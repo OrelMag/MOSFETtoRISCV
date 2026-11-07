@@ -129,8 +129,8 @@ class EchoMachine extends FastISS {
   worst = 0;
   total = 0;
   readonly nSamples: number;
-  constructor(words: number[], readonly path: EchoPath, readonly budget: number) {
-    super(words, { dmemWords: ECHO_SPEC.ramWords, imemWords: ECHO_SPEC.codeWords, m: true });
+  constructor(words: number[], readonly path: EchoPath, readonly budget: number, mac = false) {
+    super(words, { dmemWords: ECHO_SPEC.ramWords, imemWords: ECHO_SPEC.codeWords, m: true, mac });
     this.nSamples = path.x.length;
     this.region.fill(1);
   }
@@ -198,8 +198,8 @@ export const BLOCK = 250;
 export const CHUNK = 4000;
 
 /** Run `words` on one path. */
-export function runPath(words: number[], path: EchoPath, budget: number = ECHO_SPEC.budget): PathResult {
-  const m = new EchoMachine(words, path, budget), n = path.x.length;
+export function runPath(words: number[], path: EchoPath, budget: number = ECHO_SPEC.budget, mac = false): PathResult {
+  const m = new EchoMachine(words, path, budget, mac), n = path.x.length;
   let guard = 0;
   while (!m.done && !m.fault) {
     const before = m.retiredNow;
@@ -311,19 +311,19 @@ export interface EchoVerdict {
 }
 
 /** Assemble the learner's program (or say what is wrong with it). */
-export function assembleEcho(src: string): { words: number[]; errors: { line: number; message: string }[] } {
-  const r = assemble(src);
+export function assembleEcho(src: string, mac = false): { words: number[]; errors: { line: number; message: string }[] } {
+  const r = assemble(src, [], { mac });
   const errors = [...r.errors];
   if (!errors.length && r.words.length > ECHO_SPEC.codeWords) errors.push({ line: 1, message: `${r.words.length} words of code, ${ECHO_SPEC.codeWords} allowed` });
   return { words: r.words, errors };
 }
 
 /** Grade a program on a seed's paths. `paths` may be given (the page runs them one at a time). */
-export function gradeEcho(src: string, seed: number, opts: { paths?: EchoPath[]; budget?: number } = {}): EchoVerdict {
-  const a = assembleEcho(src);
+export function gradeEcho(src: string, seed: number, opts: { paths?: EchoPath[]; budget?: number; mac?: boolean } = {}): EchoVerdict {
+  const a = assembleEcho(src, opts.mac);
   const empty: EchoVerdict = { seed, ok: false, errors: a.errors, results: [], reasons: [], worstCycles: 0, meanCycles: 0, minErle: 0, diagnosis: '' };
   if (a.errors.length) return empty;
-  const results = (opts.paths ?? echoPaths(seed)).map((p) => runPath(a.words, p, opts.budget));
+  const results = (opts.paths ?? echoPaths(seed)).map((p) => runPath(a.words, p, opts.budget, opts.mac));
   return summarize(seed, results, a.words);
 }
 

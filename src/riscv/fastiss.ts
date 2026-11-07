@@ -22,6 +22,8 @@ export const K = {
   ADD: 29, SUB: 30, SLL: 31, SLT: 32, SLTU: 33, XOR: 34, SRL: 35, SRA: 36, OR: 37, AND: 38,
   MUL: 39, MULH: 40, MULHSU: 41, MULHU: 42, DIV: 43, DIVU: 44, REM: 45, REMU: 46,
   AMOADD: 47, AMOSWAP: 48, SYSTEM: 49, ILLEGAL: 50,
+  // the MAC core (IssOptions.mac): mac, mac2, clracc, racc, in funct3 order
+  MAC: 51, MAC2: 52, CLRACC: 53, RACC: 54,
 } as const;
 
 /** Kind names, for profiles and tests. */
@@ -65,6 +67,9 @@ export class FastISS {
   readonly system: boolean;
   readonly io: boolean;
   readonly m: boolean;
+  /** The MAC core's four instructions are legal (IssOptions.mac): the golden model's semantics, dsp/mac.ts, with the 40-bit accumulator as an exact double (never past 2^53). */
+  readonly macOn: boolean;
+  accN = 0;
   readonly hartid: number;
   halted = false;
   steps = 0;
@@ -90,6 +95,7 @@ export class FastISS {
     this.system = !!opts.system;
     this.io = this.system || !!opts.mmio;
     this.m = !!opts.m;
+    this.macOn = !!opts.mac;
     this.hartid = opts.hartid ?? 0;
     if (this.io) this.region.fill(DEV, 8);
     this.kind = new Uint8Array(iw); this.frd = new Uint8Array(iw); this.frs1 = new Uint8Array(iw);
@@ -98,13 +104,14 @@ export class FastISS {
   }
 
   private predecode(i: number, w: number): void {
-    const d = decode(w);
+    const d = decode(w, undefined, 32, this.macOn);
     this.words[i] = w; this.frd[i] = d.rd; this.frs1[i] = d.rs1; this.frs2[i] = d.rs2; this.fimm[i] = d.imm;
     const isM = d.opcode === OPCODES.OP && d.funct7 === 1;
     const isF = !!d.spec?.fp;
     let k: number = K.NOP;
     if (this.system && (!d.spec || (isM && !this.m) || isF)) k = K.ILLEGAL;
     else if (isF) throw new Error(`FastISS: F instruction ${d.name} at word ${i} (not implemented)`);
+    else if (d.spec?.mac) k = K.MAC + d.funct3;
     else if (isM) k = K.MUL + d.funct3;
     else switch (d.opcode) {
       case OPCODES.LUI: k = K.LUI; break;
@@ -132,6 +139,9 @@ export class FastISS {
     }
     this.kind[i] = k;
   }
+
+  /** The accumulator as the golden model holds it. */
+  get acc(): bigint { return BigInt(this.accN); }
 
   /** The instruction word at pc, as the golden model fetches it. */
   fetch(pc: number): number {
@@ -399,6 +409,22 @@ export class FastISS {
         case K.SRA: x[rd] = x[frs1[i]] >> (x[frs2[i]] & 31); break;
         case K.OR: x[rd] = x[frs1[i]] | x[frs2[i]]; break;
         case K.AND: x[rd] = x[frs1[i]] & x[frs2[i]]; break;
+        case K.MAC: case K.MAC2: {
+          // the 40-bit accumulator wraps, as dsp/mac.ts wrapAcc: two products of signed 16-bit halves, exact in a double
+          const a = x[frs1[i]], b = x[frs2[i]];
+          let p = ((a << 16) >> 16) * ((b << 16) >> 16);
+          if (kind[i] === K.MAC2) p += (a >> 16) * (b >> 16);
+          let v = this.accN + p;
+          if (v >= 549755813888 || v < -549755813888) v -= 1099511627776 * Math.floor((v + 549755813888) / 1099511627776);
+          this.accN = v;
+          break;
+        }
+        case K.CLRACC: this.accN = 0; break;
+        case K.RACC: {
+          const sh = x[frs1[i]] & 63, e = Math.floor((this.accN + (sh > 0 ? 2 ** (sh - 1) : 0)) / 2 ** sh);
+          if (rd) x[rd] = e > 2147483647 ? 2147483647 : e < -2147483648 ? -2147483648 : e;
+          break;
+        }
         case K.MUL: x[rd] = Math.imul(x[frs1[i]], x[frs2[i]]); break;
         case K.MULH: { const a = x[frs1[i]], b = x[frs2[i]]; x[rd] = mulhu(a, b) - (a < 0 ? b >>> 0 : 0) - (b < 0 ? a >>> 0 : 0); break; }
         case K.MULHSU: { const a = x[frs1[i]], b = x[frs2[i]]; x[rd] = mulhu(a, b) - (a < 0 ? b >>> 0 : 0); break; }
