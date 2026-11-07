@@ -1291,7 +1291,7 @@ svg.schematic .dot.fld { fill: var(--fc); }
 @media (pointer: coarse) { .ladder-head { min-height: 40px; } }
 .ladder-wrap { position: relative; }
 .ladder-up {
-  position: absolute; top: -11px; left: 50%; translate: -50% 0; z-index: 1; font: 600 12px var(--font-mono); color: var(--accent);
+  position: absolute; bottom: calc(100% + 4px); left: 50%; translate: -50% 0; z-index: 1; font: 600 12px var(--font-mono); color: var(--accent);
   background: var(--surface); border: 1px solid var(--accent); border-radius: 999px; padding: 3px 10px; cursor: pointer; white-space: nowrap;
 }
 .ladder-up[hidden] { display: none; }
@@ -2976,3 +2976,23 @@ svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .ne
 .wire.quiet.bus { stroke-width: calc(var(--wire-bus) * var(--wire-k, 1) * 0.45); }
 .wire.quiet.v1, .wire.quiet.bus1, .wire.quiet.vx, .wire.quiet.short { opacity: 1; }
 .wire.quiet.v1 { stroke-width: calc(var(--wire-w1) * var(--wire-k, 1)); }
+
+/* a scroll box with more past an edge fades there (ui/scrollcue.ts sets data-more) */
+[data-more="r"] { mask-image: linear-gradient(to right, #000 calc(100% - 48px), transparent); }
+[data-more="l"] { mask-image: linear-gradient(to left, #000 calc(100% - 48px), transparent); }
+[data-more="lr"] { mask-image: linear-gradient(to right, transparent, #000 48px, #000 calc(100% - 48px), transparent); }
+
+/* a tap on a term of the text on a phone: the chip that takes the learner down to the lit circuit (ui/pages/looks.ts) */
+.lit-chip {
+  position: fixed; left: 50%; translate: -50% 0; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 60;
+  display: flex; align-items: center; gap: 2px; padding: 4px; border: 1px solid var(--accent); border-radius: 999px;
+  background: var(--surface); box-shadow: 0 4px 16px rgb(0 0 0 / 0.25); animation: stage-toast-in 0.25s ease-out;
+}
+.lit-chip .btn { border-radius: 999px; min-height: 40px; }
+.lit-chip-x { min-width: 40px; justify-content: center; }
+@media (min-width: 761px) { .lit-chip { display: none; } }
+
+/* phone: Circuit ↓ beside Next in the foot (ui/pages/chapter.ts renderFoot) */
+.foot-circuit { display: none; }
+@media (max-width: 760px) { .foot-circuit { display: inline-flex; align-items: center; min-height: 40px; flex: none; } }
+@media (max-width: 360px) { .foot-circuit { padding-inline: 10px; font-size: 0; gap: 0; } }
