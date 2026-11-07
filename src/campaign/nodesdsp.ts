@@ -53,7 +53,7 @@ export const NODES_DSP: CampaignNode[] = [
   {
     id: 'sp_goertzel', act: 13, title: 'Goertzel for one tone', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_goertzel, givesOf: gzGives,
     unlocks: ['goertzel16_rv16'], par: { nand: 4389, period: 104 },
-    why: 'A keypad key is two tones out of eight, and an FFT would compute 129 bins to keep two. One resonator, s = x + c·s1 − s2, rings up on the one frequency its coefficient names and stays small on the others; after a block its last two values give the power there. One multiplier, two adders and two registers, and the same cell serves all eight tones one after another: only c changes.',
+    why: 'A keypad key is two tones out of eight, so a decoder measures all eight, and an FFT would compute 129 bins to keep those 8. One resonator, s = x + c·s1 − s2, rings up on the one frequency its coefficient names and stays small on the others; after a block its last two values give the power there. One multiplier, two adders and two registers, and the same cell serves all eight tones one after another: only c changes.',
     tips: [
       'The registers hold s1 and s2, and s2 loads the old s1. s1 loads the new s: the product c·s1 (c is a pin, in Q2.14), brought down by 14 bits and rounded, plus x, minus s2.',
       'The product is 30 bits wide for a 16-bit state and a 16-bit coefficient. Keep bits 29…14 and add bit 13 back, which is the half-up rounding; the other bits are wiring and cost nothing. Sign-extend x to 16 bits first.',

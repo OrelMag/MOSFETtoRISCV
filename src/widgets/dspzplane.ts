@@ -190,7 +190,7 @@ export function planeWidget(o: PlaneOpts): Widget {
       if (e) e.n++; else spots.set(k, { x, y, n: 1 });
     }
     // a count beside its spot, on the inner side so it never sits on the axis's own labels
-    const count = (e: { x: number; y: number; n: number }) => s('text', { x: e.x + (e.x > C ? -9 : 9), y: e.y - 8, 'text-anchor': e.x > C ? 'end' : 'start', class: 'count' }, `×${e.n}`);
+    const count = (e: { x: number; y: number; n: number }) => s('text', { x: e.x + (e.x > C ? -9 : 9), y: e.y - 8, 'text-anchor': e.x > C ? 'end' : 'start', class: 'count' }, `(${e.n})`);
     for (const e of spots.values()) if (e.n > 1) nodes.push(count(e));
     const cross = (x: number, y: number, out: boolean) => { const X = PX(x), Y = PY(y), m = 6; return s('path', { d: `M${X - m} ${Y - m}L${X + m} ${Y + m}M${X - m} ${Y + m}L${X + m} ${Y - m}`, class: `pole${out ? ' out' : ''}` }); };
     if (k) {
