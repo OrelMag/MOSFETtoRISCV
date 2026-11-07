@@ -60,6 +60,7 @@ export const chBench: Chapter = {
     {
       title: 'A method',
       body: `
+        <p>This level has built a network piece by piece, from a bit on a wire to the data centre of chapter ${numOf('datacentre')}. This last chapter meets it the way an engineer usually does: broken, with only its symptoms to go on.</p>
         <p>Almost every report starts as "the network is slow". That sentence names no cause, and a guess at one is usually wrong, because the same complaint comes from a dozen different faults. An expert does not know the answer sooner. An expert asks a better question.</p>
         <p><strong>Say what is known.</strong> What is slow, compared with what? Since when? For whom, and for whom not? "One machine" and "everybody" point to different layers before anything is measured.</p>
         <p><strong>List what could cause it, then ask what would differ between them.</strong> Loss and a slow receiver both slow a transfer, but only loss retransmits. A piece of evidence is worth looking at only if it would come out differently for the candidates.</p>
