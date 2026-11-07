@@ -19,6 +19,8 @@ export interface LayeredOptions {
   wires?: Record<string, boolean>;
   /** Column per instance name, overriding the depth (relative, 0 = first). */
   column?: Record<string, number>;
+  /** Rows to move a part by after the layout settled (negative: up): out of the way of a wire that must pass it. */
+  nudge?: Record<string, number>;
   /** Pins in this order, top to bottom, whatever their sinks ask for (the others sorted by height). */
   pinOrder?: string[];
   /** Minimum row-to-row spacing of pins. */
@@ -140,6 +142,8 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
     }
     initPins();
   }
+  for (const [n, d] of Object.entries(opts.nudge ?? {})) top.set(n, top.get(n)! + d);
+  initPins();
   // nothing anchors the rows, so the whole drawing may have drifted: back to the top
   const lift = 2 - Math.min(...names.map((n) => top.get(n)!), ...[...pinY.values()].map((y) => y));
   for (const n of names) top.set(n, top.get(n)! + lift);
@@ -168,11 +172,26 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
   };
   place(ports.filter((p) => p.dir === 'in'), 0, pitches[0]);
   place(ports.filter((p) => p.dir === 'out'), cx, pitches[1]);
+  // what a wire reads as well as a label draws as a wire (the view's wires-first rule would do the same): a net that runs forward a
+  // short way to a few sinks, and anything the caller names
+  const at = new Map(instances.map((i) => [i.name, i.at!]));
+  const endPos = (end: string): [number, number] => {
+    const n = inst(end);
+    if (!n) return pins[end] ?? [0, 0];
+    const p = geom.get(n)!.ports[portOf(end)]?.pos ?? [0, 0];
+    return [at.get(n)![0] + p[0], at.get(n)![1] + p[1]];
+  };
+  const CLOCK = /^(clk|clock|rst|reset|wclk|rclk)$/i;
   const outNets = nets.map((n) => {
     const o = opts.wires?.[n.ends[0]];
-    if (o === undefined) return n;
+    const local = n.tags === true && n.ends.length - 1 < 5 && !CLOCK.test(n.name ?? '') && (() => {
+      const d = endPos(n.ends[0]);
+      return n.ends.slice(1).every((e) => { const q = endPos(e); return q[0] >= d[0] - 2 && Math.abs(q[0] - d[0]) + Math.abs(q[1] - d[1]) <= 45; });
+    })();
+    if (o === undefined && !local) return n;
+    if (o === false) return { ...n, tags: true as const };
     const c = { ...n };
-    if (o) delete c.tags; else c.tags = true;
+    if (o ?? local) delete c.tags;
     return c;
   });
   return { pins, instances, nets: outNets };
