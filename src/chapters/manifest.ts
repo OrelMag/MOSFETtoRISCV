@@ -855,7 +855,23 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "An equalizer", challenge: "quiz" },
     { title: "A tap in gates", challenge: "reach" },
   ] },
-  { id: "pictures", num: 76, title: "Pictures", blurb: "Why does a JPEG look blocky? Filters and resizing in two dimensions, the 8 × 8 DCT with a stage in gates, quantization, zig-zag and Huffman, and a real file your browser opens.", level: "Signal processing", builds: ["signals","multirate","fixed"], recap: {"checks":3}, steps: [
+  { id: "speech", num: 76, title: "Speech", blurb: "How does a voice fit in 2.4 kb/s? G.711 μ-law in gates, IMA ADPCM as an RV32 program, linear prediction and a vocoder, all heard side by side on a real reading.", level: "Signal processing", builds: ["signals","adaptive","fixed"], recap: {"checks":3}, steps: [
+    { title: "A voice on a wire", challenge: "quiz" },
+    { title: "Why logarithms", challenge: "quiz" },
+    { title: "μ-law, from G.711's table", challenge: "quiz" },
+    { title: "μ-law in gates", challenge: "reach" },
+    { title: "Send the difference", challenge: "quiz" },
+    { title: "ADPCM on the RV32", challenge: "quiz" },
+    { title: "Predict the next sample", challenge: "quiz" },
+    { title: "A vocoder at 2.4 kb/s", challenge: "quiz" },
+  ] },
+  { id: "music", num: 77, title: "Music", blurb: "What can a codec safely throw away? The MDCT and its perfect reconstruction, a simplified model of what the ear misses, and a codec of ours that spends its bits only where noise would be heard.", level: "Signal processing", builds: ["signals","multirate","speech"], recap: {"checks":3}, steps: [
+    { title: "What a codec may throw away", challenge: "quiz" },
+    { title: "Overlap without loss", challenge: "quiz" },
+    { title: "What the ear misses", challenge: "quiz" },
+    { title: "Bits where they are heard", challenge: "quiz" },
+  ] },
+  { id: "pictures", num: 78, title: "Pictures", blurb: "Why does a JPEG look blocky? Filters and resizing in two dimensions, the 8 × 8 DCT with a stage in gates, quantization, zig-zag and Huffman, and a real file your browser opens.", level: "Signal processing", builds: ["signals","multirate","fixed"], recap: {"checks":3}, steps: [
     { title: "A picture is a signal", challenge: "quiz" },
     { title: "Filters in two dimensions", challenge: "quiz" },
     { title: "Smaller and larger", challenge: "quiz" },
@@ -865,7 +881,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Zig-zag, runs and codes", challenge: "quiz" },
     { title: "A file another program opens", challenge: "quiz" },
   ] },
-  { id: "appendix-6502", num: 77, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
+  { id: "appendix-6502", num: 79, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
     { title: "Two phases, no flip-flops", challenge: "reach" },
     { title: "Precharged buses", challenge: "reach" },
@@ -875,14 +891,14 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The 6502 running" },
     { title: "The transistor ledger" },
   ] },
-  { id: "appendix-doom", num: 78, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
+  { id: "appendix-doom", num: 80, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
     { title: "What a game asks of a computer" },
     { title: "From C to our ROM" },
     { title: "The machine" },
     { title: "Play" },
     { title: "Hand it to the gates" },
   ] },
-  { id: "appendix-sap", num: 79, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
+  { id: "appendix-sap", num: 81, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
     { title: "The machine and its bus", challenge: "quiz" },
     { title: "The clock", challenge: "quiz" },
     { title: "Registers and the bus", challenge: "reach" },
@@ -895,7 +911,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Flags and conditional jumps", challenge: "quiz" },
     { title: "Programs", challenge: "reach" },
   ] },
-  { id: "appendix-runner", num: 80, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
+  { id: "appendix-runner", num: 82, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
     { title: "Play it", challenge: "quiz" },
     { title: "The beam is two counters", challenge: "quiz" },
     { title: "A thing on screen is a comparison", challenge: "quiz" },
