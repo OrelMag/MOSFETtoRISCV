@@ -264,9 +264,17 @@ export function demodulate(yr: ArrayLike<number>, yi: ArrayLike<number>): Chain 
 export interface Reception { chain: Chain; yr: Int32Array; yi: Int32Array; clipped: number }
 /** The receiver on a stretch of the band: sample, mix, CIC, then the rest. */
 export function receive(b: Band, f: number, noiseDb: number, count = b.n, k: number = NCO_K): Reception {
+  const key = `${f}|${noiseDb}|${count}|${k}`, hit = recent.find((e) => e.b === b && e.key === key);
+  if (hit) { recent.splice(recent.indexOf(hit), 1); recent.unshift(hit); return hit.r; }
   const { xr, xi, clipped } = sample(b, noiseDb, 0, count), { yr, yi } = frontBlock(xr, xi, tuningWord(f), k);
-  return { chain: demodulate(yr, yi), yr, yi, clipped };
+  const r = { chain: demodulate(yr, yi), yr, yi, clipped };
+  recent.unshift({ b, key, r });
+  recent.length = Math.min(recent.length, RECEIVE_KEPT);
+  return r;
 }
+/** The last few receptions, by band and parameters: the page asks for the same one from several places (a table row, a sentence, a readout), and a Reception is never changed. */
+const RECEIVE_KEPT = 4;
+const recent: Array<{ b: Band; key: string; r: Reception }> = [];
 
 // ---- measurements ---------------------------------------------------------------------------------------------------------------------------
 
@@ -418,7 +426,15 @@ export function ringSpread(f: number, clocks: number): number {
 }
 
 /** The band one station occupies on its own, measured: the narrowest span around its carrier holding `share` of its power, from the power spectrum averaged over 14 blocks of 2^16 samples, 0.96 s of its programme (the first second less the last 0.04 s). */
+const occupiedMemo = new Map<string, number>();
 export function stationOccupied(k: number, share = 0.98): number {
+  const key = `${k}|${share}`, hit = occupiedMemo.get(key);
+  if (hit !== undefined) return hit;
+  const v = stationOccupiedRaw(k, share);
+  occupiedMemo.set(key, v);
+  return v;
+}
+function stationOccupiedRaw(k: number, share: number): number {
   const B = 1 << 16, blocks = 14, n = B * blocks, re = new Float32Array(n), im = new Float32Array(n), e = preEmphasis(program(k, AUD + 2)), top = programPeak(k);
   for (let i = 0; i < e.length; i++) e[i] /= top;
   addFm(re, im, 0, 1, e, DEV);

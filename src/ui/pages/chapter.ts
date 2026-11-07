@@ -1,6 +1,7 @@
 // A chapter: narrative on the left, the live stage in the middle, the inspector on the right.
 
 import { outline, outlineIndex, outlineOf } from '../../chapters/outline';
+import { settleLazy } from '../lazy';
 import { checksDone, recapIndex } from '../../chapters/checks';
 import { chapterNo, type Chapter, type Step } from '../../chapters/types';
 import { notes, type Place } from '../notes';
@@ -284,6 +285,7 @@ export class ChapterPage implements Page {
     b.replaceChildren();
     if (this.step === 0 && (c.goals?.length || c.builds?.length)) b.append(this.goalsCard());
     b.append(h('h2', { class: 'step-title' }, st.title), prose);
+    settleLazy(prose);
     // target: a big scene is still being built (Stage.load)
     const lit = st.scene && this.stage.target ? litLine(this.stage.target, st.lit) : null;
     if (lit) b.append(lit);

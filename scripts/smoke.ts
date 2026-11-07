@@ -1082,6 +1082,12 @@ class Tab {
       this.send('Runtime.evaluate', { expression: built, awaitPromise: true }),
       sleep(routeTimeout - (Date.now() - t0)).then(() => { throw new Error('timeout: the stage never finished building its scene'); }),
     ]);
+    // heavy figures and widgets fill in after the step has drawn (ui/lazy.ts: aria-busy until their numbers are in): wait for them, so what they build is judged too
+    const filled = `new Promise((r) => { const t = setInterval(() => { if (!document.querySelector('.lz[aria-busy], .widget[aria-busy="true"]')) { clearInterval(t); r(); } }, 50); })`;
+    await Promise.race([
+      this.send('Runtime.evaluate', { expression: filled, awaitPromise: true }),
+      sleep(routeTimeout - (Date.now() - t0)).then(() => { throw new Error('timeout: a figure never finished computing'); }),
+    ]);
     const idle = `new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, ${dwell}))))`;
     await Promise.race([
       this.send('Runtime.evaluate', { expression: idle, awaitPromise: true }),

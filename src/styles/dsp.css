@@ -119,3 +119,7 @@
 .sdr-pick .btn[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
 .sdr-w .mos-sl > span { min-width: 64px; }
 .sdr-w .mos-sl output { min-width: 92px; white-space: nowrap; text-align: right; }
+
+/* heavy figures that fill in after the step has drawn (ui/lazy.ts) */
+.lz[aria-busy="true"] { color: var(--muted); }
+.lz-note { margin: 12px; }
