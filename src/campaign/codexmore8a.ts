@@ -66,6 +66,7 @@ single pole, 1 GHz, at 4 GHz: gain 1 / √17 in amplitude = −12.3 dB</pre>`,
       { chapter: 'signals', step: 0, label: 'A wave is a sum of sines' },
       { chapter: 'noise', step: 0, label: 'The floor' },
       { chapter: 'radio', step: 2, label: 'The link budget' },
+      { chapter: 'converters', step: 3, label: 'A shaky clock' },
     ],
   },
   fourier: {
@@ -88,6 +89,8 @@ a = e^(−2π · 1 / 8) = 0.456 of the last level left after each bit
       { chapter: 'signals', step: 0, label: 'A wave is a sum of sines' },
       { chapter: 'signals', step: 1, label: 'The same numbers in frequency' },
       { chapter: 'signals', step: 2, label: 'Narrow in time, wide in frequency' },
+      { chapter: 'spectrum', step: 0, label: 'A tone that is not a line' },
+      { chapter: 'spectrum', step: 1, label: 'A window is a choice of skirt' },
     ],
   },
   firfilter: {
@@ -112,6 +115,10 @@ the adders\' ripple carries set the period: 40 gate delays after an edge</pre>`,
       { chapter: 'signals', step: 3, label: 'A filter is a sum of delayed samples' },
       { chapter: 'signals', step: 4, label: 'A filter in gates' },
       { chapter: 'noise', step: 2, label: 'The matched filter' },
+      { chapter: 'firdesign', step: 0, label: 'A mask, and mirror-image taps' },
+      { chapter: 'firdesign', step: 2, label: 'Parks–McClellan' },
+      { chapter: 'firdesign', step: 6, label: 'One multiplier, N clocks' },
+      { chapter: 'spectrum', step: 5, label: 'Filtering by blocks' },
     ],
   },
   aliasing: {
@@ -132,6 +139,7 @@ rounding to b bits: 6.02 b + 1.76 dB   8 bits 49.9 dB   16 bits 98.1 dB</pre>An 
     chapters: [
       { chapter: 'signals', step: 5, label: 'Sampling, and what folds' },
       { chapter: 'signals', step: 6, label: 'Rounding to a number' },
+      { chapter: 'multirate', step: 1, label: 'Throwing samples away' },
     ],
   },
   mixer: {

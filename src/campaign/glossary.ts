@@ -8,6 +8,7 @@
 import { CODEX, type CodexEntry } from './codex';
 import { numOf } from '../chapters/order';
 import { ALIASES_COMM2 } from './codexcomm2';
+import { ALIASES_DSP } from './codexdsp';
 
 /** Other names an entry goes by in the chapters' prose. */
 export const ALIASES: Record<string, string[]> = {
@@ -50,6 +51,8 @@ export const ALIASES: Record<string, string[]> = {
   interleave: ['interleaver'],
   // the extension (codexcomm2.ts)
   ...ALIASES_COMM2,
+  // the Signal processing level (codexdsp.ts)
+  ...ALIASES_DSP,
 };
 
 /** Entries never marked automatically: their names are everyday words in the prose. */
