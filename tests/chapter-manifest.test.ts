@@ -1,6 +1,6 @@
 // The light chapter outline (chapters/manifest.ts, loaders.ts) is generated from the chapters: it must equal what the chapters say,
 // every loader must give its chapter, and what reads the outline must agree with what reads the chapters.
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { chapters } from '../src/chapters';
 import { MANIFEST } from '../src/chapters/manifest';
@@ -11,11 +11,14 @@ import { outline, outlineIndex, outlineOf } from '../src/chapters/outline';
 import { checkKeys, checksDone, recapIndex } from '../src/chapters/checks';
 import { navEntries, plainText } from '../src/ui/chapternav';
 import { withText } from '../src/ui/chaptertext';
+import { BOOK_TIMEOUT, warmBook, WARM_TIMEOUT } from './warmbook';
 
 const read = (f: string) => readFileSync(new URL(`../src/chapters/${f}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const modules = import.meta.glob('../src/chapters/ch-*.ts', { eager: true }) as Record<string, Record<string, unknown>>;
 
 describe('the chapter manifest', () => {
+  beforeAll(warmBook, WARM_TIMEOUT);
+
   it('is current: npm run manifest rewrites it', () => {
     expect(read('manifest.ts')).toBe(manifestSource(chapters));
   });
@@ -64,5 +67,5 @@ describe('the chapter manifest', () => {
     expect(withText({ v: 1, text: { ...index.text, [chapters[0].id]: index.text[chapters[0].id].slice(1) } })).toBeNull();
     expect(withText({ v: 2, text: index.text })).toBeNull();
     expect(withText(null)).toBeNull();
-  });
+  }, BOOK_TIMEOUT);
 });
