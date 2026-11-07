@@ -136,15 +136,23 @@ describe('the mask capstone', () => {
       expect(rc.clip && !rc.wrap, `seed ${seed}: ${c.join(' | ')}`).toBe(true);
       await tick();
       const n = runMask(neg, 'gate', { seed }).failures;
-      expect(n.join(' | ')).toMatch(/at 0 Hz \(DC\) an input of \+1800 held steady comes out near -1\d{3}: the gain is negative \(× −1\.0\d\), so the output is inverted/);
+      expect(n.join(' | ')).toMatch(/at 0 Hz \(DC\) an input of \+1800 held steady comes out near −1\d{3}: the gain is negative \(× −1\.0\d\), so the output is inverted/);
       expect(n.join(' | ')).not.toMatch(/−120/);
       await tick();
-      expect(reasons(runMask(halfUp, 'gate', { seed, ...OPEN }).failures).wrap, `seed ${seed}`).toBe(false);
+      // the half-up loop's rounding: a limit cycle, and the worst-case line points at it rather than at a word's width
+      const hu = runMask(halfUp, 'gate', { seed, ...OPEN }).failures;
+      expect(reasons(hu).wrap, `seed ${seed}`).toBe(false);
+      const huw = hu.find((x) => /worst-case|noise/.test(x));
+      if (huw) expect(huw).toMatch(/may be the limit cycle above/);
       await tick();
+      // a wrap bends the impulse response: no bit count from it, and a small negative DC gain is not called an inversion
       const s = runMask(short3, 'gate', { seed }).failures;
       const wi = s.findIndex((x) => /worst-case|noise/.test(x)), pi = s.findIndex((x) => /^pass band/.test(x));
       expect(wi, s.join(' | ')).toBeGreaterThanOrEqual(0);
       if (pi >= 0) expect(wi).toBeLessThan(pi);
+      expect(s[wi]).toMatch(/widen the one that wraps/);
+      expect(s[wi]).not.toMatch(/needs \d+ bits/);
+      expect(s.join(' | ')).not.toMatch(/inverted/);
     }
   }, 240_000);
 

@@ -217,7 +217,7 @@ export function runMask(def: ComponentDef, mode: 'gate' | 'switch', o: MaskOpts 
     const rule = `the pass band must stay within ±${MASK_SPEC.rippleDb} dB of unity up to ${khz(MASK_SPEC.passEdge)}`;
     // dB cannot say a gain is negative or zero: say what came out instead
     bandFails.push(w.ln.band === 'dc' && dcGain < 1e-6
-      ? `pass band: at 0 Hz (DC) an input of +${SINE_AMP} held steady comes out near ${Math.round(dcGain * SINE_AMP)}: ${dcGain > -1e-6 ? 'nothing gets through' : `the gain is negative (× ${dcGain.toFixed(2).replace('-', '−')}), so the output is inverted`}; ${rule}${miss ? ` (${miss.slice(2)})` : ''}`
+      ? `pass band: at 0 Hz (DC) an input of +${SINE_AMP} held steady comes out near ${String(Math.round(dcGain * SINE_AMP)).replace('-', '−')}: ${dcGain > -1e-6 ? 'nothing gets through' : `the gain is negative (× ${dcGain.toFixed(2).replace('-', '−')})${dcGain < -0.5 && dcGain > -2 ? ', so the output is inverted' : ''}`}; ${rule}${miss ? ` (${miss.slice(2)})` : ''}`
       : `pass band: at ${w.ln.band === 'dc' ? '0 Hz (DC)' : at(w.ln.m)} the gain is ${fmtDb(w.db)}; ${rule} (${(Math.abs(w.db) - MASK_SPEC.rippleDb).toFixed(1)} dB outside${miss})`);
   }
   if (stopMiss.length) {
@@ -267,7 +267,13 @@ export function runMask(def: ComponentDef, mode: 'gate' | 'switch', o: MaskOpts 
       const how = wrapped ? `so a word wrapped: y is off by exactly ${groupDigits(2 ** k)} = 2^${k}`
         : clipped ? `so the output clipped: it falls ${groupDigits(Math.abs(d))} short, so something saturates on the way`
         : `a difference of ${groupDigits(Math.abs(d))}, more than the ±${tol} rounding may explain`;
-      fails.push(`${what}, sample ${b.n + 1}: y reads ${b.y} where the impulse response says ${b.e}, ${how}. Your impulse response adds up to ${gainSum.toFixed(2)} × full scale, so the running sum reaches ±${groupDigits(peak)}: every word that carries it, the accumulator included, must hold that without wrapping or saturating (y alone needs ${Math.ceil(Math.log2(peak + 1)) + 1} bits)${bad.length > 1 ? ` (${bad.length} of ${stim.length} inputs fail)` : ''}`);
+      // figures from h only when nothing bent it: a wrap bends the impulse response too, and a limit cycle's rounding is not a word too narrow
+      const advice = stuck.length && !wrapped
+        ? 'This may be the limit cycle above: rounding fed back through a loop adds to every output, so fix that first'
+        : wrapped
+          ? 'Every word that carries the running sum, the accumulator included, must hold it without wrapping: widen the one that wraps (the impulse response measured here is bent by the same wrap, so it cannot say by how much)'
+          : `Your impulse response adds up to ${gainSum.toFixed(2)} × full scale, so the running sum reaches ±${groupDigits(peak)}: every word that carries it, the accumulator included, must hold that without wrapping or saturating (y alone needs ${Math.ceil(Math.log2(peak + 1)) + 1} bits)`;
+      fails.push(`${what}, sample ${b.n + 1}: y reads ${b.y} where the impulse response says ${b.e}, ${how}. ${advice}${bad.length > 1 ? ` (${bad.length} of ${stim.length} inputs fail)` : ''}`);
     }
   }
 
