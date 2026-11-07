@@ -48,9 +48,11 @@ describe('chapter 52', () => {
     expect(MEASURED_MBPS).toBeLessThan(WIRE_DATA_MBPS * 0.7);
     expect(1460 / (1460 + 54 + 4 + 8 + 12)).toBeGreaterThan(0.94);
   });
-  it('the sawtooth widget link cap counts preamble, FCS and gap, as the chapter wire figure does', () => {
-    expect(dataCapMbps(32)).toBeCloseTo(WIRE_DATA_MBPS, 9);
-    expect(dataCapMbps(200)).toBeCloseTo((WIRE_DATA_MBPS * 32) / 200, 9);
+  it('the sawtooth widget link cap is what the reference model really carries: the run stays under it and close to it', () => {
+    const r = runTcp({ bytes: 8000, byteClocks: 200, queue: 8, delay: 20_000 });
+    const got = mbps(8000, r.doneAt);
+    expect(got).toBeLessThanOrEqual(dataCapMbps(200));
+    expect(got).toBeGreaterThan(dataCapMbps(200) * 0.9);
   });
   it('the gate window sizes quoted in the last step: about 6 million NANDs, some 70 thousand leaves', () => {
     const words = new Array(1 << 12).fill(0x13);

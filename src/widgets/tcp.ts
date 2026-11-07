@@ -185,8 +185,8 @@ const SAW_PRESETS = [
 
 const marksOf = (r: SimResult) => r.events.filter((e) => e.why === 'fast' || e.why === 'timeout').map((e) => ({ x: e.t, cls: e.why, label: e.why }));
 
-/** The most data a link of `byte` clocks a byte carries in our segments: the frame plus FCS, preamble and gap are all wire time. */
-export const dataCapMbps = (byte: number): number => mbps(TCP_K.MSS, (TCP_K.MSS + 54 + 4 + 8 + 12) * byte);
+/** The most data this reference model's link carries: tcpsim charges each frame its bytes + 34 (Ethernet and IP headers, no preamble or gap). */
+export const dataCapMbps = (byte: number): number => mbps(TCP_K.MSS, (TCP_K.MSS + 54) * byte);
 
 export function sawWidget(start = 0): Widget {
   let { byte, queue, delay }: { byte: number; queue: number; delay: number } = SAW_PRESETS[start];
