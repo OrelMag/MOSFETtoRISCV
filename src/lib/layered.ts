@@ -23,10 +23,22 @@ export interface LayeredOptions {
   nudge?: Record<string, number>;
   /** Pins in this order, top to bottom, whatever their sinks ask for (the others sorted by height). */
   pinOrder?: string[];
+  /**
+   * Size the space around parts from what is drawn there: between two stacked parts room for a label hanging from a bottom port
+   * and the next box's name, each channel a trunk per net through it and the labels on both its sides. Off: vgap and a channel
+   * of gap + one unit per six wires (at most 14), which suits most blocks better; on, for blocks whose labels collide.
+   */
+  room?: boolean;
   /** Minimum row-to-row spacing of pins. */
   pinPitch?: number | [number, number];
 }
 
+/** How far a net label reaches from its port (view/route.ts: TAG_STUB + TAG_H), and the height of a box's name above it. */
+const TAG_DROP = 2.75, NAME_H = 1.2;
+/** A net label's width (view/route.ts textWidth at 0.8 + 0.6; lib/ does not import the view). */
+const tagWidth = (name: string) => name.length * 0.8 * 0.62 + 1.4;
+
+const CLOCK = /^(clk|clock|rst|reset|wclk|rclk)$/i;
 const inst = (end: string): string | null => (end.includes('.') ? end.slice(0, end.indexOf('.')) : null);
 const portOf = (end: string): string => end.slice(end.indexOf('.') + 1);
 
@@ -86,8 +98,14 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
   const h = (n: string) => geom.get(n)!.h, w = (n: string) => geom.get(n)!.w;
   const portY = (n: string, p: string) => geom.get(n)!.ports[p]?.pos[1] ?? h(n) / 2;
   const vgap = opts.vgap ?? 3;
+  // room between two parts stacked in a column: a label hanging from the upper one's bottom port (stub + box, view/route.ts
+  // TAG_STUB + TAG_H), the lower box's name above it, a label standing on the lower one's top port
+  const sides = new Map(names.map((n) => [n, new Set(Object.values(geom.get(n)!.ports).map((p) => p.exit))]));
+  const isBox = (n: string) => byName.get(n)!.def.symbol.kind === 'box' && byName.get(n)!.def.prim !== 'alias';
+  const room = (a: string, b: string): number => !opts.room ? vgap : Math.max(vgap, Math.ceil((sides.get(a)!.has('down') ? TAG_DROP : 0) + (isBox(b) ? NAME_H : 0) + (sides.get(b)!.has('up') ? TAG_DROP : 0) + 0.3));
+  const below = (a: string, b: string) => top.get(a)! + h(a) + room(a, b);
   const top = new Map<string, number>();
-  const stack = (col: string[]) => { let y = 2; for (const n of col) { top.set(n, y); y += h(n) + vgap; } };
+  const stack = (col: string[]) => { let y = 2; col.forEach((n, i) => { if (i) y = below(col[i - 1], n); top.set(n, y); }); };
   cols.forEach(stack);
   // pins: input pins' sinks, output pins' drivers (for the pull of a row)
   const pinEnds = new Map<string, { inst: string; port: string; out: boolean }[]>();
@@ -125,8 +143,7 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
       const col = cols[c];
       const want = new Map(col.map((n) => [n, aim(n) ?? top.get(n)!]));
       col.sort((p, q) => want.get(p)! - want.get(q)! || names.indexOf(p) - names.indexOf(q));
-      let y = 2;
-      for (const n of col) { const t = Math.max(y, Math.round(want.get(n)!)); top.set(n, t); y = t + h(n) + vgap; }
+      col.forEach((n, i) => top.set(n, Math.max(i ? below(col[i - 1], n) : 2, Math.round(want.get(n)!))));
     }
     initPins();
   }
@@ -135,8 +152,8 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
     for (const col of cols) {
       for (let i = 0; i < col.length; i++) {
         const n = col[i]; const a = aim(n); if (a === null) continue;
-        const lo = i ? top.get(col[i - 1])! + h(col[i - 1]) + vgap : 2;
-        const hi = i + 1 < col.length ? top.get(col[i + 1])! - vgap - h(n) : Infinity;
+        const lo = i ? below(col[i - 1], n) : 2;
+        const hi = i + 1 < col.length ? top.get(col[i + 1])! - room(n, col[i + 1]) - h(n) : Infinity;
         top.set(n, Math.max(lo, Math.min(hi, Math.round(a))));
       }
     }
@@ -148,51 +165,77 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
   const lift = 2 - Math.min(...names.map((n) => top.get(n)!), ...[...pinY.values()].map((y) => y));
   for (const n of names) top.set(n, top.get(n)! + lift);
   for (const [p, y] of pinY) pinY.set(p, y + lift);
-  // x: columns, a channel between them as wide as the wires that run there
-  const x = new Map<string, number>();
-  let cx = opts.x0 ?? 10;
-  const colX: number[] = [];
-  for (let c = 0; c < L; c++) {
-    colX.push(cx);
-    const cw = Math.max(0, ...cols[c].map(w));
-    const span = edges.filter((e) => layer.get(e.from)! <= c && layer.get(e.to)! > c).length;
-    cx += cw + Math.min(14, (opts.gap ?? 6) + Math.floor(span / 6));
-    for (const n of cols[c]) x.set(n, colX[c]);
+  // x: columns, a channel between them as wide as the wires that run there (a trunk each, half a unit apart) and, once it is
+  // known which nets are labels, the labels on both its sides
+  const spans = cols.map((_, c) => edges.filter((e) => layer.get(e.from)! <= c && layer.get(e.to)! > c));
+  const channel = (c: number) => (opts.room ? Math.min(24, (opts.gap ?? 6) + Math.ceil(new Set(spans[c].map((e) => `${e.from}.${e.fp}`)).size / 3))
+    : Math.min(14, (opts.gap ?? 6) + Math.floor(spans[c].length / 6)));
+  const lay = (extra: number[]) => {
+    const x = new Map<string, number>();
+    let cx = opts.x0 ?? 10;
+    for (let c = 0; c < L; c++) {
+      const cw = Math.max(0, ...cols[c].map(w));
+      for (const n of cols[c]) x.set(n, cx);
+      cx += cw + Math.max(channel(c), extra[c] ?? 0);
+    }
+    const instances: InstanceDef[] = insts.map((i) => ({ ...i, at: [x.get(i.name)!, top.get(i.name)!] }));
+    // pins: inputs left, outputs right; ordered by the height they want, kept `pitch` apart
+    const pitches: [number, number] = Array.isArray(opts.pinPitch) ? opts.pinPitch : [opts.pinPitch ?? 2, opts.pinPitch ?? 2];
+    const pins: Record<string, [number, number]> = {};
+    const place = (side: PortDef[], px: number, pitch: number) => {
+      const rank = (n: string) => opts.pinOrder?.indexOf(n) ?? -1;
+      const want = side.map((p) => ({ p: p.name, y: pinY.get(p.name) ?? 2 })).sort((a, b) => (rank(a.p) >= 0 && rank(b.p) >= 0 ? rank(a.p) - rank(b.p) : a.y - b.y));
+      let y = 2;
+      for (const q of want) { const t = Math.max(y, Math.round(q.y)); pins[q.p] = [px, t]; y = t + pitch; }
+    };
+    place(ports.filter((p) => p.dir === 'in'), 0, pitches[0]);
+    place(ports.filter((p) => p.dir === 'out'), cx, pitches[1]);
+    // what a wire reads as well as a label draws as a wire (the view's wires-first rule would do the same): a net that runs forward a
+    // short way to a few sinks, and anything the caller names
+    const at = new Map(instances.map((i) => [i.name, i.at!]));
+    const endPos = (end: string): [number, number] => {
+      const n = inst(end);
+      if (!n) return pins[end] ?? [0, 0];
+      const p = geom.get(n)!.ports[portOf(end)]?.pos ?? [0, 0];
+      return [at.get(n)![0] + p[0], at.get(n)![1] + p[1]];
+    };
+    const outNets = nets.map((n) => {
+      const o = opts.wires?.[n.ends[0]];
+      const local = n.tags === true && n.ends.length - 1 < 5 && !CLOCK.test(n.name ?? '') && (() => {
+        const d = endPos(n.ends[0]);
+        return n.ends.slice(1).every((e) => { const q = endPos(e); return q[0] >= d[0] - 2 && Math.abs(q[0] - d[0]) + Math.abs(q[1] - d[1]) <= 45; });
+      })();
+      if (o === undefined && !local) return n;
+      if (o === false) return { ...n, tags: true as const };
+      const c = { ...n };
+      if (o ?? local) delete c.tags;
+      return c;
+    });
+    return { pins, instances, nets: outNets };
+  };
+  // the labels' room: per channel, the widest label leaving the column on its left plus the widest entering the one on its right
+  const labelRoom = (nl: Netlist): number[] => {
+    const right = new Array<number>(L).fill(0), left = new Array<number>(L).fill(0);
+    nl.nets.forEach((n, k) => {
+      if (n.tags !== true) return;
+      const tw = tagWidth(n.name ?? `n${k}`);
+      for (const e of n.ends) {
+        const i = inst(e); if (!i) continue;
+        const ex = geom.get(i)!.ports[portOf(e)]?.exit, c = layer.get(i)!;
+        if (ex === 'right') right[c] = Math.max(right[c], tw);
+        else if (ex === 'left' && c > 0) left[c - 1] = Math.max(left[c - 1], tw);
+      }
+    });
+    return right.map((r, c) => (r || left[c] ? Math.ceil(r + left[c] + 1) : 0));
+  };
+  let nl = lay([]);
+  for (let pass = 0; opts.room && pass < 2; pass++) {
+    const need = labelRoom(nl);
+    const next = lay(need);
+    if (JSON.stringify(next.nets.map((n) => !!n.tags)) === JSON.stringify(nl.nets.map((n) => !!n.tags)) && pass) { nl = next; break; }
+    nl = next;
   }
-  const instances: InstanceDef[] = insts.map((i) => ({ ...i, at: [x.get(i.name)!, top.get(i.name)!] }));
+  const { pins, instances, nets: outNets } = nl;
   void byName;
-  // pins: inputs left, outputs right; ordered by the height they want, kept `pitch` apart
-  const pitches: [number, number] = Array.isArray(opts.pinPitch) ? opts.pinPitch : [opts.pinPitch ?? 2, opts.pinPitch ?? 2];
-  const pins: Record<string, [number, number]> = {};
-  const place = (side: PortDef[], px: number, pitch: number) => {
-    const rank = (n: string) => opts.pinOrder?.indexOf(n) ?? -1;
-    const want = side.map((p) => ({ p: p.name, y: pinY.get(p.name) ?? 2 })).sort((a, b) => (rank(a.p) >= 0 && rank(b.p) >= 0 ? rank(a.p) - rank(b.p) : a.y - b.y));
-    let y = 2;
-    for (const q of want) { const t = Math.max(y, Math.round(q.y)); pins[q.p] = [px, t]; y = t + pitch; }
-  };
-  place(ports.filter((p) => p.dir === 'in'), 0, pitches[0]);
-  place(ports.filter((p) => p.dir === 'out'), cx, pitches[1]);
-  // what a wire reads as well as a label draws as a wire (the view's wires-first rule would do the same): a net that runs forward a
-  // short way to a few sinks, and anything the caller names
-  const at = new Map(instances.map((i) => [i.name, i.at!]));
-  const endPos = (end: string): [number, number] => {
-    const n = inst(end);
-    if (!n) return pins[end] ?? [0, 0];
-    const p = geom.get(n)!.ports[portOf(end)]?.pos ?? [0, 0];
-    return [at.get(n)![0] + p[0], at.get(n)![1] + p[1]];
-  };
-  const CLOCK = /^(clk|clock|rst|reset|wclk|rclk)$/i;
-  const outNets = nets.map((n) => {
-    const o = opts.wires?.[n.ends[0]];
-    const local = n.tags === true && n.ends.length - 1 < 5 && !CLOCK.test(n.name ?? '') && (() => {
-      const d = endPos(n.ends[0]);
-      return n.ends.slice(1).every((e) => { const q = endPos(e); return q[0] >= d[0] - 2 && Math.abs(q[0] - d[0]) + Math.abs(q[1] - d[1]) <= 45; });
-    })();
-    if (o === undefined && !local) return n;
-    if (o === false) return { ...n, tags: true as const };
-    const c = { ...n };
-    if (o ?? local) delete c.tags;
-    return c;
-  });
   return { pins, instances, nets: outNets };
 }
