@@ -329,7 +329,8 @@ export function showMenu(x: number, y: number, list: readonly MenuEntry[], o: Me
   document.addEventListener('contextmenu', onContext, true);
   addEventListener('hashchange', onRoute);
   const rows = itemsOf(m);
-  (rows.find((b) => !b.classList.contains('ctx-val')) ?? rows[0] ?? m).focus({ preventScroll: true });
+  // the first action, past the header's value rows and colour swatches: Enter straight after opening must not recolour a net
+  (rows.find((b) => !b.classList.contains('ctx-val') && !b.classList.contains('sb-hue-sw')) ?? rows[0] ?? m).focus({ preventScroll: true });
 }
 
 // ---- the picker (ui/menupick.ts, loaded on demand) closes with the menu and on a route change ----------------------

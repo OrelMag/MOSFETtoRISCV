@@ -1,7 +1,8 @@
 // The learner's own arrangement of a drawn circuit (the stage): parts moved, wires reshaped, pointers
 // (net tags) unravelled into wires and wires drawn as pointers, per component id, kept in localStorage,
 // with undo / redo for this visit. Only the drawing changes: the nets keep their order and ends, so the
-// simulation, net indices, probes and highlights are untouched.
+// simulation, net indices, probes and highlights are untouched. The learner's net colours live here too (hues):
+// a colour belongs to the level it was set on, as a moved part does.
 
 import type { Vec } from '../sim/geometry';
 import type { NetDef, Netlist } from '../sim/types';
@@ -17,15 +18,25 @@ export interface LayoutEdit {
   tagged: string[];
   /** netKey → sink end → the corners of the wire to that sink, as the learner dragged it (NetDef.via). */
   via?: Record<string, Record<string, Vec[]>>;
+  /** netKey → the colour the learner picked for that net: an OKLCH hue (the sandbox's swatches, editor/wirehue.ts) or
+   *  'auto' (its own colour-per-net hue, shown with that switch off too). Drawn as a user hue (nethue.ts USER_HUE). */
+  hues?: Record<string, NetColour>;
 }
+
+/** A learner's net colour: a hue in degrees, or 'auto'. */
+export type NetColour = number | 'auto';
+/** A stored colour, or nothing when it is not one: a finite hue (taken mod 360) or 'auto'. */
+export const netColour = (v: unknown): NetColour | undefined =>
+  v === 'auto' ? 'auto' : typeof v === 'number' && Number.isFinite(v) ? ((v % 360) + 360) % 360 : undefined;
 
 const KEY = 'mosfet2riscv:layouts:v1';
 let all: Record<string, LayoutEdit> | null = null;
 
-const empty = (e: LayoutEdit) => !Object.keys(e.at).length && !e.wired.length && !e.tagged.length && !e.via;
+const empty = (e: LayoutEdit) => !Object.keys(e.at).length && !e.wired.length && !e.tagged.length && !e.via && !e.hues;
 const copy = (e: LayoutEdit | undefined): LayoutEdit => {
   const out: LayoutEdit = { at: { ...e?.at }, wired: [...e?.wired ?? []], tagged: [...e?.tagged ?? []] };
   if (e?.via) out.via = Object.fromEntries(Object.entries(e.via).map(([k, ends]) => [k, { ...ends }]));
+  if (e?.hues) out.hues = { ...e.hues };
   return out;
 };
 const keys = (v: unknown): string[] => Array.isArray(v) ? v.filter((k): k is string => typeof k === 'string') : [];
@@ -61,6 +72,11 @@ function store(): Record<string, LayoutEdit> {
           }
           tidyVia(ed);
         }
+        if (e?.hues && typeof e.hues === 'object') {
+          const hues: Record<string, NetColour> = {};
+          for (const [k, v] of Object.entries(e.hues)) { const c = netColour(v); if (c !== undefined) hues[k] = c; }
+          if (Object.keys(hues).length) ed.hues = hues;
+        }
         if (!empty(ed)) all[id] = ed;
       }
     }
@@ -87,6 +103,7 @@ function put(id: string, e: LayoutEdit): void {
   e.wired = [...new Set(e.wired)];
   e.tagged = [...new Set(e.tagged)];
   tidyVia(e);
+  if (e.hues && !Object.keys(e.hues).length) delete e.hues;
   if (empty(e)) delete store()[id];
   else store()[id] = e;
   save();
@@ -105,6 +122,24 @@ export function editLayout(id: string, f: (e: LayoutEdit) => void): void {
   put(id, e);
 }
 
+/** The colour the learner gave this net on this component's drawing, if any. */
+export const colourOf = (id: string, key: string): NetColour | undefined => layoutOf(id)?.hues?.[key];
+
+/** Give a net a colour, or take it away (undefined): one undo step. */
+export function setColour(id: string, key: string, c: NetColour | undefined): void {
+  editLayout(id, (e) => {
+    const v = netColour(c);
+    if (v === undefined) delete e.hues?.[key];
+    else e.hues = { ...e.hues, [key]: v };
+  });
+}
+
+/** Every colour the learner picked on this component back to none (one undo step); the arrangement stays. */
+export function resetColours(id: string): void {
+  editLayout(id, (e) => void delete e.hues);
+}
+
+/** The arrangement as the chapter drew it (one undo step); the learner's colours stay. */
 export function resetLayout(id: string): void {
   editLayout(id, (e) => {
     e.at = {};
@@ -165,16 +200,18 @@ export function applyLayout(nl: Netlist, e: LayoutEdit | undefined): Netlist {
     delta.set(i.name, [to[0] - from[0], to[1] - from[1]]);
     return { ...i, at: to };
   });
-  if (!delta.size && !wired.size && !tagged.size && !e.via) return nl;
+  const hues = e.hues ?? {};
+  if (!delta.size && !wired.size && !tagged.size && !e.via && !e.hues) return nl;
   const moved = (end: string) => delta.has(instOf(end) ?? '');
   const nets = nl.nets.map((n): NetDef => {
     const k = isTagged(n) ? null : netKey(n);
     const unravel = !k && wired.has(netKey(n));
     const ravel = !!k && tagged.has(k);
     const touches = n.ends.some(moved);
-    const mine = own[netKey(n)];
-    if (!unravel && !ravel && !touches && !mine) return n;
+    const mine = own[netKey(n)], hue = hues[netKey(n)];
+    if (!unravel && !ravel && !touches && !mine && hue === undefined) return n;
     const out: NetDef = { ...n };
+    if (hue !== undefined) out.hue = hue;
     if (unravel) {
       delete out.tags;
       delete out.tagAt;

@@ -16,8 +16,8 @@ import type { ViewCtx } from './context';
 import { hopPathData, overlaps, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type Rect, type RoutedNet, type TapLabel } from './route';
 import { partnerLines } from './partners';
 import { drawnNetlist } from './wirefirst';
-import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
-import { netKey, setNetHue, spreadHues } from './nethue';
+import { applyLayout, canRedo, canUndo, colourOf, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, resetColours, setColour, showsTags, undoLayout, type LayoutEdit, type NetColour } from './layout';
+import { drawnHue, netKey, setNetHue, spreadHues, type HueNet } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 import type { ViewFocus } from '../ui/viewlink';
 import type { NetEnd } from './netfacts';
@@ -337,12 +337,14 @@ export class SchematicView {
 
     // Wires
     // keyed by the authored net: a wire drawn as pointers is named for its driver, but keeps its colour
-    const hues = spreadHues(nets.map((n) => ({ key: netKey(base.nets[n.index]), polys: n.paths })));
+    // a colour the learner picked (applyLayout puts it on the net) is kept, and its neighbours spread away from it
+    const picked = (i: number) => nl.nets[i].hue;
+    const hues = spreadHues(nets.map((n) => this.hueNet(base, n, picked(n.index))));
     for (const [ni, net] of nets.entries()) {
       const cls = net.width > 1 ? 'wire bus' : 'wire';
       const w: WireEls = { net, paths: [], dots: [], tags: [], taps: [] };
       const name = nl.nets[net.index].name ?? `n${net.index}`;
-      const hue = hues[ni];
+      const hue = drawnHue(hues[ni], picked(net.index));
       w.hue = hue;
       for (const t of net.tags) {
         const { tip, stub: sp, rect: { x: rx, y: ry, w: tw, h: th } } = tagGeom(t, name);
@@ -1183,6 +1185,48 @@ export class SchematicView {
     document.addEventListener('keydown', key, true);
   }
 
+  /** A net as spreadHues sees it: keyed by the authored net (a wire drawn as pointers keeps its colour), a picked hue fixed. */
+  private hueNet(base: Netlist, n: RoutedNet, picked: NetColour | undefined): HueNet {
+    return { key: netKey(base.nets[n.index]), polys: n.paths, ...(typeof picked === 'number' ? { fixed: picked } : {}) };
+  }
+
+  /** Whether the learner can colour this level's nets: where they can arrange it (a sandbox chip's wires are coloured there). */
+  get colourable(): boolean {
+    return !!this.arrange && !!this.ctx && !!this.base;
+  }
+
+  /** The colour the learner gave net i of this level (undefined: none). */
+  colourOfNet(i: number): NetColour | undefined {
+    const id = this.ctx?.def.id, net = this.base?.nets[i];
+    return id && net ? colourOf(id, netKey(net)) : undefined;
+  }
+
+  /** Give net i a colour or take it away (undefined): one undo step, kept per level. Recoloured in place: nothing moves, so
+   *  nothing is routed again; the neighbours' spread hues follow. */
+  colourNet(i: number, c: NetColour | undefined): void {
+    const id = this.ctx?.def.id, base = this.base, net = base?.nets[i];
+    if (!id || !base || !net || !this.colourable) return;
+    setColour(id, netKey(net), c);
+    this.paintHues();
+    this.events.layoutChanged?.();
+  }
+
+  /** Every net's hue again from the stored colours, applied to what is drawn where it changed. */
+  private paintHues(): void {
+    const id = this.ctx?.def.id, base = this.base;
+    if (!id || !base) return;
+    const hues = layoutOf(id)?.hues ?? {};
+    const pick = (w: WireEls) => hues[netKey(base.nets[w.net.index])];
+    const spread = spreadHues(this.wires.map((w) => this.hueNet(base, w.net, pick(w))));
+    this.wires.forEach((w, k) => {
+      const hue = drawnHue(spread[k], pick(w));
+      if (hue === w.hue) return;
+      w.hue = hue;
+      for (const el of [...w.paths, ...w.tags, ...w.taps, ...w.dots, ...(w.label ? [w.label] : []), ...(w.ants ?? [])]) setNetHue(el, hue);
+    });
+    this.update();
+  }
+
   /** Change this level's layout (one undo step) and draw it again. */
   private edit(f: Parameters<typeof editLayout>[1]): void {
     const id = this.ctx?.def.id;
@@ -1309,7 +1353,12 @@ export class SchematicView {
         l.tagged = [];
       }) });
     }
-    if (lay) items.push({ label: 'Reset layout', hint: 'This level as the chapter drew it', run: () => this.edit((l) => {
+    if (lay?.hues) items.push({ label: 'Reset colours', hint: 'The wires you coloured on this level back to their own colours', run: () => {
+      resetColours(id);
+      this.paintHues();
+      this.events.layoutChanged?.();
+    } });
+    if (lay && (Object.keys(lay.at).length || lay.wired.length || lay.tagged.length || lay.via)) items.push({ label: 'Reset layout', hint: 'This level as the chapter drew it (your colours stay)', run: () => this.edit((l) => {
       l.at = {};
       l.wired = [];
       l.tagged = [];
@@ -1376,6 +1425,7 @@ export class SchematicView {
       selectNet: (i) => { this.select(null); this.selectNet(i); },
       jump: (e) => this.jumpTo(e),
       netNote: (i) => this.netNote(ctx, i),
+      ...(this.colourable ? { colour: { of: (i: number) => this.colourOfNet(i), set: (i: number, c: NetColour | undefined) => this.colourNet(i, c) } } : {}),
     };
     void import('./circuitmenu').then(
       (m) => {
