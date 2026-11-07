@@ -22,8 +22,8 @@ const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['sid
 const cache = new Map<string, ComponentDef>();
 
 /** The biquad. `round` is the one rounding: half-up (the default, and the first dropped bit added back) or toward zero (sign and any dropped bit). */
-export function biquad(round: Extract<BqRound, 'half-up' | 'zero'> = 'half-up'): ComponentDef {
-  const key = round === 'zero' ? 'biquad16z' : 'biquad16';
+export function biquad(round: Extract<BqRound, 'half-up' | 'zero' | 'trunc'> = 'half-up'): ComponentDef {
+  const key = round === 'zero' ? 'biquad16z' : round === 'trunc' ? 'biquad16t' : 'biquad16';
   let d = cache.get(key);
   if (d) return d;
   const { w, accW, drop } = BQ, hiW = accW - drop;
@@ -66,9 +66,10 @@ export function biquad(round: Extract<BqRound, 'half-up' | 'zero'> = 'half-up'):
     const any = b.op(orN(drop), [], 'any dropped bit set?', 'any');
     for (let i = 0; i < drop; i++) b.wire(`${sp}.o${i}`, `${any}.i${i}`);
     c = b.op1(AND, [sign, `${any}.y`], 'negative with a remainder: one up', 'up');
-  } else c = b.op1(cut(accW, drop - 1, 1), [`${acc}.s`], 'first dropped bit', 'lo');
+  } else if (round === 'trunc') c = gnd; // floor: the dropped bits are simply left off
+  else c = b.op1(cut(accW, drop - 1, 1), [`${acc}.s`], 'first dropped bit', 'lo');
   b.next();
-  const r = b.op1(roundUp(hiW, 'ROUND'), [hi, c], round === 'zero' ? 'toward zero' : 'round half up', 'round');
+  const r = b.op1(roundUp(hiW, 'ROUND'), [hi, c], round === 'zero' ? 'toward zero' : round === 'trunc' ? 'floor' : 'round half up', 'round');
   b.next();
   const cl = b.op(clampWord(w, hiW), [r], 'the one clamp', 'clamp');
   b.next();
@@ -78,7 +79,7 @@ export function biquad(round: Extract<BqRound, 'half-up' | 'zero'> = 'half-up'):
   b.wire(`${ry1}.q`, `${ry2}.d`);
   const R = b.right;
   d = define({
-    id: key, name: `Biquad (${round === 'zero' ? 'rounds toward zero' : 'rounds half up'})`, category: 'arithmetic',
+    id: key, name: `Biquad (${round === 'zero' ? 'rounds toward zero' : round === 'trunc' ? 'floors' : 'rounds half up'})`, category: 'arithmetic',
     summary: 'A second-order IIR section in direct form I: five signed multipliers, a 35-bit accumulator, one rounding and one clamp, and four delay registers. Data Q1.15, coefficients Q2.14.',
     ports: [bus('x', w, 'in'), bus('b0', w, 'in'), bus('b1', w, 'in'), bus('b2', w, 'in'), bus('a1', w, 'in'), bus('a2', w, 'in'),
       { name: 'clk', width: 1, dir: 'in', side: 'bottom', clock: true }, bus('y', w, 'out'), { name: 'sat', width: 1, dir: 'out' }],
