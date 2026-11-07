@@ -75,7 +75,9 @@ export const chAdaptive: Chapter = {
       title: 'The best a filter can do',
       body: `
         <p>Say an FIR filter w takes input x and should produce d, and you judge it by the mean of the squared error. That mean is a bowl in the coefficients: a quadratic, with one bottom. Set its slope to zero and you have the <strong>Wiener solution</strong>:</p>
-        <pre>R w = p      R: x's autocorrelation      p: x with d</pre>
+        <pre>R w = p
+R: x's autocorrelation
+p: x with d</pre>
         <p>It takes no knowledge of how d was made: only those two sets of correlations. For a stationary input, R is Toeplitz, so Levinson's recursion solves it in about n² operations where a general solver takes n³. Compared with scipy's <code>solve_toeplitz</code> here, it agrees to 8 places.</p>
         <p>So the question has an answer, for a known input and a fixed path. Two things are wrong with it in a call: the statistics have to be estimated first, and by then the path has changed. It is the target, and also what proves a learning filter has got there.</p>`,
       challenge: {

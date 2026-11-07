@@ -30,7 +30,7 @@ const clip = (x: readonly number[], rate: number, note: string): Clip => ({ samp
 /** A widget that waits for the voice, says so while it does, and says what failed if it cannot load. */
 function withVoice(title: string, build: (v: Recording, panel: HTMLElement, ctl: HTMLElement) => void): Widget {
   const panel = h('div', { class: 'panel' }, h('h3', null, title), h('p', { class: 'sub' }, 'Loading the recording…')), ctl = h('div', { class: 'panel mos-ctl' });
-  loadClip('voice').then((v) => { panel.lastElementChild!.remove(); build(v, panel, ctl); panel.append(credit()); }).catch((e: Error) => { panel.lastElementChild!.textContent = `The recording would not load: ${e.message}`; });
+  loadClip('voice').then((v) => { panel.lastElementChild!.remove(); build(v, panel, ctl); panel.append(credit()); if (!ctl.childElementCount) ctl.remove(); }).catch((e: Error) => { panel.lastElementChild!.textContent = `The recording would not load: ${e.message}`; });
   return { el: h('div', { class: 'widget mos sr-w' }, panel, ctl) };
 }
 /** Average power spectrum, in dB, from Hann-windowed blocks of 512: the frequencies and levels. */

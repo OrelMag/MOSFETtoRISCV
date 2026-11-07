@@ -161,6 +161,8 @@
   .lv-bar > .lv-crumb { flex: 0 1 auto; }
   .lv-bar > .lv-spacer { flex: 1 0 0; }
   .lv-act, .lv-kind, .lv-par, .lv-bar .lbl, .lv-bar:has(.lv-stars) .lv-badge.good { display: none; }
+  /* the shortcuts to the other tiers' capstones give the capstone's own name the room (My path lists them all) */
+  .lv-bar .lv-tierjump { display: none; }
   .sandbox.sb-levelmode > .sb-center { height: auto; flex: 1 1 0; min-height: 200px; }
   .sandbox.sb-levelmode > .sb-palette { max-height: 38dvh; }
   /* a core level's pins fill a screen: the I/O bar scrolls inside its own band, the canvas keeps a usable height */
