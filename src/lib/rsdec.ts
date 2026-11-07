@@ -6,7 +6,7 @@ import { rsCntWidth, rsKWidth, gfInvChain, RS_PHASE } from '../comm/rsrtl';
 import { gfMul, gfPow } from '../comm/rs';
 import { xorPlan } from '../comm/crc';
 import { symbolGeom } from '../sim/geometry';
-import type { ComponentDef, PortDef } from '../sim/types';
+import type { ComponentDef, NetDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
 import { Builder } from './builder';
 import { busMux2, decoder, equal, incrementer, rca } from './combinational';
@@ -456,32 +456,71 @@ export function rsDecoder(nsym = 10, n = 26): ComponentDef {
     b.next();
     b.wire(b.op1(bitwise('xor', 8), ['buf.q', fix]), 'out');
     b.wire('ctl.ch', 'valid'); b.wire('ctl.done', 'done'); b.wire('kk.fail', 'fail');
-    // Hand-placed: rows read left to right and each chain of neighbours (the ring, b, Ω, the output) is a staircase, one step a
-    // box, so that its wires run straight. What every part reads (controls, S, λ, δ, γ) stays on labels.
-    const half = Math.ceil(nsym / 2), at: Record<string, [number, number]> = {
-      ctl: [12, 2], rot: [12, 26], mc: [12, 32], mk: [22, 26],
-      dl: [134, 4], dz: [146, 16], gen: [146, 36], gam: [156, 34],
-      fr: [124, 136], bufen: [132, 130], buf: [146, 128], u0: [142, 146], u1: [152, 147], u2: [170, 146], kk: [184, 128],
+    // Hand-placed: three bands of level rows (the syndrome ring, the locator, the evaluator), each cell the same height, so a chain of neighbours
+    // (the ring, b, Ω, the output) runs level; what a row shares (rx, rot, d, bm, ini, ch, om) is a rail along it with a drop into each cell, and the
+    // control block drives the rails by wires. What every part reads (S, λ, δ, γ, swap, the clock and reset) stays on labels.
+    const half = Math.ceil(nsym / 2), X = 52, R1 = 14, R2 = 38, RL = 72, RO = 136;
+    const at: Record<string, [number, number]> = {
+      ctl: [12, 6], rot: [12, 30], mc: [12, 36], mk: [22, 36],
+      dl: [X + 92, R1], dz: [X + 104, 26], gen: [X + 104, 46], gam: [X + 114, 44],
+      fr: [X + 82, RO - 10], bufen: [X + 90, RO - 16], buf: [X + 104, RO - 18], u0: [X + 100, RO], u1: [X + 110, RO + 1], u2: [X + 128, RO], kk: [X + 142, RO - 18],
     };
-    for (let k = 0; k < nsym; k++) { const r = k >= half ? nsym - 1 - k : half - 1 - k; at[`s${k}`] = [42 + 17 * r, (k >= half ? 4 : 32) + 2 * r]; }
-    for (let j = 0; j <= t; j++) at[`l${j}`] = [42 + 17 * j, j === 0 ? 64 : 70 + 8 * (j - 1)];
-    for (let i = 0; i < t; i++) at[`o${i}`] = [42 + 15 * (t - 1 - i), 128 + 4 * (t - 1 - i)];
+    for (let k = 0; k < nsym; k++) { const r = k >= half ? nsym - 1 - k : half - 1 - k; at[`s${k}`] = [X + 17 * r, k >= half ? R1 : R2]; }
+    for (let j = 0; j <= t; j++) at[`l${j}`] = [X + 20 * j, RL];
+    for (let i = 0; i < t; i++) at[`o${i}`] = [X + 15 * (t - 1 - i), RO];
     for (const i of b.instances) i.at = at[i.name] ?? i.at;
     // the ends a net keeps on labels (the others are wires; none: all wires), by driver
-    const keep: Record<string, (ends: string[]) => string[]> = { 'mc.y': () => [], 'fr.e': () => [], 'rot.y': (e) => e.slice(1).filter((x) => x !== 'mk.en'), 'dl.y': (e) => e.slice(1).filter((x) => x !== 'dz.a') };
+    const keep: Record<string, (ends: string[]) => string[]> = { en: () => [], 'mc.y': () => [], 'fr.e': () => [], 'dl.y': (e) => e.slice(1).filter((x) => x !== 'dz.a') };
     for (let k = 1; k < nsym; k++) if (k !== half) keep[`s${k}.q`] = (e) => e.filter((x) => x.startsWith('dl.'));
     for (let j = 0; j < t; j++) keep[`l${j}.b`] = () => [];
     for (let i = 1; i < t; i++) keep[`o${i}.q`] = (e) => e.filter((x) => x.startsWith('fr.'));
     keep['o0.q'] = () => [];
     keep['fr.root'] = (e) => e.filter((x) => x.startsWith('kk.'));
+    // Rails: a net's vertical trunk (x), and per row of cells a horizontal rail above or below it with a drop (x offset left of the cell) into each cell's pin.
+    const inst = new Map(b.instances.map((i) => [i.name, i]));
+    const pinAt = (end: string): [number, number] => { const [n, p] = end.split('.'); const i = inst.get(n)!; return [i.at![0], i.at![1] + symbolGeom(i.def).ports[p].pos[1]]; };
+    const ringRows = [[...Array(nsym - half).keys()].map((r) => `s${nsym - 1 - r}`), [...Array(half).keys()].map((r) => `s${half - 1 - r}`)];
+    const lamRow = Array.from({ length: t + 1 }, (_, j) => `l${j}`), omRow = Array.from({ length: t }, (_, i) => `o${i}`);
+    interface Rail { drv: string; port: string; rows: string[][]; side: 1 | -1; lvl: number; trunk: number; drop: number; skip?: string[] }
+    const rails: Rail[] = [
+      { drv: 'd', port: 'd', rows: ringRows, side: -1, lvl: 1, trunk: 47, drop: 4 },
+      { drv: 'ctl.rx', port: 'rx', rows: ringRows, side: -1, lvl: 0, trunk: 45, drop: 2 },
+      { drv: 'rot.y', port: 'rot', rows: ringRows, side: 1, lvl: 0, trunk: 31, drop: 3 },
+      { drv: 'ctl.bm', port: 'bm', rows: [lamRow], side: -1, lvl: 0, trunk: 43, drop: 2 },
+      { drv: 'ctl.ini', port: 'ini', rows: [lamRow, omRow], side: 1, lvl: 0, trunk: 41, drop: 2 },
+      { drv: 'ctl.ch', port: 'ch', rows: [lamRow, omRow], side: 1, lvl: 1, trunk: 39, drop: 4 },
+      { drv: 'ctl.om', port: 'om', rows: [omRow], side: -1, lvl: 0, trunk: 37, drop: 2 },
+    ];
+    // a net's other sinks, reached along corridors no part sits in (corner lists from the trunk)
+    const extra: Record<string, Record<string, [number, number][]>> = {
+      'ctl.rx': { 'bufen.a': [[45, pinAt('bufen.a')[1]]] },
+      d: { 'buf.d': [[47, 112], [pinAt('buf.d')[0] - 4, 112], [pinAt('buf.d')[0] - 4, pinAt('buf.d')[1]]] },
+      'ctl.ch': { 'kk.ch': [[39, 160], [pinAt('kk.ch')[0] - 6, 160], [pinAt('kk.ch')[0] - 6, pinAt('kk.ch')[1]]] },
+      'dz.z': { 'kk.dz': [[pinAt('kk.dz')[0] - 12, pinAt('dz.a')[1] + 2], [pinAt('kk.dz')[0] - 12, pinAt('kk.dz')[1]]] },
+    };
+    const via = new Map<string, NetDef['via']>(), railed = new Map<string, Set<string>>();
+    for (const r of rails) {
+      const v: NonNullable<NetDef['via']> = {}, done = new Set<string>();
+      for (const row of r.rows) {
+        const first = inst.get(row[0])!, h = symbolGeom(first.def).h, y = r.side < 0 ? first.at![1] - 3 - 3 * r.lvl : first.at![1] + h + 4 + 3 * r.lvl;
+        for (const c of row) { const end = `${c}.${r.port}`, p = pinAt(end); v[end] = [[r.trunk, y], [p[0] - r.drop, y], [p[0] - r.drop, p[1]]]; done.add(end); }
+      }
+      via.set(r.drv, v); railed.set(r.drv, done);
+    }
+    for (const [drv, m] of Object.entries(extra)) {
+      const v = via.get(drv) ?? {}, done = railed.get(drv) ?? new Set<string>();
+      for (const [end, pts] of Object.entries(m)) { v[end] = pts; done.add(end); }
+      via.set(drv, v); railed.set(drv, done);
+    }
+    const WIRED = new Set(['mk.en']);
     const nets = () => b.nets().map((x) => {
-      const k = keep[x.ends[0]];
-      if (!k) return x;
-      const tags = k(x.ends);
-      const { tags: _t, ...rest } = x;
-      return tags.length ? { ...rest, tags } : rest;
+      const k = keep[x.ends[0]], rl = railed.get(x.ends[0]);
+      let out: NetDef = x;
+      if (k) { const tags = k(x.ends); const { tags: _t, ...rest } = x; out = tags.length ? { ...rest, tags } : rest; }
+      else if (rl) { const rest = x.ends.slice(1).filter((e) => !rl.has(e) && !WIRED.has(e)); const { tags: _t, ...r2 } = x; out = rest.length ? { ...r2, tags: rest } : r2; }
+      return rl ? { ...out, via: via.get(x.ends[0]) } : out;
     });
-    const pins = { d: [0, 3] as [number, number], en: [0, 11] as [number, number], rst: [0, 14] as [number, number], clk: [0, 17] as [number, number], out: [180, 148] as [number, number], fail: [200, 137] as [number, number], valid: [200, 140] as [number, number], done: [200, 143] as [number, number] };
+    const pins = { d: [0, 3] as [number, number], en: [0, 11] as [number, number], rst: [0, 14] as [number, number], clk: [0, 17] as [number, number], out: [X + 140, RO + 3] as [number, number], fail: [X + 168, RO - 9] as [number, number], valid: [X + 168, RO - 6] as [number, number], done: [X + 168, RO - 3] as [number, number] };
     return define({
       id: `rsdec${nsym}_${n}`, name: `Reed-Solomon decoder, RS(${n}, ${n - nsym})`, category: 'arithmetic',
       summary: `Corrects any ${t} wrong bytes in ${n}. Syndromes as the word arrives, the error locator by Berlekamp-Massey in ${nsym} clocks, Ω in ${t}, then every position tested as the word goes back out: ${2 * n + nsym + t + 1} clocks in all. fail says it could not, and only at the end.`,
