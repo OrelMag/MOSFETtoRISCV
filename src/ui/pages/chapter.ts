@@ -20,6 +20,7 @@ import { settings } from '../settings';
 import { reveal, StageNotes } from '../stagenotes';
 import { reducedMotion } from '../motion';
 import { litLine, wireLooks } from './looks';
+import { trackScrollCue } from '../scrollcue';
 import { ledgerView } from '../ledger';
 import { TourPlayer } from '../tour';
 import { analogiesOf } from '../../chapters/analogies';
@@ -61,6 +62,7 @@ export class ChapterPage implements Page {
   private routing = false;
   private unlisten: (() => void)[] = [];
   private pillOff: (() => void) | null = null;
+  private cueOff: (() => void) | null = null;
   private circuitBtn: HTMLElement | null = null;
   /** The step's challenge goal and "done" toasts over the canvas: the text panel's cards are often out of sight. */
   private notes = new StageNotes();
@@ -82,6 +84,7 @@ export class ChapterPage implements Page {
     this.el = h('div', { class: 'layout' }, narrative, this.stage.el, this.inspector.el, this.notes.live);
     this.stage.el.querySelector('.canvas')?.append(this.notes.el);
     this.circuitBtn = this.showCircuitButton();
+    this.cueOff = trackScrollCue(this.el);
     // Each level opened is a history entry (ui/drillpath.ts): #/c/<chapter>/<step>/<instance>/…
     this.stage.onNavigate(() => {
       if (this.sceneShown) syncDrill(this.hash(), this.routing);
@@ -539,7 +542,12 @@ export class ChapterPage implements Page {
     }
     nextBtn.setAttribute('aria-keyshortcuts', ']');
     nextBtn.append(h('kbd', { class: 'kbd-hint', 'aria-hidden': 'true' }, ']'));
-    this.foot.replaceChildren(prevBtn, h('span', { class: 'count' }, this.step === this.recap ? 'Recap' : `${this.step + 1} / ${n}`), nextBtn);
+    // a phone: the circuit is under the text, and Next is the thing in reach (Back stays first and Next last: the [ ] keys)
+    const circ = this.step === this.recap ? null
+      : h('button', { class: 'btn foot-circuit', type: 'button', 'aria-label': 'Show the circuit', onclick: () => {
+        this.stage.el.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
+      } }, 'Circuit', icon('chevD', 16));
+    this.foot.replaceChildren(prevBtn, h('span', { class: 'count' }, this.step === this.recap ? 'Recap' : `${this.step + 1} / ${n}`), ...(circ ? [circ] : []), nextBtn);
   }
 
   /** Does the text panel scroll by itself (side by side with the stage), rather than with the page (a phone)? */
@@ -563,6 +571,7 @@ export class ChapterPage implements Page {
     this.unbindKeys();
     this.unlisten.forEach((f) => f());
     this.pillOff?.();
+    this.cueOff?.();
     this.stage.destroy();
     this.chapter.leave?.();
   }
