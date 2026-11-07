@@ -610,7 +610,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The waterfall", challenge: "quiz" },
     { title: "What near the limit costs", challenge: "quiz" },
   ] },
-  { id: "pcie", num: 53, title: "PCIe and USB", blurb: "The packet buses inside the box: PCIe's TLPs, credits, Ack, Nak and a replay buffer, and link training in gates; USB's tokens, CRCs and enumeration.", level: "Communication", builds: ["serial","errors","bus"], recap: {"checks":3}, steps: [
+  { id: "pcie", num: 53, title: "PCIe and USB", blurb: "The packet buses inside the box: PCIe's TLPs, credits, Ack, Nak and a replay buffer, and link training in gates; USB's tokens, CRCs and enumeration.", level: "Communication", builds: ["serial","clocks","errors","codes","bus"], recap: {"checks":3}, steps: [
     { title: "From a bus to a lane", challenge: "quiz" },
     { title: "A packet, byte by byte", challenge: "quiz" },
     { title: "Credits: never send what will not fit", challenge: "reach" },
@@ -622,7 +622,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Enumeration: a stranger introduces itself", challenge: "reach" },
     { title: "Two answers to one question", challenge: "quiz" },
   ] },
-  { id: "ethernet", num: 54, title: "Ethernet", blurb: "Who talks now, and to whom: addresses and the FCS, a MAC in gates, collisions, binary exponential backoff, and why a minimum frame exists.", level: "Communication", builds: ["uart","errors"], recap: {"checks":3}, steps: [
+  { id: "ethernet", num: 54, title: "Ethernet", blurb: "Who talks now, and to whom: addresses and the FCS, a MAC in gates, collisions, binary exponential backoff, and why a minimum frame exists.", level: "Communication", builds: ["pcie","uart","wire","errors"], recap: {"checks":3}, steps: [
     { title: "Many machines, one wire", challenge: "quiz" },
     { title: "The transmitter", challenge: "quiz" },
     { title: "The receiver", challenge: "quiz" },
@@ -643,7 +643,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A switch on a bench", challenge: "quiz" },
     { title: "What full duplex changed", challenge: "quiz" },
   ] },
-  { id: "network", num: 56, title: "Computers on a network", blurb: "A NIC with descriptor rings and DMA, a driver in assembly, and ARP, IPv4, ICMP and UDP written in Python and compiled live: two computers and a switch, and a ping across them on the gates.", level: "Communication", builds: ["ethernet","switch","bus","python"], recap: {"checks":3}, steps: [
+  { id: "network", num: 56, title: "Computers on a network", blurb: "A NIC with descriptor rings and DMA, a driver in assembly, and ARP, IPv4, ICMP and UDP written in Python and compiled live: two computers and a switch, and a ping across them on the gates.", level: "Communication", builds: ["pcie","ethernet","switch","bus","python"], recap: {"checks":3}, steps: [
     { title: "How software reaches the wire" },
     { title: "Registers and rings", challenge: "quiz" },
     { title: "The NIC in gates", challenge: "reach" },
@@ -711,7 +711,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A TLS 1.3 handshake" },
     { title: "What it all costs" },
   ] },
-  { id: "path", num: 61, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","secret","router","network","ethernet"], recap: {"checks":4}, steps: [
+  { id: "path", num: 61, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","queues","secret","router","network","ethernet"], recap: {"checks":4}, steps: [
     { title: "A network of networks" },
     { title: "BGP: the whole path, and who pays", challenge: "quiz" },
     { title: "A name, then an address", challenge: "quiz" },
@@ -721,7 +721,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A page" },
     { title: "Many objects: HTTP/2 and QUIC" },
   ] },
-  { id: "radio", num: 62, title: "Radio", blurb: "How a bit crosses empty air: antennas, path loss and the link budget, mixers and software radio, multipath and fading, and what more antennas buy. Models, labelled as models.", level: "Communication", builds: ["modem","serial"], recap: {"checks":3}, steps: [
+  { id: "radio", num: 62, title: "Radio", blurb: "How a bit crosses empty air: antennas, path loss and the link budget, mixers and software radio, multipath and fading, and what more antennas buy. Models, labelled as models.", level: "Communication", builds: ["noise","modem","carriers","serial","errors"], recap: {"checks":3}, steps: [
     { title: "An antenna", challenge: "quiz" },
     { title: "Path loss", challenge: "quiz" },
     { title: "The link budget", challenge: "quiz" },
