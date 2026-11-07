@@ -308,6 +308,8 @@ export function diagnose(words: number[], results: readonly PathResult[], machin
   const head = `Run on a 16-tap tail with steady white noise, your program reaches ${f(loud)} at the usual far-end level, ${f(quiet)} with the far end 20 dB quieter and ${f(louder)} with it 6 dB louder (${f(need)} needed).`;
   if (loud >= need) {
     const reach = Math.max(...failing.map((r) => CLASS_OF[r.path.cls][1])), speech = failing.some((r) => r.path.source === 'speech');
+    // a constant step tuned to the probe's level passes it, but its answer still moves with the level: that, not the tail or a slow step, is why other far ends fail
+    if (Math.abs(louder - loud) > 5) return `${head} So the update works at that level, but its answer changes with the level (${f(quiet)} quieter, ${f(louder)} louder): the step does not scale with the signal's level (the update is not normalized by its energy), and the failing path${failing.length > 1 ? 's\' far ends are' : '\'s far end is'} not at the level it suits.`;
     // another path ended worse than no filter at all: on bursts the update is unstable, which is not the slow step the sentence below would suggest raising
     if (results.some((r) => !r.pass && !r.fault && (r.erle < -3 || wobble(r) > 6))) return `${head} So the update works there. What the failing path${failing.length > 1 ? 's add' : ' adds'} is a tail up to ${reach} taps${speech ? " and speech's bursts and colour" : ''}, and a path ended worse than no filter at all or wandered by more than 6 dB from block to block: on bursts the update is unstable, which is what a step too large for them does. Do not raise the step.`;
     // a slow step still finishes a 16-tap tail, so passing the probe cannot tell too few taps from too small a step: name both

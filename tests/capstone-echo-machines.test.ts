@@ -186,6 +186,11 @@ j loop
       expect(gradeEcho(plainLms(16), seed, { machine: 'mac' }).diagnosis, `mac seed ${seed}`).toMatch(NOTNORM);
       expect(gradeEcho(dspReference({ plain: 32 }), seed, { machine: 'dsp' }).diagnosis, `dsp seed ${seed}`).toMatch(NOTNORM);
       expect(gradeEcho(dspReference({ plain: 8 }), seed, { machine: 'dsp' }).diagnosis, `dsp tiny plain seed ${seed}`).toMatch(NOTNORM);
+      // a constant step tuned near the probe's level passes the probe; the louder probe still shows it does not scale (the audit found it told "the tail")
+      const p100 = gradeEcho(dspReference({ plain: 100 }), seed, { machine: 'dsp' });
+      expect(p100.ok, `dsp plain 100 seed ${seed}`).toBe(false);
+      expect(p100.diagnosis, `dsp plain 100 seed ${seed}`).toMatch(NOTNORM);
+      expect(p100.diagnosis).not.toMatch(/the step is the one to raise/);
       // normalized but small: never "not normalized"
       for (const [src, machine] of [[echoReference({ muShift: 14 }), 'rv32im'], [macReference({ muShift: 14 }), 'mac'], [dspReference({ gshift: 12 }), 'dsp'], [dspReference({ gshift: 13 }), 'dsp']] as [string, EchoMachineId][]) {
         const v = gradeEcho(src, seed, { machine });
