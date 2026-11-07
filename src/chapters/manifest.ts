@@ -740,15 +740,15 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Where the airtime goes", challenge: "quiz" },
     { title: "More antennas, more streams", challenge: "quiz" },
   ] },
-  { id: "cellular", num: 64, title: "Cellular", blurb: "How thousands share one mast: cells and reuse, the resource grid, schedulers that exploit fading, handover, beamforming, and what 5G changed. Models, labelled as models.", level: "Communication", builds: ["radio","wifi"], recap: {"checks":3}, steps: [
+  { id: "cellular", num: 64, title: "Cellular", blurb: "How thousands share one mast: cells and reuse, the resource grid, schedulers that exploit fading, handover, beamforming, and what 5G changed. Models, labelled as models.", level: "Communication", builds: ["radio","wifi","carriers"], recap: {"checks":3}, steps: [
     { title: "Cells and reuse", challenge: "quiz" },
     { title: "A grid in time and frequency", challenge: "quiz" },
     { title: "Who gets the next millisecond", challenge: "quiz" },
     { title: "Handing over", challenge: "quiz" },
-    { title: "A hundred antennas", challenge: "quiz" },
+    { title: "Many antennas", challenge: "quiz" },
     { title: "What 5G changed", challenge: "quiz" },
   ] },
-  { id: "datacentre", num: 65, title: "Inside the data centre", blurb: "How a hundred thousand machines talk: the exchange's Clos network folded in Ethernet, ECMP, incast, DCTCP, RDMA, lossless Ethernet and its deadlock, and the tail at scale, on labelled models with closed forms.", level: "Communication", builds: ["exchange","switch","tcp","queues"], recap: {"checks":3}, steps: [
+  { id: "datacentre", num: 65, title: "Inside the data centre", blurb: "How a hundred thousand machines talk: the exchange's Clos network folded in Ethernet, ECMP, incast, DCTCP, RDMA, lossless Ethernet and its deadlock, and the tail at scale, on labelled models with closed forms.", level: "Communication", builds: ["exchange","switch","ethernet","tcp","queues"], recap: {"checks":3}, steps: [
     { title: "The exchange, folded", challenge: "quiz" },
     { title: "A hash for a route", challenge: "quiz" },
     { title: "Incast", challenge: "quiz" },
@@ -758,7 +758,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "When lossless stops", challenge: "quiz" },
     { title: "The tail at scale", challenge: "quiz" },
   ] },
-  { id: "bench", num: 66, title: "The expert's bench", blurb: "Given a symptom, find the cause: a method, then real faults injected into the book's own models, read from captures, eyes, counters and traces.", level: "Communication", builds: ["tcp","path","switch","serial","uart","noise","radio","wifi"], recap: {"checks":3}, steps: [
+  { id: "bench", num: 66, title: "The expert's bench", blurb: "Given a symptom, find the cause: a method, then real faults injected into the book's own models, read from captures, eyes, counters and traces.", level: "Communication", builds: ["tcp","path","ethernet","switch","serial","uart","noise","radio","wifi"], recap: {"checks":3}, steps: [
     { title: "A method", challenge: "quiz" },
     { title: "Four transfers that crawl", challenge: "quiz" },
     { title: "Reading an eye", challenge: "quiz" },
@@ -769,7 +769,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Reading a specification", challenge: "quiz" },
     { title: "On your own", challenge: "quiz" },
   ] },
-  { id: "fixed", num: 67, title: "Numbers that fit", blurb: "What a signal processor does when a sum will not fit: Q formats, wrap against saturate with one in gates, rounding and its bias, guard bits, and where to put a gain.", level: "Signal processing", builds: ["binary","muldiv","signals"], recap: {"checks":3}, steps: [
+  { id: "fixed", num: 67, title: "Numbers that fit", blurb: "What a signal processor does when a sum will not fit: Q formats, wrap against saturate with one in gates, rounding and its bias, guard bits, and where to put a gain.", level: "Signal processing", builds: ["binary","muldiv","signals","noise","carriers"], recap: {"checks":3}, steps: [
     { title: "A word and its point", challenge: "quiz" },
     { title: "Wrap or saturate", challenge: "quiz" },
     { title: "A saturating adder", challenge: "reach" },

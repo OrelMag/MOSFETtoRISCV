@@ -263,8 +263,9 @@ with shadowing: levels cross several times near 500 m
     example: {
       title: 'Eight users at 10 dB',
       body: `<pre>mean SNR 10 dB each, 8 users, ideal reports
-   round robin   2.90 b/s/Hz
-   max rate      4.69 b/s/Hz
+   round robin         2.91 b/s/Hz
+   proportional fair   4.61 b/s/Hz
+   max rate            4.68 b/s/Hz
 best of 8 in Rayleigh fading: H₈ = 1 + ½ + … + ⅛ = 2.72 × the mean</pre>With equal users max rate and proportional fair nearly coincide; with users apart in distance proportional fair is the one that does not starve the far ones.`,
     },
     mistakes: [
@@ -292,7 +293,7 @@ M = 64, K from 4 to 8: 61/4 → 57/8, a factor of 2.14 less each,
       'Adding users without cost: each extra user takes a dimension and a share of the power.',
     ],
     chapters: [
-      { chapter: 'cellular', step: 4, label: 'A hundred antennas' },
+      { chapter: 'cellular', step: 4, label: 'Many antennas' },
       { chapter: 'wifi', step: 6, label: 'More antennas, more streams' },
       { chapter: 'radio', step: 0, label: 'An antenna' },
     ],
