@@ -52,7 +52,8 @@
 .tc-spec-shade { fill: color-mix(in srgb, var(--accent) 18%, transparent); }
 .tc-spec-line { fill: none; stroke: var(--accent); stroke-width: 1.3; }
 .tc-mark { stroke-width: 1.5; } .tc-mark.tuned { stroke: var(--warn); } .tc-mark.culprit { stroke: var(--bad); stroke-dasharray: 4 3; }
-.tc-mark-t { font-size: 13px; } .tc-mark-t.tuned { fill: var(--text); } .tc-mark-t.culprit { fill: var(--bad); }
+.tc-mark-t { font-size: 13px; paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; } .tc-mark-t.tuned { fill: var(--text); } .tc-mark-t.culprit { fill: var(--bad); }
+.tc-grid { stroke: var(--border); stroke-width: 1; }
 .tc-tick { font-size: 12px; fill: var(--muted); font-family: var(--font-mono); }
 
 @media (max-width: 900px) { .tc-cols { grid-template-columns: minmax(0, 1fr); } }

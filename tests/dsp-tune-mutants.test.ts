@@ -15,11 +15,12 @@ const MUTANTS: { name: string; chain: Chain; blamed: (c: Cause) => boolean }[] =
   { name: '"find it" with too large a margin', chain: at(0, { tune: { mode: 'find', marginDb: 45 } } as Partial<Block>), blamed: (c) => c.kind === 'tune-none' },
   { name: 'a first-order CIC', chain: at(1, { N: 1 } as Partial<Block>), blamed: (c) => c.kind === 'interference' && c.worst.block === 'cic' },
   { name: 'a four-bit oscillator table', chain: at(0, { bits: 4 } as Partial<Block>), blamed: (c) => c.kind === 'interference' && c.worst.spurDb > 6 },
-  { name: 'a channel filter of 15 taps', chain: at(2, { taps: 15, cutoff: 75_000 } as Partial<Block>), blamed: (c) => c.kind === 'interference' },
+  { name: 'a wide channel filter of 15 taps', chain: at(2, { taps: 15, cutoff: 100_000 } as Partial<Block>), blamed: (c) => c.kind === 'interference' },
   { name: 'a channel filter narrower than the station', chain: at(2, { cutoff: 5_000 } as Partial<Block>), blamed: (c) => c.kind === 'too-narrow' },
+  { name: 'a decoder threshold far too low', chain: at(6, { threshold: 2 } as Partial<Block>), blamed: (c) => c.kind === 'decoder' },
 ];
 /** Attempts whose failing band is diagnosed (slow: every part of the band on its own); every attempt is checked to fail. */
-const DIAGNOSED = [ATTEMPTS[0], ATTEMPTS[11], ATTEMPTS[ATTEMPTS.length - 1]];
+const DIAGNOSED = [0, 0.25, 0.5, 0.75, 1].map((q) => ATTEMPTS[Math.round(q * (ATTEMPTS.length - 1))]);
 
 describe('mutants fail every attempt, and are blamed for what was spoiled', () => {
   for (const m of MUTANTS) {

@@ -6,8 +6,8 @@ import { signedOf, wordOf } from '../src/comm/signals';
 import { CicModel, cicWidth } from '../src/dsp/multirate';
 import { W_MIX } from '../src/dsp/sdr';
 import {
-  BAND_EDGE, BLOCK_NAME, chainCost, checkChain, cicRun, decodeMorse, DEFAULT_CHAIN, findSpectrum, findStation, hintsFor, keyingOf, makeBand, MESSAGES, MORSE_CODE, PRACTICE_SEED, REFERENCE_CHAIN,
-  sampleBand, unitOwners, UNIT_S, type Cause, type Chain, type GatePrices,
+  BAND_EDGE, BLOCK_NAME, blockCosts, chainCost, checkChain, cicRun, decodeMorse, DEFAULT_CHAIN, discCordic, discPhase, findSpectrum, findStation, fmtKhz, foldPath, halfBandTaps, hintsFor,
+  keyingOf, makeBand, MESSAGES, MORSE_CODE, PRACTICE_SEED, REFERENCE_CHAIN, sampleBand, unitOwners, UNIT_S, type Block, type Cause, type Chain, type GatePrices,
 } from '../src/dsp/tune';
 import { cicDecimator } from '../src/lib/multirate';
 import { complexMixer } from '../src/lib/sdr';
@@ -18,6 +18,8 @@ import { tick } from './yieldtick';
 
 const lcg = (seed: number) => { let s = seed; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 2 ** 32; }; };
 const randWord = (r: () => number, w: number) => Math.floor(r() * 2 ** w) - 2 ** (w - 1);
+/** The practice band, pinned: the seed's draws alone make a band, the same in every engine. */
+const PRACTICE_PIN = ['SOS', 750, [[171_000, 'morse', -38], [356_000, 1, 0], [61_000, 0, -3], [-308_000, 2, -6]]];
 const prices: GatePrices = { mixer: (k) => stats(complexMixer(k)).nands, cic: (N, R, w) => stats(cicDecimator(N, R, w)).nands };
 
 describe('the CICs at the learner\'s sizes', () => {
@@ -109,15 +111,68 @@ describe('the bands', () => {
 });
 
 describe('hints', () => {
-  it('name blocks, never a number', () => {
-    const worst = { station: 1, offKhz: 0, db: 0, foldedTo: 1, block: 'cic' as const, spurDb: 9, breaks: true };
+  it('give a direction, never a number, and only a change the chain can still make', () => {
+    const worst = { station: 1, offKhz: 0, db: 0, foldedTo: 1, block: 'cic' as const, whole: true, atGates: 1, spurDb: 9, breaks: true };
     const causes: Cause[] = [
       { kind: 'tune-fixed', hz: 1 }, { kind: 'tune-none', marginDb: 1 }, { kind: 'tune-wrong', hz: 1, offKhz: 1 }, { kind: 'tone-cut', lossDb: 1 }, { kind: 'too-narrow', lossDb: 1 },
-      { kind: 'disc-rate', rate: 1 }, { kind: 'cordic', stages: 1 }, { kind: 'noise', cnDb: 1 }, { kind: 'decoder' },
+      { kind: 'disc-rate', rate: 1 }, { kind: 'cordic', stages: 1 }, { kind: 'noise', cnDb: 1, stationsToo: false }, { kind: 'decoder' }, { kind: 'unknown' },
       { kind: 'interference', ciDb: 1, worst, together: false }, { kind: 'interference', ciDb: 1, worst: { ...worst, block: null, spurDb: 0 }, together: true },
       { kind: 'interference', ciDb: 1, worst: { ...worst, block: 'halfband' as const }, together: false },
     ];
     // a block's own name may hold a figure ("÷ 2"); nothing else may
     for (const c of causes) for (const h of hintsFor(c, DEFAULT_CHAIN)) expect(Object.values(BLOCK_NAME).reduce((s, n) => s.split(n.toLowerCase()).join(''), h)).not.toMatch(/\d/);
+    // a fifth-order CIC ÷ 2 behind a ten-bit table: nothing left to raise or lower there
+    const top: Chain = [{ ...REFERENCE_CHAIN[0], bits: 10 } as Block, { kind: 'cic', N: 5, R: 2 }, ...REFERENCE_CHAIN.slice(2)];
+    expect(hintsFor({ kind: 'interference', ciDb: 1, worst, together: false }, top).join(' | ')).not.toMatch(/higher CIC order|smaller CIC ratio|finer oscillator/);
+  });
+});
+
+describe('the parts the grade reasons with', () => {
+  it('a band is the same in every engine: the practice band, pinned', () => {
+    const b = makeBand(PRACTICE_SEED);
+    expect([b.message, b.toneHz, b.stations.map((s) => [s.f, s.prog, Math.round(20 * Math.log10(s.a))])]).toEqual(PRACTICE_PIN);
+  });
+  it('a station folds where the arithmetic says, whole or in part', () => {
+    const c = DEFAULT_CHAIN; // CIC ÷ 4: 240 kHz out, Nyquist 120 kHz
+    expect(foldPath(c, 199_000)).toMatchObject({ block: 'cic', whole: true });
+    expect(foldPath(c, 199_000).foldedTo).toBeCloseTo(-41_000);
+    expect(foldPath(c, -199_000).foldedTo).toBeCloseTo(41_000);
+    expect(foldPath(c, 120_000)).toMatchObject({ block: 'cic', whole: false });
+    expect(foldPath(c, 30_000)).toMatchObject({ block: null, foldedTo: null, atGates: 30_000 });
+    // past 240 kHz at a CIC ÷ 2: folds there to −180 kHz (where the plot after the gates shows it), then again at the half-band
+    const two: Chain = [c[0], { kind: 'cic', N: 4, R: 2 }, { kind: 'halfband', taps: 23 }, ...c.slice(2)];
+    const p = foldPath(two, 300_000);
+    expect(p.block).toBe('cic'); expect(p.foldedTo).toBeCloseTo(-180_000); expect(p.atGates).toBeCloseTo(-180_000);
+  });
+  it('the CORDIC discriminator agrees with the phase step to its stated angle error, at any level', () => {
+    const n = 4000, rate = 240_000, re = new Float64Array(n), im = new Float64Array(n);
+    for (let i = 0; i < n; i++) { const ph = 2 * Math.PI * ((30_000 * i) / rate + 0.3 * Math.sin(i / 37)), g = 0.01 * (1 + 0.9 * Math.sin(i / 11)); re[i] = g * Math.cos(ph); im[i] = g * Math.sin(ph); }
+    const a = discPhase(re, im, rate);
+    for (const st of [6, 12]) {
+      const b = discCordic(re, im, rate, st), bound = ((Math.atan(2 ** -(st - 1)) + 2 ** -11) / (2 * Math.PI)) * (rate / 50_000);
+      let worst = 0;
+      for (let i = 1; i < n; i++) worst = Math.max(worst, Math.abs(a[i] - b[i]));
+      expect(worst).toBeLessThanOrEqual(bound);
+    }
+  });
+  it('refuses CICs wider than the gates hold', () => {
+    const c: Chain = [DEFAULT_CHAIN[0], { kind: 'cic', N: 5, R: 16 }, { kind: 'cic', N: 5, R: 2 }, { kind: 'channel', taps: 41, cutoff: 10_000 }, DEFAULT_CHAIN[3], { kind: 'morse', threshold: 'auto' }];
+    expect(checkChain(c).problem).toMatch(/at most 32/);
+  });
+  it('prices each kind of block', () => {
+    const c: Chain = [DEFAULT_CHAIN[0], { kind: 'cic', N: 4, R: 2 }, { kind: 'halfband', taps: 23 }, { kind: 'poly', taps: 31, R: 2 }, { kind: 'channel', taps: 41, cutoff: 50_000 },
+      { kind: 'disc', method: 'cordic', stages: 10 }, { kind: 'deemph' }, { kind: 'audio', taps: 63, cutoff: 3000, M: 5 }, { kind: 'morse', threshold: 'auto' }];
+    const k = blockCosts(c, prices);
+    expect(k[2].mults).toBe(2 * halfBandTaps(23).filter((v) => v !== 0).length * 240_000);
+    expect(k[3].mults).toBe(2 * 31 * 120_000);
+    expect(k[4].mults).toBe(2 * 41 * 120_000);
+    expect(k[5]).toEqual({ nands: 0, mults: 4 * 120_000, angles: 10 * 120_000 });
+    expect(k[6].mults).toBe(2 * 120_000);
+    expect(k[7].mults).toBe(63 * 24_000);
+  });
+  it('never writes −0', () => {
+    expect(fmtKhz(-200)).toBe('0 kHz');
+    expect(fmtKhz(-1_600)).toBe('−2 kHz');
+    expect(fmtKhz(41_000)).toBe('+41 kHz');
   });
 });
