@@ -32,7 +32,7 @@ export const NODES_DSP: CampaignNode[] = [
       'The window end is base + len in 8 bits, so it wraps when the window crosses 255. Mode 4 wraps when the next address (the adder\'s output) equals the end; mode 5 when p equals the base, and it goes to end − 1, which is one more 8-bit add of 255. Compare with equality, never with greater-than: a pointer outside the window must just step.',
       'Bit-reversed needs no adder of its own beyond one: reversing is wiring. Reverse p, reverse m, add, reverse the sum. Mode 0 is the last mux in line, and it must beat the others: a read without a step leaves p alone.',
     ],
-    codex: ['counter', 'comparator', 'stack'], chapters: [{ chapter: 'dspcore', step: 2, label: 'Address generators' }],
+    codex: ['counter', 'comparator', 'ripple', 'nicring'], chapters: [{ chapter: 'dspcore', step: 2, label: 'Address generators' }],
   },
   {
     id: 'sp_biquad', act: 13, title: 'A biquad', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_biquad, givesOf: biquadGives,
