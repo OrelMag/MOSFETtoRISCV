@@ -138,7 +138,7 @@ export const UART_TX: ComponentDef = (() => {
     'u11.y': { 'tc.d': [[64, 9], [64, 3], [26, 3], [26, 8]] },
     'u14.y': { 'bc.d': [[64, 35], [64, 29], [26, 29], [26, 34]] },
   });
-  const pins = { tick: [0, 17], go: [0, 5], din: [0, 60], clk: [0, 70], tx: [100, 57], busy: [110, 44], taken: [110, 50] };
+  const pins: Record<string, [number, number]> = { tick: [0, 17], go: [0, 5], din: [0, 60], clk: [0, 70], tx: [100, 57], busy: [110, 44], taken: [110, 50] };
   return define({
     id: 'uart_tx', name: 'UART transmitter', category: 'sequential',
     summary: 'A byte in (go), a frame out: start (0), eight data bits LSB first, stop (1), each 16 ticks long, in a 10-bit shift register with a tick counter and a bit counter. The line moves only on a tick.',
@@ -218,7 +218,7 @@ export const UART_RX: ComponentDef = (() => {
     'u23.y': { 'u26.a': v([54, 25], [54, 20], [11, 20], [11, 24]) },
     'u27.y': { 'u29.a': v([54, 59], [54, 54], [11, 54], [11, 58]) },
   }, { 'dec.y1': 71, 'dec.y2': 70, 'dec.y3': 69, 'dec.y4': 68 });
-  const pins = { rx: [0, 5], tick: [0, 70], clk: [0, 74], data: [124, 61], push: [124, 33], ferr: [124, 38], state: [124, 6], busy: [124, 24] };
+  const pins: Record<string, [number, number]> = { rx: [0, 5], tick: [0, 70], clk: [0, 74], data: [124, 61], push: [124, 33], ferr: [124, 38], state: [124, 6], busy: [124, 24] };
   return define({
     id: 'uart_rx', name: 'UART receiver', category: 'sequential',
     summary: 'rx through a 2-flop synchronizer; a low at a tick starts a count of ticks, the middle of the start bit confirms it (else a false start), then a sample every 16 ticks into an 8-bit shift register and a stop check: push on a 1, ferr on a 0.',
@@ -279,9 +279,9 @@ export const UART_CORE: ComponentDef = (() => {
     u16: [150, 68], u17: [168, 40],
   }, {
     wval: true, divWe: true, clk: true, ieWe: true, 'xmit.taken': true, 'recv.push': ['u11.a'], pop: true, 'txf.empty': ['u14.a', 'u19.b'], 'baud.tick': true, clrWe: true,
-    'divr.q': ['div'], 'ier.q': ['ie'], 'u2.y': true, 'fe.q': true, 'ov.q': true, 'u14.y': true, 'recv.ferr': true, 'recv.data': ['rxf.din'],
+    'divr.q': ['div'], 'ier.q': ['ie'], 'u2.y': true, 'fe.q': true, 'ov.q': true, 'u14.y': true, 'recv.ferr': true,
   });
-  const pins = { rx: [0, 27], push: [0, 4], data: [0, 8], pop: [0, 24], divWe: [0, 34], ieWe: [0, 56], clrWe: [0, 62], wval: [0, 40], clk: [0, 70], tx: [184, 4], rxData: [184, 25], status: [184, 46], div: [184, 38], ie: [184, 52], irq: [184, 55], tickOut: [184, 60] };
+  const pins: Record<string, [number, number]> = { rx: [0, 27], push: [0, 4], data: [0, 8], pop: [0, 24], divWe: [0, 34], ieWe: [0, 56], clrWe: [0, 62], wval: [0, 40], clk: [0, 70], tx: [184, 4], rxData: [184, 25], status: [184, 46], div: [184, 38], ie: [184, 52], irq: [184, 55], tickOut: [184, 60] };
   return define({
     id: 'uart_full', name: 'UART core (FIFOs, status, divisor)', category: 'sequential',
     summary: 'Baud generator, transmitter, receiver, a 16-byte FIFO each way, the divisor and interrupt-enable registers, status bits (rx not empty, tx full, tx idle, framing error, overrun) and the interrupt. push writes a byte to the transmit FIFO, pop takes the oldest received byte; wval with divWe / ieWe / clrWe writes the registers.',
