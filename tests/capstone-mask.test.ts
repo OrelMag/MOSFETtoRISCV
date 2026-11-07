@@ -10,6 +10,8 @@ import { emptyWorkspace } from '../src/editor/model';
 import { CAPSTONES, COMM_CAPSTONES, DSP_CAPSTONES } from '../src/learn/capstones';
 import { constWord } from '../src/lib/alu';
 import { Builder } from '../src/lib/builder';
+import { placed } from '../src/lib/fft';
+import { clampWord } from '../src/lib/fixedpt';
 import { define } from '../src/lib/define';
 import { maskAccBits, maskFir, maskIir } from '../src/lib/maskfilter';
 import { stats } from '../src/sim/stats';
@@ -108,9 +110,43 @@ describe('the mask capstone', () => {
       const f = runMask(def, 'gate', { seed }).failures, r = reasons(f);
       expect(r.wrap, `seed ${seed}: ${f.join(' | ')}`).toBe(true);
       expect(r.pass || r.stop || r.cycle || r.budget, f.join(' | ')).toBe(false);
-      expect(f.find((x) => /wrapped/.test(x))).toMatch(/worst-case input.*sample \d+: y reads -?\d+ where the impulse response says -?\d+, so the output wrapped \(off by exactly [\d,]+ = 2\^\d+\)/);
+      expect(f.find((x) => /wrapped/.test(x))).toMatch(/worst-case input.*sample \d+: y reads -?\d+ where the impulse response says -?\d+, so a word wrapped: y is off by exactly [\d,\s]+ = 2\^\d+/);
     }
   }, 120_000);
+
+  it('names a clip a clip, never a wrap; an inverted output inverted, not −120 dB; a wrap before the gain it spoils', async () => {
+    const inner = maskReferenceDef();
+    const clip12 = define({
+      id: 't_maskclip12', name: 'clip 12', category: 'arithmetic', summary: '', symbol: { kind: 'box', label: 'CLIP' },
+      ports: [{ name: 'x', width: 12, dir: 'in' }, { name: 'clk', width: 1, dir: 'in', clock: true }, { name: 'y', width: 14, dir: 'out' }],
+      netlist: () => {
+        const b = new Builder(10, 10, 4);
+        b.pins('x', 'clk');
+        const f = b.op(inner, ['x', 'clk'], 'fir', 'f'), c = b.op(clampWord(12, 14), [`${f}.y`], 'clamp', 'c');
+        b.wire(b.op1(placed(12, 0, 14), [`${c}.y`], 'ext', 'e'), 'y');
+        return { pins: { x: [0, 6], clk: [0, 22], y: [b.right, 6] }, instances: b.instances, nets: b.nets() };
+      },
+    });
+    const neg = maskFir({ words: ref.words.map((v) => -v), frac: ref.frac, accBits: ref.accBits, tag: 'negated' });
+    const halfUp = maskIir({ sections: maskIirSections(), round: 'half-up' });
+    const short3 = maskFir({ words: ref.words, frac: ref.frac, accBits: ref.accBits - 3, tag: 'three short' });
+    for (const seed of [1, 2, 3]) {
+      await tick();
+      const c = runMask(clip12, 'gate', { seed }).failures, rc = reasons(c);
+      expect(rc.clip && !rc.wrap, `seed ${seed}: ${c.join(' | ')}`).toBe(true);
+      await tick();
+      const n = runMask(neg, 'gate', { seed }).failures;
+      expect(n.join(' | ')).toMatch(/at 0 Hz \(DC\) an input of \+1800 held steady comes out near -1\d{3}: the gain is negative \(× −1\.0\d\), so the output is inverted/);
+      expect(n.join(' | ')).not.toMatch(/−120/);
+      await tick();
+      expect(reasons(runMask(halfUp, 'gate', { seed, ...OPEN }).failures).wrap, `seed ${seed}`).toBe(false);
+      await tick();
+      const s = runMask(short3, 'gate', { seed }).failures;
+      const wi = s.findIndex((x) => /worst-case|noise/.test(x)), pi = s.findIndex((x) => /^pass band/.test(x));
+      expect(wi, s.join(' | ')).toBeGreaterThanOrEqual(0);
+      if (pi >= 0) expect(wi).toBeLessThan(pi);
+    }
+  }, 240_000);
 
   it('an IIR that floors what it feeds back has a limit cycle, named by its period; a good IIR passes everything but the budget', async () => {
     const sections = maskIirSections();
