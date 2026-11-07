@@ -331,6 +331,8 @@ export function shaCore(): ComponentDef {
           // wires where the sink is near, a pointer for the far ends
           const near: Record<string, string[] | true> = { done_q: ['u7.a'], vars_q: ['sv.in'], cnt_q: ['kk.t', 'inc.a'], chain_q: true };
           if (n.ends[n.ends.length - 1] === 'out') return { ...n, via: { out: outVia } };
+          const byDriver: Record<string, string[]> = { 'last.y': ['u2.b'], 'u3.y': ['u9.b'] };
+          if (byDriver[n.ends[0]]) return { ...n, tags: byDriver[n.ends[0]] };
           return n.name && near[n.name] ? { ...n, tags: near[n.name] } : n;
         }),
       }),
