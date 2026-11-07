@@ -89,6 +89,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "speech": () => import('./ch-dsp-speech').then((m) => m.chSpeech),
   "music": () => import('./ch-dsp-music').then((m) => m.chMusic),
   "pictures": () => import('./ch-dsp-pictures').then((m) => m.chPictures),
+  "sdr": () => import('./ch-dsp-sdr').then((m) => m.chSdr),
   "appendix-6502": () => import('./ch-6502').then((m) => m.chAppendix6502),
   "appendix-doom": () => import('./ch-doom').then((m) => m.chAppendixDoom),
   "appendix-sap": () => import('./ch-sap').then((m) => m.chAppendixSap),

@@ -88,6 +88,7 @@ const BOOK = [
   'speech',
   'music',
   'pictures',
+  'sdr',
   'appendix-6502',
   'appendix-doom',
   'appendix-sap',
