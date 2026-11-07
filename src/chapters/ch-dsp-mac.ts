@@ -2,7 +2,7 @@
 // four instructions on custom-2, the golden model and the single-cycle core in lock step (tests/dsp-mac-*.test.ts), and four filter kernels measured on gates on five machines
 // (dsp/macbench.json). Every figure on the page is read from the gates or the measured file; a figure the text had expected and the gates did not give is said so.
 
-import { ACC_BITS, accHex, raccOf } from '../dsp/mac';
+import { ACC_BITS, accHex, FULL_SCALE, fitsBeforeWrap, MAC_F3, macProduct, raccOf, signedBits } from '../dsp/mac';
 import { macPlan } from '../dsp/macbench';
 import { macRead } from '../lib/macunit';
 import { MAC_INSTRS } from '../riscv/isa';
@@ -17,6 +17,10 @@ import type { Chapter } from './types';
 
 const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
 const F3 = (n: string) => MAC_INSTRS.find((i) => i.name === n)!.funct3!.toString(2).padStart(3, '0');
+// headroom, from the model: full-scale instructions that fit (the next one wraps), and the bits a 64-tap sum of full-scale products needs
+const MAC_FIT = Number(fitsBeforeWrap(macProduct(MAC_F3.mac, FULL_SCALE, FULL_SCALE)));
+const MAC2_FIT = Number(fitsBeforeWrap(macProduct(MAC_F3.mac2, FULL_SCALE, FULL_SCALE)));
+const TAP64_BITS = signedBits(64n * macProduct(MAC_F3.mac, FULL_SCALE, FULL_SCALE));
 
 export const chMac: Chapter = {
   id: 'mac', num: numOf('mac'), title: 'A MAC on the RV32', level: 'Signal processing',
@@ -31,7 +35,7 @@ export const chMac: Chapter = {
   recap: {
     keep: [
       'A filter is multiply-accumulate and little else. On a core with no multiplier the multiply is a loop of shifts and adds, and it is the whole cost.',
-      'The accumulator is wide so that sums do not round on the way: 40 bits hold 2^9 products of two 16-bit words (the largest is (−32768)² = 2^30) before they can wrap, or 2^8 mac2 steps (up to 2^31 each). The shift, the one rounding and the one clamp happen once, when racc reads it.',
+      `The accumulator is wide so that sums do not round on the way: ${ACC_BITS} bits hold ${MAC_FIT} products of two 16-bit words (the largest is (−32768)² = 2^30) and the next one wraps, or ${MAC2_FIT} mac2 steps (up to 2^31 each). The shift, the one rounding and the one clamp happen once, when racc reads it.`,
       'Four instructions share one opcode, custom-2, told apart by funct3. Anything else on custom-2 does nothing, on the model and in the gates, so the learner\'s own instructions keep custom-1 and custom-3.',
       'mac alone saves a multiply, not the loads: two lw and two pointer steps still surround every product. mac2 does two products from the same two loads, and the packed layout is what pays for it.',
       'The numbers here were measured on gates, with each result checked against the exact answer. Where a count worked out on paper before the run was wrong, the page says so.',
@@ -127,7 +131,7 @@ export const chMac: Chapter = {
       title: 'The accumulator and its read',
       get body() {
         return `
-        <p>Two 16-bit words give a 32-bit product, and a filter adds up to 64 of them. So the accumulator has to be wider than a word. It is <strong>${ACC_BITS} bits</strong>: eight more than a product, enough for 512 mac products of full-scale operands (each at most 2^30) or 256 mac2 steps (at most 2^31 each) before it can wrap. A 64-tap Q1.15 filter adds at most 64 × 2^30 = 2^36: three bits to spare. Past that it wraps as two's complement, with no flag and no clamp: a guard that saturated would need a comparator on every add, and the filter never wants one.</p>
+        <p>Two 16-bit words give a 32-bit product, and a filter adds up to 64 of them. So the accumulator has to be wider than a word. It is <strong>${ACC_BITS} bits</strong>: eight more than a product, enough for ${MAC_FIT} mac products of full-scale operands (each at most 2^30) or ${MAC2_FIT} mac2 steps (at most 2^31 each); the next one wraps. A 64-tap Q1.15 filter adds at most 64 × 2^30 = 2^36, which needs ${TAP64_BITS} of the ${ACC_BITS} bits: ${ACC_BITS - TAP64_BITS} to spare, an eighth of 2^39. Past that it wraps as two's complement, with no flag and no clamp: a guard that saturated would need a comparator on every add, and the filter never wants one.</p>
         <p>The read happens once, when the sum is finished. <code>racc rd, rs1</code> takes the shift from the low six bits of <code>rs1</code>, shifts the accumulator right (arithmetic), adds the first bit that fell off (rounding half up, as <a href="#/c/fixed/1">chapter ${numOf('fixed')}</a> defined it), and clamps to 32 bits. The clamp is once, and at 32 bits, not 16: the word the next instruction uses as a 16-bit operand must still fit 16 bits, and that is the program's job.</p>
         <p>In gates the trick is a 41-bit shifter fed with the accumulator and one zero below it: the bit that falls out first is the rounding bit, and the rest goes to a rounder of half adders and the clamp. About ${n0(stats(macRead()).nands)} NANDs; the six stages of the shifter are most of it.</p>
         <div class="try">Take the magnitude to 38 bits at shift 15 and then lower the shift to 0: the clamp acts when the rounded value passes 32 bits. Then set the shift to 39, where only the sign and the rounding bit are left (−1 or 1 at the extremes), and to 40 or more, where the result is always 0.</div>`;
@@ -216,7 +220,7 @@ export const chMac: Chapter = {
         options: ['Data that overflows 16 bits, or taps that do not sum to about 1', 'More than 64 taps', 'Samples that are negative', 'A different clock rate'],
         answer: 0,
         explain: 'mac reads only the low 16 bits of each operand, and racc clamps to 32. A 16-bit state that leaves 16 bits is silently wrong, and a sum that needs more than 40 bits wraps. These kernels were chosen with headroom and the headroom is part of the result.',
-        why: ['', 'The accumulator has room for 256 full-scale products; more taps at smaller amplitude go on working.', 'Sign extension is built in: operands are signed 16-bit words.', 'The table counts clocks and NAND delays, not seconds.'],
+        why: ['', `The accumulator holds ${MAC_FIT} full-scale products; more taps at smaller amplitude go on working.`, 'Sign extension is built in: operands are signed 16-bit words.', 'The table counts clocks and NAND delays, not seconds.'],
       },
     },
   ],
