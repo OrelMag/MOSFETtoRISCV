@@ -46,3 +46,7 @@
 .lv-ed.bf-hide > :not(.bf-results) { display: none; }
 .bf-st { color: var(--warn); letter-spacing: 2px; display: inline-block; min-width: 3.4em; }
 .bf-brief { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg); }
+
+/* the mask table (cap_mask): a narrow side pane, so cells wrap and the row headings read as words */
+.cap-mask td, .cap-mask td:nth-child(2), .cap-mask td:nth-child(3) { white-space: normal; font-family: var(--font-ui); }
+.cap-mask tbody th { text-transform: none; letter-spacing: 0; font: 600 12px var(--font-ui); color: var(--text); padding: 4px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
