@@ -6,7 +6,7 @@ import { laneCore } from '../src/lib/lanes';
 import { MC_FSM, MC_MICRO, multicycleCpu } from '../src/lib/multicycle';
 import { pipelinedCpu } from '../src/lib/pipeline';
 import { CSR_UNIT, systemCpu } from '../src/lib/system';
-import { RELAY_BUZZER, RELAY_LATCH, RELAY_NAND } from '../src/lib/relays';
+import { RELAY_BUZZER, RELAY_FA, RELAY_LATCH, RELAY_NAND } from '../src/lib/relays';
 import { CATHODE_FOLLOWER, ECCLES_JORDAN, TUBE_BUF, TUBE_INV, TUBE_NAND, TUBE_NOR } from '../src/lib/tubes';
 import { assemble } from '../src/riscv/asm';
 import { netlistOf, type ComponentDef } from '../src/sim/types';
@@ -35,6 +35,7 @@ const levels: [string, () => ComponentDef][] = [
   ['relay NAND', () => RELAY_NAND],
   ['self-holding relay', () => RELAY_LATCH],
   ['relay buzzer', () => RELAY_BUZZER],
+  ['relay full adder', () => RELAY_FA],
   ['tube inverter', () => TUBE_INV],
   ['two tube inverters', () => TUBE_BUF],
   ['tube NOR', () => TUBE_NOR],

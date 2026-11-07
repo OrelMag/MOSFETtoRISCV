@@ -143,6 +143,9 @@ export const RELAY_FA: ComponentDef = define({
   netlist: () => ({
     level: 'switch',
     pins: { a: [2, 23], b: [2, 5], ci: [40, 31], nci: [40, 33], s: [40, 12], co: [40, 2], nco: [40, 0] },
+    // these lines are inout (a contact passes either way), whose pins default to facing right: on the right edge their
+    // names were drawn over the wire coming in. Facing left, the name sits outside.
+    pinDirs: { ci: 'left', nci: 'left', s: 'left', co: 'left', nco: 'left' },
     instances: [
       // B on top: its first two poles choose the carry pair, the other two the sum's lines
       { name: 'rb', def: relay(4), at: [6, 4] }, { name: 'gb', def: GND, at: [2, 9] },
@@ -159,12 +162,16 @@ export const RELAY_FA: ComponentDef = define({
       { name: 'u0', ends: ['rb.nc1', 'ra.c2'], tags: ['rb.nc1', 'ra.c2'] },
       { name: 'w1', ends: ['rb.no2', 'ra.c3'], tags: ['rb.no2', 'ra.c3'] },
       { name: 'w0', ends: ['rb.nc2', 'ra.c4'], tags: ['rb.nc2', 'ra.c4'] },
-      { name: 'vdd 1', ends: ['v1.p', 'ra.no1'], tags: ['ra.no1'] },
-      { name: 'vdd 2', ends: ['v2.p', 'ra.nc4'], tags: ['ra.nc4'] },
-      { name: 'ci', ends: ['ci', 'ra.nc1', 'ra.no2', 'rb.no3', 'rb.nc4'], tags: ['ra.nc1', 'ra.no2', 'rb.no3', 'rb.nc4'] },
-      { name: 'nci', ends: ['nci', 'ra.nc3', 'ra.no4', 'rb.nc3', 'rb.no4'], tags: ['ra.nc3', 'ra.no4', 'rb.nc3', 'rb.no4'] },
+      // The contacts are one unit apart, so their pointers hang in two staggered rows under each relay (tagAt: each
+      // pointer's tip), clear of one another and of the stubs that reach the lower row.
+      { name: 'vdd 1', ends: ['v1.p', 'ra.no1'], tags: ['ra.no1'], tagAt: { 'ra.no1': [11, 30] } },
+      { name: 'vdd 2', ends: ['v2.p', 'ra.nc4'], tags: ['ra.nc4'], tagAt: { 'ra.nc4': [18, 28] } },
+      { name: 'ci', ends: ['ci', 'ra.nc1', 'ra.no2', 'rb.no3', 'rb.nc4'], tags: ['ra.nc1', 'ra.no2', 'rb.no3', 'rb.nc4'],
+        tagAt: { 'ra.nc1': [9, 28], 'ra.no2': [14, 28], 'rb.no3': [17, 12.5], 'rb.nc4': [18.5, 10] } },
+      { name: 'nci', ends: ['nci', 'ra.nc3', 'ra.no4', 'rb.nc3', 'rb.no4'], tags: ['ra.nc3', 'ra.no4', 'rb.nc3', 'rb.no4'],
+        tagAt: { 'ra.nc3': [15, 30], 'ra.no4': [20, 30], 'rb.nc3': [15.5, 10], 'rb.no4': [20, 12.5] } },
       { name: 's', ends: ['ra.c5', 's'], tags: ['ra.c5'] },
-      { name: 'z1', ends: ['ra.no5', 'rb.c3'], tags: ['ra.no5', 'rb.c3'] },
+      { name: 'z1', ends: ['ra.no5', 'rb.c3'], tags: ['ra.no5', 'rb.c3'], tagAt: { 'ra.no5': [23, 28] } },
       { name: 'z0', ends: ['ra.nc5', 'rb.c4'], tags: ['ra.nc5', 'rb.c4'] },
     ],
   }),
