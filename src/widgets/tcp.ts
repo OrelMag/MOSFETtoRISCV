@@ -116,7 +116,7 @@ export function ladderWidget(o: { bytes: number; lose?: boolean; close?: boolean
 // ---- the receive window ----------------------------------------------------------------------------------------------------------
 
 export function windowWidget(): Widget {
-  let every = 200_000;
+  let every = 0;
   const pl = h('div'), status = h('div', { class: 'mc-status' }), note = h('div', { class: 'err-verdict' });
   const paint = () => {
     const r = runTcp({ bytes: 1500, readEvery: every, readBytes: 128 });
@@ -185,8 +185,11 @@ const SAW_PRESETS = [
 
 const marksOf = (r: SimResult) => r.events.filter((e) => e.why === 'fast' || e.why === 'timeout').map((e) => ({ x: e.t, cls: e.why, label: e.why }));
 
-export function sawWidget(): Widget {
-  let byte = 200, queue = 4, delay = 20_000;
+/** The most data this reference model's link carries: tcpsim charges each frame its bytes + 34 (Ethernet and IP headers, no preamble or gap). */
+export const dataCapMbps = (byte: number): number => mbps(TCP_K.MSS, (TCP_K.MSS + 54) * byte);
+
+export function sawWidget(start = 0): Widget {
+  let { byte, queue, delay }: { byte: number; queue: number; delay: number } = SAW_PRESETS[start];
   const one = h('div'), two = h('div'), status = h('div', { class: 'mc-status' }), note = h('div', { class: 'err-verdict' }), table = h('div', { class: 'tcp-sweep' });
   const paint = () => {
     const r = runTcp({ bytes: SAW_BYTES, byteClocks: byte, queue, delay });
@@ -195,7 +198,7 @@ export function sawWidget(): Widget {
     two.replaceChildren(plot([{ name: 'q', cls: 's3', points: r.trace.map((p) => [p.t, p.q]) }], { h: 120, yLabel: 'frames queued', yMax: Math.max(queue, 1), xMax: end, label: `Frames in the router's queue, at most ${queue}.` }));
     const rtt = r.rtts.length ? r.rtts[r.rtts.length - 1] : 0;
     status.replaceChildren(stat('time', `${n0(end)} clocks`), stat('throughput', `${mbps(SAW_BYTES, end).toFixed(1)} Mb/s`), stat('dropped', String(r.drops)), stat('fast retransmits', String(r.fast)), stat('timeouts', String(r.timeouts)), stat('SRTT', `${n0(rtt)} clocks`));
-    const linkMbps = mbps(TCP_K.MSS, (TCP_K.MSS + 54) * byte);
+    const linkMbps = dataCapMbps(byte);
     note.className = `err-verdict ${r.drops ? '' : 'ok'}`;
     note.textContent = r.timeouts && r.timeouts >= r.fast ? `The queue holds too few for three duplicate ACKs: the timer does the work, and each one waits a whole RTO and falls to one segment.` : r.fast ? `The queue fills, one frame is dropped, three duplicate ACKs come back, and the window halves. Data over the link tops out at ${linkMbps.toFixed(1)} Mb/s.` : `No frame dropped: the window stops at the receiver's ${TCP_K.RCV / TCP_K.MSS} segments before the queue fills.`;
     table.replaceChildren(h('div', { class: 'cpu-sec' }, 'The same link, whatever the queue'), h('div', { class: 'tcp-srow head' }, h('span', null, 'Queue'), h('span', null, 'Time, clocks'), h('span', null, 'Dropped'), h('span', null, 'Timeouts'), h('span', null, 'SRTT, clocks')),
