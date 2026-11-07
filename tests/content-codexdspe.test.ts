@@ -166,7 +166,7 @@ describe('group E: speech', () => {
     expect(SPEECH_FIGS.muSnr).toBe(37.3);
     expect(SPEECH_FIGS.rvPerSample).toBe(39.2);
     expect(adpcmOnRv([0, 100, 200, 300, 400]).perSample).toBeGreaterThan(30);
-    says('speech', 4, 'IMA\'s table of 89 steps');
+    says('speech', 4, 'the table of 89 steps about 10 % apart that the Interactive Multimedia Association (IMA) set out');
     says('speech', 4, '32 kb/s');
     quotes('adpcm', 89, 7, '32,767', 18, 37.3, 39.2, '32 kb/s', '1,057', '1,001', '996', 494, 337, 'quarter-steps');
   });
