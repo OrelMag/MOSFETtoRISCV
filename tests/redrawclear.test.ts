@@ -6,6 +6,8 @@ import { laneCore } from '../src/lib/lanes';
 import { MC_FSM, MC_MICRO, multicycleCpu } from '../src/lib/multicycle';
 import { pipelinedCpu } from '../src/lib/pipeline';
 import { CSR_UNIT, systemCpu } from '../src/lib/system';
+import { skewPair } from '../src/lib/seqdeep';
+import { clockDivider } from '../src/lib/seqparts';
 import { assemble } from '../src/riscv/asm';
 import { netlistOf, type ComponentDef } from '../src/sim/types';
 import { routeNetlist } from '../src/view/route';
@@ -31,6 +33,11 @@ const levels: [string, () => ComponentDef][] = [
   ['lane core', () => laneCore(w, 4)],
   ['Ethernet segment', () => ethSegment(4)],
   ['Ethernet switch', () => ethSwitch({ cellK: 7 })],
+  // short pointers wired (circuit eyeballing, phase 2a)
+  ['clock skew pair, 0 buffers', () => skewPair(0)],
+  ['clock skew pair, 2 buffers', () => skewPair(2)],
+  ['ripple clock divider ÷8', () => clockDivider(3)],
+  ['ripple clock divider ÷16', () => clockDivider(4)],
 ];
 
 describe('hand-drawn levels', () => {
