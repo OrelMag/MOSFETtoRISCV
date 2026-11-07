@@ -184,6 +184,11 @@ export const BLOCK_NAME: Record<Kind, string> = {
   mixer: 'Mixer', cic: 'CIC ÷ R', halfband: 'Half-band ÷ 2', poly: 'Polyphase ÷ R', channel: 'Channel filter', disc: 'Discriminator', audio: 'Audio filter ÷ M', deemph: 'De-emphasis', morse: 'Morse decoder',
 };
 
+/** A block named inside a sentence: "your CIC", "your channel filter". */
+export const BLOCK_NOUN: Record<Kind, string> = {
+  mixer: 'mixer', cic: 'CIC', halfband: 'half-band', poly: 'polyphase decimator', channel: 'channel filter', disc: 'discriminator', audio: 'audio filter', deemph: 'de-emphasis', morse: 'Morse decoder',
+};
+
 /** What each setting may be. */
 export const LIMITS = {
   bits: [4, 10], N: [1, 5], cicR: [2, 4, 8, 16], taps: [3, 255], polyR: [2, 3, 4, 5, 6, 8, 10], M: [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 16, 20, 24, 25, 30, 40], stages: [2, 16], marginDb: [0, 60],
@@ -200,7 +205,7 @@ export const DEFAULT_CHAIN: Chain = [
 ];
 
 /** Where a block may go: the gates first (the mixer, then any CICs), then the complex filters, the discriminator, the audio blocks, the decoder last. */
-const STAGE: Record<Kind, number> = { mixer: 0, cic: 1, halfband: 2, poly: 2, channel: 2, disc: 3, audio: 4, deemph: 4, morse: 5 };
+export const STAGE: Record<Kind, number> = { mixer: 0, cic: 1, halfband: 2, poly: 2, channel: 2, disc: 3, audio: 4, deemph: 4, morse: 5 };
 
 export interface Rates { inRate: number; outRate: number }
 /** Why a chain cannot run, or null. Also the rate into and out of each block. */
@@ -214,7 +219,7 @@ export function checkChain(c: Chain): { problem: string | null; rates: Rates[] }
   if (c[c.length - 1]?.kind !== 'morse' || c.filter((b) => b.kind === 'morse').length !== 1) say('One Morse decoder, at the end.');
   for (let i = 1; i < c.length; i++) {
     if (STAGE[c[i].kind] < STAGE[c[i - 1].kind]) {
-      const b = c[i], why = b.kind === 'cic' ? 'A CIC is gates: it goes straight after the mixer, before anything floating point.' : STAGE[b.kind] === 2 ? `The ${BLOCK_NAME[b.kind].toLowerCase()} filters the complex signal, so it comes before the discriminator.` : `The ${BLOCK_NAME[b.kind].toLowerCase()} works on sound, so it comes after the discriminator.`;
+      const b = c[i], why = b.kind === 'cic' ? 'A CIC is gates: it goes straight after the mixer, before anything floating point.' : STAGE[b.kind] === 2 ? `The ${BLOCK_NOUN[b.kind]} filters the complex signal, so it comes before the discriminator.` : `The ${BLOCK_NOUN[b.kind]} works on sound, so it comes after the discriminator.`;
       say(why);
     }
   }
@@ -524,20 +529,24 @@ export interface Cost {
 }
 /** NAND counts of the gate blocks at the learner's sizes, from the gates themselves (lib/sdr.ts, lib/multirate.ts): passed in, so this file stays free of the circuit library. */
 export interface GatePrices { mixer(bits: number): number; cic(N: number, R: number, wIn: number): number }
-export function chainCost(c: Chain, prices: GatePrices): Cost {
+/** Each block's own cost, in the chain's order. */
+export function blockCosts(c: Chain, prices: GatePrices): Cost[] {
   const { rates } = checkChain(c);
-  let nands = 0, mults = 0, angles = 0, w = W_MIX;
-  c.forEach((b, i) => {
-    const { inRate, outRate } = rates[i];
-    if (b.kind === 'mixer') nands += prices.mixer(b.bits);
-    else if (b.kind === 'cic') { nands += 2 * prices.cic(b.N, b.R, w); w = cicWidth(b.N, b.R, w); }
-    else if (b.kind === 'halfband') mults += 2 * halfBandTaps(b.taps).filter((v) => v !== 0).length * outRate;
-    else if (b.kind === 'poly' || b.kind === 'channel') mults += 2 * b.taps * outRate;
-    else if (b.kind === 'audio') mults += b.taps * outRate;
-    else if (b.kind === 'deemph') mults += 2 * inRate;
-    else if (b.kind === 'disc') { mults += 4 * inRate; angles += b.method === 'phase' ? inRate : b.stages * inRate; }
+  let w = W_MIX;
+  return c.map((b, i) => {
+    const { inRate, outRate } = rates[i], k: Cost = { nands: 0, mults: 0, angles: 0 };
+    if (b.kind === 'mixer') k.nands = prices.mixer(b.bits);
+    else if (b.kind === 'cic') { k.nands = 2 * prices.cic(b.N, b.R, w); w = cicWidth(b.N, b.R, w); }
+    else if (b.kind === 'halfband') k.mults = 2 * halfBandTaps(b.taps).filter((v) => v !== 0).length * outRate;
+    else if (b.kind === 'poly' || b.kind === 'channel') k.mults = 2 * b.taps * outRate;
+    else if (b.kind === 'audio') k.mults = b.taps * outRate;
+    else if (b.kind === 'deemph') k.mults = 2 * inRate;
+    else if (b.kind === 'disc') { k.mults = 4 * inRate; k.angles = b.method === 'phase' ? inRate : b.stages * inRate; }
+    return k;
   });
-  return { nands, mults, angles };
+}
+export function chainCost(c: Chain, prices: GatePrices): Cost {
+  return blockCosts(c, prices).reduce((a, k) => ({ nands: a.nands + k.nands, mults: a.mults + k.mults, angles: a.angles + k.angles }), { nands: 0, mults: 0, angles: 0 });
 }
 
 // ---- a band graded, and why it failed ----------------------------------------------------------------------------------------------------------
@@ -557,7 +566,7 @@ export type Cause =
 export interface BandResult { band: TuneBand; run: Run; ok: boolean; cause?: Cause; measures?: Measures; slips?: Slip[] }
 export interface Measures { ciDb: number; cnDb: number; keyRatioDb: number; contributions: Contribution[] }
 /** One other station in the channel: its power against the wanted station's, dB; where it folded in, if it did; how much of it is the mixer's spurs (its power over an ideal oscillator's, dB); and whether it alone, beside the wanted station, breaks the message. */
-export interface Contribution { station: number; offKhz: number; db: number; foldedTo: number | null; block: string | null; spurDb: number; breaks: boolean }
+export interface Contribution { station: number; offKhz: number; db: number; foldedTo: number | null; block: Kind | null; spurDb: number; breaks: boolean }
 
 /** Mean power of a complex signal after its first 5 ms. */
 function power(re: Float64Array, im: Float64Array, rate: number): number {
@@ -569,12 +578,12 @@ function power(re: Float64Array, im: Float64Array, rate: number): number {
 const db = (x: number) => 10 * Math.log10(Math.max(x, 1e-30));
 
 /** Where an offset lands after each decimation in the chain, and the first block at which it folded, if any. */
-export function foldPath(c: Chain, offHz: number): { foldedTo: number | null; block: string | null } {
+export function foldPath(c: Chain, offHz: number): { foldedTo: number | null; block: Kind | null } {
   const { rates } = checkChain(c);
-  let f = offHz, block: string | null = null;
+  let f = offHz, block: Kind | null = null;
   for (let i = 1; i < c.length && STAGE[c[i].kind] <= 2; i++) {
     const out = rates[i].outRate;
-    if (out < rates[i].inRate && Math.abs(f) > out / 2) { f = ((((f + out / 2) % out) + out) % out) - out / 2; block ??= BLOCK_NAME[c[i].kind]; }
+    if (out < rates[i].inRate && Math.abs(f) > out / 2) { f = ((((f + out / 2) % out) + out) % out) - out / 2; block ??= c[i].kind; }
   }
   return { foldedTo: block ? f : null, block };
 }
@@ -683,8 +692,8 @@ export function hintsFor(cause: Cause, c: Chain): string[] {
     case 'interference': {
       const w = cause.worst, out: string[] = [];
       if (w.spurDb > 6) out.push('the mixer: a finer oscillator table, whose spurs fall lower');
-      if (w.block === 'CIC ÷ R') out.push('a higher CIC order, which folds less into the channel', 'a smaller CIC ratio, with the rest of the decimation done by a filter', has('halfband') ? 'a half-band with more taps' : 'a half-band ÷ 2 before the rest of the decimation');
-      else if (w.block) out.push(`the ${w.block.toLowerCase()}: more taps, so less folds in`);
+      if (w.block === 'cic') out.push('a higher CIC order, which folds less into the channel', 'a smaller CIC ratio, with the rest of the decimation done by a filter', has('halfband') ? 'a half-band with more taps' : 'a half-band ÷ 2 before the rest of the decimation');
+      else if (w.block) out.push(`the ${BLOCK_NOUN[w.block]}: more taps, so less folds in`);
       else out.push('a narrower channel filter', 'more taps in the channel filter, for a steeper edge');
       return out;
     }
@@ -706,3 +715,43 @@ export const REFERENCE_CHAIN: Chain = [
 
 /** Whether a chain decodes a band's message (no diagnosis: the quick check). */
 export const decodes = (c: Chain, b: TuneBand): boolean => runChain(c, b).decoded.text === b.message;
+
+// ---- what the page says about a failed band -------------------------------------------------------------------------------------------------
+
+/** A frequency the way the page writes it: signed, in kHz, with a true minus. */
+export const fmtKhz = (hz: number, digits = 0): string => `${hz < 0 ? '−' : '+'}${(Math.abs(hz) / 1000).toFixed(digits)} kHz`;
+const fmtDb = (v: number) => `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(1)} dB`;
+
+/** What went wrong on a failed band, in sentences, every figure measured on the learner's chain. */
+export function explain(r: BandResult, c: Chain): string[] {
+  const cause = r.cause, mx = c[0] as Extract<Block, { kind: 'mixer' }>;
+  if (!cause) return [];
+  switch (cause.kind) {
+    case 'tune-fixed': return [`Your mixer is set to ${fmtKhz(cause.hz)}. On this band the weak station is somewhere else, so the decoder heard whatever was there.`];
+    case 'tune-none': return [`"Find it" found no line standing ${cause.marginDb} dB above what is around it, so the chain had no station to tune to.`];
+    case 'tune-wrong': {
+      const f = r.run.found;
+      return [`"Find it" took a line at ${fmtKhz(cause.hz, 1)} for the station: the weakest line standing at least your ${mx.tune.mode === 'find' ? mx.tune.marginDb : 0} dB above its surroundings${f ? ` (it stood ${f.standsDb.toFixed(1)} dB)` : ''}.`, `The station your decoder needed was ${(Math.abs(cause.offKhz)).toFixed(0)} kHz away from it.`];
+    }
+    case 'tone-cut': return [`Your audio filters take the tone this station keys down by ${cause.lossDb.toFixed(1)} dB, so the station alone, with nothing else in the band, does not decode.`];
+    case 'too-narrow': return [`Your filters before the discriminator are ${cause.lossDb.toFixed(1)} dB down at the station's peak deviation, ${DEV / 1000} kHz from its carrier: they cut the station's own swing.`];
+    case 'disc-rate': return [`Your discriminator runs at ${(cause.rate / 1000).toFixed(0)} kHz. A swing of ${DEV / 1000} kHz with its tone needs more than twice that between samples, or the phase turns more than half a turn from one sample to the next, and the station alone does not decode.`];
+    case 'cordic': return [`With ${cause.stages} CORDIC stages each angle is off by up to ${((Math.atan(2 ** -(cause.stages - 1)) * 180) / Math.PI).toFixed(1)}°, and the station alone does not decode.`];
+    case 'decoder': return ['The station alone does not decode through your chain, and no single block measures as the reason. Try the decoder\'s threshold.'];
+    case 'noise': return [`Carrier to noise in your channel: ${fmtDb(r.measures!.cnDb)}. Your station with the noise alone, and no other station, already loses the message.`];
+    case 'interference': {
+      const w = cause.worst, m = r.measures!, where = w.offKhz > 0 ? 'above' : 'below';
+      const how = w.foldedTo !== null ? `folded down to ${fmtKhz(w.foldedTo)} from yours when your ${BLOCK_NOUN[w.block!]} dropped the rate` : 'reached your channel directly, through the edge of your filters';
+      const out = [`A station ${Math.abs(w.offKhz).toFixed(0)} kHz ${where} yours ${how}. In your channel it measured ${fmtDb(w.db)} against your station.`];
+      if (w.spurDb > 6) out.push(`${fmtDb(w.spurDb)} of what reached it is your oscillator table's spurs: an ideal oscillator lets in that much less of that station.`);
+      out.push(`Measured in your chain: carrier to interference ${fmtDb(m.ciDb)} in the channel, carrier to noise ${fmtDb(m.cnDb)}.`);
+      out.push(w.breaks ? 'Added to your station on its own, that station alone spoils the message.' : cause.together ? 'No one part spoils the message on its own: the other stations and the noise together do.' : 'It is the largest part of what spoils the message.');
+      return out;
+    }
+  }
+}
+
+/** The decoder's slips, in words: when, in which character, and which way. */
+export function slipText(r: BandResult): string[] {
+  return (r.slips ?? []).slice(0, 6).map((s) => `${s.t.toFixed(2)} s, in the ${r.band.message[s.char] ?? '?'}: key ${s.sent} read as ${s.sent === 'down' ? 'up' : 'down'}`);
+}

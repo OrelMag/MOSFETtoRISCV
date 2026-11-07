@@ -13,7 +13,7 @@ const MUTANTS: { name: string; chain: Chain; blamed: (c: Cause) => boolean }[] =
   { name: 'a fixed tune (the practice station)', chain: at(0, { tune: { mode: 'fixed', hz: practice } } as Partial<Block>), blamed: (c) => c.kind === 'tune-fixed' },
   { name: '"find it" with too small a margin', chain: at(0, { tune: { mode: 'find', marginDb: 4 } } as Partial<Block>), blamed: (c) => c.kind === 'tune-wrong' },
   { name: '"find it" with too large a margin', chain: at(0, { tune: { mode: 'find', marginDb: 45 } } as Partial<Block>), blamed: (c) => c.kind === 'tune-none' },
-  { name: 'a first-order CIC', chain: at(1, { N: 1 } as Partial<Block>), blamed: (c) => c.kind === 'interference' && c.worst.block === 'CIC ÷ R' },
+  { name: 'a first-order CIC', chain: at(1, { N: 1 } as Partial<Block>), blamed: (c) => c.kind === 'interference' && c.worst.block === 'cic' },
   { name: 'a four-bit oscillator table', chain: at(0, { bits: 4 } as Partial<Block>), blamed: (c) => c.kind === 'interference' && c.worst.spurDb > 6 },
   { name: 'a channel filter of 15 taps', chain: at(2, { taps: 15, cutoff: 75_000 } as Partial<Block>), blamed: (c) => c.kind === 'interference' },
   { name: 'a channel filter narrower than the station', chain: at(2, { cutoff: 5_000 } as Partial<Block>), blamed: (c) => c.kind === 'too-narrow' },

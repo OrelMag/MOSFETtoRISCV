@@ -110,12 +110,12 @@ describe('the bands', () => {
 
 describe('hints', () => {
   it('name blocks, never a number', () => {
-    const worst = { station: 1, offKhz: 0, db: 0, foldedTo: 1, block: 'CIC ÷ R', spurDb: 9, breaks: true };
+    const worst = { station: 1, offKhz: 0, db: 0, foldedTo: 1, block: 'cic' as const, spurDb: 9, breaks: true };
     const causes: Cause[] = [
       { kind: 'tune-fixed', hz: 1 }, { kind: 'tune-none', marginDb: 1 }, { kind: 'tune-wrong', hz: 1, offKhz: 1 }, { kind: 'tone-cut', lossDb: 1 }, { kind: 'too-narrow', lossDb: 1 },
       { kind: 'disc-rate', rate: 1 }, { kind: 'cordic', stages: 1 }, { kind: 'noise', cnDb: 1 }, { kind: 'decoder' },
       { kind: 'interference', ciDb: 1, worst, together: false }, { kind: 'interference', ciDb: 1, worst: { ...worst, block: null, spurDb: 0 }, together: true },
-      { kind: 'interference', ciDb: 1, worst: { ...worst, block: 'Half-band ÷ 2' }, together: false },
+      { kind: 'interference', ciDb: 1, worst: { ...worst, block: 'halfband' as const }, together: false },
     ];
     // a block's own name may hold a figure ("÷ 2"); nothing else may
     for (const c of causes) for (const h of hintsFor(c, DEFAULT_CHAIN)) expect(Object.values(BLOCK_NAME).reduce((s, n) => s.split(n.toLowerCase()).join(''), h)).not.toMatch(/\d/);
