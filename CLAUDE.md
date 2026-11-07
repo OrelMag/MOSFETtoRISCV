@@ -1346,6 +1346,10 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  DRAM16 timings, REF; DmaLane: a memory with wait states, the copy script, the handshake rule;
                  Flash16Model: 4 × 4 pages + a spare-area tag, program once, erase a block), request traces (Requester:
                  held until busy = 0 / ready) on BitSim lanes; p_boot (puzzles.ts `dma`) runs on iss16's DMA engine
+  capecho.ts     cap_echo (DSP capstone, a program not a circuit): the learner's RV32IM assembly on FastISS with a sample port at 0x1000_0000 (+0 x, +4 ŷ, +8 d, whole words;
+                 every data access through load / store, none outside the 16 KB RAM or the port); echoPaths(seed) (4 hidden paths: short / 2 medium / 96-tap long, speech or noise),
+                 runPath / gradeEcho (ERLE of ŷ against the true echo over the last 4 000 of 16 000 samples, ≥ 25 dB, ≤ 2 400 cycles a sample), whyNot (what the curve shows),
+                 echoReference(opts) (NLMS, the mutants' knobs); page ui/pages/dspcap.ts (route own block in ui/app.ts); tests/capstone-echo.test.ts
                DOM: ui/svgs.ts (map and anatomy SVG), ui/levelinfo.ts (criteria, grading table), ui/codexentry.ts (a codex
                entry in full, live schematic), ui/glossaryui.ts (markTerms: hover cards); the page is ui/pages/campaign.ts.
                Levels are played on the level screen (ui/pages/level.ts, #/campaign/play/<node>, the editor's chunk): an

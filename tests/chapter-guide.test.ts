@@ -1,7 +1,7 @@
 // The chapters' guide: names in the text and highlights point at parts that exist, every per-option explanation lines
 // up with its options, Try conditions have a box to tick, Builds on links resolve, checks have unique keys.
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { nodeById } from '../src/campaign/nodes';
 import { chapterById, chapters } from '../src/chapters';
 import { Glossary, proseRuns } from '../src/campaign/glossary';
@@ -12,6 +12,8 @@ import { TAUGHT } from '../src/chapters/taught';
 import { PARTS_MIN, partsOf } from '../src/chapters/parts';
 import type { Quiz } from '../src/chapters/types';
 import { showTarget, viewDef } from '../src/ui/pages/looks';
+import { tick } from './yieldtick';
+import { BOOK_TIMEOUT, warmBook, WARM_TIMEOUT } from './warmbook';
 
 const shows = (html: string) => [...html.matchAll(/data-show="([^"]*)"/g)].flatMap((m) => m[1].split(/[\s,]+/).filter(Boolean));
 const tryBoxes = (html: string) => [...html.matchAll(/class="try[\s"]/g)].length;
@@ -23,6 +25,8 @@ function quizOk(where: string, q: Quiz): void {
 }
 
 describe('chapter guide', () => {
+  beforeAll(warmBook, WARM_TIMEOUT);
+
   it('a link whose text is a chapter number names the chapter it goes to (renumbering left stale ones)', async () => {
     const { readdirSync, readFileSync } = await import('node:fs');
     const bad: string[] = [];
@@ -39,8 +43,10 @@ describe('chapter guide', () => {
       }
     expect(bad).toEqual([]);
   });
-  it('names in the text and highlights resolve in the scene they point at', () => {
+  it('names in the text and highlights resolve in the scene they point at', async () => {
+    // every step's scene is built: the worker is given back between chapters
     for (const c of chapters) {
+      await tick();
       c.steps.forEach((s, i) => {
         const names = shows(s.body);
         if (!names.length && !s.scene) return;
@@ -54,7 +60,7 @@ describe('chapter guide', () => {
         }
       });
     }
-  });
+  }, BOOK_TIMEOUT);
 
   it('questions, hints and tries are well formed', () => {
     for (const c of chapters) {

@@ -152,6 +152,12 @@ export const NUDGES: Record<string, string> = {
   // sp_sd: below
   sp_sd: 'The bit is the sign of the last sum before the edge; whatever it says is taken away from both sums at once, as +full scale or −full scale.',
 
+  // sp_mac: below
+  sp_mac: 'Add the finished pair of products to a register 8 bits wider than a product and never clamp there; shift, round and clamp only in the read, once.',
+
+  // sp_circ: below
+  sp_circ: 'One adder steps the pointer; the window end is another 8-bit sum that may wrap; wrap only on an equal, then let mode 0 and the bit-reversed mode override at the end.',
+
   // act 12: links
   l_sync: 'Whatever samples the asynchronous signal may not decide in time; the thing that reads it should not be the thing that samples it.',
   l_uarttx: 'The line should change only at the moments the bit clock allows, and a byte offered during a frame has to wait.',

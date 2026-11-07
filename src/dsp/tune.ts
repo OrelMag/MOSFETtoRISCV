@@ -1,0 +1,787 @@
+// "Tune it", the signal-processing capstone (DOM-free): a band the learner has not seen holds a weak FM station keying a message in Morse, and the
+// learner's chain of the radio chapter's blocks must find it and decode the message. Bands are seeded (STATIONS in dsp/sdr.ts stays the chapter's).
+// The mixer and the CICs are integer, the gates' arithmetic (mixBlock, and cicRun equal to CicModel / lib/multirate.ts clock by clock: tests/dsp-tune.test.ts);
+// everything after them is floating point, the DSP core's part, as in the chapter. When a band fails, the cause is measured by running the same chain
+// on the parts of the band one at a time (the wanted station, each other station, the noise), never stated.
+
+import { addFm, ADC_SCALE, DEV, FS, lowpass, mixBlock, NCO_BITS, preEmphasis, program, TAU, W_IN, W_MIX } from './sdr';
+import { cicWidth, halfBand } from './multirate';
+import { cordicVector } from './cordic';
+
+// ---- seeds -----------------------------------------------------------------------------------------------------------------------------------
+
+export function rng(seed: number): () => number {
+  let s = seed >>> 0 || 1;
+  return () => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+
+// ---- Morse ----------------------------------------------------------------------------------------------------------------------------------
+
+export const MORSE_CODE: Readonly<Record<string, string>> = {
+  A: '.-', B: '-...', C: '-.-.', D: '-..', E: '.', F: '..-.', G: '--.', H: '....', I: '..', J: '.---', K: '-.-', L: '.-..', M: '--', N: '-.', O: '---', P: '.--.', Q: '--.-', R: '.-.',
+  S: '...', T: '-', U: '..-', V: '...-', W: '.--', X: '-..-', Y: '-.--', Z: '--..', 0: '-----', 1: '.----', 2: '..---', 3: '...--', 4: '....-', 5: '.....', 6: '-....', 7: '--...', 8: '---..', 9: '----.',
+};
+const FROM_MORSE = new Map(Object.entries(MORSE_CODE).map(([c, m]) => [m, c]));
+
+/** A message as keying units, one character of the string a unit: a dot 1, a dash 3, 1 between marks, 3 between letters, 7 between words. */
+export function keyingOf(text: string): string {
+  return text.trim().split(/\s+/).map((w) => [...w].map((c) => [...MORSE_CODE[c]].map((m) => (m === '.' ? '1' : '111')).join('0')).join('000')).join('0000000');
+}
+/** Where each unit of the keying belongs: the index of its character in the text (spaces count), or −1 between letters. */
+export function unitOwners(text: string): number[] {
+  const own: number[] = [];
+  const words = text.trim().split(/\s+/);
+  let at = 0;
+  words.forEach((w, wi) => {
+    [...w].forEach((c, ci) => {
+      const k = [...MORSE_CODE[c]].map((m) => (m === '.' ? '1' : '111')).join('0');
+      for (let i = 0; i < k.length; i++) own.push(at + ci);
+      if (ci < w.length - 1) own.push(-1, -1, -1);
+    });
+    at += w.length + 1;
+    if (wi < words.length - 1) for (let i = 0; i < 7; i++) own.push(-1);
+  });
+  return own;
+}
+
+/** Short messages an amateur station might send, so a band takes a couple of seconds. */
+export const MESSAGES = ['SOS', 'CQ DE', 'QRV', '73 GL', 'PSE K', 'TEST', 'QTH', 'FB OM', 'TNX', 'DSP', 'RST 5', 'QSL', 'GM', 'HI HI', 'WX', 'AGN'];
+/** The keying speed: 30 words a minute, a unit of 40 ms. The decoder is told it, as an operator would know the speed. */
+export const UNIT_S = 0.04;
+export const TONE_MIN = 500, TONE_MAX = 900;
+/** Silence before the message and after it, seconds. */
+export const LEAD_S = 0.15, TAIL_S = 0.25;
+
+// ---- a band ---------------------------------------------------------------------------------------------------------------------------------
+
+export interface TuneStation { f: number; a: number; prog: 0 | 1 | 2 | 'morse' }
+export interface TuneBand {
+  seed: number;
+  stations: TuneStation[];
+  /** The weak station's index in `stations`. */
+  weak: number;
+  message: string;
+  keying: string;
+  toneHz: number;
+  noiseDb: number;
+  /** Samples at FS. */
+  n: number;
+}
+
+/** Strong stations' amplitudes, as in the chapter. */
+const STRONG_A = [1, 0.7, 0.5];
+export const BAND_EDGE = 420_000;
+/** How far the loud station sits from the weak one: past half the rate a CIC ÷ 4 leaves, so it folds into the channel. */
+export const FOLD_KHZ: [number, number] = [175, 205];
+/** The noise, in dB against a station of amplitude 1 over the whole band. */
+export const NOISE_DB: [number, number] = [-46, -42];
+/** The weak station against the loudest, dB: weak enough that a coarse oscillator table's spurs, a folding neighbour or a gentle channel edge each take a band. */
+export const WEAK_DB: [number, number] = [-36, -42];
+
+/**
+ * A band: the weak station somewhere, a strong station far enough off for a CIC ÷ 4 to fold it into the channel (just past half the decimated rate),
+ * one close beside it that a wide or gentle channel filter lets in, and one elsewhere. Then noise. Every attempt's bands put the same three traps in
+ * a new place, so no fixed setting carries from one band to the next.
+ */
+export function makeBand(seed: number): TuneBand {
+  const r = rng(seed), pick = <T,>(xs: readonly T[]) => xs[Math.floor(r() * xs.length)];
+  const khz = (lo: number, hi: number) => 1000 * Math.round((lo + (hi - lo) * r()) / 1000);
+  for (;;) {
+    const fw = khz(-BAND_EDGE, BAND_EDGE), sgn = () => (r() < 0.5 ? -1 : 1);
+    const fold = fw + sgn() * khz(FOLD_KHZ[0] * 1000, FOLD_KHZ[1] * 1000), near = fw + sgn() * khz(108_000, 124_000), far = khz(-BAND_EDGE, BAND_EDGE);
+    const fs = [fold, near, far];
+    if (fs.some((f) => Math.abs(f) > BAND_EDGE)) continue;
+    const all = [fw, ...fs];
+    if (all.some((f, i) => all.some((g, j) => j > i && Math.abs(f - g) < 104_000))) continue;
+    if (Math.abs(far - fw) < 160_000) continue;
+    // Fisher–Yates on the seed's own draws: Array.sort with a random comparator draws differently in different engines
+    const shuffle = <T,>(xs: T[]): T[] => { for (let i = xs.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [xs[i], xs[j]] = [xs[j], xs[i]]; } return xs; };
+    const order = shuffle([0, 1, 2] as (0 | 1 | 2)[]), amps = shuffle([...STRONG_A]);
+    const a = 10 ** ((WEAK_DB[0] + (WEAK_DB[1] - WEAK_DB[0]) * r()) / 20);
+    const message = pick(MESSAGES), keying = keyingOf(message), toneHz = 50 * Math.round((TONE_MIN + (TONE_MAX - TONE_MIN) * r()) / 50);
+    const n = Math.round((LEAD_S + keying.length * UNIT_S + TAIL_S) * FS);
+    const stations: TuneStation[] = [{ f: fw, a, prog: 'morse' }, ...fs.map((f, i) => ({ f, a: amps[i], prog: order[i] }))];
+    // the fold trap gets the loudest station, so it bites
+    stations[1].a = 1; stations[2].a = Math.min(stations[2].a, 0.7); if (stations[3].a === 1) stations[3].a = 0.5;
+    return { seed, stations, weak: 0, message, keying, toneHz, noiseDb: NOISE_DB[0] + (NOISE_DB[1] - NOISE_DB[0]) * r(), n };
+  }
+}
+
+/** The practice band: the one the learner sees, hears and may tune by hand. */
+export const PRACTICE_SEED = 7;
+/** The five graded bands of an attempt. */
+/** The attempts the page draws from: each one checked (tests/dsp-tune-attempts.test.ts, dsp-tune-start.test.ts), so the reference decodes all five bands and the starting chain fails at least one. Attempt 29 is the first where the reference misses a band. */
+export const ATTEMPTS: readonly number[] = Array.from({ length: 29 }, (_, i) => i);
+export const attemptSeeds = (attempt: number): number[] => Array.from({ length: 5 }, (_, i) => 1000 + 37 * attempt + 7919 * i);
+
+/** The weak station's audio before pre-emphasis: the tone, keyed with 4 ms raised-cosine edges so the keying makes no clicks. n samples at AUD. */
+export function morseProgram(b: TuneBand, aud: number, n: number): Float64Array {
+  const m = new Float64Array(n), ramp = 0.004;
+  for (let i = 0; i < n; i++) {
+    const t = i / aud - LEAD_S, u = Math.floor(t / UNIT_S);
+    if (t < 0 || u >= b.keying.length) continue;
+    // distance into the mark it sits in, and to its end
+    let s = u, e = u;
+    if (b.keying[u] !== '1') continue;
+    while (s > 0 && b.keying[s - 1] === '1') s--;
+    while (e < b.keying.length - 1 && b.keying[e + 1] === '1') e++;
+    const into = t - s * UNIT_S, left = (e + 1) * UNIT_S - t, g = Math.min(1, into / ramp, left / ramp), w = 0.5 - 0.5 * Math.cos(Math.PI * g);
+    m[i] = 0.8 * w * Math.sin(2 * Math.PI * b.toneHz * (i / aud));
+  }
+  return m;
+}
+
+/** A strong station's programme: the chapter's first second, played forward, then backward, and so on, so it never jumps and never leaves the band it has in the chapter (the sweep would climb on). */
+function oneSecond(k: 0 | 1 | 2, n: number): Float64Array {
+  const s = program(k, AUD_SYN), out = new Float64Array(n);
+  for (let i = 0; i < n; i++) { const p = Math.floor(i / AUD_SYN), j = i % AUD_SYN; out[i] = s[p % 2 ? AUD_SYN - 1 - j : j]; }
+  return out;
+}
+const AUD_SYN = 24_000;
+/** Each station's pre-emphasised programme scaled so its loudest moment is the peak deviation, as in the chapter. */
+function stationAudio(b: TuneBand, st: TuneStation): Float64Array {
+  const na = Math.ceil(b.n / (FS / AUD_SYN)) + 2, m = st.prog === 'morse' ? morseProgram(b, AUD_SYN, na) : oneSecond(st.prog, na), e = preEmphasis(m);
+  let top = 0;
+  for (const v of e) top = Math.max(top, Math.abs(v));
+  for (let i = 0; i < e.length; i++) e[i] /= top || 1;
+  return e;
+}
+
+export interface Part { stations?: readonly number[]; noise?: boolean }
+const ADC_MAX = 2 ** (W_IN - 1) - 1, ADC_MIN = -(2 ** (W_IN - 1));
+
+/** What the ADCs hand the mixer: the chosen stations and, if asked, the noise, rounded and clipped to W_IN bits. The noise is the band's own, the same in every part. */
+export function sampleBand(b: TuneBand, part: Part = {}): { xr: Int16Array; xi: Int16Array } {
+  const re = new Float32Array(b.n), im = new Float32Array(b.n), only = part.stations ?? b.stations.map((_, i) => i), noise = part.noise ?? true;
+  for (const k of only) { const st = b.stations[k]; addFm(re, im, st.f, st.a, stationAudio(b, st), DEV); }
+  if (noise) {
+    const r = rng(b.seed * 31 + 5), g = 10 ** (b.noiseDb / 20) * Math.SQRT1_2;
+    for (let i = 0; i < b.n; i++) { const m = Math.sqrt(-2 * Math.log(1 - r())), a = 2 * Math.PI * r(); re[i] += g * m * Math.cos(a); im[i] += g * m * Math.sin(a); }
+  }
+  const xr = new Int16Array(b.n), xi = new Int16Array(b.n);
+  for (let i = 0; i < b.n; i++) {
+    xr[i] = Math.max(ADC_MIN, Math.min(ADC_MAX, Math.round(ADC_SCALE * re[i])));
+    xi[i] = Math.max(ADC_MIN, Math.min(ADC_MAX, Math.round(ADC_SCALE * im[i])));
+  }
+  return { xr, xi };
+}
+
+// ---- the blocks -----------------------------------------------------------------------------------------------------------------------------
+
+export type Tune = { mode: 'fixed'; hz: number } | { mode: 'find'; marginDb: number };
+export type Block =
+  | { kind: 'mixer'; tune: Tune; bits: number }
+  | { kind: 'cic'; N: number; R: number }
+  | { kind: 'halfband'; taps: number }
+  | { kind: 'poly'; taps: number; R: number }
+  | { kind: 'channel'; taps: number; cutoff: number }
+  | { kind: 'disc'; method: 'phase' | 'cordic'; stages: number }
+  | { kind: 'audio'; taps: number; cutoff: number; M: number }
+  | { kind: 'deemph' }
+  | { kind: 'morse'; threshold: 'auto' | number };
+export type Kind = Block['kind'];
+export type Chain = Block[];
+
+export const BLOCK_NAME: Record<Kind, string> = {
+  mixer: 'Mixer', cic: 'CIC ÷ R', halfband: 'Half-band ÷ 2', poly: 'Polyphase ÷ R', channel: 'Channel filter', disc: 'Discriminator', audio: 'Audio filter ÷ M', deemph: 'De-emphasis', morse: 'Morse decoder',
+};
+
+/** A block named inside a sentence: "your CIC", "your channel filter". */
+export const BLOCK_NOUN: Record<Kind, string> = {
+  mixer: 'mixer', cic: 'CIC', halfband: 'half-band', poly: 'polyphase decimator', channel: 'channel filter', disc: 'discriminator', audio: 'audio filter', deemph: 'de-emphasis', morse: 'Morse decoder',
+};
+
+/** What each setting may be. */
+export const LIMITS = {
+  bits: [4, 10], N: [1, 5], cicR: [2, 4, 8, 16], taps: [3, 255], polyR: [2, 3, 4, 5, 6, 8, 10], M: [1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 16, 20, 24, 25, 30, 40], stages: [2, 16], marginDb: [0, 60],
+} as const;
+
+/** The chapter's receiver, with "find it" in place of a dial: what the page starts from. It fails some band of every attempt, for a measured reason. */
+export const DEFAULT_CHAIN: Chain = [
+  { kind: 'mixer', tune: { mode: 'find', marginDb: 12 }, bits: 6 },
+  { kind: 'cic', N: 4, R: 4 },
+  { kind: 'channel', taps: 41, cutoff: 75_000 },
+  { kind: 'disc', method: 'phase', stages: 12 },
+  { kind: 'audio', taps: 81, cutoff: 10_000, M: 10 },
+  { kind: 'morse', threshold: 'auto' },
+];
+
+/** Where a block may go: the gates first (the mixer, then any CICs), then the complex filters, the discriminator, the audio blocks, the decoder last. */
+export const STAGE: Record<Kind, number> = { mixer: 0, cic: 1, halfband: 2, poly: 2, channel: 2, disc: 3, audio: 4, deemph: 4, morse: 5 };
+
+export interface Rates { inRate: number; outRate: number }
+/** Why a chain cannot run, or null. Also the rate into and out of each block. */
+export function checkChain(c: Chain): { problem: string | null; rates: Rates[] } {
+  const rates: Rates[] = [];
+  let rate = FS, problem: string | null = null;
+  const say = (p: string) => { problem ??= p; };
+  if (c[0]?.kind !== 'mixer') say('The chain starts with the mixer: it is what brings the station to zero.');
+  if (c.filter((b) => b.kind === 'mixer').length !== 1) say('One mixer, at the start.');
+  if (c.filter((b) => b.kind === 'disc').length !== 1) say('One discriminator: FM is turned into sound there.');
+  if (c[c.length - 1]?.kind !== 'morse' || c.filter((b) => b.kind === 'morse').length !== 1) say('One Morse decoder, at the end.');
+  for (let i = 1; i < c.length; i++) {
+    if (STAGE[c[i].kind] < STAGE[c[i - 1].kind]) {
+      const b = c[i], why = b.kind === 'cic' ? 'A CIC is gates: it goes straight after the mixer, before anything floating point.' : STAGE[b.kind] === 2 ? `The ${BLOCK_NOUN[b.kind]} filters the complex signal, so it comes before the discriminator.` : `The ${BLOCK_NOUN[b.kind]} works on sound, so it comes after the discriminator.`;
+      say(why);
+    }
+  }
+  let w = W_MIX;
+  for (const b of c) {
+    if (b.kind === 'cic') { w = cicWidth(b.N, b.R, w); if (w > 32) say(`CIC ÷ R: its registers would need ${w} bits; these gates hold at most 32.`); }
+    const R = b.kind === 'cic' || b.kind === 'poly' ? b.R : b.kind === 'halfband' ? 2 : b.kind === 'audio' ? b.M : 1, out = rate / R;
+    if (!Number.isInteger(out)) say(`${BLOCK_NAME[b.kind]}: ${rate.toLocaleString('en')} samples a second do not divide by ${R}.`);
+    if ((b.kind === 'channel' || b.kind === 'audio') && !(b.cutoff > 0 && b.cutoff < rate / 2)) say(`${BLOCK_NAME[b.kind]}: its cutoff must be between 0 and half the rate it runs at (${(rate / 2000).toLocaleString('en')} kHz).`);
+    if ('taps' in b && (b.taps < LIMITS.taps[0] || b.taps > LIMITS.taps[1] || b.taps % 2 === 0)) say(`${BLOCK_NAME[b.kind]}: an odd number of taps from ${LIMITS.taps[0]} to ${LIMITS.taps[1]}.`);
+    rates.push({ inRate: rate, outRate: out });
+    rate = out;
+  }
+  if (!problem && rate < 2 * TONE_MAX + 200) say(`The decoder gets ${rate.toLocaleString('en')} samples a second: too few for a tone of up to ${TONE_MAX} Hz.`);
+  return { problem, rates };
+}
+
+const wrapW = (v: number, w: number) => (v << (32 - w)) >> (32 - w);
+/** An order-N CIC ÷ R in w-bit registers over a block, from zeros: the registers of CicModel, one output a group of R, at clock R − 1. */
+export function cicRun(x: Int32Array, N: number, R: number, w: number): Int32Array {
+  const n = Math.floor(x.length / R), out = new Int32Array(n), ints = new Int32Array(N), combs = new Int32Array(N);
+  let cnt = 0, o = 0;
+  for (let i = 0; i < x.length; i++) {
+    const last = ints[N - 1];
+    for (let k = N - 1; k > 0; k--) ints[k] = wrapW(ints[k] + ints[k - 1], w);
+    ints[0] = wrapW(ints[0] + x[i], w);
+    if (cnt === R - 1) {
+      let v = last;
+      for (let k = 0; k < N; k++) { const keep = v; v = wrapW(v - combs[k], w); combs[k] = keep; }
+      out[o++] = v;
+    }
+    cnt = cnt === R - 1 ? 0 : cnt + 1;
+  }
+  return out;
+}
+
+/** y[j] = Σ h[k] x[jR − k]: an FIR keeping one output in R (R = 1: every one). */
+export function firDec(h: ArrayLike<number>, x: ArrayLike<number>, R: number): Float64Array {
+  const n = Math.floor(x.length / R), out = new Float64Array(n), L = h.length;
+  for (let j = 0; j < n; j++) { const a = j * R; let s = 0; for (let k = 0, m = Math.min(L, a + 1); k < m; k++) s += h[k] * x[a - k]; out[j] = s; }
+  return out;
+}
+const unitDc = (h: number[]) => { const s = h.reduce((a, b) => a + b, 0); return h.map((v) => v / s); };
+export const halfBandTaps = (n: number): number[] => unitDc(halfBand(n));
+export const polyTapsFor = (n: number, R: number): number[] => Array.from(lowpass(n, 0.45 / R));
+
+/** The phase step between samples as a share of the deviation (the chapter's discriminator), at any rate. */
+export function discPhase(re: Float64Array, im: Float64Array, rate: number): Float64Array {
+  const n = re.length, out = new Float64Array(n), k = rate / (2 * Math.PI * DEV);
+  for (let i = 1; i < n; i++) out[i] = Math.atan2(im[i] * re[i - 1] - re[i] * im[i - 1], re[i] * re[i - 1] + im[i] * im[i - 1]) * k;
+  return out;
+}
+/**
+ * The same angle by CORDIC vectoring (dsp/cordic.ts). Each product is first shifted left or right by a power of two until its larger part lies in
+ * [4096, 8191] (a leading-one detector and a shifter, as hardware normalises), then vectored in 16-bit words: n stages leave an angle error of at most
+ * atan 2^−(n−1). A product of zero (no signal at all) keeps the last angle.
+ */
+export function discCordic(re: Float64Array, im: Float64Array, rate: number, stages: number): Float64Array {
+  const n = re.length, out = new Float64Array(n), k = rate / DEV, spec = { w: 16, z: 16, n: stages };
+  for (let i = 1; i < n; i++) {
+    const pr = re[i] * re[i - 1] + im[i] * im[i - 1], pi = im[i] * re[i - 1] - re[i] * im[i - 1], m = Math.max(Math.abs(pr), Math.abs(pi));
+    if (!(m > 0)) { out[i] = out[i - 1]; continue; }
+    const s = 2 ** Math.floor(Math.log2(8191 / m)), t = cordicVector(Math.round(pr * s), Math.round(pi * s), spec).turn;
+    out[i] = (t > 0.5 ? t - 1 : t) * k;
+  }
+  return out;
+}
+/** De-emphasis at any rate, its gain 1 at DC. It undoes the transmitter's lift up to a constant (the lift is scaled to 1 at the top of the audio band), which the decoder, judging ratios, never sees. */
+export function deEmph(x: Float64Array, rate: number): Float64Array {
+  const a = Math.exp(-1 / (rate * TAU)), out = new Float64Array(x.length);
+  let p = 0;
+  for (let i = 0; i < x.length; i++) { p = (1 - a) * x[i] + a * p; out[i] = p; }
+  return out;
+}
+
+// ---- finding the station ---------------------------------------------------------------------------------------------------------------------
+
+/** The band's spectrum the mixer looks at: dB, 2048 bins of 469 Hz from −FS/2, averaged over Hann frames. */
+export const FIND_BINS = 2048;
+export function findSpectrum(xr: Int16Array, xi: Int16Array, frames = 32): Float64Array {
+  const M = FIND_BINS, avg = new Float64Array(M), n = xr.length;
+  const w = Array.from({ length: M }, (_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / M));
+  for (let f = 0; f < frames; f++) {
+    const o = Math.floor((f * (n - M)) / Math.max(1, frames - 1)), re = new Float64Array(M), im = new Float64Array(M);
+    for (let i = 0; i < M; i++) { re[i] = xr[o + i] * w[i]; im[i] = xi[o + i] * w[i]; }
+    fftInPlace(re, im);
+    for (let i = 0; i < M; i++) avg[i] += re[i] ** 2 + im[i] ** 2;
+  }
+  const out = new Float64Array(M);
+  for (let i = 0; i < M; i++) out[i] = 10 * Math.log10(Math.max(avg[(i + M / 2) % M], 1e-12) / frames);
+  return out;
+}
+function fftInPlace(re: Float64Array, im: Float64Array): void {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { [re[i], re[j]] = [re[j], re[i]]; [im[i], im[j]] = [im[j], im[i]]; }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = (-2 * Math.PI) / len, wr = Math.cos(ang), wi = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let k = 0; k < len / 2; k++) {
+        const a = i + k, b = a + len / 2, tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr;
+        re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+        const nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr;
+      }
+    }
+  }
+}
+export const binHz = (i: number): number => ((i - FIND_BINS / 2) * FS) / FIND_BINS;
+
+export interface Found { hz: number | null; standsDb: number; candidates: number }
+/**
+ * "Find it": the weakest line in the band that stands at least `marginDb` above what is around it (the median of ±25 kHz). A keyed FM station rests on
+ * its carrier between marks, which is a line; a loud station's power is spread over its whole channel. Too small a margin takes a ripple of the noise
+ * for a station; too large finds nothing.
+ */
+export function findStation(spec: Float64Array, marginDb: number): Found {
+  const M = spec.length, half = Math.round(25_000 / (FS / M));
+  let best: { i: number; level: number; stands: number } | null = null, count = 0;
+  for (let i = half; i < M - half; i++) {
+    if (!(spec[i] > spec[i - 1] && spec[i] >= spec[i + 1])) continue;
+    const around = Array.from(spec.subarray(i - half, i + half + 1)).sort((a, b) => a - b), med = around[half], stands = spec[i] - med;
+    if (stands < marginDb) continue;
+    count++;
+    if (!best || spec[i] < best.level) best = { i, level: spec[i], stands };
+  }
+  if (!best) return { hz: null, standsDb: 0, candidates: 0 };
+  const { i } = best, a = spec[i - 1], b = spec[i], c = spec[i + 1], d = a - 2 * b + c, off = d === 0 ? 0 : (0.5 * (a - c)) / d;
+  return { hz: binHz(i + off), standsDb: best.stands, candidates: count };
+}
+
+// ---- running a chain ------------------------------------------------------------------------------------------------------------------------
+
+export interface Run {
+  tunedHz: number | null;
+  found?: Found;
+  /** What leaves the gates (the mixer and the CICs), in units of a station of amplitude 1, and its rate. */
+  gatesRe: Float64Array; gatesIm: Float64Array; gatesRate: number;
+  /** The complex signal the discriminator is given, and its rate. */
+  chanRe: Float64Array; chanIm: Float64Array; chanRate: number;
+  /** The rate of each stage of the complex signal between the CICs' last output and the discriminator, for the fold check. */
+  audio: Float64Array; audioRate: number;
+  decoded: Decoded;
+}
+export interface RunOpts { part?: Part; tuneHz?: number; bitsOver?: number; skipDecode?: boolean; input?: { xr: Int16Array; xi: Int16Array } }
+
+/** The chain on a band (or on a part of it, tuned where the whole band tuned it). */
+export function runChain(c: Chain, b: TuneBand, o: RunOpts = {}): Run {
+  const { rates } = checkChain(c), input = o.input ?? sampleBand(b, o.part);
+  const mx = c[0] as Extract<Block, { kind: 'mixer' }>;
+  let tuned: number | null = o.tuneHz ?? null, found: Found | undefined;
+  if (o.tuneHz === undefined) {
+    if (mx.tune.mode === 'fixed') tuned = mx.tune.hz;
+    else { found = findStation(findSpectrum(input.xr, input.xi), mx.tune.marginDb); tuned = found.hz; }
+  }
+  const bits = o.bitsOver ?? mx.bits, ftw = ((Math.round(((tuned ?? 0) / FS) * 2 ** NCO_BITS) % 2 ** NCO_BITS) + 2 ** NCO_BITS) % 2 ** NCO_BITS;
+  const { mr, mi } = mixBlock(input.xr, input.xi, ftw, bits);
+  let ir: Int32Array = mr, ii: Int32Array = mi, w = W_MIX, gain = 1, i = 1;
+  for (; i < c.length && c[i].kind === 'cic'; i++) {
+    const k = c[i] as Extract<Block, { kind: 'cic' }>, wo = cicWidth(k.N, k.R, w);
+    ir = cicRun(ir, k.N, k.R, wo); ii = cicRun(ii, k.N, k.R, wo); w = wo; gain *= k.R ** k.N;
+  }
+  let re: Float64Array = Float64Array.from(ir, (v) => v / gain / ADC_SCALE), im: Float64Array = Float64Array.from(ii, (v) => v / gain / ADC_SCALE), rate = rates[i - 1].outRate;
+  const gatesRe = re, gatesIm = im, gatesRate = rate;
+  for (; i < c.length && STAGE[c[i].kind] === 2; i++) {
+    const k = c[i];
+    const h = k.kind === 'halfband' ? halfBandTaps(k.taps) : k.kind === 'poly' ? polyTapsFor(k.taps, k.R) : Array.from(lowpass((k as { taps: number }).taps, (k as { cutoff: number }).cutoff / rate));
+    const R = k.kind === 'halfband' ? 2 : k.kind === 'poly' ? k.R : 1;
+    re = firDec(h, re, R); im = firDec(h, im, R); rate = rates[i].outRate;
+  }
+  const chanRe = re, chanIm = im, chanRate = rate, d = c[i] as Extract<Block, { kind: 'disc' }>;
+  let a = d.method === 'phase' ? discPhase(re, im, rate) : discCordic(re, im, rate, d.stages);
+  for (i++; i < c.length && c[i].kind !== 'morse'; i++) {
+    const k = c[i];
+    if (k.kind === 'audio') a = firDec(lowpass(k.taps, k.cutoff / rate), a, k.M);
+    else a = deEmph(a, rate);
+    rate = rates[i].outRate;
+  }
+  const m = c[c.length - 1] as Extract<Block, { kind: 'morse' }>;
+  const decoded = o.skipDecode ? emptyDecode : decodeMorse(a, rate, m.threshold);
+  return { tunedHz: tuned, found, gatesRe, gatesIm, gatesRate, chanRe, chanIm, chanRate, audio: a, audioRate: rate, decoded };
+}
+
+// ---- the decoder (given) ----------------------------------------------------------------------------------------------------------------------
+
+export const FRAME_S = 0.005;
+/** What the decoder ignores at either end of the audio. Less than the lead and tail the station keeps silent. */
+export const EDGE_S = 0.06;
+export interface Decoded { text: string; key: Uint8Array; env: Float64Array; threshold: number; frameS: number }
+const emptyDecode: Decoded = { text: '', key: new Uint8Array(0), env: new Float64Array(0), threshold: 0, frameS: FRAME_S };
+
+/** The tone the decoder listens for: the frequency from 450 to 950 Hz with the most power over the whole clip, as an operator finds a station's note. */
+export function hearTone(x: Float64Array, rate: number): number {
+  let best = 0, at = 700;
+  for (let f = 450; f <= 950; f += 10) {
+    // Goertzel: one multiply a sample for each frequency tried
+    const k = 2 * Math.cos((2 * Math.PI * f) / rate);
+    let s1 = 0, s2 = 0;
+    for (let i = 0; i < x.length; i++) { const s0 = x[i] + k * s1 - s2; s2 = s1; s1 = s0; }
+    const p = s1 * s1 + s2 * s2 - k * s1 * s2;
+    if (p > best) { best = p; at = f; }
+  }
+  return at;
+}
+/**
+ * What the decoder hears in each 5 ms step: over a 10 ms window, the power at the tone against everything else in the sound, dB. Key down is the tone
+ * standing out; key up is the rest. Whatever the chain lets into the sound besides the tone (noise, a neighbour, distortion of the tone itself) lowers it.
+ */
+export function envelope(x: Float64Array, rate: number, tone = hearTone(x, rate)): Float64Array {
+  const L = Math.max(2, Math.round(rate * FRAME_S)), W = 2 * L, n = Math.max(0, Math.floor((x.length - W) / L) + 1), out = new Float64Array(n), w = (2 * Math.PI * tone) / rate;
+  const cs = new Float64Array(x.length), sn = new Float64Array(x.length);
+  for (let i = 0; i < x.length; i++) { cs[i] = Math.cos(w * i); sn[i] = Math.sin(w * i); }
+  for (let j = 0; j < n; j++) {
+    const o = j * L;
+    let m = 0;
+    for (let i = 0; i < W; i++) m += x[o + i];
+    m /= W;
+    let re = 0, im = 0, e = 0;
+    for (let i = 0; i < W; i++) { const v = x[o + i] - m; re += v * cs[o + i]; im -= v * sn[o + i]; e += v * v; }
+    const tp = (2 * (re * re + im * im)) / W, rest = Math.max(e - tp, 1e-3 * e, 1e-30);
+    out[j] = 10 * Math.log10(Math.max(tp, 1e-30) / rest);
+  }
+  return out;
+}
+/** Otsu's split of the frame levels: the threshold that best separates key down from key up. */
+export function otsu(v: Float64Array): number {
+  const s = Array.from(v).filter(Number.isFinite).sort((a, b) => a - b);
+  if (s.length < 4) return 0;
+  const lo = s[Math.floor(s.length * 0.01)], hi = s[Math.floor(s.length * 0.99)], bins = 128, hist = new Array<number>(bins).fill(0);
+  for (const x of s) hist[Math.max(0, Math.min(bins - 1, Math.floor(((x - lo) / (hi - lo || 1)) * bins)))]++;
+  let total = 0;
+  hist.forEach((c, i) => (total += c * i));
+  let wB = 0, sumB = 0, best = 0, at = 0;
+  for (let i = 0; i < bins; i++) {
+    wB += hist[i];
+    if (!wB || wB === s.length) continue;
+    sumB += i * hist[i];
+    const wF = s.length - wB, mB = sumB / wB, mF = (total - sumB) / wF, between = wB * wF * (mB - mF) ** 2;
+    if (between > best) { best = between; at = i; }
+  }
+  return lo + ((at + 1) / bins) * (hi - lo);
+}
+
+/** Frames of key down (1) and up (0), runs shorter than a third of a unit taken back (a click is not a mark), then marks and gaps read as a stated speed. */
+export function decodeMorse(audio: Float64Array, rate: number, threshold: 'auto' | number): Decoded {
+  const env = envelope(audio, rate), quiet = [...env].sort((a, b) => a - b)[Math.floor(env.length * 0.1)] ?? 0;
+  const thr = threshold === 'auto' ? otsu(env) : quiet + threshold, key = Uint8Array.from(env, (v) => (v > thr ? 1 : 0)), edge = Math.round(EDGE_S / FRAME_S);
+  // the filters are still filling at the start, and stop short at the end: nothing there is a mark
+  key.fill(0, 0, edge); key.fill(0, Math.max(0, key.length - edge));
+  const unit = UNIT_S / FRAME_S, minRun = Math.max(1, Math.round(unit / 3));
+  // take back short runs, shortest first, until none is left
+  for (let pass = 0; pass < 4; pass++) {
+    let i = 0;
+    while (i < key.length) {
+      let j = i;
+      while (j < key.length && key[j] === key[i]) j++;
+      if (j - i < minRun && i > 0 && j < key.length) key.fill(1 - key[i], i, j);
+      i = j;
+    }
+  }
+  let text = '', sym = '', i = 0;
+  while (i < key.length && key[i] === 0) i++;
+  while (i < key.length) {
+    let j = i;
+    while (j < key.length && key[j] === key[i]) j++;
+    const len = (j - i) / unit;
+    if (key[i] === 1) sym += len < 2 ? '.' : '-';
+    else if (j < key.length && len >= 2) { text += FROM_MORSE.get(sym) ?? '?'; sym = ''; if (len >= 5) text += ' '; }
+    i = j;
+  }
+  if (sym) text += FROM_MORSE.get(sym) ?? '?';
+  return { text: text.trim(), key, env, threshold: thr, frameS: FRAME_S };
+}
+
+/** Where the decoder's key went wrong against what was sent: each unit (a mark or a gap) read the other way over most of its middle. Times from the start of the band. */
+export interface Slip { t: number; sent: 'down' | 'up'; char: number }
+export function slips(b: TuneBand, d: Decoded): { lag: number; slips: Slip[] } {
+  const per = UNIT_S / d.frameS, lead = LEAD_S / d.frameS, truth = (f: number) => { const u = Math.floor((f - lead) / per); return u >= 0 && u < b.keying.length && b.keying[u] === '1' ? 1 : 0; };
+  let lag = 0, best = -1;
+  for (let L = 0; L < 80; L++) {
+    let agree = 0;
+    for (let f = 0; f + L < d.key.length; f++) agree += truth(f) === d.key[f + L] ? 1 : 0;
+    if (agree > best) { best = agree; lag = L; }
+  }
+  const own = unitOwners(b.message), out: Slip[] = [];
+  for (let u = 0; u < b.keying.length; u++) {
+    const a = Math.round(lead + u * per + per * 0.2) + lag, z = Math.round(lead + (u + 1) * per - per * 0.2) + lag;
+    let wrong = 0;
+    for (let f = a; f < z; f++) if ((d.key[f] ?? 0) !== (b.keying[u] === '1' ? 1 : 0)) wrong++;
+    if (wrong > (z - a) / 2 && (out.length === 0 || out[out.length - 1].t < LEAD_S + (u - 1) * UNIT_S)) {
+      let ch = own[u];
+      if (ch < 0) { let k = u; while (k >= 0 && own[k] < 0) k--; ch = k >= 0 ? own[k] : 0; }
+      out.push({ t: LEAD_S + u * UNIT_S, sent: b.keying[u] === '1' ? 'down' : 'up', char: ch });
+    }
+  }
+  return { lag: lag * d.frameS, slips: out };
+}
+
+// ---- what it costs --------------------------------------------------------------------------------------------------------------------------
+
+export interface Cost {
+  /** NANDs of the gates: the mixer and the CICs (I and Q each). */
+  nands: number;
+  /** Real multiplies a second in the floating-point part (a complex sample through a real filter is two). */
+  mults: number;
+  /** Discriminator angles a second, and CORDIC stage operations a second. */
+  angles: number;
+}
+/** NAND counts of the gate blocks at the learner's sizes, from the gates themselves (lib/sdr.ts, lib/multirate.ts): passed in, so this file stays free of the circuit library. */
+export interface GatePrices { mixer(bits: number): number; cic(N: number, R: number, wIn: number): number }
+/** Each block's own cost, in the chain's order. */
+export function blockCosts(c: Chain, prices: GatePrices): Cost[] {
+  const { rates } = checkChain(c);
+  let w = W_MIX;
+  return c.map((b, i) => {
+    const { inRate, outRate } = rates[i], k: Cost = { nands: 0, mults: 0, angles: 0 };
+    if (b.kind === 'mixer') k.nands = prices.mixer(b.bits);
+    else if (b.kind === 'cic') { k.nands = 2 * prices.cic(b.N, b.R, w); w = cicWidth(b.N, b.R, w); }
+    else if (b.kind === 'halfband') k.mults = 2 * halfBandTaps(b.taps).filter((v) => v !== 0).length * outRate;
+    else if (b.kind === 'poly' || b.kind === 'channel') k.mults = 2 * b.taps * outRate;
+    else if (b.kind === 'audio') k.mults = b.taps * outRate;
+    else if (b.kind === 'deemph') k.mults = 2 * inRate;
+    else if (b.kind === 'disc') { k.mults = 4 * inRate; k.angles = b.method === 'phase' ? inRate : b.stages * inRate; }
+    return k;
+  });
+}
+export function chainCost(c: Chain, prices: GatePrices): Cost {
+  return blockCosts(c, prices).reduce((a, k) => ({ nands: a.nands + k.nands, mults: a.mults + k.mults, angles: a.angles + k.angles }), { nands: 0, mults: 0, angles: 0 });
+}
+
+// ---- a band graded, and why it failed ----------------------------------------------------------------------------------------------------------
+
+export type Cause =
+  | { kind: 'tune-fixed'; hz: number }
+  | { kind: 'tune-none'; marginDb: number }
+  | { kind: 'tune-wrong'; hz: number; offKhz: number }
+  | { kind: 'tone-cut'; lossDb: number }
+  | { kind: 'too-narrow'; lossDb: number }
+  | { kind: 'disc-rate'; rate: number }
+  | { kind: 'cordic'; stages: number }
+  | { kind: 'interference'; ciDb: number; worst: Contribution; together: boolean }
+  | { kind: 'noise'; cnDb: number; stationsToo: boolean }
+  | { kind: 'decoder' }
+  | { kind: 'unknown' };
+
+export interface BandResult { band: TuneBand; run: Run; ok: boolean; cause?: Cause; measures?: Measures; slips?: Slip[] }
+export interface Measures { ciDb: number; cnDb: number; keyRatioDb: number; contributions: Contribution[] }
+/** One other station in the channel: its power against the wanted station's, dB; where it folded in, if it did; how much of it is the mixer's spurs (its power over an ideal oscillator's, dB); and whether it alone, beside the wanted station, breaks the message. */
+export interface Contribution extends Fold { station: number; offKhz: number; db: number; spurDb: number; breaks: boolean }
+
+/** Mean power of a complex signal after its first 5 ms. */
+function power(re: Float64Array, im: Float64Array, rate: number): number {
+  const s = Math.ceil(rate * 0.005);
+  let p = 0;
+  for (let i = s; i < re.length; i++) p += re[i] ** 2 + im[i] ** 2;
+  return p / Math.max(1, re.length - s);
+}
+const db = (x: number) => 10 * Math.log10(Math.max(x, 1e-30));
+
+/** A station's half-width for the fold check: its swing and a little more. */
+export const STATION_HALF = DEV + 5_000;
+/**
+ * Where a station at an offset from the tuning goes through the chain's decimations. `block`: the first decimating block past whose new Nyquist rate any
+ * of it lay (within STATION_HALF of its carrier), `foldedTo`: where its carrier landed after that block, `whole`: all of it lay past (so whatever of it
+ * reaches the channel came by folding), else only part did. `atGates`: where its carrier sits in what leaves the gates (the mixer and CICs), for a plot.
+ */
+export interface Fold { block: Kind | null; foldedTo: number | null; whole: boolean; atGates: number }
+export function foldPath(c: Chain, offHz: number): Fold {
+  const { rates } = checkChain(c), wrapTo = (f: number, r: number) => ((((f + r / 2) % r) + r) % r) - r / 2;
+  let f = offHz, block: Kind | null = null, foldedTo: number | null = null, whole = false, atGates = offHz;
+  for (let i = 1; i < c.length && STAGE[c[i].kind] <= 2; i++) {
+    const out = rates[i].outRate;
+    if (out < rates[i].inRate) {
+      const before = f, past = Math.abs(before) + STATION_HALF > out / 2;
+      f = wrapTo(f, out);
+      if (past && block === null) { block = c[i].kind; foldedTo = f; whole = Math.abs(before) - STATION_HALF > out / 2; }
+    }
+    if (STAGE[c[i].kind] <= 1) atGates = f;
+  }
+  return { block, foldedTo, whole, atGates };
+}
+
+/** Key-down power against key-up power in the decoder's envelope, from what was sent, dB. */
+export function keyRatio(b: TuneBand, d: Decoded, lagS: number): number {
+  const per = UNIT_S / d.frameS, lead = LEAD_S / d.frameS, lag = Math.round(lagS / d.frameS);
+  let on = 0, off = 0, non = 0, noff = 0;
+  for (let u = 1; u < b.keying.length - 1; u++) {
+    if (b.keying[u] !== b.keying[u - 1] || b.keying[u] !== b.keying[u + 1]) continue;
+    for (let f = Math.round(lead + u * per) + lag; f < Math.round(lead + (u + 1) * per) + lag; f++) {
+      const p = 10 ** ((d.env[f] ?? -200) / 10);
+      if (b.keying[u] === '1') { on += p; non++; } else { off += p; noff++; }
+    }
+  }
+  return db(on / Math.max(1, non)) - db(off / Math.max(1, noff));
+}
+
+
+/** Grade one band, and if it failed, measure why: a step at a time (each yield is one run of the chain, so a page can stay responsive), saying what it measures. */
+export function* gradeSteps(c: Chain, b: TuneBand): Generator<string, BandResult> {
+  yield 'Running your chain on the band';
+  const input = sampleBand(b), run = runChain(c, b, { input }), ok = run.decoded.text === b.message;
+  if (ok) return { band: b, run, ok };
+  const weak = b.stations[b.weak], mx = c[0] as Extract<Block, { kind: 'mixer' }>, { slips: sl, lag } = slips(b, run.decoded);
+  const fail = (cause: Cause, measures?: Measures): BandResult => ({ band: b, run, ok, cause, measures, slips: sl });
+  if (run.tunedHz === null) return fail({ kind: 'tune-none', marginDb: mx.tune.mode === 'find' ? mx.tune.marginDb : 0 });
+  const tuned = run.tunedHz, offKhz = (tuned - weak.f) / 1000;
+  if (Math.abs(offKhz) > 3) return fail(mx.tune.mode === 'fixed' ? { kind: 'tune-fixed', hz: tuned } : { kind: 'tune-wrong', hz: tuned, offKhz });
+  // the decoder's threshold: the same sound read with it on auto
+  const md = c[c.length - 1] as Extract<Block, { kind: 'morse' }>;
+  if (md.threshold !== 'auto' && decodeMorse(run.audio, run.audioRate, 'auto').text === b.message) return fail({ kind: 'decoder' });
+  // one suspect block at a time put right, the rest of the chain kept: a block is named only if the band then decodes
+  const d = c.find((k) => k.kind === 'disc') as Extract<Block, { kind: 'disc' }>, rates = checkChain(c).rates;
+  const narrow = -chanGainDb(c, DEV);
+  const toneLoss = -c.reduce((sum, k, i) => sum + (k.kind === 'audio' ? db(gainAt(lowpass(k.taps, k.cutoff / rates[i].inRate), b.toneHz, rates[i].inRate) ** 2) : 0), 0);
+  const fixes: [string, Cause, Chain][] = [];
+  if (d.method === 'cordic') fixes.push(['Your chain with a phase step in place of the CORDIC', { kind: 'cordic', stages: d.stages }, c.map((k) => (k.kind === 'disc' ? { ...k, method: 'phase' as const } : k))]);
+  if (toneLoss > 3) fixes.push(['Your chain with its audio filters keeping the tone', { kind: 'tone-cut', lossDb: toneLoss }, c.map((k, i) => (k.kind === 'audio' ? { ...k, cutoff: Math.min(0.45 * rates[i].inRate, Math.max(k.cutoff, 2 * TONE_MAX)) } : k))]);
+  if (narrow > 3) fixes.push(['Your chain with its channel filters wide enough for the station', { kind: 'too-narrow', lossDb: narrow }, c.map((k, i) => (k.kind === 'channel' ? { ...k, cutoff: Math.min(0.45 * rates[i].inRate, Math.max(k.cutoff, STATION_HALF + 5_000)) } : k))]);
+  for (const [say, cause, alt] of fixes) {
+    yield say;
+    if (checkChain(alt).problem === null && runChain(alt, b, { input, tuneHz: tuned }).decoded.text === b.message) return fail(cause);
+  }
+  // the chain on the wanted station alone, with no noise: does the chain itself spoil it?
+  yield 'Your chain on the station alone';
+  const alone = runChain(c, b, { part: { stations: [b.weak], noise: false }, tuneHz: tuned });
+  if (alone.decoded.text !== b.message) return fail(alone.chanRate < 2 * (DEV + b.toneHz) ? { kind: 'disc-rate', rate: alone.chanRate } : { kind: 'unknown' });
+  // the parts: wanted, each other station, the noise
+  const pw = power(alone.chanRe, alone.chanIm, alone.chanRate), contributions: Contribution[] = [];
+  for (let k = 0; k < b.stations.length; k++) {
+    if (k === b.weak) continue;
+    yield `Your chain on station ${contributions.length + 1} of the others alone`;
+    const st = b.stations[k], r = runChain(c, b, { part: { stations: [k], noise: false }, tuneHz: tuned, skipDecode: true }), p = power(r.chanRe, r.chanIm, r.chanRate);
+    const ideal = runChain(c, b, { part: { stations: [k], noise: false }, tuneHz: tuned, bitsOver: 10, skipDecode: true }), pi = power(ideal.chanRe, ideal.chanIm, ideal.chanRate);
+    contributions.push({ station: k, offKhz: (st.f - tuned) / 1000, db: db(p) - db(pw), ...foldPath(c, st.f - tuned), spurDb: db(p) - db(pi), breaks: false });
+  }
+  yield 'Your chain on the noise alone';
+  const nz = runChain(c, b, { part: { stations: [], noise: true }, tuneHz: tuned, skipDecode: true });
+  const ci = -db(contributions.reduce((sum, x) => sum + 10 ** (x.db / 10), 0)), cn = db(pw) - db(power(nz.chanRe, nz.chanIm, nz.chanRate));
+  const measures: Measures = { ciDb: ci, cnDb: cn, keyRatioDb: keyRatio(b, run.decoded, lag), contributions };
+  // which part, added to the wanted station on its own, breaks the message: measured by decoding each pair, never judged from a threshold
+  const breaks = (part: Part) => runChain(c, b, { part, tuneHz: tuned }).decoded.text !== b.message;
+  yield 'The station with the noise';
+  const noiseBreaks = breaks({ stations: [b.weak], noise: true });
+  for (const x of contributions) { yield 'The station with one other'; x.breaks = breaks({ stations: [b.weak, x.station], noise: false }); }
+  const byPower = [...contributions].sort((x, y) => y.db - x.db), culprit = byPower.find((x) => x.breaks);
+  if (noiseBreaks && (!culprit || -culprit.db > cn)) return fail({ kind: 'noise', cnDb: cn, stationsToo: !!culprit }, measures);
+  return fail({ kind: 'interference', ciDb: ci, worst: culprit ?? byPower[0], together: !culprit }, measures);
+}
+/** The same, all at once. */
+export function gradeBand(c: Chain, b: TuneBand): BandResult {
+  const g = gradeSteps(c, b);
+  for (;;) { const r = g.next(); if (r.done) return r.value; }
+}
+function gainAt(h: ArrayLike<number>, f: number, fs: number): number {
+  let re = 0, im = 0;
+  for (let i = 0; i < h.length; i++) { const w = (-2 * Math.PI * f * i) / fs; re += h[i] * Math.cos(w); im += h[i] * Math.sin(w); }
+  return Math.hypot(re, im);
+}
+/** The gain of a chain's complex filters (half-band, polyphase, channel; the CICs too) at an offset from the tuned frequency, dB. */
+export function chanGainDb(c: Chain, f: number): number {
+  const { rates } = checkChain(c);
+  let g = 0;
+  c.forEach((k, i) => {
+    const fs = rates[i].inRate;
+    if (k.kind === 'cic') g += 20 * Math.log10(Math.max(1e-12, cicGain(k.N, k.R, f / fs)));
+    else if (k.kind === 'halfband') g += 20 * Math.log10(Math.max(1e-12, gainAt(halfBandTaps(k.taps), f, fs)));
+    else if (k.kind === 'poly') g += 20 * Math.log10(Math.max(1e-12, gainAt(polyTapsFor(k.taps, k.R), f, fs)));
+    else if (k.kind === 'channel') g += 20 * Math.log10(Math.max(1e-12, gainAt(lowpass(k.taps, k.cutoff / fs), f, fs)));
+  });
+  return g;
+}
+const cicGain = (N: number, R: number, f: number) => { const s = Math.sin(Math.PI * f); return Math.abs(s) < 1e-12 ? 1 : Math.abs(Math.sin(Math.PI * R * f) / (R * s)) ** N; };
+
+/** What would help, by block: a direction, never a number (the numbers are the learner's to find), and only a change the chain can still make. */
+export function hintsFor(cause: Cause, c: Chain): string[] {
+  const has = (k: Kind) => c.some((b) => b.kind === k), cics = c.filter((b): b is Extract<Block, { kind: 'cic' }> => b.kind === 'cic');
+  const mx = c[0] as Extract<Block, { kind: 'mixer' }>;
+  switch (cause.kind) {
+    case 'tune-fixed': return ['the mixer: a fixed tune only fits a band whose station you know', 'the mixer can look for the station itself'];
+    case 'tune-none': return ['the mixer: how far a line must stand above its surroundings to count as a station', 'on the practice band, lower it until the mixer finds its station, and see how far that line stands'];
+    case 'tune-wrong': return ['the mixer: what it accepts as a station, so a ripple of the noise does not count', "the practice band says how far a real station's line stands"];
+    case 'tone-cut': return ['the audio filter: its cutoff must keep the tone the station keys', 'the brief says how high the tone can be'];
+    case 'too-narrow': return ['the channel filter: FM needs room for its swing and its tone, Carson\'s band', 'a wider channel filter'];
+    case 'disc-rate': return ['the discriminator needs a rate well above the swing: decimate less before it, and the rest after it'];
+    case 'cordic': return [cause.stages < LIMITS.stages[1] ? 'the discriminator: more CORDIC stages, or the phase step' : 'the discriminator: the phase step'];
+    case 'decoder': return ['the decoder\'s threshold'];
+    case 'unknown': return ['each block in turn: put it back as the chapter had it, and watch the practice band'];
+    case 'interference': {
+      const w = cause.worst, out: string[] = [];
+      if (w.spurDb > 6 && mx.bits < LIMITS.bits[1]) out.push('the mixer: a finer oscillator table, whose spurs fall lower');
+      // a station only partly past the new Nyquist rate comes in mostly through the channel filter's edge: that hint first
+      if (!w.whole || !w.block) out.push(has('channel') ? 'a narrower channel filter, or more taps in it for a steeper edge' : 'a channel filter before the discriminator');
+      if (w.block === 'cic') {
+        if (cics.some((k) => k.N < LIMITS.N[1])) out.push('a higher CIC order, which folds less into the channel');
+        if (cics.some((k) => k.R > LIMITS.cicR[0])) out.push('a smaller CIC ratio, with a half-band or polyphase filter after it doing the rest of the decimation');
+      } else if (w.block) out.push(`the ${BLOCK_NOUN[w.block]}: more taps, so less folds in`);
+      return out;
+    }
+    case 'noise': return ['a narrower channel filter lets in less noise (but not narrower than the station)', has('deemph') ? 'the audio filter: keep less of the noise above the tone' : 'de-emphasis, and an audio filter that keeps less above the tone'];
+  }
+}
+
+/** The book's own answer, the score's yardstick: a fifth-order CIC, a steep channel filter, de-emphasis and an audio filter. Never shown before a pass. */
+export const REFERENCE_CHAIN: Chain = [
+  { kind: 'mixer', tune: { mode: 'find', marginDb: 15 }, bits: 8 },
+  { kind: 'cic', N: 5, R: 4 },
+  { kind: 'channel', taps: 161, cutoff: 55_000 },
+  { kind: 'disc', method: 'phase', stages: 12 },
+  { kind: 'deemph' },
+  { kind: 'audio', taps: 121, cutoff: 1_500, M: 10 },
+  { kind: 'morse', threshold: 'auto' },
+];
+
+/** Whether a chain decodes a band's message (no diagnosis: the quick check). */
+export const decodes = (c: Chain, b: TuneBand): boolean => runChain(c, b).decoded.text === b.message;
+
+// ---- what the page says about a failed band -------------------------------------------------------------------------------------------------
+
+/** A frequency the way the page writes it: signed, in kHz, with a true minus. */
+/** Rounded first, so a small negative never shows as "−0". */
+export const fmtKhz = (hz: number, digits = 0): string => { const v = (Math.abs(hz) / 1000).toFixed(digits), z = Number(v) === 0; return `${z ? '' : hz < 0 ? '−' : '+'}${v} kHz`; };
+const fmtDb = (x: number) => { const v = Math.abs(x).toFixed(1); return `${x < 0 && Number(v) !== 0 ? '−' : ''}${v} dB`; };
+
+/** What went wrong on a failed band, in sentences, every figure measured on the learner's chain. */
+export function explain(r: BandResult, c: Chain): string[] {
+  const cause = r.cause, mx = c[0] as Extract<Block, { kind: 'mixer' }>;
+  if (!cause) return [];
+  switch (cause.kind) {
+    case 'tune-fixed': return [`Your mixer is set to ${fmtKhz(cause.hz)}. On this band the weak station is somewhere else, so the decoder heard whatever was there.`];
+    case 'tune-none': return [`"Find it" found no line standing ${cause.marginDb} dB above what is around it, so the chain had no station to tune to.`];
+    case 'tune-wrong': {
+      const f = r.run.found;
+      return [`"Find it" took a line at ${fmtKhz(cause.hz, 1)} for the station: the weakest line standing at least your ${mx.tune.mode === 'find' ? mx.tune.marginDb : 0} dB above its surroundings${f ? ` (it stood ${f.standsDb.toFixed(1)} dB)` : ''}.`, `The station your decoder needed was ${(Math.abs(cause.offKhz)).toFixed(0)} kHz away from it.`];
+    }
+    case 'tone-cut': return [`Your audio filters are ${cause.lossDb.toFixed(1)} dB down at the ${r.band.toneHz} Hz tone this station keys. The same chain with their cutoff raised to keep the tone decodes this band.`];
+    case 'too-narrow': return [`Your CIC and channel filters are ${cause.lossDb.toFixed(1)} dB down ${DEV / 1000} kHz from the carrier, where the station's swing reaches: they cut its own signal. The same chain with the channel filter widened to hold the station decodes this band.`];
+    case 'disc-rate': return [`Your discriminator runs at ${(cause.rate / 1000).toFixed(0)} kHz. The station swings ±${DEV / 1000} kHz with a ${r.band.toneHz} Hz tone, which takes more than ${((2 * (DEV + r.band.toneHz)) / 1000).toFixed(1)} kHz, and the station alone, with nothing else in the band, does not decode.`];
+    case 'cordic': return [`With ${cause.stages} CORDIC stages each angle is off by up to ${((Math.atan(2 ** -(cause.stages - 1)) * 180) / Math.PI).toPrecision(2)}°. The same chain with a phase step in its place decodes this band.`];
+    case 'decoder': return ['Your decoder\'s threshold misreads this band: the same sound, read with the threshold on auto, decodes.'];
+    case 'unknown': return ['The station alone, with nothing else in the band, does not decode through your chain, and no one block put right on its own makes it decode.'];
+    case 'noise': return [`Carrier to noise in your channel: ${fmtDb(r.measures!.cnDb)}. Your station with the noise alone, and no other station, already loses the message${cause.stationsToo ? ', and the noise is the larger of what spoils it' : '; no other station beside it does'}.`];
+    case 'interference': {
+      const w = cause.worst, m = r.measures!, where = w.offKhz > 0 ? 'above' : 'below';
+      const how = w.block === null ? 'reached your channel directly, through the edge of your filters'
+        : w.whole ? `folded in when your ${BLOCK_NOUN[w.block]} dropped the rate, landing at ${fmtKhz(w.foldedTo!)} from yours`
+        : `straddled half the rate your ${BLOCK_NOUN[w.block]} leaves: the part of it past that folded in, and the rest came in directly, through the edge of your filters`;
+      const out = [`A station ${Math.abs(w.offKhz).toFixed(0)} kHz ${where} yours ${how}. In your channel it measured ${Math.abs(w.db).toFixed(1)} dB ${w.db >= 0 ? 'stronger' : 'weaker'} than your station.`];
+      if (w.spurDb > 6) out.push(`Your oscillator table lets in ${w.spurDb.toFixed(1)} dB more of that station than a ten-bit table would: that extra is the table's spurs.`);
+      out.push(`Measured in your chain: carrier to interference ${fmtDb(m.ciDb)} in the channel, carrier to noise ${fmtDb(m.cnDb)}.`);
+      out.push(w.breaks ? 'Added to your station on its own, that station alone spoils the message.' : 'No one part spoils the message on its own: the other stations and the noise together do.');
+      return out;
+    }
+  }
+}
+
+/** The decoder's slips, in words: when, in which character, and which way. */
+export function slipText(r: BandResult): string[] {
+  return (r.slips ?? []).slice(0, 6).map((s) => `${s.t.toFixed(2)} s, in the ${r.band.message[s.char] ?? '?'}: key ${s.sent} read as ${s.sent === 'down' ? 'up' : 'down'}`);
+}

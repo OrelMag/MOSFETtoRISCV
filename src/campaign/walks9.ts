@@ -193,4 +193,81 @@ export const WALKS9: Record<string, WalkScript> = {
     },
   ],
 
+  // ---- sp_mac
+  sp_mac: [
+    {
+      title: 'Two products, one sum',
+      text: 'mul0 multiplies the low halves, mul1 the high halves, both signed; g1 lets the high product through only for mac2 (otherwise 0). e0 and e1 sign-extend them to 33 bits and pair adds them: two products of 2^30 at most each cannot overflow 33 bits.',
+      parts: ['alo', 'blo', 'ahi', 'bhi', 'mul0', 'mul1', 'g1', 'e0', 'e1', 'pair'], codex: ['multacc'],
+      why: 'Adding the pair before the accumulator keeps the loop to one adder: the accumulator sees one 33-bit number a clock, whichever of mac and mac2 it was.',
+      whyNot: { text: 'Two adders in the loop, one per product, would double the carry chain that sets the period.' },
+    },
+    {
+      title: 'A register wide enough to wander',
+      text: 'pe sign-extends the pair to 40 bits and add sums it with the register. nxt picks the sum or 0 (clracc), and the register acc loads it only when we is 1: en and not racc. Nothing clamps here.',
+      parts: ['pe', 'add', 'nxt', 'zero40', 'nop0', 'clr', 'isr', 'nr', 'we', 'acc'], codex: ['guardbits'],
+      ask: {
+        question: 'The register holds 2^38 and a mac2 of full-scale operands (+2^31) arrives. What does it hold after the clock?',
+        options: ['2^38 + 2^31: it fits, and nothing clamps it', '2^31 − 1: the sum is clamped to 32 bits', '2^38: a sum past 32 bits is dropped', '−2^39: it wrapped'],
+        answer: 0,
+        explain: 'The register is 40 bits: it holds anything below 2^39. The clamp to 32 bits belongs to the read, so a sum that is past 32 bits now may be pulled back by the products that follow.',
+        why: ['', 'That is what a clamp on every add would do, and it loses the excursion for good.', 'Nothing is dropped: the register has room.', 'Wrapping starts only at 2^39.'],
+      },
+      why: 'Eight bits above a 32-bit product cover 256 products of full scale; the budget is about the length of the dot product, not about its value.',
+      whyNot: { text: 'A saturating accumulator would need a comparator on every add, in the loop, and would turn an excursion that comes back into a wrong answer.' },
+    },
+    {
+      title: 'Read once',
+      text: 'read takes the 40 bits and the shift: one zero below, a shift right by sh with the sign filling in, the bit that falls out first added back with half adders (round half up), and a clamp from 41 to 32 bits. y follows the register at all times; sat says the clamp acted.',
+      parts: ['read'], codex: ['saturate', 'guardbits'],
+      why: 'Rounding and clamping happen once, on the finished sum, so their error is one half step and one clamp, however many products were added.',
+      whyNot: { text: 'Rounding each product before it is added puts a half step of error in per tap; it saves nothing, since the register is already wide.' },
+    },
+  ],
+
+  // ---- sp_circ
+  sp_circ: [
+    {
+      title: 'Which mode',
+      text: 'u0 decodes the 3-bit mode into eight lines. u1 ORs modes 3 and 7, the two that step by m instead of 1, and u2 ORs modes 2, 5 and 7, the ones that step down. u3 copies that one bit to all eight, and u4 is the constant 1.',
+      parts: ['u0', 'u1', 'u2', 'u3', 'u4'], codex: ['comparator'],
+      why: 'Eight modes need only three facts: step by 1 or m, up or down, and which of the three overrides (circular, stay, bit-reversed) applies at the end.',
+    },
+    {
+      title: 'One adder, four steps',
+      text: 'u5 picks 1 or m. u10 XORs it with the down bit, which inverts it for a minus; u16 adds p, the stepped value and the down bit as carry-in. The result t is p + 1, p − 1, p + m or p − m modulo 256.',
+      parts: ['u5', 'u10', 'u16'], codex: ['comparator'],
+      why: 'A subtraction is an addition of the inverse plus one, so the same adder serves both signs; the mode only chooses the operand and the carry.',
+      whyNot: { text: 'Separate incrementer, decrementer and m adders would each be as large as this adder or nearly. Here the cost of the four plain modes is one adder, one mux and one row of XORs.' },
+    },
+    {
+      title: 'The end of the window',
+      text: 'u9 adds base and len, 8 bits wide: that is the window end. u11, u12 and u13 add 255 to it, which is end − 1, the last address inside the window.',
+      parts: ['u8', 'u9', 'u11', 'u12', 'u13'], codex: ['comparator'],
+      ask: {
+        question: 'Base 250, length 10, the pointer at 3, mode +circular. What is y?',
+        options: ['250: the window is 250 … 255 and 0 … 3, its end is 260 mod 256 = 4, and the next address 4 equals it', '4: the pointer just steps up', '0: it wraps at 255', '260: the pointer goes to the end of the window'],
+        answer: 0,
+        explain: 'The end is an 8-bit sum, so a window that crosses 255 has a small end. The next address is 4, equal to it, so the pointer returns to the base. A nine-bit end would be 260 and never equal any address.',
+        why: ['', 'Equal to the end, the pointer wraps: that is the whole mode.', 'Only a window that ends exactly at 256 wraps at 255, and then because its end is 0.', 'An address is 8 bits; the end is a test value, never an address the pointer goes to.'],
+      },
+      why: 'Everything is modulo 256: the pointer, the step and the end. The window need not sit below 255, and the comparison with the end works unchanged when it wraps.',
+      whyNot: { text: 'A 9-bit end would be exact arithmetic, but it would never equal an 8-bit address once base + length passes 255, and the pointer would run past the buffer.' },
+    },
+    {
+      title: 'Wrap only on an equal',
+      text: 'u18 compares the stepped value t with the end, u19 compares p with the base. u20 passes the first for mode 4 and u21 the second for mode 5; u22 ORs them into hit. u23 chooses the base (for mode 4) or end − 1 (for mode 5), and u24 takes it instead of t when hit is 1.',
+      parts: ['u18', 'u19', 'u20', 'u21', 'u22', 'u23', 'u24'], codex: ['comparator'],
+      why: 'Going up the pointer reaches the end when the next address is the end; going down it leaves the base, and the new address is the last one inside, end − 1.',
+      whyNot: { text: 'Testing t ≥ end would also wrap a pointer that sits beyond the window (outside it, or past the end after a modifier step), which should just step. Equality is cheaper than a comparison and wraps only the one case.' },
+    },
+    {
+      title: 'Bit-reversed, and the last word',
+      text: 'u6 and u7 reverse the bits of p and m, u15 adds them and u17 reverses the sum back: no gates but one adder. u25 returns p unchanged in mode 0 and u26 takes the bit-reversed result in mode 6, each a mux at the very end.',
+      parts: ['u6', 'u7', 'u15', 'u17', 'u25', 'u26'], codex: ['counter'],
+      why: 'Adding with the bits reversed makes the carry run from the top down, which counts in the order an FFT wants. Reversal is wiring, so the mode costs one adder.',
+      whyNot: { text: 'Reversing only p and adding m would be an ordinary add of a strange number; the modifier must be reversed too, so that a modifier of 2^(k−1) counts a 2^k-point order.' },
+    },
+  ],
+
 };

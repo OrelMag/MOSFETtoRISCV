@@ -1,7 +1,7 @@
 // My path's model: the skill map points at real steps, questions and levels; mastery follows its rules; the learn store
 // survives junk and merges; placement and test-out draw real questions; the next step starts at Basics.
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { checkOf } from '../src/campaign/codexmore';
 import { DRILL_REVIEW, REVIEW_BANK } from '../src/learn/bank';
 import { nodeById } from '../src/campaign/nodes';
@@ -12,6 +12,7 @@ import { PLACEMENT, placementItems, suggestTier, TEST_DRILL, testOutItems } from
 import { skills, tierChapters, TIERS, type Skill } from '../src/learn/skills';
 import { emptyLearn, Learn, LEARN_KEY, mergeLearn, sanitizeLearn } from '../src/learn/store';
 import type { Memo } from '../src/ui/review';
+import { BOOK_TIMEOUT, warmBook, WARM_TIMEOUT } from './warmbook';
 
 const byId = new Map(chapters.map((c) => [c.id, c]));
 
@@ -122,10 +123,13 @@ function ctx(o: Partial<PathCtx> = {}): PathCtx {
 }
 
 describe('next up', () => {
+  // the path reads every chapter's prose (for its minutes): warm it first, as the other whole-book tests do
+  beforeAll(warmBook, WARM_TIMEOUT);
+
   it('a fresh learner starts at Basics, step 1', () => {
     const n = nextUp(ctx());
     expect(n[0]).toMatchObject({ kind: 'learn', href: '#/c/basics/0' });
-  });
+  }, BOOK_TIMEOUT);
   it('questions due come first; a start tier skips the tiers below', () => {
     const n = nextUp(ctx({ reviewDue: 3 }), 2);
     expect(n[0].kind).toBe('review');

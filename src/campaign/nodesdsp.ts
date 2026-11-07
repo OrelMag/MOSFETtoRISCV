@@ -1,9 +1,8 @@
 // Act 13, Signals: optional levels from the Signal processing chapters. Each block is a small build checked against the
-// chapter's model (builddsp.ts). The MAC with guard bits and the circular address come with the MAC unit and the DSP core;
-// the levels not built yet are on the map as "coming soon" in the order they will play. No DOM.
+// chapter's model (builddsp.ts). No DOM.
 
 import type { CampaignNode } from './types';
-import { BUILDDSP, biquadGives, cicGives, cordicGives, gzGives, satGives } from './builddsp';
+import { BUILDDSP, biquadGives, cicGives, circGives, cordicGives, gzGives, macGives, satGives } from './builddsp';
 import { sdGives } from './sdcheck';
 
 export const NODES_DSP: CampaignNode[] = [
@@ -19,14 +18,26 @@ export const NODES_DSP: CampaignNode[] = [
     codex: ['saturate', 'guardbits'], chapters: [{ chapter: 'fixed', step: 2, label: 'A saturating adder' }],
   },
   {
-    id: 'sp_mac', act: 13, title: 'MAC with guard bits', kind: 'build', optional: true, soon: true, requires: ['sp_sat'],
-    why: 'Coming with the MAC unit: a product added into an accumulator wide enough that a worst-case dot product never wraps, and one clamp at the end.',
-    tips: [], codex: [],
+    id: 'sp_mac', act: 13, title: 'MAC with guard bits', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_mac, givesOf: macGives,
+    unlocks: ['macunit'], par: { nand: 10081, period: 127 },
+    why: 'A dot product adds many products, and the partial sums wander: they can run far past what a result word holds and come back. Clamp each sum as it is added and the excursion is lost for good; keep 8 guard bits above the 32-bit product and 255 mac2 (511 mac) of full-scale operands still fit, so the sum stays exact and the clamp happens once, at the read. A 64-tap Q1.15 filter adds at most 64 × 2^30 = 2^36, an eighth of what the register can reach. Past 40 bits the register wraps as two\'s complement, with no flag: the guard bits are a budget, not a promise.',
+    tips: [
+      'Sign-extend the sum of the two products (mac2 adds both, mac only the low pair: a mux sends 0 for the high product) to 40 bits and add it to the register. The register loads when en is 1 and op is not racc; clracc loads 0 instead. Nothing here is clamped.',
+      'The word is 40 bits because a product is 32: 255 × 2^31 (mac2 of −32768 × −32768 pairs) is just under 2^39, the largest a signed 40-bit word holds. A 39-bit register wraps long before; the 256th full-scale mac2 wraps even a 40-bit one, to −2^39, and that is the model\'s answer too.',
+      'Read once: put one zero below the 40 bits, shift right by sh (arithmetic, six stages of 1, 2, 4 … 32), and the bit that falls out first is the rounding bit. Add it back with half adders into a 41-bit word, then clamp once from 41 to 32 bits: the top 10 bits must agree. y follows the register at all times; racc only names the moment you look.',
+    ],
+    codex: ['multacc', 'guardbits', 'saturate'], chapters: [{ chapter: 'mac', step: 1, label: 'The MAC unit, in gates' }, { chapter: 'mac', step: 3, label: 'The accumulator and its read' }],
   },
   {
-    id: 'sp_circ', act: 13, title: 'Circular address', kind: 'build', optional: true, soon: true, requires: ['c_computer'],
-    why: 'Coming with the DSP core: a pointer that steps through a buffer and wraps to its start with no instruction spent on it.',
-    tips: [], codex: [],
+    id: 'sp_circ', act: 13, title: 'Circular address', kind: 'build', optional: true, requires: ['c_computer'], base: BUILDDSP.sp_circ, givesOf: circGives,
+    unlocks: [], par: { nand: 639, depth: 53 },
+    why: 'A filter keeps its last N samples, and shifting them costs N moves a sample. Leave them still and move the pointer: it steps by one and, at the end of its window, goes back to the start by itself, with no instruction spent. The level is the DSP core\'s whole address step, eight modes, because one adder serves them all: a plus or minus 1 or m, the same step wrapped at the window\'s end, and a bit-reversed one for an FFT. Its subtlety is the end: base + length is an 8-bit sum that wraps, and a window may cross 255.',
+    tips: [
+      'One adder does p ± 1 and p ± m: pick 1 or m with a mux, invert it for a minus and carry a 1 in. Modes 4 and 5 start from the same sum, so the circular modes cost a comparison and a mux, not another adder.',
+      'The window end is base + len in 8 bits, so it wraps when the window crosses 255. Mode 4 wraps when the next address (the adder\'s output) equals the end; mode 5 when p equals the base, and it goes to end − 1, which is one more 8-bit add of 255. Compare with equality, never with greater-than: a pointer outside the window must just step.',
+      'Bit-reversed needs no adder of its own beyond one: reversing is wiring. Reverse p, reverse m, add, reverse the sum. Mode 0 is the last mux in line, and it must beat the others: a read without a step leaves p alone.',
+    ],
+    codex: ['counter', 'comparator', 'ripple', 'nicring'], chapters: [{ chapter: 'dspcore', step: 2, label: 'Address generators' }],
   },
   {
     id: 'sp_biquad', act: 13, title: 'A biquad', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_biquad, givesOf: biquadGives,
