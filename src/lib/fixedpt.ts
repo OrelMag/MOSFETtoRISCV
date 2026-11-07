@@ -37,7 +37,7 @@ export function limitWord(w: number): ComponentDef {
 export function clampWord(w: number, from = w + 1): ComponentDef {
   if (from !== w + 1) return clampFrom(from, w);
   return memo(`fxclamp${w}`, () => {
-    const b = new Builder(6, 10, 4);
+    const b = new Builder(6, 10, 6);
     b.pins('x');
     const top = b.op1(cut(w + 1, w, 1), ['x'], 'true sign', 'top');
     const under = b.op1(cut(w + 1, w - 1, 1), ['x'], 'top bit that fits', 'under');
@@ -156,3 +156,6 @@ export function fracMultiplier(w: number): ComponentDef {
     });
   });
 }
+
+/** The 8-bit saturating adder: registered at load, for Act 13's level (the part it unlocks) and its alternatives. */
+export const SATADD8: ComponentDef = satAdder(8);

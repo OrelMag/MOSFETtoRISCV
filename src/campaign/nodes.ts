@@ -24,6 +24,7 @@ import type { BuildChallenge } from '../editor/challenges';
 import type { Act, CampaignNode } from './types';
 import { withBugHunts } from './bughunts';
 import { NODES_COMM } from './nodescomm';
+import { NODES_DSP } from './nodesdsp';
 
 const sandbox = (id: string) => (): BuildChallenge => {
   const c = challengeById(id);
@@ -45,6 +46,7 @@ export const ACTS: Act[] = [
   { num: 9, title: 'Throughput: a GPU', blurb: 'Optional, from Core III on: throughput. Lanes: one instruction stream, four datapaths, a mask and a stack. Warps: hide memory latency. Pixels: a rasterizer beside the lanes.' },
   { num: 10, title: 'Memory', blurb: 'Optional, from A computer on: what sits behind the data port. DRAM, its controller and a cache; a bus other masters share, a DMA engine, and flash to boot from.' },
   { num: 12, title: 'Links', blurb: 'Optional, from A computer on: how a bit gets from one machine to another. Relays that repeat and select, a clock that crosses to another, a UART and an I²C controller, the checks that catch a flipped bit, a code that keeps the line balanced and a receiver that finds the clock in the data. Each bench is the far end of the link, and it names the first rule you broke.' },
+  { num: 13, title: 'Signals', blurb: 'Optional, from A computer on: arithmetic for samples. A sum that stops at full scale instead of wrapping, a filter section with feedback, one frequency picked out of a stream, a filter that throws samples away for the price of adders, a rotation by shifts and a loop that makes one bit carry many. Each bench runs the model from its chapter beside your circuit.' },
 ];
 
 /** An act's name as the map and the crumbs show it: "Act 3", or its own label ("Act P"). */
@@ -844,6 +846,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     codex: ['boot'], chapters: [{ chapter: 'bus', step: 4, label: 'A computer on one bus' }],
   },
   ...NODES_COMM,
+  ...NODES_DSP,
 ]);
 
 export const nodeById = (id: string): CampaignNode | undefined => NODES.find((n) => n.id === id);

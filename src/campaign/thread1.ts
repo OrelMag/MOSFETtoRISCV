@@ -308,6 +308,8 @@ export const THREAD1: Record<string, NodeThread> = {
       l_uarttx: 'a device on its bus that sends a byte with no clock wire',
       l_crc: 'its bytes on a long wire arrive changed, and it has to be able to tell',
       l_8b10b: 'its bytes have runs of 0s, and a line with no clock wire needs edges',
+      sp_sat: 'its samples are words with a ceiling, and a sum past it should stop there rather than wrap',
+      sp_circ: 'its loads walk an array; the delay line of a filter wants the walk to wrap with no instruction spent on it',
     },
     pitfalls: [
       'The ROM has 32 words: its address is pc[4:0], and the program must fit.',
