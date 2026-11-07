@@ -152,6 +152,10 @@ export const NUDGES: Record<string, string> = {
   // sp_sd: below
   sp_sd: 'The bit is the sign of the last sum before the edge; whatever it says is taken away from both sums at once, as +full scale or −full scale.',
 
+  // sp_mac: below
+
+  // sp_circ: below
+
   // act 12: links
   l_sync: 'Whatever samples the asynchronous signal may not decide in time; the thing that reads it should not be the thing that samples it.',
   l_uarttx: 'The line should change only at the moments the bit clock allows, and a byte offered during a frame has to wait.',

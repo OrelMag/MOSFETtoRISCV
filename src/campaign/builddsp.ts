@@ -118,4 +118,8 @@ export const BUILDDSP: Record<string, () => BuildChallenge> = {
     answer: refOf('sp_sd', SD_REF, 'Sigma-delta loop'),
   }),
 
+  // ---- sp_mac
+
+  // ---- sp_circ
+
 };

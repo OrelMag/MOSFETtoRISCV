@@ -193,4 +193,8 @@ export const WALKS9: Record<string, WalkScript> = {
     },
   ],
 
+  // ---- sp_mac
+
+  // ---- sp_circ
+
 };

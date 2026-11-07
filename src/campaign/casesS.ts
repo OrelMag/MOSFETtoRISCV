@@ -51,4 +51,8 @@ export const CASESS: Record<string, LevelCase> = {
     alts: [{ name: 'First-order loop (one sum)', nand: 502, note: 'sdModulator(1, 8), counted by the simulator' }, { name: 'Second-order loop (two sums)', nand: 987, note: 'sdModulator(2, 8), counted by the simulator' }],
   },
 
+  // ---- sp_mac
+
+  // ---- sp_circ
+
 };
