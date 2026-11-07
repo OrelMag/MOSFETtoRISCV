@@ -32,11 +32,11 @@ export const chNoise: Chapter = {
     'compare any two links on the Eb/N0 axis, and place them against the limit',
     'derive Shannon\'s capacity from counting noise spheres, and say why the code in his proof cannot be built',
   ],
-  builds: ['signals', 'telegraph'],
+  builds: ['message', 'signals', 'telegraph'],
   recap: {
     keep: [
       `Thermal noise has a density kT, ${dbm(FLOOR)}/Hz at ${T0} K, flat far past any radio band: the floor in a bandwidth is ${nf(FLOOR, 0).replace('-', '−')} dBm + 10 log₁₀ B + the receiver's noise figure. Double the band, double the noise.`,
-      `A level d from a threshold, in Gaussian noise of σ, is read wrong with probability Q(d / σ). Going from 1e-3 to 1e-9 takes about ${db(20 * Math.log10(6 / 3.09), 0)}: the tail falls fast.`,
+      `A level d from a threshold, in Gaussian noise of σ, is read wrong with probability Q(d / σ). Going from ${sci(1e-3)} to ${sci(1e-9)} takes about ${db(20 * Math.log10(6 / 3.09), 0)}: the tail falls fast.`,
       'The best weights for a known pulse in white noise are the pulse itself: the SNR after them is E / σ², the energy over the noise, whatever the shape. Averaging is that filter for a rectangle.',
       `Eb/N0 is energy per bit over noise density: SNR = (Eb/N0) (R / B). Uncoded ±1 signalling gives Q(√(2 Eb/N0)), ${db(FOR_1E5)} at 10⁻⁵ and ${db(FOR_1E9)} at 10⁻⁹.`,
       `C = B log₂(1 + P / (N0 B)). More band at fixed power flattens out at P / (N0 ln 2), so no code runs below ${db(WALL, 2)}. Short of power, spend band; short of band, each extra bit a second per hertz costs 3 dB.`,
@@ -71,8 +71,9 @@ export const chNoise: Chapter = {
     {
       title: 'The floor',
       body: `
+        <p>The last chapter's channels were noiseless: a signal went in, a scaled and delayed one came out. A real receiver also hears a floor that no design removes, and how far a link reaches, and how many bits a hertz carries, are both fought out against it.</p>
         <p>Electrons in a resistor move with heat, and their motion is a voltage. John Johnson measured it in 1926 and Harry Nyquist derived it in 1928: an open resistor has an RMS noise voltage of √(4 k T R B), ${NV(johnsonVolts(1000, 1))} nV in 1 kΩ over 1 Hz at room temperature. No design removes it, because it comes with being warm and being connected.</p>
-        <p>The power it can deliver does not depend on the resistor: <strong>kT per hertz</strong>, which at the reference temperature of ${T0} K is ${dbm(FLOOR)}/Hz. That is the most-used number in radio engineering. A band of B collects kTB, so the floor in dBm is ${nf(FLOOR, 0).replace('-', '−')} + 10 log₁₀ B. The density is flat far past any radio band, and noise that is flat is called <strong>white</strong>.</p>
+        <p>The power it can deliver does not depend on the resistor: <strong>kT per hertz</strong>, which at the reference temperature of ${T0} K is ${dbm(FLOOR)}/Hz (dBm: decibels above one milliwatt, chapter ${numOf('message')}). That is the most-used number in radio engineering. A band of B collects kTB, so the floor in dBm is ${nf(FLOOR, 0).replace('-', '−')} + 10 log₁₀ B. The density is flat far past any radio band, and noise that is flat is called <strong>white</strong>.</p>
         <p>A receiver adds its own on top, stated as its <strong>noise figure</strong>: how many dB it degrades the SNR. So a Wi-Fi receiver with 20 MHz and 6 dB of figure has a floor of ${dbm(noiseFloorDbm(20e6, 6))}, and a signal must clear that by whatever its modulation needs. A noise figure is quoted against a ${T0} K source, so that receiver adds about ${Math.round((dbToRatio(6) - 1) * T0)} K of its own, whatever it listens to. Cooling only the source then gains little. Stations that listen to deep-space probes look at a cold sky through cooled amplifiers: with everything near 4 K the floor would be up to ${db(10 * Math.log10(T0 / 4), 0)} lower.</p>
         <div class="try">Widen the band by ten and read the floor. Set the noise figure to 0 and compare halving the band with cooling the source from 290 K to 145 K: each is 3 dB. Then set the figure to 6 dB and try cooling again.</div>`,
       widget: thermalWidget,
@@ -82,6 +83,24 @@ export const chNoise: Chapter = {
         answer: 0,
         explain: 'The density is unchanged and the band is a hundredth: 10 log₁₀ 100 = 20 dB.',
         why: ['', 'The density is per hertz, and the channel now holds fewer of them.', 'A factor of 100 in power is 20 dB.', 'Ringing changes a pulse\'s shape, and does not add thermal noise.'],
+      },
+    },
+    {
+      title: 'A chain: who pays',
+      get body() {
+        const good = cascadeNfDb([LNA, CABLE]), bad = cascadeNfDb([CABLE, LNA]);
+        return `
+        <p>A receiver is a chain of stages, each with a gain and each adding noise. Friis's formula (1944) says how they combine: F = F₁ + (F₂ − 1) / G₁ + (F₃ − 1) / (G₁ G₂) + …, in ratios. Each stage's excess noise counts divided by the gain before it, so a good first amplifier makes everything after it matter less.</p>
+        <p>A passive loss has a noise figure equal to its loss. So take an amplifier of 20 dB gain and 1 dB figure, and a 10 dB cable. Amplifier first: ${db(good, 2)}. Cable first: ${db(bad, 2)}. The same two parts differ by ${db(bad - good, 1)}, which for the same signal-to-noise ratio at the end of the chain is ${(10 ** ((bad - good) / 10)).toFixed(0)} times the transmit power, or ${(10 ** ((bad - good) / 20)).toFixed(0)} times the distance in free space. That is why a satellite dish mounts its amplifier at the focus, and why receivers put their low-noise amplifier right after the antenna.</p>
+        <div class="try">Flip the order. Then put a poor amplifier first and see the penalty, and raise its gain to see where more gain stops helping.</div>`;
+      },
+      widget: chainWidget,
+      challenge: {
+        kind: 'quiz', question: 'A cable of 3 dB loss sits between the antenna and a 2 dB amplifier. Moving the amplifier to the antenna gains about how much?',
+        options: ['About 3 dB: the loss before the first amplifier adds in full', 'Nothing: the same parts are in the chain', 'About 1 dB: it is shared with the amplifier', 'About 0.3 dB: a tenth of the loss'],
+        answer: 0,
+        explain: 'Before: 3 + 2 = 5 dB. After, with enough gain: about 2 dB, because the cable is now divided by the amplifier\'s gain.',
+        why: ['', 'Order is the whole point: noise is added at different signal levels.', 'Loss before any gain cannot be shared: it reduces the signal against the noise at full weight.', 'A tenth would apply to a stage after a 10 dB gain. This loss sits before any gain, so it adds in full.'],
       },
     },
     {
@@ -127,7 +146,7 @@ export const chNoise: Chapter = {
       body: `
         <p>To compare a 300 b/s modem with a 400 Gb/s fibre, take out the rate. <strong>E<sub>b</sub></strong> is the energy per bit, signal power divided by bit rate. <strong>N<sub>0</sub></strong> is the noise density. Their ratio is dimensionless, and SNR = (E<sub>b</sub> / N<sub>0</sub>) (R / B): what a bit gets, scaled by how many bits share each hertz.</p>
         <p>With ±√E<sub>b</sub> and a matched filter, the noise on the decision has variance N<sub>0</sub> / 2, so the error rate is <strong>Q(√(2 E<sub>b</sub> / N<sub>0</sub>))</strong>. That needs ${db(FOR_1E5)} for one bit in 10⁵ and ${db(FOR_1E9)} for one in 10⁹. These figures are the reference for every link: the gain of a code is how far left of this curve it runs.</p>
-        <p>The dashed line at ${db(WALL, 2)} is the limit for any code at all, derived in the next step. Between it and the curve lie ${db(FOR_1E5 - WALL)} at 10⁻⁵. That gap, a factor of ${(10 ** ((FOR_1E5 - WALL) / 10)).toFixed(0)} in power, is what <a href="#/c/codes/0">the stronger codes</a> are for. <a href="#/c/modem/5">Modems</a> reads the same curve for larger constellations.</p>
+        <p>The dashed line at ${db(WALL, 2)} is the limit for any code at all, derived in the next step. Between it and the curve lie ${db(FOR_1E5 - WALL)} at 10⁻⁵. That gap, a factor of ${(10 ** ((FOR_1E5 - WALL) / 10)).toFixed(0)} in power, is what <a href="#/c/codes/0">the stronger codes</a> are for. <a href="#/c/modem/5">Modems</a> use the same Gaussian tail for symbols of many points.</p>
         <div class="try">Find the Eb/N0 for one wrong bit a second at 1 Gb/s. Then read how far above the limit that is.</div>`,
       widget: berCurveWidget,
       challenge: {
@@ -162,7 +181,7 @@ export const chNoise: Chapter = {
         <p>Send a block of n values, each of power P, through noise of power N. The received vector lies, with near certainty as n grows, inside a ball of radius √(n(P + N)). Around each transmitted vector, the noise puts it on a small ball of radius √(nN). If those small balls do not overlap, the receiver can always tell which was sent. So the most codewords that can fit is the ratio of the volumes: (√(n(P + N)) / √(nN))<sup>n</sup> = (1 + P / N)<sup>n/2</sup>.</p>
         <p>That is ½ log₂(1 + P / N) bits per value. At 2B values a second it is exactly <strong>C = B log₂(1 + SNR)</strong>. The bound comes from nothing but counting and geometry. The other half of the theorem is stranger: pick the codewords <em>at random</em>, with no design at all, and as n grows the error rate falls to zero at any rate below that.</p>
         <p>The plot runs that code. Every point draws fresh random codewords at rate ½ and decodes by comparing with all of them, the best any receiver can do. Below the limit of ${db(shannonBinaryDb(0.5), 2)} for ±1 signals at this rate, a longer code does worse. Well above it, a longer code does better. The curves pivot within about a dB of the limit, and steepen as n grows, which is the theorem appearing. Twenty bits is still far from the limit's sharp edge: the curve only becomes a cliff with very large n.</p>
-        <p>Nobody can use this. Decoding 20 bits tries 2¹⁰ words; a block of 1000 would try 2⁵⁰⁰. Real codes exist for one reason, to keep this performance while making decoding possible: <a href="#/c/codes/0">a code with memory</a> is the first of them.</p>
+        <p>Nobody can use this. Decoding 20 bits tries 2¹⁰ words; a block of 1000 would try 2⁵⁰⁰. Real codes exist for one reason, to keep this performance while making decoding possible: <a href="#/c/codes/0">a code with memory</a> (chapter ${numOf('codes')}) is the first of them. The next chapter first puts this one's numbers on a telephone line.</p>
         <div class="try">Run it. Compare the three lengths at 6 dB, then at −3 dB, and find where they cross.</div>`,
       widget: randomCodeWidget,
       challenge: {
@@ -171,24 +190,6 @@ export const chNoise: Chapter = {
         answer: 0,
         explain: 'Volumes in n dimensions go as radius to the n. So each dimension contributes a fixed number of bits, ½ log₂(1 + P / N), which is the capacity.',
         why: ['', 'The argument has no check bits: it only counts what fits.', 'Noise per value is unchanged. What changes is that its total becomes predictable.', 'The decoding cost does grow fast, and it plays no part in the bound.'],
-      },
-    },
-    {
-      title: 'A chain: who pays',
-      get body() {
-        const good = cascadeNfDb([LNA, CABLE]), bad = cascadeNfDb([CABLE, LNA]);
-        return `
-        <p>A receiver is a chain of stages, each with a gain and each adding noise. Friis's formula (1944) says how they combine: F = F₁ + (F₂ − 1) / G₁ + (F₃ − 1) / (G₁ G₂) + …, in ratios. Each stage's excess noise counts divided by the gain before it, so a good first amplifier makes everything after it matter less.</p>
-        <p>A passive loss has a noise figure equal to its loss. So take an amplifier of 20 dB gain and 1 dB figure, and a 10 dB cable. Amplifier first: ${db(good, 2)}. Cable first: ${db(bad, 2)}. The same two parts differ by ${db(bad - good, 1)}, which at a fixed error rate is ${(10 ** ((bad - good) / 10)).toFixed(0)} times the transmit power, or ${(10 ** ((bad - good) / 20)).toFixed(0)} times the distance in free space. That is why a satellite dish mounts its amplifier at the focus, and why receivers put their low-noise amplifier right after the antenna.</p>
-        <div class="try">Flip the order. Then put a poor amplifier first and see the penalty, and raise its gain to see where more gain stops helping.</div>`;
-      },
-      widget: chainWidget,
-      challenge: {
-        kind: 'quiz', question: 'A cable of 3 dB loss sits between the antenna and a 2 dB amplifier. Moving the amplifier to the antenna gains about how much?',
-        options: ['About 3 dB: the loss before the first amplifier adds in full', 'Nothing: the same parts are in the chain', 'About 1 dB: it is shared with the amplifier', 'About 0.3 dB: a tenth of the loss'],
-        answer: 0,
-        explain: 'Before: 3 + 2 = 5 dB. After, with enough gain: about 2 dB, because the cable is now divided by the amplifier\'s gain.',
-        why: ['', 'Order is the whole point: noise is added at different signal levels.', 'Loss before any gain cannot be shared: it reduces the signal against the noise at full weight.', 'A loss ahead of the first gain adds in full, not in part: the amplifier then comes after the signal has already fallen against the noise.'],
       },
     },
   ],

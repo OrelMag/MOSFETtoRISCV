@@ -207,19 +207,22 @@ export function constellationWidget(): Widget {
 
 // ---- 5. Shannon against the modems ----------------------------------------------------------------------------------------------
 
+/** The three slowest modems sit within a few pixels of each other at the foot of the curve: their names go above, one higher than the next. */
+const LIFT: Record<string, number> = { bell103: -12, v22: -26 };
+
 export function milestonesWidget(): Widget {
   let snrDb = 35;
   const B = 3100, W = 600;
-  const f = frame(W, 300, [0, 60], [0, 70], 'SNR (dB)', 'kb/s', 'Shannon capacity of 3.1 kHz against the voice-band modems', 10, 10, { l: 44, r: 14, t: 14, b: 34 });
-  f.svg.append(s('path', { class: 'cur', d: path(Array.from({ length: 121 }, (_, i): [number, number] => [f.X(i / 2), f.Y(Math.min(70, shannon(B, dbToRatio(i / 2)) / 1000))])) }));
+  const f = frame(W, 300, [-20, 60], [0, 70], 'SNR (dB)', 'kb/s', 'Shannon capacity of 3.1 kHz against the voice-band modems', 10, 10, { l: 44, r: 14, t: 14, b: 34 });
+  f.svg.append(s('path', { class: 'cur', d: path(Array.from({ length: 161 }, (_, i): [number, number] => [f.X(i / 2 - 20), f.Y(Math.min(70, shannon(B, dbToRatio(i / 2 - 20)) / 1000))])) }));
   for (const m of MODEMS.filter((x) => x.id !== 'v90')) {
     const need = ratioToDb(snrNeeded(m.rate / B));
-    f.svg.append(s('line', { x1: f.X(0), x2: f.X(Math.min(60, need)), y1: f.Y(m.rate / 1000), y2: f.Y(m.rate / 1000), class: 'mdm-lvl' }),
+    f.svg.append(s('line', { x1: f.X(-20), x2: f.X(Math.min(60, need)), y1: f.Y(m.rate / 1000), y2: f.Y(m.rate / 1000), class: 'mdm-lvl' }),
       s('circle', { cx: f.X(need), cy: f.Y(m.rate / 1000), r: 4.5, class: 'mdm-m' }),
-      s('text', { x: f.X(need) + 8, y: f.Y(m.rate / 1000) + 4, class: 'mdm-tl l' }, m.name.replace(' (Bell 212A)', '')));
+      s('text', { x: f.X(need) + 8, y: f.Y(m.rate / 1000) + (LIFT[m.id] ?? 4), class: 'mdm-tl l' }, m.name.replace(' (Bell 212A)', '')));
   }
   const v90 = MODEMS.find((m) => m.id === 'v90')!;
-  f.svg.append(s('line', { x1: f.X(0), x2: f.X(60), y1: f.Y(v90.rate / 1000), y2: f.Y(v90.rate / 1000), class: 'mdm-lvl v90' }), s('text', { x: f.X(1), y: f.Y(v90.rate / 1000) - 5, class: 'mdm-tl l' }, 'V.90 down: 56 kb/s, not on this curve'));
+  f.svg.append(s('line', { x1: f.X(-20), x2: f.X(60), y1: f.Y(v90.rate / 1000), y2: f.Y(v90.rate / 1000), class: 'mdm-lvl v90' }), s('text', { x: f.X(-19), y: f.Y(v90.rate / 1000) - 5, class: 'mdm-tl l' }, 'V.90 down: 56 kb/s, not on this curve'));
   const op = f.svg.appendChild(s('line', { class: 'bound', y1: f.m.t, y2: f.H - f.m.b })), chips = chipsOf(3);
   const tbl = h('table', { class: 'comm-table' }, h('thead', null, h('tr', null, ...['modem', 'rate', 'baud', 'bits / symbol', 'Shannon floor, 3.1 kHz'].map((t) => h('th', null, t)))),
     h('tbody', null, ...MODEMS.map((m) => h('tr', { id: `mdm-${m.id}` }, h('td', null, m.name), h('td', null, fmtRate(m.rate)), h('td', null, `${m.baud}`), h('td', null, nf(bitsPerSymbol(m), m.rate % m.baud ? 1 : 0)),
@@ -228,7 +231,7 @@ export function milestonesWidget(): Widget {
     op.setAttribute('x1', String(f.X(snrDb))); op.setAttribute('x2', String(f.X(snrDb)));
     const cap = shannon(B, dbToRatio(snrDb));
     chips.set(0, fmtRate(cap), `capacity at ${snrDb} dB`);
-    chips.set(1, `${nf(cap / 1000 / (shannon(B, dbToRatio(snrDb - 3)) / 1000), 2)}×`, '3 dB more SNR: only this much slower');
+    chips.set(1, `${nf(cap / 1000 / (shannon(B, dbToRatio(snrDb - 3)) / 1000), 2)}×`, '3 dB more SNR: only this much faster');
     chips.set(2, `+${nf(ratioToDb(snrNeeded(v90.rate / B)) - snrDb, 0)} dB`, 'more SNR 56 kb/s would need through 3.1 kHz');
     tbl.querySelectorAll('tr').forEach((tr) => { const m = MODEMS.find((x) => `mdm-${x.id}` === tr.id); if (m) tr.classList.toggle('now', m.id !== 'v90' && m.rate <= cap && !MODEMS.some((o) => o.id !== 'v90' && o.rate <= cap && o.rate > m.rate)); });
   };
