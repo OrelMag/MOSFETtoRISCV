@@ -49,7 +49,7 @@ describe('A MAC on the RV32', () => {
     expect(signedBits(64n * macProduct(MAC_F3.mac, FULL_SCALE, FULL_SCALE))).toBe(38);
     const text = chMac.steps.map((s) => s.body).join(' ') + chMac.recap!.keep.join(' ');
     expect(text).toContain('511 mac products'); expect(text).toContain('255 mac2 steps');
-    expect(text).toContain('needs 38 of the 40 bits: 2 to spare');
+    expect(text).toContain('needs 38 of the 40 bits, with 2 to spare: the largest sum is an eighth of the accumulator's range');
     expect(text).not.toMatch(/512 mac|256 mac2 steps|three bits to spare/);
   });
   it('step 5: the filter on the panel gives its answer on the gates, in lock step', async () => {

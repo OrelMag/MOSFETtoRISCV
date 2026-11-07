@@ -808,7 +808,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "One multiplier, N clocks", challenge: "reach" },
     { title: "One mask, four ways to build it", challenge: "quiz" },
   ] },
-  { id: "iir", num: 71, title: "IIR and stability", blurb: "What feedback buys and what it can break: the bilinear transform, poles that can only sit on a lattice, direct form against sections, a biquad in gates and a limit cycle it will not stop making, and how to order and scale sections.", level: "Signal processing", builds: ["zplane","fixed","muldiv"], recap: {"checks":3}, steps: [
+  { id: "iir", num: 71, title: "IIR and stability", blurb: "What feedback buys and what it can break: the bilinear transform, poles that can only sit on a lattice, direct form against sections, a biquad in gates and a limit cycle it will not stop making, and how to order and scale sections.", level: "Signal processing", builds: ["zplane","firdesign","fixed","muldiv"], recap: {"checks":3}, steps: [
     { title: "What feedback buys", challenge: "quiz" },
     { title: "From an analog filter to a digital one", challenge: "quiz" },
     { title: "Where a pole is allowed to sit", challenge: "quiz" },
@@ -818,7 +818,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What removes a limit cycle", challenge: "quiz" },
     { title: "Sections in a cascade", challenge: "quiz" },
   ] },
-  { id: "multirate", num: 72, title: "Changing the rate", blurb: "How do you filter at a thousandth of the price? Decimation, interpolation, polyphase, half-band and CIC filters, with a CIC and a polyphase decimator in gates and their register growth measured.", level: "Signal processing", builds: ["signals","carriers","muldiv"], recap: {"checks":3}, steps: [
+  { id: "multirate", num: 72, title: "Changing the rate", blurb: "How do you filter at a thousandth of the price? Decimation, interpolation, polyphase, half-band and CIC filters, with a CIC and a polyphase decimator in gates and their register growth measured.", level: "Signal processing", builds: ["signals","fixed","firdesign","muldiv"], recap: {"checks":3}, steps: [
     { title: "Most of the samples are not needed", challenge: "quiz" },
     { title: "Throwing samples away", challenge: "quiz" },
     { title: "Why compute what you throw away?", challenge: "quiz" },
@@ -838,7 +838,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What the words buy", challenge: "quiz" },
     { title: "Against a table", challenge: "quiz" },
   ] },
-  { id: "mac", num: 74, title: "A MAC on the RV32", blurb: "What is one instruction worth? A multiply-accumulate unit in gates, four instructions on custom-2 and a 40-bit accumulator, then four filters measured on five machines: software multiply, RV32IM, mac, mac2 and mac2 unrolled.", level: "Signal processing", builds: ["fixed","firdesign","muldiv","cordic"], recap: {"checks":3}, steps: [
+  { id: "mac", num: 74, title: "A MAC on the RV32", blurb: "What is one instruction worth? A multiply-accumulate unit in gates, four instructions on custom-2 and a 40-bit accumulator, then four filters measured on five machines: software multiply, RV32IM, mac, mac2 and mac2 unrolled.", level: "Signal processing", builds: ["fixed","firdesign","muldiv","cpu"], recap: {"checks":3}, steps: [
     { title: "What a multiply costs a filter", challenge: "quiz" },
     { title: "The MAC unit, in gates", challenge: "reach" },
     { title: "Four instructions on custom-2", challenge: "quiz" },
