@@ -106,6 +106,11 @@ export function spreadHues(nets: readonly HueNet[]): number[] {
  */
 export const USER_HUE = 1000;
 
+/** The hue a net is drawn with: its spread hue, or the learner's colour on a stage (view/layout.ts: a hue, or 'auto' for its
+ *  own spread hue), as a user hue so it shows with colour per net off. */
+export const drawnHue = (spread: number, picked: number | 'auto' | undefined): number =>
+  picked === undefined ? spread : USER_HUE + (picked === 'auto' ? spread : picked);
+
 export function setNetHue(el: SVGElement, hue: number | undefined): void {
   if (hue === undefined) el.style.removeProperty('--nh');
   else el.style.setProperty('--nh', String(hue >= USER_HUE ? hue - USER_HUE : hue));

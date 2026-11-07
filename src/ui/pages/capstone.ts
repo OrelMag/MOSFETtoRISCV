@@ -145,7 +145,8 @@ export class CapstonePage implements Page {
 
   private renderBar(): void {
     const cap = this.cap!;
-    const others = builtCapstones().filter((c) => c.id !== cap.id);
+    // the other tiers' capstones, a step along the ladder; a signal-processing or communication capstone is not on it
+    const others = cap.tier ? builtCapstones().filter((c) => c.id !== cap.id) : [];
     this.bar.replaceChildren(...[
       h('a', { class: 'lv-back', href: '#/campaign', title: 'The campaign' }, icon('chevL', 14), 'Campaign'),
       h('span', { class: 'lv-badge cap-tier' }, cap.tier ? `TIER ${cap.tier} CAPSTONE` : DSP_CAPSTONES.some((c) => c.id === cap.id) ? 'SIGNAL PROCESSING CAPSTONE' : 'COMMUNICATION CAPSTONE'),
@@ -153,7 +154,7 @@ export class CapstonePage implements Page {
       this.isBrief() ? this.briefBadge() : this.passed() ? h('span', { class: 'lv-badge good' }, 'PASSED') : null,
       h('span', { class: 'lv-spacer' }),
       ...(this.isBrief() ? this.viewButtons() : []),
-      ...others.map((c) => h('a', { class: 'btn sm ghost', href: c.route ?? '#/campaign', title: c.title }, h('span', { class: 'lbl' }, `Tier ${c.tier}`))),
+      ...others.map((c) => h('a', { class: 'btn sm ghost lv-tierjump', href: c.route ?? '#/campaign', title: c.title, 'aria-label': `Tier ${c.tier} capstone: ${c.title}` }, `Tier ${c.tier}`)),
     ].filter((x): x is HTMLElement => !!x));
   }
 

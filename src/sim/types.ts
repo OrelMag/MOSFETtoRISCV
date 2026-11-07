@@ -95,6 +95,9 @@ export interface NetDef {
   via?: { [end: string]: [number, number][] | undefined };
   /** A control signal: drawn thin and faint while idle (0), so the data path stands out; a view hint only. */
   quiet?: boolean;
+  /** A colour the learner picked for this net on a stage (view/layout.ts hues: an OKLCH hue or 'auto'); a view hint only,
+   *  set by applyLayout, carried to the sandbox's wires by Open in Sandbox. */
+  hue?: number | 'auto';
   /** Draw the bus value label for this net (default: true for buses, false for bits). */
   showValue?: boolean;
   /**

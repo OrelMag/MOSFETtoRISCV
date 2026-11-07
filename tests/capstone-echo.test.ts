@@ -22,8 +22,8 @@ describe('the echo capstone', () => {
     expect(capstoneById('cap_echo')?.title).toBe('An echo canceller');
   });
 
-  it('offers RV32IM, and the MAC and DSP machines only as coming soon', () => {
-    expect(ECHO_MACHINES.map((m) => [m.id, m.ready])).toEqual([['rv32im', true], ['mac', false], ['dsp', false]]);
+  it('offers RV32IM, RV32 + MAC and the DSP core, all graded (tests/capstone-echo-machines.test.ts)', () => {
+    expect(ECHO_MACHINES.map((m) => [m.id, m.ready])).toEqual([['rv32im', true], ['mac', true], ['dsp', true]]);
   });
 
   it('draws four paths from the seed: one short, two medium, one long (96 taps) tail, of different gains, and different ones for other seeds', () => {
@@ -319,7 +319,7 @@ j loop
     for (const { seed, v } of [1, 2].map((seed) => ({ seed, v: gradeEcho(plainLms(16), seed) }))) {
       await tick();
       expect(v.ok).toBe(false);
-      expect(v.diagnosis, `seed ${seed}`).toMatch(/does much worse when the signal is quieter: the step does not scale with the signal's level \(the update is not normalized by its energy\)/);
+      expect(v.diagnosis, `seed ${seed}`).toMatch(/and the answer changes with the level \(-?[\d.]+ dB quieter, -?[\d.]+ dB louder\): the step does not scale with the signal's level \(the update is not normalized by its energy\)/);
     }
   }, 120_000);
 
