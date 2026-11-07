@@ -63,7 +63,7 @@ describe('the group B codex entries', () => {
     says('glass', 3, `${nf(D1550)} ps/(nm·km)`);
     says('glass', 3, `${n0(reachNarrowKm(10, B2))} km at 10 Gb/s and ${nf(reachNarrowKm(40, B2))} km at 40`);
     says('glass', 3, `${nf(reachWideKm(10, D1550, 1))} km at 10 Gb/s`);
-    says('glass', 3, `${nf(B2)} ps²/km`);
+    says('glass', 3, `${nf(B2).replace('-', '−')} ps²/km`);
   });
 
   it('wdm: the grid, the rates and the fibre\'s total', () => {
