@@ -57,7 +57,7 @@ describe('Python on the pipeline: per-line cycles from the gates', () => {
 });
 
 // ---- the numbers the chapter's pipeline steps quote ----
-const strip = (t: string) => t.replace(/[\s   ]+/g, '');
+const strip = (t: string) => t.replace(/[\s    ]+/g, '');
 const prose = strip([chPipeline, chMulDiv].map((c) => c.steps.map((st) => st.body + Object.values(st.more ?? {}).join('') + (st.challenge?.kind === 'quiz' ? st.challenge.question : '')).join(' ') + c.recap!.keep.join(' ')).join(' '));
 const quoted = (t: string) => expect(prose).toContain(strip(t));
 

@@ -9,7 +9,7 @@ import { ALIAS_R, branchWidget, cascade, cascadeWidget, CASCADE_R, CIC_IN, CIC_N
 import { numOf } from './order';
 import type { Chapter } from './types';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const MUL8 = () => nands(treeMul(8, true));
 const RM = POLY_SPEC.R * POLY_SPEC.M;

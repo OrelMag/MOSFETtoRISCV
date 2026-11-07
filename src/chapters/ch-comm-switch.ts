@@ -9,7 +9,7 @@ import type { Chapter } from './types';
 import { numOf } from './order';
 
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
 const pct = (x: number, d = 1) => `${(100 * x).toFixed(d)} %`;
 
 const CAM4 = nands(cam(4, 48)), TAB4 = nands(macTable(4, 4)), TAB7 = nands(macTable(7, 4)), CAM7 = nands(cam(7, 48));

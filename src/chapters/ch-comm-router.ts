@@ -16,7 +16,7 @@ import { CH_ROUTES, CH_TRIE, distVecWidget, engineWidget, fastPathScene, FP_FRAM
 import type { Chapter } from './types';
 import { numOf } from './order';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 
 const MEM = { trie: nands(bigRam(TRIE_K, 24)), buf: nands(bigRam(BUF_K, 8)), adj: nands(bigRam(ADJ_K, 8)) };

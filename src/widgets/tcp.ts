@@ -18,7 +18,7 @@ import { saveFile } from '../view/image';
 import type { Scene, Stage, Widget } from '../view/stage';
 import { slider } from './mosparts';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
 const btn = (label: string, title: string, f: () => void, cls = 'btn sm') => { const b = h('button', { class: cls, title, type: 'button' }, label); b.addEventListener('click', f); return b; };
 const stat = (name: string, value: string) => h('span', null, `${name} `, h('b', null, value));
 

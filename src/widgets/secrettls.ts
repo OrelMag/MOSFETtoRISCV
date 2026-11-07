@@ -14,7 +14,7 @@ import { runTlsClient, type PhaseName, type Tamper, type TlsResult, type Transpo
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
 
-const n0 = (x: number | bigint) => x.toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number | bigint) => x.toLocaleString('en-US').replace(/,/g, ' ');
 const unhex = (s: string) => Uint8Array.from(s.match(/../g) ?? [], (b) => parseInt(b, 16));
 const hexOf = (b: ArrayLike<number>) => Array.from(b as ArrayLike<number> & Iterable<number>, (x) => x.toString(16).padStart(2, '0')).join('');
 const short = (s: string) => (s.length > 24 ? `${s.slice(0, 16)}…${s.slice(-8)}` : s);
