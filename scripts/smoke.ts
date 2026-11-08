@@ -858,14 +858,15 @@ const NAME_COVER = `(() => {
     if (!sr.width) continue;
     const names = [...svg.querySelectorAll('.lg-name')].filter((t) => getComputedStyle(t).display !== 'none');
     if (names.length && svg.lastElementChild?.getAttribute('class') !== 'lg-names') out.push('names layer is not last in the svg');
-    for (const t of names) {
-      const r = t.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, tall = r.height > r.width;
+    // a name on two lines is two tspans: each line is tested alone (the gap beside the shorter one is not text)
+    for (const [t, line] of names.flatMap((n) => { const ts = [...n.querySelectorAll('tspan')]; return (ts.length ? ts : [n]).map((l) => [n, l]); })) {
+      const r = line.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, tall = r.height > r.width;
       const pts = tall ? [[cx, r.top + 3], [cx, cy], [cx, r.bottom - 3]] : [[r.left + 3, cy], [cx, cy], [r.right - 3, cy]];
       for (const [x, y] of pts) {
         if (x < sr.left || x > sr.right || y < sr.top || y > sr.bottom) continue;
         const top = document.elementsFromPoint(x, y)[0];
-        if (!top || !svg.contains(top) || top === t) continue;
-        out.push('name covered: ' + t.textContent + ' by ' + (top.getAttribute('class') || top.tagName));
+        if (!top || !svg.contains(top) || t.contains(top)) continue;
+        out.push('name covered: ' + line.textContent + ' by ' + (top.getAttribute('class') || top.tagName));
         break;
       }
     }
