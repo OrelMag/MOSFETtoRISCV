@@ -1,8 +1,8 @@
 /* The cut-away fibre (widgets/fibre3dview.ts): materials, scoped under .m3d (model3d.css holds the shared ones). */
 .m3d {
-  --fb-glass: light-dark(#9fc4de, #7fa6c4);
+  --fb-glass: light-dark(#b9cfe0, #8fb0cc);
   --fb-coat: light-dark(#d9a441, #e0b25a);
-  --fb-core: light-dark(#e9f3fb, #cfe3f3);
+  --fb-core: light-dark(#7fb6e6, #9cc9f0);
   --fb-ray: light-dark(#d4382c, #ff6b5c);
   --fb-fan: light-dark(#5b6c9a, #8a9cd0);
   --fb-leak: light-dark(#c25a00, #ffa142);

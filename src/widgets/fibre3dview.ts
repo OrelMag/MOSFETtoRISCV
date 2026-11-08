@@ -12,7 +12,7 @@ import { endTau, facts, fibreAnchors, fibreParts, FIBRES, LENGTH_KM, pulseView, 
 import { bandwidthMHzKm, stepDelayPsKm } from '../phys/fibre';
 import type { OrbitView } from '../gl/camera';
 
-const VIEW: OrbitView = { target: [-3, 0, 0], yaw: 0.3, pitch: 0.42, dist: 175 };
+const VIEW: OrbitView = { target: [0, 0, 0], yaw: 0.18, pitch: 0.4, dist: 118 };
 /** Seconds for a pulse to cross the drawn stretch. */
 const CROSS_S = 3.5;
 const nf = (x: number, d = 1) => x.toFixed(d);
@@ -32,7 +32,7 @@ export function fibreView(initial: Kind = 'multi'): Widget {
     aria: 'An optical fibre cut away in 3D: the core, the cladding and the coating, with a ray launched at a chosen angle that is guided by total internal reflection or leaks into the cladding, and a pulse travelling down it',
     camera: { ...VIEW },
     limits: { minDist: 60, maxDist: 400 },
-    note: 'The diameters are true to scale (50 or 8 µm core, 125 µm cladding, 250 µm coating) and the ray angles are true; the length is compressed, 120 units standing for 1 km, and the packets’ lag is drawn 20 times too long. The ray is a meridional ray; the single-mode field is drawn at the 10.4 µm mode-field diameter. Fresnel partial reflection, loss and bends are left out.',
+    note: 'The diameters are true to scale (50 or 8 µm core, 125 µm cladding, 250 µm coating) and the ray angles are true; the length is compressed, 80 units standing for 1 km, and the packets’ lag is drawn 20 times too long. The ray is a meridional ray; the single-mode field is drawn at the 10.4 µm mode-field diameter. Fresnel partial reflection, loss and bends are left out.',
     draw: () => paint(),
   });
   const paint = () => stage.paint(fibreParts(st, palette()), fibreAnchors(st));
@@ -83,7 +83,7 @@ export function fibreView(initial: Kind = 'multi'): Widget {
       ['Modes', f.singleMode ? '1 (two polarizations)' : `≈ ${nf(f.modes, 0)} (V²/2)`],
     ];
     if (st.kind === 'multi') {
-      rows.push(['Spread n₁Δ/c · L', `${nf(p.spreadNs, 1)} ns (${nf(stepDelayPsKm(FIBRES.multi) / 1000, 1)} ns/km)`], ['Output rms width', `${nf(p.rmsOutNs, 1)} ns from ${SIGMA_NS} ns in`], ['Bandwidth · length', `${nf(bandwidthMHzKm(stepDelayPsKm(FIBRES.multi)) / 1e6, 0)} MHz·km`]);
+      rows.push(['Spread n₁Δ/c · L', `${nf(p.spreadNs, 1)} ns (${nf(stepDelayPsKm(FIBRES.multi) / 1000, 1)} ns/km)`], ['Output rms width', `${nf(p.rmsOutNs, 1)} ns from ${SIGMA_NS} ns in`], ['Bandwidth · length', `${nf(bandwidthMHzKm(stepDelayPsKm(FIBRES.multi)), 0)} MHz·km`]);
     } else rows.push(['Modal spread', '0: one mode, one speed']);
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
     sendBtn.textContent = running ? 'Pause' : 'Send pulse';

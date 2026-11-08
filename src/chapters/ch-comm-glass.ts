@@ -118,7 +118,7 @@ export const chGlass: Chapter = {
         <p>Below <strong>V = 2.405</strong>, the first zero of J₀, only the fundamental mode LP01 exists (in two polarizations). That is <strong>single-mode fibre</strong>: an ${nf(SMF_G652.aUm * 2, 0)} µm core with V = ${nf(VS, 2)} at 1550 nm, and a cutoff near ${nf(cutoffUm(SMF_G652.aUm, NAS) * 1000, 0)} nm below which it isn't single-mode any more. Press the presets: the same fibre at 850 nm carries several.</p>
         <p>A 50 µm core at 850 nm has V = ${nf(VM, 0)} and, with a step index, about ${n0(modesLarge(VM))} modes (V²/2; half that with the parabolic index below), which is why a cheap transmitter can couple into it. Each mode has its own speed, which in a step core gives a spread of n₁Δ/c: ${nf(stepDelayPsKm(MMF_50) / 1000, 0)} ns/km, about 10 MHz·km. The cure was a parabolic index profile, where a steep ray spends its extra distance in lower-index glass where light goes faster. In theory the spread falls by Δ/8, to ${nf(gradedDelayPsKm(MMF_50), 0)} ps/km: the ${MMF.modalMHzKm} MHz·km of OM4 fibre in the fast serial links chapter is the graded core, and by that chapter's table (bandwidth about 0.7 × the bit rate) it is about ${nf((MMF.modalMHzKm / (0.7 * 100000)) * 1000, 0)} m on one 100 Gb/s lane.</p>
         <p>Inside a data centre that is fine. Across anything longer, you pay for the harder alignment and take the single mode: no modal delay at all.</p>`,
-      widget: () => withModel(modesWidget(), fibre3d('single')),
+      widget: () => withModel(modesWidget(), fibre3d()),
       challenge: {
         kind: 'quiz',
         question: `A fibre has V = 2.2 at 1550 nm. What happens at 850 nm in the same fibre?`,

@@ -22,7 +22,7 @@ export const R_CLAD = CLAD_UM / 2 / UM, R_COAT = COAT_UM / 2 / UM;
 export const coreR = (f: Fibre): number => f.aUm / UM;
 
 /** The drawn stretch, standing for LENGTH_KM of fibre; the input end of the stretch and its far end. */
-export const X0 = -60, X1 = 60, LENGTH_KM = 1;
+export const X0 = -40, X1 = 40, LENGTH_KM = 1;
 /** The input pulse's width (sigma, ns): a probe chosen for the picture. */
 export const SIGMA_NS = 2;
 /** Packets lag by (stretch - 1) times this on screen, so a 1 % delay shows. */
@@ -126,7 +126,8 @@ export function facts(kind: Kind, deg: number): FibreFacts {
 // ---------------------------------------------------------------- parts
 
 const slab = (c: RGB | RGBA, x0: number, x1: number, r: number, spec = 0) => rod(c, [x0, 0, 0], [x1, 0, 0], r, spec);
-const RAY_R = 0.07;
+const RAY_R = 0.13;
+const lit = (p: Part, c: RGB): Part => ({ ...p, emissive: c });
 
 export const packetX = (frac: number, lagFactor: number): number => X0 + Math.min(1, Math.max(0, frac * lagFactor)) * (X1 - X0);
 /** Progress at which the drawn packets of a ray with this stretch stand (exaggerated lag). */
@@ -135,12 +136,12 @@ export const lagFactor = (stretch: number): number => 1 - LAG_X * (stretch - 1);
 export function fibreParts(st: FibreState, P: FibrePalette): Part[] {
   const f = FIBRES[st.kind], r = coreR(f), single = st.kind === 'single', out: Part[] = [];
   // the cut: the coating is stripped back at the input end, the cladding at the far end shows its layers as discs
-  out.push(slab(P.coat, X0 + 25, X1, R_COAT), slab(P.glass, X0, X1, R_CLAD));
-  out.push(slab(P.core, X0, X1, r, 0.3));
+  out.push(slab(P.coat, X0 + 14, X1, R_COAT), slab(P.glass, X0, X1, R_CLAD));
+  out.push(slab([...P.core, 0.4] as RGBA, X0, X1, r, 0.3));
   // end face: coating ring, cladding disc, core disc (stacked a hair apart)
   out.push(slab(P.cut, X1, X1 + 0.1, R_COAT), slab(P.glass.slice(0, 3) as RGB, X1 + 0.1, X1 + 0.2, R_CLAD), slab(P.coreEnd, X1 + 0.2, X1 + 0.3, Math.max(r, 0.2)));
   // the launch: the beam in air at the chosen angle, meeting the end at the axis
-  const a = (st.deg * Math.PI) / 180, lx = 14;
+  const a = (st.deg * Math.PI) / 180, lx = 8;
   out.push(rod(P.air, [X0 - lx, -Math.tan(a) * lx, 0], [X0, 0, 0], RAY_R * 1.4));
   const main = rayPath(st.deg, f);
   if (single && main.guided) {
@@ -148,7 +149,7 @@ export function fibreParts(st: FibreState, P: FibrePalette): Part[] {
     const mr = (MFD_UM / 2) / UM;
     out.push(slab(P.glow, X0, X1, mr));
   } else {
-    out.push(...main.pts.slice(1).map((p, k) => rod(main.guided ? P.ray : P.leak, [main.pts[k][0], main.pts[k][1], 0], [p[0], p[1], 0], RAY_R * (main.guided ? 1.6 : 1.4), 0.1)));
+    out.push(...main.pts.slice(1).map((p, k) => lit(rod(main.guided ? P.ray : P.leak, [main.pts[k][0], main.pts[k][1], 0], [p[0], p[1], 0], RAY_R * 1.5, 0.1), main.guided ? P.ray : P.leak)));
   }
   if (!single) for (const d of fanAngles(f, FAN)) {
     const p = rayPath(d, f);
@@ -162,7 +163,7 @@ export function fibreParts(st: FibreState, P: FibrePalette): Part[] {
     } else {
       for (const d of fanAngles(f, FAN)) {
         const p = rayPath(d, f), x = packetX(tau, lagFactor(p.stretch));
-        out.push(rod(P.pulse, [x - 0.7, pathY(p.pts, x), 0.2], [x + 0.7, pathY(p.pts, x), 0.2], 0.33, 0.2));
+        out.push(lit(rod(P.pulse, [x - 0.7, pathY(p.pts, x), 0.2], [x + 0.7, pathY(p.pts, x), 0.2], 0.5, 0.2), P.pulse));
       }
     }
   }
@@ -173,15 +174,15 @@ export function fibreParts(st: FibreState, P: FibrePalette): Part[] {
 export const FAN = 5;
 
 export function fibreAnchors(st: FibreState): Anchor[] {
-  const f = FIBRES[st.kind], r = coreR(f), up: Vec3 = [0, 1, 0], front: Vec3 = [0, 0.2, 1], right: Vec3 = [1, 0, 0];
+  const f = FIBRES[st.kind], r = coreR(f), up: Vec3 = [0, 1, 0], front: Vec3 = [0, 0.2, 1];
   const main = rayPath(st.deg, f), out: Anchor[] = [
-    { text: `coating ${COAT_UM * 1} µm`, p: [30, R_COAT, 0], side: 't', n: up },
-    { text: `cladding ${CLAD_UM} µm`, p: [X0 + 8, -R_CLAD, 0], side: 'b', n: front },
-    { text: `core ${f.aUm * 2} µm`, p: [X1 + 0.3, 0, 0], side: 'r', n: right },
-    { text: `θ = ${st.deg}° in air`, p: [X0 - 8, -Math.tan((st.deg * Math.PI) / 180) * 8, 0], side: 'b', n: front, minor: true },
+    { text: `coating ${COAT_UM * 1} µm`, p: [X0 + 30, R_COAT, 0], side: 't', n: up },
+    { text: `cladding ${CLAD_UM} µm`, p: [X0 + 16, -R_CLAD, 0], side: 'b', n: front },
+    { text: `core ${f.aUm * 2} µm`, p: [X1 + 0.3, 0, 0], side: 'l', n: front },
+    { text: `θ = ${st.deg}°`, p: [X0 - 3, -Math.tan((st.deg * Math.PI) / 180) * 3, 0], side: 't', n: front, minor: true },
   ];
   if (st.kind === 'multi' || !main.guided) {
-    const x = Math.min(main.hitX, X1 - 12);
+    const x = Math.min(main.hitX, X1 - 8);
     out.push({ text: main.guided ? 'total internal reflection' : 'leaks into the cladding', p: [x, main.guided ? r : r, 0], side: 't', n: up, minor: true });
   }
   return out;
