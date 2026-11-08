@@ -314,7 +314,7 @@ class ChallengeUi {
         h('button', { class: 'btn sm primary', 'data-chal': 'solve-yes', onclick: () => this.solve() }, 'Replace'),
         h('button', { class: 'btn sm ghost', onclick: () => { this.confirming = false; this.render(); } }, 'Cancel')]
       : [...(sc.actions?.() ?? []), ...(sc.solutions && !sc.solutions() ? [] : [
-        h('button', { class: 'btn sm ghost', 'data-chal': 'answer', title: 'The reference answer', onclick: () => (sc.showAnswer ? sc.showAnswer() : this.showAnswer()) }, 'Show answer'),
+        h('button', { class: 'btn sm ghost', 'data-chal': 'answer', title: 'The finished reference answer, shown in the walkthrough: your own circuit stays as it is (Do it for me replaces it)', onclick: () => (sc.showAnswer ? sc.showAnswer() : this.showAnswer()) }, 'Show answer'),
         h('button', { class: 'btn sm ghost', 'data-chal': 'solve', title: 'Replace this chip\'s circuit with the reference answer (one undo step)', onclick: () => { this.confirming = true; this.render(); } }, 'Do it for me')])];
     this.panel.append(h('header', { class: 'sb-chal-head' },
       h('button', { class: 'btn sm primary', 'data-chal': 'check', title: 'Check runs every test and scores your circuit against par.', onclick: () => this.check() }, icon('check', 14), 'Check'),
@@ -453,6 +453,9 @@ class ChallengeUi {
   private problems(r: CheckResult, ch: BuildChallenge): HTMLElement {
     const box = h('div', { class: 'sb-chal-problems' });
     if (r.failures.length) box.append(h('ul', { class: 'sb-chal-fails' }, r.failures.map((f) => h('li', null, f))));
+    // an X output (a lone X, or X bits in a word) is the commonest first failure and says nothing by itself: say what it means
+    const undriven = [...new Set(r.failures.flatMap((f) => [...f.split(', expected')[0].matchAll(/(\w+)=(?:X|0b[01XZ]*X[01XZ]*)\b/g)].map((m) => m[1])))];
+    if (undriven.length) box.append(h('p', { class: 'sb-chal-hint' }, `${undriven.join(', ')} = X: nothing drives ${undriven.length > 1 ? 'them' : 'it'} to a 0 or a 1 yet. Wire ${undriven.length > 1 ? 'each' : 'it'} to a gate's output, and check that no input it depends on is left open.`));
     // A core level: open the first failing program as a computer around this core, with the CPU panel.
     const spec = coreSpecOf(ch.check);
     const t = spec && r.failures.length ? failingTest(spec, r.failures[0]) : null;
