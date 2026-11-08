@@ -8,7 +8,7 @@ import { masks3d } from '../widgets/masks3d';
 import { withModel } from '../widgets/modelhost';
 import { clockTreeWidget, fabWidget, floorplanWidget, mappingWidget, pnrWidget, waferWidget } from '../widgets/silicon';
 import { cabinetCounts, hallFacts, periodIn } from '../lib/hall';
-import { fmtArea, fmtJoules, fmtMass, fmtRate, fmtTime, fmtWatts, RELAY_CONTACTS, TECH } from '../lib/tech';
+import { eniacRoom, fmtArea, fmtJoules, fmtMass, fmtRate, fmtTime, fmtWatts, RELAY_CONTACTS, RELAY_PLANT_W, TECH, TUBE_PLANT_W, tubeFailEvery } from '../lib/tech';
 import { ENIAC, ENIAC_PANEL } from '../phys/triode';
 import { RELAY_RACK, Z3 } from '../phys/relay';
 import { machineHall } from '../widgets/hall';
@@ -40,16 +40,21 @@ function hallStep(): Step {
       physical scale. Its ${num(f.nands)} NANDs (the program ROM left out: relay machines read their programs from film or
       cards) become <strong>${num(r.total.devices)} relays</strong>, ${num(r.total.fanout)} of them extra coils, because a
       relay has ${RELAY_CONTACTS} contacts and many nets feed more inputs than that. At ${RELAY_RACK.relays} to a rack that is
-      ${rc.used} racks (${rc.packed} if blocks shared them), ${fmtMass(r.total.mass!)} and ${fmtWatts(r.total.power!)}:
-      ${times(r.total.devices / Z3.relays)} times the Z3's ${num(Z3.relays)} relays. In tubes it is <strong>${num(t.total.devices)}
-      tubes</strong> in ${tc.used} ENIAC-sized panels of ${ENIAC_PANEL.tubes}, ${fmtMass(t.total.mass!)} and ${fmtWatts(t.total.power!)}:
-      ${times(t.total.devices / ENIAC.tubes)} ENIACs. The 4-bit CPU fits in ${num(c4.relay.total.devices)} relays
+      ${rc.used} racks (${rc.packed} if blocks shared them) and ${fmtMass(r.total.mass!)}:
+      ${times(r.total.devices / Z3.relays)} times the Z3's ${num(Z3.relays)} relays. Its coils draw ${fmtWatts(r.total.power!)}; at the Z3's
+      ${RELAY_PLANT_W.toFixed(1)} W a relay at the wall (about ${fmtWatts(Z3.power)} for ${num(Z3.relays)}) the machine would draw about ${fmtWatts(r.total.plant!)}.
+      In tubes it is <strong>${num(t.total.devices)} tubes</strong> in ${tc.used} panels the size of ENIAC's (${ENIAC_PANEL.tubes} tubes is its average
+      panel) and ${fmtMass(t.total.mass!)}: ${times(t.total.devices / ENIAC.tubes)} ENIACs. Their heaters and plates draw ${fmtWatts(t.total.power!)};
+      ENIAC drew ${fmtWatts(ENIAC.power)} for ${num(ENIAC.tubes)} tubes, ${TUBE_PLANT_W.toFixed(1)} W a tube with its power supplies and blowers,
+      which puts this machine near ${fmtWatts(t.total.plant!)}. At ENIAC's failure rate (one of its tubes every two days) a tube here would
+      fail every ${num(tubeFailEvery(t.total.devices))} hours. The 4-bit CPU fits in ${num(c4.relay.total.devices)} relays
       (${cabinetCounts(c4.relay).used} racks).</p>
       <p>The clock period is the same ${f.steps} gate delays as in CMOS, each now a <span data-ahead="relay relaystep">${TECH.relay.stepName} (the time for every relay to settle after an input changes)</span> of ${fmtTime(TECH.relay.step)}
       or a ${TECH.tube.stepName} of ${fmtTime(TECH.tube.step)}: one instruction takes <strong>${fmtTime(pr)}</strong> in relays
       (${(1 / pr).toFixed(2)} instructions a second) and ${fmtTime(pt)} in tubes (${fmtRate(pt)}), against ${fmtTime(pc)} (${fmtRate(pc)}) for the same netlist on
-      ${fmtArea(f.cmos.area!)} of silicon, the speck on the table by the person. An instruction costs ${fmtJoules(r.total.power! * pr)}
-      in relays and ${fmtJoules(t.total.power! * pt)} in tubes.</p>
+      ${fmtArea(f.cmos.area!)} of silicon (28 nm-class NANDs, ${Math.round(TECH.cmos.step * 1e12)} ps each, faster than the sky130 cells measured earlier),
+      the speck on the table by the person. An instruction costs ${fmtJoules(r.total.power! * pr)}
+      in relays and ${fmtJoules(t.total.power! * pt)} in tubes, counting the devices alone.</p>
       <p>A relay machine of this size is a building. The cost is not in the logic's cleverness but in counting: every NAND is a device, every bit of
       storage is several, and a relay cannot drive many inputs, so the fan-out adds coils.</p>
       <div class="try">Run the program and watch the relays switch (or the plates glow): each cycle's settled values from the
@@ -60,7 +65,12 @@ function hallStep(): Step {
       block gets one of its own, and the packed count (${rc.packed} racks) is what a floor plan that shared racks would need.
       In devices: ${num(f.nands)} NAND outputs became ${num(r.total.devices)} relays, ${num(r.total.fanout)} of them extra coils for fan-out beyond ${RELAY_CONTACTS} contacts.</p>`;
     counts = `<p>Tubes and relays are slow and large, not different in kind: the same ${num(f.nands)}-NAND netlist, the same ${f.steps}-step period, priced per device. A relay step is ${fmtTime(TECH.relay.step)},
-      a tube step ${fmtTime(TECH.tube.step)}, a CMOS gate delay far below either; the ratio of the three is the ratio of the three eras' clocks.</p>`;
+      a tube step ${fmtTime(TECH.tube.step)}, a CMOS gate delay far below either; the ratio of the three is the ratio of the three eras' clocks.</p>
+      <p>The comparisons are rough. The tube step is an R·C estimate: ENIAC itself pulsed at ${ENIAC.pulseHz / 1e3} kHz and added in 200 µs, so this
+      clock is faster than ENIAC's own. Our tube count includes a 6AL5 diode tube per NAND where ENIAC used ${num(ENIAC.diodes)} crystal diodes
+      and ${num(ENIAC.relays)} relays besides its tubes, so "ENIACs" compares glass envelopes, not machines. The floor counts cabinets and
+      aisles: ENIAC's room was ${ENIAC.room} m² (1 800 sq ft) for ${ENIAC_PANEL.count} panels, with its card equipment and plant, so these
+      ${tc.used} panels would want about ${num(eniacRoom(tc.used))} m² laid out as it was.</p>`;
     explain = `A flip-flop of NANDs is a master–slave pair of latches: ${perBit.toFixed(1)} NANDs per bit here with the write
       and read logic, each NAND a relay. A relay is already a latch: one of its own contacts in series with its coil holds it
       until the circuit is broken. One relay per bit is how the Z3 kept 64 words in ${num(Z3.memory)} relays, while this data

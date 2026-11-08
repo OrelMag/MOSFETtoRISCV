@@ -137,8 +137,11 @@ export function triodeAt(vg: number, t: number): { Tc: number; sat: number; vp: 
   return { Tc, sat, vp, ip: plateCurrent(vg, vp, sat) };
 }
 
-/** ENIAC (1945), for scale: tubes, crystal diodes, relays, resistors, power (W), mass (kg), additions per second. */
-export const ENIAC = { tubes: 17468, diodes: 7200, relays: 1500, resistors: 70000, power: 150e3, mass: 27e3, adds: 5000 };
+/** ENIAC (1945), for scale: tubes, crystal diodes, relays, resistors, power (W, all in: heaters, plates, power supplies and blowers;
+ *  150 kW is the usual figure, 174 kW in some), mass (kg), additions per second, its room (m²: 1 800 sq ft, U-shaped, which also held the card
+ *  equipment and the power and cooling plant), its pulse rate (Hz), and the hours between tube failures once its engineers ran the heaters
+ *  gently and bought better tubes (one every two days; several a day at first). */
+export const ENIAC = { tubes: 17468, diodes: 7200, relays: 1500, resistors: 70000, power: 150e3, mass: 27e3, adds: 5000, room: 167, pulseHz: 100e3, failH: 48 };
 /** ENIAC's 40 panels, each 2 × 2 × 8 ft (m), and their share of its tubes. */
 export const ENIAC_PANEL = { w: 0.61, d: 0.61, h: 2.44, count: 40, tubes: Math.round(ENIAC.tubes / 40) };
 
