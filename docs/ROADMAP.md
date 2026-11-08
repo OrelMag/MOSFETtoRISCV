@@ -1323,8 +1323,9 @@ main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
   - FP unit tops (fpadd / fpmul / fpdiv / fpnf, #/c/float/3, 7, 9, 12, 15): in progress (Smith), a hierarchy restructure into sub-blocks that renames instances
     the float tours point at
   - FPU CPU and the pipeline variants (fast adders, balanced + predictor, data cache, M) redrawn on fix/circuits-cpu-variants
-    (tests/redrawclear-cpuvariants.test.ts); still open: the out-of-order units (ooo/5–7, 10), the M and bus system CPUs (pointers, not redrawn),
-    and the CSR unit's select crossbar
+    (tests/redrawclear-cpuvariants.test.ts); the M and bus system CPUs on the plain system's wires (pointers 82 % → 25 %, 87 % → 43 %: the
+    bus's 16 channels at the pins) and the CSR unit's select crossbar as lanes (29 % → 21 %) on fix/circuits-sys-variants
+    (tests/redrawclear-sysvariants.test.ts); still open: the out-of-order units (ooo/5–7, 10)
   - rv16_mux16 (needs a bit-sliced redraw) and srt4div8 (not switched to layered.ts): unchanged on main (git log)
   - Warp core with lsu (chapter 32): net nMo still runs through a part — routeNetlist + wiresThroughParts on warpCore({ warps: 8, lanes: 8, lsu, mul }) returns { nMo }
   - Communication circuits left on purpose: CRC-32 next-state crossings (inherent), I²C target t0 (layered's 14-unit channel cap), the computer-with-NIC bus top

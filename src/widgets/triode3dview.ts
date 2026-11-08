@@ -14,6 +14,7 @@ import { B_PLUS, HEATER_W, R_PLATE, V_CUTOFF, V_HIGH, V_LOW, plateCurrent, plate
 import { h, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
+import { declutterLabels } from './labelfit';
 
 // ---------------------------------------------------------------- geometry (mm; x right, y up, z towards the viewer)
 // A 6SN7GT: T-9 bulb (28.6 mm), 70 mm seated height, octal base (pins on a 17.45 mm circle). The two sections stand
@@ -331,6 +332,7 @@ export function triodeView(): Widget {
       e.classList.toggle('away', dot3(a.n, sub3(eye, a.p)) < 0);
       e.style.transform = `translate(${p[0].toFixed(1)}px, ${p[1].toFixed(1)}px)`;
     });
+    declutterLabels(lblEls);
   };
 
   const summary = () => {

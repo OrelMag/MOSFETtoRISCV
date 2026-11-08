@@ -19,6 +19,9 @@ import { CODEX_ACTS, CODEX_BY_KIND, CODEX_ORDER } from '../../campaign/codexlink
 import type { Quiz } from '../../chapters/types';
 import { ANALOGIES, ANALOGY_INDEX_ID } from '../../chapters/analogies';
 import { analogyIndexEl } from '../analogyindex';
+import { MODELS_3D, MODELS_INDEX_ID, modelById, searchModels } from '../../widgets/models3dindex';
+import { modelHref, modelsIndexEl, mountModel } from '../models3dpage';
+import type { Widget } from '../../view/stage';
 import { codexEntryEl, entrySheets, liveSchematic, lockedEntryEl } from '../../campaign/ui/codexentry';
 import { LESSON_EXTRAS } from '../../campaign/lessonextras';
 import { quizBox } from '../quiz';
@@ -112,6 +115,12 @@ export class CampaignPage implements Page {
   private drawn = '';
   /** Drill and puzzle cards keep their state (question, count, code) while the page redraws around them. */
   private cards = new Map<string, HTMLElement>();
+  /** The 3D model open in the codex's model index (one at a time: a WebGL context each), kept while its address stays. */
+  private model: { id: string; widget: Widget } | null = null;
+  /** The model index's filter, kept while models open and close; where the focus goes after the next draw. */
+  private mxQuery = '';
+  private mxCat = '';
+  private mxFocus: string | null = null;
 
   constructor(parts: string[]) {
     progress().reload();
@@ -132,6 +141,7 @@ export class CampaignPage implements Page {
     this.parts = parts;
     const [a, b] = parts;
     if (a === 'codex' && codexById(b ?? '')) setPageTitle(codexById(b)!.title, 'Codex');
+    else if (a === 'codex' && b === MODELS_INDEX_ID) setPageTitle(modelById(parts[2] ?? '')?.title ?? '3D models', 'Codex');
     else if (a === 'n' && nodeById(b ?? '')) setPageTitle(nodeById(b)!.title, 'Campaign');
     this.render();
   }
@@ -139,13 +149,14 @@ export class CampaignPage implements Page {
   /** The top bar's way back names the open entry or level (ui/returnto.ts). */
   returnLabel(): { label: string; short: string } | null {
     const [a, b] = this.parts;
-    const t = a === 'codex' ? codexById(b ?? '')?.title : a === 'n' ? nodeById(b ?? '')?.title : undefined;
+    const t = a === 'codex' ? (b === MODELS_INDEX_ID ? '3D models' : codexById(b ?? '')?.title) : a === 'n' ? nodeById(b ?? '')?.title : undefined;
     if (!t) return { label: 'the campaign map', short: 'Map' };
     return a === 'codex' ? { label: `Codex: ${t}`, short: `Codex: ${t}` } : { label: `${t} (map)`, short: t };
   }
 
   destroy(): void {
     this.mapFit?.disconnect();
+    this.dropModel();
     this.unsub();
   }
 
@@ -158,6 +169,7 @@ export class CampaignPage implements Page {
     const panelTop = changed ? 0 : this.main.querySelector<HTMLElement>('.cp-panel')?.scrollTop ?? 0;
     this.drawn = route;
     const [a, b] = this.parts;
+    this.dropModel(a === 'codex' && b === MODELS_INDEX_ID ? this.parts[2] : undefined);
     const refocus = keepFocus(this.main, a === 'n' ? b : undefined);
     this.renderHead();
     if (changed) this.cxListOpen = false;
@@ -166,7 +178,7 @@ export class CampaignPage implements Page {
     if (cap) { location.replace(cap.route!); return; }
     // an address that names no level or entry: the shared notice, with the way back, not the map under a wrong address
     if (a === 'n' && b && !nodeById(b)) this.main.replaceChildren(notFound(`No level called “${b}”`, 'The address may be stale or mistyped.', [['Open the campaign map', '#/campaign'], ['Open the codex', '#/campaign/codex']]));
-    else if (a === 'codex' && b && b !== ANALOGY_INDEX_ID && !codexById(b)) this.main.replaceChildren(notFound(`No codex entry called “${b}”`, 'The address may be stale or mistyped.', [['Open the codex', '#/campaign/codex'], ['Open the campaign map', '#/campaign']]));
+    else if (a === 'codex' && b && b !== ANALOGY_INDEX_ID && b !== MODELS_INDEX_ID && !codexById(b)) this.main.replaceChildren(notFound(`No codex entry called “${b}”`, 'The address may be stale or mistyped.', [['Open the codex', '#/campaign/codex'], ['Open the campaign map', '#/campaign']]));
     else if (a && a !== 'n' && a !== 'codex' && a !== 'intro') this.main.replaceChildren(notFound(`No campaign page called “${a}”`, 'The map, the intro and the codex are the pages here.', [['Open the campaign map', '#/campaign'], ['Open the codex', '#/campaign/codex']]));
     else if (a === 'intro') this.main.replaceChildren(this.introView());
     else if (a === 'codex') this.main.replaceChildren(this.codexView(b));
@@ -179,6 +191,11 @@ export class CampaignPage implements Page {
     const panel = this.main.querySelector<HTMLElement>('.cp-panel');
     if (panel && panelTop) panel.scrollTop = panelTop;
     refocus();
+    if (this.mxFocus) {
+      const f = this.mxFocus;
+      this.mxFocus = null;
+      (f === 'open' ? this.main.querySelector<HTMLElement>('#mx-open-t') : this.main.querySelector<HTMLElement>(`.mx-card[data-id="${f}"] [data-mx]`))?.focus();
+    }
     // chosen from the keyboard: the level's details are next, not 90 more cards (Esc there goes back to its card)
     if (changed && a === 'n' && b && document.activeElement?.matches('.cp-node:focus-visible')) this.main.querySelector<HTMLElement>('.cp-node-panel h2')?.focus({ preventScroll: true });
     if (changed && b) {
@@ -649,7 +666,11 @@ export class CampaignPage implements Page {
           if (why) li.append(h('span', { class: 'cx-why' }, why));
           return li;
         }));
-        shown = hits.length;
+        // 3D models by title, after the entries (they open in the model index)
+        const models = this.cxKind ? [] : searchModels(q);
+        ranked.append(...models.map((m) => h('li', { 'data-id': `model:${m.id}` },
+          h('a', { href: modelHref(m.id) }, icon('cube', 11), m.title), h('span', { class: 'cx-why' }, '3D model'))));
+        shown = hits.length + models.length;
         for (const g of sections) g.el.hidden = true;
       } else {
         for (const g of sections) {
@@ -688,12 +709,16 @@ export class CampaignPage implements Page {
         h('p', { class: 'sub' }, `${[...unlocked].filter((u) => codexById(u)).length} of ${CODEX.length} entries discovered`),
         h('a', { class: `cx-axlink${sel === ANALOGY_INDEX_ID ? ' on' : ''}`, href: `#/campaign/codex/${ANALOGY_INDEX_ID}`, ...(sel === ANALOGY_INDEX_ID ? { 'aria-current': 'page' } : {}) },
           icon('like', 13), `All ${ANALOGIES.length} analogies`),
+        h('a', { class: `cx-axlink cx-mxlink${sel === MODELS_INDEX_ID ? ' on' : ''}`, href: modelHref(), ...(sel === MODELS_INDEX_ID ? { 'aria-current': 'page' } : {}) },
+          icon('cube', 13), `All ${MODELS_3D.length} 3D models`),
         search, h('div', { class: 'cx-filters' }, views, kinds), empty, ranked, sections.map((g) => g.el)));
     filter();
     const e = sel ? codexById(sel) : undefined;
     let detail: HTMLElement;
     if (sel === ANALOGY_INDEX_ID) {
       detail = analogyIndexEl();
+    } else if (sel === MODELS_INDEX_ID) {
+      detail = this.modelsView(this.parts[2]);
     } else if (!e) {
       detail = this.codexLanding(unlocked);
     } else if (this.moreOf === undefined) {
@@ -717,6 +742,26 @@ export class CampaignPage implements Page {
       if (!unlocked.has(e.id)) detail.querySelector('.cx-head h2')?.append(h('span', { class: 'cp-badge cx-lockbadge' }, icon('lock', 11), 'not discovered: shown anyway'));
     }
     return h('div', { class: `cp-codex${sel ? ' has-sel' : ''}` }, list, detail);
+  }
+
+  /** The open 3D model let go (its WebGL context with it), unless it is `keep`. */
+  private dropModel(keep?: string): void {
+    if (!this.model || this.model.id === keep) return;
+    this.model.widget.destroy?.();
+    this.model = null;
+  }
+
+  /** The 3D model index, with `id`'s model open above the cards (an unknown id: the index alone). */
+  private modelsView(id: string | undefined): HTMLElement {
+    const m = id ? modelById(id) : undefined;
+    if (m && this.model?.id !== m.id) this.model = { id: m.id, widget: mountModel(m) };
+    return modelsIndexEl({
+      open: m && this.model ? { model: m, widget: this.model.widget } : undefined,
+      query: this.mxQuery, cat: this.mxCat,
+      onFilter: (q, c) => { this.mxQuery = q; this.mxCat = c; },
+      onOpen: (mid) => { this.mxFocus = 'open'; location.hash = modelHref(mid); },
+      onClose: (mid) => { this.mxFocus = mid; location.hash = modelHref(); },
+    });
   }
 
   /** The codex view drawn again in place (an order switched, an entry shown anyway), the list where it was scrolled. */

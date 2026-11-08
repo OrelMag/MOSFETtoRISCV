@@ -1,0 +1,24 @@
+/* ---------- EDSAC's mercury delay line (widgets/mercury3dview.ts): materials ---------- */
+.m3d {
+  --hg-steel: light-dark(#8a93a3, #8d97aa);
+  --hg-mercury: light-dark(#d4dae6, #e6ebf5);
+  --hg-quartz: light-dark(#a9d8e6, #bfe6f2);
+  --hg-brass: light-dark(#b8862b, #e0b04a);
+  --hg-housing: light-dark(#7d879c, #55607c);
+  --hg-band-a: light-dark(#6f8fd0, #5d7fc4);
+  --hg-band-b: light-dark(#c98f5a, #b57a48);
+  --hg-panel: light-dark(#5d6680, #3b4259);
+  --hg-lamp: light-dark(#7b6f6a, #5c5450);
+  --hg-wire: light-dark(#3d4358, #aeb6cc);
+}
+.hg-in { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+.hg-in select, .hg-in input { font: 600 13px var(--font-mono); min-height: 30px; padding: 0 6px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.hg-in input { width: 9.5em; }
+.hg-seg { flex: none; }
+.hg-seg { max-width: 100%; }
+.hg-seg button { min-height: 30px; padding-inline: 8px; }
+.hg-words { margin: 4px 0 0; padding: 0; list-style: none; font: 12px var(--font-mono); color: var(--text-2); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px 12px; }
+.hg-words li { padding: 1px 4px; border-radius: 3px; }
+.hg-words li.sel { outline: 1px solid var(--accent); }
+.hg-words li.now { background: var(--accent-soft); color: var(--text); }
+@media (pointer: coarse) { .hg-seg button, .hg-in select, .hg-in input { min-height: 40px; } }

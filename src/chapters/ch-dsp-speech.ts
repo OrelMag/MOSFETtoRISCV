@@ -7,6 +7,8 @@ import { adpcmProgramLength } from '../dsp/adpcmrv';
 import { ulawDecoder, ulawEncoder } from '../lib/ulaw';
 import { logicDepth, stats } from '../sim/stats';
 import { adpcmRvWidget, adpcmWidget, companderWidget, lpcWidget, ulawApi, ulawScene, ulawWidget, vocoderWidget, voiceWidget } from '../widgets/dspspeech';
+import { speaker3d } from '../widgets/speaker3d';
+import { withModel } from '../widgets/modelhost';
 import { numOf } from './order';
 import type { Chapter } from './types';
 import { groupNum } from '../sim/numfmt';
@@ -65,7 +67,7 @@ export const chSpeech: Chapter = {
         <p>The voice here is a real one: six seconds of a LibriVox reading of the Gettysburg Address, whose recordings LibriVox releases into the public domain. It was decoded from LibriVox's 64 kb/s MP3, itself a lossy copy, cleared of a DC offset the recording carries, and resampled to 8 kHz by this site's own windowed-sinc filter. It is stored at 16 bits, so it starts at twice the telephone's rate.</p>
         <p>Its spectrum shows where the energy is: most of it below 1 kHz, where the voice's pitch and its first <strong>formants</strong> sit, the resonances of the throat and mouth (step 7 finds them), falling away towards 4 kHz.</p>
         <div class="try">Play it, and look at how much of the spectrum is below 1 kHz.</div>`,
-      widget: voiceWidget,
+      widget: () => withModel(voiceWidget(), speaker3d()),
       challenge: {
         kind: 'quiz', question: 'Sampling at 8 kHz keeps which band of the voice?',
         options: ['Up to 4 kHz', 'Up to 8 kHz', 'Up to 16 kHz', 'All of it'],

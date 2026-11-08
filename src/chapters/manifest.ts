@@ -142,6 +142,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Stack", challenge: "reach" },
     { title: "Content-addressable memory", challenge: "reach" },
     { title: "Ports cost area" },
+    { title: "Memory in rings of iron" },
   ] },
   { id: "alu", num: 11, title: "The ALU", blurb: "Every RV32I integer operation in one block, selected by the instruction's own bits.", level: "Computing", builds: ["adders","routing"], recap: {"checks":3}, steps: [
     { title: "Bitwise operations are free parallelism" },
@@ -203,6 +204,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Data hazards and forwarding" },
     { title: "The load-use stall", challenge: "quiz" },
     { title: "Control hazards", challenge: "quiz" },
+    { title: "The line, drawn as a factory", challenge: "quiz" },
     { title: "Does it pay? Measured", challenge: "quiz" },
     { title: "Your own instruction, pipelined" },
     { title: "A compiled program on the pipeline", challenge: "quiz" },
@@ -411,6 +413,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Depth", challenge: "quiz" },
     { title: "Blending", challenge: "quiz" },
     { title: "Your own picture", challenge: "quiz" },
+    { title: "The beam on a tube" },
   ] },
   { id: "graphics", num: 34, title: "The graphics pipeline", blurb: "A vertex kernel on the warp core, a command unit feeding the rasterizer, the frames double-buffered: a spinning triangle and a cube at gate level, and where the gates and cycles go.", level: "Throughput", builds: ["warps","feed","pixels"], recap: {"checks":3}, steps: [
     { title: "Vertices are a kernel", challenge: "quiz" },

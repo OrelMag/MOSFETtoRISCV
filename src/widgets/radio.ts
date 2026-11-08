@@ -39,8 +39,10 @@ const selectOf = (label: string, options: [string, string][], value: string, f: 
 };
 
 // ---- the antenna ---------------------------------------------------------------------------------------------------------------
+/** The frequency the antenna step quotes (2.4 GHz): the widget starts there, the text and the 3D dipole are built for it. */
+export const ANTENNA_GHZ = 2.4;
 export function antennaWidget(): Widget {
-  let n = 1, steer = 0, ghz = 2.4;
+  let n = 1, steer = 0, ghz = ANTENNA_GHZ;
   const plot = h('div'), out = h('div', { class: 'mc-status' });
   const paint = () => {
     const W = 340, c = W / 2, R = W / 2 - 16, kids: SVGElement[] = [s('circle', { cx: c, cy: c, r: R, class: 'rd-ring' }), s('circle', { cx: c, cy: c, r: R / 2, class: 'rd-ring' }), line(c, c - R, c, c + R, 'rd-grid'), line(c - R, c, c + R, c, 'rd-grid')];

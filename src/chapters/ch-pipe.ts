@@ -12,6 +12,8 @@ import type { Stage, Widget } from '../view/stage';
 import { cpuScene } from '../widgets/cpupanel';
 import { PY_PROGRAMS } from '../lang/pyprograms';
 import { pyScene } from '../widgets/python';
+import { assembly3d } from '../widgets/assembly3d';
+import type { AssemblyProgram } from '../widgets/assembly3dview';
 import { groupDigits } from '../sim/numfmt';
 import { OWN_ANSWER, OWN_COST, OWN_SOURCE } from '../widgets/owninstr';
 import type { Chapter } from './types';
@@ -23,7 +25,7 @@ const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
 const LOGIC = 155 - CLK_TO_Q - SETUP;
 const cut = (n: number) => Math.round(LOGIC / n) + CLK_TO_Q + SETUP;
 
-const INDEP = `# independent instructions: no hazards
+export const INDEP = `# independent instructions: no hazards
         li   a0, 1
         li   a1, 2
         li   a2, 3
@@ -34,7 +36,7 @@ const INDEP = `# independent instructions: no hazards
         li   a7, 8
 halt:   j    halt`;
 
-const HAZARDS = `# every kind of hazard, in order
+export const HAZARDS = `# every kind of hazard, in order
         li   t0, 5
         li   t1, 7
         add  t2, t0, t1      # t0 from W, t1 from M: forwarding
@@ -47,6 +49,13 @@ const HAZARDS = `# every kind of hazard, in order
         addi t6, zero, 98    # flushed
 skip:   addi a0, t5, 1
 halt:   j    halt`;
+
+/** The assembly line's programs (the step's and the codex model page's, so both show the same three). */
+export const ASSEMBLY_PROGRAMS: readonly AssemblyProgram[] = [
+  { id: 'indep', name: 'Independent instructions', source: INDEP },
+  { id: 'hazards', name: 'Every hazard, in order', source: HAZARDS },
+  { id: 'sum', name: 'The sum loop', source: src('sum') },
+];
 
 /** Bits a pipeline register of the five-stage CPU holds: the widths of its outputs, read from the circuit. */
 function regBits(name: string): number {
@@ -357,6 +366,34 @@ export const chPipeline: Chapter = {
         options: ['10', '18', '20', '0: the branch is predicted'], answer: 1,
         explain: 'Each taken branch flushes two instructions: 9 × 2 = 18 cycles. The last, not-taken branch matches the prediction and costs nothing.',
         why: ['Each taken branch flushes two instructions, not one.', '', 'The last branch falls through, which is what the pipeline predicted: no flush.', 'The prediction is always "not taken", so every taken branch is mispredicted.'],
+      },
+    },
+    {
+      title: 'The line, drawn as a factory',
+      body: `
+        <p>The same pipeline as an assembly line: five stations, one pallet per instruction, and every clock moves every pallet one
+        station on. Pick one of this chapter's programs and watch what the hazard unit does to the line.</p>
+        <p>The independent <code>li</code>s fill it and then one instruction retires per clock. In the hazard program the load's data exists
+        only after Memory, so <code>addi t5, t4, 1</code> waits in Decode while an <strong>empty pallet</strong> (the bubble) goes
+        down the line in Execute: one slot lost. In the loop, <code>bne</code> is resolved in Execute, by which time the next two
+        instructions are already on the line: a guess that the road went straight on. They are <strong>pulled off</strong>, and Fetch restarts
+        at the target. <code>jal</code> and <code>jalr</code> pay the same two slots every time: a jump is always "taken".</p>
+        <p>The timing is not a picture of the idea: every cycle shown is checked against this chapter's own gate-level pipeline, stage by stage.
+        What the drawing adds is only the factory.</p>
+        <div class="try">Press <em>Next hazard</em> in the hazard program: first the stall, then the flush after it. Then run the sum loop and count the cycles a lap.</div>`,
+      widget: () => assembly3d(ASSEMBLY_PROGRAMS),
+      more: {
+        derive: `<p>Cycles = instructions + 4 (filling the line) + one per load-use stall + two per jump or taken branch. The line shows each
+          term: the fill at the start, a single empty pallet per stall, two pulled per flush.</p>`,
+        pitfall: `<p>Reading the line as five instructions' worth of work per clock. Each instruction still spends five clocks in the machine; the line only
+          keeps all five stations busy, so the rate is one per clock when nothing goes wrong.</p>`,
+      },
+      challenge: {
+        kind: 'quiz', question: 'The line is full and a <code>jal</code> reaches Execute. How many slots does the jump cost?',
+        options: ['0: jal always goes where it says, so nothing was wrong', '2: the two instructions fetched behind it are flushed', '1: only the instruction in Decode is flushed', '2, but only when the target is not the next word'],
+        answer: 1,
+        explain: 'The next PC is only known in Execute, by which time Fetch and Decode hold the next two sequential instructions. The hazard unit flushes IF/ID and ID/EX for every jal, jalr and taken branch: pcSrcE is nonzero, whatever the target.',
+        why: ['The jump is known only in Execute; the pipeline fetched two instructions down the wrong road meanwhile.', '', 'Fetch had already fetched a second wrong-path instruction; both are lost (IF/ID and ID/EX are cleared).', 'The flush is triggered by the PC source, not by comparing addresses: even a jump to the next word flushes.'],
       },
     },
     {

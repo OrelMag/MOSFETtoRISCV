@@ -1,0 +1,21 @@
+/* ---------- The memory hierarchy as distances (widgets/hierarchy3dview.ts): materials ---------- */
+.m3d {
+  --hy-ground: light-dark(#d9dde8, #2a2f40);
+  --hy-road: light-dark(#8a90a3, #4a5068);
+  --hy-tick: light-dark(#3b4254, #c9cfe0);
+  --hy-wood: light-dark(#b78a55, #9a7248);
+  --hy-shelf: light-dark(#a47a4f, #8a6540);
+  --hy-wall: light-dark(#d8c9b0, #77706a);
+  --hy-roof: light-dark(#8e5a4a, #a46c5a);
+  --hy-door: light-dark(#5b6579, #3a4258);
+  --hy-core: light-dark(#6d8fd0, #5878b8);
+  --hy-mark: light-dark(#e3a73b, #e0b04a);
+  --hy-courier: light-dark(#d9534f, #ee7a76);
+}
+.hy-btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.hy-btns .btn[aria-pressed="true"] { outline: 2px solid var(--accent); }
+.hy-lbl { font-size: 12.5px; color: var(--muted); margin-right: 4px; }
+/* a level's label: the level, then its place in the analogy, smaller */
+.hy3d .r3-lbl b { white-space: pre; text-align: center; line-height: 1.2; font-weight: 500; font-size: 10.5px; color: var(--text-2); }
+.hy3d .r3-lbl b::first-line { font-weight: 600; font-size: 11.5px; color: var(--text); }
+@container (max-width: 480px) { .hy3d .r3-lbl b { font-size: 9.5px; } .hy3d .r3-lbl b::first-line { font-size: 10.5px; } }

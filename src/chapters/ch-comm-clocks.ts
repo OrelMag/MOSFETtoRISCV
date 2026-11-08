@@ -8,6 +8,8 @@ import { stats } from '../sim/stats';
 import { CLK_TO_Q, PS_PER_NAND, SETUP } from '../sim/timing';
 import { clockApi, fifoScene, grayBusWidget, metastableWidget, noisyEdgeWidget, pulseScene, receiverWidget, schmittPanel, syncScene, windowWidget } from '../widgets/clocks';
 import { VDD, VT } from '../widgets/mosphys';
+import { withModel } from '../widgets/modelhost';
+import { quartz3d } from '../widgets/quartz3d';
 import { MS_TIMING } from './seq/timing';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -149,7 +151,7 @@ export const chClocks: Chapter = {
         settles that race by relaxation, in zero time, and picks a side. Silicon does not, as the next step shows.</p>
         <div class="try">Set fA / fB to 1.00 and slide the phase: the edge is in the window at a few phases and nowhere else. Then 1.50, then 1.37.</div>`;
       },
-      widget: windowWidget,
+      widget: () => withModel(windowWidget(), quartz3d()),
       challenge: {
         kind: 'quiz',
         question: 'Two blocks run at the same nominal 200 MHz from separate crystals. Why does a transfer between them need a synchronizer?',

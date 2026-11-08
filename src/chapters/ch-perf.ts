@@ -7,6 +7,8 @@ import type { ComponentDef } from '../sim/types';
 import { PROGRAMS } from '../riscv/programs';
 import { cpuScene } from '../widgets/cpupanel';
 import { adderVariants } from '../widgets/adders';
+import { babbage3d } from '../widgets/babbage3d';
+import { withModel } from '../widgets/modelhost';
 import { adderComparison, prefixDelays } from '../widgets/timing';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -254,8 +256,9 @@ export const chFastAdders: Chapter = {
         <p>Other members of the family trade those three costs differently: Brent–Kung (fewer cells, 2·log n depth),
         Sklansky (minimum depth, high fan-out), Han–Carlson (a hybrid). Synthesis tools pick per timing constraint.</p>
         <p>Read the table by columns of cost: cells (NANDs) are area and power, depth is speed, and fan-out and wire length, which the table does not show, decide whether the depth survives layout.
-        At 32 bits Kogge–Stone is ${N(koggeStone(32))} NANDs deep ${D(koggeStone(32))}, Sklansky ${N(sklansky(32))} and ${D(sklansky(32))}, Brent–Kung ${N(brentKung(32))} and ${D(brentKung(32))}: the same logarithmic family, spread over a factor of ${(N(koggeStone(32)) / N(brentKung(32))).toFixed(1)} in area.</p>`,
-      widget: () => adderComparison(),
+        At 32 bits Kogge–Stone is ${N(koggeStone(32))} NANDs deep ${D(koggeStone(32))}, Sklansky ${N(sklansky(32))} and ${D(sklansky(32))}, Brent–Kung ${N(brentKung(32))} and ${D(brentKung(32))}: the same logarithmic family, spread over a factor of ${(N(koggeStone(32)) / N(brentKung(32))).toFixed(1)} in area.</p>
+        <p>Below the table is the same race in brass: one column of Babbage's Difference Engine No. 2, whose carry ripples up a run of 9s one arm at a time, and the anticipating carriage he designed so that it would not.</p>`,
+      widget: () => withModel(adderComparison(), babbage3d()),
       more: {
         derive: `<p>Cell counts: Kogge–Stone puts a cell at nearly every (bit, level) pair, about n·log₂ n; Brent–Kung builds a tree up and a tree down for about 2n; Sklansky halves the work at each level by sharing, about (n/2)·log₂ n cells, at
           the price of one cell driving up to n/2 others on the last level.</p>

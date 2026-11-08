@@ -6,6 +6,8 @@ import { SENSE_OFFSET, type SwitchSim, VDD_VOLTS } from '../sim/switchsim';
 import type { Stage } from '../view/stage';
 import { dramActions, dramScene, dramState, SAFE_CYCLES } from '../widgets/dram';
 import { dram3d } from '../widgets/dram3d';
+import { mercury3d } from '../widgets/mercury3d';
+import { withModel } from '../widgets/modelhost';
 import { rowBufferWidget, timingWidget } from '../widgets/dramtiming';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -358,7 +360,10 @@ export const chDram: Chapter = {
         <p>A row hit is then ${accessCycles('hit', TIMING)} cycles, a miss ${accessCycles('miss', TIMING)}, a conflict ${accessCycles('conflict', TIMING)}.
         <a href="#/c/cache/0">Chapter 22</a>'s caches charge a fixed ${WB_MISS_CLEAN} for a miss (${WB_MISS_DIRTY} with a dirty victim to write back first);
         ${WB_MISS_CLEAN} is a row hit. <a href="#/c/memctrl/0">Chapter 36</a> builds the controller that issues these
-        commands, and lets the caches pay what the row buffer says.</p>`,
+        commands, and lets the caches pay what the row buffer says.</p>
+        <p>Latency is older than DRAM. EDSAC (1949) kept its words as sound pulses circulating in tubes of mercury, with no address at all: a word could be
+        read only as it came round, so the wait was up to a whole circulation, about a millisecond. Re-amplifying and re-launching every pulse each trip is
+        <em>refresh</em> in its plainest form, a shift register whose output feeds its input. The model below the timing panel is one of its tanks.</p>`,
       more: {
         derive: `<p>${MTS} MT/s (million transfers a second per data pin): data moves on both edges of a ${MTS / 2} MHz clock, so tCK = ${TCK} ns.
           The three numbers are CL (tCAS), tRCD and tRP in clocks: ${CL_TCK} × ${TCK} = ${DDR4_3200.tCAS} ns each. The array cannot keep up
@@ -374,7 +379,7 @@ export const chDram: Chapter = {
         numbers: `<table class="mini"><tr><th>CPU clock</th><th>ns / cycle</th><th>hit</th><th>miss</th><th>conflict</th></tr>
           ${[0.1, 1, 2, 3, 5].map((g) => { const c = (k: number) => cyclesOf(k, 1 / g), b = cyclesOf(BL8_NS, 1 / g); return `<tr><td>${g} GHz</td><td>${(1 / g).toFixed(2)}</td><td>${c(DDR4_3200.tCAS) + b}</td><td>${c(DDR4_3200.tRCD) + c(DDR4_3200.tCAS) + b}</td><td>${c(DDR4_3200.tRP) + c(DDR4_3200.tRCD) + c(DDR4_3200.tCAS) + b}</td></tr>`; }).join('')}</table>`,
       },
-      widget: timingWidget,
+      widget: () => withModel(timingWidget(), mercury3d()),
       challenge: {
         kind: 'quiz',
         question: `The same DDR4-3200 device behind a 3 GHz CPU: how many cycles does a row conflict cost, the line coming as one BL8 burst (${BL8_NS} ns)?`,

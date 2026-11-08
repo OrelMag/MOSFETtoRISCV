@@ -1,0 +1,22 @@
+/* ---------- The loudspeaker and microphone (widgets/speaker3dview.ts): materials of a Dayton RS180-8 ---------- */
+.m3d {
+  --sp-steel: light-dark(#8d939e, #a4abb8);
+  --sp-magnet: light-dark(#3d3f45, #5a5d66);
+  --sp-frame: light-dark(#c3c8d0, #8f97a6);
+  --sp-cone: light-dark(#2a2d34, #3a3e48);
+  --sp-dust: light-dark(#3a3d45, #4a4e5a);
+  --sp-former: light-dark(#d7dbe2, #b9bfcb);
+  --sp-wire: light-dark(#b8672a, #e08a45);
+  --sp-rubber: light-dark(#17181b, #2a2c31);
+  --sp-spider: light-dark(#b69a62, #c9ad74);
+  --sp-stair: light-dark(#2d6fd0, #6aa3ff);
+  --sp-trace: light-dark(#d4572a, #ff8a5c);
+  --sp-cursor: light-dark(#6a7184, #aab1c4);
+}
+.sp-seg { flex: none; }
+.sp-seg button { min-height: 30px; }
+.sp-mat { margin: 4px 0 0; padding: 0 0 0 16px; font-size: 12.5px; color: var(--text-2); }
+.sp-mat li { padding: 1px 0; }
+@media (pointer: coarse) { .sp-seg button { min-height: 40px; } }
+.m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.sp-host { display: contents; }

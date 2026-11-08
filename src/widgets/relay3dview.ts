@@ -13,6 +13,7 @@ import { RELAY, relaySim, relayStatic, relaySummary, T_END, type RelayRun, type 
 import { h, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
+import { declutterLabels } from './labelfit';
 
 // ---------------------------------------------------------------- geometry (mm; x right, y up, z towards the viewer)
 
@@ -124,7 +125,7 @@ function anchors(q: RelaySample): Anchor[] {
     { text: 'stud', p: [tx + 0.9, ty - 5, 0], side: 'r', n: [-0.6, 0, 1], minor: true },
     { text: 'NC', p: [-29, YNC + BT / 2, 3], side: 't', n: [-0.5, 0, 1] },
     { text: 'NO', p: [-29, YNO - BT / 2, 3], side: 'b', n: [-0.5, 0, 1] },
-    { text: 'common', p: [XT - 1, YB - push(q.x) - BT / 2, 3], side: 'b', n: [-0.5, 0, 1] },
+    { text: 'common', p: [XT - 1, YB - push(q.x) - BT / 2, 3], side: 'r', n: [-0.5, 0, 1] },
   ];
 }
 
@@ -263,6 +264,7 @@ export function relayView(): Widget {
       e.classList.toggle('away', dot3(a.n, sub3(eye, a.p)) < 0);
       e.style.transform = `translate(${p[0].toFixed(1)}px, ${p[1].toFixed(1)}px)`;
     });
+    declutterLabels(lblEls);
   };
 
   const summary = () => {

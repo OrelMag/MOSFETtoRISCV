@@ -8,6 +8,9 @@
 
 import type { Widget } from '../view/stage';
 
+/** The codex address of the index: #/campaign/codex/models (no codex entry has this id: tests/models3dindex.test.ts). */
+export const MODELS_INDEX_ID = 'models';
+
 export type ModelCategory = 'devices' | 'machines' | 'memory' | 'comms' | 'dsp' | 'analogies';
 
 export const MODEL_CATEGORIES: readonly { id: ModelCategory; title: string }[] = [
@@ -89,6 +92,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./fgate3d').then((m) => m.fgate3d()),
   },
   {
+    id: 'loom', title: 'The Jacquard head', category: 'machines', chapter: 'cards', step: 0,
+    summary: 'The loom widget\'s chain on the cylinder: needles, hooks and griffe lift the warp a pick at a time and the cloth grows.',
+    files: ['loom3d', 'loom3dview', 'loom3dparts'], factory: 'loom3d',
+    open: () => import('./loom3d').then((m) => m.loom3d()),
+  },
+  {
     id: 'press', title: 'Hollerith\'s pin press', category: 'machines', chapter: 'cards', step: 1,
     summary: 'The census card under the press: pins reach mercury through the holes and the dials count.',
     files: ['press3d', 'press3dview', 'press3dparts'], factory: 'press3d', codex: ['hollerith'],
@@ -107,10 +116,22 @@ export const MODELS_3D: readonly Model3d[] = [
       }),
   },
   {
+    id: 'tide', title: 'Kelvin\'s tide predictor', category: 'analogies', chapter: 'signals', step: 0,
+    summary: 'Ten cranks turn the chapter\'s harmonics and one cord over their pulleys adds them on a pen: Fourier synthesis in brass.',
+    files: ['tide3d', 'tide3dview', 'tide3dparts'], factory: 'tide3d', codex: ['fourier'],
+    open: () => import('./tide3d').then((m) => m.tide3d()),
+  },
+  {
     id: 'enigma', title: 'The Enigma M4', category: 'machines', chapter: 'secret', step: 0,
     summary: 'The naval Enigma opened as an operator would: wheels, pawls, plugs and lamps are the cipher\'s state. Type on it.',
     files: ['enigma3d', 'enigma3dview', 'enigma3dparts', 'enigma3dmachine', 'enigma3dextras'], factory: 'enigma3d', codex: ['enigma'],
     open: () => import('./enigma3d').then((m) => m.enigma3d()),
+  },
+  {
+    id: 'fibre', title: 'An optical fibre, cut open', category: 'comms', chapter: 'glass', step: 1,
+    summary: 'Core, cladding and coating to scale: rays held by total internal reflection, and a pulse spread by the modes.',
+    files: ['fibre3d', 'fibre3dview', 'fibre3dparts'], factory: 'fibre3d', codex: ['dispersion'],
+    open: () => import('./fibre3d').then((m) => m.fibre3d()),
   },
   {
     id: 'telegraph', title: 'Telegraph key and sounder', category: 'comms', chapter: 'telegraph', step: 1,
@@ -119,16 +140,82 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./telegraph3d').then((m) => m.telegraph3d()),
   },
   {
+    id: 'dipole', title: 'The half-wave dipole', category: 'comms', chapter: 'radio', step: 0,
+    summary: 'A 6.2 cm dipole at 2.4 GHz: the standing-wave current, field loops leaving at c, and the doughnut pattern.',
+    files: ['dipole3d', 'dipole3dview', 'dipole3dparts'], factory: 'dipole3d',
+    open: () => import('./dipole3d').then((m) => m.dipole3d()),
+  },
+  {
     id: 'strowger', title: 'The Strowger selector', category: 'comms', chapter: 'exchange', step: 3,
     summary: 'The stepping switch behind the exchange: dial a level, mark lines busy, hang up.',
     files: ['strowger3d', 'strowger3dview', 'strowger3dparts'], factory: 'strowger3d', codex: ['relay'],
     open: () => import('./strowger3d').then((m) => m.strowger3d()),
   },
   {
+    id: 'speaker', title: 'Loudspeaker and microphone', category: 'dsp', chapter: 'speech', step: 0,
+    summary: 'A Dayton RS180-8 cut open: the DAC\'s held samples move the cone; run backwards, the coil makes the microphone\'s millivolts.',
+    files: ['speaker3d', 'speaker3dview', 'speaker3dparts'], factory: 'speaker3d',
+    open: () => import('./speaker3d').then((m) => m.speaker3d()),
+  },
+  {
     id: 'cable', title: 'Twisted pair and coax', category: 'comms', chapter: 'wire', step: 6,
     summary: 'Why a pair is twisted: each half twist flips a loop\'s EMF so the pickup cancels; or swap in a coax.',
     files: ['cable3d', 'cable3dview', 'cable3dparts'], factory: 'cable3d',
     open: () => import('./cable3d').then((m) => m.cable3d()),
+  },
+  {
+    id: 'cores', title: 'A core memory plane', category: 'memory', chapter: 'memory', step: 10,
+    summary: 'Sixteen ferrite cores on X, Y, sense and inhibit wires: only the core where two half currents cross flips; reads restore.',
+    files: ['core3d', 'core3dview', 'core3dparts'], factory: 'core3d', codex: ['ram', 'senseamp'],
+    open: () => import('./core3d').then((m) => m.core3d()),
+  },
+  {
+    id: 'mercury', title: 'EDSAC\'s mercury delay line', category: 'memory', chapter: 'dram', step: 6,
+    summary: 'Sound pulses crossing 1.6 m of mercury in 1.12 ms, recirculated: 576 bits a tank, a word read only as it comes round.',
+    files: ['mercury3d', 'mercury3dview', 'mercury3dparts'], factory: 'mercury3d', codex: ['refresh', 'dramtiming'],
+    open: () => import('./mercury3d').then((m) => m.mercury3d()),
+  },
+  {
+    id: 'disk', title: 'A hard disk', category: 'memory', chapter: 'flash', step: 4,
+    summary: 'Platters at 7200 rpm and a swinging arm: a sector read as seek, rotational latency and transfer, against a flash page read.',
+    files: ['disk3d', 'disk3dview', 'disk3dparts'], factory: 'disk3d', codex: ['ftl', 'wearlevel'],
+    open: () => import('./disk3d').then((m) => m.disk3d()),
+  },
+  {
+    id: 'quartz', title: 'The quartz crystal oscillator', category: 'devices', chapter: 'clocks', step: 3,
+    summary: 'A 32 768 Hz tuning fork bending in antiphase, its Pierce loop, and fifteen divide-by-two stages down to 1 Hz.',
+    files: ['quartz3d', 'quartz3dview', 'quartz3dparts'], factory: 'quartz3d', codex: ['clock', 'counter', 'cdc'],
+    open: () => import('./quartz3d').then((m) => m.quartz3d()),
+  },
+  {
+    id: 'crt', title: 'The beam on a picture tube', category: 'machines', chapter: 'pixels', step: 6,
+    summary: 'Gun, yoke and phosphor driven by the scan-out\'s own counter: the beam lights each pixel the circuit sends, then retraces.',
+    files: ['crt3d', 'crt3dview', 'crt3dparts'], factory: 'crt3d', codex: ['doublebuffer'],
+    open: () => import('./crt3d').then((m) => m.crt3d()),
+  },
+  {
+    id: 'babbage', title: 'Babbage\'s carry', category: 'machines', chapter: 'fastadd', step: 5,
+    summary: 'A Difference Engine No. 2 column: a run of 9s carries one arm at a time, or all at once by the anticipating carriage.',
+    files: ['babbage3d', 'babbage3dview', 'babbage3dparts'], factory: 'babbage3d', codex: ['ripple', 'cla', 'prefix'],
+    open: () => import('./babbage3d').then((m) => m.babbage3d()),
+  },
+  {
+    id: 'assembly', title: 'The pipeline as an assembly line', category: 'analogies', chapter: 'pipeline', step: 5,
+    summary: 'Five stations, a pallet per instruction: stalls as empty pallets, flushes pulled off, cycle for cycle as the gates.',
+    files: ['assembly3d', 'assembly3dview', 'assembly3dparts'], factory: 'assembly3d', codex: ['pipeline', 'hazards', 'stall', 'flush', 'loaduse'],
+    open: () => Promise.all([import('./assembly3d'), import('../chapters/ch-pipe')]).then(([m, c]) => m.assembly3d(c.ASSEMBLY_PROGRAMS)),
+  },
+  {
+    id: 'hierarchy', title: 'The memory hierarchy as distances', category: 'analogies', chapter: 'cache', step: 5,
+    summary: 'Desk, shelf, library, warehouse, another city: each level as far away as its latency on a log scale, with a courier for one access.',
+    files: ['hierarchy3d', 'hierarchy3dview', 'hierarchy3dparts', 'hierarchy3ddata'], factory: 'hierarchy3d', codex: ['cache', 'memwall', 'amat'],
+    open: () => import('./hierarchy3d').then((m) => m.hierarchy3d()),
+  },
+  {
+    id: 'valve', title: 'Inside the valve', category: 'analogies', chapter: 'mosfet', step: 1,
+    summary: 'A diaphragm valve in cutaway: spring preload as the threshold, no flow through the gate at rest, and the CMOS pair.',
+    files: ['valve3d', 'valve3dview', 'valve3dparts'], factory: 'valve3d', codex: ['cmos', 'inverter'],
+    open: () => import('./valve3d').then((m) => m.valve3d()),
   },
 ];
 

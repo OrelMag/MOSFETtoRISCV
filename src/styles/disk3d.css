@@ -1,0 +1,31 @@
+/* ---------- The hard disk (widgets/disk3dview.ts): materials and the timeline ---------- */
+.m3d {
+  --dk-base: light-dark(#b4bac8, #58607a);
+  --dk-platter: light-dark(#d9dde6, #aeb4c4);
+  --dk-ring: light-dark(#c3c8d4, #9aa1b3);
+  --dk-mark: light-dark(#3b4254, #2a2f3d);
+  --dk-hub: light-dark(#8e96a8, #7d869a);
+  --dk-steel: light-dark(#b9bfca, #c6ccd8);
+  --dk-slider: light-dark(#4a4f5c, #20232b);
+  --dk-copper: light-dark(#c2703a, #d98547);
+  --dk-magnet: light-dark(#4b4f66, #343850);
+  --dk-yoke: light-dark(#9aa1b2, #8a93a8);
+  --dk-target: light-dark(#e07a1f, #ff9a3c);
+}
+.dk-sel { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.dk-sel label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+.dk-sel select { min-height: 30px; }
+.dk-line[hidden] { display: none; }
+.dk-line { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--surface-2); border: 1px solid var(--border); position: relative; margin: 8px 0 4px; }
+.dk-line > i { display: block; height: 100%; min-width: 2px; }
+.dk-line .seek { background: var(--accent); }
+.dk-line .wait { background: var(--warn); }
+.dk-line .xfer { background: var(--good); }
+.dk-line .cur { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--text); }
+.dk-key { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+.dk-key b { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; }
+.dk-key .seek b { background: var(--accent); }
+.dk-key .wait b { background: var(--warn); }
+.dk-key .xfer b { background: var(--good); }
+.m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+@media (pointer: coarse) { .dk-sel select { min-height: 40px; } }

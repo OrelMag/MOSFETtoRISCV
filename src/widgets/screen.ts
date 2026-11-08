@@ -4,6 +4,7 @@
 
 import { groupDigits } from '../sim/numfmt';
 import { type DrawOp, FB_W, rasterize, rgb332, type Vtx } from '../gfx/raster';
+import { barsPicture, ringsPicture } from '../gfx/scenepics';
 import { displayTop, FB_WORDS, GPU30, GPU30Z, VERTEX_PINS } from '../lib/raster';
 import { FrameMemory, frameOf } from './framemem';
 import type { HierNode } from '../sim/flatten';
@@ -16,24 +17,6 @@ const W = FB_W;
 const kid = (n: HierNode, ...p: string[]) => p.reduce<HierNode | undefined>((x, k) => x?.children?.get(k), n);
 /** A port's value, X bits read as 0. */
 const val = (sim: Sim, nets: number[]) => sim.getBits(nets).reduce((v: number, b: Bit, i) => v + (b === 1 ? 2 ** i : 0), 0);
-
-const grey332 = (k: number) => (k << 5) | (k << 2) | (k >> 1);
-
-/** Frame 0 of the first scene: colour bars over a grey ramp. */
-function barsPicture(): Uint8Array {
-  const bars = [0xff, 0xfc, 0x1f, 0x1c, 0xe3, 0xe0, 0x03, 0x00];
-  const p = new Uint8Array(W * W);
-  for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) p[y * W + x] = y < 48 ? bars[x >> 3] : grey332(x >> 3);
-  return p;
-}
-
-/** Frame 1: rings around the centre. */
-function ringsPicture(): Uint8Array {
-  const cols = [0xe0, 0xfc, 0x1c, 0x1f, 0x03, 0xe3];
-  const p = new Uint8Array(W * W);
-  for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) p[y * W + x] = cols[Math.floor(Math.hypot(x - 31.5, y - 31.5) / 4) % cols.length];
-  return p;
-}
 
 export interface TrianglePreset { id: string; title: string; v: Vtx[]; col: number }
 

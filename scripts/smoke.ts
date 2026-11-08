@@ -21,6 +21,7 @@ import { cpus, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chapters } from '../src/chapters';
 import { ANALOGIES } from '../src/chapters/analogies';
+import { MODELS_3D } from '../src/widgets/models3dindex';
 import { families, initialParams } from '../src/lib/resolve';
 import { NODES } from '../src/campaign/nodes';
 import { levelChallenge } from '../src/campaign/levels';
@@ -558,6 +559,12 @@ function routes(): Route[] {
   // The analogy index, every aside opened (each figure loads), and on a phone.
   add('#/campaign/codex/analogies', unlocked, ' (analogies open)', undefined, ANALOGY_DRIVE);
   add('#/campaign/codex/analogies', unlocked, ` (${phoneVp.name})`, phoneVp);
+  // The 3D model index, on a phone, and every model opened in it (the codex's own loader, not the chapter's).
+  add('#/campaign/codex/models', unlocked);
+  add('#/campaign/codex/models', unlocked, ` (${phoneVp.name})`, phoneVp);
+  for (const m of MODELS_3D) add(`#/campaign/codex/models/${m.id}`, unlocked);
+  // Every 3D model's step on a phone, where its labels crowd (MODEL_LABELS; desktop routes check them too).
+  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ` (3D model, ${phoneVp.name})`, phoneVp);
   for (const n of NODES) {
     add(`#/campaign/play/${n.id}`, unlocked);
     // Lessons, drills and programs open on the map instead (pages/level.ts levelRoute).
@@ -851,14 +858,15 @@ const NAME_COVER = `(() => {
     if (!sr.width) continue;
     const names = [...svg.querySelectorAll('.lg-name')].filter((t) => getComputedStyle(t).display !== 'none');
     if (names.length && svg.lastElementChild?.getAttribute('class') !== 'lg-names') out.push('names layer is not last in the svg');
-    for (const t of names) {
-      const r = t.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, tall = r.height > r.width;
+    // a name on two lines is two tspans: each line is tested alone (the gap beside the shorter one is not text)
+    for (const [t, line] of names.flatMap((n) => { const ts = [...n.querySelectorAll('tspan')]; return (ts.length ? ts : [n]).map((l) => [n, l]); })) {
+      const r = line.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, tall = r.height > r.width;
       const pts = tall ? [[cx, r.top + 3], [cx, cy], [cx, r.bottom - 3]] : [[r.left + 3, cy], [cx, cy], [r.right - 3, cy]];
       for (const [x, y] of pts) {
         if (x < sr.left || x > sr.right || y < sr.top || y > sr.bottom) continue;
         const top = document.elementsFromPoint(x, y)[0];
-        if (!top || !svg.contains(top) || top === t) continue;
-        out.push('name covered: ' + t.textContent + ' by ' + (top.getAttribute('class') || top.tagName));
+        if (!top || !svg.contains(top) || t.contains(top)) continue;
+        out.push('name covered: ' + line.textContent + ' by ' + (top.getAttribute('class') || top.tagName));
         break;
       }
     }
@@ -875,6 +883,30 @@ const NAME_COVER = `(() => {
  * others (tabs shrink and More takes actions first: editor.ts fitActions), a phone's level canvas under 40 % of the
  * screen (level.css). Checked on every route.
  */
+/**
+ * A 3D model's labels (widgets/labelfit.ts keeps them apart): two texts closer than 3 px, a text over another label's dot, or
+ * a text past the edge of the view. Checked on every route that shows a model.
+ */
+const MODEL_LABELS = `(() => {
+  const out = [];
+  for (const box of document.querySelectorAll('.r3-labels')) {
+    if (!box.offsetWidth || getComputedStyle(box).display === 'none') continue;
+    const f = box.getBoundingClientRect();
+    const ls = [...box.querySelectorAll('.r3-lbl')].filter((e) => e.style.display !== 'none' && e.querySelector('b')?.offsetParent && getComputedStyle(e).visibility !== 'hidden')
+      .map((e) => ({ t: e.querySelector('b').textContent, r: e.querySelector('b').getBoundingClientRect(), d: (e.querySelector('i') ?? e).getBoundingClientRect() }));
+    const hit = (a, b, gx, gy) => a.left < b.right + gx && b.left < a.right + gx && a.top < b.bottom + gy && b.top < a.bottom + gy;
+    for (const [i, a] of ls.entries()) {
+      if (a.r.left < f.left - 1 || a.r.right > f.right + 1) out.push('3D label cut at the edge: ' + a.t);
+      for (const b of ls.slice(i + 1)) {
+        if (hit(a.r, b.r, 3, 0)) out.push('3D labels touch: ' + a.t + ' / ' + b.t);
+        if (hit(a.r, b.d, 0, 0)) out.push('3D label over a dot: ' + a.t + ' on ' + b.t);
+        if (hit(b.r, a.d, 0, 0)) out.push('3D label over a dot: ' + b.t + ' on ' + a.t);
+      }
+    }
+  }
+  return out;
+})()`;
+
 const STAGE_BARS = `(() => {
   const out = [];
   for (const bar of document.querySelectorAll('.stage-bar, .stage .controls')) {
@@ -1024,6 +1056,8 @@ class Tab {
       for (const p of covered) this.errors.push(p);
       const bars = (await this.send('Runtime.evaluate', { expression: STAGE_BARS, returnByValue: true })).result.value as string[];
       for (const p of bars) this.errors.push(p);
+      const lbls = (await this.send('Runtime.evaluate', { expression: MODEL_LABELS, returnByValue: true })).result.value as string[];
+      for (const p of lbls) this.errors.push(p);
       if (route.viewport) {
         const wide = (await this.send('Runtime.evaluate', { expression: OVERFLOW, returnByValue: true })).result.value as string[];
         for (const p of wide) this.errors.push(`overflow: ${p}`);

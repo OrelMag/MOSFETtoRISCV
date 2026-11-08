@@ -12,6 +12,7 @@ import { mergeReview, sanitizeReview } from '../src/ui/review';
 
 /** The steps of the chapters with moves planned, as they went live. A later rename here must keep the row's title too. */
 const LIVE: Record<string, string[]> = {
+  pipeline: ['Overlap the work', 'Pipeline registers', 'Data hazards and forwarding', 'The load-use stall', 'Control hazards', 'Does it pay? Measured', 'Your own instruction, pipelined', 'A compiled program on the pipeline'],
   modem: ['A channel built for voices', 'Tones: FSK', 'An oscillator from an adder', 'FSK in gates', 'Phase and amplitude', 'Noise decides how many points', '300 b/s to 56 kb/s', 'Many tones, one FFT', 'ADSL: many carriers'],
   serial: ['No clock on the wire', '8b/10b and running disparity', 'Scrambling instead', 'A SerDes in gates', 'Finding the clock in the data', 'A wave is a sum of sines', 'The eye diagram', 'Equalization', 'PAM4', 'Fibre'],
   errors: ['One extra bit', 'Locating the error', 'A remainder as a check', 'How good is a check?', 'CRC in gates, a bit a clock', 'A byte at a time', 'Where a frame starts', 'Asking again', 'Correcting instead of asking', 'A code with memory', 'The Viterbi decoder', 'Reed-Solomon: errors in bytes', 'Bursts: interleaving', 'How far from Shannon'],

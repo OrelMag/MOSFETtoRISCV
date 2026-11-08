@@ -652,7 +652,7 @@ pipeline + static prediction        358      80    28 640</pre>534 = 333 + 3 (
     chapters: [
       { chapter: 'pipeline', step: 0, label: 'Overlap the work' },
       { chapter: 'pipeline', step: 1, label: 'Pipeline registers' },
-      { chapter: 'pipeline', step: 5, label: 'Does it pay? Measured' },
+      { chapter: 'pipeline', step: 6, label: 'Does it pay? Measured' },
     ],
   },
 
