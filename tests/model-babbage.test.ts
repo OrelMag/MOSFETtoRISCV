@@ -1,0 +1,198 @@
+// Babbage's carry: the column's two carriages against plain decimal addition, the order the helix reaches the arms in, the
+// anticipating carriage against the successive one, and the quoted gate delays against the library.
+import { describe, expect, it } from 'vitest';
+import type { RGB } from '../src/gl/instances';
+import { koggeStone, rca } from '../src/lib';
+import { logicDepth } from '../src/sim/stats';
+import {
+  ARMS, DIGITS, EVENTS, GAP_DEG, MOD, PER_COLUMN, PITCH_DEG, SPLIT, TURN_MAX, advanceTo, anticipate, armAngle, armPhase, armTime, babbageAnchors, babbageParts, begin,
+  finished, fromValue, gateRows, giveOff, nextFiring, pending, sweep, valueOf, zero, type BabbagePalette,
+} from '../src/widgets/babbage3dparts';
+
+const c = (i: number): RGB => [i / 20, 0.5, 0.5];
+const P: BabbagePalette = { frame: c(1), metal: c(2), wheel: c(3), tick: c(4), lever: c(5), warn: c(6), arm: c(7), live: c(8) };
+const nines = (n: number) => 10n ** BigInt(n) - 1n;
+// A small seeded generator so the cases are the same on every run.
+let seed = 12345;
+const rnd = (): number => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 2 ** 32; };
+const big = (digits: number): bigint => { let v = 0n; for (let i = 0; i < digits; i++) v = v * 10n + BigInt(Math.floor(rnd() * 10)); return v; };
+/** A random column with runs of 9s: the cases that matter for a carry. */
+const nasty = (): bigint => { let v = 0n; for (let i = 0; i < DIGITS; i++) v += BigInt(rnd() < 0.6 ? 9 : Math.floor(rnd() * 10)) * 10n ** BigInt(i); return v; };
+
+describe('the column of figure wheels', () => {
+  it('has the engine’s 31 wheels and 30 carry arms', () => {
+    expect(DIGITS).toBe(31);
+    expect(ARMS).toBe(30);
+    expect(fromValue(0n).w).toHaveLength(31);
+  });
+  it('reads back the number it was given, and wraps at 10^31', () => {
+    for (let k = 0; k < 40; k++) { const v = big(31); expect(valueOf(fromValue(v))).toBe(v); }
+    expect(valueOf(fromValue(MOD + 7n))).toBe(7n);
+  });
+  it('giving-off arms a latch exactly where a wheel passes 9 to 0, and carries nothing', () => {
+    const a = fromValue(4259n), g = giveOff(a, 6332n);
+    expect(g.w.slice(0, 5)).toEqual([1, 8, 5, 0, 0]);
+    expect(g.warn.flatMap((x, i) => (x ? [i] : []))).toEqual([0, 3]);
+    expect(pending(g)).toBe(2);
+    // The wheels above did not move yet: 4259 + 6342 without carries is the digitwise sum mod 10.
+    expect(valueOf(g)).toBe(1n + 8n * 10n + 5n * 100n);
+    expect(sweep(g).longest).toBe(1);
+    expect(valueOf(sweep(g).col)).toBe(10591n);
+  });
+  it('a wheel never arms twice in one addition: the digit sum is at most 18', () => {
+    const g = giveOff(fromValue(nines(31)), nines(31));
+    expect(g.w.every((d) => d === 8)).toBe(true);
+    expect(g.warn.every(Boolean)).toBe(true);
+  });
+});
+
+describe('the carry axis and its helix', () => {
+  it('the arms are 22 degrees apart, with 45 between the 15th and the 16th', () => {
+    for (let a = 1; a < ARMS; a++) {
+      const step = ((armAngle(a) - armAngle(a - 1)) % 360 + 360) % 360;
+      expect(step).toBe(a === SPLIT ? GAP_DEG : PITCH_DEG);
+    }
+  });
+  it('polls each section from below, and the upper section’s first arm comes before arm 0 in a rotation', () => {
+    for (let a = 1; a < SPLIT; a++) expect(armTime(a, 0)).toBeGreaterThan(armTime(a - 1, 0));
+    for (let a = SPLIT + 1; a < ARMS; a++) expect(armTime(a, 0)).toBeGreaterThan(armTime(a - 1, 0));
+    expect(armTime(SPLIT, 0)).toBeLessThan(armTime(0, 0));
+    expect(armTime(SPLIT, 0)).toBe(0);
+    // A carry out of arm 14 reaches lever 15 after that lever was polled: it has to wait for the second rotation.
+    expect(armTime(SPLIT, 0)).toBeLessThan(armTime(SPLIT - 1, 0));
+    expect(armTime(SPLIT, 1)).toBeGreaterThan(armTime(SPLIT - 1, 0));
+  });
+  it('two rotations, every arm polled twice, in time order', () => {
+    expect(EVENTS).toHaveLength(2 * ARMS);
+    for (let k = 1; k < EVENTS.length; k++) expect(EVENTS[k].t).toBeGreaterThanOrEqual(EVENTS[k - 1].t);
+    expect(EVENTS[EVENTS.length - 1].t).toBeLessThan(TURN_MAX);
+  });
+  it('an arm is at the contact direction exactly when its poll comes up', () => {
+    for (const e of EVENTS) expect(((armPhase(e.arm, e.t) % 360) + 360) % 360).toBeCloseTo(0, 9);
+  });
+});
+
+describe('successive carriage', () => {
+  it('a full carry phase equals decimal addition, on random and on 9-heavy columns, with overflow flagged', () => {
+    for (let k = 0; k < 300; k++) {
+      const x = k % 2 ? big(31) : nasty(), y = k % 3 ? big(31) : nasty();
+      const done = sweep(giveOff(fromValue(x), y));
+      expect(pending(done.col)).toBe(0);
+      expect(valueOf(done.col)).toBe(x + y);
+    }
+  });
+  it('a domino across all 31 wheels needs every arm and ends in the overflow flag', () => {
+    const s = sweep(giveOff(fromValue(nines(31)), 1n));
+    expect(s.fired).toHaveLength(ARMS);
+    expect(s.longest).toBe(ARMS);
+    expect(s.col.w.every((d) => d === 0)).toBe(true);
+    expect(s.col.warn[DIGITS - 1]).toBe(true);
+    expect(valueOf(s.col)).toBe(MOD);
+  });
+  it('the number of carries in the longest run is the longest domino, wheel by wheel', () => {
+    for (const run of [1, 2, 5, 9, 14, 15, 16, 20, 29]) {
+      const s = sweep(giveOff(fromValue(nines(run)), 1n));
+      expect(s.longest, `${run} nines`).toBe(run);
+      expect(s.fired).toEqual(Array.from({ length: run }, (_, i) => i));
+    }
+  });
+  it('a run inside one section takes 22 degrees an arm; one that crosses the 15 | 16 gap waits for the second rotation', () => {
+    for (const run of [2, 6, 12, 14]) {
+      const s = sweep(giveOff(fromValue(nines(run)), 1n));
+      expect(s.lastT - armTime(0, 0)).toBe(PITCH_DEG * (run - 1));
+      expect(s.lastT).toBeLessThan(360);
+    }
+    expect(sweep(giveOff(fromValue(nines(15)), 1n)).lastT).toBeLessThan(360);
+    for (const run of [16, 20, 31]) expect(sweep(giveOff(fromValue(nines(Math.min(run, 31))), 1n)).lastT).toBeGreaterThanOrEqual(360);
+  });
+  it('the cost of a run grows with its length, one arm at a time', () => {
+    let prev = -1;
+    for (let run = 1; run <= 14; run++) {
+      const t = sweep(giveOff(fromValue(nines(run)), 1n)).lastT;
+      expect(t).toBeGreaterThan(prev);
+      prev = t;
+    }
+  });
+  it('stepping to the next firing reaches the same end as the whole sweep, never skipping a carry', () => {
+    let s = begin(giveOff(fromValue(nines(20)), 1n));
+    for (let guard = 0; guard < 100 && !finished(s); guard++) {
+      const t = nextFiring(s)!;
+      expect(t).not.toBeNull();
+      const n = s.fired.length;
+      s = advanceTo(s, t);
+      expect(s.fired.length).toBeGreaterThan(n);
+    }
+    expect(valueOf(s.col)).toBe(nines(20) + 1n);
+    expect(nextFiring(s)).toBeNull();
+  });
+  it('nothing armed, nothing fires', () => {
+    const g = giveOff(fromValue(11n), 22n);
+    expect(nextFiring(begin(g))).toBeNull();
+    expect(sweep(g).fired).toHaveLength(0);
+  });
+});
+
+describe('anticipating carriage', () => {
+  it('settles to the same column as the successive carriage, on every case', () => {
+    for (let k = 0; k < 300; k++) {
+      const x = k % 2 ? big(31) : nasty(), y = k % 3 ? big(31) : nasty(), g = giveOff(fromValue(x), y);
+      const a = anticipate(g).col, s = sweep(g).col;
+      expect(a.w).toEqual(s.w);
+      expect(a.warn[DIGITS - 1]).toBe(s.warn[DIGITS - 1]);
+      expect(valueOf(a)).toBe(x + y);
+    }
+  });
+  it('foresees a carry into every wheel of a run of 9s at once, and into nothing else', () => {
+    const g = giveOff(fromValue(nines(7)), 1n), { carryIn } = anticipate(g);
+    expect(carryIn.flatMap((x, i) => (x ? [i] : []))).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+  it('is one step whatever the run, where the successive carriage takes a step a wheel', () => {
+    for (const run of [1, 4, 9, 20, 30]) {
+      const g = giveOff(fromValue(nines(run)), 1n);
+      expect(anticipate(g).carryIn.filter(Boolean)).toHaveLength(run); // run carries all decided in one pass
+      expect(sweep(g).fired).toHaveLength(run); // run arms, one after another
+    }
+  });
+});
+
+describe('against the gate adders', () => {
+  it('quotes the library: 2 NAND delays a column for the ripple adder, 2n + 4 in all', () => {
+    expect(PER_COLUMN).toBe(2);
+    for (const r of gateRows()) {
+      expect(r.ripple).toBe(logicDepth(rca(r.n)));
+      expect(r.ks).toBe(logicDepth(koggeStone(r.n)));
+      expect(r.ripple).toBe(PER_COLUMN * r.n + 4);
+    }
+  });
+  it('the ripple adder gets slower with width; the prefix adder gains a level a doubling', () => {
+    const rows = gateRows();
+    for (let i = 1; i < rows.length; i++) {
+      expect(rows[i].ripple).toBeGreaterThan(rows[i - 1].ripple);
+      expect(rows[i].ks - rows[i - 1].ks).toBe(rows[1].ks - rows[0].ks);
+    }
+  });
+});
+
+describe('the drawing', () => {
+  const pose = (g = zero(), theta = 0) => ({ col: g, theta, foresee: null });
+  it('draws a wheel, tick and lever per wheel and an arm per carry arm', () => {
+    const parts = babbageParts(pose(), P);
+    expect(parts.length).toBe(DIGITS * 3 + ARMS + 2 + 2 + 0);
+  });
+  it('an armed latch is drawn in the warning colour, and only those', () => {
+    const g = giveOff(fromValue(4259n), 6332n), warn = babbageParts(pose(g, 18), P).filter((p) => p.color === P.warn);
+    expect(warn).toHaveLength(pending(g));
+  });
+  it('the tick moves with the digit and the arm marked as polled follows the axis', () => {
+    const a = babbageParts(pose(fromValue(0n)), P), b = babbageParts(pose(fromValue(5n)), P);
+    expect(a.filter((p) => p.color === P.tick)[0].pos).not.toEqual(b.filter((p) => p.color === P.tick)[0].pos);
+    const at = (th: number) => babbageParts(pose(zero(), th), P).filter((p) => p.color === P.warn).length;
+    expect(at(armTime(0, 0))).toBeGreaterThanOrEqual(1);
+    expect(at(armTime(0, 0) + 11)).toBe(0);
+  });
+  it('labels what is drawn', () => {
+    const labels = babbageAnchors(pose()).map((a) => a.text);
+    expect(labels).toContain('figure wheel');
+    expect(labels.some((l) => l.startsWith('warning lever'))).toBe(true);
+  });
+});
