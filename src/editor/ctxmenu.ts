@@ -280,7 +280,12 @@ export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void
   }
   if (part && partDef) partHeader(m, part.id, partDef);
   const trace = net >= 0 ? traceOf(ed, net, m) : [];
-  showMenu(x, y, [...trace, ...entries(ed, at)], { into: m, back: ed.view.svg });
+  // From the keyboard: place the armed part where the cursor is, or start a wire from the pin it is on or the selected part's
+  const armed = ed.tools.armedItem;
+  const here: Entry[] = armed ? [{ label: `Place ${armed.name} here`, key: 'Enter', run: () => ed.tools.placeAt(armed, at) }, null] : [];
+  const wires2 = ed.tools.wireStarts();
+  const start: Entry[] = wires2.length ? [...wires2.map((w) => ({ label: w.label, key: 'W', run: w.run })), null] : [];
+  showMenu(x, y, [...here, ...start, ...trace, ...entries(ed, at)], { into: m, back: ed.view.svg });
 }
 
 registerEditorPlugin((ed) => {

@@ -181,6 +181,8 @@ export class Editor {
   readonly diagPill = h('button', { class: 'btn sm sb-diag-pill', type: 'button', hidden: true, onclick: () => this.props.showFirstDiag() }) as HTMLButtonElement;
   private toastEl: HTMLElement;
   private modeEl: HTMLElement;
+  /** Where the keyboard cursor, wiring and placing speak (a polite live region, off screen). */
+  private liveEl: HTMLElement;
   private modeText: HTMLElement;
   private tipEl: HTMLElement;
   /** Shown over a chip with nothing on it: where to start. */
@@ -228,6 +230,7 @@ export class Editor {
     this.view.radix = settings.radix;
     this.toastEl = h('div', { class: 'sb-toast', role: 'status', 'aria-live': 'polite' });
     this.tipEl = h('div', { class: 'wire-tip' });
+    this.liveEl = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
     // What a touch screen is in the middle of (a part armed, a wire begun) and the way out; Esc does it on a keyboard.
     this.modeText = h('span', { class: 'sb-mode-text' });
     this.modeEl = h('div', { class: 'sb-mode', role: 'status', 'aria-live': 'polite', hidden: true }, this.modeText,
@@ -242,7 +245,7 @@ export class Editor {
       this.emptyText,
       h('div', { class: 'row' }, act('examples', 'Examples', 'book'), act('challenges', 'Challenges', 'flag'), act('puzzles', 'Puzzles', 'puzzle')));
     // Touch (tools.ts): one finger wires, moves and draws a band; two fingers pan and zoom (camera.ts).
-    this.canvas.append(overlay, this.emptyEl, this.toastEl, this.modeEl, this.tipEl,
+    this.canvas.append(overlay, this.emptyEl, this.toastEl, this.modeEl, this.tipEl, this.liveEl,
       hintBadge('drag pin → pin: wire · L: pointer (a named wire: same name = connected) · wheel zoom · Space+drag pan · ? shortcuts',
         'drag from a pin: wire · hold: menu · double-tap: open · pinch: zoom', 'sandbox', ' sb-hint'));
     this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }), left: h('div', { class: 'sb-left' }) };
@@ -1111,6 +1114,13 @@ export class Editor {
     document.addEventListener('pointerup', up);
   }
 
+  /** Say something to a screen reader (the keyboard cursor, placing and wiring); nothing is drawn. */
+  announce(msg: string): void {
+    // a repeated message is read again: clear first
+    this.liveEl.textContent = '';
+    setTimeout(() => { this.liveEl.textContent = msg; }, 30);
+  }
+
   /** A touch screen's "in the middle of something" pill: what it is and a Cancel (the armed part, a wire begun). */
   showMode(text: string): void {
     this.modeText.textContent = text;
@@ -1258,8 +1268,15 @@ export class Editor {
 
   /** Arm a palette item: the next click on the canvas places it (the phone's drawer closes). */
   armPart(item: PaletteItem, key: string): void {
+    // from the parts list with the keyboard: on to the canvas, where the arrows move the cursor and Enter places it
+    const fromList = !!document.activeElement?.closest?.('.sb-palette');
     this.tools.arm(item, key);
     if (this.partsDrawer) this.showParts(false);
+    if (fromList && !coarsePointer()) {
+      this.tools.keyboardStart();
+      this.view.svg.focus({ preventScroll: true });
+      return void this.toast(`${item.name}: arrow keys move the cursor, Enter places it (Esc cancels)`);
+    }
     // a touch screen has no Esc: the toast carries the way out
     if (coarsePointer()) this.toast(`${item.name}: tap the canvas to place it`, 'info', { label: 'Cancel', run: () => this.tools.cancel() });
     else this.toast(`${item.name}: click the canvas to place it (Esc cancels)`);
