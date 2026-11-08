@@ -64,22 +64,24 @@ export function lightWidget(): Widget {
 // ---------------------------------------------------------------------------------------------------------------------
 // 1. The CCD's bucket brigade
 
-const CCD_PIX = 6;
+// On a phone the register is drawn shorter and narrower, so its labels keep their size instead of shrinking with the drawing.
+const ccdNarrow = (): boolean => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 520px)').matches === true;
 const START = [9000, 2500, 14000, 600];
 
 export function ccdWidget(): Widget {
+  const PIX = ccdNarrow() ? 3 : 6, VW = ccdNarrow() ? 380 : 640;
   let n: 3 | 4 = 3, k = 0, cte = 0.99, running = false, last = 0, timer = 0;
   let read: { e: number; v: number }[] = [];
-  const svg = s('svg', { viewBox: '0 0 640 190', class: 'sn-ccd', role: 'img', 'aria-label': 'A row of CCD gates clocked in phases, with charge packets moving to the output amplifier' });
+  const svg = s('svg', { viewBox: `0 0 ${VW} 190`, class: 'sn-ccd', role: 'img', 'aria-label': 'A row of CCD gates clocked in phases, with charge packets moving to the output amplifier' });
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' }), live = h('div', { class: 'sr-only', 'aria-live': 'polite' });
-  const gates = () => CCD_PIX * n;
+  const gates = () => PIX * n;
   /** A packet's charge after t pixel transfers, and what it left behind. */
   const packets = () => {
     const done = Math.floor(k / stepsPerPixel(n));
-    return START.map((q, i) => ({ q: q * afterTransfers(done, cte), trail: q * (1 - afterTransfers(done, cte)), at: i * n + packetGate(n, k) + (n === 3 ? 0.5 : 1) }));
+    return START.slice(0, PIX - 1).map((q, i) => ({ q: q * afterTransfers(done, cte), trail: q * (1 - afterTransfers(done, cte)), at: i * n + packetGate(n, k) + (n === 3 ? 0.5 : 1) }));
   };
   const paint = () => {
-    const G = gates(), x0 = 20, gw = 540 / G, high = clockHigh(n, k), kids: SVGElement[] = [];
+    const G = gates(), x0 = 20, gw = (VW - 100) / G, high = clockHigh(n, k), kids: SVGElement[] = [];
     for (let i = 0; i < G; i++) {
       const ph = (i % n) + 1, on = high.includes(ph);
       kids.push(s('rect', { x: x0 + i * gw + 1, y: 40, width: gw - 2, height: 26, rx: 2, class: `sn-gate p${ph}${on ? ' on' : ''}` }), s('text', { x: x0 + (i + 0.5) * gw, y: 34, 'text-anchor': 'middle', class: 'sn-lbl sm' }, `∅${ph}`));
