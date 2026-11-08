@@ -51,9 +51,11 @@ export const SHOTS: Shot[] = [
   },
   {
     name: 'cap_tune', route: '#/campaign/play/cap_tune',
-    why: 'The DSP capstone Tune it on the level screen: the brief, the radio blocks it unlocks, the canvas. Unlock all so the capstone is open on a fresh profile.',
+    why: 'The DSP capstone Tune it: the brief, the default chain of the radio blocks, its NAND cost, and the practice band with what it decoded. Page top, nothing clicked.',
     storage: { [CAMPAIGN_KEY]: JSON.stringify({ schema: 1, nodes: {}, unlockAll: true }) },
-    wait: `document.querySelector('#view svg.ed-svg') && !document.querySelector('.route-loading')`, dwell: 3500,
+    // the page is ui/pages/tunecap.ts: the chain starts as DEFAULT_CHAIN; Check is left alone: the default chain does not decode the practice band
+    wait: `document.querySelector('.tc-chain .tc-block-head') && document.querySelector('.tc-tile')`,
+dwell: 2500,
   },
   {
     name: 'warps', route: '#/c/warps/0',
@@ -72,10 +74,11 @@ export const SHOTS: Shot[] = [
     wait: `document.querySelectorAll('#view svg.ed-svg path.wire[data-wire]').length > 3`,
     // right-click (contextmenu) the middle of the longest wire; the menu's colour row is .sb-ctx-hues
     then: [`(async () => {
-      const wires = [...document.querySelectorAll('#view path.wire[data-wire]')];
+      // the longest wire whose middle sits in the upper canvas (x 300–900, y 380–430), so the menu opens below it without being pushed under the bar
+      const mid = (w) => { const p = w.getPointAtLength(w.getTotalLength() / 2), m = w.getScreenCTM(); return { x: p.x * m.a + p.y * m.c + m.e, y: p.x * m.b + p.y * m.d + m.f }; };
+      const wires = [...document.querySelectorAll('#view svg.ed-svg path.wire[data-wire]')].filter((w) => { const q = mid(w); return q.x > 300 && q.x < 900 && q.y > 380 && q.y < 430; });
       const w = wires.sort((a, b) => b.getTotalLength() - a.getTotalLength())[0];
-      const p = w.getPointAtLength(w.getTotalLength() / 2), m = w.getScreenCTM();
-      const x = p.x * m.a + p.y * m.c + m.e, y = p.x * m.b + p.y * m.d + m.f;
+      const { x, y } = mid(w);
       w.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: x, clientY: y }));
       for (let i = 0; i < 40 && !document.querySelector('.sb-ctx-hues'); i++) await new Promise((r) => setTimeout(r, 50));
     })()`],

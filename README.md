@@ -124,7 +124,7 @@ review queue; one backup file carries all progress; the site installs as an app 
 </tr>
 <tr>
 <td><img src="docs/images/sdr.png" alt="The software radio: four stations in one band, the dial turned to one of them, its spectrum before and after the channel filter"><br><sub><b>Ch. <!--n:ch.sdr-->81<!--/n--></b>: a software radio: four stations in one band, a mixer and decimating chain in gates, a dial to turn.</sub></td>
-<td><img src="docs/images/cap_tune.png" alt="The Tune it capstone: a receive chain built from the software radio's blocks, with the decoded message and its cost"><br><sub><b>Capstone</b>: Tune it. A band you have not seen and a weak station: build the chain, and the message must decode on bands held back.</sub></td>
+<td><img src="docs/images/cap_tune.png" alt="The Tune it capstone: a receive chain built from the software radio's blocks, with each block's settings and its cost in NANDs and multiplies"><br><sub><b>Capstone</b>: Tune it. A band you have not seen and a weak station: build the chain, and the message must decode on bands held back.</sub></td>
 </tr>
 <tr>
 <td><img src="docs/images/warps.png" alt="The warp core drawn as blocks: the lanes side by side, the issue logic above and the memory below"><br><sub><b>Ch. <!--n:ch.warps-->31<!--/n--></b>: the warp core drawn as blocks: lanes, issue and scoreboard, and the memory, each one opens down to gates.</sub></td>

@@ -1319,25 +1319,21 @@ main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
   goals after the step's title, phone fold, prose width, 'Zoom to readable' for wide scenes, the tour off the goals, step-dot hit areas), the sandbox
   (keyboard-only building, phone layout, challenge strip, polish), the campaign (map, level screen, codex unlock, My path), the shell and workbench;
   one digit-grouping rule (U+202F, groupNum) across 62 formatters
-- Left open, from the findings files (listed only where a file says so; where it lives):
-  - FP unit tops (fpadd / fpmul / fpdiv / fpnf, #/c/float/3, 7, 9, 12, 15) stay in Builder columns: they need a hierarchy restructure into sub-blocks
-    (swap, align, add, sign and cancel, specials), which renames instances the float tours point at; needs a go and a mockup. E:/audit/smith/findings.md (1a)
-  - Marked "known open" in E:/audit/smith/findings.md (2a): the FPU CPU (#/c/float/17–21) and the pipeline variants / out-of-order units
-    (#/c/pipeline/7, pipepay, ooo/5–7, 10) — hazard and branch blocks loose below the datapath with long wires
-  - Relay full adder (#/c/relays/4/fa0): pointer boxes collide under relay A, needs a two-row tagAt. rv16_mux16 needs a bit-sliced redraw. srt4div8 was not
-    switched to layered.ts. E:/audit/smith/findings.md
-  - Warp core, lsu variants (chapter 32): net nMo runs through a part, logged and not fixed. E:/audit/rock/findings.md (phase 2)
-  - Communication circuits left on purpose: CRC-32 next-state crossings (inherent), I²C target t0 (layered's 14-unit channel cap; layered.ts option
-    requests go to the shell owner), the computer-with-NIC bus top. E:/audit/swan/2b/findings.md
-  - Chapters (E:/audit/swan/g2.md, g3.md, g4.md, E:/audit/rock/cont-findings.md): bus (38) ends with no pointer onward and sdr (81) does not name the
-    appendices (suggestions, not done); datacentre has no closing bridge into the bench (Swan's note); the "factor 1.4" swing claim in datacentre is kept as
-    written because it could not be derived without a new computation
-  - Kept by decision, so not work to do: secret/7's computing-history digression (a story-flow cost, not wrong); the recap `practise` list left empty for
-    cellular, glass, pcie, radio, wifi and secret, because it takes campaign nodes only and the capstones (cap_fault, cap_link, cap_tune) are not nodes
-  - Shell (phase 3, E:/audit/smith/phase3-notes.md, no fix recorded and none seen on main): first-load trim to a long task under 200 ms stands at 132–253 ms
-    locally (parse / compile 160–190 ms; the index, nodes, pad, ethswitch and mosphys chunks 30–50 ms each at module load); top-bar targets 30–39 px wide at 390
-    touch; HEX / BIN / DEC as one radio group (three tab stops now); about 14 tab stops before content; top-bar labels collapse to icons at 768; the View options
-    popover is one column of about 35 toggles. Landed from that list: the skip link target and focus ring (da9f2ffb), the collapsed CPU panel over the LEVEL badge
+- Still open, checked against main at 0a60ff0b (batch 16) on 2026-11-08:
+  - FP unit tops (fpadd / fpmul / fpdiv / fpnf, #/c/float/3, 7, 9, 12, 15): in progress (Smith), a hierarchy restructure into sub-blocks that renames instances
+    the float tours point at
+  - FPU CPU (#/c/float/17–21) and the pipeline variants / out-of-order units (#/c/pipeline/7, pipepay, ooo/5–7, 10), "known open" in E:/audit/smith/findings.md:
+    no commit or redraw test on main touches them (git log, tests/redrawclear*)
+  - rv16_mux16 (needs a bit-sliced redraw) and srt4div8 (not switched to layered.ts): unchanged on main (git log)
+  - Warp core with lsu (chapter 32): net nMo still runs through a part — routeNetlist + wiresThroughParts on warpCore({ warps: 8, lanes: 8, lsu, mul }) returns { nMo }
+  - Communication circuits left on purpose: CRC-32 next-state crossings (inherent), I²C target t0 (layered's 14-unit channel cap), the computer-with-NIC bus top
+  - Chapter seams: bus (38) ends without a pointer to chapter 39 (no numOf('message') in ch-bus.ts), sdr (81) never names the appendices (no mention in
+    ch-dsp-sdr.ts), datacentre has no pointer on to the expert's bench (no reference in ch-comm-dc.ts)
+  - Kept by decision, not work to do: secret/7's computing-history digression; the recap `practise` list left empty for cellular, glass, pcie, radio, wifi
+    and secret (it takes campaign nodes only; the capstones are not nodes)
+  - Verified fixed on main, so not listed: first load under 200 ms (batch 16), HEX / BIN / DEC as one radio group and finger-sized section links (1d8a6547),
+    View options sticky headings and Tab leaving the menu (app.ts, app.css), the relay full adder's pointers (93a4a054), the skip link (da9f2ffb); the
+    "factor 1.4" claim in datacentre is no longer in the chapter
 
 ## Open questions for the author
 - Target audience depth: high-school / first-year university / practitioner refresher?
