@@ -144,6 +144,28 @@ describe('next up', () => {
     const v = tierViews(ctx({ testedOut: () => true }));
     for (const t of v) expect(t.done, `tier ${t.tier}`).toBe(t.skills.length);
   });
+  it('every step read but nothing practised: it offers the practice, never "every tier is done"', () => {
+    // tier 0 read through (Basics and the map), no question answered, no level built: the state that used to show nothing to do
+    const seen = (c: string) => [...Array(byId.get(c)?.steps.length ?? 0).keys()];
+    const n = nextUp(ctx({ visited: (c) => (c === 'basics' || c === 'map' ? seen(c) : []) }));
+    expect(n.length).toBeGreaterThan(0);
+    expect(n[0]).toMatchObject({ kind: 'practise' });
+    expect(n[0].href).toMatch(/^#\/(c\/(basics|map)\/\d+|campaign\/(codex|n)\/)/);
+    // every chapter read, from every start: always something to do while the tier has skills left, and it links somewhere
+    const all = ctx({ visited: seen });
+    for (const start of [0, 1, 2, 3, 4]) {
+      const items = nextUp(all, start);
+      expect(items.length, `start ${start}`).toBeGreaterThan(0);
+      expect(items[0].href, `start ${start}: ${items[0].title}`).toBeTruthy();
+    }
+    // answering the offered question moves the offer on (the recap or the quiz counts as understood)
+    const key = (h: string) => { const m = /^#\/c\/([^/]+)\/(\d+)$/.exec(h); return m ? (byId.get(m[1])!.steps.length === +m[2] ? `${m[1]}:recap:` : `${m[1]}:${m[2]}`) : ''; };
+    const k = key(n[0].href!);
+    if (k) {
+      const next = nextUp(ctx({ visited: (c) => (c === 'basics' || c === 'map' ? seen(c) : []), solved: (x) => x.startsWith(k) }));
+      expect(next[0]?.title).not.toBe(n[0].title);
+    }
+  });
   it('formats times as estimates', () => {
     expect(fmtMinutes(33)).toBe('about 35 min');
     expect(fmtMinutes(150)).toBe('about 2.5 h');

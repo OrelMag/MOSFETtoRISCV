@@ -9,7 +9,7 @@ import { outlineOf } from '../chapters/outline';
 import type { ChapterMeta } from '../chapters/meta';
 import { statusOf, type ProgressView } from '../campaign/status';
 import { CAPSTONES, capstoneStatus, type Capstone, type CapstoneStatus, type Tier } from './capstones';
-import { DONE, skillState, type Evidence, type SkillState } from './mastery';
+import { DONE, skillGaps, skillState, type Evidence, type SkillState } from './mastery';
 import { PATH_LEVELS, PATH_MINUTES } from './pathindex';
 import { skills, tierChapters, TIERS, type LevelFact, type Skill } from './skills';
 
@@ -90,6 +90,13 @@ export function nextUp(ctx: PathCtx, start = 0): NextItem[] {
   if (step) out.push({ kind: 'learn', title: `${step.c.title}, step ${step.i + 1}: ${step.c.steps[step.i].title}`, href: `#/c/${step.c.id}/${step.i}`, minutes: stepMinutes(step.c.id, step.i) });
   const lv = practiseLevel(view, ctx);
   if (lv) out.push({ kind: 'practise', title: `Level: ${levelOf(lv)!.title}`, href: `#/campaign/n/${lv}`, minutes: levelMinutes(lv) });
+  else {
+    const p = practiseSkill(view, ctx);
+    if (p) out.push(p);
+  }
+  // the tier is not done but nothing above applies: say what is left, never "every tier is done"
+  const left = view.skills.length - view.done;
+  if (!out.length && left > 0) out.push({ kind: 'practise', title: `Tier ${t}: ${left} skill${left > 1 ? 's' : ''} still to practise (below)`, href: null, minutes: 5 });
   const cap = view.capstone;
   if (out.length < 3 && cap && cap.status !== 'passed' && view.done / Math.max(1, view.skills.length) >= 0.8)
     out.push({ kind: 'capstone', title: `Tier ${t} capstone: ${cap.title}`, href: cap.route, minutes: t <= 1 ? 45 : 120 });
@@ -119,7 +126,44 @@ function practiseLevel(view: TierView, ctx: PathCtx): string | null {
   return null;
 }
 
-export const chapterById = (id: string): ChapterMeta | undefined => outlineOf(id);
+/**
+ * What the tier's first skill not yet practised lacks, as one thing to do: a question right (the step's quiz, the chapter's recap,
+ * the codex's Check yourself, else a review), or its build (a reach challenge on its step, else its level). Skills seen come first.
+ */
+function practiseSkill(view: TierView, ctx: PathCtx): NextItem | null {
+  const open = view.skills.filter((x) => !DONE.has(x.state));
+  for (const { skill } of [...open.filter((x) => x.state === 'learning'), ...open.filter((x) => x.state !== 'learning')]) {
+    const gaps = skillGaps(skill, ctx);
+    if (!gaps.understand) {
+      const parts = skill.checks.map((k) => k.split(':'));
+      const quiz = parts.find((p) => p.length === 2 && /^\d+$/.test(p[1]) && outlineOf(p[0]));
+      if (quiz) {
+        const c = outlineOf(quiz[0])!, i = +quiz[1];
+        return { kind: 'practise', title: `${skill.title}: the quiz in ${c.title}, step ${i + 1}`, href: `#/c/${c.id}/${i}`, minutes: 2 };
+      }
+      const recap = parts.find((p) => p[1] === 'recap' && outlineOf(p[0]));
+      if (recap) {
+        const c = outlineOf(recap[0])!;
+        return { kind: 'practise', title: `${skill.title}: ${c.title}'s recap questions`, href: `#/c/${c.id}/${c.steps.length}`, minutes: 3 };
+      }
+      const codex = parts.find((p) => p[0] === 'codex');
+      if (codex) return { kind: 'practise', title: `${skill.title}: Check yourself in the codex`, href: `#/campaign/codex/${codex[1]}`, minutes: 3 };
+      return { kind: 'review', title: `${skill.title}: a review question`, href: '#/notes', minutes: 2 };
+    }
+    if (!gaps.build) {
+      const reach = skill.reach.map((k) => k.split(':')).find((p) => outlineOf(p[0]));
+      if (reach) {
+        const c = outlineOf(reach[0])!, i = +reach[1];
+        return { kind: 'practise', title: `${skill.title}: build it in ${c.title}, step ${i + 1}`, href: `#/c/${c.id}/${i}`, minutes: 5 };
+      }
+      const id = skill.levels.find((x) => levelOf(x));
+      if (id) return { kind: 'practise', title: `Level: ${levelOf(id)!.title}`, href: `#/campaign/n/${id}`, minutes: levelMinutes(id) };
+    }
+  }
+  return null;
+}
+
+export const chapterById =(id: string): ChapterMeta | undefined => outlineOf(id);
 
 /** "about 2 h", "about 35 min". */
 export function fmtMinutes(m: number): string {

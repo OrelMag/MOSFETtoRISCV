@@ -115,7 +115,7 @@ export class PathPage implements Page {
         h('span', { class: 'lp-kind' }, KIND_LABEL[x.kind]), h('span', { class: 'lp-it' }, x.title), h('small', null, fmtMinutes(x.minutes))))
         : [h('p', { class: 'lp-sub' }, 'Every tier is done. The sandbox and the campaign\'s optional acts are yours.')]),
       first ? h('a', { class: 'btn primary lp-go', href: first.href! }, 'Start', icon('chevR', 16)) : null,
-      h('p', { class: 'lp-note' }, 'Questions due come first, then the next step of your tier, then a level that practises what you have read.'));
+      h('p', { class: 'lp-note' }, 'Questions due come first, then the next step of your tier, then a level or a question that practises what you have read.'));
   }
 
   /** A track's capstones: outside the tiers, so a tier's progress never depends on them. One without a route is not built yet. */

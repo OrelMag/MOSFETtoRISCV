@@ -22,11 +22,18 @@ export interface Evidence {
   testedOut(chapter: string): boolean;
 }
 
-export function skillState(s: Skill, ev: Evidence): SkillState {
+/** The two halves of practised: a question right (understand) and its level or reach challenge done (build). */
+export function skillGaps(s: Skill, ev: Evidence): { understand: boolean; build: boolean } {
   const memos = s.checks.map((k) => ev.memo(k)).filter((m): m is Memo => !!m);
   const understand = memos.some((m) => !m.miss) || s.checks.some((k) => !k.startsWith('codex:') && ev.solved(k));
   const canBuild = s.levels.length > 0 || s.reach.length > 0;
-  const build = !canBuild || s.levels.some((id) => ev.levelSolved(id)) || s.reach.some((k) => ev.solved(k));
+  return { understand, build: !canBuild || s.levels.some((id) => ev.levelSolved(id)) || s.reach.some((k) => ev.solved(k)) };
+}
+
+export function skillState(s: Skill, ev: Evidence): SkillState {
+  const memos = s.checks.map((k) => ev.memo(k)).filter((m): m is Memo => !!m);
+  const { understand, build } = skillGaps(s, ev);
+  const canBuild = s.levels.length > 0 || s.reach.length > 0;
   const retain = memos.some((m) => m.streak >= 2 && !m.miss);
   if (understand && build && retain) return memos.some((m) => m.due <= ev.now) ? 'rusty' : 'mastered';
   if ((understand && build) || ev.testedOut(s.chapter)) return 'practised';
