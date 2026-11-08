@@ -87,6 +87,8 @@ export function nextFiring(s: Carry): number | null {
   for (let k = s.cursor; k < EVENTS.length; k++) if (s.col.warn[EVENTS[k].arm]) return EVENTS[k].t;
   return null;
 }
+/** A finished carry phase stands at the angle of its last carry, however it was run (the axis really turns on to 720 degrees; the readout stops where the work did). */
+export const finishCarry = (s: Carry): Carry => (finished(s) && s.fired.length ? { ...s, theta: s.lastT } : s);
 export const finished = (s: Carry): boolean => pending(s.col) === 0;
 /** The whole carry phase: both rotations. */
 export const sweep = (c: Column): Carry => advanceTo(begin(c), TURN_MAX);

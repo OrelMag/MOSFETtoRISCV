@@ -6,7 +6,7 @@ import { koggeStone, rca } from '../src/lib';
 import { logicDepth } from '../src/sim/stats';
 import {
   ARMS, DIGITS, EVENTS, GAP_DEG, MOD, PER_COLUMN, PITCH_DEG, SPLIT, TURN_MAX, advanceTo, anticipate, armAngle, armPhase, armTime, babbageAnchors, babbageParts, begin, digitGroups,
-  finished, fromValue, gateRows, giveOff, nextFiring, pending, sweep, valueOf, zero, type BabbagePalette,
+  finished, finishCarry, fromValue, gateRows, giveOff, nextFiring, pending, sweep, valueOf, zero, type BabbagePalette,
 } from '../src/widgets/babbage3dparts';
 
 const c = (i: number): RGB => [i / 20, 0.5, 0.5];
@@ -170,6 +170,27 @@ describe('against the gate adders', () => {
       expect(rows[i].ripple).toBeGreaterThan(rows[i - 1].ripple);
       expect(rows[i].ks - rows[i - 1].ks).toBe(rows[1].ks - rows[0].ks);
     }
+  });
+});
+
+describe('the finished carry phase', () => {
+  it('animated and reduced-motion runs end at the same angle: the last carry, rounded the same', () => {
+    for (const run of [1, 6, 14, 20, 31]) {
+      const g = giveOff(fromValue(nines(run)), 1n);
+      // Animated: the axis turns on in small frames until nothing is armed; reduced motion: one jump to the end of the cycle.
+      let a = begin(g);
+      for (let th = 0; !finished(a) && th <= TURN_MAX; th += 3.7) a = advanceTo(a, th);
+      a = finishCarry(a);
+      const r = finishCarry(advanceTo(begin(g), TURN_MAX));
+      expect(Math.round(a.theta)).toBe(Math.round(r.theta));
+      expect(a.theta).toBe(a.lastT);
+      expect(r.theta).toBe(r.lastT);
+      expect(valueOf(a.col)).toBe(valueOf(r.col));
+    }
+  });
+  it('a carry phase with nothing to carry stays where it was', () => {
+    const s = finishCarry(advanceTo(begin(giveOff(fromValue(11n), 22n)), TURN_MAX));
+    expect(s.fired).toHaveLength(0);
   });
 });
 

@@ -10,7 +10,7 @@ import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
 import { modelStage } from './modelstage';
 import {
-  ARMS, DIGITS, MOD, digitGroups, PER_COLUMN, TURN_MAX, advanceTo, anticipate, babbageAnchors, babbageParts, begin, finished, fromValue, gateRows, giveOff,
+  ARMS, DIGITS, MOD, digitGroups, PER_COLUMN, TURN_MAX, advanceTo, anticipate, finishCarry, babbageAnchors, babbageParts, begin, finished, fromValue, gateRows, giveOff,
   nextFiring, sweep, valueOf, type BabbagePalette, type Carry, type Column, type Pose,
 } from './babbage3dparts';
 
@@ -63,14 +63,13 @@ export function babbageView(): Widget {
     const v = valueOf(s.col), flag = s.col.warn[DIGITS - 1] ? ' with the overflow flag set' : '';
     digits.setAttribute('aria-label', `Column reads ${(v % MOD).toString()}${flag}; ${armed} warning lever${armed === 1 ? '' : 's'} armed`);
     const runLen = plan.longest;
-    const unit = anticipating ? '1 unit, whatever the run' : `axis turned to ${Math.round(plan.lastT)}° of ${TURN_MAX}°${plan.lastT >= 360 ? ' (second rotation)' : ''}`;
+    const unit = anticipating ? '1 unit, whatever the run' : `${phase === 'done' ? 'axis turned to' : `axis at ${Math.round(s.theta)}°, last carry at`} ${Math.round(plan.lastT)}° of ${TURN_MAX}°${plan.lastT >= 360 ? ' (second rotation)' : ''}`;
     const rows: [string, string][] = [
       ['Case', cs.blurb],
       ['Warning latches armed', String(armed)],
       ['Carries fired so far', String(s.fired.length)],
       ['Longest run of carries', phase === 'ready' ? '–' : String(runLen)],
       [anticipating ? 'Anticipating carriage' : 'Successive carriage', phase === 'ready' ? '–' : plan.fired.length === 0 ? 'nothing to carry' : unit],
-      ['Carry axis', `${Math.round(s.theta)}°`],
       ['Same run, ripple-carry gates', phase === 'ready' ? '–' : `${runLen} × ${PER_COLUMN} = ${runLen * PER_COLUMN} NAND delays`],
     ];
     kv.replaceChildren(...rows.flatMap(([k, val]) => [h('span', null, k), h('span', { class: 'v' }, val)]));
@@ -86,7 +85,7 @@ export function babbageView(): Widget {
       : `Carried: the column reads ${(v % MOD).toString()}${flag}.`;
     if (!goal && text !== said) { said = text; live.textContent = text; }
   }
-  const settle = () => { if (phase === 'carry' && goal === null && finished(s)) phase = 'done'; };
+  const settle = () => { if (phase === 'carry' && goal === null && finished(s)) { phase = 'done'; s = finishCarry(s); } };
   const repaint = () => { settle(); readout(); paint(); loop.kick(); };
 
   const loop = frameLoop((_now, dt) => {
