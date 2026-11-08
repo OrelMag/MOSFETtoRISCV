@@ -680,36 +680,121 @@ export function fpAdd(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   });
 }
 
+// ---- the multiplier's blocks --------------------------------------------------------------------------------------------------
+// Drawn as its stages like the adder: sign, significand product, exponent sum, normalize & round, special cases.
+
+/** The product's exponent: ea + eb − bias + 1 (the product's top bit weighs 2), on the extended exponent width. */
+export function fmulExp(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fmul_exp${E}_${M}`, () => {
+    const XE = xeOf(f), B = fbias(f);
+    const b = new Builder(10, 10, 4);
+    b.pins('ea', 'eb');
+    const za = b.op1(merger([E, XE - E]), ['ea', b.op1(K(XE - E, 0), [], undefined, 'za0')], undefined, 'za');
+    const zb = b.op1(merger([E, XE - E]), ['eb', b.op1(K(XE - E, 0), [], undefined, 'zb0')], undefined, 'zb');
+    b.next();
+    const s1 = b.op(koggeStone(XE), [za, zb, b.op1(TIE0, [], undefined, 'c1')], 'ea + eb', 'sum');
+    b.next();
+    const s2 = b.op(koggeStone(XE), [`${s1}.s`, b.op1(K(XE, (1 - B + 2 ** XE) % 2 ** XE), [], undefined, 'k'), b.op1(TIE0, [], undefined, 'c2')], '− bias + 1', 'bias');
+    b.wire(`${s2}.s`, 'e');
+    const ports = [bus('ea', E, 'in'), bus('eb', E, 'in'), bus('e', XE, 'out')];
+    return define({
+      id: `fmul_exp${E}_${M}`, name: `FP multiplier: exponent (${fmtName(f)})`, category: 'arithmetic',
+      summary: `ea + eb carries the bias twice: take one off (− ${B}), and add 1 because the product of two significands in [1, 2) has its top bit at weight 2. Two ${XE}-bit adders, with room for the sum's overflow and underflow.`,
+      ports, symbol: { kind: 'box', label: 'EXP' },
+      spec: ([ea, eb]) => [(ea + eb + 1 - B + 2 ** XE) % 2 ** XE],
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** The multiplier's special cases: NV for a signaling NaN or ∞ × 0, the canonical NaN, or ∞ with the product's sign. */
+export function fmulSpecial(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
+  const { E, M } = f;
+  return memo(`fmul_special${E}_${M}${mux.tag}`, () => {
+    const N = 1 + E + M;
+    const b = new Builder(10, 8, 4);
+    b.pins('sna', 'na', 'ia', 'za', 'ry', 'rflags', 'zb', 'ib', 'nb', 'snb');
+    const invalid = b.name(b.op1(orN(4), ['sna', 'snb', b.op1(AND, ['ia', 'zb'], '∞ × 0', 'iz'), b.op1(AND, ['za', 'ib'], '0 × ∞', 'zi')], 'invalid', 'nv'), 'NV');
+    const anyInf = b.op1(OR, ['ia', 'ib'], 'an ∞', 'inf');
+    // ∞ takes the product's sign, which normalize & round passes through as the rounded result's top bit
+    const rs = b.op(splitter([N - 1, 1]), ['ry'], undefined, 'rs');
+    b.next();
+    const nan = b.op1(orN(3), ['na', 'nb', invalid], 'NaN?', 'nan');
+    b.next();
+    specials(b, f, 'ry', 'rflags', nan, anyInf, `${rs}.o1`, invalid, undefined, mux);
+    // a's class flags on top, b's below, the rounded product between: as they arrive on the multiplier's drawing
+    const ports = [bit('sna', 'in'), bit('na', 'in'), bit('ia', 'in'), bit('za', 'in'), bus('ry', N, 'in'), bus('rflags', 5, 'in'),
+      bit('zb', 'in'), bit('ib', 'in'), bit('nb', 'in'), bit('snb', 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')];
+    const nanBits = (2 ** E - 1) * 2 ** M + 2 ** (M - 1);
+    return define({
+      id: `fmul_special${E}_${M}${mux.tag}`, name: `FP multiplier: special cases (${fmtName(f)}${mux.tag ? ', RV16' : ''})`, category: 'arithmetic',
+      summary: 'Invalid (NV) is a signaling NaN in, or ∞ × 0 either way round. Any NaN in, or invalid, gives the canonical NaN; else an infinite operand gives ∞ with the product\'s sign (the rounded result\'s top bit: normalize & round passes it through); else the rounded product. A zero needs no case: a zero significand rounds to a signed zero.',
+      ports, symbol: { kind: 'box', label: 'SPECIAL' },
+      spec: ([sna, na, ia, za, ry, rfl, zb, ib, nb, snb]) => {
+        const s = Math.floor(ry / 2 ** (N - 1));
+        const nv = sna || snb || (ia && zb) || (za && ib) ? 1 : 0, nan = na || nb || nv, inf = ia || ib;
+        return [nan ? nanBits : inf ? s * 2 ** (N - 1) + (2 ** E - 1) * 2 ** M : ry, nan || inf ? nv * FLAG.NV : rfl];
+      },
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** The multiplier's blocks, as the campaign's reference draws them. */
+export const fmulBlocks = (f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef[] => [fmulExp(f), fmulSpecial(f, mux)];
+
+/** fmulTop's places (kept apart so a tuning script can move them). */
+export const FMUL_AT: Record<'ua' | 'ub' | 'sign' | 'mul' | 'exp' | 'z' | 'nr' | 'special', [number, number]> & { pins: Record<string, [number, number]> } = {
+  ua: [6, 0], ub: [6, 18], sign: [19, 16], exp: [27, 14], mul: [42, 14], z: [58, 16], nr: [62, 9], special: [94, 0],
+  pins: { a: [0, 8], b: [0, 26], rm: [0, 36], y: [114, 11], flags: [114, 13] },
+};
+
+/** Where the multiplier's stages sit (hand-drawn: unpack, product and exponent side by side, normalize & round, special cases). */
+function fmulTop(f: FpFormat, mux: Mux2Kind): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
+  const { M } = f, P = FMUL_AT;
+  const instances: InstanceDef[] = [
+    { name: 'ua', def: fpUnpack(f), at: P.ua, flip: true, rot: 2, label: 'unpack a' }, // mirrored top to bottom: its class flags along the top edge
+    { name: 'ub', def: fpUnpack(f), at: P.ub, label: 'unpack b' },
+    { name: 'sign', def: XOR, at: P.sign, label: 'sign' },
+    { name: 'mul', def: treeMul(M + 1), at: P.mul, label: 'significand product' },
+    { name: 'exp', def: fmulExp(f), at: P.exp },
+    { name: 'z', def: TIE0, at: P.z },
+    { name: 'nr', def: normRound(f, 2 * M + 2), at: P.nr, label: 'normalize & round' },
+    { name: 'special', def: fmulSpecial(f, mux), at: P.special },
+  ];
+  const nets: NetDef[] = [
+    { name: 'a', ends: ['a', 'ua.x'] }, { name: 'b', ends: ['b', 'ub.x'] },
+    { name: 'sa', ends: ['ua.sign', 'sign.a'] }, { name: 'sb', ends: ['ub.sign', 'sign.b'] },
+    { name: 'ma', ends: ['ua.mant', 'mul.a'], via: { 'mul.a': [[39, 10], [39, 16]] } }, { name: 'mb', ends: ['ub.mant', 'mul.b'], via: { 'mul.b': [[40, 24], [40, 18]] } },
+    { name: 'ea', ends: ['ua.exp', 'exp.ea'] }, { name: 'eb', ends: ['ub.exp', 'exp.eb'] },
+    { name: 'sign', ends: ['sign.y', 'nr.sign'], via: { 'nr.sign': [[24, 18], [24, 11]] } },
+    { name: 'product', ends: ['mul.p', 'nr.mant'], via: { 'nr.mant': [[57, 17], [57, 15]] } }, { name: 'exponent', ends: ['exp.e', 'nr.exp'], via: { 'nr.exp': [[37, 17], [37, 13]] } },
+    { name: 'sticky in', ends: ['z.y', 'nr.stin'] }, { name: 'rm', ends: ['rm', 'nr.rm'], via: { 'nr.rm': [[60, 36], [60, 19]] } },
+    { name: 'rounded', ends: ['nr.y', 'special.ry'], via: { 'special.ry': [[85, 14], [85, 10]] } }, { name: 'round flags', ends: ['nr.flags', 'special.rflags'], via: { 'special.rflags': [[86, 16], [86, 12]] } },
+    ...(['inf', 'zero', 'nan', 'snan'] as const).flatMap((c): NetDef[] => {
+      const p = c === 'inf' ? 'i' : c === 'zero' ? 'z' : c === 'nan' ? 'n' : 'sn';
+      // b's flags run under normalize & round and turn up just before the special cases, in a staircase that crosses nothing
+      const k = ['zero', 'inf', 'nan', 'snan'].indexOf(c), [x, y] = [88 + k, 26 + 2 * k];
+      return [{ name: `${c} a`, ends: [`ua.${c}`, `special.${p}a`] }, { name: `${c} b`, ends: [`ub.${c}`, `special.${p}b`], via: { [`special.${p}b`]: [[x, y], [x, y - 12]] } }];
+    }),
+    { name: 'y', ends: ['special.y', 'y'] }, { name: 'flags', ends: ['special.flags', 'flags'] },
+  ];
+  return { instances, nets, pins: P.pins };
+}
+
 /** a × b: multiply significands (a tree multiplier), add exponents, normalize & round. */
 export function fpMul(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
   return memo(`fpmul${E}_${M}${mux.tag}`, () => {
-    const XE = xeOf(f), N = 1 + E + M, W = 2 * M + 2, B = fbias(f);
-    const b = new Builder();
-    const ua = b.op(fpUnpack(f), ['a'], 'unpack a'), ub = b.op(fpUnpack(f), ['b'], 'unpack b');
-    b.next();
-    const sign = b.op1(XOR, [`${ua}.sign`, `${ub}.sign`], 'sign');
-    const p = b.name(b.op1(treeMul(M + 1), [`${ua}.mant`, `${ub}.mant`], 'significand product'), 'product');
-    const za = b.op1(merger([E, XE - E]), [`${ua}.exp`, b.op1(K(XE - E, 0), [])]);
-    const zb = b.op1(merger([E, XE - E]), [`${ub}.exp`, b.op1(K(XE - E, 0), [])]);
-    b.next();
-    const s1 = b.op(koggeStone(XE), [za, zb, b.op1(TIE0, [])], 'ea + eb');
-    const s2 = b.op(koggeStone(XE), [`${s1}.s`, b.op1(K(XE, (1 - B + 2 ** XE) % 2 ** XE), []), b.op1(TIE0, [])], '− bias + 1');
-    b.next();
-    const nr = b.op(normRound(f, W), [sign, `${s2}.s`, p, b.op1(TIE0, []), 'rm'], 'normalize & round');
-    b.next();
-    const invalid = b.name(b.op1(orN(4), [`${ua}.snan`, `${ub}.snan`, b.op1(AND, [`${ua}.inf`, `${ub}.zero`]), b.op1(AND, [`${ua}.zero`, `${ub}.inf`])], 'invalid'), 'NV');
-    const nan = b.op1(orN(3), [`${ua}.nan`, `${ub}.nan`, invalid], 'NaN?');
-    const anyInf = b.op1(OR, [`${ua}.inf`, `${ub}.inf`]);
-    b.next();
-    specials(b, f, `${nr}.y`, `${nr}.flags`, nan, anyInf, sign, invalid, undefined, mux);
+    const N = 1 + E + M;
     return define({
       id: `fpmul${E}_${M}${mux.tag}`, name: `${fmtName(f)} multiplier${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: `Sign = XOR, exponent = ea + eb − bias, significand = a ${M + 1}×${M + 1} tree multiplier (chapter 21), then the shared normalize & round unit. ∞ × 0 is NaN (NV).`,
       ports: [bus('a', N, 'in'), bus('b', N, 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'FMUL' },
       spec: ([a, bb, rm]) => { const r = fpMulX(a, bb, f, rm); return [r.y, r.fl]; },
-      netlist: () => ({ pins: { a: [0, 4], b: [0, 10], rm: [0, 16], y: [b.right, 6], flags: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => fmulTop(f, mux),
       hdl: { verilog: '// behaviourally: assign {y, flags} = fmul(a, b, rm);   (IEEE 754 binary)' },
     });
   });

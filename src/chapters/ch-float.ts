@@ -417,19 +417,19 @@ export const chFloat: Chapter = {
     {
       title: 'Multiplication',
       body: `
-        <p>Multiplication is simpler than addition: no alignment. <span data-show="u2">The sign is an XOR</span>, <span data-show="u9 u12">the exponents add</span>
-        (minus one bias), and the significands go through <span data-show="u3">a tree multiplier</span> from <a href="#/c/muldiv/0">chapter 21</a>. The product of two
+        <p>Multiplication is simpler than addition: no alignment. <span data-show="sign">The sign is an XOR</span>, <span data-show="exp">the exponents add</span>
+        (minus one bias), and the significands go through <span data-show="mul">a tree multiplier</span> from <a href="#/c/muldiv/0">chapter 21</a>. The product of two
         numbers in [1, 2) lies in [1, 4), so normalization moves it at most one place, unless subnormal inputs leave leading zeros, which
-        <span data-show="u14">the shared unit</span> handles anyway. <span data-show="u17">∞ × 0 is NaN</span>.</p>
+        <span data-show="nr">the shared unit</span> handles anyway. <span data-show="special">∞ × 0 is NaN</span>.</p>
         <div class="try">a = b = 0x3A (1.25): 1.5625 = 1.1001₂ needs 4 fraction bits, an exact tie, so it rounds to the even neighbour 1.100₂ = 1.5 (0x3C). Then 0x46 (3.5) × 0x42 (2.5) = 8.75 = 1.00011₂ × 2³: above the tie, it rounds up to 9 (0x51).</div>`,
       scene: () => ({ root: fpMul(E4M3), inputs: { a: 0x3a, b: 0x3a } }),
       tour: {
         beats: [
-          { title: 'A tie', show: ['u2', 'u9', 'u3'], expect: { y: 0x3c, flags: 1 },
+          { title: 'A tie', show: ['sign', 'exp', 'mul'], expect: { y: 0x3c, flags: 1 },
             say: '<p>1.25 × 1.25 = 1.5625 = 1.1001₂ needs four fraction bits and the format keeps three. The dropped bit is exactly half: a tie, resolved to the even neighbour 1.100₂ = 1.5. y = {v:y} (0x3C) with NX.</p>' },
-          { title: 'Above the tie', set: { a: 0x46, b: 0x42 }, show: ['u3', 'u14'], expect: { y: 0x51, flags: 1 },
+          { title: 'Above the tie', set: { a: 0x46, b: 0x42 }, show: ['mul', 'nr'], expect: { y: 0x51, flags: 1 },
             say: '<p>3.5 × 2.5 = 8.75 = 1.00011₂ × 2³. The dropped part is above half, so the product rounds up to 1.001₂ × 2³ = 9: y = {v:y} (0x51).</p>' },
-          { title: 'Infinity times zero', set: { a: 0x78, b: 0x00 }, show: ['u17'], expect: { y: 0x7c, flags: 0x10 },
+          { title: 'Infinity times zero', set: { a: 0x78, b: 0x00 }, show: ['special'], expect: { y: 0x7c, flags: 0x10 },
             say: '<p>∞ × 0 has no defined value. The unit returns the canonical NaN, y = {v:y} (0x7C), and raises NV (flags = {b:flags}), even though both operands are quiet.</p>' },
         ],
       },
