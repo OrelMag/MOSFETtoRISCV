@@ -7,6 +7,7 @@ import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import type { OrbitView } from '../gl/camera';
+import { SHED, ROWS } from './loom3dparts';
 import { HOOKS, LOOM_PRESETS, PICKS, WARP, loomPick } from './cards';
 import { frameLoop } from './mosfet';
 import { modelStage } from './modelstage';
@@ -15,9 +16,9 @@ import { loomAnchors, loomParts, poseOf, steppedPose, type Cards, type LoomPalet
 /** Seconds a pick takes, and a stepped run's seconds a pick when motion is reduced. */
 const PICK_S = 6, STEP_S = 1.2;
 const PHASES: [number, string][] = [
-  [0, 'the cylinder presses the card on the needles'], [0.12, 'the griffe rises with the hooks still over its knife'],
+  [0, 'the cylinder presses the card on the needles, and holds it there through the lift'], [0.12, 'the griffe rises with the hooks still over its knife'],
   [0.35, 'the shuttle carries the weft through the shed'], [0.6, 'the reed beats the weft up to the fell'],
-  [0.72, 'the griffe sinks and the shed closes'], [0.85, 'the cylinder withdraws'], [0.92, 'the cylinder turns to the next card'],
+  [0.72, 'the griffe sinks and the shed closes'], [0.85, 'the griffe is down: the cylinder withdraws and the hooks spring back over the knives'], [0.92, 'the cylinder turns to the next card'],
 ];
 const VIEWS: Record<'head' | 'whole', OrbitView> = {
   head: { target: [0, 38, -8], yaw: 0.85, pitch: 0.25, dist: 165 },
@@ -37,7 +38,7 @@ export function loomView(): Widget {
     aria: 'A Jacquard head in 3D: a square cylinder carrying a chain of punched cards against sprung needles, vertical hooks over the griffe knife, harness cords with lingoes lifting warp threads, a shuttle, a reed and the cloth',
     camera: { ...VIEWS.head },
     limits: { minDist: 90, maxDist: 600 },
-    note: `The widget’s ${HOOKS} hooks and ${WARP} threads are drawn; a real head had hundreds of hooks (Posselt, 1888, gives 100, 200, 400, 600, 900 and 1200 as the sizes most often used), a griffe of many knives and a harness of thousands of cords. Cards are drawn some ten times thicker than pasteboard, the prism, needles and hooks are scaled up for visibility, and the shed is much taller against the thread pitch than on a loom. The chain hangs in a curtain, and a chain shorter than four cards is drawn repeated on the cylinder’s faces.`,
+    note: `The widget’s ${HOOKS} hooks and ${WARP} threads are drawn: ${HOOKS} hooks as ${ROWS} rows of ${HOOKS / ROWS} (two needle heights, a knife on the griffe for each row, a card of ${ROWS} × ${HOOKS / ROWS} holes). A real head has needles in rows of 4, 8 or 12 heights, each with its own knife (Posselt, 1888, p. 9), and the 400 head of his plates is 8 rows of 50 (p. 24); he lists 100 to 1200 as the usual sizes, with a harness of thousands of cords. Cards are drawn some ten times thicker than pasteboard, with square holes where real ones are round; the prism, needles, hooks, springs and lingoes are scaled up for visibility. The prism is perforated: a pit under each hole position lets the needle go through the card (p. 9). The shed is exaggerated the other way: it is only ${SHED} units high against a thread pitch of 2 (5 : 1), where a real shed of a few centimetres on silk threads a fraction of a millimetre apart is on the order of 100 : 1. The weft is thrown in the open shed near the fell and the reed beats it up a short way. The chain hangs in a curtain, and a chain shorter than four cards is drawn repeated on the cylinder’s faces.`,
     draw: () => paint(),
   });
   const palette = (): LoomPalette => ({

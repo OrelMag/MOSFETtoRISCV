@@ -3,7 +3,7 @@
 // cloth row is the widget's row, and the chain loops.
 import { describe, expect, it } from 'vitest';
 import { HOOKS, LOOM_PRESETS, PICKS, WARP, loomPick } from '../src/widgets/cards';
-import { HOOK_X, HOOK_Y1, KNIFE_Y, PUSH, SHED, THREAD_X, Z_FELL, clothRow, loomParts, poseOf, steppedPose, type LoomPalette } from '../src/widgets/loom3dparts';
+import { HOOK_BAR_X, HOOK_Z, HOOK_ROW, ROW_A, NEEDLE_H, SHUTTLE_Y, Z_WEFT, Z_HEDDLE, HOOK_Y1, KNIFE_Y, PUSH, SHED, THREAD_X, Z_FELL, clothRow, loomParts, poseOf, steppedPose, type LoomPalette } from '../src/widgets/loom3dparts';
 
 const col = (i: number): [number, number, number] => [i / 20, 0.5, 0.5];
 const P: LoomPalette = { wood: col(1), iron: col(2), steel: col(3), spring: col(4), card: col(5), hole: col(6), warp: col(7), weft: col(8), cord: col(9), lead: col(10), brass: col(11), live: col(12) };
@@ -47,10 +47,10 @@ describe('the Jacquard head model against the loom widget', () => {
       const bars = parts.filter((q) => q.color === P.iron && q.scale![1] === HOOK_Y1 - 34 && Math.abs(q.scale![2] - 2) < 1e-9);
       expect(bars).toHaveLength(HOOKS);
       for (let k = 0; k < HOOKS; k++) {
-        const b = bars.find((q) => Math.abs(q.pos[0] - HOOK_X(k)) < 1e-9)!;
+        const b = bars.find((q) => Math.abs(q.pos[0] - HOOK_BAR_X(k)) < 1e-9 && Math.abs(q.pos[2] - HOOK_Z(k) - (L.hooks.includes(k) ? 0 : PUSH)) < 1e-9)!;
         expect(b.pos[1] - (34 + HOOK_Y1) / 2).toBeCloseTo(L.hooks.includes(k) ? SHED : 0, 9);
         // a blank place's hook sits clear of the knife (z past its end), a hole's over it
-        expect(b.pos[2] > 1).toBe(!L.hooks.includes(k));
+        expect(b.pos[2] - HOOK_Z(k) > 1).toBe(!L.hooks.includes(k));
       }
       expect(KNIFE_Y).toBeLessThan(HOOK_Y1);
       // the newest cloth row (at the fell) rebuilt from its cells
@@ -83,5 +83,27 @@ describe('the Jacquard head model against the loom widget', () => {
       expect(o.rows).toBe(d);
       expect(o.threadLift.map((v) => v > 0)).toEqual(loomPick(cards, d).threads);
     }
+  });
+
+  it('the weft is thrown in the open shed near the fell, and the beat is short', () => {
+    const [, cards] = presets[0], o = poseOf(cards, 3, 0.5);
+    expect(Z_FELL - Z_WEFT).toBe(12);
+    expect(Z_WEFT).toBeGreaterThan(Z_HEDDLE); // between the heddle plane and the fell
+    // the shuttle's box sits between the lowest threads (y 0) and the raised ones at its z: warp height at z is lift * (1 - z / Z_FELL)
+    const top = SHED * (1 - Z_WEFT / Z_FELL);
+    expect(SHUTTLE_Y + 1.3).toBeLessThan(top); expect(SHUTTLE_Y - 1.3).toBeGreaterThan(0);
+    expect(o.reedZ).toBeLessThan(Z_WEFT - 1.8); // the reed stays behind the shuttle, on the beam side
+    expect(poseOf(cards, 3, 0.72).reedZ).toBeLessThan(Z_FELL);
+  });
+
+  it('eight hooks as two rows of four: needles at two heights, each over the right card row, a knife per row', () => {
+    const [, cards] = presets[0], parts = loomParts(cards, poseOf(cards, 2, 0.5), P);
+    expect(new Set(Array.from({ length: HOOKS }, (_, k) => NEEDLE_H(k))).size).toBe(2);
+    expect(ROW_A[0]).toBeGreaterThan(ROW_A[1]);
+    expect(HOOK_ROW(0)).toBe(0); expect(HOOK_ROW(1)).toBe(1);
+    const knives = parts.filter((q) => q.color === P.iron && q.scale![0] === 70 && Math.abs(q.scale![1] - 1.6) < 1e-9);
+    expect(knives).toHaveLength(2);
+    // every needle ends in a tip; the prism has pits (wood boxes) under the hole positions: more pieces than one cube
+    expect(parts.filter((q) => q.color === P.wood && q.scale![0] === 72).length).toBeGreaterThan(8);
   });
 });
