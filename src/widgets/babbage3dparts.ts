@@ -118,8 +118,8 @@ export const gateRows = (): { n: number; ripple: number; ks: number }[] => GATE_
 
 // ---------------------------------------------------------------- the drawing
 
-export interface Pose { col: Column; theta: number; /** wheels about to receive a carry, foreseen (anticipating carriage) */ foresee: boolean[] | null }
-export interface BabbagePalette { frame: RGB; metal: RGB; wheel: RGB; tick: RGB; lever: RGB; warn: RGB; arm: RGB; live: RGB }
+export interface Pose { col: Column; theta: number; /** wheels about to receive a carry, foreseen (anticipating carriage) */ foresee: boolean[] | null; /** the anticipating carriage is selected: draw the look-ahead rod (its effect, not its linkage) */ lookAhead?: boolean }
+export interface BabbagePalette { frame: RGB; metal: RGB; wheel: RGB; tick: RGB; lever: RGB; warn: RGB; arm: RGB; live: RGB; /** the tick of a wheel standing at 9: the run a carry will cross */ nine: RGB }
 
 export const PITCH = 3, R = 5.5, TH = 1.8, AXIS_X = -(R + 12), ARM_LEN = 7;
 export const wheelY = (i: number): number => i * PITCH;
@@ -140,7 +140,8 @@ export function babbageParts(p: Pose, P: BabbagePalette): Part[] {
   for (let i = 0; i < DIGITS; i++) {
     const y = wheelY(i), armed = p.col.warn[i], recv = p.foresee?.[i] ?? false, [tx, tz] = tickAt(p.col.w[i]);
     out.push({ ...cyl(P.wheel, 0, 0, y, y + TH, R, 0.3), emissive: recv ? lit(P.live, 0.35) : undefined });
-    out.push({ ...box(P.tick, tx - 0.8, tx + 0.8, y + TH, y + TH + 0.7, tz - 0.8, tz + 0.8), emissive: recv ? lit(P.live, 0.5) : undefined });
+    const nine = p.col.w[i] === 9;
+    out.push({ ...box(nine ? P.nine : P.tick, tx - 0.8, tx + 0.8, y + TH, y + TH + (nine ? 1.4 : 0.7), tz - 0.8, tz + 0.8), emissive: recv ? lit(P.live, 0.5) : nine ? lit(P.nine, 0.4) : undefined });
     // The warning lever: out of the arms' path until the wheel passes 9 to 0, then latched into it (a simple block, not the three-limbed lever).
     const pv: Vec3 = [-R - 0.8, y + TH / 2, 0], tip: Vec3 = armed ? [-R - 5, y + TH / 2, 0] : [-R - 2.4, y + TH / 2, 1.2];
     out.push({ ...rod(armed ? P.warn : P.lever, pv, tip, 0.55, 0.2), emissive: armed ? lit(P.warn, 0.7) : undefined });
@@ -148,6 +149,13 @@ export function babbageParts(p: Pose, P: BabbagePalette): Part[] {
   for (let a = 0; a < ARMS; a++) {
     const tip = armTip(a, p.theta), ph = ((armPhase(a, p.theta) % 360) + 540) % 360 - 180, on = Math.abs(ph) < 3.5;
     out.push({ ...rod(on ? P.warn : P.arm, [AXIS_X, tip[1], 0], tip, 0.4, 0.1), emissive: on ? lit(P.warn, 0.6) : undefined });
+  }
+  // The anticipating carriage's look-ahead, drawn as its effect only (no linkage is known for this engine): a bar the length of the
+  // column, lit over the run of wheels that receive a carry.
+  if (p.lookAhead) {
+    const lo = p.foresee ? p.foresee.indexOf(true) : -1, hi = p.foresee ? p.foresee.lastIndexOf(true) : -1, x = R + 3.2;
+    out.push(rod(P.lever, [x, wheelY(0), 0], [x, top, 0], 0.35, 0.1));
+    if (lo >= 0) out.push({ ...rod(P.live, [x, wheelY(lo), 0], [x, wheelY(hi) + TH, 0], 0.7, 0.1), emissive: lit(P.live, 0.6) });
   }
   return out;
 }
@@ -161,6 +169,7 @@ export function babbageAnchors(p: Pose): Anchor[] {
     { text: `warning lever${armed >= 0 ? ' (armed)' : ''}`, p: [-R - 4, wheelY(k) + TH / 2, 0], side: 'l', n: left },
     { text: 'carry axis', p: [AXIS_X, wheelY(18), 0], side: 'l', n: left },
     { text: 'wheel 31 (overflow)', p: [R, top + TH, 0], side: 'r', n: up },
+    ...(p.lookAhead ? [{ text: 'look-ahead (effect only)', p: [R + 3.2, wheelY(9), 0] as Vec3, side: 'r' as const, n: front }] : []),
   ];
 }
 
@@ -177,3 +186,21 @@ export const CASES: Case[] = [
   { id: 'full', label: 'All 31 wheels at 9', start: nines(DIGITS), add: 1n, blurb: '31 nines + 1: every arm fires, the top wheel only flags the overflow' },
 ];
 
+
+/** Babbage's figure for the anticipating carriage (Passages, ch. VIII): nine units of time to add, one to carry, whatever the digits. */
+export const ADD_UNITS = 9;
+/** The carriage's time on that axis, in units. Anticipating: one, however long the run. Successive: the carry axis's angle when its
+ *  last carry fell, one turn of the axis taken as one unit (a drawing's scale, not Babbage's): nothing to carry costs nothing, a
+ *  long run costs up to the two turns the axis makes. */
+export const carryUnits = (anticipating: boolean, lastT: number, fired: number): number => (anticipating ? 1 : fired === 0 ? 0 : lastT / 360);
+/** A run of n nines plus 1: the predict step's case. The carry crosses n wheels. */
+export const runCase = (n: number): Case => {
+  const k = Math.max(1, Math.min(ARMS, Math.round(n)));
+  return { id: 'custom', label: 'Your own run of 9s', start: nines(k), add: 1n, blurb: `${k} nines + 1: wheel 0 passes 9 to 0, ${k - 1} wheel${k === 2 ? '' : 's'} above stand at 9` };
+};
+/** The predict step's verdict: the guess against the arms that fired, set beside what the site's adders would take. */
+export function predictVerdict(guess: number, fired: number, bits = 32): string {
+  const rows = gateRows(), ks = rows.find((r) => r.n === bits)?.ks ?? 0;
+  const how = guess === fired ? 'Right' : guess < fired ? 'More than you guessed' : 'Fewer than you guessed';
+  return `${how}: the carry fired ${fired} arm${fired === 1 ? '' : 's'}, one after another. A ripple-carry adder pays ${fired} × ${PER_COLUMN} = ${fired * PER_COLUMN} NAND delays for the same run; a ${bits}-bit Kogge–Stone adder takes ${ks} whatever the run.`;
+}

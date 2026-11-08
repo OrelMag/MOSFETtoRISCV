@@ -7,8 +7,12 @@
   --m3-dram-open: light-dark(#d9534f, #ff7b72);
   --m3-dram-bl: light-dark(#2a6fdb, #6aa3ff);
   --m3-dram-x: light-dark(#8f98a8, #a3acbd);
+  --m3-dram-blb: light-dark(#7fa6e8, #9cc0ff);
+  --m3-dram-amp: light-dark(#b45309, #f59e0b);
+  --m3-dram-half: light-dark(#6b7280, #cbd5e1);
+  --m3-dram-fet: light-dark(#4b5563, #6b7280);
 }
-.dr-seg { display: inline-flex; gap: 4px; align-items: center; }
+.dr-seg { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .dr-seg .btn.on { background: var(--accent); color: var(--accent-text); }
 .dr-ops { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; align-items: center; }
 .dr-note { margin-top: 8px; font-size: 12.5px; color: var(--text-2); min-height: 2.6em; }

@@ -35,14 +35,15 @@ export const ANALOGIES: Analogy[] = [
   },
   {
     chapter: 'mosfet', step: 'Three regions', title: 'A faucet whose handle is a voltage',
-    body: `<p>The gate turns the handle. Below the threshold (0.45 V here) the faucet is shut however hard the tank behind it
-      pushes. Past it, the flow grows with the pressure difference across the faucet, until the outlet <em>chokes</em>: from
-      then on a lower basin adds almost nothing, because the opening sets the flow, not the drop across it. That is
-      saturation.</p>`,
+    body: `<p>The gate turns the handle. Below the threshold (0.45 V on this chapter's 1.8 V process) the faucet is shut however
+      hard the tank behind it pushes. Past it, the flow grows with the pressure difference across the faucet, until the outlet
+      starts to <em>regulate</em>: from then on a lower basin adds almost nothing, because the handle sets the flow, not the
+      drop across it. That is saturation.</p>`,
     map: [['Gate voltage', 'how far the handle is turned'], ['Drain, source', 'the tank upstream and the basin downstream'],
       ['V<sub>DS</sub>', 'the difference in level between them'], ['Drain current', 'the flow through the faucet']],
-    breaks: `A handle takes force to hold open; a gate draws no steady current at all. It is a capacitor, so only changing the
-      gate voltage costs charge. And no faucet opens as its handle is pushed <em>down</em>, which is what a PMOS does.`,
+    breaks: `A handle takes force to hold open; a gate draws no steady current: it is a capacitor, so only changing it costs
+      charge. A plain tap never saturates (through an orifice the flow grows as the root of the drop); saturation is a flow
+      regulator, as the channel's pinch-off by the drain is. And no faucet opens as its handle is pushed <em>down</em>, as a PMOS does.`,
     codex: ['mosfet'],
   },
   {
@@ -63,9 +64,12 @@ export const ANALOGIES: Analogy[] = [
       the input is 0); a faucet below empties it into a drain (the NMOS, open when the input is 1). One handle works both, in
       opposite directions, so once the input settles water only moves while the column changes level. Hold the handle halfway
       and both are partly open: water runs straight from the tank to the drain, the current a real inverter draws while its
-      input passes through the middle.</p>`,
-    breaks: `A good faucet seals when it is shut; an off transistor always leaks. That leak grows about ten times for every
-      60–100 mV taken off the threshold, which is why chips stopped lowering their supply voltage.`,
+      input passes through the middle.</p>
+      <p>The levels here are the gate-level chapters' 1.1 V supply and 0.30 V threshold (an illustrative 28 nm-class node), not
+      the 1.8 V and 0.45 V of the MOSFET chapter's faucet.</p>`,
+    breaks: `Here the level follows the handle gently; a real inverter switches far more sharply, because midway both
+      transistors saturate (they act as flow regulators) and give it gain. And a shut faucet seals; an off transistor leaks, about
+      ten times more for every 60–100 mV taken off the threshold, which is why chips stopped lowering their supply voltage.`,
     codex: ['cmos', 'inverter'],
   },
   {

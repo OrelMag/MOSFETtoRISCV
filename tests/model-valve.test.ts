@@ -2,11 +2,12 @@
 import { describe, expect, it } from 'vitest';
 import type { RGB, RGBA } from '../src/gl/instances';
 import { flatFaces } from '../src/gl/parts';
-import { VDD, VT } from '../src/widgets/mosphys';
+import { current, VDD, VT } from '../src/widgets/mosphys';
+import { biasLink } from '../src/widgets/mosshare';
 import { COLUMN_VT, columnSettle, columnStep, faucetOpen, fetWater, openings } from '../src/widgets/water';
 import {
   CAP_Y, DIA_Y, ONE, PAIR, SEAT_Y, TRAVEL, cracking, diaphragmY, lift, netPressure, opening, preload, rate, span, springForce, springLen, swept,
-  valveAnchors, valveFigure, type OneValve, type ValvePalette, type ValvePose,
+  springPoints, valveAnchors, valveFigure, type OneValve, type ValvePalette, type ValvePose,
 } from '../src/widgets/valve3dparts';
 
 const G: RGB = [0.5, 0.5, 0.5], W: RGBA = [0.2, 0.4, 0.9, 0.5];
@@ -105,5 +106,51 @@ describe('the valve drawing', () => {
     expect(flatFaces(parts, 0.3, 0.25).length).toBeGreaterThan(100);
     expect(anchors.map((a) => a.text)).toEqual(expect.arrayContaining(['PMOS valve', 'NMOS valve', 'spring', 'diaphragm', 'plunger']));
     expect(new Set(anchors.map((a) => a.text)).size).toBe(anchors.length);
+  });
+
+  const one = (o: Partial<OneValve>, g = 0.5): ValvePose => ({ valves: [{ kind: 'n', cx: 0, open: 0.5, g, left: 1, right: 0, flow: 0.5, ...o }], gateQ: 0, phase: 0, g, x0: -50, x1: 50 });
+  const jet = (p: ValvePose) => valveFigure(p, P, ONE).find((q) => q.kind === 'box' && q.pos[1] - q.scale![1] / 2 === SEAT_Y && q.scale![0] === 12);
+
+  it('the water through the gap glows with the model’s flow, and needs water upstream', () => {
+    const lo = jet(one({ flow: 0.1 }))!, hi = jet(one({ flow: 0.9 }))!;
+    expect(hi.emissive![2]).toBeGreaterThan(lo.emissive![2]);
+    expect(jet(one({ left: 0 }))).toBeUndefined();
+    expect(jet(one({ open: 0 }))).toBeUndefined();
+    // The aperture is the lift whatever the flow.
+    expect(lo.scale![1]).toBeCloseTo(hi.scale![1], 12);
+  });
+  it('the lift does not depend on the tank, the flow does, in the chapter’s regions', () => {
+    const ov = 1.2 - VT;
+    for (const vd of [0.1, ov - 0.01, ov + 0.01, VDD]) {
+      expect(fetWater(1.2, vd).opening).toBeCloseTo(fetWater(1.2, VDD).opening, 12);
+      expect(fetWater(1.2, vd).kind).toBe(vd < ov ? 'lin' : 'sat');
+      expect(fetWater(1.2, vd).id).toBeCloseTo(current(ov, vd).id, 9);
+    }
+    expect(fetWater(1.2, 0.2).flow).toBeLessThan(fetWater(1.2, 0.5).flow);
+    expect(fetWater(1.2, ov + 0.2).flow).toBeCloseTo(fetWater(1.2, VDD).flow * (1 + 0.05 * (ov + 0.2)) / (1 + 0.05 * VDD), 9);
+  });
+  it('the one valve names source, drain, channel and Vt, tank label at the tank’s level', () => {
+    const a = valveAnchors(one({ left: 0.5 })), txt = a.map((x) => x.text);
+    expect(txt).toEqual(expect.arrayContaining(['drain: tank', 'source: basin, 0 V', 'channel: the gap', 'spring: preload = Vt', 'diaphragm (gate)']));
+    const lo = valveAnchors(one({ left: 0.2 })).find((x) => x.text === 'drain: tank')!, hi = a.find((x) => x.text === 'drain: tank')!;
+    expect(hi.p[1]).toBeGreaterThan(lo.p[1]);
+    expect(new Set(txt).size).toBe(txt.length);
+  });
+  it('the spring is a helix: turns round the axis, rising from the plate to the cap, with a stem seal', () => {
+    const pts = springPoints(0, 29, CAP_Y);
+    expect(pts[0]).toEqual([0, 29, 0]);
+    expect(pts.at(-1)).toEqual([0, CAP_Y, 0]);
+    const mid = pts.slice(1, -1);
+    for (const p of mid) expect(Math.hypot(p[0], p[2])).toBeCloseTo(4.5, 9);
+    for (let i = 1; i < mid.length; i++) expect(mid[i][1]).toBeGreaterThan(mid[i - 1][1]);
+    expect(Math.max(...mid.map((p) => p[2]))).toBeGreaterThan(4);
+    expect(Math.min(...mid.map((p) => p[2]))).toBeLessThan(-4);
+    expect(valveFigure(one({}), P, ONE).some((q) => q.kind === 'cyl' && q.scale![0] > 2 && q.scale![0] < 3 && q.pos[1] > 18 && q.pos[1] < 21)).toBe(true);
+  });
+  it('the valve shares its bias with the widget above', () => {
+    const link = biasLink(1.2, 0.3), a = {}, seen: number[][] = [];
+    link.follow(a, (g, d) => seen.push([g, d]));
+    link.set(1.0, 0.6, {});
+    expect(seen).toEqual([[1.0, 0.6]]);
   });
 });

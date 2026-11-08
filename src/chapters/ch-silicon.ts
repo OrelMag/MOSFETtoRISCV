@@ -3,11 +3,12 @@ import { MUX2 } from '../lib';
 import { stats } from '../sim/stats';
 import { chipLayoutWidget } from '../widgets/chiplayout';
 import { journeyWidget } from '../widgets/journey';
+import { cell3d } from '../widgets/cell3d';
 import { masks3d } from '../widgets/masks3d';
 import { withModel } from '../widgets/modelhost';
-import { clockTreeWidget, fabWidget, floorplanWidget, layoutWidget, mappingWidget, pnrWidget, waferWidget } from '../widgets/silicon';
+import { clockTreeWidget, fabWidget, floorplanWidget, mappingWidget, pnrWidget, waferWidget } from '../widgets/silicon';
 import { cabinetCounts, hallFacts, periodIn } from '../lib/hall';
-import { fmtArea, fmtJoules, fmtMass, fmtRate, fmtTime, fmtWatts, RELAY_CONTACTS, TECH } from '../lib/tech';
+import { eniacRoom, fmtArea, fmtJoules, fmtMass, fmtRate, fmtTime, fmtWatts, RELAY_CONTACTS, RELAY_PLANT_W, TECH, TUBE_PLANT_W, tubeFailEvery } from '../lib/tech';
 import { ENIAC, ENIAC_PANEL } from '../phys/triode';
 import { RELAY_RACK, Z3 } from '../phys/relay';
 import { machineHall } from '../widgets/hall';
@@ -39,16 +40,21 @@ function hallStep(): Step {
       physical scale. Its ${num(f.nands)} NANDs (the program ROM left out: relay machines read their programs from film or
       cards) become <strong>${num(r.total.devices)} relays</strong>, ${num(r.total.fanout)} of them extra coils, because a
       relay has ${RELAY_CONTACTS} contacts and many nets feed more inputs than that. At ${RELAY_RACK.relays} to a rack that is
-      ${rc.used} racks (${rc.packed} if blocks shared them), ${fmtMass(r.total.mass!)} and ${fmtWatts(r.total.power!)}:
-      ${times(r.total.devices / Z3.relays)} times the Z3's ${num(Z3.relays)} relays. In tubes it is <strong>${num(t.total.devices)}
-      tubes</strong> in ${tc.used} ENIAC-sized panels of ${ENIAC_PANEL.tubes}, ${fmtMass(t.total.mass!)} and ${fmtWatts(t.total.power!)}:
-      ${times(t.total.devices / ENIAC.tubes)} ENIACs. The 4-bit CPU fits in ${num(c4.relay.total.devices)} relays
+      ${rc.used} racks (${rc.packed} if blocks shared them) and ${fmtMass(r.total.mass!)}:
+      ${times(r.total.devices / Z3.relays)} times the Z3's ${num(Z3.relays)} relays. Its coils draw ${fmtWatts(r.total.power!)}; at the Z3's
+      ${RELAY_PLANT_W.toFixed(1)} W a relay at the wall (about ${fmtWatts(Z3.power)} for ${num(Z3.relays)}) the machine would draw about ${fmtWatts(r.total.plant!)}.
+      In tubes it is <strong>${num(t.total.devices)} tubes</strong> in ${tc.used} panels the size of ENIAC's (${ENIAC_PANEL.tubes} tubes is its average
+      panel) and ${fmtMass(t.total.mass!)}: ${times(t.total.devices / ENIAC.tubes)} ENIACs. Their heaters and plates draw ${fmtWatts(t.total.power!)};
+      ENIAC drew ${fmtWatts(ENIAC.power)} for ${num(ENIAC.tubes)} tubes, ${TUBE_PLANT_W.toFixed(1)} W a tube with its power supplies and blowers,
+      which puts this machine near ${fmtWatts(t.total.plant!)}. At ENIAC's failure rate (one of its tubes every two days) a tube here would
+      fail every ${num(tubeFailEvery(t.total.devices))} hours. The 4-bit CPU fits in ${num(c4.relay.total.devices)} relays
       (${cabinetCounts(c4.relay).used} racks).</p>
       <p>The clock period is the same ${f.steps} gate delays as in CMOS, each now a <span data-ahead="relay relaystep">${TECH.relay.stepName} (the time for every relay to settle after an input changes)</span> of ${fmtTime(TECH.relay.step)}
       or a ${TECH.tube.stepName} of ${fmtTime(TECH.tube.step)}: one instruction takes <strong>${fmtTime(pr)}</strong> in relays
       (${(1 / pr).toFixed(2)} instructions a second) and ${fmtTime(pt)} in tubes (${fmtRate(pt)}), against ${fmtTime(pc)} (${fmtRate(pc)}) for the same netlist on
-      ${fmtArea(f.cmos.area!)} of silicon, the speck on the table by the person. An instruction costs ${fmtJoules(r.total.power! * pr)}
-      in relays and ${fmtJoules(t.total.power! * pt)} in tubes.</p>
+      ${fmtArea(f.cmos.area!)} of silicon (28 nm-class NANDs, ${Math.round(TECH.cmos.step * 1e12)} ps each, faster than the sky130 cells measured earlier),
+      the speck on the table by the person. An instruction costs ${fmtJoules(r.total.power! * pr)}
+      in relays and ${fmtJoules(t.total.power! * pt)} in tubes, counting the devices alone.</p>
       <p>A relay machine of this size is a building. The cost is not in the logic's cleverness but in counting: every NAND is a device, every bit of
       storage is several, and a relay cannot drive many inputs, so the fan-out adds coils.</p>
       <div class="try">Run the program and watch the relays switch (or the plates glow): each cycle's settled values from the
@@ -59,7 +65,12 @@ function hallStep(): Step {
       block gets one of its own, and the packed count (${rc.packed} racks) is what a floor plan that shared racks would need.
       In devices: ${num(f.nands)} NAND outputs became ${num(r.total.devices)} relays, ${num(r.total.fanout)} of them extra coils for fan-out beyond ${RELAY_CONTACTS} contacts.</p>`;
     counts = `<p>Tubes and relays are slow and large, not different in kind: the same ${num(f.nands)}-NAND netlist, the same ${f.steps}-step period, priced per device. A relay step is ${fmtTime(TECH.relay.step)},
-      a tube step ${fmtTime(TECH.tube.step)}, a CMOS gate delay far below either; the ratio of the three is the ratio of the three eras' clocks.</p>`;
+      a tube step ${fmtTime(TECH.tube.step)}, a CMOS gate delay far below either; the ratio of the three is the ratio of the three eras' clocks.</p>
+      <p>The comparisons are rough. The tube step is an R·C estimate: ENIAC itself pulsed at ${ENIAC.pulseHz / 1e3} kHz and added in 200 µs, so this
+      clock is faster than ENIAC's own. Our tube count includes a 6AL5 diode tube per NAND where ENIAC used ${num(ENIAC.diodes)} crystal diodes
+      and ${num(ENIAC.relays)} relays besides its tubes, so "ENIACs" compares glass envelopes, not machines. The floor counts cabinets and
+      aisles: ENIAC's room was ${ENIAC.room} m² (1 800 sq ft) for ${ENIAC_PANEL.count} panels, with its card equipment and plant, so these
+      ${tc.used} panels would want about ${num(eniacRoom(tc.used))} m² laid out as it was.</p>`;
     explain = `A flip-flop of NANDs is a master–slave pair of latches: ${perBit.toFixed(1)} NANDs per bit here with the write
       and read logic, each NAND a relay. A relay is already a latch: one of its own contacts in series with its coil holds it
       until the circuit is broken. One relay per bit is how the Z3 kept 64 words in ${num(Z3.memory)} relays, while this data
@@ -153,25 +164,26 @@ export const chSilicon: Chapter = {
         <p>Compare NAND2 and NOR2: in the NAND the NMOS are in series (no contact between the two gates) and the PMOS in parallel; the NOR is the mirror image.
         Since holes are slower than electrons, series PMOS (the NOR) must be drawn wider to be as fast, which is one reason NAND is the preferred universal gate.</p>
         <p>The cell is a rectangle of fixed height so that cells abut in rows: the rails line up and the tools can place any cell next to any other. Width is what varies, set by
-        how many polysilicon strips the cell needs. Area is therefore counted in tracks: a NAND2 is a few polysilicon pitches wide, an inverter fewer, a flip-flop a dozen or more.</p>
-        <div class="try">Toggle A and B and watch which channels conduct. Hide layers to see what is underneath, or switch to 3D, turn the cell and spread its layers apart.</div>`,
-      widget: layoutWidget,
+        how many polysilicon strips the cell needs. Area is therefore counted in tracks: a NAND2 is a few polysilicon pitches wide, the inverter drawn here one pitch fewer, a flip-flop a dozen or more.</p>
+        <div class="try">Toggle A and B and watch which channels conduct. Press Section, drag the plane through a gate and read the stack off the cut face: n+, gate oxide, polysilicon, n+. Orbit the cell, hide layers, pull them apart; the Top view is the flat layout.</div>`,
+      widget: () => cell3d(),
       more: {
         derive: `<p>Why series transistors are drawn wider. A transistor's drive current is proportional to W / L; two in series have twice the resistance, so to match an inverter's pull-down a NAND2 draws
-          each NMOS twice as wide (W = 2). In NOR2 the series pair is PMOS, whose carriers are slower (mobility roughly a half the electrons'), so they are drawn about four times the inverter's NMOS, and
-          the cell is larger for the same speed. In transistor count they are equal (four each); our multiplexer, four NANDs, is ${stats(MUX2).transistors} transistors.</p>`,
+          each NMOS twice as wide (W = 2). In NOR2 the series pair is PMOS, whose holes are slower (mobility two to three times lower than the electrons'), so they are drawn about four times the inverter's NMOS, and
+          the cell is larger for the same speed. The cells drawn above give every device one width, so they show the structure, not the speed matching; a real library widens a device by folding it into several fingers side by side, which is why a speed-matched NOR2, or a higher drive strength, comes out wider, not taller. In transistor count they are equal (four each); our multiplexer, four NANDs, is ${stats(MUX2).transistors} transistors.</p>`,
         real: `<p>A library such as sky130's high-density cells fixes the row height (2.72 µm) and offers each function in several widths, one per drive strength. A drive-strength variant is
           the same logic with transistors in parallel: twice the width for twice the current.</p>`,
-        pitfall: `<p>Counting each transistor as a unit of area. A NAND2 and a NOR2 have four each and are not the same size: the width of each device is set by the series stack it sits in, and the cell
-          by the larger of its two rows. Compare the NAND and NOR in the viewer with the layers shown.</p>`,
+        pitfall: `<p>Counting each transistor as a unit of area. A NAND2 and a NOR2 have four each and, sized for the same speed, are not the same size: the width of each device is set by the series stack it sits in, and the cell
+          by the larger of its two rows. The viewer draws every device at one width, so compare the two cells' wiring there (series NMOS against series PMOS), not their sizes.</p>`,
       },
     },
     {
       title: 'How chips are made',
       body: `
-        <p>The layout is cut into layers, one mask per layer, and the wafer goes through the fab layer by layer: deposit, pattern with light, etch or implant, repeat.
+        <p>The layout is cut into masks, and the wafer goes through the fab mask by mask: deposit, pattern with light, etch or implant, repeat. The masks are not the layout layers one to one. For this cell, in SkyWater's names: <strong>diff</strong> (the active area, whose complement is etched into oxide-filled trenches), <strong>nwell</strong>, <strong>poly</strong>, the implant windows <strong>nsdm</strong> and <strong>psdm</strong> (wider than the diffusion), contacts <strong>licon1</strong> and <strong>mcon</strong>, local interconnect <strong>li1</strong> and <strong>met1</strong>: about nine.
         Lithography sets the smallest feature. Today's leading processes print with 13.5 nm extreme-ultraviolet light.</p>
-        <p>Most of the cost of a chip is in these repetitions. A modern process has dozens of masks, each one a pass through coat, expose, develop, etch or implant and clean; a wafer spends weeks in
+        <div class="try">Step to the n+ implant, then shift the poly mask: the source and drain follow the gate. Tick <em>implant before the gate</em> and the same shift leaves a channel uncovered on one side and the gate over the drain on the other.</div>
+        <p>Most of the cost of a chip is in these repetitions. A whole modern process has dozens of masks, each one a pass through coat, expose, develop, etch or implant and clean; a wafer spends weeks in
         the fab, and a single defect on any layer can kill the die it lands on. That is what the yield step prices.</p>`,
       widget: () => withModel(fabWidget(), masks3d()),
       more: {

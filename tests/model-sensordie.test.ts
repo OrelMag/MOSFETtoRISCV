@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { IMX183, rollingSkew, rowTime } from '../src/phys/imagesensor';
 import {
-  AW, AH, CELL, COLS, FRAME, ROWS, T_ROW, captureEnd, captureFrame, cellRow, covered, defaultScene, dieParts, dieState,
+  AW, AH, CELL, COLS, FRAME, OB_W, RAMP_SHARE, ROWS, T_ROW, pointers, rowZ, captureEnd, captureFrame, cellRow, covered, defaultScene, dieParts, dieState,
   readTime, type DiePalette,
 } from '../src/widgets/sensordie3dparts';
 
@@ -45,7 +45,7 @@ describe('the sensor die', () => {
     }
     expect(gDiff).toBeLessThanOrEqual(2); // a cell on a blade's edge may fall either way
     expect(rSelf).toBeLessThanOrEqual(2);
-    expect(rDiff).toBeGreaterThan(COLS * ROWS * 0.05); // the propeller turns 1.1 times during a frame: bent blades
+    expect(rDiff).toBeGreaterThan(COLS * ROWS * 0.05); // the propeller turns 49° while the frame is read: bent blades
   });
 
   it('reads one drawn row at a time, every row once, in order', () => {
@@ -61,7 +61,7 @@ describe('the sensor die', () => {
   });
 
   it('a column’s counter stops where the ramp passes its pixel’s level', () => {
-    const P: DiePalette = { die: [0, 0, 0.1], pad: [0, 0, 0.2], logic: [0, 0, 0.3], dark: [0, 0, 0], lit: [1, 1, 1], idle: [0, 0, 0.4], expose: [0, 0, 0.5], read: [0.9, 0.1, 0.1], img: [0, 0, 0.6, 0.5], metal: [0, 0, 0.7] };
+    const P: DiePalette = { die: [0, 0, 0.1], pad: [0, 0, 0.2], logic: [0, 0, 0.3], dark: [0, 0, 0], lit: [1, 1, 1], idle: [0, 0, 0.4], expose: [0, 0, 0.5], read: [0.9, 0.1, 0.1], img: [0, 0, 0.6, 0.5], metal: [0, 0, 0.7], reset: [0.1, 0.9, 0.4] };
     const scene = defaultScene('bar'), texp = 20e-6, r0 = readTime(10, 'global', texp);
     const counters = (ramp: number) => dieParts({ scene, shutter: 'global', texp, now: r0 + ramp * CELL * T_ROW }, P)
       .filter((p) => p.color === P.read && p.kind === 'box' && p.scale![1] > 0.05 && p.pos[1] > 1);
@@ -69,5 +69,45 @@ describe('the sensor die', () => {
     // Bright columns count on; the bar's dark columns stop at once: late, most counters are taller than early.
     expect(late.length).toBeGreaterThanOrEqual(COLS - 8);
     expect(Math.max(...late.map((p) => p.scale![1]))).toBeGreaterThan(Math.max(...early.map((p) => p.scale![1])) * 3);
+  });
+
+  it('the default propeller turns slowly enough not to alias: 3 rev/s, as the 2D widget, about a seventh of a turn a frame', () => {
+    const s = defaultScene('prop');
+    expect(s.rps).toBe(3);
+    expect(s.rps * FRAME).toBeLessThan(1 / s.blades); // a blade moves less than the gap to the next one
+    expect(s.rps * IMX183.rows * T_ROW * 360).toBeGreaterThan(30); // and still bends visibly
+  });
+
+  it('the reset and read pointers run one exposure apart; global resets every row at once', () => {
+    const texp = 5e-3, gap = texp / T_ROW;
+    expect(gap).toBeGreaterThan(4 * CELL); // the band is several drawn rows deep at the default exposure
+    for (const t of [0.006, 0.02, 0.04]) {
+      const p = pointers('rolling', texp, t);
+      expect(p.reset! - p.read!).toBeCloseTo(gap, 9);
+      expect(pointers('global', texp, t).reset).toBeNull();
+    }
+    expect(pointers('rolling', texp, 0.001).read).toBeNull(); // nothing to read before the first exposure ends
+    const P: DiePalette = { die: [0, 0, 0.1], pad: [0, 0, 0.2], logic: [0, 0, 0.3], dark: [0, 0, 0], lit: [1, 1, 1], idle: [0, 0, 0.4], expose: [0, 0, 0.5], read: [0.9, 0.1, 0.1], img: [0, 0, 0.6, 0.5], metal: [0, 0, 0.7], reset: [0.1, 0.9, 0.4] };
+    const parts = dieParts({ scene: defaultScene('prop'), shutter: 'rolling', texp, now: 0.02 }, P);
+    const bars = parts.filter((p) => p.color === P.reset && p.scale![0] > AW);
+    expect(bars).toHaveLength(1);
+    expect(bars[0].pos[2]).toBeCloseTo(rowZ(0.02 / T_ROW), 9);
+  });
+
+  it('optical black: a pixel under metal on every row and a strip along the top, outside the active array', () => {
+    const P: DiePalette = { die: [0, 0, 0.1], pad: [0, 0, 0.2], logic: [0, 0, 0.3], dark: [0, 0, 0], lit: [1, 1, 1], idle: [0, 0, 0.4], expose: [0, 0, 0.5], read: [0.9, 0.1, 0.1], img: [0, 0, 0.6, 0.5], metal: [0.2, 0.2, 0.25], reset: [0.1, 0.9, 0.4] };
+    const parts = dieParts({ scene: defaultScene('prop'), shutter: 'rolling', texp: 5e-3, now: 0 }, P);
+    const metal = parts.filter((p) => p.color === P.metal && p.kind === 'box');
+    expect(metal.filter((p) => p.pos[0] < -AW / 2)).toHaveLength(ROWS); // left: one a row
+    expect(metal.filter((p) => p.pos[2] < -AH / 2 && p.scale![0] > AW)).toHaveLength(1); // top: a strip
+    expect(OB_W).toBeGreaterThan(0);
+  });
+
+  it('a drawn row: the ramp, then its counters shifted out to the output', () => {
+    const texp = 20e-6, r0 = readTime(5, 'global', texp), at = (f: number) => dieState({ scene: defaultScene('bar'), shutter: 'global', texp, now: r0 + f * CELL * T_ROW });
+    expect(at(0.5 * RAMP_SHARE).shift).toBeNull();
+    expect(at(0.5 * RAMP_SHARE).ramp).toBeCloseTo(0.5, 9);
+    expect(at(RAMP_SHARE + 0.5 * (1 - RAMP_SHARE)).shift).toBeCloseTo(0.5, 9);
+    expect(at(RAMP_SHARE + 0.5 * (1 - RAMP_SHARE)).ramp).toBe(1);
   });
 });

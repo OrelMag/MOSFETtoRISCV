@@ -7,10 +7,27 @@
   --mk-pdiff: light-dark(#e0a04a, #e8b055);
   --mk-contact: light-dark(#3b4252, #e4e8f0);
   --mk-metal: light-dark(#8f98a8, #b5bfd0);
-  --mk-chan: light-dark(#c9cde0, #8e97b8);
+  --mk-li1: light-dark(#4f9aa0, #6fc0c4);
+  --mk-chan-on: light-dark(#3fbf6f, #46d17c);
+  --mk-sti: light-dark(#c9d3df, #8fa0b8);
+  --mk-gox: light-dark(#e9d36a, #f0dc7a);
+  --mk-resist: light-dark(#d8913a, #e0a24f);
+  --mk-ild: light-dark(#b8c4d6, #8ea0ba);
+  --mk-uv: light-dark(#8a4fe0, #b58cff);
+  --mk-chrome: light-dark(#2b2f3a, #1a1d26);
+  --mk-pell: light-dark(#9fb5d8, #a9bfe0);
+  --mk-frame: light-dark(#6b7385, #8a93a8);
   --mk-plate: light-dark(#dbe5f1, #c5d3e6);
 }
 .mk-read { margin: 8px 0 0; font-size: 13.5px; color: var(--text-2); max-width: 78ch; }
 .mk-read strong { color: var(--text); }
 .mk-read .mk-mask { display: block; margin-top: 4px; font: 600 12.5px var(--font-mono); }
 .mk-sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.mk-verdict { margin: 8px 0 0; font: 600 12.5px var(--font-mono); color: var(--text-2); max-width: 78ch; }
+.mk-verdict.bad { color: var(--bad, #c0392b); }
+.mk-chk { flex: 1 1 100%; }
+.mk-chk span { width: auto; }
+.mk-chk input { flex: none; min-width: 0; width: 16px; height: 16px; }
+.r3-sl.mk-wide span { width: 108px; }
+@media (pointer: coarse) { .mk-chk input { width: 24px; height: 24px; } }
+.r3-sl.mk-wide output { width: 74px; }

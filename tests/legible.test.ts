@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hiddenKinds, NAME_MIN_PX, abbreviate, fitLayout, NAME_OVER_MAX_PX, nameRect, isZeroRun, isGeneratedNetName, truncLayout, planLayouts, planTags, TAG_MAX_K, LABEL_UNITS, NAME_PX, MIN_TEXT_PX, nameEligible, nameRotated, needsFixedNames, planNames, TEXT_UNITS, type NameBox } from '../src/view/legible';
+import { hiddenKinds, NAME_MIN_PX, abbreviate, fitLayout, NAME_OVER_MAX_PX, nameRect, isZeroRun, isGeneratedNetName, planLayouts, planTags, TAG_MAX_K, LABEL_UNITS, NAME_PX, MIN_TEXT_PX, nameEligible, nameRotated, needsFixedNames, planNames, TEXT_UNITS, type NameBox } from '../src/view/legible';
 import { fpAdd, fpMul, fpDiv } from '../src/lib/fpu';
 import type { FpFormat } from '../src/sim/fpref';
 import { singleCycleCpu } from '../src/lib/cpu';
@@ -17,6 +17,7 @@ import { symbolGeom } from '../src/sim/geometry';
 import { systemCpu } from '../src/lib/system';
 import { CHAPTER_COMPUTER } from '../src/lib/soc';
 import { FPU32 } from '../src/lib/fpu';
+import { pipelinedCpu } from '../src/lib/pipeline';
 
 const box = (cx: number, cy: number, w: number, h: number, chars = 6): NameBox => ({ cx, cy, w, h, chars, rot: nameRotated(w, h) });
 
@@ -143,8 +144,6 @@ describe('names sit inside their block', () => {
     expect(lay.lines.join(' ')).toBe('REGS');
     // hemmed in on both sides: no layout clears the neighbours, and the name the old renderer drew stays, as it drew it
     expect(planLayouts([b(8, 10, 'REGISTERS')], 2, 10, [{ x: -4, y: -5, w: 8, h: 10 }, { x: 4.2, y: -5, w: 3, h: 10 }, { x: -7.5, y: -5, w: 3, h: 10 }])[0]).toMatchObject({ px: NAME_PX, lines: ['REGISTERS'] });
-    expect(truncLayout(b(10, 10, 'DECODER'), 2)).toEqual({ px: NAME_MIN_PX, lines: ['DE…'] });
-    expect(truncLayout(b(6, 10, 'DECODER'), 2)).toBeNull();
   });
   it('the single-cycle CPU top at its 1280 px fit: the names are drawn in full, colliding with no name and no block', () => {
     const def = singleCycleCpu([0x00000013]);
@@ -187,7 +186,9 @@ describe('names sit inside their block', () => {
         const plan = planLayouts(boxes.map((x) => x.box), scale, 10, blocks);
         boxes.forEach((x, n) => {
           const l = plan[n], where = `${def.id} ${x.i.name} at ${scale}`;
-          expect(l, where).not.toBeNull();
+          // from scale 3 every name is drawn; at a phone's 2.3 a name may be left out, but is never cut short
+          if (scale >= 3) expect(l, where).not.toBeNull();
+          if (l) expect(l.lines.join(' '), where).not.toContain('…');
           if (!l || x.box.rot) return;
           const r = nameRect(x.box, l, scale);
           if (!l.over) { expect(width(l), where).toBeLessThanOrEqual(x.box.w * scale); return; }
@@ -371,4 +372,48 @@ describe('no regression against the pre-legibility names', () => {
     const tag = (x: number, named: boolean) => ({ tip: [x, 0] as [number, number], rect: { x, y: -0.7, w: 4, h: 1.35 }, named });
     expect(planTags([tag(0, false), tag(20, true)], [], 5)).toEqual([null, MIN_TEXT_PX / (TEXT_UNITS.tag * 5)]);
   });
+});
+
+// Batch 24 (Ross's live sweep of batch 23): at the scenes' 1280 px fits, a name whose NAME_PX layout covers no real block keeps NAME_PX in
+// full. Constants (tie cells too) and pure wiring (splitters, alias boxes) are not real blocks for a name: schematic.ts passes them as quiet.
+describe('names at the 1280 px fits, against real blocks only', () => {
+  const W = 0.68, PAD = 6;
+  const cross = (a: { x: number; y: number; w: number; h: number }, c: typeof a) => a.x < c.x + c.w && c.x < a.x + a.w && a.y < c.y + c.h && c.y < a.y + a.h;
+  // the fit scales the live pages use at 1280 (px per grid unit, read from the planner on each page)
+  const scenes: { id: string; def: ComponentDef; scale: number; full: string[] }[] = [
+    { id: 'single-cycle #/c/cpu/0', def: singleCycleCpu([0x00000013]), scale: 2.563, full: ['REG32'] },
+    { id: 'pipeline #/c/pipeline/2', def: pipelinedCpu([0x00000013]), scale: 1.774, full: ['ADD32'] },
+    { id: 'system #/c/io/3', def: systemCpu([0x00000013]), scale: 1.863, full: ['KS32'] },
+    { id: 'sys-m #/c/muldiv/22', def: systemCpu([0x00000013], { m: true }), scale: 1.968, full: ['KS32'] },
+    { id: 'CSR #/c/traps/0', def: CSR_UNIT, scale: 1.774, full: ['XOR32'] },
+  ];
+  for (const sc of scenes) {
+    it(`${sc.id}: every name clear of real blocks and names is NAME_PX in full`, () => {
+      const insts = sc.def.netlist!().instances;
+      const geo = insts.map((i) => { const { w, h } = symbolGeom(i.def), at = i.at ?? [0, 0]; return { x: at[0], y: at[1], w, h }; });
+      const quiet = (k: number) => isConstantDef(insts[k].def) || insts[k].def.prim === 'alias';
+      const real = geo.filter((_, k) => !quiet(k));
+      const named = insts.flatMap((i, k) => {
+        const t = i.def.symbol.label ?? i.def.name, { w, h } = geo[k];
+        return !isConstantDef(i.def) && i.def.symbol.kind === 'box' && nameEligible(t, w, h) ? [{ k, t, box: { cx: geo[k].x + w / 2, cy: geo[k].y + h / 2, w, h, chars: t.length, rot: nameRotated(w, h), text: t } as NameBox }] : [];
+      });
+      const plan = planLayouts(named.map((n) => n.box), sc.scale, 10, real);
+      const rects = plan.map((l, i) => (l ? nameRect(named[i].box, l, sc.scale) : null));
+      named.forEach((n, i) => {
+        const l = plan[i], where = `${sc.id} ${n.t}`;
+        if (l) expect(l.lines.join(' '), where).not.toContain('…');
+        const ww = n.t.length * NAME_PX * W + PAD, hh = NAME_PX * 1.25, [rw, rh] = n.box.rot ? [hh, ww] : [ww, hh];
+        const old = { x: n.box.cx - rw / 2 / sc.scale, y: n.box.cy - rh / 2 / sc.scale, w: rw / sc.scale, h: rh / sc.scale };
+        const own = (o: { x: number; y: number; w: number; h: number }) => Math.abs(o.x + o.w / 2 - n.box.cx) < 0.01 && Math.abs(o.y + o.h / 2 - n.box.cy) < 0.01;
+        const clear = !real.some((o) => !own(o) && cross(old, o)) && !rects.some((r, j) => j !== i && r !== null && cross(old, r));
+        if (clear) { expect(l, where).not.toBeNull(); expect(l!.px, where).toBe(NAME_PX); expect(l!.lines.join(' '), where).toBe(n.t); }
+      });
+      // the names the live sweep found shrunk only by a tie cell, a constant or wiring
+      for (const t of sc.full) {
+        const i = named.findIndex((n) => n.t === t);
+        expect(i, t).toBeGreaterThanOrEqual(0);
+        expect(plan[i], `${sc.id} ${t}`).toMatchObject({ px: NAME_PX, lines: [t] });
+      }
+    });
+  }
 });

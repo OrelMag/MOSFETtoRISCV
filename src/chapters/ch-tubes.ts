@@ -3,7 +3,7 @@ import { DFF, ECCLES_JORDAN, FULL_ADDER, SR_LATCH, TRIODE_SWITCH, TUBE_FA, TUBE_
 import { RELAY_STEP_MS } from '../phys/relay';
 import {
   B_PLUS, DIVIDER_RATIO, ENIAC, HEATER_W, R_DIV_BOTTOM, R_DIV_TOP, R_PLATE, TUBE_STEP_US, V_BIAS, V_CUTOFF, V_LOW, dividerOut, gateLevels,
-  nandBrickPower, plateVoltage, sectionPower, warmup,
+  nandBrickPower, cathodeTemp, emission, plateCurrent, plateVoltage, sectionPower, warmup,
 } from '../phys/triode';
 import { logicDepth, stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
@@ -17,6 +17,8 @@ const WARM = (() => {
   const w = warmup(0), full = w.at(-1)!.ip;
   return { t10: w.find((s) => s.ip >= 0.1 * full)!.t, t90: w.find((s) => s.ip >= 0.9 * full)!.t };
 })();
+/** How many times the hot cathode's emission exceeds the plate current at a 0 V grid (the model's 1.09 A against 7.7 mA). */
+const HEADROOM = Math.round(emission(cathodeTemp(20)) / plateCurrent(0, V_LOW));
 const v = (x: number) => Math.round(x).toString();
 const w2 = (x: number) => x.toFixed(2);
 const thin = (n: number) => groupDigits(Math.round(n));
@@ -78,9 +80,11 @@ export const chTubes: Chapter = {
       body: `
         <p>A relay waits milliseconds for iron to move. A <strong>vacuum tube</strong> moves only electrons. A heater
         brings an oxide-coated <strong>cathode</strong> to about 1000 K, hot enough to boil electrons off its surface;
-        a <strong>plate</strong> (anode) at +${B_PLUS} V collects them. Between the two, a wire mesh, the
-        <strong>grid</strong>, decides how many get through: at 0 V nearly all, and with the plate at ${B_PLUS} V
-        none once the grid is below ${V_CUTOFF} V in this model. Its field pushes them back.</p>
+        a <strong>plate</strong> (anode) at +${B_PLUS} V collects them. Between the two, a <strong>grid</strong>, a fine wire helix wound on two side rods,
+        decides how many get through: at 0 V nearly all, and with the plate at ${B_PLUS} V
+        none once the grid is below ${V_CUTOFF} V in this model (the ideal cutoff of the law below; on the 6SN7's datasheet curves a few microamps
+        still flow to about −18 V). Its field pushes them back. Most electrons never get through at all: a cloud of them, the <strong>space charge</strong>,
+        hangs round the cathode and repels the next ones, so at 0 V only about one in ${HEADROOM} of those the cathode could emit reaches the plate.</p>
         <p>This is one section of a 6SN7, the twin triode ENIAC used most. The current follows the space-charge law
         I = K·(V<sub>g</sub> + V<sub>p</sub>/µ)<sup>1.5</sup> with µ = 20, fitted to the datasheet point (250 V, −8 V,
         9 mA), and works into a 22 kΩ plate resistor. The cathode warms with a 6 s time constant, and emission
@@ -100,7 +104,7 @@ export const chTubes: Chapter = {
         pitfall: `<p>Reading a cold machine as "all off". Until the cathodes warm (${WARM.t10.toFixed(1)} s to a tenth of the current, ${WARM.t90.toFixed(1)} s to nine tenths) nothing conducts, so every plate
           sits at ${B_PLUS} V, which the logic reads as a 1: the machine wakes up in a state nobody designed, and resets must wait for the heaters.</p>`,
         real: `<p>The 6SN7 is a twin triode with a 6.3 V heater; ENIAC used it more than any other type. An oxide-coated cathode emits at around 1000 K, which is also why
-          tubes dim and fail: the coating evaporates and the heater ages. Computers of the 1950s left their tubes on day and night for this reason.</p>`,
+          tubes dim and fail: the coating evaporates and the heater ages. In the model the plate current is already full at about 750 K, because the cathode could emit ${HEADROOM} times more than the plate takes; the 1000 K is the working temperature that keeps that margin for years, and an aged tube whose margin has shrunk still works until it drops below the current asked of it. Computers of the 1950s left their tubes on day and night for this reason.</p>`,
         numbers: `<table class="mini"><tr><th>grid V</th>${[0, -4, -8, -12.5].map((g) => `<td>${g}</td>`).join('')}</tr>
           <tr><th>plate V</th>${[0, -4, -8, -12.5].map((g) => `<td>${v(plateVoltage(g))}</td>`).join('')}</tr></table>`,
       },

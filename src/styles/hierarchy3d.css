@@ -19,3 +19,7 @@
 .hy3d .r3-lbl b { white-space: pre; text-align: center; line-height: 1.2; font-weight: 500; font-size: 10.5px; color: var(--text-2); }
 .hy3d .r3-lbl b::first-line { font-weight: 600; font-size: 11.5px; color: var(--text); }
 @container (max-width: 480px) { .hy3d .r3-lbl b { font-size: 9.5px; } .hy3d .r3-lbl b::first-line { font-size: 10.5px; } }
+.hy-rates { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 8px; }
+.hy-rates .hy-lbl { flex: 1 1 100%; margin: 0; }
+/* a narrow stage is a tall one: the whole road is in view and the labels need the room */
+@container (max-width: 480px) { .hy3d .r3-stage { aspect-ratio: 5 / 4; } }

@@ -287,11 +287,11 @@ export const WALKS8: Record<string, WalkScript> = {
         question: 'The second section is as long as the first. What should the relay\'s contact connect to out?',
         options: ['A battery of its own: VDD, so the next section is driven at full strength', 'The line itself: the contact passes the signal on', 'GND, so that out reads 0 when the relay pulls in', 'Nothing: out is driven by the coil'],
         answer: 0,
-        explain: 'A contact that joins out to line would carry the weak current on, and the far relay would be 48 km from the battery. The make contact puts VDD on out instead: the signal is a copy, at full strength, one relay step later.',
+        explain: 'A contact that joins out to line would carry the weak current on, and the far relay would be two sections from the battery. The make contact puts VDD on out instead: the signal is a copy, at full strength, one relay step later.',
         why: ['', 'Passing it on adds the second section\'s resistance to the first\'s: the current at the far end is below pull-in, the very problem the station is there to solve.', 'That gives the opposite polarity, an inverter; and the rest of the chain still needs a battery behind the contact.', 'A coil has no output: it is two terminals that draw current. The relay\'s contacts are the output, electrically separate from the coil.'],
       },
       why: 'A relay is the only part here that is an amplifier in the sense that matters: input and output are separate circuits.',
-      whyNot: { text: 'A wire from line to out is one conductor 48 km long; resistance adds, and the far relay never pulls in.' },
+      whyNot: { text: 'A wire from line to out is one conductor two sections long; resistance adds, and the far relay never pulls in.' },
     },
     {
       title: 'A battery behind a contact',

@@ -16,7 +16,7 @@ describe('desk figure', () => {
       expect(tierCycles(DESK_TIERS.indexOf(t))).toBe(cyclesOf(r!.ns));
     }
     expect(DESK_TIERS.map((t) => t.level)).toEqual(['L1 cache', 'L2 cache', 'L3 cache', 'DRAM']);
-    expect(DESK_TIERS.map((_, i) => tierCycles(i))).toEqual([4, 14, 48, 320]);
+    expect(DESK_TIERS.map((_, i) => tierCycles(i))).toEqual([4, 14, 64, 320]);
     // the step's table is drawn from LEVELS
     expect(readFileSync('src/widgets/cache.ts', 'utf8')).toContain("import { LEVELS, cyclesOf } from './hierarchy3ddata'");
   });

@@ -8,6 +8,8 @@
   --dp-e2: light-dark(#7d3fc0, #c397ff);
   --dp-pat: light-dark(#1f9a63, #3ecb8a);
   --dp-src: light-dark(#3a3d45, #9aa3b5);
+  --dp-volt: light-dark(#0e8a9a, #3ec9db);
+  --dp-h: light-dark(#c2185b, #ff6fa8);
   --dp-ghost: light-dark(#7b8296, #aab2c6);
 }
 .m3d .dp-btns .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }

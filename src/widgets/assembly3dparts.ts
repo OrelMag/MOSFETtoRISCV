@@ -63,6 +63,13 @@ export type Lamp = 'off' | 'hold' | 'flush';
 /** The signal lamps: Fetch and Decode hold on a stall, are emptied on a flush. */
 export const lampsOf = (c: Cycle): Lamp[] => [c.flush ? 'flush' : c.stall ? 'hold' : 'off', c.flush ? 'flush' : c.stall ? 'hold' : 'off', 'off', 'off', 'off'];
 
+/** What the next clock will do, as the predict step asks it: the line flows, a load-use stall puts a bubble into Execute, or a redirect pulls the wrong-path fetches. */
+export type Outcome = 'flow' | 'stall' | 'flush';
+export const OUTCOMES: readonly Outcome[] = ['flow', 'stall', 'flush'];
+export const outcomeOf = (c: Cycle): Outcome => (c.flush ? 'flush' : c.stall ? 'stall' : 'flow');
+/** The chip's flush text: how many the redirect really pulled (one when Decode held a bubble, else two). */
+export const flushText = (c: Cycle): string => `Flush: ${c.pulled.length} pulled`;
+
 export interface AssemblyPalette { frame: RGB; belt: RGB; plate: RGB; bubble: RGB; alu: RGB; load: RGB; store: RGB; ctl: RGB; wrong: RGB; off: RGB; hold: RGB; flush: RGB }
 
 export function assemblyParts(pallets: readonly Pallet[], lamps: readonly Lamp[], P: AssemblyPalette): Part[] {

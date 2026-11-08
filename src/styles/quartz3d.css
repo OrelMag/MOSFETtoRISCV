@@ -19,4 +19,10 @@
 .qz-seg .btn.sm:first-child { border-radius: 6px 0 0 6px; }
 .qz-seg .btn.sm:last-child { border-radius: 0 6px 6px 0; }
 .qz-seg .btn.sm[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
-.qz-sl output { min-width: 78px; white-space: nowrap; }
+.qz-sl output { min-width: 96px; white-space: nowrap; }
+/* three tabs on a phone: share the width, smaller padding, never cut off */
+.qz-seg { max-width: 100%; }
+.qz-seg .btn.sm { flex: 1 1 auto; white-space: nowrap; }
+@media (max-width: 520px) { .qz-seg .btn.sm { padding-inline: 8px; font-size: 13px; } }
+/* four tabs on a phone: a 2 × 2 grid of separate buttons */
+@media (max-width: 520px) { .qz-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; width: 100%; } .qz-seg .btn.sm, .qz-seg .btn.sm:first-child, .qz-seg .btn.sm:last-child { border-radius: 6px; } }

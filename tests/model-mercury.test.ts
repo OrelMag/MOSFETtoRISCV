@@ -3,8 +3,9 @@
 import { describe, expect, it } from 'vitest';
 import type { RGB, RGBA } from '../src/gl/instances';
 import {
-  CARRIER_HZ, LENGTH_M, REPORT, SLOTS, SLOTS_PER_WORD, SOUND_M_S, Tank, WORDS, bandOf, bitsInTank, carrierCycles, circulationHz, delayS,
-  initialWord, mercuryAnchors, mercuryParts, pulseLengthM, rateHz, slotPitchM, slotS, storeLongWords, storeShortWords, valueOfSlots, wordSlots,
+  CARRIER_HZ, CUT_LENGTH_M, LENGTH_M, REPORT, ROW_HIT_S, SLOTS, SLOTS_PER_WORD, SOUND_M_S, TANK_C, Tank, WINDOW_TOL, WORDS, bandOf, bitsInTank, carrierCycles,
+  circulationHz, delayS, dramRatio, histogram, inWindow, initialWord, mercuryAnchors, mercuryParts, meanWaitS, offsetSlots, pulseLengthM, randomWaits, rateHz,
+  reportTubeDelayS, slotPitchM, slotS, soundAt, storeLongWords, storeShortWords, toleranceK, tubeDelayAt, valueOfSlots, wordSlots,
   type MercuryPalette,
 } from '../src/widgets/mercury3dparts';
 
@@ -16,31 +17,113 @@ const P: MercuryPalette = {
 const near = (a: number, b: number, tol: number) => expect(Math.abs(a - b) / b).toBeLessThan(tol);
 
 describe('the figures', () => {
-  it('delay is length over speed, and the report’s 5 ft 4 in is about a millisecond', () => {
+  it('the clock fixes the timing: 500 kHz, 2 µs, 576 slots, 1.152 ms, 868 a second, mean wait 576 µs', () => {
     expect(LENGTH_M).toBeCloseTo(1.6256, 4);
-    expect(delayS()).toBe(LENGTH_M / SOUND_M_S);
-    near(delayS(), REPORT.delayS, 0.03);
+    expect(rateHz()).toBeCloseTo(500e3, 3);
+    expect(slotS()).toBe(2e-6);
+    expect(delayS()).toBeCloseTo(1.152e-3, 12);
+    expect(delayS()).toBeCloseTo(SLOTS * slotS(), 15);
+    near(delayS(), REPORT.delayS, 0.005);
+    near(circulationHz(), REPORT.circHz, 0.005);
+    expect(meanWaitS()).toBeCloseTo(576e-6, 12);
+  });
+  it('sound in mercury: 1451 m/s at 20 °C, -0.46 m/s per K (Karl Deutsch table), 1442 m/s at the tanks’ 40 °C', () => {
+    expect(soundAt(20)).toBe(1451);
+    expect(TANK_C).toBe(40);
+    expect(SOUND_M_S).toBeCloseTo(1441.8, 6);
+    expect(soundAt(50) - soundAt(30)).toBeCloseTo(-9.2, 9);
+  });
+  it('the tube is cut to the clock at 40 °C: 1.66 m, 2.2 % past the report’s end-block length, whose own L / v is 2.2 % short', () => {
+    expect(CUT_LENGTH_M / SOUND_M_S).toBeCloseTo(delayS(), 12);
+    expect(tubeDelayAt(TANK_C)).toBeCloseTo(delayS(), 12);
+    expect(CUT_LENGTH_M).toBeCloseTo(1.6611, 3);
+    expect(CUT_LENGTH_M / LENGTH_M - 1).toBeGreaterThan(0.02);
+    expect(CUT_LENGTH_M / LENGTH_M - 1).toBeLessThan(0.023);
+    expect(reportTubeDelayS()).toBeCloseTo(1.1274e-3, 6);
   });
   it('bits in the tube = delay x rate = 16 x 36 = 576', () => {
     expect(bitsInTank()).toBeCloseTo(delayS() * rateHz(), 9);
     expect(Math.round(bitsInTank())).toBe(576);
     expect(SLOTS).toBe(WORDS * SLOTS_PER_WORD);
   });
-  it('the rate, the slot and the circulation are the report’s to a few per cent', () => {
-    near(rateHz(), 1 / REPORT.slotS, 0.03);
-    near(slotS(), REPORT.slotS, 0.03);
-    near(circulationHz(), REPORT.circHz, 0.03);
-  });
-  it('pulses are a fraction of a slot long, a few millimetres apart, and a pulse holds about a dozen carrier cycles', () => {
+  it('pulses are 0.45 of a slot long, about 2.9 mm apart, and a pulse holds about a dozen carrier cycles', () => {
     expect(pulseLengthM()).toBeLessThan(slotPitchM());
     expect(slotPitchM()).toBeCloseTo(SOUND_M_S * slotS(), 9);
-    expect(slotPitchM() * 1000).toBeGreaterThan(2.5);
-    expect(slotPitchM() * 1000).toBeLessThan(3.1);
+    expect(slotPitchM() * 1000).toBeGreaterThan(2.8);
+    expect(slotPitchM() * 1000).toBeLessThan(3.0);
     expect(carrierCycles()).toBeCloseTo(0.9e-6 * CARRIER_HZ, 9);
   });
   it('the store is 32 tanks, 512 long numbers, 1024 short ones', () => {
     expect(storeLongWords()).toBe(512);
     expect(storeShortWords()).toBe(1024);
+  });
+});
+
+describe('temperature', () => {
+  it('pulses slide 0.18 slot a kelvin; late when warmer, early when cooler; the window is ±0.275 slot', () => {
+    expect(offsetSlots(TANK_C)).toBeCloseTo(0, 9);
+    expect(offsetSlots(41)).toBeGreaterThan(0);
+    expect(offsetSlots(39)).toBeLessThan(0);
+    expect(offsetSlots(41)).toBeCloseTo(0.1838, 3);
+    expect(WINDOW_TOL).toBeCloseTo(0.275, 9);
+    expect(toleranceK()).toBeCloseTo(1.5, 1);
+  });
+  it('the window holds within ±1.5 K of 40 °C and the slider’s ends miss by about two slots', () => {
+    expect(inWindow(40)).toBe(true);
+    expect(inWindow(41.4)).toBe(true);
+    expect(inWindow(41.6)).toBe(false);
+    expect(inWindow(38.6)).toBe(true);
+    expect(inWindow(38.4)).toBe(false);
+    expect(inWindow(30)).toBe(false);
+    expect(Math.abs(offsetSlots(50))).toBeGreaterThan(1.5);
+    expect(Math.abs(offsetSlots(50))).toBeLessThan(2);
+  });
+  it('in the window a read is exact; outside it every pulse is missed, the read fails and the tank empties in one circulation', () => {
+    const ok = new Tank();
+    ok.offset = offsetSlots(41);
+    ok.request('read', 4); ok.advance(SLOTS * 2);
+    expect(valueOfSlots(ok.last!.got)).toBe(initialWord(4));
+    expect(ok.last!.lost).toBe(0);
+    const bad = new Tank();
+    bad.offset = offsetSlots(45);
+    bad.request('read', 4); bad.advance(SLOTS * 2);
+    expect(bad.last!.lost).toBeGreaterThan(0);
+    expect(valueOfSlots(bad.last!.got)).toBe(0);
+    expect(bad.bits.every((b) => b === 0)).toBe(true);
+    bad.offset = 0; bad.advance(SLOTS);
+    expect(bad.word(4)).toBe(0);
+  });
+  it('the drawing shifts pulses along with the offset, fully at the receiver', () => {
+    const a = new Tank(), b = new Tank();
+    b.offset = offsetSlots(48);
+    const xs = (t: Tank) => mercuryParts(t, 2, P).filter((p) => p.spec === 0.1).map((p) => p.pos[0]);
+    const xa = xs(a), xb = xs(b);
+    expect(xb).toHaveLength(xa.length);
+    expect(xb.some((x, i) => Math.abs(x - xa[i]) > 0.2)).toBe(true);
+  });
+});
+
+describe('random reads and the DRAM comparison', () => {
+  const seeded = () => { let x = 12345; return () => { x = (x * 1664525 + 1013904223) >>> 0; return x / 2 ** 32; }; };
+  it('waits are flat over one circulation, the mean near half of it', () => {
+    const w = randomWaits(4000, seeded());
+    expect(Math.min(...w)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...w)).toBeLessThan(SLOTS);
+    near((w.reduce((a, b) => a + b, 0) / w.length) * slotS(), meanWaitS(), 0.05);
+    const h = histogram(w, 8);
+    for (const n of h) expect(Math.abs(n - 500)).toBeLessThan(90);
+    expect(h.reduce((a, b) => a + b, 0)).toBe(4000);
+  });
+  it('twenty reads fill the histogram and stay in range', () => {
+    const w = randomWaits(20, seeded());
+    expect(w).toHaveLength(20);
+    expect(histogram(w, 8).reduce((a, b) => a + b, 0)).toBe(20);
+  });
+  it('a DDR4-3200 row hit is tCAS 13.75 ns from dram/timing.ts, tens of thousands of times quicker than the mean wait', () => {
+    expect(ROW_HIT_S).toBeCloseTo(13.75e-9, 15);
+    expect(dramRatio()).toBeCloseTo(576e-6 / 13.75e-9, 3);
+    expect(dramRatio()).toBeGreaterThan(40000);
+    expect(dramRatio()).toBeLessThan(43000);
   });
 });
 
@@ -120,6 +203,8 @@ describe('the drawing', () => {
     for (let w = 0; w < WORDS; w++) tiled += bandOf(t, w).reduce((a, [x, y]) => a + (y - x), 0);
     expect(tiled).toBeCloseTo(SLOTS, 9);
     expect(mercuryAnchors(t, 2).length).toBeGreaterThan(5);
+    expect(mercuryAnchors(t, 2).some((a) => a.text.startsWith('backing'))).toBe(true);
+    expect(mercuryAnchors(t, 2, true).map((a) => a.text).sort()).toEqual(['gate', 'sending crystal']);
   });
   it('pulses are one slot pitch apart in the drawing', () => {
     const t = new Tank();

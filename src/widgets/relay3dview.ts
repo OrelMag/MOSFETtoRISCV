@@ -9,7 +9,7 @@ import { CssColors, mixRgb, scaleRgb, watchTheme } from '../gl/color';
 import { packInstances, type Instance, type RGB } from '../gl/instances';
 import { dot3, quatAxisAngle, quatRotate, sub3, type Vec3 } from '../gl/math';
 import type { Renderer } from '../gl/renderer';
-import { RELAY, relaySim, relayStatic, relaySummary, T_END, type RelayRun, type RelaySample } from '../phys/relay';
+import { RELAY, RELAY_SUPPLY, SETTLED_WINDOW, T_END, T_ON, coilTau, relaySim, relayStatic, relaySummary, type RelayRun, type RelaySample } from '../phys/relay';
 import { h, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
@@ -18,7 +18,8 @@ import { ORBIT_ARIA, ORBIT_HINT, modelFrame } from './modelframe';
 
 // ---------------------------------------------------------------- geometry (mm; x right, y up, z towards the viewer)
 
-/** Gaps and travel drawn this many times their size (0.85 mm would not show). */
+/** Gaps and travel drawn this many times their size at the pole (0.85 mm would not show); the contacts' gap is drawn
+ *  at about ×4.6, because the stud moves 1.57× the pole's travel along a shorter lever. */
 export const EXAG = 6;
 const HINGE: Vec3 = [28, 25, 0]; // the armature turns about the yoke's top corner
 const POLE_X = 0, LEVER = HINGE[0] - POLE_X; // hinge to the pole's centre
@@ -28,7 +29,10 @@ const SPRING_LX = 3.5; // the return spring, from the hinge (behind it: pulls th
 // rest height.
 const XTAIL = -46, XR = -34, XC = -25, XT = -16, YB = 16;
 const STUD_LX = XT - HINGE[0]; // the lifting stud, from the hinge
-const BT = 0.6, BUT = 0.9, BUT_R = 1.8; // blade thickness, contact button height and radius
+const BT = 0.6, BUT = 0.9, BUT_R = 1.15, TWIN_Z = 1.7; // twin dome contacts: two buttons side by side on each spring
+export const POLE_R = 5.65; // a 100 mm² pole face (RELAY.A), drawn at its model area
+const POLE_AX = POLE_X - HINGE[0]; // the pole's place along the armature, from the hinge
+ // blade thickness, contact button height and radius
 const STACK = 2 * (BT / 2 + BUT); // blade centre to fixed spring centre with the buttons touching
 
 /** Armature angle (rad, opening up) for armature travel u (m): the gap at the pole, drawn ×EXAG, over the lever. */
@@ -47,13 +51,12 @@ const ncClosed = (q: RelaySample) => q.y < 0.03e-3;
 type Kind = 'box' | 'cyl';
 interface Part extends Instance { kind: Kind; id?: string }
 
-interface Palette {
+export interface Palette {
   bakelite: RGB; steel: RGB; steel2: RGB; steel3: RGB; copper: RGB; glow: RGB; spring: RGB; blade: RGB;
   stud: RGB; silver: RGB; good: RGB;
 }
 
 const Z = quatAxisAngle([0, 0, 1], 0);
-const ALONG_Z = quatAxisAngle([1, 0, 0], Math.PI / 2); // a cylinder's axis turned from y to z
 
 const box = (c: RGB, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, spec = 0): Part =>
   ({ kind: 'box', pos: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], scale: [x1 - x0, y1 - y0, z1 - z0], color: c, spec });
@@ -66,7 +69,7 @@ const bar = (c: RGB, x0: number, y0: number, x1: number, y1: number, t: number, 
 });
 
 /** Every part of the relay with the model at sample q. */
-function relayParts(q: RelaySample, P: Palette): Part[] {
+export function relayParts(q: RelaySample, P: Palette): Part[] {
   const out: Part[] = [];
   const th = theta(q.x), rot = quatAxisAngle([0, 0, 1], -th);
   // Base, yoke (bottom leg under the coil, upright to the hinge), and the lug the return spring hangs on.
@@ -74,13 +77,26 @@ function relayParts(q: RelaySample, P: Palette): Part[] {
   out.push(box(P.steel2, -10, 28, 0, 3, -7, 7, 0.25), box(P.steel2, 25, 28, 0, 25, -7, 7, 0.25), box(P.steel2, 28, 34, 10, 12, -3, 3, 0.25));
   // Core, pole face, bobbin, winding: warmer and faintly glowing with the current.
   const g = Math.min(1, Math.abs(q.i) / 0.06);
-  out.push(cyl(P.steel, POLE_X, 0, 3, 23.5, 3.5, 0.3), cyl(P.steel3, POLE_X, 0, 23.5, 25, 4.5, 0.5));
+  out.push(cyl(P.steel, POLE_X, 0, 3, 23.5, 4.5, 0.3), cyl(P.steel3, POLE_X, 0, 23.5, 25, POLE_R, 0.5));
   out.push(cyl(P.bakelite, POLE_X, 0, 3, 4.5, 10), cyl(P.bakelite, POLE_X, 0, 21.5, 23, 10));
   out.push({ ...cyl(mixRgb(P.copper, P.glow, 0.45 * g), POLE_X, 0, 4.5, 21.5, 9, 0.15), emissive: scaleRgb(P.glow, 0.22 * g), id: 'coil' });
+  // The coil's tape wrap, two solder tags on the bobbin flange and the leads down to the base.
+  out.push(cyl(P.stud, POLE_X, 0, 11, 14, 9.15, 0.05));
+  for (const x of [-3.5, 3.5]) out.push(box(P.silver, POLE_X + x - 1, POLE_X + x + 1, 3, 4.4, 9.5, 12.6, 0.4), cyl(P.copper, POLE_X + x, 12, -3.6, 3.2, 0.45, 0.3));
   // Armature (turned about the hinge) and the hinge pin.
   const [ax, ay] = armAt((ARM_X0 + ARM_X1) / 2, ARM_T / 2, th);
   out.push({ kind: 'box', pos: [ax, ay, 0], scale: [ARM_X1 - ARM_X0, ARM_T, ARM_W], rot, color: P.steel3, spec: 0.45 });
-  out.push({ ...cyl(P.steel2, HINGE[0], 0, -8, 8, 1.1, 0.4), pos: [HINGE[0], HINGE[1], 0], rot: ALONG_Z });
+  // The residual stud: a non-magnetic screw in the armature's underside over the pole, so the armature never touches
+  // the iron (its height is the drawn residual gap, RELAY.gRes × EXAG).
+  const hs = RELAY.gRes * 1e3 * EXAG + 0.05, [rx, ry] = armAt(POLE_AX, -hs / 2, th);
+  out.push({ ...cyl(P.copper, rx, 0, -hs / 2, hs / 2, 1.3, 0.5), pos: [rx, ry, 0], rot, id: 'residual' });
+  // The hinge is a knife edge: a steel wedge in the yoke's top, the armature's heel resting on its edge, held down by a
+  // locating clip with two screws.
+  out.push({ kind: 'box', pos: [HINGE[0], HINGE[1] - 1.1, 0], scale: [2.2, 2.2, ARM_W], rot: quatAxisAngle([0, 0, 1], Math.PI / 4), color: P.steel2, spec: 0.5 });
+  const [kx, ky] = armAt(3, ARM_T + 0.45, th);
+  out.push({ kind: 'box', pos: [kx, ky, 0], scale: [7, 0.9, ARM_W - 2], rot, color: P.steel2, spec: 0.4 });
+  const [sx2, sy2] = armAt(4.5, ARM_T + 1.4, th);
+  for (const z of [-3.2, 3.2]) out.push(cyl(P.steel, sx2, z, sy2 - 0.5, sy2 + 0.5, 0.7, 0.4));
   // Return spring from the lug to the armature's tail, as turns of wire.
   const [sx, sy] = armAt(SPRING_LX, 0, th), y0 = 12, turns = 9;
   for (let k = 0; k < turns; k++) {
@@ -93,17 +109,22 @@ function relayParts(q: RelaySample, P: Palette): Part[] {
   out.push(box(P.steel2, -42, XR, 0, 8, -6, 6, 0.2));
   out.push(pile(P.bakelite, 8, YNO - BT / 2), pile(P.bakelite, YNO + BT / 2, YB - BT / 2), pile(P.bakelite, YB + BT / 2, YNC - BT / 2), pile(P.steel2, YNC + BT / 2, YNC + 3));
   for (const z of [-3.2, 3.2]) out.push(cyl(P.steel, -38, z, 8, YNC + 3.6, 0.8, 0.3), cyl(P.steel, -38, z, YNC + 3, YNC + 4.2, 1.5, 0.4));
+  // The moulded buffer block's grooves that locate each spring's lug, and a solder tag on each tail.
+  const groove = scaleRgb(P.bakelite, 0.45);
+  for (const yy of [YNO, YB, YNC]) out.push(box(groove, -41.4, XR - 0.8, yy - 0.45, yy + 0.45, 4.85, 5.2), box(P.silver, XTAIL - 3.2, XTAIL + 0.2, yy - 0.3, yy + 0.3, -1.4, 1.4, 0.4));
   // Fixed springs (NC above the blade, NO below), each with a contact button facing the blade's.
   const nc = ncClosed(q), no = q.closed;
   out.push(bar(P.spring, XTAIL, YNC, XC + 2.5, YNC, BT, 6, 0.3), bar(P.spring, XTAIL, YNO, XC + 2.5, YNO, BT, 6, 0.3));
-  const btn = (closed: boolean, x: number, y0b: number) => ({ ...cyl(closed ? P.good : P.silver, x, 0, y0b, y0b + BUT, BUT_R, 0.5), emissive: closed ? scaleRgb(P.good, 0.3) : undefined });
-  out.push(btn(nc, XC, YNC - BT / 2 - BUT), btn(no, XC, YNO + BT / 2));
+  const btn = (closed: boolean, x: number, y0b: number): Part[] => [-TWIN_Z, TWIN_Z].map((z) =>
+    ({ ...cyl(closed ? P.good : P.silver, x, z, y0b, y0b + BUT, BUT_R, 0.5), emissive: closed ? scaleRgb(P.good, 0.3) : undefined }));
+  out.push(...btn(nc, XC, YNC - BT / 2 - BUT), ...btn(no, XC, YNO + BT / 2));
   // The common blade: a cantilever from the pile whose tip the stud pushes down (armature travel x); its contact,
   // part-way along, follows the model's blade position y. Once the contact meets NO the stud keeps going: the bend
   // at the contact is the over-travel that presses the contacts together.
   const yc = YB - push(q.y) * AT_CONTACT, yt = YB - push(q.x);
-  out.push(bar(P.blade, XTAIL, YB, XR, YB, BT, 6, 0.3), bar(P.blade, XR, YB, XC, yc, BT, 6, 0.3), bar(P.blade, XC, yc, XT, yt, BT, 6, 0.3));
-  out.push(btn(nc, XC, yc + BT / 2), btn(no, XC, yc - BT / 2 - BUT));
+  const blade = mixRgb(P.spring, P.blade, 0.4); // nickel-silver like the fixed springs, a warmer tint to tell it apart
+  out.push(bar(blade, XTAIL, YB, XR, YB, BT, 6, 0.3), bar(blade, XR, YB, XC, yc, BT, 6, 0.3), bar(blade, XC, yc, XT, yt, BT, 6, 0.3));
+  out.push(...btn(nc, XC, yc + BT / 2), ...btn(no, XC, yc - BT / 2 - BUT));
   // The stud hangs from the armature onto the blade's tip.
   const [tx, ty] = armAt(STUD_LX, 0, th);
   out.push({ ...cyl(P.stud, tx, 0, yt + BT / 2, ty, 0.9, 0.2), id: 'stud' });
@@ -120,9 +141,10 @@ function anchors(q: RelaySample): Anchor[] {
     { text: 'coil', p: [POLE_X + 6.4, 9, 6.4], side: 'r', n: [0.7, 0, 0.7] },
     { text: 'pole face', p: [POLE_X + 3, 25, 3], side: 'r', n: [0, 0.5, 1], minor: true },
     { text: 'armature', p: [ax, ay, 0], side: 't', n: [0, 1, 0] },
-    { text: 'hinge', p: [HINGE[0], HINGE[1], 8], side: 'r', n: [0, 0, 1], minor: true },
+    { text: 'knife edge', p: [HINGE[0], HINGE[1] - 3, 8], side: 'r', n: [0, 0, 1], minor: true },
+    { text: 'residual stud', p: [...armAt(POLE_AX, -0.5, th), 6] as Vec3, side: 'l', n: [0, 0, 1], minor: true },
     { text: 'yoke', p: [16, 1.5, 7], side: 'b', n: [0, 0, 1] },
-    { text: 'return spring', p: [sx, 11, 3], side: 'b', n: [1, 0, 0.3], minor: true },
+    { text: 'return spring (lumped)', p: [sx, 11, 3], side: 'b', n: [1, 0, 0.3], minor: true },
     { text: 'stud', p: [tx + 0.9, ty - 5, 0], side: 'r', n: [-0.6, 0, 1], minor: true },
     { text: 'NC', p: [-29, YNC + BT / 2, 3], side: 't', n: [-0.5, 0, 1] },
     { text: 'NO', p: [-29, YNO - BT / 2, 3], side: 'b', n: [-0.5, 0, 1] },
@@ -161,7 +183,9 @@ function drawFlat(svg: SVGSVGElement, parts: Part[], marks: Anchor[]): void {
 // ---------------------------------------------------------------- plots
 
 const PW = 360, PH = 214, PX0 = 34, PX1 = 330;
-const tX = (t: number) => PX0 + (t / T_END) * (PX1 - PX0);
+/** The plotted window (s): the chapter's 25 ms, or the longer one that lets the coil settle before switch-off. */
+let TE = T_END;
+const tX = (t: number) => PX0 + (t / TE) * (PX1 - PX0);
 const yI = (mA: number) => 92 - (mA / 70) * 80;
 const yX = (mm: number) => 92 - (mm / 0.8) * 80;
 const yV = (v: number) => 192 - ((v + 120) / 150) * 70;
@@ -172,7 +196,8 @@ function drawPlot(svg: SVGSVGElement, run: RelayRun): SVGLineElement {
   for (const mA of [0, 20, 40, 60]) { els.push(s('line', { x1: PX0, x2: PX1, y1: yI(mA), y2: yI(mA), class: 'grid' })); text(PX0 - 4, yI(mA) + 3, String(mA)); }
   for (const mm of [0, 0.4, 0.8]) text(PX1 + 4, yX(mm) + 3, mm ? String(mm) : '0', 'tick tr', 'start');
   for (const v of [-100, -50, 0, 24]) { els.push(s('line', { x1: PX0, x2: PX1, y1: yV(v), y2: yV(v), class: 'grid' })); text(PX0 - 4, yV(v) + 3, String(v)); }
-  for (let ms = 0; ms <= 25; ms += 5) text(tX(ms / 1e3), 208, `${ms}${ms === 25 ? ' ms' : ''}`, 'tick', 'middle');
+  const stepMs = TE > 0.05 ? 20 : 5, endMs = Math.round(TE * 1e3);
+  for (let ms = 0; ms <= endMs; ms += stepMs) text(tX(ms / 1e3), 208, `${ms}${ms + stepMs > endMs ? ' ms' : ''}`, 'tick', 'middle');
   // NO contact closed: spans of the band.
   let start: number | null = null;
   const span = (t0: number, t1: number) => els.push(s('rect', { x: tX(t0), y: 98, width: Math.max(1, tX(t1) - tX(t0)), height: 10, class: 'band' }));
@@ -180,7 +205,7 @@ function drawPlot(svg: SVGSVGElement, run: RelayRun): SVGLineElement {
     if (q.closed && start === null) start = q.t;
     if (!q.closed && start !== null) { span(start, q.t); start = null; }
   }
-  if (start !== null) span(start, T_END);
+  if (start !== null) span(start, TE);
   els.push(s('rect', { x: PX0, y: 98, width: PX1 - PX0, height: 10, class: 'band-frame' }));
   const line = (f: (q: RelaySample) => number, cls: string) =>
     els.push(s('polyline', { points: run.s.map((q) => `${tX(q.t).toFixed(1)},${f(q).toFixed(1)}`).join(' '), class: cls }));
@@ -189,23 +214,64 @@ function drawPlot(svg: SVGSVGElement, run: RelayRun): SVGLineElement {
   line((q) => yV(Math.max(-120, q.vTerm)), 'volt');
   els.push(s('line', { x1: PX0, x2: PX0, y1: 10, y2: 194, class: 'ax' }));
   text(PX1, 7, 'coil current (mA) · armature travel (mm)', 'axl');
-  text(PX1, 118, 'coil terminal (V)', 'axl');
+  text(PX0 + 6, 118, 'coil terminal (V)', 'axl', 'start');
   const cursor = s('line', { x1: 0, x2: 0, y1: 10, y2: 194, class: 'cursor' });
   els.push(cursor);
   svg.replaceChildren(...els);
   return cursor;
 }
 
+// ---------------------------------------------------------------- the hysteresis sweep
+
+/** The supply swept quasi-statically 24 V -> 0 -> 24 V: at each point the armature keeps its state until the supply
+ *  crosses the drop-out (while closed) or the pull-in (while open) voltage of relayStatic. */
+const STATIC = relayStatic();
+const SWEEP_N = 1000;
+const SWEEP = (() => {
+  let closed = true;
+  return Array.from({ length: SWEEP_N + 1 }, (_, k) => {
+    const v = RELAY_SUPPLY * Math.abs(1 - (2 * k) / SWEEP_N);
+    if (closed) { if (STATIC.drop !== null && v < STATIC.drop) closed = false; }
+    else if (STATIC.pull !== null && v >= STATIC.pull) closed = true;
+    return { v, closed };
+  });
+})();
+/** The sweep positions where the armature changes state, for the reduced-motion "next threshold" step. */
+export const SWEEP_MARKS = [0, ...SWEEP.flatMap((c, k) => (k && c.closed !== SWEEP[k - 1].closed ? [k] : [])), SWEEP_N];
+const HW = 360, HH = 138, HX0 = 34, HX1 = 340;
+const hX = (v: number) => HX0 + (v / 30) * (HX1 - HX0);
+const hY = (mm: number) => 100 - (mm / 0.8) * 70;
+
+function drawHyst(svg: SVGSVGElement, at: number | null): void {
+  const els: SVGElement[] = [];
+  const text = (x: number, y: number, tx: string, cls = 'tick', anchor = 'end') => els.push(s('text', { x, y, class: cls, 'text-anchor': anchor }, tx));
+  const T = RELAY.travel * 1e3, pull = STATIC.pull, drop = STATIC.drop;
+  for (const mm of [0, 0.75]) { els.push(s('line', { x1: HX0, x2: HX1, y1: hY(mm), y2: hY(mm), class: 'grid' })); text(HX0 - 4, hY(mm) + 3, String(mm)); }
+  for (const v of [0, 10, 20, 30]) text(hX(v), 124, `${v}${v === 30 ? ' V' : ''}`, 'tick', 'middle');
+  if (pull !== null && drop !== null) {
+    const pts = (a: [number, number][]) => a.map(([v, mm]) => `${hX(v).toFixed(1)},${hY(mm).toFixed(1)}`).join(' ');
+    els.push(s('polyline', { points: pts([[RELAY_SUPPLY, T + 0.03], [drop, T + 0.03], [drop, 0], [0, 0]]), class: 'hyst-dn' }));
+    els.push(s('polyline', { points: pts([[0, 0], [pull, 0], [pull, T], [RELAY_SUPPLY, T]]), class: 'hyst-up' }));
+    text(hX(drop) + 4, hY(0.4), `drop-out ${drop.toFixed(1)} V`, 'axl', 'start');
+    text(hX(pull) + 4, hY(0.4), `pull-in ${pull.toFixed(1)} V`, 'axl', 'start');
+  }
+  els.push(s('line', { x1: HX0, x2: HX0, y1: 12, y2: 108, class: 'ax' }));
+  text(HX1, 8, 'armature travel (mm) against the supply', 'axl');
+  if (at !== null) els.push(s('circle', { cx: hX(SWEEP[at].v), cy: hY(SWEEP[at].closed ? T : 0), r: 4.4, class: 'hyst-dot' }));
+  svg.replaceChildren(...els);
+}
+
 // ---------------------------------------------------------------- the widget
 
 const fmt = (x: number, d = 1) => x.toFixed(d);
-const STATIC = relayStatic();
-
 export function relayView(): Widget {
   let run = relaySim(24), idx = 100; // 10 ms: closed and settled
   // 'wait' until the renderer chunk answers; 'flat' without WebGL2 or while the context is lost.
   let mode: 'wait' | 'gl' | 'flat' = 'wait';
   let playing = 0, renderer: Renderer | null = null, dead = false, pending = 0, cursor: SVGLineElement | null = null;
+  // The hysteresis sweep (a position along SWEEP) replaces the timeline on the stage while `sweeping`.
+  let sweeping = false, sweepPos = 0, offSettled = false, lastAnnounced = '';
+  let rest24: RelayRun | null = null;
 
   // Controls
   const vIn = h('input', { type: 'range', min: 10, max: 30, step: 0.5, value: 24, 'aria-label': 'Supply voltage' }) as HTMLInputElement;
@@ -214,31 +280,44 @@ export function relayView(): Widget {
   const tOut = h('output', null, '');
   const playBtn = h('button', { type: 'button', class: 'btn sm primary' }, 'Play');
   const resetBtn = h('button', { type: 'button', class: 'btn sm' }, 'Reset view');
+  const offSel = h('select', { 'aria-label': 'When the coil is switched off' },
+    h('option', { value: 'chapter' }, "15 ms (the chapter's run)"), h('option', { value: 'settled' }, '60 ms (coil settled)')) as HTMLSelectElement;
+  const sIn = h('input', { type: 'range', min: 0, max: SWEEP_N, step: 1, value: 0, 'aria-label': 'Sweep the supply from 24 V down to 0 and back up' }) as HTMLInputElement;
+  const sOut = h('output', null, '');
+  const sweepBtn = h('button', { type: 'button', class: 'btn sm' }, 'Sweep supply');
   const ctl = h('div', { class: 'r3-ctl' },
     h('label', { class: 'r3-sl' }, h('span', null, 'Supply'), vIn, vOut),
     h('label', { class: 'r3-sl' }, h('span', null, 'Time'), tIn, tOut),
-    h('div', { class: 'r3-btns' }, playBtn, resetBtn));
+    h('label', { class: 'r3-sl' }, h('span', null, 'Off at'), offSel),
+    h('label', { class: 'r3-sl' }, h('span', null, 'Sweep'), sIn, sOut),
+    h('div', { class: 'r3-btns' }, playBtn, sweepBtn, resetBtn));
 
   // Stage: the canvas (or the flat drawing), labels over it, status chips.
   const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': `A telephone relay in 3D: ${ORBIT_ARIA}` }) as HTMLCanvasElement;
   const flatSvg = s('svg', { class: 'r3-flat', viewBox: `${F2.x0} ${-F2.y0 - F2.h} ${F2.w} ${F2.h}`, role: 'img', 'aria-label': 'A telephone relay seen from the front: coil, yoke, armature and contact springs' }) as SVGSVGElement;
   flatSvg.style.display = 'none';
   const labels = h('div', { class: 'r3-labels', 'aria-hidden': 'true' });
+  const live = h('span', { class: 'sr-only', 'aria-live': 'polite' });
   const state = h('span', { class: 'r3-chip' }), gap = h('span', { class: 'r3-chip' }), spike = h('span', { class: 'r3-chip bad' });
-  const hint = h('div', { class: 'r3-hint' }, `Gaps and travel drawn ×${EXAG}. ${ORBIT_HINT}`);
-  const stage = h('div', { class: 'r3-stage' }, canvas, flatSvg, labels, h('div', { class: 'r3-chips' }, state, gap, spike));
+  const HINT = `Gaps and travel drawn ×${EXAG} at the pole, about ×4.6 at the contacts; everything else to scale. `;
+  const hint = h('div', { class: 'r3-hint' }, HINT + ORBIT_HINT);
+  const stage = h('div', { class: 'r3-stage' }, canvas, flatSvg, labels, h('div', { class: 'r3-chips' }, state, gap, spike), live);
   const frame = modelFrame({ stage, name: 'telephone relay', renderer: () => (mode === 'gl' ? renderer : null), labels });
 
   // Plots and summary
-  const plot = s('svg', { class: 'r3-plot', viewBox: `0 0 ${PW} ${PH}`, role: 'img', 'aria-label': 'Coil current, armature travel, contact state and coil voltage over 25 ms' }) as SVGSVGElement;
+  const plot = s('svg', { class: 'r3-plot', viewBox: `0 0 ${PW} ${PH}`, role: 'img', 'aria-label': 'Coil current, armature travel, contact state and coil voltage against time; point or drag to set the time' }) as SVGSVGElement;
   const legend = h('div', { class: 'r3-legend' },
     h('span', null, h('i', { class: 'cur' }), 'coil current'), h('span', null, h('i', { class: 'trav' }), 'armature travel'),
     h('span', null, h('i', { class: 'band' }), 'NO contact closed'), h('span', null, h('i', { class: 'volt' }), 'coil terminal voltage'));
   const kv = h('div', { class: 'r3-kv' });
+  const hyst = s('svg', { class: 'r3-plot t3-static', viewBox: `0 0 ${HW} ${HH}`, role: 'img', 'aria-label': `Armature travel against the supply while it is swept down and up: it drops out at ${STATIC.drop?.toFixed(1)} volts and pulls in again at ${STATIC.pull?.toFixed(1)} volts` }) as SVGSVGElement;
+  const hystLegend = h('div', { class: 'r3-legend' }, h('span', null, h('i', { class: 'volt' }), 'supply falling from 24 V'), h('span', null, h('i', { class: 'trav' }), 'supply rising'));
+  const diff = h('details', { class: 'deeper' }, h('summary', null, 'How this model differs from a real 3000-type'),
+    h('p', null, `Illustrative values: ${groupDigits(RELAY.N)} turns on ${RELAY.Rc} Ω (a real 500 Ω coil has about 10 700 turns of finer wire; Smith, Telephony and Telegraphy). The gap at the pole is ${(RELAY.gOpen * 1e3).toFixed(2)} mm open and, closed, ${(RELAY.gRes * 1e3).toFixed(2)} mm of residual shim plus ${(RELAY.gIron * 1e3).toFixed(2)} mm for the iron path; real relays set a non-magnetic residual stud at 0.1, 0.3 or 0.5 mm (4, 12 or 20 mils, BPO 3000-type), which raises the drop-out voltage and speeds release. The armature's ${(RELAY.m * 1e3).toFixed(0)} g is its effective mass at the pole, not the drawn steel's. The return is one lumped spring; on the real relay the tension of the contact springs, set by the buffer block, brings the armature back.`));
 
   const el = h('div', { class: 'r3' },
     h('div', { class: 'r3-main' }, ctl, stage, hint),
-    h('div', { class: 'r3-side' }, plot, legend, h('h4', null, 'This relay ', h('span', { class: 'r3-badge' }, 'model')), kv));
+    h('div', { class: 'r3-side' }, plot, legend, hyst, hystLegend, h('h4', null, 'This relay ', h('span', { class: 'r3-badge' }, 'model')), kv, diff));
 
   const colors = new CssColors(el);
   let palette: Palette | null = null;
@@ -255,11 +334,17 @@ export function relayView(): Widget {
   };
 
   // Label overlays: one element per anchor, re-projected after every frame.
+  let anchorsNow: Anchor[] = anchors(run.s[0]);
+  const sweepSample = (): RelaySample => {
+    rest24 ??= relaySim(RELAY_SUPPLY);
+    const c = SWEEP[sweepPos];
+    return { ...rest24.s[c.closed ? 100 : 0], t: 0, i: c.v / RELAY.Rc, vTerm: c.v };
+  };
   const lblEls = anchors(run.s[0]).map((a) => labels.appendChild(h('span', { class: `r3-lbl ${a.side}${a.minor ? ' minor' : ''}` }, h('i'), h('b', null, a.text))));
   const placeLabels = () => {
     if (mode !== 'gl' || !renderer) return;
     const eye = renderer.camera.eye();
-    anchors(run.s[idx]).forEach((a, k) => {
+    anchorsNow.forEach((a, k) => {
       const p = renderer!.project(a.p), e = lblEls[k];
       if (!p) { e.style.display = 'none'; return; }
       e.style.display = '';
@@ -273,6 +358,7 @@ export function relayView(): Widget {
     const r = relaySummary(run), V = run.V, ms = (t: number | null, d = 2) => (t === null ? '—' : `${fmt(t * 1e3, d)} ms`);
     const rows: [string, string, string?][] = [
       ['Coil', `${V} V, ${RELAY.Rc} Ω, ${groupDigits(RELAY.N)} turns`],
+      ['Coil L / R', `${fmt(coilTau(0) * 1e3)} ms open, ${fmt(coilTau(RELAY.travel) * 1e3, 0)} ms closed`],
       ['Coil power', `${fmt(r.power, 2)} W`],
       ['Pull-in voltage', STATIC.pull === null ? '—' : `${fmt(STATIC.pull)} V`],
       ['Drop-out voltage', STATIC.drop === null ? '—' : `${fmt(STATIC.drop)} V`],
@@ -280,58 +366,94 @@ export function relayView(): Widget {
       ['Bounces', r.firstTouch === null ? '—' : String(r.bounces)],
       ['Settled', ms(r.settled), r.settled === null ? '' : 'good'],
       ['Release', ms(r.release)],
-      ['Turn-off spike', `${Math.round(r.spike)} V`, 'bad'],
+      ['Switched off at', `${fmt(run.tOff * 1e3, 0)} ms, coil at ${fmt(r.iOff * 1e3, 0)} of ${fmt((V / RELAY.Rc) * 1e3, 0)} mA`],
+      ['Turn-off spike', `${Math.round(r.spike)} V = ${fmt(r.iOff * 1e3, 0)} mA × ${RELAY.Rq / 1e3} kΩ quench`, 'bad'],
     ];
     kv.replaceChildren(...rows.flatMap(([k, v, c]) => [h('span', null, k), h('span', { class: `v ${c ?? ''}` }, v)]));
   };
 
   const draw = () => {
-    const q = run.s[idx];
-    tOut.textContent = `${fmt(q.t * 1e3)} ms`;
+    const q = sweeping ? sweepSample() : run.s[idx];
+    tOut.textContent = sweeping ? '—' : `${fmt(q.t * 1e3)} ms`;
+    sOut.textContent = `${fmt(SWEEP[sweepPos].v)} V`;
     state.textContent = q.closed ? 'NO closed' : ncClosed(q) ? 'NC closed' : 'in flight';
     state.className = `r3-chip ${q.closed ? 'good' : ncClosed(q) ? '' : 'warn'}`;
+    if (state.textContent !== lastAnnounced) { lastAnnounced = state.textContent; live.textContent = `Contact: ${lastAnnounced}${sweeping ? ` at ${fmt(SWEEP[sweepPos].v)} volts` : ''}`; }
+    drawHyst(hyst, sweeping ? sweepPos : null);
+    if (cursor) cursor.style.display = sweeping ? 'none' : '';
     gap.textContent = `gap ${fmt((RELAY.gOpen - q.x) * 1e3, 2)} mm`;
     spike.textContent = q.vTerm < -40 ? `coil ${Math.round(q.vTerm)} V` : '';
     spike.style.display = q.vTerm < -40 ? '' : 'none';
     if (cursor) { const x = String(tX(q.t)); cursor.setAttribute('x1', x); cursor.setAttribute('x2', x); }
     if (mode === 'wait') return;
     const parts = relayParts(q, pal());
+    anchorsNow = anchors(q);
     if (mode === 'gl' && renderer) {
       renderer.updateBatch(0, packInstances(parts.filter((p) => p.kind === 'box')));
       renderer.updateBatch(1, packInstances(parts.filter((p) => p.kind === 'cyl')));
-    } else if (mode === 'flat') drawFlat(flatSvg, parts, anchors(q));
+    } else if (mode === 'flat') drawFlat(flatSvg, parts, anchorsNow);
   };
 
   const rerun = () => {
     pending = 0;
-    run = relaySim(Number(vIn.value));
+    run = relaySim(Number(vIn.value), RELAY, offSettled ? SETTLED_WINDOW : undefined);
+    TE = run.tEnd;
+    tIn.max = String(run.s.length - 1);
+    idx = Math.min(idx, run.s.length - 1);
     vOut.textContent = `${vIn.value} V`;
     cursor = drawPlot(plot, run);
     summary();
     draw();
   };
 
-  const setIdx = (i: number) => { idx = Math.max(0, Math.min(run.s.length - 1, Math.round(i))); tIn.value = String(idx); draw(); };
-  const stop = () => { cancelAnimationFrame(playing); playing = 0; playBtn.textContent = 'Play'; };
+  const setIdx = (i: number) => { sweeping = false; idx = Math.max(0, Math.min(run.s.length - 1, Math.round(i))); tIn.value = String(idx); draw(); };
+  const idleLabels = () => {
+    const rm = reducedMotion();
+    playBtn.textContent = rm ? 'Next event' : 'Play';
+    sweepBtn.textContent = rm ? 'Next threshold' : 'Sweep supply';
+  };
+  const stop = () => { cancelAnimationFrame(playing); playing = 0; idleLabels(); };
+  /** The sample indices of the run's events: switch-on, the armature leaving, each contact change, switch-off, the end. */
+  const eventIdx = () => {
+    const at = (t: number) => Math.round(t / 1e-4), moved = run.s.findIndex((q) => q.x > 0.01e-3);
+    return [...new Set([0, at(T_ON), moved, ...run.ev.map((e) => at(e.t)), at(run.tOff), run.s.length - 1].filter((k) => k >= 0))].sort((a, b) => a - b);
+  };
   const play = () => {
     if (playing) { stop(); return; }
+    // Reduced motion: no animation; each press steps to the next event (the time slider still scrubs).
+    if (reducedMotion()) { setIdx(eventIdx().find((k) => k > idx) ?? 0); return; }
     if (idx >= run.s.length - 1) setIdx(0);
-    // Reduced motion: no animation, straight to the end (the time slider still scrubs).
-    if (reducedMotion()) { setIdx(run.s.length - 1); return; }
     playBtn.textContent = 'Pause';
     const t0 = performance.now(), from = run.s[idx].t;
     const tick = (now: number) => {
       const t = from + (now - t0) / 1000 / 400; // 1/400 speed: 25 ms of relay in 10 s
-      setIdx((t / T_END) * (run.s.length - 1));
+      setIdx((t / run.tEnd) * (run.s.length - 1));
       playing = idx < run.s.length - 1 ? requestAnimationFrame(tick) : 0;
-      if (!playing) playBtn.textContent = 'Play';
+      if (!playing) idleLabels();
     };
     playing = requestAnimationFrame(tick);
+  };
+  const setSweep = (k: number) => { sweeping = true; sweepPos = Math.max(0, Math.min(SWEEP_N, Math.round(k))); sIn.value = String(sweepPos); draw(); };
+  const sweepPlay = () => {
+    if (playing) { stop(); return; }
+    if (reducedMotion()) { setSweep(SWEEP_MARKS.find((k) => k > sweepPos) ?? 0); return; }
+    if (sweepPos >= SWEEP_N) setSweep(0);
+    sweepBtn.textContent = 'Pause';
+    const t0 = performance.now(), from = sweepPos;
+    const step = (now: number) => {
+      setSweep(from + ((now - t0) / 12000) * SWEEP_N); // 24 V -> 0 -> 24 V in 12 s
+      playing = sweepPos < SWEEP_N ? requestAnimationFrame(step) : 0;
+      if (!playing) idleLabels();
+    };
+    playing = requestAnimationFrame(step);
   };
 
   vIn.addEventListener('input', () => { vOut.textContent = `${vIn.value} V`; if (!pending) pending = requestAnimationFrame(rerun); });
   tIn.addEventListener('input', () => { stop(); setIdx(Number(tIn.value)); });
   playBtn.addEventListener('click', play);
+  sweepBtn.addEventListener('click', sweepPlay);
+  sIn.addEventListener('input', () => { stop(); setSweep(Number(sIn.value)); });
+  offSel.addEventListener('change', () => { offSettled = offSel.value === 'settled'; stop(); rerun(); });
   resetBtn.addEventListener('click', () => { renderer?.camera.reset(); renderer?.invalidate(); });
   // Scrub by pointing at the plot.
   const scrub = (e: PointerEvent) => {
@@ -348,7 +470,7 @@ export function relayView(): Widget {
     canvas.style.display = on ? 'none' : '';
     flatSvg.style.display = on ? '' : 'none';
     labels.style.display = on ? 'none' : '';
-    hint.textContent = on ? `Gaps and travel drawn ×${EXAG}. A flat view: this browser has no WebGL2 for the 3D one.` : `Gaps and travel drawn ×${EXAG}. ${ORBIT_HINT}`;
+    hint.textContent = on ? `${HINT}A flat view: this browser has no WebGL2 for the 3D one.` : HINT + ORBIT_HINT;
     frame.setFlat(on);
     resetBtn.style.display = on ? 'none' : '';
     draw();
@@ -362,6 +484,10 @@ export function relayView(): Widget {
   });
   const applyLights = () => renderer?.setLights({ sky: colors.rgb('--rl-sky'), ground: colors.rgb('--rl-ground'), key: colors.rgb('--rl-key') });
 
+  idleLabels();
+  // A narrow stage (a phone, a codex column) drops the minor labels: they would sit on each other.
+  const ro = new ResizeObserver(() => stage.classList.toggle('narrow', stage.clientWidth < 300));
+  ro.observe(stage);
   rerun();
   void import('../gl/renderer').then(({ createRenderer, OrbitCamera, boxMesh, cylinderMesh }) => {
     if (dead) return;
@@ -386,6 +512,7 @@ export function relayView(): Widget {
       stop();
       cancelAnimationFrame(pending);
       unwatch();
+      ro.disconnect();
       frame.destroy();
       renderer?.destroy();
       renderer = null;

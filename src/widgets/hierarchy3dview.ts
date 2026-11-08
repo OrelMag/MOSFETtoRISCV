@@ -10,9 +10,9 @@ import type { Widget } from '../view/stage';
 import type { OrbitView } from '../gl/camera';
 import { frameLoop } from './mosfet';
 import { modelStage } from './modelstage';
-import { CORE_GHZ, LEVELS } from './hierarchy3ddata';
+import { CORE_GHZ, DEFAULT_HITS, LEVELS, amatCycles, amatShares, type HitRates } from './hierarchy3ddata';
 import {
-  asSeconds, placeOf, cyclesOf, flightSeconds, fmtNs, followView, hierarchyAnchors, hierarchyParts, levelX, overview, timeAt, SCALE,
+  asSeconds, elapsedNs, placeOf, cyclesOf, flightSeconds, fmtNs, followView, hierarchyAnchors, hierarchyParts, levelX, overview, SCALE,
   type HPalette, type HPose, type Phase,
 } from './hierarchy3dparts';
 
@@ -31,7 +31,7 @@ export function hierarchyView(): Widget {
     aria: 'The memory hierarchy as distances in 3D: a core, then along a road a desk, a shelf, a library, a warehouse across town and another city, each at a distance that is its latency on a log scale, and a courier that fetches data from the level you pick',
     camera: overview(false),
     limits: { minDist: 25, maxDist: 500 },
-    note: 'Distance is the latency on a log scale (20 units per factor of ten), not a straight one: on a straight scale the SSD would be 80 000 times as far as L1. The flight is a drawing: it takes a second or a few, not the access’s real time. Block sizes are not capacities. L1 and L2 follow the Golden Cove / Willow Cove measurements and the SSD a NAND page read, so they are orders of magnitude that vary by product.',
+    note: 'Distance is the latency on a log scale (20 units per factor of ten), not a straight one: on a straight scale the SSD would be 80 000 times as far as L1. The flight is a drawing: it takes a second or a few, not the access’s real time; the clock on it counts a round trip (half the latency at the far end, the rest on the way back). The hit-rate sliders use the table’s latencies in cycles; hit rates are each level’s own, of the requests that reach it. Block sizes are not capacities. L1 and L2 follow the Golden Cove / Willow Cove measurements and the SSD a NAND page read, so they are orders of magnitude that vary by product.',
     draw: () => paint(),
   });
   const palette = (): HPalette => ({
@@ -54,7 +54,7 @@ export function hierarchyView(): Widget {
     }
   }
   function paint(): void {
-    stage.paint(hierarchyParts(pose(), palette()), hierarchyAnchors());
+    stage.paint(hierarchyParts(pose(), palette()), hierarchyAnchors(narrow()));
     requestAnimationFrame(keepLabelsIn); // after the renderer has placed them
   }
 
@@ -64,15 +64,15 @@ export function hierarchyView(): Widget {
 
   function readout(): void {
     const lv = target === null ? null : LEVELS[target];
-    const done = !!lv && phase === 'idle', elapsed = !lv ? 0 : done || arrived || phase === 'back' ? lv.ns : x > 0 ? timeAt(x) : 0;
-    chip.textContent = !lv ? 'At the core: pick a level' : arrived ? `${lv.name}: ${fmtNs(lv.ns)}` : done ? `Back at the core: ${fmtNs(lv.ns)}` : phase === 'back' ? `Back with the data: ${fmtNs(lv.ns)}` : `On the way to ${lv.name}: ${fmtNs(elapsed)}`;
+    const done = !!lv && phase === 'idle', elapsed = !lv ? 0 : done || arrived ? lv.ns : elapsedNs(lv.ns, phase, x);
+    chip.textContent = !lv ? 'At the core: pick a level' : arrived ? `${lv.name}: ${fmtNs(lv.ns)} there and back` : done ? `Back at the core: ${fmtNs(lv.ns)}` : phase === 'back' ? `Back with the data: ${fmtNs(lv.ns)}` : `${phase === 'out' ? 'Request on the way to' : 'Data coming back from'} ${lv.name}: ${fmtNs(elapsed)} so far`;
     chip.className = `r3-chip ${arrived || done || phase === 'back' ? 'good' : lv ? 'warn' : ''}`;
     const rows: [string, string][] = lv ? [
       ['Hit in', lv.name],
       ['Place', lv.place === 'core' ? 'In the core' : placeOf(lv).label],
-      ['Latency', `${fmtNs(lv.ns)} = ${groupNum(cyclesOf(lv.ns))} cycles at ${CORE_GHZ} GHz`],
+      ['Latency, there and back', `${fmtNs(lv.ns)} = ${groupNum(cyclesOf(lv.ns))} cycles at ${CORE_GHZ} GHz`],
       ['Distance', `${levelX(lv).toFixed(1)} units`],
-      ['Elapsed', fmtNs(elapsed)],
+      ['Elapsed', `${fmtNs(elapsed)}${phase === 'out' ? ' (request out: half the trip)' : ''}`],
       ['If a cycle were a second', asSeconds(cyclesOf(lv.ns))],
       ['A real one', lv.real],
     ] : [
@@ -126,14 +126,39 @@ export function hierarchyView(): Widget {
   });
   stage.resetBtn.addEventListener('click', toOverview);
 
+  // Hit rates: the lesson of the step. Local rates (of the requests that reach a level), AMAT over the table's own latencies.
+  const hits: HitRates = { ...DEFAULT_HITS };
+  const amatKv = h('div', { class: 'r3-kv' }), amatLive = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
+  const cyc = (c: number) => (c < 10 ? c.toFixed(1) : c.toFixed(0));
+  function amatOut(): void {
+    const a = amatCycles(hits), sh = amatShares(hits), dram = cyclesOf(LEVELS[4].ns);
+    amatKv.replaceChildren(...[
+      ['Average access', `${a.toFixed(1)} cycles = ${fmtNs(a / CORE_GHZ)}`],
+      ...sh.map((s, i): [string, string] => [i === 0 ? 'L1 hit' : `${LEVELS[i + 1].name} adds`, `${cyc(s.cycles)} cycles`]),
+      ['No caches', `${dram} cycles: ${(dram / a).toFixed(1)}× slower`],
+    ].flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
+    amatLive.textContent = `Average memory access time ${a.toFixed(1)} cycles.`;
+  }
+  const rate = (label: string, key: keyof HitRates) => {
+    const input = h('input', { type: 'range', min: 50, max: 100, step: 1, value: Math.round(hits[key] * 100), 'aria-label': `${label} hit rate` }) as HTMLInputElement;
+    const out = h('output', null, `${Math.round(hits[key] * 100)} %`);
+    input.addEventListener('input', () => { hits[key] = Number(input.value) / 100; out.textContent = `${input.value} %`; amatOut(); });
+    return h('label', { class: 'r3-sl' }, h('span', null, label), input, out);
+  };
+
+
   panel.append(
     h('h3', { class: 'm3-title' }, 'The same ladder as distances'),
     h('p', { class: 'm3-sub' }, 'The registers are in the core itself. What you use now is on the desk (L1), this week’s work on a shelf (L2), the department’s in the library (L3), and everything else in a warehouse across town (DRAM); the SSD is another city. Each place sits as far from the core as its latency, on a log scale with the table’s own figures. Pick the level where the data is and a courier goes out to it and comes back with the time on the clock; the camera follows.'),
     h('div', { class: 'r3' },
       h('div', { class: 'r3-main' },
         h('div', { class: 'r3-ctl' }, h('div', { class: 'hy-btns', role: 'group', 'aria-label': 'Where the data is' }, h('span', { class: 'hy-lbl' }, 'Hit in'), ...btns, stage.resetBtn)),
-        stage.el, stage.hint, live),
-      h('div', { class: 'r3-side' }, h('h4', null, 'This access ', h('span', { class: 'r3-badge' }, 'model')), kv)));
+        stage.el,
+        h('div', { class: 'r3-ctl hy-rates' }, h('span', { class: 'hy-lbl' }, 'Hit rate (of the requests that reach it)'), rate('L1', 'l1'), rate('L2', 'l2'), rate('L3', 'l3')),
+        stage.hint, live),
+      h('div', { class: 'r3-side' }, h('h4', null, 'This access ', h('span', { class: 'r3-badge' }, 'model')), kv,
+        h('h4', null, 'Average over many loads'), amatKv, amatLive)));
+  amatOut();
   readout();
   paint();
   return { el: panel, destroy() { loop.stop(); stage.destroy(); } };

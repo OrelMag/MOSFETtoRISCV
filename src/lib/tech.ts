@@ -57,6 +57,16 @@ export const FOLLOWER_FANOUT = 10;
 export const TUBE_VOLUME = (ENIAC_PANEL.w * ENIAC_PANEL.d * ENIAC_PANEL.h) / ENIAC_PANEL.tubes;
 export const TUBE_MASS = ENIAC.mass / ENIAC.tubes;
 
+/** Power per device with its plant, from the machines themselves (W): the Z3's about 4 kW over its 2 600 relays (power supply included),
+ *  ENIAC's 150 kW over its 17 468 tubes (heaters, plates, power supplies and blowers). RELAY_POWER and the tube brick's power are the
+ *  devices' own, from the physics models; these are what a machine of them drew at the wall. */
+export const RELAY_PLANT_W = Z3.power / Z3.relays;
+export const TUBE_PLANT_W = ENIAC.power / ENIAC.tubes;
+/** Hours between tube failures in a machine of `tubes`, at ENIAC's rate (one of its 17 468 every two days, after improvement). */
+export const tubeFailEvery = (tubes: number): number => (ENIAC.failH * ENIAC.tubes) / tubes;
+/** Floor (m²) a tube machine of `panels` would take at ENIAC's room per panel (167 m² for 40 panels, card equipment and plant included). */
+export const eniacRoom = (panels: number): number => (panels * ENIAC.room) / ENIAC_PANEL.count;
+
 /** A NAND2 in a 28 nm-class process (µm², chapter 28's floorplan) at 70 % utilization. */
 export const NAND2_UM2 = 0.3;
 export const UTILIZATION = 0.7;
@@ -89,8 +99,10 @@ export interface Priced {
   /** Steps on the worst path (gate delays, relay steps, tube steps) and their time (s); null when unknown. */
   steps: number | null;
   time: number | null;
-  /** Average power (W), energy per operation (J): null for CMOS (the Power panel measures it by simulation). */
+  /** Average power of the devices themselves (W), energy per operation (J): null for CMOS (the Power panel measures it by simulation). */
   power: number | null;
+  /** Power at the wall with the plant a machine of them needed: devices × RELAY_PLANT_W or TUBE_PLANT_W (W); null for CMOS. */
+  plant: number | null;
   energy: number | null;
   /** Volume (m³) and mass (kg); for CMOS the silicon area instead (m²). */
   volume: number | null;
@@ -109,7 +121,7 @@ export function price(def: ComponentDef, tech: TechId, steps: number | null): Pr
   const s = stats(def);
   const kind = partKind(def);
   const time = steps === null ? null : steps * TECH[tech].step;
-  const base = { tech, steps, time, native: false, fanout: 0, power: null, energy: null, volume: null, mass: null, area: null };
+  const base = { tech, steps, time, native: false, fanout: 0, power: null, plant: null, energy: null, volume: null, mass: null, area: null };
   if (tech === 'cmos') {
     if (kind !== 'nand' && kind !== 'transistor') return null;
     return { ...base, devices: s.transistors, area: s.nands * NAND2_UM2 * 1e-12 / UTILIZATION, native: kind === 'transistor' };
@@ -120,19 +132,19 @@ export function price(def: ComponentDef, tech: TechId, steps: number | null): Pr
   if (tech === 'relay') {
     const fanout = native ? 0 : fanSum(def, relayExtra);
     const n = native ? s.relays : s.nands + fanout;
-    return withEnergy({ ...base, native, devices: n, fanout, power: n * RELAY_POWER, volume: n * RELAY_VOLUME, mass: n * RELAY_MASS });
+    return withEnergy({ ...base, native, devices: n, fanout, power: n * RELAY_POWER, plant: n * RELAY_PLANT_W, volume: n * RELAY_VOLUME, mass: n * RELAY_MASS });
   }
   if (native) {
     // A tube circuit as drawn: each triode section with a divider on its grid, each diode section's heater.
     const tubes = Math.ceil((s.triodes + s.diodes) / 2);
     const power = s.triodes * (sectionPower().average + dividerPower()) + s.diodes * DIODE_HEATER_W;
-    return withEnergy({ ...base, native, devices: tubes, triodes: s.triodes, diodes: s.diodes, power, volume: tubes * TUBE_VOLUME, mass: tubes * TUBE_MASS });
+    return withEnergy({ ...base, native, devices: tubes, triodes: s.triodes, diodes: s.diodes, power, plant: tubes * TUBE_PLANT_W, volume: tubes * TUBE_VOLUME, mass: tubes * TUBE_MASS });
   }
   const fanout = fanSum(def, followers);
   const triodes = s.nands + fanout, diodes = 2 * s.nands;
   const tubes = Math.ceil(triodes / 2) + s.nands;
   const power = s.nands * TUBE_BRICK_POWER + fanout * FOLLOWER_POWER;
-  return withEnergy({ ...base, devices: tubes, fanout, triodes, diodes, power, volume: tubes * TUBE_VOLUME, mass: tubes * TUBE_MASS });
+  return withEnergy({ ...base, devices: tubes, fanout, triodes, diodes, power, plant: tubes * TUBE_PLANT_W, volume: tubes * TUBE_VOLUME, mass: tubes * TUBE_MASS });
 }
 
 const without = new WeakMap<ComponentDef, Map<string, ComponentDef>>();
@@ -211,4 +223,5 @@ settled time, bounce included), ${RELAY_POWER.toFixed(2)} W (a ${RELAY_COIL_POWE
 ${RELAY_RACK.relays} relays in ${(RELAY_RACK.w * RELAY_RACK.d * RELAY_RACK.h).toFixed(1)} m³, the Z3's mass per relay. Tubes: a NAND is a
 triode section and two diode sections (½ 6SN7 + a 6AL5), ${TUBE_STEP_US.toFixed(1)} µs per step (an R·C estimate),
 ${TUBE_BRICK_POWER.toFixed(2)} W (heaters ${(HEATER_W + 2 * DIODE_HEATER_W).toFixed(1)} W of it), a cathode follower when a plate would drive
-more than ${PLATE_FANOUT} dividers, ENIAC's volume and mass per tube.`;
+more than ${PLATE_FANOUT} dividers, ENIAC's volume and mass per tube. With their plant (power supplies, blowers) the machines drew more
+than their devices: the Z3 ${RELAY_PLANT_W.toFixed(1)} W a relay, ENIAC ${TUBE_PLANT_W.toFixed(1)} W a tube.`;

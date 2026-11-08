@@ -52,4 +52,9 @@
   .en-keys > div { gap: 2px; }
   .en-set select, .en-set input { min-height: 40px; }
 }
-@container (max-width: 560px) { .en .r3-stage { aspect-ratio: 1; } }
+@container (max-width: 560px) {
+  .en .r3-stage { aspect-ratio: 1; }
+  /* ten views wrapped to five rows pushed the machine below the fold: one row that scrolls sideways */
+  .en-views { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 4px; }
+  .en-views .btn { flex: none; }
+}

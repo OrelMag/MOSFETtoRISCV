@@ -29,15 +29,26 @@ export type Cards = readonly (readonly boolean[])[];
 
 /** Warp thread w across the cloth (pitch 2); hook k across the head (pitch 8, the width of its card slot). */
 export const THREAD_X = (w: number): number => (w - (WARP - 1) / 2) * 2;
-export const HOOK_X = (k: number): number => (k - (HOOKS - 1) / 2) * 8;
+export const HOOK_X = (k: number): number => ((k >> 1) - 1.5) * HOOK_PITCH;
+/** The widget's 8 hooks drawn as 2 rows (k & 1) of 4 columns (k >> 1), as a real head has needle rows of different heights. */
+export const HOOK_PITCH = 14, ROWS = 2, ROW_A = [2.5, -2.5], ROW_Z = [0, 12], HOOK_DX = 1.8;
+export const HOOK_ROW = (k: number): number => k & 1;
+/** The hook bar's x and z (the needle's x is HOOK_X(k); its eye is on the bar), and the needle's height (card row). */
+export const HOOK_BAR_X = (k: number): number => HOOK_X(k) - HOOK_DX;
+export const HOOK_Z = (k: number): number => ROW_Z[HOOK_ROW(k)];
+export const NEEDLE_H = (k: number): number => NEEDLE_Y + ROW_A[HOOK_ROW(k)];
+/** The spring board behind the needles (z). */
+export const SPRING_Z = 22;
 /** Shed height at the harness, and the rows of the loom front to back (z). */
-export const SHED = 10, Z_BEAM = -50, Z_HEDDLE = 0, Z_WEFT = -10, Z_FELL = 22, ROW_P = 1.3;
+export const SHED = 10, Z_BEAM = -50, Z_HEDDLE = 0, Z_WEFT = 10, Z_FELL = 22, ROW_P = 1.3;
 /** The head: hooks' bar from HOOK_Y0 to HOOK_Y1, the crook on top; the knife under it; needles and the card at NEEDLE_Y. */
 export const HOOK_Y0 = 34, HOOK_Y1 = 52, KNIFE_Y = 48.8, NEEDLE_Y = 42, COMBER_Y = 16;
 /** How far a blank position pushes its needle and hook back (the card is drawn thick to make it visible). */
-export const PUSH = 4;
+export const PUSH = 6;
 export const CYL_Z = -20, CYL_BACK = 8;
 
+/** The shuttle's centre height, in the open shed (the raised threads are about 5.5 high at the shuttle's z). */
+export const SHUTTLE_Y = 2.7;
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const ease = (t: number) => t * t * (3 - 2 * t);
 const seg = (T: number, a: number, b: number) => ease(clamp01((T - a) / (b - a)));
@@ -72,8 +83,8 @@ export function poseOf(cards: Cards, p: number, T: number): Pose {
   const rows = p - 1 + (T >= 0.72 ? 1 : 0);
   return {
     p, T, card, holes, push, hookLift, griffe, away, turn: seg(T, 0.92, 1), threadLift, dir,
-    shuttleX: dir * (-44 + 88 * sh), weft: T > 0.35 && T < 0.72, weftZ: Z_WEFT + (Z_FELL - Z_WEFT) * beat, weftY: 4 - 3.9 * beat,
-    reedZ: Z_WEFT - 1.2 + (Z_FELL - Z_WEFT) * (beat - back), rows, takeUp: p - 1 + beat,
+    shuttleX: dir * (-44 + 88 * sh), weft: T > 0.35 && T < 0.72, weftZ: Z_WEFT + (Z_FELL - Z_WEFT) * beat, weftY: SHUTTLE_Y - (SHUTTLE_Y - 0.1) * beat,
+    reedZ: Z_WEFT - 3.2 + (Z_FELL - Z_WEFT + 2) * (beat - back), rows, takeUp: p - 1 + beat,
   };
 }
 
@@ -99,15 +110,27 @@ function drumBox(c: RGB, x0: number, x1: number, a0: number, a1: number, r0: num
     scale: [x1 - x0, a1 - a0, r1 - r0], rot: quatAxisAngle([1, 0, 0], ang),
   };
 }
-/** The card on the face at angle `ang`: pasteboard with a hole where `holes` says (four strips round it), a dark pocket in it. */
+/** The perforated prism: a core cube and, on each face, a slab 2.5 thick with a pit (2 x 2) under each of the 8 hole positions. */
+function prismOnDrum(out: Part[], P: LoomPalette, ang: number, away: number): void {
+  out.push(drumBox(P.wood, -36, 36, -3.5, 3.5, -3.5, 3.5, 0, away));
+  const xs: number[] = [-36]; for (let c = 0; c < HOOKS / ROWS; c++) xs.push(HOOK_X(c * 2) - 1, HOOK_X(c * 2) + 1); xs.push(36);
+  for (let q = 0; q < 4; q++) {
+    const an = ang - q * (Math.PI / 2);
+    for (const [a0, a1, pit] of [[-6, -3.5, false], [-3.5, -1.5, true], [-1.5, 1.5, false], [1.5, 3.5, true], [3.5, 6, false]] as const) {
+      if (!pit) { out.push(drumBox(P.wood, -36, 36, a0, a1, 3.5, 6, an, away)); continue; }
+      for (let i = 0; i < xs.length; i += 2) out.push(drumBox(P.wood, xs[i], xs[i + 1], a0, a1, 3.5, 6, an, away));
+    }
+  }
+}
+/** The card on the face at angle `ang`: pasteboard in a 4 x 2 grid of slots, a square hole where `holes` says (strips round it) over the prism's pit. */
 function cardOnDrum(out: Part[], P: LoomPalette, holes: readonly boolean[], ang: number, away: number): void {
   for (let k = 0; k < HOOKS; k++) {
-    const x = HOOK_X(k);
-    if (!holes[k]) { out.push(drumBox(P.card, x - 4, x + 4, -6, 6, 6, 10, ang, away)); continue; }
+    const x = HOOK_X(k), r = HOOK_ROW(k), A = ROW_A[r], lo = r === 0 ? 0 : -6, hi = r === 0 ? 6 : 0, xl = x - HOOK_PITCH / 2, xr = x + HOOK_PITCH / 2;
+    if (!holes[k]) { out.push(drumBox(P.card, xl, xr, lo, hi, 6, 10, ang, away)); continue; }
     out.push(
-      drumBox(P.card, x - 4, x - 1.4, -6, 6, 6, 10, ang, away), drumBox(P.card, x + 1.4, x + 4, -6, 6, 6, 10, ang, away),
-      drumBox(P.card, x - 1.4, x + 1.4, 1.4, 6, 6, 10, ang, away), drumBox(P.card, x - 1.4, x + 1.4, -6, -1.4, 6, 10, ang, away),
-      drumBox(P.hole, x - 1.4, x + 1.4, -1.4, 1.4, 6, 6.15, ang, away));
+      drumBox(P.card, xl, x - 1.4, lo, hi, 6, 10, ang, away), drumBox(P.card, x + 1.4, xr, lo, hi, 6, 10, ang, away),
+      drumBox(P.card, x - 1.4, x + 1.4, A + 1.4, hi, 6, 10, ang, away), drumBox(P.card, x - 1.4, x + 1.4, lo, A - 1.4, 6, 10, ang, away),
+      drumBox(P.hole, x - 1, x + 1, A - 1, A + 1, 3.5, 3.65, ang, away));
   }
 }
 
@@ -116,7 +139,7 @@ export function loomParts(cards: Cards, o: Pose, P: LoomPalette): Part[] {
   const live = (b: Part, on: boolean): Part => { if (on) b.emissive = glow(P.live, 0.6); return b; };
 
   // The wooden frame: bottom and top rails, four posts, the head's rails.
-  const px = 40, zb = -34, zf = 16, yb = -14, yt = 70;
+  const px = 40, zb = -34, zf = 30, yb = -14, yt = 70;
   for (const z of [zb, zf]) for (const [ya, yc] of [[yb, yb + 2], [26, 28], [yt - 2, yt]]) out.push(box(P.wood, -px - 1, px + 1, ya, yc, z - 1, z + 1));
   for (const x of [-px, px]) {
     out.push(box(P.wood, x - 1, x + 1, yb, yb + 2, Z_BEAM - 4, 74));
@@ -128,44 +151,47 @@ export function loomParts(cards: Cards, o: Pose, P: LoomPalette): Part[] {
   // ---- the cylinder: a square prism on an axle, a card on each face, the chain beyond hanging behind it.
   const b = o.p - 1, drumZ = CYL_Z - CYL_BACK * o.away;
   out.push(rod(P.iron, [-px, NEEDLE_Y, drumZ], [px, NEEDLE_Y, drumZ], 1.2));
-  out.push(drumBox(P.wood, -36, 36, -6, 6, -6, 6, 0, o.away)); // a square prism looks the same after every quarter turn
   // The prism turns with its faces: the 4 faces carry cards b − 1 … b + 2 (b: the card read this pick), one quarter turn a pick.
   const ang = (c: number) => -(c - b - o.turn) * (Math.PI / 2);
   const faces = [b - 1, b, b + 1, b + 2];
+  prismOnDrum(out, P, -(-o.turn) * (Math.PI / 2), o.away);
   for (const c of faces) cardOnDrum(out, P, cards[mod(c, n)], ang(c), o.away);
   // The rest of the chain hangs in a curtain behind (n − 4 cards; fewer than four make the faces repeat cards: the chain is a loop).
   for (let s = 0; s < n - 4; s++) {
     const idx = mod(b + 3 + s, n), z = drumZ - 14 - 2.4 * s;
     out.push(box(P.card, -32, 32, 20, 32, z - 0.5, z + 0.5));
-    cards[idx].forEach((on, k) => { if (on) out.push(box(P.hole, HOOK_X(k) - 1.4, HOOK_X(k) + 1.4, 24.5, 27.5, z + 0.5, z + 0.6)); });
+    cards[idx].forEach((on, k) => { if (on) out.push(box(P.hole, HOOK_X(k) - 1.4, HOOK_X(k) + 1.4, 26 + ROW_A[HOOK_ROW(k)], 29 + ROW_A[HOOK_ROW(k)], z + 0.5, z + 0.6)); });
   }
   // Cards leaving the face run on over a lacing cord to the curtain.
   if (n > 4) out.push(rod(P.cord, [-33, 31, drumZ - 8], [-33, 31, drumZ - 14], 0.4), rod(P.cord, [33, 31, drumZ - 8], [33, 31, drumZ - 14], 0.4));
 
-  // ---- needle board, spring board; needles with their springs, hooks and the griffe knife.
-  for (let k = 0; k <= HOOKS; k++) {
-    const xa = k === 0 ? -34 : HOOK_X(k - 1) + 3, xb = k === HOOKS ? 34 : HOOK_X(k) - 1.5;
-    if (xb > xa) out.push(box(P.wood, xa, xb, 38, 46, -9, -7.8));
+  // ---- needle board, spring board; needles with their springs, hooks and the griffe knives (one per row of hooks).
+  const colX = [0, 1, 2, 3].map((c) => HOOK_X(c * 2));
+  for (let c = 0; c <= colX.length; c++) {
+    const xa = c === 0 ? -34 : colX[c - 1] + 3, xb = c === colX.length ? 34 : colX[c] - 2.5;
+    if (xb > xa) out.push(box(P.wood, xa, xb, NEEDLE_Y - 6.5, NEEDLE_Y + 6.5, -9, -7.8));
+    if (c < colX.length) out.push(box(P.wood, colX[c] - 2.5, colX[c] + 3, NEEDLE_Y - 1.2, NEEDLE_Y + 1.2, -9, -7.8));
   }
-  out.push(box(P.wood, -34, 34, 38, 46, 10, 14));
+  out.push(box(P.wood, -34, 34, NEEDLE_Y - 6.5, NEEDLE_Y + 6.5, SPRING_Z, SPRING_Z + 4));
   for (let k = 0; k < HOOKS; k++) {
-    const x = HOOK_X(k), d = o.push[k], lifted = o.holes[k] && o.hookLift[k] > 0.01;
-    const nx = x + 1.8, lift = o.hookLift[k];
-    // needle: tip to the collar (with the hook's eye) and on to the spring box
-    out.push(rod(P.steel, [nx, NEEDLE_Y, -14 + d], [nx, NEEDLE_Y, 9 + d], 0.5, 0.4));
-    out.push(box(P.steel, nx - 0.7, nx + 0.7, NEEDLE_Y - 0.7, NEEDLE_Y + 0.7, 3.2 + d, 4.4 + d));
+    const x = HOOK_BAR_X(k), nx = HOOK_X(k), ny = NEEDLE_H(k), zr = HOOK_Z(k), d = o.push[k], lifted = o.holes[k] && o.hookLift[k] > 0.01;
+    const lift = o.hookLift[k];
+    // needle: tip (into the card's hole and the prism's pit when the hole lets it) to the rear end, with a collar for the spring
+    out.push(rod(P.steel, [nx, ny, -16 + d], [nx, ny, SPRING_Z - 3 + d], 0.5, 0.4));
+    out.push(box(P.steel, nx - 0.7, nx + 0.7, ny - 0.7, ny + 0.7, 3.2 + zr + d, 4.4 + zr + d));
     // spring: coils between the collar and the spring board, closer together when pushed back
-    const coils = 6, sa = 4.4 + d, sb = 10;
-    for (let c = 0; c < coils; c++) { const z = sa + ((c + 0.5) * (sb - sa)) / coils; out.push(rod(P.spring, [nx, NEEDLE_Y, z - 0.18], [nx, NEEDLE_Y, z + 0.18], 1.3, 0.3)); }
-    // hook: the vertical bar, an eye round the needle, the crook over the knife; the neck cord below
-    out.push(live(box(P.iron, x - 0.6, x + 0.6, y0 + lift, HOOK_Y1 + lift, -1 + d, 1 + d, 0.3), lifted));
-    out.push(live(box(P.iron, x - 0.6, x + 0.6, HOOK_Y1 - 1.6 + lift, HOOK_Y1 + lift, -5 + d, 1 + d, 0.3), lifted));
-    out.push(box(P.steel, x - 0.6, nx + 0.7, NEEDLE_Y - 0.5, NEEDLE_Y + 0.5, -0.6 + d, 0.6 + d));
+    const coils = 6, sa = 4.4 + zr + d, sb = SPRING_Z;
+    for (let c = 0; c < coils; c++) { const z = sa + ((c + 0.5) * (sb - sa)) / coils; out.push(rod(P.spring, [nx, ny, z - 0.18], [nx, ny, z + 0.18], 1.3, 0.3)); }
+    // hook: the vertical bar, the crook over the knife; the eye round the needle; the neck cord below
+    out.push(live(box(P.iron, x - 0.6, x + 0.6, y0 + lift, HOOK_Y1 + lift, zr - 1 + d, zr + 1 + d, 0.3), lifted));
+    out.push(live(box(P.iron, x - 0.6, x + 0.6, HOOK_Y1 - 1.6 + lift, HOOK_Y1 + lift, zr - 5 + d, zr + 1 + d, 0.3), lifted));
+    out.push(box(P.steel, x - 0.6, nx + 0.7, ny - 0.5, ny + 0.5, zr - 0.6 + d, zr + 0.6 + d));
   }
-  // The griffe: a frame of iron with the knife, rising and falling.
-  const g = o.griffe;
-  out.push(box(P.iron, -35, 35, KNIFE_Y + g, KNIFE_Y + 1.6 + g, -4.6, -1.4, 0.5), box(P.iron, -37, 37, 30 + g, 31.5 + g, -4.6, -1.4));
-  for (const x of [-36, 36]) out.push(box(P.iron, x - 0.7, x + 0.7, 30 + g, KNIFE_Y + 1.6 + g, -4.6, -1.4));
+  // The griffe: a frame of iron with a knife for each row of hooks, rising and falling.
+  const g = o.griffe, zk = ROW_Z[ROWS - 1] - 1.4;
+  for (const zr of ROW_Z) out.push(box(P.iron, -35, 35, KNIFE_Y + g, KNIFE_Y + 1.6 + g, zr - 4.6, zr - 1.4, 0.5));
+  out.push(box(P.iron, -37, 37, 30 + g, 31.5 + g, -4.6, zk));
+  for (const x of [-36, 36]) out.push(box(P.iron, x - 0.7, x + 0.7, 30 + g, KNIFE_Y + 1.6 + g, -4.6, zk));
 
   // ---- comber board with the harness cords: hook neck → comber → the thread's heddle, the lingoe below.
   const holesX = Array.from({ length: WARP }, (_, w) => THREAD_X(w));
@@ -175,7 +201,7 @@ export function loomParts(cards: Cards, o: Pose, P: LoomPalette): Part[] {
   }
   for (let w = 0; w < WARP; w++) {
     const k = w % HOOKS, x = holesX[w], lift = o.threadLift[w], on = lift > 0.01;
-    const neck: Vec3 = [HOOK_X(k), y0 + o.hookLift[k], 0];
+    const neck: Vec3 = [HOOK_BAR_X(k), y0 + o.hookLift[k], HOOK_Z(k)];
     out.push(live(rod(P.cord, [x, COMBER_Y, 0], neck, 0.3), on));
     out.push(live(rod(P.cord, [x, lift, 0], [x, COMBER_Y, 0], 0.3), on));
     out.push(box(P.brass, x - 0.5, x + 0.5, lift - 0.4, lift + 0.4, -0.5, 0.5));
@@ -190,7 +216,8 @@ export function loomParts(cards: Cards, o: Pose, P: LoomPalette): Part[] {
     const xe = Math.max(-33, Math.min(33, o.shuttleX)), xs = -o.dir * 33;
     if (Math.abs(xe - xs) > 0.2) out.push(rod(P.weft, [xs, o.weftY, o.weftZ], [xe, o.weftY, o.weftZ], 0.5));
   }
-  out.push(box(P.wood, o.shuttleX - 5, o.shuttleX + 5, 2.7, 5.3, Z_WEFT - 1.8, Z_WEFT + 1.8, 0.4), box(P.brass, o.shuttleX + o.dir * 5, o.shuttleX + o.dir * 6.4, 3.4, 4.6, Z_WEFT - 0.6, Z_WEFT + 0.6));
+  const sy = SHUTTLE_Y;
+  out.push(box(P.wood, o.shuttleX - 5, o.shuttleX + 5, sy - 1.3, sy + 1.3, Z_WEFT - 1.8, Z_WEFT + 1.8, 0.4), box(P.brass, o.shuttleX + o.dir * 5, o.shuttleX + o.dir * 6.4, sy - 0.6, sy + 0.6, Z_WEFT - 0.6, Z_WEFT + 0.6));
   const rz = o.reedZ;
   out.push(box(P.brass, -35, 35, 12, 13.2, rz - 0.8, rz + 0.8, 0.4), box(P.brass, -35, 35, -4.5, -3.3, rz - 0.8, rz + 0.8, 0.4));
   for (let k = 0; k <= 16; k++) out.push(box(P.brass, -32 + k * 4 - 0.2, -32 + k * 4 + 0.2, -3.3, 12, rz - 0.4, rz + 0.4, 0.4));
@@ -214,13 +241,13 @@ export function loomAnchors(cards: Cards, o: Pose, whole = false): Anchor[] {
   const all: Anchor[] = [
     { text: 'cylinder (square prism)', p: [-30, NEEDLE_Y + 10, z], side: 'l', n: [0, 1, 0.3] },
     n > 4 ? { text: 'rest of the chain', p: [-32, 26, z - 14 - 2.4 * (n - 5)], side: 'l', n: [0, 0.3, 1], minor: true } : { text: 'chain of cards', p: [-32, 26, z - 14], side: 'l', n: side, minor: true },
-    { text: 'sprung needles', p: [HOOK_X(0) + 1.8, NEEDLE_Y, -5], side: 'l', n: front, minor: true },
-    { text: 'hooks', p: [HOOK_X(HOOKS - 1), 51, 0], side: 'r', n: front },
-    { text: 'griffe knife', p: [35, KNIFE_Y + o.griffe, -3], side: 'r', n: front },
+    { text: 'sprung needles', p: [HOOK_X(0), NEEDLE_H(0), -5], side: 'l', n: front, minor: true },
+    { text: 'hooks', p: [HOOK_BAR_X(HOOKS - 2), 51, 0], side: 'r', n: front },
+    { text: 'griffe knife', p: [35, KNIFE_Y + o.griffe, ROW_Z[0] - 3], side: 'r', n: front },
     { text: 'comber board', p: [34, COMBER_Y, 3], side: 'r', n: front, minor: true },
     { text: 'harness cords', p: [THREAD_X(0), 8, 0], side: 'l', n: front },
     { text: 'lingoes (weights)', p: [THREAD_X(0), -7, 0], side: 'l', n: front, minor: true },
-    { text: 'shuttle', p: [o.shuttleX, 5.3, Z_WEFT], side: 't', n: up },
+    { text: 'shuttle', p: [o.shuttleX, SHUTTLE_Y + 1.3, Z_WEFT], side: 't', n: up },
     { text: 'reed (beater)', p: [35, 13, o.reedZ], side: 'r', n: up, minor: true },
     { text: 'warp threads', p: [THREAD_X(0), 0, Z_BEAM + 8], side: 'l', n: up, minor: true },
     { text: 'cloth', p: [THREAD_X(WARP - 1), 0, Z_FELL + 14], side: 'r', n: up },
