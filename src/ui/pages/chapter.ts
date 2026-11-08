@@ -326,8 +326,14 @@ export class ChapterPage implements Page {
     const c = this.chapter;
     const prose = h('div', { class: 'prose', html: lazyBody(() => st.body) });
     b.replaceChildren();
-    if (this.step === 0 && (c.goals?.length || c.builds?.length)) b.append(this.goalsCard());
     b.append(h('h2', { class: 'step-title', tabindex: '-1' }, st.title), prose);
+    // the step's own title and first paragraph come first; the compact goals line follows them
+    if (this.step === 0 && (c.goals?.length || c.builds?.length)) {
+      const card = this.goalsCard();
+      const first = prose.firstElementChild;
+      if (first) first.after(card);
+      else prose.append(card);
+    }
     settleLazy(prose);
     // target: a big scene is still being built (Stage.load)
     const lit = st.scene && this.stage.target ? litLine(this.stage.target, st.lit) : null;
@@ -437,11 +443,35 @@ export class ChapterPage implements Page {
   private goalsCard(): HTMLElement {
     const c = this.chapter;
     const builds = (c.builds ?? []).map((id) => outlineOf(id)).filter((x) => !!x);
-    return h('div', { class: 'ch-goals' },
-      c.goals?.length ? h('div', { class: 'ch-goals-k' }, 'In this chapter you will') : null,
-      c.goals?.length ? h('ul', null, c.goals.map((g) => h('li', { html: g }))) : null,
+    const goals = c.goals ?? [];
+    const KEY = 'mosfet2riscv:goalsOpen';
+    const read = (): string[] => { try { const v = JSON.parse(localStorage.getItem(KEY) ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
+    const write = (open: boolean): void => {
+      try {
+        const rest = read().filter((x) => x !== c.id);
+        localStorage.setItem(KEY, JSON.stringify(open ? [...rest, c.id].slice(-200) : rest));
+      } catch { /* private window: this visit only */ }
+    };
+    const plain = (html: string): string => { const d = document.createElement('div'); d.innerHTML = html; return (d.textContent ?? '').trim(); };
+    const open = read().includes(c.id);
+    const list = h('ul', { id: `goals-${c.id}`, ...(open ? {} : { hidden: '' }) }, goals.map((g) => h('li', { html: g })));
+    const btn = h('button', { type: 'button', class: 'ch-goals-btn', 'aria-expanded': String(open), 'aria-controls': `goals-${c.id}` },
+      h('span', { class: 'ch-goals-k' }, open ? 'In this chapter you will' : 'In this chapter'),
+      h('span', { class: 'ch-goals-sum' }, plain(goals[0])),
+      goals.length > 1 ? h('span', { class: 'ch-goals-n' }, `· ${goals.length - 1} more`) : null,
+      icon('chevD', 14));
+    const card = h('div', { class: `ch-goals${open ? ' open' : ''}` }, goals.length ? btn : null, goals.length ? list : null,
       builds.length ? h('div', { class: 'ch-links' }, h('span', { class: 'ch-links-k' }, 'Builds on'),
         builds.map((x) => h('a', { class: 'ch-chip', href: `#/c/${x.id}/0` }, `${chapterNo(x)} · ${x.title}`))) : null);
+    btn.addEventListener('click', () => {
+      const o = btn.getAttribute('aria-expanded') !== 'true';
+      btn.setAttribute('aria-expanded', String(o));
+      list.hidden = !o;
+      card.classList.toggle('open', o);
+      btn.firstElementChild!.textContent = o ? 'In this chapter you will' : 'In this chapter';
+      write(o);
+    });
+    return card;
   }
 
   /**
