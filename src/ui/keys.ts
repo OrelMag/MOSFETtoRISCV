@@ -89,7 +89,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'sb.pointer', group: 'place', caps: ['L', '·', 'T'], does: 'arm a pointer · a comment (same pointer name = same net)', match: [letter('l')], taken: ['l', 't'] },
   { id: 'sb.comment', group: 'place', caps: [], does: '', match: [letter('t')] },
   { id: 'sb.kcursor', group: 'place', caps: ['Alt ←↑↓→'], does: 'keyboard cursor: move it (Shift: ×5); plain arrows move it too while a part is armed, a wire begun or nothing is selected, else they nudge the selection' },
-  { id: 'sb.kplace', group: 'place', caps: ['↵', '·', 'Space'], does: 'place the armed part at the cursor (Shift: keep it armed); with none armed ↵ selects what is under the cursor, and again uses it (toggles an input)' },
+  { id: 'sb.kplace', group: 'place', caps: ['↵', '·', 'Space'], does: 'place the armed part at the cursor (Shift: keep it armed); with none armed ↵ uses what is under the cursor: an input toggles, a part or pointer is selected and a second ↵ acts on it' },
   { id: 'sb.palette', group: 'place', caps: ['↑↓', 'Home End'], does: 'in the parts list (one Tab stop): move, ← → fold a group, type a name to jump, ↵ arms the part and moves to the canvas' },
   { id: 'sb.disarm', group: 'place', caps: ['Esc'], does: 'disarm · leave Type' },
   { id: 'sb.flipL', group: 'wire', caps: ['Space', '·', '/'], does: 'flip the wire\'s L while drawing', taken: ['/'] },
@@ -168,7 +168,7 @@ export function typing(t: EventTarget | null): boolean {
 export function ownsKeys(t: EventTarget | null): boolean {
   if (typing(t)) return true;
   const el = t as Element | null;
-  return !!el?.closest?.('canvas, [role=application], [role=dialog], [role=menu], [role=listbox], [data-own-keys]');
+  return !!el?.closest?.('canvas, [role=application]:not(.ed-svg), [role=dialog], [role=menu], [role=listbox], [data-own-keys]');
 }
 
 // ---- the dispatcher ---------------------------------------------------------------------------

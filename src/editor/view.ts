@@ -153,9 +153,9 @@ export class EditorView {
     this.hot = s('circle', { class: 'ed-hot', r: 0.42, display: 'none' });
     this.ghost = s('g', { class: 'ed-ghost' });
     this.kc = s('g', { class: 'ed-kc', display: 'none' },
-      s('path', { class: 'ed-kc-halo', d: 'M-1.6,0 H-0.5 M0.5,0 H1.6 M0,-1.6 V-0.5 M0,0.5 V1.6' }),
-      s('path', { class: 'ed-kc-line', d: 'M-1.6,0 H-0.5 M0.5,0 H1.6 M0,-1.6 V-0.5 M0,0.5 V1.6' }),
-      s('circle', { class: 'ed-kc-dot', r: 0.16 }));
+      s('path', { class: 'ed-kc-halo', d: 'M-2.6,0 H-0.8 M0.8,0 H2.6 M0,-2.6 V-0.8 M0,0.8 V2.6' }),
+      s('path', { class: 'ed-kc-line', d: 'M-2.6,0 H-0.8 M0.8,0 H2.6 M0,-2.6 V-0.8 M0,0.8 V2.6' }),
+      s('circle', { class: 'ed-kc-ring', r: 0.8 }), s('circle', { class: 'ed-kc-dot', r: 0.2 }));
     this.guides = s('g', { class: 'ed-guides' });
     this.gHandles = s('g', { class: 'ed-handles' });
     this.gPorts = s('g', { class: 'ed-ports' });
@@ -848,6 +848,7 @@ export class EditorView {
 
   /** The keyboard cursor at a grid point (null hides it). */
   showKeyCursor(p: Vec | null): void {
+    this.svg.parentElement?.classList.toggle('kc-on', !!p);
     if (!p) return void this.kc.setAttribute('display', 'none');
     this.kc.setAttribute('transform', `translate(${p[0]},${p[1]})`);
     this.kc.setAttribute('display', 'inline');
