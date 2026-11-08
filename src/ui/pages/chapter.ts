@@ -14,6 +14,7 @@ import type { Widget } from '../../view/stage';
 import { stageStepOf } from '../stageborrow';
 import { drillLanded, drillSegs, syncDrill } from '../drillpath';
 import { bindKeys } from '../keys';
+import { installSplitter } from '../splitter';
 import { toggleChapterMenu } from '../quicknav';
 import { bookmarkButton, StepNotes } from '../notesui';
 import { newPartsNavState, partsNav } from '../chapterparts';
@@ -80,6 +81,7 @@ export class ChapterPage implements Page {
   /** This step's notes (cards, and markers on the stage); none on the recap. */
   private stepNotes: StepNotes | null = null;
   private offNotes: () => void;
+  private unsplit: () => void;
   /** The first step is built: later step changes move the focus to the new title and announce it. */
   private ready = false;
   /** Codex terms already marked on this step (prose, analogy, layers): one tab stop per term per step. */
@@ -97,6 +99,7 @@ export class ChapterPage implements Page {
     const narrative = h('aside', { class: 'narrative' }, this.head, this.body, this.foot);
     this.el = h('div', { class: 'layout' }, narrative, this.stage.el, this.inspector.el, this.notes.live);
     this.stage.el.querySelector('.canvas')?.append(this.notes.el);
+    this.unsplit = installSplitter(this.el, narrative);
     this.circuitBtn = this.showCircuitButton();
     this.cueOff = trackScrollCue(this.el);
     // Each level opened is a history entry (ui/drillpath.ts): #/c/<chapter>/<step>/<instance>/…
@@ -632,6 +635,7 @@ export class ChapterPage implements Page {
   }
 
   destroy(): void {
+    this.unsplit();
     // (the next page may already have set it: the old one is destroyed after the new one is built)
     if (widgetStepOwner === this) document.documentElement.removeAttribute('data-widget-step');
     this.offNotes();
