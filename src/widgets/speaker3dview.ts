@@ -12,7 +12,7 @@ import { modelStage, type ModelStage } from './modelstage';
 import { loadClip } from './dspaudio';
 import type { OrbitView } from '../gl/camera';
 import {
-  BL, CMS_MM_N, DRAW_K, I_FULL, QMS, SPL_DB, FS_HZ, VOICE_RATE, WINDOW, XMAX_MM, coneMm, currentA, currentForStroke, strokeForAmp, drawnRatio, emfVolts, loudestWindow, makeDrive, pitchHz, poseAt, realPeakUm, realUm, velocityMmS,
+  BL, CMS_MM_N, DRAW_K, I_FULL, I_RATED, P_RMS_W, RE_OHM, peakStrokeMm, QMS, SPL_DB, FS_HZ, VOICE_RATE, WINDOW, XMAX_MM, coneMm, currentA, currentForStroke, strokeForAmp, drawnRatio, emfVolts, loudestWindow, makeDrive, pitchHz, poseAt, realPeakUm, realUm, velocityMmS,
   speakerAnchors, speakerParts, type Drive, type Mode, type SpeakerPalette,
 } from './speaker3dparts';
 
@@ -40,7 +40,7 @@ export function speakerView(): Widget {
       aria: 'A cut-away moving-coil loudspeaker in 3D with a plot of the held samples behind it: cone, surround, spider, voice coil in the magnet gap, pole piece, ferrite ring, top plate and frame',
       camera: { ...VIEW },
       limits: { minDist: 120, maxDist: 1200 },
-      note: `Drawn to a Dayton RS180-8: the cone, coil diameter, Xmax and force factor are the datasheet's; the winding and gap heights, the magnet's size and the spider are proportions chosen to fit Xmax. Speaker: the current is scaled so the window's largest excursion is Xmax (${XMAX_MM} mm), drawn at its real size; the cone follows the held current through Mms · x'' + Rms · x' + x / Cms = Bl · i, with Rms from an assumed Qms of ${QMS} (not on Dayton's page). Microphone: the sound is ${SPL_DB} dB SPL (1 Pa rms, 1.41 Pa peak) at the cone, whose real stroke is about ${realPeakUm(d).toFixed(1)} µm at the voice's ${Math.round(f0)} Hz; it is drawn at Xmax × ${DRAW_K}, ${groupNum(ratio)} times larger than real. This is the woofer run backwards in a sealed box, a simplification: a real dynamic microphone has a light diaphragm and a small coil and is flat to several kHz, where this one falls 6 dB per octave. The coil is drawn with 16 of its roughly 64 turns (an estimate from Bl); field arrows and the current's direction are shown for a positive current. Time is slowed 500 times.`,
+      note: `Drawn to a Dayton RS180-8: the cone, coil diameter, Xmax and force factor are the datasheet's; the winding and gap heights, the magnet's size and the spider are proportions chosen to fit Xmax. Speaker: the loudest sample is the rated power's peak current, √(2 · ${P_RMS_W} W / ${RE_OHM} Ω) = ${fmt(I_RATED, 1)} A (Dayton: 60 W RMS, Re ${RE_OHM} Ω, Qms ${QMS}); the cone follows the held current through Mms · x'' + Rms · x' + x / Cms = Bl · i and moves ${fmt(peakStrokeMm(d), 2)} mm at most, so its motion is drawn ×${d.mag} (the numbers shown are real). Microphone: the sound is ${SPL_DB} dB SPL (1 Pa rms, 1.41 Pa peak) at the cone, whose real stroke is about ${realPeakUm(d).toFixed(1)} µm at the voice's ${Math.round(f0)} Hz; it is drawn at Xmax × ${DRAW_K}, ${groupNum(ratio)} times larger than real. This is the woofer run backwards in a sealed box, a simplification: a real dynamic microphone has a light diaphragm and a small coil and is flat to several kHz, where this one falls 6 dB per octave. The coil is drawn with 16 of its roughly 64 turns (an estimate from Bl); field arrows and the current's direction are shown for a positive current. Time is slowed 500 times.`,
       draw,
     });
     stage = st;
@@ -58,7 +58,7 @@ export function speakerView(): Widget {
       const p = poseAt(d, t);
       const rows: [string, string][] = [['Sample', `${p.k + 1} of ${d.n}, held 125 µs`]];
       if (mode === 'speaker') {
-        rows.push(['DAC code', fmt(p.code, 0)], ['Coil current (held)', `${fmt(currentA(d, p.drive))} A`], ['Cone position', `${fmt(coneMm(p.cone), 1)} mm`]);
+        rows.push(['DAC code', fmt(p.code, 0)], ['Coil current (held, rated power)', `${fmt(currentA(d, p.drive))} A`], ['Cone position (real)', `${fmt(coneMm(p.cone), 2)} mm · drawn ×${d.mag}`]);
       } else {
         rows.push(['Cone (real stroke)', `${fmt(realUm(d, p.cone), 2)} µm`], ['Cone velocity', `${fmt(velocityMmS(d, p.k), 2)} mm/s`], ['EMF (real stroke)', `${fmt(emfVolts(d, p.k) * 1000, 2)} mV · drawn ×${groupNum(ratio)}`], ['ADC code (held)', fmt(p.code, 0)]);
       }
@@ -71,7 +71,7 @@ export function speakerView(): Widget {
       runBtn.setAttribute('aria-pressed', String(running));
       live.setAttribute('aria-live', running && !announce ? 'off' : 'polite');
       const text = mode === 'speaker'
-        ? `Sample ${p.k + 1}: code ${p.code} held, cone at ${fmt(coneMm(p.cone), 1)} millimetres of ±${XMAX_MM}.`
+        ? `Sample ${p.k + 1}: code ${p.code} held, cone at ${fmt(coneMm(p.cone), 2)} millimetres of ±${XMAX_MM}.`
         : `Sample ${p.k + 1}: the cone moves ${fmt(realUm(d, p.cone), 2)} micrometres at ${fmt(velocityMmS(d, p.k), 2)} millimetres a second, the coil makes ${fmt(emfVolts(d, p.k) * 1000, 2)} millivolts, the ADC holds code ${p.code}.`;
       if (live.textContent !== text) live.textContent = text;
     }
@@ -103,7 +103,7 @@ export function speakerView(): Widget {
       readout(true); kick();
     });
     const EXPLAIN: Record<Mode, string> = {
-      speaker: `The DAC holds each sample for one period and the coil current follows it. The cone is a mass on a spring: above its resonance (Fs = ${FS_HZ} Hz) it is mass-controlled, a second-order low-pass, so it answers the average of the staircase and the steps' edges (8 kHz) are lost to it (about −94 dB). With the current scaled so this window's largest stroke is Xmax, its peak code is ${fmt(d.ipeak, 1)} A (the formants add current the heavy cone barely follows); a pure tone at the voice's ${Math.round(f0)} Hz takes ${fmt(currentForStroke(f0), 1)} A for Xmax, not the ${fmt(I_FULL)} A of the stiffness law x = Bl · i · Cms (Cms = ${CMS_MM_N} mm/N), which holds only below Fs: Massless cone shows that law. Choose a tone to see the current for Xmax: it grows as f².`,
+      speaker: `The DAC holds each sample for one period and the coil current follows it. The cone is a mass on a spring: above its resonance (Fs = ${FS_HZ} Hz) it is mass-controlled, a second-order low-pass, so it answers the average of the staircase and the steps' edges (8 kHz) are lost to it (about −94 dB). The loudest sample is the rated power's peak, ${fmt(I_RATED, 1)} A (60 W RMS into 6.4 Ω), and it moves the cone only ${fmt(peakStrokeMm(d), 2)} mm at the voice's ${Math.round(f0)} Hz, drawn ×${d.mag}; a pure tone at ${Math.round(f0)} Hz would need ${fmt(currentForStroke(f0), 1)} A for Xmax. The stiffness law x = Bl · i · Cms (Cms = ${CMS_MM_N} mm/N) would give Xmax for ${fmt(I_FULL)} A but holds only below Fs: Massless cone shows it. Choose a tone to see the current for Xmax: it grows as f².`,
       mic: `The same machine run backwards: sound moves the cone, the coil moving in the gap makes e = Bl · v with Bl = ${BL} T·m, and the ADC takes one sample of that voltage a period, held for the next. The sound is ${SPL_DB} dB SPL (1 Pa rms, 1.41 Pa peak) at the cone: F = p · Sd, and above Fs (35.7 Hz) the cone is mass-controlled, v = F / (ω · Mms), so the voice's peak moves it only ${realPeakUm(d).toFixed(1)} µm at ${Math.round(f0)} Hz. The picture draws that stroke at Xmax × ${DRAW_K}, ${groupNum(ratio)} times larger; the volts shown are for the real stroke.`,
     };
     const explain = h('p', { class: 'm3-sub' }, EXPLAIN.speaker);

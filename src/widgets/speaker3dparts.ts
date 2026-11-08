@@ -31,8 +31,10 @@ export type Mode = 'speaker' | 'mic';
 export const VOICE_RATE = 8000;
 /** Samples in the window shown (it loops). */
 export const WINDOW = 64;
-/** Assumed mechanical Q of the suspension (not on Dayton's page); it sets Rms = sqrt(Mms/Cms) / Qms. */
-export const QMS = 3;
+/** Datasheet (Dayton's RS180-8 page): mechanical Q, DC resistance (ohm), RMS power handling (W). Rms = sqrt(Mms/Cms) / Qms. */
+export const QMS = 1.22, RE_OHM = 6.4, P_RMS_W = 60;
+/** The peak current of a sine at the rated power into Re: sqrt(2·P/Re) = 4.3 A. The drive's loudest sample is this. */
+export const I_RATED = Math.sqrt((2 * P_RMS_W) / RE_OHM);
 
 const mod = (a: number, n: number) => ((a % n) + n) % n;
 
@@ -61,8 +63,10 @@ export interface Drive {
   edge: readonly number[];
   /** Speaker: the cone's velocity (m/s) at the start of each period. */
   vedge: readonly number[];
-  /** Speaker: the coil current (A) at the window's peak code, scaled so the cone's largest excursion is Xmax. */
+  /** Speaker: the coil current (A) at the window's peak code: the rated power's peak, I_RATED. */
   ipeak: number;
+  /** The drawing's magnification of the cone's motion: 1 in the microphone and the massless contrast; speaker: the whole number that brings the real stroke up to about Xmax. */
+  mag: number;
   rate: number;
   /** The voice's pitch the real stroke is worked out at, Hz. */
   f0: number;
@@ -81,14 +85,15 @@ export function makeDrive(codes: readonly number[], mode: Mode, massless: boolea
   const steps = codes.map((c, i) => (codes[(i + 1) % n] - c) / peak), top = Math.max(1e-9, ...steps.map(Math.abs));
   const adc = steps.map((v) => v / top);
   // The cone, from the loop's periodic steady state (the transient dies in ~27 ms: 40 passes of the 8 ms window), for a
-  // unit force at the peak code; the force is then scaled so the largest excursion, between samples too, is Xmax.
+  // unit force at the peak code; the force is then the rated power's: Bl · I_RATED at the peak code.
   const T = 1 / rate, xs = new Array<number>(n).fill(0), vs = new Array<number>(n).fill(0);
   let x = 0, v = 0;
   for (let pass = 0; pass < 40; pass++) for (let i = 0; i < n; i++) { xs[i] = x; vs[i] = v; [x, v] = evolve(x, v, codes[i] / peak, T); }
   let hi = 0;
   for (let i = 0; i < n; i++) for (let j = 0; j < SUB; j++) hi = Math.max(hi, Math.abs(evolve(xs[i], vs[i], codes[i] / peak, (T * j) / SUB)[0]));
-  const s = XMAX_MM / 1000 / Math.max(hi, 1e-12); // N at the peak code
-  return { mode, massless, codes, n, peak, adc, edge: xs.map((q) => (q * s) / (XMAX_MM / 1000)), vedge: vs.map((q) => q * s), ipeak: s / BL, rate, f0 };
+  const s = BL * I_RATED, strokeM = hi * s; // N at the peak code, and the largest real stroke (m)
+  const mag = mode === 'mic' ? DRAW_K : massless ? 1 : Math.max(1, Math.floor(XMAX_MM / 1000 / Math.max(strokeM, 1e-12)));
+  return { mode, massless, codes, n, peak, adc, edge: xs.map((q) => (q * s) / (XMAX_MM / 1000)), vedge: vs.map((q) => q * s), ipeak: I_RATED, mag, rate, f0 };
 }
 
 /** The ZOH: the code the DAC holds at time t (in sample periods). */
@@ -124,8 +129,10 @@ export const coneEdges = (d: Drive): number[] => Array.from({ length: d.n }, (_,
 
 /** Datasheet: linear excursion (mm), force factor (T·m), suspension compliance (mm/N). */
 export const XMAX_MM = 6, BL = 7.82, CMS_MM_N = 1.12;
-/** The excursion is drawn at its real size: 6 mm, the stroke over which the winding still covers the whole gap. */
+/** The microphone's cone is drawn at Xmax, 6 mm: the stroke over which the winding still covers the whole gap. The speaker's is drawn magnified by Drive.mag (never past Xmax). */
 export const DRAW_K = 1;
+/** Peak stroke (mm) of the speaker drive's cone at the rated power. */
+export const peakStrokeMm = (d: Drive): number => Math.max(...Array.from({ length: d.n * 8 }, (_, i) => Math.abs(poseAt(d, i / 8).cone))) * XMAX_MM;
 /** The coil current that holds the cone at Xmax by the suspension alone: x = Bl·i·Cms (no mass, no damping; below Fs only). */
 export const I_FULL = XMAX_MM / 1000 / (BL * (CMS_MM_N / 1000));
 /** The cone's real displacement in millimetres: the window's peak sample is Xmax. */
@@ -189,7 +196,7 @@ export const emfVolts = (d: Drive, k: number): number => BL * (velocityMmS(d, k)
 /** Height of the dust cap's lower face at rest. */
 export const DUST_Y = 36;
 /** Height of the dust cap's lower face at displacement `cone` (−1 … 1), as drawn. */
-export const dustY = (cone: number): number => DUST_Y + cone * XMAX_MM * DRAW_K;
+export const dustY = (cone: number, mag = DRAW_K): number => DUST_Y + cone * XMAX_MM * mag;
 const SEG = 12, WIND_SEG = 6, TURNS = 16;
 const phiOf = (k: number, seg = SEG) => Math.PI + ((k + 0.5) * Math.PI) / seg;
 
@@ -255,7 +262,7 @@ export const GEOM = {
 };
 
 export function speakerParts(d: Drive, t: number, P: SpeakerPalette): Part[] {
-  const ps = poseAt(d, t), dy = ps.cone * XMAX_MM * DRAW_K, out: Part[] = [], G = GEOM;
+  const ps = poseAt(d, t), dy = ps.cone * XMAX_MM * d.mag, out: Part[] = [], G = GEOM;
   // Fixed: back plate, ferrite ring, top plate, pole piece, the six-spoke cast frame.
   out.push(...ring(P.steel, 0, G.outerR, 0, G.backTop));
   out.push(...ring(P.magnet, G.magnetIn, G.outerR, G.backTop, G.magnetTop));
@@ -313,7 +320,7 @@ export function speakerParts(d: Drive, t: number, P: SpeakerPalette): Part[] {
 }
 
 export function speakerAnchors(d: Drive, t: number, close = false): Anchor[] {
-  const dy = poseAt(d, t).cone * XMAX_MM * DRAW_K;
+  const dy = poseAt(d, t).cone * XMAX_MM * d.mag;
   const at = (r: number, phi: number, y: number): Vec3 => [r * Math.cos(phi), y, r * Math.sin(phi)];
   const up: Vec3 = [0, 1, 0], front: Vec3 = [0, 0, 1];
   if (close) {

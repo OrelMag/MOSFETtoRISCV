@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { quatRotate } from '../src/gl/math';
 import { wavSamples } from './dsp/wav';
 import {
-  BL, CMS_M_N, QMS, currentA, currentForStroke, evolve, strokeForAmp, DRAW_K, FS_HZ, MMS_KG, PRESSURE_PA, SD_M2, drawnRatio, pitchHz, realMotion, realPeakUm, realUm, velocityMmS, GEOM, I_FULL, VOICE_RATE, WINDOW, XMAX_MM, coneMm, dustY, emfVolts, heldCode, loudestWindow, makeDrive, poseAt, slab,
+  BL, CMS_M_N, QMS, I_RATED, peakStrokeMm, currentA, currentForStroke, evolve, strokeForAmp, DRAW_K, FS_HZ, MMS_KG, PRESSURE_PA, SD_M2, drawnRatio, pitchHz, realMotion, realPeakUm, realUm, velocityMmS, GEOM, I_FULL, VOICE_RATE, WINDOW, XMAX_MM, coneMm, dustY, emfVolts, heldCode, loudestWindow, makeDrive, poseAt, slab,
   speakerAnchors, speakerParts, staircase, type SpeakerPalette,
 } from '../src/widgets/speaker3dparts';
 
@@ -40,30 +40,42 @@ describe('the speaker model against the chapter', () => {
     expect(staircase(d)).toEqual(codes.map((c) => c / d.peak));
   });
 
-  it('the drawn dust cap sits at the cone position (rest height plus the real stroke, DRAW_K = 1)', () => {
+  it('the drawn dust cap sits at the cone position (rest height plus the real stroke, the drawn magnification)', () => {
     expect(DRAW_K).toBe(1);
     const d = makeDrive(codes, 'speaker', false), dust = (t: number) => speakerParts(d, t, P).filter((p) => same(p.color as number[], P.dust));
     const lowY = (t: number) => Math.min(...dust(t).map((p) => p.pos[1] - p.scale![1] / 2));
     expect(Math.max(...dust(0).map((p) => p.pos[1])) - Math.min(...dust(0).map((p) => p.pos[1]))).toBeGreaterThan(3); // a dome, not a disc
     for (const n of [0, 7, 20, 41, 63]) {
       const c = poseAt(d, n + 0.5).cone;
-      expect(lowY(n + 0.5) - lowY(0)).toBeCloseTo(dustY(c) - dustY(poseAt(d, 0).cone), 6);
+      expect(lowY(n + 0.5) - lowY(0)).toBeCloseTo(dustY(c, d.mag) - dustY(poseAt(d, 0).cone, d.mag), 6);
     }
   });
 
-  it('stays within Xmax, and the coil stays in its gap (the winding covers the gap over the whole stroke)', () => {
+  it('the drive is the rated power: peak current <= sqrt(2 P / Re), the real stroke <= Xmax, the drawn one too and the coil stays in its gap', () => {
+    expect(I_RATED).toBeCloseTo(Math.sqrt((2 * 60) / 6.4), 12); // Dayton: 60 W RMS, Re 6.4 ohm
+    expect(I_RATED).toBeLessThan(5);
     for (const massless of [false, true]) {
       const d = makeDrive(codes, 'speaker', massless);
       let top = 0;
       for (let t = 0; t < WINDOW; t += 0.1) {
         const p = poseAt(d, t);
+        expect(Math.abs(currentA(d, p.drive))).toBeLessThanOrEqual((massless ? I_FULL : I_RATED) + 1e-9);
         top = Math.max(top, Math.abs(coneMm(p.cone)));
         expect(Math.abs(coneMm(p.cone))).toBeLessThanOrEqual(XMAX_MM * 1.005);
-        const dy = p.cone * XMAX_MM * DRAW_K, wl = GEOM.windLow + dy, wh = GEOM.windHigh + dy;
+        const dy = p.cone * XMAX_MM * d.mag, wl = GEOM.windLow + dy, wh = GEOM.windHigh + dy;
+        expect(Math.abs(dy)).toBeLessThanOrEqual(XMAX_MM * 1.005);
         expect(wl).toBeLessThanOrEqual(GEOM.magnetTop + 0.05);
         expect(wh).toBeGreaterThanOrEqual(GEOM.plateTop - 0.05);
       }
-      expect(top).toBeGreaterThan(XMAX_MM * 0.99); // the window's largest excursion is Xmax
+      if (massless) { expect(top).toBeGreaterThan(XMAX_MM * 0.99); expect(d.mag).toBe(1); }
+      else {
+        // the real stroke at voice pitch is about a millimetre, far under Xmax, and the picture says how much it is magnified
+        expect(top).toBeLessThan(2);
+        expect(top).toBeCloseTo(peakStrokeMm(d), 1);
+        expect(d.mag).toBeGreaterThan(2);
+        expect(top * d.mag).toBeGreaterThan(XMAX_MM * 0.7);
+        expect(top * (d.mag + 1)).toBeGreaterThan(XMAX_MM); // the largest whole factor that stays in the gap
+      }
     }
     expect((GEOM.windHigh - GEOM.windLow - (GEOM.plateTop - GEOM.magnetTop)) / 2).toBe(XMAX_MM);
   });
@@ -76,17 +88,19 @@ describe('the speaker model against the chapter', () => {
     const [xs, vs] = evolve(0, 0, 10, 2); // a constant force settles at F·Cms
     expect(xs).toBeCloseTo(10 * CMS_M_N, 6);
     expect(vs).toBeCloseTo(0, 6);
-    expect(evolve(0, 0, 10, 1e-4)[0] / (0.5 * (10 / MMS_KG) * 1e-8)).toBeCloseTo(1, 2); // x = ½ (F / M) t² at first
+    expect(evolve(0, 0, 10, 1e-4)[0] / (0.5 * (10 / MMS_KG) * 1e-8)).toBeCloseTo(1, 1); // x = ½ (F / M) t² at first
     const wd = Math.sqrt(1 / (MMS_KG * CMS_M_N)) * Math.sqrt(1 - 1 / (4 * QMS * QMS));
-    expect(evolve(0, 0, 1, Math.PI / wd)[0]).toBeGreaterThan(CMS_M_N * 1.5); // half a ring on: Q = 3 overshoots
+    expect(evolve(0, 0, 1, Math.PI / wd)[0]).toBeGreaterThan(CMS_M_N * 1.2); // half a ring on: Q = 1.22 overshoots by exp(-pi z / sqrt(1 - z^2)) = 24 %
     // the mass law: a sine of one period per window needs i = x · |1/Cms − ω²Mms + jωRms| / Bl, as currentForStroke says
     const sine = Array.from({ length: WINDOW }, (_, i) => Math.round(1000 * Math.sin((2 * Math.PI * i) / WINDOW)));
     const f = VOICE_RATE / WINDOW, d = makeDrive(sine, 'speaker', false);
-    expect(d.ipeak / currentForStroke(f)).toBeGreaterThan(0.98);
-    expect(d.ipeak / currentForStroke(f)).toBeLessThan(1.04);
-    expect(d.ipeak).toBeGreaterThan(5); // amperes at 125 Hz, not the stiffness law's 0.685
+    const stroke = peakStrokeMm(d); // the sine's real stroke at the rated peak current
+    expect(stroke / strokeForAmp(f, I_RATED)).toBeGreaterThan(0.97);
+    expect(stroke / strokeForAmp(f, I_RATED)).toBeLessThan(1.03);
+    expect(stroke).toBeLessThan(XMAX_MM * 0.6); // mass-controlled at 125 Hz: Xmax would take currentForStroke(f) amperes
+    expect(currentForStroke(f)).toBeGreaterThan(1.5 * I_RATED);
     const dv = makeDrive(codes, 'speaker', false); // the voice itself needs several amperes for Xmax at its pitch
-    expect(dv.ipeak).toBeGreaterThan(3);
+    expect(dv.ipeak).toBe(I_RATED);
     expect(currentA(dv, 1)).toBeCloseTo(dv.ipeak, 12);
     expect(currentA(makeDrive(codes, 'speaker', true), 1)).toBeCloseTo(I_FULL, 12);
     // the cone is continuous across a sample edge, where the held current jumps (no staircase edge reaches the cone)
