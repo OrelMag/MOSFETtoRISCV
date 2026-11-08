@@ -45,15 +45,15 @@ const counter = sandboxCounter();
 
 export const SHOTS: Shot[] = [
   {
-    name: 'sdr', route: '#/c/sdr/9',
-    why: 'A DSP chapter: the software radio at "Turn the dial". Check by eye that this step shows the spectrum and the dial; sdr/4 (the mixer in gates) is the alternative.',
-    wait: `document.querySelector('#view .widget, #view canvas, #view svg')`, dwell: 2500,
+    name: 'sdr', route: '#/c/sdr/8',
+    why: 'A DSP chapter: the software radio, step 8 "Turn the dial" (steps are counted from 0: 3 is "The mixer in gates", a gate-level scene, the alternative). The widget draws its plot once the band is synthesized; check by eye that the dial is set on a station and the spectrum shows it.',
+    wait: `document.querySelector('#view canvas, #view .widget svg') && !document.querySelector('.route-loading, .load-bar')`, dwell: 3500,
   },
   {
     name: 'cap_tune', route: '#/campaign/play/cap_tune',
     why: 'The DSP capstone Tune it on the level screen: the brief, the radio blocks it unlocks, the canvas. Unlock all so the capstone is open on a fresh profile.',
     storage: { [CAMPAIGN_KEY]: JSON.stringify({ schema: 1, nodes: {}, unlockAll: true }) },
-    wait: `document.querySelector('#view .sb-canvas, #view svg')`, dwell: 3000,
+    wait: `document.querySelector('#view svg.ed-svg') && !document.querySelector('.route-loading')`, dwell: 3500,
   },
   {
     name: 'warps', route: '#/c/warps/0',
@@ -69,7 +69,7 @@ export const SHOTS: Shot[] = [
     name: 'wirecolours', route: `#/sandbox/{chip}`,
     why: 'The sandbox on the 4-bit counter with a wire\'s right-click menu open at its colour swatches (Auto + the hue row).',
     storage: counter.storage,
-    wait: `document.querySelectorAll('#view path.wire[data-wire]').length > 3`,
+    wait: `document.querySelectorAll('#view svg.ed-svg path.wire[data-wire]').length > 3`,
     // right-click (contextmenu) the middle of the longest wire; the menu's colour row is .sb-ctx-hues
     then: [`(async () => {
       const wires = [...document.querySelectorAll('#view path.wire[data-wire]')];

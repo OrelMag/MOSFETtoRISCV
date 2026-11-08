@@ -1296,20 +1296,20 @@ spectrum · 70 FIR design · 71 IIR and stability · 72 Changing the rate · 73 
   simplified masking model), pictures (DCT, quantization, JPEG's tables), the software radio (four stations in one band, mixer, decimating chain,
   discriminator)
 - ✅ Campaign Act 13 "Signals", eight optional levels: sp_sat, sp_mac, sp_circ, sp_biquad, sp_goertzel, sp_cic, sp_cordic, sp_sd (benches with mutants,
-  verdicts across seeds); codex entries for every chapter; My path gets a third capstone group
+  verdicts across seeds); 64 codex entries (src/campaign/codexdsp*.ts); My path gets a third capstone group
 - ✅ Capstones (learn/capstones.ts `DSP_CAPSTONES`, 3): `cap_mask` a filter to a mask judged on its gates, `cap_echo` an echo canceller that learns its
   path, `cap_tune` a receive chain built from the radio's blocks that must decode a message on held-back bands
-- Landed in batch 2 (67, 68, 72, 73; 4ffc1f84), 3 (76, 77; f039c275), 4 (69–71, 80; 064e7151), 7 (radio, DSP core, cap_mask, adaptive voice, MAC;
-  1a19583b) and 8 (cap_tune, cap_echo, sp_mac, sp_circ, MAC headroom fix; 68a2426e); the codex and Act 13 levels came with batches 6 and 7, the rest with
-  the audit program below
+- Landed in batch 2 (67, 68, 72, 73; 4ffc1f84), 3 (76, 77; f039c275), 4 (69–71, 80; 064e7151), 7 (74, 75, 78, 79, 81, cap_mask, adaptive voice;
+  1a19583b) and 8 (cap_tune, cap_echo, sp_mac, sp_circ, MAC headroom fix; 68a2426e); the codex and the first six Act 13 levels came with batch 6, the rest
+  with the audit program below
 
 ### Audit, circuit and UX program (2026-11-07 / 2026-11-08) ✅
 
 Fresh readers, none the author of what they read, each with a findings file under E:/audit/; every finding re-checked before a fix. Landed as batches 9–15 on
 main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
-- ✅ Content and continuity audit, Communication (chapters 53–66 in four groups, about 108 findings; among them 5 wrong statements in the router, TCP,
-  queues and secret chapters: Hellman 2002, the M4's date, the J brackets in VONVONJLOOKSJ, the TCP widget's cap, "the router has a queue"), then DSP
-  (chapters 67–81, Act 13, capstones, codex): every term introduced before its first use or pointed back to, hand-offs between chapters, builds and
+- ✅ Content and continuity audit of the whole Communication level (the on-ramp and chapters 39–66; for 53–66 four groups with 108 findings, among them
+  5 wrong statements in the router, TCP, queues and secret chapters: Hellman 2002, the M4's date, the J brackets in VONVONJLOOKSJ, the TCP widget's cap,
+  the router's queue), then DSP (chapters 67–81, Act 13, capstones, codex): every term introduced before its first use or pointed back to, hand-offs between chapters, builds and
   back-links, typed numbers recomputed
 - ✅ Circuit eyeballing: the prologue and chapters 1–38 (224 scene roots; relays, tubes, FIFO and stack, clock circuits and BCD adder redrawn),
   Communication 39–66 (2 367 levels, 202 shots; UART, router on the new src/lib/layered.ts, AES / SHA benches, Reed–Solomon decoder), every Builder level
@@ -1322,22 +1322,22 @@ main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
 - Left open, from the findings files (listed only where a file says so; where it lives):
   - FP unit tops (fpadd / fpmul / fpdiv / fpnf, #/c/float/3, 7, 9, 12, 15) stay in Builder columns: they need a hierarchy restructure into sub-blocks
     (swap, align, add, sign and cancel, specials), which renames instances the float tours point at; needs a go and a mockup. E:/audit/smith/findings.md (1a)
-  - FPU CPU (#/c/float/17–21), pipeline variants and out-of-order units (#/c/pipeline/7, pipepay, ooo/5–7, 10), microcode controller top, write-back
-    cache top, trap vector target, bus tops (#/c/bus/0–6): ranked ★★ in E:/audit/smith/findings.md (2a) and not in its fixed table
+  - Marked "known open" in E:/audit/smith/findings.md (2a): the FPU CPU (#/c/float/17–21) and the pipeline variants / out-of-order units
+    (#/c/pipeline/7, pipepay, ooo/5–7, 10) — hazard and branch blocks loose below the datapath with long wires
   - Relay full adder (#/c/relays/4/fa0): pointer boxes collide under relay A, needs a two-row tagAt. rv16_mux16 needs a bit-sliced redraw. srt4div8 was not
     switched to layered.ts. E:/audit/smith/findings.md
   - Warp core, lsu variants (chapter 32): net nMo runs through a part, logged and not fixed. E:/audit/rock/findings.md (phase 2)
   - Communication circuits left on purpose: CRC-32 next-state crossings (inherent), I²C target t0 (layered's 14-unit channel cap; layered.ts option
     requests go to the shell owner), the computer-with-NIC bus top. E:/audit/swan/2b/findings.md
-  - Chapters: secret/7's computing-history digression stays (a story-flow cost, not wrong); datacentre has no closing bridge into the bench, and its "factor
-    1.4" swing claim is kept as written (not derivable without a new computation); the recap `practise` list is empty for cellular, glass, pcie, radio, wifi
-    and secret because it takes campaign nodes only and capstones (cap_fault, cap_link, cap_tune) are not nodes; bus (38) ends with no pointer onward and
-    sdr (81) does not name the appendices. E:/audit/swan/g2.md, g3.md, g4.md, E:/audit/rock/cont-findings.md
-  - Shell: first-load trim (no long task over 200 ms on a cold chapter step) stands at 132–253 ms locally; parse / compile is 160–190 ms and the index,
-    nodes, pad, ethswitch and mosphys chunks cost 30–50 ms each at module load. E:/audit/smith/phase3-notes.md
-  - Rock's UX surveys (E:/audit/rock/ux/*-findings.md) list ★ items whose fix status the files do not record (the level screen's three overlapping help
-    routes and the dead-end card for non-build levels, the campaign map's keyboard order, the workbench Statistics tab measuring 2 173 components live):
-    check before assuming they are open
+  - Chapters (E:/audit/swan/g2.md, g3.md, g4.md, E:/audit/rock/cont-findings.md): bus (38) ends with no pointer onward and sdr (81) does not name the
+    appendices (suggestions, not done); datacentre has no closing bridge into the bench (Swan's note); the "factor 1.4" swing claim in datacentre is kept as
+    written because it could not be derived without a new computation
+  - Kept by decision, so not work to do: secret/7's computing-history digression (a story-flow cost, not wrong); the recap `practise` list left empty for
+    cellular, glass, pcie, radio, wifi and secret, because it takes campaign nodes only and the capstones (cap_fault, cap_link, cap_tune) are not nodes
+  - Shell (phase 3, E:/audit/smith/phase3-notes.md, no fix recorded and none seen on main): first-load trim to a long task under 200 ms stands at 132–253 ms
+    locally (parse / compile 160–190 ms; the index, nodes, pad, ethswitch and mosphys chunks 30–50 ms each at module load); top-bar targets 30–39 px wide at 390
+    touch; HEX / BIN / DEC as one radio group (three tab stops now); about 14 tab stops before content; top-bar labels collapse to icons at 768; the View options
+    popover is one column of about 35 toggles. Landed from that list: the skip link target and focus ring (da9f2ffb), the collapsed CPU panel over the LEVEL badge
 
 ## Open questions for the author
 - Target audience depth: high-school / first-year university / practitioner refresher?

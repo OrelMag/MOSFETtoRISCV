@@ -60,12 +60,12 @@ sample once it has one. Numbers that fit (saturation instead of wrap, guard bits
 z-plane, measuring a spectrum, FIR design to a mask, IIR and the stability feedback costs, changing the
 rate for a fraction of the price, and CORDIC, rotation by shifts. Then the machine: a MAC added to the
 RV32 as four instructions on custom-2 and measured on the CPU panel, a DSP core with two memories, address
-generators and a loop with no branch, converters (a comparator ladder, then one bit and feedback, sigma-delta
-in gates), and filters that learn (an echo canceller and an equalizer, a tap in gates). Speech (μ-law
+generators and a loop with no branch, converters (compare and compare again, a ladder on the way back, then one bit
+and feedback: sigma-delta in gates), and filters that learn (an echo canceller and an equalizer, a tap in gates). Speech (μ-law
 and ADPCM, a 2.4 kb/s vocoder), music (an MDCT codec spending its bits where noise would be heard) and
 pictures (the DCT, why a JPEG looks blocky) apply it, and **A software radio** closes the level: four
 stations in one band, a mixer in gates, a decimating chain and a discriminator, a dial to turn. Filters,
-the MAC and the converter loop are in gates and checked against bit-exact models; the vectors for the
+the MAC and the converter loop are in gates, checked against reference models; the vectors for the
 filters, spectra and codecs come from scipy at pinned versions, regenerated in CI. Audio, speech and the
 radio's band are models, and each chapter says what is assumed.
 
@@ -160,13 +160,13 @@ reuse it), closing each act with what is now within reach. **My path** maps skil
 reads mastery from what you have already done, and places you (Where are you starting?, test-outs);
 **capstones** close each tier without a walkthrough (an adding machine, an RV16 core that plays Pong,
 a pipelined core, and a design brief: the cheapest core that runs the benchmarks, placed on a cost /
-speed chart against three references). <!--n:capstones.comm-->4<!--/n--> more close communication, on a card of their own: a serial
+speed chart against three references). Communication has <!--n:capstones.comm-->4<!--/n--> of its own, on a card of their own: a serial
 console from its register sheet, a link that closes on the book's channel and code models, a switch from
-its rules, and finding the fault. <!--n:capstones.dsp-->3<!--/n--> close signal processing the same way: a filter built to a mask and
+its rules, and finding the fault. Signal processing has <!--n:capstones.dsp-->3<!--/n--> the same way: a filter built to a mask and
 judged on its gates, an echo canceller that must learn its path, and **Tune it**, a software-radio
 chain you build from the chapter's blocks and that must decode a message from bands you have not seen.
-<!--n:twins-->7<!--/n--> levels have **Verilog twins**, written as text,
-synthesized by Yosys in the page and graded by the level's own check. <!--n:bughunts-->13<!--/n--> optional **bug hunts**
+**Verilog twins** (<!--n:twins-->7<!--/n--> levels) are written as text,
+synthesized by Yosys in the page and graded by the level's own check. There are <!--n:bughunts-->13<!--/n--> optional **bug hunts**
 start from a colleague's faulty drawing of a block you built (a miswire, crossed pins, a missing
 connection, a clocking fault, a forwarding term that is never true, ...): Check shows the symptom, and
 the fix is graded in edits (parts added, removed or swapped and pins moved; moving parts is free). The
@@ -205,21 +205,20 @@ simulator, so whatever you build is a real component of the site. The full guide
   to any depth and edit them later: every user of the chip is rebuilt. A face editor puts pins on
   any side and the chip's displays, screens and switches on its box; chips go in folders, circuits
   in separate projects, favourites on keys 1–9.
-- **Wire colours**: right-click a wire for a colour for its whole net (or Auto, one hue per net), and the View options menu sets the palette, thickness and flowing bits.
-  ![The sandbox's wire-colour menu on a wire of the 4-bit counter](docs/images/wirecolours.png)
+- **Wire colours**: right-click a wire for a colour for its whole net (or Auto, one hue per net); the View options menu sets the palette, thickness and flowing bits.
 - **Look inside** any placed part, live, down to the transistors; **Open in Sandbox** turns any
   schematic from the chapters or the workbench, CPUs included, into an editable copy.
 - Switch-level parts beyond the MOSFET: resistors, pull-ups / pull-downs, capacitors, transmission
   gates and tri-state drivers, so shared buses, wired-AND / wired-OR and pseudo-NMOS logic work.
 - Recreate **every level** of the journey: chips built from transistors are solved at switch
   level and become gate-level bricks; latches, flip-flops (recognised by their structure), RAM with
-  initial contents, and a **program ROM** written in RISC-V, RV16, 4-bit or 6502 assembly, or hex.
+  initial contents, and a **program ROM** written in RISC-V, RV16, 4-bit, 6502 or DSP-core assembly, or hex.
 - I/O: LEDs and LED banks, 7-segment and hex displays, a buzzer, keys bound to your keyboard, a
   keyboard with a key queue, a pixel screen, a console, switch banks, a timer, a card reader with
   decks punched from a ROM, a halt part, random sources and cycle counters; comments on the canvas.
 - The **CPU panel** for any chip that is a processor, yours included, with the golden model in
   lock-step (single-cycle and pipelined RV32I, RV32IC, RV64I / RV64IM, several cores, the out-of-order
-  core, the 6502, the 4-bit CPU, the SAP-1), and a **Memory** drawer showing every memory live.
+  core, the 6502, the 4-bit CPU, the SAP-1, the DSP core), and a **Memory** drawer showing every memory live.
 - **Your own instruction**: a custom RV32 instruction as a row of control signals, on the single-cycle
   or the pipelined core (hazards from its signals), checked against generated golden-model code.
 - **Programs on your own CPU**: a custom instruction set written as a table gives its own
@@ -250,19 +249,20 @@ simulator, so whatever you build is a real component of the site. The full guide
 - <!--n:challenges-->21<!--/n--> optional **build challenges**, from a CMOS inverter to an instruction fetch unit, with a test
   player that steps through the failing cases.
 
+![The sandbox's wire-colour menu: right-click a wire of the 4-bit counter to colour its whole net](docs/images/wirecolours.png)
+
 ![Examples ▸ Computer: an RV32I core, its program ROM, the memory side, a 64 × 64 screen and the devices, after Run to halt](docs/images/computer.png)
 
 The sandbox builds **whole computers**. RAM and ROM parts go up to 64K words: one behavioural leaf
 at run time over a real hierarchy of banks you can open down to the latches. A cycle engine runs
 them: storage, found by its structure (library flip-flops or ones drawn from NANDs, latches,
 resets), becomes verified tables and the rest is levelized, and every net equals the event-driven
-simulator's after every settle. The single-cycle RV32I runs at about 9 k cycles/s in Node and
-4–5 kHz in the browser. **Examples ▸** has <!--n:examples-->25<!--/n--> ready-made circuits, among them:
+simulator's after every settle. `scripts/sim-perf.ts` measures the cycles per second of the CPUs on both engines. **Examples ▸** has <!--n:examples-->25<!--/n--> ready-made circuits, among them:
 
 - **Computer**: the RV32I core, a program ROM in assembly, a memory chip, a 64 × 64 screen and a
   devices chip with the console, LEDs and switches. It greets you, paints a picture and halts, with
   the golden model checking every instruction (above). A second version runs the **pipelined** RV32I
-  core on the same pins, with the pipeline diagram; **RV32C** and **RV64** examples run those cores.
+  core on the same pins, with the pipeline diagram; **RV32C** and **RV64** examples run those cores, and the **DSP core** examples run its benchmark kernels (a FIR filter among them).
 - **4-bit CPU** (4004-inspired, 3 357 NANDs), **6502 computer** (the transistor-level 6502 as a
   part, a ROM in 6502 assembly), **System on a bus** (CPU and DMA masters, RAM, flash, screen,
   keyboard, timer behind an AXI-lite-style bus) and **Boot from cards** (a loader reading a punched
@@ -306,7 +306,7 @@ also be priced in relays and tubes.
 <table>
 <tr>
 <td width="50%"><img src="docs/images/silicon.jpg" alt="The dual-core placed and routed in SkyWater 130 nm, coloured by block"><br><sub><b>Ch. <!--n:ch.silicon-->28<!--/n--></b>: the dual-core after Yosys and OpenROAD on sky130: 14.8k standard cells, coloured by block.</sub></td>
-<td width="50%"><img src="docs/images/hall.png" alt="The single-cycle RV32I as 78 racks of relays, a person for scale"><br><sub><b>Ch. <!--n:ch.silicon-->28<!--/n--></b>: the same RV32I as 55,699 relays in 78 racks (1.27 s an instruction), or 75,779 tubes.</sub></td>
+<td width="50%"><img src="docs/images/hall.png" alt="The single-cycle RV32I as 78 racks of relays, a person for scale"><br><sub><b>Ch. <!--n:ch.silicon-->28<!--/n--></b>: the same RV32I as 55,699 relays, about 70 racks' worth (1.27 s an instruction), or 75,779 tubes.</sub></td>
 </tr>
 </table>
 
@@ -397,8 +397,8 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
   second design generated by code, not yet by a person drawing it: its brief gives our estimate of the work.
 - **Signal processing is bit-exact where it is built and a model where it is not.** The converters' analog side, the speech, music and picture
   signals, and the radio's band (stations, noise, fading) are generated by models, and each chapter says what is assumed; the codecs are
-  teaching ones (a vocoder at 2.4 kb/s, a masking model labelled simplified), not standards-conformant bitstreams, apart from μ-law, which
-  follows G.711.
+  teaching ones (a vocoder at 2.4 kb/s, an MDCT codec with a masking model labelled simplified), not standards-conformant bitstreams, whereas μ-law
+  follows G.711 and the ADPCM is IMA's.
 - **Doom runs on an interpreter of our ISA** (checked against the golden model), not on the gates:
   a frame would take about 13 minutes on the gate-level CPU in the page. Appendix B's last step
   hands the running game to the gates for a window of cycles.
