@@ -42,7 +42,7 @@ describe('noise', () => {
   });
   it('follows the CCD42-40 dark law: 20 000 e⁻/s at 293 K, nearly nothing when cooled', () => {
     expect(darkCurrent(293)).toBeCloseTo(20_000, -2);
-    expect(darkCurrent(293 - 7)).toBeLessThan(darkCurrent(293) / 1.8); // halves about every 6–7 K
+    expect(darkCurrent(293 - 8.2) / darkCurrent(293)).toBeCloseTo(0.5, 1); // halves about every 8 K
     expect(darkCurrent(173) * 3600).toBeLessThan(10);
   });
   it('draws seeded Poisson and normal samples with the right mean', () => {

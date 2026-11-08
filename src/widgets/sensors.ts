@@ -64,22 +64,24 @@ export function lightWidget(): Widget {
 // ---------------------------------------------------------------------------------------------------------------------
 // 1. The CCD's bucket brigade
 
-const CCD_PIX = 6;
+// On a phone the register is drawn shorter and narrower, so its labels keep their size instead of shrinking with the drawing.
+const ccdNarrow = (): boolean => typeof window !== 'undefined' && window.matchMedia?.('(max-width: 520px)').matches === true;
 const START = [9000, 2500, 14000, 600];
 
 export function ccdWidget(): Widget {
+  const PIX = ccdNarrow() ? 3 : 6, VW = ccdNarrow() ? 380 : 640;
   let n: 3 | 4 = 3, k = 0, cte = 0.99, running = false, last = 0, timer = 0;
   let read: { e: number; v: number }[] = [];
-  const svg = s('svg', { viewBox: '0 0 640 190', class: 'sn-ccd', role: 'img', 'aria-label': 'A row of CCD gates clocked in phases, with charge packets moving to the output amplifier' });
+  const svg = s('svg', { viewBox: `0 0 ${VW} 190`, class: 'sn-ccd', role: 'img', 'aria-label': 'A row of CCD gates clocked in phases, with charge packets moving to the output amplifier' });
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' }), live = h('div', { class: 'sr-only', 'aria-live': 'polite' });
-  const gates = () => CCD_PIX * n;
+  const gates = () => PIX * n;
   /** A packet's charge after t pixel transfers, and what it left behind. */
   const packets = () => {
     const done = Math.floor(k / stepsPerPixel(n));
-    return START.map((q, i) => ({ q: q * afterTransfers(done, cte), trail: q * (1 - afterTransfers(done, cte)), at: i * n + packetGate(n, k) + (n === 3 ? 0.5 : 1) }));
+    return START.slice(0, PIX - 1).map((q, i) => ({ q: q * afterTransfers(done, cte), trail: q * (1 - afterTransfers(done, cte)), at: i * n + packetGate(n, k) + (n === 3 ? 0.5 : 1) }));
   };
   const paint = () => {
-    const G = gates(), x0 = 20, gw = 540 / G, high = clockHigh(n, k), kids: SVGElement[] = [];
+    const G = gates(), x0 = 20, gw = (VW - 100) / G, high = clockHigh(n, k), kids: SVGElement[] = [];
     for (let i = 0; i < G; i++) {
       const ph = (i % n) + 1, on = high.includes(ph);
       kids.push(s('rect', { x: x0 + i * gw + 1, y: 40, width: gw - 2, height: 26, rx: 2, class: `sn-gate p${ph}${on ? ' on' : ''}` }), s('text', { x: x0 + (i + 0.5) * gw, y: 34, 'text-anchor': 'middle', class: 'sn-lbl sm' }, `∅${ph}`));
@@ -99,7 +101,7 @@ export function ccdWidget(): Widget {
     svg.replaceChildren(...kids);
     const transfers = Math.floor(k / stepsPerPixel(n));
     chips.set(0, String(transfers), 'pixel transfers so far');
-    chips.set(1, `${(afterTransfers(transfers, cte) * 100).toFixed(3)} %`, `of each packet still in it, at CTE ${(cte * 100).toFixed(4)} %`);
+    chips.set(1, `${(afterTransfers(transfers, cte) * 100).toFixed(3)} %`, `of each packet still in it, at CTE ${num(cte * 100, 4)} %`);
     chips.set(2, `${(ccdRetained(2047, 2047) * 100).toFixed(1)} %`, 'CCD42-40: the far corner after 4096 transfers');
     chips.set(3, `${num(ccdReadTime(CCD42_40.readHz[1]), 1)} s`, `a 2048 × 2048 frame through one output at 3 MHz (${num(ccdReadTime(CCD42_40.readHz[0]) / 60, 1)} min at 20 kHz)`);
   };
@@ -172,41 +174,67 @@ export function pixelWidget(): Widget {
 // 3. The pixel, switch by switch (a scene on PIXEL_4T)
 
 export const pixelApi = new WeakMap<Stage, { log: () => string[]; bright: () => boolean; demo: () => void }>();
-type Lvl = { level(net: number): number };
 const netIdx = (name: string) => PIXEL_4T.netlist!().nets.findIndex((n) => n.name === name);
 
+/** What the pixel panel needs of a simulation (a SwitchSim on PIXEL_4T). */
+export interface PixelSim {
+  setInput(port: string, v: number): void;
+  settle(): void;
+  getBits(nets: number[]): number[];
+  level?(net: number): number;
+  design: { root: { nets?: number[][]; ports: Record<string, number[]> } };
+}
+/** A level as the panel prints it: a share of the supply, or X while the node holds no defined charge (before the first reset). */
+export const levelText = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? 'X' : `${Math.round(v * 100)} %`);
+
+/** The pixel panel's actions and readout, DOM-free (tests/sensor-panels.test.ts drives it on a SwitchSim in every state). */
+export class PixelBench {
+  log: string[] = [];
+  sawBright = false;
+  constructor(private sim: () => PixelSim | null | undefined, private after: () => void = () => {}) {}
+  private set(k: Record<string, number>): void { const sm = this.sim(); if (!sm) return; for (const [p, v] of Object.entries(k)) sm.setInput(p, v); sm.settle(); this.after(); }
+  private lvl(name: string): number | null {
+    const sm = this.sim(), ids = sm?.design.root.nets?.[netIdx(name)];
+    return sm && typeof sm.level === 'function' && ids ? sm.level(ids[0]) : null;
+  }
+  /** The column as a bit: 0, 1 or X. */
+  col(): string {
+    const sm = this.sim(); if (!sm) return 'X';
+    const v = pack(sm.getBits(sm.design.root.ports.col));
+    return v < 0 ? 'X' : String(v);
+  }
+  status(): { pd: string; fd: string; col: string } { return { pd: levelText(this.lvl('PD')), fd: levelText(this.lvl('FD')), col: this.col() }; }
+  text(): string { const t = this.status(); return `PD ${t.pd}  FD ${t.fd}  column ${t.col}`; }
+  reset(): void { this.set({ rst: 1, tx: 1, light: 0, sel: 0 }); this.set({ rst: 0, tx: 0 }); this.log.push('RST + TX: photodiode emptied, FD at the supply'); }
+  expose(lit: boolean): void { if (lit) { this.set({ light: 1 }); this.set({ light: 0 }); } this.log.push(lit ? 'exposure: light fills the photodiode (PD falls)' : 'exposure in the dark: PD keeps its level'); }
+  read(): void {
+    this.set({ sel: 1, rst: 1 }); this.set({ rst: 0 });
+    const r = this.col();
+    this.set({ tx: 1 }); this.set({ tx: 0 });
+    const v = this.col();
+    this.log.push(`read: SHR column ${r}, SHS column ${v}${r === '1' && v === '0' ? ': a bright pixel' : r === '1' && v === '1' ? ': a dark pixel' : ''}`);
+    if (r === '1' && v === '0') this.sawBright = true;
+    this.set({ sel: 0 });
+  }
+  clear(): void { this.log = []; this.sawBright = false; }
+}
+
 const pixelPanel: ScenePanel = (stage: Stage): Widget => {
-  let log: string[] = [], sawBright = false;
+  const bench = new PixelBench(() => stage.sim as unknown as PixelSim | null, () => stage.refresh());
   const out = h('ol', { class: 'sn-log' }), read = h('div', { class: 'mc-status' });
-  const lvl = (name: string): number | null => {
-    const sim = stage.sim as unknown as Partial<Lvl> & { design: { root: { nets?: number[][] } } };
-    const ids = sim?.design?.root?.nets?.[netIdx(name)];
-    return sim && typeof sim.level === 'function' && ids ? sim.level(ids[0]) : null;
-  };
   const paint = () => {
-    const pd = lvl('PD'), fd = lvl('FD');
-    read.replaceChildren(h('span', null, 'PD ', h('b', null, pd === null ? '–' : `${Math.round(pd * 100)} %`)), h('span', null, 'FD ', h('b', null, fd === null ? '–' : `${Math.round(fd * 100)} %`)), h('span', null, 'column ', h('b', null, String(stage.value('col') ?? '–'))));
-    out.replaceChildren(...log.slice(-6).map((t) => h('li', null, t)));
+    const t = bench.status();
+    read.replaceChildren(h('span', null, 'PD ', h('b', null, t.pd)), h('span', null, 'FD ', h('b', null, t.fd)), h('span', null, 'column ', h('b', null, t.col)));
+    out.replaceChildren(...bench.log.slice(-6).map((x) => h('li', null, x)));
   };
-  const set = (k: Record<string, number>) => { for (const [p, v] of Object.entries(k)) stage.sim!.setInput(p, v); stage.sim!.settle(); stage.refresh(); };
-  const doReset = () => { stage.checkpoint(); set({ rst: 1, tx: 1, light: 0, sel: 0 }); set({ rst: 0, tx: 0 }); log.push('RST + TX: photodiode emptied, FD at the supply'); paint(); };
-  const expose = (lit: boolean) => () => { stage.checkpoint(); if (lit) { set({ light: 1 }); set({ light: 0 }); } log.push(lit ? 'exposure: light fills the photodiode (PD falls)' : 'exposure in the dark: PD keeps its level'); paint(); };
-  const readout = () => {
-    stage.checkpoint();
-    set({ sel: 1, rst: 1 }); set({ rst: 0 });
-    const r = stage.value('col');
-    set({ tx: 1 }); set({ tx: 0 });
-    const v = stage.value('col');
-    log.push(`read: SHR column ${r}, SHS column ${v}${r === 1 && v === 0 ? ': a bright pixel' : r === 1 && v === 1 ? ': a dark pixel' : ''}`);
-    if (r === 1 && v === 0) sawBright = true;
-    set({ sel: 0 });
-    paint();
-  };
-  pixelApi.set(stage, { log: () => log, bright: () => sawBright, demo: () => { doReset(); expose(true)(); readout(); } });
-  stage.resetHooks.add(() => { log = []; sawBright = false; paint(); });
+  const act = (f: () => void) => () => { stage.checkpoint(); f(); paint(); };
+  const doReset = act(() => bench.reset()), readout = act(() => bench.read());
+  const expose = (lit: boolean) => act(() => bench.expose(lit));
+  pixelApi.set(stage, { log: () => bench.log, bright: () => bench.sawBright, demo: () => { doReset(); expose(true)(); readout(); } });
+  stage.resetHooks.add(() => { bench.clear(); paint(); });
   const el = h('div', { class: 'mem-panel cpu-panel mc-panel sn-panel', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'One pixel, one read'),
     h('div', { class: 'dram-ops' }, btn('Reset', doReset, 'Empty the photodiode and reset FD'), btn('Dark', expose(false), 'Expose in the dark'), btn('Light', expose(true), 'Expose to full light'), btn('Read', readout, 'Read the row: RST, SHR, TX, SHS')),
-    read, out, h('p', { class: 'sub' }, 'Levels are fractions of the supply. A level between 30 % and 70 % reads as X on a wire: the switch solver has no analog voltages, so the follower\'s output is shown as H (dark) or 0 (bright).'));
+    read, out, h('p', { class: 'sub' }, 'Levels are fractions of the supply; X until the first Reset gives the nodes a charge. A level between 30 % and 70 % reads as X on a wire: the switch solver has no analog voltages, so the follower\'s output is shown as H (dark) or 0 (bright).'));
   paint();
   return { el, update: paint };
 };
@@ -370,7 +398,7 @@ export function colourWidget(): Widget {
 // 7. Noise: what limits a pixel
 
 export function noiseWidget(): Widget {
-  let photons = 1000, temp = 293, expo = 1;
+  let photons = 1000, temp = 173, expo = 1;
   const plot = plotOf({ W: 460, H: 240, x: [0, 6], y: [-1, 3], yTicks: [-1, 0, 1, 2, 3], xLabel: 'photons on the pixel (log₁₀)', yLabel: 'SNR (log₁₀)', aria: 'Signal-to-noise ratio against light for the IMX183 and the CCD42-40', xFmt: (v) => `10${'⁰¹²³⁴⁵⁶'[Math.round(v)] ?? ''}`, yFmt: (v) => `${10 ** v >= 1 ? g(10 ** v) : num(10 ** v, 1)}` });
   const cv = h('canvas', { width: 48, height: 48, class: 'sn-canvas pix', role: 'img', 'aria-label': 'A patch of pixels at the chosen light, with shot and read noise' }) as HTMLCanvasElement;
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' });
@@ -407,7 +435,7 @@ export function noiseWidget(): Widget {
   const ph = slider('Light', 0, 6, 0.1, 3, (v) => `${g(10 ** v)} photons`, (v) => { photons = 10 ** v; paint(); });
   const tt = slider('CCD at', 173, 303, 5, temp, (v) => `${v - 273} °C`, (v) => { temp = v; paint(); });
   const ex = slider('Exposure', 0, 3, 1, 0, (v) => `${10 ** v} s`, (v) => { expo = 10 ** v; paint(); });
-  note.textContent = 'Solid: the IMX183 (QE 79 %, 3.3 e⁻ read noise, 14 837 e⁻ full well, FLIR\'s EMVA measurement). Dashed: the CCD42-40 (80 %, 3 e⁻, 150 000 e⁻) with its dark charge at the temperature and exposure set. Orange: the limit no sensor beats, √photons. In the dark the read noise rules; in bright light the photons\' own randomness does; at the top the well is full and the curve stops.';
+  note.textContent = `Solid: the IMX183 (QE 79 %, ${IMX183.readNoise} e⁻ read noise, ${g(IMX183.fullWell)} e⁻ full well, FLIR's EMVA measurement). Dashed: the CCD42-40 (80 %, ${CCD42_40.readNoise} e⁻, ${g(CCD42_40.fullWell)} e⁻) with its dark charge at the temperature and exposure set, cooled to −100 °C as it is used (warm it to 20 °C and the dark charge swamps it).` + ' Orange: the limit no sensor beats, √photons. In the dark the read noise rules; in bright light the photons\' own randomness does; at the top the well is full and the curve stops.';
   paint();
   return { el: h('div', { class: 'widget mos sn' }, h('div', { class: 'panel sn-two' }, plot.el, cv), h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, ph.el, tt.el, ex.el), note), chips.el) };
 }
