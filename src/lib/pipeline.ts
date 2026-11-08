@@ -1121,7 +1121,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     });
     rows('clk', Object.fromEntries(['pc.clk', 'FD.clk', 'DE.clk', 'EM.clk', 'MW.clk', 'btb.clk'].map((e) => [e, [[xOf(e), 86]]])), ['rf.clk', 'dm.clk']);
     for (const n of nets) if (['enPC', 'enFD', 'flushFD', 'flushDE', 'bypassA', 'bypassB', 'forwardA', 'forwardB', 'PCSrcE', 'ImmSrcD', 'opD', 'funct3D', 'funct7D', 'ALUSrcAE', 'ALUSrcBE', 'BranchE', 'JumpE', 'JalrE', 'ALUControlE', 'funct3E', 'Zero', 'Neg', 'Ovf', 'Carry', 'rs1E', 'rs2E', 'rdE', 'validE', 'resultSrcE', 'regWriteE', 'memWriteE', 'rdM', 'regWriteM', 'rdW', 'regWriteW', 'en1', 'clr0', 'MemWriteM', 'resultSrcM', 'resultSrcW', 'rs1D', 'rs2D'].includes(n.name!)) n.quiet = true;
-    net('PCF').tags = ['pcF'];
+    net('PCF')!.tags = ['pcF'];
     if (m) {
       // what the multiplier and divider rows take from the stages above stays a pointer (the wires would cross their units)
       const tag = (name: string, ends: string[]) => { const n = net(name); if (n) n.tags = ends; };

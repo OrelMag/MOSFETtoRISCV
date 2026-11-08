@@ -973,7 +973,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     // of the integer side and the result coming back stay named pointers.
     const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); at.set(name, xy); };
     const rfAt = at.get('rf')!, rfR = rfAt[0] + g(RF).w;
-    const FRF = regfile(5, 32, false, 3), gF = g(FRF), gP = g(FPU32), gC = g(FCSR), gD = g(FP_DECODE), mg = g(M2);
+    const FRF = regfile(5, 32, false, 3), gF = g(FRF), gP = g(FPU32), gC = g(FCSR), mg = g(M2);
     const fy = 108; // top of the f registers: under the control block (it ends at 100) and the gates' row
     const frfX = rfAt[0] + 12, fpuX = frfX + gF.w + 14;
     add('frf', FRF, [frfX, fy], 'f registers');
