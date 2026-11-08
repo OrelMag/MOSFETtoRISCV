@@ -565,6 +565,8 @@ function routes(): Route[] {
   for (const m of MODELS_3D) add(`#/campaign/codex/models/${m.id}`, unlocked);
   // Every 3D model's step on a phone, where its labels crowd (MODEL_LABELS; desktop routes check them too).
   for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ` (3D model, ${phoneVp.name})`, phoneVp);
+  // and on the narrowest phone, where the corner buttons (turn, save image, full screen) take the most of the stage
+  for (const m of MODELS_3D) add(`#/c/${m.chapter}/${m.step}`, light, ' (3D model, 360px phone)', { width: 360, height: 740, mobile: true, name: '360px phone' });
   for (const n of NODES) {
     add(`#/campaign/play/${n.id}`, unlocked);
     // Lessons, drills and programs open on the map instead (pages/level.ts levelRoute).
@@ -895,7 +897,12 @@ const MODEL_LABELS = `(() => {
     const ls = [...box.querySelectorAll('.r3-lbl')].filter((e) => e.style.display !== 'none' && e.querySelector('b')?.offsetParent && getComputedStyle(e).visibility !== 'hidden')
       .map((e) => ({ t: e.querySelector('b').textContent, r: e.querySelector('b').getBoundingClientRect(), d: (e.querySelector('i') ?? e).getBoundingClientRect() }));
     const hit = (a, b, gx, gy) => a.left < b.right + gx && b.left < a.right + gx && a.top < b.bottom + gy && b.top < a.bottom + gy;
+    // the stage's corner buttons (modelframe.ts): no label text over them, no labelled dot under them
+    const tools = box.closest('.r3-stage, .wt-stage')?.querySelector('.r3-tools');
+    const tr = tools && tools.offsetWidth ? tools.getBoundingClientRect() : null;
     for (const [i, a] of ls.entries()) {
+      if (tr && hit(a.r, tr, 0, 0)) out.push('3D label under the corner buttons: ' + a.t);
+      if (tr && hit(a.d, tr, 0, 0)) out.push('3D label points under the corner buttons: ' + a.t);
       if (a.r.left < f.left - 1 || a.r.right > f.right + 1) out.push('3D label cut at the edge: ' + a.t);
       if (a.r.top < f.top - 1 || a.r.bottom > f.bottom + 1) out.push('3D label past the top or bottom: ' + a.t);
       for (const b of ls.slice(i + 1)) {

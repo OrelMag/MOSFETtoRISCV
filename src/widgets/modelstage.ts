@@ -52,6 +52,8 @@ export interface ModelStage {
 const FW = 640, FH = 480;
 /** Phone framing: below NARROW px the home view may back off up to FIT_MAX × to keep main anchors FIT_X / FIT_Y px inside. */
 const NARROW = 480, FIT_MAX = 1.6, FIT_X = 8, FIT_Y = 16;
+/** px kept clear around the corner buttons (an anchor that close would have its label pushed off them). */
+const TOOL_PAD = 6;
 const css = (c: RGBA) => `rgb(${Math.round(c[0] * 255)} ${Math.round(c[1] * 255)} ${Math.round(c[2] * 255)} / ${c[3].toFixed(2)})`;
 
 export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage {
@@ -136,7 +138,13 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
     if (key === fitFor || !c.atHome()) return;
     fitFor = key;
     const base = o.camera, major = last.filter((a) => !a.minor);
-    const fits = () => major.every((a) => { const p = c.project(a.p, w, ht); return !p || (p[0] >= FIT_X && p[0] <= w - FIT_X && p[1] >= FIT_Y && p[1] <= ht - FIT_Y); });
+    // the corner buttons (modelframe.ts) in canvas px: an anchor under them has no label either (labelfit.ts)
+    const tr = frame.el.getBoundingClientRect(), cr = canvas.getBoundingClientRect();
+    const tb = tr.width ? { l: tr.left - cr.left - TOOL_PAD, r: tr.right - cr.left + TOOL_PAD, t: tr.top - cr.top - TOOL_PAD, b: tr.bottom - cr.top + TOOL_PAD } : null;
+    const fits = () => major.every((a) => {
+      const p = c.project(a.p, w, ht);
+      return !p || (p[0] >= FIT_X && p[0] <= w - FIT_X && p[1] >= FIT_Y && p[1] <= ht - FIT_Y && !(tb && p[0] > tb.l && p[0] < tb.r && p[1] > tb.t && p[1] < tb.b));
+    });
     let k = 1;
     c.rehome(base);
     if (w < NARROW) while (!fits() && k < FIT_MAX) { k *= 1.08; c.rehome({ ...base, dist: base.dist * k }, { maxDist: Math.max(c.limits.maxDist, base.dist * k) }); }
