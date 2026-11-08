@@ -11,8 +11,9 @@ import { chainWidget, costRows, costWidget, mulScene, overflowWidget, qWidget, r
 import { dspRows, DSP_LEVEL } from './dspladder';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const n0 = (v: number) => groupNum(v);
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 /** A number as the page writes it: a true minus, not a hyphen. */
 const fx = (v: number, d: number) => v.toFixed(d).replace('-', '−');

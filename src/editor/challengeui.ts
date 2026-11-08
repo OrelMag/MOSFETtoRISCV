@@ -34,6 +34,7 @@ import {
 import { dockPane, paneShown, showPane, undockPane } from './dock';
 import { fsmOf } from '../lib/fsms';
 import { readbackEl } from './fsmui';
+import { noteChecked } from './analysis';
 import { type Editor, registerToolbarAction } from './editor';
 import { type PaletteItem, registerPaletteGroup } from './palette';
 import { TestPlayer } from './testplayer';
@@ -240,8 +241,23 @@ class ChallengeUi {
         if (ed.ws.purist) return void ed.volatile({ ...ed.ws, purist: undefined });
       }
     }
+    this.paletteNote(ch);
     this.render();
     if (this.drawer) this.renderList();
+  }
+
+  private noteEl: HTMLElement | null = null;
+
+  /** One line under the palette's search: what the open challenge allows (Basics still lists LED, Pointer and Constants). */
+  private paletteNote(ch: BuildChallenge | undefined): void {
+    const head = this.ed.palette.el.querySelector('.sb-pal-head');
+    if (!head) return;
+    const on = !!ch && ch.allowed !== 'any' && !this.screen && !this.level;
+    if (!on) { this.noteEl?.remove(); return; }
+    const [name, tip] = rule(ch.allowed);
+    this.noteEl ??= h('p', { class: 'sb-pal-note', role: 'note' });
+    this.noteEl.replaceChildren(h('b', null, `This challenge: ${name}. `), `${tip}.`);
+    if (this.noteEl.previousElementSibling !== head) head.after(this.noteEl);
   }
 
   // ---- the strip under the canvas -------------------------------------------------------------
@@ -314,7 +330,7 @@ class ChallengeUi {
         h('button', { class: 'btn sm primary', 'data-chal': 'solve-yes', onclick: () => this.solve() }, 'Replace'),
         h('button', { class: 'btn sm ghost', onclick: () => { this.confirming = false; this.render(); } }, 'Cancel')]
       : [...(sc.actions?.() ?? []), ...(sc.solutions && !sc.solutions() ? [] : [
-        h('button', { class: 'btn sm ghost', 'data-chal': 'answer', title: 'The reference answer', onclick: () => (sc.showAnswer ? sc.showAnswer() : this.showAnswer()) }, 'Show answer'),
+        h('button', { class: 'btn sm ghost', 'data-chal': 'answer', title: 'The finished reference answer, shown in the walkthrough: your own circuit stays as it is (Do it for me replaces it)', onclick: () => (sc.showAnswer ? sc.showAnswer() : this.showAnswer()) }, 'Show answer'),
         h('button', { class: 'btn sm ghost', 'data-chal': 'solve', title: 'Replace this chip\'s circuit with the reference answer (one undo step)', onclick: () => { this.confirming = true; this.render(); } }, 'Do it for me')])];
     this.panel.append(h('header', { class: 'sb-chal-head' },
       h('button', { class: 'btn sm primary', 'data-chal': 'check', title: 'Check runs every test and scores your circuit against par.', onclick: () => this.check() }, icon('check', 14), 'Check'),
@@ -453,6 +469,9 @@ class ChallengeUi {
   private problems(r: CheckResult, ch: BuildChallenge): HTMLElement {
     const box = h('div', { class: 'sb-chal-problems' });
     if (r.failures.length) box.append(h('ul', { class: 'sb-chal-fails' }, r.failures.map((f) => h('li', null, f))));
+    // an X output (a lone X, or X bits in a word) is the commonest first failure and says nothing by itself: say what it means
+    const undriven = [...new Set(r.failures.flatMap((f) => [...f.split(', expected')[0].matchAll(/(\w+)=(?:X|0b[01XZ]*X[01XZ]*)\b/g)].map((m) => m[1])))];
+    if (undriven.length) box.append(h('p', { class: 'sb-chal-hint' }, `${undriven.join(', ')} = X: nothing drives ${undriven.length > 1 ? 'them' : 'it'} to a 0 or a 1 yet. Wire ${undriven.length > 1 ? 'each' : 'it'} to a gate's output, and check that no input it depends on is left open.`));
     // A core level: open the first failing program as a computer around this core, with the CPU panel.
     const spec = coreSpecOf(ch.check);
     const t = spec && r.failures.length ? failingTest(spec, r.failures[0]) : null;
@@ -508,9 +527,9 @@ class ChallengeUi {
     // Check's own simulators are separate; the player's replay is given back first all the same,
     // so a new result never opens over an old replay.
     this.closePlayer();
-    // Check while "Replace your circuit?" waits: the question is dropped, the check runs
-    this.confirming = false;
+    // Check while "Replace your circuit?" waits: the check runs and the question stays (only Replace / Cancel / an edit end it)
     const r = checkChallenge(ch, ed.compiled);
+    noteChecked(ed);
     // the truth-table and state-machine builders would hand in the answer here (challenges.ts builderViolations)
     const locked = builderViolations(ed.ws, [ed.chipId, ...ed.lib.deps(ed.chipId)], ch);
     if (locked.length) { r.restrictionViolations.push(...locked); r.ok = false; }

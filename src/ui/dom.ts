@@ -49,9 +49,10 @@ export const undoKey = (): string => tx('Ctrl+Z', 'Undo');
 /**
  * The canvas's gesture hint (.hint-badge): the mouse wording, or on a touch screen the touch wording
  * on one line (it sits over the circuit: wrapped on a phone it hid the lower pins). The first touch on
- * the canvas hides it for this visit; a tap on it hides it for good (remembered under `key`).
+ * the canvas hides it for this visit; a tap on it hides it for good (remembered under `key`);
+ * with `autoMs` (the stage), untouched, it goes by itself after that long.
  */
-export function hintBadge(mouse: string, touch: string, key: string, cls = ''): HTMLElement {
+export function hintBadge(mouse: string, touch: string, key: string, cls = '', autoMs = 0): HTMLElement {
   const store = `mosfet2riscv:hint:${key}`;
   if (!coarsePointer()) return h('div', { class: `hint-badge${cls}` }, mouse);
   let off = false;
@@ -73,6 +74,8 @@ export function hintBadge(mouse: string, touch: string, key: string, cls = ''): 
     el.parentElement?.removeEventListener('pointerdown', touched, true);
   };
   queueMicrotask(() => el.parentElement?.addEventListener('pointerdown', touched, true));
+  // ...or after a few seconds, untouched: it sits over the circuit's room and a phone's learner has read it by then
+  if (autoMs && !off) setTimeout(() => { if (!el.hidden) { el.hidden = true; el.dataset.off = '1'; } }, autoMs);
   return el;
 }
 
@@ -130,6 +133,10 @@ const ICONS: Record<string, string> = {
   probe: '<path d="M14 3l7 7-4 1-7 7-3-3 7-7z"/><path d="M7 17l-4 4"/>',
   wave: '<path d="M2 12h4V6h6v12h6v-6h4"/>',
   table: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M10 4v16"/>',
+  // Memory: a RAM package; Inspect: a page under a lens; Tests: a checklist (each distinct from the plain table)
+  memory: '<rect x="3" y="7" width="18" height="10" rx="1.5"/><path d="M7 7V4M12 7V4M17 7V4M7 17v3M12 17v3M17 17v3M7 12h2M11 12h2M15 12h2"/>',
+  inspect: '<path d="M13 3H5a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h5"/><path d="M13 3l4 4v2"/><circle cx="16" cy="16" r="4"/><path d="M19 19l2.5 2.5"/>',
+  tests: '<path d="M3.5 6.5l1.8 1.8 3-3.6M3.5 15.5l1.8 1.8 3-3.6M12 7h9M12 16h9"/>',
   code: '<path d="M8 6l-6 6 6 6M16 6l6 6-6 6"/>',
   layers: '<path d="M12 2l10 6-10 6L2 8z"/><path d="M2 16l10 6 10-6"/>',
   undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',

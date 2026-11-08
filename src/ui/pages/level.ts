@@ -21,7 +21,7 @@ import { type AreaUnit, areaBars, METRIC, measured } from '../../campaign/grade'
 import { isDone, nextAvailable, statusOf } from '../../campaign/graph';
 import { levelChallenge, levelChipId } from '../../campaign/levels';
 import { altCost, copiesInFinal, countedPart, finalCpu } from '../../campaign/measure';
-import { walkOf } from '../../campaign/walk';
+import { hasWalk as hasWalkOf, walkOf, warmWalk } from '../../campaign/walk';
 import { actName, actTitle, nodeById } from '../../campaign/nodes';
 import { type PassGrade, progress } from '../../campaign/progress';
 import type { CampaignNode, Metric, Par } from '../../campaign/types';
@@ -100,6 +100,8 @@ export class LevelPage implements Page {
     const p = progress();
     if (!n || !ch) {
       this.noTools = true;
+      // a lesson, a drill or a program is played on the map: go there in place (a stale or hand-made address), not a dead end
+      if (n && !n.soon) setTimeout(() => { if (location.hash.startsWith(`#/campaign/play/${n.id}`)) location.replace(`#/campaign/n/${n.id}`); }, 0);
       this.el = n ? this.notice('This level is not built in the editor', 'It is a lesson, a drill or a program: it opens on the map.', n) : notFound(`No level called “${nodeId}”`, 'The address may be stale or mistyped.', [['Open the campaign map', '#/campaign']]);
       return;
     }
@@ -134,7 +136,8 @@ export class LevelPage implements Page {
     const first = ruleKind(ch.allowed) === 'transistors' ? ['fets', 'unlocked', 'wiring', 'const', 'switch', 'lib', 'mine'] : undefined;
     this.editor = new Editor(chipId, { level: { chipId, actions: LEVEL_ACTIONS, hideGroups: hide, first } });
     if (this.editor.chipId !== chipId) this.editor.openChip(chipId);
-    const hasWalk = !!walkOf(n)?.steps.length;
+    const hasWalk = hasWalkOf(n);
+    warmWalk(n); // the reference answer drawn at idle, not when the learner asks for it
     this.chal = installChallenges(this.editor, {
       checked: (r, g) => this.checked(r, g),
       actions: () => (hasWalk ? [h('button', { class: 'btn sm', 'data-chal': 'walk', title: 'The reference answer built step by step, each step explained', onclick: () => this.startWalk(0) }, icon('play', 12), 'Walk me through it')] : []),
@@ -367,7 +370,7 @@ export class LevelPage implements Page {
     const n = this.node!, p = progress();
     const tips = tipsOf(n);
     const shown = Math.min(p.get(n.id)?.tips ?? 0, tips.length);
-    const hasWalk = !!walkOf(n)?.steps.length;
+    const hasWalk = hasWalkOf(n);
     const rung = (label: string, used: boolean, ...body: (HTMLElement | null)[]) =>
       h('section', { class: `lv-rung${used ? ' used' : ''}` }, h('div', { class: 'lv-rung-k' }, used ? icon('check', 11) : null, label), ...body);
     const rungs: HTMLElement[] = [];

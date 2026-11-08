@@ -49,6 +49,7 @@ describe('wording by input device', () => {
     expect(navStage(() => false)).toBe('');
     expect(navStage((s) => s === '')).toBe('tight');
     expect(navStage((s) => s === '' || s === 'tight')).toBe('icons');
-    expect(navStage(() => true)).toBe('icons'); // the last resort
+    expect(navStage((s) => s !== 'snug')).toBe('snug');
+    expect(navStage(() => true)).toBe('snug'); // the last resort: icons under 40 px, six links on a phone
   });
 });

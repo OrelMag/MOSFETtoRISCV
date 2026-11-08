@@ -112,7 +112,7 @@ describe('field wires on the hardware', () => {
     expect(instrMarks(IMM_GEN, add)!.note).toMatch(/R-type/);
     const ctl = instrMarks(CONTROL, add)!;
     expect(ctl.units).toContain('dec');
-    expect(ctl.units).toContain('g_regWrite');
+    expect(ctl.units).toContain('sig');
     for (const u of ctl.units) expect(names(CONTROL).has(u), u).toBe(true);
     const od = instrMarks(OPCODE_DECODER, sw)!;
     expect(od.units).toContain('is_STORE');

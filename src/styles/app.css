@@ -142,6 +142,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .img-menu { min-width: 240px; left: 0; right: auto; }
 .pal-head { padding: 8px 10px 2px; font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-top: 1px solid var(--border); margin-top: 4px; }
 .pal-menu > .pal-head:first-child { border-top: 0; margin-top: 0; }
+/* a long list (some 2300 px in a 730 px popover): the section being read keeps its heading in view */
+.pal-menu > .pal-head { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 .pal-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 .pal-mods i { background: hsl(var(--chip-h) var(--chip-fill-s) var(--chip-fill-l)); border: 1px solid hsl(var(--chip-h) var(--chip-stroke-s) var(--chip-stroke-l)); }
 .pal-mods .m0 { --chip-h: 145; } .pal-mods .m1 { --chip-h: 45; } .pal-mods .m2 { --chip-h: 215; } .pal-mods .m3 { --chip-h: 330; }
@@ -267,8 +269,13 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   position: fixed; left: 8px; top: 8px; z-index: 90; transform: translateY(-200%);
   padding: 8px 14px; border: 0; border-radius: 9px; background: var(--accent); color: var(--accent-text, #fff); font: 600 14px var(--font-ui); cursor: pointer;
 }
-.skip-link:focus { transform: none; outline: 2px solid var(--accent); outline-offset: 2px; }
+/* focused, it sits just under the top bar: over the bar it covered the brand */
+.skip-link:focus { transform: none; top: calc(var(--topbar-h) + 6px); outline: 2px solid var(--accent); outline-offset: 2px; }
 #view:focus { outline: none; }
+/* where the skip link lands on a page with no circuit: a ring the keyboard can see (a click never shows it) */
+#view:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+/* the top bar's controls: a 2 px ring, the browser's 1 px one was faint on the dark bar */
+.topbar :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .stage:focus { outline: none; }
 .stage:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .btn .kbd-hint { font: 500 10.5px var(--font-mono); padding: 0 5px; margin-left: 2px; border-radius: 5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; color: var(--muted); background: var(--surface); }
@@ -342,21 +349,38 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 /* ---------- chapter layout ---------- */
 .layout {
   display: grid; height: 100%;
-  grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(400px * var(--prose-scale, 1))) 1fr minmax(260px, 340px);
+  grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr minmax(260px, 340px);
+  /* the prose column grows with the window; the learner can drag it wider (ui/splitter.ts: .sized, --narr-w), never past the room the stage and inspector keep */
+  --narr-auto: clamp(calc(400px * var(--prose-scale, 1)), 28vw, calc(520px * var(--prose-scale, 1))); --narr-room: 880px; --narr-max: var(--narr-auto);
 }
-.layout.no-inspector { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(400px * var(--prose-scale, 1))) 1fr 0; }
+.layout.sized { --narr-max: min(var(--narr-w), calc(100% - var(--narr-room))); }
+.layout.no-inspector { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr 0; --narr-room: 540px; }
 .layout.no-inspector .inspector { display: none; }
 /* A laptop (1180–1440 px): narrower side panes, so the stage gets the room (at 1280 it was 540 px, and a scene's
    own panels took most of that). */
 @media (min-width: 1181px) and (max-width: 1440px) {
-  .layout { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(340px * var(--prose-scale, 1))) 1fr minmax(260px, 300px); }
-  .layout.no-inspector { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(340px * var(--prose-scale, 1))) 1fr 0; }
+  .layout { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr minmax(260px, 300px); --narr-auto: clamp(calc(340px * var(--prose-scale, 1)), 28vw, calc(400px * var(--prose-scale, 1))); --narr-room: 840px; }
+  .layout.no-inspector { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr 0; --narr-room: 540px; }
 }
 
 .narrative {
   border-right: 1px solid var(--border); background: var(--surface);
   display: flex; flex-direction: column; min-height: 0;
 }
+.narrative { position: relative; z-index: 3; }
+/* The divider between the text and the stage (ui/splitter.ts): a 9 px strip over the stage's left edge, so it never sits on the text's scrollbar. */
+.narr-split { position: absolute; top: 0; bottom: 0; right: -9px; width: 9px; cursor: col-resize; touch-action: none; }
+.narr-split::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: transparent; transition: background 0.12s; }
+.narr-split::before { content: ''; position: absolute; left: 3px; top: 50%; height: 36px; width: 3px; margin-top: -18px; border-radius: 2px; background: var(--border-strong); opacity: 0.7; }
+.narr-split:hover::before, .narr-split:focus-visible::before, .narr-split.dragging::before { background: var(--accent); opacity: 1; }
+.narr-split:hover::after, .narr-split.dragging::after { background: var(--accent); }
+.narr-split:focus-visible { outline: none; }
+.narr-split:focus-visible::after { background: var(--accent); width: 3px; }
+.narr-split.dragging { user-select: none; }
+:root:has(.narr-split.dragging) { cursor: col-resize; user-select: none; }
+@media (max-width: 1180px) { .narr-split { display: none; } }
+@media (pointer: coarse) { .narr-split { width: 40px; right: -28px; } .narr-split::after { left: 28px; } .narr-split::before { left: 31px; } }
+@media print { .narr-split { display: none; } }
 .narrative-head { padding: 18px 22px 10px; border-bottom: 1px solid var(--border); }
 .chapter-kicker { font: 600 12px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
 .chapter-title { font-size: 22px; font-weight: 750; letter-spacing: -0.02em; margin: 2px 0 10px; line-height: 1.2; }
@@ -459,6 +483,17 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .ch-goals ul { margin: 4px 0 2px; padding-left: 1.2em; color: var(--text); }
 .ch-goals li { margin: 0.2em 0; }
 .ch-goals-k, .recap-k, .ch-links-k, .lit-k { font: 600 11px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+/* The goals box on a chapter's first step sits after the step's first paragraph and is one line until opened (remembered per chapter). */
+.ch-goals-btn { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; width: 100%; min-height: 24px; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.ch-goals-btn .ch-goals-k { flex: none; }
+.ch-goals-sum { flex: 1 1 9em; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; }
+.ch-goals-n { flex: none; color: var(--muted); font-size: 12px; }
+.ch-goals-btn svg { flex: none; margin-left: auto; transition: transform 0.15s; }
+.ch-goals.open .ch-goals-sum, .ch-goals.open .ch-goals-n { display: none; }
+.ch-goals.open .ch-goals-btn svg { transform: rotate(180deg); }
+.ch-goals:has(> .ch-goals-btn) { padding-top: 7px; padding-bottom: 7px; }
+.ch-goals ul[hidden] { display: none; }
+@media (pointer: coarse) { .ch-goals-btn { min-height: 40px; } }
 .ch-links { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
 .ch-links-k { margin-right: 2px; }
 .ch-chip {
@@ -746,17 +781,20 @@ html[data-widget-step] .slow-btn { display: none; }
   .ctl-inner { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; scrollbar-width: thin; }
   .ctl-inner > * { flex: none; }
   .ctl-inner .kind { display: none; }
-  /* the pins too: wrapped, a scene with many (ch 32's rasterizer) filled the whole stage with them */
-  .ctl-pins { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; min-width: 0; overflow-x: auto; scrollbar-width: thin; padding-block: 2px; }
-  .ctl-pins > *, .ctl-pins .out-strip { flex: none; flex-wrap: nowrap; }
-  /* a cue that the row scrolls: an edge shadow while pins continue past it (the local covers hide it at the ends) */
-  .ctl-pins {
+  /* the pins too: wrapped within the stage's width (a strip scrolled sideways hid its inputs and outputs behind a thin
+     scrollbar), each input and each output's lamp + value kept whole. The whole band (pins and run row) is capped and
+     scrolls down inside itself (a scene with very many pins, ch 32's rasterizer), so the canvas and the inputs share one
+     screen: hugPhone sizes the canvas from what the band leaves. */
+  .ctl-pins { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; flex: 1 1 100%; min-width: 0; padding-block: 2px; }
+  .ctl-pins > * { flex: none; max-width: 100%; }
+  .ctl-pins .out-strip { flex-wrap: wrap; gap: 4px 10px; }
+  .stage > .controls { max-height: max(120px, 26dvh); overflow-x: hidden; overflow-y: auto; scrollbar-width: thin;
     background:
-      linear-gradient(to right, var(--surface) 30%, transparent) left / 28px 100% no-repeat local,
-      linear-gradient(to left, var(--surface) 30%, transparent) right / 28px 100% no-repeat local,
-      linear-gradient(to right, color-mix(in srgb, var(--text) 28%, transparent), transparent) left / 22px 100% no-repeat scroll,
-      linear-gradient(to left, color-mix(in srgb, var(--text) 28%, transparent), transparent) right / 22px 100% no-repeat scroll;
-  }
+      linear-gradient(var(--surface) 30%, transparent) top / 100% 24px no-repeat local,
+      linear-gradient(to top, var(--surface) 30%, transparent) bottom / 100% 24px no-repeat local,
+      linear-gradient(color-mix(in srgb, var(--text) 28%, transparent), transparent) top / 100% 18px no-repeat scroll,
+      linear-gradient(to top, color-mix(in srgb, var(--text) 28%, transparent), transparent) bottom / 100% 18px no-repeat scroll,
+      var(--surface); }
   .controls { row-gap: 6px; }
 }
 /* No box of their own on a wide screen: the pins wrap in the bar's own flow. */
@@ -1458,8 +1496,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 :root[data-wide] .bench:not(:has(> .stage.widget-mode)) > :is(.library, .inspector) { display: none; }
 
 /* ---------- workbench: Components / Statistics tabs, the statistics page ---------- */
-.bench-tabs { display: flex; gap: 0; padding: 8px 8px 0; border-bottom: 1px solid var(--border); }
-.bench-tab { padding: 6px 6px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+/* the four views wrap to a second row in a narrow sidebar (at 768 they were cut to "Pa… / Statis… / Benchm… / L…") */
+.bench-tabs { display: flex; flex-wrap: wrap; gap: 0; padding: 8px 8px 0; border-bottom: 1px solid var(--border); }
+.bench-tab { flex: 0 0 auto; padding: 6px 6px; white-space: nowrap; color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .hw-inner > .bench-tabs { gap: 2px; }
 .hw-inner .bench-tab { padding: 6px 8px; font-size: 13.5px; }
 .bench-tab:hover { color: var(--text); }
@@ -2447,6 +2486,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .bench-tab { display: flex; align-items: center; }
   .lib-item { align-items: center; }
   .in-num button { min-width: 40px; min-height: 40px; }
+  /* the home journey's "↑ n sections above" (24 px tall) */
+  .ladder-up { min-height: 40px; }
+  .in-num input { min-height: 40px; }
   /* the footer's links sit in its text (inline links, which WCAG 2.5.8 exempts): 32 px lines, each link padded to its line's height */
   .footer { line-height: 32px; }
   .footer a { padding-block: 8px; }
@@ -2774,6 +2816,13 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
   .topbar[data-nav='tight'] .nav a span.cap { font-size: 9px; font-weight: 500; letter-spacing: -0.03em; }
   .topbar[data-nav='icons'] .nav a span.cap { display: none; }
   .topbar[data-nav='icons'] .nav a { justify-content: center; min-width: 30px; }
+  .topbar[data-nav='snug'] .nav a span.cap { display: none; }
+  .topbar[data-nav='snug'] .nav a { justify-content: center; min-width: 32px; padding-inline: 2px; }
+}
+/* under a finger every section link is at least 40 px wide (navfit then sheds captions sooner; each link keeps its name) */
+@media (pointer: coarse) {
+  .nav a, .topbar[data-nav='tight'] .nav a, .topbar[data-nav='icons'] .nav a { min-width: 40px; }
+  .seg[role=radiogroup] button { min-height: 40px; }
 }
 
 /* the touch hint is one line, and 360 px is a few characters short of the sandbox's */
@@ -2823,11 +2872,11 @@ svg.schematic.lg.lg-h-tap7 .tap-label[data-ts='7'], svg.schematic.lg.lg-h-tap8 .
     cursor: pointer; padding: 12px 0; writing-mode: vertical-rl; font: 600 12px var(--font-ui);
   }
   .inspector.folded .insp-rail:hover { color: var(--text); background: var(--surface-2); }
-  .layout:not(.no-inspector):has(> .inspector.folded) { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(400px * var(--prose-scale, 1))) 1fr 34px; }
+  .layout:not(.no-inspector):has(> .inspector.folded) { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr 34px; --narr-room: 574px; }
   .bench:not(.no-part):has(> .inspector.folded) { grid-template-columns: 270px 1fr 34px; }
 }
 @media (min-width: 1181px) and (max-width: 1440px) {
-  .layout:not(.no-inspector):has(> .inspector.folded) { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(340px * var(--prose-scale, 1))) 1fr 34px; }
+  .layout:not(.no-inspector):has(> .inspector.folded) { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr 34px; --narr-room: 574px; }
 }
 .insp-head { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); }
 .insp-head .tabs { flex: 1; border-bottom: 0; }
@@ -3007,3 +3056,13 @@ svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .ne
 .foot-circuit { display: none; }
 @media (max-width: 760px) { .foot-circuit { display: inline-flex; align-items: center; min-height: 40px; flex: none; } }
 @media (max-width: 360px) { .foot-circuit { padding-inline: 10px; font-size: 0; gap: 0; } }
+
+/* A chapter's stage before its first figure (ui/pages/chapter.ts stageIntro): a card, not a later step's widget. */
+.stage-intro { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; text-align: center; color: var(--text); }
+.stage-intro p { margin: 0; font-weight: 600; font-size: 15px; }
+.stage-intro p.sub { font-weight: 400; font-size: 13.5px; color: var(--muted); max-width: 38ch; line-height: 1.5; }
+
+/* the LEVEL tag under a panel that would cover it (Stage.yieldBadge) */
+.level-badge.yield { visibility: hidden; }
+
+.zoom-read[hidden] { display: none; }

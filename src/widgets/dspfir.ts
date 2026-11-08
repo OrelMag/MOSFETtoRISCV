@@ -23,6 +23,7 @@ import { slider } from './mosparts';
 import '../styles/line.css';
 import '../styles/fourier.css';
 import '../styles/dsp.css';
+import { groupNum } from '../sim/numfmt';
 
 /** The sliders' ranges, one place: the tests read these, so a Try box can be checked against what its slider can reach. */
 export const RANGES = {
@@ -32,7 +33,7 @@ export const RANGES = {
 /** A small number as a power of ten the way the page writes it: 2 × 10⁻¹⁶, not 2e-16. */
 const pow10 = (v: number): string => { const [m, e] = v.toExponential(0).split('e'); return `${m} × 10${[...String(Number(e))].map((c) => '⁻⁰¹²³⁴⁵⁶⁷⁸⁹'['-0123456789'.indexOf(c)]).join('')}`; };
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
-const sp = (v: number) => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const sp = (v: number) => groupNum(Math.round(v));
 const stems = (p: Plot, ys: readonly number[], cls = '') => {
   ys.forEach((y, i) => p.layer.append(s('line', { x1: p.X(i), x2: p.X(i), y1: p.Y(0), y2: p.Y(y), class: `fir-stem ${cls}` })));
 };

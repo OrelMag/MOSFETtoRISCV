@@ -8,11 +8,12 @@ import { dctStage } from '../lib/dct';
 import { register } from '../lib/sequential';
 import { stats } from '../sim/stats';
 import { dctApi, dctScene, dctWidget, fileWidget, filterWidget, huffWidget, pictureWidget, qualityWidget, resizeWidget } from '../widgets/dsppictures';
-import { PICTURE_BLOCKS } from '../widgets/dsppictures';
+import { FILE_QUALITY, PICTURE_BLOCKS } from '../widgets/dsppictures';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 let memo: ReturnType<typeof encodeJpeg>[] | undefined;
 /** The scene at the qualities the prose names. */
@@ -27,7 +28,7 @@ export const chPictures: Chapter = {
     'show where JPEG loses information, and where it only rearranges it',
     'write a baseline JPEG file that two outside decoders open',
   ],
-  builds: ['signals', 'multirate', 'fixed'],
+  builds: ['signals', 'fixed', 'firdesign', 'multirate', 'music'],
   recap: {
     keep: [
       'A picture is a 2-D signal. Sampling, folding and filtering work along each axis as they did along time, and a kernel that is a product of two 1-D filters costs 2n multiplications a sample, not n².',
@@ -66,7 +67,7 @@ export const chPictures: Chapter = {
       get body() {
         const p = scene();
         return `
-        <p>Sound was one row of samples in time. A grey picture is samples on a grid: ${p.w} across, ${p.h} down, each a level from 0 to 255. At 8 bits a sample that is ${n0(p.w * p.h)} bytes, before anything is done to it. Colour would be three such grids.</p>
+        <p><a href="#/c/music/3">The music codec</a> threw away what the ear would miss. A JPEG does the same for the eye, with the same three parts: a cosine transform of each block (an 8 × 8 DCT where music had the MDCT), rounding that drops detail by a fixed table where music used a mask, and the entropy coding that chapter left out. Sound was one row of samples in time. A grey picture is samples on a grid: ${p.w} across, ${p.h} down, each a level from 0 to 255. At 8 bits a sample that is ${n0(p.w * p.h)} bytes, before anything is done to it. Colour would be three such grids.</p>
         <p>Everything learned about samples still holds, one axis at a time. A row is a signal along x, a column along y, and a picture has a spectrum in two dimensions: smooth sky is low frequency, a sharp edge or fine stripes are high. <a href="#/c/signals/5">Sampling folds</a> anything above half the rate, along either axis.</p>
         <p>The pictures in this chapter are generated, so every number is the same everywhere: a sky, a sun, a mountain, stripes, rings and a little noise. Two steps also offer one photograph, NASA's of Buzz Aldrin on the Moon in 1969, which is in the public domain. The last step takes a picture of your own, read in your browser and never sent anywhere.</p>
         <div class="try">Move the row down from the sky into the stripes, and watch the plot go from a flat line with the sun's step in it to a square wave.</div>`;
@@ -102,8 +103,8 @@ export const chPictures: Chapter = {
         const z = zonePlate(), raw = shrink(z, 3, false), f = shrink(z, 3, true);
         return `
         <p>Shrinking a picture three times keeps one sample in three along each axis, and <a href="#/c/multirate/1">the rate chapter</a> said what that does: anything above a sixth of a cycle a sample folds down and shows as a pattern that was never there. The zone plate makes it plain. Its rings reach half a cycle a sample at the edge, and kept one in three they come back as false rings around other centres.</p>
-        <p>The cure is the same as for sound: a low-pass first, here a windowed sinc cut at 1/(2m) of the rate, done as a row pass and a column pass. The fine rings are then simply gone, which is the right answer, as no small picture can hold them. Kept one in three, the plate has ${raw.w} × ${raw.h} samples whichever way it is done.</p>
-        <p>Growing a picture back has the opposite problem. Repeating each sample makes blocks. Drawing straight lines between neighbours, bilinear, is smoother, and still cannot bring back detail the small picture lost. Grown back by repeating samples, the unfiltered version measures ${psnr(z, grow(raw, 3, 'nearest')).toFixed(1)} dB against the original and the filtered one ${psnr(z, grow(f, 3, 'nearest')).toFixed(1)}. Both are low, since neither can hold the fine rings, but only one of them draws rings that were never there.</p>
+        <p>The cure is the same as for sound: a low-pass first, here a <a href="#/c/signals/3">windowed sinc</a> cut at 1/(2m) of the rate, done as a row pass and a column pass. The fine rings are then simply gone, which is the right answer, as no small picture can hold them. Kept one in three, the plate has ${raw.w} × ${raw.h} samples whichever way it is done.</p>
+        <p>Growing a picture back has the opposite problem. Repeating each sample makes blocks. Drawing straight lines between neighbours, bilinear, is smoother, and still cannot bring back detail the small picture lost. The measure is <strong>PSNR</strong>, the peak signal-to-noise ratio, 10 log₁₀(255² / the mean squared error) in dB: higher is closer. Grown back by repeating samples, the unfiltered version measures ${psnr(z, grow(raw, 3, 'nearest')).toFixed(1)} dB against the original and the filtered one ${psnr(z, grow(f, 3, 'nearest')).toFixed(1)}. Both are low, since neither can hold the fine rings, but only one of them draws rings that were never there.</p>
         <div class="try">Keep 1 in 2, then 3, then 4, with and without the low-pass. Then grow back with straight lines and compare the edges.</div>`;
       },
       widget: resizeWidget,
@@ -118,7 +119,7 @@ export const chPictures: Chapter = {
     {
       title: 'Cosines in 8 × 8',
       body: `
-        <p>JPEG cuts the picture into 8 × 8 blocks and writes each one as a sum of 64 fixed patterns, cosines across times cosines down. The amounts are the block's <strong>DCT</strong> (the discrete cosine transform). T.81 defines it in A.3.3:</p>
+        <p>JPEG cuts the picture into 8 × 8 blocks and writes each one as a sum of 64 fixed patterns, cosines across times cosines down. The amounts are the block's <strong>DCT</strong> (the discrete cosine transform). T.81, the ITU-T standard for JPEG, defines it in A.3.3:</p>
         <pre>S(v, u) = ¼ C(u) C(v) Σx Σy s(y, x)
    × cos((2x + 1)uπ/16)
    × cos((2y + 1)vπ/16)
@@ -141,7 +142,7 @@ C(0) = 1/√2, otherwise 1</pre>
         const s = nands(dctStage()), reg = nands(register(12));
         return `
         <p>An 8-point DCT is 64 multiplications done directly. The cosines have symmetries that cut that down. Add and subtract each sample and its mirror, x<sub>i</sub> ± x<sub>7−i</sub>, and the even outputs only need the sums and the odd outputs only the differences. Split the even half once more, and what is left is 22 products by constants: 2 for X0 and X4, 4 for X2 and X6, and 16 for the four odd outputs.</p>
-        <p>A product by a constant needs no multiplier. Each constant is written in signed digits, and each digit is the input moved by wiring and added or subtracted, so ${DCT_K[3]} is ${csdDigits(DCT_K[3]).length - 1} adders and ${DCT_K[6]} is ${csdDigits(DCT_K[6]).length - 1}. Every bit is kept, each output is rounded once at the end, and two extra fraction bits ride along so the second pass starts from better than whole numbers. The stage is ${n0(s)} NANDs. The tests compare it with an integer model on every basis vector, the extremes and thousands of random rows, and every constant multiplier on every input it can take at the width it is used at.</p>
+        <p>A product by a constant needs no multiplier. Each constant is written in <a href="#/c/firdesign/5">signed digits</a>, and each digit is the input moved by wiring and added or subtracted, so ${DCT_K[3]} is ${csdDigits(DCT_K[3]).length - 1} adders and ${DCT_K[6]} is ${csdDigits(DCT_K[6]).length - 1}. Every bit is kept, each output is rounded once at the end, and two extra fraction bits ride along so the second pass starts from better than whole numbers. The stage is ${n0(s)} NANDs. The tests compare it with an integer model on every basis vector, the extremes and thousands of random rows, and every constant multiplier on every input it can take at the width it is used at.</p>
         <p>A whole 8 × 8 block is the stage sixteen times: eight rows, then eight columns. Sixteen stages side by side would be about ${n0(16 * s)} NANDs. One stage used sixteen times needs a store to turn rows into columns: 64 words of 12 bits are ${n0(64 * reg)} NANDs as plain registers, and reading 8 of them out at a time takes 8 multiplexers of 16 to 1, ${n0(8 * nands(muxTree(4, 12)))} more, so at least ${n0(64 * reg + 8 * nands(muxTree(4, 12)))} before its decoder and the counter that runs it. The panel here does that turning itself, and says so. On the block it runs, the result is within ${worstOff().toFixed(2)} of the true DCT. The rounding can reach half a level on some blocks, and no more.</p>
         <div class="try">Run a block. Every pass is checked against the model, and the panel shows the coefficients and how far the worst of them is from the exact one.</div>`;
       },
@@ -180,7 +181,7 @@ C(0) = 1/√2, otherwise 1</pre>
         const r = at()[1], t = r.bits;
         return `
         <p>What is left is mostly zeros, and the file is arranged so that they cost almost nothing. The 63 coefficients after S(0, 0) are read in <strong>zig-zag</strong> order, T.81's Figure A.6, along the diagonals from low frequency to high, so the zeros at the far end come in one long run.</p>
-        <p>S(0, 0) is sent as its difference from the last block's, since neighbouring means are close. Every other non-zero coefficient becomes a pair: how many zeros came before it, and its size category, the bits its magnitude needs. A Huffman code is sent for the pair, then the magnitude itself in that many plain bits. Sixteen zeros in a row have a code of their own, ZRL, and one code, EOB, says the rest of the block is zero.</p>
+        <p>S(0, 0) is sent as its difference from the last block's, since neighbouring means are close. Every other non-zero coefficient becomes a pair: how many zeros came before it, and its size category, the bits its magnitude needs. A <strong>Huffman code</strong> is sent for the pair: a prefix code, in which no code word begins another and commoner pairs get shorter words, then the magnitude itself in that many plain bits. Sixteen zeros in a row have a code of their own, ZRL, and one code, EOB, says the rest of the block is zero.</p>
         <p>The codes come from T.81's Tables K.3 and K.5, again "typical" tables, which a file carries as two short lists: how many codes of each length, and the symbols in order. The codes follow from those lists, so a decoder rebuilds them and every code here matches the code words the standard prints. In the file at quality 50 the Huffman codes take ${n0((t.dcCodes + t.acCodes) / 8)} bytes, the plain extra bits ${n0((t.dcExtra + t.acExtra) / 8)}, and the markers and tables ${n0(t.header / 8)}. One more rule: a byte of 0xFF in the coded data is followed by a 0, so that it is never taken for a marker.</p>
         <div class="try">Pick a block and read its symbols. Then compare the sky with the checks: the sky ends with EOB almost at once.</div>`;
       },
@@ -198,7 +199,7 @@ C(0) = 1/√2, otherwise 1</pre>
       get body() {
         const r = at()[1];
         return `
-        <p>Put it together, and it is a file. A baseline JPEG is a list of segments, each a marker and a length: start of image, a JFIF header, the quantization table in zig-zag order, the frame (8-bit samples, the size, one component), the two Huffman tables, the start of scan, the coded data, and end of image. For this scene at quality 50 it is ${n0(r.bytes.length)} bytes.</p>
+        <p>Put it together, and it is a file. A baseline JPEG is a list of segments, each a marker and a length: start of image, a JFIF header, the quantization table in zig-zag order, the frame (8-bit samples, the size, one component), the two Huffman tables, the start of scan, the coded data, and end of image. For this scene at quality 50 it is ${n0(r.bytes.length)} bytes; the file below opens at quality ${FILE_QUALITY}, which makes ${n0(encodeJpeg(scene(), FILE_QUALITY).bytes.length)}.</p>
         <p>This page wrote every one of those bytes, and two programs that had no part in it read them. The tests decode files made this way, the scene at 96 × 96 and qualities 10 and 75, with libjpeg through Pillow, and find every pixel within one level of our own reconstruction. Here your browser decodes the same bytes. A level or so either way is expected: T.81 sets how exact an inverse DCT must be, not one way of computing it, and fast decoders use integer ones.</p>
         <p>Try a picture of your own. It is read and turned grey by your browser, and goes nowhere.</p>
         <div class="try">Lower the quality until you can see the blocks in the browser's own decode. Then save the file and open it in another program.</div>`;

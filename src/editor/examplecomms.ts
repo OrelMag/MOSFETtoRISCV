@@ -91,10 +91,12 @@ export function uartComputerChip(id: string, name: string, role: 'A' | 'B'): Chi
   const cpu = lib(SANDBOX_PARTS.cpu), bus = lib(BUS), ram = lib(SANDBOX_PARTS.ram), uart = lib(AXI_UART_B), def = lib(SANDBOX_PARTS.def);
   s.pin('clk', 'in', [2, 2], 1, { kind: 'clock' });
   s.pin('rx', 'in', [2, 8]);
-  s.part('boot', bootRef, [6, 6], { label: 'boot ROM' });
-  s.part('zero', { const: { width: 8, value: 0 } }, [6, 6 + bh + 6], { label: 'switches' });
   const x2 = 6 + bw + 16, [cw] = size(cpu);
   s.part('cpu', cpu, [x2, 6], { label: 'RV32I core' });
+  // the boot ROM and the switches level with the core's inputs they feed, so both wires run straight
+  s.part('zero', { const: { width: 8, value: 0 } }, [x2 - 12, s.port('cpu', 'switches').pos[1] - 1], { label: 'switches' });
+  s.part('boot', bootRef, [6, s.port('cpu', 'romData').pos[1] - 2], { label: 'boot ROM' });
+  void bh;
   const x3 = x2 + cw + 16, [uw] = size(bus);
   s.part('bus', bus, [x3, 6], { label: 'interconnect' });
   const x4 = x3 + uw + 16;
@@ -103,25 +105,29 @@ export function uartComputerChip(id: string, name: string, role: 'A' | 'B'): Chi
     s.part(n, ref, [x4, y], { label });
     y += size(ref)[1] + 6;
   }
-  s.pin('tx', 'out', [x4 + 26, 8]);
-  s.pin('conData', 'out', [x4 + 26, 14], 8);
-  s.pin('conWe', 'out', [x4 + 26, 20]);
-  // the link between the core and the bus, and the bus and each slave: a request and a response
-  // the bus has two masters; the second (a DMA engine in the other examples) asks for nothing: its request is all zeros
-  s.part('z1', { const: { width: 53, value: 0 } }, [x3, 30], { label: 'no second master' });
-  s.part('z2', { const: { width: 52, value: 0 } }, [x3, 34]);
-  s.part('zm', { merge: [53, 52] }, [x3 + 10, 32]);
-  s.wire('z1.y', 'zm.i0'); s.wire('z2.y', 'zm.i1'); s.tap('zm.out', 'idle_req'); s.tap('bus.m1_req', 'idle_req');
-  s.tap('cpu.req', 'req'); s.tap('bus.m0_req', 'req'); s.tap('bus.m0_rsp', 'rsp'); s.tap('cpu.rsp', 'rsp');
+  s.pin('tx', 'out', [x4 + 26, s.port('uart', 'tx').pos[1]]);
+  s.pin('conData', 'out', [x4 + 26, 8], 8);
+  s.pin('conWe', 'out', [x4 + 26, 12]);
+  // A request runs forward (core → interconnect → slave) and is a wire, each in a lane of its own; a response runs back and is a
+  // pair of pointers, as are the clock, the pc back to the ROM, the interrupt and the console's wires across the slaves.
+  // The bus has two masters; the second (a DMA engine in the other examples) asks for nothing: its request is all zeros, under the core.
+  const zy = 6 + size(cpu)[1] + 6;
+  s.part('z1', { const: { width: 53, value: 0 } }, [x3 - 15, zy], { label: 'no second master' });
+  s.part('z2', { const: { width: 52, value: 0 } }, [x3 - 15, zy + 4]);
+  s.part('zm', { merge: [53, 52] }, [x3 - 6, zy + 2]);
+  s.wire('z1.y', 'zm.i0'); s.wire('z2.y', 'zm.i1');
+  s.elbow('zm.out', 'bus.m1_req', x3 - 3);
+  s.elbow('cpu.req', 'bus.m0_req', x3 - 9);
+  s.tap('bus.m0_rsp', 'rsp'); s.tap('cpu.rsp', 'rsp');
   ['ram', 'uart', 'none'].forEach((n, k) => {
-    s.tap(`bus.s${k}_req`, `${n}_req`); s.tap(`${n}.req`, `${n}_req`);
+    s.elbow(`bus.s${k}_req`, `${n}.req`, x3 + uw + [12, 8, 4][k]);
     s.tap(`${n}.rsp`, `${n}_rsp`); s.tap(`bus.s${k}_rsp`, `${n}_rsp`);
   });
-  s.tap('cpu.pcOut', 'pc'); s.tap('boot.addr', 'pc'); s.tap('boot.data', 'instr'); s.tap('cpu.romData', 'instr');
-  s.tap('zero.y', 'sw'); s.tap('cpu.switches', 'sw');
+  s.tap('cpu.pcOut', 'pc'); s.tap('boot.addr', 'pc'); s.wire('boot.data', 'cpu.romData');
+  s.wire('zero.y', 'cpu.switches');
   s.tap('uart.irq', 'irq'); s.tap('cpu.irq', 'irq');
   s.tap('pin:rx', 'rx'); s.tap('uart.rx', 'rx');
-  s.tap('uart.tx', 'tx'); s.tap('pin:tx', 'tx');
+  s.wire('uart.tx', 'pin:tx');
   s.tap('cpu.consoleData', 'conData'); s.tap('pin:conData', 'conData');
   s.tap('cpu.consoleValid', 'conWe'); s.tap('pin:conWe', 'conWe');
   for (const p of ['cpu', 'bus', 'ram', 'uart', 'none']) s.tap(`${p}.clk`, 'clk');
@@ -150,10 +156,14 @@ export function twoComputersChip(id: string, name: string, docs: { a: ChipDoc; b
   const atx = s.port('a', 'tx').pos, btx = s.port('b', 'tx').pos;
   s.part('ab', { lib: L.id }, [xl, at(atx, dPos)[1]], { label: 'A → B' });
   s.part('ba', { lib: L.id }, [xl, Math.max(at(btx, [gl.w - dPos[0], dPos[1]])[1], at(atx, dPos)[1] + gl.h + 6)], { label: 'B → A', flip: true });
+  // the ring as wires: A's tx into A → B, on into B's rx; B's tx (its lowest output) round under B into B → A, and on round under
+  // A into A's rx. The consoles' wires would cross it: pointers.
   s.wire('a.tx', 'ab.d');
-  s.tap('ab.q', 'rxB'); s.tap('b.rx', 'rxB');
-  s.tap('b.tx', 'txB'); s.tap('ba.d', 'txB');
-  s.tap('ba.q', 'rxA'); s.tap('a.rx', 'rxA');
+  s.elbow('ab.q', 'b.rx', xb - 8);
+  const [bt, bad] = [s.port('b', 'tx').pos, s.port('ba', 'd').pos], under = ya + ga.h + 5;
+  s.wire('b.tx', 'ba.d', [[bt[0] + 1, bt[1]], [bt[0] + 1, under], [bad[0] + 4, under], [bad[0] + 4, bad[1]]]);
+  const [baq, arx] = [s.port('ba', 'q').pos, s.port('a', 'rx').pos];
+  s.wire('ba.q', 'a.rx', [[xa - 4, baq[1]], [xa - 4, arx[1]]]);
   s.tap('pin:noiseAB', 'noiseAB'); s.tap('ab.noise', 'noiseAB');
   s.tap('pin:noiseBA', 'noiseBA'); s.tap('ba.noise', 'noiseBA');
   for (const p of ['a', 'b', 'ab', 'ba']) s.tap(`${p}.clk`, 'clk');

@@ -70,7 +70,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'help', group: 'anywhere', caps: ['?'], does: 'the keys on this page', match: [{ key: '?' }] },
   { id: 'esc', group: 'anywhere', caps: ['Esc'], does: 'close the top dialog or menu (in search: clear the query first)' },
   { id: 'code.leave', group: 'anywhere', caps: ['Esc', 'Tab'], does: 'leave a code editor (there Tab indents)' },
-  { id: 'skip', group: 'anywhere', caps: ['Tab'], does: 'the first stop is "Skip to the circuit" (on pages with one)' },
+  { id: 'skip', group: 'anywhere', caps: ['Tab'], does: 'the first stop skips to the circuit on pages with one, else to the page' },
   // ---- chapter pages
   { id: 'step.next', group: 'chapter', caps: [']'], does: 'next step (at the end: the next chapter)', match: [{ code: 'BracketRight', codeOnly: true, shift: false }] },
   { id: 'step.prev', group: 'chapter', caps: ['['], does: 'previous step', match: [{ code: 'BracketLeft', codeOnly: true, shift: false }] },
@@ -88,9 +88,15 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'sb.fav', group: 'place', caps: ['1', '…', '9'], does: 'arm favourite n; a click places it (Shift-click: several)', taken: ['1', '2', '3', '4', '5', '6', '7', '8', '9'] },
   { id: 'sb.pointer', group: 'place', caps: ['L', '·', 'T'], does: 'arm a pointer · a comment (same pointer name = same net)', match: [letter('l')], taken: ['l', 't'] },
   { id: 'sb.comment', group: 'place', caps: [], does: '', match: [letter('t')] },
+  { id: 'sb.kcursor', group: 'place', caps: ['Alt ←↑↓→'], does: 'keyboard cursor: move it (Shift: ×5); plain arrows move it too while a part is armed, a wire begun or nothing is selected, else they nudge the selection' },
+  { id: 'sb.kplace', group: 'place', caps: ['↵', '·', 'Space'], does: 'place the armed part at the cursor (Shift: keep it armed); with none armed ↵ uses what is under the cursor: an input toggles, a part or pointer is selected and a second ↵ acts on it' },
+  { id: 'sb.palette', group: 'place', caps: ['↑↓', 'Home End'], does: 'in the parts list (one Tab stop): move, ← → fold a group, type a name to jump, ↵ arms the part and moves to the canvas' },
   { id: 'sb.disarm', group: 'place', caps: ['Esc'], does: 'disarm · leave Type' },
   { id: 'sb.flipL', group: 'wire', caps: ['Space', '·', '/'], does: 'flip the wire\'s L while drawing', taken: ['/'] },
   { id: 'sb.corner', group: 'wire', caps: ['Backspace'], does: 'remove the last corner' },
+  { id: 'sb.wirekey', group: 'wire', caps: ['W'], does: 'start a wire from the pin under the cursor (or the selected part’s first pin)', match: [letter('w')], taken: ['w'] },
+  { id: 'sb.nextpin', group: 'wire', caps: ['N', '·', 'Shift N'], does: 'cursor to the next · previous pin (the selected part’s, else the chip’s; while wiring: the next pin that can connect)', match: [letter('n')], taken: ['n'] },
+  { id: 'sb.wireEnd', group: 'wire', caps: ['↵'], does: 'end the wire on the pin under the cursor (elsewhere: a bend)' },
   { id: 'sb.wireEsc', group: 'wire', caps: ['Esc'], does: 'cancel the wire' },
   { id: 'sb.nudge', group: 'select', caps: ['←↑↓→'], does: 'nudge the selection (Shift: ×5)' },
   { id: 'sb.all', group: 'select', caps: [`${MOD} A`], does: 'select all' },
@@ -162,7 +168,7 @@ export function typing(t: EventTarget | null): boolean {
 export function ownsKeys(t: EventTarget | null): boolean {
   if (typing(t)) return true;
   const el = t as Element | null;
-  return !!el?.closest?.('canvas, [role=application], [role=dialog], [role=menu], [role=listbox], [data-own-keys]');
+  return !!el?.closest?.('canvas, [role=application]:not(.ed-svg), [role=dialog], [role=menu], [role=listbox], [data-own-keys]');
 }
 
 // ---- the dispatcher ---------------------------------------------------------------------------
@@ -197,6 +203,9 @@ export function dispatch(e: KeyLike, phase: 'capture' | 'bubble'): KeyHandler | 
 
 let installed = false;
 
+/** A modal dialog is on screen. */
+const modalOpen = (): boolean => [...document.querySelectorAll<HTMLElement>('[role=dialog][aria-modal=true]')].some((d) => !d.hidden && d.offsetParent !== null);
+
 /** The two window listeners (once, at start-up), and the root's data-singlekeys for CSS key hints. */
 export function installKeys(): void {
   if (installed) return;
@@ -209,7 +218,8 @@ export function installKeys(): void {
     if (!e.altKey) run(e, 'capture');
   }, true);
   window.addEventListener('keydown', (e) => {
-    if (e.defaultPrevented || ownsKeys(e.target) || !shortcutAllowed(e)) return;
+    // a modal dialog open (search, a key sheet) has the keyboard: a global key must not open another over it
+    if (e.defaultPrevented || ownsKeys(e.target) || !shortcutAllowed(e) || modalOpen()) return;
     run(e, 'bubble');
   });
   const sync = () => document.documentElement.toggleAttribute('data-nosinglekeys', !settings.singleKeys);

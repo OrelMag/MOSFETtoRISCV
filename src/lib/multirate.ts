@@ -13,6 +13,7 @@ import { lookupRom } from './modem';
 import { treeMul } from './muldiv';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -86,7 +87,7 @@ export function rateCount(k: number): ComponentDef {
     b.next();
     b.wire(acc, 'strobe'); b.wire(`${r}.q`, 'q');
     const ports = [clkPort, bus('q', k, 'out'), bit('strobe', 'out')];
-    return define({ id: `cic_cnt${k}`, name: `Count of ${2 ** k}`, category: 'sequential', summary: 'Counts the clocks of the high rate. All ones means this is the last of the group, so an output is taken.', ports, symbol: { kind: 'box', label: `÷${2 ** k}`, w: 6 }, netlist: () => built(b, ports) });
+    return define({ id: `cic_cnt${k}`, name: `Count of ${2 ** k}`, category: 'sequential', summary: 'Counts the clocks of the high rate. All ones means this is the last of the group, so an output is taken.', ports, symbol: { kind: 'box', label: `÷${2 ** k}`, w: 6 }, netlist: laid(b) });
   });
 }
 
@@ -229,7 +230,7 @@ function gateWord(w: number): ComponentDef {
     b.next();
     b.wire(b.op1(joinBits(w), m, undefined, 'm'), 'y');
     const ports = [bus('a', w, 'in'), bit('en', 'in'), bus('y', w, 'out')];
-    return define({ id: `poly_gate${w}`, name: 'Keep or clear', category: 'gate', summary: 'The word, or zero.', ports, symbol: { kind: 'box', label: '&', w: 4 }, spec: ([a, en]) => [en ? a : 0], netlist: () => built(b, ports) });
+    return define({ id: `poly_gate${w}`, name: 'Keep or clear', category: 'gate', summary: 'The word, or zero.', ports, symbol: { kind: 'box', label: '&', w: 4 }, spec: ([a, en]) => [en ? a : 0], netlist: laid(b, { keepOrder: true }) });
   });
 }
 

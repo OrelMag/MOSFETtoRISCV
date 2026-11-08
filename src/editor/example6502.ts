@@ -49,6 +49,12 @@ export class Sheet {
     return id;
   }
 
+  /** A wire from a's port across to the vertical lane at x = `lane`, along it, then on to b's (straight when they are level). */
+  elbow(a: string, b: string, lane: number): string {
+    const [pa, pb] = [this.endAt(a).pos, this.endAt(b).pos];
+    return this.wire(a, b, pa[1] === pb[1] ? [] : [[lane, pa[1]], [lane, pb[1]]]);
+  }
+
   /** A pointer named `name` at `at` (its flag pointing `face`): its end, 'lbl:<id>'. */
   label(name: string, at: Vec, face: LabelDoc['face']): string {
     const id = `l${this.n++}`;

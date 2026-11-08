@@ -84,7 +84,7 @@ export const chSpi: Chapter = {
     'build a wired-AND from open-drain stages and a pull-up, and compute the rise time, the static current and the legal resistor window from the bus capacitance',
     'follow an I²C frame (START, address, ACK, data, repeated START, STOP), clock stretching and arbitration bit by bit on the wires',
   ],
-  builds: ['uart', 'clocks'],
+  builds: ['uart', 'clocks', 'wire', 'inverter'],
   recap: {
     keep: [
       `A shared clock moves the sampling decision from the receiver's guess to the sender's wire. SPI sends SCLK beside the data: a byte is 8 clocks with no start or stop bit, every clock moves one bit each way (a shift register in a ring), and a target needs no oscillator. The costs are a wire for the clock, a chip select per target, and a speed limit set by the skew between SCLK and data, not by oscillator tolerance.`,

@@ -82,7 +82,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
       ...(wires.length ? [{ label: 'Collapse selected', run: () => collapseAll(ed, wireIds) }] : []),
       ...pick,
     ];
-    return [flip, ...turn, ...shape, ...(ptrs.length ? [null, ...ptrs] : []), null, ...edits];
+    return [flip, ...turn, ...(shape.length ? [{ label: 'Shape', sub: shape }] : []), ...(ptrs.length ? [null, ...ptrs] : []), null, ...edits];
   }
   if (s.parts?.length) {
     const p = ed.doc.parts.find((q) => q.id === s.parts![0]);
@@ -134,9 +134,12 @@ function entries(ed: Editor, at: Vec): Entry[] {
     const id = wires[0].id;
     const j = t.cornerAt(id, at);
     return [
-      { label: 'Add a bend here', run: () => t.bendAt(id, at), disabled: j >= 0 },
-      { label: 'Remove this bend', key: 'double-click', run: () => t.unbend(id, j), disabled: j < 0 },
-      ...shape, null,
+      // the shape actions fold into one group: the menu above them is already tall
+      { label: 'Shape', sub: [
+        { label: 'Add a bend here', run: () => t.bendAt(id, at), disabled: j >= 0 },
+        { label: 'Remove this bend', key: 'double-click', run: () => t.unbend(id, j), disabled: j < 0 },
+        ...shape,
+      ] }, null,
       { label: 'Collapse to pointers…', run: () => collapseDialog(ed, id) },
       ...pick,
       null, { label: 'Delete', key: 'Del', run: () => t.del() },
@@ -272,15 +275,25 @@ export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void
   const partDef = part && ed.defOf(part);
   if (wires.length || labels.length) {
     const cur = hueOfNets(ed.doc, ed.compiled, wires, labels);
-    m.append(h('div', { class: 'sb-ctx-hues' }, h('span', null, 'Net colour'),
-      hueSwatches(cur, (hue) => {
-        closeMenu();
-        ed.edit((d) => colourNets(d, ed.compiled, wires, labels, hue));
-      }, 'menuitemradio')), h('hr'));
+    const head = h('span', null, 'Net colour');
+    const sw = hueSwatches(cur, (hue) => {
+      closeMenu();
+      ed.edit((d) => colourNets(d, ed.compiled, wires, labels, hue));
+    }, 'menuitemradio');
+    // the swatches have no text of their own: the heading names the one under the pointer or focus
+    const name = (e: Event) => { const t = (e.target as HTMLElement).closest<HTMLElement>('.sb-hue-sw')?.title; head.textContent = t ? `Net colour: ${t.split(':')[0]}` : 'Net colour'; };
+    for (const ev of ['pointerover', 'focusin']) sw.addEventListener(ev, name);
+    for (const ev of ['pointerleave', 'focusout']) sw.addEventListener(ev, () => { head.textContent = 'Net colour'; });
+    m.append(h('div', { class: 'sb-ctx-hues' }, head, sw), h('hr'));
   }
   if (part && partDef) partHeader(m, part.id, partDef);
   const trace = net >= 0 ? traceOf(ed, net, m) : [];
-  showMenu(x, y, [...trace, ...entries(ed, at)], { into: m, back: ed.view.svg });
+  // From the keyboard: place the armed part where the cursor is, or start a wire from the pin it is on or the selected part's
+  const armed = ed.tools.armedItem;
+  const here: Entry[] = armed ? [{ label: `Place ${armed.name} here`, key: 'Enter', run: () => { ed.tools.placeAt(armed, at); ed.view.svg.focus({ preventScroll: true }); } }, null] : [];
+  const wires2 = ed.tools.wireStarts();
+  const start: Entry[] = wires2.length ? [...wires2.map((w) => ({ label: w.label, key: 'W', run: () => { w.run(); ed.view.svg.focus({ preventScroll: true }); } })), null] : [];
+  showMenu(x, y, [...here, ...start, ...trace, ...entries(ed, at)], { into: m, back: ed.view.svg });
 }
 
 registerEditorPlugin((ed) => {

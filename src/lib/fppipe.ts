@@ -23,6 +23,7 @@ import { regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { bitwise, orN } from './wide';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -340,13 +341,7 @@ export const FP_EXEC: ComponentDef = (() => {
       bit('nan', 'out'), bit('invalid', 'out'), bit('anyInf', 'out'), bit('infSign', 'out'), bit('dz', 'out'), bus('rmOut', 3, 'out'), bit('arith', 'out'),
       bus('simpleY', 32, 'out'), bus('simpleFl', 5, 'out'), bus('tiT', 33, 'out'), bit('tiSt', 'out'), bit('tiSign', 'out'), bit('tiNaN', 'out'), bit('tiBad', 'out'), bit('cvtW', 'out'), bit('tiSigned', 'out'), bit('stall', 'out')],
     symbol: { kind: 'box', label: 'FP EXECUTE' },
-    netlist: () => ({
-      pins: Object.fromEntries([
-        ...['a', 'b', 'c', 'xa', 'instr', 'frm', 'clk'].map((n, i) => [n, [0, 4 + 4 * i]]),
-        ...['p', 'mc', 'dsat', 'cBig', 'eB', 'sB', 'effSub', 'nan', 'invalid', 'anyInf', 'infSign', 'dz', 'rmOut', 'arith', 'simpleY', 'simpleFl', 'tiT', 'tiSt', 'tiSign', 'tiNaN', 'tiBad', 'cvtW', 'tiSigned', 'stall'].map((n, i) => [n, [b.right, 2 + 3 * i]]),
-      ]) as Record<string, [number, number]>,
-      instances: b.instances, nets: b.nets(),
-    }),
+    netlist: laid(b, { keepOrder: true, room: true }),
     hdl: {
       verilog: `// one multiply-add pipe for fadd / fsub / fmul / fma / fcvt.s.w (stage 1 here, 2 in M, 3 in X)
 wire [31:0] B = isAddSub ? 32'h3f800000 : b;                    // fadd: a x 1 + b

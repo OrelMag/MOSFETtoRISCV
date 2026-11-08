@@ -10,8 +10,11 @@ import { Stage } from '../../view/stage';
 import { maybeCoach } from '../coachmarks';
 import { transistorLeaf } from '../../widgets/mosfet';
 import { h, icon } from '../dom';
+import type { Widget } from '../../view/stage';
+import { stageStepOf } from '../stageborrow';
 import { drillLanded, drillSegs, syncDrill } from '../drillpath';
 import { bindKeys } from '../keys';
+import { installSplitter } from '../splitter';
 import { toggleChapterMenu } from '../quicknav';
 import { bookmarkButton, StepNotes } from '../notesui';
 import { newPartsNavState, partsNav } from '../chapterparts';
@@ -36,6 +39,14 @@ export interface Page {
   destroy(): void;
 }
 
+/** The stage before a chapter's first figure: no circuit yet, and where it comes. */
+function stageIntro(steps: Step[], has: (k: number) => boolean): Widget {
+  const first = steps.findIndex((_, k) => has(k));
+  const text = first < 0 ? 'This chapter has no figure.'
+    : `The first figure comes at step ${first + 1}, “${steps[first].title}”. The text up to there says what it will show.`;
+  return { el: h('div', { class: 'stage-intro', role: 'note' }, h('p', null, 'No figure yet'), h('p', { class: 'sub' }, text)) };
+}
+
 /** The page that last set the top bar's data-widget-step (a later page keeps it when an earlier one is destroyed). */
 let widgetStepOwner: object | null = null;
 
@@ -54,8 +65,8 @@ export class ChapterPage implements Page {
   private tour: TourPlayer | null = null;
   private foot: HTMLElement;
   private step = -1;
-  /** Has the stage shown anything yet (a step without a scene keeps the last one, or borrows a neighbour's)? */
-  private shown = false;
+  /** The step whose scene or widget is on the stage (-1: none, or the intro card): a step without one shows the nearest earlier step's. */
+  private shownStep = -1;
   /** Is the stage showing a scene (not a widget)? Only a scene has a drill path in the hash. */
   private sceneShown = false;
   /** Following the address bar (a route): the stage's moves are not new history entries. */
@@ -70,6 +81,7 @@ export class ChapterPage implements Page {
   /** This step's notes (cards, and markers on the stage); none on the recap. */
   private stepNotes: StepNotes | null = null;
   private offNotes: () => void;
+  private unsplit: () => void;
   /** The first step is built: later step changes move the focus to the new title and announce it. */
   private ready = false;
   /** Codex terms already marked on this step (prose, analogy, layers): one tab stop per term per step. */
@@ -87,6 +99,7 @@ export class ChapterPage implements Page {
     const narrative = h('aside', { class: 'narrative' }, this.head, this.body, this.foot);
     this.el = h('div', { class: 'layout' }, narrative, this.stage.el, this.inspector.el, this.notes.live);
     this.stage.el.querySelector('.canvas')?.append(this.notes.el);
+    this.unsplit = installSplitter(this.el, narrative);
     this.circuitBtn = this.showCircuitButton();
     this.cueOff = trackScrollCue(this.el);
     // Each level opened is a history entry (ui/drillpath.ts): #/c/<chapter>/<step>/<instance>/…
@@ -200,26 +213,35 @@ export class ChapterPage implements Page {
     this.notes.announce(this.step === this.recap ? `Recap, ${this.chapter.title}` : `Step ${this.step + 1} of ${n}: ${this.chapter.steps[this.step].title}`);
   }
 
-  /** Put step i's scene or widget on the stage; a step without either keeps what is shown, or borrows the nearest earlier one's. */
+  /**
+   * Put step i's stage on the stage. A step without a scene or widget shows its PREVIOUS stage (the nearest earlier step's, kept
+   * as it is when that is what is showing: a later step's figure would name terms before the text introduces them), and where
+   * nothing earlier exists, an honest card saying where the first figure comes (stageIntro).
+   */
   private show(i: number, path?: string[]): void {
     const steps = this.chapter.steps;
     const has = (k: number) => !!(steps[k].scene || steps[k].widget);
-    let k = i;
-    if (!has(k)) {
-      if (this.shown) {
-        if (path && this.sceneShown) {
-          this.routing = true;
-          try {
-            this.stage.openPath(path);
-          } finally {
-            this.routing = false;
-          }
+    const k = stageStepOf(has, i);
+    if (k >= 0 && k !== i && k === this.shownStep) {
+      if (path && this.sceneShown) {
+        this.routing = true;
+        try {
+          this.stage.openPath(path);
+        } finally {
+          this.routing = false;
         }
-        return;
       }
-      while (k > 0 && !has(k)) k--;
-      if (!has(k)) k = steps.findIndex((s) => s.scene || s.widget);
-      if (k < 0) return;
+      return;
+    }
+    if (k < 0) {
+      // nothing earlier to show: a card, not a later step's figure
+      this.stage.showWidget(stageIntro(steps, has));
+      this.shownStep = -1;
+      this.sceneShown = false;
+      this.el.classList.add('no-inspector');
+      widgetStepOwner = this;
+      document.documentElement.setAttribute('data-widget-step', '');
+      return;
     }
     const st = steps[k];
     if (st.scene) {
@@ -228,7 +250,7 @@ export class ChapterPage implements Page {
       this.stage.load(sc, path, performance.now() - t0);
     }
     else this.stage.showWidget(st.widget!());
-    this.shown = true;
+    this.shownStep = k;
     this.sceneShown = !!st.scene;
     this.el.classList.toggle('no-inspector', !st.scene);
     // a widget has no gate delays to slow down: the top bar's Slow motion button hides (app.css)
@@ -307,8 +329,14 @@ export class ChapterPage implements Page {
     const c = this.chapter;
     const prose = h('div', { class: 'prose', html: lazyBody(() => st.body) });
     b.replaceChildren();
-    if (this.step === 0 && (c.goals?.length || c.builds?.length)) b.append(this.goalsCard());
     b.append(h('h2', { class: 'step-title', tabindex: '-1' }, st.title), prose);
+    // the step's own title and first paragraph come first; the compact goals line follows them
+    if (this.step === 0 && (c.goals?.length || c.builds?.length)) {
+      const card = this.goalsCard();
+      const first = prose.firstElementChild;
+      if (first) first.after(card);
+      else prose.append(card);
+    }
     settleLazy(prose);
     // target: a big scene is still being built (Stage.load)
     const lit = st.scene && this.stage.target ? litLine(this.stage.target, st.lit) : null;
@@ -418,11 +446,35 @@ export class ChapterPage implements Page {
   private goalsCard(): HTMLElement {
     const c = this.chapter;
     const builds = (c.builds ?? []).map((id) => outlineOf(id)).filter((x) => !!x);
-    return h('div', { class: 'ch-goals' },
-      c.goals?.length ? h('div', { class: 'ch-goals-k' }, 'In this chapter you will') : null,
-      c.goals?.length ? h('ul', null, c.goals.map((g) => h('li', { html: g }))) : null,
+    const goals = c.goals ?? [];
+    const KEY = 'mosfet2riscv:goalsOpen';
+    const read = (): string[] => { try { const v = JSON.parse(localStorage.getItem(KEY) ?? '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
+    const write = (open: boolean): void => {
+      try {
+        const rest = read().filter((x) => x !== c.id);
+        localStorage.setItem(KEY, JSON.stringify(open ? [...rest, c.id].slice(-200) : rest));
+      } catch { /* private window: this visit only */ }
+    };
+    const plain = (html: string): string => { const d = document.createElement('div'); d.innerHTML = html; return (d.textContent ?? '').trim(); };
+    const open = read().includes(c.id);
+    const list = h('ul', { id: `goals-${c.id}`, ...(open ? {} : { hidden: '' }) }, goals.map((g) => h('li', { html: g })));
+    const btn = h('button', { type: 'button', class: 'ch-goals-btn', 'aria-expanded': String(open), 'aria-controls': `goals-${c.id}` },
+      h('span', { class: 'ch-goals-k' }, open ? 'In this chapter you will' : 'In this chapter'),
+      h('span', { class: 'ch-goals-sum' }, plain(goals[0])),
+      goals.length > 1 ? h('span', { class: 'ch-goals-n' }, `· ${goals.length - 1} more`) : null,
+      icon('chevD', 14));
+    const card = h('div', { class: `ch-goals${open ? ' open' : ''}` }, goals.length ? btn : null, goals.length ? list : null,
       builds.length ? h('div', { class: 'ch-links' }, h('span', { class: 'ch-links-k' }, 'Builds on'),
         builds.map((x) => h('a', { class: 'ch-chip', href: `#/c/${x.id}/0` }, `${chapterNo(x)} · ${x.title}`))) : null);
+    btn.addEventListener('click', () => {
+      const o = btn.getAttribute('aria-expanded') !== 'true';
+      btn.setAttribute('aria-expanded', String(o));
+      list.hidden = !o;
+      card.classList.toggle('open', o);
+      btn.firstElementChild!.textContent = o ? 'In this chapter you will' : 'In this chapter';
+      write(o);
+    });
+    return card;
   }
 
   /**
@@ -583,6 +635,7 @@ export class ChapterPage implements Page {
   }
 
   destroy(): void {
+    this.unsplit();
     // (the next page may already have set it: the old one is destroyed after the new one is built)
     if (widgetStepOwner === this) document.documentElement.removeAttribute('data-widget-step');
     this.offNotes();

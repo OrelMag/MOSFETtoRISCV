@@ -13,6 +13,7 @@ import { AND, NOT, OR } from '../gates';
 import { NAND, TIE0, TIE1 } from '../transistors';
 import { orN } from '../wide';
 import { BRANCH16, CORE_PORTS, CTL16, IMM16, NEXTPC16 } from './cpu';
+import { foldBands } from '../fold';
 import { choose4, MUX16, RF8, RV16_ALU16, RV16_DREG16, RV16_MUX4, RV16_MUX8, RV16_REG16 } from './logic';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -296,7 +297,8 @@ export function rv16SysCore(irq: boolean): ComponentDef {
     summary: 'The single-cycle core plus a CSR file, an illegal-instruction detector and system decode. A trap (illegal, ecall, ebreak' + (irq ? ', or the external interrupt' : '') + ') replaces the instruction: mepc ← pc, mcause ← cause, pc ← mtvec. mret returns.',
     ports: [...CORE_PORTS.slice(0, 4), bit('irq', 'in'), ...CORE_PORTS.slice(4)],
     symbol: { kind: 'box', label: irq ? 'RV16 + IRQ' : 'RV16 + traps' },
-    netlist: () => ({
+    // a core is too wide to read at fit in one strip: two bands (lib/fold.ts)
+    netlist: () => foldBands({
       pins: { ...pinsAt(['clk', 'rst', 'instr', 'drdata', 'irq'], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) },
       instances: b.instances, nets: b.nets(),
     }),

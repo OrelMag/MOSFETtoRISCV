@@ -9,8 +9,9 @@ import { TCP_K } from '../net/tcp';
 import { ladderWidget, mbps, realStackWidget, rtoWidget, sawWidget, tcpWindowScene, windowApi, windowWidget } from '../widgets/tcp';
 import type { Chapter } from './types';
 import { numOf } from './order';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const K = TCP_K, MSS = K.MSS;
 const FRAME = MSS + 54, ON_WIRE = FRAME + 4 + 8 + 12;
 /** The most data the link can carry in segments this small: preamble, headers, FCS and gap are all wire time. */
@@ -29,7 +30,7 @@ export const chTcp: Chapter = {
     'compute a retransmission timer from round-trip samples, and say why a fixed one fails',
     'explain the sawtooth, why a short queue costs more than a long one, and what a long queue costs instead',
   ],
-  builds: ['errors', 'network', 'router'],
+  builds: ['errors', 'network', 'router', 'ethernet'],
   recap: {
     keep: [
       'TCP gives two applications a stream of bytes over IP, which promises nothing. Every byte has a sequence number; an ACK says "everything before this has arrived". A connection opens with three segments because each side must learn the other\'s first number and know that its own arrived.',

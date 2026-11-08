@@ -47,7 +47,7 @@ export const CHECK11C: Record<string, Quiz[]> = {
       question: 'A narrow high-order filter is built as sections and not as one polynomial. What does that buy?',
       options: ['Each pair depends on its own two coefficients', 'It needs fewer multiplications in all', 'The coefficients then become exactly representable', 'It removes the filter\'s state'],
       answer: 0,
-      explain: 'In a section the sensitivity is 1 / (2 Im p), 6.5 at worst here, against about 3,021 for the polynomial. It costs two multiplications more: 15 against 13.',
+      explain: 'In a section the sensitivity is 1 / (2 Im p), 6.5 at worst here, against about 3021 for the polynomial. It costs two multiplications more: 15 against 13.',
       why: ['', 'The sections cost two more multiplications than the polynomial (15 against 13).', 'The coefficients are rounded either way; the sections make the rounding matter less.', 'The state is the delayed inputs and outputs, which sections have as well.'],
     },
   ],
@@ -72,7 +72,7 @@ export const CHECK11C: Record<string, Quiz[]> = {
       question: 'After the input stops, a biquad of radius 0.95 repeats 5, 0, −5, 0. What keeps the output alive?',
       options: ['Rounding of the fed-back output inside the loop', 'The pole radius has risen to 1 through rounding of a₂', 'The accumulator is too narrow to hold the sum', 'The input has not really stopped'],
       answer: 0,
-      explain: 'a₂ = 14,787 / 2¹⁴ = 0.9025 throughout. 0.9025 × 5 = 4.51 rounds back to 5 with the sign flipped, and every size up to the dead band 5.13 does the same.',
+      explain: 'a₂ = 14 787 / 2¹⁴ = 0.9025 throughout. 0.9025 × 5 = 4.51 rounds back to 5 with the sign flipped, and every size up to the dead band 5.13 does the same.',
       why: ['', 'The coefficient words do not change while the filter runs.', 'The accumulator keeps every bit of every product; the rounding comes after it.', 'The input was one word and then zeros.'],
     },
     {

@@ -24,6 +24,14 @@ const CLEAR_PASSES = 4;
 const EDGE = 0.01;
 const CLOCK = /^(clk|clock|rst|reset|rst_n|phi\d)$/i;
 
+/** A netlist's routing, kept while the netlist object lives: a candidate is routed to check it and again to draw it. */
+const routeMemo = new WeakMap<Netlist, ReturnType<typeof routeNetlist>>();
+export const routedOnce = (def: ComponentDef, nl: Netlist): ReturnType<typeof routeNetlist> => {
+  let r = routeMemo.get(nl);
+  if (!r) routeMemo.set(nl, (r = routeNetlist(def, nl)));
+  return r;
+};
+
 const tagged = (n: NetDef) => n.tags === true || (n.tags?.length ?? 0) > 0;
 
 /** Wire crossings between different nets of a routed level. */
@@ -110,7 +118,7 @@ function wiredClear(def: ComponentDef, nl: Netlist, wire: (n: NetDef) => boolean
   for (let pass = 0; pass < CLEAR_PASSES; pass++) {
     const c = draft();
     let more = false;
-    for (const net of routeNetlist(def, c).nets) {
+    for (const net of routedOnce(def, c).nets) {
       const orig = nl.nets[net.index];
       if (!tagged(orig) || !wire(orig)) continue;
       const hit = sinksThroughParts(c, net);
@@ -125,23 +133,31 @@ function wiredClear(def: ComponentDef, nl: Netlist, wire: (n: NetDef) => boolean
   return nl;
 }
 
-const cache = new WeakMap<Netlist, Netlist>();
+const caches = new Map<number, WeakMap<Netlist, Netlist>>();
 
-/** The level as first drawn: `nl` with the nets wires can carry readably drawn as wires. */
-export function drawnNetlist(def: ComponentDef, nl: Netlist): Netlist {
+/**
+ * The level as first drawn: `nl` with the nets wires can carry readably drawn as wires. `limit`: past this many nets the level keeps
+ * its author's drawing (LOCAL_NETS on a stage, where it is redone on every open; a drawing made once, like a sandbox copy, can afford more).
+ */
+export function drawnNetlist(def: ComponentDef, nl: Netlist, limit = LOCAL_NETS): Netlist {
+  let cache = caches.get(limit);
+  if (!cache) caches.set(limit, (cache = new WeakMap()));
   const known = cache.get(nl);
   if (known) return known;
   let out = nl;
   const n = nl.nets.length;
-  if (n <= LOCAL_NETS && nl.nets.some(tagged)) {
+  if (n <= limit && nl.nets.some(tagged)) {
     const fits = (c: Netlist, limit: number) => {
-      const r = routeNetlist(def, c).nets;
+      const r = routedOnce(def, c).nets;
       return wireOverlaps(r).length === 0 && wireCrossings(r) <= limit;
     };
+    // the local drawing only when the whole one does not fit: each is several routings of the level
     const whole = n <= WHOLE_NETS ? wiredClear(def, nl, (x) => !manyClock(x)) : null;
-    const local = wiredClear(def, nl, (x) => isLocal(nl, x));
     if (whole && fits(whole, MAX_CROSSINGS_PER_NET * n)) out = whole;
-    else if (fits(local, Infinity)) out = local;
+    else {
+      const local = wiredClear(def, nl, (x) => isLocal(nl, x));
+      if (fits(local, Infinity)) out = local;
+    }
   }
   cache.set(nl, out);
   return out;

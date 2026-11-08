@@ -39,7 +39,7 @@ describe('chapter "A software radio"', () => {
       why.forEach((w, i) => { if (i !== q.answer) expect(w.length).toBeGreaterThan(10); });
     }
   });
-  it('lists the DSP core step as not built yet', () => {
-    expect(chSdr.soon).toEqual(['The channel filter and the discriminator on the DSP core']);
+  it('has no step waiting to be built: the DSP core is chapter 75, and the page says what it runs instead', () => {
+    expect(chSdr.soon).toBeUndefined();
   });
 });

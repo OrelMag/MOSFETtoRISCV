@@ -14,8 +14,9 @@ import {
 } from '../widgets/dspmac';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const F3 = (n: string) => MAC_INSTRS.find((i) => i.name === n)!.funct3!.toString(2).padStart(3, '0');
 // headroom, from the model: full-scale instructions that fit (the next one wraps), and the bits a 64-tap sum of full-scale products needs
 const MAC_FIT = Number(fitsBeforeWrap(macProduct(MAC_F3.mac, FULL_SCALE, FULL_SCALE)));
@@ -31,7 +32,7 @@ export const chMac: Chapter = {
     'encode mac, mac2, clracc and racc on custom-2, and say what happens past 40 bits',
     'explain from measurements why mac barely helps, what mac2 changes, and what unrolling and the packed layout cost',
   ],
-  builds: ['fixed', 'firdesign', 'muldiv', 'cpu'],
+  builds: ['fixed', 'firdesign', 'muldiv', 'cpu', 'widths'],
   recap: {
     keep: [
       'A filter is multiply-accumulate and little else. On a core with no multiplier the multiply is a loop of shifts and adds, and it is the whole cost.',
@@ -73,7 +74,7 @@ export const chMac: Chapter = {
         <p>A FIR filter is a loop: fetch a sample and a tap, multiply, add to a sum. <a href="#/c/firdesign/6">The FIR chapter</a> did it with one multiplier and a counter. A processor does it with instructions, and the RV32I of <a href="#/c/cpu/1">chapter ${numOf('cpu')}</a> has no multiply instruction. The multiply is a routine: fifteen steps of "if the low bit of the tap is 1, add the sample; shift both", and a last step for the tap's sign.</p>
         <p>We ran it. On the single-cycle core in gates, the 64-tap filter's inner loop needs <strong>${f1(a)} clocks a product</strong>: ${n0(c.kernel)} clocks for ${c.products} products, the data setup taken out. A count on paper, fifteen steps of five instructions, gives about 75. The steps are six or seven, because the add is skipped only for the zero bits of a tap, and the arithmetic shifts, the counter and the branch are always there.</p>
         <p>With the M extension the same product is one <code>mul</code> and the loop is ${f1(b)} clocks a product, ${f1(a / b)} times faster. That core is <a href="#/c/widths/5">chapter ${numOf('widths')}'s</a> at 32 bits, since chapter ${numOf('cpu')}'s has no M option; it costs ${n0(machineCost('rv32im').nands)} NANDs against ${n0(machineCost('rv32i').nands)}, and its period is ${machineCost('rv32im').period} NAND delays against ${machineCost('rv32i').period}: larger, yet faster, because chapter ${numOf('widths')}'s core adds with Kogge–Stone adders where chapter ${numOf('cpu')}'s ripples.</p>
-        <p>Both use the same exact data, and every output word is checked against the integers that <code>scripts/dsp/oracle.py</code> computes with scipy. The taps sum to 1.0 in magnitude and the samples are 16-bit, so even a 32-bit sum cannot overflow: the machines must agree to the last bit, and they do.</p>
+        <p>Both use the same exact data, and every output word is checked against integers computed independently with scipy. The taps sum to 1.0 in magnitude and the samples are 16-bit, so even a 32-bit sum cannot overflow: the machines must agree to the last bit, and they do.</p>
         <div class="try">Pick the 64-tap filter and then the dot product. The ratio between the two machines hardly moves: the multiply is the cost, whatever the kernel.</div>`;
       },
       widget: barsWidget(['rv32i', 'rv32im'], 'fir64'),
