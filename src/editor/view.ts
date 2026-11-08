@@ -947,7 +947,9 @@ export class EditorView {
       return;
     }
     this.cam.fit(b, insetRight, touch ? Math.min(40, width / TOUCH_PX) : 40);
-    if (!touch) return;
+    // only pins (a challenge's starting chip): the plain fit already gives each knob a finger, and zooming
+    // to TOUCH_PX around the centre would crop the very pins the learner starts from
+    if (!touch || this.doc?.parts.length === 0) return;
     const vb = touchZoom(this.cam.vb, width, [b.x + b.w / 2, b.y + b.h / 2]);
     if (vb !== this.cam.vb) {
       this.cam.vb = vb;
