@@ -4,6 +4,7 @@
 
 import '../styles/hierarchy3d.css';
 import { h } from '../ui/dom';
+import { groupNum } from '../sim/numfmt';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import type { OrbitView } from '../gl/camera';
@@ -69,7 +70,7 @@ export function hierarchyView(): Widget {
     const rows: [string, string][] = lv ? [
       ['Hit in', lv.name],
       ['Place', lv.place === 'core' ? 'In the core' : placeOf(lv).label],
-      ['Latency', `${fmtNs(lv.ns)} = ${cyclesOf(lv.ns).toLocaleString('en-US')} cycles at ${CORE_GHZ} GHz`],
+      ['Latency', `${fmtNs(lv.ns)} = ${groupNum(cyclesOf(lv.ns))} cycles at ${CORE_GHZ} GHz`],
       ['Distance', `${levelX(lv).toFixed(1)} units`],
       ['Elapsed', fmtNs(elapsed)],
       ['If a cycle were a second', asSeconds(cyclesOf(lv.ns))],
@@ -78,7 +79,7 @@ export function hierarchyView(): Widget {
       ['Scale', `log: ${SCALE} units per ×10 in time, from 0.1 ns`],
       ['Nearest', `Registers: ${fmtNs(LEVELS[0].ns)}, ${levelX(LEVELS[0]).toFixed(0)} units out`],
       ['Farthest', `${LEVELS[5].name}: ${fmtNs(LEVELS[5].ns)}, ${levelX(LEVELS[5]).toFixed(0)} units out`],
-      ['Ratio', `${Math.round(LEVELS[5].ns / LEVELS[1].ns).toLocaleString('en-US')} × from L1 to the SSD`],
+      ['Ratio', `${groupNum(Math.round(LEVELS[5].ns / LEVELS[1].ns))} × from L1 to the SSD`],
     ];
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
     LEVELS.forEach((_, k) => btns[k].setAttribute('aria-pressed', String(target === k)));

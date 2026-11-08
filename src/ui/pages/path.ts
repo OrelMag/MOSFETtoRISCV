@@ -5,7 +5,7 @@ import '../../styles/path.css';
 import { asker } from '../../learn/asker';
 import { pathCtx } from '../../learn/evidence';
 import type { SkillState } from '../../learn/mastery';
-import { chapterById, currentTier, fmtMinutes, nextUp, stepMinutes, tierViews, type NextItem, type PathCtx, type TierView } from '../../learn/path';
+import { chapterById, chapterMinutes, currentTier, fmtMinutes, nextUp, tierViews, type NextItem, type PathCtx, type TierView } from '../../learn/path';
 import { testOutItems } from '../../learn/placement';
 import { capstoneStatus, COMM_CAPSTONES, DSP_CAPSTONES, type AnyCapstone } from '../../learn/capstones';
 import { tierChapters } from '../../learn/skills';
@@ -76,7 +76,7 @@ export class PathPage implements Page {
       const row = h('div', { class: 'lp-row' },
         h('a', { class: 'lp-ch', href: `#/c/${c.id}/${Math.min(seen, c.steps.length - 1)}` }, c.title, h('small', null, `${c.label ?? `ch ${c.num}`} · ${seen} / ${c.steps.length} steps${tested ? ' · tested out' : ''}`)),
         h('div', { class: 'lp-chips' }, ...mine.map(({ skill, state }) => h('a', { class: `lp-chip ${state}`, href: `#/campaign/codex/${skill.id}`, title: `${skill.title}: ${STATE_LABEL[state]}` }, skill.title))),
-        h('div', { class: 'lp-rowact' }, !tested && !allDone && c.recap?.check?.length ? h('button', { class: 'btn sm', type: 'button', title: this.testing === c.id ? 'Close the questions' : `Skip ${c.title}: answer its recap questions, all right to count it as known`, onclick: () => { this.testing = this.testing === c.id ? null : c.id; this.render(); } }, this.testing === c.id ? 'Close' : 'Test out') : null,
+        h('div', { class: 'lp-rowact' }, !tested && !allDone && c.recap?.checks ? h('button', { class: 'btn sm', type: 'button', title: this.testing === c.id ? 'Close the questions' : `Skip ${c.title}: answer its recap questions, all right to count it as known`, onclick: () => { this.testing = this.testing === c.id ? null : c.id; this.render(); } }, this.testing === c.id ? 'Close' : 'Test out') : null,
           tested ? h('button', { class: 'btn sm', type: 'button', title: 'Count this chapter as not tested out', onclick: () => learn().untest(c.id) }, 'Undo test-out') : null));
       card.append(row);
       if (this.testing === c.id) card.append(this.testOut(c.id));
@@ -86,16 +86,23 @@ export class PathPage implements Page {
 
   private testOut(chapter: string): HTMLElement {
     const c = chapterById(chapter)!;
-    const items = testOutItems(chapter);
-    const box = h('div', { class: 'lp-test' });
-    box.append(h('p', { class: 'lp-sub' }, `Test out of ${c.title}: ${items.length} questions, all right to pass. Nothing here counts toward the chapter's own checks.`),
-      asker(items, (answers) => {
-        const right = answers.filter((a) => a.right).length;
-        if (right === answers.length) { learn().testOut(chapter); this.testing = null; return; }
-        const mins = c.steps.reduce((m, s) => m + stepMinutes(s), 0);
-        box.replaceChildren(h('p', null, `${right} of ${answers.length} right: not this time. The chapter takes ${fmtMinutes(mins)}.`),
-          h('div', { class: 'lp-nav' }, h('a', { class: 'btn primary', href: `#/c/${chapter}/0` }, 'Open the chapter'), h('button', { class: 'btn', type: 'button', onclick: () => { this.testing = null; this.render(); } }, 'Close')));
-      }, 'Test-out'));
+    const close = () => { this.testing = null; this.render(); };
+    // the questions are a chunk of their own (learn/placement.ts), loaded on this click, not with the page
+    const box = h('div', { class: 'lp-test', 'aria-busy': 'true' }, h('p', { class: 'lp-sub', role: 'status' }, `Loading the questions of ${c.title}…`));
+    testOutItems(chapter).then((items) => {
+      box.removeAttribute('aria-busy');
+      box.replaceChildren(h('p', { class: 'lp-sub' }, `Test out of ${c.title}: ${items.length} questions, all right to pass. Nothing here counts toward the chapter's own checks.`),
+        asker(items, (answers) => {
+          const right = answers.filter((a) => a.right).length;
+          if (right === answers.length) { learn().testOut(chapter); this.testing = null; return; }
+          box.replaceChildren(h('p', null, `${right} of ${answers.length} right: not this time. The chapter takes ${fmtMinutes(chapterMinutes(chapter))}.`),
+            h('div', { class: 'lp-nav' }, h('a', { class: 'btn primary', href: `#/c/${chapter}/0` }, 'Open the chapter'), h('button', { class: 'btn', type: 'button', onclick: close }, 'Close')));
+        }, 'Test-out'));
+    }, () => {
+      box.removeAttribute('aria-busy');
+      box.replaceChildren(h('p', { class: 'lp-sub', role: 'status' }, 'The questions could not be loaded (offline?).'),
+        h('div', { class: 'lp-nav' }, h('button', { class: 'btn', type: 'button', onclick: () => this.render() }, 'Try again'), h('button', { class: 'btn', type: 'button', onclick: close }, 'Close')));
+    });
     return box;
   }
 
@@ -108,7 +115,7 @@ export class PathPage implements Page {
         h('span', { class: 'lp-kind' }, KIND_LABEL[x.kind]), h('span', { class: 'lp-it' }, x.title), h('small', null, fmtMinutes(x.minutes))))
         : [h('p', { class: 'lp-sub' }, 'Every tier is done. The sandbox and the campaign\'s optional acts are yours.')]),
       first ? h('a', { class: 'btn primary lp-go', href: first.href! }, 'Start', icon('chevR', 16)) : null,
-      h('p', { class: 'lp-note' }, 'Questions due come first, then the next step of your tier, then a level that practises what you have read.'));
+      h('p', { class: 'lp-note' }, 'Questions due come first, then the next step of your tier, then a level or a question that practises what you have read.'));
   }
 
   /** A track's capstones: outside the tiers, so a tier's progress never depends on them. One without a route is not built yet. */

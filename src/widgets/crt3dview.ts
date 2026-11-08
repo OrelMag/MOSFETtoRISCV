@@ -187,16 +187,17 @@ export function crtView(): Widget {
   const showSpeed = () => { speedOut.textContent = `${Math.round(rate)}/s`; };
   speed.addEventListener('input', () => { rate = 2 ** Number(speed.value); showSpeed(); });
   showSpeed();
-  const view = (name: string) => {
-    const b = h('button', { type: 'button', class: 'btn sm' }, name[0].toUpperCase() + name.slice(1));
-    b.addEventListener('click', () => {
+  // the preset views on the stage's shared view bar; the gun, yoke and mask views also draw those parts in detail (the mask up close: its own zoom limits)
+  const views = ['three', 'front', 'side', 'gun', 'yoke', 'mask'].map((name) => ({
+    label: name === 'three' ? '3/4 view' : name[0].toUpperCase() + name.slice(1),
+    view: () => viewOf(name),
+    limits: name === 'mask' ? MASK_LIMITS : TUBE_LIMITS,
+    pick: () => {
       detail = name === 'gun' || name === 'yoke' || name === 'mask' ? name : 'overview';
-      stage.setView(viewOf(name), name === 'mask' ? MASK_LIMITS : TUBE_LIMITS);
       maskNote.style.display = name === 'mask' ? '' : 'none';
       paint();
-    });
-    return b;
-  };
+    },
+  }));
 
   function retraceText(): string {
     if (mode === 'c') {
@@ -226,11 +227,9 @@ export function crtView(): Widget {
         h('div', { class: 'r3-ctl' },
           h('label', { class: 'crt-chk' }, syncBox, 'flip at vsync'),
           modeSel, pers,
-          h('div', { class: 'crt-seg', role: 'group', 'aria-label': 'Views' }, view('three'), view('front'), view('side'), view('gun'), view('yoke'), view('mask'), stage.resetBtn)),
+          stage.viewBar(views)),
         stage.el, stage.hint, maskNote, retraceNote, predict, live),
       h('div', { class: 'r3-side' }, h('div', null, h('h4', null, 'The beam ', h('span', { class: 'r3-badge' }, 'model')), kv), plotsBox)));
-  // Replace the leading "three" button label
-  panel.querySelectorAll('.crt-seg button').forEach((b) => { if (b.textContent === 'Three') b.textContent = '3/4 view'; });
   readout();
   paint();
   return { el: panel, destroy() { loop.stop(); stage.destroy(); } };

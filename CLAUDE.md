@@ -4,7 +4,7 @@ Guidance for Claude Code (and humans) working in this repository.
 
 ## What this is
 
-**From Switch to RISC-V and Beyond** (the repository and site address keep the old name, MOSFETtoRISCV): an educational static website that walks a learner from a single
+**From Switch to CPU** (the repository and site address keep the old name, MOSFETtoRISCV): an educational static website that walks a learner from a single
 transistor to a multi-core RISC-V processor laid out on silicon. Each level is built only
 from the levels below it, and every component on screen is a **transparent box**: the
 learner can open any instance and keep drilling down to MOSFETs.
@@ -56,7 +56,8 @@ route a stage bar's button past its edge, the open level's name cut on a one-row
 buttons into More, then a row for the hierarchy) or the run row cut (fitControls: icons only, then wrapped within its row). Every analogy with a figure or a Water view (chapters/analogies.ts) is also a route "(analogy open)" (30 with the phone ones; `--only analogy`): its `.analogy` asides opened and the step's Water toggles clicked (ANALOGY_DRIVE), failing on a figure that stays empty or says it could not load. `--only <substring>`, `--headful`, `--dwell <ms>` (wait after settling, default 600).
 
 CI (`.github/workflows/deploy.yml`) runs tests beside build + smoke (one job) and deploys `dist/` to GitHub Pages
-on every push to `main`. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts <design>`, one parallel job per design (multi, sys, sys-m, core-m: the system core with ports on tests/syscorebench.ts, the layout flow's design)
+on every push to `main` (https://switchtocpu.com/, a Pages custom domain). The unit tests are skipped when the pushed tree already
+passed `gate.yml` (a batch merged onto an unmoved main) or when only docs / licence / CNAME changed; build + smoke always run. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts <design>`, one parallel job per design (multi, sys, sys-m, core-m: the system core with ports on tests/syscorebench.ts, the layout flow's design)
 (Yosys synthesizes the exported dual-core and the RV32I / RV32IM system CPUs, each netlist is simulated against ours,
 every output every cycle, on their programs with irq pulses and switch changes). Run it locally (`npx vite-node scripts/verify-export.ts all`, needs `pip install yowasp-yosys`)
 before merging a change to the exporters, the dual-core or the system CPU (one design: `verify-export.ts sys-m`).

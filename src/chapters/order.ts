@@ -88,6 +88,7 @@ const BOOK = [
   'adaptive',
   'speech',
   'music',
+  'sensors',
   'pictures',
   'sdr',
   'appendix-6502',

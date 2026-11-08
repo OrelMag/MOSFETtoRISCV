@@ -1,0 +1,25 @@
+/* ---------- The CMOS 4T pixel (widgets/pixel4t3dview.ts): materials, scoped under .m3d ---------- */
+.m3d {
+  --px-nplus: light-dark(#c9506a, #e0708a);
+  --px-metal: light-dark(#b07a3a, #d09a58);
+  --px-lens: light-dark(#bcd4ee, #a9c4e6);
+  --px-b: light-dark(#2f6fe0, #5a92ff);
+  --px-g: light-dark(#1f9a4a, #3cc46e);
+  --px-r: light-dark(#d23a2a, #ff6a55);
+  --px-hot: light-dark(#e8a020, #ffc04a);
+}
+.px-plot { display: block; width: 100%; height: auto; margin-bottom: 4px; }
+.px-plot .grid { stroke: var(--border); stroke-width: 1; }
+.px-plot text { font: 10.5px var(--font-mono); fill: var(--muted); }
+.px-plot text.now { fill: var(--accent); font-weight: 600; }
+.px-plot .fd { fill: none; stroke: var(--px-metal); stroke-width: 2; stroke-linejoin: round; }
+.px-plot .col { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 3; stroke-linejoin: round; }
+.px-plot text.lbl { fill: var(--text-2); font-family: var(--font-ui); }
+.px-plot .smp { stroke: var(--surface); stroke-width: 1.5; }
+.px-plot .smp.reset { fill: var(--accent); }
+.px-plot .smp.signal { fill: var(--m3-charge); }
+.m3d .px-f.b[aria-pressed="true"] { border-color: var(--px-b); color: var(--px-b); }
+.m3d .px-f.g[aria-pressed="true"] { border-color: var(--px-g); color: var(--px-g); }
+.m3d .px-f.r[aria-pressed="true"] { border-color: var(--px-r); color: var(--px-r); }
+.px4t .r3-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 24px; align-items: start; }
+@container (max-width: 560px) { .px4t .r3-stage { aspect-ratio: 1 / 1; } }

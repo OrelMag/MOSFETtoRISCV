@@ -1,0 +1,11 @@
+/* ---------- An image sensor die (widgets/sensordie3dview.ts): materials ---------- */
+.m3d {
+  --sd-die: light-dark(#5b6378, #3a4152);
+  --sd-pad: light-dark(#c9a24a, #d9b45e);
+  --sd-dark: light-dark(#1d2230, #0d1018);
+  --sd-lit: light-dark(#f4f1e6, #e8e4d6);
+  --sd-idle: light-dark(#4a5064, #2a2f3c);
+  --sd-expose: light-dark(#a184e8, #9a7fe0);
+  --sd-img: light-dark(#e2672f, #f08a4b);
+}
+.sd-sl output { width: 64px; }

@@ -885,7 +885,7 @@ const NAME_COVER = `(() => {
  */
 /**
  * A 3D model's labels (widgets/labelfit.ts keeps them apart): two texts closer than 3 px, a text over another label's dot, or
- * a text past the edge of the view. Checked on every route that shows a model.
+ * a text past any edge of the view (left, right, top or bottom). Checked on every route that shows a model.
  */
 const MODEL_LABELS = `(() => {
   const out = [];
@@ -897,6 +897,7 @@ const MODEL_LABELS = `(() => {
     const hit = (a, b, gx, gy) => a.left < b.right + gx && b.left < a.right + gx && a.top < b.bottom + gy && b.top < a.bottom + gy;
     for (const [i, a] of ls.entries()) {
       if (a.r.left < f.left - 1 || a.r.right > f.right + 1) out.push('3D label cut at the edge: ' + a.t);
+      if (a.r.top < f.top - 1 || a.r.bottom > f.bottom + 1) out.push('3D label past the top or bottom: ' + a.t);
       for (const b of ls.slice(i + 1)) {
         if (hit(a.r, b.r, 3, 0)) out.push('3D labels touch: ' + a.t + ' / ' + b.t);
         if (hit(a.r, b.d, 0, 0)) out.push('3D label over a dot: ' + a.t + ' on ' + b.t);

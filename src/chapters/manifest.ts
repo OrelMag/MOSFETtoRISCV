@@ -895,7 +895,17 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What the ear misses", challenge: "quiz" },
     { title: "Bits where they are heard", challenge: "quiz" },
   ] },
-  { id: "pictures", num: 80, title: "Pictures", blurb: "Why does a JPEG look blocky? Filters and resizing in two dimensions, the 8 × 8 DCT with a stage in gates, quantization, zig-zag and Huffman, and a real file your browser opens.", level: "Signal processing", builds: ["signals","fixed","firdesign","multirate","music"], recap: {"checks":3}, steps: [
+  { id: "sensors", num: 80, title: "Image sensors", blurb: "Where a picture comes from: light into charge in silicon, the CCD's bucket brigade, the CMOS pixel and its correlated double sampling, column ADCs, rolling shutters, the Bayer mosaic, and the noise that limits a pixel.", level: "Signal processing", builds: ["mosfet","dram","noise","converters"], recap: {"checks":3}, steps: [
+    { title: "Light into charge", challenge: "quiz" },
+    { title: "The CCD bucket brigade", challenge: "quiz" },
+    { title: "The CMOS active pixel", challenge: "quiz" },
+    { title: "The pixel, switch by switch", challenge: "reach" },
+    { title: "Column ADCs and CDS", challenge: "reach" },
+    { title: "Rolling against global shutter", challenge: "quiz" },
+    { title: "Colour", challenge: "quiz" },
+    { title: "What limits a pixel", challenge: "quiz" },
+  ] },
+  { id: "pictures", num: 81, title: "Pictures", blurb: "Why does a JPEG look blocky? Filters and resizing in two dimensions, the 8 × 8 DCT with a stage in gates, quantization, zig-zag and Huffman, and a real file your browser opens.", level: "Signal processing", builds: ["signals","fixed","firdesign","multirate","music"], recap: {"checks":3}, steps: [
     { title: "A picture is a signal", challenge: "quiz" },
     { title: "Filters in two dimensions", challenge: "quiz" },
     { title: "Smaller and larger", challenge: "quiz" },
@@ -905,7 +915,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Zig-zag, runs and codes", challenge: "quiz" },
     { title: "A file another program opens", challenge: "quiz" },
   ] },
-  { id: "sdr", num: 81, title: "A software radio", blurb: "Can you receive a station with what you have built? A band of four FM stations, a mixer and a CIC in gates, the filters and the discriminator after them, and sound out.", level: "Signal processing", builds: ["signals","radio","modem","fixed","spectrum","firdesign","multirate","cordic","dspcore","converters"], recap: {"checks":3}, steps: [
+  { id: "sdr", num: 82, title: "A software radio", blurb: "Can you receive a station with what you have built? A band of four FM stations, a mixer and a CIC in gates, the filters and the discriminator after them, and sound out.", level: "Signal processing", builds: ["signals","radio","modem","fixed","spectrum","firdesign","multirate","cordic","dspcore","converters"], recap: {"checks":3}, steps: [
     { title: "Four stations in one band", challenge: "quiz" },
     { title: "How wide is a station?", challenge: "quiz" },
     { title: "Moving a station to zero", challenge: "quiz" },
@@ -916,7 +926,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Audio, and the treble that was boosted", challenge: "quiz" },
     { title: "Turn the dial", challenge: "quiz" },
   ] },
-  { id: "appendix-6502", num: 82, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
+  { id: "appendix-6502", num: 83, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz" },
     { title: "Two phases, no flip-flops", challenge: "reach" },
     { title: "Precharged buses", challenge: "reach" },
@@ -926,14 +936,14 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The 6502 running" },
     { title: "The transistor ledger" },
   ] },
-  { id: "appendix-doom", num: 83, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
+  { id: "appendix-doom", num: 84, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
     { title: "What a game asks of a computer" },
     { title: "From C to our ROM" },
     { title: "The machine" },
     { title: "Play" },
     { title: "Hand it to the gates" },
   ] },
-  { id: "appendix-sap", num: 84, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
+  { id: "appendix-sap", num: 85, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
     { title: "The machine and its bus", challenge: "quiz" },
     { title: "The clock", challenge: "quiz" },
     { title: "Registers and the bus", challenge: "reach" },
@@ -946,7 +956,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Flags and conditional jumps", challenge: "quiz" },
     { title: "Programs", challenge: "reach" },
   ] },
-  { id: "appendix-runner", num: 85, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
+  { id: "appendix-runner", num: 86, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
     { title: "Play it", challenge: "quiz" },
     { title: "The beam is two counters", challenge: "quiz" },
     { title: "A thing on screen is a comparison", challenge: "quiz" },

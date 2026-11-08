@@ -5,7 +5,10 @@ import { type LibRule, libAllowed, transistorLevel } from '../editor/challenges'
 import { libraryItems } from '../lib/catalog';
 import { resolveComponent } from '../lib/resolve';
 import { NODES, nodeById } from './nodes';
-import type { CampaignNode, Status } from './types';
+import { isDone, statusOf, type NodeState, type ProgressView } from './status';
+import type { CampaignNode } from './types';
+
+export { isDone, statusOf, type NodeState, type ProgressView };
 
 /** Everything a node builds on, transitively (the node itself excluded), in no particular order. */
 export function ancestors(id: string): Set<string> {
@@ -68,26 +71,6 @@ export function unlockedPartCount(rule: Pick<LibRule, 'lib'>): number {
   for (const c of libraryItems()) for (const it of c.items) if (it.id !== 'nand' && libAllowed(rule as LibRule, it.id)) ids.add(it.id);
   for (const id of rule.lib) if (!id.endsWith('*') && id !== 'nand' && !ids.has(id) && libAllowed(rule as LibRule, id) && resolveComponent(id)) ids.add(id);
   return ids.size;
-}
-
-/** A node's progress as the graph needs it. */
-export interface NodeState {
-  status?: 'started' | 'solved' | 'skipped';
-  stars?: number;
-  helped?: boolean;
-}
-
-export type ProgressView = (id: string) => NodeState | undefined;
-
-/** Done for the purpose of unlocking what follows: solved or skipped. */
-export const isDone = (s: NodeState | undefined) => s?.status === 'solved' || s?.status === 'skipped';
-
-export function statusOf(n: CampaignNode, view: ProgressView, unlockAll = false): Status {
-  const s = view(n.id)?.status;
-  if (s === 'solved' || s === 'skipped') return s;
-  const open = unlockAll || n.requires.every((r) => isDone(view(r)));
-  if (!open) return 'locked';
-  return s === 'started' ? 'started' : 'available';
 }
 
 /** The next level to play after `id`: an open, unfinished, playable node, required ones first. */

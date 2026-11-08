@@ -212,10 +212,34 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./hierarchy3d').then((m) => m.hierarchy3d()),
   },
   {
+    id: 'sensordie', title: 'A sensor die, rolling and global', category: 'devices', chapter: 'sensors', step: 5,
+    summary: 'The IMX183 array to scale with row drivers, column ADCs and readout, capturing a propeller with a rolling or a global shutter.',
+    files: ['sensordie3d', 'sensordie3dview', 'sensordie3dparts'], factory: 'sensorDie3d',
+    open: () => import('./sensordie3d').then((m) => m.sensorDie3d()),
+  },
+  {
     id: 'valve', title: 'Inside the valve', category: 'analogies', chapter: 'mosfet', step: 1,
     summary: 'A diaphragm valve in cutaway: spring preload as the threshold, no flow through the gate at rest, and the CMOS pair.',
     files: ['valve3d', 'valve3dview', 'valve3dparts'], factory: 'valve3d', codex: ['cmos', 'inverter'],
     open: () => import('./valve3d').then((m) => m.valve3d()),
+  },
+  {
+    id: 'ccd', title: 'A three-phase CCD', category: 'devices', chapter: 'sensors', step: 1,
+    summary: 'Charge packets march a gate per phase down the CCD42-40\'s columns to the output amplifier; a CTE slider shows the smear.',
+    files: ['ccd3d', 'ccd3dview', 'ccd3dparts'], factory: 'ccd3d', codex: ['ccd', 'cds', 'fullwell'],
+    open: () => import('./ccd3d').then((m) => m.ccd3d()),
+  },
+  {
+    id: 'pixel4t', title: 'A CMOS pixel, cut open', category: 'devices', chapter: 'sensors', step: 2,
+    summary: 'A 2.4 µm back-illuminated 4T pixel: each colour stops at its own depth, electrons fill the photodiode, a CDS read runs.',
+    files: ['pixel4t3d', 'pixel4t3dview', 'pixel4t3dparts'], factory: 'pixel4t3d', codex: ['aps', 'cds', 'qe', 'fullwell'],
+    open: () => import('./pixel4t3d').then((m) => m.pixel4t3d()),
+  },
+  {
+    id: 'sensorstack', title: 'Four pixels, cut open', category: 'devices', chapter: 'sensors', step: 0,
+    summary: 'A Bayer quad in cross-section, front- or back-side lit: rays traced through microlens, filter and metal to their absorption depth.',
+    files: ['sensorstack3d', 'sensorstack3dview', 'sensorstack3dparts', 'sensorstackoptics'], factory: 'sensorStack3d',
+    open: () => import('./sensorstack3d').then((m) => m.sensorStack3d()),
   },
 ];
 

@@ -68,7 +68,7 @@ export function readBackup(text: string): { file: BackupFile; dropped: string[] 
   if (!isObj(raw)) return { error: 'This is not a backup file.' };
   if (raw.format === CAMPAIGN_FORMAT) return { error: 'This is a campaign export. Import it from the campaign page (its Import button), which also brings the level chips.' };
   if (raw.format === SANDBOX_FORMAT) return { error: 'This is a sandbox chip export. Import it in the sandbox (File ▸ Import).' };
-  if (raw.format !== BACKUP_FORMAT) return { error: 'This is not a From Switch to RISC-V and Beyond backup file.' };
+  if (raw.format !== BACKUP_FORMAT) return { error: 'This is not a From Switch to CPU backup file.' };
   if (typeof raw.schema !== 'number' || !Number.isInteger(raw.schema) || raw.schema < 1) return { error: 'The backup has no version.' };
   if (raw.schema > BACKUP_SCHEMA) return { error: 'This backup was written by a newer version of the site. Reload the page to get the latest, then try again.' };
   if (!isObj(raw.keys)) return { error: 'The backup holds no data.' };

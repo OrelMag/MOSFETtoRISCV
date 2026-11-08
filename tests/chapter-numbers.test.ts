@@ -62,12 +62,17 @@ describe('chapter numbers', () => {
     for (const [, n, title] of rows) expect(chapters.find((c) => c.num === +n)?.title, n).toBe(title);
   });
 
+  const GENERATED = new Set(['src/learn/recaps.ts', 'src/learn/pathindex.ts']);
+
   // reads every source file: past 30 s on a loaded machine
   it('no text types a number that can move', () => {
     const bad: string[] = [];
     for (const f of readdirSync('src', { recursive: true }) as string[]) {
       if (!f.endsWith('.ts')) continue;
-      const path = `src/${f.replace(/\\/g, '/')}`, src = readFileSync(path, 'utf8');
+      const path = `src/${f.replace(/\\/g, '/')}`;
+      // Generated from the chapters by scripts/chapter-manifest.ts (numbers already resolved through numOf); --check keeps them current.
+      if (GENERATED.has(path)) continue;
+      const src = readFileSync(path, 'utf8');
       if (!/\b(?:chapters?|ch\.?)\s+\d/i.test(src)) continue;
       for (const r of typedInSource(path, src)) bad.push(`${path}: "${r}"`);
     }

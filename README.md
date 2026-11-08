@@ -1,4 +1,4 @@
-# From Switch to RISC-V and Beyond
+# From Switch to CPU: a RISC-V processor and beyond
 
 An interactive journey from a single MOSFET to a multi-core RISC-V processor laid out on
 silicon, and on to a GPU, a memory system, how computers talk from the telegraph to the data centre,
@@ -17,7 +17,7 @@ sky130 layouts, whose reports stand beside the site's own area and timing estima
 both ways: any circuit exports as Verilog, and Verilog written in the sandbox is synthesized by Yosys
 in the page into chips that open down to the transistors like everything else.
 
-Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journey-->81<!--/n--> chapters,
+Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journey-->82<!--/n--> chapters,
 <!--n:onramps-->2<!--/n--> on-ramps for newcomers, <!--n:prologue-->3<!--/n--> prologue chapters and <!--n:appendices-->4<!--/n--> appendices), the **[campaign](https://switchtocpu.com/#/campaign)**
 (<!--n:levels-->162<!--/n--> levels: build it to unlock it, or fix it), the **[workbench](https://switchtocpu.com/#/workbench/rca4)**
 (any component on its own, with statistics, benchmarks and the out-of-order lab) and the
@@ -25,7 +25,7 @@ Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journe
 
 ## The journey
 
-**<!--n:journey-->81<!--/n--> chapters.** The first <!--n:ch.silicon-->28<!--/n--> run from the MOSFET, the CMOS inverter and NAND, through gates, binary numbers,
+**<!--n:journey-->82<!--/n--> chapters.** The first <!--n:ch.silicon-->28<!--/n--> run from the MOSFET, the CMOS inverter and NAND, through gates, binary numbers,
 adders, multiplexers, latches, registers and memory arrays, to the ALU, the register file, RV32I
 assembly and a single-cycle CPU. Then Python compiled to RV32I by the site's own compiler and run on
 those gates, faster adders, pipelining (hazards, forwarding, branch prediction), bytes and
@@ -55,7 +55,7 @@ gates, cellular and the data centre close it, and **The expert's bench** ends it
 the cause, from real faults injected into these models. Where gates would teach nothing (radio, glass,
 cellular, queues, the data centre) the chapter says it runs a model, and labels what is assumed.
 
-**Signal processing** (chapters <!--n:dsp.first-->67<!--/n--> to <!--n:dsp.last-->81<!--/n-->, <!--n:dsp.count-->15<!--/n--> of them, after the expert's bench) asks what a computer does with a
+**Signal processing** (chapters <!--n:dsp.first-->67<!--/n--> to <!--n:dsp.last-->82<!--/n-->, <!--n:dsp.count-->16<!--/n--> of them, after the expert's bench) asks what a computer does with a
 sample once it has one. Numbers that fit (saturation instead of wrap, guard bits, Q formats), the
 z-plane, measuring a spectrum, FIR design to a mask, IIR and the stability feedback costs, changing the
 rate for a fraction of the price, and CORDIC, rotation by shifts. Then the machine: a MAC added to the
@@ -72,7 +72,7 @@ radio's band are models, and each chapter says what is assumed.
 A **Basics** chapter (a circuit, two levels, counting in binary, truth tables, programs, how to read a schematic here) starts the journey for anyone who needs it,
 and no term is used before the chapter that teaches it (a test holds that at zero). Before chapter 1,
 an optional **prologue** builds the same logic from relays, from vacuum tubes and from punched cards.
-After chapter <!--n:journey-->81<!--/n-->, <!--n:appendices-->4<!--/n--> **appendices**: the MOS 6502 rebuilt at transistor level, Doom compiled for the
+After chapter <!--n:journey-->82<!--/n-->, <!--n:appendices-->4<!--/n--> **appendices**: the MOS 6502 rebuilt at transistor level, Doom compiled for the
 site's RV32IM, Ben Eater's SAP-1 breadboard computer, its 74xx chips built from our gates, drawn on
 breadboards and run in lock step with a golden model, and Bit Runner, an original game in 74xx counters and gates with no CPU.
 
@@ -123,7 +123,7 @@ review queue; one backup file carries all progress; the site installs as an app 
 <td><img src="docs/images/bench.png" alt="A fault case: a report, a link budget, the access point's counters and a sniffer's list, and four causes to choose from"><br><sub><b>Ch. <!--n:ch.bench-->66<!--/n--></b>: the expert's bench: a report and the evidence, from a fault really switched on in the book's models. Capstone 4 draws eight at random, with nothing said until the end.</sub></td>
 </tr>
 <tr>
-<td><img src="docs/images/sdr.png" alt="The software radio: four stations in one band, the dial turned to one of them, its spectrum before and after the channel filter"><br><sub><b>Ch. <!--n:ch.sdr-->81<!--/n--></b>: a software radio: four stations in one band, a mixer and decimating chain in gates, a dial to turn.</sub></td>
+<td><img src="docs/images/sdr.png" alt="The software radio: four stations in one band, the dial turned to one of them, its spectrum before and after the channel filter"><br><sub><b>Ch. <!--n:ch.sdr-->82<!--/n--></b>: a software radio: four stations in one band, a mixer and decimating chain in gates, a dial to turn.</sub></td>
 <td><img src="docs/images/cap_tune.png" alt="The Tune it capstone: a receive chain built from the software radio's blocks, with each block's settings and its cost in NANDs and multiplies"><br><sub><b>Capstone</b>: Tune it. A band you have not seen and a weak station: build the chain, and the message must decode on bands held back.</sub></td>
 </tr>
 <tr>
@@ -178,7 +178,7 @@ Each level plays on a screen of its own: the brief, why the CPU needs the block 
 against the alternatives and its copies in the finished CPU), the level's parts only, a hint ladder
 from a nudge to the full walkthrough, and Build along (the next step's parts as outlines, the
 learner's wiring checked against the reference). Number and Boolean drills (generated, with exact
-checkers), assembly puzzles on the golden model and a codex of <!--n:codex-->330<!--/n--> entries sit alongside: each with a
+checkers), assembly puzzles on the golden model and a codex of <!--n:codex-->337<!--/n--> entries sit alongside: each with a
 live figure, a worked example, Check yourself questions and links to what it builds on and leads to,
 searchable by alias, read beside the level without leaving it, and shown as hover definitions in the
 chapters, with an index of every analogy. Practice questions (predict, what breaks) and drills come back

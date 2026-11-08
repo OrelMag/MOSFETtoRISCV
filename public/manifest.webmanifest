@@ -1,6 +1,6 @@
 {
-  "name": "From Switch to RISC-V and Beyond",
-  "short_name": "Switch to RISC-V",
+  "name": "From Switch to CPU: a RISC-V processor and beyond",
+  "short_name": "Switch to CPU",
   "description": "An interactive journey from a single MOSFET to a RISC-V processor and beyond.",
   "start_url": ".",
   "scope": ".",
