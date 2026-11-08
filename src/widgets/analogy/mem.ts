@@ -7,17 +7,18 @@ import { FG_READ, FG_STEP, VDD_VOLTS } from '../../sim/switchsim';
 import { CELL_C, BITLINE_C } from '../../lib/dram';
 import { FlashDevice } from '../../flash/model';
 import { DRAM_OFFSET_MV, type Read } from './model';
+import { LEVELS, type HLevel } from '../hierarchy3ddata';
 
 // ---- desk: the memory hierarchy ----
 
-/** The four places of the analogy, as the chapter's "The memory hierarchy" table has them (widgets/cache.ts hierarchyWidget):
- *  desk = L1, shelf = L2, library = L3 (shared by the whole department), warehouse = DRAM. Latency in ns for a ~4 GHz core. */
-export const DESK_TIERS = [
-  { place: 'desk', level: 'L1 cache', capacity: '32–64 KB', ns: 1 },
-  { place: 'shelf', level: 'L2 cache', capacity: '0.5–2 MB', ns: 4 },
-  { place: 'library', level: 'L3 cache', capacity: '8–64 MB', ns: 12 },
-  { place: 'warehouse', level: 'DRAM', capacity: '8–128 GB', ns: 80 },
-] as const;
+/** The four places of the analogy over the chapter's "The memory hierarchy" table (widgets/cache.ts hierarchyWidget), whose
+ *  rows are hierarchy3ddata.ts LEVELS: desk = L1, shelf = L2, library = L3 (shared by the whole department), warehouse = DRAM.
+ *  Latency in ns for a ~4 GHz core. (The 3D model spreads six levels over the same four places, so its places differ.) */
+const tier = (place: 'desk' | 'shelf' | 'library' | 'warehouse', id: HLevel['id']) => {
+  const l = LEVELS.find((x) => x.id === id)!;
+  return { place, level: l.name, capacity: l.cap, ns: l.ns };
+};
+export const DESK_TIERS = [tier('desk', 'l1'), tier('shelf', 'l2'), tier('library', 'l3'), tier('warehouse', 'dram')] as const;
 
 /** The table's own conversion: cycles = ns × 4, at least 1. */
 export const tierCycles = (i: number): number => Math.max(1, Math.round(DESK_TIERS[i].ns * 4));

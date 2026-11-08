@@ -3,19 +3,22 @@ import { describe, expect, it } from 'vitest';
 import { DESK_TIERS, Desk, ISLAND_ENDURANCE, Island, PULSES_TO_PROGRAM, seesawDiffMv, seesawSense, tierCycles } from '../src/widgets/analogy/mem';
 import { DRAM_OFFSET_MV, deltaMv } from '../src/widgets/analogy/model';
 import { CacheModel } from '../src/sim/cachemodel';
+import { LEVELS, cyclesOf } from '../src/widgets/hierarchy3ddata';
 import { FG_READ, FG_STEP } from '../src/sim/switchsim';
 
 describe('desk figure', () => {
   it('its tiers and latencies are the hierarchy step table (ns, cycles = ns x 4)', () => {
-    const src = readFileSync('src/widgets/cache.ts', 'utf8');
-    const rows = [...src.matchAll(/\['([^']+)', '([^']+)', ([\d._]+), '/g)].map((m) => ({ name: m[1], cap: m[2], ns: Number(m[3].replace(/_/g, '')) }));
     for (const t of DESK_TIERS) {
-      const r = rows.find((x) => x.name === t.level);
+      const r = LEVELS.find((x) => x.name === t.level);
       expect(r, t.level).toBeDefined();
       expect(r!.cap).toBe(t.capacity);
       expect(r!.ns).toBe(t.ns);
+      expect(tierCycles(DESK_TIERS.indexOf(t))).toBe(cyclesOf(r!.ns));
     }
-    expect(DESK_TIERS.map((_, i) => tierCycles(i))).toEqual([4, 16, 48, 320]);
+    expect(DESK_TIERS.map((t) => t.level)).toEqual(['L1 cache', 'L2 cache', 'L3 cache', 'DRAM']);
+    expect(DESK_TIERS.map((_, i) => tierCycles(i))).toEqual([4, 14, 48, 320]);
+    // the step's table is drawn from LEVELS
+    expect(readFileSync('src/widgets/cache.ts', 'utf8')).toContain("import { LEVELS, cyclesOf } from './hierarchy3ddata'");
   });
   it('a sequential sweep hits 3 of every 4 words on the desk; the first touch of a line walks to the warehouse', () => {
     const d = new Desk();
