@@ -32,6 +32,7 @@
 .r3-tool[hidden] { display: none; }
 .r3-canvas.panning, .wt-canvas.panning { cursor: move; }
 .r3-views { display: flex; flex-wrap: wrap; gap: 6px; }
+.r3-views .btn[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 @media (pointer: coarse) { .r3-tool { width: 40px; height: 40px; } }
 
 /* Full screen: the model's panel fills the screen (the Fullscreen API, or a fixed overlay where it is missing), the stage

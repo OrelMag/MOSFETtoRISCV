@@ -27,8 +27,9 @@ export interface ModelStageOptions {
   views?: readonly ModelView[];
 }
 
-/** A preset view: picked from the stage's view bar (setView), Reset view then comes back to it. */
-export interface ModelView { label: string; view: OrbitView; title?: string }
+/** A preset view: picked from the stage's view bar (setView), Reset view then comes back to it. `view` may be computed at
+ *  the click (a view that depends on the stage's width); `pick` runs after the camera moved (what the model draws in it). */
+export interface ModelView { label: string; view: OrbitView | (() => OrbitView); title?: string; pick?: () => void }
 
 export interface ModelStage {
   el: HTMLElement;
@@ -164,8 +165,10 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
       const btns = views.map((v) => {
         const b = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false', ...(v.title ? { title: v.title } : {}) }, v.label) as HTMLButtonElement;
         b.addEventListener('click', () => {
-          this.setView({ ...v.view, target: [...v.view.target] });
+          const w = typeof v.view === 'function' ? v.view() : v.view;
+          this.setView({ ...w, target: [...w.target] });
           for (const x of btns) x.setAttribute('aria-pressed', String(x === b));
+          v.pick?.();
         });
         return b;
       });
