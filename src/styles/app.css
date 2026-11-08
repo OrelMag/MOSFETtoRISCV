@@ -2807,6 +2807,8 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
   .topbar[data-nav='tight'] .nav a span.cap { font-size: 9px; font-weight: 500; letter-spacing: -0.03em; }
   .topbar[data-nav='icons'] .nav a span.cap { display: none; }
   .topbar[data-nav='icons'] .nav a { justify-content: center; min-width: 30px; }
+  .topbar[data-nav='snug'] .nav a span.cap { display: none; }
+  .topbar[data-nav='snug'] .nav a { justify-content: center; min-width: 32px; padding-inline: 2px; }
 }
 /* under a finger every section link is at least 40 px wide (navfit then sheds captions sooner; each link keeps its name) */
 @media (pointer: coarse) {

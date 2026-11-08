@@ -2,7 +2,8 @@
 // (fonts, the My notes link, a longer return pill), which cut the last caption ("Sandbox" read "Sanc"). It sheds in
 // steps until nothing is clipped: tighter captions, then icons alone (each link keeps its name as aria-label / title).
 
-export const NAV_STAGES = ['', 'tight', 'icons'] as const;
+// snug: icons a little under the 40 px a finger wants, only when six links (My notes shown) do not fit a phone at 40
+export const NAV_STAGES = ['', 'tight', 'icons', 'snug'] as const;
 export type NavStage = (typeof NAV_STAGES)[number];
 
 /** The first stage at which the row is not clipped (pure: `clipped` measures with the stage applied); the last when none is. */
