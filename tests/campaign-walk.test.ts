@@ -3,7 +3,7 @@
 // with every table row right, costs never fall from one step to the next, and the authored
 // scripts name real parts and codex entries.
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { codexById } from '../src/campaign/codex';
 import { levelChallenge } from '../src/campaign/levels';
 import { NODES, nodeById } from '../src/campaign/nodes';
@@ -20,6 +20,11 @@ const playable = NODES.filter((n) => levelChallenge(n) && !n.bug);
 const once = (xs: string[]) => new Set(xs).size === xs.length;
 
 describe('walkthroughs', () => {
+  // every level's walk once, up front (walkOf keeps them): drawing the references is the cost, and no single test should carry it
+  beforeAll(async () => {
+    for (const n of playable) { walkOf(n); await breathe(); }
+  }, 180_000);
+
   it('are authored for every build and core level, each with one question to predict and a nudge', () => {
     for (const n of playable.filter((x) => x.kind === 'build' || x.kind === 'core')) {
       const script = WALKS[n.id];

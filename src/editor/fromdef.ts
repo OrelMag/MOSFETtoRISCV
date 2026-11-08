@@ -6,7 +6,7 @@
 
 import { type ExitDir, instPort, symbolGeom, type Vec } from '../sim/geometry';
 import { type ComponentDef, type Netlist, netlistOf, parseEnd } from '../sim/types';
-import { routeNetlist, tagStub } from '../view/route';
+import { tagStub } from '../view/route';
 import { autoFace } from './face';
 import {
   type ChipDoc, type EndRef, type FaceDoc, type FacePinDoc, type FaceSide, isIdent, type LabelDoc, onPolyline, type PartDoc, type PartRef, type PinDoc, slug,
@@ -14,7 +14,7 @@ import {
 } from './model';
 import { partBox } from './geom';
 import { isError, MAX_WIDTH, partDef } from './parts';
-import { drawnNetlist } from '../view/wirefirst';
+import { drawnNetlist, routedOnce } from '../view/wirefirst';
 
 /** A sandbox copy is drawn once: wires-first applies to levels up to this many nets (a stage stops at wirefirst.ts LOCAL_NETS). */
 const FROMDEF_NETS = 120;
@@ -46,6 +46,8 @@ export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDo
   return drawDoc(def, settled(def, raw, opts), opts);
 }
 
+const routedOf = routedOnce;
+
 /** Per definition, the netlist docFromDef draws (the wires it settled on depend on the drawing, not on ids or names). */
 const settledNl = new WeakMap<ComponentDef, Netlist>();
 
@@ -67,8 +69,10 @@ function settled(def: ComponentDef, raw: Netlist, opts: FromDefOptions): Netlist
   for (let pass = 0; pass < 12 && nl !== raw; pass++) {
     const doc = drawDoc(def, nl, check);
     if ('error' in doc) break;
+    const found = sinksThroughParts(doc, nl);
+    if (!found.size) { out = nl; break; }
     rawHits ??= ((d) => ('error' in d ? new Set<string>() : sinksThroughParts(d, raw)))(drawDoc(def, raw, check));
-    const hit = new Set([...sinksThroughParts(doc, nl)].filter((e) => !rawHits!.has(e)));
+    const hit = new Set([...found].filter((e) => !rawHits!.has(e)));
     if (!hit.size) { out = nl; break; }
     nl = { ...nl, nets: nl.nets.map((n) => {
       const back = n.ends.slice(1).filter((e) => hit.has(e));
@@ -152,7 +156,7 @@ function drawDoc(def: ComponentDef, nl: Netlist, opts: FromDefOptions): ChipDoc 
     parts.push({ id: inst.name, ref, at: [at[0], at[1]], ...(inst.flip ? { flip: true } : {}), ...(inst.rot ? { rot: inst.rot } : {}), ...(inst.label ? { label: inst.label } : {}) });
   }
 
-  const { nets: routed, pins: pg } = routeNetlist(def, nl);
+  const { nets: routed, pins: pg } = routedOf(def, nl);
   const pins: PinDoc[] = def.ports.map((p) => {
     const g = pg.get(p.name)!;
     const face: ExitDir = p.dir === 'out' ? 'left' : 'right';
