@@ -7,6 +7,8 @@
   --sp-dust: light-dark(#3a3d45, #4a4e5a);
   --sp-former: light-dark(#d7dbe2, #b9bfcb);
   --sp-wire: light-dark(#b8672a, #e08a45);
+  --sp-wire2: light-dark(#8a4a1c, #b9733a);
+  --sp-flux: light-dark(#8a3fd0, #bb8cff);
   --sp-rubber: light-dark(#17181b, #2a2c31);
   --sp-spider: light-dark(#b69a62, #c9ad74);
   --sp-stair: light-dark(#2d6fd0, #6aa3ff);
@@ -20,3 +22,6 @@
 @media (pointer: coarse) { .sp-seg button { min-height: 40px; } }
 .m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .sp-host { display: contents; }
+.sp-toner { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--text-2); margin: 6px 0; }
+.sp-tone { font: inherit; min-height: 28px; max-width: 100%; }
+@media (pointer: coarse) { .sp-tone { min-height: 40px; } }
