@@ -94,7 +94,7 @@ export function fetScene(get: () => { vg: number; vd: number }): WaterScene {
       { text: 'drain tank: V_DS above the source', p: [-2.4, 2.35, 0.5], side: 't' },
       { text: 'source basin: 0 V', p: [2.4, 2.35, 0.5], side: 't' },
       { text: 'handle = gate (V_GS)', p: [0.0, 0.55, 0.4], side: 't' },
-      { text: choked() ? 'outlet choked: sets the flow' : 'outlet: opens with V_GS − V_T', p: [1.45, -0.55, 0.4], side: 'b', minor: true },
+      { text: choked() ? 'outlet regulates: sets the flow' : 'outlet: opens with V_GS − V_T', p: [1.45, -0.55, 0.4], side: 'b', minor: true },
     ],
     advance(dt, settle) {
       const f = now();
@@ -141,10 +141,10 @@ export function columnScene(inp: ColumnIn, out0: number): ColumnScene {
     aspect: 0.8,
     flat: { x0: -2.6, y0: -2.5, w: 5.4, h: 6.6 },
     labels: () => [
-      { text: 'V_DD tank, always full', p: [1.9, 3.5, 0.4], side: 'r' },
-      { text: inp.weak ? 'top: NMOS, shuts itself' : 'top: PMOS, open at input 0', p: [0.6, 2.75, 0.5], side: 't' },
+      { text: 'V_DD tank, full', p: [1.9, 3.5, 0.4], side: 'r' },
+      { text: inp.weak ? 'top: NMOS, shuts itself' : 'top: PMOS, open at 0', p: [0.6, 2.75, 0.5], side: 't' },
       { text: 'output = column level', p: [1.6, 0.55, 0.3], side: 'r' },
-      { text: 'bottom: NMOS, open at input 1', p: [0.6, -0.55, 0.5], side: 'b' },
+      { text: 'bottom: NMOS, open at 1', p: [0.6, -0.55, 0.5], side: 'b' },
       { text: 'drain = ground', p: [0, -2.3, 0.6], side: 'b', minor: true },
       { text: 'wasted flow', p: [-1.6, -0.6, 0.3], side: 't', minor: true },
       { text: `V_DD − V_t = ${(COLUMN_VOLTS * (1 - COLUMN_VT)).toFixed(2)} V`, p: [1.5, COL.y0 + COL.h * (1 - COLUMN_VT), 0.2], side: 'r', hidden: !inp.weak },
