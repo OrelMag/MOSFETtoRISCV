@@ -31,7 +31,7 @@ Merging deploys the site. Work from the branch's own worktree, never from the sh
    (gh is at `C:\Program Files\GitHub CLI`). On failure, report the failing job's log. A successful deploy
    starts the desktop build (desktop.yml, ~5 min: the .exe in the release `desktop-latest`); watch it too
    (`gh run list --workflow desktop.yml --limit 1`) and report it, or say it is still running.
-7. **Report** the merge commit, the deploy result and https://orelmag.github.io/MOSFETtoRISCV/ (the footer's
+7. **Report** the merge commit, the deploy result and https://switchtocpu.com/ (the footer's
    build number is the commit count of main).
 
 Never delete branches on GitHub, never force-push main, never use `--no-verify`. Removing the local

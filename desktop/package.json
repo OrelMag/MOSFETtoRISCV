@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "From Switch to RISC-V and Beyond as a portable Windows program",
   "license": "MIT",
-  "author": "OrelMag",
+  "author": "Orel Magidish",
   "main": "main.cjs",
   "scripts": {
     "stage": "node stage.mjs",
