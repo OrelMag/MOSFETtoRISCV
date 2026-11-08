@@ -28,7 +28,7 @@ export function diskView(): Widget {
     aria: 'A 3.5 inch hard disk in 3D: two spinning platters on a spindle, an actuator arm with heads on a pivot, and the voice-coil motor between two magnets',
     camera: { target: [24, 8, -4], yaw: 0.45, pitch: 1.0, dist: 190 },
     limits: { minDist: 70, maxDist: 520 },
-    note: 'The platters, spindle, arm and magnet are to scale, from a typical 3.5″ drive; the 12 track rings stand for 260 000 tracks 100 nm apart, so they are drawn about 24 000 times too wide, and the heads fly 0.25 mm up instead of about 10 nm. The platters are further apart than real ones so the arms fit, the top magnet plate is see-through, and the cover is off. Zone bits, servo wedges and the sectors’ size are not drawn: 16 equal wedges, 1/16 of a turn each.',
+    note: 'Drawn to scale, for a typical 3.5″ drive and not one model: 95 mm platters (mirror-polished nickel-plated aluminium; some drives use glass) on a 25 mm hole, two of them, four heads, the recording band from r = 20 to 46 mm, the rotary voice-coil actuator pivoting 56 mm from the spindle with a 46 mm arm (stainless steel), neodymium magnets. Exaggerated: the 12 track rings stand for 260 000 tracks 100 nm apart (drawn about 24 000 times too wide), the heads fly 0.25 mm up instead of about 10 nm, and the platters sit further apart than real ones so the arms fit. Simplified: sectors are 16 equal wedges with no zone boundaries or servo wedges, the top magnet plate is see-through and the cover is off; the seek is the fitted curve eased out and in, not the actuator’s real current profile; and drive time is slowed 300× for the eye.',
     draw: () => paint(),
   });
   const palette = (): DiskPalette => ({

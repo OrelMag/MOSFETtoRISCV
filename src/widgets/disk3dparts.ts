@@ -266,7 +266,7 @@ export function diskAnchors(p: DiskPose): Anchor[] {
   const dirX = -Math.cos(h.alpha), dirZ = Math.sin(h.alpha), tail = 27;
   const out: Anchor[] = [
     { text: 'spindle hub', p: [0, top + 3.1, 0], side: 'l', n: up },
-    { text: 'platters, 95 mm', p: [-14, PLATTER_Y[1], PLATTER_R * 0.93], side: 'b', n: front },
+    { text: 'platters, 95 mm', p: [-34, PLATTER_Y[1], 32], side: 'r', n: front },
     { text: 'head', p: [h.x, top + 0.6, h.z], side: 'b', n: up },
     { text: 'actuator arm', p: [PIVOT_D + dirX * 24, BLADE_Y[2] + 0.4, dirZ * 24], side: 't', n: up },
     { text: 'pivot', p: [PIVOT_D, BLADE_Y[2] + 2, 0], side: 't', n: up },
