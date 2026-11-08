@@ -8,7 +8,7 @@ import { centredAt, type ExitDir, orientGeom, type Rot, type Vec } from '../sim/
 import type { ComponentDef } from '../sim/types';
 import { type Rect, textWidth } from '../view/route';
 import {
-  type ChipDoc, commentBox, type DefOf, defaultFace, endGeom, endKey, type EndRef, type LabelDoc, onPolyline, orthogonal,
+  type ChipDoc, commentBox, sectionCorners, sectionTitleBox, SECTION_EDGE, type DefOf, defaultFace, endGeom, endKey, type EndRef, type LabelDoc, onPolyline, orthogonal,
   type PinDoc, polyline, straightLine, type WireDoc,
 } from './model';
 import { nearestOn, type WireGrab } from './ops';
@@ -122,6 +122,8 @@ export type Hit =
   /** On a wire; `at` is the nearest point of it. */
   | { k: 'wire'; id: string; at: Vec }
   | { k: 'comment'; id: string }
+  /** A section's border or title (its inside belongs to the canvas: a press there starts a box or a pan). */
+  | { k: 'section'; id: string; on: 'border' | 'title' }
   | { k: 'none' };
 
 const dist = (a: Vec, b: Vec) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -196,7 +198,30 @@ export function hitTest(doc: ChipDoc, defOf: DefOf, p: Vec, tol: number, polys?:
   if (w) return w;
   const cs = doc.comments ?? [];
   for (let i = cs.length - 1; i >= 0; i--) if (inRect(commentBox(cs[i]), p)) return { k: 'comment', id: cs[i].id };
+  return hitSection(doc, p, tol);
+}
+
+/** A section's title, then its border within max(tol, SECTION_EDGE) (the last drawn first), else nothing. */
+export function hitSection(doc: ChipDoc, p: Vec, tol: number): Extract<Hit, { k: 'section' }> | { k: 'none' } {
+  const ss = doc.sections ?? [], t = Math.max(tol, SECTION_EDGE);
+  for (let i = ss.length - 1; i >= 0; i--) if (inRect(sectionTitleBox(ss[i]), p)) return { k: 'section', id: ss[i].id, on: 'title' };
+  for (let i = ss.length - 1; i >= 0; i--) {
+    const s = ss[i], [x, y] = s.at, [w, h] = s.size;
+    const nearX = Math.abs(p[0] - x) <= t || Math.abs(p[0] - x - w) <= t, nearY = Math.abs(p[1] - y) <= t || Math.abs(p[1] - y - h) <= t;
+    const inX = p[0] >= x - t && p[0] <= x + w + t, inY = p[1] >= y - t && p[1] <= y + h + t;
+    if ((nearX && inY) || (nearY && inX)) return { k: 'section', id: s.id, on: 'border' };
+  }
   return { k: 'none' };
+}
+
+/** The corner handle of one of these sections under p (index into sectionCorners), or null. */
+export function sectionCornerAt(doc: ChipDoc, ids: readonly string[], p: Vec, tol: number): { id: string; corner: number } | null {
+  for (const s of doc.sections ?? []) {
+    if (!ids.includes(s.id)) continue;
+    const i = sectionCorners(s).findIndex((c) => dist(c, p) <= Math.max(tol, SECTION_EDGE));
+    if (i >= 0) return { id: s.id, corner: i };
+  }
+  return null;
 }
 
 export function hitWire(doc: ChipDoc, defOf: DefOf, p: Vec, tol: number, polys?: Map<string, Vec[]>): Extract<Hit, { k: 'wire' }> | null {

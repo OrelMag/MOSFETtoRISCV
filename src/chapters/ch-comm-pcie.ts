@@ -57,7 +57,7 @@ export const chPcie: Chapter = {
     'follow a damaged TLP through Nak, replay and delivery in gates, a lost Ack through the replay timer, and a dead lane through Recovery',
     'walk a device from attach to configured over USB\'s control transfers, and name the trap in SET_ADDRESS',
   ],
-  builds: ['serial', 'clocks', 'errors', 'codes', 'bus'],
+  builds: ['serial', 'clocks', 'errors', 'codes', 'bus', 'uart'],
   recap: {
     keep: [
       'A lane is a differential pair each way with no shared clock: skew between wires stops mattering, because each lane recovers its own clock and lanes are deskewed in the receiver. What it costs is a packet protocol: framing, flow control and retransmission, all in hardware.',

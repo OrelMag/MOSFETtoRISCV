@@ -49,9 +49,10 @@ export const undoKey = (): string => tx('Ctrl+Z', 'Undo');
 /**
  * The canvas's gesture hint (.hint-badge): the mouse wording, or on a touch screen the touch wording
  * on one line (it sits over the circuit: wrapped on a phone it hid the lower pins). The first touch on
- * the canvas hides it for this visit; a tap on it hides it for good (remembered under `key`).
+ * the canvas hides it for this visit; a tap on it hides it for good (remembered under `key`);
+ * with `autoMs` (the stage), untouched, it goes by itself after that long.
  */
-export function hintBadge(mouse: string, touch: string, key: string, cls = ''): HTMLElement {
+export function hintBadge(mouse: string, touch: string, key: string, cls = '', autoMs = 0): HTMLElement {
   const store = `mosfet2riscv:hint:${key}`;
   if (!coarsePointer()) return h('div', { class: `hint-badge${cls}` }, mouse);
   let off = false;
@@ -73,6 +74,8 @@ export function hintBadge(mouse: string, touch: string, key: string, cls = ''): 
     el.parentElement?.removeEventListener('pointerdown', touched, true);
   };
   queueMicrotask(() => el.parentElement?.addEventListener('pointerdown', touched, true));
+  // ...or after a few seconds, untouched: it sits over the circuit's room and a phone's learner has read it by then
+  if (autoMs && !off) setTimeout(() => { if (!el.hidden) { el.hidden = true; el.dataset.off = '1'; } }, autoMs);
   return el;
 }
 
@@ -100,6 +103,7 @@ const ICONS: Record<string, string> = {
   auto: '<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/>',
   image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
   fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  frame: '<rect x="3" y="6" width="18" height="14" rx="2" stroke-dasharray="3 2.2"/><path d="M6 3.5h7"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   minus: '<path d="M5 12h14"/>',
   up: '<path d="M12 19V5M5 12l7-7 7 7"/>',

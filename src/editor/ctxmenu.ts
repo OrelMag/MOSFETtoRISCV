@@ -11,7 +11,7 @@ import { canTurn } from './face';
 import { canLookInside, lookInside } from './inside';
 import { inspect } from './inspect';
 import { nextSameName } from './geom';
-import { clearBends, setPin, setStraight } from './ops';
+import { clearBends, sectionContents, setPin, setSection, setStraight } from './ops';
 import { collapseAll, collapseDialog, unravel, unravelDialog } from './pointerui';
 import { canPaste } from './tools';
 import { canUnravel, pointersOf } from './unravel';
@@ -50,10 +50,21 @@ function entries(ed: Editor, at: Vec): Entry[] {
       null,
       { label: 'Add a comment here', key: 'T', run: () => t.placeAt({ id: 'comment', name: 'Comment', place: { comment: true } }, at) },
       { label: 'Add a pointer here', key: 'L', run: () => t.placeAt({ id: 'pointer', name: 'Pointer', place: { pointer: true } }, at) },
+      { label: 'Add a section here', run: () => t.addSectionAt(at) },
       null,
       { label: 'Select all', key: 'Ctrl+A', run: () => ed.select({ parts: ed.doc.parts.map((p) => p.id), pins: ed.doc.pins.map((p) => p.id), wires: ed.doc.wires.map((w) => w.id), labels: ed.doc.labels.map((l) => l.id), ...(ed.doc.comments?.length ? { comments: ed.doc.comments.map((c) => c.id) } : {}) }), disabled: !ed.doc.parts.length && !ed.doc.pins.length && !ed.doc.wires.length && !ed.doc.labels.length && !ed.doc.comments?.length },
       { label: 'Fit to view', run: () => ed.fitView() },
       { label: 'Undo', key: 'Ctrl+Z', run: () => ed.undo() },
+    ];
+  }
+  const group: Item = { label: 'Group in a section', key: 'G', run: () => t.groupSel() };
+  if (s.sections?.length && n === 1) {
+    const id = s.sections[0];
+    return [
+      { label: 'Rename', key: 'F2', run: () => t.rename({ k: 'section', id, on: 'title' }) },
+      { label: 'Select what is inside', run: () => ed.select(sectionContents(ed.doc, id, ed.defOf)) },
+      null,
+      { label: 'Delete the frame', key: 'Del', run: () => t.del() },
     ];
   }
   const flip: Item = { label: 'Flip', key: 'F', run: () => t.flip() };
@@ -82,7 +93,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
       ...(wires.length ? [{ label: 'Collapse selected', run: () => collapseAll(ed, wireIds) }] : []),
       ...pick,
     ];
-    return [flip, ...turn, ...(shape.length ? [{ label: 'Shape', sub: shape }] : []), ...(ptrs.length ? [null, ...ptrs] : []), null, ...edits];
+    return [flip, ...turn, ...(shape.length ? [{ label: 'Shape', sub: shape }] : []), ...(ptrs.length ? [null, ...ptrs] : []), null, group, null, ...edits];
   }
   if (s.parts?.length) {
     const p = ed.doc.parts.find((q) => q.id === s.parts![0]);
@@ -98,7 +109,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
       ...explainOf(ed, p.id),
       ...elsewhereOf(ed, p.id),
       null,
-      flip, ...turn, ...(pick.length ? [null, ...pick] : []), null, ...edits,
+      flip, ...turn, ...(pick.length ? [null, ...pick] : []), null, group, null, ...edits,
     ];
   }
   if (s.pins?.length) {
@@ -285,6 +296,15 @@ export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void
     for (const ev of ['pointerover', 'focusin']) sw.addEventListener(ev, name);
     for (const ev of ['pointerleave', 'focusout']) sw.addEventListener(ev, () => { head.textContent = 'Net colour'; });
     m.append(h('div', { class: 'sb-ctx-hues' }, head, sw), h('hr'));
+  }
+  // A section: its colour (sections take no Auto: they have no net)
+  const sec = ed.selCount === 1 && ed.sel.sections?.length ? ed.doc.sections?.find((q) => q.id === ed.sel.sections![0]) : undefined;
+  if (sec) {
+    const sw = hueSwatches(sec.hue ?? undefined, (hue) => {
+      closeMenu();
+      ed.edit((d) => setSection(d, sec.id, { hue: typeof hue === 'number' ? hue : undefined }).doc);
+    }, 'menuitemradio', { auto: false, label: 'Section colour', none: 'No colour: the theme’s grey' });
+    m.append(h('div', { class: 'sb-ctx-hues' }, h('span', null, 'Section colour'), sw), h('hr'));
   }
   if (part && partDef) partHeader(m, part.id, partDef);
   const trace = net >= 0 ? traceOf(ed, net, m) : [];

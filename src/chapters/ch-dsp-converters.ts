@@ -153,7 +153,7 @@ v  = + full scale if y₂ ≥ 0, else − full scale</pre>
         const { N, R } = SCENE_CHAIN;
         return `
         <p>In a real converter the integrators are analogue, and that is where its noise and its limit come from. Here they are words, so that the arithmetic can be compared exactly. The one-bit DAC costs nothing: the words for + and − full scale differ only in their top bits, so it is the decision's inverse on some wires. The loop drawn here, at ${SCENE_CHAIN.w} bits, is ${n0(MOD(SCENE_CHAIN.w))} NANDs, and at ${CHAIN.w} bits it is ${n0(MOD())}. Its integrators have the ${SD_GUARD} extra bits the last step worked out, and the tests hold the model to a tone or a steady input of ${SD_LIMIT}, and these gates to the model.</p>
-        <p>What leaves is a bit at the high rate. <a href="#/c/multirate/7">The CIC from the rate chapter</a> takes it from there, unchanged. Each bit goes in as +1 or −1, a two-bit word, and its registers grow to ${cicWidth(N, R, 2)} bits by N log₂ R. A CIC of one order more than the loop is the usual choice, since the noise rises at the loop's order, and it needs to fall faster than that.</p>
+        <p>What leaves is a bit at the high rate. <a href="#/c/multirate/7">The CIC from the rate chapter</a> takes it from there, unchanged. Each bit goes in as +1 or −1, a two-bit word, and its registers grow to ${cicWidth(N, R, 2)} bits by N log₂ R (order ${N}, ÷ ${R} in the gates here). A CIC of one order more than the loop is the usual choice, since the noise rises at the loop's order, and it needs to fall faster than that.</p>
         <div class="try">Run a tone. Look at the strip of bits at the bottom: they do not look like a sine, and yet their running average follows it.</div>`;
       },
       scene: adcScene,

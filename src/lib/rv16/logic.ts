@@ -156,7 +156,8 @@ const placeAt = (b: Builder, at: Record<string, [number, number]>): void => {
 export const MUX16: ComponentDef = (() => {
   // a bit every P rows: ta (a·¬s) on top, tb (s·b) under it, y to their right; the splitters and the merger at the same pitch,
   // so every tap runs straight across. s and ¬s go to sixteen gates each: pointers.
-  const P = 12, Y = 6, XS = 4, XG = 24, XY = 32, XM = 40;
+  const P = 8, Y = 6, XS = 4, XG = 24, XY = 32, XM = 40;
+  const YI = Y + 9 - P / 2 + P * 16; // the inverter on s, two units under the b splitter's end
   const b = new Builder(8, 10, 2);
   b.pins('a', 'b', 's');
   const sa = b.op(splitter(Array(16).fill(1), P), ['a'], undefined, 'sa');
@@ -167,7 +168,7 @@ export const MUX16: ComponentDef = (() => {
   const ys = t.map(([ta, tb], i) => b.op1(NAND, [ta, tb], `y${i}`, `y${i}`));
   b.wire(b.op1(merger(Array(16).fill(1), P), ys, undefined, 'my'), 'y');
   // ta.a at row Y + P i + 1, tb.b (tb under ta) at Y + P i + 7, y's output at Y + P i + 5: the splitters' and merger's taps sit P/2 + P i down
-  const at: Record<string, [number, number]> = { sa: [XS, Y + 1 - P / 2], sb: [XS + 10, Y + 7 - P / 2], inv: [XG - 6, Y + P * 16 + 1], my: [XM, Y + 5 - P / 2] };
+  const at: Record<string, [number, number]> = { sa: [XS, Y + 1 - P / 2], sb: [XS + 10, Y + 7 - P / 2], inv: [XG - 6, YI], my: [XM, Y + 5 - P / 2] };
   for (let i = 0; i < 16; i++) { at[`ta${i}`] = [XG, Y + P * i]; at[`tb${i}`] = [XG, Y + P * i + 4]; at[`y${i}`] = [XY, Y + P * i + 3]; }
   placeAt(b, at);
   const R = XM + 6;
@@ -177,7 +178,7 @@ export const MUX16: ComponentDef = (() => {
     ports: [bus('a', 16, 'in'), bus('b', 16, 'in'), { name: 's', width: 1, dir: 'in', side: 'bottom' }, bus('y', 16, 'out')],
     symbol: { kind: 'mux' },
     spec: ([a, b, s]) => [s ? b : a],
-    netlist: () => ({ pins: { a: [0, Y + 1 - P / 2 + 8 * P], b: [0, Y + 7 - P / 2 + 8 * P], s: [0, Y + P * 16 + 2], y: [R, Y + 5 - P / 2 + 8 * P] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { a: [0, Y + 1 - P / 2 + 8 * P], b: [0, Y + 7 - P / 2 + 8 * P], s: [0, YI + 1], y: [R, Y + 5 - P / 2 + 8 * P] }, instances: b.instances, nets: b.nets() }),
   });
 })();
 

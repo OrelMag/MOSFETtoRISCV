@@ -11,7 +11,7 @@ describe('chapter 48 typed numbers', () => {
   it('nine steps, building on the UART and error chapters, with three recap questions', () => {
     expect(chEthernet.num).toBeGreaterThan(chapterById('uart')!.num);
     expect(chEthernet.steps.length).toBe(9);
-    expect(chEthernet.builds).toEqual(['pcie', 'uart', 'wire', 'errors']);
+    expect(chEthernet.builds).toEqual(['pcie', 'uart', 'wire', 'errors', 'serial']);
     expect(chEthernet.recap!.check!.length).toBe(3);
   });
   it('step 1 and 2: a minimum frame is 576 bit times, 2 304 clocks, 9.1 µs at 63 Mb/s; payload is 55 % of the time for minimum frames and 98 % for maximum ones', () => {

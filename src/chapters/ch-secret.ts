@@ -44,7 +44,7 @@ export const chSecret: Chapter = {
     'say what a mode of operation adds to a block cipher, and what goes wrong without one',
     'follow a TLS 1.3 handshake: how two strangers reach a shared secret in public, and what proves who is at the other end',
   ],
-  builds: ['tcp'],
+  builds: ['python', 'cpu'],
   parts: [['The Enigma', 3], ['How it broke', 4], ['AES', 6], ['SHA-256', 3], ['Strangers', 5]],
   recap: {
     keep: [
@@ -108,7 +108,7 @@ export const chSecret: Chapter = {
     {
       title: 'A secret kept in wires',
       body: `
-        <p>Everything so far in this part of the book has been about getting bits across faithfully. Anyone on the path reads them. The oldest answer is a shared secret: both ends hold a key, and the message is scrambled by it. This is the M4, the German navy's machine, developed in 1941 and in service from 1 February 1942. Its key was a printed sheet, the same for everyone on a network, changed daily.</p>
+        <p>Everything so far in this part of the book has been about getting bits across faithfully. Anyone on the path reads them. The oldest answer is a shared secret: both ends hold a key, and the message is scrambled by it. This is the <strong>Enigma</strong> in its four-wheel M4 form, the German navy's machine, developed in 1941 and in service from 1 February 1942. Its key was a printed sheet, the same for everyone on a network, changed daily.</p>
         <p>The machine's whole logic is in wires and contacts. Press a key and three things happen: the wheels step, a switch closes, and one lamp lights. Set the same key at the far end, type what you received, and the lamps spell the original: the machine undoes itself. That is not a mode. It follows from how it is wired, and the next steps show why, and what it cost.</p>
         <p class="try"><b>Try:</b> press <em>Set up U-264's message</em> and press <em>Next letter</em> a few times. This is a report Kapitänleutnant Hartwig Looks sent from U-264 in 1942, broken only in 2006 by the M4 Project's distributed search. It reads VONVON, then LOOKS between two J separators: "from, from Looks". Open <em>Wheels</em> and <em>Inside</em> while you type.</p>
         <details class="deeper"><summary>Where this comes from</summary><p>The wirings, notches and photographs the model is measured from: <a href="https://www.cryptomuseum.com/crypto/enigma/m4/index.htm" target="_blank" rel="noopener">Crypto Museum, Enigma M4</a>. The message, its settings and its war-diary record: <a href="https://www.equn.com/m4/m4-project-first-break.html" target="_blank" rel="noopener">M4 Project, first break</a>. The test suite deciphers it letter for letter. Overall size: the Computer History Museum's Enigma I record, as no source gives the M4's; the parts inside are scaled from photographs.</p></details>`,

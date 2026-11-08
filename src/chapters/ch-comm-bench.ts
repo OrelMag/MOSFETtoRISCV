@@ -21,7 +21,7 @@ export const chBench: Chapter = {
     'use Ethernet counters and a traceroute to place a fault in one network and on one link',
     'add up a radio link and tell a weak signal from two stations that cannot hear each other',
   ],
-  builds: ['tcp', 'path', 'ethernet', 'switch', 'serial', 'uart', 'noise', 'radio', 'wifi'],
+  builds: ['tcp', 'path', 'ethernet', 'switch', 'serial', 'uart', 'noise', 'radio', 'wifi', 'cellular', 'datacentre'],
   recap: {
     keep: [
       'Start from what is known and ask what would differ between the candidate causes. Look at the piece of evidence that separates them. Change one thing at a time.',
@@ -124,7 +124,7 @@ export const chBench: Chapter = {
     {
       title: 'Ethernet\'s counters',
       body: `
-        <p>An Ethernet port counts what happens to it, and each counter points somewhere. <strong>Collisions</strong> need a shared segment, so on a properly negotiated switched port they read zero; a count there means a duplex mismatch (see the question). <strong>Frames failing the check</strong> were changed on the way, so the fault is physical: cable, connector, or interference. <strong>Flooding</strong>, unicast frames sent to every port, is the switch saying it does not know where the address is.</p>
+        <p>An Ethernet port counts what happens to it, and each counter points somewhere. <strong>Collisions</strong> need a shared segment, so on a properly negotiated switched port they read zero; a count there means a duplex mismatch (see the question). <strong>Frames failing the check</strong> were changed on the way, so the fault is physical: cable, connector, or interference. A duplex mismatch makes some too (the half-duplex end cuts frames short when it sees a collision), so rule that out first. <strong>Flooding</strong>, unicast frames sent to every port, is the switch saying it does not know where the address is.</p>
         <p>These are the <a href="#/c/ethernet/0">MAC</a> and the <a href="#/c/switch/0">switch</a> you have built, with the fault switched on: a heavy load on a shared segment, bits flipped on the wire and checked by the real CRC, and a table too small for its hosts.</p>
         <div class="try">Say which counter you would read first for each symptom, before you see the numbers.</div>`,
       widget: benchWidget(['eth_collide', 'eth_badframe', 'sw_flood'], ['Case A', 'Case B', 'Case C']),

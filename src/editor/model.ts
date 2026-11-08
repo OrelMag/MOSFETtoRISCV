@@ -179,6 +179,8 @@ export interface ChipDoc {
   labels: LabelDoc[];
   /** Free-text notes on the canvas: drawn, saved and shared, never compiled (absent: none). */
   comments?: CommentDoc[];
+  /** Titled frames drawn around groups of parts: saved and shared, never compiled (absent: none). */
+  sections?: SectionDoc[];
 }
 
 /**
@@ -383,6 +385,35 @@ export function commentBox(c: CommentDoc): { lines: string[]; x: number; y: numb
   const lines = c.text.split('\n');
   const cols = Math.max(1, ...lines.map((l) => l.length));
   return { lines, x: c.at[0], y: c.at[1], w: cols * COMMENT_FONT * 0.6 + 2 * COMMENT_PAD, h: lines.length * COMMENT_LINE + COMMENT_PAD };
+}
+
+/**
+ * A section: a titled, dashed frame drawn under the circuit around a group of parts. It owns nothing: dragging it
+ * moves what lies fully inside it at that moment, deleting it leaves its contents. `at` is the top-left corner.
+ */
+export interface SectionDoc {
+  id: string;
+  at: Vec;
+  size: Vec;
+  title: string;
+  /** Hue of the frame and its title (0–359; absent: the theme's neutral colour). */
+  hue?: number;
+}
+
+/** The smallest section, and how far inside its border a click still takes it (grid units). */
+export const SECTION_MIN = 4;
+export const SECTION_EDGE = 0.6;
+
+/** The title's box: comment-sized text inside the frame's top-left corner (an empty title keeps a short box to grab). */
+export function sectionTitleBox(s: SectionDoc): { x: number; y: number; w: number; h: number } {
+  const cols = Math.max(4, s.title.length);
+  return { x: s.at[0] + 0.3, y: s.at[1] + 0.2, w: Math.min(s.size[0] - 0.6, cols * COMMENT_FONT * 0.6 + 2 * COMMENT_PAD), h: COMMENT_LINE };
+}
+
+/** The section's four corners, top-left first, clockwise (the resize handles). */
+export function sectionCorners(s: SectionDoc): Vec[] {
+  const [x, y] = s.at, [w, h] = s.size;
+  return [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
 }
 
 // ---------------------------------------------------------------------------------------------

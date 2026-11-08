@@ -13,6 +13,8 @@ import { routeNetlist, symbolRects, wireOverlaps, type Rect, type RoutedNet } fr
 export const WHOLE_NETS = 30;
 /** Wired whole only under this many wire crossings per net: past it the wires read worse than the pointers. */
 export const MAX_CROSSINGS_PER_NET = 3;
+/** Any candidate (whole or local) may cross at most this many times per net more than the author's drawing does. */
+export const MORE_CROSSINGS_PER_NET = 1;
 /** Past this many nets a level keeps its author's drawing: routing it a second time would be felt, and little is local. */
 export const LOCAL_NETS = 120;
 /** A local net reaches at most this far (grid units), to fewer than FAN sinks. */
@@ -147,9 +149,16 @@ export function drawnNetlist(def: ComponentDef, nl: Netlist, limit = LOCAL_NETS)
   let out = nl;
   const n = nl.nets.length;
   if (n <= limit && nl.nets.some(tagged)) {
+    // Against the author's drawing: a candidate adds no wire through a part, and at most MORE_CROSSINGS_PER_NET crossings per net
+    // (wires a fitted view crosses everywhere read worse than the pointers they replace), or up to MAX_CROSSINGS_PER_NET when it
+    // clears every one of the author's own wires through parts (a hidden wire reads worse than a crossing).
+    const authors = routedOnce(def, nl).nets, rawX = wireCrossings(authors), hidden = wiresThroughParts(nl, authors);
     const fits = (c: Netlist, limit: number) => {
-      const r = routedOnce(def, c).nets;
-      return wireOverlaps(r).length === 0 && wireCrossings(r) <= limit;
+      if (c === nl) return false;
+      const r = routedOnce(def, c).nets, through = wiresThroughParts(c, r);
+      if (wireOverlaps(r).length || ![...through].every((i) => hidden.has(i))) return false;
+      const more = hidden.size && !through.size ? MAX_CROSSINGS_PER_NET : MORE_CROSSINGS_PER_NET;
+      return wireCrossings(r) <= Math.min(limit, rawX + more * n);
     };
     // the local drawing only when the whole one does not fit: each is several routings of the level
     const whole = n <= WHOLE_NETS ? wiredClear(def, nl, (x) => !manyClock(x)) : null;

@@ -50,6 +50,25 @@ export interface Bench { ws: Workspace; id: string }
 /** The bench's RAM: 64 words at gate level (the address decoding around it takes daddr[5:0]). */
 const BENCH_RAM_K = 6;
 
+/**
+ * Where the bench's parts sit (grid units, top-left corners), every variant's: the top row is reset → core → address
+ * decoding → write enables → RAM, LEDs (and the IRQ line); the bottom row is the program ROM under the reset (pc comes back
+ * to it), then the read side (switches, RAM or switches) and the screen with its decoding. A part not listed would stay in
+ * Builder's one column: tests/bench-layout.test.ts checks every variant's parts are listed.
+ */
+export const BENCH_AT: Record<string, [number, number]> = {
+  tie: [4, 3], por: [8, 2], porn: [19, 4], rsto: [25, 6],
+  core: [34, 2],
+  ds: [62, 2], dw: [94, 26], kleds: [60, 14], isleds: [70, 12], kirq: [60, 24], isirq: [70, 22],
+  nhi: [82, 2], ramwe: [88, 2], ledwe: [88, 12], irqwe: [88, 22],
+  mem: [98, 2], ledr: [98, 14], irqr: [98, 24],
+  pcs: [12, 16], rom: [16, 16],
+  ksw: [4, 38], issw: [12, 36], sw: [4, 48], kz: [8, 54], swz: [24, 48], rdmux: [30, 38],
+  xy: [44, 36], top: [48, 44], n10: [54, 44], n11: [54, 50], isscr: [60, 44], scrwe: [68, 44], scr: [78, 34],
+};
+/** The leds pin's x: right of the RAM and the screen. */
+const BENCH_RIGHT = 124;
+
 /** The io bench's switch bank: eight toggles, zero-extended, read at SWITCHES (the sandbox computer's Pong uses the same switches). */
 const BENCH_SWITCHES = 8;
 
@@ -95,53 +114,46 @@ export function benchChip(core: ComponentDef, coreId: string, coreName: string, 
   const irq = core.ports.some((p) => p.name === 'irq' && p.dir === 'in');
   const io = !!opts.io;
 
+  // Builder collects the connections; the parts are then placed by name (BENCH_AT), in two rows: reset, core, address
+  // decoding, write enables, RAM and LEDs above; the program ROM under the reset, then the read side and the screen.
   const b = new Builder(12, 16, 8);
   b.pins('clk', 'rst');
   // the core is held in reset for its first cycle, as on the level's bench (a multicycle core's state machine
   // starts there): a flip-flop powered on at 0 holds rst for one cycle, and again after every Reset
-  const rst = b.op1(OR, ['rst', b.op1(NOT, [b.op1(DFF, [b.op1(TIE1, []), 'clk'], 'powered on')])], 'reset, first cycle');
-  b.next();
-  const c = b.op(core, ['clk', rst, '', '', ...(irq ? [''] : [])], 'your core');
-  b.next();
-  const pcs = b.op(splitter([k, 16 - k], 4), [`${c}.pc`]);
-  const ds = b.op(splitter([ramK, 15 - ramK, 1], 4), [`${c}.daddr`], 'address');
-  const dw = irq ? b.op(splitter([1, 15], 4), [`${c}.dwdata`]) : '';
-  b.next();
-  const rom = b.op(romDef, [`${pcs}.o0`], 'program');
+  const rst = b.op1(OR, ['rst', b.op1(NOT, [b.op1(DFF, [b.op1(TIE1, [], undefined, 'tie'), 'clk'], 'powered on', 'por')], undefined, 'porn')], 'reset, first cycle', 'rsto');
+  const c = b.op(core, ['clk', rst, '', '', ...(irq ? [''] : [])], 'your core', 'core');
+  const pcs = b.op(splitter([k, 16 - k], 4), [`${c}.pc`], undefined, 'pcs');
+  const ds = b.op(splitter([ramK, 15 - ramK, 1], 4), [`${c}.daddr`], 'address', 'ds');
+  const dw = irq ? b.op(splitter([1, 15], 4), [`${c}.dwdata`], undefined, 'dw') : '';
+  const rom = b.op(romDef, [`${pcs}.o0`], 'program', 'rom');
   const hi = b.name(`${ds}.o2`, 'io', true);
-  const isLeds = b.op(EQ16, [`${c}.daddr`, b.op1(constWord(16, MMIO16.LEDS), [])], '= LEDS');
-  const isIrq = irq ? b.op(EQ16, [`${c}.daddr`, b.op1(constWord(16, MMIO16.IRQ), [])], '= IRQ') : '';
-  b.next();
-  const ramWe = b.op1(AND, [`${c}.dwe`, b.op1(NOT, [hi])], 'RAM write');
-  const ledWe = b.op1(AND, [`${c}.dwe`, `${isLeds}.eq`], 'LED write');
-  const irqWe = irq ? b.op1(AND, [`${c}.dwe`, `${isIrq}.eq`], 'IRQ write') : '';
-  b.next();
-  const mem = b.op(ramDef, [`${ds}.o0`, `${c}.dwdata`, ramWe, 'clk'], 'data (64 words)');
-  const leds = b.op(register(16), [`${c}.dwdata`, ledWe, 'clk'], 'LEDs');
-  if (irq) b.wire(`${b.op(register(1), [`${dw}.o0`, irqWe, 'clk'], 'IRQ line')}.q`, `${c}.irq`);
+  const isLeds = b.op(EQ16, [`${c}.daddr`, b.op1(constWord(16, MMIO16.LEDS), [], undefined, 'kleds')], '= LEDS', 'isleds');
+  const isIrq = irq ? b.op(EQ16, [`${c}.daddr`, b.op1(constWord(16, MMIO16.IRQ), [], undefined, 'kirq')], '= IRQ', 'isirq') : '';
+  const ramWe = b.op1(AND, [`${c}.dwe`, b.op1(NOT, [hi], undefined, 'nhi')], 'RAM write', 'ramwe');
+  const ledWe = b.op1(AND, [`${c}.dwe`, `${isLeds}.eq`], 'LED write', 'ledwe');
+  const irqWe = irq ? b.op1(AND, [`${c}.dwe`, `${isIrq}.eq`], 'IRQ write', 'irqwe') : '';
+  const mem = b.op(ramDef, [`${ds}.o0`, `${c}.dwdata`, ramWe, 'clk'], 'data (64 words)', 'mem');
+  const leds = b.op(register(16), [`${c}.dwdata`, ledWe, 'clk'], 'LEDs', 'ledr');
+  if (irq) b.wire(`${b.op(register(1), [`${dw}.o0`, irqWe, 'clk'], 'IRQ line', 'irqr')}.q`, `${c}.irq`);
   b.wire(`${rom}.data`, `${c}.instr`);
   if (io) {
     // the screen: daddr[15:10] = 111100 (0xF000 … 0xF3FF), x = daddr[4:0], y = daddr[9:5]
-    b.next();
-    const xy = b.op(splitter([5, 5, 6], 4), [`${c}.daddr`], 'screen address');
-    const top = b.op(splitter(ones(6), 2), [`${xy}.o2`]);
-    const isSw = b.op(EQ16, [`${c}.daddr`, b.op1(constWord(16, MMIO16.SWITCHES), [])], '= SWITCHES');
-    const sw = b.op1(swDef, [], 'switches');
-    b.next();
-    const isScr = b.op1(andN(6), [b.op1(NOT, [`${top}.o0`]), b.op1(NOT, [`${top}.o1`]), `${top}.o2`, `${top}.o3`, `${top}.o4`, `${top}.o5`], 'screen words');
-    const swz = b.op1(merger([BENCH_SWITCHES, 16 - BENCH_SWITCHES], 4), [sw, b.op1(constWord(16 - BENCH_SWITCHES, 0), [])], 'switches, 16 bits');
-    b.next();
-    const scrWe = b.op1(AND, [`${c}.dwe`, isScr], 'screen write');
-    b.wire(b.op1(busMux2(16), [`${mem}.dout`, swz, `${isSw}.eq`], 'RAM or switches'), `${c}.drdata`);
-    b.next();
-    b.op(scrDef, [`${xy}.o0`, `${xy}.o1`, `${c}.dwdata`, scrWe, 'clk'], 'screen (0xF000)');
+    const xy = b.op(splitter([5, 5, 6], 4), [`${c}.daddr`], 'screen address', 'xy');
+    const top = b.op(splitter(ones(6), 2), [`${xy}.o2`], undefined, 'top');
+    const isSw = b.op(EQ16, [`${c}.daddr`, b.op1(constWord(16, MMIO16.SWITCHES), [], undefined, 'ksw')], '= SWITCHES', 'issw');
+    const sw = b.op1(swDef, [], 'switches', 'sw');
+    const isScr = b.op1(andN(6), [b.op1(NOT, [`${top}.o0`], undefined, 'n10'), b.op1(NOT, [`${top}.o1`], undefined, 'n11'), `${top}.o2`, `${top}.o3`, `${top}.o4`, `${top}.o5`], 'screen words', 'isscr');
+    const swz = b.op1(merger([BENCH_SWITCHES, 16 - BENCH_SWITCHES], 4), [sw, b.op1(constWord(16 - BENCH_SWITCHES, 0), [], undefined, 'kz')], 'switches, 16 bits', 'swz');
+    const scrWe = b.op1(AND, [`${c}.dwe`, isScr], 'screen write', 'scrwe');
+    b.wire(b.op1(busMux2(16), [`${mem}.dout`, swz, `${isSw}.eq`], 'RAM or switches', 'rdmux'), `${c}.drdata`);
+    b.op(scrDef, [`${xy}.o0`, `${xy}.o1`, `${c}.dwdata`, scrWe, 'clk'], 'screen (0xF000)', 'scr');
   } else b.wire(`${mem}.dout`, `${c}.drdata`);
   b.wire(`${leds}.q`, 'leds');
-  const R = b.right;
+  for (const i of b.instances) i.at = BENCH_AT[i.name] ?? i.at;
   const def: ComponentDef = {
     id: io ? 'rv16_io_bench' : 'rv16_bench', name: 'bench', category: 'cpu', symbol: { kind: 'box', label: 'BENCH' },
     ports: [{ name: 'clk', width: 1, dir: 'in', clock: true }, { name: 'rst', width: 1, dir: 'in' }, { name: 'leds', width: 16, dir: 'out' }],
-    netlist: () => ({ pins: { clk: [0, 4], rst: [0, 8], leds: [R, 6] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { clk: [0, 4], rst: [0, 8], leds: [BENCH_RIGHT, 17] }, instances: b.instances, nets: b.nets() }),
   };
   const id = opts.id ?? uniqueName(`u_bench_${coreId.replace(/^u_/, '')}`, taken.ids);
   const name = opts.name ?? uniqueName(`Debug: ${t.name}`, taken.names);

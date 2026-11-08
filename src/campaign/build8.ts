@@ -5,13 +5,14 @@
 import type { BuildChallenge, PinSpec, SeqStep } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc } from '../editor/model';
-import { fpAdd, fpMul } from '../lib/fpu';
+import { faddBlocks, fmulBlocks, fpAdd, fpMul } from '../lib/fpu';
 import { arrayMul, seqDivider } from '../lib/muldiv';
 import { RV16_MUX2 } from '../lib/rv16/logic';
 import { seqMul } from '../lib/multiply';
 import { F16, fpAddX, fpMulX } from '../sim/fpref';
 import { keepPorts } from '../sim/dead';
 import { type ComponentDef, netlistOf } from '../sim/types';
+import { fpRefOf } from './buildfp';
 import { rng } from './drills';
 
 const pins = (ins: [string, number?][], outs: [string, number?][], clock?: string): PinSpec[] => [
@@ -29,6 +30,32 @@ const refOf = (id: string, def: () => ComponentDef, name: string) => (): ChipDoc
   }
   return a;
 };
+
+/**
+ * A binary16 unit's reference without its exception flags (the level's y only), its blocks drawn as chips. The special-case
+ * block (the last) loses its flags logic too, so the reference costs what the flat one did.
+ */
+function yOnlyRef(unit: ComponentDef, ins: string[], blocks: ComponentDef[]): { top: ComponentDef; blocks: ComponentDef[] } {
+  const full = keepPorts(unit, [...ins, 'y']), special = blocks[blocks.length - 1];
+  const yOnly = keepPorts(special, special.ports.filter((p) => p.name !== 'flags' && p.name !== 'rflags').map((p) => p.name));
+  const top: ComponentDef = {
+    ...full,
+    netlist: () => {
+      const nl = full.netlist!();
+      return {
+        ...nl,
+        instances: nl.instances.map((i) => (i.def === special ? { ...i, def: yOnly } : i)),
+        nets: nl.nets.map((n) => ({ ...n, ends: n.ends.filter((e) => e !== 'special.rflags') })).filter((n) => n.ends.length > 1),
+      };
+    },
+  };
+  return { top, blocks: [...blocks.slice(0, -1), yOnly] };
+}
+
+/** o_fpadd's and o_fpmul's references. */
+let add16: ReturnType<typeof yOnlyRef> | null = null, mul16: ReturnType<typeof yOnlyRef> | null = null;
+export const fpAdd16Ref = () => (add16 ??= yOnlyRef(fpAdd(F16, RV16_MUX2), ['a', 'b', 'sub', 'rm'], faddBlocks(F16, RV16_MUX2)));
+export const fpMul16Ref = () => (mul16 ??= yOnlyRef(fpMul(F16, RV16_MUX2), ['a', 'b', 'rm'], fmulBlocks(F16, RV16_MUX2)));
 
 /** The library ids a reference is drawn with: what a side quest gives. */
 export const partsOf = (def: () => ComponentDef) => (): string[] => [...new Set((netlistOf(def())?.instances ?? []).map((i) => i.def.id))];
@@ -82,7 +109,7 @@ export const BUILD8: Record<string, () => BuildChallenge> = {
       vectors: () => FP_EDGE.flatMap((a) => FP_EDGE.flatMap((b) => [0, 1, 2, 3, 4].map((rm) => [a, b, 0, rm]))),
       care: ([, , , rm]) => [rm > 4 ? 0 : 0xffff],
     },
-    answer: refOf('o_fpadd', () => keepPorts(fpAdd(F16, RV16_MUX2), ['a', 'b', 'sub', 'rm', 'y']), 'binary16 adder'),
+    answer: fpRefOf('o_fpadd', () => fpAdd16Ref().top, 'binary16 adder', () => fpAdd16Ref().blocks),
   }),
   o_fpmul: () => ({
     id: 'o_fpmul', title: 'binary16 multiplier', level: 'arithmetic', allowed: 'nand',
@@ -93,6 +120,6 @@ export const BUILD8: Record<string, () => BuildChallenge> = {
       vectors: () => FP_EDGE.flatMap((a) => FP_EDGE.flatMap((b) => [0, 1, 2, 3, 4].map((rm) => [a, b, rm]))),
       care: ([, , rm]) => [rm > 4 ? 0 : 0xffff],
     },
-    answer: refOf('o_fpmul', () => keepPorts(fpMul(F16, RV16_MUX2), ['a', 'b', 'rm', 'y']), 'binary16 multiplier'),
+    answer: fpRefOf('o_fpmul', () => fpMul16Ref().top, 'binary16 multiplier', () => fpMul16Ref().blocks),
   }),
 };

@@ -31,6 +31,7 @@ import type { Editor } from './editor';
 import { drawFace, type FaceEls, paintFace } from './dispface';
 import { faceOf } from './face';
 import { decorateInside, toggleSwitch } from './ioface';
+import { drawSection } from './view';
 
 const views = new WeakMap<Editor, InsideView>();
 /** Instances to light at one path (the CPU drawer: the units an instruction uses inside a placed core). */
@@ -297,10 +298,22 @@ class InsideView {
   private decorate(): void {
     const ctx = this.ctx;
     if (!ctx) return;
+    this.drawSections(ctx);
     const io = decorateInside(this.view.el, ctx, ctx.isSubSim ? null : (node, bit) => toggleSwitch(this.ed.sim, node, bit));
     const faces = this.decorateFaces(ctx);
     this.ioPaint = io || faces ? () => { io?.(); faces?.(); } : null;
     this.ioPaint?.();
+  }
+
+  /** A user chip's sections (its document's, so a retitle shows at once), under its wires: the chip is drawn at the document's coordinates. */
+  private drawSections(ctx: ViewCtx): void {
+    this.view.el.querySelector(':scope > g.ed-secs')?.remove();
+    const secs = this.ed.ws.chips[ctx.def.id]?.sections;
+    const wires = this.view.el.querySelector(':scope > g.wires');
+    if (!secs?.length || !wires) return;
+    const g = s('g', { class: 'ed-secs' });
+    for (const c of secs) g.append(drawSection(c));
+    wires.before(g);
   }
 
   /** The displays placed user chips show on their boxes (face.ts), live from below their nodes. */

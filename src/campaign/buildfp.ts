@@ -8,7 +8,7 @@
 import type { BuildChallenge, PinSpec } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc, PartRef } from '../editor/model';
-import { fpCompare, fpFromInt, fpUnpack, lzc, normRound, ROUND_DECIDE, shiftRightSticky } from '../lib/fpu';
+import { fpCompare, fpFromInt, fpUnpack, lzc, normRound, normRoundBlocks, ROUND_DECIDE, shiftRightSticky } from '../lib/fpu';
 import { RV16_MUX2 } from '../lib/rv16/logic';
 import { bias, F16, fpCmpX, fpFromIntX, overflowToInf, roundToX, roundUp } from '../sim/fpref';
 import { type ComponentDef, netlistOf } from '../sim/types';
@@ -31,6 +31,8 @@ export const FP_REF = {
   cmp: () => fpCompare(F16),
   cvt: () => fpFromInt(F16, 16, RV16_MUX2),
 };
+/** Normalize & round's stages, drawn as chips: shift amounts, rounding, packing. */
+export const normSubs = () => normRoundBlocks(F16, 15);
 /** The leading-zero counter's halves, drawn as chips: lzc8 → lzc4 → lzc2. */
 const lzcSubs = () => [lzc(8), lzc(4), lzc(2)];
 
@@ -47,7 +49,7 @@ export const fpGives = (top: () => ComponentDef, subs: () => ComponentDef[] = ()
 
 const answers = new Map<string, ChipDoc[]>();
 /** A reference answer: the top def drawn as a chip, and `subs` drawn as chips it places (innermost last). */
-const refOf = (id: string, def: () => ComponentDef, name: string, subs: () => ComponentDef[] = () => []) => (): ChipDoc[] => {
+export const fpRefOf = (id: string, def: () => ComponentDef, name: string, subs: () => ComponentDef[] = () => []) => (): ChipDoc[] => {
   let a = answers.get(id);
   if (a) return a;
   const chips = new Map(subs().map((d, i) => [d, { id: `u_ref_cp_${id}_${i}`, name: `${d.name} ref` }]));
@@ -118,14 +120,14 @@ export const BUILDFP: Record<string, () => BuildChallenge> = {
         return [x >> 15, e || 1, (e ? 1024 : 0) | f, e === 0 && f === 0 ? 1 : 0, e === 31 && f === 0 ? 1 : 0, nan ? 1 : 0, nan && !(f & 512) ? 1 : 0];
       },
     },
-    answer: refOf('o_fpunpack', FP_REF.unpack, 'Float unpack'),
+    answer: fpRefOf('o_fpunpack', FP_REF.unpack, 'Float unpack'),
   }),
   o_fpround: () => ({
     id: 'o_fpround', title: 'Rounding decision', level: 'arithmetic', allowed: 'nand',
     brief: 'The heart of every rounder. Given the last bit kept (<b>lsb</b>), the first bit dropped (the guard bit <b>g</b>), the OR of everything below it (the sticky bit <b>s</b>), the <b>sign</b> and the mode <b>rm</b>: <b>up</b> = add one to the kept bits. RNE (0): up when g and (s or lsb), ties to even. RTZ (1): never. RDN (2): when negative and g or s. RUP (3): when positive and g or s. RMM (4): when g. <b>toInf</b>: does an overflow become ∞ (RNE, RMM, and the direction rounded towards) rather than the largest finite number? Modes 5 to 7 behave as RTZ.',
     ports: pins([['rm', 3], ['sign'], ['lsb'], ['g'], ['s']], [['up'], ['toInf']]),
     check: { kind: 'table', spec: ([rm, sign, lsb, g, s]) => [roundUp(rm, sign, !!lsb, !!g, !!s) ? 1 : 0, overflowToInf(rm, sign) ? 1 : 0] },
-    answer: refOf('o_fpround', () => ROUND_DECIDE, 'Rounding decision'),
+    answer: fpRefOf('o_fpround', () => ROUND_DECIDE, 'Rounding decision'),
   }),
   o_fpsticky: () => ({
     id: 'o_fpsticky', title: 'Sticky shifter', level: 'arithmetic', allowed: 'nand',
@@ -135,21 +137,21 @@ export const BUILDFP: Record<string, () => BuildChallenge> = {
       kind: 'table', spec: ([x, s]) => [Math.floor(x / 2 ** s), x % 2 ** s ? 1 : 0],
       vectors: () => { const r = rng(1301); return Array.from({ length: 256 }, () => Math.floor(r() * 2 ** 13)).flatMap((x) => Array.from({ length: 16 }, (_, s) => [x, s])); },
     },
-    answer: refOf('o_fpsticky', FP_REF.sticky, 'Sticky shifter'),
+    answer: fpRefOf('o_fpsticky', FP_REF.sticky, 'Sticky shifter'),
   }),
   o_fplzc: () => ({
     id: 'o_fplzc', title: 'Leading-zero counter', level: 'arithmetic', allowed: 'nand',
     brief: '<b>c</b> = how many 0s stand before the first 1 of <b>a</b> (16 bits, counting from the top), and <b>v</b> = 1 when there is a 1 at all (when a = 0, c is a don\'t-care). Normalizing a result means shifting out exactly these zeros. Build it from halves: the count is the upper half\'s, unless the upper half is all zeros, then 8 plus the lower half\'s. Every pattern is checked.',
     ports: pins([['a', 16]], [['c', 4], ['v']]),
     check: { kind: 'table', spec: ([a]) => [a ? 15 - Math.floor(Math.log2(a)) : 0, a ? 1 : 0], care: ([a]) => [a ? 0xf : 0, 1] },
-    answer: refOf('o_fplzc', FP_REF.lzc, 'Leading-zero counter', lzcSubs),
+    answer: fpRefOf('o_fplzc', FP_REF.lzc, 'Leading-zero counter', lzcSubs),
   }),
   o_fpnorm: () => ({
     id: 'o_fpnorm', title: 'Normalize & round', level: 'arithmetic', allowed: 'nand',
     brief: `The adder's back end, shared by every FP unit. <b>mant</b> (15 bits) is a significand whose top bit weighs 2^(exp − 15), with <b>exp</b> an 8-bit two's-complement biased exponent (−127 to 127), and <b>stin</b> a sticky bit below it. Give the binary16 encoding <b>y</b> of sign × that value, rounded once in mode <b>rm</b>, and <b>flags</b> = {NV, DZ, OF, UF, NX} (NV and DZ stay 0). Shift out the leading zeros as far as the exponent allows (stop at exponent 1: a subnormal), or shift right with a sticky bit when the exponent is below 1; round on the guard bit and the sticky bit; a carry out of the rounding bumps the exponent; a field past 30 overflows (∞ or the largest finite, by the rounding decision's toInf). UF: inexact and tiny after rounding. stin is only set when mant's top bit or the one below it is 1 (other rows are not checked).`,
     ports: pins([['sign'], ['exp', XE], ['mant', NW], ['stin'], ['rm', 3]], [['y', 16], ['flags', 5]]),
     check: { kind: 'table', spec: normSpec, vectors: normVectors, care: normCare },
-    answer: refOf('o_fpnorm', FP_REF.norm, 'Normalize & round'),
+    answer: fpRefOf('o_fpnorm', FP_REF.norm, 'Normalize & round', normSubs),
   }),
   o_fpcmp: () => ({
     id: 'o_fpcmp', title: 'FP comparator', level: 'arithmetic', allowed: 'nand',
@@ -163,7 +165,7 @@ export const BUILDFP: Record<string, () => BuildChallenge> = {
         return [...FP16_EDGE.flatMap((a) => FP16_EDGE.flatMap((b) => [[a, b], [a, b ^ 0x8000]])), ...near];
       },
     },
-    answer: refOf('o_fpcmp', FP_REF.cmp, 'FP comparator'),
+    answer: fpRefOf('o_fpcmp', FP_REF.cmp, 'FP comparator'),
   }),
   o_fpcvt: () => ({
     id: 'o_fpcvt', title: 'Integer to float', level: 'arithmetic', allowed: 'nand',
@@ -174,6 +176,6 @@ export const BUILDFP: Record<string, () => BuildChallenge> = {
       vectors: () => [0, 1, 2, 3, 2047, 2048, 2049, 2050, 2051, 4095, 4097, 4099, 32767, 32768, 32769, 65504, 65519, 65520, 65535, 0xfff0, 0x8001]
         .flatMap((x) => [0, 1].flatMap((s) => [0, 1, 2, 3, 4].map((rm) => [x, s, rm]))),
     },
-    answer: refOf('o_fpcvt', FP_REF.cvt, 'Integer to float'),
+    answer: fpRefOf('o_fpcvt', FP_REF.cvt, 'Integer to float'),
   }),
 };
