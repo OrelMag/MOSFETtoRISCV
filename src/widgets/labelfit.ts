@@ -31,7 +31,7 @@ const SLIDE = 28;
 /** Inset of the frame a text must stay within. */
 const EDGE = 2;
 
-interface Box { l: number; t: number; r: number; b: number }
+export interface Box { l: number; t: number; r: number; b: number }
 /** What a label chose in the frames before. */
 interface Memo { flip: boolean; move: readonly [number, number]; miss: number; fit: number; closer: number; crowd: boolean; seen: boolean }
 
@@ -40,6 +40,9 @@ export interface LabelOptions {
   gap?: number;
   /** Each label's priority (lower is placed first); absent: its index. */
   prio?: readonly (number | undefined)[];
+  /** Rectangles (client px) no text may cover and no dot may sit under; the stage's corner buttons (modelframe.ts
+   *  .r3-tools) are added by themselves. */
+  avoid?: readonly Box[];
 }
 
 const near = (a: Box, b: Box, gx: number, gy: number) => a.l < b.r + gx && b.l < a.r + gx && a.t < b.b + gy && b.t < a.b + gy;
@@ -76,9 +79,15 @@ export function declutterLabels(els: readonly HTMLElement[], opts: LabelOptions 
     if (!m) memos.set(e, (m = { flip: false, move: [0, 0], miss: 0, fit: 0, closer: 0, crowd: false, seen: false }));
     return m;
   };
+  // The stage's corner buttons (turn, save image, full screen) are off-limits like the frame's edge.
+  const tools = host.closest('.r3-stage, .wt-stage')?.querySelector('.r3-tools'), avoid: Box[] = [...(o.avoid ?? [])];
+  if (tools && tools.getBoundingClientRect().width) avoid.push(box(tools));
   const dots = live.map((e) => box(e.querySelector('i') ?? e));
-  // A dot outside the frame (its part is off screen): the label cannot point at it.
-  const lost = dots.map((d) => (d.l + d.r) / 2 < frame.l || (d.l + d.r) / 2 > frame.r || (d.t + d.b) / 2 < frame.t || (d.t + d.b) / 2 > frame.b);
+  // A dot outside the frame (its part is off screen) or under the buttons: the label cannot point at it.
+  const lost = dots.map((d) => {
+    const x = (d.l + d.r) / 2, y = (d.t + d.b) / 2;
+    return x < frame.l || x > frame.r || y < frame.t || y > frame.b || avoid.some((a) => x > a.l - 2 && x < a.r + 2 && y > a.t - 2 && y < a.b + 2);
+  });
   const base: [number, number][] = live.map(() => [0, 0]);
   const texts = live.map((e, k) => {
     const b = e.querySelector('b')!, m = memo(e), side = e.dataset.side ?? '';
@@ -114,7 +123,7 @@ export function declutterLabels(els: readonly HTMLElement[], opts: LabelOptions 
     const clear = (mv: readonly [number, number]) => {
       if (hopeless) return false;
       const b = shift(t, mv);
-      return inside(b, frame) && !down.some((d) => near(b, d, gap, 1)) && !dots.some((d, j) => j !== k && near(b, d, 1, 1));
+      return inside(b, frame) && !down.some((d) => near(b, d, gap, 1)) && !dots.some((d, j) => j !== k && near(b, d, 1, 1)) && !avoid.some((a) => near(b, a, 3, 3));
     };
     let move = MOVES.find(clear) ?? null;
     if (!m.seen) {
