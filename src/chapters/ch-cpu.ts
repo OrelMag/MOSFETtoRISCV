@@ -1,4 +1,4 @@
-import { groupDigits } from '../sim/numfmt';
+import { groupDigits, groupNum } from '../sim/numfmt';
 import { alu, addSub, bitwise, CONTROL, regfile, shifter } from '../lib';
 import { cpuState } from '../riscv/cosim';
 import { PROGRAMS } from '../riscv/programs';
@@ -62,7 +62,7 @@ export const chAlu: Chapter = {
       'No comparator: a − b gives Z (equal), N ⊕ V (signed less-than: N alone lies on overflow) and ¬C (unsigned less-than: no carry out of a + ¬b + 1).',
       'Every unit computes every cycle and an 8:1 mux on ctl[2:0] picks the result; ctl[3] selects SUB over ADD and SRA over SRL; SLT and SLTU force subtraction.',
       'The codes match R-type encodings: there <code>ctl = {funct7[5], funct3}</code>, plain wiring. Elsewhere a few gates decide: OP-IMM passes bit 30 (imm[10]) only for <code>srai</code>, loads / stores / <code>jalr</code> / <code>auipc</code> force ADD, branches force SUB.',
-      `Branches: beq Z, bne ¬Z, blt N ⊕ V, bge ¬(N ⊕ V), bltu ¬C, bgeu C, from the same subtraction (${BRANCH_WRONG.nAlone.toLocaleString('en')} of 65 536 8-bit pairs would be wrong on N alone). The ALU control: ctl[2:0] = aluOp ? funct3 : 0, ctl[3] = aluOp · f7[5] · (R ∨ funct3 = 101) ∨ BRANCH (${CTL_PARTS} NANDs).`,
+      `Branches: beq Z, bne ¬Z, blt N ⊕ V, bge ¬(N ⊕ V), bltu ¬C, bgeu C, from the same subtraction (${groupNum(BRANCH_WRONG.nAlone)} of 65 536 8-bit pairs would be wrong on N alone). The ALU control: ctl[2:0] = aluOp ? funct3 : 0, ctl[3] = aluOp · f7[5] · (R ∨ funct3 = 101) ∨ BRANCH (${CTL_PARTS} NANDs).`,
       'Held at one control code the result settles in 8 delays for and / or, 20 for a shift, 73 for add and 81 for slt (ripple adder, measured: tests/deepseq.test.ts); with a log-depth adder add is 23 and the shifter is unchanged.',
       'At 32 bits: 2610 NANDs, 98 NAND delays deep. The ripple adder sets the depth, the shifter and the result mux take most of the area.',
     ],

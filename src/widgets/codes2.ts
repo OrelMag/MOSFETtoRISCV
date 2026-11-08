@@ -13,6 +13,7 @@ import { line, mkChips, plotOf } from './line';
 import { slider } from './mosparts';
 import '../styles/line.css';
 import '../styles/codes2.css';
+import { groupNum } from '../sim/numfmt';
 
 const btn = (label: string, title: string, f: () => void, cls = 'btn sm'): HTMLButtonElement => {
   const b = h('button', { class: cls, type: 'button', title }, label) as HTMLButtonElement;
@@ -121,7 +122,7 @@ export function concatWidget(): Widget {
     const r = concatTrial(db, { depth: D, frames, seed, errs });
     // errs: positions over the whole stream of `frames` frames, each frame by columns of D words
     errs.forEach((p) => { const f = Math.floor(p / (D * 255)), i = p - f * D * 255; perWord[f * D + i % D]++; });
-    map.replaceChildren(s('rect', { x: 0, y: 8, width: 640, height: 30, class: 'cn-track' }), ...errs.map((p) => s('rect', { x: (p / CONCAT_BYTES) * 640, y: 8, width: Math.max(1, 640 / CONCAT_BYTES), height: 30, class: 'cn-err' })), s('text', { x: 0, y: 50, class: 'cn-lab' }, `${r.bytes.toLocaleString('en')} bytes as sent, left to right; each stripe a byte the Viterbi decoder left wrong`));
+    map.replaceChildren(s('rect', { x: 0, y: 8, width: 640, height: 30, class: 'cn-track' }), ...errs.map((p) => s('rect', { x: (p / CONCAT_BYTES) * 640, y: 8, width: Math.max(1, 640 / CONCAT_BYTES), height: 30, class: 'cn-err' })), s('text', { x: 0, y: 50, class: 'cn-lab' }, `${groupNum(r.bytes)} bytes as sent, left to right; each stripe a byte the Viterbi decoder left wrong`));
     const Y = (v: number) => 112 - Math.min(v, 32) * 3;
     words.replaceChildren(s('line', { x1: 0, x2: 640, y1: Y(16), y2: Y(16), class: 'cn-limit' }), s('text', { x: 636, y: Y(16) - 3, 'text-anchor': 'end', class: 'cn-lab' }, 't = 16'),
       ...perWord.flatMap((v, i) => [s('rect', { x: 12 + i * 78, y: Y(v), width: 60, height: 112 - Y(v), class: v > 16 ? 'cn-bar bad' : 'cn-bar' }), s('text', { x: 42 + i * 78, y: Y(v) - 3, 'text-anchor': 'middle', class: 'cn-lab' }, String(v)), s('text', { x: 42 + i * 78, y: 126, 'text-anchor': 'middle', class: 'cn-lab' }, `word ${i}`)]));
@@ -277,7 +278,7 @@ export function waterfallWidget(): Widget {
     for (const [d, p] of CONCAT_POINTS) plot.layer.append(s('rect', { x: plot.X(d) - 3.5, y: plot.Y(Math.log10(p)) - 3.5, width: 7, height: 7, class: 'cn-sq' }));
     for (const p of pts) plot.layer.append(s('circle', { cx: plot.X(p.db), cy: plot.Y(log(p.errors ? p.ber : 1 / p.bits)), r: 4, class: `${p.errors ? 'cn-pt' : 'cn-pt hollow'} n${p.n}` }));
     const last = pts[pts.length - 1];
-    chips.set(0, last ? `${last.errors ? last.ber.toExponential(1) : `< ${(1 / last.bits).toExponential(0)}`}` : '–', last ? `at ${last.db.toFixed(1)} dB, ${last.errors} errors in ${last.bits.toLocaleString('en')} bits` : 'bit error rate');
+    chips.set(0, last ? `${last.errors ? last.ber.toExponential(1) : `< ${(1 / last.bits).toExponential(0)}`}` : '–', last ? `at ${last.db.toFixed(1)} dB, ${last.errors} errors in ${groupNum(last.bits)} bits` : 'bit error rate');
     chips.set(1, last ? last.meanIter.toFixed(1) : '–', 'iterations a word, on average');
     chips.set(2, `${codingGain((d) => convSoftBound(CONV_K7, d), 1e-5).toFixed(1)} dB`, 'K = 7 soft\'s gain at 10⁻⁵, the code to beat');
   };

@@ -17,8 +17,9 @@ import { aesCoreScene, aesRoundScene, sboxScene, shaCoreScene, shaRoundScene } f
 import { bombeWidget, cribWidget, lessonsWidget, machinesWidget, permutationWidget } from '../widgets/secretenigma';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number | bigint) => x.toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number | bigint) => groupNum(x);
 /** 6.26 × 10^25 from an exact count. */
 const sci = (x: bigint) => { const [m, e] = Number(x).toExponential(2).split('e+'); return `${m} × 10<sup>${e}</sup>`; };
 const KS = m4KeySpace();

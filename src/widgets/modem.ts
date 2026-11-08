@@ -16,6 +16,7 @@ import { FSK_LINK, NCO } from '../lib';
 import { h, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { fitText, slider } from './mosparts';
+import { groupNum } from '../sim/numfmt';
 
 const nf = (x: number, d = 2) => x.toFixed(d);
 const fmtRate = (x: number) => (x >= 1e6 ? `${+(x / 1e6).toPrecision(3)} Mb/s` : x >= 1e3 ? `${+(x / 1e3).toPrecision(3)} kb/s` : `${+x.toPrecision(3)} b/s`);
@@ -193,7 +194,7 @@ export function constellationWidget(): Widget {
     chips.set(4, `${nf(need, 1)} dB`, 'Es/N0 for 1 in 10⁶');
     chips.set(5, `+${nf(need - floor, 1)} dB`, 'above Shannon\'s floor');
     verdict.className = `mdm-verdict ${cf < 1e-3 ? 'ok' : 'bad'}`;
-    verdict.textContent = cf < 1e-6 ? 'Clean: errors are rarer than a million symbols.' : cf < 1e-3 ? `About one symbol in ${Math.round(1 / cf).toLocaleString('en')} is wrong.` : `One symbol in ${Math.max(1, Math.round(1 / cf))} is wrong: a code on top would have to repair this.`;
+    verdict.textContent = cf < 1e-6 ? 'Clean: errors are rarer than a million symbols.' : cf < 1e-3 ? `About one symbol in ${groupNum(Math.round(1 / cf))} is wrong.` : `One symbol in ${Math.max(1, Math.round(1 / cf))} is wrong: a code on top would have to repair this.`;
   };
   const choice = seg('Modulation', [['p4', 'QPSK'], ['p8', '8-PSK'], ['q16', '16-QAM'], ['q64', '64-QAM'], ['q256', '256-QAM']] as [string, string][], 'q16', (v) => { kind = v[0] === 'p' ? 'psk' : 'qam'; M = Number(v.slice(1)); if (kind === 'psk' && M === 4) kind = 'qam'; paint(); });
   const sl = slider('Es/N0', 0, 35, 0.5, snrDb, (v) => `${nf(v, 1)} dB`, (v) => { snrDb = v; paint(); });

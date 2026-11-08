@@ -11,8 +11,9 @@ import { dctApi, dctScene, dctWidget, fileWidget, filterWidget, huffWidget, pict
 import { FILE_QUALITY, PICTURE_BLOCKS } from '../widgets/dsppictures';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 let memo: ReturnType<typeof encodeJpeg>[] | undefined;
 /** The scene at the qualities the prose names. */

@@ -18,11 +18,12 @@ import { polyRoots } from '../dsp/zplane';
 import { DSP_LEVEL } from './dspladder';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
 /** A figure to one significant digit, written plainly: 6, 500. */
 const about = (v: number): string => { const p = 10 ** Math.floor(Math.log10(Math.abs(v))); return String(Math.round(v / p) * p).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
 const TAU = 2 * Math.PI;
-const g = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const g = (v: number) => groupNum(v);
 const nf = (v: number, d = 3) => v.toFixed(d);
 /** 21 → '21st': the order of one section order among the 24. */
 export const ordinal = (n: number): string => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10 > 3 ? 0 : n % 10]}`;

@@ -12,6 +12,7 @@ import { slider } from './mosparts';
 import '../styles/line.css';
 import '../styles/fourier.css';
 import '../styles/signals.css';
+import { groupNum } from '../sim/numfmt';
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const ONE = 2 ** 14;
@@ -86,7 +87,7 @@ export function wordsWidget(): Widget {
     chips.set(0, `${num(e.worst, 2)} LSB`, 'worst error, over every angle the word holds');
     chips.set(1, num(Math.log2(scale / e.worst), 1), 'bits of accuracy that leaves');
     chips.set(2, `${num(cordicBound(spec, scale), 1)} LSB`, 'what the sum of the worst cases allows');
-    chips.set(3, stats(cordicPipeline(spec)).nands.toLocaleString('en').replace(/,/g, ' '), 'NANDs, pipelined');
+    chips.set(3, groupNum(stats(cordicPipeline(spec)).nands), 'NANDs, pipelined');
     note.textContent = `Worst at turn ${num(e.at / 2 ** z, 4)}. The result's own word is ${w - 1} bits with its sign, so the last ${num(Math.max(0, w - 1 - Math.log2(scale / e.worst)), 1)} bits are not worth keeping.`;
   };
   const sw = slider('x and y bits', 8, 18, 1, w, (v) => String(v), (v) => { w = v; paint(); });
@@ -136,7 +137,7 @@ export function costWidget(): Widget {
     { name: 'CORDIC, pipelined', rows: [{ w: 10, z: 10, n: 8 }, { w: 14, z: 14, n: 12 }, { w: 18, z: 18, n: 16 }].map((sp) => [`${sp.w} bits, ${sp.n} stages`, cordicBits(sp), stats(cordicPipeline(sp)).nands, 'every clock']) },
   ];
   const table = h('table', { class: 'mini' }, h('tr', null, h('th', null, 'Design'), h('th', null, 'Size'), h('th', null, 'Bits of accuracy'), h('th', null, 'NANDs'), h('th', null, 'A sine')),
-    ...groups.flatMap((g) => g.rows.map((r) => h('tr', null, h('td', null, g.name), h('td', null, r[0]), h('td', null, num(r[1], 1)), h('td', null, r[2].toLocaleString('en').replace(/,/g, ' ')), h('td', null, r[3])))));
+    ...groups.flatMap((g) => g.rows.map((r) => h('tr', null, h('td', null, g.name), h('td', null, r[0]), h('td', null, num(r[1], 1)), h('td', null, groupNum(r[2])), h('td', null, r[3])))));
   host.replaceChildren(table);
   };
   setTimeout(fill, 60);

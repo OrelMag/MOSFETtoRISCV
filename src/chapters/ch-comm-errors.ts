@@ -18,13 +18,14 @@ import { arqWidget, crcApi, crcExplorerWidget, crcScene, fecWidget, framingWidge
 import type { Scene } from '../view/stage';
 import type { Chapter } from './types';
 import { numOf } from './order';
+import { groupNum } from '../sim/numfmt';
 import { FEC_BER } from '../phys/fibre';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
 const sci = (x: number, d = 1) => x.toExponential(d).replace('e-', ' × 10<sup>−').replace('e+', ' × 10<sup>') + '</sup>';
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const depth = (d: Parameters<typeof logicDepth>[0]) => logicDepth(d) ?? 0;
-const withCommas = (n: number) => Math.round(n).toLocaleString('en-US');
+const withCommas = (n: number) => groupNum(Math.round(n));
 
 // the link: 4 cycles a bit at the single-cycle CPU's clock (roadmap decision 7)
 const CYCLES_PER_BIT = 4, RATE = 1e9 / (CYCLES_PER_BIT * CLOCK_NS), FRAME_BYTES = 1500;

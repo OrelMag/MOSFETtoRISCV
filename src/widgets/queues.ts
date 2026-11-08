@@ -7,6 +7,7 @@ import { line, mkChips, plotOf } from './line';
 import { slider } from './mosparts';
 import '../styles/line.css';
 import '../styles/queues.css';
+import { groupNum } from '../sim/numfmt';
 
 const btn = (label: string, title: string, f: () => void, cls = 'btn sm'): HTMLButtonElement => {
   const b = h('button', { class: cls, type: 'button', title }, label) as HTMLButtonElement;
@@ -96,7 +97,7 @@ export function lossWidget(): Widget {
     line(plot, xs, xs.map((x) => Math.log10(cubicIn(x))), 'ln-s real');
     const pipe = (1e9 * rtt) / (1500 * 8), pR = 1.5 / pipe ** 2, K = Math.cbrt((pipe * 0.3) / 0.4);
     plot.layer.append(s('line', { x1: plot.X(0), x2: plot.X(9), y1: plot.Y(Math.log10(pipe)), y2: plot.Y(Math.log10(pipe)), class: 'qu-mark' }), s('text', { x: plot.X(0.1), y: plot.Y(Math.log10(pipe)) - 4, class: 'qu-lab' }, 'the pipe of 1 Gb/s'));
-    chips.set(0, Math.round(pipe).toLocaleString('en'), 'packets in the pipe, 1 Gb/s');
+    chips.set(0, groupNum(Math.round(pipe)), 'packets in the pipe, 1 Gb/s');
     chips.set(1, `1 in ${(1 / pR).toExponential(1)}`, 'loss Reno can bear and fill it');
     chips.set(2, `${((pipe / 2) * rtt).toFixed(0)} s`, 'Reno\'s climb back after one loss');
     chips.set(3, `${K.toFixed(1)} s`, 'CUBIC\'s climb back, K');

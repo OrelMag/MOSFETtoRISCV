@@ -15,9 +15,10 @@ import { stats } from '../sim/stats';
 import { berWidget, convEncApi, convEncScene, interleaveWidget, RS_CHECK, rsApi, rsScene, VIT_FLIPS, vitApi, viterbiScene } from '../widgets/codes';
 import type { Chapter, Step } from './types';
 import { numOf } from './order';
+import { groupNum } from '../sim/numfmt';
 
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US');
+const n0 = (x: number) => groupNum(Math.round(x));
 const db = (x: number, d = 1) => `${x.toFixed(d)} dB`;
 const nf = (x: number, d = 1) => x.toFixed(d);
 const periodOf = (d: Parameters<typeof flatten>[0]) => analyzeTiming(flatten(d))?.period ?? 0;
@@ -117,7 +118,7 @@ const codeSteps: Step[] = [
       <p>A fair comparison needs one axis, and <a href="#/c/noise/4">E<sub>b</sub>/N<sub>0</sub></a> is it, energy per <em>data</em> bit over the noise density. What a code adds is its rate: a code of rate R spends that energy on 1/R channel bits, each of which sees R · E<sub>b</sub>/N<sub>0</sub>: its raw error rate is Q(√(2R · E<sub>b</sub>/N<sub>0</sub>)), so a rate ½ code starts 3 dB behind. Forgetting this makes every code look better than it is. <em>Coding gain</em> is what is left: how much less signal the coded link needs for the same decoded error rate.</p>
       <p>At 10<sup>−5</sup> uncoded BPSK (the ±1 signalling of the noise chapter) needs ${db(un, 2)}. SEC-DED(72, 64) gains ${db(gain(se))} and RS(255, 223) ${db(gain(rs))}, at high rates and with hard decisions. K = 7 gains ${db(gain(hard))} with hard decisions and ${db(gain(soft))} with soft ones, for half the rate. Each dB is bandwidth or range you did not have to buy: at ${db(gain(soft))}, a link needs about a third of the transmit power, or reaches ${Math.sqrt(10 ** (gain(soft) / 10)).toFixed(1)} times as far in free space.</p>
       <p><strong>The limit.</strong> At rate ½, Shannon's bound says errors can be made as rare as you like above ${Math.abs(lim) < 0.005 ? '0 dB' : db(lim, 2)}, or ${db(limB, 2)} if the only inputs are ±1, and at any rate no lower than ${db(shannonDb(1e-6), 2)}. K = 7 soft at 10<sup>−5</sup> sits ${db(ebn0For(soft, T) - limB)} above it. Modern codes close that gap with long blocks and iterative decoding, as the next steps show. <strong>Whether to code at all</strong> is still the trade of <a href="#/c/errors/8">Correcting instead of asking</a>: redundancy against repeating, and a good link with a short round trip often should simply ask again.</p>
-      <div class="try">Slide to 4 dB and press <strong>Run the decoder</strong>. Each decoder runs until it has counted 100 errors or 400,000 bits. The hard dot lands well below its bound, which is loose this high up. Soft errors are rare here (the curve says about 2 in 100,000 bits), so its run ends on the bit limit with only a handful of errors, and its dot lands within a small factor of the curve, above it by the quarter of a dB that three-bit levels lose and by the noise of so small a count. At 5 dB or more it sees none: the dot turns hollow and marks 1 in the number of bits, a ceiling, not a measurement.</div>`;
+      <div class="try">Slide to 4 dB and press <strong>Run the decoder</strong>. Each decoder runs until it has counted 100 errors or 400 000 bits. The hard dot lands well below its bound, which is loose this high up. Soft errors are rare here (the curve says about 2 in 100 000 bits), so its run ends on the bit limit with only a handful of errors, and its dot lands within a small factor of the curve, above it by the quarter of a dB that three-bit levels lose and by the noise of so small a count. At 5 dB or more it sees none: the dot turns hollow and marks 1 in the number of bits, a ceiling, not a measurement.</div>`;
     },
     widget: () => berWidget(),
     more: {

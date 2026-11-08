@@ -10,6 +10,7 @@ import { bgpWidget, dnsWidget, fetchWidget, LAPTOP, networkWidget, onePacketWidg
 import TLS_COSTS from '../crypto/tls/costs.json';
 import type { Chapter } from './types';
 import { numOf } from './order';
+import { groupNum } from '../sim/numfmt';
 
 const ms1 = (x: number) => x.toFixed(x >= 100 ? 0 : 1);
 const NET = new Internet();
@@ -28,7 +29,7 @@ const NODES = Math.max(...ROUTERS.map((_, r) => NET.tableOf(r).trie.length)), F1
 export const VIA_KESTREL = [[R.r2, R.k1], [R.k1, R.k2], [R.k2, R.k3], [R.k3, R.t1]].reduce((a, [x, y]) => a + LINKS[linkBetween(x, y)].km, 0);
 export const VIA_ORCHARD = [[R.r2, R.o1], [R.o1, R.o2], [R.o2, R.t1]].reduce((a, [x, y]) => a + LINKS[linkBetween(x, y)].km, 0);
 const DETOUR = VIA_KESTREL - VIA_ORCHARD;
-const km = (x: number) => x.toLocaleString('en-US').replace(/,/g, ' ');
+const km = (x: number) => groupNum(x);
 const DNS = new Resolver(NET).resolve(LAPTOP, SITE, 0);
 const READS = J.hops[0].result.reads;
 const ENGINE_NS = engineMs(FRAME, READS) * 1e6;

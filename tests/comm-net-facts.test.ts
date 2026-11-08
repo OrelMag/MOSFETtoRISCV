@@ -6,8 +6,9 @@ import { icmpEchoFrame, ip4, onesSum } from '../src/comm/netframes';
 import { PING_DATA, pingApp } from '../src/comm/stack/apps';
 import NET from '../src/comm/stack/netcosts.json';
 import { A_ECHO_RX, A_ECHO_TX, B_BUSY_PERCENT, B_ECHO, BYTES_PERCENT, dmaRx, dmaTx, MIN_FRAME_TIME, PING_DMA, PING_FRAME, PING_FRAME_TIME, PING_SERIAL, roundTrip } from '../src/comm/stack/netfacts';
+import { groupNum } from '../src/sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 
 describe('the ping frame', () => {
   it('is the 74 bytes the program sends: 14 + 20 + 8 + 32', () => {

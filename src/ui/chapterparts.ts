@@ -9,7 +9,7 @@ import { h, icon } from './dom';
 export interface PartsNavState {
   /** Parts the learner opened or closed by hand, against the default (only the current part open). */
   open: Map<number, boolean>;
-  /** The whole list folded by hand (else open on a desk, folded on a phone). */
+  /** The whole list folded by hand (else as the learner left it, folded to begin with). */
   folded: boolean | null;
   /** The part the list was last drawn for (a new current part opens itself). */
   at: number;
@@ -17,8 +17,10 @@ export interface PartsNavState {
 
 export const newPartsNavState = (): PartsNavState => ({ open: new Map(), folded: null, at: -2 });
 
-/** Folded to begin with on a phone, and where a list beside the prose would leave it too little height. */
-const startFolded = (): boolean => typeof matchMedia === 'function' && matchMedia('(max-width: 760px), (max-height: 799px)').matches;
+const OPEN_KEY = 'mosfet2riscv:partsOpen';
+/** Folded to begin with everywhere (open, the list took up to half the pane's height from the prose); a learner who opens it keeps it open, in every long chapter. */
+const storedOpen = (): boolean => { try { return localStorage.getItem(OPEN_KEY) === '1'; } catch { return false; } };
+const storeOpen = (o: boolean): void => { try { localStorage.setItem(OPEN_KEY, o ? '1' : '0'); } catch { /* private window: this visit only */ } };
 
 /**
  * The parts block for the chapter header, or null for a chapter without parts. `step` is the step shown (the recap's
@@ -87,7 +89,7 @@ export function partsNav(
       type: 'button', class: `pstep recap${onRecap ? ' cur' : ''}`, ...(onRecap ? { 'aria-current': 'step' } : {}), onclick: () => go(recap),
     }, h('span', { class: 'pn' }, '↳'), h('span', { class: 'pt' }, 'Recap')) : null);
 
-  const folded = st.folded ?? startFolded();
+  const folded = st.folded ?? !storedOpen();
   const wrap = h('details', { class: 'parts-wrap', ...(folded ? {} : { open: '' }) },
     h('summary', { class: 'parts-status' }, h('span', null, status), icon('chevD', 14)), list);
   // keep the current step in view in a list that scrolls (not while the list is folded: nothing is measured then)
@@ -101,9 +103,9 @@ export function partsNav(
       : Math.max(0, el.offsetTop - list.offsetTop - list.clientHeight / 2 + el.offsetHeight / 2);
   };
   wrap.addEventListener('toggle', () => {
-    // only a fold the learner made counts: the element's own opening on creation is the default
-    if (wrap.open === !startFolded()) st.folded = null;
-    else st.folded = !wrap.open;
+    // the element's own opening on creation writes the stored choice back, harmlessly
+    st.folded = !wrap.open;
+    storeOpen(wrap.open);
     if (wrap.open) reveal();
   });
   requestAnimationFrame(reveal);

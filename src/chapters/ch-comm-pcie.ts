@@ -11,9 +11,10 @@ import { CRC5_POLY, DEVICE_DESCRIPTOR, BIT_CLOCKS, MAX_PACKET, UsbBench, UsbDevi
 import { usbCosts } from '../lib/usb';
 import { usbApi, usbPacketWidget, usbScene } from '../widgets/usb';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
-const n0 = (x: number) => x.toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(x);
 
 // ---- numbers from the model ------------------------------------------------------------------------------------------------
 /** Clocks to train and bring up flow control, and from a command to its Ack / its completion. */

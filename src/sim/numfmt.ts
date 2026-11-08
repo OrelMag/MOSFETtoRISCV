@@ -19,3 +19,6 @@ export const groupFixed = (x: number, d: number): string => group(x.toFixed(d));
 /** Undo `groupDigits` (and plain / no-break spaces and commas used as separators) in text that is read back as a number. */
 const SEPARATORS = new RegExp('[' + THIN + String.fromCharCode(0xa0, 0x2009) + ' ,](?=' + String.fromCharCode(92) + 'd{3}(?!' + String.fromCharCode(92) + 'd))', 'g');
 export const ungroupDigits = (s: string): string => s.replace(SEPARATORS, '');
+
+/** A number as `toLocaleString('en')` rounds it (up to 3 decimals), grouped by `groupDigits`'s rule: only from 5 integer digits. */
+export const groupNum = (x: number | bigint): string => group(x.toLocaleString('en-US', { useGrouping: false }));

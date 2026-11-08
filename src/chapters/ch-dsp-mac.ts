@@ -14,8 +14,9 @@ import {
 } from '../widgets/dspmac';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const F3 = (n: string) => MAC_INSTRS.find((i) => i.name === n)!.funct3!.toString(2).padStart(3, '0');
 // headroom, from the model: full-scale instructions that fit (the next one wraps), and the bits a 64-tap sum of full-scale products needs
 const MAC_FIT = Number(fitsBeforeWrap(macProduct(MAC_F3.mac, FULL_SCALE, FULL_SCALE)));

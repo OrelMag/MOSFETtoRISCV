@@ -342,21 +342,38 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 /* ---------- chapter layout ---------- */
 .layout {
   display: grid; height: 100%;
-  grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(400px * var(--prose-scale, 1))) 1fr minmax(260px, 340px);
+  grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr minmax(260px, 340px);
+  /* the prose column grows with the window; the learner can drag it wider (ui/splitter.ts: .sized, --narr-w), never past the room the stage and inspector keep */
+  --narr-auto: clamp(calc(400px * var(--prose-scale, 1)), 28vw, calc(520px * var(--prose-scale, 1))); --narr-room: 880px; --narr-max: var(--narr-auto);
 }
-.layout.no-inspector { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(400px * var(--prose-scale, 1))) 1fr 0; }
+.layout.sized { --narr-max: min(var(--narr-w), calc(100% - var(--narr-room))); }
+.layout.no-inspector { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr 0; --narr-room: 540px; }
 .layout.no-inspector .inspector { display: none; }
 /* A laptop (1180–1440 px): narrower side panes, so the stage gets the room (at 1280 it was 540 px, and a scene's
    own panels took most of that). */
 @media (min-width: 1181px) and (max-width: 1440px) {
-  .layout { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(340px * var(--prose-scale, 1))) 1fr minmax(260px, 300px); }
-  .layout.no-inspector { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(340px * var(--prose-scale, 1))) 1fr 0; }
+  .layout { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr minmax(260px, 300px); --narr-auto: clamp(calc(340px * var(--prose-scale, 1)), 28vw, calc(400px * var(--prose-scale, 1))); --narr-room: 840px; }
+  .layout.no-inspector { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr 0; --narr-room: 540px; }
 }
 
 .narrative {
   border-right: 1px solid var(--border); background: var(--surface);
   display: flex; flex-direction: column; min-height: 0;
 }
+.narrative { position: relative; z-index: 3; }
+/* The divider between the text and the stage (ui/splitter.ts): a 9 px strip over the stage's left edge, so it never sits on the text's scrollbar. */
+.narr-split { position: absolute; top: 0; bottom: 0; right: -9px; width: 9px; cursor: col-resize; touch-action: none; }
+.narr-split::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: transparent; transition: background 0.12s; }
+.narr-split::before { content: ''; position: absolute; left: 3px; top: 50%; height: 36px; width: 3px; margin-top: -18px; border-radius: 2px; background: var(--border-strong); opacity: 0.7; }
+.narr-split:hover::before, .narr-split:focus-visible::before, .narr-split.dragging::before { background: var(--accent); opacity: 1; }
+.narr-split:hover::after, .narr-split.dragging::after { background: var(--accent); }
+.narr-split:focus-visible { outline: none; }
+.narr-split:focus-visible::after { background: var(--accent); width: 3px; }
+.narr-split.dragging { user-select: none; }
+:root:has(.narr-split.dragging) { cursor: col-resize; user-select: none; }
+@media (max-width: 1180px) { .narr-split { display: none; } }
+@media (pointer: coarse) { .narr-split { width: 40px; right: -28px; } .narr-split::after { left: 28px; } .narr-split::before { left: 31px; } }
+@media print { .narr-split { display: none; } }
 .narrative-head { padding: 18px 22px 10px; border-bottom: 1px solid var(--border); }
 .chapter-kicker { font: 600 12px var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); }
 .chapter-title { font-size: 22px; font-weight: 750; letter-spacing: -0.02em; margin: 2px 0 10px; line-height: 1.2; }
@@ -459,6 +476,17 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .ch-goals ul { margin: 4px 0 2px; padding-left: 1.2em; color: var(--text); }
 .ch-goals li { margin: 0.2em 0; }
 .ch-goals-k, .recap-k, .ch-links-k, .lit-k { font: 600 11px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+/* The goals box on a chapter's first step sits after the step's first paragraph and is one line until opened (remembered per chapter). */
+.ch-goals-btn { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; width: 100%; min-height: 24px; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.ch-goals-btn .ch-goals-k { flex: none; }
+.ch-goals-sum { flex: 1 1 9em; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; }
+.ch-goals-n { flex: none; color: var(--muted); font-size: 12px; }
+.ch-goals-btn svg { flex: none; margin-left: auto; transition: transform 0.15s; }
+.ch-goals.open .ch-goals-sum, .ch-goals.open .ch-goals-n { display: none; }
+.ch-goals.open .ch-goals-btn svg { transform: rotate(180deg); }
+.ch-goals:has(> .ch-goals-btn) { padding-top: 7px; padding-bottom: 7px; }
+.ch-goals ul[hidden] { display: none; }
+@media (pointer: coarse) { .ch-goals-btn { min-height: 40px; } }
 .ch-links { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
 .ch-links-k { margin-right: 2px; }
 .ch-chip {
@@ -2823,11 +2851,11 @@ svg.schematic.lg.lg-h-tap7 .tap-label[data-ts='7'], svg.schematic.lg.lg-h-tap8 .
     cursor: pointer; padding: 12px 0; writing-mode: vertical-rl; font: 600 12px var(--font-ui);
   }
   .inspector.folded .insp-rail:hover { color: var(--text); background: var(--surface-2); }
-  .layout:not(.no-inspector):has(> .inspector.folded) { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(400px * var(--prose-scale, 1))) 1fr 34px; }
+  .layout:not(.no-inspector):has(> .inspector.folded) { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr 34px; --narr-room: 574px; }
   .bench:not(.no-part):has(> .inspector.folded) { grid-template-columns: 270px 1fr 34px; }
 }
 @media (min-width: 1181px) and (max-width: 1440px) {
-  .layout:not(.no-inspector):has(> .inspector.folded) { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), calc(340px * var(--prose-scale, 1))) 1fr 34px; }
+  .layout:not(.no-inspector):has(> .inspector.folded) { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr 34px; --narr-room: 574px; }
 }
 .insp-head { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); }
 .insp-head .tabs { flex: 1; border-bottom: 0; }

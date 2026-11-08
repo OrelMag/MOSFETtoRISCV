@@ -65,8 +65,10 @@
 .cp-node.started .cp-card { fill: var(--accent-soft); }
 .cp-node.solved .cp-card { stroke: var(--good); fill: var(--good-soft); }
 .cp-node.skipped .cp-card { stroke: var(--muted); fill: var(--surface-3); }
-/* faded, but not its focus ring */
-.cp-node.locked > :not(.cp-focus) { opacity: 0.5; }
+/* locked: the card recedes (no fill, a faint border), its text stays readable at --muted, the faintest that passes AA */
+.cp-node.locked .cp-card { fill: none; stroke: var(--border); }
+.cp-node.locked .cp-node-title { fill: var(--muted); font-weight: 500; }
+.cp-node.locked > :not(.cp-focus):not(.cp-card):not(text) { opacity: 0.6; }
 .cp-node.opt .cp-card { stroke-dasharray: 5 3; }
 /* a bug hunt: amber, whatever its status but solved (solved shows green like every level) */
 .cp-node.bug:not(.solved):not(.skipped) .cp-card { stroke: var(--warn); fill: var(--warn-soft); }
@@ -372,4 +374,10 @@ a.th-n:hover, a.th-n:focus-visible { border-color: var(--accent); color: var(--a
 .cp-twin { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); font-size: 13px; }
 .cp-twin b { color: var(--text); }
 .cp-twin .sub { flex: 1 1 220px; margin: 0; }
-@media (pointer: coarse) { .cp-twin .btn { min-height: 40px; } }
+@media (pointer: coarse) {
+  .cp-twin .btn { min-height: 40px; }
+  /* the map page under a finger: Unlock all (its label is the target), a level panel's chips */
+  .cp-unlock { min-height: 40px; padding: 0 10px; }
+  .cp-unlock input { width: 20px; height: 20px; }
+  .cp-chip { min-height: 40px; }
+}
