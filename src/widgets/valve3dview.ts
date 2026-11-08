@@ -60,27 +60,28 @@ export function valveView(): Widget {
   }
   function paint(): void { const p = pose(); stage.paint(valveFigure(p, palette(), spec()), valveAnchors(p)); }
 
-  const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), hintP = h('p', { class: 'r3-hint' });
+  const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv vl-kv' }), hintP = h('p', { class: 'r3-hint' });
   stage.chips.append(chip);
 
   function readout(): void {
     const sp = spec(), t = target(), vo = volts(), moving = !settled();
-    const rows: [string, string][] = [['Gate line pressure', `${(vin * vo).toFixed(2)} V (${pct(vin)} of the supply)`], ['Cracking pressure (preload ÷ area)', `${(cracking(sp) * vo).toFixed(2)} V`]];
+    // Units sit in the row names so each value stays one short line beside them (a wrapped value read as two rows).
+    const rows: [string, string][] = [['Gate line pressure (of the supply)', `${(vin * vo).toFixed(2)} V · ${pct(vin)}`], ['Cracking pressure (preload ÷ area)', `${(cracking(sp) * vo).toFixed(2)} V`]];
     const held = swept(sp, open.n * TRAVEL) / swept(sp, TRAVEL);
     if (mode === 'one') {
       const f = fetWater(vin * VDD, VDD);
-      rows.push(['Spring force', `${pct(springForce(sp, t.n * TRAVEL) / (preload(sp) + rate(sp) * TRAVEL))} of full`], ['Plunger lift', `${pct(t.n)} of travel`],
+      rows.push(['Spring force (of full)', pct(springForce(sp, t.n * TRAVEL) / (preload(sp) + rate(sp) * TRAVEL))], ['Plunger lift (of travel)', pct(t.n)],
         ['Flow (tank full)', f.kind === 'cut' ? '0, shut' : `${f.id.toFixed(0)} µA, ${f.kind === 'sat' ? 'choked' : 'linear'}`]);
       chip.textContent = moving ? 'Moving: diaphragm travelling' : t.n <= 0 ? 'Seated: below cracking pressure' : t.n >= 1 ? 'Fully open' : 'Cracked open';
       chip.className = `r3-chip ${moving ? 'warn' : t.n <= 0 ? '' : t.n >= 1 ? 'good' : 'warn'}`;
     } else {
       const st = columnStep(out, col(), 0);
-      rows.push(['PMOS valve lift', `${pct(t.p)} of travel`], ['NMOS valve lift', `${pct(t.n)} of travel`], ['Output (column) level', `${(out * vo).toFixed(2)} V`],
+      rows.push(['PMOS valve lift (of travel)', pct(t.p)], ['NMOS valve lift (of travel)', pct(t.n)], ['Output (column) level', `${(out * vo).toFixed(2)} V`],
         ['Straight through, tank to drain', pct(wasted(st))]);
       chip.textContent = moving ? 'Switching: diaphragms moving' : out > 0.95 ? 'Output 1: pulled up' : out < 0.05 ? 'Output 0: pulled down' : 'Between: valves part-open';
       chip.className = `r3-chip ${!moving && (out > 0.95 || out < 0.05) ? 'good' : 'warn'}`;
     }
-    rows.push(['Gate-line flow', Math.abs(gateQ) < 0.005 ? '0 (dead end, at rest)' : `${gateQ > 0 ? '+' : '−'}${Math.abs(gateQ).toFixed(2)} strokes/s`], ['Held by the diaphragm', `${pct(held)} of a stroke`]);
+    rows.push(['Gate-line flow (strokes/s)', Math.abs(gateQ) < 0.005 ? '0, at rest' : `${gateQ > 0 ? '+' : '−'}${Math.abs(gateQ).toFixed(2)}`], ['Held by the diaphragm (of a stroke)', pct(held)]);
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
     hintP.textContent = mode === 'one'
       ? (vin * VDD < VT ? `Below ${VT} V the gate pressure is less than the spring’s preload: the plunger stays on its seat.` : 'Past the cracking pressure the lift grows in step with the gate pressure.')

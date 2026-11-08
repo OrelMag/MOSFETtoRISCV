@@ -11,3 +11,5 @@
   --vl-jet: light-dark(#f4b13a, #ffd070);
 }
 .vl-gate output { width: 64px; }
+/* Each value on one line: the names carry the units, so the values are short and a phone squeezes the names instead. */
+.vl-kv .v { white-space: nowrap; }
