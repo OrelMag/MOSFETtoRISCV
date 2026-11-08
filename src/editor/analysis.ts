@@ -411,11 +411,14 @@ class Analysis {
    * A small mark on every part input left open (it reads X). Drawn inside the part's own group,
    * in its coordinates, so it moves with the part during a drag.
    */
-  private drawHints(): void {
+  drawHints(): void {
     const svg = this.ed.view.svg;
     svg.querySelectorAll('.ed-open-in').forEach((e) => e.remove());
     const doc = this.ed.doc;
-    for (const o of this.lint().open) {
+    const lint = this.lint();
+    // a part nothing is wired to yet: its open inputs are a hint (lint.ts), drawn neutral until they are a warning
+    const soft = new Set(lint.diags.filter((d) => d.level === 'hint' && /not connected/.test(d.msg)).flatMap((d) => d.parts ?? []));
+    for (const o of lint.open) {
       const p = doc.parts.find((q) => q.id === o.part);
       const def = p && this.ed.defOf(p);
       const g = p && svg.querySelector(`[data-part="${CSS.escape(p.id)}"]`);
@@ -426,8 +429,9 @@ class Analysis {
       } catch {
         continue;
       }
-      const m = s('g', { class: 'ed-open-in', transform: `translate(${pos[0]},${pos[1]})` });
-      m.append(s('title', null, `${o.part}.${o.port} is not connected: it reads X`), s('circle', { r: 0.32 }), s('path', { d: 'M-0.14,-0.14 L0.14,0.14 M0.14,-0.14 L-0.14,0.14' }));
+      const hint = soft.has(o.part);
+      const m = s('g', { class: hint ? 'ed-open-in hint' : 'ed-open-in', transform: `translate(${pos[0]},${pos[1]})` });
+      m.append(s('title', null, hint ? `${o.part}.${o.port} is not connected yet (hint): it reads X` : `${o.part}.${o.port} is not connected: it reads X`), s('circle', { r: 0.32 }), ...(hint ? [] : [s('path', { d: 'M-0.14,-0.14 L0.14,0.14 M0.14,-0.14 L-0.14,0.14' })]));
       g.append(m);
     }
   }
@@ -545,6 +549,7 @@ export function noteChecked(ed: Editor): void {
   if (hasRun.has(ed)) return;
   hasRun.add(ed);
   ed.view.setDiags(ed.diags);
+  of.get(ed)?.drawHints();
   ed.props.update(true);
 }
 
