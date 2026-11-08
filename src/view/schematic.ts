@@ -435,7 +435,8 @@ export class SchematicView {
       // a box whose symbol is one glyph (a comparator's "=") is named by its instance label ("wa = ra1") when it has one
       // a constant's value is planned as a name of its own kind (legible.ts isConstantBox), and always titled with its name and value
       const isConst = !!own && isConstantBox(inst.def.symbol.kind, inst.def.ports.length, own.textContent ?? undefined, inst.def.prim);
-      if (isConst) g.append(s('title', {}, `${inst.label ?? inst.name} = ${own!.textContent!.trim()}`));
+      // (also a one-character constant, which is not drawn larger: the title is for all of them)
+      if (own && isConstantBox(inst.def.symbol.kind, inst.def.ports.length, own.textContent ?? undefined, inst.def.prim, 1)) g.append(s('title', {}, `${inst.label ?? inst.name} = ${own.textContent!.trim()}`));
       const nm = isConst ? own!.textContent!.trim() : nameEligible(own?.textContent, geo.w, geo.h) ? own!.textContent!.trim() : own && own.textContent!.trim().length === 1 && inst.label && nameEligible(inst.label, geo.w, geo.h) ? inst.label.trim() : null;
       if (nm) {
         const rot = nameRotated(geo.w, geo.h), cx = geo.w / 2, cy = geo.h / 2;

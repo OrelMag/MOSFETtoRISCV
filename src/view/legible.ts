@@ -52,8 +52,8 @@ export function nameEligible(label: string | null | undefined, w: number, h: num
  * A constant: a box with one output and a value as its label (a CSR unit's k_mstatus, zero32). Its value is drawn at a size of
  * its own (planLayouts: at least MIN_TEXT_PX, over its capsule) where nothing is in the way, never named like a block.
  */
-export const isConstantBox = (kind: string, ports: number, label: string | undefined, prim?: string): boolean =>
-  kind === 'box' && prim !== 'alias' && ports === 1 && (label?.trim().length ?? 0) >= 2;
+export const isConstantBox = (kind: string, ports: number, label: string | undefined, prim?: string, minChars = 2): boolean =>
+  kind === 'box' && prim !== 'alias' && ports === 1 && (label?.trim().length ?? 0) >= minChars;
 
 /** A tall narrow block (a pipeline register) gets its name turned. */
 export const nameRotated = (w: number, h: number): boolean => h > w * 3;
