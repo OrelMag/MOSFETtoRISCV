@@ -217,6 +217,18 @@ export const MODELS_3D: readonly Model3d[] = [
     files: ['valve3d', 'valve3dview', 'valve3dparts'], factory: 'valve3d', codex: ['cmos', 'inverter'],
     open: () => import('./valve3d').then((m) => m.valve3d()),
   },
+  {
+    id: 'ccd', title: 'A three-phase CCD', category: 'devices', chapter: 'sensors', step: 1,
+    summary: 'Charge packets march a gate per phase down the CCD42-40\'s columns to the output amplifier; a CTE slider shows the smear.',
+    files: ['ccd3d', 'ccd3dview', 'ccd3dparts'], factory: 'ccd3d', codex: ['ccd', 'cds', 'fullwell'],
+    open: () => import('./ccd3d').then((m) => m.ccd3d()),
+  },
+  {
+    id: 'pixel4t', title: 'A CMOS pixel, cut open', category: 'devices', chapter: 'sensors', step: 2,
+    summary: 'A 2.4 µm back-illuminated 4T pixel: each colour stops at its own depth, electrons fill the photodiode, a CDS read runs.',
+    files: ['pixel4t3d', 'pixel4t3dview', 'pixel4t3dparts'], factory: 'pixel4t3d', codex: ['aps', 'cds', 'qe', 'fullwell'],
+    open: () => import('./pixel4t3d').then((m) => m.pixel4t3d()),
+  },
 ];
 
 export const modelById = (id: string): Model3d | undefined => MODELS_3D.find((m) => m.id === id);

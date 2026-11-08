@@ -1,0 +1,13 @@
+/* ---------- The three-phase CCD (widgets/ccd3dview.ts): materials, scoped under .m3d ---------- */
+.m3d {
+  --ccd-si: light-dark(#8f98b8, #7880a0);
+  --ccd-well: light-dark(#2a4a8a, #5a86d8);
+  --ccd-hot: light-dark(#e8a020, #ffc04a);
+}
+.ccd-plot { display: block; width: 100%; height: auto; margin-bottom: 4px; }
+.ccd-plot .ax { stroke: var(--border-strong); stroke-width: 1; }
+.ccd-plot .want { fill: none; stroke: var(--border-strong); stroke-dasharray: 3 2; }
+.ccd-plot .got { fill: var(--m3-charge); }
+.ccd-plot text { font: 10.5px var(--font-mono); fill: var(--muted); }
+.ccd3d .r3-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 24px; align-items: start; }
+@container (max-width: 560px) { .ccd3d .r3-stage { aspect-ratio: 1 / 1; } }

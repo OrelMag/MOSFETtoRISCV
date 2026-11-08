@@ -9,6 +9,9 @@ import {
 } from '../phys/imagesensor';
 import { groupNum } from '../sim/numfmt';
 import { adcApi, adcScene, ccdWidget, colourWidget, lightWidget, noiseWidget, pixelApi, pixelScene, pixelWidget, shutterWidget } from '../widgets/sensors';
+import { ccd3d } from '../widgets/ccd3d';
+import { withModel } from '../widgets/modelhost';
+import { pixel4t3d } from '../widgets/pixel4t3d';
 import { numOf } from './order';
 import type { Chapter } from './types';
 
@@ -84,7 +87,7 @@ export const chSensors: Chapter = {
         <p>The numbers here are the Teledyne e2v CCD42-40, a scientific full-frame sensor: ${g(CCD42_40.cols)} × ${g(CCD42_40.rows)} pixels of ${CCD42_40.pitch} µm, three-phase image and register clocks, ${g(CCD42_40.fullWell)} e⁻ per pixel, ${CCD42_40.cg} µV per electron at the output. The rows shift down into a serial register, which shifts along to the output amplifier, the only place a charge becomes a voltage. Each gate is about ${n1(CCD42_40.gateLength, 1)} µm long: that is the pixel over three, as the datasheet gives no gate length.</p>
         <p>Every transfer leaves a little behind. The charge-transfer efficiency (CTE) is 99.9999 % per transfer in the image area and 99.9993 % in the register, and the far corner's charge makes ${g(4096)} transfers: ${n1(ccdRetained(2047, 2047) * 100, 1)} % of it arrives. At 99 % it would be gone. Reading the frame through one amplifier takes ${n1(ccdReadTime(3e6), 1)} s at 3 MHz, or ${n1(ccdReadTime(20e3) / 60, 1)} minutes at the 20 kHz where the noise is lowest (${CCD42_40.readNoise} e⁻). Consumer interline CCDs such as the Sony ICX285 (${ICX285.pitch} µm) clock their vertical registers in four phases instead, two gates high at a time: try both.</p>`;
       },
-      widget: () => ccdWidget(),
+      widget: () => withModel(ccdWidget(), ccd3d()),
       challenge: {
         kind: 'quiz', question: 'A CCD with 99.99 % CTE moves a corner pixel through 4000 transfers. About how much of its charge reaches the amplifier?',
         options: ['67 %', '99.99 %', '96 %', '40 %'],
@@ -102,7 +105,7 @@ export const chSensors: Chapter = {
         <p>One readout of a row: RST pulses, the column samples FD's reset level (SHR); TX pulses and the photodiode's electrons pull FD down; the column samples again (SHS). The reset leaves FD randomly off its nominal level, √(kTC)/q = ${n1(ktcNoise(C_FD_FF), 1)} e⁻ rms here, and the error stays until the next reset. Both samples carry it, so their difference does not. This is <strong>correlated double sampling</strong> (CDS). The pinned photodiode is what makes it possible: it empties completely through TX, so the reset happens before the charge arrives (Fossum and Hondongwa, 2014).</p>
         <div class="try">Press "Another reset" a few times: the signal sample alone wanders by tens of electrons, the CDS result stays put.</div>`;
       },
-      widget: () => pixelWidget(),
+      widget: () => withModel(pixelWidget(), pixel4t3d()),
       challenge: {
         kind: 'quiz', question: 'Why must the reset level be sampled before TX, not after?',
         options: ['After TX the charge is on FD, and a new reset would wipe it, with a new kTC error', 'TX would discharge the column line', 'The source follower needs time to warm up', 'Sampling after TX doubles the signal'],
