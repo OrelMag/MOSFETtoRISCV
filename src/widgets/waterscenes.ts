@@ -54,13 +54,14 @@ export function loopScene(get: () => LoopState): WaterScene {
       p.pipe([[2.25, 0.5, 0], [2.6, 0.5, 0], [2.6, -1.6, 0], [-3.8, -1.6, 0], [-3.8, 2.95, 0], [-2.6, 2.95, 0], [-2.6, 2.5, 0]]);
       p.valve([-1.0, 0.5, 0], vA, P.pmos);
       p.valve([1.3, -1.6, 0], vB, P.pmos);
-      // Lamp = wheel + bulb, glowing with the power; a second one in the vertical run when there are two lamps.
-      const glow = Math.min(1, m.power / 0.15) * (st.lamps === 2 ? 1 : 1);
+      // Lamp = wheel + bulb, glowing with the power it takes (m.power is per lamp: two in a row carry one current and drop
+      // equal voltages, so they glow alike); a second one in the vertical run when there are two lamps.
+      const glow = Math.min(1, m.power / 0.15), lit = P.lamp.map((c) => c * glow) as [number, number, number];
       p.wheel([1.0, 0.5, 0], ang);
-      p.sphere([1.0, 1.1, 0], 0.13, P.lamp, P.lamp.map((c) => c * glow) as [number, number, number]);
+      p.sphere([1.0, 1.1, 0], 0.13, P.lamp, lit);
       if (st.lamps === 2) {
         p.wheel([2.6, -0.55, 0], ang);
-        p.sphere([3.1, -0.55, 0], 0.13, P.lamp, P.lamp.map((c) => c * Math.min(1, m.power / 0.15 * 4)) as [number, number, number]);
+        p.sphere([3.1, -0.55, 0], 0.13, P.lamp, lit);
       }
       // The pump: a wheel on a blue plate, turning with the current.
       p.box([-1.4, -1.6, -0.22], [0.9, 0.9, 0.1], P.nmos);

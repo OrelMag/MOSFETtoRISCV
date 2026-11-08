@@ -6,12 +6,27 @@ import {
   columnSettle, columnStep, columnWords, COLUMN_VT, faucetOpen, fetWater, fetWords, FET_PIPE_R, FET_PINCH_MIN_R, loopWater, LOOP_RANGE, openings, pinchRadius, pointAlong, polyLength, wasted, weakCapVolts,
   type ColumnIn,
 } from '../src/widgets/water';
-import { alongQuat } from '../src/widgets/waterkit';
+import { alongQuat, Parts, type Palette } from '../src/widgets/waterkit';
+import { loopScene } from '../src/widgets/waterscenes';
 import { quatRotate } from '../src/gl/math';
 
 const col = (o: Partial<ColumnIn> = {}): ColumnIn => ({ vin: 0, short: false, weak: false, ...o });
 
 describe('water: the loop', () => {
+  it('lamps in series glow alike, at the power each lamp takes', () => {
+    const c = (i: number): [number, number, number] => [i / 20, 0.4, 0.4];
+    const P: Palette = { water: c(1), drop: c(2), pipe: c(3), dark: c(4), pmos: c(5), nmos: c(6), lamp: [0.9, 0.8, 0.3], wood: c(7), glass: c(8), sky: c(9), ground: c(10), key: c(11) };
+    for (const lamps of [1, 2] as const) for (const volts of [0.5, 1.5, 3]) for (const ohms of [5, 10, 30, 45]) {
+      const st = { closed: true, cut: false, lamps, volts, ohms }, p = new Parts(P);
+      loopScene(() => st).build(p);
+      const bulbs = p.list.filter((x) => x.kind === 'sph' && x.color === P.lamp);
+      expect(bulbs).toHaveLength(lamps);
+      const want = Math.min(1, loopWater(st).power / 0.15);
+      for (const b of bulbs) expect(b.emissive![0] / P.lamp[0]).toBeCloseTo(want, 9);
+    }
+  });
+
+
   it('shares the widget\u2019s numbers', () => {
     const on = loopWater({ closed: true, cut: false, lamps: 1 });
     expect(on.amps).toBeCloseTo(loopAmps(1), 12);
