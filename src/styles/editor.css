@@ -495,8 +495,6 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
   .sandbox:not(.sb-levelmode) .sb-mid { flex: 1 0 40vh; min-height: 40vh; }
   .sandbox:not(.sb-levelmode) .sb-bottom { overflow-y: visible; flex: none; }
   .sb-chal-body { max-height: 30vh; }
-  /* many switches or keys inside: the I/O bar scrolls in its own band instead of pushing the circuit down */
-  .sb-iobar { max-height: 24vh; overflow-y: auto; }
   /* the run bar wraps to two rows here: it keeps them, the canvas takes what is left */
   .sb-center > .sb-controls { flex: none; }
   .sb-props { border-left: 0; border-top: 1px solid var(--border); }
@@ -519,6 +517,8 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
   .sb-bottom .la-head { flex-wrap: wrap; row-gap: 2px; }
   .sb-bottom .la-head .la-hint, .sb-bottom .la-head .spacer { display: none; }
   .sb-bottom .la-names { width: 110px; }
+  /* many switches or keys inside: the I/O bar scrolls in its own band instead of pushing the circuit down */
+  .sb-iobar { max-height: 24vh; overflow-y: auto; }
 }
 
 /* ---------- analysis: probes, timing panel, critical path, lint hints (analysis.ts) ---------- */
