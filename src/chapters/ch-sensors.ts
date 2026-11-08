@@ -9,6 +9,8 @@ import {
 } from '../phys/imagesensor';
 import { groupNum } from '../sim/numfmt';
 import { adcApi, adcScene, ccdWidget, colourWidget, lightWidget, noiseWidget, pixelApi, pixelScene, pixelWidget, shutterWidget } from '../widgets/sensors';
+import { withModel } from '../widgets/modelhost';
+import { pixel4t3d } from '../widgets/pixel4t3d';
 import { numOf } from './order';
 import type { Chapter } from './types';
 
@@ -102,7 +104,7 @@ export const chSensors: Chapter = {
         <p>One readout of a row: RST pulses, the column samples FD's reset level (SHR); TX pulses and the photodiode's electrons pull FD down; the column samples again (SHS). The reset leaves FD randomly off its nominal level, √(kTC)/q = ${n1(ktcNoise(C_FD_FF), 1)} e⁻ rms here, and the error stays until the next reset. Both samples carry it, so their difference does not. This is <strong>correlated double sampling</strong> (CDS). The pinned photodiode is what makes it possible: it empties completely through TX, so the reset happens before the charge arrives (Fossum and Hondongwa, 2014).</p>
         <div class="try">Press "Another reset" a few times: the signal sample alone wanders by tens of electrons, the CDS result stays put.</div>`;
       },
-      widget: () => pixelWidget(),
+      widget: () => withModel(pixelWidget(), pixel4t3d()),
       challenge: {
         kind: 'quiz', question: 'Why must the reset level be sampled before TX, not after?',
         options: ['After TX the charge is on FD, and a new reset would wipe it, with a new kTC error', 'TX would discharge the column line', 'The source follower needs time to warm up', 'Sampling after TX doubles the signal'],
