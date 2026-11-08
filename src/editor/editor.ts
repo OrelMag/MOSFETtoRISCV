@@ -116,6 +116,7 @@ registerToolbarAction({ id: 'redo', title: 'Redo (Ctrl+Shift+Z)', icon: 'redo', 
 registerToolbarAction({ id: 'zout', title: 'Zoom out', icon: 'minus', order: 30, run: (ed) => ed.view.cam.zoom(1.25) });
 registerToolbarAction({ id: 'zin', title: 'Zoom in', icon: 'plus', order: 40, run: (ed) => ed.view.cam.zoom(0.8) });
 registerToolbarAction({ id: 'fit', title: 'Fit to screen', icon: 'fit', order: 50, run: (ed) => ed.fitView() });
+registerToolbarAction({ id: 'section', title: 'Section: a titled frame around the selection (G), or a new one in the view', menu: 'Add a section', icon: 'frame', order: 55, run: (ed) => ed.tools.groupSel() });
 registerToolbarAction({ id: 'props', title: 'Properties of the selection or the chip', icon: 'sidebar', label: 'Properties', order: 85, levelOnly: true, run: (ed) => ed.toggleProps(), active: (ed) => ed.propsPinned });
 // the sandbox's own: offered while the properties column is folded away (lean: a drawer or a pane beside the canvas is open)
 registerToolbarAction({ id: 'propsfold', title: 'Properties of the selection or the chip (folded while a drawer or a pane is open)', icon: 'sidebar', label: 'Properties', order: 85, run: (ed) => ed.toggleProps(), active: (ed) => ed.propsPinned, shown: (ed) => !ed.level && ed.lean });
@@ -552,7 +553,7 @@ export class Editor {
 
   get selCount(): number {
     const s = this.sel;
-    return (s.parts?.length ?? 0) + (s.pins?.length ?? 0) + (s.wires?.length ?? 0) + (s.labels?.length ?? 0) + (s.comments?.length ?? 0);
+    return (s.parts?.length ?? 0) + (s.pins?.length ?? 0) + (s.wires?.length ?? 0) + (s.labels?.length ?? 0) + (s.comments?.length ?? 0) + (s.sections?.length ?? 0);
   }
 
   onChange(f: () => void): () => void {
@@ -648,7 +649,7 @@ export class Editor {
     }
     this.sel = prune(this.sel, doc);
     this.view.render(doc, this.defOf);
-    this.emptyEl.hidden = !!this.level || !!doc.hdl || !!(doc.pins.length || doc.parts.length || doc.wires.length || doc.labels.length || doc.comments?.length);
+    this.emptyEl.hidden = !!this.level || !!doc.hdl || !!(doc.pins.length || doc.parts.length || doc.wires.length || doc.labels.length || doc.comments?.length || doc.sections?.length);
     if (!this.emptyEl.hidden) this.emptyText.replaceChildren(...emptyChipText(placeMode(coarsePointer(), matchMedia('(max-width: 760px)').matches)));
     if (!this.emptyEl.hidden) for (const b of this.emptyEl.querySelectorAll<HTMLElement>('[data-for]')) b.hidden = !actions.some((a) => a.id === b.dataset.for);
     if (switched && this.fitted) this.fitView();
@@ -1467,6 +1468,7 @@ const MOUSE_HELP: [string, string][] = [
   ['☆ on a palette item', 'pin it to Favorites at the top of the palette (★ unpins)'],
   ['Click a selected pointer / double-click', 'jump to the next pointer with that name'],
   ['Double-click a comment', 'edit it'],
+  ['G · right-click ▸ Add a section here', 'a titled frame around the selection (or a new one); drag its border or title to move it with what is inside, a corner to resize it, double-click the title to rename it; Del removes only the frame'],
   ['Click a selected name · double-click a name', 'rename a part or pin where it is drawn'],
   ['Right-click', 'actions for what is under the cursor (or the canvas); on a touch screen, press and hold'],
   ['Drag empty canvas', 'select with a rubber band (Shift: add)'],
@@ -1490,13 +1492,14 @@ function prune(sel: Sel, doc: ChipDoc): Sel {
   };
   const out: Sel = {};
   const parts = keep(sel.parts, doc.parts), pins = keep(sel.pins, doc.pins), wires = keep(sel.wires, doc.wires), labels = keep(sel.labels, doc.labels);
-  const comments = keep(sel.comments, doc.comments ?? []);
+  const comments = keep(sel.comments, doc.comments ?? []), sections = keep(sel.sections, doc.sections ?? []);
   if (parts) out.parts = parts;
   if (pins) out.pins = pins;
   if (wires) out.wires = wires;
   if (labels) out.labels = labels;
   if (comments) out.comments = comments;
+  if (sections) out.sections = sections;
   const same = (a?: string[], b?: string[]) => (a?.length ?? 0) === (b?.length ?? 0);
   return same(out.parts, sel.parts) && same(out.pins, sel.pins) && same(out.wires, sel.wires) && same(out.labels, sel.labels)
-    && same(out.comments, sel.comments) ? sel : out;
+    && same(out.comments, sel.comments) && same(out.sections, sel.sections) ? sel : out;
 }

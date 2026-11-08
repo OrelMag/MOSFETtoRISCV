@@ -22,7 +22,7 @@ import { type WireFlow, wireFlows } from './flowdir';
 import { openOutputs, partBox, pinBody, pinKnob, pointerGeom, portHandles, wireGroups } from './geom';
 import { HopCache } from './hops';
 import {
-  type ChipDoc, COMMENT_LINE, type CommentDoc, commentBox, type DefOf, defaultFace, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
+  type ChipDoc, COMMENT_LINE, type CommentDoc, commentBox, type SectionDoc, sectionCorners, sectionTitleBox, type DefOf, defaultFace, type LabelDoc, type PartDoc, type PinDoc, pinBig, polyline, type WireDoc,
 } from './model';
 import type { Sel } from './ops';
 import { codeGlyph, keyLabel } from './parts';
@@ -84,6 +84,7 @@ export class EditorView {
   private toneKey = '';
 
   private gComments: SVGGElement;
+  private gSections: SVGGElement;
   private gWires: SVGGElement;
   private gFlow: SVGGElement;
   private tokens: FlowTokens;
@@ -99,6 +100,7 @@ export class EditorView {
   private pins = new Map<string, PinEls>();
   private labels = new Map<string, LabelEls>();
   private comments = new Map<string, CommentEls>();
+  private sections = new Map<string, { doc: SectionDoc; g: SVGGElement }>();
   private busLabels: BusLabel[] = [];
   /** Junction dots of each net group (keyed by its wires and their versions), coloured like the wire they sit on. */
   private dots = new Map<string, DotEls[]>();
@@ -137,6 +139,7 @@ export class EditorView {
       <circle cx="0" cy="0" r="0.12" class="grid-dot ed-grid-major"/><path d="M5,0 H0 V5" class="grid-line major"/></pattern>`;
     const L = (cls: string) => s('g', { class: cls });
     this.gComments = L('ed-notes');
+    this.gSections = L('ed-secs');
     this.gWires = L('wires');
     this.gFlow = L('wire-flows');
     const gTokens = L('flow-tokens-layer');
@@ -163,7 +166,7 @@ export class EditorView {
     this.svg.append(defs,
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid)' }),
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid5)' }),
-      this.gComments, this.gWires, this.gFlow, this.gDots, gTokens, this.gHits, this.gParts, this.gPins, this.gLabels, this.gValues, this.gOver);
+      this.gSections, this.gComments, this.gWires, this.gFlow, this.gDots, gTokens, this.gHits, this.gParts, this.gPins, this.gLabels, this.gValues, this.gOver);
     host.append(this.svg);
     this.cam = new Camera(this.svg, host);
     this.cam.vb = { x: -4, y: -4, w: 60, h: 36 };
@@ -280,6 +283,20 @@ export class EditorView {
       this.comments.set(c.id, { doc: c, g });
     }
     for (const [id, e] of this.comments) if (!seenComments.has(id)) { e.g.remove(); this.comments.delete(id); }
+
+    // Sections: frames under the notes; hits come from geom.ts (border and title), never from the drawing.
+    const seenSections = new Set<string>();
+    (doc.sections ?? []).forEach((c, i) => {
+      seenSections.add(c.id);
+      const e = this.sections.get(c.id);
+      if (e && e.doc === c && e.g === this.gSections.children[i]) return;
+      const g = drawSection(c);
+      if (this.sel.sections?.includes(c.id)) g.classList.add('ed-sel');
+      if (e) e.g.remove();
+      this.gSections.insertBefore(g, this.gSections.children[i] ?? null);
+      this.sections.set(c.id, { doc: c, g });
+    });
+    for (const [id, e] of this.sections) if (!seenSections.has(id)) { e.g.remove(); this.sections.delete(id); }
 
     // Wires: polylines follow their ends; a geometry change rechecks the wires on what changed.
     let wiresChanged = prev?.wires !== doc.wires || geomChanged;
@@ -600,6 +617,7 @@ export class EditorView {
       e.g.classList.toggle('ed-warn', d === 'ed-warn');
     }
     for (const [id, e] of this.comments) e.g.classList.toggle('ed-sel', !!this.sel.comments?.includes(id));
+    for (const [id, e] of this.sections) e.g.classList.toggle('ed-sel', !!this.sel.sections?.includes(id));
     for (const e of this.wires.values()) this.paintWire(e, e.cls ? e.cls.split('|')[0] : 'wire');
   }
 
@@ -941,6 +959,10 @@ export class EditorView {
       grow(b.x, b.y);
       grow(b.x + b.w, b.y + b.h);
     }
+    for (const c of doc.sections ?? []) {
+      grow(c.at[0], c.at[1]);
+      grow(c.at[0] + c.size[0], c.at[1] + c.size[1]);
+    }
     for (const poly of this.polys.values()) for (const [x, y] of poly) grow(x, y);
     if (x0 === Infinity) return null;
     return { x: x0 - 3, y: y0 - 3, w: x1 - x0 + 6, h: y1 - y0 + 6 };
@@ -971,6 +993,21 @@ export class EditorView {
       this.cam.apply();
     }
   }
+}
+
+/**
+ * A section: a dashed rounded frame, its title inside the top-left corner, and corner handles shown while it is
+ * selected (editor.css). Its hue, when it has one, colours frame and title (--sec-h).
+ */
+export function drawSection(c: SectionDoc): SVGGElement {
+  const [x, y] = c.at, [w, h] = c.size, t = sectionTitleBox(c);
+  const g = s('g', { class: c.hue === undefined ? 'ed-sec' : 'ed-sec hued', 'data-section': c.id });
+  if (c.hue !== undefined) g.style.setProperty('--sec-h', String(c.hue));
+  g.append(s('rect', { class: 'ed-sec-bg', x, y, width: w, height: h, rx: 0.8 }),
+    s('rect', { class: 'ed-sec-frame', x, y, width: w, height: h, rx: 0.8 }),
+    s('text', { class: 'ed-sec-title', x: t.x + 0.6, y: t.y + COMMENT_LINE - 0.35 }, c.title || 'untitled'));
+  for (const [cx, cy] of sectionCorners(c)) g.append(s('rect', { class: 'ed-sec-handle', x: cx - 0.4, y: cy - 0.4, width: 0.8, height: 0.8, rx: 0.15 }));
+  return g;
 }
 
 /** A comment: its lines on a faint note (the box from commentBox, so hits match the drawing). */

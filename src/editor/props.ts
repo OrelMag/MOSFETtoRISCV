@@ -22,8 +22,8 @@ import { pinKnob, pointerGeom } from './geom';
 import { renamePin } from './chips';
 import { folderOf, newFolderName } from './folders';
 import { removeChip } from './library';
-import { allOnes, type ChipDoc, type CommentDoc, type DisplayKind, type ExitDir, type LabelDoc, type PartDoc, type PartRef, pinBig, type PinDoc, pinValue, type WireDoc } from './model';
-import { deleteSel, flipParts, setComment, setLabel, setPart, setPin, setRef, setWire } from './ops';
+import { allOnes, type ChipDoc, type CommentDoc, type SectionDoc, type DisplayKind, type ExitDir, type LabelDoc, type PartDoc, type PartRef, pinBig, type PinDoc, pinValue, type WireDoc } from './model';
+import { deleteSel, flipParts, sectionContents, setComment, setLabel, setPart, setPin, setRef, setSection, setWire } from './ops';
 import { keyLabel, MAX_RAM_K, MAX_WIDTH, normalizeKey } from './parts';
 import { PUZZLE_MAX_WIDTH } from './puzzleparts';
 import { openChip } from './session';
@@ -92,6 +92,7 @@ export class PropsPanel {
       ...(s.labels ?? []).map((id) => doc.labels.find((p) => p.id === id)),
       ...(s.wires ?? []).map((id) => doc.wires.find((p) => p.id === id)),
       ...(s.comments ?? []).map((id) => doc.comments?.find((p) => p.id === id)),
+      ...(s.sections ?? []).map((id) => doc.sections?.find((p) => p.id === id)),
     ];
     const none = !objs.length;
     const key = JSON.stringify([ed.chipId, s, objs.map(ser), none ? [doc.name, doc.hue, doc.notes, ser(doc.pins), ser(ed.compiled?.def), Object.keys(ed.ws.chips).length, ed.ws.folders] : 0,
@@ -185,6 +186,7 @@ export class PropsPanel {
     if (s.labels?.length) return this.pointer(doc, doc.labels.find((p) => p.id === s.labels![0])!);
     if (s.wires?.length) return this.wire(doc.wires.find((p) => p.id === s.wires![0])!);
     if (s.comments?.length) return this.comment(doc.comments!.find((p) => p.id === s.comments![0])!);
+    if (s.sections?.length) return this.sectionProps(doc.sections!.find((p) => p.id === s.sections![0])!);
     return null;
   }
 
@@ -201,6 +203,19 @@ export class PropsPanel {
       h('div', { class: 'sb-btns' },
         this.btn('Edit on canvas', 'Edit in place (double-click the comment)', () => ed.tools.editComment(c.id)),
         this.btn('Delete', 'Delete (Del)', () => { ed.edit((d) => deleteSel(d, { comments: [c.id] })); ed.select({}); })));
+  }
+
+  private sectionProps(c: SectionDoc): HTMLElement {
+    const ed = this.ed;
+    return this.section('Section',
+      h('p', { class: 'sb-sum' }, 'A frame around a group of parts: dragging its border or title moves what is inside it, Delete removes only the frame. Never part of the circuit.'),
+      this.row('Title', this.text(c.title, (v) => this.apply((d) => setSection(d, c.id, { title: v })), { 'aria-label': 'Section title' })),
+      this.row('Colour', hueSwatches(c.hue, (hue) => this.apply((d) => setSection(d, c.id, { hue: typeof hue === 'number' ? hue : undefined })), 'radio',
+        { auto: false, label: 'Section colour', none: 'No colour: the theme’s grey' })),
+      h('p', { class: 'sb-sum' }, `${c.size[0]} × ${c.size[1]} units at ${c.at[0]}, ${c.at[1]}: drag a corner to resize it.`),
+      h('div', { class: 'sb-btns' },
+        this.btn('Select what is inside', 'Select the parts, wires and notes inside it', () => ed.select(sectionContents(ed.doc, c.id, ed.defOf))),
+        this.btn('Delete frame', 'Delete the frame, keep what is inside (Del)', () => { ed.edit((d) => deleteSel(d, { sections: [c.id] })); ed.select({}); })));
   }
 
   private part(p: PartDoc): HTMLElement {

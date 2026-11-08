@@ -27,7 +27,7 @@ export function targetsOf(doc: ChipDoc, defOf: DefOf): Attach[] {
 
 /** The attach points of the one part, pin or pointer selected (in the part's port order); empty for any other selection. */
 export function ownPorts(doc: ChipDoc, defOf: DefOf, sel: Sel): Attach[] {
-  const count = (sel.parts?.length ?? 0) + (sel.pins?.length ?? 0) + (sel.labels?.length ?? 0) + (sel.wires?.length ?? 0) + (sel.comments?.length ?? 0);
+  const count = (sel.parts?.length ?? 0) + (sel.pins?.length ?? 0) + (sel.labels?.length ?? 0) + (sel.wires?.length ?? 0) + (sel.comments?.length ?? 0) + (sel.sections?.length ?? 0);
   if (count !== 1) return [];
   const all = attachPoints(doc, defOf).map((a) => ({ end: a.end, pos: a.pos }));
   if (sel.parts?.length) return all.filter((a) => 'part' in a.end && a.end.part === sel.parts![0]);
@@ -82,6 +82,10 @@ export function hitName(doc: ChipDoc, defOf: DefOf, h: Hit): string | null {
     }
     case 'wire': return 'a wire';
     case 'comment': return 'a comment';
+    case 'section': {
+      const s = doc.sections?.find((q) => q.id === h.id);
+      return `section ${s?.title || 'untitled'}${h.on === 'title' ? ' (title)' : ''}`;
+    }
     default: return null;
   }
 }
