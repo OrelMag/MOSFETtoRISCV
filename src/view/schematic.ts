@@ -26,7 +26,8 @@ import type { HueSite, MenuSite } from './circuitmenu';
 import type { ComponentDef } from '../sim/types';
 import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showMenu } from '../ui/menu';
 import { installHold } from '../ui/holdpress';
-import { isConstantBox, Legibility, nameEligible, nameRotated, type NameEl, type Seg, type TagEl } from './legible';
+import { isConstantDef } from '../sim/constant';
+import { Legibility, nameEligible, nameRotated, type NameEl, type Seg, type TagEl } from './legible';
 
 /** A note's marker on a part of the level shown. */
 export interface NotePin {
@@ -434,9 +435,9 @@ export class SchematicView {
       const own = g.querySelector('.sym-label');
       // a box whose symbol is one glyph (a comparator's "=") is named by its instance label ("wa = ra1") when it has one
       // a constant's value is planned as a name of its own kind (legible.ts isConstantBox), and always titled with its name and value
-      const isConst = !!own && isConstantBox(inst.def.symbol.kind, inst.def.ports.length, own.textContent ?? undefined, inst.def.prim);
+      const isConst = !!own && isConstantDef(inst.def) && (own.textContent?.trim().length ?? 0) >= 2;
       // (also a one-character constant, which is not drawn larger: the title is for all of them)
-      if (own && isConstantBox(inst.def.symbol.kind, inst.def.ports.length, own.textContent ?? undefined, inst.def.prim, 1)) g.append(s('title', {}, `${inst.label ?? inst.name} = ${own.textContent!.trim()}`));
+      if (own && isConstantDef(inst.def)) g.append(s('title', {}, `${inst.label ?? inst.name} = ${own.textContent!.trim()}`));
       const nm = isConst ? own!.textContent!.trim() : nameEligible(own?.textContent, geo.w, geo.h) ? own!.textContent!.trim() : own && own.textContent!.trim().length === 1 && inst.label && nameEligible(inst.label, geo.w, geo.h) ? inst.label.trim() : null;
       if (nm) {
         const rot = nameRotated(geo.w, geo.h), cx = geo.w / 2, cy = geo.h / 2;

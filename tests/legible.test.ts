@@ -5,7 +5,12 @@ import type { FpFormat } from '../src/sim/fpref';
 import { singleCycleCpu } from '../src/lib/cpu';
 import { CSR_UNIT } from '../src/lib/system';
 import { routeNetlist } from '../src/view/route';
-import { isConstantBox } from '../src/view/legible';
+import { isConstantDef } from '../src/sim/constant';
+import { constWord } from '../src/lib/alu';
+import { TIE0 } from '../src/lib/transistors';
+import { keyPart, partDef } from '../src/editor/parts';
+import type { PartRef } from '../src/editor/model';
+import type { ComponentDef } from '../src/sim/types';
 import type { Seg } from '../src/view/legible';
 import { fpAddNearFar } from '../src/lib/fpnearfar';
 import { symbolGeom } from '../src/sim/geometry';
@@ -219,10 +224,13 @@ describe('constants and wires', () => {
     const blocks = insts.map((i) => { const { w, h } = symbolGeom(i.def), at = i.at ?? [0, 0]; return { x: at[0], y: at[1], w, h }; });
     const consts = insts.flatMap((i, k) => {
       const { w, h } = symbolGeom(i.def), t = i.def.symbol.label ?? i.def.name;
-      return isConstantBox(i.def.symbol.kind, i.def.ports.length, i.def.symbol.label, i.def.prim)
+      return isConstantDef(i.def) && (i.def.symbol.label?.length ?? 0) >= 2
         ? [{ k, box: { cx: blocks[k].x + w / 2, cy: blocks[k].y + h / 2, w, h, chars: t.length, rot: false, text: t, ports: 1, const: true } }] : [];
     });
     expect(consts.length).toBeGreaterThanOrEqual(16);
+    // every one-port labelled box of the unit is one (the shapes the old rule saw are exactly the constants)
+    const shaped = insts.filter((i) => i.def.symbol.kind === 'box' && i.def.ports.length === 1 && (i.def.symbol.label?.length ?? 0) >= 2);
+    expect(shaped.length).toBe(consts.length);
     const scale = 1.7;
     const named = insts.flatMap((i, k) => {
       const { w, h } = symbolGeom(i.def), t = i.def.symbol.label ?? i.def.name;
@@ -261,5 +269,22 @@ describe('constants and wires', () => {
         }
       }
     });
+  });
+});
+
+describe('isConstantDef', () => {
+  const part = (ref: PartRef) => { const d = partDef(ref, () => undefined); if ('error' in d) throw new Error(String(d.error)); return d as ComponentDef; };
+  it('is true for constWord, the sandbox constant and the tie cells, and for the CSR unit constants', () => {
+    expect(isConstantDef(constWord(32, 0x1800))).toBe(true);
+    expect(isConstantDef(constWord(32, 0))).toBe(true);
+    expect(isConstantDef(TIE0)).toBe(true);
+    expect(isConstantDef(part({ const: { width: 8, value: 5 } }))).toBe(true);
+    const csrConsts = CSR_UNIT.netlist!().instances.filter((i) => /^k_|^zero32|^k[TE]$|^misa$|^ones$/.test(i.name));
+    expect(csrConsts.length).toBeGreaterThanOrEqual(16);
+    for (const c of csrConsts) expect(isConstantDef(c.def), c.name).toBe(true);
+  });
+  it('is false for a key, an LED, a display or a probe, though they are one-port boxes with a label too', () => {
+    expect(isConstantDef(keyPart('Space'))).toBe(false);
+    for (const ref of [{ display: 'led' }, { display: 'hex', width: 8 }, { display: 'halt' }, { key: 'a' }, { switches: 4 }] as PartRef[]) expect(isConstantDef(part(ref)), JSON.stringify(ref)).toBe(false);
   });
 });
