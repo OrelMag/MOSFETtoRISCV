@@ -41,6 +41,8 @@ export interface ModelStage {
 }
 
 const FW = 640, FH = 480;
+/** Phone framing: below NARROW px the home view may back off up to FIT_MAX × to keep main anchors FIT_X / FIT_Y px inside. */
+const NARROW = 480, FIT_MAX = 1.6, FIT_X = 8, FIT_Y = 16;
 const css = (c: RGBA) => `rgb(${Math.round(c[0] * 255)} ${Math.round(c[1] * 255)} ${Math.round(c[2] * 255)} / ${c[3].toFixed(2)})`;
 
 export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage {
@@ -63,6 +65,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
 
   const placeLabels = () => {
     if (mode !== 'gl' || !renderer) return;
+    fitHome();
     const eye = renderer.camera.eye();
     last.forEach((a, k) => {
       const p = renderer!.project(a.p), e = lblEls[k];
@@ -71,7 +74,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
       e.classList.toggle('away', dot3(a.n, sub3(eye, a.p)) < 0);
       e.style.transform = `translate(${p[0].toFixed(1)}px, ${p[1].toFixed(1)}px)`;
     });
-    declutterLabels(lblEls);
+    declutterLabels(lblEls, { prio: last.map((a) => a.prio) });
   };
 
   const drawFlat = (parts: readonly Part[], anchors: readonly Anchor[]) => {
@@ -107,6 +110,24 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
     }
     last = anchors;
     placeLabels();
+  };
+
+  // Phone framing: on a narrow canvas the home view backs off until the main labels' anchors are inside it, so a model
+  // does not lose half its labels off the top or bottom. Only at home (never after the learner orbits, pans or zooms),
+  // refitted from the model's own view whenever the canvas changes size, for that size.
+  let fitFor = '';
+  const fitHome = () => {
+    const c = renderer?.camera, w = canvas.clientWidth, ht = canvas.clientHeight;
+    if (!c || !w || !ht || !last.length) return;
+    const key = `${w}x${ht}`;
+    if (key === fitFor || !c.atHome()) return;
+    fitFor = key;
+    const base = o.camera, major = last.filter((a) => !a.minor);
+    const fits = () => major.every((a) => { const p = c.project(a.p, w, ht); return !p || (p[0] >= FIT_X && p[0] <= w - FIT_X && p[1] >= FIT_Y && p[1] <= ht - FIT_Y); });
+    let k = 1;
+    c.rehome(base);
+    if (w < NARROW) while (!fits() && k < FIT_MAX) { k *= 1.08; c.rehome({ ...base, dist: base.dist * k }, { maxDist: Math.max(c.limits.maxDist, base.dist * k) }); }
+    if (k !== 1) renderer!.invalidate();
   };
 
   const setMode = (m: 'gl' | 'flat') => {
@@ -145,6 +166,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
       const c = renderer?.camera;
       if (!c) { if (mode === 'flat') o.draw(); return; }
       c.rehome(v, c.limits);
+      fitFor = ''; // a new home: fitted again at the next frame
       renderer?.invalidate();
     },
     rgb: (t) => colors.rgb(t),
