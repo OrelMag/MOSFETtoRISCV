@@ -7,7 +7,7 @@ import { ALPHABET, chr, Enigma, idx, U264 } from '../crypto/enigma';
 import { h, keepFocus, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
 
 /** What one window position does: every letter's partner, and what the machine can never do. */
 export function permutationWidget(): Widget {

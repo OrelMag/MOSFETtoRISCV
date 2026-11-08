@@ -124,7 +124,7 @@ function nodePort(stage: Stage, path: string[], port: string): number {
 function busPanel({ arb }: Opts): ScenePanel {
   return (stage: Stage): Widget => {
     const nCtl = arb ? 2 : 1;
-    let resetLeft = 0, queues: Cmd[][] = [], clocks: Clock[] = [], timer: ReturnType<typeof setTimeout> | null = null, lostAt: (number | null)[] = [null, null], stopWhenLost = false, flip = 1, scriptName = '';
+    let resetLeft = 0, queues: Cmd[][] = [], clocks: Clock[] = [], timer: ReturnType<typeof setTimeout> | null = null, lostAt: (number | null)[] = [null, null], stopWhenLost = false, flip = 5 /* A1: 0x50 against 0x52, the pair the chapter names */, scriptName = '';
     const v = (p: string) => stage.value(p);
     const hook = {
       before: () => {
@@ -232,7 +232,7 @@ function busPanel({ arb }: Opts): ScenePanel {
     } else {
       controls = [h('div', { class: 'dram-ops' }, ...FRAME_OPS.map((o, i) => btn(o.label, o.title, () => run(i))), btn('Clear', 'Forget the wires', clear))];
     }
-    const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' },
+    const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right', 'data-phone': 'flow' }, // never folded at first: the step's text is about its controls
       h('h4', null, arb ? 'Two controllers, one bus' : 'A frame on the wires', h('span', { class: 'fold-hint' })), ...controls, wave, frame, status,
       h('p', { class: 'sub' }, arb ? 'The top two rows are what each controller sends (1: it lets go). The bus is their AND. Both start in the same clock, so they agree until the first bit where they do not.' : 'The wires are read at the pins of the pads. ACK is SDA pulled low by the receiver for the ninth clock; NACK is the pull-up winning.'));
     paint();

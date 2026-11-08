@@ -11,7 +11,7 @@ import { dbToRatio } from '../src/comm/limits';
 import { ACK_US, airtimeUs, bianchi, CW_MAX, CW_MIN, DIFS_US, goodputMbps, RATES, RESP_TIMEOUT, RETRY_LIMIT, RTS_US, SIFS_US, SLOT_US } from '../src/comm/wifi';
 import { beta2Of, cdTaps, C_BAND, dispersionD, FEC_RATE, gridChannels, L_BAND, osnrDb, photonFloorDbm, QAMS, reachNarrowKm, reachWideKm, requiredSnrDb, snrFromOsnr, spacingNm } from '../src/phys/fibre';
 import { apertureM2, bpskAwgn, bpskMrc, bpskRayleigh, coherenceMHz, coherenceTime, dopplerHz, fadeMarginDb, fsplDb, linkBudget, noiseFloorDbm, wavelengthM } from '../src/phys/radio';
-import { crossingM, harmonic, reuseSweep, schedule, sirClosedDb, zfMeanSnr } from '../src/phys/cellular';
+import { crossingM, harmonic, reuseSweep, SCHED_SEED, SCHED_SLOTS, schedule, sirClosedDb, zfMeanSnr } from '../src/phys/cellular';
 import { BUDGET_DEFAULT as D, WALL_DB } from '../src/widgets/radio';
 import { hiddenCompare, HIDDEN_LEN_US, mimoCurves } from '../src/widgets/wifi';
 
@@ -63,7 +63,7 @@ describe('the group B codex entries', () => {
     says('glass', 3, `${nf(D1550)} ps/(nm·km)`);
     says('glass', 3, `${n0(reachNarrowKm(10, B2))} km at 10 Gb/s and ${nf(reachNarrowKm(40, B2))} km at 40`);
     says('glass', 3, `${nf(reachWideKm(10, D1550, 1))} km at 10 Gb/s`);
-    says('glass', 3, `${nf(B2)} ps²/km`);
+    says('glass', 3, `${nf(B2).replace('-', '−')} ps²/km`);
   });
 
   it('wdm: the grid, the rates and the fibre\'s total', () => {
@@ -286,12 +286,13 @@ describe('the group B codex entries', () => {
 
   it('pfscheduler: the harmonic gain and the model\'s two schedulers', () => {
     const m = Array<number>(8).fill(10);
-    const rr = schedule('rr', m, 20000, 1).total, mx = schedule('max', m, 20000, 2).total;
+    const run = (p: 'rr' | 'pf' | 'max') => schedule(p, m, SCHED_SLOTS, SCHED_SEED).total, rr = run('rr'), pf = run('pf'), mx = run('max');
     expect(nf(harmonic(8), 2)).toBe('2.72');
-    expect([nf(rr, 2), nf(mx, 2)]).toEqual(['2.90', '4.69']);
-    quotes('pfscheduler', '2.72', '4.69', '2.90', '8 users', '10 dB');
+    expect([nf(rr, 2), nf(pf, 2), nf(mx, 2)]).toEqual(['2.91', '4.61', '4.68']);
+    quotes('pfscheduler', '2.72', '4.68', '4.61', '2.91', '8 users', '10 dB');
     says('cellular', 2, `A cell with 8 users serves at ${nf(harmonic(8), 2)} times the mean SNR`);
-    says('cellular', 2, `${nf(mx, 2)} against round robin's ${nf(rr, 2)} b/s/Hz for 8 users at 10 dB`);
+    says('cellular', 2, `it reads ${nf(mx, 2)} for max rate and ${nf(pf, 2)} for proportional fair, against round robin's ${nf(rr, 2)} b/s/Hz`);
+    says('cellular', 2, '8 users, 0 dB apart and a mean of 10 dB');
     says('cellular', 2, 'multi-user diversity');
   });
 

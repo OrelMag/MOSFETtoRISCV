@@ -32,6 +32,15 @@ export const STEP_MOVES: readonly (readonly StepMove[])[] = [
     { from: 'errors', step: 12, to: 'codes', toStep: 5, title: 'Bursts: interleaving' },
     { from: 'errors', step: 13, to: 'codes', toStep: 6, title: 'How far from Shannon' },
   ],
+  // noise: the noise-figure chain follows the floor it extends; the chapter ends on Shannon, which hands off to the codes
+  [
+    { from: 'noise', step: 6, to: 'noise', toStep: 1, title: 'A chain: who pays' },
+    { from: 'noise', step: 1, to: 'noise', toStep: 2, title: 'A decision' },
+    { from: 'noise', step: 2, to: 'noise', toStep: 3, title: 'The matched filter' },
+    { from: 'noise', step: 3, to: 'noise', toStep: 4, title: 'One axis for every link' },
+    { from: 'noise', step: 4, to: 'noise', toStep: 5, title: 'Power or band' },
+    { from: 'noise', step: 5, to: 'noise', toStep: 6, title: "Shannon's argument, and his code" },
+  ],
 ];
 
 export interface StepPlace { chapter: string; step: number }

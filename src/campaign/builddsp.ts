@@ -126,7 +126,7 @@ export const BUILDDSP: Record<string, () => BuildChallenge> = {
   // ---- sp_sd
   sp_sd: () => ({
     id: 'sp_sd', title: 'Sigma-delta loop', level: 'gates', allowed: 'nand',
-    brief: `<b>u</b> is a signed ${SD_W}-bit word (full scale is ±${2 ** (SD_W - 1)}). Build the digital loop of a second-order sigma-delta modulator: <b>y1</b> and <b>y2</b> are two running sums, ${SD_WORD} bits wide: enough for any input below full scale (at full scale they outgrow it and wrap, as the model does), and <b>bit</b> is one flip-flop. `
+    brief: `<b>u</b> is a signed ${SD_W}-bit word (full scale is ±${2 ** (SD_W - 1)}). Build the digital loop of a second-order sigma-delta modulator: <b>y1</b> and <b>y2</b> are two running sums, ${SD_WORD} bits wide: enough for a steady input or a tone up to 0.95 of full scale (beyond that, or for some square waves even below it, they outgrow it and wrap, as the model does), and <b>bit</b> is one flip-flop. `
       + 'At every rising clock edge the loop decides from the sign of y2 as it stands (1 when it is not negative), then y1 ← y1 + u − v and y2 ← y2 + (the new y1) − v, where v is +full scale after a 1 and −full scale after a 0; <b>bit</b> is that decision. '
       + 'Check runs 16 inputs of 3000 clocks (steady levels, sines, steps, and full scale where the sums outgrow their words and must wrap like the model): bit, y1 and y2 against the chapter model at every clock, and on the steady inputs the average of the bits against the input.',
     ports: pinsOf(SD_REF()),

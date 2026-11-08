@@ -30,7 +30,7 @@ export const chClocks: Chapter = {
     'build a two-flop synchronizer, a toggle pulse synchronizer and a Gray-coded pointer, and state what each can and cannot carry',
     'derive the asynchronous FIFO\'s full and empty rules, and show that its flags are late but never wrong',
   ],
-  builds: ['latches', 'wire'],
+  builds: ['inverter', 'latches', 'wire'],
   recap: {
     keep: [
       `A receiver is an amplifier with a threshold. The matched inverter has VIL ${nf(M.vil)} V and VIH ${nf(M.vih)} V, drives ${nf(M.vol)} V and ${nf(M.voh)} V, and so has ${mv(M.nmL)} of noise margin each way and a peak gain of ${nf(M.gain, 0)}. Between VIL and VIH the receiver does not decide.`,
@@ -58,10 +58,10 @@ export const chClocks: Chapter = {
       },
       {
         question: 'The asynchronous FIFO shows empty = 0 on the read side. What can be said about the number of words in it?',
-        options: ['At least one: a flag that is low is true, one that is high may be late', 'One or more, and empty is never wrong in either direction', 'Nothing: the pointers are in different clock domains', 'At most the depth'],
+        options: ['At least one: a flag that is low is true, one that is high may be late', 'Exactly one: empty would have gone low the moment the first word was written', 'Nothing: the pointers are in different clock domains', 'At most the depth'],
         answer: 0,
         explain: 'The read side sees a write pointer that is two edges old. Words written since are not counted yet, so empty can stay high with words inside. It goes low only when the old pointer already shows a word, and that word is still there.',
-        why: ['', 'Empty high can be wrong (late): a word has arrived that the read side has not seen yet. Only the low flag is guaranteed.', 'The sampled pointer is the old value or the new one, because it is a Gray code, so something is known.', 'True, but it says nothing about empty.'],
+        why: ['', 'Empty low says the old write pointer was past the read pointer, so at least one word; more may have arrived since, which the read side has not seen yet.', 'The sampled pointer is the old value or the new one, because it is a Gray code, so something is known.', 'True, but it says nothing about empty.'],
       },
     ],
   },
@@ -72,9 +72,9 @@ export const chClocks: Chapter = {
         <p>Every input pin ends in an amplifier and a threshold. The inverter of chapter 2 is the model: the matched pair has its switching threshold at VM = ${nf(M.vm)} V,
         and its transfer curve falls through VM with a peak gain of ${nf(M.gain, 0)}. The curve defines the receiver's contract. An input below <strong>VIL</strong> = ${nf(M.vil)} V is read as 0, above
         <strong>VIH</strong> = ${nf(M.vih)} V as 1, and in between the output is neither: a level that the next gate may read either way, or as a runt.</p>
-        <p>A driver delivers VOL = ${nf(M.vol)} V and VOH = ${nf(M.voh)} V, so the margin before the receiver's zone is <strong>NML</strong> = VIL − VOL = ${mv(M.nmL)} and
+        <p>The curve's outputs at those two points are VOL = ${nf(M.vol)} V and VOH = ${nf(M.voh)} V, the conservative figures a datasheet would quote for a driver (one that swings to the rails has more), so the margin before the receiver's zone is <strong>NML</strong> = VIL − VOL = ${mv(M.nmL)} and
         <strong>NMH</strong> = VOH − VIH = ${mv(M.nmH)}. That budget pays for everything that disturbs a wire between two chips or two blocks of one: supply bounce, crosstalk,
-        reflections, ground offset. Chapter 41 does the arithmetic of those; this chapter starts where the budget is spent.</p>
+        reflections, ground offset. Chapter ${numOf('wire')} did the arithmetic of those against an I/O standard's wider levels; this chapter starts from the inverter's own, and from where the budget is spent.</p>
         <p>Two consequences matter for what follows. A large gain makes the undefined zone narrow (${mv(M.vih - M.vil)} wide here), and an input that sits in it has an output that takes
         longer than usual to leave the middle. And a slow or noisy edge spends time in the zone, so the receiver sees many crossings of the threshold where the sender made one.</p>
         <div class="try">Raise the noise past ${nf(Math.min(M.nmL, M.nmH))} V. The worst-case level reaches the receiver's undefined zone.</div>`,
@@ -122,7 +122,7 @@ export const chClocks: Chapter = {
         <p>Count the transitions. The input here is a slow ramp from 0 to ${VDD} V with Gaussian noise on every sample. A plain receiver with one threshold at VM follows every crossing of that threshold, and
         a clocked circuit behind it sees each as an edge: a counter counts them, a flip-flop clocked by it is clocked several times. The Schmitt trigger switches once, when the ramp has gone ${mv(TH.width! / 2)} past VM,
         and stays there until the input has fallen back by the full hysteresis.</p>
-        <p>The rule of thumb is a hysteresis of at least twice the noise amplitude (about 6 σ peak to peak for Gaussian noise) and no more than would hide a real signal. The keeper's width is the knob;
+        <p>The rule of thumb is a hysteresis at least as wide as the noise peak to peak (about 6 σ for Gaussian noise) and no more than would hide a real signal. The keeper's width is the knob;
         a wider keeper costs more delay and drifts more over process corners.</p>
         <div class="try">At 0.04 V of noise the plain receiver already chatters while the Schmitt trigger switches once. Raise the noise until the Schmitt trigger chatters too: that happens when the excursions approach the hysteresis. Then move the keeper to 0 and watch it become the plain receiver.</div>`,
       widget: noisyEdgeWidget,
@@ -143,7 +143,7 @@ export const chClocks: Chapter = {
         <p>Inside one clock domain the contract of chapter 8 holds by construction. A flip-flop launches a change clk-to-q (${CLK_TO_Q} delays) after an edge, the logic adds its delay, and the next edge of the <em>same</em> clock
         captures it, provided the change is there a setup time earlier and stays a hold time after. Static timing walks every path and checks both. It can, because the phase between the launching and the capturing edge is a number it knows.</p>
         <p>Across two clocks that phase is whatever it is. A sender at fA changes data at its own edges, a receiver at fB samples at its edges, and the position of a change inside the receiver's period is
-        (n · fB / fA) mod 1. For a ratio like 1.37 that visits 137 values, and with oscillators that drift by parts per million it visits every value in between. The window around the receiver's edge in which a change is neither safely captured nor safely missed is setup + hold = ${ms.setup} + ${ms.hold} delays
+        (n · fB / fA) mod 1. For fA / fB = 1.37 = 137 / 100 that visits 137 values, and with oscillators that drift by parts per million it visits every value in between. The window around the receiver's edge in which a change is neither safely captured nor safely missed is setup + hold = ${ms.setup} + ${ms.hold} delays
         as measured in chapter 8, ${win} ps at ${PS_PER_NAND} ps per NAND delay. At a 1 GHz receiver that is ${nf(frac * 100, 1)} % of the period, so one change in ${Math.round(1 / frac)} lands in it: at a data rate of 100 MHz, about ${nf(1e8 * frac / 1e6, 1)} per microsecond. That is not a rare event.</p>
         <p>What happens inside the window is the aperture of chapter 8: the master latch is released with its two cross-coupled NANDs balanced, an SR pair freed from both sides at once. The gate simulator
         settles that race by relaxation, in zero time, and picks a side. Silicon does not, as the next step shows.</p>
@@ -172,7 +172,7 @@ export const chClocks: Chapter = {
         sits between the levels, where the next gate can read it either way.</p>
         <p>As a failure rate: the pair is undecided after t<sub>r</sub> with probability e<sup>−t<sub>r</sub>/τ</sup>, and a change lands in the window T0 wide at a rate of T0 · fclk · fdata, so</p>
         <p style="text-align:center"><strong>MTBF = e<sup>t<sub>r</sub>/τ</sup> / (T0 · f<sub>clk</sub> · f<sub>data</sub>)</strong>.</p>
-        <p>Take τ = ${nf(TAU_PS / PS_PER_NAND, 1)} NAND delays (${nf(TAU_PS, 0)} ps), T0 = 1 delay (${T0_PS} ps), a 1 GHz receiver and data at 100 MHz. The window is hit ${windowRate(1e9, 1e8).toExponential(1)} times a second. A single flop followed by 8 NANDs of logic has t<sub>r</sub> = ${nf(resolutionTime(1, 1000, 8 * PS_PER_NAND), 0)} ps and an MTBF of ${m1}, already safe in this model. What a lone flop lacks is margin: its budget is the period less clock-to-q, setup and the logic behind it. Let the logic fill most of the period (${lone.logic} NANDs, ${lone.logic * PS_PER_NAND} ps) and t<sub>r</sub> falls to ${nf(resolutionTime(1, 1000, lone.logic * PS_PER_NAND), 0)} ps, MTBF ${lone.m}. A second flop with nothing between them fixes t<sub>r</sub> at a period less clock-to-q and setup whatever the logic is: ${nf(resolutionTime(2, 1000), 0)} ps, MTBF ${m2}. A third: ${m3}. Doubling the clock to 2 GHz takes the two-flop version to ${h2}, and the lone flop with 8 NANDs of logic to ${years(1, 2e9)}. So two flops are the default because they take the logic out of the budget, and a third is added where the clock rate eats the period.</p>
+        <p>Take τ = ${nf(TAU_PS / PS_PER_NAND, 1)} NAND delays (${nf(TAU_PS, 0)} ps), T0 = 1 delay (${T0_PS} ps), a 1 GHz receiver and data at 100 MHz. The window is hit ${windowRate(1e9, 1e8).toExponential(1)} times a second. (The budget here charges clock-to-q and setup ${CLK_TO_Q} and ${SETUP} delays, as static timing does; the window measured in chapter 8 was smaller, so these figures err on the safe side.) A single flop followed by 8 NANDs of logic has t<sub>r</sub> = ${nf(resolutionTime(1, 1000, 8 * PS_PER_NAND), 0)} ps and an MTBF of ${m1}, already safe in this model. What a lone flop lacks is margin: its budget is the period less clock-to-q, setup and the logic behind it. Let the logic fill most of the period (${lone.logic} NANDs, ${lone.logic * PS_PER_NAND} ps) and t<sub>r</sub> falls to ${nf(resolutionTime(1, 1000, lone.logic * PS_PER_NAND), 0)} ps, MTBF ${lone.m}. A second flop with nothing between them fixes t<sub>r</sub> at a period less clock-to-q and setup whatever the logic is: ${nf(resolutionTime(2, 1000), 0)} ps, MTBF ${m2}. A third: ${m3}. Doubling the clock to 2 GHz takes the two-flop version to ${h2}, and the lone flop with 8 NANDs of logic to ${years(1, 2e9)}. So two flops are the default because they take the logic out of the budget, and a third is added where the clock rate eats the period.</p>
         <p>Notice what dominates: the exponent. With τ doubled to ${nf((2 * TAU_PS) / PS_PER_NAND, 1)} NAND delays the two-flop figure at 1 GHz falls from ${m2} to ${slow}. The constants here are illustrative, so the sensitivity is the lesson: MTBF is exponential in t<sub>r</sub>/τ, and a factor of two in τ moves the answer by tens of orders of magnitude.</p>
         <p><strong>What these figures are.</strong> The gate simulator resolves a balanced pair in zero time (<code>relax()</code> in gatesim.ts, Gauss–Seidel until one side wins) and cannot time a real race, so every number on this page is the
         model's. The constants are illustrative, tied to the book's delay per NAND; a library cell has its own τ and T0, measured. The gates in the next steps show the structure and the latency of a synchronizer, and those are exact.</p>
@@ -220,7 +220,7 @@ export const chClocks: Chapter = {
         <p>A level survives the crossing. An <em>event</em> (a request, a "go") is a pulse, and a pulse may not. The <strong>toggle synchronizer</strong> (${nands(PULSE_SYNC)} NANDs) turns the event into a level that
         cannot be missed. On A, each pulse toggles a flip-flop (<span data-show="tx tg">tx, tg</span>): the level t changes and stays changed until the next pulse. The level crosses through a
         <span data-show="sy">two-flop synchronizer</span> on B, and a flop with an XOR (<span data-show="pv edge">pv, edge</span>) compares the synchronized level with its own value one B cycle earlier. Any change is one pulse of one B cycle on <code>out</code>.</p>
-        <p>The level changes rarely compared with either clock (once per event), so the Gray argument of the next step is trivial here: one bit, and any sample is the old value or the new one. What the circuit cannot do is carry two events close together. If A toggles twice before B has sampled the level in between, the level is
+        <p>The level changes rarely compared with either clock (once per event), and one bit changes at a time: any sample is the old value or the new one (the next step needs a code to get the same property for a whole word). What the circuit cannot do is carry two events close together. If A toggles twice before B has sampled the level in between, the level is
         back where it was and B sees nothing, so a second pulse has to wait until the first has crossed: a few B periods. A <em>handshake</em> removes that rule by holding the request until an acknowledge returns through a second synchronizer, which costs
         two crossings per transfer (several cycles of the slower clock).</p>
         <div class="try">Send 1 pulse at 3 : 1: out pulses once. Send 2 close: by the next B edge the level is back where it started, and nothing arrives. Send 2 apart: both do.</div>`,
@@ -237,7 +237,7 @@ export const chClocks: Chapter = {
       title: 'A bus is not synchronized bit by bit',
       body: `
         <p>A multi-bit value cannot cross by synchronizing each bit. The wires have different delays, so for a while after the sender's edge some of the changing bits have arrived at the receiver's flops and some have not, and a sample taken then is
-        the old word with an arbitrary subset of the changing bits flipped. A binary counter going from 0111 to 1000 changes four bits: the sampler can read any of sixteen words, and one of them is 1111, 7 away from the nearest word the sender ever meant.
+        the old word with an arbitrary subset of the changing bits flipped. A binary counter going from 0111 to 1000 changes four bits: the sampler can read any of sixteen words, and one of them is 1111, 7 away from the nearest word the sender ever meant (the panel's <em>worst error</em> counts from the new word, so it shows 8, for 0000).
         On average ${nf(meanGarbage(4, 'binary') * 100, 0)} % of mid-change samples of a 4-bit binary count are garbage.</p>
         <p>The cure is a code in which neighbouring values differ in a single bit. In <strong>Gray code</strong>, g = b ⊕ (b ≫ 1), consecutive counts differ in one bit, so a mid-change sample is the old word or the new word, and a pointer read one step late is a pointer that is one step late. The conversion is one level of XORs
         one way (${nands(BIN2GRAY(4))} NANDs for 4 bits) and a chain n − 1 deep the other (${nands(GRAY2BIN(4))} NANDs). The chain is the reason the FIFO of the next step compares Gray pointers directly, and converts only on the side that owns the pointer.</p>
@@ -245,7 +245,7 @@ export const chClocks: Chapter = {
       widget: grayBusWidget,
       challenge: {
         kind: 'quiz',
-        question: 'Why does this asynchronous FIFO need a depth that is a power of two?',
+        question: 'The next step keeps a FIFO\'s read and write pointers in this code, and calls it full when the write pointer equals the read pointer with its top two bits inverted. Why must its depth then be a power of two?',
         options: ['Its full rule (invert the top two bits of the Gray pointer) holds for the binary-reflected Gray code, which cycles over 2^n values', 'No cyclic one-bit sequence of any other length exists', 'The memory decoder needs it', 'The synchronizers need two flops per bit'],
         answer: 0,
         explain: 'A Gray pointer must change one bit per step, wrap included, and the binary-reflected code does so over 2^n values. Its top two bits inverted lie half a cycle away, which is what makes the full compare work. Trimmed sequences of other even lengths can also be one-bit at every step (001, 011, 010, 110, 111, 101 is one), but the half-cycle rule no longer applies, so such a FIFO needs a different full test.',

@@ -72,7 +72,7 @@ export function networkCostWidget(): Widget {
     chips.set(1, n0(c.crosspoints), `Clos, n = ${c.n}, r = ${c.r}, m = ${c.m}: 2Nm + m r²`);
     chips.set(2, `${(crossbarCrosspoints(N) / c.crosspoints).toFixed(2)} ×`, c.crosspoints < crossbarCrosspoints(N) ? 'fewer crosspoints than the crossbar' : 'the crossbar is still cheaper here');
     chips.set(3, n0(cr.crosspoints), `Clos with m = n = ${c.n}: only rearrangeably non-blocking`);
-    note.textContent = `A call can be blocked in a Clos network by calls already up, unless the middle stage has m ≥ 2n − 1 switches (Clos, 1953); with m ≥ n every blocked call can be made to fit by re-routing calls in progress, which a telephone line in the middle of a word cannot take. Plot: the solid curve is a crossbar, the thin one a switch per pair (N(N − 1) / 2), the dashed one a Clos network at its best n.`;
+    note.textContent = `A call can be blocked in a Clos network by calls already up, unless the middle stage has m ≥ 2n − 1 switches (Clos, 1953); with m ≥ n every blocked call can be made to fit by re-routing calls in progress, which a telephone line in the middle of a call cannot take. Plot: the solid curve is a crossbar, the thin one a switch per pair (N(N − 1) / 2), the dashed one a Clos network at its best n.`;
   }
   const kSl = slider('Lines', K0, K1, 1, k, (v) => n0(2 ** v), (v) => { k = v; paint(); });
   const el = h('div', { class: 'widget mos comm' }, h('div', { class: 'panel' }, h('h3', null, 'What it costs to let any line reach any other'), svg),
