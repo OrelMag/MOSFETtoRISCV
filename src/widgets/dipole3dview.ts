@@ -12,7 +12,8 @@ import { ANTENNA_GHZ } from './radio';
 import { DRAW_RATE, DipoleRun, END_EFFECT, FREQ_HZ, HALF_LEN, LAMBDA, REAL_DIAMETER, DRAWN_SCALE, SLOWDOWN, STEP_PHASE, dipoleAnchors, dipoleParts, type DipolePalette } from './dipole3dparts';
 
 const STEP_MS = 380;
-const f1 = (x: number) => x.toFixed(1);
+/** One decimal, with no '-0.0': anything under 0.05 reads 0.0. */
+const f1 = (x: number) => (Math.abs(x) < 0.05 ? 0 : x).toFixed(1);
 const sci = (x: number) => { const e = Math.floor(Math.log10(x)); return `${(x / 10 ** e).toFixed(1)} × 10${String(e).replace(/\d/g, (d) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(d)])}`; };
 
 export function dipoleView(): Widget {
@@ -35,15 +36,15 @@ export function dipoleView(): Widget {
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' });
   const live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
   stage.chips.append(chip);
-  const sense = (v: number) => (Math.abs(v) < 0.02 ? 'zero' : v > 0 ? 'up the upper arm' : 'down the upper arm');
+  const sense = (v: number) => (Math.abs(v) < 0.05 ? 'zero' : v > 0 ? 'up the upper arm' : 'down the upper arm');
   function status(): string {
     const v = run.feed;
-    return `Phase ${run.degrees}°: feed current ${f1(v)} of peak, ${sense(v)}; tip current 0.${Math.abs(v) < 0.02 ? ' The charge at the tips is at its peak: a new field loop forms.' : ''}`;
+    return `Phase ${run.degrees}°: feed current ${f1(v)} of peak, ${sense(v)}; tip current 0.${Math.abs(v) < 0.05 ? ' The charge at the tips is at its peak: a new field loop forms.' : ''}`;
   }
   function readout(announce = false): void {
     const v = run.feed;
     chip.textContent = `Phase ${run.degrees}°`;
-    chip.className = `r3-chip ${Math.abs(v) < 0.02 ? 'warn' : 'good'}`;
+    chip.className = `r3-chip ${Math.abs(v) < 0.05 ? 'warn' : 'good'}`;
     const rows: [string, string][] = [
       ['Frequency', `${f1(ANTENNA_GHZ)} GHz`], ['Wavelength λ', `${f1(LAMBDA)} cm`], ['Length λ/2', `${f1(2 * HALF_LEN)} cm`],
       ['Period (real)', `${(1e9 / FREQ_HZ).toFixed(3)} ns`], ['Feed current', `${f1(v)} of peak`], ['Tip current', '0'],

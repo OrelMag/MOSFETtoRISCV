@@ -143,12 +143,12 @@ export function dipoleAnchors(run: DipoleRun, showPattern: boolean): Anchor[] {
   const front: Vec3 = [0, 0.2, 1], up: Vec3 = [0, 1, 0];
   const a: Anchor[] = [
     { text: 'tip: I = 0', p: [0, HALF_LEN + 0.4, 0], side: 't', n: up },
-    { text: 'tip: I = 0', p: [0, -HALF_LEN - 0.4, 0], side: 'b', n: [0, -1, 0], minor: true },
     { text: 'feed gap: largest swing', p: [0.45, 0, 0.45], side: 'r', n: front },
     { text: 'source (leads, no balun)', p: [-5.5, 0, 0], side: 'l', n: front, minor: true },
     { text: 'I(z) ∝ cos kz', p: [0, HALF_LEN * 0.8, CURVE_A * 0.45], side: 'r', n: front, minor: true },
   ];
-  const l = loopsAt(run.t).filter((q) => q.alpha > 0.6).sort((p, q) => q.xOut - p.xOut)[0];
+  // Named only on a loop that has left the rod (its inner edge a quarter wave out), so the label never crowds the rod's own.
+  const l = loopsAt(run.t).filter((q) => q.alpha > 0.4 && q.xIn > LAMBDA / 4).sort((p, q) => q.xOut - p.xOut)[0];
   if (l) a.push({ text: 'E loops, out at c', p: [(l.xIn + l.xOut) / 2, 0.5 * ((l.xOut - l.xIn) / 2) + 0.5, 0], side: 't', n: front });
   if (showPattern) {
     a.push({ text: 'null on the axis', p: [0, HALF_LEN + 4.2, 0], side: 't', n: up, minor: true });
