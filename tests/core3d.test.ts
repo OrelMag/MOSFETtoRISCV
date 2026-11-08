@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RGB } from '../src/gl/instances';
 import {
-  FULL, HALF, IC, ID, N, OD, PITCH, RING_R, TUBE_R, WIRE_R, applyDrive, centreOf, colOf, coreParts, halfSelected, idle, planOp, rowOf, wirePaths, runsOf, ringPoint, type CorePalette, type Op,
+  FULL, HALF, IC, ID, N, OD, PITCH, RING_R, TUBE_R, WIRE_R, applyDrive, centreOf, colOf, coreParts, halfSelected, idle, planOp, rowOf, wirePaths, runsOf, ringPoint, senseDiag, cycleFault, marginOf, marginWindow, icOf, HALF_MIN, HALF_MAX, STACK_DY, coreAnchors, type CorePalette, type Op,
 } from '../src/widgets/core3dparts';
 import type { Vec3 } from '../src/gl/math';
 
@@ -103,7 +103,7 @@ describe('the drawing', () => {
     };
     for (let k = 0; k < 16; k++) {
       const c = centreOf(k), r = rowOf(k), col = colOf(k);
-      const R = runsOf(), lines: [Vec3, Vec3][] = [[W.x[r][0], W.x[r][1]], [W.y[col][0], W.y[col][1]], R.sense[col], R.inhibit[r]];
+      const R = runsOf(), lines: [Vec3, Vec3][] = [[W.x[r][0], W.x[r][1]], [W.y[col][0], W.y[col][1]], R.sense[senseDiag(k)], R.inhibit[r]];
       for (const [a, b] of lines) expect(holeDist(a, b, c)).toBeLessThan(ID / 2 - WIRE_R - 0.2);
     }
     expect(TUBE_R).toBeLessThan(RING_R); // the ring has a hole
@@ -119,8 +119,8 @@ describe('the drawing', () => {
       expect(along([W.y[c][0], W.y[c][1]])).toBe(1);
       expect(along(R.inhibit[r])).toBe(1);
     }
-    // the sense wire alternates by column: the amplifier is bipolar
-    expect(R.sense.map(along)).toEqual([1, -1, 1, -1]);
+    // the sense wire runs along the ring axis (diagonals r - c = d), alternating direction diagonal by diagonal
+    expect(R.sense.map(along)).toEqual([1, -1, 1, -1, 1, -1, 1]);
   });
 
   it('draws sixteen rings and a lit wire only where there is current', () => {
@@ -130,12 +130,138 @@ describe('the drawing', () => {
     expect(live(dark)).toBe(0);
     expect(live(lit)).toBeGreaterThan(0);
     // 16 rings of 14 segments in ferrite colour
-    expect(dark.filter((p) => p.color[0] === 0.1).length).toBe(16 * 14);
+    expect(dark.filter((p) => p.color[0] === 0.1 && (p.color as number[])[3] === undefined).length).toBe(16 * 14);
   });
 
   it('shows the stored bit as the circulation direction', () => {
     const arrows = (bit: number) => coreParts(pose({ bits: Array(16).fill(bit) }), PAL).filter((p) => p.color[0] === (bit ? 1 : 0) && p.color[2] === (bit ? 0 : 1) && p.color[1] === 0).length;
     expect(arrows(1)).toBe(16 * 11);
     expect(arrows(0)).toBe(16 * 11);
+  });
+});
+
+describe('the half-select current window', () => {
+  it('works from Ic/2 up to just under Ic, and the slider range brackets it', () => {
+    expect(HALF_MIN).toBeLessThan(IC / 2);
+    expect(HALF_MAX).toBeGreaterThan(IC);
+    expect(marginWindow()).toEqual({ lo: IC / 2, hi: IC });
+    expect(marginOf(HALF)).toBe('ok');
+    expect(marginOf(0.2)).toBe('low');
+    expect(marginOf(0.225)).toBe('ok');
+    expect(marginOf(0.45)).toBe('high');
+    expect(marginOf(0.5)).toBe('high');
+  });
+
+  const stray = (half: number, spread = false) => planOp(START, 5, 'read', { half, spread });
+  const START = [1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0];
+
+  it('inside the window every phase is clean, at any drive', () => {
+    for (let h = 0.23; h < 0.449; h += 0.01) for (const op of ['read', 'write0', 'write1'] as Op[]) {
+      for (const ph of planOp(START, 5, op, { half: h })) { expect(ph.missed).toBe(false); expect(ph.stray).toEqual([]); expect(ph.half).toBe(h); }
+    }
+  });
+
+  it('below Ic/2 the addressed core does not flip: a 1 reads as a 0 and the write fails', () => {
+    const [rd, rs] = stray(0.22);
+    expect(START[5]).toBe(1);
+    expect(rd.flipped).toEqual([]);
+    expect(rd.pulse).toBe(false);
+    expect(rd.senseBit).toBe(0); // the sense wire saw nothing
+    expect(rd.missed).toBe(true);
+    expect(rs.after[5]).toBe(1); // it still holds the 1; the read-back wrote a "0" that could not take
+    const w = planOp(START, 5, 'write1', { half: 0.2 });
+    expect(w[0].missed).toBe(true);
+    expect(w[1].after[5]).toBe(START[5]); // nothing changed: the write did not happen
+    expect(planOp([...START].fill(0), 5, 'write1', { half: 0.2 })[1].after[5]).toBe(0);
+    expect(planOp([...START].fill(0), 5, 'write1', { half: 0.2 })[1].missed).toBe(true);
+  });
+
+  it('at Ic or more a half select flips the whole row and column of the address', () => {
+    const [rd] = stray(0.5);
+    expect(new Set(rd.flipped)).toEqual(new Set(halfSelected(5).filter((k) => START[k] === 1).concat([5])));
+    expect(rd.stray.every((k) => halfSelected(5).includes(k))).toBe(true);
+    expect(rd.stray.length).toBeGreaterThan(0);
+    // every row/column core now reads 0: their data is gone
+    for (const k of halfSelected(5)) expect(rd.after[k]).toBe(0);
+    // just at Ic is already too much
+    const exact = planOp(START, 5, 'read', { half: IC })[0];
+    expect(exact.stray.length).toBeGreaterThan(0);
+  });
+
+  it('write 0 above Ic: the inhibit cannot hold the crossing core, and the plane is wiped', () => {
+    const [, w] = planOp(START, 5, 'write0', { half: 0.5 });
+    expect(w.missed).toBe(true); // the crossing sees 0.5 A and takes a 1
+    expect(w.stray.length).toBeGreaterThan(0);
+  });
+
+  it('a drive spread of +-20 % narrows the window: the default stays inside it, the edges of the plain window do not', () => {
+    const w = marginWindow(true);
+    expect(w.lo).toBeCloseTo((IC * 1.2) / 2, 9);
+    expect(w.hi).toBeCloseTo(IC * 0.8, 9);
+    expect(w.lo).toBeGreaterThan(IC / 2);
+    expect(w.hi).toBeLessThan(IC);
+    expect(marginOf(HALF, true)).toBe('ok');
+    expect(marginOf(0.24, true)).toBe('low');
+    expect(marginOf(0.4, true)).toBe('high');
+    expect(Math.max(...Array.from({ length: 16 }, (_, k) => icOf(k, true)))).toBeCloseTo(IC * 1.2, 9);
+    expect(icOf(3)).toBe(IC);
+    // behaviour agrees with the analytic window over a sweep, for every address
+    for (let h = HALF_MIN; h <= HALF_MAX + 1e-9; h += 0.01) for (let a = 0; a < 16; a++) {
+      const bad = planOp(START, a, 'read', { half: h, spread: true }).some((p) => p.missed || p.stray.length);
+      if (marginOf(h, true) === 'ok') expect(bad).toBe(false);
+    }
+    // at 0.38 A (inside the plain window) core 3, 20% weak and holding a 1, flips when the column is driven (address 7)
+    expect(marginOf(0.38)).toBe('ok');
+    expect(planOp(START, 7, 'read', { half: 0.38, spread: true })[0].stray).toContain(3);
+  });
+
+  it('the default is unchanged: planOp without options is the 0.30 A plane', () => {
+    expect(planOp(START, 5, 'read')[0].half).toBe(HALF);
+  });
+});
+
+describe('real-plane details', () => {
+  it('the sense wire is one diagonal polyline threading all sixteen holes', () => {
+    const R = runsOf(), seen = new Set<number>();
+    expect(R.sense.length).toBe(2 * N - 1);
+    for (let k = 0; k < 16; k++) seen.add(senseDiag(k));
+    expect(seen.size).toBe(2 * N - 1);
+    const W = wirePaths();
+    expect(W.sense.length).toBe(2 * R.sense.length + 3); // ground drop, the runs, the lead to the amplifier
+  });
+
+  it('a three-wire plane draws one wire fewer and lights the shared wire for sense or inhibit', () => {
+    const d = idle(); d.inh = -1;
+    const four = coreParts(pose({ drive: d }), PAL), three = coreParts(pose({ drive: d, threeWire: true }), PAL);
+    expect(three.length).toBeLessThan(four.length);
+    const live = (ps: typeof four) => ps.filter((p) => p.color[0] === 0 && p.color[1] === 1 && p.color[2] === 0).length;
+    expect(live(four)).toBeGreaterThan(0); // the inhibit wire
+    expect(live(three)).toBeGreaterThan(0); // the merged wire
+  });
+
+  it('a faint second plane lies below, with sixteen ghost cores', () => {
+    const ps = coreParts(pose(), PAL), ghosts = ps.filter((p) => ((p.color as number[])[3] ?? 1) < 1);
+    expect(ghosts.length).toBe(17);
+    expect(STACK_DY).toBeLessThan(-20);
+    expect(coreAnchors().some((a) => /15 more planes/.test(a.text))).toBe(true);
+  });
+
+  it('a phone gets two labels', () => {
+    expect(coreAnchors(true).length).toBe(2);
+    expect(coreAnchors().length).toBeGreaterThan(5);
+  });
+});
+
+describe('the cycle summary', () => {
+  const B = [1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0];
+  it('a clean cycle has none', () => expect(cycleFault(planOp(B, 5, 'read'), 'read')).toBe(''));
+  it('too low: one sentence, one current', () => {
+    expect(cycleFault(planOp(B, 5, 'read', { half: 0.2 }), 'read')).toBe('Read failed: the addressed core never reached Ic (0.40 A against 0.45 A).');
+    expect(cycleFault(planOp(B, 5, 'write1', { half: 0.2 }), 'write1')).toBe('Write failed: the addressed core never reached Ic (0.40 A against 0.45 A).');
+  });
+  it('too high: strays counted once across phases, plural right', () => {
+    const plan = planOp(B, 5, 'read', { half: 0.5 }), n = new Set(plan.flatMap((p) => p.stray)).size;
+    expect(cycleFault(plan, 'read')).toBe(`${n} other cores flipped and lost their data.`);
+    expect(n).toBeGreaterThan(1);
   });
 });

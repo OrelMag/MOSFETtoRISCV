@@ -8,6 +8,7 @@ import { displayTop, SCAN_OUT } from '../src/lib/raster';
 import { BitSim } from '../src/sim/bitsim';
 import { flatten } from '../src/sim/flatten';
 import {
+  crtAnchors, magnetRings, maskBeam, maskParts, MASK, memWord, NTSC, NTSC_SCALED, pathAt, REAL_FRAME_MS, sagAt, TRIADS_PER_CELL, fieldTicks,
   beamAt, beamPath, cellCentre, CrtRun, decayTicks, frameTicks, GEOM, hTotal, insideFunnel, levelsOf, ScanRef, SCANOUT, spotOf, staticParts, poseParts,
   VGA_FULL, VGA_PIXEL_CLOCK, VGA_SCALED, vTotal, W, WORDS, yokeCurrent, type CrtPalette, type Timing,
 } from '../src/widgets/crt3dparts';
@@ -192,7 +193,7 @@ describe('the tube', () => {
       expect(Math.abs(spot[1] - c[1])).toBeLessThan(GEOM.H_MM / 64 / 2 + 1e-9);
       const path = beamPath(0, spot);
       expect(path[path.length - 1]).toEqual(spot);
-      expect(path[path.length - 1][0]).toBe(GEOM.D);
+      expect(path[path.length - 1][0]).toBe(spot[0]);
     }
   });
   it('the beams come out of the gun in line and are aimed through the yoke: the last leg passes the deflection centre', () => {
@@ -218,5 +219,149 @@ describe('the tube', () => {
     const dark = poseParts(P, { beam: beamAt(VGA_SCALED, 66 * hTotal(VGA_SCALED) + 3), levels: lv, cell, current: { h: 0, v: 0 } });
     expect(dark.length).toBeLessThan(live.length);
     for (const p of [...st, ...live]) { expect(p.pos.every(Number.isFinite)).toBe(true); expect((p.scale ?? [1, 1, 1]).every(Number.isFinite)).toBe(true); }
+  });
+});
+
+describe('the three beams', () => {
+  const S = GEOM.GUN_PITCH, spots = [spotOf(10.2, 50.3), spotOf(32, 32), spotOf(63.5, 0.5), spotOf(0.5, 63.5)];
+  it('keep their 5.5 mm in-line offset through the yoke, and cross in the mask hole, not at the yoke', () => {
+    for (const spot of spots) {
+      const [r, g, b] = [-S, 0, S].map((z) => beamPath(z, spot)), mx = spot[0] - GEOM.Q;
+      // at the yoke's front they are still 5.5 mm apart ...
+      expect(pathAt(r, GEOM.YOKE_X1)[2] - pathAt(g, GEOM.YOKE_X1)[2]).toBeCloseTo(-S, 6);
+      expect(pathAt(b, GEOM.YOKE_X1)[2] - pathAt(g, GEOM.YOKE_X1)[2]).toBeCloseTo(S, 6);
+      // ... and in the plane of the mask hole all three are at one point
+      for (const p of [r, b]) for (let k = 0; k < 3; k++) expect(pathAt(p, mx)[k]).toBeCloseTo(pathAt(g, mx)[k], 9);
+      // the spread closes steadily from the yoke to the mask, then reopens behind it
+      const gap = (x: number) => Math.abs(pathAt(b, x)[2] - pathAt(r, x)[2]);
+      expect(gap(GEOM.YOKE_X1)).toBeCloseTo(2 * S, 6);
+      expect(gap(0.5 * (GEOM.YOKE_X1 + mx))).toBeLessThan(gap(GEOM.YOKE_X1));
+      expect(gap(mx)).toBeLessThan(1e-9);
+      expect(gap(spot[0])).toBeGreaterThan(0);
+      // the crossing is nowhere near the deflection centre
+      expect(mx).toBeGreaterThan(GEOM.YOKE_X1 + 50);
+    }
+  });
+  it('land on three dots TRIAD / 3 apart, the beam from -z on the +z dot, centred on the triad', () => {
+    for (const spot of spots) {
+      const dots = [-S, 0, S].map((z) => beamPath(z, spot).at(-1)!);
+      expect(dots[0][2] - dots[1][2]).toBeCloseTo(GEOM.TRIAD / 3, 9);
+      expect(dots[1][2] - dots[2][2]).toBeCloseTo(GEOM.TRIAD / 3, 9);
+      expect(dots[1]).toEqual(spot);
+    }
+  });
+  it('the mask-to-screen gap follows from the pitch and the gun spacing: Q * S / (D - Q) = TRIAD / 3', () => {
+    expect((GEOM.Q * S) / (GEOM.D - GEOM.Q)).toBeCloseTo(GEOM.TRIAD / 3, 9);
+    expect(GEOM.TRIAD).toBe(0.27);
+    expect(GEOM.Q).toBeGreaterThan(1); expect(GEOM.Q).toBeLessThan(6);
+    const [a, b, c] = [-S, 0, S].map(maskBeam);
+    expect(a[1]).toEqual(b[1]); expect(b[1]).toEqual(c[1]); // the close-up's crossing
+    expect(a[1][0]).toBeCloseTo(GEOM.D - GEOM.Q, 9);
+    expect(a[2][2] - c[2][2]).toBeCloseTo((2 * GEOM.TRIAD) / 3, 9);
+  });
+  it('the curved face: the rim is pulled back by r^2 / 2R, the spot stays on the ray from the deflection centre', () => {
+    expect(spotOf(32, 32)[0]).toBeCloseTo(GEOM.D, 3);
+    const corner = spotOf(0, 0);
+    expect(corner[0]).toBeLessThan(GEOM.D - 5);
+    expect(GEOM.D - corner[0]).toBeCloseTo(sagAt(corner[1], corner[2]), 1);
+    expect(corner[1] / corner[0]).toBeCloseTo(GEOM.H_MM / 2 / GEOM.D, 6);
+  });
+  it('the mask patch: 35 holes, a triad of dots behind each, and about 16 triads in one of our cells', () => {
+    const parts = maskParts(P, [1, 1, 1], false);
+    expect(MASK.COLS * MASK.ROWS).toBeGreaterThanOrEqual(30);
+    expect(parts.length).toBeGreaterThan(MASK.COLS * MASK.ROWS * 3);
+    expect(parts.length).toBeLessThan(260);
+    expect(TRIADS_PER_CELL).toBeCloseTo(GEOM.W_MM / 64 / 0.27, 9);
+    expect(Math.round(TRIADS_PER_CELL)).toBe(16);
+    for (const p of parts) expect(p.pos.every(Number.isFinite)).toBe(true);
+  });
+  it('rings on the neck, three labels on a phone and every label named', () => {
+    expect(magnetRings(P).length).toBe(36);
+    expect(crtAnchors('overview', true).length).toBe(3);
+    expect(crtAnchors('mask').some((a) => /beams cross/.test(a.text))).toBe(true);
+    expect(crtAnchors('yoke').some((a) => /magnets/.test(a.text))).toBe(true);
+    expect(crtAnchors('gun').some((a) => /about 10 pins/.test(a.text))).toBe(true);
+  });
+});
+
+describe('broadcast interlace', () => {
+  const T = NTSC_SCALED, HT = hTotal(T);
+  it('525 lines at 4.5 MHz / 286: 63.56 us a line, 33.37 ms a frame, 59.94 fields a second', () => {
+    expect(NTSC.LINE_HZ).toBeCloseTo(15734.2657, 3);
+    expect(NTSC.lineUs()).toBeCloseTo(63.556, 3);
+    expect(NTSC.frameMs()).toBeCloseTo(33.367, 3);
+    expect(NTSC.fieldHz()).toBeCloseTo(59.94, 2);
+    expect(NTSC.LINES / 2).toBe(NTSC.LINES_FIELD);
+    expect(NTSC.CLOCK_601 / NTSC.SAMPLES_LINE).toBeCloseTo(NTSC.LINE_HZ, 0); // BT.601's 858 samples at 13.5 MHz
+    expect(REAL_FRAME_MS).toBeCloseTo(1000 / NTSC.fieldHz(), 2);
+  });
+  it('scaled to 64 rows: the same shares, a whole field of 35 lines, a frame of two', () => {
+    expect(HT).toBe(76); expect(HT % 4).toBe(0);
+    expect(HT).toBe(Math.round(64 / (NTSC.SAMPLES_ACTIVE / NTSC.SAMPLES_LINE)));
+    expect(T.vAct + T.vFp + T.vSync + T.vBp).toBeCloseTo((NTSC.LINES_FIELD * 64) / 480, 9);
+    expect(T.vAct).toBe((NTSC.ACTIVE_FIELD * 64) / 480);
+    expect(fieldTicks(T)).toBe(76 * 35);
+    expect(frameTicks(T)).toBe(2 * fieldTicks(T));
+    expect(frameTicks(T) / HT).toBe(70); // 525 lines x 64 / 480
+  });
+  it('the first field draws the odd lines (rows 0, 2, ...), the second the even ones, every row once a frame', () => {
+    const seen = new Map<number, number[]>();
+    for (let tk = 0; tk < frameTicks(T); tk++) {
+      const b = beamAt(T, tk + 0.5);
+      if (b.blanked) continue;
+      expect(b.row % 2).toBe(b.field);
+      expect(b.row).toBe(2 * b.line + b.field);
+      expect(b.pixel).toBe(b.row * 64 + b.px);
+      (seen.get(b.pixel) ?? seen.set(b.pixel, []).get(b.pixel)!).push(tk);
+    }
+    expect(seen.size).toBe(4096);
+    for (const [, v] of seen) expect(v.length).toBe(1);
+    expect(seen.get(0)![0]).toBeLessThan(fieldTicks(T));
+    expect(Math.floor(seen.get(64)![0] / fieldTicks(T))).toBe(1);
+  });
+  it('the scan-out counter with its field bit moved to the row bottom reads the frame buffer in that order, in lock step with the beam', () => {
+    const run = new CrtRun(T, pics), seenWords = new Set<number>();
+    for (let tk = 0; tk < 2 * frameTicks(T); tk++) {
+      const b = beamAt(T, tk + 0.5), sub = tk & 3;
+      if (!b.blanked) {
+        const o = run.scan.out();
+        expect(b.addr, `tick ${tk}`).toBe(o.ra);
+        expect(4 * memWord(o.ra, T) + sub, `tick ${tk}`).toBe(b.pixel);
+        if (tk < frameTicks(T)) seenWords.add(memWord(o.ra, T));
+      }
+      run.advance(tk + 1);
+    }
+    expect(seenWords.size).toBe(WORDS);
+    expect(run.frames).toBeGreaterThanOrEqual(1);
+    for (let ra = 0; ra < WORDS; ra++) expect(memWord(ra, SCANOUT)).toBe(ra);
+  });
+  it('the beam is blanked between the fields and starts the other field on its first row', () => {
+    const FF = fieldTicks(T);
+    expect(beamAt(T, FF - 0.01).blanked).toBe(true);
+    expect(beamAt(T, FF - 0.01).phase).toBe('vretrace');
+    expect(Math.abs(beamAt(T, FF - 0.01).y - 1)).toBeLessThan(0.1); // the odd field ends on row 62, moves to row 1
+    expect(Math.abs(beamAt(T, frameTicks(T) - 0.01).y)).toBeLessThan(0.1);
+  });
+  it('a fade of about a field leaves the other field dimmer: the comb', () => {
+    const run = new CrtRun(T, pics), tau = decayTicks(T, 1, 16);
+    run.advance(fieldTicks(T));
+    expect(run.glow(0, fieldTicks(T) - 1, tau)).toBeGreaterThan(0);
+    expect(run.glow(64, fieldTicks(T) - 1, tau)).toBe(0); // row 1 belongs to the next field
+    run.advance(frameTicks(T));
+    const t2 = frameTicks(T) - 1;
+    expect(run.glow(64, t2, tau)).toBeGreaterThan(run.glow(0, t2, tau));
+  });
+});
+
+describe('the Mask view labels (batch 24 review)', () => {
+  it('names the hole the three beams cross in, and puts the mask label on steel', () => {
+    const a = crtAnchors('mask'), hole = a.find((x) => /cross in this hole/.test(x.text))!, steel = a.find((x) => /steel shadow mask/.test(x.text))!;
+    const mx = GEOM.D - GEOM.Q, T = GEOM.TRIAD;
+    // every beam passes the hole's axis (y = z = 0) at the mask
+    for (const zi of [-GEOM.GUN_PITCH, 0, GEOM.GUN_PITCH]) { const m = maskBeam(zi)[1]; expect(m[0]).toBeCloseTo(mx, 9); expect(m[1]).toBe(0); expect(m[2]).toBe(0); }
+    expect(hole.p[1]).toBe(0); expect(hole.p[2]).toBe(0); expect(hole.p[0]).toBeCloseTo(mx - MASK.THICK, 9);
+    // steel: off every hole by more than half a hole in y (rows are a pitch apart)
+    const dy = Math.abs(steel.p[1] / T - Math.round(steel.p[1] / T)) * T;
+    expect(dy).toBeGreaterThan(MASK.HOLE / 2);
   });
 });

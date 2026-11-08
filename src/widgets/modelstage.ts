@@ -29,7 +29,7 @@ export interface ModelStageOptions {
 
 /** A preset view: picked from the stage's view bar (setView), Reset view then comes back to it. `view` may be computed at
  *  the click (a view that depends on the stage's width); `pick` runs after the camera moved (what the model draws in it). */
-export interface ModelView { label: string; view: OrbitView | (() => OrbitView); title?: string; pick?: () => void }
+export interface ModelView { label: string; view: OrbitView | (() => OrbitView); title?: string; pick?: () => void; /** zoom limits for this view (a close-up); else the current ones */ limits?: Partial<OrbitLimits>; /** the view the model opens on (else the first) */ on?: boolean }
 
 export interface ModelStage {
   el: HTMLElement;
@@ -42,8 +42,10 @@ export interface ModelStage {
   paint(parts: readonly Part[], anchors: readonly Anchor[]): void;
   /** No WebGL2: the flat fallback is showing (a model may draw fewer facets). */
   isFlat(): boolean;
+  /** Replace the note (what the drawing exaggerates): a model with several views shows the open one's. */
+  setNote(text: string): void;
   /** Move the camera (a model's preset views). */
-  setView(v: OrbitView): void;
+  setView(v: OrbitView, limits?: Partial<OrbitLimits>): void;
   /** The preset views as a button group with Reset view at its end (o.views, or these). */
   viewBar(views?: readonly ModelView[]): HTMLElement;
   destroy(): void;
@@ -65,7 +67,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
   const el = h('div', { class: 'r3-stage' }, canvas, flat, labels, chips);
   const colors = new CssColors(host);
   const frame = modelFrame({ stage: el, name: o.aria, renderer: () => (mode === 'gl' ? renderer : null), labels });
-  const note = o.note ? `${o.note} ` : '';
+  let note = o.note ? `${o.note} ` : '';
 
   // 'wait' until the renderer chunk answers; 'flat' without WebGL2 or while the context is lost.
   let mode: 'wait' | 'gl' | 'flat' = 'wait', renderer: Renderer | null = null, dead = false;
@@ -79,7 +81,8 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
     const eye = renderer.camera.eye();
     last.forEach((a, k) => {
       const p = renderer!.project(a.p), e = lblEls[k];
-      if (!p) { e.style.display = 'none'; return; }
+      // An anchor that projects outside the canvas (a close-up view of one end) has no label: it would be clamped to an edge.
+      if (!p || p[0] < 0 || p[1] < 0 || p[0] > canvas.clientWidth || p[1] > canvas.clientHeight) { e.style.display = 'none'; return; }
       e.style.display = '';
       e.classList.toggle('away', dot3(a.n, sub3(eye, a.p)) < 0);
       e.style.transform = `translate(${p[0].toFixed(1)}px, ${p[1].toFixed(1)}px)`;
@@ -143,6 +146,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
     if (k !== 1) renderer!.invalidate();
   };
 
+  const hintText = () => (mode === 'flat' ? `${note}A flat view: this browser has no WebGL2 for the 3D one.` : `${note}${ORBIT_HINT}`);
   const setMode = (m: 'gl' | 'flat') => {
     const on = m === 'flat';
     mode = m;
@@ -151,7 +155,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
     labels.style.display = on ? 'none' : '';
     resetBtn.style.display = on ? 'none' : '';
     frame.setFlat(on);
-    hint.textContent = on ? `${note}A flat view: this browser has no WebGL2 for the 3D one.` : `${note}${ORBIT_HINT}`;
+    hint.textContent = hintText();
     o.draw();
   };
 
@@ -175,11 +179,12 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
   return {
     el, hint, chips, resetBtn, paint,
     isFlat: () => mode === 'flat',
-    setView(v) {
-      o.camera = v;
+    setNote(text) { note = text ? `${text} ` : ''; if (mode !== 'wait') hint.textContent = hintText(); },
+    setView(v, limits) {
+      o.camera = v; fit = null;
       const c = renderer?.camera;
       if (!c) { if (mode === 'flat') o.draw(); return; }
-      c.rehome(v, c.limits);
+      c.rehome(v, limits ?? c.limits);
       fitFor = ''; // a new home: fitted again at the next frame
       renderer?.invalidate();
     },
@@ -188,13 +193,13 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
         const b = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false', ...(v.title ? { title: v.title } : {}) }, v.label) as HTMLButtonElement;
         b.addEventListener('click', () => {
           const w = typeof v.view === 'function' ? v.view() : v.view;
-          this.setView({ ...w, target: [...w.target] });
+          this.setView({ ...w, target: [...w.target] }, v.limits);
           for (const x of btns) x.setAttribute('aria-pressed', String(x === b));
           v.pick?.();
         });
         return b;
       });
-      btns[0]?.setAttribute('aria-pressed', 'true');
+      btns[Math.max(0, views.findIndex((v) => v.on))]?.setAttribute('aria-pressed', 'true');
       return h('div', { class: 'r3-views', role: 'group', 'aria-label': 'Views' }, ...btns, resetBtn);
     },
     rgb: (t) => colors.rgb(t),

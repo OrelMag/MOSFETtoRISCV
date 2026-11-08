@@ -265,7 +265,7 @@ export const chFlash: Chapter = {
         active block and erases it. Every copy is a program the host did not ask for: <strong>write amplification</strong> is page programs
         divided by host writes. The table itself lives in the controller's RAM and is rebuilt from the pages at power-up (each page
         records its logical number).</p>
-        <p>The layer is what makes flash look like a disk: the host sees a flat array of overwritable sectors, and the controller turns every overwrite into a program of a
+        <p>An SSD replaces the spinning disk modelled below, and a disk rewrites a sector where it is: seek to the track, wait for the sector to come round, write (press <em>Rewrite this sector</em> in the model). Flash cannot, so the layer is what makes flash look like a disk: the host sees a flat array of overwritable sectors, and the controller turns every overwrite into a program of a
         free page, a table update and, later, an erase. The host's speed then depends on how much work is waiting in the background, which is why an SSD slows down as it fills.</p>`,
       more: {
         derive: `<p>A block of n pages with v valid ones frees n − v pages at the price of v copies. To fill the freed pages the host writes n − v pages, so the device programs v + (n − v) = n pages for n − v host writes:
