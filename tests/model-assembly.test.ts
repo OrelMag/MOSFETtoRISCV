@@ -10,8 +10,9 @@ import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { HAZARDS, INDEP } from '../src/chapters/ch-pipe';
 import { PROGRAMS } from '../src/riscv/programs';
+import { readFileSync } from 'node:fs';
 import { tick } from './yieldtick';
-import { assemblyAnchors, palletBox, assemblyParts, lampsOf, palletsAt, stationX } from '../src/widgets/assembly3dparts';
+import { OUTCOMES, flushText, outcomeOf, assemblyAnchors, palletBox, assemblyParts, lampsOf, palletsAt, stationX } from '../src/widgets/assembly3dparts';
 
 /** Plus a program with jal, jalr and a load whose result feeds a jalr: none of the chapter's three uses them. */
 const CALLS = `# call and return
@@ -144,5 +145,33 @@ describe('the note\'s claims about the chapter\'s programs', () => {
       const words = assemble(source).words;
       words.forEach((w, i) => { if ((w & 0x7f) === 0x63) expect(decode(w).imm).not.toBe(4); void i; });
     }
+  });
+});
+
+describe('the chip, the predict step and the lamp colours', () => {
+  const plans = CASES.map(([, src, n]) => pipeSchedule(assemble(src).words, n));
+  it('the flush chip counts the instructions actually pulled, one when Decode held a bubble', () => {
+    const flushes = plans.flatMap((p) => p.filter((c) => c.flush));
+    expect(flushes.length).toBeGreaterThan(0);
+    for (const c of flushes) expect(flushText(c)).toBe(`Flush: ${c.pulled.length} pulled`);
+    // a flush with a bubble in Decode pulls only the Fetch slot: the old fixed "2 pulled" was wrong there
+    const lone = flushes.filter((c) => c.pulled.length === 1);
+    for (const c of lone) expect(flushText(c)).toBe('Flush: 1 pulled');
+    expect(flushes.every((c) => c.pulled.length === 1 || c.pulled.length === 2)).toBe(true);
+  });
+  it('the answer to the predict step is the plan’s own cycle: a stall never flushes, and all three outcomes occur', () => {
+    const all = plans.flat();
+    for (const c of all) expect(c.stall && c.flush).toBe(false);
+    for (const o of OUTCOMES) expect(all.some((c) => outcomeOf(c) === o), o).toBe(true);
+    for (const c of all) expect(outcomeOf(c)).toBe(c.flush ? 'flush' : c.stall ? 'stall' : 'flow');
+  });
+  it('the hold lamp has a colour token of its own, in both themes, not the branch pallet’s', () => {
+    const css = readFileSync(new URL('../src/styles/assembly3d.css', import.meta.url), 'utf8');
+    const tok = (n: string) => css.split('\n').find((l) => l.includes('--' + n + ':'))?.split('light-dark(')[1]?.split(')')[0];
+    expect(tok('as-hold')).toBeTruthy();
+    expect(tok('as-hold')).not.toBe(tok('as-ctl'));
+    expect(tok('as-hold')).not.toBe(tok('as-wrong'));
+    const view = readFileSync(new URL('../src/widgets/assembly3dview.ts', import.meta.url), 'utf8');
+    expect(view).toContain("hold: stage.rgb('--as-hold')");
   });
 });
