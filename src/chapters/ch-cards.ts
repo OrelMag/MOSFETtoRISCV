@@ -6,6 +6,7 @@ import { PROGRAMS } from '../riscv/programs';
 import { cardEditorWidget, censusWidget, deckWidget, loomWidget, readerPanel, sampleDeck } from '../widgets/cards';
 import { withModel } from '../widgets/modelhost';
 import { press3d } from '../widgets/press3d';
+import { cardReader3d } from '../widgets/cardreader3d';
 import { bench, type Chapter } from './types';
 import { numOf } from './order';
 
@@ -26,6 +27,8 @@ const N = SUM_DECK.cards.length;
 const EDGES_ALL = (FEED + 1) * (N - 1) + 1;
 const hex = (w: number) => `0x${(w >>> 0).toString(16).padStart(8, '0')}`;
 const wordOf = (k: number) => SUM.lines[k].word >>> 0;
+/** Edges for the deck column by column with next held at 1: 80 a card, the feed between cards. */
+const EDGES_COLS = COLUMNS * N + FEED * (N - 1);
 
 export const chCards: Chapter = {
   id: 'cards', num: numOf('cards'), prologue: 'P3', title: 'Punch cards', level: 'Input',
@@ -265,6 +268,41 @@ export const chCards: Chapter = {
           for (let k = 0; k < SUM_DECK.cards.length * (FEED + 1) && st.value('empty') !== 1; k++) st.pulse();
           st.refresh();
         },
+      },
+    },
+    {
+      title: 'Inside the reader',
+      body: `
+        <p>The part in the step before is a machine. A <strong>picker knife</strong> slides the bottom card out of the
+        hopper, <strong>feed rolls</strong> carry it past the read station, and more rolls drop it in the
+        <strong>stacker</strong>, in the order it came. What differs between readers is how the station senses the holes.</p>
+        <p>The IBM 711, the reader of the 701 and 704 (150 to 250 cards a minute), takes the card crosswise, 9 edge first, under
+        a row of wire <strong>brushes</strong>, one over each column, with a brass contact roll below. Where a brush finds a hole it
+        touches the roll and a circuit closes, as Hollerith's pins did in mercury. Row 9 comes under the brushes first, so the
+        row this chapter's object cards keep their word in is the first one read: row 9 of columns 1–32 is the word on
+        <code>data</code>. The 704 read every row this way, 12 rows of 72 columns as 24 words of 36 bits.</p>
+        <p>The IBM 2501 of the System/360 years (600 or 1000 cards a minute) takes the card lengthwise, column 1 first, between a lamp and twelve
+        <strong>photocells</strong>, one per row: it reads a column at a time, 12 bits, which is the reader part's column mode.
+        Light needs no contact, so nothing wears and the card can move faster. Either way the bits leave on wires: ${N} cards
+        take ${EDGES_ALL} edges row by row and ${EDGES_COLS} column by column, with next held at 1.</p>
+        <div class="try">Run the deck row by row and watch the lamps behind: data, then ready, empty and next. Then turn
+        off "Computer takes (next)" and step: the card waits at the station. Switch to column by column and watch the word
+        build up beside the model, one row-9 bit a column.</div>`,
+      more: {
+        derive: `<p>Column by column a card is ${COLUMNS} items, so with next held at 1 card k is done after ${COLUMNS}·k + ${FEED}·(k − 1) edges and the deck after
+          ${COLUMNS} × ${N} + ${FEED} × ${N - 1} = ${EDGES_COLS}. A loader that wants the word shifts in row 9 of each of the first 32 columns: 32 takes for what row by row arrives in one.
+          Row by row the 32 bits come on 32 wires at once; column by column they come one a column, and a column's 12 rows on 12 wires.</p>`,
+        pitfall: `<p>Thinking the brushes read the whole card at once. They read one row at a time as the card passes, and a machine that needs more than one row (the 704 needed all
+          twelve) has to catch each row as it goes by, timed by a wheel turning with the rolls. The reader part here reads row 9 only, and holds the card still until it is taken.</p>`,
+        real: `<p>Brushes wear, gather card dust, and can touch through a thin spot that is not a hole. The IBM 1402 read every card at two brush stations and compared the
+          readings; photocell readers such as the 2501 had no brushes to wear, and reading a column at a time needs twelve sensors instead of eighty.</p>`,
+      },
+      widget: () => cardReader3d(SUM_DECK, FEED, SUM.lines.map((l) => l.text.trim())),
+      challenge: {
+        kind: 'quiz', question: 'A reader takes the card column by column, 12 photocells under one column. How many takes give the computer one card\'s 32-bit word from row 9?',
+        options: ['32', '1', '12', '80'], answer: 0,
+        explain: 'Each take is one column, 12 bits, and the word is row 9 of columns 1–32, one bit a column: the first 32 columns. Row by row it is one take.',
+        why: ['', 'That is the row-by-row reader: row 9 crosses all the brushes at once.', '12 is the bits in one column, not the columns the word spans.', 'The word ends at column 32; the other 48 columns are not part of it (the last eight are the sequence number).'],
       },
     },
   ],
