@@ -24,7 +24,7 @@ export const chMultirate: Chapter = {
     'derive a CIC from a moving average, and size its registers from N log₂ R',
     'price a large rate change as one filter, as branches, and as a cascade',
   ],
-  builds: ['signals', 'fixed', 'firdesign', 'muldiv'],
+  builds: ['signals', 'fixed', 'firdesign', 'muldiv', 'radio'],
   recap: {
     keep: [
       'Keeping every R-th sample folds everything above the new half-rate into the band, for good. So the filter comes first, and it runs at the high rate.',
