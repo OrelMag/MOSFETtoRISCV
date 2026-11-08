@@ -7,8 +7,9 @@ import { CLOCK_NS } from '../src/dram/timing';
 import type { RGB, RGBA } from '../src/gl/instances';
 import {
   AVG_LATENCY_MS, BAND_IN, BAND_OUT, CYLINDERS, FULL_STROKE_MS, PITCH_NM, PIVOT_D, ARM_L, PLATTER_R, RPM, SCALE_VS_CPU, SECTORS, SEEK_AVG_MS, SEEK_FULL_DATASHEET_MS,
-  SEEK_T2T_MS, TRACKS, TURN_MS, ZERO_SKEW_R, cpuCycles, cylinderOf, fmtMs, diskAnchors, diskParts, distance, driveRows, headAt, mediaRate, modelCycles,
+  SEEK_T2T_MS, TRACKS, TURN_MS, ZERO_SKEW_R, trackBytes, cpuCycles, cylinderOf, fmtMs, diskAnchors, diskParts, distance, driveRows, headAt, mediaRate, modelCycles,
   phaseAt, planRead, radiusAt, readoutRows, sectorUnder, seekMs, trackRadius, type DiskPalette,
+  CAPACITY_BYTES, CAPACITY_NAMED_BYTES, DATASHEET_MEDIA_MBIT, OUTER_SECTORS, PICO_MM, QUEUE, RAMP_R, RAMP_C, SLIDER_DRAWN, guessLine, queueLine, queueRun, queueSorted, rewriteLine, PLATTER_Y,
 } from '../src/widgets/disk3dparts';
 
 const col = (i: number): RGB => [i / 20, 0.5, 0.5], al = (i: number): RGBA => [i / 20, 0.5, 0.5, 0.4];
@@ -47,7 +48,7 @@ describe('the drive', () => {
     expect(AVG_LATENCY_MS).toBeCloseTo(4.1667, 3);
   });
   it('has the cylinders its band and track pitch make', () => {
-    expect(CYLINDERS).toBe(((BAND_OUT - BAND_IN) * 1e6) / PITCH_NM);
+    expect(CYLINDERS).toBe(Math.round(((BAND_OUT - BAND_IN) * 1e6) / PITCH_NM));
     expect(BAND_OUT).toBeLessThan(PLATTER_R);
   });
   it('drawn tracks run from the outer to the inner edge of the band, over the whole stroke', () => {
@@ -61,6 +62,21 @@ describe('the drive', () => {
     expect(mediaRate(BAND_OUT) / mediaRate(BAND_IN)).toBeCloseTo(BAND_OUT / BAND_IN, 1);
     expect(mediaRate(BAND_OUT) / 1e6).toBeGreaterThan(150);
     expect(mediaRate(BAND_OUT) / 1e6).toBeLessThan(250);
+  });
+  it('matches the drive it names: 500 GB, and an outer media rate at the data sheet maximum of 1406 Mbit/s', () => {
+    expect(Math.abs(CAPACITY_BYTES / CAPACITY_NAMED_BYTES - 1)).toBeLessThan(0.01);
+    expect(Math.abs((mediaRate(BAND_OUT) * 8) / 1e6 / DATASHEET_MEDIA_MBIT - 1)).toBeLessThan(0.01);
+    // The capacity from the per-track bytes themselves (4 surfaces, every cylinder at its own radius) agrees with the closed form.
+    let sum = 0;
+    for (let c = 0; c < CYLINDERS; c += 7) sum += trackBytes(BAND_OUT - (c * (BAND_OUT - BAND_IN)) / (CYLINDERS - 1)) * 7;
+    expect(Math.abs((4 * sum) / CAPACITY_BYTES - 1)).toBeLessThan(0.002);
+    expect(OUTER_SECTORS).toBe(358);
+    expect(PITCH_NM).toBe(219);
+    // 219 nm = 116 ktpi; the areal density at the outer edge stays under the family maximum of 244 Gbit/in^2.
+    const ktpi = 25.4e6 / PITCH_NM / 1e3, bpi = (trackBytes(BAND_OUT) * 8) / ((2 * Math.PI * BAND_OUT) / 25.4);
+    expect(ktpi).toBeGreaterThan(110);
+    expect(ktpi).toBeLessThan(125);
+    expect((ktpi * 1e3 * bpi) / 1e9).toBeLessThan(244);
   });
   it('the arm puts the head exactly at the radius asked, with zero skew at the stated radius and a few tens of degrees across the band', () => {
     for (let r = BAND_IN; r <= BAND_OUT; r += 0.5) {
@@ -167,5 +183,77 @@ describe('the drawing follows the model', () => {
     expect(parts.some((q) => q.color === P.target && Math.hypot(q.pos[0] - h.x, q.pos[2] - h.z) < 0.01)).toBe(true);
     const names = diskAnchors({ phi: 0, r: 40, sel: null, phase: 'seek' }).map((a) => a.text).join('|');
     for (const w of ['spindle hub', 'platters', 'head', 'actuator arm', 'pivot', 'voice coil', 'magnet']) expect(names).toContain(w);
+  });
+});
+
+describe('rewriting in place, against flash', () => {
+  it('a rewrite of the sector just read needs no seek and waits almost a full turn (the sector has just gone by)', () => {
+    const read = planRead(0, 4, 8, 5), w = planRead(read.t3, 8, 8, 5, { kind: 'write' });
+    expect(w.kind).toBe('write');
+    expect(w.seek).toBe(0);
+    expect(w.wait).toBeCloseTo(TURN_MS - TURN_MS / SECTORS, 6);
+    expect(w.total).toBeLessThan(TURN_MS + 1e-9);
+    // Whatever the sector, an in-place rewrite from its own track is at most one turn.
+    for (let s = 0; s < SECTORS; s++) for (const t0 of [0, 2.2, 9.1]) expect(planRead(t0, 6, 6, s, { kind: 'write' }).total).toBeLessThanOrEqual(TURN_MS + TURN_MS / SECTORS + 1e-9);
+  });
+  it('the readout and the one-line contrast name the flash program, not the read', () => {
+    const w = planRead(1, 5, 5, 2, { kind: 'write' }), rows = Object.fromEntries(readoutRows(w, 5, { track: 5, sector: 2 }));
+    expect(rows['Request']).toContain('rewrite');
+    expect(rows['Against a flash page program']).toContain(thin(Math.round((w.total * 1000) / FLASH_REAL_US.program)));
+    expect(rows['Against a flash page read']).toBeUndefined();
+    expect(rewriteLine(w)).toContain(`${FLASH_REAL_US.program} µs`);
+    expect(rewriteLine(w)).toContain(fmtMs(w.total));
+  });
+});
+
+describe('predict, then see', () => {
+  it('a random read is mostly seek and latency, the transfer a few per cent', () => {
+    let mean = 0, n = 0;
+    for (let a = 0; a < TRACKS; a++) for (let b = 0; b < TRACKS; b++) for (let s = 0; s < SECTORS; s += 3) { const p = planRead(a * 3.7 + s, a, b, s); mean += p.transfer / p.total; n++; }
+    expect(mean / n).toBeLessThan(0.1);
+  });
+  it('the guess line reports the factor and the shares from the plan', () => {
+    const p = planRead(0, 0, 11, 6);
+    expect(guessLine(p.total / 2, p)).toContain('2.0× more');
+    expect(guessLine(p.total * 4, p)).toContain('4.0× less');
+    expect(guessLine(10, p)).toContain(((100 * p.transfer) / p.total).toFixed(1));
+  });
+  it('eight random reads cost less sorted by track, on seek, and the line prints both totals', () => {
+    expect(QUEUE).toHaveLength(8);
+    const a = queueRun(QUEUE), b = queueRun(queueSorted());
+    expect(b.seek).toBeLessThan(a.seek);
+    expect(b.total).toBeLessThan(a.total);
+    expect(a.transfer).toBeCloseTo(8 * (TURN_MS / SECTORS), 9);
+    expect(queueSorted().map((q) => q.track)).toEqual([...QUEUE.map((q) => q.track)].sort((x, y) => x - y));
+    expect(queueLine()).toContain(fmtMs(a.total));
+    expect(queueLine()).toContain(fmtMs(b.total));
+    expect(queueLine()).toContain(fmtMs((8 * FLASH_REAL_US.read) / 1000));
+  });
+});
+
+describe('the ramp and the added parts', () => {
+  it('a head parked on the ramp sits beyond the recording band, and the first read starts there', () => {
+    expect(RAMP_R).toBeGreaterThan(BAND_OUT);
+    expect(radiusAt(null, null, 0)).toBe(RAMP_R);
+    const p = planRead(2, 0, 7, 3, { fromRamp: true });
+    expect(p.fromRamp).toBe(true);
+    expect(radiusAt(p, null, 2)).toBe(RAMP_R);
+    expect(radiusAt(p, null, p.t1)).toBe(trackRadius(7));
+    expect(Math.hypot(headAt(RAMP_R).x, headAt(RAMP_R).z)).toBeCloseTo(RAMP_R, 6);
+    expect(Object.fromEntries(readoutRows(null, null, { track: 2, sector: 0 }))['Head']).toContain('ramp');
+  });
+  it('the slider is drawn at twice the pico slider, the ramp stands beyond the platter edge, and the new parts are labelled', () => {
+    expect(PICO_MM).toEqual([1.25, 1.0, 0.3]);
+    expect(SLIDER_DRAWN[0]).toBe(2.5);
+    expect(SLIDER_DRAWN[2]).toBe(2.0);
+    const parts = diskParts({ phi: 0, r: RAMP_R, sel: null, phase: 'idle' }, P), rp = headAt(RAMP_C);
+    expect(RAMP_C - 1.5).toBeGreaterThan(PLATTER_R);
+    expect(parts.some((q) => q.color === P.hub && q.kind === 'box' && Math.hypot(q.pos[0] - rp.x, q.pos[2] - rp.z) < 0.01 && q.scale![1] > PLATTER_Y[1] - PLATTER_Y[0])).toBe(true);
+    const names = diskAnchors({ phi: 0, r: RAMP_R, sel: null, phase: 'idle' }).map((a) => a.text).join('|');
+    for (const w of ['ramp', 'preamp', 'flex cable', 'spindle motor']) expect(names).toContain(w);
+  });
+  it('only the head and the platters stay named when the stage is narrow', () => {
+    const major = diskAnchors({ phi: 0, r: 30, sel: null, phase: 'idle' }).filter((a) => !a.minor).map((a) => a.text);
+    expect(major).toEqual(['platters, 95 mm', 'head']);
   });
 });
