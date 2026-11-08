@@ -165,9 +165,6 @@ export const LAMP_Y = 40;
 function cardParts(out: Part[], m: Machine, run: ReaderRun, k: number, cx: number, y: number, P: ReaderPalette): void {
   const a = m.along / 2, c = m.across / 2;
   out.push(box(P.card, cx - a, cx + a, y, y + CARD_T, -c, c));
-  // The corner cut, at column 1's 12 edge: which way round the card is.
-  const [hx, hz] = m.hole(cx, 0, 0), sx = Math.sign(hx - cx) || 1, sz = Math.sign(hz) || 1;
-  out.push(box(P.hole, cx + sx * a - sx * 1.6 - 0.6, cx + sx * a - sx * 1.6 + 0.6, y + CARD_T, y + CARD_T + 0.04, sz * c - sz * 1.6 - 0.6, sz * c - sz * 1.6 + 0.6));
   const cols = run.deck.cards[k].cols, wide = run.mode === 'word';
   for (let col = 0; col < COLUMNS; col++) for (let r = 0; r < ROWS; r++) {
     if (!((cols[col] >> r) & 1)) continue;
@@ -179,13 +176,24 @@ function cardParts(out: Part[], m: Machine, run: ReaderRun, k: number, cx: numbe
 export function readerParts(run: ReaderRun, L: ReaderLayout, next: 0 | 1, P: ReaderPalette): Part[] {
   const m = MACHINES[run.mode], out: Part[] = [], a = m.along / 2, c = m.across / 2, x0 = m.hopper - a - 8, x1 = m.stacker + a + 8;
   // The bed, with the station's slot, and the side plates.
-  out.push(box(P.bed, x0, x1, BED - 4, BED, -c - 6, c + 6));
-  for (const sz of [-1, 1]) out.push(box(P.frame, x0, x1, BED - 4, BED + 3, sz * (c + 4) - 1, sz * (c + 4) + 1));
+  // The bed sits low, in short tiles, the card riding on two guide rails at its edges: the flat view sorts faces by their
+  // middles, and one long slab under the cards would be drawn over them.
+  const slot = 3.5, tiles = (xa: number, xb: number, f: (u: number, v: number) => void) => {
+    const n = Math.max(1, Math.round((xb - xa) / 12));
+    for (let i = 0; i < n; i++) f(xa + ((xb - xa) * i) / n, xa + ((xb - xa) * (i + 1)) / n);
+  };
+  for (const [xa, xb] of [[x0, STATION_X - slot], [STATION_X + slot, x1]]) tiles(xa, xb, (u, v) => {
+    out.push(box(P.bed, u, v, BED - 9, BED - 6, -c - 6, c + 6));
+    for (const sz of [-1, 1]) out.push(box(P.frame, u, v, BED - 6, BED, Math.min(sz * (c - 1.2), sz * (c + 0.6)), Math.max(sz * (c - 1.2), sz * (c + 0.6))));
+  });
+  out.push(box(P.bed, STATION_X - slot, STATION_X + slot, BED - 9, BED - 7, -c - 6, c + 6));
+  for (const sz of [-1, 1]) tiles(x0, x1, (u, v) => out.push(box(P.frame, u, v, BED - 9, BED + 1.5, sz * (c + 4) - 1, sz * (c + 4) + 1)));
   // The hopper: corner posts, the cards face down, a weight on top; the picker knife at the bottom card's trailing edge.
   const hop = Math.min(L.hopper, STACK_MAX);
   for (const [sx, sz] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) out.push(box(P.frame, m.hopper + sx * (a + 1.2) - 0.8, m.hopper + sx * (a + 1.2) + 0.8, BED, BED + 26, sz * (c + 1.2) - 0.8, sz * (c + 1.2) + 0.8));
   for (let i = 0; i < hop; i++) out.push(box(P.card, m.hopper - a, m.hopper + a, BED + STACK_P * (i + 1), BED + STACK_P * (i + 1) + CARD_T * 0.8, -c, c));
-  out.push(box(P.metal, m.hopper - a + 2, m.hopper + a - 2, BED + STACK_P * (hop + 1) + 0.6, BED + STACK_P * (hop + 1) + 3.6, -c + 3, c - 3, 0.4));
+  const wy = BED + STACK_P * (hop + 1) + 0.6;
+  out.push(box(P.metal, m.hopper - 4, m.hopper + 4, wy, wy + 3, -c * 0.4, c * 0.4, 0.4));
   const kx = m.hopper - a - 1.4 + L.knife * 14;
   out.push(box(P.metal, kx - 1.2, kx, BED - 0.2, BED + 0.45, -c + 2, c - 2, 0.6), box(P.frame, kx - 6, kx - 1.2, BED - 1.8, BED - 0.2, -c + 6, c - 6));
   // Feed rolls in pairs across the path, rubber below, steel above.

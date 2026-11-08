@@ -21,8 +21,13 @@ const RATE: Record<ReaderMode, number> = { word: 2, column: 40 };
 /** The share of a period the motion takes, and a stepped edge's motion. */
 const MOVE = 0.75, STEP_MS = 420;
 const VIEWS: Record<ReaderMode, OrbitView> = {
-  word: { target: [0, 18, -6], yaw: 0.42, pitch: 0.42, dist: 190 },
-  column: { target: [0, 18, -4], yaw: 0.3, pitch: 0.5, dist: 300 },
+  word: { target: [-2, 16, -8], yaw: 0.32, pitch: 0.55, dist: 290 },
+  column: { target: [14, 10, -10], yaw: 0.72, pitch: 0.58, dist: 410 },
+};
+/** The read station up close. */
+const CLOSE: Record<ReaderMode, OrbitView> = {
+  word: { target: [-4, 10, 10], yaw: 0.55, pitch: 0.62, dist: 95 },
+  column: { target: [0, 10, 0], yaw: 0.65, pitch: 0.55, dist: 85 },
 };
 const hex = (w: number, d = 8) => `0x${(w >>> 0).toString(16).padStart(d, '0')}`;
 
@@ -30,12 +35,14 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
   let mode: ReaderMode = 'word', run = new ReaderRun(deck, mode, feed), next: 0 | 1 = 1, running = false;
   // u: how far the motion since the last edge has gone (1 settled); tau: the running clock's phase within a period.
   let u = 1, tau = 0, stepT = -1;
+  // The station close-up (the button is made with the controls below; a draw can come first, from the renderer).
+  let close = false, closeBtn: HTMLButtonElement | null = null;
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
     aria: 'A card reader in 3D feeding a computer: a hopper of punched cards, a picker knife, feed rolls, the read station and a stacker, and the computer’s panel of lamps',
     camera: { ...VIEWS.word },
-    limits: { minDist: 70, maxDist: 520 },
+    limits: { minDist: 70, maxDist: 800 },
     note: 'Sizes are the card’s; the brushes, rolls and timing are drawn, not modelled: here a card waits at the station until it is taken, as the reader part does, where a real reader read it on the move against a timing wheel.',
     draw: () => paint(),
   });
@@ -46,6 +53,7 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
   });
   function paint(): void {
     const L = readerLayout(run, u);
+    if (closeBtn) closeBtn.hidden = stage.isFlat(); // the flat view has one fixed view
     stage.paint(readerParts(run, L, next, palette()), readerAnchors(run, L));
   }
 
@@ -109,7 +117,10 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
     runBtn.setAttribute('aria-pressed', String(running));
     runBtn.disabled = stepBtn.disabled = empty === 1;
     takeBtn.setAttribute('aria-pressed', String(next === 1));
-    if (announce || !running) live.textContent = status();
+    // Read out on a step or a stop, not at every edge of a run (the line still follows it on screen).
+    live.setAttribute('aria-live', running && !announce ? 'off' : 'polite');
+    const text = status();
+    if (live.textContent !== text) live.textContent = text;
   }
 
   function edge(): void { run.edge(next); }
@@ -152,11 +163,19 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
       if (mode === m) return;
       mode = m;
       modeBtns.forEach((x, i) => { const on = (['word', 'column'] as const)[i] === m; x.classList.toggle('on', on); x.setAttribute('aria-pressed', String(on)); });
-      stage.setView({ ...VIEWS[m] });
+      stage.setView({ ...(close ? CLOSE : VIEWS)[m] });
       restart();
     });
     if (m === mode) b.classList.add('on');
     return b;
+  });
+  const cb = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false' }, 'Close-up of the station') as HTMLButtonElement;
+  closeBtn = cb;
+  cb.addEventListener('click', () => {
+    close = !close;
+    cb.setAttribute('aria-pressed', String(close));
+    cb.textContent = close ? 'Whole machine' : 'Close-up of the station';
+    stage.setView({ ...(close ? CLOSE : VIEWS)[mode] });
   });
 
   panel.append(
@@ -166,7 +185,7 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
       h('div', { class: 'r3-main' },
         h('div', { class: 'r3-ctl' },
           h('div', { class: 'seg cr-seg', role: 'group', 'aria-label': 'Which reader' }, ...modeBtns),
-          h('div', { class: 'r3-btns' }, runBtn, stepBtn, takeBtn, resetBtn, stage.resetBtn)),
+          h('div', { class: 'r3-btns' }, runBtn, stepBtn, takeBtn, resetBtn, closeBtn, stage.resetBtn)),
         stage.el, stage.hint, live),
       h('div', { class: 'r3-side' }, h('h4', null, 'This reader ', h('span', { class: 'r3-badge' }, 'the chapter’s part')), kv, memHead, mem)));
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape' && running) { running = false; readout(true); kick(); } });
