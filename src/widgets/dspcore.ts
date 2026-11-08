@@ -14,7 +14,7 @@ import { xlenCpu } from '../lib/cpu64';
 import { stats } from '../sim/stats';
 import { findNode } from '../sim/flatten';
 import { pack } from '../sim/values';
-import { h } from '../ui/dom';
+import { h, icon } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { slider } from './mosparts';
 import { frameRun } from './slowctl';
@@ -73,11 +73,13 @@ export function dspPanel(id: string): ScenePanel {
       },
     });
     stage.historyHooks.add({ save: () => ({ s: iss.save(), bad }), restore: (v) => { const o = v as { s: ReturnType<Iss24['save']>; bad: string | null }; iss.restore(o.s); bad = o.bad; } });
+    // Reset (this panel's button or the stage bar's): the run ends, the golden model starts again
+    stage.resetHooks.add(() => { stopRun?.(); iss = new Iss24(asm.words, b.x, b.y); bad = null; });
     const listing = h('div', { class: 'dsp-list' }), regs = h('div', { class: 'cpu-mem' }), ptrs = h('div', { class: 'cpu-mem dsp-ptrs' }), state = h('div', { class: 'cpu-mem dsp-state' }), verdict = h('div', { class: 'dsp-verdict' });
     const runBtn = h('button', { class: 'btn sm primary', onclick: () => api.run() }, 'Run to halt');
     const title = h('h4', null, 'DSP core', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel cpu-panel dsp-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow' }, title,
-      h('div', null, runBtn), verdict, h('div', { class: 'cpu-sec' }, 'Program'), listing, h('div', { class: 'cpu-sec' }, 'Loop and accumulator'), state,
+      h('div', { class: 'param-row' }, runBtn, h('button', { class: 'btn sm ghost', title: 'Restart the program: power-cycle the circuit and restart the golden model', 'aria-label': 'Reset', onclick: () => stage.powerCycle() }, icon('reset', 14), 'Reset')), verdict, h('div', { class: 'cpu-sec' }, 'Program'), listing, h('div', { class: 'cpu-sec' }, 'Loop and accumulator'), state,
       h('div', { class: 'cpu-sec' }, 'Pointers and windows'), ptrs, h('div', { class: 'cpu-sec' }, 'Registers'), regs);
     const api: PanelApi = {
       cycles: () => stage.cycles, agrees: () => !bad && iss.steps > 0, halted: () => iss.halted, outs: () => [...iss.out],

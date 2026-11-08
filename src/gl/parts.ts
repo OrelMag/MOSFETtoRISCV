@@ -8,7 +8,11 @@ export interface Part extends Instance { kind: 'box' | 'cyl' }
 
 /** A label: where it points, which side its text sits on, and the way the labelled face looks (dimmed when that
  *  face turns away from the camera: the label would otherwise float over whatever hides it). */
-export interface Anchor { text: string; p: Vec3; side: 'l' | 'r' | 't' | 'b'; n: Vec3; minor?: boolean }
+export interface Anchor {
+  text: string; p: Vec3; side: 'l' | 'r' | 't' | 'b'; n: Vec3; minor?: boolean;
+  /** Which label gives way when two cannot both be shown (lower is kept); absent: the order the model lists them. */
+  prio?: number;
+}
 
 export const box = (c: RGB | RGBA, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, spec = 0): Part =>
   ({ kind: 'box', pos: [(x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2], scale: [x1 - x0, y1 - y0, z1 - z0], color: c, spec });

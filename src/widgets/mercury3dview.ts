@@ -168,11 +168,8 @@ export function mercuryView(): Widget {
     b.addEventListener('click', () => { slow = i; slowBtns.forEach((x, j) => { x.classList.toggle('on', j === i); x.setAttribute('aria-pressed', String(j === i)); }); readout(true); kick(); });
     return b;
   });
-  const viewBtns = (Object.keys(VIEWS) as (keyof typeof VIEWS)[]).map((k) => {
-    const b = h('button', { type: 'button', 'aria-pressed': String(k === 'whole'), class: k === 'whole' ? 'on' : '' }, VIEW_NAMES[k]) as HTMLButtonElement;
-    b.addEventListener('click', () => { stage.setView(k === 'whole' ? wholeView() : { ...VIEWS[k] }); viewBtns.forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); }); });
-    return b;
-  });
+  // the preset views on the stage's shared view bar (the whole tank framed for the stage's width at the click)
+  const views = (Object.keys(VIEWS) as (keyof typeof VIEWS)[]).map((k) => ({ label: VIEW_NAMES[k], view: k === 'whole' ? wholeView : () => ({ ...VIEWS[k] }) }));
 
   panel.append(
     h('h3', { class: 'm3-title' }, 'EDSAC’s mercury delay line'),
@@ -186,9 +183,8 @@ export function mercuryView(): Widget {
         h('div', { class: 'r3-ctl' },
           h('div', { class: 'r3-btns' }, runBtn, stepBtn, cutBtn, resetBtn)),
         h('div', { class: 'r3-ctl' },
-          h('div', { class: 'seg hg-seg', role: 'group', 'aria-label': 'View' }, ...viewBtns),
-          h('div', { class: 'seg hg-seg', role: 'group', 'aria-label': 'How much slower than real time' }, ...slowBtns),
-          stage.resetBtn),
+          stage.viewBar(views),
+          h('div', { class: 'seg hg-seg', role: 'group', 'aria-label': 'How much slower than real time' }, ...slowBtns)),
         stage.el, stage.hint, live),
       h('div', { class: 'r3-side' }, h('h4', null, 'This tank ', h('span', { class: 'r3-badge' }, `${SLOTS} slots`)), kv, h('h4', null, 'Its sixteen words'), list)));
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape' && running) { running = false; readout(true); kick(); } });

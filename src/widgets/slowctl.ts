@@ -105,6 +105,10 @@ export function slowControls(stage: Stage, opts: SlowOptions): SlowControls {
     opts.onStart?.();
     stage.back();
   } }, icon('stepBack', 14), 'Back') as HTMLButtonElement;
+  // Reset: the stage's power cycle (the same as the stage bar's), reached from where the learner is looking.
+  const resetBtn = h('button', { class: 'btn sm ghost', title: 'Restart the program: power-cycle the circuit and restart the golden model', 'aria-label': 'Reset', onclick: () => stage.powerCycle() }, icon('reset', 14), 'Reset');
+  // whoever resets (this button or the stage bar): Slow and the panel's own Run end with the run they belonged to
+  stage.resetHooks.add(() => { ctl.stop(); opts.onStart?.(); });
   const rateIn = h('input', { type: 'range', min: 0, max: 1000, 'aria-label': 'Slow-mode speed' }) as HTMLInputElement;
   const rateLbl = h('span', { class: 'cpu-rate-v' });
   const unitOf = () => (level === 'gate' ? 'delays' : level === 'cycle' ? 'cycles' : unit.unit);
@@ -147,7 +151,7 @@ export function slowControls(stage: Stage, opts: SlowOptions): SlowControls {
     return b;
   });
   syncRate();
-  ctl.el = h('div', { class: 'cpu-slow' }, slowBtn, backBtn, stepBtn, seg, h('label', { class: 'cpu-rate' }, rateIn, rateLbl));
+  ctl.el = h('div', { class: 'cpu-slow' }, slowBtn, backBtn, stepBtn, resetBtn, seg, h('label', { class: 'cpu-rate' }, rateIn, rateLbl));
   return ctl;
 }
 

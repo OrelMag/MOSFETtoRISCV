@@ -89,6 +89,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "adaptive": () => import('./ch-dsp-adaptive').then((m) => m.chAdaptive),
   "speech": () => import('./ch-dsp-speech').then((m) => m.chSpeech),
   "music": () => import('./ch-dsp-music').then((m) => m.chMusic),
+  "sensors": () => import('./ch-sensors').then((m) => m.chSensors),
   "pictures": () => import('./ch-dsp-pictures').then((m) => m.chPictures),
   "sdr": () => import('./ch-dsp-sdr').then((m) => m.chSdr),
   "appendix-6502": () => import('./ch-6502').then((m) => m.chAppendix6502),

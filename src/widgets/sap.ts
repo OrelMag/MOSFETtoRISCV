@@ -12,7 +12,7 @@ import { CTRL, CTRL_LABEL, ctrlText, disasm, microcode, SAP_CTRL, SAP_STEPS } fr
 import { SAP_PROGRAMS } from '../sap/programs';
 import { shortText, SwitchSim } from '../sim/switchsim';
 import { B0, B1, type ComponentDef } from '../sim/types';
-import { h } from '../ui/dom';
+import { h, icon } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { codeEditor } from './codeedit';
 import { moduleLayout, sapLayout, sapSelect } from './saplayout';
@@ -210,7 +210,7 @@ export function sapPanel(o: SapSceneOptions): ScenePanel {
     const outs = h('div', { class: 'sap-outs' });
     const body = h('div', { class: 'cpu-body' },
       o.fixed ? null : h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn),
-      h('div', { class: 'param-row', style: 'margin-bottom:6px' }, instrBtn, runBtn, rateSel),
+      h('div', { class: 'param-row', style: 'margin-bottom:6px' }, instrBtn, runBtn, h('button', { class: 'btn sm ghost', title: 'Restart the program: power-cycle the circuit and restart the golden model', 'aria-label': 'Reset', onclick: () => stage.powerCycle() }, icon('reset', 14), 'Reset'), rateSel),
       o.fixed ? null : editWrap, alarm, status, now,
       h('div', { class: 'cpu-sec' }, 'Control word', h('span', { class: 'cpu-sec-hint' }, 'the EEPROMs\' 16 outputs now')), lines,
       h('div', { class: 'cpu-sec' }, 'This instruction\'s steps'), steps,

@@ -24,6 +24,7 @@ jobs:
     outputs:
       hdl: ${{ steps.diff.outputs.hdl }}
       fpga: ${{ steps.diff.outputs.fpga }}
+      tests: ${{ steps.tested.outputs.tests }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,8 +42,31 @@ jobs:
             echo hdl=true >> "$GITHUB_OUTPUT"
             echo fpga=true >> "$GITHUB_OUTPUT"
           fi
+      # The unit tests are skipped when this exact tree already passed the full gate (gate.yml) on its integ branch:
+      # a batch merged onto an unmoved main has the integ head's tree. Also when everything since the last successful
+      # deploy is text that no test reads (docs, licence, the CNAME). By hand: always tested. Build + smoke always run.
+      - id: tested
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tests=true
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            tree=$(git rev-parse 'HEAD^{tree}')
+            for sha in $(gh run list --workflow gate.yml --status success --limit 40 --json headSha -q '.[].headSha' --repo "$GITHUB_REPOSITORY" || true); do
+              t=$(git rev-parse "$sha^{tree}" 2>/dev/null || gh api "repos/$GITHUB_REPOSITORY/commits/$sha" -q .commit.tree.sha 2>/dev/null || true)
+              if [ "$t" = "$tree" ]; then echo "tree $tree passed gate.yml at $sha: unit tests skipped"; tests=false; break; fi
+            done
+            base=$(gh run list --workflow deploy.yml --branch main --status success --limit 1 --json headSha -q '.[0].headSha' --repo "$GITHUB_REPOSITORY" || true)
+            if [ "$tests" = true ] && [ -n "$base" ] && files=$(git diff --name-only "$base" HEAD) && [ -n "$files" ] &&
+               ! echo "$files" | grep -qvE '^(docs/|\.claude/|LICENSE$|public/CNAME$)|\.md$'; then
+              echo "only text changed since $base: unit tests skipped"; tests=false
+            fi
+          fi
+          echo "tests=$tests" >> "$GITHUB_OUTPUT"
   # The unit tests (~8 min) run beside the build and its smoke test (~1 + ~8 min), not before them.
   test:
+    needs: changes
+    if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -139,7 +163,7 @@ jobs:
     needs: [changes, test, build, verify-hdl, fpga]
     # a skipped job would otherwise skip this one too; a failed or cancelled one still stops it
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.test.result == 'success' && needs.build.result == 'success' &&
+      !cancelled() && needs.changes.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') && needs.build.result == 'success' &&
       (needs.verify-hdl.result == 'success' || needs.verify-hdl.result == 'skipped') &&
       (needs.fpga.result == 'success' || needs.fpga.result == 'skipped')
     runs-on: ubuntu-latest

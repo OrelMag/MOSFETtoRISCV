@@ -15,8 +15,10 @@ import { CODEX } from './codex';
 /** Codex entries some level lists (discovered by playing it). */
 const LISTED = new Set(NODES.flatMap((n) => n.codex));
 import { isTwinKey } from './twinids';
+import { CAMPAIGN_KEY } from './progressread';
 
-export const CAMPAIGN_KEY = 'mosfet2riscv:campaign:v1';
+export { CAMPAIGN_KEY };
+
 export const CAMPAIGN_FORMAT = 'mosfet2riscv-campaign';
 const SCHEMA = 1;
 

@@ -12,6 +12,7 @@ import { cross3, norm3, quatAxisAngle, quatRotate, sub3, type Quat, type Vec3 } 
 import { createRenderer, OrbitCamera, boxMesh, cylinderMesh, sphereMesh, type Renderer } from '../gl/renderer';
 import { h, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
+import { ORBIT_ARIA, ORBIT_HINT, modelFrame } from './modelframe';
 import { pointAlong, polyLength, type P3 } from './water';
 
 // ---------------------------------------------------------------- palette (CSS tokens: theme.css --wt-*)
@@ -161,7 +162,7 @@ export interface WaterMount {
   destroy(): void;
 }
 
-const HINT_GL = 'Drag to orbit, wheel or pinch to zoom, double-click to reset.';
+const HINT_GL = ORBIT_HINT;
 const HINT_FLAT = 'A flat view: this browser has no WebGL2 for the 3D one.';
 
 const css3 = (c: RGB) => `rgb(${c.map((v) => Math.round(v * 255)).join(' ')})`;
@@ -200,7 +201,7 @@ function drawFlat(svg: SVGSVGElement, parts: WPart[], marks: WLabel[], px: numbe
 
 /** Draw `scene` into `host`. `onFrame` runs after every drawn frame (readouts that follow the scene's own dynamics). */
 export function mountWater(host: HTMLElement, scene: WaterScene, onFrame?: () => void): WaterMount {
-  const canvas = h('canvas', { class: 'wt-canvas', tabindex: 0, 'aria-label': `${scene.alt} Drag to orbit, wheel or pinch to zoom, arrow keys to turn.` }) as HTMLCanvasElement;
+  const canvas = h('canvas', { class: 'wt-canvas', tabindex: 0, 'aria-label': `${scene.alt} ${ORBIT_ARIA[0].toUpperCase()}${ORBIT_ARIA.slice(1)}.` }) as HTMLCanvasElement;
   const f = scene.flat;
   const flatSvg = s('svg', { class: 'wt-flat', viewBox: `${f.x0} ${-(f.y0 + f.h)} ${f.w} ${f.h}`, role: 'img', 'aria-label': scene.alt }) as SVGSVGElement;
   flatSvg.style.display = 'none';
@@ -209,6 +210,7 @@ export function mountWater(host: HTMLElement, scene: WaterScene, onFrame?: () =>
   const stage = h('div', { class: 'wt-stage' }, canvas, flatSvg, labels);
   stage.style.aspectRatio = String(scene.aspect);
   host.append(stage, hint);
+  const frame = modelFrame({ stage, name: scene.alt, renderer: () => (mode === 'gl' ? renderer : null), labels, root: () => host });
 
   const colors = new CssColors(stage);
   let palette: Palette | null = null;
@@ -268,6 +270,7 @@ export function mountWater(host: HTMLElement, scene: WaterScene, onFrame?: () =>
     flatSvg.style.display = flat ? '' : 'none';
     labels.style.display = flat ? 'none' : '';
     hint.textContent = flat ? HINT_FLAT : HINT_GL;
+    frame.setFlat(flat);
     draw();
   };
 
@@ -314,6 +317,7 @@ export function mountWater(host: HTMLElement, scene: WaterScene, onFrame?: () =>
     dead = true;
     cancelAnimationFrame(raf);
     unwatch();
+    frame.destroy();
     io?.disconnect();
     renderer?.destroy();
     renderer = null;

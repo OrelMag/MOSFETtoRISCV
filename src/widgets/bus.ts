@@ -10,7 +10,7 @@ import { CARD_COMPUTER, CARD_DECK, CHAPTER_COMPUTER, SOC_SCREEN, SYSTEM_COMPUTER
 import { type CardReaderState, readerProgress } from '../cards/reader';
 import { findNode } from '../sim/flatten';
 import { pack } from '../sim/values';
-import { h } from '../ui/dom';
+import { h, icon } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { frameRun } from './slowctl';
 
@@ -228,6 +228,8 @@ const computerPanel = (full: boolean, cards = false): ScenePanel => (stage: Stag
     stop = frameRun(stage, () => false, () => { stop = null; runBtn.textContent = 'Run'; stage.refresh(); });
   };
   runBtn.addEventListener('click', () => { if (stop) stop(); else run(); });
+  // Reset (this panel's button or the stage bar's): the run ends, the counters and the console start again
+  stage.resetHooks.add(() => { stop?.(); Object.assign(st, { console: '', retired: 0, cycles: 0, inRam: 0, dmaCycles: 0, booted: -1, dram: { hit: 0, miss: 0, conflict: 0, refresh: 0 } }); });
   const step = h('button', { class: 'btn sm', title: 'Run to the next printed character, or 2000 cycles' }, 'Run to output');
   step.addEventListener('click', () => {
     stage.checkpoint();
@@ -250,7 +252,7 @@ const computerPanel = (full: boolean, cards = false): ScenePanel => (stage: Stag
     ...(full ? [['0x5000_0000', `screen: ${SOC_SCREEN} × ${SOC_SCREEN}, a byte a pixel (RGB332)`], ['0x6000_0000', 'keyboard: +0 the oldest key (taken), +4 status']] as [string, string][] : []),
     ['0x8000_0000', 'console, LEDs, switches, timer (inside the CPU)']];
   const map = h('div', { class: 'bus-map' }, ...rows.map(([a, d]) => h('div', null, h('span', null, a), h('span', null, d))));
-  const parts: (Node | string)[] = [title, h('div', { class: 'dram-ops' }, runBtn, step), status];
+  const parts: (Node | string)[] = [title, h('div', { class: 'dram-ops' }, runBtn, step, h('button', { class: 'btn sm ghost', title: 'Restart the program: power-cycle the circuit and restart the golden model', 'aria-label': 'Reset', onclick: () => stage.powerCycle() }, icon('reset', 14), 'Reset')), status];
   // ---- the card reader: where it is in the deck (the reader leaf's state)
   const reader = h('div', { class: 'mc-status' });
   const readerState = (): CardReaderState | null => { const li = node(['cards'])?.leafIndex; return li === undefined ? null : sim().leafState(li) as CardReaderState; };

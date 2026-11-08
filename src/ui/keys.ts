@@ -37,11 +37,12 @@ export interface KeySpec {
   mod?: boolean;
 }
 
-export type KeyGroup = 'anywhere' | 'chapter' | 'stage' | 'place' | 'wire' | 'select' | 'edit' | 'view' | 'panels';
+export type KeyGroup = 'anywhere' | 'chapter' | 'stage' | 'place' | 'wire' | 'select' | 'edit' | 'view' | 'panels' | 'model';
 
 export const GROUP_TITLES: Record<KeyGroup, string> = {
   anywhere: 'Anywhere', chapter: 'This chapter', stage: 'Circuit (when focused)',
   place: 'Place', wire: 'Wire', select: 'Select and move', edit: 'Edit', view: 'View and run', panels: 'Panels and search',
+  model: '3D model (when focused)',
 };
 
 export interface KeyDef {
@@ -84,6 +85,12 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'stage.menu', group: 'stage', caps: ['Menu', '·', 'Shift F10'], does: 'the menu of the selected wire or part, else of this level, with a list to pick any of them' },
   { id: 'stage.up', group: 'stage', caps: ['Esc', '·', 'Backspace'], does: 'leave probe or Why? mode, else up one level' },
   { id: 'stage.undo', group: 'stage', caps: [`${MOD} Z`, '·', `${MOD} Y`], does: 'undo · redo moving parts' },
+  // ---- a 3D model's canvas (gl/orbit.ts handles them; listed only)
+  { id: 'model.orbit', group: 'model', caps: ['←', '→', '↑', '↓'], does: 'turn the model (or drag it)' },
+  { id: 'model.pan', group: 'model', caps: ['Shift', '←', '→', '↑', '↓'], does: 'pan (or right-drag, shift-drag, middle-drag; two fingers on a touch screen)' },
+  { id: 'model.zoom', group: 'model', caps: ['+', '·', '−'], does: 'zoom in · out (the wheel and a pinch zoom toward the pointer)' },
+  { id: 'model.home', group: 'model', caps: ['Home'], does: 'back to the starting view (or double-click)' },
+  { id: 'model.full', group: 'model', caps: ['Esc'], does: 'leave full screen (the corner button enters it)' },
   // ---- the sandbox (and campaign levels)
   { id: 'sb.fav', group: 'place', caps: ['1', '…', '9'], does: 'arm favourite n; a click places it (Shift-click: several)', taken: ['1', '2', '3', '4', '5', '6', '7', '8', '9'] },
   { id: 'sb.pointer', group: 'place', caps: ['L', '·', 'T'], does: 'arm a pointer · a comment (same pointer name = same net)', match: [letter('l')], taken: ['l', 't'] },

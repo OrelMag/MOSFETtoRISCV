@@ -15,6 +15,7 @@ import { h, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { declutterLabels } from './labelfit';
+import { ORBIT_ARIA, ORBIT_HINT, modelFrame } from './modelframe';
 
 // ---------------------------------------------------------------- geometry (mm; x right, y up, z towards the viewer)
 // A 6SN7GT: T-9 bulb (28.6 mm), 70 mm seated height, octal base (pins on a 17.45 mm circle). The two sections stand
@@ -285,14 +286,15 @@ export function triodeView(): Widget {
     h('div', { class: 'r3-btns' }, coldBtn, resetBtn));
 
   // Stage: the canvas (or the flat drawing), labels over it, status chips.
-  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': 'A 6SN7 twin triode in 3D, one plate cut away: drag to orbit, wheel or pinch to zoom, arrow keys to turn' }) as HTMLCanvasElement;
+  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': 'A 6SN7 twin triode in 3D, one plate cut away: ' + ORBIT_ARIA }) as HTMLCanvasElement;
   const flatSvg = s('svg', { class: 'r3-flat', viewBox: `${F2.x0} ${-F2.y0 - F2.h} ${F2.w} ${F2.h}`, role: 'img', 'aria-label': 'A 6SN7 twin triode seen from the front, one plate cut away: cathode, heater, grid, plate, electrons' }) as SVGSVGElement;
   flatSvg.style.display = 'none';
   const labels = h('div', { class: 'r3-labels', 'aria-hidden': 'true' });
   const stateChip = h('span', { class: 'r3-chip' }), plateChip = h('span', { class: 'r3-chip' }), tempChip = h('span', { class: 'r3-chip' });
-  const HINT_GL = 'Real size; the near section\'s plate is cut away. Drag to orbit, wheel or pinch to zoom, double-click to reset.';
+  const HINT_GL = `Real size; the near section's plate is cut away. ${ORBIT_HINT}`;
   const hint = h('div', { class: 'r3-hint' }, HINT_GL);
   const stage = h('div', { class: 'r3-stage' }, canvas, flatSvg, labels, h('div', { class: 'r3-chips' }, stateChip, plateChip, tempChip));
+  const frame = modelFrame({ stage, name: '6SN7 twin triode', renderer: () => (mode === 'gl' ? renderer : null), labels });
 
   // Plots and summary
   const xfer = s('svg', { class: 'r3-plot t3-plot t3-static', viewBox: `0 0 ${PW} ${H1}`, role: 'img', 'aria-label': 'Plate voltage against grid voltage with the cathode hot, the operating point and the cutoff marked' }) as SVGSVGElement;
@@ -465,6 +467,7 @@ export function triodeView(): Widget {
     flatSvg.style.display = on ? '' : 'none';
     labels.style.display = on ? 'none' : '';
     hint.textContent = on ? 'Real size; the near section\'s plate is cut away. A flat view: this browser has no WebGL2 for the 3D one.' : HINT_GL;
+    frame.setFlat(on);
     resetBtn.style.display = on ? 'none' : '';
     draw();
   };
@@ -511,6 +514,7 @@ export function triodeView(): Widget {
       cancelAnimationFrame(pending);
       io.disconnect();
       unwatch();
+      frame.destroy();
       renderer?.destroy();
       renderer = null;
       colors.destroy();

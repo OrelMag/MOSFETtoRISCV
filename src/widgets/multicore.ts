@@ -10,7 +10,7 @@ import { MC_PROGRAMS } from '../riscv/mcprograms';
 import { MultiISS } from '../riscv/multi';
 import { Coherence, type CoherenceEvent, type Protocol } from '../sim/coherence';
 import { pack } from '../sim/values';
-import { h } from '../ui/dom';
+import { h, icon } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 
 const hex = (v: number, d = 8) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(d, '0');
@@ -50,7 +50,7 @@ function dualPanel(source: string, asm: AsmResult): ScenePanel {
     });
     const title = h('h4', null, 'Two cores, one memory', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right', 'data-fold': 'narrow' }, title,
-      h('div', { class: 'cpu-body' }, h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, runBtn), status, cols,
+      h('div', { class: 'cpu-body' }, h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, runBtn, h('button', { class: 'btn sm ghost', title: 'Restart the program: power-cycle the circuit and restart the golden model', 'aria-label': 'Reset', onclick: () => stage.powerCycle() }, icon('reset', 14), 'Reset')), status, cols,
         h('div', { class: 'cpu-sec' }, 'Shared memory (non-zero words; counter at 0x40, lock at 0x44)'), mem));
     stage.edgeHooks.add({
       before: () => {
@@ -85,6 +85,8 @@ function dualPanel(source: string, asm: AsmResult): ScenePanel {
         lastStall = st.lastStall.slice();
       },
     });
+    // Reset (this panel's button or the stage bar's): the run ends, the golden model starts again
+    stage.resetHooks.add(() => { stop(); m = new MultiISS(asm.words); mismatch = null; stalls = [0, 0]; lastStall = [false, false]; });
     const update = () => {
       const sim = stage.sim;
       if (!sim) return;
