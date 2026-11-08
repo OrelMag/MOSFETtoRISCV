@@ -35,6 +35,8 @@ export interface ModelStage {
   paint(parts: readonly Part[], anchors: readonly Anchor[]): void;
   /** No WebGL2: the flat fallback is showing (a model may draw fewer facets). */
   isFlat(): boolean;
+  /** Replace the note (what the drawing exaggerates): a model with several views shows the open one's. */
+  setNote(text: string): void;
   /** Move the camera (a model's preset views). */
   setView(v: OrbitView, limits?: Partial<OrbitLimits>): void;
   destroy(): void;
@@ -53,7 +55,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
   const resetBtn = h('button', { type: 'button', class: 'btn sm' }, 'Reset view') as HTMLButtonElement;
   const el = h('div', { class: 'r3-stage' }, canvas, flat, labels, chips);
   const colors = new CssColors(host);
-  const note = o.note ? `${o.note} ` : '';
+  let note = o.note ? `${o.note} ` : '';
 
   // 'wait' until the renderer chunk answers; 'flat' without WebGL2 or while the context is lost.
   let mode: 'wait' | 'gl' | 'flat' = 'wait', renderer: Renderer | null = null, dead = false;
@@ -110,6 +112,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
     placeLabels();
   };
 
+  const hintText = () => mode === 'flat' ? `${note}A flat view: this browser has no WebGL2 for the 3D one.` : `${note}Drag to orbit, wheel or pinch to zoom, double-click to reset.`;
   const setMode = (m: 'gl' | 'flat') => {
     const on = m === 'flat';
     mode = m;
@@ -117,7 +120,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
     flat.style.display = on ? '' : 'none';
     labels.style.display = on ? 'none' : '';
     resetBtn.style.display = on ? 'none' : '';
-    hint.textContent = on ? `${note}A flat view: this browser has no WebGL2 for the 3D one.` : `${note}Drag to orbit, wheel or pinch to zoom, double-click to reset.`;
+    hint.textContent = hintText();
     o.draw();
   };
 
@@ -141,6 +144,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
   return {
     el, hint, chips, resetBtn, paint,
     isFlat: () => mode === 'flat',
+    setNote(text) { note = text ? `${text} ` : ''; if (mode !== 'wait') hint.textContent = hintText(); },
     setView(v, limits) {
       o.camera = v; fit = null;
       const c = renderer?.camera;

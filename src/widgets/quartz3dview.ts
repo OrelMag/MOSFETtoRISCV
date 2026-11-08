@@ -42,11 +42,18 @@ export function quartzView(): Widget {
   const narrow = (): boolean => stage.el.clientWidth > 0 && stage.el.clientWidth < 480;
   const loopCam = () => (narrow() ? { ...LOOP, dist: 60 } : LOOP);
   const driftCam = () => (narrow() ? { ...DRIFT, target: [0, 0, 6] as [number, number, number], dist: 78 } : DRIFT);
+  // What each view's drawing exaggerates: the stage's note shows the open view's only.
+  const NOTES: Record<View, string> = {
+    crystal: `Drawn, not modelled: a tine swings ${(TIP_DRAWN / 10).toFixed(2)} mm here (estimated from a 0.1 µW drive level and Q = 50 000, a real tine moves about ${(tipAmplitude() * 1e6).toFixed(0)} µm, ${Math.round(TIP_DRAWN * 100 / (tipAmplitude() * 1e6))} times less); the fork is drawn at ${SHOWN_HZ} swings a second, ${grp(F_WATCH / SHOWN_HZ)} times slower than real; the tine length comes from a plain beam formula, the groove width and depth are drawn choices inside the ranges of the tuning-fork patents, the package is vacuum sealed under a metal lid (the lid is drawn clear so that you can see in) with two pads underneath.`,
+    drift: `Drawn, not modelled: each fork swings at the same drawn rate and the ring is slowed by one fixed factor, so it turns at the difference: 40 ppm apart is one turn in ${SLIP_S} s of screen time, 20 ppm apart one in ${2 * SLIP_S} s, equal clocks stand still; a 200 MHz clock is a multiple of its crystal, so its ppm are the crystal's.`,
+    loop: `Drawn, not modelled: the divider counts at the Rate shown (cycles of the crystal a second, up to the real ${F_WATCH_TXT}), the fork swings at that rate, and the inverter, the fifteen stages and the parts around them are drawn as boxes, not as their gates.`,
+    at: `The AT-cut blank is drawn ${Math.round(AT_T_DRAWN / 10 / atThicknessMm(AT_F))} times thicker than its ${atThicknessMm(AT_F).toFixed(3)} mm, with its shear swing exaggerated and slowed to ${SHOWN_HZ} a second; its 8 mm diameter, its 5 mm electrodes and its cubic temperature curve (turning points at −20 and 70 °C, ±15 ppm) are illustrative.`,
+  };
   const stage = modelStage(panel, {
     aria: 'A 32768 hertz quartz tuning fork in its ceramic package, and the Pierce oscillator and fifteen-stage divider around it',
     camera: CRYSTAL,
     limits: { minDist: 12, maxDist: 160 },
-    note: `Drawn, not modelled: a tine swings ${(TIP_DRAWN / 10).toFixed(2)} mm here (estimated from a 0.1 µW drive level and Q = 50 000, a real tine moves about ${(tipAmplitude() * 1e6).toFixed(0)} µm, ${Math.round(TIP_DRAWN * 100 / (tipAmplitude() * 1e6))} times less); the fork is drawn at ${SHOWN_HZ} swings a second, ${grp(F_WATCH / SHOWN_HZ)} times slower than real; the tine length comes from a plain beam formula, the groove width and depth are drawn choices inside the ranges of the tuning-fork patents, the package is vacuum sealed under a metal lid (the lid is drawn clear so that you can see in) with two pads underneath. In the two-crystals view each fork swings at the same drawn rate and the ring is slowed by one fixed factor, so it turns at the difference: 40 ppm apart is one turn in ${SLIP_S} s of screen time, 20 ppm apart one in ${2 * SLIP_S} s, equal clocks stand still; a 200 MHz clock is a multiple of its crystal, so its ppm are the crystal's. In the oscillator view the divider counts at the Rate shown (cycles of the crystal a second, up to the real ${F_WATCH_TXT}), the fork swings at that rate, and the inverter, the fifteen stages and the parts around them are drawn as boxes, not as their gates. The AT-cut blank is drawn ${Math.round(AT_T_DRAWN / 10 / atThicknessMm(AT_F))} times thicker than its ${atThicknessMm(AT_F).toFixed(3)} mm, with its shear swing exaggerated and slowed to ${SHOWN_HZ} a second; its 8 mm diameter, its 5 mm electrodes and its cubic temperature curve (turning points at −20 and 70 °C, ±15 ppm) are illustrative.`,
+    note: NOTES.crystal,
     draw: () => paint(),
   });
   const palette = (): QuartzPalette => ({
@@ -152,6 +159,7 @@ export function quartzView(): Widget {
   ];
   function setView(v: View): void {
     view = v;
+    stage.setNote(NOTES[v]);
     stage.setView(v === 'crystal' ? CRYSTAL : v === 'loop' ? loopCam() : v === 'at' ? AT : driftCam());
     repaint();
   }
