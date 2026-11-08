@@ -24,7 +24,7 @@ const VIEWS = {
 } satisfies Record<string, OrbitView>;
 /** A phone is narrow and the tube is 64 times longer than wide: stand further back. */
 const narrow = () => typeof matchMedia === 'function' && matchMedia('(max-width: 600px)').matches;
-const wholeView = (): OrbitView => (narrow() ? { ...VIEWS.whole, dist: 440 } : { ...VIEWS.whole });
+const wholeView = (): OrbitView => (narrow() ? { ...VIEWS.whole, dist: 380 } : { ...VIEWS.whole });
 const VIEW_NAMES: Record<keyof typeof VIEWS, string> = { whole: 'Whole tank', rx: 'Receiving end', tx: 'Sending end' };
 const us = (s: number) => `${(s * 1e6).toFixed(s < 1e-4 ? 1 : 0)} µs`;
 const ms = (s: number) => `${(s * 1e3).toFixed(2)} ms`;

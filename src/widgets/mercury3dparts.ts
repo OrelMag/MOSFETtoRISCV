@@ -198,7 +198,7 @@ export function mercuryAnchors(tank: Tank, sel: number): Anchor[] {
   out.push({ text: `word ${sel}`, p: [xOfPos((band[0] + band[1]) / 2 - 0.5), ay - TUBE_R - 1.3, az + 1.2], side: 'b', n: [0, -1, 0] });
   out.push({ text: 'sending crystal', p: [TUBE_X0 + 38, ay + TUBE_R, az], side: 't', n: [0, 1, 0] });
   out.push({ text: 'receiving crystal', p: [TUBE_X1 - 38, ay + TUBE_R, az], side: 't', n: [0, 1, 0] });
-  out.push({ text: 'mercury in a steel tube', p: [0, ay + TUBE_R, az], side: 't', n: [0, 1, 0] });
+  out.push({ text: 'mercury in a steel tube', p: [0, ay + TUBE_R, az], side: 't', n: [0, 1, 0], minor: true });
   out.push({ text: 'amplifier', p: [80, ELEC_Y - 4, az + 5], side: 'b', n: [0, 0, 1] });
   out.push({ text: 'reshaper', p: [15, ELEC_Y - 4, az + 5], side: 'b', n: [0, 0, 1] });
   out.push({ text: 'gate', p: [-50, ELEC_Y - 4, az + 5], side: 'b', n: [0, 0, 1] });
