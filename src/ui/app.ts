@@ -251,6 +251,14 @@ export function startApp(root: HTMLElement): void {
   });
   const palWrap = h('div', { class: 'pal-wrap' }, palBtn, palMenu);
   menuKeys(palWrap, palMenu, palBtn, () => palOpen(false));
+  // Tab past the last option (or back before the first) leaves the menu: it closes, rather than staying open behind the focus
+  palMenu.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return;
+    const items = [...palMenu.querySelectorAll<HTMLElement>('button, [role^=menuitem], input, select')].filter((x) => x.offsetParent);
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    // the focus moves on first (the browser's own Tab), then the menu closes behind it
+    if ((!e.shiftKey && i === items.length - 1) || (e.shiftKey && i === 0)) setTimeout(() => palOpen(false), 0);
+  });
 
   const syncTools = () => {
     for (const b of palMenu.querySelectorAll<HTMLButtonElement>('button[data-p]')) b.setAttribute('aria-checked', String(b.dataset.p === settings.palette));
