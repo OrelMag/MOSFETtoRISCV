@@ -163,7 +163,7 @@ export function pixAnchors(pose: PixPose): Anchor[] {
   const front: Vec3 = [0, 0, -1], up: Vec3 = [0, 1, 0], down: Vec3 = [0, -1, 0], z = pose.cut ? 0.8 : 0;
   const mid = (a: readonly number[]) => (a[0] + a[1]) / 2;
   return [
-    { text: 'microlens', p: P3(PITCH / 2, LENS[1], PITCH / 2), side: 't', n: up },
+    { text: 'microlens', p: P3(PITCH * 0.9, (LENS[0] + LENS[1]) / 2, PITCH / 2), side: 'r', n: up },
     { text: 'colour filter', p: P3(PITCH, mid(CF), z + 0.3), side: 'r', n: front },
     { text: 'silicon, lit from the back', p: P3(PITCH, SI_T * 0.75, z), side: 'r', n: front },
     { text: 'pd: pinned photodiode (n under p+)', p: P3(L.pd.x[0], mid(L.pd.y), z), side: 'l', n: front },
