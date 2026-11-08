@@ -14,6 +14,7 @@ import { AND, MUX2, NOT, OR, XOR } from '../gates';
 import { orN } from '../wide';
 import { TIE0 } from '../transistors';
 import { ADD16, choose4, CMP16, cmpWith, EQ16, INC16, MUX16, PC16, RF8, RV16_ALU16, RV16_ALU16KS, RV16_DREG16 } from './logic';
+import { foldBands } from '../fold';
 import { DIV16, MUL16 } from './md';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -354,7 +355,8 @@ export function rv16Core(full: boolean, fast = false, md: CoreMd = '', arith = f
       + (md === 'mul' ? ' MD instructions take the multiplier\'s result instead.' : md === 'div' ? ' MD instructions take the multiplier\'s or the divider\'s result; a divide holds the PC (and writes nothing) until the divider is done.' : ''),
     ports: CORE_PORTS,
     symbol: { kind: 'box', label: full ? (md ? 'RV16 M' : 'RV16') : arith ? 'RV16 (ALU)' : 'RV16 (no br)' },
-    netlist: () => ({
+    // a core is too wide to read at fit in one strip: two bands (lib/fold.ts)
+    netlist: () => foldBands({
       pins: { ...pinsAt(['clk', 'rst', 'instr', 'drdata'], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) },
       instances: b.instances, nets: b.nets(),
     }),
