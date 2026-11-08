@@ -101,5 +101,6 @@ export function showPageKeys(): void {
   const groups: KeyGroup[] = ['anywhere'];
   if (chapter) groups.push('chapter');
   if (stage) groups.push('stage');
+  if (document.querySelector('.r3-canvas, .wt-canvas')) groups.push('model');
   showKeySheet({ title: 'Keys on this page', groups, ...(stage ? { coach: 'stage' as const } : {}) });
 }

@@ -12,6 +12,7 @@ import { flatFaces, flatView, type Anchor, type Part } from '../gl/parts';
 import type { Renderer } from '../gl/renderer';
 import { h, s } from '../ui/dom';
 import { declutterLabels } from './labelfit';
+import { ORBIT_ARIA, ORBIT_HINT, modelFrame } from './modelframe';
 
 export interface ModelStageOptions {
   /** What the canvas shows, for a screen reader. */
@@ -22,7 +23,13 @@ export interface ModelStageOptions {
   note?: string;
   /** Repaint from the current state: calls paint(). */
   draw: () => void;
+  /** Named camera views (front, top, side, iso …) for viewBar(); the first is usually the starting one. */
+  views?: readonly ModelView[];
 }
+
+/** A preset view: picked from the stage's view bar (setView), Reset view then comes back to it. `view` may be computed at
+ *  the click (a view that depends on the stage's width); `pick` runs after the camera moved (what the model draws in it). */
+export interface ModelView { label: string; view: OrbitView | (() => OrbitView); title?: string; pick?: () => void }
 
 export interface ModelStage {
   el: HTMLElement;
@@ -37,6 +44,8 @@ export interface ModelStage {
   isFlat(): boolean;
   /** Move the camera (a model's preset views). */
   setView(v: OrbitView): void;
+  /** The preset views as a button group with Reset view at its end (o.views, or these). */
+  viewBar(views?: readonly ModelView[]): HTMLElement;
   destroy(): void;
 }
 
@@ -46,7 +55,7 @@ const NARROW = 480, FIT_MAX = 1.6, FIT_X = 8, FIT_Y = 16;
 const css = (c: RGBA) => `rgb(${Math.round(c[0] * 255)} ${Math.round(c[1] * 255)} ${Math.round(c[2] * 255)} / ${c[3].toFixed(2)})`;
 
 export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage {
-  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': `${o.aria}: drag to orbit, wheel or pinch to zoom, arrow keys to turn` }) as HTMLCanvasElement;
+  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': `${o.aria}: ${ORBIT_ARIA}` }) as HTMLCanvasElement;
   const flat = s('svg', { class: 'r3-flat', viewBox: `0 0 ${FW} ${FH}`, role: 'img', 'aria-label': o.aria }) as SVGSVGElement;
   flat.style.display = 'none';
   const labels = h('div', { class: 'r3-labels', 'aria-hidden': 'true' });
@@ -55,6 +64,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
   const resetBtn = h('button', { type: 'button', class: 'btn sm' }, 'Reset view') as HTMLButtonElement;
   const el = h('div', { class: 'r3-stage' }, canvas, flat, labels, chips);
   const colors = new CssColors(host);
+  const frame = modelFrame({ stage: el, name: o.aria, renderer: () => (mode === 'gl' ? renderer : null), labels });
   const note = o.note ? `${o.note} ` : '';
 
   // 'wait' until the renderer chunk answers; 'flat' without WebGL2 or while the context is lost.
@@ -89,7 +99,10 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
     for (const a of anchors) {
       if (a.minor) continue;
       const [x, y] = pr(a.p);
-      g.append(s('text', { x: X(x), y: Y(y), class: 'm3-flat-lbl', 'text-anchor': 'middle' }, a.text));
+      // a two-line label (a level, then its place) as two lines: SVG text does not break at \n
+      const t = s('text', { x: X(x), y: Y(y), class: 'm3-flat-lbl', 'text-anchor': 'middle' });
+      a.text.split('\n').forEach((l, i) => t.append(s('tspan', { x: X(x), dy: i ? '1.15em' : '0', ...(i ? { class: 'm3-flat-sub' } : {}) }, l)));
+      g.append(t);
     }
     flat.replaceChildren(g);
   };
@@ -137,7 +150,8 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
     flat.style.display = on ? '' : 'none';
     labels.style.display = on ? 'none' : '';
     resetBtn.style.display = on ? 'none' : '';
-    hint.textContent = on ? `${note}A flat view: this browser has no WebGL2 for the 3D one.` : `${note}Drag to orbit, wheel or pinch to zoom, double-click to reset.`;
+    frame.setFlat(on);
+    hint.textContent = on ? `${note}A flat view: this browser has no WebGL2 for the 3D one.` : `${note}${ORBIT_HINT}`;
     o.draw();
   };
 
@@ -169,10 +183,25 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
       fitFor = ''; // a new home: fitted again at the next frame
       renderer?.invalidate();
     },
+    viewBar(views = o.views ?? []) {
+      const btns = views.map((v) => {
+        const b = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false', ...(v.title ? { title: v.title } : {}) }, v.label) as HTMLButtonElement;
+        b.addEventListener('click', () => {
+          const w = typeof v.view === 'function' ? v.view() : v.view;
+          this.setView({ ...w, target: [...w.target] });
+          for (const x of btns) x.setAttribute('aria-pressed', String(x === b));
+          v.pick?.();
+        });
+        return b;
+      });
+      btns[0]?.setAttribute('aria-pressed', 'true');
+      return h('div', { class: 'r3-views', role: 'group', 'aria-label': 'Views' }, ...btns, resetBtn);
+    },
     rgb: (t) => colors.rgb(t),
     rgba: (t, alpha) => { const [r, g, b] = colors.rgb(t); return [r, g, b, alpha]; },
     destroy() {
       dead = true;
+      frame.destroy();
       unwatch();
       renderer?.destroy();
       renderer = null;

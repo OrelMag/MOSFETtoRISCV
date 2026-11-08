@@ -9,6 +9,9 @@ export interface OrbitLimits {
   minDist: number; maxDist: number;
   /** Radians; the default keeps the camera between straight down and just under the horizon. */
   minPitch: number; maxPitch: number;
+  /** How far a pan may take the target from its home (world units): far enough to look at an edge of the model, not
+   *  so far that it leaves the screen. Default half the home distance. */
+  maxPan: number;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -21,7 +24,7 @@ export class OrbitCamera implements OrbitView {
   private home: OrbitView;
 
   constructor(view: OrbitView, limits: Partial<OrbitLimits> = {}) {
-    this.limits = { minDist: view.dist / 4, maxDist: view.dist * 4, minPitch: -0.2, maxPitch: Math.PI / 2 - 0.01, ...limits };
+    this.limits = { minDist: view.dist / 4, maxDist: view.dist * 4, minPitch: -0.2, maxPitch: Math.PI / 2 - 0.01, maxPan: view.dist / 2, ...limits };
     this.target = [...view.target]; this.yaw = view.yaw; this.pitch = view.pitch; this.dist = view.dist;
     this.clamp();
     this.home = { target: [...this.target], yaw: this.yaw, pitch: this.pitch, dist: this.dist };
@@ -49,6 +52,39 @@ export class OrbitCamera implements OrbitView {
 
   /** Multiply the distance (< 1 moves in). */
   zoom(factor: number): void { this.dist *= factor; this.clamp(); }
+
+  /** World units per CSS pixel on the plane through the target, in a view h px tall. */
+  unitsPerPx(h: number): number { return (2 * this.dist * Math.tan(this.fov / 2)) / h; }
+
+  /** The view's right and up directions in world space. */
+  axes(): [Vec3, Vec3] {
+    const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw), sp = Math.sin(this.pitch), cp = Math.cos(this.pitch);
+    return [[cy, 0, -sy], [-sp * sy, cp, -sp * cy]];
+  }
+
+  /** Pan by a drag of (dx, dy) CSS px in a view h px tall: the target (and the eye with it) moves in the view plane, so
+   *  what was under the pointer stays under it. Held within maxPan of home. */
+  pan(dx: number, dy: number, h: number): void {
+    const u = this.unitsPerPx(h), [r, up] = this.axes();
+    this.target = this.target.map((v, i) => v - r[i] * dx * u + up[i] * dy * u) as Vec3;
+    this.clampPan();
+  }
+
+  /** Zoom by `factor` about the point under (px, py) of a w × h view (on the plane through the target), which stays put. */
+  zoomAt(factor: number, px: number, py: number, w: number, h: number): void {
+    const u = this.unitsPerPx(h), [r, up] = this.axes(), ox = (px - w / 2) * u, oy = (h / 2 - py) * u;
+    const p = this.target.map((v, i) => v + r[i] * ox + up[i] * oy) as Vec3;
+    const d0 = this.dist;
+    this.zoom(factor);
+    const k = this.dist / d0; // the factor applied, after the distance limits
+    this.target = p.map((v, i) => v + (this.target[i] - v) * k) as Vec3;
+    this.clampPan();
+  }
+
+  private clampPan(): void {
+    const off = this.target.map((v, i) => v - this.home.target[i]) as Vec3, d = Math.hypot(...off), m = this.limits.maxPan;
+    if (d > m) this.target = this.home.target.map((v, i) => v + (off[i] * m) / d) as Vec3;
+  }
 
   eye(): Vec3 {
     const cp = Math.cos(this.pitch), [tx, ty, tz] = this.target;

@@ -20,7 +20,6 @@
 .crt-plot .cur { stroke: var(--accent); stroke-width: 1.5; }
 .crt-plot .ax { stroke: var(--border-strong); stroke-width: 1; }
 .crt-plot text { font: 10.5px var(--font-mono); fill: var(--muted); }
-.crt-seg { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .crt-retrace { margin-top: 8px; }
 @media (pointer: coarse) { .crt-sel { min-height: 40px; } .crt-chk input { width: 20px; height: 20px; } }

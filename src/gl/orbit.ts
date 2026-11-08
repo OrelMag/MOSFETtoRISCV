@@ -1,46 +1,74 @@
-// Orbit controls on a canvas: drag to orbit, wheel or pinch to zoom, arrows / + / − / Home while focused,
-// double-click to reset. Every change calls onChange (the renderer then draws one frame).
+// Orbit controls on a canvas. Drag to orbit; right-, middle- or shift-drag to pan; wheel or pinch to zoom toward the
+// pointer (two fingers also pan); while focused, arrows orbit, shift + arrows pan, + / − zoom, Home resets; double-click
+// resets. Every change calls onChange (the renderer then draws one frame).
 
 import type { OrbitCamera } from './camera';
 
 const ROT = 0.008; // radians per CSS pixel dragged
 const KEY_ROT = 0.08;
+const KEY_PAN = 40; // CSS pixels per shift + arrow
 
 export function attachOrbit(canvas: HTMLCanvasElement, cam: OrbitCamera, onChange: () => void): () => void {
   const pts = new Map<number, [number, number]>();
-  let pinch = 0;
-  const spread = () => { const [a, b] = [...pts.values()]; return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+  /** What a one-pointer drag does: orbit, or pan (right / middle button, or shift held at the press). */
+  let mode: 'orbit' | 'pan' = 'orbit';
+  // Two pointers: their spread and midpoint at the last move (pinch zooms about the midpoint, which pans as it moves).
+  let pinch = 0, mid: [number, number] = [0, 0];
+  const two = () => {
+    const [a, b] = [...pts.values()];
+    return { d: Math.hypot(a[0] - b[0], a[1] - b[1]), m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] as [number, number] };
+  };
+  const size = () => ({ w: Math.max(1, canvas.clientWidth), h: Math.max(1, canvas.clientHeight), r: canvas.getBoundingClientRect() });
 
   const down = (e: PointerEvent) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.pointerType === 'mouse' && e.button > 2) return;
+    if (e.button === 1) e.preventDefault(); // no autoscroll
     pts.set(e.pointerId, [e.clientX, e.clientY]);
     canvas.setPointerCapture(e.pointerId);
-    if (pts.size === 2) pinch = spread();
+    if (pts.size === 1) mode = e.button === 1 || e.button === 2 || e.shiftKey ? 'pan' : 'orbit';
+    if (pts.size === 2) ({ d: pinch, m: mid } = two());
     canvas.classList.add('dragging');
+    canvas.classList.toggle('panning', mode === 'pan' && pts.size === 1);
   };
   const move = (e: PointerEvent) => {
     const p = pts.get(e.pointerId);
     if (!p) return;
-    if (pts.size === 1) cam.orbit(-(e.clientX - p[0]) * ROT, (e.clientY - p[1]) * ROT);
+    const dx = e.clientX - p[0], dy = e.clientY - p[1];
     pts.set(e.pointerId, [e.clientX, e.clientY]);
-    if (pts.size === 2) { const d = spread(); if (pinch > 0 && d > 0) cam.zoom(pinch / d); pinch = d; }
+    const { w, h, r } = size();
+    if (pts.size === 1) {
+      if (mode === 'pan') cam.pan(dx, dy, h);
+      else cam.orbit(-dx * ROT, dy * ROT);
+    } else if (pts.size === 2) {
+      const t = two();
+      if (pinch > 0 && t.d > 0) cam.zoomAt(pinch / t.d, t.m[0] - r.left, t.m[1] - r.top, w, h);
+      cam.pan(t.m[0] - mid[0], t.m[1] - mid[1], h);
+      pinch = t.d; mid = t.m;
+    }
     onChange();
   };
   const up = (e: PointerEvent) => {
     pts.delete(e.pointerId);
-    pinch = pts.size === 2 ? spread() : 0;
-    if (!pts.size) canvas.classList.remove('dragging');
+    if (pts.size === 2) ({ d: pinch, m: mid } = two()); else pinch = 0;
+    // a finger left of a pinch orbits from where it is, without a jump
+    if (pts.size === 1) mode = 'orbit';
+    if (!pts.size) canvas.classList.remove('dragging', 'panning');
   };
   const wheel = (e: WheelEvent) => {
     e.preventDefault();
     // Pixel, line and page deltas to roughly the same feel; a trackpad pinch arrives as ctrl + wheel.
     const d = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
-    cam.zoom(Math.exp(d * (e.ctrlKey ? 0.01 : 0.0015)));
+    const { w, h, r } = size();
+    cam.zoomAt(Math.exp(d * (e.ctrlKey ? 0.01 : 0.0015)), e.clientX - r.left, e.clientY - r.top, w, h);
     onChange();
   };
   const key = (e: KeyboardEvent) => {
-    const k = e.key;
-    if (k === 'ArrowLeft') cam.orbit(KEY_ROT, 0);
+    const k = e.key, h = size().h;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.shiftKey && k.startsWith('Arrow')) {
+      const [dx, dy] = k === 'ArrowLeft' ? [KEY_PAN, 0] : k === 'ArrowRight' ? [-KEY_PAN, 0] : k === 'ArrowUp' ? [0, KEY_PAN] : [0, -KEY_PAN];
+      cam.pan(dx, dy, h);
+    } else if (k === 'ArrowLeft') cam.orbit(KEY_ROT, 0);
     else if (k === 'ArrowRight') cam.orbit(-KEY_ROT, 0);
     else if (k === 'ArrowUp') cam.orbit(0, KEY_ROT);
     else if (k === 'ArrowDown') cam.orbit(0, -KEY_ROT);
@@ -52,6 +80,7 @@ export function attachOrbit(canvas: HTMLCanvasElement, cam: OrbitCamera, onChang
     onChange();
   };
   const dbl = () => { cam.reset(); onChange(); };
+  const menu = (e: Event) => e.preventDefault(); // right-drag pans
 
   canvas.addEventListener('pointerdown', down);
   canvas.addEventListener('pointermove', move);
@@ -60,6 +89,7 @@ export function attachOrbit(canvas: HTMLCanvasElement, cam: OrbitCamera, onChang
   canvas.addEventListener('wheel', wheel, { passive: false });
   canvas.addEventListener('keydown', key);
   canvas.addEventListener('dblclick', dbl);
+  canvas.addEventListener('contextmenu', menu);
   return () => {
     canvas.removeEventListener('pointerdown', down);
     canvas.removeEventListener('pointermove', move);
@@ -68,5 +98,6 @@ export function attachOrbit(canvas: HTMLCanvasElement, cam: OrbitCamera, onChang
     canvas.removeEventListener('wheel', wheel);
     canvas.removeEventListener('keydown', key);
     canvas.removeEventListener('dblclick', dbl);
+    canvas.removeEventListener('contextmenu', menu);
   };
 }
