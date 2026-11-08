@@ -11,9 +11,10 @@ import { CRC5_POLY, DEVICE_DESCRIPTOR, BIT_CLOCKS, MAX_PACKET, UsbBench, UsbDevi
 import { usbCosts } from '../lib/usb';
 import { usbApi, usbPacketWidget, usbScene } from '../widgets/usb';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
-const n0 = (x: number) => x.toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(x);
 
 // ---- numbers from the model ------------------------------------------------------------------------------------------------
 /** Clocks to train and bring up flow control, and from a command to its Ack / its completion. */
@@ -56,7 +57,7 @@ export const chPcie: Chapter = {
     'follow a damaged TLP through Nak, replay and delivery in gates, a lost Ack through the replay timer, and a dead lane through Recovery',
     'walk a device from attach to configured over USB\'s control transfers, and name the trap in SET_ADDRESS',
   ],
-  builds: ['serial', 'clocks', 'errors', 'codes', 'bus'],
+  builds: ['serial', 'clocks', 'errors', 'codes', 'bus', 'uart'],
   recap: {
     keep: [
       'A lane is a differential pair each way with no shared clock: skew between wires stops mattering, because each lane recovers its own clock and lanes are deskewed in the receiver. What it costs is a packet protocol: framing, flow control and retransmission, all in hardware.',

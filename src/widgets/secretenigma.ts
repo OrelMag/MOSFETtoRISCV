@@ -6,8 +6,9 @@ import { bombeCipher, bombeRun, BOMBE_KEY, BOMBE_PLAIN, centreOf, cribOffsets, m
 import { ALPHABET, chr, Enigma, idx, U264 } from '../crypto/enigma';
 import { h, keepFocus, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 
 /** What one window position does: every letter's partner, and what the machine can never do. */
 export function permutationWidget(): Widget {

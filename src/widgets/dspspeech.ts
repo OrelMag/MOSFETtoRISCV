@@ -17,6 +17,7 @@ import '../styles/signals.css';
 import '../styles/dsp.css';
 import '../styles/fourier.css';
 import '../styles/speech.css';
+import { LPC_OPEN_FRAME } from '../dsp/soundfigs';
 
 const minus = (t: string) => t.replace(/-/g, '−');
 const dbs = (x: number, d = 1) => `${minus(x.toFixed(d))} dB`;
@@ -189,7 +190,7 @@ export function adpcmRvWidget(): Widget {
 export function lpcWidget(): Widget {
   return withVoice('A spectrum from ten numbers', (v, panel, ctl) => {
     // open on a voiced frame of the reader's
-    let frame = 100, order = 10;
+    let frame = LPC_OPEN_FRAME, order = 10;
     const plot = plotOf({ W: 640, H: 220, x: [0, v.rate / 2], y: [-90, 10], yTicks: [-80, -60, -40, -20, 0], xLabel: 'Hz', yLabel: 'dB', aria: 'One frame\'s spectrum and the envelope its predictor draws' });
     const chips = mkChips(3);
     const paint = () => {

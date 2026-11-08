@@ -26,6 +26,7 @@ import { regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { bitwise } from './wide';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -112,7 +113,7 @@ export function onehotMux(n: number, w: number): ComponentDef {
       ports: [bus('s', n, 'in', 'bottom'), ...ds.map((d) => bus(d, w, 'in')), bus('y', w, 'out')],
       symbol: { kind: 'box', label: 'ONE-HOT MUX' },
       spec: (v) => [ds.reduce((y, _, i) => ((v[0] >> i) & 1 ? y | v[1 + i] : y), 0) >>> 0],
-      netlist: () => ({ pins: edgePins(b, ['s', ...ds], ['y'], 3), instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { keepOrder: true }),
     });
   });
 }
@@ -202,7 +203,6 @@ export function simtDecode(n: number): ComponentDef {
     const m2 = b.op1(busMux2(32), [m1, tmask, `${sl}.o2`], 'tmask?', 'm2');
     const outs: [string, string][] = [['isTmc', `${fd}.y0`], ['isSplit', `${fd}.y2`], ['isJoin', `${fd}.y3`], ['isPred', `${fd}.y5`], ['isCsr', isCsr], ['csrSel', sel], ['csrS', m2]];
     for (const [p, d] of outs) b.wire(d, p);
-    const pins = edgePins(b, ins, outs.map(([p]) => p), 3);
     return define({
       id: `simtdec${n}`, name: 'SIMT decoder', category: 'cpu',
       summary: 'custom-0 (0001011): funct3 picks tmc (0), split (2), join (3), pred (5); wspawn and bar do nothing with one warp. csrr rd, 0xCC0–0xCC4 reads a lane CSR: lane and tid differ per lane (csrSel), warp, nlanes and tmask are shared (csrS).',
@@ -215,7 +215,7 @@ export function simtDecode(n: number): ComponentDef {
         return [+(simt && f3 === 0), +(simt && f3 === 2), +(simt && f3 === 3), +(simt && f3 === 5), +csrOk,
           (lo === 0 ? 1 : 0) | (lo === 3 ? 2 : 0), lo & 4 ? mask : lo & 2 ? n : 0];
       },
-      netlist: () => ({ pins, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b),
     });
   });
 }

@@ -10,6 +10,7 @@ import { AND, NOT, XOR } from './gates';
 import { treeMul } from './muldiv';
 import { TIE0 } from './transistors';
 import { orN } from './wide';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width: 1, dir, side });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -90,14 +91,13 @@ function clampFrom(n: number, w: number): ComponentDef {
     b.next();
     b.wire(mux, 'y');
     b.wire(over, 'sat');
-    const R = b.right;
     return define({
       id: `fxclamp${w}_${n}`, name: `${n} → ${w}-bit clamp`, category: 'arithmetic',
       summary: `Takes ${n} bits to ${w}. If the top ${k} bits do not all agree the value does not fit, and the output is the largest word of its sign.`,
       ports: [bus('x', n, 'in'), bus('y', w, 'out'), bit('sat', 'out')],
       symbol: { kind: 'box', label: 'CLAMP', w: 8 },
       spec: ([x]) => { const v = wrapTo(x, n), y = satTo(v, w); return [uns(y, w), y === v ? 0 : 1]; },
-      netlist: () => ({ pins: { x: [0, 12], y: [R, 6], sat: [R, 18] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { room: true }),
     });
   });
 }

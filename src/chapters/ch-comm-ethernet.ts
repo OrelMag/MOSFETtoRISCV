@@ -10,9 +10,10 @@ import { collisionWidget, minFrameWidget, segState, segmentScene, throughputWidg
 import { csmaScene, frameWidget, rxScene, txScene } from '../widgets/ethernet';
 import type { Chapter } from './types';
 import { numOf } from './order';
+import { groupNum } from '../sim/numfmt';
 
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 
 const BITS_MIN = frameBitTimes(MIN_FRAME);
 const US_BIT = 1 / LINK_MBPS;
@@ -37,7 +38,7 @@ export const chEthernet: Chapter = {
     'explain carrier sense, the inter-frame gap, collision detection, the jam and the backoff draw, and compute the largest cable a minimum frame can cover at a given rate',
     'read a throughput curve for a shared wire and say where the capture effect comes from',
   ],
-  builds: ['pcie', 'uart', 'wire', 'errors'],
+  builds: ['pcie', 'uart', 'wire', 'errors', 'serial'],
   recap: {
     keep: [
       `A frame on the stream is destination (6), source (6), type or length (2), payload, pad to ${MIN_FRAME - FCS_BYTES} bytes, then the FCS (${FCS_BYTES}); the wire adds ${PREAMBLE.length} bytes of 0x55 and the SFD 0x${SFD.toString(16).toUpperCase()}, every byte least significant bit first. The FCS is chapter ${numOf('errors')}'s CRC-32 over destination to pad, and a good frame leaves the register at ${hex32(CRC32_RESIDUE)}.`,

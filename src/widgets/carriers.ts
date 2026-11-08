@@ -11,6 +11,7 @@ import { line, mkChips, num, plotOf } from './line';
 import { slider } from './mosparts';
 import '../styles/line.css';
 import '../styles/carriers.css';
+import { groupNum } from '../sim/numfmt';
 
 const btn = (label: string, title: string, f: () => void, cls = 'btn sm'): HTMLButtonElement => {
   const b = h('button', { class: cls, type: 'button', title }, label) as HTMLButtonElement;
@@ -217,7 +218,7 @@ export function wordWidget(): Widget {
     WS.forEach((w, i) => plot.layer.append(s('circle', { cx: plot.X(w), cy: plot.Y(pts[i]), r: w === W ? 6 : 3.5, class: w === W ? 'fc-dot now' : 'fc-dot a' })));
     chips.set(0, `${now.toFixed(1)} dB`, 'tone power over the FFT\'s own rounding');
     chips.set(1, `${bitsAt(now)} bits`, `the largest constellation that leaves, at Γ = ${gap.toFixed(1)} dB`);
-    chips.set(2, `${(2 * W * (N - 1)).toLocaleString('en')}`, 'flip-flops in the stream\'s delay lines');
+    chips.set(2, `${groupNum((2 * W * (N - 1)))}`, 'flip-flops in the stream\'s delay lines');
     note.textContent = `Every bit gives 6 dB, and N = ${N} costs about ${(3 * Math.log2(N)).toFixed(0)} dB against no transform at all, since the tones of a noise-like block shrink under the stage-by-stage halving while the rounding stays one unit. The back-off is the room left for the block's peak: each 6 dB of it is one bit of the word held idle.`;
   };
   const sel = h('select', { 'aria-label': 'Points' }, ...[64, 512, 4096].map((v) => h('option', { value: String(v) }, `${v} points`))) as HTMLSelectElement;

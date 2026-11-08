@@ -114,6 +114,8 @@ export class EditorView {
   private preview: SVGPathElement;
   private band: SVGRectElement;
   private hot: SVGCircleElement;
+  /** The keyboard cursor: a crosshair on a grid point, shown after the keyboard moved it (tools.ts). */
+  private kc: SVGGElement;
   private ghost: SVGGElement;
   /** Outlines of parts still to place (a walkthrough's step in Build along). */
   private guides: SVGGElement;
@@ -126,8 +128,8 @@ export class EditorView {
   private defOf: DefOf | null = null;
 
   constructor(host: HTMLElement) {
-    // tabindex -1: where the focus goes back to when a dialog or drawer over it closes (not a Tab stop)
-    this.svg = s('svg', { class: 'schematic ed-svg', role: 'application', 'aria-label': 'Circuit editor canvas', tabindex: -1 });
+    // A Tab stop (WCAG 2.1.1: the keyboard cursor, tools.ts), and where the focus goes back to when a dialog or drawer over it closes
+    this.svg = s('svg', { class: 'schematic ed-svg', role: 'application', 'aria-label': 'Circuit editor canvas. Press ? for the keys', tabindex: 0 });
     const defs = s('defs');
     defs.innerHTML = `<pattern id="ed-grid" width="1" height="1" patternUnits="userSpaceOnUse">
       <circle cx="0" cy="0" r="0.07" class="grid-dot"/><path d="M1,0 H0 V1" class="grid-line"/></pattern>
@@ -150,10 +152,14 @@ export class EditorView {
     this.band = s('rect', { class: 'ed-band', width: 0, height: 0, display: 'none' });
     this.hot = s('circle', { class: 'ed-hot', r: 0.42, display: 'none' });
     this.ghost = s('g', { class: 'ed-ghost' });
+    this.kc = s('g', { class: 'ed-kc', display: 'none' },
+      s('path', { class: 'ed-kc-halo', d: 'M-2.6,0 H-0.8 M0.8,0 H2.6 M0,-2.6 V-0.8 M0,0.8 V2.6' }),
+      s('path', { class: 'ed-kc-line', d: 'M-2.6,0 H-0.8 M0.8,0 H2.6 M0,-2.6 V-0.8 M0,0.8 V2.6' }),
+      s('circle', { class: 'ed-kc-ring', r: 0.8 }), s('circle', { class: 'ed-kc-dot', r: 0.2 }));
     this.guides = s('g', { class: 'ed-guides' });
     this.gHandles = s('g', { class: 'ed-handles' });
     this.gPorts = s('g', { class: 'ed-ports' });
-    this.gOver.append(this.guides, this.gPorts, this.gHandles, this.ghost, this.preview, this.band, this.hot);
+    this.gOver.append(this.guides, this.gPorts, this.gHandles, this.ghost, this.preview, this.band, this.hot, this.kc);
     this.svg.append(defs,
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid)' }),
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid5)' }),
@@ -555,6 +561,7 @@ export class EditorView {
       if (this.diagCls.get(k) !== 'ed-err') this.diagCls.set(k, lvl);
     };
     for (const d of diags) {
+      if (d.level === 'hint') continue; // a note in the panel, nothing drawn on the part
       const lvl = d.level === 'error' ? 'ed-err' : 'ed-warn';
       d.parts?.forEach((id) => mark(`p:${id}`, lvl));
       d.pins?.forEach((id) => mark(`pin:${id}`, lvl));
@@ -840,6 +847,14 @@ export class EditorView {
     this.band.setAttribute('display', 'inline');
   }
 
+  /** The keyboard cursor at a grid point (null hides it). */
+  showKeyCursor(p: Vec | null): void {
+    this.svg.parentElement?.classList.toggle('kc-on', !!p);
+    if (!p) return void this.kc.setAttribute('display', 'none');
+    this.kc.setAttribute('transform', `translate(${p[0]},${p[1]})`);
+    this.kc.setAttribute('display', 'inline');
+  }
+
   /** Highlight an attach point under the cursor (null hides it). */
   showHot(p: Vec | null, bad = false): void {
     if (!p) return void this.hot.setAttribute('display', 'none');
@@ -947,7 +962,9 @@ export class EditorView {
       return;
     }
     this.cam.fit(b, insetRight, touch ? Math.min(40, width / TOUCH_PX) : 40);
-    if (!touch) return;
+    // only pins (a challenge's starting chip): the plain fit already gives each knob a finger, and zooming
+    // to TOUCH_PX around the centre would crop the very pins the learner starts from
+    if (!touch || this.doc?.parts.length === 0) return;
     const vb = touchZoom(this.cam.vb, width, [b.x + b.w / 2, b.y + b.h / 2]);
     if (vb !== this.cam.vb) {
       this.cam.vb = vb;

@@ -15,7 +15,7 @@ const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
 /** Frames in, the header out for the lookup, the buffers read towards one output at a time. */
 const inputUnit = memoOne((): ComponentDef => {
-  const m = new Rtl({ id: 'os_input', name: 'Input', category: 'sequential', summary: 'Two frame buffers taking turns.' });
+  const m = new Rtl({ noSplit: true, id: 'os_input', name: 'Input', category: 'sequential', summary: 'Two frame buffers taking turns.' });
   const clk = m.input('clk', { clock: true }), rxData = m.inputBus('rxData', 8), rxValid = m.input('rxValid'), rxLast = m.input('rxLast'), rxErr = m.input('rxErr');
   const grant = m.input('grant'), maskIn = range(4).map((j) => m.input(`maskIn${j}`)), g = range(4).map((j) => m.input(`g${j}`)), adv = m.input('adv');
   const wb = m.reg(clk, 'wb'), rb = m.reg(clk, 'rb'), full = [m.reg(clk, 'full0'), m.reg(clk, 'full1')];
@@ -74,7 +74,7 @@ const inputUnit = memoOne((): ComponentDef => {
 
 /** Eight rows, one lookup a cycle, learning as it looks. */
 const tableUnit = memoOne((): ComponentDef => {
-  const m = new Rtl({ id: 'os_table', name: 'Table', category: 'sequential', summary: 'Eight rows of registers and comparators.' });
+  const m = new Rtl({ noSplit: true, id: 'os_table', name: 'Table', category: 'sequential', summary: 'Eight rows of registers and comparators.' });
   const clk = m.input('clk', { clock: true }), req = range(4).map((i) => m.input(`req${i}`)), hdrs = range(4).map((i) => m.inputBus(`hdr${i}`, 96));
   const g = m.part(arbiterN(4), [...req, clk], 'who looks', 'arb');
   const any = m.orN(g), hdr = range(96).map((b) => m.orN(range(4).map((i) => m.and(g[i], hdrs[i][b]))));
@@ -102,7 +102,7 @@ const tableUnit = memoOne((): ComponentDef => {
 
 /** One input at a time. */
 const outputUnit = memoOne((): ComponentDef => {
-  const m = new Rtl({ id: 'os_output', name: 'Output', category: 'sequential', summary: 'An arbiter, a busy flag and a data mux.' });
+  const m = new Rtl({ noSplit: true, id: 'os_output', name: 'Output', category: 'sequential', summary: 'An arbiter, a busy flag and a data mux.' });
   const clk = m.input('clk', { clock: true }), r = range(4).map((i) => m.input(`r${i}`)), ready = m.input('txReady');
   const ds = range(4).map((i) => m.inputBus(`d${i}`, 8)), ls = range(4).map((i) => m.input(`l${i}`));
   const busy = m.reg(clk, 'busy'), src = counter(m, clk, 2, 'src');
@@ -123,7 +123,7 @@ const outputUnit = memoOne((): ComponentDef => {
 export const otherSwitchParts = (): ComponentDef[] => [inputUnit(), tableUnit(), outputUnit()];
 
 export const otherSwitch = memoOne((): ComponentDef => {
-  const m = new Rtl({ id: 'os_switch', name: 'Another switch', category: 'routing', summary: 'A second design of the capstone.' });
+  const m = new Rtl({ noSplit: true, id: 'os_switch', name: 'Another switch', category: 'routing', summary: 'A second design of the capstone.' });
   const clk = m.input('clk', { clock: true }), P = range(4);
   const inp = P.map((i) => ({ data: m.inputBus(`rxData${i}`, 8), valid: m.input(`rxValid${i}`), last: m.input(`rxLast${i}`), err: m.input(`rxErr${i}`), ready: m.input(`txReady${i}`) }));
   const grant = P.map(() => m.fwd()), maskIn = P.map(() => P.map(() => m.fwd())), gOut = P.map(() => P.map(() => m.fwd())), adv = P.map(() => P.map(() => m.fwd()));

@@ -85,74 +85,138 @@ export const BLACK_CELL: ComponentDef = define({
 });
 
 /**
- * 4-bit carry-lookahead adder: every carry is a two-level AND-OR of g, p and cin,
- * c_k = g_{k-1} + p_{k-1}·g_{k-2} + … + p_{k-1}…p_0·cin.
+ * One carry of the lookahead, c_k = g_{k-1} + p_{k-1}·g_{k-2} + … + p_{k-1}…p_0·cin, as two levels of gates: an AND per term
+ * (the literals on rails, the taps sorted so none crosses another) and the OR of them and g_{k-1}. All four g / p bits come in;
+ * the bits above k − 1 are not used.
  */
-export const CLA4: ComponentDef = (() => {
-  const R = 4; // rail spacing
-  const rails = ['c0', 'g0', 'p0', 'g1', 'p1', 'g2', 'p2', 'g3', 'p3'];
-  const railX = (name: string) => 22 + 2 * rails.indexOf(name);
-  const XA = 22 + 2 * rails.length + 3; // AND column
-  const instances: InstanceDef[] = [
-    { name: 'sa', def: splitter(ones(4), R * 2), at: [3, 0] },
-    { name: 'sb', def: splitter(ones(4), R * 2), at: [6, 1] },
-  ];
-  const railEnds = new Map<string, string[]>(rails.map((r) => [r, []]));
-  railEnds.get('c0')!.push('cin');
-  const nets: NetDef[] = [{ name: 'a', ends: ['a', 'sa.in'] }, { name: 'b', ends: ['b', 'sb.in'] }];
-  for (let i = 0; i < 4; i++) {
-    instances.push({ name: `gp${i}`, def: GP_CELL, at: [11, 2 * R * i + 3] });
-    nets.push({ ends: [`sa.o${i}`, `gp${i}.a`] }, { ends: [`sb.o${i}`, `gp${i}.b`] });
-    railEnds.get(`g${i}`)!.unshift(`gp${i}.g`);
-    railEnds.get(`p${i}`)!.unshift(`gp${i}.p`);
-  }
-  let y = 2;
-  const XO = XA + 9, XS = XO + 10;
-  const sumEnds: string[] = [];
-  for (let k = 1; k <= 4; k++) {
+export const claCarry = (k: number, order?: string[]): ComponentDef => {
+  const make = (): ComponentDef => {
+    const lits = ['cin', ...Array.from({ length: k }, (_, i) => `g${i}`), ...Array.from({ length: k }, (_, i) => `p${i}`)];
+    const rails = order ?? CARRY_RAILS[k] ?? lits;
+    const SP = 3;
+    const railX = (name: string) => 16 + SP * rails.indexOf(name);
+    const XA = 16 + SP * rails.length + 2, XO = XA + 9;
+    const instances: InstanceDef[] = [
+      { name: 'sg', def: splitter(ones(4), 4), at: [3, 0] },
+      { name: 'sp', def: splitter(ones(4), 4), at: [8, 3] },
+    ];
+    const ends = new Map<string, string[]>(lits.map((l) => [l, l === 'cin' ? ['cin'] : [`${l[0] === 'g' ? 'sg' : 'sp'}.o${l.slice(1)}`]]));
+    const nets: NetDef[] = [{ name: 'g', ends: ['g', 'sg.in'] }, { name: 'p', ends: ['p', 'sp.in'] }];
+    const ors = orN(k + 1), orIns = ors.ports.filter((p) => p.dir === 'in').map((p) => p.name);
+    let y = 1;
     const terms: string[] = [];
-    const ors = orN(k + 1);
-    const orIns = ors.ports.filter((p) => p.dir === 'in').map((p) => p.name);
-    const yTop = y;
+    const bands: [number, number][] = [];
     for (let j = 0; j < k; j++) {
-      // term j: p_{k-1} … p_j · (j == 0 ? c0 : g_{j-1})
-      const lits = [...Array.from({ length: k - j }, (_, m) => `p${k - 1 - m}`), j === 0 ? 'c0' : `g${j - 1}`];
-      const g = lits.length === 2 ? AND : andN(lits.length);
+      const ls = [...Array.from({ length: k - j }, (_, m) => `p${k - 1 - m}`), j === 0 ? 'cin' : `g${j - 1}`].sort((a, b) => rails.indexOf(b) - rails.indexOf(a));
+      const g = ls.length === 2 ? AND : andN(ls.length);
       const gIns = g.ports.filter((p) => p.dir === 'in').map((p) => p.name);
-      const nm = `t${k}_${j}`;
-      instances.push({ name: nm, def: g, at: [XA, y] });
-      lits.forEach((l, m) => railEnds.get(l)!.push(`${nm}.${gIns[m]}`));
-      terms.push(`${nm}.y`);
+      instances.push({ name: `t${j}`, def: g, at: [XA, y] });
+      bands.push([y, y + symbolGeom(g).h]);
+      ls.forEach((l, m) => ends.get(l)!.push(`t${j}.${gIns[m]}`));
+      terms.push(`t${j}.y`);
       y += symbolGeom(g).h + 1;
     }
-    const og = symbolGeom(ors);
-    const oy = Math.max(yTop, (yTop + y) / 2 - og.h / 2);
-    instances.push({ name: `c${k}`, def: ors, at: [XO, oy] });
-    terms.forEach((t, m) => nets.push({ ends: [t, `c${k}.${orIns[m]}`] }));
-    railEnds.get(`g${k - 1}`)!.push(`c${k}.${orIns[k]}`);
-    if (k < 4) {
-      instances.push({ name: `x${k}`, def: XOR, at: [XS, oy + og.h / 2 - 1] });
-      nets.push({ name: `c${k}`, ends: [`c${k}.y`, `x${k}.b`] });
-      railEnds.get(`p${k}`)!.push(`x${k}.a`);
-      sumEnds.push(`x${k}.y`);
-    } else nets.push({ name: 'c4', ends: ['c4.y', 'cout'] });
-    y += 3;
+    const og = symbolGeom(ors), oy = Math.max(1, (1 + y - 1) / 2 - og.h / 2);
+    instances.push({ name: 'or', def: ors, at: [XO, oy] });
+    terms.forEach((t, m) => nets.push({ ends: [t, `or.${orIns[m]}`] }));
+    ends.get(`g${k - 1}`)!.push(`or.${orIns[k]}`);
+    nets.push({ name: 'c', ends: ['or.y', 'c'] });
+    // g_{k-1} runs in to the OR's last input: where that falls on an AND gate it dips through the gap above the band
+    const py = oy + og.ports[orIns[k]].pos[1], hit = bands.find(([a, b]) => py > a && py < b);
+    const via = hit ? { [`or.${orIns[k]}`]: [[XA - 1.5, hit[0] - 0.5], [XA + 6, hit[0] - 0.5], [XA + 6, py]] as [number, number][] } : undefined;
+    for (const [r, e] of ends) nets.push({ name: r, ends: e, trunk: railX(r), ...(r === `g${k - 1}` && via ? { via } : {}) });
+    return define({
+      id: `cla_c${k}${order ? `_${order.join('')}` : ''}`, name: `Lookahead carry c${k}`, category: 'arithmetic',
+      summary: `c${k} from g, p and cin alone: ${k} AND term${k > 1 ? 's' : ''} and an OR of ${k + 1}. Every carry has its own, so none waits for the one below.`,
+      ports: [bus('g', 4, 'in'), bus('p', 4, 'in'), bit('cin', 'in'), bit('c', 'out')],
+      symbol: { kind: 'box', label: `c${k}` },
+      spec: ([g, p, c]) => {
+        let r = c;
+        for (let i = 0; i < k; i++) r = ((g >> i) & 1) | (((p >> i) & 1) & r);
+        return [r];
+      },
+      netlist: () => ({ pins: { g: [0, 2], p: [0, 6], cin: [0, -2], c: [XO + 8, oy + og.ports.y.pos[1]] }, instances, nets }),
+    });
+  };
+  return order ? make() : memo(`claCarry${k}`, make);
+};
+// Rail order per carry, found by a search over the router's own crossing count (tests/redrawclear-fastadd.test.ts holds the result).
+const CARRY_RAILS: Record<number, string[]> = {
+  2: ['g0', 'p1', 'p0', 'cin', 'g1'], 3: ['g1', 'p2', 'g2', 'g0', 'p1', 'p0', 'cin'], 4: ['g2', 'g1', 'g3', 'p3', 'p2', 'g0', 'p1', 'p0', 'cin'],
+};
+
+/** The lookahead unit: the four carries side by side, each a box of its own, fed from the g and p words. */
+export const CLA_LOOKAHEAD: ComponentDef = define({
+  id: 'cla_lookahead', name: 'Carry-lookahead unit', category: 'arithmetic',
+  summary: 'c1 … c4 from the generate and propagate words and cin: one two-level AND-OR box per carry, all in parallel. The gates get wide fast: c_k needs a (k+1)-input OR.',
+  ports: [bus('g', 4, 'in'), bus('p', 4, 'in'), bit('cin', 'in'), bus('c', 4, 'out')],
+  symbol: { kind: 'box', label: 'LOOKAHEAD' },
+  spec: ([g, p, c]) => {
+    let r = c, out = 0;
+    for (let i = 0; i < 4; i++) { r = ((g >> i) & 1) | (((p >> i) & 1) & r); out |= r << i; }
+    return [out];
+  },
+  netlist: () => {
+    const boxes = [1, 2, 3, 4].map((k) => claCarry(k));
+    const mc = merger(ones(4), 12);
+    return {
+      pins: { g: [0, 2], p: [0, 6], cin: [0, -3], c: [34, 18] },
+      instances: [
+        ...boxes.map((d, i) => ({ name: `k${i + 1}`, def: d, at: [10, 12 * i] as [number, number] })),
+        { name: 'mc', def: mc, at: [26, 0] },
+      ],
+      nets: [
+        { name: 'g', ends: ['g', 'k1.g', 'k2.g', 'k3.g', 'k4.g'] },
+        { name: 'p', ends: ['p', 'k1.p', 'k2.p', 'k3.p', 'k4.p'] },
+        { name: 'cin', ends: ['cin', 'k1.cin', 'k2.cin', 'k3.cin', 'k4.cin'] },
+        ...boxes.map((_, i) => ({ name: `c${i + 1}`, ends: [`k${i + 1}.c`, `mc.i${i}`] })),
+        { name: 'c', ends: ['mc.out', 'c'] },
+      ],
+    };
+  },
+});
+
+/**
+ * 4-bit carry-lookahead adder in three stages: a g / p cell per bit, the lookahead unit (one box per carry), the sum XORs.
+ */
+export const CLA4: ComponentDef = (() => {
+  const instances: InstanceDef[] = [
+    { name: 'sa', def: splitter(ones(4), 8), at: [3, 0] },
+    { name: 'sb', def: splitter(ones(4), 8), at: [6, 1] },
+  ];
+  const nets: NetDef[] = [{ name: 'a', ends: ['a', 'sa.in'] }, { name: 'b', ends: ['b', 'sb.in'] }];
+  for (let i = 0; i < 4; i++) {
+    instances.push({ name: `gp${i}`, def: GP_CELL, at: [11, 8 * i + 3] });
+    nets.push({ ends: [`sa.o${i}`, `gp${i}.a`] }, { ends: [`sb.o${i}`, `gp${i}.b`] });
   }
-  instances.push({ name: 'x0', def: XOR, at: [XS, -6] });
-  railEnds.get('p0')!.push('x0.a');
-  railEnds.get('c0')!.push('x0.b');
-  instances.push({ name: 'ms', def: merger(ones(4)), at: [XS + 8, 6] });
-  nets.push({ name: 's0', ends: ['x0.y', 'ms.i0'] });
-  sumEnds.forEach((e, i) => nets.push({ name: `s${i + 1}`, ends: [e, `ms.i${i + 1}`] }));
+  instances.push(
+    { name: 'mg', def: merger(ones(4), 8), at: [20, 3] },
+    { name: 'mp', def: merger(ones(4), 8), at: [24, 4] },
+    { name: 'lcu', def: CLA_LOOKAHEAD, at: [32, 2] },
+    { name: 'sc', def: splitter(ones(4), 8), at: [56, 4] },
+  );
+  const XS = 64;
+  nets.push({ name: 'g', ends: ['mg.out', 'lcu.g'] }, { name: 'p', ends: ['mp.out', 'lcu.p'] }, { name: 'c', ends: ['lcu.c', 'sc.in'] });
+  for (let i = 0; i < 4; i++) {
+    nets.push({ name: `g${i}`, ends: [`gp${i}.g`, `mg.i${i}`] });
+    instances.push({ name: `x${i}`, def: XOR, at: [XS, 8 * i + 2] });
+  }
+  for (let i = 0; i < 4; i++) {
+    nets.push({ name: `p${i}`, ends: [`gp${i}.p`, `mp.i${i}`, `x${i}.a`] });
+    nets.push({ name: `s${i}`, ends: [`x${i}.y`, `ms.i${i}`] });
+  }
+  nets.push({ name: 'cin', ends: ['cin', 'lcu.cin', 'x0.b'] });
+  for (let i = 1; i < 4; i++) nets.push({ name: `c${i}`, ends: [`sc.o${i - 1}`, `x${i}.b`] });
+  nets.push({ name: 'c4', ends: ['sc.o3', 'cout'] });
+  instances.push({ name: 'ms', def: merger(ones(4), 8), at: [XS + 8, 3] });
   nets.push({ name: 's', ends: ['ms.out', 's'] });
-  for (const [r, ends] of railEnds) nets.push({ name: r, ends, trunk: railX(r) });
   return define({
     id: 'cla4', name: '4-bit carry-lookahead adder', category: 'arithmetic',
     summary: 'All four carries computed at once from g, p and cin by two-level AND-OR logic. Constant depth, but the gates get wide fast: c_k needs a (k+1)-input OR.',
     ports: [bus('a', 4, 'in'), bus('b', 4, 'in'), bit('cin', 'in'), bus('s', 4, 'out'), bit('cout', 'out')],
     symbol: { kind: 'box', label: 'CLA4' },
     spec: ([a, b, c]) => { const t = a + b + c; return [t % 16, t > 15 ? 1 : 0]; },
-    netlist: () => ({ pins: { a: [0, 16], b: [0, 17 + 1], cin: [0, -4], s: [XS + 13, 10], cout: [XS + 13, y] }, instances, nets }),
+    netlist: () => ({ pins: { a: [0, 16], b: [0, 18], cin: [0, -4], s: [XS + 20, 14], cout: [XS + 20, 40] }, instances, nets }),
     hdl: {
       verilog: `module cla4 (input logic [3:0] a, b, input logic cin, output logic [3:0] s, output logic cout);
   logic [3:0] g, p;  logic [4:1] c;

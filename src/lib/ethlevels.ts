@@ -26,9 +26,8 @@ export function ethMacFd(): ComponentDef {
   const clk = m.input('clk', { clock: true }), rst = m.input('rst');
   const data = m.inputBus('data', 8), valid = m.input('valid'), last = m.input('last'), rxd = m.input('rxd'), crs = m.input('crs');
   const zero = m.const(0), one = m.const(1);
-  const seed = Array.from({ length: 10 }, (_, i) => ((MAC_SEED >> i) & 1 ? one : zero));
-  const [ready, txd, txen] = m.part(macTx(), [clk, rst, m.bus(data), valid, last, zero, zero, m.bus(seed)], 'transmitter', 'tx');
-  const rx = m.part(macRx(), [clk, rst, rxd, crs, one, one, m.bus(Array.from({ length: 48 }, () => zero))], 'receiver', 'rx');
+  const [ready, txd, txen] = m.part(macTx(), [clk, rst, m.bus(data), valid, last, zero, zero, m.constBus(MAC_SEED, 10)], 'transmitter', 'tx');
+  const rx = m.part(macRx(), [clk, rst, rxd, crs, one, one, m.constBus(0, 48)], 'receiver', 'rx');
   m.output('ready', ready); m.output('txd', txd); m.output('txen', txen);
   // rx outputs: data(8) valid last err why(5) drop state(2)
   m.outputBus('rdata', m.unbus(rx[0], 8)); m.output('rvalid', rx[1]); m.output('rlast', rx[2]); m.output('rerr', rx[3]);
@@ -113,6 +112,7 @@ export function fwdPath(shortcut = false): ComponentDef {
   const hit = fwdDefs.get(shortcut);
   if (hit) return hit;
   const m = new Rtl({
+    noSplit: true, // the campaign's l_fwd answer: drawn as a learner would build it
     id: shortcut ? 'fwd_path_rfc1141' : 'fwd_path', name: shortcut ? 'Forwarding decision, the older checksum update' : 'Forwarding decision', category: 'sequential', label: 'FORWARD', columnHeight: 40,
     summary: 'Four routes matched at once, the longest prefix wins; a bad header is dropped, a TTL that has run out, no route or the router itself goes to the slow path; forwarded, TTL − 1 and the checksum updated from the old one.',
   });

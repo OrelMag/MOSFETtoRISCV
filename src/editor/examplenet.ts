@@ -160,10 +160,12 @@ export function lanComputerChip(id: string, name: string, role: 'A' | 'B'): Chip
   s.pin('clk', 'in', [2, 2], 1, { kind: 'clock' });
   s.pin('rxd', 'in', [2, 8]);
   s.pin('crs', 'in', [2, 14]);
-  s.part('boot', bootRef, [6, 6], { label: 'boot ROM' });
-  s.part('zero', { const: { width: 8, value: 0 } }, [6, 6 + bh + 6], { label: 'switches' });
   const x2 = 6 + bw + 16, [cw] = size(cpu);
   s.part('cpu', cpu, [x2, 6], { label: 'RV32I core' });
+  // the boot ROM and the switches level with the core's inputs they feed, so both wires run straight
+  s.part('zero', { const: { width: 8, value: 0 } }, [x2 - 12, s.port('cpu', 'switches').pos[1] - 1], { label: 'switches' });
+  s.part('boot', bootRef, [6, s.port('cpu', 'romData').pos[1] - 2], { label: 'boot ROM' });
+  void bh;
   const x3 = x2 + cw + 16, [uw] = size(busRef);
   s.part('bus', busRef, [x3, 6], { label: 'interconnect' });
   const x4 = x3 + uw + 16;
@@ -172,22 +174,26 @@ export function lanComputerChip(id: string, name: string, role: 'A' | 'B'): Chip
     s.part(n, ref, [x4, y], { label });
     y += size(ref)[1] + 6;
   }
-  s.pin('txd', 'out', [x4 + 30, 8]);
-  s.pin('txen', 'out', [x4 + 30, 14]);
-  s.pin('conData', 'out', [x4 + 30, 20], 8);
-  s.pin('conWe', 'out', [x4 + 30, 26]);
-  s.tap('cpu.req', 'req'); s.tap('bus.m0_req', 'req'); s.tap('bus.m0_rsp', 'rsp'); s.tap('cpu.rsp', 'rsp');
+  s.pin('txd', 'out', [x4 + 30, s.port('nic', 'txd').pos[1]]);
+  s.pin('txen', 'out', [x4 + 30, s.port('nic', 'txen').pos[1]]);
+  s.pin('conData', 'out', [x4 + 30, 8], 8);
+  s.pin('conWe', 'out', [x4 + 30, 12]);
+  // A request runs forward (core → interconnect → slave) and is a wire, each in a lane of its own; a response runs back and is a
+  // pair of pointers, as are the clock, the pc back to the ROM, the interrupt, the NIC's link as a master (it sits right of the
+  // bus) and the console's wires across the slaves.
+  s.elbow('cpu.req', 'bus.m0_req', x3 - 8);
+  s.tap('bus.m0_rsp', 'rsp'); s.tap('cpu.rsp', 'rsp');
   // the NIC is the second master: its DMA requests go where the example of the UART tied an idle request
   s.tap('nic.m_req', 'dma_req'); s.tap('bus.m1_req', 'dma_req'); s.tap('bus.m1_rsp', 'dma_rsp'); s.tap('nic.m_rsp', 'dma_rsp');
   ['ram', 'nic', 'none'].forEach((n, k) => {
-    s.tap(`bus.s${k}_req`, `${n}_req`); s.tap(`${n}.req`, `${n}_req`);
+    s.elbow(`bus.s${k}_req`, `${n}.req`, x3 + uw + [12, 8, 4][k]);
     s.tap(`${n}.rsp`, `${n}_rsp`); s.tap(`bus.s${k}_rsp`, `${n}_rsp`);
   });
-  s.tap('cpu.pcOut', 'pc'); s.tap('boot.addr', 'pc'); s.tap('boot.data', 'instr'); s.tap('cpu.romData', 'instr');
-  s.tap('zero.y', 'sw'); s.tap('cpu.switches', 'sw');
+  s.tap('cpu.pcOut', 'pc'); s.tap('boot.addr', 'pc'); s.wire('boot.data', 'cpu.romData');
+  s.wire('zero.y', 'cpu.switches');
   s.tap('nic.irq', 'irq'); s.tap('cpu.irq', 'irq');
   s.tap('pin:rxd', 'rxd'); s.tap('nic.rxd', 'rxd'); s.tap('pin:crs', 'crs'); s.tap('nic.crs', 'crs');
-  s.tap('nic.txd', 'txd'); s.tap('pin:txd', 'txd'); s.tap('nic.txen', 'txen'); s.tap('pin:txen', 'txen');
+  s.wire('nic.txd', 'pin:txd'); s.wire('nic.txen', 'pin:txen');
   s.tap('cpu.consoleData', 'conData'); s.tap('pin:conData', 'conData');
   s.tap('cpu.consoleValid', 'conWe'); s.tap('pin:conWe', 'conWe');
   for (const p of ['cpu', 'bus', 'ram', 'nic', 'none']) s.tap(`${p}.clk`, 'clk');
@@ -202,36 +208,33 @@ export function lanSwitchChip(id: string, name: string): ChipDoc {
   const s = new Sheet();
   const SW: PartRef = { lib: switchId(SANDBOX_SWITCH) };
   const RX: PartRef = { lib: 'eth_mac_rx' }, TX: PartRef = { lib: 'eth_mac_tx' };
-  const [sw, shh] = size(SW);
-  const [rw, rh] = size(RX), [tw, th] = size(TX);
-  void sw;
-  const x1 = 30, xs = x1 + rw + 26;
+  const [sw] = size(SW);
+  const [rw, rh] = size(RX), [, th] = size(TX);
+  const x1 = 30, xs = x1 + rw + 26, xe = xs + sw + 26, xp = xe + 38;
   s.pin('clk', 'in', [2, 2], 1, { kind: 'clock' });
-  (['A', 'B'] as const).forEach((c, i) => {
-    s.pin(`${c}_txd`, 'in', [2, 8 + 12 * i]); s.pin(`${c}_txen`, 'in', [2, 14 + 12 * i]);
-  });
   s.part('sw', SW, [xs, 4], { label: '4-port switch' });
-  const xe = xs + sw + 26;
-  const rows = [4 + shh + 8, 4 + shh + 8 + Math.max(rh, th) + 6];
-  (['A', 'B'] as const).forEach((c, i) => {
-    const p = i;
-    s.part(`rx${p}`, RX, [x1, rows[i]], { label: `port ${p} MAC RX` });
-    s.part(`tx${p}`, TX, [xe, rows[i]], { label: `port ${p} MAC TX` });
-    s.tap(`pin:${c}_txd`, `${c}_txd`); s.tap(`rx${p}.rxd`, `${c}_txd`);
-    s.tap(`pin:${c}_txen`, `${c}_txen`); s.tap(`rx${p}.crs`, `${c}_txen`);
-    s.pin(`${c}_rxd`, 'out', [xe + tw + 24, rows[i] + 4 + 6 * i]); s.pin(`${c}_crs`, 'out', [xe + tw + 24, rows[i] + 10 + 6 * i]);
-    s.tap(`tx${p}.txd`, `${c}_rxd`); s.tap(`pin:${c}_rxd`, `${c}_rxd`);
-    s.tap(`tx${p}.txen`, `${c}_crs`); s.tap(`pin:${c}_crs`, `${c}_crs`);
-    for (const n of ['data', 'valid', 'last']) { s.tap(`rx${p}.${n}`, `rx${p}_${n}`); }
-    s.tap(`rx${p}.err`, `rx${p}_err`);
-    s.tap(`sw.rxData${p}`, `rx${p}_data`); s.tap(`sw.rxValid${p}`, `rx${p}_valid`); s.tap(`sw.rxLast${p}`, `rx${p}_last`); s.tap(`sw.rxErr${p}`, `rx${p}_err`);
-    s.tap(`sw.txData${p}`, `tx${p}_data`); s.tap(`sw.txValid${p}`, `tx${p}_valid`); s.tap(`sw.txLast${p}`, `tx${p}_last`);
-    s.tap(`tx${p}.data`, `tx${p}_data`); s.tap(`tx${p}.valid`, `tx${p}_valid`); s.tap(`tx${p}.last`, `tx${p}_last`);
+  // Each MAC beside the switch: a receiver left of its port's inputs, a transmitter right of its outputs. Port 0's sit level with
+  // them (straight wires); port 1's sit below, joined by a staircase of elbows (each a lane of its own, in order, so none crosses
+  // another). The line pins are level with the MACs' line ports. What runs back (ready) and the constants are pointers.
+  const rxIn = (p: number, n: string) => s.port('sw', `rx${n}${p}`).pos[1], txOut = (p: number, n: string) => s.port('sw', `tx${n}${p}`).pos[1];
+  const ry = [rxIn(0, 'Data') - 2, 0], ty = [txOut(0, 'Data') - 7, 0];
+  ry[1] = ry[0] + rh + 8; ty[1] = ty[0] + th + 8;
+  (['A', 'B'] as const).forEach((c, p) => {
+    s.part(`rx${p}`, RX, [x1, ry[p]], { label: `port ${p} MAC RX` });
+    s.part(`tx${p}`, TX, [xe, ty[p]], { label: `port ${p} MAC TX` });
+    s.pin(`${c}_txd`, 'in', [2, s.port(`rx${p}`, 'rxd').pos[1]]); s.pin(`${c}_txen`, 'in', [2, s.port(`rx${p}`, 'crs').pos[1]]);
+    s.wire(`pin:${c}_txd`, `rx${p}.rxd`); s.wire(`pin:${c}_txen`, `rx${p}.crs`);
+    s.pin(`${c}_rxd`, 'out', [xp, s.port(`tx${p}`, 'txd').pos[1]]); s.pin(`${c}_crs`, 'out', [xp, s.port(`tx${p}`, 'txen').pos[1]]);
+    s.wire(`tx${p}.txd`, `pin:${c}_rxd`); s.wire(`tx${p}.txen`, `pin:${c}_crs`);
+    // received bytes: up the staircase, lanes left to right in port order
+    ['data', 'valid', 'last', 'err'].forEach((n, k) => s.elbow(`rx${p}.${n}`, `sw.rx${n[0].toUpperCase()}${n.slice(1)}${p}`, x1 + rw + 8 + 2 * k));
+    // bytes to send: down the staircase, lanes right to left in port order
+    ['data', 'valid', 'last'].forEach((n, k) => s.elbow(`sw.tx${n[0].toUpperCase()}${n.slice(1)}${p}`, `tx${p}.${n}`, xe - 8 - 2 * k));
     s.tap(`tx${p}.ready`, `tx${p}_ready`); s.tap(`sw.txReady${p}`, `tx${p}_ready`);
     s.tap(`rx${p}.ready`, `rx${p}_ready`); s.tap(`sw.rxReady${p}`, `rx${p}_ready`);
   });
   // constants: the MACs' reset low, promiscuous, no address filter, no carrier sensed or collision on the transmit side; ports 2 and 3 unplugged
-  const zy = rows[1] + Math.max(rh, th) + 8;
+  const zy = ry[1] + rh + 8;
   s.part('zero', { const: { width: 1, value: 0 } }, [x1, zy], { label: 'low' });
   s.part('one', { const: { width: 1, value: 1 } }, [x1, zy + 6], { label: 'high' });
   s.part('zero8', { const: { width: 8, value: 0 } }, [x1, zy + 12], { label: 'no data' });
@@ -247,10 +250,9 @@ export function lanSwitchChip(id: string, name: string): ChipDoc {
   s.tap('tx0.seed', 'seed'); s.tap('tx1.seed', 'seed'); s.tap('seed.y', 'seed');
   for (const e of ['sw', 'rx0', 'rx1', 'tx0', 'tx1']) s.tap(`${e}.clk`, 'clk');
   s.tap('pin:clk', 'clk');
-  // the counters out
-  let py = 4;
+  // the counters out, level with the switch's outputs
   for (const c of ['learned', 'evicted', 'flooded', 'filtered']) {
-    s.pin(c, 'out', [xs + sw + 60, py], 16); s.tap(`sw.${c}`, c); s.tap(`pin:${c}`, c); py += 6;
+    s.pin(c, 'out', [xp, s.port('sw', c).pos[1]], 16); s.wire(`sw.${c}`, `pin:${c}`);
   }
   return s.doc(id, name, {
     notes: `Chapter ${numOf('switch')}'s switch with two of its four ports plugged in. Each plugged port is a MAC receiver (the bits of the computer's transmitter become the byte stream the switch takes) and a MAC transmitter (the switch's byte stream becomes bits for the computer's receiver); the receivers accept every destination (promiscuous), as a switch port must. Ports 2 and 3 are unplugged: nothing arrives, and their transmit sides are always ready, so a flooded frame leaves. Select the switch to read its learned table and counters.`,
@@ -268,15 +270,15 @@ export function lanTopChip(id: string, name: string, docs: { a: ChipDoc; b: Chip
   s.part('a', { chip: docs.a.id }, [xa, ya], { label: 'Computer A' }, A);
   s.part('sw', { chip: docs.sw.id }, [xs, ya], { label: 'Switch' }, S);
   s.part('b', { chip: docs.b.id }, [xb, ya], { label: 'Computer B' }, B);
-  for (const [c, p] of [['A', 'a'], ['B', 'b']] as const) {
-    s.tap(`${p}.txd`, `${c}_txd`); s.tap(`sw.${c}_txd`, `${c}_txd`);
-    s.tap(`${p}.txen`, `${c}_txen`); s.tap(`sw.${c}_txen`, `${c}_txen`);
-    s.tap(`sw.${c}_rxd`, `${c}_rxd`); s.tap(`${p}.rxd`, `${c}_rxd`);
-    s.tap(`sw.${c}_crs`, `${c}_crs`); s.tap(`${p}.crs`, `${c}_crs`);
-  }
+  // What runs forward is a wire (A's line into the switch, the switch's into B, the counters into their displays: staircases of
+  // elbows, a lane each); what runs back (B's line into the switch, the switch's into A) and the consoles are pointers.
+  s.elbow('a.txd', 'sw.A_txd', xs - 10); s.elbow('a.txen', 'sw.A_txen', xs - 12);
+  s.elbow('sw.B_rxd', 'b.rxd', xs + gs.w + 10); s.elbow('sw.B_crs', 'b.crs', xs + gs.w + 12);
+  s.tap('b.txd', 'B_txd'); s.tap('sw.B_txd', 'B_txd'); s.tap('b.txen', 'B_txen'); s.tap('sw.B_txen', 'B_txen');
+  s.tap('sw.A_rxd', 'A_rxd'); s.tap('a.rxd', 'A_rxd'); s.tap('sw.A_crs', 'A_crs'); s.tap('a.crs', 'A_crs');
   for (const p of ['a', 'b', 'sw']) s.tap(`${p}.clk`, 'clk');
   s.tap('pin:clk', 'clk');
-  const yc = ya + Math.max(ga.h, gs.h) + 6;
+  const yc = ya + gs.h + 2 + 6 * 4 + 4; // below the counters' displays, which sit right of the switch
   s.part('conA', con, [xa, yc], { label: 'console A (what A heard)' });
   s.part('conB', con, [xb, yc], { label: 'console B (what B heard)' });
   for (const [c, p] of [['conA', 'a'], ['conB', 'b']] as const) {
@@ -284,11 +286,9 @@ export function lanTopChip(id: string, name: string, docs: { a: ChipDoc; b: Chip
     s.tap(`${p}.conWe`, `${p}We`); s.tap(`${c}.we`, `${p}We`);
     s.tap(`${c}.clk`, 'clk');
   }
-  let vy = yc;
-  for (const c of ['learned', 'evicted', 'flooded', 'filtered']) {
-    s.part(`v_${c}`, { display: 'value', width: 16 }, [xs, vy], { label: `${c} (frames)` });
-    s.tap(`sw.${c}`, c); s.tap(`v_${c}.a`, c);
-    vy += 6;
-  }
+  ['learned', 'evicted', 'flooded', 'filtered'].forEach((c, k) => {
+    s.part(`v_${c}`, { display: 'value', width: 16 }, [xs + gs.w + 14, ya + gs.h + 2 + 6 * k], { label: `${c} (frames)` });
+    s.elbow(`sw.${c}`, `v_${c}.a`, xs + gs.w + 8 - 2 * k);
+  });
   return s.doc(id, name, { notes: LAN_NOTES });
 }

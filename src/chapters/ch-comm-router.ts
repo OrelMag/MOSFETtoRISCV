@@ -15,8 +15,9 @@ import { analyzeTiming } from '../sim/timing';
 import { CH_ROUTES, CH_TRIE, distVecWidget, engineWidget, fastPathScene, FP_FRAMES, ipHeaderWidget, linkStateWidget, lpmWidget, routerApi, ROUTER_SCENE_DEF } from '../widgets/router';
 import type { Chapter } from './types';
 import { numOf } from './order';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 
 const MEM = { trie: nands(bigRam(TRIE_K, 24)), buf: nands(bigRam(BUF_K, 8)), adj: nands(bigRam(ADJ_K, 8)) };
@@ -48,7 +49,7 @@ export const chRouter: Chapter = {
     'follow a frame through a fast path in gates, and compute how many ports one such engine can serve',
     'run distance vector and link state on a network that breaks, and say which fails how, and what each costs in messages',
   ],
-  builds: ['ethernet', 'switch'],
+  builds: ['ethernet', 'switch', 'network'],
   recap: {
     keep: [
       `A router forwards on one field, the destination, by the longest matching prefix. On the way through it changes four things: destination MAC, source MAC, TTL − 1, and the checksum, updated from the old one by adding 0x${TTL_DELTA.toString(16).toUpperCase()} to its complement with end-around carry (RFC 1624), without summing the header again.`,
@@ -170,7 +171,7 @@ export const chRouter: Chapter = {
         <p>Poison reverse helps: tell a neighbour "infinity" for routes that go through it. The chain now settles in ${dvPoison} rounds. It cures loops of two routers; loops of three and more can still count, given the right timing. <span class="try">Choose the chain, fail B - C, and run rounds.</span> <span class="try">Do it again with poison reverse.</span></p>`,
       widget: distVecWidget,
       more: {
-        real: `<p>Rounds here are synchronous, all routers at once, which is the simplest case and the kindest. BGP, which runs between the internet's networks, is a distance-vector protocol that advertises the whole path, not only the number, exactly so a router can see itself in it and refuse: that removes counting to infinity at the price of longer messages. It also chooses by policy rather than cost, because networks are companies.</p>`,
+        real: `<p>Rounds here are synchronous, all routers at once, which is the simplest case and the kindest. BGP, which runs between the internet's networks, is a path-vector protocol: like distance vector it tells its neighbours its routes, but with the whole path, not only the number, exactly so a router can see itself in it and refuse: that removes counting to infinity at the price of longer messages. It also chooses by policy rather than cost, because networks are companies.</p>`,
       },
     },
     {

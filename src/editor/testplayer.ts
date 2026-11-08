@@ -16,6 +16,17 @@ import { type CaseView, TestReplay, type TestSet } from './testrun';
 /** Cases per second; 0: one per frame. */
 const RATES = [1, 2, 5, 10, 30, 0];
 let rate = 5;
+/**
+ * Whether the player shows its scrubber and case table (true) or one line: the transport and the verdict. The learner's choice is
+ * remembered; until they make one, a phone or a short window starts folded so the circuit keeps its room.
+ */
+const OPEN_KEY = 'mosfet2riscv:tp-open';
+const shortRoom = (): boolean => typeof innerHeight === 'number' && (innerHeight < 820 || (typeof innerWidth === 'number' && innerWidth <= 760));
+const loadOpen = (): boolean => {
+  try { const v = localStorage.getItem(OPEN_KEY); if (v === '1' || v === '0') return v === '1'; } catch { /* private window */ }
+  return !shortRoom();
+};
+const saveOpen = (v: boolean): void => { try { localStorage.setItem(OPEN_KEY, v ? '1' : '0'); } catch { /* private window */ } };
 /** Rows of the case table around the current one. */
 const WINDOW = 5;
 /** Most failure marks drawn on the scrubber (the rest share their pixel). */
@@ -36,12 +47,32 @@ export class TestPlayer {
   private mine = { resets: 0, cycles: 0, sim: null as unknown };
   /** The circuit was edited since Check: the ✓ / ✗ marks are Check's, the live row is now. */
   stale = false;
+  private open = loadOpen();
 
   constructor(private readonly ed: Editor, readonly ch: BuildChallenge, readonly set: TestSet, r: CheckResult, private readonly onClose: () => void) {
     this.es = ed.sim;
     this.rp = new TestReplay(ed.sim, set, ch.check);
     this.failed = r.failed ?? [];
     this.bad = new Set(this.failed);
+    this.el.classList.toggle('folded', !this.open);
+  }
+
+  private fold = h('button', { class: 'btn ghost icon-only sm sb-tp-fold', 'data-tp': 'fold', onclick: () => this.toggle() }, icon('chevR', 14));
+
+  /** Show or fold the scrubber and the case table (remembered). */
+  private toggle(): void {
+    this.open = !this.open;
+    saveOpen(this.open);
+    this.syncFold();
+  }
+
+  private syncFold(): void {
+    const t = this.open ? 'Fold the player to one line' : 'Show the scrubber and the case table';
+    this.el.classList.toggle('folded', !this.open);
+    this.fold.classList.toggle('open', this.open);
+    this.fold.title = t;
+    this.fold.setAttribute('aria-label', t);
+    this.fold.setAttribute('aria-expanded', String(this.open));
   }
 
   get k(): number {
@@ -185,12 +216,13 @@ export class TestPlayer {
     }
     this.el.append(
       h('div', { class: 'sb-tp-bar' },
-        h('span', { class: 'sb-tp-name' }, icon('table', 14), 'Tests'), this.nav,
+        this.fold, h('span', { class: 'sb-tp-name' }, icon('table', 14), 'Tests'), this.nav,
         h('span', { class: 'sb-tp-tools' }, speed,
           set.kind === 'table' ? h('button', { class: 'btn ghost sm', title: 'Close the player with this test\'s inputs set on your pins', onclick: () => this.keep() }, 'Keep these inputs') : null,
           btn('close', 'Close the player: your circuit gets its own inputs back', () => this.onClose(), 'close'))),
       h('div', { class: 'sb-tp-scrub' }, this.marks, this.range),
       this.body);
+    this.syncFold();
   }
 
   render(): void {

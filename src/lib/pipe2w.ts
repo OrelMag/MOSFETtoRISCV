@@ -34,6 +34,7 @@ import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { andN } from './combinational';
 import { orN } from './wide';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -91,7 +92,6 @@ export const PREDECODE: ComponentDef = (() => {
   b.next();
   b.wire(b.op1(AND, [jump, rdLink], undefined, 'isCall'), 'call');
   b.wire(b.op1(andN(4), [isJalr, rd0, rsLink, imm0], undefined, 'isRet'), 'ret');
-  const R = b.right;
   return define({
     id: 'predecode', name: 'Call / return predecode', category: 'cpu',
     summary: 'Spots calls and returns in a fetched word, before decode: a call is jal or jalr writing ra or t0 (push the return address); a return is jalr x0, 0(ra or t0) (predict it from the return stack).',
@@ -101,7 +101,7 @@ export const PREDECODE: ComponentDef = (() => {
       const op = bits(w, 0, 7), rd = bits(w, 7, 5), rs1 = bits(w, 15, 5), imm = bits(w, 20, 12);
       return [(op === 0x6f || op === 0x67) && LINK(rd) ? 1 : 0, op === 0x67 && rd === 0 && LINK(rs1) && imm === 0 ? 1 : 0];
     },
-    netlist: () => ({ pins: { instr: [0, 4], call: [R, 4], ret: [R, 8] }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b),
   });
 })();
 
@@ -132,7 +132,6 @@ export const ISSUE_CLASS: ComponentDef = (() => {
   b.wire(b.op1(AND, [md, nf2], undefined, 'isMul'), 'mul');
   b.wire(b.op1(NOT, [noRs1], undefined, 'rs1'), 'u1');
   b.wire(rs2, 'u2');
-  const R = b.right;
   return define({
     id: 'issueclass', name: 'Issue class', category: 'cpu',
     summary: 'What the issue logic needs to know about an instruction: does it use the data memory, the multiplier or the divider, and which source registers does it really read (rs1: all but lui, auipc and jal; rs2: register-register ops, branches and stores). A field an instruction does not read never makes it wait.',
@@ -142,7 +141,7 @@ export const ISSUE_CLASS: ComponentDef = (() => {
       const md = op === 0x33 && f7 === 1;
       return [op === 0x03 || op === 0x23 ? 1 : 0, md ? 1 : 0, md && f3 < 4 ? 1 : 0, md && f3 >= 4 ? 1 : 0, op === 0x37 || op === 0x17 || op === 0x6f ? 0 : 1, op === 0x33 || op === 0x63 || op === 0x23 ? 1 : 0];
     },
-    netlist: () => ({ pins: { op: [0, 2], funct3: [0, 4], funct7: [0, 6], mem: [R, 2], md: [R, 4], mul: [R, 6], div: [R, 8], u1: [R, 10], u2: [R, 12] }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b),
   });
 })();
 
@@ -170,8 +169,6 @@ export const PAIR_CHECK: ComponentDef = (() => {
   const ok = b.op1(NOT, [no], undefined, 'nc');
   b.next();
   b.wire(b.op1(AND, ['v1', ok], undefined, 'pair'), 'ok');
-  const R = b.right;
-  const ins = ['v1', 'mem1', 'md1', 'ctrl0', 'ctrl1', 'div0', 'regWrite0', 'rd0', 'rs1', 'rs2', 'u1', 'u2'];
   return define({
     id: 'paircheck', name: 'Pair check', category: 'cpu',
     summary: 'Can the second instruction of the pair issue now, beside the first? Not if it needs what only lane 0 has (memory, multiplier, divider), not if both are control instructions, not after a divide, and not if it reads the first one\'s result (a read-after-write inside the pair).',
@@ -182,7 +179,7 @@ export const PAIR_CHECK: ComponentDef = (() => {
       const raw = w0 && rd0 !== 0 && ((u1 && rs1 === rd0) || (u2 && rs2 === rd0));
       return [v1 && !mem1 && !md1 && !(c0 && c1) && !div0 && !raw ? 1 : 0];
     },
-    netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ok: [R, 2] }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { keepOrder: true }),
   });
 })();
 
@@ -229,8 +226,6 @@ export const HAZARD2: ComponentDef = (() => {
   const uses = b.op1(orN(4), OPS.map((o) => m[o].ld), undefined, 'usesLoad');
   b.next();
   b.wire(b.op1(AND, ['loadE0', uses], undefined, 'stall'), 'lwStall');
-  const R = b.right;
-  const ins = [...OPS.map((o) => `r${o}`), ...OPS.map((o) => `u${o}`), ...prods.map((p) => `rd${p}`), ...prods.map((p) => `regWrite${p}`), 'loadE0'];
   type Ins = number[];
   return define({
     id: 'hazard2', name: 'Hazard unit (dual issue)', category: 'cpu',
@@ -253,7 +248,7 @@ export const HAZARD2: ComponentDef = (() => {
       if (stall) return [...out, 1];
       return [...out, 0];
     },
-    netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries([...outs, 'lwStall'].map((n, i) => [n, [R, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { keepOrder: true, room: true }),
   });
 })();
 

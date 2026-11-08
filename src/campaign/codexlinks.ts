@@ -85,8 +85,11 @@ export function buildsOn(id: string): CodexEntry[] {
   if (!own) return [];
   const at = levelRank(own);
   const req = new Set(own.requires);
-  return pick(new Set(NODES.filter((n) => req.has(n.id)).flatMap((n) => n.codex).filter((c) => !own.codex.includes(c) && firstTaught(c) < at)), id);
+  return pick(new Set(NODES.filter((n) => req.has(n.id)).flatMap((n) => n.codex).filter((c) => !own.codex.includes(c) && firstTaught(c) < at && !ROOT_CODEX.has(c))), id);
 }
+
+/** The map's starting lesson (the CPU's anatomy) is required by every first level: its entries are under everything, so naming them builds on nothing. */
+const ROOT_CODEX = new Set(NODES.filter((n) => !n.requires.length).flatMap((n) => n.codex));
 
 /** Entries taught by the levels that directly require its first teaching level, those first taught after it only. */
 export function leadsTo(id: string): CodexEntry[] {

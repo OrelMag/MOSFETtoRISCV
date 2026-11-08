@@ -23,9 +23,9 @@ export const CHECK11D: Record<string, Quiz[]> = {
   sar: [
     {
       question: 'Going from 8 to 12 bits, what changes in a successive-approximation converter?',
-      options: ['12 clocks instead of 8, with one comparator still', '4,095 comparators instead of 255', '8 clocks still, but a finer DAC', '16 clocks, one for each new comparator'],
+      options: ['12 clocks instead of 8, with one comparator still', '4095 comparators instead of 255', '8 clocks still, but a finer DAC', '16 clocks, one for each new comparator'],
       answer: 0,
-      explain: 'It makes one trial a bit with the same comparator, so b bits take b clocks. The 255 and 4,095 comparators are a flash converter\'s.',
+      explain: 'It makes one trial a bit with the same comparator, so b bits take b clocks. The 255 and 4095 comparators are a flash converter\'s.',
       why: ['', 'That is the flash converter, which decides all bits at once and pays 2^b − 1 comparators for it.', 'Each added bit is another trial, so the clock count rises with the bits.', 'A SAR has no extra comparators to wait for; 12 bits are 12 trials.'],
     },
     {
@@ -103,9 +103,9 @@ export const CHECK11D: Record<string, Quiz[]> = {
   wiener: [
     {
       question: 'Roughly how many operations does Levinson\'s recursion need for a 128-tap Wiener filter?',
-      options: ['About 16 thousand: 128², Toeplitz', 'About 2 million: 128³, as for any matrix', 'About 128: one step for each tap', 'About 4,096: 128 steps of 32 operations each'],
+      options: ['About 16 thousand: 128², Toeplitz', 'About 2 million: 128³, as for any matrix', 'About 128: one step for each tap', 'About 4096: 128 steps of 32 operations each'],
       answer: 0,
-      explain: 'A stationary input makes R Toeplitz, a constant along each diagonal, and Levinson exploits that: n² = 16,384 operations where a general solver does n³ = 2,097,152.',
+      explain: 'A stationary input makes R Toeplitz, a constant along each diagonal, and Levinson exploits that: n² = 16 384 operations where a general solver does n³ = 2 097 152.',
       why: ['', 'That is the cost of a general solver, which ignores the structure of R.', 'Each step of the recursion does work in proportion to the taps so far, not one operation.', 'The recursion grows its solution one tap at a time, doing work in proportion to the taps so far.'],
     },
     {
@@ -246,10 +246,10 @@ export const CHECK11D: Record<string, Quiz[]> = {
   ],
   jpeg: [
     {
-      question: 'The chapter\'s 36,864-byte picture is a 3,932-byte file at quality 50. What is the ratio?',
+      question: 'The chapter\'s 36 864-byte picture is a 3932-byte file at quality 50. What is the ratio?',
       options: ['9.4 to 1: raw bytes over file bytes', '0.11 to 1: file bytes over raw bytes', '4.7 to 1: half the file taken up by headers', '36.9 to 1: raw size over a thousand'],
       answer: 0,
-      explain: '36,864 / 3,932 = 9.4. Headers and tables are about 8 % of that file, so the coded data are most of it.',
+      explain: '36 864 / 3932 = 9.4. Headers and tables are about 8 % of that file, so the coded data are most of it.',
       why: ['', 'That is the inverse, a fraction of the raw size.', 'Headers are about 8 % of the file, not half.', 'That divides the raw size by a thousand, which is no part of the arithmetic.'],
     },
     {

@@ -16,6 +16,7 @@ import { slider } from './mosparts';
 import '../styles/line.css';
 import '../styles/fourier.css';
 import '../styles/dsp.css';
+import { groupNum } from '../sim/numfmt';
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const db = (v: number) => (v > 200 ? 'above 200 dB' : `${Math.abs(v) < 0.05 ? '0.0' : v.toFixed(1).replace('-', '−')} dB`);
@@ -195,7 +196,7 @@ export function costWidget(): Widget {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, 'Counted from the gates'),
         h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', null, 'Part'), h('th', { class: 'num' }, 'NANDs'), h('th', null, ''))),
-          h('tbody', null, ...rows.map(([n, v]) => h('tr', null, h('td', null, n), h('td', { class: 'num' }, String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')), h('td', { class: 'dsp-barcell' }, h('i', { style: `width:${Math.max(1, (v / max) * 100).toFixed(1)}%` })))))))),
+          h('tbody', null, ...rows.map(([n, v]) => h('tr', null, h('td', null, n), h('td', { class: 'num' }, groupNum(v)), h('td', { class: 'dsp-barcell' }, h('i', { style: `width:${Math.max(1, (v / max) * 100).toFixed(1)}%` })))))))),
   };
 }
 

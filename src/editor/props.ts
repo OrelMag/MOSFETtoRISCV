@@ -464,7 +464,7 @@ export class PropsPanel {
 
   private diags(ds: Diag[]): void {
     // errors before warnings; on the chip's own panel (nothing selected) they lead it
-    ds = [...ds.filter((d) => d.level === 'error'), ...ds.filter((d) => d.level !== 'error')];
+    ds = [...ds.filter((d) => d.level === 'error'), ...ds.filter((d) => d.level === 'warn'), ...ds.filter((d) => d.level === 'hint')];
     const top = !this.ed.selCount && ds.length > 0;
     if (top !== (this.el.firstChild === this.diagEl)) {
       if (top) this.el.prepend(this.diagEl);
@@ -478,8 +478,9 @@ export class PropsPanel {
     this.diagEl.replaceChildren();
     if (!ds.length) return;
     const errs = ds.filter((d) => d.level === 'error').length;
-    const warns = ds.length - errs;
-    this.diagEl.append(h('h3', null, errs ? `${errs} problem${errs > 1 ? 's' : ''}` : `${warns} warning${warns > 1 ? 's' : ''}`, errs && warns ? h('small', null, ` · ${warns} warning${warns > 1 ? 's' : ''}`) : null));
+    const warns = ds.filter((d) => d.level === 'warn').length;
+    const hints = ds.length - errs - warns;
+    this.diagEl.append(h('h3', null, errs ? `${errs} problem${errs > 1 ? 's' : ''}` : warns ? `${warns} warning${warns > 1 ? 's' : ''}` : hints > 1 ? 'Hints' : 'Hint', errs && warns ? h('small', null, ` · ${warns} warning${warns > 1 ? 's' : ''}`) : null));
     ds.slice(0, 50).forEach((d, i) => {
       const b = h('button', { class: `sb-diag ${d.level}`, title: 'Show where', 'data-diag': i }, h('span', { class: 'sb-dot' }),
         h('span', null, h('b', null, d.msg), d.fix ? ' ' : null, d.fix ?? null));
@@ -491,14 +492,14 @@ export class PropsPanel {
   /** The run bar's "⚠ n problems · m warnings": a click shows the first one on the circuit and its message here. */
   private pill(ds: Diag[]): void {
     const el = this.ed.diagPill;
-    const errs = ds.filter((d) => d.level === 'error').length, warns = ds.length - errs;
-    const text = ds.length ? [errs ? `${errs} problem${errs > 1 ? 's' : ''}` : '', warns ? `${warns} warning${warns > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ') : '';
-    el.hidden = !ds.length;
+    const errs = ds.filter((d) => d.level === 'error').length, warns = ds.filter((d) => d.level === 'warn').length;
+    const text = errs + warns ? [errs ? `${errs} problem${errs > 1 ? 's' : ''}` : '', warns ? `${warns} warning${warns > 1 ? 's' : ''}` : ''].filter(Boolean).join(' · ') : '';
+    el.hidden = !(errs + warns);
     el.classList.toggle('err', errs > 0);
     if (el.dataset.text === text) return;
     el.dataset.text = text;
     el.replaceChildren(h('span', { 'aria-hidden': 'true' }, '⚠ '), text);
-    el.title = ds.length ? `${diagText(ds[0])} (click to show it)` : '';
+    el.title = errs + warns ? `${diagText(ds[0])} (click to show it)` : '';
   }
 
   /** Select the first diagnostic's objects, centre them, and scroll its message into view. */

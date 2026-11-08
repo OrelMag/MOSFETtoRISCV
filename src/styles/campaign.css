@@ -23,7 +23,7 @@
 .cp-split { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; align-items: start; }
 .cp-map-pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; min-width: 0; }
 .cp-map-scroll { overflow: auto; max-height: calc(100vh - var(--topbar-h) - 150px); }
-.cp-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--text-2); padding: 2px 6px 8px; }
+.cp-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--text-2); padding: 2px 6px 8px; }
 .cp-legend .l::before { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; border: 1.5px solid var(--border-strong); background: var(--surface); }
 .cp-legend .available::before { border-color: var(--accent); }
 .cp-legend .solved::before { border-color: var(--good); background: var(--good-soft); }
@@ -65,8 +65,10 @@
 .cp-node.started .cp-card { fill: var(--accent-soft); }
 .cp-node.solved .cp-card { stroke: var(--good); fill: var(--good-soft); }
 .cp-node.skipped .cp-card { stroke: var(--muted); fill: var(--surface-3); }
-/* faded, but not its focus ring */
-.cp-node.locked > :not(.cp-focus) { opacity: 0.5; }
+/* locked: the card recedes (no fill, a faint border), its text stays readable at --muted, the faintest that passes AA */
+.cp-node.locked .cp-card { fill: none; stroke: var(--border); }
+.cp-node.locked .cp-node-title { fill: var(--muted); font-weight: 500; }
+.cp-node.locked > :not(.cp-focus):not(.cp-card):not(text) { opacity: 0.6; }
 .cp-node.opt .cp-card { stroke-dasharray: 5 3; }
 /* a bug hunt: amber, whatever its status but solved (solved shows green like every level) */
 .cp-node.bug:not(.solved):not(.skipped) .cp-card { stroke: var(--warn); fill: var(--warn-soft); }
@@ -76,10 +78,10 @@
 /* the keyboard focus: a ring outside the card (the selected card has an accent border already) */
 .cp-focus { fill: none; stroke: none; pointer-events: none; }
 .cp-node:focus-visible .cp-focus { stroke: var(--accent); stroke-width: 2.5; }
-.cp-node-kind { font-size: 10px; font-family: var(--font-mono); fill: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.cp-node-kind { font-size: 11px; font-family: var(--font-mono); fill: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .cp-node-title { font-size: 13px; font-weight: 600; fill: var(--text); }
 .cp-node-stars { font-size: 12px; fill: var(--warn-text); }
-.cp-node-skip, .cp-node-lock { font-size: 10px; fill: var(--muted); font-family: var(--font-mono); }
+.cp-node-skip, .cp-node-lock { font-size: 11px; fill: var(--muted); font-family: var(--font-mono); }
 
 /* As tall as the map pane beside it (its scroller: 100vh - topbar - 150px), so its foot, the action bar, is on screen
    before the page is scrolled too. */
@@ -208,6 +210,8 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 }
 /* A phone: the document scrolls, so .scroll must not be a scroller of its own (the action bar sticks to the screen). */
 @media (max-width: 760px) { .cp-page { overflow: visible; } }
+/* a codex entry on a phone: the campaign's own counts and Unlock all / Export / Import (on the map) give way to the entry */
+@media (max-width: 600px) { .cp-head.codex .cp-actions, .cp-head.codex .cp-stats { display: none; } }
 @media (max-width: 600px) {
   .cp-wrap { padding: 10px var(--page-gutter) 30px; }
   .cp-stats { flex-wrap: wrap; }
@@ -372,4 +376,10 @@ a.th-n:hover, a.th-n:focus-visible { border-color: var(--accent); color: var(--a
 .cp-twin { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2); font-size: 13px; }
 .cp-twin b { color: var(--text); }
 .cp-twin .sub { flex: 1 1 220px; margin: 0; }
-@media (pointer: coarse) { .cp-twin .btn { min-height: 40px; } }
+@media (pointer: coarse) {
+  .cp-twin .btn { min-height: 40px; }
+  /* the map page under a finger: Unlock all (its label is the target), a level panel's chips */
+  .cp-unlock { min-height: 40px; padding: 0 10px; }
+  .cp-unlock input { width: 20px; height: 20px; }
+  .cp-chip { min-height: 40px; }
+}

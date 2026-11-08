@@ -14,6 +14,7 @@ import { h, s } from '../dom';
 import '../../styles/codeedit.css';
 import '../../styles/signals.css';
 import '../../styles/dspcap.css';
+import { needsLine } from '../capneeds';
 
 /** Each machine's draft is kept apart: the RV32IM one under the key the page always used. */
 const KEY = 'mosfet2riscv:capecho:src', MACHINE_KEY = 'mosfet2riscv:capecho:machine', PASSED_KEY = 'mosfet2riscv:capecho:passed';
@@ -69,8 +70,8 @@ export class DspCapstonePage {
   constructor(readonly nodeId: string) {
     const meta = DSP_CAPSTONES.find((c) => c.id === nodeId);
     this.el.append(this.body);
-    this.body.append(h('p', { class: 'cc-crumb' }, h('a', { href: '#/path' }, 'My path'), ' › Signal processing capstone'), h('h1', null, 'Cancel the echo'),
-      h('p', null, meta?.brief ?? ''));
+    this.body.append(h('p', { class: 'cc-crumb' }, h('a', { href: '#/campaign' }, 'Campaign'), ' › ', h('a', { href: '#/path' }, 'My path'), ' › Signal processing capstone'), h('h1', null, meta?.title ?? 'An echo canceller'),
+      h('p', null, meta?.brief ?? ''), needsLine(meta?.needs, 'cc-hint') ?? '');
     progress().open(nodeId, true);
     this.run.addEventListener('click', () => this.check());
     this.job();

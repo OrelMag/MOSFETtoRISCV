@@ -235,6 +235,28 @@ describe('lint', () => {
     expect(open?.fix).toBe('and reads X. Wire it, or tie it with Constant 0 / 1.');
   });
 
+  it('an unwired fresh part is a hint until the chip runs; a half-wired one stays a warning', () => {
+    const mk = (wired: boolean) => chip('u_h', 'H', {
+      pins: [pin('a', 'in', [0, 2]), pin('y', 'out', [30, 2])],
+      parts: [part('g1', { lib: 'and' }, [8, 1]), part('g2', { lib: 'not' }, [8, 8])],
+      wires: [wire('w1', 'pin:a', 'g1.a'), wire('w2', 'g1.y', 'pin:y'), ...(wired ? [wire('w3', 'pin:a', 'g2.a')] : [])],
+    });
+    const compiled = (doc: ChipDoc, soft: boolean) => {
+      const c = compileLib(doc);
+      return lintChip(doc, c, new Map(), { soft }).diags;
+    };
+    const lvl = (ds: ReturnType<typeof compiled>, re: RegExp) => ds.find((d) => re.test(d.msg))?.level;
+    // g2 has nothing wired to it: hints (open input and dead part), and g1.b is open on a wired part: warning
+    const soft = compiled(mk(false), true);
+    expect(lvl(soft, /g2.a/)).toBe('hint');
+    expect(lvl(soft, /g2 drives/)).toBe('hint');
+    expect(lvl(soft, /g1.b/)).toBe('warn');
+    // once run, the same are warnings
+    expect(compiled(mk(false), false).filter((d) => d.level === 'hint')).toEqual([]);
+    // g2 wired in: its dead output is a real warning even before running
+    expect(lvl(compiled(mk(true), true), /g2 drives/)).toBe('warn');
+  });
+
   it('flags a pointer that has no twin', () => {
     const doc = chip('u_l2', 'L2', {
       pins: [pin('a', 'in', [0, 2])],

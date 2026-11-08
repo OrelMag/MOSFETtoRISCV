@@ -404,6 +404,10 @@ export class PalettePanel {
   /** Groups the user collapsed or opened (kept across re-renders). */
   private open = new Map<string, boolean>();
   armed: string | null = null;
+  /** The one Tab stop of the list (roving tabindex): a group's summary or a part, by identity (stopKey). */
+  private rover: string | null = null;
+  private typed = '';
+  private typedAt = 0;
 
   constructor(private ctx: () => PaletteCtx, private hooks: PaletteHooks) {
     this.search = h('input', { type: 'search', placeholder: 'Search parts…', 'aria-label': 'Search parts' }) as HTMLInputElement;
@@ -415,6 +419,7 @@ export class PalettePanel {
     const pur = h('label', { class: 'sb-purist', title: 'Only transistors, NAND, pins, constants, wiring, displays and your own chips: build everything else yourself' },
       this.purist, 'Purist');
     this.list = h('div', { class: 'sb-pal-list' });
+    this.installRover();
     this.top = h('div', { class: 'sb-pal-top' });
     this.el = h('aside', { class: 'sb-palette', 'aria-label': 'Parts' }, this.top, h('div', { class: 'sb-pal-head' }, h('span', { class: 'sb-search' }, this.search, this.searchX), hooks.locked ? null : pur), this.list);
   }
@@ -424,6 +429,7 @@ export class PalettePanel {
     const purist = this.hooks.purist();
     this.purist.checked = purist;
     const filter = this.search.value;
+    const hadFocus = this.list.contains(document.activeElement);
     this.list.replaceChildren();
     const favs = this.favorites(filter);
     const pinned = new Set(ctx.ws.favorites);
@@ -508,6 +514,78 @@ export class PalettePanel {
       this.list.append(det);
     }
     if (!this.list.childElementCount) this.list.append(h('p', { class: 'sb-empty' }, 'Nothing matches.'));
+    this.syncRover();
+    if (hadFocus) this.stops().find((el) => stopKey(el) === this.rover)?.focus({ preventScroll: true });
+  }
+
+  // ---- the list as one Tab stop (WCAG 2.1.1: ~75 buttons were each a stop) -----------------------
+
+  /** Every group heading and part that can be reached now (not inside a folded group). */
+  private stops(): HTMLElement[] {
+    return [...this.list.querySelectorAll<HTMLElement>('summary, .sb-item')].filter(visibleStop);
+  }
+
+  /** Exactly one stop takes the Tab key: the last one focused, else the first. */
+  private syncRover(): void {
+    const stops = this.stops();
+    const cur = stops.find((el) => stopKey(el) === this.rover) ?? stops[0];
+    this.rover = cur ? stopKey(cur) : null;
+    for (const el of this.list.querySelectorAll<HTMLElement>('summary, .sb-item')) el.tabIndex = el === cur ? 0 : -1;
+  }
+
+  private installRover(): void {
+    const l = this.list;
+    l.addEventListener('focusin', (e) => {
+      const t = e.target as HTMLElement;
+      if (!t.matches?.('summary, .sb-item')) return;
+      this.rover = stopKey(t);
+      this.syncRover();
+    });
+    // a folded group takes its parts' stop away: the heading takes it over
+    l.addEventListener('toggle', () => {
+      const cur = this.list.querySelector<HTMLElement>('summary[tabindex="0"], .sb-item[tabindex="0"]');
+      if (cur && !visibleStop(cur)) {
+        this.rover = null;
+        this.syncRover();
+      }
+    }, true);
+    l.addEventListener('keydown', (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      const t = e.target as HTMLElement;
+      if (!t.matches?.('summary, .sb-item')) return;
+      const stops = this.stops();
+      const i = stops.indexOf(t);
+      if (i < 0) return;
+      const go = (j: number) => {
+        e.preventDefault();
+        stops[Math.max(0, Math.min(stops.length - 1, j))]?.focus();
+      };
+      const group = t.tagName === 'SUMMARY' ? (t.parentElement as HTMLDetailsElement) : null;
+      switch (e.key) {
+        case 'ArrowDown': return go(i + 1);
+        case 'ArrowUp': return go(i - 1);
+        case 'Home': return go(0);
+        case 'End': return go(stops.length - 1);
+        case 'ArrowRight':
+          if (group && !group.open) { e.preventDefault(); group.open = true; return; }
+          return go(i + 1);
+        case 'ArrowLeft':
+          if (group?.open) { e.preventDefault(); group.open = false; return; }
+          // from a part (or a folded heading): up to its heading
+          { const up = (group ? group.parentElement : t.parentElement)?.closest('details')?.querySelector<HTMLElement>(':scope > summary'); if (up) { e.preventDefault(); up.focus(); } }
+          return;
+      }
+      // type a name to jump to it (the keys that arm favourites stay theirs until a letter began the word)
+      if (e.key.length !== 1 || e.key === ' ') return;
+      const now = e.timeStamp, fresh = now - this.typedAt > 800;
+      if (/[0-9]/.test(e.key) && (fresh || !this.typed)) return;
+      this.typed = fresh ? e.key.toLowerCase() : this.typed + e.key.toLowerCase();
+      this.typedAt = now;
+      const order = [...stops.slice(i + (this.typed.length === 1 ? 1 : 0)), ...stops.slice(0, i + (this.typed.length === 1 ? 1 : 0))];
+      const hit = order.find((el) => stopLabel(el).startsWith(this.typed)) ?? order.find((el) => stopLabel(el).split(/[ _-]+/).some((w) => w.startsWith(this.typed)));
+      e.preventDefault();
+      hit?.focus();
+    });
   }
 
   /** One item: drag or click to place; its star pins it to Favorites (number `n`: the key that arms it). */
@@ -685,4 +763,29 @@ export class PalettePanel {
     this.armed = key;
     for (const b of this.list.querySelectorAll<HTMLElement>('.sb-item')) b.classList.toggle('on', b.dataset.item === key);
   }
+}
+
+/** Can this heading or part be focused (no folded group around it; a heading's own group may be folded)? */
+function visibleStop(el: HTMLElement): boolean {
+  let d: Element | null | undefined = el.tagName === 'SUMMARY' ? el.parentElement?.parentElement : el.parentElement;
+  for (d = d?.closest('details'); d; d = d.parentElement?.closest('details')) if (!(d as HTMLDetailsElement).open) return false;
+  return true;
+}
+
+/** A stop's name as typed-ahead: a part's name, a heading's title. */
+function stopLabel(el: HTMLElement): string {
+  const t = el.tagName === 'SUMMARY'
+    ? [...el.childNodes].filter((n) => n.nodeType === 3 || n.nodeName === 'SPAN').map((n) => n.textContent).join('')
+    : el.querySelector('span')?.textContent ?? el.textContent ?? '';
+  return t.trim().toLowerCase();
+}
+
+/** A stop's identity across re-renders: a part by its palette key, a heading by the headings around it. */
+function stopKey(el: HTMLElement): string {
+  if (el.tagName !== 'SUMMARY') return `i:${el.dataset.item ?? ''}`;
+  const path: string[] = [];
+  for (let d = el.parentElement as HTMLElement | null; d; d = d.parentElement?.closest('details') as HTMLElement | null) {
+    path.unshift(d.dataset.group ?? d.dataset.folder ?? stopLabel(d.querySelector(':scope > summary') as HTMLElement));
+  }
+  return `s:${path.join('/')}`;
 }

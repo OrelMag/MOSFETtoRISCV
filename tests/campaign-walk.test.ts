@@ -3,7 +3,7 @@
 // with every table row right, costs never fall from one step to the next, and the authored
 // scripts name real parts and codex entries.
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { codexById } from '../src/campaign/codex';
 import { levelChallenge } from '../src/campaign/levels';
 import { NODES, nodeById } from '../src/campaign/nodes';
@@ -20,6 +20,11 @@ const playable = NODES.filter((n) => levelChallenge(n) && !n.bug);
 const once = (xs: string[]) => new Set(xs).size === xs.length;
 
 describe('walkthroughs', () => {
+  // every level's walk once, up front (walkOf keeps them): drawing the references is the cost, and no single test should carry it
+  beforeAll(async () => {
+    for (const n of playable) { walkOf(n); await breathe(); }
+  }, 180_000);
+
   it('are authored for every build and core level, each with one question to predict and a nudge', () => {
     for (const n of playable.filter((x) => x.kind === 'build' || x.kind === 'core')) {
       const script = WALKS[n.id];
@@ -35,15 +40,19 @@ describe('walkthroughs', () => {
     for (const id of Object.keys(NUDGES)) expect(nodeById(id), `nudge for '${id}'`).toBeTruthy();
   });
 
-  it('draw a wire between two part ports as soon as both parts are placed (one whose ends meet at a point too)', () => {
+  it('draw a wire between two part ports as soon as both parts are placed (one whose ends meet at a point too)', async () => {
     for (const n of playable) {
       const w = walkOf(n)!;
+      // each step's drawing once: a level of many wires would otherwise rebuild it per wire and per step
+      const docs = w.steps.map((_, i) => partialDoc(w, i));
+      const partsAt = docs.map((d) => new Set(d.parts.map((q) => q.id))), wiresAt = docs.map((d) => new Set(d.wires.map((x) => x.id)));
       for (const z of w.main.wires) {
         if (!('part' in z.a) || !('part' in z.b)) continue;
         const ends = [z.a.part, z.b.part];
-        const k = w.steps.findIndex((_, i) => ends.every((p) => partialDoc(w, i).parts.some((q) => q.id === p)));
-        if (k >= 0) expect(partialDoc(w, k).wires.some((x) => x.id === z.id), `${n.id}: wire ${z.id} at step ${k + 1}`).toBe(true);
+        const k = partsAt.findIndex((s) => ends.every((p) => s.has(p)));
+        if (k >= 0) expect(wiresAt[k].has(z.id), `${n.id}: wire ${z.id} at step ${k + 1}`).toBe(true);
       }
+      await breathe();
     }
   });
 

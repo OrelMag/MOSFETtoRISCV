@@ -12,8 +12,8 @@ export const MORE8C: Record<string, CodexMore> = {
 PCIe 5.0 ×16: 32 GT/s × 128/130 × 16 lanes / 8 = 63 GB/s each way on 64 signal pins
 bytes around one TLP: 2 framing + 12 header + 4 LCRC + 2 sequence = 20
   4-byte write  4 / 24 = 17 %           256-byte write  256 / 276 = 93 %
-the chapter's gates, one lane: port 18,854 NANDs of logic + 355,716 for two buffers
-  whole link with the completer's 1 KB memory: 922,275 NANDs</pre>The gates run one lane at a symbol a clock, a teaching rate; the multi-gigabit figures are real PCIe's. Short on-chip buses are still parallel for the same reason: on one die there is no skew to fight and no errors to retry.`,
+the chapter's gates, one lane: port 18 854 NANDs of logic + 355 716 for two buffers
+  whole link with the completer's 1 KB memory: 922 275 NANDs</pre>The gates run one lane at a symbol a clock, a teaching rate; the multi-gigabit figures are real PCIe's. Short on-chip buses are still parallel for the same reason: on one die there is no skew to fight and no errors to retry.`,
     },
     mistakes: [
       'Thinking more width fixes a parallel bus: it adds skew and pins, so the clock falls as the bus grows; a lane sidesteps it by carrying its clock in its data.',
@@ -65,7 +65,7 @@ Write, sequence 0 → Ack back after about 99 clocks
 damaged TLP: LCRC fails → dropped, Nak(last good) → replay from the buffer → delivered once
 lost Ack:    replay timer (512 clocks here) expires → same TLP, good LCRC, old number
              → dropped, Ack at once ("B expects" moved by one, not two)
-dead lane:   timer expires four times (a little over 4 × 512 = 2,048 clocks) → REPLAY_NUM wraps → Recovery
+dead lane:   timer expires four times (a little over 4 × 512 = 2048 clocks) → REPLAY_NUM wraps → Recovery
 buffer: at most 8 TLPs unacknowledged in the chapter's port (the standard allows 2048)</pre>`,
     },
     mistakes: [
@@ -117,7 +117,7 @@ SET_ADDRESS(5)                address 0 until the status stage ends, 5 afterward
 GET_DESCRIPTOR(device, 18)    address 5     → 8 + 8 + 2 bytes: DATA1, DATA0, DATA1
 GET_DESCRIPTOR(configuration) address 5     → 9 bytes, then the full length
 SET_CONFIGURATION(1)          address 5     → Configured
-device: 4,571 NANDs;  the dialogue: 12,702 clocks at 4 clocks a bit (real full speed is 12 Mb/s)</pre>Left out and named in the chapter: start-of-frame timing, suspend, low and high speed, hubs, attach detection.`,
+device: 4571 NANDs;  the dialogue: 12 702 clocks at 4 clocks a bit (real full speed is 12 Mb/s)</pre>Left out and named in the chapter: start-of-frame timing, suspend, low and high speed, hubs, attach detection.`,
     },
     mistakes: [
       'Moving to the new address when the SETUP of SET_ADDRESS is acknowledged: the status stage still goes to address 0, the device never hears it and the host gives up on it.',
@@ -141,8 +141,8 @@ plaintext  3243f6a8 885a308d 313198a2 e0370734
 ciphertext 3925841d 02dc09fb dc118597 196a0b32       (S-box of 0x53 is 0xED)
 the core's bus prints it backwards: 0x320B6A19_978511DC_FB09DC02_1D842539
 S-box 584 NANDs (inverse 476, depth 74)    MixColumn 464 (four a round)
-SubBytes 16 × 584 = 9,344                  key step 2,880
-round 12,224        core 20,782 NANDs, 11 clocks a block (one to load, one a round), period 102</pre>`,
+SubBytes 16 × 584 = 9344                  key step 2880
+round 12 224        core 20 782 NANDs, 11 clocks a block (one to load, one a round), period 102</pre>`,
     },
     mistakes: [
       'Reading the S-box as an arbitrary table: it is the GF(2<sup>8</sup>) inverse plus an affine map, which is why it can be built from a tower of smaller fields with no ROM.',
@@ -164,9 +164,9 @@ round 12,224        core 20,782 NANDs, 11 clocks a block (one to load, one a rou
       title: '"abc", and the core that hashes it',
       body: `<pre>SHA-256("abc") = ba7816bf 8f01cfea 414140de 5dae2223 b00361a3 96177a9c b410ff61 f20015ad
 SHA-256("abb") differs from it in 124 of the 256 bits (one input bit changed)
-round 2,848 NANDs        message schedule 11,104 (16 words stored)      constants 3,337
-core 28,487 NANDs, 65 clocks a block (one to load, one a round), period 108
-in software on the RV32IM: 8,364 cycles per 64-byte block
+round 2848 NANDs        message schedule 11 104 (16 words stored)      constants 3337
+core 28 487 NANDs, 65 clocks a block (one to load, one a round), period 108
+in software on the RV32IM: 8364 cycles per 64-byte block
 per byte: 65 / 64 = 1.02 clocks      AES core 11 / 16 = 0.69</pre>The core's bus holds the digest with its first word at the low end, so it prints 0xF20015AD_…_BA7816BF.`,
     },
     mistakes: [
@@ -205,6 +205,76 @@ GCM   as CTR, plus a tag over the ciphertext: one flipped bit anywhere and the t
     ],
   },
 
+  enigma: {
+    idea: `Stop the wheels and the machine is a function from 26 letters to 26 letters. A letter goes through the <b>plugboard</b>, the entry wheel, four wheels (a Greek wheel and three rotors), the <b>reflector</b>, the same four wheels backwards, the entry wheel and the plugboard again, and one lamp lights. Each wheel is a permutation <em>W</em> and the plugboard <em>P</em> a set of swaps, so one position is <em>P⁻¹ W⁻¹ U W P</em> with the reflector <em>U</em> in the middle. <em>U</em> is 13 swaps, and a swap seen through anything is still a swap, so at every position, for every key, the permutation is its own inverse (the same key at the far end undoes the message) and has no fixed point: no letter enciphers to itself. The wiring shows it a second way: each key is a changeover switch, and a pressed key has cut off its own lamp.<br><br>The wheels give a new permutation at every key press. The right wheel steps each time; when a wheel's notch is under its pawl the wheel to its left is carried too. The middle wheel's own notch also lets the left pawl in, so the middle wheel steps twice in a row, the <b>double step</b>. The key is the wheel order, the Greek wheel and reflector, the window positions, the ring settings and the plugboard.`,
+    example: {
+      title: 'The size of the key, and the period of the wheels',
+      body: `<pre>M4 key:   8 · 7 · 6 = 336 wheel orders     2 Greek wheels      2 reflectors
+          26<sup>4</sup> = 456 976 window positions       26<sup>2</sup> = 676 ring settings that matter
+          10 cables: 150 738 274 937 250 plugboards
+total     6.26 × 10<sup>25</sup>, about 2<sup>85.7</sup>
+one position: at most 25 · 23 · … · 1 = 7 905 853 580 625 permutations
+wheels I II III: 16 900 presses before they repeat (26 × 25 × 26, the middle wheel's double step)
+  wheels I II VI: 8450      wheels VI VII VIII: 4056</pre>The naval wheels VI, VII and VIII have two notches, which shortens the stepping. Real messages were far shorter than any of these periods, so that is not how it broke.`,
+    },
+    mistakes: [
+      'Thinking the reflector only makes the machine reciprocal: it is also the reason no letter maps to itself, which handed the attacker a test that needs no key.',
+      'Reading 2<sup>85.7</sup> as the cost of an attack: it is the count of settings, the plugboard is most of it, and a method goes round the plugboard.',
+      'Expecting the wheels to turn like an odometer: the middle wheel steps twice in a row at a double step, and the period of three wheels is 16 900, not 26<sup>3</sup>.',
+      'Taking the wheel wirings for the key: they are the machine, the same for everyone, and can be captured; the key is the daily settings.',
+    ],
+    chapters: [
+      { chapter: 'secret', step: 0, label: 'A secret kept in wires' },
+      { chapter: 'secret', step: 1, label: 'A permutation you can read' },
+      { chapter: 'secret', step: 2, label: 'The same machine in gates' },
+      { chapter: 'secret', step: 3, label: 'Why it broke: the flaw in the wiring' },
+    ],
+  },
+
+  bombe: {
+    idea: `Take a crib, a guessed piece of plaintext, and draw it as a <b>menu</b>: letters are nodes, and an edge joins the crib letter and the cipher letter at each place, labelled with the place. Guess that one letter is plugged to some letter. At a chosen wheel position the scrambler is known, so each edge turns that guess into another: if <em>a</em> is plugged to <em>u</em> and the scrambler at this place sends <em>u</em> to <em>v</em>, then <em>b</em> is plugged to <em>v</em>. Follow every edge, round every loop of the menu. If the consequences say a letter is plugged to everything, the guess was a <b>contradiction</b>. If every guess dies, the position is wrong, and it is wrong whichever way the other cables were plugged: the plugboard, the largest factor of the key, drops out of the search.<br><br>The Bombe is Enigma scramblers wired together by the menu, current doing the following, and a stop when something survives. Welchman's <b>diagonal board</b> adds that a plug is a swap, so if <em>a</em> goes to <em>u</em> then <em>u</em> goes to <em>a</em>. The chapter's software does the same over all 17 576 positions of three wheels, told the wheel order, the rings and the reflector.`,
+    example: {
+      title: 'What the search is over, and what it is not',
+      body: `<pre>a crib's place k: the scrambler at that position sends u → v
+hypothesis  a is plugged to u  gives  b is plugged to v  (and, a plug being a swap, u to a)
+contradiction: that hypothesis is out; every hypothesis out: that position is out
+positions of three wheels: 26<sup>3</sup> = 17 576       plugboards never counted: 150 738 274 937 250
+wheel orders still to try on a real run: 336</pre>The number of stops depends on the menu's loops: a short crib leaves false stops, and each stop was checked by a person. The chapter's model steps the wheels exactly, where a real machine's short cribs ignored the middle wheel's turnover.`,
+    },
+    mistakes: [
+      'Thinking the Bombe tries every plugboard: it never counts them; a contradiction at a wheel position holds for all of them at once.',
+      'Expecting one answer: a run gives stops, and a short crib gives false ones to be checked by hand.',
+      'Forgetting the crib is a guess: the no-letter-to-itself property is what first rules out places where it cannot stand.',
+      'Reading the search as a faster brute force: it works because a wrong position leaves no consistent plugboard at all, found by following the menu.',
+    ],
+    chapters: [
+      { chapter: 'secret', step: 4, label: 'The Bombe: going round the plugboard' },
+      { chapter: 'secret', step: 3, label: 'Why it broke: the flaw in the wiring' },
+    ],
+  },
+
+  kerckhoffs: {
+    idea: `<b>Kerckhoffs's principle</b>, as the chapter's table gives it (1883): only the key is secret. The Enigma's wheels and procedure were kept secret, and were captured or worked out; once known, what remained was the day's settings, and a method went round the largest part of those. So the design is published and only the key is secret: AES comes with its specification and test vectors, anyone can check an implementation against them, and a break in public view has to be a break of the key.<br><br>Two things follow. The key should be data a machine holds apart from its logic: on the gates here a different key meant a different circuit, which is why a modern cipher keeps it in a register. And it must be big enough to count against an attacker: the M4's wheel-and-ring settings alone are 4.15 × 10<sup>11</sup>, under 7 minutes at 1 GHz, while AES-128 has 2<sup>128</sup> keys, and the design's job is to make sure nothing cleverer than counting gets near it.`,
+    example: {
+      title: 'Counting the key against one key per clock',
+      body: `<pre>M4 wheel and ring settings, plugboard left out: 415 182 802 944 = 4.15 × 10<sup>11</sup>
+at 1 GHz, one key a clock: 415 s, under 7 minutes
+with the plugboard: 6.26 × 10<sup>25</sup>, about 2<sup>85.7</sup>
+AES-128: 2<sup>128</sup> keys</pre>The sum is for settings an attacker could try. It says nothing of how the Enigma was in fact broken: by a method that never counted the plugboard.`,
+    },
+    mistakes: [
+      'Hearing it as "publish everything": the key is the secret; the principle says not to rely on a secret design, not to disclose keys.',
+      'Treating a secret design as extra safety: one held by every operator and every machine will be captured or worked out.',
+      'Counting settings as strength: 2<sup>85.7</sup> looks safe, but the attack that went round the plugboard never counted it.',
+      'Building the key into the logic: a key wired into gates is a different circuit for every key; in a register, the design is public and the key secret.',
+    ],
+    chapters: [
+      { chapter: 'secret', step: 5, label: 'What the breaking taught' },
+      { chapter: 'secret', step: 2, label: 'The same machine in gates' },
+      { chapter: 'secret', step: 7, label: 'AES: four steps and a key' },
+    ],
+  },
+
   keyexchange: {
     idea: `The navy's key lists had to be printed and carried to every boat, and a capture gave them away. Two strangers on a network have no list, and Diffie and Hellman showed in 1976 they do not need one. Take a public prime p and a number g. Alice keeps a secret a and sends g<sup>a</sup> mod p; Bob keeps b and sends g<sup>b</sup> mod p. Each raises what arrived to their own secret and both get g<sup>ab</sup> mod p, because exponents commute. Anyone watching has both public numbers and would need to undo an exponentiation, the <b>discrete logarithm</b>, for which no fast method is known on ordinary computers at the right sizes. The shared secret is never sent, under any cipher.<br><br>Modern TLS does this on an elliptic curve, where the same security needs far smaller numbers: instead of multiplying numbers you add points, <i>a</i> times a point is easy, and getting <i>a</i> back is the hard direction. X25519 has 255-bit numbers and is chosen so that a careful implementation is simple; the chapter's is Python built for the RV32IM, a number being 32 limbs of 8 bits, and one multiplication walks the 255 bits with the Montgomery ladder. A large quantum computer would change the hardness, since Shor's algorithm solves discrete logarithms. And key exchange alone says nothing about who is at the other end: a man in the middle runs one exchange with each side.`,
     example: {
@@ -212,8 +282,8 @@ GCM   as CTR, plus a tag over the ciphertext: one flipped bit anywhere and the t
       body: `<pre>p = 23, g = 5, Alice a = 6, Bob b = 15   (public: p, g, A, B)
 A = 5^6  mod 23 = 8        B = 5^15 mod 23 = 19
 Alice: B^a = 19^6 mod 23 = 2        Bob: A^b = 8^15 mod 23 = 2     same secret, never sent
-X25519 on the chapter's RV32IM:  34,569,985 cycles for one
-AES-128 block in the same software: 8,057 cycles   (about 4,300 times less)</pre>The chapter's own Diffie–Hellman demonstration uses p = 2<sup>31</sup> − 1, a size Eve can search; X25519 works with 255-bit numbers.`,
+X25519 on the chapter's RV32IM:  34 569 985 cycles for one
+AES-128 block in the same software: 8057 cycles   (about 4300 times less)</pre>The chapter's own Diffie–Hellman demonstration uses p = 2<sup>31</sup> − 1, a size Eve can search; X25519 works with 255-bit numbers.`,
     },
     mistakes: [
       'Calling the exchange authenticated: it proves you share a secret with someone; a man in the middle holds two such secrets, so a signature over the transcript is needed.',
@@ -233,18 +303,18 @@ AES-128 block in the same software: 8,057 cycles   (about 4,300 times less)</pre
     example: {
       title: 'The chapter\'s client against RFC 8448\'s recorded server',
       body: `<pre>cycles on the RV32IM model (1 per instruction):
-client_hello (X25519 share)   34,598,182     key_agreement (X25519)  35,089,754
-certificate_verify (RSA-PSS)  10,338,413     the other five phases    1,251,248
-total 81,277,693 (96 outside any phase), of which the two X25519 runs 69,139,884 (85 %)
-one X25519 measured alone is 34,569,985: 43 more each, the command loop around that measurement
-RSA verify: 10,310,080 cycles with RFC 8448's 1024-bit key, 40,767,022 with a 2048-bit key
-the client: 1,314 lines of Python, 7,428 words of RV32IM
+client_hello (X25519 share)   34 598 182     key_agreement (X25519)  35 089 754
+certificate_verify (RSA-PSS)  10 338 413     the other five phases    1 251 248
+total 81 277 693 (96 outside any phase), of which the two X25519 runs 69 139 884 (85 %)
+one X25519 measured alone is 34 569 985: 43 more each, the command loop around that measurement
+RSA verify: 10 310 080 cycles with RFC 8448's 1024-bit key, 40 767 022 with a 2048-bit key
+the client: 1314 lines of Python, 7428 words of RV32IM
 bytes: ClientHello 201, sent 259, received 774</pre>RFC 8448's 1024-bit RSA is far too short to trust today; real servers use ECDSA, Ed25519 or RSA of 2048 bits or more.`,
     },
     mistakes: [
       'Believing a completed handshake means the right server: without a certificate check (the chapter\'s client has only a pin) the channel runs to whoever answered, who may be an attacker.',
       'Counting the symmetric part as the cost: here X25519 twice and one signature check are nearly all of it; AES-GCM and HMAC barely show.',
-      'Trusting a short RSA key because the handshake works: 1024 bits does for replaying the RFC, not for a server; 2048 bits costs 40,767,022 cycles against 10,310,080.',
+      'Trusting a short RSA key because the handshake works: 1024 bits does for replaying the RFC, not for a server; 2048 bits costs 40 767 022 cycles against 10 310 080.',
       'Assuming a stolen server key opens old traffic: session keys come only from the exchange and are discarded, so recordings stay shut (forward secrecy), unlike a captured key list.',
     ],
     chapters: [

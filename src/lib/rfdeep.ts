@@ -11,6 +11,7 @@ import { AND } from './gates';
 import { nonZero } from './pipeline';
 import { readPort, regfile } from './regfile';
 import { D_LATCH } from './sequential';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -103,13 +104,12 @@ export function latchFile(k: number, w: number): ComponentDef {
     b.next();
     b.wire(b.op1(readPort(k, w), [all, 'ra1'], 'read port 1', 'rp1'), 'rd1');
     b.wire(b.op1(readPort(k, w), [all, 'ra2'], 'read port 2', 'rp2'), 'rd2');
-    const R = b.right;
     return define({
       id: `latchfile${N}x${w}`, name: `Latch register file (${N} × ${w})`, category: 'memory',
       summary: 'Two read ports and one write port like regfile(), but each bit is one D latch: the write decoder ANDed with clk is the enable, so a word is open for the whole high phase of the clock.',
       ports: [bus('wa', k, 'in'), bus('wd', w, 'in'), bit('we', 'in'), bus('ra1', k, 'in'), bus('ra2', k, 'in'), bit('clk', 'in', 'bottom', true), bus('rd1', w, 'out'), bus('rd2', w, 'out')],
       symbol: { kind: 'box', label: 'LATCH FILE' },
-      netlist: () => ({ pins: { wa: [0, 2], wd: [0, 6], we: [0, 10], ra1: [0, 14], ra2: [0, 18], clk: [0, 22], rd1: [R, 4], rd2: [R, 8] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { keepOrder: true }),
     });
   });
 }

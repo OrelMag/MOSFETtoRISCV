@@ -10,6 +10,7 @@ import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { slider } from './mosparts';
 import '../styles/glass.css';
+import { groupNum } from '../sim/numfmt';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
 const stat = (label: string, value: string, cls = '') => h('span', null, `${label} `, h('b', { class: cls }, value));
@@ -194,7 +195,7 @@ export function coherentWidget(): Widget {
     }
     plot.replaceChildren(s('svg', { class: 'gl-svg sq', viewBox: `0 0 ${W} ${W}`, role: 'img', 'aria-label': `Received symbols, bit error rate ${r.ber.toExponential(1)}` }, ...dots));
     const taps = cdTaps(b2, km, 32);
-    out.replaceChildren(stat('BER', r.ber.toExponential(1), r.ber > 3 * r.theory ? 'bad' : 'good'), stat('Q(√SNR)', r.theory.toExponential(1)), stat('Bits', r.bits.toLocaleString('en-US')), stat('Equalizer would need', `${taps.toLocaleString('en-US')} taps at 64 GS/s`));
+    out.replaceChildren(stat('BER', r.ber.toExponential(1), r.ber > 3 * r.theory ? 'bad' : 'good'), stat('Q(√SNR)', r.theory.toExponential(1)), stat('Bits', groupNum(r.bits)), stat('Equalizer would need', `${groupNum(taps)} taps at 64 GS/s`));
   };
   const a = slider('Distance', 0, 6600, 100, km, (v) => `${v} km`, (v) => { km = v; paint(); });
   const b = slider('SNR', 3, 18, 0.5, snr, (v) => `${v} dB`, (v) => { snr = v; paint(); });
@@ -223,11 +224,11 @@ export function oceanWidget(): Widget {
     plot.replaceChildren(svgOf(a, `SNR against launch power over ${km} km; the best is ${nf(best.snrDb, 1)} dB at ${nf(best.pDbm, 1)} dBm`, ...a.g, poly(linear, 'gl-l2'), poly(curve, 'gl-l1'), line(44, yNeed, a.w - 10, yNeed, 'gl-need'), txt(a.w - 12, yNeed - 4, `${QAMS[q].name} needs ${nf(need, 1)} dB`, 'gl-t', 'end'), s('circle', { cx: a.x(best.pDbm), cy: a.y(Math.max(0, best.snrDb)), r: 4, class: 'gl-amp' }), s('circle', { cx: a.x(p), cy: a.y(Math.max(0, Math.min(30, s0))), r: 3.5, class: 'gl-cur-dot' })));
     const closes = s0 >= need, chans = gridChannels(50) + gridChannels(50, L_BAND), rate = 2 * gbd * QAMS[q].bitsPerPolSym * FEC_RATE, reach = maxSpans(need, nfdb, spanDb, gbd) * kmSpan;
     const lim = (2 * shannon(gbd, 10 ** (best.snrDb / 10))).toFixed(0);
-    out.replaceChildren(stat('Amplifiers', String(spans)), stat('This power', `${nf(s0, 1)} dB`, closes ? 'good' : 'bad'), stat('Best power', `${nf(best.pDbm, 1)} dBm, ${nf(best.snrDb, 1)} dB`), stat(`${QAMS[q].name} reach`, `${reach.toLocaleString('en-US')} km`), stat('Channel', `${rate.toFixed(0)} Gb/s (Shannon at the best SNR: ${lim})`), stat('C + L, 50 GHz', `${(chans * rate / 1000).toFixed(1)} Tb/s each way on one pair`));
+    out.replaceChildren(stat('Amplifiers', String(spans)), stat('This power', `${nf(s0, 1)} dB`, closes ? 'good' : 'bad'), stat('Best power', `${nf(best.pDbm, 1)} dBm, ${nf(best.snrDb, 1)} dB`), stat(`${QAMS[q].name} reach`, `${groupNum(reach)} km`), stat('Channel', `${rate.toFixed(0)} Gb/s (Shannon at the best SNR: ${lim})`), stat('C + L, 50 GHz', `${(chans * rate / 1000).toFixed(1)} Tb/s each way on one pair`));
   };
   const sel = h('select', { class: 'mc-sel', 'aria-label': 'Modulation' }, ...QAMS.map((m, i) => h('option', { value: String(i) }, m.name)));
   sel.addEventListener('change', () => { q = Number((sel as HTMLSelectElement).value); paint(); });
-  const a = slider('Distance', 500, 12000, 100, km, (v) => `${v.toLocaleString('en-US')} km`, (v) => { km = v; paint(); });
+  const a = slider('Distance', 500, 12000, 100, km, (v) => `${groupNum(v)} km`, (v) => { km = v; paint(); });
   const b = slider('Span length', 30, 120, 5, kmSpan, (v) => `${v} km`, (v) => { kmSpan = v; paint(); });
   const c = slider('Launch power', -10, 10, 0.5, p, (v) => `${v} dBm`, (v) => { p = v; paint(); });
   const d = slider('Noise figure', 3, 8, 0.5, nfdb, (v) => `${v} dB`, (v) => { nfdb = v; paint(); });

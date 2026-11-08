@@ -14,6 +14,7 @@ import { BOOTH_ENC, compressor } from './muldiv';
 import { register } from './sequential';
 import { NAND, TIE0 } from './transistors';
 import { bitwise } from './wide';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -284,7 +285,7 @@ export function boothReduce(n: number): ComponentDef {
       summary: `${m} rows, their ${m} +1 bits and one constant (it replaces the sign extension of every row): ${count} words reduced to two by ${level} levels of 3:2 compressors, without a carry chain.`,
       ports: [...Array.from({ length: m }, (_, j) => bus(`pp${j}`, n + 1, 'in')), bus('neg', m, 'in'), bus('s', W, 'out'), bus('c', W, 'out')],
       symbol: { kind: 'box', label: 'REDUCE' },
-      netlist: () => ({ pins, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b),
     });
   });
 }

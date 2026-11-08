@@ -9,9 +9,10 @@ import { amplifierWidget, coherentWidget, lossWidget, modesWidget, oceanWidget, 
 import { MMF, SMF } from '../widgets/serial';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 
 // ---- numbers ---------------------------------------------------------------------------------------------------------------
 const MIN = minLoss();
@@ -76,7 +77,7 @@ export const chGlass: Chapter = {
       body: `
         <p>The fast serial links chapter ended on a comparison: copper loses tens of dB a metre at tens of GHz, single-mode fibre about ${SMF.dbPerKm} dB a <em>kilometre</em> at 1310 nm (less at 1550 nm, as below) at any rate you could modulate. This chapter is about that fibre: what the loss is made of, how light stays in the glass, what happens to pulses over thousands of kilometres, and how a link under an ocean is budgeted. It has no gates in it. These are models, each tested against a closed form, and the prose says when it is simplifying.</p>
         <p>Purified silica has two ways to lose light. <strong>Rayleigh scattering</strong> comes from density fluctuations frozen in when the glass cooled, far smaller than a wavelength; it goes as λ⁻⁴, the reason the sky is blue. <strong>Infrared absorption</strong> is the Si–O bond vibrating, whose tail rises exponentially at long wavelengths. Between them there is a minimum at about ${nf(MIN.um * 1000, 0)} nm, ${nf(MIN.db, 2)} dB/km in this model: commercial low-loss fibre reaches about 0.15, and the record is near 0.14.</p>
-        <p>Move the wavelength. At 850 nm, the first window, cheap lasers and silicon detectors work but the loss is ${nf(lossDb(0.85), 1)} dB/km of scattering alone (and a multimode core's heavier doping brings it to about ${MMF.dbPerKm}). At 1310 nm it is ${nf(lossDb(1.31, 0), 2)}. At 1550 nm it is ${nf(lossDb(1.55), 2)}. Over 100 km that is the difference between ${nf(100 * 10 ** (-lossDb(1.55) * 100 / 10), 1)} % of the light left and ${nf(100 * 10 ** (-lossDb(1.31, 0) * 100 / 10), 1)} %. The bump at 1383 nm is OH⁻ left from manufacture, removed in "low water peak" fibre.</p>
+        <p>Move the wavelength. At 850 nm, the first window, cheap lasers and silicon detectors work but the loss is ${nf(lossDb(0.85), 1)} dB/km of scattering alone (and a multimode core's heavier doping brings it to about ${MMF.dbPerKm}). At 1310 nm the glass alone loses ${nf(lossDb(1.31, 0), 2)} (a cabled span, with its splices and bends, the ${SMF.dbPerKm} above). At 1550 nm it is ${nf(lossDb(1.55), 2)}. Over 100 km that is the difference between ${nf(100 * 10 ** (-lossDb(1.55) * 100 / 10), 1)} % of the light left and ${nf(100 * 10 ** (-lossDb(1.31, 0) * 100 / 10), 1)} %. The bump at 1383 nm is OH⁻ left from manufacture, removed in "low water peak" fibre.</p>
         <p>History in one line: 17 dB/km was the 1970 Corning result that made fibre communication plausible (20 was the target of the day), and silica had reached 0.2 dB/km by 1979, close to this floor. The rest of the gains in this chapter came from what is done with the light.</p>`,
       widget: lossWidget,
       challenge: {
@@ -166,7 +167,7 @@ export const chGlass: Chapter = {
       title: 'Amplifying light',
       body: `
         <p>Early links ended a span with a <em>regenerator</em>: a photodiode, a slicer and a new laser, per wavelength, in a box at the bottom of the sea. <strong>Erbium-doped fibre amplifiers</strong> (1987) removed all that: a few metres of fibre doped with erbium, pumped with a laser at 980 or 1480 nm, amplify all of 1530 to 1565 nm at once by stimulated emission, with no idea of the bit rate or format. That one device is why the C band is the C band, and why a cable laid for one modulation can be upgraded to the next by changing its ends.</p>
-        <p>What amplifiers do is <em>add noise</em>: spontaneous emission, amplified along with the signal. The noise figure is the penalty, 3 dB at the quantum limit and about 4.5 to 6 in practice. Every amplifier resets the signal to the launch level, and adds its noise again:</p>
+        <p>What amplifiers do is <em>add noise</em>: spontaneous emission, amplified along with the signal. The noise figure is the penalty, 3 dB at the quantum limit and about 4.5 to 6 in practice. Every amplifier resets the signal to the launch level, and adds its noise again. The measure is the <strong>OSNR</strong>, the optical signal-to-noise ratio, in dB:</p>
         <p><code>OSNR = P − NF − L<sub>span</sub> − 10 log₁₀ N − hνB</code></p>
         <p>where hνB in the 0.1 nm reference bandwidth (${BREF_GHZ} GHz) is ${nf(photonFloorDbm(1550), 1)} dBm: one photon's energy, per second, per hertz of that bandwidth. That is the famous "+58 dB" of the rule of thumb. Take 0 dBm per channel, ${NFDB} dB, 16 dB spans and 100 of them: OSNR = ${nf(osnrDb(0, NFDB, 16, 100), 1)} dB, an SNR of ${nf(snrFromOsnr(osnrDb(0, NFDB, 16, 100), 32), 1)} dB at 32 GBd. QPSK at the code's threshold needs ${nf(REQ[0], 1)} dB, 16-QAM ${nf(REQ[1], 1)}, 64-QAM ${nf(REQ[2], 1)}.</p>
         <p>Read the rule: a span twice as long costs what its dB say (linearly in km), but ten times the spans costs only 10 dB. So many short spans beat a few long ones, by a lot. Going from 16 dB to 8 dB spans doubles the amplifiers but gains ${nf(8 - 10 * Math.log10(2), 0)} dB. That is why cables under oceans have repeaters every 50 to 80 km, despite the cost of each.</p>`,

@@ -80,4 +80,5 @@ button.lv-chip { font: inherit; font-size: 12.5px; cursor: pointer; }
 .ax-index .analogy-fig, .cx-entry .analogy-fig { max-width: 460px; }
 .ax-btns { display: flex; gap: 6px; }
 
-@media (pointer: coarse) { .cp-codex-list .cx-grp-t { min-height: 40px; } }
+@media (pointer: coarse) { .cp-codex-list .cx-grp-t { min-height: 40px; } .cx-rows .lv-chip { min-height: 40px; } }
+.cx-more { color: var(--accent); border-style: dashed; }

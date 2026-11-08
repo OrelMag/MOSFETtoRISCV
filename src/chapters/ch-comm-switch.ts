@@ -7,9 +7,10 @@ import { BENCH_OPTS, benchScene, crossbarScene, learnScene, rigOf } from '../wid
 import { duplexWidget, holWidget, latencyWidget, muxWidget, sharedEfficiency, tableWidget } from '../widgets/ethswitchtools';
 import type { Chapter } from './types';
 import { numOf } from './order';
+import { groupNum } from '../sim/numfmt';
 
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const pct = (x: number, d = 1) => `${(100 * x).toFixed(d)} %`;
 
 const CAM4 = nands(cam(4, 48)), TAB4 = nands(macTable(4, 4)), TAB7 = nands(macTable(7, 4)), CAM7 = nands(cam(7, 48));
@@ -224,7 +225,7 @@ export const chSwitch: Chapter = {
     {
       title: 'What full duplex changed',
       body: `
-        <p>The first Ethernet was one coaxial cable that every station tapped. A station listened before it sent (carrier sense) and, if two began together, both heard the collision, stopped and waited a random time (CSMA/CD with binary exponential backoff, chapter ${numOf('ethernet')}). Throughput on such a wire is shared and degrades with load: in the idealised slotted model of the widget below, four always-busy stations get ${pct(EFF64, 0)} of the link with 64-byte frames and ${pct(EFF1518, 0)} with 1518-byte frames.</p>
+        <p>The first Ethernet was one shared coaxial cable run by CSMA/CD, as <a href="#/c/ethernet/8">chapter ${numOf('ethernet')}'s last step</a> told. Throughput on such a wire is shared and degrades with load: in the idealised slotted model of the widget below, four always-busy stations get ${pct(EFF64, 0)} of the link with 64-byte frames and ${pct(EFF1518, 0)} with 1518-byte frames.</p>
         <p>Twisted pair (10BASE-T, 1990) put each station on its own cable to a hub, and a hub is still one collision domain: it repeats everything everywhere. A <strong>switch</strong> replaces the repeater with the machinery of this chapter. Each port is then a point-to-point link with a pair of wires for each direction, so there is nothing to collide with and a port can send and receive at once. The standard added full-duplex operation in 1997 (IEEE 802.3x), and
         10 Gb/s Ethernet (2002) dropped half duplex altogether. CSMA/CD survives as a negotiated fallback to older equipment.</p>
         <p>The cost moved. The wire no longer limits throughput; the switch's <em>fabric</em>, <em>buffers</em> and <em>table</em> do, so the head-of-line figure, the cell count and the table size are now the numbers to design. A real switch differs from this one in scale and in broad shape, not in kind: ports at 1 to 100 Gb/s, buffers of megabytes in SRAM or DRAM, tables of tens of thousands of addresses or more, fabric and lookups in an ASIC, and queueing disciplines well beyond a round-robin arbiter (priorities, per-class queues, shaping). Specific figures vary by product and are not claimed here.</p>

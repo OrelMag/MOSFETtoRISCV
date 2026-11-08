@@ -18,11 +18,12 @@ import { polyRoots } from '../dsp/zplane';
 import { DSP_LEVEL } from './dspladder';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
 /** A figure to one significant digit, written plainly: 6, 500. */
 const about = (v: number): string => { const p = 10 ** Math.floor(Math.log10(Math.abs(v))); return String(Math.round(v / p) * p).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
 const TAU = 2 * Math.PI;
-const g = (v: number) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const g = (v: number) => groupNum(v);
 const nf = (v: number, d = 3) => v.toFixed(d);
 /** 21 → '21st': the order of one section order among the 24. */
 export const ordinal = (n: number): string => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10 > 3 ? 0 : n % 10]}`;
@@ -267,6 +268,7 @@ export const chIir: Chapter = {
         <p>Each section sees the signal after the sections before it. The peak gain from the input to the output of each of them decides how big a sine can be before that section's word overflows. In the order the design tool returns, poles farthest from the circle first, the peaks are small at first and grow to 1 at the end, so a full-scale sine fits, but most of the word is empty in the early sections and their output is noise-limited. <strong>Scaling</strong> multiplies each section's numerator so that the peak to every output is 1: no overflow, and every word uses its range. It is free in hardware, since it changes only the b coefficients, and it is the largest effect here: ${nf(def.snrScaled - def.snrRaw, 1)} dB of signal to rounding noise on this order, ${nf(def.snrRaw, 1)} → ${nf(def.snrScaled, 1)}.</p>
         <p>The noise from each rounding passes through its own section's 1 / A and through the sections after it, so the order matters too. With scaling the ${D.rows.length} orders span ${nf(best[best.length - 1].snrScaled, 1)} to ${nf(best[0].snrScaled, 1)} dB, ${nf(best[0].snrScaled - best[best.length - 1].snrScaled, 1)} dB apart. A rule of thumb that puts the poles nearest the circle last comes ${ordinal(best.findIndex((r) => r.p.join('') === '0123') + 1)} of ${D.rows.length} here once the sections are scaled. Without scaling it is the best order (${nf(rawBest[0].snrRaw, 1)} dB) because it keeps the peaks low, and the worst orders overflow a full-scale sine many times over. Take it as a rule of thumb: one filter cannot prove it. The model and the figure agree to within 2 dB on every one of the 24 orders, scaled or not: the predicted noise is a frequency-domain integral, and the check runs the biquad model on a sine at the same amplitude.</p>
         <p>Scaling to a gain of 1 protects against sines. Protecting against any bounded input takes the sum of the impulse response's absolute values, as in <a href="#/c/fixed/6">the scaling step</a>, and costs bits.</p>
+        <p>That is every tool for meeting a filter specification: FIR or IIR, the word lengths, the order of the sections. The level's first capstone, <a href="#/campaign/play/cap_mask">A filter to a mask</a>, gives you a mask and a NAND budget and judges the gates you build.</p>
         <div class="try">Click the best and the worst bar with scaling on, then uncheck scaling: the bars reorder, and the first section's peak goes above 1 for most orders.</div>`;
       },
       widget: orderWidget,

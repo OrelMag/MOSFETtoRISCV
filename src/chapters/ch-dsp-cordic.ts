@@ -10,10 +10,11 @@ import { stats } from '../sim/stats';
 import { cordicApi, cordicBits, cordicScene, costWidget, romBits, rotateWidget, SCENE_SPEC, sineRom, vectorWidget, wordsWidget } from '../widgets/dspcordic';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
 /** 1 / n in words: a sixth, a thirteenth. */
 const part = (n: number): string => { const w = ['', 'all', 'a half', 'a third', 'a quarter', 'a fifth', 'a sixth', 'a seventh', 'an eighth', 'a ninth', 'a tenth', 'an eleventh', 'a twelfth', 'a thirteenth', 'a fourteenth', 'a fifteenth', 'a sixteenth', 'a seventeenth', 'an eighteenth']; return w[n] ?? `1 / ${n}`; };
-const n0 = (x: number) => x.toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(x);
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const S: CordicSpec = { w: 14, z: 14, n: 12 };
 const K = 1 / cordicStretch(24);
@@ -31,7 +32,7 @@ export const chCordic: Chapter = {
     'run the same stages backwards for arctangent and magnitude',
     'price a pipelined and an iterative CORDIC against a table of sines, in NANDs and in clocks',
   ],
-  builds: ['muldiv', 'modem', 'signals'],
+  builds: ['muldiv', 'modem', 'signals', 'adders'],
   recap: {
     keep: [
       'A rotation is four multiplications. Choosing angles whose tangent is 2^−i turns them into shifts, so each stage is a pair of adders and wiring.',

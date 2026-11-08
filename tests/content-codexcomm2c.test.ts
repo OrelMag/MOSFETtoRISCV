@@ -12,6 +12,7 @@ import { chapterById } from '../src/chapters';
 import { linkFacts } from '../src/chapters/ch-comm-pcie';
 import { ACK_LIMIT, ADV_NPH, ADV_PD, ADV_PH, creditOk, LINE_DELAY, REPLAY_LIMIT, REPLAY_SLOTS, TS_RX, TS_TX } from '../src/comm/pcie';
 import { BIT_CLOCKS, crc5Token, DEVICE_DESCRIPTOR, MAX_PACKET, PID, tokenBytes, UsbBench, UsbDevice } from '../src/comm/usb';
+import { involutions26, m4KeySpace, periodOf } from '../src/crypto/bombe';
 import COSTS from '../src/crypto/gatecosts.json';
 import TLS from '../src/crypto/tls/costs.json';
 import { usbCosts } from '../src/lib/usb';
@@ -40,8 +41,8 @@ const popcount = (a: Buffer, b: Buffer) => a.reduce((n, x, i) => { let v = x ^ b
 
 describe('group C codex entries: PCIe and USB', () => {
   const ids = CODEX_C.map((e) => e.id);
-  it('are the ten, each complete', () => {
-    expect(ids).toEqual(['pcie', 'credits', 'replay', 'linktraining', 'usbenum', 'aes', 'sha256', 'blockmode', 'keyexchange', 'tls']);
+  it('are the thirteen, each complete', () => {
+    expect(ids).toEqual(['pcie', 'credits', 'replay', 'linktraining', 'usbenum', 'aes', 'sha256', 'blockmode', 'keyexchange', 'tls', 'enigma', 'bombe', 'kerckhoffs']);
   });
 
   it('pcie: the bus against the lane, the packet overhead and the gates', () => {
@@ -263,5 +264,64 @@ describe('group C codex entries: secret', () => {
     says('secret', 18, 'forward secrecy');
     says('secret', 18, 'a pin');
     says('secret', 20, `${Math.round(hs.cycles / 1e6)} million cycles`);
+  });
+});
+
+describe('group C codex entries: the Enigma, the Bombe, Kerckhoffs', () => {
+  // integers of five or more digits are grouped with U+202F (the chapter's n0 gives a plain space, so the step is compared flat)
+  const g = (n: number | bigint) => n.toLocaleString('en-US').replace(/,/g, '\u202f');
+  const KS = m4KeySpace();
+  const quote = (id: string, ...s: string[]) => { const t = [codexById(id)!.body, moreOf(id)!.idea, moreOf(id)!.example?.body, ...(moreOf(id)!.mistakes ?? [])].join(' '); for (const x of s) expect(t, `${id}: ${x}`).toContain(x); };
+  const sci = (x: bigint) => { const [m, e] = Number(x).toExponential(2).split('e+'); return `${m} × 10${e}`; };
+  const stepSays = (step: number, s: string) => says('secret', step, s);
+
+  it('enigma: the key space and the periods, from the model', () => {
+    expect([KS.orders, KS.windows, KS.rings, KS.plugs]).toEqual([336n, 456976n, 676n, 150738274937250n]);
+    expect(KS.bits.toFixed(1)).toBe('85.7');
+    const p3 = periodOf(['I', 'II', 'III']), p2 = periodOf(['I', 'II', 'VI']), p8 = periodOf(['VI', 'VII', 'VIII']);
+    expect([p3, p2, p8]).toEqual([16900, 8450, 4056]);
+    expect(involutions26()).toBe(7905853580625n);
+    quote('enigma', '336', g(KS.windows), '676', g(KS.plugs), g(involutions26()), g(p3), String(p2), String(p8), '2<sup>85.7</sup>');
+    expect(strip(codexById('enigma')!.body)).toContain(sci(KS.total).replace(/10(\d+)/, '10$1'));
+    stepSays(3, `${g(KS.orders)} wheel orders`.replace(/\u202f/g, ' '));
+    stepSays(3, `${KS.windows.toLocaleString('en-US').replace(/,/g, ' ')} window positions`);
+    stepSays(3, `${KS.rings} ring settings`);
+    stepSays(3, `${g(p3).replace(/\u202f/g, ' ')} presses`);
+    stepSays(3, `${p2} with one double-notched wheel`);
+    stepSays(3, `${p8} with all three`);
+    stepSays(1, 'its own inverse');
+    stepSays(1, 'nothing maps to itself');
+    stepSays(1, 'The pressed key has cut off its own lamp');
+    stepSays(1, 'U is 13 swaps');
+  });
+
+  it('bombe: the positions searched and the diagonal board', () => {
+    quote('bombe', g(26 ** 3), g(KS.plugs), '336');
+    expect(26 ** 3).toBe(17576);
+    stepSays(4, `${(26 ** 3).toLocaleString('en-US').replace(/,/g, ' ')} positions`);
+    stepSays(4, 'diagonal board');
+    stepSays(4, 'a plug is a swap');
+    stepSays(4, 'whichever way the other cables were plugged');
+  });
+
+  it('kerckhoffs: the sum of the key against one key a clock', () => {
+    const secs = Number(KS.withoutPlugs) / 1e9;
+    expect(Math.ceil(secs / 60)).toBe(7);
+    expect(secs).toBeLessThan(420);
+    quote('kerckhoffs', g(KS.withoutPlugs), '4.15 × 10<sup>11</sup>', '415 s', 'under 7 minutes', '2<sup>128</sup>');
+    stepSays(5, 'under 7 minutes');
+    stepSays(2, 'a different key means a different circuit');
+  });
+
+  it('are linked to each other and to chapter steps by exact titles', () => {
+    for (const id of ['enigma', 'bombe', 'kerckhoffs']) {
+      const m = moreOf(id)!, ch = chapterById('secret')!;
+      expect(CHECKS[id]).toHaveLength(2);
+      for (const l of m.chapters!) expect(l.label).toBe(ch.steps[l.step!].title);
+    }
+    const rel = (id: string) => codexById(id)!.related ?? [];
+    expect(rel('enigma')).toContain('bombe');
+    expect(rel('bombe')).toContain('enigma');
+    expect(rel('kerckhoffs')).toContain('aes');
   });
 });

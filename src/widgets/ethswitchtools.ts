@@ -14,8 +14,9 @@ import { stats } from '../sim/stats';
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { slider } from './mosparts';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const pct = (x: number, d = 1) => `${(100 * x).toFixed(d)} %`;
 const select = (label: string, opts: [string, string][], value: string, on: (v: string) => void) => {
   const sel = h('select', { class: 'mc-sel', 'aria-label': label }) as HTMLSelectElement;
