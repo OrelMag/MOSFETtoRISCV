@@ -6,6 +6,7 @@
 
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
+import { constWord } from './alu';
 import { Builder } from './builder';
 import { layered } from './layered';
 import { define, merger, ones, splitter } from './define';
@@ -157,6 +158,8 @@ export class Rtl {
   /** w bits (LSB first) into one w-bit bus, and back. */
   bus(sigs: Sig[]): Sig { return this.gate(merger(ones(sigs.length)), sigs); }
   unbus(s: Sig, w: number): Sig[] { return this.parts(splitter(ones(w)), [s]); }
+  /** A w-bit constant word as one part (lib/alu.ts constWord: its ties and merger inside), not w tie outputs merged here. */
+  constBus(v: number, w: number): Sig { return this.gate(constWord(w, v), []); }
   nand(a: Sig, b: Sig): Sig { return this.gate(NAND, [a, b]); }
   not(a: Sig): Sig { return this.gate(NOT, [a]); }
   and(a: Sig, b: Sig): Sig { return this.gate(AND, [a, b]); }
