@@ -4,6 +4,7 @@
 
 import '../styles/quartz3d.css';
 import { h } from '../ui/dom';
+import { groupNum } from '../sim/numfmt';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
@@ -15,10 +16,11 @@ import {
 
 const SHOWN_HZ = 2; // the crystal view draws the fork at this many swings a second
 const HALF = DIVIDE / 2;
-const thin = (s: string): string => s.replace(/,/g, ' ');
-const grp = (x: number): string => thin(Math.round(x).toLocaleString('en-US'));
+// The site's digit rule (sim/numfmt.ts): grouped by U+202F only from five digits.
+const grp = (x: number): string => groupNum(Math.round(x));
+const F_WATCH_TXT = groupNum(F_WATCH);
 const hz = (f: number): string => (f >= 1000 ? `${(f / 1000).toFixed(3)} kHz` : f >= 10 ? `${f.toFixed(2)} Hz` : `${f.toFixed(4)} Hz`);
-const cur = (f: number): string => (f >= 1e4 ? thin(f.toLocaleString('en-US', { maximumFractionDigits: 1 })) : f >= 10 ? f.toFixed(1) : f.toFixed(2));
+const cur = (f: number): string => (f >= 1e4 ? groupNum(Math.round(f * 10) / 10) : f >= 10 ? f.toFixed(1) : f.toFixed(2));
 
 export function quartzView(): Widget {
   let view: 'crystal' | 'loop' = 'crystal', n = 0, running = false, lid = false, temp = 25, rateExp = 6;
@@ -26,10 +28,10 @@ export function quartzView(): Widget {
   const CRYSTAL = { target: [-2, 3, 0] as [number, number, number], yaw: 0.2, pitch: 1.15, dist: 36 };
   const LOOP = { target: [1, 0, -2] as [number, number, number], yaw: 0.2, pitch: 0.85, dist: 78 };
   const stage = modelStage(panel, {
-    aria: 'A 32 768 hertz quartz tuning fork in its ceramic package, and the Pierce oscillator and fifteen-stage divider around it',
+    aria: 'A 32768 hertz quartz tuning fork in its ceramic package, and the Pierce oscillator and fifteen-stage divider around it',
     camera: CRYSTAL,
     limits: { minDist: 12, maxDist: 160 },
-    note: `Drawn, not modelled: a tine swings ${(TIP_DRAWN / 10).toFixed(2)} mm here (a real tine moves far less than a micrometre, so at least a hundred times less); the fork is drawn at ${SHOWN_HZ} swings a second, ${grp(F_WATCH / SHOWN_HZ)} times slower than real; the tine length comes from a plain beam formula, and a real fork has grooves in its tines.`,
+    note: `Drawn, not modelled: a tine swings ${(TIP_DRAWN / 10).toFixed(2)} mm here (a real tine moves far less than a micrometre, so at least a hundred times less); the fork is drawn at ${SHOWN_HZ} swings a second, ${grp(F_WATCH / SHOWN_HZ)} times slower than real; the tine length comes from a plain beam formula, and a real fork has grooves in its tines. In the oscillator view the divider counts at the Rate shown (cycles of the crystal a second, up to the real ${F_WATCH_TXT}), the fork swings at that rate, and the inverter, the fifteen stages and the parts around them are drawn as boxes, not as their gates.`,
     draw: () => paint(),
   });
   const palette = (): QuartzPalette => ({
@@ -66,7 +68,7 @@ export function quartzView(): Widget {
       ]
       : [
         ['Load CL', `${(CL * 1e12).toFixed(1)} pF (15 pF in series with 15 pF, + 1.5 pF stray)`],
-        ['Pulled to', `${cur(loaded(CL))} Hz from fs 32 764.4 Hz`],
+        ['Pulled to', `${cur(loaded(CL))} Hz from fs ${groupNum(32764.4)} Hz`],
         [`At ${temp} °C`, `${cur(f)} Hz`],
         ['Stage 1 (÷2)', hz(stageFreq(0, f))],
         ['Stage 8 (÷256)', hz(stageFreq(7, f))],
@@ -74,7 +76,7 @@ export function quartzView(): Widget {
         ['Counting at', `${cur(rate())} cycles/s (${rate() >= F_WATCH ? 'real time' : `${grp(F_WATCH / rate())}× slower than real`})`],
       ];
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
-    out_.textContent = view === 'crystal' ? `${SHOWN_HZ}` : cur(rate());
+    out_.textContent = view === 'crystal' ? `${SHOWN_HZ} swings/s` : `${cur(rate())} cycles/s`;
     slider.disabled = view === 'crystal';
     runBtn.textContent = running ? 'Pause' : 'Run';
     lidBtn.style.display = view === 'crystal' ? '' : 'none';
@@ -122,7 +124,7 @@ export function quartzView(): Widget {
 
   panel.append(
     h('h3', { class: 'm3-title' }, 'The quartz crystal oscillator'),
-    h('p', { class: 'm3-sub' }, 'A watch crystal is a tuning fork cut from quartz, ringing at 32 768 Hz in a flexural mode: two tines bend toward and away from each other in antiphase, gold films on them turn bending into charge (piezoelectricity) and the field back into bending. It is not a disc between two plates: a thickness-shear AT-cut blank is a different crystal, in the MHz (16 MHz takes a blank 0.104 mm thick, f ∝ 1/thickness). The inverter, a 10 MΩ feedback resistor and two 15 pF capacitors keep the fork ringing (a Pierce oscillator), and fifteen divide-by-two stages count it down: 2¹⁵ = 32 768, so the last one beats at exactly 1 Hz. The error is a parabola in temperature, −0.034 ppm/°C² about 25 °C: try 45 °C.'),
+    h('p', { class: 'm3-sub' }, `A watch crystal is a tuning fork cut from quartz, ringing at ${F_WATCH_TXT} Hz in a flexural mode: two tines bend toward and away from each other in antiphase, gold films on them turn bending into charge (piezoelectricity) and the field back into bending. It is not a disc between two plates: a thickness-shear AT-cut blank is a different crystal, in the MHz (16 MHz takes a blank 0.104 mm thick, f ∝ 1/thickness). The inverter, a 10 MΩ feedback resistor and two 15 pF capacitors keep the fork ringing (a Pierce oscillator), and fifteen divide-by-two stages count it down: 2¹⁵ = ${F_WATCH_TXT}, so the last one beats at exactly 1 Hz. The error is a parabola in temperature, −0.034 ppm/°C² about 25 °C: try 45 °C.`),
     h('div', { class: 'r3' },
       h('div', { class: 'r3-main' },
         h('div', { class: 'r3-ctl' }, h('div', { class: 'qz-seg', role: 'group', 'aria-label': 'View' }, ...tabs),

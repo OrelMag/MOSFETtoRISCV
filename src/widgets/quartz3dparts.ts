@@ -165,7 +165,7 @@ export function boardParts(p: BoardPose, P: QuartzPalette): Part[] {
 export function boardAnchors(): Anchor[] {
   const up: Vec3 = [0, 1, 0];
   return [
-    { text: 'quartz fork 32 768 Hz', p: [0, 0.9, -7], side: 't', n: up },
+    { text: 'quartz fork 32 768 Hz', p: [0, 0.9, -7], side: 't', n: up },
     { text: 'inverter', p: [0, 1.1, -12.5], side: 't', n: up, minor: true },
     { text: 'Rf 10 MΩ', p: [0, 1.2, -3], side: 'b', n: up },
     { text: 'C1 15 pF', p: [-10, 1, -5], side: 'l', n: up, minor: true },
