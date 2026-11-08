@@ -22,7 +22,7 @@ describe('skill map', () => {
     for (const s of skills()) {
       const c = byId.get(s.chapter);
       if (!c || c.prologue || c.appendix) { bad.push(`${s.id}: ${s.chapter}`); continue; }
-      if (!tierChapters(s.tier).includes(c)) bad.push(`${s.id}: tier ${s.tier} but ${c.id}`);
+      if (!tierChapters(s.tier).some((m) => m.id === c.id)) bad.push(`${s.id}: tier ${s.tier} but ${c.id}`);
       for (const i of s.steps) if (!c.steps[i]) bad.push(`${s.id}: step ${i}`);
       if (!s.checks.length) bad.push(`${s.id}: no question, so it can never be remembered`);
       for (const k of s.checks) {
@@ -100,8 +100,8 @@ describe('learn store', () => {
 });
 
 describe('placement and test-out', () => {
-  it('placement asks twelve real questions climbing the tiers', () => {
-    const items = placementItems(42);
+  it('placement asks twelve real questions climbing the tiers', async () => {
+    const items = await placementItems(42);
     expect(items).toHaveLength(PLACEMENT.length);
     expect(items.map((i) => i.tier)).toEqual([...items.map((i) => i.tier)].sort());
     for (const i of items) if (i.kind === 'drill') expect(i.q.check(i.q.answer).ok, i.from).toBe(true);
@@ -112,8 +112,12 @@ describe('placement and test-out', () => {
     expect(suggestTier([a(0, false), a(0, true)])).toBe(0);
     expect(suggestTier([a(0, true), a(1, true), a(2, true), a(3, true)])).toBe(4);
   });
-  it('every journey chapter with a recap can be tested out; drills fit their chapters', () => {
-    for (const c of chapters) if (!c.prologue && !c.appendix && c.recap?.check?.length) expect(testOutItems(c.id).length, c.id).toBeGreaterThanOrEqual(c.recap.check.length);
+  it('every journey chapter with a recap can be tested out with its own questions; drills fit their chapters', async () => {
+    for (const c of chapters) if (!c.prologue && !c.appendix && c.recap?.check?.length) {
+      const items = await testOutItems(c.id);
+      expect(items.length, c.id).toBeGreaterThanOrEqual(c.recap.check.length);
+      expect(items.slice(0, c.recap.check.length).map((i) => i.kind === 'quiz' && i.quiz), c.id).toEqual(c.recap.check);
+    }
     for (const ch of Object.keys(TEST_DRILL)) expect(byId.has(ch), ch).toBe(true);
   });
 });
