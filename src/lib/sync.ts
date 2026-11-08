@@ -300,7 +300,8 @@ export function asyncFifo(k: number, w: number): ComponentDef {
     b.name(`${sw}.o0`, 'waddr', true);
     b.name(`${sd}.o0`, 'raddr', true);
     b.next();
-    const dec = b.op(decoder(k, true), [`${sw}.o0`, wen], 'which word', 'sel');
+    // rows 10 apart, the pitch the word registers are drawn at, so each select leaves level with its register
+    const dec = b.op(decoder(k, true, 10), [`${sw}.o0`, wen], 'which word', 'sel');
     b.next();
     const words = Array.from({ length: N }, (_, i) => b.op1(register(w), ['wdata', `${dec}.y${i}`, 'wclk'], `word ${i}`, `w${i}`));
     b.next();
@@ -338,6 +339,10 @@ export function asyncFifo(k: number, w: number): ComponentDef {
       });
       y = bottom + BAND_GAP;
     });
+    // the words move down until their enables are level with the decoder's outputs
+    const decOut = b.instances.find((i) => i.name === 'sel')!.at![1] + symbolGeom(b.instances.find((i) => i.name === 'sel')!.def).ports.y0.pos[1];
+    const lift = decOut - (b.instances.find((i) => i.name === 'w0')!.at![1] + symbolGeom(b.instances.find((i) => i.name === 'w0')!.def).ports.en.pos[1]);
+    for (const i of b.instances) if (/^wd+$/.test(i.name)) i.at = [i.at![0], i.at![1] + lift];
     const R = right + 10;
     return define({
       id: `afifo${N}x${w}`, name: `${N}-word asynchronous FIFO (${w}-bit)`, category: 'memory',

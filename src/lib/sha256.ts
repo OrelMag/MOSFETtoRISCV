@@ -295,7 +295,7 @@ export function shaCore(): ComponentDef {
     b.next();
     const vm = b.op(wordMux(8), [`${rd}.y`, 'h', 'start'], 'start: load h', 'vm');
     const zero = `${b.add(TIE0, '0', 'zero')}.y`;
-    const sv = b.op(splitter(words(8)), ['V.q'], '', 'sv'), sh = b.op(splitter(words(8)), ['H.q'], '', 'sh');
+    const sv = b.op(splitter(words(8), 10), ['V.q'], '', 'sv'), sh = b.op(splitter(words(8), 10), ['H.q'], '', 'sh');
     b.next();
     const sums = Array.from({ length: 8 }, (_, i) => add32(b, `${sh}.o${i}`, `${sv}.o${i}`, zero));
     b.next();
@@ -303,14 +303,39 @@ export function shaCore(): ComponentDef {
     b.wire('h', 'H.d'); b.wire('start', 'H.en'); b.wire('clk', 'H.clk');
     b.wire(`${inc}.y`, 'CNT.d'); b.wire('busy.q', 'CNT.en'); b.wire('start', 'CNT.clr'); b.wire('clk', 'CNT.clk');
     b.wire(busyD, 'busy.d'); b.wire('clk', 'busy.clk'); b.wire(doneD, 'done.d'); b.wire('clk', 'done.clk');
-    b.wire(b.op1(merger(words(8)), sums, 'h + a..h'), 'out'); b.wire('done.q', 'done');
+    b.wire(b.op1(merger(words(8), 10), sums, 'h + a..h'), 'out'); b.wire('done.q', 'done');
+    // Drawn as a schematic: the datapath (V → round → mux → V) on top, the control chains in rows of gates whose outputs meet the next
+    // gate's input on the same line, the eight adders in a column at the splitter's pitch, the sum merger beside them.
+    const at: Record<string, [number, number]> = {
+      V: [12, 0], kk: [26, 8], sched: [10, 12], rd: [40, 4], vm: [56, 6], zero: [66, 16],
+      H: [12, 26], CNT: [12, 36], inc: [14, 48], cs: [30, 34], last: [34, 34], run: [36, 56],
+      u0: [42, 39], u1: [47, 37], u5: [58, 36], u6: [65, 37], busy: [80, 37],
+      u2: [42, 48], u7: [54, 47], u8: [61, 48], u9: [70, 49], done: [80, 49], u3: [58, 43], u4: [54, 54],
+      sv: [102, 1], sh: [110, -1],
+    };
+    sums.forEach((_, i) => (at[`u${10 + i}`] = [118, 10 * i + 2]));
+    at.u18 = [132, 0];
+    for (const i of b.instances) if (at[i.name]) i.at = at[i.name];
+    // the wide pins' bars run to the left of the pin, the output's to the right: kept over and under the drawing, not beside it
+    const pins: Record<string, [number, number]> = { clk: [4, 50], rst: [4, 55], start: [4, 60], h: [122, -4], blk: [122, -8], out: [60, 86], done: [91, 52] };
+    const outVia = [[135, 40], [135, 84], [60, 84]] as [number, number][];
     b.name('V.q', 'vars_q'); b.name('H.q', 'chain_q'); b.name('CNT.q', 'cnt_q'); b.name('done.q', 'done_q'); b.name('busy.q', 'busy_q');
     return define({
       id: 'sha_core', name: 'SHA-256 compression core', category: 'sequential',
       summary: 'One SHA-256 round a clock: the working variables a..h, the chaining value, the 16-word schedule register, a 6-bit round counter and the constants in gates. 65 clocks from start to done; out = h + a..h.',
       ports: [clk(), bit('rst', 'in'), bit('start', 'in'), bus('h', 256, 'in'), bus('blk', 512, 'in'), bus('out', 256, 'out'), bit('done', 'out')],
       symbol: { kind: 'box', label: 'SHA-256' },
-      netlist: () => ({ pins: { clk: [0, 6], rst: [0, 18], start: [0, 30], h: [0, 42], blk: [0, 54], out: [b.right, 12], done: [b.right, 30] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({
+        pins, pinDirs: { out: 'up' as const }, instances: b.instances,
+        nets: b.nets().map((n) => {
+          // wires where the sink is near, a pointer for the far ends
+          const near: Record<string, string[] | true> = { done_q: ['u7.a'], vars_q: ['sv.in'], cnt_q: ['kk.t', 'inc.a'], chain_q: true };
+          if (n.ends[n.ends.length - 1] === 'out') return { ...n, via: { out: outVia } };
+          const byDriver: Record<string, string[]> = { 'last.y': ['u2.b'], 'u3.y': ['u9.b'] };
+          if (byDriver[n.ends[0]]) return { ...n, tags: byDriver[n.ends[0]] };
+          return n.name && near[n.name] ? { ...n, tags: near[n.name] } : n;
+        }),
+      }),
     });
   });
 }

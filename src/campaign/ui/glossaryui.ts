@@ -13,6 +13,8 @@ export { chapterSkip } from '../glossary';
 
 let gloss: Glossary | null = null;
 let card: HTMLElement | null = null;
+/** The term whose card is open (it is described by the card while open). */
+let current: HTMLElement | null = null;
 let hideTimer: ReturnType<typeof setTimeout> | null = null;
 /** Opens an entry where the reader is instead of the codex page (the level screen: its pane keeps the circuit). */
 let opener: ((id: string) => void) | null = null;
@@ -53,15 +55,33 @@ export function markTerms(root: HTMLElement, max = 10, skip: ReadonlySet<string>
       frag.append(s.slice(at, m.start));
       const ahead = later?.(m.id);
       const el = h('span', { class: ahead ? 'gl later' : 'gl', tabindex: '0', 'data-cx': m.id, 'data-later': ahead ?? null }, s.slice(m.start, m.end));
-      el.addEventListener('mouseenter', () => show(el));
-      el.addEventListener('focus', () => show(el));
-      el.addEventListener('mouseleave', hideSoon);
-      el.addEventListener('blur', hideSoon);
+      wire(el, m.id);
       frag.append(el);
       at = m.end;
     }
     frag.append(s.slice(at));
     t.replaceWith(frag);
+  }
+}
+
+/** Hover, focus and keyboard behaviour of one marked term. */
+function wire(el: HTMLElement, id: string): void {
+  el.addEventListener('mouseenter', () => show(el));
+  el.addEventListener('focus', () => show(el));
+  el.addEventListener('mouseleave', hideSoon);
+  el.addEventListener('blur', hideSoon);
+  // keyboard: Enter takes the term to its codex entry (the card's link is out of the tab order, below the page), Esc closes the card
+  el.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape' && card && !card.hidden) { hideGlossary(); ev.stopPropagation(); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); openEntry(id); }
+  });
+}
+
+/** Terms a caller marked itself (`.gl[data-wire]`, ui/quiz.ts: an explanation in place folded into a hover card). */
+export function wireTerms(root: HTMLElement): void {
+  for (const el of root.querySelectorAll<HTMLElement>('.gl[data-wire]')) {
+    el.removeAttribute('data-wire');
+    wire(el, el.dataset.cx ?? '');
   }
 }
 
@@ -82,13 +102,15 @@ function show(el: HTMLElement): void {
   if (!e) return;
   if (hideTimer) clearTimeout(hideTimer);
   if (!card) {
-    card = h('div', { class: 'gl-card', role: 'tooltip' });
+    card = h('div', { class: 'gl-card', role: 'tooltip', id: 'gl-card' });
     card.addEventListener('mouseenter', () => { if (hideTimer) clearTimeout(hideTimer); });
     card.addEventListener('mouseleave', hideSoon);
     document.body.append(card);
     // A touch screen has no mouseleave: the card closes on its ×, and when the page scrolls under it.
     addEventListener('scroll', () => { if (card && !card.hidden && coarse()) hideGlossary(); }, { capture: true, passive: true });
   }
+  current?.removeAttribute('aria-describedby');
+  current = el;
   const go = (ev: Event) => {
     if (!opener) return;
     ev.preventDefault();
@@ -105,6 +127,7 @@ function show(el: HTMLElement): void {
     ...(el.dataset.later ? [h('div', { class: 'gl-later' }, `Built in ${el.dataset.later}. Read on: this step does not need it yet.`)] : []),
     h('a', { class: 'gl-more', href: `#/campaign/codex/${e.id}`, onclick: go }, opener ? 'Read the entry' : 'Open in the codex', icon('chevR', 12)));
   card.hidden = false;
+  el.setAttribute('aria-describedby', 'gl-card');
   const r = el.getBoundingClientRect();
   const w = Math.min(380, window.innerWidth - 24);
   card.style.width = `${w}px`;
@@ -119,10 +142,18 @@ const coarse = () => matchMedia('(pointer: coarse)').matches;
 
 function hideSoon(): void {
   if (hideTimer) clearTimeout(hideTimer);
-  hideTimer = setTimeout(() => { if (card) card.hidden = true; }, 180);
+  hideTimer = setTimeout(hideGlossary, 180);
+}
+
+/** Enter on a term: the codex entry, where the reader is (the level screen) or on the codex page. */
+function openEntry(id: string): void {
+  hideGlossary();
+  if (opener) opener(id);
+  else location.hash = `#/campaign/codex/${id}`;
 }
 
 /** Hide the card (a page change). */
 export function hideGlossary(): void {
   if (card) card.hidden = true;
+  current?.removeAttribute('aria-describedby');
 }

@@ -11,7 +11,9 @@ import { cordicApi, cordicBits, cordicScene, costWidget, romBits, rotateWidget, 
 import { numOf } from './order';
 import type { Chapter } from './types';
 
-const n0 = (x: number) => x.toLocaleString('en').replace(/,/g, ' ');
+/** 1 / n in words: a sixth, a thirteenth. */
+const part = (n: number): string => { const w = ['', 'all', 'a half', 'a third', 'a quarter', 'a fifth', 'a sixth', 'a seventh', 'an eighth', 'a ninth', 'a tenth', 'an eleventh', 'a twelfth', 'a thirteenth', 'a fourteenth', 'a fifteenth', 'a sixteenth', 'a seventeenth', 'an eighteenth']; return w[n] ?? `1 / ${n}`; };
+const n0 = (x: number) => x.toLocaleString('en').replace(/,/g, ' ');
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const S: CordicSpec = { w: 14, z: 14, n: 12 };
 const K = 1 / cordicStretch(24);
@@ -67,7 +69,7 @@ export const chCordic: Chapter = {
       title: 'A rotation is four multiplications',
       get body() {
         return `
-        <p>Turning a vector (x, y) by θ takes four products: x′ = x cos θ − y sin θ, y′ = y cos θ + x sin θ. A mixer needs this, and so does a phase-locked loop, a beamformer, and an FFT's butterfly. In <a href="#/c/muldiv/5">the multiplier chapter</a>'s tree form, 16 × 16 costs ${n0(MUL())} NANDs, so one rotation in a clock is ${n0(4 * MUL())} NANDs, and that is before anybody has found the sine and cosine.</p>
+        <p>Turning a vector (x, y) by θ takes four products: x′ = x cos θ − y sin θ, y′ = y cos θ + x sin θ. A mixer needs this, and so does a phase-locked loop (an oscillator steered to follow a received carrier), a beamformer, and an FFT's butterfly. In <a href="#/c/muldiv/5">the multiplier chapter</a>'s tree form, 16 × 16 costs ${n0(MUL())} NANDs, so one rotation in a clock is ${n0(4 * MUL())} NANDs, and that is before anybody has found the sine and cosine.</p>
         <p>Finding them has been a table so far. <a href="#/c/modem/2">The modem's oscillator</a> looks up a 64-entry ROM of 6-bit samples, ${n0(nands(SINE_ROM))} NANDs of its ${n0(nands(NCO))}, and that is fine for a modem. Each extra bit of angle doubles the table.</p>
         <p>In 1959 Jack Volder of Convair published an answer built for real-time airborne computing. <strong>CORDIC</strong>, the COordinate Rotation DIgital Computer, starts here: take out cos θ, and what is left is x′ = cos θ (x − y tan θ), y′ = cos θ (y + x tan θ). If tan θ is a power of two, each multiplication is a shift. And a shift, as <a href="#/c/signals/4">the filter in gates</a> showed, is only how the wires are laid.</p>
         <p>So never turn by the angle you want. Turn by a sequence of fixed angles, atan 1, atan ½, atan ¼, …, each one way or the other, until the sum comes close enough.</p>`;
@@ -120,7 +122,7 @@ z′ = z − d · atan 2^−i          d = +1 if z ≥ 0, else −1</pre>
       title: 'A stage is three adders',
       get body() {
         return `
-        <p>Here is what the formula costs. Stage 3 of a 14-bit design is ${n0(STAGE())} NANDs, and all but a handful are in its adders. There are three <a href="#/c/adders/5">adder / subtractors</a>, for x, y and z, whose subtract lines come from one test. The shifts are wiring, and atan 2^−3 is a constant tied to the rails. Open one and look: a part labelled ≫ 3 costs nothing.</p>
+        <p>Here is what the formula costs. Stage 3 of a 14-bit design is ${n0(STAGE())} NANDs, and all but a handful are in its adders. There are three <a href="#/c/adders/5">adder / subtractors</a>, for x, y and z, whose subtract lines come from one test. The shifts are wiring, and atan 2^−3 is a constant tied to the rails. Open one in the scene and look (its design is ${SCENE_SPEC.w} bits, so its stage 3 is a little smaller, ${n0(nands(cordicStage(SCENE_SPEC, 3)))} NANDs): a part labelled ≫ 3 costs nothing.</p>
         <p>The pipeline puts a register after each stage, plus a half-turn at the front. So it takes ${SCENE_SPEC.n + 1} clocks to fill, and from then on one result leaves on every clock. This one is ${SCENE_SPEC.w} bits with ${SCENE_SPEC.n} stages, ${n0(nands(cordicPipeline(SCENE_SPEC)))} NANDs, of which ${n0(PIPE_REGS())} are its registers.</p>
         <div class="try">Run a full turn. The output traces a sine and a cosine, ${SCENE_SPEC.n + 1} clocks late, with the model checked at every clock.</div>`;
       },
@@ -139,7 +141,7 @@ z′ = z − d · atan 2^−i          d = +1 if z ≥ 0, else −1</pre>
       body: `
         <p>Change one thing: instead of steering z to 0, steer y to 0, so each stage turns the vector toward the x axis. It is the same stage with a different test: d comes from y's sign and not z's. Now z starts at 0 and adds up every turn that was made.</p>
         <p>When y has reached 0, the vector lies along the axis, so x holds its length, still stretched by ${(1 / K).toFixed(4)}, and z holds its angle. That is <strong>vectoring</strong>: arctangent and magnitude from the same three adders, where a table of arctangents would need two inputs, and a magnitude would need two multipliers and a square root.</p>
-        <p>Both are wanted constantly. The phase of a received sample is an arctangent, so it decides a QPSK symbol or an FM station's audio, as a later chapter on a software radio will use. The length of a complex sample is what any spectrum displays. A pipelined design can take either mode on each clock, since the mode bit travels through the registers with its data.</p>
+        <p>Both are wanted constantly. The phase of a received sample is an arctangent, so it decides a QPSK symbol or an FM station's audio, as <a href="#/c/sdr/0">chapter ${numOf('sdr')}</a>'s software radio will use. The length of a complex sample is what any spectrum displays. A pipelined design can take either mode on each clock, since the mode bit travels through the registers with its data.</p>
         <div class="try">Drag x negative. A half-turn happens first, here because x < 0, since the stages only reach ±99.9° of the axis.</div>`,
       widget: vectorWidget,
       challenge: {
@@ -171,10 +173,10 @@ z′ = z − d · atan 2^−i          d = +1 if z ≥ 0, else −1</pre>
       get body() {
         const it = cordicIterative(S), pi = cordicPipeline(S);
         return `
-        <p>So is it worth it? The table below measures both. The ROM is the modem's design at larger sizes, its worst error found by reading between the entries, and the CORDIC's found at every angle.</p>
+        <p>So is it worth it? The table below measures both. The ROM is the modem's sine table, built at larger sizes and with wider words, its worst error found by reading between the entries, and the CORDIC's found at every angle.</p>
         <p>While the accuracy is low the table wins, by far. Sixty-four words at ${romBits(6).toFixed(1)} bits take ${n0(nands(sineRom(6)))} NANDs, and nothing else comes close. But each added bit doubles it, and 4 096 words reach ${n0(nands(sineRom(12)))}. A pipeline grows as the square of the accuracy: more stages times wider adders. A ${S.w}-bit one with ${S.n} stages takes ${n0(nands(pi))} NANDs for ${cordicBits(S).toFixed(1)} bits. Between those, at about 5 or 6 bits, they cross.</p>
         <p>The table is not at its best here, in fairness. Using the symmetry of a sine and storing only a quarter divides it by about four, and interpolating between entries with a small multiplier does much more, so a real design would move that crossing up by a few bits. A table also gives only a sine. CORDIC also gives arctangent and magnitude from the same gates, and it can rotate any vector and not only a unit one.</p>
-        <p>When a result is not needed on every clock, the iterative form goes a long way further. One stage with two shifters, a table of angles and a counter: ${n0(nands(it))} NANDs at the same ${S.w} bits, for ${S.n + 1} clocks a result: the start, then ${S.n} stages. That is about one-${Math.round(nands(pi) / nands(it))}th of the area for one-${S.n + 1}th of the rate. The shifters are now real multiplexers, where in the pipeline they were wires, so its area × time is ${(nands(it) * (S.n + 1) / nands(pi)).toFixed(1)} times the pipeline's. Choosing between them is the old trade from the multiplier chapter, in a new place.</p>`;
+        <p>When a result is not needed on every clock, the iterative form goes a long way further. One stage with two shifters, a table of angles and a counter: ${n0(nands(it))} NANDs at the same ${S.w} bits, for ${S.n + 1} clocks a result: the start, then ${S.n} stages. That is about ${part(Math.round(nands(pi) / nands(it)))} of the area for ${part(S.n + 1)} of the rate. The shifters are now real multiplexers, where in the pipeline they were wires, so its area × time is ${(nands(it) * (S.n + 1) / nands(pi)).toFixed(1)} times the pipeline's. Choosing between them is the old trade from the multiplier chapter, in a new place.</p>`;
       },
       widget: costWidget,
       challenge: {

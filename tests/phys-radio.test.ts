@@ -2,7 +2,7 @@
 // Rayleigh channel against its BER and level-crossing formulas.
 import { describe, expect, it } from 'vitest';
 import {
-  apertureM2, arrayDbi, arrayFactor, bpskAwgn, bpskMrc, bpskRayleigh, channelAt, Clarke, coherenceMHz, coherenceTime, delaySpread, DIPOLE_DBI, dipoleField, directivityOf, dopplerHz, fadeDuration, fadeMarginDb, fadingTrial, friisRatio, fsplDb, imageOf, KT_DBM_HZ, levelCrossing, linkBudget, logDistanceDb,
+  apertureM2, arrayDbi, arrayFactor, bpskAwgn, bpskMrc, bpskRayleigh, channelAt, Clarke, coherenceMHz, coherenceTime, delaySpread, DIPOLE_DBI, dipoleField, directivityOf, dopplerHz, fadeDuration, fadeMarginDb, fadingTrial, friisRatio, fsplDb, imageOf, imageRejectionDb, KT_DBM_HZ, levelCrossing, linkBudget, logDistanceDb,
   mixed, mixSpectrum, noiseFloorDbm, notchSpacingMHz, sdrReceive, sincGain, wavelengthM, widebandLimitMbps,
 } from '../src/phys/radio';
 import { ratioToDb, shannon, dbToRatio } from '../src/comm/limits';
@@ -81,6 +81,13 @@ describe('mixing', () => {
     const fs = 1024, spec = mixSpectrum([100], 300, fs);
     const big = spec.flatMap((v, k) => (v > 0.1 ? [k] : []));
     expect(big).toEqual([...mixed(100, 300)].sort((a, b) => a - b));
+  });
+  it('image rejection: the chapter half a percent and a third of a degree (each alone, and together) follow (e² + φ²) / 4', () => {
+    const e = 0.005, p = 1 / 3, ph = (p * Math.PI) / 180;
+    expect(imageRejectionDb(e, 0)).toBeCloseTo(10 * Math.log10((e * e) / 4), 0);
+    expect(imageRejectionDb(0, p)).toBeCloseTo(10 * Math.log10((ph * ph) / 4), 0);
+    expect(imageRejectionDb(e, p)).toBeCloseTo(10 * Math.log10((e * e + ph * ph) / 4), 0);
+    expect(imageRejectionDb(0, 0)).toBe(-Infinity);
   });
   it('two inputs a difference apart reach the same IF: the image', () => {
     const lo = 300, f = 340;

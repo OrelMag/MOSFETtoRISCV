@@ -197,3 +197,9 @@ export function fadingTrial(snrDb: number, L: number, bits: number, seed: number
 /** A fading margin: extra dB to hold outage at p under Rayleigh (Pr[|h|² < x] = 1 − e^(−x)). */
 export const fadeMarginDb = (p: number): number => -ratioToDb(-Math.log(1 - p));
 export type { Cx };
+
+/** A quadrature mixer's image rejection (dB, negative: the image against the wanted signal) for a gain error (a fraction, 0.005 = half a percent) and a phase error (degrees) between its arms: (1 − 2g cos φ + g²) / (1 + 2g cos φ + g²) with g = 1 + gainErr. */
+export function imageRejectionDb(gainErr: number, phaseDeg: number): number {
+  const g = 1 + gainErr, c = Math.cos((phaseDeg * Math.PI) / 180);
+  return 10 * Math.log10((1 - 2 * g * c + g * g) / (1 + 2 * g * c + g * g));
+}

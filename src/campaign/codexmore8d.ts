@@ -204,7 +204,7 @@ k = 48   27,648 hosts  2,880 switches   576 paths
     chapters: [{ chapter: 'datacentre', step: 0, label: 'The exchange, folded' }],
   },
   ecmp: {
-    idea: `With many equal paths the fabric has to choose one for each packet. Switches do it by hashing the five-tuple (addresses, ports, protocol) to an uplink. It is stateless and needs no controller, and all of a flow's packets take one path, so TCP sees them in order. It also ignores load, so it is balls in bins.<br><br>Most flows are small and this does not matter. A few elephants collide and sit on one link while the next is idle. There are three ways round it: a central scheduler moves the elephants (Hedera, 2010), a sender splits a flow where a pause is long enough that its packets cannot reorder (flowlets, CONGA, 2014), or the fabric sprays packets over every path and leaves the reordering to the far end.`,
+    idea: `With many equal paths the fabric has to choose one for each packet. Switches do it by hashing the five-tuple (addresses, ports, protocol) to an uplink. It is stateless and needs no controller, and all of a flow's packets take one path, so TCP sees them in order. It also ignores load, so it is balls in bins.<br><br>Most flows are small and this does not matter. A few elephants collide and sit on one link while the next is idle. There are three ways round it: a central scheduler moves the elephants (Hedera, 2010), a leaf switch splits a flow where a pause is long enough that its packets cannot reorder (flowlets, CONGA, 2014), or the fabric sprays packets over every path and leaves the reordering to the far end.`,
     example: {
       title: 'Balls in bins',
       body: `<pre>n flows, m paths: a path is idle with chance (1 − 1 / m)ⁿ

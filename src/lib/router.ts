@@ -7,6 +7,7 @@ import { TTL_DELTA } from '../net/ipv4';
 import { ADJ_K, BUF_K, PORT_CPU, TRIE_K } from '../net/trie';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { kit } from './axi';
+import { layered } from './layered';
 import { bigRam, bigRamWithInit } from './bigmem';
 import { Builder } from './builder';
 import { equal, incrementer, rca } from './combinational';
@@ -112,7 +113,7 @@ export const RT_CHECK: ComponentDef = (() => {
     id: 'rtcheck', name: 'Header checks', category: 'sequential',
     summary: 'Watches the bytes as they go into the buffer: our MAC or broadcast, type 0x0800, version and length 0x45, the checksum summed as it passes, TTL. Everything DECIDE needs, and no byte is read twice.',
     ports, symbol: { kind: 'box', label: 'CHECK' },
-    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    netlist: () => layered(ports, b, { vgap: 4, wires: { 'verbad.q': true, 'u56.y': true } }),
   });
 })();
 
@@ -155,7 +156,7 @@ export const RT_WALK: ComponentDef = (() => {
     id: 'rtwalk', name: 'Trie walk', category: 'sequential',
     summary: 'One memory read a cycle: take the child the next destination bit picks, remember the longest route passed, stop at no child or after 32 bits. Up to 33 cycles for a lookup, whatever the size of the table.',
     ports, symbol: { kind: 'box', label: 'WALK' },
-    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    netlist: () => layered(ports, b, { gap: 10 }),
   });
 })();
 
@@ -239,7 +240,7 @@ export const RT_COUNT: ComponentDef = (() => {
     id: 'rtcount', name: 'Byte counter and position', category: 'sequential',
     summary: 'One counter serves both directions: it addresses the packet buffer, and a table says what each position is, so no field needs a parser of its own.',
     ports, symbol: { kind: 'box', label: 'COUNT' },
-    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    netlist: () => layered(ports, b, { nudge: { u10: -6 } }),
   });
 })();
 

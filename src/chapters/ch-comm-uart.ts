@@ -6,9 +6,10 @@ import { stats } from '../sim/stats';
 import { baudWidget, busUartApi, coreApi, coreScene, coreState, fifoWidget, frameWidget, rxScene, rxState, twoApi, twoComputersNands, twoScene, txScene, TWO_DIV, uartBusScene } from '../widgets/uart';
 import type { Chapter } from './types';
 import { numOf } from './order';
+import { groupDigits } from '../sim/numfmt';
 
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
-const n0 = (x: number) => x.toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupDigits(Math.round(x));
 const pct = (x: number, d = 2) => `${(100 * x).toFixed(d)} %`;
 
 const TOL = tolerance(UART_8N1, { ticks: 16, pos: 0.5 }, 5e-4);
@@ -35,11 +36,11 @@ export const chUart: Chapter = {
   recap: {
     keep: [
       `A byte is a frame of ten bits on a wire that idles at 1: a start bit (0), eight data bits least significant first, a stop bit (1). The start edge is the only synchronization. Efficiency is 80 %.`,
-      `The baud generator divides the clock by a programmable divisor (${nands(baudGen())} NANDs for a ${UART_DIV_BITS}-bit one). A tick every <code>div</code> cycles, ${OVERSAMPLE} ticks to a bit: rate = clock / (${OVERSAMPLE} · div). An integer divisor leaves a rate error: 50 MHz gives divisor ${D50.div} for 115 200 baud and ${pct(D50.error)} off.`,
+      `The baud generator divides the clock by a programmable divisor (${nands(baudGen())} NANDs for a ${UART_DIV_BITS}-bit one). A tick every <code>div</code> cycles, ${OVERSAMPLE} ticks to a bit: rate = clock / (${OVERSAMPLE} · div). An integer divisor leaves a rate error: 50 MHz gives divisor ${D50.div} for 115 200 baud and ${pct(D50.error)} off.`,
       `The transmitter is a 10-bit shift register (${nands(shiftRegister(10))} of its ${nands(UART_TX)} NANDs) with a tick counter and a bit counter; the line changes only on a tick. The receiver synchronizes rx (${nands(SYNC2)} NANDs), takes the falling edge at a tick, confirms it 8 ticks later in the middle of the start bit, and samples every ${OVERSAMPLE} ticks (${nands(UART_RX)} NANDs).`,
       `A sample taken k + ½ bits after the start edge moves by about e·(k + ½) bits when the clock is off by e, and must stay inside its cell, whose edge is k bits in: a fast receiver reaches the stop sample (k = 9) at 9½ / (1 + e) and needs that at or after 9, so e ≤ ½ / 9, the margin over the cell's edge (not over the sample) divided by its distance. The stop bit is the last sample, so the limit is about ±${pct(CF.fast, 1)} for a continuous clock and ${pct(TOL.slow, 1)} (receiver slow) or ${pct(TOL.fast, 1)} (receiver fast) with the 16-tick grid. Both ends share it: about ${pct(TOL.slow / 2, 1)} each, and ${pct(SLOW_LIMIT_BACK_TO_BACK / 2, 1)} each for back-to-back bytes (the slow side then stops at ${pct(SLOW_LIMIT_BACK_TO_BACK, 1)}).`,
       `Errors are flags: a stop bit of 0 is a framing error (the byte is dropped); a low shorter than half a bit is a false start and is ignored; a break is one framing error, after which the receiver waits for the line to rise; a byte arriving to a full FIFO sets overrun. The flags stay until a 1 is written to them.`,
-      `Two ${FIFO_DEPTH}-byte FIFOs are ${n0(2 * FIFO_N)} of the core's ${n0(CORE_N)} NANDs. They turn a deadline of one byte time (${BYTE_US.toFixed(1)} µs at 115 200 baud) into the time to fill the rest of the FIFO. RTS/CTS stops a sender with extra wires; XON/XOFF does it with two characters on the data path.`,
+      `Two ${FIFO_DEPTH}-byte FIFOs are ${n0(2 * FIFO_N)} of the core's ${n0(CORE_N)} NANDs. They turn a deadline of one byte time (${BYTE_US.toFixed(1)} µs at 115 200 baud) into the time to fill the rest of the FIFO. RTS/CTS stops a sender with extra wires; XON/XOFF does it with two characters on the data path.`,
       `On the bus the UART is four registers (data, status, divisor, enables) and a slave of ${n0(nands(AXI_UART))} NANDs. Polling holds the CPU for the whole wait; the interrupt version spends ${UART_COSTS.handlerPerByte} cycles a byte and leaves ${(UART_COSTS.freePermille / 10).toFixed(1)} % of the cycles to the main loop in the measured run.`,
     ],
     check: [
@@ -121,9 +122,9 @@ export const chUart: Chapter = {
         (or 0), and its tick is high for the cycle in which it reloads: one cycle in every <code>div</code>. A bit is ${OVERSAMPLE} ticks, so
         <strong>baud = clock / (${OVERSAMPLE} · div)</strong>. At power-on the counter and the divisor are 0 and the tick is high every cycle, which is harmless: nothing is being sent. Divisors 0 and 1 are the same. The counter and its
         reload multiplexer cost ${nands(baudGen())} NANDs.</p>
-        <p>An integer divisor cannot hit every rate. The table computes the divisor nearest to each rate for the clock chosen, and what it gives. At 1.8432 MHz, the classic crystal, the clock is exactly ${OVERSAMPLE} × 115 200, so divisor 1
+        <p>An integer divisor cannot hit every rate. The table computes the divisor nearest to each rate for the clock chosen, and what it gives. At 1.8432 MHz, the classic crystal, the clock is exactly ${OVERSAMPLE} × 115 200, so divisor 1
         is exact and every standard rate below it is an integer divisor. At 50 MHz divisor ${D50.div} gives ${D50.actual.toFixed(0)} baud, ${pct(D50.error)} high. At 12 MHz the nearest divisor is ${D12.div} and the error is ${pct(D12.error, 1)}: more than the
-        receiver tolerates once the other end contributes its own (step 4). The rule of thumb is to keep each end under 2 %.</p>
+        receiver tolerates even when the other end is exact (step 4). The rule of thumb is to keep each end under 2 %.</p>
         <p>Dividing by ${OVERSAMPLE} first also sets the fastest rate: divisor 1 gives clock / ${OVERSAMPLE}. A 100 MHz clock cannot make more than ${(100 / OVERSAMPLE).toFixed(2)} Mbaud from this divider.</p>`,
       widget: baudWidget,
       more: {
@@ -133,7 +134,7 @@ export const chUart: Chapter = {
       challenge: {
         kind: 'quiz',
         question: `A 50 MHz clock drives the baud generator with divisor 27. What bit rate does the line carry?`,
-        options: [`${D50.actual.toFixed(0)} baud, ${pct(D50.error)} above 115 200`, '1 851 852 baud (clock / 27)', '115 200 baud exactly', `${(50e6 / 27 / 8).toFixed(0)} baud`],
+        options: [`${D50.actual.toFixed(0)} baud, ${pct(D50.error)} above 115 200`, '1 851 852 baud (clock / 27)', '115 200 baud exactly', `${(50e6 / 27 / 8).toFixed(0)} baud`],
         answer: 0,
         explain: `The tick comes every 27 cycles, a bit is 16 ticks: 50 000 000 / (16 · 27) = ${D50.actual.toFixed(1)}. The error is ${pct(D50.error)}, well inside the 2 % rule of thumb.`,
         why: ['', 'That is the tick rate. A bit is 16 ticks, so the bit rate is a sixteenth of it.', 'The ideal divisor is 27.13; the integer 27 leaves a small error rather than hitting the rate.', 'There is no factor of 8 in the generator: the oversampling is 16.'],
@@ -153,7 +154,7 @@ export const chUart: Chapter = {
         a receiver that is slow can be off by ${pct(TOL.slow, 2)} (closed form ${pct(SLOW_LIMIT_ISOLATED, 2)}) where one that is fast can be off by ${pct(TOL.fast, 2)} (${pct(CF.fast, 2)}). The gates, searched over all 256 bytes at eight start phases at divisors 1 and 4 (on the golden model, which equals the gates cycle for cycle), accept a sender up to ${pct(UART_TOLERANCE.measured[0].senderSlow, 2)} slower and
         ${pct(UART_TOLERANCE.measured[0].senderFast, 1)} faster than the receiver, at both divisors: the synchronizer delays the detection and every later sample equally, so it moves only where the start edge falls against the tick grid.
         <strong>Back to back the slow side is tighter.</strong> The next start edge comes 10 bits after this one, and a receiver slow by more than 1 − 9.5 / (10 − 1/16) = ${pct(SLOW_LIMIT_BACK_TO_BACK, 2)} has put its stop sample into it (measured ${pct(UART_TOLERANCE.measured[0].backToBackFast, 2)}). A UART that sends bursts needs both ends within about ${pct(SLOW_LIMIT_BACK_TO_BACK / 2, 1)} each; one that leaves gaps has ${pct(TOL.slow / 2, 1)}.</p>
-        <div class="try">Set the receiver clock error and press <em>Send to the gates</em>: the real receiver reads the frame. Press <em>Find the limit</em> to search every byte and three start phases for the largest error that is received.</div>`,
+        <div class="try">Set the receiver clock error and press <em>Send to the gates</em>: the real receiver reads the frame. Press <em>Find the limit</em> to search every byte at three start phases for the largest error that is received (the figures above searched eight, offline, so the widget's limit can sit a little wider).</div>`,
       scene: rxScene,
       more: {
         derive: `<p>With the start edge at time 0 and the receiver's ticks on its own grid, the sample for unit u (the start is unit 0, data bit i unit i + 1, the stop unit 9) falls at (u + ½)/(1 + e) + δ bit times of the sender, where δ ∈ [0, 1/16) is how late the edge was detected.
@@ -194,11 +195,11 @@ export const chUart: Chapter = {
     {
       title: 'FIFOs and flow control',
       body: `
-        <p>A UART with one receive register gives the CPU one byte time to take each byte: ${BYTE_US.toFixed(1)} µs at 115 200 baud, every byte, with no other interrupt allowed to run longer. A
+        <p>A UART with one receive register gives the CPU one byte time to take each byte: ${BYTE_US.toFixed(1)} µs at 115 200 baud, every byte, with no other interrupt allowed to run longer. A
         <strong>FIFO</strong> turns that into an average. The core has a ${FIFO_DEPTH}-byte FIFO each way (<code>fifo(4, 8)</code>, ${n0(FIFO_N)} NANDs each, ${pct(2 * FIFO_N / CORE_N, 0)} of the core's ${n0(CORE_N)}): the receiver pushes, the CPU pops, and the interrupt
         can be raised when the FIFO is not empty (this chapter's driver) or, in a UART with a trigger level, when it holds a chosen number of bytes. A trigger of 8 has a price: a lone byte is not reported until
         more arrive, so real parts add a timeout.</p>
-        <p>The widget does the arithmetic. At 115 200 baud and a trigger of 8 the CPU has ${SLACK.slackUs.toFixed(0)} µs between the interrupt and the first lost byte, and takes ${IRQ_PER_S.toFixed(0)} interrupts a second at a level of 1 against ${(IRQ_PER_S / 8).toFixed(0)} at a level of 8, for the
+        <p>The widget does the arithmetic. At 115 200 baud and a trigger of 8 the CPU has ${SLACK.slackUs.toFixed(0)} µs between the interrupt and the first lost byte (${(SLACK.slackUs - BYTE_US).toFixed(0)} µs to be safe: a byte already in the shift register lands too), and takes ${n0(IRQ_PER_S)} interrupts a second at a level of 1 against ${n0(IRQ_PER_S / 8)} at a level of 8, for the
         same handler work per byte. At 3 Mbaud the same FIFO leaves ${SLACK3M.slackUs.toFixed(0)} µs, and that is where a DMA engine (chapter 38) takes over.</p>
         <p>When the receiver cannot keep up, the sender has to be told. <strong>RTS/CTS</strong> uses two extra wires: the receiver drops its RTS (the sender's CTS) when its FIFO is nearly full, and a sender checks CTS before it starts each frame. A frame already started still arrives, so the threshold leaves
         room for one more byte. <strong>XON/XOFF</strong> uses no wires: the receiver sends the characters 0x13 (XOFF) and 0x11 (XON) on its own tx. It has to leave room for every byte in flight plus the time the character takes to reach the other end and be acted on, and the data stream cannot contain those two values. A
@@ -206,10 +207,10 @@ export const chUart: Chapter = {
       widget: fifoWidget,
       challenge: {
         kind: 'quiz',
-        question: 'A receive FIFO of 16 bytes interrupts at 8. At 921 600 baud, compared with 115 200, the CPU has:',
+        question: 'A receive FIFO of 16 bytes interrupts at 8. At 921 600 baud, compared with 115 200, the CPU has:',
         options: ['One eighth of the time (about 87 µs for eight bytes instead of 694 µs)', 'The same time: the FIFO size fixes it', 'Eight times as long', 'No time at all: the FIFO fills instantly'],
         answer: 0,
-        explain: `The slack is the free places times the byte time. A byte takes ${(1e7 / 921600).toFixed(1)} µs at 921 600 baud, eight of them ${(8 * 1e7 / 921600).toFixed(0)} µs, against ${SLACK.slackUs.toFixed(0)} µs at 115 200.`,
+        explain: `The slack is the free places times the byte time. A byte takes ${(1e7 / 921600).toFixed(1)} µs at 921 600 baud, eight of them ${(8 * 1e7 / 921600).toFixed(0)} µs, against ${SLACK.slackUs.toFixed(0)} µs at 115 200.`,
         why: ['', 'The size sets how many bytes fit, the rate sets how long each takes on the wire. The time is their product.', 'A faster line gives less time between bytes, not more.', 'Eight byte times is short, but it is not zero: that is the number to design the interrupt latency against.'],
       },
     },
@@ -226,7 +227,7 @@ export const chUart: Chapter = {
         <details class="deeper"><summary>Polled driver, then interrupt driver (RV32 assembly)</summary><pre>${uartPollSource(2).replace(/</g, '&lt;')}</pre><pre>${uartIrqSource(2).replace(/</g, '&lt;')}</pre></details>
         <p><strong>Measured on the gates</strong> (8 bytes at divisor 1, <code>UART_COSTS</code>): the polled loop takes a byte ${UART_COSTS.pollLatency[0]} to ${UART_COSTS.pollLatency[1]} cycles after it reaches the FIFO, depending on where the loop is; the interrupt takes it ${UART_COSTS.irqLatency} cycles after, every time.
         The handler runs ${UART_COSTS.handlerPerByte} cycles a byte (it checks the status once more before it returns) and the main loop keeps ${(UART_COSTS.freePermille / 10).toFixed(1)} % of the cycles. Polling reacts as fast and keeps the CPU busy. The interrupt costs a few instructions of setup once and
-        gives the time back when the line is mostly idle, which at 115 200 baud it is.</p>`;
+        gives the time back when the line is mostly idle, which at 115 200 baud it is.</p>`;
       },
       scene: uartBusScene,
       challenge: {
@@ -246,7 +247,7 @@ export const chUart: Chapter = {
         it stands for the cable (it delays the level by two sender cycles and has an input that flips it, for noise) and chapter 41's model is what is inside. Each computer runs the chat program: keys typed go out on the UART, bytes received go to the console. A polls;
         B takes its bytes by interrupt. Everything else, both CPUs, both UARTs and their FIFOs, runs as gates on the cycle engine, each computer on its own clock pin, the edges merged in time order.</p>
         <p>Type on A and the text appears on B's console, and the other way. The slider gives clock B an error against clock A. Typed text goes out in bursts, back to back, so the slow side of clock B is the tight one: ${pct(SLOW_LIMIT_BACK_TO_BACK, 1)}. Within ±4 % the chat works in both directions (tested); between 4.4 % and 5 % a direction already garbles, and by ±9 % neither works. The consoles
-        show wrong characters or lose them. The glitch button flips the wire from A to B for six cycles, much shorter than half a bit (${8 * TWO_DIV} cycles of confirmation), so a receiver in idle treats it as a false start; inside a frame it would corrupt a bit instead.</p>
+        show wrong characters or lose them. The glitch button flips the wire from A to B for six cycles, under the ${8 * TWO_DIV} cycles of confirmation (half a bit), so a receiver in idle treats it as a false start; inside a frame it would corrupt a bit instead.</p>
         <p>The two computers are ${n0(twoComputersNands())} NANDs in one scene. They run at a few thousand cycles a second, so the divisor in the program is ${TWO_DIV}: a bit is ${16 * TWO_DIV} cycles and a character crosses in a fraction of a second.
         The same machine gets a modem, a faster serial link and finally a network interface in the chapters that follow.</p>`;
       },

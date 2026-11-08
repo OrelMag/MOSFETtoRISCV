@@ -199,9 +199,9 @@ describe('group A: noise', () => {
     says('noise', 0, `${minus(noiseDensityDbm(), 1)} dBm`);
     says('noise', 0, `${minus(noiseFloorDbm(20e6, 6), 1)} dBm`);
     says('noise', 0, '865 K');
-    says('noise', 6, '1.30 dB');
-    says('noise', 6, '11.00 dB');
-    says('noise', 6, '9.7 dB');
+    says('noise', 1, '1.30 dB');
+    says('noise', 1, '11.00 dB');
+    says('noise', 1, '9.7 dB');
   });
 
   it('matched filter: E / σ² and the gain of averaging', () => {
@@ -214,9 +214,9 @@ describe('group A: noise', () => {
     // matched: SNR = Σ p² / σ², whatever the shape
     for (const p of PULSES) expect(snrAfter(p.shape, RECEIVERS[2].weights(p.shape), 1)).toBeCloseTo(p.shape.reduce((m, v) => m + v * v, 0), 9);
     quotes('matchedfilter', '12.0 dB', '0.90 dB', '18.1 dB', '16 samples', 'E / σ²');
-    says('noise', 2, '12.0 dB');
-    says('noise', 2, '0.90 dB');
-    says('noise', 2, 'E / σ²');
+    says('noise', 3, '12.0 dB');
+    says('noise', 3, '0.90 dB');
+    says('noise', 3, 'E / σ²');
   });
 
   it('Eb/N0: the curve, the limit and the gap', () => {
@@ -230,13 +230,13 @@ describe('group A: noise', () => {
     expect(Math.round(10 * Math.log10(1e9 / 1e3))).toBe(60);
     expect(ebn0For(uncodedBer, 1e-2).toFixed(1)).toBe('4.3');
     quotes('ebn0', '9.59 dB', '9.6 dB', '12.5 dB', '−1.59 dB', '11.2 dB', 'factor of 13', '0.19 dB', '60 dB');
-    says('noise', 3, `${e5.toFixed(1)} dB`);
-    says('noise', 3, `${e9.toFixed(1)} dB`);
-    says('noise', 3, `${minus(wall, 2)} dB`);
-    says('noise', 3, `${(e5 - wall).toFixed(1)} dB`);
-    const q = chapterById('noise')!.steps[3].challenge;
+    says('noise', 4, `${e5.toFixed(1)} dB`);
+    says('noise', 4, `${e9.toFixed(1)} dB`);
+    says('noise', 4, `${minus(wall, 2)} dB`);
+    says('noise', 4, `${(e5 - wall).toFixed(1)} dB`);
+    const q = chapterById('noise')!.steps[4].challenge;
     expect(q?.kind === 'quiz' && q.explain, 'the chapter quiz').toContain('60 dB more power');
-    says('noise', 5, `${shannonBinaryDb(0.5).toFixed(2)} dB`);
+    says('noise', 6, `${shannonBinaryDb(0.5).toFixed(2)} dB`);
   });
 });
 

@@ -20,6 +20,7 @@ import { settings } from '../settings';
 import { reveal, StageNotes } from '../stagenotes';
 import { reducedMotion } from '../motion';
 import { litLine, wireLooks } from './looks';
+import { trackScrollCue } from '../scrollcue';
 import { ledgerView } from '../ledger';
 import { TourPlayer } from '../tour';
 import { analogiesOf } from '../../chapters/analogies';
@@ -61,6 +62,7 @@ export class ChapterPage implements Page {
   private routing = false;
   private unlisten: (() => void)[] = [];
   private pillOff: (() => void) | null = null;
+  private cueOff: (() => void) | null = null;
   private circuitBtn: HTMLElement | null = null;
   /** The step's challenge goal and "done" toasts over the canvas: the text panel's cards are often out of sight. */
   private notes = new StageNotes();
@@ -68,6 +70,10 @@ export class ChapterPage implements Page {
   /** This step's notes (cards, and markers on the stage); none on the recap. */
   private stepNotes: StepNotes | null = null;
   private offNotes: () => void;
+  /** The first step is built: later step changes move the focus to the new title and announce it. */
+  private ready = false;
+  /** Codex terms already marked on this step (prose, analogy, layers): one tab stop per term per step. */
+  private glossSeen = new Set<string>();
 
   constructor(chapter: Chapter, step: number, path?: string[]) {
     this.chapter = chapter;
@@ -82,6 +88,7 @@ export class ChapterPage implements Page {
     this.el = h('div', { class: 'layout' }, narrative, this.stage.el, this.inspector.el, this.notes.live);
     this.stage.el.querySelector('.canvas')?.append(this.notes.el);
     this.circuitBtn = this.showCircuitButton();
+    this.cueOff = trackScrollCue(this.el);
     // Each level opened is a history entry (ui/drillpath.ts): #/c/<chapter>/<step>/<instance>/…
     this.stage.onNavigate(() => {
       if (this.sceneShown) syncDrill(this.hash(), this.routing);
@@ -102,6 +109,7 @@ export class ChapterPage implements Page {
     // the head's Save / note count follow the store
     this.offNotes = notes().onChange(() => this.renderTools());
     this.goStep(step, path);
+    this.ready = true;
   }
 
   /** The step's place for notes and bookmarks (null on the recap). */
@@ -151,6 +159,8 @@ export class ChapterPage implements Page {
     const steps = this.chapter.steps;
     i = this.clamp(i);
     if (i === this.step) return;
+    const a0 = document.activeElement;
+    this.glossSeen.clear();
     this.step = i;
     this.unlisten.forEach((f) => f());
     this.unlisten = [];
@@ -175,8 +185,19 @@ export class ChapterPage implements Page {
     }
     this.renderFoot();
     this.body.scrollTop = 0;
+    if (this.ready) this.arrived(a0);
     const want = this.hash();
     if (location.hash !== want) history.replaceState(null, '', want);
+  }
+
+  /** A step change: the control used has been rebuilt, so the focus goes to the new step's title (not out of a field elsewhere), and the step is announced. */
+  private arrived(was: Element | null): void {
+    const a = document.activeElement;
+    const lost = !a || a === document.body || !a.isConnected || (this.head.contains(a) || this.foot.contains(a));
+    const title = this.body.querySelector<HTMLElement>('.step-title');
+    if (lost && (was === document.body || !was || this.el.contains(was) || !was.isConnected)) title?.focus({ preventScroll: true });
+    const n = this.chapter.steps.length;
+    this.notes.announce(this.step === this.recap ? `Recap, ${this.chapter.title}` : `Step ${this.step + 1} of ${n}: ${this.chapter.steps[this.step].title}`);
   }
 
   /** Put step i's scene or widget on the stage; a step without either keeps what is shown, or borrows the nearest earlier one's. */
@@ -274,8 +295,10 @@ export class ChapterPage implements Page {
       if (!el.isConnected) return;
       const skip = m.chapterSkip(c);
       for (const b of met) for (const id of m.termsIn(b)) skip.add(id);
+      for (const id of this.glossSeen) skip.add(id);
       const at = outlineIndex(c.id);
       m.markTerms(el, 10, skip, (id) => f.later(outline, at, id));
+      for (const g of el.querySelectorAll<HTMLElement>('.gl[data-cx]')) this.glossSeen.add(g.dataset.cx!);
     }, () => {});
   }
 
@@ -284,7 +307,7 @@ export class ChapterPage implements Page {
     const c = this.chapter;
     const prose = h('div', { class: 'prose', html: lazyBody(() => st.body) });
     b.replaceChildren();
-    b.append(h('h2', { class: 'step-title' }, st.title), prose);
+    b.append(h('h2', { class: 'step-title', tabindex: '-1' }, st.title), prose);
     // the step's own title and first paragraph come first; the compact goals line follows them
     if (this.step === 0 && (c.goals?.length || c.builds?.length)) {
       const card = this.goalsCard();
@@ -533,7 +556,7 @@ export class ChapterPage implements Page {
     const links = h('div', { class: 'recap-links' });
     const qs = r.check ?? [];
     this.body.replaceChildren(
-      h('h2', { class: 'step-title' }, 'Recap'),
+      h('h2', { class: 'step-title', tabindex: '-1' }, 'Recap'),
       h('div', { class: 'recap-k' }, 'What to keep'),
       h('ul', { class: 'prose recap-keep' }, r.keep.map((k) => h('li', { html: k }))),
       ...(qs.length ? [h('div', { class: 'recap-k recap-check' }, 'Check yourself')] : []),
@@ -557,10 +580,10 @@ export class ChapterPage implements Page {
     const last = this.recap >= 0 ? this.recap : n - 1;
     const prevBtn = this.step > 0
       ? h('button', { class: 'btn', onclick: () => this.goStep(this.step - 1) }, icon('chevL', 16), 'Back')
-      : prev ? h('a', { class: 'btn', title: prev.title, href: `#/c/${prev.id}/${recapIndex(prev) ?? prev.steps.length - 1}` }, icon('chevL', 16), h('span', { class: 'lbl' }, h('small', null, 'Previous'), h('span', { class: 't' }, prev.title))) : h('span');
+      : prev ? h('a', { class: 'btn', title: prev.title, 'aria-label': `Previous chapter: ${prev.title}`, href: `#/c/${prev.id}/${recapIndex(prev) ?? prev.steps.length - 1}` }, icon('chevL', 16), h('span', { class: 'lbl' }, h('small', null, 'Previous'), h('span', { class: 't' }, prev.title))) : h('span');
     const nextBtn = this.step < last
       ? h('button', { class: 'btn primary', onclick: () => this.goStep(this.step + 1) }, this.step + 1 === this.recap ? 'Recap' : 'Next', icon('chevR', 16))
-      : next ? h('a', { class: 'btn primary', title: next.title, href: `#/c/${next.id}/0` }, h('span', { class: 'lbl' }, h('small', null, 'Next'), h('span', { class: 't' }, next.title)), icon('chevR', 16))
+      : next ? h('a', { class: 'btn primary', title: next.title, 'aria-label': `Next chapter: ${next.title}`, href: `#/c/${next.id}/0` }, h('span', { class: 'lbl' }, h('small', null, 'Next'), h('span', { class: 't' }, next.title)), icon('chevR', 16))
         : h('a', { class: 'btn primary', href: '#/' }, 'Back to the map');
     // the key on each (hidden on touch screens and with single-key shortcuts off: app.css)
     if (prevBtn instanceof HTMLButtonElement || prevBtn instanceof HTMLAnchorElement) {
@@ -569,7 +592,12 @@ export class ChapterPage implements Page {
     }
     nextBtn.setAttribute('aria-keyshortcuts', ']');
     nextBtn.append(h('kbd', { class: 'kbd-hint', 'aria-hidden': 'true' }, ']'));
-    this.foot.replaceChildren(prevBtn, h('span', { class: 'count' }, this.step === this.recap ? 'Recap' : `${this.step + 1} / ${n}`), nextBtn);
+    // a phone: the circuit is under the text, and Next is the thing in reach (Back stays first and Next last: the [ ] keys)
+    const circ = this.step === this.recap ? null
+      : h('button', { class: 'btn foot-circuit', type: 'button', 'aria-label': 'Show the circuit', onclick: () => {
+        this.stage.el.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
+      } }, 'Circuit', icon('chevD', 16));
+    this.foot.replaceChildren(prevBtn, h('span', { class: 'count' }, this.step === this.recap ? 'Recap' : `${this.step + 1} / ${n}`), ...(circ ? [circ] : []), nextBtn);
   }
 
   /** Does the text panel scroll by itself (side by side with the stage), rather than with the page (a phone)? */
@@ -593,6 +621,7 @@ export class ChapterPage implements Page {
     this.unbindKeys();
     this.unlisten.forEach((f) => f());
     this.pillOff?.();
+    this.cueOff?.();
     this.stage.destroy();
     this.chapter.leave?.();
   }

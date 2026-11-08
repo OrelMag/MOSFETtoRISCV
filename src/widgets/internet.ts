@@ -22,7 +22,7 @@ const btn = (label: string, title: string, f: () => void, cls = 'btn sm') => { c
 const hex2 = (v: number) => v.toString(16).padStart(2, '0');
 const hexText = (b: readonly number[]) => b.map(hex2).join(' ');
 const ms2 = (v: number) => (v > 0 && v < 0.001 ? '<0.001' : v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v >= 1 ? v.toFixed(2) : v.toFixed(3));
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
 const pick = (label: string, options: [string, string][], value: string, f: (v: string) => void) => {
   const e = h('select', { class: 'mc-sel', 'aria-label': label }, ...options.map(([v, t]) => h('option', { value: v }, t))) as HTMLSelectElement;
   e.value = value;

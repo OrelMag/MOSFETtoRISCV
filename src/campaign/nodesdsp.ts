@@ -53,7 +53,7 @@ export const NODES_DSP: CampaignNode[] = [
   {
     id: 'sp_goertzel', act: 13, title: 'Goertzel for one tone', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_goertzel, givesOf: gzGives,
     unlocks: ['goertzel16_rv16'], par: { nand: 4389, period: 104 },
-    why: 'A keypad key is two tones out of eight, and an FFT would compute 129 bins to keep two. One resonator, s = x + c·s1 − s2, rings up on the one frequency its coefficient names and stays small on the others; after a block its last two values give the power there. One multiplier, two adders and two registers, and the same cell serves all eight tones one after another: only c changes.',
+    why: 'A keypad key is two tones out of eight, so a decoder measures all eight, and an FFT would compute 129 bins to keep those 8. One resonator, s = x + c·s1 − s2, rings up on the one frequency its coefficient names and stays small on the others; after a block its last two values give the power there. One multiplier, two adders and two registers, and the same cell serves all eight tones one after another: only c changes.',
     tips: [
       'The registers hold s1 and s2, and s2 loads the old s1. s1 loads the new s: the product c·s1 (c is a pin, in Q2.14), brought down by 14 bits and rounded, plus x, minus s2.',
       'The product is 30 bits wide for a 16-bit state and a 16-bit coefficient. Keep bits 29…14 and add bit 13 back, which is the half-up rounding; the other bits are wiring and cost nothing. Sign-extend x to 16 bits first.',
@@ -78,10 +78,10 @@ export const NODES_DSP: CampaignNode[] = [
     why: 'Three adders and two shifts turn a vector by a fixed angle one way or the other: one step of a rotation with no multiplier. The shifts are wiring and the angle a constant, so the only decision is which way: the sign of z (or of y) picks add or subtract in all three adders at once.',
     tips: [
       'x and y each move toward the other: xo = x ∓ (y ≫ 1), yo = y ± (x ≫ 1). A shift right by 1 is wiring: bit k of the result is bit k+1 of the input, and the top bit is copied.',
-      'One signal d (1 = turn by +atan) drives all the adders: the z adder and the x adder subtract when d is 1, the y adder adds. the y adder takes the opposite of d.',
+      'One signal d (1 = turn by +atan) drives all the adders: the z adder and the x adder subtract when d is 1, and the y adder adds: it takes the opposite of d.',
       'd comes from z ≥ 0 (the inverse of the top bit of z) when rotate is 1, and from y < 0 (the top bit of y) when rotate is 0: a 2:1 mux on rotate. The angle constant is atan ½ as a 5-bit word.',
     ],
-    codex: ['cordic'], chapters: [{ chapter: 'cordic', step: 1, label: 'One way or the other' }, { chapter: 'cordic', step: 3, label: 'A stage is three adders' }],
+    codex: ['cordic'], chapters: [{ chapter: 'cordic', step: 1, label: 'One way or the other' }, { chapter: 'cordic', step: 3, label: 'A stage is three adders' }, { chapter: 'cordic', step: 4, label: 'Run it backwards' }],
   },
   {
     id: 'sp_sd', act: 13, title: 'Sigma-delta loop', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_sd, givesOf: sdGives,
@@ -90,7 +90,7 @@ export const NODES_DSP: CampaignNode[] = [
     tips: [
       'Two registers hold running sums. Each clock adds the input into y1 and y1 into y2, and takes away v, the one-bit DAC: +full scale after a 1, −full scale after a 0.',
       'v is wiring: the word for +full scale and the word for −full scale differ only in their top bits, and those are the bit and its inverse. Subtract it with the adders you have.',
-      'The decision is the sign of y2, read before the edge and stored in a flip-flop; the sums are 5 bits wider than the input, enough below full scale; at full scale they wrap like the model. Check names the first clock at which your bit, y1 or y2 leaves the model.',
+      'The decision is the sign of y2, read before the edge and stored in a flip-flop; the sums are 5 bits wider than the input, enough for a steady input or tone up to 0.95 of full scale; past that they wrap like the model. Check names the first clock at which your bit, y1 or y2 leaves the model.',
     ],
     codex: ['sigmadelta', 'noiseshaping'], chapters: [{ chapter: 'converters', step: 4, label: 'One bit, and feedback' }, { chapter: 'converters', step: 5, label: 'The loop in gates, and its CIC' }],
   },

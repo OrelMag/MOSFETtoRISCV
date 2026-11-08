@@ -219,7 +219,7 @@ export function viterbi(s: ConvSpec = CONV_K3, o: ViterbiGates = {}): ComponentD
     const mask = n - 1;
     for (let ns = 0; ns < n; ns++) {
       const u = ns >>> (s.K - 2), p0 = (ns << 1) & mask, p1 = p0 | 1, nm = `u${ns}`;
-      instances.push({ name: nm, def: vitSlice(w, D, u), at: [X0 + PX * (ns % cols), Y0 + PY * Math.floor(ns / cols)], label: `state ${ns.toString(2).padStart(s.K - 1, '0')}` });
+      instances.push({ name: nm, def: vitSlice(w, D, u), at: [X0 + PX * (cols - 1 - (ns % cols)), Y0 + PY * Math.floor(ns / cols)], label: `state ${ns.toString(2).padStart(s.K - 1, '0')}` });
       for (const [j, p] of [p0, p1].entries()) {
         const e = convStep(s, p, u);
         bEnds.get(`${e.a}${e.b}`)!.push(`${nm}.b${j}`);
@@ -228,13 +228,14 @@ export function viterbi(s: ConvSpec = CONV_K3, o: ViterbiGates = {}): ComponentD
       }
       en.push(`${nm}.en`); rst.push(`${nm}.rst`); ck.push(`${nm}.clk`);
     }
+    // state 0 sits next to the output splitter (the rightmost column), so its survivor reaches it by a wire
     for (const [k, ends] of bEnds) if (ends.length > 1) nets.push({ name: `b${k}`, ends, tags: true });
-    for (let i = 0; i < n; i++) { nets.push({ name: `m${i}`, ends: mE[i], tags: true }); if (i === 0) sE[i].push('top.in'); nets.push({ name: `s${i}`, ends: sE[i], tags: true }); }
+    for (let i = 0; i < n; i++) { nets.push({ name: `m${i}`, ends: mE[i], tags: true }); if (i === 0) sE[i].push('top.in'); nets.push(i === 0 ? { name: 's0', ends: sE[0], tags: sE[0].filter((e) => e !== 'top.in') } : { name: `s${i}`, ends: sE[i], tags: true }); }
     nets.push({ name: 'en', ends: en, tags: true }, { name: 'rst', ends: rst, tags: true }, { name: 'clk', ends: ck, tags: true }, { name: 'out', ends: ['top.o1', 'out'] });
     const XT = X0 + PX * cols;
     instances.push({ name: 'top', def: T, at: [XT, Y0] });
     return define({
-      id: `viterbi${tagOf(s)}_${q}_${D}`, name: `Viterbi decoder, ${s.name}, ${q}-bit levels`, category: 'sequential',
+      id: `viterbi${tagOf(s)}_${q}_${D}`, name: `Viterbi decoder, ${s.name}, ${q}-bit levels`, category: 'arithmetic',
       summary: `Maximum-likelihood decoding by dynamic programming: ${n} states, each with an add-compare-select, a ${w}-bit metric that wraps, and a ${D}-bit survivor. out is the oldest bit of state 0's survivor, the input bit from ${D} steps ago.`,
       ports: [bus('r0', q, 'in'), bus('r1', q, 'in'), bit('en', 'in'), bit('rst', 'in'), clk(), bit('out', 'out')], symbol: { kind: 'box', label: 'VITERBI' },
       netlist: () => ({ pins: { r0: [0, Y0 + bg.ports.r0.pos[1]], r1: [0, Y0 + bg.ports.r1.pos[1]], en: [0, Y0 + bg.h + 3], rst: [0, Y0 + bg.h + 6], clk: [0, Y0 + bg.h + 9], out: [XT + tg.w + 6, Y0 + tg.ports.o1.pos[1]] }, instances, nets }),

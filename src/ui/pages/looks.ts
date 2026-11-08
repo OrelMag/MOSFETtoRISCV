@@ -6,7 +6,8 @@
 
 import { netlistOf, type ComponentDef } from '../../sim/types';
 import type { Scene, Stage } from '../../view/stage';
-import { h } from '../dom';
+import { h, icon } from '../dom';
+import { reducedMotion } from '../motion';
 
 const same = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
@@ -29,6 +30,35 @@ export function showTarget(def: ComponentDef, name: string): string | undefined 
   if (!inst) return undefined;
   if (!rest.length) return inst.label ?? inst.def.symbol?.label ?? inst.def.name;
   return showTarget(inst.def, rest.join('.'));
+}
+
+/** Where the circuit sits under the text (a phone): the stage is off screen, so a tap on a term needs a way down to it. */
+const narrow = (): boolean => typeof matchMedia !== 'undefined' && matchMedia('(max-width: 760px)').matches;
+
+/**
+ * A small dismissible chip over the foot of the screen: "Lit on the circuit ↓" scrolls to the stage, where the tapped
+ * parts are lit. One at a time; it goes by itself after a few seconds.
+ */
+let chip: { el: HTMLElement; off: () => void } | null = null;
+function litChip(stage: Stage): void {
+  chip?.off();
+  let timer = 0;
+  // gone once the circuit is on screen: the chip would sit on its input bar
+  // (a meaningful part of the stage, not all of it: a screen's height of it is more than the chip needs to give way)
+  const io = typeof IntersectionObserver !== 'undefined'
+    ? new IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting && (e.intersectionRatio >= 0.15 || e.intersectionRect.height >= 160)) off(); }, { threshold: [0, 0.05, 0.1, 0.15, 0.25, 0.5] })
+    : null;
+  io?.observe(stage.el);
+  const off = () => { clearTimeout(timer); io?.disconnect(); el.remove(); if (chip?.el === el) chip = null; };
+  const go = h('button', { class: 'btn sm primary', type: 'button', onclick: () => {
+    stage.el.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    off();
+  } }, 'Lit on the circuit', icon('chevD', 16));
+  const x = h('button', { class: 'btn sm ghost lit-chip-x', type: 'button', 'aria-label': 'Dismiss', onclick: off }, icon('close', 14));
+  const el = h('div', { class: 'lit-chip', role: 'status' }, go, x);
+  document.body.append(el);
+  chip = { el, off };
+  timer = window.setTimeout(off, 8000);
 }
 
 /** Wire every [data-show] element under `root` to `stage`. Returns a function that drops a pinned highlight. */
@@ -62,7 +92,7 @@ export function wireLooks(root: HTMLElement, stage: Stage): () => void {
     el.tabIndex = 0;
     el.setAttribute('role', 'button');
     el.setAttribute('aria-pressed', 'false');
-    el.title ||= 'Hover to light it on the circuit; click to keep it lit';
+    el.title ||= narrow() ? 'Tap to light it on the circuit' : 'Hover to light it on the circuit; click to keep it lit';
     el.addEventListener('mouseenter', () => apply(names(el), false));
     el.addEventListener('focus', () => apply(names(el), false));
     el.addEventListener('mouseleave', rest);
@@ -76,12 +106,13 @@ export function wireLooks(root: HTMLElement, stage: Stage): () => void {
         pinned.classList.add('on');
         pinned.setAttribute('aria-pressed', 'true');
         apply(names(pinned), true);
-      } else rest();
+        if (narrow()) litChip(stage);
+      } else { rest(); chip?.off(); }
     };
     el.addEventListener('click', toggle);
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
   }
-  return () => { pinned?.classList.remove('on'); pinned = null; };
+  return () => { pinned?.classList.remove('on'); pinned = null; chip?.off(); };
 }
 
 /**

@@ -1,4 +1,4 @@
-// The on-ramp to the Communication chapters: what it takes to send anything, for a reader who has Chapter 0 and nothing else. Bits on a
+// The on-ramp to the Communication chapters: what it takes to send anything, written so that a reader with only the Start chapter can follow it. Bits on a
 // wire, the two parts of a delay, what fits on a line, packets, layers, decibels. Every figure is comm/message.ts's, worked out here.
 
 import { dbToRatio } from '../comm/limits';
@@ -23,7 +23,7 @@ export const chMessage: Chapter = {
     'say why a network cuts messages into packets and wraps them in layers, and what each costs',
     'add a chain of gains and losses in decibels',
   ],
-  builds: ['basics'],
+  builds: ['basics', 'bus'],
   recap: {
     keep: [
       'A message is bits, and a bit on a wire is a level held for a time. Rate is bits a second; size ÷ rate is the time to send.',
@@ -61,8 +61,9 @@ export const chMessage: Chapter = {
     {
       title: 'Bits on a wire',
       body: `
+        <p>Chapters 1 to ${numOf('bus')} built a computer whose parts sit millimetres apart and share one clock; the last of them joined its blocks with bus handshakes. This part of the book asks what changes when a bit has to leave the box: it must survive a distance, and the far end, with a clock of its own, has to agree on what it means. This chapter is the vocabulary, written so that it reads without the hardware chapters; chapter ${numOf('telegraph')} starts building.</p>
         <p>Sending a message needs three things: something that can change at one end and be seen at the other, an agreement about what each change means, and time. A lamp across a valley would do. So would a voltage on a wire, which is what most of these chapters use.</p>
-        <p>The agreement starts with <strong>bits</strong>. Text becomes bytes by a table everybody shares, and each byte is eight bits, as in Chapter 0. To send a bit, hold the wire at a high voltage for 1 or a low one for 0, for an agreed time. The number of bits sent each second is the <strong>bit rate</strong>, written b/s; the time to send a message is its bits divided by the rate.</p>
+        <p>The agreement starts with <strong>bits</strong>. Text becomes bytes by a table everybody shares, and a byte is eight bits, enough for one character. To send a bit, hold the wire at a high voltage for 1 or a low one for 0, for an agreed time. The number of bits sent each second is the <strong>bit rate</strong>, written b/s; the time to send a message is its bits divided by the rate.</p>
         <p>Rates are written with the same prefixes as everywhere, in thousands: 1 kb/s, 1 Mb/s, 1 Gb/s. Bytes are usually counted with a capital B, so 1 MB is eight million bits. Mixing up b and B is an eightfold error, and an easy one.</p>
         <div class="try">Type your name. Then move the rate from 1 b/s up. At 1 b/s you could read it off a lamp; at a million you could not.</div>`,
       widget: bitsWidget,
@@ -93,8 +94,8 @@ export const chMessage: Chapter = {
       title: 'What fits on the line',
       body: `
         <p>Delay answers "how soon". <strong>Throughput</strong> answers "how much a second", and the two are different questions. Rate × travel time is how much is on the line at once: at 10 Gb/s to London, ${fmtBytes(onTheLine(1e10, LONDON))} is in the fibre, on its way, before the first byte arrives.</p>
-        <p>That matters because a sender cannot forget what it sent until it hears that it arrived. A fast, long line needs a memory that large at the sender, however little data the program thinks it is sending. The chapter on <a href="#/c/tcp/0">TCP</a> is largely about this number.</p>
-        <p>An old joke makes the point: never underestimate the bandwidth of a van full of disks. ${VAN_TB} TB driven ${VAN_KM} km takes ${VAN_H.toFixed(1)} hours; the same over a 10 Gb/s link takes ${LINK_H.toFixed(0)}. The van has enormous throughput and a terrible delay, and for a one-byte message it would still take ${VAN_H.toFixed(1)} hours.</p>
+        <p>That matters because a sender cannot forget what it sent until it hears that it arrived. A fast, long line needs a memory of the rate times the <em>round</em> trip at the sender, since the acknowledgement has to come back too: ${fmtBytes(2 * onTheLine(1e10, LONDON))} here, twice what is in the fibre one way, however little data the program thinks it is sending. The chapter on <a href="#/c/tcp/0">TCP</a> is largely about this number.</p>
+        <p>An old joke makes the point: never underestimate the bandwidth of a van full of disks (engineers say <em>bandwidth</em> for a data rate casually; from chapter ${numOf('telegraph')} on it means a range of frequencies, in hertz, and the rate is the bit rate). ${VAN_TB} TB driven ${VAN_KM} km takes ${VAN_H.toFixed(1)} hours; the same over a 10 Gb/s link takes ${LINK_H.toFixed(0)}. The van has enormous throughput and a terrible delay, and for a one-byte message it would still take ${VAN_H.toFixed(1)} hours.</p>
         <div class="try">Drive further until the link wins. Then take a rate and a distance you know, your home connection and a city far away, and read how much is on the line.</div>`,
       widget: pipeWidget,
       challenge: {
@@ -108,7 +109,7 @@ export const chMessage: Chapter = {
     {
       title: 'Why messages are cut up',
       body: `
-        <p>A network shares its lines among everybody using them, and the fair way to share is to take turns in small pieces. So a message is cut into <strong>packets</strong>, each with a <strong>header</strong> saying where it is going. A <em>switch</em>, a box that joins lines, receives a packet whole, checks it, and sends it on.</p>
+        <p>A network shares its lines among everybody using them, and the fair way to share is to take turns in small pieces. So a message is cut into <strong>packets</strong>, each with a <strong>header</strong> saying where it is going (on the internet usually 40 bytes: <span data-ahead="tcp">a TCP header, which numbers the bytes,</span> and an IP header, which names the machine; the next step opens them). A <em>switch</em>, a box that joins lines, receives a packet whole, checks it, and sends it on.</p>
         <p>Cutting costs headers, and it also saves time. One 1 MB message over ${BIG.hops} links at 10 Mb/s waits whole at every one: ${fmtTime(storeAndForward(BIG))}. In ${packetCount(CUT)} packets, each link is busy with the next packet while the first has moved on: ${fmtTime(storeAndForward(CUT))}.</p>
         <p>It also limits what an error costs. If one bit in a million flips, a 1 MB message almost never arrives clean, and sending it whole again and again costs thousands of times its size. Sent as 1000-byte packets, only the few that were hit go again: ${(bytesWithLoss(CUT, 1e-6) / 1e6).toFixed(2)} MB in all.</p>
         <div class="try">Slide the packet from small to large: the time falls, then climbs. Add links and the best size moves down. Raise the wrong bits and watch the bytes sent.</div>`,
@@ -118,14 +119,14 @@ export const chMessage: Chapter = {
         options: ['Every packet carries a header, so more of what is sent is headers', 'Small packets travel more slowly', 'Links can only send so many packets', 'Small packets are more likely to be hit by an error'],
         answer: 0,
         explain: `With 40-byte headers, a packet of 20 data bytes is two thirds header: the link spends two thirds of its time on them.`,
-        why: ['', 'Their bits move at the same speed as any others.', 'That is not what the sum here shows: the rate in bits a second is fixed, and the headers use it up.', 'A small packet is less likely to be hit, not more.'],
+        why: ['', 'Their bits move at the same speed as any others.', 'True of some devices, but not what this sum shows: here the rate in bits a second is fixed, and the headers use it up.', 'A small packet is less likely to be hit, not more.'],
       },
     },
     {
       title: 'Layers',
       body: `
         <p>Nobody writes one program that knows about voltages, routes across the world and which browser tab wants the data. The job is split into <strong>layers</strong>, each using the one below as a service and adding a header of its own: an envelope inside an envelope.</p>
-        <p><span data-ahead="tcp">TCP, in the program's computer, numbers the bytes so nothing is lost or out of order.</span> IP names the machine anywhere in the world. Ethernet names the next machine along this one cable and checks that its packet, which it calls a <em>frame</em>, came through. At each <em>hop</em>, each machine along the way, the outer envelope is opened and replaced, and the inner ones travel untouched.</p>
+        <p><span data-ahead="tcp">TCP, in the program's computer, numbers the bytes so nothing is lost or out of order.</span> IP names the machine anywhere in the world. Ethernet names the next machine along this one cable and checks that its packet, which it calls a <em>frame</em>, came through. At each <em>hop</em>, each machine along the way, the outer envelope is opened and replaced, and the inner ones travel nearly untouched: a router reads the IP header to choose the next hop and only counts down its hop limit.</p>
         <p>The layers can change independently, which is the whole point: the same web page crosses Wi-Fi, then fibre, then copper. The price is ${WIRE_OVERHEAD + 40} bytes on every packet, and a frame too short is padded to Ethernet's minimum. On a full frame that is ${(100 * (1 - full.share)).toFixed(1)} %; on a one-byte message it is nearly all of it.</p>
         <div class="try">Slide the data down to 1 byte and read what share of the wire is your data.</div>`,
       widget: layersWidget,
@@ -140,8 +141,8 @@ export const chMessage: Chapter = {
     {
       title: 'Decibels',
       body: `
-        <p>Signals lose power along a line and gain it in amplifiers, and each stage multiplies. A long cable may leave one part in a million. Numbers like that are awkward, so engineers use their logarithm, the <strong>decibel</strong>: ratio in dB = 10 log₁₀(P₂ / P₁), where log₁₀ asks what power of ten a number is: log₁₀ 1000 = 3, so a ratio of 1000 is 30 dB.</p>
-        <p>Then a chain adds up. Three facts carry most of the arithmetic: 10 dB is ten times, 3 dB is about twice (${dbToRatio(3).toFixed(2)}), and a negative number is a loss. <strong>dBm</strong> is a level, not a ratio: decibels above one milliwatt, so 0 dBm is 1 mW and 30 dBm is 1 W.</p>
+        <p>Signals lose power along a line and gain it in amplifiers, and each stage multiplies. A long cable may leave one part in a million. Numbers like that are awkward, so engineers use their logarithm, the <strong>decibel</strong>: ratio in dB = 10 log₁₀(P₂ / P₁), where log₁₀ asks what power of ten a number is: log₁₀ 1000 = 3, so a ratio of 1000 is 30 dB. For a voltage or a current the factor is 20, not 10, because power goes as the square: ten times the voltage is 20 dB, a hundred times the power.</p>
+        <p>Then a chain adds up. Three facts carry most of the arithmetic: 10 dB is ten times, 3 dB is about twice (${dbToRatio(3).toFixed(3)}), and a negative number is a loss. <strong>dBm</strong> is a level, not a ratio: decibels above one milliwatt, so 0 dBm is 1 mW and 30 dBm is 1 W.</p>
         <p>Every later chapter that talks about noise or radio uses these. Think of it as doing the multiplications with the exponents.</p>
         <div class="try">Set the cable to −100 dB and read the power that arrives. Then add 10 dB anywhere in the chain: the order does not change the sum.</div>`,
       widget: decibelWidget,

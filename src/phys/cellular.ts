@@ -70,6 +70,8 @@ export const slotMs = (mu: number): number => 1 / 2 ** mu;
 export const cpUs = (mu: number): number => 4.69 / 2 ** mu;
 
 // ---- schedulers --------------------------------------------------------------------------------------------------------------------
+/** The slots and seed the scheduler panel and the chapter's quoted numbers both run, so they agree. */
+export const SCHED_SLOTS = 6000, SCHED_SEED = 7;
 export type Policy = 'rr' | 'max' | 'pf';
 export interface SchedResult { perUser: number[]; total: number; jain: number; served: number[] }
 /** n users on independent block-fading Rayleigh channels of mean SNRs (per slot a fresh draw), one served a slot, by Shannon's rate. */

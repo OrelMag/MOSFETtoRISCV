@@ -204,7 +204,8 @@ describe('group C: multirate', () => {
     const hb = halfBand(23), mid = 11;
     expect(nonZero(hb)).toBe(13);
     hb.forEach((v, i) => { const d = Math.abs(i - mid); expect(v === 0, `distance ${d}`).toBe(d !== 0 && d % 2 === 0); });
-    expect((nonZero(hb) - 1) / 2 + 1).toBe(7);
+    expect((nonZero(hb) - 1) / 2).toBe(6); // and a shift for the middle tap, exactly ½
+    expect(hb[(hb.length - 1) / 2]).toBeCloseTo(0.5, 12);
     expect(1 + 12).toBe(13);
     expect((7 / 23).toFixed(2)).toBe('0.30');
     const r = cascade();

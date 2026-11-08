@@ -9,7 +9,7 @@ import { adcApi, adcScene, CHAIN, chainEnob, clipWidget, jitterWidget, ladderWid
 import { numOf } from './order';
 import type { Chapter } from './types';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const MOD = (w = CHAIN.w) => nands(sdModulator(2, w));
 const WHOLE = () => nands(sdConverter(CHAIN.order, CHAIN.w, CHAIN.N, CHAIN.R));
@@ -23,7 +23,7 @@ export const chConverters: Chapter = {
     'explain how feedback pushes quantization noise out of the band',
     'measure a sigma-delta chain\'s effective bits, and say where the textbook\'s model is out',
   ],
-  builds: ['signals', 'noise', 'multirate', 'fixed'],
+  builds: ['signals', 'noise', 'zplane', 'multirate', 'fixed'],
   recap: {
     keep: [
       'Effective bits are (SNDR − 1.76) / 6.02: what an ideal converter would need to do as well. The bits on the datasheet\'s front page are only an upper limit.',
@@ -60,7 +60,7 @@ export const chConverters: Chapter = {
     {
       title: 'What a converter is judged by',
       body: `
-        <p>Everything so far began with samples already there. A converter is where they come from, and it is the one part of the chain that has to be analogue. Most of this chapter is therefore models, labelled as such: comparators, capacitors and resistors with seeded errors. The sigma-delta arithmetic at the end is exact and in gates.</p>
+        <p>The DSP core of the last chapter, like everything before it, began with samples already there. A converter is where they come from, and it is the one part of the chain that has to be analogue. Most of this chapter is therefore models, labelled as such: comparators, capacitors and resistors with seeded errors. The sigma-delta arithmetic at the end is exact and in gates.</p>
         <p><a href="#/c/signals/6">Rounding</a> gave the limit: a perfect b-bit converter on a full-scale sine reaches 6.02 b + 1.76 dB. So a real one is judged backwards. Measure its signal to noise and distortion, SNDR, and ask how many bits a perfect converter would need to do as well: <strong>effective bits</strong>, ENOB = (SNDR − 1.76) / 6.02. Rounding a sine to 12 bits should reach ${idealSqnrDb(12).toFixed(1)} dB, and the tests hold this chapter's measurement to within 1.5 dB of that on rounded sines.</p>
         <p>The bits on the front of the data sheet are the bits it delivers. Effective bits are how many of them are right, and at high input frequencies they fall, as you will see.</p>`,
       challenge: {
@@ -75,7 +75,7 @@ export const chConverters: Chapter = {
       title: 'Compare, and compare again',
       body: `
         <p>A <strong>flash</strong> converter is the direct way: a comparator at every step of the ladder, all deciding at once. It takes one clock and 2^b − 1 comparators, and each added bit doubles the input's load and the power. Eight bits is 255 comparators. Past that it is rarely worth it.</p>
-        <p>A <strong>SAR</strong> converter is a binary search: one comparator, and a DAC. Try the top bit, ask whether the input is above that level, keep or clear it, and go on. So b clocks, one comparator, and a DAC to build, usually from binary-weighted capacitors whose charge is the sum of those it holds.</p>
+        <p>A <strong>SAR</strong> converter is a binary search: one comparator, and a <strong>DAC</strong>, a digital-to-analog converter, which turns a code back into a level. Try the top bit, ask whether the input is above that level, keep or clear it, and go on. So b clocks, one comparator, and a DAC to build, usually from binary-weighted capacitors whose charge is the sum of those it holds.</p>
         <p>The catch is that the DAC has to be as accurate as the result. Its largest capacitor is half of the total, and an error of 1 % in it is 1.3 codes at 8 bits. Past about 12 bits, trimming or calibration starts to matter.</p>
         <div class="try">Step the input and read the search. Then add capacitor error, and watch the code move away from the right one.</div>`,
       widget: sarWidget,
@@ -92,7 +92,7 @@ export const chConverters: Chapter = {
       body: `
         <p>Going from a word to a voltage has an elegant answer in the <strong>R-2R ladder</strong>. Each bit switches a 2R resistor between 0 and the reference, and series R's join them. Looking back from any node, the rest of the ladder looks like 2R, so each bit's contribution halves on its way along, and only two values of resistor are needed.</p>
         <p>The widget solves the ladder node by node with each resistor seeded off by its σ. Judge a staircase by two figures. <strong>DNL</strong> is how far each step is from one LSB, and a step of less than zero means it went backwards. <strong>INL</strong> is how far each output is from the straight line between the ends.</p>
-        <p>The worst step usually comes at the middle of the range: going from 0111 1111 to 1000 0000, every bit changes at once and all the errors meet. With every resistor about 1 % out, that step is typically some 2 LSBs off at 8 bits. Matching is a matter of area, and that is the real price of a converter's bits.</p>
+        <p>The worst step usually comes at the middle of the range: going from 0111 1111 to 1000 0000, every bit changes at once and all the errors meet. With every resistor about 1 % out, that step is typically 1 to 2 LSBs off at 8 bits: the median over 200 such ladders is 1.2 LSBs, and the one drawn first here, at 1.9, is worse than most. Matching is a matter of area, and that is the real price of a converter's bits.</p>
         <div class="try">Raise σ to 3 % and try other ladders. Find one that goes backwards, then bring σ down until none does.</div>`,
       widget: ladderWidget,
       challenge: {
@@ -126,7 +126,11 @@ export const chConverters: Chapter = {
         const a = sdMeasuredDb(2, 64, 0.5), m = sdLinearModelDb(2, 64, 0.5), pw = sdErrorPower(2, 0.5), m2 = sdLinearModelDb(2, 64, 0.5, pw);
         return `
         <p>So far every bit has been paid for in matching. <strong>Sigma-delta</strong> takes another way: one bit, whose two levels cannot be out of line with each other, sampled far faster than the signal needs. Rate is cheap, and it can be traded for bits.</p>
-        <p>Feed the error back through an integrator. The loop adds up input minus output, and decides from the sign of that sum, so that over time the bits' average follows the input. In symbols, with the quantizer's error E:</p>
+        <p>Feed the error back through an integrator. The loop adds up input minus output, and decides from the sign of that sum, so that over time the bits' average follows the input. That is order 1. This chapter's loop has two integrators in a row, order 2: with u the input and v the output (+ or − full scale),</p>
+        <pre>y₁ ← y₁ + u − v
+y₂ ← y₂ + y₁ − v
+v  = + full scale if y₂ ≥ 0, else − full scale</pre>
+        <p>In symbols, with the quantizer's error E:</p>
         <pre>V = z⁻¹ U + (1 − z⁻¹)² E</pre>
         <p>The signal comes through with a delay. The error comes through a filter, (1 − z⁻¹)², that is nearly zero at low frequencies and largest at half the rate. The tests check this as an identity, to the bit, on the error the loop recorded. Nothing has been removed, only moved, and filtering it out is a job from an earlier chapter. Here oversampling alone buys 3 dB a doubling, and shaping adds 6 dB for each order: in theory <strong>9 dB at order 1, 15 at order 2</strong>. Order 2 measures about 13 to 16 at half of full scale, from 16 to 256 times the rate, and less near the top. Order 1 wanders between 6 and 11, since its noise is less like noise: it falls into patterns tied to the input.</p>
         <p>The textbook's sum treats the quantizer as added white noise. That gets the slope right and the level close: at 64 times the rate and half of full scale it predicts ${m.toFixed(1)} dB, and the loop measures ${a.toFixed(1)}. Most of the gap is one assumption you can measure. A step of 2 should give an error power of 1/3, and this loop's error has ${pw.toFixed(2)}: with that figure the sum gives ${m2.toFixed(1)}. What is left is an error that is neither white nor independent of its input.</p>
