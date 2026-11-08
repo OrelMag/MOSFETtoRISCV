@@ -656,7 +656,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
 
   const T = 6; // top of the pipeline registers
   const row = (f: string) => T + rowY(f);
-  const xFD = 40, xDE = 112, xEM = wired ? 204 : 196, xMW = (wired ? 240 : 232) + (dcache ? 16 : 0);
+  const xFD = 40, xDE = 112, xEM = wired ? 204 : 196, xMW = (wired ? 240 : 232) + (dcache ? 38 : 0);
   place('FD', FD, [xFD, T]); place('DE', DE, [xDE, T]); place('EM', EM, [xEM, T]); place('MW', MW, [xMW, T]);
   // F
   alignY('pcmux', M4, 2, 'y', row('pc') + 10);
