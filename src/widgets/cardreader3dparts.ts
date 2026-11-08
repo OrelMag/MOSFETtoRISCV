@@ -254,11 +254,11 @@ export function readerAnchors(run: ReaderRun, L: ReaderLayout): Anchor[] {
   return [
     { text: 'hopper', p: [m.hopper - a - 1.2, BED + 24, c + 1.2], side: 'l', n: front },
     { text: 'picker knife', p: [m.hopper - a - 1.4 + L.knife * 14, BED, c - 2], side: 'b', n: front, minor: true },
-    { text: 'feed rolls', p: [m.rolls[0], BED + CARD_T + 4, c + 3], side: 't', n: up },
+    { text: 'feed rolls', p: [m.rolls[run.mode === 'word' ? 0 : 1], BED + CARD_T + 4, c + 3], side: 't', n: up },
     run.mode === 'word' ? { text: 'brushes, one a column', p: [STATION_X, BED + 10, c + 4], side: 'r', n: front } : { text: 'lamp and 12 photocells', p: [STATION_X, BED + 18, c + 2], side: 'r', n: front },
     run.mode === 'word' ? { text: 'contact roll', p: [STATION_X, BED - 2, c + 3], side: 'b', n: front, minor: true } : { text: 'photocells', p: [STATION_X, BED - 2.4, c + 1], side: 'b', n: front, minor: true },
     { text: 'stacker', p: [m.stacker + a + 3, BED + 22, c + 1], side: 'r', n: front },
-    { text: `data to the computer (${bits} bits)`, p: [lampX(0, bits) - 5, LAMP_Y + 6, m.panelZ], side: 'l', n: front },
-    { text: 'ready · empty · next', p: [lampX(bits + 3, bits) + 2, LAMP_Y + 2, m.panelZ], side: 'r', n: front, minor: true },
+    { text: `data to the computer (${bits} bits)`, p: run.mode === 'word' ? [lampX(0, bits) - 5, LAMP_Y + 6, m.panelZ] : [lampX(bits / 2, bits), LAMP_Y + 6, m.panelZ], side: run.mode === 'word' ? 'l' : 't', n: front },
+    { text: 'ready · empty · next', p: run.mode === 'word' ? [lampX(bits + 2, bits) + 2, LAMP_Y + 6, m.panelZ] : [lampX(bits + 3, bits) + 3, LAMP_Y, m.panelZ], side: run.mode === 'word' ? 't' : 'r', n: front, minor: true },
   ];
 }
