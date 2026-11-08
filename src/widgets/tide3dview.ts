@@ -15,7 +15,8 @@ import type { OrbitView } from '../gl/camera';
 /** Seconds a period takes on Run, and the stepped part of a period; a reduced-motion run steps every STEP_S. */
 const PERIOD_S = 14, STEP_FRAC = 1 / 20, STEP_S = 0.6;
 const VIEW: OrbitView = { target: [31, 46, 0], yaw: 0.16, pitch: 0.24, dist: 242 };
-const sg = (v: number, d = 3) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
+/** Signed to d places, with no '−0.000': a value that rounds to zero has no sign. */
+const sg = (v: number, d = 3) => (v < 0 && Math.abs(v) >= 0.5 * 10 ** -d ? '−' : '') + Math.abs(v).toFixed(d);
 
 export function tideView(): Widget {
   let pat = 0, td = tideOf(0), t = 0, running = false, tauStep = 0;
