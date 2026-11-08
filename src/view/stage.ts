@@ -111,6 +111,10 @@ const LEVEL_NAME: Record<string, string> = {
 /** Steps Back can undo (each a full copy of the simulation's state). */
 /** A phone's stage (hugPhone): the least canvas it keeps, the badge's room above the drawing, and the tallest cover it shrinks under. */
 const HUG_MIN_PX = 260, HUG_TOP_PX = 48, HUG_COVER_PX = 90;
+/** The top bar a scrolled phone stage sits under: hugPhone lets a tall circuit's stage grow to the screen's bottom. */
+const PHONE_TOPBAR_PX = 70;
+/** The stage's touch hint hides itself after this long untouched (it sits over the circuit's room). */
+const HINT_AUTO_MS = 8000;
 const HISTORY_MAX = 100;
 /** A link's clock cycles are replayed for at most this long (ms); a note says how many ran. */
 const REPLAY_MS = 1500;
@@ -428,7 +432,7 @@ export class Stage {
     this.dock = h('div', { class: 'panel-dock' });
     // Touch: dblclick comes from a double tap; the Layout button stands in for the right-click menu.
     this.hint = hintBadge('double-click a part to open it · drag a part or a wire to move it (shift: pick several) · right-click for layout · drag to pan · wheel or pinch to zoom',
-      'double-tap a part: open · drag: move / pan (a wire: tap it first) · pinch: zoom', 'stage');
+      'double-tap a part: open · drag: move / pan (a wire: tap it first) · pinch: zoom', 'stage', '', HINT_AUTO_MS);
     this.canvas.append(this.levelBadge, this.hint, this.dock, this.board.el, this.why.el);
     this.controls = h('div', { class: 'controls' });
     this.status = h('div', { class: 'status' });
@@ -2543,6 +2547,14 @@ export class Stage {
     this.el.style.height = '';
     const full = this.el.clientHeight, canvasH = this.canvas.clientHeight;
     if (need < canvasH - 2) this.el.style.height = `${Math.round(full - canvasH + need)}px`;
+    else if (need > canvasH + 2) {
+      // A tall circuit (an ALU, a register file) fitted by its height uses a sliver of the width: give the canvas what the
+      // screen under the top bar leaves after the stage bar and the (capped) controls band, so the circuit and its inputs
+      // share one screen, no more than the circuit needs.
+      const bar = this.el.querySelector<HTMLElement>(':scope > .stage-bar')?.offsetHeight ?? 57;
+      const room = window.innerHeight - PHONE_TOPBAR_PX - bar - this.controls.offsetHeight - 8;
+      if (room > canvasH) this.el.style.height = `${Math.round(full - canvasH + Math.min(room, need))}px`;
+    }
   }
 
   private covers(hint = true): Rect[] {
