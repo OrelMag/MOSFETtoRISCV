@@ -192,6 +192,7 @@ export function crtView(): Widget {
     label: name === 'three' ? '3/4 view' : name[0].toUpperCase() + name.slice(1),
     view: () => viewOf(name),
     limits: name === 'mask' ? MASK_LIMITS : TUBE_LIMITS,
+    on: name === (isNarrow() ? 'side' : 'three'), // a phone opens on the side view (the camera above)
     pick: () => {
       detail = name === 'gun' || name === 'yoke' || name === 'mask' ? name : 'overview';
       maskNote.style.display = name === 'mask' ? '' : 'none';
