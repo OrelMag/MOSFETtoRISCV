@@ -211,6 +211,12 @@ export const MODELS_3D: readonly Model3d[] = [
     files: ['hierarchy3d', 'hierarchy3dview', 'hierarchy3dparts', 'hierarchy3ddata'], factory: 'hierarchy3d', codex: ['cache', 'memwall', 'amat'],
     open: () => import('./hierarchy3d').then((m) => m.hierarchy3d()),
   },
+  {
+    id: 'valve', title: 'Inside the valve', category: 'analogies', chapter: 'mosfet', step: 1,
+    summary: 'A diaphragm valve in cutaway: spring preload as the threshold, no flow through the gate at rest, and the CMOS pair.',
+    files: ['valve3d', 'valve3dview', 'valve3dparts'], factory: 'valve3d', codex: ['cmos', 'inverter'],
+    open: () => import('./valve3d').then((m) => m.valve3d()),
+  },
 ];
 
 export const modelById = (id: string): Model3d | undefined => MODELS_3D.find((m) => m.id === id);
