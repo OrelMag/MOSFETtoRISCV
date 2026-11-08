@@ -3,6 +3,15 @@ import { hiddenKinds, NAME_MIN_PX, abbreviate, fitLayout, NAME_OVER_MAX_PX, LARG
 import { fpAdd, fpMul, fpDiv } from '../src/lib/fpu';
 import type { FpFormat } from '../src/sim/fpref';
 import { singleCycleCpu } from '../src/lib/cpu';
+import { CSR_UNIT } from '../src/lib/system';
+import { routeNetlist } from '../src/view/route';
+import { isConstantDef } from '../src/sim/constant';
+import { constWord } from '../src/lib/alu';
+import { TIE0 } from '../src/lib/transistors';
+import { keyPart, partDef } from '../src/editor/parts';
+import type { PartRef } from '../src/editor/model';
+import type { ComponentDef } from '../src/sim/types';
+import type { Seg } from '../src/view/legible';
 import { fpAddNearFar } from '../src/lib/fpnearfar';
 import { symbolGeom } from '../src/sim/geometry';
 
@@ -141,7 +150,9 @@ describe('names sit inside their block', () => {
     });
     const bb = { x0: Math.min(...blocks.map((r) => r.x)), x1: Math.max(...blocks.map((r) => r.x + r.w)) };
     const scale = 400 / (bb.x1 - bb.x0);
-    const plan = planLayouts(named.map((n) => n.box), scale, 10, blocks);
+    const nlc = def.netlist!();
+    const wires = routeNetlist(def, nlc).nets.flatMap((n) => n.paths.flatMap((p) => p.slice(1).map((q, i): Seg => [p[i][0], p[i][1], q[0], q[1]])));
+    const plan = planLayouts(named.map((n) => n.box), scale, 10, blocks, wires);
     const full = ['INSTR MEM', 'REGISTERS', 'DATA MEM', 'NEXT PC'];
     for (const f of full) {
       const k = named.findIndex((n) => n.t.toUpperCase() === f);
@@ -199,5 +210,81 @@ describe('planTags', () => {
     expect(r[0]).not.toBeNull();
     expect(r[1]).toBeNull();
     expect(r[2]).not.toBeNull();
+  });
+});
+
+describe('constants and wires', () => {
+  const wiresOf = (def: Parameters<typeof routeNetlist>[0]): Seg[] => {
+    const nl = def.netlist!();
+    return routeNetlist(def, nl).nets.flatMap((n) => n.paths.flatMap((p) => p.slice(1).map((q, i): Seg => [p[i][0], p[i][1], q[0], q[1]])));
+  };
+  it('a CSR unit at its fit shows every constant value at 7 px or more, or leaves a capsule only where that would collide', () => {
+    const nl = CSR_UNIT.netlist!();
+    const insts = nl.instances;
+    const blocks = insts.map((i) => { const { w, h } = symbolGeom(i.def), at = i.at ?? [0, 0]; return { x: at[0], y: at[1], w, h }; });
+    const consts = insts.flatMap((i, k) => {
+      const { w, h } = symbolGeom(i.def), t = i.def.symbol.label ?? i.def.name;
+      return isConstantDef(i.def) && (i.def.symbol.label?.length ?? 0) >= 2
+        ? [{ k, box: { cx: blocks[k].x + w / 2, cy: blocks[k].y + h / 2, w, h, chars: t.length, rot: false, text: t, ports: 1, const: true } }] : [];
+    });
+    expect(consts.length).toBeGreaterThanOrEqual(16);
+    // every one-port labelled box of the unit is one (the shapes the old rule saw are exactly the constants)
+    const shaped = insts.filter((i) => i.def.symbol.kind === 'box' && i.def.ports.length === 1 && (i.def.symbol.label?.length ?? 0) >= 2);
+    expect(shaped.length).toBe(consts.length);
+    const scale = 1.7;
+    const named = insts.flatMap((i, k) => {
+      const { w, h } = symbolGeom(i.def), t = i.def.symbol.label ?? i.def.name;
+      return !consts.some((c) => c.k === k) && i.def.symbol.kind === 'box' && nameEligible(t, w, h) ? [{ cx: blocks[k].x + w / 2, cy: blocks[k].y + h / 2, w, h, chars: t.length, rot: nameRotated(w, h), text: t, ports: Object.keys(symbolGeom(i.def).ports).length }] : [];
+    });
+    const plan = planLayouts([...named, ...consts.map((c) => c.box)], scale, 10, blocks);
+    let shown = 0;
+    consts.forEach((c, n) => {
+      const l = plan[named.length + n];
+      if (l) { shown++; expect(l.px).toBeGreaterThanOrEqual(MIN_TEXT_PX); return; }
+      // not shown: drawn alone it would be (so it was a collision, not a rule)
+      expect(planLayouts([c.box], scale, 10, [blocks[c.k]])[0], 'const ' + insts[c.k].name).not.toBeNull();
+    });
+    expect(shown).toBeGreaterThan(0);
+  });
+  it('fpdiv at the phone fit draws UNPACK inside its block (UNPK) and no spilled name touches a wire', () => {
+    const def = fpDiv({ E: 4, M: 3 } as FpFormat, true);
+    const nl = def.netlist!(), wires = wiresOf(def);
+    const insts = nl.instances;
+    const blocks = insts.map((i) => { const { w, h } = symbolGeom(i.def), at = i.at ?? [0, 0]; return { x: at[0], y: at[1], w, h }; });
+    const boxes = insts.flatMap((i, k) => {
+      const { w, h } = symbolGeom(i.def), t = i.def.symbol.label ?? i.def.name;
+      return i.def.symbol.kind === 'box' && nameEligible(t, w, h) ? [{ k, t, box: { cx: blocks[k].x + w / 2, cy: blocks[k].y + h / 2, w, h, chars: t.length, rot: nameRotated(w, h), text: t, ports: Object.keys(symbolGeom(i.def).ports).length } }] : [];
+    });
+    const plan = planLayouts(boxes.map((b) => b.box), 2.4, 10, blocks, wires);
+    boxes.forEach((b, n) => {
+      const l = plan[n]!;
+      if (b.t === 'UNPACK') expect(l).toMatchObject({ lines: ['UNPK'] });
+      // (a large name over a wide, sparsely pinned block is the CPU top's kind and is not held to this)
+      if (l.over && l.px <= NAME_OVER_MAX_PX) {
+        const r = nameRect(b.box, l, 2.4), own = blocks[b.k];
+        for (const [ax, ay, bx, by] of wires) {
+          const x0 = Math.max(Math.min(ax, bx), r.x), x1 = Math.min(Math.max(ax, bx), r.x + r.w), y0 = Math.max(Math.min(ay, by), r.y), y1 = Math.min(Math.max(ay, by), r.y + r.h);
+          if (x0 > x1 || y0 > y1) continue;
+          expect(x0 >= own.x && x1 <= own.x + own.w && y0 >= own.y && y1 <= own.y + own.h, b.t + ' spills over a wire').toBe(true);
+        }
+      }
+    });
+  });
+});
+
+describe('isConstantDef', () => {
+  const part = (ref: PartRef) => { const d = partDef(ref, () => undefined); if ('error' in d) throw new Error(String(d.error)); return d as ComponentDef; };
+  it('is true for constWord, the sandbox constant and the tie cells, and for the CSR unit constants', () => {
+    expect(isConstantDef(constWord(32, 0x1800))).toBe(true);
+    expect(isConstantDef(constWord(32, 0))).toBe(true);
+    expect(isConstantDef(TIE0)).toBe(true);
+    expect(isConstantDef(part({ const: { width: 8, value: 5 } }))).toBe(true);
+    const csrConsts = CSR_UNIT.netlist!().instances.filter((i) => /^k_|^zero32|^k[TE]$|^misa$|^ones$/.test(i.name));
+    expect(csrConsts.length).toBeGreaterThanOrEqual(16);
+    for (const c of csrConsts) expect(isConstantDef(c.def), c.name).toBe(true);
+  });
+  it('is false for a key, an LED, a display or a probe, though they are one-port boxes with a label too', () => {
+    expect(isConstantDef(keyPart('Space'))).toBe(false);
+    for (const ref of [{ display: 'led' }, { display: 'hex', width: 8 }, { display: 'halt' }, { key: 'a' }, { switches: 4 }] as PartRef[]) expect(isConstantDef(part(ref)), JSON.stringify(ref)).toBe(false);
   });
 });

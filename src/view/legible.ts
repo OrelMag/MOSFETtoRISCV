@@ -38,7 +38,7 @@ const NAME_EM = 0.68, NAME_LINE = 1.25;
 const NAME_PAD = 4;
 
 /** A block that may carry a fixed-size name: grid units. `text` (else `chars` letters) is what is drawn. */
-export interface NameBox { cx: number; cy: number; w: number; h: number; chars: number; rot: boolean; text?: string; ports?: number }
+export interface NameBox { cx: number; cy: number; w: number; h: number; chars: number; rot: boolean; text?: string; ports?: number; const?: boolean }
 
 /** Is this block's label worth a fixed name? Not: no label, one character (a constant, a bit), a small box. */
 export function nameEligible(label: string | null | undefined, w: number, h: number): boolean {
@@ -127,6 +127,9 @@ function nameSize(b: NameBox, l: NameLayout): { w: number; h: number } {
 interface Box { l: number; r: number; t: number; b: number }
 const crosses = (a: Box, k: Box) => a.l < k.r && a.r > k.l && a.t < k.b && a.b > k.t;
 
+/** A wire segment (grid units): x1, y1, x2, y2. */
+export type Seg = [number, number, number, number];
+
 /** The rectangle (grid units) a laid-out name covers. */
 export function nameRect(b: NameBox, l: NameLayout, scale: number): { x: number; y: number; w: number; h: number } {
   const { w, h } = nameSize(b, l);
@@ -148,7 +151,7 @@ export function planNames(boxes: NameBox[], scale: number, minBlockPx = 10): boo
  * size (at most NAME_OVER_MAX_PX, and no larger than the largest name inside a block) where it covers no other block and no name
  * kept before it (`blocks`: every block's grid rectangle, else the other named blocks), and last the text cut short with an ellipsis.
  */
-export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, blocks?: { x: number; y: number; w: number; h: number }[]): (NameLayout | null)[] {
+export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, blocks?: { x: number; y: number; w: number; h: number }[], wires: Seg[] = []): (NameLayout | null)[] {
   const out: (NameLayout | null)[] = boxes.map(() => null);
   if (!needsFixedNames(scale)) return out;
   const order = boxes.map((_, i) => i).sort((a, c) => boxes[c].w * boxes[c].h - boxes[a].w * boxes[a].h || a - c);
@@ -161,6 +164,14 @@ export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, bl
   const overMax = Math.max(MIN_TEXT_PX, Math.min(NAME_OVER_MAX_PX, Math.floor(maxIn)));
   for (const i of order) {
     const b = boxes[i];
+    if (b.const) {
+      // a constant's value at its label's own size (at least readable), over the capsule, clear of everything
+      const l: NameLayout = { px: Math.max(MIN_TEXT_PX, Math.min(NAME_PX, LABEL_UNITS * scale)), lines: [textOf(b)], over: true };
+      const r = asBox(nameRect(b, l, scale));
+      const isOwn = (k: Box) => Math.abs((k.l + k.r) / 2 - b.cx) < 0.01 && Math.abs((k.t + k.b) / 2 - b.cy) < 0.01;
+      if (!kept.some((k) => crosses(r, k)) && !all.some((k) => !isOwn(k) && crosses(r, k))) { kept.push(r); out[i] = l; }
+      continue;
+    }
     if (Math.max(b.w, b.h) * scale < minBlockPx) continue;
     const full = textOf(b), short = abbreviate(full);
     const texts = short === full ? [full] : [full, short];
@@ -173,6 +184,15 @@ export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, bl
     let pick: NameLayout | null = null;
     // inside the block first, the abbreviation before anything wider than the block, then wider than it
     // (a full name that spills only a little is kept over its abbreviation)
+    // a quiet spill over a routed wire (outside its own block) reads as part of the wire: the abbreviation inside the block wins
+    const wireFree = (l: NameLayout) => {
+      const r = nameRect(b, l, scale), m = 0.2 / 1, own = { x: b.cx - b.w / 2, y: b.cy - b.h / 2 };
+      return !wires.some(([ax, ay, bx, by]) => {
+        const x0 = Math.max(Math.min(ax, bx), r.x - m), x1 = Math.min(Math.max(ax, bx), r.x + r.w + m), y0 = Math.max(Math.min(ay, by), r.y - m), y1 = Math.min(Math.max(ay, by), r.y + r.h + m);
+        if (x0 > x1 || y0 > y1) return false;
+        return !(x0 >= own.x - 1e-6 && x1 <= own.x + b.w + 1e-6 && y0 >= own.y - 1e-6 && y1 <= own.y + b.h + 1e-6);
+      });
+    };
     const spill = (l: NameLayout) => maxChars(l.lines) * l.px * NAME_EM - (b.rot ? b.h : b.w) * scale;
     // wider than the quiet size, up to the largest name inside a block, only for a block that can carry it (LARGE_BLOCK_PX) and
     // where no other block, name or tag is under it
@@ -186,12 +206,12 @@ export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, bl
       }
       return null;
     };
-    const over = (t: string, mild: boolean) => {
-      for (const l of overLayouts(b, t, overMax)) if ((!mild || spill(l) <= NAME_SPILL_PX) && free(l) && others(l)) return l;
+    const over = (t: string, mild: boolean, clearOfWires = false) => {
+      for (const l of overLayouts(b, t, overMax)) if ((!mild || spill(l) <= NAME_SPILL_PX) && free(l) && others(l) && (!clearOfWires || wireFree(l))) return l;
       return null;
     };
     const fits = texts.map((t) => { const f = fitLayout(b, scale, t); return f && free(f) ? f : null; });
-    pick = (fits[0] && fits[0].px > overMax ? fits[0] : null) ?? large(full) ?? fits[0] ?? over(full, true) ?? fits[1] ?? over(full, false) ?? (texts.length > 1 ? over(short, false) : null);
+    pick = (fits[0] && fits[0].px > overMax ? fits[0] : null) ?? large(full) ?? fits[0] ?? (fits[1] ? over(full, true, true) : null) ?? fits[1] ?? over(full, true) ?? over(full, false) ?? (texts.length > 1 ? over(short, false) : null);
     for (const t of texts) {
       if (pick) break;
       const tr = truncLayout(b, scale, t);
@@ -250,6 +270,7 @@ export class Legibility {
   private tagBlocks: R[] = [];
   private tagK: (number | null)[] = [];
   private nameRects: R[] = [];
+  private wires: Seg[] = [];
   private tagScale = 0;
   /** Planning runs this long after the scale stopped changing (ms). */
   settleMs = 60;
@@ -266,6 +287,9 @@ export class Legibility {
     this.fontScale = 0;
     this.wasFixed = false;
   }
+
+  /** The routed wires' segments: a quiet name spilling over one gives way to its abbreviation. */
+  setWires(wires: Seg[]): void { this.wires = wires; }
 
   /** The net tags that may be enlarged (legible.ts planTags), and the blocks they must not cover. */
   setTags(tags: TagEl[], blocks: R[]): void {
@@ -347,7 +371,7 @@ export class Legibility {
     clearTimeout(this.timer);
     this.lastPlan = performance.now();
     this.planScale = this.scale;
-    const next = planLayouts(this.names.map((n) => n.box), this.scale, 10, this.tagBlocks.length ? this.tagBlocks : undefined);
+    const next = planLayouts(this.names.map((n) => n.box), this.scale, 10, this.tagBlocks.length ? this.tagBlocks : undefined, this.wires);
     this.shown = [];
     next.forEach((l, i) => {
       const v = l !== null, t = this.names[i].t;
