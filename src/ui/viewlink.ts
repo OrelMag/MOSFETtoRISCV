@@ -9,7 +9,7 @@
 // A link without the suffix opens exactly as before. DOM-free apart from the clipboard helper; the stage reads and applies it.
 
 /** The public site, for a link made from the desktop program's app:// page (same as editor/files.ts SITE_URL; a test holds them equal). */
-export const SITE_URL = 'https://orelmag.github.io/MOSFETtoRISCV/';
+export const SITE_URL = 'https://switchtocpu.com/';
 
 export interface ProbeRef {
   /** Instance names from the root to the level the net is in. */

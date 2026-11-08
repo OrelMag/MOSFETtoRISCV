@@ -17,7 +17,7 @@ export const SHARE_WARN = 32 * 1024;
 export const shareHash = (payload: string) => `#/sandbox/${SHARE_SEG}/${payload}`;
 
 /** The public site: where a link made outside the web (the desktop program's app:// page) points. */
-export const SITE_URL = 'https://orelmag.github.io/MOSFETtoRISCV/';
+export const SITE_URL = 'https://switchtocpu.com/';
 
 /** The full link: the page's URL without its hash (the public site if the page is not on the web), plus the share route. */
 export const shareUrl = (href: string, payload: string) =>
