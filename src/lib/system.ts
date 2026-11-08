@@ -312,7 +312,8 @@ export function csrUnit(m = false): ComponentDef {
   // read multiplexer, the read-modify-write chain and the interrupt gating on the right; `new` goes back over the top.
   for (const [d, nm] of [['z3.y', 'z3'], ['z7.y', 'z7'], ['z20.y', 'z20'], ['z2.y', 'z2'], ['csrWrite', 'csrWrite']] as const) merged.find((n) => n.ends[0] === d)!.name = nm;
   const POS: Record<string, [number, number]> = {
-    known: [50, 2], enc0: [50, 40], enc1: [50, 60], enc2: [50, 80], enc3: [50, 100], idx: [62, 60],
+    // the encoders one unit off the comparators' rows' parity: their taps never share a line with a row (see the crossbar)
+    known: [50, 2], enc0: [50, 41], enc1: [50, 61], enc2: [50, 81], enc3: [50, 101], idx: [62, 60],
     nv: [58, 6], gnd: [60, 14], vdd: [60, 30], tm: [60, 22],
     mMIE: [64, 2], mMPIE: [64, 17], enS: [64, 31], rMIE: [76, 5], rMPIE: [76, 20],
     z3: [88, 2], mpp: [88, 12], z19: [88, 14], vStatus: [98, 2], w_mstatus: [56, 36],
@@ -359,12 +360,29 @@ export function csrUnit(m = false): ComponentDef {
       if (tags) n.tags = tags;
       else delete n.tags;
     };
-    // the select signals fan out into a crossbar (known, the index encoders, the write gates): pointers at the sinks
-    for (const [n] of CSR_ORDER) {
+    // the select crossbar: each comparator's row runs right to a lane of its own between the comparators and the ORs
+    // (known, the index encoders), and the lane taps straight into its OR inputs; the write gates sit by their registers,
+    // so those stay pointers. A row and another select's tap can fall on one line: the tap's lane then lies right of the
+    // row's lane (so the two never share a stretch), the lanes otherwise in the comparators' order.
+    const xbar = CSR_ORDER.map(([n]) => {
       const net = byDrv(sel[n]);
       net.name = `is_${n}`;
-      wire(net, {}, net.ends.slice(1));
+      const taps = net.ends.slice(1).filter((e) => /^(known|enc\d)\./.test(e));
+      const P2 = (e: string) => portAt(e.split('.')[0], e.split('.')[1]);
+      return { net, taps, row: P2(net.ends[0]), ys: taps.map((e) => P2(e)[1]), P2 };
+    });
+    const rightOf = xbar.map((t) => new Set(xbar.flatMap((r, k) => (r !== t && t.ys.includes(r.row[1]) ? [k] : []))));
+    const order: number[] = [];
+    while (order.length < xbar.length) {
+      const k = xbar.findIndex((_, i) => !order.includes(i) && [...rightOf[i]].every((j) => order.includes(j)));
+      if (k < 0) throw new Error('csrUnit: the select crossbar has no lane order');
+      order.push(k);
     }
+    const lane0 = xbar[0].row[0] + 3, laneStep = Math.min(1.5, (portAt('known', 'i0')[0] - 4 - lane0) / (xbar.length - 1));
+    order.forEach((k, slot) => {
+      const t = xbar[k], x = lane0 + slot * laneStep;
+      wire(t.net, Object.fromEntries(t.taps.map((e) => [e, [[x, t.row[1]], [x, t.P2(e)[1]]] as [number, number][]])), t.net.ends.slice(1).filter((e) => !t.taps.includes(e)));
+    });
     // the address: a lane down each column of comparators, in from the left
     const addr = merged.find((n) => n.name === undefined && n.ends[0] === 'addr')!;
     addr.name = 'addr';
@@ -610,9 +628,9 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   };
   const alignY = (inst: string, def: ComponentDef, x: number, port: string, y: number) => place(inst, def, [x, y - g(def).ports[port].pos[1]]);
 
-  // The plain system is drawn with wires (see the block after the nets); the core with ports, the M extension and the
-  // bus keep the author's pointers and their original placement.
-  const wired = !ports && !m && !busK;
+  // The system is drawn with wires (see the block after the nets), the M extension's and the bus's parts in the free
+  // corner right of the CSRs; the core with ports keeps the author's pointers and its original placement.
+  const wired = !ports;
   const Y = 36;
   alignY('pcmux', M4, wired ? 5 : 0, 'y', Y);
   alignY('trapmux', M4, wired ? 13 : 10, 'd0', Y);
@@ -622,8 +640,8 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   const romG = IM ? g(IM) : symbolGeom({ id: 'romgeom', name: '', category: 'memory', ports: [bus('addr', 32, 'in'), bus('data', 32, 'out')], symbol: { kind: 'box', label: 'INSTR MEM' } });
   const romData: [number, number] = [36 + romG.ports.data.pos[0], P('pc', 'q')[1] - romG.ports.addr.pos[1] + romG.ports.data.pos[1]];
   if (IM) alignY('imem', IM, 36, 'addr', P('pc', 'q')[1]);
-  alignY('si', SI, 56 + (busK ? 4 : 0), 'in', romData[1]);
-  alignY('rf', RF, 74 + (busK ? 4 : 0), 'wa', P('si', 'o1')[1]);
+  alignY('si', SI, 56, 'in', romData[1]);
+  alignY('rf', RF, 74, 'wa', P('si', 'o1')[1]);
   if (wired) place('imm', IMM_GEN, [82, 62]); else alignY('imm', IMM_GEN, 70, 'instr', Y + 22);
   const rfR = at.get('rf')![0] + g(RF).w;
   alignY('srcA', M2, rfR + 8, 'a', P('rf', 'rd1')[1]);
@@ -634,8 +652,10 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   // the bus's memory unit is a tall box: room for the labels between it and the store alignment
   const dmX = wired ? 172 : aluR + 30 + (busK ? 16 : 0);
   if (!ports) alignY('dm', DM, dmX, 'addr', P('alu', 'y')[1]);
-  if (wired) place('io', IO_UNIT, [174, 68]); else alignY('io', IO_UNIT, aluR + 30, 'addr', Y + 70);
-  alignY('ldsel', M2, dmX + g(DM).w + (wired ? 10 : 8), 'a', ports ? P('alu', 'y')[1] : P('dm', 'rdata')[1]);
+  // the bus's memory unit is taller than the data memory: the I/O unit goes below it
+  if (wired) place('io', IO_UNIT, [174, busK ? 74 : 68]); else alignY('io', IO_UNIT, aluR + 30, 'addr', Y + 70);
+  // the bus's memory unit has a column of outputs on its right: room for their labels and the I/O read's lane
+  alignY('ldsel', M2, dmX + g(DM).w + (wired ? (busK ? 18 : 10) : 8), 'a', ports ? P('alu', 'y')[1] : P('dm', 'rdata')[1]);
   alignY('ld', LOAD_EXTRACT, P('ldsel', 'y')[0] + 10, 'rdata', P('ldsel', 'y')[1]);
   alignY('res', M8, P('ld', 'value')[0] + 8, 'd1', P('ld', 'value')[1]);
   place('plus4', P4, [36, Y - 10]);
@@ -674,6 +694,8 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
     rsrc: [224, 62], addr2: [140, 58], size: [140, 64], ldMis: [112, 132], stMis: [112, 138], isLoad: [98, 127], nres1: [94, 132], taken: [84, 139],
     tgt1: [98, 142], fMis: [112, 126], psplit: [78, 139], rssplit: [92, 127], z32: [204, 72], isIO: [152, 66],
   };
+  // the I/O write's gate follows the I/O unit down (the bus)
+  GLUE.ioWq = [GLUE.ioWq[0], GLUE.ioWq[1] + at.get('io')![1] - 68];
   for (const [n, d] of glue) place(n, d, wired ? GLUE[n] : gridAt());
 
   const labels: Record<string, string> = { pcmux: 'next PC', trapmux: 'trap / mret', pc: 'PC', srcA: 'SrcA', srcB: 'SrcB', res: 'result', target: 'PC + imm', ldsel: 'mem / I/O', sys: 'system decode', csr: 'CSRs', trap: 'trap unit', io: 'I/O' };
@@ -847,7 +869,7 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
     // ALUResult: along the row to the memory, a lane down at 138 for the rest, over the top to the result mux
     const XA = 138, ay = P('alu', 'y')[1];
     route('ALUResult', {
-      'res.d0': [[XA, ay], [XA, 33], [222.5, 33], [222.5, P('res', 'd0')[1]]],
+      'res.d0': [[XA, ay], [XA, 33], [P('res', 'd0')[0] - 7.5, 33], [P('res', 'd0')[0] - 7.5, P('res', 'd0')[1]]],
       'clr0.in': [[XA, ay], [XA, P('clr0', 'in')[1]]],
       'addr2.in': [[XA, ay], [XA, P('addr2', 'in')[1]]],
       'isIO.in': [[XA, ay], [XA, P('isIO', 'in')[1]]],
@@ -863,7 +885,8 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
     route('ByteEn', { 'dm.be': [[sb[0] + 4, sb[1]], [sb[0] + 4, P('dm', 'be')[1]]] });
     // the read side: the I/O devices' word and the memory's meet in a mux, whose select comes up from below
     const ir = P('io', 'rdata');
-    route('IORead', { 'ldsel.b': [[ir[0] + 2, ir[1]], [ir[0] + 2, P('ldsel', 'b')[1]]] });
+    const xIr = busK ? P('ldsel', 'b')[0] - 3 : ir[0] + 2;
+    route('IORead', { 'ldsel.b': [[xIr, ir[1]], [xIr, P('ldsel', 'b')[1]]] });
     const cr = P('csr', 'rdata'), rd4 = P('res', 'd4');
     route('CSRRead', { 'res.d4': [[cr[0] + 1.5, cr[1]], [cr[0] + 1.5, 126], [rd4[0] - 2.5, 126], [rd4[0] - 2.5, rd4[1]]] });
     // control: each signal straight out of its port, then up to its unit
@@ -891,7 +914,7 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   const pins: Record<string, [number, number]> = { clk: [0, yS - 10], switches: [0, yS - 6], irq: [0, yS - 2], pcOut: [P('res', 'y')[0] + 20, yS - 10], consoleData: [P('res', 'y')[0] + 20, yS - 6], consoleValid: [P('res', 'y')[0] + 20, yS - 2], leds: [P('res', 'y')[0] + 20, yS + 2] };
   if (wired) {
     const xR = P('res', 'y')[0] + 20;
-    Object.assign(pins, { clk: [0, 100], switches: [166, 78], irq: [146, 140], pcOut: [xR, 30.5], consoleData: [xR, P('io', 'consoleData')[1]], consoleValid: [xR, P('io', 'consoleValid')[1]], leds: [xR, P('io', 'leds')[1]] });
+    Object.assign(pins, { clk: [0, 100], switches: [166, 78 + at.get('io')![1] - 68], irq: [146, 140], pcOut: [xR, 30.5], consoleData: [xR, P('io', 'consoleData')[1]], consoleValid: [xR, P('io', 'consoleValid')[1]], leds: [xR, P('io', 'leds')[1]] });
     }
   if (ports) {
     // ---- a core with ports: the ROM and the data memory outside, only the timer's registers inside
@@ -944,16 +967,21 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
     pins.instr = romData;
     Object.assign(pins, { memAddr: [xR, yS + 10], memWData: [xR, yS + 14], memBE: [xR, yS + 18], memWE: [xR, yS + 22], memRE: [xR, yS + 26], memRData: [0, yS + 6] });
   }
+  /** The stall into the PC's enable and the register write: its labels under the ports (the PC sits close to the trap multiplexer). */
+  const retireTags = (): NetDef['tagAt'] => ({ 'pc.en': [P('pc', 'en')[0], P('pc', 'en')[1] + 3], 'rwm.b': [P('rwm', 'b')[0], P('rwm', 'b')[1] + 3] });
   if (m) {
     // ---- M extension: the multiply/divide unit, a result multiplexer, and the stall it causes
     const xM = P('res', 'y')[0] + 8, yM = yS + Math.max(g(CSRU).h, g(SYSD).h) + 16;
     const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); at.set(name, xy); };
-    add('md', MDU, [4 + g(SYSD).w + 24, yM], 'M unit');
+    // wired: the unit in the free corner right of the CSRs, its stall and busy gates beside its outputs, the register
+    // write's AND next to the one it follows; the ALU / M multiplexer right after the result multiplexer
+    const [mdX, mdY] = [212, 100];
+    add('md', MDU, wired ? [mdX, mdY] : [4 + g(SYSD).w + 24, yM], 'M unit');
     add('mres', M2, [xM, P('res', 'y')[1] - g(M2).ports.a.pos[1]], 'ALU / M');
-    add('nstall', NOT, gridAt());
-    add('rwm', AND, gridAt());
-    add('nbusy', NOT, gridAt());
-    add('irqg', AND, gridAt());
+    add('nstall', NOT, wired ? [mdX + 18, mdY + g(MDU).ports.stall.pos[1] - 1] : gridAt());
+    add('rwm', AND, wired ? [P('rwq', 'y')[0] + 2, at.get('rwq')![1]] : gridAt());
+    add('nbusy', NOT, wired ? [mdX + 24, mdY + g(MDU).ports.busy.pos[1] - 1] : gridAt());
+    add('irqg', AND, wired ? [mdX + 30, mdY + g(MDU).ports.busy.pos[1] + 1] : gridAt());
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     const net = (name: string) => nets.find((n) => n.name === name)!;
     nets.splice(nets.indexOf(net('en')), 1);
@@ -966,17 +994,25 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
     net('NoTrap').ends.push('md.noTrap');
     net('clk').ends.push('md.clk');
     (net('clk').tags as string[]).push('md.clk');
+    // wired: wires between neighbours; pointers for the long ways (the decode's isM, the stall back to the PC and the
+    // register write, the gated interrupt into the trap unit, the operands into the unit)
+    const w = (tags: NetDef['tags']) => (wired ? {} : { tags });
     nets.push(
       { name: 'isM', ends: ['sys.isM', 'md.isM', 'mres.s'], tags: true },
-      { name: 'MResult', ends: ['md.y', 'mres.b'], tags: true },
-      { name: 'WriteBack', ends: ['mres.y', 'rf.wd'], tags: true },
-      { name: 'stall', ends: ['md.stall', 'nstall.a'], tags: true },
-      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwm.b', 'retire'], tags: ['pc.en', 'rwm.b', 'retire'] },
-      { name: 'RegWriteQ', ends: ['rwm.y', 'rf.we'], tags: true },
-      { name: 'divBusy', ends: ['md.busy', 'nbusy.a'], tags: true },
-      { name: '¬divBusy', ends: ['nbusy.y', 'irqg.b'], tags: true },
+      { name: 'MResult', ends: ['md.y', 'mres.b'], ...w(true) },
+      { name: 'WriteBack', ends: ['mres.y', 'rf.wd'], ...w(true) },
+      { name: 'stall', ends: ['md.stall', 'nstall.a'], ...w(true) },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwm.b', 'retire'], tags: wired ? ['pc.en', 'rwm.b'] : ['pc.en', 'rwm.b', 'retire'], ...(wired ? { tagAt: retireTags() } : {}) },
+      { name: 'RegWriteQ', ends: ['rwm.y', 'rf.we'], ...w(true) },
+      { name: 'divBusy', ends: ['md.busy', 'nbusy.a'], ...w(true) },
+      { name: '¬divBusy', ends: ['nbusy.y', 'irqg.b'], ...w(true) },
       { name: 'irqTakeQ', ends: ['irqg.y', 'trap.irq'], tags: true },
     );
+    if (wired) {
+      for (const n of ['rd1', 'WriteData']) { const t = net(n).tags; net(n).tags = [...(Array.isArray(t) ? t : []), n === 'rd1' ? 'md.a' : 'md.b']; }
+      if (Array.isArray(net('funct3').tags)) (net('funct3').tags as string[]).push('md.funct3');
+      if (Array.isArray(net('NoTrap').tags)) (net('NoTrap').tags as string[]).push('md.noTrap');
+    }
     pins.retire = [P('res', 'y')[0] + 20, yS + 6];
   }
   if (ports) {
@@ -992,16 +1028,19 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   if (busK) {
     // ---- memory over the bus: instructions beyond the ROM and every load / store through dm (busMemUnit)
     const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); at.set(name, xy); };
-    add('memRd', andN(3), gridAt(), 'a load');
-    add('nstall', NOT, gridAt());
-    add('rwm', AND, gridAt());
-    add('irqg', AND, gridAt());
+    // wired: the stall and the gated interrupt in the free corner right of the CSRs, the load request beside them, the
+    // register write's AND next to the one it follows
+    const [gX, gY] = [212, 96];
+    add('memRd', andN(3), wired ? [gX, gY] : gridAt(), 'a load');
+    add('nstall', NOT, wired ? [gX, gY + 10] : gridAt());
+    add('rwm', AND, wired ? [P('rwq', 'y')[0] + 2, at.get('rwq')![1]] : gridAt());
+    add('irqg', AND, wired ? [gX, gY + 16] : gridAt());
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     const net = (name: string) => nets.find((n) => n.name === name)!;
     nets.splice(nets.indexOf(net('en')), 1);
     net('Instr').ends = ['dm.instr', ...net('Instr').ends.filter((e) => e !== 'imem.data')];
     net('PC').ends.push('dm.pc');
-    (net('PC').tags as string[]).push('dm.pc');
+    { const t = net('PC').tags; net('PC').tags = [...(Array.isArray(t) ? t : []), 'dm.pc']; }
     net('isLoad').ends.push('memRd.i0');
     net('notIO').ends.push('memRd.i1');
     net('NoTrap').ends.push('memRd.i2');
@@ -1011,11 +1050,27 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
       { name: 'BootROM', ends: ['imem.data', 'dm.romData'], tags: ['dm.romData'] },
       { name: 'LoadReq', ends: ['memRd.y', 'dm.re'], tags: true },
       { name: 'stall', ends: ['dm.stall', 'nstall.a'], tags: true },
-      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwm.b', 'retire'], tags: ['pc.en', 'rwm.b', 'retire'] },
-      { name: 'RegWriteQ', ends: ['rwm.y', 'rf.we'], tags: true },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwm.b', 'retire'], tags: wired ? ['pc.en', 'rwm.b'] : ['pc.en', 'rwm.b', 'retire'], ...(wired ? { tagAt: retireTags() } : {}) },
+      { name: 'RegWriteQ', ends: ['rwm.y', 'rf.we'], ...(wired ? {} : { tags: true as const }) },
       { name: 'irqOk', ends: ['dm.irqOk', 'irqg.b'], tags: true },
       { name: 'irqTakeQ', ends: ['irqg.y', 'trap.irq'], tags: true },
     );
+    // wired: the instruction comes out of the memory unit, right of the datapath: a pointer there, the wires to the
+    // fields as before
+    if (wired) {
+      const instr = net('Instr');
+      instr.tags = true;
+      delete instr.via;
+      // the load request's inputs come from the exception gates and the I/O decode, across the datapath
+      net('isLoad').tags = ['memRd.i0'];
+      net('notIO').tags = ['memRd.i1'];
+      // the wider memory unit sits on the low address bits' straight way to the load extractor
+      net('addr[1:0]').tags = ['ld.addr'];
+      // labels clear of their neighbours: the boot ROM's word above the ROM (the decode's input is beside it), the
+      // misaligned flag under the store aligner (the bus's inputs face it)
+      net('BootROM').tagAt = { 'imem.data': [P('imem', 'data')[0], P('imem', 'data')[1] - 3] };
+      net('misaligned').tagAt = { 'st.misaligned': [P('st', 'misaligned')[0], P('st', 'misaligned')[1] + 3] };
+    }
     pins.retire = [P('res', 'y')[0] + 20, yS + 6];
     // the bus: the port's channels at the CPU's pins
     const xB = P('res', 'y')[0] + 20;
