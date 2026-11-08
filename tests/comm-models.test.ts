@@ -5,7 +5,7 @@ import { bestClos, capacityAt, clos, crossbarCrosspoints, erlangB, foldedCrosspo
 import { EBN0_MIN, dbToRatio, ebn0AtCapacity, levelsSupported, minBandwidth, nyquistBitRate, ratioToDb, shannon, shannonDb, snrNeeded } from '../src/comm/limits';
 import { ITA2_START_STOP, UART_8N1, frameUnits, levelAt, parityBit, receive, segments, stopIndex, tolerance, toleranceClosedForm } from '../src/comm/startstop';
 import { RELAY, relayStatic } from '../src/phys/relay';
-import { PULL_I, PULL_V, loopCurrent, margin, ohmsPerKm, reachKm, reachWithRepeaters, repeaterDelayMs } from '../src/phys/telegraph';
+import { PULL_I, PULL_V, SOUNDER, SOUNDER_R, loopCurrent, margin, ohmsPerKm, reachKm, reachWithRepeaters, repeaterDelayMs } from '../src/phys/telegraph';
 
 describe('Morse and ITA2', () => {
   it('PARIS and the word gap after it are 50 units, the definition of words a minute', () => {
@@ -73,8 +73,10 @@ describe('the telegraph line', () => {
     expect(ohmsPerKm('iron') / ohmsPerKm('copper')).toBeCloseTo(1e-7 / 1.68e-8, 9);
   });
   it('pull-in current is the relay model\'s pull-in voltage over its coil', () => {
-    expect(PULL_V).toBe(relayStatic().pull);
-    expect(PULL_I).toBeCloseTo(PULL_V / RELAY.Rc, 12);
+    expect(PULL_I).toBeCloseTo(relayStatic().pull! / RELAY.Rc, 12);
+    expect(PULL_V).toBeCloseTo(PULL_I * SOUNDER_R, 12);
+    // rewound to the sounder's resistance the force balance gives the same current (it is in ampere-turns); 10 mV search steps
+    expect(relayStatic(SOUNDER).pull! / SOUNDER_R).toBeCloseTo(PULL_I, 3);
   });
   it('reach is where the current falls to the pull-in current, and repeaters add sections', () => {
     for (const V of [24, 48, 120]) for (const m of ['iron', 'copper'] as const) {
