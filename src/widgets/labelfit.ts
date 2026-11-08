@@ -86,7 +86,10 @@ export function declutterLabels(els: readonly HTMLElement[], opts: LabelOptions 
     if (side) {
       const across = side === 'l' || side === 'r';
       const out = across ? t.l < frame.l + EDGE || t.r > frame.r - EDGE : t.t < frame.t + EDGE || t.b > frame.b - EDGE;
-      const deepIn = across ? t.l > frame.l + UNFLIP && t.r < frame.r - UNFLIP : t.t > frame.t + UNFLIP && t.b < frame.b - UNFLIP;
+      // across, a flipped text waits until its own side is well inside (a running model's label would swap at every
+      // frame); above or below, a text near the edge is common (a label over the top of a model), so it goes back as
+      // soon as its own side fits
+      const deepIn = across ? t.l > frame.l + UNFLIP && t.r < frame.r - UNFLIP : t.t > frame.t + EDGE + 2 && t.b < frame.b - EDGE - 2;
       const was = m.flip;
       m.flip = m.flip ? !deepIn : out;
       if (m.flip) {
