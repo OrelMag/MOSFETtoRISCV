@@ -494,7 +494,7 @@ function nfSelect(f: FpFormat): ComponentDef {
     const sign = b.op1(MUX2, [sg1, b.op1(equal(3), ['rm', b.op1(K(3, RM.RDN), [], undefined, 'rdnk')], 'RDN?', 'rdn'), zero], 'x − x = +0 (−0 in RDN)', 'zsign');
     b.wire(sign, 'sign');
     b.wire(b.op1(busMux2(w), ['fm', 'nm', 'near'], 'select the path', 'msel'), 'm');
-    b.wire(b.op1(busMux2(XE), ['fe', 'ne', 'near'], undefined, 'esel'), 'e');
+    b.wire(b.op1(busMux2(XE), ['fe', 'ne', 'near'], 'and its exponent', 'esel'), 'e');
     const ports = [bus('nm', w, 'in'), bus('ne', XE, 'in'), bit('neg', 'in'), bit('eq', 'in'), bus('fm', w, 'in'), bus('fe', XE, 'in'), bit('near', 'in'), bit('ge', 'in'),
       bit('sa', 'in'), bit('signB', 'in'), bus('rm', 3, 'in'), bit('sign', 'out'), bus('e', XE, 'out'), bus('m', w, 'out')];
     return define({
