@@ -175,6 +175,12 @@ export const MODELS_3D: readonly Model3d[] = [
     files: ['mercury3d', 'mercury3dview', 'mercury3dparts'], factory: 'mercury3d', codex: ['refresh', 'dramtiming'],
     open: () => import('./mercury3d').then((m) => m.mercury3d()),
   },
+  {
+    id: 'disk', title: 'A hard disk', category: 'memory', chapter: 'flash', step: 4,
+    summary: 'Platters at 7200 rpm and a swinging arm: a sector read as seek, rotational latency and transfer, against a flash page read.',
+    files: ['disk3d', 'disk3dview', 'disk3dparts'], factory: 'disk3d', codex: ['ftl', 'wearlevel'],
+    open: () => import('./disk3d').then((m) => m.disk3d()),
+  },
 ];
 
 export const modelById = (id: string): Model3d | undefined => MODELS_3D.find((m) => m.id === id);
