@@ -212,6 +212,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./hierarchy3d').then((m) => m.hierarchy3d()),
   },
   {
+    id: 'sensordie', title: 'A sensor die, rolling and global', category: 'devices', chapter: 'sensors', step: 5,
+    summary: 'The IMX183 array to scale with row drivers, column ADCs and readout, capturing a propeller with a rolling or a global shutter.',
+    files: ['sensordie3d', 'sensordie3dview', 'sensordie3dparts'], factory: 'sensorDie3d',
+    open: () => import('./sensordie3d').then((m) => m.sensorDie3d()),
+  },
+  {
     id: 'valve', title: 'Inside the valve', category: 'analogies', chapter: 'mosfet', step: 1,
     summary: 'A diaphragm valve in cutaway: spring preload as the threshold, no flow through the gate at rest, and the CMOS pair.',
     files: ['valve3d', 'valve3dview', 'valve3dparts'], factory: 'valve3d', codex: ['cmos', 'inverter'],
