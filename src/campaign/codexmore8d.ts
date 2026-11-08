@@ -65,7 +65,7 @@ on the Gaussian channel: threshold between 1.01 and 1.16 dB, limit 0.19 dB
 
 operations at 2 dB on a 2016-bit word
 12 messages a round per data bit × 10.8 rounds ≈ 130 updates
-K = 7 Viterbi: 128 branch additions (64 add-compare-selects) a data bit</pre>A word of 504 bits at 2.4 dB already makes about 6 errors in 10 000, where K = 7 soft's bound is about 6 in 1000.`,
+K = 7 Viterbi: 128 branch additions (64 add-compare-selects) a data bit</pre>A word of 504 bits at 2.4 dB already makes about 6 errors in 10 000, where K = 7 soft's bound is about 6 in 1000.`,
     },
     mistakes: [
       'Echoing a check\'s own message back to it: the beliefs then grow with no new information, and a wrong one stops the decoder changing its mind.',
@@ -106,7 +106,7 @@ Reno:  4167 round trips to climb back, about 7 minutes
        and it needs under one loss in 4.6 × 10⁷ packets
 CUBIC: K = ∛(8333 × 0.3 / 0.4) ≈ 18.4 s
 
-at one loss in 10 000, 100 ms: Reno 122 packets, CUBIC 187</pre>CUBIC's average is (C (3 + β) / (4 (1 − β)))^¼ (RTT / p)^¾, 1.054 (RTT / p)^¾ at C = 0.4, β = 0.7.`,
+at one loss in 10 000, 100 ms: Reno 122 packets, CUBIC 187</pre>CUBIC's average is (C (3 + β) / (4 (1 − β)))^¼ (RTT / p)^¾, 1.054 (RTT / p)^¾ at C = 0.4, β = 0.7.`,
     },
     mistakes: [
       'Reading t as round trips: it is time since the last cut, so two flows with different round trips climb alike in seconds, which is what ends Reno\'s penalty on long paths.',
@@ -261,7 +261,7 @@ halving on the same marks: 76 % of the link</pre>The paper's safe bound on K is 
       title: 'What a loss costs, 100 Gb/s across 10 µs',
       body: `<pre>the pipe: W = 122 packets of 1 KB
 goodput = (1 − p) / (1 − p + W p)
-one loss in 100 000   99.88 %
+one loss in 100 000   99.88 %
 one loss in 1000      89 %    (selective repeat: 99.9 %)</pre>For small p goodput depends on W p, so four times the rate wants a quarter of the loss.`,
     },
     mistakes: [

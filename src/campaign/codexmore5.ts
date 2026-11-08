@@ -30,16 +30,16 @@ V.34's 3429 baud × 8 bits = 27.4 kb/s uncoded</pre>V.34's 33.6 kb/s came from t
     idea: `Over the megahertz it can pass, a copper pair is far from flat, and one fast carrier meets all of it. The alternative is many slow carriers, each narrow enough to see a nearly flat channel. Choose the tones to fit a whole number of cycles in a block of N samples and any two have zero overlap over the block: Σ e<sup>j2π(k−m)n/N</sup> = 0 unless k = m. They are <b>orthogonal</b> though their spectra overlap heavily, so a tone is read by correlating with it and no guard band is spent. Correlating with every tone is the discrete Fourier transform, X[k] = Σ x[n] e<sup>−j2πkn/N</sup>, and summing every tone with its QAM point as amplitude is its inverse. The modem is two transforms and no oscillators.<br><br>The definition costs N² complex multiplications. The <b>FFT</b> splits a transform of N into two of N/2 on the even and odd samples, joined by one multiplication per pair (a butterfly), and recursion leaves N/2 · log<sub>2</sub> N. What it buys is the whole equalizer: a channel is a convolution and the transform turns <i>circular</i> convolution into one multiplication per tone, Y[k] = H[k] X[k]. A real channel convolves linearly, so the sender copies the block's last samples in front of it, the <b>cyclic prefix</b>; if the prefix is at least as long as the echo, the receiver cuts it off and what remains is exactly circular, and each tone needs one complex division. ADSL gives every tone the bits its own SNR allows: b<sub>k</sub> = ⌊log<sub>2</sub>(1 + SNR<sub>k</sub> / Γ)⌋, from 0 to at most 15, where Γ is the gap to Shannon (10.0 dB uncoded at 10<sup>−7</sup>).`,
     example: {
       title: 'ADSL\'s numbers',
-      body: `<pre>512-point transform:  N² = 262 144 complex multiplications
-                       FFT: N/2 · log2 N = 256 · 9 = 2 304   (114 × fewer)
-256 tones × 4 312.5 Hz = 1.104 MHz
-512 × 4 312.5 Hz = 2.208 MHz of samples; prefix 32: 2.208 MHz / 544 = 4 058.8 blocks/s
-one sync block in 69 brings it to the 4 000 symbols/s the standard quotes
+      body: `<pre>512-point transform:  N² = 262 144 complex multiplications
+                       FFT: N/2 · log2 N = 256 · 9 = 2304    (114 × fewer)
+256 tones × 4312.5 Hz = 1.104 MHz
+512 × 4312.5 Hz = 2.208 MHz of samples; prefix 32: 2.208 MHz / 544 = 4058.8 blocks/s
+one sync block in 69 brings it to the 4000 symbols/s the standard quotes
 echo of 5 samples: error vector 19.2 % with no prefix, none with a prefix of 5</pre>Loaded by the chapter's illustrative loop: 3 km at −120 dBm/Hz gives 1682 bits a symbol, 6.73 Mb/s; 5 km gives 370 bits and 1.48 Mb/s. That is a negotiated rate, not a standard one.`,
     },
     mistakes: [
       'Making the cyclic prefix shorter than the channel\'s echo: the block is then not circular, tones leak into each other and no per-tone division can remove it.',
-      'Counting only the prefix as the overhead: the prefix (32 of 544 samples) and the sync block both lower the symbol rate, and the standard\'s 4 000 symbols/s already includes both.',
+      'Counting only the prefix as the overhead: the prefix (32 of 544 samples) and the sync block both lower the symbol rate, and the standard\'s 4000 symbols/s already includes both.',
       'Loading every tone with the same constellation: the SNR varies steeply across a copper pair, and a tone loaded above its SNR carries errors, not bits.',
     ],
     chapters: [
@@ -138,8 +138,8 @@ DFE                         34 %    2 × 10⁻¹⁷   (noise unchanged, 40 mV)</
       title: 'Check value, and what a frame risks',
       body: `<pre>CRC-32("123456789") = 0xCBF43926
 bit-serial unit        795 NANDs, 16 delays → 0.40 ns, 2.50 GHz  =  2.5 Gb/s
-byte-wide unit       1 027 NANDs, 22 delays →         1.82 GHz  = 14.5 Gb/s (5.8×)
-1500-byte frame, 12 032 bits, 63 Mb/s: 5 260 frames/s
+byte-wide unit       1027 NANDs, 22 delays →         1.82 GHz  = 14.5 Gb/s (5.8×)
+1500-byte frame, 12 032 bits, 63 Mb/s: 5260 frames/s
 if every frame were garbage, one passes every 2³² / 5260 s = 9.5 days</pre>Real garbage is rarer than that: a stuck driver, a truncated or mis-addressed frame is what the 2<sup>−32</sup> figure is for. For random single-bit errors at 10<sup>−6</sup>, 1.2 % of those frames arrive damaged and the check misses essentially none.`,
     },
     mistakes: [
@@ -181,8 +181,8 @@ selective repeat, ideal: 1 − p = 99 %</pre>`,
     example: {
       title: 'What the decoder costs, and what it gains',
       body: `<pre>encoder K = 3 42 NANDs        K = 7 122 NANDs
-decoder K = 3, hard    3 118 NANDs        K = 7 (64 states, 70-bit survivors)  101 094 NANDs
-K = 7 with 3-bit soft levels  110 578 NANDs (+9 %), about 2.4 dB less signal needed
+decoder K = 3, hard    3118 NANDs        K = 7 (64 states, 70-bit survivors)  101 094 NANDs
+K = 7 with 3-bit soft levels  110 578 NANDs (+9 %), about 2.4 dB less signal needed
 at 10⁻⁵, uncoded BPSK needs 9.59 dB E_b/N_0; K = 7 gains 3.1 dB hard, 5.4 dB soft, at rate ½</pre>5.4 dB is a link that needs about a third of the transmit power or reaches 1.9 times as far in free space. K = 7 soft at 10<sup>−5</sup> still sits 4.0 dB above Shannon's rate-½ limit.`,
     },
     mistakes: [
@@ -202,8 +202,8 @@ at 10⁻⁵, uncoded BPSK needs 9.59 dB E_b/N_0; K = 7 gains 3.1 dB hard, 5.4 dB
       title: 'RS(255, 223): bytes, bursts, gates',
       body: `<pre>255 − 223 = 32 check bytes → t = 16 wrong bytes
 burst of 121 bits: 1 + 15 · 8 bits touches at most 16 bytes → corrected
-encoder  10 check bytes   2 356 NANDs        32 check bytes   7 452 NANDs
-syndromes, 10 roots       2 366 NANDs        general GF(256) multiplier  416 NANDs
+encoder  10 check bytes   2356 NANDs        32 check bytes   7452 NANDs
+syndromes, 10 roots       2366 NANDs        general GF(256) multiplier  416 NANDs
 RS coding gain at 10⁻⁵ (hard decisions) 3.4 dB</pre>The encoder's output on the published QR example message equals the published check bytes.`,
     },
     mistakes: [

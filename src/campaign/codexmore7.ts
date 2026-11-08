@@ -39,7 +39,7 @@ so one engine could serve 17 ports of that link</pre>The memory is 99.5 % of it:
     },
     mistakes: [
       'Recomputing the checksum at every hop: the sum is linear, so one constant addition does it; the router must still verify the old one.',
-      'Adding 0x0100 to the checksum field itself: it looks the same, and it is what RFC 1141 did. For a checksum of 0xFEFF it gives 0xFFFF where the sum says 0, since a sum of non-zero words is never 0. RFC 1624 is the correction: work on the complement. The next router would drop that one packet in 65 536.',
+      'Adding 0x0100 to the checksum field itself: it looks the same, and it is what RFC 1141 did. For a checksum of 0xFEFF it gives 0xFFFF where the sum says 0, since a sum of non-zero words is never 0. RFC 1624 is the correction: work on the complement. The next router would drop that one packet in 65 536.',
       'Answering a bad header with an ICMP error: the source address may be the very bit that was damaged, so a corrupted packet is dropped in silence.',
       'Thinking the slow path is an edge case: it is how the table is filled and how a traceroute works, and a flood of TTL-1 packets is an attack on it, so routers limit how fast it answers.',
     ],
