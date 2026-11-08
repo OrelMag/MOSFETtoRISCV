@@ -186,7 +186,9 @@ export function busCore(imemK = 7): ComponentDef {
         ...nl,
         pins: { ...nl.pins, romData: [im.at![0] + g.ports.data.pos[0], im.at![1] + g.ports.data.pos[1]] },
         instances: nl.instances.filter((i) => i.name !== 'imem'),
-        nets: nl.nets.map((n) => ({ ...n, ends: n.ends.filter((e) => e !== 'imem.addr').map(swap), tags: Array.isArray(n.tags) ? n.tags.filter((e) => e !== 'imem.addr').map(swap) : n.tags })),
+        // hand-placed labels follow their end (the boot ROM's word, now the romData pin)
+        nets: nl.nets.map((n) => ({ ...n, ends: n.ends.filter((e) => e !== 'imem.addr').map(swap), tags: Array.isArray(n.tags) ? n.tags.filter((e) => e !== 'imem.addr').map(swap) : n.tags,
+          ...(n.tagAt ? { tagAt: Object.fromEntries(Object.entries(n.tagAt).map(([e, p]) => [swap(e), p])) } : {}) })),
       };
     },
   });
