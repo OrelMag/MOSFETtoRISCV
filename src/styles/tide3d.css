@@ -1,0 +1,23 @@
+/* ---------- Kelvin's tide predictor (widgets/tide3dview.ts): materials and the harmonics table ---------- */
+.m3d {
+  --td-iron: light-dark(#6e727c, #565a66);
+  --td-brass: light-dark(#c19a3a, #e0b955);
+  --td-wood: light-dark(#a0703c, #7d5530);
+  --td-steel: light-dark(#a9b0bd, #b7bdca);
+  --td-cord: light-dark(#d9c9a0, #e6d8b0);
+  --td-paper: light-dark(#f2ead6, #e6dcc2);
+  --td-ink: light-dark(#1d2a55, #1b2650);
+  --td-trace: light-dark(#1d2a55, #7fa0ff);
+  --td-off: light-dark(#8a8f99, #6a6f7a);
+  --td-glass: light-dark(#bcd8e8, #a8c9de);
+}
+.td-cranks { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.td-cranks .btn { min-width: 38px; padding: 0 8px; font-variant-numeric: tabular-nums; }
+.td-lbl { font-size: 12.5px; color: var(--text-2); }
+.td-tab { width: 100%; border-collapse: collapse; font: 12px var(--font-mono); font-variant-numeric: tabular-nums; margin-top: 4px; }
+.td-tab th { text-align: right; font: 600 11px var(--font-ui); color: var(--text-2); padding: 1px 4px; }
+.td-tab td { text-align: right; padding: 1px 4px; color: var(--text); }
+.td-tab tr.off td { color: var(--muted); text-decoration: line-through; }
+.td-sel { font-size: 13px; }
+.m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+@media (pointer: coarse) { .td-cranks .btn { min-width: 40px; } }
