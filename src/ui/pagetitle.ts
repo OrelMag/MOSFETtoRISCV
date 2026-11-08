@@ -3,7 +3,9 @@
 
 import type { StepMeta } from '../chapters/meta';
 
-export const SITE_TITLE = 'From Switch to RISC-V and Beyond';
+export const SITE_TITLE = 'From Switch to CPU';
+/** The whole name: the home page's tab, share cards, the README. */
+export const SITE_FULL = 'From Switch to CPU: a RISC-V processor and beyond';
 
 /** What the address alone can name: most specific first. `chapter`: the chapter a `c` route opens, if it exists. */
 export function routeTitle(parts: string[], chapter?: { title: string; steps: StepMeta[] }): string[] {
@@ -26,8 +28,8 @@ export function routeTitle(parts: string[], chapter?: { title: string; steps: St
   }
 }
 
-/** "Most specific · … · From Switch to RISC-V and Beyond". */
-export const titleText = (names: string[]): string => [...names.filter(Boolean), SITE_TITLE].join(' · ');
+/** "Most specific · … · From Switch to CPU"; the home page alone: the whole name. */
+export const titleText = (names: string[]): string => names.some(Boolean) ? [...names.filter(Boolean), SITE_TITLE].join(' · ') : SITE_FULL;
 
 export function setPageTitle(...names: string[]): void {
   document.title = titleText(names);

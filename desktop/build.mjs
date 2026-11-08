@@ -16,7 +16,7 @@ await build({
   targets: Platform.WINDOWS.createTarget(['portable'], 1 /* x64 */),
   config: {
     appId: 'io.github.orelmag.mosfettoriscv',
-    productName: 'From Switch to RISC-V and Beyond',
+    productName: 'From Switch to CPU',
     copyright: '© Orel Magidish',
     extraMetadata: { version },
     directories: { output: 'release' },
