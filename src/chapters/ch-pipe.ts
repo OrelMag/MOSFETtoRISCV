@@ -13,6 +13,7 @@ import { cpuScene } from '../widgets/cpupanel';
 import { PY_PROGRAMS } from '../lang/pyprograms';
 import { pyScene } from '../widgets/python';
 import { assembly3d } from '../widgets/assembly3d';
+import type { AssemblyProgram } from '../widgets/assembly3dview';
 import { groupDigits } from '../sim/numfmt';
 import { OWN_ANSWER, OWN_COST, OWN_SOURCE } from '../widgets/owninstr';
 import type { Chapter } from './types';
@@ -48,6 +49,13 @@ export const HAZARDS = `# every kind of hazard, in order
         addi t6, zero, 98    # flushed
 skip:   addi a0, t5, 1
 halt:   j    halt`;
+
+/** The assembly line's programs (the step's and the codex model page's, so both show the same three). */
+export const ASSEMBLY_PROGRAMS: readonly AssemblyProgram[] = [
+  { id: 'indep', name: 'Independent instructions', source: INDEP },
+  { id: 'hazards', name: 'Every hazard, in order', source: HAZARDS },
+  { id: 'sum', name: 'The sum loop', source: src('sum') },
+];
 
 /** Bits a pipeline register of the five-stage CPU holds: the widths of its outputs, read from the circuit. */
 function regBits(name: string): number {
@@ -373,11 +381,7 @@ export const chPipeline: Chapter = {
         <p>The timing is not a picture of the idea: every cycle shown is checked against this chapter's own gate-level pipeline, stage by stage.
         What the drawing adds is only the factory.</p>
         <div class="try">Press <em>Next hazard</em> in the hazard program: first the stall, then the flush after it. Then run the sum loop and count the cycles a lap.</div>`,
-      widget: () => assembly3d([
-        { id: 'indep', name: 'Independent instructions', source: INDEP },
-        { id: 'hazards', name: 'Every hazard, in order', source: HAZARDS },
-        { id: 'sum', name: 'The sum loop', source: src('sum') },
-      ]),
+      widget: () => assembly3d(ASSEMBLY_PROGRAMS),
       more: {
         derive: `<p>Cycles = instructions + 4 (filling the line) + one per load-use stall + two per jump or taken branch. The line shows each
           term: the fill at the start, a single empty pallet per stall, two pulled per flush.</p>`,

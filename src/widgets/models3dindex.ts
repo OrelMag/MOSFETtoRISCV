@@ -130,6 +130,12 @@ export const MODELS_3D: readonly Model3d[] = [
     files: ['cable3d', 'cable3dview', 'cable3dparts'], factory: 'cable3d',
     open: () => import('./cable3d').then((m) => m.cable3d()),
   },
+  {
+    id: 'assembly', title: 'The pipeline as an assembly line', category: 'analogies', chapter: 'pipeline', step: 5,
+    summary: 'Five stations, a pallet per instruction: stalls as empty pallets, flushes pulled off, cycle for cycle as the gates.',
+    files: ['assembly3d', 'assembly3dview', 'assembly3dparts'], factory: 'assembly3d', codex: ['pipeline', 'hazards', 'stall', 'flush', 'loaduse'],
+    open: () => Promise.all([import('./assembly3d'), import('../chapters/ch-pipe')]).then(([m, c]) => m.assembly3d(c.ASSEMBLY_PROGRAMS)),
+  },
 ];
 
 export const modelById = (id: string): Model3d | undefined => MODELS_3D.find((m) => m.id === id);

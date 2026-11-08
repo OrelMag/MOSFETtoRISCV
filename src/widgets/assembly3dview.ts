@@ -71,7 +71,11 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
     if (c.flush) return `Cycle ${t}: ${n(E)} redirects the PC from Execute (a jump or taken branch). ${c.pulled.length} wrong-path instruction${c.pulled.length > 1 ? 's' : ''} pulled off the line (${[F, D].filter((s) => c.pulled.includes(s.seq)).map(n).join(' and ')}); Fetch restarts at the target.`;
     if (t === 0) return 'Cycle 0: power-on. The first instruction is being fetched; the other four stations are empty.';
     if (c.slots.every((s) => s.valid)) return `Cycle ${t}: the line is full, five instructions in flight; “${text(c.slots[4].pc)}” is retiring.`;
-    return `Cycle ${t}: ${c.slots.filter((s) => s.valid).length} of 5 stations hold an instruction${c.slots[2].valid ? '' : ' (a bubble is in Execute)'}.`;
+    // Every station holding a bubble, by name; "(flush)" when they are the two slots the last cycle's redirect emptied.
+    const empty = c.slots.map((s, i) => (s.valid ? '' : STATIONS[i])).filter(Boolean);
+    const why = t > 0 && L.plan[t - 1].flush ? ' (flush)' : '';
+    const where = empty.length === 1 ? `a bubble in ${empty[0]}` : `bubbles in ${empty.slice(0, -1).join(', ')} and ${empty[empty.length - 1]}`;
+    return `Cycle ${t}: ${5 - empty.length} of 5 stations hold an instruction; ${where}${why}.`;
   }
 
   function readout(): void {
