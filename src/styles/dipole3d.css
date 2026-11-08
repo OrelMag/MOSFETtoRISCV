@@ -1,0 +1,13 @@
+/* The half-wave dipole model: materials, scoped under .m3d (model3d.css holds the shared ones). */
+.m3d {
+  --dp-cu: light-dark(#b87333, #d68a4a);
+  --dp-ins: light-dark(#f1efe6, #e8e4d4);
+  --dp-pos: light-dark(#e02f24, #ff5a4a);
+  --dp-neg: light-dark(#1f5fe0, #4f8dff);
+  --dp-e1: light-dark(#c47a00, #ffb73a);
+  --dp-e2: light-dark(#7d3fc0, #c397ff);
+  --dp-pat: light-dark(#1f9a63, #3ecb8a);
+  --dp-src: light-dark(#3a3d45, #9aa3b5);
+  --dp-ghost: light-dark(#7b8296, #aab2c6);
+}
+.m3d .dp-btns .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
