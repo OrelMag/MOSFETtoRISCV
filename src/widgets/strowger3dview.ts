@@ -6,7 +6,7 @@ import '../styles/strowger3d.css';
 import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
-import { call, HOME, LEVELS, LINES, PULSE_MS, pulsesOf, stateAt, type Frame, type State } from '../phys/strowger';
+import { BREAK_MS, call, HOME, LEVELS, LINES, PULSE_MS, pulsesOf, release, stateAt, verticalPulling, type Frame, type State } from '../phys/strowger';
 import { frameLoop } from './mosfet';
 import { modelStage } from './modelstage';
 import { swAnchors, swParts, type SwPalette, type SwPose } from './strowger3dparts';
@@ -30,7 +30,7 @@ export function strowgerView(): Widget {
     aria: 'A Strowger selector in 3D: a vertical shaft with a wiper that turns over a bank of ten levels of ten contacts',
     camera: { target: [0, 25, -2], yaw: 0.5, pitch: 0.3, dist: 158 },
     limits: { minDist: 50, maxDist: 320 },
-    note: 'One of the three wipers is drawn, the shaft’s ratchet and the release mechanism are left out, and the contacts are far larger than life.',
+    note: 'A group selector: it hunts. One of the three wipers is drawn, the shaft’s ratchets and pawls are left out (the release magnet is drawn, not the pawls it frees), the contacts are far larger than life, and the pause before the hunt, the hunting and the release times are assumptions; the 66 % break is the GPO standard.',
     draw,
   });
   const palette = (): SwPalette => ({
@@ -39,8 +39,9 @@ export function strowgerView(): Widget {
   });
   const pose = (): SwPose => ({
     level: disp.level, line: disp.line,
-    // The vertical magnet pulls while the loop is open, the first 60 ms of each pulse; the rotary one steps while hunting.
-    vmag: playing && target.mode === 'climb' && tm % PULSE_MS < 60, rmag: playing && target.mode === 'hunt' && target.line > 0,
+    // The vertical magnet pulls while the loop is open (the break, BREAK_MS of each pulse); the rotary one steps while hunting;
+    // the release magnet holds the pawls off until the shaft is home.
+    vmag: playing && verticalPulling(frames, tm), rmag: playing && target.mode === 'hunt' && target.line > 0, rel: playing && target.mode === 'release',
   });
   function draw(): void { const p = pose(); stage.paint(swParts(p, target, busy, palette()), swAnchors(p)); }
 
@@ -53,21 +54,23 @@ export function strowgerView(): Widget {
     const s = target, n = digit === null ? 0 : pulsesOf(digit), inCall = digit !== null;
     const text: Record<State['mode'], string> = {
       home: 'At rest', climb: `Vertical: level ${s.level} of ${n}`, hunt: s.line ? `Rotary: line ${s.line} busy, stepping on` : 'Rotary: starting',
-      connected: `Connected: level ${s.level}, line ${s.line}`, busy: `Busy tone: level ${s.level} has no free line`,
+      connected: `Connected: level ${s.level}, line ${s.line}`, busy: `Busy tone: level ${s.level} full, wiper on the 11th step`,
+      release: s.line ? 'Release: the spring turns the shaft home' : 'Release: the shaft drops',
     };
     chip.textContent = text[s.mode];
-    chip.className = `r3-chip ${s.mode === 'connected' ? 'good' : s.mode === 'busy' ? 'bad' : s.mode === 'home' ? '' : 'warn'}`;
+    chip.className = `r3-chip ${s.mode === 'connected' ? 'good' : s.mode === 'busy' ? 'bad' : s.mode === 'home' || s.mode === 'release' ? '' : 'warn'}`;
     const rows: [string, string][] = [
       ['Digit dialled', inCall ? `${digit} (${n} pulses)` : 'none'],
       ['Shaft level', `${s.level} of ${LEVELS}`],
-      ['Wiper line', s.line ? `${s.line} of ${LINES}` : 'rest'],
-      ['The call takes', inCall ? `${end()} ms` : '0 ms'],
+      ['Wiper line', s.line > LINES ? '11th step, past the bank' : s.line ? `${s.line} of ${LINES}` : 'rest'],
+      ['Dial pulse', `${PULSE_MS} ms, ${BREAK_MS} % break (GPO)`],
+      ['The call takes (model timing)', inCall ? `${end()} ms` : '0 ms'],
       ['Shown at', `1/${SLOW} speed`],
-      ['Relay selector above', inCall ? (n < 8 ? `output ${n}` : `output ${n & 7} (it counts to 7)`) : 'output 0'],
+      ['Relay selector (previous step)', inCall ? (n < 8 ? `output ${n}` : `output ${n & 7} (it counts to 7)`) : 'output 0'],
     ];
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
-    note.textContent = !inCall ? 'Dial a digit to lift the shaft.' : playing ? '' : tm < end() ? 'Paused part-way through the call. Continue it, or dial again.' : '';
-    resume.hidden = !(inCall && !playing && tm < end());
+    note.textContent = !inCall ? (s.mode === 'release' ? '' : 'Dial a digit to lift the shaft.') : playing ? '' : tm < end() ? 'Paused part-way through the call. Continue it, or dial again.' : '';
+    resume.hidden = !(!playing && tm < end());
     for (const [k, b] of cells) {
       const [l, j] = k.split(',').map(Number);
       b.classList.toggle('busy', busy[l - 1][j - 1]);
@@ -82,8 +85,9 @@ export function strowgerView(): Widget {
     const next = stateAt(frames, tm), changed = next.mode !== target.mode || next.level !== target.level || next.line !== target.line;
     target = next;
     const k = 1 - Math.exp(-dt * 16);
-    disp.level += (target.level - disp.level) * k;
     disp.line += (target.line - disp.line) * k;
+    // The shaft never drops while turned: going down waits for the wipers to be back at the home angle.
+    if (target.level >= disp.level || Math.abs(disp.line) < 0.02) disp.level += (target.level - disp.level) * k;
     if (changed || !playing) readout();
     draw();
   }, moving);
@@ -91,14 +95,15 @@ export function strowgerView(): Widget {
   // Without animation the call jumps to its end state.
   const settle = () => { target = stateAt(frames, tm); disp.level = target.level; disp.line = target.line; };
   function repaint(): void { if (reducedMotion()) { playing = false; settle(); } readout(); draw(); loop.kick(); }
-  function dial(d: number): void { digit = d; frames = call(d, busy); tm = reducedMotion() ? end() : 0; playing = !reducedMotion(); target = stateAt(frames, tm); repaint(); }
-  function hangUp(): void { digit = null; frames = [{ t: 0, s: HOME }]; tm = 0; playing = false; target = HOME; repaint(); }
+  // Dialled again without hanging up, the selector releases first: it is wherever the last call left it.
+  function dial(d: number): void { digit = d; frames = call(d, busy, target); tm = reducedMotion() ? end() : 0; playing = !reducedMotion(); target = stateAt(frames, tm); repaint(); }
+  function hangUp(): void { digit = null; frames = release(target); tm = reducedMotion() ? end() : 0; playing = !reducedMotion() && frames.length > 1; target = stateAt(frames, tm); repaint(); }
   // An edit while the call is over replays it, so the hunt over the new lines is seen; mid-call it keeps its place.
   function mark(l: number, set: (j: number) => boolean): void {
     const wasEnd = tm >= end();
     for (let j = 1; j <= LINES; j++) busy[l - 1][j - 1] = set(j);
     if (digit !== null) {
-      frames = call(digit, busy);
+      frames = call(digit, busy, frames[0].s.mode === 'release' ? { ...frames[0].s } : HOME);
       if (wasEnd) { tm = reducedMotion() ? end() : 0; playing = !reducedMotion(); } else tm = Math.min(tm, end());
     }
     target = stateAt(frames, tm);
@@ -134,7 +139,7 @@ export function strowgerView(): Widget {
     h('div', { class: 'r3-btns' }, resume, hang, stage.resetBtn));
   panel.append(
     h('h3', { class: 'm3-title' }, 'The machine itself'),
-    h('p', { class: 'm3-sub' }, `Each digit sends that many pulses at 10 a second (0 sends ten), and each lifts the shaft one level. Then the rotary magnet turns the wipers along that level by itself, line by line, until it finds a free one or runs off the end: all ten busy is the busy tone. Mark lines busy below and dial again; hang up and the shaft drops. The relay selector above stops at output 7 and never hunts; here the digit picks a level of ten lines. Shown ${SLOW} times slower than real.`),
+    h('p', { class: 'm3-sub' }, `This is a group selector, the kind that hunts. Each digit sends that many pulses at 10 a second (0 sends ten), the loop open for two thirds of each, and each pulse lifts the shaft one level. Then the rotary magnet turns the wipers along that level by itself, line by line, until it finds a free one; with all ten busy it steps on to an 11th position past the last contact, and that gives the busy tone. (A final selector, the last in the train, would step along the level on the next digit’s pulses instead, and give the tone on a busy line without hunting.) Mark lines busy below and dial again. Hang up and the release magnet frees the pawls: a spring turns the shaft back to its home angle, and only then does it drop. The relay selector of the previous step stops at output 7 and never hunts; here the digit picks a level of ten lines. Shown ${SLOW} times slower than real.`),
     h('div', { class: 'r3' },
       h('div', { class: 'r3-main' }, ctl, stage.el, stage.hint, note),
       h('div', { class: 'r3-side' }, h('h4', null, 'This selector ', h('span', { class: 'r3-badge' }, 'model')), kv, h('h4', null, 'Busy lines'), grid)));

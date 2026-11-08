@@ -94,7 +94,7 @@ export function valveView(link?: BiasLink): Widget {
     rows.push(['Gate-line flow (strokes/s)', Math.abs(gateQ) < 0.005 ? '0, at rest' : `${gateQ > 0 ? '+' : '−'}${Math.abs(gateQ).toFixed(2)}`], ['Gate charge held (of a stroke)', pct(held)]);
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
     hintP.textContent = mode === 'one'
-      ? (vin * VDD < VT ? `Below ${VT} V the gate pressure is less than the spring’s preload: the plunger stays on its seat.` : 'Past the cracking pressure the lift grows in step with the gate pressure. Lower the tank below Vgs − Vt and the flow falls with it (linear); above it the flow is choked (saturation).')
+      ? (vin * VDD < VT ? `Below ${VT} V the gate pressure is less than the spring’s preload: the plunger stays on its seat.` : 'Past the cracking pressure the lift grows in step with the gate pressure. Lower the tank below Vgs − Vt and the flow falls with it (linear); above it the flow stops growing (saturation).')
       : 'The PMOS valve’s lower chamber is on the supply and the gate line is above its diaphragm: gate pressure closes it. The NMOS valve’s gate line is below its diaphragm: it opens it.';
     tankSl.style.display = mode === 'one' ? '' : 'none';
     tank.value = String(Math.round(vds * 1000)); tankOut.textContent = `${(vds * VDD).toFixed(2)} V`;

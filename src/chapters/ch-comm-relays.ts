@@ -366,7 +366,7 @@ export const chExchange: Chapter = {
     {
       title: 'Counting dial pulses',
       body: `
-        <p>To make a call the exchange must be told whom. A rotary dial does it by breaking the telephone's loop current: a digit n is n breaks at about ten a second, roughly 60 % of each cycle with the loop open, and in most countries 0 is ten pulses. The exchange's line relay
+        <p>To make a call the exchange must be told whom. A rotary dial does it by breaking the telephone's loop current: a digit n is n breaks at ten a second, about two thirds of each cycle with the loop open (the British Post Office's standard was a 66 % break, 63 to 72 % accepted), and in most countries 0 is ten pulses. The exchange's line relay
         follows the loop, and something must count its pulses.</p>
         <p>The counter below is <span data-show="st0 st1 st2">three toggle stages</span> of three relays each. In a stage the <em>pulse relay</em> p follows its input; a master m and a slave s hold the state, and each is fed through p's contacts:
         <code>m' = p ? ¬s : m</code> and <code>s' = p ? s : m</code>. While the pulse is up, m takes the inverse of s and s holds; when it falls, s copies m. So s toggles
@@ -440,8 +440,8 @@ export const chExchange: Chapter = {
     {
       title: 'The machine itself',
       body: `
-        <p>The relay selector above is a chain of latches that decodes a count. The Strowger switch has no count to decode: its <strong>position is the state</strong>, and it moves in two directions. Each pulse of the first digit steps a shaft up one level of a bank of ten; the shaft's height is the digit. Then the shaft turns instead of rising: the rotary magnet steps the wipers along that level of ten lines by itself, without further pulses, until a line is free.</p>
-        <p>That hunt is what the relay version cannot do. The same pulses reach the same level in both (for 0 to 7 pulses the model and the ${SEL.relays}-relay selector agree), but a busy line is skipped by the wiper, and a level busy to the end gives the busy tone, the signal a caller hears when no path is free. Hanging up releases the shaft and it drops to rest.</p>
+        <p>The relay selector of the previous step is a chain of latches that decodes a count. The Strowger switch has no count to decode: its <strong>position is the state</strong>, and it moves in two directions. Each pulse of the first digit steps a shaft up one level of a bank of ten; the shaft's height is the digit. Then the shaft turns instead of rising: the rotary magnet steps the wipers along that level of ten lines by itself, without further pulses, until a line is free. That makes it a <em>group selector</em>, which hunts for a free trunk to the next stage; a <em>final selector</em>, the last in the train, would step along the level on the next digit's pulses instead.</p>
+        <p>That hunt is what the relay version cannot do. The same pulses reach the same level in both (for 0 to 7 pulses the model and the ${SEL.relays}-relay selector agree), but a busy line is skipped by the wiper, and a level busy to the end sends the wipers on to an 11th step past the last contact, which gives the busy tone, the signal a caller hears when no path is free. Hanging up energizes the release magnet: a spring turns the shaft back to its home angle, and only then does it drop to rest.</p>
         <div class="try">Dial 4, mark lines on level 4 busy, and dial again. Fill a whole level with its L button and watch the wiper run off the end.</div>`,
       widget: () => strowger3d(),
     },
