@@ -567,6 +567,7 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
 /* touch (app.css has the shared part): palette rows, group headers, the favourite star and the top bar's
    tabs at 40 px; the star takes the row's full height and 40 px at its end */
 @media (pointer: coarse) {
+  .sb-purist, .sb-check { min-height: 40px; align-items: center; }
   .sb-item { min-height: 40px; align-items: center; }
   .sb-star { align-self: stretch; width: 40px; margin: -4px -8px -4px 0; display: flex; align-items: center; justify-content: center; font-size: 16px; }
   .sb-group > summary, .sb-sec > summary { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
