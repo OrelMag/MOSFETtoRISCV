@@ -103,7 +103,7 @@ export const centreOf = (k: number): Vec3 => [colX(colOf(k)), CY, rowZ(rowOf(k))
 
 /** Wire offsets from a core's centre (units), distinct so four wires fit the hole: x y sense inhibit. */
 const OFF = { x: [0, 1.1, 0.8] as Vec3, y: [0.8, 1.1, 0] as Vec3, ys: [-0.8, -1.1, 0] as Vec3, xi: [0, -1.1, -0.8] as Vec3 };
-const EDGE = 52, BRIDGE = 58, DRIVER = 66;
+const EDGE = 52, BRIDGE = 58, DRIVER = 66, INH_X = 74;
 
 export interface CorePose {
   bits: readonly number[];
@@ -139,14 +139,20 @@ export function wirePaths(): { x: Vec3[][]; y: Vec3[][]; sense: Vec3[]; inhibit:
     const down = c % 2 === 0, xs = colX(c) + OFF.ys[0], z0 = down ? -BRIDGE : BRIDGE, z1 = -z0;
     sense.push([xs, (CY + OFF.ys[1]), z0], [xs, (CY + OFF.ys[1]), z1]);
   }
+  // The inhibit wire runs the same way (+x) through every core, so its current opposes the select currents in all sixteen; its
+  // returns between rows pass under the board, outside the cores.
   for (let r = 0; r < N; r++) {
-    const right = r % 2 === 0, zi = rowZ(r) + OFF.xi[2], x0 = right ? -DRIVER + 6 : DRIVER - 6, x1 = -x0;
-    inhibit.push([x0, (CY + OFF.xi[1]), zi], [x1, (CY + OFF.xi[1]), zi]);
+    const zi = rowZ(r) + OFF.xi[2], yi = CY + OFF.xi[1];
+    inhibit.push([-INH_X, yi, zi], [INH_X, yi, zi]);
+    if (r + 1 < N) inhibit.push([INH_X, -9, zi], [-INH_X, -9, rowZ(r + 1) + OFF.xi[2]]);
   }
   return { x, y, sense, inhibit };
 }
-/** A polyline through points listed as segment ends (a pair per straight run): joined by the bridges between them. */
-const joined = (pts: Vec3[]): Vec3[] => pts;
+/** The straight runs through the cores, as (start, end): the sense wire's alternate by column, the inhibit's all point +x. */
+export function runsOf(): { sense: [Vec3, Vec3][]; inhibit: [Vec3, Vec3][] } {
+  const W = wirePaths();
+  return { sense: Array.from({ length: N }, (_, c) => [W.sense[2 * c], W.sense[2 * c + 1]] as [Vec3, Vec3]), inhibit: Array.from({ length: N }, (_, r) => [W.inhibit[4 * r], W.inhibit[4 * r + 1]] as [Vec3, Vec3]) };
+}
 
 export const SENSE_AMP: Vec3 = [colX(N - 1) + 12, 0, BRIDGE + 6];
 
@@ -159,7 +165,7 @@ export function coreParts(p: CorePose, P: CorePalette): Part[] {
   const wireLive = (a: number) => a !== 0;
   for (let r = 0; r < N; r++) {
     const on = wireLive(p.drive.x[r]);
-    out.push({ ...box(on ? P.live : P.metal, -DRIVER - 2, -DRIVER + 4, CY - 4, CY + 4, rowZ(r) - 3, rowZ(r) + 3), emissive: on ? lit(P.live) : undefined });
+    out.push({ ...box(on ? P.live : P.metal, -DRIVER - 2, -DRIVER + 4, CY - 4, CY + 4, rowZ(r), rowZ(r) + 3), emissive: on ? lit(P.live) : undefined });
   }
   for (let c = 0; c < N; c++) {
     const on = wireLive(p.drive.y[c]);
@@ -180,14 +186,8 @@ export function coreParts(p: CorePose, P: CorePalette): Part[] {
   W.x.forEach((w, r) => { run(w, P.wx, p.drive.x[r] !== 0); if (p.drive.x[r]) marker(w[0], w[1], p.drive.x[r]); });
   W.y.forEach((w, c) => { run(w, P.wy, p.drive.y[c] !== 0); if (p.drive.y[c]) marker(w[0], w[1], p.drive.y[c]); });
   // The snaking wires, through every core with their bridges outside the board.
-  const snake = (runs: Vec3[], base: RGB, on: boolean) => {
-    for (let i = 0; i < runs.length; i += 2) {
-      run([runs[i], runs[i + 1]], base, on);
-      if (i + 2 < runs.length) run([runs[i + 1], runs[i + 2]], base, on);
-    }
-  };
-  snake(joined(W.sense), P.ws, p.sense);
-  snake(joined(W.inhibit), P.wi, p.drive.inh !== 0);
+  run(W.sense, P.ws, p.sense);
+  run(W.inhibit, P.wi, p.drive.inh !== 0);
   // The cores: a dark ferrite ring, tilted; around it the magnetisation as a circulating arrow (gap at the tail, a bead at the head).
   for (let k = 0; k < N * N; k++) {
     const flipping = p.flipping.includes(k), ring = flipping ? mix(P.ferrite, P.live, 0.45) : P.ferrite;
@@ -216,13 +216,13 @@ export function coreParts(p: CorePose, P: CorePalette): Part[] {
 }
 
 export function coreAnchors(): Anchor[] {
-  const up: Vec3 = [0, 1, 0], front: Vec3 = [0, 0.4, 1];
+  const up: Vec3 = [0, 1, 0];
   return [
-    { text: 'X select wire', p: [-DRIVER + 4, (CY + OFF.x[1]), rowZ(0)], side: 'l', n: [-1, 0.3, 0] },
-    { text: 'Y select wire', p: [colX(0), (CY + OFF.y[1]), -DRIVER + 4], side: 't', n: [0, 0.3, -1] },
+    { text: 'X select wire', p: [-DRIVER + 1, CY + 4, rowZ(0) + 1.5], side: 'l', n: up },
+    { text: 'Y select wire', p: [colX(0), CY + 4, -DRIVER + 1], side: 't', n: up },
     { text: 'ferrite core', p: ringPoint(idx(1, 2), Math.PI * 0.85, RING_R + TUBE_R), side: 'r', n: up },
-    { text: 'sense wire', p: [colX(0) + OFF.ys[0], (CY + OFF.ys[1]), BRIDGE], side: 'b', n: front },
-    { text: 'inhibit wire', p: [DRIVER - 6, (CY + OFF.xi[1]), rowZ(1)], side: 'r', n: [1, 0.3, 0] },
+    { text: 'sense wire', p: [colX(0) + OFF.ys[0], (CY + OFF.ys[1]), BRIDGE], side: 'b', n: up },
+    { text: 'inhibit wire', p: [DRIVER - 6, (CY + OFF.xi[1]), rowZ(1)], side: 'l', n: up },
     { text: 'sense amplifier', p: [SENSE_AMP[0], 5, SENSE_AMP[2]], side: 'r', n: up },
   ];
 }

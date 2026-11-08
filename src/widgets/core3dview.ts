@@ -24,7 +24,7 @@ export function coreView(): Widget {
     aria: 'A plane of sixteen ferrite cores in 3D, threaded by X and Y select wires, a sense wire and an inhibit wire; a bright wire carries current and a circulating arrow on each core shows its magnetisation',
     camera: { target: [0, 6, 4], yaw: 0.62, pitch: 0.62, dist: 235 },
     limits: { minDist: 90, maxDist: 520 },
-    note: 'Sizes are a Whirlwind-era core’s (80 mil outside, 50 mil inside, 20 mil high) with the pitch and the wire gauge assumed; the cores are drawn as round tubes on a tilted ring, the loop as perfectly square (a real core drifts a little with every half-select), and a cycle lasts about a second here, not microseconds.',
+    note: 'Sizes are a Whirlwind-era core’s (80 mil outside, 50 mil inside, 20 mil high) with the pitch and the wire gauge assumed; the cores are drawn as round tubes on a tilted ring, the loop as perfectly square (a real core drifts a little with every half-select), and a cycle lasts about a second here, not microseconds. The currents are the model’s own figures: 0.30 A a half select, 0.45 A to switch, 0.60 A a full select, inside the 400–800 mA quoted for 1950s cores; real cores switch over a range, not at one value. The sense pulse changes sign from one column to the next, as the sense wire runs up one and down the next.',
     draw: () => paint(),
   });
   const palette = (): CorePalette => ({
@@ -53,7 +53,7 @@ export function coreView(): Widget {
     g.append(s('path', { d: `M${BX(-0.75)},${BY(-1)} H${BX(IC)} V${BY(1)} H${BX(0.75)} M${BX(0.75)},${BY(1)} H${BX(-IC)} V${BY(-1)} H${BX(-0.75)}`, class: 'co-loop', fill: 'none' }));
     for (const [a, t] of [[-FULL, '−full'], [-IC, '−Ic'], [-HALF, '−½'], [HALF, '+½'], [IC, 'Ic'], [FULL, 'full']] as [number, string][]) {
       const cls = Math.abs(a) === IC ? 'co-tick ic' : 'co-tick';
-      g.append(line(BX(a), BY(0) - 3, BX(a), BY(0) + 3, cls), s('text', { x: BX(a), y: BY(0) + 14 + (Math.abs(a) === IC ? 11 : 0), class: `co-lbl${Math.abs(a) === IC ? ' ic' : ''}`, 'text-anchor': 'middle' }, t));
+      g.append(line(BX(a), BY(0) - 3, BX(a), BY(0) + 3, cls), s('text', { x: BX(a) + (a === IC ? 4 : a === -IC ? -4 : 0), y: Math.abs(a) === IC ? BY(0) - 7 : BY(0) + 14, class: `co-lbl${Math.abs(a) === IC ? ' ic' : ''}`, 'text-anchor': a === IC ? 'start' : a === -IC ? 'end' : 'middle' }, t));
     }
     g.append(s('text', { x: BX(0.73), y: BY(1) - 4, class: 'co-lbl', 'text-anchor': 'end' }, '1'), s('text', { x: BX(-0.73), y: BY(-1) + 11, class: 'co-lbl' }, '0'),
       s('text', { x: 232, y: 144, class: 'co-lbl', 'text-anchor': 'end' }, 'net current through the core'));
@@ -73,7 +73,7 @@ export function coreView(): Widget {
       rows.push(['Phase', p.title], ['Select wires', `${xs.join(', ')} · ${ys.join(', ')} (½ = ${HALF.toFixed(2)} A)`], ['Inhibit wire', p.drive.inh ? `${half(p.drive.inh)}: against the select currents` : 'off']);
       const hs = halfSelected(addr), mx = Math.max(...hs.map((x) => Math.abs(p.net[x])));
       rows.push(['Addressed core', `${amps(p.net[addr])} vs Ic ${IC.toFixed(2)} A: ${p.flipped.includes(addr) ? `flips to ${p.after[addr]}` : 'stays'}`],
-        ['Half-selected', `${hs.length} cores, at most ${amps(mx)}: ${p.flipped.some((x) => x !== addr) ? 'ONE FLIPPED' : 'none flips'}`],
+        ['Half-selected', `${hs.length} cores, at most ${mx.toFixed(2)} A: ${p.flipped.some((x) => x !== addr) ? 'ONE FLIPPED' : 'none flips'}`],
         ['Sense wire', p.strobed ? (p.pulse ? 'pulse: it held a 1' : 'quiet: it held a 0') : p.pulse ? 'a pulse, but nobody is listening' : 'quiet, not listened to']);
     } else rows.push(['Phase', 'idle: nothing driven']);
     kv.replaceChildren(...rows.flatMap(([kk, v]) => [h('span', null, kk), h('span', { class: 'v' }, v)]));
@@ -124,7 +124,7 @@ export function coreView(): Widget {
   const btn = (label: string, fn: () => void, cls = 'btn sm') => { const b = h('button', { type: 'button', class: cls }, label) as HTMLButtonElement; b.addEventListener('click', fn); return b; };
   const readBtn = btn('Read', () => begin('read')), w0Btn = btn('Write 0', () => begin('write0')), w1Btn = btn('Write 1', () => begin('write1'));
   const nextBtn = btn('Next phase', next);
-  const choose = (r: number, c: number) => { if (plan) return; addr = idx(r, c); readout(true); paint(); };
+  const choose = (r: number, c: number) => { if (plan) return; last = null; lastOp = null; live.textContent = ''; addr = idx(r, c); readout(true); paint(); };
   const grid = h('div', { class: 'co-grid', role: 'group', 'aria-label': 'The sixteen cores: choose the address' },
     ...Array.from({ length: N * N }, (_, i) => btn('0', () => choose(rowOf(i), colOf(i)), 'co-cell')));
   const rowBtns = Array.from({ length: N }, (_, i) => btn(String(i), () => choose(i, colOf(addr))));

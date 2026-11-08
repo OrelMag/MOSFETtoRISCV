@@ -1217,7 +1217,6 @@ export const chMemory: Chapter = {
     },
     {
       title: 'Memory in rings of iron',
-      deep: true,
       body: `
         <p>Before the one-transistor cell, the memory of the 1950s and 60s was a plane of <strong>ferrite cores</strong>: rings of dark ceramic about two millimetres across, each holding one bit as the direction its magnetisation circulates. Whirlwind got the first 32 × 32 × 16 array in 1953. A core has a nearly square hysteresis loop: below its switching current <em>I</em><sub>c</sub> it does not move, at or above it it flips completely.</p>
         <p>The address needs no decoder inside the array. One X wire and one Y wire each carry half the current that flips a core, so only the core where they cross sees the whole of it: the <strong>coincident-current</strong> scheme of Forrester's patent. Every other core on those two wires sees half and holds, and that margin is the whole design.</p>

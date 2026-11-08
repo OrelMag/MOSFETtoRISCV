@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import type { RGB } from '../src/gl/instances';
 import {
-  FULL, HALF, IC, ID, N, OD, PITCH, RING_R, TUBE_R, WIRE_R, applyDrive, centreOf, colOf, coreParts, halfSelected, idle, planOp, rowOf, wirePaths, ringPoint, type CorePalette, type Op,
+  FULL, HALF, IC, ID, N, OD, PITCH, RING_R, TUBE_R, WIRE_R, applyDrive, centreOf, colOf, coreParts, halfSelected, idle, planOp, rowOf, wirePaths, runsOf, ringPoint, type CorePalette, type Op,
 } from '../src/widgets/core3dparts';
 import type { Vec3 } from '../src/gl/math';
 
@@ -103,11 +103,24 @@ describe('the drawing', () => {
     };
     for (let k = 0; k < 16; k++) {
       const c = centreOf(k), r = rowOf(k), col = colOf(k);
-      const lines: [Vec3, Vec3][] = [[W.x[r][0], W.x[r][1]], [W.y[col][0], W.y[col][1]], [W.sense[2 * col], W.sense[2 * col + 1]], [W.inhibit[2 * r], W.inhibit[2 * r + 1]]];
+      const R = runsOf(), lines: [Vec3, Vec3][] = [[W.x[r][0], W.x[r][1]], [W.y[col][0], W.y[col][1]], R.sense[col], R.inhibit[r]];
       for (const [a, b] of lines) expect(holeDist(a, b, c)).toBeLessThan(ID / 2 - WIRE_R - 0.2);
     }
     expect(TUBE_R).toBeLessThan(RING_R); // the ring has a hole
     expect(ringPoint(0, 0, RING_R)).toHaveLength(3);
+  });
+
+  it('the inhibit and both select wires thread every core the same way, so the inhibit current opposes the selects in all sixteen', () => {
+    const W = wirePaths(), R = runsOf(), A = [Math.SQRT1_2, 0, Math.SQRT1_2];
+    const along = ([a, b]: [Vec3, Vec3]) => Math.sign((b[0] - a[0]) * A[0] + (b[2] - a[2]) * A[2]);
+    for (let k = 0; k < 16; k++) {
+      const r = rowOf(k), c = colOf(k);
+      expect(along([W.x[r][0], W.x[r][1]])).toBe(1);
+      expect(along([W.y[c][0], W.y[c][1]])).toBe(1);
+      expect(along(R.inhibit[r])).toBe(1);
+    }
+    // the sense wire alternates by column: the amplifier is bipolar
+    expect(R.sense.map(along)).toEqual([1, -1, 1, -1]);
   });
 
   it('draws sixteen rings and a lit wire only where there is current', () => {
