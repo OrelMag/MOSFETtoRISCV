@@ -30,7 +30,7 @@ export function ccdView(): Widget {
     aria: `A three-phase CCD in 3D: ${COLS} columns of ${ROWS} pixels with three polysilicon gates each, the horizontal register below them and the output amplifier, with charge packets in potential wells under the gates`,
     camera: { target: [16, -4, 12], yaw: 2.05, pitch: 0.8, dist: 96 },
     limits: { minDist: 35, maxDist: 320 },
-    note: `Across the chip the drawing is to scale (the CCD42-40's ${PITCH} µm pixels, each gate ${GATE} µm: a third of the pitch, derived, since the datasheet gives the pitch and not the gate lengths); the layers are drawn about four times thicker than they are. A well's depth stands for the channel potential under its gate, not a hole in the silicon, and a packet's volume is its charge (full well ${groupNum(FULL_WELL)} e⁻). Only ${COLS} × ${ROWS} of the 2048 × 2048 pixels are drawn, and charge beyond full well, which would bloom up and down the column, is clipped. Consumer interline CCDs such as Sony's ICX285 clock their vertical registers in four phases.`,
+    note: `Across the chip the drawing is to scale (the CCD42-40's ${PITCH} µm pixels, each gate ${GATE} µm: a third of the pitch, derived, since the datasheet gives the pitch and not the gate lengths); the oxide is drawn about eight times and the gates about three times as thick as they are, the silicon below them about to scale. A well's depth stands for the channel potential under its gate, not a hole in the silicon, and a packet's volume is its charge (full well ${groupNum(FULL_WELL)} e⁻). Only ${COLS} × ${ROWS} of the 2048 × 2048 pixels are drawn, and charge beyond full well, which would bloom up and down the column, is clipped. Consumer interline CCDs such as Sony's ICX285 clock their vertical registers in four phases.`,
     draw: () => draw(),
   });
   const palette = (): CcdPalette => ({
@@ -49,7 +49,7 @@ export function ccdView(): Widget {
     const svg = s('svg', { class: 'ccd-plot', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `The output: each pixel's charge as it is read, against what it collected (${run.samples.length} of ${n} read)` }) as SVGSVGElement;
     svg.append(s('line', { class: 'ax', x1: 0, x2: W, y1: H - 14, y2: H - 14 }));
     for (let i = 0; i < n; i++) {
-      const r = Math.floor(i / COLS), c = i % COLS, want = Math.min(FULL_WELL, Math.round(level * scene(r, c) * FULL_WELL)), got = run.samples[i];
+      const r = Math.floor(i / COLS), c = i % COLS, want = Math.min(FULL_WELL, Math.round(run.level * scene(r, c) * FULL_WELL)), got = run.samples[i];
       svg.append(s('rect', { class: 'want', x: i * bw + 2, width: bw - 4, y: y(want), height: H - 14 - y(want) }));
       if (got) svg.append(s('rect', { class: 'got', x: i * bw + 5, width: bw - 10, y: y(got.e), height: H - 14 - y(got.e) }));
       if (c === 0) svg.append(s('text', { x: i * bw + 2, y: H - 2 }, `row ${r}`));
@@ -110,7 +110,7 @@ export function ccdView(): Widget {
   cte.addEventListener('input', () => { k = Number(cte.value); run.cte = { ...cteOf(k) }; cteOut.textContent = k >= K_MAX ? 'datasheet' : pc(cteOf(k).v); repaint(); });
   const lvl = h('input', { type: 'range', min: 10, max: 100, step: 5, value: level * 100, 'aria-label': 'Exposure: the brightest pixel as a share of full well' }) as HTMLInputElement;
   const lvlOut = h('output', null, `${Math.round(level * 90)} % full`);
-  lvl.addEventListener('input', () => { level = Number(lvl.value) / 100; lvlOut.textContent = `${Math.round(level * 90)} % full`; });
+  lvl.addEventListener('input', () => { level = Number(lvl.value) / 100; lvlOut.textContent = `${Math.round(level * 90)} % full`; }); // takes effect at the next Expose
 
   panel.append(
     h('h3', { class: 'm3-title' }, 'Charge, moved a gate at a time'),
