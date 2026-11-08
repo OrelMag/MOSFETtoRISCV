@@ -2,7 +2,7 @@
 // where it is designed to, BSI keeps oblique light that FSI loses to its metal, and the drawing shows the trace.
 import { describe, expect, it } from 'vitest';
 import { absorptionDepth, bayerAt } from '../src/phys/imagesensor';
-import { BAYER, K, lensHeight, lensRadius, refract, stackHeight, stackParts, stackSpec, traceStack, type Fate, type StackPalette } from '../src/widgets/sensorstack3dparts';
+import { BAYER, FATES, K, lensHeight, tenths, lensRadius, refract, stackHeight, stackParts, stackSpec, traceStack, type Fate, type StackPalette } from '../src/widgets/sensorstack3dparts';
 import { STACK_OPTICS as O, filterT, nSi } from '../src/widgets/sensorstackoptics';
 
 const sum = (t: Record<Fate, number>) => t.own + t.cross + t.metal + t.filter + t.through;
@@ -109,5 +109,26 @@ describe('the optical stack', () => {
       expect(line!.pos[1]).toBeCloseTo(-Math.min(absorptionDepth(600), spec.si) * K, 6);
       expect(parts.filter((p) => p.color === P.dti).length > 0).toBe(il === 'bsi');
     }
+  });
+
+  it('the readouts name every share and add up to exactly 100.0 %', () => {
+    expect(FATES.map((f) => f.k).sort()).toEqual(['cross', 'filter', 'metal', 'own', 'through']);
+    for (const il of ['fsi', 'bsi'] as const) for (let nm = 400; nm <= 1000; nm += 50) for (let a = -30; a <= 30; a += 5) for (const row of [0, 1] as const) {
+      const t = tenths(traceStack(stackSpec(il), O, nm, a, row, 5).total);
+      expect(Object.values(t).reduce((x, y) => x + y, 0)).toBe(1000);
+      for (const v of Object.values(t)) expect(v).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('FSI at a 1.0 µm pitch: the focal spot walks onto the edge metal by 15°, its stack being far taller than the pixel is wide', () => {
+    const s = stackSpec('fsi'), passed = (a: number) => { const t = traceStack(s, O, 540, a, 0, 25).total; return { own: t.own / (1 - t.filter), metal: t.metal / (1 - t.filter) }; };
+    expect(passed(0).own).toBeGreaterThan(0.8);
+    expect(passed(10).own).toBeLessThan(passed(5).own);
+    expect(passed(15).own).toBeLessThan(0.02);
+    expect(passed(20).metal).toBeGreaterThan(0.98);
+    // the walk: the beam's angle in oxide times the depth from the lens to its focus passes the top metal's aperture
+    // (the edge line's inner side, measured from the pixel's centre) at 15°
+    const inOx = Math.asin(Math.sin((15 * Math.PI) / 180) / 1.46), top = s.metal.reduce((a, m) => (m.y1 > a.y1 && m.x0 < 0 && m.x1 > 0 ? m : a));
+    expect((stackHeight(s) + s.focus) * Math.tan(inOx)).toBeGreaterThan(s.pitch / 2 - (top.x1 - top.x0) / 2);
   });
 });

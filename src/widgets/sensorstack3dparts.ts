@@ -405,3 +405,22 @@ export function stackAnchors(q: StackPose): Anchor[] {
 }
 
 export const fmtUm = (u: number): string => (u >= 100 ? `${Math.round(u)} µm` : u >= 10 ? `${u.toFixed(0)} µm` : u >= 1 ? `${u.toFixed(1)} µm` : `${Math.round(u * 1000)} nm`);
+
+/** Every fate a ray's power can meet, named for the readouts: they cover all of it (the row repeats every two pixels, so
+ *  nothing leaves the drawn quad, and DTI reflects within the silicon, losing nothing). */
+export const FATES: readonly { k: Fate; name: string }[] = [
+  { k: 'own', name: 'in its own pixel' },
+  { k: 'cross', name: 'in the neighbour (crosstalk)' },
+  { k: 'metal', name: 'stopped by metal' },
+  { k: 'filter', name: 'absorbed by the colour filters' },
+  { k: 'through', name: 'through the silicon unabsorbed' },
+];
+
+/** The shares in tenths of a percent, rounded so they add up to exactly 1000 (largest remainder). */
+export function tenths(t: Record<Fate, number>): Record<Fate, number> {
+  const raw = FATES.map(({ k }) => ({ k, v: t[k] * 1000 })), out = Object.fromEntries(raw.map(({ k, v }) => [k, Math.floor(v + 1e-9)])) as Record<Fate, number>;
+  let left = 1000 - FATES.reduce((a, { k }) => a + out[k], 0);
+  for (const { k } of [...raw].sort((a, b) => (b.v - Math.floor(b.v + 1e-9)) - (a.v - Math.floor(a.v + 1e-9)))) { if (left <= 0) break; out[k]++; left--; }
+  return out;
+}
+export const pctOf = (n: number): string => `${(n / 10).toFixed(1)} %`;

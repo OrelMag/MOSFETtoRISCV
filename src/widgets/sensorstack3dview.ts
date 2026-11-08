@@ -7,10 +7,9 @@ import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import type { OrbitView } from '../gl/camera';
 import { modelStage } from './modelstage';
-import { BAYER, K, fmtUm, stackAnchors, stackHeight, stackParts, stackSpec, traceStack, type Illum, type StackOptics, type StackPalette, type StackPose } from './sensorstack3dparts';
+import { BAYER, FATES, K, fmtUm, pctOf, tenths, stackAnchors, stackHeight, stackParts, stackSpec, traceStack, type Illum, type StackOptics, type StackPalette, type StackPose } from './sensorstack3dparts';
 import { STACK_OPTICS } from './sensorstackoptics';
 
-const pct = (v: number) => `${(Math.round(v * 1000) / 10).toFixed(1)} %`;
 const NAMES = { R: 'red', G: 'green', B: 'blue' } as const;
 /** Each illumination framed on its own drawing (BSI's metal and logic wafer hang below the thinned silicon). */
 const VIEWS: Record<Illum, OrbitView> = {
@@ -25,7 +24,7 @@ export function sensorStackView(optics: StackOptics = STACK_OPTICS): Widget {
     aria: 'Four pixels of an image sensor in 3D, cut through the front row: microlenses, red, green and blue filters, metal, and the silicon photodiodes, with light rays traced through them',
     camera: { ...VIEWS.fsi },
     limits: { minDist: 35, maxDist: 320 },
-    note: 'To scale: a 1.0 µm pixel with representative layer thicknesses (BSI silicon 2.7 µm as measured on early 1.0 µm pixels; FSI drawn at this size only for comparison). Geometric rays in the cut’s plane: no diffraction (at a 1 µm pitch it blurs the sharp edges seen here), no reflection losses, no microlens shift towards the sensor’s centre. A ray counts in the pixel where it reaches its mean absorption depth; the filters’ curves are illustrative.',
+    note: 'To scale: a 1.0 µm pixel with representative layer thicknesses (BSI silicon 2.7 µm as measured on early 1.0 µm pixels; FSI drawn at this size only for comparison). At this pitch FSI’s stack, 3.7 µm from lens to silicon, is far taller than the pixel is wide: tilted 15° or more, the lens’ focal spot walks past the aperture in the top metal and lands on the line at the pixel’s edge, so nothing reaches its own diode. That is why FSI stopped near 1.4 µm, where Lee et al. and Agranov et al. (IISW 2011) measured its sensitivity falling far faster with angle than BSI’s. Geometric rays in the cut’s plane: no diffraction (at a 1 µm pitch it blurs the sharp edges seen here), no reflection losses, no microlens shift towards the sensor’s centre. A ray counts in the pixel where it reaches its mean absorption depth; the filters’ curves are illustrative.',
     draw: () => paint(),
   });
   const palette = (): StackPalette => ({
@@ -39,7 +38,7 @@ export function sensorStackView(optics: StackOptics = STACK_OPTICS): Widget {
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
   stage.chips.append(chip);
   function readout(q: StackPose): void {
-    const t = q.trace.total, s = q.spec, px = BAYER[q.row];
+    const t = q.trace.total, s = q.spec, px = BAYER[q.row], p = tenths(t);
     chip.textContent = `${s.illum.toUpperCase()} · ${q.nm} nm · ${q.angle}°`;
     chip.className = `r3-chip ${t.cross + t.metal > 0.1 ? 'warn' : 'good'}`;
     const rows: [string, string][] = [
@@ -47,14 +46,10 @@ export function sensorStackView(optics: StackOptics = STACK_OPTICS): Widget {
       ['Absorption depth 1/α', fmtUm(q.trace.depth)],
       ['Silicon that collects', fmtUm(s.si)],
       ['Stack, lens base to silicon', fmtUm(stackHeight(s))],
-      ['Absorbed in its own pixel', pct(t.own)],
-      ['In the neighbour (crosstalk)', pct(t.cross)],
-      ['Stopped by metal', pct(t.metal)],
-      ['Absorbed by the filters', pct(t.filter)],
-      ['Through the silicon', pct(t.through)],
+      ...FATES.map(({ k, name }): [string, string] => [name[0].toUpperCase() + name.slice(1), pctOf(p[k])]),
     ];
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
-    const text = `${s.illum === 'fsi' ? 'FSI' : 'BSI'} at ${q.angle}°, ${q.nm} nm: ${pct(t.own)} in its own pixel, ${pct(t.cross)} crosstalk, ${pct(t.metal)} on metal.`;
+    const text = `${s.illum === 'fsi' ? 'FSI' : 'BSI'} at ${q.angle}°, ${q.nm} nm: ${FATES.map(({ k, name }) => `${pctOf(p[k])} ${name}`).join(', ')}.`;
     if (live.textContent !== text) live.textContent = text;
     angOut.textContent = `${angle}°`; nmOut.textContent = `${nm} nm`;
   }
