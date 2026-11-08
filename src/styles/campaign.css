@@ -208,6 +208,8 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 }
 /* A phone: the document scrolls, so .scroll must not be a scroller of its own (the action bar sticks to the screen). */
 @media (max-width: 760px) { .cp-page { overflow: visible; } }
+/* a codex entry on a phone: the campaign's own counts and Unlock all / Export / Import (on the map) give way to the entry */
+@media (max-width: 600px) { .cp-head.codex .cp-actions, .cp-head.codex .cp-stats { display: none; } }
 @media (max-width: 600px) {
   .cp-wrap { padding: 10px var(--page-gutter) 30px; }
   .cp-stats { flex-wrap: wrap; }
