@@ -1,0 +1,13 @@
+/* ---------- The diaphragm valve (widgets/valve3dview.ts): materials ---------- */
+.m3d {
+  --vl-body: light-dark(#9aa4b8, #5b6480);
+  --vl-seat: light-dark(#6b7590, #8791ad);
+  --vl-disc: light-dark(#b8862b, #e0b04a);
+  --vl-spring: light-dark(#4a5368, #cfd6e6);
+  --vl-diaphragm: light-dark(#2f3646, #e8ecf5);
+  --vl-water: light-dark(#3f8fd6, #4aa3ee);
+  --vl-gate: light-dark(#d9822b, #f0a04b);
+  --vl-glass: light-dark(#cfe0f2, #8aa0c4);
+  --vl-jet: light-dark(#f4b13a, #ffd070);
+}
+.vl-gate output { width: 64px; }

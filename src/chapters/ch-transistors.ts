@@ -4,6 +4,7 @@ import { metrics, MOBILITY_RATIO, strength, vout } from '../phys/inverter';
 import { chainDelay, FO4_TAU, P_INV, PS_PER_TAU } from '../phys/sizing';
 import { and4Tree, and4Wide, gNand, gNor, pGate } from '../phys/effort';
 import { mosfet3d, withModel } from '../widgets/modelhost';
+import { valve3d } from '../widgets/valve3d';
 import { sizingWidget } from '../widgets/sizing';
 import { vtcWidget } from '../widgets/vtc';
 import {
@@ -232,7 +233,7 @@ export const chMosfet: Chapter = {
           Vt falls as Vds rises and as the channel shortens, and λ grows. Leakage is why Vt, and with it VDD, stopped
           scaling in the mid-2000s, and clock frequencies stalled with them.</p>`,
       },
-      widget: () => mosRegionsWidget(),
+      widget: () => withModel(mosRegionsWidget(), valve3d()),
       challenge: {
         kind: 'quiz', question: 'An NMOS has Vgs = 1.2 V and Vds = 0.3 V (Vt = 0.45 V). Which region is it in?',
         options: ['Linear', 'Saturation', 'Cut-off'], answer: 0,
