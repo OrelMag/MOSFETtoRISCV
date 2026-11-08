@@ -41,7 +41,7 @@ export const PATH_MINUTES: Record<string, number[]> = {
   "simt": [4,6,4,4,4,5],
   "warps": [4,6,4,6,3],
   "feed": [5,4,5,4,6,3],
-  "pixels": [5,6,5,6,5,5,5],
+  "pixels": [5,6,5,6,5,5,6],
   "graphics": [7,5,6,5,6,5],
   "dram": [7,5,5,5,3,5,5],
   "memctrl": [7,5,5,5,5,5],
