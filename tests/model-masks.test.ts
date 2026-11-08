@@ -1,71 +1,135 @@
-// The mask-by-mask model held to the cell data and to fabWidget's steps.
+// The mask-by-mask model held to the cell data, to sky130's mask set and to fabWidget's steps.
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { RGB, RGBA } from '../src/gl/instances';
-import { disjoint } from '../src/widgets/cell3d';
-import { landed, LANDS, layerRects, MASK_AT, maskSolids, masksAnchors, masksParts, stageOf, stageSolids, type MasksPalette, type Stage } from '../src/widgets/masks3dparts';
-import { CELLS, FAB, levels } from '../src/widgets/silicon';
+import {
+  activeOf, area, channelOf, DEPTH, implanted, intersect, LAND_AT, LAYERS, maskRects, MASK_AT, masksAnchors, masksParts, minus, misalignment, polyOf, rayPoints, reticle, windowOf, WINDOW_MARGIN, zs,
+  type MaskName, type MasksPalette, type R,
+} from '../src/widgets/masks3dparts';
+import { CELLS, FAB } from '../src/widgets/silicon';
 
-const area = (rs: [number, number, number, number][]) => disjoint(rs).reduce((t, [, , w, h]) => t + w * h, 0);
-const flat = (s: { x0: number; x1: number; y0: number; y1: number }): [number, number, number, number] => [s.x0, s.y0, s.x1 - s.x0, s.y1 - s.y0];
 const G: RGB = [0.5, 0.5, 0.5], CLEAR: RGBA = [0.5, 0.5, 0.5, 0.3];
-const P: MasksPalette = { psub: G, plate: CLEAR, chan: [0.1, 0.1, 0.1], layer: { nwell: G, poly: G, ndiff: G, pdiff: G, contact: G, metal: G } };
-const STAGES: Stage[] = ['nwell', 'poly', 'ndiff', 'pdiff', 'contact', 'metal'];
+const P: MasksPalette = { psub: G, sti: G, gox: G, resist: CLEAR, ild: CLEAR, uv: CLEAR, chrome: CLEAR, plate: CLEAR, pell: CLEAR, frame: G, layer: Object.fromEntries(LAYERS.map((l) => [l, G])) as MasksPalette['layer'] };
+const MASKS: MaskName[] = ['diff', 'nwell', 'poly', 'nsdm', 'psdm', 'licon1', 'met1'];
+const st = (step: number, over: Partial<{ shift: number; aligned: boolean; spread: number }> = {}) => ({ step, spread: 0.35, shift: 0, aligned: true, ...over });
+const top = (p: { pos: number[]; scale?: number[] }) => p.pos[1] + (p.scale?.[1] ?? 0) / 2;
 
 describe('masks in 3D', () => {
-  it('follows fabWidget’s steps, by name and order', () => {
-    expect(FAB.map(([n]) => n)).toEqual(['Substrate', 'N-well', 'Isolation', 'Gate stack', 'Lithography', 'Etch', 'N+ implant', 'P+ implant', 'Contacts', 'Metal']);
-    expect(LANDS).toHaveLength(FAB.length);
+  it('follows fabWidget’s steps in sky130’s order: isolation before the well', () => {
+    expect(FAB.map(([n]) => n)).toEqual(['Substrate', 'Isolation', 'N-well', 'Gate stack', 'Lithography', 'Etch', 'N+ implant', 'P+ implant', 'Contacts', 'Metal']);
     expect(MASK_AT).toHaveLength(FAB.length);
-    // Layers land in the process order, each once.
-    expect(LANDS.filter((l) => l)).toEqual(['nwell', 'poly', 'ndiff', 'pdiff', 'contact', 'metal']);
-    expect(FAB[LANDS.indexOf('poly')][0]).toBe('Etch');
-    expect(landed(0)).toEqual([]);
-    expect(landed(9)).toEqual(STAGES);
+    expect(LAND_AT.sti).toBeLessThan(LAND_AT.nwell);
+    expect(MASK_AT.filter((m) => m)).toEqual(['diff', 'nwell', 'poly', 'poly', 'nsdm', 'psdm', 'licon1', 'met1']);
+    // The text says what the model draws (sky130: aluminium, five metals).
+    expect(FAB[9][1]).toMatch(/five metal layers, aluminium/);
+    expect(FAB[9][1]).not.toMatch(/Copper wires/);
+  });
+
+  it('every step changes what is drawn', () => {
+    for (const cell of CELLS) for (let s = 1; s < FAB.length; s++) {
+      const a = JSON.stringify(masksParts(cell, st(s - 1), P)), b = JSON.stringify(masksParts(cell, st(s), P));
+      expect(b, `${cell.name}: step ${s} is identical to step ${s - 1}`).not.toBe(a);
+    }
   });
 
   for (const cell of CELLS) {
-    it(`${cell.name}: every shape is in exactly one stage and the solids are the cell’s rectangles`, () => {
-      const counts = STAGES.map((st) => cell.shapes.filter((s) => stageOf(s) === st).length);
-      expect(counts.reduce((a, b) => a + b, 0)).toBe(cell.shapes.length);
-      for (const st of STAGES) {
-        const src = cell.shapes.filter((s) => stageOf(s) === st).map((s) => s.r), solids = stageSolids(cell, st, 0.4);
-        const boxes = solids.map(flat);
-        // Same union of area as the source rectangles: nothing missing, nothing invented.
-        expect(area(boxes)).toBeCloseTo(area(src), 6);
-        expect(area([...boxes, ...src])).toBeCloseTo(area(src), 6);
-        // Within one stage the solids do not overlap each other (except channels, which sit under the gate's poly level).
-        const plain = solids.filter((s) => !s.chan).map(flat);
-        expect(plain.reduce((t, [, , w, h]) => t + w * h, 0)).toBeCloseTo(area(plain), 6);
-      }
-    });
+    describe(cell.name, () => {
+      it('implant windows are larger than the diffusion by the margin on every side, and are not its shape', () => {
+        for (const k of ['n', 'p'] as const) {
+          const w = windowOf(cell, k)[0], act = activeOf(cell, k);
+          for (const r of act) {
+            expect(r[1] - w[1]).toBeGreaterThanOrEqual(WINDOW_MARGIN - 1e-9);
+            expect(w[1] + w[3] - (r[1] + r[3])).toBeGreaterThanOrEqual(WINDOW_MARGIN - 1e-9);
+            expect(r[0]).toBeGreaterThanOrEqual(w[0]);
+            expect(r[0] + r[2]).toBeLessThanOrEqual(w[0] + w[2]);
+          }
+          expect(area([w])).toBeGreaterThan(area(act));
+        }
+        expect(area(intersect(windowOf(cell, 'n'), activeOf(cell, 'p')))).toBe(0);
+        expect(area(intersect(windowOf(cell, 'p'), activeOf(cell, 'n')))).toBe(0);
+      });
 
-    it(`${cell.name}: a mask is exactly its layer’s pattern`, () => {
-      for (const st of STAGES) {
-        const { plate, pattern } = maskSolids(cell, st, 0.4);
-        const src = cell.shapes.filter((s) => !s.gate && stageOf(s) === st).map((s) => s.r);
-        expect(area(pattern.map(flat))).toBeCloseTo(area(src), 6);
-        expect(area([...pattern.map(flat), ...src])).toBeCloseTo(area(src), 6);
-        for (const p of pattern) expect(p.z1).toBeLessThanOrEqual(plate.z0 + 1e-9);
-        expect(plate.z0).toBeGreaterThan(levels(0.4).metal1);
-      }
+      it('active area is the diffusions with their channels', () => {
+        const all = cell.shapes.filter((s) => s.layer === 'ndiff' || s.layer === 'pdiff').map((s) => s.r);
+        expect(area(maskRects(cell, 'diff'))).toBeCloseTo(area(all), 6);
+        expect(area(channelOf(cell, 'n', 0)) + area(channelOf(cell, 'p', 0))).toBeCloseTo(area(cell.shapes.filter((s) => s.gate).map((s) => s.r)), 6);
+      });
+
+      it('the implant lands on window ∩ active minus the gate: never under the gate, never in the field', () => {
+        for (const k of ['n', 'p'] as const) for (const shift of [-2, -0.5, 0, 1, 2]) {
+          const imp = implanted(cell, k, shift, true), gate = polyOf(cell, shift);
+          expect(area(intersect(imp, gate))).toBe(0);
+          expect(area(minus(imp, activeOf(cell, k)))).toBe(0);
+          expect(area(imp) + area(channelOf(cell, k, shift))).toBeCloseTo(area(activeOf(cell, k)), 6);
+        }
+      });
+
+      it('self-aligned: any poly shift leaves neither overlap nor a gap; implanting first does', () => {
+        for (const shift of [-2, -1, 0, 1, 2]) expect(misalignment(cell, shift, true)).toEqual({ overlap: 0, gap: 0 });
+        expect(misalignment(cell, 0, false)).toEqual({ overlap: 0, gap: 0 });
+        const m = misalignment(cell, 1, false);
+        expect(m.overlap).toBeGreaterThan(0);
+        expect(m.gap).toBeGreaterThan(0);
+        // A shift of s λ puts s λ of each gate over source/drain and leaves s λ of its channel bare: equal areas.
+        expect(m.overlap).toBeCloseTo(m.gap, 6);
+      });
+
+      it('masks are the cell’s shapes (contacts, metal), poly follows the shift', () => {
+        expect(area(maskRects(cell, 'licon1'))).toBeCloseTo(cell.shapes.filter((s) => s.layer === 'contact').length * 4, 6);
+        expect(area(maskRects(cell, 'met1'))).toBeCloseTo(area(cell.shapes.filter((s) => s.layer === 'metal').map((s) => s.r)), 6);
+        expect(maskRects(cell, 'nsdm')).toHaveLength(1);
+        expect(maskRects(cell, 'poly', 1.5)[0][0]).toBeCloseTo(maskRects(cell, 'poly', 0)[0][0] + 1.5, 9);
+      });
+
+      it('the STI is the active area’s complement; the silicon stays at or below the surface until the gate stack', () => {
+        const f: R = [0, 0, cell.w, 44], sti = minus([f], maskRects(cell, 'diff'));
+        expect(area(sti) + area(maskRects(cell, 'diff'))).toBeCloseTo(area([f]), 6);
+        for (const step of [0, 1, 2]) for (const p of masksParts(cell, st(step), P)) if (p.color.length === 3 && top(p) < zs(0.35).plate - 2) expect(top(p)).toBeLessThanOrEqual(1e-9);
+        // The implants of the last wafer steps are sunk into the active area too.
+        const z = (step: number) => Math.max(...masksParts(cell, st(step), P).filter((p) => p.color.length === 3 && p.pos[1] < 0.5 && top(p) < zs(0.35).plate - 2).map(top));
+        expect(z(7)).toBeLessThanOrEqual(1e-9 + 0.14);
+        expect(DEPTH.sti).toBeLessThan(DEPTH.well);
+        expect(DEPTH.junction).toBeLessThan(DEPTH.sti);
+      });
+
+      it('the gate stack is blanket, lithography leaves resist on the pattern, the etch leaves the pattern', () => {
+        const z = zs(0.35), mid = (a: number, b: number) => (a + b) / 2;
+        const at = (step: number, y: number) => masksParts(cell, st(step), P).filter((p) => p.kind === 'box' && Math.abs(p.pos[1] - y) < 1e-9);
+        const polyY = mid(z.poly0, z.poly1), resY = mid(z.res0, z.res1);
+        expect(at(3, polyY)).toHaveLength(1);
+        expect(at(3, polyY)[0].scale![0]).toBeCloseTo(cell.w, 9);
+        expect(at(5, polyY)).toHaveLength(maskRects(cell, 'poly').length);
+        expect(at(4, resY)).toHaveLength(maskRects(cell, 'poly').length);
+        expect(at(5, resY)).toHaveLength(0);
+      });
+
+      it('UV rays pass through clear parts of the reticle only', () => {
+        const pat = polyOf(cell, 0), pts = rayPoints(cell, 0);
+        expect(pts.length).toBeGreaterThan(0);
+        for (const [x, y] of pts) expect(pat.some((r) => x >= r[0] && x <= r[0] + r[2] && y >= r[1] && y <= r[1] + r[3])).toBe(false);
+      });
+
+      it('a reticle has plate, chrome pattern, pellicle frame and film, above the stack', () => {
+        for (const m of MASKS) {
+          const parts = reticle(cell, m, st(4), P);
+          expect(parts.length).toBe(1 + maskRects(cell, m).length + 4 + 1 + rayPoints(cell, 0).length);
+          for (const p of parts.filter((q) => q.kind === 'box')) expect(p.pos[1] - p.scale![1] / 2).toBeGreaterThan(zs(0.35).res1);
+        }
+      });
+
+      it('labels the wafer, what the step does and the reticle', () => {
+        const text = (step: number) => masksAnchors(cell, st(step)).map((a) => a.text);
+        expect(text(0)).toEqual(['p-type wafer']);
+        expect(text(1)).toEqual(['p-type wafer', 'STI oxide', 'active (diff) reticle']);
+        expect(text(3)).toEqual(['p-type wafer', 'blanket poly']);
+        expect(text(9)).toEqual(['p-type wafer', 'metal 1', 'metal 1 (met1) reticle']);
+      });
     });
   }
 
-  it('adds a layer per landing step, and a mask plate with its pattern where there is a mask', () => {
-    const cell = CELLS[0], n = (step: number) => masksParts(cell, { step, spread: 0.5 }, P).length;
-    const mask = (step: number) => (MASK_AT[step] ? 1 + layerRects(cell, MASK_AT[step]!).length : 0);
-    for (let s = 1; s < FAB.length; s++) {
-      const grown = LANDS[s] ? stageSolids(cell, LANDS[s]!, 0.5).length : 0;
-      // The well replaces the plug of wafer it stands in (one part), so step 1 nets one fewer.
-      expect(n(s) - n(s - 1)).toBe(grown - (s === 1 ? 1 : 0) + mask(s) - mask(s - 1));
-    }
-    expect(n(3)).toBe(n(2));
-  });
-
-  it('labels the wafer, the layer that landed and the mask', () => {
-    const cell = CELLS[0], text = (step: number) => masksAnchors(cell, { step, spread: 0.5 }).map((a) => a.text);
-    expect(text(0)).toEqual(['p-type wafer']);
-    expect(text(9)).toEqual(['p-type wafer', 'metal 1', 'metal 1 mask']);
-    expect(text(4)).toEqual(['p-type wafer', 'polysilicon mask']);
+  it('opens on the cell the layout step opens on', () => {
+    const src = readFileSync(new URL('../src/widgets/masks3dview.ts', import.meta.url), 'utf8');
+    expect(CELLS[1].name).toBe('NAND2');
+    expect(src).toMatch(/let cell = CELLS\[1\]/);
   });
 });

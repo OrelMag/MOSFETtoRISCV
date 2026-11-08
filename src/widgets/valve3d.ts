@@ -3,5 +3,7 @@
 
 import { lazyModel } from './modelhost';
 import type { Widget } from '../view/stage';
+import type { BiasLink } from './mosshare';
 
-export const valve3d = (): Widget => lazyModel('the valve cutaway', () => import('./valve3dview').then((m) => m.valveView()));
+/** `link`: the gate and drain of the widget above, when the step shares them (mosshare.ts). */
+export const valve3d = (link?: BiasLink): Widget => lazyModel('the valve cutaway', () => import('./valve3dview').then((m) => m.valveView(link)));

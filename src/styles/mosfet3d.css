@@ -1,0 +1,13 @@
+/* ---------- The MOSFET in 3D (widgets/mosfet3dview.ts) ---------- */
+.m3d {
+  --mf-depl: light-dark(#e0a44a, #f0b860);
+}
+/* Phone: the stage first, the sliders under it, so the transistor stays in view while a slider is dragged. */
+.mf3 .r3-main { display: flex; flex-direction: column; }
+.mf3 .r3-main > .r3-stage { order: 1; }
+.mf3 .r3-main > .r3-hint { order: 2; }
+.mf3 .r3-main > .r3-ctl { order: 3; margin: 8px 0 0; }
+.mf3 .r3-main > .mf-try { order: 4; }
+@container (min-width: 760px) {
+  .mf3 .r3-main > .r3-ctl { order: 0; margin: 0 0 8px; }
+}

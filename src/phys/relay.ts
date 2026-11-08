@@ -64,11 +64,16 @@ export interface RelayEvent { t: number; closed: boolean }
 
 export interface RelayRun {
   V: number;
-  /** Every 0.1 ms from 0 to T_END (251 samples). */
+  /** Switch-off and end of the window (s): T_OFF and T_END unless the run was asked to let the coil settle first. */
+  tOff: number; tEnd: number;
+  /** Every 0.1 ms from 0 to tEnd (251 samples for the default window). */
   s: RelaySample[];
   /** Every change of the NO contact, at its exact step. */
   ev: RelayEvent[];
 }
+
+/** The coil's L / R (s) with the armature moved by x: N² / ℜ over the coil resistance. Open (x = 0) 3.1 ms, closed (x = travel) 19 ms. */
+export const coilTau = (x: number, p: RelayParams = RELAY) => (p.N * p.N) / (reluct(p, x) * p.Rc);
 
 /** Reluctance of the magnetic circuit with the armature moved by x. */
 const reluct = (p: RelayParams, x: number) => (p.gOpen - x + p.gRes + p.gIron) / (MU0 * p.A);
@@ -79,16 +84,21 @@ const iOf = (p: RelayParams, lam: number, rm: number) => {
 };
 const phiOf = (p: RelayParams, ni: number, rm: number) => p.phiSat * Math.tanh(ni / (rm * p.phiSat));
 
-/** Supply V from T_ON to T_OFF, then the coil discharges through the quench resistor. Semi-implicit Euler, 1 µs. */
-export function relaySim(V: number, p: RelayParams = RELAY): RelayRun {
+/** The window of a run that lets the coil settle (L / R of the closed magnet, 19 ms, is the slowest part) before it is
+ *  switched off: on until 60 ms, off at 60 ms, 25 ms to release. The chapter's own run switches off at 15 ms. */
+export const SETTLED_WINDOW = { tOff: 60e-3, tEnd: 85e-3 };
+
+/** Supply V from T_ON to tOff, then the coil discharges through the quench resistor. Semi-implicit Euler, 1 µs. */
+export function relaySim(V: number, p: RelayParams = RELAY, win: { tOff: number; tEnd: number } = { tOff: T_OFF, tEnd: T_END }): RelayRun {
+  const { tOff, tEnd } = win;
   let lam = 0, x = 0, v = 0, y = 0, vy = 0, was = false;
   const s: RelaySample[] = [], ev: RelayEvent[] = [];
   // Contact damping for restitution e of the mass mb on KC (a damped half-oscillation loses (1 − e) of its speed).
   const le = Math.log(p.e);
   const cc = (-2 * le * Math.sqrt(KC * p.mb)) / Math.sqrt(Math.PI ** 2 + le * le);
-  const steps = Math.round(T_END / DT);
+  const steps = Math.round(tEnd / DT);
   for (let n = 0; n <= steps; n++) {
-    const t = n * DT, on = t >= T_ON && t < T_OFF, rm = reluct(p, x), i = iOf(p, lam, rm);
+    const t = n * DT, on = t >= T_ON && t < tOff, rm = reluct(p, x), i = iOf(p, lam, rm);
     const vTerm = on ? V : -p.Rq * i;
     lam += (on ? V - p.Rc * i : -(p.Rc + p.Rq) * i) * DT;
     const phi = lam / p.N, F = (phi * phi) / (2 * MU0 * p.A);
@@ -103,7 +113,7 @@ export function relaySim(V: number, p: RelayParams = RELAY): RelayRun {
     if (closed !== was) { ev.push({ t, closed }); was = closed; }
     if (n % SAMPLE_EVERY === 0) s.push({ t, i, x, y, closed, vTerm });
   }
-  return { V, s, ev };
+  return { V, tOff, tEnd, s, ev };
 }
 
 /** The magnet's settled pull (N) on the armature at supply V (current V / Rc) with the armature moved by x. */
@@ -131,22 +141,25 @@ export interface RelaySummary {
   release: number | null;
   /** Most negative coil terminal voltage (V), the turn-off spike. */
   spike: number;
+  /** Coil current just before switch-off (A): the spike is this times the quench resistor. */
+  iOff: number;
   /** Coil power while on (W). */
   power: number;
 }
 
 export function relaySummary(run: RelayRun, p: RelayParams = RELAY): RelaySummary {
-  const { ev } = run, onEv = ev.filter((e) => e.t < T_OFF);
+  const { ev } = run, onEv = ev.filter((e) => e.t < run.tOff);
   const first = ev.find((e) => e.closed), last = onEv.filter((e) => e.closed).at(-1);
-  const rel = ev.find((e) => e.t > T_OFF && !e.closed);
+  const rel = ev.find((e) => e.t > run.tOff && !e.closed);
   let spike = 0;
   for (const q of run.s) spike = Math.min(spike, q.vTerm);
   return {
     firstTouch: first ? first.t - T_ON : null,
     bounces: first ? onEv.filter((e) => !e.closed).length : 0,
     settled: last ? last.t - T_ON : null,
-    release: rel ? rel.t - T_OFF : null,
+    release: rel ? rel.t - run.tOff : null,
     spike,
+    iOff: -spike / p.Rq,
     power: (run.V * run.V) / p.Rc,
   };
 }

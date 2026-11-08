@@ -4,6 +4,8 @@
   --as-load: light-dark(#1f9a63, #3ecb8a);
   --as-store: light-dark(#8a62c2, #a583dc);
   --as-ctl: light-dark(#d08a1c, #f0b13c);
+  /* the Fetch / Decode hold lamp: its own colour, not the branch pallet's amber */
+  --as-hold: light-dark(#0e8fa3, #4fd3e8);
   --as-wrong: light-dark(#d23f4a, #ff6b78);
   --as-plate: light-dark(#7c8499, #8a93aa);
   --as-bubble: light-dark(#c5cad8, #4a5068);
@@ -23,3 +25,9 @@
 .as-stages .v.bub { color: var(--muted); }
 .as-stages .v.wrong { color: var(--bad); }
 @media (pointer: coarse) { .as-prog select { min-height: 40px; } }
+.as-predict { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 8px 0 0; font-size: 13px; }
+.as-predict .as-q { color: var(--text-2); }
+.as-predict .as-score { color: var(--muted); font-variant-numeric: tabular-nums; }
+.as-scrub { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; font-size: 12.5px; color: var(--text-2); }
+.as-scrub input { flex: 1; min-width: 0; }
+@media (pointer: coarse) { .as-scrub input { min-height: 40px; } }

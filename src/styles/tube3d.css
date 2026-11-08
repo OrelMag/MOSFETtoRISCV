@@ -51,3 +51,16 @@
 .tube3d .r3-kv .v.hot { color: var(--tb-orange); }
 .t3-flat-dot { fill: var(--text); }
 .t3-flat-lead { stroke: var(--text-2); stroke-width: 0.18; }
+
+/* b24: pin roles, space-charge toggle, plate-rating bar */
+.tube3d {
+  --tb-pin-g: light-dark(#4f9a3c, #7cc66a);
+  --tb-pin-p: light-dark(#3a6fd0, #6a9cf0);
+  --tb-pin-k: light-dark(#c8402c, #ee6a54);
+  --tb-pin-h: light-dark(#d9961c, #f0b43e);
+}
+.tube3d .r3-sl span { width: 92px; }
+.tube3d .r3-chk { display: flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--text-2); }
+.t3-bar { height: 7px; border-radius: 4px; background: var(--border); margin: 4px 0 2px; overflow: hidden; }
+.t3-bar i { display: block; height: 100%; background: var(--tb-orange); border-radius: 4px; }
+.t3-bar.over i { background: var(--bad); }

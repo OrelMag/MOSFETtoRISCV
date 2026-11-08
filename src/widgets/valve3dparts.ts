@@ -47,11 +47,21 @@ export const swept = (v: ValveSpec, x: number): number => v.area * x;
 // ---------------------------------------------------------------- geometry
 
 export const SEAT_Y = 8, DISC_T = 2.5, FLOOR = 2, WALL_TOP = 18, LEVEL_H = 14;
-export const DIA_Y = 28, CAP_Y = 56, FREE_LEN = 30, COILS = 8;
+export const DIA_Y = 28, CAP_Y = 56, FREE_LEN = 30, COILS = 3.5, PTS_PER_COIL = 8;
 /** The diaphragm's height at a lift. */
 export const diaphragmY = (x: number): number => DIA_Y + x;
 /** The disc's underside above the seat: the gap the water goes through. */
 export const gapAt = (x: number): number => x;
+/** The spring as a helix of COILS turns (radius 4.5) from the plate at y0 up to the cap at y1, ends on the axis. */
+export function springPoints(cx: number, y0: number, y1: number): Vec3[] {
+  const n = Math.round(COILS * PTS_PER_COIL), amp = 4.5, pts: Vec3[] = [[cx, y0, 0]];
+  for (let i = 0; i <= n; i++) {
+    const a = (2 * Math.PI * i) / PTS_PER_COIL;
+    pts.push([cx + amp * Math.cos(a), y0 + ((y1 - y0) * (i + 0.5)) / (n + 1), amp * Math.sin(a)]);
+  }
+  pts.push([cx, y1, 0]);
+  return pts;
+}
 /** Spring length at a lift, and the turns drawn. */
 export const springLen = (x: number): number => CAP_Y - diaphragmY(x) - 1;
 
@@ -87,13 +97,12 @@ function valveParts(v: OneValve, P: ValvePalette, spec: ValveSpec): Part[] {
   out.push(box(P.body, cx - 10, cx + 10, WALL_TOP, CAP_Y + 2, -10, -8), box(P.body, cx - 10, cx + 10, CAP_Y, CAP_Y + 2, -10, 10));
   out.push(box(P.body, cx - 10, cx - 1.2, WALL_TOP, WALL_TOP + 2, -10, 8), box(P.body, cx + 1.2, cx + 10, WALL_TOP, WALL_TOP + 2, -10, 8));
   out.push(box(P.glass, cx - 8, cx + 8, WALL_TOP + 2, CAP_Y, 8, 10));
+  // The stem's packing: a collar where the stem leaves the water for the actuator, so nothing leaks into the spring chamber.
+  out.push(cyl(P.seat, cx, 0, WALL_TOP, WALL_TOP + 2, 1.25, 0.3));
   // The diaphragm and the stem's top plate.
   out.push(cyl(P.diaphragm, cx, 0, dy, dy + 1, 8, 0.2));
   // The spring above it, compressed to its length at this lift.
-  const len = springLen(x), top = CAP_Y, n = COILS, amp = 4.5;
-  const pts: Vec3[] = [[cx, dy + 1, 0]];
-  for (let i = 0; i < n; i++) pts.push([cx + (i % 2 ? -amp : amp), dy + 1 + (len * (i + 0.5)) / n, 0]);
-  pts.push([cx, top, 0]);
+  const pts = springPoints(cx, dy + 1, CAP_Y);
   out.push(...wire(P.spring, pts, 0.55, 0.5));
   // Chambers' fluid: the lower one (gate for the NMOS, supply for the PMOS), the upper one for the PMOS (the gate line).
   const gl = shade(P.gate, 0.25 + 0.5 * v.g), sup = shade(P.water, 0.7);
@@ -107,8 +116,13 @@ function valveParts(v: OneValve, P: ValvePalette, spec: ValveSpec): Part[] {
     out.push(box(P.metal, cx - 16, cx - 10, 22, 28, -4, 0), box(sup, cx - 16, cx - 10, 23, 27, -3, 3));
     out.push(box(P.metal, cx - 16, cx - 13, WALL_TOP, 28, -4, 0), box(sup, cx - 15.4, cx - 13.6, WALL_TOP, 27, -3, 3));
   }
-  // Water through the gap: a band whose height is the gap, glowing with the flow.
-  if (x > 0.05) out.push(line(box(shade(P.water, 0.9), cx - 6, cx + 6, SEAT_Y, SEAT_Y + gapAt(x), -5, 5), [0, 0, 0]));
+  // Water through the gap: a band whose height is the gap (the lift: a real valve's area is linear in it), glowing with the
+  // model's flow v.flow (0..1 of the most the device passes: the square law and the tank's level, not the lift). Nothing
+  // flows without water on the upstream side.
+  if (x > 0.05 && v.left > 0.02) {
+    const g = 0.12 + 0.7 * Math.min(1, Math.max(0, v.flow));
+    out.push(line(box(shade(P.water, 0.9), cx - 6, cx + 6, SEAT_Y, SEAT_Y + gapAt(x), -5, 5), [P.water[0] * g, P.water[1] * g, P.water[2] * g]));
+  }
   // Vent (NMOS): the top chamber is open to ground.
   if (kind === 'n') out.push(box(P.metal, cx + 6, cx + 10, CAP_Y - 5, CAP_Y - 1, 8, 10));
   return out;
@@ -151,13 +165,17 @@ const gateLine = (vs: OneValve[]): number[] =>
 export function valveAnchors(pose: ValvePose): Anchor[] {
   const front: Vec3 = [0, 0.3, 1], up: Vec3 = [0, 1, 0], vs = [...pose.valves].sort((a, b) => a.cx - b.cx);
   const a = vs[vs.length - 1], dy = diaphragmY(a.open * TRAVEL);
-  const out: Anchor[] = [
+  const single = pose.valves.length === 1, out: Anchor[] = [
     pose.valves.length > 1 ? { text: 'gate line (dead end)', p: [(vs[0].cx + a.cx) / 2 + 8, 66, 3], side: 't', n: up } : { text: 'gate line (dead end)', p: [a.cx + 13, 60, 3], side: 'r', n: up },
-    { text: 'spring', p: [a.cx + 4, 44, 0], side: 'r', n: front },
-    { text: 'diaphragm', p: [a.cx + 8, dy, 0], side: 'r', n: front },
-    { text: 'plunger', p: [a.cx + 5.5, SEAT_Y + a.open * TRAVEL + 1, 0], side: 'r', n: front },
+    { text: single ? 'spring: preload = Vt' : 'spring', p: [a.cx + 4, 44, 0], side: 'r', n: front },
+    { text: single ? 'diaphragm (gate)' : 'diaphragm', p: [a.cx + 8, dy, 0], side: 'r', n: front },
+    { text: single ? 'channel: the gap' : 'plunger', p: [a.cx + 5.5, SEAT_Y + a.open * TRAVEL + 1, 0], side: 'r', n: front },
   ];
-  if (pose.valves.length === 1) out.push({ text: 'seat', p: [a.cx, SEAT_Y - 2, 8], side: 'b', n: front });
+  if (single) {
+    out.push({ text: 'seat', p: [a.cx, SEAT_Y - 2, 8], side: 'b', n: front, minor: true },
+      { text: 'drain: tank', p: [a.cx - 30, FLOOR + LEVEL_H * a.left + 0.5, 8], side: 't', n: up },
+      { text: 'source: basin, 0 V', p: [a.cx + 26, FLOOR + 2, -5], side: 't', n: up });
+  }
   if (pose.valves.length > 1) out.push({ text: 'PMOS valve', p: [vs[0].cx, 4, 10], side: 'b', n: front }, { text: 'NMOS valve', p: [a.cx, 4, 10], side: 'b', n: front, minor: false });
   return out;
 }

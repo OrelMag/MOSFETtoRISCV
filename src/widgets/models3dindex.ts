@@ -63,9 +63,9 @@ export const MODELS_3D: readonly Model3d[] = [
   },
   {
     id: 'cell', title: 'A standard cell, layer by layer', category: 'devices', chapter: 'silicon', step: 0,
-    summary: 'A CMOS cell\'s diffusion, poly, metal and contacts stacked and spread apart; its inputs switch the transistors.',
-    files: ['cell3d'], factory: 'layoutWidget', codex: ['stdcell', 'cmos'],
-    open: () => import('./silicon').then((m) => m.layoutWidget({ mode: '3d' })),
+    summary: 'A CMOS cell from well to metal 1 with a section plane through a gate: n+, oxide, poly, n+.',
+    files: ['cell3d', 'cell3dview', 'cell3dparts'], factory: 'cell3d', codex: ['stdcell', 'cmos'],
+    open: () => import('./cell3d').then((m) => m.cell3d()),
   },
   {
     id: 'masks', title: 'The chip, mask by mask', category: 'devices', chapter: 'silicon', step: 1,
