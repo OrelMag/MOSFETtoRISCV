@@ -192,17 +192,14 @@ export function mercuryParts(tank: Tank, sel: number, P: MercuryPalette): Part[]
   return out;
 }
 
-export function mercuryAnchors(tank: Tank, sel: number): Anchor[] {
+export function mercuryAnchors(_tank: Tank, _sel: number): Anchor[] {
   const [, ay, az] = ACTIVE, out: Anchor[] = [];
-  const band = bandOf(tank, sel).sort((p, q) => q[1] - q[0] - (p[1] - p[0]))[0];
-  out.push({ text: `word ${sel}`, p: [xOfPos((band[0] + band[1]) / 2 - 0.5), ay - TUBE_R - 1.3, az + 1.2], side: 'b', n: [0, -1, 0] });
   out.push({ text: 'sending crystal', p: [TUBE_X0 + 38, ay + TUBE_R, az], side: 't', n: [0, 1, 0] });
   out.push({ text: 'receiving crystal', p: [TUBE_X1 - 38, ay + TUBE_R, az], side: 't', n: [0, 1, 0] });
   out.push({ text: 'mercury in a steel tube', p: [0, ay + TUBE_R, az], side: 't', n: [0, 1, 0], minor: true });
   out.push({ text: 'amplifier', p: [80, ELEC_Y - 4, az + 5], side: 'b', n: [0, 0, 1] });
   out.push({ text: 'reshaper', p: [15, ELEC_Y - 4, az + 5], side: 'b', n: [0, 0, 1] });
   out.push({ text: 'gate', p: [-50, ELEC_Y - 4, az + 5], side: 'b', n: [0, 0, 1] });
-  out.push({ text: '15 more tanks, one housing', p: [0, 13, -12], side: 't', n: [0, 1, 0], minor: true });
   return out;
 }
 

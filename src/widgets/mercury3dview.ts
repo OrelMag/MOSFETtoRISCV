@@ -18,13 +18,13 @@ import {
 /** Slowdown choices: how many times slower than the real thing the pulses move on screen. */
 const SLOWS = [2000, 20000] as const;
 const VIEWS = {
-  whole: { target: [0, -1, 5], yaw: 0.22, pitch: 0.34, dist: 292 },
+  whole: { target: [-14, -3, 6], yaw: -0.95, pitch: 0.4, dist: 290 },
   rx: { target: [96, 3, 7], yaw: 0.3, pitch: 0.36, dist: 80 },
   tx: { target: [-96, 3, 7], yaw: -0.3, pitch: 0.36, dist: 80 },
 } satisfies Record<string, OrbitView>;
 /** A phone is narrow and the tube is 64 times longer than wide: stand further back. */
 const narrow = () => typeof matchMedia === 'function' && matchMedia('(max-width: 600px)').matches;
-const wholeView = (): OrbitView => (narrow() ? { ...VIEWS.whole, dist: 380 } : { ...VIEWS.whole });
+const wholeView = (): OrbitView => (narrow() ? { ...VIEWS.whole, dist: 320 } : { ...VIEWS.whole });
 const VIEW_NAMES: Record<keyof typeof VIEWS, string> = { whole: 'Whole tank', rx: 'Receiving end', tx: 'Sending end' };
 const us = (s: number) => `${(s * 1e6).toFixed(s < 1e-4 ? 1 : 0)} µs`;
 const ms = (s: number) => `${(s * 1e3).toFixed(2)} ms`;
@@ -95,7 +95,7 @@ export function mercuryView(): Widget {
 
   function readout(announce = false): void {
     const at = tank.atWord;
-    chip.textContent = tank.loop ? `Word ${at} at the receiver` : 'Loop cut';
+    chip.textContent = tank.loop ? `Word ${at} at the receiver · word ${sel} lit` : 'Loop cut';
     chip.className = `r3-chip ${tank.loop ? 'good' : 'bad'}`;
     kv.replaceChildren(...[...facts, ['Time on screen', `1 : ${SLOWS[slow].toLocaleString('en')} (1 ms = ${(SLOWS[slow] / 1000).toFixed(0)} s)`] as [string, string],
       ['Real time elapsed', ms(tank.t * slotS())], ['Passes of the gate', String(Math.floor(tank.t / SLOTS))]].flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
