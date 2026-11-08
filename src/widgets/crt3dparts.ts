@@ -33,10 +33,16 @@ export class ScanRef {
 // ---------------------------------------------------------------- the display timeline
 
 /** Pixel-clock counts of one line (pixels) and one frame (lines). A scan-out cycle is four pixel ticks (a word). */
-export interface Timing { id: 'scanout' | 'vga'; hAct: number; hFp: number; hSync: number; hBp: number; vAct: number; vFp: number; vSync: number; vBp: number }
+export interface Timing {
+  id: 'scanout' | 'vga' | 'ntsc'; hAct: number; hFp: number; hSync: number; hBp: number; vAct: number; vFp: number; vSync: number; vBp: number;
+  /** 2: interlaced. The v* counts are then those of one field (vAct: the lines drawn in it), and a frame is two fields. */
+  fields?: 1 | 2;
+}
 export const hTotal = (t: Timing) => t.hAct + t.hFp + t.hSync + t.hBp;
+/** Lines of one field (the whole frame when progressive). */
 export const vTotal = (t: Timing) => t.vAct + t.vFp + t.vSync + t.vBp;
-export const frameTicks = (t: Timing) => hTotal(t) * vTotal(t);
+export const fieldTicks = (t: Timing) => hTotal(t) * vTotal(t);
+export const frameTicks = (t: Timing) => fieldTicks(t) * (t.fields ?? 1);
 
 /** Our scan-out: a word a cycle, the cycle after word 1023 is word 0. No time is spent anywhere but on pixels. */
 export const SCANOUT: Timing = { id: 'scanout', hAct: W, hFp: 0, hSync: 0, hBp: 0, vAct: W, vFp: 0, vSync: 0, vBp: 0 };
@@ -48,12 +54,31 @@ export const VGA_PIXEL_CLOCK = 25.175e6;
 export const VGA_SCALED: Timing = { id: 'vga', hAct: W, hFp: 2, hSync: 10, hBp: 4, vAct: W, vFp: 1, vSync: 1, vBp: 4 };
 export const timingOf = (blanking: boolean): Timing => (blanking ? VGA_SCALED : SCANOUT);
 
+/** 525-line broadcast video (NTSC, "system M"): the line frequency is 4.5 MHz / 286 = 15 734.264 Hz (ITU-R BT.470-6 table: 15 734.264 Hz
+ *  +-0.0003 %; SMPTE ST 170M), 525 lines a frame in two interlaced fields of 262.5 (59.94 fields, 29.97 frames a second). ITU-R BT.601
+ *  samples the same line at 13.5 MHz: 858 samples a line (13.5 MHz / 858 = the same 15 734.27 Hz), 720 of them picture, 240 picture lines a field. */
+export const NTSC = {
+  LINE_HZ: 4.5e6 / 286, LINES: 525, LINES_FIELD: 262.5, CLOCK_601: 13.5e6, SAMPLES_LINE: 858, SAMPLES_ACTIVE: 720, ACTIVE_FIELD: 240,
+  lineUs: () => 1e6 / NTSC.LINE_HZ, fieldHz: () => (2 * NTSC.LINE_HZ) / NTSC.LINES, frameMs: () => (1e3 * NTSC.LINES) / NTSC.LINE_HZ,
+};
+/** NTSC on our 64 x 64: the same shares. Per line 64 of 64 / (720 / 858) = 76.3 clocks -> 76 (1 front porch, 6 sync: 4.7 us of 63.6 us is
+ *  5.6 pixels, 5 back porch); per field 240 of 262.5 lines is 32 of 35.0 (a field's 262.5 x 64 / 480 is exactly 35), so the frame is 70
+ *  lines. The porches and the sync pulse are rounded to whole pixels / lines (estimates), a word stays four pixels. */
+export const NTSC_SCALED: Timing = { id: 'ntsc', hAct: W, hFp: 1, hSync: 6, hBp: 5, vAct: 32, vFp: 0, vSync: 1, vBp: 2, fields: 2 };
+export const timingFor = (mode: 'a' | 'b' | 'c'): Timing => (mode === 'c' ? NTSC_SCALED : mode === 'b' ? VGA_SCALED : SCANOUT);
+
+/** The frame-buffer word the scan-out counter's value means. Progressive: itself. Interlaced: the counter runs a field's 32 lines
+ *  after another (bit 9 = field, 8..4 = line in the field, 3..0 = word), the memory wants row = 2 * line + field: the field bit
+ *  moves from the top of the address to the row's bottom bit (a six-wire permutation). */
+export const memWord = (ra: number, tm: Timing): number => ((tm.fields ?? 1) > 1 ? ((((ra >> 4) & 31) * 2 + (ra >> 9)) << 4) | (ra & 15) : ra);
+
 export interface BeamPos {
   /** Deflection in pixel units: x in 0..64 across, y in 0..64 down (continuous: the pixel under the beam is floor of both). */
   x: number; y: number;
   blanked: boolean;
   phase: 'active' | 'hretrace' | 'vretrace';
-  line: number; px: number;
+  /** The line within the field (the row when progressive), the picture row it is drawing and the field (0: odd lines, 1: even). */
+  line: number; row: number; field: number; px: number;
   hsync: boolean; vsync: boolean;
   /** The scan-out word the beam is on (-1 while blanked) and the pixel index 0..4095 under it. */
   addr: number; pixel: number;
@@ -66,17 +91,24 @@ export interface BeamPos {
  * blanking: y returns linearly over the blank lines while x keeps sweeping, all blanked.
  */
 export function beamAt(tm: Timing, t: number): BeamPos {
-  const HT = hTotal(tm), FT = frameTicks(tm), f = ((t % FT) + FT) % FT, line = Math.floor(f / HT), pxf = f - line * HT, px = Math.floor(pxf);
+  const HT = hTotal(tm), FT = frameTicks(tm), f = ((t % FT) + FT) % FT, nf = tm.fields ?? 1, FF = fieldTicks(tm);
+  const field = nf > 1 ? Math.floor(f / FF) : 0, ff = f - field * FF, line = Math.floor(ff / HT), pxf = ff - line * HT, px = Math.floor(pxf);
   const hAct = pxf < tm.hAct, vAct = line < tm.vAct;
   const x = hAct ? pxf : tm.hAct * (1 - (pxf - tm.hAct) / (HT - tm.hAct));
-  const T0 = tm.vAct * HT;
-  const y = vAct ? f / HT : tm.vAct * (1 - (f - T0) / (FT - T0));
-  const active = hAct && vAct;
+  const T0 = tm.vAct * HT, yOf = (fl: number, fd: number) => nf * fl + fd; // interlaced: row = 2 * line + field, a line slopes by one row
+  let y: number;
+  if (vAct) y = yOf(line, field) + pxf / HT; // active line: the ramp inside the row it draws
+  else {
+    const yEnd = yOf(tm.vAct - 1, field) + 1, yNext = nf > 1 ? 1 - field : 0; // back to the top, or to the other field's first row
+    y = yEnd + (yNext - yEnd) * ((ff - T0) / (FF - T0));
+  }
+  const active = hAct && vAct, row = yOf(line, field);
   const hs0 = tm.hAct + tm.hFp, vs0 = tm.vAct + tm.vFp;
   return {
-    x, y, blanked: !active, phase: active ? 'active' : !vAct ? 'vretrace' : 'hretrace', line, px,
+    x, y, blanked: !active, phase: active ? 'active' : !vAct ? 'vretrace' : 'hretrace', line, row, field, px,
     hsync: px >= hs0 && px < hs0 + tm.hSync, vsync: line >= vs0 && line < vs0 + tm.vSync,
-    addr: active ? line * ROW_WORDS + (px >> 2) : -1, pixel: active ? line * W + px : -1,
+    // the scan-out counter's value: a frame's words in order (an interlaced frame: field 0's, then field 1's)
+    addr: active ? field * ROW_WORDS * tm.vAct + line * ROW_WORDS + (px >> 2) : -1, pixel: active ? row * W + px : -1,
   };
 }
 
@@ -87,7 +119,8 @@ export const levelsOf = (v: number): RGB => { const [r, g, b] = rgb332(v); retur
 
 /** Persistence: a P22 phosphor fades in about a millisecond (an order of magnitude; sources vary), here as a share of a frame. */
 export const REAL_FRAME_MS = 1000 / 59.94;
-export const decayTicks = (tm: Timing, ms: number, scale = 1): number => ((ms * scale) / REAL_FRAME_MS) * frameTicks(tm);
+/** A field (a frame when progressive) lasts REAL_FRAME_MS: 59.94 Hz, VGA's frame rate and NTSC's field rate. */
+export const decayTicks = (tm: Timing, ms: number, scale = 1): number => ((ms * scale) / REAL_FRAME_MS) * fieldTicks(tm);
 
 export interface WordEvent { tick: number; ra: number; vsync: number; front: number; pixels: number[] }
 
@@ -112,10 +145,10 @@ export class CrtRun {
       if (!b.blanked) {
         const o = this.scan.out();
         if (sub === 0) {
-          this.lastWord = { tick: tk, ra: o.ra, vsync: o.vsync, front: o.front, pixels: [0, 1, 2, 3].map((j) => this.pics[o.front][4 * o.ra + j]) };
+          this.lastWord = { tick: tk, ra: o.ra, vsync: o.vsync, front: o.front, pixels: [0, 1, 2, 3].map((j) => this.pics[o.front][4 * memWord(o.ra, this.tm) + j]) };
           this.onWord?.(this.lastWord);
         }
-        const p = 4 * o.ra + sub;
+        const p = 4 * memWord(o.ra, this.tm) + sub;
         this.litAt[p] = tk; this.litCol[p] = this.pics[o.front][p];
         if (sub === 3) {
           this.scan.step(this.swapReq ? 1 : 0, this.sync);
@@ -146,22 +179,40 @@ export const GEOM = (() => {
   const DIAG = 340, W_MM = DIAG * 0.8, H_MM = DIAG * 0.6; // 4:3 (a 14-inch-class tube: 13.4 in)
   const DEFLECT = 90; // full angle, to the corners
   const D = DIAG / 2 / Math.tan(rad(DEFLECT / 2)); // deflection centre to the screen
+  const GUN_PITCH = 5.5, TRIAD = 0.27;
+  // The mask-to-screen gap q follows from the geometry: the beams cross at the mask hole at an angle GUN_PITCH / (D - q) to each other
+  // (they left the gun GUN_PITCH apart), and the neighbouring dots of a triad are TRIAD / 3 apart, so q * GUN_PITCH / (D - q) = TRIAD / 3.
+  // Estimated: no primary source gives q for this tube (real tubes' effective beam spacing at the yoke is smaller, their gap larger).
+  const Q = (TRIAD * D) / (3 * GUN_PITCH + TRIAD);
   return {
     DIAG, W_MM, H_MM, DEFLECT, D,
     NECK_OD: 29.1, NECK_R: 29.1 / 2,
     NECK_X0: -166, JOIN_X: -10,
     YOKE_X0: -40, YOKE_X1: 20,
-    GUN_PITCH: 5.5, GUN_EXIT: -62,
-    FUNNEL_X1: D - 6,
+    GUN_PITCH, GUN_EXIT: -62,
+    /** The funnel meets the glass at the rim, which the curved face has pulled back (about 14 mm at the corners of the glass). */
+    FUNNEL_X1: D - 16,
+    /** Triad pitch: 0.27 mm, the circular-hole mask example of US6107729. */
+    TRIAD, Q,
+    /** The faceplate's radius of curvature: an ESTIMATE (large radii, order 1-2 m, are what 14-inch faces had; no primary source found). */
+    FACE_R: 2000,
     /** The glass beyond the picture area, all round. */
     MARGIN: 16,
     ANODE_KV: [24, 32] as const,
+    /** About ten: the stem's pin count is the model's choice (no source found). */
     PINS: 10,
   };
 })();
 
-/** Where the spot is on the faceplate for a deflection (pixel units): [x, y, z] in mm. */
-export const spotOf = (x: number, y: number): Vec3 => [GEOM.D, (0.5 - y / W) * GEOM.H_MM, (0.5 - x / W) * GEOM.W_MM];
+/** How far back from the axis plane the curved face sits at (y, z) (a sphere of radius FACE_R, sag r^2 / 2R). */
+export const sagAt = (y: number, z: number): number => (y * y + z * z) / (2 * GEOM.FACE_R);
+/** Where the spot is on the faceplate for a deflection (pixel units): [x, y, z] in mm. The ray from the deflection centre meets the
+ *  curved face a little before D: x = D - r^2 / 2R with r = r0 x / D (r0: where it would land on the flat plane). */
+export const spotOf = (x: number, y: number): Vec3 => {
+  const y0 = (0.5 - y / W) * GEOM.H_MM, z0 = (0.5 - x / W) * GEOM.W_MM, D = GEOM.D, a = (y0 * y0 + z0 * z0) / (2 * GEOM.FACE_R * D * D);
+  const xf = a < 1e-15 ? D : (-1 + Math.sqrt(1 + 4 * a * D)) / (2 * a);
+  return [xf, (y0 * xf) / D, (z0 * xf) / D];
+};
 /** The centre of cell i. */
 export const cellCentre = (i: number): Vec3 => spotOf((i % W) + 0.5, Math.floor(i / W) + 0.5);
 
@@ -184,19 +235,31 @@ export function insideFunnel(x: number, y: number, z: number): boolean {
   return Math.abs(y / a) ** n + Math.abs(z / b) ** n <= 1;
 }
 
-/** One beam's path from the gun: straight in the neck, bent through the yoke's field (a quadratic curve whose tangents meet at
- *  the deflection centre), then straight from the yoke's front to the spot. zi: the beam's offset in the in-line gun. */
+/** One beam's path from the gun to its phosphor dot. The three beams of the in-line gun leave GUN_PITCH apart (zi = -pitch, 0, +pitch: R, G, B)
+ *  and keep that offset through the yoke (a quadratic bend about their own deflection centres), then each is steered to the hole of the
+ *  shadow mask in front of `spot` (the triad's centre): all three CROSS in that hole, GEOM.Q ahead of the face, and go on to three
+ *  dots TRIAD / 3 apart, swapped end for end (the beam from -z lands on +z). The path's last point is the dot. */
 export function beamPath(zi: number, spot: Vec3): Vec3[] {
-  const C: Vec3 = [0, 0, 0], d = sub3(spot, C), Q = scale3(d, GEOM.YOKE_X1 / d[0]);
-  const P0: Vec3 = [GEOM.YOKE_X0 + 10, 0, 0];
-  const pts: Vec3[] = [[GEOM.GUN_EXIT, 0, zi], [GEOM.GUN_EXIT + 20, 0, zi * 0.3], P0];
+  const G = GEOM, C: Vec3 = [0, 0, zi], d = sub3(spot, [0, 0, 0]), Qp = add3(scale3(d, G.YOKE_X1 / d[0]), [0, 0, zi]);
+  const hole = scale3(d, (spot[0] - G.Q) / d[0]); // the crossing: on the axis of the undeflected-plus-centre ray, at the mask
+  const dot: Vec3 = [spot[0], spot[1], spot[2] - (zi / G.GUN_PITCH) * (G.TRIAD / 3)];
+  const P0: Vec3 = [G.YOKE_X0 + 10, 0, zi];
+  const pts: Vec3[] = [[G.GUN_EXIT, 0, zi], [G.GUN_EXIT + 20, 0, zi], P0];
   const N = 8;
   for (let i = 1; i <= N; i++) {
     const u = i / N, a = (1 - u) * (1 - u), b = 2 * u * (1 - u), c = u * u;
-    pts.push([a * P0[0] + b * C[0] + c * Q[0], a * P0[1] + b * C[1] + c * Q[1], a * P0[2] + b * C[2] + c * Q[2]]);
+    pts.push([a * P0[0] + b * C[0] + c * Qp[0], a * P0[1] + b * C[1] + c * Qp[1], a * P0[2] + b * C[2] + c * Qp[2]]);
   }
-  pts.push(spot);
+  pts.push(hole, dot);
   return pts;
+}
+/** The z of a path (monotonic in x) at x. */
+export function pathAt(path: Vec3[], x: number): Vec3 {
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i];
+    if (x >= a[0] && x <= b[0] && b[0] > a[0]) { const t = (x - a[0]) / (b[0] - a[0]); return [x, a[1] + t * (b[1] - a[1]), a[2] + t * (b[2] - a[2])]; }
+  }
+  return path[path.length - 1];
 }
 
 export interface CrtPalette {
@@ -274,13 +337,45 @@ export function staticParts(P: CrtPalette, current: { h: number; v: number } = {
   // Anode button on the top of the funnel
   const ab = sectionPoint(70, 0);
   out.push(rod(P.pin, [70, ab[0], ab[1]], [70, ab[0] + 14, ab[1]], 7, 0.3), rod(P.metal, [70, ab[0] + 14, ab[1]], [70, ab[0] + 22, ab[1]], 1.8, 0.5));
-  // Faceplate glass, its bezel, the shadow mask behind it
-  const hw = G.W_MM / 2, hh = G.H_MM / 2, M = G.MARGIN;
-  out.push(box(alpha(P.glass, 0.14), G.D + 1, G.D + 13, -hh - M, hh + M, -hw - M, hw + M));
-  out.push(box(P.bezel, G.D - 2, G.D + 14, hh + M, hh + M + 4, -hw - M - 4, hw + M + 4), box(P.bezel, G.D - 2, G.D + 14, -hh - M - 4, -hh - M, -hw - M - 4, hw + M + 4),
-    box(P.bezel, G.D - 2, G.D + 14, -hh - M, hh + M, hw + M, hw + M + 4), box(P.bezel, G.D - 2, G.D + 14, -hh - M, hh + M, -hw - M - 4, -hw - M));
-  out.push(box(alpha(P.mask, 0.3), G.D - 14.4, G.D - 14, -hh - 3, hh + 3, -hw - 3, hw + 3, 0.2));
+  // Faceplate glass on a curved face (FACE_R: estimated), in 8 x 8 steps; the shadow mask GEOM.Q behind it, on the same sphere;
+  // the bezel round it and the implosion band (a steel strap round the panel's rim, which holds the evacuated glass together if it cracks).
+  const hw = G.W_MM / 2, hh = G.H_MM / 2, M = G.MARGIN, NG = 8;
+  const gy = hh + M, gz = hw + M;
+  for (let i = 0; i < NG; i++) for (let k = 0; k < NG; k++) {
+    const y0 = -gy + (2 * gy * i) / NG, y1 = y0 + (2 * gy) / NG, z0 = -gz + (2 * gz * k) / NG, z1 = z0 + (2 * gz) / NG, xi = G.D - sagAt((y0 + y1) / 2, (z0 + z1) / 2);
+    if (i === 0 && k === 0) out.push(box(alpha(P.glass, 0.14), G.D + 1, G.D + 13, -gy, gy, -gz, gz)); // one clean pane (stacked stepped panes drew a grid)
+    out.push(box(alpha(P.mask, 0.12), xi - G.Q - 0.2, xi - G.Q, y0, y1, z0, z1, 0.2));
+  }
+  out.push(...rim(P.bezel, 0, 4, -2, 14), ...rim(P.metal, 4, 6.5, -12, 2, 0.5));
+  out.push(...magnetRings(P));
   out.push(...yokeParts(P, current));
+  return out;
+}
+
+/** A frame of boxes round the faceplate's glass edge, `inner` to `outer` mm beyond it, each piece at the face's local depth
+ *  (x from `x0` to `x1` mm either side of the glass's inner surface there). */
+function rim(c: RGB, inner: number, outer: number, x0: number, x1: number, spec = 0): Part[] {
+  const G = GEOM, gy = G.H_MM / 2 + G.MARGIN, gz = G.W_MM / 2 + G.MARGIN, out: Part[] = [], NZ = 6, NY = 4;
+  const at = (y: number, z: number) => G.D - sagAt(y, z);
+  for (const sy of [1, -1]) for (let k = 0; k < NZ; k++) {
+    const z0 = -gz - outer + ((2 * (gz + outer)) * k) / NZ, z1 = z0 + (2 * (gz + outer)) / NZ, xi = at(sy * (gy + inner), (z0 + z1) / 2);
+    out.push(box(c, xi + x0, xi + x1, sy > 0 ? gy + inner : -gy - outer, sy > 0 ? gy + outer : -gy - inner, z0, z1, spec));
+  }
+  for (const sz of [1, -1]) for (let k = 0; k < NY; k++) {
+    const y0 = -gy + ((2 * gy) * k) / NY, y1 = y0 + (2 * gy) / NY, xi = at((y0 + y1) / 2, sz * (gz + inner));
+    out.push(box(c, xi + x0, xi + x1, y0, y1, sz > 0 ? gz + inner : -gz - outer, sz > 0 ? gz + outer : -gz - inner, spec));
+  }
+  return out;
+}
+
+/** Purity and convergence magnets: thin rings clipped round the neck behind the yoke (the real ones are pairs of magnetised rings turned
+ *  against each other to trim the beams' landing). Three rings of twelve segments. */
+export function magnetRings(P: CrtPalette): Part[] {
+  const out: Part[] = [], R = GEOM.NECK_R + 1.6, N = 12;
+  for (const x of [-58, -52, -46]) {
+    const pts: Vec3[] = Array.from({ length: N + 1 }, (_, i): Vec3 => [x, R * Math.cos((i / N) * 2 * Math.PI), R * Math.sin((i / N) * 2 * Math.PI)]);
+    out.push(...wire(P.ferrite, pts, 1.3, 0.2));
+  }
   return out;
 }
 
@@ -321,9 +416,9 @@ export function poseParts(P: CrtPalette, pose: CrtPose): Part[] {
   for (let cy = 0; cy < n; cy++) for (let cx = 0; cx < n; cx++) {
     let r = 0, g = 0, b = 0;
     for (let dy = 0; dy < B; dy++) for (let dx = 0; dx < B; dx++) { const c = pose.cell((cy * B + dy) * W + cx * B + dx); r = Math.max(r, c[0]); g = Math.max(g, c[1]); b = Math.max(b, c[2]); }
-    const zc = (0.5 - (cx + 0.5) / n) * G.W_MM, yc = (0.5 - (cy + 0.5) / n) * G.H_MM;
+    const [xf, yc, zc] = spotOf((cx + 0.5) * B, (cy + 0.5) * B), k = xf / G.D;
     const col: RGB = [P.cellOff[0] + (1 - P.cellOff[0]) * r * 0.9, P.cellOff[1] + (1 - P.cellOff[1]) * g * 0.9, P.cellOff[2] + (1 - P.cellOff[2]) * b * 0.9];
-    out.push({ ...box(col, G.D - 0.6, G.D, yc - ch / 2, yc + ch / 2, zc - cw / 2, zc + cw / 2), emissive: [r * 0.55, g * 0.55, b * 0.55] });
+    out.push({ ...box(col, xf - 0.6, xf, yc - (ch * k) / 2, yc + (ch * k) / 2, zc - (cw * k) / 2, zc + (cw * k) / 2), emissive: [r * 0.55, g * 0.55, b * 0.55] });
   }
   const bm = pose.beam;
   if (bm) {
@@ -341,11 +436,73 @@ export function poseParts(P: CrtPalette, pose: CrtPose): Part[] {
   return out;
 }
 
-export type CrtDetail = 'overview' | 'gun' | 'yoke';
+// ---------------------------------------------------------------- the mask close-up
+
+/** The close-up's figures, in mm. Triad pitch GEOM.TRIAD (US6107729's example); the rest are ESTIMATES: hole 0.12 mm drawn square (real holes are
+ *  round, about 40-50 % of the pitch), mask steel 0.15 mm thick (order 0.1-0.25 mm), row pitch = the triad pitch, dot diameter 0.07 mm. */
+export const MASK = { COLS: 7, ROWS: 5, HOLE: 0.12, THICK: 0.15, DOT_R: 0.035, LEAD: 5, MATRIX: 0.06 } as const;
+/** Triads across one of our cells: its width (340 mm x 0.8 / 64 = 4.25 mm) over the triad pitch. */
+export const TRIADS_PER_CELL = GEOM.W_MM / W / GEOM.TRIAD;
+
+/** The three beams' lines through the close-up's centre hole (the screen's centre: z = 0 is the hole's axis): the lead-in, the crossing, the dot. */
+export function maskBeam(zi: number): Vec3[] {
+  const G = GEOM, mx = G.D - G.Q, L = mx, m: Vec3 = [mx, 0, 0];
+  return [[mx - MASK.LEAD, 0, (zi * MASK.LEAD) / L], m, [G.D, 0, -(zi / G.GUN_PITCH) * (G.TRIAD / 3)]];
+}
+
+/** A patch of the shadow mask with the beams of one triad through its centre hole, drawn to scale (the camera sits a few millimetres away).
+ *  Dots: R at +z, G, B at -z (the beams cross in the hole); dim ones for every other hole, glowing for the centre triad. */
+export function maskParts(P: CrtPalette, levels: RGB, blanked: boolean): Part[] {
+  const G = GEOM, T = G.TRIAD, mx = G.D - G.Q, out: Part[] = [], nc = MASK.COLS, nr = MASK.ROWS, h = MASK.HOLE / 2, th = MASK.THICK;
+  const cz = (i: number) => (i - (nc - 1) / 2) * T, cy = (r: number) => (r - (nr - 1) / 2) * T;
+  const z0 = cz(0) - T / 2, z1 = cz(nc - 1) + T / 2, y0 = cy(0) - T / 2, y1 = cy(nr - 1) + T / 2, mc = P.mask;
+  // the plate: strips between the rows, and in each row the bars between the holes
+  for (let r = 0; r <= nr; r++) {
+    const a = r === 0 ? y0 : cy(r - 1) + h, b = r === nr ? y1 : cy(r) - h;
+    out.push(box(mc, mx - th, mx, a, b, z0, z1, 0.3));
+  }
+  for (let r = 0; r < nr; r++) for (let i = 0; i <= nc; i++) {
+    const a = i === 0 ? z0 : cz(i - 1) + h, b = i === nc ? z1 : cz(i) - h;
+    out.push(box(mc, mx - th, mx, cy(r) - h, cy(r) + h, a, b, 0.3));
+  }
+  // the screen: the black matrix, then a red, green and blue dot behind every hole
+  out.push(box(P.aquadag, G.D, G.D + MASK.MATRIX, y0, y1, z0, z1));
+  const cols: RGB[] = [[1, 0.15, 0.12], [0.2, 1, 0.25], [0.25, 0.4, 1]];
+  for (let r = 0; r < nr; r++) for (let i = 0; i < nc; i++) {
+    const centre = r === (nr - 1) / 2 && i === (nc - 1) / 2;
+    cols.forEach((c, k) => {
+      const dz = cz(i) - (k - 1) * (T / 3), dim = centre ? Math.max(0.25, blanked ? 0 : levels[k]) : 0.28;
+      out.push({ ...rod(lit(c, 0.35 + 0.65 * dim), [G.D, cy(r), dz], [G.D - 0.05, cy(r), dz], MASK.DOT_R), emissive: lit(c, centre ? dim * 0.8 : 0.1) });
+    });
+  }
+  // the three beams, thin: the real spot is wider than the hole and most of its current stops on the mask
+  [-G.GUN_PITCH, 0, G.GUN_PITCH].forEach((zi, k) => {
+    const lv = blanked ? 0 : levels[k];
+    if (lv <= 0.001) return;
+    for (const p of wire([cols[k][0], cols[k][1], cols[k][2], 0.95] as RGBA4, maskBeam(zi), 0.012)) out.push({ ...p, emissive: lit(cols[k], 0.5 + 0.4 * lv) });
+  });
+  return out;
+}
+
+export type CrtDetail = 'overview' | 'gun' | 'yoke' | 'mask';
 
 /** Labels for what the camera is on: a few for the whole tube, the electrodes up close at the gun, the coils at the yoke. */
-export function crtAnchors(detail: CrtDetail = 'overview'): Anchor[] {
+export function crtAnchors(detail: CrtDetail = 'overview', narrow = false): Anchor[] {
+  const all = anchorsAll(detail), main = all.filter((a) => !a.minor);
+  // a phone's stage has room for three labels (the tube's: gun, yoke, screen)
+  return narrow ? (detail === 'overview' ? main.filter((a) => /gun|yoke|screen/.test(a.text)) : main.slice(0, 3)) : all;
+}
+function anchorsAll(detail: CrtDetail): Anchor[] {
   const G = GEOM, right: Vec3 = [0, 0, 1], up: Vec3 = [0, 1, 0], front: Vec3 = [1, 0, 0], down: Vec3 = [0, -1, 0];
+  if (detail === 'mask') {
+    const mx = G.D - G.Q, T = G.TRIAD;
+    return [
+      { text: 'steel mask, one hole', p: [mx - MASK.THICK, MASK.HOLE, -T], side: 't', n: up },
+      { text: 'beams cross in the hole', p: [mx - 2, 0, 0.06], side: 'l', n: right },
+      { text: 'R · G · B dots', p: [G.D - 0.05, -T * 1.2, 0], side: 'b', n: [-1, 0, 0] },
+      { text: 'black matrix', p: [G.D, T * 2.2, -T * 2.2], side: 'r', n: [-1, 0, 0], minor: true },
+    ];
+  }
   if (detail === 'gun') {
     return [
       { text: 'cathodes + heaters', p: [-150, 0, -5.5], side: 'l', n: right },
@@ -354,7 +511,7 @@ export function crtAnchors(detail: CrtDetail = 'overview'): Anchor[] {
       { text: 'G3–G5 focus', p: [-100, 5.5, -9.5], side: 't', n: right },
       { text: 'G6 final anode', p: [-74, -5.8, 9.8], side: 'b', n: right },
       { text: 'neck, 29.1 mm', p: [-125, -G.NECK_R, 0], side: 'b', n: down },
-      { text: 'stem, 10 pins', p: [G.NECK_X0 - 10, 11, 0], side: 'l', n: up },
+      { text: 'stem, about 10 pins', p: [G.NECK_X0 - 10, 11, 0], side: 'l', n: up },
     ];
   }
   if (detail === 'yoke') {
@@ -363,6 +520,7 @@ export function crtAnchors(detail: CrtDetail = 'overview'): Anchor[] {
       { text: 'horizontal coils (sweep)', p: [-20, G.NECK_R + 8, 0], side: 't', n: up },
       { text: 'vertical coils (step)', p: [-20, 0, G.NECK_R + 14], side: 'r', n: right },
       { text: 'ferrite core', p: [9, fe[0] + 15.5, 0], side: 't', n: up },
+      { text: 'purity + convergence magnets', p: [-52, G.NECK_R + 1.6, 0], side: 't', n: up },
       { text: 'neck / funnel join', p: [G.JOIN_X, -G.NECK_R - 2, 0], side: 'b', n: down },
       { text: 'aquadag funnel', p: [60, sectionPoint(60, Math.PI)[0], sectionPoint(60, Math.PI)[1]], side: 'b', n: down },
     ];
@@ -374,6 +532,7 @@ export function crtAnchors(detail: CrtDetail = 'overview'): Anchor[] {
     { text: 'funnel, aquadag', p: [90, fn[0], fn[1]], side: 'b', n: right },
     { text: 'phosphor screen', p: [G.D, -G.H_MM / 2, 0], side: 'b', n: front },
     { text: 'anode button', p: [70, an[0] + 22, 0], side: 't', n: up },
-    { text: 'shadow mask', p: [G.D - 14, G.H_MM / 2, G.W_MM / 2], side: 'r', n: front, minor: true },
+    { text: 'shadow mask', p: [G.D - sagAt(G.H_MM / 2, G.W_MM / 2) - G.Q, G.H_MM / 2, G.W_MM / 2], side: 'r', n: front, minor: true },
+    { text: 'implosion band', p: [G.D - sagAt(G.H_MM / 2 + G.MARGIN, 0) - 5, G.H_MM / 2 + G.MARGIN + 6.5, 0], side: 't', n: up, minor: true },
   ];
 }

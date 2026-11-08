@@ -36,7 +36,7 @@ export interface ModelStage {
   /** No WebGL2: the flat fallback is showing (a model may draw fewer facets). */
   isFlat(): boolean;
   /** Move the camera (a model's preset views). */
-  setView(v: OrbitView): void;
+  setView(v: OrbitView, limits?: Partial<OrbitLimits>): void;
   destroy(): void;
 }
 
@@ -140,11 +140,11 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
   return {
     el, hint, chips, resetBtn, paint,
     isFlat: () => mode === 'flat',
-    setView(v) {
-      o.camera = v;
+    setView(v, limits) {
+      o.camera = v; fit = null;
       const c = renderer?.camera;
       if (!c) { if (mode === 'flat') o.draw(); return; }
-      c.rehome(v, c.limits);
+      c.rehome(v, limits ?? c.limits);
       renderer?.invalidate();
     },
     rgb: (t) => colors.rgb(t),
