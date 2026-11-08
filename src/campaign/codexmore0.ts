@@ -374,7 +374,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Measuring CPI on programs that skip the slow cases: load-use pairs, taken branches, divides.',
       'Speeding up one instruction class without weighing its share: a 10× faster divide does nothing for a program that never divides.',
     ],
-    chapters: [{ chapter: 'multicycle', step: 5, label: 'Was it worth it?' }, { chapter: 'pipeline', step: 5, label: 'Does it pay? Measured' }, { chapter: 'fastadd', step: 9, label: 'Swap in fast adders' }],
+    chapters: [{ chapter: 'multicycle', step: 5, label: 'Was it worth it?' }, { chapter: 'pipeline', step: 6, label: 'Does it pay? Measured' }, { chapter: 'fastadd', step: 9, label: 'Swap in fast adders' }],
   },
 
   // ---- side quests
