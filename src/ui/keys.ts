@@ -70,7 +70,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'help', group: 'anywhere', caps: ['?'], does: 'the keys on this page', match: [{ key: '?' }] },
   { id: 'esc', group: 'anywhere', caps: ['Esc'], does: 'close the top dialog or menu (in search: clear the query first)' },
   { id: 'code.leave', group: 'anywhere', caps: ['Esc', 'Tab'], does: 'leave a code editor (there Tab indents)' },
-  { id: 'skip', group: 'anywhere', caps: ['Tab'], does: 'the first stop is "Skip to the circuit" (on pages with one)' },
+  { id: 'skip', group: 'anywhere', caps: ['Tab'], does: 'the first stop skips to the circuit on pages with one, else to the page' },
   // ---- chapter pages
   { id: 'step.next', group: 'chapter', caps: [']'], does: 'next step (at the end: the next chapter)', match: [{ code: 'BracketRight', codeOnly: true, shift: false }] },
   { id: 'step.prev', group: 'chapter', caps: ['['], does: 'previous step', match: [{ code: 'BracketLeft', codeOnly: true, shift: false }] },
@@ -197,6 +197,9 @@ export function dispatch(e: KeyLike, phase: 'capture' | 'bubble'): KeyHandler | 
 
 let installed = false;
 
+/** A modal dialog is on screen. */
+const modalOpen = (): boolean => [...document.querySelectorAll<HTMLElement>('[role=dialog][aria-modal=true]')].some((d) => !d.hidden && d.offsetParent !== null);
+
 /** The two window listeners (once, at start-up), and the root's data-singlekeys for CSS key hints. */
 export function installKeys(): void {
   if (installed) return;
@@ -209,7 +212,8 @@ export function installKeys(): void {
     if (!e.altKey) run(e, 'capture');
   }, true);
   window.addEventListener('keydown', (e) => {
-    if (e.defaultPrevented || ownsKeys(e.target) || !shortcutAllowed(e)) return;
+    // a modal dialog open (search, a key sheet) has the keyboard: a global key must not open another over it
+    if (e.defaultPrevented || ownsKeys(e.target) || !shortcutAllowed(e) || modalOpen()) return;
     run(e, 'bubble');
   });
   const sync = () => document.documentElement.toggleAttribute('data-nosinglekeys', !settings.singleKeys);
