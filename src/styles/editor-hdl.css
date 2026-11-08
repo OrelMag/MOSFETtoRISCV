@@ -113,3 +113,6 @@
 @media (prefers-reduced-motion: no-preference) {
   .sb-canvas.hdl-stale svg.ed-svg { transition: opacity 0.2s, filter 0.2s; }
 }
+
+/* a window under 1100 px: the text takes at most 40 % of the width, the drawing the rest (it was a 348 px strip at 768) */
+@media (min-width: 761px) and (max-width: 1100px) { .hdl-pane { max-width: 40vw; } }

@@ -117,6 +117,8 @@ registerToolbarAction({ id: 'zout', title: 'Zoom out', icon: 'minus', order: 30,
 registerToolbarAction({ id: 'zin', title: 'Zoom in', icon: 'plus', order: 40, run: (ed) => ed.view.cam.zoom(0.8) });
 registerToolbarAction({ id: 'fit', title: 'Fit to screen', icon: 'fit', order: 50, run: (ed) => ed.fitView() });
 registerToolbarAction({ id: 'props', title: 'Properties of the selection or the chip', icon: 'sidebar', label: 'Properties', order: 85, levelOnly: true, run: (ed) => ed.toggleProps(), active: (ed) => ed.propsPinned });
+// the sandbox's own: offered while the properties column is folded away (lean: a drawer or a pane beside the canvas is open)
+registerToolbarAction({ id: 'propsfold', title: 'Properties of the selection or the chip (folded while a drawer or a pane is open)', icon: 'sidebar', label: 'Properties', order: 85, run: (ed) => ed.toggleProps(), active: (ed) => ed.propsPinned, shown: (ed) => !ed.level && ed.lean });
 // Menus that gather actions used together, so the bar stays short.
 registerToolbarAction({ id: 'timingmenu', title: 'Timing: probe wires, and the timing panel that records them', icon: 'wave', label: 'Timing ▾', order: 61, group: true, run: (ed) => ed.groupMenu('timingmenu') });
 registerToolbarAction({ id: 'play', title: 'Play: challenges (build a chip, checked and scored) and puzzles (write programs for a CPU)', icon: 'flag', label: 'Play ▾', order: 64, group: true, run: (ed) => ed.groupMenu('play') });
@@ -292,7 +294,10 @@ export class Editor {
       this.view.radix = settings.radix;
       this.repaint();
     });
+    // a phone shows one tab (the rest are in Open…): rotating or resizing across 760 px redraws the tabs
+    if (typeof matchMedia === 'function') matchMedia('(max-width: 760px)').addEventListener?.('change', () => this.renderTabs());
     this.resize = new ResizeObserver(() => {
+      this.refreshLean();
       if (!this.fitted && this.canvas.clientWidth > 0) {
         this.fitted = true;
         this.fitView();
@@ -483,7 +488,24 @@ export class Editor {
     if (this.level) { this.el.classList.toggle('props-sel', this.selCount > 0); this.clearOfProps(); }
   }
 
-  /** Level screen: the properties panel pinned open (it also shows while something is selected). */
+  /**
+   * The properties column is folded into a Properties toggle (a drawer or a pane beside the canvas is open on a window where
+   * palette, properties and that would leave the circuit a sliver): the canvas keeps the room.
+   */
+  lean = false;
+  refreshLean(): void {
+    const w = typeof innerWidth === 'number' ? innerWidth : 9999;
+    const dock = this.slots.overlay.querySelector('.sb-dock .sb-drawer:not([hidden])');
+    const left = [...this.slots.left.children].some((c) => !(c as HTMLElement).hidden && (c as HTMLElement).offsetWidth > 0);
+    const on = !this.level && w > 760 && w <= 1600 && !!(dock || left);
+    if (on === this.lean) return;
+    this.lean = on;
+    this.el.classList.toggle('sb-lean', on);
+    if (!on && this.propsPinned) { this.propsPinned = false; this.el.classList.remove('props-on'); }
+    this.renderActions();
+  }
+
+  /** Level screen (and a lean sandbox): the properties panel pinned open (it also shows while something is selected). */
   propsPinned = false;
   toggleProps(): void {
     this.propsPinned = !this.propsPinned;
@@ -797,12 +819,15 @@ export class Editor {
     // Open… and New chip ▾ in one group that stays in view at the end of the tabs when they scroll (editor.css): with
     // New chip alone sticky, many tabs slid Open… under it
     const grp = h('span', { class: 'sb-new-grp' });
-    const others = Object.values(ws.chips).filter((c) => !ws.open.includes(c.id));
+    // a phone shows only the open chip's tab (editor.css): the other open ones are listed here
+    const solo = typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches;
+    const listed = (c: ChipDoc) => (solo ? c.id !== this.chipId : !ws.open.includes(c.id));
+    const others = Object.values(ws.chips).filter(listed);
     if (others.length) {
       const opt = (c: ChipDoc) => h('option', { value: c.id }, c.name);
       const sel = h('select', { class: 'sb-open', 'aria-label': 'Open a chip', title: 'Open another of your chips' },
         h('option', { value: '' }, `Open… (${others.length})`),
-        folderGroups(ws, (c) => !ws.open.includes(c.id)).flatMap((g) => (!g.chips.length ? [] : g.name === null ? g.chips.map(opt) : [h('optgroup', { label: g.name }, g.chips.map(opt))]))) as HTMLSelectElement;
+        folderGroups(ws, listed).flatMap((g) => (!g.chips.length ? [] : g.name === null ? g.chips.map(opt) : [h('optgroup', { label: g.name }, g.chips.map(opt))]))) as HTMLSelectElement;
       sel.addEventListener('change', () => sel.value && this.openChip(sel.value));
       grp.append(sel);
     }
@@ -1130,9 +1155,9 @@ export class Editor {
     this.placeHint = '';
   }
 
-  /** The palette is a drawer (editor.css, max-width 760px) and open. */
+  /** The palette is a drawer (editor.css, max-width 1000px) and open. */
   private get partsDrawer(): boolean {
-    return this.el.classList.contains('pal-open') && matchMedia('(max-width: 760px)').matches;
+    return this.el.classList.contains('pal-open') && matchMedia('(max-width: 1000px)').matches;
   }
 
   private readonly buzzers = new Buzzers();
@@ -1267,7 +1292,7 @@ export class Editor {
 
   /** Scroll the palette to an item ('<group>/<item>') and flash it (the phone's drawer opens first). */
   revealPart(key: string): void {
-    if (matchMedia('(max-width: 760px)').matches) this.showParts(true);
+    if (matchMedia('(max-width: 1000px)').matches) this.showParts(true);
     this.palette.reveal(key);
   }
 

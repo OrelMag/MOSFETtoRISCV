@@ -370,7 +370,9 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
 /* a switch bank inside a placed chip (ionested.ts): its path, a row of small switches, its value */
 .sb-io-nested { gap: 8px; }
 .in-bank { padding: 2px 8px; gap: 8px; }
-.in-bank .bank-row { display: inline-flex; gap: 2px; }
+.in-bank .bank-row { display: inline-flex; flex-wrap: wrap; gap: 2px; max-width: 226px; }
+.in-bank { flex-wrap: wrap; max-width: 100%; }
+.sb-io-nested { flex-wrap: wrap; max-width: 100%; }
 .in-bank .bank-sw {
   position: relative; width: 12px; height: 20px; padding: 0; border: 0; border-radius: 4px; cursor: pointer;
   background: var(--w0); transition: background 0.15s;
@@ -460,6 +462,24 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
   .sb-top { flex-wrap: wrap; }
   .sb-actions { flex: 1 1 100%; min-width: 0; }
 }
+/* 761-1000 px: the palette is a drawer over the canvas's left edge behind the Parts button (as on a phone), so the circuit
+   keeps palette's 200 px (a 768 px tablet gave it 328 px beside palette and properties) */
+@media (min-width: 761px) and (max-width: 1000px) {
+  .sandbox { grid-template-columns: minmax(0, 1fr) 240px; grid-template-areas: 'top top' 'center props'; }
+  .sb-parts-btn { display: inline-flex; }
+  .sandbox:not(.pal-open) > .sb-palette { display: none; }
+  .sandbox > .sb-palette { grid-area: center; justify-self: start; width: 236px; z-index: 8; box-shadow: var(--shadow-lg); border-right: 1px solid var(--border); }
+  .sb-item { touch-action: pan-y; }
+}
+/* Lean (editor.ts refreshLean): a drawer or a pane beside the canvas is open on a window under 1600 px: the properties
+   column folds into the Properties toggle, which floats it over the canvas's right edge (the same grid cell) */
+.sandbox.sb-lean { grid-template-columns: 236px minmax(0, 1fr); grid-template-areas: 'top top' 'pal center'; }
+.sandbox.sb-lean > .sb-props { display: none; }
+.sandbox.sb-lean.props-on > .sb-props { display: block; grid-area: center; justify-self: end; width: 290px; z-index: 9; box-shadow: var(--shadow-lg); border-left: 1px solid var(--border); }
+@media (max-width: 1100px) { .sandbox.sb-lean { grid-template-columns: 200px minmax(0, 1fr); } }
+@media (min-width: 761px) and (max-width: 1000px) {
+  .sandbox.sb-lean { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'top' 'center'; }
+}
 @media (max-width: 760px) {
   .sandbox { display: flex; flex-direction: column; height: auto; }
   /* the palette is a drawer under the top bar, closed by default: the canvas starts near the top */
@@ -470,10 +490,35 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
   .sb-palette { max-height: 50vh; border-right: 0; border-bottom: 1px solid var(--border); }
   /* a vertical swipe scrolls the drawer (a drag would have to go down into the canvas anyway): a tap arms a part */
   .sb-item { touch-action: pan-y; }
-  .sb-center { height: 62vh; }
+  /* a phone: the column is at least 62 vh and grows with what sits under the canvas (the page scrolls), the canvas never below 40 vh */
+  .sandbox:not(.sb-levelmode) .sb-center { height: auto; min-height: 62vh; }
+  .sandbox:not(.sb-levelmode) .sb-mid { flex: 1 0 40vh; min-height: 40vh; }
+  .sandbox:not(.sb-levelmode) .sb-bottom { overflow-y: visible; flex: none; }
+  .sb-chal-body { max-height: 30vh; }
   /* the run bar wraps to two rows here: it keeps them, the canvas takes what is left */
   .sb-center > .sb-controls { flex: none; }
   .sb-props { border-left: 0; border-top: 1px solid var(--border); }
+}
+
+/* a phone's tabs: the open chip's name stays, the others are in Open… (editor.ts renderTabs lists them there) */
+@media (max-width: 760px) {
+  .sb-tabs > .sb-tab:not(.on) { display: none; }
+  /* Parts, the open chip's tab (whole name) and the save state share the first row; Open… and New chip are the second */
+  .sb-tabs { display: contents; }
+  .sb-parts-btn { order: 0; }
+  .sb-tabs > .sb-tab.on { order: 1; flex: 1 1 0; min-width: 0; }
+  .sb-tabs > .sb-trail { order: 1; }
+  .sb-top-slot { order: 2; }
+  .sb-tabs > .sb-new-grp { order: 3; flex: 1 1 100%; position: static; padding-left: 0; }
+  .sb-actions { order: 4; }
+  .sb-save[data-state='saving'] .sb-save-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  /* the Timing panel under the circuit: its header wraps (Clear probes / VCD overlapped) and it is no taller than a third of the screen */
+  .sb-bottom .analyzer { height: min(220px, 34vh); }
+  .sb-bottom .la-head { flex-wrap: wrap; row-gap: 2px; }
+  .sb-bottom .la-head .la-hint, .sb-bottom .la-head .spacer { display: none; }
+  .sb-bottom .la-names { width: 110px; }
+  /* many switches or keys inside: the I/O bar scrolls in its own band instead of pushing the circuit down */
+  .sb-iobar { max-height: 24vh; overflow-y: auto; }
 }
 
 /* ---------- analysis: probes, timing panel, critical path, lint hints (analysis.ts) ---------- */
@@ -520,6 +565,17 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
   .sb-addfolder { min-width: 40px; min-height: 40px; align-items: center; justify-content: center; }
   .sb-tab-name, .sb-proj, .sb-menu button, .sb-toast-act, .sb-diag-pill, .sb-mode-cancel { min-height: 40px; }
   .sb-advanced > summary { padding: 10px 0; }
+  /* selects and fields in the run bar and the properties, the close of a tab, Open…, the Screens drawer's switches, the hint chip */
+  .sb-controls select, .sb-props select, .sb-props input:not([type='range']):not([type='checkbox']):not([type='radio']), .sb-open, .sb-scr-sw button { min-height: 40px; }
+  .sb-scr-sw button { min-width: 40px; }
+  .sb-tab-x { min-width: 40px; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+  .sb-hint button, .sb-hint { min-height: 40px; }
+  .sb-props input[type='range'] { min-height: 40px; }
+  /* a bank of switches inside a chip: 32 of them must still wrap into a few rows (they are 22 x 34 here, not 40 wide) */
+  .in-bank .bank-sw { min-width: 22px; width: 22px; min-height: 34px; height: 34px; }
+  .in-bank .bank-sw .knob { left: 6px; }
+  .in-bank .bank-sw.v1 .knob { bottom: 20px; }
+  .in-bank .bank-row { max-width: 250px; }
   /* the save state: a dot and a word in the bar, its tap area spread around it */
   .sb-save { position: relative; }
   .sb-save::after { content: ''; position: absolute; inset: -13px -9px; }
@@ -559,7 +615,8 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
 :root[data-theme='dark'] .sb-minimap { --mm-s: 35%; --mm-l: 30%; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .sb-minimap { --mm-s: 35%; --mm-l: 30%; } }
 @media (pointer: coarse) { .mm-note { display: none; } .sb-minimap { width: 176px; height: 124px; } }
-@media (max-width: 760px) { .sb-minimap { bottom: 56px; } }
+/* a phone: no more than ~10 % of the canvas */
+@media (max-width: 760px) { .sb-minimap { width: min(34%, 128px); height: 88px; bottom: 56px; right: 8px; } }
 
 /* 360 px and under: "+ New chip" is its plus (the open tab would slide under the sticky group); it keeps its name as aria-label */
 @media (max-width: 380px) { .sb-new-lbl { display: none; } }
