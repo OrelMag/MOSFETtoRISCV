@@ -233,7 +233,7 @@ export const chMosfet: Chapter = {
           Vt falls as Vds rises and as the channel shortens, and λ grows. Leakage is why Vt, and with it VDD, stopped
           scaling in the mid-2000s, and clock frequencies stalled with them.</p>`,
       },
-      widget: () => withModel(mosRegionsWidget(), valve3d()),
+      widget: () => { const link = biasLink(1.2, 0.3); return withModel(mosRegionsWidget(link), valve3d(link)); },
       challenge: {
         kind: 'quiz', question: 'An NMOS has Vgs = 1.2 V and Vds = 0.3 V (Vt = 0.45 V). Which region is it in?',
         options: ['Linear', 'Saturation', 'Cut-off'], answer: 0,

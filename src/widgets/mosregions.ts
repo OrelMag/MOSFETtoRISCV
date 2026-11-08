@@ -11,11 +11,13 @@ import { chips, idVdsChart, slider } from './mosparts';
 import { crossSection } from './mosxsec';
 import { fetWater, fetWords } from './water';
 import type { WaterMount } from './waterkit';
+import type { BiasLink } from './mosshare';
 
 const SWEEP_MS = 4000;
 
-export function mosRegionsWidget(): Widget {
-  let vg = 1.2, vd = 0.3, flowing = false;
+/** `link`: the gate and drain shared with a 3D model of the same device (mosshare.ts). */
+export function mosRegionsWidget(link?: BiasLink): Widget {
+  let vg = link?.vg ?? 1.2, vd = link?.vd ?? 0.3, flowing = false;
   let sweepT0: number | null = null;
   const chart = idVdsChart(640, 300, true);
   const xs = crossSection('channel', 'The channel of an NMOS transistor, close up');
@@ -57,6 +59,7 @@ export function mosRegionsWidget(): Widget {
   }
 
   function paint(dt: number): void {
+    link?.set(vg, vd, chart);
     chart.paint(vg, vd, false);
     readout.paint(vg, vd, false);
     if (view === 'xs') flowing = xs.paint('n', vg, vd, dt);
@@ -79,7 +82,8 @@ export function mosRegionsWidget(): Widget {
     readout.el,
     h('div', { class: 'panel mos-xpanel' }, h('h3', null, 'The channel, close up'), seg, xs.el, waterBox));
 
+  const unlink = link?.follow(chart, (g, d) => { stopSweep(); vg = g; vd = d; gSl.set(vg); repaint(); });
   syncSweep();
   repaint();
-  return { el, destroy() { dead = true; loop.stop(); water?.destroy(); water = null; } };
+  return { el, destroy() { dead = true; loop.stop(); unlink?.(); water?.destroy(); water = null; } };
 }
