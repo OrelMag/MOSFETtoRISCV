@@ -59,7 +59,7 @@ const BENCH_RAM_K = 6;
 export const BENCH_AT: Record<string, [number, number]> = {
   tie: [4, 3], por: [8, 2], porn: [19, 4], rsto: [25, 6],
   core: [34, 2],
-  ds: [56, 2], dw: [94, 26], kleds: [60, 14], isleds: [70, 12], kirq: [60, 24], isirq: [70, 22],
+  ds: [62, 2], dw: [94, 26], kleds: [60, 14], isleds: [70, 12], kirq: [60, 24], isirq: [70, 22],
   nhi: [82, 2], ramwe: [88, 2], ledwe: [88, 12], irqwe: [88, 22],
   mem: [98, 2], ledr: [98, 14], irqr: [98, 24],
   pcs: [12, 16], rom: [16, 16],
