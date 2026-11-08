@@ -151,14 +151,14 @@ const sheet = (c: RGB | RGBA, r0: number, y0: number, r1: number, y1: number, th
   Array.from({ length: SEG }, (_, k) => slab(c, phiOf(k), Math.PI / SEG, r0, y0, r1, y1, thick));
 
 /** The plot behind the speaker (its own scale: `amp` stands for full scale). */
-export const PLOT = { x0: -96, x1: 96, z: -108, yc: 52, amp: 26 };
+export const PLOT = { x0: -90, x1: 90, z: -20, yc: 134, amp: 20 };
 const stepX = (d: Drive, k: number): number => PLOT.x0 + ((PLOT.x1 - PLOT.x0) * k) / d.n;
 const level = (v: number): number => PLOT.yc + v * PLOT.amp;
 /** The staircase the plot draws: the held DAC codes (speaker) or the ADC's held samples (mic), each on −1 … 1. */
 export const staircase = (d: Drive): number[] => (d.mode === 'speaker' ? d.codes.map((c) => c / d.peak) : [...d.adc]);
 
 /** Where the voltage bar at the coil's terminals stands. */
-export const BAR = { x: 122, y0: 40, z: -6, half: 26 };
+export const BAR = { x: 118, y0: 40, z: -6, half: 24 };
 
 /** Fixed geometry, mm. Winding 16 … 34 (18 mm) in a gap 22 … 28 (6 mm): Xmax = (18 − 6) / 2 = 6 mm. */
 export const GEOM = {
@@ -207,19 +207,28 @@ export function speakerParts(d: Drive, t: number, P: SpeakerPalette): Part[] {
   return out;
 }
 
-export function speakerAnchors(d: Drive, t: number): Anchor[] {
+export function speakerAnchors(d: Drive, t: number, close = false): Anchor[] {
   const dy = poseAt(d, t).cone * XMAX_MM * DRAW_K;
   const at = (r: number, phi: number, y: number): Vec3 => [r * Math.cos(phi), y, r * Math.sin(phi)];
   const up: Vec3 = [0, 1, 0], front: Vec3 = [0, 0, 1];
+  if (close) {
+    // The close-up on the gap (the left cut face): only what is in view, each label towards the middle.
+    return [
+      { text: 'Top plate', p: [-28, 25, 0], side: 'l', n: front },
+      { text: 'Voice coil', p: [-19.8, 28 + dy, 0], side: 'r', n: front },
+      { text: 'Pole piece', p: [-8, 11, 0], side: 'r', n: front },
+      { text: 'Ferrite magnet', p: [-34, 13, 0], side: 'l', n: front },
+    ];
+  }
   return [
     { text: 'Cone', p: at(44, Math.PI * 1.3, 52 + dy), side: 'l', n: up },
     { text: 'Surround', p: at(67, Math.PI * 1.12, 77 + dy / 2), side: 'l', n: up },
     { text: 'Spider', p: at(40, Math.PI * 1.7, 38 + dy * 0.4), side: 'r', n: up },
-    { text: 'Voice coil', p: [-19.8, 25 + dy, 0], side: 'l', n: front },
+    { text: 'Voice coil', p: [-19.8, 25 + dy, 0], side: 'r', n: front },
     { text: 'Pole piece', p: [-9, 12, 0], side: 'b', n: front },
-    { text: 'Ferrite magnet', p: [-48, 14, 0], side: 'l', n: front },
-    { text: 'Top plate', p: [-40, 25, 0], side: 'l', n: front },
-    { text: 'Frame', p: at(72, Math.PI * 1.5, 52), side: 'r', n: front },
+    { text: 'Ferrite magnet', p: [-54, 11, 0], side: 'l', n: front },
+    { text: 'Top plate', p: [-54, 25, 0], side: 'l', n: front },
+    { text: 'Frame', p: at(71.4, Math.PI * 1.83, 52), side: 'r', n: front },
     { text: d.mode === 'speaker' ? 'Coil current' : 'EMF', p: [BAR.x, BAR.y0 + BAR.half + 2, BAR.z], side: 't', n: up },
     { text: d.mode === 'speaker' ? 'Held DAC codes' : 'ADC samples', p: [PLOT.x0 + 6, PLOT.yc + PLOT.amp + 4, PLOT.z], side: 't', n: front },
     { text: 'Cone position', p: [PLOT.x1 - 14, PLOT.yc - PLOT.amp - 3, PLOT.z + 2.4], side: 'b', n: front },

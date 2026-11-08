@@ -19,3 +19,4 @@
 .sp-mat li { padding: 1px 0; }
 @media (pointer: coarse) { .sp-seg button { min-height: 40px; } }
 .m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.sp-host { display: contents; }

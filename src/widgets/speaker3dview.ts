@@ -17,7 +17,8 @@ import {
 
 /** Sample periods a second on Run (the voice runs at 8 000 a second, so it is slowed 500 times), and a step's motion. */
 const RATE = 16, STEP_MS = 420;
-const VIEW: OrbitView = { target: [10, 50, -40], yaw: 0.45, pitch: 0.38, dist: 520 };
+const VIEW: OrbitView = { target: [10, 74, -20], yaw: 0.3, pitch: 0.16, dist: 340 };
+const CLOSE: OrbitView = { target: [-19, 28, 0], yaw: 0.12, pitch: 0.08, dist: 95 };
 const fmt = (v: number, d = 2) => v.toFixed(d).replace('-', '−');
 
 export function speakerView(): Widget {
@@ -27,10 +28,11 @@ export function speakerView(): Widget {
 
   function build(x: readonly number[], rate: number): void {
     const start = loudestWindow(x), codes = x.slice(start, start + WINDOW);
-    let mode: Mode = 'speaker', smooth = false, running = false, t = 0, stepFrom = -1, stepT0 = 0;
+    let mode: Mode = 'speaker', smooth = false, running = false, t = 0, stepFrom = -1, stepT0 = 0, close = false;
     let d: Drive = makeDrive(codes, mode, smooth, rate);
     const draw = () => paint();
-    const st = modelStage(panel, {
+    const probeHost = h('span', { class: 'sp-host', 'aria-hidden': 'true' }); // the colour probe lives here: it must outlast replaceChildren below
+    const st = modelStage(probeHost, {
       aria: 'A cut-away moving-coil loudspeaker in 3D with a plot of the held samples behind it: cone, surround, spider, voice coil in the magnet gap, pole piece, ferrite ring, top plate and frame',
       camera: { ...VIEW },
       limits: { minDist: 120, maxDist: 1200 },
@@ -44,7 +46,7 @@ export function speakerView(): Widget {
       stair: st.rgb('--sp-stair'), stairDim: st.rgba('--sp-stair', 0.3), trace: st.rgb('--sp-trace'), cursor: st.rgb('--sp-cursor'),
       live: st.rgb('--m3-charge'), zero: st.rgb('--sp-cursor'),
     });
-    function paint(): void { st.paint(speakerParts(d, t, palette()), speakerAnchors(d, t)); }
+    function paint(): void { st.paint(speakerParts(d, t, palette()), speakerAnchors(d, t, close)); }
 
     const kv = h('div', { class: 'r3-kv' }), live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
     const runBtn = h('button', { type: 'button', class: 'btn sm primary', 'aria-pressed': 'false' }, 'Run') as HTMLButtonElement;
@@ -52,9 +54,9 @@ export function speakerView(): Widget {
       const p = poseAt(d, t);
       const rows: [string, string][] = [['Sample', `${p.k + 1} of ${d.n}, held 125 µs`]];
       if (mode === 'speaker') {
-        rows.push(['DAC code', String(p.code)], ['Coil current (held)', `${fmt(currentA(p.drive))} A`], ['Cone position', `${fmt(coneMm(p.cone))} mm`]);
+        rows.push(['DAC code', fmt(p.code, 0)], ['Coil current (held)', `${fmt(currentA(p.drive))} A`], ['Cone position', `${fmt(coneMm(p.cone))} mm`]);
       } else {
-        rows.push(['Cone position (sound)', `${fmt(coneMm(p.cone))} mm`], ['EMF = Bl · v', `${fmt(emfVolts(d, p.k))} V`], ['ADC code (held)', String(p.code)]);
+        rows.push(['Cone position (sound)', `${fmt(coneMm(p.cone))} mm`], ['EMF = Bl · v, at this scaled stroke', `${fmt(emfVolts(d, p.k))} V`], ['ADC code (held)', fmt(p.code, 0)]);
       }
       rows.push(['Xmax', `±${XMAX_MM} mm`]);
       kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
@@ -95,7 +97,7 @@ export function speakerView(): Widget {
     });
     const EXPLAIN: Record<Mode, string> = {
       speaker: `The DAC holds each sample for one period, the coil current follows it, and the suspension turns that current into a position: full scale is ${fmt(I_FULL)} A for Xmax (x = Bl · i · Cms, with Cms = ${CMS_MM_N} mm/N). With Smoothing off the cone position is exactly the staircase, the zero-order hold. Smoothing lags the cone by about ${TAU} periods, a stand-in for the reconstruction filter and the cone's mass.`,
-      mic: `The same machine run backwards: sound moves the cone through the voice's samples joined by straight lines, the coil moving in the gap makes e = Bl · v with Bl = ${BL} T·m, and the ADC takes one sample of that voltage a period, held for the next. Scaled so the window's peak is Xmax.`,
+      mic: `The same machine run backwards: sound moves the cone through the voice's samples joined by straight lines, the coil moving in the gap makes e = Bl · v with Bl = ${BL} T·m, and the ADC takes one sample of that voltage a period, held for the next. Scaled so the window's peak is Xmax: a real cone moves microns in sound, so these volts are for the stroke drawn, far more than a real microphone makes.`,
     };
     const explain = h('p', { class: 'm3-sub' }, EXPLAIN.speaker);
     const modes = ['speaker', 'mic'] as const;
@@ -123,16 +125,24 @@ export function speakerView(): Widget {
       h('li', null, 'Voice coil: copper wire on an aluminium former, 38 mm'),
       h('li', null, 'Ferrite ring magnet; steel back plate, top plate and pole piece'),
       h('li', null, 'Frame: cast aluminium, six spokes'));
+    const closeBtn = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false' }, 'Close-up of the gap') as HTMLButtonElement;
+    closeBtn.addEventListener('click', () => {
+      close = !close; closeBtn.setAttribute('aria-pressed', String(close)); closeBtn.classList.toggle('on', close);
+      closeBtn.textContent = close ? 'Whole driver' : 'Close-up of the gap';
+      st.setView({ ...(close ? CLOSE : VIEW) });
+      kick();
+    });
     const restartBtn = h('button', { type: 'button', class: 'btn sm' }, 'Back to sample 1');
     restartBtn.addEventListener('click', () => { running = false; t = 0; stepFrom = -1; readout(true); kick(); });
     panel.replaceChildren(
+      probeHost,
       h('h3', { class: 'm3-title' }, 'The loudspeaker and the microphone'),
       h('p', { class: 'm3-sub' }, `A Dayton RS180-8 woofer cut open, driven by this chapter's voice: ${WINDOW} samples of the recording above at ${VOICE_RATE} a second, one period (125 µs) each. Time is slowed so each hold can be seen.`),
       h('div', { class: 'r3' },
         h('div', { class: 'r3-main' },
           h('div', { class: 'r3-ctl' },
             h('div', { class: 'seg sp-seg', role: 'group', 'aria-label': 'Speaker or microphone' }, ...modeBtns),
-            h('div', { class: 'r3-btns' }, runBtn, stepBtn, smoothBtn, restartBtn, st.resetBtn)),
+            h('div', { class: 'r3-btns' }, runBtn, stepBtn, smoothBtn, restartBtn, closeBtn, st.resetBtn)),
           st.el, st.hint, live),
         h('div', { class: 'r3-side' }, h('h4', null, 'This driver ', h('span', { class: 'r3-badge' }, 'RS180-8')), kv, explain, mats)));
     panel.addEventListener('keydown', (e) => { if (e.key === 'Escape' && running) { running = false; readout(true); kick(); } });
