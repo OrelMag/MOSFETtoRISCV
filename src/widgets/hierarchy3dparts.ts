@@ -103,9 +103,9 @@ export function hierarchyAnchors(): Anchor[] {
 }
 
 /** The camera while following the courier at x. */
-export const followView = (x: number) => ({ target: [x, 5, -4] as Vec3, yaw: 0.45, pitch: 0.3, dist: 48 });
+export const followView = (x: number) => ({ target: [x, 5, -4] as Vec3, yaw: 0.45, pitch: 0.32, dist: 78 });
 /** The whole road. */
-export const overview = (narrow: boolean) => ({ target: [60, 6, -6] as Vec3, yaw: 0.25, pitch: 0.42, dist: narrow ? 330 : 205 });
+export const overview = (narrow: boolean) => ({ target: [60, 6, -6] as Vec3, yaw: 0.25, pitch: 0.42, dist: narrow ? 270 : 205 });
 
 /** Seconds the courier takes one way to a distance: a drawing's time, longer for the far levels, not the level's latency. */
 export const flightSeconds = (x: number): number => 0.9 + 0.032 * x;
