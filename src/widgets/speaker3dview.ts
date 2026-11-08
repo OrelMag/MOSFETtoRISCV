@@ -19,7 +19,8 @@ import {
 const RATE = 16, STEP_MS = 420;
 const VIEW: OrbitView = { target: [10, 74, -20], yaw: 0.3, pitch: 0.16, dist: 340 };
 const CLOSE: OrbitView = { target: [-19, 28, 0], yaw: 0.12, pitch: 0.08, dist: 95 };
-const fmt = (v: number, d = 2) => v.toFixed(d).replace('-', '−');
+// Never "−0.0": a value that rounds to zero at `d` places is zero.
+const fmt = (v: number, d = 2) => (Math.abs(v) < 0.5 * 10 ** -d ? 0 : v).toFixed(d).replace('-', '−');
 
 export function speakerView(): Widget {
   const panel = h('div', { class: 'panel' }, h('h3', { class: 'm3-title' }, 'The loudspeaker and the microphone'), h('p', { class: 'm3-sub' }, 'Loading the recording…'));
@@ -54,9 +55,9 @@ export function speakerView(): Widget {
       const p = poseAt(d, t);
       const rows: [string, string][] = [['Sample', `${p.k + 1} of ${d.n}, held 125 µs`]];
       if (mode === 'speaker') {
-        rows.push(['DAC code', fmt(p.code, 0)], ['Coil current (held)', `${fmt(currentA(p.drive))} A`], ['Cone position', `${fmt(coneMm(p.cone))} mm`]);
+        rows.push(['DAC code', fmt(p.code, 0)], ['Coil current (held)', `${fmt(currentA(p.drive))} A`], ['Cone position', `${fmt(coneMm(p.cone), 1)} mm`]);
       } else {
-        rows.push(['Cone position (sound)', `${fmt(coneMm(p.cone))} mm`], ['EMF = Bl · v, at this scaled stroke', `${fmt(emfVolts(d, p.k))} V`], ['ADC code (held)', fmt(p.code, 0)]);
+        rows.push(['Cone position (sound)', `${fmt(coneMm(p.cone), 1)} mm`], ['EMF = Bl · v, at this scaled stroke', `${fmt(emfVolts(d, p.k))} V`], ['ADC code (held)', fmt(p.code, 0)]);
       }
       rows.push(['Xmax', `±${XMAX_MM} mm`]);
       kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
@@ -64,8 +65,8 @@ export function speakerView(): Widget {
       runBtn.setAttribute('aria-pressed', String(running));
       live.setAttribute('aria-live', running && !announce ? 'off' : 'polite');
       const text = mode === 'speaker'
-        ? `Sample ${p.k + 1}: code ${p.code} held, cone at ${fmt(coneMm(p.cone))} millimetres of ±${XMAX_MM}.`
-        : `Sample ${p.k + 1}: the cone is at ${fmt(coneMm(p.cone))} millimetres, the coil makes ${fmt(emfVolts(d, p.k))} volts, the ADC holds code ${p.code}.`;
+        ? `Sample ${p.k + 1}: code ${p.code} held, cone at ${fmt(coneMm(p.cone), 1)} millimetres of ±${XMAX_MM}.`
+        : `Sample ${p.k + 1}: the cone is at ${fmt(coneMm(p.cone), 1)} millimetres, the coil makes ${fmt(emfVolts(d, p.k))} volts, the ADC holds code ${p.code}.`;
       if (live.textContent !== text) live.textContent = text;
     }
 
