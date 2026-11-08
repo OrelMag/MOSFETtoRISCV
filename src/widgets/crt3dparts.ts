@@ -328,33 +328,52 @@ export function poseParts(P: CrtPalette, pose: CrtPose): Part[] {
   const bm = pose.beam;
   if (bm) {
     const spot = spotOf(bm.x, bm.y);
-    if (bm.blanked) out.push(...wire([P.ghost[0], P.ghost[1], P.ghost[2], 0.35] as RGBA4, beamPath(0, spot), 0.5));
+    if (bm.blanked) out.push(...wire([P.ghost[0], P.ghost[1], P.ghost[2], 0.35] as RGBA4, beamPath(0, spot), 0.8));
     else {
       const cols: RGB[] = [[1, 0.15, 0.12], [0.2, 1, 0.25], [0.25, 0.4, 1]]; // R, G, B guns, in order along z
       [-G.GUN_PITCH, 0, G.GUN_PITCH].forEach((z, k) => {
         const lv = pose.levels[k];
         if (lv <= 0.001) return;
-        for (const p of wire([cols[k][0], cols[k][1], cols[k][2], 0.9] as RGBA4, beamPath(z, spot), 0.45 + 0.35 * lv)) out.push({ ...p, emissive: lit(cols[k], 0.4 + 0.5 * lv) });
+        for (const p of wire([cols[k][0], cols[k][1], cols[k][2], 0.9] as RGBA4, beamPath(z, spot), 0.9 + 0.9 * lv)) out.push({ ...p, emissive: lit(cols[k], 0.4 + 0.5 * lv) });
       });
     }
   }
   return out;
 }
 
-export function crtAnchors(): Anchor[] {
-  const G = GEOM, right: Vec3 = [0, 0, 1], up: Vec3 = [0, 1, 0], front: Vec3 = [1, 0, 0];
+export type CrtDetail = 'overview' | 'gun' | 'yoke';
+
+/** Labels for what the camera is on: a few for the whole tube, the electrodes up close at the gun, the coils at the yoke. */
+export function crtAnchors(detail: CrtDetail = 'overview'): Anchor[] {
+  const G = GEOM, right: Vec3 = [0, 0, 1], up: Vec3 = [0, 1, 0], front: Vec3 = [1, 0, 0], down: Vec3 = [0, -1, 0];
+  if (detail === 'gun') {
+    return [
+      { text: 'cathodes + heaters', p: [-150, 0, -5.5], side: 'l', n: right },
+      { text: 'G1 grid', p: [-144, 5.5, 9.5], side: 't', n: right },
+      { text: 'G2 screen grid', p: [-141, -5.5, 9.5], side: 'b', n: right },
+      { text: 'G3–G5 focus', p: [-100, 5.5, -9.5], side: 't', n: right },
+      { text: 'G6 final anode', p: [-74, -5.8, 9.8], side: 'b', n: right },
+      { text: 'neck, 29.1 mm', p: [-125, -G.NECK_R, 0], side: 'b', n: down },
+      { text: 'stem, 10 pins', p: [G.NECK_X0 - 10, 11, 0], side: 'l', n: up },
+    ];
+  }
+  if (detail === 'yoke') {
+    const fe = sectionPoint(9, 0);
+    return [
+      { text: 'horizontal coils (sweep)', p: [-20, G.NECK_R + 8, 0], side: 't', n: up },
+      { text: 'vertical coils (step)', p: [-20, 0, G.NECK_R + 14], side: 'r', n: right },
+      { text: 'ferrite core', p: [9, fe[0] + 15.5, 0], side: 't', n: up },
+      { text: 'neck / funnel join', p: [G.JOIN_X, -G.NECK_R - 2, 0], side: 'b', n: down },
+      { text: 'aquadag funnel', p: [60, sectionPoint(60, Math.PI)[0], sectionPoint(60, Math.PI)[1]], side: 'b', n: down },
+    ];
+  }
   const fn = sectionPoint(90, Math.PI), an = sectionPoint(70, 0);
   return [
     { text: 'electron gun', p: [-100, -5.5, 9.5], side: 'b', n: right },
     { text: 'deflection yoke', p: [0, 42, 0], side: 't', n: up },
     { text: 'funnel, aquadag', p: [90, fn[0], fn[1]], side: 'b', n: right },
     { text: 'phosphor screen', p: [G.D, -G.H_MM / 2, 0], side: 'b', n: front },
-    { text: 'neck, 29.1 mm', p: [-130, G.NECK_R, 0], side: 't', n: up, minor: true },
-    { text: 'cathodes + heaters', p: [-150, 0, -5.5], side: 'l', n: right, minor: true },
-    { text: 'G1, G2', p: [-142, 5.5, 9.5], side: 't', n: right, minor: true },
-    { text: 'G3–G5 focus', p: [-100, 5.5, -9.5], side: 't', n: right, minor: true },
-    { text: 'G6 final anode', p: [-74, 5.8, 9.8], side: 't', n: right, minor: true },
-    { text: 'anode button', p: [70, an[0] + 22, 0], side: 't', n: up, minor: true },
+    { text: 'anode button', p: [70, an[0] + 22, 0], side: 't', n: up },
     { text: 'shadow mask', p: [G.D - 14, G.H_MM / 2, G.W_MM / 2], side: 'r', n: front, minor: true },
   ];
 }

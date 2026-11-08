@@ -12,30 +12,37 @@ import { frameLoop } from './mosfet';
 import { modelStage } from './modelstage';
 import {
   beamAt, crtAnchors, CrtRun, decayTicks, frameTicks, GEOM, hTotal, levelsOf, poseParts, ROW_WORDS, staticParts, timingOf, vTotal, yokeCurrent,
-  type CrtPalette, type Timing,
+  type CrtDetail, type CrtPalette, type Timing,
 } from './crt3dparts';
 import type { OrbitView } from '../gl/camera';
 
 const PICS: [Uint8Array, Uint8Array] = [barsPicture(), ringsPicture()];
 const PICTURE = ['colour bars', 'rings'];
 const VIEWS: Record<string, OrbitView> = {
-  three: { target: [10, 0, 0], yaw: 0.62, pitch: 0.3, dist: 720 },
-  front: { target: [GEOM.D, 0, 0], yaw: 1.2, pitch: 0.14, dist: 640 },
-  side: { target: [10, 0, 0], yaw: 0.05, pitch: 0.12, dist: 800 },
+  three: { target: [30, 0, 0], yaw: 0.62, pitch: 0.3, dist: 540 },
+  front: { target: [GEOM.D, 0, 0], yaw: 1.2, pitch: 0.14, dist: 500 },
+  side: { target: [10, 0, 0], yaw: 0.05, pitch: 0.12, dist: 620 },
+  gun: { target: [-105, 0, 0], yaw: 0.45, pitch: 0.25, dist: 200 },
+  yoke: { target: [-5, 0, 0], yaw: 0.6, pitch: 0.3, dist: 300 },
+};
+/** A phone's stage is narrow: stand further back so the whole tube is in it. */
+const viewOf = (name: string): OrbitView => {
+  const o = VIEWS[name], narrow = typeof matchMedia === 'function' && matchMedia('(max-width: 640px)').matches;
+  return { ...o, dist: o.dist * (narrow ? 1.75 : 1) };
 };
 const hex = (n: number, d = 3) => `0x${n.toString(16).toUpperCase().padStart(d, '0')}`;
 const SVGW = 300, SVGH = 64;
 
 export function crtView(): Widget {
   let blanking = false, tm: Timing = timingOf(false), run = new CrtRun(tm, PICS);
-  let tf = 0.5, running = false, rate = 256, persist = 1, acc = 0, sync = true;
+  let detail: CrtDetail = 'overview', tf = 0.5, running = false, rate = 256, persist = 16, acc = 0, sync = true;
 
-  const panel = h('div', { class: 'panel' });
+  const panel = h('div', { class: 'panel crt3d' });
   const stage = modelStage(panel, {
     aria: 'A colour picture tube in 3D: an electron gun with three beams, the deflection yoke at the neck, the funnel and the phosphor screen, with the beam painting the picture the scan-out sends',
-    camera: { ...VIEWS.three },
+    camera: viewOf('three'),
     limits: { minDist: 120, maxDist: 1500 },
-    note: 'Drawn, not modelled: one smooth bend per beam through a single deflection centre, electrodes as plates, a shadow mask with no holes, a flat faceplate, one phosphor cell per pixel (a real pixel is many red, green and blue dots), and an exponential fade. Sizes, angle, neck, stem pins and the order of the electrodes are real.',
+    note: 'Drawn, not modelled: one smooth bend per beam through a single deflection centre, electrodes as plates, a shadow mask with no holes, a flat faceplate, one phosphor cell per pixel (a real pixel is many red, green and blue dots), and an exponential fade. The beams are drawn about 2 mm thick (the real ones are a fraction of a millimetre) so they show. Sizes, angle, neck, stem pins and the order of the electrodes are real.',
     draw: () => paint(),
   });
   const palette = (): CrtPalette => ({
@@ -55,7 +62,7 @@ export function crtView(): Widget {
       const c = levelsOf(run.litCol[i]);
       return [c[0] * g, c[1] * g, c[2] * g];
     };
-    stage.paint([...staticParts(P, cur), ...poseParts(P, { beam: b, levels: lv, cell, current: cur, bin: flat ? 2 : 1 })], crtAnchors());
+    stage.paint([...staticParts(P, cur), ...poseParts(P, { beam: b, levels: lv, cell, current: cur, bin: flat ? 2 : 1 })], crtAnchors(detail));
   }
 
   // ---- readout
@@ -162,13 +169,18 @@ export function crtView(): Widget {
   });
   const pers = h('select', { class: 'crt-sel', 'aria-label': 'phosphor persistence' },
     h('option', { value: '1' }, 'Fade ≈ 1 ms (P22 order)'), h('option', { value: '4' }, 'Fade ×4 (exaggerated)'), h('option', { value: '16' }, 'Fade ×16 (exaggerated)')) as HTMLSelectElement;
+  pers.value = String(persist);
   pers.addEventListener('change', () => { persist = Number(pers.value); kick(); });
   const speed = h('input', { type: 'range', min: 4, max: 12, step: 0.1, value: Math.log2(rate), 'aria-label': 'Speed in scan-out cycles a second' }) as HTMLInputElement;
   const speedOut = h('output', null, '');
   const showSpeed = () => { speedOut.textContent = `${Math.round(rate)}/s`; };
   speed.addEventListener('input', () => { rate = 2 ** Number(speed.value); showSpeed(); });
   showSpeed();
-  const view = (name: string) => { const b = h('button', { type: 'button', class: 'btn sm' }, name[0].toUpperCase() + name.slice(1)); b.addEventListener('click', () => stage.setView({ ...VIEWS[name] })); return b; };
+  const view = (name: string) => {
+    const b = h('button', { type: 'button', class: 'btn sm' }, name[0].toUpperCase() + name.slice(1));
+    b.addEventListener('click', () => { detail = name === 'gun' ? 'gun' : name === 'yoke' ? 'yoke' : 'overview'; stage.setView(viewOf(name)); paint(); });
+    return b;
+  };
 
   function retraceText(): string {
     return blanking
@@ -189,9 +201,9 @@ export function crtView(): Widget {
         h('div', { class: 'r3-ctl' },
           h('label', { class: 'crt-chk' }, syncBox, 'flip at vsync'),
           mode, pers,
-          h('div', { class: 'crt-seg', role: 'group', 'aria-label': 'Views' }, view('three'), view('front'), view('side'), stage.resetBtn)),
+          h('div', { class: 'crt-seg', role: 'group', 'aria-label': 'Views' }, view('three'), view('front'), view('side'), view('gun'), view('yoke'), stage.resetBtn)),
         stage.el, stage.hint, retraceNote, live),
-      h('div', { class: 'r3-side' }, h('h4', null, 'The beam ', h('span', { class: 'r3-badge' }, 'model')), kv, plotsBox)));
+      h('div', { class: 'r3-side' }, h('div', null, h('h4', null, 'The beam ', h('span', { class: 'r3-badge' }, 'model')), kv), plotsBox)));
   // Replace the leading "three" button label
   panel.querySelectorAll('.crt-seg button').forEach((b) => { if (b.textContent === 'Three') b.textContent = '3/4 view'; });
   readout();
