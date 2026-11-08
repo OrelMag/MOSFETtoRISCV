@@ -5,6 +5,10 @@
   --pk-paddle: light-dark(#c9ced8, #7a8396);
   --pk-gold: light-dark(#c8921e, #e6b64a);
   --pk-ground: light-dark(#1d6fa5, #5db3ea);
+  --pk-al: light-dark(#b9c4d2, #9aa7b8);
+  --pk-vdd: light-dark(#d2691e, #f28c3c);
+  --pk-attach: light-dark(#3a3d46, #1f2229);
+  --pk-mould: light-dark(#1b1b1f, #0b0b0e);
   --pk-lit: light-dark(#ff9a2e, #ffb04a);
   --pk-bad: light-dark(#e04b4b, #ff6b6b);
 }
@@ -14,3 +18,5 @@
 .pk-bar b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--text); }
 .pk-scale { position: relative; height: 16px; margin-bottom: 8px; font: 600 10.5px var(--font-mono); color: var(--muted); }
 .pk-scale span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+/* on a phone the stage comes first, the sliders under it (the four sliders filled the first screen) */
+@media (max-width: 700px) { .m3d .pk-main { display: flex; flex-direction: column; } .m3d .pk-main > .r3-ctl { order: 5; margin-top: 8px; } }
