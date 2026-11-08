@@ -46,16 +46,13 @@ export const tx = (mouse: string, touch: string): string => byPointer(coarsePoin
 /** How a toast says to take a step back: a phone has no Ctrl+Z, the toolbar has an Undo button. */
 export const undoKey = (): string => tx('Ctrl+Z', 'Undo');
 
-/** How long a touch screen's gesture hint stays when nobody touches the canvas. */
-const HINT_MS = 8000;
-
 /**
  * The canvas's gesture hint (.hint-badge): the mouse wording, or on a touch screen the touch wording
  * on one line (it sits over the circuit: wrapped on a phone it hid the lower pins). The first touch on
  * the canvas hides it for this visit; a tap on it hides it for good (remembered under `key`);
- * untouched, it goes by itself after HINT_MS.
+ * with `autoMs` (the stage), untouched, it goes by itself after that long.
  */
-export function hintBadge(mouse: string, touch: string, key: string, cls = ''): HTMLElement {
+export function hintBadge(mouse: string, touch: string, key: string, cls = '', autoMs = 0): HTMLElement {
   const store = `mosfet2riscv:hint:${key}`;
   if (!coarsePointer()) return h('div', { class: `hint-badge${cls}` }, mouse);
   let off = false;
@@ -78,7 +75,7 @@ export function hintBadge(mouse: string, touch: string, key: string, cls = ''): 
   };
   queueMicrotask(() => el.parentElement?.addEventListener('pointerdown', touched, true));
   // ...or after a few seconds, untouched: it sits over the circuit's room and a phone's learner has read it by then
-  if (!off) setTimeout(() => { if (!el.hidden) { el.hidden = true; el.dataset.off = '1'; } }, HINT_MS);
+  if (autoMs && !off) setTimeout(() => { if (!el.hidden) { el.hidden = true; el.dataset.off = '1'; } }, autoMs);
   return el;
 }
 

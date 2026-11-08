@@ -780,6 +780,14 @@ html[data-widget-step] .slow-btn { display: none; }
   .ctl-pins { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; flex: 1 1 100%; min-width: 0; max-height: 38dvh; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; padding-block: 2px; }
   .ctl-pins > * { flex: none; max-width: 100%; }
   .ctl-pins .out-strip { flex-wrap: wrap; gap: 4px 10px; }
+  /* a cue that the box scrolls: an edge shadow while pins continue past it (the local covers hide it at the ends) */
+  .ctl-pins {
+    background:
+      linear-gradient(var(--surface) 30%, transparent) top / 100% 24px no-repeat local,
+      linear-gradient(to top, var(--surface) 30%, transparent) bottom / 100% 24px no-repeat local,
+      linear-gradient(color-mix(in srgb, var(--text) 28%, transparent), transparent) top / 100% 18px no-repeat scroll,
+      linear-gradient(to top, color-mix(in srgb, var(--text) 28%, transparent), transparent) bottom / 100% 18px no-repeat scroll;
+  }
   .controls { row-gap: 6px; }
 }
 /* No box of their own on a wide screen: the pins wrap in the bar's own flow. */
