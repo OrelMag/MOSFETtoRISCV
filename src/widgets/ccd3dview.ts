@@ -114,7 +114,7 @@ export function ccdView(): Widget {
 
   panel.append(
     h('h3', { class: 'm3-title' }, 'Charge, moved a gate at a time'),
-    h('p', { class: 'm3-sub' }, `Three polysilicon gates per pixel sit on oxide over an n channel in p silicon. Raise one phase and a deep potential well forms under every third gate; light frees electrons that collect there. Clock φ1, φ1 + φ2, φ2, φ2 + φ3, φ3, φ3 + φ1 and each packet slides half a gate a step, one gate per phase, a pixel in six steps, down its column (the channel stops keep it in that column). A row at a time drops into the horizontal register, which moves its packets across to the output: a floating diffusion, reset to a drain before each pixel, whose voltage drops ${CG_UV} µV for each electron, read by a source follower. Each pixel moved leaves 1 − CTE of a packet behind, to join the one after it.`),
+    h('p', { class: 'm3-sub' }, `The gates are cut away over the right-hand column and the near half of the horizontal register. Under each gate the blue floor is the channel potential: deep under a high gate, shallow under a low one, so a packet (green, its volume its charge) sits where the clock lets it. Step a phase to watch the wells move and the packets follow half a gate at a time; a row drops into the horizontal register, which carries it to the floating diffusion beside the output.`),
     h('div', { class: 'r3' },
       h('div', { class: 'r3-main' },
         h('div', { class: 'r3-ctl' }, h('div', { class: 'r3-btns' }, exposeBtn, stepBtn, runBtn, stage.resetBtn)),
