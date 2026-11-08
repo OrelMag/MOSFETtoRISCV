@@ -17,6 +17,7 @@ import { define, merger, ones, splitter } from './define';
 import { AND, NOT, OR, XOR } from './gates';
 import { NAND } from './transistors';
 import { orN } from './wide';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width: 1, dir, side });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -219,7 +220,7 @@ export const C_FORMS: ComponentDef = (() => {
       const k = formOf(h);
       return [k < 0 ? 0 : 2 ** k, (h & 3) === 3 ? 1 : 0, k < 0 ? 1 : 0];
     },
-    netlist: () => ({ pins: edgePins(b, ['c'], ['f', 'pass', 'illegal'], 4), instances: b.instances, nets: b.nets() }),
+    netlist: laid(b),
   });
 })();
 

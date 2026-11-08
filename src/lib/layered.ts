@@ -4,7 +4,7 @@
 // are untouched.
 
 import { symbolGeom } from '../sim/geometry';
-import type { InstanceDef, NetDef, Netlist, PortDef } from '../sim/types';
+import type { ComponentDef, InstanceDef, NetDef, Netlist, PortDef } from '../sim/types';
 import type { Builder } from './builder';
 
 export interface LayeredOptions {
@@ -29,6 +29,12 @@ export interface LayeredOptions {
    * of gap + one unit per six wires (at most 14), which suits most blocks better; on, for blocks whose labels collide.
    */
   room?: boolean;
+  /**
+   * Keep each column's parts in the order the Builder added them (register 0 above register 1, bit 0 above bit 1): the rows only
+   * move up or down to sit level with what they connect to. Off: rows reordered by their neighbours (fewer crossings, but a
+   * bit-sliced block may come out of order).
+   */
+  keepOrder?: boolean;
   /** Minimum row-to-row spacing of pins. */
   pinPitch?: number | [number, number];
 }
@@ -142,7 +148,7 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
     for (const c of order) {
       const col = cols[c];
       const want = new Map(col.map((n) => [n, aim(n) ?? top.get(n)!]));
-      col.sort((p, q) => want.get(p)! - want.get(q)! || names.indexOf(p) - names.indexOf(q));
+      if (!opts.keepOrder) col.sort((p, q) => want.get(p)! - want.get(q)! || names.indexOf(p) - names.indexOf(q));
       col.forEach((n, i) => top.set(n, Math.max(i ? below(col[i - 1], n) : 2, Math.round(want.get(n)!))));
     }
     initPins();
@@ -238,4 +244,12 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
   const { pins, instances, nets: outNets } = nl;
   void byName;
   return { pins, instances, nets: outNets };
+}
+
+/**
+ * A Builder-made level's netlist laid out by layered(), for a definition's `netlist: laid(b, opts)`: the ports are the
+ * definition's own, read when the netlist is first asked for (netlistOf calls it as the definition's method).
+ */
+export function laid(b: Builder, opts: LayeredOptions = {}): (this: ComponentDef) => Netlist {
+  return function (this: ComponentDef) { return layered(this.ports, b, opts); };
 }

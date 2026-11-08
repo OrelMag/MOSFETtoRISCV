@@ -13,6 +13,7 @@ import { NOT, OR } from './gates';
 import { equal } from './pipeline';
 import { register } from './sequential';
 import { orN } from './wide';
+import { laid } from './layered';
 
 const cache = new Map<string, ComponentDef>();
 const memo = (key: string, f: () => ComponentDef): ComponentDef => { let d = cache.get(key); if (!d) { d = f(); cache.set(key, d); } return d; };
@@ -99,7 +100,7 @@ export function wiringTable(id: string, name: string, table: readonly number[]):
       summary: `${name}. On the real machine this table is 26 soldered wires and costs nothing; here each output bit is the OR of the letters that have it set.`,
       ports: [bus('a', 5, 'in'), bus('y', 5, 'out')], symbol: { kind: 'box', label: id.split('_')[0] },
       spec: ([x]) => [x < 26 ? table[x] : 0],
-      netlist: () => ({ pins: { a: [0, 8], y: [b.right, 8] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b),
     });
   });
 }
