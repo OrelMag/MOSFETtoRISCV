@@ -496,11 +496,11 @@ export const chFloat: Chapter = {
       get body() { return `
         <p>Division has no shortcut like the multiplier's tree: each quotient bit depends on the remainder left by the previous one. So the FPU
         reuses the integer divider of <a href="#/c/muldiv/0">chapter 21</a>: <strong>radix-2 restoring division</strong>, one step per clock. Both significands are first
-        <span data-show="u3 u4"><em>prenormalized</em></span> (a subnormal's leading zeros shifted out, the exponent lowered), so they lie in [1, 2) and the quotient in (½, 2).
-        <span data-show="u11">The step</span> tries remainder − divisor; if it does not borrow, the quotient bit is 1 and the difference is kept, otherwise the remainder is
-        restored (<span data-show="u13">a multiplexer</span>). M + 4 steps give the M + 1 kept bits, G and one more bit (for tininess) even when the quotient is below 1; the final
-        remainder ≠ 0 is the sticky bit, and <span data-show="u23">the shared normalize &amp; round</span> does the rest, in any mode. Exponent: e<sub>a</sub> − e<sub>b</sub> + bias.
-        <span data-show="u30">x / 0</span> is ∞ with <strong>DZ</strong>; 0 / 0 and ∞ / ∞ are NaN with NV.</p>
+        <span data-show="pa pb"><em>prenormalized</em></span> (a subnormal's leading zeros shifted out, the exponent lowered), so they lie in [1, 2) and the quotient in (½, 2).
+        <span data-show="core.step">The step</span> tries remainder − divisor; if it does not borrow, the quotient bit is 1 and the difference is kept, otherwise the remainder is
+        restored (<span data-show="core.rmux">a multiplexer</span>). M + 4 steps give the M + 1 kept bits, G and one more bit (for tininess) even when the quotient is below 1; the final
+        remainder ≠ 0 is the sticky bit, and <span data-show="nr">the shared normalize &amp; round</span> does the rest, in any mode. Exponent: e<sub>a</sub> − e<sub>b</sub> + bias.
+        <span data-show="special.dz">x / 0</span> is ∞ with <strong>DZ</strong>; 0 / 0 and ∞ / ∞ are NaN with NV.</p>
         <p>float32: ${F32.M + 4} steps, <strong>${F32.M + 6} cycles</strong>, ${about(nands(fpDiv(F32)))} NANDs (4500 of them normalize &amp; round, 2300 the two prenormalizers); the step
         loop is 58 NAND delays.</p>
         <p>Why a loop and not a tree: the multiplier could be flattened into a tree because every partial product is known at once. In a division each quotient bit decides what the next subtraction is, so the
@@ -510,11 +510,11 @@ export const chFloat: Chapter = {
       scene: () => ({ root: fpDiv(E4M3), inputs: { a: 0x38, b: 0x44, rm: 0, start: 1, clk: 0 }, autoClock: false }),
       tour: {
         beats: [
-          { title: 'Start', cycles: 1, show: ['u3', 'u4'], expect: { busy: 1, done: 0 },
+          { title: 'Start', cycles: 1, show: ['pa', 'pb'], expect: { busy: 1, done: 0 },
             say: '<p>With start = 1 the first edge loads the dividend 1.0 and the divisor 3.0, both prenormalized into [1, 2). busy = {v:busy}, done = {v:done}.</p>' },
-          { title: 'One bit a clock', cycles: 3, show: ['u11', 'u13'], expect: { busy: 1, done: 0 },
+          { title: 'One bit a clock', cycles: 3, show: ['core'], expect: { busy: 1, done: 0 },
             say: '<p>Each edge tries remainder − divisor: if it does not borrow the quotient bit is 1 and the difference is kept, otherwise the remainder is restored through the multiplexer. Four edges so far; the output is not valid until done rises.</p>' },
-          { title: 'Done', cycles: 4, show: ['u23'], expect: { done: 1, y: 0x2b, flags: 1 },
+          { title: 'Done', cycles: 4, show: ['nr'], expect: { done: 1, y: 0x2b, flags: 1 },
             say: `<p>After ${E4M3.M + 5} edges the ${E4M3.M + 4} quotient bits are in, the last remainder is non-zero (the sticky bit) and the shared rounder presents the result: done = {v:done}, y = {v:y} (0x2B), 1.011₂ × 2<sup>−2</sup> = 0.34375 with NX. 1/3 is never exact in binary.</p>` },
         ],
       },

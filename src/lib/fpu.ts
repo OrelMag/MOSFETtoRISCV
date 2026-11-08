@@ -1144,6 +1144,182 @@ const outPins = (b: Builder, names: string[]): Record<string, [number, number]> 
 const preRoundPorts = (f: FpFormat, n: number): PortDef[] => [bit('sign', 'out'), bus('e', xeOf(f), 'out'), bus('m', n, 'out'), bit('sticky', 'out'),
   bit('nan', 'out'), bit('invalid', 'out'), bit('dz', 'out'), bit('inf', 'out'), bit('infSign', 'out')];
 
+// ---- the divider's blocks -----------------------------------------------------------------------------------------------------
+// The iterative divider is drawn as its stages (circuit eyeballing, 2026-11-08), like the adder: the core that makes one quotient
+// bit a clock, the exponent, normalize & round, the special cases. The gates are the ones the flat drawing had.
+
+/** The iterative core: control, the dividend fed in bit by bit, one restoring step a clock, the remainder and quotient registers, the sticky bit. */
+export function fdivCore(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fdiv_core${E}_${M}`, () => {
+    const n = M + 4, w = M + 1;
+    // drawn by hand: the step in the middle, its remainder loop above (mux, register, back over the top) and its quotient loop
+    // below (the new bit merged in, mux, register, back under to the splitter that feeds its top bit to the step); the
+    // dividend's setup and the control below on the left
+    const instances: InstanceDef[] = [
+      { name: 'step', def: divStep(w), at: [24, 10], label: 'restoring step' },
+      { name: 'rmux', def: busMux2(w), at: [44, 11], label: 'step or load' }, { name: 'R', def: register(w), at: [52, 12], label: 'remainder' },
+      { name: 'nz', def: isZero(w), at: [64, 13], label: 'remainder = 0?' }, { name: 'nn', def: NOT, at: [73, 14] },
+      { name: 'qn', def: merger([1, n - 1]), at: [41, 14] },
+      { name: 'qmux', def: busMux2(n), at: [44, 22], label: 'shift or load' }, { name: 'Q', def: register(n), at: [52, 23], label: 'quotient / dividend bits' },
+      { name: 'qs', def: splitter([n - 1, 1]), at: [19, 11] },
+      { name: 'k0', def: K(n - 1, 0), at: [5, 29] }, { name: 'q0', def: merger([n - 1, 1]), at: [12, 29] },
+      { name: 'sa', def: splitter([1, M]), at: [6, 32] },
+      { name: 't0', def: TIE0, at: [8, 36] }, { name: 'r0', def: merger([M, 1]), at: [12, 34] },
+      { name: 'ctl', def: iterControl(n), at: [40, 34], label: 'control' },
+    ];
+    const nets: NetDef[] = [
+      { name: 'ma', ends: ['ma', 'sa.in'] }, { name: 'mb', ends: ['mb', 'step.d'] }, { name: 'start', ends: ['start', 'ctl.start'] },
+      { name: 'clk', ends: ['clk', 'ctl.clk', 'R.clk', 'Q.clk'], tags: true },
+      { name: 'ma0', ends: ['sa.o0', 'q0.i1'] }, { name: 'ma top', ends: ['sa.o1', 'r0.i0'] }, { name: '0', ends: ['t0.y', 'r0.i1'] }, { name: 'zeros', ends: ['k0.y', 'q0.i0'] },
+      { name: 'R0', ends: ['r0.out', 'rmux.b'] }, { name: 'Q0', ends: ['q0.out', 'qmux.b'] },
+      { name: 'r', ends: ['R.q', 'step.r', 'nz.a'] }, { name: 'r′', ends: ['step.rout', 'rmux.a'] }, { name: 'rd', ends: ['rmux.y', 'R.d'] },
+      { name: 'q', ends: ['Q.q', 'qs.in', 'q'] }, { name: 'q top', ends: ['qs.o1', 'step.qin'] }, { name: 'q rest', ends: ['qs.o0', 'qn.i1'] },
+      { name: 'q bit', ends: ['step.q', 'qn.i0'] }, { name: 'q′', ends: ['qn.out', 'qmux.a'] }, { name: 'qd', ends: ['qmux.y', 'Q.d'] },
+      { name: 'load', ends: ['ctl.load', 'rmux.s', 'qmux.s'], tags: true }, { name: 'en', ends: ['ctl.en', 'R.en', 'Q.en'], tags: true },
+      { name: 'r = 0', ends: ['nz.z', 'nn.a'] }, { name: 'sticky', ends: ['nn.y', 'sticky'] },
+      { name: 'done', ends: ['ctl.done', 'done'] }, { name: 'busy', ends: ['ctl.busy', 'busy'] },
+    ];
+    const ports: PortDef[] = [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('ma', w, 'in'), bus('mb', w, 'in'),
+      bus('q', n, 'out'), bit('sticky', 'out'), bit('done', 'out'), bit('busy', 'out')];
+    return define({
+      id: `fdiv_core${E}_${M}`, name: `FP divider: the iterative core (${fmtName(f)})`, category: 'arithmetic',
+      summary: `start loads the remainder with the dividend's top bits; then each clock the restoring step tries remainder − divisor, keeps the difference when it does not borrow, and shifts the quotient bit in: ${n} steps. A remainder left over is the sticky bit.`,
+      ports, symbol: { kind: 'box', label: 'DIVIDER CORE' },
+      netlist: () => ({ instances, nets, pins: { mb: [0, 16], ma: [0, 34], start: [0, 39], clk: [0, 48], sticky: [80, 15], q: [80, 26], done: [80, 40], busy: [80, 42] } }),
+    });
+  });
+}
+
+/** The quotient's exponent: ea − eb + bias (the significands' quotient lies in (½, 2), normalize & round corrects by one). */
+export function fdivExp(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fdiv_exp${E}_${M}`, () => {
+    const XE = xeOf(f), B = fbias(f);
+    const b = new Builder(10, 8, 4);
+    b.pins('ea', 'eb');
+    const ed = b.op(addSubFast(XE), ['ea', 'eb', b.op1(TIE1, [])], 'ea − eb', 'sub');
+    b.next();
+    b.wire(`${b.op(koggeStone(XE), [`${ed}.s`, b.op1(K(XE, B), []), b.op1(TIE0, [])], '+ bias', 'add')}.s`, 'e');
+    const ports: PortDef[] = [bus('ea', XE, 'in'), bus('eb', XE, 'in'), bus('e', XE, 'out')];
+    return define({
+      id: `fdiv_exp${E}_${M}`, name: `FP divider: exponent (${fmtName(f)})`, category: 'arithmetic',
+      summary: 'ea − eb + bias, in the unpacked exponent\'s width (two\'s complement: a tiny or huge quotient is found by normalize & round).',
+      ports, symbol: { kind: 'box', label: 'EXPONENT' },
+      spec: ([ea, eb]) => [(((ea - eb + B) % 2 ** XE) + 2 ** XE) % 2 ** XE],
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** The divider's special cases: NaN, 0 / 0 and ∞ / ∞ (NV), x / 0 (∞ with DZ), ∞ / x, 0 / x and x / ∞; else the rounded quotient. */
+export function fdivSpecial(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fdiv_special${E}_${M}`, () => {
+    const N = 1 + E + M;
+    // drawn by hand: the result's three multiplexers along the top (zero, infinity, NaN, each select from below), the class
+    // tests below them in two columns, the flags' multiplexer at the bottom
+    const instances: InstanceDef[] = [
+      { name: 'nv', def: orN(4), at: [22, 13], label: 'invalid' }, { name: 'nan', def: orN(4), at: [22, 22], label: 'NaN?' },
+      { name: 'zz', def: AND, at: [10, 30], label: '0 / 0' }, { name: 'ii', def: AND, at: [10, 36], label: '∞ / ∞' },
+      { name: 'fo', def: orN(3), at: [10, 42] }, { name: 'fin', def: NOT, at: [16, 44], label: 'a finite, ≠ 0' },
+      { name: 'inf', def: OR, at: [22, 34], label: '∞ result' }, { name: 'zero', def: OR, at: [22, 40], label: '0 result' },
+      { name: 'dz', def: AND, at: [30, 43], label: 'x / 0' }, { name: 'sp', def: orN(3), at: [34, 25], label: 'special' },
+      { name: 'kz', def: K(N - 1, 0), at: [36, 1] }, { name: 'zv', def: merger([N - 1, 1]), at: [44, 4] },
+      { name: 'm0', def: busMux2(N), at: [48, 2], label: 'zero' },
+      { name: 'km', def: K(M, 0), at: [43, 9] }, { name: 'ke', def: K(E, 2 ** E - 1), at: [43, 11] }, { name: 'infv', def: merger([M, E, 1]), at: [53, 9] },
+      { name: 'm1', def: busMux2(N), at: [56, 3], label: 'infinity' },
+      { name: 'kn', def: K(N, (2 ** E - 1) * 2 ** M + 2 ** (M - 1)), at: [59, 11] }, { name: 'm2', def: busMux2(N), at: [66, 4], label: 'NaN' },
+      { name: 't0', def: TIE0, at: [56, 53] }, { name: 't1', def: TIE0, at: [56, 55] }, { name: 't2', def: TIE0, at: [56, 57] },
+      { name: 'fw', def: merger([1, 1, 1, 1, 1]), at: [60, 53] }, { name: 'fm', def: busMux2(5), at: [66, 50], label: 'flags' },
+    ];
+    const nets: NetDef[] = [
+      { name: 'sna', ends: ['sna', 'nv.i0'] }, { name: 'snb', ends: ['snb', 'nv.i1'] }, { name: 'na', ends: ['na', 'nan.i0', 'fo.i2'] }, { name: 'nb', ends: ['nb', 'nan.i1'] },
+      { name: 'za', ends: ['za', 'zz.a', 'fo.i0', 'zero.a'] }, { name: 'zb', ends: ['zb', 'zz.b', 'inf.b', 'dz.a'] },
+      { name: 'ia', ends: ['ia', 'ii.a', 'fo.i1', 'inf.a'] }, { name: 'ib', ends: ['ib', 'ii.b', 'zero.b'] },
+      { name: '0 / 0', ends: ['zz.y', 'nv.i2', 'nan.i2'] }, { name: '∞ / ∞', ends: ['ii.y', 'nv.i3', 'nan.i3'] },
+      { name: 'a special', ends: ['fo.y', 'fin.a'] }, { name: 'a finite', ends: ['fin.y', 'dz.b'] },
+      { name: 'NV', ends: ['nv.y', 'fw.i4'] }, { name: 'DZ', ends: ['dz.y', 'fw.i3'] },
+      { name: 'nan', ends: ['nan.y', 'm2.s', 'sp.i0'] }, { name: 'inf', ends: ['inf.y', 'm1.s', 'sp.i1'] }, { name: 'zero', ends: ['zero.y', 'm0.s', 'sp.i2'] },
+      { name: 'special', ends: ['sp.y', 'fm.s'] },
+      { name: 'ry', ends: ['ry', 'm0.a'] }, { name: 'sign', ends: ['sign', 'zv.i1', 'infv.i2'] },
+      { name: 'zeros', ends: ['kz.y', 'zv.i0'] }, { name: '±0', ends: ['zv.out', 'm0.b'] }, { name: 'y0', ends: ['m0.y', 'm1.a'] },
+      { name: 'mant 0', ends: ['km.y', 'infv.i0'] }, { name: 'exp max', ends: ['ke.y', 'infv.i1'] }, { name: '±∞', ends: ['infv.out', 'm1.b'] },
+      { name: 'y1', ends: ['m1.y', 'm2.a'] }, { name: 'qNaN', ends: ['kn.y', 'm2.b'] }, { name: 'y', ends: ['m2.y', 'y'] },
+      { name: 'nx', ends: ['t0.y', 'fw.i0'] }, { name: 'uf', ends: ['t1.y', 'fw.i1'] }, { name: 'of', ends: ['t2.y', 'fw.i2'] },
+      { name: 'rflags', ends: ['rflags', 'fm.a'] }, { name: 'NV DZ', ends: ['fw.out', 'fm.b'] }, { name: 'flags', ends: ['fm.y', 'flags'] },
+    ];
+    const pins: Record<string, [number, number]> = { ry: [0, 4], sign: [0, 7], sna: [0, 14], snb: [0, 16], na: [0, 23], nb: [0, 25],
+      za: [0, 31], zb: [0, 33], ia: [0, 37], ib: [0, 39], rflags: [0, 52], y: [78, 7], flags: [78, 53] };
+    const ports: PortDef[] = [bus('ry', N, 'in'), bus('rflags', 5, 'in'), bit('sign', 'in'), bit('za', 'in'), bit('ia', 'in'), bit('na', 'in'), bit('sna', 'in'),
+      bit('zb', 'in'), bit('ib', 'in'), bit('nb', 'in'), bit('snb', 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')];
+    const nanBits = (2 ** E - 1) * 2 ** M + 2 ** (M - 1);
+    return define({
+      id: `fdiv_special${E}_${M}`, name: `FP divider: special cases (${fmtName(f)})`, category: 'arithmetic',
+      summary: 'Invalid (NV) is a signaling NaN in, 0 / 0 or ∞ / ∞, and those give the canonical NaN, as any NaN in does. x / 0 with x finite and ≠ 0 is ∞ with DZ; ∞ / x is ∞; 0 / x and x / ∞ are 0, with the quotient\'s sign. A special result raises only NV or DZ.',
+      ports, symbol: { kind: 'box', label: 'SPECIAL' },
+      spec: ([ry, rfl, s, za, ia, na, sna, zb, ib, nb, snb]) => {
+        const zz = za && zb, ii = ia && ib, nv = sna || snb || zz || ii ? 1 : 0, nan = na || nb || zz || ii;
+        const dz = zb && !(za || ia || na) ? 1 : 0, inf = ia || zb, zero = za || ib;
+        const y = nan ? nanBits : inf ? s * 2 ** (N - 1) + (2 ** E - 1) * 2 ** M : zero ? s * 2 ** (N - 1) : ry;
+        return [y, nan || inf || zero ? nv * FLAG.NV + dz * FLAG.DZ : rfl];
+      },
+      netlist: () => ({ instances, nets, pins }),
+    });
+  });
+}
+
+/** The divider's top: unpack and prenormalize both operands, the core, the exponent and the sign beside it, normalize & round, the special cases. */
+function fdivTop(f: FpFormat): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
+  const n = f.M + 4;
+  const at = new Map<string, [number, number]>(), defs = new Map<string, ComponentDef>();
+  const put = (name: string, def: ComponentDef, xy: [number, number]) => { at.set(name, xy); defs.set(name, def); };
+  const P = (inst: string, port: string): [number, number] => { const a = at.get(inst)!, p = symbolGeom(defs.get(inst)!).ports[port].pos; return [a[0] + p[0], a[1] + p[1]]; };
+  const align = (name: string, def: ComponentDef, x: number, port: string, y: number) => put(name, def, [x, y - symbolGeom(def).ports[port].pos[1]]);
+  const right = (inst: string) => at.get(inst)![0] + symbolGeom(defs.get(inst)!).w;
+  const bottom = (inst: string) => at.get(inst)![1] + symbolGeom(defs.get(inst)!).h;
+  put('ua', fpUnpack(f), [6, 6]);
+  put('ub', fpUnpack(f), [6, bottom('ua') + 8]);
+  align('pa', fpPrenorm(f), right('ua') + 8, 'mant', P('ua', 'mant')[1]);
+  align('pb', fpPrenorm(f), right('ub') + 8, 'mant', P('ub', 'mant')[1]);
+  const CX = right('pa') + 10, core = fdivCore(f);
+  align('core', core, CX, 'ma', P('pa', 'm')[1]);
+  put('exp', fdivExp(f), [CX, Math.max(bottom('core') + 6, P('pb', 'e')[1] - symbolGeom(fdivExp(f)).ports.eb.pos[1])]);
+  put('sign', XOR, [CX + 4, bottom('exp') + 6]);
+  const NX = Math.max(right('core'), right('exp')) + 12;
+  align('nr', normRound(f, n), NX, 'mant', P('core', 'q')[1]);
+  const SX = right('nr') + 10;
+  align('special', fdivSpecial(f), SX, 'ry', P('nr', 'y')[1]);
+  const labels: Record<string, string> = { ua: 'unpack a', ub: 'unpack b', pa: 'normalize a', pb: 'normalize b', sign: 'sign', nr: 'normalize & round' };
+  const instances: InstanceDef[] = [...at.keys()].map((name) => ({ name, def: defs.get(name)!, at: at.get(name), label: labels[name] }));
+  // wires along the data path; labels for what runs far: the signs, the class flags into the special cases, rm, the clock
+  const nets: NetDef[] = [
+    { name: 'a', ends: ['a', 'ua.x'] }, { name: 'b', ends: ['b', 'ub.x'] },
+    { name: 'ma', ends: ['ua.mant', 'pa.mant'] }, { name: 'ea', ends: ['ua.exp', 'pa.exp'] },
+    { name: 'mb', ends: ['ub.mant', 'pb.mant'] }, { name: 'eb', ends: ['ub.exp', 'pb.exp'] },
+    { name: 'dividend', ends: ['pa.m', 'core.ma'] }, { name: 'divisor', ends: ['pb.m', 'core.mb'] },
+    { name: 'ea′', ends: ['pa.e', 'exp.ea'], tags: true }, { name: 'eb′', ends: ['pb.e', 'exp.eb'] },
+    { name: 'start', ends: ['start', 'core.start'] }, { name: 'clk', ends: ['clk', 'core.clk'], tags: true },
+    { name: 'sa', ends: ['ua.sign', 'sign.a'], tags: true }, { name: 'sb', ends: ['ub.sign', 'sign.b'], tags: true },
+    { name: 'sign', ends: ['sign.y', 'nr.sign', 'special.sign'], tags: true },
+    { name: 'e', ends: ['exp.e', 'nr.exp'] }, { name: 'quotient', ends: ['core.q', 'nr.mant'] }, { name: 'sticky', ends: ['core.sticky', 'nr.stin'] },
+    { name: 'rm', ends: ['rm', 'nr.rm'], tags: true },
+    { name: 'rounded', ends: ['nr.y', 'special.ry'] }, { name: 'round flags', ends: ['nr.flags', 'special.rflags'] },
+    ...(['zero', 'inf', 'nan', 'snan'] as const).flatMap((c): NetDef[] => {
+      const p = c === 'zero' ? 'z' : c === 'inf' ? 'i' : c === 'nan' ? 'n' : 'sn';
+      return [{ name: `${c} a`, ends: [`ua.${c}`, `special.${p}a`], tags: true }, { name: `${c} b`, ends: [`ub.${c}`, `special.${p}b`], tags: true }];
+    }),
+    { name: 'y', ends: ['special.y', 'y'] }, { name: 'flags', ends: ['special.flags', 'flags'] },
+    { name: 'done', ends: ['core.done', 'done'], tags: true }, { name: 'busy', ends: ['core.busy', 'busy'], tags: true },
+  ];
+  const ox = right('special') + 8, oy = P('special', 'y')[1];
+  return {
+    instances, nets,
+    pins: { start: [0, at.get('ua')![1] - 3], a: [0, P('ua', 'x')[1]], b: [0, P('ub', 'x')[1]], rm: [0, bottom('sign') + 4], clk: [0, bottom('sign') + 8],
+      y: [ox, oy], flags: [ox, oy + 2], done: [ox, oy + 6], busy: [ox, oy + 8] },
+  };
+}
+
 /**
  * a / b, iteratively: prenormalize both significands, then one restoring division step per
  * clock (the integer divider's step, chapter 21) produces M + 4 quotient bits, most significant
@@ -1206,7 +1382,7 @@ export function fpDiv(f: FpFormat, round = true): ComponentDef {
       ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('a', N, 'in'), bus('b', N, 'in'), bus('rm', 3, 'in'),
         ...(round ? [bus('y', N, 'out'), bus('flags', 5, 'out')] : preRoundPorts(f, n)), bit('done', 'out'), bit('busy', 'out')],
       symbol: { kind: 'box', label: 'FDIV (iterative)' },
-      netlist: () => ({ pins: { start: [0, 2], a: [0, 6], b: [0, 10], rm: [0, 14], clk: [0, 18], ...outPins(b, round ? ['y', 'flags', 'done', 'busy'] : ['sign', 'e', 'm', 'sticky', 'nan', 'invalid', 'dz', 'inf', 'infSign', 'done', 'busy']) }, instances: b.instances, nets: b.nets() }),
+      netlist: () => (round ? fdivTop(f) : { pins: { start: [0, 2], a: [0, 6], b: [0, 10], rm: [0, 14], clk: [0, 18], ...outPins(b, ['sign', 'e', 'm', 'sticky', 'nan', 'invalid', 'dz', 'inf', 'infSign', 'done', 'busy']) }, instances: b.instances, nets: b.nets() }),
       hdl: {
         verilog: `module fdiv_iter (input logic clk, start, input logic [31:0] a, b, input logic [2:0] rm,
                   output logic [31:0] y, output logic [4:0] flags, output logic done, busy);
