@@ -32,7 +32,7 @@ export const chUart: Chapter = {
     'read framing, break, false-start and overrun conditions off the status bits, and size a FIFO against an interrupt latency',
     'write a polled and an interrupt-driven driver for the bus UART and say what each costs in cycles',
   ],
-  builds: ['telegraph', 'exchange', 'clocks', 'bus'],
+  builds: ['telegraph', 'exchange', 'clocks', 'bus', 'wire'],
   recap: {
     keep: [
       `A byte is a frame of ten bits on a wire that idles at 1: a start bit (0), eight data bits least significant first, a stop bit (1). The start edge is the only synchronization. Efficiency is 80 %.`,

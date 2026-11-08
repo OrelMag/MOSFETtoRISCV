@@ -51,10 +51,10 @@ const LADDER: [number, string][] = [
 ];
 /** The five questions, with the chapters of the track that answer each. */
 const QUESTIONS: [string, string, ChapterId[]][] = [
-  ['What is a bit on the wire?', 'a voltage, a current, a tone: levels, and what the line does to them', ['wire', 'signals', 'modem', 'serial']],
-  ['When do I look at it?', 'sampling instants: a start edge, a recovered clock, a synchronizer', ['exchange', 'clocks', 'uart', 'serial']],
-  ['Where does a message start?', 'a start bit, a preamble, a frame delimiter', ['exchange', 'uart', 'ethernet']],
-  ['How do I know it is right?', 'parity, checksums, CRC, ECC, retransmission', ['errors', 'pcie', 'tcp']],
+  ['What is a bit on the wire?', 'a voltage, a current, a tone: levels, and what the line does to them', ['wire', 'signals', 'modem', 'carriers', 'serial', 'glass']],
+  ['When do I look at it?', 'sampling instants: a start edge, a recovered clock, a synchronizer', ['exchange', 'clocks', 'uart', 'spi', 'serial']],
+  ['Where does a message start?', 'a start bit, a preamble, a frame delimiter', ['exchange', 'uart', 'serial', 'errors', 'ethernet']],
+  ['How do I know it is right?', 'parity, checksums, CRC, ECC, retransmission', ['errors', 'codes', 'pcie', 'tcp']],
   ['Who may talk?', 'a circuit, an arbiter, a collision rule, an address, a route', ['exchange', 'spi', 'ethernet', 'switch', 'router']],
 ];
 
@@ -67,7 +67,7 @@ export const chTelegraph: Chapter = {
     'tell symbol rate from bit rate, and apply Nyquist and Shannon to a channel of given bandwidth and noise',
     'name the five questions every link answers, and where this track answers each',
   ],
-  builds: ['message', 'relays', 'bus'],
+  builds: ['message', 'relays', 'inverter'],
   recap: {
     keep: [
       `A telegraph loop is a battery, a wire and a coil in series: the coil pulls in when V / (R<sub>line</sub> + R<sub>coil</sub>) reaches its pull-in current (${mA(PULL_I)} mA for our relay). On 4 mm iron wire (${f1(ohmsPerKm('iron'))} Ω/km) a 24 V battery reaches ${f0(reachKm(24, 'iron'))} km; copper (${f1(ohmsPerKm('copper'))} Ω/km) reaches ${f0(reachKm(24, 'copper'))} km.`,
@@ -313,7 +313,7 @@ export const chExchange: Chapter = {
     'use Erlang B to say how many trunks a given traffic needs',
     'derive how much clock error a start-stop receiver tolerates, and why only the start edge has to be found',
   ],
-  builds: ['relays', 'telegraph'],
+  builds: ['relays', 'telegraph', 'latches'],
   recap: {
     keep: [
       `n telephones joined pairwise need n(n − 1) / 2 wires (${thin(meshWires(1000))} for 1 000); an exchange needs n and a switch. A <strong>circuit-switched</strong> call owns a path end to end for its whole duration, speaking or not. Chapter ${numOf('switch')} and the chapters after it return to the other way: packets, which share links.`,

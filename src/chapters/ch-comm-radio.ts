@@ -36,7 +36,7 @@ export const chRadio: Chapter = {
     'relate delay spread to coherence bandwidth and speed to coherence time, and pick what each one breaks',
     'read a fading BER curve, and say how much diversity buys and why',
   ],
-  builds: ['noise', 'modem', 'carriers', 'serial', 'errors'],
+  builds: ['noise', 'modem', 'carriers', 'serial', 'errors', 'codes'],
   recap: {
     keep: [
       'The path formula 20 log d + 20 log f + 92.45 dB is really about the receiving antenna: the same gain at a shorter wavelength has a smaller aperture. Fix the aperture instead and higher frequencies win.',
@@ -195,7 +195,7 @@ export const chRadio: Chapter = {
       body: `
         <p>If one antenna is in a fade, another half a wavelength away probably isn't. Combine them according to their strengths (<strong>maximal ratio combining</strong>) and an error needs both to be in a fade together. With L independent branches the error rate falls as 1 / SNR<sup>L</sup>: the <strong>diversity order</strong> is the slope of the curve.</p>
         <p>At a BER of 10⁻³, BPSK needs ${nf(needAwgn(1e-3), 1)} dB with no fading and ${nf(needRay(1e-3), 1)} dB in Rayleigh fading with one antenna. Two antennas: ${nf(needFor(2), 1)} dB. Four: ${nf(needFor(4), 1)}. The first extra antenna is worth ${nf(needRay(1e-3) - needFor(2), 0)} dB, for the price of a wire and some arithmetic. That gain is a statistical one, and a real one. A simple rule: don't fight a fade; average over it.</p>
-        <p>Diversity comes in other forms too, all of them the same idea. Frequency: spread over more bandwidth than the coherence bandwidth, as the many-carriers system does, with a code across its subcarriers. Time: interleave beyond a coherence time, the errors chapter's interleaver. Space: more antennas at either end, which, used differently, also buys several streams at once. That is MIMO, in the next chapter.</p>
+        <p>Diversity comes in other forms too, all of them the same idea. Frequency: spread over more bandwidth than the coherence bandwidth, as the many-carriers system does, with a code across its subcarriers. Time: interleave beyond a coherence time, with <a href="#/c/codes/5">the interleaver of chapter ${numOf('codes')}</a>. Space: more antennas at either end, which, used differently, also buys several streams at once. That is MIMO, in the next chapter.</p>
         <p>This is where the wireless engineer's budget differs from the optical one. Fibre has no fading and a known noise. A radio's SNR can change by tens of dB in a fraction of a second, so a radio has to measure and adapt continually. The next two chapters are about who talks, how fast, and how they share.</p>`,
       widget: diversityWidget,
       challenge: {

@@ -24,7 +24,7 @@ export const chSpeech: Chapter = {
     'describe a voice by a filter and a source, and say what that buys',
     'compare the recording and three coders by rate and by what they keep',
   ],
-  builds: ['signals', 'multirate', 'adaptive', 'fixed'],
+  builds: ['signals', 'multirate', 'adaptive', 'fixed', 'cpu'],
   recap: {
     keep: [
       'μ-law gives each sample 8 bits whose steps grow with the level: segments double in width, so the noise is a roughly constant share of the signal over some 40 dB of level.',
