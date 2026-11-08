@@ -496,6 +496,12 @@ src/lib/       the component library (registered in `registry` via define())
                  cbusy, the rasterizer only draws), ROP_W (raster.ts: depth in four banks zbuf0…3, cwe writes a word: wall),
                  frameBuffers(…, wide) (an `all` input per frame); ch 33's parts and ids unchanged; PIPE_COSTS.word / *_w frames
   builder.ts     Builder: column-by-column netlist builder for blocks read by drilling in (fpu, fppipe, coding, divide)
+  layered.ts     layered(ports, b, opts): a Builder level laid out by logic depth (feedback cut), rows by neighbour barycentre
+                 (keepOrder: the Builder's order, bit / register order kept), parts level with what they connect to, pins at
+                 the height of what they feed, short forward nets as wires; room: gaps sized for hanging labels and names,
+                 channels for their nets and labels. A site switches with `netlist: laid(b, opts)` (the def's own ports)
+                 only where every level it builds gets no worse (crossings, wires through parts, overlaps, area ≤ 1.3×),
+                 measured over every Builder level (builderOf); off by default: Builder's columns stay for the rest
   coding.ts      magComparator(n, signed), priorityEncoder(n), encoder(n), demux(k, w), popcount(n), absValue(n),
                  parity(n), hammingEnc/Dec(k) (SEC-DED, with TS reference models), eccChannel(k)
   divide.ts      nrDivStep / nrArrayDiv / nrSeqDivider (non-restoring), iterCtrl(n) (load / step / done control),

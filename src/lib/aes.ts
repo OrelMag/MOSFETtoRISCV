@@ -17,6 +17,7 @@ import { AND, NOT, OR, XOR } from './gates';
 import { DFF, register } from './sequential';
 import { clearableRegister } from './pipeline';
 import { bitwise } from './wide';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -289,7 +290,7 @@ export function xorBytes(n: number): ComponentDef {
       summary: n === 16 ? 'The state XORed with the round key, byte by byte: 128 XOR gates.' : `${n} bytes XORed with ${n} bytes: ${8 * n} XOR gates.`,
       ports: [bus('a', 8 * n, 'in'), bus('b', 8 * n, 'in'), bus('y', 8 * n, 'out')], symbol: { kind: 'box', label: n === 16 ? 'ADD KEY' : `XOR${8 * n}` },
       ...(8 * n <= 48 ? { spec: ([x, y]: number[]) => [Number(BigInt(x) ^ BigInt(y))] } : {}),
-      netlist: () => ({ pins: { a: [0, 12], b: [0, 24], y: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { keepOrder: true }),
     });
   });
 }
@@ -310,7 +311,7 @@ export function byteMux(n: number): ComponentDef {
       id: `aes_muxb${n}`, name: `${8 * n}-bit 2:1 multiplexer`, category: 'routing',
       summary: `Chooses between two ${8 * n}-bit buses, byte lane by byte lane, with one shared select.`,
       ports: [bus('a', 8 * n, 'in'), bus('b', 8 * n, 'in'), bit('s', 'in', 'bottom'), bus('y', 8 * n, 'out')], symbol: { kind: 'mux' },
-      netlist: () => ({ pins: { a: [0, 12], b: [0, 24], s: [0, 36], y: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { keepOrder: true }),
     });
   });
 }
@@ -331,7 +332,7 @@ export function subBytes(): ComponentDef {
       id: 'aes_subbytes', name: 'SubBytes', category: 'arithmetic',
       summary: 'The S-box applied to each of the 16 state bytes, in parallel. The round\'s only nonlinear step, and most of its gates.',
       ports: [bus('a', 128, 'in'), bus('y', 128, 'out')], symbol: { kind: 'box', label: 'SUB BYTES' },
-      netlist: () => ({ pins: { a: [0, 12], y: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { keepOrder: true }),
     });
   });
 }
