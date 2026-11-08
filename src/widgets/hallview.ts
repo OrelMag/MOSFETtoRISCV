@@ -22,6 +22,7 @@ import { flatten, type FlatDesign } from '../sim/flatten';
 import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
+import { ORBIT_HINT, modelFrame } from './modelframe';
 
 const num = (n: number) => groupDigits(Math.round(n));
 /** A clock rate, as Hz below 1 Hz too (not mHz). */
@@ -165,13 +166,14 @@ export function hallView(): Widget {
   const run = h('div', { class: 'hall-run' }, runBtn, stepBtn, resetBtn, speedSel, soundBtn, cycOut);
 
   // ---- stage
-  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': 'The CPU as a hall of racks in 3D: drag to orbit, wheel or pinch to zoom, click a rack to name its block' }) as HTMLCanvasElement;
+  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': 'The CPU as a hall of racks in 3D: drag to orbit, right-drag or shift-drag to pan, wheel or pinch to zoom, click a rack to name its block' }) as HTMLCanvasElement;
   const flat = h('canvas', { class: 'hall-flat', tabindex: 0, 'aria-label': 'The CPU as a hall of racks, drawn flat: click a rack to name its block' }) as HTMLCanvasElement;
   flat.style.display = 'none';
   const labels = h('div', { class: 'r3-labels', 'aria-hidden': 'true' });
   const stateChip = h('span', { class: 'r3-chip' }), engineChip = h('span', { class: 'r3-chip' });
   const stage = h('div', { class: 'r3-stage' }, canvas, flat, labels, h('div', { class: 'r3-chips' }, stateChip, engineChip));
-  const HINT_GL = 'Real size. Drag to orbit, wheel or pinch to zoom, double-click to reset; click a rack for its block.';
+  const frame = modelFrame({ stage, name: 'machine hall', renderer: () => (mode === 'gl' ? renderer : null), labels });
+  const HINT_GL = `Real size; click a rack for its block. ${ORBIT_HINT}`;
   const hint = h('div', { class: 'r3-hint' }, HINT_GL);
   const sum = h('div', { class: 'hall-sum' }), sub = h('p', { class: 'hall-sub' });
   const legend = h('div', { class: 'hall-legend' });
@@ -634,6 +636,7 @@ export function hallView(): Widget {
     labels.style.display = on ? 'none' : '';
     chipBtn.style.display = viewBtn.style.display = on ? 'none' : '';
     hint.textContent = on ? 'A flat drawing of the same hall: this browser has no WebGL2 for the 3D one. Click a rack for its block.' : HINT_GL;
+    frame.setFlat(on);
     state.fill(0);
     if (on) drawFlat(); else pushScene();
     paint();
@@ -683,6 +686,7 @@ export function hallView(): Widget {
       clearTimeout(liveTimer);
       ro.disconnect();
       unwatch();
+      frame.destroy();
       renderer?.destroy();
       renderer = null;
       colors.destroy();

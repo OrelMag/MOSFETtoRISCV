@@ -14,6 +14,7 @@ import { h, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { declutterLabels } from './labelfit';
+import { ORBIT_ARIA, ORBIT_HINT, modelFrame } from './modelframe';
 
 // ---------------------------------------------------------------- geometry (mm; x right, y up, z towards the viewer)
 
@@ -219,13 +220,14 @@ export function relayView(): Widget {
     h('div', { class: 'r3-btns' }, playBtn, resetBtn));
 
   // Stage: the canvas (or the flat drawing), labels over it, status chips.
-  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': 'A telephone relay in 3D: drag to orbit, wheel or pinch to zoom, arrow keys to turn' }) as HTMLCanvasElement;
+  const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': `A telephone relay in 3D: ${ORBIT_ARIA}` }) as HTMLCanvasElement;
   const flatSvg = s('svg', { class: 'r3-flat', viewBox: `${F2.x0} ${-F2.y0 - F2.h} ${F2.w} ${F2.h}`, role: 'img', 'aria-label': 'A telephone relay seen from the front: coil, yoke, armature and contact springs' }) as SVGSVGElement;
   flatSvg.style.display = 'none';
   const labels = h('div', { class: 'r3-labels', 'aria-hidden': 'true' });
   const state = h('span', { class: 'r3-chip' }), gap = h('span', { class: 'r3-chip' }), spike = h('span', { class: 'r3-chip bad' });
-  const hint = h('div', { class: 'r3-hint' }, `Gaps and travel drawn ×${EXAG}. Drag to orbit, wheel or pinch to zoom, double-click to reset.`);
+  const hint = h('div', { class: 'r3-hint' }, `Gaps and travel drawn ×${EXAG}. ${ORBIT_HINT}`);
   const stage = h('div', { class: 'r3-stage' }, canvas, flatSvg, labels, h('div', { class: 'r3-chips' }, state, gap, spike));
+  const frame = modelFrame({ stage, name: 'telephone relay', renderer: () => (mode === 'gl' ? renderer : null), labels });
 
   // Plots and summary
   const plot = s('svg', { class: 'r3-plot', viewBox: `0 0 ${PW} ${PH}`, role: 'img', 'aria-label': 'Coil current, armature travel, contact state and coil voltage over 25 ms' }) as SVGSVGElement;
@@ -346,7 +348,8 @@ export function relayView(): Widget {
     canvas.style.display = on ? 'none' : '';
     flatSvg.style.display = on ? '' : 'none';
     labels.style.display = on ? 'none' : '';
-    hint.textContent = on ? `Gaps and travel drawn ×${EXAG}. A flat view: this browser has no WebGL2 for the 3D one.` : `Gaps and travel drawn ×${EXAG}. Drag to orbit, wheel or pinch to zoom, double-click to reset.`;
+    hint.textContent = on ? `Gaps and travel drawn ×${EXAG}. A flat view: this browser has no WebGL2 for the 3D one.` : `Gaps and travel drawn ×${EXAG}. ${ORBIT_HINT}`;
+    frame.setFlat(on);
     resetBtn.style.display = on ? 'none' : '';
     draw();
   };
@@ -383,6 +386,7 @@ export function relayView(): Widget {
       stop();
       cancelAnimationFrame(pending);
       unwatch();
+      frame.destroy();
       renderer?.destroy();
       renderer = null;
       colors.destroy();
