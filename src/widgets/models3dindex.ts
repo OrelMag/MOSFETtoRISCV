@@ -113,6 +113,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./enigma3d').then((m) => m.enigma3d()),
   },
   {
+    id: 'fibre', title: 'An optical fibre, cut open', category: 'comms', chapter: 'glass', step: 1,
+    summary: 'Core, cladding and coating to scale: rays held by total internal reflection, and a pulse spread by the modes.',
+    files: ['fibre3d', 'fibre3dview', 'fibre3dparts'], factory: 'fibre3d', codex: ['dispersion'],
+    open: () => import('./fibre3d').then((m) => m.fibre3d()),
+  },
+  {
     id: 'telegraph', title: 'Telegraph key and sounder', category: 'comms', chapter: 'telegraph', step: 1,
     summary: 'Hold the key to send: the sounder\'s armature moves as the relay model moves it at the voltage the line leaves.',
     files: ['telegraph3d', 'telegraph3dview', 'telegraph3dparts'], factory: 'telegraph3d', codex: ['relay'],
