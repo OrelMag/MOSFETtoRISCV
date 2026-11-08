@@ -7,7 +7,9 @@ import { V_READ, vtOf } from '../lib/flash';
 import { findNode } from '../sim/flatten';
 import { FG_READ, FG_STEP, type SwitchSim } from '../sim/switchsim';
 import type { Stage } from '../view/stage';
+import { disk3d } from '../widgets/disk3d';
 import { fgate3d } from '../widgets/fgate3d';
+import { withModel } from '../widgets/modelhost';
 import { flashActions, flashScene, ftlWidget, wearWidget } from '../widgets/flash';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -274,7 +276,7 @@ export const chFlash: Chapter = {
         pitfall: `<p>Thinking a delete frees a page. Until the block holding it is collected the stale copy still sits there, readable with the right tools, and a drive that has not been told
           (TRIM) treats it as live data and copies it during garbage collection. In the widget, watch the stale count rise on a rewrite and fall only when a block is erased.</p>`,
       },
-      widget: ftlWidget,
+      widget: () => withModel(ftlWidget(), disk3d()),
       challenge: {
         kind: 'quiz',
         question: 'The host has written logical page 2 five times. How many valid copies of it are on the flash?',

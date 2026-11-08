@@ -1,0 +1,277 @@
+// A 3.5" 7200 rpm hard disk as parts and a timing model (DOM-free, tested). Units are millimetres.
+//
+// What is real (representative of a 3.5" desktop drive; sources in the commit message and the on-screen note):
+//   platter 95 mm across, 25 mm hole, 1.27 mm thick; two platters, four heads; recording band r = 20 … 46 mm; tracks 100 nm
+//   apart (so 260 000 cylinders); 4 KiB sectors, zoned density (more sectors on the outer tracks); a rotary voice-coil
+//   actuator pivoting 56 mm from the spindle, head 46 mm from its pivot (zero skew near mid-band); 7200 rpm.
+// What the timing is: seek = a + b·√distance, fitted to a datasheet's track-to-track and average seek; rotation is exact,
+//   so the rotational latency is wherever the sector happens to be when the arm arrives; transfer is the sector's arc.
+// What is drawn bigger than it is: the tracks (12 rings stand for 260 000), the flying height, the platter spacing.
+
+import type { RGB, RGBA } from '../gl/instances';
+import { quatAxisAngle, type Vec3 } from '../gl/math';
+import { box, cyl, rod, type Anchor, type Part } from '../gl/parts';
+import { FLASH_REAL_US, FLASH_TIMES } from '../flash/model';
+import { CLOCK_NS } from '../dram/timing';
+
+// ---------------------------------------------------------------- the drive
+
+export const RPM = 7200;
+/** One turn, ms: 8.33. */
+export const TURN_MS = 60000 / RPM;
+/** The average rotational latency: half a turn, 4.17 ms. */
+export const AVG_LATENCY_MS = TURN_MS / 2;
+
+export const PLATTER_R = 47.5, HOLE_R = 12.5, PLATTER_T = 1.27, PLATTERS = 2, HEADS = 4;
+export const BAND_IN = 20, BAND_OUT = 46;
+/** Track pitch, nm, and the cylinders it makes of the band. */
+export const PITCH_NM = 100;
+export const CYLINDERS = Math.round(((BAND_OUT - BAND_IN) * 1e6) / PITCH_NM);
+/** Actuator: the pivot's distance from the spindle, and the pivot-to-head length. */
+export const PIVOT_D = 56, ARM_L = 46;
+
+/** Tracks drawn (outer = 0), sectors drawn per track. Each drawn wedge is 1/16 of a track. */
+export const TRACKS = 12, SECTORS = 16;
+export const SECTOR_BYTES = 4096;
+/** Sectors on the outermost track; a track holds that many × (its radius / the outer radius). */
+export const OUTER_SECTORS = 400;
+
+/** Drawn track pitch against the real one: how much bigger the rings are than a track. */
+export const TRACK_PITCH_MM = (BAND_OUT - BAND_IN) / (TRACKS - 1);
+export const PITCH_EXAGGERATION = (TRACK_PITCH_MM * 1e6) / PITCH_NM;
+
+/** Seek datasheet points (ms): track to track, and the average over random pairs. Hitachi Deskstar 7K1000.B; Maxtor D740X: 0.8 / 8.5 / 17.8. */
+export const SEEK_T2T_MS = 0.8, SEEK_AVG_MS = 8.5, SEEK_FULL_DATASHEET_MS = 15.1;
+/** t(d) = A + B·√d for d ≥ 1 cylinders. For a distance |u − v|·N between uniform random cylinders, E[√d] = (8/15)·√N. */
+export const SEEK_B = (SEEK_AVG_MS - SEEK_T2T_MS) / ((8 / 15) * Math.sqrt(CYLINDERS) - 1);
+export const SEEK_A = SEEK_T2T_MS - SEEK_B;
+export const seekMs = (d: number): number => (d <= 0 ? 0 : SEEK_A + SEEK_B * Math.sqrt(d));
+export const FULL_STROKE_MS = seekMs(CYLINDERS - 1);
+
+// ---------------------------------------------------------------- the flash model's clock
+
+/** One cycle of the flash chapter's model in real microseconds: FLASH_REAL_US.read / FLASH_TIMES.read (25 µs / 64). */
+export const FLASH_CYCLE_US = FLASH_REAL_US.read / FLASH_TIMES.read;
+/** Real milliseconds → that model's cycles. */
+export const modelCycles = (ms: number): number => Math.round((ms * 1000) / FLASH_CYCLE_US);
+/** The same time at the CPU's own clock (dram/timing.ts CLOCK_NS), unscaled. */
+export const cpuCycles = (ms: number): number => Math.round((ms * 1e6) / CLOCK_NS);
+/** How many times shorter the model's cycle is than the CPU clock's: the "about 100×" scale the chapter states. */
+export const SCALE_VS_CPU = (FLASH_CYCLE_US * 1000) / CLOCK_NS;
+
+// ---------------------------------------------------------------- geometry
+
+export const frac = (x: number): number => x - Math.floor(x);
+/** Radius of drawn track k (0 outer). */
+export const trackRadius = (k: number): number => BAND_OUT - (k * (BAND_OUT - BAND_IN)) / (TRACKS - 1);
+/** The real cylinder drawn track k stands for (evenly spaced across the band). */
+export const cylinderOf = (k: number): number => Math.round((k * (CYLINDERS - 1)) / (TRACKS - 1));
+/** Cylinders between two drawn tracks. */
+export const distance = (a: number, b: number): number => Math.abs(cylinderOf(a) - cylinderOf(b));
+/** Bytes on a track at radius r (constant linear density: proportional to r), and one drawn wedge of it. */
+export const trackBytes = (r: number): number => Math.round((OUTER_SECTORS * r) / BAND_OUT) * SECTOR_BYTES;
+export const wedgeBytes = (r: number): number => trackBytes(r) / SECTORS;
+/** Media rate at radius r, bytes a second: a track a turn. */
+export const mediaRate = (r: number): number => (trackBytes(r) / TURN_MS) * 1000;
+
+/** Where the head is when its distance from the spindle is r: x, z, the arm's angle at the pivot, the head's angle round the spindle (turns) and its skew (rad). */
+export function headAt(r: number): { x: number; z: number; alpha: number; gamma: number; skew: number } {
+  const alpha = Math.acos((PIVOT_D ** 2 + ARM_L ** 2 - r ** 2) / (2 * PIVOT_D * ARM_L));
+  const x = PIVOT_D - ARM_L * Math.cos(alpha), z = ARM_L * Math.sin(alpha);
+  const gamma = Math.atan2(z, x) / (2 * Math.PI);
+  // Skew: the angle between the head (along the arm) and the track tangent, folded to +-90 degrees. Zero when pivot-head is perpendicular to spindle-head.
+  let skew = Math.atan2(Math.sin(alpha), -Math.cos(alpha)) - (Math.atan2(z, x) + Math.PI / 2);
+  skew = Math.atan2(Math.sin(skew), Math.cos(skew));
+  if (skew > Math.PI / 2) skew -= Math.PI; else if (skew < -Math.PI / 2) skew += Math.PI;
+  return { x, z, alpha, gamma, skew };
+}
+/** The radius at which the skew is zero: pivot, head and spindle make a right angle at the head. */
+export const ZERO_SKEW_R = Math.sqrt(PIVOT_D ** 2 - ARM_L ** 2);
+
+// ---------------------------------------------------------------- one read, planned
+
+export interface Plan {
+  t0: number; t1: number; t2: number; t3: number;
+  from: number; to: number; sector: number;
+  /** Real cylinders crossed. */
+  cylinders: number;
+  seek: number; wait: number; transfer: number; total: number;
+}
+
+/** A read of (track, sector) requested at virtual time t0 ms with the head on track `from`. */
+export function planRead(t0: number, from: number, to: number, sector: number): Plan {
+  const cylinders = distance(from, to), seek = seekMs(cylinders), t1 = t0 + seek;
+  const gamma = headAt(trackRadius(to)).gamma;
+  const wait = frac(sector / SECTORS + gamma - t1 / TURN_MS) * TURN_MS;
+  const transfer = TURN_MS / SECTORS, t2 = t1 + wait, t3 = t2 + transfer;
+  return { t0, t1, t2, t3, from, to, sector, cylinders, seek, wait, transfer, total: t3 - t0 };
+}
+
+/** The wedge of a track passing under the head on `track` at virtual time t. */
+export function sectorUnder(t: number, track: number): number {
+  return Math.floor(frac(t / TURN_MS - headAt(trackRadius(track)).gamma) * SECTORS + 1e-9) % SECTORS;
+}
+
+export type Phase = 'idle' | 'seek' | 'wait' | 'transfer' | 'done';
+export function phaseAt(plan: Plan | null, t: number): Phase {
+  if (!plan || t < plan.t0) return 'idle';
+  return t < plan.t1 ? 'seek' : t < plan.t2 ? 'wait' : t < plan.t3 ? 'transfer' : 'done';
+}
+const smooth = (u: number) => u * u * (3 - 2 * u);
+/** The head's distance from the spindle at virtual time t: the actuator eases out and in over the seek. */
+export function radiusAt(plan: Plan | null, parked: number, t: number): number {
+  if (!plan) return trackRadius(parked);
+  const r0 = trackRadius(plan.from), r1 = trackRadius(plan.to);
+  if (t <= plan.t0) return r0;
+  return t >= plan.t1 ? r1 : r0 + (r1 - r0) * smooth((t - plan.t0) / plan.seek);
+}
+// ---------------------------------------------------------------- what is shown
+
+export const fmtMs = (ms: number): string => (ms >= 100 ? ms.toFixed(0) : ms >= 10 ? ms.toFixed(1) : ms.toFixed(2)) + ' ms';
+const fmtN = (n: number): string => n.toLocaleString('en-US').replace(/,/g, ' ');
+const fmtBytes = (b: number): string => (b >= 2 ** 20 ? `${(b / 2 ** 20).toFixed(2)} MiB` : `${Math.round(b / 1024)} KiB`);
+
+/** The rows of the readout, as text: the view prints exactly these, and the tests hold them to the model above. */
+export function readoutRows(plan: Plan | null, parked: number, sel: { track: number; sector: number }): [string, string][] {
+  const r = trackRadius(sel.track), rows: [string, string][] = [];
+  const from = plan && plan.t3 > plan.t0 ? plan.from : parked;
+  const d = distance(from, sel.track);
+  rows.push(['Request', `track ${sel.track}, sector ${sel.sector} (r = ${r.toFixed(1)} mm)`]);
+  rows.push(['Seek', `${fmtN(d)} cylinders → ${fmtMs(seekMs(d))}`]);
+  if (plan) {
+    rows.push(['Rotational latency', `${fmtMs(plan.wait)} (average ${fmtMs(AVG_LATENCY_MS)})`]);
+    rows.push(['Transfer', `${fmtMs(plan.transfer)} · ${fmtBytes(wedgeBytes(r))} at ${(mediaRate(r) / 1e6).toFixed(0)} MB/s`]);
+    rows.push(['Total', fmtMs(plan.total)]);
+    rows.push(['In flash-model cycles', `${fmtN(modelCycles(plan.total))} (a flash page read: ${FLASH_TIMES.read})`]);
+    rows.push(['Against a flash page read', `${fmtN(Math.round((plan.total * 1000) / FLASH_REAL_US.read))}× slower`]);
+  } else {
+    rows.push(['Rotational latency', `0 … ${fmtMs(TURN_MS)}, average ${fmtMs(AVG_LATENCY_MS)}`]);
+    rows.push(['Transfer', `${fmtMs(TURN_MS / SECTORS)} · ${fmtBytes(wedgeBytes(r))} at ${(mediaRate(r) / 1e6).toFixed(0)} MB/s`]);
+  }
+  return rows;
+}
+
+/** The rows describing the fitted drive, constant. */
+export function driveRows(): [string, string][] {
+  return [
+    ['Spindle', `${RPM} rpm: one turn ${fmtMs(TURN_MS)}`],
+    ['Seek model', `${SEEK_A.toFixed(3)} + ${SEEK_B.toFixed(5)}·√d ms`],
+    ['1 cylinder · average · full stroke', `${fmtMs(seekMs(1))} · ${fmtMs(SEEK_AVG_MS)} · ${fmtMs(FULL_STROKE_MS)}`],
+    ['Cylinders', `${fmtN(CYLINDERS)} (${PITCH_NM} nm apart)`],
+    ['Flash-model clock', `1 cycle = ${Math.round(FLASH_CYCLE_US * 1000)} ns (${FLASH_REAL_US.read} µs ÷ ${FLASH_TIMES.read}), ${Math.round(SCALE_VS_CPU)}× the CPU clock's ${CLOCK_NS.toFixed(2)} ns`],
+  ];
+}
+
+// ---------------------------------------------------------------- the drawing
+
+export interface DiskPose {
+  /** Platter angle, turns. */
+  phi: number;
+  /** The head's distance from the spindle, mm. */
+  r: number;
+  /** The requested wedge, or none. */
+  sel: { track: number; sector: number } | null;
+  phase: Phase;
+}
+
+export interface DiskPalette {
+  base: RGB; platter: RGB; ring: RGB; mark: RGB; hub: RGB; steel: RGB; slider: RGB; copper: RGB; magnet: RGB; yoke: RGBA; magnetTop: RGBA; target: RGB; live: RGB;
+}
+
+const glow = (c: RGB, k = 0.6): RGB => [c[0] * k, c[1] * k, c[2] * k];
+export const PLATTER_Y = [8, 13] as const;
+const BLADE_Y = [PLATTER_Y[0] - PLATTER_T / 2 - 1.6, (PLATTER_Y[0] + PLATTER_Y[1]) / 2, PLATTER_Y[1] + PLATTER_T / 2 + 1.6] as const;
+export const SURFACE_TOP = PLATTER_Y[1] + PLATTER_T / 2;
+const GAP = 0.25, SLIDER_T = 0.35;
+
+/** A box of size (len along the direction, t, w across) centred at c, turned to point at world angle θ about y. */
+function slab(c: RGB | RGBA, cx: number, cy: number, cz: number, len: number, t: number, w: number, yaw: number, spec = 0): Part {
+  const p = box(c, -len / 2, len / 2, -t / 2, t / 2, -w / 2, w / 2, spec);
+  return { ...p, pos: [cx, cy, cz], rot: quatAxisAngle([0, 1, 0], yaw) };
+}
+/** The yaw that points a slab's x axis along the xz direction (dx, dz). */
+const yawOf = (dx: number, dz: number): number => -Math.atan2(dz, dx);
+
+export function diskParts(p: DiskPose, P: DiskPalette): Part[] {
+  const out: Part[] = [];
+  const top = SURFACE_TOP, h = headAt(p.r);
+  const lit = p.phase === 'transfer';
+  // Base casting, and the platter stack: hub, platters, spacers, clamp.
+  out.push(box(P.base, -52, 95, -4, 0, -51, 51, 0.2));
+  out.push(cyl(P.hub, 0, 0, 0, PLATTER_Y[0] - PLATTER_T / 2, 16, 0.5));
+  out.push(cyl(P.hub, 0, 0, PLATTER_Y[0] + PLATTER_T / 2, PLATTER_Y[1] - PLATTER_T / 2, 15, 0.5));
+  for (const y of PLATTER_Y) out.push(cyl(P.platter, 0, 0, y - PLATTER_T / 2, y + PLATTER_T / 2, PLATTER_R, 0.9));
+  out.push(cyl(P.hub, 0, 0, top, top + 2.4, 13.5, 0.6), cyl(P.steel, 0, 0, top + 2.4, top + 3.1, 5, 0.8));
+  // The lower platter's top and the recording band on the top platter: concentric track rings, alternating tint.
+  const ringY = top + 0.02;
+  for (let k = 0; k < TRACKS; k++) {
+    const r = trackRadius(k) + TRACK_PITCH_MM / 2;
+    out.push(cyl(k % 2 ? P.ring : P.platter, 0, 0, top, ringY + 0.012 * k, r, 0.9));
+  }
+  // Sector boundaries: 16 radial lines turning with the platter; boundary s is the leading edge of wedge s.
+  for (let s = 0; s < SECTORS; s++) {
+    const w = 2 * Math.PI * (p.phi - s / SECTORS), y = ringY + 0.012 * TRACKS + 0.03;
+    const a: Vec3 = [(BAND_IN - 1.5) * Math.cos(w), y, (BAND_IN - 1.5) * Math.sin(w)], b: Vec3 = [(BAND_OUT + 1.5) * Math.cos(w), y, (BAND_OUT + 1.5) * Math.sin(w)];
+    out.push(rod(P.mark, a, b, s === 0 ? 0.22 : 0.1));
+  }
+  // The requested wedge on its track, in three chords of the arc.
+  if (p.sel) {
+    const r = trackRadius(p.sel.track), lead = 2 * Math.PI * (p.phi - p.sel.sector / SECTORS), y = ringY + 0.012 * TRACKS + 0.06;
+    const n = 3, step = (2 * Math.PI) / SECTORS / n;
+    for (let i = 0; i < n; i++) {
+      const w = lead - step * (i + 0.5);
+      const c = slab(lit ? P.live : P.target, r * Math.cos(w), y, r * Math.sin(w), 2 * r * Math.sin(step / 2) + 0.05, 0.1, TRACK_PITCH_MM * 0.8, -(w + Math.PI / 2), 0.3);
+      if (lit) c.emissive = glow(P.live);
+      out.push(c);
+    }
+  }
+  // The actuator: pivot body, the comb of three blades, the tail with its coil.
+  const px = PIVOT_D, dirX = -Math.cos(h.alpha), dirZ = Math.sin(h.alpha); // pivot → head
+  const yaw = yawOf(dirX, dirZ), tailYaw = yawOf(-dirX, -dirZ);
+  out.push(cyl(P.steel, px, 0, 3, BLADE_Y[2] + 1.2, 6, 0.8), cyl(P.hub, px, 0, BLADE_Y[2] + 1.2, BLADE_Y[2] + 2, 3.4, 0.6));
+  const bladeLen = ARM_L - 16;
+  BLADE_Y.forEach((by) => {
+    for (const [from, to, w] of [[0, 0.5, 10], [0.5, 1, 5]] as const) {
+      const m = ((from + to) / 2) * bladeLen;
+      out.push(slab(P.steel, px + dirX * m, by, dirZ * m, (to - from) * bladeLen + 0.02, 0.6, w, yaw, 0.8));
+    }
+  });
+  // Four heads: slider on the surface side of each blade, a spring beam from the blade to it.
+  const heads: { by: number; ys: number; below: boolean; active: boolean }[] = [
+    { by: BLADE_Y[0], ys: PLATTER_Y[0] - PLATTER_T / 2, below: true, active: false },
+    { by: BLADE_Y[1], ys: PLATTER_Y[0] + PLATTER_T / 2, below: false, active: false },
+    { by: BLADE_Y[1], ys: PLATTER_Y[1] - PLATTER_T / 2, below: true, active: false },
+    { by: BLADE_Y[2], ys: top, below: false, active: true },
+  ];
+  for (const hd of heads) {
+    const sy = hd.below ? hd.ys - GAP - SLIDER_T / 2 : hd.ys + GAP + SLIDER_T / 2;
+    const s = slab(hd.active && p.phase !== 'idle' ? (lit ? P.live : P.target) : P.slider, h.x, sy, h.z, 2.4, SLIDER_T, 1.6, yaw, 0.6);
+    if (hd.active && lit) s.emissive = glow(P.live);
+    out.push(s);
+    const root: Vec3 = [px + dirX * bladeLen, hd.by, dirZ * bladeLen];
+    out.push(rod(P.steel, root, [h.x - dirX * 1.2, sy + (hd.below ? -SLIDER_T / 2 : SLIDER_T / 2), h.z - dirZ * 1.2], 0.35, 0.7));
+  }
+  // The tail: a frame out to the coil, the coil itself (copper), swinging between the magnets.
+  const tx = -dirX, tz = -dirZ, coilAt = 27;
+  out.push(slab(P.steel, px + tx * 10, 10.5, tz * 10, 12, 0.7, 9, tailYaw, 0.8));
+  out.push(slab(P.copper, px + tx * coilAt, 10.5, tz * coilAt, 22, 2.4, 15, tailYaw, 0.5));
+  // The voice-coil magnets (neodymium) and their steel return plates, fixed; the top ones see-through.
+  out.push(box(P.yoke, 62, 94, 4.2, 5.6, -36, 0, 0.7), box(P.magnet, 63, 93, 5.6, 8.4, -35, -1, 0.3));
+  out.push(box(P.magnetTop, 63, 93, 12.6, 15.4, -35, -1, 0.3), box(P.yoke, 62, 94, 15.4, 16.8, -36, 0, 0.7));
+  return out;
+}
+
+export function diskAnchors(p: DiskPose): Anchor[] {
+  const front: Vec3 = [0, 0.5, 1], up: Vec3 = [0, 1, 0], h = headAt(p.r), top = SURFACE_TOP;
+  const dirX = -Math.cos(h.alpha), dirZ = Math.sin(h.alpha), tail = 27;
+  const out: Anchor[] = [
+    { text: 'spindle hub', p: [0, top + 3.1, 0], side: 'l', n: up },
+    { text: 'platters, 95 mm', p: [-14, PLATTER_Y[1], PLATTER_R * 0.93], side: 'b', n: front },
+    { text: 'head', p: [h.x, top + 0.6, h.z], side: 'b', n: up },
+    { text: 'actuator arm', p: [PIVOT_D + dirX * 24, BLADE_Y[2] + 0.4, dirZ * 24], side: 't', n: up },
+    { text: 'pivot', p: [PIVOT_D, BLADE_Y[2] + 2, 0], side: 't', n: up },
+    { text: 'voice coil', p: [PIVOT_D - dirX * tail, 10.5, -dirZ * tail], side: 'b', n: up },
+    { text: 'magnet', p: [78, 16.8, -34], side: 't', n: up },
+  ];
+  return out;
+}
