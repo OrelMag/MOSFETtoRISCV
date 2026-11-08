@@ -95,7 +95,7 @@ class MemoryDrawer {
     if (byUser && on) this.closed.delete(this.ed.chipId);
     // opening by itself, it waits behind a drawer already shown (the CPU drawer of a computer)
     if (on) {
-      dockPane(this.ed, { id: 'memory', label: 'Memory', icon: 'table', el: this.el, width: 340 }, byUser);
+      dockPane(this.ed, { id: 'memory', label: 'Memory', icon: 'memory', el: this.el, width: 340 }, byUser);
       this.build();
     } else undockPane(this.ed, 'memory');
     this.ed.renderActions();
@@ -149,7 +149,7 @@ registerEditorPlugin((ed) => {
 });
 
 registerToolbarAction({
-  id: 'memory', title: 'Memory panel: the words of every RAM and register file in this chip and the chips it places, live', icon: 'table', label: 'Memory', order: 64,
+  id: 'memory', title: 'Memory panel: the words of every RAM and register file in this chip and the chips it places, live', icon: 'memory', label: 'Memory', order: 64,
   run: (ed) => drawers.get(ed)?.toggle(),
   // only on a chip with a memory somewhere inside
   shown: (ed) => !!drawers.get(ed)?.open || !!drawers.get(ed)?.hasAny,
