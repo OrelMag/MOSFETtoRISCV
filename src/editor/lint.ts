@@ -98,29 +98,34 @@ export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<strin
 
   // ---- inputs left open ----
   const open = openInputs(built);
-  if (open.length) {
-    const list = open.slice(0, 6).map((o) => `${o.part}.${o.port}`).join(', ');
-    const one = open.length === 1;
-    const ids = [...new Set(open.map((o) => o.part))];
+  // real warnings first, then the hints (parts nothing is wired to yet): one diagnostic each
+  const split = <T>(xs: T[], part: (x: T) => string): [Diag['level'], T[]][] => {
+    const hint = xs.filter((x) => level([part(x)]) === 'hint');
+    return [['warn', xs.filter((x) => !hint.includes(x))], ['hint', hint]];
+  };
+  for (const [lvl, group] of split(open, (o) => o.part)) {
+    if (!group.length) continue;
+    const list = group.slice(0, 6).map((o) => `${o.part}.${o.port}`).join(', ');
+    const one = group.length === 1;
     diags.push({
-      level: level(ids),
-      msg: open.length > 6 ? `${open.length} inputs (${list}, …) are not connected` : `${list} ${one ? 'is' : 'are'} not connected`,
+      level: lvl,
+      msg: group.length > 6 ? `${group.length} inputs (${list}, …) are not connected` : `${list} ${one ? 'is' : 'are'} not connected`,
       fix: one ? 'and reads X. Wire it, or tie it with Constant 0 / 1.' : 'and read X. Wire them, or tie them with Constant 0 / 1.',
-      parts: ids,
+      parts: [...new Set(group.map((o) => o.part))],
     });
   }
 
   // ---- parts nothing reads ----
-  const dead = deadParts(doc, built);
-  if (dead.length) {
-    const label = new Map(doc.parts.map((p) => [p.id, p.label]));
-    const list = dead.slice(0, 6).map((id) => (label.get(id) ? `${id} (${label.get(id)})` : id)).join(', ');
-    const one = dead.length === 1;
+  const label = new Map(doc.parts.map((p) => [p.id, p.label]));
+  for (const [lvl, group] of split(deadParts(doc, built), (id) => id)) {
+    if (!group.length) continue;
+    const list = group.slice(0, 6).map((id) => (label.get(id) ? `${id} (${label.get(id)})` : id)).join(', ');
+    const one = group.length === 1;
     diags.push({
-      level: level(dead),
-      msg: one ? `${list} drives nothing that reaches an output.` : dead.length > 6 ? `${dead.length} parts (${list}, …) drive nothing that reaches an output.` : `${list} drive nothing that reaches an output.`,
+      level: lvl,
+      msg: one ? `${list} drives nothing that reaches an output.` : group.length > 6 ? `${group.length} parts (${list}, …) drive nothing that reaches an output.` : `${list} drive nothing that reaches an output.`,
       fix: one ? 'Wire its output on, or delete it (Del).' : 'Wire their outputs on, or delete them (Del).',
-      parts: dead,
+      parts: group,
     });
   }
   diags.push(...isaMismatch(doc));
