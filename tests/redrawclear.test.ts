@@ -3,6 +3,8 @@ import { singleCycleCpu } from '../src/lib/cpu';
 import { ethSegment } from '../src/lib/ethstation';
 import { ethSwitch } from '../src/lib/ethswitch';
 import { laneCore } from '../src/lib/lanes';
+import { xlenCpu } from '../src/lib/cpu64';
+import { resolveComponent } from '../src/lib/resolve';
 import { MC_FSM, MC_MICRO, multicycleCpu } from '../src/lib/multicycle';
 import { pipelinedCpu } from '../src/lib/pipeline';
 import { CSR_UNIT, systemCpu } from '../src/lib/system';
@@ -31,6 +33,13 @@ const levels: [string, () => ComponentDef][] = [
   ['state machine control', () => MC_FSM],
   ['microcode control', () => MC_MICRO],
   ['lane core', () => laneCore(w, 4)],
+  // chapter 25's core at both widths, and the sandbox's RV64 cores (circuit eyeballing, phase 2)
+  ['RV32I core, xlen drawing', () => xlenCpu(w, { xlen: 32 })],
+  ['RV32IM core, xlen drawing', () => xlenCpu(w, { xlen: 32, m: true })],
+  ['RV64I core', () => xlenCpu(w, { xlen: 64 })],
+  ['RV64IM core', () => xlenCpu(w, { xlen: 64, m: true })],
+  ['sandbox rv64i_core', () => resolveComponent('rv64i_core')!],
+  ['sandbox rv64im_core', () => resolveComponent('rv64im_core')!],
   // the prologue's relay and tube circuits (circuit eyeballing, phase 2a)
   ['relay NAND', () => RELAY_NAND],
   ['self-holding relay', () => RELAY_LATCH],

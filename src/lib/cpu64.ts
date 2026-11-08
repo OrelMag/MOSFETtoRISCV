@@ -377,28 +377,33 @@ function buildXlen(IM: ComponentDef, X: Xlen, m: boolean, dmemK: number, imemPor
   const aluX = WU ? at.get('wu')![0] + g(WU).w + 12 : rfR + 18;
   alignY('alu', ALU, aluX, 'a', WU ? P('wu', 'aw')[1] : P('srcA', 'y')[1]);
   const aluR = aluX + g(ALU).w;
-  alignY('st', ST, aluR + 12, 'wd', Y + 20);
   const dmX = aluR + 34;
+  // store path between the ALU and the memory: the address splitter, then the store unit feeding the memory up
+  place('adr', splitter([lb, X - lb]), [aluR + 6, Y + 14]);
+  alignY('st', ST, aluR + 12, 'addr', P('adr', 'o0')[1]);
+  place('fs', splitter([2, 1]), [aluR + 9, P('st', 'size')[1] + 1]);
   alignY('dm', DM, dmX, 'addr', P('alu', 'y')[1]);
   alignY('ld', LD, dmX + g(DM).w + 12, 'rdata', P('dm', 'rdata')[1]);
   alignY('res', M4, P('ld', 'value')[0] + 12, 'd1', P('ld', 'value')[1]);
   place('plus4', P4, [34, Y - 12]);
   alignY('target', ADD, rfR + 18, 'a', Y + 30);
   place('gndT', TIE0, [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 5]);
-  alignY('clr0', CLR, aluR + 12, 'in', Y + 44);
+  // jalr's target: the ALU's sum with bit 0 cleared, just past the ALU on its result's way to the memory
+  alignY('clr0', CLR, aluR + 12, 'in', Y + 7);
   place('gndJ', TIE0, [P('clr0', 'zero')[0] - 6, P('clr0', 'zero')[1] + 1]);
-  place('ctl', CONTROL, [12, 0]);
+  // the extra decoder sits before the control unit: op -> xd -> ctl
+  const ctlX = XD ? 30 : 12;
+  place('ctl', CONTROL, [ctlX, 0]);
+  if (XD) place('xd', XD, [6, 24]);
   place('npc', NEXT_PC, [72, 0]);
-  if (XD) place('xd', XD, [6, Y + 64]);
-  place('adr', splitter([lb, X - lb]), [dmX, Y + 30]);
-  place('fs', splitter([2, 1]), [dmX, Y + 36]);
-  const bottom = Y + 56;
+  const bottom = Y + 38;
   if (MD) {
-    place('md', MD, [aluX - 4, bottom + 8]);
-    alignY('mres', M2, aluR + 4, 'a', P('alu', 'y')[1] - 14);
-    place('yes', TIE1, [aluX - 14, bottom + 24]);
-    place('nstall', NOT, [aluX + g(MD).w + 4, P('md', 'stall')[1] - 1]);
-    place('rwg', AND, [60, bottom - 8]);
+    // the M unit under the ALU, on the same operands; its result and the ALU's meet in mres beside it
+    place('md', MD, [aluX, WU ? Y + 26 : Y + 40]);
+    alignY('mres', M2, aluR + 16, 'b', P('md', 'y')[1]);
+    place('yes', TIE1, [aluX - 6, P('md', 'noTrap')[1] + 1]);
+    place('nstall', NOT, [aluR + 6, P('md', 'stall')[1] + 5]);
+    place('rwg', AND, [62, P('rf', 'we')[1] + 6]);
   }
   if (wide && !m) place('gndM', TIE0, [P('wu', 'rw')[0] + 4, P('wu', 'rw')[1] + 10]);
 
@@ -421,8 +426,8 @@ function buildXlen(IM: ComponentDef, X: Xlen, m: boolean, dmemK: number, imemPor
     { name: 'PCSrc', ends: ['npc.pcSrc', 'pcmux.s'], tags: true },
     // decode
     { name: 'Instr', ends: ['imem.data', 'si.in', 'imm.instr', 'instrOut'], trunk: 52, tags: ['instrOut'] },
-    { name: 'op', ends: ['si.o0', wide ? 'xd.op' : 'ctl.op', ...(m && !wide ? ['xd.op'] : [])], tags: true },
-    ...(wide ? [{ name: 'opInt', ends: ['xd.opInt', 'ctl.op'], tags: true as const }, { name: 'isW', ends: ['xd.isW', 'wu.w'], tags: true as const }] : []),
+    { name: 'op', ends: ['si.o0', wide ? 'xd.op' : 'ctl.op', ...(m && !wide ? ['xd.op'] : [])], tags: wide ? undefined : true },
+    ...(wide ? [{ name: 'opInt', ends: ['xd.opInt', 'ctl.op'] }, { name: 'isW', ends: ['xd.isW', 'wu.w'], tags: true as const }] : []),
     { name: 'rd', ends: ['si.o1', 'rf.wa'] },
     { name: 'funct3', ends: ['si.o2', 'ctl.funct3', 'npc.funct3', 'ld.funct3', 'fs.in', ...(WU ? ['wu.funct3'] : []), ...(MD ? ['md.funct3'] : [])], tags: true },
     { name: 'rs1', ends: ['si.o3', 'rf.ra1'], trunk: 64 },
@@ -434,25 +439,27 @@ function buildXlen(IM: ComponentDef, X: Xlen, m: boolean, dmemK: number, imemPor
     // execute
     { name: 'rd1', ends: ['rf.rd1', 'srcA.a'] },
     { name: 'WriteData', ends: ['rf.rd2', 'srcB.a', 'st.wd'], trunk: rfR + 2.5, tags: ['st.wd'] },
-    { name: 'SrcA', ends: ['srcA.y', WU ? 'wu.a' : 'alu.a', ...(MD && !WU ? ['md.a'] : [])], tags: MD && !WU ? ['md.a'] : undefined },
-    { name: 'SrcB', ends: ['srcB.y', WU ? 'wu.b' : 'alu.b', ...(MD && !WU ? ['md.b'] : [])], tags: MD && !WU ? ['md.b'] : undefined },
+    { name: 'SrcA', ends: ['srcA.y', WU ? 'wu.a' : 'alu.a', ...(MD && !WU ? ['md.a'] : [])] },
+    { name: 'SrcB', ends: ['srcB.y', WU ? 'wu.b' : 'alu.b', ...(MD && !WU ? ['md.b'] : [])] },
     ...(WU ? [
-      { name: 'OpA', ends: ['wu.aw', 'alu.a', ...(MD ? ['md.a'] : [])], tags: MD ? ['md.a'] : undefined },
-      { name: 'OpB', ends: ['wu.bw', 'alu.b', ...(MD ? ['md.b'] : [])], tags: MD ? ['md.b'] : undefined },
+      { name: 'OpA', ends: ['wu.aw', 'alu.a', ...(MD ? ['md.a'] : [])] },
+      { name: 'OpB', ends: ['wu.bw', 'alu.b', ...(MD ? ['md.b'] : [])] },
       { name: 'WResult', ends: ['wu.rw', 'res.d0'], tags: true as const },
     ] : []),
     {
       name: 'ALUResult', ends: ['alu.y', 'dm.addr', 'clr0.in', 'adr.in', 'aluOut', ...(MD ? ['mres.a'] : WU ? ['wu.r'] : ['res.d0'])],
-      tags: ['clr0.in', 'adr.in', 'aluOut', ...(MD ? [] : WU ? ['wu.r'] : ['res.d0'])],
+      tags: ['aluOut', ...(MD ? [] : WU ? ['wu.r'] : ['res.d0'])],
+      // down to the ALU / M choice past the M unit's right edge, never through it
+      ...(MD ? { via: { 'mres.a': [[aluR + 8, P('alu', 'y')[1]], [aluR + 8, P('mres', 'a')[1]]] as [number, number][] } } : {}),
     },
     ...(MD ? [
-      { name: 'MResult', ends: ['md.y', 'mres.b'], tags: true as const },
+      { name: 'MResult', ends: ['md.y', 'mres.b'] },
       { name: 'ExecResult', ends: ['mres.y', WU ? 'wu.r' : 'res.d0'], tags: true as const },
     ] : []),
-    { name: `addr[${lb - 1}:0]`, ends: ['adr.o0', 'st.addr', 'ld.addr'], tags: true },
-    { name: 'size', ends: ['fs.o0', 'st.size'], tags: true },
-    { name: 'StoreData', ends: ['st.wdata', 'dm.wdata'], tags: true },
-    { name: 'ByteEn', ends: ['st.be', 'dm.be'], tags: true },
+    { name: `addr[${lb - 1}:0]`, ends: ['adr.o0', 'st.addr', 'ld.addr'], tags: ['ld.addr'] },
+    { name: 'size', ends: ['fs.o0', 'st.size'] },
+    { name: 'StoreData', ends: ['st.wdata', 'dm.wdata'] },
+    { name: 'ByteEn', ends: ['st.be', 'dm.be'] },
     { name: 'ReadData', ends: ['dm.rdata', 'ld.rdata'] },
     { name: 'LoadValue', ends: ['ld.value', 'res.d1'] },
     { name: 'Result', ends: ['res.y', 'rf.wd'], tags: true },
@@ -476,15 +483,15 @@ function buildXlen(IM: ComponentDef, X: Xlen, m: boolean, dmemK: number, imemPor
     { name: 'Carry', ends: ['alu.carry', 'npc.carry'], tags: true },
     ...(MD ? [
       { name: 'isM', ends: ['xd.isM', 'md.isM', 'mres.s', ...(WU ? ['wu.isM'] : [])], tags: true as const },
-      { name: 'noTrap', ends: ['yes.y', 'md.noTrap'], tags: true as const },
+      { name: 'noTrap', ends: ['yes.y', 'md.noTrap'] },
       { name: 'stall', ends: ['md.stall', 'nstall.a'] },
       { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwg.b', 'retire'], tags: ['pc.en', 'rwg.b', 'retire'] },
-      { name: 'RegWriteQ', ends: ['rwg.y', 'rf.we'], tags: true as const },
+      { name: 'RegWriteQ', ends: ['rwg.y', 'rf.we'] },
     ] : []),
-    ...(wide && !m ? [{ name: 'gndM', ends: ['gndM.y', 'wu.isM'], tags: true as const }] : []),
+    ...(wide && !m ? [{ name: 'gndM', ends: ['gndM.y', 'wu.isM'] }] : []),
   ];
   const resY = P('res', 'y');
-  const ox = resY[0] + 22;
+  const ox = resY[0] + 8;
   const pins: Record<string, [number, number]> = { clk: [0, bottom], pcOut: [ox, bottom - 8], instrOut: [ox, bottom - 5], aluOut: [ox, bottom - 2], ...(m ? { retire: [ox, bottom + 1] } : {}) };
   const extra: PortDef[] = [];
   if (imemPort) {
