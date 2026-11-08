@@ -11,6 +11,8 @@ import { actName, actTitle, NODES } from '../campaign/nodes';
 import { progress } from '../campaign/progress';
 import type { CampaignNode, NodeKind } from '../campaign/types';
 import { plainText, type NavItem } from './chapternav';
+import { MODELS_3D, searchModels } from '../widgets/models3dindex';
+import { modelHref, modelPlace } from './models3dpage';
 
 const KIND: Record<NodeKind, string> = { lesson: 'lesson', drill: 'drill', build: 'build', program: 'program', core: 'core' };
 const BADGE: Record<string, string> = { solved: 'solved', skipped: 'skipped', started: 'in progress' };
@@ -35,12 +37,19 @@ export function levelItems(): NavItem[] {
   });
 }
 
-/** Every codex entry; those not discovered yet marked locked (their page shows the summary only). */
+/** The 3D models (the codex's model index), after the entries: ids model:<id>. */
+function modelItems(): NavItem[] {
+  return MODELS_3D.map((m): NavItem => ({
+    kind: 'codex', id: `model:${m.id}`, title: m.title, sub: `3D model · ${modelPlace(m)}`, alt: `3D model ${m.id}`, text: m.summary, href: modelHref(m.id),
+  }));
+}
+
+/** Every codex entry; those not discovered yet marked locked (their page shows the summary only); then the 3D models. */
 export function codexItems(): NavItem[] {
   const p = progress();
   const open = p.codexUnlocked();
   const kinds = new Map(CODEX_KINDS.map((k) => [k.id, k.title.replace(/s$/, '')]));
-  return CODEX.map((e): NavItem => {
+  return [...CODEX.map((e): NavItem => {
     const sum = plainSummary(e).trim();
     const first = /^.{20,}?[.:;](\s|$)/.exec(sum)?.[0].trim() ?? sum;
     return {
@@ -48,11 +57,11 @@ export function codexItems(): NavItem[] {
       sub: `${kinds.get(e.kind) ?? e.kind} · ${first}`,
       alt: [kinds.get(e.kind), ...(ALIASES[e.id] ?? [])].join(' · '), text: sum, href: `#/campaign/codex/${e.id}`, locked: !open.has(e.id),
     };
-  });
+  }), ...modelItems()];
 }
 
 /** The codex group's order for a query: the codex page's own search (aliases, spellings), over the items given. */
 export function rankCodexItems(items: readonly NavItem[], text: string): NavItem[] {
   const byId = new Map(items.map((it) => [it.id, it]));
-  return searchCodex(text).map((e) => byId.get(e.id)).filter((x): x is NavItem => !!x);
+  return [...searchCodex(text).map((e) => e.id), ...searchModels(text).map((m) => `model:${m.id}`)].map((id) => byId.get(id)).filter((x): x is NavItem => !!x);
 }

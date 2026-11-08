@@ -82,3 +82,34 @@ button.lv-chip { font: inherit; font-size: 12.5px; cursor: pointer; }
 
 @media (pointer: coarse) { .cp-codex-list .cx-grp-t { min-height: 40px; } .cx-rows .lv-chip { min-height: 40px; } }
 .cx-more { color: var(--accent); border-style: dashed; }
+
+/* the 3D model index (ui/models3dpage.ts): its link under the analogies', a card per model, the open model above them */
+.cp-codex-list a.cx-mxlink { color: var(--accent); margin-top: 0; }
+.cp-codex-list a.cx-mxlink.on { background: var(--accent-soft); color: var(--accent); }
+.mx-index h2 { display: flex; align-items: center; gap: 8px; }
+.mx-index h2 .icon { color: var(--accent); }
+.mx-index .ax-tools { margin: 14px 0 10px; }
+.mx-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.mx-card { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); min-width: 0; }
+.mx-card[hidden] { display: none; }
+.mx-card.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.mx-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.mx-card h3 { margin: 0; font: 600 14.5px/1.3 var(--font-ui); color: var(--text); }
+.mx-cat { flex: none; }
+.mx-sum { margin: 0; font-size: 13px; line-height: 1.45; color: var(--text-2); }
+.mx-where { display: flex; align-items: baseline; gap: 6px; margin: 0; font-size: 12.5px; color: var(--text-2); }
+.mx-where .icon { flex: none; position: relative; top: 1px; }
+.mx-card .ax-codex { margin: 0; }
+.mx-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 4px; }
+.mx-acts .btn, .mx-open-head .btn { display: inline-flex; align-items: center; gap: 4px; }
+.mx-open { margin: 14px 0 6px; padding: 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); min-width: 0; }
+.mx-open-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mx-open-head h3 { display: flex; align-items: center; gap: 6px; margin: 0 auto 0 0; font: 600 16px var(--font-ui); }
+.mx-open-head h3 .icon { color: var(--accent); }
+.mx-open-head h3:focus { outline: none; }
+.mx-open-head h3:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mx-open > .sub { margin: 4px 0 10px; }
+.mx-model { min-width: 0; overflow-x: auto; }
+/* a phone: the codex card already pads the page; the open model takes its width back */
+@media (max-width: 600px) { .mx-open { padding: 8px 6px; margin-inline: -10px; } }
+@media (pointer: coarse) { .mx-acts .btn, .mx-open-head .btn { min-height: 40px; } }

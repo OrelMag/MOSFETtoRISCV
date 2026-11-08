@@ -8,6 +8,9 @@
 
 import type { Widget } from '../view/stage';
 
+/** The codex address of the index: #/campaign/codex/models (no codex entry has this id: tests/models3dindex.test.ts). */
+export const MODELS_INDEX_ID = 'models';
+
 export type ModelCategory = 'devices' | 'machines' | 'memory' | 'comms' | 'dsp' | 'analogies';
 
 export const MODEL_CATEGORIES: readonly { id: ModelCategory; title: string }[] = [

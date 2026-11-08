@@ -34,6 +34,7 @@ import type { ProgressView } from '../graph';
 import type { Quiz } from '../../chapters/types';
 import { chapterNo } from '../../chapters/meta';
 import { outlineOf } from '../../chapters/outline';
+import { modelsOfCodex } from '../../widgets/models3dindex';
 import { analogiesForCodex, type Analogy } from '../../chapters/analogies';
 import { analogyEl } from '../../ui/analogy';
 import { codexFigure } from './codexfigs';
@@ -154,8 +155,11 @@ function linksEl(e: CodexEntry, more: CodexMore | undefined): HTMLElement {
   };
   const cx = (xs: CodexEntry[]) => xs.map((x) => chip('', `#/campaign/codex/${x.id}`, x.title));
   return h('div', { class: 'cx-rows' },
-    row('Learn it', learn), row('Builds on', cx(builds)), row('Leads to', cx(leads)), row('See also', cx(also)));
+    row('Learn it', learn), row('In 3D', modelChips(e.id)), row('Builds on', cx(builds)), row('Leads to', cx(leads)), row('See also', cx(also)));
 }
+
+/** The 3D models that show an entry (the codex's model index): no secret, so a locked entry lists them too. */
+const modelChips = (id: string) => modelsOfCodex(id).map((m) => chip('acc', `#/campaign/codex/models/${m.id}`, icon('cube', 12), m.title));
 
 /** The entries before and after this one. */
 function prevNextEl(id: string): HTMLElement {
@@ -287,7 +291,8 @@ export function lockedEntryEl(e: CodexEntry, more: CodexMore | undefined, checks
       rich('div', e.body, 'cx-sum'),
       h('div', { class: 'cx-rows' },
         where.length ? h('div', { class: 'cx-row' }, h('span', { class: 'cx-row-k' }, 'Unlocks with'), ...where.map((n) => chip('', levelHref(n), icon('flag', 12), n.title))) : null,
-        chapters.length ? h('div', { class: 'cx-row' }, h('span', { class: 'cx-row-k' }, 'Read in'), ...chapters) : null)),
+        chapters.length ? h('div', { class: 'cx-row' }, h('span', { class: 'cx-row-k' }, 'Read in'), ...chapters) : null,
+        modelsOfCodex(e.id).length ? h('div', { class: 'cx-row' }, h('span', { class: 'cx-row-k' }, 'In 3D'), ...modelChips(e.id)) : null)),
     checks.length ? h('section', { class: 'cx-check' }, h('h4', null, 'Check yourself'),
       h('p', { class: 'sub' }, 'Already know it? These are the entry\'s own questions.'),
       ...checks.map((q, k) => quizBox(q, `codex:${e.id}:${k}`, `${k + 1} of ${checks.length}`, () => {}))) : null,
