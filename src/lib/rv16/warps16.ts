@@ -23,6 +23,7 @@ import { AND, NOT, OR } from '../gates';
 import { bitwise, orN } from '../wide';
 import { BRANCH16, CTL16, IMM16, NEXTPC16 } from './cpu';
 import { LANE_PORTS, LANEDEC16, LANES16, MASK16, NL, STACK16, VRF16 } from './lanes16';
+import { foldBands } from '../fold';
 import { choose4, MUX16, RV16_DFF, RV16_DFFE, RV16_MUX4, RV16_REG16, RV16_REG4 } from './logic';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -115,6 +116,7 @@ export const WARP_PORTS: PortDef[] = (() => {
  */
 function rv16Warps(raster: boolean): ComponentDef {
   const b = new Builder(10, 16, 6);
+  b.maxH = 140; // a column past this wraps into the next, not one tall strip
   b.pins('clk', 'rst', 'instr', ...each('drdata'));
   const nrst = b.op1(NOT, ['rst'], 'not reset');
   // the warp issuing now: 0 after reset, then 1, 0, 1, …
@@ -288,7 +290,7 @@ function rv16Warps(raster: boolean): ComponentDef {
       summary: 'The two-warp core with the rasterizer as a device: lane 0\'s stores to 0xFFF0 … 0xFFF5 set the vertices, its store to 0xFFF6 the colour, and the rasterizer starts in the next cycle, writing the screen through fa / fd / fwe. While it is busy, a warp whose instruction would store to it (lane 0) or load from the screen (0xF000 … 0xF3FF) does not issue: its turn passes.',
       ports: FRAME_PORTS,
       symbol: { kind: 'box', label: 'RV16 × 2 WARPS + RASTER' },
-      netlist: () => ({
+      netlist: () => foldBands({
         pins: { ...pinsAt(['clk', 'rst', 'instr', ...each('drdata')], 0, 4), ...pinsAt(['pc', 'warp', ...each('daddr'), ...each('dwdata'), 'dwe', 'rwe', 'rwa', ...each('rwd'), 'lwe', 'lwa', ...each('lwd'), 'fa', 'fd', 'fwe'], R, 4) },
         instances: b.instances, nets: b.nets(),
       }),
@@ -299,7 +301,7 @@ function rv16Warps(raster: boolean): ComponentDef {
     summary: 'Two warps of the SIMT core take turns every cycle: one fetch, decode, control and set of lanes; per warp a PC, a mask, a split / join stack, lane registers and a waiting bit for bar. The data memory answers one cycle late: a load\'s lanes and rd wait a cycle in a register, and the word is written to its warp\'s registers (lwe, lwa, lwd) while the other warp issues, so neither ever waits for memory.',
     ports: WARP_PORTS,
     symbol: { kind: 'box', label: 'RV16 × 2 WARPS' },
-    netlist: () => ({
+    netlist: () => foldBands({
       pins: { ...pinsAt(['clk', 'rst', 'instr', ...each('drdata')], 0, 4), ...pinsAt(['pc', 'warp', ...each('daddr'), ...each('dwdata'), 'dwe', 'rwe', 'rwa', ...each('rwd'), 'lwe', 'lwa', ...each('lwd')], R, 4) },
       instances: b.instances, nets: b.nets(),
     }),

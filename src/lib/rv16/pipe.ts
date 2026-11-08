@@ -14,6 +14,7 @@ import { AND, NOT, OR, XOR } from '../gates';
 import { TIE0, TIE1 } from '../transistors';
 import { BRANCH16, branch16, CTL16, IMM16, NEXTPC16, NEXTPC16F } from './cpu';
 import { ADD16, choose4, INC16, MUX16, RF8, RV16_ALU16, RV16_ALU16KS, RV16_DFF, RV16_DREG16, RV16_REG16 } from './logic';
+import { foldBands } from '../fold';
 import { CSR16F, ILL16, SYSDEC16, trapCause } from './system';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -368,7 +369,8 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
     ports: [{ name: 'clk', width: 1, dir: 'in', clock: true }, bit('rst', 'in'), bus('instr', 16, 'in'), bus('drdata', 16, 'in'), ...(o.sys ? [bit('irq', 'in')] : []),
       bus('pc', 16, 'out'), bus('daddr', 16, 'out'), bus('dwdata', 16, 'out'), bit('dwe', 'out'), bit('rwe', 'out'), bus('rwa', 3, 'out'), bus('rwd', 16, 'out')],
     symbol: { kind: 'box', label: 'RV16 PIPE' },
-    netlist: () => ({
+    // a core is too wide to read at fit in one strip: two bands (lib/fold.ts)
+    netlist: () => foldBands({
       pins: { ...pinsAt(['clk', 'rst', 'instr', 'drdata', ...(o.sys ? ['irq'] : [])], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) },
       instances: b.instances, nets: b.nets(),
     }),
