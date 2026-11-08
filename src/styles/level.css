@@ -66,6 +66,8 @@
 /* The editor in level mode: no props column; properties float over the canvas while something is selected or pinned. */
 .lv-ed { position: relative; min-width: 0; min-height: 0; }
 .sandbox.sb-levelmode { grid-template-columns: 196px minmax(0, 1fr); grid-template-areas: 'top top' 'pal center'; position: relative; }
+/* wide enough that a part's name and its NAND cost share a row (Full adder (from half adders) wrapped at 196) */
+@media (min-width: 1200px) { .sandbox.sb-levelmode { grid-template-columns: 228px minmax(0, 1fr); } }
 .sb-levelmode .sb-tabs .sb-tab { max-width: 200px; }
 .sb-levelmode .sb-props {
   display: none; position: absolute; right: 0; top: 47px; bottom: 0; width: 290px; z-index: 6;
