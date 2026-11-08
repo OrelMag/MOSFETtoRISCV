@@ -1159,7 +1159,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
       tag('funct3E', ['sf3E.in']);
       tag('funct3D', ['sf3D.in']);
       tag('ALUResultE', ['mdE.a']);
-      if (bal) net('ALUResultE').tagAt = { 'alu.y': [166, 22] };
+      if (bal) net('ALUResultE')!.tagAt = { 'alu.y': [166, 22] };
       tag('flushDE', ['mE.clr']);
       tag('en1', ['msM.en', 'mcM.en', 'mfM.en']);
       tag('validE', ['hz.validE', 'goDiv.b', ...(pred ? ['mis.valid'] : [])]);
