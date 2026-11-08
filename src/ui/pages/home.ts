@@ -70,7 +70,7 @@ export function homePage(): Page {
     h('section', { class: 'hero' },
       h('div', null,
         h('div', { class: 'eyebrow' }, 'An interactive journey'),
-        h('h1', null, 'From a ', h('span', { class: 'grad' }, 'switch'), ' to ', h('span', { class: 'grad' }, 'RISC-V'), ' and beyond.'),
+        h('h1', null, 'From a ', h('span', { class: 'grad' }, 'switch'), ' to a ', h('span', { class: 'grad' }, 'CPU'), ': RISC-V and beyond.'),
         h('p', { class: 'lead' }, 'Build a computer one level at a time. Start with a MOSFET, make a gate, then adders, memory and a processor, and go on to GPUs, memory systems and networks. Every box on screen is transparent: open it and keep going down until you reach silicon.'),
         // One way forward, then the rest as quiet links: five equal buttons wrapped unevenly and moved when the campaign link grew.
         h('div', { class: 'cta' },

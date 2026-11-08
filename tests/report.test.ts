@@ -98,6 +98,9 @@ describe('problem reports', () => {
     expect(isNoise({ message: 'boom', stack: `Error: boom\n    at x (moz-extension://abc/c.js:1:2)\n    at f (${ORIGIN}/a.js:1:2)` }, ORIGIN)).toBe(true);
     expect(isNoise({ message: 'boom', stack: 'Error: boom\n    at x (https://other.example/ad.js:1:2)' }, ORIGIN)).toBe(true);
     expect(isNoise({ message: 'boom', filename: 'chrome-extension://abc/x.js' }, ORIGIN)).toBe(true);
+    // Brave on iOS: its wallet's injected script, reported against the page itself
+    expect(isNoise({ message: "undefined is not an object (evaluating 'window.ethereum.selectedAddress = undefined')", filename: `${ORIGIN}/` }, ORIGIN)).toBe(true);
+    expect(isNoise({ message: 'boom', stack: 'f@user-script:5:12:34\nglobal code@user-script:5:40:3' }, ORIGIN)).toBe(true);
     expect(isNoise({ message: 'boom', stack: ours }, ORIGIN)).toBe(false);
     expect(isNoise({ message: 'boom', stack: ours, filename: `${ORIGIN}/MOSFETtoRISCV/assets/index.js` }, ORIGIN)).toBe(false);
     expect(isNoise({ message: 'boom' }, ORIGIN)).toBe(false);

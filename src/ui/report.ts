@@ -56,7 +56,10 @@ export function oneLine(message: string, n = 200): string {
 }
 
 const EXTENSION = /\b(?:chrome|moz|safari(?:-web)?|ms-browser)-extension:\/\/|webkit-masked-url:\/\//;
-const URL_IN_STACK = /\b[a-z][a-z0-9+.-]*:\/\/[^\s)]+/gi;
+const USER_SCRIPT = /\buser-script:\d/;
+/** Globals the site never touches but wallet injections do: an error about one of them is not ours. */
+const WALLET = /\bwindow\.(?:ethereum|solana|phantom|web3|tronWeb|braveSolana|keplr)\b/;
+const URL_IN_STACK =/\b[a-z][a-z0-9+.-]*:\/\/[^\s)]+/gi;
 
 /**
  * Errors not worth a banner: benign browser warnings, cross-origin "Script error." with nothing to report,
@@ -67,6 +70,9 @@ export function isNoise(e: { message: string; stack?: string; name?: string; fil
   if (/ResizeObserver loop/i.test(m)) return true;
   if (e.name === 'AbortError' || /play\(\) request was interrupted/i.test(m)) return true;
   if (/^Script error\.?$/i.test(m.trim()) && !e.stack) return true;
+  // A browser's own injected scripts (Brave's and others' wallets on iOS run as WebKit user scripts: no file of ours,
+  // `user-script:n` frames) defining window.ethereum and friends on every page.
+  if (WALLET.test(m) || USER_SCRIPT.test(e.stack ?? '') || USER_SCRIPT.test(e.filename ?? '')) return true;
   if (e.filename && (EXTENSION.test(e.filename) || (/^[a-z][a-z0-9+.-]*:\/\//i.test(e.filename) && !e.filename.startsWith(origin)))) return true;
   // Frames with URLs: the top one an extension's (thrown there, even if called from ours), or none of ours.
   const urls = e.stack?.match(URL_IN_STACK) ?? [];
