@@ -5,14 +5,19 @@
 // checks for every component of the library.
 
 import { type ExitDir, instPort, symbolGeom, type Vec } from '../sim/geometry';
-import { type ComponentDef, netlistOf, parseEnd } from '../sim/types';
-import { routeNetlist, tagStub } from '../view/route';
+import { type ComponentDef, type Netlist, netlistOf, parseEnd } from '../sim/types';
+import { tagStub } from '../view/route';
 import { autoFace } from './face';
 import {
   type ChipDoc, type EndRef, type FaceDoc, type FacePinDoc, type FaceSide, isIdent, type LabelDoc, onPolyline, type PartDoc, type PartRef, type PinDoc, slug,
-  uniqueName, type WireDoc,
+  polyline, uniqueName, type WireDoc,
 } from './model';
+import { partBox } from './geom';
 import { isError, MAX_WIDTH, partDef } from './parts';
+import { drawnNetlist, routedOnce } from '../view/wirefirst';
+
+/** A sandbox copy is drawn once: wires-first applies to levels up to this many nets (a stage stops at wirefirst.ts LOCAL_NETS). */
+const FROMDEF_NETS = 120;
 
 export interface FromDefOptions {
   /** Chip id (default `u_<slug of the def's id>`). */
@@ -36,8 +41,103 @@ export interface FromDefOptions {
  * net's first wire, a power-on hint on that wire's `init`.
  */
 export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDoc | { error: string } {
-  const nl = netlistOf(def);
-  if (!nl) return { error: `${def.id} has no netlist (a primitive): nothing to draw` };
+  const raw = netlistOf(def);
+  if (!raw) return { error: `${def.id} has no netlist (a primitive): nothing to draw` };
+  return drawDoc(def, settled(def, raw, opts), opts);
+}
+
+const routedOf = routedOnce;
+
+/** Per definition, the netlist docFromDef draws (the wires it settled on depend on the drawing, not on ids or names). */
+const settledNl = new WeakMap<ComponentDef, Netlist>();
+
+/**
+ * The netlist as a stage shows it: the nets that read better as wires (short, forward, few sinks) are wires, not pointer pairs.
+ * The editor's wires branch where the schematic's paths share a beginning, so a wire the router kept clear can still cross a part
+ * or run along another net here: those sinks go back to pointers and the chip is drawn again, unless the author's own drawing has
+ * the same fault (that stays as it was). Not settled after a few passes: the author's netlist.
+ */
+function settled(def: ComponentDef, raw: Netlist, opts: FromDefOptions): Netlist {
+  // a caller placing parts its own way (refOf) may draw what a plain reference cannot: settled for it alone, not kept
+  const keep = !opts.refOf;
+  const known = keep ? settledNl.get(def) : undefined;
+  if (known) return known;
+  const check: FromDefOptions = opts.refOf ? { refOf: opts.refOf } : {};
+  let nl = drawnNetlist(def, raw, FROMDEF_NETS);
+  let rawHits: Set<string> | undefined;
+  let out = raw;
+  for (let pass = 0; pass < 12 && nl !== raw; pass++) {
+    const doc = drawDoc(def, nl, check);
+    if ('error' in doc) break;
+    const found = sinksThroughParts(doc, nl);
+    if (!found.size) { out = nl; break; }
+    rawHits ??= ((d) => ('error' in d ? new Set<string>() : sinksThroughParts(d, raw)))(drawDoc(def, raw, check));
+    const hit = new Set([...found].filter((e) => !rawHits!.has(e)));
+    if (!hit.size) { out = nl; break; }
+    nl = { ...nl, nets: nl.nets.map((n) => {
+      const back = n.ends.slice(1).filter((e) => hit.has(e));
+      if (!back.length || n.tags === true) return n;
+      const tags = [...new Set([...(Array.isArray(n.tags) ? n.tags : []), ...back])];
+      return { ...n, tags: tags.length >= n.ends.length - 1 ? true : tags };
+    }) };
+  }
+  if (keep) settledNl.set(def, out);
+  return out;
+}
+
+/**
+ * Sinks (as netlist ends) whose wire in the drawn chip runs through a part other than its own ends (a splitter's bar does not hide
+ * it), or lies on a line another net's wire runs along (they would look joined: lint.ts warns of it).
+ */
+function sinksThroughParts(doc: ChipDoc, nl: Netlist): Set<string> {
+  const out = new Set<string>();
+  const sinkOf = (w: WireDoc) => ('part' in w.b ? `${w.b.part}.${w.b.port}` : 'pin' in w.b ? w.b.pin : null);
+  const defsAll = new Map(nl.instances.map((i) => [i.name, i.def]));
+  const nets = wireNets.get(doc);
+  if (nets) {
+    type Seg = { a: number; b: number; net: number; w: WireDoc };
+    const rows = new Map<string, Seg[]>();
+    for (const w of doc.wires) {
+      const p = polyline(doc, w, ((x: PartDoc) => defsAll.get(x.id)) as never);
+      if (!p) continue;
+      for (let i = 1; i < p.length; i++) {
+        const [u, v] = [p[i - 1], p[i]], horiz = u[1] === v[1];
+        if (horiz === (u[0] === v[0])) continue;
+        const k = horiz ? `h${u[1]}` : `v${u[0]}`, [a, b] = horiz ? [u[0], v[0]] : [u[1], v[1]];
+        (rows.get(k) ?? rows.set(k, []).get(k)!).push({ a: Math.min(a, b), b: Math.max(a, b), net: nets.get(w.id) ?? -1, w });
+      }
+    }
+    for (const segs of rows.values()) for (const x of segs) for (const y of segs) {
+      if (x.net === y.net || x.net < 0 || y.net < 0 || Math.min(x.b, y.b) - Math.max(x.a, y.a) <= 0) continue;
+      for (const z of [x, y]) { const e = sinkOf(z.w); if (e) out.add(e); }
+    }
+  }
+  for (const e of sinksInParts(doc, nl)) out.add(e);
+  return out;
+}
+
+function sinksInParts(doc: ChipDoc, nl: Netlist): Set<string> {
+  const defs = new Map(nl.instances.map((i) => [i.name, i.def]));
+  const defOf = (p: PartDoc) => defs.get(p.id);
+  const boxes = doc.parts.filter((p) => defs.get(p.id)?.prim !== 'alias').map((p) => ({ id: p.id, r: partBox(defs.get(p.id)!, p.at, p.flip, p.rot) }));
+  const out = new Set<string>();
+  for (const w of doc.wires) {
+    const sink = 'part' in w.b ? `${w.b.part}.${w.b.port}` : 'pin' in w.b ? w.b.pin : null;
+    if (!sink) continue;
+    const pts = polyline(doc, w, defOf as never);
+    if (!pts) continue;
+    const own = new Set([w.a, w.b].flatMap((e) => ('part' in e ? [e.part] : [])));
+    const hit = boxes.some(({ id, r }) => !own.has(id) && pts.some((p, i) => {
+      if (i + 1 >= pts.length) return false;
+      const q = pts[i + 1], lx = Math.min(p[0], q[0]), hx = Math.max(p[0], q[0]), ly = Math.min(p[1], q[1]), hy = Math.max(p[1], q[1]);
+      return hx > r.x + 0.1 && lx < r.x + r.w - 0.1 && hy > r.y + 0.1 && ly < r.y + r.h - 0.1;
+    }));
+    if (hit) out.add(sink);
+  }
+  return out;
+}
+
+function drawDoc(def: ComponentDef, nl: Netlist, opts: FromDefOptions): ChipDoc | { error: string } {
   for (const p of def.ports) {
     if (!isIdent(p.name) || p.name.includes('.')) return { error: `port name '${p.name}' is not an identifier` };
     if (p.width > MAX_WIDTH) return { error: `port '${p.name}' is ${p.width} bits wide (pins: at most ${MAX_WIDTH})` };
@@ -56,7 +156,7 @@ export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDo
     parts.push({ id: inst.name, ref, at: [at[0], at[1]], ...(inst.flip ? { flip: true } : {}), ...(inst.rot ? { rot: inst.rot } : {}), ...(inst.label ? { label: inst.label } : {}) });
   }
 
-  const { nets: routed, pins: pg } = routeNetlist(def, nl);
+  const { nets: routed, pins: pg } = routedOf(def, nl);
   const pins: PinDoc[] = def.ports.map((p) => {
     const g = pg.get(p.name)!;
     const face: ExitDir = p.dir === 'out' ? 'left' : 'right';
@@ -89,13 +189,17 @@ export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDo
   const labels: LabelDoc[] = [];
   const firstWire: (WireDoc | undefined)[] = [];
   let wn = 0, ln = 0;
+  const netOfWire = new Map<string, number>();
+  let curNet = -1;
   const addWire = (w: Omit<WireDoc, 'id'>): WireDoc => {
     const doc = { id: `w${++wn}`, ...w };
     wires.push(doc);
+    netOfWire.set(doc.id, curNet);
     return doc;
   };
 
   nl.nets.forEach((net, ni) => {
+    curNet = ni;
     const rn = routed[ni];
     const tagged = new Set(rn.tags.map((t) => t.end));
     const drv = net.ends[0];
@@ -170,12 +274,17 @@ export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDo
 
   const name = opts.name ?? def.name;
   const face = boxFace(def, pins, name);
-  return {
+  const out: ChipDoc = {
     id: opts.id ?? `u_${slug(def.id)}`, name,
     ...(def.notes ? { notes: def.notes } : {}),
     pins, parts, wires, labels, ...(face ? { face } : {}),
   };
+  wireNets.set(out, netOfWire);
+  return out;
 }
+
+/** The net each wire of a drawn chip belongs to (drawDoc's own record). */
+const wireNets = new WeakMap<ChipDoc, Map<string, number>>();
 
 /**
  * A box part's own box as the chip's face, when it differs from the box the chip would get by itself (pins on the
