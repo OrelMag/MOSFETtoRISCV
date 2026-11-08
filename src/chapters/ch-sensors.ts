@@ -7,12 +7,12 @@ import {
   absorptionDepth, CCD42_40, ccdReadTime, ccdRetained, C_FD_FF, CG_4T, darkCurrent, dynamicRangeDb, ICX285, IMX183, ktcNoise, qe, rowTime,
   SI_CUTOFF_NM, singleSlopeTime, STACK_BSI, STACK_FSI,
 } from '../phys/imagesensor';
+import { sensorStack3d } from '../widgets/sensorstack3d';
 import { groupNum } from '../sim/numfmt';
 import { adcApi, adcScene, ccdWidget, colourWidget, lightWidget, noiseWidget, pixelApi, pixelScene, pixelWidget, shutterWidget } from '../widgets/sensors';
 import { numOf } from './order';
 import type { Chapter } from './types';
 import { withModel } from '../widgets/modelhost';
-import { sensorStack3d } from '../widgets/sensorstack3d';
 
 const g = (x: number) => groupNum(Math.round(x));
 const n1 = (x: number, d = 1) => x.toFixed(d);
