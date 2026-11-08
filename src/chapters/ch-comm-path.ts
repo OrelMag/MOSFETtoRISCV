@@ -198,7 +198,7 @@ export const chPath: Chapter = {
       },
       more: {
         derive: `<p>M/M/1: Poisson arrivals at rate λ, exponential service of mean S, ρ = λS. The mean wait in the queue is ρS / (1 − ρ). Traceroute's times come instead from a queue simulated packet by packet (Lindley's recursion, W<sub>n+1</sub> = max(0, W<sub>n</sub> + S<sub>n</sub> − A<sub>n</sub>)); a test holds its mean to the formula. Real traffic is burstier than Poisson, so a real queue at a given load is usually worse.</p>`,
-        real: `<p>Our links are symmetric, and the lengths and rates are invented but typical. An oversized buffer on an access line is the source of bufferbloat: a queue that stays full adds hundreds of milliseconds without losing anything, so TCP has no reason to slow down. Active queue management drops or marks packets early to prevent it.</p>`,
+        real: `<p>Our links are symmetric, and the lengths and rates are invented but typical. An oversized buffer on an access line is the source of bufferbloat (<a href="#/c/queues/1">chapter ${numOf('queues')}</a>): a queue that stays full adds hundreds of milliseconds without losing anything, so TCP has no reason to slow down. Active queue management drops or marks packets early to prevent it.</p>`,
       },
     },
     {
