@@ -214,15 +214,15 @@ export function layoutWidget(opts: { mode?: '2d' | '3d' } = {}): Widget {
 
 export const FAB: [string, string][] = [
   ['Substrate', 'A polished wafer of lightly p-doped silicon, 300 mm across and under 1 mm thick, cut from a single crystal.'],
-  ['N-well', 'Photoresist masks the wafer; phosphorus ions implanted into the exposed area make an n-type well where the PMOS transistors will live.'],
-  ['Isolation', 'Shallow trenches are etched between transistors and filled with oxide (STI) so neighbouring devices cannot leak into each other.'],
-  ['Gate stack', 'A gate dielectric a few atoms thick is grown, then polysilicon (or, today, metal) is deposited over the whole wafer.'],
-  ['Lithography', 'Photoresist is spun on and exposed to deep-UV light through a mask (reticle), 4× reduced by the lens. The exposed resist dissolves in the developer.'],
+  ['Isolation', 'The active (diff) mask protects the transistor areas; everywhere else shallow trenches are etched and filled with oxide, then polished flush (STI). What stays bare silicon is the active area, so neighbouring devices cannot leak into each other.'],
+  ['N-well', 'Photoresist masks the wafer; phosphorus implanted into the exposed area makes an n-type well where the PMOS transistors will live. In STI flows the wells follow the isolation; older LOCOS flows did it the other way round.'],
+  ['Gate stack', 'A gate dielectric a few nanometres thick is grown on the bare silicon, then polysilicon (or, today, metal) is deposited over the whole wafer.'],
+  ['Lithography', 'Photoresist is spun on and exposed to deep-UV light through the poly mask (reticle), 4× reduced by the lens. The exposed resist dissolves in the developer, leaving resist only where the gates will be.'],
   ['Etch', 'Plasma etching removes the gate material wherever the resist does not protect it; the resist is stripped. What remains are the gates.'],
-  ['N+ implant', 'Arsenic or phosphorus implanted beside the NMOS gate forms its source and drain. The gate itself masks the channel, so the transistor is self-aligned.'],
-  ['P+ implant', 'Boron implanted beside the PMOS gate, inside the n-well, forms the PMOS source and drain.'],
-  ['Contacts', 'An insulating oxide covers everything; holes are etched down to the sources, drains and gates and filled with tungsten plugs.'],
-  ['Metal', 'Copper wires (metal 1) connect the contacts. Ten or more metal layers follow, each insulated from the last and joined by vias: the routing.'],
+  ['N+ implant', 'The n+ implant mask (nsdm) is a window over the NMOS row, larger than the diffusion. Arsenic or phosphorus lands only on active area the poly and the field oxide do not cover, so the source and drain form beside the gate. The gate itself masks the channel: the transistor is self-aligned.'],
+  ['P+ implant', 'The p+ mask (psdm) opens a window over the PMOS row inside the n-well; boron implanted beside the PMOS gate forms its source and drain.'],
+  ['Contacts', 'An insulating oxide covers everything; holes are etched down to the sources, drains and gates and filled with tungsten plugs (licon1; sky130 then adds a local interconnect, li1, and a second plug, mcon, to metal 1).'],
+  ['Metal', 'Metal 1 wires connect the contacts. Sky130 has five metal layers, aluminium, above the local interconnect; leading-edge processes use copper and ten or more, each insulated from the last and joined by vias: the routing.'],
 ];
 
 export function fabWidget(): Widget {
@@ -235,8 +235,8 @@ export function fabWidget(): Widget {
     const W = 600, H = 220, top = 120;
     const svg = svgEl(W, H, 'fab-svg');
     let s = `<rect x="0" y="${top}" width="${W}" height="${H - top}" class="si"/>`;
-    if (step >= 1) s += `<rect x="320" y="${top}" width="260" height="70" class="nwell"/>`;
-    if (step >= 2) for (const x of [10, 290, 570]) s += `<rect x="${x}" y="${top}" width="24" height="34" class="sti"/>`;
+    if (step >= 2) s += `<rect x="320" y="${top}" width="260" height="70" class="nwell"/>`;
+    if (step >= 1) for (const x of [10, 290, 570]) s += `<rect x="${x}" y="${top}" width="24" height="34" class="sti"/>`;
     const gates = [[140, 'n'], [440, 'p']] as const;
     if (step === 3 || step === 4) s += `<rect x="0" y="${top - 4}" width="${W}" height="4" class="gox"/><rect x="0" y="${top - 24}" width="${W}" height="20" class="poly"/>`;
     if (step === 4) {
@@ -254,7 +254,7 @@ export function fabWidget(): Widget {
     }
     if (step >= 9) {
       s += `<rect x="70" y="${top - 86}" width="40" height="16" class="cu"/><rect x="185" y="${top - 86}" width="215" height="16" class="cu"/><rect x="480" y="${top - 86}" width="40" height="16" class="cu"/><rect x="125" y="${top - 86}" width="30" height="16" class="cu"/><rect x="425" y="${top - 86}" width="30" height="16" class="cu"/>`;
-      s += `<rect x="0" y="${top - 112}" width="${W}" height="24" class="upper"/><text x="10" y="${top - 96}" class="lbl">metal 2 … 12 and vias</text>`;
+      s += `<rect x="0" y="${top - 112}" width="${W}" height="24" class="upper"/><text x="10" y="${top - 96}" class="lbl">metal 2 … and vias</text>`;
     }
     s += `<text x="140" y="${H - 8}" text-anchor="middle" class="lbl">NMOS</text><text x="440" y="${H - 8}" text-anchor="middle" class="lbl">PMOS (in the n-well)</text>`;
     svg.innerHTML = s;

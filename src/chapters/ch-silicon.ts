@@ -169,9 +169,10 @@ export const chSilicon: Chapter = {
     {
       title: 'How chips are made',
       body: `
-        <p>The layout is cut into layers, one mask per layer, and the wafer goes through the fab layer by layer: deposit, pattern with light, etch or implant, repeat.
+        <p>The layout is cut into masks, and the wafer goes through the fab mask by mask: deposit, pattern with light, etch or implant, repeat. The masks are not the layout layers one to one. For this cell, in SkyWater's names: <strong>diff</strong> (the active area, whose complement is etched into oxide-filled trenches), <strong>nwell</strong>, <strong>poly</strong>, the implant windows <strong>nsdm</strong> and <strong>psdm</strong> (wider than the diffusion), contacts <strong>licon1</strong> and <strong>mcon</strong>, local interconnect <strong>li1</strong> and <strong>met1</strong>: about nine.
         Lithography sets the smallest feature. Today's leading processes print with 13.5 nm extreme-ultraviolet light.</p>
-        <p>Most of the cost of a chip is in these repetitions. A modern process has dozens of masks, each one a pass through coat, expose, develop, etch or implant and clean; a wafer spends weeks in
+        <div class="try">Step to the n+ implant, then shift the poly mask: the source and drain follow the gate. Tick <em>implant before the gate</em> and the same shift leaves a channel uncovered on one side and the gate over the drain on the other.</div>
+        <p>Most of the cost of a chip is in these repetitions. A whole modern process has dozens of masks, each one a pass through coat, expose, develop, etch or implant and clean; a wafer spends weeks in
         the fab, and a single defect on any layer can kill the die it lands on. That is what the yield step prices.</p>`,
       widget: () => withModel(fabWidget(), masks3d()),
       more: {
