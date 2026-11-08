@@ -159,6 +159,7 @@ export function pixParts(pose: PixPose, P: PixPalette): Part[] {
   return out;
 }
 
+// The transistors' labels are minor: where they crowd pd and fd (labelfit lays main labels down first), they give way.
 export function pixAnchors(pose: PixPose): Anchor[] {
   const front: Vec3 = [0, 0, -1], up: Vec3 = [0, 1, 0], down: Vec3 = [0, -1, 0], z = pose.cut ? 0.8 : 0;
   const mid = (a: readonly number[]) => (a[0] + a[1]) / 2;
@@ -167,10 +168,10 @@ export function pixAnchors(pose: PixPose): Anchor[] {
     { text: 'colour filter', p: P3(PITCH, mid(CF), z + 0.3), side: 'r', n: front },
     { text: 'silicon, lit from the back', p: P3(PITCH, SI_T * 0.75, z), side: 'r', n: front },
     { text: 'pd: pinned photodiode (n under p+)', p: P3(L.pd.x[0], mid(L.pd.y), z), side: 'l', n: front },
-    { text: 'xfer: transfer gate', p: P3(mid(L.tg.x), POLY[0], Math.max(z, L.tg.z[0])), side: 'b', n: down },
+    { text: 'xfer: transfer gate', p: P3(mid(L.tg.x), POLY[0], Math.max(z, L.tg.z[0])), side: 'b', n: down, minor: true },
     { text: 'fd: floating diffusion', p: P3(L.fd.x[1], L.fd.y / 2, Math.max(z, L.fd.z[0])), side: 'r', n: front },
     { text: 'reset', p: P3(L.rst.x[1], POLY[0] / 2, mid(L.rst.z)), side: 't', n: [1, 0, 0], minor: true },
-    { text: 'sf, rs: source follower, row select', p: P3(mid(L.sf.x), POLY[0], L.strip.z[1]), side: 'l', n: down },
+    { text: 'sf, rs: source follower, row select', p: P3(mid(L.sf.x), POLY[0], L.strip.z[1]), side: 'l', n: down, minor: true },
     { text: 'column line (metal 2)', p: P3(mid(L.col.x), M2[0], 0), side: 'b', n: down },
   ];
 }
