@@ -275,11 +275,16 @@ export function openContextMenu(ed: Editor, x: number, y: number, at: Vec): void
   const partDef = part && ed.defOf(part);
   if (wires.length || labels.length) {
     const cur = hueOfNets(ed.doc, ed.compiled, wires, labels);
-    m.append(h('div', { class: 'sb-ctx-hues' }, h('span', null, 'Net colour'),
-      hueSwatches(cur, (hue) => {
-        closeMenu();
-        ed.edit((d) => colourNets(d, ed.compiled, wires, labels, hue));
-      }, 'menuitemradio')), h('hr'));
+    const head = h('span', null, 'Net colour');
+    const sw = hueSwatches(cur, (hue) => {
+      closeMenu();
+      ed.edit((d) => colourNets(d, ed.compiled, wires, labels, hue));
+    }, 'menuitemradio');
+    // the swatches have no text of their own: the heading names the one under the pointer or focus
+    const name = (e: Event) => { const t = (e.target as HTMLElement).closest<HTMLElement>('.sb-hue-sw')?.title; head.textContent = t ? `Net colour: ${t.split(':')[0]}` : 'Net colour'; };
+    for (const ev of ['pointerover', 'focusin']) sw.addEventListener(ev, name);
+    for (const ev of ['pointerleave', 'focusout']) sw.addEventListener(ev, () => { head.textContent = 'Net colour'; });
+    m.append(h('div', { class: 'sb-ctx-hues' }, head, sw), h('hr'));
   }
   if (part && partDef) partHeader(m, part.id, partDef);
   const trace = net >= 0 ? traceOf(ed, net, m) : [];
