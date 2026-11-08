@@ -269,6 +269,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 }
 .skip-link:focus { transform: none; outline: 2px solid var(--accent); outline-offset: 2px; }
 #view:focus { outline: none; }
+/* the skip link lands here when a page has no circuit: show where the focus is, for the keyboard only */
+#view:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .stage:focus { outline: none; }
 .stage:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .btn .kbd-hint { font: 500 10.5px var(--font-mono); padding: 0 5px; margin-left: 2px; border-radius: 5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; color: var(--muted); background: var(--surface); }

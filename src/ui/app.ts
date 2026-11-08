@@ -71,9 +71,13 @@ export function startApp(root: HTMLElement): void {
   const searchBtn = h('button', { class: 'btn ghost icon-only', title: `Search chapters, components, levels, codex and actions (${QUICK_KEY}, /)`, 'aria-label': 'Search', 'aria-keyshortcuts': 'Control+K /', onclick: () => openQuickNav() }, icon('search', 18));
   // The first Tab stop: straight to the circuit where a page has one (S does the same), else to the page.
   const skip = h('button', { class: 'skip-link' }, 'Skip to the circuit');
-  skip.addEventListener('focus', () => { skip.textContent = document.querySelector('#view section.stage') ? 'Skip to the circuit' : 'Skip to the content'; });
+  skip.addEventListener('focus', () => { skip.textContent = document.querySelector('#view section.stage, #view svg.ed-svg') ? 'Skip to the circuit' : 'Skip to the content'; });
   skip.addEventListener('click', () => {
-    if (!focusStage()) view.focus();
+    // the sandbox and a level have no stage section: the editor's canvas is the circuit (a Tab stop of its own)
+    if (focusStage()) return;
+    const canvas = view.querySelector<SVGElement>('svg.ed-svg');
+    if (canvas) canvas.focus();
+    else view.focus();
   });
 
   const radix = h('div', { class: 'seg', role: 'group', title: 'How buses show their value', 'aria-label': 'How buses show their value' });
