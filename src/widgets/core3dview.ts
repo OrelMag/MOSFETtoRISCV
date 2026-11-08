@@ -139,7 +139,7 @@ export function coreView(): Widget {
         h('div', { class: 'r3-ctl' }, h('div', { class: 'r3-btns' }, readBtn, w0Btn, w1Btn, nextBtn, resetBtn, stage.resetBtn)),
         stage.el, stage.hint, live),
       h('div', { class: 'r3-side' },
-        h('h4', null, 'Address ', h('span', { class: 'r3-badge' }, 'click a core')), grid,
+        h('h4', null, 'Address ', h('span', { class: 'r3-badge' }, 'pick a core')), grid,
         h('div', { class: 'co-rc' }, h('span', null, 'Row'), h('div', { class: 'co-seg', role: 'group', 'aria-label': 'Row' }, ...rowBtns), h('span', null, 'Column'), h('div', { class: 'co-seg', role: 'group', 'aria-label': 'Column' }, ...colBtns)),
         h('h4', null, 'This cycle ', h('span', { class: 'r3-badge' }, 'model')), kv, h('h4', null, 'The loop'), bh)));
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape' && plan) { next(); } });

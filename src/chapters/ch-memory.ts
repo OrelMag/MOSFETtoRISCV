@@ -1225,7 +1225,7 @@ export const chMemory: Chapter = {
         real: `<p>Cores of the early planes were about 80 mil (2 mm) outside; by 1966 they were down to 13 mil (0.33 mm), and the CDC 6600 (1964) had a core cycle of 1 µs; Whirlwind's core access took about 9 µs. Planes were often wired with three wires (sense and inhibit sharing one) and the sense wire ran diagonally through the cores so that the noise of half-selected cores cancelled; the model here draws four wires and a straight sense wire, as in the IBM 1401's planes.</p>`,
         pitfall: `<p>Assuming a core is a perfect switch. A half-select current still nudges a real core's flux a little, and thousands of them on one wire add up to noise on the sense wire that the signal has to be picked out of; the square loop below is the idealisation.</p>`,
       },
-      widget: core3d,
+      widget: () => core3d(),
     },
   ],
 };
