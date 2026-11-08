@@ -149,11 +149,11 @@ export const CHECK10C: Record<string, Quiz[]> = {
   ],
   tls: [
     {
-      question: 'Where do almost all of the chapter\'s client\'s 81,277,693 handshake cycles go?',
+      question: 'Where do almost all of the chapter\'s client\'s 81 277 693 handshake cycles go?',
       options: ['Two X25519 runs and one RSA signature check; AES and HMAC barely show', 'Encrypting the application data under AES-128-GCM, a block at a time', 'HKDF stretching the shared secret into the traffic keys', 'Hashing the transcript with SHA-256 after every message'],
       answer: 0,
-      explain: 'The two X25519 runs are 69,139,884 cycles, 85 % of the total, and the 1024-bit RSA verification adds 10,310,029 more. The symmetric work that protects the data is a small fraction.',
-      why: ['', 'Symmetric work is thousands of times cheaper than public-key work here.', 'The two HKDF calls take 779,480 cycles in all.', 'Hashing is cheap next to a point multiplication; SHA-256 takes 8,364 cycles per 64-byte block.'],
+      explain: 'The two X25519 runs are 69 139 884 cycles, 85 % of the total, and the 1024-bit RSA verification adds 10 310 029 more. The symmetric work that protects the data is a small fraction.',
+      why: ['', 'Symmetric work is thousands of times cheaper than public-key work here.', 'The two HKDF calls take 779 480 cycles in all.', 'Hashing is cheap next to a point multiplication; SHA-256 takes 8364 cycles per 64-byte block.'],
     },
     {
       question: 'A year later the server\'s long-term signing key is stolen. What does that open?',

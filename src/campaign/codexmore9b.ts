@@ -48,7 +48,7 @@ Blackman–Harris   8    −92.0      2.00      0.83           −96.6</pre>lobe
 Hann       2.45 bins  → 2.45 / 0.02 ≈ 122 samples
 at 32 samples the gap is 0.64 bin: one lump, however much padding
 
-64 samples at 8 kHz, a bin is 125 Hz; padded to 4,096 points the dots are 1.95 Hz apart
+64 samples at 8 kHz, a bin is 125 Hz; padded to 4096 points the dots are 1.95 Hz apart
 Hann needs 2.45 × 125 = 306 Hz between tones, padded or not</pre>The padded dots lie on the same curve as the unpadded ones, with more of them.`,
     },
     mistakes: [
@@ -64,11 +64,11 @@ Hann needs 2.45 × 125 = 306 Hz between tones, padded or not</pre>The padded dot
     example: {
       title: 'Frame length against what you see, at 8 kHz',
       body: `<pre>frame N   frame lasts   Hann main lobe (4 bins)
-32         4 ms          1,000 Hz
+32         4 ms          1000 Hz
 64         8 ms            500 Hz
 512        64 ms          62.5 Hz
 
-2,048 samples in frames of 512: 7 frames at hop 256 (50 %), 25 at hop 64 (7/8)
+2048 samples in frames of 512: 7 frames at hop 256 (50 %), 25 at hop 64 (7/8)
 without overlap 4 frames: 1.75× and 6.25× the transforms</pre>The steady tone is a sharp line at 512 and a thick band at 32; the chirp is the other way round.`,
     },
     mistakes: [
@@ -89,8 +89,8 @@ M = 128 taps, N = 256 block:   L = 129 new samples
 60 taps: best block 512 costs 45.2 against 60
 crossover: 44 taps
 
-in gates (sums of parts): 256-point streaming FFT 167,844 NANDs
-128 direct 16 × 16 multipliers 457,216; two FFTs and four multipliers 349,976</pre>Blocks win on multiplications and on area here; the parallel direct form wins on throughput, one sample a clock against about half.`,
+in gates (sums of parts): 256-point streaming FFT 167 844 NANDs
+128 direct 16 × 16 multipliers 457 216; two FFTs and four multipliers 349 976</pre>Blocks win on multiplications and on area here; the parallel direct form wins on throughput, one sample a clock against about half.`,
     },
     mistakes: [
       'Keeping all N outputs of a block. The first M − 1 are circular wrap-around and wrong; the error chip beside the method shows them wrong by a lot and the rest exact.',
@@ -106,11 +106,11 @@ in gates (sums of parts): 256-point streaming FFT 167,844 NANDs
       title: 'A keypad decoder in one cell',
       body: `<pre>697 Hz at 8 kHz: c = 2 cos(2π · 697 / 8000) = 1.7077
 block 205 puts the worst of the eight tones 0.269 bin off a centre
-cell: 16 × 16 multiplier 3,427 NANDs, whole cell 4,419
-worst tone's response sums to 252.06; × 128.5 = 32,390 fits 16 bits (max 32,767)
-8 tones in turn: 8 × (205 + 1) = 1,648 clocks a key; the block lasts 25.6 ms,
+cell: 16 × 16 multiplier 3427 NANDs, whole cell 4419
+worst tone's response sums to 252.06; × 128.5 = 32 390 fits 16 bits (max 32 767)
+8 tones in turn: 8 × (205 + 1) = 1648 clocks a key; the block lasts 25.6 ms,
 so the clock must be at least 64.3 kHz
-break-even against an FFT: 16 bins for 256 samples, 12 for 64</pre>Eight cells would decode a key at the sample rate for 35,352 NANDs; a 256-point streaming FFT is 167,844.`,
+break-even against an FFT: 16 bins for 256 samples, 12 for 64</pre>Eight cells would decode a key at the sample rate for 35 352 NANDs; a 256-point streaming FFT is 167 844.`,
     },
     mistakes: [
       'Computing an FFT to read eight tones. 129 bins for 8 wanted is 121 thrown away; below 2 log<sub>2</sub> N bins Goertzel is cheaper.',
@@ -147,7 +147,7 @@ break-even against an FFT: 16 bins for 256 samples, 12 for 64</pre>Eight cells w
     example: {
       title: 'Meeting 60 dB across a transition of 0.025 cycles a sample',
       body: `<pre>mask: pass to 0.100, stop from 0.125, 0.1 dB ripple (1 ± 0.00576), 60 dB (0.001)
-rectangle   −23.6 dB at 101 taps, −41.8 at 1,001: falls 6 dB a doubling
+rectangle   −23.6 dB at 101 taps, −41.8 at 1001: falls 6 dB a doubling
 Hamming   −16.6, −29.7, −56.9, −58.4 dB at 61, 101, 201, 301 taps
           first −60 dB at 489 taps odd (488 if either parity is allowed)
 Hann      269 taps odd (268 if either parity is allowed)
@@ -184,15 +184,15 @@ rounded to 16-bit words with 17 fraction bits, 114 taps miss by 0.22 dB; 115 mee
     chapters: [{ chapter: 'firdesign', step: 2, label: 'Parks–McClellan' }, { chapter: 'firdesign', step: 3, label: 'Taps are words' }, { chapter: 'firdesign', step: 7, label: 'One mask, four ways to build it' }],
   },
   csd: {
-    idea: `When the taps never change, a general multiplier is wasted on them. A constant is a sum of powers of two, a shift is wiring, and each further non-zero digit costs an adder: 13,304 is −2³ + 2¹⁰ − 2¹² + 2¹⁴, four terms and three adders. Allowing negative digits cuts the count, as 8 − 1 does for 7 (three ones in binary, two signed digits). The canonical signed digit form is the signed-digit recoding with no two non-zero digits side by side, and it has the fewest non-zero digits of any signed form; it is also unique.<br><br>The saving is large when many taps are fixed, as in a channel filter in a radio. A subtraction is an inverted copy plus a carry in, and because two's complement addition is modular, an intermediate sum may be out of range as long as the final one fits. The price is flexibility: change a tap and you have rebuilt the multiplier, so it is the wrong trade for anything that adapts. It is the same idea as the Booth recoding of a multiplier, applied once, to a constant, at design time.`,
+    idea: `When the taps never change, a general multiplier is wasted on them. A constant is a sum of powers of two, a shift is wiring, and each further non-zero digit costs an adder: 13 304 is −2³ + 2¹⁰ − 2¹² + 2¹⁴, four terms and three adders. Allowing negative digits cuts the count, as 8 − 1 does for 7 (three ones in binary, two signed digits). The canonical signed digit form is the signed-digit recoding with no two non-zero digits side by side, and it has the fewest non-zero digits of any signed form; it is also unique.<br><br>The saving is large when many taps are fixed, as in a channel filter in a radio. A subtraction is an inverted copy plus a carry in, and because two's complement addition is modular, an intermediate sum may be out of range as long as the final one fits. The price is flexibility: change a tap and you have rebuilt the multiplier, so it is the wrong trade for anything that adapts. It is the same idea as the Booth recoding of a multiplier, applied once, to a constant, at design time.`,
     example: {
       title: 'The 115-tap filter without a multiplier',
-      body: `<pre>13,304 = −2³ + 2¹⁰ − 2¹² + 2¹⁴      4 signed digits, 9 ones in binary, 3 adders
+      body: `<pre>13 304 = −2³ + 2¹⁰ − 2¹² + 2¹⁴      4 signed digits, 9 ones in binary, 3 adders
 58 distinct taps (the rest are mirrors)
 binary: 296 non-zero digits   signed digits: 227   173 adders
 (227 − 58 + 4: four taps of negative digits only need one more)
-58 constant multipliers: 43,853 NANDs
-58 general 16 × 16 multipliers (3,572 each): 207,176</pre>The whole folded filter goes from 285,871 to 99,048 NANDs, with no multiplier left; the drop is larger than 207,176 − 43,853 because the folded form's multipliers are 17 × 17, one bit wider for the pre-adder. Every constant from 1 to 4,095 recoded this way has no two non-zero digits side by side, and none needs more than 7.`,
+58 constant multipliers: 43 853 NANDs
+58 general 16 × 16 multipliers (3572 each): 207 176</pre>The whole folded filter goes from 285 871 to 99 048 NANDs, with no multiplier left; the drop is larger than 207 176 − 43 853 because the folded form's multipliers are 17 × 17, one bit wider for the pre-adder. Every constant from 1 to 4095 recoded this way has no two non-zero digits side by side, and none needs more than 7.`,
     },
     mistakes: [
       'Counting the ones of the binary form as the cost. A run of ones is one subtraction in signed digits: 0111 1111 (127) is 2⁷ − 1.',
@@ -207,16 +207,16 @@ binary: 296 non-zero digits   signed digits: 227   173 adders
     example: {
       title: '115 taps, 16-bit words, counted from the gates',
       body: `<pre>                                          NANDs     multiplications
-direct, all parallel                    473,024     115 (adder tree of 7 levels)
-folded: add the pair, then multiply     285,871      58
-transposed, mirror taps sharing         300,200      58
+direct, all parallel                    473 024     115 (adder tree of 7 levels)
+folded: add the pair, then multiply     285 871      58
+transposed, mirror taps sharing         300 200      58
 
 accumulator, transposed registers: 2 × 16 + 2 = 34 bits; a sample register 16</pre>Here the wide registers cost more than the folded form's pre-adders save; the transposed form's case is the short path, not the area.`,
     },
     mistakes: [
       'Expecting a different response. The transposed form is exactly the same filter in exact arithmetic; only the cost, the path and the rounding noise differ.',
       'Giving its registers the sample width. They hold partial sums, so they need the accumulator\'s guard bits, 34 bits here rather than 16.',
-      'Assuming it is always smaller. At 115 taps it is 300,200 NANDs against 285,871 for the folded direct form; it wins on the longest path, not on area.',
+      'Assuming it is always smaller. At 115 taps it is 300 200 NANDs against 285 871 for the folded direct form; it wins on the longest path, not on area.',
       'Forgetting that the input fans out to every multiplier. Its load, not an adder chain, then sets the speed of a long transposed filter.',
     ],
     chapters: [{ chapter: 'firdesign', step: 4, label: 'Folding, and the transposed form' }],
@@ -225,13 +225,13 @@ accumulator, transposed registers: 2 × 16 + 2 = 34 bits; a sample register 16</
     idea: `If the clock is much faster than the sample rate, build one multiplier and use it N times a sample. A ring of N sample registers turns one place each clock, so its head shows x[n], x[n − 1], … one tap after another; a ROM gives the tap for each count with two flags, first and last; one multiplier forms the product; and an accumulator adds each, starting afresh at the first tap. After the last, one rounder and one clamp turn the sum into the output word, which a register holds for the N clocks until the next. In the last cycle only the head loads, so the oldest sample falls out and the ring is in order again, with no write pointer.<br><br>The accumulator is wider than the product by guard bits, and here the taps decide: the output is at most Σ|tap| times the largest input, so the guard bits are the ones Σ|tap| asks for, not the log<sub>2</sub> N that a full-scale worst case would need. The sum is wide, rounded once and clamped once at the end. The cost is time: N clocks a sample, so the sample rate is the clock over N, and a radio's channel filter at millions of samples a second is past what one multiplier can do.`,
     example: {
       title: 'One multiplier against 115 in parallel',
-      body: `<pre>115 taps, 16-bit words: 37,057 NANDs, 115 clocks a sample
-all parallel:            473,024 NANDs, one sample a clock   (13 times more)
+      body: `<pre>115 taps, 16-bit words: 37 057 NANDs, 115 clocks a sample
+all parallel:            473 024 NANDs, one sample a clock   (13 times more)
 accumulator: 2 × 16 + 2 guard = 34 bits (Σ|tap| = 1.94; log₂ 115 would give 7)
 48 kHz × 115 = 5.52 MHz clock needed; period 127 NAND delays, which at an
 illustrative 25 ps a delay is about 315 MHz → at most 315 / 115 = 2.7 million a second
 
-the drawing: 16 taps, 9,336 NANDs, multiplier 3,572, accumulator 33 bits
+the drawing: 16 taps, 9336 NANDs, multiplier 3572, accumulator 33 bits
 passband tone 0.04: gain 1.001; stopband tone 0.35: 0.024</pre>The model and the gates are compared after every clock edge: the output, the tap number and the accumulator.`,
     },
     mistakes: [
