@@ -147,7 +147,7 @@ function emptyChipText(mode: PlaceMode): (Node | string)[] {
   const parts = [h('b', null, 'Input'), ', ', h('b', null, 'NAND'), ' and ', h('b', null, 'Output')];
   if (mode === 'tap') return ['Tap ', ...parts, ' under ', h('i', null, 'Basics'), ' in the Parts list, then tap the canvas to place each; drag from a pin’s dot to another pin to wire.'];
   if (mode === 'drawer') return ['Open ', h('b', null, 'Parts'), ', pick ', ...parts, ' under ', h('i', null, 'Basics'), ', and click the canvas to place each; drag from a pin’s dot to another pin to wire.'];
-  return ['Drag ', ...parts, ' from ', h('i', null, 'Basics'), ' on the left; drag from a pin’s dot to another pin to wire.'];
+  return ['Drag ', ...parts, ' from ', h('i', null, 'Basics'), ' on the left (or click one, then click the canvas to place it); drag from a pin’s dot to another pin to wire.'];
 }
 
 export class Editor {

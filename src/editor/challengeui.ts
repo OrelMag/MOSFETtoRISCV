@@ -241,8 +241,23 @@ class ChallengeUi {
         if (ed.ws.purist) return void ed.volatile({ ...ed.ws, purist: undefined });
       }
     }
+    this.paletteNote(ch);
     this.render();
     if (this.drawer) this.renderList();
+  }
+
+  private noteEl: HTMLElement | null = null;
+
+  /** One line under the palette's search: what the open challenge allows (Basics still lists LED, Pointer and Constants). */
+  private paletteNote(ch: BuildChallenge | undefined): void {
+    const head = this.ed.palette.el.querySelector('.sb-pal-head');
+    if (!head) return;
+    const on = !!ch && ch.allowed !== 'any' && !this.screen && !this.level;
+    if (!on) { this.noteEl?.remove(); return; }
+    const [name, tip] = rule(ch.allowed);
+    this.noteEl ??= h('p', { class: 'sb-pal-note', role: 'note' });
+    this.noteEl.replaceChildren(h('b', null, `This challenge: ${name}. `), `${tip}.`);
+    if (this.noteEl.previousElementSibling !== head) head.after(this.noteEl);
   }
 
   // ---- the strip under the canvas -------------------------------------------------------------
