@@ -19,4 +19,4 @@
 .qz-seg .btn.sm:first-child { border-radius: 6px 0 0 6px; }
 .qz-seg .btn.sm:last-child { border-radius: 0 6px 6px 0; }
 .qz-seg .btn.sm[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
-.qz-sl output { width: 78px; }
+.qz-sl output { min-width: 78px; white-space: nowrap; }
