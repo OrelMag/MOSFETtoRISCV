@@ -1,12 +1,12 @@
 // The Strowger selector: the state machine held to chapter 40's gate-level DIAL_SELECTOR, and the drawing held to the machine.
 import { describe, expect, it } from 'vitest';
 import { DIAL_SELECTOR } from '../src/lib/telegraph';
-import { call, hunt, HOME, LEVELS, LINES, PULSE_MS, pulsesOf, stateAt, vertical } from '../src/phys/strowger';
+import { BREAK_MS, call, DROP_MS, hunt, HOME, LEVELS, LINES, OVERFLOW, PULSE_MS, pulsesOf, release, stateAt, TURN_HOME_MS, vertical, verticalPulling } from '../src/phys/strowger';
 import { flatFaces, flatView } from '../src/gl/parts';
 import { flatten } from '../src/sim/flatten';
 import { SwitchSim } from '../src/sim/switchsim';
 import { B1 } from '../src/sim/types';
-import { contactAt, levelY, swParts, wiperTip, type SwPalette } from '../src/widgets/strowger3dparts';
+import { contactAt, lineAngle, levelY, swParts, wiperTip, type SwPalette } from '../src/widgets/strowger3dparts';
 
 const none = (): boolean[][] => Array.from({ length: LEVELS }, () => Array<boolean>(LINES).fill(false));
 const yOf = (sim: SwitchSim) => sim.getBits(sim.design.root.ports.y).reduce<number>((v, x, i) => v | ((x === B1 ? 1 : 0) << i), 0);
@@ -52,19 +52,52 @@ describe('the hunt', () => {
     const end = call(4, b).at(-1)!.s;
     expect(end).toEqual({ level: 4, line: 4, mode: 'connected' });
   });
-  it('a level busy to the end gives the busy tone after ten steps', () => {
+  it('a level busy to the end steps on to the 11th (overflow) step, past the last contact, and gives the busy tone', () => {
     const b = none();
     b[6].fill(true);
     const f = call(7, b), end = f.at(-1)!.s;
-    expect(end).toEqual({ level: 7, line: LINES, mode: 'busy' });
-    expect(f.filter((x) => x.s.mode === 'hunt')).toHaveLength(LINES - 1);
+    expect(OVERFLOW).toBe(LINES + 1);
+    expect(end).toEqual({ level: 7, line: OVERFLOW, mode: 'busy' });
+    expect(f.filter((x) => x.s.mode === 'hunt')).toHaveLength(LINES);
+    // The last contact is free: it is taken, not passed.
+    b[6][LINES - 1] = false;
+    expect(call(7, b).at(-1)!.s).toEqual({ level: 7, line: LINES, mode: 'connected' });
   });
   it('one step at a time: free is taken, busy moves on', () => {
     expect(hunt({ level: 2, line: 0, mode: 'hunt' }, [false]).mode).toBe('connected');
     expect(hunt({ level: 2, line: 0, mode: 'hunt' }, [true, false])).toEqual({ level: 2, line: 1, mode: 'hunt' });
   });
-  it('the pulses come 100 ms apart', () => {
-    expect(call(3, none()).slice(0, 4).map((f) => f.t)).toEqual([0, 100, 200, 300]);
+  it('the pulses come 100 ms apart, the vertical magnet pulling for the GPO’s 66 % break of each', () => {
+    const f = call(3, none());
+    expect(f.slice(0, 4).map((x) => x.t)).toEqual([0, 100, 200, 300]);
+    expect(BREAK_MS / PULSE_MS).toBeGreaterThanOrEqual(0.63);
+    expect(BREAK_MS / PULSE_MS).toBeLessThanOrEqual(0.72);
+    let on = 0;
+    for (let t = 0; t < 300; t++) if (verticalPulling(f, t)) on++;
+    expect(on).toBe(3 * BREAK_MS);
+    expect(verticalPulling(f, 350)).toBe(false);
+  });
+});
+
+describe('the release', () => {
+  it('turns the shaft home before it drops: the level never falls while the wipers are off the home angle', () => {
+    const from = { level: 7, line: 6, mode: 'connected' as const }, f = release(from);
+    expect(f.at(-1)!.s).toEqual(HOME);
+    expect(f.at(-1)!.t).toBe(TURN_HOME_MS + DROP_MS);
+    for (let i = 1; i < f.length; i++) {
+      const a = f[i - 1].s, b = f[i].s;
+      expect(a.level !== b.level && a.line !== b.line, `frame ${i}`).toBe(false);
+      if (b.level < a.level) expect(a.line).toBe(0);
+    }
+    expect(release(HOME)).toEqual([{ t: 0, s: HOME }]);
+  });
+  it('dialled again off normal, the selector releases first, then climbs from rest', () => {
+    const b = none(), f = call(2, b, { level: 5, line: 3, mode: 'connected' });
+    expect(f[0].s).toEqual({ level: 5, line: 3, mode: 'release' });
+    const i = f.findIndex((x) => x.s.mode === 'home');
+    expect(f[i].t).toBe(TURN_HOME_MS + DROP_MS);
+    expect(f[i + 1].s).toEqual({ level: 1, line: 0, mode: 'climb' });
+    expect(f.at(-1)!.s).toEqual({ level: 2, line: 1, mode: 'connected' });
   });
 });
 
@@ -77,6 +110,11 @@ describe('the drawing', () => {
       for (let i = 0; i < 3; i++) expect(tip[i]).toBeCloseTo(k[i], 0);
       expect(tip[1]).toBeCloseTo(levelY(l), 6);
     }
+  });
+  it('the 11th step lies past the last contact, on the same arc', () => {
+    expect(lineAngle(OVERFLOW) - lineAngle(LINES)).toBeCloseTo(lineAngle(LINES) - lineAngle(LINES - 1), 6);
+    const tip = wiperTip({ level: 3, line: OVERFLOW });
+    expect(tip[1]).toBeCloseTo(levelY(3), 6);
   });
   it('a contact for every line of every level, busy ones coloured as busy', () => {
     const b = none();
@@ -93,9 +131,10 @@ describe('the drawing', () => {
     expect(live.map((p) => p.pos)).toContainEqual(contactAt(4, 4));
   });
   it('a magnet glows only while it pulls, and the flat view draws it', () => {
-    const glow = (v: boolean) => swParts({ level: 1, line: 0, vmag: v, rmag: false }, HOME, none(), P).filter((p) => p.color === P.lit).length;
+    const glow = (v: boolean, rel = false) => swParts({ level: 1, line: 0, vmag: v, rmag: false, rel }, HOME, none(), P).filter((p) => p.color === P.lit).length;
     expect(glow(true)).toBe(1);
     expect(glow(false)).toBe(0);
+    expect(glow(false, true)).toBe(1);
     expect(flatFaces(swParts({ level: 1, line: 0, vmag: false, rmag: false }, HOME, none(), P), 0.5, 0.3).length).toBeGreaterThan(100);
     expect(flatView(0, 0)([1, 2, 3])).toHaveLength(3);
   });

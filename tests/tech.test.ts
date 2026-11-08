@@ -9,12 +9,12 @@ import { RELAY_FA, RELAY_NAND, relayAdder } from '../src/lib/relays';
 import { register } from '../src/lib/sequential';
 import {
   FOLLOWER_POWER, PLATE_FANOUT, RELAY_MASS, RELAY_POWER, RELAY_VOLUME, TECH, TUBE_BRICK_POWER, TUBE_MASS, TUBE_VOLUME,
-  cabinets, fmtTime, partKind, price, relayExtra, withoutParts,
+  cabinets, eniacRoom, fmtTime, partKind, price, relayExtra, RELAY_PLANT_W, TUBE_PLANT_W, tubeFailEvery, withoutParts,
 } from '../src/lib/tech';
 import { TUBE_FA, TUBE_NAND } from '../src/lib/tubes';
 import { NAND } from '../src/lib/transistors';
-import { RELAY_COIL_POWER, RELAY_STEP_MS } from '../src/phys/relay';
-import { gateLevels, nandBrickPower, sectionPower } from '../src/phys/triode';
+import { RELAY_COIL_POWER, RELAY_STEP_MS, Z3 } from '../src/phys/relay';
+import { ENIAC, ENIAC_PANEL, gateLevels, nandBrickPower, sectionPower } from '../src/phys/triode';
 import { flatten } from '../src/sim/flatten';
 import { stats } from '../src/sim/stats';
 import { fanHistogram, fanSum } from '../src/sim/techcount';
@@ -118,5 +118,32 @@ describe('pricing', () => {
     expect(fmtTime(8.2e-3)).toBe('8.2 ms');
     expect(fmtTime(25e-12)).toBe('25 ps');
     expect(fmtTime(1.271)).toBe('1.27 s');
+  });
+});
+
+// Batch 24 (the machine hall's audit): power at the wall from the machines themselves, ENIAC's room and failure rate.
+describe('the machines at the wall', () => {
+  it('a relay draws the Z3\'s share at the wall, a tube ENIAC\'s: more than the devices alone', () => {
+    expect(RELAY_PLANT_W).toBeCloseTo(Z3.power / Z3.relays, 12);
+    expect(RELAY_PLANT_W).toBeCloseTo(1.54, 2);
+    expect(TUBE_PLANT_W).toBeCloseTo(ENIAC.power / ENIAC.tubes, 12);
+    expect(TUBE_PLANT_W).toBeCloseTo(8.59, 2);
+    expect(RELAY_PLANT_W).toBeGreaterThan(RELAY_POWER);
+    // the Z3 and ENIAC priced back: their own devices at their own rates give their own power
+    expect(Z3.relays * RELAY_PLANT_W).toBeCloseTo(Z3.power, 6);
+    expect(ENIAC.tubes * TUBE_PLANT_W).toBeCloseTo(ENIAC.power, 6);
+  });
+  it('price() carries devices × plant W for relays and tubes, none for CMOS', () => {
+    const cpu = singleCycleCpu([0x00000013]);
+    const r = price(cpu, 'relay', 10)!, t = price(cpu, 'tube', 10)!, c = price(cpu, 'cmos', 10)!;
+    expect(r.plant).toBeCloseTo(r.devices * RELAY_PLANT_W, 6);
+    expect(t.plant).toBeCloseTo(t.devices * TUBE_PLANT_W, 6);
+    expect(t.plant!).toBeGreaterThan(t.power!);
+    expect(c.plant).toBeNull();
+  });
+  it('ENIAC\'s room and failure rate scale back to ENIAC', () => {
+    expect(eniacRoom(ENIAC_PANEL.count)).toBeCloseTo(ENIAC.room, 9);
+    expect(tubeFailEvery(ENIAC.tubes)).toBe(ENIAC.failH);
+    expect(tubeFailEvery(2 * ENIAC.tubes)).toBe(ENIAC.failH / 2);
   });
 });

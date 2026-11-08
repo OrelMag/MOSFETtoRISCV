@@ -247,6 +247,10 @@ export function mountWater(host: HTMLElement, scene: WaterScene, onFrame?: () =>
         if (side === 'r' && p[0] + 9 + w > W - 2 && p[0] - 9 - w >= 2) side = 'l';
         else if (side === 'l' && p[0] - 9 - w < 2 && p[0] + 9 + w <= W - 2) side = 'r';
         if (side === 't' || side === 'b') shift = Math.max(0, 3 - (p[0] - w / 2)) - Math.max(0, p[0] + w / 2 - (W - 3));
+        // and off the top or bottom edge (a short phone stage): the other side of the point, when that one fits
+        const H = canvas.clientHeight, lh = l.b.offsetHeight + 9;
+        if (side === 'b' && p[1] + lh > H - 2 && p[1] - lh >= 2) side = 't';
+        else if (side === 't' && p[1] - lh < 2 && p[1] + lh <= H - 2) side = 'b';
       }
       l.b.style.marginLeft = shift ? `${shift.toFixed(1)}px` : '';
       e.className = `wt-lbl ${side}${a.minor ? ' minor' : ''}`;

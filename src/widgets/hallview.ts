@@ -15,7 +15,8 @@ import { cross3, norm3, sub3, type Vec3 } from '../gl/math';
 import type { Renderer } from '../gl/renderer';
 import { hallCpu, hallFacts, nandOutputsByBlock, hallLayout, periodIn, cabinetCounts, type Hall, type HallDesign, type HallTech } from '../lib/hall';
 import { resolveComponent } from '../lib/resolve';
-import { fmtArea, fmtMass, fmtRate, fmtTime, fmtWatts } from '../lib/tech';
+import { ENIAC } from '../phys/triode';
+import { eniacRoom, fmtArea, fmtMass, fmtRate, fmtTime, fmtWatts, tubeFailEvery } from '../lib/tech';
 import { clockCycle } from '../riscv/cosim';
 import { DualSim } from '../sim/dualsim';
 import { flatten, type FlatDesign } from '../sim/flatten';
@@ -160,10 +161,13 @@ export function hallView(): Widget {
   const speedSel = h('select', { 'aria-label': 'Clock speed' }) as HTMLSelectElement;
   const soundBtn = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'false', title: 'Relay clicks (WebAudio), off by default' }, 'Sound') as HTMLButtonElement;
   const chipBtn = h('button', { type: 'button', class: 'btn sm' }, 'Find the CMOS chip') as HTMLButtonElement;
+  // A tube fails: one at random goes dark and its block is selected (the simulation keeps the ideal machine).
+  const failBtn = h('button', { type: 'button', class: 'btn sm', title: 'Pick the next tube to fail, at random: it goes dark and its block is selected' }, 'Next tube failure') as HTMLButtonElement;
+  let failed = -1, failSeed = 1;
   const viewBtn = h('button', { type: 'button', class: 'btn sm' }, 'Reset view') as HTMLButtonElement;
   const cycOut = h('span', { class: 'hall-cyc', 'aria-live': 'off' });
   const ctl = h('div', { class: 'hall-ctl' }, designSeg.el, techSeg.el, chipBtn, viewBtn);
-  const run = h('div', { class: 'hall-run' }, runBtn, stepBtn, resetBtn, speedSel, soundBtn, cycOut);
+  const run = h('div', { class: 'hall-run' }, runBtn, stepBtn, resetBtn, speedSel, soundBtn, failBtn, cycOut);
 
   // ---- stage
   const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': 'The CPU as a hall of racks in 3D: drag to orbit, right-drag or shift-drag to pan, wheel or pinch to zoom, click a rack to name its block' }) as HTMLCanvasElement;
@@ -287,6 +291,7 @@ export function hallView(): Widget {
     const P = pal(), n = slots.length;
     for (let i = 0; i < n; i++) {
       const hue = hueOf(slotBlock[i]), on = state[i] === 1, s = slots[i];
+      if (i === failed) { writeInstance(devData, i, { pos: s.pos, scale: s.scale, color: scaleRgb(P.glass, 0.15), spec: 0.1 }); continue; }
       if (tech === 'relay') {
         const color = on ? mixRgb(P.on, hue, 0.3) : mixRgb(P.relay, hue, 0.35);
         writeInstance(devData, i, { pos: s.pos, scale: s.scale, color, emissive: on ? scaleRgb(P.on, 0.35) : undefined, spec: 0.25 });
@@ -322,7 +327,8 @@ export function hallView(): Widget {
       out.push({ p, el: e, side });
     };
     labels.replaceChildren();
-    // priority order: the CMOS chip, the person, then blocks largest first
+    // priority order: a failed tube, the CMOS chip, the person, then blocks largest first
+    if (failed >= 0 && slots[failed]) lbl(slots[failed].pos, 'the failed tube', 'r', 'fail');
     lbl(diePos(), `the same CPU in CMOS (${Math.round(dieSide() * 1e6)} µm square)`, 'l', 'die');
     lbl([hall.person[0] + 0.2, PERSON, hall.person[1]], `${PERSON} m`, 'r', 'minor');
     hall.blocks.forEach((b, bi) => {
@@ -360,7 +366,7 @@ export function hallView(): Widget {
     const x0 = hall.person[0] - 0.5, x1 = hall.width, z0 = -hall.depth, z1 = hall.person[1] + 0.4, H = hall.spec.h;
     const R = 0.5 * Math.hypot(x1 - x0, z1 - z0, H), aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight) || 1.6;
     const fv = (35 * Math.PI) / 180, fh = 2 * Math.atan(Math.tan(fv / 2) * aspect);
-    return { target: [(x0 + x1) / 2, H * 0.3, (z0 + z1) / 2] as Vec3, yaw: -0.62, pitch: 0.52, dist: ((aspect < 1 ? 1 : 0.75) * R) / Math.sin(Math.min(fv, fh) / 2) };
+    return { target: [(x0 + x1) / 2, H * 0.3, (z0 + z1) / 2] as Vec3, yaw: -0.62, pitch: 0.52, dist: ((aspect < 1 || canvas.clientWidth < 600 ? 1 : 0.75) * R) / Math.sin(Math.min(fv, fh) / 2) };
   };
   const rehome = () => {
     if (!renderer) return;
@@ -471,8 +477,9 @@ export function hallView(): Widget {
   const describe = () => {
     const f = hallFacts(design), t = hall.total, sp = hall.spec, { used, packed } = cabinetCounts(hall);
     const per = periodIn(f.steps, tech), cmos = periodIn(f.steps, 'cmos');
-    sum.textContent = `${num(t.devices)} ${sp.devices} · ${used} ${sp.word}${packed < used ? ` (${packed} if packed full)` : ''} · ${num(hall.floor)} m² with aisles · ${fmtMass(t.mass!)} · ${fmtWatts(t.power!)}`;
-    sub.textContent = `${hallCpu(design).name}, ${num(f.nands)} NANDs without its program ROM (the program comes off cards). Clock: ${f.steps} ${tech} steps = ${fmtTime(per)} per instruction (${hz(per)}); in CMOS ${fmtTime(cmos)} (${fmtRate(cmos)}) on ${fmtArea(f.cmos.area!)} of silicon.`;
+    sum.textContent = `${num(t.devices)} ${sp.devices} · ${used} ${sp.word}${packed < used ? ` (${packed} if packed full)` : ''} · ${num(hall.floor)} m² of cabinets and aisles · ${fmtMass(t.mass!)} · ${fmtWatts(t.power!)} in the ${sp.devices}, ${fmtWatts(t.plant!)} at the wall`;
+    sub.textContent = `${hallCpu(design).name}, ${num(f.nands)} NANDs without its program ROM (the program comes off cards). Clock: ${f.steps} ${tech} steps = ${fmtTime(per)} per instruction (${hz(per)}); in CMOS ${fmtTime(cmos)} (${fmtRate(cmos)}) on ${fmtArea(f.cmos.area!)} of silicon (28 nm-class).${tech === 'tube' ? ` The room: about ${num(eniacRoom(used))} m² at ENIAC's ${ENIAC.room} m² for 40 panels; a tube fails every ${num(tubeFailEvery(t.devices))} h at ENIAC's rate.` : ''}`;
+    failBtn.style.display = tech === 'tube' ? '' : 'none';
     legend.replaceChildren(...hall.blocks.map((b, bi) => {
       const btn = h('button', { type: 'button', class: bi === selected ? 'on' : '', title: `${b.label}: ${num(b.devices)} ${sp.devices}` },
         h('i', { style: `background: var(--hl-${b.hue})` }), `${b.label} · ${b.cabinets}`);
@@ -583,7 +590,17 @@ export function hallView(): Widget {
 
   runBtn.addEventListener('click', () => (running ? pause() : start()));
   stepBtn.addEventListener('click', () => { const l = live; if (!l || l.halted || running) return; cycle(l); paint(); setChips(); });
-  resetBtn.addEventListener('click', () => powerOn());
+  resetBtn.addEventListener('click', () => { if (failed >= 0) { failed = -1; makeLabels(); } powerOn(); });
+  failBtn.addEventListener('click', () => {
+    if (!slots.length) return;
+    failSeed = (failSeed * 1103515245 + 12345) % 2147483648; // a fixed sequence: the same tubes fail in the same order
+    failed = failSeed % slots.length;
+    const b = slotBlock[failed], h_ = tubeFailEvery(hall.total.devices);
+    select(b);
+    makeLabels();
+    card.prepend(h('p', null, h('b', null, 'A tube has failed'), ` in ${hall.blocks[b].label}: one of ${num(hall.total.devices)}. At ENIAC's rate (one of its ${num(ENIAC.tubes)} every two days) that is every ${num(h_)} hours here, and someone has to find it among the rest and swap it. The simulation keeps running the ideal machine.`));
+    if (mode === 'gl') pushScene(); else drawFlat();
+  });
   speedSel.addEventListener('change', () => { speed = speedSel.value as Speed; owed = 0; });
   soundBtn.addEventListener('click', () => {
     sound = !sound;
@@ -617,7 +634,7 @@ export function hallView(): Widget {
   function relayout() {
     const changed = liveFor !== design;
     hall = hallLayout(hallCpu(design).def, tech);
-    selected = -1;
+    selected = -1; failed = -1;
     placeDevices();
     speeds();
     describe();

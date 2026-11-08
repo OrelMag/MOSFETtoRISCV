@@ -12,7 +12,7 @@
 import type { RGB, RGBA } from '../gl/instances';
 import type { Vec3 } from '../gl/math';
 import { box, rod, type Anchor, type Part } from '../gl/parts';
-import { bayerAt, type Cfa } from '../phys/imagesensor';
+import { bayerAt, IMX183, STACK_BSI, STACK_FSI, type Cfa } from '../phys/imagesensor';
 
 export type Illum = 'fsi' | 'bsi';
 export type { Cfa };
@@ -52,29 +52,44 @@ export interface StackSpec {
   dti: boolean;
   /** The interconnect drawn below the silicon (BSI: out of the light's way), µm. */
   beolBelow: number;
+  /** A quarter-wave anti-reflection film on the silicon (index and thickness, µm), or none: bare oxide on silicon. */
+  arc: { n: number; d: number } | null;
 }
 
 const OX = 1.46, CF = 1.6, PL = 1.55;
+/** The pitches drawn: the chapter's IMX183 (2.4 µm) and a 1.0 µm phone pixel. */
+export const PITCHES = [IMX183.pitch, 1.0] as const;
+/** The AR film: a tantalum-oxide-class layer (n ≈ 2.1), a quarter wave thick at 550 nm. */
+export const ARC_N = 2.1, ARC_NM = 550;
 
 /**
- * A 1.0 µm pixel in two illuminations. Representative values, not a single product's: the BSI silicon is 2.7 µm, the
- * thickness TechInsights measured on early 1.0 µm DTI pixels (R. Fontaine, IISW 2019); the FSI metal is three levels in
- * 2.4 µm of oxide over the diode, so the FSI stack (≈ 3.7 µm from the lens' base) is about 2.5 × the BSI one (≈ 1.0 µm),
- * where Hirigoyen et al. (IISW 2009, 1.1 µm) found 30 % between the BSI and FSI of their day, BSI stacks having thinned
- * since. Filters 0.6 µm, a metal grid 0.25 µm high in BSI. Indices: oxide 1.46, filters and lens 1.6, planarisation 1.55.
- * The FSI pixel is drawn at 1.0 µm for comparison, not as a product: FSI gave way to BSI around 1.4 µm (Agranov et al.,
- * Lee et al., IISW 2011, where 1.4 µm FSI lost over 20 % to its metal), and the trace shows why: its tall stack accepts
- * only a few degrees. The BSI lens focuses 0.3 µm into the silicon, the FSI one 1.2 µm above it, between M1 and M2.
+ * A pixel at `pitch` µm in two illuminations. Representative values, not a single product's:
+ * - the silicon collects over the chapter's 3 µm (imagesensor.ts STACK_BSI / STACK_FSI .collect) at 2.4 µm; at 1.0 µm the
+ *   BSI wafer is 2.7 µm, as TechInsights measured early 1.0 µm DTI pixels (2.5–2.7 µm: R. Fontaine, "The State-of-the-Art
+ *   of Smartphone Imagers", IISW 2019, via Image Sensors World, July 2019);
+ * - FSI: three metal levels in 2.4 µm of oxide over the diode (line widths in µm, the same at both pitches), so its
+ *   stack, ≈ 3.7 µm from the lens' base, is several times BSI's ≈ 1 µm (Hirigoyen et al., "1.1 µm Backside Imager vs.
+ *   Frontside Imager: an optics-dedicated FDTD approach", IISW 2009, found BSI's 30 % shorter; BSI stacks have thinned
+ *   since);
+ * - filters 0.6 µm; a metal grid 0.25 µm high between BSI's filters; indices oxide 1.46, filters and lens 1.6,
+ *   planarisation 1.55.
+ * The 1.0 µm FSI pixel is for comparison, not a product: FSI gave way to BSI near 1.4 µm, where Lee et al. ("SNR
+ * Performance Comparison of 1.4 µm Pixel: FSI, Light-guide, and BSI", IISW 2011) measured over 20 % lost in FSI's metal
+ * and BSI's sensitivity at oblique incidence "far superior … due to low stack height"; FSI products of that size added
+ * light guides, not drawn here. The BSI lens focuses 0.3 µm into the silicon (0.5 µm at 2.4 µm), the FSI one 1.2 µm above it (0.6 µm at 2.4 µm,
+ * in M1: higher, red light's wide cone would spread into the neighbour before it is absorbed).
  */
-export function stackSpec(illum: Illum, pitch = 1.0): StackSpec {
-  const p = pitch, b = (xc: number, w: number, y0: number, y1: number): Metal => ({ x0: xc - w / 2, x1: xc + w / 2, y0, y1 });
+export function stackSpec(illum: Illum, o: { pitch?: number; ar?: boolean } = {}): StackSpec {
+  const p = o.pitch ?? IMX183.pitch, b = (xc: number, w: number, y0: number, y1: number): Metal => ({ x0: xc - w / 2, x1: xc + w / 2, y0, y1 });
+  const arc = o.ar === false ? null : { n: ARC_N, d: ARC_NM / 1000 / (4 * ARC_N) };
   if (illum === 'fsi') {
     // M1 densest (row select, transfer gate, reset), M3 the widest lines at the pixel's edges; apertures centred on the diodes.
     const edges = [-p, 0, p], metal: Metal[] = [];
-    for (const e of edges) metal.push(b(e, 0.3 * p, 0.35, 0.55), b(e, 0.26 * p, 1.05, 1.3), b(e, 0.22 * p, 1.8, 2.1));
-    for (const c of [-p / 2, p / 2]) metal.push(b(c - 0.3 * p, 0.1 * p, 0.35, 0.55));
+    for (const e of edges) metal.push(b(e, 0.3, 0.35, 0.55), b(e, 0.26, 1.05, 1.3), b(e, 0.22, 1.8, 2.1));
+    // M1's inner line beside the diode, kept clear of the beam's waist (at 2.4 µm the beam is wide where M1 is).
+    for (const c of [-p / 2, p / 2]) metal.push(b(c - (p < 1.5 ? 0.3 * p : p / 2 - 0.35), 0.1, 0.35, 0.55));
     return {
-      illum, pitch: p, nLens: 1.6, focus: -1.2, metal, si: 3.0, dti: false, beolBelow: 0,
+      illum, pitch: p, nLens: 1.6, focus: p < 1.5 ? -1.2 : -0.6, metal, si: STACK_FSI.collect, dti: false, beolBelow: 0, arc,
       layers: [
         { name: 'planarisation', t: 0.2, n: PL, kind: 'plan' },
         { name: 'colour filters', t: 0.6, n: CF, kind: 'cfa' },
@@ -83,16 +98,33 @@ export function stackSpec(illum: Illum, pitch = 1.0): StackSpec {
       ],
     };
   }
-  const metal = [-p, 0, p].map((e) => b(e, 0.1 * p, 0.25, 0.5));
+  // A wider pixel needs a longer focal length than a cap across it can give over BSI's thin stack: the lens stands on a
+  // 1.4 µm planarisation spacer at 2.4 µm and focuses 0.5 µm into the silicon.
+  const metal = [-p, 0, p].map((e) => b(e, 0.1, 0.25, 0.5)), wide = p >= 1.5;
   return {
-    illum, pitch: p, nLens: 1.6, focus: 0.3, metal, si: 2.7, dti: true, beolBelow: 2.4,
+    illum, pitch: p, nLens: 1.6, focus: wide ? 0.5 : 0.3, metal, si: wide ? STACK_BSI.collect : 2.7, dti: true, beolBelow: 2.4, arc,
     layers: [
-      { name: 'planarisation', t: 0.1, n: PL, kind: 'plan' },
+      { name: 'planarisation', t: wide ? 1.4 : 0.1, n: PL, kind: 'plan' },
       { name: 'colour filters', t: 0.6, n: CF, kind: 'cfa' },
-      { name: 'anti-reflection oxide', t: 0.25, n: OX, kind: 'oxide' },
+      { name: 'oxide', t: 0.25, n: OX, kind: 'oxide' },
     ],
   };
 }
+
+/**
+ * The share of light reflected where the last layer (index n1) meets silicon (n2), at normal incidence: bare, Fresnel's
+ * ((n1 − n2) / (n1 + n2))²; with a single film of index na and thickness d between them, the thin-film sum
+ * (r01² + r12² + 2 r01 r12 cos 2δ) / (1 + r01² r12² + 2 r01 r12 cos 2δ), δ = 2π na d / λ (Hecht, Optics, §9.7).
+ */
+export function siReflectance(n1: number, n2: number, nm: number, arc: { n: number; d: number } | null): number {
+  if (!arc) return ((n1 - n2) / (n1 + n2)) ** 2;
+  const r01 = (n1 - arc.n) / (n1 + arc.n), r12 = (arc.n - n2) / (arc.n + n2), c2 = Math.cos((4 * Math.PI * arc.n * arc.d * 1000) / nm);
+  return (r01 * r01 + r12 * r12 + 2 * r01 * r12 * c2) / (1 + r01 * r01 * r12 * r12 + 2 * r01 * r12 * c2);
+}
+
+/** The diffraction-limited spot (Airy disc diameter, 2.44 λ N) the microlens makes, µm: with the lens' reduced focal
+ *  distance f (Rc / (nLens − 1)), N = f / pitch, the same in every medium the light crosses. */
+export const spotSize = (s: StackSpec, rc: number, nm: number): number => (2.44 * (nm / 1000) * (rc / (s.nLens - 1))) / s.pitch;
 
 /** Height of the stack between the lens' base and the silicon. */
 export const stackHeight = (s: StackSpec): number => s.layers.reduce((a, l) => a + l.t, 0);
@@ -134,13 +166,13 @@ export function refract(d: V2, n: V2, n1: number, n2: number): V2 | null {
 }
 const reflect = (d: V2, n: V2): V2 => { const c = dot(d, n); return [d[0] - 2 * c * n[0], d[1] - 2 * c * n[1]]; };
 
-export type Fate = 'own' | 'cross' | 'metal' | 'filter' | 'through';
+export type Fate = 'own' | 'cross' | 'metal' | 'filter' | 'reflected' | 'through';
 
 export interface Ray {
   /** Polylines (x, y in µm, y = 0 the silicon's light-side surface): several when the ray wraps across the quad's edge. */
   paths: V2[][];
   /** Shares of the ray's power: absorbed in the pixel whose filter it crossed, in another pixel, on metal, in the filters,
-   *  passed through the silicon unabsorbed. They sum to 1. */
+   *  reflected at the silicon's surface, passed through the silicon unabsorbed. They sum to 1. */
   share: Record<Fate, number>;
   /** The pixel (0 left, 1 right) whose filter it crossed, the pixel it is absorbed in (null: stopped before the silicon). */
   filterPx: number | null;
@@ -158,7 +190,7 @@ export interface TraceResult {
   rc: number; h: number; depth: number;
 }
 
-const zero = (): Record<Fate, number> => ({ own: 0, cross: 0, metal: 0, filter: 0, through: 0 });
+const zero = (): Record<Fate, number> => ({ own: 0, cross: 0, metal: 0, filter: 0, reflected: 0, through: 0 });
 
 /**
  * Trace `perPx` rays per pixel across the cut row (`row`: 0 R G, 1 G B) at `angleDeg` from the normal (positive: going
@@ -245,7 +277,9 @@ export function traceStack(s: StackSpec, o: StackOptics, nm: number, angleDeg: n
     }
     if (stopped) { share.metal = w; fate = 'metal'; }
     else {
-      // Into the silicon: absorbed a mean depth 1/α along the path, reflected by DTI walls between pixels.
+      // Into the silicon: a share reflected at its surface (normal-incidence Fresnel, through the AR film when there is
+      // one), the rest absorbed a mean depth 1/α along the path, reflected by DTI walls between pixels.
+      share.reflected = w * siReflectance(n, nSi, nm, s.arc); w -= share.reflected;
       const dd = refract(d, [0, 1], n, nSi);
       d = dd ?? reflect(d, [0, 1]);
       // First the whole path to the far side (DTI walls at x = 0 and ±P reflect), then the ray is drawn to where it is
@@ -290,6 +324,12 @@ export function traceStack(s: StackSpec, o: StackOptics, nm: number, angleDeg: n
   return { rays, total, rc, h, depth };
 }
 
+/** The angular response: at each angle, the share of the light past the filter that its own pixel absorbs (row 0,
+ *  both pixels of the cut). Angles in degrees. */
+export function angleCurve(s: StackSpec, o: StackOptics, nm: number, angles: readonly number[], perPx = 15): number[] {
+  return angles.map((a) => { const t = traceStack(s, o, nm, a, 0, perPx).total; return t.filter >= 1 ? 0 : t.own / (1 - t.filter); });
+}
+
 // ---------------------------------------------------------------- the drawing
 
 /** Drawing units a µm. */
@@ -297,6 +337,7 @@ export const K = 10;
 
 export interface StackPalette {
   lens: RGBA; R: RGBA; G: RGBA; B: RGBA; oxide: RGBA; metal: RGB; si: RGB; diode: RGB; dti: RGB; beol: RGBA; warn: RGB; dim: RGB;
+  pplus: RGB; arc: RGBA;
 }
 
 export interface StackPose { spec: StackSpec; nm: number; angle: number; row: 0 | 1; trace: TraceResult }
@@ -314,8 +355,18 @@ export function wavelengthRgb(nm: number): RGB {
   return [Math.min(1, Math.max(0, r)) * f, Math.min(1, Math.max(0, g)) * f, Math.min(1, Math.max(0, b)) * f];
 }
 
-/** The cut is the front row's middle (z = P/2 in µm); rays are drawn just in front of it. */
-const LENS_GRID = 8;
+/** The lens as columns: finer on the cut row, where its profile is seen edge on. The cut is the front row's middle
+ *  (z = P/2 in µm); rays are drawn just in front of it. */
+export const LENS_GRID = 8, LENS_GRID_CUT = 16;
+/** The photodiode's n region: this share of the silicon's depth, from just under the pinning layer on the metal side (the
+ *  side its transfer gate is on); the p-type silicon beyond still collects what diffuses to it. */
+export const DIODE_DEPTH = 0.65, PPLUS = 0.12;
+
+/** The photodiode's span in y (µm, silicon surface at 0, far side at −si): on the metal side, under the p+ layer. */
+export function diodeSpan(s: StackSpec): [number, number] {
+  const d = DIODE_DEPTH * s.si;
+  return s.illum === 'fsi' ? [-PPLUS - d, -PPLUS] : [-s.si + PPLUS, -s.si + PPLUS + d];
+}
 
 export function stackParts(q: StackPose, C: StackPalette): Part[] {
   const s = q.spec, P = s.pitch, out: Part[] = [], H = stackHeight(s), { rc, h } = q.trace;
@@ -336,19 +387,24 @@ export function stackParts(q: StackPose, C: StackPalette): Part[] {
         y -= L.t;
       }
       // The lens: columns following the spherical cap, centred on the pixel (the cut row's centre is the cut plane).
-      const cx = (xa + xb) / 2, cz = r === q.row ? P / 2 : -P / 2, nz = r === q.row ? LENS_GRID / 2 : LENS_GRID;
-      for (let i = 0; i < LENS_GRID; i++) for (let j = 0; j < nz; j++) {
-        const x0 = xa + (i * P) / LENS_GRID, x1 = x0 + P / LENS_GRID, z0 = za + (j * P) / LENS_GRID, z1 = z0 + P / LENS_GRID;
-        const rr = Math.hypot((x0 + x1) / 2 - cx, (z0 + z1) / 2 - cz), hh = Math.sqrt(Math.max(0, rc * rc - rr * rr)) - (rc - h);
+      const cx = (xa + xb) / 2, cz = r === q.row ? P / 2 : -P / 2, G = r === q.row ? LENS_GRID_CUT : LENS_GRID, nz = r === q.row ? G / 2 : G;
+      for (let i = 0; i < G; i++) for (let j = 0; j < nz; j++) {
+        const x0 = xa + (i * P) / G, x1 = x0 + P / G, z0 = za + (j * P) / G, z1 = z0 + P / G;
+        // The cut row's last column of cells is cut at the plane: its height is the profile there, not at the cell's middle.
+        const zm = r === q.row && j === nz - 1 ? z1 : (z0 + z1) / 2;
+        const rr = Math.hypot((x0 + x1) / 2 - cx, zm - cz), hh = Math.sqrt(Math.max(0, rc * rc - rr * rr)) - (rc - h);
         if (hh > 0.005) out.push(box(C.lens, X(x0), X(x1), Y(H), Y(H + hh), X(z0), X(z1)));
       }
-      // Silicon and the photodiode (the n region the pixel collects into), the substrate below for FSI.
-      const siTop = 0, siBot = -s.si;
-      out.push(box(C.si, X(xa), X(xb), Y(siBot), Y(siTop - 0.12), X(za), X(zb)));
-      const inset = s.dti ? 0.08 * P : 0.12 * P;
-      // On the cut face the diode stands just proud of the silicon around it, so it shows.
-      out.push(box(C.diode, X(xa + inset), X(xb - inset), Y(siBot + 0.3), Y(siTop - 0.25), X(za) + 0.01, X(zb) + (r === q.row ? 0.08 : -0.01)));
-      out.push(box(C.si, X(xa), X(xb), Y(siTop - 0.12), Y(siTop), X(za), X(zb)));
+      // Silicon, the photodiode (the n region the pixel collects into) on the metal side under its p+ pinning layer, the
+      // substrate below for FSI.
+      const siTop = 0, siBot = -s.si, [d0, d1] = diodeSpan(s), inset = s.dti ? 0.08 * P : 0.12 * P;
+      const pTop = s.illum === 'fsi' ? siTop : d0, pBot = pTop - PPLUS;
+      out.push(box(C.si, X(xa), X(xb), Y(siBot), Y(siTop), X(za), X(zb)));
+      // On the cut face the diode and its pinning layer stand just proud of the silicon around them, so they show.
+      const zFront = X(zb) + (r === q.row ? 0.08 : -0.01);
+      out.push(box(C.diode, X(xa + inset), X(xb - inset), Y(d0), Y(d1), X(za) + 0.01, zFront));
+      out.push(box(C.pplus, X(xa + inset), X(xb - inset), Y(pBot), Y(pTop), X(za) + 0.01, zFront + 0.02));
+      if (s.arc) out.push(box(C.arc, X(xa), X(xb), Y(siTop), Y(siTop + Math.max(s.arc.d, 0.04)), X(za), X(zb)));
       if (s.illum === 'fsi') out.push(box(C.si, X(xa), X(xb), Y(siBot - 0.8), Y(siBot), X(za), X(zb)));
       if (s.beolBelow > 0) {
         out.push(box(C.beol, X(xa), X(xb), Y(siBot - s.beolBelow), Y(siBot), X(za), X(zb)));
@@ -386,6 +442,10 @@ export function stackParts(q: StackPose, C: StackPalette): Part[] {
   // The absorption depth 1/α: a thin glowing line across the cut silicon (at the far side when deeper than the silicon).
   const dY = -Math.min(q.trace.depth, s.si);
   out.push({ ...box([light[0], light[1], light[2], 0.55], X(-P), X(P), Y(dY) - 0.15, Y(dY) + 0.15, X(P / 2) + 0.05, X(P / 2) + 0.25), emissive: [light[0] * 0.5, light[1] * 0.5, light[2] * 0.5] });
+  // The diffraction-limited spot at the lens' focus, centred under each lens (where the rays above converge at 0°): what
+  // a geometric ray cannot show, the light is never focused narrower than this.
+  const spot = Math.min(spotSize(s, rc, q.nm), P), fy = -s.focus;
+  for (const c of [-P / 2, P / 2]) out.push({ ...box(C.warn, X(c - spot / 2), X(c + spot / 2), Y(fy) - 0.25, Y(fy) + 0.25, zc + 0.3, zc + 0.6), emissive: [C.warn[0] * 0.4, C.warn[1] * 0.4, C.warn[2] * 0.4] });
   return out;
 }
 
@@ -396,9 +456,12 @@ export function stackAnchors(q: StackPose): Anchor[] {
     { text: 'microlens', p: [-P * 0.5 * K, (H + q.trace.h) * K, 0], side: 't', n: up },
     { text: 'colour filters', p: [-P * K, yOf('cfa') * K, zc], side: 'l', n: front },
     { text: s.illum === 'fsi' ? 'metal, three levels' : 'metal grid', p: [P * K, (s.illum === 'fsi' ? 1.2 : yOf('cfa') - 0.2) * K, zc], side: 'r', n: front },
-    { text: 'photodiode', p: [-P * K, -s.si * 0.5 * K, zc], side: 'l', n: front },
+    { text: 'photodiode', p: [-P * K, ((diodeSpan(s)[0] + diodeSpan(s)[1]) / 2) * K, zc], side: 'l', n: front },
+    { text: 'p+ pinning layer', p: [-P * K, (s.illum === 'fsi' ? -PPLUS / 2 : -s.si + PPLUS / 2) * K, zc], side: 'l', n: front, minor: true },
     { text: `1/α = ${fmtUm(q.trace.depth)} at ${q.nm} nm`, p: [P * K, -Math.min(q.trace.depth, s.si) * K, zc], side: 'r', n: front, minor: true },
+    { text: `diffraction spot ${fmtUm(spotSize(s, q.trace.rc, q.nm))}`, p: [(P / 2 + Math.min(spotSize(s, q.trace.rc, q.nm), P) / 2) * K, -s.focus * K, zc], side: 'r', n: front, minor: true },
   ];
+  if (s.arc) a.push({ text: 'anti-reflection film', p: [P * K, s.arc.d * K * 0.5, zc], side: 'r', n: front, minor: true });
   if (s.dti) a.push({ text: 'deep trench isolation', p: [0, -s.si * K, zc], side: 'b', n: front, minor: true });
   if (s.beolBelow > 0) a.push({ text: 'metal, below the silicon', p: [P * K, (-s.si - s.beolBelow / 2) * K, zc], side: 'r', n: front, minor: true });
   return a;
@@ -413,6 +476,7 @@ export const FATES: readonly { k: Fate; name: string }[] = [
   { k: 'cross', name: 'in the neighbour (crosstalk)' },
   { k: 'metal', name: 'stopped by metal' },
   { k: 'filter', name: 'absorbed by the colour filters' },
+  { k: 'reflected', name: 'reflected at the silicon' },
   { k: 'through', name: 'through the silicon unabsorbed' },
 ];
 

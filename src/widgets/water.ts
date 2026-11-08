@@ -51,7 +51,8 @@ export interface FetWater {
   level: number;
   /** Flow relative to the most this device passes (Vgs = Vds = VDD): drops' speed. */
   flow: number;
-  /** Is the outlet choked (saturation): a lower basin adds nothing? */
+  /** Does the outlet regulate (saturation): the handle sets the flow and a lower basin adds nothing? A plain orifice never
+   *  does this (its flow grows as the square root of the drop); a flow regulator does, and so does a pinched-off channel. */
   choked: boolean;
   /** The outlet's bore against the pipe's (the pinch drawn in the faucet scene): the overdrive over its largest, so its
    *  area, and the flow it limits in saturation, go as the overdrive squared like mosphys.ts current(). 0 when cut off. */
@@ -148,7 +149,7 @@ export function pointAlong(pts: readonly P3[], s: number): P3 {
 export function fetWords(f: FetWater): string {
   if (f.kind === 'cut') return `Cut-off: the handle is below the ${VT} V threshold, so the faucet is shut however high the drain tank stands.`;
   if (f.kind === 'lin') return 'Linear: the opening is wider than the drop is tall, so flow grows with the drain tank\u2019s level.';
-  return 'Saturation, choked: the opening limits the flow now, so a lower basin would add nothing (bar the slight slope \u03bb gives).';
+  return 'Saturation, regulated: the outlet now works like a flow regulator, not a plain tap: the handle sets the flow, and a lower basin adds almost nothing (bar the slight slope \u03bb gives).';
 }
 
 /** The column's state in words and a tone (the pill under the figure). */

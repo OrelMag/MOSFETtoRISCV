@@ -54,13 +54,14 @@ export function loopScene(get: () => LoopState): WaterScene {
       p.pipe([[2.25, 0.5, 0], [2.6, 0.5, 0], [2.6, -1.6, 0], [-3.8, -1.6, 0], [-3.8, 2.95, 0], [-2.6, 2.95, 0], [-2.6, 2.5, 0]]);
       p.valve([-1.0, 0.5, 0], vA, P.pmos);
       p.valve([1.3, -1.6, 0], vB, P.pmos);
-      // Lamp = wheel + bulb, glowing with the power; a second one in the vertical run when there are two lamps.
-      const glow = Math.min(1, m.power / 0.15) * (st.lamps === 2 ? 1 : 1);
+      // Lamp = wheel + bulb, glowing with the power it takes (m.power is per lamp: two in a row carry one current and drop
+      // equal voltages, so they glow alike); a second one in the vertical run when there are two lamps.
+      const glow = Math.min(1, m.power / 0.15), lit = P.lamp.map((c) => c * glow) as [number, number, number];
       p.wheel([1.0, 0.5, 0], ang);
-      p.sphere([1.0, 1.1, 0], 0.13, P.lamp, P.lamp.map((c) => c * glow) as [number, number, number]);
+      p.sphere([1.0, 1.1, 0], 0.13, P.lamp, lit);
       if (st.lamps === 2) {
         p.wheel([2.6, -0.55, 0], ang);
-        p.sphere([3.1, -0.55, 0], 0.13, P.lamp, P.lamp.map((c) => c * Math.min(1, m.power / 0.15 * 4)) as [number, number, number]);
+        p.sphere([3.1, -0.55, 0], 0.13, P.lamp, lit);
       }
       // The pump: a wheel on a blue plate, turning with the current.
       p.box([-1.4, -1.6, -0.22], [0.9, 0.9, 0.1], P.nmos);
@@ -93,7 +94,7 @@ export function fetScene(get: () => { vg: number; vd: number }): WaterScene {
       { text: 'drain tank: V_DS above the source', p: [-2.4, 2.35, 0.5], side: 't' },
       { text: 'source basin: 0 V', p: [2.4, 2.35, 0.5], side: 't' },
       { text: 'handle = gate (V_GS)', p: [0.0, 0.55, 0.4], side: 't' },
-      { text: choked() ? 'outlet choked: sets the flow' : 'outlet: opens with V_GS − V_T', p: [1.45, -0.55, 0.4], side: 'b', minor: true },
+      { text: choked() ? 'outlet regulates: sets the flow' : 'outlet: opens with V_GS − V_T', p: [1.45, -0.55, 0.4], side: 'b', minor: true },
     ],
     advance(dt, settle) {
       const f = now();
@@ -140,10 +141,10 @@ export function columnScene(inp: ColumnIn, out0: number): ColumnScene {
     aspect: 0.8,
     flat: { x0: -2.6, y0: -2.5, w: 5.4, h: 6.6 },
     labels: () => [
-      { text: 'V_DD tank, always full', p: [1.9, 3.5, 0.4], side: 'r' },
-      { text: inp.weak ? 'top: NMOS, shuts itself' : 'top: PMOS, open at input 0', p: [0.6, 2.75, 0.5], side: 't' },
+      { text: 'V_DD tank, full', p: [1.9, 3.5, 0.4], side: 'r' },
+      { text: inp.weak ? 'top: NMOS, shuts itself' : 'top: PMOS, open at 0', p: [0.6, 2.75, 0.5], side: 't' },
       { text: 'output = column level', p: [1.6, 0.55, 0.3], side: 'r' },
-      { text: 'bottom: NMOS, open at input 1', p: [0.6, -0.55, 0.5], side: 'b' },
+      { text: 'bottom: NMOS, open at 1', p: [0.6, -0.55, 0.5], side: 'b' },
       { text: 'drain = ground', p: [0, -2.3, 0.6], side: 'b', minor: true },
       { text: 'wasted flow', p: [-1.6, -0.6, 0.3], side: 't', minor: true },
       { text: `V_DD − V_t = ${(COLUMN_VOLTS * (1 - COLUMN_VT)).toFixed(2)} V`, p: [1.5, COL.y0 + COL.h * (1 - COLUMN_VT), 0.2], side: 'r', hidden: !inp.weak },
