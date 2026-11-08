@@ -121,40 +121,49 @@ function nandOf(b: Builder, ins: string[], label?: string, name?: string): strin
 
 const fieldCache = new Map<number, ComponentDef>();
 
-/** One field's multiplexer: f (forms, one-hot) and w (the window) in, the field out. */
+/**
+ * One field's multiplexer: f (forms, one-hot) and w (the window) in, the field out. Its recipes come from decoding every
+ * parcel (cRecipes, ~85 ms in a browser), so the drawing and the summary's count wait for the first look: C_EXPAND places
+ * all six fields at module load, and every chapter page evaluates this module.
+ */
 export function cField(fi: number): ComponentDef {
   let d = fieldCache.get(fi);
   if (d) return d;
   const { name, lo, hi } = C_FIELDS[fi];
   const W = hi - lo + 1;
-  const recipes = cRecipes()[fi];
-  const b = new Builder(14);
-  b.pins('f', 'w');
-  const sf = b.op(splitter(ones(NF + 1)), ['f'], undefined, 'sf');
-  const sw = b.op(splitter(ones(32)), ['w'], undefined, 'sw');
-  b.next();
-  // a recipe's select: the OR of its forms
-  // (a recipe that leaves the whole field 0 needs no select: its forms just contribute nothing)
-  const sel = recipes.map((r, g) => (r.src.every((s) => s === 'zero') ? ''
-    : r.forms.length === 1 ? `${sf}.o${r.forms[0]}` : b.op1(orN(r.forms.length), r.forms.map((k) => `${sf}.o${k}`), `${r.forms.length} forms`, `s${g}`)));
-  b.next();
-  // per field bit, a NAND per recipe that sets it (constant 1: the select's inverse), then a NAND across them
-  const terms: string[][] = Array.from({ length: W }, () => []);
-  recipes.forEach((r, g) => r.src.forEach((s, i) => {
-    if (s === 'zero') return;
-    terms[i].push(s === 'one' ? b.op1(NOT, [sel[g]], undefined, `t${i}_${g}`) : b.op1(NAND, [sel[g], `${sw}.o${s}`], undefined, `t${i}_${g}`));
-  }));
-  b.next();
-  const ys = terms.map((t, i) => nandOf(b, t, `${name}[${i}]`, `y${i}`));
-  b.next();
-  b.wire(b.op1(merger(ones(W)), ys, undefined, 'my'), 'y');
+  let built: Builder | null = null;
+  const build = (): Builder => {
+    if (built) return built;
+    const recipes = cRecipes()[fi];
+    const b = new Builder(14);
+    b.pins('f', 'w');
+    const sf = b.op(splitter(ones(NF + 1)), ['f'], undefined, 'sf');
+    const sw = b.op(splitter(ones(32)), ['w'], undefined, 'sw');
+    b.next();
+    // a recipe's select: the OR of its forms
+    // (a recipe that leaves the whole field 0 needs no select: its forms just contribute nothing)
+    const sel = recipes.map((r, g) => (r.src.every((s) => s === 'zero') ? ''
+      : r.forms.length === 1 ? `${sf}.o${r.forms[0]}` : b.op1(orN(r.forms.length), r.forms.map((k) => `${sf}.o${k}`), `${r.forms.length} forms`, `s${g}`)));
+    b.next();
+    // per field bit, a NAND per recipe that sets it (constant 1: the select's inverse), then a NAND across them
+    const terms: string[][] = Array.from({ length: W }, () => []);
+    recipes.forEach((r, g) => r.src.forEach((s, i) => {
+      if (s === 'zero') return;
+      terms[i].push(s === 'one' ? b.op1(NOT, [sel[g]], undefined, `t${i}_${g}`) : b.op1(NAND, [sel[g], `${sw}.o${s}`], undefined, `t${i}_${g}`));
+    }));
+    b.next();
+    const ys = terms.map((t, i) => nandOf(b, t, `${name}[${i}]`, `y${i}`));
+    b.next();
+    b.wire(b.op1(merger(ones(W)), ys, undefined, 'my'), 'y');
+    return (built = b);
+  };
   d = define({
     id: `rvc_${name}`, name: `C expander: ${name}`, category: 'routing',
-    summary: `The ${name} field (bits ${hi}:${lo}) of the instruction a parcel stands for: ${recipes.length} ways to fill it (forms that fill it alike share one, their selects ORed), each bit a NAND per way, then a NAND across them.`,
+    get summary() { return `The ${name} field (bits ${hi}:${lo}) of the instruction a parcel stands for: ${cRecipes()[fi].length} ways to fill it (forms that fill it alike share one, their selects ORed), each bit a NAND per way, then a NAND across them.`; },
     ports: [bus('f', NF + 1, 'in'), bus('w', 32, 'in'), bus('y', W, 'out')],
     symbol: { kind: 'box', label: name.toUpperCase() },
     spec: ([f, w]) => [fieldValue(fi, f, w)],
-    netlist: () => ({ pins: edgePins(b, ['f', 'w'], ['y'], 4), instances: b.instances, nets: b.nets() }),
+    netlist: () => { const b = build(); return { pins: edgePins(b, ['f', 'w'], ['y'], 4), instances: b.instances, nets: b.nets() }; },
   });
   fieldCache.set(fi, d);
   return d;

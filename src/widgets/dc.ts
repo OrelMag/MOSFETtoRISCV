@@ -50,7 +50,7 @@ export function fabricWidget(): Widget {
     chips.set(0, n0(f.hosts), `hosts, on ${k}-port switches`);
     chips.set(1, n0(f.switches), 'switches');
     chips.set(2, n0(f.core), 'paths between two pods');
-    chips.set(3, (f.hosts / f.switches).toFixed(1), 'hosts a switch');
+    chips.set(3, n0(f.links), 'cables in all, hosts included');
     note.textContent = `The drawing is k = 4. Every switch is the same cheap ${k}-port part, and the links up equal the hosts down, so every host could have its port's full rate to any other if the traffic spreads evenly: the exchange's Clos network, folded, in Ethernet.`;
     draw();
   };

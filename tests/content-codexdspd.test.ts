@@ -126,7 +126,7 @@ describe('group D: converters', () => {
     expect(f1(bad.worstDnl)).toBe('2.2');
     expect(bad.monotonic).toBe(false);
     quotes('r2r', '0.5', '0.996', '0.0039', '0.4961', '130', '1.2', '1.9', '2.2', '16 resistors');
-    says('converters', 2, 'some 2 LSBs');
+    says('converters', 2, '1 to 2 LSBs off at 8 bits: the median over 200 such ladders is 1.2 LSBs');
     // the quiz: a DNL of −1.3 is a step of −0.3 LSB
     expect(-1.3 + 1).toBeCloseTo(-0.3, 12);
   });
@@ -234,12 +234,12 @@ describe('group D: filters that learn', () => {
     expect(2 ** (LMS_SPEC.s - 1)).toBe(64);
     expect(LMS_SPEC.s).toBe(7);
     expect(Math.round(avg / loud)).toBe(11);
-    quotes('lms', avg.toFixed(2), loud.toFixed(3), c(tap), c(2 * mul), c(four), '±64', '1960', 'recorded voice', 'converges at 1.3 times', 'diverged at 1.4 times');
+    quotes('lms', avg.toFixed(2), loud.toFixed(3), c(tap), c(2 * mul), c(four), 'from −64 to +63', '1960', 'recorded voice', 'converges at 1.3 times', 'diverged at 1.4 times');
     says('adaptive', 3, 'still converges at 1.3 times it and has fallen apart at 1.4 times it');
     says('adaptive', 3, `${avg.toFixed(2)}`);
     says('adaptive', 3, `${loud.toFixed(3)}`);
     says('adaptive', 5, `${c(tap).replace(/,/g, ' ')} NANDs`);
-    says('adaptive', 5, `±${2 ** (LMS_SPEC.s - 1)}`);
+    says('adaptive', 5, `from −${2 ** (LMS_SPEC.s - 1)} to +${2 ** (LMS_SPEC.s - 1) - 1}`);
     says('adaptive', 2, 'In 1960');
     // the quiz: ten times the amplitude is a hundred times the power
     expect(10 ** 2).toBe(100);

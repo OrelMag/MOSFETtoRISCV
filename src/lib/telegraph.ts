@@ -171,7 +171,7 @@ export const DIAL_SELECTOR: ComponentDef = define({
   ports: [bit('line', 'in', 'left'), bit('pulse', 'in', 'left'), bit('hangup', 'in', 'left'), { name: 'count', width: 3, dir: 'out' }, { name: 'y', width: 8, dir: 'out' }],
   symbol: { kind: 'box', label: 'SELECTOR', w: 14 },
   netlist: () => {
-    const loads: InstanceDef[] = Array.from({ length: 8 }, (_, i) => load(`ld${i}`, [20 + 6 * i, 22]));
+    const loads: InstanceDef[] = Array.from({ length: 8 }, (_, i) => load(`ld${i}`, [60 + 4 * i, 48]));
     const nets: NetDef[] = [
       { name: 'pulse', ends: ['pulse', 'st0.p'] }, { name: 'hangup', ends: ['hangup', 'hr.a'] },
       { name: 'gnd', ends: ['hr.b', 'ghr.p'] }, { name: 'vdd', ends: ['vhr.p', 'hr.c'] },
@@ -186,15 +186,17 @@ export const DIAL_SELECTOR: ComponentDef = define({
       { name: 'y', ends: ['my.out', 'y'] },
     ];
     for (let j = 0; j < 4; j++) {
-      nets.push({ name: `y${j}`, ends: [`st2.tn${j}`, `ld${j}.y`, `my.i${j}`], tags: true }, { name: `y${j + 4}`, ends: [`st2.ty${j}`, `ld${j + 4}.y`, `my.i${j + 4}`], tags: true });
+      // the stage's bottom pins stand two apart: stagger their labels over three heights
+      const lab = (k: number): [number, number] => [64 + 2 * k, 35 + 3 * (k % 3)];
+      nets.push({ name: `y${j}`, ends: [`st2.tn${j}`, `ld${j}.y`, `my.i${j}`], tags: true, tagAt: { [`st2.tn${j}`]: lab(2 * j) } }, { name: `y${j + 4}`, ends: [`st2.ty${j}`, `ld${j + 4}.y`, `my.i${j + 4}`], tags: true, tagAt: { [`st2.ty${j}`]: lab(2 * j + 1) } });
     }
     return {
       level: 'switch',
-      pins: { line: [2, 10], pulse: [2, 6], hangup: [2, 30], count: [100, 6], y: [92, 29] },
+      pins: { line: [2, 10], pulse: [2, 6], hangup: [2, 21], count: [100, 22], y: [110, 56] },
       instances: [
-        ...holdRail([6, 26]).instances,
-        { name: 'st0', def: countStage(1), at: [14, 4] }, { name: 'st1', def: countStage(2), at: [34, 4] }, { name: 'st2', def: countStage(4), at: [58, 4] },
-        { name: 'mc', def: merger(ones(3), 2), at: [92, 3] }, { name: 'my', def: merger(ones(8), 2), at: [74, 24] },
+        ...holdRail([8, 17]).instances,
+        { name: 'st0', def: countStage(1), at: [14, 4] }, { name: 'st1', def: countStage(2), at: [36, 14] }, { name: 'st2', def: countStage(4), at: [62, 28] },
+        { name: 'mc', def: merger(ones(3), 2), at: [92, 20] }, { name: 'my', def: merger(ones(8), 2), at: [100, 48] },
         ...loads,
       ],
       nets,

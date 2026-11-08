@@ -54,7 +54,7 @@ export function waveSvg(rows: WaveRow[], n: number, opts: { marks?: WaveMarks[];
 
 /** One byte as a UART frame (8N1, LSB first) and as SPI mode 0, on the same time axis: what the clock wire replaces. */
 export function frameCompareWidget(): Widget {
-  let byte = 0xa5;
+  let byte = 0xb2; // not a bit palindrome: LSB first and MSB first look different
   const view = h('div', { class: 'spi-view' }), note = h('p', { class: 'clk-verdict ok', role: 'status' });
   const paint = () => {
     const Q = 4; // slots per bit time

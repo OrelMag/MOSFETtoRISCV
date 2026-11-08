@@ -83,7 +83,6 @@ export function wiringTable(id: string, name: string, table: readonly number[]):
     b.pins('a');
     const d = b.op(decoder(5), ['a']);
     b.next();
-    b.maxH = 90;
     const bits = [0, 1, 2, 3, 4].map((k) => {
       const lines = table.flatMap((v, i) => (v >> k & 1 ? [`${d}.y${i}`] : []));
       const g = orN(lines.length);
@@ -91,7 +90,6 @@ export function wiringTable(id: string, name: string, table: readonly number[]):
       lines.forEach((l, j) => b.wire(l, `${u}.i${j}`));
       return `${u}.y`;
     });
-    b.maxH = 0;
     b.next();
     b.wire(b.op1(merger(ones(5)), bits), 'y');
     return define({

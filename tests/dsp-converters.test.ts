@@ -43,7 +43,7 @@ describe('flash, SAR and a ladder', () => {
     for (let c = 0; c < 256; c++) expect(ladderOutput(c, 8)).toBeCloseTo(c / 256, 12);
     expect(linearity(Array.from({ length: 256 }, (_, c) => ladderOutput(c, 8))).worstDnl).toBeLessThan(1e-9);
   });
-  it('an imperfect ladder is usually worst at the MSB step, some 2 LSBs at 1 %, and tolerances set when it stops being monotonic', () => {
+  it('an imperfect ladder is usually worst at the MSB step, 1 to 2 LSBs at 1 % (median 1.2, the first ladder drawn 1.9), and tolerances set when it stops being monotonic', () => {
     const lv = (s: number, seed = 5) => linearity(Array.from({ length: 256 }, (_, c) => ladderOutput(c, 8, ladderErrors(8, s, seed))));
     expect(lv(0.001).monotonic).toBe(true);
     expect(lv(0.03).monotonic).toBe(false);
@@ -51,7 +51,8 @@ describe('flash, SAR and a ladder', () => {
     for (let seed = 1; seed <= 200; seed++) { const t = lv(0.01, seed); if (t.dnl.reduce((m, v, i) => (Math.abs(v) > Math.abs(t.dnl[m]) ? i : m), 0) === 127) atMiddle++; worst.push(Math.abs(t.dnl[127])); }
     expect(atMiddle).toBeGreaterThan(100);
     const median = worst.sort((a, b) => a - b)[100];
-    expect(median).toBeGreaterThan(1.2); expect(median).toBeLessThan(2.8);
+    expect(median).toBeGreaterThan(1.15); expect(median).toBeLessThan(1.3);
+    expect(Math.abs(lv(0.01, 5).dnl[127])).toBeCloseTo(1.9, 1);
   });
 });
 

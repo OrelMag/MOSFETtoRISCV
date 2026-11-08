@@ -1,7 +1,7 @@
 // More adders: carry-select (compute both answers, pick one), carry-skip (let the carry jump over a
 // block that would only propagate it) and a decimal (BCD) adder.
 
-import type { ComponentDef, PortDef } from '../sim/types';
+import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { mask } from '../sim/values';
 import { Builder } from './builder';
 import { andN, busMux2, rca } from './combinational';
@@ -166,22 +166,29 @@ assign s    = cout ? t[3:0] + 4'd6 : t[3:0];`,
 export function bcdAdder(d: number): ComponentDef {
   return memo(`bcd${d}`, () => {
     if (d === 1) return BCD_DIGIT;
-    const b = new Builder(8, 12);
-    b.pins('a', 'b', 'cin');
-    const sa = b.op(splitter(Array(d).fill(4), 6), ['a']);
-    const sb = b.op(splitter(Array(d).fill(4), 6), ['b']);
-    b.next();
-    let carry = 'cin';
-    const sums: string[] = [];
-    for (let i = 0; i < d; i++) {
-      const dig = b.op(BCD_DIGIT, [`${sa}.o${i}`, `${sb}.o${i}`, carry], `digit ${i}`);
-      sums.push(`${dig}.s`);
-      carry = b.name(`${dig}.cout`, `carry ${i + 1}`, i < d - 1);
-    }
-    b.next();
-    b.wire(b.op1(merger(Array(d).fill(4), 6), sums), 's');
-    b.wire(carry, 'cout');
-    const R = b.right;
+    // Drawn by hand: the digits stacked at pitch P, each operand split at the same pitch so every nibble runs straight
+    // into its digit's a or b (b's splitter left of a's: its nibbles hop a's bar); each carry drops from a digit's cout
+    // to the next one's cin; the sums straight into a merger at the same pitch, the last carry under it to cout.
+    const P = 12, Y = 6, X = 24, R = 50;
+    const instances: InstanceDef[] = [
+      { name: 'sb', def: splitter(Array(d).fill(4), P), at: [12, Y - 2] },
+      { name: 'sa', def: splitter(Array(d).fill(4), P), at: [16, Y - 4] },
+      ...Array.from({ length: d }, (_, i): InstanceDef => ({ name: `u${i + 2}`, def: BCD_DIGIT, at: [X, Y + P * i], label: `digit ${i}` })),
+      { name: 'ms', def: merger(Array(d).fill(4), P), at: [40, Y - 3] },
+    ];
+    const nets: NetDef[] = [
+      { name: 'a', ends: ['a', 'sa.in'] }, { name: 'b', ends: ['b', 'sb.in'] },
+      ...Array.from({ length: d }, (_, i): NetDef => ({ name: `a${i}`, ends: [`sa.o${i}`, `u${i + 2}.a`] })),
+      ...Array.from({ length: d }, (_, i): NetDef => ({ name: `b${i}`, ends: [`sb.o${i}`, `u${i + 2}.b`] })),
+      { name: 'cin', ends: ['cin', 'u2.cin'] },
+      ...Array.from({ length: d - 1 }, (_, i): NetDef => ({
+        name: `carry ${i + 1}`, ends: [`u${i + 2}.cout`, `u${i + 3}.cin`],
+        via: { [`u${i + 3}.cin`]: [[X + 11, Y + 5 + P * i], [X + 11, Y + 10 + P * i], [X - 2, Y + 10 + P * i], [X - 2, Y + 6 + P * (i + 1)]] },
+      })),
+      ...Array.from({ length: d }, (_, i): NetDef => ({ name: `s${i}`, ends: [`u${i + 2}.s`, `ms.i${i}`] })),
+      { name: 's', ends: ['ms.out', 's'] },
+      { name: 'cout', ends: [`u${d + 1}.cout`, 'cout'], via: { cout: [[X + 11, Y + 5 + P * (d - 1)], [X + 11, Y + P * d], [R, Y + P * d]] } },
+    ];
     return define({
       id: `bcd${d}`, name: `${d}-digit BCD adder`, category: 'arithmetic',
       summary: `${d} decimal digits, each four bits (0x0–0x9), added digit by digit with a decimal carry between them. Read the inputs and the sum in hex: they look like decimal numbers.`,
@@ -196,7 +203,7 @@ export function bcdAdder(d: number): ComponentDef {
         }
         return [s, carry];
       },
-      netlist: () => ({ pins: { a: [0, 4], b: [0, 8], cin: [0, 12], s: [R, 4], cout: [R, 8] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { a: [0, Y - 4 + 6 * d], b: [0, Y - 2 + 6 * d], cin: [0, Y + 6], s: [R, Y - 3 + 6 * d], cout: [R, Y + P * d] }, instances, nets }),
     });
   });
 }

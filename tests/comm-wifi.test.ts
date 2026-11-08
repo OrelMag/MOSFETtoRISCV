@@ -136,6 +136,12 @@ describe('the air', () => {
     expect(bianchi(50, len, true).throughput).toBeGreaterThan(b.throughput);
     expect(bianchi(2, 50, true).throughput).toBeLessThan(bianchi(2, 50).throughput);
   });
+  it('the share of the air with 1500-byte frames: a lone sender pays its whole backoff, so a few stations do better than one before the share falls (the chapter says so)', () => {
+    const len = airtimeUs(1500, 216);
+    expect(bianchi(1, len).throughput).toBeLessThan(bianchi(2, len).throughput);
+    expect(bianchi(2, len).throughput).toBeGreaterThan(bianchi(20, len).throughput);
+    expect(bianchi(20, len).throughput).toBeGreaterThan(0.4);
+  });
   const hidden = (useRts: boolean): AirOpts => ({
     n: 3, lenUs: 1500, useRts, dest: () => 1, saturated: [true, false, true], seeds: [101, 3, 300],
     hears: (i, j) => !((i === 0 && j === 2) || (i === 2 && j === 0)),

@@ -439,7 +439,14 @@ export function clockDivider(k: number): ComponentDef {
       const e = nets.find((nt) => nt.ends[0] === o);
       if (e) { e.ends.push(`mq.i${i}`); e.tags = [`mq.i${i}`]; } else nets.push({ name: `f/${2 ** (i + 1)}`, ends: [o, `mq.i${i}`] });
     });
-    nets.push({ name: '1', ends: tEnds, tags: tEnds.slice(1) }, { name: 'rst_n', ends: rEnds, tags: rEnds.slice(1) }, { name: 'q', ends: ['mq.out', 'q'] });
+    // the constant 1 and rst_n as two rails, over and under the flip-flops, dropping into each one's left side: the clock
+    // runs stage to stage straight between them (pointers two units from their partners, before)
+    const tX = (i: number) => 8 + dx * i;
+    nets.push(
+      { name: '1', ends: tEnds, via: Object.fromEntries(tEnds.slice(1).map((e, i) => [e, [[tX(i) - 2, -1], [tX(i) - 2, 6]]])) },
+      { name: 'rst_n', ends: rEnds, via: Object.fromEntries(rEnds.slice(1).map((e, i) => [e, [[tX(i) - 1, 4 + g.h + 4], [tX(i) - 1, 10]]])) },
+      { name: 'q', ends: ['mq.out', 'q'] },
+    );
     const R = 8 + dx * k + 8;
     return define({
       id: `clkdiv${k}`, name: `÷${2 ** k} ripple clock divider`, category: 'sequential',

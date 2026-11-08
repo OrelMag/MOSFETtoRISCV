@@ -293,7 +293,7 @@ const CLOCKS: [number, string][] = [[1.8432e6, '1.8432 MHz'], [3.6864e6, '3.6864
 const BAUDS = [9600, 19200, 38400, 57600, 115200, 230400, 921600, 3e6];
 
 export function baudWidget(): Widget {
-  let ci = 4;
+  let ci = 6; // 50 MHz, the prose's worked example
   const tbl = h('div', { class: 'scroll' }), note = h('p', { class: 'sub' });
   const paint = () => {
     const f = CLOCKS[ci][0], th = h('tr', null, h('th', null, 'baud'), h('th', null, 'divisor'), h('th', null, 'actual'), h('th', null, 'error'), h('th', null, 'byte'));
@@ -424,7 +424,7 @@ export function twoScene(): Scene {
       };
       const rSl = slider('Clock B vs A', -10, 10, 0.5, 0, (v) => `${v > 0 ? '+' : ''}${v.toFixed(1)} %`, (v) => { drive.ratio = 1 + v / 100; paint(); });
       const run = btn('Run', 'Clock both computers, each at its own rate', () => { if (loop.running) { loop.stop(); run.textContent = 'Run'; } else { loop.start(); run.textContent = 'Pause'; } }, 'btn sm primary');
-      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel uart-two', 'data-dock': 'right', 'data-phone': 'flow', 'data-fold': 'narrow' }, h('h4', null, 'Two computers chatting', h('span', { class: 'fold-hint' })),
+      const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel uart-two', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'Two computers chatting', h('span', { class: 'fold-hint' })),
         h('div', { class: 'mc-row' }, run, btn('Glitch A→B', 'Flip the wire from A to B for six A cycles', () => api.glitch())), rSl.el,
         field('A'), field('B'), h('div', { class: 'uart-cons2' }, h('div', null, h('div', { class: 'cpu-sec' }, 'Console A (what B sent)'), cons.A), h('div', null, h('div', { class: 'cpu-sec' }, 'Console B (what A sent)'), cons.B)),
         h('div', { class: 'cpu-sec' }, 'The wires, last 480 edges: A → B, B → A'), strip, read);

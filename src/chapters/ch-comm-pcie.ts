@@ -5,6 +5,8 @@
 import { ACK_LIMIT, ADV_NPH, ADV_PD, ADV_PH, creditOk, DL_UP, FC_PERIOD_BITS, LINE_DELAY, LINK_IN0, PcieLink, REPLAY_LIMIT, REPLAY_SLOTS, TS_RX, TS_TX, type LinkIn } from '../comm/pcie';
 import { busWidget, creditScene, laneGBs, parallelGBs, parallelMHz, PCIE_GENS, pcieApi, pcieCosts, pcieScene, tlpWidget } from '../widgets/pcie';
 import { numOf } from './order';
+import { stats } from '../sim/stats';
+import { AXI_PORT } from '../lib/axi';
 import { CRC5_POLY, DEVICE_DESCRIPTOR, BIT_CLOCKS, MAX_PACKET, UsbBench, UsbDevice, crc16, crc5Token, tokenBytes, PID } from '../comm/usb';
 import { usbCosts } from '../lib/usb';
 import { usbApi, usbPacketWidget, usbScene } from '../widgets/usb';
@@ -41,6 +43,9 @@ const UC = () => (usbC ??= usbCosts());
 const hx = (b: readonly number[]) => b.map((x) => x.toString(16).padStart(2, '0').toUpperCase()).join(' ');
 const SK = 1000, W64 = 64;
 const G5 = PCIE_GENS[4];
+const N_SER = numOf('serial'), N_ERR = numOf('errors'), N_CODES = numOf('codes'), N_CLK = numOf('clocks'), N_BUS = numOf('bus'), N_SW = numOf('switch');
+const serialLink = `<a href="#/c/serial/0">chapter ${N_SER}</a>`;
+const AXI_N = stats(AXI_PORT).nands;
 
 export const chPcie: Chapter = {
   id: 'pcie', num: numOf('pcie'), title: 'PCIe and USB', level: 'Communication',
@@ -52,7 +57,7 @@ export const chPcie: Chapter = {
     'follow a damaged TLP through Nak, replay and delivery in gates, a lost Ack through the replay timer, and a dead lane through Recovery',
     'walk a device from attach to configured over USB\'s control transfers, and name the trap in SET_ADDRESS',
   ],
-  builds: ['serial', 'errors', 'bus'],
+  builds: ['serial', 'clocks', 'errors', 'codes', 'bus'],
   recap: {
     keep: [
       'A lane is a differential pair each way with no shared clock: skew between wires stops mattering, because each lane recovers its own clock and lanes are deskewed in the receiver. What it costs is a packet protocol: framing, flow control and retransmission, all in hardware.',
@@ -89,10 +94,10 @@ export const chPcie: Chapter = {
     {
       title: 'From a bus to a lane',
       body: `
-        <p>The bus chapter put a memory behind wires: an address, data, a handshake, one transaction at a time. PCI did this between chips for two decades: 32 data and address lines, one shared clock at 33 MHz, 133 MB/s for everybody on the bus. PCI-X reached 64 bits at 533 MT/s, by then with source-synchronous strobes to get round the common clock, and that was the end of the road. The common-clock limit is one you can compute; strobes only postpone it, since the lines in a group must still agree to within a bit.</p>
+        <p>Chapters ${N_SER} to ${N_CODES} made one link work: a clock recovered from the data, a line code, checks that catch damaged bits and codes that repair them. Those are parts; this chapter is the first place they are assembled into the packet buses inside a computer, PCIe and USB. It starts from chapter ${N_BUS}'s bus, which put a memory behind wires: an address, data, a handshake, one transaction at a time. PCI did this between chips for two decades: 32 data and address lines, one shared clock at 33 MHz, 133 MB/s for everybody on the bus. PCI-X reached 64 bits at 533 MT/s, by then with source-synchronous strobes to get round the common clock, and that was the end of the road. The common-clock limit is one you can compute; strobes only postpone it, since the lines in a group must still agree to within a bit.</p>
         <p>Every line of a parallel bus has to be valid at the same clock edge. Lines are not the same length, nor are their loads, so they arrive spread over some <strong>skew</strong>, and the receiver can only sample where all of them have settled. With a nanosecond of skew and half a period kept for setting up and sampling, the clock stops at ${nf(parallelMHz(SK), 0)} MHz: at ${W64} bits that is ${nf(parallelGBs(SK, W64), 1)} GB/s, in one direction at a time, for every device on the bus, on ${W64} signal pins plus controls. More width makes the skew worse, not better.</p>
-        <p><strong>PCI Express</strong> (specified in 2002) kept PCI's software model (configuration space, memory reads and writes, base address registers) and threw away the wires. A <strong>lane</strong> is one differential pair each way, point to point, with the clock recovered from the data as in the fast serial links chapter. One lane has no skew to speak of, and a ×16 link has 16 lanes which the receiver deskews on its own, each with its own recovered clock. The cost moves from pins to logic: the receiver now needs a clock recovery, a line code, and a protocol that frames, checks and retransmits.</p>
-        <p>The table shows real PCIe, a transfer rate per lane and the line code it spends bandwidth on. ${G5.name} at ×16 carries ${nf(laneGBs(G5, 16), 0)} GB/s each way on ${16 * 4} signal pins. Our gates below run one lane at a symbol a clock; that is a teaching rate, and they say so.</p>`,
+        <p><strong>PCI Express</strong> (specified in 2002) kept PCI's software model (configuration space, memory reads and writes, base address registers) and threw away the wires. A <strong>lane</strong> is one differential pair each way, point to point, with the clock recovered from the data as in the serial links of ${serialLink}. One lane has no skew to speak of, and a ×16 link has 16 lanes which the receiver deskews on its own, each with its own recovered clock. The cost moves from pins to logic: the receiver now needs a clock recovery, a line code, and a protocol that frames, checks and retransmits.</p>
+        <p>The table shows real PCIe, a transfer rate per lane and the line code it spends bandwidth on. PCIe ${G5.name} at ×16 carries ${nf(laneGBs(G5, 16), 0)} GB/s each way on ${16 * 4} signal pins. Our gates below run one lane at a symbol a clock; that is a teaching rate, and they say so.</p>`,
       widget: busWidget,
       challenge: {
         kind: 'quiz',
@@ -104,14 +109,14 @@ export const chPcie: Chapter = {
       },
       more: {
         real: '<p>PCI\'s other problem was that the bus was shared: one slow card held everybody up, so reads turned into retries and then into split transactions on PCI-X. PCIe makes every link point to point and puts a switch where there would have been a shared bus.</p>',
-        numbers: `<p>The model behind the slider: a common clock with period T must leave at least half of T after the skew, so f<sub>max</sub> = 1 / (2 × skew). Lane rates and line codes are PCI-SIG's; 6.0's figure counts its flit overhead of 14 bytes in 256 and no other protocol overhead, like the rest of the table.</p>`,
+        numbers: `<p>The model behind the slider: a common clock with period T must leave at least half of T after the skew, so f<sub>max</sub> = 1 / (2 × skew). Lane rates and line codes are PCI-SIG's; 6.0's figure takes off the flit's CRC and forward error correction, 14 bytes of each 256 (the 6 bytes of data link header count as payload here), and no other protocol overhead, like the rest of the table.</p>`,
       },
     },
     {
       title: 'A packet, byte by byte',
       body: `
         <p>A memory write across a link is a <strong>TLP</strong>, a transaction layer packet, and this one is real: these are PCIe's bytes. Choose a kind and read the fields. The transaction layer makes the three-dword header: <code>Fmt</code> and <code>Type</code> say what it is (<code>0x40</code> a memory write, <code>0x00</code> a read, <code>0x4A</code> a completion with data), <code>Length</code> counts dwords, the <code>Tag</code> names one of the requester's reads so that the answer can find its way back, the byte enables say which bytes of the end dwords count, and the address goes last.</p>
-        <p>The data link layer wraps it: 4 reserved bits and a 12-bit <strong>sequence number</strong> in front, a 32-bit <strong>LCRC</strong> behind. The LCRC is the polynomial of Ethernet's FCS, computed over the sequence number and the TLP: the CRC unit from the errors chapter does it, a byte a clock. At 2.5 and 5 GT/s the physical layer then frames it between two control symbols, <code>STP</code> (K27.7) and <code>END</code> (K29.7), which cannot appear in data: the line code's K symbols are why framing costs no escaping and no length search. (From 8 GT/s the 128b/130b code has no K symbols, and a framing token carrying the packet's length takes their place.)</p>
+        <p>The data link layer wraps it: 4 reserved bits and a 12-bit <strong>sequence number</strong> in front, a 32-bit <strong>LCRC</strong> behind. The LCRC is the polynomial of Ethernet's FCS, computed over the sequence number and the TLP: the CRC unit of chapter ${N_ERR} does it, a byte a clock. At 2.5 and 5 GT/s the physical layer then frames it between two control symbols, <code>STP</code> (K27.7) and <code>END</code> (K29.7), which cannot appear in data: the line code's K symbols are why framing costs no escaping and no length search. (From 8 GT/s the 128b/130b code has no K symbols, and a framing token carrying the packet's length takes their place.)</p>
         <p>Link management goes in smaller packets the transaction layer never sees: a <strong>DLLP</strong> is 6 bytes (type, 3 bytes, a CRC-16) between <code>SDP</code> and <code>END</code>. Ack, Nak and flow-control updates are all DLLPs.</p>
         <p>The cost: ${2 + 12 + 4 + 2} bytes of framing and headers around every write and every read. A 4-byte write is ${nf((100 * 4) / 24, 0)} % efficient, a 256-byte one ${nf((100 * 256) / 276, 0)} %, and that is before the line code. The maximum payload size a system negotiates is a trade between this and how long one TLP may hold up the lane.</p>
         <p>Click a byte to flip one of its bits. The receiver cannot tell where the hit landed, and it does not try: a wrong LCRC condemns the whole packet.</p>`,
@@ -132,7 +137,7 @@ export const chPcie: Chapter = {
     {
       title: 'Credits: never send what will not fit',
       body: `
-        <p>An Ethernet switch that runs out of room drops the frame and leaves recovery to software further up. A memory write cannot be dropped: nothing above PCIe would notice. So the sender is not allowed to send a TLP until the receiver has promised room for it.</p>
+        <p>An <span data-ahead="learnsw">Ethernet switch (chapter ${N_SW}: a box that forwards frames between its ports by address)</span> that runs out of room drops the frame and leaves recovery to software further up. A memory write cannot be dropped: nothing above PCIe would notice. So the sender is not allowed to send a TLP until the receiver has promised room for it.</p>
         <p>The receiver tells the sender its buffer sizes when the link comes up (<code>InitFC</code> DLLPs), in <strong>credits</strong>: one header credit is one TLP header, one data credit is 4 dwords of payload. There are three classes, kept apart: <strong>posted</strong> (memory writes, no answer expected), <strong>non-posted</strong> (reads: an answer owed) and <strong>completions</strong>. As it frees buffers it sends the running total as an <code>UpdateFC</code> DLLP.</p>
         <p>The sender keeps two counters per kind: <code>CREDIT_LIMIT</code> (what the receiver has allowed since the start) and <code>CREDITS_CONSUMED</code> (what it has used). Both only go up, and wrap: 8 bits for headers, 12 for data. So a comparison of the two would be wrong just after one of them wraps. The standard's test is a subtraction:</p>
         <p><code>(LIMIT − (CONSUMED + want)) mod 2<sup>w</sup> ≤ 2<sup>w−1</sup></code></p>
@@ -191,7 +196,7 @@ export const chPcie: Chapter = {
         kind: 'reach',
         goal: 'Block the lane with a write in flight, watch the port go through Recovery, unblock it, and see the write acknowledged.',
         check: (st) => { const s = pcieApi.get(st)?.status(); return !!s && s.recoveries >= 1 && s.up && s.ltA === 4 && s.ltB === 4 && s.nrcv >= 1 && ((s.ackd + 1) & 0xfff) === s.nextSeq; },
-        hints: ['Block A→B first, then Write, then Run for a few thousand clocks.', 'After REPLAY_NUM wraps the ladder shows Rec.Lock. Then unblock and Run.'],
+        hints: ['Block A→B first, then Write, then Run for a few thousand clocks.', 'After REPLAY_NUM wraps the state ladder in the panel shows Rec.Lock. Then unblock and Run.'],
         answer: `Block, Write, Run a little over ${REPLAY_LIMIT * 4} clocks: four timer expiries, then Recovery. Unblock and Run: TS1, TS2, idle, L0, then the replay and its Ack.`,
         solve: (st) => { const a = pcieApi.get(st); a?.block(true); a?.write(4, 2, 0x55); a?.run(REPLAY_LIMIT * 6); a?.block(false); a?.run(3000); },
       },
@@ -204,9 +209,9 @@ export const chPcie: Chapter = {
       title: 'Link training',
       body: `
         <p>Plug a card in. Neither end knows if the other is there, where its symbol boundaries are, or how fast it can go. The physical layer's <strong>LTSSM</strong> (link training and status state machine) finds out. Ours is a subset: <span data-show="a">Detect → Polling → Configuration → L0</span>, with Recovery beside it.</p>
-        <p><strong>Plug in</strong> and run. <strong>Detect</strong>: a real transmitter senses a far-end termination by the time constant of a voltage step. Then <strong>Polling.Active</strong>: the port sends <strong>TS1</strong> ordered sets, 16 symbols, starting with the comma <code>COM</code> (K28.5) that lets the receiver find symbol and word boundaries, as in the SerDes of the fast serial links chapter. When it has sent at least ${TS_TX} and seen ${TS_RX} in a row from the other side, it moves to <strong>Polling.Configuration</strong> and sends <strong>TS2</strong>: "I can hear you." ${TS_RX} TS2s seen means the other end hears this one too. Eight in a row guards against a noise burst that looks like one.</p>
-        <p><strong>Configuration</strong> agrees lane order, link width and numbers (ours skips these), and ends with idle symbols: ${TS_RX} received and ${TS_TX} sent. Then <strong>L0</strong>: the link is up. Only now does the data link layer begin: <strong>InitFC1</strong> and <strong>InitFC2</strong> DLLPs give each side the other's buffer sizes (the ladder's DL_Up). The first TLP may go. All of that takes ${F.train} clocks here; the standard's Polling alone asks for 1024 TS1s.</p>
-        <p>Recovery uses the same three moves, TS1 then TS2 then idle. Speed changes and equalization go through it too on real parts: at 8 GT/s and up, the two ends tune each other's FFE taps by exchanging TS1s, which is the equalization of the fast serial links chapter run as a protocol.</p>
+        <p><strong>Plug in</strong> and run. <strong>Detect</strong>: a real transmitter senses a far-end termination by the time constant of a voltage step. Then <strong>Polling.Active</strong>: the port sends <strong>TS1</strong> ordered sets, 16 symbols, starting with the comma <code>COM</code> (K28.5) that lets the receiver find symbol and word boundaries, as in the SerDes of chapter ${N_SER}. When it has sent at least ${TS_TX} and seen ${TS_RX} in a row from the other side, it moves to <strong>Polling.Configuration</strong> and sends <strong>TS2</strong>: "I can hear you." ${TS_RX} TS2s seen means the other end hears this one too. Eight in a row guards against a noise burst that looks like one.</p>
+        <p><strong>Configuration</strong> agrees lane order, link width and numbers (ours skips these), and ends with idle symbols: ${TS_RX} received and ${TS_TX} sent. Then <strong>L0</strong>: the link is up. Only now does the data link layer begin: <strong>InitFC1</strong> and <strong>InitFC2</strong> DLLPs give each side the other's buffer sizes (the state ladder in the panel: Detect … L0, then DL_Up). The first TLP may go. All of that takes ${F.train} clocks here; the standard's Polling alone asks for 1024 TS1s.</p>
+        <p>Recovery uses the same three moves, TS1 then TS2 then idle. Speed changes and equalization go through it too on real parts: at 8 GT/s and up, the two ends tune each other's FFE taps by exchanging TS1s, which is the equalization of chapter ${N_SER} run as a protocol.</p>
         <p>Pull the cable with <em>Unplug</em>: both ports reset, and the transaction layer's state goes too (a hot unplug is a real error for software to catch).</p>`,
       scene: () => pcieScene('train'),
       challenge: {
@@ -224,9 +229,9 @@ export const chPcie: Chapter = {
     {
       title: 'What is below, and what it costs',
       body: `
-        <p>Our link stops where a real MAC hands off to its PHY, the industry's <strong>PIPE</strong> interface: bytes with a K flag at a symbol clock. Everything below is the fast serial links chapter. At 2.5 and 5 GT/s each byte goes through a scrambler (so that a repeating pattern does not concentrate its energy in one tone) and 8b/10b. From 8 GT/s the line code is 128b/130b: scrambling carries the transitions, and a 2-bit sync header says whether a 16-byte block is data or ordered sets.</p>
-        <p>What we left out, then. <strong>SKP ordered sets</strong>: each end's clock is allowed ±300 ppm, so at the 8b/10b rates every 1180 to 1538 symbols the sender inserts a marker and a receiver's elastic buffer adds or drops a SKP symbol: a clock-crossing FIFO (the crossing clocks chapter) with a rule to keep it from under- or overflowing. <strong>Lane striping</strong>: a ×16 link deals its bytes out across lanes, and the receiver lines the lanes up again using a COM on each. <strong>Switches</strong>: a port per link and a crossbar, like the Ethernet switch, routing by address.</p>
-        <p>The cost, in our gates: ${n0(C().port - C().buffers)} NANDs of logic for a port plus ${n0(C().buffers)} for its two buffers as flip-flops (a real one is a compiled SRAM), and ${n0(C().link)} for the link with the completer's kilobyte. The requester is ${n0(C().root)}. That is one lane's protocol. The bus chapter's AXI port is far cheaper, and it is why short on-chip buses are still parallel wires: they have no skew to fight and no errors to retry.</p>`,
+        <p>Our link stops where a real MAC hands off to its PHY, the industry's <strong>PIPE</strong> interface: bytes with a K flag at a symbol clock. Everything below is the subject of chapter ${N_SER}. At 2.5 and 5 GT/s each byte goes through a scrambler (so that a repeating pattern does not concentrate its energy in one tone) and 8b/10b. From 8 GT/s the line code is 128b/130b: scrambling carries the transitions, and a 2-bit sync header says whether a 16-byte block is data or ordered sets.</p>
+        <p>What we left out, then. <strong>SKP ordered sets</strong>: each end's clock is allowed ±300 ppm, so at the 8b/10b rates every 1180 to 1538 symbols the sender inserts a marker and a receiver's elastic buffer adds or drops a SKP symbol: a clock-crossing FIFO (chapter ${N_CLK}) with a rule to keep it from under- or overflowing. <strong>Lane striping</strong>: a ×16 link deals its bytes out across lanes, and the receiver lines the lanes up again using a COM on each. <strong>Switches</strong>: a port per link and a crossbar, like the <span data-ahead="learnsw">Ethernet switch of chapter ${N_SW} (a table, a crossbar and an arbiter between ports)</span>, routing by address.</p>
+        <p>The cost, in our gates: ${n0(C().port - C().buffers)} NANDs of logic for a port plus ${n0(C().buffers)} for its two buffers as flip-flops (a real one is a compiled SRAM), and ${n0(C().link)} for the link with the completer's kilobyte. The requester is ${n0(C().root)}. That is one lane's protocol. Chapter ${N_BUS}'s AXI port is ${n0(AXI_N)} NANDs against this port's ${n0(C().port - C().buffers)}, and that is why short on-chip buses are still parallel wires: they have no skew to fight and no errors to retry.</p>`,
       widget: busWidget,
       challenge: {
         kind: 'quiz',

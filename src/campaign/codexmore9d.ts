@@ -147,7 +147,7 @@ measured, order 2, rate 16 → 256:  15.8, 14.2, 13.9, 12.7 dB</pre>The gain per
 w = R⁻¹ p = [1.0, −0.4]
 with E[d²] = 1:  smallest error = 1 − (0.8 × 1.0 + 0.1 × (−0.4)) = 0.24
 128 taps:  Levinson 128² = 16,384 operations
-           general solver 128³ = 2,097,152, 128 times as many</pre>Levinson's recursion returns the same two coefficients as the direct solution, and in the chapter it agrees with scipy's solve_toeplitz to 8 places.`,
+           general solver 128³ = 2,097,152, 128 times as many</pre>Levinson's recursion returns the same two coefficients as the direct solution, and in the tests it agrees with scipy's solve_toeplitz to 8 places.`,
     },
     mistakes: [
       'Thinking it needs a model of how d is produced. Only R and p enter; the echo path itself is never needed to find the best filter.',
@@ -171,7 +171,7 @@ with E[d²] = 1:  smallest error = 1 − (0.8 × 1.0 + 0.1 × (−0.4)) = 0.24
   NLMS: μ in (0, 2), whatever the loudness
 LMS tap, 12-bit words:   4,580 NANDs, 4,172 of them the two multipliers
 four taps with their sums: 19,188 NANDs
-update e × x shifted down 7, rounded half up: inside ±64 it is zero (dead zone)</pre>The limit is set by the loudest stretch, not the average: ${EF.avgAllows.toFixed(2)} would have let the run diverge.`,
+update e × x shifted down 7, rounded half up: from −64 to +63 it is zero (dead zone)</pre>The limit is set by the loudest stretch, not the average: ${EF.avgAllows.toFixed(2)} would have let the run diverge.`,
     },
     mistakes: [
       `Taking the step limit from the average power. For speech it is set by the loudest stretch of N samples, here ${EF.loudestAllows.toFixed(3)} against ${EF.avgAllows.toFixed(2)}.`,

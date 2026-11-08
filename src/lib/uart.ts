@@ -7,7 +7,7 @@
 // until the divisor is written.
 
 import { UART_DIV_BITS } from '../comm/uart';
-import type { ComponentDef, PortDef } from '../sim/types';
+import type { ComponentDef, NetDef, PortDef } from '../sim/types';
 import { isZero } from './alu';
 import { andBus, bundled, kit, slaveFsm, slavePorts } from './axi';
 import { Builder } from './builder';
@@ -35,6 +35,21 @@ function sidePins(ports: PortDef[], right: number): Record<string, [number, numb
   let yl = 2, yr = 2;
   for (const p of ports) if (p.dir === 'in') { pins[p.name] = [0, yl]; yl += 3; } else { pins[p.name] = [right, yr]; yr += 3; }
   return pins;
+}
+
+/**
+ * Hand placement of a Builder-made level: instances by name at `at`, the nets drawn as wires except those whose driver end is in `ptr`
+ * (long control lines, constants, the clock), `via` corners per net (keyed by the driver end, then the sink end). Connectivity is the
+ * Builder's, untouched.
+ */
+function laid(b: Builder, at: Record<string, [number, number]>, ptr: Record<string, true | string[]> | string[], via: Record<string, NetDef['via']> = {}, trunks: Record<string, number> = {}): NetDef[] {
+  for (const i of b.instances) { const p = at[i.name]; if (!p) throw new Error(`no place for ${i.name}`); i.at = p; }
+  const tg = Array.isArray(ptr) ? Object.fromEntries(ptr.map((k) => [k, true as const])) : ptr;
+  return b.nets().map((n): NetDef => {
+    const { tags: _t, ...rest } = n;
+    const t = tg[n.ends[0]];
+    return { ...rest, ...(t ? { tags: t } : {}), ...(via[n.ends[0]] ? { via: via[n.ends[0]] } : {}), ...(trunks[n.ends[0]] !== undefined ? { trunk: trunks[n.ends[0]] } : {}) };
+  });
 }
 
 /** n-bit decrement: ~(~x + 1). */
@@ -109,11 +124,26 @@ export const UART_TX: ComponentDef = (() => {
   b.wire(`${busy}.q`, 'busy');
   b.wire(load, 'taken');
   const ports: PortDef[] = [bit('tick', 'in'), bit('go', 'in'), bus('din', 8, 'in'), bit('clk', 'in', 'bottom', true), bit('tx', 'out'), bit('busy', 'out'), bit('taken', 'out')];
+  // Drawn by hand: control at the left (load, step), the tick counter and its last-tick detector on top, the bit counter and the end
+  // chain to busy below, the frame (shift register, line flip-flop) at the bottom. Each counter is a loop (register, +1, clear
+  // multiplexer) whose new value comes back over the top; load, step, the last tick, busy, the constants and the clock are labels.
+  const nets = laid(b, {
+    u2: [8, 6], u3: [14, 4], u4: [14, 14], u0: [22, 61], u1: [22, 57],
+    u12: [20, 8], tc: [28, 6], u10: [44, 6], u11: [58, 6], u9: [80, 22], u5: [38, 16], u7: [46, 16],
+    u15: [20, 34], bc: [28, 32], u13: [44, 32], u14: [58, 32], u6: [38, 38], u8: [54, 40], u16: [62, 42], u17: [70, 40], u18: [80, 39], busy: [90, 39],
+    u19: [12, 51], u20: [28, 52], u21: [28, 57], sh: [34, 52], u22: [50, 55], u23: [55, 55], ntx: [62, 54], u24: [74, 56],
+  }, ['clk', 'busy.q', 'u3.y', 'u4.y', 'u7.y', 'u9.y'], {
+    'u0.y': { 'sh.sr': [[26, 62], [26, 66], [32, 66], [32, 56]] },
+    'u1.y': { 'sh.sl': [[26, 58], [26, 56.5], [31, 56.5], [31, 58]] },
+    'u11.y': { 'tc.d': [[64, 9], [64, 3], [26, 3], [26, 8]] },
+    'u14.y': { 'bc.d': [[64, 35], [64, 29], [26, 29], [26, 34]] },
+  });
+  const pins: Record<string, [number, number]> = { tick: [0, 17], go: [0, 5], din: [0, 60], clk: [0, 70], tx: [100, 57], busy: [110, 44], taken: [110, 50] };
   return define({
     id: 'uart_tx', name: 'UART transmitter', category: 'sequential',
     summary: 'A byte in (go), a frame out: start (0), eight data bits LSB first, stop (1), each 16 ticks long, in a 10-bit shift register with a tick counter and a bit counter. The line moves only on a tick.',
     ports, symbol: { kind: 'box', label: 'UART TX' },
-    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins, instances: b.instances, nets }),
   });
 })();
 
@@ -142,7 +172,7 @@ export const UART_RX: ComponentDef = (() => {
   const d = b.op(decoder(3, false), [`${st}.q`], 'state one-hot', 'dec');
   const tcb = g.split(`${tc}.q`, [1, 1, 1, 1]), bcb = g.split(`${bc}.q`, [1, 1, 1]);
   const nlo = g.not(lo);
-  const tc7 = g.and(g.not(tcb[3]), tcb[2], tcb[1], tcb[0]), tc15 = g.and(...tcb), bc7 = g.and(...bcb);
+  const tc7 = b.name(g.and(g.not(tcb[3]), tcb[2], tcb[1], tcb[0]), 'tick count 7', true), tc15 = b.name(g.and(...tcb), 'tick count 15', true), bc7 = b.name(g.and(...bcb), 'bit count 7', true);
   const detect = b.name(g.and('tick', `${d}.y0`, lo), 'start edge', true);
   const mid = b.name(g.and('tick', `${d}.y1`, tc7), 'mid start', true);
   const midOk = g.and(mid, lo);
@@ -166,11 +196,34 @@ export const UART_RX: ComponentDef = (() => {
   b.wire(`${st}.q`, 'state');
   b.wire(g.not(`${d}.y0`), 'busy');
   const ports: PortDef[] = [bit('rx', 'in'), bit('tick', 'in'), bit('clk', 'in', 'bottom', true), bus('data', 8, 'out'), bit('push', 'out'), bit('ferr', 'out'), bus('state', 3, 'out'), bit('busy', 'out')];
+  // Drawn by hand: the synchronizer and the state register (with its decoder) on top, the event gates (one per state) in columns to the
+  // right of the decoder, the two counters below with their compare detectors between them and the gates, the shift register at the
+  // bottom right. The events (start edge, mid start, bit sample, stop sample, framing error) and lo / nlo are labels; the counters'
+  // loops come back over their tops.
+  const at = (o: Record<string, [number, number]>) => Object.fromEntries(Object.entries(o).map(([k, [x, y]]) => [k, [x + 8, y + 2] as [number, number]]));
+  const v = (...p: [number, number][]) => p.map(([x, y]): [number, number] => [x + 8, y + 2]);
+  const nets = laid(b, at({
+    u1: [4, 3], sy: [12, 2], u5: [24, 3],
+    u20: [6, 8], u21: [6, 13], u22: [20, 7], st: [30, 8], dec: [46, 2],
+    u10: [66, 3], u11: [66, 11], u13: [66, 19], u15: [66, 27], u18: [66, 35],
+    u12: [84, 11], u14: [84, 19], u16: [84, 27], u17: [84, 33], u19: [102, 8], u32: [110, 20],
+    u24: [4, 25], u26: [12, 22], tc: [30, 23], u23: [44, 23], u25: [12, 32], u3: [41, 30], u6: [47, 36], u7: [52, 30], u8: [52, 40],
+    u28: [4, 59], u29: [12, 56], u30: [12, 65], bc: [30, 57], u27: [44, 57], u4: [41, 64], u9: [52, 62],
+    u31: [84, 52], u0: [76, 58], u2: [80, 63], sr: [92, 52],
+  }), {
+    clk: true, tick: true, 'sy.q': ['u10.i2', 'u12.b', 'u17.b'], 'u5.y': true, 'dec.y0': ['u32.a'], 'st.q': ['state'],
+    'u10.y': true, 'u11.y': ['u19.i1'], 'u12.y': true, 'u13.y': ['u30.b', 'u31.i0'], 'u14.y': true, 'u15.y': ['u19.i3'], 'u17.y': true, 'u18.y': true, 'u19.y': true,
+    'u0.y': true, 'u7.y': true, 'u8.y': true, 'u9.y': true,
+  }, {
+    'u23.y': { 'u26.a': v([54, 25], [54, 20], [11, 20], [11, 24]) },
+    'u27.y': { 'u29.a': v([54, 59], [54, 54], [11, 54], [11, 58]) },
+  }, { 'dec.y1': 71, 'dec.y2': 70, 'dec.y3': 69, 'dec.y4': 68 });
+  const pins: Record<string, [number, number]> = { rx: [0, 5], tick: [0, 70], clk: [0, 74], data: [124, 61], push: [124, 33], ferr: [124, 38], state: [124, 6], busy: [124, 24] };
   return define({
     id: 'uart_rx', name: 'UART receiver', category: 'sequential',
     summary: 'rx through a 2-flop synchronizer; a low at a tick starts a count of ticks, the middle of the start bit confirms it (else a false start), then a sample every 16 ticks into an 8-bit shift register and a stop check: push on a 1, ferr on a 0.',
     ports, symbol: { kind: 'box', label: 'UART RX' },
-    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins, instances: b.instances, nets }),
   });
 })();
 
@@ -214,11 +267,26 @@ export const UART_CORE: ComponentDef = (() => {
     bit('rx', 'in'), bit('push', 'in'), bus('data', 8, 'in'), bit('pop', 'in'), bit('divWe', 'in'), bit('ieWe', 'in'), bit('clrWe', 'in'), bus('wval', UART_DIV_BITS, 'in'), bit('clk', 'in', 'bottom', true),
     bit('tx', 'out'), bus('rxData', 8, 'out'), bus('status', 8, 'out'), bus('div', UART_DIV_BITS, 'out'), bus('ie', 2, 'out'), bit('irq', 'out'), bit('tickOut', 'out'),
   ];
+  // Drawn by hand: the transmit path on top (FIFO, transmitter), the receive path below (receiver, FIFO), the divisor, baud
+  // generator and interrupt enables underneath, the flag logic (framing error, overrun) and the status word at the right. What
+  // reaches many places (clk, tick, the strobes, rx not empty, the empty flag) or runs back (taken, push, pop) is a label.
+  const nets = laid(b, {
+    divr: [10, 38], u0: [4, 49], ier: [10, 48], baud: [28, 38], u15: [24, 50], u18: [36, 49], u19: [36, 55], u20: [46, 52],
+    txf: [50, 2], u1: [66, 5], xmit: [72, 2], u13: [90, 7], u14: [96, 5],
+    recv: [50, 22], rxf: [72, 22], u2: [88, 25], u21: [114, 23],
+    u3: [96, 44], u4: [104, 44], u5: [112, 45], u6: [118, 43], u7: [130, 44], fe: [142, 43],
+    u8: [104, 56], u9: [112, 57], u10: [118, 55], u11: [118, 62], u12: [130, 58], ov: [142, 57],
+    u16: [150, 68], u17: [168, 40],
+  }, {
+    wval: true, divWe: true, clk: true, ieWe: true, 'xmit.taken': true, 'recv.push': ['u11.a'], pop: true, 'txf.empty': ['u14.a', 'u19.b'], 'baud.tick': true, clrWe: true,
+    'divr.q': ['div'], 'ier.q': ['ie'], 'u2.y': true, 'fe.q': true, 'ov.q': true, 'u14.y': true, 'recv.ferr': true,
+  });
+  const pins: Record<string, [number, number]> = { rx: [0, 27], push: [0, 4], data: [0, 8], pop: [0, 24], divWe: [0, 34], ieWe: [0, 56], clrWe: [0, 62], wval: [0, 40], clk: [0, 70], tx: [184, 4], rxData: [184, 25], status: [184, 46], div: [184, 38], ie: [184, 52], irq: [184, 55], tickOut: [184, 60] };
   return define({
     id: 'uart_full', name: 'UART core (FIFOs, status, divisor)', category: 'sequential',
     summary: 'Baud generator, transmitter, receiver, a 16-byte FIFO each way, the divisor and interrupt-enable registers, status bits (rx not empty, tx full, tx idle, framing error, overrun) and the interrupt. push writes a byte to the transmit FIFO, pop takes the oldest received byte; wval with divWe / ieWe / clrWe writes the registers.',
     ports, symbol: { kind: 'box', label: 'UART' },
-    netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins, instances: b.instances, nets }),
   });
 })();
 

@@ -8,6 +8,7 @@ import { Builder } from './builder';
 import { busMux2, HALF_ADDER, incrementer, rca } from './combinational';
 import { define, merger, ones, splitter } from './define';
 import { AND, NOT, OR } from './gates';
+import { layered } from './layered';
 import { lookupRom } from './modem';
 import { boothMul } from './multiply';
 import { nonZero } from './pipeline';
@@ -274,15 +275,14 @@ export function fftNet(N: number, W: number): ComponentDef {
     });
     g.next();
     v.forEach((d, i) => g.wire(d, `X${i}`));
-    const R = g.right, PY = 7, pins: Record<string, [number, number]> = {};
-    inNames.forEach((n, i) => { pins[n] = [0, 2 + PY * bitRev(i, bits)]; });
-    outNames.forEach((n, i) => { pins[n] = [R, 2 + PY * i]; });
+    const ports = [...inNames.map((n) => bus(n, 2 * W, 'in')), ...outNames.map((n) => bus(n, 2 * W, 'out'))];
     return define({
       id: `fftnet${N}_${W}`, name: `${N}-point FFT, ${W} bits`, category: 'arithmetic',
       summary: `${N} complex samples in, ${N} tones out, each ${N}th of the sum: ${stages.flat().length} butterflies in ${bits} columns, the inputs in bit-reversed order, no clock. A complex sample is ${2 * W} bits, im above re.`,
-      ports: [...inNames.map((n) => bus(n, 2 * W, 'in')), ...outNames.map((n) => bus(n, 2 * W, 'out'))], symbol: { kind: 'box', label: `FFT${N}` },
+      ports, symbol: { kind: 'box', label: `FFT${N}` },
       spec: (ins) => fftFx(ins.map((x) => unpackFx(x, W)), W).map((c) => packFx(c, W)),
-      netlist: () => ({ pins, instances: g.instances, nets: g.nets() }),
+      // inputs in the order the first column wants them (bit-reversed down the page), outputs in tone order
+      netlist: () => layered(ports, g, { pinOrder: outNames, gap: 14, vgap: 4, pinPitch: [2, 4] }),
     });
   });
 }

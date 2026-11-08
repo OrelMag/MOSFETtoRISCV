@@ -9,7 +9,12 @@ import { TCP_K } from '../src/net/tcp';
 import { measureBench, tcpBench } from '../src/net/tcpbench';
 import COSTS from '../src/net/tcpcosts.json';
 import { runTcp } from '../src/net/tcpsim';
-import { mbps, rtoSeries, rttSamples } from '../src/widgets/tcp';
+import { dataCapMbps, mbps, rtoSeries, rttSamples } from '../src/widgets/tcp';
+import { computerDesign } from '../src/net/gatewindow';
+import { busComputer } from '../src/lib/soc';
+import { lanSoc } from '../src/lib/lan';
+import { FLASH } from '../src/lib/uartlink';
+import { stats } from '../src/sim/stats';
 import { chapterById, chapters } from '../src/chapters';
 import { tick } from './yieldtick';
 
@@ -43,6 +48,18 @@ describe('chapter 52', () => {
     expect(MEASURED_MBPS).toBeLessThan(WIRE_DATA_MBPS * 0.7);
     expect(1460 / (1460 + 54 + 4 + 8 + 12)).toBeGreaterThan(0.94);
   });
+  it('the sawtooth widget link cap is what the reference model really carries: the run stays under it and close to it', () => {
+    const r = runTcp({ bytes: 8000, byteClocks: 200, queue: 8, delay: 20_000 });
+    const got = mbps(8000, r.doneAt);
+    expect(got).toBeLessThanOrEqual(dataCapMbps(200));
+    expect(got).toBeGreaterThan(dataCapMbps(200) * 0.9);
+  });
+  it('the gate window sizes quoted in the last step: about 6 million NANDs, some 70 thousand leaves', () => {
+    const words = new Array(1 << 12).fill(0x13);
+    const nands = stats(busComputer(words, FLASH, lanSoc(12))).nands;
+    expect(Math.round(nands / 1e6)).toBe(6);
+    expect(Math.round(computerDesign(words, 12).leaves.length / 1e4)).toBe(7);
+  }, 60_000);
   it('the worked numbers in the text', () => {
     expect((2 ** 32 * 8) / 10e9).toBeCloseTo(3.44, 1);
     expect((1e6 * 8) / 10e6).toBeCloseTo(0.8, 6);

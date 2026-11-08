@@ -2,7 +2,7 @@
 // measured on a real network, and no trace is a capture.
 
 import { arrayFactor } from '../phys/radio';
-import { channelOverlap, CLUSTERS, cpUs, gridMbps, handover, harmonic, hexGrid, LTE_RBS, rbKhz, reachKm, reuseRatio, reuseSweep, schedule, sirAt, sirClosedDb, slotMs, zfMeanSnr, zfRates, type Policy } from '../phys/cellular';
+import { channelOverlap, CLUSTERS, cpUs, gridMbps, handover, harmonic, hexGrid, LTE_RBS, rbKhz, reachKm, reuseRatio, reuseSweep, SCHED_SEED, SCHED_SLOTS, schedule, sirAt, sirClosedDb, slotMs, zfMeanSnr, zfRates, type Policy } from '../phys/cellular';
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { slider } from './mosparts';
@@ -34,7 +34,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 
 // ---- the map -----------------------------------------------------------------------------------------------------------------------------
 export function reuseWidget(): Widget {
-  let k = 7, n = 4;
+  let k = 7, n = 3.5;
   const map = h('div'), out = h('div', { class: 'mc-status' });
   const paint = () => {
     const cells = hexGrid(9, k), W = 420, H = 340, sc = k > 9 ? 14 : 24, cx = W / 2, cy = H / 2;
@@ -56,7 +56,7 @@ export function gridWidget(): Widget {
   let mhzI = 3, bits = 4.5, layers = 2, mu = 0;
   const grid = h('div'), out = h('div', { class: 'mc-status' });
   const paint = () => {
-    const rbs = mu === 0 ? LTE_RBS[mhzI][1] : Math.floor((LTE_RBS[mhzI][0] * 900) / rbKhz(mu)), W = 560, H = 150, cols = 14, rows = 12, cw = 26, ch = 9, x0 = 44, y0 = 8;
+    const rbs = mu === 0 ? LTE_RBS[mhzI][1] : Math.floor((LTE_RBS[mhzI][0] * 900) / rbKhz(mu)), W = 572, H = 150, cols = 14, rows = 12, cw = 26, ch = 9, x0 = 56, y0 = 8;
     const kids: SVGElement[] = [];
     for (let c = 0; c < cols; c++) for (let r = 0; r < rows; r++) kids.push(s('rect', { x: x0 + c * cw, y: y0 + r * ch, width: cw - 1, height: ch - 1, class: c < 2 ? 'cl-re ctl' : (c === 4 || c === 7 || c === 11) && r % 6 === (c % 2 ? 1 : 4) ? 'cl-re ref' : 'cl-re' }));
     kids.push(txt(4, y0 + 56, '1 block', 'cl-t'), txt(x0, y0 + rows * ch + 14, `${nf(slotMs(mu), 3)} ms: 14 symbols of ${nf(66.7 / 2 ** mu, 1)} µs`, 'cl-t'));
@@ -64,7 +64,7 @@ export function gridWidget(): Widget {
     out.replaceChildren(stat('Blocks', String(rbs)), stat('Block width', `${rbKhz(mu)} kHz`), stat('Slot', `${nf(slotMs(mu), 3)} ms`), stat('Cyclic prefix', `${nf(cpUs(mu), 2)} µs`), stat('Peak of this carrier', `${nf(gridMbps(rbs, bits, 0.25, mu, layers), 0)} Mb/s`, 'good'));
   };
   const a = selectOf('Channel', LTE_RBS.map(([m], i) => [String(i), `${m} MHz`]), String(mhzI), (v) => { mhzI = Number(v); paint(); });
-  const c = selectOf('Modulation and code', [['1', 'QPSK ½'], ['2.67', '16-QAM ⅔'], ['4.5', '64-QAM ¾'], ['6', '256-QAM ¾']], '4.5', (v) => { bits = Number(v); paint(); });
+  const c = selectOf('Modulation and code', [['1', 'QPSK 1/2'], ['2.67', '16-QAM 2/3'], ['4.5', '64-QAM 3/4'], ['6', '256-QAM 3/4']], '4.5', (v) => { bits = Number(v); paint(); });
   const d = selectOf('Layers', [['1', '1 stream'], ['2', '2 streams'], ['4', '4 streams']], '2', (v) => { layers = Number(v); paint(); });
   const e = slider('Numerology µ', 0, 3, 1, mu, (v) => `${15 * 2 ** v} kHz`, (v) => { mu = v; paint(); });
   paint();
@@ -73,11 +73,11 @@ export function gridWidget(): Widget {
 
 // ---- schedulers -----------------------------------------------------------------------------------------------------------------------------
 export function schedulerWidget(): Widget {
-  let far = 15, users = 6;
+  let far = 15, users = 6, top = 20;
   const plot = h('div'), out = h('div', { class: 'mc-status' });
   const paint = () => {
-    const means = Array.from({ length: users }, (_, i) => 20 - (i * far) / Math.max(1, users - 1));
-    const res = (['rr', 'pf', 'max'] as Policy[]).map((p) => schedule(p, means, 6000, 7));
+    const means = Array.from({ length: users }, (_, i) => top - (i * far) / Math.max(1, users - 1));
+    const res = (['rr', 'pf', 'max'] as Policy[]).map((p) => schedule(p, means, SCHED_SLOTS, SCHED_SEED));
     const W = 560, H = 220, a = axes([0, users], [0, Math.max(...res.flatMap((r) => r.perUser)) * 1.1], [], [], () => '', () => '', 'users, near to far', 'b/s/Hz', W, H);
     const bars: SVGElement[] = [], pw = (W - 54) / users / 3.4;
     res.forEach((r, j) => r.perUser.forEach((v, i) => {
@@ -91,8 +91,9 @@ export function schedulerWidget(): Widget {
   };
   const a = slider('Users', 2, 16, 1, users, (v) => String(v), (v) => { users = v; paint(); });
   const b = slider('Nearest to farthest', 0, 30, 1, far, (v) => `${v} dB`, (v) => { far = v; paint(); });
+  const m = slider('Nearest mean SNR', 5, 30, 1, top, (v) => `${v} dB`, (v) => { top = v; paint(); });
   paint();
-  return { el: h('div', { class: 'widget mos cl-w' }, row(a.el), row(b.el), plot, out, h('p', { class: 'sub' }, 'Simulated slots, one user served in each; independent Rayleigh fades drawn fresh every slot and known to the scheduler at once; rate by Shannon. An ideal model, not a measured cell.')) };
+  return { el: h('div', { class: 'widget mos cl-w' }, row(a.el), row(b.el), row(m.el), plot, out, h('p', { class: 'sub' }, 'Simulated slots, one user served in each; independent Rayleigh fades drawn fresh every slot and known to the scheduler at once; rate by Shannon. An ideal model, not a measured cell.')) };
 }
 
 // ---- handover --------------------------------------------------------------------------------------------------------------------------------
@@ -149,7 +150,7 @@ export function mmwaveWidget(): Widget {
     const rows: [string, number, number][] = [['700 MHz', 0.7, 0], ['3.5 GHz', 3.5, 0], ['3.5 GHz, array', 3.5, 10 * Math.log10(elements)], ['28 GHz', 28, 0], ['28 GHz, array', 28, 10 * Math.log10(elements)]];
     body.replaceChildren(...rows.map(([n, f, g]) => { const k = reachKm(budget, f, g), w = 299792458 / (f * 1e9); return h('tr', null, h('td', null, n), h('td', { class: 'num' }, `${nf(w * 100, 1)} cm`), h('td', { class: 'num' }, `${nf(g, 0)} dB`), h('td', { class: 'num' }, k >= 1 ? `${nf(k, 1)} km` : `${nf(k * 1000, 0)} m`)); }));
   };
-  const a = slider('Transmit EIRP', 30, 70, 1, eirp, (v) => `${v} dBm`, (v) => { eirp = v; paint(); });
+  const a = slider('Radiated power (EIRP)', 30, 70, 1, eirp, (v) => `${v} dBm`, (v) => { eirp = v; paint(); });
   const b = slider('Receiver needs', -120, -80, 1, sens, (v) => `${v} dBm`, (v) => { sens = v; paint(); });
   const c = slider('Array elements', 4, 256, 4, elements, (v) => String(v), (v) => { elements = v; paint(); });
   paint();

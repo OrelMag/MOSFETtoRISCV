@@ -3,6 +3,7 @@
 
 import { CLOCK_NS, LINK_MBPS } from '../comm/mac';
 import '../lib';
+import NET from '../comm/stack/netcosts.json';
 import COSTS from '../net/tcpcosts.json';
 import { TCP_K } from '../net/tcp';
 import { ladderWidget, mbps, realStackWidget, rtoWidget, sawWidget, tcpWindowScene, windowApi, windowWidget } from '../widgets/tcp';
@@ -65,7 +66,7 @@ export const chTcp: Chapter = {
   steps: [
     {
       title: 'A stream over datagrams',
-      body: `\n        <p>IP delivers packets, sometimes. Chapter ${numOf('router')}'s router drops them when a queue is full, TTL or checksum fail, and two packets may swap places on two paths or arrive twice after a link retry. Applications want something else: bytes, all of them, in order, as if down a wire. <strong>TCP</strong> (RFC 9293) builds that at the two ends alone, and asks the network for nothing.</p>\n        <p>This is the ARQ of <a href="#/c/errors">chapter ${numOf('errors')}</a> with four problems added. The channel has no fixed delay, so the timeout must be measured. Segments can overtake each other, so numbers must not wrap within a segment's life. The receiver can run out of room, so it must be able to say stop. And the channel is shared with strangers, so the sender must find its own fair rate without being told. The next steps take these in turn.</p>\n        <p>Each segment carries the twenty bytes below after the IP header, with ports to name the two applications. Sequence numbers count <em>bytes</em>, not segments, and the checksum covers a pseudo-header of the two addresses as well, so a segment delivered to the wrong machine fails it. <span class="try">Pick each of the three segments and find its flags and its two numbers.</span></p>`,
+      body: `\n        <p>IP delivers packets, sometimes. A router drops them when TTL or checksum fail (chapter ${numOf('router')}) and when a queue is full (chapter ${numOf('queues')}), and two packets may swap places on two paths or arrive twice after a link retry. Applications want something else: bytes, all of them, in order, as if down a wire. <strong>TCP</strong> (RFC 9293) builds that at the two ends alone, and asks the network for nothing.</p>\n        <p>This is the ARQ of <a href="#/c/errors">chapter ${numOf('errors')}</a> with four problems added. The channel has no fixed delay, so the timeout must be measured. Segments can overtake each other, so numbers must not wrap within a segment's life. The receiver can run out of room, so it must be able to say stop. And the channel is shared with strangers, so the sender must find its own fair rate without being told. The next steps take these in turn.</p>\n        <p>Each segment carries the twenty bytes below after the IP header, with ports to name the two applications. Sequence numbers count <em>bytes</em>, not segments, and the checksum covers a pseudo-header of the two addresses as well, so a segment delivered to the wrong machine fails it. <span class="try">Pick each of the three segments and find its flags and its two numbers.</span></p>`,
       widget: () => ladderWidget({ bytes: 0, lose: false }),
       more: {
         numbers: `<p>Forty bytes of headers on every segment, TCP's twenty and IP's twenty, plus Ethernet's fourteen, FCS, preamble and gap. Our segments carry ${MSS} bytes of data in ${ON_WIRE} bytes of wire time, which is why ${WIRE_DATA_MBPS.toFixed(1)} of the link's ${LINK_MBPS.toFixed(1)} Mb/s is the most data they can carry. A real MSS of 1460 keeps 95 % of the wire.</p>`,
@@ -77,7 +78,7 @@ export const chTcp: Chapter = {
       body: `
         <p>Neither end can use the other's numbers until it has them, and each must know its own were heard. So: A sends a <strong>SYN</strong> with its first sequence number; B answers <strong>SYN, ACK</strong> with its own and "next from you"; A answers <strong>ACK</strong>. Two segments would leave B unsure that A heard it, and that A is even still there: an old SYN wandering the network would make B open a connection for nobody.</p>
         <p>A SYN and a FIN each take one sequence number, so they can be acknowledged and sent again exactly like a byte of data, with no extra machinery. Each side moves through states on what it has seen: A goes CLOSED, SYN_SENT, ESTABLISHED; B goes LISTEN, SYN_RCVD, ESTABLISHED.</p>
-        <p>The first sequence number is not 0: a late segment from an earlier connection on the same ports must not fall inside the new one's numbers, and an attacker must not be able to guess it. <span class="try">Lose the SYN, then lose the SYN-ACK instead, and see who sends what again.</span></p>`,
+        <p>The first sequence number is not 0: a late segment from an earlier connection on the same ports must not fall inside the new one's numbers, and an attacker must not be able to guess it. (The diagram below, like a capture tool, shows each side's numbers counted from its first, so its SYN reads seq 0; the byte table under it shows the real number, 4096.) <span class="try">Lose the SYN, then lose the SYN-ACK instead, and see who sends what again.</span></p>`,
       widget: () => ladderWidget({ bytes: 0 }),
       challenge: {
         kind: 'quiz',
@@ -95,17 +96,17 @@ export const chTcp: Chapter = {
     {
       title: 'Numbers that count bytes',
       body: `
-        <p>Data goes out in segments of at most an <strong>MSS</strong>, ${MSS} bytes here, each stamped with the number of its first byte. An <strong>ACK</strong> is cumulative: it names the next byte expected, so one ACK covers everything before it, and a lost ACK costs nothing if a later one arrives.</p>
+        <p>Data goes out in segments of at most the <strong>maximum segment size</strong>, <strong>MSS</strong>, ${MSS} bytes here, each stamped with the number of its first byte. An <strong>ACK</strong> is cumulative: it names the next byte expected, so one ACK covers everything before it, and a lost ACK costs nothing if a later one arrives.</p>
         <p>A segment that arrives out of order cannot be acknowledged, so the receiver repeats its last ACK. Three such <strong>duplicate ACKs</strong> tell the sender that a segment is gone while later ones are still arriving, a round trip or more before any timer would. Our receiver throws away what arrives ahead of the gap, to keep it small, so both fast retransmit and the timer send everything again from the first unacknowledged byte.</p>
         <p>The numbers are 32 bits and wrap. Our code compares only differences, as a signed number: <code>(a - b) &lt; 0</code>, so it works across the wrap as long as the two are within 2 GB. <span class="try">Find the arrow "ACK seq 193" and lose it: the segments behind it bring duplicate ACKs, and the sender goes back. Most other losses here end in a timeout instead, since too few segments follow them.</span></p>`,
       widget: () => ladderWidget({ bytes: 512 }),
       challenge: {
         kind: 'quiz',
-        question: 'A sent bytes 0–63, 64–127 and 128–191, and the middle segment was lost. What does the receiver\'s ACK say after the third arrives?',
-        options: ['64: everything before it has arrived, and 64 has not', '192: the highest byte seen, plus one', '128: the start of the last segment', 'Nothing: it waits for the gap to fill'],
+        question: 'A sent bytes numbered 1–64, 65–128 and 129–192 (the SYN took 0), and the middle segment was lost. What does the receiver\'s ACK say after the third arrives?',
+        options: ['65: everything before it has arrived, and 65 has not', '193: the highest byte seen, plus one', '129: the start of the last segment', 'Nothing: it waits for the gap to fill'],
         answer: 0,
-        explain: 'A cumulative ACK can only name the first gap. Repeating 64 is what tells the sender something is wrong, so holding the ACK back would hide it.',
-        why: ['', 'That would tell the sender the lost segment arrived, and it would never be sent again.', 'An ACK names the next byte expected, and that is 64.', 'Saying nothing would waste the one signal the sender can act on before its timer.'],
+        explain: 'A cumulative ACK can only name the first gap. Repeating 65 is what tells the sender something is wrong, so holding the ACK back would hide it.',
+        why: ['', 'That would tell the sender the lost segment arrived, and it would never be sent again.', 'An ACK names the next byte expected, and that is 65.', 'Saying nothing would waste the one signal the sender can act on before its timer.'],
       },
       more: {
         real: `<p>Real receivers keep what arrives out of order, and SACK (RFC 2018) tells the sender exactly which ranges they hold, so that only the holes go again. They also delay ACKs, typically one for every two segments, which halves the traffic back. Ours acknowledges every segment. At 10 Gb/s a 32-bit number wraps in 3.4 s, within a delayed packet's possible life, so timestamps (PAWS, RFC 7323) tell the old from the new.</p>`,
@@ -115,9 +116,12 @@ export const chTcp: Chapter = {
     {
       title: 'The window: room at the far end',
       body: `
-        <p>The receiver's application may be slower than the network, and bytes must wait somewhere. So every segment announces a <strong>window</strong>: how many more bytes this end can take. The sender keeps its unacknowledged bytes within it, and the buffer can never overflow, whatever the speeds. Ours has ${K.RCV} bytes, ${WINDOW_SEGS} segments.</p>
+        <p>The receiver's application may be slower than the network, and bytes must wait somewhere. So every segment announces a <strong>window</strong>: how many more bytes this end can take. The sender keeps its unacknowledged bytes within it, and the buffer can never overflow, whatever the speeds. Ours has ${K.RCV} bytes, ${WINDOW_SEGS} segments. Call it <em>rwnd</em>, the receive window.</p>
         <p>This is flow control, the same idea as <code>ready</code> on chapter ${numOf('ethernet')}'s byte stream, stretched over a round trip. When the window reaches zero the sender stops, and now there is a trap: the update that reopens it is an ACK with no data, and if that is lost, no one will ever send anything again. So a stopped sender sends a one-byte <strong>probe</strong> on a timer, doubling each time. A refused probe is no loss, so nothing is cut and it never gives up.</p>
-        <p><span class="try">Slow the reader until the window shuts, and find where the probes begin.</span> Getting this right is harder than it looks: an early version of this chapter's code treated the second probe as a loss and cut the window, and carried on one byte past a refused probe. Holding the window shut for longer than the retry limit in a test is what found both.</p>`,
+        <p><span class="try">Slow the reader until the window shuts, and find where the probes begin.</span></p>`,
+      more: {
+        pitfall: `<p>Two easy mistakes, both found by holding the window shut for longer than the retry limit in a test: treating the second probe as a loss, which cuts the window, and carrying on one byte past a refused probe.</p>`,
+      },
       widget: windowWidget,
       challenge: {
         kind: 'quiz',
@@ -131,9 +135,9 @@ export const chTcp: Chapter = {
     {
       title: 'How long to wait',
       body: `
-        <p>A timer that is too long wastes time after a loss. One that is too short sends data that was only late, adding load just when the network is busiest. The right value depends on a path you cannot see, and it moves. So the sender measures: for one segment at a time it notes when it left and when its ACK came, and keeps a smoothed mean and a smoothed deviation (RFC 6298):</p>
+        <p>A timer that is too long wastes time after a loss. One that is too short sends data that was only late, adding load just when the network is busiest. The right value depends on a path you cannot see, and it moves. So the sender measures: for one segment at a time it notes when it left and when its ACK came, and keeps a smoothed mean, SRTT, and a smoothed deviation, RTTVAR (RFC 6298). The <strong>retransmission timeout</strong>, RTO, is the timer's length:</p>
         <p><code>RTTVAR ← 3/4 RTTVAR + 1/4 |SRTT − R| &nbsp; SRTT ← 7/8 SRTT + 1/8 R &nbsp; RTO = SRTT + 4 · RTTVAR</code></p>
-        <p>The shifts make that cheap, which matters on our RV32I with no multiply. Two rules finish it. <strong>Karn's</strong>: never sample a segment that was sent twice, since its ACK could belong to either copy. And each timeout <strong>doubles</strong> the timer, until the next valid sample resets it. <span class="try">Widen the spread: the fixed timer starts firing early even before the step, while the adaptive one stays out of the way by waiting longer. Watch "RTO now": that wait is what it pays after a real loss.</span></p>`,
+        <p>The shifts make that cheap, which matters on our RV32I with no multiply. Two rules finish it. <strong>Karn's</strong>: never sample a segment that was sent twice, since its ACK could belong to either copy. And each timeout <strong>doubles</strong> the timer, until the next valid sample resets it. <span class="try">Widen the spread and watch the dashed fixed timer: it starts firing on round trips that were only late, while the adaptive RTO rises to stay clear of them.</span> <span class="try">Read "RTO now": that is the wait the adaptive timer pays after a real loss.</span></p>`,
       widget: rtoWidget,
       challenge: {
         kind: 'quiz',
@@ -150,10 +154,10 @@ export const chTcp: Chapter = {
     {
       title: 'How fast: the sawtooth',
       body: `
-        <p>In October 1986 data throughput between Lawrence Berkeley Lab and UC Berkeley, 400 yards apart, fell from 32 kb/s to 40 b/s: everyone's timers fired, everyone sent again, and the routers carried almost nothing but copies. Van Jacobson's answer in 1988 asks nothing of the routers. Each sender keeps a <strong>congestion window</strong>, a guess at what the network can hold, and treats a loss as the signal to back off.</p>
-        <p><strong>Slow start</strong> begins at two segments here (RFC 5681 allows up to four at this size, RFC 6928 ten) and adds one per ACK, so it doubles every round trip until a loss or until <code>ssthresh</code>. <strong>Congestion avoidance</strong> then adds one segment per round trip. On three duplicate ACKs the window halves; on a timeout it falls to one segment and starts again, since a timeout means nothing has been arriving. Halving fast and growing slowly is what makes competing flows converge on equal shares.</p>
+        <p>In October 1986 data throughput between Lawrence Berkeley Lab and UC Berkeley, 400 yards apart, fell from 32 kb/s to 40 b/s: everyone's timers fired, everyone sent again, and the routers carried almost nothing but copies. Van Jacobson's answer in 1988 asks nothing of the routers. Each sender keeps a <strong>congestion window</strong>, <em>cwnd</em>, a guess at what the network can hold, and treats a loss as the signal to back off.</p>
+        <p><strong>Slow start</strong> begins at two segments here (RFC 5681 allows up to four at this size, RFC 6928 ten) and adds one per ACK, so it doubles every round trip until a loss or until <code>ssthresh</code>, the slow-start threshold: half the window at the last loss. <strong>Congestion avoidance</strong> then adds one segment per round trip. On three duplicate ACKs the window halves; on a timeout it falls to one segment and starts again, since a timeout means nothing has been arriving. Halving fast and growing slowly is what makes competing flows converge on equal shares.</p>
         <p>The result is a sawtooth, and it is not a fault: a sender with no information finds the limit by exceeding it and backing off. <span class="try">Try "Sawtooth", then move the queue down one frame at a time and watch the time for the same data.</span></p>`,
-      widget: sawWidget,
+      widget: () => sawWidget(),
       challenge: {
         kind: 'quiz',
         question: 'Why multiply on the way down but add on the way up?',
@@ -173,7 +177,7 @@ export const chTcp: Chapter = {
         <p>The sawtooth's teeth are the bottleneck's queue filling. So the queue's size sets what happens, in two opposite ways, and the table under the plots shows both.</p>
         <p><strong>Too short</strong>, and a loss leaves too few segments in flight behind it to produce three duplicate ACKs. Only the timer can recover, after a whole RTO, and from one segment. The rule of thumb is one bandwidth-delay product of buffer: enough that the halved window still fills the link. <strong>Too long</strong>, and it never drops at all until the window reaches it, so it just sits full, and every packet of every flow waits behind it. Throughput gains nothing while the round trip grows by a queue's worth: at ${K.MSS + 54} bytes a frame and 200 clocks a byte, each queued frame adds ${n0((K.MSS + 54) * 200)} clocks.</p>
         <p>That second failure has a name, <strong>bufferbloat</strong>: memory got cheap, home routers shipped with seconds of buffer, and a single upload could make a web page crawl on the same link. Our window of ${WINDOW_SEGS} segments caps the effect here. A real window of megabytes does not, and <a href="#/c/queues/1">Queues and congestion</a> measures it. <span class="try">Pick "Room for the window", then shorten the queue a frame at a time and find where drops begin. Above that, a longer queue changes nothing here: the window of ${WINDOW_SEGS} segments cannot fill it.</span></p>`,
-      widget: sawWidget,
+      widget: () => sawWidget(2),
       challenge: {
         kind: 'quiz',
         question: 'A home router\'s upload queue holds 1 MB, on a 10 Mb/s uplink. While someone uploads a large file, how much delay does the queue add to every other packet going out?',
@@ -194,7 +198,7 @@ export const chTcp: Chapter = {
         <p>The wire-speed run shows where the time goes: ${n0(COSTS.fast.bytes)} bytes in ${n0(COSTS.fast.clocks)} cycles, ${n0(CYCLES_PER_BYTE)} cycles a byte, ${MEASURED_MBPS.toFixed(1)} Mb/s. Segments this small could carry ${WIRE_DATA_MBPS.toFixed(1)} Mb/s of data, so here the CPU is the limit, not the network. <span class="try">Run "A slow link" and find the moments the window falls.</span></p>`,
       widget: realStackWidget,
       more: {
-        numbers: `<p>This bench is the golden model, not gates: a load or store costs one clock more, and the bus contention between the CPU and the NIC's DMA is not modelled. Against chapter ${numOf('network')}'s gate-level ping that leaves it 5 clocks in ${n0(14689)} off. It runs about a hundred times faster than the gates, which is what makes a transfer of thousands of bytes possible here at all.</p>`,
+        numbers: `<p>This bench is the golden model, not gates: a load or store costs one clock more, and the bus contention between the CPU and the NIC's DMA is not modelled. Against chapter ${numOf('network')}'s gate-level ping that leaves it within 5 clocks of its ${n0(NET.rtt)}-clock round trip. It runs about a hundred times faster than the gates, which is what makes a transfer of thousands of bytes possible here at all.</p>`,
         real: `<p>A real stack avoids most of this work in hardware: the NIC computes checksums, splits large sends into segments and coalesces received ones (TSO, GRO), and DMA goes straight to the application's memory, so that a modern server reaches hundreds of gigabits on a few cores.</p>`,
         pitfall: `<p>Writing this TCP turned up a fault in chapter ${numOf('ethernet')}'s receiver: its shift register kept the last frame's final byte, and if that byte was 0xAA or 0xAB the next preamble looked like a start-of-frame, so about one frame in 128 was lost on a clean link. The model and the gates agreed with each other all along, so lock step could not see it. The cue was duplicate ACKs with no drop anywhere. A test that checks against the frame as built now catches it.</p>`,
       },
@@ -204,7 +208,8 @@ export const chTcp: Chapter = {
       body: `
         <p>At several thousand clock cycles a second on the gates, a whole transfer would take minutes. So it runs on the models, and you can put a computer into its gates at any quiet moment. The registers, PC, CSRs and timer go into their flip-flops, the RAM into its leaves, and the NIC's configuration into its registers, as Appendix B does for Doom. The far computer and the router stay models, on the wire at this computer's pins.</p>
         <p>While the window is open, the golden model and the NIC model step beside the gates: every register after every instruction, every NIC output every clock. The panel names the Python line that the PC is on, so you can watch <code>tcp_input</code> run through the circuit. Open the CPU in the schematic while it runs. Then hand it back, and the models carry on from the state the gates reached; the receiver still finds every byte right.</p>
-        <p>Quiet means no frame at this computer's pins and nothing in the NIC's bus engine, so that nothing mid-frame needs loading. What the window does not load, the bus fields left over from the last transaction, means nothing until its valid is next raised, and it is compared only then.</p>`,
+        <p>Quiet means no frame at this computer's pins and nothing in the NIC's bus engine, so that nothing mid-frame needs loading. What the window does not load, the bus fields left over from the last transaction, means nothing until its valid is next raised, and it is compared only then.</p>
+        <p>One thing this chapter left half-open is the queue the sawtooth fills. Chapter ${numOf('queues')} takes it up: what a queue costs before it is full, why a long one is worse than a short one, and what routers and senders can do about it.</p>`,
       scene: tcpWindowScene,
       challenge: {
         kind: 'reach',
