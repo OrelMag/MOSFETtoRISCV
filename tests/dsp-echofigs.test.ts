@@ -11,6 +11,7 @@ describe('the echo canceller on the voice', () => {
   const ok = (v: number) => (Number.isFinite(v) ? v : -Infinity);
   it('what NLMS reaches, and with a filter too short for the path', () => {
     expect(run({})).toBeCloseTo(F.erle, 1);
+    expect(runEcho({ n: ECHO_RUN, seed: 3, taps: 128, mu: 0.5, normalized: true, x, near, noise: ROOM_NOISE }).echoDb).toBeCloseTo(F.echoDb, 1);
     expect(run({ taps: 32 })).toBeCloseTo(F.erle32, 1);
   });
   it('near-end talk, learning on and held', () => {

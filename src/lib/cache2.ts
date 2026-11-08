@@ -15,6 +15,7 @@ import type { DramConfig } from '../dram/controller';
 import { accessCycles, TIMING } from '../dram/timing';
 import { cfgKey, dramCtrl, dramDevice } from './dramctrl';
 import { DFF } from './sequential';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -52,14 +53,13 @@ export function cacheWay(ib: number, t: number): ComponentDef {
     b.wire(`${st}.o2`, 'dirty');
     b.wire(`${st}.o0`, 'stag');
     b.wire(`${data}.dout`, 'dout');
-    const R = b.right;
     return define({
       id: `cway${ib}_${t}`, name: `Cache way (${2 ** ib} lines × 4 words)`, category: 'memory',
       summary: 'Tag array ({dirty, valid, tag} per line) and data array, read by the set index; hit = valid and the stored tag equals the address tag. A store hit sets the dirty bit; a fill clears it.',
       ports: [bus('index', ib, 'in'), bus('tag', t, 'in'), bus('daddr', ib + 2, 'in'), bus('din', 32, 'in'), bit('dwe', 'in'), bit('twe', 'in'), bit('dirtyIn', 'in'), bit('clk', 'in', 'bottom', true),
         bit('hit', 'out'), bit('valid', 'out'), bit('dirty', 'out'), bus('stag', t, 'out'), bus('dout', 32, 'out')],
       symbol: { kind: 'box', label: 'WAY' },
-      netlist: () => ({ pins: { index: [0, 4], tag: [0, 8], daddr: [0, 12], din: [0, 16], dwe: [0, 20], twe: [0, 24], dirtyIn: [0, 28], clk: [0, 34], hit: [R, 4], valid: [R, 8], dirty: [R, 12], stag: [R, 16], dout: [R, 20] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { keepOrder: true, room: true }),
     });
   });
 }

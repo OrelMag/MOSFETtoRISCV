@@ -854,9 +854,11 @@ function warpCoreDrawing(b: Builder, { W, n, lsu, host }: { W: number; n: number
     schedR = P.right('G');
   }
   const IX = schedR + 14;
-  P.put('issue', 'pcSel', IX, 4); P.put('issue', 'imSel', IX, P.bottom('pcSel') + 4); P.put('issue', 'maskSel', IX, P.bottom('imSel') + 4);
+  // the issuing warp's PC, instruction and mask, chosen right beside the scheduler that picked it
+  const IY = W > 1 ? Math.max(4, P.y('sched') - 4) : 4;
+  P.put('issue', 'pcSel', IX, IY); P.put('issue', 'imSel', IX, P.bottom('pcSel') + 4); P.put('issue', 'maskSel', IX, P.bottom('imSel') + 4);
   if (W > 1) { P.row('issue', 'plus4', 'a', IX + 20, P.pin('pcSel', 'y')[1]); wire('pcSel.y', 'plus4.a'); }
-  else P.put('issue', 'plus4', IX + 4, 7);
+  else P.put('issue', 'plus4', IX + 4, IY + 3);
 
   // ---- band B: decode and control, wspawn ----
   const YB = Math.max(rowY(W), P.extent('row', 'sched', 'issue').bottom + 12);
@@ -945,7 +947,8 @@ function warpCoreDrawing(b: Builder, { W, n, lsu, host }: { W: number; n: number
   P.put('pcmux', 'pcmux', NX + 28, P.bottom('target') + 6);
 
   // ---- band D: the memory system, the returning loads ----
-  const YD = P.extent('lanes', 'lead', 'pcmux').bottom + 12;
+  // the memory right under the lanes it serves (the leader's column beside them may run lower: the memory stays left of it)
+  const YD = (lsu ? P.extent('lanes', 'lead', 'pcmux') : P.extent('lanes')).bottom + 12;
   /** A register enabled for good: its tie-high left of en. */
   const tie = (grp: string, r: string) => P.row(grp, `${r}On`, 'y', P.x(r) - 10, P.pin(r, 'en')[1]);
   let mx = 30;
