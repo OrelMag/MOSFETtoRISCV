@@ -149,14 +149,16 @@ export function drawnNetlist(def: ComponentDef, nl: Netlist, limit = LOCAL_NETS)
   let out = nl;
   const n = nl.nets.length;
   if (n <= limit && nl.nets.some(tagged)) {
-    // Against the author's drawing: a candidate may add at most MORE_CROSSINGS_PER_NET crossings per net and no wire through a
-    // part. Wires a fitted view crosses everywhere read worse than the pointers they replace.
-    const authors = routedOnce(def, nl).nets;
-    const bound = wireCrossings(authors) + MORE_CROSSINGS_PER_NET * n, hidden = wiresThroughParts(nl, authors);
+    // Against the author's drawing: a candidate adds no wire through a part, and at most MORE_CROSSINGS_PER_NET crossings per net
+    // (wires a fitted view crosses everywhere read worse than the pointers they replace), or up to MAX_CROSSINGS_PER_NET when it
+    // clears every one of the author's own wires through parts (a hidden wire reads worse than a crossing).
+    const authors = routedOnce(def, nl).nets, rawX = wireCrossings(authors), hidden = wiresThroughParts(nl, authors);
     const fits = (c: Netlist, limit: number) => {
       if (c === nl) return false;
-      const r = routedOnce(def, c).nets;
-      return wireOverlaps(r).length === 0 && wireCrossings(r) <= Math.min(limit, bound) && [...wiresThroughParts(c, r)].every((i) => hidden.has(i));
+      const r = routedOnce(def, c).nets, through = wiresThroughParts(c, r);
+      if (wireOverlaps(r).length || ![...through].every((i) => hidden.has(i))) return false;
+      const more = hidden.size && !through.size ? MAX_CROSSINGS_PER_NET : MORE_CROSSINGS_PER_NET;
+      return wireCrossings(r) <= Math.min(limit, rawX + more * n);
     };
     // the local drawing only when the whole one does not fit: each is several routings of the level
     const whole = n <= WHOLE_NETS ? wiredClear(def, nl, (x) => !manyClock(x)) : null;

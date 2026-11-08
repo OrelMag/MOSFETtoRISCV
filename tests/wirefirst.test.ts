@@ -44,9 +44,11 @@ describe('wires first', () => {
       if (wireOverlaps(r).length) bad.push(`${def.id}: wires overlap`);
       if (!hasTags(dn) && nl.nets.length <= WHOLE_NETS && wireCrossings(r) > MAX_CROSSINGS_PER_NET * nl.nets.length) bad.push(`${def.id}: too many crossings`);
       if (labelOverlaps(def, dn).length > labelOverlaps(def, nl).length) bad.push(`${def.id}: labels collide`);
-      // at most one crossing a net more than the author's drawing: past it the wires read worse than the pointers
-      const more = wireCrossings(r) - wireCrossings(routeNetlist(def, nl).nets);
-      if (more > MORE_CROSSINGS_PER_NET * nl.nets.length) bad.push(`${def.id}: ${more} more crossings than its author's ${nl.nets.length} nets allow`);
+      // at most one crossing a net more than the author's drawing (past it the wires read worse than the pointers), or three when
+      // the drawing clears every one of the author's own wires through parts
+      const ar = routeNetlist(def, nl).nets, more = wireCrossings(r) - wireCrossings(ar);
+      const clears = wiresThroughParts(nl, ar).size > 0 && wiresThroughParts(dn, r).size === 0;
+      if (more > (clears ? MAX_CROSSINGS_PER_NET : MORE_CROSSINGS_PER_NET) * nl.nets.length) bad.push(`${def.id}: ${more} more crossings than its author's ${nl.nets.length} nets allow`);
     }
     expect(bad).toEqual([]);
   }, 600_000);
