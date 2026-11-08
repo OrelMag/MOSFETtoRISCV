@@ -9,8 +9,10 @@ import {
 } from '../phys/imagesensor';
 import { groupNum } from '../sim/numfmt';
 import { adcApi, adcScene, ccdWidget, colourWidget, lightWidget, noiseWidget, pixelApi, pixelScene, pixelWidget, shutterWidget } from '../widgets/sensors';
+import { sensorDie3d } from '../widgets/sensordie3d';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { withModel } from '../widgets/modelhost';
 
 const g = (x: number) => groupNum(Math.round(x));
 const n1 = (x: number, d = 1) => x.toFixed(d);
@@ -153,7 +155,7 @@ export const chSensors: Chapter = {
         <p>Anything that moves in those milliseconds is drawn bent: a propeller's blades curve, a passing car leans. A flash shorter than the readout lights only the rows exposing at that moment. A <strong>global shutter</strong> ends every pixel's exposure at once by moving its charge into a storage node inside the pixel, then reads the stored rows at leisure. The storage node costs area that the photodiode no longer has, and it collects its own stray light and leakage while it waits.</p>
         <div class="try">Spin the propeller at 10 rev/s with a rolling shutter, then switch to global. Turn on the flash and shorten the readout.</div>`;
       },
-      widget: () => shutterWidget(),
+      widget: () => withModel(shutterWidget(), sensorDie3d()),
       challenge: {
         kind: 'quiz', question: `With a ${n1(1000 / IMX183.fps, 0)} ms readout, an edge crosses the frame at 1000 pixels a second. How far is the bottom of a vertical edge from its top?`,
         options: [`About ${n1(1000 / IMX183.fps, 0)} pixels`, 'None: each row is exposed for the same time', 'About 1000 pixels', 'One pixel per row'],
