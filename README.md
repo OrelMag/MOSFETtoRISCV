@@ -1,4 +1,4 @@
-# From Switch to RISC-V and Beyond
+# From Switch to CPU: a RISC-V processor and beyond
 
 An interactive journey from a single MOSFET to a multi-core RISC-V processor laid out on
 silicon, and on to a GPU, a memory system, how computers talk from the telegraph to the data centre,

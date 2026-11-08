@@ -29,3 +29,11 @@
 .dk-key .xfer b { background: var(--good); }
 .m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 @media (pointer: coarse) { .dk-sel select { min-height: 40px; } }
+.dk-sel input { width: 76px; min-height: 30px; }
+.dk-verdict { margin: 4px 0; font-size: 13px; color: var(--text-2); }
+.dk-verdict[hidden] { display: none; }
+/* Below 600 px of stage only the head and the platters are named; the rest are in the note and the codex. */
+@container (max-width: 600px) { .m3d .r3-lbl.minor { display: none; } }
+@media (pointer: coarse) { .dk-sel input { min-height: 40px; } }
+/* A phone: the readout key over its value, so values do not wrap a word a line (the same rule as mercury3d.css). */
+@media (max-width: 600px) { .m3d .r3-kv { grid-template-columns: minmax(0, 1fr); gap: 0; } .m3d .r3-kv > span:nth-child(odd) { font-size: 11px; color: var(--muted); margin-top: 5px; } .m3d .r3-kv .v { font-size: 12.5px; } }

@@ -63,9 +63,9 @@ export const MODELS_3D: readonly Model3d[] = [
   },
   {
     id: 'cell', title: 'A standard cell, layer by layer', category: 'devices', chapter: 'silicon', step: 0,
-    summary: 'A CMOS cell\'s diffusion, poly, metal and contacts stacked and spread apart; its inputs switch the transistors.',
-    files: ['cell3d'], factory: 'layoutWidget', codex: ['stdcell', 'cmos'],
-    open: () => import('./silicon').then((m) => m.layoutWidget({ mode: '3d' })),
+    summary: 'A CMOS cell from well to metal 1 with a section plane through a gate: n+, oxide, poly, n+.',
+    files: ['cell3d', 'cell3dview', 'cell3dparts'], factory: 'cell3d', codex: ['stdcell', 'cmos'],
+    open: () => import('./cell3d').then((m) => m.cell3d()),
   },
   {
     id: 'masks', title: 'The chip, mask by mask', category: 'devices', chapter: 'silicon', step: 1,
@@ -171,7 +171,7 @@ export const MODELS_3D: readonly Model3d[] = [
   },
   {
     id: 'mercury', title: 'EDSAC\'s mercury delay line', category: 'memory', chapter: 'dram', step: 6,
-    summary: 'Sound pulses crossing 1.6 m of mercury in 1.12 ms, recirculated: 576 bits a tank, a word read only as it comes round.',
+    summary: 'Sound pulses crossing 1.66 m of mercury in the clock’s 1.152 ms, recirculated: 576 bits a tank, a word read only as it comes round.',
     files: ['mercury3d', 'mercury3dview', 'mercury3dparts'], factory: 'mercury3d', codex: ['refresh', 'dramtiming'],
     open: () => import('./mercury3d').then((m) => m.mercury3d()),
   },

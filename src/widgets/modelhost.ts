@@ -2,6 +2,7 @@
 // model (its view, the renderer) loads as its own chunks; withModel puts it under the step's existing widget.
 
 import type { Widget } from '../view/stage';
+import type { BiasLink } from './mosshare';
 
 /** A placeholder of about the loaded height until `load` answers. */
 export function lazyModel(what: string, load: () => Promise<Widget>): Widget {
@@ -38,4 +39,4 @@ export function withModel(base: Widget, model: Widget): Widget {
 }
 
 /** Chapter 1: the transistor with its width showing. */
-export const mosfet3d = (): Widget => lazyModel('the 3D transistor', () => import('./mosfet3dview').then((m) => m.mosfetView()));
+export const mosfet3d = (link?: BiasLink): Widget => lazyModel('the 3D transistor', () => import('./mosfet3dview').then((m) => m.mosfetView(link)));

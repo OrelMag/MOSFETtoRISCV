@@ -3,9 +3,10 @@ import { MUX2 } from '../lib';
 import { stats } from '../sim/stats';
 import { chipLayoutWidget } from '../widgets/chiplayout';
 import { journeyWidget } from '../widgets/journey';
+import { cell3d } from '../widgets/cell3d';
 import { masks3d } from '../widgets/masks3d';
 import { withModel } from '../widgets/modelhost';
-import { clockTreeWidget, fabWidget, floorplanWidget, layoutWidget, mappingWidget, pnrWidget, waferWidget } from '../widgets/silicon';
+import { clockTreeWidget, fabWidget, floorplanWidget, mappingWidget, pnrWidget, waferWidget } from '../widgets/silicon';
 import { cabinetCounts, hallFacts, periodIn } from '../lib/hall';
 import { fmtArea, fmtJoules, fmtMass, fmtRate, fmtTime, fmtWatts, RELAY_CONTACTS, TECH } from '../lib/tech';
 import { ENIAC, ENIAC_PANEL } from '../phys/triode';
@@ -153,25 +154,26 @@ export const chSilicon: Chapter = {
         <p>Compare NAND2 and NOR2: in the NAND the NMOS are in series (no contact between the two gates) and the PMOS in parallel; the NOR is the mirror image.
         Since holes are slower than electrons, series PMOS (the NOR) must be drawn wider to be as fast, which is one reason NAND is the preferred universal gate.</p>
         <p>The cell is a rectangle of fixed height so that cells abut in rows: the rails line up and the tools can place any cell next to any other. Width is what varies, set by
-        how many polysilicon strips the cell needs. Area is therefore counted in tracks: a NAND2 is a few polysilicon pitches wide, an inverter fewer, a flip-flop a dozen or more.</p>
-        <div class="try">Toggle A and B and watch which channels conduct. Hide layers to see what is underneath, or switch to 3D, turn the cell and spread its layers apart.</div>`,
-      widget: layoutWidget,
+        how many polysilicon strips the cell needs. Area is therefore counted in tracks: a NAND2 is a few polysilicon pitches wide, the inverter drawn here one pitch fewer, a flip-flop a dozen or more.</p>
+        <div class="try">Toggle A and B and watch which channels conduct. Press Section, drag the plane through a gate and read the stack off the cut face: n+, gate oxide, polysilicon, n+. Orbit the cell, hide layers, pull them apart; the Top view is the flat layout.</div>`,
+      widget: () => cell3d(),
       more: {
         derive: `<p>Why series transistors are drawn wider. A transistor's drive current is proportional to W / L; two in series have twice the resistance, so to match an inverter's pull-down a NAND2 draws
-          each NMOS twice as wide (W = 2). In NOR2 the series pair is PMOS, whose carriers are slower (mobility roughly a half the electrons'), so they are drawn about four times the inverter's NMOS, and
-          the cell is larger for the same speed. In transistor count they are equal (four each); our multiplexer, four NANDs, is ${stats(MUX2).transistors} transistors.</p>`,
+          each NMOS twice as wide (W = 2). In NOR2 the series pair is PMOS, whose holes are slower (mobility two to three times lower than the electrons'), so they are drawn about four times the inverter's NMOS, and
+          the cell is larger for the same speed. The cells drawn above give every device one width, so they show the structure, not the speed matching; a real library widens a device by folding it into several fingers side by side, which is why a speed-matched NOR2, or a higher drive strength, comes out wider, not taller. In transistor count they are equal (four each); our multiplexer, four NANDs, is ${stats(MUX2).transistors} transistors.</p>`,
         real: `<p>A library such as sky130's high-density cells fixes the row height (2.72 µm) and offers each function in several widths, one per drive strength. A drive-strength variant is
           the same logic with transistors in parallel: twice the width for twice the current.</p>`,
-        pitfall: `<p>Counting each transistor as a unit of area. A NAND2 and a NOR2 have four each and are not the same size: the width of each device is set by the series stack it sits in, and the cell
-          by the larger of its two rows. Compare the NAND and NOR in the viewer with the layers shown.</p>`,
+        pitfall: `<p>Counting each transistor as a unit of area. A NAND2 and a NOR2 have four each and, sized for the same speed, are not the same size: the width of each device is set by the series stack it sits in, and the cell
+          by the larger of its two rows. The viewer draws every device at one width, so compare the two cells' wiring there (series NMOS against series PMOS), not their sizes.</p>`,
       },
     },
     {
       title: 'How chips are made',
       body: `
-        <p>The layout is cut into layers, one mask per layer, and the wafer goes through the fab layer by layer: deposit, pattern with light, etch or implant, repeat.
+        <p>The layout is cut into masks, and the wafer goes through the fab mask by mask: deposit, pattern with light, etch or implant, repeat. The masks are not the layout layers one to one. For this cell, in SkyWater's names: <strong>diff</strong> (the active area, whose complement is etched into oxide-filled trenches), <strong>nwell</strong>, <strong>poly</strong>, the implant windows <strong>nsdm</strong> and <strong>psdm</strong> (wider than the diffusion), contacts <strong>licon1</strong> and <strong>mcon</strong>, local interconnect <strong>li1</strong> and <strong>met1</strong>: about nine.
         Lithography sets the smallest feature. Today's leading processes print with 13.5 nm extreme-ultraviolet light.</p>
-        <p>Most of the cost of a chip is in these repetitions. A modern process has dozens of masks, each one a pass through coat, expose, develop, etch or implant and clean; a wafer spends weeks in
+        <div class="try">Step to the n+ implant, then shift the poly mask: the source and drain follow the gate. Tick <em>implant before the gate</em> and the same shift leaves a channel uncovered on one side and the gate over the drain on the other.</div>
+        <p>Most of the cost of a chip is in these repetitions. A whole modern process has dozens of masks, each one a pass through coat, expose, develop, etch or implant and clean; a wafer spends weeks in
         the fab, and a single defect on any layer can kill the die it lands on. That is what the yield step prices.</p>`,
       widget: () => withModel(fabWidget(), masks3d()),
       more: {

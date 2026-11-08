@@ -11,7 +11,7 @@ import { disasm } from '../riscv/isa';
 import { pipeSchedule, type Cycle } from '../riscv/pipetrace';
 import { frameLoop } from './mosfet';
 import { modelStage } from './modelstage';
-import { STATIONS, assemblyAnchors, assemblyParts, kindOfWord, lampsOf, palletsAt, type AssemblyPalette } from './assembly3dparts';
+import { STATIONS, assemblyAnchors, assemblyParts, kindOfWord, lampsOf, palletsAt, flushText, outcomeOf, type Outcome, type AssemblyPalette } from './assembly3dparts';
 
 export interface AssemblyProgram { id: string; name: string; source: string }
 
@@ -36,7 +36,7 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
   };
   let prog = programs.find((p) => p.id === 'hazards') ?? programs[0], L = load(prog);
   // Opens with the line full, so the first Step has something to show.
-  let t = 4, u = 1, running = false, acc = 0;
+  let t = 4, u = 1, running = false, acc = 0, verdict = '';
   const word = (pc: number) => L.words[(pc >>> 2) & 63] ?? 0;
   // a fetch past the program reads the ROM's empty words: only wrong-path instructions ever do
   const text = (pc: number) => (word(pc) === 0 ? '(empty ROM word)' : disasm(word(pc), pc));
@@ -54,7 +54,7 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
   const palette = (): AssemblyPalette => ({
     frame: stage.rgb('--m3-si'), belt: stage.rgb('--as-belt'), plate: stage.rgb('--as-plate'), bubble: stage.rgb('--as-bubble'),
     alu: stage.rgb('--as-alu'), load: stage.rgb('--as-load'), store: stage.rgb('--as-store'), ctl: stage.rgb('--as-ctl'), wrong: stage.rgb('--as-wrong'),
-    off: stage.rgb('--as-off'), hold: stage.rgb('--as-ctl'), flush: stage.rgb('--as-wrong'),
+    off: stage.rgb('--as-off'), hold: stage.rgb('--as-hold'), flush: stage.rgb('--as-wrong'),
   });
   function paint(): void {
     const p = palletsAt(L.plan, t, u, ctx);
@@ -82,7 +82,7 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
     const c = L.plan[t];
     let stalls = 0, flushes = 0, retired = 0;
     for (let i = 0; i < t; i++) { const q = L.plan[i]; if (q.stall) stalls++; if (q.flush) flushes++; if (q.slots[4].valid) retired++; }
-    chip.textContent = c.stall ? 'Stall: bubble into E' : c.flush ? 'Flush: 2 pulled' : 'Flowing';
+    chip.textContent = c.stall ? 'Stall: bubble into E' : c.flush ? flushText(c) : 'Flowing';
     chip.className = `r3-chip ${c.stall || c.flush ? 'warn' : 'good'}`;
     const rows: [string, string, string][] = [
       ['Clock cycle', String(t), ''],
@@ -93,13 +93,15 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
       ['Cycles per instruction', retired ? (t / retired).toFixed(2) : '–', ''],
     ];
     kv.replaceChildren(...rows.flatMap(([k, v, cls]) => [h('span', null, k), h('span', { class: `v ${cls}` }, v)]));
-    const msg = say(c);
+    const msg = verdict + say(c);
     if (status.textContent !== msg) status.textContent = msg;
     status.setAttribute('aria-live', running ? 'off' : 'polite');
     playBtn.textContent = running ? 'Pause' : 'Play';
     playBtn.setAttribute('aria-pressed', String(running));
     stepBtn.disabled = t + 1 >= L.plan.length;
     backBtn.disabled = t === 0;
+    for (const b of predictBtns) b.disabled = t + 1 >= L.plan.length;
+    scrub.value = String(t); scrubOut.textContent = String(t);
     hazBtn.disabled = !L.plan.some((q) => q.stall || q.flush);
   }
 
@@ -117,10 +119,10 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
   /** One clock on; the slide starts over (no slide with reduced motion). */
   function advance(): void {
     if (t + 1 >= L.plan.length) { running = false; return; }
-    t++; u = reducedMotion() ? 1 : 0;
+    t++; u = reducedMotion() ? 1 : 0; verdict = '';
     if (running && t >= L.end) running = false; // the program has halted: its spin loop only repeats
   }
-  const go = (to: number, slide: boolean) => { running = false; acc = 0; t = Math.min(L.plan.length - 1, Math.max(0, to)); u = slide && !reducedMotion() ? 0 : 1; repaint(); };
+  const go = (to: number, slide: boolean) => { verdict = ''; running = false; acc = 0; t = Math.min(L.plan.length - 1, Math.max(0, to)); u = slide && !reducedMotion() ? 0 : 1; repaint(); };
 
   const select = h('select', { 'aria-label': 'Program' }, ...programs.map((p) => h('option', { value: p.id }, p.name))) as HTMLSelectElement;
   select.value = prog.id;
@@ -140,8 +142,26 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
     const k = L.plan.findIndex((q, i) => i > t && (q.stall || q.flush)), to = k >= 0 ? k : L.plan.findIndex((q) => q.stall || q.flush);
     go(to, to === t + 1);
   });
+  // Predict, then see: the answer is the plan's own next cycle, no new model.
+  const ASK: [Outcome, string][] = [['flow', 'Flows on'], ['stall', 'Bubble into Execute'], ['flush', 'Pull the wrong path']];
+  const WORD: Record<Outcome, string> = { flow: 'the line flows on', stall: 'a load-use stall puts a bubble into Execute', flush: 'a redirect pulls the wrong-path fetches' };
+  let asked = 0, right = 0;
+  const score = h('span', { class: 'as-score' }), predictBtns = ASK.map(([o, label]) => {
+    const b = h('button', { type: 'button', class: 'btn sm' }, label) as HTMLButtonElement;
+    b.addEventListener('click', () => {
+      const actual = outcomeOf(L.plan[t + 1]);
+      asked++; if (actual === o) right++;
+      go(t + 1, true);
+      verdict = `${actual === o ? 'Right' : 'Not quite'}: ${WORD[actual]}. `;
+      score.textContent = `Predicted ${right} of ${asked}`; readout();
+    });
+    return b;
+  });
   const resetBtn = h('button', { type: 'button', class: 'btn sm' }, 'Reset') as HTMLButtonElement;
-  resetBtn.addEventListener('click', () => go(0, false));
+  resetBtn.addEventListener('click', () => { asked = right = 0; score.textContent = ''; go(0, false); });
+  const scrubOut = h('output', null, String(t));
+  const scrub = h('input', { type: 'range', min: 0, max: HORIZON - 1, step: 1, value: t, 'aria-label': 'Clock cycle' }) as HTMLInputElement;
+  scrub.addEventListener('input', () => go(Number(scrub.value), false));
 
   const swatch = (c: string, label: string) => h('span', null, h('i', { style: `background:var(${c})` }), label);
   panel.append(
@@ -152,14 +172,17 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
         h('div', { class: 'r3-ctl' }, h('label', { class: 'as-prog' }, h('span', null, 'Program'), select),
           h('div', { class: 'r3-btns' }, stepBtn, playBtn, backBtn, hazBtn, resetBtn, stage.resetBtn)),
         stage.el, stage.hint, status,
+        h('div', { class: 'as-predict', role: 'group', 'aria-label': 'Predict the next clock' }, h('span', { class: 'as-q' }, 'Predict the next clock:'), ...predictBtns, score),
+        h('label', { class: 'as-scrub' }, h('span', null, 'Clock'), scrub, scrubOut),
         h('div', { class: 'as-legend', 'aria-label': 'Colours' }, swatch('--as-alu', 'arithmetic'), swatch('--as-load', 'load'), swatch('--as-store', 'store'), swatch('--as-ctl', 'branch / jump'),
-          swatch('--as-wrong', '✗ wrong path, pulled'), swatch('--as-bubble', 'empty pallet: bubble')),
+          swatch('--as-wrong', '✗ wrong path, pulled'), swatch('--as-bubble', 'empty pallet: bubble'), swatch('--as-hold', 'lamp: Fetch / Decode hold'), swatch('--as-wrong', 'lamp: flush')),
         h('details', { class: 'deeper as-note' }, h('summary', null, 'What is drawn and what is modelled'),
           h('p', null, 'The timing is the five-stage pipeline’s own, item for item: which instruction, or bubble, is in each station every clock, and when the hazard unit stalls or flushes, are held by test to the gate-level CPU’s pipeline registers on these programs (tests/model-assembly.test.ts, including jal and jalr). The rules are those of lib/pipeline.ts’s hazard unit as chapter 17 describes them. What is simplified:'),
           h('ul', null,
             h('li', null, 'The stations, belt and pallets are a drawing. The slide between two clocks is animation: in the circuit, everything changes at the clock edge.'),
             h('li', null, 'A laundromat’s machines each run at their own pace. Here one clock moves every station together, so the slowest stage sets the beat for all of them (the next step measures what that costs).'),
-            h('li', null, 'Only which instruction is where is kept, not values: whether a branch is taken comes from the golden model, and forwarding costs no cycle, so it is not drawn.'),
+            h('li', null, 'Only which instruction is where is kept, not values: whether a branch is taken comes from the golden model, and forwarding costs no cycle, so it is not drawn (it is why a dependent pair of arithmetic instructions never stalls; only a load followed by its user does).'),
+            h('li', null, 'All five stations are drawn the same size. They are not the same length of logic: Execute is nearly the whole path of the single-cycle CPU, and it sets the clock for every station (the next step measures it).'),
             h('li', null, 'Memory is ideal: no cache misses, and no multi-cycle instructions (this CPU has no multiply or divide).'),
             h('li', null, 'The hazard unit compares the load’s destination with the register fields of the instruction in Decode whether or not that instruction reads them, so it could stall where no register is used. None of these programs does; the test checks it.'),
             h('li', null, 'A branch whose target is the very next instruction would still flush in the circuit; the model cannot tell it from a branch not taken. None of these programs has one.')))),

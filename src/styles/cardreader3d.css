@@ -9,7 +9,7 @@
   --cr-beam: light-dark(#f5d76e, #ffe58a);
   --cr-rubber: light-dark(#3a3d45, #24262c);
 }
-.cr-seg { flex: none; }
+.cr-seg { flex: 0 1 auto; flex-wrap: wrap; max-width: 100%; } /* wraps under 400 px rather than clip "Column by column (2501)" */
 .cr-seg button { min-height: 30px; }
 .cr-mem { margin: 4px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--text-2); }
 .cr-mem li { padding: 2px 0; overflow-wrap: anywhere; }
@@ -17,3 +17,4 @@
 .cr-mem .cr-none { font-style: italic; }
 @media (pointer: coarse) { .cr-seg button { min-height: 40px; } }
 .m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.m3d { --cr-alarm: light-dark(#d1342f, #ff6b5e); }

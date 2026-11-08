@@ -11,3 +11,8 @@
 .ccd-plot text { font: 10.5px var(--font-mono); fill: var(--muted); }
 .ccd3d .r3-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 24px; align-items: start; }
 @container (max-width: 560px) { .ccd3d .r3-stage { aspect-ratio: 1 / 1; } }
+.ccd3d .ccd-bars { display: grid; gap: 4px; margin-bottom: 4px; }
+.ccd3d .ccd-bar { display: grid; grid-template-columns: minmax(0, 9em) 1fr auto; gap: 8px; align-items: center; font-size: 0.8em; color: var(--muted); }
+.ccd3d .ccd-bar i { display: block; height: 8px; background: var(--m3-charge); border-radius: 2px; min-width: 2px; }
+.ccd3d .ccd-bar b { font: 10.5px var(--font-mono); font-weight: 400; }
+.ccd3d .btn.pending { box-shadow: 0 0 0 2px var(--ccd-hot); }

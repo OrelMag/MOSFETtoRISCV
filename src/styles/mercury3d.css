@@ -22,3 +22,16 @@
 .hg-words li.sel { outline: 1px solid var(--accent); }
 .hg-words li.now { background: var(--accent-soft); color: var(--text); }
 @media (pointer: coarse) { .hg-seg button, .hg-in select, .hg-in input { min-height: 40px; } }
+.hg-in input[type="range"] { width: 9em; padding: 0; min-height: 24px; border: 0; background: none; }
+.hg-temp-out { font: 600 12.5px var(--font-mono); color: var(--text); white-space: nowrap; }
+.hg-temp-out.bad { color: var(--bad); }
+.hg-temp-out.good { color: var(--good); }
+.hg-hist:empty { display: none; }
+.hg-hist { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; height: 64px; margin: 8px 0 18px; align-items: end; }
+.hg-bar { position: relative; height: 100%; display: flex; align-items: flex-end; }
+.hg-bar i { display: block; width: 100%; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 1px; }
+.hg-bar b { position: absolute; left: 0; right: 0; bottom: -15px; text-align: center; font: 600 10px var(--font-mono); color: var(--muted); }
+/* "This tank": keys take what they need, values wrap inside their column instead of pushing it wide */
+.m3d .r3-kv { grid-template-columns: max-content minmax(0, 1fr); gap: 3px 10px; }
+.m3d .r3-kv .v { overflow-wrap: anywhere; }
+@media (max-width: 600px) { .m3d .r3-kv { grid-template-columns: minmax(0, 1fr); gap: 0; } .m3d .r3-kv > span:nth-child(odd) { font-size: 11px; color: var(--muted); margin-top: 5px; } .m3d .r3-kv .v { font-size: 12.5px; } .hg-in { flex-wrap: wrap; } .hg-in input[type="range"] { width: 7em; } }

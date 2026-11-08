@@ -2,7 +2,7 @@
   "name": "mosfet-to-riscv-desktop",
   "private": true,
   "version": "1.0.0",
-  "description": "From Switch to RISC-V and Beyond as a portable Windows program",
+  "description": "From Switch to CPU as a portable Windows program",
   "license": "MIT",
   "author": "Orel Magidish",
   "main": "main.cjs",

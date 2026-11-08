@@ -31,3 +31,9 @@
 .co-dot.sel { fill: light-dark(#e8a100, #ffc83a); stroke: var(--text); stroke-width: 1.2; }
 .co-dot.half { fill: var(--surface); stroke: var(--text); stroke-width: 1.5; }
 @media (pointer: coarse) { .co-cell { min-height: 44px; } }
+.co-sl span { width: auto; }
+.co-sl output { width: 54px; }
+.co-predict { margin: 0 0 8px; font-weight: 500; }
+.co-sl ~ .btn.sm[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* the plane is near square: a phone's stage is as tall as it is wide */
+@media (max-width: 600px) { .m3d .r3-stage { aspect-ratio: 1 / 1; } }

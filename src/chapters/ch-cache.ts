@@ -11,6 +11,7 @@ import { findNode } from '../sim/flatten';
 import type { Stage } from '../view/stage';
 import { cacheExplorer, dramWidget, hierarchyWidget } from '../widgets/cache';
 import { hierarchy3d } from '../widgets/hierarchy3d';
+import { DEFAULT_HITS, amatCycles } from '../widgets/hierarchy3ddata';
 import { withModel } from '../widgets/modelhost';
 import { cpuScene } from '../widgets/cpupanel';
 import type { Chapter } from './types';
@@ -395,7 +396,7 @@ export const chCache: Chapter = {
         derive: `<p>Expected cost of an access is the sum over levels of (probability that the access gets that far) × (that level's time). With L1 hitting ${pct(1 - 0.05)}, a
           miss going to L2 which hits ${pct(1 - 0.2)} of the time, and DRAM behind it: ${amat([[4, 0.05], [12, 0.2]], 250).toFixed(1)} cycles on average, against 250 without caches. Halving the
           L1 miss rate (5 % to 2.5 %) gains ${(amat([[4, 0.05], [12, 0.2]], 250) - amat([[4, 0.025], [12, 0.2]], 250)).toFixed(1)} cycles; halving the DRAM latency gains
-          ${(amat([[4, 0.05], [12, 0.2]], 250) - amat([[4, 0.05], [12, 0.2]], 125)).toFixed(1)}. The miss rate multiplies everything below it, so it is the lever that matters most.</p>`,
+          ${(amat([[4, 0.05], [12, 0.2]], 250) - amat([[4, 0.05], [12, 0.2]], 125)).toFixed(1)}. The miss rate multiplies everything below it, so it is the lever that matters most. These are round numbers (L2 12 cycles, DRAM 250, no L3); the model above uses the table's own (L2 14, L3 64, DRAM 320), and with L1 / L2 / L3 hitting ${pct(DEFAULT_HITS.l1)} / ${pct(DEFAULT_HITS.l2)} / ${pct(DEFAULT_HITS.l3)} its sliders start at ${amatCycles(DEFAULT_HITS).toFixed(1)} cycles on average.</p>`,
         real: `<p>Typical numbers for a desktop core: L1 32 to 48 KB at 4 to 5 cycles, L2 256 KB to 2 MB at about 12 to 15, a shared L3 of tens of MB at 40 or more, DRAM at 200 or more
           cycles. Registers are the level above L1, and a hit in them costs nothing visible, which is why compilers work so hard to keep values there.</p>`,
         pitfall: `<p>Reading a cache's size as its speed-up. A hierarchy helps by the fraction of accesses it catches, not by its capacity: a 1 MB cache in front of a program that streams

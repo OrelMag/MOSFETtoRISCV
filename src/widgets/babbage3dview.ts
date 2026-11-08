@@ -10,33 +10,35 @@ import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
 import { modelStage } from './modelstage';
 import {
-  ARMS, CASES, DIGITS, columnReads, digitGroups, PER_COLUMN, TURN_MAX, advanceTo, anticipate, finishCarry, babbageAnchors, babbageParts, begin, finished, fromValue, gateRows, giveOff,
-  nextFiring, sweep, valueOf, type BabbagePalette, type Carry, type Column, type Pose,
+  ADD_UNITS, ARMS, CASES, DIGITS, carryUnits, predictVerdict, runCase, columnReads, digitGroups, PER_COLUMN, TURN_MAX, advanceTo, anticipate, finishCarry, babbageAnchors, babbageParts, begin, finished, fromValue, gateRows, giveOff,
+  nextFiring, sweep, valueOf, type BabbagePalette, type Carry, type Case, type Column, type Pose,
 } from './babbage3dparts';
 
 export function babbageView(): Widget {
   let cs = CASES[1], base: Column = fromValue(cs.start), s: Carry = begin(base), phase: 'ready' | 'carry' | 'done' = 'ready';
-  let anticipating = false, goal: 'next' | 'all' | null = null, target = 0, said = '';
+  let anticipating = false, goal: 'next' | 'all' | null = null, target = 0, said = '', guess = 0, verdictDone = false, verdict = '';
 
-  const panel = h('div', { class: 'panel' });
+  const panel = h('div', { class: 'panel bb3d' });
   const stage = modelStage(panel, {
     aria: 'One column of Difference Engine No. 2 in 3D: thirty-one figure wheels, a warning lever on each, and a carry axis with a helix of thirty carry arms',
     camera: { target: [-4, 52, 0], yaw: -0.6, pitch: 0.28, dist: 215 },
     limits: { minDist: 60, maxDist: 500 },
-    note: 'One column of eight is drawn, still except for the carry axis; the sector drive, the locks, the three-limbed carry levers and the helix of arms are simplified to a block lever and thirty rods, and the motion is a drawing, not a kinematic model. The anticipating carriage was not fitted to this engine: its effect is drawn (every carry of a run at once), its linkage is not.',
+    note: 'One column of eight is drawn, still except for the carry axis; the sector drive, the locks, the three-limbed carry levers and the helix of arms are simplified to a block lever and thirty rods, and the motion is a drawing, not a kinematic model. The anticipating carriage was not fitted to this engine: its effect is drawn (every carry of a run at once), its linkage is not. The look-ahead bar is that effect only. The order the arms are swept in is derived from the stated 22° pitch, 45° gap and two turns, not quoted. On the time bars the nine units to add and the one to carry are Babbage’s (Passages, ch. VIII, for the anticipating carriage); the successive carriage is drawn at one unit per turn of the carry axis, the model’s scale, not a measurement. The wheel proportions are not to scale.',
     draw: () => paint(),
   });
   const palette = (): BabbagePalette => ({
     frame: stage.rgb('--m3-si'), metal: stage.rgb('--m3-metal'), wheel: stage.rgb('--bb-wheel'), tick: stage.rgb('--bb-tick'),
-    lever: stage.rgb('--bb-lever'), warn: stage.rgb('--bb-warn'), arm: stage.rgb('--bb-arm'), live: stage.rgb('--m3-charge'),
+    lever: stage.rgb('--bb-lever'), warn: stage.rgb('--bb-warn'), arm: stage.rgb('--bb-arm'), live: stage.rgb('--m3-charge'), nine: stage.rgb('--bb-nine'),
   });
   const foresee = (): boolean[] | null => anticipating && phase === 'carry' ? anticipate(s.col).carryIn : null;
-  const pose = (): Pose => ({ col: s.col, theta: s.theta, foresee: foresee() });
+  const pose = (): Pose => ({ col: s.col, theta: s.theta, foresee: foresee(), lookAhead: anticipating });
   function paint(): void { const p = pose(); stage.paint(babbageParts(p, palette()), babbageAnchors(p)); }
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' }), digits = h('div', { class: 'bb-digits', role: 'img' });
   const live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
   const gates = h('table', { class: 'bb-gates' });
+  const bars = h('div', { class: 'bb-bars', role: 'img', 'aria-label': 'Time on one axis: nine units to add, then the carriage' });
+  const verdictEl = h('p', { class: 'bb-verdict', 'aria-live': 'polite' });
   stage.chips.append(chip);
   gates.append(h('tr', null, h('th', null, 'bits'), h('th', null, 'ripple'), h('th', null, 'Kogge–Stone')),
     ...gateRows().map((r) => h('tr', null, h('td', null, String(r.n)), h('td', null, String(r.ripple)), h('td', null, String(r.ks)))));
@@ -48,18 +50,22 @@ export function babbageView(): Widget {
     let at = DIGITS;
     digits.replaceChildren(...digitGroups(Array.from({ length: DIGITS }, (_, k) => s.col.w[DIGITS - 1 - k])).map((g) => h('span', { class: 'bb-grp' }, ...g.map((d) => {
       const i = --at;
-      return h('span', { class: `bb-d${s.col.warn[i] ? ' armed' : ''}${fs?.[i] ? ' recv' : ''}` }, d);
+      return h('span', { class: `bb-d${s.col.w[i] === 9 ? ' nine' : ''}${s.col.warn[i] ? ' armed' : ''}${fs?.[i] ? ' recv' : ''}` }, d);
     }))));
     const v = valueOf(s.col), flag = s.col.warn[DIGITS - 1] ? ' with the overflow flag set' : '';
     digits.setAttribute('aria-label', `Column reads ${columnReads(v)}${flag}; ${armed} warning lever${armed === 1 ? '' : 's'} armed`);
     const runLen = plan.longest;
-    const unit = anticipating ? '1 unit, whatever the run' : `${phase === 'done' ? 'axis turned to' : `axis at ${Math.round(s.theta)}°, last carry at`} ${Math.round(plan.lastT)}° of ${TURN_MAX}°${plan.lastT >= 360 ? ' (second rotation)' : ''}`;
+    // one axis for both carriages: Babbage's nine units to add, then the carriage in units (successive: the carry axis's turns)
+    const uS = carryUnits(false, plan.lastT, plan.fired.length), uA = carryUnits(true, plan.lastT, plan.fired.length), f1 = (x: number) => +x.toFixed(2);
+    const unit = `${phase === 'done' ? 'axis turned to' : `axis at ${Math.round(s.theta)}° of ${TURN_MAX}° (two turns); last carry at`} ${Math.round(plan.lastT)}°${plan.lastT >= 360 ? ' (second rotation)' : ''}`;
     const rows: [string, string][] = [
       ['Case', cs.blurb],
       ['Warning latches armed', String(armed)],
       ['Carries fired so far', String(s.fired.length)],
       ['Longest run of carries', phase === 'ready' ? '–' : String(runLen)],
-      [anticipating ? 'Anticipating carriage' : 'Successive carriage', phase === 'ready' ? '–' : plan.fired.length === 0 ? 'nothing to carry' : unit],
+      [anticipating ? 'Carry axis (not used)' : 'Carry axis', phase === 'ready' ? '–' : plan.fired.length === 0 ? 'nothing to carry' : anticipating ? 'the look-ahead replaces it' : unit],
+      ['Time, successive', phase === 'ready' ? '–' : `${ADD_UNITS} + ${f1(uS)} = ${f1(ADD_UNITS + uS)} units`],
+      ['Time, anticipating', phase === 'ready' ? '–' : `${ADD_UNITS} + ${uA} = ${ADD_UNITS + uA} units`],
       ['Same run, ripple-carry gates', phase === 'ready' ? '–' : `${runLen} × ${PER_COLUMN} = ${runLen * PER_COLUMN} NAND delays`],
     ];
     kv.replaceChildren(...rows.flatMap(([k, val]) => [h('span', null, k), h('span', { class: 'v' }, val)]));
@@ -70,6 +76,11 @@ export function babbageView(): Widget {
     stepBtn.textContent = anticipating ? 'Carry (one unit)' : 'Next carry';
     runBtn.textContent = anticipating ? 'Carry all' : 'Run carry';
     modeBtn.setAttribute('aria-pressed', String(anticipating));
+    bars.replaceChildren(...([['Successive', uS, !anticipating], ['Anticipating', uA, anticipating]] as [string, number, boolean][]).map(([name, u, on]) => h('div', { class: `bb-bar${on ? ' on' : ''}`, title: `${name}: ${ADD_UNITS} units to add, then ${f1(u)} to carry` },
+      h('span', { class: 'bb-bn' }, name), h('span', { class: 'bb-track' }, h('i', { class: 'add', style: `width:${(ADD_UNITS / 11) * 100}%` }), phase === 'ready' ? null : h('i', { class: 'car', style: `width:${(u / 11) * 100}%` })))));
+    if (cs.id === 'custom' && phase === 'done' && !verdictDone) { verdictDone = true; verdict = predictVerdict(guess, plan.fired.length); }
+    verdictEl.textContent = cs.id === 'custom' ? (phase === 'done' ? verdict : `Guess how many arms fire when ${runN} nines get a 1 added, then Add and Run carry.`) : '';
+    predictRow.style.display = cs.id === 'custom' ? '' : 'none';
     const text = phase === 'ready' ? 'Press Add: every wheel advances, and a wheel passing 9 to 0 arms its warning lever without carrying.'
       : phase === 'carry' ? `${armed} warning lever${armed === 1 ? ' is' : 's are'} armed. ${anticipating ? 'The anticipating carriage settles every carry of a run in one unit.' : 'The carry axis turns and its arms poll the wheels from below.'}`
       : `Carried: the column reads ${columnReads(v)}${flag}.`;
@@ -114,10 +125,12 @@ export function babbageView(): Widget {
     repaint();
   }
 
-  const sel = h('select', { id: 'bb-case', 'aria-label': 'Case' }, ...CASES.map((c) => h('option', { value: c.id }, c.label))) as HTMLSelectElement;
+  const sel = h('select', { id: 'bb-case', 'aria-label': 'Case' }, ...CASES.map((c) => h('option', { value: c.id }, c.label)), h('option', { value: 'custom' }, 'Your own run of 9s (predict)')) as HTMLSelectElement;
   sel.value = cs.id;
-  sel.addEventListener('change', () => { cs = CASES.find((c) => c.id === sel.value)!; reset(); });
-  function reset(): void { base = fromValue(cs.start); s = begin(base); phase = 'ready'; goal = null; repaint(); }
+  sel.addEventListener('change', () => { cs = pick(); reset(); });
+  let runN = 12;
+  const pick = (): Case => (sel.value === 'custom' ? runCase(runN) : CASES.find((c) => c.id === sel.value)!);
+  function reset(): void { verdictDone = false; verdict = ''; base = fromValue(cs.start); s = begin(base); phase = 'ready'; goal = null; repaint(); }
   const addBtn = h('button', { type: 'button', class: 'btn sm primary' }, 'Add') as HTMLButtonElement;
   addBtn.addEventListener('click', addAction);
   const stepBtn = h('button', { type: 'button', class: 'btn sm' }, 'Next carry') as HTMLButtonElement;
@@ -126,6 +139,12 @@ export function babbageView(): Widget {
   runBtn.addEventListener('click', () => carryAction(true));
   const modeBtn = h('button', { type: 'button', class: 'btn sm bb-mode', 'aria-pressed': 'false' }, 'Anticipating carriage') as HTMLButtonElement;
   modeBtn.addEventListener('click', () => { anticipating = !anticipating; repaint(); });
+  const runOut = h('output', null, String(runN)), guessIn = h('input', { type: 'number', min: 0, max: ARMS, step: 1, value: 0, 'aria-label': 'Your guess: arms that fire' }) as HTMLInputElement;
+  const runIn = h('input', { type: 'range', min: 1, max: ARMS, step: 1, value: runN, 'aria-label': 'Nines in the run' }) as HTMLInputElement;
+  runIn.addEventListener('input', () => { runN = Number(runIn.value); runOut.textContent = String(runN); if (cs.id === 'custom') { cs = runCase(runN); reset(); } });
+  guessIn.addEventListener('input', () => { guess = Math.round(Number(guessIn.value)); verdictDone = false; });
+  const predictRow = h('div', { class: 'bb-predict' }, h('label', { class: 'r3-sl' }, h('span', null, 'Nines in the run'), runIn, runOut),
+    h('label', { class: 'bb-guess' }, h('span', null, 'Your guess: arms that fire'), guessIn));
   const resetBtn = h('button', { type: 'button', class: 'btn sm' }, 'Start over') as HTMLButtonElement;
   resetBtn.addEventListener('click', reset);
 
@@ -135,7 +154,7 @@ export function babbageView(): Widget {
     h('div', { class: 'r3' },
       h('div', { class: 'r3-main' },
         h('div', { class: 'r3-ctl' }, h('label', { class: 'bb-case' }, h('span', null, 'Case'), sel), h('div', { class: 'r3-btns' }, addBtn, stepBtn, runBtn, modeBtn, resetBtn, stage.resetBtn)),
-        digits, stage.el, stage.hint, live),
+        digits, predictRow, stage.el, stage.hint, live, verdictEl, bars),
       h('div', { class: 'r3-side' }, h('h4', null, 'This column ', h('span', { class: 'r3-badge' }, 'model')), kv,
         h('h4', null, 'The site’s adders, NAND delays'), gates)));
   readout();

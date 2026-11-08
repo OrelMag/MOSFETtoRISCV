@@ -10,6 +10,7 @@ import type { Widget } from '../view/stage';
 import { tween, VDD } from './mosphys';
 import { chips, idVdsChart, idVgsChart, slider } from './mosparts';
 import { crossSection, type MosType } from './mosxsec';
+import type { BiasLink } from './mosshare';
 
 export interface MosfetOptions {
   type?: MosType;
@@ -17,6 +18,8 @@ export interface MosfetOptions {
   /** Live gate value from a running circuit (leaf mode). */
   gate?: () => Bit;
   caption?: string;
+  /** Gate and drain shared with a 3D model of the same device (mosshare.ts): each follows the other. */
+  link?: BiasLink;
 }
 
 const RAMP_MS = 600; // leaf mode: how long the gate takes to follow a logic edge
@@ -40,7 +43,7 @@ export function frameLoop(frame: (now: number, dt: number) => void, moving: () =
 
 export function mosfetWidget(opts: MosfetOptions = {}): Widget {
   let type: MosType = opts.type ?? 'n';
-  let vg = 0, vd = 0.9;
+  let vg = opts.link?.vg ?? 0, vd = opts.link?.vd ?? 0.9;
   let lastGate: Bit | null = null;
   let flowing = false;
 
@@ -89,6 +92,7 @@ export function mosfetWidget(opts: MosfetOptions = {}): Widget {
     const p = type === 'p', vs = p ? VDD : 0;
     const drive = Math.max(0, p ? vs - vg : vg - vs), vds = Math.abs(vd - vs);
     flowing = xs.paint(type, vg, vd, dt);
+    opts.link?.set(vg, vd, xs);
     gSl.set(vg);
     readout.paint(drive, vds, p);
     vgsChart.paint(drive, vds, p);
@@ -122,6 +126,7 @@ export function mosfetWidget(opts: MosfetOptions = {}): Widget {
       h('div', { class: 'panel' }, h('h3', null, 'Current against gate voltage'), vgsChart.el),
       h('div', { class: 'panel' }, h('h3', null, 'Current against drain voltage'), vdsChart.el)));
 
+  const unlink = opts.link?.follow(xs, (g, d) => { stopSweep(); vg = g; vd = d; dSl.set(vd); repaint(); });
   syncSweep();
   setType(type);
   loop.kick();
@@ -139,7 +144,7 @@ export function mosfetWidget(opts: MosfetOptions = {}): Widget {
       if (ms) play([{ to, ms }]);
       else { stopSweep(); vg = to; repaint(); }
     },
-    destroy() { loop.stop(); },
+    destroy() { loop.stop(); unlink?.(); },
   };
 }
 

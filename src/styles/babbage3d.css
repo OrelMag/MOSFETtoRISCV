@@ -4,6 +4,7 @@
   --bb-tick: light-dark(#2b2f3a, #14161c);
   --bb-lever: light-dark(#8a93ad, #7f8aa6);
   --bb-warn: light-dark(#d98a1f, #f0a63a);
+  --bb-nine: light-dark(#c2185b, #ff7aa8);
   --bb-arm: light-dark(#6c7690, #98a2bd);
 }
 .bb-digits { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 2px 0 6px; font: 600 14px var(--font-mono); font-variant-numeric: tabular-nums; }
@@ -18,3 +19,19 @@
 .bb-case select { min-height: 32px; max-width: 100%; }
 .bb-mode[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, #fff); }
 @media (pointer: coarse) { .bb-case select { min-height: 40px; } }
+.bb-d.nine { color: var(--bad); }
+.bb-bars { display: grid; gap: 4px; margin: 8px 0 0; font-size: 12px; color: var(--text-2); }
+.bb-bar { display: grid; grid-template-columns: 6.5em 1fr; align-items: center; gap: 8px; opacity: 0.7; }
+.bb-bar.on { opacity: 1; font-weight: 600; color: var(--text); }
+.bb-track { display: flex; height: 10px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.bb-track i { display: block; height: 100%; }
+.bb-track .add { background: var(--muted); }
+.bb-track .car { background: var(--accent); }
+.bb-predict { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin: 4px 0 6px; font-size: 13px; color: var(--text-2); }
+.bb-guess { display: flex; align-items: center; gap: 8px; }
+.bb-guess input { width: 4.5em; min-height: 32px; }
+.bb-verdict { margin: 6px 0 0; font-size: 13px; min-height: 2.6em; }
+.bb-digits { flex-wrap: nowrap; white-space: nowrap; max-width: 100%; overflow-x: auto; }
+/* a narrow stage: the case row wraps so the blurb takes the full width, and the digits shrink to stay on one line */
+@container (max-width: 480px) { .bb-case { flex-wrap: wrap; } .bb-digits { font-size: 11px; gap: 2px 3px; } .bb-d { padding: 0; min-width: 1ch; } .bb3d .r3-stage { aspect-ratio: 1 / 1; } }
+@media (pointer: coarse) { .bb-guess input, .bb-predict input[type=range] { min-height: 40px; } }

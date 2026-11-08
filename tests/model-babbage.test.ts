@@ -6,12 +6,12 @@ import type { RGB } from '../src/gl/instances';
 import { koggeStone, rca } from '../src/lib';
 import { logicDepth } from '../src/sim/stats';
 import {
-  ARMS, DIGITS, EVENTS, GAP_DEG, MOD, PER_COLUMN, PITCH_DEG, SPLIT, TURN_MAX, advanceTo, anticipate, armAngle, armPhase, armTime, babbageAnchors, babbageParts, begin, digitGroups,
+  ADD_UNITS, ARMS, DIGITS, EVENTS, carryUnits, predictVerdict, runCase, GAP_DEG, MOD, PER_COLUMN, PITCH_DEG, SPLIT, TURN_MAX, advanceTo, anticipate, armAngle, armPhase, armTime, babbageAnchors, babbageParts, begin, digitGroups,
   CASES, columnReads, finished, finishCarry, fromValue, gateRows, giveOff, nextFiring, pending, sweep, valueOf, zero, type BabbagePalette,
 } from '../src/widgets/babbage3dparts';
 
 const c = (i: number): RGB => [i / 20, 0.5, 0.5];
-const P: BabbagePalette = { frame: c(1), metal: c(2), wheel: c(3), tick: c(4), lever: c(5), warn: c(6), arm: c(7), live: c(8) };
+const P: BabbagePalette = { frame: c(1), metal: c(2), wheel: c(3), tick: c(4), lever: c(5), warn: c(6), arm: c(7), live: c(8), nine: c(9) };
 const nines = (n: number) => 10n ** BigInt(n) - 1n;
 // A small seeded generator so the cases are the same on every run.
 let seed = 12345;
@@ -243,5 +243,49 @@ describe('the drawing', () => {
     const labels = babbageAnchors(pose()).map((a) => a.text);
     expect(labels).toContain('figure wheel');
     expect(labels.some((l) => l.startsWith('warning lever'))).toBe(true);
+  });
+});
+
+describe('the common time axis, the predict step and the look-ahead rod', () => {
+  it('both carriages are on Babbage’s axis: nine units to add; anticipating carries in one, successive in the carry axis’s turns', () => {
+    expect(ADD_UNITS).toBe(9);
+    for (const k of CASES) {
+      const r = sweep(giveOff(fromValue(k.start), k.add));
+      expect(carryUnits(true, r.lastT, r.fired.length)).toBe(1);
+      const s = carryUnits(false, r.lastT, r.fired.length);
+      expect(s).toBeGreaterThan(0);
+      expect(s).toBeLessThanOrEqual(2);
+    }
+    expect(carryUnits(false, 0, 0)).toBe(0);
+    // a longer run costs the successive carriage more, never the anticipating one
+    const u = (n: number) => { const r = sweep(giveOff(fromValue(nines(n)), 1n)); return carryUnits(false, r.lastT, r.fired.length); };
+    expect(u(30)).toBeGreaterThan(u(3));
+    expect(u(30)).toBeLessThanOrEqual(2);
+  });
+  it('a run of n nines plus 1 fires exactly n arms, for every n the slider offers', () => {
+    for (let n = 1; n <= ARMS; n++) {
+      const k = runCase(n), r = sweep(giveOff(fromValue(k.start), k.add));
+      expect(r.fired.length, String(n)).toBe(n);
+      expect(r.longest, String(n)).toBe(n);
+      expect(valueOf(r.col)).toBe(k.start + 1n);
+    }
+    expect(runCase(99).start).toBe(nines(ARMS));
+  });
+  it('the verdict compares the guess with the arms fired and sets it beside the ripple and prefix adders', () => {
+    expect(predictVerdict(12, 12)).toMatch(/^Right/);
+    expect(predictVerdict(3, 12)).toMatch(/^More than you guessed/);
+    expect(predictVerdict(20, 12)).toMatch(/^Fewer than you guessed/);
+    expect(predictVerdict(12, 12)).toContain(`12 × ${PER_COLUMN} = ${12 * PER_COLUMN} NAND delays`);
+    expect(predictVerdict(12, 12)).toContain(`takes ${gateRows().find((r) => r.n === 32)!.ks} whatever the run`);
+  });
+  it('wheels at 9 are marked in their own tick colour, and the look-ahead rod appears only with the anticipating carriage', () => {
+    const g = fromValue(7999999n), base = { col: g, theta: 0, foresee: null };
+    expect(babbageParts(base, P).filter((p) => p.color === P.nine)).toHaveLength(6);
+    const n0 = babbageParts(base, P).length;
+    expect(babbageParts({ ...base, lookAhead: true }, P).length).toBe(n0 + 1);
+    const after = giveOff(g, 1n), fs = anticipate(after).carryIn;
+    expect(babbageParts({ col: after, theta: 0, foresee: fs, lookAhead: true }, P).length).toBe(n0 + 2);
+    expect(babbageAnchors({ ...base, lookAhead: true }).map((a) => a.text)).toContain('look-ahead (effect only)');
+    expect(babbageAnchors(base).map((a) => a.text)).not.toContain('look-ahead (effect only)');
   });
 });
