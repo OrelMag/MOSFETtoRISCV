@@ -23,12 +23,12 @@ const cur = (f: number): string => (f >= 1e4 ? thin(f.toLocaleString('en-US', { 
 export function quartzView(): Widget {
   let view: 'crystal' | 'loop' = 'crystal', n = 0, running = false, lid = false, temp = 25, rateExp = 6;
   const panel = h('div', { class: 'panel' });
-  const CRYSTAL = { target: [0, 4, 0] as [number, number, number], yaw: 0.45, pitch: 0.55, dist: 62 };
-  const LOOP = { target: [0, 0, -2] as [number, number, number], yaw: 0.2, pitch: 0.75, dist: 62 };
+  const CRYSTAL = { target: [-2, 3, 0] as [number, number, number], yaw: 0.2, pitch: 1.15, dist: 36 };
+  const LOOP = { target: [0, 0, -2] as [number, number, number], yaw: 0.2, pitch: 0.8, dist: 76 };
   const stage = modelStage(panel, {
     aria: 'A 32 768 hertz quartz tuning fork in its ceramic package, and the Pierce oscillator and fifteen-stage divider around it',
     camera: CRYSTAL,
-    limits: { minDist: 18, maxDist: 160 },
+    limits: { minDist: 12, maxDist: 160 },
     note: `Drawn, not modelled: a tine swings ${(TIP_DRAWN / 10).toFixed(2)} mm here (a real tine moves far less than a micrometre, so at least a hundred times less); the fork is drawn at ${SHOWN_HZ} swings a second, ${grp(F_WATCH / SHOWN_HZ)} times slower than real; the tine length comes from a plain beam formula, and a real fork has grooves in its tines.`,
     draw: () => paint(),
   });

@@ -116,11 +116,11 @@ export function crystalParts(p: ForkPose, P: QuartzPalette): Part[] {
 export function crystalAnchors(p: ForkPose): Anchor[] {
   const f = fork, tipZ = f.gap / 2 + f.w + p.disp * TIP_DRAWN, up: Vec3 = [0, 1, 0], front: Vec3 = [0, 0.3, 1];
   return [
-    { text: 'tine, bending', p: [f.x0 + f.L * 0.75, f.y0 + f.t, tipZ], side: 'r', n: up },
-    { text: 'gold electrode', p: [f.x0 + f.L * 0.3, f.y0 + f.t + 0.06, -(f.gap / 2 + f.w / 2)], side: 'l', n: up },
-    { text: 'quartz base', p: [f.x0 - f.base * 0.5, f.y0 + f.t, 2.4], side: 'l', n: up },
-    { text: 'glue and pad', p: [-14, 2.3, 2.5], side: 'l', n: up, minor: true },
-    { text: 'ceramic package 3.2 × 1.5 mm', p: [10, 5, 7.5], side: 'r', n: front },
+    { text: 'tine, bending', p: [f.x0 + f.L * 0.85, f.y0 + f.t, tipZ], side: 'r', n: up },
+    { text: 'gold electrode', p: [f.x0 + f.L * 0.4, f.y0 + f.t + 0.06, -(f.gap / 2 + f.w / 2)], side: 'b', n: up },
+    { text: 'quartz base', p: [f.x0 - f.base * 0.5, f.y0 + f.t, -2.0], side: 't', n: up },
+    { text: 'glue and gold pad', p: [-13, 2.3, 3.4], side: 'r', n: up },
+    { text: 'ceramic package 3.2 × 1.5 mm', p: [12, 6, 7.5], side: 'r', n: front },
   ];
 }
 
