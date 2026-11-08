@@ -182,8 +182,12 @@ export function fibreAnchors(st: FibreState): Anchor[] {
     { text: `θ = ${st.deg}°`, p: [X0 - 3, -Math.tan((st.deg * Math.PI) / 180) * 3, 0], side: 't', n: front, minor: true },
   ];
   if (st.kind === 'multi' || !main.guided) {
-    const x = Math.min(main.hitX, X1 - 8);
-    out.push({ text: main.guided ? 'total internal reflection' : 'leaks into the cladding', p: [x, main.guided ? r : r, 0], side: 't', n: up, minor: true });
+    if (main.guided) out.push({ text: 'total internal reflection', p: [Math.min(main.hitX, X1 - 8), r, 0], side: 't', n: up, minor: true });
+    else {
+      // the label sits beside the refracted ray, below its middle, clear of the launch label at the input end
+      const a = main.pts[1], b = main.pts[main.pts.length - 1];
+      out.push({ text: 'leaks into the cladding', p: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 0], side: 'b', n: up, minor: true });
+    }
   }
   return out;
 }
