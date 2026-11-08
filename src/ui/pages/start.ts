@@ -4,7 +4,7 @@
 import '../../styles/path.css';
 import type { Tier } from '../../learn/capstones';
 import { asker } from '../../learn/asker';
-import { placementItems, suggestTier } from '../../learn/placement';
+import { placementItems, suggestTier, type Item } from '../../learn/placement';
 import { TIERS } from '../../learn/skills';
 import { learn, type Persona } from '../../learn/store';
 import { h } from '../dom';
@@ -49,7 +49,18 @@ export class StartPage implements Page {
   }
 
   private run(): void {
-    this.check.replaceChildren(asker(placementItems(), (answers) => {
+    // the questions are chunks of their own (the drills, learn/recaps.ts), loaded on this click
+    this.check.setAttribute('aria-busy', 'true');
+    this.check.replaceChildren(h('p', { class: 'lp-sub', role: 'status' }, 'Loading the questions…'));
+    placementItems().then((items) => { this.check.removeAttribute('aria-busy'); this.ask(items); }, () => {
+      this.check.removeAttribute('aria-busy');
+      this.check.replaceChildren(h('p', { class: 'lp-sub', role: 'status' }, 'The questions could not be loaded (offline?).'),
+        h('div', { class: 'lp-nav' }, h('button', { class: 'btn primary', type: 'button', onclick: () => this.run() }, 'Try again'), h('button', { class: 'btn', type: 'button', onclick: () => this.intro() }, 'Back')));
+    });
+  }
+
+  private ask(items: Item[]): void {
+    this.check.replaceChildren(asker(items, (answers) => {
       const tier = suggestTier(answers);
       const right = answers.filter((a) => a.right).length;
       learn().setPlacement(right, answers.length, tier);
