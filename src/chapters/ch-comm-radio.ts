@@ -3,7 +3,9 @@
 
 import { dbToRatio } from '../comm/limits';
 import { apertureM2, bpskAwgn, bpskMrc, bpskRayleigh, coherenceMHz, coherenceTime, dopplerHz, fadeMarginDb, fsplDb, imageRejectionDb, levelCrossing, linkBudget, noiseFloorDbm, wavelengthM } from '../phys/radio';
-import { antennaWidget, budgetWidget, BUDGET_DEFAULT, diversityWidget, fadingWidget, mixerWidget, multipathWidget, pathWidget, sdrWidget, WALL_DB } from '../widgets/radio';
+import { ANTENNA_GHZ, antennaWidget, budgetWidget, BUDGET_DEFAULT, diversityWidget, fadingWidget, mixerWidget, multipathWidget, pathWidget, sdrWidget, WALL_DB } from '../widgets/radio';
+import { withModel } from '../widgets/modelhost';
+import { dipole3d } from '../widgets/dipole3d';
 import { numOf } from './order';
 import type { Chapter } from './types';
 
@@ -75,10 +77,10 @@ export const chRadio: Chapter = {
       title: 'An antenna',
       body: `
         <p>Everything so far ran down a wire or a fibre, even the access line at the start of <a href="#/c/path">the internet path</a>. A radio has only two antennas and the space between them, and no cable to keep one signal apart from another. This chapter is models, tested against closed forms; the radio chapters say so, and they say when a trace is modelled rather than captured. The gates come back in the next chapter, for the part of Wi-Fi that is logic.</p>
-        <p>An antenna turns current into a travelling field and, by reciprocity, back. A wire half a wavelength long is resonant: a <strong>half-wave dipole</strong>, ${nf(wavelengthM(2.4) * 50, 1)} cm at 2.4 GHz. It radiates most broadside, nothing along its own axis. Integrating the pattern over the sphere gives its <strong>gain</strong> over an imaginary isotropic antenna: 1.64, or 2.15 dBi. An antenna does not create power, it aims it. So the gain is the concentration and "more dBi" is "narrower".</p>
-        <p>Every antenna also has an <strong>effective aperture</strong>, the area of passing wave it collects: A = G λ² / 4π. A 0 dBi antenna at 2.4 GHz collects ${nf(apertureM2(0, 2.4) * 1e4, 0)} cm², at 28 GHz only ${nf(apertureM2(0, 28) * 1e4, 2)} cm². Remember this. It is the whole explanation of the next step.</p>
+        <p>An antenna turns current into a travelling field and, by reciprocity, back. A wire half a wavelength long is resonant: a <strong>half-wave dipole</strong>, ${nf(wavelengthM(ANTENNA_GHZ) * 50, 1)} cm at ${nf(ANTENNA_GHZ, 1)} GHz. It radiates most broadside, nothing along its own axis. Integrating the pattern over the sphere gives its <strong>gain</strong> over an imaginary isotropic antenna: 1.64, or 2.15 dBi. An antenna does not create power, it aims it. So the gain is the concentration and "more dBi" is "narrower".</p>
+        <p>Every antenna also has an <strong>effective aperture</strong>, the area of passing wave it collects: A = G λ² / 4π. A 0 dBi antenna at ${nf(ANTENNA_GHZ, 1)} GHz collects ${nf(apertureM2(0, ANTENNA_GHZ) * 1e4, 0)} cm², at 28 GHz only ${nf(apertureM2(0, 28) * 1e4, 2)} cm². Remember this. It is the whole explanation of the next step.</p>
         <p>Put elements in a line, half a wavelength apart, and feed each with a phase step: their fields add in one direction and cancel in others. That is a <strong>phased array</strong>: isotropic elements would give 10 log n dB of gain (dipoles in a line a little less, since their own pattern already narrows the same way; the panel integrates the plotted pattern), and a beam you steer electronically, with no moving parts. Move the sliders. At 28 GHz, half a wavelength is ${nf(wavelengthM(28) * 500, 1)} mm, and a 64-element array fits in a panel about 4 cm square. A phone has room for a handful of elements. The cellular chapter returns to this.</p>`,
-      widget: antennaWidget,
+      widget: () => withModel(antennaWidget(), dipole3d()),
       challenge: {
         kind: 'quiz',
         question: 'What does a higher-gain antenna do to the total power it radiates?',
