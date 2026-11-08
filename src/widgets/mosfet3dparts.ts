@@ -79,7 +79,8 @@ export function mosAnchors(st: MosState): Anchor[] {
   return [
     { text: 'source', p: [-(hl + SD / 2), 3.4, 0], side: 't', n: up },
     { text: 'drain', p: [hl + SD / 2, 3.4, 0], side: 't', n: up },
-    { text: 'gate', p: [0, gy + POLY + 3, 0], side: 't', n: up },
+    // on the gate's front face, not above it: the 200 nm poly is tall, and a label over its top left a phone's stage
+    { text: 'gate', p: [0, gy + POLY * 0.55, hw], side: 'r', n: front },
     { text: 'channel', p: [-hl * 0.6, -0.5, hw], side: 'l', n: front },
     { text: `L = ${lengthNm(st.l)} nm`, p: [hl * 0.5, 0.2, hw + RIM + 1.4], side: 'b', n: front },
     { text: `W = ${widthNm(st.w)} nm`, p: [xEnd + RIM + 1.4, 0.2, 0], side: 'r', n: [1, 0.4, 0] },
