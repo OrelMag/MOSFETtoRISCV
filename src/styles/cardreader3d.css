@@ -16,3 +16,4 @@
 .cr-mem code { color: var(--text); font-size: 12px; }
 .cr-mem .cr-none { font-style: italic; }
 @media (pointer: coarse) { .cr-seg button { min-height: 40px; } }
+.m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }

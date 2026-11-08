@@ -126,7 +126,7 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
   function edge(): void { run.edge(next); }
   const loop = frameLoop((now, dt) => {
     if (running) {
-      tau += dt * RATE[mode];
+      tau += dt * (reducedMotion() ? Math.min(RATE[mode], 4) : RATE[mode]); // no lamps blinking 40 times a second
       while (tau >= 1 && !run.out[2]) { tau -= 1; edge(); }
       u = reducedMotion() ? 1 : Math.min(1, tau / MOVE);
       if (run.out[2]) { u = 1; if (run.leftEdge < run.st.e || tau >= MOVE) { running = false; readout(true); } }
@@ -152,8 +152,9 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
     if (reducedMotion()) { u = 1; stepT = -1; } else { u = 0; stepT = performance.now(); }
     readout(true); kick();
   });
-  const takeBtn = h('button', { type: 'button', class: 'btn sm', 'aria-pressed': 'true' }, 'next = 1: take cards') as HTMLButtonElement;
-  takeBtn.addEventListener('click', () => { next = next ? 0 : 1; takeBtn.textContent = next ? 'next = 1: take cards' : 'next = 0: hold'; readout(true); kick(); });
+  // A toggle: its name stays, aria-pressed (and the on look) says whether the computer holds next at 1.
+  const takeBtn = h('button', { type: 'button', class: 'btn sm on', 'aria-pressed': 'true', title: 'The computer holds next at 1: it takes whatever is ready' }, 'Computer takes (next)') as HTMLButtonElement;
+  takeBtn.addEventListener('click', () => { next = next ? 0 : 1; takeBtn.classList.toggle('on', next === 1); readout(true); kick(); });
   const resetBtn = h('button', { type: 'button', class: 'btn sm' }, 'Deck back in the hopper');
   const restart = () => { run = new ReaderRun(deck, mode, feed); running = false; u = 1; tau = 0; stepT = -1; readout(true); kick(); };
   resetBtn.addEventListener('click', restart);

@@ -281,12 +281,13 @@ export const chCards: Chapter = {
         touches the roll and a circuit closes, as Hollerith's pins did in mercury. Row 9 comes under the brushes first, so the
         row this chapter's object cards keep their word in is the first one read: row 9 of columns 1–32 is the word on
         <code>data</code>. The 704 read every row this way, 12 rows of 72 columns as 24 words of 36 bits.</p>
-        <p>The IBM 2501 (1965; 600 or 1000 cards a minute) takes the card lengthwise, column 1 first, between a lamp and twelve
+        <p>The IBM 2501 of the System/360 years (600 or 1000 cards a minute) takes the card lengthwise, column 1 first, between a lamp and twelve
         <strong>photocells</strong>, one per row: it reads a column at a time, 12 bits, which is the reader part's column mode.
         Light needs no contact, so nothing wears and the card can move faster. Either way the bits leave on wires: ${N} cards
         take ${EDGES_ALL} edges row by row and ${EDGES_COLS} column by column, with next held at 1.</p>
-        <div class="try">Run the deck row by row and watch the lamps behind: data, then ready, empty and next. Then set
-        next = 0 and step: the card waits at the station. Switch to column by column and watch row 9's lamp build the word.</div>`,
+        <div class="try">Run the deck row by row and watch the lamps behind: data, then ready, empty and next. Then turn
+        off "Computer takes (next)" and step: the card waits at the station. Switch to column by column and watch the word
+        build up beside the model, one row-9 bit a column.</div>`,
       more: {
         derive: `<p>Column by column a card is ${COLUMNS} items, so with next held at 1 card k is done after ${COLUMNS}·k + ${FEED}·(k − 1) edges and the deck after
           ${COLUMNS} × ${N} + ${FEED} × ${N - 1} = ${EDGES_COLS}. A loader that wants the word shifts in row 9 of each of the first 32 columns: 32 takes for what row by row arrives in one.
