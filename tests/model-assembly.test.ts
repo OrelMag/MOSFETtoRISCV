@@ -11,7 +11,7 @@ import { GateSim } from '../src/sim/gatesim';
 import { HAZARDS, INDEP } from '../src/chapters/ch-pipe';
 import { PROGRAMS } from '../src/riscv/programs';
 import { tick } from './yieldtick';
-import { STATIONS, assemblyAnchors, assemblyParts, lampsOf, palletsAt, stationX } from '../src/widgets/assembly3dparts';
+import { assemblyAnchors, palletBox, assemblyParts, lampsOf, palletsAt, stationX } from '../src/widgets/assembly3dparts';
 
 /** Plus a program with jal, jalr and a load whose result feeds a jalr: none of the chapter's three uses them. */
 const CALLS = `# call and return
@@ -94,18 +94,26 @@ describe('the pallets', () => {
   });
   it('a flush lifts its two pallets off the line while the next cycle slides in', () => {
     const k = plan.findIndex((c) => c.flush), mid = palletsAt(plan, k + 1, 0.5, ctx);
-    expect(mid.filter((q) => q.z > 0 && q.wrong).length).toBe(plan[k].pulled.length);
+    expect(mid.filter((q) => q.z < 0 && q.wrong).length).toBe(plan[k].pulled.length);
     expect(palletsAt(plan, k, 1, ctx).filter((q) => q.wrong).length).toBe(plan[k].pulled.length);
   });
-  it('mid-flush, the pulled pallets are named and clear of the belt, the new fetch and the bubbles are on the line', () => {
-    const k = plan.findIndex((c) => c.flush), mid = palletsAt(plan, k + 1, 0.5, ctx);
-    const pulled = mid.filter((q) => q.leaving === 'pulled');
-    expect(pulled.length).toBe(plan[k].pulled.length);
-    expect(pulled.every((q) => q.text.startsWith('pulled off') && q.z >= 14)).toBe(true);
-    expect(assemblyAnchors(mid).filter((a) => a.text.startsWith('pulled off')).length).toBe(pulled.length);
-    expect(mid.filter((q) => !q.leaving).length).toBe(5);
-    // the station names under a pulled label step aside; the others stay
-    expect(assemblyAnchors(mid).filter((a) => (STATIONS as readonly string[]).includes(a.text)).length).toBe(5 - pulled.length);
+  it('mid-flush, the pulled pallets are named, clear of every other pallet, and every station keeps its name', () => {
+    const k = plan.findIndex((c) => c.flush), N = ['Fetch', 'Decode', 'Execute', 'Memory', 'Writeback'];
+    for (const u of [0.05, 0.1, 0.25, 0.5, 0.75, 0.95]) {
+      const mid = palletsAt(plan, k + 1, u, ctx), pulled = mid.filter((q) => q.leaving === 'pulled');
+      expect(pulled.length).toBe(plan[k].pulled.length);
+      for (const a of pulled) for (const b of mid) {
+        if (a === b || b.size === 0) continue;
+        const [x0, x1, y0, y1, z0, z1] = palletBox(a), [p0, p1, q0, q1, r0, r1] = palletBox(b);
+        const hit = x0 < p1 && p0 < x1 && y0 < q1 && q0 < y1 && z0 < r1 && r0 < z1;
+        expect(hit, `u=${u}: pulled pallet at x=${a.x} meets one at x=${b.x}`).toBe(false);
+      }
+      expect(pulled.every((q) => q.text.endsWith(' · pulled'))).toBe(true);
+      const texts = assemblyAnchors(mid).map((a) => a.text);
+      expect(N.every((n) => texts.includes(n))).toBe(true);
+      expect(texts.filter((t) => t.endsWith(' · pulled')).length).toBe(pulled.length);
+      expect(texts.includes('bubble')).toBe(false);
+    }
   });
   it('the retiring pallet leaves past Writeback', () => {
     const mid = palletsAt(plan, 8, 0.5, ctx);
@@ -115,7 +123,7 @@ describe('the pallets', () => {
     const p = palletsAt(plan, 8, 1, ctx), rgb: [number, number, number] = [0.5, 0.5, 0.5];
     const pal = Object.fromEntries(['frame', 'belt', 'plate', 'bubble', 'alu', 'load', 'store', 'ctl', 'wrong', 'off', 'hold', 'flush'].map((k) => [k, rgb])) as unknown as Parameters<typeof assemblyParts>[2];
     expect(assemblyParts(p, lampsOf(plan[8]), pal).length).toBeGreaterThan(p.length * 2);
-    expect(assemblyAnchors(p).length).toBe(5 + p.length);
+    expect(assemblyAnchors(p).length).toBe(5 + p.filter((q) => q.kind !== 'bubble').length);
   });
 });
 

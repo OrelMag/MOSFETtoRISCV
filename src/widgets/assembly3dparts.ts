@@ -47,11 +47,17 @@ export function palletsAt(plan: readonly Cycle[], t: number, u: number, ctx: Ctx
   prev?.slots.forEach((s, i) => {
     if (now.has(s.seq)) return;
     if (i === 4) out.push(make(s, stationX(4 + u), false, { size: 1 - u, leaving: 'retired' }));
-    // lifted clear of the belt within the first half of the slide, named so a still frame says what it is
-    else out.push(make(s, stationX(i), true, { z: 15 * Math.min(1, 2 * u), y: 5 * Math.min(1, 2 * u), leaving: 'pulled', text: s.valid ? 'pulled off' : 'bubble' }));
+    // lifted at once and carried behind the gantries, off the belt's far side: never over a station's pallet, named by its own mnemonic
+    else out.push(make(s, stationX(i), true, { z: -PULL_Z * Math.min(1, 2 * u), y: PULL_Y * Math.min(1, 4 * u), leaving: 'pulled', text: s.valid ? `${ctx.mnemonicOf(s.pc)} · pulled` : 'bubble' }));
   });
   return out;
 }
+
+/** How far a pulled pallet is lifted and carried back (units), well past a pallet's own 8 high and 14 deep. */
+const PULL_Y = 14, PULL_Z = 28;
+/** A pallet's box: plate and cargo, x0 x1 y0 y1 z0 z1. */
+export const palletBox = (p: Pallet): [number, number, number, number, number, number] =>
+  [p.x - 9 * p.size, p.x + 9 * p.size, p.y, p.y + 8 * p.size, p.z - 7 * p.size, p.z + 7 * p.size];
 
 export type Lamp = 'off' | 'hold' | 'flush';
 /** The signal lamps: Fetch and Decode hold on a stall, are emptied on a flush. */
@@ -77,14 +83,14 @@ export function assemblyParts(pallets: readonly Pallet[], lamps: readonly Lamp[]
 
 export function assemblyAnchors(pallets: readonly Pallet[]): Anchor[] {
   const front: [number, number, number] = [0, 0.3, 1], up: [number, number, number] = [0, 1, 0];
-  const settled = pallets.filter((p) => p.leaving !== 'retired'); // a retiring pallet is not labelled; a pulled one says so
+  // a retiring pallet is not labelled, nor a bubble (its colour and the readout say it); a pulled one is named where it hangs
+  const named = pallets.filter((p) => p.leaving !== 'retired' && p.kind !== 'bubble');
+  const pulled = named.filter((p) => p.leaving === 'pulled').sort((a, b) => a.x - b.x);
   return [
-    // a station's name steps aside while a pulled pallet's label hangs where it would be
-    ...STATIONS.map((n, i): Anchor => ({ text: n, p: [stationX(i), -1, 10], side: 'b', n: front }))
-      .filter((_, i) => !pallets.some((p) => p.leaving === 'pulled' && p.x === stationX(i))),
-    // a pulled pallet's name hangs below it, clear of the arriving pallet and its label above
-    ...settled.map((p): Anchor => p.leaving === 'pulled'
-      ? { text: p.text, p: [p.x, p.y, p.z + 16], side: 'b', n: front }
+    ...STATIONS.map((n, i): Anchor => ({ text: n, p: [stationX(i), -1, 10], side: 'b', n: front })),
+    // two pulled labels would meet on a narrow stage: one above its pallet, the next below
+    ...named.map((p): Anchor => p.leaving === 'pulled'
+      ? { text: p.text, p: [p.x, p.y + (pulled.indexOf(p) % 2 ? 0 : 9), p.z], side: pulled.indexOf(p) % 2 ? 'b' : 't', n: up }
       : { text: `${p.wrong ? '✗ ' : ''}${p.text}`, p: [p.x, p.y + 9, p.z], side: 't', n: up }),
   ];
 }
