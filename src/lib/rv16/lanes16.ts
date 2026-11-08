@@ -20,6 +20,7 @@ import { AND, NOT, OR } from '../gates';
 import { bitwise, orN } from '../wide';
 import { BRANCH16, CTL16, IMM16, NEXTPC16 } from './cpu';
 import { choose4, DEC3, MUX16, RF8, RV16_ALU16, RV16_DFFE, RV16_DREG16, RV16_MUX4, RV16_REG16, RV16_REG4 } from './logic';
+import { laid } from '../layered';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -51,7 +52,6 @@ export const LANES16: ComponentDef = (() => {
   b.next();
   b.wire(b.op1(merger(ones(NL), 2), nz, 'nz'), 'nz');
   ys.forEach((y, i) => b.wire(y, `y${i}`));
-  const R = b.right;
   const aluF = RV16_ALU16.spec!;
   return define({
     id: 'rv16_lanes4', name: 'Four lanes (RV16)', category: 'cpu',
@@ -64,7 +64,7 @@ export const LANES16: ComponentDef = (() => {
       const ys = L.map((i) => aluF([v[i], bimm ? imm : v[4 + i], op])[0]);
       return [...ys, L.reduce((m, i) => (v[i] ? m | (1 << i) : m), 0)];
     },
-    netlist: () => ({ pins: { ...pinsAt([...each('a'), ...each('b'), 'imm', 'bimm', 'alu'], 0, 3), ...pinsAt([...each('y'), 'nz'], R, 4) }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { keepOrder: true, room: true }),
   });
 })();
 
@@ -128,14 +128,13 @@ export const MASK16: ComponentDef = (() => {
   b.wire(b.op1(bitwise('and', NL), [rwe4, mask], 'we'), 'we');
   b.wire(b.op1(bitwise('and', NL), [mwe4, mask], 'dwe'), 'dwe');
   b.wire(mask, 'mask');
-  const R = b.right;
   return define({
     id: 'rv16_mask4', name: 'Active mask (4 lanes)', category: 'cpu',
     summary: 'Which lanes run: a 4-bit register, all ones after reset, loaded from d when ld (tmc, split, join). lead is the lowest active lane\'s number (its registers decide branches), any says some lane is active; we and dwe let only the active lanes write a register or memory.',
     ports: [bit('rst', 'in'), bit('ld', 'in'), bus('d', NL, 'in'), bit('rwe', 'in'), bit('mwe', 'in'), clkIn(),
       bus('mask', NL, 'out'), bus('lead', 2, 'out'), bit('any', 'out'), bus('we', NL, 'out'), bus('dwe', NL, 'out')],
     symbol: { kind: 'box', label: 'MASK' },
-    netlist: () => ({ pins: { ...pinsAt(['rst', 'ld', 'd', 'rwe', 'mwe', 'clk'], 0), ...pinsAt(['mask', 'lead', 'any', 'we', 'dwe'], R) }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b),
   });
 })();
 
@@ -168,14 +167,13 @@ export const LANEDEC16: ComponentDef = (() => {
   b.wire(`${fd}.o5`, 'join');
   b.wire(`${fd}.o6`, 'tmc');
   b.wire(b.op1(AND, [csrOp, c7], 'tid'), 'tid');
-  const R = b.right;
   return define({
     id: 'rv16_lanedec', name: 'Lane decoder (RV16)', category: 'cpu',
     summary: 'The lane core\'s extra instructions, all in the SYSTEM opcode: funct3 4 split, 5 join, 6 tmc (7, bar, waits for other warps: with one warp it does nothing), and any CSR instruction on CSR 7, which reads tid (the lane\'s thread number) instead of a register.',
     ports: [bus('instr', 16, 'in'), bit('split', 'out'), bit('join', 'out'), bit('tmc', 'out'), bit('tid', 'out')],
     symbol: { kind: 'box', label: 'LANE DECODE' },
     spec: ([w]) => laneDecode(w),
-    netlist: () => ({ pins: { instr: [0, 8], ...pinsAt(['split', 'join', 'tmc', 'tid'], R) }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { keepOrder: true }),
   });
 })();
 

@@ -129,7 +129,9 @@ class Coach {
       this.refreshCount();
     }
     // a phone: the circuit sits under the text; open it (once per beat) before a beat about its controls
-    if (coarsePointer() && this.opened !== this.i && el.closest('.stage')) {
+    // (any width the stage is a sheet under the text: a narrow window as much as a touch screen)
+    const sheet = coarsePointer() || matchMedia('(max-width: 760px)').matches;
+    if (sheet && this.opened !== this.i && el.closest('.stage')) {
       this.opened = this.i;
       document.querySelector('.stage')?.scrollIntoView({ block: 'start' });
     }

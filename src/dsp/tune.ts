@@ -1,5 +1,5 @@
 // "Tune it", the signal-processing capstone (DOM-free): a band the learner has not seen holds a weak FM station keying a message in Morse, and the
-// learner's chain of the radio chapter's blocks must find it and decode the message. Bands are seeded (STATIONS in dsp/sdr.ts stays the chapter's).
+// learner's chain of the software radio chapter's (sdr) blocks must find it and decode the message. Bands are seeded (STATIONS in dsp/sdr.ts stays the chapter's).
 // The mixer and the CICs are integer, the gates' arithmetic (mixBlock, and cicRun equal to CicModel / lib/multirate.ts clock by clock: tests/dsp-tune.test.ts);
 // everything after them is floating point, the DSP core's part, as in the chapter. When a band fails, the cause is measured by running the same chain
 // on the parts of the band one at a time (the wanted station, each other station, the noise), never stated.
