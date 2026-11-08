@@ -130,6 +130,12 @@ export const MODELS_3D: readonly Model3d[] = [
     files: ['cable3d', 'cable3dview', 'cable3dparts'], factory: 'cable3d',
     open: () => import('./cable3d').then((m) => m.cable3d()),
   },
+  {
+    id: 'disk', title: 'A hard disk', category: 'memory', chapter: 'flash', step: 4,
+    summary: 'Platters at 7200 rpm and a swinging arm: a sector read as seek, rotational latency and transfer, against a flash page read.',
+    files: ['disk3d', 'disk3dview', 'disk3dparts'], factory: 'disk3d', codex: ['ftl', 'wearlevel'],
+    open: () => import('./disk3d').then((m) => m.disk3d()),
+  },
 ];
 
 export const modelById = (id: string): Model3d | undefined => MODELS_3D.find((m) => m.id === id);

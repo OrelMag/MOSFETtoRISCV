@@ -13,6 +13,7 @@ import { quatAxisAngle, type Vec3 } from '../gl/math';
 import { box, cyl, rod, type Anchor, type Part } from '../gl/parts';
 import { FLASH_REAL_US, FLASH_TIMES } from '../flash/model';
 import { CLOCK_NS } from '../dram/timing';
+import { groupNum } from '../sim/numfmt';
 
 // ---------------------------------------------------------------- the drive
 
@@ -128,7 +129,8 @@ export function radiusAt(plan: Plan | null, parked: number, t: number): number {
 // ---------------------------------------------------------------- what is shown
 
 export const fmtMs = (ms: number): string => (ms >= 100 ? ms.toFixed(0) : ms >= 10 ? ms.toFixed(1) : ms.toFixed(2)) + ' ms';
-const fmtN = (n: number): string => n.toLocaleString('en-US').replace(/,/g, ' ');
+/** The site's digit rule (sim/numfmt.ts): grouped by U+202F only from five digits. */
+const fmtN = (n: number): string => groupNum(n);
 const fmtBytes = (b: number): string => (b >= 2 ** 20 ? `${(b / 2 ** 20).toFixed(2)} MiB` : `${Math.round(b / 1024)} KiB`);
 
 /** The rows of the readout, as text: the view prints exactly these, and the tests hold them to the model above. */

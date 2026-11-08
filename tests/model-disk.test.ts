@@ -1,6 +1,7 @@
 // The hard disk model: the fitted seek curve against its datasheet points, rotation exact, the planned read landing on its
 // sector, the clock conversion to the flash chapter's cycles, and the 3D drawing held to the same numbers.
 import { describe, expect, it } from 'vitest';
+import { groupNum } from '../src/sim/numfmt';
 import { FLASH_REAL_US, FLASH_TIMES } from '../src/flash/model';
 import { CLOCK_NS } from '../src/dram/timing';
 import type { RGB, RGBA } from '../src/gl/instances';
@@ -12,7 +13,7 @@ import {
 
 const col = (i: number): RGB => [i / 20, 0.5, 0.5], al = (i: number): RGBA => [i / 20, 0.5, 0.5, 0.4];
 const P: DiskPalette = { base: col(1), platter: col(2), ring: col(3), mark: col(4), hub: col(5), steel: col(6), slider: col(7), copper: col(8), magnet: col(9), yoke: al(10), magnetTop: al(11), target: col(12), live: col(13) };
-const thin = (n: number) => n.toLocaleString('en-US').replace(/,/g, ' ');
+const thin = (n: number) => groupNum(n);
 
 describe('the fitted seek curve', () => {
   it('passes through the datasheet track-to-track and average seek', () => {
