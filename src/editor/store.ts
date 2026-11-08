@@ -19,7 +19,7 @@ import { PUZZLE_MAX_WIDTH } from './puzzleparts';
 import {
   type FsmDoc, type TableDoc, SCHEMA, chipDeps, portCoreRef, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
   type ChipDoc, type CommentDoc, type FaceDisplayDoc, type FaceDoc, type FacePinDoc, type FaceSide, type DisplayKind, type EndRef, type ExitDir, type FolderDoc, type LabelDoc, type NetHue, type PartDoc, type PartRef,
-  type PinDoc, type PinValue, type Vec, type WireDoc, type Workspace,
+  type PinDoc, type PinValue, type SectionDoc, type Vec, type WireDoc, type Workspace, SECTION_MIN,
 } from './model';
 
 export interface KV {
@@ -244,11 +244,20 @@ function sanitizeLabel(l: unknown): LabelDoc | null {
 
 /** Comments longer than this are cut (a pasted essay would make a huge box). */
 const MAX_COMMENT = 2000;
+const MAX_SECTION_TITLE = 120, MAX_SECTION_SIZE = 4000;
 
 function sanitizeComment(c: unknown): CommentDoc | null {
   const at = isObj(c) ? vec(c.at) : null;
   if (!isObj(c) || !str(c.id) || !str(c.text) || !c.text.trim() || !at) return null;
   return { id: c.id, at, text: c.text.slice(0, MAX_COMMENT) };
+}
+
+function sanitizeSection(s: unknown): SectionDoc | null {
+  const at = isObj(s) ? vec(s.at) : null, size = isObj(s) ? vec(s.size) : null;
+  if (!isObj(s) || !str(s.id) || !at || !size) return null;
+  const title = str(s.title) ? s.title.replace(/s+/g, ' ').trim().slice(0, MAX_SECTION_TITLE) : '';
+  const big = (v: number) => Math.min(MAX_SECTION_SIZE, Math.max(SECTION_MIN, Math.round(v)));
+  return compact<SectionDoc>({ id: s.id, at, size: [big(size[0]), big(size[1])], title, hue: num(s.hue) ? ((Math.round(s.hue) % 360) + 360) % 360 : undefined });
 }
 
 function list<T extends { id: string }>(x: unknown, f: (v: unknown) => T | null): T[] {
@@ -294,6 +303,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
   const parts = list(c.parts, sanitizePart);
   const labels = list(c.labels, sanitizeLabel);
   const comments = list(c.comments, sanitizeComment);
+  const sections = list(c.sections, sanitizeSection);
   let wires = list(c.wires, sanitizeWire);
   // Pin names must be unique too (they become port names): later duplicates go.
   const names = new Set<string>();
@@ -321,6 +331,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
     tests: sanitizeTests(c.tests),
     pins: uniquePins, parts, wires, labels,
     comments: comments.length ? comments : undefined,
+    sections: sections.length ? sections : undefined,
   });
 }
 

@@ -97,7 +97,7 @@ class Minimap {
   private update(): void {
     const ed = this.ed;
     const doc = ed.doc;
-    const key = [doc.parts, doc.wires, doc.pins, doc.labels, doc.comments, ed.view.polys.size, ed.chipId, ed.ws.chips, settings.minimap];
+    const key = [doc.parts, doc.wires, doc.pins, doc.labels, doc.comments, doc.sections, ed.view.polys.size, ed.chipId, ed.ws.chips, settings.minimap];
     const vb = ed.view.cam.vb;
     const view = `${vb.x},${vb.y},${vb.w},${vb.h}`;
     const same = !this.sized && view === this.lastView && key.every((k, i) => k === this.seen[i]);

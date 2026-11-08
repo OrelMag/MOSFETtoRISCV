@@ -25,12 +25,12 @@ import { lookInside } from './inside';
 import { flipSwitch, ioInfo, switchAt, type SwitchState } from './ioparts';
 import { canTurn, faceHit, nodeAt } from './face';
 import { toggleSwitch } from './ioface';
-import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, knobPortSide, nextSameName, onPinKnob, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
+import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, knobPortSide, nextSameName, onPinKnob, partAnchor, pointerGeom, sectionCornerAt, snapPt, WireDraft } from './geom';
 import { renamePin } from './chips';
-import { type ChipDoc, commentBox, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc, pinBig, pinValue } from './model';
+import { type ChipDoc, commentBox, sectionCorners, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc, pinBig, pinValue } from './model';
 import {
   addComment, addLabel, addPart, addPin, addWire, boxSelect, type Clip, copySel, deleteSel, dragWire, duplicate, flipParts, moveSel, pasteClip,
-  namePart, removeBend, rotateParts, type Sel, selectAll, setComment, setLabel, setPin, type WireGrab,
+  addSection, groupInSection, namePart, removeBend, resizeSection, rotateParts, type Sel, selectAll, setComment, setLabel, setPin, setSection, type WireGrab, withContents,
 } from './ops';
 import type { PaletteItem } from './palette';
 import { matches, shortcutAllowed } from '../ui/keys';
@@ -49,6 +49,8 @@ type State =
    */
   | { k: 'reshape'; id: string; grab: WireGrab; at: Vec; base: ChipDoc; d: Vec; hover?: boolean }
   | { k: 'band'; at: Vec; add: boolean }
+  /** A section's corner handle dragged: `fixed` is the opposite corner. */
+  | { k: 'resize'; id: string; fixed: Vec }
   /** `held`: the button is still down since the press that started it (drag-to-connect). */
   | { k: 'wire'; draft: WireDraft; held: boolean; sx: number; sy: number }
   /** Placing a palette item; `drag` while it is being dragged out of the palette. `flip` / `rot`: F and R pressed meanwhile. */
@@ -166,7 +168,13 @@ export class Tools {
     if (h.k === 'label') return !!s.labels?.includes(h.id);
     if (h.k === 'wire') return !!s.wires?.includes(h.id);
     if (h.k === 'comment') return !!s.comments?.includes(h.id);
+    if (h.k === 'section') return !!s.sections?.includes(h.id);
     return false;
+  }
+
+  /** A selection with what lies inside its sections: a section carries its contents when it moves. */
+  carried(sel: Sel): Sel {
+    return withContents(this.ed.doc, sel, this.ed.defOf);
   }
 
   /** Abandon whatever is in progress. */
@@ -225,6 +233,14 @@ export class Tools {
       return;
     }
 
+    // a selected section's corner: resize it (the opposite corner stays)
+    const corner = ed.sel.sections?.length && !e.shiftKey ? sectionCornerAt(ed.doc, ed.sel.sections, p, this.tol()) : null;
+    if (corner) {
+      const s = ed.doc.sections!.find((q) => q.id === corner.id)!;
+      ed.begin();
+      this.state = { k: 'resize', id: s.id, fixed: sectionCorners(s)[(corner.corner + 2) % 4] };
+      return;
+    }
     const named = nameHit(e.target);
     let h = named ?? this.hit(p);
     const took = this.onPress?.(h, e);
@@ -296,7 +312,7 @@ export class Tools {
         }
         if (!this.isSelected(st.hit)) ed.select(selOf(st.hit));
         ed.begin();
-        this.state = { k: 'move', at: st.at, base: ed.doc, sel: ed.sel, d: [0, 0] };
+        this.state = { k: 'move', at: st.at, base: ed.doc, sel: this.carried(ed.sel), d: [0, 0] };
         return this.move(e);
       }
       case 'move': {
@@ -316,12 +332,19 @@ export class Tools {
       case 'band':
         ed.view.showBand(st.at, p);
         return;
+      case 'resize': {
+        const q: Vec = [Math.round(p[0]), Math.round(p[1])];
+        ed.edit((d) => resizeSection(d, st.id, st.fixed, q).doc);
+        return;
+      }
       case 'wire':
         return this.previewWire(st.draft, p);
       case 'place':
         return this.ghost(st.item, p);
       default: {
         if (e.pointerType === 'mouse' || e.pointerType === 'pen') this.touch = false;
+        const cc = ed.sel.sections?.length ? sectionCornerAt(ed.doc, ed.sel.sections, p, this.tol()) : null;
+        if (cc) { ed.view.svg.style.cursor = cc.corner % 2 ? 'nesw-resize' : 'nwse-resize'; return; }
         const h = this.hit(p);
         const pin = h.k === 'pin' ? ed.doc.pins.find((q) => q.id === h.id) : undefined;
         // On a knob's port side the connection point lights up: a drag from here draws a wire.
@@ -364,6 +387,10 @@ export class Tools {
         if (this.taps.upEvent(e, key) && this.state.k === 'idle') this.dbl(e);
         return;
       }
+      case 'resize':
+        this.state = { k: 'idle' };
+        ed.commit();
+        return;
       case 'move':
       case 'reshape':
         if (st.k === 'reshape' && st.hover) return;
@@ -464,6 +491,7 @@ export class Tools {
     const h = this.hit(p);
     if (h.k === 'label') return; // the second click of a double-click already jumped
     if (h.k === 'comment') return this.editComment(h.id);
+    if (h.k === 'section') return this.rename(h);
     if (h.k === 'wire') {
       const poly = ed.view.polys.get(h.id);
       const g = poly && grabOn(poly, p, this.tol());
@@ -544,7 +572,8 @@ export class Tools {
     const s = this.ed.sel;
     if (this.ed.selCount !== 1) return;
     const h: Hit = s.parts?.length ? { k: 'part', id: s.parts[0] } : s.pins?.length ? { k: 'pin', id: s.pins[0] }
-      : s.labels?.length ? { k: 'label', id: s.labels[0] } : s.comments?.length ? { k: 'comment', id: s.comments[0] } : { k: 'none' };
+      : s.labels?.length ? { k: 'label', id: s.labels[0] } : s.comments?.length ? { k: 'comment', id: s.comments[0] }
+      : s.sections?.length ? { k: 'section', id: s.sections[0], on: 'title' } : { k: 'none' };
     this.rename(h);
   }
 
@@ -558,6 +587,16 @@ export class Tools {
     const svg = ed.view.svg;
     const el = (sel: string) => svg.querySelector(sel);
     if (h.k === 'comment') return this.editComment(h.id);
+    if (h.k === 'section') {
+      const sc = ed.doc.sections?.find((q) => q.id === h.id);
+      const at = sc && (el(`[data-section="${CSS.escape(sc.id)}"] .ed-sec-title`) ?? el(`[data-section="${CSS.escape(sc.id)}"]`));
+      if (!sc || !at) return;
+      ed.editInline(at, sc.title, { label: 'Section title' }, (v) => {
+        if (v === null || v.trim() === sc.title) return;
+        ed.edit((d) => setSection(d, sc.id, { title: v }).doc);
+      });
+      return;
+    }
     if (h.k === 'part') {
       const p = ed.doc.parts.find((q) => q.id === h.id);
       const at = p && (el(`[data-part="${p.id}"] .inst-name`) ?? el(`[data-part="${p.id}"]`));
@@ -984,6 +1023,7 @@ export class Tools {
     if (matches(e, 'sb.rotate')) { done(); this.rotate(e.shiftKey ? 3 : 1); return; }
     if (matches(e, 'sb.pointer')) { done(); this.armPointer(); return; }
     if (matches(e, 'sb.comment')) { done(); this.armComment(); return; }
+    if (matches(e, 'sb.section')) { done(); this.groupSel(); return; }
     switch (k) {
       case 'Delete': case 'Backspace': done(); this.del(); return;
       case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9': {
@@ -1001,7 +1041,7 @@ export class Tools {
         done();
         const n = e.shiftKey ? 5 : 1;
         const d: Vec = k === 'ArrowLeft' ? [-n, 0] : k === 'ArrowRight' ? [n, 0] : k === 'ArrowUp' ? [0, -n] : [0, n];
-        ed.edit((doc) => moveSel(doc, ed.sel, d, ed.defOf));
+        ed.edit((doc) => moveSel(doc, this.carried(ed.sel), d, ed.defOf));
       }
     }
   }
@@ -1204,6 +1244,32 @@ export class Tools {
     return list.slice(0, 8).map((a) => ({ label: `Start a wire from ${endName(ed.doc, ed.defOf, a.end)}`, run: () => this.keyWire(a.end, a.pos) }));
   }
 
+/** A new section with its top-left corner at p (the canvas menu's "Add a section here"), selected, its title being typed. */
+  addSectionAt(p: Vec): void {
+    const ed = this.ed;
+    this.cancel();
+    const r = addSection(ed.doc, snapPt(p), [20, 12]);
+    if (r.id === undefined) return void ed.toast(r.reason, 'err');
+    ed.edit(() => r.doc);
+    ed.select({ sections: [r.id] });
+    requestAnimationFrame(() => this.rename({ k: 'section', id: r.id, on: 'title' }));
+  }
+
+  /** A section fitted around the selection (its title being typed); the toolbar's Section with nothing selected adds one in the view's middle. */
+  groupSel(): void {
+    const ed = this.ed;
+    if (!ed.selCount) {
+      const v = ed.view.cam.vb;
+      return this.addSectionAt([Math.round(v.x + v.w / 2 - 10), Math.round(v.y + v.h / 2 - 6)]);
+    }
+    const r = groupInSection(ed.doc, ed.sel, ed.defOf);
+    if (r.id === undefined) return void ed.toast(r.reason, 'err');
+    ed.edit(() => r.doc);
+    ed.select({ sections: [r.id] });
+    ed.announce('Grouped in a section: type its title');
+    requestAnimationFrame(() => this.rename({ k: 'section', id: r.id, on: 'title' }));
+  }
+
   del(): void {
     const ed = this.ed;
     if (!ed.selCount) return;
@@ -1222,7 +1288,7 @@ export class Tools {
     const ed = this.ed;
     if (!clipboard) return;
     const c = clipboard;
-    const xs = [...c.parts.map((p) => p.at), ...c.pins.map((p) => p.at), ...c.labels.map((l) => l.at), ...(c.comments ?? []).map((q) => q.at), ...c.wires.flatMap((w) => w.pts)];
+    const xs = [...c.parts.map((p) => p.at), ...c.pins.map((p) => p.at), ...c.labels.map((l) => l.at), ...(c.comments ?? []).map((q) => q.at), ...(c.sections ?? []).map((q) => q.at), ...c.wires.flatMap((w) => w.pts)];
     if (!xs.length) return;
     const o: Vec = [Math.min(...xs.map((q) => q[0])), Math.min(...xs.map((q) => q[1]))];
     const want = this.cursor ? snapPt(this.cursor) : [o[0] + 2, o[1] + 2] as Vec;
@@ -1329,11 +1395,12 @@ function selOf(h: Hit): Sel {
   if (h.k === 'label') return { labels: [h.id] };
   if (h.k === 'wire') return { wires: [h.id] };
   if (h.k === 'comment') return { comments: [h.id] };
+  if (h.k === 'section') return { sections: [h.id] };
   return {};
 }
 
 function toggle(sel: Sel, h: Hit): Sel {
-  const key = h.k === 'part' ? 'parts' : h.k === 'pin' ? 'pins' : h.k === 'label' ? 'labels' : h.k === 'wire' ? 'wires' : h.k === 'comment' ? 'comments' : null;
+  const key = h.k === 'part' ? 'parts' : h.k === 'pin' ? 'pins' : h.k === 'label' ? 'labels' : h.k === 'wire' ? 'wires' : h.k === 'comment' ? 'comments' : h.k === 'section' ? 'sections' : null;
   if (!key || !('id' in h)) return sel;
   const cur = sel[key] ?? [];
   return { ...sel, [key]: cur.includes(h.id) ? cur.filter((x) => x !== h.id) : [...cur, h.id] };
@@ -1344,5 +1411,7 @@ function union(a: Sel, b: Sel): Sel {
   const r: Sel = { parts: u(a.parts, b.parts), pins: u(a.pins, b.pins), wires: u(a.wires, b.wires), labels: u(a.labels, b.labels) };
   const cs = u(a.comments, b.comments);
   if (cs.length) r.comments = cs;
+  const ss = u(a.sections, b.sections);
+  if (ss.length) r.sections = ss;
   return r;
 }
