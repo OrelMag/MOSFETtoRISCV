@@ -20,6 +20,7 @@
   --ed-crit: #d6336c;
   --ed-note-bg: #fdf6d3;
   --ed-note-text: #4a4325;
+  --ed-sec: #5c6478;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -40,7 +41,9 @@
     --ed-crit: #f472b6;
     --ed-note-bg: #2b2818;
     --ed-note-text: #e6dcae;
+    --ed-sec: #9aa3b8;
   }
+  :root:not([data-theme='light']) .ed-sec.hued { --sec: hsl(var(--sec-h) 60% 66%); }
 }
 
 :root[data-theme='dark'],
@@ -62,7 +65,9 @@
   --ed-crit: #f472b6;
   --ed-note-bg: #2b2818;
   --ed-note-text: #e6dcae;
+  --ed-sec: #9aa3b8;
 }
+:root[data-theme='dark'] .ed-sec.hued, :root[data-look='vivid'][data-board='dark'] svg.schematic .ed-sec.hued { --sec: hsl(var(--sec-h) 60% 66%); }
 
 /* ---------- layout ---------- */
 .sandbox {
@@ -294,6 +299,15 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
 /* displays */
 /* comments: font size = COMMENT_FONT (model.ts), monospace so the box is computed without a DOM */
 .ed-note-bg { fill: var(--ed-note-bg); stroke: none; }
+/* Sections: a frame under the circuit; the drawing takes no pointer events (geom.ts hits the border and title). */
+.ed-sec { pointer-events: none; --sec: var(--ed-sec); }
+.ed-sec.hued { --sec: hsl(var(--sec-h) 55% 42%); }
+.ed-sec-bg { fill: color-mix(in srgb, var(--sec) 5%, transparent); stroke: none; }
+.ed-sec-frame { fill: none; stroke: var(--sec); stroke-width: 0.14; stroke-dasharray: 0.7 0.45; }
+.ed-sec-title { font: 600 1.1px var(--font-mono); fill: var(--sec); white-space: pre; }
+.ed-sec-handle { fill: var(--ed-sel); stroke: none; display: none; }
+.ed-sec.ed-sel .ed-sec-frame { stroke: var(--ed-sel); stroke-width: 0.2; }
+.ed-sec.ed-sel .ed-sec-handle { display: inline; }
 .ed-note-text { font: 1.1px var(--font-mono); fill: var(--ed-note-text); white-space: pre; }
 .ed-note.ed-sel .ed-note-bg { stroke: var(--ed-sel); stroke-width: 0.14; }
 .ed-disp-box { fill: var(--sym-fill); }

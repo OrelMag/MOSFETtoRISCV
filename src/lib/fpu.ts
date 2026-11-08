@@ -5,7 +5,7 @@
 //   plus the special cases (zero, subnormal, infinity, NaN) and the exception flags. One
 //   normalize-and-round unit serves the adder, the multiplier and integer-to-float conversion.
 
-import { symbolGeom } from '../sim/geometry';
+import { orientGeom, symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
 import { LIB_MUX2, andN, busMux2, equal, incrementer, muxTree, type Mux2Kind } from './combinational';
@@ -289,6 +289,202 @@ endmodule`,
   });
 })();
 
+// ---- normalize & round's blocks ------------------------------------------------------------------------------------------------
+// Drawn as its stages (circuit eyeballing, 2026-11-08): the shift amounts, the left shift, the right shift for a subnormal, the
+// rounding, the packing. The gates are the ones the flat drawing had.
+
+/** Bit length of a non-negative integer below 2^53. */
+const bitLen = (x: number) => { let n = 0; while (x >= 1) { x = Math.floor(x / 2); n++; } return n; };
+
+/** The shift amounts: count the leading zeros; shift them out (L) as far as the exponent allows, or right (R) below it. */
+function nrAmount(f: FpFormat, w: number): ComponentDef {
+  const { E, M } = f;
+  return memo(`fnr_amt${E}_${M}_${w}`, () => {
+    const XE = xeOf(f), P = pow2ceil(w + 1), k = Math.log2(P), T = 2 ** XE;
+    const b = new Builder(10, 8, 4);
+    b.pins('mant', 'exp');
+    // leading zeros (padded with ones below, so an all-zero significand counts w)
+    const pad = b.op1(merger([P - w, w]), [b.op1(K(P - w, 2 ** (P - w) - 1), [], undefined, 'ones'), 'mant'], undefined, 'pad');
+    b.next();
+    const lz = b.op(lzc(P), [pad], 'leading zeros', 'lz');
+    b.next();
+    const c = b.op1(merger([k, XE - k]), [`${lz}.c`, b.op1(K(XE - k, 0), [], undefined, 'cz')], undefined, 'cw');
+    const em1 = `${b.op(koggeStone(XE), ['exp', b.op1(K(XE, 2 ** XE - 1), [], undefined, 'm1'), b.op1(TIE0, [], undefined, 'c0')], 'exp − 1', 'dec')}.s`;
+    b.next();
+    const t = b.op(addSubFast(XE), [em1, c, b.op1(TIE1, [], undefined, 'one')], 'exp − 1 − lz', 'room');
+    const canNorm = b.name(b.op1(NOT, [`${t}.n`], 'can normalize?', 'can'), 'canNormalize');
+    const es = b.op(splitter([k, XE - 1 - k, 1]), [em1], undefined, 'es');
+    const em1Neg = `${es}.o2`;
+    const negEm1 = b.op(addSubFast(XE), [b.op1(K(XE, 0), [], undefined, 'zero'), em1, b.op1(TIE1, [], undefined, 'one2')], '1 − exp', 'neg');
+    b.next();
+    const Lalt = b.op1(busMux2(k), [`${es}.o0`, b.op1(K(k, 0), [], undefined, 'l0'), em1Neg], 'as far as exp allows', 'lalt');
+    b.wire(b.op1(busMux2(k), [Lalt, `${lz}.c`, canNorm], 'left shift', 'lsel'), 'L');
+    const ns = b.op(splitter([k, XE - k]), [`${negEm1}.s`], undefined, 'ns');
+    const hiNZ = b.op1(NOT, [b.op1(isZero(XE - k), [`${ns}.o1`], undefined, 'hiz')], undefined, 'hinz');
+    const Rsat = b.op1(busMux2(k), [`${ns}.o0`, b.op1(K(k, 2 ** k - 1), [], undefined, 'rmax'), hiNZ], 'saturate', 'rsat');
+    b.wire(b.op1(bitwise('and', k), [Rsat, b.op1(fanout(k), [em1Neg], undefined, 'neg1')], 'right shift', 'rgate'), 'R');
+    const eNorm = b.op1(incFast(XE), [`${t}.s`], undefined, 'enorm');
+    b.wire(b.op1(busMux2(XE), [b.op1(K(XE, 1), [], undefined, 'emin'), eNorm, canNorm], 'exponent after the shift', 'esel'), 'e');
+    const ports = [bus('mant', w, 'in'), bus('exp', XE, 'in'), bus('L', k, 'out'), bus('R', k, 'out'), bus('e', XE, 'out')];
+    return define({
+      id: `fnr_amt${E}_${M}_${w}`, name: `Normalize & round: shift amounts (${w}-bit)`, category: 'arithmetic',
+      summary: 'Count the leading zeros lz. If exp − 1 − lz ≥ 0 shift them all out (L = lz, the exponent drops by lz); else shift only as far as the smallest exponent allows (L = exp − 1, the result is subnormal); and when exp < 1 already, shift right instead (R = 1 − exp, saturated). e is the exponent after the shift.',
+      ports, symbol: { kind: 'box', label: 'SHIFT AMOUNT' },
+      spec: ([mant, exp]) => {
+        const c = mant ? w - bitLen(mant) : w, em1 = (exp + T - 1) % T, t = (em1 - c + T) % T, can = t < T / 2, neg = em1 >= T / 2;
+        const L = can ? c : neg ? 0 : em1 % P, n1 = (T - em1) % T, Rs = Math.floor(n1 / P) ? P - 1 : n1 % P;
+        return [L, neg ? Rs : 0, can ? (t + 1) % T : 1];
+      },
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** Rounding: the guard bit G and sticky bit S below the kept M + 1 bits decide (rounding mode rm), tininess after rounding. */
+function nrRound(f: FpFormat, w: number): ComponentDef {
+  const { E, M } = f;
+  return memo(`fnr_round${E}_${M}_${w}`, () => {
+    const b = new Builder(10, 8, 4);
+    b.pins('m', 'sticky', 'stin', 'rm', 'sign');
+    // G = first dropped bit, Rb = the next one, S2 = OR of everything below Rb
+    const parts = b.op(splitter([w - M - 2, 1, M + 1]), ['m'], undefined, 'parts');
+    b.name(`${parts}.o2`, 'kept'); // names for the pointers a re-placed drawing may draw
+    let Rb: string, S2: string;
+    if (w - M - 2 === 1) {
+      Rb = `${parts}.o0`;
+      S2 = anyOf(b, ['sticky', 'stin']);
+    } else {
+      const rs = b.op(splitter([w - M - 3, 1]), [`${parts}.o0`], undefined, 'rs');
+      Rb = `${rs}.o1`;
+      S2 = anyOf(b, [nonZero(b, `${rs}.o0`, w - M - 3), 'sticky', 'stin']);
+    }
+    b.name(Rb, 'R'); b.name(S2, 'below R');
+    b.next();
+    const S = b.name(b.op1(OR, [Rb, S2], 'sticky S', 'sor'), 'S');
+    const G = b.name(`${parts}.o1`, 'G');
+    const lsb = b.op(splitter([1, M]), [`${parts}.o2`], undefined, 'lsb');
+    const kt = b.op(splitter([M, 1]), [`${parts}.o2`], undefined, 'kt');
+    b.next();
+    b.name(`${lsb}.o0`, 'lsb'); b.name(`${kt}.o1`, 'top bit'); b.name(`${kt}.o0`, 'fraction');
+    const rd = b.op(ROUND_DECIDE, ['rm', 'sign', `${lsb}.o0`, G, S], 'round up?', 'rd');
+    const inc = b.name(`${rd}.up`, 'up');
+    b.wire(b.op1(OR, [G, S], 'inexact', 'nx'), 'inexact');
+    // tininess after rounding: would rounding to M + 1 bits (G becomes the last bit) reach 2^emin?
+    const kf = b.op(splitter(ones(M)), [`${kt}.o0`], undefined, 'kf');
+    const fracOnes = b.op1(andN(M), Array.from({ length: M }, (_, i) => `${kf}.o${i}`), 'fraction all 1s', 'ones');
+    const rd2 = b.op(ROUND_DECIDE, ['rm', 'sign', b.op1(TIE1, [], undefined, 'one'), Rb, S2], 'unbounded rounding', 'rd2');
+    b.next();
+    const mi = b.op(incFast(M + 1), [`${parts}.o2`], undefined, 'inc');
+    b.wire(b.op1(busMux2(M + 1), [`${parts}.o2`, `${mi}.y`, inc], 'rounded', 'msel'), 'mr');
+    b.wire(b.op1(AND, [inc, `${mi}.cout`], 'carry out', 'carry'), 'carry');
+    const reach = b.op1(andN(3), [fracOnes, G, `${rd2}.up`], undefined, 'reach');
+    b.next();
+    b.wire(b.op1(AND, [b.op1(NOT, [`${kt}.o1`], undefined, 'nhid'), b.op1(NOT, [reach], undefined, 'nreach')], 'tiny?', 'tiny'), 'tiny');
+    b.wire(`${rd}.toInf`, 'toInf');
+    const ports = [bus('m', w, 'in'), bit('sticky', 'in'), bit('stin', 'in'), bus('rm', 3, 'in'), bit('sign', 'in'),
+      bus('mr', M + 1, 'out'), bit('carry', 'out'), bit('toInf', 'out'), bit('inexact', 'out'), bit('tiny', 'out')];
+    const D = w - M - 2;
+    return define({
+      id: `fnr_round${E}_${M}_${w}`, name: `Normalize & round: rounding (${w}-bit)`, category: 'arithmetic',
+      summary: 'The top M + 1 bits are kept. G is the first bit below them, S the OR of everything further down (and the sticky bits). The rounding decision adds 1 or not; a carry out of the top is reported. inexact = G or S. tiny: the result would stay below 2^emin even rounded with an unbounded exponent.',
+      ports, symbol: { kind: 'box', label: 'ROUND' },
+      spec: ([m, sticky, stin, rm, sign]) => {
+        const low = m % 2 ** D, G = Math.floor(m / 2 ** D) % 2, kept = Math.floor(m / 2 ** (D + 1));
+        const Rb = D === 1 ? low : Math.floor(low / 2 ** (D - 1)) % 2;
+        const S2 = (D === 1 ? 0 : low % 2 ** (D - 1)) || sticky || stin ? 1 : 0, S = Rb || S2 ? 1 : 0;
+        const up = roundUp(rm, sign, !!(kept % 2), !!G, !!S), full = 2 ** (M + 1) - 1;
+        const reach = kept % 2 ** M === 2 ** M - 1 && G && roundUp(rm, sign, true, !!Rb, !!S2);
+        return [up ? (kept + 1) % (full + 1) : kept, up && kept === full ? 1 : 0, overflowToInf(rm, sign) ? 1 : 0, G || S ? 1 : 0,
+          kept < 2 ** M && !reach ? 1 : 0];
+      },
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** Packing: a carry bumps the exponent; past the top the result is ∞ or the largest finite number; zeros and subnormals get exponent 0. */
+function nrPack(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fnr_pack${E}_${M}`, () => {
+    const XE = xeOf(f), T = 2 ** XE;
+    const b = new Builder(10, 8, 4);
+    b.pins('mr', 'carry', 'toInf', 'inexact', 'tiny', 'e', 'sign');
+    const eInc = b.op1(incFast(XE), ['e'], 'e + 1', 'einc');
+    const geTop = b.op1(NOT, [`${b.op(addSubFast(XE), ['e', b.op1(K(XE, 2 ** E - 1), [], undefined, 'max'), b.op1(TIE1, [], undefined, 'one')], 'e ≥ max?', 'cmp')}.n`], undefined, 'ge');
+    const atTop = b.op1(equal(XE), ['e', b.op1(K(XE, 2 ** E - 2), [], undefined, 'max1')], 'e = max − 1?', 'at');
+    b.next();
+    const ms = b.op(splitter([M, 1]), ['mr'], undefined, 'ms');
+    b.name(`${ms}.o0`, 'fraction'); b.name(`${ms}.o1`, 'top bit'); b.name(geTop, 'e ≥ max'); // the pointers' names
+    const hidden = b.op1(OR, [`${ms}.o1`, 'carry'], 'hidden bit', 'hid');
+    const eF = b.op1(busMux2(XE), ['e', eInc, 'carry'], 'exp + carry', 'ef');
+    b.next();
+    const inf = b.name(b.op1(AND, [hidden, b.op1(OR, [geTop, b.op1(AND, ['carry', atTop], undefined, 'ct')], 'overflow?', 'ov')], undefined, 'inf'), 'ovf');
+    const satMax = b.op1(AND, [inf, b.op1(NOT, ['toInf'], undefined, 'nti')], 'largest finite instead', 'sat');
+    const ef = b.op(splitter([E, XE - E]), [eF], undefined, 'efs');
+    b.name(`${ef}.o0`, 'exponent field');
+    b.next();
+    const expF = b.op1(bitwise('and', E), [`${ef}.o0`, b.op1(fanout(E), [hidden], undefined, 'hf')], 'exponent, 0 if subnormal', 'ez');
+    const expOr = b.op(splitter([1, E - 1]), [b.op1(bitwise('or', E), [expF, b.op1(fanout(E), [inf], undefined, 'if')], 'all 1s on overflow', 'eo')], undefined, 'eos');
+    b.name(`${expOr}.o0`, 'field bit 0'); b.name(`${expOr}.o1`, 'field bits 1+');
+    const e0 = b.op1(AND, [`${expOr}.o0`, b.op1(NOT, [satMax], undefined, 'nsat')], undefined, 'e0');
+    const fracOut = b.op1(bitwise('or', M), [b.op1(bitwise('and', M), [`${ms}.o0`, b.op1(fanout(M), [b.op1(NOT, [inf], undefined, 'ninf')], undefined, 'nf')], undefined, 'fz'),
+      b.op1(fanout(M), [satMax], undefined, 'sf')], 'fraction', 'fo');
+    b.next();
+    b.wire(b.op1(merger([M, 1, E - 1, 1]), [fracOut, e0, `${expOr}.o1`, 'sign'], undefined, 'y'), 'y');
+    b.wire(flagWord(b, { of: inf, uf: b.op1(AND, ['tiny', 'inexact'], 'UF', 'uf'), nx: b.op1(OR, ['inexact', inf], 'NX', 'nxo') }), 'flags');
+    // the rounding's outputs in the order ROUND gives them, then the exponent and the sign
+    const ports = [bus('mr', M + 1, 'in'), bit('carry', 'in'), bit('toInf', 'in'), bit('inexact', 'in'), bit('tiny', 'in'), bus('e', XE, 'in'), bit('sign', 'in'),
+      bus('y', 1 + E + M, 'out'), bus('flags', 5, 'out')];
+    return define({
+      id: `fnr_pack${E}_${M}`, name: `Normalize & round: pack (${fmtName(f)})`, category: 'arithmetic',
+      summary: 'A carry out of the rounding bumps the exponent. With no hidden bit the exponent field is 0 (a subnormal or zero). Past the top exponent: ∞, or the largest finite number when the rounding mode does not round toward ∞. Flags: OF on overflow, UF if tiny and inexact, NX if inexact or overflowed.',
+      ports, symbol: { kind: 'box', label: 'PACK' },
+      spec: ([mr, carry, toInf, nx, tiny, e, sign]) => {
+        const geTop = (e - (2 ** E - 1) + T) % T < T / 2, atTop = e === 2 ** E - 2, hidden = Math.floor(mr / 2 ** M) || carry;
+        const eF = carry ? (e + 1) % T : e, inf = !!hidden && (geTop || (!!carry && atTop)), sat = inf && !toInf;
+        const ex = ((hidden ? eF % 2 ** E : 0) | (inf ? 2 ** E - 1 : 0)) - (sat ? 1 : 0);
+        const frac = (inf ? 0 : mr % 2 ** M) | (sat ? 2 ** M - 1 : 0);
+        return [frac + ex * 2 ** M + sign * 2 ** (E + M), (nx || inf ? 1 : 0) + (tiny && nx ? 2 : 0) + (inf ? 4 : 0)];
+      },
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** Normalize & round's blocks, as the campaign's reference draws them (chips of their own). */
+export const normRoundBlocks = (f: FpFormat, w: number): ComponentDef[] => [nrAmount(f, w), nrRound(f, w), nrPack(f)];
+
+/** normRound's places (kept apart so a tuning script can move them). */
+export const NR_AT: Record<'amt' | 'shl' | 'shr' | 'rnd' | 'pack', [number, number]> & { pins: Record<string, [number, number]> } = {
+  amt: [8, 8], shl: [28, 4], shr: [40, 4], rnd: [60, 4], pack: [80, 4],
+  pins: { mant: [0, 11], exp: [0, 13], stin: [0, 22], rm: [0, 24], sign: [0, 26], y: [100, 11], flags: [100, 13] },
+};
+
+/** Normalize & round's top level: shift amounts, the left shift, the right shift (subnormal), rounding, packing. */
+function nrTop(f: FpFormat, w: number, mux: Mux2Kind): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
+  const P = NR_AT, k = Math.log2(pow2ceil(w + 1));
+  const instances: InstanceDef[] = [
+    { name: 'amt', def: nrAmount(f, w), at: P.amt },
+    { name: 'shl', def: shiftLeft(w, k, mux), at: P.shl, label: 'normalize' },
+    { name: 'shr', def: shiftRightSticky(w, k, mux), at: P.shr, label: 'subnormal' },
+    { name: 'rnd', def: nrRound(f, w), at: P.rnd },
+    { name: 'pack', def: nrPack(f), at: P.pack },
+  ];
+  const nets: NetDef[] = [
+    { name: 'mant', ends: ['mant', 'amt.mant', 'shl.x'], via: { 'shl.x': [[4, 11], [4, 6]] } }, { name: 'exp', ends: ['exp', 'amt.exp'] },
+    { name: 'L', ends: ['amt.L', 'shl.s'] }, { name: 'R', ends: ['amt.R', 'shr.s'], via: { 'shr.s': [[38, 12], [38, 8]] } },
+    { name: 'e', ends: ['amt.e', 'pack.e'], via: { 'pack.e': [[24, 14], [24, 16]] } },
+    { name: 'normalized', ends: ['shl.y', 'shr.x'] }, { name: 'shifted', ends: ['shr.y', 'rnd.m'] }, { name: 'sticky', ends: ['shr.sticky', 'rnd.sticky'] },
+    // stin, rm and sign come up to the rounding in a staircase
+    { name: 'stin', ends: ['stin', 'rnd.stin'], via: { 'rnd.stin': [[56, 22], [56, 10]] } }, { name: 'rm', ends: ['rm', 'rnd.rm'], via: { 'rnd.rm': [[57, 24], [57, 12]] } },
+    { name: 'sign', ends: ['sign', 'rnd.sign', 'pack.sign'], via: { 'rnd.sign': [[58, 26], [58, 14]], 'pack.sign': [[78, 26], [78, 18]] } },
+    { name: 'rounded', ends: ['rnd.mr', 'pack.mr'] }, { name: 'carry', ends: ['rnd.carry', 'pack.carry'] }, { name: 'toInf', ends: ['rnd.toInf', 'pack.toInf'] },
+    { name: 'inexact', ends: ['rnd.inexact', 'pack.inexact'] }, { name: 'tiny', ends: ['rnd.tiny', 'pack.tiny'] },
+    { name: 'y', ends: ['pack.y', 'y'] }, { name: 'flags', ends: ['pack.flags', 'flags'] },
+  ];
+  return { instances, nets, pins: P.pins };
+}
+
 /**
  * Normalize and round: mant (w bits, its top bit has weight 2^exp) plus a sticky bit → the IEEE
  * encoding, rounded in mode rm, and the flags OF, UF, NX. Leading zeros are shifted out (left) as
@@ -299,92 +495,18 @@ endmodule`,
 export function normRound(f: FpFormat, w: number, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
   return memo(`fpnr${E}_${M}_${w}${mux.tag}`, () => {
-    const XE = xeOf(f), P = pow2ceil(w + 1), k = Math.log2(P);
+    const XE = xeOf(f);
     if (w < M + 3) throw new Error('normRound: the significand needs a guard bit and a sticky bit below it');
-    const b = new Builder();
-    // 1. leading zeros (padded with ones below, so an all-zero significand counts w)
-    const pad = b.op1(merger([P - w, w]), [b.op1(K(P - w, 2 ** (P - w) - 1), []), 'mant']);
-    b.next();
-    const lz = b.op(lzc(P), [pad], 'leading zeros');
-    b.next();
-    const c = b.name(b.op1(merger([k, XE - k]), [`${lz}.c`, b.op1(K(XE - k, 0), [])]), 'lz');
-    const em1 = b.name(`${b.op(koggeStone(XE), ['exp', b.op1(K(XE, 2 ** XE - 1), []), b.op1(TIE0, [])], 'exp − 1')}.s`, 'exp−1');
-    b.next();
-    const t = b.op(addSubFast(XE), [em1, c, b.op1(TIE1, [])], 'exp − 1 − lz');
-    const canNorm = b.name(b.op1(NOT, [`${t}.n`]), 'canNormalize');
-    const es = b.op(splitter([k, XE - 1 - k, 1]), [em1]);
-    const em1Neg = b.name(`${es}.o2`, 'exp<1');
-    const negEm1 = b.op(addSubFast(XE), [b.op1(K(XE, 0), []), em1, b.op1(TIE1, [])], '1 − exp');
-    b.next();
-    const Lalt = b.op1(busMux2(k), [`${es}.o0`, b.op1(K(k, 0), []), em1Neg]);
-    const L = b.name(b.op1(busMux2(k), [Lalt, `${lz}.c`, canNorm], 'left shift'), 'L');
-    const ns = b.op(splitter([k, XE - k]), [`${negEm1}.s`]);
-    const hiNZ = b.op1(NOT, [b.op1(isZero(XE - k), [`${ns}.o1`])]);
-    const Rsat = b.op1(busMux2(k), [`${ns}.o0`, b.op1(K(k, 2 ** k - 1), []), hiNZ]);
-    const R = b.name(b.op1(bitwise('and', k), [Rsat, b.op1(fanout(k), [em1Neg])], 'right shift'), 'R');
-    const eNorm = b.op1(incFast(XE), [`${t}.s`]);
-    const eAfter = b.name(b.op1(busMux2(XE), [b.op1(K(XE, 1), []), eNorm, canNorm]), 'e');
-    // in parallel with the shifts and the rounding: e + 1 (for a carry out of the rounding) and the overflow tests on e
-    const eInc = b.name(b.op1(incFast(XE), [eAfter], 'e + 1'), 'e+1');
-    const geTop = b.name(b.op1(NOT, [`${b.op(addSubFast(XE), [eAfter, b.op1(K(XE, 2 ** E - 1), []), b.op1(TIE1, [])], 'e ≥ max?')}.n`]), 'e≥max');
-    const atTop = b.name(b.op1(equal(XE), [eAfter, b.op1(K(XE, 2 ** E - 2), [])], 'e = max − 1?'), 'e=max−1');
-    b.next();
-    // 2. shift
-    const sh1 = b.op1(shiftLeft(w, k, mux), ['mant', L], 'normalize');
-    b.next();
-    const sh2 = b.op(shiftRightSticky(w, k, mux), [sh1, R], 'subnormal');
-    b.next();
-    // 3. round: G = first dropped bit, Rb = the next one, S2 = OR of everything below Rb
-    const parts = b.op(splitter([w - M - 2, 1, M + 1]), [`${sh2}.y`]);
-    let Rb: string, S2: string;
-    if (w - M - 2 === 1) {
-      Rb = `${parts}.o0`;
-      S2 = anyOf(b, [`${sh2}.sticky`, 'stin']);
-    } else {
-      const rs = b.op(splitter([w - M - 3, 1]), [`${parts}.o0`]);
-      Rb = `${rs}.o1`;
-      S2 = anyOf(b, [nonZero(b, `${rs}.o0`, w - M - 3), `${sh2}.sticky`, 'stin']);
-    }
-    const S = b.name(b.op1(OR, [Rb, S2]), 'S');
-    const G = b.name(`${parts}.o1`, 'G');
-    const lsb = b.op(splitter([1, M]), [`${parts}.o2`]);
-    const kt = b.op(splitter([M, 1]), [`${parts}.o2`]);
-    b.next();
-    const rd = b.op(ROUND_DECIDE, ['rm', 'sign', `${lsb}.o0`, G, S], 'round up?');
-    const inc = b.name(`${rd}.up`, 'roundUp');
-    const nx0 = b.name(b.op1(OR, [G, S]), 'inexact');
-    // tininess after rounding: would rounding to M + 1 bits (G becomes the last bit) reach 2^emin?
-    const kf = b.op(splitter(ones(M)), [`${kt}.o0`]);
-    const fracOnes = b.op1(andN(M), Array.from({ length: M }, (_, i) => `${kf}.o${i}`), 'fraction all 1s');
-    const rd2 = b.op(ROUND_DECIDE, ['rm', 'sign', b.op1(TIE1, []), Rb, S2], 'unbounded rounding');
-    b.next();
-    const mi = b.op(incFast(M + 1), [`${parts}.o2`]);
-    const mR = b.op1(busMux2(M + 1), [`${parts}.o2`, `${mi}.y`, inc]);
-    const carry = b.name(b.op1(AND, [inc, `${mi}.cout`]), 'carry');
-    const reach = b.op1(andN(3), [fracOnes, G, `${rd2}.up`]);
-    b.next();
-    const ms = b.op(splitter([M, 1]), [mR]);
-    const hidden = b.name(b.op1(OR, [`${ms}.o1`, carry]), 'hidden');
-    const eF = b.name(b.op1(busMux2(XE), [eAfter, eInc, carry], 'exp + carry'), 'eFinal');
-    const tiny = b.name(b.op1(AND, [b.op1(NOT, [`${kt}.o1`]), b.op1(NOT, [reach])], 'tiny?'), 'tiny');
-    b.next();
-    const inf = b.name(b.op1(AND, [hidden, b.op1(OR, [geTop, b.op1(AND, [carry, atTop])], 'overflow?')]), 'ovf');
-    const satMax = b.name(b.op1(AND, [inf, b.op1(NOT, [`${rd}.toInf`])], 'largest finite instead'), 'satMax');
-    const ef = b.op(splitter([E, XE - E]), [eF]);
-    b.next();
-    const expF = b.op1(bitwise('and', E), [`${ef}.o0`, b.op1(fanout(E), [hidden])]);
-    const expOr = b.op(splitter([1, E - 1]), [b.op1(bitwise('or', E), [expF, b.op1(fanout(E), [inf])])]);
-    const e0 = b.op1(AND, [`${expOr}.o0`, b.op1(NOT, [satMax])]);
-    const fracOut = b.op1(bitwise('or', M), [b.op1(bitwise('and', M), [`${ms}.o0`, b.op1(fanout(M), [b.op1(NOT, [inf])])]), b.op1(fanout(M), [satMax])]);
-    b.next();
-    b.wire(b.op1(merger([M, 1, E - 1, 1]), [fracOut, e0, `${expOr}.o1`, 'sign']), 'y');
-    b.wire(flagWord(b, { of: inf, uf: b.op1(AND, [tiny, nx0], 'UF'), nx: b.op1(OR, [nx0, inf], 'NX') }), 'flags');
+    // the parts, made now (not when the drawing is first asked for): what they register is there as soon as the unit is
+    nrAmount(f, w); nrRound(f, w); nrPack(f);
+    const k = Math.log2(pow2ceil(w + 1));
+    shiftLeft(w, k, mux); shiftRightSticky(w, k, mux);
     return define({
       id: `fpnr${E}_${M}_${w}${mux.tag}`, name: `Normalize & round (${w}-bit significand)${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: 'Counts leading zeros, shifts them out (or shifts right for a subnormal result), then rounds in mode rm using the guard bit G and the sticky bit S (round to nearest even: up if G and (S or the last kept bit)). A carry out of the rounding bumps the exponent; an exponent past the top becomes ∞ or the largest finite number, depending on the mode. Flags: NX if G or S, OF on overflow, UF if inexact and tiny after rounding.',
       ports: [bit('sign', 'in'), bus('exp', XE, 'in'), bus('mant', w, 'in'), bit('stin', 'in'), bus('rm', 3, 'in'), bus('y', 1 + E + M, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'NORMALIZE & ROUND' },
-      netlist: () => ({ pins: { sign: [0, 2], exp: [0, 6], mant: [0, 10], stin: [0, 14], rm: [0, 18], y: [b.right, 6], flags: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => nrTop(f, w, mux),
       hdl: {
         verilog: `// normalize & round (sketch): lz = leading zeros of mant; shift left by lz (or less, down to emin),
 // shift right with sticky below emin; then
@@ -584,20 +706,89 @@ export function faddCancel(f: FpFormat): ComponentDef {
   });
 }
 
+/** Hand-drawn blocks' places: each starts from a column layout; FP_LAY[block][part or 'pin:name'] moves a part or a pin by hand. */
+export const FP_LAY: Record<string, Record<string, [number, number]>> = {
+  // the class flags come in a staircase from below; ∞ and NaN replace the rounded result on top, NV alone the flags below
+  fnf_select: { sbig: [10, 0], ssmall: [10, 8], sg: [20, 4], negsel: [16, 16], cancel: [16, 22], rdnk: [23, 15], rdn: [30, 12], zsign: [40, 6],
+    msel: [34, 28], esel: [34, 36], 'pin:signB': [0, 2], 'pin:sa': [0, 4], 'pin:ge': [0, 7], 'pin:rm': [0, 15], 'pin:neg': [0, 17], 'pin:eq': [0, 23],
+    'pin:fm': [0, 30], 'pin:nm': [0, 32], 'pin:near': [0, 35], 'pin:ne': [0, 38], 'pin:fe': [0, 40], 'pin:sign': [50, 9], 'pin:m': [50, 31], 'pin:e': [50, 39] },
+  fmul_special: { rs: [36, 5], km: [26, 1], ke: [33, 3], iv: [40, 1], inf: [20, 12], iz: [20, 17], zi: [20, 22], nv: [28, 18], nan: [36, 21], y1: [44, -2], kn: [49, 2],
+    yo: [56, -1], sp: [52, 16], fw: [52, 23], z3: [48, 25], z2: [48, 27], z1: [48, 29], z0: [48, 31], fl: [56, 26],
+    'pin:ry': [0, 0], 'pin:ia': [0, 13], 'pin:ib': [0, 15], 'pin:zb': [0, 20], 'pin:za': [0, 25], 'pin:snb': [0, 28], 'pin:sna': [0, 30], 'pin:nb': [0, 32], 'pin:na': [0, 34],
+    'pin:rflags': [0, 38], 'pin:y': [66, 2], 'pin:flags': [66, 29] },
+  fadd_special: { infs: [20, 3], inf: [20, 12], ii: [20, 17], nv: [30, 19], nan: [38, 21], km: [33, 1], ke: [26, 3], iv: [40, 1], y1: [44, -2], kn: [49, 2], yo: [56, -1],
+    sp: [52, 16], fw: [52, 23], z3: [48, 25], z2: [48, 27], z1: [48, 29], z0: [48, 31], fl: [56, 26],
+    'pin:ry': [0, 0], 'pin:signB': [0, 5], 'pin:sa': [0, 7], 'pin:ia': [0, 13], 'pin:ib': [0, 15], 'pin:effSub': [0, 22], 'pin:snb': [0, 26], 'pin:sna': [0, 28],
+    'pin:nb': [0, 30], 'pin:na': [0, 32], 'pin:rflags': [0, 36], 'pin:y': [66, 2], 'pin:flags': [66, 29] },
+};
+export type Part = Omit<InstanceDef, 'at'>;
+/** Corner points for the nets reaching the given ends (end → points from the driver), set on a block's hand-drawn nets. */
+export const withVias = (nets: NetDef[], vias: Record<string, [number, number][]>): NetDef[] =>
+  nets.map((n) => { const v = Object.entries(vias).filter(([e]) => n.ends.includes(e)); return v.length ? { ...n, via: { ...n.via, ...Object.fromEntries(v) } } : n; });
+
+/** A block drawn in columns (parts top to bottom in each), inputs down the left, outputs down the right; FP_LAY overrides. */
+export function fpColumns(key: string, cols: (Part | false)[][], ins: string[], outs: string[], nets: NetDef[]): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
+  const over = FP_LAY[key] ?? {};
+  const instances: InstanceDef[] = [];
+  let x = 8;
+  for (const col of cols) {
+    let y = 0, w = 0;
+    for (const p of col) {
+      if (!p) continue;
+      const g = orientGeom(p.def, p.flip, p.rot);
+      instances.push({ ...p, at: over[p.name] ?? [x, y] });
+      y += g.h + 2; w = Math.max(w, g.w);
+    }
+    x += w + 6;
+  }
+  const pins: Record<string, [number, number]> = {};
+  ins.forEach((p, i) => (pins[p] = over[`pin:${p}`] ?? [0, 2 + 2 * i]));
+  outs.forEach((p, i) => (pins[p] = over[`pin:${p}`] ?? [x, 2 + 2 * i]));
+  return { instances, nets, pins };
+}
+
+/**
+ * The special cases' common back: ∞ (sign `sign`) over the rounded result where `inf`, the canonical NaN over that where
+ * `nan`; the flags are NV alone (from `nv`) for a special result, else the rounding's. The gates specials() makes.
+ */
+function specialBack(f: FpFormat, mux: Mux2Kind, sign: string, inf: string[], nan: string[], nv: string[]): { cols: Part[][]; nets: NetDef[] } {
+  const { E, M } = f, N = 1 + E + M;
+  const cols: Part[][] = [
+    [{ name: 'km', def: K(M, 0) }, { name: 'ke', def: K(E, 2 ** E - 1) }],
+    [{ name: 'iv', def: merger([M, E, 1]), label: '∞' }, { name: 'z0', def: TIE0 }, { name: 'z1', def: TIE0 }, { name: 'z2', def: TIE0 }, { name: 'z3', def: TIE0 }],
+    [{ name: 'y1', def: mux.of(N), label: 'infinity' }, { name: 'fw', def: merger([1, 1, 1, 1, 1]), flip: true, rot: 2 }, { name: 'sp', def: OR, label: 'special?' }],
+    [{ name: 'kn', def: K(N, (2 ** E - 1) * 2 ** M + 2 ** (M - 1)), label: 'NaN' }, { name: 'yo', def: mux.of(N), label: 'NaN' }, { name: 'fl', def: busMux2(5), flip: true, rot: 2, label: 'flags' }],
+  ];
+  const nets: NetDef[] = [
+    { name: 'rounded', ends: ['ry', 'y1.a'] }, { name: '0', ends: ['km.y', 'iv.i0'] }, { name: 'all 1s', ends: ['ke.y', 'iv.i1'] }, { name: '∞ sign', ends: [sign, 'iv.i2'] },
+    { name: '∞', ends: ['iv.out', 'y1.b'] }, { name: 'an ∞', ends: [...inf, 'y1.s', 'sp.a'] }, { name: 'y1', ends: ['y1.y', 'yo.a'] }, { name: 'NaN', ends: ['kn.y', 'yo.b'] },
+    { name: 'NaN?', ends: [...nan, 'yo.s', 'sp.b'] }, { name: 'y', ends: ['yo.y', 'y'] },
+    ...[0, 1, 2, 3].map((i): NetDef => ({ name: `0 ${i}`, ends: [`z${i}.y`, `fw.i${i}`] })), { name: 'NV', ends: [...nv, 'fw.i4'] },
+    { name: 'NV only', ends: ['fw.out', 'fl.b'] }, { name: 'round flags', ends: ['rflags', 'fl.a'] }, { name: 'special', ends: ['sp.y', 'fl.s'] }, { name: 'flags', ends: ['fl.y', 'flags'] },
+  ];
+  return { cols, nets };
+}
+
 /** The adder's special cases: invalid (a signaling NaN, or ∞ − ∞), NaN in or out, an infinite operand; else the rounded sum. */
 export function faddSpecial(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
   return memo(`fadd_special${E}_${M}${mux.tag}`, () => {
     const { N } = addWidths(f);
-    const b = new Builder(10, 8, 4);
-    b.pins('ry', 'rflags', 'ia', 'ib', 'na', 'nb', 'sna', 'snb', 'effSub', 'sa', 'signB');
-    const invalid = b.name(b.op1(orN(3), ['sna', 'snb', b.op1(andN(3), ['ia', 'ib', 'effSub'], '∞ − ∞', 'ii')], 'invalid', 'nv'), 'NV');
-    const anyInf = b.op1(OR, ['ia', 'ib'], 'an ∞', 'inf');
-    const infS = b.op1(MUX2, ['signB', 'sa', 'ia'], '∞\'s sign', 'infs');
-    b.next();
-    const nan = b.op1(orN(3), ['na', 'nb', invalid], 'NaN?', 'nan');
-    b.next();
-    specials(b, f, 'ry', 'rflags', nan, anyInf, infS, invalid, undefined, mux);
+    const key = 'fadd_special';
+    const back = specialBack(f, mux, 'infs.y', ['inf.y'], ['nan.y'], ['nv.y']);
+    const cols: Part[][] = [
+      [{ name: 'infs', def: MUX2, label: '∞\'s sign' }, { name: 'inf', def: OR, label: 'an ∞' }, { name: 'ii', def: andN(3), label: '∞ − ∞' }],
+      [{ name: 'nv', def: orN(3), flip: true, rot: 2, label: 'invalid' }],
+      [{ name: 'nan', def: orN(3), flip: true, rot: 2, label: 'NaN?' }],
+      ...back.cols,
+    ];
+    const nets: NetDef[] = [
+      { name: 'ia', ends: ['ia', 'infs.s', 'inf.a', 'ii.i0'] }, { name: 'ib', ends: ['ib', 'inf.b', 'ii.i1'] }, { name: 'effSub', ends: ['effSub', 'ii.i2'] },
+      { name: 'signB', ends: ['signB', 'infs.a'] }, { name: 'sa', ends: ['sa', 'infs.b'] },
+      { name: 'sna', ends: ['sna', 'nv.i0'] }, { name: 'snb', ends: ['snb', 'nv.i1'] }, { name: '∞ − ∞', ends: ['ii.y', 'nv.i2'] },
+      { name: 'na', ends: ['na', 'nan.i0'] }, { name: 'nb', ends: ['nb', 'nan.i1'] }, { name: 'nv', ends: ['nv.y', 'nan.i2', 'fw.i4'] },
+      ...back.nets.filter((n) => n.name !== 'NV'),
+    ];
     const ports = [bus('ry', N, 'in'), bus('rflags', 5, 'in'), bit('ia', 'in'), bit('ib', 'in'), bit('na', 'in'), bit('nb', 'in'), bit('sna', 'in'), bit('snb', 'in'),
       bit('effSub', 'in'), bit('sa', 'in'), bit('signB', 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')];
     const nanBits = (2 ** E - 1) * 2 ** M + 2 ** (M - 1);
@@ -610,7 +801,7 @@ export function faddSpecial(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef
         const infv = (ia ? sa : sB) * 2 ** (N - 1) + (2 ** E - 1) * 2 ** M;
         return [nan ? nanBits : inf ? infv : ry, nan || inf ? nv * FLAG.NV : rfl];
       },
-      netlist: () => layered(ports, b, { gap: 8 }),
+      netlist: () => fpColumns(key, cols, ['ry', 'signB', 'sa', 'ia', 'ib', 'effSub', 'sna', 'snb', 'na', 'nb', 'rflags'], ['y', 'flags'], nets),
     });
   });
 }
@@ -677,36 +868,133 @@ export function fpAdd(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   });
 }
 
+// ---- the multiplier's blocks --------------------------------------------------------------------------------------------------
+// Drawn as its stages like the adder: sign, significand product, exponent sum, normalize & round, special cases.
+
+/** The product's exponent: ea + eb − bias + 1 (the product's top bit weighs 2), on the extended exponent width. */
+export function fmulExp(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fmul_exp${E}_${M}`, () => {
+    const XE = xeOf(f), B = fbias(f);
+    const b = new Builder(10, 10, 4);
+    b.pins('ea', 'eb');
+    const za = b.op1(merger([E, XE - E]), ['ea', b.op1(K(XE - E, 0), [], undefined, 'za0')], undefined, 'za');
+    const zb = b.op1(merger([E, XE - E]), ['eb', b.op1(K(XE - E, 0), [], undefined, 'zb0')], undefined, 'zb');
+    b.next();
+    const s1 = b.op(koggeStone(XE), [za, zb, b.op1(TIE0, [], undefined, 'c1')], 'ea + eb', 'sum');
+    b.next();
+    const s2 = b.op(koggeStone(XE), [`${s1}.s`, b.op1(K(XE, (1 - B + 2 ** XE) % 2 ** XE), [], undefined, 'k'), b.op1(TIE0, [], undefined, 'c2')], '− bias + 1', 'bias');
+    b.wire(`${s2}.s`, 'e');
+    const ports = [bus('ea', E, 'in'), bus('eb', E, 'in'), bus('e', XE, 'out')];
+    return define({
+      id: `fmul_exp${E}_${M}`, name: `FP multiplier: exponent (${fmtName(f)})`, category: 'arithmetic',
+      summary: `ea + eb carries the bias twice: take one off (− ${B}), and add 1 because the product of two significands in [1, 2) has its top bit at weight 2. Two ${XE}-bit adders, with room for the sum's overflow and underflow.`,
+      ports, symbol: { kind: 'box', label: 'EXP' },
+      spec: ([ea, eb]) => [(ea + eb + 1 - B + 2 ** XE) % 2 ** XE],
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** The multiplier's special cases: NV for a signaling NaN or ∞ × 0, the canonical NaN, or ∞ with the product's sign. */
+export function fmulSpecial(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
+  const { E, M } = f;
+  return memo(`fmul_special${E}_${M}${mux.tag}`, () => {
+    const N = 1 + E + M;
+    const key = 'fmul_special';
+    const back = specialBack(f, mux, 'rs.o1', ['inf.y'], ['nan.y'], ['nv.y']);
+    // ∞ takes the product's sign, which normalize & round passes through as the rounded result's top bit
+    const cols: Part[][] = [
+      [{ name: 'inf', def: OR, label: 'an ∞' }, { name: 'iz', def: AND, label: '∞ × 0' }, { name: 'zi', def: AND, label: '0 × ∞' }],
+      [{ name: 'rs', def: splitter([N - 1, 1]) }, { name: 'nv', def: orN(4), flip: true, rot: 2, label: 'invalid' }],
+      [{ name: 'nan', def: orN(3), flip: true, rot: 2, label: 'NaN?' }],
+      ...back.cols,
+    ];
+    const nets: NetDef[] = [
+      { name: 'ia', ends: ['ia', 'inf.a', 'iz.a'] }, { name: 'ib', ends: ['ib', 'inf.b', 'zi.a'] }, { name: 'zb', ends: ['zb', 'iz.b'] }, { name: 'za', ends: ['za', 'zi.b'] },
+      // the two ∞ × 0 terms into the balanced tree's second pair (either order)
+      { name: '∞ × 0', ends: ['iz.y', 'nv.i3'] }, { name: '0 × ∞', ends: ['zi.y', 'nv.i2'] }, { name: 'sna', ends: ['sna', 'nv.i0'] }, { name: 'snb', ends: ['snb', 'nv.i1'] },
+      { name: 'na', ends: ['na', 'nan.i0'] }, { name: 'nb', ends: ['nb', 'nan.i1'] }, { name: 'nv', ends: ['nv.y', 'nan.i2', 'fw.i4'] },
+      { name: 'rounded', ends: ['ry', 'y1.a', 'rs.in'] },
+      ...back.nets.filter((n) => n.name !== 'NV' && n.name !== 'rounded'),
+    ];
+    // a's class flags on top, b's below, the rounded product between: as they arrive on the multiplier's drawing
+    const ports = [bit('sna', 'in'), bit('na', 'in'), bit('ia', 'in'), bit('za', 'in'), bus('ry', N, 'in'), bus('rflags', 5, 'in'),
+      bit('zb', 'in'), bit('ib', 'in'), bit('nb', 'in'), bit('snb', 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')];
+    const nanBits = (2 ** E - 1) * 2 ** M + 2 ** (M - 1);
+    return define({
+      id: `fmul_special${E}_${M}${mux.tag}`, name: `FP multiplier: special cases (${fmtName(f)}${mux.tag ? ', RV16' : ''})`, category: 'arithmetic',
+      summary: 'Invalid (NV) is a signaling NaN in, or ∞ × 0 either way round. Any NaN in, or invalid, gives the canonical NaN; else an infinite operand gives ∞ with the product\'s sign (the rounded result\'s top bit: normalize & round passes it through); else the rounded product. A zero needs no case: a zero significand rounds to a signed zero.',
+      ports, symbol: { kind: 'box', label: 'SPECIAL' },
+      spec: ([sna, na, ia, za, ry, rfl, zb, ib, nb, snb]) => {
+        const s = Math.floor(ry / 2 ** (N - 1));
+        const nv = sna || snb || (ia && zb) || (za && ib) ? 1 : 0, nan = na || nb || nv, inf = ia || ib;
+        return [nan ? nanBits : inf ? s * 2 ** (N - 1) + (2 ** E - 1) * 2 ** M : ry, nan || inf ? nv * FLAG.NV : rfl];
+      },
+      // the staircases drawn by hand: each class flag turns up where it crosses nothing
+      netlist: () => fpColumns(key, cols, ['ry', 'ia', 'ib', 'zb', 'za', 'snb', 'sna', 'nb', 'na', 'rflags'], ['y', 'flags'], withVias(nets, {
+        'rs.in': [[24, 0], [24, 7]], 'nv.i2': [[25, 24], [25, 21]], 'nv.i1': [[26, 28], [26, 23]], 'nv.i0': [[27, 30], [27, 25]], 'nan.i1': [[34, 32], [34, 24]],
+        'nan.i0': [[35, 34], [35, 26]], 'fl.a': [[54, 38], [54, 30]],
+      })),
+    });
+  });
+}
+
+/** The multiplier's blocks, as the campaign's reference draws them. */
+export const fmulBlocks = (f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef[] => [fmulExp(f), fmulSpecial(f, mux)];
+
+/** fmulTop's places (kept apart so a tuning script can move them). */
+export const FMUL_AT: Record<'ua' | 'ub' | 'sign' | 'mul' | 'exp' | 'z' | 'nr' | 'special', [number, number]> & { pins: Record<string, [number, number]> } = {
+  ua: [6, 0], ub: [6, 18], sign: [19, 16], exp: [27, 14], mul: [42, 14], z: [58, 16], nr: [62, 9], special: [94, 0],
+  pins: { a: [0, 8], b: [0, 26], rm: [0, 36], y: [114, 11], flags: [114, 13] },
+};
+
+/** Where the multiplier's stages sit (hand-drawn: unpack, product and exponent side by side, normalize & round, special cases). */
+function fmulTop(f: FpFormat, mux: Mux2Kind): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
+  const { M } = f, P = FMUL_AT;
+  const instances: InstanceDef[] = [
+    { name: 'ua', def: fpUnpack(f), at: P.ua, flip: true, rot: 2, label: 'unpack a' }, // mirrored top to bottom: its class flags along the top edge
+    { name: 'ub', def: fpUnpack(f), at: P.ub, label: 'unpack b' },
+    { name: 'sign', def: XOR, at: P.sign, label: 'sign' },
+    { name: 'mul', def: treeMul(M + 1), at: P.mul, label: 'significand product' },
+    { name: 'exp', def: fmulExp(f), at: P.exp },
+    { name: 'z', def: TIE0, at: P.z },
+    { name: 'nr', def: normRound(f, 2 * M + 2), at: P.nr, label: 'normalize & round' },
+    { name: 'special', def: fmulSpecial(f, mux), at: P.special },
+  ];
+  const nets: NetDef[] = [
+    { name: 'a', ends: ['a', 'ua.x'] }, { name: 'b', ends: ['b', 'ub.x'] },
+    { name: 'sa', ends: ['ua.sign', 'sign.a'] }, { name: 'sb', ends: ['ub.sign', 'sign.b'] },
+    { name: 'ma', ends: ['ua.mant', 'mul.a'], via: { 'mul.a': [[39, 10], [39, 16]] } }, { name: 'mb', ends: ['ub.mant', 'mul.b'], via: { 'mul.b': [[40, 24], [40, 18]] } },
+    { name: 'ea', ends: ['ua.exp', 'exp.ea'] }, { name: 'eb', ends: ['ub.exp', 'exp.eb'] },
+    { name: 'sign', ends: ['sign.y', 'nr.sign'], via: { 'nr.sign': [[24, 18], [24, 11]] } },
+    { name: 'product', ends: ['mul.p', 'nr.mant'], via: { 'nr.mant': [[57, 17], [57, 15]] } }, { name: 'exponent', ends: ['exp.e', 'nr.exp'], via: { 'nr.exp': [[37, 17], [37, 13]] } },
+    { name: 'sticky in', ends: ['z.y', 'nr.stin'] }, { name: 'rm', ends: ['rm', 'nr.rm'], via: { 'nr.rm': [[60, 36], [60, 19]] } },
+    { name: 'rounded', ends: ['nr.y', 'special.ry'], via: { 'special.ry': [[85, 14], [85, 10]] } }, { name: 'round flags', ends: ['nr.flags', 'special.rflags'], via: { 'special.rflags': [[86, 16], [86, 12]] } },
+    ...(['inf', 'zero', 'nan', 'snan'] as const).flatMap((c): NetDef[] => {
+      const p = c === 'inf' ? 'i' : c === 'zero' ? 'z' : c === 'nan' ? 'n' : 'sn';
+      // b's flags run under normalize & round and turn up just before the special cases, in a staircase that crosses nothing
+      const k = ['zero', 'inf', 'nan', 'snan'].indexOf(c), [x, y] = [88 + k, 26 + 2 * k];
+      return [{ name: `${c} a`, ends: [`ua.${c}`, `special.${p}a`] }, { name: `${c} b`, ends: [`ub.${c}`, `special.${p}b`], via: { [`special.${p}b`]: [[x, y], [x, y - 12]] } }];
+    }),
+    { name: 'y', ends: ['special.y', 'y'] }, { name: 'flags', ends: ['special.flags', 'flags'] },
+  ];
+  return { instances, nets, pins: P.pins };
+}
+
 /** a × b: multiply significands (a tree multiplier), add exponents, normalize & round. */
 export function fpMul(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
   return memo(`fpmul${E}_${M}${mux.tag}`, () => {
-    const XE = xeOf(f), N = 1 + E + M, W = 2 * M + 2, B = fbias(f);
-    const b = new Builder();
-    const ua = b.op(fpUnpack(f), ['a'], 'unpack a'), ub = b.op(fpUnpack(f), ['b'], 'unpack b');
-    b.next();
-    const sign = b.op1(XOR, [`${ua}.sign`, `${ub}.sign`], 'sign');
-    const p = b.name(b.op1(treeMul(M + 1), [`${ua}.mant`, `${ub}.mant`], 'significand product'), 'product');
-    const za = b.op1(merger([E, XE - E]), [`${ua}.exp`, b.op1(K(XE - E, 0), [])]);
-    const zb = b.op1(merger([E, XE - E]), [`${ub}.exp`, b.op1(K(XE - E, 0), [])]);
-    b.next();
-    const s1 = b.op(koggeStone(XE), [za, zb, b.op1(TIE0, [])], 'ea + eb');
-    const s2 = b.op(koggeStone(XE), [`${s1}.s`, b.op1(K(XE, (1 - B + 2 ** XE) % 2 ** XE), []), b.op1(TIE0, [])], '− bias + 1');
-    b.next();
-    const nr = b.op(normRound(f, W), [sign, `${s2}.s`, p, b.op1(TIE0, []), 'rm'], 'normalize & round');
-    b.next();
-    const invalid = b.name(b.op1(orN(4), [`${ua}.snan`, `${ub}.snan`, b.op1(AND, [`${ua}.inf`, `${ub}.zero`]), b.op1(AND, [`${ua}.zero`, `${ub}.inf`])], 'invalid'), 'NV');
-    const nan = b.op1(orN(3), [`${ua}.nan`, `${ub}.nan`, invalid], 'NaN?');
-    const anyInf = b.op1(OR, [`${ua}.inf`, `${ub}.inf`]);
-    b.next();
-    specials(b, f, `${nr}.y`, `${nr}.flags`, nan, anyInf, sign, invalid, undefined, mux);
+    const N = 1 + E + M;
+    fmulExp(f); fmulSpecial(f, mux); normRound(f, 2 * M + 2); treeMul(M + 1); // the parts, made now: they register as soon as the unit is
     return define({
       id: `fpmul${E}_${M}${mux.tag}`, name: `${fmtName(f)} multiplier${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: `Sign = XOR, exponent = ea + eb − bias, significand = a ${M + 1}×${M + 1} tree multiplier (chapter 21), then the shared normalize & round unit. ∞ × 0 is NaN (NV).`,
       ports: [bus('a', N, 'in'), bus('b', N, 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'FMUL' },
       spec: ([a, bb, rm]) => { const r = fpMulX(a, bb, f, rm); return [r.y, r.fl]; },
-      netlist: () => ({ pins: { a: [0, 4], b: [0, 10], rm: [0, 16], y: [b.right, 6], flags: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => fmulTop(f, mux),
       hdl: { verilog: '// behaviourally: assign {y, flags} = fmul(a, b, rm);   (IEEE 754 binary)' },
     });
   });
@@ -1141,6 +1429,182 @@ const outPins = (b: Builder, names: string[]): Record<string, [number, number]> 
 const preRoundPorts = (f: FpFormat, n: number): PortDef[] => [bit('sign', 'out'), bus('e', xeOf(f), 'out'), bus('m', n, 'out'), bit('sticky', 'out'),
   bit('nan', 'out'), bit('invalid', 'out'), bit('dz', 'out'), bit('inf', 'out'), bit('infSign', 'out')];
 
+// ---- the divider's blocks -----------------------------------------------------------------------------------------------------
+// The iterative divider is drawn as its stages (circuit eyeballing, 2026-11-08), like the adder: the core that makes one quotient
+// bit a clock, the exponent, normalize & round, the special cases. The gates are the ones the flat drawing had.
+
+/** The iterative core: control, the dividend fed in bit by bit, one restoring step a clock, the remainder and quotient registers, the sticky bit. */
+export function fdivCore(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fdiv_core${E}_${M}`, () => {
+    const n = M + 4, w = M + 1;
+    // drawn by hand: the step in the middle, its remainder loop above (mux, register, back over the top) and its quotient loop
+    // below (the new bit merged in, mux, register, back under to the splitter that feeds its top bit to the step); the
+    // dividend's setup and the control below on the left
+    const instances: InstanceDef[] = [
+      { name: 'step', def: divStep(w), at: [24, 10], label: 'restoring step' },
+      { name: 'rmux', def: busMux2(w), at: [44, 11], label: 'step or load' }, { name: 'R', def: register(w), at: [52, 12], label: 'remainder' },
+      { name: 'nz', def: isZero(w), at: [64, 13], label: 'remainder = 0?' }, { name: 'nn', def: NOT, at: [73, 14] },
+      { name: 'qn', def: merger([1, n - 1]), at: [41, 14] },
+      { name: 'qmux', def: busMux2(n), at: [44, 22], label: 'shift or load' }, { name: 'Q', def: register(n), at: [52, 23], label: 'quotient / dividend bits' },
+      { name: 'qs', def: splitter([n - 1, 1]), at: [19, 11] },
+      { name: 'k0', def: K(n - 1, 0), at: [5, 29] }, { name: 'q0', def: merger([n - 1, 1]), at: [12, 29] },
+      { name: 'sa', def: splitter([1, M]), at: [6, 32] },
+      { name: 't0', def: TIE0, at: [8, 36] }, { name: 'r0', def: merger([M, 1]), at: [12, 34] },
+      { name: 'ctl', def: iterControl(n), at: [40, 34], label: 'control' },
+    ];
+    const nets: NetDef[] = [
+      { name: 'ma', ends: ['ma', 'sa.in'] }, { name: 'mb', ends: ['mb', 'step.d'] }, { name: 'start', ends: ['start', 'ctl.start'] },
+      { name: 'clk', ends: ['clk', 'ctl.clk', 'R.clk', 'Q.clk'], tags: true },
+      { name: 'ma0', ends: ['sa.o0', 'q0.i1'] }, { name: 'ma top', ends: ['sa.o1', 'r0.i0'] }, { name: '0', ends: ['t0.y', 'r0.i1'] }, { name: 'zeros', ends: ['k0.y', 'q0.i0'] },
+      { name: 'R0', ends: ['r0.out', 'rmux.b'] }, { name: 'Q0', ends: ['q0.out', 'qmux.b'] },
+      { name: 'r', ends: ['R.q', 'step.r', 'nz.a'] }, { name: 'r′', ends: ['step.rout', 'rmux.a'] }, { name: 'rd', ends: ['rmux.y', 'R.d'] },
+      { name: 'q', ends: ['Q.q', 'qs.in', 'q'] }, { name: 'q top', ends: ['qs.o1', 'step.qin'] }, { name: 'q rest', ends: ['qs.o0', 'qn.i1'] },
+      { name: 'q bit', ends: ['step.q', 'qn.i0'] }, { name: 'q′', ends: ['qn.out', 'qmux.a'] }, { name: 'qd', ends: ['qmux.y', 'Q.d'] },
+      { name: 'load', ends: ['ctl.load', 'rmux.s', 'qmux.s'], tags: true }, { name: 'en', ends: ['ctl.en', 'R.en', 'Q.en'], tags: true },
+      { name: 'r = 0', ends: ['nz.z', 'nn.a'] }, { name: 'sticky', ends: ['nn.y', 'sticky'] },
+      { name: 'done', ends: ['ctl.done', 'done'] }, { name: 'busy', ends: ['ctl.busy', 'busy'] },
+    ];
+    const ports: PortDef[] = [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('ma', w, 'in'), bus('mb', w, 'in'),
+      bus('q', n, 'out'), bit('sticky', 'out'), bit('done', 'out'), bit('busy', 'out')];
+    return define({
+      id: `fdiv_core${E}_${M}`, name: `FP divider: the iterative core (${fmtName(f)})`, category: 'arithmetic',
+      summary: `start loads the remainder with the dividend's top bits; then each clock the restoring step tries remainder − divisor, keeps the difference when it does not borrow, and shifts the quotient bit in: ${n} steps. A remainder left over is the sticky bit.`,
+      ports, symbol: { kind: 'box', label: 'DIVIDER CORE' },
+      netlist: () => ({ instances, nets, pins: { mb: [0, 16], ma: [0, 34], start: [0, 39], clk: [0, 48], sticky: [80, 15], q: [80, 26], done: [80, 40], busy: [80, 42] } }),
+    });
+  });
+}
+
+/** The quotient's exponent: ea − eb + bias (the significands' quotient lies in (½, 2), normalize & round corrects by one). */
+export function fdivExp(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fdiv_exp${E}_${M}`, () => {
+    const XE = xeOf(f), B = fbias(f);
+    const b = new Builder(10, 8, 4);
+    b.pins('ea', 'eb');
+    const ed = b.op(addSubFast(XE), ['ea', 'eb', b.op1(TIE1, [])], 'ea − eb', 'sub');
+    b.next();
+    b.wire(`${b.op(koggeStone(XE), [`${ed}.s`, b.op1(K(XE, B), []), b.op1(TIE0, [])], '+ bias', 'add')}.s`, 'e');
+    const ports: PortDef[] = [bus('ea', XE, 'in'), bus('eb', XE, 'in'), bus('e', XE, 'out')];
+    return define({
+      id: `fdiv_exp${E}_${M}`, name: `FP divider: exponent (${fmtName(f)})`, category: 'arithmetic',
+      summary: 'ea − eb + bias, in the unpacked exponent\'s width (two\'s complement: a tiny or huge quotient is found by normalize & round).',
+      ports, symbol: { kind: 'box', label: 'EXPONENT' },
+      spec: ([ea, eb]) => [(((ea - eb + B) % 2 ** XE) + 2 ** XE) % 2 ** XE],
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** The divider's special cases: NaN, 0 / 0 and ∞ / ∞ (NV), x / 0 (∞ with DZ), ∞ / x, 0 / x and x / ∞; else the rounded quotient. */
+export function fdivSpecial(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fdiv_special${E}_${M}`, () => {
+    const N = 1 + E + M;
+    // drawn by hand: the result's three multiplexers along the top (zero, infinity, NaN, each select from below), the class
+    // tests below them in two columns, the flags' multiplexer at the bottom
+    const instances: InstanceDef[] = [
+      { name: 'nv', def: orN(4), at: [22, 13], label: 'invalid' }, { name: 'nan', def: orN(4), at: [22, 22], label: 'NaN?' },
+      { name: 'zz', def: AND, at: [10, 30], label: '0 / 0' }, { name: 'ii', def: AND, at: [10, 36], label: '∞ / ∞' },
+      { name: 'fo', def: orN(3), at: [10, 42] }, { name: 'fin', def: NOT, at: [16, 44], label: 'a finite, ≠ 0' },
+      { name: 'inf', def: OR, at: [22, 34], label: '∞ result' }, { name: 'zero', def: OR, at: [22, 40], label: '0 result' },
+      { name: 'dz', def: AND, at: [30, 43], label: 'x / 0' }, { name: 'sp', def: orN(3), at: [34, 25], label: 'special' },
+      { name: 'kz', def: K(N - 1, 0), at: [36, 1] }, { name: 'zv', def: merger([N - 1, 1]), at: [44, 4] },
+      { name: 'm0', def: busMux2(N), at: [48, 2], label: 'zero' },
+      { name: 'km', def: K(M, 0), at: [43, 9] }, { name: 'ke', def: K(E, 2 ** E - 1), at: [43, 11] }, { name: 'infv', def: merger([M, E, 1]), at: [53, 9] },
+      { name: 'm1', def: busMux2(N), at: [56, 3], label: 'infinity' },
+      { name: 'kn', def: K(N, (2 ** E - 1) * 2 ** M + 2 ** (M - 1)), at: [59, 11] }, { name: 'm2', def: busMux2(N), at: [66, 4], label: 'NaN' },
+      { name: 't0', def: TIE0, at: [56, 53] }, { name: 't1', def: TIE0, at: [56, 55] }, { name: 't2', def: TIE0, at: [56, 57] },
+      { name: 'fw', def: merger([1, 1, 1, 1, 1]), at: [60, 53] }, { name: 'fm', def: busMux2(5), at: [66, 50], label: 'flags' },
+    ];
+    const nets: NetDef[] = [
+      { name: 'sna', ends: ['sna', 'nv.i0'] }, { name: 'snb', ends: ['snb', 'nv.i1'] }, { name: 'na', ends: ['na', 'nan.i0', 'fo.i2'] }, { name: 'nb', ends: ['nb', 'nan.i1'] },
+      { name: 'za', ends: ['za', 'zz.a', 'fo.i0', 'zero.a'] }, { name: 'zb', ends: ['zb', 'zz.b', 'inf.b', 'dz.a'] },
+      { name: 'ia', ends: ['ia', 'ii.a', 'fo.i1', 'inf.a'] }, { name: 'ib', ends: ['ib', 'ii.b', 'zero.b'] },
+      { name: '0 / 0', ends: ['zz.y', 'nv.i2', 'nan.i2'] }, { name: '∞ / ∞', ends: ['ii.y', 'nv.i3', 'nan.i3'] },
+      { name: 'a special', ends: ['fo.y', 'fin.a'] }, { name: 'a finite', ends: ['fin.y', 'dz.b'] },
+      { name: 'NV', ends: ['nv.y', 'fw.i4'] }, { name: 'DZ', ends: ['dz.y', 'fw.i3'] },
+      { name: 'nan', ends: ['nan.y', 'm2.s', 'sp.i0'] }, { name: 'inf', ends: ['inf.y', 'm1.s', 'sp.i1'] }, { name: 'zero', ends: ['zero.y', 'm0.s', 'sp.i2'] },
+      { name: 'special', ends: ['sp.y', 'fm.s'] },
+      { name: 'ry', ends: ['ry', 'm0.a'] }, { name: 'sign', ends: ['sign', 'zv.i1', 'infv.i2'] },
+      { name: 'zeros', ends: ['kz.y', 'zv.i0'] }, { name: '±0', ends: ['zv.out', 'm0.b'] }, { name: 'y0', ends: ['m0.y', 'm1.a'] },
+      { name: 'mant 0', ends: ['km.y', 'infv.i0'] }, { name: 'exp max', ends: ['ke.y', 'infv.i1'] }, { name: '±∞', ends: ['infv.out', 'm1.b'] },
+      { name: 'y1', ends: ['m1.y', 'm2.a'] }, { name: 'qNaN', ends: ['kn.y', 'm2.b'] }, { name: 'y', ends: ['m2.y', 'y'] },
+      { name: 'nx', ends: ['t0.y', 'fw.i0'] }, { name: 'uf', ends: ['t1.y', 'fw.i1'] }, { name: 'of', ends: ['t2.y', 'fw.i2'] },
+      { name: 'rflags', ends: ['rflags', 'fm.a'] }, { name: 'NV DZ', ends: ['fw.out', 'fm.b'] }, { name: 'flags', ends: ['fm.y', 'flags'] },
+    ];
+    const pins: Record<string, [number, number]> = { ry: [0, 4], sign: [0, 7], sna: [0, 14], snb: [0, 16], na: [0, 23], nb: [0, 25],
+      za: [0, 31], zb: [0, 33], ia: [0, 37], ib: [0, 39], rflags: [0, 52], y: [78, 7], flags: [78, 53] };
+    const ports: PortDef[] = [bus('ry', N, 'in'), bus('rflags', 5, 'in'), bit('sign', 'in'), bit('za', 'in'), bit('ia', 'in'), bit('na', 'in'), bit('sna', 'in'),
+      bit('zb', 'in'), bit('ib', 'in'), bit('nb', 'in'), bit('snb', 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')];
+    const nanBits = (2 ** E - 1) * 2 ** M + 2 ** (M - 1);
+    return define({
+      id: `fdiv_special${E}_${M}`, name: `FP divider: special cases (${fmtName(f)})`, category: 'arithmetic',
+      summary: 'Invalid (NV) is a signaling NaN in, 0 / 0 or ∞ / ∞, and those give the canonical NaN, as any NaN in does. x / 0 with x finite and ≠ 0 is ∞ with DZ; ∞ / x is ∞; 0 / x and x / ∞ are 0, with the quotient\'s sign. A special result raises only NV or DZ.',
+      ports, symbol: { kind: 'box', label: 'SPECIAL' },
+      spec: ([ry, rfl, s, za, ia, na, sna, zb, ib, nb, snb]) => {
+        const zz = za && zb, ii = ia && ib, nv = sna || snb || zz || ii ? 1 : 0, nan = na || nb || zz || ii;
+        const dz = zb && !(za || ia || na) ? 1 : 0, inf = ia || zb, zero = za || ib;
+        const y = nan ? nanBits : inf ? s * 2 ** (N - 1) + (2 ** E - 1) * 2 ** M : zero ? s * 2 ** (N - 1) : ry;
+        return [y, nan || inf || zero ? nv * FLAG.NV + dz * FLAG.DZ : rfl];
+      },
+      netlist: () => ({ instances, nets, pins }),
+    });
+  });
+}
+
+/** The divider's top: unpack and prenormalize both operands, the core, the exponent and the sign beside it, normalize & round, the special cases. */
+function fdivTop(f: FpFormat): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
+  const n = f.M + 4;
+  const at = new Map<string, [number, number]>(), defs = new Map<string, ComponentDef>();
+  const put = (name: string, def: ComponentDef, xy: [number, number]) => { at.set(name, xy); defs.set(name, def); };
+  const P = (inst: string, port: string): [number, number] => { const a = at.get(inst)!, p = symbolGeom(defs.get(inst)!).ports[port].pos; return [a[0] + p[0], a[1] + p[1]]; };
+  const align = (name: string, def: ComponentDef, x: number, port: string, y: number) => put(name, def, [x, y - symbolGeom(def).ports[port].pos[1]]);
+  const right = (inst: string) => at.get(inst)![0] + symbolGeom(defs.get(inst)!).w;
+  const bottom = (inst: string) => at.get(inst)![1] + symbolGeom(defs.get(inst)!).h;
+  put('ua', fpUnpack(f), [6, 6]);
+  put('ub', fpUnpack(f), [6, bottom('ua') + 8]);
+  align('pa', fpPrenorm(f), right('ua') + 8, 'mant', P('ua', 'mant')[1]);
+  align('pb', fpPrenorm(f), right('ub') + 8, 'mant', P('ub', 'mant')[1]);
+  const CX = right('pa') + 10, core = fdivCore(f);
+  align('core', core, CX, 'ma', P('pa', 'm')[1]);
+  put('exp', fdivExp(f), [CX, Math.max(bottom('core') + 6, P('pb', 'e')[1] - symbolGeom(fdivExp(f)).ports.eb.pos[1])]);
+  put('sign', XOR, [CX + 4, bottom('exp') + 6]);
+  const NX = Math.max(right('core'), right('exp')) + 12;
+  align('nr', normRound(f, n), NX, 'mant', P('core', 'q')[1]);
+  const SX = right('nr') + 10;
+  align('special', fdivSpecial(f), SX, 'ry', P('nr', 'y')[1]);
+  const labels: Record<string, string> = { ua: 'unpack a', ub: 'unpack b', pa: 'normalize a', pb: 'normalize b', sign: 'sign', nr: 'normalize & round' };
+  const instances: InstanceDef[] = [...at.keys()].map((name) => ({ name, def: defs.get(name)!, at: at.get(name), label: labels[name] }));
+  // wires along the data path; labels for what runs far: the signs, the class flags into the special cases, rm, the clock
+  const nets: NetDef[] = [
+    { name: 'a', ends: ['a', 'ua.x'] }, { name: 'b', ends: ['b', 'ub.x'] },
+    { name: 'ma', ends: ['ua.mant', 'pa.mant'] }, { name: 'ea', ends: ['ua.exp', 'pa.exp'] },
+    { name: 'mb', ends: ['ub.mant', 'pb.mant'] }, { name: 'eb', ends: ['ub.exp', 'pb.exp'] },
+    { name: 'dividend', ends: ['pa.m', 'core.ma'] }, { name: 'divisor', ends: ['pb.m', 'core.mb'] },
+    { name: 'ea′', ends: ['pa.e', 'exp.ea'], tags: true }, { name: 'eb′', ends: ['pb.e', 'exp.eb'] },
+    { name: 'start', ends: ['start', 'core.start'] }, { name: 'clk', ends: ['clk', 'core.clk'], tags: true },
+    { name: 'sa', ends: ['ua.sign', 'sign.a'], tags: true }, { name: 'sb', ends: ['ub.sign', 'sign.b'], tags: true },
+    { name: 'sign', ends: ['sign.y', 'nr.sign', 'special.sign'], tags: true },
+    { name: 'e', ends: ['exp.e', 'nr.exp'] }, { name: 'quotient', ends: ['core.q', 'nr.mant'] }, { name: 'sticky', ends: ['core.sticky', 'nr.stin'] },
+    { name: 'rm', ends: ['rm', 'nr.rm'], tags: true },
+    { name: 'rounded', ends: ['nr.y', 'special.ry'] }, { name: 'round flags', ends: ['nr.flags', 'special.rflags'] },
+    ...(['zero', 'inf', 'nan', 'snan'] as const).flatMap((c): NetDef[] => {
+      const p = c === 'zero' ? 'z' : c === 'inf' ? 'i' : c === 'nan' ? 'n' : 'sn';
+      return [{ name: `${c} a`, ends: [`ua.${c}`, `special.${p}a`], tags: true }, { name: `${c} b`, ends: [`ub.${c}`, `special.${p}b`], tags: true }];
+    }),
+    { name: 'y', ends: ['special.y', 'y'] }, { name: 'flags', ends: ['special.flags', 'flags'] },
+    { name: 'done', ends: ['core.done', 'done'], tags: true }, { name: 'busy', ends: ['core.busy', 'busy'], tags: true },
+  ];
+  const ox = right('special') + 8, oy = P('special', 'y')[1];
+  return {
+    instances, nets,
+    pins: { start: [0, at.get('ua')![1] - 3], a: [0, P('ua', 'x')[1]], b: [0, P('ub', 'x')[1]], rm: [0, bottom('sign') + 4], clk: [0, bottom('sign') + 8],
+      y: [ox, oy], flags: [ox, oy + 2], done: [ox, oy + 6], busy: [ox, oy + 8] },
+  };
+}
+
 /**
  * a / b, iteratively: prenormalize both significands, then one restoring division step per
  * clock (the integer divider's step, chapter 21) produces M + 4 quotient bits, most significant
@@ -1203,7 +1667,7 @@ export function fpDiv(f: FpFormat, round = true): ComponentDef {
       ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('a', N, 'in'), bus('b', N, 'in'), bus('rm', 3, 'in'),
         ...(round ? [bus('y', N, 'out'), bus('flags', 5, 'out')] : preRoundPorts(f, n)), bit('done', 'out'), bit('busy', 'out')],
       symbol: { kind: 'box', label: 'FDIV (iterative)' },
-      netlist: () => ({ pins: { start: [0, 2], a: [0, 6], b: [0, 10], rm: [0, 14], clk: [0, 18], ...outPins(b, round ? ['y', 'flags', 'done', 'busy'] : ['sign', 'e', 'm', 'sticky', 'nan', 'invalid', 'dz', 'inf', 'infSign', 'done', 'busy']) }, instances: b.instances, nets: b.nets() }),
+      netlist: () => (round ? fdivTop(f) : { pins: { start: [0, 2], a: [0, 6], b: [0, 10], rm: [0, 14], clk: [0, 18], ...outPins(b, ['sign', 'e', 'm', 'sticky', 'nan', 'invalid', 'dz', 'inf', 'infSign', 'done', 'busy']) }, instances: b.instances, nets: b.nets() }),
       hdl: {
         verilog: `module fdiv_iter (input logic clk, start, input logic [31:0] a, b, input logic [2:0] rm,
                   output logic [31:0] y, output logic [4:0] flags, output logic done, busy);

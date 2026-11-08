@@ -844,7 +844,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                DOM-free (tested in Node):
   model.ts       Workspace / ChipDoc (pins, parts, wires = interior corners (`straight`: a simple connection, segments
                  at any angle, settings.simpleWires for new ones), pointers = named net labels, comments:
-                 free text drawn under the circuit, never compiled and left out of the compile cache key)
+                 free text drawn under the circuit, never compiled and left out of the compile cache key; sections
+                 (SectionDoc: id, at, size, title, hue?): titled dashed frames drawn under the circuit, also outside the
+                 compile hash; geom.ts hitSection (border / title only) and sectionCornerAt; ops.ts addSection / setSection /
+                 resizeSection / sectionContents / withContents (a drag or nudge of a section carries what is fully inside) /
+                 groupInSection; Delete removes the frame only; shown in look inside and the image export)
   compile.ts     compileChip(doc) → ComponentDef + diags, netOfWire / netOfEnd / netOfLabel, connKey
   parts.ts       partDef(ref): library ids, user chips, splitters, constants, displays (LED / LED bank, 7-segment,
                  hex, value, buzzer: buzzerHz; and the halt part), keys and the keyboard (external sources: behaviour-only

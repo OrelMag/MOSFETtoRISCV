@@ -8,7 +8,7 @@
 import type { BuildChallenge, PinSpec } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc, PartRef } from '../editor/model';
-import { fpCompare, fpFromInt, fpUnpack, lzc, normRound, ROUND_DECIDE, shiftRightSticky } from '../lib/fpu';
+import { fpCompare, fpFromInt, fpUnpack, lzc, normRound, normRoundBlocks, ROUND_DECIDE, shiftRightSticky } from '../lib/fpu';
 import { RV16_MUX2 } from '../lib/rv16/logic';
 import { bias, F16, fpCmpX, fpFromIntX, overflowToInf, roundToX, roundUp } from '../sim/fpref';
 import { type ComponentDef, netlistOf } from '../sim/types';
@@ -31,6 +31,8 @@ export const FP_REF = {
   cmp: () => fpCompare(F16),
   cvt: () => fpFromInt(F16, 16, RV16_MUX2),
 };
+/** Normalize & round's stages, drawn as chips: shift amounts, rounding, packing. */
+export const normSubs = () => normRoundBlocks(F16, 15);
 /** The leading-zero counter's halves, drawn as chips: lzc8 → lzc4 → lzc2. */
 const lzcSubs = () => [lzc(8), lzc(4), lzc(2)];
 
@@ -149,7 +151,7 @@ export const BUILDFP: Record<string, () => BuildChallenge> = {
     brief: `The adder's back end, shared by every FP unit. <b>mant</b> (15 bits) is a significand whose top bit weighs 2^(exp − 15), with <b>exp</b> an 8-bit two's-complement biased exponent (−127 to 127), and <b>stin</b> a sticky bit below it. Give the binary16 encoding <b>y</b> of sign × that value, rounded once in mode <b>rm</b>, and <b>flags</b> = {NV, DZ, OF, UF, NX} (NV and DZ stay 0). Shift out the leading zeros as far as the exponent allows (stop at exponent 1: a subnormal), or shift right with a sticky bit when the exponent is below 1; round on the guard bit and the sticky bit; a carry out of the rounding bumps the exponent; a field past 30 overflows (∞ or the largest finite, by the rounding decision's toInf). UF: inexact and tiny after rounding. stin is only set when mant's top bit or the one below it is 1 (other rows are not checked).`,
     ports: pins([['sign'], ['exp', XE], ['mant', NW], ['stin'], ['rm', 3]], [['y', 16], ['flags', 5]]),
     check: { kind: 'table', spec: normSpec, vectors: normVectors, care: normCare },
-    answer: fpRefOf('o_fpnorm', FP_REF.norm, 'Normalize & round'),
+    answer: fpRefOf('o_fpnorm', FP_REF.norm, 'Normalize & round', normSubs),
   }),
   o_fpcmp: () => ({
     id: 'o_fpcmp', title: 'FP comparator', level: 'arithmetic', allowed: 'nand',

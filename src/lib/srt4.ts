@@ -3,6 +3,7 @@
 // on the top bits of the divisor. The thresholds are computed here from the containment conditions,
 // not copied from a table, and the tests check the whole divider against Math.floor.
 
+import { instPort, symbolGeom } from '../sim/geometry';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { mask } from '../sim/values';
 import { constWord, isZero } from './alu';
@@ -278,9 +279,10 @@ export function srt4Divider(n: number, abort = false): ComponentDef {
     const ctl = b.op(iterCtrl(m, abort), ['clk', 'start', ...(abort ? ['abort'] : [])], 'control');
     const nm = b.op(srtNorm(n), ['a', 'b']);
     const load = b.name(`${ctl}.load`, 'load', true), step = b.name(`${ctl}.step`, 'step', true);
+    b.name(`${nm}.hi`, 'hi', true); // up past the zeros to its splitter: a pointer pair
     b.next();
     const hs = b.op(splitter([2, n - 2]), [`${nm}.hi`]);
-    const w0 = b.op1(merger([n - 2, 6]), [`${hs}.o1`, b.op1(constWord(6, 0), [])], 'hi / 4');
+    const w0 = b.op1(merger([n - 2, 6]), [`${hs}.o1`, b.name(b.op1(constWord(6, 0), []), 'zero6', true)], 'hi / 4');
     const x0 = b.op1(merger([n, 2]), [`${nm}.lo`, `${hs}.o0`], 'dividend bits');
     const mS = b.op(busMux2(W), ['', w0, load], 'load / step');
     const mC = b.op(busMux2(W), ['', b.op1(constWord(W, 0), []), load]);
@@ -294,6 +296,7 @@ export function srt4Divider(n: number, abort = false): ComponentDef {
     const D = b.name(b.op1(register(n), [`${nm}.d`, load, 'clk'], 'divisor'), 'D', true);
     const SH = b.op1(register(k), [`${nm}.s`, load, 'clk'], 'shift');
     const Z = b.op1(register(1), [b.op1(isZero(n), ['b'], 'b = 0'), load, 'clk'], 'divide by 0');
+    b.name(Z, 'bzero', true); // to the q word's OR at the far end: a pointer pair
     b.next();
     const xs = b.op(splitter([n, 2]), [X]);
     const qs = b.op(splitter([n, 2]), [QN]);
@@ -312,6 +315,34 @@ export function srt4Divider(n: number, abort = false): ComponentDef {
     b.wire(`${fin}.r`, 'r');
     b.wire(`${ctl}.done`, 'done');
     b.wire(`${ctl}.busy`, 'busy');
+    // Placed by hand (Builder's columns ran the normalizer's d and s across the muxes, the digit splitters across the step): every
+    // register level with what feeds it, the normalizer under the control level with the divisor and shift registers.
+    const inst = (nmI: string) => b.instances.find((i) => i.name === nmI)!;
+    const portY = (nmI: string, port: string) => { const i = inst(nmI); return instPort(i.def, i.at!, i.flip, port, i.rot).pos[1]; };
+    const put = (nmI: string, x: number, y: number) => { inst(nmI).at = [x, y]; };
+    // `nmI` at column x, its port level with the driver's
+    const level = (nmI: string, port: string, drv: string, dport: string, x: number) => { put(nmI, x, 0); put(nmI, x, portY(drv, dport) - portY(nmI, port)); };
+    const at = (v: string) => v.slice(0, v.indexOf('.'));
+    const XM = 48, XR = 62, mux = [mS, mC, mX, mN];
+    put(ctl, 10, 30); // below the corner where the dividend's top bits split
+    mux.forEach((m, i) => put(m, XM, 2 + 12 * i));
+    const z6 = b.instances[b.instances.indexOf(inst(at(w0))) - 1].name; // the six zeros of hi / 4
+    level(at(w0), 'out', mS, 'b', 38); put(hs, 24, portY(at(w0), 'i0') - 1); put(z6, 12, 18); // out of the splitter's lanes: a pointer
+    level(at(x0), 'out', mX, 'b', 38);
+    // an argument's part is built before the part it feeds: the zero words just before their muxes
+    const zc = b.instances[b.instances.indexOf(inst(mC)) - 1].name, zn = b.instances[b.instances.indexOf(inst(mN)) - 1].name;
+    level(zc, 'y', mC, 'b', XM - 10); level(zn, 'y', mN, 'b', XM - 10);
+    [at(S), at(C), at(X), at(QN)].forEach((r, i) => level(r, 'd', mux[i], 'y', XR));
+    put(nm, 10, 54);
+    level(at(D), 'd', nm, 'd', XR); put(at(SH), XR, inst(at(D)).at![1] + 10); // the shift register under the divisor's, s bending down to it
+    const zr = at(Z), zb = b.instances[b.instances.indexOf(inst(zr)) - 1].name;
+    put(zb, XM, 76); level(zr, 'd', zb, 'z', XR);
+    // the digit splitters under the step, so their low words reach the shift-in mergers below it, not through it
+    const stI = inst(st), stBottom = stI.at![1] + symbolGeom(stI.def).h;
+    put(xs, stI.at![0] - 7, stBottom + 4); put(qs, stI.at![0] - 7, stBottom + 12);
+    // and the shift-in mergers below the step too, each one's low word level with its splitter
+    const mx = inst(at(xn)).at![0];
+    level(at(xn), 'i2', xs, 'o0', mx); level(at(nn), 'i2', qs, 'o0', mx);
     const R = b.right;
     return define({
       id: `srt4div${n}${abort ? 'a' : ''}`, name: `${n}-bit iterative radix-4 SRT divider${abort ? ' (abortable)' : ''}`, category: 'sequential',

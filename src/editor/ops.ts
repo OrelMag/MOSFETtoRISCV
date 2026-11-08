@@ -12,10 +12,10 @@ import { centredAt, orientGeom } from '../sim/geometry';
 import {
   chipDeps, commentBox, endGeom, endKey, isIdent, nextId, onPolyline, onSegment, orthogonal, polyline, roundPt, straightLine, uniqueName,
   type ChipDoc, type CommentDoc, type DefOf, type EndRef, type ExitDir, type LabelDoc, type PartDoc, type PartRef,
-  type PinDoc, type Vec, type WireDoc, type Workspace,
+  type PinDoc, type SectionDoc, type Vec, type WireDoc, type Workspace, SECTION_MIN,
 } from './model';
 
-export type Sel = { parts?: string[]; pins?: string[]; wires?: string[]; labels?: string[]; comments?: string[] };
+export type Sel = { parts?: string[]; pins?: string[]; wires?: string[]; labels?: string[]; comments?: string[]; sections?: string[] };
 
 /** What copySel puts on the clipboard: plain objects, ids still those of the source chip. */
 export interface Clip {
@@ -24,6 +24,7 @@ export interface Clip {
   labels: LabelDoc[];
   wires: WireDoc[];
   comments?: CommentDoc[];
+  sections?: SectionDoc[];
 }
 
 export type Added = { doc: ChipDoc; id: string; reason?: undefined } | { doc: ChipDoc; id?: undefined; reason: string };
@@ -133,6 +134,92 @@ export function addComment(doc: ChipDoc, text: string, at: Vec): Added {
   const cs = commentsOf(doc);
   const id = nextId('note', cs.map((c) => c.id));
   return { doc: { ...doc, comments: [...cs, { id, at: [at[0], at[1]], text: t }] }, id };
+}
+
+const sectionsOf = (doc: ChipDoc): SectionDoc[] => doc.sections ?? [];
+const sectionSize = (v: Vec): Vec => [Math.max(SECTION_MIN, Math.round(v[0])), Math.max(SECTION_MIN, Math.round(v[1]))];
+const gridPt = (p: Vec): Vec => [Math.round(p[0]), Math.round(p[1])];
+const cleanTitle = (t: string) => t.replace(/\s+/g, ' ').trim();
+
+/** A section frame (at its top-left corner; its size at least SECTION_MIN each way, whole units). */
+export function addSection(doc: ChipDoc, at: Vec, size: Vec, title = 'Section', hue?: number): Added {
+  const ss = sectionsOf(doc);
+  const id = nextId('sec', ss.map((s) => s.id));
+  const s: SectionDoc = { id, at: gridPt(at), size: sectionSize(size), title: cleanTitle(title), ...(hue === undefined ? {} : { hue }) };
+  return { doc: { ...doc, sections: [...ss, s] }, id };
+}
+
+/** Title, hue, corner or size of a section (a hue of undefined clears it). */
+export function setSection(doc: ChipDoc, id: string, patch: Partial<Omit<SectionDoc, 'id'>>): Edited {
+  const ss = sectionsOf(doc);
+  const i = ss.findIndex((s) => s.id === id);
+  if (i < 0) return { doc, reason: `no section '${id}'` };
+  const p = { ...patch };
+  if (p.title !== undefined) p.title = cleanTitle(p.title);
+  if (p.size) p.size = sectionSize(p.size);
+  if (p.at) p.at = gridPt(p.at);
+  const s = ss[i], next = patched(s, p);
+  if (next.title === s.title && next.hue === s.hue && eqv(next.at, s.at) && eqv(next.size, s.size)) return { doc };
+  const sections = ss.slice();
+  sections[i] = next;
+  return { doc: { ...doc, sections } };
+}
+
+/** A section's frame spanned by two corners (any order): a corner handle's drag, the opposite corner held. */
+export function resizeSection(doc: ChipDoc, id: string, a: Vec, b: Vec): Edited {
+  return setSection(doc, id, { at: [Math.min(a[0], b[0]), Math.min(a[1], b[1])], size: [Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1])] });
+}
+
+/** What lies fully inside a section (other sections included, never itself): what a drag of it carries. */
+export function sectionContents(doc: ChipDoc, id: string, defOf: DefOf): Sel {
+  const s = sectionsOf(doc).find((x) => x.id === id);
+  if (!s) return {};
+  const sel = boxSelect(doc, [s.at, add(s.at, s.size)], defOf);
+  if (sel.sections) sel.sections = sel.sections.filter((x) => x !== id);
+  return sel;
+}
+
+/** A selection with what lies inside its sections: a section carries its contents when it moves (drag, arrow keys). */
+export function withContents(doc: ChipDoc, sel: Sel, defOf: DefOf): Sel {
+  if (!sel.sections?.length) return sel;
+  const u = (a?: string[], b?: string[]) => [...new Set([...(a ?? []), ...(b ?? [])])];
+  const r: Sel = { ...sel };
+  for (const id of sel.sections) {
+    const c = sectionContents(doc, id, defOf);
+    for (const k of ['parts', 'pins', 'wires', 'labels', 'comments', 'sections'] as const) if (c[k]?.length) r[k] = u(r[k], c[k]);
+  }
+  return r;
+}
+
+/** The box around a selection's parts, pins, pointers, comments, sections and wires (null: nothing with a place). */
+export function selBounds(doc: ChipDoc, sel: Sel, defOf: DefOf): [Vec, Vec] | null {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const take = (p: Vec) => { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); };
+  const ids = (xs?: string[]) => new Set(xs ?? []);
+  const ps = ids(sel.parts), pins = ids(sel.pins), ls = ids(sel.labels), ws = ids(sel.wires), cs = ids(sel.comments), ss = ids(sel.sections);
+  for (const p of doc.parts) if (ps.has(p.id)) {
+    const d = defOf(p);
+    take(p.at);
+    if (d) { const g = orientGeom(d, p.flip, p.rot); take(add(p.at, [g.w, g.h])); }
+  }
+  for (const p of doc.pins) if (pins.has(p.id)) take(p.at);
+  for (const l of doc.labels) if (ls.has(l.id)) take(l.at);
+  for (const w of doc.wires) if (ws.has(w.id)) for (const q of polyline(doc, w, defOf) ?? []) take(q);
+  for (const c of commentsOf(doc)) if (cs.has(c.id)) { const b = commentBox(c); take([b.x, b.y]); take([b.x + b.w, b.y + b.h]); }
+  for (const s of sectionsOf(doc)) if (ss.has(s.id)) { take(s.at); take(add(s.at, s.size)); }
+  return x0 === Infinity ? null : [[x0, y0], [x1, y1]];
+}
+
+/**
+ * A section fitted around the selection with `margin` units to spare (more on the left and right, where pin and
+ * pointer names stand beside their points, and above for the title).
+ */
+export function groupInSection(doc: ChipDoc, sel: Sel, defOf: DefOf, title = 'Section', margin = 2): Added {
+  const b = selBounds(doc, sel, defOf);
+  if (!b) return { doc, reason: 'select some parts to group' };
+  const side = (sel.pins?.length || sel.labels?.length) ? margin + 4 : margin;
+  const at: Vec = [Math.floor(b[0][0] - side), Math.floor(b[0][1] - margin - 1)];
+  return addSection(doc, at, [Math.ceil(b[1][0] + side) - at[0], Math.ceil(b[1][1] + margin) - at[1]], title);
 }
 
 export function setComment(doc: ChipDoc, id: string, patch: Partial<Omit<CommentDoc, 'id'>>): Edited {
@@ -382,11 +469,12 @@ export function moveSel(doc: ChipDoc, sel: Sel, d: Vec, defOf: DefOf): ChipDoc {
   const pins = moveAll(doc.pins, sel.pins, d);
   const labels = moveAll(doc.labels, sel.labels, d);
   const comments = doc.comments && moveAll(doc.comments, sel.comments, d);
+  const sections = doc.sections && moveAll(doc.sections, sel.sections, d);
   const rigid = new Map((sel.wires ?? []).filter((id) => doc.wires.some((w) => w.id === id)).map((id): [string, Vec] => [id, d]));
-  if (parts === doc.parts && pins === doc.pins && labels === doc.labels && comments === doc.comments && !rigid.size) return doc;
-  // Comments touch no wire: moving only comments needs no refit.
-  if (parts === doc.parts && pins === doc.pins && labels === doc.labels && !rigid.size) return { ...doc, comments };
-  return refit(doc, { ...doc, parts, pins, labels, comments }, defOf, rigid);
+  if (parts === doc.parts && pins === doc.pins && labels === doc.labels && comments === doc.comments && sections === doc.sections && !rigid.size) return doc;
+  // Comments and sections touch no wire: moving only those needs no refit.
+  if (parts === doc.parts && pins === doc.pins && labels === doc.labels && !rigid.size) return { ...doc, comments, sections };
+  return refit(doc, { ...doc, parts, pins, labels, comments, sections }, defOf, rigid);
 }
 
 /** Wires ending on a deleted object go, and so do wires branched from deleted wires (transitively). */
@@ -401,7 +489,8 @@ export function deleteSel(doc: ChipDoc, sel: Sel): ChipDoc {
   const keep = <T extends { id: string }>(xs: T[], s: Set<string | undefined>) => (xs.some((x) => s.has(x.id)) ? xs.filter((x) => !s.has(x.id)) : xs);
   const r = { ...doc, parts: keep(doc.parts, parts), pins: keep(doc.pins, pins), labels: keep(doc.labels, labels), wires: keep(doc.wires, wires) };
   if (doc.comments) r.comments = keep(doc.comments, new Set(sel.comments));
-  return r.parts === doc.parts && r.pins === doc.pins && r.labels === doc.labels && r.wires === doc.wires && r.comments === doc.comments ? doc : r;
+  if (doc.sections) r.sections = keep(doc.sections, new Set(sel.sections));
+  return r.parts === doc.parts && r.pins === doc.pins && r.labels === doc.labels && r.wires === doc.wires && r.comments === doc.comments && r.sections === doc.sections ? doc : r;
 }
 
 /**
@@ -651,6 +740,7 @@ export function copySel(doc: ChipDoc, sel: Sel): Clip {
     labels: doc.labels.filter((l) => ls.has(l.id)),
     wires: doc.wires.filter((w) => ws.has(w.id)),
     comments: commentsOf(doc).filter((c) => sel.comments?.includes(c.id)),
+    sections: sectionsOf(doc).filter((s) => sel.sections?.includes(s.id)),
   };
 }
 
@@ -720,6 +810,9 @@ export function pasteClip(doc: ChipDoc, clip: Clip, offset: Vec): { doc: ChipDoc
   if (comments.length) out.comments = [...commentsOf(doc), ...comments];
   const sel: Sel = { parts: parts.map((p) => p.id), pins: pins.map((p) => p.id), labels: labels.map((l) => l.id), wires: wires.map((w) => w.id) };
   if (comments.length) sel.comments = comments.map((c) => c.id);
+  const secIds = new Set(sectionsOf(doc).map((s) => s.id));
+  const sections = (clip.sections ?? []).map((s) => ({ ...s, id: take(secIds, nextId('sec', secIds)), at: add(s.at, offset) }));
+  if (sections.length) { out.sections = [...sectionsOf(doc), ...sections]; sel.sections = sections.map((s) => s.id); }
   return { doc: out, sel };
 }
 
@@ -728,6 +821,7 @@ export const duplicate = (doc: ChipDoc, sel: Sel, offset: Vec): { doc: ChipDoc; 
 export function selectAll(doc: ChipDoc): Sel {
   const sel: Sel = { parts: doc.parts.map((p) => p.id), pins: doc.pins.map((p) => p.id), wires: doc.wires.map((w) => w.id), labels: doc.labels.map((l) => l.id) };
   if (doc.comments?.length) sel.comments = doc.comments.map((c) => c.id);
+  if (doc.sections?.length) sel.sections = doc.sections.map((s) => s.id);
   return sel;
 }
 
@@ -761,5 +855,7 @@ export function boxSelect(doc: ChipDoc, rect: [Vec, Vec], defOf: DefOf): Sel {
     return inn(c.at) && inn([b.x + b.w, b.y + b.h]);
   });
   if (cs.length) sel.comments = cs.map((c) => c.id);
+  const ss = sectionsOf(doc).filter((s) => inn(s.at) && inn(add(s.at, s.size)));
+  if (ss.length) sel.sections = ss.map((s) => s.id);
   return sel;
 }
