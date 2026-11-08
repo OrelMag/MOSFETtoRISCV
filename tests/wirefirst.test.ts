@@ -4,10 +4,13 @@ import { netlistOf, type ComponentDef, type Netlist } from '../src/sim/types';
 import { reachableDefs } from '../src/lib/resolve';
 import { partnerLines } from '../src/view/partners';
 import { labelOverlaps, routeNetlist, wireOverlaps, type NetTag } from '../src/view/route';
-import { drawnNetlist, MAX_CROSSINGS_PER_NET, WHOLE_NETS, wireCrossings, wiresThroughParts } from '../src/view/wirefirst';
+import { drawnNetlist, MAX_CROSSINGS_PER_NET, MORE_CROSSINGS_PER_NET, WHOLE_NETS, wireCrossings, wiresThroughParts } from '../src/view/wirefirst';
+import { registry } from '../src/lib/define';
 import { tick } from './yieldtick';
 
 const hasTags = (nl: Netlist) => nl.nets.some((n) => n.tags === true || (n.tags?.length ?? 0) > 0);
+/** Every level a stage can show: the ones reachable from the families and every registered part. */
+const everyDef = (): ComponentDef[] => [...new Set([...reachableDefs(), ...registry.values()])];
 
 describe('wires first', () => {
   it('draws the six-gate flip-flop with wires: its loops are what the step teaches', () => {
@@ -29,7 +32,7 @@ describe('wires first', () => {
 
   it('never draws two nets on one line, on any level with pointers', async () => {
     const bad: string[] = [];
-    const defs: ComponentDef[] = reachableDefs();
+    const defs = everyDef();
     expect(defs.length).toBeGreaterThan(200);
     for (const def of defs) {
       const nl = netlistOf(def);
@@ -41,6 +44,9 @@ describe('wires first', () => {
       if (wireOverlaps(r).length) bad.push(`${def.id}: wires overlap`);
       if (!hasTags(dn) && nl.nets.length <= WHOLE_NETS && wireCrossings(r) > MAX_CROSSINGS_PER_NET * nl.nets.length) bad.push(`${def.id}: too many crossings`);
       if (labelOverlaps(def, dn).length > labelOverlaps(def, nl).length) bad.push(`${def.id}: labels collide`);
+      // at most one crossing a net more than the author's drawing: past it the wires read worse than the pointers
+      const more = wireCrossings(r) - wireCrossings(routeNetlist(def, nl).nets);
+      if (more > MORE_CROSSINGS_PER_NET * nl.nets.length) bad.push(`${def.id}: ${more} more crossings than its author's ${nl.nets.length} nets allow`);
     }
     expect(bad).toEqual([]);
   }, 600_000);
@@ -50,7 +56,7 @@ describe('wires first and the parts', () => {
   // A wire is drawn under a part's body: run through one, it seems to vanish and come back somewhere else.
   it('never adds a wire through a part', async () => {
     const bad: string[] = [];
-    for (const def of reachableDefs()) {
+    for (const def of everyDef()) {
       const nl = netlistOf(def);
       if (!nl || !hasTags(nl)) continue;
       const dn = drawnNetlist(def, nl);
