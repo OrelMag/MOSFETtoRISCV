@@ -891,7 +891,8 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     en1.name = 'go';
     en1.tags = true;
     if (pred) {
-      add('gU', AND, xDE + 40, 0);
+      if (wired) instances.push({ name: 'gU', def: AND, at: [90, 146] }); else add('gU', AND, xDE + 40, 0);
+      defs.set('gU', AND);
       retarget('updE', 'btb.updE', 'gU.a');
       en1.ends.push('gU.b');
       nets.push({ name: 'updGo', ends: ['gU.y', 'btb.updE'], tags: true });
@@ -915,7 +916,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   }
   if (m) {
     // ---- M extension. D: decode; E: multiply (first half) and divide; M: multiply (second half).
-    const ym = T + PIPE_H + 72; // below the hazard unit and the prediction row
+    const ym = T + PIPE_H + (wired && pred ? 100 : 72); // below the hazard unit and the prediction row
     const add = (name: string, def: ComponentDef, x: number, y: number, label?: string) => { instances.push({ name, def, at: [x, ym + y], label }); defs.set(name, def); };
     const at2 = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); };
     const net = (name: string) => nets.find((n) => n.name === name)!;
@@ -928,7 +929,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     add('isMD', AND, xFD + 30, 6);
     add('isMul', AND, xFD + 44, 7); add('isDiv', AND, xFD + 44, 16);
     add('mfl', merger([1, 1]), xFD + 58, 8); add('kLd', constWord(2, 1), xFD + 52, 26);
-    at2('rsm', M22, [xDE - 6, P('DE', 'resultSrcD')[1] - g(M22).ports.y.pos[1]], 'load path');
+    at2('rsm', M22, wired ? [92, 72] : [xDE - 6, P('DE', 'resultSrcD')[1] - g(M22).ports.y.pos[1]], 'load path'); // wired: under the control block, out of the rows into ID/EX
     // E: the multiplier's first half, the divider, and the result multiplexer
     add('mE', CR2, xDE + 4, 6, 'M flags');
     add('smE', splitter([1, 1]), xDE + 18, 6); add('sf3E', splitter([2, 1]), xDE + 18, 20);
@@ -937,7 +938,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     add('dive', DIV_E, xDE + 40, 44, 'divide');
     add('mdE', busMux2(32), xDE + 56, -16, 'ALU / divide');
     add('run', NOT, xDE + 58, -4);
-    add('gPC', AND, 4, 44); add('gFD', AND, 24, 44);
+    if (wired) { at2('gPC', AND, [66, 100]); at2('gFD', AND, [66, 106]); } else { add('gPC', AND, 4, 44); add('gFD', AND, 24, 44); }
     // M: the multiplier's second half, and its result in place of the memory word
     add('mfMd', merger([1, 2]), xEM - 30, 6);
     add('mfM', CR3, xEM - 20, 4, 'mul?, funct3'); add('msM', R, xEM - 20, 20, 'sum'); add('mcM', R, xEM - 20, 36, 'carry');
@@ -945,8 +946,10 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     add('mulm', MUL_M, xEM + 12, 22, 'multiply (M)');
     add('rdm', busMux2(32), xEM + 34, 4, 'memory / product');
     // the ID/EX enable now comes from the stall; the constants that remain move clear of the clock labels
-    instances.find((x) => x.name === 'en1')!.at = [xDE - 6, T + PIPE_H + 3];
-    instances.find((x) => x.name === 'clr0E')!.at = [xMW - 6, T + PIPE_H + 3];
+    if (!wired) {
+      instances.find((x) => x.name === 'en1')!.at = [xDE - 6, T + PIPE_H + 3];
+      instances.find((x) => x.name === 'clr0E')!.at = [xMW - 6, T + PIPE_H + 3];
+    }
     // D wiring
     net('opD').ends.push('opM.a'); net('funct7D').ends.push('f7M.a'); net('funct3D').ends.push('sf3D.in');
     retargetEnd(net('resultSrcD'), 'DE.resultSrcD', 'rsm.a');
@@ -1119,6 +1122,18 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     rows('clk', Object.fromEntries(['pc.clk', 'FD.clk', 'DE.clk', 'EM.clk', 'MW.clk', 'btb.clk'].map((e) => [e, [[xOf(e), 86]]])), ['rf.clk', 'dm.clk']);
     for (const n of nets) if (['enPC', 'enFD', 'flushFD', 'flushDE', 'bypassA', 'bypassB', 'forwardA', 'forwardB', 'PCSrcE', 'ImmSrcD', 'opD', 'funct3D', 'funct7D', 'ALUSrcAE', 'ALUSrcBE', 'BranchE', 'JumpE', 'JalrE', 'ALUControlE', 'funct3E', 'Zero', 'Neg', 'Ovf', 'Carry', 'rs1E', 'rs2E', 'rdE', 'validE', 'resultSrcE', 'regWriteE', 'memWriteE', 'rdM', 'regWriteM', 'rdW', 'regWriteW', 'en1', 'clr0', 'MemWriteM', 'resultSrcM', 'resultSrcW', 'rs1D', 'rs2D'].includes(n.name!)) n.quiet = true;
     net('PCF').tags = ['pcF'];
+    if (m) {
+      // what the multiplier and divider rows take from the stages above stays a pointer (the wires would cross their units)
+      const tag = (name: string, ends: string[]) => { const n = net(name); if (n) n.tags = ends; };
+      tag('funct3E', ['sf3E.in']);
+      tag('flushDE', ['mE.clr']);
+      tag('en1', ['msM.en', 'mcM.en', 'mfM.en']);
+      tag('validE', ['hz.validE', 'goDiv.b', ...(pred ? ['mis.valid'] : [])]);
+      tag('WriteDataE', ['mule.b', 'dive.b', ...(bal ? ['bcmp.b'] : [])]);
+      net('clk')!.tags = [...(net('clk')!.tags as string[]), 'mE.clk', 'dive.clk', 'msM.clk', 'mcM.clk', 'mfM.clk'];
+      if (pred) { tag('BranchE', ['mis.branch']); tag('JumpE', ['mis.jump', 'isJ.a']); tag('JalrE', ['mis.jalr', 'isJ.b']); }
+    }
+    if (pred && bal) { net('JalrTargetE')!.tags = true; net('JalrTargetE')!.tagAt = { 'clr0.out': [177, 25] }; }
     if (pred) {
       net('validE')!.tags = ['hz.validE', 'mis.valid'];
       // the predictor's answers: into the IF/ID register beside it, back to the next-PC mux and the select as pointers
