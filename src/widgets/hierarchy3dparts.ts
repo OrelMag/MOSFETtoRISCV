@@ -93,12 +93,13 @@ export function hierarchyParts(p: HPose, P: HPalette): Part[] {
 }
 
 const SHORT: Record<HLevel['id'], string> = { reg: 'Regs', l1: 'L1', l2: 'L2', l3: 'L3', dram: 'DRAM', ssd: 'SSD' };
-/** narrow: every other of the close-set cache labels stands further out, so a phone-width view does not set them touching. */
-export function hierarchyAnchors(narrow = false): Anchor[] {
+/** The levels' dots stand on the road at their true distance; their names alternate below and above it in order (Regs below, L1 above, L2 below, L3 above), so neighbours never share a line. */
+export function hierarchyAnchors(): Anchor[] {
   const front: Vec3 = [0, 0.3, 1], up: Vec3 = [0, 1, 0];
+  const above = new Set<HLevel['id']>(['l1', 'l3']);
   return [
     { text: 'Core', p: [-7, 10, -1], side: 't', n: up },
-    ...LEVELS.map((lv): Anchor => ({ text: SHORT[lv.id], p: [levelX(lv), 0, narrow && (lv.id === 'l1' || lv.id === 'l3') ? 24 : 3], side: narrow && lv.id === 'reg' ? 'l' : 'b', n: front })),
+    ...LEVELS.map((lv): Anchor => ({ text: SHORT[lv.id], p: [levelX(lv), 0, 3], side: above.has(lv.id) ? 't' : 'b', n: front })),
     ...PLACES.map((q): Anchor => ({ text: q.label, p: [(q.x0 + q.x1) / 2, q.h + (q.id === 'desk' ? 8 : q.id === 'shelf' ? 1 : 3), -6], side: 't', n: up })),
   ];
 }

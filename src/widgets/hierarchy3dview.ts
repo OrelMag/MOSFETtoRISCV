@@ -53,7 +53,7 @@ export function hierarchyView(): Widget {
     }
   }
   function paint(): void {
-    stage.paint(hierarchyParts(pose(), palette()), hierarchyAnchors(narrow()));
+    stage.paint(hierarchyParts(pose(), palette()), hierarchyAnchors());
     requestAnimationFrame(keepLabelsIn); // after the renderer has placed them
   }
 
