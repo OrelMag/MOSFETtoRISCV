@@ -1,0 +1,30 @@
+/* ---------- The CRT raster scan (widgets/crt3dview.ts): materials, scoped under .m3d ---------- */
+.m3d {
+  --crt-glass: light-dark(#b9cfd0, #8fb0b4);
+  --crt-aquadag: light-dark(#17181b, #0b0c0e);
+  --crt-copper: light-dark(#b8692e, #d07f40);
+  --crt-ferrite: light-dark(#4a4c52, #5c5f67);
+  --crt-metal: light-dark(#8f98a8, #a3acbd);
+  --crt-pin: light-dark(#a9a38c, #c9c3a8);
+  --crt-off: light-dark(#26292e, #17191d);
+  --crt-mask: light-dark(#454a55, #6a7080);
+  --crt-heater: light-dark(#ff8a1f, #ff9a3a);
+  --crt-ghost: light-dark(#6c7690, #aab3cc);
+  --crt-bezel: light-dark(#cfc8b4, #2b2d33);
+}
+.crt-sel { min-height: 30px; max-width: 100%; font: inherit; font-size: 13px; }
+.crt-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); }
+.crt-plot { display: block; width: 100%; height: auto; margin-bottom: 4px; }
+.crt-plot .line { fill: none; stroke: var(--crt-copper); stroke-width: 1.7; stroke-linejoin: round; }
+.crt-plot .blank { fill: var(--warn-soft, rgba(200, 150, 0, .15)); }
+.crt-plot .cur { stroke: var(--accent); stroke-width: 1.5; }
+.crt-plot .ax { stroke: var(--border-strong); stroke-width: 1; }
+.crt-plot text { font: 10.5px var(--font-mono); fill: var(--muted); }
+.crt-seg { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.crt-retrace { margin-top: 8px; }
+@media (pointer: coarse) { .crt-sel { min-height: 40px; } .crt-chk input { width: 20px; height: 20px; } }
+.m3d .crt3d .r3, .crt3d .r3 { grid-template-columns: minmax(0, 1fr); }
+.crt3d .r3-stage { aspect-ratio: 16 / 9; max-height: 580px; }
+.crt3d .r3-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 24px; align-items: start; }
+@container (max-width: 560px) { .crt3d .r3-stage { aspect-ratio: 1 / 1; } }
