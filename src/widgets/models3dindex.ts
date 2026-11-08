@@ -89,6 +89,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./fgate3d').then((m) => m.fgate3d()),
   },
   {
+    id: 'loom', title: 'The Jacquard head', category: 'machines', chapter: 'cards', step: 0,
+    summary: 'The loom widget\'s chain on the cylinder: needles, hooks and griffe lift the warp a pick at a time and the cloth grows.',
+    files: ['loom3d', 'loom3dview', 'loom3dparts'], factory: 'loom3d',
+    open: () => import('./loom3d').then((m) => m.loom3d()),
+  },
+  {
     id: 'press', title: 'Hollerith\'s pin press', category: 'machines', chapter: 'cards', step: 1,
     summary: 'The census card under the press: pins reach mercury through the holes and the dials count.',
     files: ['press3d', 'press3dview', 'press3dparts'], factory: 'press3d', codex: ['hollerith'],
