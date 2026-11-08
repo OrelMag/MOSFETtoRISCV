@@ -243,6 +243,15 @@ export function control(custom: readonly CustomRow[] = [], mac = false): Compone
 }
 
 /** mac: the MAC core's custom-2 class (chapter "A MAC on the RV32"): racc writes a register and picks result input 4, and `macEn` lets the unit's accumulator change. */
+/** The control unit's drawing (a crossbar: class rails down the page, one OR gate per signal), as found by a search over the router's
+ *  own crossing count: rail order, gate order, where the signals leave and the mergers sit. Classes and signals the lists leave out
+ *  (custom rows, the MAC) go after them. A drawing only: no gate, wire or name differs. */
+const CTL_RAILS = ['BRANCH', 'R', 'I', 'AUIPC', 'JAL', 'LUI', 'JALR', 'STORE', 'LOAD'];
+const CTL_GATES = ['regWrite', 'resSrc0', 'aluSrcB', 'resSrc1', 'immSrc0', 'immSrc1', 'aluOp'];
+const CTL_PIN_Y: Record<string, number> = { regWrite: 6, immSrc: 40, aluSrcA: 11, aluSrcB: 23, memWrite: 17, resultSrc: 14, branch: 2, jump: 31, jalr: 25, aluCtl: 50, macEn: 54 };
+const CTL_MERGE = { ctl: [68, 4], imm: [28, 2], res: [17, 3] } as const; // y, pin pitch
+/** Place in `order`; names it leaves out follow, in their own order. */
+const rankIn = (order: readonly string[], name: string, all: readonly string[]) => { const k = order.indexOf(name); return k >= 0 ? k : order.length + all.filter((n) => !order.includes(n)).indexOf(name); };
 function buildControl(custom: readonly CustomRow[], mac = false): ComponentDef {
   if (mac && custom.some((r) => r.slot === 2)) throw new Error('control: custom-2 belongs to the MAC');
   const cx = custom.map((r) => ({ row: r, cls: `cx_${r.name.replace(/[^\w]/g, '_')}`, sigs: new Set(signalsOf(r)) }));
@@ -250,7 +259,8 @@ function buildControl(custom: readonly CustomRow[], mac = false): ComponentDef {
   const D = opcodeDecoder([...cx.map((c): [string, number] => [c.cls, SLOT_CODE[c.row.slot]]), ...macClass]);
   const classes: [string, number][] = [...CLASSES, ...cx.map((c): [string, number] => [c.cls, SLOT_CODE[c.row.slot]]), ...macClass];
   const dg = symbolGeom(D);
-  const rail = (k: number) => dg.w + 4 + 2 * k; // vertical rail per class
+  const railPos = (n: string) => rankIn(CTL_RAILS, n, classes.map(([c]) => c));
+  const rail = (k: number) => dg.w + 4 + 3 * k; // vertical rail per class
   const classIdx = new Map(classes.map(([n], i) => [n, i]));
   const XO = rail(classes.length) + 4; // OR gate column
   const by = (sig: string) => cx.filter((c) => c.sigs.has(sig)).map((c) => c.cls);
@@ -278,8 +288,11 @@ function buildControl(custom: readonly CustomRow[], mac = false): ComponentDef {
   const nets: NetDef[] = [{ name: 'op', ends: ['op', 'dec.op'] }];
   const classEnds = new Map<string, string[]>(classes.map(([n]) => [n, [`dec.${n}`]]));
   if (mac) classEnds.set('macRd', ['mrd.y', 'mres.i2']); // racc: not a class of its own, the MAC class and funct3 = 011
+  const sigNames = sigs.map((x) => x.name);
+  sigs.sort((a, b) => rankIn(CTL_GATES, a.name, sigNames) - rankIn(CTL_GATES, b.name, sigNames));
   let y = 2;
   const gateOut = new Map<string, string>();
+  const gateIn = new Map<string, (cls: string) => { pin: string; y: number }>();
   for (const s of sigs) {
     const g = s.from.length === 2 ? OR : orN(s.from.length);
     const gg = symbolGeom(g);
@@ -287,6 +300,7 @@ function buildControl(custom: readonly CustomRow[], mac = false): ComponentDef {
     instances.push({ name: `g_${s.name}`, def: g, at: [XO, y] });
     s.from.forEach((c, i) => classEnds.get(c)!.push(`g_${s.name}.${ins[i]}`));
     gateOut.set(s.name, `g_${s.name}.y`);
+    gateIn.set(s.name, (c) => ({ pin: `g_${s.name}.${ins[s.from.indexOf(c)]}`, y: y + gg.ports[ins[s.from.indexOf(c)]].pos[1] }));
     y += gg.h + 2;
   }
   for (const [sig, c] of direct) gateOut.set(sig, `dec.${c}`);
@@ -304,9 +318,9 @@ function buildControl(custom: readonly CustomRow[], mac = false): ComponentDef {
     { name: 'shR', def: OR, at: [XO + 18, ya + 15] },
     { name: 'alt1', def: andN(3), at: [XO + 25, ya + 13] },
     { name: 'alt', def: ALT, at: [XO + 32, ya + 17 - altH / 2] },
-    { name: 'mctl', def: merger([1, 1, 1, 1]), at: [XO + 40, ya] },
-    { name: 'mimm', def: merger([1, 1, 1]), at: [XO + 40, 22] },
-    { name: 'mres', def: merger(mac ? [1, 1, 1] : [1, 1]), at: [XO + 40, 9] },
+    { name: 'mctl', def: merger([1, 1, 1, 1], CTL_MERGE.ctl[1]), at: [XO + 40, CTL_MERGE.ctl[0]] },
+    { name: 'mimm', def: merger([1, 1, 1], CTL_MERGE.imm[1]), at: [XO + 40, CTL_MERGE.imm[0]] },
+    { name: 'mres', def: merger(mac ? [1, 1, 1] : [1, 1], CTL_MERGE.res[1]), at: [XO + 40, CTL_MERGE.res[0]] },
   );
   if (mac) {
     // custom-2 is a MAC instruction only with funct7 = 0 and funct3 < 4 (anything else does nothing, as the golden model): macEn, and racc = funct3 11
@@ -330,9 +344,16 @@ function buildControl(custom: readonly CustomRow[], mac = false): ComponentDef {
     );
     for (let i = 0; i < 7; i++) nets.push({ ends: [`mf7.o${i}`, `mor.i${i}`] });
   }
+  // racc's one wire starts right of the gate columns: down under the MAC block and up the lane left of the gates into
+  // regWrite's OR, and up the lane right of them into the result merger
+  const macVia = (): Record<string, [number, number][]> => {
+    const at = gateIn.get('regWrite')!('macRd'), o = symbolGeom(AND);
+    const out = [XO + 27 + o.w, ya + 30 + o.ports.y.pos[1]], yb = ya + 40;
+    return { [at.pin]: [[out[0] + 1, yb], [XO - 2, yb], [XO - 2, at.y]], 'mres.i2': [[XO + 38, out[1]], [XO + 38, CTL_MERGE.res[0] + symbolGeom(merger([1, 1, 1], CTL_MERGE.res[1])).ports.i2.pos[1]]] };
+  };
   for (const [c, ends] of classEnds) {
     const sub = subs.indexOf(c);
-    nets.push({ name: c, ends: [...ends, ...(c === 'R' ? ['shR.a'] : []), ...(c === 'BRANCH' ? [`alt.${altIn[1]}`] : []), ...(sub >= 0 ? [`alt.${altIn[2 + sub]}`] : [])], ...(classIdx.has(c) ? { trunk: rail(classIdx.get(c)!) } : {}) });
+    nets.push({ name: c, ends: [...ends, ...(c === 'R' ? ['shR.a'] : []), ...(c === 'BRANCH' ? [`alt.${altIn[1]}`] : []), ...(sub >= 0 ? [`alt.${altIn[2 + sub]}`] : [])], ...(classIdx.has(c) ? { trunk: rail(railPos(c)) } : {}), ...(c === 'macRd' ? { via: macVia() } : {}), ...(c === 'BRANCH' ? { via: { [`alt.${altIn[1]}`]: [[rail(railPos(c)), ya + 22], [XO + 30, ya + 22], [XO + 30, ya + 17 - altH / 2 + symbolGeom(ALT).ports[altIn[1]].pos[1]]] } } : {}) });
   }
   nets.push(
     { name: 'f3', ends: ['funct3', 'sf3.in'] },
@@ -378,7 +399,7 @@ function buildControl(custom: readonly CustomRow[], mac = false): ComponentDef {
   const outs = ['regWrite', 'immSrc', 'aluSrcA', 'aluSrcB', 'memWrite', 'resultSrc', 'branch', 'jump', 'jalr', 'aluCtl', ...(mac ? ['macEn'] : [])];
   const OX = XO + 50;
   const pins: Record<string, [number, number]> = { op: [0, 4], funct3: [XO - 14, ya + 1.5], funct7: [XO - 14, ya + 11] };
-  outs.forEach((o, i) => (pins[o] = [OX, 2 + 4 * i]));
+  outs.forEach((o, i) => (pins[o] = [OX, CTL_PIN_Y[o] ?? 2 + 4 * i]));
   const customRows = custom.map((r) => {
     const res = r.regWrite ? { alu: 'ALU', mem: 'mem', pc4: 'PC+4', imm: 'imm' }[r.result] : '–';
     return `<tr><td>${r.name} (custom-${r.slot})</td><td>${r.regWrite ? 1 : 0}</td><td>${r.fmt}</td><td>${r.srcA === 'pc' ? 'PC' : 'rs1'}</td><td>${r.srcB}</td><td>${r.memWrite ? 1 : 0}</td><td>${res}</td></tr>`;

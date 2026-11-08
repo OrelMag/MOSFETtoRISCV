@@ -90,7 +90,8 @@ export const BLACK_CELL: ComponentDef = define({
  */
 export const CLA4: ComponentDef = (() => {
   const R = 4; // rail spacing
-  const rails = ['c0', 'g0', 'p0', 'g1', 'p1', 'g2', 'p2', 'g3', 'p3'];
+  // Rail order found by search over the router's own crossing count (g and p of the high bits next to the AND column: their taps cross the fewest rails).
+  const rails = ['g2', 'g3', 'g1', 'p3', 'c0', 'g0', 'p1', 'p0', 'p2'];
   const railX = (name: string) => 22 + 2 * rails.indexOf(name);
   const XA = 22 + 2 * rails.length + 3; // AND column
   const instances: InstanceDef[] = [
@@ -109,18 +110,21 @@ export const CLA4: ComponentDef = (() => {
   let y = 2;
   const XO = XA + 9, XS = XO + 10;
   const sumEnds: string[] = [];
+  const railVia = new Map<string, [string, [number, number][]]>(); // g_{k-1} to c_k's last input must not run along an AND gate
   for (let k = 1; k <= 4; k++) {
     const terms: string[] = [];
     const ors = orN(k + 1);
     const orIns = ors.ports.filter((p) => p.dir === 'in').map((p) => p.name);
-    const yTop = y;
+    const yTop = y, bands: [number, number][] = [];
     for (let j = 0; j < k; j++) {
       // term j: p_{k-1} … p_j · (j == 0 ? c0 : g_{j-1})
-      const lits = [...Array.from({ length: k - j }, (_, m) => `p${k - 1 - m}`), j === 0 ? 'c0' : `g${j - 1}`];
+      // literals in rail order, the far rail on the top input: the taps do not cross each other
+      const lits = [...Array.from({ length: k - j }, (_, m) => `p${k - 1 - m}`), j === 0 ? 'c0' : `g${j - 1}`].sort((a, b) => rails.indexOf(b) - rails.indexOf(a));
       const g = lits.length === 2 ? AND : andN(lits.length);
       const gIns = g.ports.filter((p) => p.dir === 'in').map((p) => p.name);
       const nm = `t${k}_${j}`;
       instances.push({ name: nm, def: g, at: [XA, y] });
+      bands.push([y, y + symbolGeom(g).h]);
       lits.forEach((l, m) => railEnds.get(l)!.push(`${nm}.${gIns[m]}`));
       terms.push(`${nm}.y`);
       y += symbolGeom(g).h + 1;
@@ -130,6 +134,8 @@ export const CLA4: ComponentDef = (() => {
     instances.push({ name: `c${k}`, def: ors, at: [XO, oy] });
     terms.forEach((t, m) => nets.push({ ends: [t, `c${k}.${orIns[m]}`] }));
     railEnds.get(`g${k - 1}`)!.push(`c${k}.${orIns[k]}`);
+    const py = oy + symbolGeom(ors).ports[orIns[k]].pos[1], hit = bands.find(([a, b]) => py > a && py < b);
+    if (hit) railVia.set(`c${k}.${orIns[k]}`, [`g${k - 1}`, [[XA - 1.5, hit[0] - 0.5], [XA + 6, hit[0] - 0.5], [XA + 6, py]]]);
     if (k < 4) {
       instances.push({ name: `x${k}`, def: XOR, at: [XS, oy + og.h / 2 - 1] });
       nets.push({ name: `c${k}`, ends: [`c${k}.y`, `x${k}.b`] });
@@ -145,7 +151,11 @@ export const CLA4: ComponentDef = (() => {
   nets.push({ name: 's0', ends: ['x0.y', 'ms.i0'] });
   sumEnds.forEach((e, i) => nets.push({ name: `s${i + 1}`, ends: [e, `ms.i${i + 1}`] }));
   nets.push({ name: 's', ends: ['ms.out', 's'] });
-  for (const [r, ends] of railEnds) nets.push({ name: r, ends, trunk: railX(r) });
+  for (const [r, ends] of railEnds) {
+    const via: Record<string, [number, number][]> = {};
+    for (const [sink, [rr, pts]] of railVia) if (rr === r) via[sink] = pts;
+    nets.push({ name: r, ends, trunk: railX(r), ...(Object.keys(via).length ? { via } : {}) });
+  }
   return define({
     id: 'cla4', name: '4-bit carry-lookahead adder', category: 'arithmetic',
     summary: 'All four carries computed at once from g, p and cin by two-level AND-OR logic. Constant depth, but the gates get wide fast: c_k needs a (k+1)-input OR.',
