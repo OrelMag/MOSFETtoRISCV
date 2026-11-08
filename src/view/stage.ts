@@ -455,7 +455,7 @@ export class Stage {
     this.view.trace = true;
     this.view.badge = () => {
       const r = this.levelBadge.getBoundingClientRect(), c = this.canvas.getBoundingClientRect();
-      return r.width > 0 ? { x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height } : null;
+      return r.width > 0 && !this.levelBadge.classList.contains('yield') ? { x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height } : null;
     };
     // Tab-reachable (and S or the skip link focus it, ui/quicknav.ts): its keys work while it has focus
     this.el.tabIndex = 0;
@@ -517,6 +517,7 @@ export class Stage {
       this.inset = this.rightInset();
       this.drillLayout();
       this.layoutDock(false);
+      this.yieldBadge();
       this.view.resized();
       this.fitBar();
       this.fitControls();
@@ -2378,6 +2379,17 @@ export class Stage {
 
   /** A panel changed size (folded, unfolded, grew): make room for it, refitting a still-fitted view when the
    *  right dock's width changed or a panel now covers part of the circuit. */
+  /** The LEVEL tag gives way to a panel (a folded right-docked strip too) that would sit over it: half a tag is worse than none.
+   *  Where a panel and the tag meet depends on the stage's width, so it is measured, not a media query. */
+  private yieldBadge(): void {
+    const b = this.levelBadge;
+    b.classList.remove('yield');
+    const r = b.getBoundingClientRect();
+    if (!(r.width > 0)) return;
+    const hit = this.panels.some((p) => { const q = p.el.getBoundingClientRect(); return q.width > 0 && q.height > 0 && q.left < r.right + 6 && q.right > r.left - 6 && q.top < r.bottom + 4 && q.bottom > r.top - 4; });
+    b.classList.toggle('yield', hit);
+  }
+
   private syncCover(): void {
     this.autoFold();
     const inset = this.rightInset();
@@ -2389,6 +2401,7 @@ export class Stage {
     const covered = this.panels.filter((p) => p.el.dataset.dock === 'right').map((p) => p.el.offsetWidth).filter((w) => w > 0);
     this.canvas.style.setProperty('--panel-inset', `${covered.length ? Math.max(...covered) + 24 : 0}px`);
     this.clearNotesOfPanels();
+    this.yieldBadge();
     this.placeWhy();
     this.boardCover();
     this.drillLayout();

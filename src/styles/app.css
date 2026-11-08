@@ -3012,3 +3012,6 @@ svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .ne
 .stage-intro { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; text-align: center; color: var(--text); }
 .stage-intro p { margin: 0; font-weight: 600; font-size: 15px; }
 .stage-intro p.sub { font-weight: 400; font-size: 13.5px; color: var(--muted); max-width: 38ch; line-height: 1.5; }
+
+/* the LEVEL tag under a panel that would cover it (Stage.yieldBadge) */
+.level-badge.yield { visibility: hidden; }
