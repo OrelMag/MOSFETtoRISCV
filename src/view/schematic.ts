@@ -27,7 +27,7 @@ import type { ComponentDef } from '../sim/types';
 import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showMenu } from '../ui/menu';
 import { installHold } from '../ui/holdpress';
 import { isConstantDef } from '../sim/constant';
-import { Legibility, nameEligible, nameRotated, type NameEl, type Seg, type TagEl } from './legible';
+import { isGeneratedNetName, Legibility, nameEligible, nameRotated, type NameEl, type Seg, type TagEl } from './legible';
 
 /** A note's marker on a part of the level shown. */
 export interface NotePin {
@@ -358,7 +358,7 @@ export class SchematicView {
         g.append(stub, s('rect', { x: rx, y: ry, width: tw, height: th, rx: 0.35 }), s('circle', { class: 'tag-end', cx: tip[0], cy: tip[1], r: 0.5 }),
           s('text', { x: rx + tw / 2, y: ry + th / 2 + 0.3, 'text-anchor': 'middle' }, name));
         w.tags.push(g);
-        tagEls.push({ g, tip, rect: { x: rx, y: ry, w: tw, h: th } });
+        tagEls.push({ g, tip, rect: { x: rx, y: ry, w: tw, h: th }, named: nl.nets[net.index].name !== undefined && !isGeneratedNetName(name) });
         labelG.append(g);
         grow(rx, ry);
         grow(rx + tw, ry + th);

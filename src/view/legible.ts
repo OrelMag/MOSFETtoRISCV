@@ -5,8 +5,11 @@
 //     under MIN_TEXT_PX on screen (classes on the svg, toggled when the scale crosses a size: one CSS rule per kind).
 //  2. A block's name (box label) that would render under NAME_PX is drawn at a fixed NAME_PX on screen, centred on its
 //     block (a second text inside the instance group, so focus fading, dragging, heat and hit testing apply to it as to
-//     the block). Names that would collide are dropped, the larger block keeping its name. The plan is computed when
-//     the scale settles, from the blocks' sizes alone: no layout reads.
+//     the block), on one line, spilling past its block if it is wider: kept so whenever it covers no other block and no
+//     name kept before it (wires do not count). Only a name that would collide is shrunk into its block, abbreviated,
+//     drawn quietly over it or cut short. Constant values are planned after every name, so a name wins every clash, and
+//     a bare zero run (0, 00, 0x0) is never drawn at fit. The plan is computed when the scale settles, from the blocks'
+//     sizes alone: no layout reads.
 
 /** Smallest text (px on screen) any schematic text is drawn at. */
 export const MIN_TEXT_PX = 7;
@@ -98,15 +101,7 @@ export function truncLayout(b: NameBox, scale: number, text = textOf(b)): NameLa
 
 /** Largest size (px) of a name drawn wider than its block: quiet, never louder than the names that fit. */
 export const NAME_OVER_MAX_PX = 8;
-/**
- * A name above that size over its block needs a block this wide (px), at most LARGE_PORTS ports, and spills at most LARGE_SPILL
- * times its width: a label over a block (a CPU top's REGISTERS at the 12 px of its CONTROL), never text over the pins of a small or
- * densely pinned block (a phone's UNPACK, SPECIAL). Clearing the pins cannot tell the two apart: a large name covers the ports on
- * its own block's edges in either.
- */
-export const LARGE_BLOCK_PX = 30;
-/** ... and has at most this many ports: a block with a dense edge of pins (a phone's SPECIAL) keeps the quiet size. */
-export const LARGE_PORTS = 8;
+/** A name between the quiet size and NAME_PX spills at most this many times its block's width. */
 export const LARGE_SPILL = 2.5;
 /** A full name spilling past its block by no more than this (px, in all) is kept over the abbreviation that fits inside. */
 export const NAME_SPILL_PX = 8;
@@ -146,83 +141,114 @@ export function planNames(boxes: NameBox[], scale: number, minBlockPx = 10): boo
 }
 
 /**
- * planNames with how each kept name is drawn (null: no name). A block's name is tried, in order: the full text inside the block
- * (largest size), the full text barely wider than it (NAME_SPILL_PX), its abbreviation (ABBREVIATIONS) inside the block, then wider than the block at the smallest readable
- * size (at most NAME_OVER_MAX_PX, and no larger than the largest name inside a block) where it covers no other block and no name
- * kept before it (`blocks`: every block's grid rectangle, else the other named blocks), and last the text cut short with an ellipsis.
+ * planNames with how each kept name is drawn (null: no name), in passes:
+ *  1. The names the renderer before this planner drew (NAME_PX, one line, centred; a name dropped only where it overlapped a name
+ *     kept before it, largest block first) keep exactly that wherever it covers no other block (wires do not count).
+ *  2. The rest, those first: the full text inside the block (largest size), a size between that and NAME_PX over the block clear
+ *     of everything (at most LARGE_SPILL times its width), the full text barely wider than it (NAME_SPILL_PX), the abbreviation
+ *     (ABBREVIATIONS) inside it, wider than it at a quiet size (at most NAME_OVER_MAX_PX), then cut short with an ellipsis; a quiet
+ *     spill over a routed wire gives way to the abbreviation inside. A name of pass 1's kind that finds none of these keeps its
+ *     NAME_PX layout over the block rather than vanish.
+ *  3. Constant values, so a name wins every clash with one; a bare zero run is not drawn.
+ * `blocks`: every block's grid rectangle (else the named blocks').
  */
 export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, blocks?: { x: number; y: number; w: number; h: number }[], wires: Seg[] = []): (NameLayout | null)[] {
   const out: (NameLayout | null)[] = boxes.map(() => null);
   if (!needsFixedNames(scale)) return out;
   const order = boxes.map((_, i) => i).sort((a, c) => boxes[c].w * boxes[c].h - boxes[a].w * boxes[a].h || a - c);
+  const names = order.filter((i) => !boxes[i].const && Math.max(boxes[i].w, boxes[i].h) * scale >= minBlockPx);
   const kept: Box[] = [];
   const asBox = (r: { x: number; y: number; w: number; h: number }): Box => ({ l: r.x, r: r.x + r.w, t: r.y, b: r.y + r.h });
   const all = (blocks ?? boxes.map((b) => ({ x: b.cx - b.w / 2, y: b.cy - b.h / 2, w: b.w, h: b.h }))).map(asBox);
+  const isOwn = (b: NameBox) => (k: Box) => Math.abs((k.l + k.r) / 2 - b.cx) < 0.01 && Math.abs((k.t + k.b) / 2 - b.cy) < 0.01;
+  // pass 2 also keeps clear of the old places of the old renderer's names still to be placed, so none of them is pushed out
+  let reserved: Map<number, Box> = new Map();
+  let self = -1;
+  const free = (b: NameBox, l: NameLayout) => { const r = asBox(nameRect(b, l, scale)); return !kept.some((k) => crosses(r, k)) && ![...reserved].some(([j, k]) => j !== self && crosses(r, k)); };
+  const others = (b: NameBox, l: NameLayout) => { const r = asBox(nameRect(b, l, scale)), own = isOwn(b); return !all.some((k) => !own(k) && crosses(r, k)); };
+  const spill = (b: NameBox, l: NameLayout) => maxChars(l.lines) * l.px * NAME_EM - (b.rot ? b.h : b.w) * scale;
+  /** The name as the renderer before this planner drew it. */
+  const classic = (b: NameBox): NameLayout => {
+    const l: NameLayout = { px: NAME_PX, lines: [textOf(b)] };
+    if (spill(b, l) + 6 > 0 || (!b.rot && NAME_PX * NAME_LINE > b.h * scale)) l.over = true;
+    return l;
+  };
+  const keep = (i: number, l: NameLayout) => { kept.push(asBox(nameRect(boxes[i], l, scale))); out[i] = l; };
   // a name over its block is no larger than the largest name inside a block of this drawing
   let maxIn = 0;
   for (const b of boxes) for (const t of [textOf(b), abbreviate(textOf(b))]) maxIn = Math.max(maxIn, fitLayout(b, scale, t)?.px ?? 0);
   const overMax = Math.max(MIN_TEXT_PX, Math.min(NAME_OVER_MAX_PX, Math.floor(maxIn)));
-  for (const i of order) {
-    const b = boxes[i];
-    if (b.const) {
-      // a constant's value at its label's own size (at least readable), over the capsule, clear of everything
-      const l: NameLayout = { px: Math.max(MIN_TEXT_PX, Math.min(NAME_PX, LABEL_UNITS * scale)), lines: [textOf(b)], over: true };
-      const r = asBox(nameRect(b, l, scale));
-      const isOwn = (k: Box) => Math.abs((k.l + k.r) / 2 - b.cx) < 0.01 && Math.abs((k.t + k.b) / 2 - b.cy) < 0.01;
-      if (!kept.some((k) => crosses(r, k)) && !all.some((k) => !isOwn(k) && crosses(r, k))) { kept.push(r); out[i] = l; }
-      continue;
-    }
-    if (Math.max(b.w, b.h) * scale < minBlockPx) continue;
-    const full = textOf(b), short = abbreviate(full);
+
+  // 1. what the old renderer drew, and of it what covers no other block
+  const oldRects: Box[] = [], wasDrawn = new Set<number>();
+  for (const i of names) {
+    const r = asBox(nameRect(boxes[i], classic(boxes[i]), scale));
+    if (oldRects.some((k) => crosses(r, k))) continue;
+    oldRects.push(r); wasDrawn.add(i);
+  }
+  for (const i of names) if (wasDrawn.has(i) && others(boxes[i], classic(boxes[i]))) keep(i, classic(boxes[i]));
+  reserved = new Map(names.filter((i) => wasDrawn.has(i) && !out[i]).map((i) => [i, asBox(nameRect(boxes[i], classic(boxes[i]), scale))]));
+
+  // 2. the rest: those the old renderer drew first
+  const rest = [...names.filter((i) => wasDrawn.has(i) && !out[i]), ...names.filter((i) => !wasDrawn.has(i))];
+  for (const i of rest) {
+    self = i;
+    const b = boxes[i], full = textOf(b), short = abbreviate(full);
     const texts = short === full ? [full] : [full, short];
-    const free = (l: NameLayout) => !kept.some((k) => crosses(asBox(nameRect(b, l, scale)), k));
-    // a rectangle is the block's own when it matches its centre and size
-    const others = (l: NameLayout) => {
-      const r = asBox(nameRect(b, l, scale));
-      return !all.some((k) => !(Math.abs((k.l + k.r) / 2 - b.cx) < 0.01 && Math.abs((k.t + k.b) / 2 - b.cy) < 0.01) && crosses(r, k));
-    };
-    let pick: NameLayout | null = null;
-    // inside the block first, the abbreviation before anything wider than the block, then wider than it
-    // (a full name that spills only a little is kept over its abbreviation)
+    const ok = (l: NameLayout) => free(b, l) && others(b, l);
     // a quiet spill over a routed wire (outside its own block) reads as part of the wire: the abbreviation inside the block wins
     const wireFree = (l: NameLayout) => {
-      const r = nameRect(b, l, scale), m = 0.2 / 1, own = { x: b.cx - b.w / 2, y: b.cy - b.h / 2 };
+      const r = nameRect(b, l, scale), m = 0.2, own = { x: b.cx - b.w / 2, y: b.cy - b.h / 2 };
       return !wires.some(([ax, ay, bx, by]) => {
         const x0 = Math.max(Math.min(ax, bx), r.x - m), x1 = Math.min(Math.max(ax, bx), r.x + r.w + m), y0 = Math.max(Math.min(ay, by), r.y - m), y1 = Math.min(Math.max(ay, by), r.y + r.h + m);
         if (x0 > x1 || y0 > y1) return false;
         return !(x0 >= own.x - 1e-6 && x1 <= own.x + b.w + 1e-6 && y0 >= own.y - 1e-6 && y1 <= own.y + b.h + 1e-6);
       });
     };
-    const spill = (l: NameLayout) => maxChars(l.lines) * l.px * NAME_EM - (b.rot ? b.h : b.w) * scale;
-    // wider than the quiet size, up to the largest name inside a block, only for a block that can carry it (LARGE_BLOCK_PX) and
-    // where no other block, name or tag is under it
-    const large = (t: string) => {
-      if (b.rot || b.w * scale < LARGE_BLOCK_PX || (b.ports ?? 0) > LARGE_PORTS) return null;
-      for (let px = Math.min(NAME_PX, Math.floor(maxIn)); px > overMax; px--) {
-        for (const lines of nameBreaks(t)) {
-          const l: NameLayout = { px, lines, over: true };
-          if (free(l) && others(l) && maxChars(l.lines) * l.px * NAME_EM <= LARGE_SPILL * b.w * scale) return l;
-        }
+    // between the quiet size and NAME_PX over the block, clear of every block and name
+    const large = () => {
+      if (b.rot) return null;
+      for (let px = NAME_PX - 1; px > overMax; px--) for (const lines of nameBreaks(full)) {
+        const l: NameLayout = { px, lines, over: true };
+        if (ok(l) && maxChars(l.lines) * l.px * NAME_EM <= LARGE_SPILL * b.w * scale) return l;
       }
       return null;
     };
     const over = (t: string, mild: boolean, clearOfWires = false) => {
-      for (const l of overLayouts(b, t, overMax)) if ((!mild || spill(l) <= NAME_SPILL_PX) && free(l) && others(l) && (!clearOfWires || wireFree(l))) return l;
+      for (const l of overLayouts(b, t, overMax)) if ((!mild || spill(b, l) <= NAME_SPILL_PX) && ok(l) && (!clearOfWires || wireFree(l))) return l;
       return null;
     };
-    const fits = texts.map((t) => { const f = fitLayout(b, scale, t); return f && free(f) ? f : null; });
-    pick = (fits[0] && fits[0].px > overMax ? fits[0] : null) ?? large(full) ?? fits[0] ?? (fits[1] ? over(full, true, true) : null) ?? fits[1] ?? over(full, true) ?? over(full, false) ?? (texts.length > 1 ? over(short, false) : null);
+    const fits = texts.map((t) => { const x = fitLayout(b, scale, t); return x && free(b, x) ? x : null; });
+    const c = classic(b);
+    let pick: NameLayout | null = (ok(c) ? c : null) ?? (fits[0] && fits[0].px > overMax ? fits[0] : null) ?? large() ?? fits[0]
+      ?? (fits[1] ? over(full, true, true) : null) ?? fits[1] ?? over(full, true) ?? over(full, false) ?? (texts.length > 1 ? over(short, false) : null);
     for (const t of texts) {
       if (pick) break;
       const tr = truncLayout(b, scale, t);
-      if (tr && free(tr)) pick = tr;
+      if (tr && free(b, tr)) pick = tr;
     }
-    if (!pick) continue;
-    kept.push(asBox(nameRect(b, pick, scale)));
-    out[i] = pick;
+    // a name the old renderer drew is never lost: over the block, as it was
+    if (!pick && wasDrawn.has(i) && free(b, c)) pick = c;
+    reserved.delete(i);
+    if (pick) keep(i, pick);
+  }
+  self = -1;
+
+  // 3. constant values: their label's own size (at least readable), over the capsule, clear of every name and block
+  for (const i of order) {
+    const b = boxes[i];
+    if (!b.const || isZeroRun(textOf(b))) continue;
+    const l: NameLayout = { px: Math.max(MIN_TEXT_PX, Math.min(NAME_PX, LABEL_UNITS * scale)), lines: [textOf(b)], over: true };
+    if (free(b, l) && others(b, l)) keep(i, l);
   }
   return out;
 }
+
+/** A constant's value that is only zeros (0, 00, 000, 0x0, 0b0): nothing to read at fit. */
+export const isZeroRun = (t: string): boolean => /^(0[xb])?0+$/i.test(t.trim());
+
+/** A net name the netlist made up (an unnamed net drawn as n<index>): its tags stay dots at fit. */
+export const isGeneratedNetName = (t: string): boolean => /^n\d+$/.test(t.trim());
 
 /** Largest factor a net tag is enlarged by to reach MIN_TEXT_PX; a tag needing more stays a dot (a CPU's fit). */
 export const TAG_MAX_K = 2.5;
@@ -235,12 +261,14 @@ const clash = (a: R, b: R, m = 0.1) => a.x < b.x + b.w + m && b.x < a.x + a.w + 
  * once its text is under MIN_TEXT_PX). A tag is enlarged to put its text at MIN_TEXT_PX, kept only while the enlarged pill
  * overlaps neither a block (`obstacles`) nor a tag kept before it, so an enlarged tag never covers more than a plain one.
  */
-export function planTags(tags: { tip: [number, number]; rect: R }[], obstacles: R[], scale: number): (number | null)[] {
+export function planTags(tags: { tip: [number, number]; rect: R; named?: boolean }[], obstacles: R[], scale: number): (number | null)[] {
   const k = MIN_TEXT_PX / (TEXT_UNITS.tag * scale);
   const out: (number | null)[] = tags.map(() => null);
   if (!(scale > 0) || k <= 1 || k > TAG_MAX_K) return out;
   const kept: R[] = [];
   tags.forEach((t, i) => {
+    // a generated name (n18) is no label a reader can use: it stays a dot
+    if (t.named === false) return;
     const r = t.rect;
     const e = { x: t.tip[0] + (r.x - t.tip[0]) * k, y: t.tip[1] + (r.y - t.tip[1]) * k, w: r.w * k, h: r.h * k };
     if (obstacles.some((o) => clash(e, o, 0)) || kept.some((o) => clash(e, o))) return;
@@ -250,7 +278,7 @@ export function planTags(tags: { tip: [number, number]; rect: R }[], obstacles: 
   return out;
 }
 
-export interface TagEl { g: SVGGElement; tip: [number, number]; rect: R }
+export interface TagEl { g: SVGGElement; tip: [number, number]; rect: R; named: boolean }
 
 export interface NameEl { t: SVGTextElement; box: NameBox }
 
