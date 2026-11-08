@@ -49,9 +49,10 @@ export const undoKey = (): string => tx('Ctrl+Z', 'Undo');
 /**
  * The canvas's gesture hint (.hint-badge): the mouse wording, or on a touch screen the touch wording
  * on one line (it sits over the circuit: wrapped on a phone it hid the lower pins). The first touch on
- * the canvas hides it for this visit; a tap on it hides it for good (remembered under `key`).
+ * the canvas hides it for this visit; a tap on it hides it for good (remembered under `key`);
+ * with `autoMs` (the stage), untouched, it goes by itself after that long.
  */
-export function hintBadge(mouse: string, touch: string, key: string, cls = ''): HTMLElement {
+export function hintBadge(mouse: string, touch: string, key: string, cls = '', autoMs = 0): HTMLElement {
   const store = `mosfet2riscv:hint:${key}`;
   if (!coarsePointer()) return h('div', { class: `hint-badge${cls}` }, mouse);
   let off = false;
@@ -73,6 +74,8 @@ export function hintBadge(mouse: string, touch: string, key: string, cls = ''): 
     el.parentElement?.removeEventListener('pointerdown', touched, true);
   };
   queueMicrotask(() => el.parentElement?.addEventListener('pointerdown', touched, true));
+  // ...or after a few seconds, untouched: it sits over the circuit's room and a phone's learner has read it by then
+  if (autoMs && !off) setTimeout(() => { if (!el.hidden) { el.hidden = true; el.dataset.off = '1'; } }, autoMs);
   return el;
 }
 

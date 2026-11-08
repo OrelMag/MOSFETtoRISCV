@@ -64,7 +64,7 @@ export const chSerial: Chapter = {
     'read an eye diagram and its BER from the channel model, and compare feed-forward, CTLE and decision-feedback equalization and PAM4 by what each costs',
     'compare copper, multimode and single-mode fibre by reach at a given rate',
   ],
-  builds: ['clocks', 'uart', 'wire', 'signals', 'noise'],
+  builds: ['clocks', 'uart', 'wire', 'signals', 'noise', 'carriers'],
   recap: {
     keep: [
       `A receiver with no clock of its own recovers one from the transitions in the data. A line code exists to guarantee them (a bounded run of equal bits) and to keep the average level at the middle (DC balance) so a transformer or an AC-coupled receiver passes it.`,

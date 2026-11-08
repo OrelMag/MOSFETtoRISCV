@@ -463,7 +463,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Decibels", challenge: "quiz" },
     { title: "An estimate on one page", challenge: "quiz" },
   ] },
-  { id: "telegraph", num: 39, title: "Two machines, one wire", blurb: "Why moving a bit is harder than computing one: a telegraph line, the relay that repeats it, and the limits Nyquist and Shannon set.", level: "Communication", builds: ["message","relays","bus"], recap: {"checks":3}, steps: [
+  { id: "telegraph", num: 39, title: "Two machines, one wire", blurb: "Why moving a bit is harder than computing one: a telegraph line, the relay that repeats it, and the limits Nyquist and Shannon set.", level: "Communication", builds: ["message","relays","inverter"], recap: {"checks":3}, steps: [
     { title: "Moving a bit", challenge: "quiz" },
     { title: "A line that fades", challenge: "quiz" },
     { title: "The relay as a repeater", challenge: "quiz" },
@@ -472,7 +472,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Shannon: what noise leaves", challenge: "quiz" },
     { title: "The rest of the track", challenge: "quiz" },
   ] },
-  { id: "exchange", num: 40, title: "The telephone exchange", blurb: "How many people reach each other: a dial exchange from relays, circuit switching and what it costs in contacts.", level: "Communication", builds: ["relays","telegraph"], recap: {"checks":3}, steps: [
+  { id: "exchange", num: 40, title: "The telephone exchange", blurb: "How many people reach each other: a dial exchange from relays, circuit switching and what it costs in contacts.", level: "Communication", builds: ["relays","telegraph","latches"], recap: {"checks":3}, steps: [
     { title: "Everyone to everyone", challenge: "quiz" },
     { title: "Counting dial pulses", challenge: "reach" },
     { title: "A stepping selector", challenge: "reach" },
@@ -482,7 +482,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The busy tone", challenge: "quiz" },
     { title: "Start-stop", challenge: "quiz" },
   ] },
-  { id: "wire", num: 41, title: "A wire is not a wire", blurb: "Between the driver's drain and the far pin: on-chip RC, repeaters, transmission lines, reflections, termination, differential pairs and an I/O pad.", level: "Communication", builds: ["inverter","telegraph","exchange"], recap: {"checks":3}, steps: [
+  { id: "wire", num: 41, title: "A wire is not a wire", blurb: "Between the driver's drain and the far pin: on-chip RC, repeaters, transmission lines, reflections, termination, differential pairs and an I/O pad.", level: "Communication", builds: ["inverter","telegraph","mosfet"], recap: {"checks":3}, steps: [
     { title: "The driver and its load", challenge: "quiz" },
     { title: "A long wire on a chip", challenge: "quiz" },
     { title: "Repeaters", challenge: "quiz" },
@@ -504,7 +504,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A bus is not synchronized bit by bit", challenge: "quiz" },
     { title: "An asynchronous FIFO", challenge: "reach" },
   ] },
-  { id: "uart", num: 43, title: "A UART", blurb: "How two clocks agree for one byte: a baud divider, shift registers, 16× oversampling, framing errors, FIFOs, and two computers chatting over a wire.", level: "Communication", builds: ["telegraph","exchange","clocks","bus"], recap: {"checks":3}, steps: [
+  { id: "uart", num: 43, title: "A UART", blurb: "How two clocks agree for one byte: a baud divider, shift registers, 16× oversampling, framing errors, FIFOs, and two computers chatting over a wire.", level: "Communication", builds: ["telegraph","exchange","clocks","bus","wire"], recap: {"checks":3}, steps: [
     { title: "One byte, no clock", challenge: "quiz" },
     { title: "The transmitter", challenge: "quiz" },
     { title: "The baud generator", challenge: "quiz" },
@@ -514,7 +514,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A UART on the bus", challenge: "reach" },
     { title: "Two computers chat", challenge: "reach" },
   ] },
-  { id: "spi", num: 44, title: "SPI and I²C", blurb: "A shared clock, or many devices on two wires: SPI's modes, I²C at switch level with open drain, arbitration and clock stretching.", level: "Communication", builds: ["uart","clocks"], recap: {"checks":3}, steps: [
+  { id: "spi", num: 44, title: "SPI and I²C", blurb: "A shared clock, or many devices on two wires: SPI's modes, I²C at switch level with open drain, arbitration and clock stretching.", level: "Communication", builds: ["uart","clocks","wire","inverter"], recap: {"checks":3}, steps: [
     { title: "Send the clock too", challenge: "quiz" },
     { title: "SPI: a ring of shift registers", challenge: "quiz" },
     { title: "Four modes", challenge: "quiz" },
@@ -564,7 +564,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What breaks a block of tones", challenge: "quiz" },
     { title: "The same idea, everywhere", challenge: "quiz" },
   ] },
-  { id: "serial", num: 49, title: "Fast serial links", blurb: "No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then the eye, equalization, PAM4 and fibre.", level: "Communication", builds: ["clocks","uart","wire","signals","noise"], recap: {"checks":3}, steps: [
+  { id: "serial", num: 49, title: "Fast serial links", blurb: "No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then the eye, equalization, PAM4 and fibre.", level: "Communication", builds: ["clocks","uart","wire","signals","noise","carriers"], recap: {"checks":3}, steps: [
     { title: "No clock on the wire", challenge: "quiz" },
     { title: "8b/10b and running disparity", challenge: "quiz" },
     { title: "Scrambling instead", challenge: "quiz" },
@@ -610,7 +610,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The waterfall", challenge: "quiz" },
     { title: "What near the limit costs", challenge: "quiz" },
   ] },
-  { id: "pcie", num: 53, title: "PCIe and USB", blurb: "The packet buses inside the box: PCIe's TLPs, credits, Ack, Nak and a replay buffer, and link training in gates; USB's tokens, CRCs and enumeration.", level: "Communication", builds: ["serial","clocks","errors","codes","bus"], recap: {"checks":3}, steps: [
+  { id: "pcie", num: 53, title: "PCIe and USB", blurb: "The packet buses inside the box: PCIe's TLPs, credits, Ack, Nak and a replay buffer, and link training in gates; USB's tokens, CRCs and enumeration.", level: "Communication", builds: ["serial","clocks","errors","codes","bus","uart"], recap: {"checks":3}, steps: [
     { title: "From a bus to a lane", challenge: "quiz" },
     { title: "A packet, byte by byte", challenge: "quiz" },
     { title: "Credits: never send what will not fit", challenge: "reach" },
@@ -622,7 +622,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Enumeration: a stranger introduces itself", challenge: "reach" },
     { title: "Two answers to one question", challenge: "quiz" },
   ] },
-  { id: "ethernet", num: 54, title: "Ethernet", blurb: "Who talks now, and to whom: addresses and the FCS, a MAC in gates, collisions, binary exponential backoff, and why a minimum frame exists.", level: "Communication", builds: ["pcie","uart","wire","errors"], recap: {"checks":3}, steps: [
+  { id: "ethernet", num: 54, title: "Ethernet", blurb: "Who talks now, and to whom: addresses and the FCS, a MAC in gates, collisions, binary exponential backoff, and why a minimum frame exists.", level: "Communication", builds: ["pcie","uart","wire","errors","serial"], recap: {"checks":3}, steps: [
     { title: "Many machines, one wire", challenge: "quiz" },
     { title: "The transmitter", challenge: "quiz" },
     { title: "The receiver", challenge: "quiz" },
@@ -655,7 +655,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Ping across the wire", challenge: "reach" },
     { title: "The cost of a packet" },
   ] },
-  { id: "router", num: 57, title: "A router", blurb: "Past one Ethernet: IPv4's bytes, longest-prefix match as a trie in RAM, a fast path in gates that rewrites four fields, a slow path for the rest, and how routers fill their tables.", level: "Communication", builds: ["ethernet","switch"], recap: {"checks":3}, steps: [
+  { id: "router", num: 57, title: "A router", blurb: "Past one Ethernet: IPv4's bytes, longest-prefix match as a trie in RAM, a fast path in gates that rewrites four fields, a slow path for the rest, and how routers fill their tables.", level: "Communication", builds: ["ethernet","switch","network"], recap: {"checks":3}, steps: [
     { title: "An address with a shape" },
     { title: "Longest prefix wins", challenge: "quiz" },
     { title: "The fast path in gates", challenge: "reach" },
@@ -665,7 +665,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Link state: everyone holds the map" },
     { title: "What one engine can carry" },
   ] },
-  { id: "tcp", num: 58, title: "TCP", blurb: "A reliable stream over a network that loses, repeats and reorders: the handshake, sequence numbers, the window, a timer that learns, AIMD's sawtooth, and queues that fill, in Python compiled for our CPU.", level: "Communication", builds: ["errors","network","router"], recap: {"checks":3}, steps: [
+  { id: "tcp", num: 58, title: "TCP", blurb: "A reliable stream over a network that loses, repeats and reorders: the handshake, sequence numbers, the window, a timer that learns, AIMD's sawtooth, and queues that fill, in Python compiled for our CPU.", level: "Communication", builds: ["errors","network","router","ethernet"], recap: {"checks":3}, steps: [
     { title: "A stream over datagrams" },
     { title: "Three segments to begin", challenge: "quiz" },
     { title: "Numbers that count bytes", challenge: "quiz" },
@@ -688,7 +688,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "CUBIC meets BBR", challenge: "quiz" },
     { title: "Choosing for a link", challenge: "quiz" },
   ] },
-  { id: "secret", num: 60, title: "Keeping it secret", blurb: "The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Then AES and SHA-256 in gates, and how strangers share a secret in public: key exchange and a TLS 1.3 handshake, run by our CPU against RFC 8448's recorded server.", level: "Communication", builds: ["tcp"], recap: {"checks":6}, steps: [
+  { id: "secret", num: 60, title: "Keeping it secret", blurb: "The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Then AES and SHA-256 in gates, and how strangers share a secret in public: key exchange and a TLS 1.3 handshake, run by our CPU against RFC 8448's recorded server.", level: "Communication", builds: ["python","cpu"], recap: {"checks":6}, steps: [
     { title: "A secret kept in wires" },
     { title: "A permutation you can read" },
     { title: "The same machine in gates" },
@@ -721,7 +721,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A page" },
     { title: "Many objects: HTTP/2 and QUIC" },
   ] },
-  { id: "radio", num: 62, title: "Radio", blurb: "How a bit crosses empty air: antennas, path loss and the link budget, mixers and software radio, multipath and fading, and what more antennas buy. Models, labelled as models.", level: "Communication", builds: ["noise","modem","carriers","serial","errors"], recap: {"checks":3}, steps: [
+  { id: "radio", num: 62, title: "Radio", blurb: "How a bit crosses empty air: antennas, path loss and the link budget, mixers and software radio, multipath and fading, and what more antennas buy. Models, labelled as models.", level: "Communication", builds: ["noise","modem","carriers","serial","errors","codes"], recap: {"checks":3}, steps: [
     { title: "An antenna", challenge: "quiz" },
     { title: "Path loss", challenge: "quiz" },
     { title: "The link budget", challenge: "quiz" },
@@ -731,7 +731,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Fading", challenge: "quiz" },
     { title: "What more antennas buy", challenge: "quiz" },
   ] },
-  { id: "wifi", num: 63, title: "Wi-Fi", blurb: "Who talks when nobody can hear everybody? CSMA/CA with its timing in gates, the contention window and Bianchi's formula, the hidden terminal and RTS / CTS, rate adaptation, airtime, MIMO.", level: "Communication", builds: ["radio","ethernet"], recap: {"checks":3}, steps: [
+  { id: "wifi", num: 63, title: "Wi-Fi", blurb: "Who talks when nobody can hear everybody? CSMA/CA with its timing in gates, the contention window and Bianchi's formula, the hidden terminal and RTS / CTS, rate adaptation, airtime, MIMO.", level: "Communication", builds: ["radio","ethernet","modem","pcie"], recap: {"checks":3}, steps: [
     { title: "A channel you cannot listen to", challenge: "quiz" },
     { title: "The rules, in microseconds", challenge: "reach" },
     { title: "How many can share", challenge: "quiz" },
@@ -740,7 +740,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Where the airtime goes", challenge: "quiz" },
     { title: "More antennas, more streams", challenge: "quiz" },
   ] },
-  { id: "cellular", num: 64, title: "Cellular", blurb: "How thousands share one mast: cells and reuse, the resource grid, schedulers that exploit fading, handover, beamforming, and what 5G changed. Models, labelled as models.", level: "Communication", builds: ["radio","wifi","carriers"], recap: {"checks":3}, steps: [
+  { id: "cellular", num: 64, title: "Cellular", blurb: "How thousands share one mast: cells and reuse, the resource grid, schedulers that exploit fading, handover, beamforming, and what 5G changed. Models, labelled as models.", level: "Communication", builds: ["radio","wifi","carriers","path"], recap: {"checks":3}, steps: [
     { title: "Cells and reuse", challenge: "quiz" },
     { title: "A grid in time and frequency", challenge: "quiz" },
     { title: "Who gets the next millisecond", challenge: "quiz" },
@@ -758,7 +758,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "When lossless stops", challenge: "quiz" },
     { title: "The tail at scale", challenge: "quiz" },
   ] },
-  { id: "bench", num: 66, title: "The expert's bench", blurb: "Given a symptom, find the cause: a method, then real faults injected into the book's own models, read from captures, eyes, counters and traces.", level: "Communication", builds: ["tcp","path","ethernet","switch","serial","uart","noise","radio","wifi"], recap: {"checks":3}, steps: [
+  { id: "bench", num: 66, title: "The expert's bench", blurb: "Given a symptom, find the cause: a method, then real faults injected into the book's own models, read from captures, eyes, counters and traces.", level: "Communication", builds: ["tcp","path","ethernet","switch","serial","uart","noise","radio","wifi","cellular","datacentre"], recap: {"checks":3}, steps: [
     { title: "A method", challenge: "quiz" },
     { title: "Four transfers that crawl", challenge: "quiz" },
     { title: "Reading an eye", challenge: "quiz" },
@@ -818,7 +818,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What removes a limit cycle", challenge: "quiz" },
     { title: "Sections in a cascade", challenge: "quiz" },
   ] },
-  { id: "multirate", num: 72, title: "Changing the rate", blurb: "How do you filter at a thousandth of the price? Decimation, interpolation, polyphase, half-band and CIC filters, with a CIC and a polyphase decimator in gates and their register growth measured.", level: "Signal processing", builds: ["signals","fixed","firdesign","muldiv"], recap: {"checks":3}, steps: [
+  { id: "multirate", num: 72, title: "Changing the rate", blurb: "How do you filter at a thousandth of the price? Decimation, interpolation, polyphase, half-band and CIC filters, with a CIC and a polyphase decimator in gates and their register growth measured.", level: "Signal processing", builds: ["signals","fixed","firdesign","muldiv","radio"], recap: {"checks":3}, steps: [
     { title: "Most of the samples are not needed", challenge: "quiz" },
     { title: "Throwing samples away", challenge: "quiz" },
     { title: "Why compute what you throw away?", challenge: "quiz" },
@@ -829,7 +829,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A CIC in gates", challenge: "reach" },
     { title: "The whole job, priced", challenge: "quiz" },
   ] },
-  { id: "cordic", num: 73, title: "Turning by shifting", blurb: "Can you rotate with no multiplier? CORDIC: a vector turned by adding shifted copies of itself, iterative and pipelined in gates, with sine, arctangent and magnitude, against a ROM of sines.", level: "Signal processing", builds: ["muldiv","modem","signals"], recap: {"checks":3}, steps: [
+  { id: "cordic", num: 73, title: "Turning by shifting", blurb: "Can you rotate with no multiplier? CORDIC: a vector turned by adding shifted copies of itself, iterative and pipelined in gates, with sine, arctangent and magnitude, against a ROM of sines.", level: "Signal processing", builds: ["muldiv","modem","signals","adders"], recap: {"checks":3}, steps: [
     { title: "A rotation is four multiplications", challenge: "quiz" },
     { title: "One way or the other", challenge: "quiz" },
     { title: "The gain nobody can avoid", challenge: "quiz" },
@@ -838,7 +838,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What the words buy", challenge: "quiz" },
     { title: "Against a table", challenge: "quiz" },
   ] },
-  { id: "mac", num: 74, title: "A MAC on the RV32", blurb: "What is one instruction worth? A multiply-accumulate unit in gates, four instructions on custom-2 and a 40-bit accumulator, then four filters measured on five machines: software multiply, RV32IM, mac, mac2 and mac2 unrolled.", level: "Signal processing", builds: ["fixed","firdesign","muldiv","cpu"], recap: {"checks":3}, steps: [
+  { id: "mac", num: 74, title: "A MAC on the RV32", blurb: "What is one instruction worth? A multiply-accumulate unit in gates, four instructions on custom-2 and a 40-bit accumulator, then four filters measured on five machines: software multiply, RV32IM, mac, mac2 and mac2 unrolled.", level: "Signal processing", builds: ["fixed","firdesign","muldiv","cpu","widths"], recap: {"checks":3}, steps: [
     { title: "What a multiply costs a filter", challenge: "quiz" },
     { title: "The MAC unit, in gates", challenge: "reach" },
     { title: "Four instructions on custom-2", challenge: "quiz" },
@@ -867,7 +867,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The loop in gates, and its CIC", challenge: "reach" },
     { title: "Many bits from one", challenge: "quiz" },
   ] },
-  { id: "adaptive", num: 77, title: "Filters that learn", blurb: "How do you cancel an echo you cannot measure? The Wiener solution, LMS and NLMS, an echo canceller and an equalizer you can hear and see converge, and an LMS tap in gates.", level: "Signal processing", builds: ["noise","serial","zplane","muldiv"], recap: {"checks":3}, steps: [
+  { id: "adaptive", num: 77, title: "Filters that learn", blurb: "How do you cancel an echo you cannot measure? The Wiener solution, LMS and NLMS, an echo canceller and an equalizer you can hear and see converge, and an LMS tap in gates.", level: "Signal processing", builds: ["noise","serial","zplane","muldiv","converters"], recap: {"checks":3}, steps: [
     { title: "An echo nobody can measure", challenge: "quiz" },
     { title: "The best a filter can do", challenge: "quiz" },
     { title: "One step downhill, per sample", challenge: "quiz" },
@@ -875,7 +875,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "An equalizer", challenge: "quiz" },
     { title: "A tap in gates", challenge: "reach" },
   ] },
-  { id: "speech", num: 78, title: "Speech", blurb: "How does a voice fit in 2.4 kb/s? G.711 μ-law in gates, IMA ADPCM as an RV32 program, linear prediction and a vocoder, all heard side by side on a real reading.", level: "Signal processing", builds: ["signals","multirate","adaptive","fixed"], recap: {"checks":3}, steps: [
+  { id: "speech", num: 78, title: "Speech", blurb: "How does a voice fit in 2.4 kb/s? G.711 μ-law in gates, IMA ADPCM as an RV32 program, linear prediction and a vocoder, all heard side by side on a real reading.", level: "Signal processing", builds: ["signals","multirate","adaptive","fixed","cpu"], recap: {"checks":3}, steps: [
     { title: "A voice on a wire", challenge: "quiz" },
     { title: "Why logarithms", challenge: "quiz" },
     { title: "μ-law, from G.711's table", challenge: "quiz" },
@@ -901,7 +901,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Zig-zag, runs and codes", challenge: "quiz" },
     { title: "A file another program opens", challenge: "quiz" },
   ] },
-  { id: "sdr", num: 81, title: "A software radio", blurb: "Can you receive a station with what you have built? A band of four FM stations, a mixer and a CIC in gates, the filters and the discriminator after them, and sound out.", level: "Signal processing", builds: ["signals","radio","modem","fixed","spectrum","firdesign","multirate","cordic","dspcore"], recap: {"checks":3}, steps: [
+  { id: "sdr", num: 81, title: "A software radio", blurb: "Can you receive a station with what you have built? A band of four FM stations, a mixer and a CIC in gates, the filters and the discriminator after them, and sound out.", level: "Signal processing", builds: ["signals","radio","modem","fixed","spectrum","firdesign","multirate","cordic","dspcore","converters"], recap: {"checks":3}, steps: [
     { title: "Four stations in one band", challenge: "quiz" },
     { title: "How wide is a station?", challenge: "quiz" },
     { title: "Moving a station to zero", challenge: "quiz" },

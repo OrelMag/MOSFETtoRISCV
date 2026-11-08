@@ -781,17 +781,20 @@ html[data-widget-step] .slow-btn { display: none; }
   .ctl-inner { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; scrollbar-width: thin; }
   .ctl-inner > * { flex: none; }
   .ctl-inner .kind { display: none; }
-  /* the pins too: wrapped, a scene with many (ch 32's rasterizer) filled the whole stage with them */
-  .ctl-pins { display: flex; align-items: center; gap: 8px; flex: 1 1 100%; min-width: 0; overflow-x: auto; scrollbar-width: thin; padding-block: 2px; }
-  .ctl-pins > *, .ctl-pins .out-strip { flex: none; flex-wrap: nowrap; }
-  /* a cue that the row scrolls: an edge shadow while pins continue past it (the local covers hide it at the ends) */
-  .ctl-pins {
+  /* the pins too: wrapped within the stage's width (a strip scrolled sideways hid its inputs and outputs behind a thin
+     scrollbar), each input and each output's lamp + value kept whole. The whole band (pins and run row) is capped and
+     scrolls down inside itself (a scene with very many pins, ch 32's rasterizer), so the canvas and the inputs share one
+     screen: hugPhone sizes the canvas from what the band leaves. */
+  .ctl-pins { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; flex: 1 1 100%; min-width: 0; padding-block: 2px; }
+  .ctl-pins > * { flex: none; max-width: 100%; }
+  .ctl-pins .out-strip { flex-wrap: wrap; gap: 4px 10px; }
+  .stage > .controls { max-height: max(120px, 26dvh); overflow-x: hidden; overflow-y: auto; scrollbar-width: thin;
     background:
-      linear-gradient(to right, var(--surface) 30%, transparent) left / 28px 100% no-repeat local,
-      linear-gradient(to left, var(--surface) 30%, transparent) right / 28px 100% no-repeat local,
-      linear-gradient(to right, color-mix(in srgb, var(--text) 28%, transparent), transparent) left / 22px 100% no-repeat scroll,
-      linear-gradient(to left, color-mix(in srgb, var(--text) 28%, transparent), transparent) right / 22px 100% no-repeat scroll;
-  }
+      linear-gradient(var(--surface) 30%, transparent) top / 100% 24px no-repeat local,
+      linear-gradient(to top, var(--surface) 30%, transparent) bottom / 100% 24px no-repeat local,
+      linear-gradient(color-mix(in srgb, var(--text) 28%, transparent), transparent) top / 100% 18px no-repeat scroll,
+      linear-gradient(to top, color-mix(in srgb, var(--text) 28%, transparent), transparent) bottom / 100% 18px no-repeat scroll,
+      var(--surface); }
   .controls { row-gap: 6px; }
 }
 /* No box of their own on a wide screen: the pins wrap in the bar's own flow. */
@@ -2485,6 +2488,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .in-num button { min-width: 40px; min-height: 40px; }
   /* the home journey's "↑ n sections above" (24 px tall) */
   .ladder-up { min-height: 40px; }
+  .in-num input { min-height: 40px; }
   /* the footer's links sit in its text (inline links, which WCAG 2.5.8 exempts): 32 px lines, each link padded to its line's height */
   .footer { line-height: 32px; }
   .footer a { padding-block: 8px; }

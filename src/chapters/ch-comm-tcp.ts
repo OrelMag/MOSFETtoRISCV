@@ -30,7 +30,7 @@ export const chTcp: Chapter = {
     'compute a retransmission timer from round-trip samples, and say why a fixed one fails',
     'explain the sawtooth, why a short queue costs more than a long one, and what a long queue costs instead',
   ],
-  builds: ['errors', 'network', 'router'],
+  builds: ['errors', 'network', 'router', 'ethernet'],
   recap: {
     keep: [
       'TCP gives two applications a stream of bytes over IP, which promises nothing. Every byte has a sequence number; an ACK says "everything before this has arrived". A connection opens with three segments because each side must learn the other\'s first number and know that its own arrived.',

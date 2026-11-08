@@ -32,7 +32,7 @@ export const chCordic: Chapter = {
     'run the same stages backwards for arctangent and magnitude',
     'price a pipelined and an iterative CORDIC against a table of sines, in NANDs and in clocks',
   ],
-  builds: ['muldiv', 'modem', 'signals'],
+  builds: ['muldiv', 'modem', 'signals', 'adders'],
   recap: {
     keep: [
       'A rotation is four multiplications. Choosing angles whose tangent is 2^−i turns them into shifts, so each stage is a pair of adders and wiring.',

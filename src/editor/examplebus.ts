@@ -1,7 +1,9 @@
 // Examples ▸ System on a bus: chapter 38's computer as a sandbox chip. The system CPU (its boot ROM a ROM part)
 // and the DMA engine are the bus's masters; RAM, a flash (its window in gates over a ROM part holding the
 // program), the DRAM of chapter 36, the DMA's registers, a screen, and an I/O port for a keyboard and a timer.
-// Every link is two buses (request, response: lib/axi.ts bundled), every connection a pair of pointers.
+// Every link is two buses (request, response: lib/axi.ts bundled). A request runs forward, master → interconnect → slave, and is a
+// wire, each in a lane of its own so none crosses another; a response runs back against the columns and is a pair of pointers, as
+// are the clock and the links that point backwards. A slave's device (screen, keyboard, timer, flash contents) is wired from it.
 
 import { SANDBOX_SOURCE, SANDBOX_WORDS, bootSource } from '../bus/programs';
 import { SANDBOX_MAP, SANDBOX_PARTS } from '../lib/soc';
@@ -30,6 +32,7 @@ export function busSystemChip(id: string, name: string): ChipDoc {
   const size = (ref: PartRef) => { const d = partDef(ref, () => undefined); if (isError(d)) throw new Error(d.error); const g = symbolGeom(d); return [g.w, g.h] as Vec; };
   const lib = (k: keyof typeof SANDBOX_PARTS): PartRef => ({ lib: SANDBOX_PARTS[k].id });
   const GAP = 6;
+  const elbow = (a: string, b: string, lane: number) => s.elbow(a, b, lane);
 
   // column 1: the boot ROM, the switches; column 2: the core, the DMA, the interrupt OR, console and LEDs
   const bootRef: PartRef = { rom: { k: 7, w: 32, addr: 'rv32', lang: 'asm', src: bootSource(SANDBOX_WORDS) } };
@@ -79,16 +82,24 @@ export function busSystemChip(id: string, name: string): ChipDoc {
   const yt = device('tmr', { lib: 'timer1000' }, 'io', 'timer');
   s.part('cnt', { split: [8, 2] }, [x5 + 16, yt + 2]);
 
-  // the links: request and response of every master and slave
-  s.tap('cpu.req', 'cpu_req'); s.tap('bus.m0_req', 'cpu_req');
+  // the links. Requests are wires: the DMA's lane right of the core's (its run starts lower, so neither crosses the other),
+  // a slave's further left the lower it sits. Responses come back against the columns: pointers.
+  elbow('cpu.req', 'bus.m0_req', x3 - 6);
+  elbow('dma.m_req', 'bus.m1_req', x3 - 3);
   s.tap('bus.m0_rsp', 'cpu_rsp'); s.tap('cpu.rsp', 'cpu_rsp');
-  s.tap('dma.m_req', 'dma_req'); s.tap('bus.m1_req', 'dma_req');
   s.tap('bus.m1_rsp', 'dma_rsp'); s.tap('dma.m_rsp', 'dma_rsp');
   SLAVES.forEach(([n], k) => {
     const part = n === 'dmaregs' ? 'dma' : n;
-    s.tap(`bus.s${k}_req`, `${n}_req`); s.tap(`${part}.req`, `${n}_req`);
+    if (n === 'dmaregs') { s.tap(`bus.s${k}_req`, `${n}_req`); s.tap(`${part}.req`, `${n}_req`); } // the DMA sits left of the bus
+    else elbow(`bus.s${k}_req`, `${part}.req`, x3 + 12 + 9 - k);
     s.tap(`${part}.rsp`, `${n}_rsp`); s.tap(`bus.s${k}_rsp`, `${n}_rsp`);
   });
+  // forward device links as wires, a lane each in the channel before the devices; the boot ROM and the switches into the core
+  const fwd: [string, string][] = [['flash.addr', 'from.addr'], ['pixel.x', 'scr.x'], ['pixel.y', 'scr.y'], ['pixel.color', 'scr.color'], ['pixel.we', 'scr.we'], ['io.kack', 'kbd.ack'], ['io.tack', 'tmr.ack']];
+  fwd.forEach(([a, b], i) => elbow(a, b, x5 - 3 - i));
+  elbow('boot.data', 'cpu.romData', x2 - 4);
+  elbow('sw.q', 'cpu.switches', x2 - 7);
+  const wired = new Set([...fwd.flat(), 'boot.data', 'cpu.romData', 'sw.q', 'cpu.switches']);
   // the devices
   const pairs: [string, string, string][] = [
     ['cpu.pcOut', 'boot.addr', 'pc'], ['boot.data', 'cpu.romData', 'boot'], ['sw.q', 'cpu.switches', 'sw'],
@@ -100,7 +111,10 @@ export function busSystemChip(id: string, name: string): ChipDoc {
     ['tmr.irq', 'io.irq', 'tmrIrq'], ['io.tack', 'tmr.ack', 'tack'], ['tmr.count', 'cnt.in', 'tcount'], ['cnt.o0', 'io.count', 'tcount8'],
   ];
   const tapped = new Set<string>();
-  for (const [a, b, n] of pairs) for (const e of [a, b]) if (!tapped.has(e)) { tapped.add(e); s.tap(e, n); }
+  for (const [a, b, n] of pairs) {
+    if (wired.has(a) && wired.has(b)) continue;
+    for (const e of [a, b]) if (!tapped.has(e)) { tapped.add(e); s.tap(e, n); }
+  }
   for (const p of ['cpu', 'dma', 'bus', 'ram', 'flash', 'dram', 'pixel', 'io', 'none', 'tmr', 'con', 'scr']) s.tap(`${p}.clk`, 'clk');
   s.tap('pin:clk', 'clk');
   return s.doc(id, name, { notes: NOTES_BUS });
