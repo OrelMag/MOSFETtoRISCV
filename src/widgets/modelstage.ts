@@ -66,7 +66,8 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
     const eye = renderer.camera.eye();
     last.forEach((a, k) => {
       const p = renderer!.project(a.p), e = lblEls[k];
-      if (!p) { e.style.display = 'none'; return; }
+      // An anchor that projects outside the canvas (a close-up view of one end) has no label: it would be clamped to an edge.
+      if (!p || p[0] < 0 || p[1] < 0 || p[0] > canvas.clientWidth || p[1] > canvas.clientHeight) { e.style.display = 'none'; return; }
       e.style.display = '';
       e.classList.toggle('away', dot3(a.n, sub3(eye, a.p)) < 0);
       e.style.transform = `translate(${p[0].toFixed(1)}px, ${p[1].toFixed(1)}px)`;
