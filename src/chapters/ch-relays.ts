@@ -1,7 +1,7 @@
 import { groupDigits } from '../sim/numfmt';
 import { DFF, RELAY_BUZZER, RELAY_LATCH, RELAY_NAND, RELAY_NOT, RELAY_XOR, SR_LATCH, XOR, relayAdder, rca } from '../lib';
 import { NAND2_UM2, RELAY_CONTACTS, RELAY_MASS, RELAY_POWER, RELAY_VOLUME, fmtMass, fmtTime, fmtVolume, relayExtra } from '../lib/tech';
-import { RELAY, RELAY_COIL_POWER, RELAY_STEP_MS, RELAY_SUPPLY, Z3, relayStatic } from '../phys/relay';
+import { RELAY, RELAY_COIL_POWER, RELAY_STEP_MS, RELAY_SUPPLY, Z3, coilTau, relayStatic } from '../phys/relay';
 import { logicDepth, stats } from '../sim/stats';
 import { PS_PER_NAND } from '../sim/timing';
 import { relayCloseup } from '../widgets/relay3d';
@@ -82,9 +82,9 @@ export const chRelays: Chapter = {
         armature across the open gap takes ${ms(PULL.pull ?? 0)} V, but once it is in, the gap is nearly gone and a
         fraction of the current holds it, so it lets go only at ${ms(PULL.drop ?? 0)} V. A supply that sags between the two
         changes nothing. And because the coil's own contact keeps the full supply on it, a relay can hold a bit (step 6); the hysteresis is margin on top. Second, <strong>time</strong>: the
-        step is partly electrical and partly mechanical: about 3.6 ms for the coil's current to build (L / R), then the rest for an armature and blade of a few grams to travel and the blade to stop bouncing. Twice the voltage, four times the power, shortens it by only about a quarter.</p>
+        step is partly electrical and partly mechanical: the coil's current builds with L / R, which is ${ms(coilTau(0) * 1e3)} ms with the armature open and ${(coilTau(RELAY.travel) * 1e3).toFixed(0)} ms once it is closed (the iron's inductance rises as the gap goes), so the armature starts to move after about 4.5 ms; then an armature and blade of a few grams travel and the blade stops bouncing. Twice the voltage, four times the power, shortens it by only about a quarter. At switch-off the coil's current has to go somewhere: here it discharges through a ${RELAY.Rq / 1e3} kΩ quench resistor across the coil, so the terminal voltage jumps to −R<sub>q</sub>·I. The close-up switches off at 15 ms, with the current still rising (about 29 mA of 60), which gives the −117 V; let the coil settle first (Off at 60 ms) and the same resistor sees 60 mA and −240 V.</p>
         <div class="try">Drag the supply below the pull-in voltage, and play the switch-off: the coil's current has to
-        go somewhere.</div>`,
+        go somewhere. Then sweep the supply down and back up: the armature drops out at one voltage and pulls in at another.</div>`,
       more: {
         derive: `<p>The coil is ${RELAY.Rc} Ω on ${RELAY_SUPPLY} V: ${(1e3 * RELAY_SUPPLY / RELAY.Rc).toFixed(0)} mA and
           ${RELAY_COIL_POWER.toFixed(2)} W (V² / R). With N = ${RELAY.N} turns the magnetomotive force is N·I, and the flux is that
