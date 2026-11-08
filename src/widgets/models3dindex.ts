@@ -220,7 +220,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'ccd', title: 'A three-phase CCD', category: 'devices', chapter: 'sensors', step: 1,
     summary: 'Charge packets march a gate per phase down the CCD42-40\'s columns to the output amplifier; a CTE slider shows the smear.',
-    files: ['ccd3d', 'ccd3dview', 'ccd3dparts'], factory: 'ccd3d',
+    files: ['ccd3d', 'ccd3dview', 'ccd3dparts'], factory: 'ccd3d', codex: ['ccd', 'cds', 'fullwell'],
     open: () => import('./ccd3d').then((m) => m.ccd3d()),
   },
 ];
