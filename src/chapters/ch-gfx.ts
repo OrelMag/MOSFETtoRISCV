@@ -120,7 +120,6 @@ export const chPixels: Chapter = {
     },
     {
       title: 'The beam on a tube',
-      deep: true,
       body: `
         <p>The scan-out was designed for a tube. A cathode-ray tube has one pixel's worth of information at a time: an electron beam, and the position of the beam is the address. The counter's 10 bits <em>are</em> the beam's two coordinates: the low 4 bits pick the word along a row (16 words of 4 pixels), the high 6 the row. Below, the same counter drives a picture tube; the beam is wherever the counter says, and every phosphor cell it passes lights with the byte the scan-out read.</p>
         <p><strong>The gun.</strong> A heater warms three cathodes (red, green, blue, in a row); a control grid, G1, held negative against each cathode meters its beam current, which is the pixel's colour field; a screen grid, G2, a few hundred volts up, draws the electrons out; three focus electrodes shape the beam; the final anode, G6, is at the tube's high voltage, 24 to 32 kV on a colour tube, joined to the aquadag (graphite) coating inside the funnel through the anode button. At 25 kV an electron travels at about 0.3 c. The neck is 29.1 mm across on a typical colour tube of this 90° class, and its stem has ten pins.</p>
