@@ -85,7 +85,8 @@
 }
 .sb-tab-hdl { margin-left: 2px; }
 .sb-canvas.hdl-stale svg.ed-svg { opacity: 0.45; filter: grayscale(0.6); }
-.sb-new-more { flex: none; padding-inline: 4px; margin-left: -6px; }
+.sb-new-more { flex: none; padding-inline: 4px; margin-left: -6px; min-width: 24px; min-height: 24px; justify-content: center; }
+@media (pointer: coarse) { .sb-new-more { min-width: 40px; min-height: 40px; } }
 
 .hdl-props select { width: 100%; min-width: 0; }
 .hdl-seg { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
