@@ -5,7 +5,7 @@
 //   plus the special cases (zero, subnormal, infinity, NaN) and the exception flags. One
 //   normalize-and-round unit serves the adder, the multiplier and integer-to-float conversion.
 
-import { symbolGeom } from '../sim/geometry';
+import { orientGeom, symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
 import { LIB_MUX2, andN, busMux2, equal, incrementer, muxTree, type Mux2Kind } from './combinational';
@@ -699,20 +699,72 @@ export function faddCancel(f: FpFormat): ComponentDef {
   });
 }
 
+/** Hand-drawn blocks' places: each starts from a column layout; FP_LAY[block][part or 'pin:name'] moves a part or a pin by hand. */
+export const FP_LAY: Record<string, Record<string, [number, number]>> = {};
+type Part = Omit<InstanceDef, 'at'>;
+/** A block drawn in columns (parts top to bottom in each), inputs down the left, outputs down the right; FP_LAY overrides. */
+function columns(key: string, cols: (Part | false)[][], ins: string[], outs: string[], nets: NetDef[]): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
+  const over = FP_LAY[key] ?? {};
+  const instances: InstanceDef[] = [];
+  let x = 8;
+  for (const col of cols) {
+    let y = 0, w = 0;
+    for (const p of col) {
+      if (!p) continue;
+      const g = orientGeom(p.def, p.flip, p.rot);
+      instances.push({ ...p, at: over[p.name] ?? [x, y] });
+      y += g.h + 2; w = Math.max(w, g.w);
+    }
+    x += w + 6;
+  }
+  const pins: Record<string, [number, number]> = {};
+  ins.forEach((p, i) => (pins[p] = over[`pin:${p}`] ?? [0, 2 + 2 * i]));
+  outs.forEach((p, i) => (pins[p] = over[`pin:${p}`] ?? [x, 2 + 2 * i]));
+  return { instances, nets, pins };
+}
+
+/**
+ * The special cases' common back: ∞ (sign `sign`) over the rounded result where `inf`, the canonical NaN over that where
+ * `nan`; the flags are NV alone (from `nv`) for a special result, else the rounding's. The gates specials() makes.
+ */
+function specialBack(f: FpFormat, mux: Mux2Kind, sign: string, inf: string[], nan: string[], nv: string[]): { cols: Part[][]; nets: NetDef[] } {
+  const { E, M } = f, N = 1 + E + M;
+  const cols: Part[][] = [
+    [{ name: 'km', def: K(M, 0) }, { name: 'ke', def: K(E, 2 ** E - 1) }],
+    [{ name: 'iv', def: merger([M, E, 1]), label: '∞' }, { name: 'z0', def: TIE0 }, { name: 'z1', def: TIE0 }, { name: 'z2', def: TIE0 }, { name: 'z3', def: TIE0 }],
+    [{ name: 'y1', def: mux.of(N), label: 'infinity' }, { name: 'fw', def: merger([1, 1, 1, 1, 1]) }, { name: 'sp', def: OR, label: 'special?' }],
+    [{ name: 'kn', def: K(N, (2 ** E - 1) * 2 ** M + 2 ** (M - 1)), label: 'NaN' }, { name: 'yo', def: mux.of(N), label: 'NaN' }, { name: 'fl', def: busMux2(5), label: 'flags' }],
+  ];
+  const nets: NetDef[] = [
+    { name: 'rounded', ends: ['ry', 'y1.a'] }, { name: '0', ends: ['km.y', 'iv.i0'] }, { name: 'all 1s', ends: ['ke.y', 'iv.i1'] }, { name: '∞ sign', ends: [sign, 'iv.i2'] },
+    { name: '∞', ends: ['iv.out', 'y1.b'] }, { name: 'an ∞', ends: [...inf, 'y1.s', 'sp.b'] }, { name: 'y1', ends: ['y1.y', 'yo.a'] }, { name: 'NaN', ends: ['kn.y', 'yo.b'] },
+    { name: 'NaN?', ends: [...nan, 'yo.s', 'sp.a'] }, { name: 'y', ends: ['yo.y', 'y'] },
+    ...[0, 1, 2, 3].map((i): NetDef => ({ name: `0 ${i}`, ends: [`z${i}.y`, `fw.i${i}`] })), { name: 'NV', ends: [...nv, 'fw.i4'] },
+    { name: 'NV only', ends: ['fw.out', 'fl.b'] }, { name: 'round flags', ends: ['rflags', 'fl.a'] }, { name: 'special', ends: ['sp.y', 'fl.s'] }, { name: 'flags', ends: ['fl.y', 'flags'] },
+  ];
+  return { cols, nets };
+}
+
 /** The adder's special cases: invalid (a signaling NaN, or ∞ − ∞), NaN in or out, an infinite operand; else the rounded sum. */
 export function faddSpecial(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
   return memo(`fadd_special${E}_${M}${mux.tag}`, () => {
     const { N } = addWidths(f);
-    const b = new Builder(10, 8, 4);
-    b.pins('ry', 'rflags', 'ia', 'ib', 'na', 'nb', 'sna', 'snb', 'effSub', 'sa', 'signB');
-    const invalid = b.name(b.op1(orN(3), ['sna', 'snb', b.op1(andN(3), ['ia', 'ib', 'effSub'], '∞ − ∞', 'ii')], 'invalid', 'nv'), 'NV');
-    const anyInf = b.op1(OR, ['ia', 'ib'], 'an ∞', 'inf');
-    const infS = b.op1(MUX2, ['signB', 'sa', 'ia'], '∞\'s sign', 'infs');
-    b.next();
-    const nan = b.op1(orN(3), ['na', 'nb', invalid], 'NaN?', 'nan');
-    b.next();
-    specials(b, f, 'ry', 'rflags', nan, anyInf, infS, invalid, undefined, mux);
+    const key = 'fadd_special';
+    const back = specialBack(f, mux, 'infs.y', ['inf.y'], ['nan.y'], ['nv.y']);
+    const cols: Part[][] = [
+      [{ name: 'infs', def: MUX2, label: '∞\'s sign' }, { name: 'inf', def: OR, label: 'an ∞' }, { name: 'ii', def: andN(3), label: '∞ − ∞' }],
+      [{ name: 'nv', def: orN(3), label: 'invalid' }],
+      [{ name: 'nan', def: orN(3), label: 'NaN?' }],
+      ...back.cols,
+    ];
+    const nets: NetDef[] = [
+      { name: 'ia', ends: ['ia', 'infs.s', 'inf.a', 'ii.i0'] }, { name: 'ib', ends: ['ib', 'inf.b', 'ii.i1'] }, { name: 'effSub', ends: ['effSub', 'ii.i2'] },
+      { name: 'signB', ends: ['signB', 'infs.a'] }, { name: 'sa', ends: ['sa', 'infs.b'] },
+      { name: 'sna', ends: ['sna', 'nv.i0'] }, { name: 'snb', ends: ['snb', 'nv.i1'] }, { name: '∞ − ∞', ends: ['ii.y', 'nv.i2'] },
+      { name: 'na', ends: ['na', 'nan.i0'] }, { name: 'nb', ends: ['nb', 'nan.i1'] }, { name: 'nv', ends: ['nv.y', 'nan.i2', 'fw.i4'] },
+      ...back.nets.filter((n) => n.name !== 'NV'),
+    ];
     const ports = [bus('ry', N, 'in'), bus('rflags', 5, 'in'), bit('ia', 'in'), bit('ib', 'in'), bit('na', 'in'), bit('nb', 'in'), bit('sna', 'in'), bit('snb', 'in'),
       bit('effSub', 'in'), bit('sa', 'in'), bit('signB', 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')];
     const nanBits = (2 ** E - 1) * 2 ** M + 2 ** (M - 1);
@@ -725,7 +777,7 @@ export function faddSpecial(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef
         const infv = (ia ? sa : sB) * 2 ** (N - 1) + (2 ** E - 1) * 2 ** M;
         return [nan ? nanBits : inf ? infv : ry, nan || inf ? nv * FLAG.NV : rfl];
       },
-      netlist: () => layered(ports, b, { gap: 8 }),
+      netlist: () => columns(key, cols, ['ry', 'signB', 'sa', 'ia', 'ib', 'effSub', 'sna', 'snb', 'na', 'nb', 'rflags'], ['y', 'flags'], nets),
     });
   });
 }
