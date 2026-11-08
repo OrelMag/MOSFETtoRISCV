@@ -1,4 +1,4 @@
-// From Switch to RISC-V and Beyond as a desktop program: the built site (app/) served from inside the executable
+// From Switch to CPU as a desktop program: the built site (app/) served from inside the executable
 // on a private app:// origin, in a window of its own. Nothing is fetched from the network.
 const { app, BrowserWindow, Menu, nativeTheme, protocol, shell } = require('electron');
 const { existsSync, mkdirSync, accessSync, constants } = require('node:fs');
@@ -58,7 +58,7 @@ let win = null;
 function createWindow() {
   win = new BrowserWindow({
     width: 1440, height: 900, minWidth: 720, minHeight: 480, show: false,
-    title: 'From Switch to RISC-V and Beyond',
+    title: 'From Switch to CPU',
     icon: path.join(__dirname, 'icon.png'),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0c12' : '#f5f6fa',
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false },
