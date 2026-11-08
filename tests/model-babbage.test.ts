@@ -5,7 +5,7 @@ import type { RGB } from '../src/gl/instances';
 import { koggeStone, rca } from '../src/lib';
 import { logicDepth } from '../src/sim/stats';
 import {
-  ARMS, DIGITS, EVENTS, GAP_DEG, MOD, PER_COLUMN, PITCH_DEG, SPLIT, TURN_MAX, advanceTo, anticipate, armAngle, armPhase, armTime, babbageAnchors, babbageParts, begin,
+  ARMS, DIGITS, EVENTS, GAP_DEG, MOD, PER_COLUMN, PITCH_DEG, SPLIT, TURN_MAX, advanceTo, anticipate, armAngle, armPhase, armTime, babbageAnchors, babbageParts, begin, digitGroups,
   finished, fromValue, gateRows, giveOff, nextFiring, pending, sweep, valueOf, zero, type BabbagePalette,
 } from '../src/widgets/babbage3dparts';
 
@@ -170,6 +170,18 @@ describe('against the gate adders', () => {
       expect(rows[i].ripple).toBeGreaterThan(rows[i - 1].ripple);
       expect(rows[i].ks - rows[i - 1].ks).toBe(rows[1].ks - rows[0].ks);
     }
+  });
+});
+
+describe('the digit row', () => {
+  const row = (v: bigint) => digitGroups(fromValue(v).w.slice().reverse()).map((g) => g.join(''));
+  it('groups from the units: a leading single digit, then threes, so it reads like the number', () => {
+    const g = row(7999999n);
+    expect(g).toHaveLength(11);
+    expect(g[0]).toHaveLength(1);
+    expect(g.slice(1).every((x) => x.length === 3)).toBe(true);
+    expect(g.slice(-3)).toEqual(['007', '999', '999']);
+    expect(row(nines(31))[0]).toBe('9');
   });
 });
 

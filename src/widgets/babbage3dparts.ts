@@ -101,6 +101,13 @@ export function anticipate(c: Column): { col: Column; carryIn: boolean[] } {
   return { col: o, carryIn: carryIn.slice(0, DIGITS) };
 }
 
+/** The column's digits (most significant first) in groups of three counted from the units, so a short group leads: 31 digits are 1 + 10 x 3. */
+export function digitGroups(ds: readonly (number | string)[]): string[][] {
+  const out: string[][] = [], first = ds.length % 3 || 3;
+  for (let i = 0; i < ds.length; i += i === 0 ? first : 3) out.push(ds.slice(i, i + (i === 0 ? first : 3)).map(String));
+  return out;
+}
+
 /** NAND delays of the site's adders (the library's own, the fast-adder chapter's numbers). */
 export const PER_COLUMN = (logicDepth(rca(9)) ?? 0) - (logicDepth(rca(8)) ?? 0);
 export const GATE_WIDTHS = [8, 16, 32, 64];

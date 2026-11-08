@@ -10,7 +10,7 @@ import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
 import { modelStage } from './modelstage';
 import {
-  ARMS, DIGITS, MOD, PER_COLUMN, TURN_MAX, advanceTo, anticipate, babbageAnchors, babbageParts, begin, finished, fromValue, gateRows, giveOff,
+  ARMS, DIGITS, MOD, digitGroups, PER_COLUMN, TURN_MAX, advanceTo, anticipate, babbageAnchors, babbageParts, begin, finished, fromValue, gateRows, giveOff,
   nextFiring, sweep, valueOf, type BabbagePalette, type Carry, type Column, type Pose,
 } from './babbage3dparts';
 
@@ -24,12 +24,6 @@ export const CASES: Case[] = [
   { id: 'full', label: 'All 31 wheels at 9', start: nines(DIGITS), add: 1n, blurb: '31 nines + 1: every arm fires, the top wheel only flags the overflow' },
 ];
 
-const group3 = (cells: HTMLElement[]) => {
-  const out: HTMLElement[] = [];
-  for (let i = 0; i < cells.length; i += 3) out.push(h('span', { class: 'bb-grp' }, ...cells.slice(i, i + 3)));
-  return out;
-};
-
 export function babbageView(): Widget {
   let cs = CASES[1], base: Column = fromValue(cs.start), s: Carry = begin(base), phase: 'ready' | 'carry' | 'done' = 'ready';
   let anticipating = false, goal: 'next' | 'all' | null = null, target = 0, said = '';
@@ -37,7 +31,7 @@ export function babbageView(): Widget {
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
     aria: 'One column of Difference Engine No. 2 in 3D: thirty-one figure wheels, a warning lever on each, and a carry axis with a helix of thirty carry arms',
-    camera: { target: [-4, 46, 0], yaw: -0.6, pitch: 0.28, dist: 185 },
+    camera: { target: [-4, 52, 0], yaw: -0.6, pitch: 0.28, dist: 215 },
     limits: { minDist: 60, maxDist: 500 },
     note: 'One column of eight is drawn, still except for the carry axis; the sector drive, the locks, the three-limbed carry levers and the helix of arms are simplified to a block lever and thirty rods, and the motion is a drawing, not a kinematic model. The anticipating carriage was not fitted to this engine: its effect is drawn (every carry of a run at once), its linkage is not.',
     draw: () => paint(),
@@ -61,11 +55,11 @@ export function babbageView(): Widget {
     const fs = foresee(), armed = s.col.warn.slice(0, ARMS).filter(Boolean).length;
     // The run, whichever carriage: what the successive carry would do from here.
     const plan = advanceTo(s, TURN_MAX);
-    const cells = Array.from({ length: DIGITS }, (_, k) => {
-      const i = DIGITS - 1 - k;
-      return h('span', { class: `bb-d${s.col.warn[i] ? ' armed' : ''}${fs?.[i] ? ' recv' : ''}` }, String(s.col.w[i]));
-    });
-    digits.replaceChildren(...group3(cells));
+    let at = DIGITS;
+    digits.replaceChildren(...digitGroups(Array.from({ length: DIGITS }, (_, k) => s.col.w[DIGITS - 1 - k])).map((g) => h('span', { class: 'bb-grp' }, ...g.map((d) => {
+      const i = --at;
+      return h('span', { class: `bb-d${s.col.warn[i] ? ' armed' : ''}${fs?.[i] ? ' recv' : ''}` }, d);
+    }))));
     const v = valueOf(s.col), flag = s.col.warn[DIGITS - 1] ? ' with the overflow flag set' : '';
     digits.setAttribute('aria-label', `Column reads ${(v % MOD).toString()}${flag}; ${armed} warning lever${armed === 1 ? '' : 's'} armed`);
     const runLen = plan.longest;
