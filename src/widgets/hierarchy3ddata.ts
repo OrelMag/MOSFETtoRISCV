@@ -17,19 +17,20 @@ export const CORE_GHZ = 4;
 export interface HLevel {
   id: 'reg' | 'l1' | 'l2' | 'l3' | 'dram' | 'ssd';
   name: string; cap: string; ns: number; built: string;
-  /** The analogy's place (chapters/analogies.ts 'cache': desk, shelf, library, a warehouse across town). */
-  place: 'desk' | 'shelf' | 'library' | 'warehouse';
+  /** The analogy's place (chapters/analogies.ts 'cache' and its desk figure: desk = L1, shelf = L2, library = L3, a warehouse
+   *  across town = DRAM). The registers are part of the core; the SSD, which the analogy leaves out, is another city. */
+  place: 'core' | 'desk' | 'shelf' | 'library' | 'warehouse' | 'city';
   /** A real part with this latency, for the readout. */
   real: string;
 }
 
 export const LEVELS: HLevel[] = [
-  { id: 'reg', name: 'Registers', cap: '~1 KB', ns: 0.25, built: 'flip-flops, in the datapath', place: 'desk', real: 'one cycle of a 4 GHz core' },
+  { id: 'reg', name: 'Registers', cap: '~1 KB', ns: 0.25, built: 'flip-flops, in the datapath', place: 'core', real: 'one cycle of a 4 GHz core' },
   { id: 'l1', name: 'L1 cache', cap: '32–64 KB', ns: 1, built: '6T SRAM, per core, split I / D', place: 'desk', real: 'Golden Cove L1D: 48 KB, 5 cycles' },
   { id: 'l2', name: 'L2 cache', cap: '0.5–2 MB', ns: 3.5, built: 'SRAM, per core', place: 'shelf', real: 'Willow Cove L2: 1.25 MB, 14 cycles; Golden Cove ~15' },
-  { id: 'l3', name: 'L3 cache', cap: '8–64 MB', ns: 12, built: 'SRAM, shared by all cores', place: 'shelf', real: 'a shared last-level cache: 40+ cycles' },
-  { id: 'dram', name: 'DRAM', cap: '8–128 GB', ns: 80, built: '1T1C, off chip, refreshed', place: 'library', real: 'DDR4-3200 loaded latency, 60–100 ns (CL22 alone: 13.75 ns)' },
-  { id: 'ssd', name: 'NVMe SSD', cap: '1–8 TB', ns: 80_000, built: 'flash, through the OS', place: 'warehouse', real: 'NAND page read: SK hynix H27UCG8T2ATR tR 60 µs typ., 80 µs max' },
+  { id: 'l3', name: 'L3 cache', cap: '8–64 MB', ns: 12, built: 'SRAM, shared by all cores', place: 'library', real: 'a shared last-level cache: 40+ cycles' },
+  { id: 'dram', name: 'DRAM', cap: '8–128 GB', ns: 80, built: '1T1C, off chip, refreshed', place: 'warehouse', real: 'DDR4-3200 loaded latency, 60–100 ns (CL22 alone: 13.75 ns)' },
+  { id: 'ssd', name: 'NVMe SSD', cap: '1–8 TB', ns: 80_000, built: 'flash, through the OS', place: 'city', real: 'NAND page read: SK hynix H27UCG8T2ATR tR 60 µs typ., 80 µs max' },
 ];
 
 /** Cycles of the core clock, as the table shows them. */
