@@ -26,7 +26,7 @@ import type { HueSite, MenuSite } from './circuitmenu';
 import type { ComponentDef } from '../sim/types';
 import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showMenu } from '../ui/menu';
 import { installHold } from '../ui/holdpress';
-import { Legibility, nameEligible, nameRotated, type NameEl, type TagEl } from './legible';
+import { isConstantBox, Legibility, nameEligible, nameRotated, type NameEl, type Seg, type TagEl } from './legible';
 
 /** A note's marker on a part of the level shown. */
 export interface NotePin {
@@ -433,17 +433,20 @@ export class SchematicView {
       // hidden from assistive tech, never hit, and left out of exported images.
       const own = g.querySelector('.sym-label');
       // a box whose symbol is one glyph (a comparator's "=") is named by its instance label ("wa = ra1") when it has one
-      const nm = nameEligible(own?.textContent, geo.w, geo.h) ? own!.textContent!.trim() : own && own.textContent!.trim().length === 1 && inst.label && nameEligible(inst.label, geo.w, geo.h) ? inst.label.trim() : null;
+      // a constant's value is planned as a name of its own kind (legible.ts isConstantBox), and always titled with its name and value
+      const isConst = !!own && isConstantBox(inst.def.symbol.kind, inst.def.ports.length, own.textContent ?? undefined, inst.def.prim);
+      if (isConst) g.append(s('title', {}, `${inst.label ?? inst.name} = ${own!.textContent!.trim()}`));
+      const nm = isConst ? own!.textContent!.trim() : nameEligible(own?.textContent, geo.w, geo.h) ? own!.textContent!.trim() : own && own.textContent!.trim().length === 1 && inst.label && nameEligible(inst.label, geo.w, geo.h) ? inst.label.trim() : null;
       if (nm) {
         const rot = nameRotated(geo.w, geo.h), cx = geo.w / 2, cy = geo.h / 2;
         const ax = at[0] + cx, ay = at[1] + cy;
         const t = s('text', { class: 'lg-name', x: ax, y: ay, 'text-anchor': 'middle', 'dominant-baseline': 'central', transform: rot ? `rotate(-90 ${ax} ${ay})` : null }, nm);
         g.classList.add('lg-named');
         // the full name whatever is drawn: hover, and the block's accessible name
-        g.append(s('title', {}, nm));
+        if (!isConst) g.append(s('title', {}, nm));
         nameG.append(t);
         this.nameOf.set(inst.name, t);
-        names.push({ t, box: { cx: at[0] + cx, cy: at[1] + cy, w: geo.w, h: geo.h, chars: nm.length, rot, text: nm, ports: Object.keys(geo.ports).length } });
+        names.push({ t, box: { cx: at[0] + cx, cy: at[1] + cy, w: geo.w, h: geo.h, chars: nm.length, rot, text: nm, ports: Object.keys(geo.ports).length, ...(isConst ? { const: true } : {}) } });
       }
       if (openable) {
         const badge = s('g', { class: 'open-badge', transform: `translate(${geo.w - 0.2},${-0.9})` });
@@ -505,6 +508,7 @@ export class SchematicView {
     const m = 3;
     this.bbox = { x: x0 - m, y: y0 - m - 1, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m + 1 };
     this.legible.setNames(names);
+    this.legible.setWires(nets.flatMap((n) => n.paths.flatMap((p) => p.slice(1).map((q, i): Seg => [p[i][0], p[i][1], q[0], q[1]]))));
     this.legible.setTags(tagEls, [...this.boxes.values()]);
     if (!keepView) this.fit();
     else this.cam.apply();
