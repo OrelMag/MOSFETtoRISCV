@@ -916,35 +916,66 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   }
   if (m) {
     // ---- M extension. D: decode; E: multiply (first half) and divide; M: multiply (second half).
-    const ym = T + PIPE_H + (wired && pred ? 100 : 72); // below the hazard unit and the prediction row
+    const ym = wired ? (pred ? 160 : 131) : T + PIPE_H + 72; // wired: a band under the hazard unit's rows (and the prediction row), in three groups by stage
     const add = (name: string, def: ComponentDef, x: number, y: number, label?: string) => { instances.push({ name, def, at: [x, ym + y], label }); defs.set(name, def); };
     const at2 = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); };
     const net = (name: string) => nets.find((n) => n.name === name)!;
     const drop = (name: string, end: string) => { const n = net(name); n.ends = n.ends.filter((e) => e !== end); if (Array.isArray(n.tags)) n.tags = n.tags.filter((e) => e !== end); };
     const R = register(64), CR2 = clearableRegister(2), CR3 = clearableRegister(3), M22 = busMux2(2);
     // D: isM = (op = OP) and (funct7 = 1); a multiply asks for the load path (ResultSrc = 01)
-    add('kOp', constWord(7, 0x33), xFD - 12, 2); add('opM', equal(7), xFD + 6, 0);
-    add('kF7', constWord(7, 1), xFD - 12, 16); add('f7M', equal(7), xFD + 6, 14);
-    add('sf3D', splitter([2, 1]), xFD + 6, 30); add('nf2', NOT, xFD + 30, 32);
-    add('isMD', AND, xFD + 30, 6);
-    add('isMul', AND, xFD + 44, 7); add('isDiv', AND, xFD + 44, 16);
-    add('mfl', merger([1, 1]), xFD + 58, 8); add('kLd', constWord(2, 1), xFD + 52, 26);
-    at2('rsm', M22, wired ? [92, 72] : [xDE - 6, P('DE', 'resultSrcD')[1] - g(M22).ports.y.pos[1]], 'load path'); // wired: under the control block, out of the rows into ID/EX
+    if (wired) {
+      add('kOp', constWord(7, 0x33), 40, 2); add('opM', equal(7), 49, -1);
+      add('kF7', constWord(7, 1), 40, 12); add('f7M', equal(7), 49, 9);
+      add('isMD', AND, 60, 3);
+      add('isMul', AND, 70, 2); add('isDiv', AND, 70, 9);
+      add('sf3D', splitter([2, 1]), 58, 17); add('nf2', NOT, 62, 17);
+      add('mfl', merger([1, 1]), 78, 5);
+      at2('kLd', constWord(2, 1), [86, 82.5]);
+      at2('rsm', M22, [96, 79.5], 'load path'); // under the control block, out of the rows into ID/EX
+    } else {
+      add('kOp', constWord(7, 0x33), xFD - 12, 2); add('opM', equal(7), xFD + 6, 0);
+      add('kF7', constWord(7, 1), xFD - 12, 16); add('f7M', equal(7), xFD + 6, 14);
+      add('sf3D', splitter([2, 1]), xFD + 6, 30); add('nf2', NOT, xFD + 30, 32);
+      add('isMD', AND, xFD + 30, 6);
+      add('isMul', AND, xFD + 44, 7); add('isDiv', AND, xFD + 44, 16);
+      add('mfl', merger([1, 1]), xFD + 58, 8); add('kLd', constWord(2, 1), xFD + 52, 26);
+      at2('rsm', M22, [xDE - 6, P('DE', 'resultSrcD')[1] - g(M22).ports.y.pos[1]], 'load path');
+    }
     // E: the multiplier's first half, the divider, and the result multiplexer
-    add('mE', CR2, xDE + 4, 6, 'M flags');
-    add('smE', splitter([1, 1]), xDE + 18, 6); add('sf3E', splitter([2, 1]), xDE + 18, 20);
-    add('goDiv', AND, xDE + 28, 2);
-    add('mule', MUL_E, xDE + 40, 20, 'multiply (E)');
-    add('dive', DIV_E, xDE + 40, 44, 'divide');
-    add('mdE', busMux2(32), xDE + 56, -16, 'ALU / divide');
-    add('run', NOT, xDE + 58, -4);
-    if (wired) { at2('gPC', AND, [66, 100]); at2('gFD', AND, [66, 106]); } else { add('gPC', AND, 4, 44); add('gFD', AND, 24, 44); }
+    if (wired) {
+      add('mE', CR2, 112, 0, 'M flags');
+      add('smE', splitter([1, 1]), 126, 2); add('sf3E', splitter([2, 1]), 126, 10);
+      add('goDiv', AND, 144, 0);
+      add('dive', DIV_E, 158, 0, 'divide');
+      add('mdE', busMux2(32), 178, 0, 'ALU / divide');
+      add('mule', MUL_E, 158, 16, 'multiply (E)');
+      // the divider's stall logic beside the hazard unit: the run signal gates the PC's and IF/ID's enables
+      at2('run', NOT, [58, 103]);
+      at2('gPC', AND, [66, 100]); at2('gFD', AND, [66, 106]);
+    } else {
+      add('mE', CR2, xDE + 4, 6, 'M flags');
+      add('smE', splitter([1, 1]), xDE + 18, 6); add('sf3E', splitter([2, 1]), xDE + 18, 20);
+      add('goDiv', AND, xDE + 28, 2);
+      add('mule', MUL_E, xDE + 40, 20, 'multiply (E)');
+      add('dive', DIV_E, xDE + 40, 44, 'divide');
+      add('mdE', busMux2(32), xDE + 56, -16, 'ALU / divide');
+      add('run', NOT, xDE + 58, -4);
+      add('gPC', AND, 4, 44); add('gFD', AND, 24, 44);
+    }
     // M: the multiplier's second half, and its result in place of the memory word
-    add('mfMd', merger([1, 2]), xEM - 30, 6);
-    add('mfM', CR3, xEM - 20, 4, 'mul?, funct3'); add('msM', R, xEM - 20, 20, 'sum'); add('mcM', R, xEM - 20, 36, 'carry');
-    add('smM', splitter([1, 2]), xEM + 4, 6);
-    add('mulm', MUL_M, xEM + 12, 22, 'multiply (M)');
-    add('rdm', busMux2(32), xEM + 34, 4, 'memory / product');
+    if (wired) {
+      add('mfMd', merger([1, 2]), 196, 8);
+      add('mfM', CR3, 210, 6, 'mul?, funct3'); add('smM', splitter([1, 2]), 224, 8);
+      add('msM', R, 204, 18, 'sum'); add('mcM', R, 204, 30, 'carry');
+      add('mulm', MUL_M, 226, 19, 'multiply (M)');
+      add('rdm', busMux2(32), 242, 19, 'memory / product');
+    } else {
+      add('mfMd', merger([1, 2]), xEM - 30, 6);
+      add('mfM', CR3, xEM - 20, 4, 'mul?, funct3'); add('msM', R, xEM - 20, 20, 'sum'); add('mcM', R, xEM - 20, 36, 'carry');
+      add('smM', splitter([1, 2]), xEM + 4, 6);
+      add('mulm', MUL_M, xEM + 12, 22, 'multiply (M)');
+      add('rdm', busMux2(32), xEM + 34, 4, 'memory / product');
+    }
     // the ID/EX enable now comes from the stall; the constants that remain move clear of the clock labels
     if (!wired) {
       instances.find((x) => x.name === 'en1')!.at = [xDE - 6, T + PIPE_H + 3];
@@ -955,10 +986,10 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     retargetEnd(net('resultSrcD'), 'DE.resultSrcD', 'rsm.a');
     nets.push(
       { ends: ['kOp.y', 'opM.b'] }, { ends: ['kF7.y', 'f7M.b'] },
-      { name: 'isOP', ends: ['opM.eq', 'isMD.a'], tags: true }, { name: 'f7is1', ends: ['f7M.eq', 'isMD.b'], tags: true },
-      { name: 'isMD', ends: ['isMD.y', 'isMul.a', 'isDiv.a'], tags: ['isDiv.a'] },
-      { name: 'f3hi', ends: ['sf3D.o1', 'nf2.a', 'isDiv.b'], tags: ['isDiv.b'] }, { name: '¬f3hi', ends: ['nf2.y', 'isMul.b'], tags: true },
-      { name: 'isMulD', ends: ['isMul.y', 'mfl.i0', 'rsm.s'], tags: ['rsm.s'] }, { name: 'isDivD', ends: ['isDiv.y', 'mfl.i1'], tags: true },
+      { name: 'isOP', ends: ['opM.eq', 'isMD.a'], tags: wired ? undefined : true }, { name: 'f7is1', ends: ['f7M.eq', 'isMD.b'], tags: wired ? undefined : true },
+      { name: 'isMD', ends: ['isMD.y', 'isMul.a', 'isDiv.a'], tags: wired ? undefined : ['isDiv.a'] },
+      { name: 'f3hi', ends: ['sf3D.o1', 'nf2.a', 'isDiv.b'], tags: wired ? undefined : ['isDiv.b'] }, { name: '¬f3hi', ends: ['nf2.y', 'isMul.b'], tags: wired ? undefined : true },
+      { name: 'isMulD', ends: ['isMul.y', 'mfl.i0', 'rsm.s'], tags: ['rsm.s'] }, { name: 'isDivD', ends: ['isDiv.y', 'mfl.i1'], tags: wired ? undefined : true },
       { ends: ['kLd.y', 'rsm.b'] }, { name: 'resultSrcD2', ends: ['rsm.y', 'DE.resultSrcD'] },
       { name: 'mFlagsD', ends: ['mfl.out', 'mE.d'], tags: true },
     );
@@ -972,22 +1003,22 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     net('en1').ends.push('msM.en', 'mcM.en', 'mfM.en');
     nets.push(
       { name: 'enPCm', ends: ['gPC.y', 'pc.en'], tags: true }, { name: 'enFDm', ends: ['gFD.y', 'FD.en'], tags: true },
-      { name: 'divStall', ends: ['dive.stall', 'run.a', 'EM.clr', 'mfM.clr'], tags: true },
-      { name: 'runE', ends: ['run.y', 'DE.en', 'mE.en', 'gPC.b', 'gFD.b'], tags: true },
+      { name: 'divStall', ends: ['dive.stall', 'run.a', 'EM.clr', 'mfM.clr'], tags: wired ? ['EM.clr', 'mfM.clr'] : true },
+      { name: 'runE', ends: ['run.y', 'DE.en', 'mE.en', 'gPC.b', 'gFD.b'], tags: wired ? ['DE.en', 'mE.en'] : true },
       // E wiring
       { name: 'mFlagsE', ends: ['mE.q', 'smE.in'] },
-      { name: 'isMulE', ends: ['smE.o0', 'mfMd.i0'], tags: true }, { name: 'isDivE', ends: ['smE.o1', 'goDiv.a', 'mdE.s'], tags: true },
-      { name: 'f3E', ends: ['sf3E.o0', 'mule.f', 'dive.f', 'mfMd.i1'], tags: true },
-      { name: 'divGo', ends: ['goDiv.y', 'dive.go'], tags: true },
+      { name: 'isMulE', ends: ['smE.o0', 'mfMd.i0'], tags: true }, { name: 'isDivE', ends: ['smE.o1', 'goDiv.a', 'mdE.s'], tags: wired ? ['mdE.s'] : true },
+      { name: 'f3E', ends: ['sf3E.o0', 'mule.f', 'dive.f', 'mfMd.i1'], tags: wired ? ['mfMd.i1'] : true },
+      { name: 'divGo', ends: ['goDiv.y', 'dive.go'], tags: wired ? undefined : true },
       { name: 'mulS', ends: ['mule.s', 'msM.d'], tags: true }, { name: 'mulC', ends: ['mule.c', 'mcM.d'], tags: true },
-      { name: 'divY', ends: ['dive.y', 'mdE.b'], tags: true },
+      { name: 'divY', ends: ['dive.y', 'mdE.b'], tags: wired ? undefined : true },
       { name: 'ALUResultE2', ends: ['mdE.y', 'EM.aluResultE'], tags: true },
       // M wiring
       { name: 'mFlagsM', ends: ['mfM.q', 'smM.in'] },
       // mfM holds {isMul (bit 0), funct3[1:0]}
-      { name: 'isMulM', ends: ['smM.o0', 'rdm.s'], tags: true }, { name: 'f3M', ends: ['smM.o1', 'mulm.f'], tags: true },
+      { name: 'isMulM', ends: ['smM.o0', 'rdm.s'], tags: wired ? ['rdm.s'] : true }, { name: 'f3M', ends: ['smM.o1', 'mulm.f'], tags: wired ? undefined : true },
       { name: 'mulSM', ends: ['msM.q', 'mulm.s'] }, { name: 'mulCM', ends: ['mcM.q', 'mulm.c'] },
-      { name: 'productM', ends: ['mulm.y', 'rdm.b'], tags: true },
+      { name: 'productM', ends: ['mulm.y', 'rdm.b'], tags: wired ? undefined : true },
       { name: 'ReadDataM2', ends: ['rdm.y', 'MW.readDataM'], tags: true },
     );
     nets.push({ name: 'mFlagsE2', ends: ['mfMd.out', 'mfM.d'] });
@@ -1126,6 +1157,9 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
       // what the multiplier and divider rows take from the stages above stays a pointer (the wires would cross their units)
       const tag = (name: string, ends: string[]) => { const n = net(name); if (n) n.tags = ends; };
       tag('funct3E', ['sf3E.in']);
+      tag('funct3D', ['sf3D.in']);
+      tag('ALUResultE', ['mdE.a']);
+      if (bal) net('ALUResultE').tagAt = { 'alu.y': [166, 22] };
       tag('flushDE', ['mE.clr']);
       tag('en1', ['msM.en', 'mcM.en', 'mfM.en']);
       tag('validE', ['hz.validE', 'goDiv.b', ...(pred ? ['mis.valid'] : [])]);
@@ -1135,7 +1169,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     }
     if (pred && bal) { net('JalrTargetE')!.tags = true; net('JalrTargetE')!.tagAt = { 'clr0.out': [177, 25] }; }
     if (pred) {
-      net('validE')!.tags = ['hz.validE', 'mis.valid'];
+      net('validE')!.tags = ['hz.validE', 'mis.valid', ...(m ? ['goDiv.b'] : [])];
       // the predictor's answers: into the IF/ID register beside it, back to the next-PC mux and the select as pointers
       rows('PredTargetF', { 'FD.predTargetF': [[36, yOf('btb.predTarget')], [36, yOf('FD.predTargetF')]] }, ['pcmux.d1']);
       rows('PredTakenF', { 'FD.predTakenF': [[37, yOf('btb.predTaken')], [37, yOf('FD.predTakenF')]] }, ['fsel.i0']);
