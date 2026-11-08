@@ -213,18 +213,18 @@ export function loomAnchors(cards: Cards, o: Pose, whole = false): Anchor[] {
   const n = cards.length;
   const all: Anchor[] = [
     { text: 'cylinder (square prism)', p: [-30, NEEDLE_Y + 10, z], side: 'l', n: [0, 1, 0.3] },
-    n > 4 ? { text: 'rest of the chain', p: [32, 26, z - 14 - 2.4 * (n - 5)], side: 'r', n: [0, 0.3, 1] } : { text: 'chain of cards', p: [-32, 26, z - 14], side: 'l', n: side, minor: true },
-    { text: 'needles, each sprung', p: [HOOK_X(0) + 1.8, NEEDLE_Y, -5], side: 'l', n: front },
+    n > 4 ? { text: 'rest of the chain', p: [-32, 26, z - 14 - 2.4 * (n - 5)], side: 'l', n: [0, 0.3, 1], minor: true } : { text: 'chain of cards', p: [-32, 26, z - 14], side: 'l', n: side, minor: true },
+    { text: 'sprung needles', p: [HOOK_X(0) + 1.8, NEEDLE_Y, -5], side: 'l', n: front, minor: true },
     { text: 'hooks', p: [HOOK_X(HOOKS - 1), 51, 0], side: 'r', n: front },
     { text: 'griffe knife', p: [35, KNIFE_Y + o.griffe, -3], side: 'r', n: front },
     { text: 'comber board', p: [34, COMBER_Y, 3], side: 'r', n: front, minor: true },
     { text: 'harness cords', p: [THREAD_X(0), 8, 0], side: 'l', n: front },
-    { text: 'lingoes (weights)', p: [THREAD_X(0), -7, 0], side: 'l', n: front },
+    { text: 'lingoes (weights)', p: [THREAD_X(0), -7, 0], side: 'l', n: front, minor: true },
     { text: 'shuttle', p: [o.shuttleX, 5.3, Z_WEFT], side: 't', n: up },
-    { text: 'reed (beater)', p: [-35, 13, o.reedZ], side: 'l', n: up, minor: true },
-    { text: 'warp threads', p: [THREAD_X(0), 0, Z_BEAM + 8], side: 'l', n: up },
+    { text: 'reed (beater)', p: [35, 13, o.reedZ], side: 'r', n: up, minor: true },
+    { text: 'warp threads', p: [THREAD_X(0), 0, Z_BEAM + 8], side: 'l', n: up, minor: true },
     { text: 'cloth', p: [THREAD_X(WARP - 1), 0, Z_FELL + 14], side: 'r', n: up },
   ];
-  const keep = whole ? ['cylinder (square prism)', 'griffe knife', 'harness cords', 'shuttle', 'reed (beater)', 'warp threads', 'cloth'] : ['cylinder (square prism)', 'needles, each sprung', 'hooks', 'griffe knife', 'comber board', 'harness cords', 'lingoes (weights)', n > 4 ? 'rest of the chain' : 'chain of cards'];
-  return all.filter((a) => keep.includes(a.text)).map((a) => ({ ...a, minor: false }));
+  const keep = whole ? ['cylinder (square prism)', 'griffe knife', 'shuttle', 'reed (beater)', 'warp threads', 'cloth'] : ['cylinder (square prism)', 'sprung needles', 'hooks', 'griffe knife', 'comber board', 'harness cords', 'lingoes (weights)', n > 4 ? 'rest of the chain' : 'chain of cards'];
+  return all.filter((a) => keep.includes(a.text));
 }
