@@ -443,7 +443,7 @@ export class SchematicView {
         g.append(s('title', {}, nm));
         nameG.append(t);
         this.nameOf.set(inst.name, t);
-        names.push({ t, box: { cx: at[0] + cx, cy: at[1] + cy, w: geo.w, h: geo.h, chars: nm.length, rot, text: nm } });
+        names.push({ t, box: { cx: at[0] + cx, cy: at[1] + cy, w: geo.w, h: geo.h, chars: nm.length, rot, text: nm, ports: Object.keys(geo.ports).length } });
       }
       if (openable) {
         const badge = s('g', { class: 'open-badge', transform: `translate(${geo.w - 0.2},${-0.9})` });

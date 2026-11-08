@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hiddenKinds, NAME_MIN_PX, abbreviate, fitLayout, NAME_OVER_MAX_PX, nameRect, truncLayout, planLayouts, planTags, TAG_MAX_K, LABEL_UNITS, NAME_PX, MIN_TEXT_PX, nameEligible, nameRotated, needsFixedNames, planNames, TEXT_UNITS, type NameBox } from '../src/view/legible';
+import { hiddenKinds, NAME_MIN_PX, abbreviate, fitLayout, NAME_OVER_MAX_PX, LARGE_BLOCK_PX, nameRect, truncLayout, planLayouts, planTags, TAG_MAX_K, LABEL_UNITS, NAME_PX, MIN_TEXT_PX, nameEligible, nameRotated, needsFixedNames, planNames, TEXT_UNITS, type NameBox } from '../src/view/legible';
 import { fpAdd, fpMul, fpDiv } from '../src/lib/fpu';
 import type { FpFormat } from '../src/sim/fpref';
 import { singleCycleCpu } from '../src/lib/cpu';
@@ -120,7 +120,7 @@ describe('names sit inside their block', () => {
     const l = planLayouts([b(6, 10, 'REGISTERS')], 4)[0]!;
     expect(l).toEqual({ px: expect.any(Number), lines: ['REGS'] });
     const o = planLayouts([b(10, 10, 'REGISTERS')], 4)[0]!;
-    expect(o.over ? o.px : 0).toBeLessThanOrEqual(NAME_OVER_MAX_PX);
+    expect(o.over ? o.px : 0).toBeLessThanOrEqual(NAME_PX);
   });
   it('abbreviates when the full name would collide, then truncates, then drops', () => {
     // a neighbour's block 14 units to the right: 'REGISTERS' (about 9 chars at 12 px) would reach it, 'REGS' would not
@@ -137,7 +137,7 @@ describe('names sit inside their block', () => {
     const blocks = insts.map((i) => { const { w, h } = symbolGeom(i.def), at = i.at ?? [0, 0]; return { x: at[0], y: at[1], w, h }; });
     const named = insts.flatMap((i, k) => {
       const { w, h } = symbolGeom(i.def), t = i.def.symbol.label ?? i.def.name;
-      return i.def.symbol.kind === 'box' && nameEligible(t, w, h) ? [{ k, t, box: { cx: blocks[k].x + w / 2, cy: blocks[k].y + h / 2, w, h, chars: t.length, rot: nameRotated(w, h), text: t } }] : [];
+      return i.def.symbol.kind === 'box' && nameEligible(t, w, h) ? [{ k, t, box: { cx: blocks[k].x + w / 2, cy: blocks[k].y + h / 2, w, h, chars: t.length, rot: nameRotated(w, h), text: t, ports: Object.keys(symbolGeom(insts[k].def).ports).length } }] : [];
     });
     const bb = { x0: Math.min(...blocks.map((r) => r.x)), x1: Math.max(...blocks.map((r) => r.x + r.w)) };
     const scale = 400 / (bb.x1 - bb.x0);
@@ -147,9 +147,9 @@ describe('names sit inside their block', () => {
       const k = named.findIndex((n) => n.t.toUpperCase() === f);
       expect(k, f + ' is a block of the top').toBeGreaterThanOrEqual(0);
       expect(plan[k]?.lines.join(' '), f).toBe(f);
+      expect(plan[k]!.px, f + ' size').toBeGreaterThanOrEqual(10);
     }
     // no name covers another name or another block
-    for (const l of plan) if (l?.over) expect(l.px).toBeLessThanOrEqual(NAME_OVER_MAX_PX);
     const rects = plan.map((l, k) => (l ? nameRect(named[k].box, l, scale) : null));
     rects.forEach((a, i) => {
       if (!a) return;
@@ -162,10 +162,10 @@ describe('names sit inside their block', () => {
     for (const def of [fpAdd(f), fpMul(f), fpDiv(f, true), fpAddNearFar(f)]) {
       const insts = def.netlist!().instances;
       const blocks = insts.map((i) => { const { w, h } = symbolGeom(i.def), at = i.at ?? [0, 0]; return { x: at[0], y: at[1], w, h }; });
-      for (const scale of [3, 3.3, 4.5, 6]) {
+      for (const scale of [2.3, 3, 3.3, 4.5, 6]) {
         const boxes = insts.flatMap((i, k) => {
           const { w, h } = symbolGeom(i.def), t = i.def.symbol.label ?? i.def.name;
-          return i.def.symbol.kind === 'box' && nameEligible(t, w, h) ? [{ i, k, box: { cx: blocks[k].x + w / 2, cy: blocks[k].y + h / 2, w, h, chars: t.length, rot: nameRotated(w, h), text: t } }] : [];
+          return i.def.symbol.kind === 'box' && nameEligible(t, w, h) ? [{ i, k, box: { cx: blocks[k].x + w / 2, cy: blocks[k].y + h / 2, w, h, chars: t.length, rot: nameRotated(w, h), text: t, ports: Object.keys(symbolGeom(i.def).ports).length } }] : [];
         });
         const plan = planLayouts(boxes.map((x) => x.box), scale, 10, blocks);
         boxes.forEach((x, n) => {
@@ -173,7 +173,8 @@ describe('names sit inside their block', () => {
           expect(l, where).not.toBeNull();
           if (!l || x.box.rot) return;
           const r = nameRect(x.box, l, scale);
-          if (l.over) expect(l.px, where).toBeLessThanOrEqual(NAME_OVER_MAX_PX);
+          // a large name over a block only on one that is wide enough and not densely pinned (a phone's UNPACK, SPECIAL stay quiet)
+          if (l.over && l.px > NAME_OVER_MAX_PX) { expect(x.box.w * scale, where).toBeGreaterThanOrEqual(LARGE_BLOCK_PX); expect(x.box.ports!, where).toBeLessThanOrEqual(8); }
           if (!l.over) { expect(width(l), where).toBeLessThanOrEqual(x.box.w * scale); return; }
           blocks.forEach((o, k) => { if (k !== x.k) expect(r.x < o.x + o.w && o.x < r.x + r.w && r.y < o.y + o.h && o.y < r.y + r.h, where + ' covers ' + insts[k].name).toBe(false); });
         });

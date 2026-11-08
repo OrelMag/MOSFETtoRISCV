@@ -38,7 +38,7 @@ const NAME_EM = 0.68, NAME_LINE = 1.25;
 const NAME_PAD = 4;
 
 /** A block that may carry a fixed-size name: grid units. `text` (else `chars` letters) is what is drawn. */
-export interface NameBox { cx: number; cy: number; w: number; h: number; chars: number; rot: boolean; text?: string }
+export interface NameBox { cx: number; cy: number; w: number; h: number; chars: number; rot: boolean; text?: string; ports?: number }
 
 /** Is this block's label worth a fixed name? Not: no label, one character (a constant, a bit), a small box. */
 export function nameEligible(label: string | null | undefined, w: number, h: number): boolean {
@@ -98,6 +98,16 @@ export function truncLayout(b: NameBox, scale: number, text = textOf(b)): NameLa
 
 /** Largest size (px) of a name drawn wider than its block: quiet, never louder than the names that fit. */
 export const NAME_OVER_MAX_PX = 8;
+/**
+ * A name above that size over its block needs a block this wide (px), at most LARGE_PORTS ports, and spills at most LARGE_SPILL
+ * times its width: a label over a block (a CPU top's REGISTERS at the 12 px of its CONTROL), never text over the pins of a small or
+ * densely pinned block (a phone's UNPACK, SPECIAL). Clearing the pins cannot tell the two apart: a large name covers the ports on
+ * its own block's edges in either.
+ */
+export const LARGE_BLOCK_PX = 30;
+/** ... and has at most this many ports: a block with a dense edge of pins (a phone's SPECIAL) keeps the quiet size. */
+export const LARGE_PORTS = 8;
+export const LARGE_SPILL = 2.5;
 /** A full name spilling past its block by no more than this (px, in all) is kept over the abbreviation that fits inside. */
 export const NAME_SPILL_PX = 8;
 
@@ -164,12 +174,24 @@ export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, bl
     // inside the block first, the abbreviation before anything wider than the block, then wider than it
     // (a full name that spills only a little is kept over its abbreviation)
     const spill = (l: NameLayout) => maxChars(l.lines) * l.px * NAME_EM - (b.rot ? b.h : b.w) * scale;
+    // wider than the quiet size, up to the largest name inside a block, only for a block that can carry it (LARGE_BLOCK_PX) and
+    // where no other block, name or tag is under it
+    const large = (t: string) => {
+      if (b.rot || b.w * scale < LARGE_BLOCK_PX || (b.ports ?? 0) > LARGE_PORTS) return null;
+      for (let px = Math.min(NAME_PX, Math.floor(maxIn)); px > overMax; px--) {
+        for (const lines of nameBreaks(t)) {
+          const l: NameLayout = { px, lines, over: true };
+          if (free(l) && others(l) && maxChars(l.lines) * l.px * NAME_EM <= LARGE_SPILL * b.w * scale) return l;
+        }
+      }
+      return null;
+    };
     const over = (t: string, mild: boolean) => {
       for (const l of overLayouts(b, t, overMax)) if ((!mild || spill(l) <= NAME_SPILL_PX) && free(l) && others(l)) return l;
       return null;
     };
     const fits = texts.map((t) => { const f = fitLayout(b, scale, t); return f && free(f) ? f : null; });
-    pick = fits[0] ?? over(full, true) ?? fits[1] ?? over(full, false) ?? (texts.length > 1 ? over(short, false) : null);
+    pick = (fits[0] && fits[0].px > overMax ? fits[0] : null) ?? large(full) ?? fits[0] ?? over(full, true) ?? fits[1] ?? over(full, false) ?? (texts.length > 1 ? over(short, false) : null);
     for (const t of texts) {
       if (pick) break;
       const tr = truncLayout(b, scale, t);
