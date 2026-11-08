@@ -2848,7 +2848,7 @@ svg.schematic.lg.lg-nm .inst.lg-named .sym-label,
 svg.schematic.lg.lg-h-tiny .sym-tiny, svg.schematic.lg.lg-h-rail .sym-rail, svg.schematic.lg.lg-h-port .sym-port,
 svg.schematic.lg.lg-h-label .sym-label, svg.schematic.lg.lg-h-iname .inst-name,
 svg.schematic.lg.lg-h-pin .pin-name, svg.schematic.lg.lg-h-pin .pin-value,
-svg.schematic.lg.lg-h-tag .net-tag text, svg.schematic.lg.lg-h-bus .bus-label, svg.schematic.lg.lg-h-level .level-tag, svg.schematic.lg.lg-h-flow .flow-tokens, svg.schematic.lg.lg-h-probe .probe-flag text, svg.schematic.lg.lg-h-note .note-pin text,
+svg.schematic.lg.lg-h-tag .net-tag:not(.lg-tg) text, svg.schematic.lg.lg-h-bus .bus-label, svg.schematic.lg.lg-h-level .level-tag, svg.schematic.lg.lg-h-flow .flow-tokens, svg.schematic.lg.lg-h-probe .probe-flag text, svg.schematic.lg.lg-h-note .note-pin text,
 svg.schematic.lg.lg-h-tap3 .tap-label[data-ts='3'], svg.schematic.lg.lg-h-tap4 .tap-label[data-ts='4'],
 svg.schematic.lg.lg-h-tap5 .tap-label[data-ts='5'], svg.schematic.lg.lg-h-tap6 .tap-label[data-ts='6'],
 svg.schematic.lg.lg-h-tap7 .tap-label[data-ts='7'], svg.schematic.lg.lg-h-tap8 .tap-label[data-ts='8'] { display: none; }
@@ -3023,8 +3023,8 @@ html[data-busy]::before {
 .net-tag.vx .tag-end { fill: var(--wx); }
 .net-tag.bus .tag-end { fill: var(--bus); }
 .net-tag.bus.bus1 .tag-end { fill: var(--bus1); }
-svg.schematic.lg.lg-h-tag .net-tag .tag-end { display: inline; }
-svg.schematic.lg.lg-h-tag .net-tag rect { fill: transparent; stroke: none; pointer-events: all; }
+svg.schematic.lg.lg-h-tag .net-tag:not(.lg-tg) .tag-end { display: inline; }
+svg.schematic.lg.lg-h-tag .net-tag:not(.lg-tg) rect { fill: transparent; stroke: none; pointer-events: all; }
 svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .net-tag.net-sel rect { stroke: var(--hl); stroke-width: 0.2; }
 .partner-lines { pointer-events: none; }
 .partner-line, .partner-flow { fill: none; stroke: var(--w1); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }

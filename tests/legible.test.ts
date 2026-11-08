@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { hiddenKinds, LABEL_UNITS, NAME_PX, MIN_TEXT_PX, nameEligible, nameRotated, needsFixedNames, planNames, TEXT_UNITS, type NameBox } from '../src/view/legible';
+import { hiddenKinds, NAME_MIN_PX, nameLayout, planLayouts, planTags, TAG_MAX_K, LABEL_UNITS, NAME_PX, MIN_TEXT_PX, nameEligible, nameRotated, needsFixedNames, planNames, TEXT_UNITS, type NameBox } from '../src/view/legible';
+import { fpAdd, fpMul, fpDiv, type FpFormat } from '../src/lib/fpu';
+import { fpAddNearFar } from '../src/lib/fpnearfar';
+import { symbolGeom } from '../src/sim/geometry';
 
 const box = (cx: number, cy: number, w: number, h: number, chars = 6): NameBox => ({ cx, cy, w, h, chars, rot: nameRotated(w, h) });
 
@@ -80,5 +83,66 @@ describe('trivial labels get no fixed name', () => {
     expect(nameEligible('+4', 20, 20)).toBe(false);
     expect(nameEligible('I/O', 8, 8)).toBe(true);
     expect(nameEligible('NEXT PC', 8, 8)).toBe(true);
+  });
+});
+
+describe('names sit inside their block', () => {
+  const b = (w: number, h: number, text: string, rot = false): NameBox => ({ cx: 0, cy: 0, w, h, chars: text.length, rot, text });
+  const width = (l: { px: number; lines: string[] }) => Math.max(...l.lines.map((x) => x.length)) * l.px * 0.68;
+  it('shrinks a name that is wider than its block at 12 px', () => {
+    const l = nameLayout(b(10, 16, 'UNPACK'), 3.3);
+    expect(l.px).toBeLessThan(NAME_PX);
+    expect(l.px).toBeGreaterThanOrEqual(NAME_MIN_PX);
+    expect(width(l)).toBeLessThanOrEqual(10 * 3.3);
+  });
+  it('wraps onto two lines where that gives a larger size', () => {
+    const l = nameLayout(b(22, 12, 'NORMALIZE & ROUND'), 3.3);
+    expect(l.lines).toEqual(['NORMALIZE &', 'ROUND']);
+    expect(nameLayout(b(14, 8, 'ADD/SUB'), 2.4).lines.length).toBeGreaterThan(0);
+  });
+  it('keeps a name that fits at 12 px unchanged', () => {
+    expect(nameLayout(b(30, 20, 'ALU'), 2)).toEqual({ px: NAME_PX, lines: ['ALU'] });
+  });
+  it('a block too small for any size keeps its name at the floor instead of losing it', () => {
+    const l = nameLayout(b(10, 10, 'DECODER'), 2);
+    expect(l.px).toBe(MIN_TEXT_PX);
+    expect(planNames([b(10, 10, 'DECODER')], 2)).toEqual([true]);
+  });
+  it('every name of the floating-point units is drawn inside its block at phone and desktop fits', () => {
+    const f = { E: 4, M: 3 } as FpFormat;
+    for (const def of [fpAdd(f), fpMul(f), fpDiv(f, true), fpAddNearFar(f)]) {
+      const insts = def.netlist!().instances.filter((i) => i.def.symbol.kind === 'box');
+      for (const scale of [3, 3.3, 4.5, 6]) {
+        const boxes = insts.flatMap((i) => {
+          const { w, h } = symbolGeom(i.def), at = i.at ?? [0, 0], t = i.def.symbol.label ?? i.def.name;
+          return nameEligible(t, w, h) ? [{ i, box: { cx: at[0] + w / 2, cy: at[1] + h / 2, w, h, chars: t.length, rot: nameRotated(w, h), text: t } }] : [];
+        });
+        const plan = planLayouts(boxes.map((x) => x.box), scale);
+        boxes.forEach((x, k) => {
+          const l = plan[k], where = `${def.id} ${x.i.name} at ${scale}`;
+          expect(l, where).not.toBeNull();
+          if (l && !x.box.rot) expect(width(l), where).toBeLessThanOrEqual(x.box.w * scale);
+        });
+      }
+    }
+  });
+});
+
+describe('planTags', () => {
+  const tag = (x: number, y: number): { tip: [number, number]; rect: { x: number; y: number; w: number; h: number } } => ({ tip: [x, y], rect: { x, y: y - 0.7, w: 4, h: 1.35 } });
+  it('enlarges tags whose text is under the floor, to put it at the floor', () => {
+    const [k] = planTags([tag(0, 0)], [], 5);
+    expect(k! * TEXT_UNITS.tag * 5).toBeCloseTo(MIN_TEXT_PX, 5);
+  });
+  it('leaves tags alone when the text is big enough, or would need more than TAG_MAX_K', () => {
+    expect(planTags([tag(0, 0)], [], 9)).toEqual([null]);
+    expect(planTags([tag(0, 0)], [], 7 / TEXT_UNITS.tag / (TAG_MAX_K + 0.1))).toEqual([null]);
+  });
+  it('never lets an enlarged tag cover a block or a tag kept before it', () => {
+    expect(planTags([tag(0, 0)], [{ x: 5, y: -1, w: 3, h: 2 }], 5)).toEqual([null]);
+    const r = planTags([tag(0, 0), tag(0, 0.5), tag(0, 10)], [], 5);
+    expect(r[0]).not.toBeNull();
+    expect(r[1]).toBeNull();
+    expect(r[2]).not.toBeNull();
   });
 });

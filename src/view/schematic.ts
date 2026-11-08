@@ -26,7 +26,7 @@ import type { HueSite, MenuSite } from './circuitmenu';
 import type { ComponentDef } from '../sim/types';
 import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showMenu } from '../ui/menu';
 import { installHold } from '../ui/holdpress';
-import { Legibility, nameEligible, nameRotated, type NameEl } from './legible';
+import { Legibility, nameEligible, nameRotated, type NameEl, type TagEl } from './legible';
 
 /** A note's marker on a part of the level shown. */
 export interface NotePin {
@@ -338,6 +338,7 @@ export class SchematicView {
 
     // Wires
     // keyed by the authored net: a wire drawn as pointers is named for its driver, but keeps its colour
+    const tagEls: TagEl[] = [];
     const hues = spreadHues(nets.map((n) => ({ key: netKey(base.nets[n.index]), polys: n.paths })));
     for (const [ni, net] of nets.entries()) {
       const cls = net.width > 1 ? 'wire bus' : 'wire';
@@ -356,6 +357,7 @@ export class SchematicView {
         g.append(stub, s('rect', { x: rx, y: ry, width: tw, height: th, rx: 0.35 }), s('circle', { class: 'tag-end', cx: tip[0], cy: tip[1], r: 0.5 }),
           s('text', { x: rx + tw / 2, y: ry + th / 2 + 0.3, 'text-anchor': 'middle' }, name));
         w.tags.push(g);
+        tagEls.push({ g, tip, rect: { x: rx, y: ry, w: tw, h: th } });
         labelG.append(g);
         grow(rx, ry);
         grow(rx + tw, ry + th);
@@ -439,7 +441,7 @@ export class SchematicView {
         g.classList.add('lg-named');
         nameG.append(t);
         this.nameOf.set(inst.name, t);
-        names.push({ t, box: { cx: at[0] + cx, cy: at[1] + cy, w: geo.w, h: geo.h, chars: nm.length, rot } });
+        names.push({ t, box: { cx: at[0] + cx, cy: at[1] + cy, w: geo.w, h: geo.h, chars: nm.length, rot, text: nm } });
       }
       if (openable) {
         const badge = s('g', { class: 'open-badge', transform: `translate(${geo.w - 0.2},${-0.9})` });
@@ -501,6 +503,7 @@ export class SchematicView {
     const m = 3;
     this.bbox = { x: x0 - m, y: y0 - m - 1, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m + 1 };
     this.legible.setNames(names);
+    this.legible.setTags(tagEls, [...this.boxes.values()]);
     if (!keepView) this.fit();
     else this.cam.apply();
     this.drawProbes();
