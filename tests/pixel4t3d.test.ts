@@ -81,6 +81,6 @@ describe('the drawing', () => {
       expect(p.pos[0]).toBeLessThanOrEqual(PITCH * U + 1e-9);
     }
     const t = pixAnchors(pose(IDLE)).map((a) => a.text).join(' ');
-    for (const n of ['pd:', 'xfer:', 'fd:', 'reset', 'sf:', 'rs:']) expect(t).toContain(n);
+    for (const n of ['pd', 'xfer', 'fd', 'reset', 'sf', 'rs']) expect(t).toMatch(new RegExp(`\\b${n}\\b`));
   });
 });
