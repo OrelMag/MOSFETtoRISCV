@@ -11,7 +11,7 @@ import { rowsKey, signalsOf, SLOT_CODE, type CustomRow } from '../riscv/custom';
 import { alu, constWord, orN } from './alu';
 import { koggeStone } from './fastadd';
 import { andN, busMux2, incrementer, muxTree, rca } from './combinational';
-import { define, merger, splitter } from './define';
+import { define, merger, ones, splitter } from './define';
 import { AND, NOT, OR, XOR } from './gates';
 import { ram } from './memory';
 import { cachedMemory } from './cache';
@@ -242,17 +242,33 @@ export function control(custom: readonly CustomRow[] = [], mac = false): Compone
   return memo(`${custom.length ? `control_cx${rowsKey(custom)}` : 'control'}${mac ? '_mac' : ''}`, () => buildControl(custom, mac));
 }
 
-/** mac: the MAC core's custom-2 class (chapter "A MAC on the RV32"): racc writes a register and picks result input 4, and `macEn` lets the unit's accumulator change. */
-function buildControl(custom: readonly CustomRow[], mac = false): ComponentDef {
+/** What a control unit is drawn as: three blocks after the opcode decoder. `layout` is the drawing of the signals block (a crossbar: class rails
+ *  down the page, one OR gate per signal), found by a search over the router's own crossing count; classes and signals the lists leave out
+ *  (custom rows, the MAC) go after them. A drawing only: no gate, wire or name differs from a flat unit. */
+export interface CtlLayout {
+  rails: string[]; gates: string[]; pinY: Record<string, number>;
+  /** merger y and pin pitch */
+  imm: [number, number]; res: [number, number];
+}
+const CTL_LAYOUT: CtlLayout = {
+  rails: ['BRANCH', 'R', 'I', 'AUIPC', 'JAL', 'LUI', 'JALR', 'STORE', 'LOAD'],
+  gates: ['regWrite', 'resSrc0', 'aluSrcB', 'resSrc1', 'immSrc0', 'immSrc1', 'aluOp'],
+  pinY: { regWrite: 6, immSrc: 40, aluSrcA: 11, aluSrcB: 23, memWrite: 17, resultSrc: 14, branch: 2, jump: 31, jalr: 25, aluOp: 50 },
+  imm: [28, 2], res: [17, 3],
+};
+/** Place in `order`; names it leaves out follow, in their own order. */
+const rankIn = (order: readonly string[], name: string, all: readonly string[]) => { const k = order.indexOf(name); return k >= 0 ? k : order.length + all.filter((n) => !order.includes(n)).indexOf(name); };
+
+/** mac: the MAC core's custom-2 class (chapter "A MAC on the RV32"): racc writes a register and picks result input 4, and `macEn` lets the unit's accumulator change.
+ *  Exported for the layout search (tests, scripts): `lay` overrides the signals block's drawing, `tag` makes its ids distinct. */
+export function buildControl(custom: readonly CustomRow[], mac = false, lay: CtlLayout = CTL_LAYOUT, tag = ''): ComponentDef {
   if (mac && custom.some((r) => r.slot === 2)) throw new Error('control: custom-2 belongs to the MAC');
+  const key = `${custom.length ? `control_cx${rowsKey(custom)}` : 'control'}${mac ? '_mac' : ''}${tag}`;
   const cx = custom.map((r) => ({ row: r, cls: `cx_${r.name.replace(/[^\w]/g, '_')}`, sigs: new Set(signalsOf(r)) }));
   const macClass: [string, number][] = mac ? [['MAC', SLOT_CODE[2]]] : [];
   const D = opcodeDecoder([...cx.map((c): [string, number] => [c.cls, SLOT_CODE[c.row.slot]]), ...macClass]);
   const classes: [string, number][] = [...CLASSES, ...cx.map((c): [string, number] => [c.cls, SLOT_CODE[c.row.slot]]), ...macClass];
-  const dg = symbolGeom(D);
-  const rail = (k: number) => dg.w + 4 + 2 * k; // vertical rail per class
-  const classIdx = new Map(classes.map(([n], i) => [n, i]));
-  const XO = rail(classes.length) + 4; // OR gate column
+  const classNames = classes.map(([c]) => c);
   const by = (sig: string) => cx.filter((c) => c.sigs.has(sig)).map((c) => c.cls);
   type Sig = { name: string; from: string[] };
   const sigs: Sig[] = [
@@ -274,117 +290,174 @@ function buildControl(custom: readonly CustomRow[], mac = false): ComponentDef {
   const subs = by('alt');
   const ALT = subs.length ? orN(2 + subs.length) : OR;
   const altIn = ALT.ports.filter((p) => p.dir === 'in').map((p) => p.name);
-  const instances: InstanceDef[] = [{ name: 'dec', def: D, at: [4, 0] }];
-  const nets: NetDef[] = [{ name: 'op', ends: ['op', 'dec.op'] }];
-  const classEnds = new Map<string, string[]>(classes.map(([n]) => [n, [`dec.${n}`]]));
-  if (mac) classEnds.set('macRd', ['mrd.y', 'mres.i2']); // racc: not a class of its own, the MAC class and funct3 = 011
-  let y = 2;
-  const gateOut = new Map<string, string>();
-  for (const s of sigs) {
-    const g = s.from.length === 2 ? OR : orN(s.from.length);
-    const gg = symbolGeom(g);
-    const ins = g.ports.filter((p) => p.dir === 'in').map((p) => p.name);
-    instances.push({ name: `g_${s.name}`, def: g, at: [XO, y] });
-    s.from.forEach((c, i) => classEnds.get(c)!.push(`g_${s.name}.${ins[i]}`));
-    gateOut.set(s.name, `g_${s.name}.y`);
-    y += gg.h + 2;
-  }
-  for (const [sig, c] of direct) gateOut.set(sig, `dec.${c}`);
-  // ALU decoder: ctl[2:0] = aluOp ? funct3 : 0; ctl[3] = aluOp & f7b5 & (R | f3 == 101) | BRANCH (| a subtracting custom class)
-  const ya = y + 2;
-  const altH = symbolGeom(ALT).h;
-  instances.push(
-    { name: 'sf3', def: splitter([1, 1, 1]), at: [XO - 10, ya] },
-    { name: 'sf7', def: splitter([5, 1, 1]), at: [XO - 10, ya + 8] },
-    { name: 'a0', def: AND, at: [XO, ya] },
-    { name: 'a1', def: AND, at: [XO, ya + 5] },
-    { name: 'a2', def: AND, at: [XO, ya + 10] },
-    { name: 'nf1', def: NOT, at: [XO + 6, ya + 16] },
-    { name: 'is101', def: andN(3), at: [XO + 11, ya + 14] },
-    { name: 'shR', def: OR, at: [XO + 18, ya + 15] },
-    { name: 'alt1', def: andN(3), at: [XO + 25, ya + 13] },
-    { name: 'alt', def: ALT, at: [XO + 32, ya + 17 - altH / 2] },
-    { name: 'mctl', def: merger([1, 1, 1, 1]), at: [XO + 40, ya] },
-    { name: 'mimm', def: merger([1, 1, 1]), at: [XO + 40, 22] },
-    { name: 'mres', def: merger(mac ? [1, 1, 1] : [1, 1]), at: [XO + 40, 9] },
-  );
-  if (mac) {
-    // custom-2 is a MAC instruction only with funct7 = 0 and funct3 < 4 (anything else does nothing, as the golden model): macEn, and racc = funct3 11
-    const ym = ya + 26;
-    instances.push(
-      { name: 'mf7', def: splitter([1, 1, 1, 1, 1, 1, 1]), at: [XO - 10, ym] },
-      { name: 'mor', def: orN(7), at: [XO, ym] },
-      { name: 'mbad', def: OR, at: [XO + 8, ym + 2] },
-      { name: 'mok', def: NOT, at: [XO + 14, ym + 3] },
-      { name: 'mv', def: AND, at: [XO + 19, ym + 2] },
-      { name: 'misr', def: AND, at: [XO + 19, ym + 8] },
-      { name: 'mrd', def: AND, at: [XO + 27, ym + 4] },
-    );
-    classEnds.get('MAC')!.push('mv.a');
-    nets.push(
-      { name: 'mbad', ends: ['mor.y', 'mbad.a'] },
-      { name: 'mnz', ends: ['mbad.y', 'mok.a'] },
-      { name: 'mok', ends: ['mok.y', 'mv.b'] },
-      { name: 'macEn', ends: ['mv.y', 'mrd.a', 'macEn'] },
-      { name: 'mis3', ends: ['misr.y', 'mrd.b'] },
-    );
-    for (let i = 0; i < 7; i++) nets.push({ ends: [`mf7.o${i}`, `mor.i${i}`] });
-  }
-  for (const [c, ends] of classEnds) {
-    const sub = subs.indexOf(c);
-    nets.push({ name: c, ends: [...ends, ...(c === 'R' ? ['shR.a'] : []), ...(c === 'BRANCH' ? [`alt.${altIn[1]}`] : []), ...(sub >= 0 ? [`alt.${altIn[2 + sub]}`] : [])], ...(classIdx.has(c) ? { trunk: rail(classIdx.get(c)!) } : {}) });
-  }
-  nets.push(
-    { name: 'f3', ends: ['funct3', 'sf3.in'] },
-    { name: 'f7', ends: ['funct7', 'sf7.in', ...(mac ? ['mf7.in'] : [])] },
-    { name: 'aluOp', ends: [gateOut.get('aluOp')!, 'a0.a', 'a1.a', 'a2.a', 'alt1.i0'], trunk: XO + 5 },
-    { name: 'f3_0', ends: ['sf3.o0', 'a0.b', 'is101.i0', ...(mac ? ['misr.a'] : [])] },
-    { name: 'f3_1', ends: ['sf3.o1', 'a1.b', 'nf1.a', ...(mac ? ['misr.b'] : [])] },
-    { name: 'f3_2', ends: ['sf3.o2', 'a2.b', 'is101.i2', ...(mac ? ['mbad.b'] : [])] },
-    { name: 'nf3_1', ends: ['nf1.y', 'is101.i1'] },
-    { name: 'f7b5', ends: ['sf7.o1', 'alt1.i1'] },
-    { name: 'is101', ends: ['is101.y', 'shR.b'] },
-    { name: 'shR', ends: ['shR.y', 'alt1.i2'] },
-    { name: 'alt1', ends: ['alt1.y', `alt.${altIn[0]}`] },
-    { name: 'c0', ends: ['a0.y', 'mctl.i0'] },
-    { name: 'c1', ends: ['a1.y', 'mctl.i1'] },
-    { name: 'c2', ends: ['a2.y', 'mctl.i2'] },
-    { name: 'c3', ends: ['alt.y', 'mctl.i3'] },
-    { name: 'aluCtl', ends: ['mctl.out', 'aluCtl'] },
-    { name: 'immSrc0', ends: [gateOut.get('immSrc0')!, 'mimm.i0'] },
-    { name: 'immSrc1', ends: [gateOut.get('immSrc1')!, 'mimm.i1'] },
-    { name: 'immSrc2', ends: [gateOut.get('immSrc2')!, 'mimm.i2'] },
-    { name: 'immSrc', ends: ['mimm.out', 'immSrc'] },
-    { name: 'resSrc0', ends: [gateOut.get('resSrc0')!, 'mres.i0'] },
-    { name: 'resSrc1', ends: [gateOut.get('resSrc1')!, 'mres.i1'] },
-    { name: 'resultSrc', ends: ['mres.out', 'resultSrc'] },
-  );
-  for (const s of ['regWrite', 'aluSrcB', 'aluSrcA', 'memWrite', 'branch', 'jump', 'jalr']) {
-    nets.push({ name: s, ends: [gateOut.get(s)!, s] });
-  }
-  // The direct class signals already belong to class nets; merge them.
-  const merged: NetDef[] = [];
-  const byDriver = new Map<string, NetDef>();
-  for (const n of nets) {
-    const k = n.ends[0];
-    const prev = byDriver.get(k);
-    if (prev && k.startsWith('dec.')) {
-      prev.ends.push(...n.ends.slice(1));
-      continue;
+  const outs = ['regWrite', 'immSrc', 'aluSrcA', 'aluSrcB', 'memWrite', 'resultSrc', 'branch', 'jump', 'jalr'];
+
+  // ---- the signals block: class lines in, one OR gate per signal ------------------------------------------------------------
+  const SG = (() => {
+    const N = classes.length;
+    const sc = splitter(ones(N), 3), scg = symbolGeom(sc);
+    const railNames = [...classNames, ...(mac ? ['macRd'] : [])];
+    const rail = (k: number) => 3 + scg.w + 4 + 3 * k;
+    const railOf = (n: string) => rail(rankIn(lay.rails, n, railNames));
+    const XO = rail(railNames.length) + 4;
+    const instances: InstanceDef[] = [{ name: 'sc', def: sc, at: [3, 0] }];
+    const nets: NetDef[] = [{ name: 'cls', ends: ['cls', 'sc.in'] }];
+    const ends = new Map<string, string[]>(classNames.map((n, i) => [n, [`sc.o${i}`]]));
+    if (mac) ends.set('macRd', ['macRd', 'mres.i2']);
+    const names = sigs.map((x) => x.name);
+    const order = sigs.slice().sort((a, b) => rankIn(lay.gates, a.name, names) - rankIn(lay.gates, b.name, names));
+    let y = 2;
+    const gateOut = new Map<string, string>();
+    for (const s of order) {
+      const g = s.from.length === 2 ? OR : orN(s.from.length), gg = symbolGeom(g);
+      const ins = g.ports.filter((p) => p.dir === 'in').map((p) => p.name);
+      instances.push({ name: `g_${s.name}`, def: g, at: [XO, y] });
+      s.from.forEach((c, i) => ends.get(c)!.push(`g_${s.name}.${ins[i]}`));
+      gateOut.set(s.name, `g_${s.name}.y`);
+      y += gg.h + 2;
     }
-    byDriver.set(k, n);
-    merged.push(n);
-  }
-  const outs = ['regWrite', 'immSrc', 'aluSrcA', 'aluSrcB', 'memWrite', 'resultSrc', 'branch', 'jump', 'jalr', 'aluCtl', ...(mac ? ['macEn'] : [])];
-  const OX = XO + 50;
-  const pins: Record<string, [number, number]> = { op: [0, 4], funct3: [XO - 14, ya + 1.5], funct7: [XO - 14, ya + 11] };
-  outs.forEach((o, i) => (pins[o] = [OX, 2 + 4 * i]));
+    const yBelow = y + 1;
+    const mimm = merger([1, 1, 1], lay.imm[1]), mres = merger(mac ? [1, 1, 1] : [1, 1], lay.res[1]);
+    instances.push({ name: 'mimm', def: mimm, at: [XO + 40, lay.imm[0]] }, { name: 'mres', def: mres, at: [XO + 40, lay.res[0]] });
+    for (const [sig, c] of direct) gateOut.set(sig, `sc.o${classNames.indexOf(c)}`);
+    // racc's wire (a rail of its own) enters regWrite's OR, then runs under the gates and up the lane before the merger into resultSrc
+    const macVia = mac ? { 'mres.i2': [[railOf('macRd'), yBelow], [XO + 38, yBelow], [XO + 38, lay.res[0] + symbolGeom(mres).ports.i2.pos[1]]] as [number, number][] } : undefined;
+    for (const [c, e] of ends) if (e.length > 1) nets.push({ name: c, ends: e, trunk: railOf(c), ...(c === 'macRd' ? { via: macVia } : {}) });
+    nets.push(
+      { name: 'immSrc0', ends: [gateOut.get('immSrc0')!, 'mimm.i0'] }, { name: 'immSrc1', ends: [gateOut.get('immSrc1')!, 'mimm.i1'] },
+      { name: 'immSrc2', ends: [gateOut.get('immSrc2')!, 'mimm.i2'] }, { name: 'immSrc', ends: ['mimm.out', 'immSrc'] },
+      { name: 'resSrc0', ends: [gateOut.get('resSrc0')!, 'mres.i0'] }, { name: 'resSrc1', ends: [gateOut.get('resSrc1')!, 'mres.i1'] },
+      { name: 'resultSrc', ends: ['mres.out', 'resultSrc'] }, { name: 'aluOp', ends: [gateOut.get('aluOp')!, 'aluOp'] },
+    );
+    for (const s of ['regWrite', 'aluSrcB', 'aluSrcA', 'memWrite', 'branch', 'jump', 'jalr']) nets.push({ name: s, ends: [gateOut.get(s)!, s] });
+    // a direct signal's wire is the class line's own: one net
+    const byDriver = new Map<string, NetDef>(), merged: NetDef[] = [];
+    for (const n of nets) {
+      const prev = byDriver.get(n.ends[0]);
+      if (prev && n.ends[0].startsWith('sc.')) { prev.ends.push(...n.ends.slice(1)); continue; }
+      byDriver.set(n.ends[0], n);
+      merged.push(n);
+    }
+    const OX = XO + 50;
+    const pins: Record<string, [number, number]> = { cls: [0, 4], ...(mac ? { macRd: [0, yBelow + 2] } : {}) };
+    for (const o of [...outs, 'aluOp']) pins[o] = [OX, lay.pinY[o] ?? 2];
+    return define({
+      id: `${key}_signals`, name: 'Control signals', category: 'cpu',
+      summary: 'One OR gate per datapath signal over the instruction classes that assert it; a signal one class alone asserts is that class line itself. The ALU control has its own block.',
+      ports: [
+        bus('cls', N, 'in'), ...(mac ? [bit('macRd', 'in')] : []),
+        bit('regWrite', 'out'), bus('immSrc', 3, 'out'), bit('aluSrcA', 'out'), bit('aluSrcB', 'out'),
+        bit('memWrite', 'out'), bus('resultSrc', mac ? 3 : 2, 'out'), bit('branch', 'out'), bit('jump', 'out'),
+        bit('jalr', 'out'), bit('aluOp', 'out', 'bottom'),
+      ],
+      symbol: { kind: 'box', label: 'SIGNALS' },
+      netlist: () => ({ pins, instances, nets: merged }),
+    });
+  })();
+
+  // ---- the ALU decoder: ctl[2:0] = aluOp ? funct3 : 0; ctl[3] = aluOp & f7b5 & (R | f3 == 101) | BRANCH (| a subtracting custom class) -----
+  const AD = (() => {
+    const altH = symbolGeom(ALT).h, X = 14, ya = 0;
+    const instances: InstanceDef[] = [
+      { name: 'sf3', def: splitter([1, 1, 1]), at: [4, ya] },
+      { name: 'sf7', def: splitter([5, 1, 1]), at: [4, ya + 8] },
+      { name: 'a0', def: AND, at: [X, ya] },
+      { name: 'a1', def: AND, at: [X, ya + 5] },
+      { name: 'a2', def: AND, at: [X, ya + 10] },
+      { name: 'nf1', def: NOT, at: [X + 6, ya + 16] },
+      { name: 'is101', def: andN(3), at: [X + 11, ya + 14] },
+      { name: 'shR', def: OR, at: [X + 18, ya + 15] },
+      { name: 'alt1', def: andN(3), at: [X + 25, ya + 13] },
+      { name: 'alt', def: ALT, at: [X + 32, ya + 17 - altH / 2] },
+      { name: 'mctl', def: merger([1, 1, 1, 1], 4), at: [X + 40, 2] },
+    ];
+    const altY = ya + 17 - altH / 2 + symbolGeom(ALT).ports[altIn[1]].pos[1];
+    const nets: NetDef[] = [
+      { name: 'f3', ends: ['funct3', 'sf3.in'] }, { name: 'f7', ends: ['funct7', 'sf7.in'] },
+      { name: 'aluOp', ends: ['aluOp', 'a0.a', 'a1.a', 'a2.a', 'alt1.i0'], trunk: X - 2 },
+      { name: 'R', ends: ['R', 'shR.a'] },
+      // the inputs from below run under the gates and up a lane of their own into the OR
+      { name: 'BRANCH', ends: ['BRANCH', `alt.${altIn[1]}`], via: { [`alt.${altIn[1]}`]: [[X + 30, 24], [X + 30, altY]] } },
+      ...subs.map((c, i) => ({ name: c, ends: [c, `alt.${altIn[2 + i]}`], via: { [`alt.${altIn[2 + i]}`]: [[X + 30.5 + 0.5 * i, 31 + 3 * i], [X + 30.5 + 0.5 * i, ya + 17 - altH / 2 + symbolGeom(ALT).ports[altIn[2 + i]].pos[1]]] as [number, number][] } })),
+      { name: 'f3_0', ends: ['sf3.o0', 'a0.b', 'is101.i0'] }, { name: 'f3_1', ends: ['sf3.o1', 'a1.b', 'nf1.a'] }, { name: 'f3_2', ends: ['sf3.o2', 'a2.b', 'is101.i2'] },
+      { name: 'nf3_1', ends: ['nf1.y', 'is101.i1'] }, { name: 'f7b5', ends: ['sf7.o1', 'alt1.i1'] },
+      { name: 'is101', ends: ['is101.y', 'shR.b'] }, { name: 'shR', ends: ['shR.y', 'alt1.i2'] }, { name: 'alt1', ends: ['alt1.y', `alt.${altIn[0]}`] },
+      { name: 'c0', ends: ['a0.y', 'mctl.i0'] }, { name: 'c1', ends: ['a1.y', 'mctl.i1'] }, { name: 'c2', ends: ['a2.y', 'mctl.i2'] }, { name: 'c3', ends: ['alt.y', 'mctl.i3'] },
+      { name: 'aluCtl', ends: ['mctl.out', 'aluCtl'] },
+    ];
+    return define({
+      id: `${key}_alu`, name: 'ALU control decoder', category: 'cpu',
+      summary: 'ctl[2:0] = funct3 for the instructions that use the ALU as such (aluOp), else 000 (an address add); ctl[3] = funct7[5] where it means subtract or arithmetic shift (R-type, or funct3 = 101), forced for a branch.',
+      ports: [bus('funct3', 3, 'in'), bus('funct7', 7, 'in'), bit('aluOp', 'in', 'top'), bit('R', 'in'), bit('BRANCH', 'in'), ...subs.map((c) => bit(c, 'in')), bus('aluCtl', 4, 'out')],
+      symbol: { kind: 'box', label: 'ALU CTL' },
+      netlist: () => ({ pins: { funct3: [0, 1.5], funct7: [0, 11], aluOp: [0, -4], R: [0, 28], BRANCH: [0, 24], ...Object.fromEntries(subs.map((c, i) => [c, [0, 31 + 3 * i]])), aluCtl: [X + 50, 4] }, instances, nets }),
+    });
+  })();
+
+  // ---- the MAC's decode: custom-2 is a MAC instruction only with funct7 = 0 and funct3 < 4 (anything else does nothing, as the golden model): macEn, and racc = funct3 11
+  const MD = mac ? define({
+    id: `${key}_mac`, name: 'MAC decode', category: 'cpu',
+    summary: 'custom-2 is a MAC instruction only with funct7 = 0 and funct3 < 4: macEn lets the accumulator change; racc (funct3 = 011) writes a register.',
+    ports: [bit('MAC', 'in'), bus('funct3', 3, 'in'), bus('funct7', 7, 'in'), bit('macEn', 'out'), bit('macRd', 'out')],
+    symbol: { kind: 'box', label: 'MAC DEC' },
+    netlist: () => ({
+      pins: { MAC: [0, -2], funct3: [0, 1.5], funct7: [0, 11], macEn: [40, 4], macRd: [40, 8] },
+      instances: [
+        { name: 'mf3', def: splitter([1, 1, 1]), at: [4, 0] },
+        { name: 'mf7', def: splitter([1, 1, 1, 1, 1, 1, 1]), at: [4, 8] },
+        { name: 'mor', def: orN(7), at: [14, 8] },
+        { name: 'mbad', def: OR, at: [22, 10] },
+        { name: 'mok', def: NOT, at: [28, 11] },
+        { name: 'mv', def: AND, at: [33, 10] },
+        { name: 'misr', def: AND, at: [33, 16] },
+        { name: 'mrd', def: AND, at: [41, 12] },
+      ],
+      nets: [
+        { name: 'f3', ends: ['funct3', 'mf3.in'] }, { name: 'f7', ends: ['funct7', 'mf7.in'] }, { name: 'MAC', ends: ['MAC', 'mv.a'] },
+        { name: 'f3_0', ends: ['mf3.o0', 'misr.a'] }, { name: 'f3_1', ends: ['mf3.o1', 'misr.b'] }, { name: 'f3_2', ends: ['mf3.o2', 'mbad.b'], via: { 'mbad.b': [[12, 5], [12, 23], [20, 23], [20, 13]] } },
+        { name: 'mbad', ends: ['mor.y', 'mbad.a'] }, { name: 'mnz', ends: ['mbad.y', 'mok.a'] }, { name: 'mok', ends: ['mok.y', 'mv.b'] },
+        { name: 'macEn', ends: ['mv.y', 'mrd.a', 'macEn'] }, { name: 'mis3', ends: ['misr.y', 'mrd.b'] }, { name: 'macRd', ends: ['mrd.y', 'macRd'] },
+        ...Array.from({ length: 7 }, (_, i) => ({ ends: [`mf7.o${i}`, `mor.i${i}`] })),
+      ],
+    }),
+  }) : null;
+
+  // ---- the top: decoder → class lines (a bus) → signals; the ALU decoder and the MAC's beside ------------------------------------
+  const dg = symbolGeom(D), sgg = symbolGeom(SG), adg = symbolGeom(AD);
+  const mcls = merger(ones(classes.length), 2), mg = symbolGeom(mcls);
+  const instances: InstanceDef[] = [
+    { name: 'dec', def: D, at: [4, 0] },
+    { name: 'mcls', def: mcls, at: [dg.w + 10, dg.ports[classes[0][0]].pos[1] - mg.ports.i0.pos[1]] },
+    { name: 'sig', def: SG, at: [dg.w + 24, 0] },
+  ];
+  const adY = Math.max(dg.h, sgg.h) + 6;
+  instances.push({ name: 'aludec', def: AD, at: [dg.w + 24, adY] });
+  const mdY = adY + adg.h + 6;
+  if (MD) instances.push({ name: 'macdec', def: MD, at: [dg.w + 24, mdY] });
+  const nets: NetDef[] = [{ name: 'op', ends: ['op', 'dec.op'] }];
+  classes.forEach(([c], i) => nets.push({
+    name: c, ends: [`dec.${c}`, `mcls.i${i}`, ...(c === 'R' || c === 'BRANCH' || subs.includes(c) ? [`aludec.${c}`] : []), ...(c === 'MAC' ? ['macdec.MAC'] : [])],
+  }));
+  nets.push(
+    { name: 'cls', ends: ['mcls.out', 'sig.cls'] },
+    { name: 'f3', ends: ['funct3', 'aludec.funct3', ...(mac ? ['macdec.funct3'] : [])] },
+    { name: 'f7', ends: ['funct7', 'aludec.funct7', ...(mac ? ['macdec.funct7'] : [])] },
+    { name: 'aluOp', ends: ['sig.aluOp', 'aludec.aluOp'] },
+    { name: 'aluCtl', ends: ['aludec.aluCtl', 'aluCtl'] },
+    ...(mac ? [{ name: 'macRd', ends: ['macdec.macRd', 'sig.macRd'] }, { name: 'macEn', ends: ['macdec.macEn', 'macEn'] }] : []),
+  );
+  for (const o of outs) nets.push({ name: o, ends: [`sig.${o}`, o] });
+  const OX = dg.w + 24 + sgg.w + 12;
+  const pins: Record<string, [number, number]> = { op: [0, dg.ports.op.pos[1]], funct3: [dg.w + 12, adY + adg.ports.funct3.pos[1]], funct7: [dg.w + 14, adY + adg.ports.funct7.pos[1]] };
+  outs.forEach((o, i) => (pins[o] = [OX, sgg.ports[o].pos[1] + (i % 2 ? 0 : 0)]));
+  pins.aluCtl = [OX, adY + adg.ports.aluCtl.pos[1]];
+  if (mac) pins.macEn = [OX, mdY + symbolGeom(MD!).ports.macEn.pos[1]];
   const customRows = custom.map((r) => {
     const res = r.regWrite ? { alu: 'ALU', mem: 'mem', pc4: 'PC+4', imm: 'imm' }[r.result] : '–';
     return `<tr><td>${r.name} (custom-${r.slot})</td><td>${r.regWrite ? 1 : 0}</td><td>${r.fmt}</td><td>${r.srcA === 'pc' ? 'PC' : 'rs1'}</td><td>${r.srcB}</td><td>${r.memWrite ? 1 : 0}</td><td>${res}</td></tr>`;
   }).join('');
   return define({
-    id: `${custom.length ? `control_cx${rowsKey(custom)}` : 'control'}${mac ? '_mac' : ''}`,
+    id: key,
     name: custom.length || mac ? `Control unit (+ ${[...custom.map((r) => r.name), ...(mac ? ['MAC'] : [])].join(', ')})` : 'Control unit', category: 'cpu',
     summary: `Turns the instruction's opcode and function fields into the switch settings for the datapath: which mux inputs to pick, whether to write a register or memory, which ALU operation.${custom.length ? ` With ${custom.map((r) => r.name).join(', ')}: one more opcode class each, ORed into the signals its row asserts.` : ''}${mac ? ' With the MAC: custom-2 is one more class; racc writes a register and takes the result mux\'s fifth input, and macEn lets mac, mac2 and clracc change the accumulator.' : ''}`,
     ports: [
@@ -394,7 +467,7 @@ function buildControl(custom: readonly CustomRow[], mac = false): ComponentDef {
       bit('jalr', 'out'), bus('aluCtl', 4, 'out'), ...(mac ? [bit('macEn', 'out')] : []),
     ],
     symbol: { kind: 'box', label: 'CONTROL' },
-    netlist: () => ({ pins, instances, nets: merged }),
+    netlist: () => ({ pins, instances, nets }),
     notes: `<table><tr><th>class</th><th>RegW</th><th>ImmSrc</th><th>SrcA</th><th>SrcB</th><th>MemW</th><th>Result</th></tr>
       <tr><td>R</td><td>1</td><td>–</td><td>rs1</td><td>rs2</td><td>0</td><td>ALU</td></tr>
       <tr><td>I</td><td>1</td><td>I</td><td>rs1</td><td>imm</td><td>0</td><td>ALU</td></tr>

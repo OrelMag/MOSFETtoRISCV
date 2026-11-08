@@ -147,7 +147,10 @@ export function instrMarks(def: ComponentDef, word: number, focus: FieldKey | nu
     const alu = klass === 'R' || klass === 'I';
     if (want('funct3')) for (const n of ['f3', 'f3_0', 'f3_1', 'f3_2']) mark(named(n), cls('fn', alu));
     if (want('funct7')) for (const n of ['f7', 'f7b5']) mark(named(n), cls('fn', alu && has('funct7') !== undefined));
-    return { nets, units: onNets(), note: klass ? undefined : 'Not one of the nine base classes: every class output stays 0.' };
+    // the signals block takes the class lines as a bus: the unit it lights is the block, not a wire's end
+    const units = onNets();
+    if (klass && !units.includes('sig')) units.push('sig');
+    return { nets, units, note: klass ? undefined : 'Not one of the nine base classes: every class output stays 0.' };
   }
   if (def.id === 'opdec') {
     if (!want('opcode')) return { nets, units: [] };

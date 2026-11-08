@@ -168,7 +168,9 @@ const ctrlPorts = (): PortDef[] => [
  * Each control output is the OR of the states that assert it; each next-state bit is the OR of the
  * transitions (state AND opcode class) whose target has that bit set.
  */
-export const MC_FSM: ComponentDef = (() => {
+// The drawing is laid out (a small search for the fewest crossings) only when it is first drawn: every chapter page
+// registers the library, and this ran at import (~20 ms of a cold load's first task).
+function mcFsmLayout(): Netlist {
   const REG = register(4), DEC = decoder(4), OPD = OPCODE_DECODER;
   const rg = symbolGeom(REG), dg = symbolGeom(DEC), og = symbolGeom(OPD);
   const instances: InstanceDef[] = [];
@@ -346,15 +348,17 @@ export const MC_FSM: ComponentDef = (() => {
   const laneOf = xs();
   terms.forEach((n, i) => tpath(n, laneOf[i]).forEach((p, k) => { n.via = { ...n.via, [n.ends[k + 1]]: [[laneOf[i], p[1][1]], [laneOf[i], p[2][1]]] }; }));
   const pinDirs: Netlist['pinDirs'] = { state: 'down' };
-  return define({
-    id: 'mc_fsm', name: 'Hardwired multicycle controller', category: 'cpu',
-    summary: `A finite-state machine: ${MC_STATES.length} states in a 4-bit register, a decoder giving one wire per state, AND gates for the opcode-dependent transitions, and OR gates for the next state and for every control signal.`,
-    ports: ctrlPorts(),
-    symbol: { kind: 'box', label: 'FSM CONTROL' },
-    netlist: () => ({ pins, pinDirs, instances, nets }),
-    hdl: { verilog: fsmVerilog() },
-  });
-})();
+  return { pins, pinDirs, instances, nets };
+}
+let mcFsmDrawn: Netlist | undefined;
+export const MC_FSM: ComponentDef = define({
+  id: 'mc_fsm', name: 'Hardwired multicycle controller', category: 'cpu',
+  summary: `A finite-state machine: ${MC_STATES.length} states in a 4-bit register, a decoder giving one wire per state, AND gates for the opcode-dependent transitions, and OR gates for the next state and for every control signal.`,
+  ports: ctrlPorts(),
+  symbol: { kind: 'box', label: 'FSM CONTROL' },
+  netlist: () => (mcFsmDrawn ??= mcFsmLayout()),
+  hdl: { verilog: fsmVerilog() },
+});
 
 // ---- microprogrammed controller ------------------------------------------------------------------------
 
