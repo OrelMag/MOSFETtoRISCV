@@ -193,6 +193,8 @@ export class SchematicView {
   /** Where each part is drawn now, and its box (grid units); how long the last routing took. */
   private atOf = new Map<string, Vec>();
   private boxes = new Map<string, Rect>();
+  /** Instances a block name may cover (legible.ts): constants (tie cells too) and pure wiring (splitters, mergers, alias boxes). */
+  private quiet = new Set<string>();
   private routeMs = 0;
   private tooltip: HTMLDivElement;
 
@@ -291,6 +293,7 @@ export class SchematicView {
     this.insts.clear();
     this.atOf.clear();
     this.boxes.clear();
+    this.quiet.clear();
     if (!base) return;
     let lay = this.arrange ? layoutOf(ctx.def.id) : undefined;
     if (this.arrange && this.preview) {
@@ -426,6 +429,7 @@ export class SchematicView {
       });
       this.atOf.set(inst.name, at);
       this.boxes.set(inst.name, { x: at[0], y: at[1], w: geo.w, h: geo.h });
+      if (isConstantDef(inst.def) || inst.def.prim === 'alias') this.quiet.add(inst.name);
       g.append(s('rect', { class: 'hit', x: -0.4, y: -0.4, width: geo.w + 0.8, height: geo.h + 0.8, rx: 0.6 }));
       g.append(drawSymbol(inst.def, inst.flip, inst.rot));
       const nameAt = instNameAt(inst.def, inst.flip, inst.rot);
@@ -511,7 +515,7 @@ export class SchematicView {
     this.bbox = { x: x0 - m, y: y0 - m - 1, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m + 1 };
     this.legible.setNames(names);
     this.legible.setWires(nets.flatMap((n) => n.paths.flatMap((p) => p.slice(1).map((q, i): Seg => [p[i][0], p[i][1], q[0], q[1]]))));
-    this.legible.setTags(tagEls, [...this.boxes.values()]);
+    this.legible.setTags(tagEls, [...this.boxes.values()], [...this.boxes].filter(([n]) => !this.quiet.has(n)).map(([, b]) => b));
     if (!keepView) this.fit();
     else this.cam.apply();
     this.drawProbes();

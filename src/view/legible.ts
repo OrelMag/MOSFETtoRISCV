@@ -91,13 +91,6 @@ export function fitLayout(b: NameBox, scale: number, text = textOf(b)): NameLayo
   return best && best.px >= NAME_MIN_PX ? best : null;
 }
 
-/** `text` cut short with an ellipsis (at least two letters kept) at NAME_MIN_PX on one line inside the block, or null. */
-export function truncLayout(b: NameBox, scale: number, text = textOf(b)): NameLayout | null {
-  const n = Math.floor(((b.rot ? b.h : b.w) * scale - NAME_PAD) / (NAME_MIN_PX * NAME_EM));
-  const across = (b.rot ? b.w : b.h) * scale - 2;
-  if (b.rot || n < 3 || n >= text.length || across < NAME_MIN_PX * NAME_LINE) return null;
-  return { px: NAME_MIN_PX, lines: [text.slice(0, n - 1).trimEnd() + '…'] };
-}
 
 /** Largest size (px) of a name drawn wider than its block: quiet, never louder than the names that fit. */
 export const NAME_OVER_MAX_PX = 8;
@@ -146,7 +139,7 @@ export function planNames(boxes: NameBox[], scale: number, minBlockPx = 10): boo
  *     kept before it, largest block first) keep exactly that wherever it covers no other block (wires do not count).
  *  2. The rest, those first: the full text inside the block (largest size), a size between that and NAME_PX over the block clear
  *     of everything (at most LARGE_SPILL times its width), the full text barely wider than it (NAME_SPILL_PX), the abbreviation
- *     (ABBREVIATIONS) inside it, wider than it at a quiet size (at most NAME_OVER_MAX_PX), then cut short with an ellipsis; a quiet
+ *     (ABBREVIATIONS) inside it, wider than it at a quiet size (at most NAME_OVER_MAX_PX), else no name (never cut short: an ellipsis would be NAME_MIN_PX, too small to read); a quiet
  *     spill over a routed wire gives way to the abbreviation inside. A name of pass 1's kind that finds none of these keeps its
  *     NAME_PX layout over the block rather than vanish.
  *  3. Constant values, so a name wins every clash with one; a bare zero run is not drawn.
@@ -222,11 +215,6 @@ export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, bl
     const c = classic(b);
     let pick: NameLayout | null = (ok(c) ? c : null) ?? (fits[0] && fits[0].px > overMax ? fits[0] : null) ?? large() ?? fits[0]
       ?? (fits[1] ? over(full, true, true) : null) ?? fits[1] ?? over(full, true) ?? over(full, false) ?? (texts.length > 1 ? over(short, false) : null);
-    for (const t of texts) {
-      if (pick) break;
-      const tr = truncLayout(b, scale, t);
-      if (tr && free(b, tr)) pick = tr;
-    }
     // a name the old renderer drew is never lost: over the block, as it was
     if (!pick && wasDrawn.has(i) && free(b, c)) pick = c;
     reserved.delete(i);
@@ -296,6 +284,8 @@ export class Legibility {
   private lastPlan = -1e9;
   private tags: TagEl[] = [];
   private tagBlocks: R[] = [];
+  /** The blocks a name must not cover: every block but constants and pure wiring (a name wins over those). */
+  private nameBlocks: R[] = [];
   private tagK: (number | null)[] = [];
   private nameRects: R[] = [];
   private wires: Seg[] = [];
@@ -320,9 +310,10 @@ export class Legibility {
   setWires(wires: Seg[]): void { this.wires = wires; }
 
   /** The net tags that may be enlarged (legible.ts planTags), and the blocks they must not cover. */
-  setTags(tags: TagEl[], blocks: R[]): void {
+  setTags(tags: TagEl[], blocks: R[], nameBlocks: R[] = blocks): void {
     this.tags = tags;
     this.tagBlocks = blocks;
+    this.nameBlocks = nameBlocks;
     this.tagK = tags.map(() => null);
     this.tagScale = 0;
   }
@@ -399,7 +390,7 @@ export class Legibility {
     clearTimeout(this.timer);
     this.lastPlan = performance.now();
     this.planScale = this.scale;
-    const next = planLayouts(this.names.map((n) => n.box), this.scale, 10, this.tagBlocks.length ? this.tagBlocks : undefined, this.wires);
+    const next = planLayouts(this.names.map((n) => n.box), this.scale, 10, this.tagBlocks.length ? this.nameBlocks : undefined, this.wires);
     this.shown = [];
     next.forEach((l, i) => {
       const v = l !== null, t = this.names[i].t;
