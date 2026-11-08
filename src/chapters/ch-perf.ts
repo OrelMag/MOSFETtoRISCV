@@ -109,8 +109,8 @@ export const chFastAdders: Chapter = {
         c<sub>i+1</sub> = g<sub>i</sub> + p<sub>i</sub>c<sub>i</sub>, and unrolling gives every carry as a two-level
         sum of products of g, p and c<sub>0</sub>:</p>
         <p style="font-family:var(--font-mono);font-size:13px">c₄ = g₃ + p₃g₂ + p₃p₂g₁ + p₃p₂p₁g₀ + p₃p₂p₁p₀c₀</p>
-        <p>"Two-level" assumes wide gates: c<sub>k</sub> needs a <span data-show="c4">(k+1)-input OR</span> of
-        <span data-show="t4_0 t4_1 t4_2 t4_3">up-to-(k+1)-input ANDs</span>. In CMOS
+        <p>"Two-level" assumes wide gates: c<sub>k</sub> needs a <span data-show="lcu.k4.or">(k+1)-input OR</span> of
+        <span data-show="lcu.k4.t0 lcu.k4.t1 lcu.k4.t2 lcu.k4.t3">up-to-(k+1)-input ANDs</span>. In CMOS
         those are complex gates (NAND4, AOI). Here we only have 2-input NANDs, so every wide gate becomes a tree, and
         the Info tab shows the uncomfortable result: <strong>this 4-bit CLA is deeper than the 4-bit ripple adder</strong>
         (15 vs 12 NAND delays) and three times larger. Lookahead pays off with wide gates or at larger widths, built

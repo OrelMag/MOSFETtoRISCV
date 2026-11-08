@@ -86,8 +86,15 @@ describe('fast adders and the control unit', () => {
     expect(await truthHash(c, name === 'control')).toBe(fx.truth[name]);
   }, 300_000);
 
+  // the lookahead's and the control unit's blocks are levels of their own: every one of them, at any depth
+  const blocksOf = (top: ComponentDef, out = new Map<string, ComponentDef>()) => {
+    if (out.has(top.id)) return out;
+    out.set(top.id, top);
+    for (const i of netlistOf(top)?.instances ?? []) if (/^(cla_|control)/.test(i.def.id)) blocksOf(i.def, out);
+    return out;
+  };
   const levels: [string, () => ComponentDef][] = [
-    ['CLA4', () => CLA4], ['control', () => control()], ['control + MAC', () => control([], true)], ['control + custom rows', () => control(CUSTOM_PRESETS.slice(0, 2))],
+    ...[CLA4, control(), control([], true), control(CUSTOM_PRESETS.slice(0, 2)), control(CUSTOM_PRESETS.slice(0, 3))].flatMap((t) => [...blocksOf(t).values()].map((d): [string, () => ComponentDef] => [d.id, () => d])),
     ...[4, 8, 16, 32, 64].flatMap((n): [string, () => ComponentDef][] => [[`ks${n}`, () => koggeStone(n)], [`bk${n}`, () => brentKung(n)], [`sk${n}`, () => sklansky(n)]]),
   ];
   it.each(levels)('%s: no wire runs through a part', (_, make) => {
