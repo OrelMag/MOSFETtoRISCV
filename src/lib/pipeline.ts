@@ -643,7 +643,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   const FD = REG_FD(pred), DE = REG_DE(bal, pred), EM = REG_EM(), MW = REG_MW();
   const HZ = hazardUnit(bal);
   // The plain pipeline is drawn with wires, its bands readable as stages (see the wired block below); variants keep their pointers.
-  const wired = !pred && !bal && !dcache && !m && !o.ports && adder === 'rca';
+  const wired = !pred && !bal && !dcache && !m && !o.ports;
   const g = (d: ComponentDef) => symbolGeom(d);
   const at = new Map<string, [number, number]>();
   const defs = new Map<string, ComponentDef>();
@@ -700,7 +700,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   }
   // the tie for the target adder's carry-in: above it when cin is on top (ripple carry), below-left otherwise
   const cinTop = g(ADD).ports.cin.exit === 'up';
-  place('gT', TIE0, wired ? [P('target', 'cin')[0] - 3, P('target', 'cin')[1] - 3] : cinTop ? [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 4] : [P('target', 'cin')[0] - 10, P('target', 'cin')[1] + 3]);
+  place('gT', TIE0, wired ? (cinTop ? [P('target', 'cin')[0] - 3, P('target', 'cin')[1] - 3] : [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 1]) : cinTop ? [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 4] : [P('target', 'cin')[0] - 10, P('target', 'cin')[1] + 3]);
   place('gJ', TIE0, wired ? [P('clr0', 'zero')[0] - 5, P('clr0', 'zero')[1] + 1] : [P('clr0', 'zero')[0] - 5, P('clr0', 'zero')[1] + 1]);
   // M
   if (wired) place('dm', DM, [xEM + 18, 31]); else alignY('dm', DM, xEM + 12, 'addr', row('aluResult'));
@@ -792,7 +792,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
       { name: 'Ovf', ends: ['alu.ovf', 'npc.ovf'], tags: true } as NetDef,
       { name: 'Carry', ends: ['alu.carry', 'npc.carry'], tags: true } as NetDef,
     ]),
-    { name: 'gT', ends: ['gT.y', 'target.cin'], via: { 'target.cin': cinTop ? [[P('target', 'cin')[0], P('gT', 'y')[1]]] : [[P('target', 'cin')[0] - 2, P('gT', 'y')[1]], [P('target', 'cin')[0] - 2, P('target', 'cin')[1]]] } },
+    { name: 'gT', ends: ['gT.y', 'target.cin'], via: { 'target.cin': cinTop ? [[P('target', 'cin')[0], P('gT', 'y')[1]]] : wired ? [] : [[P('target', 'cin')[0] - 2, P('gT', 'y')[1]], [P('target', 'cin')[0] - 2, P('target', 'cin')[1]]] } },
     { name: 'gJ', ends: ['gJ.y', 'clr0.zero'], via: { 'clr0.zero': [[P('clr0', 'zero')[0], P('gJ', 'y')[1]]] } },
     // M
     { name: 'validM', ends: ['EM.validM', 'MW.validM'] },
