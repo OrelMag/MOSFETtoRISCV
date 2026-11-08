@@ -40,9 +40,12 @@ export const ORBIT_ARIA = 'drag to orbit, right-drag or shift-drag to pan, wheel
 
 const SPIN = 0.35; // radians per second while turning by itself
 
-/** The element full screen takes: the model's panel, else its widget, else the stage. */
-const rootOf = (stage: HTMLElement): HTMLElement =>
-  stage.closest<HTMLElement>('.panel') ?? stage.closest<HTMLElement>('.m3d, .relay3d') ?? stage;
+/** The element full screen takes: the model's panel inside its widget (never a panel of the page around it), else the
+ *  widget (the machine hall's controls sit in it), else the stage. */
+const rootOf = (stage: HTMLElement): HTMLElement => {
+  const widget = stage.closest<HTMLElement>('.m3d, .relay3d, .hall3d'), panel = stage.closest<HTMLElement>('.panel');
+  return panel && widget?.contains(panel) ? panel : widget ?? stage;
+};
 
 const fsApi = () => typeof document.documentElement.requestFullscreen === 'function' && document.fullscreenEnabled !== false;
 
@@ -73,11 +76,16 @@ export function modelFrame(o: ModelFrameOptions): ModelFrame {
     e.preventDefault(); e.stopPropagation(); // not also the page's Esc (up a level, close a menu)
     leave();
   };
+  // The overlay is fixed over the viewport, but an ancestor with a z-index (the chapter's widget host) caps it below the
+  // top bar: raised while it is open, then given back.
+  let raised: [HTMLElement, string][] = [];
+  const unraise = () => { for (const [e, z] of raised) e.style.zIndex = z; raised = []; };
   const settle = () => {
     if (!root) return;
     root.classList.remove('m3-full');
     document.documentElement.classList.remove('m3-lock');
     document.removeEventListener('keydown', onEsc, true);
+    unraise();
     root = null; overlay = false;
     showFull(false);
     full.focus({ preventScroll: true });
@@ -87,6 +95,9 @@ export function modelFrame(o: ModelFrameOptions): ModelFrame {
     overlay = true;
     document.documentElement.classList.add('m3-lock');
     document.addEventListener('keydown', onEsc, true);
+    for (let e = root?.parentElement ?? null; e && e !== document.body; e = e.parentElement) {
+      if (getComputedStyle(e).zIndex !== 'auto') { raised.push([e, e.style.zIndex]); e.style.zIndex = '2147483000'; }
+    }
   };
   const enter = () => {
     root = o.root?.() ?? rootOf(o.stage);
@@ -185,6 +196,7 @@ export function modelFrame(o: ModelFrameOptions): ModelFrame {
         root.classList.remove('m3-full');
         document.documentElement.classList.remove('m3-lock');
         document.removeEventListener('keydown', onEsc, true);
+        unraise();
         root = null;
       }
     },

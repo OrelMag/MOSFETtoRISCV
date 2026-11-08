@@ -48,7 +48,7 @@ html.m3-lock, html.m3-lock body { overflow: hidden; }
 .m3-full > .m3-sub { display: none; }
 .m3-full .r3 { flex: 1 1 auto; min-height: 0; }
 .m3-full .r3-stage.r3-stage { aspect-ratio: auto; max-height: none; height: 64dvh; min-height: 220px; }
-.m3-full .wt-stage { aspect-ratio: auto !important; flex: 1 1 auto; min-height: 220px; }
+.m3-full .wt-stage { aspect-ratio: auto !important; max-height: none; flex: 1 1 auto; min-height: 220px; }
 @container (min-width: 760px) {
   /* doubled classes: over a model that keeps one column on the page (the CRT: .m3d .crt3d .r3) */
   .m3-full.m3-full .r3.r3 { grid-template-columns: minmax(0, 1fr) minmax(280px, 380px); grid-template-rows: minmax(0, 1fr); align-items: stretch; }
@@ -56,3 +56,5 @@ html.m3-lock, html.m3-lock body { overflow: hidden; }
   .m3-full .r3-stage.r3-stage { flex: 1 1 auto; height: auto; min-height: 280px; }
   .m3-full .r3-side { min-height: 0; overflow: auto; }
 }
+/* the machine hall: controls, stage and readouts in one column, no .r3 grid */
+.m3-full.hall3d .r3-stage.r3-stage { flex: none; height: 70dvh; min-height: 280px; }
