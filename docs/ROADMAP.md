@@ -1269,8 +1269,8 @@ switch (48–49), e NIC + stack (50), f router + TCP + path (51–53), g campaig
 - ✅ c: chapters 45–47 (modem, serial, errors): comm/ (modem, linecode, serdes, crc, framing, arq, fec), lib/modem.ts, lib/serdes.ts, lib/crc.ts, phys/line.ts equalization and PAM4. A line part opens onto its model's panel (`ComponentDef.modelPanel`, widgets/modelleaf.ts; decision 3). The 8b/10b encoder equals a vendor's printed table on all 268 symbols at both disparities (Xilinx UG196, tests/fixtures/8b10b-ug196.txt) and SATA 1.0's on the 258 it prints; IEEE 802.3's own Clause 36 tables are behind a login and were not read.
 - ✅ d: chapters 48–49: comm/ethframe.ts (frames and the byte stream), comm/pcap.ts, comm/mac.ts, comm/ethswitch.ts, lib/ethernet.ts, lib/ethstation.ts, lib/ethswitch.ts. The address table hashed in RAM is 1.5–1.66 × a CAM key store in our NAND accounting (a small RAM is flip-flops here), so decision 11's cost reason does not hold; the chapter says so. Captures read back by our own reader only: the tshark check of decision 5 is open.
 - ✅ e: chapter 50: comm/nic.ts + lib/nic.ts (NIC: registers, descriptor rings, DMA as a third bus master, MACs inside), bus/model.ts NicDevice, busComputer({ nic }) at 0x7000_0000, riscv/nicprograms.ts, comm/stack/ (eth, arp, ip, icmp, udp in the Python subset, now with load8 / store8 / load32 / store32), comm/netframes.ts, lib/lan.ts (two computers and a switch on the cycle engine), widgets/net.ts, ch-comm-net.ts. Ping runs on the gates (about 28 000 clocks to the first reply, 14 689 for the round trip); long runs on FastISS with a gate window and the tshark check of decision 5 are open.
-- ⏳ g (codex part, feat/comms-g-codex): 18 entries for chapters 39–47 (shannon, reflection, cdc, asyncfifo, uart, spi, i2c, qam, ofdm, linecode, cdr, eye, equalization, crc, arq, viterbi, reedsolomon, interleave) with figures from the chapters' widgets and two checks each; Ethernet / switch / NIC / IP / TCP / router entries follow with chapters 48–53; Act 12's levels list the ids in `codex` and drop them from COMM_AWAITING_LEVELS.
-- ⏳ g (sandbox parts, feat/comms-g-sandbox2): editor/commparts.ts rows for the NIC (`nic_b`, both bus links packed), the MACs (`eth_mac_rx` / `eth_mac_tx`), the switch (`ethswitch_<cellK>[_<cells>]<v|f><c|s>_<tableK>_<tickLog2>`, options in the id, changed in the properties) and the SPI controller (`axi_spi_b`, lib/spi.ts axiSpi: +0 DATA, +4 STATUS, +8 CTRL, on the cycle engine against comm/spi.ts SpiTarget; against the gate-level SPI memory the pair runs on GateSim, the memory being clocked by SCLK) and the SPI memory; all resolve by id (lib/resolve.ts patterns, built on first use) and are real gates in every export. Property sections read live state off named nets (commparts.ts nicView, switchTable). Examples ▸ Two computers on a switch (editor/examplenet.ts): raw frames, 3 pings, learned 2 / flooded 1; ~4 400 clocks/s in vitest, ~30 000 clocks for the run.
+- ✅ g (codex part, feat/comms-g-codex; landed 2026-11-05 with the extension, src/campaign/codexcomm*.ts): 18 entries for chapters 39–47 (shannon, reflection, cdc, asyncfifo, uart, spi, i2c, qam, ofdm, linecode, cdr, eye, equalization, crc, arq, viterbi, reedsolomon, interleave) with figures from the chapters' widgets and two checks each; Ethernet / switch / NIC / IP / TCP / router entries follow with chapters 48–53; Act 12's levels list the ids in `codex` and drop them from COMM_AWAITING_LEVELS.
+- ✅ g (sandbox parts, feat/comms-g-sandbox2; src/editor/commparts.ts): editor/commparts.ts rows for the NIC (`nic_b`, both bus links packed), the MACs (`eth_mac_rx` / `eth_mac_tx`), the switch (`ethswitch_<cellK>[_<cells>]<v|f><c|s>_<tableK>_<tickLog2>`, options in the id, changed in the properties) and the SPI controller (`axi_spi_b`, lib/spi.ts axiSpi: +0 DATA, +4 STATUS, +8 CTRL, on the cycle engine against comm/spi.ts SpiTarget; against the gate-level SPI memory the pair runs on GateSim, the memory being clocked by SCLK) and the SPI memory; all resolve by id (lib/resolve.ts patterns, built on first use) and are real gates in every export. Property sections read live state off named nets (commparts.ts nicView, switchTable). Examples ▸ Two computers on a switch (editor/examplenet.ts): raw frames, 3 pings, learned 2 / flooded 1; ~4 400 clocks/s in vitest, ~30 000 clocks for the run.
 - ✅ f (51): chapter 51 A router: net/ipv4.ts, net/trie.ts (longest-prefix match as a binary trie in RAM), net/fastpath.ts (golden model of the fast path), net/routing.ts (distance vector, link state on an invented network), lib/router.ts (the fast path in gates, compared every output every clock), widgets/router.ts. 
 - ✅ f (52): chapter 52 TCP: net/tcp.ts (the rules), comm/stack/tcp.ts (the same in the Python subset, compared frame by frame and on every state variable; 12 rules broken on purpose, all caught), net/tcpsim.ts (the explorers), net/lanbench.ts + net/tcpbench.ts (two computers on the golden model; chapter 50's ping within 5 clocks of the gates; tcpcosts.json), net/gatewindow.ts (one computer in gates mid-transfer, in lock step), widgets/tcp.ts. Decision 9's long transfers run on the golden model with the exact NIC and MACs, about 200 000 clocks/s, not on FastISS: fast enough, and the same timing as the gates' to 0.03 %. Named as left out: one connection, no out-of-order queue, no delayed ACKs, MSS only.
 - ✅ f (53) The internet path: net/internet.ts (an invented map of 8 networks, 16 routers: documentation AS numbers, private addresses, .example; link state inside, tables as chapter 51's trie and next-hop bytes, a frame forwarded byte by byte, traceroute with real ICMP), net/internetbgp.ts (path vector in rounds, Gao-Rexford policy, a false /24), net/internetdns.ts (RFC 1035 bytes, an iterative resolver with TTLs), net/internetdelay.ts (light, bits, M/M/1 and a Lindley queue, the fast path's cycles, a page's phases), widgets/internet.ts, ch-comm-path.ts. One fast path on the stage takes each router's table through its cfg port and the frame through its gates, hop by hop; tests/net-internet-gates.test.ts holds every hop equal to the fast path's model at every output and the network model's frame byte for byte. No MAC or line between the hops on gates (the bytes are the same, those delays come from the model); the page's transfer is counted in round trips, not run on chapter 52's TCP.
@@ -1279,6 +1279,66 @@ switch (48–49), e NIC + stack (50), f router + TCP + path (51–53), g campaig
 - ✅ Extension, `radio` Radio: phys/radio.ts (antennas and arrays, Friis, link budget, a mixer's spectrum, a software radio, multipath, Clarke's fading, MRC), models only, tested against closed forms and simulation; widgets/radio.ts.
 - ✅ Extension, `wifi` Wi-Fi: comm/wifi.ts + lib/wifi.ts (DCF at 1 clock = 1 µs: DIFS, backoff, SIFS, ACK, RTS / CTS, NAV, every output every clock), an air model of who hears whom, Bianchi's closed form as the oracle; rates, airtime and MIMO are models; the traces are modelled and the chapter says so.
 - ✅ Extension, `cellular` Cellular: phys/cellular.ts (hexagonal reuse on a real grid, the resource grid and numerology, schedulers, handover, zero-forcing, mmWave budget), models only, against closed forms and simulation; the chapter says plainly that nothing is measured on a real network.
+### Phase 22 — Journey and campaign track: Signal processing ✅ (2026-11-05 to 2026-11-08: 15 chapters, Act 13, 3 capstones, codex; live)
+
+Approved 2026-11-05 (mockup: E:/mockups/dsp/dsp-mockup.html, ten decisions; the MAC and DSP-core drawing: E:/mockups/dsp/phase-d-mockup.html, nine decisions). Level "Signal processing", chapters 67–81 after the
+expert's bench, nothing moved from Communication. Numbers follow `chapters/order.ts`; the counts in the README are computed from the code
+(scripts/readme-counts.ts, tests/readme-counts.test.ts). Ladder (src/chapters/dspladder.ts): 67 Numbers that fit · 68 The z-plane · 69 Measuring a
+spectrum · 70 FIR design · 71 IIR and stability · 72 Changing the rate · 73 Turning by shifting (CORDIC) · 74 A MAC on the RV32 · 75 A DSP core ·
+76 Converters · 77 Filters that learn · 78 Speech · 79 Music · 80 Pictures · 81 A software radio.
+
+- ✅ src/dsp/ (reference models), the audio player, scripts/dsp/oracle.py with the vectors in tests/dsp/vectors/ (scipy / numpy at pinned versions;
+  `.github/workflows/dsp-oracle.yml` regenerates and compares), docs/DSP-SOURCES.md (what each chapter's facts rest on)
+- ✅ Gates and CPUs: a MAC unit on the RV32 as custom-2 instructions (golden model, assembler and lock-step ISS; Spike cannot check custom-2, so the
+  lock-step is mutation-tested), a DSP core (DSP24: two memories, address generators, a loop with no branch; sandbox examples and a drawer),
+  sigma-delta and CIC in gates, the adaptive tap in gates, measured costs replacing estimates (src/bench/dspcore.json)
+- ✅ Applications on models labelled as such: speech (μ-law after G.711, ADPCM, a 2.4 kb/s vocoder), music (an MDCT codec against scipy's DCT-IV, a
+  simplified masking model), pictures (DCT, quantization, JPEG's tables), the software radio (four stations in one band, mixer, decimating chain,
+  discriminator)
+- ✅ Campaign Act 13 "Signals", eight optional levels: sp_sat, sp_mac, sp_circ, sp_biquad, sp_goertzel, sp_cic, sp_cordic, sp_sd (benches with mutants,
+  verdicts across seeds); codex entries for every chapter; My path gets a third capstone group
+- ✅ Capstones (learn/capstones.ts `DSP_CAPSTONES`, 3): `cap_mask` a filter to a mask judged on its gates, `cap_echo` an echo canceller that learns its
+  path, `cap_tune` a receive chain built from the radio's blocks that must decode a message on held-back bands
+- Landed in batch 2 (67, 68, 72, 73; 4ffc1f84), 3 (76, 77; f039c275), 4 (69–71, 80; 064e7151), 7 (radio, DSP core, cap_mask, adaptive voice, MAC;
+  1a19583b) and 8 (cap_tune, cap_echo, sp_mac, sp_circ, MAC headroom fix; 68a2426e); the codex and Act 13 levels came with batches 6 and 7, the rest with
+  the audit program below
+
+### Audit, circuit and UX program (2026-11-07 / 2026-11-08) ✅
+
+Fresh readers, none the author of what they read, each with a findings file under E:/audit/; every finding re-checked before a fix. Landed as batches 9–15 on
+main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
+- ✅ Content and continuity audit, Communication (chapters 53–66 in four groups, about 108 findings; among them 5 wrong statements in the router, TCP,
+  queues and secret chapters: Hellman 2002, the M4's date, the J brackets in VONVONJLOOKSJ, the TCP widget's cap, "the router has a queue"), then DSP
+  (chapters 67–81, Act 13, capstones, codex): every term introduced before its first use or pointed back to, hand-offs between chapters, builds and
+  back-links, typed numbers recomputed
+- ✅ Circuit eyeballing: the prologue and chapters 1–38 (224 scene roots; relays, tubes, FIFO and stack, clock circuits and BCD adder redrawn),
+  Communication 39–66 (2 367 levels, 202 shots; UART, router on the new src/lib/layered.ts, AES / SHA benches, Reed–Solomon decoder), every Builder level
+  through layered.ts per site (crossings −26 %, 39 sites / 145 levels), generated state machines (Ethernet, PCIe, Wi-Fi, switch) as hierarchy, the RV64
+  top, the warp core, CLA4 and the control unit as sub-blocks
+- ✅ UI/UX review at 390 / 768 / 1280 / 1920, light and dark, mouse / touch / keyboard: the chapter page (focus kept across steps, quiz explanations,
+  goals after the step's title, phone fold, prose width, 'Zoom to readable' for wide scenes, the tour off the goals, step-dot hit areas), the sandbox
+  (keyboard-only building, phone layout, challenge strip, polish), the campaign (map, level screen, codex unlock, My path), the shell and workbench;
+  one digit-grouping rule (U+202F, groupNum) across 62 formatters
+- Left open, from the findings files (listed only where a file says so; where it lives):
+  - FP unit tops (fpadd / fpmul / fpdiv / fpnf, #/c/float/3, 7, 9, 12, 15) stay in Builder columns: they need a hierarchy restructure into sub-blocks
+    (swap, align, add, sign and cancel, specials), which renames instances the float tours point at; needs a go and a mockup. E:/audit/smith/findings.md (1a)
+  - FPU CPU (#/c/float/17–21), pipeline variants and out-of-order units (#/c/pipeline/7, pipepay, ooo/5–7, 10), microcode controller top, write-back
+    cache top, trap vector target, bus tops (#/c/bus/0–6): ranked ★★ in E:/audit/smith/findings.md (2a) and not in its fixed table
+  - Relay full adder (#/c/relays/4/fa0): pointer boxes collide under relay A, needs a two-row tagAt. rv16_mux16 needs a bit-sliced redraw. srt4div8 was not
+    switched to layered.ts. E:/audit/smith/findings.md
+  - Warp core, lsu variants (chapter 32): net nMo runs through a part, logged and not fixed. E:/audit/rock/findings.md (phase 2)
+  - Communication circuits left on purpose: CRC-32 next-state crossings (inherent), I²C target t0 (layered's 14-unit channel cap; layered.ts option
+    requests go to the shell owner), the computer-with-NIC bus top. E:/audit/swan/2b/findings.md
+  - Chapters: secret/7's computing-history digression stays (a story-flow cost, not wrong); datacentre has no closing bridge into the bench, and its "factor
+    1.4" swing claim is kept as written (not derivable without a new computation); the recap `practise` list is empty for cellular, glass, pcie, radio, wifi
+    and secret because it takes campaign nodes only and capstones (cap_fault, cap_link, cap_tune) are not nodes; bus (38) ends with no pointer onward and
+    sdr (81) does not name the appendices. E:/audit/swan/g2.md, g3.md, g4.md, E:/audit/rock/cont-findings.md
+  - Shell: first-load trim (no long task over 200 ms on a cold chapter step) stands at 132–253 ms locally; parse / compile is 160–190 ms and the index,
+    nodes, pad, ethswitch and mosphys chunks cost 30–50 ms each at module load. E:/audit/smith/phase3-notes.md
+  - Rock's UX surveys (E:/audit/rock/ux/*-findings.md) list ★ items whose fix status the files do not record (the level screen's three overlapping help
+    routes and the dead-end card for non-build levels, the campaign map's keyboard order, the workbench Statistics tab measuring 2 173 components live):
+    check before assuming they are open
+
 ## Open questions for the author
 - Target audience depth: high-school / first-year university / practitioner refresher?
 - ~~Should challenges *gate* progress?~~ Decided: the campaign gates softly (skip and Unlock all), the chapters stay open.
