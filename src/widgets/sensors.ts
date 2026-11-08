@@ -174,41 +174,67 @@ export function pixelWidget(): Widget {
 // 3. The pixel, switch by switch (a scene on PIXEL_4T)
 
 export const pixelApi = new WeakMap<Stage, { log: () => string[]; bright: () => boolean; demo: () => void }>();
-type Lvl = { level(net: number): number };
 const netIdx = (name: string) => PIXEL_4T.netlist!().nets.findIndex((n) => n.name === name);
 
+/** What the pixel panel needs of a simulation (a SwitchSim on PIXEL_4T). */
+export interface PixelSim {
+  setInput(port: string, v: number): void;
+  settle(): void;
+  getBits(nets: number[]): number[];
+  level?(net: number): number;
+  design: { root: { nets?: number[][]; ports: Record<string, number[]> } };
+}
+/** A level as the panel prints it: a share of the supply, or X while the node holds no defined charge (before the first reset). */
+export const levelText = (v: number | null | undefined): string => (v === null || v === undefined || !Number.isFinite(v) ? 'X' : `${Math.round(v * 100)} %`);
+
+/** The pixel panel's actions and readout, DOM-free (tests/sensor-panels.test.ts drives it on a SwitchSim in every state). */
+export class PixelBench {
+  log: string[] = [];
+  sawBright = false;
+  constructor(private sim: () => PixelSim | null | undefined, private after: () => void = () => {}) {}
+  private set(k: Record<string, number>): void { const sm = this.sim(); if (!sm) return; for (const [p, v] of Object.entries(k)) sm.setInput(p, v); sm.settle(); this.after(); }
+  private lvl(name: string): number | null {
+    const sm = this.sim(), ids = sm?.design.root.nets?.[netIdx(name)];
+    return sm && typeof sm.level === 'function' && ids ? sm.level(ids[0]) : null;
+  }
+  /** The column as a bit: 0, 1 or X. */
+  col(): string {
+    const sm = this.sim(); if (!sm) return 'X';
+    const v = pack(sm.getBits(sm.design.root.ports.col));
+    return v < 0 ? 'X' : String(v);
+  }
+  status(): { pd: string; fd: string; col: string } { return { pd: levelText(this.lvl('PD')), fd: levelText(this.lvl('FD')), col: this.col() }; }
+  text(): string { const t = this.status(); return `PD ${t.pd}  FD ${t.fd}  column ${t.col}`; }
+  reset(): void { this.set({ rst: 1, tx: 1, light: 0, sel: 0 }); this.set({ rst: 0, tx: 0 }); this.log.push('RST + TX: photodiode emptied, FD at the supply'); }
+  expose(lit: boolean): void { if (lit) { this.set({ light: 1 }); this.set({ light: 0 }); } this.log.push(lit ? 'exposure: light fills the photodiode (PD falls)' : 'exposure in the dark: PD keeps its level'); }
+  read(): void {
+    this.set({ sel: 1, rst: 1 }); this.set({ rst: 0 });
+    const r = this.col();
+    this.set({ tx: 1 }); this.set({ tx: 0 });
+    const v = this.col();
+    this.log.push(`read: SHR column ${r}, SHS column ${v}${r === '1' && v === '0' ? ': a bright pixel' : r === '1' && v === '1' ? ': a dark pixel' : ''}`);
+    if (r === '1' && v === '0') this.sawBright = true;
+    this.set({ sel: 0 });
+  }
+  clear(): void { this.log = []; this.sawBright = false; }
+}
+
 const pixelPanel: ScenePanel = (stage: Stage): Widget => {
-  let log: string[] = [], sawBright = false;
+  const bench = new PixelBench(() => stage.sim as unknown as PixelSim | null, () => stage.refresh());
   const out = h('ol', { class: 'sn-log' }), read = h('div', { class: 'mc-status' });
-  const lvl = (name: string): number | null => {
-    const sim = stage.sim as unknown as Partial<Lvl> & { design: { root: { nets?: number[][] } } };
-    const ids = sim?.design?.root?.nets?.[netIdx(name)];
-    return sim && typeof sim.level === 'function' && ids ? sim.level(ids[0]) : null;
-  };
   const paint = () => {
-    const pd = lvl('PD'), fd = lvl('FD');
-    read.replaceChildren(h('span', null, 'PD ', h('b', null, pd === null || Number.isNaN(pd) ? 'X' : `${Math.round(pd * 100)} %`)), h('span', null, 'FD ', h('b', null, fd === null || Number.isNaN(fd) ? 'X' : `${Math.round(fd * 100)} %`)), h('span', null, 'column ', h('b', null, String(stage.value('col') ?? '–'))));
-    out.replaceChildren(...log.slice(-6).map((t) => h('li', null, t)));
+    const t = bench.status();
+    read.replaceChildren(h('span', null, 'PD ', h('b', null, t.pd)), h('span', null, 'FD ', h('b', null, t.fd)), h('span', null, 'column ', h('b', null, t.col)));
+    out.replaceChildren(...bench.log.slice(-6).map((x) => h('li', null, x)));
   };
-  const set = (k: Record<string, number>) => { for (const [p, v] of Object.entries(k)) stage.sim!.setInput(p, v); stage.sim!.settle(); stage.refresh(); };
-  const doReset = () => { stage.checkpoint(); set({ rst: 1, tx: 1, light: 0, sel: 0 }); set({ rst: 0, tx: 0 }); log.push('RST + TX: photodiode emptied, FD at the supply'); paint(); };
-  const expose = (lit: boolean) => () => { stage.checkpoint(); if (lit) { set({ light: 1 }); set({ light: 0 }); } log.push(lit ? 'exposure: light fills the photodiode (PD falls)' : 'exposure in the dark: PD keeps its level'); paint(); };
-  const readout = () => {
-    stage.checkpoint();
-    set({ sel: 1, rst: 1 }); set({ rst: 0 });
-    const r = stage.value('col');
-    set({ tx: 1 }); set({ tx: 0 });
-    const v = stage.value('col');
-    log.push(`read: SHR column ${r}, SHS column ${v}${r === 1 && v === 0 ? ': a bright pixel' : r === 1 && v === 1 ? ': a dark pixel' : ''}`);
-    if (r === 1 && v === 0) sawBright = true;
-    set({ sel: 0 });
-    paint();
-  };
-  pixelApi.set(stage, { log: () => log, bright: () => sawBright, demo: () => { doReset(); expose(true)(); readout(); } });
-  stage.resetHooks.add(() => { log = []; sawBright = false; paint(); });
+  const act = (f: () => void) => () => { stage.checkpoint(); f(); paint(); };
+  const doReset = act(() => bench.reset()), readout = act(() => bench.read());
+  const expose = (lit: boolean) => act(() => bench.expose(lit));
+  pixelApi.set(stage, { log: () => bench.log, bright: () => bench.sawBright, demo: () => { doReset(); expose(true)(); readout(); } });
+  stage.resetHooks.add(() => { bench.clear(); paint(); });
   const el = h('div', { class: 'mem-panel cpu-panel mc-panel sn-panel', 'data-dock': 'right', 'data-phone': 'flow' }, h('h4', null, 'One pixel, one read'),
     h('div', { class: 'dram-ops' }, btn('Reset', doReset, 'Empty the photodiode and reset FD'), btn('Dark', expose(false), 'Expose in the dark'), btn('Light', expose(true), 'Expose to full light'), btn('Read', readout, 'Read the row: RST, SHR, TX, SHS')),
-    read, out, h('p', { class: 'sub' }, 'Levels are fractions of the supply. A level between 30 % and 70 % reads as X on a wire: the switch solver has no analog voltages, so the follower\'s output is shown as H (dark) or 0 (bright).'));
+    read, out, h('p', { class: 'sub' }, 'Levels are fractions of the supply; X until the first Reset gives the nodes a charge. A level between 30 % and 70 % reads as X on a wire: the switch solver has no analog voltages, so the follower\'s output is shown as H (dark) or 0 (bright).'));
   paint();
   return { el, update: paint };
 };
