@@ -64,6 +64,7 @@ describe('a readout', () => {
       expect(s.uv).toBeCloseTo(s.e * CG_UV, 6);
     });
     expect(run.total()).toBeCloseTo(before, 6);
+    expect(run.level).toBe(1); // the plot compares the samples with this exposure, not the slider's later value
   });
   it('a lone packet reaches the output with r + 1 parallel and c + 1 serial transfers (imagesensor.ts ccdRetained)', () => {
     const cte = { v: 0.9, h: 0.8 };

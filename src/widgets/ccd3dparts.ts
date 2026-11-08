@@ -73,6 +73,8 @@ export class CcdRun {
   samples: { e: number; uv: number; row: number; col: number }[] = [];
   /** Rows moved into the horizontal register so far, and pixels of the current row read. */
   rowsOut = 0; pxOut = 0;
+  /** The exposure the charge came from (what Expose was given), for comparing the samples with what was collected. */
+  level = 0;
   /** Charge reset off the floating diffusion into the reset drain, all told (for conservation). */
   drained = 0;
   cte: Cte;
@@ -87,6 +89,7 @@ export class CcdRun {
   /** Integrate: every pixel collects `level` × scene × full well under its φ1 gate (clipped at full well; the
    *  real chip blooms beyond it, not drawn). Clears the registers and the samples first. */
   expose(level: number): void {
+    this.level = level;
     this.v = Array.from({ length: COLS }, (_, c) => Array.from({ length: ROWS }, (_, r) => Math.min(FULL_WELL, Math.round(level * scene(r, c) * FULL_WELL))));
     this.vTail.fill(0); this.h.fill(0); this.hTail = 0; this.vs = 0; this.hs = 0; this.fd = 0; this.samples = []; this.rowsOut = 0; this.pxOut = 0; this.drained = 0;
   }
@@ -151,7 +154,7 @@ export class CcdRun {
 
 // ---------------------------------------------------------------- the drawing
 
-/** Drawn layer tops (y, µm-scale units: exaggerated about 4 × in y; the real oxide is ~0.1 µm, each poly layer ~0.4 µm). */
+/** Drawn layer tops (y, µm): the oxide ~8 × its real ~0.1 µm, each poly level ~3 × its ~0.4 µm; the silicon about to scale. */
 export const SI_BOTTOM = -14, CHANNEL = -2.5, OX = 0.8, POLY = 1.1, POLY_T = 1.2;
 /** A well's depth under a high gate and under a low one (drawn, not to any scale: it stands for the channel potential). */
 export const WELL_HI = 4.5, WELL_LO = 1, WELL_FD = 5.5, WELL_T = 0.3;
