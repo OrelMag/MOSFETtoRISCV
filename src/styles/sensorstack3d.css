@@ -1,0 +1,11 @@
+/* ---------- An image sensor's optical stack (widgets/sensorstack3dview.ts): materials ---------- */
+.m3d {
+  --ss-lens: light-dark(#cfe3f5, #b9d3ee);
+  --ss-r: light-dark(#d9534f, #e0625e);
+  --ss-g: light-dark(#3fa65a, #4cbd69);
+  --ss-b: light-dark(#3b6fd1, #5285e6);
+  --ss-dti: light-dark(#e8eef6, #3a4256);
+  --ss-warn: light-dark(#d97706, #f59e0b);
+  --ss-dim: light-dark(#8a8f99, #6b7180);
+}
+.ss-sl output { width: 56px; }

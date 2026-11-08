@@ -217,6 +217,12 @@ export const MODELS_3D: readonly Model3d[] = [
     files: ['valve3d', 'valve3dview', 'valve3dparts'], factory: 'valve3d', codex: ['cmos', 'inverter'],
     open: () => import('./valve3d').then((m) => m.valve3d()),
   },
+  {
+    id: 'sensorstack', title: 'Four pixels, cut open', category: 'devices', chapter: 'sensors', step: 0,
+    summary: 'A Bayer quad in cross-section, front- or back-side lit: rays traced through microlens, filter and metal to their absorption depth.',
+    files: ['sensorstack3d', 'sensorstack3dview', 'sensorstack3dparts', 'sensorstackoptics'], factory: 'sensorStack3d',
+    open: () => import('./sensorstack3d').then((m) => m.sensorStack3d()),
+  },
 ];
 
 export const modelById = (id: string): Model3d | undefined => MODELS_3D.find((m) => m.id === id);
