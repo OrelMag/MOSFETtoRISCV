@@ -36,7 +36,6 @@ import { KEY as SANDBOX_KEY } from '../src/editor/store';
 import { NOTES_KEY } from '../src/ui/notes';
 import { LEARN_KEY } from '../src/learn/store';
 import { REVIEW_KEY } from '../src/ui/review';
-import { MODELS_3D } from '../src/widgets/models3dindex';
 
 // ---- options ---------------------------------------------------------------------------------
 
