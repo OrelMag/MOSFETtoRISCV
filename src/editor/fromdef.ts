@@ -43,19 +43,33 @@ export interface FromDefOptions {
 export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDoc | { error: string } {
   const raw = netlistOf(def);
   if (!raw) return { error: `${def.id} has no netlist (a primitive): nothing to draw` };
-  // drawn as a stage shows it: the nets that read better as wires (short, forward, few sinks) are wires, not pointer pairs.
-  // The editor's wires branch where the schematic's paths share a beginning, so a wire the router kept clear can still cross a
-  // part here: those sinks go back to pointers and the chip is drawn again.
+  return drawDoc(def, settled(def, raw, opts), opts);
+}
+
+/** Per definition, the netlist docFromDef draws (the wires it settled on depend on the drawing, not on ids or names). */
+const settledNl = new WeakMap<ComponentDef, Netlist>();
+
+/**
+ * The netlist as a stage shows it: the nets that read better as wires (short, forward, few sinks) are wires, not pointer pairs.
+ * The editor's wires branch where the schematic's paths share a beginning, so a wire the router kept clear can still cross a part
+ * or run along another net here: those sinks go back to pointers and the chip is drawn again, unless the author's own drawing has
+ * the same fault (that stays as it was). Not settled after a few passes: the author's netlist.
+ */
+function settled(def: ComponentDef, raw: Netlist, opts: FromDefOptions): Netlist {
+  // a caller placing parts its own way (refOf) may draw what a plain reference cannot: settled for it alone, not kept
+  const keep = !opts.refOf;
+  const known = keep ? settledNl.get(def) : undefined;
+  if (known) return known;
+  const check: FromDefOptions = opts.refOf ? { refOf: opts.refOf } : {};
   let nl = drawnNetlist(def, raw, FROMDEF_NETS);
   let rawHits: Set<string> | undefined;
+  let out = raw;
   for (let pass = 0; pass < 12 && nl !== raw; pass++) {
-    const doc = drawDoc(def, nl, opts);
-    if ('error' in doc) return doc;
-    // a wire through a part that the author's own drawing did not have (a new wire, or an old one moved by them) becomes a pointer;
-    // one the author drew through a part stays as it was
-    rawHits ??= ((d) => ('error' in d ? new Set<string>() : sinksThroughParts(d, raw)))(drawDoc(def, raw, opts));
+    const doc = drawDoc(def, nl, check);
+    if ('error' in doc) break;
+    rawHits ??= ((d) => ('error' in d ? new Set<string>() : sinksThroughParts(d, raw)))(drawDoc(def, raw, check));
     const hit = new Set([...sinksThroughParts(doc, nl)].filter((e) => !rawHits!.has(e)));
-    if (!hit.size) return doc;
+    if (!hit.size) { out = nl; break; }
     nl = { ...nl, nets: nl.nets.map((n) => {
       const back = n.ends.slice(1).filter((e) => hit.has(e));
       if (!back.length || n.tags === true) return n;
@@ -63,7 +77,8 @@ export function docFromDef(def: ComponentDef, opts: FromDefOptions = {}): ChipDo
       return { ...n, tags: tags.length >= n.ends.length - 1 ? true : tags };
     }) };
   }
-  return drawDoc(def, raw, opts); // not settled: the author's drawing, as before
+  if (keep) settledNl.set(def, out);
+  return out;
 }
 
 /**
