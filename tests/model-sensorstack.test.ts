@@ -2,10 +2,14 @@
 // where it is designed to, BSI keeps oblique light that FSI loses to its metal, and the drawing shows the trace.
 import { describe, expect, it } from 'vitest';
 import { absorptionDepth, bayerAt } from '../src/phys/imagesensor';
-import { BAYER, FATES, K, lensHeight, tenths, lensRadius, refract, stackHeight, stackParts, stackSpec, traceStack, type Fate, type StackPalette } from '../src/widgets/sensorstack3dparts';
+import { angleCurve, BAYER, DIODE_DEPTH, diodeSpan, FATES, K, lensHeight, tenths, lensRadius, PITCHES, PPLUS, refract, siReflectance, spotSize, stackHeight, stackParts, stackSpec as specOf, traceStack, type Fate, type Illum, type StackPalette } from '../src/widgets/sensorstack3dparts';
+import { IMX183, STACK_BSI } from '../src/phys/imagesensor';
 import { STACK_OPTICS as O, filterT, nSi } from '../src/widgets/sensorstackoptics';
 
-const sum = (t: Record<Fate, number>) => t.own + t.cross + t.metal + t.filter + t.through;
+const sum = (t: Record<Fate, number>) => t.own + t.cross + t.metal + t.filter + t.reflected + t.through;
+/** The 1.0 µm pixel unless a pitch is given: the tests written for the FSI limit. */
+const stackSpec = (il: Illum, pitch = 1.0, ar = true) => specOf(il, { pitch, ar });
+const ALL = PITCHES.flatMap((p) => (['fsi', 'bsi'] as const).flatMap((il) => [true, false].map((ar) => stackSpec(il, p, ar))));
 const sinOf = (d: [number, number]) => Math.abs(d[0]) / Math.hypot(d[0], d[1]);
 
 describe('the optical stack', () => {
@@ -27,17 +31,18 @@ describe('the optical stack', () => {
   });
 
   it('every ray’s power is accounted for', () => {
-    for (const il of ['fsi', 'bsi'] as const) for (const nm of [450, 550, 650, 900]) for (const a of [-25, 0, 12, 30]) for (const row of [0, 1] as const) {
-      const r = traceStack(stackSpec(il), O, nm, a, row, 7);
+    for (const s of ALL) for (const nm of [450, 550, 650, 900]) for (const a of [-25, 0, 12, 30]) for (const row of [0, 1] as const) {
+      const r = traceStack(s, O, nm, a, row, 7);
       expect(sum(r.total)).toBeCloseTo(1, 9);
       for (const ray of r.rays) { expect(sum(ray.share)).toBeCloseTo(1, 9); for (const v of Object.values(ray.share)) expect(v).toBeGreaterThanOrEqual(-1e-12); }
     }
   });
 
   it('the microlens focuses at its design depth (paraxial)', () => {
-    for (const il of ['fsi', 'bsi'] as const) {
-      const s = stackSpec(il), n = O.nSi(550), rc = lensRadius(s, n);
+    for (const p of PITCHES) for (const il of ['fsi', 'bsi'] as const) {
+      const s = stackSpec(il, p), n = O.nSi(550), rc = lensRadius(s, n);
       expect(lensHeight(s, rc)).toBeGreaterThan(0);
+      expect(rc).toBeGreaterThan(s.pitch / 2 + 0.02); // a cap that can focus there, not clamped to a hemisphere
       // A ray close to a pixel's axis, at normal incidence: where it crosses the axis.
       const r = traceStack({ ...s, metal: [], dti: false }, { ...O, nSi: () => n, filterT: () => 1, depthUm: () => 100 }, 550, 0, 0, 200);
       const axis = -s.pitch / 2, ray = r.rays.reduce((a, b) => (Math.abs(b.paths[0][0][0] - axis + 0.03) < Math.abs(a.paths[0][0][0] - axis + 0.03) ? b : a));
@@ -52,8 +57,8 @@ describe('the optical stack', () => {
   });
 
   it('at normal incidence the lenses bring the light through: no crosstalk, the metal’s apertures clear', () => {
-    for (const nm of [460, 530, 630]) for (const row of [0, 1] as const) {
-      const b = traceStack(stackSpec('bsi'), O, nm, 0, row).total, f = traceStack(stackSpec('fsi'), O, nm, 0, row).total;
+    for (const p of PITCHES) for (const nm of [460, 530, 630]) for (const row of [0, 1] as const) {
+      const b = traceStack(stackSpec('bsi', p), O, nm, 0, row).total, f = traceStack(stackSpec('fsi', p), O, nm, 0, row).total;
       expect(b.cross).toBe(0);
       expect(b.metal).toBe(0);
       expect(f.cross).toBe(0);
@@ -74,7 +79,7 @@ describe('the optical stack', () => {
   it('blue is absorbed near the surface, near infrared mostly passes the thin silicon', () => {
     const blue = traceStack(stackSpec('bsi'), O, 450, 0, 1).total, ir = traceStack(stackSpec('bsi'), O, 900, 0, 0).total;
     expect(blue.through).toBeLessThan(0.002);
-    expect(ir.through / (1 - ir.filter - ir.metal)).toBeGreaterThan(0.85);
+    expect(ir.through / (1 - ir.filter - ir.metal - ir.reflected)).toBeGreaterThan(0.85);
     // At normal incidence through the cap a ray's path in silicon is barely longer than the silicon: what passes is e^(−L/d).
     const s = stackSpec('bsi'), d = absorptionDepth(650), t = traceStack(s, O, 650, 0, 0).total;
     const rest = t.own + t.cross + t.through;
@@ -83,8 +88,8 @@ describe('the optical stack', () => {
   });
 
   it('a ray ends at its absorption point, inside the silicon of the pixel that counts it', () => {
-    for (const il of ['fsi', 'bsi'] as const) {
-      const s = stackSpec(il), r = traceStack(s, O, 550, 10, 0);
+    for (const s of ALL) {
+      const r = traceStack(s, O, 550, 10, 0);
       for (const ray of r.rays.filter((x) => x.absorbPx !== null)) {
         expect(ray.end[1]).toBeLessThanOrEqual(1e-9);
         expect(ray.end[1]).toBeGreaterThanOrEqual(-s.si - 1e-9);
@@ -96,9 +101,9 @@ describe('the optical stack', () => {
 
   it('draws the filters in the mosaic’s colours, the metal where the light meets it, and the absorption depth', () => {
     const col = (i: number): [number, number, number, number] => [i / 20, 0.3, 0.3, 1];
-    const P: StackPalette = { lens: col(1), R: col(2), G: col(3), B: col(4), oxide: col(5), metal: [0.6, 0.1, 0.1], si: [0.1, 0.6, 0.1], diode: [0.1, 0.1, 0.6], dti: [0.9, 0.9, 0.9], beol: col(6), warn: [1, 0.5, 0], dim: [0.4, 0.4, 0.4] };
-    for (const il of ['fsi', 'bsi'] as const) for (const row of [0, 1] as const) {
-      const spec = stackSpec(il), trace = traceStack(spec, O, 600, 0, row), parts = stackParts({ spec, nm: 600, angle: 0, row, trace }, P);
+    const P: StackPalette = { lens: col(1), R: col(2), G: col(3), B: col(4), oxide: col(5), metal: [0.6, 0.1, 0.1], si: [0.1, 0.6, 0.1], diode: [0.1, 0.1, 0.6], dti: [0.9, 0.9, 0.9], beol: col(6), warn: [1, 0.5, 0], dim: [0.4, 0.4, 0.4], pplus: [0.7, 0.2, 0.7], arc: col(7) };
+    for (const p of PITCHES) for (const il of ['fsi', 'bsi'] as const) for (const row of [0, 1] as const) {
+      const spec = stackSpec(il, p), trace = traceStack(spec, O, 600, 0, row), parts = stackParts({ spec, nm: 600, angle: 0, row, trace }, P);
       const filters = parts.filter((p) => p.color === P.R || p.color === P.G || p.color === P.B);
       expect(filters).toHaveLength(4);
       expect(filters.filter((p) => p.color === P.G)).toHaveLength(2);
@@ -112,9 +117,9 @@ describe('the optical stack', () => {
   });
 
   it('the readouts name every share and add up to exactly 100.0 %', () => {
-    expect(FATES.map((f) => f.k).sort()).toEqual(['cross', 'filter', 'metal', 'own', 'through']);
-    for (const il of ['fsi', 'bsi'] as const) for (let nm = 400; nm <= 1000; nm += 50) for (let a = -30; a <= 30; a += 5) for (const row of [0, 1] as const) {
-      const t = tenths(traceStack(stackSpec(il), O, nm, a, row, 5).total);
+    expect(FATES.map((f) => f.k).sort()).toEqual(['cross', 'filter', 'metal', 'own', 'reflected', 'through']);
+    for (const s of ALL) for (let nm = 400; nm <= 1000; nm += 100) for (let a = -30; a <= 30; a += 10) for (const row of [0, 1] as const) {
+      const t = tenths(traceStack(s, O, nm, a, row, 5).total);
       expect(Object.values(t).reduce((x, y) => x + y, 0)).toBe(1000);
       for (const v of Object.values(t)) expect(v).toBeGreaterThanOrEqual(0);
     }
@@ -130,5 +135,74 @@ describe('the optical stack', () => {
     // (the edge line's inner side, measured from the pixel's centre) at 15°
     const inOx = Math.asin(Math.sin((15 * Math.PI) / 180) / 1.46), top = s.metal.reduce((a, m) => (m.y1 > a.y1 && m.x0 < 0 && m.x1 > 0 ? m : a));
     expect((stackHeight(s) + s.focus) * Math.tan(inOx)).toBeGreaterThan(s.pitch / 2 - (top.x1 - top.x0) / 2);
+  });
+
+  it('two pitches: the chapter’s IMX183 over its 3 µm of silicon by default, 1.0 µm over 2.7 µm; the metal the same in µm', () => {
+    expect(PITCHES[0]).toBe(IMX183.pitch);
+    const d = specOf('bsi');
+    expect(d.pitch).toBe(IMX183.pitch);
+    expect(d.si).toBe(STACK_BSI.collect);
+    expect(stackSpec('bsi', 1.0).si).toBe(2.7);
+    const w = (p: number) => stackSpec('fsi', p).metal.map((m) => +(m.x1 - m.x0).toFixed(9));
+    expect(w(2.4)).toEqual(w(1.0));
+  });
+
+  it('reflection at the silicon: Fresnel bare, a quarter-wave film near zero at its design wavelength, and the trace takes that share', () => {
+    const n = O.nSi(550), bare = ((1.46 - n) / (1.46 + n)) ** 2;
+    expect(siReflectance(1.46, n, 550, null)).toBeCloseTo(bare, 12);
+    expect(bare).toBeGreaterThan(0.2);
+    const s = stackSpec('bsi', 2.4), arc = s.arc!;
+    expect(arc.n * arc.d * 1000).toBeCloseTo(550 / 4, 9);
+    // the ideal film's residual: ((n0 nSi − na²) / (n0 nSi + na²))²
+    expect(siReflectance(1.46, n, 550, arc)).toBeCloseTo(((1.46 * n - arc.n ** 2) / (1.46 * n + arc.n ** 2)) ** 2, 9);
+    expect(siReflectance(1.46, n, 550, arc)).toBeLessThan(0.03);
+    for (const ar of [true, false]) {
+      const sp = stackSpec('bsi', 2.4, ar), R = siReflectance(1.46, O.nSi(550), 550, sp.arc);
+      for (const ray of traceStack(sp, O, 550, 0, 0).rays) {
+        const past = ray.share.reflected + ray.share.own + ray.share.cross + ray.share.through;
+        expect(ray.share.reflected).toBeCloseTo(R * past, 12);
+      }
+    }
+    expect(traceStack(stackSpec('bsi', 2.4, false), O, 550, 0, 0).total.own).toBeLessThan(traceStack(stackSpec('bsi', 2.4, true), O, 550, 0, 0).total.own);
+  });
+
+  it('the photodiode fills two thirds of the silicon on the metal side, under its p+ layer', () => {
+    const col = (i: number): [number, number, number, number] => [i / 20, 0.3, 0.3, 1];
+    const P: StackPalette = { lens: col(1), R: col(2), G: col(3), B: col(4), oxide: col(5), metal: [0.6, 0.1, 0.1], si: [0.1, 0.6, 0.1], diode: [0.1, 0.1, 0.6], dti: [0.9, 0.9, 0.9], beol: col(6), warn: [1, 0.5, 0], dim: [0.4, 0.4, 0.4], pplus: [0.7, 0.2, 0.7], arc: col(7) };
+    for (const s of ALL) {
+      const [d0, d1] = diodeSpan(s);
+      expect(d1 - d0).toBeCloseTo(DIODE_DEPTH * s.si, 12);
+      if (s.illum === 'fsi') expect(d1).toBeCloseTo(-PPLUS, 12); // metal above: the diode at the top
+      else expect(d0).toBeCloseTo(-s.si + PPLUS, 12); // metal below: the diode at the bottom
+      const parts = stackParts({ spec: s, nm: 550, angle: 0, row: 0, trace: traceStack(s, O, 550, 0, 0) }, P);
+      const diodes = parts.filter((p) => p.color === P.diode);
+      expect(diodes).toHaveLength(4);
+      for (const p of diodes) { expect((p.scale as number[])[1]).toBeCloseTo(DIODE_DEPTH * s.si * K, 9); expect(p.pos[1]).toBeCloseTo(((d0 + d1) / 2) * K, 9); }
+      expect(parts.filter((p) => p.color === P.pplus)).toHaveLength(4);
+      expect(parts.filter((p) => p.color === P.arc)).toHaveLength(s.arc ? 4 : 0);
+    }
+  });
+
+  it('the diffraction-limited spot: 2.44 λ N, wider than a 1.0 µm FSI pixel, narrower than the IMX183’s', () => {
+    for (const s of ALL) {
+      const rc = lensRadius(s, O.nSi(550));
+      expect(spotSize(s, rc, 550)).toBeCloseTo((2.44 * 0.55 * (rc / (s.nLens - 1))) / s.pitch, 12);
+    }
+    const at = (il: Illum, p: number) => { const s = stackSpec(il, p); return spotSize(s, lensRadius(s, O.nSi(550)), 550) / s.pitch; };
+    expect(at('fsi', 1.0)).toBeGreaterThan(1);
+    expect(at('bsi', 2.4)).toBeLessThan(0.5);
+    expect(at('fsi', 2.4)).toBeLessThan(0.6);
+  });
+
+  it('the angular response: at 1.0 µm BSI keeps what FSI loses, FSI gone by 16°; at 2.4 µm both hold to 10°, FSI falling first', () => {
+    const A = Array.from({ length: 16 }, (_, i) => i * 2);
+    const f1 = angleCurve(stackSpec('fsi', 1.0), O, 540, A), b1 = angleCurve(stackSpec('bsi', 1.0), O, 540, A);
+    A.forEach((a, i) => { if (a >= 6) expect(b1[i]).toBeGreaterThan(f1[i]); });
+    const f2 = angleCurve(stackSpec('fsi', 2.4), O, 540, A), b2 = angleCurve(stackSpec('bsi', 2.4), O, 540, A);
+    A.forEach((a, i) => { if (a <= 10) { expect(f2[i]).toBeGreaterThan(0.6); expect(b2[i]).toBeGreaterThan(0.6); } });
+    expect(f2[A.length - 1]).toBeLessThan(b2[A.length - 1]);
+    expect(f2[A.length - 1]).toBeLessThan(f2[0] / 2);
+    expect(f1[8]).toBe(0);
+    expect(f1[0]).toBeGreaterThan(0.75);
   });
 });

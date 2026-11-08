@@ -9,3 +9,22 @@
   --ss-dim: light-dark(#8a8f99, #6b7180);
 }
 .ss-sl output { width: 56px; }
+.m3d {
+  --ss-pplus: light-dark(#c77dba, #b06aa6);
+  --ss-arc: light-dark(#5b6fd6, #8597f0);
+  --ss-cv-fsi: light-dark(#b45309, #f59e0b);
+  --ss-cv-bsi: light-dark(#1d4ed8, #60a5fa);
+}
+.ss-cv { margin: 10px 0 0; }
+.ss-cv figcaption { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+.ss-cv svg { width: 100%; max-width: 320px; height: auto; display: block; }
+.ss-cv-ax line { stroke: var(--muted); stroke-width: 1; }
+.ss-cv-ax text { fill: var(--muted); font-size: 9px; }
+.ss-cv polyline { fill: none; stroke-width: 2; }
+.ss-cv-fsi { stroke: var(--ss-cv-fsi); stroke-dasharray: 5 3; }
+.ss-cv-bsi { stroke: var(--ss-cv-bsi); }
+.ss-cv-at { stroke: var(--text, currentColor); stroke-width: 1; stroke-dasharray: 2 2; opacity: 0.7; }
+.ss-cv-leg { display: flex; gap: 12px; font-size: 12px; color: var(--muted); }
+.ss-cv-leg span::before { content: ''; display: inline-block; width: 16px; height: 0; margin-right: 4px; vertical-align: middle; border-top: 2px solid; }
+.ss-cv-leg .f::before { border-top: 2px dashed var(--ss-cv-fsi); }
+.ss-cv-leg .b::before { border-top-color: var(--ss-cv-bsi); }
