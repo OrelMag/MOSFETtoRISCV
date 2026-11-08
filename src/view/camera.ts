@@ -179,6 +179,8 @@ export function touchZoom(vb: ViewBox, width: number, c: Vec, minPx = TOUCH_PX, 
  *  or a bus top fitted to its width: gates a few px wide), and it shows the drawing at READABLE_PX instead. */
 export const READABLE_BELOW = 2.5, READABLE_PX = 3;
 export const offerReadable = (pxPerUnit: number): boolean => pxPerUnit > 0 && pxPerUnit < READABLE_BELOW;
+/** Does the stage bar show the button now? Only for the schematic (not the boards, a leaf's model view or a widget) at an unreadable scale. */
+export const showReadable = (s: { px: number; boards: boolean; leaf: boolean; widget: boolean }): boolean => !s.boards && !s.leaf && !s.widget && offerReadable(s.px);
 /** The view at `px` per unit: the drawing's left edge (its inputs) at the host's left, centred vertically on it, for panning right. */
 export function readableBox(bbox: ViewBox, width: number, height: number, px = READABLE_PX): ViewBox {
   const w = width / px, h = height / px;

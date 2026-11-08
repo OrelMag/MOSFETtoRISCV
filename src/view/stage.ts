@@ -30,7 +30,7 @@ import { Inspector, inspectorChoice } from './inspector';
 import { LABEL_UNITS, MIN_TEXT_PX } from './legible';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber, syncPopover } from './popover';
-import { chooseFolds, COVER_GAP, fitMinW, freeArea, KEEP_SCALE, roomBeside, startFolded, type Rect } from './camera';
+import { chooseFolds, COVER_GAP, fitMinW, freeArea, KEEP_SCALE, roomBeside, showReadable, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { drawnNetlist } from './wirefirst';
 import { type NotePin, SchematicView } from './schematic';
@@ -227,6 +227,8 @@ export class Stage {
   private panesBtn: HTMLButtonElement;
   private moreBtn: HTMLButtonElement;
   private readBtn!: HTMLButtonElement;
+  /** Zoom to readable is in force: the how-to line gives way (it sat over the drawing's parts). */
+  private readZoom = false;
   /** Aborted by destroy(): the document listeners this stage added. */
   private life = new AbortController();
   private moreMenu: HTMLElement;
@@ -342,7 +344,7 @@ export class Stage {
     const imgWrap = h('div', { class: 'pal-wrap' }, imgBtn, imgMenu);
     menuKeys(imgWrap, imgMenu, imgBtn, () => showImg(false));
     // offered only while the overview is under ~2.5 px per unit (camera.ts offerReadable), hidden at or above it
-    const readBtn = this.readBtn = h('button', { class: 'btn ghost sm keep zoom-read', hidden: true, title: 'Zoom to readable: about 3 px per grid unit from the inputs; drag to pan, Fit returns to the overview', 'aria-label': 'Zoom to readable', onclick: () => this.view.zoomReadable() }, icon('zoomin', 15), h('span', { class: 'lbl' }, 'Zoom to readable')) as HTMLButtonElement;
+    const readBtn = this.readBtn = h('button', { class: 'btn ghost sm keep zoom-read', hidden: true, title: 'Zoom to readable: about 3 px per grid unit from the inputs; drag to pan, Fit returns to the overview', 'aria-label': 'Zoom to readable', onclick: () => this.zoomReadable() }, icon('zoomin', 15), h('span', { class: 'lbl' }, 'Zoom to readable')) as HTMLButtonElement;
     const zoomOut = btn('minus', 'Zoom out', () => this.zoomBy(1.25), ' zoom-btn');
     const zoomIn = btn('plus', 'Zoom in', () => this.zoomBy(0.8), ' zoom-btn');
     // More: the buttons fitBar takes off a bar too narrow for them and the open level's name, as menu items
@@ -373,7 +375,7 @@ export class Stage {
     const pressed = (b: HTMLElement) => b.classList.contains('on');
     // the order they go in: the least used first (a wheel or a pinch zooms; Up, Fit and the panes stay)
     this.shedGroups = [
-      { els: [readBtn], items: [{ label: 'Zoom to readable', hint: 'About 3 px per grid unit, from the inputs; drag to pan', icon: 'zoomin', run: () => this.view.zoomReadable() }] },
+      { els: [readBtn], items: [{ label: 'Zoom to readable', hint: 'About 3 px per grid unit, from the inputs; drag to pan', icon: 'zoomin', run: () => this.zoomReadable() }] },
       { els: [zoomOut, zoomIn], items: [{ label: 'Zoom out', icon: 'minus', run: () => this.zoomBy(1.25) }, { label: 'Zoom in', icon: 'plus', run: () => this.zoomBy(0.8) }] },
       { els: [imgWrap], items: [
         { label: 'Image as SVG', hint: 'This level, whole, as drawn in the current theme', icon: 'image', run: () => this.exportImage('svg') },
@@ -524,6 +526,7 @@ export class Stage {
       this.layoutDock(false);
       this.yieldBadge();
       this.view.resized();
+      this.syncReadable();
       this.fitBar();
       this.fitControls();
       this.hugPhone();
@@ -620,6 +623,7 @@ export class Stage {
       this.widget = null;
     }
     this.el.classList.toggle('widget-mode', !!w);
+    this.syncReadable();
     if (!w) return;
     this.stopAnim();
     this.stopClock();
@@ -1016,6 +1020,7 @@ export class Stage {
   private setBoardShown(on: boolean): void {
     this.boardOn = on;
     this.el.classList.toggle('bb-mode', on);
+    this.syncReadable();
     if (this.syncDrill()) this.view.setCover(this.covers(), true);
     const [sch, bb] = [...this.viewSeg.querySelectorAll('button')];
     sch.classList.toggle('on', !on);
@@ -1261,6 +1266,7 @@ export class Stage {
     widget.el = host;
     this.canvas.append(host);
     this.leaf = { name, widget };
+    this.syncReadable();
     this.levelBadge.textContent = def.modelPanel ? 'level: a model, not transistors' : 'level: a single transistor';
   }
 
@@ -1269,6 +1275,7 @@ export class Stage {
     this.leaf.widget.destroy?.();
     this.leaf.widget.el.remove();
     this.leaf = null;
+    this.syncReadable();
   }
 
   // ---- inputs ------------------------------------------------------------------------------
@@ -2384,9 +2391,18 @@ export class Stage {
 
   /** A panel changed size (folded, unfolded, grew): make room for it, refitting a still-fitted view when the
    *  right dock's width changed or a panel now covers part of the circuit. */
+  private zoomReadable(): void {
+    this.readZoom = true;
+    this.view.zoomReadable();
+    this.placeHint();
+  }
+
   /** Show Zoom to readable only while the schematic's overview is drawn too small to read; the bar refits when it comes or goes. */
   private syncReadable(): void {
-    const on = this.view.readableOffered && !this.boardOn && !this.leaf && !this.el.classList.contains('widget-mode');
+    if (!this.view || !this.readBtn) return;
+    // the learner is back at the overview (Fit, a new level or scene): the hint line may return
+    if (this.readZoom && this.view.fitted) { this.readZoom = false; this.placeHint(); }
+    const on = showReadable({ px: this.view.pxPerUnit(), boards: this.boardOn, leaf: !!this.leaf, widget: this.el.classList.contains('widget-mode') });
     if (this.readBtn.hidden !== on) return;
     this.readBtn.hidden = !on;
     this.fitBar();
@@ -2577,7 +2593,7 @@ export class Stage {
     this.hint.style.bottom = `${bottom}px`;
     this.hint.style.maxWidth = `${W - right - left}px`;
     // a drill stacked on a narrow canvas leaves the schematic a strip: the line would take a third of it
-    this.hint.hidden = this.hint.dataset.off === '1' || W - right - left < 160 || (docked.length > 0 && lineTop < H / 2)
+    this.hint.hidden = this.hint.dataset.off === '1' || this.readZoom || W - right - left < 160 || (docked.length > 0 && lineTop < H / 2)
       || (!!this.drill && this.el.classList.contains('bb-stacked'));
     if (!this.hint.hidden && !roomBeside(this.view.contentBox(), W, H, this.covers())) this.hint.hidden = true;
     return this.hint.hidden !== was;
