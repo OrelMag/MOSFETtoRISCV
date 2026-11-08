@@ -9,12 +9,12 @@ export const MORE8D: Record<string, CodexMore> = {
       title: 'What 16 points cost, two ways',
       body: `<pre>at 10 bits a part, in NANDs
 one butterfly's four adders     416
-a 45° turn                    1,752
-a general complex multiplier  6,884
-8 points, unrolled            8,496   (7 W⁰, 3 −j, 2 turns: no general multiplier)
-16 points, unrolled          51,360
-16 points, streaming         22,591   (one sample a clock, 19 edges of latency)
-64 points, streaming         54,598</pre>The word sets the noise: each bit gains about 6 dB, and each doubling of N costs about 3 dB on a noise-like block.`,
+a 45° turn                    1752
+a general complex multiplier  6884
+8 points, unrolled            8496   (7 W⁰, 3 −j, 2 turns: no general multiplier)
+16 points, unrolled          51 360
+16 points, streaming         22 591   (one sample a clock, 19 edges of latency)
+64 points, streaming         54 598</pre>The word sets the noise: each bit gains about 6 dB, and each doubling of N costs about 3 dB on a noise-like block.`,
     },
     mistakes: [
       'Counting N / 2 · log<sub>2</sub> N "multiplications" as the cost: 10 of the 12 butterflies in an 8-point FFT are wires, and none of them needs the general multiplier.',
@@ -42,7 +42,7 @@ a general complex multiplier  6,884
 3.34 bits, against 3.32 for an even split
 
 the illustrative loop, gap 10 dB, 223 tones
-3 km: water-filling 1,796 bits, flat 1,795, whole bits 1,788
+3 km: water-filling 1796 bits, flat 1795, whole bits 1788
 5 km: flat on all 429, flat on the best 89: 522, water-filling 524</pre>At 5 km the gain is nearly all in dropping the tones not worth using.`,
     },
     mistakes: [
@@ -63,9 +63,9 @@ the illustrative loop, gap 10 dB, 223 tones
 the recursion falls to zero up to ε* = 0.4294; capacity at rate ½ is 0.5
 on the Gaussian channel: threshold between 1.01 and 1.16 dB, limit 0.19 dB
 
-operations at 2 dB on a 2,016-bit word
+operations at 2 dB on a 2016-bit word
 12 messages a round per data bit × 10.8 rounds ≈ 130 updates
-K = 7 Viterbi: 128 branch additions (64 add-compare-selects) a data bit</pre>A word of 504 bits at 2.4 dB already makes about 6 errors in 10 000, where K = 7 soft's bound is about 6 in 1,000.`,
+K = 7 Viterbi: 128 branch additions (64 add-compare-selects) a data bit</pre>A word of 504 bits at 2.4 dB already makes about 6 errors in 10 000, where K = 7 soft's bound is about 6 in 1000.`,
     },
     mistakes: [
       'Echoing a check\'s own message back to it: the beliefs then grow with no new information, and a wrong one stops the decoder changing its mind.',
@@ -101,12 +101,12 @@ at 100 Mb/s a 1500-byte packet is 0.12 ms; at 1 Mb/s, 12 ms</pre>To halve the wa
     idea: `Reno's sawtooth is simple enough to solve: the window climbs from W / 2 to W at one packet a round trip, so at loss rate p it averages √(3 / 2p). Across a long fat pipe that is hopeless: after one loss Reno needs half a pipe's worth of round trips to climb back, and it fills the pipe only if losses are rarer than real paths allow.<br><br>CUBIC (RFC 9438) keeps the increase but changes its curve, in real time and not in round trips. It falls by 30 %, climbs fast, flattens as it nears W<sub>max</sub>, the window where it last lost, waits there, then probes beyond. K, the time to return, is the cube root of W<sub>max</sub> (1 − β) / C. Where a short RTT or a small window would make it slower than Reno, a Reno-friendly region takes over.`,
     example: {
       title: 'One loss on 1 Gb/s across 100 ms',
-      body: `<pre>the pipe: 8,333 packets of 1500 bytes
-Reno:  4,167 round trips to climb back, about 7 minutes
+      body: `<pre>the pipe: 8333 packets of 1500 bytes
+Reno:  4167 round trips to climb back, about 7 minutes
        and it needs under one loss in 4.6 × 10⁷ packets
-CUBIC: K = ∛(8,333 × 0.3 / 0.4) ≈ 18.4 s
+CUBIC: K = ∛(8333 × 0.3 / 0.4) ≈ 18.4 s
 
-at one loss in 10 000, 100 ms: Reno 122 packets, CUBIC 187</pre>CUBIC's average is (C (3 + β) / (4 (1 − β)))^¼ (RTT / p)^¾, 1.054 (RTT / p)^¾ at C = 0.4, β = 0.7.`,
+at one loss in 10 000, 100 ms: Reno 122 packets, CUBIC 187</pre>CUBIC's average is (C (3 + β) / (4 (1 − β)))^¼ (RTT / p)^¾, 1.054 (RTT / p)^¾ at C = 0.4, β = 0.7.`,
     },
     mistakes: [
       'Reading t as round trips: it is time since the last cut, so two flows with different round trips climb alike in seconds, which is what ends Reno\'s penalty on long paths.',
@@ -192,7 +192,7 @@ FQ-CoDel, 40   9.7 and 9.7 Mb/s</pre>One run each, so take the pattern and not t
       title: 'Counting one',
       body: `<pre>k-port switches: k³ / 4 hosts, 5k² / 4 switches, (k / 2)² paths between pods
 k = 4    16 hosts      20 switches      4 paths
-k = 48   27,648 hosts  2,880 switches   576 paths
+k = 48   27 648 hosts  2880 switches   576 paths
 
 40 × 25 Gb/s servers on 8 × 100 Gb/s uplinks: oversubscribed 1.25 to 1</pre>`,
     },
@@ -261,7 +261,7 @@ halving on the same marks: 76 % of the link</pre>The paper's safe bound on K is 
       title: 'What a loss costs, 100 Gb/s across 10 µs',
       body: `<pre>the pipe: W = 122 packets of 1 KB
 goodput = (1 − p) / (1 − p + W p)
-one loss in 100 000   99.88 %
+one loss in 100 000   99.88 %
 one loss in 1000      89 %    (selective repeat: 99.9 %)</pre>For small p goodput depends on W p, so four times the rate wants a quarter of the loss.`,
     },
     mistakes: [
@@ -276,7 +276,7 @@ one loss in 1000      89 %    (selective repeat: 99.9 %)</pre>For small p goodpu
     example: {
       title: 'Two flows, one upstream queue, a receiver at a quarter of the link',
       body: `<pre>each flow offers 0.5 of the link; a labelled model
-lossy     slow flow 0.25, fast flow 0.50, 7,434 packets dropped
+lossy     slow flow 0.25, fast flow 0.50, 7434 packets dropped
 lossless  slow flow 0.25, fast flow 0.25, none dropped, paused half the time
 
 headroom ≈ 2 · delay + 2 packets: 18 for a delay of 8
@@ -298,7 +298,7 @@ at 100 Gb/s over 100 m (500 ns), about 15 packets of 1 KB</pre>The headroom is a
       title: 'Fan-out divides the budget',
       body: `<pre>q = 1 %, n = 100          63 % of requests slow
 q = 1 %, n = 50           39 %
-want 1 % slow at n = 50:  q ≈ 0.0002, about 1 in 5,000</pre>For small q the share slow is about n q.`,
+want 1 % slow at n = 50:  q ≈ 0.0002, about 1 in 5000</pre>For small q the share slow is about n q.`,
     },
     mistakes: [
       'Judging a service by its servers\' mean latency: a fan-out reads the tail of each.',

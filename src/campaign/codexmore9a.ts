@@ -4,13 +4,13 @@ import type { CodexMore } from './codexmore';
 
 export const MORE9A: Record<string, CodexMore> = {
   qformat: {
-    idea: `A word has no point in it. A Q format is a promise about where the designer put one: <b>Qm.f</b> is a two's complement integer divided by 2^f, with m bits before the point, the sign counted among them. Range and step are fixed when the design is: Q1.15 runs from −1 to 1 − 2⁻¹⁵ in steps of 2⁻¹⁵, and the largest word is 0111…1, 32 767 / 32 768. There is a word for −1 and none for +1, because two's complement has one more negative value than positive. The adder, the register and the multiplier do not know the format; the same hardware serves every one.<br><br>Signal processing lives in fractions because a product of two fractions is still a fraction: Q1.15 × Q1.15 is Q2.30 with two sign bits, and it comes back to Q1.15 by dropping 15 bits, not 16. Integers do the reverse and their products grow out of the word. Keep the full product, round once at the end, and note that only −1 × −1 has an answer that does not fit.`,
+    idea: `A word has no point in it. A Q format is a promise about where the designer put one: <b>Qm.f</b> is a two's complement integer divided by 2^f, with m bits before the point, the sign counted among them. Range and step are fixed when the design is: Q1.15 runs from −1 to 1 − 2⁻¹⁵ in steps of 2⁻¹⁵, and the largest word is 0111…1, 32 767 / 32 768. There is a word for −1 and none for +1, because two's complement has one more negative value than positive. The adder, the register and the multiplier do not know the format; the same hardware serves every one.<br><br>Signal processing lives in fractions because a product of two fractions is still a fraction: Q1.15 × Q1.15 is Q2.30 with two sign bits, and it comes back to Q1.15 by dropping 15 bits, not 16. Integers do the reverse and their products grow out of the word. Keep the full product, round once at the end, and note that only −1 × −1 has an answer that does not fit.`,
     example: {
       title: 'Q1.7 in eight bits',
       body: `<pre>largest word 0111 1111 = 127  → 127 / 128 = 0.9922
 smallest word 1000 0000 = −128 → −128 / 128 = −1
 0.75 → 96 (0110 0000)    0.5 → 64 (0100 0000)
-96 × 64 = 6 144 in Q2.14 → dropped by 7 places → 48 → 48 / 128 = 0.375 = 0.75 × 0.5
+96 × 64 = 6144 in Q2.14 → dropped by 7 places → 48 → 48 / 128 = 0.375 = 0.75 × 0.5
 −1 × −1 = +1 → 128: one past the largest word → the clamp gives 127</pre>The shift by 7 is wiring. Shift by 8 instead and the answer is 24, half of what it should be.`,
     },
     mistakes: [
@@ -58,11 +58,11 @@ true sum:     90  170  240  180   90   40   60   75     (peak 240)
 wrapped:      90  −86  −16  −76   90   40   60   75     ends at 75: right
 saturated:    90  127  127   67  −23  −73  −53  −38     ends at −38: wrong
 
-guard bits:   256 terms → 8     1 024 terms → 10, so 32 + 10 = 42 bits for Q1.15 taps</pre>The wrapped sum passes through values that are wrong, and ends right because the true total, 75, fits in eight bits.`,
+guard bits:   256 terms → 8     1024 terms → 10, so 32 + 10 = 42 bits for Q1.15 taps</pre>The wrapped sum passes through values that are wrong, and ends right because the true total, 75, fits in eight bits.`,
     },
     mistakes: [
       'Clamping after every addition "to be safe". The clamp is what makes the final answer wrong; wrapping through an excursion that comes back is harmless.',
-      'Counting guard bits from the number of taps when the taps are small. 1 024 taps need 10 only if every product can be near full scale; the sum of |h| gives the real bound.',
+      'Counting guard bits from the number of taps when the taps are small. 1024 taps need 10 only if every product can be near full scale; the sum of |h| gives the real bound.',
       'Assuming wrapping is always safe. It is right only if the final value fits in the word; if it may not, the accumulator needs the guard bits, or a clamp at the end.',
       'Forgetting the clamp at the end. The accumulator is wider than the word it feeds, so the result must be saturated or rounded down to the word, once.',
     ],
@@ -107,7 +107,7 @@ cost: 2 multiplications, 1 addition, 1 word of memory</pre>Each output is 0.9 of
     },
     mistakes: [
       'Reading the a signs from the polynomial. The equation has − a₁y[n−1]; the denominator is 1 + a₁z⁻¹ + …. A pole at 0.9 is a₁ = −0.9, and the equation reads y[n] = x[n] + 0.9 y[n−1].',
-      'Calling a filter IIR because it has many taps. IIR means feedback: a 1 000-tap filter with no a terms is FIR and stops after 1 000 samples.',
+      'Calling a filter IIR because it has many taps. IIR means feedback: a 1000-tap filter with no a terms is FIR and stops after 1000 samples.',
       'Starting a step from a non-zero state. The impulse response is the output from rest; leftover y[n−1] terms add their own tail.',
       'Counting memory by the highest delay of the inputs only. The feedback terms need their own words, one per y delay.',
     ],
@@ -131,7 +131,7 @@ cost: 6 × 3 = 18 multiplications
       'Forgetting that h is reversed. The sum pairs x[n−k] with h[k]: the newest sample meets the first tap, so h is reversed as it slides along x.',
       'Expecting the output to be as long as the input. A block of N through M taps gives N + M − 1; the extra M − 1 samples are the filter\'s tail.',
       'Adding two lists of taps to cascade two filters. Cascading convolves them; adding is two filters in parallel.',
-      'Using the sliding sum on a long filter without counting. N × M grows fast: 1 000 samples through 101 taps is 101 000 multiplications, which is when an FFT pays.',
+      'Using the sliding sum on a long filter without counting. N × M grows fast: 1000 samples through 101 taps is 101 000 multiplications, which is when an FFT pays.',
     ],
     chapters: [
       { chapter: 'zplane', step: 1, label: 'Slide, multiply, add' },

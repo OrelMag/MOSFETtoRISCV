@@ -78,10 +78,10 @@ export const CHECK6: Record<string, Quiz[]> = {
     },
     {
       question: 'A UART divides a 50 MHz clock by 27 with a 16× oversampling tick. What baud rate does it run?',
-      options: ['115 741 baud, 0.47 % above 115 200', '115 200 baud exactly', '1 851 852 baud', '231 481 baud'],
+      options: ['115 741 baud, 0.47 % above 115 200', '115 200 baud exactly', '1 851 852 baud', '231 481 baud'],
       answer: 0,
-      explain: 'baud = clock / (16 · divisor) = 50 000 000 / 432 = 115 740.7. An integer divisor cannot hit every rate; 0.47 % is well inside the roughly ±5 % a receiver tolerates.',
-      why: ['', 'An integer divisor of 27 cannot give exactly 115 200; the nearest is 0.47 % high.', 'That omits the 16 ticks per bit: 50 MHz / 27.', 'That divides by 8 ticks a bit instead of 16.'],
+      explain: 'baud = clock / (16 · divisor) = 50 000 000 / 432 = 115 740.7. An integer divisor cannot hit every rate; 0.47 % is well inside the roughly ±5 % a receiver tolerates.',
+      why: ['', 'An integer divisor of 27 cannot give exactly 115 200; the nearest is 0.47 % high.', 'That omits the 16 ticks per bit: 50 MHz / 27.', 'That divides by 8 ticks a bit instead of 16.'],
     },
   ],
   spi: [

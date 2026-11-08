@@ -17,7 +17,7 @@ export const CHECK9: Record<string, Quiz[]> = {
       options: ['A walk reads one node per address bit used, and an address has 32 bits, plus the root', 'It holds at most 33 routes', 'Each read halves the number of routes left', 'It stops at the first route it passes'],
       answer: 0,
       explain: 'The depth depends on the address, not the table. It cannot stop at the first route, since a longer one may lie below: it remembers the last one and goes on until a child is missing.',
-      why: ['', 'Here it holds 1,024 nodes, and tables run to a million routes.', 'That is binary search over a sorted list, which does not work for prefixes of different lengths.', 'Stopping there would give the shortest match, not the longest.'],
+      why: ['', 'Here it holds 1024 nodes, and tables run to a million routes.', 'That is binary search over a sorted list, which does not work for prefixes of different lengths.', 'Stopping there would give the shortest match, not the longest.'],
     },
   ],
   fastpath: [

@@ -15,12 +15,12 @@ export const MORE9E: Record<string, CodexMore> = {
   +c    9, 4, 5              (10 is base + length: back to the base)
   −c    4, 9, 8              (from the base: to the window's last word)
   +r    0, 32, 16, 48        (from 0, m = 32)
-64-tap filter, clocks a product:   DSP core 1.11   RV32 + MAC 6.15   RV32IM 7.18</pre>The two generators are 3,840 of the core's 21,974 NANDs.`,
+64-tap filter, clocks a product:   DSP core 1.11   RV32 + MAC 6.15   RV32IM 7.18</pre>The two generators are 3840 of the core's 21 974 NANDs.`,
     },
     mistakes: [
       'Reading at the updated address. The access uses the pointer as it was and the mode updates it after (post-modify): <code>x(p0)+c</code> at 9 reads word 9 and leaves 4.',
       'Giving the pointer more than 8 bits. The arithmetic is modulo 256: + from 255 gives 0, and −m from 9 with m = 32 gives 233.',
-      'Counting the generator as free. It is 1,920 NANDs, 639 of them step logic, and the core has two.',
+      'Counting the generator as free. It is 1920 NANDs, 639 of them step logic, and the core has two.',
       'Treating X and Y as one address space. The same address in each names a different word, and a <code>mac</code> reads one of each.',
     ],
     chapters: [
@@ -37,7 +37,7 @@ export const MORE9E: Record<string, CodexMore> = {
 −c from the base:     4 9 8 7 6 5 4
 +c from 12 (outside): 12 13 14
 64 taps: shifting costs 63 moves a sample; the ring costs one store
-64 samples of 64 taps on the core: 4,550 clocks, (4,550 − 6) / 64 = 71 = N + 7 a sample</pre>The window is [base, base + length), so base 4 and length 6 end at word 9.`,
+64 samples of 64 taps on the core: 4550 clocks, (4550 − 6) / 64 = 71 = N + 7 a sample</pre>The window is [base, base + length), so base 4 and length 6 end at word 9.`,
     },
     mistakes: [
       'Starting a pointer outside the window. The wrap fires on equality with base + length; from 12 the pointer counts 12, 13, 14 and never returns.',
@@ -56,9 +56,9 @@ export const MORE9E: Record<string, CodexMore> = {
       title: 'The order a pointer counts in',
       body: `<pre>8 points,   m = 4:     0 4 2 6 1 5 3 7
 64 points,  m = 32:    0 32 16 48 8 40 24 56 …   (every place once, then 0 again)
-64 points from 128:    128 160 144 176 …         (the base bits stay)
-256 points, m = 128:   0 128 64 192 32 160 96 224 …
-64-point FFT on the core: 4,512 clocks, 768 multiply-accumulates; the copy is one loop of 64</pre>`,
+64 points from 128:    128 160 144 176 …         (the base bits stay)
+256 points, m = 128:   0128 64 192 32 160 96 224 …
+64-point FFT on the core: 4512 clocks, 768 multiply-accumulates; the copy is one loop of 64</pre>`,
     },
     mistakes: [
       'Using the wrong modifier. It is N / 2: m = 128 on a 64-point table walks the 256-point order, 0, 128, 64, 192, … and leaves the table.',
@@ -96,21 +96,21 @@ FIR, 16 taps:  1.45 clocks a product     FIR, 64 taps:  1.11
     ],
   },
   mulaw: {
-    idea: `A uniform quantizer has one step for whispers and shouts alike, so its noise is the same at every level and a quiet voice gets a poor ratio. Companding makes the step follow the level: compress with a logarithmic curve, quantize uniformly, expand at the far end. The μ-law curve is F(x) = sign(x) · ln(1 + μ|x|) / ln(1 + μ), μ = 255. G.711 does not send it as a formula but as a table on 14-bit samples: 8 segments of 16 steps, the step doubling from one segment to the next, from 2 to 256. Segment ends fall at 31, 95, 223, 479, 991, 2,015, 4,063 and 8,159, the clip level.<br><br>A code is the sign, the segment and the step, sent inverted so that silence is all ones. The encoder adds 33 to the magnitude, finds the top set bit for the segment and takes the four bits below it for the step; the decoder is ((33 + 2m) ≪ e) − 33. Near full scale uniform coding wins, because μ-law's steps there are coarser than a 14-bit-to-8-bit uniform step; the trade is made for the quiet end. G.711 also defines an A-law with a table of its own; only μ-law is built here.`,
+    idea: `A uniform quantizer has one step for whispers and shouts alike, so its noise is the same at every level and a quiet voice gets a poor ratio. Companding makes the step follow the level: compress with a logarithmic curve, quantize uniformly, expand at the far end. The μ-law curve is F(x) = sign(x) · ln(1 + μ|x|) / ln(1 + μ), μ = 255. G.711 does not send it as a formula but as a table on 14-bit samples: 8 segments of 16 steps, the step doubling from one segment to the next, from 2 to 256. Segment ends fall at 31, 95, 223, 479, 991, 2015, 4063 and 8159, the clip level.<br><br>A code is the sign, the segment and the step, sent inverted so that silence is all ones. The encoder adds 33 to the magnitude, finds the top set bit for the segment and takes the four bits below it for the step; the decoder is ((33 + 2m) ≪ e) − 33. Near full scale uniform coding wins, because μ-law's steps there are coarser than a 14-bit-to-8-bit uniform step; the trade is made for the quiet end. G.711 also defines an A-law with a table of its own; only μ-law is built here.`,
     example: {
       title: 'Samples and their codes',
       body: `<pre>sample  code  decoded  segment, step
 0       FF    0        1, 0
 1       FE    2        1, 1
 100     DF    99       3, 0
-1000    AF    1,023    6, 0
-8000    80    8,031    8, 15
+1000    AF    1023    6, 0
+8000    80    8031    8, 15
 curve against table: a sample at 1 % of full scale, magnitude 82 → code magnitude 28 of 127; the curve says 29.0
 sine peaking at −40 dB:   μ-law 34.4 dB   8 uniform bits 11.1 dB
-sine peaking at −20 dB:   38.0 / 29.6      at −6 dB: 36.7 / 43.9</pre>Decibels are below the clip level, 8,159.`,
+sine peaking at −20 dB:   38.0 / 29.6      at −6 dB: 36.7 / 43.9</pre>Decibels are below the clip level, 8159.`,
     },
     mistakes: [
-      'Reading the 8 bits as 8-bit PCM. They stand for a 14-bit range: the largest code decodes to 8,031 and the clip level is 8,159.',
+      'Reading the 8 bits as 8-bit PCM. They stand for a 14-bit range: the largest code decodes to 8031 and the clip level is 8159.',
       'Forgetting the inversion. G.711 sends the code complemented, so silence is 0xFF, not 0, and a positive sample\'s code is 255 − n.',
       'Expecting μ-law to win everywhere. Near full scale 8 uniform bits do better (43.9 dB against 36.7 at −6 dB); the gain is at the quiet end.',
       'Treating the logarithm as smooth. The table is piecewise linear, 8 segments whose step doubles; the curve is its idealisation.',
@@ -122,7 +122,7 @@ sine peaking at −20 dB:   38.0 / 29.6      at −6 dB: 36.7 / 43.9</pre>Decibe
     ],
   },
   adpcm: {
-    idea: `Neighbouring samples of a voice are close, so the difference from a prediction is smaller than the sample and fits fewer bits. ADPCM predicts the next sample as the last reconstructed one and sends the difference on 4 bits: one for the sign, three for the magnitude in quarter-steps of the current step, a code <i>m</i> standing for (m + ½) quarter-steps. The step adapts. After each sample the index into IMA's table of 89 steps (7 to 32,767, each about 10 % above the last) moves by −1 for magnitudes 0 to 3 and by +2, +4, +6, +8 for 4 to 7: a small code shrinks the step, a large one grows it, up to 8 places at once.<br><br>The encoder runs the decoder's arithmetic on its own codes, so both keep the same prediction and the same step, and neither is sent. The error is largest just after a loud onset, while the step is still growing. A byte holds two codes; Python's audioop puts the first in the high half, and Microsoft's IMA ADPCM in WAV files in the low half, with block headers, so these codes are not a WAV file\'s. The encoder as an RV32I program needs shifts, compares and table loads, and no multiply.`,
+    idea: `Neighbouring samples of a voice are close, so the difference from a prediction is smaller than the sample and fits fewer bits. ADPCM predicts the next sample as the last reconstructed one and sends the difference on 4 bits: one for the sign, three for the magnitude in quarter-steps of the current step, a code <i>m</i> standing for (m + ½) quarter-steps. The step adapts. After each sample the index into IMA's table of 89 steps (7 to 32 767, each about 10 % above the last) moves by −1 for magnitudes 0 to 3 and by +2, +4, +6, +8 for 4 to 7: a small code shrinks the step, a large one grows it, up to 8 places at once.<br><br>The encoder runs the decoder's arithmetic on its own codes, so both keep the same prediction and the same step, and neither is sent. The error is largest just after a loud onset, while the step is still growing. A byte holds two codes; Python's audioop puts the first in the high half, and Microsoft's IMA ADPCM in WAV files in the low half, with block headers, so these codes are not a WAV file\'s. The encoder as an RV32I program needs shifts, compares and table loads, and no multiply.`,
     example: {
       title: 'A step to 1000 from rest',
       body: `<pre>sample  code  prediction  index  step
@@ -132,10 +132,10 @@ sine peaking at −20 dB:   38.0 / 29.6      at −6 dB: 36.7 / 43.9</pre>Decibe
 4       7     240         32     157
 5       7     533         40     337
 6       5     996         44     494
-7       0     1,057       43     449
-8       8     1,001       42     408
+7       0     1057       43     449
+8       8     1001       42     408
 9       8     950         41     371
-10      0     996         40     337</pre>The step climbs by 8 places a sample, so the prediction needs six samples to arrive and then overshoots. 89 steps from 7 to 32,767 are 1.10 apart on average; 4 bits at 8,000 a second are 32 kb/s.`,
+10      0     996         40     337</pre>The step climbs by 8 places a sample, so the prediction needs six samples to arrive and then overshoots. 89 steps from 7 to 32 767 are 1.10 apart on average; 4 bits at 8000 a second are 32 kb/s.`,
     },
     mistakes: [
       'Sending the step. Both sides move it by the same table from the same codes, so it never travels.',
@@ -179,12 +179,12 @@ pitch period and voicing                              7
 level                                                 5
 sync                                                  1
                                                      54 bits per 180 samples (22.5 ms at 8 kHz)
-54 / 0.0225 s = 2,400 b/s       μ-law 64,000 (27×)       ADPCM 32,000 (13×)
+54 / 0.0225 s = 2400 b/s       μ-law 64 000 (27×)       ADPCM 32 000 (13×)
 chapter's reading: 59 % of frames voiced, median pitch 127 Hz</pre>`,
     },
     mistakes: [
       'Judging it by SNR. It never tries to match the samples; compare it by intelligibility and by what it keeps.',
-      'Reading 2,400 b/s as a 27-fold compression of the same thing. μ-law keeps the waveform and the speaker; the vocoder keeps the words.',
+      'Reading 2400 b/s as a 27-fold compression of the same thing. μ-law keeps the waveform and the speaker; the vocoder keeps the words.',
       'Believing the filter alone carries the speech. Driving the same filter with noise instead of pulses gives a whisper; the voiced / unvoiced decision and the pitch are half the description.',
       'Trusting the pitch. A tracker can pick an octave or a harmonic; the check reduces the mistakes, it does not remove them.',
     ],
@@ -201,7 +201,7 @@ chapter's reading: 59 % of frames voiced, median pitch 127 Hz</pre>`,
 one frame back:   first half   y[n] = w[n] ( w[n] x[n] − w[M−1−n] x[M−1−n] )
                   second half  y[n] = w[n] ( w[n] x[n] + w[3M−1−n] x[3M−1−n] )
 two frames added: the aliases cancel; the signal returns to better than 10<sup>−12</sup>
-direct computation: 2M² = 131,072 multiplications a frame</pre>`,
+direct computation: 2M² = 131 072 multiplications a frame</pre>`,
     },
     mistakes: [
       'Treating one frame as invertible. Alone it returns the signal folded; only the overlap-add restores it.',
@@ -240,9 +240,9 @@ nocturne, bits by mask / by signal:
     idea: `The ear resolves frequency in bands whose width grows with frequency: about 100 Hz wide near the bottom, roughly a fifth of the centre frequency higher up. The Bark scale numbers those critical bands, one Bark each, from 1 to 24. An engineer wants it because masking, loudness summation and the ear's resolution are all roughly constant on it, so a fixed spreading rule in decibels a Bark describes masking at any pitch, where in hertz the same rule would change with frequency.<br><br>Zwicker\'s formula is an approximation to the measured bands, and the chapter takes it from memory. Used for a codec, it fixes the bands: starting at the lowest coefficient, each band takes coefficients until a Bark has been covered. At 16 kHz that makes 20 bands of an MDCT frame, narrow at the bottom (4 coefficients of 31.25 Hz) and wide at the top (28), so more bits and more side information go where the ear is sharper.`,
     example: {
       title: 'Hertz to Bark',
-      body: `<pre>f        100    500    1,000   4,000   8,000   16,000 Hz
+      body: `<pre>f        100    500    1000   4000   8000   16 000 Hz
 z(f)     0.99   4.74   8.51    17.26   21.28   24.09  Bark
-100 → 500 Hz: 3.75 Bark on 400 Hz, 107 Hz a Bark     4 → 8 kHz: 4.02 Bark on 4,000 Hz, about 1 kHz a Bark
+100 → 500 Hz: 3.75 Bark on 400 Hz, 107 Hz a Bark     4 → 8 kHz: 4.02 Bark on 4000 Hz, about 1 kHz a Bark
 20 kHz: 24.6 Bark
 MDCT, 16 kHz, 256 coefficients: 20 bands, widths from 4 to 36 coefficients (the last, 28)</pre>`,
     },
@@ -261,19 +261,19 @@ MDCT, 16 kHz, 256 coefficients: 20 bands, widths from 4 to 36 coefficients (the 
     idea: `To generate a sine of any frequency from a table, step through the table at a rate. The modem chapter builds one for FSK, with a 13-bit register; the software radio's has 16 bits and a cosine table beside the sine one. The phase register is the position, and it advances by the tuning word at every clock; the top bits of the phase pick the table entry. The register being 16 bits wide, the word f / f<sub>s</sub> · 2<sup>16</sup> sets the frequency in steps of f<sub>s</sub> / 2<sup>16</sup>, which at 960 kHz is 14.65 Hz. A second table a quarter turn out gives the cosine, and the pair is the complex oscillator e<sup>jθ</sup> that a mixer needs.<br><br>Fineness of tuning and accuracy of the wave are different things. Resolution comes from the phase register's width; the table size decides how coarse the staircase is, and the staircase leaves a spur at a fixed distance below the carrier, 6 dB lower for every bit of the table until the table's own word length takes over. Where a station sits matters: −300 kHz has the word 0xB000, with 12 trailing zeros, so the phase visits only 16 points, which are all on the table and so have no staircase error. Tuned 100 Hz off, the spurs return. A table of 2<sup>k</sup> entries doubles in size for every bit.`,
     example: {
       title: 'Tuning words and table sizes',
-      body: `<pre>step = 960,000 / 65,536 = 14.65 Hz
-−300 kHz → word 45,056 = 0xB000   (12 trailing zeros: 16 phase points)
+      body: `<pre>step = 960 000 / 65 536 = 14.65 Hz
+−300 kHz → word 45 056 = 0xB000   (12 trailing zeros: 16 phase points)
 table bits   spur below the carrier   oscillator NANDs
    4           23.5 dB                    902
-   6           36.0                     3,146      (the chapter's)
-   8           48.1                    13,658
-   9           52.8                    29,176      (the table's 8-bit words limit it)</pre>`,
+   6           36.0                     3146      (the chapter's)
+   8           48.1                    13 658
+   9           52.8                    29 176      (the table's 8-bit words limit it)</pre>`,
     },
     mistakes: [
       'Reading the table size as the tuning resolution. The resolution is f<sub>s</sub> / 2<sup>16</sup> = 14.65 Hz, from the phase register; the table only sets the spur level.',
       'Judging the table on a friendly frequency. At −300 kHz the phase lands on 16 table points and the error vanishes; 100 Hz off, it does not.',
       'Expecting 6 dB a bit without limit. From 9 bits on the table\'s 8-bit entries set the floor, at 52.8 dB.',
-      'Forgetting the wrap. Negative frequencies are the word modulo 2<sup>16</sup>, so −300 kHz is 45,056, not a negative number.',
+      'Forgetting the wrap. Negative frequencies are the word modulo 2<sup>16</sup>, so −300 kHz is 45 056, not a negative number.',
     ],
     chapters: [
       { chapter: 'modem', step: 2, label: 'An oscillator from an adder' },
@@ -289,7 +289,7 @@ table bits   spur below the carrier   oscillator NANDs
       body: `<pre>(xr + j xi)(cos θ − j sin θ) = (xr cos θ + xi sin θ) + j (xi cos θ − xr sin θ)
 the station at −300 kHz            → 0
 the station at +340 kHz            → +640 kHz, past +480 kHz, so it shows at −320 kHz
-mixer 9,554 NANDs, of which the oscillator 3,146; gain 127 / 128 = 0.992</pre>`,
+mixer 9554 NANDs, of which the oscillator 3146; gain 127 / 128 = 0.992</pre>`,
     },
     mistakes: [
       'Using a real mixer on I / Q and expecting one image. Multiplying by cos θ alone makes the sum and the difference, with the mirror image on top of the wanted station.',
@@ -322,10 +322,10 @@ Carson: 2 (50 + 15) = 130 kHz       modulation index 50 / 15 = 3.33</pre>`,
     ],
   },
   emphasis: {
-    idea: `After an FM discriminator, noise rises towards the top of the audio band while most programme energy sits at the bottom. A broadcaster takes advantage: it boosts the treble before modulating and every receiver cuts the treble by the inverse curve. The programme comes back flat, the noise added in the channel is cut at the top, and the hiss is quieter than without the pair.<br><br>The analogue standard is a first-order network with a time constant, 75 µs in North American FM broadcasting: its corner is 2,122 Hz and it lifts a tone at the corner by 3.01 dB. The chapter\'s discrete version is one tap at 24 kHz, the pre-emphasis y[n] = (m[n] − α m[n−1]) / (1 + α), scaled to unity gain at 12 kHz, with the de-emphasis its exact inverse; α is chosen from the same 75 µs. The two do not match: at 10 kHz the discrete one lifts 11.07 dB, the analogue one 13.66.`,
+    idea: `After an FM discriminator, noise rises towards the top of the audio band while most programme energy sits at the bottom. A broadcaster takes advantage: it boosts the treble before modulating and every receiver cuts the treble by the inverse curve. The programme comes back flat, the noise added in the channel is cut at the top, and the hiss is quieter than without the pair.<br><br>The analogue standard is a first-order network with a time constant, 75 µs in North American FM broadcasting: its corner is 2122 Hz and it lifts a tone at the corner by 3.01 dB. The chapter\'s discrete version is one tap at 24 kHz, the pre-emphasis y[n] = (m[n] − α m[n−1]) / (1 + α), scaled to unity gain at 12 kHz, with the de-emphasis its exact inverse; α is chosen from the same 75 µs. The two do not match: at 10 kHz the discrete one lifts 11.07 dB, the analogue one 13.66.`,
     example: {
       title: 'The two curves',
-      body: `<pre>τ = 75 µs → corner 1 / (2π τ) = 2,122 Hz
+      body: `<pre>τ = 75 µs → corner 1 / (2π τ) = 2122 Hz
 f         1 kHz   2.122 kHz   5 kHz   10 kHz
 analogue  0.87    3.01        8.16    13.66 dB
 discrete  0.85    2.90        7.54    11.07 dB     (α = 0.574 at 24 kHz)
