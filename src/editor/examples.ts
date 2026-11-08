@@ -63,13 +63,15 @@ export function fetchChip(id: string, name: string, rom: { k: number; src: strin
       part('inc', { lib: 'plus4' }, [22, 2], { flip: true }),
       part('rom', { rom: { k: rom.k, w: 32, addr: 'rv32', lang: 'asm', src: rom.src } }, [34, 11], { label: 'program' }),
     ],
-    // the loop: q up into the incrementer above the register (it faces left), its sum down into d; en and clk come in below it
-    labels: [],
+    // the loop: q through the pc pointers (the editor ladder's lesson) to the incrementer above the register (it faces left), its
+    // sum down into d; en and clk come in below it, so nothing crosses
+    labels: [lbl('p1', 'pc', [30, 9], 'up'), lbl('p2', 'pc', [30, 4], 'right')],
     wires: [
       wire('clk', 'pin:clk', 'pcr.clk'), wire('en', 'one.y', 'pcr.en'),
       wire('q', 'pcr.q', 'rom.addr'),
       wire('qo', { wire: 'q', at: [26, 13] }, 'pin:pc', [[26, 21]]),
-      wire('ia', { wire: 'q', at: [30, 13] }, 'inc.a', [[32, 13], [32, 4]]),
+      wire('qp', { wire: 'q', at: [30, 13] }, 'lbl:p1'),
+      wire('ia', 'lbl:p2', 'inc.a'),
       wire('nx', 'inc.y', 'pcr.d', [[8, 4], [8, 12]]),
       wire('i', 'rom.data', 'pin:instr'),
     ],
