@@ -21,9 +21,10 @@ import { define, merger, ones, splitter } from './define';
 import { addSubFast, fanout, koggeStone } from './fastadd';
 import { AND, MUX2, NOT, OR, XOR } from './gates';
 import { Builder } from './builder';
-import { ROUND_DECIDE, fpUnpack, incFast, lzc, shiftLeft, shiftRightSticky } from './fpu';
+import { ROUND_DECIDE, faddSpecial, fpUnpack, incFast, lzc, shiftLeft, shiftRightSticky } from './fpu';
+import { layered } from './layered';
 import { TIE0, TIE1 } from './transistors';
-import { bitwise, orN } from './wide';
+import { bitwise } from './wide';
 import { fpAddX, RM, type FpFormat } from '../sim/fpref';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -43,10 +44,6 @@ const xeOf = (f: FpFormat) => (f.E + 3 <= 8 ? 8 : 16);
 const fmtName = (f: FpFormat) => (f.E === 8 && f.M === 23 ? 'float32' : f.E === 5 && f.M === 10 ? 'binary16' : `E${f.E}M${f.M}`);
 const nonZero = (b: Builder, x: string, w: number) => (w === 1 ? x : b.op1(NOT, [b.op1(isZero(w), [x])]));
 const zext = (b: Builder, x: string, from: number, to: number) => (from === to ? x : b.op1(merger([from, to - from]), [x, b.op1(K(to - from, 0), [])]));
-const flagWord = (b: Builder, fl: { nv?: string }) => {
-  const z = () => b.op1(TIE0, []);
-  return b.op1(merger([1, 1, 1, 1, 1]), [z(), z(), z(), z(), fl.nv ?? z()]);
-};
 
 /** n inverters side by side (the library has no inverter word: an XOR with ones would cost three NANDs a bit more). */
 const notCache = new Map<number, ComponentDef>();
@@ -391,6 +388,180 @@ function roundPack(f: FpFormat): ComponentDef {
   });
 }
 
+// ---- the adder's blocks ----------------------------------------------------------------------------
+// Drawn as its stages like fpAdd (circuit eyeballing, 2026-11-08): the control nets between them (which exponent is larger,
+// near or far, subtract) are box ports. The gates are the ones the flat drawing had.
+
+/** Signs: b's effective sign (sub flips it) and whether the significands are subtracted. */
+export const FNF_SIGN: ComponentDef = (() => {
+  const b = new Builder(10, 8, 4);
+  b.pins('sa', 'sub', 'sb');
+  const sbEff = b.op1(XOR, ['sb', 'sub'], 'b sign (−b for fsub)', 'nb');
+  b.next();
+  b.wire(b.op1(XOR, ['sa', sbEff], 'subtract?', 'sx'), 'effSub');
+  b.wire(sbEff, 'signB');
+  const ports = [bit('sa', 'in'), bit('sub', 'in'), bit('sb', 'in'), bit('signB', 'out'), bit('effSub', 'out')];
+  return define({
+    id: 'fnf_sign', name: 'Near / far adder: signs', category: 'arithmetic',
+    summary: 'b\'s sign XOR sub (a − b is a + (−b)); the significands are subtracted when the two signs differ.',
+    ports, symbol: { kind: 'box', label: 'SIGNS' },
+    spec: ([sa, sub, sb]) => [sb ^ sub, sa ^ sb ^ sub],
+    netlist: () => layered(ports, b, { gap: 8 }),
+  });
+})();
+
+/** The exponents: both differences (the borrow says which is larger), the larger exponent and that minus 1, and near or far. */
+function nfExp(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fnf_exp${E}_${M}`, () => {
+    // drawn by hand: the two differences on top (the lower one's borrow is ge), the two decrements below, the three muxes in a
+    // column (the lower two mirrored, their selects on top); ea and eb run down two trunks on the left; near from the difference's upper bits on the right
+    const instances: InstanceDef[] = [
+      { name: 'dba', def: addSubFast(E), at: [8, 2], label: 'eb − ea' }, { name: 'one_ba', def: TIE1, at: [5, 8] },
+      { name: 'dab', def: addSubFast(E), at: [8, 14], label: 'ea − eb' }, { name: 'one_ab', def: TIE1, at: [5, 20] },
+      { name: 'deca', def: koggeStone(E), at: [12, 30], label: 'ea − 1' }, { name: 'decak', def: K(E, 2 ** E - 1), at: [5, 33] }, { name: 'decac', def: TIE0, at: [7, 36] },
+      { name: 'decb', def: koggeStone(E), at: [12, 40], label: 'eb − 1' }, { name: 'decbk', def: K(E, 2 ** E - 1), at: [5, 43] }, { name: 'decbc', def: TIE0, at: [7, 46] },
+      { name: 'dsel', def: busMux2(E), at: [30, 8], label: '|exponent difference|' },
+      { name: 'esel', def: busMux2(E), at: [30, 24], flip: true, rot: 2, label: 'larger exponent' }, // mirrored: ge comes in from above
+      { name: 'm1sel', def: busMux2(E), at: [30, 38], flip: true, rot: 2, label: 'e − 1 (formed before the swap)' },
+      { name: 'dsp', def: splitter([1, E - 1]), at: [38, 9] },
+      { name: 'zero', def: isZero(E - 1), at: [41, 10] }, { name: 'nz', def: NOT, at: [48, 11] }, { name: 'small', def: NOT, at: [52, 11], label: 'd ≤ 1' },
+      { name: 'isnear', def: AND, at: [57, 9], label: 'near: subtract, d ≤ 1' },
+    ];
+    const nets: NetDef[] = [
+      { name: 'ea', ends: ['ea', 'dba.b', 'dab.a', 'esel.b', 'deca.a'] }, { name: 'eb', ends: ['eb', 'dba.a', 'dab.b', 'esel.a', 'decb.a'] },
+      { name: '1', ends: ['one_ba.y', 'dba.sub'] }, { name: '1 ', ends: ['one_ab.y', 'dab.sub'] },
+      { name: 'eb − ea', ends: ['dba.s', 'dsel.a'] }, { name: 'ea − eb', ends: ['dab.s', 'dsel.b'] },
+      { name: 'aExp≥bExp', ends: ['dab.cout', 'dsel.s', 'esel.s', 'm1sel.s', 'ge'], via: { 'm1sel.s': [[36, 18], [36, 36], [32, 36]] } },
+      { name: '−1', ends: ['decbk.y', 'decb.b'] }, { name: '0', ends: ['decbc.y', 'decb.cin'] }, { name: '−1 ', ends: ['decak.y', 'deca.b'] }, { name: '0 ', ends: ['decac.y', 'deca.cin'] },
+      { name: 'eb − 1', ends: ['decb.s', 'm1sel.a'] }, { name: 'ea − 1', ends: ['deca.s', 'm1sel.b'] },
+      { name: 'd', ends: ['dsel.y', 'dsp.in', 'd'], via: { d: [[36, 11], [36, 16]] } },
+      { name: 'd1', ends: ['dsp.o0', 'd1'], via: { d1: [[40, 10], [40, 8]] } }, { name: 'd upper', ends: ['dsp.o1', 'zero.a'] },
+      { name: 'upper = 0', ends: ['zero.z', 'nz.a'] }, { name: 'd ≥ 2', ends: ['nz.y', 'small.a'] }, { name: 'd ≤ 1', ends: ['small.y', 'isnear.b'] },
+      { name: 'effSub', ends: ['effSub', 'isnear.a'], via: { 'isnear.a': [[55, 0], [55, 10]] } }, { name: 'near', ends: ['isnear.y', 'near'] },
+      { name: 'eBig', ends: ['esel.y', 'eBig'] }, { name: 'eBig − 1', ends: ['m1sel.y', 'eBigM1'] },
+    ];
+    const pins: Record<string, [number, number]> = { effSub: [0, 0], ea: [0, 7], eb: [0, 5], ge: [66, 18], d1: [66, 8], near: [66, 11], d: [66, 16], eBig: [66, 27], eBigM1: [66, 41] };
+    const ports = [bus('ea', E, 'in'), bit('effSub', 'in'), bus('eb', E, 'in'), bit('ge', 'out'), bus('eBig', E, 'out'), bus('d', E, 'out'), bus('eBigM1', E, 'out'),
+      bit('d1', 'out'), bit('near', 'out')];
+    const T = 2 ** E;
+    return define({
+      id: `fnf_exp${E}_${M}`, name: `Near / far adder: exponents (${fmtName(f)})`, category: 'arithmetic',
+      summary: 'Both differences ea − eb and eb − ea at once: the first one\'s borrow says which exponent is larger (ge) and picks d = |difference|, the larger exponent, and that exponent minus 1 (formed before the swap, for the near path). near: a subtraction with d ≤ 1.',
+      ports, symbol: { kind: 'box', label: 'EXP' },
+      spec: ([ea, sub, eb]) => {
+        const ge = ea >= eb ? 1 : 0, d = ge ? ea - eb : eb - ea, eB = ge ? ea : eb;
+        return [ge, eB, d, (eB - 1 + T) % T, d & 1, sub && d <= 1 ? 1 : 0];
+      },
+      netlist: () => ({ pins, instances, nets }),
+    });
+  });
+}
+
+/** The significands, larger exponent first (no magnitude compare: when d = 0 the near path sorts them out). */
+function nfSwap(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fnf_swap${E}_${M}`, () => {
+    const b = new Builder(10, 8, 4);
+    b.pins('ma', 'mb', 'ge');
+    b.wire(b.op1(busMux2(M + 1), ['mb', 'ma', 'ge'], 'larger exponent\'s', 'big'), 'mBig');
+    b.wire(b.op1(busMux2(M + 1), ['ma', 'mb', 'ge'], 'smaller exponent\'s', 'small'), 'mSmall');
+    const ports = [bus('ma', M + 1, 'in'), bus('mb', M + 1, 'in'), bit('ge', 'in'), bus('mBig', M + 1, 'out'), bus('mSmall', M + 1, 'out')];
+    return define({
+      id: `fnf_swap${E}_${M}`, name: `Near / far adder: swap (${fmtName(f)})`, category: 'arithmetic',
+      summary: 'The significand with the larger exponent first. By exponent alone: when the exponents are equal either may be the larger, and the near path, which forms both differences, sorts that out.',
+      ports, symbol: { kind: 'box', label: 'SWAP' },
+      spec: ([ma, mb, ge]) => (ge ? [ma, mb] : [mb, ma]),
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** Pick the path's result, and the sign: the larger operand's, the other one's when the near path's X − Y went negative, ±0 for x − x. */
+function nfSelect(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fnf_select${E}_${M}`, () => {
+    const XE = xeOf(f), w = M + 5;
+    const b = new Builder(10, 8, 4);
+    b.pins('nm', 'ne', 'neg', 'eq', 'fm', 'fe', 'near', 'ge', 'sa', 'signB', 'rm');
+    const sB = b.op1(MUX2, ['signB', 'sa', 'ge'], 'larger exponent\'s sign', 'sbig');
+    const sS = b.op1(MUX2, ['sa', 'signB', 'ge'], 'the other sign', 'ssmall');
+    b.next();
+    const negSel = b.op1(AND, ['near', 'neg'], 'near, X < Y', 'negsel');
+    const zero = b.op1(AND, ['near', 'eq'], 'x − x', 'cancel');
+    b.next();
+    const sg1 = b.op1(MUX2, [sB, sS, negSel], 'sign of the bigger', 'sg');
+    const sign = b.op1(MUX2, [sg1, b.op1(equal(3), ['rm', b.op1(K(3, RM.RDN), [], undefined, 'rdnk')], 'RDN?', 'rdn'), zero], 'x − x = +0 (−0 in RDN)', 'zsign');
+    b.wire(sign, 'sign');
+    b.wire(b.op1(busMux2(w), ['fm', 'nm', 'near'], 'select the path', 'msel'), 'm');
+    b.wire(b.op1(busMux2(XE), ['fe', 'ne', 'near'], 'and its exponent', 'esel'), 'e');
+    const ports = [bus('nm', w, 'in'), bus('ne', XE, 'in'), bit('neg', 'in'), bit('eq', 'in'), bus('fm', w, 'in'), bus('fe', XE, 'in'), bit('near', 'in'), bit('ge', 'in'),
+      bit('sa', 'in'), bit('signB', 'in'), bus('rm', 3, 'in'), bit('sign', 'out'), bus('e', XE, 'out'), bus('m', w, 'out')];
+    return define({
+      id: `fnf_select${E}_${M}`, name: `Near / far adder: select (${fmtName(f)})`, category: 'arithmetic',
+      summary: 'One path\'s significand and exponent, the other\'s discarded. The sign is the larger exponent\'s operand\'s, or the other one\'s when the near path found X < Y; an exact x − x is +0, −0 when rounding down.',
+      ports, symbol: { kind: 'box', label: 'SELECT' },
+      spec: ([nm, ne, neg, eq, fm, fe, near, ge, sa, sB0, rm]) => {
+        const sB = ge ? sa : sB0, sS = ge ? sB0 : sa;
+        const sign = near && eq ? (rm === RM.RDN ? 1 : 0) : near && neg ? sS : sB;
+        return [sign, near ? ne : fe, near ? nm : fm];
+      },
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** The near / far adder's own blocks (the paths, the rounder and the special cases are drawn with them). */
+export const fnfBlocks = (f: FpFormat): ComponentDef[] => [FNF_SIGN, nfExp(f), nfSwap(f), nfSelect(f)];
+
+/** Where the near / far adder's stages sit (kept apart so a tuning script can move them). */
+export const FNF_AT: Record<'ua' | 'ub' | 'sign' | 'exp' | 'swap' | 'far' | 'near' | 'sel' | 'rnd' | 'special', [number, number]> & { pins: Record<string, [number, number]> } = {
+  ua: [6, 0], ub: [6, 22], sign: [20, 15], exp: [40, 13], swap: [58, 4], near: [84, -1], far: [83, 16], sel: [98, -2], rnd: [114, 5], special: [128, 12],
+  pins: { a: [0, 8], b: [0, 30], sub: [0, 19], rm: [0, 40], y: [150, 24], flags: [150, 26] },
+};
+
+/** The near / far adder's top level: unpack, signs and exponents, swap, the two paths side by side, select, round, special cases. */
+function nfTop(f: FpFormat, near: ComponentDef): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
+  const P = FNF_AT;
+  const instances: InstanceDef[] = [
+    { name: 'ua', def: fpUnpack(f), at: P.ua, flip: true, rot: 2, label: 'unpack a' }, // mirrored top to bottom: its class flags along the top edge
+    { name: 'ub', def: fpUnpack(f), at: P.ub, label: 'unpack b' },
+    { name: 'sign', def: FNF_SIGN, at: P.sign },
+    { name: 'exp', def: nfExp(f), at: P.exp },
+    { name: 'swap', def: nfSwap(f), at: P.swap },
+    { name: 'far', def: farPath(f), at: P.far, label: 'far path' },
+    { name: 'near', def: near, at: P.near, label: 'near path' },
+    { name: 'sel', def: nfSelect(f), at: P.sel },
+    { name: 'rnd', def: roundPack(f), at: P.rnd, label: 'round' },
+    { name: 'special', def: faddSpecial(f), at: P.special },
+  ];
+  const nets: NetDef[] = [
+    { name: 'a', ends: ['a', 'ua.x'] }, { name: 'b', ends: ['b', 'ub.x'] },
+    { name: 'sa', ends: ['ua.sign', 'sign.sa', 'sel.sa', 'special.sa'], tags: ['sel.sa', 'special.sa'] }, { name: 'sb', ends: ['ub.sign', 'sign.sb'] }, { name: 'sub', ends: ['sub', 'sign.sub'] },
+    { name: 'signB', ends: ['sign.signB', 'sel.signB', 'special.signB'], tags: true },
+    { name: 'effSub', ends: ['sign.effSub', 'exp.effSub', 'far.sub', 'special.effSub'], tags: ['far.sub', 'special.effSub'] },
+    { name: 'ea', ends: ['ua.exp', 'exp.ea'], via: { 'exp.ea': [[38, 12], [38, 18]] } }, { name: 'eb', ends: ['ub.exp', 'exp.eb'], via: { 'exp.eb': [[38, 26], [38, 22]] } },
+    { name: 'ma', ends: ['ua.mant', 'swap.ma'], via: { 'swap.ma': [[55, 10], [55, 6]] } }, { name: 'mb', ends: ['ub.mant', 'swap.mb'], via: { 'swap.mb': [[56, 28], [56, 8]] } },
+    { name: 'aExp≥bExp', ends: ['exp.ge', 'swap.ge', 'sel.ge'], tags: ['sel.ge'] },
+    { name: 'd', ends: ['exp.d', 'far.d'] }, { name: 'd1', ends: ['exp.d1', 'near.d1'] },
+    { name: 'eBig', ends: ['exp.eBig', 'far.eB', 'near.eB'] }, { name: 'eBig−1', ends: ['exp.eBigM1', 'near.em1'] },
+    { name: 'near', ends: ['exp.near', 'sel.near'], tags: true },
+    { name: 'mBig', ends: ['swap.mBig', 'far.mB', 'near.mB'] }, { name: 'mSmall', ends: ['swap.mSmall', 'far.mS', 'near.mS'] },
+    { name: 'far m', ends: ['far.m', 'sel.fm'] }, { name: 'far e', ends: ['far.e', 'sel.fe'] },
+    { name: 'near m', ends: ['near.m', 'sel.nm'] }, { name: 'near e', ends: ['near.e', 'sel.ne'] },
+    { name: 'X < Y', ends: ['near.neg', 'sel.neg'] }, { name: 'X = Y', ends: ['near.eq', 'sel.eq'] },
+    { name: 'rm', ends: ['rm', 'sel.rm', 'rnd.rm'], tags: true },
+    { name: 'sign', ends: ['sel.sign', 'rnd.sign'] }, { name: 'e', ends: ['sel.e', 'rnd.e'] }, { name: 'm', ends: ['sel.m', 'rnd.m'] },
+    { name: 'rounded', ends: ['rnd.y', 'special.ry'] }, { name: 'round flags', ends: ['rnd.flags', 'special.rflags'] },
+    ...(['inf', 'nan', 'snan'] as const).flatMap((c): NetDef[] => [
+      { name: `${c} a`, ends: [`ua.${c}`, `special.${c === 'inf' ? 'ia' : c === 'nan' ? 'na' : 'sna'}`], tags: true },
+      { name: `${c} b`, ends: [`ub.${c}`, `special.${c === 'inf' ? 'ib' : c === 'nan' ? 'nb' : 'snb'}`], tags: true },
+    ]),
+    { name: 'y', ends: ['special.y', 'y'] }, { name: 'flags', ends: ['special.flags', 'flags'] },
+  ];
+  return { instances, nets, pins: P.pins };
+}
+
 // ---- the adder -------------------------------------------------------------------------------------
 
 /** a ± b with a near path and a far path (see the file header): the same function as fpAdd, shallower and larger. */
@@ -398,56 +569,15 @@ export function fpAddNearFar(f: FpFormat, anticipate = true): ComponentDef {
   const { E, M } = f;
   const tag = anticipate ? 'fpnf' : 'fpnfc';
   return memo(`${tag}${E}_${M}`, () => {
-    const XE = xeOf(f), w = M + 5, N = 1 + E + M;
-    const b = new Builder();
-    const ua = b.op(fpUnpack(f), ['a'], 'unpack a', 'ua'), ub = b.op(fpUnpack(f), ['b'], 'unpack b', 'ub');
-    b.next();
-    const sbEff = b.name(b.op1(XOR, [`${ub}.sign`, 'sub'], 'b sign (−b for fsub)'), 'signB');
-    const effSub = b.name(b.op1(XOR, [`${ua}.sign`, sbEff], 'subtract?'), 'effSub');
-    const dab = b.op(addSubFast(E), [`${ua}.exp`, `${ub}.exp`, b.op1(TIE1, [])], 'ea − eb', 'dab');
-    const dba = b.op(addSubFast(E), [`${ub}.exp`, `${ua}.exp`, b.op1(TIE1, [])], 'eb − ea', 'dba');
-    b.next();
-    const ge = b.name(`${dab}.cout`, 'aExp≥bExp');
-    const d = b.name(b.op1(busMux2(E), [`${dba}.s`, `${dab}.s`, ge], '|exponent difference|'), 'd');
-    const eB = b.name(b.op1(busMux2(E), [`${ub}.exp`, `${ua}.exp`, ge], 'swap by exponent'), 'eBig');
-    const dec1 = (x: string, lbl: string) => `${b.op(koggeStone(E), [x, b.op1(K(E, 2 ** E - 1), []), b.op1(TIE0, [])], lbl)}.s`;
-    const em1 = b.name(b.op1(busMux2(E), [dec1(`${ub}.exp`, 'eb − 1'), dec1(`${ua}.exp`, 'ea − 1'), ge], 'e − 1 (formed before the swap)'), 'eBig−1');
-    b.next();
-    const mB = b.name(b.op1(busMux2(M + 1), [`${ub}.mant`, `${ua}.mant`, ge]), 'mBig');
-    const mS = b.name(b.op1(busMux2(M + 1), [`${ua}.mant`, `${ub}.mant`, ge]), 'mSmall');
-    const sB = b.name(b.op1(MUX2, [sbEff, `${ua}.sign`, ge]), 'signBig');
-    const sS = b.op1(MUX2, [`${ua}.sign`, sbEff, ge]);
-    const dsp = b.op(splitter([1, E - 1]), [d]);
-    const near = b.name(b.op1(AND, [effSub, b.op1(NOT, [nonZero(b, `${dsp}.o1`, E - 1)])], 'near: subtract, d ≤ 1'), 'near');
-    b.next();
-    const far = b.op(farPath(f), [eB, mB, mS, d, effSub], 'far path', 'far');
-    const nr = b.op(anticipate ? nearPath(f) : nearPathCounted(f), [eB, em1, mB, mS, `${dsp}.o0`], 'near path', 'near');
-    b.next();
-    const negSel = b.op1(AND, [near, `${nr}.neg`], 'near, X < Y');
-    const zero = b.name(b.op1(AND, [near, `${nr}.eq`], 'x − x'), 'cancel');
-    const sg1 = b.op1(MUX2, [sB, sS, negSel], 'sign of the bigger');
-    const sign = b.op1(MUX2, [sg1, b.op1(equal(3), ['rm', b.op1(K(3, RM.RDN), [])], 'RDN?'), zero], 'x − x = +0 (−0 in RDN)');
-    const m = b.op1(busMux2(w), [`${far}.m`, `${nr}.m`, near], 'select the path');
-    const e = b.op1(busMux2(XE), [`${far}.e`, `${nr}.e`, near]);
-    b.next();
-    const rnd = b.op(roundPack(f), [sign, e, m, 'rm'], 'round', 'rnd');
-    const invalid = b.name(b.op1(orN(3), [`${ua}.snan`, `${ub}.snan`, b.op1(andN(3), [`${ua}.inf`, `${ub}.inf`, effSub])], 'invalid'), 'NV');
-    const nan = b.op1(orN(3), [`${ua}.nan`, `${ub}.nan`, invalid], 'NaN?');
-    const anyInf = b.op1(OR, [`${ua}.inf`, `${ub}.inf`]);
-    const infS = b.op1(MUX2, [sbEff, `${ua}.sign`, `${ua}.inf`]);
-    b.next();
-    const infV = b.op1(merger([M, E, 1]), [b.op1(K(M, 0), []), b.op1(K(E, 2 ** E - 1), []), infS]);
-    const nanV = b.op1(K(N, (2 ** E - 1) * 2 ** M + 2 ** (M - 1)), []);
-    const y1 = b.op1(busMux2(N), [`${rnd}.y`, infV, anyInf], 'infinity');
-    b.wire(b.op1(busMux2(N), [y1, nanV, nan], 'NaN'), 'y');
-    b.wire(b.op1(busMux2(5), [`${rnd}.flags`, flagWord(b, { nv: invalid }), b.op1(OR, [nan, anyInf])], 'flags'), 'flags');
+    const N = 1 + E + M;
+    fnfBlocks(f); farPath(f); roundPack(f); faddSpecial(f); if (anticipate) nearPath(f); else nearPathCounted(f); // the parts, made now
     return define({
       id: `${tag}${E}_${M}`, name: `${fmtName(f)} near / far adder${anticipate ? '' : ' (no anticipation)'}`, category: 'arithmetic',
       summary: 'The dual-path adder: swap by exponent only (no magnitude compare); a far path (effective addition, or exponents differing by 2 or more: long right shift, sticky, at most two places of left shift) and a near path (a subtraction with exponents within 1: no aligner, a leading-zero anticipator running beside the subtractor); a select; one shared rounder. Same results and flags as the single-path adder, in fewer gate delays and more gates.',
       ports: [bus('a', N, 'in'), bus('b', N, 'in'), bit('sub', 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'FADD n/f' },
       spec: ([a, bb, s, rm]) => { const r = fpAddX(a, bb, !!s, f, rm); return [r.y, r.fl]; },
-      netlist: () => ({ pins: { a: [0, 4], b: [0, 10], sub: [0, 16], rm: [0, 20], y: [b.right, 6], flags: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => nfTop(f, anticipate ? nearPath(f) : nearPathCounted(f)),
       hdl: { verilog: `// behaviourally: assign {y, flags} = sub ? fsub(a, b, rm) : fadd(a, b, rm);   (IEEE 754 binary)` },
     });
   });

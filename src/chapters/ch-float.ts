@@ -282,27 +282,27 @@ export const chFloat: Chapter = {
     {
       title: 'Round to nearest, ties to even',
       body: `
-        <p>The normalize-and-round unit is shared by every operation. It <span data-show="u2">counts leading zeros</span> and
-        <span data-show="u17">shifts left</span>, but never below the smallest exponent; there it <span data-show="u24">shifts right</span> instead, producing a subnormal.
-        Then it rounds: with G the first dropped bit and S the OR of all the others, it <span data-show="u45">rounds up</span> when
+        <p>The normalize-and-round unit is shared by every operation. It <span data-show="amt">counts leading zeros</span> and
+        <span data-show="shl">shifts left</span>, but never below the smallest exponent; there it <span data-show="shr">shifts right</span> instead, producing a subnormal.
+        Then it rounds: with G the first dropped bit and S the OR of all the others, it <span data-show="rnd">rounds up</span> when
         G = 1 and (S = 1 or the last kept bit is 1). A tie (G = 1, S = 0) goes to the even neighbour, so ties do not bias long sums upwards.</p>
-        <p>A carry out of the rounding (1.111 + 1 = 10.000) <span data-show="u57">bumps the exponent</span>. An exponent beyond the top becomes
-        <span data-show="u62">infinity</span>.</p>
+        <p>A carry out of the rounding (1.111 + 1 = 10.000) <span data-show="pack">bumps the exponent</span>. An exponent beyond the top becomes
+        <span data-show="pack">infinity</span>.</p>
         <p>Why ties go to even and not always up: rounding up every tie adds a small positive error each time, and in a long sum those errors accumulate in one direction. Rounding to the even neighbour
         takes the tie half the time down and half the time up, since the last bit of the neighbours alternates, so the errors cancel on average. The cost is the rule itself: the decision reads the last kept bit, the guard and the sticky bit, a few gates
         on the carry path of the incrementer.</p>`,
       scene: () => ({ root: normRound(E4M3, 8), inputs: { sign: 0, exp: 3, mant: 0b10011100, stin: 0, rm: 0 } }),
       tour: {
         beats: [
-          { title: 'Above half', show: ['u45'], expect: { y: 0x1a, flags: 1 },
+          { title: 'Above half', show: ['rnd'], expect: { y: 0x1a, flags: 1 },
             say: '<p>The input is 1.001|1100: kept 001, then G = 1 and the rest non-zero. More than half a unit is dropped, so it rounds up to 010: y = {v:y} (0x1A) with NX.</p>' },
-          { title: 'Below half', set: { mant: 0b10010100 }, show: ['u45'], expect: { y: 0x19, flags: 1 },
+          { title: 'Below half', set: { mant: 0b10010100 }, show: ['rnd'], expect: { y: 0x19, flags: 1 },
             say: '<p>1.001|0100: G = 0. Less than half is dropped and the kept bits stay: y = {v:y} (0x19), still inexact.</p>' },
-          { title: 'A tie, last bit even', set: { mant: 0b10101000 }, show: ['u45'], expect: { y: 0x1a, flags: 1 },
+          { title: 'A tie, last bit even', set: { mant: 0b10101000 }, show: ['rnd'], expect: { y: 0x1a, flags: 1 },
             say: '<p>1.010|1000: exactly half (G = 1, S = 0). The kept bits end in 0, already even, so nothing is added: y = {v:y} (0x1A).</p>' },
-          { title: 'A tie, last bit odd', set: { mant: 0b10111000 }, show: ['u45'], expect: { y: 0x1c, flags: 1 },
+          { title: 'A tie, last bit odd', set: { mant: 0b10111000 }, show: ['rnd'], expect: { y: 0x1c, flags: 1 },
             say: '<p>1.011|1000: the same tie, but the kept bits end in 1. Rounding up gives the even neighbour 1.100: y = {v:y} (0x1C).</p>' },
-          { title: 'The carry reaches the exponent', set: { mant: 0b11111100 }, show: ['u45', 'u57'], expect: { y: 0x20, flags: 1 },
+          { title: 'The carry reaches the exponent', set: { mant: 0b11111100 }, show: ['rnd', 'pack'], expect: { y: 0x20, flags: 1 },
             say: '<p>1.111|1100 rounds up to 10.000: the carry out of the fraction bumps the exponent and the fraction restarts at 0. y = {v:y} (0x20) = 1.000₂ × 2<sup>4 − 7</sup>, the exponent field now 4.</p>' },
         ],
       },
@@ -380,11 +380,11 @@ export const chFloat: Chapter = {
       body: `
         <p>IEEE 754 defines five exceptions; RISC-V does not trap on them but ORs them into <strong>fflags</strong>, where they stay until software
         clears them, so one check after a long loop finds any exception inside it. <strong>NV</strong> invalid (∞ − ∞, 0 × ∞, a signaling NaN
-        operand, an out-of-range float → int), <strong>DZ</strong> divide by zero, <strong>OF</strong> overflow, <span data-show="u80"><strong>UF</strong> underflow</span>,
-        <span data-show="u81"><strong>NX</strong> inexact</span> (G or S was 1, or overflow).</p>
-        <p>Underflow is subtle. A result is <span data-show="u60"><em>tiny</em></span> if it lies below 2<sup>emin</sup>; RISC-V checks tininess <em>after rounding</em>,
+        operand, an out-of-range float → int), <strong>DZ</strong> divide by zero, <strong>OF</strong> overflow, <span data-show="pack"><strong>UF</strong> underflow</span>,
+        <span data-show="pack"><strong>NX</strong> inexact</span> (G or S was 1, or overflow).</p>
+        <p>Underflow is subtle. A result is <span data-show="rnd"><em>tiny</em></span> if it lies below 2<sup>emin</sup>; RISC-V checks tininess <em>after rounding</em>,
         as if the exponent were unbounded. And UF is raised only if the tiny result is also inexact: a subnormal computed exactly raises nothing. Detecting
-        "after rounding" costs <span data-show="u50">a second rounding decision</span>: with G as the last bit and the bit below it (R) as the new guard, would the M + 1 kept
+        "after rounding" costs <span data-show="rnd">a second rounding decision</span>: with G as the last bit and the bit below it (R) as the new guard, would the M + 1 kept
         bits carry into 2<sup>emin</sup>? Modes and flags add about 250 NANDs (4.5 %) to the float32 normalize &amp; round unit. With its incrementers
         and overflow test made parallel (see the pipelined FPU at the end of the chapter), the multiplier's instance (48-bit significand) is 6120 NANDs and
         102 NAND delays deep.</p>
@@ -392,11 +392,11 @@ export const chFloat: Chapter = {
       scene: () => ({ root: normRound(E4M3, 8), inputs: { sign: 0, exp: 0, mant: 0b11110000, stin: 0, rm: 0 } }),
       tour: {
         beats: [
-          { title: 'Tiny and inexact', show: ['u60', 'u50', 'u80', 'u81'], expect: { y: 0x08, flags: 0b11 },
+          { title: 'Tiny and inexact', show: ['rnd', 'pack'], expect: { y: 0x08, flags: 0b11 },
             say: '<p>1.111 × 2<sup>−7</sup> is below the smallest normal number. Rounding it gives y = {v:y} (0x08), exactly 2<sup>−6</sup>, the smallest normal, yet flags = {b:flags}: UF and NX. Tininess is judged as if the exponent were unbounded, where this result would still be below 2<sup>−6</sup>, and the rounding was inexact.</p>' },
-          { title: 'Same result, one flag', set: { mant: 0b11111100 }, show: ['u60', 'u81'], expect: { y: 0x08, flags: 0b01 },
+          { title: 'Same result, one flag', set: { mant: 0b11111100 }, show: ['rnd', 'pack'], expect: { y: 0x08, flags: 0b01 },
             say: '<p>With mant = 1111 1100 a little more is dropped: with an unbounded exponent the rounded value reaches 2<sup>−6</sup> itself, which is not tiny. The result is the same, y = {v:y}, but only NX is raised: flags = {b:flags}.</p>' },
-          { title: 'Towards zero', set: { rm: 1, mant: 0b11110000 }, show: ['u60', 'u80'], expect: { y: 0x07, flags: 0b11 },
+          { title: 'Towards zero', set: { rm: 1, mant: 0b11110000 }, show: ['rnd', 'pack'], expect: { y: 0x07, flags: 0b11 },
             say: '<p>In RTZ the first input is truncated and stays subnormal: y = {v:y} (0x07), UF and NX again. Tininess does not depend on the rounding direction here, because the unbounded result is still tiny.</p>' },
         ],
       },
@@ -417,19 +417,19 @@ export const chFloat: Chapter = {
     {
       title: 'Multiplication',
       body: `
-        <p>Multiplication is simpler than addition: no alignment. <span data-show="u2">The sign is an XOR</span>, <span data-show="u9 u12">the exponents add</span>
-        (minus one bias), and the significands go through <span data-show="u3">a tree multiplier</span> from <a href="#/c/muldiv/0">chapter 21</a>. The product of two
+        <p>Multiplication is simpler than addition: no alignment. <span data-show="sign">The sign is an XOR</span>, <span data-show="exp">the exponents add</span>
+        (minus one bias), and the significands go through <span data-show="mul">a tree multiplier</span> from <a href="#/c/muldiv/0">chapter 21</a>. The product of two
         numbers in [1, 2) lies in [1, 4), so normalization moves it at most one place, unless subnormal inputs leave leading zeros, which
-        <span data-show="u14">the shared unit</span> handles anyway. <span data-show="u17">∞ × 0 is NaN</span>.</p>
+        <span data-show="nr">the shared unit</span> handles anyway. <span data-show="special">∞ × 0 is NaN</span>.</p>
         <div class="try">a = b = 0x3A (1.25): 1.5625 = 1.1001₂ needs 4 fraction bits, an exact tie, so it rounds to the even neighbour 1.100₂ = 1.5 (0x3C). Then 0x46 (3.5) × 0x42 (2.5) = 8.75 = 1.00011₂ × 2³: above the tie, it rounds up to 9 (0x51).</div>`,
       scene: () => ({ root: fpMul(E4M3), inputs: { a: 0x3a, b: 0x3a } }),
       tour: {
         beats: [
-          { title: 'A tie', show: ['u2', 'u9', 'u3'], expect: { y: 0x3c, flags: 1 },
+          { title: 'A tie', show: ['sign', 'exp', 'mul'], expect: { y: 0x3c, flags: 1 },
             say: '<p>1.25 × 1.25 = 1.5625 = 1.1001₂ needs four fraction bits and the format keeps three. The dropped bit is exactly half: a tie, resolved to the even neighbour 1.100₂ = 1.5. y = {v:y} (0x3C) with NX.</p>' },
-          { title: 'Above the tie', set: { a: 0x46, b: 0x42 }, show: ['u3', 'u14'], expect: { y: 0x51, flags: 1 },
+          { title: 'Above the tie', set: { a: 0x46, b: 0x42 }, show: ['mul', 'nr'], expect: { y: 0x51, flags: 1 },
             say: '<p>3.5 × 2.5 = 8.75 = 1.00011₂ × 2³. The dropped part is above half, so the product rounds up to 1.001₂ × 2³ = 9: y = {v:y} (0x51).</p>' },
-          { title: 'Infinity times zero', set: { a: 0x78, b: 0x00 }, show: ['u17'], expect: { y: 0x7c, flags: 0x10 },
+          { title: 'Infinity times zero', set: { a: 0x78, b: 0x00 }, show: ['special'], expect: { y: 0x7c, flags: 0x10 },
             say: '<p>∞ × 0 has no defined value. The unit returns the canonical NaN, y = {v:y} (0x7C), and raises NV (flags = {b:flags}), even though both operands are quiet.</p>' },
         ],
       },

@@ -36,7 +36,7 @@ function measured(): Measured {
   return (cached = {
     one: row(fpAdd(F32)), counted: row(fpAddNearFar(F32, false)), nf: row(nf),
     lzaD: unit(lza(n)), lzaN: nands(lza(n)), addD: unit(addSubFast(n)), lzcD: unit(lzc(32)),
-    far: part('far'), near: part('near'), rnd: part('rnd'), unpackD: unit(parts.get('ua')!), expD: unit(parts.get('dab')!),
+    far: part('far'), near: part('near'), rnd: part('rnd'), unpackD: unit(parts.get('ua')!), expD: unit(addSubFast(F32.E)), // the exponent block's ea − eb
   });
 }
 /** The change from a to b in percent, with a true minus sign. */
@@ -65,7 +65,7 @@ export const nearFarSteps: Step[] = [
         for an addition and in (½, 2) for a subtraction with d ≥ 2, so it moves at most one place right (a carry) or two left, counted from the carry column: two rows of multiplexers and no counter. <strong>Near path</strong> (<span data-show="near">NEAR</span>): a
         subtraction with d ≤ 1. The smaller significand moves at most one place, into one extra bit, so nothing is lost: no sticky, no aligner, an exact difference. What can happen instead is cancellation to any depth, so this path keeps the
         counting and the left shifter. Each path carries one of the two big shifters, not both in series.</p>
-        <p>The swap goes by exponent alone: <span data-show="dab dba">both differences e<sub>a</sub> − e<sub>b</sub> and e<sub>b</sub> − e<sub>a</sub> are formed and the borrow picks</span>, which removes the magnitude comparator that stood in front of
+        <p>The swap goes by exponent alone: <span data-show="exp">both differences e<sub>a</sub> − e<sub>b</sub> and e<sub>b</sub> − e<sub>a</sub> are formed and the borrow picks</span>, which removes the magnitude comparator that stood in front of
         everything (31 bits wide in float32). When d = 0 either operand may be the larger, so the near path forms X − Y and Y − X and keeps the one without a borrow. A select between the two results, then <span data-show="rnd">one rounder</span>
         shared by both paths: the rounding decision, increment, overflow and tininess logic of normalize &amp; round, without its counter and shifters, which the paths have already done. Results and flags are bit for bit those of the single-path adder:
         every operand pair of the 6-bit format and of E4M3 in all five modes, float16 and float32 on biased random operands.</p>
@@ -76,7 +76,7 @@ export const nearFarSteps: Step[] = [
     scene: () => ({ root: fpAddNearFar(E4M3), inputs: { a: 0x44, b: 0x38, sub: 0 } }),
     tour: {
       beats: [
-        { title: 'Far: align and add', at: [], show: ['dab', 'dba', 'far', 'rnd'], expect: want(0x44, 0x38, 0),
+        { title: 'Far: align and add', at: [], show: ['exp', 'far', 'rnd'], expect: want(0x44, 0x38, 0),
           say: '<p>3.0 + 1.0: an addition, so the far path. The exponents differ by 1, the smaller significand shifts right one place, the sum carries and moves back one: y = {v:y} = 0x48 = 4.0, no flags. The near path computes something too, but is not selected.</p>' },
         { title: 'Near: cancellation', set: { sub: 1, a: 0x39, b: 0x38 }, show: ['near', 'rnd'], expect: want(0x39, 0x38, 1),
           say: '<p>1.125 − 1.0: a subtraction with equal exponents, the near path. The difference is 0.001₂, three leading zeros; the near path shifts them out and lowers the exponent by 3: y = {v:y} = 0x20 = 0.125, exact, flags {b:flags}.</p>' },
