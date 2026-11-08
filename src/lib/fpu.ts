@@ -491,6 +491,10 @@ export function normRound(f: FpFormat, w: number, mux: Mux2Kind = LIB_MUX2): Com
   return memo(`fpnr${E}_${M}_${w}${mux.tag}`, () => {
     const XE = xeOf(f);
     if (w < M + 3) throw new Error('normRound: the significand needs a guard bit and a sticky bit below it');
+    // the parts, made now (not when the drawing is first asked for): what they register is there as soon as the unit is
+    nrAmount(f, w); nrRound(f, w); nrPack(f);
+    const k = Math.log2(pow2ceil(w + 1));
+    shiftLeft(w, k, mux); shiftRightSticky(w, k, mux);
     return define({
       id: `fpnr${E}_${M}_${w}${mux.tag}`, name: `Normalize & round (${w}-bit significand)${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: 'Counts leading zeros, shifts them out (or shifts right for a subnormal result), then rounds in mode rm using the guard bit G and the sticky bit S (round to nearest even: up if G and (S or the last kept bit)). A carry out of the rounding bumps the exponent; an exponent past the top becomes ∞ or the largest finite number, depending on the mode. Flags: NX if G or S, OF on overflow, UF if inexact and tiny after rounding.',
@@ -897,6 +901,7 @@ export function fpMul(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
   return memo(`fpmul${E}_${M}${mux.tag}`, () => {
     const N = 1 + E + M;
+    fmulExp(f); fmulSpecial(f, mux); normRound(f, 2 * M + 2); treeMul(M + 1); // the parts, made now: they register as soon as the unit is
     return define({
       id: `fpmul${E}_${M}${mux.tag}`, name: `${fmtName(f)} multiplier${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: `Sign = XOR, exponent = ea + eb − bias, significand = a ${M + 1}×${M + 1} tree multiplier (chapter 21), then the shared normalize & round unit. ∞ × 0 is NaN (NV).`,
