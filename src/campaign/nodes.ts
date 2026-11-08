@@ -496,7 +496,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   {
     id: 'pi_lesson', act: 6, title: 'Pipelining', kind: 'lesson', requires: ['c_fast'], body: 'pipe',
     why: 'Core IV runs at 76 delays a cycle: every instruction must fit a whole load. Registers between its steps let five run at once, but hazards make the 28 Core III programs take 1495 cycles instead of 1236, and with ripple adders E alone is 78 delays. With Kogge–Stone adders in E it wins: period 56, 83 720 NAND delays against Core IV\'s 93 936.',
-    tips: [], codex: ['pipeline', 'hazards'], chapters: [{ chapter: 'pipeline', label: 'Pipelining' }, { chapter: 'pipeline', step: 5, label: 'Does it pay? Measured' }],
+    tips: [], codex: ['pipeline', 'hazards'], chapters: [{ chapter: 'pipeline', label: 'Pipelining' }, { chapter: 'pipeline', step: 6, label: 'Does it pay? Measured' }],
   },
   {
     id: 'pi_reg', act: 6, title: 'Pipeline register', kind: 'build', requires: ['s_reg16', 'g_mux8', 'g_or'], base: BUILD6.pi_reg, par: { nand: 260, period: 8 },

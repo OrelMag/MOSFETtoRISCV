@@ -204,6 +204,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Data hazards and forwarding" },
     { title: "The load-use stall", challenge: "quiz" },
     { title: "Control hazards", challenge: "quiz" },
+    { title: "The line, drawn as a factory", challenge: "quiz" },
     { title: "Does it pay? Measured", challenge: "quiz" },
     { title: "Your own instruction, pipelined" },
     { title: "A compiled program on the pipeline", challenge: "quiz" },
