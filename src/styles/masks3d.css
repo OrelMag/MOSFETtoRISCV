@@ -7,6 +7,8 @@
   --mk-pdiff: light-dark(#e0a04a, #e8b055);
   --mk-contact: light-dark(#3b4252, #e4e8f0);
   --mk-metal: light-dark(#8f98a8, #b5bfd0);
+  --mk-li1: light-dark(#4f9aa0, #6fc0c4);
+  --mk-chan-on: light-dark(#3fbf6f, #46d17c);
   --mk-sti: light-dark(#c9d3df, #8fa0b8);
   --mk-gox: light-dark(#e9d36a, #f0dc7a);
   --mk-resist: light-dark(#d8913a, #e0a24f);
@@ -28,3 +30,4 @@
 .mk-chk input { flex: none; min-width: 0; width: 16px; height: 16px; }
 .r3-sl.mk-wide span { width: 108px; }
 @media (pointer: coarse) { .mk-chk input { width: 24px; height: 24px; } }
+.r3-sl.mk-wide output { width: 74px; }
