@@ -1,0 +1,32 @@
+/* ---------- Image sensors (src/widgets/sensors.ts). Colours come from the theme tokens only, so both themes follow. ---------- */
+.sn .sn-two { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+.sn .sn-two > svg, .sn .sn-two > canvas { flex: 1 1 260px; max-width: 100%; }
+.sn .sn-center { display: flex; justify-content: center; }
+.sn-slab, .sn-ccd, .sn-cds { width: 100%; height: auto; max-width: 640px; }
+.sn-slab { max-width: 300px; }
+.sn-si { fill: var(--accent); }
+.sn-si-edge { fill: none; stroke: var(--border-strong); stroke-width: 1; }
+.sn-mark { stroke: var(--warn); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.sn-mark.coll { stroke: var(--good); }
+.sn-lbl { font: 600 calc(11px * var(--tk, 1)) var(--font-mono); fill: var(--text-2); }
+.sn-lbl.sm { font-size: calc(10px * var(--tk, 1)); }
+.sn-lbl.coll { fill: var(--good); }
+.sn-lbl.t50 { fill: var(--warn); }
+.sn-dot { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.sn-gate { fill: var(--surface-3); stroke: var(--border-strong); stroke-width: 1; }
+.sn-gate.p1.on { fill: var(--series-1); }
+.sn-gate.p2.on { fill: var(--series-2); }
+.sn-gate.p3.on { fill: var(--series-3); }
+.sn-gate.p4.on { fill: var(--series-4); }
+.sn-pix { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
+.sn-amp { fill: var(--surface-2); stroke: var(--border-strong); }
+.sn-q { fill: var(--accent); }
+.sn-q.trail { fill: var(--warn); }
+.sn-dig { fill: none; stroke: var(--text); stroke-width: 1.8; stroke-linejoin: round; }
+.sn-canvas { width: 100%; max-width: 360px; height: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); }
+.sn-canvas.pix { image-rendering: pixelated; max-width: 320px; }
+.sn .sn-two > canvas.pix { max-width: 200px; }
+.sn-log { margin: 6px 0 0; padding-left: 18px; font: 12px var(--font-mono); color: var(--text-2); }
+.sn-cols { display: grid; gap: 4px; margin: 6px 0; font: 12px var(--font-mono); }
+.sn-col { display: flex; gap: 8px; flex-wrap: wrap; }
+.sn-col b { color: var(--text); }
