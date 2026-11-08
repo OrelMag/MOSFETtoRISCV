@@ -5,7 +5,7 @@
 //   plus the special cases (zero, subnormal, infinity, NaN) and the exception flags. One
 //   normalize-and-round unit serves the adder, the multiplier and integer-to-float conversion.
 
-import { symbolGeom } from '../sim/geometry';
+import { orientGeom, symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
 import { LIB_MUX2, andN, busMux2, equal, incrementer, muxTree, type Mux2Kind } from './combinational';
@@ -348,6 +348,7 @@ function nrRound(f: FpFormat, w: number): ComponentDef {
     b.pins('m', 'sticky', 'stin', 'rm', 'sign');
     // G = first dropped bit, Rb = the next one, S2 = OR of everything below Rb
     const parts = b.op(splitter([w - M - 2, 1, M + 1]), ['m'], undefined, 'parts');
+    b.name(`${parts}.o2`, 'kept'); // names for the pointers a re-placed drawing may draw
     let Rb: string, S2: string;
     if (w - M - 2 === 1) {
       Rb = `${parts}.o0`;
@@ -357,14 +358,16 @@ function nrRound(f: FpFormat, w: number): ComponentDef {
       Rb = `${rs}.o1`;
       S2 = anyOf(b, [nonZero(b, `${rs}.o0`, w - M - 3), 'sticky', 'stin']);
     }
+    b.name(Rb, 'R'); b.name(S2, 'below R');
     b.next();
     const S = b.name(b.op1(OR, [Rb, S2], 'sticky S', 'sor'), 'S');
     const G = b.name(`${parts}.o1`, 'G');
     const lsb = b.op(splitter([1, M]), [`${parts}.o2`], undefined, 'lsb');
     const kt = b.op(splitter([M, 1]), [`${parts}.o2`], undefined, 'kt');
     b.next();
+    b.name(`${lsb}.o0`, 'lsb'); b.name(`${kt}.o1`, 'top bit'); b.name(`${kt}.o0`, 'fraction');
     const rd = b.op(ROUND_DECIDE, ['rm', 'sign', `${lsb}.o0`, G, S], 'round up?', 'rd');
-    const inc = `${rd}.up`;
+    const inc = b.name(`${rd}.up`, 'up');
     b.wire(b.op1(OR, [G, S], 'inexact', 'nx'), 'inexact');
     // tininess after rounding: would rounding to M + 1 bits (G becomes the last bit) reach 2^emin?
     const kf = b.op(splitter(ones(M)), [`${kt}.o0`], undefined, 'kf');
@@ -411,15 +414,18 @@ function nrPack(f: FpFormat): ComponentDef {
     const atTop = b.op1(equal(XE), ['e', b.op1(K(XE, 2 ** E - 2), [], undefined, 'max1')], 'e = max − 1?', 'at');
     b.next();
     const ms = b.op(splitter([M, 1]), ['mr'], undefined, 'ms');
+    b.name(`${ms}.o0`, 'fraction'); b.name(`${ms}.o1`, 'top bit'); b.name(geTop, 'e ≥ max'); // the pointers' names
     const hidden = b.op1(OR, [`${ms}.o1`, 'carry'], 'hidden bit', 'hid');
     const eF = b.op1(busMux2(XE), ['e', eInc, 'carry'], 'exp + carry', 'ef');
     b.next();
     const inf = b.name(b.op1(AND, [hidden, b.op1(OR, [geTop, b.op1(AND, ['carry', atTop], undefined, 'ct')], 'overflow?', 'ov')], undefined, 'inf'), 'ovf');
     const satMax = b.op1(AND, [inf, b.op1(NOT, ['toInf'], undefined, 'nti')], 'largest finite instead', 'sat');
     const ef = b.op(splitter([E, XE - E]), [eF], undefined, 'efs');
+    b.name(`${ef}.o0`, 'exponent field');
     b.next();
     const expF = b.op1(bitwise('and', E), [`${ef}.o0`, b.op1(fanout(E), [hidden], undefined, 'hf')], 'exponent, 0 if subnormal', 'ez');
     const expOr = b.op(splitter([1, E - 1]), [b.op1(bitwise('or', E), [expF, b.op1(fanout(E), [inf], undefined, 'if')], 'all 1s on overflow', 'eo')], undefined, 'eos');
+    b.name(`${expOr}.o0`, 'field bit 0'); b.name(`${expOr}.o1`, 'field bits 1+');
     const e0 = b.op1(AND, [`${expOr}.o0`, b.op1(NOT, [satMax], undefined, 'nsat')], undefined, 'e0');
     const fracOut = b.op1(bitwise('or', M), [b.op1(bitwise('and', M), [`${ms}.o0`, b.op1(fanout(M), [b.op1(NOT, [inf], undefined, 'ninf')], undefined, 'nf')], undefined, 'fz'),
       b.op1(fanout(M), [satMax], undefined, 'sf')], 'fraction', 'fo');
@@ -700,20 +706,89 @@ export function faddCancel(f: FpFormat): ComponentDef {
   });
 }
 
+/** Hand-drawn blocks' places: each starts from a column layout; FP_LAY[block][part or 'pin:name'] moves a part or a pin by hand. */
+export const FP_LAY: Record<string, Record<string, [number, number]>> = {
+  // the class flags come in a staircase from below; ∞ and NaN replace the rounded result on top, NV alone the flags below
+  fnf_select: { sbig: [10, 0], ssmall: [10, 8], sg: [20, 4], negsel: [16, 16], cancel: [16, 22], rdnk: [23, 15], rdn: [30, 12], zsign: [40, 6],
+    msel: [34, 28], esel: [34, 36], 'pin:signB': [0, 2], 'pin:sa': [0, 4], 'pin:ge': [0, 7], 'pin:rm': [0, 15], 'pin:neg': [0, 17], 'pin:eq': [0, 23],
+    'pin:fm': [0, 30], 'pin:nm': [0, 32], 'pin:near': [0, 35], 'pin:ne': [0, 38], 'pin:fe': [0, 40], 'pin:sign': [50, 9], 'pin:m': [50, 31], 'pin:e': [50, 39] },
+  fmul_special: { rs: [36, 5], km: [26, 1], ke: [33, 3], iv: [40, 1], inf: [20, 12], iz: [20, 17], zi: [20, 22], nv: [28, 18], nan: [36, 21], y1: [44, -2], kn: [49, 2],
+    yo: [56, -1], sp: [52, 16], fw: [52, 23], z3: [48, 25], z2: [48, 27], z1: [48, 29], z0: [48, 31], fl: [56, 26],
+    'pin:ry': [0, 0], 'pin:ia': [0, 13], 'pin:ib': [0, 15], 'pin:zb': [0, 20], 'pin:za': [0, 25], 'pin:snb': [0, 28], 'pin:sna': [0, 30], 'pin:nb': [0, 32], 'pin:na': [0, 34],
+    'pin:rflags': [0, 38], 'pin:y': [66, 2], 'pin:flags': [66, 29] },
+  fadd_special: { infs: [20, 3], inf: [20, 12], ii: [20, 17], nv: [30, 19], nan: [38, 21], km: [33, 1], ke: [26, 3], iv: [40, 1], y1: [44, -2], kn: [49, 2], yo: [56, -1],
+    sp: [52, 16], fw: [52, 23], z3: [48, 25], z2: [48, 27], z1: [48, 29], z0: [48, 31], fl: [56, 26],
+    'pin:ry': [0, 0], 'pin:signB': [0, 5], 'pin:sa': [0, 7], 'pin:ia': [0, 13], 'pin:ib': [0, 15], 'pin:effSub': [0, 22], 'pin:snb': [0, 26], 'pin:sna': [0, 28],
+    'pin:nb': [0, 30], 'pin:na': [0, 32], 'pin:rflags': [0, 36], 'pin:y': [66, 2], 'pin:flags': [66, 29] },
+};
+export type Part = Omit<InstanceDef, 'at'>;
+/** Corner points for the nets reaching the given ends (end → points from the driver), set on a block's hand-drawn nets. */
+export const withVias = (nets: NetDef[], vias: Record<string, [number, number][]>): NetDef[] =>
+  nets.map((n) => { const v = Object.entries(vias).filter(([e]) => n.ends.includes(e)); return v.length ? { ...n, via: { ...n.via, ...Object.fromEntries(v) } } : n; });
+
+/** A block drawn in columns (parts top to bottom in each), inputs down the left, outputs down the right; FP_LAY overrides. */
+export function fpColumns(key: string, cols: (Part | false)[][], ins: string[], outs: string[], nets: NetDef[]): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
+  const over = FP_LAY[key] ?? {};
+  const instances: InstanceDef[] = [];
+  let x = 8;
+  for (const col of cols) {
+    let y = 0, w = 0;
+    for (const p of col) {
+      if (!p) continue;
+      const g = orientGeom(p.def, p.flip, p.rot);
+      instances.push({ ...p, at: over[p.name] ?? [x, y] });
+      y += g.h + 2; w = Math.max(w, g.w);
+    }
+    x += w + 6;
+  }
+  const pins: Record<string, [number, number]> = {};
+  ins.forEach((p, i) => (pins[p] = over[`pin:${p}`] ?? [0, 2 + 2 * i]));
+  outs.forEach((p, i) => (pins[p] = over[`pin:${p}`] ?? [x, 2 + 2 * i]));
+  return { instances, nets, pins };
+}
+
+/**
+ * The special cases' common back: ∞ (sign `sign`) over the rounded result where `inf`, the canonical NaN over that where
+ * `nan`; the flags are NV alone (from `nv`) for a special result, else the rounding's. The gates specials() makes.
+ */
+function specialBack(f: FpFormat, mux: Mux2Kind, sign: string, inf: string[], nan: string[], nv: string[]): { cols: Part[][]; nets: NetDef[] } {
+  const { E, M } = f, N = 1 + E + M;
+  const cols: Part[][] = [
+    [{ name: 'km', def: K(M, 0) }, { name: 'ke', def: K(E, 2 ** E - 1) }],
+    [{ name: 'iv', def: merger([M, E, 1]), label: '∞' }, { name: 'z0', def: TIE0 }, { name: 'z1', def: TIE0 }, { name: 'z2', def: TIE0 }, { name: 'z3', def: TIE0 }],
+    [{ name: 'y1', def: mux.of(N), label: 'infinity' }, { name: 'fw', def: merger([1, 1, 1, 1, 1]), flip: true, rot: 2 }, { name: 'sp', def: OR, label: 'special?' }],
+    [{ name: 'kn', def: K(N, (2 ** E - 1) * 2 ** M + 2 ** (M - 1)), label: 'NaN' }, { name: 'yo', def: mux.of(N), label: 'NaN' }, { name: 'fl', def: busMux2(5), flip: true, rot: 2, label: 'flags' }],
+  ];
+  const nets: NetDef[] = [
+    { name: 'rounded', ends: ['ry', 'y1.a'] }, { name: '0', ends: ['km.y', 'iv.i0'] }, { name: 'all 1s', ends: ['ke.y', 'iv.i1'] }, { name: '∞ sign', ends: [sign, 'iv.i2'] },
+    { name: '∞', ends: ['iv.out', 'y1.b'] }, { name: 'an ∞', ends: [...inf, 'y1.s', 'sp.a'] }, { name: 'y1', ends: ['y1.y', 'yo.a'] }, { name: 'NaN', ends: ['kn.y', 'yo.b'] },
+    { name: 'NaN?', ends: [...nan, 'yo.s', 'sp.b'] }, { name: 'y', ends: ['yo.y', 'y'] },
+    ...[0, 1, 2, 3].map((i): NetDef => ({ name: `0 ${i}`, ends: [`z${i}.y`, `fw.i${i}`] })), { name: 'NV', ends: [...nv, 'fw.i4'] },
+    { name: 'NV only', ends: ['fw.out', 'fl.b'] }, { name: 'round flags', ends: ['rflags', 'fl.a'] }, { name: 'special', ends: ['sp.y', 'fl.s'] }, { name: 'flags', ends: ['fl.y', 'flags'] },
+  ];
+  return { cols, nets };
+}
+
 /** The adder's special cases: invalid (a signaling NaN, or ∞ − ∞), NaN in or out, an infinite operand; else the rounded sum. */
 export function faddSpecial(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
   return memo(`fadd_special${E}_${M}${mux.tag}`, () => {
     const { N } = addWidths(f);
-    const b = new Builder(10, 8, 4);
-    b.pins('ry', 'rflags', 'ia', 'ib', 'na', 'nb', 'sna', 'snb', 'effSub', 'sa', 'signB');
-    const invalid = b.name(b.op1(orN(3), ['sna', 'snb', b.op1(andN(3), ['ia', 'ib', 'effSub'], '∞ − ∞', 'ii')], 'invalid', 'nv'), 'NV');
-    const anyInf = b.op1(OR, ['ia', 'ib'], 'an ∞', 'inf');
-    const infS = b.op1(MUX2, ['signB', 'sa', 'ia'], '∞\'s sign', 'infs');
-    b.next();
-    const nan = b.op1(orN(3), ['na', 'nb', invalid], 'NaN?', 'nan');
-    b.next();
-    specials(b, f, 'ry', 'rflags', nan, anyInf, infS, invalid, undefined, mux);
+    const key = 'fadd_special';
+    const back = specialBack(f, mux, 'infs.y', ['inf.y'], ['nan.y'], ['nv.y']);
+    const cols: Part[][] = [
+      [{ name: 'infs', def: MUX2, label: '∞\'s sign' }, { name: 'inf', def: OR, label: 'an ∞' }, { name: 'ii', def: andN(3), label: '∞ − ∞' }],
+      [{ name: 'nv', def: orN(3), flip: true, rot: 2, label: 'invalid' }],
+      [{ name: 'nan', def: orN(3), flip: true, rot: 2, label: 'NaN?' }],
+      ...back.cols,
+    ];
+    const nets: NetDef[] = [
+      { name: 'ia', ends: ['ia', 'infs.s', 'inf.a', 'ii.i0'] }, { name: 'ib', ends: ['ib', 'inf.b', 'ii.i1'] }, { name: 'effSub', ends: ['effSub', 'ii.i2'] },
+      { name: 'signB', ends: ['signB', 'infs.a'] }, { name: 'sa', ends: ['sa', 'infs.b'] },
+      { name: 'sna', ends: ['sna', 'nv.i0'] }, { name: 'snb', ends: ['snb', 'nv.i1'] }, { name: '∞ − ∞', ends: ['ii.y', 'nv.i2'] },
+      { name: 'na', ends: ['na', 'nan.i0'] }, { name: 'nb', ends: ['nb', 'nan.i1'] }, { name: 'nv', ends: ['nv.y', 'nan.i2', 'fw.i4'] },
+      ...back.nets.filter((n) => n.name !== 'NV'),
+    ];
     const ports = [bus('ry', N, 'in'), bus('rflags', 5, 'in'), bit('ia', 'in'), bit('ib', 'in'), bit('na', 'in'), bit('nb', 'in'), bit('sna', 'in'), bit('snb', 'in'),
       bit('effSub', 'in'), bit('sa', 'in'), bit('signB', 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')];
     const nanBits = (2 ** E - 1) * 2 ** M + 2 ** (M - 1);
@@ -726,7 +801,7 @@ export function faddSpecial(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef
         const infv = (ia ? sa : sB) * 2 ** (N - 1) + (2 ** E - 1) * 2 ** M;
         return [nan ? nanBits : inf ? infv : ry, nan || inf ? nv * FLAG.NV : rfl];
       },
-      netlist: () => layered(ports, b, { gap: 8 }),
+      netlist: () => fpColumns(key, cols, ['ry', 'signB', 'sa', 'ia', 'ib', 'effSub', 'sna', 'snb', 'na', 'nb', 'rflags'], ['y', 'flags'], nets),
     });
   });
 }
@@ -826,16 +901,23 @@ export function fmulSpecial(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef
   const { E, M } = f;
   return memo(`fmul_special${E}_${M}${mux.tag}`, () => {
     const N = 1 + E + M;
-    const b = new Builder(10, 8, 4);
-    b.pins('sna', 'na', 'ia', 'za', 'ry', 'rflags', 'zb', 'ib', 'nb', 'snb');
-    const invalid = b.name(b.op1(orN(4), ['sna', 'snb', b.op1(AND, ['ia', 'zb'], '∞ × 0', 'iz'), b.op1(AND, ['za', 'ib'], '0 × ∞', 'zi')], 'invalid', 'nv'), 'NV');
-    const anyInf = b.op1(OR, ['ia', 'ib'], 'an ∞', 'inf');
+    const key = 'fmul_special';
+    const back = specialBack(f, mux, 'rs.o1', ['inf.y'], ['nan.y'], ['nv.y']);
     // ∞ takes the product's sign, which normalize & round passes through as the rounded result's top bit
-    const rs = b.op(splitter([N - 1, 1]), ['ry'], undefined, 'rs');
-    b.next();
-    const nan = b.op1(orN(3), ['na', 'nb', invalid], 'NaN?', 'nan');
-    b.next();
-    specials(b, f, 'ry', 'rflags', nan, anyInf, `${rs}.o1`, invalid, undefined, mux);
+    const cols: Part[][] = [
+      [{ name: 'inf', def: OR, label: 'an ∞' }, { name: 'iz', def: AND, label: '∞ × 0' }, { name: 'zi', def: AND, label: '0 × ∞' }],
+      [{ name: 'rs', def: splitter([N - 1, 1]) }, { name: 'nv', def: orN(4), flip: true, rot: 2, label: 'invalid' }],
+      [{ name: 'nan', def: orN(3), flip: true, rot: 2, label: 'NaN?' }],
+      ...back.cols,
+    ];
+    const nets: NetDef[] = [
+      { name: 'ia', ends: ['ia', 'inf.a', 'iz.a'] }, { name: 'ib', ends: ['ib', 'inf.b', 'zi.a'] }, { name: 'zb', ends: ['zb', 'iz.b'] }, { name: 'za', ends: ['za', 'zi.b'] },
+      // the two ∞ × 0 terms into the balanced tree's second pair (either order)
+      { name: '∞ × 0', ends: ['iz.y', 'nv.i3'] }, { name: '0 × ∞', ends: ['zi.y', 'nv.i2'] }, { name: 'sna', ends: ['sna', 'nv.i0'] }, { name: 'snb', ends: ['snb', 'nv.i1'] },
+      { name: 'na', ends: ['na', 'nan.i0'] }, { name: 'nb', ends: ['nb', 'nan.i1'] }, { name: 'nv', ends: ['nv.y', 'nan.i2', 'fw.i4'] },
+      { name: 'rounded', ends: ['ry', 'y1.a', 'rs.in'] },
+      ...back.nets.filter((n) => n.name !== 'NV' && n.name !== 'rounded'),
+    ];
     // a's class flags on top, b's below, the rounded product between: as they arrive on the multiplier's drawing
     const ports = [bit('sna', 'in'), bit('na', 'in'), bit('ia', 'in'), bit('za', 'in'), bus('ry', N, 'in'), bus('rflags', 5, 'in'),
       bit('zb', 'in'), bit('ib', 'in'), bit('nb', 'in'), bit('snb', 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')];
@@ -849,7 +931,11 @@ export function fmulSpecial(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef
         const nv = sna || snb || (ia && zb) || (za && ib) ? 1 : 0, nan = na || nb || nv, inf = ia || ib;
         return [nan ? nanBits : inf ? s * 2 ** (N - 1) + (2 ** E - 1) * 2 ** M : ry, nan || inf ? nv * FLAG.NV : rfl];
       },
-      netlist: () => layered(ports, b, { gap: 8 }),
+      // the staircases drawn by hand: each class flag turns up where it crosses nothing
+      netlist: () => fpColumns(key, cols, ['ry', 'ia', 'ib', 'zb', 'za', 'snb', 'sna', 'nb', 'na', 'rflags'], ['y', 'flags'], withVias(nets, {
+        'rs.in': [[24, 0], [24, 7]], 'nv.i2': [[25, 24], [25, 21]], 'nv.i1': [[26, 28], [26, 23]], 'nv.i0': [[27, 30], [27, 25]], 'nan.i1': [[34, 32], [34, 24]],
+        'nan.i0': [[35, 34], [35, 26]], 'fl.a': [[54, 38], [54, 30]],
+      })),
     });
   });
 }
