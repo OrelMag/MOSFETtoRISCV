@@ -12,6 +12,7 @@ import { XOR, NOT, MUX2, OR, AND } from './gates';
 import { lookupRom } from './modem';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width: 1, dir, side });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -136,7 +137,7 @@ export function cordicPipeline(s: CordicSpec): ComponentDef {
     return define({
       id: `cordic_pipe${tag(s)}`, name: `CORDIC, pipelined (${s.n} stages)`, category: 'arithmetic',
       summary: `A half-turn and ${s.n} stages with registers between them: one result every clock, ${s.n + 1} clocks after its input. No multiplier anywhere.`,
-      ports, symbol: { kind: 'box', label: 'CORDIC', w: 10 }, netlist: () => built(b, ports),
+      ports, symbol: { kind: 'box', label: 'CORDIC', w: 10 }, netlist: laid(b, { keepOrder: true }),
     });
   });
 }

@@ -238,8 +238,10 @@ async function browserDecode(bytes: Uint8Array, w: number, hh: number): Promise<
     return pictureOf(w, hh, (x, y) => d[4 * (y * w + x)]);
   } catch { return null; }
 }
+/** The quality the file widget opens at (chapter 80 quotes its size). */
+export const FILE_QUALITY = 75;
 export function fileWidget(): Widget {
-  let q = 75, own: Picture | null = null, token = 0, photo: Picture | null = null;
+  let q = FILE_QUALITY, own: Picture | null = null, token = 0, photo: Picture | null = null;
   const shown = h('img', { class: 'pic', alt: 'Our JPEG file, decoded by the browser', width: SIZE }) as HTMLImageElement, ours = canvasOf(theScene(), 1, 'Our own reconstruction');
   const chips = mkChips(4), note = h('p', { class: 'sub' }), link = h('a', { class: 'btn sm', download: 'ours.jpg' }, 'Save the file') as HTMLAnchorElement;
   let url = '';

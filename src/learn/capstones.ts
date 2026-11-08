@@ -25,7 +25,11 @@ export const CAPSTONES: Capstone[] = [
 export interface CommCapstone { id: string; title: string; brief: string; route: string | null; tier?: undefined }
 
 /** The signal-processing track's capstones: a third group on My path, tier-free like the communication one. A `route` of null is not built yet. */
-export interface DspCapstone { id: string; title: string; brief: string; route: string | null; tier?: undefined }
+export interface DspCapstone {
+  id: string; title: string; brief: string; route: string | null; tier?: undefined;
+  /** The chapters it builds on, in book order (shown as links on My path and on its page). */
+  needs: readonly string[];
+}
 
 export type AnyCapstone = Capstone | CommCapstone | DspCapstone;
 
@@ -37,9 +41,9 @@ export const COMM_CAPSTONES: CommCapstone[] = [
 ];
 
 export const DSP_CAPSTONES: DspCapstone[] = [
-  { id: 'cap_mask', title: 'A filter to a mask', brief: 'A low-pass to a stated mask (pass edge, ripple, stop edge, attenuation at 48 kHz) for the worst-case input, in a NAND budget. Judged on the gates: swept sines, an impulse response read from the circuit, a worst-case sequence that must not wrap, and silence after a burst.', route: '#/campaign/play/cap_mask' },
-  { id: 'cap_echo', title: 'An echo canceller', brief: 'An adaptive filter that learns an echo path from the far-end signal and removes it, graded on the dB of echo it takes out and how fast.', route: '#/campaign/play/cap_echo' },
-  { id: 'cap_tune', title: 'Tune it', brief: 'A band you have not seen, a weak station, a message in it: build your own chain from the radio chapter’s blocks. Graded by the decoded message across several held-back bands, with its cost reported.', route: '#/campaign/play/cap_tune' },
+  { id: 'cap_mask', title: 'A filter to a mask', brief: 'A low-pass to a stated mask (pass edge, ripple, stop edge, attenuation at 48 kHz) for the worst-case input, in a NAND budget. Judged on the gates: swept sines, an impulse response read from the circuit, a worst-case sequence that must not wrap, and silence after a burst.', route: '#/campaign/play/cap_mask', needs: ['fixed', 'firdesign', 'iir'] },
+  { id: 'cap_echo', title: 'An echo canceller', brief: 'An adaptive filter that learns an echo path from the far-end signal and removes it, graded on the dB of echo it takes out and how fast.', route: '#/campaign/play/cap_echo', needs: ['fixed', 'mac', 'dspcore', 'adaptive'] },
+  { id: 'cap_tune', title: 'Tune it', brief: 'A band you have not seen, a weak station, a message in it: find it and build your own chain from the software radio’s blocks. Graded by the decoded message across several held-back bands, with its cost reported.', route: '#/campaign/play/cap_tune', needs: ['spectrum', 'multirate', 'cordic', 'sdr'] },
 ];
 
 export type CapstoneStatus = 'none' | 'started' | 'passed';

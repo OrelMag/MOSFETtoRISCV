@@ -885,13 +885,13 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Predict the next sample", challenge: "quiz" },
     { title: "A vocoder at 2.4 kb/s", challenge: "quiz" },
   ] },
-  { id: "music", num: 79, title: "Music", blurb: "What can a codec safely throw away? The MDCT and its perfect reconstruction, a simplified model of what the ear misses, and a codec of ours that spends its bits only where noise would be heard.", level: "Signal processing", builds: ["signals","multirate","speech"], recap: {"checks":3}, steps: [
+  { id: "music", num: 79, title: "Music", blurb: "What can a codec safely throw away? The MDCT and its perfect reconstruction, a simplified model of what the ear misses, and a codec of ours that spends its bits only where noise would be heard.", level: "Signal processing", builds: ["signals","spectrum","multirate","speech"], recap: {"checks":3}, steps: [
     { title: "What a codec may throw away", challenge: "quiz" },
     { title: "Overlap without loss", challenge: "quiz" },
     { title: "What the ear misses", challenge: "quiz" },
     { title: "Bits where they are heard", challenge: "quiz" },
   ] },
-  { id: "pictures", num: 80, title: "Pictures", blurb: "Why does a JPEG look blocky? Filters and resizing in two dimensions, the 8 × 8 DCT with a stage in gates, quantization, zig-zag and Huffman, and a real file your browser opens.", level: "Signal processing", builds: ["signals","multirate","fixed"], recap: {"checks":3}, steps: [
+  { id: "pictures", num: 80, title: "Pictures", blurb: "Why does a JPEG look blocky? Filters and resizing in two dimensions, the 8 × 8 DCT with a stage in gates, quantization, zig-zag and Huffman, and a real file your browser opens.", level: "Signal processing", builds: ["signals","fixed","firdesign","multirate","music"], recap: {"checks":3}, steps: [
     { title: "A picture is a signal", challenge: "quiz" },
     { title: "Filters in two dimensions", challenge: "quiz" },
     { title: "Smaller and larger", challenge: "quiz" },
@@ -901,7 +901,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Zig-zag, runs and codes", challenge: "quiz" },
     { title: "A file another program opens", challenge: "quiz" },
   ] },
-  { id: "sdr", num: 81, title: "A software radio", blurb: "Can you receive a station with what you have built? A band of four FM stations, a mixer and a CIC in gates, the filters and the discriminator after them, and sound out.", level: "Signal processing", builds: ["signals","radio","fixed","firdesign","multirate","cordic"], recap: {"checks":3}, steps: [
+  { id: "sdr", num: 81, title: "A software radio", blurb: "Can you receive a station with what you have built? A band of four FM stations, a mixer and a CIC in gates, the filters and the discriminator after them, and sound out.", level: "Signal processing", builds: ["signals","radio","modem","fixed","spectrum","firdesign","multirate","cordic","dspcore"], recap: {"checks":3}, steps: [
     { title: "Four stations in one band", challenge: "quiz" },
     { title: "How wide is a station?", challenge: "quiz" },
     { title: "Moving a station to zero", challenge: "quiz" },
