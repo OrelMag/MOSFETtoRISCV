@@ -60,6 +60,8 @@
 .r3-lbl.minor b { font-weight: 500; color: var(--text-2); }
 /* the labelled face is turned away: the label would float over whatever hides it */
 .r3-lbl.away { opacity: 0.3; }
+/* labelfit.ts: no clear spot near its part this frame */
+.r3-lbl.crowd { visibility: hidden; }
 @container (max-width: 480px) { .r3-lbl.minor { display: none; } .r3-lbl b { font-size: 10.5px; } }
 .r3-chips { position: absolute; left: 8px; top: 8px; right: 8px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
 .r3-chip { font: 600 11.5px var(--font-mono); padding: 1px 8px; border-radius: 99px; background: var(--surface); border: 1px solid var(--border); color: var(--text-2); }
