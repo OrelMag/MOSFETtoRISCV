@@ -205,6 +205,76 @@ GCM   as CTR, plus a tag over the ciphertext: one flipped bit anywhere and the t
     ],
   },
 
+  enigma: {
+    idea: `Stop the wheels and the machine is a function from 26 letters to 26 letters. A letter goes through the <b>plugboard</b>, the entry wheel, four wheels (a Greek wheel and three rotors), the <b>reflector</b>, the same four wheels backwards, the entry wheel and the plugboard again, and one lamp lights. Each wheel is a permutation <em>W</em> and the plugboard <em>P</em> a set of swaps, so one position is <em>P⁻¹ W⁻¹ U W P</em> with the reflector <em>U</em> in the middle. <em>U</em> is 13 swaps, and a swap seen through anything is still a swap, so at every position, for every key, the permutation is its own inverse (the same key at the far end undoes the message) and has no fixed point: no letter enciphers to itself. The wiring shows it a second way: each key is a changeover switch, and a pressed key has cut off its own lamp.<br><br>The wheels give a new permutation at every key press. The right wheel steps each time; when a wheel's notch is under its pawl the wheel to its left is carried too. The middle wheel's own notch also lets the left pawl in, so the middle wheel steps twice in a row, the <b>double step</b>. The key is the wheel order, the Greek wheel and reflector, the window positions, the ring settings and the plugboard.`,
+    example: {
+      title: 'The size of the key, and the period of the wheels',
+      body: `<pre>M4 key:   8 · 7 · 6 = 336 wheel orders     2 Greek wheels      2 reflectors
+          26<sup>4</sup> = 456 976 window positions       26<sup>2</sup> = 676 ring settings that matter
+          10 cables: 150 738 274 937 250 plugboards
+total     6.26 × 10<sup>25</sup>, about 2<sup>85.7</sup>
+one position: at most 25 · 23 · … · 1 = 7 905 853 580 625 permutations
+wheels I II III: 16 900 presses before they repeat (26 × 25 × 26, the middle wheel's double step)
+  wheels I II VI: 8450      wheels VI VII VIII: 4056</pre>The naval wheels VI, VII and VIII have two notches, which shortens the stepping. Real messages were far shorter than any of these periods, so that is not how it broke.`,
+    },
+    mistakes: [
+      'Thinking the reflector only makes the machine reciprocal: it is also the reason no letter maps to itself, which handed the attacker a test that needs no key.',
+      'Reading 2<sup>85.7</sup> as the cost of an attack: it is the count of settings, the plugboard is most of it, and a method goes round the plugboard.',
+      'Expecting the wheels to turn like an odometer: the middle wheel steps twice in a row at a double step, and the period of three wheels is 16 900, not 26<sup>3</sup>.',
+      'Taking the wheel wirings for the key: they are the machine, the same for everyone, and can be captured; the key is the daily settings.',
+    ],
+    chapters: [
+      { chapter: 'secret', step: 0, label: 'A secret kept in wires' },
+      { chapter: 'secret', step: 1, label: 'A permutation you can read' },
+      { chapter: 'secret', step: 2, label: 'The same machine in gates' },
+      { chapter: 'secret', step: 3, label: 'Why it broke: the flaw in the wiring' },
+    ],
+  },
+
+  bombe: {
+    idea: `Take a crib, a guessed piece of plaintext, and draw it as a <b>menu</b>: letters are nodes, and an edge joins the crib letter and the cipher letter at each place, labelled with the place. Guess that one letter is plugged to some letter. At a chosen wheel position the scrambler is known, so each edge turns that guess into another: if <em>a</em> is plugged to <em>u</em> and the scrambler at this place sends <em>u</em> to <em>v</em>, then <em>b</em> is plugged to <em>v</em>. Follow every edge, round every loop of the menu. If the consequences say a letter is plugged to everything, the guess was a <b>contradiction</b>. If every guess dies, the position is wrong, and it is wrong whichever way the other cables were plugged: the plugboard, the largest factor of the key, drops out of the search.<br><br>The Bombe is Enigma scramblers wired together by the menu, current doing the following, and a stop when something survives. Welchman's <b>diagonal board</b> adds that a plug is a swap, so if <em>a</em> goes to <em>u</em> then <em>u</em> goes to <em>a</em>. The chapter's software does the same over all 17 576 positions of three wheels, told the wheel order, the rings and the reflector.`,
+    example: {
+      title: 'What the search is over, and what it is not',
+      body: `<pre>a crib's place k: the scrambler at that position sends u → v
+hypothesis  a is plugged to u  gives  b is plugged to v  (and, a plug being a swap, u to a)
+contradiction: that hypothesis is out; every hypothesis out: that position is out
+positions of three wheels: 26<sup>3</sup> = 17 576       plugboards never counted: 150 738 274 937 250
+wheel orders still to try on a real run: 336</pre>The number of stops depends on the menu's loops: a short crib leaves false stops, and each stop was checked by a person. The chapter's model steps the wheels exactly, where a real machine's short cribs ignored the middle wheel's turnover.`,
+    },
+    mistakes: [
+      'Thinking the Bombe tries every plugboard: it never counts them; a contradiction at a wheel position holds for all of them at once.',
+      'Expecting one answer: a run gives stops, and a short crib gives false ones to be checked by hand.',
+      'Forgetting the crib is a guess: the no-letter-to-itself property is what first rules out places where it cannot stand.',
+      'Reading the search as a faster brute force: it works because a wrong position leaves no consistent plugboard at all, found by following the menu.',
+    ],
+    chapters: [
+      { chapter: 'secret', step: 4, label: 'The Bombe: going round the plugboard' },
+      { chapter: 'secret', step: 3, label: 'Why it broke: the flaw in the wiring' },
+    ],
+  },
+
+  kerckhoffs: {
+    idea: `<b>Kerckhoffs's principle</b>, as the chapter's table gives it (1883): only the key is secret. The Enigma's wheels and procedure were kept secret, and were captured or worked out; once known, what remained was the day's settings, and a method went round the largest part of those. So the design is published and only the key is secret: AES comes with its specification and test vectors, anyone can check an implementation against them, and a break in public view has to be a break of the key.<br><br>Two things follow. The key should be data a machine holds apart from its logic: on the gates here a different key meant a different circuit, which is why a modern cipher keeps it in a register. And it must be big enough to count against an attacker: the M4's wheel-and-ring settings alone are 4.15 × 10<sup>11</sup>, under 7 minutes at 1 GHz, while AES-128 has 2<sup>128</sup> keys, and the design's job is to make sure nothing cleverer than counting gets near it.`,
+    example: {
+      title: 'Counting the key against one key per clock',
+      body: `<pre>M4 wheel and ring settings, plugboard left out: 415 182 802 944 = 4.15 × 10<sup>11</sup>
+at 1 GHz, one key a clock: 415 s, under 7 minutes
+with the plugboard: 6.26 × 10<sup>25</sup>, about 2<sup>85.7</sup>
+AES-128: 2<sup>128</sup> keys</pre>The sum is for settings an attacker could try. It says nothing of how the Enigma was in fact broken: by a method that never counted the plugboard.`,
+    },
+    mistakes: [
+      'Hearing it as "publish everything": the key is the secret; the principle says not to rely on a secret design, not to disclose keys.',
+      'Treating a secret design as extra safety: one held by every operator and every machine will be captured or worked out.',
+      'Counting settings as strength: 2<sup>85.7</sup> looks safe, but the attack that went round the plugboard never counted it.',
+      'Building the key into the logic: a key wired into gates is a different circuit for every key; in a register, the design is public and the key secret.',
+    ],
+    chapters: [
+      { chapter: 'secret', step: 5, label: 'What the breaking taught' },
+      { chapter: 'secret', step: 2, label: 'The same machine in gates' },
+      { chapter: 'secret', step: 7, label: 'AES: four steps and a key' },
+    ],
+  },
+
   keyexchange: {
     idea: `The navy's key lists had to be printed and carried to every boat, and a capture gave them away. Two strangers on a network have no list, and Diffie and Hellman showed in 1976 they do not need one. Take a public prime p and a number g. Alice keeps a secret a and sends g<sup>a</sup> mod p; Bob keeps b and sends g<sup>b</sup> mod p. Each raises what arrived to their own secret and both get g<sup>ab</sup> mod p, because exponents commute. Anyone watching has both public numbers and would need to undo an exponentiation, the <b>discrete logarithm</b>, for which no fast method is known on ordinary computers at the right sizes. The shared secret is never sent, under any cipher.<br><br>Modern TLS does this on an elliptic curve, where the same security needs far smaller numbers: instead of multiplying numbers you add points, <i>a</i> times a point is easy, and getting <i>a</i> back is the hard direction. X25519 has 255-bit numbers and is chosen so that a careful implementation is simple; the chapter's is Python built for the RV32IM, a number being 32 limbs of 8 bits, and one multiplication walks the 255 bits with the Montgomery ladder. A large quantum computer would change the hardness, since Shor's algorithm solves discrete logarithms. And key exchange alone says nothing about who is at the other end: a man in the middle runs one exchange with each side.`,
     example: {
