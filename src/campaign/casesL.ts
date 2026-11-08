@@ -3,6 +3,7 @@
 
 import type { LevelCase } from './cases';
 import { numOf } from '../chapters/order';
+import { margin, PULL_I, REPEATER_SECTION_KM as SEC, SOUNDER_R } from '../phys/telegraph';
 
 export const CASESL: Record<string, LevelCase> = {
   l_sync: {
@@ -48,7 +49,7 @@ export const CASESL: Record<string, LevelCase> = {
     cost: `5 847 NANDs for four routes, nearly all of it 160 flip-flops and the comparisons. Matching every route at once is what a TCAM does, and it pays per route: chapter ${numOf('router')} walks a trie in RAM instead, one read per bit of the address, and its whole fast path is 4 214 NANDs of logic beside 836 585 of memory, which holds 1 024 nodes.`,
   },
   l_repeater: {
-    problem: 'A telegraph line weakens with its length: the current a battery drives through 4 mm iron wire and a relay coil falls as the wire gets longer, and below the relay\'s pull-in current (38 mA with our 24 V coil) the sounder stays silent. A 24 km section is fine with a margin of 1.08, 48 km is a margin of 0.70. A relay half way takes the weak current and closes a contact that puts a battery of its own on the next section.',
+    problem: `A telegraph line weakens with its length: the current a battery drives through 4 mm iron wire and a coil falls as the wire gets longer, and below the coil's pull-in current (${(PULL_I * 1e3).toFixed(0)} mA for our ${SOUNDER_R} Ω main-line coil) the sounder stays silent. A ${SEC} km section on 24 V is fine with a margin of ${margin(24, SEC, 'iron').toFixed(2)}, ${2 * SEC} km is a margin of ${margin(24, 2 * SEC, 'iron').toFixed(2)}. A relay half way takes the weak current and closes a contact that puts a battery of its own on the next section.`,
     without: 'Without the repeater the line has to be shortened, or the voltage raised until the insulators break down, or the wire made thicker at a copper cost per kilometre. With one the line is unlimited: each station restarts the signal.',
     cost: 'One relay, one relay step (8.2 ms) of delay per station. A signal crosses n stations in n steps, and each one shortens a dot by a little: repeaters balanced their relays to make the two edges equal. A regenerator is also where a signal that was wrong gets repeated wrongly at full strength.',
   },

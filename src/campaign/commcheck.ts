@@ -12,7 +12,7 @@ import { flatten } from '../sim/flatten';
 import { analyzeTiming } from '../sim/timing';
 import { PS_PER_NAND } from '../sim/timing';
 import type { ComponentDef } from '../sim/types';
-import { margin, reachKm } from '../phys/telegraph';
+import { margin, reachKm, REPEATER_SECTION_KM } from '../phys/telegraph';
 import { fmtLog10, log10Mtbf, resolutionTime, TAU_PS, T0_PS, windowRate } from '../phys/metastable';
 import { CMD_NAMES as I2C_CMD_NAMES, I2cController as I2cControllerModel, I2cTarget as I2cTargetModel, READ as I2C_READ, START as I2C_START, STOP as I2C_STOP, WRITE as I2C_WRITE } from '../comm/i2c';
 import { codeText, decode8b10b, encodeStream, disparityOf, K_CODES, MAX_RUN_8B10B, nameOf, type Rd, validByte } from '../comm/linecode';
@@ -557,12 +557,12 @@ export function runI2c(def: ComponentDef, mode: 'gate' | 'switch'): CustomRun {
 // ---- l_repeater: a line twice as long as one battery drives ---------------------------------------------------------------------
 
 /** A section a battery can drive to a relay's coil with margin, and the line the station serves: twice that. */
-export const LINE_SECTION_KM = 24, LINE_KM = 2 * LINE_SECTION_KM, LINE_VOLTS = 24;
+export const LINE_SECTION_KM = REPEATER_SECTION_KM, LINE_KM = 2 * LINE_SECTION_KM, LINE_VOLTS = 24;
 
 /**
  * The line between the far stations is two sections long. A relay at the end of a section sees only what the line lets through, so
  * the station must send the signal on from a battery of its own: the output must share no conductor with the line. A contact that
- * joins them passes the weak signal on (and the next section is then 48 km, not 24).
+ * joins them passes the weak signal on (and the next section is then twice as long, beyond one battery's reach).
  */
 export function repeaterProblems(def: ComponentDef): string[] {
   let d;
