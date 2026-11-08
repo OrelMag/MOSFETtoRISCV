@@ -1,0 +1,14 @@
+/* ---------- The Jacquard head (widgets/loom3dview.ts): materials ---------- */
+.m3d {
+  --lm-wood: light-dark(#b98a55, #8a6540);
+  --lm-iron: light-dark(#4a4f5a, #8a92a3);
+  --lm-steel: light-dark(#9aa3b3, #b7c0d0);
+  --lm-spring: light-dark(#c2a14a, #d6b75e);
+  --lm-card: light-dark(#e3d4a6, #d4c590);
+  --lm-hole: light-dark(#2b2f3a, #101217);
+  --lm-warp: light-dark(#b3402f, #d1604c);
+  --lm-weft: light-dark(#efe6cf, #cfc6ae);
+  --lm-cord: light-dark(#8c7b5e, #a8987a);
+  --lm-lead: light-dark(#6d7380, #848b99);
+  --lm-brass: light-dark(#b8862b, #e0b04a);
+}
