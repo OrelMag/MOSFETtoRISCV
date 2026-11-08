@@ -159,6 +159,7 @@ export const chFlash: Chapter = {
         Vt = 1 + 5q, so ${pulses} pulses carry Vt past the read voltage of ${V_READ} V. Erase empties every cell of the block at once. A read of one cell puts ${V_READ} V on its control gate and a
         pass voltage on the others, high enough that they conduct whatever they hold. The string carries current only if the chosen cell does, so its
         bit is read through the other cells, which are all on.</p>
+        <p>The voltages are illustrative. In a real NAND string the erased cells have a threshold below 0 V and the chosen word line is read at about 0 V, with the others passed at 4.5 to 6 V, and a program step (ISPP) moves Vt by 0.2 to 0.5 V rather than the model's 1 V; the model keeps the NOR-style window above so that one rule serves the whole chapter. The 5 in Vt = 1 + 5q is the floating gate's coupling to the control gate: the charge needed for a volt of threshold is Q / C<sub>ONO</sub>, and the same ratio, GCR = C<sub>ONO</sub> / (C<sub>ONO</sub> + C<sub>tox</sub>) of about 0.6, sets how much of the programming voltage lands across the thin tunnel oxide.</p>
         <div class="try">Choose cell 3, pulse until the string goes from conducting to blocked, then erase the block.</div>`,
       widget: () => fgate3d(),
     },

@@ -1,2 +1,2 @@
 /* ---------- The floating-gate string (widgets/fgate3dview.ts): the lit channel's colour ---------- */
-.m3d { --m3-hot: light-dark(#e8a020, #ffc04a); }
+.m3d { --m3-hot: light-dark(#e8a020, #ffc04a); --m3-nitride: light-dark(#7d8fa8, #8fa0b8); }
