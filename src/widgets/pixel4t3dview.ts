@@ -29,7 +29,7 @@ export function pixel4tView(): Widget {
     aria: 'One back-illuminated CMOS pixel in 3D, cut through its photodiode: microlens, colour filter, thinned silicon with the pinned photodiode, and on the front side the transfer gate, floating diffusion, reset, source follower and row select transistors with their metal to the column line',
     camera: { target: [12, 15, 12], yaw: 2.65, pitch: 0.3, dist: 100 },
     limits: { minDist: 25, maxDist: 220 },
-    note: `Drawn to scale (${PITCH} µm pixel, ${SI_T} µm of thinned silicon, absorption depths from Green's 2008 table) except the gate oxide, a few nanometres and not drawn. The layout is ours: a real ${PITCH} µm pixel shares its reset, follower and select transistors among two or four photodiodes. A dot is ${groupNum(Math.round(FULL_WELL / 60))} electrons and a drawn photon ${PHOTONS_PER_FLASH / DRAWN}. Sony does not publish the IMX183's conversion gain: ${CG_4T} µV/e⁻ is an illustrative value for a ${PITCH} µm pixel, and the floating diffusion's ${C_FD_FF.toFixed(2)} fF follows from it as q / CG; the full well (${groupNum(FULL_WELL)} e⁻) is an EMVA 1288 measurement.`,
+    note: `Drawn to scale (${PITCH} µm pixel, ${SI_T} µm of thinned silicon, absorption depths from Green's 2008 table) except the gate oxide, a few nanometres and not drawn. The layout is ours: a real ${PITCH} µm pixel shares its reset, follower and select transistors among two or four photodiodes. A dot is ${groupNum(Math.round(FULL_WELL / 60))} electrons, and each drawn photon stands for ${PHOTONS_PER_FLASH / DRAWN}. Sony does not publish the IMX183's conversion gain: ${CG_4T} µV/e⁻ is an illustrative value for a ${PITCH} µm pixel, and the floating diffusion's ${C_FD_FF.toFixed(2)} fF follows from it as q / CG; the full well (${groupNum(FULL_WELL)} e⁻) is an EMVA 1288 measurement.`,
     draw: () => draw(),
   });
   const palette = (): PixPalette => ({
@@ -45,19 +45,26 @@ export function pixel4tView(): Widget {
   stage.chips.append(chip);
 
   function plot(): SVGSVGElement {
-    const seq = sequenceOf(st), W = 300, H = 140, x0 = 34, cw = (W - x0 - 6) / 4, vMin = VDD_PIX - 1.1, vMax = VDD_PIX + 0.05;
+    // Both traces on one axis: FD near the supply, the column a follower's drop below it (SF_GAIN × (FD − Vt)).
+    const seq = sequenceOf(st), W = 300, H = 150, x0 = 34, cw = (W - x0 - 6) / 4, vMin = 1, vMax = VDD_PIX + 0.1;
     const y = (v: number) => 8 + ((vMax - v) / (vMax - vMin)) * (H - 30);
-    const svg = s('svg', { class: 'px-plot', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `The floating diffusion's voltage through the four phases of a read, with the column's reset and signal samples` }) as SVGSVGElement;
-    for (const v of [VDD_PIX, VDD_PIX - 0.5, VDD_PIX - 1]) svg.append(s('line', { class: 'grid', x1: x0, x2: W - 6, y1: y(v), y2: y(v) }), s('text', { x: 0, y: y(v) + 3 }, `${v.toFixed(1)} V`));
-    let pts = `${x0},${y(VDD_PIX)}`;
+    const svg = s('svg', { class: 'px-plot', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': `The floating diffusion's voltage and the column's through the four phases of a read, with the column's reset and signal samples` }) as SVGSVGElement;
+    for (const v of [VDD_PIX, 2, 1.2]) svg.append(s('line', { class: 'grid', x1: x0, x2: W - 6, y1: y(v), y2: y(v) }), s('text', { x: 0, y: y(v) + 3 }, `${v.toFixed(1)} V`));
+    let pts = '', cpts = '';
+    const dotsAt: SVGElement[] = [];
     seq.phases.forEach((p, i) => {
       const xa = x0 + i * cw, done = st.phase >= i;
       svg.append(s('text', { class: `ph${st.phase === i ? ' now' : ''}`, x: xa + cw / 2, y: H - 6, 'text-anchor': 'middle' }, p.name));
       if (!done) return;
       pts += ` ${xa},${y(p.fd)} ${xa + cw},${y(p.fd)}`;
-      if (p.sample) svg.append(s('circle', { class: `smp ${p.sample}`, cx: xa + cw / 2, cy: y(p.fd), r: 4 }));
+      cpts += ` ${xa},${y(p.col)} ${xa + cw},${y(p.col)}`;
+      if (p.sample) dotsAt.push(s('circle', { class: `smp ${p.sample}`, cx: xa + cw / 2, cy: y(p.col), r: 4 }));
     });
-    if (st.phase >= 0) svg.append(s('polyline', { class: 'fd', points: pts }));
+    if (st.phase >= 0) {
+      const last = seq.phases[Math.min(st.phase, 3)];
+      svg.append(s('polyline', { class: 'fd', points: pts.trim() }), s('polyline', { class: 'col', points: cpts.trim() }), ...dotsAt,
+        s('text', { class: 'lbl', x: W - 8, y: y(last.fd) - 4, 'text-anchor': 'end' }, 'FD'), s('text', { class: 'lbl', x: W - 8, y: y(last.col) - 4, 'text-anchor': 'end' }, 'column'));
+    }
     return svg;
   }
 

@@ -13,6 +13,8 @@
 .px-plot text { font: 10.5px var(--font-mono); fill: var(--muted); }
 .px-plot text.now { fill: var(--accent); font-weight: 600; }
 .px-plot .fd { fill: none; stroke: var(--px-metal); stroke-width: 2; stroke-linejoin: round; }
+.px-plot .col { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 5 3; stroke-linejoin: round; }
+.px-plot text.lbl { fill: var(--text-2); font-family: var(--font-ui); }
 .px-plot .smp { stroke: var(--surface); stroke-width: 1.5; }
 .px-plot .smp.reset { fill: var(--accent); }
 .px-plot .smp.signal { fill: var(--m3-charge); }
