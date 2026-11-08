@@ -176,11 +176,11 @@ export function tideParts(td: Tide, on: readonly boolean[], t: number, P: TidePa
 }
 
 export function tideAnchors(_td: Tide): Anchor[] {
-  const front: Vec3 = [0, 0.1, 1], up: Vec3 = [0, 1, 0];
+  const front: Vec3 = [0, 0.1, 1];
   return [
     { text: 'cranks, one a harmonic', p: [crankX(2), HUB_Y - 5, 3.4], side: 'b', n: front },
     { text: 'slider and movable pulley', p: [crankX(6), C0 - 2, 2], side: 'b', n: front },
-    { text: 'fixed pulleys', p: [crankX(3) + PITCH / 2, RAIL_Y + 4, 0], side: 't', n: up },
+    { text: 'fixed pulleys', p: [crankX(1) + PITCH / 2, YF - 4, 0], side: 'b', n: front }, // below the row: above it the text runs off a phone's canvas
     { text: 'cord, fixed here', p: [crankX(0) - A_ARC, YF + 4, 0], side: 'r', n: front, minor: true },
     { text: 'ink bottle and pen', p: [PEN_X, Y0 + 2, 0], side: 'l', n: front },
     { text: 'moving paper', p: [PEN_X + 40, PAPER_Y0 - 1, PAPER_Z], side: 'b', n: front },
