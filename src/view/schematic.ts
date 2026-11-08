@@ -439,6 +439,8 @@ export class SchematicView {
         const ax = at[0] + cx, ay = at[1] + cy;
         const t = s('text', { class: 'lg-name', x: ax, y: ay, 'text-anchor': 'middle', 'dominant-baseline': 'central', transform: rot ? `rotate(-90 ${ax} ${ay})` : null }, nm);
         g.classList.add('lg-named');
+        // the full name whatever is drawn: hover, and the block's accessible name
+        g.append(s('title', {}, nm));
         nameG.append(t);
         this.nameOf.set(inst.name, t);
         names.push({ t, box: { cx: at[0] + cx, cy: at[1] + cy, w: geo.w, h: geo.h, chars: nm.length, rot, text: nm } });

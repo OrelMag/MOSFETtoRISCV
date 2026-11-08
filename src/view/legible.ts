@@ -51,74 +51,121 @@ export function nameEligible(label: string | null | undefined, w: number, h: num
 /** A tall narrow block (a pipeline register) gets its name turned. */
 export const nameRotated = (w: number, h: number): boolean => h > w * 3;
 
-/** How a name is drawn: font size (px on screen) and its lines (one, or two broken at a space, a slash or an ampersand). */
-export interface NameLayout { px: number; lines: string[] }
+/** How a name is drawn: font size (px on screen), its lines (one, or two broken at a space or slash), and whether it is wider than its block. */
+export interface NameLayout { px: number; lines: string[]; over?: boolean }
 
-/** The ways to put a name on one or two lines: whole, or broken after a space or a slash, the most even split first. */
+/** Abbreviations, applied to a name word by word (never per drawing) when its full name has no room. */
+export const ABBREVIATIONS: Record<string, string> = {
+  REGISTERS: 'REGS', REGISTER: 'REG', INSTRUCTION: 'INSTR', MEMORY: 'MEM', EXPONENT: 'EXP', NORMALIZE: 'NORM', SPECIAL: 'SPEC',
+  SELECT: 'SEL', UNPACK: 'UNPK', ALIGN: 'ALGN', DIVIDER: 'DIV', ROUND: 'RND', CONTROL: 'CTRL', PRENORM: 'PRENRM',
+};
+/** A name with each word of ABBREVIATIONS shortened (same text when none applies). */
+export const abbreviate = (text: string): string => text.replace(/[A-Za-z]+/g, (w) => ABBREVIATIONS[w.toUpperCase()] ?? w);
+
+/** The ways to put a name on one or two lines: whole, or broken after a space / slash or before an "&", the most even split first. */
 export function nameBreaks(text: string): string[][] {
   const out: string[][] = [[text]];
   const cuts: number[] = [];
-  for (let i = 1; i < text.length; i++) {
-    if ((text[i - 1] === ' ' || text[i - 1] === '/') && text[i] !== '&') cuts.push(i);
-  }
+  for (let i = 1; i < text.length; i++) if (text[i - 1] === ' ' || text[i - 1] === '/') cuts.push(i);
   const lines = cuts.map((i) => [text.slice(0, i).trim(), text.slice(i).trim()]).filter((l) => l[0] && l[1]);
   lines.sort((a, b) => Math.max(a[0].length, a[1].length) - Math.max(b[0].length, b[1].length));
   return out.concat(lines.slice(0, 3));
 }
 
-/**
- * The layout of a block's name at `scale`: the largest font up to NAME_PX at which one line, or two, fits inside the block
- * (a turned name along its length only: it is meant to span a narrow register); a name no size fits is cut short with an ellipsis at
- * NAME_MIN_PX; a block too small even for three letters keeps its name at MIN_TEXT_PX over the edge, never lost. The block's size alone decides it.
- */
-export function nameLayout(b: NameBox, scale: number): NameLayout {
-  const text = b.text ?? 'x'.repeat(b.chars);
+const maxChars = (lines: string[]) => Math.max(...lines.map((x) => x.length));
+const textOf = (b: NameBox) => b.text ?? 'x'.repeat(b.chars);
+
+/** The largest layout (up to NAME_PX) of `text` that sits inside the block, or null when none reaches NAME_MIN_PX. */
+export function fitLayout(b: NameBox, scale: number, text = textOf(b)): NameLayout | null {
   const along = (b.rot ? b.h : b.w) * scale - NAME_PAD, across = (b.rot ? b.w : b.h) * scale - 2;
   let best: NameLayout | null = null;
+  // a turned name is meant to span a narrow register: only its length is bound
   for (const lines of b.rot ? [[text]] : nameBreaks(text)) {
-    const chars = Math.max(...lines.map((l) => l.length));
-    let px = Math.min(NAME_PX, along / (chars * NAME_EM));
+    let px = Math.min(NAME_PX, along / (maxChars(lines) * NAME_EM));
     if (!b.rot) px = Math.min(px, across / (lines.length * NAME_LINE));
     if (!best || px > best.px + 0.01) best = { px, lines };
   }
-  if (best!.px >= NAME_MIN_PX) return best!;
-  // no layout reaches the floor: cut the name short, at the floor size, where one line fits the block
-  const n = Math.floor(along / (NAME_MIN_PX * NAME_EM));
-  if (!b.rot && n >= 3 && n < text.length && across >= NAME_MIN_PX * NAME_LINE) return { px: NAME_MIN_PX, lines: [text.slice(0, n - 1).trimEnd() + '…'] };
-  return { px: MIN_TEXT_PX, lines: nameBreaks(text).reduce((a, l) => (Math.max(...l.map((x) => x.length)) < Math.max(...a.map((x) => x.length)) ? l : a), [text]) };
+  return best && best.px >= NAME_MIN_PX ? best : null;
 }
 
-/** The screen rectangle (px, from the block's centre) a fixed name takes. */
+/** `text` cut short with an ellipsis (at least two letters kept) at NAME_MIN_PX on one line inside the block, or null. */
+export function truncLayout(b: NameBox, scale: number, text = textOf(b)): NameLayout | null {
+  const n = Math.floor(((b.rot ? b.h : b.w) * scale - NAME_PAD) / (NAME_MIN_PX * NAME_EM));
+  const across = (b.rot ? b.w : b.h) * scale - 2;
+  if (b.rot || n < 3 || n >= text.length || across < NAME_MIN_PX * NAME_LINE) return null;
+  return { px: NAME_MIN_PX, lines: [text.slice(0, n - 1).trimEnd() + '…'] };
+}
+
+/** Layouts of `text` wider than the block: the largest size (NAME_PX down to MIN_TEXT_PX), one line before two. */
+function* overLayouts(b: NameBox, text: string): Generator<NameLayout> {
+  if (b.rot) return;
+  const ways = nameBreaks(text);
+  for (let px = NAME_PX; px >= MIN_TEXT_PX; px--) for (const lines of ways) yield { px, lines, over: true };
+}
+
+/** The screen rectangle (px, from the block's centre) a name takes. */
 function nameSize(b: NameBox, l: NameLayout): { w: number; h: number } {
-  const w = Math.max(...l.lines.map((x) => x.length)) * l.px * NAME_EM + 6, h = l.px * NAME_LINE * l.lines.length;
+  const w = maxChars(l.lines) * l.px * NAME_EM + 6, h = l.px * NAME_LINE * l.lines.length;
   return b.rot ? { w: h, h: w } : { w, h };
+}
+
+interface Box { l: number; r: number; t: number; b: number }
+const crosses = (a: Box, k: Box) => a.l < k.r && a.r > k.l && a.t < k.b && a.b > k.t;
+
+/** The rectangle (grid units) a laid-out name covers. */
+export function nameRect(b: NameBox, l: NameLayout, scale: number): { x: number; y: number; w: number; h: number } {
+  const { w, h } = nameSize(b, l);
+  return { x: b.cx - w / 2 / scale, y: b.cy - h / 2 / scale, w: w / scale, h: h / scale };
 }
 
 /**
  * Which names are drawn at `scale` px per grid unit: none once labels render at NAME_PX themselves; else those whose block
- * is at least `minBlockPx` long and whose text does not overlap a name kept before it, blocks taken from the largest.
+ * is at least `minBlockPx` long and whose text collides with nothing kept before it, blocks taken from the largest.
  * Pure: `boxes` in any order, the answer by index.
  */
 export function planNames(boxes: NameBox[], scale: number, minBlockPx = 10): boolean[] {
   return planLayouts(boxes, scale, minBlockPx).map((l) => l !== null);
 }
 
-/** planNames with how each kept name is drawn (null: no name). */
-export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10): (NameLayout | null)[] {
+/**
+ * planNames with how each kept name is drawn (null: no name). A block's name is tried in this order, first the full text, then
+ * its abbreviation (ABBREVIATIONS): inside the block at the largest size; wider than the block at the largest size where it
+ * covers no other block and no name kept before it (`blocks`: every block's grid rectangle, else the other named blocks);
+ * and last the full text cut short with an ellipsis inside the block.
+ */
+export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, blocks?: { x: number; y: number; w: number; h: number }[]): (NameLayout | null)[] {
   const out: (NameLayout | null)[] = boxes.map(() => null);
   if (!needsFixedNames(scale)) return out;
-  const order = boxes.map((_, i) => i).sort((a, b) => boxes[b].w * boxes[b].h - boxes[a].w * boxes[a].h || a - b);
-  const kept: { l: number; r: number; t: number; b: number }[] = [];
+  const order = boxes.map((_, i) => i).sort((a, c) => boxes[c].w * boxes[c].h - boxes[a].w * boxes[a].h || a - c);
+  const kept: Box[] = [];
+  const asBox = (r: { x: number; y: number; w: number; h: number }): Box => ({ l: r.x, r: r.x + r.w, t: r.y, b: r.y + r.h });
+  const all = (blocks ?? boxes.map((b) => ({ x: b.cx - b.w / 2, y: b.cy - b.h / 2, w: b.w, h: b.h }))).map(asBox);
   for (const i of order) {
     const b = boxes[i];
     if (Math.max(b.w, b.h) * scale < minBlockPx) continue;
-    const lay = nameLayout(b, scale);
-    const { w, h } = nameSize(b, lay);
-    const hw = w / 2 / scale, hh = h / 2 / scale;
-    const r = { l: b.cx - hw, r: b.cx + hw, t: b.cy - hh, b: b.cy + hh };
-    if (kept.some((k) => r.l < k.r && r.r > k.l && r.t < k.b && r.b > k.t)) continue;
-    kept.push(r);
-    out[i] = lay;
+    const full = textOf(b), short = abbreviate(full);
+    const texts = short === full ? [full] : [full, short];
+    const free = (l: NameLayout) => !kept.some((k) => crosses(asBox(nameRect(b, l, scale)), k));
+    // a rectangle is the block's own when it matches its centre and size
+    const others = (l: NameLayout) => {
+      const r = asBox(nameRect(b, l, scale));
+      return !all.some((k) => !(Math.abs((k.l + k.r) / 2 - b.cx) < 0.01 && Math.abs((k.t + k.b) / 2 - b.cy) < 0.01) && crosses(r, k));
+    };
+    let pick: NameLayout | null = null;
+    for (const t of texts) {
+      const fit = fitLayout(b, scale, t);
+      if (fit && free(fit)) { pick = fit; break; }
+      for (const l of overLayouts(b, t)) if (free(l) && others(l)) { pick = l; break; }
+      if (pick) break;
+    }
+    for (const t of texts) {
+      if (pick) break;
+      const tr = truncLayout(b, scale, t);
+      if (tr && free(tr)) pick = tr;
+    }
+    if (!pick) continue;
+    kept.push(asBox(nameRect(b, pick, scale)));
+    out[i] = pick;
   }
   return out;
 }
@@ -168,6 +215,7 @@ export class Legibility {
   private tags: TagEl[] = [];
   private tagBlocks: R[] = [];
   private tagK: (number | null)[] = [];
+  private nameRects: R[] = [];
   private tagScale = 0;
   /** Planning runs this long after the scale stopped changing (ms). */
   settleMs = 60;
@@ -195,7 +243,7 @@ export class Legibility {
 
   private planTagSizes(): void {
     this.tagScale = this.scale;
-    const next = planTags(this.tags, this.tagBlocks, this.scale);
+    const next = planTags(this.tags, [...this.tagBlocks, ...this.nameRects], this.scale);
     next.forEach((k, i) => {
       if (k === this.tagK[i] && k === null) return;
       const g = this.tags[i].g, [x, y] = this.tags[i].tip;
@@ -239,7 +287,8 @@ export class Legibility {
     this.fontScale = this.scale;
     for (const { t, l } of this.shown) {
       t.setAttribute('font-size', String(l.px / this.scale));
-      t.setAttribute('stroke-width', String(Math.min(2.6, l.px * 0.22) / this.scale));
+      t.setAttribute('stroke-width', String(Math.min(l.over ? 3.2 : 2.6, l.px * (l.over ? 0.28 : 0.22)) / this.scale));
+      t.classList.toggle('lg-over', !!l.over);
     }
   }
 
@@ -264,7 +313,7 @@ export class Legibility {
     clearTimeout(this.timer);
     this.lastPlan = performance.now();
     this.planScale = this.scale;
-    const next = planLayouts(this.names.map((n) => n.box), this.scale);
+    const next = planLayouts(this.names.map((n) => n.box), this.scale, 10, this.tagBlocks.length ? this.tagBlocks : undefined);
     this.shown = [];
     next.forEach((l, i) => {
       const v = l !== null, t = this.names[i].t;
@@ -272,6 +321,9 @@ export class Legibility {
       if (l) { this.lines(t, l); this.shown.push({ t, l }); }
     });
     this.on = next.map((l) => l !== null);
+    // tags are enlarged only where no name (overflowing its block, perhaps) is
+    this.nameRects = next.flatMap((l, i) => (l ? [nameRect(this.names[i].box, l, this.scale)] : []));
+    if (this.tags.length) this.planTagSizes();
     this.fontScale = 0;
     this.size();
   }
