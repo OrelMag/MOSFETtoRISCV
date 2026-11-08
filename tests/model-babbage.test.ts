@@ -1,12 +1,13 @@
 // Babbage's carry: the column's two carriages against plain decimal addition, the order the helix reaches the arms in, the
 // anticipating carriage against the successive one, and the quoted gate delays against the library.
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { RGB } from '../src/gl/instances';
 import { koggeStone, rca } from '../src/lib';
 import { logicDepth } from '../src/sim/stats';
 import {
   ARMS, DIGITS, EVENTS, GAP_DEG, MOD, PER_COLUMN, PITCH_DEG, SPLIT, TURN_MAX, advanceTo, anticipate, armAngle, armPhase, armTime, babbageAnchors, babbageParts, begin, digitGroups,
-  finished, finishCarry, fromValue, gateRows, giveOff, nextFiring, pending, sweep, valueOf, zero, type BabbagePalette,
+  CASES, columnReads, finished, finishCarry, fromValue, gateRows, giveOff, nextFiring, pending, sweep, valueOf, zero, type BabbagePalette,
 } from '../src/widgets/babbage3dparts';
 
 const c = (i: number): RGB => [i / 20, 0.5, 0.5];
@@ -191,6 +192,21 @@ describe('the finished carry phase', () => {
   it('a carry phase with nothing to carry stays where it was', () => {
     const s = finishCarry(advanceTo(begin(giveOff(fromValue(11n), 22n)), TURN_MAX));
     expect(s.fired).toHaveLength(0);
+  });
+});
+
+describe('big numbers in the readouts', () => {
+  const BARE = /[0-9]{5,}/, THIN = String.fromCharCode(0x202f);
+  it('the column reading, the aria and status text and every case blurb group their digits with the site’s thin spaces', () => {
+    for (const v of [0n, 9999n, 10000n, 7999999n, nines(20) + 1n, nines(31), MOD - 1n, MOD, MOD + 5n]) expect(columnReads(v)).not.toMatch(BARE);
+    expect(columnReads(nines(20) + 1n)).toBe(['100', ...Array(6).fill('000')].join(THIN));
+    expect(columnReads(7999999n)).toBe(['7', '999', '999'].join(THIN));
+    for (const c of CASES) { expect(c.blurb).not.toMatch(BARE); expect(c.label).not.toMatch(BARE); }
+    expect(CASES[1].blurb.startsWith('7' + THIN + '999' + THIN + '999 + 1')).toBe(true);
+  });
+  it('the view and its entry write no number of five digits or more bare, and format the column only through columnReads', () => {
+    for (const f of ['../src/widgets/babbage3dview.ts', '../src/widgets/babbage3d.ts']) expect(readFileSync(new URL(f, import.meta.url), 'utf8')).not.toMatch(BARE);
+    expect(readFileSync(new URL('../src/widgets/babbage3dview.ts', import.meta.url), 'utf8')).not.toContain('% MOD');
   });
 });
 

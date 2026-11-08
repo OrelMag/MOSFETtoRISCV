@@ -20,6 +20,7 @@ import type { RGB } from '../gl/instances';
 import type { Vec3 } from '../gl/math';
 import { box, cyl, rod, type Anchor, type Part } from '../gl/parts';
 import { koggeStone, rca } from '../lib';
+import { groupNum } from '../sim/numfmt';
 import { logicDepth } from '../sim/stats';
 
 export const DIGITS = 31, ARMS = DIGITS - 1, SPLIT = 15, PITCH_DEG = 22, GAP_DEG = 45;
@@ -162,3 +163,17 @@ export function babbageAnchors(p: Pose): Anchor[] {
     { text: 'wheel 31 (overflow)', p: [R, top + TH, 0], side: 'r', n: up },
   ];
 }
+
+/** The number the wheels read, as the site writes a big number (thin-space groups from 5 digits up). */
+export const columnReads = (v: bigint): string => groupNum(v % MOD);
+
+export interface Case { id: string; label: string; start: bigint; add: bigint; blurb: string }
+const nines = (n: number) => 10n ** BigInt(n) - 1n;
+/** Starting columns and what is added to them; the third crosses the 15th / 16th arm, the last runs the whole column. */
+export const CASES: Case[] = [
+  { id: 'apart', label: 'Two separate carries', start: 4259n, add: 6332n, blurb: `${groupNum(4259n)} + ${groupNum(6332n)}: wheels 0 and 3 pass 9 to 0, no 9 above either to carry on` },
+  { id: 'run', label: 'A run of 9s', start: 7999999n, add: 1n, blurb: `${groupNum(7999999n)} + 1: wheel 0 passes 9 to 0, six wheels above stand at 9` },
+  { id: 'gap', label: 'A run across wheel 15 to 16', start: nines(20), add: 1n, blurb: '20 nines + 1: the carry crosses the 45° gap in the helix and waits for the second rotation' },
+  { id: 'full', label: 'All 31 wheels at 9', start: nines(DIGITS), add: 1n, blurb: '31 nines + 1: every arm fires, the top wheel only flags the overflow' },
+];
+

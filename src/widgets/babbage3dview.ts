@@ -10,19 +10,9 @@ import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
 import { modelStage } from './modelstage';
 import {
-  ARMS, DIGITS, MOD, digitGroups, PER_COLUMN, TURN_MAX, advanceTo, anticipate, finishCarry, babbageAnchors, babbageParts, begin, finished, fromValue, gateRows, giveOff,
+  ARMS, CASES, DIGITS, columnReads, digitGroups, PER_COLUMN, TURN_MAX, advanceTo, anticipate, finishCarry, babbageAnchors, babbageParts, begin, finished, fromValue, gateRows, giveOff,
   nextFiring, sweep, valueOf, type BabbagePalette, type Carry, type Column, type Pose,
 } from './babbage3dparts';
-
-interface Case { id: string; label: string; start: bigint; add: bigint; blurb: string }
-const nines = (n: number) => 10n ** BigInt(n) - 1n;
-/** Starting columns and what is added to them; the third crosses the 15th / 16th arm, the last runs the whole column. */
-export const CASES: Case[] = [
-  { id: 'apart', label: 'Two separate carries', start: 4259n, add: 6332n, blurb: '4 259 + 6 332: wheels 0 and 3 pass 9 to 0, no 9 above either to carry on' },
-  { id: 'run', label: 'A run of 9s', start: 7999999n, add: 1n, blurb: '7 999 999 + 1: wheel 0 passes 9 to 0, six wheels above stand at 9' },
-  { id: 'gap', label: 'A run across wheel 15 to 16', start: nines(20), add: 1n, blurb: '20 nines + 1: the carry crosses the 45° gap in the helix and waits for the second rotation' },
-  { id: 'full', label: 'All 31 wheels at 9', start: nines(DIGITS), add: 1n, blurb: '31 nines + 1: every arm fires, the top wheel only flags the overflow' },
-];
 
 export function babbageView(): Widget {
   let cs = CASES[1], base: Column = fromValue(cs.start), s: Carry = begin(base), phase: 'ready' | 'carry' | 'done' = 'ready';
@@ -61,7 +51,7 @@ export function babbageView(): Widget {
       return h('span', { class: `bb-d${s.col.warn[i] ? ' armed' : ''}${fs?.[i] ? ' recv' : ''}` }, d);
     }))));
     const v = valueOf(s.col), flag = s.col.warn[DIGITS - 1] ? ' with the overflow flag set' : '';
-    digits.setAttribute('aria-label', `Column reads ${(v % MOD).toString()}${flag}; ${armed} warning lever${armed === 1 ? '' : 's'} armed`);
+    digits.setAttribute('aria-label', `Column reads ${columnReads(v)}${flag}; ${armed} warning lever${armed === 1 ? '' : 's'} armed`);
     const runLen = plan.longest;
     const unit = anticipating ? '1 unit, whatever the run' : `${phase === 'done' ? 'axis turned to' : `axis at ${Math.round(s.theta)}°, last carry at`} ${Math.round(plan.lastT)}° of ${TURN_MAX}°${plan.lastT >= 360 ? ' (second rotation)' : ''}`;
     const rows: [string, string][] = [
@@ -82,7 +72,7 @@ export function babbageView(): Widget {
     modeBtn.setAttribute('aria-pressed', String(anticipating));
     const text = phase === 'ready' ? 'Press Add: every wheel advances, and a wheel passing 9 to 0 arms its warning lever without carrying.'
       : phase === 'carry' ? `${armed} warning lever${armed === 1 ? ' is' : 's are'} armed. ${anticipating ? 'The anticipating carriage settles every carry of a run in one unit.' : 'The carry axis turns and its arms poll the wheels from below.'}`
-      : `Carried: the column reads ${(v % MOD).toString()}${flag}.`;
+      : `Carried: the column reads ${columnReads(v)}${flag}.`;
     if (!goal && text !== said) { said = text; live.textContent = text; }
   }
   const settle = () => { if (phase === 'carry' && goal === null && finished(s)) { phase = 'done'; s = finishCarry(s); } };
