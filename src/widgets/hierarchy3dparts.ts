@@ -111,13 +111,22 @@ export function hierarchyParts(p: HPose, P: HPalette): Part[] {
 const SHORT: Record<HLevel['id'], string> = { reg: 'Regs', l1: 'L1', l2: 'L2', l3: 'L3', dram: 'DRAM', ssd: 'SSD' };
 /** The levels' dots stand on the road at their true distance, each label the level over its place (two lines: the log scale
  *  puts the places too close for labels of their own; the registers' place is the Core label beside them); they alternate below and above the road, so neighbours never share a line. */
-export function hierarchyAnchors(): Anchor[] {
+export function hierarchyAnchors(narrow = false): Anchor[] {
   const front: Vec3 = [0, 0.3, 1], up: Vec3 = [0, 1, 0];
   const above = new Set<HLevel['id']>(['l1', 'l3']);
   return [
     { text: 'Core', p: [-7, 10, -1], side: 't', n: up },
-    ...LEVELS.map((lv): Anchor => ({ text: lv.place === 'core' ? SHORT[lv.id] : `${SHORT[lv.id]}\n${placeOf(lv).label}`, p: [levelX(lv), 0, 3], side: above.has(lv.id) ? 't' : 'b', n: front })),
+    ...LEVELS.map((lv): Anchor => ({ text: lv.place === 'core' || narrow ? SHORT[lv.id] : `${SHORT[lv.id]}\n${placeOf(lv).label}`, p: [levelX(lv), 0, 3], side: above.has(lv.id) ? 't' : 'b', n: front })),
   ];
+}
+
+/** The access time on the clock when the courier is at distance x. An access is a round trip: the request goes out, the data
+ *  comes back, so the outward leg is half the latency (read off the log scale at x) and the return the other half; the full
+ *  latency is on the clock only when the data is home. The flight is a drawing, but its clock is this. */
+export function elapsedNs(ns: number, phase: Phase, x: number): number {
+  if (phase === 'out') return x > 0 ? Math.min(ns / 2, timeAt(x) / 2) : 0;
+  if (phase === 'back') return Math.max(ns / 2, ns - timeAt(x) / 2);
+  return ns;
 }
 
 /** The camera while following the courier at x. */

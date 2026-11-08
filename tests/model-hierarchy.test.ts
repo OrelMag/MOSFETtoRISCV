@@ -3,10 +3,10 @@
 // ranges hold for the constants.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CORE_GHZ, LEVELS, REAL_CYCLES, cyclesOf } from '../src/widgets/hierarchy3ddata';
+import { CORE_GHZ, DEFAULT_HITS, LEVELS, REAL_CYCLES, amatCycles, amatShares, cyclesOf } from '../src/widgets/hierarchy3ddata';
 import { DESK_TIERS } from '../src/widgets/analogy/mem';
 import {
-  CORE, NS0, PLACES, placeOf, SCALE, TICKS, accessNs, asSeconds, distOf, flightSeconds, fmtNs, hierarchyAnchors, hierarchyParts, levelX, timeAt, type HPalette,
+  CORE, NS0, PLACES, placeOf, SCALE, TICKS, accessNs, asSeconds, distOf, elapsedNs, flightSeconds, fmtNs, hierarchyAnchors, hierarchyParts, levelX, timeAt, type HPalette,
 } from '../src/widgets/hierarchy3dparts';
 
 const col = (i: number): [number, number, number] => [i / 20, 0.5, 0.5];
@@ -93,5 +93,41 @@ describe('the hierarchy model against the chapter', () => {
     expect(new Set(labels).size).toBe(labels.length);
     expect(labels).toEqual(['Core', 'Regs', 'L1\nDesk', 'L2\nShelf', 'L3\nLibrary', 'DRAM\nWarehouse', 'SSD\nAnother city']);
     expect(TICKS.map(distOf).every((x, i, a) => i === 0 || x > a[i - 1])).toBe(true);
+  });
+  it('the clock is a round trip: half the latency at the far end of the outward leg, the whole of it only when the data is home', () => {
+    for (const l of LEVELS) {
+      const X = levelX(l);
+      expect(elapsedNs(l.ns, 'out', 0)).toBe(0);
+      expect(elapsedNs(l.ns, 'out', X)).toBeCloseTo(l.ns / 2, 9);
+      expect(elapsedNs(l.ns, 'back', X)).toBeCloseTo(l.ns / 2, 9);
+      expect(elapsedNs(l.ns, 'back', 0)).toBeGreaterThan(l.ns * 0.75);
+      expect(elapsedNs(l.ns, 'idle', 0)).toBe(l.ns);
+      let prev = 0;
+      for (let s = 0; s <= 20; s++) { const e = elapsedNs(l.ns, 'out', (X * s) / 20); expect(e).toBeGreaterThanOrEqual(prev); prev = e; }
+      for (let s = 0; s <= 20; s++) { const e = elapsedNs(l.ns, 'back', X * (1 - s / 20)); expect(e).toBeGreaterThanOrEqual(prev); prev = e; }
+    }
+  });
+  it('on a narrow stage the labels are the short names only, so none overlaps its neighbour', () => {
+    expect(hierarchyAnchors(true).map((a) => a.text)).toEqual(['Core', 'Regs', 'L1', 'L2', 'L3', 'DRAM', 'SSD']);
+  });
+  it('L3 is 64 cycles, in the 40 to 80+ range the row states', () => {
+    expect(cyclesOf(get('l3').ns)).toBe(64);
+    expect(get('l3').real).toContain('40 to 80+');
+  });
+  it('AMAT over the table’s latencies: the recursion, the shares add up, and a perfect L1 leaves its own latency', () => {
+    const c = (id: string) => cyclesOf(get(id).ns);
+    const m = DEFAULT_HITS;
+    expect(amatCycles(m)).toBeCloseTo(c('l1') + 0.05 * (c('l2') + 0.2 * (c('l3') + 0.25 * c('dram'))), 9);
+    expect(amatShares(m).reduce((a, s) => a + s.cycles, 0)).toBeCloseTo(amatCycles(m), 9);
+    expect(amatCycles({ l1: 1, l2: 0.5, l3: 0.5 })).toBe(c('l1'));
+    expect(amatCycles({ l1: 0, l2: 0, l3: 0 })).toBe(c('l1') + c('l2') + c('l3') + c('dram'));
+    expect(amatCycles({ ...m, l1: 0.9 })).toBeGreaterThan(amatCycles(m));
+  });
+  it('the chapter says its derivation uses round numbers and where the model’s differ', () => {
+    const flat = chapter.replace(/\s+/g, ' ');
+    expect(flat).toContain('These are round numbers (L2 12 cycles, DRAM 250, no L3)');
+    expect(flat).toContain("(L2 14, L3 64, DRAM 320)");
+    expect(cyclesOf(get('l2').ns)).toBe(14);
+    expect(cyclesOf(get('dram').ns)).toBe(320);
   });
 });
