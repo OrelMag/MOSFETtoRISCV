@@ -20,6 +20,7 @@ import { journeyWidget } from '../widgets/journey';
 import { techCompareWidget } from '../widgets/techcompare';
 import { mosCostWidget } from '../widgets/moscost';
 import { mosfetWidget } from '../widgets/mosfet';
+import { biasLink } from '../widgets/mosshare';
 import { mosRegionsWidget } from '../widgets/mosregions';
 import { bench, type Chapter } from './types';
 import { numOf } from './order';
@@ -192,7 +193,7 @@ export const chMosfet: Chapter = {
         real: `<p>Vt is set by the doping and the oxide, and it varies from device to device and with temperature. The square law in the panel is the textbook model of a long channel; the next step lists where it fails in
           the short ones of a modern chip.</p>`,
       },
-      widget: () => withModel(mosfetWidget({ type: 'n', allowTypeSwitch: false }), mosfet3d()),
+      widget: () => { const link = biasLink(); return withModel(mosfetWidget({ type: 'n', allowTypeSwitch: false, link }), mosfet3d(link)); },
     },
     {
       title: 'Three regions',
