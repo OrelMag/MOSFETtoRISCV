@@ -130,6 +130,12 @@ export const MODELS_3D: readonly Model3d[] = [
     files: ['cable3d', 'cable3dview', 'cable3dparts'], factory: 'cable3d',
     open: () => import('./cable3d').then((m) => m.cable3d()),
   },
+  {
+    id: 'mercury', title: 'EDSAC\'s mercury delay line', category: 'memory', chapter: 'dram', step: 6,
+    summary: 'Sound pulses crossing 1.6 m of mercury in 1.12 ms, recirculated: 576 bits a tank, a word read only as it comes round.',
+    files: ['mercury3d', 'mercury3dview', 'mercury3dparts'], factory: 'mercury3d', codex: ['refresh', 'dramtiming'],
+    open: () => import('./mercury3d').then((m) => m.mercury3d()),
+  },
 ];
 
 export const modelById = (id: string): Model3d | undefined => MODELS_3D.find((m) => m.id === id);
