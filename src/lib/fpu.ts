@@ -292,6 +292,196 @@ endmodule`,
   });
 })();
 
+// ---- normalize & round's blocks ------------------------------------------------------------------------------------------------
+// Drawn as its stages (circuit eyeballing, 2026-11-08): the shift amounts, the left shift, the right shift for a subnormal, the
+// rounding, the packing. The gates are the ones the flat drawing had.
+
+/** Bit length of a non-negative integer below 2^53. */
+const bitLen = (x: number) => { let n = 0; while (x >= 1) { x = Math.floor(x / 2); n++; } return n; };
+
+/** The shift amounts: count the leading zeros; shift them out (L) as far as the exponent allows, or right (R) below it. */
+function nrAmount(f: FpFormat, w: number): ComponentDef {
+  const { E, M } = f;
+  return memo(`fnr_amt${E}_${M}_${w}`, () => {
+    const XE = xeOf(f), P = pow2ceil(w + 1), k = Math.log2(P), T = 2 ** XE;
+    const b = new Builder(10, 8, 4);
+    b.pins('mant', 'exp');
+    // leading zeros (padded with ones below, so an all-zero significand counts w)
+    const pad = b.op1(merger([P - w, w]), [b.op1(K(P - w, 2 ** (P - w) - 1), [], undefined, 'ones'), 'mant'], undefined, 'pad');
+    b.next();
+    const lz = b.op(lzc(P), [pad], 'leading zeros', 'lz');
+    b.next();
+    const c = b.op1(merger([k, XE - k]), [`${lz}.c`, b.op1(K(XE - k, 0), [], undefined, 'cz')], undefined, 'cw');
+    const em1 = `${b.op(koggeStone(XE), ['exp', b.op1(K(XE, 2 ** XE - 1), [], undefined, 'm1'), b.op1(TIE0, [], undefined, 'c0')], 'exp − 1', 'dec')}.s`;
+    b.next();
+    const t = b.op(addSubFast(XE), [em1, c, b.op1(TIE1, [], undefined, 'one')], 'exp − 1 − lz', 'room');
+    const canNorm = b.name(b.op1(NOT, [`${t}.n`], 'can normalize?', 'can'), 'canNormalize');
+    const es = b.op(splitter([k, XE - 1 - k, 1]), [em1], undefined, 'es');
+    const em1Neg = `${es}.o2`;
+    const negEm1 = b.op(addSubFast(XE), [b.op1(K(XE, 0), [], undefined, 'zero'), em1, b.op1(TIE1, [], undefined, 'one2')], '1 − exp', 'neg');
+    b.next();
+    const Lalt = b.op1(busMux2(k), [`${es}.o0`, b.op1(K(k, 0), [], undefined, 'l0'), em1Neg], 'as far as exp allows', 'lalt');
+    b.wire(b.op1(busMux2(k), [Lalt, `${lz}.c`, canNorm], 'left shift', 'lsel'), 'L');
+    const ns = b.op(splitter([k, XE - k]), [`${negEm1}.s`], undefined, 'ns');
+    const hiNZ = b.op1(NOT, [b.op1(isZero(XE - k), [`${ns}.o1`], undefined, 'hiz')], undefined, 'hinz');
+    const Rsat = b.op1(busMux2(k), [`${ns}.o0`, b.op1(K(k, 2 ** k - 1), [], undefined, 'rmax'), hiNZ], 'saturate', 'rsat');
+    b.wire(b.op1(bitwise('and', k), [Rsat, b.op1(fanout(k), [em1Neg], undefined, 'neg1')], 'right shift', 'rgate'), 'R');
+    const eNorm = b.op1(incFast(XE), [`${t}.s`], undefined, 'enorm');
+    b.wire(b.op1(busMux2(XE), [b.op1(K(XE, 1), [], undefined, 'emin'), eNorm, canNorm], 'exponent after the shift', 'esel'), 'e');
+    const ports = [bus('mant', w, 'in'), bus('exp', XE, 'in'), bus('L', k, 'out'), bus('R', k, 'out'), bus('e', XE, 'out')];
+    return define({
+      id: `fnr_amt${E}_${M}_${w}`, name: `Normalize & round: shift amounts (${w}-bit)`, category: 'arithmetic',
+      summary: 'Count the leading zeros lz. If exp − 1 − lz ≥ 0 shift them all out (L = lz, the exponent drops by lz); else shift only as far as the smallest exponent allows (L = exp − 1, the result is subnormal); and when exp < 1 already, shift right instead (R = 1 − exp, saturated). e is the exponent after the shift.',
+      ports, symbol: { kind: 'box', label: 'SHIFT AMOUNT' },
+      spec: ([mant, exp]) => {
+        const c = mant ? w - bitLen(mant) : w, em1 = (exp + T - 1) % T, t = (em1 - c + T) % T, can = t < T / 2, neg = em1 >= T / 2;
+        const L = can ? c : neg ? 0 : em1 % P, n1 = (T - em1) % T, Rs = Math.floor(n1 / P) ? P - 1 : n1 % P;
+        return [L, neg ? Rs : 0, can ? (t + 1) % T : 1];
+      },
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** Rounding: the guard bit G and sticky bit S below the kept M + 1 bits decide (rounding mode rm), tininess after rounding. */
+function nrRound(f: FpFormat, w: number): ComponentDef {
+  const { E, M } = f;
+  return memo(`fnr_round${E}_${M}_${w}`, () => {
+    const b = new Builder(10, 8, 4);
+    b.pins('m', 'sticky', 'stin', 'rm', 'sign');
+    // G = first dropped bit, Rb = the next one, S2 = OR of everything below Rb
+    const parts = b.op(splitter([w - M - 2, 1, M + 1]), ['m'], undefined, 'parts');
+    let Rb: string, S2: string;
+    if (w - M - 2 === 1) {
+      Rb = `${parts}.o0`;
+      S2 = anyOf(b, ['sticky', 'stin']);
+    } else {
+      const rs = b.op(splitter([w - M - 3, 1]), [`${parts}.o0`], undefined, 'rs');
+      Rb = `${rs}.o1`;
+      S2 = anyOf(b, [nonZero(b, `${rs}.o0`, w - M - 3), 'sticky', 'stin']);
+    }
+    b.next();
+    const S = b.name(b.op1(OR, [Rb, S2], 'sticky S', 'sor'), 'S');
+    const G = b.name(`${parts}.o1`, 'G');
+    const lsb = b.op(splitter([1, M]), [`${parts}.o2`], undefined, 'lsb');
+    const kt = b.op(splitter([M, 1]), [`${parts}.o2`], undefined, 'kt');
+    b.next();
+    const rd = b.op(ROUND_DECIDE, ['rm', 'sign', `${lsb}.o0`, G, S], 'round up?', 'rd');
+    const inc = `${rd}.up`;
+    b.wire(b.op1(OR, [G, S], 'inexact', 'nx'), 'inexact');
+    // tininess after rounding: would rounding to M + 1 bits (G becomes the last bit) reach 2^emin?
+    const kf = b.op(splitter(ones(M)), [`${kt}.o0`], undefined, 'kf');
+    const fracOnes = b.op1(andN(M), Array.from({ length: M }, (_, i) => `${kf}.o${i}`), 'fraction all 1s', 'ones');
+    const rd2 = b.op(ROUND_DECIDE, ['rm', 'sign', b.op1(TIE1, [], undefined, 'one'), Rb, S2], 'unbounded rounding', 'rd2');
+    b.next();
+    const mi = b.op(incFast(M + 1), [`${parts}.o2`], undefined, 'inc');
+    b.wire(b.op1(busMux2(M + 1), [`${parts}.o2`, `${mi}.y`, inc], 'rounded', 'msel'), 'mr');
+    b.wire(b.op1(AND, [inc, `${mi}.cout`], 'carry out', 'carry'), 'carry');
+    const reach = b.op1(andN(3), [fracOnes, G, `${rd2}.up`], undefined, 'reach');
+    b.next();
+    b.wire(b.op1(AND, [b.op1(NOT, [`${kt}.o1`], undefined, 'nhid'), b.op1(NOT, [reach], undefined, 'nreach')], 'tiny?', 'tiny'), 'tiny');
+    b.wire(`${rd}.toInf`, 'toInf');
+    const ports = [bus('m', w, 'in'), bit('sticky', 'in'), bit('stin', 'in'), bus('rm', 3, 'in'), bit('sign', 'in'),
+      bus('mr', M + 1, 'out'), bit('carry', 'out'), bit('toInf', 'out'), bit('inexact', 'out'), bit('tiny', 'out')];
+    const D = w - M - 2;
+    return define({
+      id: `fnr_round${E}_${M}_${w}`, name: `Normalize & round: rounding (${w}-bit)`, category: 'arithmetic',
+      summary: 'The top M + 1 bits are kept. G is the first bit below them, S the OR of everything further down (and the sticky bits). The rounding decision adds 1 or not; a carry out of the top is reported. inexact = G or S. tiny: the result would stay below 2^emin even rounded with an unbounded exponent.',
+      ports, symbol: { kind: 'box', label: 'ROUND' },
+      spec: ([m, sticky, stin, rm, sign]) => {
+        const low = m % 2 ** D, G = Math.floor(m / 2 ** D) % 2, kept = Math.floor(m / 2 ** (D + 1));
+        const Rb = D === 1 ? low : Math.floor(low / 2 ** (D - 1)) % 2;
+        const S2 = (D === 1 ? 0 : low % 2 ** (D - 1)) || sticky || stin ? 1 : 0, S = Rb || S2 ? 1 : 0;
+        const up = roundUp(rm, sign, !!(kept % 2), !!G, !!S), full = 2 ** (M + 1) - 1;
+        const reach = kept % 2 ** M === 2 ** M - 1 && G && roundUp(rm, sign, true, !!Rb, !!S2);
+        return [up ? (kept + 1) % (full + 1) : kept, up && kept === full ? 1 : 0, overflowToInf(rm, sign) ? 1 : 0, G || S ? 1 : 0,
+          kept < 2 ** M && !reach ? 1 : 0];
+      },
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** Packing: a carry bumps the exponent; past the top the result is ∞ or the largest finite number; zeros and subnormals get exponent 0. */
+function nrPack(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fnr_pack${E}_${M}`, () => {
+    const XE = xeOf(f), T = 2 ** XE;
+    const b = new Builder(10, 8, 4);
+    b.pins('mr', 'carry', 'toInf', 'inexact', 'tiny', 'e', 'sign');
+    const eInc = b.op1(incFast(XE), ['e'], 'e + 1', 'einc');
+    const geTop = b.op1(NOT, [`${b.op(addSubFast(XE), ['e', b.op1(K(XE, 2 ** E - 1), [], undefined, 'max'), b.op1(TIE1, [], undefined, 'one')], 'e ≥ max?', 'cmp')}.n`], undefined, 'ge');
+    const atTop = b.op1(equal(XE), ['e', b.op1(K(XE, 2 ** E - 2), [], undefined, 'max1')], 'e = max − 1?', 'at');
+    b.next();
+    const ms = b.op(splitter([M, 1]), ['mr'], undefined, 'ms');
+    const hidden = b.op1(OR, [`${ms}.o1`, 'carry'], 'hidden bit', 'hid');
+    const eF = b.op1(busMux2(XE), ['e', eInc, 'carry'], 'exp + carry', 'ef');
+    b.next();
+    const inf = b.name(b.op1(AND, [hidden, b.op1(OR, [geTop, b.op1(AND, ['carry', atTop], undefined, 'ct')], 'overflow?', 'ov')], undefined, 'inf'), 'ovf');
+    const satMax = b.op1(AND, [inf, b.op1(NOT, ['toInf'], undefined, 'nti')], 'largest finite instead', 'sat');
+    const ef = b.op(splitter([E, XE - E]), [eF], undefined, 'efs');
+    b.next();
+    const expF = b.op1(bitwise('and', E), [`${ef}.o0`, b.op1(fanout(E), [hidden], undefined, 'hf')], 'exponent, 0 if subnormal', 'ez');
+    const expOr = b.op(splitter([1, E - 1]), [b.op1(bitwise('or', E), [expF, b.op1(fanout(E), [inf], undefined, 'if')], 'all 1s on overflow', 'eo')], undefined, 'eos');
+    const e0 = b.op1(AND, [`${expOr}.o0`, b.op1(NOT, [satMax], undefined, 'nsat')], undefined, 'e0');
+    const fracOut = b.op1(bitwise('or', M), [b.op1(bitwise('and', M), [`${ms}.o0`, b.op1(fanout(M), [b.op1(NOT, [inf], undefined, 'ninf')], undefined, 'nf')], undefined, 'fz'),
+      b.op1(fanout(M), [satMax], undefined, 'sf')], 'fraction', 'fo');
+    b.next();
+    b.wire(b.op1(merger([M, 1, E - 1, 1]), [fracOut, e0, `${expOr}.o1`, 'sign'], undefined, 'y'), 'y');
+    b.wire(flagWord(b, { of: inf, uf: b.op1(AND, ['tiny', 'inexact'], 'UF', 'uf'), nx: b.op1(OR, ['inexact', inf], 'NX', 'nxo') }), 'flags');
+    // the rounding's outputs in the order ROUND gives them, then the exponent and the sign
+    const ports = [bus('mr', M + 1, 'in'), bit('carry', 'in'), bit('toInf', 'in'), bit('inexact', 'in'), bit('tiny', 'in'), bus('e', XE, 'in'), bit('sign', 'in'),
+      bus('y', 1 + E + M, 'out'), bus('flags', 5, 'out')];
+    return define({
+      id: `fnr_pack${E}_${M}`, name: `Normalize & round: pack (${fmtName(f)})`, category: 'arithmetic',
+      summary: 'A carry out of the rounding bumps the exponent. With no hidden bit the exponent field is 0 (a subnormal or zero). Past the top exponent: ∞, or the largest finite number when the rounding mode does not round toward ∞. Flags: OF on overflow, UF if tiny and inexact, NX if inexact or overflowed.',
+      ports, symbol: { kind: 'box', label: 'PACK' },
+      spec: ([mr, carry, toInf, nx, tiny, e, sign]) => {
+        const geTop = (e - (2 ** E - 1) + T) % T < T / 2, atTop = e === 2 ** E - 2, hidden = Math.floor(mr / 2 ** M) || carry;
+        const eF = carry ? (e + 1) % T : e, inf = !!hidden && (geTop || (!!carry && atTop)), sat = inf && !toInf;
+        const ex = ((hidden ? eF % 2 ** E : 0) | (inf ? 2 ** E - 1 : 0)) - (sat ? 1 : 0);
+        const frac = (inf ? 0 : mr % 2 ** M) | (sat ? 2 ** M - 1 : 0);
+        return [frac + ex * 2 ** M + sign * 2 ** (E + M), (nx || inf ? 1 : 0) + (tiny && nx ? 2 : 0) + (inf ? 4 : 0)];
+      },
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** Normalize & round's blocks, as the campaign's reference draws them (chips of their own). */
+export const normRoundBlocks = (f: FpFormat, w: number): ComponentDef[] => [nrAmount(f, w), nrRound(f, w), nrPack(f)];
+
+/** normRound's places (kept apart so a tuning script can move them). */
+export const NR_AT: Record<'amt' | 'shl' | 'shr' | 'rnd' | 'pack', [number, number]> & { pins: Record<string, [number, number]> } = {
+  amt: [8, 8], shl: [28, 4], shr: [40, 4], rnd: [60, 4], pack: [80, 4],
+  pins: { mant: [0, 11], exp: [0, 13], stin: [0, 22], rm: [0, 24], sign: [0, 26], y: [100, 11], flags: [100, 13] },
+};
+
+/** Normalize & round's top level: shift amounts, the left shift, the right shift (subnormal), rounding, packing. */
+function nrTop(f: FpFormat, w: number, mux: Mux2Kind): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
+  const P = NR_AT, k = Math.log2(pow2ceil(w + 1));
+  const instances: InstanceDef[] = [
+    { name: 'amt', def: nrAmount(f, w), at: P.amt },
+    { name: 'shl', def: shiftLeft(w, k, mux), at: P.shl, label: 'normalize' },
+    { name: 'shr', def: shiftRightSticky(w, k, mux), at: P.shr, label: 'subnormal' },
+    { name: 'rnd', def: nrRound(f, w), at: P.rnd },
+    { name: 'pack', def: nrPack(f), at: P.pack },
+  ];
+  const nets: NetDef[] = [
+    { name: 'mant', ends: ['mant', 'amt.mant', 'shl.x'], via: { 'shl.x': [[4, 11], [4, 6]] } }, { name: 'exp', ends: ['exp', 'amt.exp'] },
+    { name: 'L', ends: ['amt.L', 'shl.s'] }, { name: 'R', ends: ['amt.R', 'shr.s'], via: { 'shr.s': [[38, 12], [38, 8]] } },
+    { name: 'e', ends: ['amt.e', 'pack.e'], via: { 'pack.e': [[24, 14], [24, 16]] } },
+    { name: 'normalized', ends: ['shl.y', 'shr.x'] }, { name: 'shifted', ends: ['shr.y', 'rnd.m'] }, { name: 'sticky', ends: ['shr.sticky', 'rnd.sticky'] },
+    // stin, rm and sign come up to the rounding in a staircase
+    { name: 'stin', ends: ['stin', 'rnd.stin'], via: { 'rnd.stin': [[56, 22], [56, 10]] } }, { name: 'rm', ends: ['rm', 'rnd.rm'], via: { 'rnd.rm': [[57, 24], [57, 12]] } },
+    { name: 'sign', ends: ['sign', 'rnd.sign', 'pack.sign'], via: { 'rnd.sign': [[58, 26], [58, 14]], 'pack.sign': [[78, 26], [78, 18]] } },
+    { name: 'rounded', ends: ['rnd.mr', 'pack.mr'] }, { name: 'carry', ends: ['rnd.carry', 'pack.carry'] }, { name: 'toInf', ends: ['rnd.toInf', 'pack.toInf'] },
+    { name: 'inexact', ends: ['rnd.inexact', 'pack.inexact'] }, { name: 'tiny', ends: ['rnd.tiny', 'pack.tiny'] },
+    { name: 'y', ends: ['pack.y', 'y'] }, { name: 'flags', ends: ['pack.flags', 'flags'] },
+  ];
+  return { instances, nets, pins: P.pins };
+}
+
 /**
  * Normalize and round: mant (w bits, its top bit has weight 2^exp) plus a sticky bit → the IEEE
  * encoding, rounded in mode rm, and the flags OF, UF, NX. Leading zeros are shifted out (left) as
@@ -302,92 +492,14 @@ endmodule`,
 export function normRound(f: FpFormat, w: number, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
   return memo(`fpnr${E}_${M}_${w}${mux.tag}`, () => {
-    const XE = xeOf(f), P = pow2ceil(w + 1), k = Math.log2(P);
+    const XE = xeOf(f);
     if (w < M + 3) throw new Error('normRound: the significand needs a guard bit and a sticky bit below it');
-    const b = new Builder();
-    // 1. leading zeros (padded with ones below, so an all-zero significand counts w)
-    const pad = b.op1(merger([P - w, w]), [b.op1(K(P - w, 2 ** (P - w) - 1), []), 'mant']);
-    b.next();
-    const lz = b.op(lzc(P), [pad], 'leading zeros');
-    b.next();
-    const c = b.name(b.op1(merger([k, XE - k]), [`${lz}.c`, b.op1(K(XE - k, 0), [])]), 'lz');
-    const em1 = b.name(`${b.op(koggeStone(XE), ['exp', b.op1(K(XE, 2 ** XE - 1), []), b.op1(TIE0, [])], 'exp − 1')}.s`, 'exp−1');
-    b.next();
-    const t = b.op(addSubFast(XE), [em1, c, b.op1(TIE1, [])], 'exp − 1 − lz');
-    const canNorm = b.name(b.op1(NOT, [`${t}.n`]), 'canNormalize');
-    const es = b.op(splitter([k, XE - 1 - k, 1]), [em1]);
-    const em1Neg = b.name(`${es}.o2`, 'exp<1');
-    const negEm1 = b.op(addSubFast(XE), [b.op1(K(XE, 0), []), em1, b.op1(TIE1, [])], '1 − exp');
-    b.next();
-    const Lalt = b.op1(busMux2(k), [`${es}.o0`, b.op1(K(k, 0), []), em1Neg]);
-    const L = b.name(b.op1(busMux2(k), [Lalt, `${lz}.c`, canNorm], 'left shift'), 'L');
-    const ns = b.op(splitter([k, XE - k]), [`${negEm1}.s`]);
-    const hiNZ = b.op1(NOT, [b.op1(isZero(XE - k), [`${ns}.o1`])]);
-    const Rsat = b.op1(busMux2(k), [`${ns}.o0`, b.op1(K(k, 2 ** k - 1), []), hiNZ]);
-    const R = b.name(b.op1(bitwise('and', k), [Rsat, b.op1(fanout(k), [em1Neg])], 'right shift'), 'R');
-    const eNorm = b.op1(incFast(XE), [`${t}.s`]);
-    const eAfter = b.name(b.op1(busMux2(XE), [b.op1(K(XE, 1), []), eNorm, canNorm]), 'e');
-    // in parallel with the shifts and the rounding: e + 1 (for a carry out of the rounding) and the overflow tests on e
-    const eInc = b.name(b.op1(incFast(XE), [eAfter], 'e + 1'), 'e+1');
-    const geTop = b.name(b.op1(NOT, [`${b.op(addSubFast(XE), [eAfter, b.op1(K(XE, 2 ** E - 1), []), b.op1(TIE1, [])], 'e ≥ max?')}.n`]), 'e≥max');
-    const atTop = b.name(b.op1(equal(XE), [eAfter, b.op1(K(XE, 2 ** E - 2), [])], 'e = max − 1?'), 'e=max−1');
-    b.next();
-    // 2. shift
-    const sh1 = b.op1(shiftLeft(w, k, mux), ['mant', L], 'normalize');
-    b.next();
-    const sh2 = b.op(shiftRightSticky(w, k, mux), [sh1, R], 'subnormal');
-    b.next();
-    // 3. round: G = first dropped bit, Rb = the next one, S2 = OR of everything below Rb
-    const parts = b.op(splitter([w - M - 2, 1, M + 1]), [`${sh2}.y`]);
-    let Rb: string, S2: string;
-    if (w - M - 2 === 1) {
-      Rb = `${parts}.o0`;
-      S2 = anyOf(b, [`${sh2}.sticky`, 'stin']);
-    } else {
-      const rs = b.op(splitter([w - M - 3, 1]), [`${parts}.o0`]);
-      Rb = `${rs}.o1`;
-      S2 = anyOf(b, [nonZero(b, `${rs}.o0`, w - M - 3), `${sh2}.sticky`, 'stin']);
-    }
-    const S = b.name(b.op1(OR, [Rb, S2]), 'S');
-    const G = b.name(`${parts}.o1`, 'G');
-    const lsb = b.op(splitter([1, M]), [`${parts}.o2`]);
-    const kt = b.op(splitter([M, 1]), [`${parts}.o2`]);
-    b.next();
-    const rd = b.op(ROUND_DECIDE, ['rm', 'sign', `${lsb}.o0`, G, S], 'round up?');
-    const inc = b.name(`${rd}.up`, 'roundUp');
-    const nx0 = b.name(b.op1(OR, [G, S]), 'inexact');
-    // tininess after rounding: would rounding to M + 1 bits (G becomes the last bit) reach 2^emin?
-    const kf = b.op(splitter(ones(M)), [`${kt}.o0`]);
-    const fracOnes = b.op1(andN(M), Array.from({ length: M }, (_, i) => `${kf}.o${i}`), 'fraction all 1s');
-    const rd2 = b.op(ROUND_DECIDE, ['rm', 'sign', b.op1(TIE1, []), Rb, S2], 'unbounded rounding');
-    b.next();
-    const mi = b.op(incFast(M + 1), [`${parts}.o2`]);
-    const mR = b.op1(busMux2(M + 1), [`${parts}.o2`, `${mi}.y`, inc]);
-    const carry = b.name(b.op1(AND, [inc, `${mi}.cout`]), 'carry');
-    const reach = b.op1(andN(3), [fracOnes, G, `${rd2}.up`]);
-    b.next();
-    const ms = b.op(splitter([M, 1]), [mR]);
-    const hidden = b.name(b.op1(OR, [`${ms}.o1`, carry]), 'hidden');
-    const eF = b.name(b.op1(busMux2(XE), [eAfter, eInc, carry], 'exp + carry'), 'eFinal');
-    const tiny = b.name(b.op1(AND, [b.op1(NOT, [`${kt}.o1`]), b.op1(NOT, [reach])], 'tiny?'), 'tiny');
-    b.next();
-    const inf = b.name(b.op1(AND, [hidden, b.op1(OR, [geTop, b.op1(AND, [carry, atTop])], 'overflow?')]), 'ovf');
-    const satMax = b.name(b.op1(AND, [inf, b.op1(NOT, [`${rd}.toInf`])], 'largest finite instead'), 'satMax');
-    const ef = b.op(splitter([E, XE - E]), [eF]);
-    b.next();
-    const expF = b.op1(bitwise('and', E), [`${ef}.o0`, b.op1(fanout(E), [hidden])]);
-    const expOr = b.op(splitter([1, E - 1]), [b.op1(bitwise('or', E), [expF, b.op1(fanout(E), [inf])])]);
-    const e0 = b.op1(AND, [`${expOr}.o0`, b.op1(NOT, [satMax])]);
-    const fracOut = b.op1(bitwise('or', M), [b.op1(bitwise('and', M), [`${ms}.o0`, b.op1(fanout(M), [b.op1(NOT, [inf])])]), b.op1(fanout(M), [satMax])]);
-    b.next();
-    b.wire(b.op1(merger([M, 1, E - 1, 1]), [fracOut, e0, `${expOr}.o1`, 'sign']), 'y');
-    b.wire(flagWord(b, { of: inf, uf: b.op1(AND, [tiny, nx0], 'UF'), nx: b.op1(OR, [nx0, inf], 'NX') }), 'flags');
     return define({
       id: `fpnr${E}_${M}_${w}${mux.tag}`, name: `Normalize & round (${w}-bit significand)${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: 'Counts leading zeros, shifts them out (or shifts right for a subnormal result), then rounds in mode rm using the guard bit G and the sticky bit S (round to nearest even: up if G and (S or the last kept bit)). A carry out of the rounding bumps the exponent; an exponent past the top becomes ∞ or the largest finite number, depending on the mode. Flags: NX if G or S, OF on overflow, UF if inexact and tiny after rounding.',
       ports: [bit('sign', 'in'), bus('exp', XE, 'in'), bus('mant', w, 'in'), bit('stin', 'in'), bus('rm', 3, 'in'), bus('y', 1 + E + M, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'NORMALIZE & ROUND' },
-      netlist: () => ({ pins: { sign: [0, 2], exp: [0, 6], mant: [0, 10], stin: [0, 14], rm: [0, 18], y: [b.right, 6], flags: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => nrTop(f, w, mux),
       hdl: {
         verilog: `// normalize & round (sketch): lz = leading zeros of mant; shift left by lz (or less, down to emin),
 // shift right with sticky below emin; then
