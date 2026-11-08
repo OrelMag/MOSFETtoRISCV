@@ -16,7 +16,6 @@ import { pixel4t3d } from '../widgets/pixel4t3d';
 import { sensorDie3d } from '../widgets/sensordie3d';
 import { numOf } from './order';
 import type { Chapter } from './types';
-import { withModel } from '../widgets/modelhost';
 
 const g = (x: number) => groupNum(Math.round(x));
 const n1 = (x: number, d = 1) => x.toFixed(d);
