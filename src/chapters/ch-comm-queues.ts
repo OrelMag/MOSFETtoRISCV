@@ -5,9 +5,10 @@ import { cubicK, md1Wait, mm1Quantile, mm1Wait, renoUtilization, renoWindow, typ
 import { chiuWidget, delayWidget, duelRun, duelWidget, labRun, labWidget, lossWidget, type LabPreset } from '../widgets/queues';
 import { numOf } from './order';
 import type { Chapter, Step } from './types';
+import { groupNum } from '../sim/numfmt';
 
 const nf = (x: number, d = 0) => x.toFixed(d);
-const n0 = (x: number) => Math.round(x).toLocaleString('en');
+const n0 = (x: number) => groupNum(Math.round(x));
 const FULL = 1000;
 
 const memoRuns = new Map<string, SimResult>();

@@ -15,9 +15,10 @@ import { analyzeTiming, PS_PER_NAND } from '../sim/timing';
 import { constellationWidget, fskWidget, iqWidget, linkScene, milestonesWidget, ncoScene, passbandWidget } from '../widgets/modem';
 import type { Chapter } from './types';
 import { numOf } from './order';
+import { groupNum } from '../sim/numfmt';
 
 const nf = (x: number, d = 2) => x.toFixed(d);
-const n0 = (x: number) => x.toLocaleString('en');
+const n0 = (x: number) => groupNum(x);
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
 const period = (d: Parameters<typeof flatten>[0]) => analyzeTiming(flatten(d))?.period ?? 0;
 const fmtRate = (x: number) => (x >= 1e6 ? `${+(x / 1e6).toPrecision(3)} Mb/s` : x >= 1e3 ? `${+(x / 1e3).toPrecision(3)} kb/s` : `${+x.toPrecision(3)} b/s`);

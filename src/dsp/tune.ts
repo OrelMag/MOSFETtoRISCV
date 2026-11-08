@@ -7,6 +7,7 @@
 import { addFm, ADC_SCALE, DEV, FS, lowpass, mixBlock, NCO_BITS, preEmphasis, program, TAU, W_IN, W_MIX } from './sdr';
 import { cicWidth, halfBand } from './multirate';
 import { cordicVector } from './cordic';
+import { groupNum } from '../sim/numfmt';
 
 // ---- seeds -----------------------------------------------------------------------------------------------------------------------------------
 
@@ -229,13 +230,13 @@ export function checkChain(c: Chain): { problem: string | null; rates: Rates[] }
   for (const b of c) {
     if (b.kind === 'cic') { w = cicWidth(b.N, b.R, w); if (w > 32) say(`CIC ÷ R: its registers would need ${w} bits; these gates hold at most 32.`); }
     const R = b.kind === 'cic' || b.kind === 'poly' ? b.R : b.kind === 'halfband' ? 2 : b.kind === 'audio' ? b.M : 1, out = rate / R;
-    if (!Number.isInteger(out)) say(`${BLOCK_NAME[b.kind]}: ${rate.toLocaleString('en')} samples a second do not divide by ${R}.`);
-    if ((b.kind === 'channel' || b.kind === 'audio') && !(b.cutoff > 0 && b.cutoff < rate / 2)) say(`${BLOCK_NAME[b.kind]}: its cutoff must be between 0 and half the rate it runs at (${(rate / 2000).toLocaleString('en')} kHz).`);
+    if (!Number.isInteger(out)) say(`${BLOCK_NAME[b.kind]}: ${groupNum(rate)} samples a second do not divide by ${R}.`);
+    if ((b.kind === 'channel' || b.kind === 'audio') && !(b.cutoff > 0 && b.cutoff < rate / 2)) say(`${BLOCK_NAME[b.kind]}: its cutoff must be between 0 and half the rate it runs at (${groupNum((rate / 2000))} kHz).`);
     if ('taps' in b && (b.taps < LIMITS.taps[0] || b.taps > LIMITS.taps[1] || b.taps % 2 === 0)) say(`${BLOCK_NAME[b.kind]}: an odd number of taps from ${LIMITS.taps[0]} to ${LIMITS.taps[1]}.`);
     rates.push({ inRate: rate, outRate: out });
     rate = out;
   }
-  if (!problem && rate < 2 * TONE_MAX + 200) say(`The decoder gets ${rate.toLocaleString('en')} samples a second: too few for a tone of up to ${TONE_MAX} Hz.`);
+  if (!problem && rate < 2 * TONE_MAX + 200) say(`The decoder gets ${groupNum(rate)} samples a second: too few for a tone of up to ${TONE_MAX} Hz.`);
   return { problem, rates };
 }
 

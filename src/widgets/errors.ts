@@ -16,6 +16,7 @@ import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { crcUnit } from '../lib';
 import { CRC32_REFLECTED } from '../comm/crc';
 import { fitText, slider } from './mosparts';
+import { groupNum } from '../sim/numfmt';
 
 const hex = (v: number, w = 8) => (v >>> 0).toString(16).padStart(w, '0').toUpperCase();
 const SUP: Record<string, string> = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
@@ -26,7 +27,7 @@ const sci = (x: number): string => {
   return `${m.replace(/\.0$/, '')} × 10${[...String(Number(e))].map((c) => SUP[c] ?? c).join('')}`;
 };
 const pctS = (x: number): string => (x === 0 ? '0 %' : x < 1e-3 ? `${sci(100 * x)} %` : `${(100 * x).toFixed(x < 0.1 ? 2 : 1)} %`);
-const oneIn = (x: number): string => (x > 0 ? `1 in ${Math.round(1 / x).toLocaleString('en-US')}` : 'never');
+const oneIn = (x: number): string => (x > 0 ? `1 in ${groupNum(Math.round(1 / x))}` : 'never');
 const pct = (x: number): string => `${(100 * x).toFixed(x < 0.1 ? 2 : 1)} %`;
 const si = (v: number, unit: string): string => (v >= 1 ? `${+v.toPrecision(3)} ${unit}` : v >= 1e-3 ? `${+(v * 1e3).toPrecision(3)} m${unit}` : v >= 1e-6 ? `${+(v * 1e6).toPrecision(3)} µ${unit}` : `${+(v * 1e9).toPrecision(3)} n${unit}`);
 

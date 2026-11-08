@@ -11,6 +11,9 @@ import { tick } from './yieldtick';
 /** A lone digit, a thin / narrow space and exactly three digits, not part of a longer run ("11 725", "1 234 567" are fine). */
 export const FOUR_DIGIT_GROUP = /(?<![\d.,  ])\d[  ]\d{3}(?![\d  ])/g;
 
+/** A comma-grouped integer ("1,312", "11,725", "1,234,567"): one to three digits, then comma-and-three-digit groups, bounded by non-digits and not a decimal's tail. */
+export const COMMA_GROUP = /(?<![\d.,])\d{1,3}(?:,\d{3})+(?!\d|,\d)/g;
+
 const plain = (s: string): string => s.replace(/<[^>]*>/g, '\u0001');
 
 /** Every string a chapter shows: JSON takes the getters and the nested quiz / layer / tour texts, not the functions. */
@@ -45,10 +48,19 @@ describe('digit grouping', () => {
     expect(hit('(4 214.5)')).toBe(1);
   });
 
+  it('the comma pattern catches grouped integers and not lists or coordinates', () => {
+    const hit = (s: string) => (s.match(COMMA_GROUP) ?? []).length;
+    expect(hit('1,312 NANDs')).toBe(1);
+    expect(hit('11,725 and 1,234,567')).toBe(2);
+    expect(hit('(3,4) and 1, 2, 3 and a,b and 0.5,123 and 12,34')).toBe(0);
+  });
+
   it('no chapter text groups a four-digit integer', async () => {
     const bad: string[] = [];
     for (const c of chapters) {
       for (const t of textsOf(c)) {
+        // (a coordinate pair "(98,102)" is two numbers, not one grouped)
+        for (const m of plain(t).matchAll(COMMA_GROUP)) if (!(plain(t)[(m.index ?? 0) - 1] === '(' && plain(t)[(m.index ?? 0) + m[0].length] === ')')) bad.push(`${c.id}: comma group …${plain(t).slice(Math.max(0, (m.index ?? 0) - 25), (m.index ?? 0) + 30)}…`);
         for (const m of plain(t).matchAll(FOUR_DIGIT_GROUP)) {
           const at = m.index ?? 0;
           bad.push(`${c.id}: …${plain(t).slice(Math.max(0, at - 25), at + 30).replace(/[  ]/g, '␣')}…`);
