@@ -17,7 +17,7 @@ await build({
   config: {
     appId: 'io.github.orelmag.mosfettoriscv',
     productName: 'From Switch to RISC-V and Beyond',
-    copyright: '© OrelMag',
+    copyright: '© Orel Magidish',
     extraMetadata: { version },
     directories: { output: 'release' },
     compression: 'maximum',
