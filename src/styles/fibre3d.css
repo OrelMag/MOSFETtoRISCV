@@ -1,0 +1,27 @@
+/* The cut-away fibre (widgets/fibre3dview.ts): materials, scoped under .m3d (model3d.css holds the shared ones). */
+.m3d {
+  --fb-glass: light-dark(#b9cfe0, #8fb0cc);
+  --fb-coat: light-dark(#d9a441, #e0b25a);
+  --fb-core: light-dark(#7fb6e6, #9cc9f0);
+  --fb-ray: light-dark(#d4382c, #ff6b5c);
+  --fb-fan: light-dark(#5b6c9a, #8a9cd0);
+  --fb-leak: light-dark(#c25a00, #ffa142);
+  --fb-pulse: light-dark(#1f9a63, #3ecb8a);
+  --fb-glow: light-dark(#e0a800, #ffd54a);
+  --fb-air: light-dark(#5b6275, #b5bccd);
+  --fb-cut: light-dark(#8f98a8, #a3acbd);
+}
+.fb-plot { display: block; width: 100%; height: auto; margin-top: 8px; }
+.fb-plot .grid { stroke: var(--border); stroke-width: 1; }
+.fb-plot .ax { stroke: var(--border-strong); stroke-width: 1; }
+.fb-plot text { font: 10.5px var(--font-mono); fill: var(--muted); }
+.fb-plot .axl { font: 600 10.5px var(--font-ui); fill: var(--text-2); }
+.fb-plot polyline { fill: none; stroke-width: 1.8; stroke-linejoin: round; }
+.fb-plot .in { stroke: var(--fb-air); stroke-dasharray: 4 3; }
+.fb-plot .out { stroke: var(--fb-pulse); }
+.fb-plot .mark { stroke: var(--fb-ray); stroke-width: 1.2; stroke-dasharray: 3 3; }
+.fb-plot .lead { fill: var(--text); font-weight: 600; }
+.fb-seg { flex: none; }
+.fb-seg button { min-height: 30px; }
+@media (pointer: coarse) { .fb-seg button { min-height: 40px; } }
+.m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
