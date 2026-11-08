@@ -694,7 +694,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   const aluR = at.get('alu')![0] + g(ALU).w;
   // The plain core is drawn with wires: control below the datapath (selects take their signal from below), each signal
   // on its own row and the farthest lowest, feedback over the top and along the bottom. Variants keep their pointers.
-  const wired = !(icache && dcache) && !fpu && !(imemPort && c);
+  const wired = !(icache && dcache) && !(imemPort && c);
   const dmX = aluR + (wired ? 24 : 18);
   alignY('dm', DM, dmX, 'addr', P('alu', 'y')[1]);
   alignY('res', RES, dmX + g(DM).w + (dcache ? 18 : 10), 'd1', P('dm', 'rd')[1]); // a cache's stall / hit labels need room
@@ -967,86 +967,112 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   }
   if (fpu) pins.retire = [resY[0] + 22, bottom + 1];
   if (fpu) {
-    // ---- RV32F subset: a second register file, the FPU, and a few multiplexers
-    const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => instances.push({ name, def, at: xy, label });
+    // ---- RV32F subset: a second register file, the FPU, and a few multiplexers. The f registers sit under the integer ones and
+    // the FPU beside them (the read ports straight into its operands); the FP decode under the control block, whose field lanes
+    // it shares; the fcsr under the FPU. The fields reaching the FPU and the fcsr, the control from the decode, the operands
+    // of the integer side and the result coming back stay named pointers.
+    const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); at.set(name, xy); };
     const rfAt = at.get('rf')!, rfR = rfAt[0] + g(RF).w;
-    const FRF = regfile(5, 32, false, 3);
-    add('frf', FRF, [rfAt[0], bottom + 10], 'f registers');
-    add('fpu', FPU32, [rfR + 24, bottom + 14], 'FPU');
-    add('fdec', FP_DECODE, [8, bottom + 10]);
-    add('fwd', M2, [rfAt[0] - 18, bottom + 14], 'mem / FPU');
-    const mg = g(M2), xresAt: [number, number] = [resY[0] + 10, resY[1] - 6];
+    const FRF = regfile(5, 32, false, 3), gF = g(FRF), gP = g(FPU32), gC = g(FCSR), mg = g(M2);
+    const fy = 108; // top of the f registers: under the control block (it ends at 100) and the gates' row
+    const frfX = rfAt[0] + 12, fpuX = frfX + gF.w + 14;
+    add('frf', FRF, [frfX, fy], 'f registers');
+    add('fpu', FPU32, [fpuX, fy + gF.ports.rd1.pos[1] - gP.ports.a.pos[1]], 'FPU');
+    add('fcsr', FCSR, [fpuX + 50, P('fpu', 'flags')[1] - gC.ports.flags.pos[1]], 'fcsr');
+    add('fdec', FP_DECODE, [30, 104]);
+    // x-register write enable: (RegWrite AND NOT flw) OR toInt OR isCSR, then AND retire; a row under the f registers' left edge
+    const cy = 101;
+    add('nflw', NOT, [60, cy + 1]);
+    add('rwx', AND, [67, cy]);
+    add('rwi', orN(3), [80, cy - 1]);
+    add('xwg', AND, [96, cy]);
+    add('sr3', splitter([2, 5]), [52, 100]);
+    add('nstall', NOT, [fpuX + 16, P('fpu', 'stall')[1] - 1]);
+    add('fwd', M2, [fpuX + 24, P('fpu', 'y')[1] - mg.ports.a.pos[1] - 8], 'mem / FPU');
+    add('fwg', AND, [fpuX + 22, P('fpu', 'stall')[1] + 3]);
+    add('fpg', AND, [fpuX + 22, P('fpu', 'stall')[1] + 9]);
+    // the multiplexers on the result path: ALU / FPU, then FP / CSR, beside the result multiplexer
+    const xresAt: [number, number] = [resY[0] + 12, resY[1] - mg.ports.a.pos[1]];
     add('xres', M2, xresAt, 'ALU / FPU');
-    add('swd', M2, [rfR + 4, bottom - 6], 'x / f store');
-    // x-register write enable: (RegWrite AND NOT flw) OR toInt OR isCSR, then AND retire; each gate's
-    // output on the next one's input row
-    const yw = bottom - 10;
-    add('nflw', NOT, [30, yw]);
-    add('rwx', AND, [38, yw - 2]);
-    add('rwi', orN(3), [48, yw - 1]);
-    add('fcsr', FCSR, [rfR + 24, bottom + 62], 'fcsr');
-    add('sr3', splitter([2, 5]), [rfAt[0] - 6, bottom + 40]);
-    add('cres', M2, [xresAt[0] + mg.w + 10, xresAt[1] + mg.ports.y.pos[1] - mg.ports.a.pos[1]], 'FP / CSR');
-    // fdiv.s / fsqrt.s stall: the PC and every register write wait for the iterative unit
-    if (dcache) throw new Error('singleCycleCpu: fpu and dcache together are not supported');
-    add('nstall', NOT, [20, yw + 6]);
-    add('xwg', AND, [60, yw + 1]);
-    add('fwg', AND, [rfAt[0] - 6, bottom + 6]);
-    add('fpg', AND, [rfR + 18, bottom + 58]);
+    add('cres', M2, [xresAt[0] + mg.w + 8, xresAt[1] + mg.ports.y.pos[1] - mg.ports.a.pos[1]], 'FP / CSR');
+    add('swd', M2, [dmX - 11, 28], 'x / f store');
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     const net = (name: string) => nets.find((n) => n.name === name)!;
     nets.splice(nets.indexOf(net('en')), 1);
-    net('op').ends = ['si.o0', 'fdec.op', 'fpu.op'];
+    net('op').ends = ['si.o0', 'fdec.op', 'fpu.op', 'fcsr.op'];
+    net('op').tags = ['fpu.op', 'fcsr.op'];
     nets.push({ name: 'opInt', ends: ['fdec.opInt', 'ctl.op'], tags: true });
-    net('op').ends.push('fcsr.op');
     net('rs1').ends.push('frf.ra1', 'fcsr.rs1');
+    net('rs1').tags = ['fcsr.rs1'];
     net('rs2').ends.push('frf.ra2', 'fpu.rs2', 'fcsr.rs2');
+    net('rs2').tags = ['fpu.rs2', 'fcsr.rs2'];
     net('rd').ends.push('frf.wa');
     net('funct7').ends.push('fpu.funct7', 'fdec.funct7', 'fcsr.funct7', 'sr3.in');
+    net('funct7').tags = ['fpu.funct7', 'fcsr.funct7'];
     net('funct3').ends.push('fpu.funct3', 'fcsr.funct3');
+    net('funct3').tags = ['fpu.funct3', 'fcsr.funct3'];
     net('rd1').ends.push('fpu.xa', 'fcsr.xa');
-    (net('rd1') as NetDef).tags = ['fpu.xa', 'fcsr.xa'];
+    net('rd1').tags = ['fpu.xa', 'fcsr.xa'];
     const wdn = net('WriteData');
     wdn.ends = wdn.ends.filter((e) => e !== 'dm.wd').concat('swd.a');
-    wdn.tags = ['swd.a'];
-    net('ReadData').ends.push('fwd.a');
+    net('ReadData').ends.push('fwd.b');
+    net('ReadData').tags = ['fwd.b'];
     const res = net('Result');
     res.ends = ['res.y', 'xres.a'];
-    res.via = undefined;
+    delete res.via;
     net('RegWrite').ends = ['ctl.regWrite', 'rwx.a'];
     net('clk').ends.push('frf.clk', 'fcsr.clk', 'fpu.clk');
+    net('clk').tags = ['frf.clk', 'fcsr.clk', 'fpu.clk'];
     nets.push(
-      { name: 'frs1', ends: ['frf.rd1', 'fpu.a'], tags: true },
-      { name: 'frs2', ends: ['frf.rd2', 'fpu.b', 'swd.b'], tags: true },
-      { name: 'StoreData', ends: ['swd.y', 'dm.wd'], tags: true },
-      { name: 'FPUResult', ends: ['fpu.y', 'xres.b', 'fwd.b'], tags: true },
+      { name: 'frs1', ends: ['frf.rd1', 'fpu.a'] },
+      { name: 'frs2', ends: ['frf.rd2', 'fpu.b', 'swd.b'], tags: ['swd.b'] },
+      { name: 'frs3', ends: ['frf.rd3', 'fpu.c'] },
+      { name: 'StoreData', ends: ['swd.y', 'dm.wd'] },
+      { name: 'FPUResult', ends: ['fpu.y', 'xres.b', 'fwd.a'], tags: ['xres.b'] },
       { name: 'FWriteData', ends: ['fwd.y', 'frf.wd'], tags: true },
       { name: 'XResult0', ends: ['xres.y', 'cres.a'] },
       { name: 'CSRData', ends: ['fcsr.rdata', 'cres.b'], tags: true },
-      { name: 'isCSR', ends: ['fcsr.hit', 'cres.s', 'rwi.i2'], tags: true },
-      { name: 'XResult', ends: ['cres.y', 'rf.wd'], tags: true },
-      { name: 'FFlags', ends: ['fpu.flags', 'fcsr.flags'], tags: true },
+      { name: 'isCSR', ends: ['fcsr.hit', 'cres.s', 'rwi.i2'], tags: ['cres.s', 'rwi.i2'] },
+      { name: 'XResult', ends: ['cres.y', 'rf.wd'] },
+      { name: 'FFlags', ends: ['fpu.flags', 'fcsr.flags'] },
       { name: 'isOPFP', ends: ['fdec.opfp', 'fpu.go'], tags: true },
       { name: 'FPOp', ends: ['fdec.fpOp', 'fpg.a'], tags: true },
       { name: 'rs3', ends: ['sr3.o1', 'frf.ra3'], tags: true },
-      { name: 'frs3', ends: ['frf.rd3', 'fpu.c'], tags: true },
-      { name: 'FFlagsWE', ends: ['fpg.y', 'fcsr.fpOp'], tags: true },
-      { name: 'stall', ends: ['fpu.stall', 'nstall.a'], tags: true },
-      { name: 'retire', ends: ['nstall.y', 'pc.en', 'xwg.b', 'fwg.b', 'fpg.b', 'retire'], tags: ['pc.en', 'xwg.b', 'fwg.b', 'fpg.b', 'retire'] },
-      { name: 'frm', ends: ['fcsr.frm', 'fpu.frm'], tags: true },
-      { name: 'isFLW', ends: ['fdec.flw', 'fwd.s', 'nflw.a'], tags: true },
+      { name: 'FFlagsWE', ends: ['fpg.y', 'fcsr.fpOp'] },
+      { name: 'stall', ends: ['fpu.stall', 'nstall.a'] },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'xwg.b', 'fwg.b', 'fpg.b', 'retire'], tags: ['pc.en', 'xwg.b', 'retire'] },
+      { name: 'frm', ends: ['fcsr.frm', 'fpu.frm'] },
+      { name: 'isFLW', ends: ['fdec.flw', 'fwd.s', 'nflw.a'], tags: ['fwd.s'] },
       { name: 'isFSW', ends: ['fdec.fsw', 'swd.s'], tags: true },
-      { name: 'toInt', ends: ['fdec.toInt', 'xres.s', 'rwi.i1'], tags: true },
+      { name: 'toInt', ends: ['fdec.toInt', 'xres.s', 'rwi.i1'], tags: ['xres.s'] },
       { name: 'FRegWrite', ends: ['fdec.fWrite', 'fwg.a'], tags: true },
       { name: 'FRegWriteQ', ends: ['fwg.y', 'frf.we'], tags: true },
       { name: '¬flw', ends: ['nflw.y', 'rwx.b'] },
       { name: 'RegWriteInt', ends: ['rwx.y', 'rwi.i0'] },
       { name: 'XRegWrite', ends: ['rwi.y', 'xwg.a'] },
-      { name: 'XRegWriteQ', ends: ['xwg.y', 'rf.we'], tags: true },
+      { name: 'XRegWriteQ', ends: ['xwg.y', 'rf.we'] },
     );
     // fwd: a = ReadData? the FPU result is the common case, the memory word only for flw
-    nets.find((n) => n.name === 'ReadData')!.ends = nets.find((n) => n.name === 'ReadData')!.ends.map((e) => (e === 'fwd.a' ? 'fwd.b' : e));
-    nets.find((n) => n.name === 'FPUResult')!.ends = ['fpu.y', 'xres.b', 'fwd.a'];
+    net('FPUResult').ends = ['fpu.y', 'xres.b', 'fwd.a'];
+    for (const n of nets) if (['XRegWriteQ', 'XRegWrite', 'RegWriteInt', '¬flw', 'FFlagsWE', 'isFLW', 'isFSW', 'toInt', 'isOPFP', 'FPOp', 'FRegWrite', 'FRegWriteQ', 'stall', 'retire', 'isCSR', 'opInt'].includes(n.name!)) n.quiet = true;
+    // ---- wires: the fields down the control block's lanes, the f registers' ports straight into the FPU
+    const Qp = (inst: string, port: string) => P(inst, port);
+    const setVia = (name: string, via: NonNullable<NetDef['via']>) => { const n = net(name); n.via = { ...n.via, ...via }; };
+    const oy = (o: string) => P('si', o)[1];
+    setVia('op', { 'fdec.op': [[48 + dx, oy('o0')], [48 + dx, 75.5], [28, 75.5], [28, Qp('fdec', 'op')[1]]] });
+    setVia('funct7', {
+      'fdec.funct7': [[51 + dx, oy('o5')], [51 + dx, 77.5], [26, 77.5], [26, Qp('fdec', 'funct7')[1]]],
+      'sr3.in': [[51 + dx, oy('o5')], [51 + dx, Qp('sr3', 'in')[1]]],
+    });
+    net('rd').trunk = 53.5 + dx;
+    setVia('WriteData', { 'swd.a': [[rfR + 2.5, P('rf', 'rd2')[1]], [rfR + 2.5, 30], [Qp('swd', 'a')[0] - 2, 30], [Qp('swd', 'a')[0] - 2, Qp('swd', 'a')[1]]] });
+    setVia('StoreData', { 'dm.wd': [[Qp('swd', 'y')[0] + 2, Qp('swd', 'y')[1]], [Qp('swd', 'y')[0] + 2, P('dm', 'wd')[1]]] });
+    delete net('WriteData').via?.['dm.wd'];
+    setVia('Result', {});
+    setVia('XResult', { 'rf.wd': [[Qp('cres', 'y')[0] + 3, Qp('cres', 'y')[1]], [Qp('cres', 'y')[0] + 3, bottom - 4], [58 + dx, bottom - 4], [58 + dx, P('rf', 'wd')[1]]] });
+    setVia('XRegWriteQ', { 'rf.we': [[Qp('xwg', 'y')[0] + 2, Qp('xwg', 'y')[1]], [Qp('xwg', 'y')[0] + 2, 98.5], [59.5 + dx, 98.5], [59.5 + dx, P('rf', 'we')[1]]] });
+    setVia('RegWrite', { 'rwx.a': [[52, P('ctl', 'regWrite')[1]], [52, Qp('rwx', 'a')[1]]] });
+    delete net('RegWrite').via?.['rf.we'];
   }
   const extraPorts: PortDef[] = [];
   if (shared) {
