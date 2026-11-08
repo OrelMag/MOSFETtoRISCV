@@ -1,0 +1,20 @@
+/* ---------- Babbage's carry (widgets/babbage3dview.ts): materials ---------- */
+.m3d {
+  --bb-wheel: light-dark(#c9a75a, #b99445);
+  --bb-tick: light-dark(#2b2f3a, #14161c);
+  --bb-lever: light-dark(#8a93ad, #7f8aa6);
+  --bb-warn: light-dark(#d98a1f, #f0a63a);
+  --bb-arm: light-dark(#6c7690, #98a2bd);
+}
+.bb-digits { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 2px 0 6px; font: 600 14px var(--font-mono); font-variant-numeric: tabular-nums; }
+.bb-grp { display: inline-flex; }
+.bb-d { min-width: 1.05ch; text-align: center; color: var(--text); border-radius: 3px; padding: 0 1px; }
+.bb-d.armed { background: var(--warn-soft); color: var(--warn); box-shadow: inset 0 -2px 0 var(--warn); }
+.bb-d.recv { background: var(--good-soft); color: var(--good); }
+.bb-gates { border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
+.bb-gates th, .bb-gates td { text-align: right; padding: 2px 10px 2px 0; font-variant-numeric: tabular-nums; }
+.bb-gates th { color: var(--muted); font-weight: 600; }
+.bb-case { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--text-2); }
+.bb-case select { min-height: 32px; max-width: 100%; }
+.bb-mode[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, #fff); }
+@media (pointer: coarse) { .bb-case select { min-height: 40px; } }
