@@ -497,8 +497,9 @@ function anchorsAll(detail: CrtDetail): Anchor[] {
   if (detail === 'mask') {
     const mx = G.D - G.Q, T = G.TRIAD;
     return [
-      { text: 'steel mask, one hole', p: [mx - MASK.THICK, MASK.HOLE, -T], side: 't', n: up },
-      { text: 'beams cross in the hole', p: [mx - 2, 0, 0.06], side: 'l', n: right },
+      // the steel between the holes (a corner bar), and the centre hole the three beams cross in (the hole's own axis: y = z = 0)
+      { text: 'steel shadow mask', p: [mx - MASK.THICK, T * 2.35, -T * 3], side: 't', n: up },
+      { text: 'the beams cross in this hole', p: [mx - MASK.THICK, 0, 0], side: 'l', n: [-1, 0, 0] },
       { text: 'R · G · B dots', p: [G.D - 0.05, -T * 1.2, 0], side: 'b', n: [-1, 0, 0] },
       { text: 'black matrix', p: [G.D, T * 2.2, -T * 2.2], side: 'r', n: [-1, 0, 0], minor: true },
     ];

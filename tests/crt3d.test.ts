@@ -352,3 +352,16 @@ describe('broadcast interlace', () => {
     expect(run.glow(64, t2, tau)).toBeGreaterThan(run.glow(0, t2, tau));
   });
 });
+
+describe('the Mask view labels (batch 24 review)', () => {
+  it('names the hole the three beams cross in, and puts the mask label on steel', () => {
+    const a = crtAnchors('mask'), hole = a.find((x) => /cross in this hole/.test(x.text))!, steel = a.find((x) => /steel shadow mask/.test(x.text))!;
+    const mx = GEOM.D - GEOM.Q, T = GEOM.TRIAD;
+    // every beam passes the hole's axis (y = z = 0) at the mask
+    for (const zi of [-GEOM.GUN_PITCH, 0, GEOM.GUN_PITCH]) { const m = maskBeam(zi)[1]; expect(m[0]).toBeCloseTo(mx, 9); expect(m[1]).toBe(0); expect(m[2]).toBe(0); }
+    expect(hole.p[1]).toBe(0); expect(hole.p[2]).toBe(0); expect(hole.p[0]).toBeCloseTo(mx - MASK.THICK, 9);
+    // steel: off every hole by more than half a hole in y (rows are a pitch apart)
+    const dy = Math.abs(steel.p[1] / T - Math.round(steel.p[1] / T)) * T;
+    expect(dy).toBeGreaterThan(MASK.HOLE / 2);
+  });
+});
