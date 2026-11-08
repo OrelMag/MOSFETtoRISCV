@@ -344,7 +344,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   display: grid; height: 100%;
   grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr minmax(260px, 340px);
   /* the prose column grows with the window; the learner can drag it wider (ui/splitter.ts: .sized, --narr-w), never past the room the stage and inspector keep */
-  --narr-auto: clamp(calc(400px * var(--prose-scale, 1)), 26vw, calc(520px * var(--prose-scale, 1))); --narr-room: 880px; --narr-max: var(--narr-auto);
+  --narr-auto: clamp(calc(400px * var(--prose-scale, 1)), 28vw, calc(520px * var(--prose-scale, 1))); --narr-room: 880px; --narr-max: var(--narr-auto);
 }
 .layout.sized { --narr-max: min(var(--narr-w), calc(100% - var(--narr-room))); }
 .layout.no-inspector { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr 0; --narr-room: 540px; }
@@ -352,7 +352,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 /* A laptop (1180–1440 px): narrower side panes, so the stage gets the room (at 1280 it was 540 px, and a scene's
    own panels took most of that). */
 @media (min-width: 1181px) and (max-width: 1440px) {
-  .layout { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr minmax(260px, 300px); --narr-auto: clamp(calc(340px * var(--prose-scale, 1)), 26vw, calc(400px * var(--prose-scale, 1))); --narr-room: 840px; }
+  .layout { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr minmax(260px, 300px); --narr-auto: clamp(calc(340px * var(--prose-scale, 1)), 28vw, calc(400px * var(--prose-scale, 1))); --narr-room: 840px; }
   .layout.no-inspector { grid-template-columns: minmax(calc(300px * var(--prose-scale, 1)), var(--narr-max)) 1fr 0; --narr-room: 540px; }
 }
 
