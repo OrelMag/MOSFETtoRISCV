@@ -1,11 +1,11 @@
-// The loudspeaker model against the chapter's voice: with no smoothing the cone sits exactly on the held (ZOH) sample at
-// every instant, the drawing's dust cap is where the model says, the stroke stays within Xmax, and the microphone's EMF is
-// Bl times the cone's velocity.
+// The loudspeaker model against the chapter's voice: the real cone is a second-order system (mass-controlled at the voice's
+// pitch), the massless contrast sits exactly on the held (ZOH) sample, the drawn dust cap is where the model says, the stroke
+// stays within Xmax, and the microphone's EMF is Bl times the cone's velocity.
 import { describe, expect, it } from 'vitest';
 import { quatRotate } from '../src/gl/math';
 import { wavSamples } from './dsp/wav';
 import {
-  BL, CMS_M_N, DRAW_K, FS_HZ, MMS_KG, PRESSURE_PA, SD_M2, drawnRatio, pitchHz, realMotion, realPeakUm, realUm, velocityMmS, DUST_Y, GEOM, I_FULL, VOICE_RATE, WINDOW, XMAX_MM, coneMm, dustY, emfVolts, heldCode, loudestWindow, makeDrive, poseAt, slab,
+  BL, CMS_M_N, QMS, I_RATED, peakStrokeMm, currentA, currentForStroke, evolve, strokeForAmp, DRAW_K, FS_HZ, MMS_KG, PRESSURE_PA, SD_M2, drawnRatio, pitchHz, realMotion, realPeakUm, realUm, velocityMmS, GEOM, I_FULL, VOICE_RATE, WINDOW, XMAX_MM, coneMm, dustY, emfVolts, heldCode, loudestWindow, makeDrive, poseAt, slab,
   speakerAnchors, speakerParts, staircase, type SpeakerPalette,
 } from '../src/widgets/speaker3dparts';
 
@@ -13,11 +13,10 @@ const w = wavSamples('public/dsp/voice-8k.wav');
 const codes = w.x.slice(loudestWindow(w.x), loudestWindow(w.x) + WINDOW);
 const col = (i: number): [number, number, number] => [i / 20, 0.5, 0.5];
 const P: SpeakerPalette = {
-  steel: col(1), magnet: col(2), basket: col(3), cone: [0.3, 0.3, 0.3, 0.8], dust: col(5), former: col(6), wire: col(7), rubber: col(8), spider: col(9),
+  steel: col(1), magnet: col(2), basket: col(3), cone: [0.3, 0.3, 0.3, 0.8], dust: col(5), former: col(6), wire: col(7), wire2: col(16), flux: col(17), rubber: col(8), spider: col(9),
   stair: col(10), stairDim: [0.1, 0.1, 0.9, 0.3], trace: col(12), cursor: col(13), live: col(14), zero: col(15),
 };
 const same = (a: readonly number[], b: readonly number[]) => a.every((v, i) => Math.abs(v - b[i]) < 1e-6);
-const dustPart = (d: ReturnType<typeof makeDrive>, t: number) => speakerParts(d, t, P).find((p) => same(p.color as number[], P.dust))!;
 
 describe('the speaker model against the chapter', () => {
   it('uses the chapter\'s recording: 8 kHz, a full window of its samples', () => {
@@ -26,8 +25,8 @@ describe('the speaker model against the chapter', () => {
     expect(Math.max(...codes.map(Math.abs))).toBeGreaterThan(1000);
   });
 
-  it('ZOH: with no smoothing the cone at any t is the held sample, scaled to Xmax', () => {
-    const d = makeDrive(codes, 'speaker', false);
+  it('ZOH: the massless contrast has the cone at any t on the held sample, scaled to Xmax', () => {
+    const d = makeDrive(codes, 'speaker', true);
     for (let n = 0; n < WINDOW; n++) {
       for (const f of [0, 0.25, 0.5, 0.999]) {
         const t = n + f, p = poseAt(d, t);
@@ -41,36 +40,74 @@ describe('the speaker model against the chapter', () => {
     expect(staircase(d)).toEqual(codes.map((c) => c / d.peak));
   });
 
-  it('the drawn dust cap sits at the cone position (rest height plus the stroke as drawn)', () => {
-    const d = makeDrive(codes, 'speaker', false);
+  it('the drawn dust cap sits at the cone position (rest height plus the real stroke, the drawn magnification)', () => {
+    expect(DRAW_K).toBe(1);
+    const d = makeDrive(codes, 'speaker', false), dust = (t: number) => speakerParts(d, t, P).filter((p) => same(p.color as number[], P.dust));
+    const lowY = (t: number) => Math.min(...dust(t).map((p) => p.pos[1] - p.scale![1] / 2));
+    expect(Math.max(...dust(0).map((p) => p.pos[1])) - Math.min(...dust(0).map((p) => p.pos[1]))).toBeGreaterThan(3); // a dome, not a disc
     for (const n of [0, 7, 20, 41, 63]) {
-      const p = dustPart(d, n + 0.5), c = codes[n] / d.peak;
-      expect(p.pos[1] - 0.6).toBeCloseTo(DUST_Y + c * XMAX_MM * DRAW_K, 9);
-      expect(p.pos[1] - 0.6).toBeCloseTo(dustY(c), 9);
+      const c = poseAt(d, n + 0.5).cone;
+      expect(lowY(n + 0.5) - lowY(0)).toBeCloseTo(dustY(c, d.mag) - dustY(poseAt(d, 0).cone, d.mag), 6);
     }
   });
 
-  it('stays within Xmax, with or without smoothing, and the coil stays in its gap', () => {
-    for (const smooth of [false, true]) {
-      const d = makeDrive(codes, 'speaker', smooth);
+  it('the drive is the rated power: peak current <= sqrt(2 P / Re), the real stroke <= Xmax, the drawn one too and the coil stays in its gap', () => {
+    expect(I_RATED).toBeCloseTo(Math.sqrt((2 * 60) / 6.4), 12); // Dayton: 60 W RMS, Re 6.4 ohm
+    expect(I_RATED).toBeLessThan(5);
+    for (const massless of [false, true]) {
+      const d = makeDrive(codes, 'speaker', massless);
+      let top = 0;
       for (let t = 0; t < WINDOW; t += 0.1) {
         const p = poseAt(d, t);
-        expect(Math.abs(coneMm(p.cone))).toBeLessThanOrEqual(XMAX_MM + 1e-9);
-        // The winding (height 18) overlaps the gap (6) over the whole stroke only if |x| <= (18 - 6) / 2.
-        const dy = p.cone * XMAX_MM, wl = GEOM.windLow + dy, wh = GEOM.windHigh + dy;
-        expect(wl).toBeLessThanOrEqual(GEOM.magnetTop + 1e-9);
-        expect(wh).toBeGreaterThanOrEqual(GEOM.plateTop - 1e-9);
+        expect(Math.abs(currentA(d, p.drive))).toBeLessThanOrEqual((massless ? I_FULL : I_RATED) + 1e-9);
+        top = Math.max(top, Math.abs(coneMm(p.cone)));
+        expect(Math.abs(coneMm(p.cone))).toBeLessThanOrEqual(XMAX_MM * 1.005);
+        const dy = p.cone * XMAX_MM * d.mag, wl = GEOM.windLow + dy, wh = GEOM.windHigh + dy;
+        expect(Math.abs(dy)).toBeLessThanOrEqual(XMAX_MM * 1.005);
+        expect(wl).toBeLessThanOrEqual(GEOM.magnetTop + 0.05);
+        expect(wh).toBeGreaterThanOrEqual(GEOM.plateTop - 0.05);
+      }
+      if (massless) { expect(top).toBeGreaterThan(XMAX_MM * 0.99); expect(d.mag).toBe(1); }
+      else {
+        // the real stroke at voice pitch is about a millimetre, far under Xmax, and the picture says how much it is magnified
+        expect(top).toBeLessThan(2);
+        expect(top).toBeCloseTo(peakStrokeMm(d), 1);
+        expect(d.mag).toBeGreaterThan(2);
+        expect(top * d.mag).toBeGreaterThan(XMAX_MM * 0.7);
+        expect(top * (d.mag + 1)).toBeGreaterThan(XMAX_MM); // the largest whole factor that stays in the gap
       }
     }
     expect((GEOM.windHigh - GEOM.windLow - (GEOM.plateTop - GEOM.magnetTop)) / 2).toBe(XMAX_MM);
   });
 
-  it('smoothing is a lag, not a different signal: it matches the hold at the start of a long constant run', () => {
-    const flat = Array.from({ length: 16 }, (_, i) => (i < 8 ? 1000 : 0));
-    const d = makeDrive(flat, 'speaker', true);
-    expect(poseAt(d, 7.999).cone).toBeGreaterThan(0.95);
-    expect(poseAt(d, 8.0).cone).toBeLessThan(1);
-    expect(poseAt(d, 8.5).cone).toBeGreaterThan(0);
+  it('the coil is centred in the gap: the same clearance inside and out', () => {
+    expect(GEOM.formerIn - GEOM.poleR).toBeCloseTo(GEOM.plateIn - GEOM.windOut, 9);
+  });
+
+  it('the cone is a second-order system: exact stepping, the static limit, the mass law, no staircase edges', () => {
+    const [xs, vs] = evolve(0, 0, 10, 2); // a constant force settles at F·Cms
+    expect(xs).toBeCloseTo(10 * CMS_M_N, 6);
+    expect(vs).toBeCloseTo(0, 6);
+    expect(evolve(0, 0, 10, 1e-4)[0] / (0.5 * (10 / MMS_KG) * 1e-8)).toBeCloseTo(1, 1); // x = ½ (F / M) t² at first
+    const wd = Math.sqrt(1 / (MMS_KG * CMS_M_N)) * Math.sqrt(1 - 1 / (4 * QMS * QMS));
+    expect(evolve(0, 0, 1, Math.PI / wd)[0]).toBeGreaterThan(CMS_M_N * 1.2); // half a ring on: Q = 1.22 overshoots by exp(-pi z / sqrt(1 - z^2)) = 24 %
+    // the mass law: a sine of one period per window needs i = x · |1/Cms − ω²Mms + jωRms| / Bl, as currentForStroke says
+    const sine = Array.from({ length: WINDOW }, (_, i) => Math.round(1000 * Math.sin((2 * Math.PI * i) / WINDOW)));
+    const f = VOICE_RATE / WINDOW, d = makeDrive(sine, 'speaker', false);
+    const stroke = peakStrokeMm(d); // the sine's real stroke at the rated peak current
+    expect(stroke / strokeForAmp(f, I_RATED)).toBeGreaterThan(0.97);
+    expect(stroke / strokeForAmp(f, I_RATED)).toBeLessThan(1.03);
+    expect(stroke).toBeLessThan(XMAX_MM * 0.6); // mass-controlled at 125 Hz: Xmax would take currentForStroke(f) amperes
+    expect(currentForStroke(f)).toBeGreaterThan(1.5 * I_RATED);
+    const dv = makeDrive(codes, 'speaker', false); // the voice itself needs several amperes for Xmax at its pitch
+    expect(dv.ipeak).toBe(I_RATED);
+    expect(currentA(dv, 1)).toBeCloseTo(dv.ipeak, 12);
+    expect(currentA(makeDrive(codes, 'speaker', true), 1)).toBeCloseTo(I_FULL, 12);
+    // the cone is continuous across a sample edge, where the held current jumps (no staircase edge reaches the cone)
+    for (const n of [5, 30, 50]) expect(Math.abs(poseAt(dv, n + 1 - 1e-9).cone - poseAt(dv, n + 1).cone)).toBeLessThan(1e-3);
+    // above the resonance the stroke from 1 A falls as 1 / f²
+    expect(strokeForAmp(500) / strokeForAmp(1000) / 4).toBeGreaterThan(0.95);
+    expect(strokeForAmp(500) / strokeForAmp(1000) / 4).toBeLessThan(1.05);
   });
 
   it('the microphone: EMF is Bl times the cone velocity, and the ADC holds one value a period', () => {
@@ -116,8 +153,8 @@ describe('the speaker model against the chapter', () => {
   it('the datasheet figures', () => {
     expect(XMAX_MM).toBe(6);
     expect(BL).toBe(7.82);
-    expect(I_FULL).toBeCloseTo(0.685, 3);
-    expect(2 * GEOM.formerOut).toBeCloseTo(39, 0); // the 38 mm coil's former plus its winding
+    expect(I_FULL).toBeCloseTo(0.685, 3); // the stiffness law's current, valid below Fs only
+    expect(2 * GEOM.formerOut).toBeCloseTo(38, 0); // the 38 mm coil's former
     expect(2 * Math.sqrt(124.7 / Math.PI) * 10).toBeGreaterThan(2 * GEOM.coneRim - 2); // Sd's diameter, 126 mm
   });
 
@@ -131,7 +168,7 @@ describe('the speaker model against the chapter', () => {
   it('every part is cut away at the front (z <= 0) except nothing, and labels are in both modes', () => {
     for (const mode of ['speaker', 'mic'] as const) {
       const d = makeDrive(codes, mode, false);
-      for (const p of speakerParts(d, 5.5, P)) if (p.pos[0] < 130) expect(p.pos[2]).toBeLessThanOrEqual(1e-6);
+      for (const p of speakerParts(d, 5.5, P)) if (p.pos[0] < 130) expect(p.pos[2]).toBeLessThanOrEqual(2); // flux / current marks sit just in front of the cut face
       expect(speakerAnchors(d, 5.5).length).toBeGreaterThan(8);
     }
   });

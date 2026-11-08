@@ -21,3 +21,8 @@
 .td-sel { font-size: 13px; }
 .m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 @media (pointer: coarse) { .td-cranks .btn { min-width: 40px; } }
+.td-cal { display: grid; gap: 6px; margin-bottom: 6px; }
+.td-cal label { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.td-cal input[type="range"] { flex: 1 1 120px; min-width: 100px; }
+.td-val { font: 12px var(--font-mono); color: var(--text); font-variant-numeric: tabular-nums; }
+.td-tabwrap { overflow-x: auto; }

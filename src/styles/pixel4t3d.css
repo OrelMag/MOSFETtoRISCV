@@ -7,6 +7,12 @@
   --px-g: light-dark(#1f9a4a, #3cc46e);
   --px-r: light-dark(#d23a2a, #ff6a55);
   --px-hot: light-dark(#e8a020, #ffc04a);
+  --px-sti: light-dark(#5d7fa8, #8fb0d8);
+  --px-dti: light-dark(#3f5f88, #9cb8de);
+  --px-ar0: light-dark(#7a4fc0, #a98aea);
+  --px-ar1: light-dark(#c05fa8, #e58ccb);
+  --px-ar2: light-dark(#9ccbe0, #b5dcee);
+  --px-wafer: light-dark(#8a8f99, #5b606b);
 }
 .px-plot { display: block; width: 100%; height: auto; margin-bottom: 4px; }
 .px-plot .grid { stroke: var(--border); stroke-width: 1; }
