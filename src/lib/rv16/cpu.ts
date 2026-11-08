@@ -3,6 +3,7 @@
 // joins them with the register file, the ALU and the program counter. Each uses only the parts
 // the levels below it unlock, so each is that level's reference solution.
 
+import { symbolGeom } from '../../sim/geometry';
 import type { ComponentDef, PortDef } from '../../sim/types';
 import { constWord } from '../alu';
 import { koggeStone } from '../fastadd';
@@ -13,6 +14,7 @@ import { AND, MUX2, NOT, OR, XOR } from '../gates';
 import { orN } from '../wide';
 import { TIE0 } from '../transistors';
 import { ADD16, choose4, CMP16, cmpWith, EQ16, INC16, MUX16, PC16, RF8, RV16_ALU16, RV16_ALU16KS, RV16_DREG16 } from './logic';
+import { foldBands } from '../fold';
 import { DIV16, MUL16 } from './md';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -110,6 +112,12 @@ export const CTL16: ComponentDef = (() => {
   const br = or([y(8), y(9), y(10), y(11)], 'br');
   const wb0 = or([y(6), lui], 'wb0');
   const wb1 = or([y(12), y(13), lui], 'wb1');
+  // where a gate's port is, from the instance the Builder placed (for the hand placement below)
+  const inst = (end: string) => b.instances.find((i) => i.name === end.split('.')[0])!;
+  const at = (end: string): [number, number] => { const i = inst(end), p = symbolGeom(i.def).ports[end.split('.')[1]].pos; return [i.at![0] + p[0], i.at![1] + p[1]]; };
+  // a two-input merger right of the OR column, at the pitch of its two ORs' outputs (moved one row if that pitch is odd)
+  const pair = (lo: string, hi: string): number => { if ((at(hi)[1] - at(lo)[1]) % 2) inst(hi).at![1] += 1; return at(hi)[1] - at(lo)[1]; };
+  const iselP = pair(isel0, isel1), wbP = pair(wb0, wb1);
   const a0r = b.op1(AND, [alu1, f0]);
   const a1 = b.op1(AND, [alu1, f1], 'alu1');
   const a2r = b.op1(AND, [alu1, f2]);
@@ -124,21 +132,38 @@ export const CTL16: ComponentDef = (() => {
   b.next();
   b.wire(rwe, 'rwe');
   b.wire(bimm, 'bimm');
-  b.wire(b.op1(merger([1, 1], 2), [isel0, isel1], 'isel'), 'isel');
-  b.wire(b.op1(merger([1, 1, 1, 1], 2), [a0, a1, a2, a3], 'alu'), 'alu');
+  const iselM = b.op1(merger([1, 1], iselP), [isel0, isel1], 'isel');
+  b.wire(iselM, 'isel');
+  const aluM = b.op1(merger([1, 1, 1, 1], 2), [a0, a1, a2, a3], 'alu');
+  b.wire(aluM, 'alu');
   b.wire(y(14), 'mwe');
-  b.wire(b.op1(merger([1, 1], 2), [wb0, wb1], 'wb'), 'wb');
+  const wbM = b.op1(merger([1, 1], wbP), [wb0, wb1], 'wb');
+  b.wire(wbM, 'wb');
   b.wire(br, 'br');
   b.wire(y(12), 'jal');
   b.wire(y(13), 'jalr');
   const R = b.right;
+  // the isel and wb mergers beside their ORs, level with them, not in a column of their own at the far right; isel0's two
+  // padding zeros beside the inputs they fill; every output pin level with what drives it, the decoder's three under the rest
+  const XM = at(rwe)[0] + 6;
+  inst(iselM).at = [XM, at(isel0)[1] - iselP / 2];
+  inst(wbM).at = [XM, at(wb0)[1] - wbP / 2];
+  const pads = b.instances.filter((i) => i.def === TIE0);
+  const isel0In = (k: number) => at(`${isel0.split('.')[0]}.i${k}`);
+  pads.forEach((p, j) => { const q = isel0In(8 - pads.length + j); p.at = [q[0] - 10, q[1] - 1]; });
+  const pinY: Record<string, number> = { rwe: at(rwe)[1], bimm: at(bimm)[1], isel: at(iselM)[1], br: at(br)[1], wb: at(wbM)[1], alu: at(aluM)[1] };
+  let low = Math.max(...Object.values(pinY)) + 4;
+  for (const n of ['mwe', 'jal', 'jalr']) { pinY[n] = low; low += 3; }
+  // two pins never closer than 2 rows: a later one steps down
+  const taken: number[] = [];
+  for (const n of CTL_OUTS) { let yy = pinY[n]; while (taken.some((t) => Math.abs(t - yy) < 2)) yy += 2; taken.push(yy); pinY[n] = yy; }
   return define({
     id: 'rv16_ctl', name: 'Control unit (RV16)', category: 'cpu',
     summary: 'Opcode → control signals: a 4→16 decoder, then each signal is the OR of the opcodes that need it. The ALU operation is {OPX, f3} (shifts: from the shift type).',
     ports: [bus('instr', 16, 'in'), ...CTL_OUTS.map((n, i) => (CTL_WIDTHS[i] > 1 ? bus(n, CTL_WIDTHS[i], 'out') : bit(n, 'out')))],
     symbol: { kind: 'box', label: 'CONTROL' },
     spec: ([w]) => controlSpec(w).out,
-    netlist: () => ({ pins: { instr: [0, 8], ...pinsAt([...CTL_OUTS], R, 3) }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { instr: [0, 8], ...Object.fromEntries(CTL_OUTS.map((n) => [n, [R, pinY[n]] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
   });
 })();
 
@@ -330,7 +355,8 @@ export function rv16Core(full: boolean, fast = false, md: CoreMd = '', arith = f
       + (md === 'mul' ? ' MD instructions take the multiplier\'s result instead.' : md === 'div' ? ' MD instructions take the multiplier\'s or the divider\'s result; a divide holds the PC (and writes nothing) until the divider is done.' : ''),
     ports: CORE_PORTS,
     symbol: { kind: 'box', label: full ? (md ? 'RV16 M' : 'RV16') : arith ? 'RV16 (ALU)' : 'RV16 (no br)' },
-    netlist: () => ({
+    // a core is too wide to read at fit in one strip: two bands (lib/fold.ts)
+    netlist: () => foldBands({
       pins: { ...pinsAt(['clk', 'rst', 'instr', 'drdata'], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) },
       instances: b.instances, nets: b.nets(),
     }),

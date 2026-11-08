@@ -9,9 +9,10 @@ import { amplifierWidget, coherentWidget, lossWidget, modesWidget, oceanWidget, 
 import { MMF, SMF } from '../widgets/serial';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
 const nf = (x: number, d = 1) => x.toFixed(d);
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 
 // ---- numbers ---------------------------------------------------------------------------------------------------------------
 const MIN = minLoss();

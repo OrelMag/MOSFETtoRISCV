@@ -10,8 +10,9 @@ import { chapterDesign, csdApi, csdScene, csdTap, csdTotals, designRows, designs
 import { DSP_LEVEL } from './dspladder';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (v: number) => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const n0 = (v: number) => groupNum(Math.round(v));
 const nf = (v: number, d = 2) => v.toFixed(d).replace('-', '−');
 const dbs = (v: number) => `${nf(v, 1)} dB`;
 

@@ -10,6 +10,7 @@ import { h } from '../dom';
 import { caseView } from '../../widgets/faultbench';
 import { fmtRate } from '../../widgets/message';
 import '../../styles/signals.css';
+import { groupNum } from '../../sim/numfmt';
 
 const ber = (b: number) => (b === 0 ? 'none counted' : b > 0.01 ? b.toFixed(2) : b.toExponential(1).replace('e-', ' × 10⁻').replace(/⁻(\d+)/, (_, e: string) => `⁻${[...e].map((c) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(c)]).join('')}`).replace(/^1\.0 × /, ''));
 
@@ -86,7 +87,7 @@ export class CommCapstonePage {
     };
     const measureC = h('button', { type: 'button', class: 'btn primary', onclick: () => {
       const c = { mod: Number(mod.value), code: Number(code.value) };
-      cOut.textContent = `Sending ${CARRIER_BITS.toLocaleString('en')} bits through it…`;
+      cOut.textContent = `Sending ${groupNum(CARRIER_BITS)} bits through it…`;
       this.timer = window.setTimeout(() => { carrier = runCarrier(CARRIER_BRIEF, c, CARRIER_BITS); say(cOut, carrier, CARRIER_REFERENCE_RATE, fmtRate, CARRIER_BRIEF.target); judge(); }, 30);
     } }, 'Measure');
     const measureS = h('button', { type: 'button', class: 'btn primary', onclick: () => {

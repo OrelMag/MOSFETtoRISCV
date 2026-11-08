@@ -147,26 +147,37 @@ export const DEC3: ComponentDef = (() => {
   });
 })();
 
+/** Put Builder instances where a drawing wants them: names, nets and their order stay as built. */
+const placeAt = (b: Builder, at: Record<string, [number, number]>): void => {
+  for (const i of b.instances) if (at[i.name]) i.at = at[i.name];
+};
+
 /** 16-bit 2:1 bus multiplexer, y = s ? b : a, with one inverter on s shared by every bit: 3n + 1 NANDs. */
 export const MUX16: ComponentDef = (() => {
+  // a bit every P rows: ta (a·¬s) on top, tb (s·b) under it, y to their right; the splitters and the merger at the same pitch,
+  // so every tap runs straight across. s and ¬s go to sixteen gates each: pointers.
+  const P = 12, Y = 6, XS = 4, XG = 24, XY = 32, XM = 40;
   const b = new Builder(8, 10, 2);
   b.pins('a', 'b', 's');
-  const sa = b.op(splitter(Array(16).fill(1), 2), ['a'], undefined, 'sa');
-  const sb = b.op(splitter(Array(16).fill(1), 2), ['b'], undefined, 'sb');
+  const sa = b.op(splitter(Array(16).fill(1), P), ['a'], undefined, 'sa');
+  const sb = b.op(splitter(Array(16).fill(1), P), ['b'], undefined, 'sb');
   const ns = b.name(b.op1(NOT, ['s'], '¬s', 'inv'), 'ns', true);
-  b.next();
-  const t = Array.from({ length: 16 }, (_, i) => [b.op1(NAND, [`${sa}.o${i}`, ns], undefined, `ta${i}`), b.op1(NAND, [`${sb}.o${i}`, 's'], undefined, `tb${i}`)]);
-  b.next();
+  b.name('s', 's', true);
+  const t = Array.from({ length: 16 }, (_, i) => [b.op1(NAND, [`${sa}.o${i}`, ns], undefined, `ta${i}`), b.op1(NAND, ['s', `${sb}.o${i}`], undefined, `tb${i}`)]);
   const ys = t.map(([ta, tb], i) => b.op1(NAND, [ta, tb], `y${i}`, `y${i}`));
-  b.next();
-  b.wire(b.op1(merger(Array(16).fill(1), 2), ys, undefined, 'my'), 'y');
+  b.wire(b.op1(merger(Array(16).fill(1), P), ys, undefined, 'my'), 'y');
+  // ta.a at row Y + P i + 1, tb.b (tb under ta) at Y + P i + 7, y's output at Y + P i + 5: the splitters' and merger's taps sit P/2 + P i down
+  const at: Record<string, [number, number]> = { sa: [XS, Y + 1 - P / 2], sb: [XS + 10, Y + 7 - P / 2], inv: [XG - 6, Y + P * 16 + 1], my: [XM, Y + 5 - P / 2] };
+  for (let i = 0; i < 16; i++) { at[`ta${i}`] = [XG, Y + P * i]; at[`tb${i}`] = [XG, Y + P * i + 4]; at[`y${i}`] = [XY, Y + P * i + 3]; }
+  placeAt(b, at);
+  const R = XM + 6;
   return define({
     id: 'rv16_mux16', name: '16-bit 2:1 multiplexer (shared inverter)', category: 'routing',
     summary: 'y = s ? b : a on 16-bit buses: per bit ¬(¬(a·¬s) · ¬(b·s)), three NANDs, and one inverter on s for all sixteen (49 NANDs, not 64).',
     ports: [bus('a', 16, 'in'), bus('b', 16, 'in'), { name: 's', width: 1, dir: 'in', side: 'bottom' }, bus('y', 16, 'out')],
     symbol: { kind: 'mux' },
     spec: ([a, b, s]) => [s ? b : a],
-    netlist: laid(b),
+    netlist: () => ({ pins: { a: [0, Y + 1 - P / 2 + 8 * P], b: [0, Y + 7 - P / 2 + 8 * P], s: [0, Y + P * 16 + 2], y: [R, Y + 5 - P / 2 + 8 * P] }, instances: b.instances, nets: b.nets() }),
   });
 })();
 
@@ -232,23 +243,28 @@ export const RV16_ALU16KS = aluOf(16, 'ks', rv16Mux(3, 16), RV16_SHIFT16, 'rv16_
 
 /** 16-bit equality: XOR per bit, then a zero detect. */
 export const EQ16: ComponentDef = (() => {
+  // an XOR a bit every P rows, both splitters and the merger at that pitch: every tap straight across
+  const P = 6, Y = 4, XS = 4, XX = 22, XM = 30, XW = 38;
   const b = new Builder(8, 10, 2);
   b.pins('a', 'b');
-  const sa = b.op(splitter(Array(16).fill(1), 2), ['a']);
-  const sb = b.op(splitter(Array(16).fill(1), 2), ['b']);
-  b.next();
+  const sa = b.op(splitter(Array(16).fill(1), P), ['a']);
+  const sb = b.op(splitter(Array(16).fill(1), P), ['b']);
   const xs = Array.from({ length: 16 }, (_, i) => b.op1(XOR, [`${sa}.o${i}`, `${sb}.o${i}`]));
-  b.next();
-  const m = b.op1(merger(Array(16).fill(1), 2), xs, 'a ⊕ b');
-  b.next();
-  b.wire(`${b.op(WIDE16, [m], 'all equal?')}.zero`, 'eq');
+  const m = b.op1(merger(Array(16).fill(1), P), xs, 'a ⊕ b');
+  const w = b.op(WIDE16, [m], 'all equal?');
+  b.wire(`${w}.zero`, 'eq');
+  const mid = Y + 2 - P / 2 + 8 * P; // the merger's output: half its height down
+  const at: Record<string, [number, number]> = { [sa]: [XS, Y + 1 - P / 2], [sb]: [XS + 10, Y + 3 - P / 2], [m.split('.')[0]]: [XM, Y + 2 - P / 2], [w]: [XW, mid - 3] }; // WIDE16 reads a 3 rows down, gives zero at 4
+  xs.forEach((x, i) => { at[x.split('.')[0]] = [XX, Y + P * i]; });
+  placeAt(b, at);
+  const R = XW + 14;
   return define({
     id: 'rv16_eq16', name: 'Equality (16-bit)', category: 'routing',
     summary: 'eq = (a = b): 16 XORs (a bit differs) and a zero detect over their outputs.',
     ports: [bus('a', 16, 'in'), bus('b', 16, 'in'), bit('eq', 'out')],
     symbol: { kind: 'box', label: 'A = B' },
     spec: ([a, b]) => [a === b ? 1 : 0],
-    netlist: laid(b, { keepOrder: true }),
+    netlist: () => ({ pins: { a: [0, Y + 1 - P / 2 + 8 * P], b: [0, Y + 3 - P / 2 + 8 * P], eq: [R, mid + 1] }, instances: b.instances, nets: b.nets() }),
   });
 })();
 
@@ -321,31 +337,47 @@ export const INC16: ComponentDef = (() => {
 export function cmpWith(adder: ComponentDef, id: string, name: string): ComponentDef {
   const b = new Builder(8, 12, 2);
   b.pins('a', 'b');
+  b.name('a', 'a', true); // a goes to the adder and to its sign tap, past b's column of inverters
   const one = b.op1(TIE1, []);
-  const sb = b.op(splitter(Array(16).fill(1), 2), ['b']);
+  const P = 4; // b's splitter, the inverters and the ¬b merger on one pitch: sixteen straight rows
+  const sb = b.op(splitter(Array(16).fill(1), P), ['b']);
   b.next();
   const nb = Array.from({ length: 16 }, (_, i) => b.op1(NOT, [`${sb}.o${i}`]));
   b.next();
-  const d = b.op(adder, ['a', b.op1(merger(Array(16).fill(1), 2), nb, '¬b'), one], 'a + ¬b + 1');
+  const mnb = b.op1(merger(Array(16).fill(1), P), nb, '¬b');
+  const d = b.op(adder, ['a', mnb, one], 'a + ¬b + 1');
   const sa = b.op(splitter([15, 1], 2), ['a'], 'sign of a');
   const sbs = b.op(splitter([15, 1], 2), ['b'], 'sign of b');
   b.next();
-  const ltu = b.name(b.op1(NOT, [`${d}.cout`], 'no carry'), 'ltu', true);
-  const differ = b.name(b.op1(XOR, [`${sa}.o1`, `${sbs}.o1`], 'signs differ'), 'differ', true);
+  const ltuG = b.op1(NOT, [`${d}.cout`], 'no carry');
+  const ltu = b.name(ltuG, 'ltu', true);
+  const differG = b.op1(XOR, [`${sa}.o1`, `${sbs}.o1`], 'signs differ');
+  const differ = b.name(differG, 'differ'); // a wire: the select is beside it
   b.next();
   // lt = differ ? a15 : ltu, as NANDs (the mux part is not unlocked yet at this level).
-  const t1 = b.op1(NAND, [differ, `${sa}.o1`]), t2 = b.op1(NAND, [b.op1(NOT, [differ]), ltu]);
+  const t1 = b.op1(NAND, [differ, `${sa}.o1`]), nd = b.op1(NOT, [differ]), t2 = b.op1(NAND, [nd, ltu]);
   b.next();
-  b.wire(b.op1(NAND, [t1, t2], 'lt'), 'lt');
+  const ltG = b.op1(NAND, [t1, t2], 'lt');
+  b.wire(ltG, 'lt');
   b.wire(ltu, 'ltu');
-  const R = b.right;
+  // placed by hand: the inverter rows level with b's taps and ¬b's merger, the adder's b on the merger's output and its carry-in on the
+  // constant; the sign logic in a band under the adder, read left to right
+  const nm = (x: string) => x.split('.')[0];
+  const Y = 4, XS = 8, XN = 14, XM = 22, XA = 32, XC = 52, XT = 76, XO = 88;
+  const yA = Y + 8 * P - 4; // the merger's output (half its height down) is the adder's b, 4 rows down the adder
+  const at: Record<string, [number, number]> = { [sb]: [XS, Y], [nm(mnb)]: [XM, Y], [d]: [XA, yA], [nm(one)]: [XA - 5, yA + 5] };
+  nb.forEach((x, i) => { at[nm(x)] = [XN, Y + P * i + P / 2 - 1]; });
+  const yS = yA + 14; // the sign taps, the XOR, then the select
+  Object.assign(at, { [sa]: [XA, yS], [sbs]: [XA, yS + 8], [nm(differG)]: [XC, yS + 1], [nm(ltuG)]: [XC, yA + 4], [nm(nd)]: [XT - 8, yS + 9], [nm(t1)]: [XT, yS], [nm(t2)]: [XT, yS + 8], [nm(ltG)]: [XO, yS + 4] });
+  placeAt(b, at);
+  const R = XO + 10;
   return define({
     id, name, category: 'arithmetic',
     summary: 'From a + ¬b + 1: unsigned a < b ⇔ no carry out. Signed: if the signs differ, a < b ⇔ a is negative; if they agree the difference cannot overflow and the unsigned answer holds. Only the carry is read, so ¬b needs inverters, not XORs.' + (adder === ADD16 ? '' : ' A Kogge–Stone subtraction.'),
     ports: [bus('a', 16, 'in'), bus('b', 16, 'in'), bit('lt', 'out'), bit('ltu', 'out')],
     symbol: { kind: 'box', label: 'A < B' },
     spec: ([a, b]) => [((a << 16) >> 16) < ((b << 16) >> 16) ? 1 : 0, a < b ? 1 : 0],
-    netlist: () => ({ pins: { a: [0, 6], b: [0, 10], lt: [R, 6], ltu: [R, 10] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { a: [0, Y + 8 * P + 6], b: [0, Y + 8 * P], lt: [R, yS + 6], ltu: [R, yA + 5] }, instances: b.instances, nets: b.nets() }),
   });
 }
 

@@ -14,6 +14,7 @@ import { CHAIN3, dijkstra, DistVec, floodAll, floodMessages, INFINITY, NET7, typ
 import { adjImage, buildTrie, lpmLinear, PORT_CPU, routeMatches, walkTrie, type NextHop, type Route } from '../net/trie';
 import { h, keepFocus, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
+import { groupNum } from '../sim/numfmt';
 
 const hex2 = (v: number) => v.toString(16).padStart(2, '0');
 const hex4 = (v: number) => v.toString(16).padStart(4, '0');
@@ -130,7 +131,7 @@ export function engineWidget(): Widget {
   const paint = () => {
     const reads = len + 1, e = engineCycles(n, reads), w = wireCycles(n);
     chips.set(0, String(e), `engine cycles: ${n} in, 1, ${reads} reads, 1, ${n} out`);
-    chips.set(1, w.toLocaleString('en-US').replace(/,/g, '\u202f'), `cycles on one link, at ${BYTE_CYCLES} a byte`);
+    chips.set(1, groupNum(w), `cycles on one link, at ${BYTE_CYCLES} a byte`);
     chips.set(2, String(portsServed(n, reads)), 'ports one engine keeps up with');
     chips.set(3, `${(100 * e / w).toFixed(1)} %`, 'of one port\'s time the engine is busy');
   };

@@ -22,10 +22,11 @@ import '../styles/line.css';
 import '../styles/fourier.css';
 import '../styles/signals.css';
 import '../styles/dsp.css';
+import { groupNum } from '../sim/numfmt';
 
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const khz = (hz: number) => `${hz >= 0 ? '+' : '−'}${Math.abs(hz / 1000)} kHz`;
-const sp = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const sp = (x: number) => groupNum(Math.round(x));
 const dbOf = (x: number) => 20 * Math.log10(Math.max(x, 1e-9));
 let theBand: Band | undefined;
 /** One second of the band, made on first use and kept: every explorer reads the same samples. */

@@ -11,9 +11,10 @@ import { dtmfCoefs, dtmfScene, DTMF_N, goertzelWidget, leakStats, leakageWidget,
 import { DSP_LEVEL } from './dspladder';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
 const nf = (v: number, d = 1) => v.toFixed(d).replace('-', '−');
-const n0 = (v: number) => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const n0 = (v: number) => groupNum(Math.round(v));
 const F = (k: WinKind) => windowFigures(k, 128);
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 

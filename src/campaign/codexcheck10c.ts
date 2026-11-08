@@ -131,6 +131,54 @@ export const CHECK10C: Record<string, Quiz[]> = {
       why: ['', 'The keystream cancels, but AES still hides the key.', 'The keystream depends only on key and counter; same counters, same keystream.', 'If every counter value repeats, every block is exposed, not just the first.'],
     },
   ],
+  enigma: [
+    {
+      question: 'Why can the Enigma never light the lamp of the key that was pressed?',
+      options: ['The pressed key has cut off its own lamp, and the reflector forces the same: a position is a set of swaps with no fixed point', 'The plugboard swaps every letter with another one before the wheels see it', 'The wheels step before the contact closes, so the letter has always moved on', 'The ring settings are chosen each day so that no letter maps to itself'],
+      answer: 0,
+      explain: 'Each key is a changeover switch whose rest contact goes to its own lamp; pressed, it goes to the battery. The reflector is 13 swaps, and a swap seen through any permutation is a swap, so one position is its own inverse and moves every letter.',
+      why: ['', 'Only the cables actually plugged swap; most letters pass straight through, and the property holds with none.', 'Stepping changes which permutation is used, not whether it has a fixed point; every position has none.', 'A ring setting moves a notch and does not touch the property, which holds for every key.'],
+    },
+    {
+      question: 'Why does the same key at the far end turn the ciphertext back into the plaintext?',
+      options: ['At every position the permutation is its own inverse, and both machines step the same way', 'The receiving machine runs the wheels backwards through the same letters', 'The ciphertext is enciphered a second time with the plugboard removed', 'The lamp board is wired to the keys in reverse order'],
+      answer: 0,
+      explain: 'One position is P⁻¹ W⁻¹ U W P with the reflector U in the middle; U is 13 swaps, so the whole is a set of swaps. Pressing the cipher letter at the same position gives the plain letter back, and the same start gives the same positions.',
+      why: ['', 'Nothing runs backwards at the far end: the current already goes out and back through the wheels once.', 'The plugboard stays in the path; the property comes from the reflector, not from removing a part.', 'The lamps are not reordered; the symmetry is in the permutation, not in the keyboard.'],
+    },
+  ],
+  bombe: [
+    {
+      question: 'What does a contradiction, for every guess, at one wheel position show the Bombe?',
+      options: ['That position is wrong for every plugboard, not just the one guessed', 'Only that the first guessed plug is wrong, so the next position is tried', 'That the crib is wrong and the whole run must start again', 'That the plugboard has more than ten cables'],
+      answer: 0,
+      explain: 'Each edge of the menu turns a plug guess into another through the scrambler, whose wiring is known at that position. If every guess ends with a letter plugged to more than one letter, no plugboard is consistent there, whichever way the other cables go.',
+      why: ['', 'One failed guess removes only that guess; the position is out when every guess fails, and then it holds for all plugboards.', 'The crib is assumed; a wrong crib shows as no position surviving, not as contradictions at one.', 'The number of cables is not tested; the search never counts plugboards.'],
+    },
+    {
+      question: 'Welchman\'s diagonal board added what fact to the menu\'s reasoning?',
+      options: ['A plug is a swap: if a goes to u then u goes to a', 'The plugboard always has exactly ten cables', 'The middle wheel steps only when the right wheel is at its notch', 'Every message begins with the same crib'],
+      answer: 0,
+      explain: 'With the swap property each plug hypothesis gives two facts, so the consequences of a guess reach more of the menu and contradictions come sooner.',
+      why: ['', 'The cable count is not used; the argument never counts plugboards.', 'Stepping is part of the scrambler at each position, not of the diagonal board.', 'A crib is a guess for each message; the board does not depend on it.'],
+    },
+  ],
+  kerckhoffs: [
+    {
+      question: 'According to Kerckhoffs\'s principle, what should a cipher rely on keeping secret?',
+      options: ['Only the key; the design may be public', 'The wiring of the machine and the procedure for using it', 'The key and the algorithm together, for extra safety', 'The test vectors, so that nobody can check an implementation'],
+      answer: 0,
+      explain: 'The Enigma\'s wheels and procedure were kept secret and were captured or worked out. AES publishes its design and its test vectors, and anyone can check an implementation against them.',
+      why: ['', 'That is what the Enigma\'s users tried; it was captured or worked out.', 'A secret design adds nothing that lasts, since every machine and operator holds it.', 'Public test vectors are the point: they let anyone check an implementation.'],
+    },
+    {
+      question: 'On the chapter\'s gate-level Enigma a different key means a different circuit. What does a modern cipher do instead?',
+      options: ['Keeps the key in a register, apart from the public logic', 'Wires each key into its own set of gates, as the Enigma did', 'Hides the logic, so that the key need not be long', 'Stores the key in the S-box, next to the design'],
+      answer: 0,
+      explain: 'With the key a register, the design can be published and one circuit serves every key. The M4\'s wheel-and-ring settings alone, 4.15 × 10¹¹, fall in under 7 minutes at one key a clock; AES-128 has 2¹²⁸ keys.',
+      why: ['', 'That is the problem: a new key would mean a new circuit.', 'Hiding the logic is what the principle says not to rely on.', 'The S-box is a fixed table of the public design; the key is separate data.'],
+    },
+  ],
   keyexchange: [
     {
       question: 'In a Diffie–Hellman exchange, what travels over the network?',

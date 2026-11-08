@@ -189,7 +189,9 @@ export class WalkMode {
   /** The partial circuit becomes the level's chip (one undo step); the walkthrough ends. */
   takeOver(): void {
     const ed = this.ed;
-    const sc = ed.ws.chips[this.scratchId] ?? this.docAt(this.k);
+    // Use this answer is the whole answer, even while the last step's question still holds its parts back (the scratch
+    // chip shows the step before then: on a one-step walk, an empty circuit)
+    const sc = this.last && this.mode === 'watch' ? this.docAt(this.k) : ed.ws.chips[this.scratchId] ?? this.docAt(this.k);
     this.added = []; // the level's chip places them now
     this.restoreLevel();
     ed.editWs((ws) => {

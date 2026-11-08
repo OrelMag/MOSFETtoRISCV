@@ -75,6 +75,7 @@ export const EDGE16: ComponentDef = (() => {
 
 export const TILE16: ComponentDef = (() => {
   const b = new Builder(10, 12, 4);
+  b.maxH = 120; // a column past this wraps into the next: the walk's gates fit a screen, not one tall strip
   const ins = ['tx0', 'tx1', 'ty0', 'ty1', 'go', 'ok', 'clk', 'rst'];
   b.pins(...ins);
   const busy = b.add(RV16_DFF, 'busy', 'busyF');
