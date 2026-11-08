@@ -4,6 +4,7 @@ import { deckReader } from '../cards/reader';
 import { assemble } from '../riscv/asm';
 import { PROGRAMS } from '../riscv/programs';
 import { cardEditorWidget, censusWidget, deckWidget, loomWidget, readerPanel, sampleDeck } from '../widgets/cards';
+import { loom3d } from '../widgets/loom3d';
 import { withModel } from '../widgets/modelhost';
 import { press3d } from '../widgets/press3d';
 import { bench, type Chapter } from './types';
@@ -97,7 +98,7 @@ export const chCards: Chapter = {
         real: `<p>Babbage planned the Analytical Engine with two decks in the Jacquard style: operation cards to say what to do, and variable cards to say where the numbers were.
           That is a program and an address field on cards, a century before either word had its meaning. Jacquard looms stayed in use well into the twentieth century.</p>`,
       },
-      widget: () => loomWidget(),
+      widget: () => withModel(loomWidget(), loom3d()),
       challenge: {
         kind: 'quiz', question: 'A loom has 8 hooks and a chain of 6 cards. After how many picks does the cloth repeat down its length?',
         options: ['6', '8', '48', '14'], answer: 0,

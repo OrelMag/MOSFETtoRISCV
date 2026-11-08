@@ -34,9 +34,16 @@ const btn = (label: string, onclick: () => void, title?: string) => h('button', 
 // stops it. The harness ties each hook to every HOOKS-th thread across the cloth, so the pattern repeats across
 // the width; the chain of cards loops, so it repeats down the length. One card, one pick (one pass of the weft).
 
-const HOOKS = 8, WARP = 32, PICKS = 32;
+export const HOOKS = 8, WARP = 32, PICKS = 32;
 
-const LOOM_PRESETS: Record<string, { name: string; cards: string[] }> = {
+/** Pick number `pick` (1-based) on a chain of `cards`: the card read, the hooks (0-based) its holes leave on the griffe, and the
+ *  warp threads those hooks lift (the harness ties hook j to every HOOKS-th thread: j, j + 8, …). The loom widget and the 3D model share it. */
+export function loomPick(cards: readonly (readonly boolean[])[], pick: number): { card: number; hooks: number[]; threads: boolean[] } {
+  const card = (pick - 1) % cards.length, hooks = cards[card].flatMap((on, j) => (on ? [j] : []));
+  return { card, hooks, threads: Array.from({ length: WARP }, (_, w) => cards[card][w % HOOKS]) };
+}
+
+export const LOOM_PRESETS: Record<string, { name: string; cards: string[] }> = {
   diamond: { name: 'Diamond', cards: ['00011000', '00100100', '01000010', '10000001', '10000001', '01000010', '00100100', '00011000'] },
   twill: { name: 'Twill', cards: ['11000000', '01100000', '00110000', '00011000', '00001100', '00000110', '00000011', '10000001'] },
   plain: { name: 'Plain weave', cards: ['10101010', '01010101'] },
@@ -73,10 +80,10 @@ export function loomWidget(): Widget {
       });
     });
     for (let p = 0; p < Math.min(pick, PICKS); p++) {
-      const row = cards[p % cards.length];
+      const row = loomPick(cards, p + 1).threads;
       for (let w = 0; w < WARP; w++) {
         // pick 0 at the bottom: cloth grows up from the breast beam
-        cloth.append(s('rect', { x: clothX + w * CELL, y: (PICKS - 1 - p) * CELL, width: CELL - 0.6, height: CELL - 0.6, class: row[w % HOOKS] ? 'loom-up' : 'loom-dn' }));
+        cloth.append(s('rect', { x: clothX + w * CELL, y: (PICKS - 1 - p) * CELL, width: CELL - 0.6, height: CELL - 0.6, class: row[w] ? 'loom-up' : 'loom-dn' }));
       }
     }
     const lifted = at >= 0 ? cards[at].map((on, c) => (on ? c + 1 : 0)).filter(Boolean) : [];
