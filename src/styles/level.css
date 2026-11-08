@@ -168,7 +168,7 @@
   .sandbox.sb-levelmode > .sb-center { height: auto; flex: 1 1 0; min-height: 200px; }
   .sandbox.sb-levelmode > .sb-palette { max-height: 38dvh; }
   /* a core level's pins fill a screen: the I/O bar scrolls inside its own band, the canvas keeps a usable height */
-  .sb-levelmode .sb-mid { min-height: 230px; }
+  .sb-levelmode .sb-mid { min-height: max(230px, 40dvh); }
   /* the strip and the run row take no more than they must: the goal line is in the Task tab and the level badge is the
      bottom bar's (the canvas gains ~50 px of a 844 px phone) */
   .sb-levelmode .sb-chal-sum.sb-chal-goal, .sb-levelmode .sb-controls .sb-level { display: none; }
@@ -302,3 +302,6 @@
 .lv-without { font-size: 12.5px; margin: 6px 0 0; }
 .lv-k { font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 .lv-play.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+
+/* touch: the strip's tabs (Why / Task / Tips / Codex) at 40 px */
+@media (pointer: coarse) { .lv-tabs button { min-height: 40px; } }
