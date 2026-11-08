@@ -1,0 +1,22 @@
+/* ---------- The quartz oscillator (widgets/quartz3dview.ts): materials ---------- */
+.m3d {
+  --qz-quartz: light-dark(#a9c8e0, #9fc4de);
+  --qz-gold: light-dark(#c99a1e, #e6b83a);
+  --qz-ceramic: light-dark(#d9d2c4, #b9b2a6);
+  --qz-glue: light-dark(#7d8794, #a7b0bd);
+  --qz-lid: light-dark(#8b95a3, #b4bccb);
+  --qz-pcb: light-dark(#2d6b4f, #1f4d3a);
+  --qz-copper: light-dark(#c98d4a, #e0a35e);
+  --qz-body: light-dark(#a8712f, #c48a45);
+  --qz-chip: light-dark(#2b2f3a, #14161c);
+  --qz-led: light-dark(#1f9a63, #3ecb8a);
+  --qz-led-off: light-dark(#5f6e66, #38453f);
+  --qz-plus: light-dark(#1f9a63, #3ecb8a);
+  --qz-minus: light-dark(#d9534f, #ff7b72);
+}
+.qz-seg { display: inline-flex; }
+.qz-seg .btn.sm { border-radius: 0; }
+.qz-seg .btn.sm:first-child { border-radius: 6px 0 0 6px; }
+.qz-seg .btn.sm:last-child { border-radius: 0 6px 6px 0; }
+.qz-seg .btn.sm[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.qz-sl output { width: 78px; }
