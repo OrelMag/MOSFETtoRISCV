@@ -57,9 +57,11 @@ export interface Drive {
   /** Speaker with smoothing: the cone's position at the start of each period (periodic steady state). */
   edge: readonly number[];
   rate: number;
+  /** The voice's pitch the real stroke is worked out at, Hz. */
+  f0: number;
 }
 
-export function makeDrive(codes: readonly number[], mode: Mode, smooth: boolean, rate = VOICE_RATE): Drive {
+export function makeDrive(codes: readonly number[], mode: Mode, smooth: boolean, rate = VOICE_RATE, f0 = DEFAULT_F0): Drive {
   const n = codes.length, peak = Math.max(1, ...codes.map(Math.abs));
   const steps = codes.map((c, i) => (codes[(i + 1) % n] - c) / peak), top = Math.max(1e-9, ...steps.map(Math.abs));
   const adc = steps.map((v) => v / top);
@@ -71,7 +73,7 @@ export function makeDrive(codes: readonly number[], mode: Mode, smooth: boolean,
       edge[(i + 1) % n] = hold + (edge[i] - hold) * a;
     }
   }
-  return { mode, smooth, codes, n, peak, adc, edge, rate };
+  return { mode, smooth, codes, n, peak, adc, edge, rate, f0 };
 }
 
 /** The ZOH: the code the DAC holds at time t (in sample periods). */
@@ -114,11 +116,50 @@ export const I_FULL = XMAX_MM / 1000 / (BL * (CMS_MM_N / 1000));
 export const coneMm = (cone: number): number => cone * XMAX_MM;
 /** The coil current the held code asks for, in amperes (speaker; static). */
 export const currentA = (drive: number): number => drive * I_FULL;
-/** The EMF in volts, e = Bl · v: the cone's velocity across period k, as the samples (scaled to Xmax) give it (mic). */
-export function emfVolts(d: Drive, k: number): number {
-  const a = d.codes[k] / d.peak, b = d.codes[(k + 1) % d.n] / d.peak;
-  return BL * (((b - a) * XMAX_MM) / 1000) * d.rate;
+
+// The microphone's real stroke. Model (stated, simple): a plane wave of peak pressure p acts on the diaphragm, force F = p·Sd,
+// and the moving system answers with its mechanical impedance Z = ωMms − 1/(ωCms) (damping left out), at the voice's pitch f0.
+// Above Fs = 35.7 Hz it is mass-controlled: v = F / Z, x = v / ω. (Beranek, Acoustics; Kinsler et al., Fundamentals of
+// Acoustics: the driven mass-spring oscillator. From memory, not looked up.) The window's peak sample is that excursion.
+/** 94 dB SPL re 20 µPa is 1 Pa rms; taken here as the peak pressure at the cone. */
+export const PRESSURE_PA = 1;
+export const SPL_DB = 94;
+/** Datasheet: effective area (m²), moving mass (kg), resonance (Hz). */
+export const SD_M2 = 124.7e-4, MMS_KG = 0.0179, FS_HZ = 35.7;
+/** Compliance, the datasheet's 1.12 mm/N (Fs and Mms alone give 1.11: the mass includes the air load). */
+export const CMS_M_N = CMS_MM_N / 1000;
+/** A voice's pitch when none is measured, Hz. */
+export const DEFAULT_F0 = 130;
+/** The window's pitch, Hz: the strongest autocorrelation lag between 20 and 146 samples (50 … 400 Hz at 8 kHz) of the block from `start`. */
+export function pitchHz(x: readonly number[], start: number, rate = VOICE_RATE): number {
+  const len = Math.min(400, x.length - start), seg = x.slice(start, start + len);
+  let best = 0, bestR = -Infinity;
+  for (let lag = 20; lag <= 146 && lag < len; lag++) {
+    let r = 0;
+    for (let i = 0; i + lag < len; i++) r += seg[i] * seg[i + lag];
+    r /= len - lag;
+    if (r > bestR) { bestR = r; best = lag; }
+  }
+  return best ? rate / best : DEFAULT_F0;
 }
+/** Peak velocity (m/s) and excursion (m) of the cone for pressure p at frequency f. */
+export function realMotion(f0: number, p = PRESSURE_PA): { v: number; x: number } {
+  const w = 2 * Math.PI * f0, z = Math.abs(w * MMS_KG - 1 / (w * CMS_M_N)), v = (p * SD_M2) / z;
+  return { v, x: v / w };
+}
+/** The real excursion of the window's peak sample, in µm. */
+export const realPeakUm = (d: Drive): number => realMotion(d.f0).x * 1e6;
+/** The drawn stroke (Xmax × the drawing's factor) over the real one: how much the picture exaggerates. */
+export const drawnRatio = (d: Drive): number => (XMAX_MM * DRAW_K * 1000) / realPeakUm(d);
+/** The cone's real displacement in µm at the pose's `cone` (−1 … 1 of the window's peak). */
+export const realUm = (d: Drive, cone: number): number => cone * realPeakUm(d);
+/** The cone's real velocity in mm/s across period k, from the samples joined by straight lines (mic). */
+export function velocityMmS(d: Drive, k: number): number {
+  const a = d.codes[k] / d.peak, b = d.codes[(k + 1) % d.n] / d.peak;
+  return (b - a) * realMotion(d.f0).x * d.rate * 1000;
+}
+/** The EMF in volts, e = Bl · v, for that real velocity (mic). */
+export const emfVolts = (d: Drive, k: number): number => BL * (velocityMmS(d, k) / 1000);
 
 // ---------------------------------------------------------------- geometry
 

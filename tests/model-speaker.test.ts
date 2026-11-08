@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { quatRotate } from '../src/gl/math';
 import { wavSamples } from './dsp/wav';
 import {
-  BL, DRAW_K, DUST_Y, GEOM, I_FULL, VOICE_RATE, WINDOW, XMAX_MM, coneMm, dustY, emfVolts, heldCode, loudestWindow, makeDrive, poseAt, slab,
+  BL, CMS_M_N, DRAW_K, FS_HZ, MMS_KG, PRESSURE_PA, SD_M2, drawnRatio, pitchHz, realMotion, realPeakUm, realUm, velocityMmS, DUST_Y, GEOM, I_FULL, VOICE_RATE, WINDOW, XMAX_MM, coneMm, dustY, emfVolts, heldCode, loudestWindow, makeDrive, poseAt, slab,
   speakerAnchors, speakerParts, staircase, type SpeakerPalette,
 } from '../src/widgets/speaker3dparts';
 
@@ -74,17 +74,43 @@ describe('the speaker model against the chapter', () => {
   });
 
   it('the microphone: EMF is Bl times the cone velocity, and the ADC holds one value a period', () => {
-    const d = makeDrive(codes, 'mic', false);
+    const f0 = pitchHz(w.x, loudestWindow(w.x)), d = makeDrive(codes, 'mic', false, VOICE_RATE, f0);
     const top = Math.max(...codes.map((c, i) => Math.abs(codes[(i + 1) % WINDOW] - c)));
     for (const n of [3, 30, 62]) {
-      const v = ((poseAt(d, n + 1 - 1e-9).cone - poseAt(d, n).cone) * XMAX_MM / 1000) * VOICE_RATE;
-      expect(emfVolts(d, n)).toBeCloseTo(BL * v, 6);
+      // The real velocity: the joined samples' slope times the real peak excursion of 1 Pa on the RS180-8 at f0.
+      const v = (poseAt(d, n + 1 - 1e-9).cone - poseAt(d, n).cone) * realMotion(f0).x * VOICE_RATE;
+      expect(velocityMmS(d, n)).toBeCloseTo(v * 1000, 5);
+      expect(emfVolts(d, n)).toBeCloseTo(BL * v, 9);
+      expect(emfVolts(d, n) * 1000).toBeCloseTo(BL * velocityMmS(d, n), 9); // mV = T·m × mm/s
       expect(poseAt(d, n + 0.2).code).toBe(poseAt(d, n + 0.8).code);
       expect(d.adc[n]).toBeCloseTo((codes[(n + 1) % WINDOW] - codes[n]) / top, 9);
     }
     // The cone itself is continuous: the samples joined.
     expect(poseAt(d, 10).cone).toBeCloseTo(codes[10] / d.peak, 12);
     expect(poseAt(d, 10.5).cone).toBeCloseTo((codes[10] + codes[11]) / 2 / d.peak, 12);
+  });
+
+  it('the real stroke: 1 Pa on Sd, mass-controlled above Fs, and the drawn / real ratio is consistent', () => {
+    expect(CMS_M_N * 1000).toBeCloseTo(1.12, 9);
+    expect(1 / ((2 * Math.PI * FS_HZ) ** 2 * MMS_KG) * 1000).toBeCloseTo(1.12, 1); // Fs and Mms agree to 1 %
+    const f0 = pitchHz(w.x, loudestWindow(w.x));
+    expect(f0).toBeGreaterThan(50);
+    expect(f0).toBeLessThan(400);
+    const { v, x } = realMotion(f0), wr = 2 * Math.PI * f0;
+    expect(v).toBeCloseTo((PRESSURE_PA * SD_M2) / (wr * MMS_KG - 1 / (wr * CMS_M_N)), 12);
+    expect(x).toBeCloseTo(v / wr, 12);
+    expect(f0).toBeGreaterThan(FS_HZ);
+    expect(x * 1e6).toBeGreaterThan(0.2); // micrometres, not millimetres
+    expect(x * 1e6).toBeLessThan(10);
+    const d = makeDrive(codes, 'mic', false, VOICE_RATE, f0);
+    expect(realPeakUm(d)).toBeCloseTo(x * 1e6, 9);
+    expect(realUm(d, 1)).toBeCloseTo(realPeakUm(d), 12);
+    // The drawn stroke is Xmax × DRAW_K; the ratio the readout prints is drawn over real.
+    expect(drawnRatio(d) * realPeakUm(d)).toBeCloseTo(XMAX_MM * DRAW_K * 1000, 6);
+    // The window's peak sample moves the cone by the real peak, and the drawn dust cap by Xmax × DRAW_K.
+    expect(Math.abs(realUm(d, poseAt(d, codes.findIndex((c) => Math.abs(c) === d.peak)).cone))).toBeCloseTo(realPeakUm(d), 9);
+    // The EMF of the voice stays in the millivolts a cone-and-coil of this size makes.
+    for (let k = 0; k < WINDOW; k++) expect(Math.abs(emfVolts(d, k))).toBeLessThan(0.1);
   });
 
   it('the datasheet figures', () => {
