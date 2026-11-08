@@ -99,7 +99,7 @@ export function ccdWidget(): Widget {
     svg.replaceChildren(...kids);
     const transfers = Math.floor(k / stepsPerPixel(n));
     chips.set(0, String(transfers), 'pixel transfers so far');
-    chips.set(1, `${(afterTransfers(transfers, cte) * 100).toFixed(3)} %`, `of each packet still in it, at CTE ${(cte * 100).toFixed(4)} %`);
+    chips.set(1, `${(afterTransfers(transfers, cte) * 100).toFixed(3)} %`, `of each packet still in it, at CTE ${num(cte * 100, 4)} %`);
     chips.set(2, `${(ccdRetained(2047, 2047) * 100).toFixed(1)} %`, 'CCD42-40: the far corner after 4096 transfers');
     chips.set(3, `${num(ccdReadTime(CCD42_40.readHz[1]), 1)} s`, `a 2048 × 2048 frame through one output at 3 MHz (${num(ccdReadTime(CCD42_40.readHz[0]) / 60, 1)} min at 20 kHz)`);
   };
@@ -185,7 +185,7 @@ const pixelPanel: ScenePanel = (stage: Stage): Widget => {
   };
   const paint = () => {
     const pd = lvl('PD'), fd = lvl('FD');
-    read.replaceChildren(h('span', null, 'PD ', h('b', null, pd === null ? '–' : `${Math.round(pd * 100)} %`)), h('span', null, 'FD ', h('b', null, fd === null ? '–' : `${Math.round(fd * 100)} %`)), h('span', null, 'column ', h('b', null, String(stage.value('col') ?? '–'))));
+    read.replaceChildren(h('span', null, 'PD ', h('b', null, pd === null || Number.isNaN(pd) ? 'X' : `${Math.round(pd * 100)} %`)), h('span', null, 'FD ', h('b', null, fd === null || Number.isNaN(fd) ? 'X' : `${Math.round(fd * 100)} %`)), h('span', null, 'column ', h('b', null, String(stage.value('col') ?? '–'))));
     out.replaceChildren(...log.slice(-6).map((t) => h('li', null, t)));
   };
   const set = (k: Record<string, number>) => { for (const [p, v] of Object.entries(k)) stage.sim!.setInput(p, v); stage.sim!.settle(); stage.refresh(); };
@@ -370,7 +370,7 @@ export function colourWidget(): Widget {
 // 7. Noise: what limits a pixel
 
 export function noiseWidget(): Widget {
-  let photons = 1000, temp = 293, expo = 1;
+  let photons = 1000, temp = 173, expo = 1;
   const plot = plotOf({ W: 460, H: 240, x: [0, 6], y: [-1, 3], yTicks: [-1, 0, 1, 2, 3], xLabel: 'photons on the pixel (log₁₀)', yLabel: 'SNR (log₁₀)', aria: 'Signal-to-noise ratio against light for the IMX183 and the CCD42-40', xFmt: (v) => `10${'⁰¹²³⁴⁵⁶'[Math.round(v)] ?? ''}`, yFmt: (v) => `${10 ** v >= 1 ? g(10 ** v) : num(10 ** v, 1)}` });
   const cv = h('canvas', { width: 48, height: 48, class: 'sn-canvas pix', role: 'img', 'aria-label': 'A patch of pixels at the chosen light, with shot and read noise' }) as HTMLCanvasElement;
   const chips = mkChips(4), note = h('p', { class: 'sub mos-note' });
@@ -407,7 +407,7 @@ export function noiseWidget(): Widget {
   const ph = slider('Light', 0, 6, 0.1, 3, (v) => `${g(10 ** v)} photons`, (v) => { photons = 10 ** v; paint(); });
   const tt = slider('CCD at', 173, 303, 5, temp, (v) => `${v - 273} °C`, (v) => { temp = v; paint(); });
   const ex = slider('Exposure', 0, 3, 1, 0, (v) => `${10 ** v} s`, (v) => { expo = 10 ** v; paint(); });
-  note.textContent = 'Solid: the IMX183 (QE 79 %, 3.3 e⁻ read noise, 14 837 e⁻ full well, FLIR\'s EMVA measurement). Dashed: the CCD42-40 (80 %, 3 e⁻, 150 000 e⁻) with its dark charge at the temperature and exposure set. Orange: the limit no sensor beats, √photons. In the dark the read noise rules; in bright light the photons\' own randomness does; at the top the well is full and the curve stops.';
+  note.textContent = `Solid: the IMX183 (QE 79 %, ${IMX183.readNoise} e⁻ read noise, ${g(IMX183.fullWell)} e⁻ full well, FLIR's EMVA measurement). Dashed: the CCD42-40 (80 %, ${CCD42_40.readNoise} e⁻, ${g(CCD42_40.fullWell)} e⁻) with its dark charge at the temperature and exposure set, cooled to −100 °C as it is used (warm it to 20 °C and the dark charge swamps it).` + ' Orange: the limit no sensor beats, √photons. In the dark the read noise rules; in bright light the photons\' own randomness does; at the top the well is full and the curve stops.';
   paint();
   return { el: h('div', { class: 'widget mos sn' }, h('div', { class: 'panel sn-two' }, plot.el, cv), h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, ph.el, tt.el, ex.el), note), chips.el) };
 }

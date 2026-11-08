@@ -20,7 +20,7 @@ describe('README.md quotes the code', () => {
 
   it('the level counts are the book\'s', () => {
     const c = readmeCounts();
-    expect(c['dsp.count']).toBe(15);
+    expect(c['dsp.count']).toBe(16);
     expect(c['dsp.levels']).toBeGreaterThan(0);
     expect(c['comm.last'] + 1).toBe(c['dsp.first']);
     expect(c.journey).toBe(c['dsp.last']);
