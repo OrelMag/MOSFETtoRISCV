@@ -70,7 +70,7 @@ export function startApp(root: HTMLElement): void {
   installQuickNav();
   const searchBtn = h('button', { class: 'btn ghost icon-only', title: `Search chapters, components, levels, codex and actions (${QUICK_KEY}, /)`, 'aria-label': 'Search', 'aria-keyshortcuts': 'Control+K /', onclick: () => openQuickNav() }, icon('search', 18));
   // The first Tab stop: straight to the circuit where a page has one (S does the same), else to the page.
-  const skip = h('button', { class: 'skip-link' }, 'Skip to the circuit');
+  const skip = h('button', { class: 'skip-link' }, 'Skip to the content');
   skip.addEventListener('focus', () => { skip.textContent = document.querySelector('#view section.stage, #view svg.ed-svg') ? 'Skip to the circuit' : 'Skip to the content'; });
   skip.addEventListener('click', () => {
     // the sandbox and a level have no stage section: the editor's canvas is the circuit (a Tab stop of its own)
@@ -80,9 +80,18 @@ export function startApp(root: HTMLElement): void {
     else view.focus();
   });
 
-  const radix = h('div', { class: 'seg', role: 'group', title: 'How buses show their value', 'aria-label': 'How buses show their value' });
+  // one radio group: one tab stop, the arrows move the choice (three plain buttons were three stops with no checked state)
+  const radix = h('div', { class: 'seg', role: 'radiogroup', title: 'How buses show their value', 'aria-label': 'How buses show their value' });
   const radixes: [Radix, string, string][] = [['hex', 'HEX', 'hexadecimal'], ['bin', 'BIN', 'binary'], ['dec', 'DEC', 'decimal']];
-  for (const [r, label, long] of radixes) radix.append(h('button', { 'data-r': r, title: `Bus values in ${long}`, onclick: () => settings.set('radix', r) }, label));
+  for (const [r, label, long] of radixes) radix.append(h('button', { 'data-r': r, role: 'radio', title: `Bus values in ${long}`, onclick: () => settings.set('radix', r) }, label));
+  radix.addEventListener('keydown', (e) => {
+    const k = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!k) return;
+    e.preventDefault();
+    const i = radixes.findIndex(([r]) => r === settings.radix), next = radixes[(i + k + radixes.length) % radixes.length][0];
+    settings.set('radix', next);
+    radix.querySelector<HTMLButtonElement>(`[data-r="${next}"]`)?.focus();
+  });
 
   // A snail, not a play triangle: on a phone the label is hidden and ▶ read as "Run".
   const animate = h('button', { class: 'btn sm toggle slow-btn', title: 'Slow motion: one gate delay at a time, each change travelling along its wires', 'aria-label': 'Slow motion' },
@@ -286,7 +295,12 @@ export function startApp(root: HTMLElement): void {
     sizeVal.textContent = `${settings.textSize}%`;
     sizeMinus.disabled = settings.textSize <= TEXT_SIZES[0];
     sizePlus.disabled = settings.textSize >= TEXT_SIZES[TEXT_SIZES.length - 1];
-    for (const b of radix.querySelectorAll<HTMLButtonElement>('button')) b.classList.toggle('on', b.dataset.r === settings.radix);
+    for (const b of radix.querySelectorAll<HTMLButtonElement>('button')) {
+      const on = b.dataset.r === settings.radix;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-checked', String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
     animate.classList.toggle('on', settings.animate);
     animate.setAttribute('aria-pressed', String(settings.animate));
     themeBtn.replaceChildren(icon(settings.theme === 'light' ? 'sun' : settings.theme === 'dark' ? 'moon' : 'auto', 18));
