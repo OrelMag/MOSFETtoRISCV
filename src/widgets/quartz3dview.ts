@@ -24,7 +24,7 @@ export function quartzView(): Widget {
   let view: 'crystal' | 'loop' = 'crystal', n = 0, running = false, lid = false, temp = 25, rateExp = 6;
   const panel = h('div', { class: 'panel' });
   const CRYSTAL = { target: [-2, 3, 0] as [number, number, number], yaw: 0.2, pitch: 1.15, dist: 36 };
-  const LOOP = { target: [0, 0, -2] as [number, number, number], yaw: 0.2, pitch: 0.8, dist: 76 };
+  const LOOP = { target: [1, 0, -2] as [number, number, number], yaw: 0.2, pitch: 0.85, dist: 78 };
   const stage = modelStage(panel, {
     aria: 'A 32 768 hertz quartz tuning fork in its ceramic package, and the Pierce oscillator and fifteen-stage divider around it',
     camera: CRYSTAL,

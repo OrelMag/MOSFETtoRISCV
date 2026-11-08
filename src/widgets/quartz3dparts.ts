@@ -120,7 +120,7 @@ export function crystalAnchors(p: ForkPose): Anchor[] {
     { text: 'gold electrode', p: [f.x0 + f.L * 0.4, f.y0 + f.t + 0.06, -(f.gap / 2 + f.w / 2)], side: 'b', n: up },
     { text: 'quartz base', p: [f.x0 - f.base * 0.5, f.y0 + f.t, -2.0], side: 't', n: up },
     { text: 'glue and gold pad', p: [-13, 2.3, 3.4], side: 'r', n: up },
-    { text: 'ceramic package 3.2 × 1.5 mm', p: [12, 6, 7.5], side: 'r', n: front },
+    { text: 'ceramic package 3.2 × 1.5 mm', p: [-3, 7, 7.5], side: 't', n: front },
   ];
 }
 
@@ -166,13 +166,13 @@ export function boardAnchors(): Anchor[] {
   const up: Vec3 = [0, 1, 0];
   return [
     { text: 'quartz fork 32 768 Hz', p: [0, 0.9, -7], side: 't', n: up },
-    { text: 'inverter', p: [0, 1.1, -12.5], side: 't', n: up },
+    { text: 'inverter', p: [0, 1.1, -12.5], side: 't', n: up, minor: true },
     { text: 'Rf 10 MΩ', p: [0, 1.2, -3], side: 'b', n: up },
-    { text: 'C1 15 pF', p: [-10, 1, -5], side: 'l', n: up },
-    { text: 'C2 15 pF', p: [10, 1, -5], side: 'r', n: up },
+    { text: 'C1 15 pF', p: [-10, 1, -5], side: 'l', n: up, minor: true },
+    { text: 'C2 15 pF', p: [10, 1, -5], side: 'r', n: up, minor: true },
     { text: '÷2: 16 384 Hz', p: [chainX(0), 1, CHAIN_Z + 1.3], side: 'b', n: up },
     { text: 'stage 8: 128 Hz', p: [chainX(7), 1, CHAIN_Z + 1.3], side: 'b', n: up, minor: true },
-    { text: 'stage 15: 1 Hz', p: [chainX(STAGES - 1), 2, CHAIN_Z + 1.3], side: 'b', n: up },
+    { text: '1 Hz output', p: [chainX(STAGES - 1), 2, CHAIN_Z + 1.3], side: 'b', n: up },
   ];
 }
 
