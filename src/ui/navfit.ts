@@ -22,7 +22,8 @@ export function installNavFit(bar: HTMLElement, nav: HTMLElement): void {
     apply(bar, navStage((s) => { apply(bar, s); return nav.scrollWidth > nav.clientWidth + 1; }));
     busy = false;
   };
-  fit();
+  // no fit() now: a ResizeObserver reports once on observe, after layout and before paint, so the first fit costs no
+  // forced layout inside the page's startup task (~27 ms of a cold load)
   // the width, a link appearing (My notes), the return pill, the fonts arriving: each changes the room
   new ResizeObserver(fit).observe(document.documentElement);
   new ResizeObserver(fit).observe(nav);
