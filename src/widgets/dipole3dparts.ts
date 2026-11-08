@@ -144,7 +144,7 @@ export function dipoleAnchors(run: DipoleRun, showPattern: boolean): Anchor[] {
   const a: Anchor[] = [
     { text: 'tip: I = 0', p: [0, HALF_LEN + 0.4, 0], side: 't', n: up },
     { text: 'tip: I = 0', p: [0, -HALF_LEN - 0.4, 0], side: 'b', n: [0, -1, 0], minor: true },
-    { text: 'feed gap: I maximal', p: [0.45, 0, 0.45], side: 'r', n: front },
+    { text: 'feed gap: largest swing', p: [0.45, 0, 0.45], side: 'r', n: front },
     { text: 'source (leads, no balun)', p: [-5.5, 0, 0], side: 'l', n: front, minor: true },
     { text: 'I(z) ∝ cos kz', p: [0, HALF_LEN * 0.8, CURVE_A * 0.45], side: 'r', n: front, minor: true },
   ];
