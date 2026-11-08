@@ -47,6 +47,10 @@ const rootOf = (stage: HTMLElement): HTMLElement => {
   return panel && widget?.contains(panel) ? panel : widget ?? stage;
 };
 
+/** A saved image's name: the model's name up to its first colon, comma or bracket (an aria text runs on), as a slug. */
+export const fileName = (name: string): string =>
+  `${name.split(/[:,(;]| in 3D/)[0].trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48).replace(/-$/, '') || 'model'}.png`;
+
 const fsApi = () => typeof document.documentElement.requestFullscreen === 'function' && document.fullscreenEnabled !== false;
 
 export function modelFrame(o: ModelFrameOptions): ModelFrame {
@@ -151,7 +155,7 @@ export function modelFrame(o: ModelFrameOptions): ModelFrame {
       });
     }
     g.globalAlpha = 1;
-    out.toBlob((blob) => { if (blob) saveFile(`${o.name.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase() || 'model'}.png`, blob); }, 'image/png');
+    out.toBlob((blob) => { if (blob) saveFile(fileName(o.name), blob); }, 'image/png');
   });
 
   // ---- turn by itself: a slow orbit until any input on the canvas, off under reduced motion ----
@@ -176,7 +180,8 @@ export function modelFrame(o: ModelFrameOptions): ModelFrame {
     t0 = performance.now();
     raf = requestAnimationFrame(tick);
   });
-  const touched = (e: Event) => { if (raf && e.target instanceof HTMLCanvasElement) stop(); };
+  // any press, wheel or key in the stage stops it, except on these buttons (Enter on Turn would stop it, then start it)
+  const touched = (e: Event) => { if (raf && !(e.target instanceof Node && el.contains(e.target))) stop(); };
   for (const ev of ['pointerdown', 'wheel', 'keydown']) o.stage.addEventListener(ev, touched, { passive: true });
   const motion = () => { spin.hidden = reducedMotion(); };
   motion();
