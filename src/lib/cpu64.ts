@@ -385,7 +385,8 @@ function buildXlen(IM: ComponentDef, X: Xlen, m: boolean, dmemK: number, imemPor
   alignY('dm', DM, dmX, 'addr', P('alu', 'y')[1]);
   alignY('ld', LD, dmX + g(DM).w + 12, 'rdata', P('dm', 'rdata')[1]);
   alignY('res', M4, P('ld', 'value')[0] + 12, 'd1', P('ld', 'value')[1]);
-  place('plus4', P4, [34, Y - 12]);
+  // PC + 4 under the PC's way to the ROM, fed by the PC's trunk
+  place('plus4', P4, [P('pc', 'q')[0] + 6, Y + 8]);
   alignY('target', ADD, rfR + 18, 'a', Y + 30);
   place('gndT', TIE0, [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 5]);
   // jalr's target: the ALU's sum with bit 0 cleared, just past the ALU on its result's way to the memory
@@ -418,14 +419,15 @@ function buildXlen(IM: ComponentDef, X: Xlen, m: boolean, dmemK: number, imemPor
     // fetch
     { name: 'PCNext', ends: ['pcmux.y', 'pc.d'] },
     ...(m ? [] : [{ name: 'en', ends: ['one.y', 'pc.en'] }]),
-    { name: 'PC', ends: ['pc.q', wide ? 'pclo.in' : 'imem.addr', 'plus4.a', 'srcA.b', 'target.a', 'pcOut'], trunk: pcq[0] + 3, tags: ['srcA.b', 'target.a', 'pcOut'] },
+    { name: 'PC', ends: ['pc.q', wide ? 'pclo.in' : 'imem.addr', 'plus4.a', 'srcA.b', 'target.a', 'pcOut'], trunk: pcq[0] + 3, tags: ['srcA.b', 'target.a'] },
     ...(wide ? [{ name: 'PC[31:0]', ends: ['pclo.o0', 'imem.addr'] }] : []),
     { name: 'PCPlus4', ends: ['plus4.y', 'pcmux.d0', 'pcmux.d3', 'res.d2'], tags: true },
     { name: 'PCTarget', ends: ['target.s', 'pcmux.d1'], tags: true },
     { name: 'JalrTarget', ends: ['clr0.out', 'pcmux.d2'], tags: true },
-    { name: 'PCSrc', ends: ['npc.pcSrc', 'pcmux.s'], tags: true },
+    // the loop that makes it a CPU: the next-PC choice back over the top into the PC's multiplexer
+    { name: 'PCSrc', ends: ['npc.pcSrc', 'pcmux.s'], via: { 'pcmux.s': [[P('npc', 'pcSrc')[0] + 3, P('npc', 'pcSrc')[1]], [P('npc', 'pcSrc')[0] + 3, -3], [-2, -3], [-2, P('pcmux', 's')[1] + 3], [P('pcmux', 's')[0], P('pcmux', 's')[1] + 3]] } },
     // decode
-    { name: 'Instr', ends: ['imem.data', 'si.in', 'imm.instr', 'instrOut'], trunk: 52, tags: ['instrOut'] },
+    { name: 'Instr', ends: ['imem.data', 'si.in', 'imm.instr', 'instrOut'], trunk: 52 },
     { name: 'op', ends: ['si.o0', wide ? 'xd.op' : 'ctl.op', ...(m && !wide ? ['xd.op'] : [])], tags: wide ? undefined : true },
     ...(wide ? [{ name: 'opInt', ends: ['xd.opInt', 'ctl.op'] }, { name: 'isW', ends: ['xd.isW', 'wu.w'], tags: true as const }] : []),
     { name: 'rd', ends: ['si.o1', 'rf.wa'] },
@@ -448,7 +450,7 @@ function buildXlen(IM: ComponentDef, X: Xlen, m: boolean, dmemK: number, imemPor
     ] : []),
     {
       name: 'ALUResult', ends: ['alu.y', 'dm.addr', 'clr0.in', 'adr.in', 'aluOut', ...(MD ? ['mres.a'] : WU ? ['wu.r'] : ['res.d0'])],
-      tags: ['aluOut', ...(MD ? [] : WU ? ['wu.r'] : ['res.d0'])],
+      tags: MD ? undefined : WU ? ['wu.r'] : ['res.d0'],
       // down to the ALU / M choice past the M unit's right edge, never through it
       ...(MD ? { via: { 'mres.a': [[aluR + 8, P('alu', 'y')[1]], [aluR + 8, P('mres', 'a')[1]]] as [number, number][] } } : {}),
     },
@@ -485,14 +487,18 @@ function buildXlen(IM: ComponentDef, X: Xlen, m: boolean, dmemK: number, imemPor
       { name: 'isM', ends: ['xd.isM', 'md.isM', 'mres.s', ...(WU ? ['wu.isM'] : [])], tags: true as const },
       { name: 'noTrap', ends: ['yes.y', 'md.noTrap'] },
       { name: 'stall', ends: ['md.stall', 'nstall.a'] },
-      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwg.b', 'retire'], tags: ['pc.en', 'rwg.b', 'retire'] },
+      { name: 'retire', ends: ['nstall.y', 'pc.en', 'rwg.b', 'retire'], tags: ['pc.en', 'rwg.b'] },
       { name: 'RegWriteQ', ends: ['rwg.y', 'rf.we'] },
     ] : []),
     ...(wide && !m ? [{ name: 'gndM', ends: ['gndM.y', 'wu.isM'] }] : []),
   ];
   const resY = P('res', 'y');
   const ox = resY[0] + 8;
-  const pins: Record<string, [number, number]> = { clk: [0, bottom], pcOut: [ox, bottom - 8], instrOut: [ox, bottom - 5], aluOut: [ox, bottom - 2], ...(m ? { retire: [ox, bottom + 1] } : {}) };
+  // each output beside what drives it: the PC above its register, the instruction past the ROM, the ALU's result past the ALU, retire past the stall
+  const pins: Record<string, [number, number]> = {
+    clk: [0, bottom], pcOut: [pcq[0] + 6, Y - 6], instrOut: [P('imem', 'data')[0] + 2, Y - 6], aluOut: [aluR + 6, Y - 4],
+    ...(m ? { retire: [P('nstall', 'y')[0] + 6, P('nstall', 'y')[1]] } : {}),
+  };
   const extra: PortDef[] = [];
   if (imemPort) {
     // the program comes from outside (the sandbox's ROM part): its address leaves, the instruction arrives
