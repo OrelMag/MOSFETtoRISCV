@@ -775,19 +775,19 @@ html[data-widget-step] .slow-btn { display: none; }
   .ctl-inner > * { flex: none; }
   .ctl-inner .kind { display: none; }
   /* the pins too: wrapped within the stage's width (a strip scrolled sideways hid its inputs and outputs behind a thin
-     scrollbar), each input and each output's lamp + value kept whole; a scene with very many (ch 32's rasterizer) scrolls
-     down inside a box of at most 38 % of the screen instead of filling the stage */
-  .ctl-pins { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; flex: 1 1 100%; min-width: 0; max-height: 38dvh; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; padding-block: 2px; }
+     scrollbar), each input and each output's lamp + value kept whole. The whole band (pins and run row) is capped and
+     scrolls down inside itself (a scene with very many pins, ch 32's rasterizer), so the canvas and the inputs share one
+     screen: hugPhone sizes the canvas from what the band leaves. */
+  .ctl-pins { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; flex: 1 1 100%; min-width: 0; padding-block: 2px; }
   .ctl-pins > * { flex: none; max-width: 100%; }
   .ctl-pins .out-strip { flex-wrap: wrap; gap: 4px 10px; }
-  /* a cue that the box scrolls: an edge shadow while pins continue past it (the local covers hide it at the ends) */
-  .ctl-pins {
+  .stage > .controls { max-height: max(120px, 26dvh); overflow-x: hidden; overflow-y: auto; scrollbar-width: thin;
     background:
       linear-gradient(var(--surface) 30%, transparent) top / 100% 24px no-repeat local,
       linear-gradient(to top, var(--surface) 30%, transparent) bottom / 100% 24px no-repeat local,
       linear-gradient(color-mix(in srgb, var(--text) 28%, transparent), transparent) top / 100% 18px no-repeat scroll,
-      linear-gradient(to top, color-mix(in srgb, var(--text) 28%, transparent), transparent) bottom / 100% 18px no-repeat scroll;
-  }
+      linear-gradient(to top, color-mix(in srgb, var(--text) 28%, transparent), transparent) bottom / 100% 18px no-repeat scroll,
+      var(--surface); }
   .controls { row-gap: 6px; }
 }
 /* No box of their own on a wide screen: the pins wrap in the bar's own flow. */

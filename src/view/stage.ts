@@ -2548,11 +2548,11 @@ export class Stage {
     const full = this.el.clientHeight, canvasH = this.canvas.clientHeight;
     if (need < canvasH - 2) this.el.style.height = `${Math.round(full - canvasH + need)}px`;
     else if (need > canvasH + 2) {
-      // A tall circuit (an ALU, a register file) fitted by its height uses a sliver of the width: give the canvas the
-      // screen under the top bar (a canvas taller than that would trap the page's scroll: the drawing takes the touches),
-      // no more than the circuit needs; the controls follow below it.
+      // A tall circuit (an ALU, a register file) fitted by its height uses a sliver of the width: give the canvas what the
+      // screen under the top bar leaves after the stage bar and the (capped) controls band, so the circuit and its inputs
+      // share one screen, no more than the circuit needs.
       const bar = this.el.querySelector<HTMLElement>(':scope > .stage-bar')?.offsetHeight ?? 57;
-      const room = window.innerHeight - PHONE_TOPBAR_PX - bar - 8;
+      const room = window.innerHeight - PHONE_TOPBAR_PX - bar - this.controls.offsetHeight - 8;
       if (room > canvasH) this.el.style.height = `${Math.round(full - canvasH + Math.min(room, need))}px`;
     }
   }
