@@ -33,14 +33,14 @@ describe('the pipelined CPU drawn with wires', () => {
     });
   }
 
-  it('keeps the hazard unit flipped and quiet control, and leaves the variants as they were', () => {
+  it('keeps the hazard unit flipped and quiet control; the variants are drawn the same way (tests/redrawclear-cpuvariants.test.ts)', () => {
     const nl = netlistOf(pipelinedCpu(words))!;
     expect(nl.instances.find((i) => i.name === 'hz')!.flip).toBe(true);
     expect(nl.nets.find((n) => n.name === 'forwardA')!.quiet).toBe(true);
     for (const v of [{ adder: 'ks' as const }, { balanced: true, adder: 'ks' as const }, { predictor: true, balanced: true, adder: 'ks' as const }, { dcache: 'wt' as const }, { m: true }]) {
       const n = netlistOf(pipelinedCpu(words, v))!;
-      expect(n.instances.find((i) => i.name === 'hz')!.flip).toBeUndefined();
-      expect(n.nets.filter((x) => x.tags === true || (x.tags?.length ?? 0) > 0).length).toBeGreaterThan(40);
+      expect(n.instances.find((i) => i.name === 'hz')!.flip).toBe(true);
+      expect(n.nets.filter((x) => x.tags === true || (x.tags?.length ?? 0) > 0).length).toBeLessThan(0.45 * n.nets.length);
     }
   });
 });
