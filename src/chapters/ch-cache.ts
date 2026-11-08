@@ -10,6 +10,8 @@ import { logicDepth, stats } from '../sim/stats';
 import { findNode } from '../sim/flatten';
 import type { Stage } from '../view/stage';
 import { cacheExplorer, dramWidget, hierarchyWidget } from '../widgets/cache';
+import { hierarchy3d } from '../widgets/hierarchy3d';
+import { withModel } from '../widgets/modelhost';
 import { cpuScene } from '../widgets/cpupanel';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -388,7 +390,7 @@ export const chCache: Chapter = {
         a bigger decoder, and a cheaper cell is a slower one (SRAM, then DRAM, then flash). A level pays off only if it catches most of the requests that reach it: if 95 % of
         accesses hit in the first level, the processor sees that level's speed for 95 % of its accesses and the next level's speed, diluted, for the rest. Locality is what makes the hit
         rate high; without it the hierarchy would be pure overhead, and a program that jumps randomly through a large array shows exactly that.</p>`,
-      widget: hierarchyWidget,
+      widget: () => withModel(hierarchyWidget(), hierarchy3d()),
       more: {
         derive: `<p>Expected cost of an access is the sum over levels of (probability that the access gets that far) × (that level's time). With L1 hitting ${pct(1 - 0.05)}, a
           miss going to L2 which hits ${pct(1 - 0.2)} of the time, and DRAM behind it: ${amat([[4, 0.05], [12, 0.2]], 250).toFixed(1)} cycles on average, against 250 without caches. Halving the

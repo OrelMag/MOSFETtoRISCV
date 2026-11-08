@@ -6,6 +6,7 @@ import { TRACE_PROGRAMS } from '../riscv/cprograms';
 import { ISS } from '../riscv/iss';
 import { CacheModel, type AccessResult, type CacheConfig } from '../sim/cachemodel';
 import { h } from '../ui/dom';
+import { LEVELS, cyclesOf } from './hierarchy3ddata';
 import type { Widget } from '../view/stage';
 
 const traces = new Map<string, { addr: number; write: boolean }[]>();
@@ -182,14 +183,7 @@ export function dramWidget(): Widget {
 
 /** The memory hierarchy at a glance: typical capacities and latencies of a desktop core. */
 export function hierarchyWidget(): Widget {
-  const rows: [string, string, number, string][] = [
-    ['Registers', '~1 KB', 0.25, 'flip-flops, in the datapath'],
-    ['L1 cache', '32–64 KB', 1, '6T SRAM, per core, split I / D'],
-    ['L2 cache', '0.5–2 MB', 4, 'SRAM, per core'],
-    ['L3 cache', '8–64 MB', 12, 'SRAM, shared by all cores'],
-    ['DRAM', '8–128 GB', 80, '1T1C, off chip, refreshed'],
-    ['NVMe SSD', '1–8 TB', 80_000, 'flash, through the OS'],
-  ];
+  const rows = LEVELS.map((l): [string, string, number, string] => [l.name, l.cap, l.ns, l.built]);
   const max = Math.log10(rows[rows.length - 1][2] / 0.1);
   return {
     el: h('div', { class: 'widget' }, h('div', { class: 'panel' },
@@ -198,7 +192,7 @@ export function hierarchyWidget(): Widget {
       h('table', { class: 'cmp' },
         h('thead', null, h('tr', null, h('th', null, 'level'), h('th', null, 'capacity'), h('th', null, 'latency'), h('th', null, 'cycles'), h('th', null, ''), h('th', null, 'built from'))),
         h('tbody', null, rows.map(([n, c, ns, b]) => h('tr', null,
-          h('td', null, n), h('td', null, c), h('td', { class: 'num' }, ns >= 1000 ? `${ns / 1000} µs` : `${ns} ns`), h('td', { class: 'num' }, String(Math.max(1, Math.round(ns * 4)))),
+          h('td', null, n), h('td', null, c), h('td', { class: 'num' }, ns >= 1000 ? `${ns / 1000} µs` : `${ns} ns`), h('td', { class: 'num' }, String(cyclesOf(ns))),
           h('td', { class: 'barcell', style: 'width:28%' }, h('span', { class: 'cbar k', style: `width:${(Math.log10(ns / 0.1) / max) * 100}%` })),
           h('td', { class: 'sub' }, b))))),
       h('p', { class: 'sub', style: 'margin-top:10px' }, 'If a register access took one second, an L1 hit would take 4 s, a DRAM access 5 minutes, and an SSD read 4 days. Caches work because programs reuse data (temporal locality) and touch neighbours (spatial locality).'))),
