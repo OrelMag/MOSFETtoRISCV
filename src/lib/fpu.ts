@@ -703,6 +703,9 @@ export function faddCancel(f: FpFormat): ComponentDef {
 /** Hand-drawn blocks' places: each starts from a column layout; FP_LAY[block][part or 'pin:name'] moves a part or a pin by hand. */
 export const FP_LAY: Record<string, Record<string, [number, number]>> = {
   // the class flags come in a staircase from below; ∞ and NaN replace the rounded result on top, NV alone the flags below
+  fnf_select: { sbig: [10, 0], ssmall: [10, 8], sg: [20, 4], negsel: [16, 16], cancel: [16, 22], rdnk: [23, 15], rdn: [30, 12], zsign: [40, 6],
+    msel: [34, 28], esel: [34, 36], 'pin:signB': [0, 2], 'pin:sa': [0, 4], 'pin:ge': [0, 7], 'pin:rm': [0, 15], 'pin:neg': [0, 17], 'pin:eq': [0, 23],
+    'pin:fm': [0, 30], 'pin:nm': [0, 32], 'pin:near': [0, 35], 'pin:ne': [0, 38], 'pin:fe': [0, 40], 'pin:sign': [50, 9], 'pin:m': [50, 31], 'pin:e': [50, 39] },
   fmul_special: { rs: [36, 5], km: [26, 1], ke: [33, 3], iv: [40, 1], inf: [20, 12], iz: [20, 17], zi: [20, 22], nv: [28, 18], nan: [36, 21], y1: [44, -2], kn: [49, 2],
     yo: [56, -1], sp: [52, 16], fw: [52, 23], z3: [48, 25], z2: [48, 27], z1: [48, 29], z0: [48, 31], fl: [56, 26],
     'pin:ry': [0, 0], 'pin:ia': [0, 13], 'pin:ib': [0, 15], 'pin:zb': [0, 20], 'pin:za': [0, 25], 'pin:snb': [0, 28], 'pin:sna': [0, 30], 'pin:nb': [0, 32], 'pin:na': [0, 34],
@@ -712,13 +715,13 @@ export const FP_LAY: Record<string, Record<string, [number, number]>> = {
     'pin:ry': [0, 0], 'pin:signB': [0, 5], 'pin:sa': [0, 7], 'pin:ia': [0, 13], 'pin:ib': [0, 15], 'pin:effSub': [0, 22], 'pin:snb': [0, 26], 'pin:sna': [0, 28],
     'pin:nb': [0, 30], 'pin:na': [0, 32], 'pin:rflags': [0, 36], 'pin:y': [66, 2], 'pin:flags': [66, 29] },
 };
-type Part = Omit<InstanceDef, 'at'>;
+export type Part = Omit<InstanceDef, 'at'>;
 /** Corner points for the nets reaching the given ends (end → points from the driver), set on a block's hand-drawn nets. */
-const withVias = (nets: NetDef[], vias: Record<string, [number, number][]>): NetDef[] =>
+export const withVias = (nets: NetDef[], vias: Record<string, [number, number][]>): NetDef[] =>
   nets.map((n) => { const v = Object.entries(vias).filter(([e]) => n.ends.includes(e)); return v.length ? { ...n, via: { ...n.via, ...Object.fromEntries(v) } } : n; });
 
 /** A block drawn in columns (parts top to bottom in each), inputs down the left, outputs down the right; FP_LAY overrides. */
-function columns(key: string, cols: (Part | false)[][], ins: string[], outs: string[], nets: NetDef[]): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
+export function fpColumns(key: string, cols: (Part | false)[][], ins: string[], outs: string[], nets: NetDef[]): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
   const over = FP_LAY[key] ?? {};
   const instances: InstanceDef[] = [];
   let x = 8;
@@ -792,7 +795,7 @@ export function faddSpecial(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef
         const infv = (ia ? sa : sB) * 2 ** (N - 1) + (2 ** E - 1) * 2 ** M;
         return [nan ? nanBits : inf ? infv : ry, nan || inf ? nv * FLAG.NV : rfl];
       },
-      netlist: () => columns(key, cols, ['ry', 'signB', 'sa', 'ia', 'ib', 'effSub', 'sna', 'snb', 'na', 'nb', 'rflags'], ['y', 'flags'], nets),
+      netlist: () => fpColumns(key, cols, ['ry', 'signB', 'sa', 'ia', 'ib', 'effSub', 'sna', 'snb', 'na', 'nb', 'rflags'], ['y', 'flags'], nets),
     });
   });
 }
@@ -923,7 +926,7 @@ export function fmulSpecial(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef
         return [nan ? nanBits : inf ? s * 2 ** (N - 1) + (2 ** E - 1) * 2 ** M : ry, nan || inf ? nv * FLAG.NV : rfl];
       },
       // the staircases drawn by hand: each class flag turns up where it crosses nothing
-      netlist: () => columns(key, cols, ['ry', 'ia', 'ib', 'zb', 'za', 'snb', 'sna', 'nb', 'na', 'rflags'], ['y', 'flags'], withVias(nets, {
+      netlist: () => fpColumns(key, cols, ['ry', 'ia', 'ib', 'zb', 'za', 'snb', 'sna', 'nb', 'na', 'rflags'], ['y', 'flags'], withVias(nets, {
         'rs.in': [[24, 0], [24, 7]], 'nv.i2': [[25, 24], [25, 21]], 'nv.i1': [[26, 28], [26, 23]], 'nv.i0': [[27, 30], [27, 25]], 'nan.i1': [[34, 32], [34, 24]],
         'nan.i0': [[35, 34], [35, 26]], 'fl.a': [[54, 38], [54, 30]],
       })),

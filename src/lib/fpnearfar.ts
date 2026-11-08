@@ -21,7 +21,7 @@ import { define, merger, ones, splitter } from './define';
 import { addSubFast, fanout, koggeStone } from './fastadd';
 import { AND, MUX2, NOT, OR, XOR } from './gates';
 import { Builder } from './builder';
-import { ROUND_DECIDE, faddSpecial, fpUnpack, incFast, lzc, shiftLeft, shiftRightSticky } from './fpu';
+import { ROUND_DECIDE, faddSpecial, fpColumns, fpUnpack, type Part, withVias, incFast, lzc, shiftLeft, shiftRightSticky } from './fpu';
 import { layered } from './layered';
 import { TIE0, TIE1 } from './transistors';
 import { bitwise } from './wide';
@@ -482,19 +482,26 @@ function nfSelect(f: FpFormat): ComponentDef {
   const { E, M } = f;
   return memo(`fnf_select${E}_${M}`, () => {
     const XE = xeOf(f), w = M + 5;
-    const b = new Builder(10, 8, 4);
-    b.pins('nm', 'ne', 'neg', 'eq', 'fm', 'fe', 'near', 'ge', 'sa', 'signB', 'rm');
-    const sB = b.op1(MUX2, ['signB', 'sa', 'ge'], 'larger exponent\'s sign', 'sbig');
-    const sS = b.op1(MUX2, ['sa', 'signB', 'ge'], 'the other sign', 'ssmall');
-    b.next();
-    const negSel = b.op1(AND, ['near', 'neg'], 'near, X < Y', 'negsel');
-    const zero = b.op1(AND, ['near', 'eq'], 'x − x', 'cancel');
-    b.next();
-    const sg1 = b.op1(MUX2, [sB, sS, negSel], 'sign of the bigger', 'sg');
-    const sign = b.op1(MUX2, [sg1, b.op1(equal(3), ['rm', b.op1(K(3, RM.RDN), [], undefined, 'rdnk')], 'RDN?', 'rdn'), zero], 'x − x = +0 (−0 in RDN)', 'zsign');
-    b.wire(sign, 'sign');
-    b.wire(b.op1(busMux2(w), ['fm', 'nm', 'near'], 'select the path', 'msel'), 'm');
-    b.wire(b.op1(busMux2(XE), ['fe', 'ne', 'near'], 'and its exponent', 'esel'), 'e');
+    const key = 'fnf_select';
+    // the signs on top (ge between the two muxes, one mirrored), x − x and RDN in the middle, the path's results below (near between them,
+    // rising to the two ANDs)
+    const cols: Part[][] = [
+      [{ name: 'sbig', def: MUX2, label: 'larger exponent\'s sign' }, { name: 'ssmall', def: MUX2, flip: true, rot: 2, label: 'the other sign' },
+        { name: 'negsel', def: AND, label: 'near, X < Y' }, { name: 'cancel', def: AND, label: 'x − x' }],
+      [{ name: 'sg', def: MUX2, label: 'sign of the bigger' }, { name: 'rdnk', def: K(3, RM.RDN) }],
+      [{ name: 'rdn', def: equal(3), label: 'RDN?' }, { name: 'msel', def: busMux2(w), label: 'select the path' }, { name: 'esel', def: busMux2(XE), flip: true, rot: 2, label: 'and its exponent' }],
+      [{ name: 'zsign', def: MUX2, label: 'x − x = +0 (−0 in RDN)' }],
+    ];
+    const nets: NetDef[] = withVias([
+      { name: 'signB', ends: ['signB', 'sbig.a', 'ssmall.b'] }, { name: 'sa', ends: ['sa', 'sbig.b', 'ssmall.a'] }, { name: 'ge', ends: ['ge', 'sbig.s', 'ssmall.s'] },
+      { name: 'larger\'s sign', ends: ['sbig.y', 'sg.a'] }, { name: 'other sign', ends: ['ssmall.y', 'sg.b'] },
+      { name: 'neg', ends: ['neg', 'negsel.a'] }, { name: 'eq', ends: ['eq', 'cancel.a'] }, { name: 'near', ends: ['near', 'negsel.b', 'cancel.b', 'msel.s', 'esel.s'] },
+      { name: 'X < Y', ends: ['negsel.y', 'sg.s'] }, { name: 'x − x', ends: ['cancel.y', 'zsign.s'] },
+      { name: 'rm', ends: ['rm', 'rdn.a'] }, { name: 'RDN', ends: ['rdnk.y', 'rdn.b'] }, { name: 'rdn', ends: ['rdn.eq', 'zsign.b'] },
+      { name: 'sign1', ends: ['sg.y', 'zsign.a'] }, { name: 'sign', ends: ['zsign.y', 'sign'] },
+      { name: 'fm', ends: ['fm', 'msel.a'] }, { name: 'nm', ends: ['nm', 'msel.b'] }, { name: 'fe', ends: ['fe', 'esel.a'] }, { name: 'ne', ends: ['ne', 'esel.b'] },
+      { name: 'm', ends: ['msel.y', 'm'] }, { name: 'e', ends: ['esel.y', 'e'] },
+    ], { 'zsign.s': [[42, 24]] });
     const ports = [bus('nm', w, 'in'), bus('ne', XE, 'in'), bit('neg', 'in'), bit('eq', 'in'), bus('fm', w, 'in'), bus('fe', XE, 'in'), bit('near', 'in'), bit('ge', 'in'),
       bit('sa', 'in'), bit('signB', 'in'), bus('rm', 3, 'in'), bit('sign', 'out'), bus('e', XE, 'out'), bus('m', w, 'out')];
     return define({
@@ -506,7 +513,7 @@ function nfSelect(f: FpFormat): ComponentDef {
         const sign = near && eq ? (rm === RM.RDN ? 1 : 0) : near && neg ? sS : sB;
         return [sign, near ? ne : fe, near ? nm : fm];
       },
-      netlist: () => layered(ports, b, { gap: 8 }),
+      netlist: () => fpColumns(key, cols, ['signB', 'sa', 'ge', 'rm', 'neg', 'eq', 'fm', 'nm', 'near', 'ne', 'fe'], ['sign', 'm', 'e'], nets),
     });
   });
 }
