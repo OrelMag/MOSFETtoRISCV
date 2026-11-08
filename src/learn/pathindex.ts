@@ -50,7 +50,7 @@ export const PATH_MINUTES: Record<string, number[]> = {
   "message": [5,5,5,5,5,5,5],
   "telegraph": [4,5,6,5,5,5,3],
   "exchange": [5,7,6,3,6,5,5,6],
-  "wire": [5,5,6,6,6,5,6,6,3],
+  "wire": [5,5,6,6,6,5,7,6,3],
   "clocks": [5,5,5,6,7,5,5,5,6],
   "uart": [6,5,5,7,5,6,7,6],
   "spi": [6,7,6,6,7,6,7,6,5],
