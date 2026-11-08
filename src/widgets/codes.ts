@@ -12,6 +12,7 @@ import { convEncoder, rsEncoder, viterbi } from '../lib';
 import { h, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { fitText, slider } from './mosparts';
+import { groupNum } from '../sim/numfmt';
 
 const btn = (label: string, title: string, f: () => void, cls = 'btn sm'): HTMLButtonElement => {
   const b = h('button', { type: 'button', class: cls, title }, label) as HTMLButtonElement;
@@ -90,7 +91,7 @@ export function berWidget(keys: string[] = CURVES.map((c) => c.key)): Widget {
       // a dot with no errors is hollow and sits at 1 / bits: the rate is below it, not on it
       tally.forEach((t, i) => { if (t.bits) { circles[i].setAttribute('cy', String(Y(Math.max(t.errors, 1) / t.bits))); circles[i].classList.toggle('zero', t.errors === 0); } });
       const done = jobs.every((_, i) => finished(i));
-      runNote.textContent = `The real decoder, at ${at.toFixed(1)} dB, three-bit levels for soft, each run to ${BER_MIN_ERRORS} errors or ${BER_MAX_BITS.toLocaleString('en-US')} bits: ` + jobs.map((j, i) => `${j.name} ${tally[i].errors} error${tally[i].errors === 1 ? '' : 's'} in ${tally[i].bits.toLocaleString('en-US')} bits${tally[i].errors ? ` (${sci(tally[i].errors / tally[i].bits)})` : ' (hollow dot: below 1 in that many)'}`).join(', ') + (done ? '.' : ' …');
+      runNote.textContent = `The real decoder, at ${at.toFixed(1)} dB, three-bit levels for soft, each run to ${BER_MIN_ERRORS} errors or ${groupNum(BER_MAX_BITS)} bits: ` + jobs.map((j, i) => `${j.name} ${tally[i].errors} error${tally[i].errors === 1 ? '' : 's'} in ${groupNum(tally[i].bits)} bits${tally[i].errors ? ` (${sci(tally[i].errors / tally[i].bits)})` : ' (hollow dot: below 1 in that many)'}`).join(', ') + (done ? '.' : ' …');
       if (!done) timer = window.setTimeout(tick, 0);
     };
     tick();
@@ -355,7 +356,7 @@ export function interleaveWidget(): Widget {
     grid.replaceChildren(...Array.from({ length: Math.min(D, 12) }, (_, w) => h('div', { class: `cd-il-row${r.errs[w] > 1 ? ' bad' : r.errs[w] === 1 ? ' fixed' : ''}` }, h('span', { class: 'cd-il-lab' }, `word ${w}`),
       ...Array.from({ length: n }, (_, i) => { const c = i * D + w, hit = c >= start && c < start + b; return h('span', { class: `cd-il-b${hit ? ' hit' : ''}` }); }),
       h('span', { class: 'cd-il-n' }, r.errs[w] ? String(r.errs[w]) : ''))));
-    chips.replaceChildren(stat('worst word sees', `${worst} (⌈${b}/${D}⌉ = ${worstPerWord(b, D)})`), stat('words lost', `${r.failed} of ${r.total}`), stat('buffer each end', `${(D * n).toLocaleString('en-US')} bits`), stat('added delay', `${(D * n).toLocaleString('en-US')} bit times`));
+    chips.replaceChildren(stat('worst word sees', `${worst} (⌈${b}/${D}⌉ = ${worstPerWord(b, D)})`), stat('words lost', `${r.failed} of ${r.total}`), stat('buffer each end', `${groupNum((D * n))} bits`), stat('added delay', `${groupNum((D * n))} bit times`));
     const v = burstVerdict(D, b, r);
     verdict.className = `err-verdict ${v.cls}`;
     verdict.textContent = v.text;

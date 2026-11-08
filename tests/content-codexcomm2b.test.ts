@@ -14,6 +14,7 @@ import { apertureM2, bpskAwgn, bpskMrc, bpskRayleigh, coherenceMHz, coherenceTim
 import { crossingM, harmonic, reuseSweep, SCHED_SEED, SCHED_SLOTS, schedule, sirClosedDb, zfMeanSnr } from '../src/phys/cellular';
 import { BUDGET_DEFAULT as D, WALL_DB } from '../src/widgets/radio';
 import { hiddenCompare, HIDDEN_LEN_US, mimoCurves } from '../src/widgets/wifi';
+import { groupNum } from '../src/sim/numfmt';
 
 const IDS = CODEX_B.map((e) => e.id);
 const strip = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ');
@@ -33,7 +34,7 @@ const says = (ch: string, step: number, s: string) => {
   expect(flat(strip([st.body, ...Object.values(st.more ?? {})].map(String).join(' '))), `${ch} ${step}: ${s}`).toContain(flat(s));
 };
 const nf = (x: number, d = 1) => x.toFixed(d);
-const n0 = (x: number) => Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 /** Radio's solver: the SNR in dB at which a BER falls to a target. */
 function solveDb(f: (x: number) => number, target: number): number {
   let lo = -5, hi = 60;
@@ -113,7 +114,7 @@ describe('the group B codex entries', () => {
 
   it('coherent: the taps of six thousand kilometres and the eight photodiodes', () => {
     const B2 = beta2Of(dispersionD(1550), 1550);
-    expect(n0(cdTaps(B2, 6000, 32))).toBe('3 439');
+    expect(n0(cdTaps(B2, 6000, 32))).toBe('3439');
     quotes('coherent', '3 439 taps', '6000 km', '32 GBd', '64 GS/s', 'Q(√SNR)', 'eight');
     says('glass', 6, `${n0(cdTaps(B2, 6000, 32))} taps at 64 GS/s`);
     says('glass', 6, 'Q(√SNR)');

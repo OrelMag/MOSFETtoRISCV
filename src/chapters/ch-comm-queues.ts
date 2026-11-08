@@ -3,12 +3,12 @@
 
 import { cubicK, md1Wait, mm1Quantile, mm1Wait, renoUtilization, renoWindow, type SimResult } from '../comm/queues';
 import { chiuWidget, delayWidget, duelRun, duelWidget, labRun, labWidget, lossWidget, type LabPreset } from '../widgets/queues';
-import { groupDigits } from '../sim/numfmt';
 import { numOf } from './order';
 import type { Chapter, Step } from './types';
+import { groupNum } from '../sim/numfmt';
 
 const nf = (x: number, d = 0) => x.toFixed(d);
-const n0 = (x: number) => groupDigits(Math.round(x));
+const n0 = (x: number) => groupNum(Math.round(x));
 /** 4.6 × 10<sup>7</sup> from a number. */
 const sci = (x: number, d = 1) => { const [m, e] = x.toExponential(d).split('e+'); return `${m} × 10<sup>${e}</sup>`; };
 const FULL = 1000;

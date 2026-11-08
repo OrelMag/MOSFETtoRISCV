@@ -8,8 +8,9 @@ import { stats } from '../sim/stats';
 import { adcApi, adcScene, CHAIN, chainEnob, clipWidget, jitterWidget, ladderWidget, sarWidget, SCENE_CHAIN, sdWidget } from '../widgets/dspconverters';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const MOD = (w = CHAIN.w) => nands(sdModulator(2, w));
 const WHOLE = () => nands(sdConverter(CHAIN.order, CHAIN.w, CHAIN.N, CHAIN.R));

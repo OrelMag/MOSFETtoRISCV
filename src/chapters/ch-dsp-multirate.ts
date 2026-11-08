@@ -8,8 +8,9 @@ import { stats } from '../sim/stats';
 import { ALIAS_R, branchWidget, cascade, cascadeWidget, CASCADE_R, CIC_IN, CIC_N, CIC_ORDER, CIC_NULL, CIC_R, cicScene, cicWidget, dropWidget, growthWidget, polyScene, rateApi, upWidget } from '../widgets/dspmultirate';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const MUL8 = () => nands(treeMul(8, true));
 const RM = POLY_SPEC.R * POLY_SPEC.M;

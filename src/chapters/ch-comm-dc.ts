@@ -6,9 +6,10 @@ import { bottleneck, dctcpAlpha, dctcpAmplitude } from '../comm/queues';
 import { arqWidget, dctcpWidget, ecmpWidget, fabricWidget, incastWidget, pfcWidget, ringWidget, tailWidget } from '../widgets/dc';
 import { numOf } from './order';
 import type { Chapter, Step } from './types';
+import { groupNum } from '../sim/numfmt';
 
 const nf = (x: number, d = 0) => x.toFixed(d);
-const n0 = (x: number) => Math.round(x).toLocaleString('en');
+const n0 = (x: number) => groupNum(Math.round(x));
 
 const read = (senders: number, rtoMs = 200, bufferPkts = 32) => incast({ senders, blockBytes: 256 * 1024, bufferPkts, rtoMs });
 

@@ -11,8 +11,9 @@ import { slider } from './mosparts';
 import '../styles/line.css';
 import '../styles/signals.css';
 import '../styles/pictures.css';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const minus = (t: string) => t.replace(/-/g, '−');
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
