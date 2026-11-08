@@ -43,7 +43,8 @@ class IoBar {
   own: boolean | null = null;
 
   constructor(private ed: Editor) {
-    ed.slots.bottom.append(this.el);
+    // beside the run bar (editor.css .sb-runrow): inputs first, sharing its row where there is room
+    ed.slots.run.prepend(this.el);
     this.update();
   }
 

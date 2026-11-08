@@ -353,7 +353,7 @@ registerEditorPlugin((ed) => {
 });
 
 registerToolbarAction({
-  id: 'tests', title: 'Tests: tables of inputs and expected outputs for this chip, run after every edit', icon: 'table', label: 'Tests', order: 62,
+  id: 'tests', title: 'Tests: tables of inputs and expected outputs for this chip, run after every edit', icon: 'tests', label: 'Tests', order: 62,
   run: (ed) => { const p = of.get(ed); p?.setOpen(!p.open); },
   active: (ed) => !!of.get(ed)?.open,
 });

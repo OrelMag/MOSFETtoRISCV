@@ -20,11 +20,12 @@ import { DoubleTap } from '../ui/doubletap';
 import { settings } from '../ui/settings';
 import { nextDrive } from './chips';
 import type { Editor } from './editor';
+import { cycle, endName, hitName, ownPorts, stepCursor, targetsOf } from './keynav';
 import { lookInside } from './inside';
 import { flipSwitch, ioInfo, switchAt, type SwitchState } from './ioparts';
 import { canTurn, faceHit, nodeAt } from './face';
 import { toggleSwitch } from './ioface';
-import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, knobPortSide, nextSameName, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
+import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, knobPortSide, nextSameName, onPinKnob, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
 import { renamePin } from './chips';
 import { type ChipDoc, commentBox, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc, pinBig, pinValue } from './model';
 import {
@@ -80,6 +81,9 @@ export class Tools {
   /** The last press came from a finger: ports are hit from further away (tol). */
   private touch = false;
   private buttonHeld: PinDoc | null = null;
+  /** The keyboard cursor (a grid point), once a key moved it; a pointer press or move hides it (kcHide). */
+  private kc: Vec | null = null;
+  private kcOn = false;
   /** A hold just opened the menu: the contextmenu some browsers send for the same press is dropped. */
   private holdQuiet: () => boolean = () => false;
   private off: (() => void)[] = [];
@@ -184,6 +188,7 @@ export class Tools {
   // ---- pointer -----------------------------------------------------------------------------
 
   private down(e: PointerEvent): void {
+    if (this.kcOn) this.kcHide();
     this.ed.hoverWire(null);
     // No text selection or focus change from presses on the canvas (a press that opens the
     // pointer-name prompt must not blur it right away); a field being edited commits first.
@@ -262,6 +267,7 @@ export class Tools {
 
   private move(e: PointerEvent): void {
     if (this.panning) return;
+    if (this.kcOn) this.kcHide();
     const ed = this.ed;
     const p = this.world(e);
     this.cursor = p;
@@ -276,6 +282,10 @@ export class Tools {
           return;
         }
         const h = st.hit;
+        if (h.k === 'pin' && !st.name && !st.shift) {
+          const kp = ed.doc.pins.find((q) => q.id === h.id);
+          if (kp && kp.width === 1 && onPinKnob(kp, st.at)) this.knobHint();
+        }
         // A wire dragged on its own reshapes; one of several selected moves with the rest.
         const poly = h.k === 'wire' && ed.selCount <= 1 ? ed.view.polys.get(h.id) : undefined;
         if (h.k === 'wire' && poly) {
@@ -319,10 +329,22 @@ export class Tools {
         const owner = h.k === 'port' ? hitOwner(h) : h;
         ed.view.showPortsOf(owner.k === 'part' ? [owner.id] : [], owner.k === 'pin' ? [owner.id] : []);
         ed.hoverWire(h.k === 'wire' ? h.id : null, e);
+        // a pin's knob: the stub half draws a wire (crosshair), the far half moves the pin (grab)
+        const onKnob = !!pin && pin.width === 1 && onPinKnob(pin, p);
         ed.view.svg.style.cursor = h.k === 'wire' ? this.wireCursor(h.id, p)
-          : h.k === 'port' ? 'crosshair' : pin && pin.dir !== 'out' ? 'pointer' : h.k === 'none' ? '' : this.isSelected(h) ? 'move' : 'pointer';
+          : onKnob ? (knobPortSide(pin, p) ? 'crosshair' : 'grab') : h.k === 'port' ? 'crosshair' : pin && pin.dir !== 'out' ? 'pointer' : h.k === 'none' ? '' : this.isSelected(h) ? 'move' : 'pointer';
       }
     }
+  }
+
+  /** The first time a drag from a knob's far half moves the pin: say how to wire instead (once, remembered). */
+  private knobHint(): void {
+    const key = 'sb-knob-hint';
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, '1');
+    } catch { /* storage blocked: say it every session */ }
+    this.ed.toast('That moved the pin. To wire, drag from the stub side of its knob (the crosshair half).');
   }
 
   private up(e: PointerEvent): void {
@@ -410,20 +432,24 @@ export class Tools {
     if (ed.selCount > 1) ed.select(selOf(h));
     // A click on the name of what was already selected: type a new one.
     if (st.was && st.name && ed.selCount <= 1) return this.rename(h);
-    if (h.k === 'pin') {
-      const pin = ed.doc.pins.find((q) => q.id === h.id);
-      if (pin?.dir === 'inout') return ed.setPinValue(pin.id, nextDrive(pin));
-      if (!pin || pin.dir !== 'in') return;
-      if (pin.kind === 'clock') return ed.sim.toggleClocks();
-      if (pin.kind === 'button') return;
-      if (pin.width === 1) return ed.setPinValue(pin.id, pin.value ? 0 : 1);
-      const g = ed.view.svg.querySelector(`[data-pin-id="${pin.id}"]`);
-      const r = g ? g.getBoundingClientRect() : new DOMRect(e.clientX, e.clientY, 0, 0);
-      editNumber(r, pin.name, pin.width, pinBig(pin.value), (v) => ed.setPinValue(pin.id, pinValue(v)));
-      return;
-    }
+    if (h.k === 'pin') return void this.pinAction(h.id, new DOMRect(e.clientX, e.clientY, 0, 0));
     if (h.k === 'part' && this.flipSwitchAt(h.id, st.at)) return;
     if (h.k === 'label' && st.was) this.jump(h.id);
+  }
+
+  /** What a click on a pin does: an input toggles (a wide one asks for a number), a clock starts or stops, a bidirectional pin cycles. */
+  private pinAction(id: string, fallback: DOMRect): boolean {
+    const ed = this.ed;
+    const pin = ed.doc.pins.find((q) => q.id === id);
+    if (pin?.dir === 'inout') { ed.setPinValue(pin.id, nextDrive(pin)); return true; }
+    if (!pin || pin.dir !== 'in') return false;
+    if (pin.kind === 'clock') { ed.sim.toggleClocks(); return true; }
+    if (pin.kind === 'button') return false;
+    if (pin.width === 1) { ed.setPinValue(pin.id, pin.value ? 0 : 1); return true; }
+    const g = ed.view.svg.querySelector(`[data-pin-id="${pin.id}"]`);
+    const r = g ? g.getBoundingClientRect() : fallback;
+    editNumber(r, pin.name, pin.width, pinBig(pin.value), (v) => ed.setPinValue(pin.id, pinValue(v)));
+    return true;
   }
 
   private dbl(e: MouseEvent): void {
@@ -471,8 +497,18 @@ export class Tools {
     const q = s.parts?.length ? `[data-part="${CSS.escape(s.parts[0])}"]` : s.pins?.length ? `[data-pin-id="${CSS.escape(s.pins[0])}"]`
       : s.wires?.length ? `[data-wire="${CSS.escape(s.wires[0])}"]` : s.labels?.length ? `[data-label="${CSS.escape(s.labels[0])}"]` : '';
     const box = q ? svg.querySelector(q)?.getBoundingClientRect() ?? null : null;
-    const { x, y } = anchorPoint(box, svg.getBoundingClientRect());
-    const p = this.world({ clientX: x, clientY: y });
+    let { x, y } = anchorPoint(box, svg.getBoundingClientRect());
+    let p = this.world({ clientX: x, clientY: y });
+    // the keyboard cursor, if it is out: the menu is for the point it marks
+    if (this.kcOn && this.kc) {
+      const m = svg.getScreenCTM();
+      if (m && !box) {
+        const sp = new DOMPoint(this.kc[0], this.kc[1]).matrixTransform(m);
+        x = sp.x;
+        y = sp.y;
+      }
+      p = this.kc;
+    }
     this.cursor = p;
     this.onContext?.(x, y, p);
   }
@@ -636,12 +672,17 @@ export class Tools {
 
   private startWire(from: EndRef, pos: Vec, e: PointerEvent): void {
     const ed = this.ed;
+    this.beginWire(from, pos, true, e.clientX, e.clientY, this.world(e));
+    if (this.touch) ed.showMode('Wire: tap a pin to finish, the canvas to bend');
+  }
+
+  private beginWire(from: EndRef, pos: Vec, held: boolean, sx: number, sy: number, at: Vec): void {
+    const ed = this.ed;
     const g = 'wire' in from ? null : endGeom(ed.doc, from, ed.defOf);
     const draft = new WireDraft(from, pos, g?.exit ?? null, settings.simpleWires);
-    this.state = { k: 'wire', draft, held: true, sx: e.clientX, sy: e.clientY };
-    if (this.touch) ed.showMode('Wire: tap a pin to finish, the canvas to bend');
+    this.state = { k: 'wire', draft, held, sx, sy };
     ed.view.svg.style.cursor = 'crosshair';
-    this.previewWire(draft, this.world(e));
+    this.previewWire(draft, at);
   }
 
   /** What a click at p would connect to: a port (snapped onto it), a wire (a branch) or nothing. */
@@ -700,8 +741,10 @@ export class Tools {
       ed.toast(`Cannot wire: ${r.reason}`, 'err');
       return;
     }
+    const said = `Wire connected: ${endName(ed.doc, ed.defOf, draft.from)} to ${endName(ed.doc, ed.defOf, end)}`;
     this.cancel();
     ed.edit(() => r.doc);
+    ed.announce(said);
   }
 
   // ---- placing -----------------------------------------------------------------------------
@@ -886,7 +929,7 @@ export class Tools {
 
     if (isMenuKey(e) && (!control(e.target) || ed.view.svg.contains(e.target as Node))) {
       done();
-      if (st.k === 'idle') this.keyMenu();
+      if (st.k === 'idle' || (st.k === 'place' && !st.drag)) this.keyMenu();
       return;
     }
     // A bend being carried: any key but a modifier drops the edit (Esc included).
@@ -896,12 +939,17 @@ export class Tools {
       if (k === 'Backspace') { done(); if (!st.draft.undo()) this.cancel(); else if (this.cursor) this.previewWire(st.draft, this.cursor); return; }
       if (k === 'Escape') { done(); this.cancel(); return; }
     }
+    if (this.keyCanvas(e, st)) { done(); return; }
     if (k === ' ' && !control(e.target)) { done(); this.space = true; return; }
     if (k === 'Escape') {
       done();
       closePopover();
       if (st.k !== 'idle') this.cancel();
-      else ed.select({});
+      else {
+        // the second Esc puts the keyboard cursor away
+        if (!ed.selCount && this.kcOn) this.kcHide();
+        ed.select({});
+      }
       return;
     }
     if (mod && k === 'Enter') { done(); ed.toggleRun(); return; }
@@ -956,6 +1004,204 @@ export class Tools {
         ed.edit((doc) => moveSel(doc, ed.sel, d, ed.defOf));
       }
     }
+  }
+
+  // ---- the keyboard cursor (WCAG 2.1.1) ------------------------------------------------------
+
+  /** The focus is on the canvas, or nowhere (a mouse press leaves none): the keys below are the canvas's. */
+  private onCanvas(t: EventTarget | null): boolean {
+    const svg = this.ed.view.svg;
+    return t === svg || t === document.body || t === document.documentElement || (t instanceof Node && svg.contains(t));
+  }
+
+  /** The part, if any, that Enter or the menu would place: armed, not being dragged. */
+  get armedItem(): PaletteItem | null {
+    const st = this.state;
+    return st.k === 'place' && !st.drag ? st.item : null;
+  }
+
+  /** The cursor, started where the pointer last was if it is in view, else in the middle of the view. */
+  private kcPoint(): Vec {
+    if (this.kc && this.kcOn) return this.kc;
+    const v = this.ed.view.cam.vb, c = this.cursor;
+    const inView = c && c[0] >= v.x && c[0] <= v.x + v.w && c[1] >= v.y && c[1] <= v.y + v.h;
+    const p = snapPt(inView ? c : [v.x + v.w / 2, v.y + v.h / 2]);
+    this.kc = p;
+    return p;
+  }
+
+  /** Show the keyboard cursor (an item was armed from the parts list). */
+  keyboardStart(): void {
+    this.kcSet(this.kcPoint(), false);
+  }
+
+  private kcHide(): void {
+    this.kcOn = false;
+    this.ed.view.showKeyCursor(null);
+    this.ed.view.showHot(null);
+    this.ed.view.showPortsOf([], []);
+  }
+
+  /** Move the keyboard cursor to a grid point: the view follows, what is under it lights and is said. */
+  private kcSet(p: Vec, say = true): void {
+    const ed = this.ed;
+    this.kc = p;
+    this.kcOn = true;
+    this.cursor = [p[0], p[1]];
+    ed.view.cam.centerOn(p);
+    ed.view.showKeyCursor(p);
+    const st = this.state;
+    const h = this.hit(p);
+    const name = hitName(ed.doc, ed.defOf, h);
+    let msg = `${name ?? 'empty'}, ${p[0]}, ${p[1]}`;
+    if (st.k === 'place') {
+      this.ghost(st.item, p);
+      msg = `${st.item.name} goes here (${name ? `over ${name}, ` : ''}${p[0]}, ${p[1]})`;
+    } else if (st.k === 'wire') {
+      this.previewWire(st.draft, p);
+      const t = this.target(p);
+      const why = t.end ? this.refusal(st.draft, t.end) : null;
+      msg = t.end ? `${endName(ed.doc, ed.defOf, t.end)}${why ? `: ${why}` : ': Enter connects'}` : `corner ${p[0]}, ${p[1]}: Enter adds a bend`;
+    } else {
+      ed.view.showHot(h.k === 'port' ? h.pos : null);
+      const owner = h.k === 'port' ? hitOwner(h) : h;
+      ed.view.showPortsOf(owner.k === 'part' ? [owner.id] : [], owner.k === 'pin' ? [owner.id] : []);
+    }
+    if (say) ed.announce(msg);
+  }
+
+  /** The keys of a canvas without a mouse. True when the key was one of them. */
+  private keyCanvas(e: KeyboardEvent, st: State): boolean {
+    const ed = this.ed;
+    const k = e.key;
+    if (e.ctrlKey || e.metaKey || !this.onCanvas(e.target)) return false;
+    // With the focus nowhere (a mouse press leaves none) these keys are the canvas's only once the keyboard cursor is out.
+    if ((e.target === document.body || e.target === document.documentElement) && !this.kcOn) return false;
+    if (k.startsWith('Arrow')) {
+      if (st.k !== 'idle' && st.k !== 'wire' && !(st.k === 'place' && !st.drag)) return false;
+      // Alt+arrows always move the cursor; plain arrows nudge a selection, and move the cursor when nothing is selected,
+      // a part is armed or a wire begun
+      if (!e.altKey && st.k === 'idle' && ed.selCount) return false;
+      this.kcSet(stepCursor(this.kcPoint(), k, e.shiftKey));
+      return true;
+    }
+    if (e.altKey) return false;
+    if (k === 'Enter' || (k === ' ' && st.k === 'place' && !st.drag)) {
+      const p = this.kcPoint();
+      if (st.k === 'place' && !st.drag) {
+        this.kcSet(p, false);
+        this.placeAtCursor(st.item, p, e.shiftKey);
+        return true;
+      }
+      if (st.k === 'wire') {
+        this.wireClick(st.draft, p);
+        if (this.state.k === 'wire') this.kcSet(p);
+        return true;
+      }
+      if (st.k === 'idle' && k === 'Enter') {
+        this.activate(p, e.shiftKey);
+        return true;
+      }
+      return false;
+    }
+    if (!shortcutAllowed(e)) return false;
+    if (matches(e, 'sb.nextpin') && (st.k === 'idle' || st.k === 'wire')) {
+      const dir = e.shiftKey ? -1 : 1;
+      const all = targetsOf(ed.doc, ed.defOf);
+      const here = this.kcOn ? this.kcPoint() : null;
+      let a;
+      if (st.k === 'wire') a = cycle(all.filter((t) => !this.refusal(st.draft, t.end)), here, dir);
+      else {
+        // the selected part's own pins first; with nothing selected, every pin of the chip
+        const own = ownPorts(ed.doc, ed.defOf, ed.sel);
+        a = own.length ? cycle(own, here && own.some((t) => t.pos[0] === here[0] && t.pos[1] === here[1]) ? here : null, dir) : cycle(all, here, dir);
+      }
+      if (!a) ed.announce('No pins here');
+      else this.kcSet(a.pos);
+      return true;
+    }
+    if (matches(e, 'sb.wirekey') && st.k === 'idle') {
+      this.wireFromKeyboard();
+      return true;
+    }
+    return false;
+  }
+
+  /** Enter with a part armed: place it at the cursor, and say what was placed. */
+  private placeAtCursor(item: PaletteItem, p: Vec, keep: boolean): void {
+    const ed = this.ed;
+    this.place(item, p, keep);
+    const s = ed.sel;
+    const part = s.parts?.length ? ed.doc.parts.find((q) => q.id === s.parts![0]) : undefined;
+    const pin = s.pins?.length ? ed.doc.pins.find((q) => q.id === s.pins![0]) : undefined;
+    if (part) ed.announce(`Placed ${part.id} (${item.name}) at ${p[0]}, ${p[1]}${keep ? '; still armed' : ''}`);
+    else if (pin) ed.announce(`Placed ${pin.dir === 'in' ? 'input' : pin.dir === 'out' ? 'output' : 'bidirectional'} pin ${pin.name} at ${p[0]}, ${p[1]}${keep ? '; still armed' : ''}`);
+  }
+
+  /** Enter with nothing armed: select what is under the cursor; on an input, toggle it. */
+  private activate(p: Vec, add: boolean): void {
+    const ed = this.ed;
+    const h = this.hit(p);
+    const t: Hit = h.k === 'port' ? hitOwner(h) : h;
+    if (t.k === 'none') {
+      ed.select({});
+      return ed.announce(`Nothing here, ${p[0]}, ${p[1]}`);
+    }
+    const was = this.isSelected(t);
+    if (add) ed.select(toggle(ed.sel, t));
+    else if (!was) ed.select(selOf(t));
+    const name = hitName(ed.doc, ed.defOf, t) ?? '';
+    if (add) return ed.announce(`${this.isSelected(t) ? 'Added' : 'Removed'} ${name}`);
+    if (t.k === 'pin') {
+      const pin = ed.doc.pins.find((q) => q.id === t.id);
+      if (pin && this.pinAction(pin.id, new DOMRect(0, 0, 0, 0))) return this.sayPin(pin.id);
+      return ed.announce(`Selected ${name}`);
+    }
+    if (t.k === 'part' && was && this.flipSwitchAt(t.id, p)) return ed.announce(`${name}: switch flipped`);
+    if (t.k === 'label' && was) return this.jump(t.id);
+    ed.announce(`Selected ${name}${t.k === 'part' ? '. W starts a wire from its pins, N steps through them' : ''}`);
+  }
+
+  /** After a pin was used by key: its value now, and the outputs it moved. */
+  private sayPin(id: string): void {
+    const ed = this.ed;
+    setTimeout(() => {
+      const bits = (name: string) => ed.sim.pinBits(name)?.map((b) => String(b)).reverse().join('') ?? '?';
+      const pin = ed.doc.pins.find((q) => q.id === id);
+      if (!pin) return;
+      const outs = ed.doc.pins.filter((q) => q.dir === 'out').slice(0, 6).map((q) => `${q.name} = ${bits(q.name)}`);
+      ed.announce(`${pin.name} = ${bits(pin.name)}${pin.kind === 'clock' ? ' (clock)' : ''}${outs.length ? `; outputs: ${outs.join(', ')}` : ''}`);
+    }, 150);
+  }
+
+  /** W: a wire from the pin under the cursor, else from the selected part's first pin. */
+  private wireFromKeyboard(): void {
+    const ed = this.ed;
+    const t = this.target(this.kcPoint());
+    if (t.end && !('wire' in t.end)) return this.keyWire(t.end, t.pos);
+    const own = ownPorts(ed.doc, ed.defOf, ed.sel);
+    if (!own.length) return ed.announce('Put the cursor on a pin first: N steps to the next pin');
+    this.keyWire(own[0].end, own[0].pos);
+  }
+
+  private keyWire(end: EndRef, pos: Vec): void {
+    const ed = this.ed;
+    this.beginWire(end, pos, false, 0, 0, pos);
+    this.kcSet(pos, false);
+    ed.showMode('Wire: arrows move, N next pin, Enter connects or bends, Esc cancels');
+    ed.announce(`Wire from ${endName(ed.doc, ed.defOf, end)}. Arrow keys move, N jumps to the next pin, Enter connects, Escape cancels`);
+  }
+
+  /** The menu's "Start a wire from …": the pins of the selected part (a pin, a pointer), else the one under the keyboard cursor. */
+  wireStarts(): { label: string; run(): void }[] {
+    const ed = this.ed;
+    if (this.state.k !== 'idle') return [];
+    let list = ownPorts(ed.doc, ed.defOf, ed.sel);
+    if (!list.length && this.kcOn && this.kc) {
+      const t = this.target(this.kc);
+      if (t.end && !('wire' in t.end)) list = [{ end: t.end, pos: t.pos }];
+    }
+    return list.slice(0, 8).map((a) => ({ label: `Start a wire from ${endName(ed.doc, ed.defOf, a.end)}`, run: () => this.keyWire(a.end, a.pos) }));
   }
 
   del(): void {

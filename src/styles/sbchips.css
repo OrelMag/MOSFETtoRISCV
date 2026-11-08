@@ -118,3 +118,10 @@
 .ed-pin-drv { font: 700 0.95px var(--font-mono); fill: var(--text-2); pointer-events: none; }
 .ed-pin.v1 .ed-pin-drv { fill: var(--surface); }
 .ed-pin-io .pin-knob { stroke-dasharray: 0.35 0.2; }
+
+/* a toast while look inside is open goes to the foot of the canvas: the top is the crumb bar (and Close) */
+.sb-canvas:has(.sb-inside) .sb-toast, .sb-canvas:has(.sb-mode:not([hidden])):has(.sb-inside) .sb-toast { top: auto; bottom: 14px; z-index: 8; transform: translate(-50%, 8px); }
+.sb-canvas:has(.sb-inside) .sb-toast.show { transform: translate(-50%, 0); }
+
+.sb-pal-note { margin: 0; padding: 6px 10px; font-size: 12px; line-height: 1.4; color: var(--muted); border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.sb-pal-note b { color: var(--text); font-weight: 600; }
