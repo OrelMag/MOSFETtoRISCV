@@ -201,6 +201,16 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
 .sb-center { grid-area: center; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--canvas); }
 .sb-canvas { flex: 1; position: relative; min-height: 0; overflow: hidden; touch-action: manipulation; }
 .sb-canvas > svg.ed-svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; outline: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+/* The canvas is a Tab stop (the keyboard cursor, tools.ts): a ring inside its edge, only for the keyboard. */
+.sb-canvas > svg.ed-svg:focus-visible { outline: 2px solid var(--ed-preview); outline-offset: -3px; }
+.ed-kc { pointer-events: none; }
+/* the empty-chip card would hide the cursor and the ghost under it */
+.sb-canvas.kc-on .sb-empty-chip { opacity: 0.12; }
+.ed-kc-halo, .ed-kc-line, .ed-kc-ring { fill: none; stroke-linecap: round; }
+.ed-kc-halo { stroke: var(--canvas, var(--surface)); stroke-width: 0.6; opacity: 0.9; }
+.ed-kc-ring { stroke: var(--ed-preview); stroke-width: 0.12; opacity: 0.8; }
+.ed-kc-line { stroke: var(--ed-preview); stroke-width: 0.28; }
+.ed-kc-dot { fill: var(--ed-preview); stroke: var(--canvas, var(--surface)); stroke-width: 0.06; }
 .sb-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
 .sb-overlay > * { pointer-events: auto; }
 .sb-hint { left: 12px; bottom: 8px; }
