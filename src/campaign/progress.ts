@@ -10,6 +10,10 @@ import { isDone, type ProgressView } from './graph';
 import { levelChipId } from './levels';
 import { CAPSTONES, COMM_CAPSTONES, DSP_CAPSTONES } from '../learn/capstones';
 import { NODES, nodeById } from './nodes';
+import { CODEX } from './codex';
+
+/** Codex entries some level lists (discovered by playing it). */
+const LISTED = new Set(NODES.flatMap((n) => n.codex));
 import { isTwinKey } from './twinids';
 
 export const CAMPAIGN_KEY = 'mosfet2riscv:campaign:v1';
@@ -312,6 +316,8 @@ export class Progress {
       const p = this.state.nodes[n.id];
       if (this.unlockAll || isDone(p) || (n.body && p?.seen)) n.codex.forEach((c) => out.add(c));
     }
+    // an entry no level lists is taught by a chapter alone (tcp, firfilter, aes, …): no level could discover it, so it is open
+    for (const e of CODEX) if (!LISTED.has(e.id)) out.add(e.id);
     return out;
   }
 

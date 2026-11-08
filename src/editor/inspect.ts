@@ -55,7 +55,7 @@ class InspectDrawer {
       e.stopPropagation();
       if (e.key === 'Escape') this.close();
     });
-    dockPane(ed, { id: 'inspect', label: 'Inspector', icon: 'table', el: this.el, width: 360 });
+    dockPane(ed, { id: 'inspect', label: 'Inspector', icon: 'inspect', el: this.el, width: 360 });
     ed.paintHooks.add(this.hook);
     this.tick(true);
   }
@@ -108,6 +108,6 @@ class InspectDrawer {
 }
 
 registerToolbarAction({
-  id: 'inspect', title: 'Inspect the selected part, or this chip: info, truth table, Verilog', menu: 'Inspect', levelLabel: 'Inspect', icon: 'table', order: 70,
+  id: 'inspect', title: 'Inspect the selected part, or this chip: info, truth table, Verilog', menu: 'Inspect', levelLabel: 'Inspect', icon: 'inspect', order: 70,
   run: (ed) => inspect(ed, ed.sel.parts?.length === 1 ? ed.sel.parts[0] : undefined),
 });

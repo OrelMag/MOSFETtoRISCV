@@ -36,12 +36,12 @@ chain at ÷64 / ÷128 / ÷256: 12.1 / 14.7 / 17.2 bits (half-scale tone)</pre>Th
 input above?  yes     no      yes     no      no      yes     yes      no
 bit kept     1       0       1       0       0       1       1        0   → 10100110 = 166
 the top capacitor 1 % too big:   same input → 10100101 = 165
-flash: 255 comparators at 8 bits, 4,095 at 12, one clock
+flash: 255 comparators at 8 bits, 4095 at 12, one clock
 SAR: one comparator, 8 clocks, then 12</pre>The code 166 is the right one, the input's place among 256 steps. A capacitor error moves the levels tried, and the code with them.`,
     },
     mistakes: [
       'Assuming the comparator sets the accuracy. Every trial compares the input with a level the DAC makes, so the DAC\'s errors are errors in the result: with the top capacitor 1 % off, the same input reads 165 and not 166.',
-      'Comparing flash and SAR by bits alone. From 8 to 12 bits a flash goes from 255 comparators to 4,095, sixteen times; a SAR keeps its one and takes four clocks more.',
+      'Comparing flash and SAR by bits alone. From 8 to 12 bits a flash goes from 255 comparators to 4095, sixteen times; a SAR keeps its one and takes four clocks more.',
       'Expecting a later bit to repair an earlier one. The search never revisits a decision, so a wrong top-bit trial is final.',
       'Forgetting that the conversion rate is the clock divided by b. Twelve bits at the same clock is a third slower than eight.',
     ],
@@ -102,8 +102,8 @@ one clock, 70 MHz against 7 MHz: 20.0 dB apart</pre>Each ten times the frequency
 order 2         39.9  55.7  69.9  83.8   96.6
 order 1         30.3  40.5  49.8  56.1   63.6
 at ×64:  measured 69.9    model 73.2    model with the measured error power 71.0
-gates: loop 12 bits 1,283 NANDs; 16 bits 1,579;
-loop + CIC (N = 3) at ÷ 64: 5,181
+gates: loop 12 bits 1283 NANDs; 16 bits 1579;
+loop + CIC (N = 3) at ÷ 64: 5181
 chain's effective bits, ÷64 / ÷128 / ÷256: 12.1 / 14.7 / 17.2</pre>The one-bit DAC costs nothing in gates: the words for + and − full scale differ only in their top bits, so it is the decision, inverted, on some wires.`,
     },
     mistakes: [
@@ -146,8 +146,8 @@ measured, order 2, rate 16 → 256:  15.8, 14.2, 13.9, 12.7 dB</pre>The gain per
       body: `<pre>r = [1, 0.5]  (R = [[1, 0.5], [0.5, 1]])      p = [0.8, 0.1]
 w = R⁻¹ p = [1.0, −0.4]
 with E[d²] = 1:  smallest error = 1 − (0.8 × 1.0 + 0.1 × (−0.4)) = 0.24
-128 taps:  Levinson 128² = 16,384 operations
-           general solver 128³ = 2,097,152, 128 times as many</pre>Levinson's recursion returns the same two coefficients as the direct solution, and in the tests it agrees with scipy's solve_toeplitz to 8 places.`,
+128 taps:  Levinson 128² = 16 384 operations
+           general solver 128³ = 2 097 152, 128 times as many</pre>Levinson's recursion returns the same two coefficients as the direct solution, and in the tests it agrees with scipy's solve_toeplitz to 8 places.`,
     },
     mistakes: [
       'Thinking it needs a model of how d is produced. Only R and p enter; the echo path itself is never needed to find the best filter.',
@@ -169,8 +169,8 @@ with E[d²] = 1:  smallest error = 1 − (0.8 × 1.0 + 0.1 × (−0.4)) = 0.24
   2 / (energy of the loudest 128 samples):   ${EF.loudestAllows.toFixed(3)}   ← safe below this
   plain LMS: converges at ${EF.stillConverges} times it, diverged at ${EF.diverges} times
   NLMS: μ in (0, 2), whatever the loudness
-LMS tap, 12-bit words:   4,580 NANDs, 4,172 of them the two multipliers
-four taps with their sums: 19,188 NANDs
+LMS tap, 12-bit words:   4580 NANDs, 4172 of them the two multipliers
+four taps with their sums: 19 188 NANDs
 update e × x shifted down 7, rounded half up: from −64 to +63 it is zero (dead zone)</pre>The limit is set by the loudest stretch, not the average: ${EF.avgAllows.toFixed(2)} would have let the run diverge.`,
     },
     mistakes: [
@@ -188,13 +188,13 @@ update e × x shifted down 7, rounded half up: from −64 to +63 it is zero (dea
   echocancel: {
     idea: `A speaker at your end plays what the far end said; it comes back through the room into your microphone, and the far end hears itself. The room is a filter, and nobody can stop the call to measure it, but the signal sent to the speaker is known to the bit. So a copy of the path, learnt by NLMS, is run on that signal and its output subtracted from the microphone: what is left is the near-end voice and whatever the copy got wrong. The measure is <b>echo return loss enhancement</b>, ERLE, how far the echo has come down, in dB.<br><br>It works because the far-end signal is known and the path linear. Its limits are the length, the learning rule and the near end. Echo beyond the last tap cannot be subtracted, however long it runs. Plain LMS is safe only below a step set by the loudest stretch; NLMS's limit does not depend on loudness. And near-end speech is, to the filter, a huge error to be fixed: it wrecks what has been learnt, so a real canceller stops learning while someone talks, which is where most of its difficulty lies. This model is told when that is; a real one has to detect it.`,
     example: {
-      title: 'The chapter\'s run: 32,000 samples at 8 kHz, a 128-tap hidden path',
+      title: 'The chapter\'s run: 32 000 samples at 8 kHz, a 128-tap hidden path',
       body: `<pre>128 taps, NLMS μ = 0.5:                      ERLE ${EF.erle.toFixed(1)} dB (last quarter)
 32 taps, the tail has none:                   ERLE ${EF.erle32.toFixed(1)} dB
 near-end talk, learning left on:              ${EF.talkOn.toFixed(1)} dB over the last second
 near-end talk, learning frozen while it lasts: ${EF.talkHeld.toFixed(1)} dB
 cost: 128 taps × 2 multiplications = 256 a sample
-      × 8,000 = 2,048,000 a second;  128 samples = 16 ms</pre>The difference between leaving learning on and freezing it is about ${Math.round(EF.talkHeld - EF.talkOn)} dB. The far end is a LibriVox reading; the path and the room noise are seeded models.`,
+      × 8000 = 2 048 000 a second;  128 samples = 16 ms</pre>The difference between leaving learning on and freezing it is about ${Math.round(EF.talkHeld - EF.talkOn)} dB. The far end is a LibriVox reading; the path and the room noise are seeded models.`,
     },
     mistakes: [
       `Leaving learning on in double talk. The voice lands in the error and the filter walks away from the path: ${EF.talkOn.toFixed(1)} dB against ${EF.talkHeld.toFixed(1)} with it frozen.`,
@@ -214,8 +214,8 @@ cost: 128 taps × 2 multiplications = 256 a sample
       body: `<pre>[1 2 1]ᵀ × [1 2 1] = [[1 2 1],[2 4 2],[1 2 1]]  (÷ 16 for unit gain)
 multiplications a sample:  3 × 3: 9 → 6   15 × 15: 225 → 30 (7.5×)   9 × 9: 81 → 18
 the scene blurred whole, and as two passes: largest difference 0
-8 × 8 DCT, one block:  direct sum 64 × 64 = 4,096 products
-   rows then columns, 16 passes of 64 = 1,024
+8 × 8 DCT, one block:  direct sum 64 × 64 = 4096 products
+   rows then columns, 16 passes of 64 = 1024
    with 22 products a pass: 16 × 22 = 352</pre>The chapter's tests hold the two-pass blur equal to the whole kernel to rounding.`,
     },
     mistakes: [
@@ -263,14 +263,14 @@ stripes                5         81.7 %
 checks                28         17.7 %
 rings                 46         48.3 %
 sun's edge            53         45.2 %
-products a block: direct 64 × 64 = 4,096; rows then columns 16 × 64 = 1,024
+products a block: direct 64 × 64 = 4096; rows then columns 16 × 64 = 1024
    16 stages × 22 = 352
-one 8-point stage in gates: 24,721 NANDs; sixteen side by side 395,536</pre>The constant 1703 is 5 adders in signed digits, 784 is 2.`,
+one 8-point stage in gates: 24 721 NANDs; sixteen side by side 395 536</pre>The constant 1703 is 5 adders in signed digits, 784 is 2.`,
     },
     mistakes: [
       'Saying the DCT compresses. It rearranges: the 64 coefficients carry exactly the energy of the 64 samples, and nothing is smaller until quantization rounds it away.',
       'Leaving out the shift by 128. Without it S(0, 0) carries the grey level, and a mid-grey block is not zero.',
-      'Reading the 8 × 8 transform as 4,096 products. It is separable: two passes of an 8-point transform, 16 in all.',
+      'Reading the 8 × 8 transform as 4096 products. It is separable: two passes of an 8-point transform, 16 in all.',
       'Judging a block by how busy it looks. The stripes block packs into 5 large coefficients, and the sun\'s edge, which looks simpler, needs 53.',
     ],
     chapters: [
@@ -283,10 +283,10 @@ one 8-point stage in gates: 24,721 NANDs; sixteen side by side 395,536</pre>The 
     example: {
       title: 'The scale, and what it does to a picture',
       body: `<pre>quality   scale     DC step   last entry    bytes (scene)   PSNR   zero levels
-   10     500 %       80        255 (clamped)         1,920                24.5 dB  94.9 %
-   50     100 %       16         99                  3,932                31.0 dB  88.0 %
-   90      20 %        3         20                 10,250                39.3 dB  65.5 %
-raw: 36,864 bytes
+   10     500 %       80        255 (clamped)         1920                24.5 dB  94.9 %
+   50     100 %       16         99                  3932                31.0 dB  88.0 %
+   90      20 %        3         20                 10 250                39.3 dB  65.5 %
+raw: 36 864 bytes
 a coefficient of 37 at a step of 16: 37 / 16 = 2.3 → 2 → decoder gets 32
    (off by 5, at most 8)</pre>The sizes are of the real files, headers included.`,
     },
@@ -309,7 +309,7 @@ a coefficient of 37 at a step of 16: 37 / 16 = 2.3 → 2 → decoder gets 32
 0, 0    → counted into the next symbol
 −2      → (run 2, size 2)  symbol 0x22   code 8 bits  + 2 extra bits (01)
 rest    → EOB  0x00                       code 4 bits
-total 20 bits for 63 coefficients</pre>The code lengths are those of T.81's Table K.5. For the chapter's scene at quality 50, 32,435 of its 36,864 levels are zero.`,
+total 20 bits for 63 coefficients</pre>The code lengths are those of T.81's Table K.5. For the chapter's scene at quality 50, 32 435 of its 36 864 levels are zero.`,
     },
     mistakes: [
       'Sending zeros one at a time. They are counted into the next non-zero coefficient\'s symbol; only the trailing ones are ended by EOB.',
@@ -322,7 +322,7 @@ total 20 bits for 63 coefficients</pre>The code lengths are those of T.81's Tabl
     ],
   },
   huffman: {
-    idea: `A Huffman code gives frequent symbols short codes and rare ones long, with no code the start of another, so that the bits can be read off without separators. JPEG does not store the codes. A file carries two lists: <b>BITS</b>, how many codes there are of each length from 1 to 16, and <b>HUFFVAL</b>, the symbols in order. T.81's Annex C turns them into codes: each length's codes count up from where the shorter ones ended, doubled, so the decoder rebuilds every code from sixteen counts and the symbols. The shortest codes are the first symbols listed, and the code of all ones is never assigned, so a run of ones is always unambiguous.<br><br>The luminance AC table of Annex K is a "typical" one, and its 162 symbols are the (run, size) pairs, with EOB and ZRL; the DC table has 12 symbols, the size categories. The Huffman symbol is only part of what is sent: the magnitude follows as plain bits, and the codes of the chapter's file at quality 50 take 2,465 bytes, the extra bits 1,094 and the markers and tables 326. A table tuned to one picture is allowed; the standard table is the cheap default.`,
+    idea: `A Huffman code gives frequent symbols short codes and rare ones long, with no code the start of another, so that the bits can be read off without separators. JPEG does not store the codes. A file carries two lists: <b>BITS</b>, how many codes there are of each length from 1 to 16, and <b>HUFFVAL</b>, the symbols in order. T.81's Annex C turns them into codes: each length's codes count up from where the shorter ones ended, doubled, so the decoder rebuilds every code from sixteen counts and the symbols. The shortest codes are the first symbols listed, and the code of all ones is never assigned, so a run of ones is always unambiguous.<br><br>The luminance AC table of Annex K is a "typical" one, and its 162 symbols are the (run, size) pairs, with EOB and ZRL; the DC table has 12 symbols, the size categories. The Huffman symbol is only part of what is sent: the magnitude follows as plain bits, and the codes of the chapter's file at quality 50 take 2465 bytes, the extra bits 1094 and the markers and tables 326. A table tuned to one picture is allowed; the standard table is the cheap default.`,
     example: {
       title: 'The luminance AC table, from its lists',
       body: `<pre>BITS: 0, 2, 1, 3, 3, 2, 4, 3, 5, 5, 4, 4, 0, 0, 1, 125      162 codes in all
@@ -335,7 +335,7 @@ sum of 2^−length over all codes = 0.99998 = 1 − 2^−16
     mistakes: [
       'Thinking the file stores the code words. It stores BITS and HUFFVAL, and the codes are rebuilt by counting.',
       'Believing Table K.5 is optimal for every picture. It is a typical table; a file may carry one tuned to its symbols.',
-      'Forgetting the extra bits. The code names the (run, size) pair; the magnitude comes behind it in plain bits, which at quality 50 are 1,094 bytes against 2,465 for the codes.',
+      'Forgetting the extra bits. The code names the (run, size) pair; the magnitude comes behind it in plain bits, which at quality 50 are 1094 bytes against 2465 for the codes.',
       'Forgetting byte stuffing. A 0xFF in the coded data is followed by a 0, which at quality 50 costs 368 bits of the file.',
     ],
     chapters: [
@@ -347,11 +347,11 @@ sum of 2^−length over all codes = 0.99998 = 1 − 2^−16
     idea: `A baseline JPEG is five steps on blocks of 8 × 8 samples: shift by 128, the DCT, quantization by a table, zig-zag with run lengths, Huffman codes. Only the third loses information; the others are exact to rounding, and the transform's own rounding and the final rounding to 8 bits are far smaller than what quantization takes. The decoder runs the steps backwards, and the file in between is a list of marker segments, each a marker and a length: start of image, a JFIF header, the quantization table in zig-zag order, the frame (8-bit samples, the size, one component), the two Huffman tables, the start of scan, the coded data and end of image.<br><br>Because it is only a format, any program can write and read it. The chapter writes every byte of a file. In the tests libjpeg through Pillow reads the 96 × 96 scene at qualities 10 and 75 to within one level of our own reconstruction, and the browser opens the same bytes of the page's file. Decoders can differ by a level or so on a few pixels since T.81 sets how exact an inverse DCT must be, not how to compute it, and fast decoders use integer ones. The one parameter most people see, quality, is not in the standard but libjpeg's scaling of its example table.`,
     example: {
       title: 'The same grey picture at three qualities',
-      body: `<pre>raw: 192 × 192 samples = 36,864 bytes
-quality 10:   1,920 bytes   19.2 to 1   24.5 dB
-quality 50:   3,932 bytes    9.4 to 1   31.0 dB
-   Huffman codes 2,465 + extra bits 1,094 + markers and tables 326
-quality 90:  10,250 bytes    3.6 to 1   39.3 dB</pre>These are real file sizes with headers. At quality 50 the markers and tables are about 8 % of the file.`,
+      body: `<pre>raw: 192 × 192 samples = 36 864 bytes
+quality 10:   1920 bytes   19.2 to 1   24.5 dB
+quality 50:   3932 bytes    9.4 to 1   31.0 dB
+   Huffman codes 2465 + extra bits 1094 + markers and tables 326
+quality 90:  10 250 bytes    3.6 to 1   39.3 dB</pre>These are real file sizes with headers. At quality 50 the markers and tables are about 8 % of the file.`,
     },
     mistakes: [
       'Thinking every step of the pipeline loses something. The DCT, zig-zag and Huffman coding are exact; only the division and rounding by the table loses.',

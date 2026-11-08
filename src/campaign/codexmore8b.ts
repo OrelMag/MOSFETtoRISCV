@@ -73,9 +73,9 @@ halve the spans to 8 dB, double their number: −3 dB, +8 dB → +5 dB</pre>That
     example: {
       title: 'Undoing six thousand kilometres',
       body: `<pre>β₂ = −22.3 ps²/km    L = 6000 km    32 GBd sampled at 64 GS/s
-time-domain filter to invert it: 3 439 taps
+time-domain filter to invert it: 3439 taps
 received QPSK: smeared ring → undone → four clusters at BER Q(√SNR)
-photodiodes: 2 polarizations × I, Q = 8</pre>In silicon this is an FFT, multiply, inverse FFT, the many-carriers mathematics again, not a 3 439-tap filter.`,
+photodiodes: 2 polarizations × I, Q = 8</pre>In silicon this is an FFT, multiply, inverse FFT, the many-carriers mathematics again, not a 3439-tap filter.`,
     },
     mistakes: [
       'Assuming a direct-detection receiver could compensate dispersion given enough DSP: it has only |A|², and the phases that carry the distortion are gone before the ADC.',

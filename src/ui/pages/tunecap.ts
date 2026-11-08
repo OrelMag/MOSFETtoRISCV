@@ -125,7 +125,7 @@ export class TuneCapstonePage {
     }, 'Your chain does not run yet');
     this.checkBtn.addEventListener('click', () => this.check());
     this.body.append(
-      h('p', { class: 'cc-crumb' }, h('a', { href: '#/path' }, 'My path'), ' › Signal processing capstone'),
+      h('p', { class: 'cc-crumb' }, h('a', { href: '#/campaign' }, 'Campaign'), ' › ', h('a', { href: '#/path' }, 'My path'), ' › Signal processing capstone'),
       h('h1', null, meta?.title ?? 'Tune it'),
       h('div', { class: 'tc-cols' },
         h('aside', { class: 'tc-side' },
