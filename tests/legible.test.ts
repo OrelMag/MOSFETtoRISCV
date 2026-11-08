@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { hiddenKinds, NAME_MIN_PX, nameLayout, planLayouts, planTags, TAG_MAX_K, LABEL_UNITS, NAME_PX, MIN_TEXT_PX, nameEligible, nameRotated, needsFixedNames, planNames, TEXT_UNITS, type NameBox } from '../src/view/legible';
-import { fpAdd, fpMul, fpDiv, type FpFormat } from '../src/lib/fpu';
+import { fpAdd, fpMul, fpDiv } from '../src/lib/fpu';
+import type { FpFormat } from '../src/sim/fpref';
 import { fpAddNearFar } from '../src/lib/fpnearfar';
 import { symbolGeom } from '../src/sim/geometry';
 
@@ -103,9 +104,10 @@ describe('names sit inside their block', () => {
   it('keeps a name that fits at 12 px unchanged', () => {
     expect(nameLayout(b(30, 20, 'ALU'), 2)).toEqual({ px: NAME_PX, lines: ['ALU'] });
   });
-  it('a block too small for any size keeps its name at the floor instead of losing it', () => {
+  it('a name no size fits is cut short at the floor; a block too small even for that keeps it at 7 px', () => {
     const l = nameLayout(b(10, 10, 'DECODER'), 2);
-    expect(l.px).toBe(MIN_TEXT_PX);
+    expect(l).toEqual({ px: NAME_MIN_PX, lines: ['DE…'] });
+    expect(nameLayout(b(6, 6, 'DECODER'), 2).px).toBe(MIN_TEXT_PX);
     expect(planNames([b(10, 10, 'DECODER')], 2)).toEqual([true]);
   });
   it('every name of the floating-point units is drawn inside its block at phone and desktop fits', () => {

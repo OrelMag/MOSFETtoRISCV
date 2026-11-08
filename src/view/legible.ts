@@ -69,7 +69,7 @@ export function nameBreaks(text: string): string[][] {
 /**
  * The layout of a block's name at `scale`: the largest font up to NAME_PX at which one line, or two, fits inside the block
  * (a turned name along its length only: it is meant to span a narrow register); a name no size fits is cut short with an ellipsis at
- * MIN_TEXT_PX; a block too small even for three letters keeps its name at MIN_TEXT_PX over the edge, never lost. The block's size alone decides it.
+ * NAME_MIN_PX; a block too small even for three letters keeps its name at MIN_TEXT_PX over the edge, never lost. The block's size alone decides it.
  */
 export function nameLayout(b: NameBox, scale: number): NameLayout {
   const text = b.text ?? 'x'.repeat(b.chars);
@@ -82,9 +82,9 @@ export function nameLayout(b: NameBox, scale: number): NameLayout {
     if (!best || px > best.px + 0.01) best = { px, lines };
   }
   if (best!.px >= NAME_MIN_PX) return best!;
-  // no layout reaches the floor: cut the name short, at MIN_TEXT_PX, where one line of that size fits the block
-  const n = Math.floor(along / (MIN_TEXT_PX * NAME_EM));
-  if (!b.rot && n >= 3 && n < text.length && across >= MIN_TEXT_PX * NAME_LINE) return { px: MIN_TEXT_PX, lines: [text.slice(0, n - 1).trimEnd() + '…'] };
+  // no layout reaches the floor: cut the name short, at the floor size, where one line fits the block
+  const n = Math.floor(along / (NAME_MIN_PX * NAME_EM));
+  if (!b.rot && n >= 3 && n < text.length && across >= NAME_MIN_PX * NAME_LINE) return { px: NAME_MIN_PX, lines: [text.slice(0, n - 1).trimEnd() + '…'] };
   return { px: MIN_TEXT_PX, lines: nameBreaks(text).reduce((a, l) => (Math.max(...l.map((x) => x.length)) < Math.max(...a.map((x) => x.length)) ? l : a), [text]) };
 }
 
