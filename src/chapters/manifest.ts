@@ -406,12 +406,12 @@ export const MANIFEST: readonly ChapterMeta[] = [
   ] },
   { id: "pixels", num: 33, title: "Pixels and triangles", blurb: "A framebuffer scanned out to the screen, double buffering and vsync; edge functions in fixed point, a rasterizer that walks a triangle in tiles, one pixel a cycle; a depth buffer and blending; your own drawing, cut into triangles.", level: "Throughput", builds: ["memory","muldiv"], recap: {"checks":3}, steps: [
     { title: "A frame in memory" },
-    { title: "The beam on a tube" },
     { title: "Inside a triangle", challenge: "quiz" },
     { title: "Walking tiles", challenge: "quiz" },
     { title: "Depth", challenge: "quiz" },
     { title: "Blending", challenge: "quiz" },
     { title: "Your own picture", challenge: "quiz" },
+    { title: "The beam on a tube" },
   ] },
   { id: "graphics", num: 34, title: "The graphics pipeline", blurb: "A vertex kernel on the warp core, a command unit feeding the rasterizer, the frames double-buffered: a spinning triangle and a cube at gate level, and where the gates and cycles go.", level: "Throughput", builds: ["warps","feed","pixels"], recap: {"checks":3}, steps: [
     { title: "Vertices are a kernel", challenge: "quiz" },

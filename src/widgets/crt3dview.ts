@@ -28,7 +28,7 @@ const VIEWS: Record<string, OrbitView> = {
 /** A phone's stage is narrow: stand further back so the whole tube is in it. */
 const viewOf = (name: string): OrbitView => {
   const o = VIEWS[name], narrow = typeof matchMedia === 'function' && matchMedia('(max-width: 640px)').matches;
-  return { ...o, dist: o.dist * (narrow ? 1.75 : 1) };
+  return { ...o, dist: o.dist * (narrow ? 1.25 : 1) };
 };
 const hex = (n: number, d = 3) => `0x${n.toString(16).toUpperCase().padStart(d, '0')}`;
 const SVGW = 300, SVGH = 64;
