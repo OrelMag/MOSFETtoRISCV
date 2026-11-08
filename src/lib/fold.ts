@@ -9,9 +9,14 @@ import type { NetDef, Netlist } from '../sim/types';
 export interface FoldOptions {
   /** Rows between the bands (default 16). */
   gap?: number;
+  /** Cut at this column x instead of choosing (tests compare rules). */
+  cut?: number;
   /** Fold only when the drawing is wider than this many grid units (default 160). */
   minWidth?: number;
 }
+
+/** Each fold made: the first-past-half column, the cut taken, and the nets each one cuts (the pointer pairs it creates). */
+export const FOLD_LOG: { first: number; cut: number; crossFirst: number; crossCut: number }[] = [];
 
 const instOf = (end: string): string | null => (end.includes('.') ? end.slice(0, end.indexOf('.')) : null);
 
@@ -20,9 +25,9 @@ export function foldBands(nl: Netlist, opts: FoldOptions = {}): Netlist {
   const xs = nl.instances.map((i) => i.at![0]);
   const right = Math.max(...xs.map((x, k) => x + symbolGeom(nl.instances[k].def).w), ...Object.values(pins).map(([x]) => x));
   if (right < (opts.minWidth ?? 160)) return nl;
-  // the cut: the first column at or past half the width (every instance of a column moves together)
-  const cols = [...new Set(xs)].sort((a, b) => a - b);
-  const cut = cols.find((x) => x >= right / 2) ?? cols[cols.length - 1];
+  const plan = foldCut(nl), cols = plan.cols;
+  const cut = opts.cut ?? plan.cut;
+  FOLD_LOG.push({ first: plan.first, cut, crossFirst: plan.crossing(plan.first), crossCut: plan.crossing(cut) });
   const x0 = Math.min(...cols);
   const top = nl.instances.filter((i) => i.at![0] < cut);
   const h1 = Math.max(0, ...top.map((i) => i.at![1] + symbolGeom(i.def).h), ...Object.entries(pins).filter(([, [x]]) => x < cut).map(([, [, y]]) => y));
@@ -53,4 +58,20 @@ export function foldBands(nl: Netlist, opts: FoldOptions = {}): Netlist {
     return tags.length >= n.ends.length - 1 ? { ...rest, tags: true } : { ...rest, tags };
   });
   return { ...nl, pins: newPins, instances, nets };
+}
+
+/** Where foldBands cuts: among the columns within 15 % of half the width, the one the fewest nets cross (each crossing net
+ *  becomes a pointer pair), else the first column past half; with what each rule would cost, for the tests and the report. */
+export function foldCut(nl: Netlist): { cut: number; first: number; cols: number[]; crossing: (c: number) => number } {
+  const pins = nl.pins ?? {};
+  const xs = nl.instances.map((i) => i.at![0]);
+  const right = Math.max(...xs.map((x, k) => x + symbolGeom(nl.instances[k].def).w), ...Object.values(pins).map(([x]) => x));
+  const cols = [...new Set(xs)].sort((a, b) => a - b);
+  const at = new Map(nl.instances.map((i) => [i.name, i.at![0]]));
+  const xOf = (end: string) => { const i = instOf(end); return i ? at.get(i)! : (pins[end]?.[0] ?? 0); };
+  const crossing = (c: number) => nl.nets.filter((n) => n.ends.some((e) => xOf(e) < c) && n.ends.some((e) => xOf(e) >= c)).length;
+  const first = cols.find((x) => x >= right / 2) ?? cols[cols.length - 1];
+  const window = cols.filter((x) => x > cols[0] && Math.abs(x - right / 2) <= 0.15 * right);
+  const cut = window.length ? window.reduce((best, x) => (crossing(x) < crossing(best) ? x : best)) : first;
+  return { cut, first, cols, crossing };
 }
