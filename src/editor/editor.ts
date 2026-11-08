@@ -1373,8 +1373,11 @@ export class Editor {
     const finish = (ok: boolean) => {
       if (finished) return;
       finished = true;
+      // Enter or Esc: the keyboard goes back to the canvas (a click elsewhere keeps its own focus)
+      const had = document.activeElement === input;
       input.remove();
       list?.remove();
+      if (had) this.view.svg.focus({ preventScroll: true });
       done(ok ? input.value.trim() : null);
     };
     input.addEventListener('keydown', (e) => {
