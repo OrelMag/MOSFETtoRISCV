@@ -8,7 +8,7 @@ import { assemble4 } from '../isa4/asm4';
 import { decode4, JCN } from '../isa4/isa4';
 import { BCD4 } from '../isa4/programs4';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
-import { symbolGeom } from '../sim/geometry';
+import { instPort, symbolGeom } from '../sim/geometry';
 import { constWord, isZero } from './alu';
 import { Builder } from './builder';
 import { andN, busMux2, decoder, equal, incrementer, muxTree, rca } from './combinational';
@@ -24,6 +24,68 @@ const pinsAt = (names: string[], x: number, step = 4, y0 = 4): Record<string, [n
   Object.fromEntries(names.map((n, i) => [n, [x, y0 + step * i]]));
 const ins = (ps: PortDef[]) => ps.filter((p) => p.dir === 'in').map((p) => p.name);
 const outs = (ps: PortDef[]) => ps.filter((p) => p.dir === 'out').map((p) => p.name);
+
+/**
+ * Places a Builder's parts from `head` on in bands, one per output (in port order): each part in the band of the first output it
+ * feeds, in the column of its depth from the parts before `head` (columns shared by every band), so a control signal's gates read
+ * left to right on its own row and its pin sits level with the gate that drives it. Pins stay in port order, top to bottom.
+ */
+function outputBands(b: Builder, head: number, outNames: readonly string[], x0: number, gap = 8): { pins: Record<string, [number, number]>; right: number } {
+  const nets = b.nets(), body = b.instances.slice(head), inBody = new Set(body.map((i) => i.name));
+  const instOf = (e: string) => (e.includes('.') ? e.slice(0, e.indexOf('.')) : null);
+  const succ = new Map<string, string[]>(), pred = new Map<string, string[]>(), direct = new Map<string, number>(), driver = new Map<string, string>();
+  for (const n of nets) {
+    const d = instOf(n.ends[0]);
+    for (const s of n.ends.slice(1)) {
+      const t = instOf(s);
+      if (d && t && inBody.has(t)) { (succ.get(d) ?? succ.set(d, []).get(d)!).push(t); (pred.get(t) ?? pred.set(t, []).get(t)!).push(d); }
+      const k = t ? -1 : outNames.indexOf(s);
+      if (k >= 0) { driver.set(s, n.ends[0]); if (d) direct.set(d, Math.min(direct.get(d) ?? k, k)); }
+    }
+  }
+  const group = new Map<string, number>(), depth = new Map<string, number>();
+  const groupOf = (i: string): number => {
+    if (!group.has(i)) group.set(i, Math.min(direct.get(i) ?? outNames.length, ...(succ.get(i) ?? []).map(groupOf)));
+    return group.get(i)!;
+  };
+  // as late as possible: a gate's column is just before the first gate it feeds, so a wire skips no column (and no gate in it)
+  const height = new Map<string, number>();
+  const heightOf = (i: string): number => {
+    if (!height.has(i)) height.set(i, Math.max(0, ...(succ.get(i) ?? []).map((s) => heightOf(s) + 1)));
+    return height.get(i)!;
+  };
+  const cols = Math.max(...body.map((i) => heightOf(i.name))) + 1;
+  const depthOf = (i: string): number => {
+    if (!depth.has(i)) depth.set(i, Math.min(cols - 1 - heightOf(i), ...(succ.get(i) ?? []).map((s) => depthOf(s) - 1)));
+    return depth.get(i)!;
+  };
+  const colW = Array.from({ length: cols }, (_, d) => Math.max(0, ...body.filter((i) => depthOf(i.name) === d).map((i) => symbolGeom(i.def).w)));
+  const colX = colW.reduce<number[]>((xs, w, d) => [...xs, xs[d] + w + gap], [x0]);
+  const top = new Map<number, number>();
+  let y = 2;
+  for (let g = 0; g <= outNames.length; g++) {
+    const band = body.filter((i) => groupOf(i.name) === g);
+    if (!band.length) continue;
+    top.set(g, y);
+    const ys = new Array<number>(cols).fill(y);
+    for (const i of band) {
+      const d = depthOf(i.name);
+      i.at = [colX[d], ys[d]];
+      ys[d] += symbolGeom(i.def).h + 2;
+    }
+    y = Math.max(...ys) + 2;
+  }
+  const right = colX[cols] + 4;
+  const pins: Record<string, [number, number]> = {};
+  let prev = -Infinity;
+  outNames.forEach((o, k) => {
+    const dr = driver.get(o), d = dr && instOf(dr), inst = d && inBody.has(d) ? body.find((i) => i.name === d) : undefined;
+    const want = inst ? instPort(inst.def, inst.at!, inst.flip, dr!.slice(d!.length + 1), inst.rot).pos[1] : (top.get(k) ?? prev + 2);
+    prev = Math.max(want, prev + 2);
+    pins[o] = [right, prev];
+  });
+  return { pins, right };
+}
 
 // ---- Decode ----------------------------------------------------------------------------------
 
@@ -90,6 +152,7 @@ export const CPU4_DECODE: ComponentDef = (() => {
   const az = b.name(b.op1(isZero(4), ['acc'], 'A = 0'), 'az', true);
   const nc0 = b.name(b.op1(NOT, [c0]), 'nc0', true);
   const ncy = b.name(b.op1(NOT, ['cy']), 'ncy', true);
+  const head = b.instances.length; // the decoders and their inverters: a header column; the gates after it go in bands (outputBands)
   b.next();
   // Jumps: JCN's condition, ISZ's non-zero test, JUN / JMS always.
   const t = b.op1(orN(3), [b.op1(AND, [c2, az], 'A = 0?'), b.op1(AND, [c1, 'cy'], 'CY?'), b.op1(AND, [c0, b.op1(NOT, ['test'])], 'TEST = 0?')]);
@@ -148,7 +211,8 @@ export const CPU4_DECODE: ComponentDef = (() => {
   b.wire(cconst, 'cconst');
   b.wire(src, 'srcwe');
   b.wire(wrr, 'wrr');
-  const R = b.right;
+  const hx = Math.max(...b.instances.slice(0, head).map((i) => i.at![0] + symbolGeom(i.def).w)) + 12;
+  const { pins: outPins } = outputBands(b, head, outs(DECODE_PORTS), hx, 12);
   return define({
     id: 'cpu4_decode', name: 'Decode (4-bit CPU)', category: 'cpu',
     summary: 'The instruction word → every control signal of the 4-bit CPU: a decoder on OPR (one line per opcode), a second on OPA for the accumulator group, the JCN condition, and OR gates gathering the lines each control needs.',
@@ -158,7 +222,7 @@ export const CPU4_DECODE: ComponentDef = (() => {
       const c = control4(w, acc, cy, test, rz);
       return CTL4.map(([n]) => c[n]);
     },
-    netlist: () => ({ pins: { ...pinsAt(ins(DECODE_PORTS), 0, 4), ...pinsAt(outs(DECODE_PORTS), R, 3) }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { ...pinsAt(ins(DECODE_PORTS), 0, 4), ...outPins }, instances: b.instances, nets: b.nets() }),
   });
 })();
 
