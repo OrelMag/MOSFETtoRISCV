@@ -119,7 +119,7 @@ describe('water: the faucet', () => {
     const sat = fetWater(0.9, 0.5);
     expect(sat.kind).toBe('sat');
     expect(sat.choked).toBe(true);
-    expect(fetWords(sat)).toMatch(/choked/);
+    expect(fetWords(sat)).toMatch(/regulat/);
     // choked: lowering the basin (more V_DS) adds only the lambda slope
     expect(fetWater(0.9, 1.8).id / sat.id).toBeLessThan(1.1);
   });
