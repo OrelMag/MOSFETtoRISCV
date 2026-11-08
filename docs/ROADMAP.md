@@ -1,4 +1,4 @@
-# Roadmap — From MOSFET to RISC-V
+# Roadmap — From Switch to CPU: a RISC-V processor and beyond
 
 The product is a static website that walks a learner from a single transistor to a
 multi-core RISC-V processor laid out on silicon. Each level is built **only** from the
