@@ -11,6 +11,7 @@ import type { FsmInputs, FsmSpec } from '../fsm';
 import { AND, MUX2, NOT, OR, XOR } from '../gates';
 import { SR_LATCH } from '../sequential';
 import { NAND, TIE1 } from '../transistors';
+import { laid } from '../layered';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -159,14 +160,13 @@ export const MUX16: ComponentDef = (() => {
   const ys = t.map(([ta, tb], i) => b.op1(NAND, [ta, tb], `y${i}`, `y${i}`));
   b.next();
   b.wire(b.op1(merger(Array(16).fill(1), 2), ys, undefined, 'my'), 'y');
-  const R = b.right;
   return define({
     id: 'rv16_mux16', name: '16-bit 2:1 multiplexer (shared inverter)', category: 'routing',
     summary: 'y = s ? b : a on 16-bit buses: per bit ¬(¬(a·¬s) · ¬(b·s)), three NANDs, and one inverter on s for all sixteen (49 NANDs, not 64).',
     ports: [bus('a', 16, 'in'), bus('b', 16, 'in'), { name: 's', width: 1, dir: 'in', side: 'bottom' }, bus('y', 16, 'out')],
     symbol: { kind: 'mux' },
     spec: ([a, b, s]) => [s ? b : a],
-    netlist: () => ({ pins: { a: [0, 16], b: [0, 50], s: [0, 84], y: [R, 34] }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b),
   });
 })();
 
@@ -242,14 +242,13 @@ export const EQ16: ComponentDef = (() => {
   const m = b.op1(merger(Array(16).fill(1), 2), xs, 'a ⊕ b');
   b.next();
   b.wire(`${b.op(WIDE16, [m], 'all equal?')}.zero`, 'eq');
-  const R = b.right;
   return define({
     id: 'rv16_eq16', name: 'Equality (16-bit)', category: 'routing',
     summary: 'eq = (a = b): 16 XORs (a bit differs) and a zero detect over their outputs.',
     ports: [bus('a', 16, 'in'), bus('b', 16, 'in'), bit('eq', 'out')],
     symbol: { kind: 'box', label: 'A = B' },
     spec: ([a, b]) => [a === b ? 1 : 0],
-    netlist: () => ({ pins: { a: [0, 16], b: [0, 50], eq: [R, 30] }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { keepOrder: true }),
   });
 })();
 
@@ -458,13 +457,12 @@ export const RV16_DREG16: ComponentDef = (() => {
   const qs = Array.from({ length: 16 }, (_, i) => b.op1(RV16_DFF, [`${s}.o${i}`, 'clk'], `bit ${i}`));
   b.next();
   b.wire(b.op1(merger(Array(16).fill(1), 2), qs), 'q');
-  const R = b.right;
   return define({
     id: 'rv16_dreg16', name: '16-bit register, no enable (144 NANDs)', category: 'sequential',
     summary: 'Sixteen flip-flops on one clock: q ← d at every rising edge. For a register whose next value is always chosen in front of it (the PC), enable muxes would do nothing.',
     ports: [bus('d', 16, 'in'), clkIn(), bus('q', 16, 'out')],
     symbol: { kind: 'box', label: 'REG16' },
-    netlist: () => ({ pins: { d: [0, 6], clk: [0, 10], q: [R, 8] }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { keepOrder: true }),
   });
 })();
 

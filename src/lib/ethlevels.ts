@@ -113,6 +113,7 @@ export function fwdPath(shortcut = false): ComponentDef {
   const hit = fwdDefs.get(shortcut);
   if (hit) return hit;
   const m = new Rtl({
+    noSplit: true, // the campaign's l_fwd answer: drawn as a learner would build it
     id: shortcut ? 'fwd_path_rfc1141' : 'fwd_path', name: shortcut ? 'Forwarding decision, the older checksum update' : 'Forwarding decision', category: 'sequential', label: 'FORWARD', columnHeight: 40,
     summary: 'Four routes matched at once, the longest prefix wins; a bad header is dropped, a TTL that has run out, no route or the router itself goes to the slow path; forwarded, TTL − 1 and the checksum updated from the old one.',
   });

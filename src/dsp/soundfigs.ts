@@ -1,6 +1,9 @@
 // What "Speech" and "Music" measure on their two recordings, written down so the prose can quote them without fetching a clip. tests/dsp-soundfigs.test.ts recomputes every one
 // from public/dsp/*.wav, so they cannot drift from what the widgets show.
 
+/** The frame the LPC widget opens on: 100 hops of 180 samples, 2.25 s into the voice, a voiced one. */
+export const LPC_OPEN_FRAME = 100;
+
 export const SPEECH_FIGS = {
   /** SNR of the voice as 14-bit samples, μ-law and 8 uniform bits, at its own level (peaks at −1 dB of full scale) and 30 dB down. */
   muSnr: 37.3, uniform8Snr: 31.9, quietMuSnr: 28.9, quietUniform8Snr: 4.5,
@@ -10,6 +13,8 @@ export const SPEECH_FIGS = {
   rvPerSample: 39.2,
   /** Mean prediction gain of order 10 over the loud pre-emphasized frames. */
   predGain: 6.6,
+  /** The same gain on the one voiced frame the LPC widget opens on (LPC_OPEN_FRAME). */
+  openGain: 14.3,
   /** The vocoder's share of voiced frames, and the median pitch it found. */
   voicedPct: 59, pitchHz: 127,
 };

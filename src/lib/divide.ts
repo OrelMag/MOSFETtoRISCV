@@ -16,6 +16,7 @@ import { csa } from './muldiv';
 import { DFF, register } from './sequential';
 import { NAND, TIE0, TIE1 } from './transistors';
 import { bitwise, orN } from './wide';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -424,14 +425,13 @@ export function srtTerm(n: number, W: number): ComponentDef {
     ts.push(b.op1(fanout(W - n), ['qp'], `bits ${n}..${W - 1}`));
     b.next();
     b.wire(b.op1(merger([...ones(n), W - n]), ts), 't');
-    const R = b.right;
     return define({
       id: `srtterms${n}_${W}`, name: `SRT term (${W} bits)`, category: 'arithmetic',
       summary: 'The word −q·d: one two-level NAND multiplexer per divisor bit. NOT d comes from the divisor register, so it is ready long before the digit is.',
       ports: [bus('d', n, 'in'), bit('qp', 'in'), bit('qn', 'in'), bus('t', W, 'out')],
       symbol: { kind: 'box', label: '−q·d' },
       spec: W <= 52 ? ([d, qp, qn]) => [qp ? (2 ** W - 1 - d) : qn ? d : 0] : undefined,
-      netlist: () => ({ pins: { d: [0, 4], qp: [0, 10], qn: [0, 14], t: [R, 6] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { keepOrder: true, room: true }),
     });
   });
 }

@@ -94,7 +94,8 @@ export function farEnd(n: number, seed: number): number[] {
   return out.map((v) => (0.8 * v) / peak);
 }
 
-export interface EchoRun { d: number[]; e: number[]; w: number[]; erle: number; misalign: number[] }
+/** echoDb: the echo alone, before any cancelling, over the same last quarter as erle, in dB of full scale. */
+export interface EchoRun { d: number[]; e: number[]; w: number[]; erle: number; echoDb: number; misalign: number[] }
 /** A far-end signal through a hidden path, a canceller learning the path, and optionally near-end talk or noise on top. erle is over the last quarter, against the echo alone. */
 export function runEcho(o: { n: number; seed: number; taps: number; mu: number; normalized: boolean; noise?: number; talkFrom?: number; talkTo?: number; freeze?: boolean; x?: readonly number[]; near?: readonly number[] }): EchoRun {
   const x = o.x ?? farEnd(o.n, o.seed), h = echoPath(o.seed + 7), u = rng(o.seed + 11), near = o.near ?? farEnd(o.n, o.seed + 99);
@@ -111,7 +112,8 @@ export function runEcho(o: { n: number; seed: number; taps: number; mu: number; 
     d.push(mic); e.push(r.e); clean.push(echo); residual.push(echo - r.y);
     if (i % 64 === 0) { let m = 0; for (let k = 0; k < h.length; k++) m += ((h[k] ?? 0) - (f.w[k] ?? 0)) ** 2; misalign.push(10 * Math.log10(m / pathEnergy)); }
   }
-  return { d, e, w: f.w, erle: erleDb(clean, residual, Math.floor(0.75 * o.n)), misalign };
+  const q = Math.floor(0.75 * o.n), echoDb = 10 * Math.log10(clean.slice(q).reduce((a, v) => a + v * v, 0) / Math.max(1, o.n - q));
+  return { d, e, w: f.w, erle: erleDb(clean, residual, q), echoDb, misalign };
 }
 
 /** An equalizer: BPSK through a smeared channel, a known training stretch, and then decisions it makes for itself. Returns the output and the worst gap between + and − after training. */
