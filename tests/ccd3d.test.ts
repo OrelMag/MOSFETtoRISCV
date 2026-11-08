@@ -2,9 +2,9 @@
 // a lone packet keeps what ccdRetained says, charge is conserved through a whole readout, and the drawing follows.
 import { describe, expect, it } from 'vitest';
 import type { RGB, RGBA } from '../src/gl/instances';
-import { afterTransfers, CCD42_40, clockHigh } from '../src/phys/imagesensor';
+import { afterTransfers, CCD42_40, clockHigh, STACK_CCD42 } from '../src/phys/imagesensor';
 import {
-  ccdAnchors, ccdParts, CcdRun, CG_UV, COLS, CTE_DATASHEET, FULL_WELL, gateOf, GATE, highAt, phaseOf, PITCH, radiusOf, ROWS, scene, STEPS, transfer, type CcdPalette,
+  ccdAnchors, ccdParts, CcdRun, CG_UV, COLS, CTE_DATASHEET, FULL_WELL, gateOf, GATE, highAt, phaseOf, PITCH, heightOf, ROWS, scene, SI_BOTTOM, SI_DEPTH, STEPS, transfer, WELL_HI, type CcdPalette,
 } from '../src/widgets/ccd3dparts';
 
 const c = (v: number): RGB => [v, v, v], a = (v: number): RGBA => [v, v, v, 0.4];
@@ -91,16 +91,34 @@ describe('a readout', () => {
 });
 
 describe('the drawing', () => {
-  it('a packet\'s volume follows its charge', () => {
-    expect(radiusOf(FULL_WELL)).toBeCloseTo(3);
-    expect(radiusOf(FULL_WELL / 8)).toBeCloseTo(1.5);
-    expect(radiusOf(0)).toBe(0);
+  it('a packet fills its well like water: height follows charge, full well fills the well', () => {
+    expect(heightOf(FULL_WELL)).toBeCloseTo(WELL_HI);
+    expect(heightOf(FULL_WELL / 2)).toBeCloseTo(WELL_HI / 2);
+    expect(heightOf(2 * FULL_WELL)).toBeCloseTo(WELL_HI); // clipped, as the note says
+    expect(heightOf(0)).toBe(0);
   });
-  it('draws a cloud per non-empty bucket and moves them with the clock', () => {
+  it('draws the silicon as deep as the chapter\'s QE model collects (40 µm), lit from the back', () => {
+    expect(SI_DEPTH).toBe(STACK_CCD42.collect);
+    expect(SI_BOTTOM).toBe(-40);
+    const run = new CcdRun();
+    run.expose(1);
+    const parts = ccdParts({ run, t: 1, moving: 'idle' }, P);
+    expect(parts.filter((p) => p.color === P.hot && p.pos[1] < SI_BOTTOM)).toHaveLength(3 * COLS); // a beam per column: shaft + two head strokes
+    expect(ccdAnchors().map((a) => a.text)).toEqual(expect.arrayContaining(['light enters the back', 'dump gate and drain', 'output B (not read here)']));
+  });
+  it('has an output stage at each end of the register and a dump drain: one amplifier on each side', () => {
+    const run = new CcdRun();
+    run.expose(1);
+    const parts = ccdParts({ run, t: 1, moving: 'idle' }, P);
+    const followers = parts.filter((p) => p.color === P.poly && p.scale![0] === 4 && p.scale![2] === 5);
+    expect(followers).toHaveLength(2);
+    expect(followers[0].pos[0] + followers[1].pos[0]).toBeCloseTo(COLS * PITCH, 6); // mirrored about the register's middle
+  });
+  it('draws a box per non-empty bucket and moves them with the clock', () => {
     const run = new CcdRun({ v: 1, h: 1 });
     run.expose(1);
     const clouds = (parts: ReturnType<typeof ccdParts>) => parts.filter((p) => p.color === P.charge);
-    expect(clouds(ccdParts({ run, t: 1, moving: 'idle' }, P)).length).toBe(3 * ROWS * COLS);
+    expect(clouds(ccdParts({ run, t: 1, moving: 'idle' }, P)).length).toBe(ROWS * COLS);
     const z0 = clouds(ccdParts({ run, t: 1, moving: 'idle' }, P))[0].pos[2];
     run.step();
     const mid = clouds(ccdParts({ run, t: 0, moving: 'vertical' }, P))[0].pos[2], z1 = clouds(ccdParts({ run, t: 1, moving: 'vertical' }, P))[0].pos[2];
@@ -114,5 +132,34 @@ describe('the drawing', () => {
     run.step();
     const hot = ccdParts({ run, t: 1, moving: 'vertical' }, P).filter((p) => p.color === P.poly && p.emissive && p.scale![0] >= 2 * PITCH);
     expect(hot).toHaveLength(2 * ROWS); // φ1 and φ2 both high at step 1, one of each per pixel
+  });
+});
+
+describe('the reset / signal pair', () => {
+  it('each pixel: the reset gate empties the diffusion before the packet arrives, then the signal is sampled', () => {
+    const run = new CcdRun({ v: 1, h: 1 });
+    run.expose(1);
+    const seen: string[] = [];
+    let guard = 0;
+    while (!run.done() && guard++ < 10_000) {
+      const before = run.samples.length;
+      run.step();
+      if (run.hs === 3) { expect(run.resetting()).toBe(true); expect(run.fd).toBe(0); expect(run.cdsRef).toBe(true); expect(run.cdsSig).toBeNull(); seen.push('reset'); }
+      if (run.samples.length > before) { expect(run.resetting()).toBe(false); expect(run.cdsSig!.e).toBe(run.fd); expect(run.cdsSig!.uv).toBeCloseTo(run.fd * CG_UV, 6); seen.push('signal'); }
+    }
+    expect(seen.filter((x) => x === 'reset')).toHaveLength(ROWS * COLS);
+    expect(seen.filter((x) => x === 'signal')).toHaveLength(ROWS * COLS);
+  });
+  it('conserves charge across the resets, and lights the reset gate only while it pulses', () => {
+    const run = new CcdRun();
+    run.expose(1);
+    const before = run.total();
+    let lit = 0;
+    while (!run.done()) {
+      run.step();
+      if (run.resetting()) lit++;
+    }
+    expect(lit).toBe(ROWS * COLS);
+    expect(run.total()).toBeCloseTo(before, 6);
   });
 });
