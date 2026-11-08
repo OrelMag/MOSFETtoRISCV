@@ -41,6 +41,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Eighty columns", challenge: "quiz" },
     { title: "A program on cards", challenge: "quiz" },
     { title: "A machine that reads them", challenge: "reach" },
+    { title: "Inside the reader", challenge: "quiz" },
   ] },
   { id: "mosfet", num: 1, title: "The MOSFET", blurb: "A switch with no moving parts, controlled by a voltage: its three regions, and what one switch costs in time and energy.", level: "Transistors", recap: {"checks":3}, steps: [
     { title: "A switch made of silicon" },

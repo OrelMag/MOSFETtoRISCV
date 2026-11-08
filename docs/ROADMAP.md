@@ -1322,8 +1322,9 @@ main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
 - Still open, checked against main at 0a60ff0b (batch 16) on 2026-11-08:
   - FP unit tops (fpadd / fpmul / fpdiv / fpnf, #/c/float/3, 7, 9, 12, 15): in progress (Smith), a hierarchy restructure into sub-blocks that renames instances
     the float tours point at
-  - FPU CPU (#/c/float/17–21) and the pipeline variants / out-of-order units (#/c/pipeline/8, pipepay, ooo/5–7, 10), "known open" in E:/audit/smith/findings.md:
-    no commit or redraw test on main touches them (git log, tests/redrawclear*)
+  - FPU CPU and the pipeline variants (fast adders, balanced + predictor, data cache, M) redrawn on fix/circuits-cpu-variants
+    (tests/redrawclear-cpuvariants.test.ts); still open: the out-of-order units (ooo/5–7, 10), the M and bus system CPUs (pointers, not redrawn),
+    and the CSR unit's select crossbar
   - rv16_mux16 (needs a bit-sliced redraw) and srt4div8 (not switched to layered.ts): unchanged on main (git log)
   - Warp core with lsu (chapter 32): net nMo still runs through a part — routeNetlist + wiresThroughParts on warpCore({ warps: 8, lanes: 8, lsu, mul }) returns { nMo }
   - Communication circuits left on purpose: CRC-32 next-state crossings (inherent), I²C target t0 (layered's 14-unit channel cap), the computer-with-NIC bus top
