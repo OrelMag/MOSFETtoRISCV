@@ -41,6 +41,12 @@ export const STEP_MOVES: readonly (readonly StepMove[])[] = [
     { from: 'noise', step: 4, to: 'noise', toStep: 5, title: 'Power or band' },
     { from: 'noise', step: 5, to: 'noise', toStep: 6, title: "Shannon's argument, and his code" },
   ],
+  // pipeline: "The line, drawn as a factory" joins at step 5; the steps behind it move up one (the recap's keys are `recap:k`, they stay)
+  [
+    { from: 'pipeline', step: 5, to: 'pipeline', toStep: 6, title: 'Does it pay? Measured' },
+    { from: 'pipeline', step: 6, to: 'pipeline', toStep: 7, title: 'Your own instruction, pipelined' },
+    { from: 'pipeline', step: 7, to: 'pipeline', toStep: 8, title: 'A compiled program on the pipeline' },
+  ],
 ];
 
 export interface StepPlace { chapter: string; step: number }

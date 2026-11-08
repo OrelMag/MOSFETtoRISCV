@@ -11,7 +11,7 @@ import { GateSim } from '../src/sim/gatesim';
 import { HAZARDS, INDEP } from '../src/chapters/ch-pipe';
 import { PROGRAMS } from '../src/riscv/programs';
 import { tick } from './yieldtick';
-import { assemblyAnchors, assemblyParts, lampsOf, palletsAt, stationX } from '../src/widgets/assembly3dparts';
+import { STATIONS, assemblyAnchors, assemblyParts, lampsOf, palletsAt, stationX } from '../src/widgets/assembly3dparts';
 
 /** Plus a program with jal, jalr and a load whose result feeds a jalr: none of the chapter's three uses them. */
 const CALLS = `# call and return
@@ -96,6 +96,16 @@ describe('the pallets', () => {
     const k = plan.findIndex((c) => c.flush), mid = palletsAt(plan, k + 1, 0.5, ctx);
     expect(mid.filter((q) => q.z > 0 && q.wrong).length).toBe(plan[k].pulled.length);
     expect(palletsAt(plan, k, 1, ctx).filter((q) => q.wrong).length).toBe(plan[k].pulled.length);
+  });
+  it('mid-flush, the pulled pallets are named and clear of the belt, the new fetch and the bubbles are on the line', () => {
+    const k = plan.findIndex((c) => c.flush), mid = palletsAt(plan, k + 1, 0.5, ctx);
+    const pulled = mid.filter((q) => q.leaving === 'pulled');
+    expect(pulled.length).toBe(plan[k].pulled.length);
+    expect(pulled.every((q) => q.text.startsWith('pulled off') && q.z >= 14)).toBe(true);
+    expect(assemblyAnchors(mid).filter((a) => a.text.startsWith('pulled off')).length).toBe(pulled.length);
+    expect(mid.filter((q) => !q.leaving).length).toBe(5);
+    // the station names under a pulled label step aside; the others stay
+    expect(assemblyAnchors(mid).filter((a) => (STATIONS as readonly string[]).includes(a.text)).length).toBe(5 - pulled.length);
   });
   it('the retiring pallet leaves past Writeback', () => {
     const mid = palletsAt(plan, 8, 0.5, ctx);

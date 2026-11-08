@@ -46,7 +46,7 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
   const stage = modelStage(panel, {
     aria: 'The five-stage pipeline as an assembly line in 3D: Fetch, Decode, Execute, Memory and Writeback stations on a belt, a pallet for every instruction in flight, an empty pallet for a bubble',
     // the stage is as wide as the model needs: a phone's narrow one sits further back
-    camera: { target: [4, 8, 0], yaw: 0.35, pitch: 0.42, dist: typeof innerWidth === 'number' && innerWidth < 640 ? 185 : 165 },
+    camera: { target: [2, 8, 4], yaw: 0.35, pitch: 0.42, dist: typeof innerWidth === 'number' && innerWidth < 640 ? 190 : 178 },
     limits: { minDist: 70, maxDist: 420 },
     note: 'The stations are a drawing; the timing is the pipeline’s, item for item (details below).',
     draw: () => paint(),

@@ -12,7 +12,7 @@ export const PITCH = 26;
 export const stationX = (stage: number): number => (stage - 2) * PITCH;
 
 export type Kind = 'alu' | 'load' | 'store' | 'ctl' | 'bubble';
-export interface Pallet { seq: number; x: number; y: number; z: number; size: number; kind: Kind; wrong: boolean; text: string }
+export interface Pallet { seq: number; x: number; y: number; z: number; size: number; kind: Kind; wrong: boolean; text: string; /** On its way off the line: retired out of Writeback, or pulled by a flush. */ leaving?: 'retired' | 'pulled' }
 
 /** The kind of instruction by major opcode: what the cargo is coloured by. */
 export function kindOfWord(w: number): Exclude<Kind, 'bubble'> {
@@ -42,12 +42,13 @@ export function palletsAt(plan: readonly Cycle[], t: number, u: number, ctx: Ctx
     if (!prev) out.push(make(s, stationX(i), wrong));
     else if (from !== undefined) out.push(make(s, stationX(from + (i - from) * u), wrong));
     else if (i === 0) out.push(make(s, stationX(-1 + u), wrong));
-    else out.push(make(s, stationX(i), wrong, { size: u }));
+    else out.push(make(s, stationX(i), wrong, { size: Math.min(1, 2 * u) }));
   });
   prev?.slots.forEach((s, i) => {
     if (now.has(s.seq)) return;
-    if (i === 4) out.push(make(s, stationX(4 + u), false, { size: 1 - u }));
-    else out.push(make(s, stationX(i), true, { z: 22 * u, y: 3 * u }));
+    if (i === 4) out.push(make(s, stationX(4 + u), false, { size: 1 - u, leaving: 'retired' }));
+    // lifted clear of the belt within the first half of the slide, named so a still frame says what it is
+    else out.push(make(s, stationX(i), true, { z: 15 * Math.min(1, 2 * u), y: 5 * Math.min(1, 2 * u), leaving: 'pulled', text: s.valid ? 'pulled off' : 'bubble' }));
   });
   return out;
 }
@@ -76,9 +77,14 @@ export function assemblyParts(pallets: readonly Pallet[], lamps: readonly Lamp[]
 
 export function assemblyAnchors(pallets: readonly Pallet[]): Anchor[] {
   const front: [number, number, number] = [0, 0.3, 1], up: [number, number, number] = [0, 1, 0];
-  const settled = pallets.filter((p) => p.size === 1 && p.z === 0); // a pallet on its way off the line is not labelled
+  const settled = pallets.filter((p) => p.leaving !== 'retired'); // a retiring pallet is not labelled; a pulled one says so
   return [
-    ...STATIONS.map((n, i): Anchor => ({ text: n, p: [stationX(i), -1, 10], side: 'b', n: front })),
-    ...settled.map((p): Anchor => ({ text: `${p.wrong ? '✗ ' : ''}${p.text}`, p: [p.x, p.y + 9, 0], side: 't', n: up })),
+    // a station's name steps aside while a pulled pallet's label hangs where it would be
+    ...STATIONS.map((n, i): Anchor => ({ text: n, p: [stationX(i), -1, 10], side: 'b', n: front }))
+      .filter((_, i) => !pallets.some((p) => p.leaving === 'pulled' && p.x === stationX(i))),
+    // a pulled pallet's name hangs below it, clear of the arriving pallet and its label above
+    ...settled.map((p): Anchor => p.leaving === 'pulled'
+      ? { text: p.text, p: [p.x, p.y, p.z + 16], side: 'b', n: front }
+      : { text: `${p.wrong ? '✗ ' : ''}${p.text}`, p: [p.x, p.y + 9, p.z], side: 't', n: up }),
   ];
 }
