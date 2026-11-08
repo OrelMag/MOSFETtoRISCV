@@ -141,7 +141,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     const narrKind = opts.ooo || opts.wide || opts.multicycle || opts.fpu ? null : opts.pipeline ? 'cycle' : 'instr';
     const narrBox = h('div', { class: 'cpu-narr', 'aria-live': 'polite' });
     let narr: NarrLine[] = [];
-    let narrShown = '';
+    let narrShown: string | null = null; // null: the hint is drawn on the first update, as after a Reset
     /** The listing line the user clicked: its hardware stays highlighted. */
     let selPc: number | null = null;
     /** The out-of-order core: the port the selected instruction was bound to (-1: not known). */
