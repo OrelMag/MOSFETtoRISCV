@@ -7,6 +7,7 @@ import {
   absorptionDepth, CCD42_40, ccdReadTime, ccdRetained, C_FD_FF, CG_4T, darkCurrent, dynamicRangeDb, ICX285, IMX183, ktcNoise, qe, rowTime,
   SI_CUTOFF_NM, singleSlopeTime, STACK_BSI, STACK_FSI,
 } from '../phys/imagesensor';
+import { sensorStack3d } from '../widgets/sensorstack3d';
 import { groupNum } from '../sim/numfmt';
 import { adcApi, adcScene, ccdWidget, colourWidget, lightWidget, noiseWidget, pixelApi, pixelScene, pixelWidget, shutterWidget } from '../widgets/sensors';
 import { ccd3d } from '../widgets/ccd3d';
@@ -15,6 +16,7 @@ import { pixel4t3d } from '../widgets/pixel4t3d';
 import { sensorDie3d } from '../widgets/sensordie3d';
 import { numOf } from './order';
 import type { Chapter } from './types';
+import { withModel } from '../widgets/modelhost';
 
 const g = (x: number) => groupNum(Math.round(x));
 const n1 = (x: number, d = 1) => x.toFixed(d);
@@ -71,7 +73,7 @@ export const chSensors: Chapter = {
         <p>The share of photons that become counted electrons is the <strong>quantum efficiency</strong> (QE). It loses light above the silicon (microlens, colour filter, metal wiring) and light absorbed where nothing collects it. A front-illuminated pixel is lit through its own metal layers. A back-illuminated one is thinned and turned over, so light reaches the diode first: the Sony IMX183 reaches 79 % at 525 nm (FLIR's EMVA 1288 measurement). The curves are a one-dimensional absorption model fitted to such points, not a simulation of the device.</p>
         <div class="try">Move the wavelength from 400 to 1000 nm and watch the depth where the light is used up pass the back-illuminated diode's 3 µm.</div>`;
       },
-      widget: () => lightWidget(),
+      widget: () => withModel(lightWidget(), sensorStack3d()),
       challenge: {
         kind: 'quiz', question: `Why does a ${n1(STACK_BSI.collect, 0)} µm deep photodiode see little light at 1000 nm?`,
         options: ['At 1000 nm silicon absorbs over about 150 µm, so most photons pass through', 'Photons at 1000 nm have too little energy to free an electron', 'The colour filter blocks it', 'The microlens cannot focus infrared'],
