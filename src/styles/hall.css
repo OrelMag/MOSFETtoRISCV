@@ -57,6 +57,7 @@
 .hall-flat { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; }
 .hall3d .r3-lbl.blk b { font-weight: 600; }
 .hall3d .r3-lbl.die b { color: var(--accent); }
+.hall3d .r3-lbl.fail b { color: var(--bad); }
 @container (max-width: 520px) {
   .hall3d .r3-stage { aspect-ratio: 1 / 1; }
   .hall3d .r3-lbl.small { display: none; }
