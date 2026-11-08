@@ -226,6 +226,7 @@ export class CampaignPage implements Page {
     const p = progress();
     const sum = p.summary();
     const view = this.parts[0] ?? '';
+    this.head.classList.toggle('codex', view === 'codex');
     const tab = (href: string, label: string, on: boolean, ic: string) => h('a', { class: `cp-tab${on ? ' on' : ''}`, href }, icon(ic, 15), label);
     const unlock = h('label', { class: 'cp-unlock', title: 'Open every level, whatever you have solved (the parts each level may use do not change)' },
       h('input', { type: 'checkbox', ...(p.unlockAll ? { checked: true } : {}), onchange: (e: Event) => p.setUnlockAll((e.target as HTMLInputElement).checked) }),
