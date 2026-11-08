@@ -218,6 +218,12 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
 .sb-empty-chip button { pointer-events: auto; }
 .ed-grid-major { fill: var(--ed-grid-major); }
 .sb-controls { gap: 8px; }
+/* The I/O bar and the run bar share a row where they fit (each wraps inside its own part), else the I/O bar has its own row above */
+.sb-runrow { display: flex; flex-wrap: wrap; flex: none; border-top: 1px solid var(--border); background: var(--surface); }
+.sb-runrow > .controls { border-top: 0; flex: 1 1 auto; min-width: 0; }
+.sb-runrow > .sb-iobar { flex: 1 1 auto; }
+.sb-runrow > .sb-controls { flex: 100 1 560px; }
+.sb-runrow > .sb-iobar[hidden] { display: none; }
 .sb-controls .seg button { padding: 3px 9px; }
 .sb-rate { display: inline-flex; }
 .sb-level {
@@ -496,7 +502,9 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
   .sandbox:not(.sb-levelmode) .sb-bottom { overflow-y: visible; flex: none; }
   .sb-chal-body { max-height: 30vh; }
   /* the run bar wraps to two rows here: it keeps them, the canvas takes what is left */
-  .sb-center > .sb-controls { flex: none; }
+  .sb-center > .sb-runrow { flex: none; }
+  .sb-runrow > .controls { flex-basis: 100%; }
+  .sb-runrow > .sb-iobar { border-bottom: 1px solid var(--border); }
   .sb-props { border-left: 0; border-top: 1px solid var(--border); }
 }
 

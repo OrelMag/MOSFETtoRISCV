@@ -162,7 +162,7 @@ export class Editor {
   readonly props: PropsPanel;
   readonly tools: Tools;
   /** Where later phases put things: over the canvas, between the canvas and the run bar, and in the top bar. */
-  readonly slots: { overlay: HTMLElement; bottom: HTMLElement; top: HTMLElement; left: HTMLElement };
+  readonly slots: { overlay: HTMLElement; bottom: HTMLElement; top: HTMLElement; left: HTMLElement; run: HTMLElement };
   /** Autosave: 'saving' while a save is pending, else the result of the last one. */
   saveState: { state: 'saved' | 'saving' | 'error'; reason?: string } = { state: 'saved' };
   sel: Sel = {};
@@ -247,7 +247,7 @@ export class Editor {
     this.canvas.append(overlay, this.emptyEl, this.toastEl, this.modeEl, this.tipEl,
       hintBadge('drag pin → pin: wire · L: pointer (a named wire: same name = connected) · wheel zoom · Space+drag pan · ? shortcuts',
         'drag from a pin: wire · hold: menu · double-tap: open · pinch: zoom', 'sandbox', ' sb-hint'));
-    this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }), left: h('div', { class: 'sb-left' }) };
+    this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }), left: h('div', { class: 'sb-left' }), run: h('div', { class: 'sb-runrow' }) };
 
     this.sim = new EditorSim({ gateRate: () => settings.speed });
     this.sim.onChange = () => this.simChanged();
@@ -283,7 +283,8 @@ export class Editor {
       onclick: () => this.showParts(!this.el.classList.contains('pal-open')) }, icon('plus', 15), 'Parts') as HTMLButtonElement;
     this.status = h('div', { class: 'status' });
     this.controls = h('div', { class: 'controls sb-controls' });
-    const center = h('section', { class: 'sb-center' }, h('div', { class: 'sb-mid' }, this.slots.left, this.canvas), this.slots.bottom, this.controls);
+    this.slots.run.append(this.controls);
+    const center = h('section', { class: 'sb-center' }, h('div', { class: 'sb-mid' }, this.slots.left, this.canvas), this.slots.bottom, this.slots.run);
     this.topEl = h('div', { class: 'sb-top' }, this.partsBtn, this.tabs, this.slots.top, this.actionsEl);
     this.el = h('div', { class: this.level ? 'sandbox sb-levelmode' : 'sandbox' }, this.topEl, this.palette.el, center, this.props.el);
 
