@@ -455,6 +455,17 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .ch-goals ul { margin: 4px 0 2px; padding-left: 1.2em; color: var(--text); }
 .ch-goals li { margin: 0.2em 0; }
 .ch-goals-k, .recap-k, .ch-links-k, .lit-k { font: 600 11px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+/* The goals box on a chapter's first step sits after the step's first paragraph and is one line until opened (remembered per chapter). */
+.ch-goals-btn { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; width: 100%; min-height: 24px; padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.ch-goals-btn .ch-goals-k { flex: none; }
+.ch-goals-sum { flex: 1 1 9em; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; }
+.ch-goals-n { flex: none; color: var(--muted); font-size: 12px; }
+.ch-goals-btn svg { flex: none; margin-left: auto; transition: transform 0.15s; }
+.ch-goals.open .ch-goals-sum, .ch-goals.open .ch-goals-n { display: none; }
+.ch-goals.open .ch-goals-btn svg { transform: rotate(180deg); }
+.ch-goals:has(> .ch-goals-btn) { padding-top: 7px; padding-bottom: 7px; }
+.ch-goals ul[hidden] { display: none; }
+@media (pointer: coarse) { .ch-goals-btn { min-height: 40px; } }
 .ch-links { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
 .ch-links-k { margin-right: 2px; }
 .ch-chip {
