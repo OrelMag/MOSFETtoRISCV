@@ -3007,3 +3007,8 @@ svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .ne
 .foot-circuit { display: none; }
 @media (max-width: 760px) { .foot-circuit { display: inline-flex; align-items: center; min-height: 40px; flex: none; } }
 @media (max-width: 360px) { .foot-circuit { padding-inline: 10px; font-size: 0; gap: 0; } }
+
+/* A chapter's stage before its first figure (ui/pages/chapter.ts stageIntro): a card, not a later step's widget. */
+.stage-intro { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; text-align: center; color: var(--text); }
+.stage-intro p { margin: 0; font-weight: 600; font-size: 15px; }
+.stage-intro p.sub { font-weight: 400; font-size: 13.5px; color: var(--muted); max-width: 38ch; line-height: 1.5; }
