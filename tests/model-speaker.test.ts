@@ -77,7 +77,7 @@ describe('the speaker model against the chapter', () => {
     const f0 = pitchHz(w.x, loudestWindow(w.x)), d = makeDrive(codes, 'mic', false, VOICE_RATE, f0);
     const top = Math.max(...codes.map((c, i) => Math.abs(codes[(i + 1) % WINDOW] - c)));
     for (const n of [3, 30, 62]) {
-      // The real velocity: the joined samples' slope times the real peak excursion of 1 Pa on the RS180-8 at f0.
+      // The real velocity: the joined samples' slope times the real peak excursion at 94 dB SPL (1.41 Pa peak) on the RS180-8 at f0.
       const v = (poseAt(d, n + 1 - 1e-9).cone - poseAt(d, n).cone) * realMotion(f0).x * VOICE_RATE;
       expect(velocityMmS(d, n)).toBeCloseTo(v * 1000, 5);
       expect(emfVolts(d, n)).toBeCloseTo(BL * v, 9);
@@ -90,7 +90,7 @@ describe('the speaker model against the chapter', () => {
     expect(poseAt(d, 10.5).cone).toBeCloseTo((codes[10] + codes[11]) / 2 / d.peak, 12);
   });
 
-  it('the real stroke: 1 Pa on Sd, mass-controlled above Fs, and the drawn / real ratio is consistent', () => {
+  it('the real stroke: 94 dB SPL (1.41 Pa peak) on Sd, mass-controlled above Fs, and the drawn / real ratio is consistent', () => {
     expect(CMS_M_N * 1000).toBeCloseTo(1.12, 9);
     expect(1 / ((2 * Math.PI * FS_HZ) ** 2 * MMS_KG) * 1000).toBeCloseTo(1.12, 1); // Fs and Mms agree to 1 %
     const f0 = pitchHz(w.x, loudestWindow(w.x));

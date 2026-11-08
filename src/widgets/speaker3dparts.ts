@@ -121,9 +121,9 @@ export const currentA = (drive: number): number => drive * I_FULL;
 // and the moving system answers with its mechanical impedance Z = ωMms − 1/(ωCms) (damping left out), at the voice's pitch f0.
 // Above Fs = 35.7 Hz it is mass-controlled: v = F / Z, x = v / ω. (Beranek, Acoustics; Kinsler et al., Fundamentals of
 // Acoustics: the driven mass-spring oscillator. From memory, not looked up.) The window's peak sample is that excursion.
-/** 94 dB SPL re 20 µPa is 1 Pa rms; taken here as the peak pressure at the cone. */
-export const PRESSURE_PA = 1;
+/** 94 dB SPL re 20 µPa is 1 Pa rms, so the peak pressure at the cone is √2 Pa. */
 export const SPL_DB = 94;
+export const PRESSURE_PA = 20e-6 * 10 ** (SPL_DB / 20) * Math.SQRT2;
 /** Datasheet: effective area (m²), moving mass (kg), resonance (Hz). */
 export const SD_M2 = 124.7e-4, MMS_KG = 0.0179, FS_HZ = 35.7;
 /** Compliance, the datasheet's 1.12 mm/N (Fs and Mms alone give 1.11: the mass includes the air load). */
