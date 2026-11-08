@@ -11,6 +11,7 @@ import type { OrbitLimits, OrbitView } from '../gl/camera';
 import { flatFaces, flatView, type Anchor, type Part } from '../gl/parts';
 import type { Renderer } from '../gl/renderer';
 import { h, s } from '../ui/dom';
+import { declutterLabels } from './labelfit';
 
 export interface ModelStageOptions {
   /** What the canvas shows, for a screen reader. */
@@ -70,6 +71,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
       e.classList.toggle('away', dot3(a.n, sub3(eye, a.p)) < 0);
       e.style.transform = `translate(${p[0].toFixed(1)}px, ${p[1].toFixed(1)}px)`;
     });
+    declutterLabels(lblEls);
   };
 
   const drawFlat = (parts: readonly Part[], anchors: readonly Anchor[]) => {
