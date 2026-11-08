@@ -665,13 +665,14 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   alignY('plus4', P4, 26, 'a', row('pcPlus4'));
   place('vF', TIE1, [xFD - 6, row('valid') - 1]);
   if (pred) {
-    place('btb', BTB, [6, row('rs1') + 4]);
+    place('btb', BTB, wired ? [18, 50] : [6, row('rs1') + 4]);
     place('fsel', merger([1, 1]), [-3, P('pcmux', 's')[1] + 2]);
     // prediction and correction sit in a row below the pipeline registers, out of the E-stage datapath
-    place('corr', M4, [xDE + 64, T + PIPE_H + 12]);
-    place('mis', MISPREDICT, [xDE + 84, T + PIPE_H + 12]);
-    place('gndM', TIE0, [xFD + 30, T + PIPE_H + 12]);
-    place('mspc', merger([1, 1]), [xFD + 26, T + PIPE_H + 14]);
+    // wired: the prediction row under the hazard unit's rows (y 98 to 124) and the PCSrc lane (128.5)
+    place('corr', M4, wired ? [148, 142] : [xDE + 64, T + PIPE_H + 12]);
+    place('mis', MISPREDICT, wired ? [184, 134] : [xDE + 84, T + PIPE_H + 12]);
+    place('gndM', TIE0, wired ? [112, 138] : [xFD + 30, T + PIPE_H + 12]);
+    place('mspc', merger([1, 1]), wired ? [124, 134] : [xFD + 26, T + PIPE_H + 14]);
   }
   // D
   alignY('si', SI, xFD + 8, 'in', row('instr'));
@@ -692,8 +693,8 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   if (wired) { place('target', ADD, [184, 32]); alignY('clr0', CLEAR_BIT0, 172, 'in', 31); }
   else { alignY('target', ADD, xDE + 36, 'a', row('regWrite') + 6); alignY('clr0', CLEAR_BIT0, xDE + 58, 'in', row('rd') + 2); }
   if (bal) {
-    place('bcmp', BRANCH_CMP, [xDE + 14, T + PIPE_H + 12]);
-    place('jtgt', koggeStone(32), [xDE + 40, T + PIPE_H + 30]);
+    place('bcmp', BRANCH_CMP, wired ? [182, 64] : [xDE + 14, T + PIPE_H + 12]);
+    place('jtgt', koggeStone(32), wired ? [140, 90] : [xDE + 40, T + PIPE_H + 30]);
     place('gJT', TIE0, [P('jtgt', 'cin')[0] - 10, P('jtgt', 'cin')[1] + 3]);
   } else {
     place('npc', NEXT_PC, wired ? [182, 60] : pred ? [xDE + 14, T + PIPE_H + 12] : [xDE + 52, row('jalr') + 4]);
@@ -845,7 +846,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     const cpcNet = nets.find((n) => n.name === 'CorrectPC')!;
     cpcNet.ends.push('btb.targetE'); // tags: true covers the new end too
     nets.splice(nets.findIndex((n) => n.name === 'isJumpE'), 1);
-    instances.push({ name: 'isJ', def: OR, at: [xDE + 64, T + PIPE_H + 30] });
+    instances.push({ name: 'isJ', def: OR, at: wired ? [128, 150] : [xDE + 64, T + PIPE_H + 30] });
     defs.set('isJ', OR);
     nets.find((n) => n.name === 'JumpE')!.ends.push('isJ.a');
     nets.find((n) => n.name === 'JalrE')!.ends.push('isJ.b');
@@ -1031,8 +1032,8 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     rows('PCTargetE', { 'pcmux.d1': [[194, yOf('target.s')], [194, -7.5], [-3, -7.5], [-3, yOf('pcmux.d1')]] });
     rows('JalrTargetE', { 'pcmux.d2': [[180, yOf('clr0.out')], [180, -6.5], [-2, -6.5], [-2, yOf('pcmux.d2')]] });
     rows('PCSrcE', {
-      'pcmux.s': [[198, yOf('npc.pcSrc')], [198, BOT.pcSrc], [xOf('pcmux.s'), BOT.pcSrc]],
-      'hz.pcSrcE': [[198, yOf('npc.pcSrc')], [198, yOf('hz.pcSrcE')]],
+      'pcmux.s': [[198, yOf(`${decide}.pcSrc`)], [198, BOT.pcSrc], [xOf('pcmux.s'), BOT.pcSrc]],
+      'hz.pcSrcE': [[198, yOf(`${decide}.pcSrc`)], [198, yOf('hz.pcSrcE')]],
     });
     rows('enFD', { 'FD.en': [[38, yOf('hz.enFD')], [38, yOf('FD.en')]] });
     rows('flushFD', { 'FD.clr': [[36, yOf('hz.flushFD')], [36, yOf('FD.clr')]] });
@@ -1064,6 +1065,13 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     rows('FwdM', Object.fromEntries(['fwdA.d2', 'fwdA.d3', 'fwdB.d2', 'fwdB.d3'].map((e) => [e, [...fm, [124, yOf(e)]]])));
     rows('forwardA', { 'fwdA.s': [[86, yOf('hz.forwardA')], [86, 95], [128, 95], [128, 30], [xOf('fwdA.s'), 30]] });
     rows('forwardB', { 'fwdB.s': [[87, yOf('hz.forwardB')], [87, 96], [130, 96], [130, 43], [xOf('fwdB.s'), 43]] });
+    if (bal) {
+      // look-ahead forwarding: the hazard unit's selects go into ID/EX (rows 70, 72) and come out of it beside the muxes
+      rows('forwardA', { 'fwdA.s': [[128, yOf('DE.fwdAE')], [128, 30], [xOf('fwdA.s'), 30]] });
+      rows('forwardB', { 'fwdB.s': [[130, yOf('DE.fwdBE')], [130, 43], [xOf('fwdB.s'), 43]] });
+      rows('fwdNextA', { 'DE.fwdAD': [[85, yOf('hz.forwardA')], [85, yOf('DE.fwdAD')]] });
+      rows('fwdNextB', { 'DE.fwdBD': [[86, yOf('hz.forwardB')], [86, yOf('DE.fwdBD')]] });
+    }
     // the data rows: the immediate and the PC on to EM, with branches to their users
     rows('RD2E', { 'fwdB.d0': [[122, yOf('DE.rd2E')], [122, yOf('fwdB.d0')]] });
     rows('PCE', { 'srcA.b': [[142, yOf('DE.pcE')], [142, yOf('srcA.b')]], 'target.a': [[182, yOf('DE.pcE')], [182, yOf('target.a')]] }, undefined);
@@ -1076,11 +1084,11 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     rows('ALUSrcAE', { 'srcA.s': [[143, yOf('DE.aluSrcAE')], [143, 28.5], [xOf('srcA.s'), 28.5]] });
     rows('ALUSrcBE', { 'srcB.s': [[xOf('srcB.s'), yOf('DE.aluSrcBE')]] });
     rows('ALUControlE', { 'alu.ctl': [[158, yOf('DE.aluCtlE')], [158, 43], [xOf('alu.ctl'), 43]] });
-    rows('BranchE', { 'npc.branch': [[162, yOf('DE.branchE')], [162, yOf('npc.branch')]] });
-    rows('JumpE', { 'npc.jump': [[161, yOf('DE.jumpE')], [161, yOf('npc.jump')]] });
-    rows('JalrE', { 'npc.jalr': [[160, yOf('DE.jalrE')], [160, yOf('npc.jalr')]] });
-    rows('funct3E', { 'npc.funct3': [[163, yOf('DE.funct3E')], [163, yOf('npc.funct3')]] });
-    ([['Zero', 'zero', 168], ['Neg', 'neg', 167], ['Ovf', 'ovf', 166], ['Carry', 'carry', 165]] as const).forEach(([n, p, x]) => rows(n, { [`npc.${p}`]: [[x, yOf(`alu.${p}`)], [x, yOf(`npc.${p}`)]] }));
+    rows('BranchE', { [`${decide}.branch`]: [[162, yOf('DE.branchE')], [162, yOf(`${decide}.branch`)]] });
+    rows('JumpE', { [`${decide}.jump`]: [[161, yOf('DE.jumpE')], [161, yOf(`${decide}.jump`)]] });
+    rows('JalrE', { [`${decide}.jalr`]: [[160, yOf('DE.jalrE')], [160, yOf(`${decide}.jalr`)]] });
+    rows('funct3E', { [`${decide}.funct3`]: [[163, yOf('DE.funct3E')], [163, yOf(`${decide}.funct3`)]] });
+    if (!bal) ([['Zero', 'zero', 168], ['Neg', 'neg', 167], ['Ovf', 'ovf', 166], ['Carry', 'carry', 165]] as const).forEach(([n, p, x]) => rows(n, { [`npc.${p}`]: [[x, yOf(`alu.${p}`)], [x, yOf(`npc.${p}`)]] }));
     // M: the result forwarded from M, the memory's address, data and write enable
     rows('PCPlus4M', { 'fwdM.d2': [[xEM + 5, yOf('EM.pcPlus4M')], [xEM + 5, yOf('fwdM.d2')]] });
     rows('ImmExtM', { 'fwdM.d3': [[xEM + 4, yOf('EM.immM')], [xEM + 4, yOf('fwdM.d3')]] });
@@ -1108,9 +1116,16 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
       'EM.clr': [[xEM - 2, yOf('clr0E.y')], [xEM - 2, yOf('EM.clr')]],
       'MW.clr': [[xMW - 2, yOf('clr0E.y')], [xMW - 2, yOf('MW.clr')]],
     });
-    rows('clk', Object.fromEntries(['pc.clk', 'FD.clk', 'DE.clk', 'EM.clk', 'MW.clk'].map((e) => [e, [[xOf(e), 86]]])), ['rf.clk', 'dm.clk']);
+    rows('clk', Object.fromEntries(['pc.clk', 'FD.clk', 'DE.clk', 'EM.clk', 'MW.clk', 'btb.clk'].map((e) => [e, [[xOf(e), 86]]])), ['rf.clk', 'dm.clk']);
     for (const n of nets) if (['enPC', 'enFD', 'flushFD', 'flushDE', 'bypassA', 'bypassB', 'forwardA', 'forwardB', 'PCSrcE', 'ImmSrcD', 'opD', 'funct3D', 'funct7D', 'ALUSrcAE', 'ALUSrcBE', 'BranchE', 'JumpE', 'JalrE', 'ALUControlE', 'funct3E', 'Zero', 'Neg', 'Ovf', 'Carry', 'rs1E', 'rs2E', 'rdE', 'validE', 'resultSrcE', 'regWriteE', 'memWriteE', 'rdM', 'regWriteM', 'rdW', 'regWriteW', 'en1', 'clr0', 'MemWriteM', 'resultSrcM', 'resultSrcW', 'rs1D', 'rs2D'].includes(n.name!)) n.quiet = true;
     net('PCF').tags = ['pcF'];
+    if (pred) {
+      net('validE')!.tags = ['hz.validE', 'mis.valid'];
+      // the predictor's answers: into the IF/ID register beside it, back to the next-PC mux and the select as pointers
+      rows('PredTargetF', { 'FD.predTargetF': [[36, yOf('btb.predTarget')], [36, yOf('FD.predTargetF')]] }, ['pcmux.d1']);
+      rows('PredTakenF', { 'FD.predTakenF': [[37, yOf('btb.predTaken')], [37, yOf('FD.predTakenF')]] }, ['fsel.i0']);
+    }
+    if (pred) net('PCSrcE')!.tags = true; // the correction mux and the mispredict unit sit in the prediction row, behind the lane
   }
 
   const portPins: Record<string, [number, number]> = {};
