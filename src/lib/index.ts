@@ -35,6 +35,7 @@ export * from './cmosgates';
 export * from './storage';
 export * from './cells';
 export * from './dram';
+export * from './sensor';
 export * from './flash';
 export * from './relays';
 export * from './tubes';
