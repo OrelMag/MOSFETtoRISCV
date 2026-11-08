@@ -114,8 +114,8 @@ function cellBoxes(cell: Cell, show: Record<Layer, boolean>, ins: Record<string,
 }
 
 /** A CMOS cell drawn layer by layer, flat or in 3D; inputs switch the transistors and colour the nodes. */
-export function layoutWidget(): Widget {
-  let cell = CELLS[1], mode: '2d' | '3d' = '2d', spread = 0.35;
+export function layoutWidget(opts: { mode?: '2d' | '3d' } = {}): Widget {
+  let cell = CELLS[1], mode: '2d' | '3d' = opts.mode ?? '2d', spread = 0.35;
   const view: View3 = { yaw: -32, pitch: 48 };
   const ins: Record<string, number> = { A: 1, B: 1 };
   const show: Record<Layer, boolean> = { nwell: true, pdiff: true, ndiff: true, poly: true, metal: true, contact: true };
