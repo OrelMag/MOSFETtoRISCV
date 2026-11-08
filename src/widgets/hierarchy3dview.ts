@@ -44,7 +44,18 @@ export function hierarchyView(): Widget {
     if (stage.isFlat()) return; // one fixed view
     stage.setView(cam <= 0 ? home() : mix(home(), followView(x), ease(cam)));
   }
-  function paint(): void { stage.paint(hierarchyParts(pose(), palette()), hierarchyAnchors()); }
+  /** A label whose box would cross the canvas edge is hidden, not cut. */
+  function keepLabelsIn(): void {
+    const box = stage.el.getBoundingClientRect();
+    for (const l of stage.el.querySelectorAll<HTMLElement>('.r3-lbl')) {
+      const r = (l.querySelector('b') ?? l).getBoundingClientRect();
+      l.style.visibility = r.width > 0 && (r.left < box.left + 2 || r.right > box.right - 2 || r.top < box.top + 2 || r.bottom > box.bottom - 2) ? 'hidden' : '';
+    }
+  }
+  function paint(): void {
+    stage.paint(hierarchyParts(pose(), palette()), hierarchyAnchors(narrow()));
+    requestAnimationFrame(keepLabelsIn); // after the renderer has placed them
+  }
 
   const chip = h('span', { class: 'r3-chip' }), kv = h('div', { class: 'r3-kv' });
   const live = h('p', { class: 'r3-hint', 'aria-live': 'polite' });
