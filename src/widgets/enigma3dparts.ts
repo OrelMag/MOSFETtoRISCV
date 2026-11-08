@@ -492,7 +492,8 @@ export function caseParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void {
   }
   // The carrying handle at the back, recessed; the serial number under it.
   out.push(box(P.steel, -40, 40, 68, 71, -d - 0.6, -d, 0.3), ...wire(P.steel, [[-34, 69, -d - 0.6], [-34, 60, -d - 8], [34, 60, -d - 8], [34, 69, -d - 0.6]], 1.8, 0.4));
-  // The flap: down on the table in use, up over the plugs before enciphering ('Klappe schließen').
+  // The flap: shut (upright) over the plugs while enciphering, as its own 'Klappe schließen' and the operators' instructions
+  // say (Crypto Museum, Enigma M4); flap 1 swings it down onto the table to reach the plugs.
   const f0 = out.length, fw = w - 0.5, fy = 6, fh = WALL_H - fy;
   out.push(box(P.wood, -fw, fw, fy, fy + fh, d - 14, d, 0.05));
   grain(out, soft(P), (t, a, b) => box(P.wood, -fw + a * CASE_W, -fw + b * CASE_W, fy + 2 + t * (fh - 4), fy + 2 + t * (fh - 4) + 0.5, d, d + 0.05), 24, 33);

@@ -206,3 +206,10 @@ export function printerParts(out: Part[], p: EnigmaPose, P: EnigmaPalette): void
   out.push(...wire(P.bakelite, [[170, 100, -52], [190, 40, 40], [240, 6, 90], [300, 3, 120]], 2));
 }
 
+
+const WHEEL_NAMES = ['Greek', 'left', 'middle', 'right'];
+/** Which wheels a step moved, in words: "right", "middle and right", "left, middle and right". */
+export function movedWords(before: readonly number[], after: readonly number[]): string {
+  const m = WHEEL_NAMES.filter((_, i) => before[i] !== after[i]);
+  return m.length < 2 ? (m[0] ?? 'none') : `${m.slice(0, -1).join(', ')} and ${m[m.length - 1]}`;
+}

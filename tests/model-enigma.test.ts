@@ -8,7 +8,7 @@ import {
   type EnigmaPalette, type EnigmaPose,
 } from '../src/widgets/enigma3dparts';
 import { enigmaAnchors, enigmaParts } from '../src/widgets/enigma3dmachine';
-import { BOX_AT, BOX_SLOT, BOX_W, currentRuns, harness, spareWheels, TAPE_SHOWN } from '../src/widgets/enigma3dextras';
+import { BOX_AT, BOX_SLOT, BOX_W, currentRuns, harness, movedWords, spareWheels, TAPE_SHOWN } from '../src/widgets/enigma3dextras';
 import { quatRotate } from '../src/gl/math';
 import type { Part } from '../src/gl/parts';
 
@@ -213,5 +213,16 @@ describe('the accessories', () => {
     expect(new Enigma(s).windows()[0]).toBe('D');
     expect(enigmaParts(pose(s), P).filter((p) => p.color === P.bakelite && p.pos[0] < -60)).toHaveLength(0);
     expect(enigmaAnchors(pose(s)).map((a) => a.text)).toContain('UKW-D: in place of both');
+  });
+});
+
+describe('what a press moved, in the chip', () => {
+  it('right alone, then the double step: middle and right, then all three of the stepping wheels; the Greek wheel never', () => {
+    const s = DEFAULT_SETTINGS, mid = chr(idx(ROTORS[s.rotors[1]].turnover[0]) - 1), right = chr(idx(ROTORS[s.rotors[2]].turnover[0]) - 1);
+    const e = new Enigma({ ...s, start: `${s.start[0]}${s.start[1]}${mid}${right}` });
+    const said: string[] = [];
+    for (let k = 0; k < 3; k++) { const b = [...e.pos]; e.step(); said.push(movedWords(b, e.pos)); }
+    expect(said).toEqual(['right', 'middle and right', 'left, middle and right']);
+    expect(movedWords([1, 2, 3, 4], [1, 2, 3, 4])).toBe('none');
   });
 });
