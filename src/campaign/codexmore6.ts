@@ -15,9 +15,9 @@ payload 20 + pad of zeros 26            46 bytes (the minimum)
 FCS over the 60 bytes so far             4 bytes     = 64, the minimum frame
 preamble 7 + delimiter 1                 8 bytes     = 72 bytes = 576 bit times
 + gap 96 bit times                                    = 672 bit times
-payload share: 8 · 46 / 672 = 55 %     (a maximum frame: 8 · 1500 / 12 304 = 98 %)
+payload share: 8 · 46 / 672 = 55 %     (a maximum frame: 8 · 1500 / 12 304 = 98 %)
 address 02:00:00:00:00:01: first byte 0x02, bit 0 = 0 unicast, bit 1 = 1 local
-address 01:00:…: group;   ff:ff:ff:ff:ff:ff: broadcast</pre>The minimum frame is 576 bit times, 2,304 clocks at this book's 4 clocks a bit, 9.1 µs at 63 Mb/s. The pad is part of what the FCS covers, so pad in one place only.`,
+address 01:00:…: group;   ff:ff:ff:ff:ff:ff: broadcast</pre>The minimum frame is 576 bit times, 2304 clocks at this book's 4 clocks a bit, 9.1 µs at 63 Mb/s. The pad is part of what the FCS covers, so pad in one place only.`,
     },
     mistakes: [
       'Reading the 2-byte field as a length in an Ethernet II frame: 1536 or more is a type, and the layer above (IP\'s total length) must say where its data ends, because the pad is not described anywhere in the frame.',
@@ -32,17 +32,17 @@ address 01:00:…: group;   ff:ff:ff:ff:ff:ff: broadcast</pre>The minimum frame 
     ],
   },
   csmacd: {
-    idea: `With one wire for all stations the first rule is the human one: do not talk over someone. <b>Carrier sense</b> (the MAC's <code>crs</code>) is 1 while any station is sending, this one included. A station with a frame ready waits for the wire to be silent for the <b>inter-frame gap</b>, 96 bit times, and then sends. Ethernet is <i>1-persistent</i>: a station that finds the wire busy waits for the carrier to end and sends as soon as the gap has passed, which is efficient at low load and is why two stations that waited for the same frame send at the same instant.<br><br>Even a careful station collides, because the wire has length: until the first bit of the other frame arrives, the cable looks free. The transmitter's rule is the whole of collision detection: <b>a carrier heard while sending is a collision</b>, one AND of <code>txen</code> with the carrier from the others. It stops, sends a <b>jam</b> of 32 bits so that stations farther away also see a carrier long enough to count, and goes to <b>truncated binary exponential backoff</b>: after the n-th collision wait r slots of 512 bit times, r uniform in 0 … 2<sup>min(n, 10)</sup> − 1, and give up after 16 attempts. The draw is a free-running 10-bit LFSR sampled when the jam ends, and the seeds must differ or two stations draw equal numbers forever.<br><br>Detection needs the sender still to be sending when the news returns: with signal speed v and cable length d, 2d / v must not exceed the frame's time. That fixes the minimum frame: 512 bit times, which is 64 bytes. At 0.66 c the slot allows 5,065 m of cable by propagation alone at 10 Mb/s and 507 m at 100 Mb/s (the same count of bit times in a tenth of the time), 51 m at 1 Gb/s. A frame shorter than the round trip lets a collision go unseen: the sender finishes, believes the frame went out, and nothing is repeated.`,
+    idea: `With one wire for all stations the first rule is the human one: do not talk over someone. <b>Carrier sense</b> (the MAC's <code>crs</code>) is 1 while any station is sending, this one included. A station with a frame ready waits for the wire to be silent for the <b>inter-frame gap</b>, 96 bit times, and then sends. Ethernet is <i>1-persistent</i>: a station that finds the wire busy waits for the carrier to end and sends as soon as the gap has passed, which is efficient at low load and is why two stations that waited for the same frame send at the same instant.<br><br>Even a careful station collides, because the wire has length: until the first bit of the other frame arrives, the cable looks free. The transmitter's rule is the whole of collision detection: <b>a carrier heard while sending is a collision</b>, one AND of <code>txen</code> with the carrier from the others. It stops, sends a <b>jam</b> of 32 bits so that stations farther away also see a carrier long enough to count, and goes to <b>truncated binary exponential backoff</b>: after the n-th collision wait r slots of 512 bit times, r uniform in 0 … 2<sup>min(n, 10)</sup> − 1, and give up after 16 attempts. The draw is a free-running 10-bit LFSR sampled when the jam ends, and the seeds must differ or two stations draw equal numbers forever.<br><br>Detection needs the sender still to be sending when the news returns: with signal speed v and cable length d, 2d / v must not exceed the frame's time. That fixes the minimum frame: 512 bit times, which is 64 bytes. At 0.66 c the slot allows 5065 m of cable by propagation alone at 10 Mb/s and 507 m at 100 Mb/s (the same count of bit times in a tenth of the time), 51 m at 1 Gb/s. A frame shorter than the round trip lets a collision go unseen: the sender finishes, believes the frame went out, and nothing is repeated.`,
     example: {
       title: 'The backoff range, and the cost of a wait',
       body: `<pre>collision n    r drawn from        mean wait (slots)
      1           0 … 1              0.5
      2           0 … 3              1.5
-     3           0 … 7              3.5   = 1 792 bit times = 179.2 µs at 10 Mb/s
+     3           0 … 7              3.5   = 1792 bit times = 179.2 µs at 10 Mb/s
     10+          0 … 1023           (the range stops growing; 16 attempts, then give up)
 two stations: they collide again with probability 2^-min(n,10): ½, ¼, ⅛ …
-this book's link: 63 Mb/s, slot 512 · 4 = 2 048 clocks, 800 m of cable at 0.66 c
-news returns in time while the cable delay is under 576 · 4 / 2 = 1 152 clocks</pre>Run hard, one station often wins the wire for long stretches: the winner of a collision starts its next frame with a short range while the loser's has doubled, so the winner's next collision is again decided in its favour (<i>capture</i>). Backoff is fair to frames and unfair to stations.`,
+this book's link: 63 Mb/s, slot 512 · 4 = 2048 clocks, 800 m of cable at 0.66 c
+news returns in time while the cable delay is under 576 · 4 / 2 = 1152 clocks</pre>Run hard, one station often wins the wire for long stretches: the winner of a collision starts its next frame with a short range while the loser's has doubled, so the winner's next collision is again decided in its favour (<i>capture</i>). Backoff is fair to frames and unfair to stations.`,
     },
     mistakes: [
       'Believing a collision is an error: it is the access method working when two stations ask at once. It is detected and cleaned up in about a slot time, and no higher layer is told until 16 attempts have failed.',
@@ -58,16 +58,16 @@ news returns in time while the cable delay is under 576 · 4 / 2 = 1 152 clocks<
     ],
   },
   ethmac: {
-    idea: `The MAC speaks to the layer above in bytes and to the wire in bits. Above it the interface is a <b>byte stream</b>: <code>data[7:0]</code>, <code>valid</code>, <code>last</code>, and <code>ready</code> from the MAC; a byte moves at a clock edge where both valid and ready are 1. The frame is the bytes from the destination to the last payload byte, with no preamble and no FCS: the MAC adds those. Below it is a bit pair, <code>txd</code> with <code>txen</code> out, <code>rxd</code> with <code>crs</code> in, one bit per 4 clocks (a byte every 32), which is the MII cut down to a bit. The same stream is the interface of chapter ${numOf('switch')}'s switch.<br><br>The <b>transmitter</b> is a shift register and a few counters. At each byte boundary a state picks the next byte: seven of 0x55 and 0xD5, then the stream's bytes, then zeros until 60 bytes have gone out, then the four FCS bytes from the complemented CRC register, which a byte-wide CRC unit (1,027 NANDs) keeps current as the bytes load. It waits 96 bit times (384 clocks) of silence first. A byte that is not valid when the wire needs it is an <i>underrun</i>: the MAC ends the frame, pads it and complements the FCS on purpose, so that every receiver rejects it. The <b>receiver</b> hunts the preamble by restarting a bit counter at every edge, shifts bits into an 8-bit register until it reads 0xD5, then counts bytes, feeds the CRC and compares the first six with the station's address (or a group address, or anything with <code>promisc</code>). It cannot know where the frame ends until the carrier falls, so it holds the last four bytes plus one in a delay line: byte k leaves when byte k + 5 has arrived, and the final data byte leaves at the fall, with <code>last</code> and a valid <code>err</code>. The register then holds 0xDEBB20E3 if the frame was good; <code>why</code> names the reason otherwise.`,
+    idea: `The MAC speaks to the layer above in bytes and to the wire in bits. Above it the interface is a <b>byte stream</b>: <code>data[7:0]</code>, <code>valid</code>, <code>last</code>, and <code>ready</code> from the MAC; a byte moves at a clock edge where both valid and ready are 1. The frame is the bytes from the destination to the last payload byte, with no preamble and no FCS: the MAC adds those. Below it is a bit pair, <code>txd</code> with <code>txen</code> out, <code>rxd</code> with <code>crs</code> in, one bit per 4 clocks (a byte every 32), which is the MII cut down to a bit. The same stream is the interface of chapter ${numOf('switch')}'s switch.<br><br>The <b>transmitter</b> is a shift register and a few counters. At each byte boundary a state picks the next byte: seven of 0x55 and 0xD5, then the stream's bytes, then zeros until 60 bytes have gone out, then the four FCS bytes from the complemented CRC register, which a byte-wide CRC unit (1027 NANDs) keeps current as the bytes load. It waits 96 bit times (384 clocks) of silence first. A byte that is not valid when the wire needs it is an <i>underrun</i>: the MAC ends the frame, pads it and complements the FCS on purpose, so that every receiver rejects it. The <b>receiver</b> hunts the preamble by restarting a bit counter at every edge, shifts bits into an 8-bit register until it reads 0xD5, then counts bytes, feeds the CRC and compares the first six with the station's address (or a group address, or anything with <code>promisc</code>). It cannot know where the frame ends until the carrier falls, so it holds the last four bytes plus one in a delay line: byte k leaves when byte k + 5 has arrived, and the final data byte leaves at the fall, with <code>last</code> and a valid <code>err</code>. The register then holds 0xDEBB20E3 if the frame was good; <code>why</code> names the reason otherwise.`,
     example: {
       title: 'Cost and timing of the pair',
-      body: `<pre>transmitter 3 553 NANDs (of which the byte-wide CRC unit 1 027)
-receiver    3 213 NANDs
+      body: `<pre>transmitter 3553 NANDs (of which the byte-wide CRC unit 1027)
+receiver    3213 NANDs
 one bit 4 clocks, one byte 32 clocks
-minimum frame: 576 bit times = 2 304 clocks   (+ gap 384 clocks)
+minimum frame: 576 bit times = 2304 clocks   (+ gap 384 clocks)
 first frame after reset: 385 clocks in at the earliest
 receive: write each byte as it arrives; at last, either
-  commit pointer := write pointer (kept) or write pointer := commit pointer (never was)</pre>The alternative to commit-or-rewind, holding the whole frame in the MAC until the FCS is known, costs 1,518 bytes of RAM in every MAC and a frame time of latency on every frame.`,
+  commit pointer := write pointer (kept) or write pointer := commit pointer (never was)</pre>The alternative to commit-or-rewind, holding the whole frame in the MAC until the FCS is known, costs 1518 bytes of RAM in every MAC and a frame time of latency on every frame.`,
     },
     lib: 'eth_mac_rx',
     compare: ['eth_mac_tx'],
@@ -90,9 +90,9 @@ receive: write each byte as it arrives; at last, either
       body: `<pre>t = 4:  0x7F → 7 ⊕ F = 8     0x80 → 8 ⊕ 0 = 8     same slot
   both hosts live: each frame one sends evicts the other, whose next frame is a miss
   → flooded to 3 ports, the eviction counter ticks; connectivity survives, bandwidth does not
-16-entry table as built      28 876 NANDs  (the two RAM blocks alone 26 008)
-library CAM 16 × 59 bits     21 229        48-bit key store alone 17 357
-128 entries: table 213 699,  48-bit CAM 139 748
+16-entry table as built      28 876 NANDs  (the two RAM blocks alone 26 008)
+library CAM 16 × 59 bits     21 229        48-bit key store alone 17 357
+128 entries: table 213 699,  48-bit CAM 139 748
 empty table, A → B: flooded to the other three ports, A learned; then B → A: one port</pre>In this accounting neither is clearly cheaper. In silicon an SRAM cell is smaller than a binary CAM cell and a search charges every match line, which is why large tables are hashed RAM.`,
     },
     mistakes: [
@@ -113,11 +113,11 @@ empty table, A → B: flooded to the other three ports, A learned; then B → A:
       title: 'Latency and cost of a four-port switch',
       body: `<pre>64-byte frame, a byte a cycle:  store-and-forward out at cycle 65 (last byte in at 63)
                                  cut-through out at cycle 14 (table answered)
-1518-byte frame, 100 Mb/s:       (1518 + 8) · 8 = 12 208 bits = 122.1 µs per hop
+1518-byte frame, 100 Mb/s:       (1518 + 8) · 8 = 12 208 bits = 122.1 µs per hop
   cut-through waits for preamble + 6 address bytes: 112 bits = 1.1 µs
-crossbar 724 NANDs · arbiter 125 · output port 516 · table port 1 292
-one input buffer 142 221 NANDs with 128-byte cells, 2 219 295 with 2048-byte cells
-whole bench switch 1 195 167 NANDs (128-byte cells); 17 810 671 with 2048-byte cells</pre>The buffers dominate, almost all of it RAM, which a real switch builds as SRAM.`,
+crossbar 724 NANDs · arbiter 125 · output port 516 · table port 1292
+one input buffer 142 221 NANDs with 128-byte cells, 2 219 295 with 2048-byte cells
+whole bench switch 1 195 167 NANDs (128-byte cells); 17 810 671 with 2048-byte cells</pre>The buffers dominate, almost all of it RAM, which a real switch builds as SRAM.`,
     },
     lib: 'eth_xbar',
     compare: ['eth_out', 'eth_tport'],
@@ -142,7 +142,7 @@ abstract model, 64 ports                       0.590   (limit 2 − √2 = 0.585
 no host sends to its own port (3 choices)      0.691
 a frame takes 65 cycles to move 64 bytes: × 64/65 = 0.680   the gate-level switch measures 0.68
 one queue per output:  4 cells ≈ 0.80, 8 ≈ 0.88, 16 ≈ 0.92
-cost over one FIFO per input:  +945 NANDs (4 cells), +2 059 (8), +4 621 (16)</pre>Under a hot spot (half the traffic for one host) no discipline can deliver more than that output's line rate.`,
+cost over one FIFO per input:  +945 NANDs (4 cells), +2059 (8), +4621 (16)</pre>Under a hot spot (half the traffic for one host) no discipline can deliver more than that output's line rate.`,
     },
     mistakes: [
       'Blaming the crossbar: the fabric could carry the younger frame, but a single queue never offers it.',
@@ -160,11 +160,11 @@ cost over one FIFO per input:  +945 NANDs (4 cells), +2 059 (8), +4 621 (16)</pr
       title: 'A 74-byte ping frame through the NIC',
       body: `<pre>send:    3 + ⌈74 / 4⌉ = 22 reads (two descriptor words, 19 frame words, a look at the next)  + 1 write
 receive:  2 reads + ⌈74 / 4⌉ + 1 = 20 writes (the commit is the last)
-NIC 15 425 NANDs, of which the two MACs 3 553 + 3 213 = 6 766
-8 descriptors a ring, 1 536-byte buffers (the longest frame is 1 514)
-driver (polled): 63 lines; a 64-byte frame, doorbell to wire 279 clocks, 2 432 clocks on the cable
-  polled:      4 clocks a pass, frame seen 2 726 clocks after the doorbell, CPU busy all the time
-  by interrupt: handler 11 clocks, frame seen at 2 718, the main loop keeps 99.6 %</pre>An interrupt wins on a quiet link and polling on a busy one; real drivers switch between them.`,
+NIC 15 425 NANDs, of which the two MACs 3553 + 3213 = 6766
+8 descriptors a ring, 1536-byte buffers (the longest frame is 1514)
+driver (polled): 63 lines; a 64-byte frame, doorbell to wire 279 clocks, 2432 clocks on the cable
+  polled:      4 clocks a pass, frame seen 2726 clocks after the doorbell, CPU busy all the time
+  by interrupt: handler 11 clocks, frame seen at 2718, the main loop keeps 99.6 %</pre>An interrupt wins on a quiet link and polling on a busy one; real drivers switch between them.`,
     },
     mistakes: [
       'Writing OWN before the address and length are in place: the NIC rescans as soon as it finishes a frame and can take a half-written descriptor. The bit that gives the descriptor away goes last.',
@@ -209,9 +209,9 @@ field zero → checksum 0xB861; with 0xB861 in place the sum is 0xFFFF</pre>On t
 ARP        0001 0800 06 04 0001                               8 bytes
            sender 02:00:00:00:00:01  10.0.0.1                 10 bytes
            target 00:00:00:00:00:00  10.0.0.2                 10 bytes  = 42 bytes
-the MAC pads it to 60; on the wire 8 + 60 + 4 = 72 bytes, with the gap 84 bytes = 2 688 clocks
+the MAC pads it to 60; on the wire 8 + 60 + 4 = 72 bytes, with the gap 84 bytes = 2688 clocks
 on the gates: sending the request 410 instructions, 510 clocks;
-              answering it (and learning) 719 instructions, 912 clocks</pre>The cable holds the frame for 2,688 clocks (10.6 µs at 3.95 ns a clock) each way, about five times the software\'s time to send the request.`,
+              answering it (and learning) 719 instructions, 912 clocks</pre>The cable holds the frame for 2688 clocks (10.6 µs at 3.95 ns a clock) each way, about five times the software\'s time to send the request.`,
     },
     mistakes: [
       'Learning from every packet\'s source address: here only ARP fills the table, so a request from a host not in it has its reply dropped and an ARP request sent in its place.',
@@ -228,12 +228,12 @@ on the gates: sending the request 410 instructions, 510 clocks;
     example: {
       title: 'A ping, layer by layer, on the gates',
       body: `<pre>data 32 + ICMP 8 = 40;  + IPv4 20 = 60 (total length 0x003C);  + Ethernet 14 = 74 bytes
-+ FCS 4 + preamble and delimiter 8 = 86 bytes on the cable = 2 752 clocks (3 136 with the gap)
-round trip, request to reply: 14 689 clocks = 58.0 µs at 3.95 ns
-  cable 11 008 (four serializations of 2 752: two links each way, switch store-and-forward)
-  software 3 673;  the switch's turnaround 8
-receive and answer one echo request: 1 491 instructions, 1 882 clocks = 60 % of a frame time
-  48 % of those clocks are the byte helpers</pre>Two computers, each the system CPU with a NIC, behind the four-port switch: 12,471,821 NANDs, the compiled stack 1,711 instructions in A and 1,322 in B.`,
++ FCS 4 + preamble and delimiter 8 = 86 bytes on the cable = 2752 clocks (3136 with the gap)
+round trip, request to reply: 14 689 clocks = 58.0 µs at 3.95 ns
+  cable 11 008 (four serializations of 2752: two links each way, switch store-and-forward)
+  software 3673;  the switch's turnaround 8
+receive and answer one echo request: 1491 instructions, 1882 clocks = 60 % of a frame time
+  48 % of those clocks are the byte helpers</pre>Two computers, each the system CPU with a NIC, behind the four-port switch: 12 471 821 NANDs, the compiled stack 1711 instructions in A and 1322 in B.`,
     },
     mistakes: [
       'Using the frame\'s length as the datagram\'s: a 20-byte message is padded to 60 bytes of frame, and only the total length says where it ends.',

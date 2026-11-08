@@ -815,6 +815,8 @@ const CLIPPED = `(() => {
   const top = document.querySelector('.sb-top');
   if (!top) return [];
   const tabs = top.querySelector('.sb-tabs'), tr = tabs.getBoundingClientRect(), R = top.getBoundingClientRect().right;
+  // a phone: the tabs are display: contents (the open tab, Open… and New chip are rows of the bar itself)
+  const flat = getComputedStyle(tabs).display === 'contents';
   const out = [];
   for (const el of top.querySelectorAll('.sb-tab.on, .sb-open, .sb-new, .sb-top-slot > *, .sb-actions > button')) {
     const b = el.getBoundingClientRect();
@@ -823,12 +825,13 @@ const CLIPPED = `(() => {
     if (!b.width) continue;
     const name = (el.textContent || el.getAttribute('aria-label') || el.className).trim().slice(0, 24);
     if (el.scrollWidth > el.clientWidth + 1) out.push('toolbar label cut: ' + name);
-    else if (tabs.contains(el) && (b.left < tr.left - 1 || b.right > tr.right + 1)) out.push('toolbar item scrolled out of view: ' + name);
+    else if (!flat && tabs.contains(el) && (b.left < tr.left - 1 || b.right > tr.right + 1)) out.push('toolbar item scrolled out of view: ' + name);
     else if (b.right > R + 1) out.push('toolbar item past the bar: ' + name);
   }
   // the open tab slid under the sticky Open… / New chip group (many tabs: editor.ts showActiveTab)
   const on = top.querySelector('.sb-tab.on'), grp = top.querySelector('.sb-new-grp');
-  if (on && grp && on.getBoundingClientRect().right > grp.getBoundingClientRect().left + 1) out.push('open tab under New chip: ' + on.textContent.trim().slice(0, 24));
+  const ob = on && on.getBoundingClientRect(), gb = grp && grp.getBoundingClientRect();
+  if (on && grp && ob.right > gb.left + 1 && ob.bottom > gb.top + 1 && gb.bottom > ob.top + 1) out.push('open tab under New chip: ' + on.textContent.trim().slice(0, 24));
   return out;
 })()`;
 

@@ -142,6 +142,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .img-menu { min-width: 240px; left: 0; right: auto; }
 .pal-head { padding: 8px 10px 2px; font: 600 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); border-top: 1px solid var(--border); margin-top: 4px; }
 .pal-menu > .pal-head:first-child { border-top: 0; margin-top: 0; }
+/* a long list (some 2300 px in a 730 px popover): the section being read keeps its heading in view */
+.pal-menu > .pal-head { position: sticky; top: 0; z-index: 1; background: var(--surface); }
 .pal-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 .pal-mods i { background: hsl(var(--chip-h) var(--chip-fill-s) var(--chip-fill-l)); border: 1px solid hsl(var(--chip-h) var(--chip-stroke-s) var(--chip-stroke-l)); }
 .pal-mods .m0 { --chip-h: 145; } .pal-mods .m1 { --chip-h: 45; } .pal-mods .m2 { --chip-h: 215; } .pal-mods .m3 { --chip-h: 330; }
@@ -267,8 +269,13 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   position: fixed; left: 8px; top: 8px; z-index: 90; transform: translateY(-200%);
   padding: 8px 14px; border: 0; border-radius: 9px; background: var(--accent); color: var(--accent-text, #fff); font: 600 14px var(--font-ui); cursor: pointer;
 }
-.skip-link:focus { transform: none; outline: 2px solid var(--accent); outline-offset: 2px; }
+/* focused, it sits just under the top bar: over the bar it covered the brand */
+.skip-link:focus { transform: none; top: calc(var(--topbar-h) + 6px); outline: 2px solid var(--accent); outline-offset: 2px; }
 #view:focus { outline: none; }
+/* where the skip link lands on a page with no circuit: a ring the keyboard can see (a click never shows it) */
+#view:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+/* the top bar's controls: a 2 px ring, the browser's 1 px one was faint on the dark bar */
+.topbar :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .stage:focus { outline: none; }
 .stage:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
 .btn .kbd-hint { font: 500 10.5px var(--font-mono); padding: 0 5px; margin-left: 2px; border-radius: 5px; border: 1px solid var(--border-strong); border-bottom-width: 2px; color: var(--muted); background: var(--surface); }
@@ -1486,8 +1493,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 :root[data-wide] .bench:not(:has(> .stage.widget-mode)) > :is(.library, .inspector) { display: none; }
 
 /* ---------- workbench: Components / Statistics tabs, the statistics page ---------- */
-.bench-tabs { display: flex; gap: 0; padding: 8px 8px 0; border-bottom: 1px solid var(--border); }
-.bench-tab { padding: 6px 6px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+/* the four views wrap to a second row in a narrow sidebar (at 768 they were cut to "Pa… / Statis… / Benchm… / L…") */
+.bench-tabs { display: flex; flex-wrap: wrap; gap: 0; padding: 8px 8px 0; border-bottom: 1px solid var(--border); }
+.bench-tab { flex: 0 0 auto; padding: 6px 6px; white-space: nowrap; color: var(--text-2); text-decoration: none; font-weight: 500; font-size: 13px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .hw-inner > .bench-tabs { gap: 2px; }
 .hw-inner .bench-tab { padding: 6px 8px; font-size: 13.5px; }
 .bench-tab:hover { color: var(--text); }
@@ -2475,6 +2483,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   .bench-tab { display: flex; align-items: center; }
   .lib-item { align-items: center; }
   .in-num button { min-width: 40px; min-height: 40px; }
+  /* the home journey's "↑ n sections above" (24 px tall) */
+  .ladder-up { min-height: 40px; }
   /* the footer's links sit in its text (inline links, which WCAG 2.5.8 exempts): 32 px lines, each link padded to its line's height */
   .footer { line-height: 32px; }
   .footer a { padding-block: 8px; }
@@ -2802,6 +2812,13 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
   .topbar[data-nav='tight'] .nav a span.cap { font-size: 9px; font-weight: 500; letter-spacing: -0.03em; }
   .topbar[data-nav='icons'] .nav a span.cap { display: none; }
   .topbar[data-nav='icons'] .nav a { justify-content: center; min-width: 30px; }
+  .topbar[data-nav='snug'] .nav a span.cap { display: none; }
+  .topbar[data-nav='snug'] .nav a { justify-content: center; min-width: 32px; padding-inline: 2px; }
+}
+/* under a finger every section link is at least 40 px wide (navfit then sheds captions sooner; each link keeps its name) */
+@media (pointer: coarse) {
+  .nav a, .topbar[data-nav='tight'] .nav a, .topbar[data-nav='icons'] .nav a { min-width: 40px; }
+  .seg[role=radiogroup] button { min-height: 40px; }
 }
 
 /* the touch hint is one line, and 360 px is a few characters short of the sandbox's */

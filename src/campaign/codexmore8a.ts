@@ -7,11 +7,11 @@ export const MORE8A: Record<string, CodexMore> = {
     idea: `A bit sent now is still on the line when the next is sent, so a line has a volume: <b>rate × travel time</b> bytes are in flight at any instant, 35 MB for 10 Gb/s to London. The sender cannot forget a byte until its acknowledgement returns, so what it must hold, and what its window must allow, is <b>rate × round trip</b>. That is the bandwidth-delay product. It is the one number that links a faster line to a bigger buffer: the rate scales it and no upgrade shortens the delay part.<br><br>The same number appears wherever something waits for an answer. A sliding window fills the pipe when W reaches the round trip in frame times, 1 + 2a slots; TCP's receive window has to be at least this much or the line idles; a router buffer of one BDP lets a single loss-based sender recover without emptying the line, and any more only becomes queueing delay. On a long fat path the arithmetic is unforgiving: Reno climbs back from a halved window at a packet a round trip, which on a 1 Gb/s, 100 ms path takes minutes.`,
     example: {
       title: 'Three lines, one product',
-      body: `<pre>10 Gb/s to London, 5 600 km: travel 28 ms     → 35 MB on the line  (10¹⁰ × 0.028 / 8)
-100 Mb/s, 3 000 km: travel 15 ms                → 187.5 kB
-1 Gb/s, round trip 100 ms                       → 12.5 MB = 8 333 packets of 1 500 bytes
+      body: `<pre>10 Gb/s to London, 5600 km: travel 28 ms     → 35 MB on the line  (10¹⁰ × 0.028 / 8)
+100 Mb/s, 3000 km: travel 15 ms                → 187.5 kB
+1 Gb/s, round trip 100 ms                       → 12.5 MB = 8333 packets of 1500 bytes
 1 Gb/s, round trip 40 ms                        → 5 MB to fill it; a 500 kB window uses a tenth
-after one loss Reno climbs back 4 167 round trips ≈ 7 minutes on the 100 ms path</pre>The rate in bits a second divided by eight gives bytes; the time is the one way trip for what is on the line and the round trip for the window.`,
+after one loss Reno climbs back 4167 round trips ≈ 7 minutes on the 100 ms path</pre>The rate in bits a second divided by eight gives bytes; the time is the one way trip for what is on the line and the round trip for the window.`,
     },
     mistakes: [
       'Using the one-way travel time for a window. The data cannot be forgotten until the acknowledgement is back, so the window is rate × round trip: twice what is on the line in one direction.',
@@ -31,7 +31,7 @@ after one loss Reno climbs back 4 167 round trips ≈ 7 minutes on the 100 ms pa
     example: {
       title: 'What a layered packet costs on Ethernet',
       body: `<pre>around the data:  TCP 20 + IP 20 + Ethernet header 14 + FCS 4 + preamble and start 8 + gap 12 = 78 bytes
-1 460 data bytes  → 1 538 on the wire   94.9 % data
+1460 data bytes  → 1538 on the wire   94.9 % data
 1 data byte       → 59-byte frame padded by 5 to the 64-byte minimum → 84 on the wire   1.2 % data</pre>The 8 bytes of preamble and start and the 12 of gap occupy the line, though no layer calls them a header.`,
     },
     mistakes: [
@@ -100,8 +100,8 @@ a = e^(−2π · 1 / 8) = 0.456 of the last level left after each bit
       body: `<pre>taps sum to 16: 8-bit input → 12-bit output (−128 × 16 = −2048 fits)
 gain cos⁴(π f):  1 at DC,  0.250 at a quarter of the sample rate,  0 at half
 + − + − + once the registers are full: 1 − 4 + 6 − 4 + 1 = 0
-fixed taps         1 140 NANDs, 600 of them in five 8-bit registers
-programmable taps  + 3 × 632 = 1 896 NANDs for the 8 × 8 multipliers (it more than doubles)
+fixed taps         1140 NANDs, 600 of them in five 8-bit registers
+programmable taps  + 3 × 632 = 1896 NANDs for the 8 × 8 multipliers (it more than doubles)
 the adders\' ripple carries set the period: 40 gate delays after an edge</pre>`,
     },
     lib: 'fir5',

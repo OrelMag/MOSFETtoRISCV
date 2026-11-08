@@ -8,7 +8,8 @@
 .lp-lead { color: var(--text-2); font-size: 17px; max-width: 62ch; margin: 0; }
 .lp-note { color: var(--muted); font-size: 12.5px; margin: 0; }
 .lp-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
-@media (max-width: 960px) { .lp-grid { grid-template-columns: minmax(0, 1fr); } .lp-side { order: -1; } }
+/* one column: Next up first, then the learner's own tiers, the capstones after them (they took three screens above the tiers) */
+@media (max-width: 960px) { .lp-grid { grid-template-columns: minmax(0, 1fr); } .lp-grid > .lp-side { display: contents; } .lp-side > .lp-next { order: -1; } .lp-side > .lp-cap { order: 1; } }
 .lp-tiers { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .lp-side { display: flex; flex-direction: column; gap: 14px; min-width: 0; position: sticky; top: 12px; }
 
@@ -82,7 +83,7 @@ a.lp-item:hover { border-color: var(--accent); }
 .lp-verdict.bad { color: var(--text-2); }
 
 @media (pointer: coarse) {
-  .lp-chip { padding: 10px 9px; }
+  .lp-chip { display: inline-flex; align-items: center; min-height: 40px; padding: 0 9px; }
   .lp-item, .lp-th { min-height: 40px; }
   .lp-input { min-height: 40px; }
 }

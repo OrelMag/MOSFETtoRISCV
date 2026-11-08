@@ -92,7 +92,15 @@ a.sb-chal-flag:hover { filter: brightness(1.1); text-decoration: underline; }
 .sb-chal-watch { margin-left: auto; }
 .sb-chal-tests { border-top: 1px solid var(--border); padding: 4px 12px 6px 34px; background: var(--surface); }
 .sb-tp-bar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; row-gap: 2px; }
-.sb-tp-nav, .sb-tp-tools, .sb-tp-fails { display: inline-flex; align-items: center; gap: 4px; }
+.sb-tp-nav, .sb-tp-tools, .sb-tp-fails { display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; row-gap: 2px; min-width: 0; }
+.sb-tp-fold svg { transition: transform 0.15s; }
+.sb-tp-fold.open svg { transform: rotate(90deg); }
+/* folded: one line (transport, position, verdict), no scrubber, table, rate or "Keep these inputs" */
+.sb-chal-tests.folded .sb-tp-scrub, .sb-chal-tests.folded .sb-tp-body, .sb-chal-tests.folded .sb-tp-rate,
+.sb-chal-tests.folded .sb-tp-tools > .btn:not(.icon-only), .sb-chal-tests.folded .sb-tp-fails .btn:not([data-tp]) { display: none; }
+.sb-chal-tests.folded { padding-top: 2px; padding-bottom: 2px; }
+.sb-chal-tests.folded .sb-tp-nav, .sb-chal-tests.folded .sb-tp-fails { display: contents; }
+@media (max-width: 760px) { .sb-chal-tests.folded .sb-tp-name, .sb-chal-tests.folded .sb-tp-fails small { display: none; } .sb-chal-tests { padding-left: 8px; padding-right: 8px; } .sb-tp-fails { margin-left: 0; } }
 .sb-tp-tools { margin-left: auto; }
 .sb-tp-bar .btn.icon-only { padding: 3px; }
 .sb-tp-bar .btn[disabled] { opacity: 0.4; cursor: default; }
@@ -168,5 +176,8 @@ span.sb-tp-prog:hover { background: none; }
 .sb-chal-note { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
 @media (pointer: coarse) {
   .sb-chal-fold-line button { min-height: 40px; min-width: 40px; }
+  .sb-tp-rate, .sb-tp-bar .btn { min-height: 40px; }
+  .sb-tp-bar .btn.icon-only { min-width: 40px; }
 }
+@media (pointer: coarse) { a.sb-chal-flag { display: inline-flex; align-items: center; min-height: 40px; } }
 .sb-chal-hint { margin: 4px 0 2px; font-size: 12.5px; color: var(--text-2); }

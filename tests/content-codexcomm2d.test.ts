@@ -24,7 +24,7 @@ function text(id: string): string {
   const m = moreOf(id)!;
   return strip([codexById(id)!.body, m.idea, m.example?.title, m.example?.body, ...(m.mistakes ?? []), ...(CHECKS[id] ?? []).flatMap((q) => [q.question, q.explain, ...q.options, ...(q.why ?? [])])].join(' '));
 }
-const flat = (s: string) => s.replace(/(\d),(?=\d{3}(?!\d))/g, '$1');
+const flat = (s: string) => s.replace(/(\d)[,   ](?=\d{3}(?!\d))/g, '$1');
 const quotes = (id: string, ...s: (string | number)[]) => { const t = flat(text(id)); for (const x of s) expect(t, `${id}: ${x}`).toContain(flat(String(x))); };
 const n = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const c = (x: number) => Math.round(x).toLocaleString('en-US');

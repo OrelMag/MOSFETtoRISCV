@@ -63,7 +63,7 @@ export const MORE3: Record<string, CodexMore> = {
   },
   bin2dec: {
     idea: 'Inside, a number is binary; to print it, it needs decimal digits. Without a divider, subtract powers of ten: count how many times 10 000 goes into x, then 1000, 100 and 10; each count is a digit and what is left is the last. A 16-bit number takes at most 32 subtractions, every digit an ASCII \'0\' plus its count. That is p_print, on RV16I, which has no divide.<br>With a multiplier, divide by multiplying: x / 10 = (x · 52 429) >> 19 for every 16-bit x, the remainder x − 10·q; compilers do this for every division by a constant. In hardware the classic is <b>double dabble</b>: shift the binary number into BCD digits a bit at a time, adding 3 to any digit of 5 or more before each shift, 16 shifts for 16 bits.',
-    example: { title: '1234 and 59 999', body: '<pre>1234    10 000 × 0, 1 000 × 1, 100 × 2, 10 × 3, left 4   → "1234", 6 subtractions\n59 999   5 + 9 + 9 + 9 subtractions, left 9               → 32, the most for 16 bits</pre>' },
+    example: { title: '1234 and 59 999', body: '<pre>1234    10 000 × 0, 1000 × 1, 100 × 2, 10 × 3, left 4   → "1234", 6 subtractions\n59 999   5 + 9 + 9 + 9 subtractions, left 9               → 32, the most for 16 bits</pre>' },
     mistakes: [
       'Comparing signed: 40 000 is −25 536 as a signed 16-bit number, so a signed compare finds it below 10 000. Use sltu.',
       'Skipping every zero digit: only leading zeros go; 105 keeps its 0, and 0 itself prints one digit.',
