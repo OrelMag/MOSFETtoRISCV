@@ -8,6 +8,7 @@ import { MS_TIMING, timingSteps } from './seq/timing';
 import { fsmPanel } from '../widgets/fsmpanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { memSizePanel } from '../widgets/memsize';
+import { core3d } from '../widgets/core3d';
 import { portCost } from '../widgets/storage';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
@@ -1213,6 +1214,18 @@ export const chMemory: Chapter = {
           ${([[2, 1], [4, 1], [4, 2]] as const).map(([r, w]) => `<tr><td>${r} / ${w}</td><td>${groupDigits(nands(regfileMP(5, 32, r, w)))}</td></tr>`).join('')}</table>`,
       },
       widget: portCost,
+    },
+    {
+      title: 'Memory in rings of iron',
+      body: `
+        <p>Before the one-transistor cell, the memory of the 1950s and 60s was a plane of <strong>ferrite cores</strong>: rings of dark ceramic about two millimetres across, each holding one bit as the direction its magnetisation circulates. Whirlwind got the first 32 × 32 × 16 array in 1953. A core has a nearly square hysteresis loop: below its switching current <em>I</em><sub>c</sub> it does not move, at or above it it flips completely.</p>
+        <p>The address needs no decoder inside the array. One X wire and one Y wire each carry half the current that flips a core, so only the core where they cross sees the whole of it: the <strong>coincident-current</strong> scheme of Forrester's patent. Every other core on those two wires sees half and holds, and that margin is the whole design.</p>
+        <p>Reading is destructive. The cycle drives the addressed core toward 0; if it held a 1 it flips, and the change of flux pulses the <strong>sense wire</strong> through all cores; if it held 0 nothing moves and the wire stays quiet. A second phase writes the bit back. To write or restore a 0, the <strong>inhibit wire</strong> carries half the current the other way, so the crossing core sees half and keeps its 0. Compared with the flip-flop RAM above, a bit costs no transistor at all: it is a ring, and the select drivers and sense amplifiers are shared by the whole plane. The price was that every read had to be followed by a write.</p>`,
+      more: {
+        real: `<p>Cores of the early planes were about 80 mil (2 mm) outside; by 1966 they were down to 13 mil (0.33 mm), and the CDC 6600 (1964) had a core cycle of 1 µs; Whirlwind's core access took about 9 µs. Planes were often wired with three wires (sense and inhibit sharing one) and the sense wire ran diagonally through the cores so that the noise of half-selected cores cancelled; the model here draws four wires and a straight sense wire, as in the IBM 1401's planes.</p>`,
+        pitfall: `<p>Assuming a core is a perfect switch. A half-select current still nudges a real core's flux a little, and thousands of them on one wire add up to noise on the sense wire that the signal has to be picked out of; the square loop below is the idealisation.</p>`,
+      },
+      widget: () => core3d(),
     },
   ],
 };

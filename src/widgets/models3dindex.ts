@@ -163,6 +163,12 @@ export const MODELS_3D: readonly Model3d[] = [
     files: ['cable3d', 'cable3dview', 'cable3dparts'], factory: 'cable3d',
     open: () => import('./cable3d').then((m) => m.cable3d()),
   },
+  {
+    id: 'cores', title: 'A core memory plane', category: 'memory', chapter: 'memory', step: 10,
+    summary: 'Sixteen ferrite cores on X, Y, sense and inhibit wires: only the core where two half currents cross flips; reads restore.',
+    files: ['core3d', 'core3dview', 'core3dparts'], factory: 'core3d', codex: ['ram', 'senseamp'],
+    open: () => import('./core3d').then((m) => m.core3d()),
+  },
 ];
 
 export const modelById = (id: string): Model3d | undefined => MODELS_3D.find((m) => m.id === id);

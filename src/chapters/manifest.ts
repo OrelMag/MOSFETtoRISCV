@@ -142,6 +142,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Stack", challenge: "reach" },
     { title: "Content-addressable memory", challenge: "reach" },
     { title: "Ports cost area" },
+    { title: "Memory in rings of iron" },
   ] },
   { id: "alu", num: 11, title: "The ALU", blurb: "Every RV32I integer operation in one block, selected by the instruction's own bits.", level: "Computing", builds: ["adders","routing"], recap: {"checks":3}, steps: [
     { title: "Bitwise operations are free parallelism" },
