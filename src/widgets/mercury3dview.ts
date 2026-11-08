@@ -41,7 +41,7 @@ export function mercuryView(): Widget {
     aria: 'EDSAC’s mercury delay line in 3D: a steel tube of mercury with a quartz crystal at each end, a train of pulses travelling along it, the amplifier, reshaper and gate that feed the pulses back, and fifteen more tanks in the same housing',
     camera: wholeView(),
     limits: { minDist: 40, maxDist: 700 },
-    note: `Length, outside diameter, slot count and pulse timing are the 1948 report’s and the sound speed is mercury’s; the bore, the wall, the housing and the electronics are drawn, not modelled. The pulses move at the real speed and spacing, ${SLOWS[0].toLocaleString('en')} times slower (${SLOWS[1].toLocaleString('en')} on the slow setting), and their weakening and spreading down the tube is exaggerated.`,
+    note: `Length, outside diameter, slot count and pulse timing are the 1948 report’s and the sound speed is mercury’s; the bore and wall, the crystals’ size, the housing (the report only says all tanks must be at the same temperature) with its 4 × 4 grid of tubes standing for a battery of 16, and the electronics are drawn, not modelled; the report’s 500 kc/s and ‘about 1.15 ms’ are 2.7 % off the 514 kHz and 1.12 ms that 5 ft 4 in and 1450 m/s give. The pulses move at the real speed and spacing, ${SLOWS[0].toLocaleString('en')} times slower (${SLOWS[1].toLocaleString('en')} on the slow setting), and their weakening and spreading down the tube is exaggerated.`,
     draw: () => paint(),
   });
   const palette = (): MercuryPalette => ({
