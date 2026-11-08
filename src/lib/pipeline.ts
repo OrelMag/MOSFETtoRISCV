@@ -643,7 +643,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   const FD = REG_FD(pred), DE = REG_DE(bal, pred), EM = REG_EM(), MW = REG_MW();
   const HZ = hazardUnit(bal);
   // The plain pipeline is drawn with wires, its bands readable as stages (see the wired block below); variants keep their pointers.
-  const wired = !pred && !bal && !dcache && !m && !o.ports && adder === 'rca';
+  const wired = !o.ports;
   const g = (d: ComponentDef) => symbolGeom(d);
   const at = new Map<string, [number, number]>();
   const defs = new Map<string, ComponentDef>();
@@ -656,7 +656,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
 
   const T = 6; // top of the pipeline registers
   const row = (f: string) => T + rowY(f);
-  const xFD = 40, xDE = 112, xEM = wired ? 204 : 196, xMW = wired ? 240 : 232;
+  const xFD = 40, xDE = 112, xEM = wired ? 204 : 196, xMW = (wired ? 240 : 232) + (dcache ? 38 : 0);
   place('FD', FD, [xFD, T]); place('DE', DE, [xDE, T]); place('EM', EM, [xEM, T]); place('MW', MW, [xMW, T]);
   // F
   alignY('pcmux', M4, 2, 'y', row('pc') + 10);
@@ -665,13 +665,14 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   alignY('plus4', P4, 26, 'a', row('pcPlus4'));
   place('vF', TIE1, [xFD - 6, row('valid') - 1]);
   if (pred) {
-    place('btb', BTB, [6, row('rs1') + 4]);
+    place('btb', BTB, wired ? [18, 50] : [6, row('rs1') + 4]);
     place('fsel', merger([1, 1]), [-3, P('pcmux', 's')[1] + 2]);
     // prediction and correction sit in a row below the pipeline registers, out of the E-stage datapath
-    place('corr', M4, [xDE + 64, T + PIPE_H + 12]);
-    place('mis', MISPREDICT, [xDE + 84, T + PIPE_H + 12]);
-    place('gndM', TIE0, [xFD + 30, T + PIPE_H + 12]);
-    place('mspc', merger([1, 1]), [xFD + 26, T + PIPE_H + 14]);
+    // wired: the prediction row under the hazard unit's rows (y 98 to 124) and the PCSrc lane (128.5)
+    place('corr', M4, wired ? [148, 142] : [xDE + 64, T + PIPE_H + 12]);
+    place('mis', MISPREDICT, wired ? [184, 134] : [xDE + 84, T + PIPE_H + 12]);
+    place('gndM', TIE0, wired ? [112, 138] : [xFD + 30, T + PIPE_H + 12]);
+    place('mspc', merger([1, 1]), wired ? [124, 134] : [xFD + 26, T + PIPE_H + 14]);
   }
   // D
   alignY('si', SI, xFD + 8, 'in', row('instr'));
@@ -692,18 +693,18 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   if (wired) { place('target', ADD, [184, 32]); alignY('clr0', CLEAR_BIT0, 172, 'in', 31); }
   else { alignY('target', ADD, xDE + 36, 'a', row('regWrite') + 6); alignY('clr0', CLEAR_BIT0, xDE + 58, 'in', row('rd') + 2); }
   if (bal) {
-    place('bcmp', BRANCH_CMP, [xDE + 14, T + PIPE_H + 12]);
-    place('jtgt', koggeStone(32), [xDE + 40, T + PIPE_H + 30]);
+    place('bcmp', BRANCH_CMP, wired ? [182, 64] : [xDE + 14, T + PIPE_H + 12]);
+    place('jtgt', koggeStone(32), wired ? [140, 90] : [xDE + 40, T + PIPE_H + 30]);
     place('gJT', TIE0, [P('jtgt', 'cin')[0] - 10, P('jtgt', 'cin')[1] + 3]);
   } else {
     place('npc', NEXT_PC, wired ? [182, 60] : pred ? [xDE + 14, T + PIPE_H + 12] : [xDE + 52, row('jalr') + 4]);
   }
   // the tie for the target adder's carry-in: above it when cin is on top (ripple carry), below-left otherwise
   const cinTop = g(ADD).ports.cin.exit === 'up';
-  place('gT', TIE0, wired ? [P('target', 'cin')[0] - 3, P('target', 'cin')[1] - 3] : cinTop ? [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 4] : [P('target', 'cin')[0] - 10, P('target', 'cin')[1] + 3]);
+  place('gT', TIE0, wired ? (cinTop ? [P('target', 'cin')[0] - 3, P('target', 'cin')[1] - 3] : [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 1]) : cinTop ? [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 4] : [P('target', 'cin')[0] - 10, P('target', 'cin')[1] + 3]);
   place('gJ', TIE0, wired ? [P('clr0', 'zero')[0] - 5, P('clr0', 'zero')[1] + 1] : [P('clr0', 'zero')[0] - 5, P('clr0', 'zero')[1] + 1]);
   // M
-  if (wired) place('dm', DM, [xEM + 18, 31]); else alignY('dm', DM, xEM + 12, 'addr', row('aluResult'));
+  if (wired) place('dm', DM, [xEM + (dcache ? 26 : 18), 31]); else alignY('dm', DM, xEM + 12, 'addr', row('aluResult'));
   if (wired) place('fwdM', M4, [xEM + 8, 31]); else alignY('fwdM', M4, xEM + 12, 'd0', row('imm') + 14);
   // W
   alignY('res', M4, xMW + 10, 'd0', row('aluResult') + (wired ? 1 : 0));
@@ -792,7 +793,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
       { name: 'Ovf', ends: ['alu.ovf', 'npc.ovf'], tags: true } as NetDef,
       { name: 'Carry', ends: ['alu.carry', 'npc.carry'], tags: true } as NetDef,
     ]),
-    { name: 'gT', ends: ['gT.y', 'target.cin'], via: { 'target.cin': cinTop ? [[P('target', 'cin')[0], P('gT', 'y')[1]]] : [[P('target', 'cin')[0] - 2, P('gT', 'y')[1]], [P('target', 'cin')[0] - 2, P('target', 'cin')[1]]] } },
+    { name: 'gT', ends: ['gT.y', 'target.cin'], via: { 'target.cin': cinTop ? [[P('target', 'cin')[0], P('gT', 'y')[1]]] : wired ? [] : [[P('target', 'cin')[0] - 2, P('gT', 'y')[1]], [P('target', 'cin')[0] - 2, P('target', 'cin')[1]]] } },
     { name: 'gJ', ends: ['gJ.y', 'clr0.zero'], via: { 'clr0.zero': [[P('clr0', 'zero')[0], P('gJ', 'y')[1]]] } },
     // M
     { name: 'validM', ends: ['EM.validM', 'MW.validM'] },
@@ -845,7 +846,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     const cpcNet = nets.find((n) => n.name === 'CorrectPC')!;
     cpcNet.ends.push('btb.targetE'); // tags: true covers the new end too
     nets.splice(nets.findIndex((n) => n.name === 'isJumpE'), 1);
-    instances.push({ name: 'isJ', def: OR, at: [xDE + 64, T + PIPE_H + 30] });
+    instances.push({ name: 'isJ', def: OR, at: wired ? [128, 150] : [xDE + 64, T + PIPE_H + 30] });
     defs.set('isJ', OR);
     nets.find((n) => n.name === 'JumpE')!.ends.push('isJ.a');
     nets.find((n) => n.name === 'JalrE')!.ends.push('isJ.b');
@@ -859,19 +860,198 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     );
   }
 
+  const yb = T + PIPE_H + 6;
+  const extraPorts: PortDef[] = [];
+  if (dcache) {
+    // A load or store that misses in M freezes every stage: the PC and all pipeline registers hold,
+    // flushes and predictor updates wait, and W reports a retirement only once, when the miss is over.
+    const yc = wired ? 96 : yb + 44, add = (name: string, def: ComponentDef, x: number, y: number) => { instances.push({ name, def, at: [x, yc + y] }); defs.set(name, def); };
+    const net = (name: string) => nets.find((n) => n.name === name)!;
+    const retarget = (name: string, from: string, to: string) => { const e = net(name).ends; e[e.indexOf(from)] = to; };
+    const sx = wired ? xEM + 22 : xEM - 20; // wired: the load test under the cache, clear of the PCSrc lane
+    add('rsl', splitter([1, 1]), sx, 0);
+    add('nrs1', NOT, sx + 4, 2);
+    add('isLd', AND, sx + 10, 0);
+    add('ldV', AND, sx + 16, 4);
+    const dmAt = at.get('dm')!, dmg = symbolGeom(DM);
+    instances.push({ name: 'go', def: NOT, at: [dmAt[0] + dmg.w - 6, dmAt[1] + dmg.h + 4] }); defs.set('go', NOT);
+    if (wired) { add('gPC', AND, 66, 4); add('gFD', AND, 66, 10); add('gFl1', AND, 66, 16); add('gFl2', AND, 66, 22); add('gV', AND, xMW + 12, 0); }
+    else { add('gPC', AND, 14, 44); add('gFD', AND, 34, 44); add('gFl1', AND, 54, 44); add('gFl2', AND, 74, 44); add('gV', AND, xMW + 12, 0); }
+    instances.splice(instances.findIndex((i) => i.name === 'en1'), 1);
+    net('resultSrcM').ends.push('rsl.in');
+    net('validM').ends.push('ldV.b');
+    net('validM').tags = ['ldV.b'];
+    retarget('enPC', 'pc.en', 'gPC.a');
+    retarget('enFD', 'FD.en', 'gFD.a');
+    retarget('flushFD', 'FD.clr', 'gFl1.a');
+    retarget('flushDE', 'DE.clr', 'gFl2.a');
+    retarget('validW', 'validW', 'gV.a');
+    const en1 = net('en1');
+    en1.ends = ['go.y', 'gPC.b', 'gFD.b', 'gFl1.b', 'gFl2.b', 'gV.b', 'DE.en', 'EM.en', 'MW.en'];
+    en1.name = 'go';
+    en1.tags = true;
+    if (pred) {
+      if (wired) instances.push({ name: 'gU', def: AND, at: [90, 146] }); else add('gU', AND, xDE + 40, 0);
+      defs.set('gU', AND);
+      retarget('updE', 'btb.updE', 'gU.a');
+      en1.ends.push('gU.b');
+      nets.push({ name: 'updGo', ends: ['gU.y', 'btb.updE'], tags: true });
+    }
+    if (!net('clk').ends.includes('dm.clk')) net('clk').ends.push('dm.clk'); // (already there: the data memory's own)
+    nets.push(
+      { name: 'rs0M', ends: ['rsl.o0', 'isLd.a'], tags: true },
+      { name: 'rs1M', ends: ['rsl.o1', 'nrs1.a'] },
+      { ends: ['nrs1.y', 'isLd.b'] },
+      // a flushed bubble may still look like a load: only a valid instruction may access the cache
+      { name: 'isLoadM', ends: ['isLd.y', 'ldV.a'] },
+      { name: 'MemReadM', ends: ['ldV.y', 'dm.re'], tags: true },
+      { name: 'dstall', ends: ['dm.stall', 'go.a', 'dstall'], tags: ['dstall'] },
+      { name: 'enPCgo', ends: ['gPC.y', 'pc.en'], tags: true },
+      { name: 'enFDgo', ends: ['gFD.y', 'FD.en'], tags: true },
+      { name: 'flushFDgo', ends: ['gFl1.y', 'FD.clr'], tags: true },
+      { name: 'flushDEgo', ends: ['gFl2.y', 'DE.clr'], tags: true },
+      { name: 'retireW', ends: ['gV.y', 'validW'], tags: true },
+    );
+    extraPorts.push(bit('dstall', 'out'));
+  }
+  if (m) {
+    // ---- M extension. D: decode; E: multiply (first half) and divide; M: multiply (second half).
+    const ym = wired ? (pred ? 160 : 131) : T + PIPE_H + 72; // wired: a band under the hazard unit's rows (and the prediction row), in three groups by stage
+    const add = (name: string, def: ComponentDef, x: number, y: number, label?: string) => { instances.push({ name, def, at: [x, ym + y], label }); defs.set(name, def); };
+    const at2 = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); };
+    const net = (name: string) => nets.find((n) => n.name === name)!;
+    const drop = (name: string, end: string) => { const n = net(name); n.ends = n.ends.filter((e) => e !== end); if (Array.isArray(n.tags)) n.tags = n.tags.filter((e) => e !== end); };
+    const R = register(64), CR2 = clearableRegister(2), CR3 = clearableRegister(3), M22 = busMux2(2);
+    // D: isM = (op = OP) and (funct7 = 1); a multiply asks for the load path (ResultSrc = 01)
+    if (wired) {
+      add('kOp', constWord(7, 0x33), 40, 2); add('opM', equal(7), 49, -1);
+      add('kF7', constWord(7, 1), 40, 12); add('f7M', equal(7), 49, 9);
+      add('isMD', AND, 60, 3);
+      add('isMul', AND, 70, 2); add('isDiv', AND, 70, 9);
+      add('sf3D', splitter([2, 1]), 58, 17); add('nf2', NOT, 62, 17);
+      add('mfl', merger([1, 1]), 78, 5);
+      at2('kLd', constWord(2, 1), [86, 82.5]);
+      at2('rsm', M22, [96, 79.5], 'load path'); // under the control block, out of the rows into ID/EX
+    } else {
+      add('kOp', constWord(7, 0x33), xFD - 12, 2); add('opM', equal(7), xFD + 6, 0);
+      add('kF7', constWord(7, 1), xFD - 12, 16); add('f7M', equal(7), xFD + 6, 14);
+      add('sf3D', splitter([2, 1]), xFD + 6, 30); add('nf2', NOT, xFD + 30, 32);
+      add('isMD', AND, xFD + 30, 6);
+      add('isMul', AND, xFD + 44, 7); add('isDiv', AND, xFD + 44, 16);
+      add('mfl', merger([1, 1]), xFD + 58, 8); add('kLd', constWord(2, 1), xFD + 52, 26);
+      at2('rsm', M22, [xDE - 6, P('DE', 'resultSrcD')[1] - g(M22).ports.y.pos[1]], 'load path');
+    }
+    // E: the multiplier's first half, the divider, and the result multiplexer
+    if (wired) {
+      add('mE', CR2, 112, 0, 'M flags');
+      add('smE', splitter([1, 1]), 126, 2); add('sf3E', splitter([2, 1]), 126, 10);
+      add('goDiv', AND, 144, 0);
+      add('dive', DIV_E, 158, 0, 'divide');
+      add('mdE', busMux2(32), 178, 0, 'ALU / divide');
+      add('mule', MUL_E, 158, 16, 'multiply (E)');
+      // the divider's stall logic beside the hazard unit: the run signal gates the PC's and IF/ID's enables
+      at2('run', NOT, [58, 103]);
+      at2('gPC', AND, [66, 100]); at2('gFD', AND, [66, 106]);
+    } else {
+      add('mE', CR2, xDE + 4, 6, 'M flags');
+      add('smE', splitter([1, 1]), xDE + 18, 6); add('sf3E', splitter([2, 1]), xDE + 18, 20);
+      add('goDiv', AND, xDE + 28, 2);
+      add('mule', MUL_E, xDE + 40, 20, 'multiply (E)');
+      add('dive', DIV_E, xDE + 40, 44, 'divide');
+      add('mdE', busMux2(32), xDE + 56, -16, 'ALU / divide');
+      add('run', NOT, xDE + 58, -4);
+      add('gPC', AND, 4, 44); add('gFD', AND, 24, 44);
+    }
+    // M: the multiplier's second half, and its result in place of the memory word
+    if (wired) {
+      add('mfMd', merger([1, 2]), 196, 8);
+      add('mfM', CR3, 210, 6, 'mul?, funct3'); add('smM', splitter([1, 2]), 224, 8);
+      add('msM', R, 204, 18, 'sum'); add('mcM', R, 204, 30, 'carry');
+      add('mulm', MUL_M, 226, 19, 'multiply (M)');
+      add('rdm', busMux2(32), 242, 19, 'memory / product');
+    } else {
+      add('mfMd', merger([1, 2]), xEM - 30, 6);
+      add('mfM', CR3, xEM - 20, 4, 'mul?, funct3'); add('msM', R, xEM - 20, 20, 'sum'); add('mcM', R, xEM - 20, 36, 'carry');
+      add('smM', splitter([1, 2]), xEM + 4, 6);
+      add('mulm', MUL_M, xEM + 12, 22, 'multiply (M)');
+      add('rdm', busMux2(32), xEM + 34, 4, 'memory / product');
+    }
+    // the ID/EX enable now comes from the stall; the constants that remain move clear of the clock labels
+    if (!wired) {
+      instances.find((x) => x.name === 'en1')!.at = [xDE - 6, T + PIPE_H + 3];
+      instances.find((x) => x.name === 'clr0E')!.at = [xMW - 6, T + PIPE_H + 3];
+    }
+    // D wiring
+    net('opD').ends.push('opM.a'); net('funct7D').ends.push('f7M.a'); net('funct3D').ends.push('sf3D.in');
+    retargetEnd(net('resultSrcD'), 'DE.resultSrcD', 'rsm.a');
+    nets.push(
+      { ends: ['kOp.y', 'opM.b'] }, { ends: ['kF7.y', 'f7M.b'] },
+      { name: 'isOP', ends: ['opM.eq', 'isMD.a'], tags: wired ? undefined : true }, { name: 'f7is1', ends: ['f7M.eq', 'isMD.b'], tags: wired ? undefined : true },
+      { name: 'isMD', ends: ['isMD.y', 'isMul.a', 'isDiv.a'], tags: wired ? undefined : ['isDiv.a'] },
+      { name: 'f3hi', ends: ['sf3D.o1', 'nf2.a', 'isDiv.b'], tags: wired ? undefined : ['isDiv.b'] }, { name: '¬f3hi', ends: ['nf2.y', 'isMul.b'], tags: wired ? undefined : true },
+      { name: 'isMulD', ends: ['isMul.y', 'mfl.i0', 'rsm.s'], tags: ['rsm.s'] }, { name: 'isDivD', ends: ['isDiv.y', 'mfl.i1'], tags: wired ? undefined : true },
+      { ends: ['kLd.y', 'rsm.b'] }, { name: 'resultSrcD2', ends: ['rsm.y', 'DE.resultSrcD'] },
+      { name: 'mFlagsD', ends: ['mfl.out', 'mE.d'], tags: true },
+    );
+    // the divider's stall holds PC, IF/ID and ID/EX (and the M flags with them) and sends bubbles into M
+    retargetEnd(net('enPC'), 'pc.en', 'gPC.a');
+    retargetEnd(net('enFD'), 'FD.en', 'gFD.a');
+    drop('en1', 'DE.en');
+    net('flushDE').ends.push('mE.clr');
+    drop('clr0', 'EM.clr');
+    net('clk').ends.push('mE.clk', 'dive.clk', 'msM.clk', 'mcM.clk', 'mfM.clk');
+    net('en1').ends.push('msM.en', 'mcM.en', 'mfM.en');
+    nets.push(
+      { name: 'enPCm', ends: ['gPC.y', 'pc.en'], tags: true }, { name: 'enFDm', ends: ['gFD.y', 'FD.en'], tags: true },
+      { name: 'divStall', ends: ['dive.stall', 'run.a', 'EM.clr', 'mfM.clr'], tags: wired ? ['EM.clr', 'mfM.clr'] : true },
+      { name: 'runE', ends: ['run.y', 'DE.en', 'mE.en', 'gPC.b', 'gFD.b'], tags: wired ? ['DE.en', 'mE.en'] : true },
+      // E wiring
+      { name: 'mFlagsE', ends: ['mE.q', 'smE.in'] },
+      { name: 'isMulE', ends: ['smE.o0', 'mfMd.i0'], tags: true }, { name: 'isDivE', ends: ['smE.o1', 'goDiv.a', 'mdE.s'], tags: wired ? ['mdE.s'] : true },
+      { name: 'f3E', ends: ['sf3E.o0', 'mule.f', 'dive.f', 'mfMd.i1'], tags: wired ? ['mfMd.i1'] : true },
+      { name: 'divGo', ends: ['goDiv.y', 'dive.go'], tags: wired ? undefined : true },
+      { name: 'mulS', ends: ['mule.s', 'msM.d'], tags: true }, { name: 'mulC', ends: ['mule.c', 'mcM.d'], tags: true },
+      { name: 'divY', ends: ['dive.y', 'mdE.b'], tags: wired ? undefined : true },
+      { name: 'ALUResultE2', ends: ['mdE.y', 'EM.aluResultE'], tags: true },
+      // M wiring
+      { name: 'mFlagsM', ends: ['mfM.q', 'smM.in'] },
+      // mfM holds {isMul (bit 0), funct3[1:0]}
+      { name: 'isMulM', ends: ['smM.o0', 'rdm.s'], tags: wired ? ['rdm.s'] : true }, { name: 'f3M', ends: ['smM.o1', 'mulm.f'], tags: wired ? undefined : true },
+      { name: 'mulSM', ends: ['msM.q', 'mulm.s'] }, { name: 'mulCM', ends: ['mcM.q', 'mulm.c'] },
+      { name: 'productM', ends: ['mulm.y', 'rdm.b'], tags: wired ? undefined : true },
+      { name: 'ReadDataM2', ends: ['rdm.y', 'MW.readDataM'], tags: true },
+    );
+    nets.push({ name: 'mFlagsE2', ends: ['mfMd.out', 'mfM.d'] });
+    net('funct3E').ends.push('sf3E.in'); (net('funct3E').tags as true | string[]) = true;
+    net('validE').ends.push('goDiv.b');
+    if (Array.isArray(net('validE').tags)) (net('validE').tags as string[]).push('goDiv.b');
+    net('SrcAE').ends.push('mule.a', 'dive.a');
+    net('WriteDataE').ends.push('mule.b', 'dive.b');
+    { const t = net('SrcAE').tags; net('SrcAE').tags = [...(Array.isArray(t) ? t : []), 'mule.a', 'dive.a']; }
+    { const t = net('WriteDataE').tags; net('WriteDataE').tags = [...(Array.isArray(t) ? t : []), 'mule.b', 'dive.b']; }
+    retargetEnd(net('ALUResultE'), 'EM.aluResultE', 'mdE.a');
+    retargetEnd(net('ReadDataM'), 'MW.readDataM', 'rdm.a');
+  }
   if (wired) {
     // ---- drawn with wires. The pipeline registers wall the middle off (y 6 to 80), so a signal going back to an earlier stage
     // runs over the top (ResultW, FwdM, the register file's write port, the next-PC targets) or under the hazard unit (PCSrcE). The
     // hazard unit sits flipped below the decode stage: its inputs face the later stages, its outputs the earlier ones. The
     // control rows of the pipeline registers (y 44 and below) run straight on across a stage; the datapath sits above them.
-    const net = (name: string) => nets.find((n) => n.name === name)!;
-    const Q = (inst: string, port: string): [number, number] => instPort(defs.get(inst)!, at.get(inst)!, inst === 'hz', port).pos;
+    const net = (name: string) => nets.find((n) => n.name === name);
+    // a part the variant lacks, or a port it lacks: 0, and the net's ends decide whether a via is used at all
+    const Q = (inst: string, port: string): [number, number] => {
+      const x = instances.find((i) => i.name === inst);
+      if (!x?.at) return [0, 0];
+      try { return instPort(x.def, x.at, x.flip, port).pos; } catch { return [0, 0]; }
+    };
     const pinY: Record<string, number> = { validW: T + PIPE_H + 13, pcW: T + PIPE_H + 16 };
     const yOf = (end: string) => { const [i, p] = end.split('.'); return p === undefined ? pinY[i] : Q(i, p)[1]; };
     const xOf = (end: string) => { const [i, p] = end.split('.'); return Q(i, p)[0]; };
     const rows = (name: string, via: NonNullable<NetDef['via']>, tags?: string[]) => {
       const n = net(name);
-      n.via = { ...n.via, ...via };
+      if (!n) return;
+      const mine = Object.fromEntries(Object.entries(via).filter(([e]) => n.ends.includes(e)));
+      n.via = { ...n.via, ...mine };
       delete n.trunk;
       if (tags) n.tags = tags; else delete n.tags;
     };
@@ -886,8 +1066,8 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     rows('PCTargetE', { 'pcmux.d1': [[194, yOf('target.s')], [194, -7.5], [-3, -7.5], [-3, yOf('pcmux.d1')]] });
     rows('JalrTargetE', { 'pcmux.d2': [[180, yOf('clr0.out')], [180, -6.5], [-2, -6.5], [-2, yOf('pcmux.d2')]] });
     rows('PCSrcE', {
-      'pcmux.s': [[198, yOf('npc.pcSrc')], [198, BOT.pcSrc], [xOf('pcmux.s'), BOT.pcSrc]],
-      'hz.pcSrcE': [[198, yOf('npc.pcSrc')], [198, yOf('hz.pcSrcE')]],
+      'pcmux.s': [[198, yOf(`${decide}.pcSrc`)], [198, BOT.pcSrc], [xOf('pcmux.s'), BOT.pcSrc]],
+      'hz.pcSrcE': [[198, yOf(`${decide}.pcSrc`)], [198, yOf('hz.pcSrcE')]],
     });
     rows('enFD', { 'FD.en': [[38, yOf('hz.enFD')], [38, yOf('FD.en')]] });
     rows('flushFD', { 'FD.clr': [[36, yOf('hz.flushFD')], [36, yOf('FD.clr')]] });
@@ -905,9 +1085,9 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     for (const n of ['rdE', 'resultSrcE', 'validE'] as const) rows(n, {}, [`hz.${n}`]);
     rows('rdM', { 'hz.rdM': [[209, yOf('EM.rdM')], [209, yOf('hz.rdM')]] });
     rows('regWriteM', { 'hz.regWriteM': [[211, yOf('EM.regWriteM')], [211, yOf('hz.regWriteM')]] });
-    rows('rdW', { 'rf.wa': [[246, yOf('MW.rdW')], [246, TOP.rdW], [59, TOP.rdW], [59, yOf('rf.wa')]], 'hz.rdW': [[246, yOf('MW.rdW')], [246, yOf('hz.rdW')]] });
-    rows('regWriteW', { 'rf.we': [[248, yOf('MW.regWriteW')], [248, TOP.regWriteW], [55, TOP.regWriteW], [55, yOf('rf.we')]], 'hz.regWriteW': [[248, yOf('MW.regWriteW')], [248, yOf('hz.regWriteW')]] });
-    const RW = 256, rwt = [[RW, yOf('res.y')], [RW, TOP.ResultW]] as [number, number][];
+    rows('rdW', { 'rf.wa': [[xMW + 6, yOf('MW.rdW')], [xMW + 6, TOP.rdW], [59, TOP.rdW], [59, yOf('rf.wa')]], 'hz.rdW': [[xMW + 6, yOf('MW.rdW')], [xMW + 6, yOf('hz.rdW')]] });
+    rows('regWriteW', { 'rf.we': [[xMW + 8, yOf('MW.regWriteW')], [xMW + 8, TOP.regWriteW], [55, TOP.regWriteW], [55, yOf('rf.we')]], 'hz.regWriteW': [[xMW + 8, yOf('MW.regWriteW')], [xMW + 8, yOf('hz.regWriteW')]] });
+    const RW = xMW + 16, rwt = [[RW, yOf('res.y')], [RW, TOP.ResultW]] as [number, number][];
     rows('ResultW', {
       'rf.wd': [...rwt, [57, TOP.ResultW], [57, yOf('rf.wd')]],
       'byA.b': [...rwt, [80, TOP.ResultW], [80, yOf('byA.b')]],
@@ -919,6 +1099,13 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     rows('FwdM', Object.fromEntries(['fwdA.d2', 'fwdA.d3', 'fwdB.d2', 'fwdB.d3'].map((e) => [e, [...fm, [124, yOf(e)]]])));
     rows('forwardA', { 'fwdA.s': [[86, yOf('hz.forwardA')], [86, 95], [128, 95], [128, 30], [xOf('fwdA.s'), 30]] });
     rows('forwardB', { 'fwdB.s': [[87, yOf('hz.forwardB')], [87, 96], [130, 96], [130, 43], [xOf('fwdB.s'), 43]] });
+    if (bal) {
+      // look-ahead forwarding: the hazard unit's selects go into ID/EX (rows 70, 72) and come out of it beside the muxes
+      rows('forwardA', { 'fwdA.s': [[128, yOf('DE.fwdAE')], [128, 30], [xOf('fwdA.s'), 30]] });
+      rows('forwardB', { 'fwdB.s': [[130, yOf('DE.fwdBE')], [130, 43], [xOf('fwdB.s'), 43]] });
+      rows('fwdNextA', { 'DE.fwdAD': [[85, yOf('hz.forwardA')], [85, yOf('DE.fwdAD')]] });
+      rows('fwdNextB', { 'DE.fwdBD': [[86, yOf('hz.forwardB')], [86, yOf('DE.fwdBD')]] });
+    }
     // the data rows: the immediate and the PC on to EM, with branches to their users
     rows('RD2E', { 'fwdB.d0': [[122, yOf('DE.rd2E')], [122, yOf('fwdB.d0')]] });
     rows('PCE', { 'srcA.b': [[142, yOf('DE.pcE')], [142, yOf('srcA.b')]], 'target.a': [[182, yOf('DE.pcE')], [182, yOf('target.a')]] }, undefined);
@@ -931,11 +1118,11 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     rows('ALUSrcAE', { 'srcA.s': [[143, yOf('DE.aluSrcAE')], [143, 28.5], [xOf('srcA.s'), 28.5]] });
     rows('ALUSrcBE', { 'srcB.s': [[xOf('srcB.s'), yOf('DE.aluSrcBE')]] });
     rows('ALUControlE', { 'alu.ctl': [[158, yOf('DE.aluCtlE')], [158, 43], [xOf('alu.ctl'), 43]] });
-    rows('BranchE', { 'npc.branch': [[162, yOf('DE.branchE')], [162, yOf('npc.branch')]] });
-    rows('JumpE', { 'npc.jump': [[161, yOf('DE.jumpE')], [161, yOf('npc.jump')]] });
-    rows('JalrE', { 'npc.jalr': [[160, yOf('DE.jalrE')], [160, yOf('npc.jalr')]] });
-    rows('funct3E', { 'npc.funct3': [[163, yOf('DE.funct3E')], [163, yOf('npc.funct3')]] });
-    ([['Zero', 'zero', 168], ['Neg', 'neg', 167], ['Ovf', 'ovf', 166], ['Carry', 'carry', 165]] as const).forEach(([n, p, x]) => rows(n, { [`npc.${p}`]: [[x, yOf(`alu.${p}`)], [x, yOf(`npc.${p}`)]] }));
+    rows('BranchE', { [`${decide}.branch`]: [[162, yOf('DE.branchE')], [162, yOf(`${decide}.branch`)]] });
+    rows('JumpE', { [`${decide}.jump`]: [[161, yOf('DE.jumpE')], [161, yOf(`${decide}.jump`)]] });
+    rows('JalrE', { [`${decide}.jalr`]: [[160, yOf('DE.jalrE')], [160, yOf(`${decide}.jalr`)]] });
+    rows('funct3E', { [`${decide}.funct3`]: [[163, yOf('DE.funct3E')], [163, yOf(`${decide}.funct3`)]] });
+    if (!bal) ([['Zero', 'zero', 168], ['Neg', 'neg', 167], ['Ovf', 'ovf', 166], ['Carry', 'carry', 165]] as const).forEach(([n, p, x]) => rows(n, { [`npc.${p}`]: [[x, yOf(`alu.${p}`)], [x, yOf(`npc.${p}`)]] }));
     // M: the result forwarded from M, the memory's address, data and write enable
     rows('PCPlus4M', { 'fwdM.d2': [[xEM + 5, yOf('EM.pcPlus4M')], [xEM + 5, yOf('fwdM.d2')]] });
     rows('ImmExtM', { 'fwdM.d3': [[xEM + 4, yOf('EM.immM')], [xEM + 4, yOf('fwdM.d3')]] });
@@ -963,151 +1150,33 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
       'EM.clr': [[xEM - 2, yOf('clr0E.y')], [xEM - 2, yOf('EM.clr')]],
       'MW.clr': [[xMW - 2, yOf('clr0E.y')], [xMW - 2, yOf('MW.clr')]],
     });
-    rows('clk', Object.fromEntries(['pc.clk', 'FD.clk', 'DE.clk', 'EM.clk', 'MW.clk'].map((e) => [e, [[xOf(e), 86]]])), ['rf.clk', 'dm.clk']);
+    rows('clk', Object.fromEntries(['pc.clk', 'FD.clk', 'DE.clk', 'EM.clk', 'MW.clk', 'btb.clk'].map((e) => [e, [[xOf(e), 86]]])), ['rf.clk', 'dm.clk']);
     for (const n of nets) if (['enPC', 'enFD', 'flushFD', 'flushDE', 'bypassA', 'bypassB', 'forwardA', 'forwardB', 'PCSrcE', 'ImmSrcD', 'opD', 'funct3D', 'funct7D', 'ALUSrcAE', 'ALUSrcBE', 'BranchE', 'JumpE', 'JalrE', 'ALUControlE', 'funct3E', 'Zero', 'Neg', 'Ovf', 'Carry', 'rs1E', 'rs2E', 'rdE', 'validE', 'resultSrcE', 'regWriteE', 'memWriteE', 'rdM', 'regWriteM', 'rdW', 'regWriteW', 'en1', 'clr0', 'MemWriteM', 'resultSrcM', 'resultSrcW', 'rs1D', 'rs2D'].includes(n.name!)) n.quiet = true;
-    net('PCF').tags = ['pcF'];
+    net('PCF')!.tags = ['pcF'];
+    if (m) {
+      // what the multiplier and divider rows take from the stages above stays a pointer (the wires would cross their units)
+      const tag = (name: string, ends: string[]) => { const n = net(name); if (n) n.tags = ends; };
+      tag('funct3E', ['sf3E.in']);
+      tag('funct3D', ['sf3D.in']);
+      tag('ALUResultE', ['mdE.a']);
+      if (bal) net('ALUResultE')!.tagAt = { 'alu.y': [166, 22] };
+      tag('flushDE', ['mE.clr']);
+      tag('en1', ['msM.en', 'mcM.en', 'mfM.en']);
+      tag('validE', ['hz.validE', 'goDiv.b', ...(pred ? ['mis.valid'] : [])]);
+      tag('WriteDataE', ['mule.b', 'dive.b', ...(bal ? ['bcmp.b'] : [])]);
+      net('clk')!.tags = [...(net('clk')!.tags as string[]), 'mE.clk', 'dive.clk', 'msM.clk', 'mcM.clk', 'mfM.clk'];
+      if (pred) { tag('BranchE', ['mis.branch']); tag('JumpE', ['mis.jump', 'isJ.a']); tag('JalrE', ['mis.jalr', 'isJ.b']); }
+    }
+    if (pred && bal) { net('JalrTargetE')!.tags = true; net('JalrTargetE')!.tagAt = { 'clr0.out': [177, 25] }; }
+    if (pred) {
+      net('validE')!.tags = ['hz.validE', 'mis.valid', ...(m ? ['goDiv.b'] : [])];
+      // the predictor's answers: into the IF/ID register beside it, back to the next-PC mux and the select as pointers
+      rows('PredTargetF', { 'FD.predTargetF': [[36, yOf('btb.predTarget')], [36, yOf('FD.predTargetF')]] }, ['pcmux.d1']);
+      rows('PredTakenF', { 'FD.predTakenF': [[37, yOf('btb.predTaken')], [37, yOf('FD.predTakenF')]] }, ['fsel.i0']);
+    }
+    if (pred) net('PCSrcE')!.tags = true; // the correction mux and the mispredict unit sit in the prediction row, behind the lane
   }
 
-  const yb = T + PIPE_H + 6;
-  const extraPorts: PortDef[] = [];
-  if (dcache) {
-    // A load or store that misses in M freezes every stage: the PC and all pipeline registers hold,
-    // flushes and predictor updates wait, and W reports a retirement only once, when the miss is over.
-    const yc = yb + 44, add = (name: string, def: ComponentDef, x: number, y: number) => { instances.push({ name, def, at: [x, yc + y] }); defs.set(name, def); };
-    const net = (name: string) => nets.find((n) => n.name === name)!;
-    const retarget = (name: string, from: string, to: string) => { const e = net(name).ends; e[e.indexOf(from)] = to; };
-    add('rsl', splitter([1, 1]), xEM - 20, 0);
-    add('nrs1', NOT, xEM - 16, 2);
-    add('isLd', AND, xEM - 10, 0);
-    add('ldV', AND, xEM - 4, 4);
-    const dmAt = at.get('dm')!, dmg = symbolGeom(DM);
-    instances.push({ name: 'go', def: NOT, at: [dmAt[0] + dmg.w - 6, dmAt[1] + dmg.h + 4] }); defs.set('go', NOT);
-    add('gPC', AND, 14, 44);
-    add('gFD', AND, 34, 44);
-    add('gFl1', AND, 54, 44);
-    add('gFl2', AND, 74, 44);
-    add('gV', AND, xMW + 12, 0);
-    instances.splice(instances.findIndex((i) => i.name === 'en1'), 1);
-    net('resultSrcM').ends.push('rsl.in');
-    net('validM').ends.push('ldV.b');
-    net('validM').tags = ['ldV.b'];
-    retarget('enPC', 'pc.en', 'gPC.a');
-    retarget('enFD', 'FD.en', 'gFD.a');
-    retarget('flushFD', 'FD.clr', 'gFl1.a');
-    retarget('flushDE', 'DE.clr', 'gFl2.a');
-    retarget('validW', 'validW', 'gV.a');
-    const en1 = net('en1');
-    en1.ends = ['go.y', 'gPC.b', 'gFD.b', 'gFl1.b', 'gFl2.b', 'gV.b', 'DE.en', 'EM.en', 'MW.en'];
-    en1.name = 'go';
-    en1.tags = true;
-    if (pred) {
-      add('gU', AND, xDE + 40, 0);
-      retarget('updE', 'btb.updE', 'gU.a');
-      en1.ends.push('gU.b');
-      nets.push({ name: 'updGo', ends: ['gU.y', 'btb.updE'], tags: true });
-    }
-    net('clk').ends.push('dm.clk');
-    nets.push(
-      { name: 'rs0M', ends: ['rsl.o0', 'isLd.a'], tags: true },
-      { name: 'rs1M', ends: ['rsl.o1', 'nrs1.a'] },
-      { ends: ['nrs1.y', 'isLd.b'] },
-      // a flushed bubble may still look like a load: only a valid instruction may access the cache
-      { name: 'isLoadM', ends: ['isLd.y', 'ldV.a'] },
-      { name: 'MemReadM', ends: ['ldV.y', 'dm.re'], tags: true },
-      { name: 'dstall', ends: ['dm.stall', 'go.a', 'dstall'], tags: ['dstall'] },
-      { name: 'enPCgo', ends: ['gPC.y', 'pc.en'], tags: true },
-      { name: 'enFDgo', ends: ['gFD.y', 'FD.en'], tags: true },
-      { name: 'flushFDgo', ends: ['gFl1.y', 'FD.clr'], tags: true },
-      { name: 'flushDEgo', ends: ['gFl2.y', 'DE.clr'], tags: true },
-      { name: 'retireW', ends: ['gV.y', 'validW'], tags: true },
-    );
-    extraPorts.push(bit('dstall', 'out'));
-  }
-  if (m) {
-    // ---- M extension. D: decode; E: multiply (first half) and divide; M: multiply (second half).
-    const ym = T + PIPE_H + 72; // below the hazard unit and the prediction row
-    const add = (name: string, def: ComponentDef, x: number, y: number, label?: string) => { instances.push({ name, def, at: [x, ym + y], label }); defs.set(name, def); };
-    const at2 = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); };
-    const net = (name: string) => nets.find((n) => n.name === name)!;
-    const drop = (name: string, end: string) => { const n = net(name); n.ends = n.ends.filter((e) => e !== end); if (Array.isArray(n.tags)) n.tags = n.tags.filter((e) => e !== end); };
-    const R = register(64), CR2 = clearableRegister(2), CR3 = clearableRegister(3), M22 = busMux2(2);
-    // D: isM = (op = OP) and (funct7 = 1); a multiply asks for the load path (ResultSrc = 01)
-    add('kOp', constWord(7, 0x33), xFD - 12, 2); add('opM', equal(7), xFD + 6, 0);
-    add('kF7', constWord(7, 1), xFD - 12, 16); add('f7M', equal(7), xFD + 6, 14);
-    add('sf3D', splitter([2, 1]), xFD + 6, 30); add('nf2', NOT, xFD + 30, 32);
-    add('isMD', AND, xFD + 30, 6);
-    add('isMul', AND, xFD + 44, 7); add('isDiv', AND, xFD + 44, 16);
-    add('mfl', merger([1, 1]), xFD + 58, 8); add('kLd', constWord(2, 1), xFD + 52, 26);
-    at2('rsm', M22, [xDE - 6, P('DE', 'resultSrcD')[1] - g(M22).ports.y.pos[1]], 'load path');
-    // E: the multiplier's first half, the divider, and the result multiplexer
-    add('mE', CR2, xDE + 4, 6, 'M flags');
-    add('smE', splitter([1, 1]), xDE + 18, 6); add('sf3E', splitter([2, 1]), xDE + 18, 20);
-    add('goDiv', AND, xDE + 28, 2);
-    add('mule', MUL_E, xDE + 40, 20, 'multiply (E)');
-    add('dive', DIV_E, xDE + 40, 44, 'divide');
-    add('mdE', busMux2(32), xDE + 56, -16, 'ALU / divide');
-    add('run', NOT, xDE + 58, -4);
-    add('gPC', AND, 4, 44); add('gFD', AND, 24, 44);
-    // M: the multiplier's second half, and its result in place of the memory word
-    add('mfMd', merger([1, 2]), xEM - 30, 6);
-    add('mfM', CR3, xEM - 20, 4, 'mul?, funct3'); add('msM', R, xEM - 20, 20, 'sum'); add('mcM', R, xEM - 20, 36, 'carry');
-    add('smM', splitter([1, 2]), xEM + 4, 6);
-    add('mulm', MUL_M, xEM + 12, 22, 'multiply (M)');
-    add('rdm', busMux2(32), xEM + 34, 4, 'memory / product');
-    // the ID/EX enable now comes from the stall; the constants that remain move clear of the clock labels
-    instances.find((x) => x.name === 'en1')!.at = [xDE - 6, T + PIPE_H + 3];
-    instances.find((x) => x.name === 'clr0E')!.at = [xMW - 6, T + PIPE_H + 3];
-    // D wiring
-    net('opD').ends.push('opM.a'); net('funct7D').ends.push('f7M.a'); net('funct3D').ends.push('sf3D.in');
-    retargetEnd(net('resultSrcD'), 'DE.resultSrcD', 'rsm.a');
-    nets.push(
-      { ends: ['kOp.y', 'opM.b'] }, { ends: ['kF7.y', 'f7M.b'] },
-      { name: 'isOP', ends: ['opM.eq', 'isMD.a'], tags: true }, { name: 'f7is1', ends: ['f7M.eq', 'isMD.b'], tags: true },
-      { name: 'isMD', ends: ['isMD.y', 'isMul.a', 'isDiv.a'], tags: ['isDiv.a'] },
-      { name: 'f3hi', ends: ['sf3D.o1', 'nf2.a', 'isDiv.b'], tags: ['isDiv.b'] }, { name: '¬f3hi', ends: ['nf2.y', 'isMul.b'], tags: true },
-      { name: 'isMulD', ends: ['isMul.y', 'mfl.i0', 'rsm.s'], tags: ['rsm.s'] }, { name: 'isDivD', ends: ['isDiv.y', 'mfl.i1'], tags: true },
-      { ends: ['kLd.y', 'rsm.b'] }, { name: 'resultSrcD2', ends: ['rsm.y', 'DE.resultSrcD'] },
-      { name: 'mFlagsD', ends: ['mfl.out', 'mE.d'], tags: true },
-    );
-    // the divider's stall holds PC, IF/ID and ID/EX (and the M flags with them) and sends bubbles into M
-    retargetEnd(net('enPC'), 'pc.en', 'gPC.a');
-    retargetEnd(net('enFD'), 'FD.en', 'gFD.a');
-    drop('en1', 'DE.en');
-    net('flushDE').ends.push('mE.clr');
-    drop('clr0', 'EM.clr');
-    net('clk').ends.push('mE.clk', 'dive.clk', 'msM.clk', 'mcM.clk', 'mfM.clk');
-    net('en1').ends.push('msM.en', 'mcM.en', 'mfM.en');
-    nets.push(
-      { name: 'enPCm', ends: ['gPC.y', 'pc.en'], tags: true }, { name: 'enFDm', ends: ['gFD.y', 'FD.en'], tags: true },
-      { name: 'divStall', ends: ['dive.stall', 'run.a', 'EM.clr', 'mfM.clr'], tags: true },
-      { name: 'runE', ends: ['run.y', 'DE.en', 'mE.en', 'gPC.b', 'gFD.b'], tags: true },
-      // E wiring
-      { name: 'mFlagsE', ends: ['mE.q', 'smE.in'] },
-      { name: 'isMulE', ends: ['smE.o0', 'mfMd.i0'], tags: true }, { name: 'isDivE', ends: ['smE.o1', 'goDiv.a', 'mdE.s'], tags: true },
-      { name: 'f3E', ends: ['sf3E.o0', 'mule.f', 'dive.f', 'mfMd.i1'], tags: true },
-      { name: 'divGo', ends: ['goDiv.y', 'dive.go'], tags: true },
-      { name: 'mulS', ends: ['mule.s', 'msM.d'], tags: true }, { name: 'mulC', ends: ['mule.c', 'mcM.d'], tags: true },
-      { name: 'divY', ends: ['dive.y', 'mdE.b'], tags: true },
-      { name: 'ALUResultE2', ends: ['mdE.y', 'EM.aluResultE'], tags: true },
-      // M wiring
-      { name: 'mFlagsM', ends: ['mfM.q', 'smM.in'] },
-      // mfM holds {isMul (bit 0), funct3[1:0]}
-      { name: 'isMulM', ends: ['smM.o0', 'rdm.s'], tags: true }, { name: 'f3M', ends: ['smM.o1', 'mulm.f'], tags: true },
-      { name: 'mulSM', ends: ['msM.q', 'mulm.s'] }, { name: 'mulCM', ends: ['mcM.q', 'mulm.c'] },
-      { name: 'productM', ends: ['mulm.y', 'rdm.b'], tags: true },
-      { name: 'ReadDataM2', ends: ['rdm.y', 'MW.readDataM'], tags: true },
-    );
-    nets.push({ name: 'mFlagsE2', ends: ['mfMd.out', 'mfM.d'] });
-    net('funct3E').ends.push('sf3E.in'); (net('funct3E').tags as true | string[]) = true;
-    net('validE').ends.push('goDiv.b');
-    if (Array.isArray(net('validE').tags)) (net('validE').tags as string[]).push('goDiv.b');
-    net('SrcAE').ends.push('mule.a', 'dive.a');
-    net('WriteDataE').ends.push('mule.b', 'dive.b');
-    { const t = net('SrcAE').tags; net('SrcAE').tags = [...(Array.isArray(t) ? t : []), 'mule.a', 'dive.a']; }
-    { const t = net('WriteDataE').tags; net('WriteDataE').tags = [...(Array.isArray(t) ? t : []), 'mule.b', 'dive.b']; }
-    retargetEnd(net('ALUResultE'), 'EM.aluResultE', 'mdE.a');
-    retargetEnd(net('ReadDataM'), 'MW.readDataM', 'rdm.a');
-  }
   const portPins: Record<string, [number, number]> = {};
   if (o.ports) {
     // the program and the data memory outside: the M stage's memory port keeps dataMemory's timing (read from the address in the
