@@ -24,7 +24,7 @@ describe('chapter 53 typed numbers', () => {
   });
   it('the detour is 1 590 km, in the prose as computed', () => {
     expect(VIA_KESTREL - VIA_ORCHARD).toBe(1590);
-    expect(text).toContain('1 590 km');
+    expect(text).toContain('1 590 km');
   });
   it('the slider\'s size is the IP packet: 1500 bytes is a 1514-byte frame', () => { expect(text).toContain('1514-byte frame'); });
   it('5 µs a kilometre in fibre', () => { expect(1e6 / FIBRE_KM_PER_S).toBe(5); });

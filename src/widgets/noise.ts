@@ -220,7 +220,7 @@ export function chainWidget(): Widget {
   const lna: ChainStage = { name: 'Amplifier', gainDb: 20, nfDb: 1 }, cable: ChainStage = { name: 'Cable', gainDb: -10, nfDb: 10 };
   let first = true, gain = 20, loss = 10, nf = 1;
   const chips = mkChips(3), order = h('div', { class: 'sg-dbrows' });
-  const box = h('input', { type: 'checkbox', checked: true, 'aria-label': 'Amplifier before the cable' }) as HTMLInputElement;
+  const box = h('input', { type: 'checkbox', checked: true, 'aria-label': 'Amplifier before the cable', style: 'flex: none; min-width: 0' }) as HTMLInputElement; // .mos-sl stretches a slider's input
   box.addEventListener('change', () => { first = box.checked; paint(); });
   function paint() {
     lna.gainDb = gain; lna.nfDb = nf; cable.gainDb = -loss; cable.nfDb = loss;
@@ -236,7 +236,7 @@ export function chainWidget(): Widget {
   return {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, 'A receiver is a chain'), order, chips.el),
-      h('div', { class: 'panel mos-ctl' }, h('label', { class: 'mos-sl' }, box, h('span', null, 'Amplifier before the cable')), h('div', { class: 'mos-row' },
+      h('div', { class: 'panel mos-ctl' }, h('label', { class: 'mos-sl', style: 'flex-basis: 100%' }, box, h('span', { style: 'width: auto; white-space: nowrap' }, 'Amplifier before the cable')), h('div', { class: 'mos-row' },
         slider('Amplifier gain', 0, 40, 1, gain, (v) => `${v} dB`, (v) => { gain = v; paint(); }).el,
         slider('Amplifier noise', 0, 6, 0.5, nf, (v) => `${v} dB`, (v) => { nf = v; paint(); }).el,
         slider('Cable loss', 0, 30, 1, loss, (v) => `${v} dB`, (v) => { loss = v; paint(); }).el))),

@@ -125,7 +125,7 @@ export function wifiCell(n: number): ComponentDef {
   pins.clk = [0, iy + 2];
   nets.push({ name: 'clk', ends: ['clk', ...instances.map((x) => `${x.name}.clk`)], tags: true }, { name: 'rst', ends: ['rst', ...instances.map((x) => `${x.name}.rst`)], tags: true }, { name: 'len', ends: ['len', ...instances.map((x) => `${x.name}.len`)], tags: true }, { name: 'use_rts', ends: ['use_rts', ...instances.map((x) => `${x.name}.use_rts`)], tags: true });
   const d = define({
-    id: `wifi_cell${n}`, name: `A cell of ${n} stations`, category: 'sequential',
+    id: `wifi_cell${n}`, name: `A cell of ${n} stations`, category: 'routing',
     summary: `${n} stations, each its own DCF. The air between them is outside this box: a model of who hears whom, which drives their carrier sense and reports what arrived whole.`,
     ports, symbol: { kind: 'box', label: 'Cell' },
     netlist: () => ({ pins, instances, nets }),

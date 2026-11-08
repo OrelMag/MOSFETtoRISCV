@@ -189,7 +189,7 @@ export function layersWidget(): Widget {
   function paint() {
     const c = layerCost(data);
     stack.replaceChildren(
-      row('Ethernet', c.pad ? `which machine on this cable; a check of the frame; ${c.pad} bytes of padding to its minimum` : 'which machine on this cable; a check of the frame', WIRE_OVERHEAD + c.pad, 'l3',
+      row('Ethernet', c.pad ? `which machine on this cable (14), a check of the frame (4), and the preamble and gap the line spends (20); ${c.pad} bytes of padding to its minimum` : 'which machine on this cable (14), a check of the frame (4), and the preamble and gap the line spends (20)', WIRE_OVERHEAD + c.pad, 'l3',
         row('IP', 'which machine in the world', IP_HEADER, 'l2',
           row('TCP', 'which program; which byte comes next', TCP_HEADER, 'l1',
             row('Your data', 'the only part the program asked to send', data, 'l0', null)))));

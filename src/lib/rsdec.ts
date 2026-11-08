@@ -5,7 +5,8 @@
 import { rsCntWidth, rsKWidth, gfInvChain, RS_PHASE } from '../comm/rsrtl';
 import { gfMul, gfPow } from '../comm/rs';
 import { xorPlan } from '../comm/crc';
-import type { ComponentDef, PortDef } from '../sim/types';
+import { symbolGeom } from '../sim/geometry';
+import type { ComponentDef, NetDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
 import { Builder } from './builder';
 import { busMux2, decoder, equal, incrementer, rca } from './combinational';
@@ -104,6 +105,12 @@ export function rsRegOne(): ComponentDef {
   });
 }
 
+/** Put an instance (named, or the owner of a "inst.port" end) at x, y. */
+const put = (b: Builder, end: string, x: number, y: number): void => {
+  const i = b.instances.find((v) => v.name === end || v.name === end.slice(0, end.indexOf('.')));
+  if (i) i.at = [x, y];
+};
+
 /** ×c, or nothing at all when c = 1. */
 const times = (b: Builder, x: string, c: number): string => (c === 1 ? x : b.op1(gfConst(c), [x]));
 
@@ -137,14 +144,28 @@ export function rsDelta(t: number): ComponentDef {
     const b = new Builder(16, 18, 4), M = gfMulGates(), X = bitwise('xor', 8), A = bitwise('and', 8), F = fanout(8);
     const inNames = [...Array.from({ length: t + 1 }, (_, j) => `l${j}`), ...Array.from({ length: t + 1 }, (_, j) => `w${j}`), 'm'];
     b.pins(...inNames);
-    const sm = b.op(splitter(ones(t), 2), ['m']); b.next();
-    const gated = Array.from({ length: t + 1 }, (_, j) => (j === 0 ? 'w0' : b.op1(A, [`w${j}`, b.op1(F, [`${sm}.o${j - 1}`])])));
+    // a row a term: the mask bit (a splitter with a row's pitch), the AND that gates S, the multiplier; the XOR tree sits between its pairs
+    const sm = b.op(splitter(ones(t), 10), ['m']); b.next();
+    const fans: string[] = [], ands: string[] = [];
+    const gated = Array.from({ length: t + 1 }, (_, j) => {
+      if (j === 0) return 'w0';
+      const f = b.op1(F, [`${sm}.o${j - 1}`]), a = b.op1(A, [`w${j}`, f]);
+      fans.push(f); ands.push(a);
+      return a;
+    });
     b.next();
     let terms = gated.map((w, j) => b.op1(M, [`l${j}`, w], `λ${j} × S`));
-    while (terms.length > 1) {
+    const row = (j: number) => 2 + 10 * j, yOut = new Map<string, number>(terms.map((e, j) => [e, row(j) + 3]));
+    put(b, sm, 16, 12);
+    terms.forEach((e, j) => put(b, e, 56, row(j)));
+    ands.forEach((e, k) => { put(b, e, 38, row(k + 1) + 1); put(b, fans[k], 26, row(k + 1) + 4); });
+    for (let x = 72; terms.length > 1; x += 16) {
       b.next();
       const next: string[] = [];
-      for (let i = 0; i + 1 < terms.length; i += 2) next.push(b.op1(X, [terms[i], terms[i + 1]]));
+      for (let i = 0; i + 1 < terms.length; i += 2) {
+        const e = b.op1(X, [terms[i], terms[i + 1]]), y = Math.round((yOut.get(terms[i])! + yOut.get(terms[i + 1])!) / 2) - 3;
+        put(b, e, x, y); yOut.set(e, y + 3); next.push(e);
+      }
       if (terms.length & 1) next.push(terms[terms.length - 1]);
       terms = next;
     }
@@ -159,7 +180,7 @@ export function rsDelta(t: number): ComponentDef {
         for (let j = 1; j <= t; j++) if ((v[2 * t + 2] >>> (j - 1)) & 1) s ^= gfMul(v[j], v[t + 1 + j]);
         return [s];
       },
-      netlist: () => ({ pins: { ...pinsOf(inNames, [], b.right), y: [b.right, 6] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { ...Object.fromEntries(inNames.map((n, i) => [n, [0, n === 'm' ? 12 + 5 * t : i <= t ? row(i) + 2 : row(i - t - 1) + 8] as [number, number]])), y: [Math.max(...b.instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 4, yOut.get(terms[0])!] }, instances: b.instances, nets: b.nets() }),
     });
   });
 }
@@ -181,18 +202,26 @@ export function rsLamSlice(j: number, n: number): ComponentDef {
     const m1 = b.op1(Mx, [upd, k0, 'ini']);
     b.next();
     const m2 = b.op1(Mx, [m1, k1, 'ch']);
-    const anyL = b.op1(OR, [b.op1(OR, ['bm', 'ini']), 'ch']);
+    const or1 = b.op1(OR, ['bm', 'ini']), anyL = b.op1(OR, [or1, 'ch']);
     const nb = j ? b.op1(Mx, ['bin', 'lam.q', 'swap']) : b.op1(bitwise('and', 8), ['lam.q', b.op1(fanout(8), ['swap'])]);
     b.next();
     b.op(R, [m2, anyL, 'rst', 'clk'], `λ${j}`, 'lam');
     b.op(R, [nb, 'bm', 'rst', 'clk'], `b${j}`, 'bb');
     b.wire('lam.q', 'l'); b.wire('bb.q', 'b');
+    // j > 0, left to right: the two products and their sum, the two constant steps beside the muxes that choose among them, the registers;
+    // each part level with the pin it feeds (the shared constants stay on labels)
+    if (j) {
+      put(b, g, 16, 2); put(b, d, 16, 12); put(b, upd, 30, 3);
+      put(b, k0, 40, 12); put(b, k1, 40, 24); put(b, m1, 50, 4); put(b, m2, 62, 5);
+      put(b, or1, 56, 13); put(b, anyL, 68, 14); put(b, nb, 66, 23);
+      put(b, 'lam', 78, 12); put(b, 'bb', 78, 24);
+    }
     return define({
       id: `rslam${j}_${n}`, name: `RS locator, coefficient ${j}`, category: 'sequential',
       summary: `λ' = γ λ + δ b, inversionless: nothing is ever divided, so the coefficients are scaled by a known factor that the error values cancel. b waits with the last locator that made progress.`,
       ports: [...(j ? [bus('bin', 8, 'in')] : []), bus('gamma', 8, 'in'), ...(j ? [bus('delta', 8, 'in')] : []), bit('bm', 'in'), bit('swap', 'in'), bit('ini', 'in'), bit('ch', 'in'), bit('rst', 'in'), clk(), bus('l', 8, 'out'), bus('b', 8, 'out')],
       symbol: { kind: 'box', label: `λ${j}` },
-      netlist: () => ({ pins: pinsOf(ins, ['l', 'b'], b.right), instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: j ? { ...pinsOf(ins, [], 0), l: [102, 16], b: [102, 28] } : pinsOf(ins, ['l', 'b'], b.right), instances: b.instances, nets: b.nets() }),
     });
   });
 }
@@ -209,15 +238,17 @@ export function rsOmSlice(i: number, n: number): ComponentDef {
     const m1 = b.op1(Mx, ['in', k0, 'ini']);
     b.next();
     const m2 = b.op1(Mx, [m1, k1, 'ch']);
-    const load = b.op1(OR, [b.op1(OR, ['om', 'ini']), 'ch']);
+    const or1 = b.op1(OR, ['om', 'ini']), load = b.op1(OR, [or1, 'ch']);
     b.next();
     b.op(clearableRegister(8), [m2, load, 'rst', 'clk'], `Ω${i}`, 'reg');
     b.wire('reg.q', 'q');
+    // left to right, each part level with the pin it feeds
+    put(b, k0, 14, 6); put(b, m1, 28, 4); put(b, k1, 34, 14); put(b, m2, 46, 5); put(b, or1, 40, 22); put(b, load, 50, 23); put(b, 'reg', 62, 6);
     return define({
       id: `rsom${i}_${n}`, name: `RS error evaluator, coefficient ${i}`, category: 'sequential',
       summary: 'Ω shifts in from the discrepancy unit, then takes the same constant steps as the locator coefficient of the same power, so its sum is Ω at the position under test.',
       ports: [bus('in', 8, 'in'), bit('om', 'in'), bit('ini', 'in'), bit('ch', 'in'), bit('rst', 'in'), clk(), bus('q', 8, 'out')], symbol: { kind: 'box', label: `Ω${i}` },
-      netlist: () => ({ pins: { ...pinsOf(ins, [], b.right), q: [b.right, 9] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { ...pinsOf(ins, [], 0), q: [86, 10] }, instances: b.instances, nets: b.nets() }),
     });
   });
 }
@@ -425,12 +456,77 @@ export function rsDecoder(nsym = 10, n = 26): ComponentDef {
     b.next();
     b.wire(b.op1(bitwise('xor', 8), ['buf.q', fix]), 'out');
     b.wire('ctl.ch', 'valid'); b.wire('ctl.done', 'done'); b.wire('kk.fail', 'fail');
+    // Hand-placed: three bands of level rows (the syndrome ring, the locator, the evaluator), each cell the same height, so a chain of neighbours
+    // (the ring, b, Ω, the output) runs level; what a row shares (rx, rot, d, bm, ini, ch, om) is a rail along it with a drop into each cell, and the
+    // control block drives the rails by wires. What every part reads (S, λ, δ, γ, swap, the clock and reset) stays on labels.
+    const half = Math.ceil(nsym / 2), X = 52, R1 = 14, R2 = 38, RL = 72, RO = 136;
+    const at: Record<string, [number, number]> = {
+      ctl: [12, 6], rot: [12, 30], mc: [12, 36], mk: [22, 36],
+      dl: [X + 92, R1], dz: [X + 104, 26], gen: [X + 104, 46], gam: [X + 114, 44],
+      fr: [X + 82, RO - 10], bufen: [X + 90, RO - 16], buf: [X + 104, RO - 18], u0: [X + 100, RO], u1: [X + 110, RO + 1], u2: [X + 128, RO], kk: [X + 142, RO - 18],
+    };
+    for (let k = 0; k < nsym; k++) { const r = k >= half ? nsym - 1 - k : half - 1 - k; at[`s${k}`] = [X + 17 * r, k >= half ? R1 : R2]; }
+    for (let j = 0; j <= t; j++) at[`l${j}`] = [X + 20 * j, RL];
+    for (let i = 0; i < t; i++) at[`o${i}`] = [X + 15 * (t - 1 - i), RO];
+    for (const i of b.instances) i.at = at[i.name] ?? i.at;
+    // the ends a net keeps on labels (the others are wires; none: all wires), by driver
+    const keep: Record<string, (ends: string[]) => string[]> = { en: () => [], 'mc.y': () => [], 'fr.e': () => [], 'dl.y': (e) => e.slice(1).filter((x) => x !== 'dz.a') };
+    for (let k = 1; k < nsym; k++) if (k !== half) keep[`s${k}.q`] = (e) => e.filter((x) => x.startsWith('dl.'));
+    for (let j = 0; j < t; j++) keep[`l${j}.b`] = () => [];
+    for (let i = 1; i < t; i++) keep[`o${i}.q`] = (e) => e.filter((x) => x.startsWith('fr.'));
+    keep['o0.q'] = () => [];
+    keep['fr.root'] = (e) => e.filter((x) => x.startsWith('kk.'));
+    // Rails: a net's vertical trunk (x), and per row of cells a horizontal rail above or below it with a drop (x offset left of the cell) into each cell's pin.
+    const inst = new Map(b.instances.map((i) => [i.name, i]));
+    const pinAt = (end: string): [number, number] => { const [n, p] = end.split('.'); const i = inst.get(n)!; return [i.at![0], i.at![1] + symbolGeom(i.def).ports[p].pos[1]]; };
+    const ringRows = [[...Array(nsym - half).keys()].map((r) => `s${nsym - 1 - r}`), [...Array(half).keys()].map((r) => `s${half - 1 - r}`)];
+    const lamRow = Array.from({ length: t + 1 }, (_, j) => `l${j}`), omRow = Array.from({ length: t }, (_, i) => `o${i}`);
+    interface Rail { drv: string; port: string; rows: string[][]; side: 1 | -1; lvl: number; trunk: number; drop: number; skip?: string[] }
+    const rails: Rail[] = [
+      { drv: 'd', port: 'd', rows: ringRows, side: -1, lvl: 1, trunk: 47, drop: 4 },
+      { drv: 'ctl.rx', port: 'rx', rows: ringRows, side: -1, lvl: 0, trunk: 45, drop: 2 },
+      { drv: 'rot.y', port: 'rot', rows: ringRows, side: 1, lvl: 0, trunk: 31, drop: 3 },
+      { drv: 'ctl.bm', port: 'bm', rows: [lamRow], side: -1, lvl: 0, trunk: 43, drop: 2 },
+      { drv: 'ctl.ini', port: 'ini', rows: [lamRow, omRow], side: 1, lvl: 0, trunk: 41, drop: 2 },
+      { drv: 'ctl.ch', port: 'ch', rows: [lamRow, omRow], side: 1, lvl: 1, trunk: 39, drop: 4 },
+      { drv: 'ctl.om', port: 'om', rows: [omRow], side: -1, lvl: 0, trunk: 37, drop: 2 },
+    ];
+    // a net's other sinks, reached along corridors no part sits in (corner lists from the trunk)
+    const extra: Record<string, Record<string, [number, number][]>> = {
+      'ctl.rx': { 'bufen.a': [[45, pinAt('bufen.a')[1]]] },
+      d: { 'buf.d': [[47, 112], [pinAt('buf.d')[0] - 4, 112], [pinAt('buf.d')[0] - 4, pinAt('buf.d')[1]]] },
+      'ctl.ch': { 'kk.ch': [[39, 160], [pinAt('kk.ch')[0] - 6, 160], [pinAt('kk.ch')[0] - 6, pinAt('kk.ch')[1]]] },
+      'dz.z': { 'kk.dz': [[pinAt('kk.dz')[0] - 12, pinAt('dz.a')[1] + 2], [pinAt('kk.dz')[0] - 12, pinAt('kk.dz')[1]]] },
+    };
+    const via = new Map<string, NetDef['via']>(), railed = new Map<string, Set<string>>();
+    for (const r of rails) {
+      const v: NonNullable<NetDef['via']> = {}, done = new Set<string>();
+      for (const row of r.rows) {
+        const first = inst.get(row[0])!, h = symbolGeom(first.def).h, y = r.side < 0 ? first.at![1] - 3 - 3 * r.lvl : first.at![1] + h + 4 + 3 * r.lvl;
+        for (const c of row) { const end = `${c}.${r.port}`, p = pinAt(end); v[end] = [[r.trunk, y], [p[0] - r.drop, y], [p[0] - r.drop, p[1]]]; done.add(end); }
+      }
+      via.set(r.drv, v); railed.set(r.drv, done);
+    }
+    for (const [drv, m] of Object.entries(extra)) {
+      const v = via.get(drv) ?? {}, done = railed.get(drv) ?? new Set<string>();
+      for (const [end, pts] of Object.entries(m)) { v[end] = pts; done.add(end); }
+      via.set(drv, v); railed.set(drv, done);
+    }
+    const WIRED = new Set(['mk.en']);
+    const nets = () => b.nets().map((x) => {
+      const k = keep[x.ends[0]], rl = railed.get(x.ends[0]);
+      let out: NetDef = x;
+      if (k) { const tags = k(x.ends); const { tags: _t, ...rest } = x; out = tags.length ? { ...rest, tags } : rest; }
+      else if (rl) { const rest = x.ends.slice(1).filter((e) => !rl.has(e) && !WIRED.has(e)); const { tags: _t, ...r2 } = x; out = rest.length ? { ...r2, tags: rest } : r2; }
+      return rl ? { ...out, via: via.get(x.ends[0]) } : out;
+    });
+    const pins = { d: [0, 3] as [number, number], en: [0, 11] as [number, number], rst: [0, 14] as [number, number], clk: [0, 17] as [number, number], out: [X + 140, RO + 3] as [number, number], fail: [X + 168, RO - 9] as [number, number], valid: [X + 168, RO - 6] as [number, number], done: [X + 168, RO - 3] as [number, number] };
     return define({
-      id: `rsdec${nsym}_${n}`, name: `Reed-Solomon decoder, RS(${n}, ${n - nsym})`, category: 'sequential',
+      id: `rsdec${nsym}_${n}`, name: `Reed-Solomon decoder, RS(${n}, ${n - nsym})`, category: 'arithmetic',
       summary: `Corrects any ${t} wrong bytes in ${n}. Syndromes as the word arrives, the error locator by Berlekamp-Massey in ${nsym} clocks, Ω in ${t}, then every position tested as the word goes back out: ${2 * n + nsym + t + 1} clocks in all. fail says it could not, and only at the end.`,
       ports: [bus('d', 8, 'in'), bit('en', 'in'), bit('rst', 'in'), clk(), bus('out', 8, 'out'), bit('valid', 'out'), bit('done', 'out'), bit('fail', 'out')],
       symbol: { kind: 'box', label: 'RS DEC' },
-      netlist: () => ({ pins: pinsOf(['d', 'en', 'rst', 'clk'], ['out', 'valid', 'done', 'fail'], b.right), instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins, instances: b.instances, nets: nets() }),
     });
   });
 }

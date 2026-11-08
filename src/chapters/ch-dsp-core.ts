@@ -7,7 +7,7 @@ import { aguWidget, benchWidget, dspApi, dspPerProduct, dspScene, FIG, fftWidget
 import { numOf } from './order';
 import type { Chapter } from './types';
 
-const n0 = (x: number) => x.toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => x.toLocaleString('en').replace(/,/g, ' ');
 const f2 = (x: number) => x.toFixed(2);
 
 export const chDspCore: Chapter = {
@@ -19,7 +19,7 @@ export const chDspCore: Chapter = {
     'follow a hardware loop: start, end and count, and why it adds no instruction',
     'compare the core with the RV32 machines per product, in clocks and in time, and say what a real DSP pipelines that this one does not',
   ],
-  builds: ['mac', 'cpu', 'fixed', 'firdesign'],
+  builds: ['mac', 'cpu', 'carriers', 'fixed', 'firdesign'],
   recap: {
     keep: [
       'A tap on a load-store machine is a load for each operand, two pointer steps, the multiply-accumulate and a branch. The DSP core folds the pointer steps into the access and the branch into a loop register, so the loop body is the multiply-accumulate alone.',
@@ -51,7 +51,7 @@ export const chDspCore: Chapter = {
         why: ['', 'Backwards would be descending addresses, not a bit-reversed pattern.', 'A table of 64 orders would cost a ROM; this costs wires.', 'The direction of the transform is unrelated to the order the inputs are read in.'],
       },
     ],
-    practise: [],
+    practise: ['sp_circ', 'sp_mac'],
   },
   steps: [
     {
@@ -59,7 +59,7 @@ export const chDspCore: Chapter = {
       get body() {
         const a = rvPerProduct('rv32im', 'fir64'), b = rvPerProduct('mac', 'fir64'), c = rvPerProduct('mac2u', 'fir64');
         return `
-        <p><a href="#/c/mac/1">Chapter ${numOf('mac')}</a> measured the RV32 filtering. With a multiplier the loop is ${f2(a)} clocks a product. With a MAC instruction it is ${f2(b)}, because two loads, two pointer steps and a branch still surround every product. Even packing two samples in a word, the best case there, leaves ${f2(c)} clocks.</p>
+        <p><a href="#/c/mac/7">Chapter ${numOf('mac')}</a> measured the RV32 filtering on a <strong>load-store machine</strong>, one whose arithmetic reads only registers, so every operand from memory needs a load instruction of its own. With a multiplier the loop is ${f2(a)} clocks a product. With a MAC instruction it is ${f2(b)}, because two loads, two pointer steps and a branch still surround every product. Even packing two samples in a word, the best case there, leaves ${f2(c)} clocks.</p>
         <p>That overhead is what a DSP core removes. The product is already one instruction. What is left is <strong>fetching two operands</strong>, <strong>moving two pointers</strong> and <strong>counting</strong>. Do them as part of the multiply-accumulate and there is nothing else in the loop: one clock a tap is possible. The rest of this chapter builds the three pieces and measures what they cost.</p>
         <p>The bar chart below shows the inner loop for a filter of any length. The DSP core's bar is a sample's N + 7 clocks spread over its N taps: the loop's N, and seven more for the load, the store, the loop set-up, the round, the output, the count and the branch. The RV32 bars are the MAC chapter's 64-tap measurements, with the packed layout for the last of them.</p>
         <div class="try">Slide the taps from 2 up to 128. How many taps does it take for the loop's set-up to stop mattering?</div>`;
@@ -77,8 +77,9 @@ export const chDspCore: Chapter = {
       title: 'Two memories, two buses',
       get body() {
         return `
-        <p>The core is single-cycle, like <a href="#/c/cpu/1">chapter ${numOf('cpu')}</a>'s CPU, with 16-bit data and 24-bit instructions. The picture reads left to right: the sequencer and program memory fetch, the decoder turns the word into controls, an <strong>address generator</strong> for each memory feeds <strong>X</strong> (samples) and <strong>Y</strong> (coefficients), both read in the same clock, and the <a href="#/c/mac/1">MAC of chapter ${numOf('mac')}</a> multiplies them. Registers and a 16-bit ALU sit beside it for everything else.</p>
-        <p>The MAC is that chapter's block <em>unchanged</em>, behind a small adapter that places a 16-bit word in its low half and clamps its 32-bit read to 16 bits. The price of reusing it unchanged is its second multiplier, which this core never uses: ${n0(FIG.nands.secondMultiplier)} of the unit's ${n0(FIG.nands.macUnit)} NANDs. The whole core without memories is <strong>${n0(FIG.nands.core)} NANDs</strong>, with a clock of ${FIG.period} NAND delays. The decoder is only ${n0(FIG.nands.decode)}, the registers ${n0(FIG.nands.regs)} and the ALU ${n0(FIG.nands.alu)}.</p>
+        <p>The core is single-cycle, like <a href="#/c/cpu/0">chapter ${numOf('cpu')}</a>'s CPU, with 16-bit data and 24-bit instructions. The picture reads left to right: the sequencer and program memory fetch, the decoder turns the word into controls, an <strong>address generator</strong> for each memory feeds <strong>X</strong> (samples) and <strong>Y</strong> (coefficients), both read in the same clock, and the <a href="#/c/mac/1">MAC of chapter ${numOf('mac')}</a> multiplies them. Registers and a 16-bit ALU sit beside it for everything else.</p>
+        <p>Why two memories? A multiply-accumulate needs a sample and a coefficient in the same clock. One memory with one address bus gives one word a clock, so every tap would take two clocks; a cache sits in front of that same single port and cannot give two words a clock either. So X holds the samples and Y the coefficients, each with its own address generator and bus, and both are read at once. The program in the panel uses the core's own instructions; step 5 lists all 27.</p>
+        <p>The MAC is that chapter's block <em>unchanged</em> (${n0(FIG.nands.macUnit)} NANDs), behind a small adapter of ${n0(FIG.nands.mac - FIG.nands.macUnit)} that places a 16-bit word in its low half and clamps its 32-bit read to 16 bits. The price of reusing it unchanged is its second multiplier, which this core never uses: ${n0(FIG.nands.secondMultiplier)} of the unit's ${n0(FIG.nands.macUnit)} NANDs. The whole core without memories is <strong>${n0(FIG.nands.core)} NANDs</strong>, with a clock of ${FIG.period} NAND delays. The decoder is only ${n0(FIG.nands.decode)}, the registers ${n0(FIG.nands.regs)} and the ALU ${n0(FIG.nands.alu)}.</p>
         <p>Run the dot product. The panel steps a golden model beside the gates and compares every register after every clock.</p>
         <div class="try">Press Run to halt. The panel should say "matches golden model" after ${FIG.cycles.dot.cycles} clocks, and the accumulator holds the 128-element dot product.</div>`;
       },
@@ -97,9 +98,9 @@ export const chDspCore: Chapter = {
       title: 'Address generators',
       get body() {
         return `
-        <p>An <strong>address generator</strong> is four 8-bit pointers, a window (base and length) and a modifier, with an adder beside them. The instruction names a pointer and a mode: <code>x(p0)+</code> reads at p0, then adds 1 to it in the same clock. The modes are plus 1, minus 1, plus or minus the modifier, circular in either direction, and bit-reversed. Each generator costs ${n0(FIG.nands.agu)} NANDs, of which the step logic alone is ${n0(FIG.nands.aguStep)}.</p>
+        <p>An <strong>address generator</strong> is four 8-bit pointers, a window (base and length) and a modifier, with an adder beside them: p0–p3 address X and p4–p7 address Y. The instruction names a pointer and a mode: <code>x(p0)+</code> reads at p0, then adds 1 to it in the same clock, a <strong>post-increment</strong>. The modes are plus 1 (<code>+</code>), minus 1 (<code>−</code>), plus or minus the modifier (<code>+m</code>, <code>−m</code>), circular in either direction (<code>+c</code>, <code>−c</code>), and bit-reversed (<code>+r</code>). Each generator costs ${n0(FIG.nands.agu)} NANDs, of which the step logic alone is ${n0(FIG.nands.aguStep)}.</p>
         <p><strong>Circular:</strong> a filter keeps its last N samples. Shifting them costs N moves a sample. In a circular window, the next address is compared with the window's end, and when they are equal it is replaced by the base. The new sample overwrites the oldest, and nothing else moves.</p>
-        <p><strong>Bit-reversed:</strong> an FFT wants its input in the order whose index bits are reversed. Reverse the pointer's bits, add the reversed modifier, reverse back; the reversals are wiring, so the cost is one 8-bit adder.</p>
+        <p><strong>Bit-reversed:</strong> an FFT wants its input in the order whose index bits are reversed, as <a href="#/c/carriers/2">chapter ${numOf('carriers')}</a> found. Reverse the pointer's bits, add the reversed modifier, reverse back; the reversals are wiring, so the cost is one 8-bit adder.</p>
         <div class="try">Pick the circular mode with base 4 and length 6, then bit-reversed with m = 32. Watch where the run goes.</div>`;
       },
       widget: aguWidget,
@@ -179,9 +180,8 @@ export const chDspCore: Chapter = {
       title: 'The FFT',
       get body() {
         return `
-        <p>A 64-point FFT touches both ideas. The input is copied into bit-reversed order by the address generator, one loop of 64 iterations. Then six stages of butterflies, each a loop of <code>mac</code> pairs that use the twiddle table in Y, with the modifier set to the stage's stride.</p>
-        <p>The whole transform takes <strong>${n0(FIG.cycles.fft.cycles)} clocks</strong>: ${FIG.cycles.fft.macs} multiply-accumulates, and the rest is loads, stores and adds. A butterfly is 16 clocks here, because the core has one memory write port and one ALU. Real DSPs do a butterfly in a handful of clocks. The result below is the model's, which the gates equal, and the tones sit where they were put.</p>
-        ${''}`;
+        <p>A 64-point <a href="#/c/carriers/1">FFT</a> (chapter ${numOf('carriers')}) touches both of the address generator's special ideas: bit-reversed order and the modifier. The input is copied into bit-reversed order by the address generator, one loop of 64 iterations. Then six stages of butterflies, each a loop of <code>mac</code> pairs that use the twiddle table in Y (the roots of unity a butterfly multiplies by), with the modifier set to the stage's stride.</p>
+        <p>The whole transform takes <strong>${n0(FIG.cycles.fft.cycles)} clocks</strong>: ${FIG.cycles.fft.macs} multiply-accumulates, and the rest is loads, stores and adds. A butterfly is 16 clocks here, because the core has one memory write port and one ALU. Real DSPs do a butterfly in a handful of clocks. The result below is the model's, which the gates equal, and the tones sit where they were put.</p>`;
       },
       widget: fftWidget,
       challenge: {
@@ -197,13 +197,13 @@ export const chDspCore: Chapter = {
       get body() {
         const dsp = rvFigure('rv32im');
         return `
-        <p>Per product, so the machines' different block lengths do not matter. The DSP core is the winner in clocks everywhere, but its clock is longer: ${FIG.period} NAND delays against ${rvFigure('mac').period} for the MAC cores (${f2(FIG.period / rvFigure('mac').period)} times) and ${dsp.period} for the RV32IM, which has faster adders, since one clock reaches from the ROM through decode, the pointer, the memory, the multiplier and the accumulator. Time per product is the product of the two, and that is what the table gives.</p>
-        <p>The FFT has no RV32 figure to compare with, since the MAC chapter did not run one. The core is ${n0(FIG.nands.core)} NANDs without memories. The RV32IM is ${n0(dsp.nands)} with its 32-word data memory and 32 × 32 registers, and ${n0(rvWithoutDm('rv32im'))} without the data memory, so the core is about ${f2(rvWithoutDm('rv32im') / FIG.nands.core)} times smaller than it, and ${f2(rvWithoutDm('mac') / FIG.nands.core)} times smaller than the MAC core (${n0(rvWithoutDm('mac'))}). Nearly half of that is the MAC (${n0(FIG.nands.mac)} NANDs), with its idle second multiplier, which is the price of reusing the block unchanged.</p>
+        <p>Per product, so the machines' different block lengths do not matter. The DSP core is the winner in clocks everywhere, but its clock is longer: ${FIG.period} NAND delays against ${rvFigure('mac').period} for the MAC cores (${f2(FIG.period / rvFigure('mac').period)} times) and ${dsp.period} for the RV32IM, which has faster adders. The core's clock is long because one clock reaches from the ROM through decode, the pointer, the memory, the multiplier and the accumulator. Time per product is the product of the two, and that is what the table gives.</p>
+        <p>The FFT has no RV32 figure to compare with, since the MAC chapter did not run one. The core is ${n0(FIG.nands.core)} NANDs without memories. The RV32IM is ${n0(dsp.nands)} with its 32-word data memory and 32 × 32 registers, and ${n0(rvWithoutDm('rv32im'))} without the data memory, so the core is about ${f2(rvWithoutDm('rv32im') / FIG.nands.core)} times smaller than it, and ${f2(rvWithoutDm('mac') / FIG.nands.core)} times smaller than the MAC core (${n0(rvWithoutDm('mac'))}). Nearly half of that is the MAC with its adapter (${n0(FIG.nands.mac)} NANDs), with its idle second multiplier, which is the price of reusing the block unchanged.</p>
         <p><strong>What a real DSP does.</strong> It pipelines this path: fetch, decode, address, memory, multiply, accumulate in stages, each short, so the clock is several times faster. The costs are visible in the programmer's model: the instruction after a branch still runs (a delay slot), a loaded value is not there for the next instruction, and the loop must be set up some instructions before it starts. This core pays none of those, and pays for it in the length of its clock.</p>`;
       },
       widget: benchWidget,
       challenge: {
-        kind: 'quiz', question: 'The DSP core needs about 1.1 clocks a product and the RV32I with the packed MAC 2.0 on the 64-tap filter. Is it twice as fast?',
+        kind: 'quiz', question: 'The DSP core needs about 1.1 clocks a product and the RV32I with the packed MAC 2.0 on the 64-tap filter, 1.8 times as many. Is it 1.8 times as fast?',
         options: ['No: its clock is longer, so compare time, not clocks', 'Yes, by exactly the ratio of clocks', 'No: it is slower', 'It depends only on the NANDs'],
         answer: 0,
         explain: 'Time is clocks times the period. A longer period eats part of the gain. The table shows the time in NAND delays.',

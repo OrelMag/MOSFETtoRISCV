@@ -29,6 +29,8 @@ export const RANGES = {
   symTaps: [7, 31], windowTaps: [11, 501], beta: [0, 10], remezTaps: [60, 130], weight: [-1, 1], frac: [8, 20], structTaps: [16, 120], clock: [10, 500],
 } as const;
 
+/** A small number as a power of ten the way the page writes it: 2 × 10⁻¹⁶, not 2e-16. */
+const pow10 = (v: number): string => { const [m, e] = v.toExponential(0).split('e'); return `${m} × 10${[...String(Number(e))].map((c) => '⁻⁰¹²³⁴⁵⁶⁷⁸⁹'['-0123456789'.indexOf(c)]).join('')}`; };
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 const sp = (v: number) => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 const stems = (p: Plot, ys: readonly number[], cls = '') => {
@@ -106,13 +108,13 @@ export function symmetryWidget(): Widget {
     plane.replaceChildren(
       s('circle', { cx: C, cy: C, r: U, class: 'circle' }), s('line', { x1: 8, x2: Z - 8, y1: C, y2: C, class: 'axis' }), s('line', { x1: C, x2: C, y1: 8, y2: Z - 8, class: 'axis' }),
       ...roots.map((r) => s('circle', { cx: C + r.re * U, cy: C - r.im * U, r: 3.6, class: Math.abs(Math.hypot(r.re, r.im) - 1) < 1e-6 ? 'zero' : 'zero off' })),
-      s('text', { x: Z - 6, y: C - 5, 'text-anchor': 'end' }, 'z = 1'), s('text', { x: 6, y: C - 5 }, 'z = −1'));
+      s('text', { x: Z - 6, y: C + 14, 'text-anchor': 'end' }, 'z = 1'), s('text', { x: 6, y: C + 14 }, 'z = −1'));
     const odd = n % 2 === 1;
     chips.set(0, isSymmetric(t) ? 'yes' : 'no', 'taps are mirror images of each other');
     chips.set(1, `${num(linearDelay(n), 1)} samples`, 'delay at every frequency: (N − 1) / 2');
     chips.set(2, `${circle.length} on the circle, ${off} off it`, 'zeros; those off it come in sets: r and 1 / r on the real axis, or four at r e^±jθ and e^±jθ / r');
     chips.set(3, odd ? 'odd length' : 'even length', odd ? 'a whole number of samples of delay' : 'a whole number and a half of delay; a zero at z = −1');
-    note.textContent = `The roots, multiplied back together, give the taps to ${err.toExponential(0)} of the largest.${odd ? '' : ' With an even length the delay is a whole number and a half, so the filter cannot pass half the sample rate: z = −1 is always a zero.'}`;
+    note.textContent = `The roots, multiplied back together, give the taps to ${pow10(err)} of the largest.${odd ? '' : ' With an even length the delay is a whole number and a half, so the filter cannot pass half the sample rate: z = −1 is always a zero.'}`;
   };
   paint();
   return {

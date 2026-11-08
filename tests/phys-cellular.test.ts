@@ -1,6 +1,6 @@
 // Cellular's models against independent statements: lattice geometry computed by measuring distances, the harmonic-number law, zero-forcing's mean, the resource grid's printed sizes.
 import { describe, expect, it } from 'vitest';
-import { channelOverlap, clusterOf, CLUSTERS, cpUs, crossingM, elementsPerMs, gramInverseDiag, gridMbps, handover, harmonic, hexGrid, LTE_RBS, rbKhz, reachKm, reuseRatio, reuseSweep, schedule, sirAt, sirClosedDb, slotMs, zfMeanSnr, zfRates, type C } from '../src/phys/cellular';
+import { channelOverlap, clusterOf, CLUSTERS, cpUs, crossingM, elementsPerMs, gramInverseDiag, gridMbps, handover, harmonic, hexGrid, LTE_RBS, rbKhz, reachKm, reuseRatio, reuseSweep, SCHED_SEED, SCHED_SLOTS, schedule, sirAt, sirClosedDb, slotMs, zfMeanSnr, zfRates, type C } from '../src/phys/cellular';
 import { rng } from '../src/phys/line';
 import { fsplDb } from '../src/phys/radio';
 import { tick as yieldTick } from './yieldtick';
@@ -153,5 +153,22 @@ describe('many antennas', () => {
   it('reach: 20 dB more budget is ten times the distance; matches the dB form', () => {
     expect(reachKm(140, 3.5) / reachKm(120, 3.5)).toBeCloseTo(10, 6);
     expect(fsplDb(reachKm(140, 28), 28)).toBeCloseTo(140, 6);
+  });
+});
+
+describe('the figures the chapter and its codex quote', () => {
+  it('reuse table at n = 3.5 (the reuse panel\'s default) and the handover crossing', () => {
+    const r = [1, 3, 7].map((k) => reuseSweep(k, 3.5, 1500));
+    expect(r.map((x) => Math.round(x.medianDb))).toEqual([4, 14, 21]);
+    expect(r.map((x) => x.perCell.toFixed(2))).toEqual(['2.67', '1.79', '1.09']);
+    expect((r[0].perCell / r[2].perCell).toFixed(1)).toBe('2.5');
+    expect(Math.round(crossingM(1000, 3.5, 3))).toBe(549);
+    expect(sirClosedDb(7, 4).toFixed(1)).toBe('18.7');
+  });
+  it('eight users at 10 dB, the scheduler panel\'s own run (SCHED_SLOTS, SCHED_SEED)', () => {
+    const m = Array<number>(8).fill(10);
+    const t = (['rr', 'pf', 'max'] as const).map((p) => schedule(p, m, SCHED_SLOTS, SCHED_SEED).total.toFixed(2));
+    expect(t).toEqual(['2.91', '4.61', '4.68']);
+    expect(harmonic(8).toFixed(2)).toBe('2.72');
   });
 });

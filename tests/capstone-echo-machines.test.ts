@@ -130,12 +130,12 @@ describe('the DSP core', () => {
   }, 120_000);
 
   it('mutant: over the cycle budget → every path stops on the budget with its overshoot', () => {
-    for (const { v } of dsp({ busy: 1000 }, [1])) for (const r of v.results) { expect(r.fault?.kind).toBe('budget'); expect(r.why).toMatch(/took [\d\s  ]+ cycles, [\d\s  ]+ over the budget of 2.?400/); }
+    for (const { v } of dsp({ busy: 1000 }, [1])) for (const r of v.results) { expect(r.fault?.kind).toBe('budget'); expect(r.why).toMatch(/took [\d\s   ]+ cycles, [\d\s   ]+ over the budget of 2.?400/); }
   });
 
   it('protocol: halting before the last sample, an out that never comes, and a first out that takes too long are each named in the core\'s words', () => {
     expect(gradeEcho('ldi p1, 254\nld r1, x(p1)\nout r1\nhalt\n', 1, { machine: 'dsp' }).results[0].why).toMatch(/halted after sample 0 of 16.?000: it must keep answering until the last/);
-    expect(gradeEcho('spin: jmp spin\n', 1, { machine: 'dsp' }).results[0].why).toMatch(/no out in [\d\s  ]+ cycles/);
+    expect(gradeEcho('spin: jmp spin\n', 1, { machine: 'dsp' }).results[0].why).toMatch(/no out in [\d\s   ]+ cycles/);
     expect(gradeEcho('ldi r1, 3\nspin: jmp spin\n', 1, { machine: 'dsp' }).results[0].fault?.kind).toBe('setup');
     const late = gradeEcho('ldi p1, 254\nld r1, x(p1)\nout r1\nspin: jmp spin\n', 1, { machine: 'dsp' }).results[0];
     expect(late.fault?.kind).toBe('budget');

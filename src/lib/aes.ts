@@ -45,7 +45,7 @@ function xorColumns(b: Builder, plan: XorPlan, srcs: string[]): string[] {
 const outOf = (sp: string, n: number) => Array.from({ length: n }, (_, i) => `${sp}.o${i}`);
 
 /** y = M·a over GF(2) (row masks), then XOR the constant `konst` (a NOT on each bit it sets): an XOR network with shared pairs. */
-export function linear(id: string, name: string, summary: string, rows: bigint[], nin: number, konst = 0, label = 'LIN'): ComponentDef {
+export function linear(id: string, name: string, summary: string, rows: bigint[], nin: number, konst = 0, label = 'LIN', rowsAt?: Record<string, number>): ComponentDef {
   return memo(id, () => {
     const nout = rows.length, b = new Builder(8, 10, 2);
     b.pins('a');
@@ -54,6 +54,8 @@ export function linear(id: string, name: string, summary: string, rows: bigint[]
     for (let i = 0; i < nout; i++) if ((konst >> i) & 1) outs[i] = b.op1(NOT, [outs[i]]);
     b.next();
     b.wire(b.op1(merger(ones(nout)), outs), 'y');
+    // gates re-seated within their columns (y of each instance): a drawing aid found by scripts/ (fewest crossings), nothing else changes
+    if (rowsAt) for (const i of b.instances) if (i.name in rowsAt) i.at = [i.at![0], rowsAt[i.name]];
     return define({
       id, name, category: 'arithmetic', summary,
       ports: [bus('a', nin, 'in'), bus('y', nout, 'out')], symbol: { kind: 'box', label },
@@ -69,8 +71,8 @@ const lin = (rows: bigint[], a: number, konst = 0): number => {
   return konst ? Number(BigInt(y) ^ BigInt(konst)) : y;
 };
 /** A linear part with its spec computed from the rows. */
-function linearPart(id: string, name: string, summary: string, rows: bigint[], nin: number, konst = 0, label = 'LIN'): ComponentDef {
-  const d = linear(id, name, summary, rows, nin, konst, label);
+function linearPart(id: string, name: string, summary: string, rows: bigint[], nin: number, konst = 0, label = 'LIN', rowsAt?: Record<string, number>): ComponentDef {
+  const d = linear(id, name, summary, rows, nin, konst, label, rowsAt);
   d.spec = ([a]) => [lin(rows, a, konst)];
   return d;
 }
@@ -195,11 +197,14 @@ export function gf256Inv(): ComponentDef {
   });
 }
 
+const SBOX_IN_AT = { u1: 14, u2: 26, u3: 8, u4: 2, u5: 38, u6: 20, u7: 32, u8: 20, u9: 2, u10: 8, u11: 14 };
+const SBOX_OUT_AT = { u2: 14, u3: 26, u5: 8, u6: 14, u7: 2, u8: 8, u10: 14, u11: 2, u12: 20, u13: 8, u15: 6, u16: 14, u18: 2 };
+
 /** The S-box: basis change into the tower, inverse, basis change back with the affine map folded in, then XOR 0x63. */
 export function aesSbox(): ComponentDef {
   return memo('aes_sbox', () => {
-    const inM = linearPart('aes_sbox_in', 'S-box: into the tower', 'The change of basis from AES\'s polynomial basis to the tower\'s: an 8×8 matrix over GF(2), an XOR network.', SBOX_IN, 8, 0, 'x→T');
-    const outM = linearPart('aes_sbox_out', 'S-box: out of the tower, affine', 'The change of basis back, multiplied by the S-box\'s affine matrix, then XOR 0x63 (inverters on the bits it sets): one 8×8 matrix and a constant.', SBOX_OUT, 8, 0x63, 'T→S');
+    const inM = linearPart('aes_sbox_in', 'S-box: into the tower', 'The change of basis from AES\'s polynomial basis to the tower\'s: an 8×8 matrix over GF(2), an XOR network.', SBOX_IN, 8, 0, 'x→T', SBOX_IN_AT);
+    const outM = linearPart('aes_sbox_out', 'S-box: out of the tower, affine', 'The change of basis back, multiplied by the S-box\'s affine matrix, then XOR 0x63 (inverters on the bits it sets): one 8×8 matrix and a constant.', SBOX_OUT, 8, 0x63, 'T→S', SBOX_OUT_AT);
     const b = new Builder(8, 10, 2);
     b.pins('x');
     const t = b.op1(inM, ['x']);

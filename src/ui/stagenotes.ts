@@ -79,6 +79,11 @@ export class StageNotes {
       h('span', { class: 'more', 'aria-hidden': 'true' }, '›'));
   }
 
+  /** Announce a message (a step change). */
+  announce(msg: string): void {
+    this.say(msg);
+  }
+
   private say(msg: string): void {
     // cleared first, so the same words twice are still announced
     this.live.textContent = '';

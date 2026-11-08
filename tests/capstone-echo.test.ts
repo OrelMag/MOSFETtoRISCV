@@ -100,7 +100,7 @@ describe('the echo capstone', () => {
     expect(over.ok).toBe(false);
     for (const r of over.results) {
       expect(r.fault?.kind).toBe('budget');
-      const m = /took (\d[\d  ]*) cycles, (\d[\d  ]*) over the budget of 2.?400/.exec(r.why)!;
+      const m = /took (\d[\d   ]*) cycles, (\d[\d   ]*) over the budget of 2.?400/.exec(r.why)!;
       expect(m).toBeTruthy();
       expect(Number(m[1].replace(/\D/g, '')) - Number(m[2].replace(/\D/g, ''))).toBe(ECHO_SPEC.budget);
     }

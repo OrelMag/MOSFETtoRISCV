@@ -28,14 +28,112 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
   return d;
 }
 
+/** One gate of an XOR network as built: its output driver and the two it reads. */
+export interface XorGate { out: string; srcs: [string, string] }
+
+/**
+ * Lay out an XOR network's gates to cross as little as it allows: each column's gates sit on a 6-unit pitch about the sources' middle, and
+ * their order is searched (swaps that reduce the crossings of the straight lines between pins, wires skipping a column counted heavily).
+ * Sources stay where they are and the merger follows the last gates. Only instance `at` changes.
+ */
+export function arrangeXor(b: Builder, gates: XorGate[], outs: string[], merge: string): void {
+  if (!gates.length) return;
+  const U = 3, byName = new Map(b.instances.map((i) => [i.name, i]));
+  const instOf = (end: string) => byName.get(end.slice(0, end.indexOf('.')))!;
+  const colOf = new Map<number, XorGate[]>();
+  for (const g of gates) { const x = instOf(g.out).at![0]; (colOf.get(x) ?? colOf.set(x, []).get(x)!).push(g); }
+  const xs = [...colOf.keys()].sort((p, q) => p - q), cols = xs.map((x) => colOf.get(x)!);
+  const mi = byName.get(merge)!, mg = symbolGeom(mi.def), gg = symbolGeom(instOf(gates[0].out).def);
+  const srcY = gates.flatMap((g) => g.srcs).filter((d) => !gates.some((x) => x.out === d)).map((d) => instOf(d).at![1] + symbolGeom(instOf(d).def).ports[d.slice(d.indexOf('.') + 1)].pos[1]);
+  const mid = (Math.min(...srcY) + Math.max(...srcY)) / 2;
+  // a gate's place is a slot of U units (a gate is two slots tall, so neighbours are two apart at least), about the middle of the sources
+  const slotOf = new Map<XorGate, number>();
+  let mOff = 0;
+  cols.forEach((c) => c.forEach((g, i) => slotOf.set(g, 2 * i - (c.length - 1))));
+  const place = () => {
+    for (const [g, k] of slotOf) instOf(g.out).at![1] = Math.round(mid - gg.h / 2 + k * U);
+    const ys = outs.map((o, i) => pinOf(o)[1] - mg.ports[`i${i}`].pos[1]);
+    mi.at![1] = Math.round(ys.reduce((p, q) => p + q, 0) / ys.length) + mOff;
+  };
+  const pinOf = (end: string): [number, number] => { const i = instOf(end), p = symbolGeom(i.def).ports[end.slice(end.indexOf('.') + 1)].pos; return [i.at![0] + p[0], i.at![1] + p[1]]; };
+  const edges = (): [[number, number], [number, number], string][] => [
+    ...gates.flatMap((g) => g.srcs.map((d, k): [[number, number], [number, number], string] => [pinOf(d), [instOf(g.out).at![0], instOf(g.out).at![1] + gg.ports[k ? 'b' : 'a'].pos[1]], d])),
+    ...outs.map((o, i): [[number, number], [number, number], string] => [pinOf(o), [mi.at![0], mi.at![1] + mg.ports[`i${i}`].pos[1]], o]),
+  ];
+  const fan = new Map<string, number>();
+  for (const [, , d] of edges()) fan.set(d, (fan.get(d) ?? 0) + 1);
+  const nearSource = (d: string) => gates.some((g) => g.out === d) || fan.get(d)! > 1;
+  const ori = (p: number[], q: number[], r: number[]) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+  const cost = () => {
+    place();
+    const es = edges();
+    let c = 0;
+    for (let i = 0; i < es.length; i++) for (let j = i + 1; j < es.length; j++) {
+      const [a, b2, da] = es[i], [c2, d2, dc] = es[j];
+      if (da === dc || (a[0] === c2[0] && a[1] === c2[1]) || (b2[0] === d2[0] && b2[1] === d2[1])) continue;
+      if (ori(a, b2, c2) * ori(a, b2, d2) < 0 && ori(c2, d2, a) * ori(c2, d2, b2) < 0) c++;
+    }
+    // a wire skipping a column runs under that column's gates
+    // a wire that skips a column runs level across it, at the sink's height when its vertical is by the driver (xorTrunks), else at the driver's
+    for (const [a, b2, d] of es) {
+      const y = nearSource(d) ? b2[1] : a[1];
+      for (const gs of cols) { const x = instOf(gs[0].out).at![0]; if (a[0] < x && b2[0] > x + gg.w && gs.some((g) => y > instOf(g.out).at![1] - 1 && y < instOf(g.out).at![1] + gg.h + 1)) c += 3; }
+    }
+    return c * 100 + es.reduce((p, [a, b2]) => p + Math.abs(a[1] - b2[1]), 0) / 10;
+  };
+  // start from the barycentre of each gate's sources, then swap or shift gates while it helps
+  for (const c of cols) {
+    c.sort((p, q) => (pinOf(p.srcs[0])[1] + pinOf(p.srcs[1])[1]) - (pinOf(q.srcs[0])[1] + pinOf(q.srcs[1])[1]));
+    c.forEach((g, i) => slotOf.set(g, 2 * i - (c.length - 1)));
+  }
+  let best = cost();
+  const shiftMerger = () => { for (const d of [-3, -2, -1, 1, 2, 3]) { const k = mOff; mOff += d; const v = cost(); if (v < best) { best = v; return true; } mOff = k; } return false; };
+  for (let again = true, rounds = 0; again && rounds < 12; rounds++) {
+    again = shiftMerger();
+    for (const c of cols) for (const g of c) {
+      const k0 = slotOf.get(g)!;
+      for (const k of [k0 - 3, k0 - 2, k0 - 1, k0 + 1, k0 + 2, k0 + 3]) {
+        const other = c.find((x) => x !== g && Math.abs(slotOf.get(x)! - k) < 2);
+        if (other) { // swap with a neighbour that is in the way, when it is the exact place
+          if (slotOf.get(other) !== k) continue;
+          slotOf.set(g, k); slotOf.set(other, k0);
+          if (c.some((x) => c.some((y) => x !== y && Math.abs(slotOf.get(x)! - slotOf.get(y)!) < 2))) { slotOf.set(g, k0); slotOf.set(other, k); continue; }
+          const v = cost();
+          if (v < best) { best = v; again = true; break; }
+          slotOf.set(g, k0); slotOf.set(other, k);
+        } else {
+          slotOf.set(g, k);
+          const v = cost();
+          if (v < best) { best = v; again = true; break; }
+          slotOf.set(g, k0);
+        }
+      }
+    }
+  }
+  place();
+  const top = Math.min(2, ...b.instances.map((i) => i.at![1]));
+  if (top < 2) for (const i of b.instances) i.at![1] += 2 - top;
+}
+
+/** The builder's nets, those a gate drives with their vertical run in the gap right after it (not mid-way, where a wire skipping a column would run into that column's gates). */
+const xorTrunks = (b: Builder, gates: XorGate[]): NetDef[] => {
+  const at = new Map(b.instances.map((i) => [i.name, i.at![0]]));
+  const x = (end: string) => at.get(end.slice(0, end.indexOf('.')))!;
+  return b.nets().map((n) => {
+    if (!n.ends[0].includes('.') || n.ends.length < 2) return n;
+    if (gates.some((g) => g.out === n.ends[0])) return { ...n, trunk: x(n.ends[0]) + 7 };
+    return { ...n, trunk: n.ends.length > 2 ? x(n.ends[0]) + 4 : x(n.ends[1]) - 4 }; // a source's: by it, or by its one sink
+  });
+};
+
 /** The plan's XOR gates over `srcs`, one column per level; returns each output's driver. */
-export function xorColumns(b: Builder, plan: XorPlan, srcs: string[]): string[] {
+export function xorColumns(b: Builder, plan: XorPlan, srcs: string[], gates?: XorGate[]): string[] {
   const inputs = srcs.length, level = new Array<number>(inputs).fill(0), gate: string[] = [];
   plan.pairs.forEach(([x, y], k) => { level[inputs + k] = Math.max(level[x], level[y]) + 1; });
   const drv = (id: number) => (id < inputs ? srcs[id] : gate[id - inputs]);
   for (let lv = 1; lv <= plan.depth; lv++) {
     b.next();
-    plan.pairs.forEach(([x, y], k) => { if (level[inputs + k] === lv) gate[k] = b.op1(XOR, [drv(x), drv(y)]); });
+    plan.pairs.forEach(([x, y], k) => { if (level[inputs + k] === lv) { gate[k] = b.op1(XOR, [drv(x), drv(y)]); gates?.push({ out: gate[k], srcs: [drv(x), drv(y)] }); } });
   }
   b.next();
   return plan.out.map((o) => drv(o));
@@ -46,17 +144,21 @@ export function gfConst(c: number): ComponentDef {
   return memo(`gfc${hex2(c)}`, () => {
     const rows: bigint[] = new Array<bigint>(8).fill(0n);
     for (let j = 0; j < 8; j++) { const v = gfMul(1 << j, c); for (let i = 0; i < 8; i++) if ((v >> i) & 1) rows[i] |= 1n << BigInt(j); }
-    const b = new Builder(8, 10, 2);
+    const b = new Builder(8, 10, 2), P = 6;
     b.pins('a');
-    const sp = b.op(splitter(ones(8)), ['a']);
-    const outs = xorColumns(b, xorPlan(rows, 8, true), Array.from({ length: 8 }, (_, i) => `${sp}.o${i}`));
-    b.wire(b.op1(merger(ones(8)), outs), 'y');
+    const sp = b.op(splitter(ones(8), P), ['a']);
+    const gates: XorGate[] = [];
+    const outs = xorColumns(b, xorPlan(rows, 8, true), Array.from({ length: 8 }, (_, i) => `${sp}.o${i}`), gates);
+    const mg = b.op(merger(ones(8), P), outs);
+    b.wire(`${mg}.out`, 'y');
+    arrangeXor(b, gates, outs, mg);
+    const pa = symbolGeom(splitter(ones(8), P)).ports.in.pos[1] + 2, py = b.instances.find((i) => i.name === mg)!.at![1] + symbolGeom(merger(ones(8), P)).ports.out.pos[1];
     return define({
       id: `gfc${hex2(c)}`, name: `GF(256) × 0x${hex2(c)}`, category: 'arithmetic',
       summary: `Multiplies a byte by the constant 0x${hex2(c)} in GF(256), field polynomial 0x11D. No multiplier is involved: the map is linear over GF(2), so every output bit is the XOR of a fixed set of input bits.`,
       ports: [bus('a', 8, 'in'), bus('y', 8, 'out')], symbol: { kind: 'box', label: `×${hex2(c)}` },
       spec: ([a]) => [gfMul(a, c)],
-      netlist: () => ({ pins: { a: [0, 12], y: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { a: [0, pa], y: [b.right, py] }, instances: b.instances, nets: xorTrunks(b, gates) }),
     });
   });
 }
@@ -139,7 +241,7 @@ export function rsEncoder(nsym = 10): ComponentDef {
     nets.push({ name: 'top', ends: ['s0.q', 'fsum.b', 'pass.a'], tags: true }, { name: 'f', ends: f, tags: true }, { name: 'en', ends: en, tags: true }, { name: 'clr', ends: clr, tags: true }, { name: 'clk', ends: ck, tags: true });
     const R = Xm + mg.w + 6;
     return define({
-      id: `rsenc${nsym}`, name: `Reed-Solomon encoder, ${nsym} check bytes`, category: 'sequential',
+      id: `rsenc${nsym}`, name: `Reed-Solomon encoder, ${nsym} check bytes`, category: 'arithmetic',
       summary: `Polynomial division over GF(256) by a shift register of bytes: ${nsym} registers, a constant multiplier per generator coefficient, one feedback byte. It is the CRC's circuit with bytes for bits.`,
       ports: [bus('d', 8, 'in'), bit('msg', 'in'), bit('en', 'in'), bit('clr', 'in'), clk(), bus('out', 8, 'out')], symbol: { kind: 'box', label: 'RS ENC' },
       netlist: () => ({ pins: { d: [0, 4], msg: [0, 7], en: [0, 10], clr: [0, 13], clk: [0, 16], out: [Math.max(R, X0 + PX * PER_ROW), 3 + mg.ports.y.pos[1]] }, instances, nets }),
@@ -183,7 +285,7 @@ export function rsSyndrome(nsym = 10): ComponentDef {
     }
     nets.push({ name: 'd', ends: d, tags: true }, { name: 'en', ends: en, tags: true }, { name: 'clr', ends: clr, tags: true }, { name: 'clk', ends: ck, tags: true }, { name: 'bytes', ends: ['all.out', 'zero.a'], tags: true }, { name: 'ok', ends: ['zero.z', 'ok'] });
     return define({
-      id: `rssynd${nsym}`, name: `Reed-Solomon check, ${nsym} syndromes`, category: 'sequential',
+      id: `rssynd${nsym}`, name: `Reed-Solomon check, ${nsym} syndromes`, category: 'arithmetic',
       summary: `Evaluates the received word at each of the generator's ${nsym} roots as it arrives. All zero: it is a code word. Not zero: the ${nsym} bytes are what a decoder starts from.`,
       ports: [bus('d', 8, 'in'), bit('en', 'in'), bit('clr', 'in'), clk(), bit('ok', 'out')], symbol: { kind: 'box', label: 'RS SYN' },
       netlist: () => ({ pins: { d: [0, 3], en: [0, 6], clr: [0, 9], clk: [0, 12], ok: [X2 + zg.w + 6, yz + zg.ports.z.pos[1]] }, instances, nets }),

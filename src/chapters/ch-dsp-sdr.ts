@@ -16,7 +16,7 @@ import { deferredAt, lazyProps, lz } from '../ui/lazy';
 import { numOf } from './order';
 import type { Chapter } from './types';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
 const d1 = (x: number) => (Math.abs(x) < 0.05 ? 0 : x).toFixed(1);
 const khzf = (hz: number) => `${n0(hz / 1000)} kHz`;
 const memo = <T>(f: () => T): (() => T) => { let v: T | undefined; return () => (v ??= f()); };

@@ -1,7 +1,7 @@
 // The codex's quoted numbers against the library, read from the entries' text: a change to either side fails here.
 // (The codex files are plain strings; this test is their guard. Re-measure with stats() / corePeriod before editing.)
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import '../src/lib';
 import { CODEX, codexById } from '../src/campaign/codex';
 import { chapterSkip, Glossary } from '../src/campaign/glossary';
@@ -10,6 +10,7 @@ import { moreOf } from '../src/campaign/codexmore';
 import { corePeriod } from '../src/campaign/corecheck';
 import { CELL_C, BITLINE_C } from '../src/lib/dram';
 import { resolveComponent } from '../src/lib/resolve';
+import { BOOK_TIMEOUT, warmBook, WARM_TIMEOUT } from './warmbook';
 import { rv16Core } from '../src/lib/rv16/cpu';
 import { LANEDEC16, LANES16, RV16_SIMD } from '../src/lib/rv16/lanes16';
 import { DEC3, DET101, RF8, RV16_ALU16, RV16_DFF, RV16_MUX4, RV16_MUX8, RV16_REG16 } from '../src/lib/rv16/logic';
@@ -173,6 +174,8 @@ describe('the codex\'s other measured examples', () => {
 });
 
 describe('the glossary in the chapters', () => {
+  // the last test reads every chapter's prose: warm it first, as the other whole-book tests do
+  beforeAll(warmBook, WARM_TIMEOUT);
   const g = new Glossary();
   const ids = (s: string) => g.find(s).map((m) => m.id);
   const plain = (h: string) => h.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ');
@@ -215,5 +218,5 @@ describe('the glossary in the chapters', () => {
     const never = CODEX.filter((e) => !hit.has(e.id)).map((e) => e.id);
     expect(never.length / CODEX.length, never.join(' ')).toBeLessThanOrEqual(0.25); // 57 of 146 before the aliases
     for (const id of ['pc', 'traps', 'interrupts', 'subnormal', 'demorgan', 'setuphold', 'precise']) expect(hit, id).toContain(id);
-  });
+  }, BOOK_TIMEOUT);
 });
