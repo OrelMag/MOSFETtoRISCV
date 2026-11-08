@@ -57,20 +57,20 @@ halt:   j    halt`;
 export function fetchChip(id: string, name: string, rom: { k: number; src: string } = { k: 3, src: FETCH_PROGRAM }): ChipDoc {
   return chip(id, name, {
     notes: 'Each clock edge: PC ← PC + 4. The ROM turns the PC into the instruction at that byte address. Open the ROM (Edit program…) to change the program and watch the listing follow the PC.',
-    pins: [pin('clk', 'in', [2, 12], 1, { kind: 'clock' }), pin('instr', 'out', [56, 7], 32), pin('pc', 'out', [56, 2], 32)],
+    pins: [pin('clk', 'in', [2, 18], 1, { kind: 'clock' }), pin('instr', 'out', [56, 13], 32), pin('pc', 'out', [56, 21], 32)],
     parts: [
-      part('pcr', { lib: 'reg32' }, [12, 4], { label: 'PC' }), part('one', { const: { width: 1, value: 1 } }, [3, 7]),
-      part('inc', { lib: 'plus4' }, [22, 15], { flip: true }),
-      part('rom', { rom: { k: rom.k, w: 32, addr: 'rv32', lang: 'asm', src: rom.src } }, [34, 5], { label: 'program' }),
+      part('pcr', { lib: 'reg32' }, [12, 10], { label: 'PC' }), part('one', { const: { width: 1, value: 1 } }, [3, 13]),
+      part('inc', { lib: 'plus4' }, [22, 2], { flip: true }),
+      part('rom', { rom: { k: rom.k, w: 32, addr: 'rv32', lang: 'asm', src: rom.src } }, [34, 11], { label: 'program' }),
     ],
-    labels: [lbl('p1', 'pc', [28, 11], 'down'), lbl('p2', 'pc', [32, 17], 'right')],
+    // the loop: q up into the incrementer above the register (it faces left), its sum down into d; en and clk come in below it
+    labels: [],
     wires: [
       wire('clk', 'pin:clk', 'pcr.clk'), wire('en', 'one.y', 'pcr.en'),
       wire('q', 'pcr.q', 'rom.addr'),
-      wire('qo', { wire: 'q', at: [24, 7] }, 'pin:pc', [[24, 2]]),
-      wire('qp', { wire: 'q', at: [28, 7] }, 'lbl:p1'),
-      wire('ia', 'lbl:p2', 'inc.a'),
-      wire('nx', 'inc.y', 'pcr.d', [[8, 17], [8, 6]]),
+      wire('qo', { wire: 'q', at: [26, 13] }, 'pin:pc', [[26, 21]]),
+      wire('ia', { wire: 'q', at: [30, 13] }, 'inc.a', [[32, 13], [32, 4]]),
+      wire('nx', 'inc.y', 'pcr.d', [[8, 4], [8, 12]]),
       wire('i', 'rom.data', 'pin:instr'),
     ],
   });

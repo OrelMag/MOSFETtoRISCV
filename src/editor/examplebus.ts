@@ -32,10 +32,7 @@ export function busSystemChip(id: string, name: string): ChipDoc {
   const size = (ref: PartRef) => { const d = partDef(ref, () => undefined); if (isError(d)) throw new Error(d.error); const g = symbolGeom(d); return [g.w, g.h] as Vec; };
   const lib = (k: keyof typeof SANDBOX_PARTS): PartRef => ({ lib: SANDBOX_PARTS[k].id });
   const GAP = 6;
-  const elbow = (a: string, b: string, lane: number) => {
-    const [pa, pb] = [a, b].map((e) => { const [p, q] = e.split('.'); return s.port(p, q).pos; });
-    s.wire(a, b, pa[1] === pb[1] ? [] : [[lane, pa[1]], [lane, pb[1]]]);
-  };
+  const elbow = (a: string, b: string, lane: number) => s.elbow(a, b, lane);
 
   // column 1: the boot ROM, the switches; column 2: the core, the DMA, the interrupt OR, console and LEDs
   const bootRef: PartRef = { rom: { k: 7, w: 32, addr: 'rv32', lang: 'asm', src: bootSource(SANDBOX_WORDS) } };
