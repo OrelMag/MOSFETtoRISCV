@@ -4,6 +4,7 @@
 
 import '../styles/speaker3d.css';
 import { h } from '../ui/dom';
+import { groupNum } from '../sim/numfmt';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
@@ -38,7 +39,7 @@ export function speakerView(): Widget {
       aria: 'A cut-away moving-coil loudspeaker in 3D with a plot of the held samples behind it: cone, surround, spider, voice coil in the magnet gap, pole piece, ferrite ring, top plate and frame',
       camera: { ...VIEW },
       limits: { minDist: 120, maxDist: 1200 },
-      note: `Drawn to a Dayton RS180-8: the cone, coil diameter, Xmax and force factor are the datasheet's; the winding and gap heights, the magnet's size and the spider are proportions chosen to fit Xmax. Speaker: the window's peak sample is scaled to Xmax (${XMAX_MM} mm) and the stroke is drawn ${DRAW_K} times larger. Microphone: the sound is ${SPL_DB} dB SPL (1 Pa rms, 1.41 Pa peak) at the cone, whose real stroke is about ${realPeakUm(d).toFixed(1)} µm at the voice's ${Math.round(f0)} Hz; it is drawn at Xmax × ${DRAW_K}, ${ratio.toLocaleString('en')} times larger than real. Time is slowed 500 times. The mechanics are drawn, not simulated: the smoothing is a one-pole lag, not the cone's resonance.`,
+      note: `Drawn to a Dayton RS180-8: the cone, coil diameter, Xmax and force factor are the datasheet's; the winding and gap heights, the magnet's size and the spider are proportions chosen to fit Xmax. Speaker: the window's peak sample is scaled to Xmax (${XMAX_MM} mm) and the stroke is drawn ${DRAW_K} times larger. Microphone: the sound is ${SPL_DB} dB SPL (1 Pa rms, 1.41 Pa peak) at the cone, whose real stroke is about ${realPeakUm(d).toFixed(1)} µm at the voice's ${Math.round(f0)} Hz; it is drawn at Xmax × ${DRAW_K}, ${groupNum(ratio)} times larger than real. Time is slowed 500 times. The mechanics are drawn, not simulated: the smoothing is a one-pole lag, not the cone's resonance.`,
       draw,
     });
     stage = st;
@@ -58,7 +59,7 @@ export function speakerView(): Widget {
       if (mode === 'speaker') {
         rows.push(['DAC code', fmt(p.code, 0)], ['Coil current (held)', `${fmt(currentA(p.drive))} A`], ['Cone position', `${fmt(coneMm(p.cone), 1)} mm`]);
       } else {
-        rows.push(['Cone (real stroke)', `${fmt(realUm(d, p.cone), 2)} µm`], ['Cone velocity', `${fmt(velocityMmS(d, p.k), 2)} mm/s`], ['EMF (real stroke)', `${fmt(emfVolts(d, p.k) * 1000, 2)} mV · drawn ×${ratio.toLocaleString('en')}`], ['ADC code (held)', fmt(p.code, 0)]);
+        rows.push(['Cone (real stroke)', `${fmt(realUm(d, p.cone), 2)} µm`], ['Cone velocity', `${fmt(velocityMmS(d, p.k), 2)} mm/s`], ['EMF (real stroke)', `${fmt(emfVolts(d, p.k) * 1000, 2)} mV · drawn ×${groupNum(ratio)}`], ['ADC code (held)', fmt(p.code, 0)]);
       }
       rows.push(mode === 'speaker' ? ['Xmax', `±${XMAX_MM} mm`] : ['Sound at the cone', `${SPL_DB} dB SPL, ${Math.round(f0)} Hz`]);
       kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
@@ -99,7 +100,7 @@ export function speakerView(): Widget {
     });
     const EXPLAIN: Record<Mode, string> = {
       speaker: `The DAC holds each sample for one period, the coil current follows it, and the suspension turns that current into a position: full scale is ${fmt(I_FULL)} A for Xmax (x = Bl · i · Cms, with Cms = ${CMS_MM_N} mm/N). With Smoothing off the cone position is exactly the staircase, the zero-order hold. Smoothing lags the cone by about ${TAU} periods, a stand-in for the reconstruction filter and the cone's mass.`,
-      mic: `The same machine run backwards: sound moves the cone, the coil moving in the gap makes e = Bl · v with Bl = ${BL} T·m, and the ADC takes one sample of that voltage a period, held for the next. The sound is ${SPL_DB} dB SPL (1 Pa rms, 1.41 Pa peak) at the cone: F = p · Sd, and above Fs (35.7 Hz) the cone is mass-controlled, v = F / (ω · Mms), so the voice's peak moves it only ${realPeakUm(d).toFixed(1)} µm at ${Math.round(f0)} Hz. The picture draws that stroke at Xmax × ${DRAW_K}, ${ratio.toLocaleString('en')} times larger; the volts shown are for the real stroke.`,
+      mic: `The same machine run backwards: sound moves the cone, the coil moving in the gap makes e = Bl · v with Bl = ${BL} T·m, and the ADC takes one sample of that voltage a period, held for the next. The sound is ${SPL_DB} dB SPL (1 Pa rms, 1.41 Pa peak) at the cone: F = p · Sd, and above Fs (35.7 Hz) the cone is mass-controlled, v = F / (ω · Mms), so the voice's peak moves it only ${realPeakUm(d).toFixed(1)} µm at ${Math.round(f0)} Hz. The picture draws that stroke at Xmax × ${DRAW_K}, ${groupNum(ratio)} times larger; the volts shown are for the real stroke.`,
     };
     const explain = h('p', { class: 'm3-sub' }, EXPLAIN.speaker);
     const modes = ['speaker', 'mic'] as const;

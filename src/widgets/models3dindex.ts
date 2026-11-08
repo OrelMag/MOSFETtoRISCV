@@ -125,6 +125,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./strowger3d').then((m) => m.strowger3d()),
   },
   {
+    id: 'speaker', title: 'Loudspeaker and microphone', category: 'dsp', chapter: 'speech', step: 0,
+    summary: 'A Dayton RS180-8 cut open: the DAC\'s held samples move the cone; run backwards, the coil makes the microphone\'s millivolts.',
+    files: ['speaker3d', 'speaker3dview', 'speaker3dparts'], factory: 'speaker3d',
+    open: () => import('./speaker3d').then((m) => m.speaker3d()),
+  },
+  {
     id: 'cable', title: 'Twisted pair and coax', category: 'comms', chapter: 'wire', step: 6,
     summary: 'Why a pair is twisted: each half twist flips a loop\'s EMF so the pickup cancels; or swap in a coax.',
     files: ['cable3d', 'cable3dview', 'cable3dparts'], factory: 'cable3d',
