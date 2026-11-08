@@ -3,7 +3,7 @@ import { bestClos, capacityAt, clos, crossbarCrosspoints, erlangB, foldedCrosspo
 import { MARKED, dbToRatio, levelsSupported, nyquistBitRate, ratioToDb, shannon, snrNeeded } from '../comm/limits';
 import { ITA2_START_STOP, UART_8N1, frameUnits, stopIndex, toleranceClosedForm } from '../comm/startstop';
 import { CROSSBAR3, CROSSBAR_EXCHANGE, DIAL_COUNTER, DIAL_SELECTOR, telegraphChain } from '../lib/telegraph';
-import { PULL_I, PULL_V, bitEnergy, loopCurrent, margin, ohmsPerKm, reachKm, repeaterDelayMs } from '../phys/telegraph';
+import { PULL_I, PULL_V, SOUNDER_R, bitEnergy, loopCurrent, margin, ohmsPerKm, reachKm, repeaterDelayMs } from '../phys/telegraph';
 import { RELAY_STEP_MS } from '../phys/relay';
 import { groupDigits } from '../sim/numfmt';
 import { FF_DRIVER, FF_INPUT, FF_WIRE } from '../sim/netcap';
@@ -70,7 +70,7 @@ export const chTelegraph: Chapter = {
   builds: ['message', 'relays', 'inverter'],
   recap: {
     keep: [
-      `A telegraph loop is a battery, a wire and a coil in series: the coil pulls in when V / (R<sub>line</sub> + R<sub>coil</sub>) reaches its pull-in current (${mA(PULL_I)} mA for our relay). On 4 mm iron wire (${f1(ohmsPerKm('iron'))} Ω/km) a 24 V battery reaches ${f0(reachKm(24, 'iron'))} km; copper (${f1(ohmsPerKm('copper'))} Ω/km) reaches ${f0(reachKm(24, 'copper'))} km.`,
+      `A telegraph loop is a battery, a wire and a coil in series: the coil pulls in when V / (R<sub>line</sub> + R<sub>coil</sub>) reaches its pull-in current (${mA(PULL_I)} mA for our ${SOUNDER_R} Ω main-line sounder). American landlines kept that loop closed at idle. On 4 mm iron wire (${f1(ohmsPerKm('iron'))} Ω/km) a 24 V battery reaches ${f0(reachKm(24, 'iron'))} km; copper (${f1(ohmsPerKm('copper'))} Ω/km) reaches ${f0(reachKm(24, 'copper'))} km.`,
       `A relay repeater regenerates: the weak line current closes a contact on a fresh battery. Reach adds section by section; each station costs a relay step (${RELAY_STEP_MS} ms) and, because the relay releases faster than it operates, shortens each pulse by about ${f1(SHRINK_MS)} ms.`,
       `Morse is a variable-length code read by its gaps (dot 1, dash 3, gaps 1 / 3 / 7 units; PARIS and a word gap are ${PARIS_UNITS} units). ITA2 is five bits in a frame of ${ITA2_UNITS} units (start 1, stop 1.5) that a motor can find alone. The frame costs ${f0(100 * (1 - 5 / ITA2_UNITS))} % of the line's time.`,
       'Baud is symbols a second; bit/s is baud × log<sub>2</sub> M. Nyquist: a channel of bandwidth B carries at most 2B symbols a second. Shannon: with noise, no more than B log<sub>2</sub>(1 + SNR) bit/s, whatever the code; M levels need SNR ≥ M² − 1.',
@@ -78,11 +78,11 @@ export const chTelegraph: Chapter = {
     ],
     check: [
       {
-        question: `A relay needs ${mA(PULL_I)} mA in its ${f0(PULL_V / PULL_I)} Ω coil. The 24 V battery drives a 40 km iron line. What happens?`,
+        question: `A main-line sounder needs ${mA(PULL_I)} mA in its ${f0(PULL_V / PULL_I)} Ω coil. The 24 V battery drives an 80 km iron line. What happens?`,
         options: ['The sounder never moves: the current falls short', `It moves: 24 V is far above the coil's pull-in voltage`, 'It moves, slowly'],
         answer: 0,
-        explain: `The wire is ${f0(ohmsPerKm('iron') * 40)} Ω, so the loop current is ${mA(loopCurrent(24, 40, 'iron'))} mA against ${mA(PULL_I)} mA. The coil needs a current, not a voltage: the line's resistance eats the battery.`,
-        why: ['', `The pull-in voltage is across the coil alone. The wire takes most of the 24 V first: the coil sees ${f1(loopCurrent(24, 40, 'iron') * (PULL_V / PULL_I))} V.`, 'Below its pull-in current the armature does not move at all; a weak pull is not a slow one.'],
+        explain: `The wire is ${f0(ohmsPerKm('iron') * 80)} Ω, so the loop current is ${mA(loopCurrent(24, 80, 'iron'))} mA against ${mA(PULL_I)} mA. The coil needs a current, not a voltage: the line's resistance eats the battery.`,
+        why: ['', `The pull-in voltage is across the coil alone. The wire takes most of the 24 V first: the coil sees ${f1(loopCurrent(24, 80, 'iron') * (PULL_V / PULL_I))} V.`, 'Below its pull-in current the armature does not move at all; a weak pull is not a slow one.'],
       },
       {
         question: 'A modem sends 16 levels at 2 400 baud. What bit rate is that, and which limit says how much bandwidth it needs?',
@@ -118,7 +118,7 @@ export const chTelegraph: Chapter = {
         below it.</p>`,
       more: {
         derive: `<p>The NAND figure is this site's wire-load model (<code>sim/netcap.ts</code>): ${FF_INPUT} fF for the input driven, ${FF_DRIVER} fF for the driver's own drains and ${FF_WIRE} fF of wire,
-          ${NAND_C.toFixed(1)} fF in all, at ${VDD} V. The telegraph figure is the loop of the next step: ${TG.V} V across ${f0(ohmsPerKm('iron') * TG.km)} Ω of wire and the relay's 400 Ω coil. Neither is a measurement; they are the same kind of
+          ${NAND_C.toFixed(1)} fF in all, at ${VDD} V. The telegraph figure is the loop of the next step: ${TG.V} V across ${f0(ohmsPerKm('iron') * TG.km)} Ω of wire and the sounder's ${SOUNDER_R} Ω coil. Neither is a measurement; they are the same kind of
           estimate on both sides, which is what makes the ratio worth reading as an order of magnitude and no more.</p>`,
         pitfall: `<p>Reading "harder" as "slower". Time is part of it (a relay step is ${RELAY_STEP_MS} ms, a NAND delay ${PS_PER_NAND} ps), but the cost that never goes away is
           <em>agreement</em>: two machines with their own clocks, their own noise and no shared state must still decide the same bit. That is what the five questions are about.</p>`,
@@ -133,29 +133,32 @@ export const chTelegraph: Chapter = {
     {
       title: 'A line that fades',
       body: `
-        <p>A telegraph is the simplest link there is: a <strong>key</strong> at one end closes a circuit through a <strong>battery</strong> and a long wire to a
-        <strong>sounder</strong> or relay coil at the other, and the earth returns the current. One loop, in series, so
-        I = V / (R<sub>line</sub> + R<sub>coil</sub>). The coil pulls in only above its pull-in current: our relay (a coil that moves a contact, the telephone relay of <a href="#/c/relays/0">prologue P1</a>) needs
-        ${PULL_V.toFixed(1)} V across its 400 Ω, ${mA(PULL_I)} mA. It is a current threshold, so the wire matters: 4 mm iron wire is ${f1(ohmsPerKm('iron'))} Ω/km, copper ${f1(ohmsPerKm('copper'))} Ω/km.</p>
+        <p>A telegraph is the simplest link there is: a <strong>key</strong> at one end works a circuit through a <strong>battery</strong> and a long wire to a
+        <strong>sounder</strong> at the other, and the earth returns the current. American landlines ran it <em>closed</em>: current flowed all the time, every key had a
+        <strong>circuit closer</strong> (a lever that shorts its contacts) and the sounder's armature was held down at idle; to send, the operator opened the closer and worked the key, so the line
+        was closed only while the key was down (with the closer left open, the circuit is the open-circuit one, current only while the key is down; the 3D model has both). One loop, in series, so
+        I = V / (R<sub>line</sub> + R<sub>coil</sub>). The coil pulls in only above its pull-in current: our main-line sounder (the telephone relay of <a href="#/c/relays/0">prologue P1</a> with the same turns rewound to ${SOUNDER_R} Ω,
+        the resistance of a Western Union 15B main-line sounder) needs
+        ${PULL_V.toFixed(1)} V across its ${SOUNDER_R} Ω, ${mA(PULL_I)} mA. It is a current threshold, so the wire matters: 4 mm iron wire is ${f1(ohmsPerKm('iron'))} Ω/km, copper ${f1(ohmsPerKm('copper'))} Ω/km.</p>
         <p>At 24 V the loop reaches ${f0(reachKm(24, 'iron'))} km on iron before the current falls under ${mA(PULL_I)} mA, ${f0(reachKm(24, 'copper'))} km on copper. The reach grows linearly with the battery: ${f0(reachKm(240, 'iron'))} km on iron at
         240 V, the voltage of some two hundred cells in series. Beyond that the insulation leaks and the battery becomes the bill. The curve plots the loop current against the route length;
         the grey line is the other metal. Add a repeater and every section starts again from a fresh battery.</p>
         <div class="try">Set 150 km of iron on 48 V, and watch the current fall under the pull-in line. Add one repeater.</div>`,
       widget: () => withModel(telegraphLineWidget(), telegraph3d()),
       more: {
-        derive: `<p>The coil's pull-in current is ${mA(PULL_I)} mA = ${PULL_V.toFixed(2)} V / 400 Ω (the force balance of <code>phys/relay.ts</code>). With r Ω/km of wire, the reach of one section is
-          (V / I<sub>pull</sub> − R<sub>coil</sub>) / r. For iron at 24 V: (${f0(24 / PULL_I)} − 400) / ${f1(ohmsPerKm('iron'))} = ${f0(reachKm(24, 'iron'))} km. Resistance per km is ρ / A with ρ = 1.0 × 10<sup>−7</sup> Ω·m for iron
+        derive: `<p>The coil's pull-in current is ${mA(PULL_I)} mA = ${PULL_V.toFixed(2)} V / ${SOUNDER_R} Ω (the force balance of <code>phys/relay.ts</code> sees ampere-turns, so the same turns on a coil of other resistance pull in at the same current). With r Ω/km of wire, the reach of one section is
+          (V / I<sub>pull</sub> − R<sub>coil</sub>) / r. For iron at 24 V: (${f0(24 / PULL_I)} − ${SOUNDER_R}) / ${f1(ohmsPerKm('iron'))} = ${f0(reachKm(24, 'iron'))} km. Resistance per km is ρ / A with ρ = 1.0 × 10<sup>−7</sup> Ω·m for iron
           and 1.68 × 10<sup>−8</sup> for copper over a 4 mm wire; telegraph iron was impure, so ρ is a round figure.</p>`,
-        pitfall: `<p>Treating the battery voltage as the signal. The relay does not read a voltage; it needs ${mA(PULL_I)} mA, and a longer line only changes how much of the battery is left over for the coil. Real telegraph relays
-          were wound for far smaller currents than our telephone relay, so the real reach was longer than the one drawn here: the curve is a model, not a museum label.</p>`,
+        pitfall: `<p>Treating the battery voltage as the signal. The relay does not read a voltage; it needs ${mA(PULL_I)} mA, and a longer line only changes how much of the battery is left over for the coil. Long lines did not
+          work a sounder on the line at all: a relay wound with finer wire (some hundreds of ohms, a few milliamperes) closed a local battery through a 4 Ω local sounder, so the real reach was longer than the one drawn here, and the next step is that relay. The pull-in current is the model's estimate, not a datasheet value: the curve is a model, not a museum label.</p>`,
         real: `<p>Practical lines also lost current by leakage across insulators in wet weather, a loss that grows with the length of the line and is not in this model. The line's resistance and capacitance round the
           pulses too, which limits speed as the series resistance limits reach; chapter ${numOf('wire')} comes back to a wire's RC.</p>`,
       },
       challenge: {
-        kind: 'quiz', question: `${QZ.km} km of iron wire, a ${QZ.V} V battery and one relay at the far end. The sounder:`,
+        kind: 'quiz', question: `${QZ.km} km of iron wire, a ${QZ.V} V battery and one main-line sounder at the far end. The sounder:`,
         options: [`does not move: ${mA(loopCurrent(QZ.V, QZ.km, 'iron'))} mA against the ${mA(PULL_I)} mA it needs`, 'moves, but weakly', `moves: ${QZ.V} V is more than the ${PULL_V.toFixed(1)} V pull-in`],
         answer: 0,
-        explain: `The wire alone is ${f0(ohmsPerKm('iron') * QZ.km)} Ω. With the 400 Ω coil that is ${mA(loopCurrent(QZ.V, QZ.km, 'iron'))} mA. One repeater half way makes two ${QZ.km / 2} km sections of ${mA(loopCurrent(QZ.V, QZ.km / 2, 'iron'))} mA each, ${margin(QZ.V, QZ.km / 2, 'iron').toFixed(2)} times the pull-in.`,
+        explain: `The wire alone is ${f0(ohmsPerKm('iron') * QZ.km)} Ω. With the ${SOUNDER_R} Ω coil that is ${mA(loopCurrent(QZ.V, QZ.km, 'iron'))} mA. One repeater half way makes two ${QZ.km / 2} km sections of ${mA(loopCurrent(QZ.V, QZ.km / 2, 'iron'))} mA each, ${margin(QZ.V, QZ.km / 2, 'iron').toFixed(2)} times the pull-in.`,
         why: ['', 'An armature either pulls in or it does not: below the pull-in current the magnet is too weak to overcome the spring at all.', `The pull-in voltage applies to the coil alone. By Ohm's law the coil only sees its share of the battery once the wire has taken its own.`],
       },
     },

@@ -11,3 +11,6 @@
 .tg-key { font-weight: 700; min-width: 150px; min-height: 44px; touch-action: none; user-select: none; }
 .tg-key:active { background: var(--accent-soft); }
 @media (pointer: coarse) { .tg-key { min-height: 52px; } }
+/* a phone: the stage keeps a real height (the chips and the corner buttons take a corner each) */
+@media (max-width: 600px) { .tg3d .r3-stage { aspect-ratio: auto; height: 300px; min-height: 300px; } }
+@media (max-width: 400px) { .tg3d .r3-stage { height: 280px; min-height: 280px; } }

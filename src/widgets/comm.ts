@@ -4,7 +4,7 @@
 import { ITA2_UNITS, codeBits, ita2Encode, morseEncode } from '../comm/codes';
 import { MARKED, dbToRatio, levelsSupported, nyquistBitRate, nyquistSymbolRate, ratioToDb, shannon, snrNeeded } from '../comm/limits';
 import { RELAY_STEP_MS } from '../phys/relay';
-import { CELL_V, PULL_I, PULL_V, loopCurrent, margin, ohmsPerKm, reachKm, repeaterDelayMs, type Metal } from '../phys/telegraph';
+import { CELL_V, PULL_I, PULL_V, SOUNDER_R, loopCurrent, margin, ohmsPerKm, reachKm, repeaterDelayMs, type Metal } from '../phys/telegraph';
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { slider } from './mosparts';
@@ -74,7 +74,7 @@ export function telegraphLineWidget(): Widget {
     chips.set(1, `${(1e3 * i).toFixed(1)} mA`, `coil current, ${mg.toFixed(2)} × the pull-in`);
     chips.set(2, `${((repeaters + 1) * reachSec).toFixed(0)} km`, `reach with ${repeaters} repeater${repeaters === 1 ? '' : 's'} (${reachSec.toFixed(0)} km a section)`);
     chips.set(3, `${repeaterDelayMs(repeaters).toFixed(0)} ms`, `added by the repeaters (${repeaters} × ${RELAY_STEP_MS} ms)`);
-    verdict.textContent = reachSec === 0 ? `${volts} V cannot pull this relay in even on a zero-length line: it needs ${PULL_V.toFixed(1)} V across its coil.`
+    verdict.textContent = reachSec === 0 ? `${volts} V cannot pull this sounder in even on a zero-length line: it needs ${PULL_V.toFixed(1)} V across its coil.`
       : mg >= 1 ? `The coil pulls in with ${((mg - 1) * 100).toFixed(0)} % to spare.`
       : `The current is ${(100 * mg).toFixed(0)} % of what the coil needs: the sounder never moves. Add a repeater or raise the battery.`;
     verdict.classList.toggle('bad', mg < 1);
@@ -85,7 +85,7 @@ export function telegraphLineWidget(): Widget {
   const el = h('div', { class: 'widget mos comm' },
     h('div', { class: 'panel' }, h('h3', null, 'Key, battery, wire and relay coil in series ', seg), svg),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, kmSl.el, vSl.el, rSl.el), verdict,
-      h('p', { class: 'sub mos-note' }, `Model: the telephone relay of the previous chapters (pull-in ${PULL_V.toFixed(1)} V on 400 Ω), 4 mm wire, one wire with the earth as the return, ${CELL_V} V a cell. Leakage over damp insulators and the line's inductance are left out; both cost real lines more.`)),
+      h('p', { class: 'sub mos-note' }, `Model: a ${SOUNDER_R} Ω main-line sounder, the telephone relay's magnet rewound (pull-in ${PULL_V.toFixed(1)} V on ${SOUNDER_R} Ω), 4 mm wire, one wire with the earth as the return, ${CELL_V} V a cell. Leakage over damp insulators and the line's inductance are left out; both cost real lines more.`)),
     chips.el);
   paint();
   return { el };

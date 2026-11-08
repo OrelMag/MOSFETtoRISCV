@@ -33,7 +33,7 @@ describe('chapter 39 content', () => {
   it('the quiz line fails alone and works with a repeater half way', () => {
     expect(loopCurrent(48, 150, 'iron')).toBeLessThan(PULL_I);
     expect(loopCurrent(48, 75, 'iron')).toBeGreaterThan(PULL_I);
-    expect(loopCurrent(24, 40, 'iron')).toBeLessThan(PULL_I);
+    expect(loopCurrent(24, 80, 'iron')).toBeLessThan(PULL_I);
   });
 
   it('E, T and the space have a single hole each in ITA2', () => {
