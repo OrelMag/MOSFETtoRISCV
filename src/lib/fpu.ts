@@ -6,7 +6,7 @@
 //   normalize-and-round unit serves the adder, the multiplier and integer-to-float conversion.
 
 import { orientGeom, symbolGeom } from '../sim/geometry';
-import type { ComponentDef, InstanceDef, NetDef, Netlist, PortDef } from '../sim/types';
+import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
 import { LIB_MUX2, andN, busMux2, equal, incrementer, muxTree, type Mux2Kind } from './combinational';
 import { define, merger, ones, splitter } from './define';
@@ -314,14 +314,12 @@ function nrAmount(f: FpFormat, w: number): ComponentDef {
     const t = b.op(addSubFast(XE), [em1, c, b.op1(TIE1, [], undefined, 'one')], 'exp − 1 − lz', 'room');
     const canNorm = b.name(b.op1(NOT, [`${t}.n`], 'can normalize?', 'can'), 'canNormalize');
     const es = b.op(splitter([k, XE - 1 - k, 1]), [em1], undefined, 'es');
-    b.name(`${lz}.c`, 'lz'); b.name(em1, 'exp − 1'); b.name(`${es}.o0`, 'exp − 1 (low bits)'); b.name(`${es}.o2`, 'exp < 1'); // the pointers' names
     const em1Neg = `${es}.o2`;
     const negEm1 = b.op(addSubFast(XE), [b.op1(K(XE, 0), [], undefined, 'zero'), em1, b.op1(TIE1, [], undefined, 'one2')], '1 − exp', 'neg');
     b.next();
     const Lalt = b.op1(busMux2(k), [`${es}.o0`, b.op1(K(k, 0), [], undefined, 'l0'), em1Neg], 'as far as exp allows', 'lalt');
     b.wire(b.op1(busMux2(k), [Lalt, `${lz}.c`, canNorm], 'left shift', 'lsel'), 'L');
     const ns = b.op(splitter([k, XE - k]), [`${negEm1}.s`], undefined, 'ns');
-    b.name(`${ns}.o0`, '1 − exp (low bits)'); b.name(`${ns}.o1`, '1 − exp (high bits)');
     const hiNZ = b.op1(NOT, [b.op1(isZero(XE - k), [`${ns}.o1`], undefined, 'hiz')], undefined, 'hinz');
     const Rsat = b.op1(busMux2(k), [`${ns}.o0`, b.op1(K(k, 2 ** k - 1), [], undefined, 'rmax'), hiNZ], 'saturate', 'rsat');
     b.wire(b.op1(bitwise('and', k), [Rsat, b.op1(fanout(k), [em1Neg], undefined, 'neg1')], 'right shift', 'rgate'), 'R');
@@ -337,7 +335,7 @@ function nrAmount(f: FpFormat, w: number): ComponentDef {
         const L = can ? c : neg ? 0 : em1 % P, n1 = (T - em1) % T, Rs = Math.floor(n1 / P) ? P - 1 : n1 % P;
         return [L, neg ? Rs : 0, can ? (t + 1) % T : 1];
       },
-      netlist: () => fpPlaced('fnr_amt', b, ports, ['mant', 'exp'], ['L', 'R', 'e']),
+      netlist: () => layered(ports, b, { gap: 8 }),
     });
   });
 }
@@ -399,7 +397,7 @@ function nrRound(f: FpFormat, w: number): ComponentDef {
         return [up ? (kept + 1) % (full + 1) : kept, up && kept === full ? 1 : 0, overflowToInf(rm, sign) ? 1 : 0, G || S ? 1 : 0,
           kept < 2 ** M && !reach ? 1 : 0];
       },
-      netlist: () => fpPlaced('fnr_round', b, ports, ['m', 'sticky', 'stin', 'rm', 'sign'], ['mr', 'carry', 'toInf', 'inexact', 'tiny']),
+      netlist: () => layered(ports, b, { gap: 8 }),
     });
   });
 }
@@ -448,7 +446,7 @@ function nrPack(f: FpFormat): ComponentDef {
         const frac = (inf ? 0 : mr % 2 ** M) | (sat ? 2 ** M - 1 : 0);
         return [frac + ex * 2 ** M + sign * 2 ** (E + M), (nx || inf ? 1 : 0) + (tiny && nx ? 2 : 0) + (inf ? 4 : 0)];
       },
-      netlist: () => fpPlaced('fnr_pack', b, ports, ['mr', 'carry', 'toInf', 'inexact', 'tiny', 'e', 'sign'], ['y', 'flags']),
+      netlist: () => layered(ports, b, { gap: 8 }),
     });
   });
 }
@@ -710,9 +708,6 @@ export function faddCancel(f: FpFormat): ComponentDef {
 
 /** Hand-drawn blocks' places: each starts from a column layout; FP_LAY[block][part or 'pin:name'] moves a part or a pin by hand. */
 export const FP_LAY: Record<string, Record<string, [number, number]>> = {
-  fnr_pack: { 'einc': [14, -4], 'max': [12, 4], 'one': [17, 17], 'cmp': [19, 23], 'ge': [36, 27], 'max1': [39, 47], 'at': [53, 46], 'ms': [32, -6], 'hid': [34, 5], 'ef': [39, 14], 'ct': [60, -4], 'ov': [41, 2], 'inf': [45, 9], 'nti': [43, 23], 'sat': [58, 28], 'efs': [48, 36], 'hf': [75, -6], 'ez': [60, 7], 'if': [80, 14], 'eo': [52, 17], 'eos': [69, 31], 'nsat': [65, 39], 'e0': [76, 47], 'ninf': [60, 41], 'nf': [77, 53], 'fz': [61, 54], 'sf': [80, 60], 'fo': [71, 64], 'y': [81, -3], 'uf': [73, 10], 'nxo': [76, 20], 'u0': [73, 26], 'u1': [66, 15], 'u2': [82, 37], 'pin:mr': [0, -3], 'pin:carry': [0, 2], 'pin:toInf': [0, 16], 'pin:inexact': [0, 39], 'pin:tiny': [0, -5], 'pin:e': [0, 5], 'pin:sign': [0, 63], 'pin:y': [84, 35], 'pin:flags': [84, 69] },
-  fnr_round: { 'parts': [24, -3], 'rs': [32, 6], 'u0': [47, 14], 'u1': [25, 18], 'u2': [31, 23], 'sor': [36, -3], 'lsb': [39, 3], 'kt': [28, 10], 'rd': [42, -6], 'nx': [55, 11], 'kf': [61, 24], 'ones': [64, 24], 'one': [55, 49], 'rd2': [59, 46], 'inc': [75, 0], 'msel': [66, 9], 'carry': [56, 17], 'reach': [72, 18], 'nhid': [80, -5], 'nreach': [77, 8], 'tiny': [83, 22], 'pin:m': [0, 24], 'pin:sticky': [0, 12], 'pin:stin': [0, 56], 'pin:rm': [0, 32], 'pin:sign': [0, 15], 'pin:mr': [88, 51], 'pin:carry': [88, 7], 'pin:toInf': [88, 0], 'pin:inexact': [88, 3], 'pin:tiny': [88, 10] },
-  fnr_amt: { 'ones': [33, -5], 'pad': [41, -2], 'lz': [45, -1], 'cz': [51, -5], 'cw': [58, 5], 'm1': [38, 12], 'c0': [43, 7], 'dec': [45, 30], 'one': [100, -3], 'room': [61, 7], 'can': [80, 6], 'es': [72, 20], 'zero': [89, 34], 'one2': [80, 37], 'neg': [63, 31], 'l0': [88, -4], 'lalt': [78, -4], 'lsel': [94, 1], 'ns': [89, 15], 'hiz': [90, 21], 'hinz': [96, 10], 'rmax': [90, 27], 'rsat': [100, 40], 'neg1': [85, 39], 'rgate': [89, 45], 'enorm': [75, 51], 'emin': [82, 59], 'esel': [95, 57], 'pin:mant': [0, 26], 'pin:exp': [0, 45], 'pin:L': [100, 42], 'pin:R': [100, 47], 'pin:e': [100, 56] },
   // the class flags come in a staircase from below; ∞ and NaN replace the rounded result on top, NV alone the flags below
   fnf_select: { sbig: [10, 0], ssmall: [10, 8], sg: [20, 4], negsel: [16, 16], cancel: [16, 22], rdnk: [23, 15], rdn: [30, 12], zsign: [40, 6],
     msel: [34, 28], esel: [34, 36], 'pin:signB': [0, 2], 'pin:sa': [0, 4], 'pin:ge': [0, 7], 'pin:rm': [0, 15], 'pin:neg': [0, 17], 'pin:eq': [0, 23],
@@ -727,39 +722,6 @@ export const FP_LAY: Record<string, Record<string, [number, number]>> = {
     'pin:nb': [0, 30], 'pin:na': [0, 32], 'pin:rflags': [0, 36], 'pin:y': [66, 2], 'pin:flags': [66, 29] },
 };
 export type Part = Omit<InstanceDef, 'at'>;
-/** A Builder's block re-placed by hand: its own parts and nets, places from FP_LAY (else the Builder's columns), pins likewise. */
-export function fpPlaced(key: string, b: Builder, ports: PortDef[], ins: string[], outs: string[], vias: Record<string, [number, number][]> = {}): Netlist {
-  const over = FP_LAY[key] ?? {};
-  const instances: InstanceDef[] = b.instances.map((i) => ({ ...i, at: over[i.name] ?? i.at }));
-  // the places were tuned at one size: a format whose parts grow into one another (a wider AND) is drawn by layered()
-  const box = (i: InstanceDef) => { const g = orientGeom(i.def, i.flip, i.rot); return { x: i.at![0], y: i.at![1], w: g.w, h: g.h }; };
-  const rs = instances.map(box);
-  if (rs.some((a, j) => rs.some((c, k) => k > j && a.x < c.x + c.w && c.x < a.x + a.w && a.y < c.y + c.h && c.y < a.y + a.h))) {
-    return layered(ports, b, { gap: 8 });
-  }
-  const pins: Record<string, [number, number]> = {};
-  ins.forEach((p, i) => (pins[p] = over[`pin:${p}`] ?? [0, 2 + 2 * i]));
-  outs.forEach((p, i) => (pins[p] = over[`pin:${p}`] ?? [b.right, 2 + 2 * i]));
-  const byName = new Map(instances.map((i) => [i.name, i]));
-  const at = (e: string): [number, number] | undefined => {
-    if (!e.includes('.')) return pins[e];
-    const [n, p] = e.split('.'), i = byName.get(n), q = i && orientGeom(i.def, i.flip, i.rot).ports[p];
-    return i && q ? [i.at![0] + q.pos[0], i.at![1] + q.pos[1]] : undefined;
-  };
-  const nets = b.nets().map(({ tags: _t, ...n }) => {
-    // a net the Builder left unnamed is named after the part driving it (its label, a constant's value), so a pointer reads
-    const d = byName.get(n.ends[0].split('.')[0]);
-    const name = n.name && !/^n\d+$/.test(n.name) ? n.name : d ? (d.label ?? d.def.symbol.label ?? d.name) : n.name;
-    // the Builder's pointers were for its own columns: here a net is a pointer when its ends lie far apart, else a wire
-    const ps = n.ends.map(at).filter((p): p is [number, number] => !!p);
-    const far = ps.length > 1 && (Math.max(...ps.map((p) => p[0])) - Math.min(...ps.map((p) => p[0])) > FAR_X || Math.max(...ps.map((p) => p[1])) - Math.min(...ps.map((p) => p[1])) > FAR_Y);
-    return { ...n, ...(name ? { name } : {}), ...(far && !n.ends.some((e) => !e.includes('.')) ? { tags: true as const } : {}) };
-  });
-  return { instances, nets: withVias(nets, vias), pins };
-}
-/** How far apart (grid units) a re-placed Builder block's net's ends may lie before it is drawn as a pointer pair. */
-const FAR_X = 30, FAR_Y = 20;
-
 /** Corner points for the nets reaching the given ends (end → points from the driver), set on a block's hand-drawn nets. */
 export const withVias = (nets: NetDef[], vias: Record<string, [number, number][]>): NetDef[] =>
   nets.map((n) => { const v = Object.entries(vias).filter(([e]) => n.ends.includes(e)); return v.length ? { ...n, via: { ...n.via, ...Object.fromEntries(v) } } : n; });
