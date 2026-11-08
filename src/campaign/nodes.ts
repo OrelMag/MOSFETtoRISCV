@@ -7,7 +7,7 @@ import { BUILD1 } from './build1';
 import { BUILD5 } from './build5';
 import { BUILD6 } from './build6';
 import { BUILD7 } from './build7';
-import { BUILD8, partsOf } from './build8';
+import { BUILD8, fpAdd16Ref, partsOf } from './build8';
 import { BUILD9 } from './build9';
 import { BUILDCARD } from './buildcard';
 import { BUILDFP, FP_REF, fpGives } from './buildfp';
@@ -15,7 +15,7 @@ import { BUILDH } from './buildh';
 import { BUILDK } from './buildk';
 import { BUILDM } from './buildm';
 import { BUILDR } from './buildr';
-import { fpAdd, fpMul, lzc, ROUND_DECIDE } from '../lib/fpu';
+import { fpMul, lzc, ROUND_DECIDE } from '../lib/fpu';
 import { arrayMul, seqDivider } from '../lib/muldiv';
 import { seqMul } from '../lib/multiply';
 import { RV16_MUX2 } from '../lib/rv16/logic';
@@ -664,7 +664,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     codex: ['normalize', 'rounding', 'subnormal'], chapters: [{ chapter: 'float', step: 3, label: 'Addition: align, add, normalize, round' }],
   },
   {
-    id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['o_fpunpack', 'o_fpnorm'], base: BUILD8.o_fpadd, givesOf: fpGives(() => fpAdd(F16, RV16_MUX2)), par: { nand: 3732, depth: 163 },
+    id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['o_fpunpack', 'o_fpnorm'], base: BUILD8.o_fpadd, givesOf: fpGives(() => fpAdd16Ref().top, () => fpAdd16Ref().blocks), par: { nand: 3732, depth: 163 },
     why: 'Adding floats means aligning their binary points, adding, then normalizing and rounding, and every block for that is built: 3732 NANDs, depth 163, normalize & round 2058 of them. RV16 has no F registers, so this and the other FP units stand alone: no core in the campaign runs them. The FP multiplier reuses its normalizer, wider.',
     tips: ['Swap so that |a| ≥ |b|, shift b right by the exponent difference (keep a sticky bit), add or subtract the significands.', 'Leave room: put the significands at bits 13..3 of a 15-bit word (a carry above, guard and sticky below), and hand normalize & round exponent + 1.', 'x − x is +0 (−0 in RDN). NaN in, or ∞ − ∞, gives the canonical NaN 0x7E00.'],
     codex: ['fpadder', 'ieee754', 'rounding'], chapters: [{ chapter: 'float', step: 3, label: 'Addition: align, add, normalize, round' }, { chapter: 'float', step: 17, label: 'An FPU in the CPU' }],

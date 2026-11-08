@@ -6,7 +6,7 @@
 //   normalize-and-round unit serves the adder, the multiplier and integer-to-float conversion.
 
 import { symbolGeom } from '../sim/geometry';
-import type { ComponentDef, PortDef } from '../sim/types';
+import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
 import { LIB_MUX2, andN, busMux2, equal, incrementer, muxTree, type Mux2Kind } from './combinational';
 import { define, merger, ones, splitter } from './define';
@@ -17,10 +17,10 @@ import { DFF, register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { bitwise, orN } from './wide';
 import {
-  F32, bias as fbias, fpAddX, fpClass, fpFmaX, fpCmpX, fpFromIntX, fpMinMaxX, fpMulX, fpToIntX, overflowToInf, RM, roundUp, type FpFormat,
+  F32, FLAG, bias as fbias, fpAddX, fpClass, fpFmaX, fpCmpX, fpFromIntX, fpMinMaxX, fpMulX, fpToIntX, overflowToInf, RM, roundUp, type FpFormat,
 } from '../sim/fpref';
 import { Builder } from './builder';
-import { laid } from './layered';
+import { laid, layered } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -417,61 +417,261 @@ function specials(b: Builder, f: FpFormat, nr: string, nrFlags: string, nan: str
   b.wire(b.op1(busMux2(5), [nrFlags, flagWord(b, { nv: invalid, dz }), special], 'flags'), 'flags');
 }
 
+// ---- the adder's blocks -------------------------------------------------------------------------------------------------------
+// The adder is drawn as its stages (circuit eyeballing, 2026-11-08): the control nets between them (which operand is larger,
+// subtract, the signs) are box ports, not wires that cross every stage. The gates are the ones the flat drawing had.
+
+/** The operand widths the adder's stages share. */
+const addWidths = (f: FpFormat) => { const WA = f.M + 3; return { N: 1 + f.E + f.M, XE: xeOf(f), WA, kA: log2c(WA + 1), WS: f.M + 4 }; };
+
+/** Signs: b's effective sign (sub flips it), the larger operand's sign, and whether the significands are subtracted. */
+export const FADD_SIGN: ComponentDef = (() => {
+  const b = new Builder(10, 8, 4);
+  b.pins('sa', 'sb', 'sub', 'big');
+  const sbEff = b.name(b.op1(XOR, ['sb', 'sub'], 'b sign (−b for fsub)', 'nb'), 'signB');
+  b.next();
+  b.wire(b.op1(MUX2, [sbEff, 'sa', 'big'], 'larger sign', 'bigs'), 'signBig');
+  b.wire(b.op1(XOR, ['sa', sbEff], 'subtract?', 'sx'), 'effSub');
+  b.wire(sbEff, 'signB');
+  const ports = [bit('sa', 'in'), bit('sb', 'in'), bit('sub', 'in'), bit('big', 'in'), bit('effSub', 'out'), bit('signBig', 'out'), bit('signB', 'out')];
+  return define({
+    id: 'fadd_sign', name: 'FP adder: signs', category: 'arithmetic',
+    summary: 'b\'s sign XOR sub (a − b is a + (−b)); the result takes the larger operand\'s sign; the significands are subtracted when the two signs differ.',
+    ports, symbol: { kind: 'box', label: 'SIGNS' },
+    spec: ([sa, sb, sub, big]) => { const nb = sb ^ sub; return [sa ^ nb, big ? sa : nb, nb]; },
+    netlist: () => layered(ports, b, { gap: 8 }),
+  });
+})();
+
+/** Which operand is larger in magnitude (the patterns without their signs, one subtractor), and the swap that puts it first. */
+export function faddSwap(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fadd_swap${E}_${M}`, () => {
+    const { N } = addWidths(f);
+    // drawn by hand: the compare on top, fed straight from a and b; the four muxes in a column, each pair of inputs crossing once
+    // on its way into its two muxes; which is larger reaches the selects as a label
+    const instances: InstanceDef[] = [
+      { name: 'sa', def: splitter([E + M, 1]), at: [5, 5] }, { name: 'sb', def: splitter([E + M, 1]), at: [8, 9] },
+      { name: 'one', def: TIE1, at: [6, 15] },
+      { name: 'cmp', def: addSubFast(E + M), at: [12, 3], label: '|a| ≥ |b| ?' },
+      { name: 'eB', def: busMux2(E), at: [34, 16], label: 'larger exponent' }, { name: 'eS', def: busMux2(E), at: [34, 26], label: 'smaller exponent' },
+      { name: 'mB', def: busMux2(M + 1), at: [34, 36], label: 'larger significand' }, { name: 'mS', def: busMux2(M + 1), at: [34, 46], label: 'smaller significand' },
+    ];
+    const nets: NetDef[] = [
+      { name: 'a', ends: ['a', 'sa.in'] }, { name: 'b', ends: ['b', 'sb.in'] },
+      { name: '|a|', ends: ['sa.o0', 'cmp.a'] }, { name: '|b|', ends: ['sb.o0', 'cmp.b'] }, { name: '1', ends: ['one.y', 'cmp.sub'] },
+      { name: 'big', ends: ['cmp.cout', 'big', 'eB.s', 'eS.s', 'mB.s', 'mS.s'], tags: ['eB.s', 'eS.s', 'mB.s', 'mS.s'] },
+      { name: 'eb', ends: ['eb', 'eB.a', 'eS.b'] }, { name: 'ea', ends: ['ea', 'eB.b', 'eS.a'] },
+      { name: 'mb', ends: ['mb', 'mB.a', 'mS.b'] }, { name: 'ma', ends: ['ma', 'mB.b', 'mS.a'] },
+      { name: 'eBig', ends: ['eB.y', 'eBig'] }, { name: 'eSmall', ends: ['eS.y', 'eSmall'] },
+      { name: 'mBig', ends: ['mB.y', 'mBig'] }, { name: 'mSmall', ends: ['mS.y', 'mSmall'] },
+    ];
+    const pins: Record<string, [number, number]> = { a: [0, 7], b: [0, 11], eb: [0, 18], ea: [0, 20], mb: [0, 38], ma: [0, 40],
+      big: [44, 7], eBig: [44, 19], eSmall: [44, 29], mBig: [44, 39], mSmall: [44, 49] };
+    const ports = [bus('ea', E, 'in'), bus('ma', M + 1, 'in'), bus('eb', E, 'in'), bus('mb', M + 1, 'in'), bus('a', N, 'in'), bus('b', N, 'in'),
+      bus('eBig', E, 'out'), bus('eSmall', E, 'out'), bit('big', 'out'), bus('mSmall', M + 1, 'out'), bus('mBig', M + 1, 'out')];
+    const mag = (x: number) => x % 2 ** (E + M);
+    return define({
+      id: `fadd_swap${E}_${M}`, name: `FP adder: compare and swap (${fmtName(f)})`, category: 'arithmetic',
+      summary: `|a| ≥ |b| from one ${E + M}-bit subtractor on the patterns without their sign bits (the exponent field sits above the fraction, so they compare in numeric order); four multiplexers then route the larger operand's exponent and significand to one side, the smaller's to the other.`,
+      ports, symbol: { kind: 'box', label: 'SWAP' },
+      spec: ([ea, ma, eb, mb, a, bb]) => { const g = mag(a) >= mag(bb); return g ? [ea, eb, 1, mb, ma] : [eb, ea, 0, ma, mb]; },
+      netlist: () => ({ pins, instances, nets }),
+    });
+  });
+}
+
+/** The exponent difference, saturated to what the aligner can shift, and the larger exponent + 1 for normalize & round. */
+export function faddExp(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fadd_exp${E}_${M}`, () => {
+    const { XE, kA } = addWidths(f);
+    const b = new Builder(10, 10, 4);
+    b.pins('eBig', 'eSmall');
+    const d = b.op(addSubFast(E), ['eBig', 'eSmall', b.op1(TIE1, [], undefined, 'one')], 'exponent difference', 'diff');
+    b.next();
+    let dsat: string;
+    if (kA < E) {
+      const ds = b.op(splitter([kA, E - kA]), [`${d}.s`], undefined, 'ds');
+      const big = b.op1(NOT, [b.op1(isZero(E - kA), [`${ds}.o1`], 'too far?', 'far')], undefined, 'nfar');
+      b.next();
+      dsat = b.op1(busMux2(kA), [`${ds}.o0`, b.op1(K(kA, 2 ** kA - 1), [], undefined, 'max'), big], 'saturate', 'sat');
+    } else dsat = kA === E ? `${d}.s` : b.op1(merger([E, kA - E]), [`${d}.s`, b.op1(K(kA - E, 0), [], undefined, 'zx')], undefined, 'dz');
+    b.wire(dsat, 'd');
+    b.wire(b.op1(incFast(XE), [b.op1(merger([E, XE - E]), ['eBig', b.op1(K(XE - E, 0), [], undefined, 'z')], undefined, 'ez')], 'larger + 1', 'inc'), 'ex');
+    const ports = [bus('eBig', E, 'in'), bus('eSmall', E, 'in'), bus('d', kA, 'out'), bus('ex', XE, 'out')];
+    return define({
+      id: `fadd_exp${E}_${M}`, name: `FP adder: exponents (${fmtName(f)})`, category: 'arithmetic',
+      summary: kA < E ? `The shift amount: larger − smaller exponent, saturated to ${2 ** kA - 1} (by then everything falls into the sticky bit). And the larger exponent + 1: the sum keeps a carry place above the significand.`
+        : 'The shift amount: larger − smaller exponent. And the larger exponent + 1: the sum keeps a carry place above the significand.',
+      ports, symbol: { kind: 'box', label: 'EXP' },
+      spec: ([eB, eS]) => { const dd = (eB - eS + 2 ** E) % 2 ** E; return [kA < E ? (dd >= 2 ** kA ? 2 ** kA - 1 : dd) : dd, (eB + 1) % 2 ** XE]; },
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** The smaller significand, with two 0s below it, shifted right by d: what falls off becomes the sticky bit at the bottom. */
+export function faddAlign(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fadd_align${E}_${M}`, () => {
+    const { WA, kA, WS } = addWidths(f);
+    const b = new Builder(10, 8, 4);
+    b.pins('m', 'd');
+    const al = b.op(shiftRightSticky(WA, kA), [b.op1(merger([2, M + 1]), [b.op1(K(2, 0), [], undefined, 'gr'), 'm'], undefined, 'mx'), 'd'], 'align', 'shr');
+    b.next();
+    b.wire(b.op1(merger([1, WA]), [`${al}.sticky`, `${al}.y`], undefined, 'my'), 'y');
+    const ports = [bus('d', kA, 'in'), bus('m', M + 1, 'in'), bus('y', WS, 'out')];
+    const shr = shiftRightSticky(WA, kA);
+    return define({
+      id: `fadd_align${E}_${M}`, name: `FP adder: align (${fmtName(f)})`, category: 'arithmetic',
+      summary: `The smaller significand, two 0s below it (guard and round), shifted right by the exponent difference in the sticky shifter; the bits that fall off are ORed into one sticky bit at the bottom of the ${WS}-bit word.`,
+      ports, symbol: { kind: 'box', label: 'ALIGN' },
+      spec: ([d, m]) => { const [y, st] = shr.spec!([m * 4, d]); return [y * 2 + st]; },
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** {larger, 000} ± {aligned, sticky} in one adder / subtractor, with a carry place on top (never set by a subtraction). */
+export function faddAdd(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fadd_add${E}_${M}`, () => {
+    const { WA, WS } = addWidths(f);
+    const b = new Builder(10, 8, 4);
+    b.pins('mBig', 's', 'effSub');
+    const opB = b.op1(merger([1, 2, M + 1]), [b.op1(TIE0, [], undefined, 'z0'), b.op1(K(2, 0), [], undefined, 'z1'), 'mBig'], undefined, 'big');
+    b.next();
+    const sum = b.op(addSubFast(WS), [opB, 's', 'effSub'], 'add / subtract', 'as');
+    b.next();
+    const top = b.op1(AND, [`${sum}.cout`, b.op1(NOT, ['effSub'], undefined, 'nsub')], 'carry', 'cy');
+    b.next();
+    b.wire(b.op1(merger([WS, 1]), [`${sum}.s`, top], undefined, 'sm'), 'sum');
+    const ports = [bus('s', WS, 'in'), bus('mBig', M + 1, 'in'), bit('effSub', 'in'), bus('sum', WS + 1, 'out')];
+    const add = addSubFast(WS);
+    void WA;
+    return define({
+      id: `fadd_add${E}_${M}`, name: `FP adder: add or subtract (${fmtName(f)})`, category: 'arithmetic',
+      summary: `The larger significand with three 0s below it, plus or minus the aligned one, in a ${WS}-bit fast adder / subtractor. A carry out of an addition is the sum's extra top bit; a subtraction's carry out only says it did not borrow.`,
+      ports, symbol: { kind: 'box', label: 'ADD/SUB' },
+      spec: ([s, mB, sub]) => { const [y, c] = add.spec!([mB * 8, s, sub]); return [y + (c && !sub ? 2 ** WS : 0)]; },
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** x − x: an exact cancellation gives +0, −0 in round-down; any other sum keeps the larger operand's sign. */
+export function faddCancel(f: FpFormat): ComponentDef {
+  const { E, M } = f;
+  return memo(`fadd_cancel${E}_${M}`, () => {
+    const { WS } = addWidths(f);
+    const b = new Builder(10, 8, 4);
+    b.pins('sum', 'effSub', 'signBig', 'rm');
+    const zs = b.op1(isZero(WS + 1), ['sum'], 'sum = 0?', 'zero');
+    b.next();
+    const exact = b.name(b.op1(AND, ['effSub', zs], 'x − x', 'xx'), 'cancel');
+    const rdn = isMode(b, 'rm', RM.RDN, 'RDN?');
+    b.next();
+    b.wire(b.op1(MUX2, ['signBig', rdn, exact], 'x − x = +0 (−0 in RDN)', 'sg'), 'sign');
+    const ports = [bus('sum', WS + 1, 'in'), bit('effSub', 'in'), bit('signBig', 'in'), bus('rm', 3, 'in'), bit('sign', 'out')];
+    return define({
+      id: `fadd_cancel${E}_${M}`, name: `FP adder: sign of x − x (${fmtName(f)})`, category: 'arithmetic',
+      summary: 'A subtraction that comes out exactly 0 gives +0, except −0 when rounding down (rm = RDN); any other result keeps the larger operand\'s sign.',
+      ports, symbol: { kind: 'box', label: 'x − x' },
+      spec: ([sum, sub, sB, rm]) => [sub && sum === 0 ? (rm === RM.RDN ? 1 : 0) : sB],
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** The adder's special cases: invalid (a signaling NaN, or ∞ − ∞), NaN in or out, an infinite operand; else the rounded sum. */
+export function faddSpecial(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
+  const { E, M } = f;
+  return memo(`fadd_special${E}_${M}${mux.tag}`, () => {
+    const { N } = addWidths(f);
+    const b = new Builder(10, 8, 4);
+    b.pins('ry', 'rflags', 'ia', 'ib', 'na', 'nb', 'sna', 'snb', 'effSub', 'sa', 'signB');
+    const invalid = b.name(b.op1(orN(3), ['sna', 'snb', b.op1(andN(3), ['ia', 'ib', 'effSub'], '∞ − ∞', 'ii')], 'invalid', 'nv'), 'NV');
+    const anyInf = b.op1(OR, ['ia', 'ib'], 'an ∞', 'inf');
+    const infS = b.op1(MUX2, ['signB', 'sa', 'ia'], '∞\'s sign', 'infs');
+    b.next();
+    const nan = b.op1(orN(3), ['na', 'nb', invalid], 'NaN?', 'nan');
+    b.next();
+    specials(b, f, 'ry', 'rflags', nan, anyInf, infS, invalid, undefined, mux);
+    const ports = [bus('ry', N, 'in'), bus('rflags', 5, 'in'), bit('ia', 'in'), bit('ib', 'in'), bit('na', 'in'), bit('nb', 'in'), bit('sna', 'in'), bit('snb', 'in'),
+      bit('effSub', 'in'), bit('sa', 'in'), bit('signB', 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')];
+    const nanBits = (2 ** E - 1) * 2 ** M + 2 ** (M - 1);
+    return define({
+      id: `fadd_special${E}_${M}${mux.tag}`, name: `FP adder: special cases (${fmtName(f)}${mux.tag ? ', RV16' : ''})`, category: 'arithmetic',
+      summary: 'Invalid (NV) is a signaling NaN in, or ∞ − ∞. Any NaN in, or invalid, gives the canonical NaN; else an infinite operand gives ∞ with its sign; else the rounded sum. A special result raises only NV.',
+      ports, symbol: { kind: 'box', label: 'SPECIAL' },
+      spec: ([ry, rfl, ia, ib, na, nb, sna, snb, sub, sa, sB]) => {
+        const nv = sna || snb || (ia && ib && sub) ? 1 : 0, nan = na || nb || nv, inf = ia || ib;
+        const infv = (ia ? sa : sB) * 2 ** (N - 1) + (2 ** E - 1) * 2 ** M;
+        return [nan ? nanBits : inf ? infv : ry, nan || inf ? nv * FLAG.NV : rfl];
+      },
+      netlist: () => layered(ports, b, { gap: 8 }),
+    });
+  });
+}
+
+/** The adder's blocks, as the campaign's reference draws them (chips of their own, the level gives what is inside them). */
+export const faddBlocks = (f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef[] =>
+  [faddSwap(f), FADD_SIGN, faddExp(f), faddAlign(f), faddAdd(f), faddCancel(f), faddSpecial(f, mux)];
+
+/** Where the adder's stages sit, and the wires between them (hand-drawn: stages left to right, the control ports between). */
+function faddTop(f: FpFormat, mux: Mux2Kind): { instances: InstanceDef[]; nets: NetDef[]; pins: Record<string, [number, number]> } {
+  const { WS } = addWidths(f);
+  const instances: InstanceDef[] = [
+    { name: 'ua', def: fpUnpack(f), at: [6, 2], label: 'unpack a' },
+    { name: 'ub', def: fpUnpack(f), at: [6, 22], label: 'unpack b' },
+    { name: 'swap', def: faddSwap(f), at: [30, 4] },
+    { name: 'sign', def: FADD_SIGN, at: [48, 24] },
+    { name: 'exp', def: faddExp(f), at: [50, 5] },
+    { name: 'align', def: faddAlign(f), at: [72, 8] },
+    { name: 'add', def: faddAdd(f), at: [86, 9] },
+    { name: 'z', def: TIE0, at: [106, 14] },
+    { name: 'nr', def: normRound(f, WS + 1), at: [110, 7], label: 'normalize & round' },
+    { name: 'cancel', def: faddCancel(f), at: [110, 22] },
+    { name: 'special', def: faddSpecial(f, mux), at: [140, 10] },
+  ];
+  // labels for what runs far: the raw patterns into the compare, the class flags into the special cases, the signs and rm
+  const nets: NetDef[] = [
+    { name: 'a', ends: ['a', 'ua.x', 'swap.a'], tags: ['swap.a'] }, { name: 'b', ends: ['b', 'ub.x', 'swap.b'], tags: ['swap.b'] },
+    { name: 'ea', ends: ['ua.exp', 'swap.ea'] }, { name: 'eb', ends: ['ub.exp', 'swap.eb'] },
+    { name: 'ma', ends: ['ua.mant', 'swap.ma'] }, { name: 'mb', ends: ['ub.mant', 'swap.mb'] },
+    { name: 'sa', ends: ['ua.sign', 'sign.sa', 'special.sa'], tags: true }, { name: 'sb', ends: ['ub.sign', 'sign.sb'] }, { name: 'sub', ends: ['sub', 'sign.sub'] },
+    { name: 'aBigger', ends: ['swap.big', 'sign.big'] },
+    { name: 'eBig', ends: ['swap.eBig', 'exp.eBig'] }, { name: 'eSmall', ends: ['swap.eSmall', 'exp.eSmall'] },
+    { name: 'mBig', ends: ['swap.mBig', 'add.mBig'], via: { 'add.mBig': [[84, 15], [84, 13]] } }, { name: 'mSmall', ends: ['swap.mSmall', 'align.m'] },
+    { name: 'shift', ends: ['exp.d', 'align.d'] }, { name: 'aligned', ends: ['align.y', 'add.s'] },
+    { name: 'effSub', ends: ['sign.effSub', 'add.effSub', 'cancel.effSub', 'special.effSub'], tags: true },
+    { name: 'signBig', ends: ['sign.signBig', 'cancel.signBig'] }, { name: 'signB', ends: ['sign.signB', 'special.signB'], tags: true },
+    { name: 'sum', ends: ['add.sum', 'nr.mant', 'cancel.sum'] }, { name: 'sign', ends: ['cancel.sign', 'nr.sign'], tags: true },
+    { name: 'eBig + 1', ends: ['exp.ex', 'nr.exp'], tags: true }, { name: 'sticky in', ends: ['z.y', 'nr.stin'] },
+    { name: 'rm', ends: ['rm', 'cancel.rm', 'nr.rm'], tags: true },
+    { name: 'rounded', ends: ['nr.y', 'special.ry'] }, { name: 'round flags', ends: ['nr.flags', 'special.rflags'] },
+    ...(['inf', 'nan', 'snan'] as const).flatMap((c): NetDef[] => [
+      { name: `${c} a`, ends: [`ua.${c}`, `special.${c === 'inf' ? 'ia' : c === 'nan' ? 'na' : 'sna'}`], tags: true },
+      { name: `${c} b`, ends: [`ub.${c}`, `special.${c === 'inf' ? 'ib' : c === 'nan' ? 'nb' : 'snb'}`], tags: true },
+    ]),
+    { name: 'y', ends: ['special.y', 'y'] }, { name: 'flags', ends: ['special.flags', 'flags'] },
+  ];
+  return { instances, nets, pins: { a: [0, 10], b: [0, 30], sub: [0, 42], rm: [0, 46], y: [160, 21], flags: [160, 23] } };
+}
+
 /** a ± b: swap so |big| ≥ |small|, align small by the exponent difference, add or subtract, normalize & round. */
 export function fpAdd(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
   return memo(`fpadd${E}_${M}${mux.tag}`, () => {
-    const XE = xeOf(f), WA = M + 3, kA = log2c(WA + 1), WS = M + 4, N = 1 + E + M;
-    const b = new Builder();
-    const ua = b.op(fpUnpack(f), ['a'], 'unpack a'), ub = b.op(fpUnpack(f), ['b'], 'unpack b');
-    const ma = b.op(splitter([E + M, 1]), ['a']), mb = b.op(splitter([E + M, 1]), ['b']);
-    b.next();
-    const sbEff = b.name(b.op1(XOR, [`${ub}.sign`, 'sub'], 'b sign (−b for fsub)'), 'signB');
-    const ge = b.name(`${b.op(addSubFast(E + M), [`${ma}.o0`, `${mb}.o0`, b.op1(TIE1, [])], '|a| ≥ |b| ?')}.cout`, 'aBigger');
-    b.next();
-    const eB = b.name(b.op1(busMux2(E), [`${ub}.exp`, `${ua}.exp`, ge], 'swap'), 'eBig');
-    const eS = b.op1(busMux2(E), [`${ua}.exp`, `${ub}.exp`, ge]);
-    const mB = b.name(b.op1(busMux2(M + 1), [`${ub}.mant`, `${ua}.mant`, ge]), 'mBig');
-    const mS = b.op1(busMux2(M + 1), [`${ua}.mant`, `${ub}.mant`, ge]);
-    const sB = b.name(b.op1(MUX2, [sbEff, `${ua}.sign`, ge]), 'signBig');
-    const effSub = b.name(b.op1(XOR, [`${ua}.sign`, sbEff], 'subtract?'), 'effSub');
-    b.next();
-    const d = b.op(addSubFast(E), [eB, eS, b.op1(TIE1, [])], 'exponent difference');
-    let dsat: string;
-    if (kA < E) {
-      const ds = b.op(splitter([kA, E - kA]), [`${d}.s`]);
-      const big = b.op1(NOT, [b.op1(isZero(E - kA), [`${ds}.o1`])]);
-      dsat = b.op1(busMux2(kA), [`${ds}.o0`, b.op1(K(kA, 2 ** kA - 1), []), big]);
-    } else dsat = kA === E ? `${d}.s` : b.op1(merger([E, kA - E]), [`${d}.s`, b.op1(K(kA - E, 0), [])]);
-    b.next();
-    const al = b.op(shiftRightSticky(WA, kA), [b.op1(merger([2, M + 1]), [b.op1(K(2, 0), []), mS]), dsat], 'align');
-    b.next();
-    const opB = b.op1(merger([1, 2, M + 1]), [b.op1(TIE0, []), b.op1(K(2, 0), []), mB]);
-    const opS = b.op1(merger([1, WA]), [`${al}.sticky`, `${al}.y`]);
-    const sum = b.op(addSubFast(WS), [opB, opS, effSub], 'add / subtract');
-    b.next();
-    const top = b.op1(AND, [`${sum}.cout`, b.op1(NOT, [effSub])]);
-    const sm = b.name(b.op1(merger([WS, 1]), [`${sum}.s`, top]), 'sum');
-    const zs = b.op1(isZero(WS + 1), [sm]);
-    const exactZero = b.name(b.op1(AND, [effSub, zs], 'x − x'), 'cancel');
-    const sign = b.op1(MUX2, [sB, isMode(b, 'rm', RM.RDN, 'RDN?'), exactZero], 'x − x = +0 (−0 in RDN)');
-    const ex = b.op1(incFast(XE), [b.op1(merger([E, XE - E]), [eB, b.op1(K(XE - E, 0), [])])]);
-    b.next();
-    const nr = b.op(normRound(f, WS + 1), [sign, ex, sm, b.op1(TIE0, []), 'rm'], 'normalize & round');
-    b.next();
-    const invalid = b.name(b.op1(orN(3), [`${ua}.snan`, `${ub}.snan`, b.op1(andN(3), [`${ua}.inf`, `${ub}.inf`, effSub])], 'invalid'), 'NV');
-    const nan = b.op1(orN(3), [`${ua}.nan`, `${ub}.nan`, invalid], 'NaN?');
-    const anyInf = b.op1(OR, [`${ua}.inf`, `${ub}.inf`]);
-    const infS = b.op1(MUX2, [sbEff, `${ua}.sign`, `${ua}.inf`]);
-    b.next();
-    specials(b, f, `${nr}.y`, `${nr}.flags`, nan, anyInf, infS, invalid, undefined, mux);
+    const { N } = addWidths(f);
     return define({
       id: `fpadd${E}_${M}${mux.tag}`, name: `${fmtName(f)} adder / subtractor${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: 'Compare magnitudes and swap; shift the smaller significand right by the exponent difference (guard, round and sticky bits keep track of what falls off); add or subtract; normalize and round in mode rm. Then the special cases: NaN in or ∞ − ∞ gives NaN (NV for ∞ − ∞ or a signaling NaN), an infinite operand gives infinity.',
       ports: [bus('a', N, 'in'), bus('b', N, 'in'), bit('sub', 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'FADD' },
       spec: ([a, bb, s, rm]) => { const r = fpAddX(a, bb, !!s, f, rm); return [r.y, r.fl]; },
-      netlist: () => ({ pins: { a: [0, 4], b: [0, 10], sub: [0, 16], rm: [0, 20], y: [b.right, 6], flags: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => faddTop(f, mux),
       hdl: { verilog: `// behaviourally: assign {y, flags} = sub ? fsub(a, b, rm) : fadd(a, b, rm);   (IEEE 754 binary)` },
     });
   });

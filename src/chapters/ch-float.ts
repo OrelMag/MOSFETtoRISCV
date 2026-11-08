@@ -234,9 +234,9 @@ export const chFloat: Chapter = {
     {
       title: 'Addition: align, add, normalize, round',
       body: `
-        <p>To add, the exponents must match. <span data-show="u6">Compare the magnitudes</span> and <span data-show="u7">swap</span> so the bigger operand comes first.
-        <span data-show="u22">Shift the smaller significand right</span> by the <span data-show="u14">exponent difference</span>: bits that fall off are not thrown away but ORed into a <strong>sticky bit</strong>.
-        Then <span data-show="u27">add, or subtract</span> if the signs differ. Then <span data-show="u40">normalize</span>: a carry shifts the sum right one place; a cancellation leaves leading zeros, which are counted and shifted out.</p>
+        <p>To add, the exponents must match. <span data-show="swap.cmp">Compare the magnitudes</span> and <span data-show="swap">swap</span> so the bigger operand comes first.
+        <span data-show="align">Shift the smaller significand right</span> by the <span data-show="exp">exponent difference</span>: bits that fall off are not thrown away but ORed into a <strong>sticky bit</strong>.
+        Then <span data-show="add">add, or subtract</span> if the signs differ. Then <span data-show="nr">normalize</span>: a carry shifts the sum right one place; a cancellation leaves leading zeros, which are counted and shifted out.</p>
         <p>Three extra bits below the significand (<strong>guard</strong>, <strong>round</strong>, <strong>sticky</strong>) are provably enough to round the
         result exactly as if it had been computed with infinite precision.</p>
         <p>Why the steps come in this order. Adding is only meaningful at equal weights, so the exponents are matched first, and it is the smaller operand that moves right: shifting the larger left
@@ -247,13 +247,13 @@ export const chFloat: Chapter = {
       scene: () => ({ root: fpAdd(E4M3), inputs: { a: 0x44, b: 0x38, sub: 0 } }),
       tour: {
         beats: [
-          { title: 'Align and add', show: ['u6', 'u7', 'u14', 'u22', 'u27'], expect: { y: 0x48, flags: 0 },
+          { title: 'Align and add', show: ['swap', 'exp', 'align', 'add'], expect: { y: 0x48, flags: 0 },
             say: '<p>3.0 (0x44) + 1.0 (0x38). The exponents differ by 1, so the smaller significand is shifted right one place and added: 1.1₂ + 0.1₂ = 10.0₂. The sum carries, normalization moves it back: y = {v:y} = 0x48 = 4.0, no flags.</p>' },
-          { title: 'Cancellation', set: { sub: 1, a: 0x39, b: 0x38 }, show: ['u27', 'u40'], expect: { y: 0x20, flags: 0 },
+          { title: 'Cancellation', set: { sub: 1, a: 0x39, b: 0x38 }, show: ['add', 'nr'], expect: { y: 0x20, flags: 0 },
             say: '<p>1.125 − 1.0: the subtraction leaves 0.001₂, three leading zeros. Normalize counts them and shifts the result left three places, lowering the exponent by 3: y = {v:y} = 0x20 = 0.125. The result is exact, flags {b:flags}: cancellation loses no bits, it only exposes the ones below.</p>' },
-          { title: 'Absorbed', set: { sub: 0, a: 0x44, b: 0x01 }, show: ['u14', 'u22'], expect: { y: 0x44, flags: 1 },
+          { title: 'Absorbed', set: { sub: 0, a: 0x44, b: 0x01 }, show: ['exp', 'align'], expect: { y: 0x44, flags: 1 },
             say: '<p>3.0 + the smallest subnormal. The difference of exponents is larger than the datapath is wide: b is shifted completely out, and only its sticky bit survives. y = {v:y} = 3.0 unchanged, with NX raised (flags = {b:flags}): the sum was not exact.</p>' },
-          { title: 'x − x', set: { sub: 1, a: 0x44, b: 0x44 }, show: ['u27'], expect: { y: 0, flags: 0 },
+          { title: 'x − x', set: { sub: 1, a: 0x44, b: 0x44 }, show: ['add', 'cancel'], expect: { y: 0, flags: 0 },
             say: '<p>Subtracting a number from itself cancels everything. In round to nearest the sign of an exact zero sum is +, so y = {v:y} (0x00, not 0x80), and nothing is inexact.</p>' },
         ],
       },
@@ -652,7 +652,7 @@ export const chFloat: Chapter = {
         see every 8-bit input. Well over a million cases in all; every pair of the 8-bit formats is a switch for a long run by hand, not part of the
         regular test suite. float32 is tested on random and special operands (subnormals, infinities, NaNs, cancellation), and against the host CPU in
         round to nearest even.</p>
-        <div class="try">1.5 (0x3FC00000) + 2.25 (0x40100000) = 3.75 (0x40700000). Follow <span data-show="u22 u27">the significands</span> through the aligner and the adder.</div>`; },
+        <div class="try">1.5 (0x3FC00000) + 2.25 (0x40100000) = 3.75 (0x40700000). Follow <span data-show="align add">the significands</span> through the aligner and the adder.</div>`; },
       scene: () => ({ root: fpAdd(F32), inputs: { a: 0x3fc00000, b: 0x40100000, sub: 0 } }),
       more: lazy(() => ({
         numbers: costTable(
