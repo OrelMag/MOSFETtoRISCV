@@ -96,11 +96,16 @@ export function truncLayout(b: NameBox, scale: number, text = textOf(b)): NameLa
   return { px: NAME_MIN_PX, lines: [text.slice(0, n - 1).trimEnd() + '…'] };
 }
 
-/** Layouts of `text` wider than the block: the largest size (NAME_PX down to MIN_TEXT_PX), one line before two. */
-function* overLayouts(b: NameBox, text: string): Generator<NameLayout> {
+/** Largest size (px) of a name drawn wider than its block: quiet, never louder than the names that fit. */
+export const NAME_OVER_MAX_PX = 8;
+/** A full name spilling past its block by no more than this (px, in all) is kept over the abbreviation that fits inside. */
+export const NAME_SPILL_PX = 8;
+
+/** Layouts of `text` wider than the block: the smallest readable size first (MIN_TEXT_PX up to `max`), one line before two. */
+function* overLayouts(b: NameBox, text: string, max: number): Generator<NameLayout> {
   if (b.rot) return;
   const ways = nameBreaks(text);
-  for (let px = NAME_PX; px >= MIN_TEXT_PX; px--) for (const lines of ways) yield { px, lines, over: true };
+  for (let px = MIN_TEXT_PX; px <= max; px++) for (const lines of ways) yield { px, lines, over: true };
 }
 
 /** The screen rectangle (px, from the block's centre) a name takes. */
@@ -128,10 +133,10 @@ export function planNames(boxes: NameBox[], scale: number, minBlockPx = 10): boo
 }
 
 /**
- * planNames with how each kept name is drawn (null: no name). A block's name is tried in this order, first the full text, then
- * its abbreviation (ABBREVIATIONS): inside the block at the largest size; wider than the block at the largest size where it
- * covers no other block and no name kept before it (`blocks`: every block's grid rectangle, else the other named blocks);
- * and last the full text cut short with an ellipsis inside the block.
+ * planNames with how each kept name is drawn (null: no name). A block's name is tried, in order: the full text inside the block
+ * (largest size), the full text barely wider than it (NAME_SPILL_PX), its abbreviation (ABBREVIATIONS) inside the block, then wider than the block at the smallest readable
+ * size (at most NAME_OVER_MAX_PX, and no larger than the largest name inside a block) where it covers no other block and no name
+ * kept before it (`blocks`: every block's grid rectangle, else the other named blocks), and last the text cut short with an ellipsis.
  */
 export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, blocks?: { x: number; y: number; w: number; h: number }[]): (NameLayout | null)[] {
   const out: (NameLayout | null)[] = boxes.map(() => null);
@@ -140,6 +145,10 @@ export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, bl
   const kept: Box[] = [];
   const asBox = (r: { x: number; y: number; w: number; h: number }): Box => ({ l: r.x, r: r.x + r.w, t: r.y, b: r.y + r.h });
   const all = (blocks ?? boxes.map((b) => ({ x: b.cx - b.w / 2, y: b.cy - b.h / 2, w: b.w, h: b.h }))).map(asBox);
+  // a name over its block is no larger than the largest name inside a block of this drawing
+  let maxIn = 0;
+  for (const b of boxes) for (const t of [textOf(b), abbreviate(textOf(b))]) maxIn = Math.max(maxIn, fitLayout(b, scale, t)?.px ?? 0);
+  const overMax = Math.max(MIN_TEXT_PX, Math.min(NAME_OVER_MAX_PX, Math.floor(maxIn)));
   for (const i of order) {
     const b = boxes[i];
     if (Math.max(b.w, b.h) * scale < minBlockPx) continue;
@@ -152,12 +161,15 @@ export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, bl
       return !all.some((k) => !(Math.abs((k.l + k.r) / 2 - b.cx) < 0.01 && Math.abs((k.t + k.b) / 2 - b.cy) < 0.01) && crosses(r, k));
     };
     let pick: NameLayout | null = null;
-    for (const t of texts) {
-      const fit = fitLayout(b, scale, t);
-      if (fit && free(fit)) { pick = fit; break; }
-      for (const l of overLayouts(b, t)) if (free(l) && others(l)) { pick = l; break; }
-      if (pick) break;
-    }
+    // inside the block first, the abbreviation before anything wider than the block, then wider than it
+    // (a full name that spills only a little is kept over its abbreviation)
+    const spill = (l: NameLayout) => maxChars(l.lines) * l.px * NAME_EM - (b.rot ? b.h : b.w) * scale;
+    const over = (t: string, mild: boolean) => {
+      for (const l of overLayouts(b, t, overMax)) if ((!mild || spill(l) <= NAME_SPILL_PX) && free(l) && others(l)) return l;
+      return null;
+    };
+    const fits = texts.map((t) => { const f = fitLayout(b, scale, t); return f && free(f) ? f : null; });
+    pick = fits[0] ?? over(full, true) ?? fits[1] ?? over(full, false) ?? (texts.length > 1 ? over(short, false) : null);
     for (const t of texts) {
       if (pick) break;
       const tr = truncLayout(b, scale, t);

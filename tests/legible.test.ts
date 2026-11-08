@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hiddenKinds, NAME_MIN_PX, abbreviate, fitLayout, nameRect, truncLayout, planLayouts, planTags, TAG_MAX_K, LABEL_UNITS, NAME_PX, MIN_TEXT_PX, nameEligible, nameRotated, needsFixedNames, planNames, TEXT_UNITS, type NameBox } from '../src/view/legible';
+import { hiddenKinds, NAME_MIN_PX, abbreviate, fitLayout, NAME_OVER_MAX_PX, nameRect, truncLayout, planLayouts, planTags, TAG_MAX_K, LABEL_UNITS, NAME_PX, MIN_TEXT_PX, nameEligible, nameRotated, needsFixedNames, planNames, TEXT_UNITS, type NameBox } from '../src/view/legible';
 import { fpAdd, fpMul, fpDiv } from '../src/lib/fpu';
 import type { FpFormat } from '../src/sim/fpref';
 import { singleCycleCpu } from '../src/lib/cpu';
@@ -116,6 +116,12 @@ describe('names sit inside their block', () => {
     expect(l.over).toBe(true);
     expect(l.lines.join(' ')).toBe('REGISTERS');
   });
+  it('prefers the abbreviation inside the block to a full name spilling well past it, and keeps overflow small', () => {
+    const l = planLayouts([b(6, 10, 'REGISTERS')], 4)[0]!;
+    expect(l).toEqual({ px: expect.any(Number), lines: ['REGS'] });
+    const o = planLayouts([b(10, 10, 'REGISTERS')], 4)[0]!;
+    expect(o.over ? o.px : 0).toBeLessThanOrEqual(NAME_OVER_MAX_PX);
+  });
   it('abbreviates when the full name would collide, then truncates, then drops', () => {
     // a neighbour's block 14 units to the right: 'REGISTERS' (about 9 chars at 12 px) would reach it, 'REGS' would not
     const neighbour = b(10, 10, 'ZZ', false, 12, 0);
@@ -143,6 +149,7 @@ describe('names sit inside their block', () => {
       expect(plan[k]?.lines.join(' '), f).toBe(f);
     }
     // no name covers another name or another block
+    for (const l of plan) if (l?.over) expect(l.px).toBeLessThanOrEqual(NAME_OVER_MAX_PX);
     const rects = plan.map((l, k) => (l ? nameRect(named[k].box, l, scale) : null));
     rects.forEach((a, i) => {
       if (!a) return;
@@ -166,6 +173,7 @@ describe('names sit inside their block', () => {
           expect(l, where).not.toBeNull();
           if (!l || x.box.rot) return;
           const r = nameRect(x.box, l, scale);
+          if (l.over) expect(l.px, where).toBeLessThanOrEqual(NAME_OVER_MAX_PX);
           if (!l.over) { expect(width(l), where).toBeLessThanOrEqual(x.box.w * scale); return; }
           blocks.forEach((o, k) => { if (k !== x.k) expect(r.x < o.x + o.w && o.x < r.x + r.w && r.y < o.y + o.h && o.y < r.y + r.h, where + ' covers ' + insts[k].name).toBe(false); });
         });
