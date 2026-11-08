@@ -166,13 +166,11 @@ export function pixAnchors(pose: PixPose): Anchor[] {
     { text: 'microlens', p: P3(PITCH / 2, LENS[1], PITCH / 2), side: 't', n: up },
     { text: 'colour filter', p: P3(PITCH, mid(CF), z + 0.3), side: 'r', n: front },
     { text: 'silicon, lit from the back', p: P3(PITCH, SI_T * 0.75, z), side: 'r', n: front },
-    { text: 'pd: pinned photodiode (n)', p: P3(L.pd.x[0], mid(L.pd.y), z), side: 'l', n: front },
-    { text: 'p+ pinning layer', p: P3(L.pd.x[0] + 0.2, L.pin.y / 2, z), side: 'l', n: front, minor: true },
+    { text: 'pd: pinned photodiode (n under p+)', p: P3(L.pd.x[0], mid(L.pd.y), z), side: 'l', n: front },
     { text: 'xfer: transfer gate', p: P3(mid(L.tg.x), POLY[0], Math.max(z, L.tg.z[0])), side: 'b', n: down },
     { text: 'fd: floating diffusion', p: P3(L.fd.x[1], L.fd.y / 2, Math.max(z, L.fd.z[0])), side: 'r', n: front },
-    { text: 'reset', p: P3(mid(L.rst.x), POLY[0], mid(L.rst.z)), side: 'r', n: down, minor: true },
-    { text: 'sf: source follower', p: P3(mid(L.sf.x), POLY[0], L.strip.z[1]), side: 'l', n: down },
-    { text: 'rs: row select', p: P3(mid(L.rs.x), POLY[0], L.strip.z[1]), side: 'b', n: down, minor: true },
+    { text: 'reset', p: P3(L.rst.x[1], POLY[0] / 2, mid(L.rst.z)), side: 't', n: [1, 0, 0], minor: true },
+    { text: 'sf, rs: source follower, row select', p: P3(mid(L.sf.x), POLY[0], L.strip.z[1]), side: 'l', n: down },
     { text: 'column line (metal 2)', p: P3(mid(L.col.x), M2[0], 0), side: 'b', n: down },
   ];
 }
