@@ -132,7 +132,7 @@ export const MODELS_3D: readonly Model3d[] = [
   },
   {
     id: 'hierarchy', title: 'The memory hierarchy as distances', category: 'analogies', chapter: 'cache', step: 5,
-    summary: 'Desk, shelf, library, warehouse: each level as far away as its latency on a log scale, with a courier for one access.',
+    summary: 'Desk, shelf, library, warehouse, another city: each level as far away as its latency on a log scale, with a courier for one access.',
     files: ['hierarchy3d', 'hierarchy3dview', 'hierarchy3dparts', 'hierarchy3ddata'], factory: 'hierarchy3d', codex: ['cache', 'memwall', 'amat'],
     open: () => import('./hierarchy3d').then((m) => m.hierarchy3d()),
   },

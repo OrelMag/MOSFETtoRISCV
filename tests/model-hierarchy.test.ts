@@ -4,8 +4,9 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CORE_GHZ, LEVELS, REAL_CYCLES, cyclesOf } from '../src/widgets/hierarchy3ddata';
+import { DESK_TIERS } from '../src/widgets/analogy/mem';
 import {
-  NS0, PLACES, SCALE, TICKS, accessNs, asSeconds, distOf, flightSeconds, fmtNs, hierarchyAnchors, hierarchyParts, levelX, timeAt, type HPalette,
+  CORE, NS0, PLACES, placeOf, SCALE, TICKS, accessNs, asSeconds, distOf, flightSeconds, fmtNs, hierarchyAnchors, hierarchyParts, levelX, timeAt, type HPalette,
 } from '../src/widgets/hierarchy3dparts';
 
 const col = (i: number): [number, number, number] => [i / 20, 0.5, 0.5];
@@ -68,10 +69,15 @@ describe('the hierarchy model against the chapter', () => {
   });
   it('the places are the analogy’s, in order, and every level has one that holds its distance', () => {
     for (const w of ['your desk', 'a shelf', 'the library', 'a warehouse across town']) expect(analogy.replace(/\s+/g, ' ')).toContain(w);
-    expect(PLACES.map((p) => p.id)).toEqual(['desk', 'shelf', 'library', 'warehouse']);
+    expect(PLACES.map((p) => p.id)).toEqual(['desk', 'shelf', 'library', 'warehouse', 'city']);
     for (let i = 1; i < PLACES.length; i++) expect(PLACES[i].x0).toBeGreaterThan(PLACES[i - 1].x1);
+    expect(PLACES[0].x0).toBeGreaterThan(CORE.x1);
+    // the desk figure's mapping (analogy/mem.ts DESK_TIERS): one analogy, one mapping on the step
+    for (const t of DESK_TIERS) expect(LEVELS.find((l) => l.name === t.level)!.place, t.level).toBe(t.place);
+    expect(get('reg').place).toBe('core');
+    expect(get('ssd').place).toBe('city');
     for (const l of LEVELS) {
-      const p = PLACES.find((q) => q.id === l.place)!;
+      const p = placeOf(l);
       expect(levelX(l)).toBeGreaterThan(p.x0);
       expect(levelX(l)).toBeLessThan(p.x1);
     }
@@ -85,7 +91,7 @@ describe('the hierarchy model against the chapter', () => {
     for (const p of parts) for (const v of [...p.pos, ...(p.scale ?? [])]) expect(Number.isFinite(v)).toBe(true);
     const labels = hierarchyAnchors().map((a) => a.text);
     expect(new Set(labels).size).toBe(labels.length);
-    expect(labels).toEqual(expect.arrayContaining(['Desk', 'Shelf', 'Library', 'Warehouse', 'L1', 'SSD']));
+    expect(labels).toEqual(['Core', 'Regs', 'L1\nDesk', 'L2\nShelf', 'L3\nLibrary', 'DRAM\nWarehouse', 'SSD\nAnother city']);
     expect(TICKS.map(distOf).every((x, i, a) => i === 0 || x > a[i - 1])).toBe(true);
   });
 });

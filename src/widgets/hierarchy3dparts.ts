@@ -40,13 +40,19 @@ export interface HPalette {
   mark: RGB; live: RGB; courier: RGB;
 }
 
-/** Which place stands where on the road (x range) and how tall it is. */
-export const PLACES: { id: HLevel['place']; label: string; x0: number; x1: number; h: number }[] = [
-  { id: 'desk', label: 'Desk', x0: 3, x1: 25, h: 6 },
-  { id: 'shelf', label: 'Shelf', x0: 27, x1: 47, h: 15 },
-  { id: 'library', label: 'Library', x0: 51, x1: 71, h: 18 },
-  { id: 'warehouse', label: 'Warehouse', x0: 104, x1: 134, h: 22 },
+export type Place = { id: HLevel['place']; label: string; x0: number; x1: number; h: number };
+/** Which place stands where on the road (x range) and how tall it is: the desk figure's four (desk L1, shelf L2, library L3,
+ *  warehouse DRAM), then the SSD a city away. The log scale puts L2 and L3 close together, so the shelf is narrow. */
+export const PLACES: Place[] = [
+  { id: 'desk', label: 'Desk', x0: 13, x1: 26, h: 6 },
+  { id: 'shelf', label: 'Shelf', x0: 28, x1: 35, h: 15 },
+  { id: 'library', label: 'Library', x0: 37, x1: 49, h: 18 },
+  { id: 'warehouse', label: 'Warehouse', x0: 51, x1: 70, h: 22 },
+  { id: 'city', label: 'Another city', x0: 100, x1: 134, h: 30 },
 ];
+/** The registers are in the core: its body and the register rack on its road side. */
+export const CORE: Place = { id: 'core', label: 'Core', x0: -12, x1: 11, h: 9 };
+export const placeOf = (l: HLevel): Place => (l.place === 'core' ? CORE : PLACES.find((q) => q.id === l.place)!);
 /** Decade ticks along the road, in ns: 1 ns, 10 ns … 100 µs. */
 export const TICKS = [1, 10, 100, 1000, 10_000, 100_000];
 
@@ -58,6 +64,8 @@ export function hierarchyParts(p: HPose, P: HPalette): Part[] {
   for (const t of TICKS) { const x = distOf(t); out.push(box(P.tick, x - 0.25, x + 0.25, 0.1, 0.5, -2.2, 2.2)); }
   // The core at the start of the road.
   out.push(box(P.core, -12, -2, 0, 9, -6, 4), box(P.metal, -9, -5, 9, 10, -3, 1), box(P.metal, -2, -1, 3, 4, -1, 1));
+  // The register rack: a low bench joined to the core, the registers' block on it.
+  out.push(box(P.core, -2, CORE.x1, 2.2, 3, -9, -4), box(P.core, CORE.x1 - 1, CORE.x1, 0, 2.2, -9, -4));
   // The desk: a top on four legs.
   const d = PLACES[0];
   out.push(box(P.wood, d.x0, d.x1, 4.2, 5.2, -11, -3.5));
@@ -66,19 +74,27 @@ export function hierarchyParts(p: HPose, P: HPalette): Part[] {
   const s = PLACES[1];
   out.push(box(P.shelf, s.x0, s.x1, 0, s.h, -9, -8), box(P.shelf, s.x0, s.x0 + 0.8, 0, s.h, -9, -3), box(P.shelf, s.x1 - 0.8, s.x1, 0, s.h, -9, -3));
   for (const y of [0, 5, 10, 14.2]) out.push(box(P.shelf, s.x0, s.x1, y, y + 0.8, -9, -3));
-  // The library: a hall with columns and a roof.
+  // The library: a hall with a portico (columns at its ends, clear of the level's block) and a roof.
   const l = PLACES[2];
   out.push(box(P.wall, l.x0, l.x1, 0, l.h, -22, -9), box(P.roof, l.x0 - 1, l.x1 + 1, l.h, l.h + 1.5, -23, -8));
-  for (let i = 0; i < 5; i++) out.push(cyl(P.wall, l.x0 + 2 + i * 4, -6, 0, l.h - 1, 0.8), box(P.door, l.x0 + 1.5 + i * 4, l.x0 + 3 + i * 4, 0, 6, -9.05, -8.9));
-  out.push(box(P.roof, l.x0 - 1, l.x1 + 1, l.h - 1, l.h, -9.5, -5));
+  for (const cx of [l.x0 + 1.2, l.x1 - 1.2]) out.push(cyl(P.wall, cx, -4.5, 0, l.h - 1, 0.8));
+  for (let i = 0; i < 3; i++) out.push(box(P.door, l.x0 + 2.5 + i * 3.2, l.x0 + 4 + i * 3.2, 0, 6, -9.05, -8.9));
+  out.push(box(P.roof, l.x0 - 1, l.x1 + 1, l.h - 1, l.h, -9.5, -3.5));
   // The warehouse across town: a long shed with big doors.
   const w = PLACES[3];
-  out.push(box(P.wall, w.x0, w.x1, 0, w.h, -34, -8), box(P.roof, w.x0 - 1, w.x1 + 1, w.h, w.h + 1.5, -35, -7));
-  for (let i = 0; i < 3; i++) out.push(box(P.door, w.x0 + 3 + i * 9, w.x0 + 9 + i * 9, 0, 12, -7.95, -7.8));
+  out.push(box(P.wall, w.x0, w.x1, 0, w.h, -34, -10), box(P.roof, w.x0 - 1, w.x1 + 1, w.h, w.h + 1.5, -35, -9));
+  for (let i = 0; i < 2; i++) out.push(box(P.door, w.x0 + 2.5 + i * 8.5, w.x0 + 8 + i * 8.5, 0, 12, -9.95, -9.8));
+  // Another city: a cluster of towers with rows of windows, the tallest at the back.
+  const c = PLACES[4];
+  for (const [a, b, ht, z0, z1] of [[0, 7, 14, -16, -10], [8, 14, 30, -30, -18], [15, 22, 22, -20, -11], [23, 29, 26, -32, -21], [30, 34, 12, -15, -10]]) {
+    const top = (c.h * ht) / 30;
+    out.push(box(P.wall, c.x0 + a, c.x0 + b, 0, top, z0, z1), box(P.roof, c.x0 + a - 0.3, c.x0 + b + 0.3, top, top + 0.8, z0 - 0.3, z1 + 0.3));
+    for (let y = 3; y < top - 1; y += 4) out.push(box(P.door, c.x0 + a + 1, c.x0 + b - 1, y, y + 1.2, z1 + 0.02, z1 + 0.12));
+  }
   // The levels: a block each, bigger the further out; the target glows.
   LEVELS.forEach((lv, k) => {
     const x = levelX(lv), sz = 1.2 + k * 0.45, on = p.target === k;
-    const base = lv.place === 'desk' ? 5.2 : lv.place === 'shelf' ? (lv.id === 'l2' ? 0.8 : 5.8) : 0;
+    const base = lv.place === 'core' ? 3 : lv.place === 'desk' ? 5.2 : lv.place === 'shelf' ? 0.8 : 0;
     const m = box(on ? P.live : P.mark, x - sz, x + sz, base, base + 2 * sz, -7 - sz / 2, -7 + sz / 2);
     if (on) m.emissive = lit(P.live, 0.6);
     out.push(m, rod(P.tick, [x, base, -5], [x, 0.3, 0], 0.12, 0.1));
@@ -93,14 +109,14 @@ export function hierarchyParts(p: HPose, P: HPalette): Part[] {
 }
 
 const SHORT: Record<HLevel['id'], string> = { reg: 'Regs', l1: 'L1', l2: 'L2', l3: 'L3', dram: 'DRAM', ssd: 'SSD' };
-/** The levels' dots stand on the road at their true distance; their names alternate below and above it in order (Regs below, L1 above, L2 below, L3 above), so neighbours never share a line. */
+/** The levels' dots stand on the road at their true distance, each label the level over its place (two lines: the log scale
+ *  puts the places too close for labels of their own; the registers' place is the Core label beside them); they alternate below and above the road, so neighbours never share a line. */
 export function hierarchyAnchors(): Anchor[] {
   const front: Vec3 = [0, 0.3, 1], up: Vec3 = [0, 1, 0];
   const above = new Set<HLevel['id']>(['l1', 'l3']);
   return [
     { text: 'Core', p: [-7, 10, -1], side: 't', n: up },
-    ...LEVELS.map((lv): Anchor => ({ text: SHORT[lv.id], p: [levelX(lv), 0, 3], side: above.has(lv.id) ? 't' : 'b', n: front })),
-    ...PLACES.map((q): Anchor => ({ text: q.label, p: [(q.x0 + q.x1) / 2, q.h + (q.id === 'desk' ? 8 : q.id === 'shelf' ? 1 : 3), -6], side: 't', n: up })),
+    ...LEVELS.map((lv): Anchor => ({ text: lv.place === 'core' ? SHORT[lv.id] : `${SHORT[lv.id]}\n${placeOf(lv).label}`, p: [levelX(lv), 0, 3], side: above.has(lv.id) ? 't' : 'b', n: front })),
   ];
 }
 

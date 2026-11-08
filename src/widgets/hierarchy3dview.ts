@@ -11,7 +11,7 @@ import { frameLoop } from './mosfet';
 import { modelStage } from './modelstage';
 import { CORE_GHZ, LEVELS } from './hierarchy3ddata';
 import {
-  PLACES, asSeconds, cyclesOf, flightSeconds, fmtNs, followView, hierarchyAnchors, hierarchyParts, levelX, overview, timeAt, SCALE,
+  asSeconds, placeOf, cyclesOf, flightSeconds, fmtNs, followView, hierarchyAnchors, hierarchyParts, levelX, overview, timeAt, SCALE,
   type HPalette, type HPose, type Phase,
 } from './hierarchy3dparts';
 
@@ -25,9 +25,9 @@ export function hierarchyView(): Widget {
   let x = 0, phase: Phase = 'idle', target: number | null = null, cam = 0, camGoal = 0, arrived = false;
   const narrow = () => panel.clientWidth > 0 && panel.clientWidth < 560;
 
-  const panel = h('div', { class: 'panel' });
+  const panel = h('div', { class: 'panel hy3d' });
   const stage = modelStage(panel, {
-    aria: 'The memory hierarchy as distances in 3D: a core, then along a road a desk, a shelf, a library and a warehouse across town, each at a distance that is its latency on a log scale, and a courier that fetches data from the level you pick',
+    aria: 'The memory hierarchy as distances in 3D: a core, then along a road a desk, a shelf, a library, a warehouse across town and another city, each at a distance that is its latency on a log scale, and a courier that fetches data from the level you pick',
     camera: overview(false),
     limits: { minDist: 25, maxDist: 500 },
     note: 'Distance is the latency on a log scale (20 units per factor of ten), not a straight one: on a straight scale the SSD would be 80 000 times as far as L1. The flight is a drawing: it takes a second or a few, not the access’s real time. Block sizes are not capacities. L1 and L2 follow the Golden Cove / Willow Cove measurements and the SSD a NAND page read, so they are orders of magnitude that vary by product.',
@@ -68,7 +68,7 @@ export function hierarchyView(): Widget {
     chip.className = `r3-chip ${arrived || done || phase === 'back' ? 'good' : lv ? 'warn' : ''}`;
     const rows: [string, string][] = lv ? [
       ['Hit in', lv.name],
-      ['Place', PLACES.find((p) => p.id === lv.place)!.label],
+      ['Place', lv.place === 'core' ? 'In the core' : placeOf(lv).label],
       ['Latency', `${fmtNs(lv.ns)} = ${cyclesOf(lv.ns).toLocaleString('en-US')} cycles at ${CORE_GHZ} GHz`],
       ['Distance', `${levelX(lv).toFixed(1)} units`],
       ['Elapsed', fmtNs(elapsed)],
@@ -85,7 +85,7 @@ export function hierarchyView(): Widget {
   }
   function announce(): void {
     const lv = target === null ? null : LEVELS[target];
-    live.textContent = !lv ? '' : arrived ? `Data from ${lv.name}, ${PLACES.find((p) => p.id === lv.place)!.label.toLowerCase()}: ${fmtNs(lv.ns)}.` : phase === 'idle' ? `Back at the core with data from ${lv.name} after ${fmtNs(lv.ns)}.` : '';
+    live.textContent = !lv ? '' : arrived ? `Data from ${lv.name}, ${lv.place === 'core' ? 'in the core' : placeOf(lv).label.toLowerCase()}: ${fmtNs(lv.ns)}.` : phase === 'idle' ? `Back at the core with data from ${lv.name} after ${fmtNs(lv.ns)}.` : '';
   }
 
   // The courier: out to the level's distance and back, the camera following.
@@ -127,7 +127,7 @@ export function hierarchyView(): Widget {
 
   panel.append(
     h('h3', { class: 'm3-title' }, 'The same ladder as distances'),
-    h('p', { class: 'm3-sub' }, 'What you use now is on the desk, this week’s work on a shelf, the department’s in the library, and everything else in a warehouse across town. Each place sits as far from the core as its latency, on a log scale with the table’s own figures. Pick the level where the data is and a courier goes out to it and comes back with the time on the clock; the camera follows.'),
+    h('p', { class: 'm3-sub' }, 'The registers are in the core itself. What you use now is on the desk (L1), this week’s work on a shelf (L2), the department’s in the library (L3), and everything else in a warehouse across town (DRAM); the SSD is another city. Each place sits as far from the core as its latency, on a log scale with the table’s own figures. Pick the level where the data is and a courier goes out to it and comes back with the time on the clock; the camera follows.'),
     h('div', { class: 'r3' },
       h('div', { class: 'r3-main' },
         h('div', { class: 'r3-ctl' }, h('div', { class: 'hy-btns', role: 'group', 'aria-label': 'Where the data is' }, h('span', { class: 'hy-lbl' }, 'Hit in'), ...btns, stage.resetBtn)),
