@@ -205,6 +205,12 @@ export const MODELS_3D: readonly Model3d[] = [
     files: ['assembly3d', 'assembly3dview', 'assembly3dparts'], factory: 'assembly3d', codex: ['pipeline', 'hazards', 'stall', 'flush', 'loaduse'],
     open: () => Promise.all([import('./assembly3d'), import('../chapters/ch-pipe')]).then(([m, c]) => m.assembly3d(c.ASSEMBLY_PROGRAMS)),
   },
+  {
+    id: 'hierarchy', title: 'The memory hierarchy as distances', category: 'analogies', chapter: 'cache', step: 5,
+    summary: 'Desk, shelf, library, warehouse: each level as far away as its latency on a log scale, with a courier for one access.',
+    files: ['hierarchy3d', 'hierarchy3dview', 'hierarchy3dparts', 'hierarchy3ddata'], factory: 'hierarchy3d', codex: ['cache', 'memwall', 'amat'],
+    open: () => import('./hierarchy3d').then((m) => m.hierarchy3d()),
+  },
 ];
 
 export const modelById = (id: string): Model3d | undefined => MODELS_3D.find((m) => m.id === id);
