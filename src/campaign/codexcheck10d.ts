@@ -150,9 +150,9 @@ export const CHECK10D: Record<string, Quiz[]> = {
   fattree: [
     {
       question: 'How many hosts does a fat tree of 48-port switches serve?',
-      options: ['27,648', '2,304', '110,592', '576'],
+      options: ['27 648', '2304', '110 592', '576'],
       answer: 0,
-      explain: 'k³ / 4 at k = 48. It takes 5k² / 4 = 2,880 switches, and there are (k / 2)² = 576 paths between two pods.',
+      explain: 'k³ / 4 at k = 48. It takes 5k² / 4 = 2880 switches, and there are (k / 2)² = 576 paths between two pods.',
       why: ['', 'That is k², with no factor for the pods.', 'That is k³, forgetting the quarter.', 'That is the number of paths between two pods.'],
     },
     {
@@ -246,7 +246,7 @@ export const CHECK10D: Record<string, Quiz[]> = {
   tailscale: [
     {
       question: 'A service waits for 50 servers and wants 99 % of requests free of a slow reply. About how rare must a slow reply be on each?',
-      options: ['1 in 5,000', '1 in 100', '1 in 50', '1 in 2,500'],
+      options: ['1 in 5000', '1 in 100', '1 in 50', '1 in 2500'],
       answer: 0,
       explain: 'For small q the share slow is about 50 q, so q = 0.01 / 50 = 0.0002.',
       why: ['', 'That would make 39 % of requests slow.', 'That would make 64 % of requests slow.', 'That would make about 2 % slow, twice the target.'],

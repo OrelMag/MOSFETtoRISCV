@@ -117,6 +117,8 @@ registerToolbarAction({ id: 'zout', title: 'Zoom out', icon: 'minus', order: 30,
 registerToolbarAction({ id: 'zin', title: 'Zoom in', icon: 'plus', order: 40, run: (ed) => ed.view.cam.zoom(0.8) });
 registerToolbarAction({ id: 'fit', title: 'Fit to screen', icon: 'fit', order: 50, run: (ed) => ed.fitView() });
 registerToolbarAction({ id: 'props', title: 'Properties of the selection or the chip', icon: 'sidebar', label: 'Properties', order: 85, levelOnly: true, run: (ed) => ed.toggleProps(), active: (ed) => ed.propsPinned });
+// the sandbox's own: offered while the properties column is folded away (lean: a drawer or a pane beside the canvas is open)
+registerToolbarAction({ id: 'propsfold', title: 'Properties of the selection or the chip (folded while a drawer or a pane is open)', icon: 'sidebar', label: 'Properties', order: 85, run: (ed) => ed.toggleProps(), active: (ed) => ed.propsPinned, shown: (ed) => !ed.level && ed.lean });
 // Menus that gather actions used together, so the bar stays short.
 registerToolbarAction({ id: 'timingmenu', title: 'Timing: probe wires, and the timing panel that records them', icon: 'wave', label: 'Timing ▾', order: 61, group: true, run: (ed) => ed.groupMenu('timingmenu') });
 registerToolbarAction({ id: 'play', title: 'Play: challenges (build a chip, checked and scored) and puzzles (write programs for a CPU)', icon: 'flag', label: 'Play ▾', order: 64, group: true, run: (ed) => ed.groupMenu('play') });
@@ -147,7 +149,7 @@ function emptyChipText(mode: PlaceMode): (Node | string)[] {
   const parts = [h('b', null, 'Input'), ', ', h('b', null, 'NAND'), ' and ', h('b', null, 'Output')];
   if (mode === 'tap') return ['Tap ', ...parts, ' under ', h('i', null, 'Basics'), ' in the Parts list, then tap the canvas to place each; drag from a pin’s dot to another pin to wire.'];
   if (mode === 'drawer') return ['Open ', h('b', null, 'Parts'), ', pick ', ...parts, ' under ', h('i', null, 'Basics'), ', and click the canvas to place each; drag from a pin’s dot to another pin to wire.'];
-  return ['Drag ', ...parts, ' from ', h('i', null, 'Basics'), ' on the left; drag from a pin’s dot to another pin to wire.'];
+  return ['Drag ', ...parts, ' from ', h('i', null, 'Basics'), ' on the left (or click one, then click the canvas to place it); drag from a pin’s dot to another pin to wire.'];
 }
 
 export class Editor {
@@ -160,7 +162,7 @@ export class Editor {
   readonly props: PropsPanel;
   readonly tools: Tools;
   /** Where later phases put things: over the canvas, between the canvas and the run bar, and in the top bar. */
-  readonly slots: { overlay: HTMLElement; bottom: HTMLElement; top: HTMLElement; left: HTMLElement };
+  readonly slots: { overlay: HTMLElement; bottom: HTMLElement; top: HTMLElement; left: HTMLElement; run: HTMLElement };
   /** Autosave: 'saving' while a save is pending, else the result of the last one. */
   saveState: { state: 'saved' | 'saving' | 'error'; reason?: string } = { state: 'saved' };
   sel: Sel = {};
@@ -181,6 +183,8 @@ export class Editor {
   readonly diagPill = h('button', { class: 'btn sm sb-diag-pill', type: 'button', hidden: true, onclick: () => this.props.showFirstDiag() }) as HTMLButtonElement;
   private toastEl: HTMLElement;
   private modeEl: HTMLElement;
+  /** Where the keyboard cursor, wiring and placing speak (a polite live region, off screen). */
+  private liveEl: HTMLElement;
   private modeText: HTMLElement;
   private tipEl: HTMLElement;
   /** Shown over a chip with nothing on it: where to start. */
@@ -228,6 +232,7 @@ export class Editor {
     this.view.radix = settings.radix;
     this.toastEl = h('div', { class: 'sb-toast', role: 'status', 'aria-live': 'polite' });
     this.tipEl = h('div', { class: 'wire-tip' });
+    this.liveEl = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
     // What a touch screen is in the middle of (a part armed, a wire begun) and the way out; Esc does it on a keyboard.
     this.modeText = h('span', { class: 'sb-mode-text' });
     this.modeEl = h('div', { class: 'sb-mode', role: 'status', 'aria-live': 'polite', hidden: true }, this.modeText,
@@ -242,10 +247,10 @@ export class Editor {
       this.emptyText,
       h('div', { class: 'row' }, act('examples', 'Examples', 'book'), act('challenges', 'Challenges', 'flag'), act('puzzles', 'Puzzles', 'puzzle')));
     // Touch (tools.ts): one finger wires, moves and draws a band; two fingers pan and zoom (camera.ts).
-    this.canvas.append(overlay, this.emptyEl, this.toastEl, this.modeEl, this.tipEl,
+    this.canvas.append(overlay, this.emptyEl, this.toastEl, this.modeEl, this.tipEl, this.liveEl,
       hintBadge('drag pin → pin: wire · L: pointer (a named wire: same name = connected) · wheel zoom · Space+drag pan · ? shortcuts',
         'drag from a pin: wire · hold: menu · double-tap: open · pinch: zoom', 'sandbox', ' sb-hint'));
-    this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }), left: h('div', { class: 'sb-left' }) };
+    this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }), left: h('div', { class: 'sb-left' }), run: h('div', { class: 'sb-runrow' }) };
 
     this.sim = new EditorSim({ gateRate: () => settings.speed });
     this.sim.onChange = () => this.simChanged();
@@ -281,7 +286,8 @@ export class Editor {
       onclick: () => this.showParts(!this.el.classList.contains('pal-open')) }, icon('plus', 15), 'Parts') as HTMLButtonElement;
     this.status = h('div', { class: 'status' });
     this.controls = h('div', { class: 'controls sb-controls' });
-    const center = h('section', { class: 'sb-center' }, h('div', { class: 'sb-mid' }, this.slots.left, this.canvas), this.slots.bottom, this.controls);
+    this.slots.run.append(this.controls);
+    const center = h('section', { class: 'sb-center' }, h('div', { class: 'sb-mid' }, this.slots.left, this.canvas), this.slots.bottom, this.slots.run);
     this.topEl = h('div', { class: 'sb-top' }, this.partsBtn, this.tabs, this.slots.top, this.actionsEl);
     this.el = h('div', { class: this.level ? 'sandbox sb-levelmode' : 'sandbox' }, this.topEl, this.palette.el, center, this.props.el);
 
@@ -292,7 +298,10 @@ export class Editor {
       this.view.radix = settings.radix;
       this.repaint();
     });
+    // a phone shows one tab (the rest are in Open…): rotating or resizing across 760 px redraws the tabs
+    if (typeof matchMedia === 'function') matchMedia('(max-width: 760px)').addEventListener?.('change', () => this.renderTabs());
     this.resize = new ResizeObserver(() => {
+      this.refreshLean();
       if (!this.fitted && this.canvas.clientWidth > 0) {
         this.fitted = true;
         this.fitView();
@@ -483,7 +492,24 @@ export class Editor {
     if (this.level) { this.el.classList.toggle('props-sel', this.selCount > 0); this.clearOfProps(); }
   }
 
-  /** Level screen: the properties panel pinned open (it also shows while something is selected). */
+  /**
+   * The properties column is folded into a Properties toggle (a drawer or a pane beside the canvas is open on a window where
+   * palette, properties and that would leave the circuit a sliver): the canvas keeps the room.
+   */
+  lean = false;
+  refreshLean(): void {
+    const w = typeof innerWidth === 'number' ? innerWidth : 9999;
+    const dock = this.slots.overlay.querySelector('.sb-dock .sb-drawer:not([hidden])');
+    const left = [...this.slots.left.children].some((c) => !(c as HTMLElement).hidden && (c as HTMLElement).offsetWidth > 0);
+    const on = !this.level && w > 760 && w <= 1600 && !!(dock || left);
+    if (on === this.lean) return;
+    this.lean = on;
+    this.el.classList.toggle('sb-lean', on);
+    if (!on && this.propsPinned) { this.propsPinned = false; this.el.classList.remove('props-on'); }
+    this.renderActions();
+  }
+
+  /** Level screen (and a lean sandbox): the properties panel pinned open (it also shows while something is selected). */
   propsPinned = false;
   toggleProps(): void {
     this.propsPinned = !this.propsPinned;
@@ -797,12 +823,15 @@ export class Editor {
     // Open… and New chip ▾ in one group that stays in view at the end of the tabs when they scroll (editor.css): with
     // New chip alone sticky, many tabs slid Open… under it
     const grp = h('span', { class: 'sb-new-grp' });
-    const others = Object.values(ws.chips).filter((c) => !ws.open.includes(c.id));
+    // a phone shows only the open chip's tab (editor.css): the other open ones are listed here
+    const solo = typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches;
+    const listed = (c: ChipDoc) => (solo ? c.id !== this.chipId : !ws.open.includes(c.id));
+    const others = Object.values(ws.chips).filter(listed);
     if (others.length) {
       const opt = (c: ChipDoc) => h('option', { value: c.id }, c.name);
       const sel = h('select', { class: 'sb-open', 'aria-label': 'Open a chip', title: 'Open another of your chips' },
         h('option', { value: '' }, `Open… (${others.length})`),
-        folderGroups(ws, (c) => !ws.open.includes(c.id)).flatMap((g) => (!g.chips.length ? [] : g.name === null ? g.chips.map(opt) : [h('optgroup', { label: g.name }, g.chips.map(opt))]))) as HTMLSelectElement;
+        folderGroups(ws, listed).flatMap((g) => (!g.chips.length ? [] : g.name === null ? g.chips.map(opt) : [h('optgroup', { label: g.name }, g.chips.map(opt))]))) as HTMLSelectElement;
       sel.addEventListener('change', () => sel.value && this.openChip(sel.value));
       grp.append(sel);
     }
@@ -1111,6 +1140,13 @@ export class Editor {
     document.addEventListener('pointerup', up);
   }
 
+  /** Say something to a screen reader (the keyboard cursor, placing and wiring); nothing is drawn. */
+  announce(msg: string): void {
+    // a repeated message is read again: clear first
+    this.liveEl.textContent = '';
+    setTimeout(() => { this.liveEl.textContent = msg; }, 30);
+  }
+
   /** A touch screen's "in the middle of something" pill: what it is and a Cancel (the armed part, a wire begun). */
   showMode(text: string): void {
     this.modeText.textContent = text;
@@ -1130,9 +1166,9 @@ export class Editor {
     this.placeHint = '';
   }
 
-  /** The palette is a drawer (editor.css, max-width 760px) and open. */
+  /** The palette is a drawer (editor.css, max-width 1000px) and open. */
   private get partsDrawer(): boolean {
-    return this.el.classList.contains('pal-open') && matchMedia('(max-width: 760px)').matches;
+    return this.el.classList.contains('pal-open') && matchMedia('(max-width: 1000px)').matches;
   }
 
   private readonly buzzers = new Buzzers();
@@ -1258,8 +1294,15 @@ export class Editor {
 
   /** Arm a palette item: the next click on the canvas places it (the phone's drawer closes). */
   armPart(item: PaletteItem, key: string): void {
+    // from the parts list with the keyboard: on to the canvas, where the arrows move the cursor and Enter places it
+    const fromList = !!document.activeElement?.closest?.('.sb-palette');
     this.tools.arm(item, key);
     if (this.partsDrawer) this.showParts(false);
+    if (fromList && !coarsePointer()) {
+      this.tools.keyboardStart();
+      this.view.svg.focus({ preventScroll: true });
+      return void this.toast(`${item.name}: arrow keys move the cursor, Enter places it (Esc cancels)`);
+    }
     // a touch screen has no Esc: the toast carries the way out
     if (coarsePointer()) this.toast(`${item.name}: tap the canvas to place it`, 'info', { label: 'Cancel', run: () => this.tools.cancel() });
     else this.toast(`${item.name}: click the canvas to place it (Esc cancels)`);
@@ -1267,7 +1310,7 @@ export class Editor {
 
   /** Scroll the palette to an item ('<group>/<item>') and flash it (the phone's drawer opens first). */
   revealPart(key: string): void {
-    if (matchMedia('(max-width: 760px)').matches) this.showParts(true);
+    if (matchMedia('(max-width: 1000px)').matches) this.showParts(true);
     this.palette.reveal(key);
   }
 

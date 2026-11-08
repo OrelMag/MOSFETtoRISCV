@@ -380,7 +380,17 @@ describe('progress', () => {
     p.skip('g_xor');
     expect(p.codexUnlocked().has('xor')).toBe(true);
     p.setUnlockAll(true);
-    expect(p.codexUnlocked().size).toBe(new Set(NODES.flatMap((n) => n.codex)).size);
+    // Unlock all opens every entry, the ones no level teaches as well (a chapter teaches them: tcp, firfilter, aes, …)
+    expect(p.codexUnlocked().size).toBe(CODEX.length);
+  });
+
+  it('an entry no level lists is open from the start: no level could ever discover it', () => {
+    const listed = new Set(NODES.flatMap((n) => n.codex));
+    const free = CODEX.filter((e) => !listed.has(e.id));
+    expect(free.length).toBeGreaterThan(50);
+    const p = new Progress(new MapKV());
+    for (const e of free) expect(p.codexUnlocked().has(e.id), e.id).toBe(true);
+    expect(p.codexUnlocked().has('demorgan')).toBe(false);
   });
 
   it('sanitizes what it reads', () => {

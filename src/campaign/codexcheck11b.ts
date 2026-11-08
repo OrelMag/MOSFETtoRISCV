@@ -37,10 +37,10 @@ export const CHECK11B: Record<string, Quiz[]> = {
   ],
   zeropad: [
     {
-      question: '64 samples at 8 kHz under a Hann window, padded to 4,096 points. Two tones 150 Hz apart: are they resolved?',
+      question: '64 samples at 8 kHz under a Hann window, padded to 4096 points. Two tones 150 Hz apart: are they resolved?',
       options: ['No: that is 1.2 bins of 125 Hz, and Hann needs 2.45', 'Yes: the padded bins are 1.95 Hz apart', 'Yes: padding multiplies the resolution by 64', 'No: Hann cannot resolve any tones closer than 1 kHz apart'],
       answer: 0,
-      explain: 'The bin that counts is the unpadded one, 8,000 / 64 = 125 Hz. Hann needs about 2.45 of them, 306 Hz, and padding does not change that.',
+      explain: 'The bin that counts is the unpadded one, 8000 / 64 = 125 Hz. Hann needs about 2.45 of them, 306 Hz, and padding does not change that.',
       why: ['', 'The padded dots are close together, but they lie on a curve whose lobe is still 4 unpadded bins wide.', 'Padding reads the same curve at more points; it narrows nothing.', 'There is no such limit; 306 Hz is the figure for this block, and a longer block would do better.'],
     },
     {
@@ -54,13 +54,13 @@ export const CHECK11B: Record<string, Quiz[]> = {
   spectrogram: [
     {
       question: 'At 8 kHz you go from a frame of 512 samples to one of 32. What happens to a Hann frame\'s main lobe and duration?',
-      options: ['Lobe 62.5 Hz to 1,000 Hz; frame 64 ms to 4 ms', 'The lobe narrows to 4 Hz and the frame lasts 4 ms', 'The lobe stays 62.5 Hz and the frame shortens', 'The lobe widens to 1,000 Hz and the frame lasts 64 ms'],
+      options: ['Lobe 62.5 Hz to 1000 Hz; frame 64 ms to 4 ms', 'The lobe narrows to 4 Hz and the frame lasts 4 ms', 'The lobe stays 62.5 Hz and the frame shortens', 'The lobe widens to 1000 Hz and the frame lasts 64 ms'],
       answer: 0,
       explain: 'The lobe is 4 bins of fs / N and the frame lasts N / fs, so shortening N sixteen-fold widens the lobe sixteen-fold and shortens the frame the same.',
       why: ['', 'A shorter frame has fewer samples, which widens the lobe; it cannot narrow it.', 'The lobe\'s width in hertz is 4 fs / N, so it follows N.', 'The frame lasts N / fs, so it follows N as well.'],
     },
     {
-      question: 'A 2,048-sample signal is cut into frames of 512 with a hop of 64 instead of 512. About how many more transforms?',
+      question: 'A 2048-sample signal is cut into frames of 512 with a hop of 64 instead of 512. About how many more transforms?',
       options: ['6.25 times: 25 frames against 4', 'None: the frames share their transforms', '8 times exactly: every sample is in 8 frames', 'Half as many, since frames overlap'],
       answer: 0,
       explain: 'Without overlap there are 4 frames; at a hop of 64 there are 25. The ends are in fewer frames than the middle, so it is a little under the 8 that 7/8 overlap suggests.',
@@ -128,7 +128,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
       options: ['Lengthen it: Hamming first reaches −60 dB at 489 taps, odd', 'Raise β until it passes', 'Nothing: −58 dB is its limit', 'Switch to a rectangle window, which has a faster-falling skirt'],
       answer: 0,
       explain: 'Hamming plateaus near −58 dB while its nearest sidelobes sit inside the transition, and falls on again as the filter lengthens, reaching −60 dB at 489 taps.',
-      why: ['', 'Hamming has no β; Kaiser\'s window has one.', 'Its sidelobe level is fixed, but the response in the stopband still improves as N grows.', 'The rectangle\'s stopband is at −41.8 dB even at 1,001 taps.'],
+      why: ['', 'Hamming has no β; Kaiser\'s window has one.', 'Its sidelobe level is fixed, but the response in the stopband still improves as N grows.', 'The rectangle\'s stopband is at −41.8 dB even at 1001 taps.'],
     },
   ],
   parksmcclellan: [
@@ -149,7 +149,7 @@ export const CHECK11B: Record<string, Quiz[]> = {
   ],
   csd: [
     {
-      question: 'The tap 13,304 is −2³ + 2¹⁰ − 2¹² + 2¹⁴. How many adders does it need, with no multiplier?',
+      question: 'The tap 13 304 is −2³ + 2¹⁰ − 2¹² + 2¹⁴. How many adders does it need, with no multiplier?',
       options: ['3: four terms need three adders', '4: one adder for each of the four terms', '9: one for each one in the binary form of the tap', '1: shifts are free, so a single sum does it'],
       answer: 0,
       explain: 'A shift is wiring; combining four shifted copies takes three adders or subtractors. Binary would have nine ones.',
@@ -181,11 +181,11 @@ export const CHECK11B: Record<string, Quiz[]> = {
   ],
   multacc: [
     {
-      question: 'A 64-tap filter must give 96,000 samples a second on one multiplier. What is the slowest clock that works?',
-      options: ['6.144 MHz: 64 × 96,000', '96 kHz', '3.072 MHz, taking the folded form', '1.5 kHz'],
+      question: 'A 64-tap filter must give 96 000 samples a second on one multiplier. What is the slowest clock that works?',
+      options: ['6.144 MHz: 64 × 96 000', '96 kHz', '3.072 MHz, taking the folded form', '1.5 kHz'],
       answer: 0,
-      explain: 'One multiplication a clock and 64 of them a sample is 64 × 96,000 = 6.144 million a second.',
-      why: ['', 'That is one multiplication a sample, enough for one tap.', 'That assumes folding, which the shared-multiplier design does not do.', 'That divides instead of multiplying: 96,000 / 64.'],
+      explain: 'One multiplication a clock and 64 of them a sample is 64 × 96 000 = 6.144 million a second.',
+      why: ['', 'That is one multiplication a sample, enough for one tap.', 'That assumes folding, which the shared-multiplier design does not do.', 'That divides instead of multiplying: 96 000 / 64.'],
     },
     {
       question: 'The 115-tap accumulator has 2 guard bits where log<sub>2</sub> 115 would suggest 7. Why is 2 enough?',

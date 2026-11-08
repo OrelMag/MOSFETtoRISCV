@@ -70,7 +70,7 @@ export class DspCapstonePage {
   constructor(readonly nodeId: string) {
     const meta = DSP_CAPSTONES.find((c) => c.id === nodeId);
     this.el.append(this.body);
-    this.body.append(h('p', { class: 'cc-crumb' }, h('a', { href: '#/path' }, 'My path'), ' › Signal processing capstone'), h('h1', null, meta?.title ?? 'An echo canceller'),
+    this.body.append(h('p', { class: 'cc-crumb' }, h('a', { href: '#/campaign' }, 'Campaign'), ' › ', h('a', { href: '#/path' }, 'My path'), ' › Signal processing capstone'), h('h1', null, meta?.title ?? 'An echo canceller'),
       h('p', null, meta?.brief ?? ''), needsLine(meta?.needs, 'cc-hint') ?? '');
     progress().open(nodeId, true);
     this.run.addEventListener('click', () => this.check());

@@ -25,7 +25,7 @@ export class CommCapstonePage {
   constructor(readonly nodeId: string) {
     const meta = COMM_CAPSTONES.find((c) => c.id === nodeId);
     this.el.append(this.body);
-    this.body.append(h('p', { class: 'cc-crumb' }, h('a', { href: '#/path' }, 'My path'), ' › Communication capstone'), h('h1', null, meta?.title ?? 'Capstone'), h('p', null, meta?.brief ?? ''));
+    this.body.append(h('p', { class: 'cc-crumb' }, h('a', { href: '#/campaign' }, 'Campaign'), ' › ', h('a', { href: '#/path' }, 'My path'), ' › Communication capstone'), h('h1', null, meta?.title ?? 'Capstone'), h('p', null, meta?.brief ?? ''));
     const host = h('div');
     this.body.append(host);
     if (nodeId === 'cap_fault') this.fault(host);

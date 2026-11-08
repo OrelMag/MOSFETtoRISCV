@@ -14,10 +14,10 @@ export const CHECK8: Record<string, Quiz[]> = {
     },
     {
       question: 'The 2-byte field after the addresses holds 0x0800. What is it?',
-      options: ['An EtherType: IPv4', 'A payload length of 2,048 bytes', 'A payload length, since all Ethernet frames carry one', 'The FCS length'],
+      options: ['An EtherType: IPv4', 'A payload length of 2048 bytes', 'A payload length, since all Ethernet frames carry one', 'The FCS length'],
       answer: 0,
-      explain: 'A value of 1536 (0x0600) or more is a type; 1500 or less is a length (802.3). 0x0800 = 2,048 is above 1,500 and no frame is that long, so it can only be the type of an Ethernet II frame: IPv4. 0x0806 is ARP.',
-      why: ['', 'The longest frame carries 1,500 bytes of payload, so a length of 2,048 cannot occur.', 'Ethernet II carries a type and no length; only 802.3 frames announce theirs, with values up to 1500.', 'The FCS is always 4 bytes and sits at the end, not in this field.'],
+      explain: 'A value of 1536 (0x0600) or more is a type; 1500 or less is a length (802.3). 0x0800 = 2048 is above 1500 and no frame is that long, so it can only be the type of an Ethernet II frame: IPv4. 0x0806 is ARP.',
+      why: ['', 'The longest frame carries 1500 bytes of payload, so a length of 2048 cannot occur.', 'Ethernet II carries a type and no length; only 802.3 frames announce theirs, with values up to 1500.', 'The FCS is always 4 bytes and sits at the end, not in this field.'],
     },
   ],
   csmacd: [
@@ -41,7 +41,7 @@ export const CHECK8: Record<string, Quiz[]> = {
       question: 'The receiver cannot know a frame is good until its last byte, yet the consumer has been handed the bytes as they came. What keeps a bad frame from being seen?',
       options: ['The buffer writes each byte and moves the write pointer back to the commit pointer on err; only a good frame moves the commit pointer up', 'The MAC holds the whole frame until the FCS is known', 'The consumer checks every byte against the FCS', 'The MAC retransmits the frame'],
       answer: 0,
-      explain: 'Write, then commit or rewind: the frame becomes visible only when the commit pointer reaches it. Holding the frame in the MAC would need 1,518 bytes of RAM in every MAC and add a frame time to every frame.',
+      explain: 'Write, then commit or rewind: the frame becomes visible only when the commit pointer reaches it. Holding the frame in the MAC would need 1518 bytes of RAM in every MAC and add a frame time to every frame.',
       why: ['', 'That is the alternative this design declines: a frame of memory and a frame of latency.', 'The FCS is a property of the whole frame; no byte can be checked alone.', 'A receiver cannot retransmit; recovery belongs to the layers above.'],
     },
     {
@@ -96,7 +96,7 @@ export const CHECK8: Record<string, Quiz[]> = {
       question: 'What does a virtual output queue change?',
       options: ['A frame for an idle output is never queued behind a frame for a busy one', 'The crossbar becomes faster', 'The arbiter grants several outputs to one input at once', 'Frames are no longer buffered'],
       answer: 0,
-      explain: 'One queue per output in every input lets the input offer a frame for any idle output. The gain depends on how many frames it can look past: about 0.80 with 4 cells, 0.88 with 8, 0.92 with 16, for a few thousand NANDs on an input of 142,221.',
+      explain: 'One queue per output in every input lets the input offer a frame for any idle output. The gain depends on how many frames it can look past: about 0.80 with 4 cells, 0.88 with 8, 0.92 with 16, for a few thousand NANDs on an input of 142 221.',
       why: ['', 'The fabric is unchanged; the same multiplexers carry the bytes.', 'Each output still grants one asker per cycle; the input has more to offer.', 'Buffering is the point: a queue per output needs cells to look past.'],
     },
   ],
@@ -157,11 +157,11 @@ export const CHECK8: Record<string, Quiz[]> = {
       why: ['', 'The frame\'s length includes the pad.', 'The FCS follows the pad and covers it; it does not locate the datagram.', 'The checksum covers the datagram, and needs its length first.'],
     },
     {
-      question: 'On the gates, a ping takes 14,689 clocks, of which the cable accounts for 11,008. What share is that, and why?',
-      options: ['About three quarters: four serializations of a 74-byte frame, 2,752 clocks each', 'About a quarter: most of the time is software', 'Under 10 %: the cable is fast', 'About half: two frames, each on one link'],
+      question: 'On the gates, a ping takes 14 689 clocks, of which the cable accounts for 11 008. What share is that, and why?',
+      options: ['About three quarters: four serializations of a 74-byte frame, 2752 clocks each', 'About a quarter: most of the time is software', 'Under 10 %: the cable is fast', 'About half: two frames, each on one link'],
       answer: 0,
-      explain: 'Each 74-byte frame, with its preamble and FCS, is 86 bytes at 32 clocks a byte: 2,752 clocks. It is sent twice (computer to switch, switch to computer), and so is the reply, since the switch stores and forwards: 4 × 2,752 = 11,008 of 14,689.',
-      why: ['', 'The software is 3,673 clocks; the rest is the wire.', 'At 4 clocks a bit the cable is the scarce resource in this book.', 'Each frame crosses two links, not one, because the switch stores the whole frame before forwarding.'],
+      explain: 'Each 74-byte frame, with its preamble and FCS, is 86 bytes at 32 clocks a byte: 2752 clocks. It is sent twice (computer to switch, switch to computer), and so is the reply, since the switch stores and forwards: 4 × 2752 = 11 008 of 14 689.',
+      why: ['', 'The software is 3673 clocks; the rest is the wire.', 'At 4 clocks a bit the cable is the scarce resource in this book.', 'Each frame crosses two links, not one, because the switch stores the whole frame before forwarding.'],
     },
   ],
 };

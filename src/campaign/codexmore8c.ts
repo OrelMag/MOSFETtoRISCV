@@ -12,8 +12,8 @@ export const MORE8C: Record<string, CodexMore> = {
 PCIe 5.0 ×16: 32 GT/s × 128/130 × 16 lanes / 8 = 63 GB/s each way on 64 signal pins
 bytes around one TLP: 2 framing + 12 header + 4 LCRC + 2 sequence = 20
   4-byte write  4 / 24 = 17 %           256-byte write  256 / 276 = 93 %
-the chapter's gates, one lane: port 18,854 NANDs of logic + 355,716 for two buffers
-  whole link with the completer's 1 KB memory: 922,275 NANDs</pre>The gates run one lane at a symbol a clock, a teaching rate; the multi-gigabit figures are real PCIe's. Short on-chip buses are still parallel for the same reason: on one die there is no skew to fight and no errors to retry.`,
+the chapter's gates, one lane: port 18 854 NANDs of logic + 355 716 for two buffers
+  whole link with the completer's 1 KB memory: 922 275 NANDs</pre>The gates run one lane at a symbol a clock, a teaching rate; the multi-gigabit figures are real PCIe's. Short on-chip buses are still parallel for the same reason: on one die there is no skew to fight and no errors to retry.`,
     },
     mistakes: [
       'Thinking more width fixes a parallel bus: it adds skew and pins, so the clock falls as the bus grows; a lane sidesteps it by carrying its clock in its data.',
@@ -65,7 +65,7 @@ Write, sequence 0 → Ack back after about 99 clocks
 damaged TLP: LCRC fails → dropped, Nak(last good) → replay from the buffer → delivered once
 lost Ack:    replay timer (512 clocks here) expires → same TLP, good LCRC, old number
              → dropped, Ack at once ("B expects" moved by one, not two)
-dead lane:   timer expires four times (a little over 4 × 512 = 2,048 clocks) → REPLAY_NUM wraps → Recovery
+dead lane:   timer expires four times (a little over 4 × 512 = 2048 clocks) → REPLAY_NUM wraps → Recovery
 buffer: at most 8 TLPs unacknowledged in the chapter's port (the standard allows 2048)</pre>`,
     },
     mistakes: [
@@ -117,7 +117,7 @@ SET_ADDRESS(5)                address 0 until the status stage ends, 5 afterward
 GET_DESCRIPTOR(device, 18)    address 5     → 8 + 8 + 2 bytes: DATA1, DATA0, DATA1
 GET_DESCRIPTOR(configuration) address 5     → 9 bytes, then the full length
 SET_CONFIGURATION(1)          address 5     → Configured
-device: 4,571 NANDs;  the dialogue: 12,702 clocks at 4 clocks a bit (real full speed is 12 Mb/s)</pre>Left out and named in the chapter: start-of-frame timing, suspend, low and high speed, hubs, attach detection.`,
+device: 4571 NANDs;  the dialogue: 12 702 clocks at 4 clocks a bit (real full speed is 12 Mb/s)</pre>Left out and named in the chapter: start-of-frame timing, suspend, low and high speed, hubs, attach detection.`,
     },
     mistakes: [
       'Moving to the new address when the SETUP of SET_ADDRESS is acknowledged: the status stage still goes to address 0, the device never hears it and the host gives up on it.',
@@ -141,8 +141,8 @@ plaintext  3243f6a8 885a308d 313198a2 e0370734
 ciphertext 3925841d 02dc09fb dc118597 196a0b32       (S-box of 0x53 is 0xED)
 the core's bus prints it backwards: 0x320B6A19_978511DC_FB09DC02_1D842539
 S-box 584 NANDs (inverse 476, depth 74)    MixColumn 464 (four a round)
-SubBytes 16 × 584 = 9,344                  key step 2,880
-round 12,224        core 20,782 NANDs, 11 clocks a block (one to load, one a round), period 102</pre>`,
+SubBytes 16 × 584 = 9344                  key step 2880
+round 12 224        core 20 782 NANDs, 11 clocks a block (one to load, one a round), period 102</pre>`,
     },
     mistakes: [
       'Reading the S-box as an arbitrary table: it is the GF(2<sup>8</sup>) inverse plus an affine map, which is why it can be built from a tower of smaller fields with no ROM.',
@@ -164,9 +164,9 @@ round 12,224        core 20,782 NANDs, 11 clocks a block (one to load, one a rou
       title: '"abc", and the core that hashes it',
       body: `<pre>SHA-256("abc") = ba7816bf 8f01cfea 414140de 5dae2223 b00361a3 96177a9c b410ff61 f20015ad
 SHA-256("abb") differs from it in 124 of the 256 bits (one input bit changed)
-round 2,848 NANDs        message schedule 11,104 (16 words stored)      constants 3,337
-core 28,487 NANDs, 65 clocks a block (one to load, one a round), period 108
-in software on the RV32IM: 8,364 cycles per 64-byte block
+round 2848 NANDs        message schedule 11 104 (16 words stored)      constants 3337
+core 28 487 NANDs, 65 clocks a block (one to load, one a round), period 108
+in software on the RV32IM: 8364 cycles per 64-byte block
 per byte: 65 / 64 = 1.02 clocks      AES core 11 / 16 = 0.69</pre>The core's bus holds the digest with its first word at the low end, so it prints 0xF20015AD_…_BA7816BF.`,
     },
     mistakes: [
@@ -282,8 +282,8 @@ AES-128: 2<sup>128</sup> keys</pre>The sum is for settings an attacker could try
       body: `<pre>p = 23, g = 5, Alice a = 6, Bob b = 15   (public: p, g, A, B)
 A = 5^6  mod 23 = 8        B = 5^15 mod 23 = 19
 Alice: B^a = 19^6 mod 23 = 2        Bob: A^b = 8^15 mod 23 = 2     same secret, never sent
-X25519 on the chapter's RV32IM:  34,569,985 cycles for one
-AES-128 block in the same software: 8,057 cycles   (about 4,300 times less)</pre>The chapter's own Diffie–Hellman demonstration uses p = 2<sup>31</sup> − 1, a size Eve can search; X25519 works with 255-bit numbers.`,
+X25519 on the chapter's RV32IM:  34 569 985 cycles for one
+AES-128 block in the same software: 8057 cycles   (about 4300 times less)</pre>The chapter's own Diffie–Hellman demonstration uses p = 2<sup>31</sup> − 1, a size Eve can search; X25519 works with 255-bit numbers.`,
     },
     mistakes: [
       'Calling the exchange authenticated: it proves you share a secret with someone; a man in the middle holds two such secrets, so a signature over the transcript is needed.',
@@ -303,18 +303,18 @@ AES-128 block in the same software: 8,057 cycles   (about 4,300 times less)</pre
     example: {
       title: 'The chapter\'s client against RFC 8448\'s recorded server',
       body: `<pre>cycles on the RV32IM model (1 per instruction):
-client_hello (X25519 share)   34,598,182     key_agreement (X25519)  35,089,754
-certificate_verify (RSA-PSS)  10,338,413     the other five phases    1,251,248
-total 81,277,693 (96 outside any phase), of which the two X25519 runs 69,139,884 (85 %)
-one X25519 measured alone is 34,569,985: 43 more each, the command loop around that measurement
-RSA verify: 10,310,080 cycles with RFC 8448's 1024-bit key, 40,767,022 with a 2048-bit key
-the client: 1,314 lines of Python, 7,428 words of RV32IM
+client_hello (X25519 share)   34 598 182     key_agreement (X25519)  35 089 754
+certificate_verify (RSA-PSS)  10 338 413     the other five phases    1 251 248
+total 81 277 693 (96 outside any phase), of which the two X25519 runs 69 139 884 (85 %)
+one X25519 measured alone is 34 569 985: 43 more each, the command loop around that measurement
+RSA verify: 10 310 080 cycles with RFC 8448's 1024-bit key, 40 767 022 with a 2048-bit key
+the client: 1314 lines of Python, 7428 words of RV32IM
 bytes: ClientHello 201, sent 259, received 774</pre>RFC 8448's 1024-bit RSA is far too short to trust today; real servers use ECDSA, Ed25519 or RSA of 2048 bits or more.`,
     },
     mistakes: [
       'Believing a completed handshake means the right server: without a certificate check (the chapter\'s client has only a pin) the channel runs to whoever answered, who may be an attacker.',
       'Counting the symmetric part as the cost: here X25519 twice and one signature check are nearly all of it; AES-GCM and HMAC barely show.',
-      'Trusting a short RSA key because the handshake works: 1024 bits does for replaying the RFC, not for a server; 2048 bits costs 40,767,022 cycles against 10,310,080.',
+      'Trusting a short RSA key because the handshake works: 1024 bits does for replaying the RFC, not for a server; 2048 bits costs 40 767 022 cycles against 10 310 080.',
       'Assuming a stolen server key opens old traffic: session keys come only from the exchange and are discarded, so recordings stay shut (forward secrecy), unlike a captured key list.',
     ],
     chapters: [

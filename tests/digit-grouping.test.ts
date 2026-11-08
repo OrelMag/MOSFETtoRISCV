@@ -3,6 +3,10 @@
 // This reads every chapter's prose (steps, layers, tours, quizzes, recaps) and fails on a grouped four-digit integer.
 
 import { beforeAll, describe, expect, it } from 'vitest';
+import { CODEX } from '../src/campaign/codex';
+import { CHECKS } from '../src/campaign/codexcheck';
+import { moreOf } from '../src/campaign/codexmore';
+import { NODES } from '../src/campaign/nodes';
 import { chapters } from '../src/chapters';
 import { groupDigits, groupFixed, groupNum } from '../src/sim/numfmt';
 import { BOOK_TIMEOUT, warmBook, WARM_TIMEOUT } from './warmbook';
@@ -67,6 +71,21 @@ describe('digit grouping', () => {
         }
       }
       await tick();
+    }
+    expect(bad).toEqual([]);
+  }, BOOK_TIMEOUT);
+
+  it('no codex or campaign text groups a number by commas or a four-digit integer at all', () => {
+    // the codex entries, their fuller pages and Check-yourself quizzes, and every level's brief, tips and why
+    const sources: [string, unknown][] = [
+      ...CODEX.map((e): [string, unknown] => [`codex ${e.id}`, [e, moreOf(e.id), CHECKS[e.id]]]),
+      ...NODES.map((n): [string, unknown] => [`level ${n.id}`, n]),
+    ];
+    const bad: string[] = [];
+    for (const [where, v] of sources) for (const t of textsOf(v)) {
+      const p = plain(t);
+      for (const m of p.matchAll(COMMA_GROUP)) if (!(p[(m.index ?? 0) - 1] === '(' && p[(m.index ?? 0) + m[0].length] === ')')) bad.push(`${where}: comma group …${p.slice(Math.max(0, (m.index ?? 0) - 25), (m.index ?? 0) + 30)}…`);
+      for (const m of p.matchAll(FOUR_DIGIT_GROUP)) bad.push(`${where}: …${p.slice(Math.max(0, (m.index ?? 0) - 25), (m.index ?? 0) + 30)}…`);
     }
     expect(bad).toEqual([]);
   }, BOOK_TIMEOUT);
