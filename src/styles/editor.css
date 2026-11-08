@@ -198,6 +198,10 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
 .sb-empty { color: var(--muted); font-size: 13px; padding: 12px; }
 
 /* ---------- canvas ---------- */
+/* What sits under the canvas (I/O bar, challenge strip, test player, timing panel) scrolls in its own band before it can squeeze
+   the circuit: the canvas keeps ~40 % of the column (a phone: 40 vh, below). */
+.sandbox .sb-mid { min-height: min(40%, 380px); }
+.sb-bottom { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .sb-center { grid-area: center; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--canvas); }
 .sb-canvas { flex: 1; position: relative; min-height: 0; overflow: hidden; touch-action: manipulation; }
 .sb-canvas > svg.ed-svg { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; outline: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
@@ -470,7 +474,11 @@ select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
   .sb-palette { max-height: 50vh; border-right: 0; border-bottom: 1px solid var(--border); }
   /* a vertical swipe scrolls the drawer (a drag would have to go down into the canvas anyway): a tap arms a part */
   .sb-item { touch-action: pan-y; }
-  .sb-center { height: 62vh; }
+  /* a phone: the column is at least 62 vh and grows with what sits under the canvas (the page scrolls), the canvas never below 40 vh */
+  .sandbox:not(.sb-levelmode) .sb-center { height: auto; min-height: 62vh; }
+  .sandbox:not(.sb-levelmode) .sb-mid { flex: 1 0 40vh; min-height: 40vh; }
+  .sandbox:not(.sb-levelmode) .sb-bottom { overflow-y: visible; flex: none; }
+  .sb-chal-body { max-height: 30vh; }
   /* the run bar wraps to two rows here: it keeps them, the canvas takes what is left */
   .sb-center > .sb-controls { flex: none; }
   .sb-props { border-left: 0; border-top: 1px solid var(--border); }
