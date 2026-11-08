@@ -125,15 +125,20 @@ function wiredClear(def: ComponentDef, nl: Netlist, wire: (n: NetDef) => boolean
   return nl;
 }
 
-const cache = new WeakMap<Netlist, Netlist>();
+const caches = new Map<number, WeakMap<Netlist, Netlist>>();
 
-/** The level as first drawn: `nl` with the nets wires can carry readably drawn as wires. */
-export function drawnNetlist(def: ComponentDef, nl: Netlist): Netlist {
+/**
+ * The level as first drawn: `nl` with the nets wires can carry readably drawn as wires. `limit`: past this many nets the level keeps
+ * its author's drawing (LOCAL_NETS on a stage, where it is redone on every open; a drawing made once, like a sandbox copy, can afford more).
+ */
+export function drawnNetlist(def: ComponentDef, nl: Netlist, limit = LOCAL_NETS): Netlist {
+  let cache = caches.get(limit);
+  if (!cache) caches.set(limit, (cache = new WeakMap()));
   const known = cache.get(nl);
   if (known) return known;
   let out = nl;
   const n = nl.nets.length;
-  if (n <= LOCAL_NETS && nl.nets.some(tagged)) {
+  if (n <= limit && nl.nets.some(tagged)) {
     const fits = (c: Netlist, limit: number) => {
       const r = routeNetlist(def, c).nets;
       return wireOverlaps(r).length === 0 && wireCrossings(r) <= limit;
