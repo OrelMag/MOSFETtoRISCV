@@ -1,0 +1,33 @@
+/* ---------- The core memory plane (widgets/core3dview.ts): materials and its address grid ---------- */
+.m3d {
+  --co-ferrite: light-dark(#3b3c42, #55575f);   /* dark grey-black sintered ferrite */
+  --co-frame: light-dark(#a89870, #7c7050);     /* epoxy-glass board */
+  --co-wx: light-dark(#c4622d, #e0884f);        /* enamelled copper, one colour per wire */
+  --co-wy: light-dark(#2f7fb8, #5aa6dc);
+  --co-ws: light-dark(#3a9d5b, #5cc47e);
+  --co-wi: light-dark(#a04bb0, #c47ad4);
+  --co-live: light-dark(#e8a100, #ffc83a);      /* a wire carrying current */
+  --co-one: light-dark(#d9482b, #ff7a5c);
+  --co-zero: light-dark(#2f6fd0, #6aa0ff);
+  --co-lamp: light-dark(#f4f1e6, #ffffff);
+  --co-lamp-off: light-dark(#5b5f6b, #3b3f4b);
+  --co-sel: light-dark(#d9a21b, #ffc83a);
+}
+.co-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; max-width: 220px; margin: 4px 0 8px; }
+.co-cell { font: 600 15px var(--font-mono, monospace); min-height: 36px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); cursor: pointer; }
+.co-cell.one { color: light-dark(#b0381f, #ff8f75); }
+.co-cell:not(.one) { color: light-dark(#2459b0, #86b1ff); }
+.co-cell.on { outline: 2px solid var(--accent); outline-offset: 1px; background: var(--surface); }
+.co-cell:disabled { opacity: .6; cursor: default; }
+.co-rc { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; margin-bottom: 10px; font-size: 13px; color: var(--text-2); }
+.co-seg { display: flex; gap: 4px; flex-wrap: wrap; }
+.co-bh { width: 100%; max-width: 280px; height: auto; display: block; }
+.co-ax { stroke: var(--muted); stroke-width: 1; }
+.co-loop { stroke: var(--text); stroke-width: 1.6; }
+.co-tick { stroke: var(--muted); stroke-width: 1; }
+.co-tick.ic { stroke: var(--accent); stroke-width: 1.5; }
+.co-lbl { font: 11px var(--font-ui); fill: var(--muted); }
+.co-lbl.ic { fill: var(--accent); font-weight: 600; }
+.co-dot.sel { fill: light-dark(#e8a100, #ffc83a); stroke: var(--text); stroke-width: 1.2; }
+.co-dot.half { fill: var(--surface); stroke: var(--text); stroke-width: 1.5; }
+@media (pointer: coarse) { .co-cell { min-height: 44px; } }
