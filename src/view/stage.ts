@@ -1914,6 +1914,7 @@ export class Stage {
 
   powerCycle(): void {
     if (!this.sim || !this.scene) return;
+    this.panelPause?.(); // a panel's Slow run ended with the run it belonged to
     this.stopAnim();
     this.stopClock();
     this.edge = null;
