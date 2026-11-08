@@ -18,6 +18,8 @@ export function voiceEcho(v: readonly number[]): { x: number[]; near: number[] }
 export const ECHO_FIGS = {
   /** NLMS, μ 0.5, 128 taps: ERLE over the last quarter, and with only 32 taps. */
   erle: 35.4, erle32: 14.6,
+  /** The echo alone over that last quarter, in dB of full scale: what the ERLE is taken from. */
+  echoDb: -17.7,
   /** Near-end talk with learning left on, and held while they talk. */
   talkOn: 25.1, talkHeld: 33.9,
   /** Plain LMS's step limits on this far end: 2 / (N σ²) from its average power, and 2 / (the loudest 128 samples' energy). */

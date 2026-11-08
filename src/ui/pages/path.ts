@@ -13,6 +13,7 @@ import { learn, PERSONAS } from '../../learn/store';
 import { h, icon } from '../dom';
 import { settings } from '../settings';
 import type { Page } from './chapter';
+import { needsLine } from '../capneeds';
 
 const STATE_LABEL: Record<SkillState, string> = { new: 'not started', learning: 'learning', practised: 'practised', mastered: 'mastered', rusty: 'rusty: a question is due' };
 const KIND_LABEL: Record<NextItem['kind'], string> = { review: 'Review', learn: 'Learn', practise: 'Practise', capstone: 'Capstone' };
@@ -117,7 +118,7 @@ export class PathPage implements Page {
         const status = capstoneStatus(c.id, { [c.id]: ctx.campaign(c.id) });
         return h('div', { class: 'cc-capline' }, h('div', { class: 'lp-nh' }, h('b', null, c.title),
           h('span', { class: `lp-pill ${c.route ? status : 'none'}` }, !c.route ? 'not built yet' : status === 'passed' ? 'passed' : status === 'started' ? 'started' : 'open')),
-          h('p', { class: 'lp-sub' }, c.brief), c.route ? h('a', { class: 'btn sm', href: c.route }, status === 'passed' ? 'Try again' : 'Open') : null);
+          h('p', { class: 'lp-sub' }, c.brief), needsLine('needs' in c ? c.needs : undefined), c.route ? h('a', { class: 'btn sm', href: c.route }, status === 'passed' ? 'Try again' : 'Open') : null);
       }));
   }
 
