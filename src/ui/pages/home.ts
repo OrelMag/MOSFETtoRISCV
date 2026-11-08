@@ -104,7 +104,7 @@ export function homePage(): Page {
       h('a', { href: '#/', onclick: (e: Event) => { e.preventDefault(); void import('../backupui').then((m) => m.resetProgressDialog(() => settings.resetProgress())); } }, 'Reset progress'),
       h('div', { class: 'footer-meta' },
         h('span', { title: `build ${__APP_COMMIT__}, ${__APP_DATE__}` }, `Version ${__APP_VERSION__}`), ' · ',
-        `© ${__APP_DATE__.slice(0, 4)} OrelMag`, ' · ',
-        h('a', { href: 'mailto:orelmac@gmail.com' }, 'orelmac@gmail.com')))));
+        `© ${__APP_DATE__.slice(0, 4)} `,
+        h('a', { href: 'mailto:orelmac@gmail.com', title: 'Write to Orel Magidish' }, 'Orel Magidish')))));
   return { el, destroy() {} };
 }

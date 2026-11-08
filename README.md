@@ -3,7 +3,7 @@
 An interactive journey from a single MOSFET to a multi-core RISC-V processor laid out on
 silicon, and on to a GPU, a memory system, how computers talk from the telegraph to the data centre,
 digital signal processing up to a software radio, Doom and a breadboard computer, as a static website.
-**[Open it →](https://orelmag.github.io/MOSFETtoRISCV/)**
+**[Open it →](https://switchtocpu.com/)** · by Orel Magidish
 
 ![Drilling from a 4-bit adder into a full adder, into one NAND, down to its four transistors](docs/images/drill.gif)
 
@@ -17,11 +17,11 @@ sky130 layouts, whose reports stand beside the site's own area and timing estima
 both ways: any circuit exports as Verilog, and Verilog written in the sandbox is synthesized by Yosys
 in the page into chips that open down to the transistors like everything else.
 
-Four ways in: the **[journey](https://orelmag.github.io/MOSFETtoRISCV/#/c/map/0)** (<!--n:journey-->81<!--/n--> chapters,
-<!--n:onramps-->2<!--/n--> on-ramps for newcomers, <!--n:prologue-->3<!--/n--> prologue chapters and <!--n:appendices-->4<!--/n--> appendices), the **[campaign](https://orelmag.github.io/MOSFETtoRISCV/#/campaign)**
-(<!--n:levels-->162<!--/n--> levels: build it to unlock it, or fix it), the **[workbench](https://orelmag.github.io/MOSFETtoRISCV/#/workbench/rca4)**
+Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journey-->81<!--/n--> chapters,
+<!--n:onramps-->2<!--/n--> on-ramps for newcomers, <!--n:prologue-->3<!--/n--> prologue chapters and <!--n:appendices-->4<!--/n--> appendices), the **[campaign](https://switchtocpu.com/#/campaign)**
+(<!--n:levels-->162<!--/n--> levels: build it to unlock it, or fix it), the **[workbench](https://switchtocpu.com/#/workbench/rca4)**
 (any component on its own, with statistics, benchmarks and the out-of-order lab) and the
-**[sandbox](https://orelmag.github.io/MOSFETtoRISCV/#/sandbox)** (your own circuits, up to whole computers).
+**[sandbox](https://switchtocpu.com/#/sandbox)** (your own circuits, up to whole computers).
 
 ## The journey
 
