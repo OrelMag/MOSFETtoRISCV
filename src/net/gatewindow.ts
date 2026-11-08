@@ -38,9 +38,16 @@ function forceNamed(sim: GateSim, scope: HierNode, name: string, bit: number): v
   const nets = scope.def.netlist!().nets, alt = new RegExp(`^${name}_[0-9]+$`), i = nets.findIndex((n) => n.name === name || (n.name !== undefined && alt.test(n.name)));
   const id = i >= 0 ? scope.nets?.[i]?.[0] : undefined;
   if (id === undefined) throw new Error(`gate window: no net ${name} in ${scope.name}`);
-  for (const [k, c] of scope.children!) {
-    if (c.ports.q?.[0] === id && c.children?.has('master')) { forceFlop(sim, scope, k, bit); return; }
-  }
+  // the flip-flop may sit a box down: a large block is drawn as next state / state / outputs (lib/rtl.ts split)
+  const find = (node: HierNode): [HierNode, string] | null => {
+    for (const [k, c] of node.children ?? []) {
+      if (c.ports.q?.[0] === id && c.children?.has('master')) return [node, k];
+      if (c.children && !c.children.has('master')) { const hit = find(c); if (hit) return hit; }
+    }
+    return null;
+  };
+  const hit = find(scope);
+  if (hit) { forceFlop(sim, hit[0], hit[1], bit); return; }
   throw new Error(`gate window: no flip-flop drives ${name} in ${scope.name}`);
 }
 const forceBits = (sim: GateSim, scope: HierNode, name: string, n: number, v: number) => { for (let i = 0; i < n; i++) forceNamed(sim, scope, `${name}${i}`, Math.floor((v >>> 0) / 2 ** i) % 2); };

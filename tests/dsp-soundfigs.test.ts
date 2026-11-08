@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { adpcmOnRv } from '../src/dsp/adpcmrv';
 import { audibleShare, encodeMusic, MDCT_M, meanNmrDb } from '../src/dsp/music';
-import { MUSIC_FIGS, SPEECH_FIGS } from '../src/dsp/soundfigs';
+import { LPC_OPEN_FRAME, MUSIC_FIGS, SPEECH_FIGS } from '../src/dsp/soundfigs';
 import { adpcmDecode, adpcmEncode, lpc, predictionGainDb, snrDb, ulawDecode, ulawEncode, uniform, vocode } from '../src/dsp/speech';
 import { wavSamples } from './dsp/wav';
 
@@ -20,6 +20,8 @@ describe('what the chapters quote', () => {
     let g = 0, n = 0;
     for (let at = 0; at + 240 <= x.length; at += 180) { const f = x.slice(at, at + 240).map((v, i, a) => v - 0.9375 * (a[i - 1] ?? 0)); if (f.reduce((s, v) => s + v * v, 0) > 240 * 300 ** 2) { g += predictionGainDb(f, lpc(f, 10)); n++; } }
     expect(g / n).toBeCloseTo(SPEECH_FIGS.predGain, 1);
+    const o = x.slice(LPC_OPEN_FRAME * 180, LPC_OPEN_FRAME * 180 + 240).map((v, i, a) => v - 0.9375 * (a[i - 1] ?? 0));
+    expect(predictionGainDb(o, lpc(o, 10))).toBeCloseTo(SPEECH_FIGS.openGain, 1);
     const v = vocode(x), lags = v.frames.filter((f) => f.voiced).map((f) => f.lag).sort((a, b) => a - b);
     expect(Math.round((100 * v.voiced) / v.frames.length)).toBe(SPEECH_FIGS.voicedPct);
     expect(Math.round(8000 / lags[lags.length >> 1])).toBe(SPEECH_FIGS.pitchHz);

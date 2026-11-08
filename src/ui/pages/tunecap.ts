@@ -1,4 +1,4 @@
-// "Tune it" (cap_tune), the signal-processing capstone that is a chain of the radio chapter's blocks, not a circuit (dsp/tune.ts). No sandbox: the brief,
+// "Tune it" (cap_tune), the signal-processing capstone that is a chain of the software radio chapter's blocks, not a circuit (dsp/tune.ts). No sandbox: the brief,
 // a practice band the learner sees and hears through their own chain, the chain as cards, its cost from the gates, and a check on five bands drawn
 // from attempts the learner has not seen. A failed band shows what the learner's own chain measured, and hints that name blocks, never settings. A pass is
 // recorded under the capstone's id in the campaign progress, as the other capstones are.
@@ -18,13 +18,16 @@ import { clipButton } from '../../widgets/clip';
 import { h, s } from '../dom';
 import '../../styles/signals.css';
 import '../../styles/tune.css';
+import { needsLine } from '../capneeds';
+import { numOf } from '../../chapters/order';
+import { groupNum } from '../../sim/numfmt';
 
 const KEY = 'mosfet2riscv:captune:';
 const load = <T,>(k: string, d: T): T => { try { const v = localStorage.getItem(KEY + k); return v ? (JSON.parse(v) as T) : d; } catch { return d; } };
 const save = (k: string, v: unknown) => { try { localStorage.setItem(KEY + k, JSON.stringify(v)); } catch { /* storage blocked: nothing kept */ } };
 
 const PRICES: GatePrices = { mixer: (k) => stats(complexMixer(k)).nands, cic: (N, R, w) => stats(cicDecimator(N, R, w)).nands };
-const n0 = (v: number) => Math.round(v).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (v: number) => groupNum(Math.round(v));
 const mps = (v: number) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)} M` : `${n0(v / 1e3)} k`);
 const khz = (hz: number) => `${(hz / 1000).toLocaleString('en', { maximumFractionDigits: 1 })} kHz`;
 
@@ -122,12 +125,13 @@ export class TuneCapstonePage {
     }, 'Your chain does not run yet');
     this.checkBtn.addEventListener('click', () => this.check());
     this.body.append(
-      h('p', { class: 'cc-crumb' }, h('a', { href: '#/path' }, 'My path'), ' › Signal processing capstone'),
+      h('p', { class: 'cc-crumb' }, h('a', { href: '#/campaign' }, 'Campaign'), ' › ', h('a', { href: '#/path' }, 'My path'), ' › Signal processing capstone'),
       h('h1', null, meta?.title ?? 'Tune it'),
       h('div', { class: 'tc-cols' },
         h('aside', { class: 'tc-side' },
           h('section', { class: 'tc-card' }, h('h2', null, 'The brief'),
-            h('p', null, `A band sampled at ${n0(FS / 1000)} kHz holds four FM stations, each swinging ±${DEV / 1000} kHz. One of them is weak, and keys a tone between ${TONE_MIN} and ${TONE_MAX} Hz on and off in Morse at 30 words a minute (a unit of ${UNIT_S * 1000} ms). Build a chain from the radio chapter's blocks that finds it and decodes the message.`),
+            h('p', null, `A band sampled at ${n0(FS / 1000)} kHz holds four FM stations, each swinging ±${DEV / 1000} kHz. One of them is weak, and keys a tone between ${TONE_MIN} and ${TONE_MAX} Hz on and off in Morse at 30 words a minute (a unit of ${UNIT_S * 1000} ms). Build a chain from the blocks of chapter ${numOf('sdr')}'s software radio that finds it and decodes the message. There is no dial: the mixer's "find it" takes the weakest line in the band that stands a margin you set above its surroundings (the median of ±25 kHz), because a keyed station rests on its bare carrier between marks while a loud one spreads its power over its channel.`),
+            needsLine(meta?.needs, 'cc-hint') ?? '',
             h('p', null, `You see one practice band. A check runs your chain on five more, each with the station somewhere else, a different message and a different neighbourhood. Every one of the five must decode, exactly. Each check takes the next of ${ATTEMPTS.length} sets of five, from a starting point of your own, so a chain that only fits the last five will not do.`),
             h('p', { class: 'cc-hint' }, 'The mixer and the CICs are gates and are priced in NANDs, counted from their circuits at your sizes. Everything after them runs on a DSP core and is priced in multiplies a second. The Morse decoder is given and free: it listens for the tone against everything else in the sound.')),
           h('section', { class: 'tc-card' }, h('h2', null, 'Practice band'), this.practice, play.el)),

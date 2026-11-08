@@ -16,6 +16,7 @@ import { bitwise, orN } from './wide';
 import { lowestOne, onehotMux } from './lanes';
 import { popcount } from './coding';
 import { nonZero } from './pipeline';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -1050,13 +1051,12 @@ export function ageRow(i: number, Q = 8): ComponentDef {
     b.next();
     b.op(register(Q - 1), [b.op1(merger(ones(Q - 1)), cells, undefined, 'nx'), one, 'clk'], `${i} older than`, 'bits');
     b.wire('bits.q', 'older');
-    const R = b.right;
     return define({
       id, name: `Age-matrix row ${i}`, category: 'cpu',
       summary: `Whether entry ${i} holds an older instruction than each other entry, kept up to date as entries are allocated.`,
       ports: [bus('alloc0', Q, 'in'), bus('alloc1', Q, 'in'), bus('alloc', Q, 'in'), bus('valid', Q, 'in'), bit('clk', 'in', 'bottom', true), bus('older', Q - 1, 'out')],
       symbol: { kind: 'box', label: `AGE ${i}` },
-      netlist: () => ({ pins: { alloc0: [0, 2], alloc1: [0, 4], alloc: [0, 6], valid: [0, 8], clk: [0, 10], older: [R, 2] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b),
     });
   });
 }

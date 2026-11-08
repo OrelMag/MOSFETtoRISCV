@@ -29,7 +29,7 @@ export const chWifi: Chapter = {
     'show the hidden terminal on gates, and say what RTS / CTS costs and buys',
     'work out where the airtime of a 54 Mb/s link goes, and what aggregation and MIMO change',
   ],
-  builds: ['radio', 'ethernet'],
+  builds: ['radio', 'ethernet', 'modem', 'pcie'],
   recap: {
     keep: [
       'A transmitter is too loud to hear anyone else, so a collision cannot be detected: it is inferred, from a missing ACK. Everything else follows: listen, wait a random time, send, wait for an ACK, double the window if none comes.',

@@ -98,16 +98,16 @@ a word written on wclk is visible 2 rclk edges later; a freed slot, 2 wclk edges
     idea: `Two machines, one wire each way, and two clocks with no relation. A byte can still cross if the sender wraps it in a <b>frame</b> that gives the receiver one thing to align to. The line idles at 1; a <b>start bit</b> of 0 begins the frame (an unambiguous falling edge), eight data bits follow <b>least significant first</b> (a receiver shifting right ends with the byte in place), and a <b>stop bit</b> of 1 returns the line to idle and doubles as the check: a 0 where the stop should be is a <i>framing error</i>. The teleprinter of chapter 40 framed five-bit characters the same way and kept time with a cam where a UART uses a counter.<br><br>The transmitter is a 10-bit shift register loaded with {1, data, 0} and a tick counter; its output is registered, so it cannot glitch. The receiver synchronizes <i>rx</i> into its own clock, waits for a low sample, looks again 8 of the 16 ticks later (still low: a real start bit; high: a glitch, back to idle), then samples every 16 ticks, and reports the byte or a framing error at the stop sample. A sample drifts from mid-bit in proportion to the bits since the start edge, so the stop sample, the furthest, sets the limit: ±5.56 % for a continuous clock, and on the gates 5.55 % slower or 5.0 % faster, which is why the tolerance is a few percent where a clocked link needs parts per million. The baud rate is clock / (16 · divisor) with an integer divisor, which cannot hit every rate. A FIFO each way turns "one byte time to take each byte" into an average.`,
     example: {
       title: 'Baud rates, from the divider and the frame',
-      body: `<pre>clock 1.8432 MHz = 16 × 115 200            divisor 1: exact
-clock 50 MHz, divisor 27: 50e6 / (16 · 27)   = 115 741 baud, 0.47 % high
-one bit at 115 200 baud                      = 8.68 µs; one byte = 86.8 µs
+      body: `<pre>clock 1.8432 MHz = 16 × 115 200            divisor 1: exact
+clock 50 MHz, divisor 27: 50e6 / (16 · 27)   = 115 741 baud, 0.47 % high
+one bit at 115 200 baud                      = 8.68 µs; one byte = 86.8 µs
 8N1: 8 data bits in 10 bit times             = 80 %
-receiver 526 NANDs; 16-byte FIFO 2 803 NANDs = 77 % of the 7 307-NAND core</pre>The gates, searched at divisors 1 and 4, accept a sender 5.55 % slower and 4.9 % faster than the receiver.`,
+receiver 526 NANDs; 16-byte FIFO 2803 NANDs = 77 % of the 7307-NAND core</pre>The gates, searched at divisors 1 and 4, accept a sender 5.55 % slower and 4.9 % faster than the receiver.`,
     },
     mistakes: [
       'Configuring the two ends at the "same" baud from different clocks without checking the divisor error: 0.47 % is fine, but a 12 MHz clock at its nearest divisor (7) is 7.0 % slow, past what the sampling tolerates against a sender that is exact.',
       'Treating a framing error as line noise only: it is also what a wrong baud rate, a wrong frame format, and a break (a line held low longer than a frame) look like.',
-      'Relying on one receive register at high baud: the CPU gets one byte time (86.8 µs at 115 200, 3.3 µs at 3 Mbaud) to take each byte, whatever else is running; the FIFO and its trigger level exist for this.',
+      'Relying on one receive register at high baud: the CPU gets one byte time (86.8 µs at 115 200, 3.3 µs at 3 Mbaud) to take each byte, whatever else is running; the FIFO and its trigger level exist for this.',
     ],
     lib: 'uart_tx',
     compare: ['uart_rx'],
@@ -151,7 +151,7 @@ receiver 526 NANDs; 16-byte FIFO 2 803 NANDs = 77 % of the 7 307-NAND core</pre>
 C_b = 100 pF, Standard    (t_r ≤ 1000 ns):  R_p ≤ 11802 Ω
 Fast-mode, I_OL = 3 mA:                     R_p ≥ (3.3 − 0.4) V / 3 mA      =  967 Ω
 C_b = 400 pF, Fast-mode:                    R_p ≤ 885 Ω  &lt;  967 Ω: no resistor works
-the window closes at 300 ns / (0.8473 · 967 Ω) = 366 pF</pre>Fast-mode Plus, with 20 mA pads, has a window at 400 pF. The chapter's controller is 659 NANDs, the target (four registers, address pins, START/STOP detector) 1 638, and a pad 5 transistors.`,
+the window closes at 300 ns / (0.8473 · 967 Ω) = 366 pF</pre>Fast-mode Plus, with 20 mA pads, has a window at 400 pF. The chapter's controller is 659 NANDs, the target (four registers, address pins, START/STOP detector) 1638, and a pad 5 transistors.`,
     },
     mistakes: [
       'Sizing the pull-up for speed only: a resistor small enough for the rise time can exceed what the pads must sink, and the wire never reaches V<sub>OL</sub>.',

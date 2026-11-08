@@ -21,6 +21,7 @@ import { frameRun } from './slowctl';
 import '../styles/line.css';
 import '../styles/dsp.css';
 import '../styles/dspcore.css';
+import { groupNum } from '../sim/numfmt';
 
 export const FIG = figures;
 export const bench = (id: string): Bench24 => BENCH24.find((b) => b.id === id)!;
@@ -195,7 +196,7 @@ export function benchWidget(): Widget {
     const t = v * (m === 'dsp' ? FIG.period : rvFigure(m).period);
     return h('td', null, `${f2(v)} clocks`, h('br'), h('span', { class: 'sub' }, `${Math.round(t)} delays`));
   }));
-  const costRow = h('tr', null, h('th', null, 'NANDs, period'), ...machines.map(([m]) => h('td', null, m === 'dsp' ? `${FIG.nands.core.toLocaleString('en').replace(/,/g, ' ')}, ${FIG.period}` : `${rvFigure(m).nands.toLocaleString('en').replace(/,/g, ' ')}, ${rvFigure(m).period}`)));
+  const costRow = h('tr', null, h('th', null, 'NANDs, period'), ...machines.map(([m]) => h('td', null, m === 'dsp' ? `${groupNum(FIG.nands.core)}, ${FIG.period}` : `${groupNum(rvFigure(m).nands)}, ${rvFigure(m).period}`)));
   return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, 'Clocks and time per product, measured'),
     h('table', { class: 'dsp-table' }, h('thead', null, h('tr', null, h('th', null, ''), ...machines.map(([, n]) => h('th', null, n)))), h('tbody', null, ...ids.map(row), costRow)),
     h('p', { class: 'sub' }, 'Per product, so the machines\' different block lengths do not matter. The RV32 columns are the MAC chapter\'s kernels without setup; the DSP core\'s include its loop set-up, rounding and output instructions. Basis of the last row: the RV32 columns are the whole core without its program ROM, with a 32-word data memory (about a third of the NANDs) and a 32 × 32 register file; the DSP core is without its program ROM and both memories, with 8 × 16 registers. Periods are in NAND delays: the RV32IM has Kogge-Stone adders, the MAC cores do not.'))) };

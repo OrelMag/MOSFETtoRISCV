@@ -117,6 +117,14 @@ export class CampaignPage implements Page {
     progress().reload();
     this.el = h('div', { class: 'scroll cp-page' }, h('div', { class: 'cp-wrap' }, this.head, this.main));
     this.unsub = progress().onChange(() => this.render());
+    // Esc in a level's panel goes back to its card on the map; Esc on the selected card lets the level go
+    this.main.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || this.parts[0] !== 'n') return;
+      const id = this.parts[1], card = () => this.main.querySelector<SVGElement>(`.cp-node[data-node="${id}"]`);
+      const t = e.target as Element;
+      if (t.closest('.cp-panel')) { card()?.focus(); e.preventDefault(); }
+      else if (t.closest('.cp-node.sel')) { location.hash = '#/campaign'; requestAnimationFrame(() => card()?.focus()); e.preventDefault(); }
+    });
     this.open(parts);
   }
 
@@ -171,6 +179,8 @@ export class CampaignPage implements Page {
     const panel = this.main.querySelector<HTMLElement>('.cp-panel');
     if (panel && panelTop) panel.scrollTop = panelTop;
     refocus();
+    // chosen from the keyboard: the level's details are next, not 90 more cards (Esc there goes back to its card)
+    if (changed && a === 'n' && b && document.activeElement?.matches('.cp-node:focus-visible')) this.main.querySelector<HTMLElement>('.cp-node-panel h2')?.focus({ preventScroll: true });
     if (changed && b) {
       this.revealUntil = performance.now() + 1000;
       requestAnimationFrame(() => (a === 'codex' ? this.revealEntry() : this.reveal()));
@@ -216,6 +226,7 @@ export class CampaignPage implements Page {
     const p = progress();
     const sum = p.summary();
     const view = this.parts[0] ?? '';
+    this.head.classList.toggle('codex', view === 'codex');
     const tab = (href: string, label: string, on: boolean, ic: string) => h('a', { class: `cp-tab${on ? ' on' : ''}`, href }, icon(ic, 15), label);
     const unlock = h('label', { class: 'cp-unlock', title: 'Open every level, whatever you have solved (the parts each level may use do not change)' },
       h('input', { type: 'checkbox', ...(p.unlockAll ? { checked: true } : {}), onchange: (e: Event) => p.setUnlockAll((e.target as HTMLInputElement).checked) }),
@@ -344,7 +355,7 @@ export class CampaignPage implements Page {
     const el = h('div', { class: `cp-node-panel ${st}` });
     el.append(
       h('div', { class: 'cp-crumb' }, h('a', { href: '#/campaign' }, 'Map'), ' › ', `${actName(act.num)}: ${act.title}`),
-      h('h2', null, n.title),
+      h('h2', { tabindex: -1 }, n.title),
       h('div', { class: 'cp-badges' },
         h('span', { class: 'cp-badge kind' }, n.bug ? 'Bug hunt' : KIND_LABEL[n.kind]),
         n.optional ? h('span', { class: 'cp-badge opt' }, 'optional') : null,

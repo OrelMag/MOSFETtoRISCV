@@ -104,6 +104,7 @@ class Dock {
       overlay.style.removeProperty('--dock-space');
       overlay.parentElement?.style.removeProperty('--toast-dock');
       this.refit();
+      this.ed.refreshLean();
       this.ed.renderActions();
       return;
     }
@@ -122,6 +123,7 @@ class Dock {
       class: `sb-dock-tab${p === cur ? ' on' : ''}`, role: 'tab', 'aria-selected': String(p === cur), title: p.label, 'aria-label': p.label,
       onclick: () => this.show(p.id),
     }, icon(p.icon, 13), h('span', null, p.label))));
+    this.ed.refreshLean();
     this.ed.renderActions();
     cur.onShow?.();
   }

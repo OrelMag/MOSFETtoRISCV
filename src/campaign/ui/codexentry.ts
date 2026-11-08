@@ -141,7 +141,17 @@ function linksEl(e: CodexEntry, more: CodexMore | undefined): HTMLElement {
   const seen = new Set<string>([e.id]);
   const once = (xs: CodexEntry[]) => xs.filter((x) => !seen.has(x.id) && !!seen.add(x.id));
   const builds = once(buildsOn(e.id)), leads = once(leadsTo(e.id)), also = once(seeAlso(e.id));
-  const row = (label: string, items: HTMLElement[]) => items.length ? h('div', { class: 'cx-row' }, h('span', { class: 'cx-row-k' }, label), ...items) : null;
+  // a long row shows its first few and a +n more (tcp's rows took more than a phone's screen before The idea)
+  const FEW = 5;
+  const row = (label: string, items: HTMLElement[]) => {
+    if (!items.length) return null;
+    const el = h('div', { class: 'cx-row' }, h('span', { class: 'cx-row-k' }, label), ...(items.length > FEW + 1 ? items.slice(0, FEW) : items));
+    if (items.length > FEW + 1) {
+      const more: HTMLButtonElement = h('button', { type: 'button', class: 'lv-chip cx-more', 'aria-expanded': 'false', 'aria-label': `Show ${items.length - FEW} more: ${label}`, onclick: () => { more.replaceWith(...items.slice(FEW)); items[FEW]?.focus(); } }, `+${items.length - FEW} more`);
+      el.append(more);
+    }
+    return el;
+  };
   const cx = (xs: CodexEntry[]) => xs.map((x) => chip('', `#/campaign/codex/${x.id}`, x.title));
   return h('div', { class: 'cx-rows' },
     row('Learn it', learn), row('Builds on', cx(builds)), row('Leads to', cx(leads)), row('See also', cx(also)));

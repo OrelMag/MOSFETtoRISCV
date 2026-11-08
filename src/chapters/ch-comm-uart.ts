@@ -6,10 +6,10 @@ import { stats } from '../sim/stats';
 import { baudWidget, busUartApi, coreApi, coreScene, coreState, fifoWidget, frameWidget, rxScene, rxState, twoApi, twoComputersNands, twoScene, txScene, TWO_DIV, uartBusScene } from '../widgets/uart';
 import type { Chapter } from './types';
 import { numOf } from './order';
-import { groupDigits } from '../sim/numfmt';
+import { groupNum } from '../sim/numfmt';
 
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
-const n0 = (x: number) => groupDigits(Math.round(x));
+const n0 = (x: number) => groupNum(Math.round(x));
 const pct = (x: number, d = 2) => `${(100 * x).toFixed(d)} %`;
 
 const TOL = tolerance(UART_8N1, { ticks: 16, pos: 0.5 }, 5e-4);
@@ -32,7 +32,7 @@ export const chUart: Chapter = {
     'read framing, break, false-start and overrun conditions off the status bits, and size a FIFO against an interrupt latency',
     'write a polled and an interrupt-driven driver for the bus UART and say what each costs in cycles',
   ],
-  builds: ['telegraph', 'exchange', 'clocks', 'bus'],
+  builds: ['telegraph', 'exchange', 'clocks', 'bus', 'wire'],
   recap: {
     keep: [
       `A byte is a frame of ten bits on a wire that idles at 1: a start bit (0), eight data bits least significant first, a stop bit (1). The start edge is the only synchronization. Efficiency is 80 %.`,

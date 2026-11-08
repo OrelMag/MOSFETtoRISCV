@@ -52,11 +52,11 @@ edge asked 0.2, prewarped: 2 tan(0.2π) = 1.453 → lands at 0.2
     idea: `A <b>biquad</b> is the second-order IIR section, y[n] = b₀x[n] + b₁x[n − 1] + b₂x[n − 2] − a₁y[n − 1] − a₂y[n − 2]: two zeros, two poles, five multiplications. Any filter of higher order factors into such sections, and a pole pair is exactly what two coefficients hold: a₁ = −2r cos θ and a₂ = r². The section is stable inside a triangle of the coefficient plane, |a₂| &lt; 1 and |a₁| &lt; 1 + a₂, which can be checked exactly on the integers.<br><br>In gates the chapter builds direct form I: four delay registers hold the last two inputs and the last two outputs, five signed multipliers form the products, and four adders sum them into an accumulator that keeps every product bit and adds log₂ 5 → 3 guard bits to the 32 of a product, 35 in all. There is one rounding, after the sum, and one saturating clamp, because a filter with poles on the circle can drive the sum off the end. Data are Q1.15 and the coefficients Q2.14, so the word −2 is a legal a₁.`,
     example: {
       title: 'What the chapter\'s section costs',
-      body: `<pre>5 multipliers (16 × 16 tree) × 3,572 NANDs     = 17,860
-everything else: adders, rounder, clamp, registers     =  2,453
-the whole section                                 = 20,313 NANDs, 135 delays
+      body: `<pre>5 multipliers (16 × 16 tree) × 3572 NANDs     = 17 860
+everything else: adders, rounder, clamp, registers     =  2453
+the whole section                                 = 20 313 NANDs, 135 delays
 accumulator: 32-bit products + 3 guard bits       = 35 bits
-radius 0.95 at a quarter rate: a₁ = 0, a₂ = round(0.9025 × 2¹⁴) = 14,787</pre>Multipliers are 88 % of the section. Four such sections are the elliptic filter of the mask: 4 × 5 = 20 multiplications a sample.`,
+radius 0.95 at a quarter rate: a₁ = 0, a₂ = round(0.9025 × 2¹⁴) = 14 787</pre>Multipliers are 88 % of the section. Four such sections are the elliptic filter of the mask: 4 × 5 = 20 multiplications a sample.`,
     },
     mistakes: [
       'Building a high-order filter as one polynomial. The poles of a tight cluster move enormously when a coefficient is rounded; split into sections, each pair depends on its own two coefficients.',
@@ -82,7 +82,7 @@ radius 0.95 at a quarter rate: a₁ = 0, a₂ = round(0.9025 × 2¹⁴) = 14,787
 narrow elliptic filter (order 6), coefficients rounded:
   one polynomial: unstable at every width 8 … 19 bits, stable from 20
   three sections: stable at every width from 8 bits
-  worst-pole sensitivity: 3,021 per unit as a polynomial, 6.5 in a section
+  worst-pole sensitivity: 3021 per unit as a polynomial, 6.5 in a section
   (about 470 times less)</pre>The asked a₂ = r² = 0.9409 rounds to 1.000 at a step of 1/8; the filter whose designer asked for a fast decay now has an oscillator.`,
     },
     mistakes: [
@@ -100,7 +100,7 @@ narrow elliptic filter (order 6), coefficients rounded:
     idea: `A stable filter with no input should die away, and an exact one does. A rounded one need not: the output that is fed back is the <em>rounded</em> value, and rounding is a nonlinearity inside a feedback loop. With a₁ = 0 the recurrence is y[n] = round(−a₂ y[n − 2]), and any y whose product with a₂ rounds back to the same size is a fixed point of the loop in magnitude: every y from 1 to the <b>dead band</b> ½ / (1 − a₂) maps onto itself with the sign flipped. The pole radius is not what keeps the output alive; the radius can be 0.95, well inside the circle.<br><br>What helps and what does not follows from where the rounding is. A wider accumulator cannot, because the accumulator is already exact and the one rounding comes after it. Rounding toward zero can: for a₁ = 0 it gives |y[n]| &lt; |y[n − 2]| until zero, a proof. For a₁ ≠ 0 it is only a result of the sweeps, which found no cycle up to radius 0.975 and rare ones from 0.98, so it is no safe rule. A cycle of a few least significant bits is quiet but not silent, and in audio it is heard as a tone that will not go away.`,
     example: {
       title: 'The chapter\'s resonator: radius 0.95, a quarter of the rate',
-      body: `<pre>a₂ = 14,787 / 2¹⁴ = 0.9025    one input word of 8,000, then silence
+      body: `<pre>a₂ = 14 787 / 2¹⁴ = 0.9025    one input word of 8000, then silence
 y = 5:   −0.9025 × 5 = −4.51  → rounds to −5      y = −5: +4.51 → 5
 so the output repeats 5, 0, −5, 0
 dead band ½ / (1 − 0.9025) = 5.13: y = 1 … 5 each map to themselves;
@@ -131,7 +131,7 @@ both look like cos 2π(0.2)k once sampled
 a tone at 0.3 of the input rate, no filter: it lands at 0.2 of the new rate for good
 
 the job: ÷ 64, keep 40 % of the new rate, 50 dB down from 60 %
-  one filter at the input rate               1,037 taps    1,037 multiplications a sample
+  one filter at the input rate               1037 taps    1037 multiplications a sample
   the same filter by branches                              16.2
   halving six times                                          4.03
   CIC of order 3 ÷ 16, then a filter ÷ 4                     1.05</pre>The last row is about a thousandth of the first, from reordering the work, not from a cleverer filter.`,
@@ -176,9 +176,9 @@ a low-pass at 0.125 of the new rate keeps 0.025 and removes the three images</pr
       title: 'The chapter\'s polyphase decimator, 8-bit samples, ÷ 4 over 16 taps',
       body: `<pre>64 taps, ÷ 8:   direct 64 multiplications an input sample      branches 64 / 8 = 8
 gates, R = 4, M = 4 (16 taps):
-  4 multipliers × 972 NANDs = 3,888
-  a direct filter on this clock would need 16 × 972 = 15,552
-  the whole decimator: 7,809 NANDs
+  4 multipliers × 972 NANDs = 3888
+  a direct filter on this clock would need 16 × 972 = 15 552
+  the whole decimator: 7809 NANDs
   (storage is the same either way: every sample is held somewhere)
   sum held in full: 2 × 8 + log₂ 16 = 20 bits, no rounding, no saturation</pre>The multiplier saving is the factor R; the registers and the adder are common to both forms.`,
     },
@@ -202,7 +202,7 @@ non-zero:                       yes yes  0  yes  0  …  yes      → 1 + 12 = 1
 symmetric pairs share one:      centre + 6 pairs         → 7 multipliers (23 × 0.30)
 
 ÷ 64 as six halvings (keep 40 %, 50 dB):   first stage 13 taps, last 35 taps
-  4.03 multiplications an input sample, against 1,037 for one filter at the input rate</pre>The early stages are cheap because what folds onto the kept band comes only from the far edge, which lies a long way off.`,
+  4.03 multiplications an input sample, against 1037 for one filter at the input rate</pre>The early stages are cheap because what folds onto the kept band comes only from the far edge, which lies a long way off.`,
     },
     mistakes: [
       'Using it to divide by anything but two. The zeros fall at a quarter of the rate, which is the new Nyquist for ÷ 2 and nothing else.',
@@ -220,12 +220,12 @@ symmetric pairs share one:      centre + 6 pairs         → 7 multipliers (23 �
     example: {
       title: 'Order 3, ÷ 8, from 8-bit samples (the chapter\'s gates)',
       body: `<pre>DC gain R<sup>N</sup> = 8³ = 512 = 2⁹   →   8 + 3 log₂ 8 = 17 bits
-worst input, the most negative word held: −128 × 512 = −65,536 = −2¹⁶
+worst input, the most negative word held: −128 × 512 = −65 536 = −2¹⁶
 which just fills 17 bits
 impulse response: 3 boxcars of 8 convolved = 22 taps summing to 512
 a tone at 1/8 of the input rate (one whole cycle in 8 samples): response 0, a null
 at the new Nyquist (f = 1/16): 0.263 of DC, −11.6 dB: the droop
-gates: 3,010 NANDs, no multiplier</pre>Order 4 and ÷ 16 would need 4 × 4 = 16 more bits. The chapter's whole-job comparison uses order 3, ÷ 16: aliases 57 dB down at the band edge, droop 0.43 dB.`,
+gates: 3010 NANDs, no multiplier</pre>Order 4 and ÷ 16 would need 4 × 4 = 16 more bits. The chapter's whole-job comparison uses order 3, ÷ 16: aliases 57 dB down at the band edge, droop 0.43 dB.`,
     },
     mistakes: [
       'Saturating the integrators to stop them overflowing. The comb needs the wrapped number: a clamped register has lost the value whose difference is wanted.',
@@ -249,15 +249,15 @@ gates: 3,010 NANDs, no multiplier</pre>Order 4 and ÷ 16 would need 4 × 4 = 16 
  stage 1  z &lt; 0: turn −26.57° →  11.565°        stage 4  z ≥ 0: turn +3.58°   →  1.077°
  stage 2  z ≥ 0: turn +14.04° →  −2.471°        stage 5  z ≥ 0                 → −0.712°
 after 12 stages: cos 0.86591, sin 0.50020  (true 0.86603, 0.5), length 1.000
-a stage, 14-bit (stage 3): 564 NANDs        pipeline of 12: 15,537 NANDs, 9.0 good bits
-iterative: 2,551 NANDs, 13 clocks
-four 16 × 16 multipliers: 4 × 3,572 = 14,288, before the sine is found</pre>Vectoring (3, 4): x ends at 8.2338 = 5 × 1.6468, z at 53.11° against the true 53.13°.`,
+a stage, 14-bit (stage 3): 564 NANDs        pipeline of 12: 15 537 NANDs, 9.0 good bits
+iterative: 2551 NANDs, 13 clocks
+four 16 × 16 multipliers: 4 × 3572 = 14 288, before the sine is found</pre>Vectoring (3, 4): x ends at 8.2338 = 5 × 1.6468, z at 53.11° against the true 53.13°.`,
     },
     mistakes: [
       'Skipping a stage when the angle left is already small. Every stage must run so that the gain is one fixed number; skip some and each angle gets its own gain.',
       'Expecting 99.9° of reach to cover the circle. Past ±90° a half-turn (negate x and y, flip the angle\'s top bit) comes first.',
       'Believing more stages always help. Beyond the word\'s length the truncation of each stage costs as much as the stage gains; word, angle and stages must grow together.',
-      'Choosing the pipeline when a result is needed once in many clocks. The iterative form is 2,551 NANDs against 15,537 and fits any task slower than 13 clocks a result.',
+      'Choosing the pipeline when a result is needed once in many clocks. The iterative form is 2551 NANDs against 15 537 and fits any task slower than 13 clocks a result.',
     ],
     chapters: [
       { chapter: 'cordic', step: 0, label: 'A rotation is four multiplications' },

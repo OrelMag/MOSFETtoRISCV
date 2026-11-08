@@ -20,7 +20,7 @@ export const chCellular: Chapter = {
     'set hysteresis and time to trigger for handover, and name what goes wrong each way',
     'say what many antennas buy, by zero-forcing\'s formula, and what millimetre waves cost',
   ],
-  builds: ['radio', 'wifi', 'carriers'],
+  builds: ['radio', 'wifi', 'carriers', 'path'],
   recap: {
     keep: [
       `Space is the first multiplier. A cell reuses its frequencies at a distance √(3K) R, so SIR rises with K, and each cell gets 1 / K of the band. On this model, K = 1 carries ${nf(S1.perCell / S7.perCell, 1)} times what K = 7 does, even with a far worse edge: coding and scheduling can live with low SIR.`,

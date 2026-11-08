@@ -74,6 +74,24 @@ const MIN_STEPS = 4;
 
 const walks = new Map<string, Walk | null>();
 
+/**
+ * Whether the node has a walkthrough, without building it: building one draws the reference answer (the large cores take a second),
+ * so a level screen asks this on open and builds the walk at idle (warmWalk).
+ */
+export function hasWalk(node: CampaignNode): boolean {
+  if (node.bug) return false;
+  const known = walks.get(node.id);
+  return known !== undefined ? !!known?.steps.length : !!levelChallenge(node);
+}
+
+/** Build the node's walkthrough when the browser is idle, so Show answer and the walkthrough open at once. */
+export function warmWalk(node: CampaignNode): void {
+  if (node.bug || walks.has(node.id)) return;
+  const go = () => { walkOf(node); };
+  const idle = (globalThis as { requestIdleCallback?: (f: () => void, o?: { timeout: number }) => void }).requestIdleCallback;
+  if (idle) idle(go, { timeout: 4000 }); else setTimeout(go, 200);
+}
+
 /** The node's walkthrough (memoized), or undefined when it has no challenge. */
 export function walkOf(node: CampaignNode): Walk | undefined {
   // A bug hunt is a fix, not a build: nothing to walk through from an empty chip.

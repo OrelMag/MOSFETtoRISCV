@@ -8,6 +8,7 @@ import { line, mkChips, plotOf } from './line';
 import { slider } from './mosparts';
 import '../styles/line.css';
 import '../styles/dc.css';
+import { groupNum } from '../sim/numfmt';
 
 const selectOf = (aria: string, opts: readonly (readonly [string, string])[], value: string, on: (v: string) => void): HTMLSelectElement => {
   const e = h('select', { 'aria-label': aria }, ...opts.map(([v, t]) => h('option', { value: v, selected: v === value ? true : undefined }, t))) as HTMLSelectElement;
@@ -15,7 +16,7 @@ const selectOf = (aria: string, opts: readonly (readonly [string, string])[], va
   return e;
 };
 const btn = (label: string, title: string, f: () => void): HTMLButtonElement => { const b = h('button', { class: 'btn sm', type: 'button', title }, label) as HTMLButtonElement; b.addEventListener('click', f); return b; };
-const n0 = (x: number) => Math.round(x).toLocaleString('en');
+const n0 = (x: number) => groupNum(Math.round(x));
 
 // ---- the fabric ------------------------------------------------------------------------------------------------------------------
 

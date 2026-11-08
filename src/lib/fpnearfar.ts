@@ -570,6 +570,7 @@ export function fpAddNearFar(f: FpFormat, anticipate = true): ComponentDef {
   const tag = anticipate ? 'fpnf' : 'fpnfc';
   return memo(`${tag}${E}_${M}`, () => {
     const N = 1 + E + M;
+    fnfBlocks(f); farPath(f); roundPack(f); faddSpecial(f); if (anticipate) nearPath(f); else nearPathCounted(f); // the parts, made now
     return define({
       id: `${tag}${E}_${M}`, name: `${fmtName(f)} near / far adder${anticipate ? '' : ' (no anticipation)'}`, category: 'arithmetic',
       summary: 'The dual-path adder: swap by exponent only (no magnitude compare); a far path (effective addition, or exponents differing by 2 or more: long right shift, sticky, at most two places of left shift) and a near path (a subtraction with exponents within 1: no aligner, a leading-zero anticipator running beside the subtractor); a select; one shared rounder. Same results and flags as the single-path adder, in fewer gate delays and more gates.',

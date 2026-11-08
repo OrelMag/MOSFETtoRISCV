@@ -18,6 +18,7 @@ import { pack } from '../sim/values';
 import { h, s } from '../ui/dom';
 import type { Scene, Stage, Widget } from '../view/stage';
 import { slider } from './mosparts';
+import { groupNum } from '../sim/numfmt';
 
 const hex2 = (v: number) => v.toString(16).padStart(2, '0').toUpperCase();
 const chr = (v: number) => (v >= 32 && v < 127 ? String.fromCharCode(v) : '·');
@@ -317,7 +318,7 @@ export function fifoWidget(): Widget {
   const ENTRY_EXIT = 10; // assumed cycles of entry and exit, paid once per interrupt
   const paint = () => {
     const f = fifoBudget(baud, depth, level), cyc = (us: number) => Math.round(us * mhz);
-    out.replaceChildren(h('span', null, 'byte ', h('b', null, `${(10e6 / baud).toFixed(1)} µs`)), h('span', null, 'time to fill ', h('b', null, `${f.fillUs.toFixed(0)} µs`)), h('span', null, 'slack after the interrupt ', h('b', null, `${f.slackUs.toFixed(0)} µs = ${cyc(f.slackUs).toLocaleString('en')} cycles`)),
+    out.replaceChildren(h('span', null, 'byte ', h('b', null, `${(10e6 / baud).toFixed(1)} µs`)), h('span', null, 'time to fill ', h('b', null, `${f.fillUs.toFixed(0)} µs`)), h('span', null, 'slack after the interrupt ', h('b', null, `${f.slackUs.toFixed(0)} µs = ${groupNum(cyc(f.slackUs))} cycles`)),
       h('span', null, 'interrupts ', h('b', null, `${f.irqPerSecond.toFixed(0)} / s`)), h('span', null, 'CPU in the handler ', h('b', null, pct((f.irqPerSecond * (level * UART_COSTS.handlerPerByte + ENTRY_EXIT)) / (mhz * 1e6), 2))));
     const rows = [9600, 115200, 921600, 3e6].map((b) => {
       const g = fifoBudget(b, 16, 1), g8 = fifoBudget(b, 16, 8);

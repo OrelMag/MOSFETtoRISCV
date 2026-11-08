@@ -3,12 +3,12 @@
 
 import { cubicK, md1Wait, mm1Quantile, mm1Wait, renoUtilization, renoWindow, type SimResult } from '../comm/queues';
 import { chiuWidget, delayWidget, duelRun, duelWidget, labRun, labWidget, lossWidget, type LabPreset } from '../widgets/queues';
-import { groupDigits } from '../sim/numfmt';
 import { numOf } from './order';
 import type { Chapter, Step } from './types';
+import { groupNum } from '../sim/numfmt';
 
 const nf = (x: number, d = 0) => x.toFixed(d);
-const n0 = (x: number) => groupDigits(Math.round(x));
+const n0 = (x: number) => groupNum(Math.round(x));
 /** 4.6 × 10<sup>7</sup> from a number. */
 const sci = (x: number, d = 1) => { const [m, e] = x.toExponential(d).split('e+'); return `${m} × 10<sup>${e}</sup>`; };
 const FULL = 1000;
@@ -49,7 +49,7 @@ const steps: Step[] = [
       const t = lab(one('cubic', 'tail')), s = lab({ aqm: 'tail', buffer: 90, rtt: 50, flows: [{ cc: 'cubic', rttMs: 50 }] });
       return `
       <p><a href="#/c/tcp/6">The TCP chapter</a> left a queue that a window could fill, with a first look at what that does. Now a real window of megabytes. This is a labelled model: one 20 Mb/s link, 50 ms of round trip, senders by their published rules, and every 20 ms a small packet like a video call's, measuring what it waits. Reno (chapter ${numOf('tcp')}'s sawtooth) or CUBIC (step 4) keep raising the window until something is lost, and a tail-drop queue loses nothing until it is full, so the sender's only signal of a full queue is the queue being full. With a buffer of ${FULL} packets the link is busy ${nf(100 * t.utilization, 0)} % of the time, carrying ${nf(t.goodputMbps[0], 1)} Mb/s of new data, and <strong>every packet waits ${n0(t.pingMeanMs)} ms</strong>. With 90 packets, about one bandwidth-delay product, the link is busy ${nf(100 * s.utilization, 0)} % of the time, carrying ${nf(s.goodputMbps[0], 1)} Mb/s, and it waits ${n0(s.pingMeanMs)} ms. The extra buffer bought no throughput at all.</p>
-      <p>Jim Gettys named this at the end of 2010, and he and Nichols wrote it up in 2011: buffers sized for the fastest link a device might see, or for benchmarks that counted only throughput, sat in front of the slowest. A queue that is always full has the worst of it: no room for a burst, and a delay on every flow sharing it. The window the sender chooses and the buffer the router chooses meet at this link, and nobody is in charge. The rest of this chapter is the ways out: change what the sender listens for, change what the queue does, or both.</p>
+      <p>This is the <a href="#/c/tcp/6">bufferbloat of chapter ${numOf('tcp')}</a>, measured. Jim Gettys named it at the end of 2010, and he and Nichols wrote it up in 2011: buffers sized for the fastest link a device might see, or for benchmarks that counted only throughput, sat in front of the slowest. A queue that is always full has the worst of it: no room for a burst, and a delay on every flow sharing it. The window the sender chooses and the buffer the router chooses meet at this link, and nobody is in charge. The rest of this chapter is the ways out: change what the sender listens for, change what the queue does, or both.</p>
       <div class="try">Bring the buffer down from ${FULL} to 90 packets, watching the throughput chip. Then try 20. What did it cost?</div>`;
     },
     widget: () => labWidget(one('cubic', 'tail')),

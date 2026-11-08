@@ -6,9 +6,10 @@ import { bottleneck, dctcpAlpha, dctcpAmplitude } from '../comm/queues';
 import { arqWidget, dctcpWidget, ecmpWidget, fabricWidget, incastWidget, pfcWidget, ringWidget, tailWidget } from '../widgets/dc';
 import { numOf } from './order';
 import type { Chapter, Step } from './types';
+import { groupNum } from '../sim/numfmt';
 
 const nf = (x: number, d = 0) => x.toFixed(d);
-const n0 = (x: number) => Math.round(x).toLocaleString('en');
+const n0 = (x: number) => groupNum(Math.round(x));
 
 const read = (senders: number, rtoMs = 200, bufferPkts = 32) => incast({ senders, blockBytes: 256 * 1024, bufferPkts, rtoMs });
 
@@ -114,7 +115,7 @@ const steps: Step[] = [
     get body() {
       const oneWay = 8, h = pfcHeadroom(oneWay), loss = pfcRun({ lossless: false, r1: 0.25, buffer: 64, headroom: h, oneWay, slots: 30000 }), pf = pfcRun({ lossless: true, r1: 0.25, buffer: 64, headroom: h, oneWay, slots: 30000 });
       return `
-      <p>Ethernet can be made lossless with one mechanism: the PAUSE frame of <a href="#/c/ethernet/0">the Ethernet chapter</a>, made per traffic class. <strong>Priority flow control</strong> (IEEE 802.1Qbb): when a switch's input buffer for a traffic class passes a threshold XOFF, it sends a pause frame upstream, and the upstream port stops that class until told otherwise. Nothing is ever dropped, provided the switch can still hold what is on its way. That has a clear size: a pause takes a one-way delay to arrive, the packets already sent take another to land, and there may be a packet underway at each end. So the <strong>headroom</strong> above XOFF is about 2 · delay + 2 packets, per port per class: ${h} packets for a delay of ${oneWay} here, and it grows with distance and rate. It is a safe bound, since it counts nothing draining meanwhile. A simulation agrees: with all traffic aimed at the stopped port nothing was lost at this headroom, and packets were lost with a third of it.</p>
+      <p>Ethernet can be made lossless with one mechanism: the PAUSE frame of <a href="#/c/ethernet/8">the Ethernet chapter</a>, made per traffic class. <strong>Priority flow control</strong> (IEEE 802.1Qbb): when a switch's input buffer for a traffic class passes a threshold XOFF, it sends a pause frame upstream, and the upstream port stops that class until told otherwise. Nothing is ever dropped, provided the switch can still hold what is on its way. That has a clear size: a pause takes a one-way delay to arrive, the packets already sent take another to land, and there may be a packet underway at each end. So the <strong>headroom</strong> above XOFF is about 2 · delay + 2 packets, per port per class: ${h} packets for a delay of ${oneWay} here, and it grows with distance and rate. It is a safe bound, since it counts nothing draining meanwhile. A simulation agrees: with all traffic aimed at the stopped port nothing was lost at this headroom, and packets were lost with a third of it.</p>
       <p>The problem comes next. A pause stops a whole class on a link, whoever's packets those are. Two flows share an upstream queue. Flow 1 goes to a slow receiver, at a quarter of the link, and flow 2 to a free one. With drops, flow 1 gets ${nf(pf.f1, 2)} and ${n0(loss.drops)} losses in this run, and flow 2 passes at ${nf(loss.f2, 2)}, all it offers. With PFC nothing is lost, and flow 2 falls to ${nf(pf.f2, 2)}, because the packets for the slow port block the ones behind them, and the upstream is paused ${nf(100 * pf.pausedShare, 0)} % of the time. That is <strong>congestion spreading</strong>: from one slow receiver back through switches to flows with no connection to it, and in a real fabric it can reach many hops. It is why PFC should be a safety net and not the control loop, with DCTCP-style marking above it (DCQCN, 2015, on RoCE) to keep pauses rare.</p>
       <div class="try">Switch between lossless and lossy and watch the second bar. Then slow the receiver down further.</div>`;
     },

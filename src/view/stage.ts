@@ -30,7 +30,7 @@ import { Inspector, inspectorChoice } from './inspector';
 import { LABEL_UNITS, MIN_TEXT_PX } from './legible';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber, syncPopover } from './popover';
-import { chooseFolds, COVER_GAP, fitMinW, freeArea, KEEP_SCALE, roomBeside, startFolded, type Rect } from './camera';
+import { chooseFolds, COVER_GAP, fitMinW, freeArea, KEEP_SCALE, roomBeside, showReadable, startFolded, type Rect } from './camera';
 import { applyLayout, layoutOf } from './layout';
 import { drawnNetlist } from './wirefirst';
 import { type NotePin, SchematicView } from './schematic';
@@ -111,6 +111,10 @@ const LEVEL_NAME: Record<string, string> = {
 /** Steps Back can undo (each a full copy of the simulation's state). */
 /** A phone's stage (hugPhone): the least canvas it keeps, the badge's room above the drawing, and the tallest cover it shrinks under. */
 const HUG_MIN_PX = 260, HUG_TOP_PX = 48, HUG_COVER_PX = 90;
+/** The top bar a scrolled phone stage sits under: hugPhone lets a tall circuit's stage grow to the screen's bottom. */
+const PHONE_TOPBAR_PX = 70;
+/** The stage's touch hint hides itself after this long untouched (it sits over the circuit's room). */
+const HINT_AUTO_MS = 8000;
 const HISTORY_MAX = 100;
 /** A link's clock cycles are replayed for at most this long (ms); a note says how many ran. */
 const REPLAY_MS = 1500;
@@ -226,6 +230,9 @@ export class Stage {
   private timingBtn: HTMLButtonElement;
   private panesBtn: HTMLButtonElement;
   private moreBtn: HTMLButtonElement;
+  private readBtn!: HTMLButtonElement;
+  /** Zoom to readable is in force: the how-to line gives way (it sat over the drawing's parts). */
+  private readZoom = false;
   /** Aborted by destroy(): the document listeners this stage added. */
   private life = new AbortController();
   private moreMenu: HTMLElement;
@@ -340,6 +347,8 @@ export class Stage {
     this.syncPanesBtn();
     const imgWrap = h('div', { class: 'pal-wrap' }, imgBtn, imgMenu);
     menuKeys(imgWrap, imgMenu, imgBtn, () => showImg(false));
+    // offered only while the overview is under ~2.5 px per unit (camera.ts offerReadable), hidden at or above it
+    const readBtn = this.readBtn = h('button', { class: 'btn ghost sm keep zoom-read', hidden: true, title: 'Zoom to readable: about 3 px per grid unit from the inputs; drag to pan, Fit returns to the overview', 'aria-label': 'Zoom to readable', onclick: () => this.zoomReadable() }, icon('zoomin', 15), h('span', { class: 'lbl' }, 'Zoom to readable')) as HTMLButtonElement;
     const zoomOut = btn('minus', 'Zoom out', () => this.zoomBy(1.25), ' zoom-btn');
     const zoomIn = btn('plus', 'Zoom in', () => this.zoomBy(0.8), ' zoom-btn');
     // More: the buttons fitBar takes off a bar too narrow for them and the open level's name, as menu items
@@ -370,6 +379,7 @@ export class Stage {
     const pressed = (b: HTMLElement) => b.classList.contains('on');
     // the order they go in: the least used first (a wheel or a pinch zooms; Up, Fit and the panes stay)
     this.shedGroups = [
+      { els: [readBtn], items: [{ label: 'Zoom to readable', hint: 'About 3 px per grid unit, from the inputs; drag to pan', icon: 'zoomin', run: () => this.zoomReadable() }] },
       { els: [zoomOut, zoomIn], items: [{ label: 'Zoom out', icon: 'minus', run: () => this.zoomBy(1.25) }, { label: 'Zoom in', icon: 'plus', run: () => this.zoomBy(0.8) }] },
       { els: [imgWrap], items: [
         { label: 'Image as SVG', hint: 'This level, whole, as drawn in the current theme', icon: 'image', run: () => this.exportImage('svg') },
@@ -415,14 +425,14 @@ export class Stage {
     upBtn.classList.add('sch-only');
     const bar = this.bar = h('div', { class: 'stage-bar' },
       this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, this.probeBtn, this.whyBtn, this.timingBtn, moreWrap,
-      upBtn, zoomOut, zoomIn, fitBtn,
+      upBtn, readBtn, zoomOut, zoomIn, fitBtn,
       this.panesBtn);
     this.canvas = h('div', { class: 'canvas' });
     this.levelBadge = h('div', { class: 'level-badge' });
     this.dock = h('div', { class: 'panel-dock' });
     // Touch: dblclick comes from a double tap; the Layout button stands in for the right-click menu.
     this.hint = hintBadge('double-click a part to open it · drag a part or a wire to move it (shift: pick several) · right-click for layout · drag to pan · wheel or pinch to zoom',
-      'double-tap a part: open · drag: move / pan (a wire: tap it first) · pinch: zoom', 'stage');
+      'double-tap a part: open · drag: move / pan (a wire: tap it first) · pinch: zoom', 'stage', '', HINT_AUTO_MS);
     this.canvas.append(this.levelBadge, this.hint, this.dock, this.board.el, this.why.el);
     this.controls = h('div', { class: 'controls' });
     this.status = h('div', { class: 'status' });
@@ -450,12 +460,13 @@ export class Stage {
       up: () => this.up(),
       elsewhere: (t) => this.elsewhere(t),
     });
+    this.view.onCamera(() => this.syncReadable());
     this.view.arrange = true;
     this.view.pickable = true;
     this.view.trace = true;
     this.view.badge = () => {
       const r = this.levelBadge.getBoundingClientRect(), c = this.canvas.getBoundingClientRect();
-      return r.width > 0 ? { x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height } : null;
+      return r.width > 0 && !this.levelBadge.classList.contains('yield') ? { x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height } : null;
     };
     // Tab-reachable (and S or the skip link focus it, ui/quicknav.ts): its keys work while it has focus
     this.el.tabIndex = 0;
@@ -517,7 +528,9 @@ export class Stage {
       this.inset = this.rightInset();
       this.drillLayout();
       this.layoutDock(false);
+      this.yieldBadge();
       this.view.resized();
+      this.syncReadable();
       this.fitBar();
       this.fitControls();
       this.hugPhone();
@@ -614,6 +627,7 @@ export class Stage {
       this.widget = null;
     }
     this.el.classList.toggle('widget-mode', !!w);
+    this.syncReadable();
     if (!w) return;
     this.stopAnim();
     this.stopClock();
@@ -1010,6 +1024,7 @@ export class Stage {
   private setBoardShown(on: boolean): void {
     this.boardOn = on;
     this.el.classList.toggle('bb-mode', on);
+    this.syncReadable();
     if (this.syncDrill()) this.view.setCover(this.covers(), true);
     const [sch, bb] = [...this.viewSeg.querySelectorAll('button')];
     sch.classList.toggle('on', !on);
@@ -1255,6 +1270,7 @@ export class Stage {
     widget.el = host;
     this.canvas.append(host);
     this.leaf = { name, widget };
+    this.syncReadable();
     this.levelBadge.textContent = def.modelPanel ? 'level: a model, not transistors' : 'level: a single transistor';
   }
 
@@ -1263,6 +1279,7 @@ export class Stage {
     this.leaf.widget.destroy?.();
     this.leaf.widget.el.remove();
     this.leaf = null;
+    this.syncReadable();
   }
 
   // ---- inputs ------------------------------------------------------------------------------
@@ -2378,6 +2395,34 @@ export class Stage {
 
   /** A panel changed size (folded, unfolded, grew): make room for it, refitting a still-fitted view when the
    *  right dock's width changed or a panel now covers part of the circuit. */
+  private zoomReadable(): void {
+    this.readZoom = true;
+    this.view.zoomReadable();
+    this.placeHint();
+  }
+
+  /** Show Zoom to readable only while the schematic's overview is drawn too small to read; the bar refits when it comes or goes. */
+  private syncReadable(): void {
+    if (!this.view || !this.readBtn) return;
+    // the learner is back at the overview (Fit, a new level or scene): the hint line may return
+    if (this.readZoom && this.view.fitted) { this.readZoom = false; this.placeHint(); }
+    const on = showReadable({ px: this.view.pxPerUnit(), boards: this.boardOn, leaf: !!this.leaf, widget: this.el.classList.contains('widget-mode') });
+    if (this.readBtn.hidden !== on) return;
+    this.readBtn.hidden = !on;
+    this.fitBar();
+  }
+
+  /** The LEVEL tag gives way to a panel (a folded right-docked strip too) that would sit over it: half a tag is worse than none.
+   *  Where a panel and the tag meet depends on the stage's width, so it is measured, not a media query. */
+  private yieldBadge(): void {
+    const b = this.levelBadge;
+    b.classList.remove('yield');
+    const r = b.getBoundingClientRect();
+    if (!(r.width > 0)) return;
+    const hit = this.panels.some((p) => { const q = p.el.getBoundingClientRect(); return q.width > 0 && q.height > 0 && q.left < r.right + 6 && q.right > r.left - 6 && q.top < r.bottom + 4 && q.bottom > r.top - 4; });
+    b.classList.toggle('yield', hit);
+  }
+
   private syncCover(): void {
     this.autoFold();
     const inset = this.rightInset();
@@ -2389,6 +2434,7 @@ export class Stage {
     const covered = this.panels.filter((p) => p.el.dataset.dock === 'right').map((p) => p.el.offsetWidth).filter((w) => w > 0);
     this.canvas.style.setProperty('--panel-inset', `${covered.length ? Math.max(...covered) + 24 : 0}px`);
     this.clearNotesOfPanels();
+    this.yieldBadge();
     this.placeWhy();
     this.boardCover();
     this.drillLayout();
@@ -2501,6 +2547,14 @@ export class Stage {
     this.el.style.height = '';
     const full = this.el.clientHeight, canvasH = this.canvas.clientHeight;
     if (need < canvasH - 2) this.el.style.height = `${Math.round(full - canvasH + need)}px`;
+    else if (need > canvasH + 2) {
+      // A tall circuit (an ALU, a register file) fitted by its height uses a sliver of the width: give the canvas what the
+      // screen under the top bar leaves after the stage bar and the (capped) controls band, so the circuit and its inputs
+      // share one screen, no more than the circuit needs.
+      const bar = this.el.querySelector<HTMLElement>(':scope > .stage-bar')?.offsetHeight ?? 57;
+      const room = window.innerHeight - PHONE_TOPBAR_PX - bar - this.controls.offsetHeight - 8;
+      if (room > canvasH) this.el.style.height = `${Math.round(full - canvasH + Math.min(room, need))}px`;
+    }
   }
 
   private covers(hint = true): Rect[] {
@@ -2551,7 +2605,7 @@ export class Stage {
     this.hint.style.bottom = `${bottom}px`;
     this.hint.style.maxWidth = `${W - right - left}px`;
     // a drill stacked on a narrow canvas leaves the schematic a strip: the line would take a third of it
-    this.hint.hidden = this.hint.dataset.off === '1' || W - right - left < 160 || (docked.length > 0 && lineTop < H / 2)
+    this.hint.hidden = this.hint.dataset.off === '1' || this.readZoom || W - right - left < 160 || (docked.length > 0 && lineTop < H / 2)
       || (!!this.drill && this.el.classList.contains('bb-stacked'));
     if (!this.hint.hidden && !roomBeside(this.view.contentBox(), W, H, this.covers())) this.hint.hidden = true;
     return this.hint.hidden !== was;

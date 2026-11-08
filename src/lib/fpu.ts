@@ -20,7 +20,7 @@ import {
   F32, FLAG, bias as fbias, fpAddX, fpClass, fpFmaX, fpCmpX, fpFromIntX, fpMinMaxX, fpMulX, fpToIntX, overflowToInf, RM, roundUp, type FpFormat,
 } from '../sim/fpref';
 import { Builder } from './builder';
-import { layered } from './layered';
+import { laid, layered } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -156,7 +156,7 @@ export function shiftRightSticky(w: number, k: number, mux: Mux2Kind = LIB_MUX2)
       ports: [bus('x', w, 'in'), bus('s', k, 'in'), bus('y', w, 'out'), bit('sticky', 'out')],
       symbol: { kind: 'box', label: '>> sticky' },
       spec: w + k <= 40 ? ([x, s]) => [Math.floor(x / 2 ** s), x % 2 ** s ? 1 : 0] : undefined,
-      netlist: () => ({ pins: { x: [0, 4], s: [0, 10], y: [b.right, 4], sticky: [b.right, 10] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { room: true }),
     });
   });
 }
@@ -237,10 +237,7 @@ export function fpUnpack(f: FpFormat): ComponentDef {
       summary: 'Splits sign | exponent | fraction. The hidden leading 1 is present unless the exponent field is 0 (zero or subnormal); subnormals behave as if their exponent were 1. Exponent all ones means infinity (fraction 0) or NaN; a NaN whose top fraction bit (the quiet bit) is 0 is signaling.',
       ports: [bus('x', 1 + E + M, 'in'), bit('sign', 'out'), bus('exp', E, 'out'), bus('mant', M + 1, 'out'), bit('zero', 'out'), bit('inf', 'out'), bit('nan', 'out'), bit('snan', 'out')],
       symbol: { kind: 'box', label: 'UNPACK' },
-      netlist: () => ({
-        pins: { x: [0, 4], sign: [b.right, 2], exp: [b.right, 6], mant: [b.right, 10], zero: [b.right, 14], inf: [b.right, 18], nan: [b.right, 22], snan: [b.right, 26] },
-        instances: b.instances, nets: b.nets(),
-      }),
+      netlist: laid(b),
     });
   });
 }
@@ -494,6 +491,10 @@ export function normRound(f: FpFormat, w: number, mux: Mux2Kind = LIB_MUX2): Com
   return memo(`fpnr${E}_${M}_${w}${mux.tag}`, () => {
     const XE = xeOf(f);
     if (w < M + 3) throw new Error('normRound: the significand needs a guard bit and a sticky bit below it');
+    // the parts, made now (not when the drawing is first asked for): what they register is there as soon as the unit is
+    nrAmount(f, w); nrRound(f, w); nrPack(f);
+    const k = Math.log2(pow2ceil(w + 1));
+    shiftLeft(w, k, mux); shiftRightSticky(w, k, mux);
     return define({
       id: `fpnr${E}_${M}_${w}${mux.tag}`, name: `Normalize & round (${w}-bit significand)${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: 'Counts leading zeros, shifts them out (or shifts right for a subnormal result), then rounds in mode rm using the guard bit G and the sticky bit S (round to nearest even: up if G and (S or the last kept bit)). A carry out of the rounding bumps the exponent; an exponent past the top becomes ∞ or the largest finite number, depending on the mode. Flags: NX if G or S, OF on overflow, UF if inexact and tiny after rounding.',
@@ -952,6 +953,7 @@ export function fpMul(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
   const { E, M } = f;
   return memo(`fpmul${E}_${M}${mux.tag}`, () => {
     const N = 1 + E + M;
+    fmulExp(f); fmulSpecial(f, mux); normRound(f, 2 * M + 2); treeMul(M + 1); // the parts, made now: they register as soon as the unit is
     return define({
       id: `fpmul${E}_${M}${mux.tag}`, name: `${fmtName(f)} multiplier${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
       summary: `Sign = XOR, exponent = ea + eb − bias, significand = a ${M + 1}×${M + 1} tree multiplier (chapter 21), then the shared normalize & round unit. ∞ × 0 is NaN (NV).`,
@@ -1016,7 +1018,7 @@ export function fpToIntAlign(f: FpFormat, w = 32): ComponentDef {
       summary: `The significand is placed with its hidden bit at weight 2^${w - 1} and shifted right by (${w - 1} + bias) − exponent: t holds the integer part and, below it, G; everything further down is ORed into sticky. bad: NaN, ∞, or an exponent too big for any integer.`,
       ports: [bus('a', 1 + E + M, 'in'), bus('t', w + 1, 'out'), bit('sticky', 'out'), bit('sign', 'out'), bit('nan', 'out'), bit('bad', 'out')],
       symbol: { kind: 'box', label: 'F→I ALIGN' },
-      netlist: () => ({ pins: { a: [0, 4], ...outPins(b, ['t', 'sticky', 'sign', 'nan', 'bad']) }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { keepOrder: true }),
     });
   });
 }
@@ -1061,7 +1063,7 @@ export function fpToIntRound(f: FpFormat, w = 32): ComponentDef {
       summary: 'Round the aligned value in mode rm (G and sticky), check the range of the signed or unsigned result, negate a negative one; NaN, ∞ and out-of-range values saturate to the largest integer of their sign (NaN counts as positive) with NV, otherwise NX if inexact.',
       ports: [bus('t', w + 1, 'in'), bit('sticky', 'in'), bit('sign', 'in'), bit('nan', 'in'), bit('bad', 'in'), bit('signed', 'in'), bus('rm', 3, 'in'), bus('y', w, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'F→I ROUND' },
-      netlist: () => ({ pins: { t: [0, 2], sticky: [0, 6], sign: [0, 10], nan: [0, 14], bad: [0, 18], signed: [0, 22], rm: [0, 26], y: [b.right, 6], flags: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { room: true }),
     });
   });
 }

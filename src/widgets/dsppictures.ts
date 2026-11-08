@@ -11,8 +11,9 @@ import { slider } from './mosparts';
 import '../styles/line.css';
 import '../styles/signals.css';
 import '../styles/pictures.css';
+import { groupNum } from '../sim/numfmt';
 
-const n0 = (x: number) => Math.round(x).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (x: number) => groupNum(Math.round(x));
 const minus = (t: string) => t.replace(/-/g, '−');
 const range = (n: number) => Array.from({ length: n }, (_, i) => i);
 
@@ -237,8 +238,10 @@ async function browserDecode(bytes: Uint8Array, w: number, hh: number): Promise<
     return pictureOf(w, hh, (x, y) => d[4 * (y * w + x)]);
   } catch { return null; }
 }
+/** The quality the file widget opens at (chapter 80 quotes its size). */
+export const FILE_QUALITY = 75;
 export function fileWidget(): Widget {
-  let q = 75, own: Picture | null = null, token = 0, photo: Picture | null = null;
+  let q = FILE_QUALITY, own: Picture | null = null, token = 0, photo: Picture | null = null;
   const shown = h('img', { class: 'pic', alt: 'Our JPEG file, decoded by the browser', width: SIZE }) as HTMLImageElement, ours = canvasOf(theScene(), 1, 'Our own reconstruction');
   const chips = mkChips(4), note = h('p', { class: 'sub' }), link = h('a', { class: 'btn sm', download: 'ours.jpg' }, 'Save the file') as HTMLAnchorElement;
   let url = '';

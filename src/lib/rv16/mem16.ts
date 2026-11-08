@@ -383,6 +383,7 @@ export const DMA16 = dmaOf();
  */
 export const flashOf = (fault?: 'nogc'): ComponentDef => once(`flash${fault ?? ''}`, () => {
   const b = new Builder(10, 12, 4);
+  b.maxH = 120; // a column past this wraps into the next, not one tall strip
   b.pins('lpage', 'wd', 'we', 're', 'clk', 'rst', 'fbusy', 'fq', 'fqt');
   const nrst = b.op1(NOT, ['rst']);
   const free = b.op1(NOT, ['fbusy'], 'chip free');

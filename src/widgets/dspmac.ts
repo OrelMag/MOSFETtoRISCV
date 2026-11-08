@@ -12,6 +12,7 @@ import { mkChips } from './line';
 import { slider } from './mosparts';
 import '../styles/line.css';
 import '../styles/dspmac.css';
+import { groupNum } from '../sim/numfmt';
 
 // ---- the measured figures ---------------------------------------------------------------------------------------------------------------
 
@@ -28,7 +29,7 @@ export const machineCost = (m: MacMachine): { nands: number; period: number } =>
 export const timePerProduct = (m: MacMachine, b: MacBench): number => perProduct(m, b) * FIG[m].period;
 export const f1 = (v: number) => v.toFixed(1);
 export const f2 = (v: number) => v.toFixed(2);
-const n0 = (v: number) => Math.round(v).toLocaleString('en').replace(/,/g, ' ');
+const n0 = (v: number) => groupNum(Math.round(v));
 
 /** What the MAC adds to the core: NANDs and period, against the same core without it. */
 export const macDelta = () => ({ nands: FIG.mac.nands - FIG.rv32i.nands, period: FIG.mac.period - FIG.rv32i.period });
