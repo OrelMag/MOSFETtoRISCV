@@ -37,7 +37,7 @@ export function loomView(): Widget {
     aria: 'A Jacquard head in 3D: a square cylinder carrying a chain of punched cards against sprung needles, vertical hooks over the griffe knife, harness cords with lingoes lifting warp threads, a shuttle, a reed and the cloth',
     camera: { ...VIEWS.head },
     limits: { minDist: 90, maxDist: 600 },
-    note: `The widget’s ${HOOKS} hooks and ${WARP} threads are drawn; a real head had hundreds of hooks (400 and 600 were common), a griffe of many knives and a harness of thousands of cords. Cards are drawn some ten times thicker than pasteboard, the prism, needles and hooks are scaled up for visibility, and the shed is much taller against the thread pitch than on a loom. The chain hangs in a curtain, and a chain shorter than four cards is drawn repeated on the cylinder’s faces.`,
+    note: `The widget’s ${HOOKS} hooks and ${WARP} threads are drawn; a real head had hundreds of hooks (Posselt, 1888, gives 100, 200, 400, 600, 900 and 1200 as the sizes most often used), a griffe of many knives and a harness of thousands of cords. Cards are drawn some ten times thicker than pasteboard, the prism, needles and hooks are scaled up for visibility, and the shed is much taller against the thread pitch than on a loom. The chain hangs in a curtain, and a chain shorter than four cards is drawn repeated on the cylinder’s faces.`,
     draw: () => paint(),
   });
   const palette = (): LoomPalette => ({
