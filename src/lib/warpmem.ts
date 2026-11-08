@@ -23,6 +23,7 @@ import { lowestOne, onehotMux } from './lanes';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { bitwise, orN } from './wide';
+import { laneMemPorts } from './lanegeom';
 
 /** The lowest set bit's index (-1: none). */
 const low = (m: number) => (m ? 31 - Math.clz32(m & -m) : -1);
@@ -368,10 +369,11 @@ export function lsuMemory(o: LsuMemOptions): ComponentDef {
       id: `lsumem${n}_${W}_${L}_${Ls}_${B}_${GM.id}_${SM.id}`, name: 'Memory system (line memory + shared banks)', category: 'memory',
       summary: `One access per cycle enters: global ones travel ${L - 1} pipeline registers to the line memory, shared ones ${Ls - 1} to the banks (they enter near the end, when that slot is free).${B > 1 ? ` A global access may start only when none has in the last ${B - 1} cycles.` : ''} At the memory the served lanes read their words, stores write them (the highest lane wins a word several store), and amoadd.w writes old + data and returns the old word. Loaded words go back to the lanes they serve.`,
       ports: [bit('ret', 'in'), bit('st', 'in'), bit('amo', 'in'), bit('shared', 'in'), bit('last', 'in'), bus('warp', W, 'in'), bus('rd', 5, 'in'), bus('serve', n, 'in'),
-        ...Ln.map((i) => bus(`addr${i}`, 32, 'in')), ...Ln.map((i) => bus(`wd${i}`, 32, 'in')), clkPort(),
-        bit('retValid', 'out'), bus('retWarp', W, 'out'), bus('retRd', 5, 'out'), bit('retLast', 'out'), bus('retMask', n, 'out'), ...Ln.map((i) => bus(`retData${i}`, 32, 'out')),
+        // each lane's address, data and returning word on the top edge, under that lane (lib/lanegeom.ts)
+        ...Ln.map((i) => ({ ...bus(`addr${i}`, 32, 'in'), side: 'top' as const })), ...Ln.map((i) => ({ ...bus(`wd${i}`, 32, 'in'), side: 'top' as const })), clkPort(),
+        bit('retValid', 'out'), bus('retWarp', W, 'out'), bus('retRd', 5, 'out'), bit('retLast', 'out'), bus('retMask', n, 'out'), ...Ln.map((i) => ({ ...bus(`retData${i}`, 32, 'out'), side: 'top' as const })),
         bit('slotBusy', 'out'), bit('globalBusy', 'out')],
-      symbol: { kind: 'box', label: `MEMORY (${L} / ${Ls} CYCLES)` },
+      symbol: { kind: 'box', label: `MEMORY (${L} / ${Ls} CYCLES)`, ...laneMemPorts(n) },
       netlist: () => ({ pins: edgePins(b, ins, outs), instances: b.instances, nets: b.nets() }),
     });
   });

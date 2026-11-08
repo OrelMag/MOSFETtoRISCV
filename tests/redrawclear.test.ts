@@ -4,6 +4,8 @@ import { ethSegment } from '../src/lib/ethstation';
 import { ethSwitch } from '../src/lib/ethswitch';
 import { laneCore } from '../src/lib/lanes';
 import { xlenCpu } from '../src/lib/cpu64';
+import { warpCore } from '../src/lib/warps';
+import { WARP_PROGRAMS } from '../src/riscv/warpprograms';
 import { resolveComponent } from '../src/lib/resolve';
 import { MC_FSM, MC_MICRO, multicycleCpu } from '../src/lib/multicycle';
 import { pipelinedCpu } from '../src/lib/pipeline';
@@ -18,6 +20,7 @@ import { drawnNetlist, wiresThroughParts } from '../src/view/wirefirst';
 // A wire is drawn under a part's body: run through one, it seems to vanish and come back somewhere else. The tests that
 // check routing compare nets with nets, so a hand-drawn level is held to this here.
 const w = assemble('j .').words;
+const saxpy = WARP_PROGRAMS.find((p) => p.id === 'saxpy64')!;
 const levels: [string, () => ComponentDef][] = [
   ['single-cycle', () => singleCycleCpu(w)],
   ['single-cycle, fast adders', () => singleCycleCpu(w, { adder: 'ks' })],
@@ -40,6 +43,8 @@ const levels: [string, () => ComponentDef][] = [
   ['RV64IM core', () => xlenCpu(w, { xlen: 64, m: true })],
   ['sandbox rv64i_core', () => resolveComponent('rv64i_core')!],
   ['sandbox rv64im_core', () => resolveComponent('rv64im_core')!],
+  // the warp core: each lane's address, data and returning load straight between it and the memory under it
+  ...([[4, 2], [4, 4], [8, 8]] as const).map(([W, n]): [string, () => ComponentDef] => [`warp core, ${W} warps × ${n} lanes`, () => warpCore(assemble(saxpy.source(n)).words, { warps: W, lanes: n, dmemK: 4 })]),
   // the prologue's relay and tube circuits (circuit eyeballing, phase 2a)
   ['relay NAND', () => RELAY_NAND],
   ['self-holding relay', () => RELAY_LATCH],

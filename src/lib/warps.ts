@@ -29,6 +29,7 @@ import { regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { type At, Placer } from './placer';
+import { LANE_PITCH, LANE_TAP, laneMemPorts, MEM_INSET } from './lanegeom';
 import { accessUnit, lsuMemory } from './warpmem';
 import { bitwise, orN } from './wide';
 
@@ -329,8 +330,9 @@ export function warpLane(n: number, W: number, mul = false): ComponentDef {
       summary: `One lane of the warp core: ${W} register file${W > 1 ? 's' : ''} of 31 × 32 bits, one per warp (the issuing warp's is read and written), the operand multiplexers, an ALU${mul ? ', a multiplier (mul: the low 32 bits of a Wallace tree)' : ''} and the result multiplexer. A returning load writes its own warp's bank in the same cycle.`,
       ports: [bus('rs1', 5, 'in'), bus('rs2', 5, 'in'), bus('rd', 5, 'in'), bus('warp', W, 'in'), bit('we', 'in'), bus('pc', 32, 'in'), bus('imm', 32, 'in'), bus('pcPlus4', 32, 'in'),
         bit('aluSrcA', 'in'), bit('aluSrcB', 'in'), bus('aluCtl', 4, 'in'), bus('resultSrc', 2, 'in'), bit('isCsr', 'in'), bus('csrSel', 2, 'in'), bus('csrS', 32, 'in'), bus('tid', 32, 'in'),
-        bit('retEn', 'in'), bus('retWarp', W, 'in'), bus('retRd', 5, 'in'), bus('retData', 32, 'in'), ...(mul ? [bit('isMul', 'in')] : []), clkPort(),
-        bus('rd1', 32, 'out'), bus('rd2', 32, 'out'), bus('aluY', 32, 'out'), bus('flags', 4, 'out'), bit('nz', 'out')],
+        bit('retEn', 'in'), bus('retWarp', W, 'in'), bus('retRd', 5, 'in'), ...(mul ? [bit('isMul', 'in')] : []), bus('retData', 32, 'in'), clkPort(),
+        // rd2 and aluY last: on the top level they drop straight down into the memory, under the other outputs' labels
+        bus('rd1', 32, 'out'), bus('flags', 4, 'out'), bit('nz', 'out'), bus('rd2', 32, 'out'), bus('aluY', 32, 'out')],
       symbol: { kind: 'box', label: 'LANE' },
       netlist: () => ({ pins: edgePins(b, ins, outs), instances: b.instances, nets: b.nets() }),
     });
@@ -477,9 +479,11 @@ export function memPipe(n: number, W: number, L: number, k: number, init?: Array
     return define({
       id: `mempipe${n}_${W}_${L}_${MEM.id}`, name: `Memory, ${L}-cycle pipeline`, category: 'memory',
       summary: `A load or store enters with its warp, destination register, active lanes, addresses and data, and travels ${L - 1} pipeline registers to the memory: a load issued in cycle t is written back at the end of cycle t + ${L - 1}, so an instruction that needs it can issue in cycle t + ${L}. One request enters per cycle; nothing waits for it.`,
-      ports: [bit('ld', 'in'), bit('st', 'in'), bus('warp', W, 'in'), bus('rd', 5, 'in'), bus('mask', n, 'in'), ...lanes.map((i) => bus(`addr${i}`, 32, 'in')), ...lanes.map((i) => bus(`wd${i}`, 32, 'in')), ...(xport ? [bus('xa', k, 'in')] : []), clkPort(),
-        bit('retValid', 'out'), bus('retWarp', W, 'out'), bus('retRd', 5, 'out'), bus('retMask', n, 'out'), ...lanes.map((i) => bus(`retData${i}`, 32, 'out')), ...(xport ? [bus('xq', 32, 'out')] : [])],
-      symbol: { kind: 'box', label: `MEMORY (${L} CYCLES)` },
+      ports: [bit('ld', 'in'), bit('st', 'in'), bus('warp', W, 'in'), bus('rd', 5, 'in'), bus('mask', n, 'in'),
+        // each lane's address, data and returning word on the top edge, under that lane (lib/lanegeom.ts)
+        ...lanes.map((i) => ({ ...bus(`addr${i}`, 32, 'in'), side: 'top' as const })), ...lanes.map((i) => ({ ...bus(`wd${i}`, 32, 'in'), side: 'top' as const })), ...(xport ? [bus('xa', k, 'in')] : []), clkPort(),
+        bit('retValid', 'out'), bus('retWarp', W, 'out'), bus('retRd', 5, 'out'), bus('retMask', n, 'out'), ...lanes.map((i) => ({ ...bus(`retData${i}`, 32, 'out'), side: 'top' as const })), ...(xport ? [bus('xq', 32, 'out')] : [])],
+      symbol: { kind: 'box', label: `MEMORY (${L} CYCLES)`, ...laneMemPorts(n) },
       netlist: () => ({ pins: edgePins(b, ins, outs), instances: b.instances, nets: b.nets() }),
     });
   });
@@ -810,7 +814,7 @@ function warpCoreDrawing(b: Builder, { W, n, lsu, host }: { W: number; n: number
   const Ws = range(W), Ls = range(n), wb = Math.max(1, log2(W));
   /** The unnamed splitter of anyOf() feeding this OR. */
   const feeding = (target: string) => raw.find((nt) => /^u\d+\.o0$/.test(nt.ends[0]) && nt.ends.slice(1).some((e) => e.startsWith(`${target}.`)))?.ends[0].split('.')[0] ?? '';
-  const wired = new Set<string>(), labelled = new Set<string>(), trunks = new Map<string, number>();
+  const wired = new Set<string>(), labelled = new Set<string>(), trunks = new Map<string, number>(), vias = new Map<string, At[]>();
   const wire = (d: string, s: string) => wired.add(`${d}>${s}`);
 
   // ---- band A: a row per warp, the scheduler, the issuing warp ----
@@ -920,16 +924,9 @@ function warpCoreDrawing(b: Builder, { W, n, lsu, host }: { W: number; n: number
 
   // ---- band C: the lanes, the leader, the next PC ----
   const YC = P.extent('dec', 'spawn', 'out').bottom + 12;
-  const LP = 36, laneX = (i: number) => 22 + LP * i, laneH = P.h('lane0');
-  for (const i of Ls) {
-    const x = laneX(i), ty = YC + laneH + 6;
-    P.put('lanes', `lane${i}`, x, YC);
-    P.put('lanes', `tid${i}`, x - 4, ty);
-    P.row('lanes', `ln${i}`, 'y', x - 14, P.pin(`tid${i}`, 'i0')[1]);
-    P.row('lanes', `tz${i}`, 'y', x - 14, P.pin(`tid${i}`, 'i2')[1]);
-    labelled.add(`tid${i}.out`); // a wire up to the lane's tid would cross its labels
-  }
-  const MX = laneX(n) - 4, NX = MX + 24;
+  const laneX = (i: number) => 22 + LANE_PITCH * i;
+  for (const i of Ls) P.put('lanes', `lane${i}`, laneX(i), YC);
+  const MX = laneX(n) - 4, NX = MX + 24, lanesBottom = P.extent('lanes').bottom;
   // the leader's flags feed the next-PC logic beside them; its ALU result (jalr) the clear-bit-0 under it
   P.put('lead', 'lF', MX, YC);
   const fOut = P.pin('lF', 'y')[1];
@@ -948,13 +945,32 @@ function warpCoreDrawing(b: Builder, { W, n, lsu, host }: { W: number; n: number
 
   // ---- band D: the memory system, the returning loads ----
   // the memory right under the lanes it serves (the leader's column beside them may run lower: the memory stays left of it)
-  const YD = (lsu ? P.extent('lanes', 'lead', 'pcmux') : P.extent('lanes')).bottom + 12;
+  // the memory right under the lanes, below the leader's column beside them: each lane's address and store data drop
+  // straight into its top edge, and its returning load rises beside it (lib/lanegeom.ts)
+  const YD = Math.max(lanesBottom + 10, P.extent('lead', 'pcmux').bottom + 6);
   /** A register enabled for good: its tie-high left of en. */
   const tie = (grp: string, r: string) => P.row(grp, `${r}On`, 'y', P.x(r) - 10, P.pin(r, 'en')[1]);
-  let mx = 30;
+  const mx = laneX(0) - MEM_INSET;
+  P.put('mem', 'mem', mx, YD);
+  for (const i of Ls) {
+    const x = laneX(i);
+    wire(`lane${i}.aluY`, `mem.addr${i}`); vias.set(`lane${i}.aluY>mem.addr${i}`, [[x + LANE_TAP.addr, P.pin(`lane${i}`, 'aluY')[1]]]);
+    wire(`lane${i}.rd2`, `mem.wd${i}`); vias.set(`lane${i}.rd2>mem.wd${i}`, [[x + LANE_TAP.wd, P.pin(`lane${i}`, 'rd2')[1]]]);
+    wire(`mem.retData${i}`, `lane${i}.retData`); vias.set(`mem.retData${i}>lane${i}.retData`, [[x + LANE_TAP.retData, P.pin(`lane${i}`, 'retData')[1]]]);
+  }
+  // each lane's thread id, made under the memory: a label up to its lane
+  const ty = P.bottom('mem') + 8;
+  for (const i of Ls) {
+    const x = laneX(i);
+    P.put('tid', `tid${i}`, x + 8, ty);
+    P.row('tid', `ln${i}`, 'y', x - 2, P.pin(`tid${i}`, 'i0')[1]);
+    P.row('tid', `tz${i}`, 'y', x - 2, P.pin(`tid${i}`, 'i2')[1]);
+    labelled.add(`tid${i}.out`);
+  }
+  const YL = P.extent('tid').bottom + 12;
   if (lsu) {
     // a memory instruction's accesses: which lanes now (the access unit, unless it must wait), what is left, done, holding the port
-    const a = P.cols('acc', 22, YD, [['todo', 'mo'], ['acc', 'memop'], ['nShA', 'wS', 'wG'], ['wait'], ['nWait'], ['go'], ['fGo'], ['srv']], 16);
+    const a = P.cols('acc', 22, YL, [['todo', 'mo'], ['acc', 'memop'], ['nShA', 'wS', 'wG'], ['wait'], ['nWait'], ['go'], ['fGo'], ['srv']], 16);
     const uHeld = feeding('heldG');
     const d = P.cols('done', 22, a.bottom + 10, [['allN', 'nMo'], ['nSrv'], ['rest'], ['restZ'], ['doneG'], ['nDone'], ['hold'], ['fH'], ['heldN'], ['heldW'], ['hw'], [uHeld]], 12);
     P.row('done', 'heldG', 'i0', P.right(uHeld) + 3, P.pin(uHeld, 'o0')[1]);
@@ -963,12 +979,10 @@ function warpCoreDrawing(b: Builder, { W, n, lsu, host }: { W: number; n: number
     // bar: how many warps have arrived against rs2, release; the warps waiting
     const top = Math.max(d.bottom, P.bottom('left'), P.bottom('heldG')) + 10;
     const r1 = P.cols('bar', 22, top, [['nWait2', 'arr1'], ['arr', 'arrZ'], ['arrW'], ['barCmp'], ['enough'], ['release']], 12);
-    const r2 = P.cols('bar', 22, r1.bottom + 10, [['barGo'], ['fB'], ['arrives', 'nRel'], ['barOr', 'fR'], ['barN'], ['atBar'], ['ab'], ['amoIss']], 12);
+    P.cols('bar', 22, r1.bottom + 10, [['barGo'], ['fB'], ['arrives', 'nRel'], ['barOr', 'fR'], ['barN'], ['atBar'], ['ab'], ['amoIss']], 12);
     tie('bar', 'atBar');
-    mx = Math.max(a.right, d.right, P.right('heldG'), r1.right, r2.right) + 24;
     labelled.add('amoIss.y');
   }
-  P.put('mem', 'mem', mx, YD);
   P.row('mem', 'stIss', 'y', mx - 12, P.pin('mem', 'st')[1]);
   const RX = P.right('mem') + 14;
   P.row('mem', 'rw', 'in', RX, P.pin('mem', 'retWarp')[1]);
@@ -1008,7 +1022,9 @@ function warpCoreDrawing(b: Builder, { W, n, lsu, host }: { W: number; n: number
     };
     const tags = sinks.filter((s) => !asWire(s));
     const trunk = trunks.get(drv);
-    return { name, ends: nt.ends, ...(tags.length === sinks.length ? { tags: true as const } : tags.length ? { tags } : {}), ...(trunk !== undefined ? { trunk } : {}) };
+    const via: Record<string, At[]> = {};
+    for (const s of sinks) { const v = vias.get(`${drv}>${s}`); if (v && !tags.includes(s)) via[s] = v; }
+    return { name, ends: nt.ends, ...(tags.length === sinks.length ? { tags: true as const } : tags.length ? { tags } : {}), ...(trunk !== undefined ? { trunk } : {}), ...(Object.keys(via).length ? { via } : {}) };
   });
   return { pins, nets };
 }
