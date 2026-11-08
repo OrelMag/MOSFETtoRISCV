@@ -32,3 +32,13 @@ export function tallyCard(counts: number[][], p: readonly number[]): number {
   p.forEach((v, i) => { counts[i][v]++; });
   return marriedWoman(p) ? 1 : 0;
 }
+
+/** The 3D press's relay pair: one relay per condition, energized through its hole's mercury cup (married: yes; born:
+ *  abroad). Their make contacts in series drive a dial for AND, in parallel for OR (chapter P3's derive and quiz). */
+export type Wiring = 'and' | 'or';
+export const relayInputs = (p: readonly number[]): [boolean, boolean] => [p[2] === 0, p[3] === 1];
+/** Whether the relay dial steps for this card under this wiring. */
+export function relayDial(p: readonly number[], w: Wiring): boolean {
+  const [a, b] = relayInputs(p);
+  return w === 'and' ? a && b : a || b;
+}

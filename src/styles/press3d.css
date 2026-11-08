@@ -7,5 +7,6 @@
   --pr-hand: light-dark(#2b2f3a, #14161c);
   --pr-brass: light-dark(#b8862b, #e0b04a);
   --pr-pad: light-dark(#8a93ad, #565f7a);
+  --pr-coil: light-dark(#b9773c, #c98a4f);
 }
 .pr-stroke output { width: 44px; }
