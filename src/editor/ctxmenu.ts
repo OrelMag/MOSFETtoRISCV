@@ -82,7 +82,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
       ...(wires.length ? [{ label: 'Collapse selected', run: () => collapseAll(ed, wireIds) }] : []),
       ...pick,
     ];
-    return [flip, ...turn, ...shape, ...(ptrs.length ? [null, ...ptrs] : []), null, ...edits];
+    return [flip, ...turn, ...(shape.length ? [{ label: 'Shape', sub: shape }] : []), ...(ptrs.length ? [null, ...ptrs] : []), null, ...edits];
   }
   if (s.parts?.length) {
     const p = ed.doc.parts.find((q) => q.id === s.parts![0]);
@@ -134,9 +134,12 @@ function entries(ed: Editor, at: Vec): Entry[] {
     const id = wires[0].id;
     const j = t.cornerAt(id, at);
     return [
-      { label: 'Add a bend here', run: () => t.bendAt(id, at), disabled: j >= 0 },
-      { label: 'Remove this bend', key: 'double-click', run: () => t.unbend(id, j), disabled: j < 0 },
-      ...shape, null,
+      // the shape actions fold into one group: the menu above them is already tall
+      { label: 'Shape', sub: [
+        { label: 'Add a bend here', run: () => t.bendAt(id, at), disabled: j >= 0 },
+        { label: 'Remove this bend', key: 'double-click', run: () => t.unbend(id, j), disabled: j < 0 },
+        ...shape,
+      ] }, null,
       { label: 'Collapse to pointers…', run: () => collapseDialog(ed, id) },
       ...pick,
       null, { label: 'Delete', key: 'Del', run: () => t.del() },
