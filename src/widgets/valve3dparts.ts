@@ -152,7 +152,7 @@ export function valveAnchors(pose: ValvePose): Anchor[] {
   const front: Vec3 = [0, 0.3, 1], up: Vec3 = [0, 1, 0], vs = [...pose.valves].sort((a, b) => a.cx - b.cx);
   const a = vs[vs.length - 1], dy = diaphragmY(a.open * TRAVEL);
   const out: Anchor[] = [
-    { text: 'gate line (dead end)', p: [vs[0].cx - 14, 66, 3], side: 't', n: up },
+    pose.valves.length > 1 ? { text: 'gate line (dead end)', p: [(vs[0].cx + a.cx) / 2 + 8, 66, 3], side: 't', n: up } : { text: 'gate line (dead end)', p: [a.cx + 13, 60, 3], side: 'r', n: up },
     { text: 'spring', p: [a.cx + 4, 44, 0], side: 'r', n: front },
     { text: 'diaphragm', p: [a.cx + 8, dy, 0], side: 'r', n: front },
     { text: 'plunger', p: [a.cx + 5.5, SEAT_Y + a.open * TRAVEL + 1, 0], side: 'r', n: front },

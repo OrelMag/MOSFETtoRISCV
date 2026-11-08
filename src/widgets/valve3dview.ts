@@ -64,21 +64,21 @@ export function valveView(): Widget {
   stage.chips.append(chip);
 
   function readout(): void {
-    const sp = spec(), t = target(), vo = volts();
+    const sp = spec(), t = target(), vo = volts(), moving = !settled();
     const rows: [string, string][] = [['Gate line pressure', `${(vin * vo).toFixed(2)} V (${pct(vin)} of the supply)`], ['Cracking pressure (preload ÷ area)', `${(cracking(sp) * vo).toFixed(2)} V`]];
     const held = swept(sp, open.n * TRAVEL) / swept(sp, TRAVEL);
     if (mode === 'one') {
       const f = fetWater(vin * VDD, VDD);
       rows.push(['Spring force', `${pct(springForce(sp, t.n * TRAVEL) / (preload(sp) + rate(sp) * TRAVEL))} of full`], ['Plunger lift', `${pct(t.n)} of travel`],
         ['Flow (tank full)', f.kind === 'cut' ? '0, shut' : `${f.id.toFixed(0)} µA, ${f.kind === 'sat' ? 'choked' : 'linear'}`]);
-      chip.textContent = t.n <= 0 ? 'Seated: below cracking pressure' : t.n >= 1 ? 'Fully open' : 'Cracked open';
-      chip.className = `r3-chip ${t.n <= 0 ? '' : t.n >= 1 ? 'good' : 'warn'}`;
+      chip.textContent = moving ? 'Moving: diaphragm travelling' : t.n <= 0 ? 'Seated: below cracking pressure' : t.n >= 1 ? 'Fully open' : 'Cracked open';
+      chip.className = `r3-chip ${moving ? 'warn' : t.n <= 0 ? '' : t.n >= 1 ? 'good' : 'warn'}`;
     } else {
       const st = columnStep(out, col(), 0);
       rows.push(['PMOS valve lift', `${pct(t.p)} of travel`], ['NMOS valve lift', `${pct(t.n)} of travel`], ['Output (column) level', `${(out * vo).toFixed(2)} V`],
         ['Straight through, tank to drain', pct(wasted(st))]);
-      chip.textContent = out > 0.95 ? 'Output 1: pulled up' : out < 0.05 ? 'Output 0: pulled down' : 'Between: valves part-open';
-      chip.className = `r3-chip ${out > 0.95 || out < 0.05 ? 'good' : 'warn'}`;
+      chip.textContent = moving ? 'Switching: diaphragms moving' : out > 0.95 ? 'Output 1: pulled up' : out < 0.05 ? 'Output 0: pulled down' : 'Between: valves part-open';
+      chip.className = `r3-chip ${!moving && (out > 0.95 || out < 0.05) ? 'good' : 'warn'}`;
     }
     rows.push(['Gate-line flow', Math.abs(gateQ) < 0.005 ? '0 (dead end, at rest)' : `${gateQ > 0 ? '+' : '−'}${Math.abs(gateQ).toFixed(2)} strokes/s`], ['Held by the diaphragm', `${pct(held)} of a stroke`]);
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
