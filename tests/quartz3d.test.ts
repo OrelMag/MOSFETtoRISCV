@@ -6,6 +6,7 @@ import { flatFaces } from '../src/gl/parts';
 import {
   atThicknessMm, beamFreq, boardAnchors, driftAnchors, realPerScreen, screenSlip, SLIP_S, driftOf, driftParts, driveCurrent, fmtTime, GROOVE_D, GROOVE_W, inWindow, tipAmplitude, TOL_PPM, WINDOW_FRAC, boardParts, chainX, crystalAnchors, crystalParts, DIVIDE, F_WATCH, fork, freqAt, loadCap, loaded, modeShape,
   PIERCE, ringTau, secPerDay, STAGES, stageBits, stageFreq, TINE_L, TINE_W, tempPpm, type QuartzPalette,
+  atAnchors, atParts, atPpm, AT_F, AT_LAYERS, AT_N, shearAt,
 } from '../src/widgets/quartz3dparts';
 
 const c = (v: number): [number, number, number] => [v, v, v];
@@ -192,5 +193,30 @@ describe('the ring screen speed', () => {
   });
   it('states the scale: at 200 MHz one screen second is 125 µs / 8', () => {
     expect(realPerScreen(200e6)).toBeCloseTo(125e-6 / SLIP_S, 12);
+  });
+});
+
+describe('the AT-cut view', () => {
+  it('f = N / t: a 16 MHz fundamental blank is about 0.104 mm thick, and halving the thickness doubles f', () => {
+    expect(AT_N).toBeGreaterThanOrEqual(1.66e6); expect(AT_N).toBeLessThanOrEqual(1.67e6);
+    expect(atThicknessMm(AT_F)).toBeCloseTo(0.104, 3);
+    expect(atThicknessMm(2 * AT_F)).toBeCloseTo(atThicknessMm(AT_F) / 2, 9);
+  });
+  it('the temperature curve is a cubic about 25 °C, within ±15 ppm over −40 … 85 °C, flatter near room temperature than the fork', () => {
+    expect(atPpm(25)).toBe(0);
+    for (let T = -40; T <= 85; T++) expect(Math.abs(atPpm(T))).toBeLessThanOrEqual(15 + 1e-9);
+    expect(atPpm(-20)).toBeCloseTo(15, 9); expect(atPpm(70)).toBeCloseTo(-15, 9);
+    expect(atPpm(25 + 7) + atPpm(25 - 7)).toBeCloseTo(0, 9); // odd about the inflection
+    expect(Math.abs(atPpm(45))).toBeLessThan(Math.abs(-0.034 * 20 * 20) * 2); // both a few ppm at 45 °C; the fork's grows as the square
+  });
+  it('thickness shear: the faces move opposite ways, the middle plane stays', () => {
+    expect(shearAt(0.5)).toBeCloseTo(1, 12); expect(shearAt(-0.5)).toBeCloseTo(-1, 12); expect(shearAt(0)).toBe(0);
+    const parts = atParts({ disp: 1 }, P), layers = parts.slice(0, AT_LAYERS).map((q) => q.pos[0]);
+    for (let i = 0; i < AT_LAYERS; i++) expect(layers[i]).toBeCloseTo(-layers[AT_LAYERS - 1 - i], 9);
+    expect(layers[AT_LAYERS - 1]).toBeGreaterThan(0);
+    const still = atParts({ disp: 0 }, P).slice(0, AT_LAYERS);
+    for (const q of still) expect(q.pos[0]).toBeCloseTo(0, 12);
+    expect(parts.length).toBeLessThan(20);
+    expect(atAnchors().filter((a) => !a.minor).length).toBe(2); // a phone keeps two labels
   });
 });

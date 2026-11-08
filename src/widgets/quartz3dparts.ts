@@ -97,8 +97,23 @@ export function tipAmplitude(P = DRIVE_W, Q = Q_FORK, f = F_WATCH, wMm = TINE_W,
 /** The motional current at that power through the crystal's ESR (A). */
 export const driveCurrent = (P = DRIVE_W, R = ESR): number => Math.sqrt(P / R);
 
-/** AT-cut thickness-shear: f ≈ 1.67 MHz·mm / thickness (CTS). The other kind of crystal; not drawn. */
-export const atThicknessMm = (f: number): number => 1.67e6 / f;
+/** AT-cut thickness-shear: f ≈ 1.67 MHz·mm / thickness (CTS; Corning's data book gives 1.66, a US patent about 1.67). The AT-cut view draws one. */
+export const AT_N = 1.67e6;
+export const atThicknessMm = (f: number): number => AT_N / f;
+/** The AT-cut view's crystal: 16 MHz, fundamental. Fundamental AT blanks run from about 0.8 to 40 MHz (Corning); a 200 MHz clock comes from
+ *  an overtone crystal or, usually, a PLL multiplying a crystal's frequency, so it inherits the crystal's ppm. */
+export const AT_F = 16e6;
+/** Blank and electrode diameters (mm): an HC-49-style round blank, ILLUSTRATIVE (no datasheet gives them); SMD parts use small rectangles. */
+export const AT_BLANK_MM = 8, AT_ELEC_MM = 5;
+/** The AT-cut's temperature curve is a cubic with its inflection near 25 °C, within about ±15 ppm over −40 … 85 °C (Jauch). Drawn here
+ *  with turning points 45 °C either side of 25 °C at ±15 ppm: an ILLUSTRATIVE curve, the real one set by the cut angle to arc-seconds. */
+export const AT_X0 = 45, AT_SPAN = 15;
+export const atPpm = (T: number): number => { const x = T - 25; return (AT_SPAN / (2 * AT_X0 ** 3)) * (x ** 3 - 3 * AT_X0 ** 2 * x); };
+/** Drawn thickness (units of 0.1 mm) and layers: the 0.104 mm blank is drawn 6 times thicker, its faces swinging 0.4 mm, so the shear shows. */
+export const AT_T_DRAWN = 6, AT_LAYERS = 6, AT_SHEAR = 4;
+/** Thickness-shear fundamental: the displacement along x across the thickness is sin(π·s), s from −½ (bottom face) to ½ (top face): the two
+ *  faces slide opposite ways, the middle plane stays. */
+export const shearAt = (s: number): number => Math.sin(Math.PI * s);
 
 // ---------------------------------------------------------------- the crystal, 1 unit = 0.1 mm
 
@@ -258,5 +273,34 @@ export function driftAnchors(slip: number, narrow = false): Anchor[] {
     { text: "A's edge", p: [ax, 1.8, az], side: 'l', n: up },
     { text: "B's edge", p: [bx, 2.4, bz], side: 'b', n: up },
     { text: 'setup + hold window (drawn wide)', p: [wx, 0.8, wz], side: 'r', n: up, minor: true },
+  ];
+}
+
+// ---------------------------------------------------------------- the AT-cut blank, 1 unit = 0.1 mm
+
+export interface AtPose { disp: number }
+/** The AT-cut blank lying flat: layers sliding in thickness shear, a gold electrode on each face, two spring clips on leads into the base. */
+export function atParts(p: AtPose, P: QuartzPalette): Part[] {
+  const out: Part[] = [], R = (AT_BLANK_MM * 10) / 2, RE = (AT_ELEC_MM * 10) / 2, h = AT_T_DRAWN / AT_LAYERS, top = AT_T_DRAWN;
+  const dx = (s: number) => p.disp * AT_SHEAR * shearAt(s);
+  for (let i = 0; i < AT_LAYERS; i++) out.push({ ...cyl(P.quartz, dx((i + 0.5) / AT_LAYERS - 0.5), 0, i * h, (i + 1) * h, R), spec: 0.5 });
+  // the electrodes ride on their faces: the top one slides +x while the bottom one slides −x
+  out.push(cyl(P.gold, dx(0.5), 0, top, top + 0.15, RE, 0.6), cyl(P.gold, dx(-0.5), 0, -0.15, 0, RE, 0.6));
+  // a tab from each electrode to the rim, where a clip holds the blank: the top one to +x, the bottom one to −x
+  out.push(box(P.gold, RE - 1 + dx(0.5), R + dx(0.5), top, top + 0.15, -2, 2), box(P.gold, -R + dx(-0.5), -RE + 1 + dx(-0.5), -0.15, 0, -2, 2));
+  for (const s of [1, -1]) {
+    out.push(box(P.metal, s * R - 1.5, s * R + 1.5, -2, top + 2, -2.5, 2.5, 0.6));
+    out.push(rod(P.metal, [s * (R + 1), -2, 0], [s * (R + 1), -30, 0], 0.6, 0.6));
+  }
+  out.push(box(P.ceramic, -R - 8, R + 8, -33, -30, -8, 8));
+  return out;
+}
+export function atAnchors(): Anchor[] {
+  const R = (AT_BLANK_MM * 10) / 2, RE = (AT_ELEC_MM * 10) / 2, up: Vec3 = [0, 1, 0], top = AT_T_DRAWN;
+  return [
+    { text: 'quartz blank, AT-cut', p: [-R * 0.62, top, R * 0.55], side: 'l', n: up },
+    { text: 'gold electrode, both faces', p: [RE * 0.3, top + 0.15, -RE * 0.75], side: 't', n: up },
+    { text: 'faces shear opposite ways', p: [R * 0.5, top / 2, R * 0.866], side: 'b', n: [0.5, 0, 0.866], minor: true },
+    { text: 'spring clip on a lead', p: [-R, top + 2, 0], side: 'l', n: [-1, 0, 0], minor: true },
   ];
 }

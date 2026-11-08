@@ -24,3 +24,5 @@
 .qz-seg { max-width: 100%; }
 .qz-seg .btn.sm { flex: 1 1 auto; white-space: nowrap; }
 @media (max-width: 520px) { .qz-seg .btn.sm { padding-inline: 8px; font-size: 13px; } }
+/* four tabs on a phone: a 2 × 2 grid of separate buttons */
+@media (max-width: 520px) { .qz-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; width: 100%; } .qz-seg .btn.sm, .qz-seg .btn.sm:first-child, .qz-seg .btn.sm:last-child { border-radius: 6px; } }
