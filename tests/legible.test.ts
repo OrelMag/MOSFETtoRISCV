@@ -324,7 +324,7 @@ describe('no regression against the pre-legibility names', () => {
       });
       const cboxes = [...consts].map((k) => { const { w, h } = symbolGeom(insts[k].def), t = insts[k].def.symbol.label!; return { cx: blocks[k].x + w / 2, cy: blocks[k].y + h / 2, w, h, chars: t.length, rot: false, text: t, ports: 1, const: true } as NameBox; });
       expect(named.length, id).toBeGreaterThan(2);
-      for (const scale of [1.2, 1.6, 2, 2.4, 3, 3.6, 4.5, 6, 8]) {
+      for (const scale of [0.4, 0.5, 0.6, 0.7, 0.8, 1, 1.2, 1.6, 2, 2.4, 3, 3.6, 4.5, 6, 8]) {
         // the old rule, written out: NAME_PX on one line, largest block first, dropped only where it overlaps a name kept before
         const old = named.map(() => false), oldKept: { x: number; y: number; w: number; h: number }[] = [];
         if (needsFixedNames(scale)) {
