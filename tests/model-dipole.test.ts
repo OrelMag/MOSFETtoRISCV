@@ -32,15 +32,15 @@ describe('current', () => {
   it('is zero at the tips and maximal at the feed at every phase', () => {
     for (const t of [0, 0.125, 0.3, 0.5, 0.7]) {
       const ph = 2 * Math.PI * t;
-      expect(Math.abs(currentAt(HALF_LEN, ph))).toBeLessThan(1e-9);
-      expect(Math.abs(currentAt(-HALF_LEN, ph))).toBeLessThan(1e-9);
+      expect(Math.abs(currentAt(cutHalf(0.5), ph))).toBeLessThan(1e-9);
+      expect(Math.abs(currentAt(-cutHalf(0.5), ph))).toBeLessThan(1e-9);
       for (let i = 1; i < 40; i++) expect(Math.abs(currentAt((HALF_LEN * i) / 40, ph))).toBeLessThanOrEqual(Math.abs(currentAt(0, ph)) + 1e-12);
     }
     expect(envelope(0)).toBe(1);
-    expect(envelope(HALF_LEN)).toBe(0);
+    expect(envelope(cutHalf(0.5))).toBeLessThan(1e-9);
   });
   it('is cos(kz) in space and oscillates at the period of the chapter frequency', () => {
-    for (let i = 0; i <= 10; i++) { const z = (HALF_LEN * i) / 10; expect(currentAt(z, 0)).toBeCloseTo(Math.cos((2 * Math.PI * z) / LAMBDA), 12); }
+    for (let i = 0; i <= 10; i++) { const z = (cutHalf(0.5) * i) / 10; expect(currentAt(z, 0)).toBeCloseTo(Math.cos((2 * Math.PI * z * HALF_LEN) / cutHalf(0.5) / LAMBDA), 12); }
     expect(currentAt(0, 2 * Math.PI)).toBeCloseTo(1, 12);
     expect(currentAt(0, Math.PI)).toBeCloseTo(-1, 12);
     const r = new DipoleRun(); r.step(); r.step();
@@ -159,8 +159,8 @@ describe('the length slider (Balanis ch. 4, sinusoidal current)', () => {
   it('the voltage is odd about the feed, zero there, largest at the tips and in quadrature with the current', () => {
     const t = 0.25 * 2 * Math.PI;
     expect(voltageAt(0.001, t)).toBeCloseTo(0, 2);
-    expect(voltageAt(HALF_LEN - 0.001, t)).toBeCloseTo(1, 3);
-    expect(voltageAt(-HALF_LEN + 0.001, t)).toBeCloseTo(-1, 3);
+    expect(voltageAt(cutHalf(0.5) - 0.001, t)).toBeCloseTo(1, 3);
+    expect(voltageAt(-cutHalf(0.5) + 0.001, t)).toBeCloseTo(-1, 3);
     expect(voltageAt(1, 0)).toBeCloseTo(0, 12);
     expect(currentAt(1, t)).toBeCloseTo(0, 12);
   });
@@ -168,7 +168,13 @@ describe('the length slider (Balanis ch. 4, sinusoidal current)', () => {
     const run = new DipoleRun();
     run.lwl = 1.5;
     expect(cutHalf(1.5)).toBeCloseTo((1.5 * LAMBDA - DEFICIT) / 2, 9);
-    expect(currentAt(0.75 * LAMBDA, 0, 1.5)).toBeCloseTo(0, 9);
+    expect(currentAt(cutHalf(1.5), 0, 1.5)).toBeCloseTo(0, 9);
+    for (let L = 0.25; L <= 1.5001; L += 0.05) for (const ph of [0, 0.7, 2, 4]) {
+      expect(Math.abs(currentAt(cutHalf(L), ph, L))).toBeLessThan(1e-9);
+      expect(Math.abs(currentAt(-cutHalf(L), ph, L))).toBeLessThan(1e-9);
+      const r = new DipoleRun(); r.lwl = L; r.t = ph / (2 * Math.PI); expect(Math.abs(r.tip)).toBeLessThan(1e-9);
+    }
+    expect(Math.abs(voltageAt(cutHalf(0.5), Math.PI / 2))).toBeCloseTo(1, 9);
     expect(hRing(1, 1.5)[0][1]).toBe(1);
     const base = new DipoleRun();
     for (const feed of ['balanced', 'coax', 'balun'] as const) for (const mode of ['power', 'field'] as const) {

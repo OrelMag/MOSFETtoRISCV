@@ -31,7 +31,7 @@ export const REAL_DIAMETER = 0.2, DRAWN_SCALE = 3;
 const ROD_R = (REAL_DIAMETER * DRAWN_SCALE) / 2;
 /** The feed gap (cm) bridged by an insulator block; the arms start at its edges. The amplitude (cm) of the current and voltage curves is arbitrary. */
 export const GAP = 0.3, CURVE_A = 2.4;
-/** A wire cut for resonance is shorter than the electrical half wave by the end effect, about 0.95 (ARRL Antenna Book; Balanis ch. 4). The rods are drawn at the CUT length; the current's zero sits the end-effect extension beyond each tip. */
+/** A wire cut for resonance is shorter than the electrical half wave by the end effect, about 0.95 (ARRL Antenna Book; Balanis ch. 4). The rods are drawn at the CUT length; the standing wave is mapped onto the cut wire so that its node is at the drawn tip. */
 export const END_EFFECT = 0.95;
 /** Total end-effect shortening (cm): (1 - 0.95) lambda/2, taken as the same ~0.16 cm per end at every slider length (set by the wire's thickness, not its length). */
 export const DEFICIT = (1 - END_EFFECT) * LAMBDA / 2;
@@ -48,20 +48,25 @@ export const SLOWDOWN = FREQ_HZ / DRAW_RATE;
 
 // ---------------------------------------------------------------- the model the drawing follows
 
-/** The standing-wave current at height z (cm from the feed) at phase `phase`, for electrical length `lwl` wavelengths (1 = the wave's peak): zero past the electrical tips. */
+/** Where on the electrical wave a point of the cut wire sits: the wire's physical tip is the wave's node (the end effect makes the electrical length longer than the wire), so z is stretched by L/2 over the cut half length. Null past the tip. */
+const along = (z: number, lwl: number): { u: number; h: number } | null => {
+  const hc = cutHalf(lwl), h = (lwl * LAMBDA) / 2;
+  return Math.abs(z) > hc + 1e-9 ? null : { u: (Math.abs(z) * h) / hc, h };
+};
+/** The standing-wave current at height z (cm from the feed) at phase `phase`, for electrical length `lwl` wavelengths (1 = the wave's peak): zero at and past the physical tips. */
 export const currentAt = (z: number, phase: number, lwl = L_HALF): number => {
-  const h = (lwl * LAMBDA) / 2;
-  return Math.abs(z) > h + 1e-9 ? 0 : Math.sin(K * (h - Math.abs(z))) * Math.cos(phase);
+  const p = along(z, lwl);
+  return p ? Math.sin(K * (p.h - p.u)) * Math.cos(phase) : 0;
 };
-/** Amplitude envelope sin(k(L/2 - |z|)): 1 at the feed of the half wave, 0 at the electrical tips. */
+/** Amplitude envelope sin(k(L/2 - u)): 1 at the feed of the half wave, 0 at the physical tips. */
 export const envelope = (z: number, lwl = L_HALF): number => {
-  const h = (lwl * LAMBDA) / 2;
-  return Math.abs(z) >= h - 1e-9 ? 0 : Math.sin(K * (h - Math.abs(z)));
+  const p = along(z, lwl);
+  return p ? Math.sin(K * (p.h - p.u)) : 0;
 };
-/** The voltage along the arms, in quadrature with the current and odd about the feed: sign(z) cos(k(L/2 - |z|)) sin(wt). Largest at the tips of a half wave, zero at its feed. */
+/** The voltage along the arms, in quadrature with the current and odd about the feed: sign(z) cos(k(L/2 - u)) sin(wt). Largest at the tips of a half wave, zero at its feed. */
 export const voltageAt = (z: number, phase: number, lwl = L_HALF): number => {
-  const h = (lwl * LAMBDA) / 2;
-  return Math.abs(z) > h + 1e-9 ? 0 : Math.sign(z) * Math.cos(K * (h - Math.abs(z))) * Math.sin(phase);
+  const p = along(z, lwl);
+  return p ? Math.sign(z) * Math.cos(K * (p.h - p.u)) * Math.sin(phase) : 0;
 };
 
 /** The far-field amplitude of the sinusoidal-current dipole, unnormalized: [cos(pi L cos t) - cos(pi L)] / sin t (L in wavelengths). */
@@ -180,7 +185,7 @@ export class DipoleRun {
   step(): void { this.t = Math.round(this.t / STEP_PHASE) * STEP_PHASE + STEP_PHASE; }
   /** The feed current now, 1 = the wave's peak (sin(pi L) of it at the feed). */
   get feed(): number { return currentAt(0, this.phase, this.lwl); }
-  /** The current at the cut tips now (the electrical zero lies the end effect beyond). */
+  /** The current at the cut tips now: zero, the wire ends there. */
   get tip(): number { return currentAt(cutHalf(this.lwl), this.phase, this.lwl); }
 }
 
