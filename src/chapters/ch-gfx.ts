@@ -3,6 +3,7 @@ import { BILINEAR8, BLEND332, LERP8, bilinearRef } from '../lib';
 import { stats } from '../sim/stats';
 import { costWidget, pipelineScene } from '../widgets/gfxpipe';
 import { drawScene } from '../widgets/drawpad';
+import { crt3d } from '../widgets/crt3d';
 import { depthScene, displayScene, edgeWidget, gpuScene } from '../widgets/screen';
 import { warpCoreScene } from '../widgets/warps';
 import { CLEAR_CYCLES, Z_WALK_START } from '../gfx/raster';
@@ -115,6 +116,22 @@ export const chPixels: Chapter = {
           With sync off the swap is immediate and lands in the middle of a frame: the rows above the flip come from one buffer and the rows below from the other.</p>`,
         real: `<p>Displays are refreshed from a scan-out engine that reads the frame buffer by DMA in bursts and cannot be stalled; compositors flip pointers, not pixels (page flipping), and triple buffering adds a third
           frame so the GPU never waits for the flip. Variable-refresh displays move the vsync to when the frame is ready.</p>`,
+      },
+    },
+    {
+      title: 'The beam on a tube',
+      deep: true,
+      body: `
+        <p>The scan-out was designed for a tube. A cathode-ray tube has one pixel's worth of information at a time: an electron beam, and the position of the beam is the address. The counter's 10 bits <em>are</em> the beam's two coordinates: the low 4 bits pick the word along a row (16 words of 4 pixels), the high 6 the row. Below, the same counter drives a picture tube; the beam is wherever the counter says, and every phosphor cell it passes lights with the byte the scan-out read.</p>
+        <p><strong>The gun.</strong> A heater warms three cathodes (red, green, blue, in a row); a control grid, G1, held negative against each cathode meters its beam current, which is the pixel's colour field; a screen grid, G2, a few hundred volts up, draws the electrons out; three focus electrodes shape the beam; the final anode, G6, is at the tube's high voltage, 24 to 32 kV on a colour tube, joined to the aquadag (graphite) coating inside the funnel through the anode button. At 25 kV an electron travels at about 0.3 c. The neck is 29.1 mm across on a typical colour tube of this 90° class, and its stem has ten pins.</p>
+        <p><strong>The yoke.</strong> Where the neck widens into the funnel sits the deflection yoke: copper saddle coils round a ferrite core. A magnetic field across the beam bends it (F = −e v × B), so the horizontal coils, which make a vertical field, sweep the beam sideways, and the vertical coils step it down. The deflection is proportional to the coil current, so a straight scan line needs a <strong>sawtooth</strong> current: a steady ramp, then a fast return. A <em>magnetic</em> lens is what makes 90° (110° on larger tubes) possible in a tube this short; the drive power grows with the angle, from about 40 W at 90° to 80 W at 120°. On this tube the deflection centre is 170 mm from the face, so the corners of a 340 mm diagonal are exactly 45° off the axis.</p>
+        <p><strong>Retrace.</strong> Returning the beam takes time, because the yoke is an inductance: the return is a short half-cycle of a resonance, during which the grid is driven past cut-off and the beam is <em>blanked</em>. Horizontal retrace is fast; vertical retrace is slow, several tens of line times. VGA's 640 × 480 mode spends 160 of 800 clocks on each line's blanking (20 %) and 45 of 525 lines on the frame's (8.6 %): only 73 % of the time is picture. <strong>Our scan-out has none.</strong> The cycle after word 15 of a row is word 0 of the next, and word 1023 is followed by word 0; a real tube would need a controller that holds the address while the beam flies back. Choose "With VGA-proportioned retrace" and the clock is held for those cycles.</p>
+        <p><strong>Phosphor.</strong> Each cell glows for as long as its phosphor takes to decay, which is why a 60 Hz screen does not flicker; the colour-television phosphors (P22) are short-persistence, so the picture exists only where the beam has just been. The default fade is about 1 ms, 6 % of a frame: a trail of about four of our 64 rows behind the beam. The ×4 and ×16 settings exaggerate it so the sweep is visible at the speed you can follow.</p>
+        <div class="try">Run, then switch to the VGA retrace and watch the horizontal current: the ramp is the sweep, the near-vertical fall the flyback. Swap the frame and note that it changes at the bottom right, at vsync, just as in the circuit above.</div>`,
+      widget: () => crt3d(),
+      more: {
+        numbers: `<p>VGA 640 × 480 @ 59.94 Hz: 25.175 MHz / 800 = 31.469 kHz a line, / 525 = 59.94 Hz a frame. Scaled to this screen the blanking becomes 16 pixels (4 words) a line and 6 lines a frame: ${20 * 70} cycles a frame instead of ${FRAME_WORDS}, of which ${FRAME_WORDS} carry a word.</p>`,
+        real: `<p>Flat panels dropped the beam and kept the timing: the blanking intervals of VGA, DVI and HDMI are the tube's retrace, kept so that the same signals drive both. CRT monitors recovered the flyback energy to make the anode voltage: the pulse of voltage across the horizontal coil's inductance on the return is stepped up by a flyback transformer.</p>`,
       },
     },
     {

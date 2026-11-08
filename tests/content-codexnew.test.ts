@@ -100,7 +100,7 @@ describe('the journey\'s codex entries', () => {
     stepSays('warps', 4, '110 715'); stepSays('warps', 4, '92 564'); stepSays('warps', 4, '65 536');
     quotes('occupancy', 110715, 92564, 65536);
     stepSays('warps', 0, '266 cycles'); stepSays('warps', 3, '192 cycles'); stepSays('warps', 3, '172 cycles');
-    stepSays('pixels', 3, '12 032'); stepSays('pixels', 3, '76 more cycles');
+    stepSays('pixels', 4, '12 032'); stepSays('pixels', 4, '76 more cycles');
     quotes('zbuffer', 12032);
     stepSays('graphics', 1, '6144');
   });

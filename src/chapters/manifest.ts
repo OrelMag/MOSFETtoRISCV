@@ -405,6 +405,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
   ] },
   { id: "pixels", num: 33, title: "Pixels and triangles", blurb: "A framebuffer scanned out to the screen, double buffering and vsync; edge functions in fixed point, a rasterizer that walks a triangle in tiles, one pixel a cycle; a depth buffer and blending; your own drawing, cut into triangles.", level: "Throughput", builds: ["memory","muldiv"], recap: {"checks":3}, steps: [
     { title: "A frame in memory" },
+    { title: "The beam on a tube" },
     { title: "Inside a triangle", challenge: "quiz" },
     { title: "Walking tiles", challenge: "quiz" },
     { title: "Depth", challenge: "quiz" },
