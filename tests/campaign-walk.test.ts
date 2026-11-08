@@ -35,15 +35,19 @@ describe('walkthroughs', () => {
     for (const id of Object.keys(NUDGES)) expect(nodeById(id), `nudge for '${id}'`).toBeTruthy();
   });
 
-  it('draw a wire between two part ports as soon as both parts are placed (one whose ends meet at a point too)', () => {
+  it('draw a wire between two part ports as soon as both parts are placed (one whose ends meet at a point too)', async () => {
     for (const n of playable) {
       const w = walkOf(n)!;
+      // each step's drawing once: a level of many wires would otherwise rebuild it per wire and per step
+      const docs = w.steps.map((_, i) => partialDoc(w, i));
+      const partsAt = docs.map((d) => new Set(d.parts.map((q) => q.id))), wiresAt = docs.map((d) => new Set(d.wires.map((x) => x.id)));
       for (const z of w.main.wires) {
         if (!('part' in z.a) || !('part' in z.b)) continue;
         const ends = [z.a.part, z.b.part];
-        const k = w.steps.findIndex((_, i) => ends.every((p) => partialDoc(w, i).parts.some((q) => q.id === p)));
-        if (k >= 0) expect(partialDoc(w, k).wires.some((x) => x.id === z.id), `${n.id}: wire ${z.id} at step ${k + 1}`).toBe(true);
+        const k = partsAt.findIndex((s) => ends.every((p) => s.has(p)));
+        if (k >= 0) expect(wiresAt[k].has(z.id), `${n.id}: wire ${z.id} at step ${k + 1}`).toBe(true);
       }
+      await breathe();
     }
   });
 
