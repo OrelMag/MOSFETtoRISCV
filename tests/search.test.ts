@@ -159,7 +159,10 @@ describe('the built-in sources', () => {
     for (const l of locked) expect(l.href).toMatch(/^#\/campaign\/n\//);
     const codex = searchSources(ctx).find((s) => s.id === 'codex')!.items(ctx)!;
     expect(codex.length).toBeGreaterThan(50);
-    expect(codex.every((c) => c.href === `#/campaign/codex/${c.id}`)).toBe(true);
+    // entries open their page; 3D models (model:<id>) open in the codex's model index
+    expect(codex.every((c) => c.href === (c.id.startsWith('model:') ? `#/campaign/codex/models/${c.id.slice(6)}` : `#/campaign/codex/${c.id}`))).toBe(true);
+    expect(codex.some((c) => c.id === 'model:enigma')).toBe(true);
+    expect(searchGroups(searchSources(ctx), 'strowger', 'codex', ctx).groups.find((g) => g.id === 'codex')?.items.map((i) => i.id)).toContain('model:strowger');
     const r = searchGroups(searchSources(ctx), 'adder', ALL, ctx);
     expect(r.loading).toEqual([]);
     expect(r.groups.map((g) => g.id)).toEqual(expect.arrayContaining(['campaign', 'codex']));

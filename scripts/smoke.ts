@@ -21,6 +21,7 @@ import { cpus, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chapters } from '../src/chapters';
 import { ANALOGIES } from '../src/chapters/analogies';
+import { MODELS_3D } from '../src/widgets/models3dindex';
 import { families, initialParams } from '../src/lib/resolve';
 import { NODES } from '../src/campaign/nodes';
 import { levelChallenge } from '../src/campaign/levels';
@@ -558,6 +559,10 @@ function routes(): Route[] {
   // The analogy index, every aside opened (each figure loads), and on a phone.
   add('#/campaign/codex/analogies', unlocked, ' (analogies open)', undefined, ANALOGY_DRIVE);
   add('#/campaign/codex/analogies', unlocked, ` (${phoneVp.name})`, phoneVp);
+  // The 3D model index, on a phone, and every model opened in it (the codex's own loader, not the chapter's).
+  add('#/campaign/codex/models', unlocked);
+  add('#/campaign/codex/models', unlocked, ` (${phoneVp.name})`, phoneVp);
+  for (const m of MODELS_3D) add(`#/campaign/codex/models/${m.id}`, unlocked);
   for (const n of NODES) {
     add(`#/campaign/play/${n.id}`, unlocked);
     // Lessons, drills and programs open on the map instead (pages/level.ts levelRoute).

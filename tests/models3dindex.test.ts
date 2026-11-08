@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { codexById } from '../src/campaign/codex';
 import { chapterById } from '../src/chapters';
-import { MODEL_CATEGORIES, MODELS_3D, modelsOfCodex, searchModels } from '../src/widgets/models3dindex';
+import { MODEL_CATEGORIES, MODELS_3D, MODELS_INDEX_ID, modelsOfCodex, searchModels } from '../src/widgets/models3dindex';
 
 const WIDGETS = join(__dirname, '../src/widgets');
 
@@ -23,6 +23,7 @@ describe('3D model index', () => {
   });
 
   it('has unique ids and known categories', () => {
+    expect(codexById(MODELS_INDEX_ID), 'the index address must not be a codex entry').toBeUndefined();
     expect(new Set(MODELS_3D.map((m) => m.id)).size).toBe(MODELS_3D.length);
     for (const m of MODELS_3D) {
       expect(MODEL_CATEGORIES.some((c) => c.id === m.category), m.id).toBe(true);
