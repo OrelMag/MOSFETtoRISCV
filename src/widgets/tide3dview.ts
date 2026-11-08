@@ -78,7 +78,7 @@ export function tideView(): Widget {
       h('tbody', null, ...td.harms.map((hm, i) => {
         const r = ratioOf(td, hm), cells = [
           td.names[i], ...(isTide() ? [hm.k.toFixed(3)] : []), hm.amp.toFixed(3), String(Math.round(deg(hm.phase))), throwMm(hm).toFixed(0),
-          `${r.toFixed(r < 10 ? 3 : 2)}:1`, String(Math.round(deg(angleOf(hm, td.n, t)))), sg(d[i] / (PEN_SCALE / 2), 3),
+          `${r.toFixed(2)} : 1`, String(Math.round(deg(angleOf(hm, td.n, t)))), sg(d[i] / (PEN_SCALE / 2), 3),
         ];
         return h('tr', { class: on[i] ? '' : 'off' }, ...cells.map((c) => h('td', null, c)));
       })));
