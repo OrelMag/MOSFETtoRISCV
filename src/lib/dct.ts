@@ -10,6 +10,7 @@ import { define } from './define';
 import { csdDigits, cut, placed, roundUp } from './fft';
 import { TIE0, TIE1 } from './transistors';
 import { notBus } from './viterbi';
+import { laid } from './layered';
 
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
 const uns = (v: number, w: number) => ((v % 2 ** w) + 2 ** w) % 2 ** w;
@@ -144,7 +145,7 @@ export function dctStage(): ComponentDef {
       id: 'dct8', name: '8-point DCT', category: 'arithmetic',
       summary: `Eight samples to eight cosine coefficients: sums and differences of mirrored pairs split it into an even half and an odd half, then ${ROWS.flat().length} products by constants, each only shifts and adds, every bit kept, and each output rounded once. Its outputs are 2^${DCT_F} times the true ones.`,
       ports, symbol: { kind: 'box', label: 'DCT', w: 8 },
-      netlist: () => built(b, ports),
+      netlist: laid(b, { keepOrder: true }),
     });
   });
 }

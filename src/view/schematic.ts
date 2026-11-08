@@ -9,7 +9,7 @@ import { describeBits, formatBits, type Radix } from '../sim/values';
 import { h, icon, s, tx } from '../ui/dom';
 import { DoubleTap } from '../ui/doubletap';
 import { reducedMotion } from '../ui/motion';
-import { Camera, fitBox, installPanZoom, underCover, type ViewBox } from './camera';
+import { Camera, fitBox, offerReadable, readableBox, installPanZoom, underCover, type ViewBox } from './camera';
 import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
@@ -1553,6 +1553,18 @@ export class SchematicView {
 
   /** Screen pixels per grid unit now (0 before a layout). */
   pxPerUnit(): number { return this.cam.pxPerUnit(); }
+
+  /** Is the overview too small to read (the stage offers Zoom to readable)? */
+  get readableOffered(): boolean { return offerReadable(this.cam.pxPerUnit()); }
+
+  /** The camera moved (a fit, a zoom, a pan): the stage's Zoom to readable button follows. */
+  onCamera(f: () => void): void { this.cam.listeners.add(f); }
+
+  /** Zoom to readable: ~3 px per unit from the drawing's left edge; the view is the learner's now (Fit goes back). */
+  zoomReadable(): void {
+    const r = this.host.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) this.cam.setView(readableBox(this.bbox, r.width, r.height));
+  }
 
   /** Everything drawn at this level, in grid units (what fit() frames, and what an image exports). */
   contentBox(): ViewBox {

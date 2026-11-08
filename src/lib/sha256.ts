@@ -16,6 +16,7 @@ import { DFF, register } from './sequential';
 import { NAND3 } from './seqparts';
 import { NAND, TIE0 } from './transistors';
 import { bitwise, orN } from './wide';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -195,7 +196,7 @@ export function wordMux(n: number): ComponentDef {
       id: `sha_muxw${n}`, name: `${32 * n}-bit 2:1 multiplexer`, category: 'routing',
       summary: `Chooses between two ${32 * n}-bit buses, word by word, with one shared select.`,
       ports: [bus('a', 32 * n, 'in'), bus('b', 32 * n, 'in'), bit('s', 'in', 'bottom'), bus('y', 32 * n, 'out')], symbol: { kind: 'mux' },
-      netlist: () => ({ pins: { a: [0, 12], b: [0, 24], s: [0, 36], y: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { keepOrder: true, room: true }),
     });
   });
 }

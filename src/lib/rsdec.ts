@@ -19,6 +19,7 @@ import { register } from './sequential';
 import { TIE0 } from './transistors';
 import { notBus } from './viterbi';
 import { bitwise } from './wide';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -133,7 +134,7 @@ export function rsRingStage(k: number): ComponentDef {
       id: `rsring${k}`, name: `RS syndrome ring, stage ${k}`, category: 'sequential',
       summary: `While the word arrives: S' = S · α^${k} + d, the word evaluated at α^${k}. Afterwards the ring rotates, one syndrome a clock, so that Berlekamp-Massey sees them in order.`,
       ports: [bus('d', 8, 'in'), bus('next', 8, 'in'), bit('rx', 'in'), bit('rot', 'in'), bit('rst', 'in'), clk(), bus('q', 8, 'out')], symbol: { kind: 'box', label: `S${k}` },
-      netlist: () => ({ pins: { ...pinsOf(['d', 'next', 'rx', 'rot', 'rst', 'clk'], [], b.right), q: [b.right, 9] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { keepOrder: true }),
     });
   });
 }

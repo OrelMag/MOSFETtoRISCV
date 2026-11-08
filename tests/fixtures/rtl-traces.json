@@ -1,0 +1,167 @@
+{
+ "spi_master": {
+  "hash": "34078514",
+  "nands": 397,
+  "transistors": 1588
+ },
+ "spi_device": {
+  "hash": "31b34b95",
+  "nands": 42898,
+  "transistors": 171592
+ },
+ "i2c_controller": {
+  "hash": "85401be5",
+  "nands": 659,
+  "transistors": 2636
+ },
+ "i2c_target": {
+  "hash": "1eceed65",
+  "nands": 1638,
+  "transistors": 6552
+ },
+ "eth_mac_tx": {
+  "hash": "51672a8d",
+  "nands": 3553,
+  "transistors": 14212
+ },
+ "eth_mac_rx": {
+  "hash": "8b106d3b",
+  "nands": 3213,
+  "transistors": 12852
+ },
+ "mac_table4_4": {
+  "hash": "64f33efa",
+  "nands": 28876,
+  "transistors": 115504
+ },
+ "mac_table7_4": {
+  "hash": "2a66779b",
+  "nands": 213699,
+  "transistors": 854796
+ },
+ "eth_xbar": {
+  "hash": "5227d49e",
+  "nands": 724,
+  "transistors": 2896
+ },
+ "eth_out": {
+  "hash": "f22f347c",
+  "nands": 516,
+  "transistors": 2064
+ },
+ "eth_tport": {
+  "hash": "a2e868d7",
+  "nands": 1292,
+  "transistors": 5168
+ },
+ "eth_in_7fs": {
+  "hash": "e1086485",
+  "nands": 142221,
+  "transistors": 568884
+ },
+ "eth_in_11fs": {
+  "hash": "e1086485",
+  "nands": 2219295,
+  "transistors": 8877180
+ },
+ "eth_in_7_8vs": {
+  "hash": "c0890a6",
+  "nands": 283950,
+  "transistors": 1135800
+ },
+ "mac_table5_6": {
+  "hash": "447a1536",
+  "nands": 55287,
+  "transistors": 221148
+ },
+ "eth_in_11_8vs": {
+  "hash": "c0890a6",
+  "nands": 4437826,
+  "transistors": 17751304
+ },
+ "eth_in_7vs": {
+  "hash": "a094534c",
+  "nands": 143166,
+  "transistors": 572664
+ },
+ "eth_in_7_8fs": {
+  "hash": "9fb0e7f2",
+  "nands": 281891,
+  "transistors": 1127564
+ },
+ "eth_in_7_16vs": {
+  "hash": "6dd7f1df",
+  "nands": 566083,
+  "transistors": 2264332
+ },
+ "eth_in_7_16fs": {
+  "hash": "bdb6db97",
+  "nands": 561462,
+  "transistors": 2245848
+ },
+ "pcie_credit_8": {
+  "hash": "bbece7b3",
+  "nands": 271,
+  "transistors": 1084
+ },
+ "pcie_credit_12": {
+  "hash": "3c73b59a",
+  "nands": 407,
+  "transistors": 1628
+ },
+ "pcie_port": {
+  "hash": "3ee6fff",
+  "nands": 374570,
+  "transistors": 1498280
+ },
+ "pcie_root_tl": {
+  "hash": "56dae2d8",
+  "nands": 2342,
+  "transistors": 9368
+ },
+ "pcie_ep_tl": {
+  "hash": "a47b13f7",
+  "nands": 169989,
+  "transistors": 679956
+ },
+ "pcie_lane": {
+  "hash": "727014bc",
+  "nands": 400,
+  "transistors": 1600
+ },
+ "usb_device": {
+  "hash": "8f3431cf",
+  "nands": 4571,
+  "transistors": 18284
+ },
+ "wifi_dcf": {
+  "hash": "36f9dbda",
+  "nands": 2617,
+  "transistors": 10468
+ },
+ "eth_src": {
+  "hash": "a71cac2e",
+  "nands": 336855,
+  "transistors": 1347420
+ },
+ "eth_rxbuf": {
+  "hash": "7f31dcf7",
+  "nands": 337314,
+  "transistors": 1349256
+ },
+ "mac_table4_5": {
+  "hash": "64f33efa",
+  "nands": 28895,
+  "transistors": 115580
+ },
+ "nic": {
+  "hash": "4b42607d",
+  "nands": 15425,
+  "transistors": 61700
+ },
+ "eth_in_7_2fs": {
+  "hash": "573c9fba",
+  "nands": 72443,
+  "transistors": 289772
+ }
+}

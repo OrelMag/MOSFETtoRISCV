@@ -63,6 +63,39 @@ const relSeq = (r: SegRec, isnA: number, isnB: number) => {
   return { seq: (r.seg.seq - a) | 0, ack: r.seg.flags & ACK ? (r.seg.ack - b) | 0 : null };
 };
 
+/** Where each arrow's label goes: a fraction along its arrow, and the row height that leaves room for them all. Text is measured as
+ *  characters × the widest size it is drawn at (13 px mono on a phone); a label may not touch another's box. Rows grow (18 up to
+ *  44 units) until every label fits; if none does, the least crowded height is kept. Pure: tests/tcpladder.test.ts. */
+export function placeLabels(segs: SegRec[], texts: string[], rank: Map<number, number>, XA: number, XB: number): { ROW: number; spots: number[]; clash: number } {
+  const CW = 7.9, LH = 15, GAP = 3;
+  const fr = [0.5, 0.38, 0.62, 0.26, 0.74, 0.14, 0.86, 0.08, 0.92];
+  let best: { ROW: number; spots: number[]; clash: number } | null = null;
+  for (let ROW = 18; ROW <= 44; ROW += 2) {
+    const Y = (t: number) => 24 + ROW * (rank.get(t) ?? 0);
+    const placed: { x0: number; x1: number; y0: number; y1: number }[] = [];
+    const spots: number[] = [];
+    let clash = 0;
+    segs.forEach((x, i) => {
+      const from = x.from === 'a' ? XA : XB, to = x.from === 'a' ? XB : XA, gone = x.fate === 'lost' || x.fate === 'queue';
+      const end = gone ? from + (to - from) * 0.6 : to, y1 = Y(x.t), y2 = gone ? (y1 + Y(x.at)) / 2 + 4 : Y(x.at);
+      const w = texts[i].length * CW;
+      const box = (f: number) => { const cx = from + (end - from) * f, cy = y1 + (y2 - y1) * f - 4; return { x0: cx - w / 2, x1: cx + w / 2, y0: cy - LH + 3, y1: cy + 4 }; };
+      let pick = 0, least = Infinity;
+      for (let k = 0; k < fr.length && least > 0; k++) {
+        const r = box(fr[k]);
+        const hit = placed.filter((p) => r.x0 < p.x1 + GAP && p.x0 < r.x1 + GAP && r.y0 < p.y1 && p.y0 < r.y1).length;
+        if (hit < least) { least = hit; pick = k; }
+      }
+      placed.push(box(fr[pick]));
+      spots.push(fr[pick]);
+      clash += least;
+    });
+    if (!best || clash < best.clash) best = { ROW, spots, clash };
+    if (!clash) break;
+  }
+  return best!;
+}
+
 /** Segments as arrows between two time lines. A click picks one, and the button loses it (they are numbered in the order sent, which a lost one changes). */
 export function ladderWidget(o: { bytes: number; lose?: boolean; close?: boolean; title?: string }): Widget {
   const ISN_A = 0x1000, ISN_B = 0x2000;
@@ -75,7 +108,10 @@ export function ladderWidget(o: { bytes: number; lose?: boolean; close?: boolean
     if (sel >= segs.length) sel = 0;
     const times = [...new Set(segs.flatMap((x) => [x.t, x.at]))].sort((a, b) => a - b);
     const rank = new Map(times.map((t, i) => [t, i]));
-    const W = 560, ROW = 18, H = 30 + ROW * Math.max(6, times.length), XA = 90, XB = W - 90;
+    const W = 560, XA = 90, XB = W - 90;
+    const texts = segs.map((x) => { const rel = relSeq(x, ISN_A, ISN_B); return `${tcpFlagText(x.seg.flags)} ${x.seg.data.length ? `seq ${rel.seq}, ${x.seg.data.length} bytes` : rel.ack !== null ? `ack ${rel.ack}` : `seq ${rel.seq}`}`; });
+    const { ROW, spots } = placeLabels(segs, texts, rank, XA, XB);
+    const H = 30 + ROW * Math.max(6, times.length);
     const Y = (t: number) => 24 + ROW * (rank.get(t) ?? 0);
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'tcp-lad', role: 'group', 'aria-label': 'Segments between computer A and computer B' }) as SVGSVGElement;
     svg.append(s('text', { x: XA, y: 13, 'text-anchor': 'middle', class: 'who' }, 'A'), s('text', { x: XB, y: 13, 'text-anchor': 'middle', class: 'who' }, 'B'),
@@ -83,12 +119,12 @@ export function ladderWidget(o: { bytes: number; lose?: boolean; close?: boolean
     segs.forEach((x, i) => {
       const from = x.from === 'a' ? XA : XB, to = x.from === 'a' ? XB : XA, gone = x.fate === 'lost' || x.fate === 'queue';
       const end = gone ? from + (to - from) * 0.6 : to, y1 = Y(x.t), y2 = gone ? (y1 + Y(x.at)) / 2 + 4 : Y(x.at);
-      const rel = relSeq(x, ISN_A, ISN_B), text = `${tcpFlagText(x.seg.flags)} ${x.seg.data.length ? `seq ${rel.seq}, ${x.seg.data.length} bytes` : rel.ack !== null ? `ack ${rel.ack}` : `seq ${rel.seq}`}`;
+      const text = texts[i];
       const g = s('g', { class: `arrow ${x.from}${gone ? ' lost' : ''}${x.retrans ? ' again' : ''}${i === sel ? ' on' : ''}`, role: 'button', tabindex: '0', 'aria-label': `Segment ${i + 1}, from ${x.from.toUpperCase()}: ${text}${gone ? ', lost' : ''}${x.retrans ? ', sent again' : ''}` });
       g.append(s('line', { x1: from, y1, x2: end, y2, class: 'hit' }), s('line', { x1: from, y1, x2: end, y2, class: 'ar' }));
       if (gone) g.append(s('path', { d: `M${end - 5} ${y2 - 5}l10 10m0-10l-10 10`, class: 'x' }));
       else g.append(s('circle', { cx: end, cy: y2, r: 3, class: 'head' }));
-      g.append(s('text', { x: (from + to) / 2, y: (y1 + y2) / 2 - 4, 'text-anchor': 'middle', class: 'lab' }, text));
+      g.append(s('text', { x: from + (end - from) * spots[i], y: y1 + (y2 - y1) * spots[i] - 4, 'text-anchor': 'middle', class: 'lab' }, text));
       const pick = () => { sel = i; paint(); (svg.isConnected ? host.querySelectorAll('.arrow')[i] as SVGGElement | undefined : undefined)?.focus({ preventScroll: true }); };
       g.addEventListener('click', pick);
       g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });

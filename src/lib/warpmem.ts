@@ -23,6 +23,7 @@ import { lowestOne, onehotMux } from './lanes';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { bitwise, orN } from './wide';
+import { laid } from './layered';
 
 /** The lowest set bit's index (-1: none). */
 const low = (m: number) => (m ? 31 - Math.clz32(m & -m) : -1);
@@ -150,7 +151,7 @@ export function accessUnit(n: number): ComponentDef {
         const lead = low(left);
         return [serveLanes(left, addrs, !!amo), lead >= 0 && isShared(addrs[lead]) ? 1 : 0];
       },
-      netlist: () => ({ pins: edgePins(b, ins, ['serve', 'shared'], 4), instances: b.instances, nets: b.nets() }),
+      netlist: laid(b),
     });
   });
 }
@@ -204,7 +205,7 @@ export function quadMemory(k: number, banked: boolean, init?: ArrayLike<number>)
         : `${N} words as ${R} lines of four: one row address reads or writes a whole 16-byte line, a write enable per word. One decoder for the four words; any four words of one line in one access, two lines in two.`,
       ports: [...rowIns.map((p) => bus(p, k - 2, 'in')), bus('we', 4, 'in'), ...C.map((c) => bus(`wd${c}`, 32, 'in')), clkPort(), ...C.map((c) => bus(`rd${c}`, 32, 'out'))],
       symbol: { kind: 'box', label: banked ? 'SHARED (4 BANKS)' : 'LINE MEMORY' },
-      netlist: () => ({ pins: edgePins(b, ins, C.map((c) => `rd${c}`), 4), instances: b.instances, nets: b.nets() }),
+      netlist: laid(b),
     });
   });
 }

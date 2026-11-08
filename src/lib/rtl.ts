@@ -7,6 +7,7 @@
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { Builder } from './builder';
+import { layered } from './layered';
 import { define, merger, ones, splitter } from './define';
 import { AND, MUX2, NOR, NOT, OR, XNOR, XOR } from './gates';
 import { DFF } from './sequential';
@@ -15,10 +16,28 @@ import { NAND, TIE0, TIE1 } from './transistors';
 
 export type Sig = number;
 
+/** Every design built with Rtl, top level first: tests walk them (equivalence across drawing changes, the drawing checks). */
+export const RTL_TOPS: ComponentDef[] = [];
+
 interface Driver { scope: number; inst: string; port: string }
 interface Gate { scope: number; name: string; def: ComponentDef; ins: Sig[]; out: Sig[]; label?: string }
 interface Pin { name: string; width: number; sigs: Sig[] }
-interface Scope { id: number; name: string; label: string; parent: number; kids: number[] }
+interface Scope {
+  id: number; name: string; label: string; parent: number; kids: number[];
+  /** A block made by split(): its id carries the parent's name, and its ports are ordered register by register. */
+  idName?: string; role?: 'next' | 'state' | 'out';
+  /** A scope whose gates went into next / state / out blocks: drawn as those three in a row. */
+  split?: boolean;
+}
+
+/** Every block drawn as next state / state / outputs (drawSplit), for the drawing checks. */
+export const RTL_SPLITS: ComponentDef[] = [];
+
+/** The gates split() moves into next state / outputs; any other part (a CRC unit, a counter) stays a box where it was. */
+const PLAIN = new Set<ComponentDef>([NAND, NOT, AND, OR, NOR, XOR, XNOR, MUX2, TIE0, TIE1]);
+
+/** A block with at least this many gates of its own, flip-flops among them, is drawn as next state, state register and outputs. */
+export const SPLIT_MIN = 40;
 
 const OUT_PORTS = (d: ComponentDef) => d.ports.filter((p) => p.dir === 'out').map((p) => p.name);
 const IN_PORTS = (d: ComponentDef) => d.ports.filter((p) => p.dir === 'in').map((p) => p.name);
@@ -30,6 +49,8 @@ export interface RtlOptions {
   summary: string;
   label?: string;
   notes?: string;
+  /** Draw a block of many gates as is, not as next state / state register / outputs (split()). */
+  noSplit?: boolean;
   /** Wrap a column of the drawing after this many grid units. */
   columnHeight?: number;
   /** Width of the top box in grid units (default: from its label). */
@@ -234,16 +255,145 @@ export class Rtl {
     return { imp, exp };
   }
 
+  /** d and q of each register of a split block, by register: ports of the three blocks line up in this order. */
+  private regRank = new Map<Sig, number>();
+
+  /**
+   * A large block of a state machine as three: the flip-flops (state), the gates whose outputs reach a flip-flop's d
+   * (next state), and the rest (outputs). Only the gates' boxes change; every gate keeps its inputs, so the netlist
+   * flattens to the same leaves on the same nets (tests/redrawclear-fsm.test.ts holds every design's outputs to it).
+   */
+  private split(sc: Scope): void {
+    if (sc.role) return; // blocks it already has (a ROM, a counter) stay, drawn first
+    const mine = this.gates.filter((g) => g.scope === sc.id);
+    const isReg = (g: Gate) => g.def === DFF || g.def === DFF_R;
+    const isPart = (g: Gate) => !PLAIN.has(g.def) && g.def.prim !== 'alias' && g.def !== DFF && g.def !== DFF_R;
+    const partIns = new Set<Sig>(), partOuts = new Set<Sig>();
+    for (const g of mine) if (isPart(g)) { g.ins.forEach((x) => partIns.add(this.root(x))); g.out.forEach((x) => partOuts.add(this.root(x))); }
+    const plain = (g: Gate) => PLAIN.has(g.def) || (g.def.prim === 'alias' && !g.out.some((x) => partIns.has(this.root(x))) && !g.ins.some((x) => partOuts.has(this.root(x))));
+    const regs = mine.filter(isReg);
+    if (mine.length < SPLIT_MIN || !regs.length || regs.length === mine.length) return;
+    const byOut = new Map<Sig, Gate>();
+    for (const g of mine) for (const o of g.out) byOut.set(this.root(o), g);
+    const next = new Set<Gate>();
+    const walk = (sig: Sig) => {
+      const g = byOut.get(this.root(sig));
+      if (!g || !plain(g) || next.has(g)) return;
+      next.add(g);
+      g.ins.forEach(walk);
+    };
+    for (const r of regs) walk(r.ins[0]);
+    const make = (role: 'next' | 'state' | 'out', name: string, label: string, gates: Gate[]) => {
+      if (!gates.length) return;
+      // a name its parent does not use yet (a block may already have a 'state' of its own)
+      const taken = new Set(sc.kids.map((k) => this.scopes[k].name));
+      let nm = name;
+      for (let i = 2; taken.has(nm); i++) nm = `${name}${i}`;
+      const k: Scope = { id: this.scopes.length, name: nm, label, parent: sc.id, kids: [], idName: sc.id === 0 ? nm : `${sc.idName ?? sc.name}_${nm}`, role };
+      this.scopes.push(k);
+      sc.kids.push(k.id);
+      for (const g of gates) { g.scope = k.id; for (const o of g.out) this.drivers[this.root(o)].scope = k.id; }
+    };
+    // one or two output gates are not worth a box of their own (its label would not fit it): they join the logic
+    const outs = mine.filter((g) => plain(g) && !next.has(g)), few = outs.length > 0 && outs.length <= 2;
+    make('next', 'next', few ? 'next state, outputs' : 'next state', mine.filter((g) => next.has(g) || (few && outs.includes(g))));
+    make('state', 'state', 'state', regs);
+    if (!few) make('out', 'out', 'outputs', outs);
+    sc.split = true;
+    regs.forEach((r, i) => { this.regRank.set(this.root(r.ins[0]), i); this.regRank.set(this.root(r.out[0]), i); });
+  }
+
+  /**
+   * A split block's own drawing: its inputs at the left, next state, state and outputs in a row, its outputs at the right.
+   * Each block is lined up on the first signal it takes from the one before, so a register's d runs straight from next
+   * state into the state block and its q on into the outputs; a signal that runs backwards (q into next state), skips a
+   * block, or comes from a pin is a pointer.
+   */
+  private drawSplit(sc: Scope, id: string, importList: Sig[], exportList: Sig[], built: Map<number, ComponentDef>, exp: Set<Sig>[], imp: Set<Sig>[]): ComponentDef {
+    const rootOf = (s: Sig) => this.root(s);
+    const netName = (s: Sig) => this.names[rootOf(s)];
+    const L = Math.max(4, ...this.names.filter((_, i) => this.alias[i] === i).map((nm) => nm.length));
+    const gapW = Math.ceil(L + 7);
+    // a block: a sub-scope (ports named after its signals) or a part left at this level (its own port names)
+    interface Block { name: string; def: ComponentDef; label?: string; ins: [string, Sig][]; outs: [string, Sig][]; col: number }
+    let col = 0;
+    const fromScope = (k: Scope): Block => ({ name: k.name, def: built.get(k.id)!, label: k.label, ins: [...imp[k.id]].map((x) => [netName(x), rootOf(x)]), outs: [...exp[k.id]].map((x) => [netName(x), rootOf(x)]), col: col++ });
+    const kidScopes = sc.kids.map((k) => this.scopes[k]);
+    const left = kidScopes.filter((k) => !k.role).map(fromScope);
+    // the parts left at this level (with the mergers and splitters of their buses) share one column
+    const own = this.gates.filter((g) => g.scope === sc.id);
+    const partCol = own.length ? col++ : -1;
+    const parts = own.map((g): Block => ({ name: g.name, def: g.def, label: g.label, ins: IN_PORTS(g.def).map((p, i) => [p, rootOf(g.ins[i])]), outs: OUT_PORTS(g.def).map((p, i) => [p, rootOf(g.out[i])]), col: partCol }));
+    const blocks: Block[] = [...left, ...parts, ...kidScopes.filter((k) => k.role).map(fromScope)];
+    const instances: InstanceDef[] = [];
+    let x = gapW;
+    for (let c = 0; c < col; c++) {
+      const here = blocks.filter((bl) => bl.col === c);
+      let y = 2, w = 0;
+      here.forEach((bl, j) => {
+        const g = symbolGeom(bl.def);
+        if (here.length === 1 && c > 0) {
+          // a block alone in its column lines up on the first signal it takes from the column before
+          const before = blocks.filter((p) => p.col === c - 1).at(-1)!, bAt = instances[blocks.indexOf(before)].at!, bg = symbolGeom(before.def);
+          const from = new Map(before.outs.map(([p, s]) => [s, p]));
+          const shared = bl.ins.find(([, s]) => from.has(s));
+          y = shared ? bAt[1] + bg.ports[from.get(shared[1])!].pos[1] - g.ports[shared[0]].pos[1] : bAt[1];
+        }
+        instances.push({ name: bl.name, def: bl.def, at: [x, y], label: bl.label });
+        y += g.h + 4 * (j < here.length - 1 ? 1 : 0);
+        w = Math.max(w, g.w);
+      });
+      x += w + 2 * gapW; // room for a pointer on each side of the gap
+    }
+    const top = Math.min(...instances.map((i) => i.at![1]));
+    if (top < 2) for (const i of instances) i.at = [i.at![0], i.at![1] + 2 - top];
+    const R = x - gapW;
+    const ports: PortDef[] = [];
+    const pins: Record<string, [number, number]> = {};
+    importList.forEach((s, i) => { ports.push({ name: netName(s), width: 1, dir: 'in', ...(this.clocks.has(netName(s)) ? { side: 'bottom' as const, clock: true } : {}) }); pins[netName(s)] = [0, 2 + 2 * i]; });
+    exportList.forEach((s, i) => { ports.push({ name: netName(s), width: 1, dir: 'out' }); pins[netName(s)] = [R, 2 + 2 * i]; });
+    const drv = new Map<Sig, { end: string; col: number }>();
+    for (const s of importList) drv.set(s, { end: netName(s), col: -1 });
+    for (const bl of blocks) for (const [p, s] of bl.outs) drv.set(s, { end: `${bl.name}.${p}`, col: bl.col });
+    const sinks = new Map<Sig, { end: string; col: number }[]>();
+    const add = (s: Sig, end: string, c: number) => { const r = rootOf(s); if (!sinks.has(r)) sinks.set(r, []); sinks.get(r)!.push({ end, col: c }); };
+    for (const bl of blocks) for (const [p, s] of bl.ins) add(s, `${bl.name}.${p}`, bl.col);
+    for (const s of exportList) add(s, netName(s), col);
+    const nets: NetDef[] = [];
+    for (const [s, ends] of sinks) {
+      const d = drv.get(s);
+      if (!d) throw new Error(`${id}: no driver for ${netName(s)}`);
+      // a wire only into the block right after the driver's, or from the last block out to a pin; the rest are pointers
+      const tags = ends.filter((e) => d.col < 0 || e.col !== d.col + 1).map((e) => e.end);
+      const net: NetDef = { name: netName(s), ends: [d.end, ...ends.map((e) => e.end)] };
+      if (tags.length === ends.length) net.tags = true;
+      else if (tags.length) net.tags = tags;
+      nets.push(net);
+    }
+    const def = define({
+      id,
+      name: `${this.opt.name}: ${sc.label}`,
+      category: this.opt.category,
+      summary: `${sc.label} (a block of ${this.opt.name}): its next-state logic, its state register and its outputs.`,
+      ports,
+      symbol: { kind: 'box', label: sc.label },
+      netlist: () => ({ pins, instances, nets }),
+    });
+    if (!RTL_SPLITS.includes(def)) RTL_SPLITS.push(def);
+    return def;
+  }
+
   private defs: ComponentDef[] = [];
   build(): ComponentDef {
     if (this.pending.size) throw new Error(`${this.opt.id}: a register has no d`);
+    if (!this.opt.noSplit) for (const sc of [...this.scopes]) this.split(sc);
     const { imp, exp } = this.plumbing();
     const built = new Map<number, ComponentDef>();
     const rootOf = (s: Sig) => this.root(s);
 
     const buildScope = (sc: Scope): ComponentDef => {
       const isRoot = sc.id === 0;
-      const id = isRoot ? this.opt.id : `${this.opt.id}_${sc.name}`;
+      const id = isRoot ? this.opt.id : `${this.opt.id}_${sc.idName ?? sc.name}`;
       // children first
       for (const k of sc.kids) built.set(k, buildScope(this.scopes[k]));
       // a label is ~0.5 units a character beside its pin and stub: two of them must fit in a column gap
@@ -251,8 +401,10 @@ export class Rtl {
       const gapW = Math.ceil(L + 7);
       const b = new Builder(gapW, gapW);
       const myGates = this.gates.filter((g) => g.scope === sc.id);
-      const importList = isRoot ? [] : [...imp[sc.id]].map(rootOf);
-      const exportList = isRoot ? [] : [...exp[sc.id]].map(rootOf);
+      const byReg = (xs: Sig[]) => (sc.role ? [...xs].sort((a, b) => (this.regRank.get(a) ?? 1e9) - (this.regRank.get(b) ?? 1e9)) : xs);
+      const importList = isRoot ? [] : byReg([...imp[sc.id]].map(rootOf));
+      const exportList = isRoot ? [] : byReg([...exp[sc.id]].map(rootOf));
+      if (sc.split && !isRoot) return this.drawSplit(sc, id, importList, exportList, built, exp, imp);
       const netName = (s: Sig) => this.names[rootOf(s)];
       // drivers of each signal as seen in this scope
       const drv = new Map<Sig, string>();
@@ -337,19 +489,24 @@ export class Rtl {
       // a pin used as a driver is named after itself; a pass-through (in → out) is a net of two pins
       const nets: NetDef[] = b.nets();
       const instances: InstanceDef[] = b.instances;
+      // a small block of gates is laid out by logic depth, rows level with what they talk to, its short nets drawn as wires
+      // (lib/layered.ts); not one of boxes or wide buses, whose pointer names need wider channels than layered leaves
+      const small = !sc.role && !sc.kids.length && instances.length <= SPLIT_MIN && instances.every((i) => i.def.ports.length <= 8);
+      const lay = small ? layered(ports, b, { gap: 14, x0: gapW }) : null; // x0: room for a pin's pointer
       return define({
         id,
-        name: isRoot ? this.opt.name : `${this.opt.name}: ${sc.label}`,
+        name: isRoot ? this.opt.name : sc.role ? `${this.opt.name}: ${this.scopes[sc.parent].label || this.opt.name}, ${sc.label}` : `${this.opt.name}: ${sc.label}`,
         category: isRoot ? this.opt.category : this.opt.category,
         summary: isRoot ? this.opt.summary : `${sc.label} (a block of ${this.opt.name}).`,
         ports,
         symbol: { kind: 'box', label: isRoot ? (this.opt.label ?? this.opt.name) : sc.label, ...(isRoot && this.opt.boxW ? { w: this.opt.boxW } : {}) },
-        netlist: () => ({ pins, instances, nets }),
+        netlist: () => lay ?? { pins, instances, nets },
         ...(isRoot && this.opt.notes ? { notes: this.opt.notes } : {}),
       });
     };
     const top = buildScope(this.scopes[0]);
     this.defs.push(top);
+    if (!RTL_TOPS.includes(top)) RTL_TOPS.push(top);
     return top;
   }
 }

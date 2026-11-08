@@ -17,7 +17,7 @@ export interface CoachBeat {
 }
 
 export const STAGE_BEATS: readonly CoachBeat[] = [
-  { id: 'drill', target: '.stage .crumbs', card: 'beside', title: 'Open any box',
+  { id: 'drill', target: '.stage .crumbs', card: 'clear', title: 'Open any box',
     text: 'Double-click a part to look inside it, all the way down to the MOSFETs: every level is built from the one below. This path shows where you are; click a name to climb back, or press Esc.',
     touch: { text: 'Double-tap a part to look inside it, all the way down to the MOSFETs: every level is built from the one below. This path shows where you are; tap a name to climb back, or use the up-arrow button.' } },
   { id: 'walk', target: '.tour-go', title: 'Walk me through it', card: 'clear',

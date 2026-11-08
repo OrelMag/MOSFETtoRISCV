@@ -27,6 +27,7 @@ import { h, icon } from '../dom';
 import { markJump } from '../returnto';
 import { briefResults, GRADE_WORD, starText } from './briefview';
 import type { Page } from './chapter';
+import { needsLine } from '../capneeds';
 
 type Tab = 'spec' | 'tests' | 'rules' | 'others';
 /** The design brief (tier 4) has two views: the editor, and the chart of what has been measured. */
@@ -248,7 +249,7 @@ export class CapstonePage implements Page {
       ? `${core.tests().length} programs against the golden model, write by write (registers and stores, in order), within the cycle budget; Pong among them. Scored on NANDs, clock period and cycles.`
       : `A test sequence of ${ch.check.kind === 'sequence' ? ch.check.steps.length : 0} clocked steps, every output compared after every step. Scored on NANDs and clock period.`;
     el.append(
-      ...(rulesOnly ? [] : [h('section', null, h('h4', null, 'The brief'), rich('p', ch.brief))]),
+      ...(rulesOnly ? [] : [h('section', null, h('h4', null, 'The brief'), rich('p', ch.brief), needsLine(DSP_CAPSTONES.find((c) => c.id === this.nodeId)?.needs, 'cap-note') ?? '')]),
       ...(this.nodeId === 'cap_mask' && !rulesOnly ? [this.maskSheet()] : []),
       h('section', null, h('h4', null, 'Pins'), h('div', { class: 'cap-tw' }, h('table', { class: 'cap-pins' },
         h('thead', null, h('tr', null, ['pin', 'dir', 'w', 'meaning'].map((t) => h('th', null, t)))), h('tbody', null, ch.ports.map(pinRow))))),

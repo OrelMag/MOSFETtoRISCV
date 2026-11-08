@@ -6,6 +6,9 @@
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef } from '../sim/types';
 
+/** The Builder that made an instance list (layout tools and their measurements find a level's Builder by its netlist). */
+export const builderOf = new WeakMap<InstanceDef[], Builder>();
+
 export class Builder {
   instances: InstanceDef[] = [];
   private sinks = new Map<string, string[]>();
@@ -19,6 +22,7 @@ export class Builder {
   /** x0: first column; gap: between columns; vgap: between parts stacked in a column. */
   constructor(x0 = 10, private gap = 12, private vgap = 4) {
     this.x = x0;
+    builderOf.set(this.instances, this);
   }
   /** Start a new column. */
   next(): void {

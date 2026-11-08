@@ -20,6 +20,7 @@ import { arbiterN } from './mpdecode';
 import { DFF, register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { bitwise, orN } from './wide';
+import { laid } from './layered';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -262,7 +263,7 @@ export function axiBus(M: number, codes: number[]): ComponentDef {
       id, name: `Bus interconnect (${M} masters, ${S} slaves)`, category: 'memory',
       summary: `Round-robin arbitration between ${M} masters, an address decoder on the top four address bits (${codes.slice(0, S - 1).map((c) => `0x${c.toString(16)}…`).join(', ')}; anything else to the last slave), one transaction at a time: the granted master and its slave are held until the response handshake.`,
       ports, symbol: { kind: 'box', label: 'BUS' },
-      netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { keepOrder: true }),
     });
   });
 }
@@ -880,7 +881,7 @@ export function bundled(def: ComponentDef, groups: [string, 'master' | 'slave'][
       id, name: `${def.name}, bus bundled`, category: def.category,
       summary: `${def.summary ?? def.name} Its bus ports packed: per link a request bus (the master's ${M_OUT.length} signals, ${REQ_BITS} bits) and a response bus (${M_IN.length} signals, ${RSP_BITS} bits).`,
       ports, symbol: { ...def.symbol, kind: 'box' },
-      netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { keepOrder: true }),
     });
   });
 }
