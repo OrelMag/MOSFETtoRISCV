@@ -34,6 +34,7 @@ import {
 import { dockPane, paneShown, showPane, undockPane } from './dock';
 import { fsmOf } from '../lib/fsms';
 import { readbackEl } from './fsmui';
+import { noteChecked } from './analysis';
 import { type Editor, registerToolbarAction } from './editor';
 import { type PaletteItem, registerPaletteGroup } from './palette';
 import { TestPlayer } from './testplayer';
@@ -511,6 +512,7 @@ class ChallengeUi {
     // Check while "Replace your circuit?" waits: the question is dropped, the check runs
     this.confirming = false;
     const r = checkChallenge(ch, ed.compiled);
+    noteChecked(ed);
     // the truth-table and state-machine builders would hand in the answer here (challenges.ts builderViolations)
     const locked = builderViolations(ed.ws, [ed.chipId, ...ed.lib.deps(ed.chipId)], ch);
     if (locked.length) { r.restrictionViolations.push(...locked); r.ok = false; }

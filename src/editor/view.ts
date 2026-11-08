@@ -555,6 +555,7 @@ export class EditorView {
       if (this.diagCls.get(k) !== 'ed-err') this.diagCls.set(k, lvl);
     };
     for (const d of diags) {
+      if (d.level === 'hint') continue; // a note in the panel, nothing drawn on the part
       const lvl = d.level === 'error' ? 'ed-err' : 'ed-warn';
       d.parts?.forEach((id) => mark(`p:${id}`, lvl));
       d.pins?.forEach((id) => mark(`pin:${id}`, lvl));

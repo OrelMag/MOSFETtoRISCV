@@ -24,7 +24,7 @@ import { lookInside } from './inside';
 import { flipSwitch, ioInfo, switchAt, type SwitchState } from './ioparts';
 import { canTurn, faceHit, nodeAt } from './face';
 import { toggleSwitch } from './ioface';
-import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, knobPortSide, nextSameName, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
+import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, knobPortSide, nextSameName, onPinKnob, partAnchor, pointerGeom, snapPt, WireDraft } from './geom';
 import { renamePin } from './chips';
 import { type ChipDoc, commentBox, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc, pinBig, pinValue } from './model';
 import {
@@ -276,6 +276,10 @@ export class Tools {
           return;
         }
         const h = st.hit;
+        if (h.k === 'pin' && !st.name && !st.shift) {
+          const kp = ed.doc.pins.find((q) => q.id === h.id);
+          if (kp && kp.width === 1 && onPinKnob(kp, st.at)) this.knobHint();
+        }
         // A wire dragged on its own reshapes; one of several selected moves with the rest.
         const poly = h.k === 'wire' && ed.selCount <= 1 ? ed.view.polys.get(h.id) : undefined;
         if (h.k === 'wire' && poly) {
@@ -319,10 +323,22 @@ export class Tools {
         const owner = h.k === 'port' ? hitOwner(h) : h;
         ed.view.showPortsOf(owner.k === 'part' ? [owner.id] : [], owner.k === 'pin' ? [owner.id] : []);
         ed.hoverWire(h.k === 'wire' ? h.id : null, e);
+        // a pin's knob: the stub half draws a wire (crosshair), the far half moves the pin (grab)
+        const onKnob = !!pin && pin.width === 1 && onPinKnob(pin, p);
         ed.view.svg.style.cursor = h.k === 'wire' ? this.wireCursor(h.id, p)
-          : h.k === 'port' ? 'crosshair' : pin && pin.dir !== 'out' ? 'pointer' : h.k === 'none' ? '' : this.isSelected(h) ? 'move' : 'pointer';
+          : onKnob ? (knobPortSide(pin, p) ? 'crosshair' : 'grab') : h.k === 'port' ? 'crosshair' : pin && pin.dir !== 'out' ? 'pointer' : h.k === 'none' ? '' : this.isSelected(h) ? 'move' : 'pointer';
       }
     }
+  }
+
+  /** The first time a drag from a knob's far half moves the pin: say how to wire instead (once, remembered). */
+  private knobHint(): void {
+    const key = 'sb-knob-hint';
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, '1');
+    } catch { /* storage blocked: say it every session */ }
+    this.ed.toast('That moved the pin. To wire, drag from the stub side of its knob (the crosshair half).');
   }
 
   private up(e: PointerEvent): void {

@@ -38,7 +38,8 @@ import { applyFace, type ChipFace, faceItems, resolveFace, setFaceOf } from './f
 import { MAX_WIDTH, type PartResult } from './parts';
 
 export interface Diag {
-  level: 'error' | 'warn';
+  /** hint: a neutral note (not counted as a warning). */
+  level: 'error' | 'warn' | 'hint';
   /** The cause, shown bold ("g1.b is not connected"). */
   msg: string;
   /** What follows the cause: its consequence and how to fix it ("and reads X. Wire it, or …"). */

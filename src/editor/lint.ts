@@ -4,6 +4,7 @@
 //   a pointer touching nothing.
 // - Part inputs left unconnected: they read X, which spreads through everything after them.
 // - Parts whose outputs reach no output of the chip: dead logic, often a wire never drawn.
+// A freshly placed part's open inputs / dead output are hints until it is wired or the chip runs (opts.soft).
 // Warnings only: the circuit still compiles and simulates.
 
 import type { Vec } from '../sim/geometry';
@@ -22,8 +23,13 @@ export interface LintResult {
 /** At most this many overlap warnings (a badly drawn chip should not flood the list). */
 const MAX_OVERLAPS = 12;
 
-export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<string, Vec[]>): LintResult {
+export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<string, Vec[]>, opts: { soft?: boolean } = {}): LintResult {
   const diags: Diag[] = [];
+  // Until the learner runs the chip, a part nothing is wired to yet is still being placed: its open inputs and
+  // dead output are a hint (neutral, uncounted), not a warning.
+  const wired = new Set<string>();
+  for (const w of doc.wires) for (const e of [w.a, w.b]) if ("part" in e) wired.add(e.part);
+  const level = (ids: string[]): Diag["level"] => (opts.soft && ids.every((id) => !wired.has(id)) ? "hint" : "warn");
   const nl = netlistOf(built.def);
   const netName = (i: number) => {
     const n = nl?.nets[i];
@@ -95,11 +101,12 @@ export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<strin
   if (open.length) {
     const list = open.slice(0, 6).map((o) => `${o.part}.${o.port}`).join(', ');
     const one = open.length === 1;
+    const ids = [...new Set(open.map((o) => o.part))];
     diags.push({
-      level: 'warn',
+      level: level(ids),
       msg: open.length > 6 ? `${open.length} inputs (${list}, …) are not connected` : `${list} ${one ? 'is' : 'are'} not connected`,
       fix: one ? 'and reads X. Wire it, or tie it with Constant 0 / 1.' : 'and read X. Wire them, or tie them with Constant 0 / 1.',
-      parts: [...new Set(open.map((o) => o.part))],
+      parts: ids,
     });
   }
 
@@ -110,7 +117,7 @@ export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<strin
     const list = dead.slice(0, 6).map((id) => (label.get(id) ? `${id} (${label.get(id)})` : id)).join(', ');
     const one = dead.length === 1;
     diags.push({
-      level: 'warn',
+      level: level(dead),
       msg: one ? `${list} drives nothing that reaches an output.` : dead.length > 6 ? `${dead.length} parts (${list}, …) drive nothing that reaches an output.` : `${list} drive nothing that reaches an output.`,
       fix: one ? 'Wire its output on, or delete it (Del).' : 'Wire their outputs on, or delete them (Del).',
       parts: dead,

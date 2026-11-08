@@ -69,7 +69,7 @@ class Analysis {
   /** The Timing section's delay model (the Unit / Load switch). */
   private delayModel: DelayModel = defaultDelay();
   private timingTimer: ReturnType<typeof setTimeout> | null = null;
-  private lintCache: { built: Compiled | null; doc: ChipDoc | null; r: LintResult } = { built: null, doc: null, r: { diags: [], open: [] } };
+  private lintCache: { built: Compiled | null; doc: ChipDoc | null; soft: boolean; r: LintResult } = { built: null, doc: null, soft: true, r: { diags: [], open: [] } };
   private off: (() => void)[] = [];
 
   constructor(private ed: Editor) {
@@ -437,8 +437,11 @@ class Analysis {
   lint(): LintResult {
     const ed = this.ed;
     const c = this.lintCache;
-    if (c.built !== ed.compiled || c.doc !== ed.doc) {
-      this.lintCache = { built: ed.compiled, doc: ed.doc, r: ed.compiled ? lintChip(ed.doc, ed.compiled, ed.view.polys) : { diags: [], open: [] } };
+    // a freshly placed part's open pins are only hints until the learner runs or checks (lint.ts)
+    if (ed.sim.running || ed.sim.cycles > 0 || hasRun.has(ed)) hasRun.add(ed);
+    const soft = !hasRun.has(ed);
+    if (c.built !== ed.compiled || c.doc !== ed.doc || c.soft !== soft) {
+      this.lintCache = { built: ed.compiled, doc: ed.doc, soft, r: ed.compiled ? lintChip(ed.doc, ed.compiled, ed.view.polys, { soft }) : { diags: [], open: [] } };
     }
     return this.lintCache.r;
   }
@@ -535,6 +538,15 @@ class Analysis {
 }
 
 const of = new WeakMap<Editor, Analysis>();
+/** Editors whose chip has been run or checked: lint hints turn into warnings. */
+const hasRun = new WeakSet<Editor>();
+/** Check was pressed (challengeui): from now on open pins are warnings. */
+export function noteChecked(ed: Editor): void {
+  if (hasRun.has(ed)) return;
+  hasRun.add(ed);
+  ed.view.setDiags(ed.diags);
+  ed.props.update(true);
+}
 
 // the right-click menu's probe row (the Timing panel opens with the first), through probehook.ts
 setProbeRow((ed, target) => of.get(ed)?.probeRow(target) ?? 'The Timing panel is not available here.');
@@ -543,7 +555,8 @@ registerEditorPlugin((ed) => {
   const a = new Analysis(ed);
   of.set(ed, a);
   a.start();
-  return () => a.destroy();
+  const off = ed.onSimChange(() => { if (!hasRun.has(ed) && (ed.sim.running || ed.sim.cycles > 0)) noteChecked(ed); });
+  return () => { off(); a.destroy(); };
 });
 
 registerToolbarAction({
