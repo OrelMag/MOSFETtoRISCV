@@ -98,7 +98,7 @@ export function hierarchyAnchors(narrow = false): Anchor[] {
   const front: Vec3 = [0, 0.3, 1], up: Vec3 = [0, 1, 0];
   return [
     { text: 'Core', p: [-7, 10, -1], side: 't', n: up },
-    ...LEVELS.map((lv): Anchor => ({ text: SHORT[lv.id], p: [levelX(lv), 0, narrow && (lv.id === 'l1' || lv.id === 'l3') ? 24 : 3], side: 'b', n: front })),
+    ...LEVELS.map((lv): Anchor => ({ text: SHORT[lv.id], p: [levelX(lv), 0, narrow && (lv.id === 'l1' || lv.id === 'l3') ? 24 : 3], side: narrow && lv.id === 'reg' ? 'l' : 'b', n: front })),
     ...PLACES.map((q): Anchor => ({ text: q.label, p: [(q.x0 + q.x1) / 2, q.h + (q.id === 'desk' ? 8 : q.id === 'shelf' ? 1 : 3), -6], side: 't', n: up })),
   ];
 }
