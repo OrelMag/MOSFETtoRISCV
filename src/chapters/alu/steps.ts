@@ -62,9 +62,9 @@ export const ctlOf = (r: { op: number; f3: number; f7: number }): number => {
   return out[out.length - 1];
 };
 const CTL_PARTS = (() => {
-  const inst = netlistOf(control())!.instances;
-  const names = ['sf3', 'sf7', 'a0', 'a1', 'a2', 'nf1', 'is101', 'shR', 'alt1', 'alt'];
-  return inst.filter((i) => names.includes(i.name)).reduce((a, i) => a + stats(i.def).nands, 0);
+  // the ALU decoder block: its splitters, ANDs, NOT, ORs and the merger (which costs nothing)
+  const dec = netlistOf(control())!.instances.find((i) => i.name === 'aludec')!;
+  return stats(dec.def).nands;
 })();
 export { CTL_PARTS };
 
@@ -111,7 +111,7 @@ export const aluSteps: Step[] = [
     title: 'The ALU control decode',
     get body() {
       return `
-      <p>The ALU's four control bits come from the instruction's own fields. The <span data-ahead="control">control unit (the block that turns an instruction's fields into switch settings for the rest of the CPU)</span> has an ALU decoder (<span data-show="a0 a1 a2">three ANDs</span>, <span data-show="is101 shR alt1 alt">a small subtract / arithmetic detector</span>, ${g(CTL_PARTS)} NANDs with the field splitters) implements
+      <p>The ALU's four control bits come from the instruction's own fields. The <span data-ahead="control">control unit (the block that turns an instruction's fields into switch settings for the rest of the CPU)</span> has an ALU decoder (<span data-show="aludec.a0 aludec.a1 aludec.a2">three ANDs</span>, <span data-show="aludec.is101 aludec.shR aludec.alt1 aludec.alt">a small subtract / arithmetic detector</span>, ${g(CTL_PARTS)} NANDs with the field splitters) implements
       two rules, and no table:</p>
       <ul><li><strong>ctl[2:0] = aluOp ? funct3 : 000.</strong> An R-type or OP-IMM arithmetic instruction passes funct3 straight through (which is why the ALU's operation numbers are funct3). Loads, stores, branches, <code>lui</code>, <code>auipc</code> and jumps force 000: they only add (or, for a branch, subtract).</li>
       <li><strong>ctl[3] = aluOp · f7[5] · (R-type ∨ funct3 = 101) ∨ BRANCH.</strong> The bit that picks <code>sub</code> over <code>add</code> and <code>sra</code> over <code>srl</code> is funct7 bit 5, but only where it means that: an <code>addi</code> whose constant happens to set bit 30 of the word must not subtract, and
@@ -123,7 +123,7 @@ export const aluSteps: Step[] = [
     scene: () => ({ root: control(), inputs: { op: 0x13, funct3: 0, funct7: 0x20 } }),
     tour: {
       beats: [
-        { title: 'addi with bit 30 set', show: ['alt1', 'is101'], expect: { aluCtl: 0 },
+        { title: 'addi with bit 30 set', at: ['aludec'], show: ['alt1', 'is101'], expect: { aluCtl: 0 },
           say: '<p>OP-IMM, funct3 = 000, funct7[5] = 1 (bit 30 of the word, part of the constant): the subtract detector wants an R-type or funct3 = 101, so ctl = {b:aluCtl}, <code>add</code>.</p>' },
         { title: 'srai', set: { funct3: 5 }, show: ['is101', 'shR', 'alt1', 'alt'], expect: { aluCtl: 13 },
           say: '<p>funct3 = 101: <code>is101</code> and <code>alt1</code> fire, ctl = {b:aluCtl} = 1101, <code>sra</code>.</p>' },

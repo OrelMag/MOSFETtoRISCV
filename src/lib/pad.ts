@@ -66,7 +66,8 @@ export function ioPad(w = PAD_FINAL): ComponentDef {
         { name: 'y', ends: ['rx2.y', 'y'] },
       ],
     }),
-    notes: `Why a chain? The output stage is wide enough to charge a pin, a bond wire and a trace (here ${w}× the unit device, about ${Math.round(padDriveOhms(w))} Ω while it switches), so its gate is a load of ${w * 2} fF; the core's gate drives a 2 fF input. A ratio of about 4 per stage is the fastest way across. The solver sees strengths, not widths: the labels are the drawing's, and the line model reads the resistance from phys/line.ts.`,
+    // a getter: the drive resistance is a short simulation (phys/line.ts), ~25 ms, and the library is registered on every page load
+    get notes() { return `Why a chain? The output stage is wide enough to charge a pin, a bond wire and a trace (here ${w}× the unit device, about ${Math.round(padDriveOhms(w))} Ω while it switches), so its gate is a load of ${w * 2} fF; the core's gate drives a 2 fF input. A ratio of about 4 per stage is the fastest way across. The solver sees strengths, not widths: the labels are the drawing's, and the line model reads the resistance from phys/line.ts.`; },
     hdl: {
       verilog: `module io_pad (input d, en, inout pad, output y);
   // output: a chain of inverters, then a tri-state stage;  input: a buffer
