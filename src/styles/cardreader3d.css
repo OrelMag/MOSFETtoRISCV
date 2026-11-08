@@ -1,0 +1,19 @@
+/* ---------- The card reader (widgets/cardreader3dview.ts): materials and the memory list ---------- */
+.m3d {
+  --cr-card: light-dark(#e6d9b0, #d9c995);
+  --cr-hole: light-dark(#2b2f3a, #101217);
+  --cr-bed: light-dark(#b9bfd2, #4d5572);
+  --cr-brass: light-dark(#b8862b, #e0b04a);
+  --cr-lamp: light-dark(#7b6f6a, #5c5450);
+  --cr-panel: light-dark(#5d6680, #3b4259);
+  --cr-beam: light-dark(#f5d76e, #ffe58a);
+  --cr-rubber: light-dark(#3a3d45, #24262c);
+}
+.cr-seg { flex: none; }
+.cr-seg button { min-height: 30px; }
+.cr-mem { margin: 4px 0 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--text-2); }
+.cr-mem li { padding: 2px 0; overflow-wrap: anywhere; }
+.cr-mem code { color: var(--text); font-size: 12px; }
+.cr-mem .cr-none { font-style: italic; }
+@media (pointer: coarse) { .cr-seg button { min-height: 40px; } }
+.m3d .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
