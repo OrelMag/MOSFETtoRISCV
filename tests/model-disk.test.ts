@@ -9,7 +9,7 @@ import {
   AVG_LATENCY_MS, BAND_IN, BAND_OUT, CYLINDERS, FULL_STROKE_MS, PITCH_NM, PIVOT_D, ARM_L, PLATTER_R, RPM, SCALE_VS_CPU, SECTORS, SEEK_AVG_MS, SEEK_FULL_DATASHEET_MS,
   SEEK_T2T_MS, TRACKS, TURN_MS, ZERO_SKEW_R, trackBytes, cpuCycles, cylinderOf, fmtMs, diskAnchors, diskParts, distance, driveRows, headAt, mediaRate, modelCycles,
   phaseAt, planRead, radiusAt, readoutRows, sectorUnder, seekMs, trackRadius, type DiskPalette,
-  CAPACITY_BYTES, CAPACITY_NAMED_BYTES, DATASHEET_MEDIA_MBIT, OUTER_SECTORS, PICO_MM, QUEUE, RAMP_R, RAMP_C, SLIDER_DRAWN, guessLine, queueLine, queueRun, queueSorted, rewriteLine, PLATTER_Y,
+  blockMs, CAPACITY_BYTES, CAPACITY_NAMED_BYTES, DATASHEET_MEDIA_MBIT, OUTER_SECTORS, PICO_MM, QUEUE, RAMP_R, RAMP_C, SLIDER_DRAWN, guessLine, queueLine, queueRun, queueSorted, rewriteLine, PLATTER_Y,
 } from '../src/widgets/disk3dparts';
 
 const col = (i: number): RGB => [i / 20, 0.5, 0.5], al = (i: number): RGBA => [i / 20, 0.5, 0.5, 0.4];
@@ -99,10 +99,11 @@ describe('a planned read', () => {
       expect(p.seek).toBeCloseTo(seekMs(distance(from, to)), 12);
       expect(p.wait).toBeGreaterThanOrEqual(0);
       expect(p.wait).toBeLessThan(TURN_MS + 1e-9);
-      expect(p.transfer).toBeCloseTo(TURN_MS / SECTORS, 12);
+      expect(p.transfer).toBeCloseTo(blockMs(trackRadius(p.to)), 12);
       expect(sectorUnder(p.t2 + 1e-6, to)).toBe(s);
+      // the 4 KiB block is a sliver at the wedge's leading edge: the wedge is still under the head once it has passed
       expect(sectorUnder(p.t3 - 1e-6, to)).toBe(s);
-      expect(sectorUnder(p.t3 + 1e-6, to)).toBe((s + 1) % SECTORS);
+      expect(sectorUnder(p.t3 + 1e-6, to)).toBe(s);
       if (p.wait > 1e-6) expect(sectorUnder(p.t2 - 1e-6, to)).toBe((s + SECTORS - 1) % SECTORS);
     }
   });
@@ -167,7 +168,9 @@ describe('the drawing follows the model', () => {
     for (const [track, sector] of [[0, 3], [5, 11], [TRACKS - 1, 0]]) {
       const p = planRead(0, 3, track, sector), h = headAt(trackRadius(track));
       const dist = (t: number) => Math.min(...lit(t, track, sector).map((q) => Math.hypot(q.pos[0] - h.x, q.pos[2] - h.z)));
-      expect(dist((p.t2 + p.t3) / 2)).toBeLessThan(1.5);
+      // the block is at the wedge's leading edge, so the head is over the first of its three chords
+      const r = trackRadius(track), half = r * Math.sin(Math.PI / SECTORS / 3);
+      expect(dist((p.t2 + p.t3) / 2)).toBeLessThan(half + 0.2);
       if (p.wait > 1) expect(dist(p.t2 - 0.5)).toBeGreaterThan(1.5);
     }
   });
@@ -191,10 +194,10 @@ describe('rewriting in place, against flash', () => {
     const read = planRead(0, 4, 8, 5), w = planRead(read.t3, 8, 8, 5, { kind: 'write' });
     expect(w.kind).toBe('write');
     expect(w.seek).toBe(0);
-    expect(w.wait).toBeCloseTo(TURN_MS - TURN_MS / SECTORS, 6);
+    expect(w.wait).toBeCloseTo(TURN_MS - blockMs(trackRadius(8)), 6);
     expect(w.total).toBeLessThan(TURN_MS + 1e-9);
     // Whatever the sector, an in-place rewrite from its own track is at most one turn.
-    for (let s = 0; s < SECTORS; s++) for (const t0 of [0, 2.2, 9.1]) expect(planRead(t0, 6, 6, s, { kind: 'write' }).total).toBeLessThanOrEqual(TURN_MS + TURN_MS / SECTORS + 1e-9);
+    for (let s = 0; s < SECTORS; s++) for (const t0 of [0, 2.2, 9.1]) expect(planRead(t0, 6, 6, s, { kind: 'write' }).total).toBeLessThanOrEqual(TURN_MS + blockMs(trackRadius(6)) + 1e-9);
   });
   it('the readout and the one-line contrast name the flash program, not the read', () => {
     const w = planRead(1, 5, 5, 2, { kind: 'write' }), rows = Object.fromEntries(readoutRows(w, 5, { track: 5, sector: 2 }));
@@ -223,7 +226,7 @@ describe('predict, then see', () => {
     const a = queueRun(QUEUE), b = queueRun(queueSorted());
     expect(b.seek).toBeLessThan(a.seek);
     expect(b.total).toBeLessThan(a.total);
-    expect(a.transfer).toBeCloseTo(8 * (TURN_MS / SECTORS), 9);
+    expect(a.transfer).toBeCloseTo(QUEUE.reduce((s, q) => s + blockMs(trackRadius(q.track)), 0), 9);
     expect(queueSorted().map((q) => q.track)).toEqual([...QUEUE.map((q) => q.track)].sort((x, y) => x - y));
     expect(queueLine()).toContain(fmtMs(a.total));
     expect(queueLine()).toContain(fmtMs(b.total));
@@ -255,5 +258,16 @@ describe('the ramp and the added parts', () => {
   it('only the head and the platters stay named when the stage is narrow', () => {
     const major = diskAnchors({ phi: 0, r: 30, sel: null, phase: 'idle' }).filter((a) => !a.minor).map((a) => a.text);
     expect(major).toEqual(['platters, 95 mm', 'head']);
+  });
+});
+
+describe('one story for the transfer (batch 24 review)', () => {
+  it('a read moves one 4 KiB block: tens of microseconds, the bar nearly all seek and latency', () => {
+    for (let k = 0; k < TRACKS; k++) { const ms = blockMs(trackRadius(k)); expect(ms).toBeGreaterThan(0.02); expect(ms).toBeLessThan(0.06); }
+    const p = planRead(0, 0, 8, 11);
+    expect(p.transfer * 1000).toBeCloseTo(4096 / mediaRate(trackRadius(8)) * 1e6, 6);
+    expect(p.transfer / p.total).toBeLessThan(0.01);
+    const row = readoutRows(p, null, { track: 8, sector: 11 }).find(([k]) => k === 'Transfer')![1];
+    expect(row).toContain('one 4 KiB block');
   });
 });

@@ -87,6 +87,9 @@ export const trackBytes = (r: number): number => Math.round((OUTER_SECTORS * r) 
 export const wedgeBytes = (r: number): number => trackBytes(r) / SECTORS;
 /** Media rate at radius r, bytes a second: a track a turn. */
 export const mediaRate = (r: number): number => (trackBytes(r) / TURN_MS) * 1000;
+/** Time (ms) one 4 KiB block (eight 512-byte sectors) takes to pass under the head at radius r: what a read transfers. The 16 drawn
+ *  wedges are only places round the track; a real track there holds about 180 to 360 such blocks. */
+export const blockMs = (r: number): number => (SECTOR_BYTES / mediaRate(r)) * 1000;
 
 /** Where the head is when its distance from the spindle is r: x, z, the arm's angle at the pivot, the head's angle round the spindle (turns) and its skew (rad). */
 export function headAt(r: number): { x: number; z: number; alpha: number; gamma: number; skew: number } {
@@ -122,7 +125,7 @@ export function planRead(t0: number, from: number, to: number, sector: number, o
   const cylinders = distance(from, to), seek = seekMs(cylinders), t1 = t0 + seek;
   const gamma = headAt(trackRadius(to)).gamma;
   const wait = frac(sector / SECTORS + gamma - t1 / TURN_MS) * TURN_MS;
-  const transfer = TURN_MS / SECTORS, t2 = t1 + wait, t3 = t2 + transfer;
+  const transfer = blockMs(trackRadius(to)), t2 = t1 + wait, t3 = t2 + transfer;
   return { kind: opts.kind ?? 'read', fromRamp: opts.fromRamp ?? false, t0, t1, t2, t3, from, to, sector, cylinders, seek, wait, transfer, total: t3 - t0 };
 }
 
@@ -175,7 +178,7 @@ export function queueLine(): string {
 
 // ---------------------------------------------------------------- what is shown
 
-export const fmtMs = (ms: number): string => (ms >= 100 ? ms.toFixed(0) : ms >= 10 ? ms.toFixed(1) : ms.toFixed(2)) + ' ms';
+export const fmtMs = (ms: number): string => (ms >= 100 ? ms.toFixed(0) : ms >= 10 ? ms.toFixed(1) : ms >= 0.1 ? ms.toFixed(2) : ms.toFixed(3)) + ' ms';
 /** The site's digit rule (sim/numfmt.ts): grouped by U+202F only from five digits. */
 const fmtN = (n: number): string => groupNum(n);
 const fmtBytes = (b: number): string => (b >= 2 ** 20 ? `${(b / 2 ** 20).toFixed(2)} MiB` : `${Math.round(b / 1024)} KiB`);
@@ -190,14 +193,15 @@ export function readoutRows(plan: Plan | null, parked: number | null, sel: { tra
   rows.push(['Seek', `${fmtN(d)} cylinders → ${fmtMs(seekMs(d))}`]);
   if (plan) {
     rows.push(['Rotational latency', `${fmtMs(plan.wait)} (average ${fmtMs(AVG_LATENCY_MS)})`]);
-    rows.push(['Transfer', `${fmtMs(plan.transfer)} · ${fmtBytes(wedgeBytes(r))} at ${(mediaRate(r) / 1e6).toFixed(0)} MB/s`]);
+    rows.push(['Transfer', `${fmtMs(plan.transfer)} · one 4 KiB block at ${(mediaRate(r) / 1e6).toFixed(0)} MB/s`]);
     rows.push(['Total', fmtMs(plan.total)]);
     rows.push(['In flash-model cycles', `${fmtN(modelCycles(plan.total))} (a flash page ${write ? `program: ${FLASH_TIMES.program}` : `read: ${FLASH_TIMES.read}`})`]);
     if (write) rows.push(['Against a flash page program', `${fmtN(Math.round((plan.total * 1000) / FLASH_REAL_US.program))}× slower, and the flash one went to a fresh page`]);
     else rows.push(['Against a flash page read', `${fmtN(Math.round((plan.total * 1000) / FLASH_REAL_US.read))}× slower`]);
   } else {
     rows.push(['Rotational latency', `0 … ${fmtMs(TURN_MS)}, average ${fmtMs(AVG_LATENCY_MS)}`]);
-    rows.push(['Transfer', `${fmtMs(TURN_MS / SECTORS)} · ${fmtBytes(wedgeBytes(r))} at ${(mediaRate(r) / 1e6).toFixed(0)} MB/s`]);
+    rows.push(['Transfer', `${fmtMs(blockMs(r))} · one 4 KiB block at ${(mediaRate(r) / 1e6).toFixed(0)} MB/s`]);
+    rows.push(['This track', `${fmtBytes(trackBytes(r))}: the drawn wedge is a place on it, ${fmtBytes(wedgeBytes(r))} of real sectors`]);
   }
   return rows;
 }
