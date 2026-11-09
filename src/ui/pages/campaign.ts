@@ -257,7 +257,7 @@ export class CampaignPage implements Page {
     this.head.replaceChildren(
       h('div', { class: 'cp-title' },
         h('h1', null, 'Campaign'),
-        h('p', null, 'From a transistor NAND to a pipelined 16-bit RISC-V processor, one block at a time.')),
+        h('p', null, 'From a transistor NAND to a pipelined 16-bit RISC-V processor, one block at a time; then, if you like, relays and tubes, arithmetic units, a GPU, memory, links and signal processing.')),
       h('div', { class: 'cp-stats' },
         h('span', null, h('b', null, `${sum.requiredDone}/${sum.required}`), ' required levels'),
         h('span', null, h('b', null, `${sum.done}`), ' done in all'),
