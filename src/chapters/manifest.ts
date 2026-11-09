@@ -324,7 +324,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Summing many numbers", challenge: "quiz" },
     { title: "Kahan on the CPU", challenge: "reach" },
   ] },
-  { id: "widths", num: 25, title: "Sixteen bits and sixty-four", blurb: "The C extension: two thirds of real instructions in 16 bits, an expander in gates in front of the decoder, fetching at any halfword, and what that costs. Then the other way: the same core at 64 bits, the W instructions RV64 kept, and what width costs.", level: "Processor", builds: ["cpu","python","cache","float"], recap: {"checks":3}, steps: [
+  { id: "widths", num: 25, title: "Sixteen bits and sixty-four", blurb: "The C extension: two thirds of real instructions in 16 bits, an expander in gates in front of the decoder, fetching at any halfword, and what that costs. Then the other way: the same core at 64 bits, the W instructions RV64 kept, and what width costs.", level: "Processor", builds: ["cpu","python","fastadd","muldiv","cache","float"], recap: {"checks":3}, steps: [
     { title: "Two thirds fit in 16 bits", challenge: "quiz" },
     { title: "What 16 bits give up", challenge: "quiz" },
     { title: "The expander", challenge: "reach" },
@@ -450,7 +450,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Garbage, wear and bad blocks", challenge: "quiz" },
     { title: "Bit errors and ECC", challenge: "reach" },
   ] },
-  { id: "bus", num: 38, title: "Buses and DMA", blurb: "A valid / ready handshake, five channels and an address decoder, two masters and an arbiter, a DMA engine that copies while the CPU runs, a computer that boots from flash into RAM, or from a deck of punched cards, and one with a DRAM, a screen and a keyboard on the same bus: every part in gates.", level: "Memory in depth", builds: ["io","multicore","flash"], recap: {"checks":4}, steps: [
+  { id: "bus", num: 38, title: "Buses and DMA", blurb: "A valid / ready handshake, five channels and an address decoder, two masters and an arbiter, a DMA engine that copies while the CPU runs, a computer that boots from flash into RAM, or from a deck of punched cards, and one with a DRAM, a screen and a keyboard on the same bus: every part in gates.", level: "Memory in depth", builds: ["io","cache","multicore","memctrl","flash"], recap: {"checks":4}, steps: [
     { title: "A handshake", challenge: "reach" },
     { title: "Five channels", challenge: "quiz" },
     { title: "Two masters", challenge: "reach" },

@@ -699,7 +699,7 @@ export const chOoo: Chapter = {
         <code>and</code> with the polynomial picks it or 0, and the <code>xor</code> always runs. One and a half more instructions a
         bit on average, and no branch.</p>
         <p>On the benchmark that is 3819 instructions instead of 3049, but 2330 cycles instead of 3021: 21
-        mispredictions. The in-order dual-issue machine of step 3 gains as much (3045 → 2370 cycles): the win is in
+        mispredictions. The in-order dual-issue machine of step 2 gains as much (3045 → 2370 cycles): the win is in
         prediction, not in reordering. Compilers do this where they can (if-conversion into a select, cmov on x86,
         czero in RISC-V's Zicond).</p>
         <p>The core runs the CRC of four words, a branch on every bit: 807 cycles. Edit the program in the CPU panel and
