@@ -46,7 +46,7 @@ export function gradeTable(n: CampaignNode): HTMLElement {
   const unit = pz ? puzzleUnit(pz) : undefined;
   const label = (k: Metric) => (k === 'cycles' && unit ? unit[0].toUpperCase() + unit.slice(1) : METRIC[k].label);
   const hint = (k: Metric) => (k === 'cycles' && unit ? `${unit[0].toUpperCase() + unit.slice(1)} to run each test, mean over the tests` : METRIC[k].hint);
-  return h('div', { class: 'cp-grade' }, h('h4', null, 'Grading'),
+  return h('div', { class: 'cp-grade' }, h('h3', null, 'Grading'),
     keys.length
       ? h('table', null, h('tr', null, h('th', null, 'Metric'), h('th', null, 'Par'), h('th', null, 'Your best')),
         keys.map((k) => h('tr', { title: hint(k) }, h('td', null, label(k)), h('td', null, fmt(k, par[k]!)),

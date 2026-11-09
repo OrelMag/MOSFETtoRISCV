@@ -191,7 +191,7 @@ function analogyFrom(a: Analogy): { href: string; label: string } | undefined {
 
 function analogySection(id: string): HTMLElement | null {
   const list = analogiesForCodex(id);
-  return list.length ? h('section', null, h('h4', null, list.length > 1 ? 'Analogies' : 'Analogy'),
+  return list.length ? h('section', null, h('h3', null, list.length > 1 ? 'Analogies' : 'Analogy'),
     ...list.map((a, i) => analogyEl(a, { open: i === 0, from: analogyFrom(a) }))) : null;
 }
 
@@ -209,12 +209,12 @@ export function codexEntryEl(e: CodexEntry, more: CodexMore | undefined, view: P
     rich('div', e.body, 'cx-sum'), linksEl(e, more));
   const drill = DRILLS[DRILL_OF[e.id] ?? ''];
   const left = h('div', { class: 'cx-col' },
-    more ? h('section', null, h('h4', null, 'The idea'), ideaEl(more.idea)) : null,
+    more ? h('section', null, h('h3', null, 'The idea'), ideaEl(more.idea)) : null,
     analogySection(e.id),
-    more?.example ? h('section', null, h('h4', null, `Worked example: ${more.example.title}`), rich('div', more.example.body, 'cx-prose cx-example')) : null,
-    more?.mistakes?.length ? h('section', null, h('h4', null, 'Common mistakes'), h('ul', { class: 'cx-mist' }, more.mistakes.map((m) => rich('li', m)))) : null,
-    more?.anatomy?.length ? h('section', null, h('h4', null, 'Where it sits'), anatomyEl(view, more.anatomy)) : null,
-    checks.length || drill ? h('section', { class: 'cx-check' }, h('h4', null, 'Check yourself'),
+    more?.example ? h('section', null, h('h3', null, `Worked example: ${more.example.title}`), rich('div', more.example.body, 'cx-prose cx-example')) : null,
+    more?.mistakes?.length ? h('section', null, h('h3', null, 'Common mistakes'), h('ul', { class: 'cx-mist' }, more.mistakes.map((m) => rich('li', m)))) : null,
+    more?.anatomy?.length ? h('section', null, h('h3', null, 'Where it sits'), anatomyEl(view, more.anatomy)) : null,
+    checks.length || drill ? h('section', { class: 'cx-check' }, h('h3', null, 'Check yourself'),
       ...checks.map((q, k) => quizBox(q, `codex:${e.id}:${k}`, `${k + 1} of ${checks.length}`, () => {})),
       drill ? tryOne(drill) : null) : null);
   const figure = codexFigure(e.id);
@@ -229,7 +229,7 @@ export function codexEntryEl(e: CodexEntry, more: CodexMore | undefined, view: P
     fsm ? h('figure', { class: 'cx-fig' }, fsmDiagram(fsm).el,
       h('figcaption', null, 'Its state diagram, drawn from the same table as the circuit (a test reads the circuit back into it). Arcs read input / output.')) : null,
     ...sheets,
-    compare.length > 1 ? h('section', null, h('h4', null, 'Cost against the alternatives'),
+    compare.length > 1 ? h('section', null, h('h3', null, 'Cost against the alternatives'),
       h('div', { class: 'lv-bars' }, compare.flatMap((x, i) => [
         h('a', { href: `#/workbench/${x.id}` }, x.name),
         h('span', { class: 'track' }, h('i', { class: i === 0 ? 'you' : '', style: `width:${(100 * (x.c?.nand ?? 0) / max).toFixed(1)}%` })),
@@ -237,7 +237,7 @@ export function codexEntryEl(e: CodexEntry, more: CodexMore | undefined, view: P
       h('p', { class: 'sub' }, 'NANDs (bar) and depth in NAND delays, measured.')) : null);
   const article = h('article', { class: `cp-codex-entry cx-entry${opts.narrow ? ' narrow' : ''}` }, head,
     h('div', { class: `cx-cols${right.childElementCount ? '' : ' solo'}` }, left, right.childElementCount ? right : null),
-    figure?.wide ? h('section', { class: 'cx-wide' }, h('h4', null, 'Explore it'), h('figure', { class: 'cx-fig cx-widget' }, figure.el, h('figcaption', null, figure.caption))) : null, prevNextEl(e.id));
+    figure?.wide ? h('section', { class: 'cx-wide' }, h('h3', null, 'Explore it'), h('figure', { class: 'cx-fig cx-widget' }, figure.el, h('figcaption', null, figure.caption))) : null, prevNextEl(e.id));
   // Hover definitions inside the entry's own text (not for itself): a chunk of its own, marked once it arrives.
   if (settings.glossary) {
     import('./glossaryui').then((m) => {
@@ -253,7 +253,7 @@ export function sheetEl(d: Datasheet): HTMLElement {
   const ins = d.pins.filter((p) => p.dir !== 'out').length;
   const widths = [...d.pins.filter((p) => p.dir !== 'out'), ...d.pins.filter((p) => p.dir === 'out')].map((p) => p.width);
   return h('div', { class: 'cp-sheet' },
-    h('h4', null, 'Datasheet: ', h('a', { href: `#/workbench/${d.id}`, title: 'Open it in the workbench' }, d.name)),
+    h('h3', null, 'Datasheet: ', h('a', { href: `#/workbench/${d.id}`, title: 'Open it in the workbench' }, d.name)),
     h('p', { class: 'sub' }, `${groupDigits(d.nand)} NAND · ${groupDigits(d.transistors)} transistors · ${d.depth !== null ? `depth ${d.depth}` : 'sequential'}`),
     h('div', { class: 'cp-sheet-cols' },
       h('table', null, h('tr', null, h('th', null, 'pin'), h('th', null, 'dir'), h('th', null, 'bits')),
@@ -293,7 +293,7 @@ export function lockedEntryEl(e: CodexEntry, more: CodexMore | undefined, checks
         where.length ? h('div', { class: 'cx-row' }, h('span', { class: 'cx-row-k' }, 'Unlocks with'), ...where.map((n) => chip('', levelHref(n), icon('flag', 12), n.title))) : null,
         chapters.length ? h('div', { class: 'cx-row' }, h('span', { class: 'cx-row-k' }, 'Read in'), ...chapters) : null,
         modelsOfCodex(e.id).length ? h('div', { class: 'cx-row' }, h('span', { class: 'cx-row-k' }, 'In 3D'), ...modelChips(e.id)) : null)),
-    checks.length ? h('section', { class: 'cx-check' }, h('h4', null, 'Check yourself'),
+    checks.length ? h('section', { class: 'cx-check' }, h('h3', null, 'Check yourself'),
       h('p', { class: 'sub' }, 'Already know it? These are the entry\'s own questions.'),
       ...checks.map((q, k) => quizBox(q, `codex:${e.id}:${k}`, `${k + 1} of ${checks.length}`, () => {}))) : null,
     h('p', null, h('button', { class: 'btn sm', onclick: peek }, 'Show the full entry anyway'),
