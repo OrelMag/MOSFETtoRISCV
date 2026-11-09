@@ -2,7 +2,8 @@
 // processors, and the energy per instruction (sim/power.ts: toggles counted on the same runs).
 // Computed incrementally so the page stays responsive.
 
-import { pipelinedCpu, singleCycleCpu } from '../lib';
+import { singleCycleCpu } from '../lib/cpu';
+import { pipelinedCpu } from '../lib/pipeline';
 import { assemble } from '../riscv/asm';
 import { clockCycle, retiring } from '../riscv/cosim';
 import { ISS } from '../riscv/iss';

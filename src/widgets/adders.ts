@@ -1,7 +1,9 @@
 // Chapter 16 widget: four adders, measured two ways (static depth and simulated delay), and what an add costs in
 // energy (sim/power.ts: toggles on the same vectors, glitches included).
 
-import { carrySelect, carrySkip, koggeStone, rca } from '../lib';
+import { carrySelect, carrySkip } from '../lib/adders';
+import { rca } from '../lib/combinational';
+import { koggeStone } from '../lib/fastadd';
 import { energyFj, fmtEnergy, POWER_NOTE, vectorPower, VDD } from '../sim/power';
 import { outputSettle } from '../sim/settle';
 import { logicDepth, stats } from '../sim/stats';

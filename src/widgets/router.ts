@@ -4,7 +4,7 @@
 import '../styles/router.css';
 import { BROADCAST, ETHERTYPE_ARP, ETHERTYPE_IPV4, frameBody, type Mac } from '../comm/ethframe';
 import { CYCLES_PER_BIT } from '../comm/serdes';
-import { routerFastPath } from '../lib';
+import { routerFastPath } from '../lib/router';
 import { mkChips } from './line';
 import { slider } from './mosparts';
 import { CAUSE_NAMES, C_FORWARD, FastPathModel, posOf, STATE_NAMES, S_RX, S_TX, type FpIn } from '../net/fastpath';

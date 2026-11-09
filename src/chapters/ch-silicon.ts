@@ -1,5 +1,5 @@
 import { groupDigits } from '../sim/numfmt';
-import { MUX2 } from '../lib';
+import { MUX2 } from '../lib/gates';
 import { stats } from '../sim/stats';
 import { chipLayoutWidget } from '../widgets/chiplayout';
 import { journeyWidget } from '../widgets/journey';

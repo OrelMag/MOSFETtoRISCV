@@ -1,7 +1,8 @@
 import { fmtLog10, log10Mtbf, resolutionTime, T0_PS, TAU_PS, windowRate } from '../phys/metastable';
 import { metrics } from '../phys/inverter';
 import { keeperLimit, KEEPER, thresholds, VM } from '../phys/schmitt';
-import { asyncFifo, BIN2GRAY, fifo, GRAY2BIN, PULSE_SYNC, SCHMITT, SYNC2, syncN } from '../lib';
+import { fifo } from '../lib/storage';
+import { asyncFifo, BIN2GRAY, GRAY2BIN, PULSE_SYNC, SCHMITT, SYNC2, syncN } from '../lib/sync';
 import { CREDIT_EDGES, sustained } from '../comm/asyncfifo';
 import { meanGarbage } from '../comm/graybus';
 import { stats } from '../sim/stats';

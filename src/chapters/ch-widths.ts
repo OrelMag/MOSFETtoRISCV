@@ -1,7 +1,8 @@
 import { groupDigits } from '../sim/numfmt';
 import { assemble } from '../riscv/asm';
 import { PROGRAMS } from '../riscv/programs';
-import { C_EXPAND, cFetch, W_ALU } from '../lib';
+import { W_ALU } from '../lib/cpu64';
+import { C_EXPAND, cFetch } from '../lib/rvc';
 import { XLEN_COSTS } from '../lib/xlencosts';
 import { PROGRAMS64 } from '../riscv/programs64';
 import { cpu64Scene } from '../widgets/cpu64panel';

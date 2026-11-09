@@ -1,4 +1,7 @@
-import { CLA4, addSubFast, alu, brentKung, carrySelect, carrySkip, isZero, koggeStone, muxTree, rca, sklansky } from '../lib';
+import { carrySelect, carrySkip } from '../lib/adders';
+import { alu, isZero } from '../lib/alu';
+import { muxTree, rca } from '../lib/combinational';
+import { CLA4, addSubFast, brentKung, koggeStone, sklansky } from '../lib/fastadd';
 import { FF_INPUT, FF_WIRE } from '../sim/netcap';
 import { nandDelay } from '../sim/delay';
 import { logicDepth, stats } from '../sim/stats';

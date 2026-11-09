@@ -4,7 +4,9 @@
 
 import { gibbsOvershoot, PATTERNS, poleGain, powerShare, smallestSample, swing1010, tauOf, toDb } from '../comm/fourier';
 import { aliasOf, binomialGain, firGain, FIR_TAPS, movingAverage, sqnrDb, windowedSinc } from '../comm/signals';
-import { arrayMul, FIR5, FIR_SETTLE, register } from '../lib';
+import { FIR5, FIR_SETTLE } from '../lib/fir';
+import { arrayMul } from '../lib/muldiv';
+import { register } from '../lib/sequential';
 import { flatten } from '../sim/flatten';
 import { stats } from '../sim/stats';
 import { analyzeTiming } from '../sim/timing';

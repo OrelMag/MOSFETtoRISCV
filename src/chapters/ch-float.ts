@@ -1,5 +1,5 @@
 import { groupDigits } from '../sim/numfmt';
-import { FPU32, fpAdd, fpDiv, fpFma, fpMul, fpSqrt, fpToInt, fpUnpack, normRound, ROUND_DECIDE } from '../lib';
+import { FPU32, fpAdd, fpDiv, fpFma, fpMul, fpSqrt, fpToInt, fpUnpack, normRound, ROUND_DECIDE } from '../lib/fpu';
 import { cpuState } from '../riscv/cosim';
 import { F_PROGRAMS } from '../riscv/fprograms';
 import { F16, F32, type FpFormat } from '../sim/fpref';

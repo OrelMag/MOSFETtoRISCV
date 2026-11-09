@@ -2,7 +2,7 @@ import { groupDigits } from '../sim/numfmt';
 import { CLOCK_NS } from '../dram/timing';
 import { FLASH_REAL_US, FLASH_TIMES } from '../flash/model';
 import { bchParity, codewordFail, maxRber } from '../flash/ecc';
-import { eccChannel } from '../lib';
+import { eccChannel } from '../lib/coding';
 import { V_READ, vtOf } from '../lib/flash';
 import { findNode } from '../sim/flatten';
 import { FG_READ, FG_STEP, type SwitchSim } from '../sim/switchsim';

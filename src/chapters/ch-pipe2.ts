@@ -1,5 +1,8 @@
 import { groupDigits } from '../sim/numfmt';
-import { BRANCH_CMP, BTB, SAT_COUNTER, alu, koggeStone, regfile } from '../lib';
+import { alu } from '../lib/alu';
+import { koggeStone } from '../lib/fastadd';
+import { BRANCH_CMP, BTB, SAT_COUNTER } from '../lib/pipeline';
+import { regfile } from '../lib/regfile';
 import { logicDepth, stats } from '../sim/stats';
 import { PROGRAMS } from '../riscv/programs';
 import { cpuScene } from '../widgets/cpupanel';

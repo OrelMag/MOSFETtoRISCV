@@ -1,5 +1,6 @@
 import { groupDigits } from '../sim/numfmt';
-import { BILINEAR8, BLEND332, LERP8, bilinearRef } from '../lib';
+import { BILINEAR8, LERP8, bilinearRef } from '../lib/intc';
+import { BLEND332 } from '../lib/raster';
 import { stats } from '../sim/stats';
 import { costWidget, pipelineScene } from '../widgets/gfxpipe';
 import { drawScene } from '../widgets/drawpad';

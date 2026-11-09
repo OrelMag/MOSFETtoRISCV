@@ -3,7 +3,7 @@
 // is read as a BigInt (sim/values.ts packBig), never through a JS number.
 
 import { groupDigits } from '../sim/numfmt';
-import { xlenCpu } from '../lib';
+import { xlenCpu } from '../lib/cpu64';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { retiring, wideState } from '../riscv/cosim';
 import { ABI, disasm, regNumber } from '../riscv/isa';

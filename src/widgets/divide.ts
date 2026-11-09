@@ -1,6 +1,8 @@
 // Chapter 21 widget: restoring, non-restoring and SRT dividers, measured from their netlists.
 
-import { nrDivStep, nrSeqDivider, seqDivider, srt4Divider, srt4Step, srtDivider, srtStep, divStep } from '../lib';
+import { nrDivStep, nrSeqDivider, srtDivider, srtStep } from '../lib/divide';
+import { seqDivider, divStep } from '../lib/muldiv';
+import { srt4Divider, srt4Step } from '../lib/srt4';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { analyzeTiming } from '../sim/timing';

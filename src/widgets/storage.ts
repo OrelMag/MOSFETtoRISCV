@@ -1,6 +1,6 @@
 // Chapter 10 widget: what register-file ports cost, measured.
 
-import { regfileMP } from '../lib';
+import { regfileMP } from '../lib/storage';
 import { stats } from '../sim/stats';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';

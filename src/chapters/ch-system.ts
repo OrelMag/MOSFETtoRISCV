@@ -1,5 +1,6 @@
 import { groupDigits } from '../sim/numfmt';
-import { CSR_UNIT, LOAD_EXTRACT, STORE_ALIGN, SYS_DECODE, TRAP_UNIT, bankedMemory, systemCpu } from '../lib';
+import { LOAD_EXTRACT, STORE_ALIGN, bankedMemory } from '../lib/lsu';
+import { CSR_UNIT, SYS_DECODE, TRAP_UNIT, systemCpu } from '../lib/system';
 import { withoutParts } from '../lib/tech';
 import { cpuState } from '../riscv/cosim';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';

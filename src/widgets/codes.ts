@@ -8,7 +8,8 @@ import { CONV_K3, CONV_K7, Viterbi, convEncode, convStep, statesOf } from '../co
 import { codeOf, secdedDecode, secdedEncode } from '../comm/fec';
 import { deinterleave, interleave, placeOf, secdedOverBursts, worstPerWord } from '../comm/interleave';
 import { rsDecode, rsGenerator, rsStep } from '../comm/rs';
-import { convEncoder, rsEncoder, viterbi } from '../lib';
+import { rsEncoder } from '../lib/rs';
+import { convEncoder, viterbi } from '../lib/viterbi';
 import { h, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { fitText, slider } from './mosparts';

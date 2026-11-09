@@ -3,7 +3,8 @@ import { FCS_BYTES, HEADER_BYTES, MAX_FRAME, MIN_FRAME, MIN_PAYLOAD, PREAMBLE, S
 import {
   ATTEMPT_LIMIT, BACKOFF_LIMIT, BIT_CLOCKS, BYTE_CLOCKS, frameBitTimes, GAP_BITS, GAP_CLOCKS, JAM_BYTES, LINK_MBPS, maxCableMetres, SLOT_BITS, SLOT_CLOCKS,
 } from '../comm/mac';
-import { crcUnit, macRx, macTx } from '../lib';
+import { crcUnit } from '../lib/crc';
+import { macRx, macTx } from '../lib/ethernet';
 import { ETH_SEG_POSITIONS } from '../lib/ethernet';
 import { stats } from '../sim/stats';
 import { collisionWidget, minFrameWidget, segState, segmentScene, throughputWidget } from '../widgets/ethernet2';

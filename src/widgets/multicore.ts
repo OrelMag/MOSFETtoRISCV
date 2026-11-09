@@ -1,7 +1,7 @@
 // Chapter 27 widgets: the dual-core scene (both cores, shared memory, golden-model lock-step) and
 // the cache-coherence explorer.
 
-import { dualCore } from '../lib';
+import { dualCore } from '../lib/multicore';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { cpuState } from '../riscv/cosim';
 import { lrScNote } from '../riscv/hwgaps';

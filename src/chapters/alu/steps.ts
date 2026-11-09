@@ -1,7 +1,8 @@
 // Chapter 11's deeper steps, after "The complete ALU": the six branch conditions read off one subtraction, the ALU control
 // decode as the control unit builds it, and what each operation actually waits for. Numbers come from the circuits (tests/deepseq.test.ts).
 
-import { control, NEXT_PC, XOR } from '../../lib';
+import { control, NEXT_PC } from '../../lib/cpu';
+import { XOR } from '../../lib/gates';
 import { aluSpec } from '../../lib/alu';
 import { evalOnce, simulate } from '../../sim/harness';
 import { groupDigits } from '../../sim/numfmt';

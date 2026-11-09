@@ -10,7 +10,7 @@ import { PY_GROUPS, PY_PROGRAMS } from '../lang/pyprograms';
 import { cpuState, pipeSnap } from '../riscv/cosim';
 import { lineTotal, PipeProfile } from '../lang/pipeprof';
 import type { LineCost } from '../lang/pipeprof';
-import { pipelinedCpu } from '../lib';
+import { pipelinedCpu } from '../lib/pipeline';
 import { stats } from '../sim/stats';
 import { pack } from '../sim/values';
 import { ABI, disasm } from '../riscv/isa';

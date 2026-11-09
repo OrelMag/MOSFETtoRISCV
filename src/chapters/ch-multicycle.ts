@@ -1,6 +1,6 @@
 import { groupDigits } from '../sim/numfmt';
 import facts from '../bench/ucodefacts.json';
-import { MC_DISPATCH, MC_FSM, MC_MICRO, MC_STATES } from '../lib';
+import { MC_DISPATCH, MC_FSM, MC_MICRO, MC_STATES } from '../lib/multicycle';
 import { bookProgram, cyclesByClass, iTypeInThree, type Microprogram } from '../lib/ucode';
 import { stats } from '../sim/stats';
 import { PROGRAMS } from '../riscv/programs';

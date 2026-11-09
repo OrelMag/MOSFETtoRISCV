@@ -1,6 +1,8 @@
 import { CLOCK_NS } from '../comm/mac';
 import { binomialTail, HOL_LIMIT, HOL_N4, holSaturation, sharedCapacity, singleFrame } from '../comm/ethswitch';
-import { arbiterN, cam, registry } from '../lib';
+import { registry } from '../lib/define';
+import { arbiterN } from '../lib/mpdecode';
+import { cam } from '../lib/storage';
 import { crossbar, ethSwitch, inputBuffer, macTable, outputPort, tablePort } from '../lib/ethswitch';
 import { stats } from '../sim/stats';
 import { BENCH_OPTS, benchScene, crossbarScene, learnScene, rigOf } from '../widgets/ethswitch';

@@ -7,7 +7,9 @@ import { AWGN_SIGMA, becThreshold, concatRate, ebn0OfSigma, ldpcTrial, regularCo
 import { rsLatency } from '../comm/rsrtl';
 import { CONV_K3, CONV_K7, defaultDepth, metricWidth, spectrum } from '../comm/conv';
 import { burstTolerance } from '../comm/interleave';
-import { convEncoder, gfInvGates, gfMulGates, rsBuffer, rsDecoder, rsEncoder, rsSyndrome, vitAcs, vitSlice, viterbi } from '../lib';
+import { gfMulGates, rsEncoder, rsSyndrome } from '../lib/rs';
+import { gfInvGates, rsBuffer, rsDecoder } from '../lib/rsdec';
+import { convEncoder, vitAcs, vitSlice, viterbi } from '../lib/viterbi';
 import { flatten } from '../sim/flatten';
 import { analyzeTiming } from '../sim/timing';
 import { CONCAT_FAILED_22, CONCAT_MEASURED, CONCAT_POINTS, CONCAT_WORDS, concatWidget, costWidget, GOSSIP_PAIR, gossipWidget, rsDecApi, rsDecScene, tunnelWidget, waterfallWidget } from '../widgets/codes2';

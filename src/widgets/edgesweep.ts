@@ -2,7 +2,8 @@
 // delays before (t < 0) or after the rising edge and q settles to the old value, the new one, or never decides. The
 // strip's boundaries are the setup and hold times of the circuit; a click shows that run as a waveform.
 
-import { DFF, DFF_EDGE6 } from '../lib';
+import { DFF_EDGE6 } from '../lib/seqdeep';
+import { DFF } from '../lib/sequential';
 import { qTrace, sweepEdge, type Capture, type EdgeSweep } from '../sim/edgetiming';
 import { CLK_TO_Q, SETUP } from '../sim/timing';
 import type { ComponentDef } from '../sim/types';

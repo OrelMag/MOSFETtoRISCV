@@ -1,6 +1,7 @@
 // Chapter 21 widget: five ways to multiply, measured (area, clock period, latency, throughput).
 
-import { boothMul, pipeMul, seqMul, treeMul } from '../lib';
+import { treeMul } from '../lib/muldiv';
+import { boothMul, pipeMul, seqMul } from '../lib/multiply';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { CLK_TO_Q, SETUP, analyzeTiming } from '../sim/timing';

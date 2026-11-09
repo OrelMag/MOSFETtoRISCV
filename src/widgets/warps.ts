@@ -4,7 +4,8 @@
 // widget (cycles against warps and load latency from the timing model, NANDs from the circuits).
 
 import { groupDigits } from '../sim/numfmt';
-import { regfile, warpCore } from '../lib';
+import { regfile } from '../lib/regfile';
+import { warpCore } from '../lib/warps';
 import { assemble } from '../riscv/asm';
 import { ABI, decode, disasm, OPCODES } from '../riscv/isa';
 import { WARP_DMEM_K, WARP_PROGRAMS, WARP_SMEM_K, type WarpProgram } from '../riscv/warpprograms';

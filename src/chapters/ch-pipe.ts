@@ -1,4 +1,5 @@
-import { pipelinedCpu, singleCycleCpu } from '../lib';
+import { singleCycleCpu } from '../lib/cpu';
+import { pipelinedCpu } from '../lib/pipeline';
 import { assemble } from '../riscv/asm';
 import { clockCycle, pipeSnap, retiring, type PipeSnap } from '../riscv/cosim';
 import { ISS } from '../riscv/iss';

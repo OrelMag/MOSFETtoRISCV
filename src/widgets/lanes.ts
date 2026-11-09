@@ -3,7 +3,10 @@
 // against cores comparison (NANDs by block and cycles, both measured).
 
 import { groupDigits } from '../sim/numfmt';
-import { alu, laneCore, multiCore, regfile } from '../lib';
+import { alu } from '../lib/alu';
+import { laneCore } from '../lib/lanes';
+import { multiCore } from '../lib/multicore';
+import { regfile } from '../lib/regfile';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { ABI, disasm } from '../riscv/isa';
 import { MultiISS } from '../riscv/multi';
