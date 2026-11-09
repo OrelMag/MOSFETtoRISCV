@@ -79,6 +79,12 @@ function tableFor(key: string, make: () => FfTable): FfTable {
 export class CycleSim implements Sim {
   readonly kind = 'gate' as const;
   readonly design: FlatDesign;
+  /**
+   * The most inverters any storage's timed input follows its pin through (0: every clock straight from a pin). The
+   * tables are built from unit-delay simulation, so under load-dependent delay a clock chain can race differently:
+   * DualSim refuses the cycle engine there (docs/PLAN-FINEDELAY.md).
+   */
+  clockChain = 0;
   time = 0;
   readonly unstable = false;
   evaluations = 0;
@@ -530,7 +536,9 @@ export class CycleSim implements Sim {
       }
       if (ins.some((net) => clocks.has(net) || derived[net])) for (const net of nodeOuts(k)) derived[net] = 1;
     }
-    return new CycleSim(design, macros, gates, behaviors, level, maxLevel, hazards);
+    const sim = new CycleSim(design, macros, gates, behaviors, level, maxLevel, hazards);
+    for (const p of plans) p.group.forEach((g, i) => { if (g >= 0 && p.delay[i] > sim.clockChain) sim.clockChain = p.delay[i]; });
+    return sim;
   }
 
   // ---- loading and handing over ----------------------------------------------------------

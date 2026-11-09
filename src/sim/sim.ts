@@ -10,8 +10,12 @@ export type SimState = { readonly __simState: true };
 export interface Sim {
   readonly design: FlatDesign;
   readonly kind: 'gate' | 'switch';
-  /** Simulation time in gate delays (always 0 for the switch-level solver). */
+  /** Simulation time in gate delays (always 0 for the switch-level solver); in units, with tenths, under load-dependent delay. */
   readonly time: number;
+  /** Ticks per unit: absent or 1 for every engine but GateSim under load-dependent delay (docs/PLAN-FINEDELAY.md). */
+  readonly ticksPerUnit?: number;
+  /** Gate level: the time of the next instant that holds events (null: none). Stepping under a finer grain goes there. */
+  nextEventTime?(): number | null;
   /** True when the last settle() hit its limit (oscillation, e.g. a ring oscillator). */
   readonly unstable: boolean;
   get(net: number): Bit;

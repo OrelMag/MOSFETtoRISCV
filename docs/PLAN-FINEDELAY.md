@@ -11,6 +11,19 @@ the sim-perf numbers against the acceptance below.
 Progress:
 1. Fingerprints ✅ (feat/finedelay-1): tests/gatesimfingerprint.ts, tests/gatesim-fingerprints.json, taken on main cd8e0eb9 with
    scripts/gatesim-fp.ts.
+2. Engine ✅ (feat/finedelay-2): GateSim `delay: 'load'`, `ticks`, `nextEventTime()`, the wheel per instance with a mask; edge.ts
+   `nextStepTime`; DualSim passes the model and refuses the cycle engine on a clock chain under 'load' (CycleSim.clockChain);
+   tests/finedelay.test.ts (both CPUs in lock step with the cycle engine, every net every cycle). Measured with
+   scripts/finedelay-perf.ts on the bare engine, medians of 5 rounds of 1.5 s, 2026-11-10 (Node 22, a shared machine):
+
+   | | main's engine, unit | this engine, unit | this engine, load | load / unit |
+   |---|---|---|---|---|
+   | single-cycle RV32I, cycles/s | 1407, 1431 | 1453, 1442 | 1166 | 83 % |
+   | pipelined RV32I | 1688, 1679 | 1659, 1678 | 1551 | 91 % |
+   | system RV32I | 1031, 1026 | 1021, 1027 | 841 | 82 % |
+   | ks64 adder, settles/s | 51672, 50925 | 51384, 51550 | 45283 | 88 % |
+
+   Unit within ±2 % of main, pairs run alternately: inside the ±3 % acceptance. Load well above 50 % of unit.
 
 ## What exists
 
