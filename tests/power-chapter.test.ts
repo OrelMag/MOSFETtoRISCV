@@ -20,6 +20,9 @@ describe('Power chapter claims', () => {
     expect(b(POWER.gated, 'dm')).toBeLessThan(b(POWER.plain, 'dm'));
     expect(b(POWER.gated, 'rf')).toBeGreaterThan(b(POWER.plain, 'rf'));
     expect(POWER.gated.glitch).toBeGreaterThan(POWER.plain.glitch);
+    // the new glitches are inside the gated registers (their masters follow the write data), not in the read path
+    expect(POWER.gated.rfRegGlitchPj).toBeGreaterThan(0.8 * POWER.gated.rfGlitchPj);
+    expect(POWER.gated.rfGlitchPj - POWER.plain.rfGlitchPj).toBeGreaterThan(0.5 * (POWER.gated.glitchPj - POWER.plain.glitchPj));
   });
   it('race to halt: with slack, pacing beats racing; at the deadline they are close', () => {
     for (const id of ['hp', 'lp'] as const) {

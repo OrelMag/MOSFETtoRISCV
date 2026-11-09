@@ -11,7 +11,7 @@ import { PROGRAMS } from '../riscv/programs';
 import { flatten } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import { leakageOf } from '../sim/leakage';
-import { energyFj, PowerMeter, VDD } from '../sim/power';
+import { driverOf, energyFj, PowerMeter, VDD } from '../sim/power';
 import { stats } from '../sim/stats';
 import { analyzeTiming, PS_PER_NAND } from '../sim/timing';
 import results from './results.json';
@@ -37,6 +37,11 @@ export interface CpuPower {
   /** Every net's C summed (fF), and the supply energy (pJ) to charge the nets that are 1 at the end again after a power-off. */
   totalFf: number;
   wakePj: number;
+  /** pJ per cycle of glitch toggles and of settled ones; the register file's glitches, and those inside its registers (rf.w<i>). */
+  glitchPj: number;
+  settledPj: number;
+  rfGlitchPj: number;
+  rfRegGlitchPj: number;
 }
 
 /** Four significant digits: the numbers span from µW of leakage to pF of clock. */
@@ -65,8 +70,17 @@ export function measureCpu(gated: boolean): CpuPower {
     let n = l.node; while (n.parent?.parent) n = n.parent;
     by.set(n.name, (by.get(n.name) ?? 0) + 1); inputs++;
   }
-  let totalFf = 0, oneFf = 0;
-  for (let i = 0; i < m.caps.length; i++) { totalFf += m.caps[i]; if (sim.get(i) === 1) oneFf += m.caps[i]; }
+  let totalFf = 0, oneFf = 0, glitch = 0, settled = 0, rfGlitch = 0, rfReg = 0;
+  const dr = driverOf(d);
+  for (let i = 0; i < m.caps.length; i++) {
+    totalFf += m.caps[i];
+    if (sim.get(i) === 1) oneFf += m.caps[i];
+    const s = m.caps[i] * m.settled(i), g = m.caps[i] * m.toggles(i) - s;
+    glitch += g; settled += s;
+    const p = dr[i] >= 0 ? d.leaves[dr[i]].node.path : [];
+    if (p[0] === 'rf') { rfGlitch += g; if (/^w\d+$/.test(p[1] ?? '')) rfReg += g; }
+  }
+  const pjOf = (ff: number) => r3(energyFj(ff) / POWER_CYCLES / 1e3);
   return {
     nands: stats(def).nands,
     period: analyzeTiming(d)!.period,
@@ -79,6 +93,7 @@ export function measureCpu(gated: boolean): CpuPower {
     leakUw: { hp: r3((leak.hp / POWER_CYCLES) * 1e6), lp: r3((leak.lp / POWER_CYCLES) * 1e6) },
     totalFf: r3(totalFf),
     wakePj: r3(oneFf * VDD * VDD / 1e3),
+    glitchPj: pjOf(glitch), settledPj: pjOf(settled), rfGlitchPj: pjOf(rfGlitch), rfRegGlitchPj: pjOf(rfReg),
   };
 }
 
