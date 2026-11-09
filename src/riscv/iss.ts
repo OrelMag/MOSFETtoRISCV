@@ -36,6 +36,7 @@ import { aluCtlOf, aluOp, branchTaken, FMT_FIELDS, type CustomRow } from './cust
 import { F32, fpAddX, fpClass, fpCmpX, fpDivX, fpFmaX, fpFromIntX, fpMinMaxX, fpMulX, fpSqrtX, fpToIntX, type FpResult } from '../sim/fpref';
 import { CSRS, decode, disasm, OPCODES } from './isa';
 import { disasmC, expand16 } from './rvc';
+import { execV, isVectorWord, vcsrRead, type VContext } from './rvv';
 
 export interface IssOptions {
   /** Data memory size in 32-bit words (power of two). */
@@ -71,6 +72,8 @@ export interface IssOptions {
   c?: boolean;
   /** Privilege modes M / S / U and Sv32 (see the header; needs `system`). Off: the machine-mode-only system. */
   vm?: boolean;
+  /** The vector extension, Zve32x (riscv/rvv.ts): VLEN in bits (a power of two, 32 … 1024). */
+  v?: { vlen: number };
 }
 
 /** Privilege levels (the encoding of mstatus.MPP and the commit log's first digit). */
@@ -127,6 +130,11 @@ export interface StepInfo {
   store?: { addr: number; value: number };
   /** Floating-point register written (RV32F). */
   fwrite?: { rd: number; value: number };
+  /** Vector registers written (riscv/rvv.ts): the first and how many. */
+  vwrite?: { vd: number; regs: number };
+  /** A vector load's element addresses, a vector store's elements, in element order. */
+  vloads?: number[];
+  vstores?: { addr: number; value: number; bytes: 1 | 2 | 4 }[];
   trap?: { cause: number; interrupt: boolean; tval?: number };
   halted: boolean;
   /** vm: the privilege level the step ran in (before a trap changed it). */
@@ -192,6 +200,11 @@ export class ISS {
   fflags = 0;
   frm = 0;
   private readonly imemWords: number;
+  /** The vector extension (IssOptions.v): VLEN / 8, 0 without it; the 32 registers as bytes; vl and vtype. */
+  readonly vlenb: number;
+  readonly vregs: Uint8Array;
+  vl = 0;
+  vtype = 0x80000000;
 
   // machine-mode state
   mie = false; // mstatus.MIE
@@ -253,6 +266,10 @@ export class ISS {
     this.c = !!opts.c;
     this.hartid = opts.hartid ?? 0;
     this.bus = opts.bus;
+    const vlen = opts.v?.vlen ?? 0;
+    if (vlen && (vlen & (vlen - 1) || vlen < 32 || vlen > 1024)) throw new Error(`VLEN ${vlen}: a power of two from 32 to 1024`);
+    this.vlenb = vlen / 8;
+    this.vregs = new Uint8Array(32 * this.vlenb);
   }
 
   fetch(pc: number): number {
@@ -455,7 +472,7 @@ export class ISS {
       case CSRS.fflags: return this.fext ? this.fflags : null;
       case CSRS.frm: return this.fext ? this.frm : null;
       case CSRS.fcsr: return this.fext ? (this.frm << 5) | this.fflags : null;
-      default: return null;
+      default: return this.vlenb ? vcsrRead(this.vctx(), a) : null;
     }
   }
 
@@ -553,6 +570,7 @@ export class ISS {
     const privBefore = this.priv;
     const { word, size, half, fault } = this.instrAt(pc);
     if (this.translating() && this.lastWalkSeen) { this.lastWalk = this.lastWalkSeen; this.stepWalks.push(this.lastWalkSeen); }
+    if (!fault && this.vlenb && isVectorWord(word)) return this.stepVector(pc, word, size);
     const d = decode(word, this.custom, 32, this.mac);
     const x = this.x;
     const a = x[d.rs1] | 0, b = x[d.rs2] | 0, ua = x[d.rs1], ub = x[d.rs2];
@@ -699,6 +717,7 @@ export class ISS {
           // user-level programs: csrr rd, mhartid (multi-core) and the F CSRs fflags, frm, fcsr
           const csrA = (word >>> 20) & 0xfff;
           if (d.funct3 === 2 && csrA === 0xf14 && d.rs1 === 0) write(this.hartid);
+          else if (this.vlenb && d.funct3 & 3 && vcsrRead(this.vctx(), csrA) !== null) write(vcsrRead(this.vctx(), csrA)!); // read-only here: vstart is always 0
           else if (d.funct3 & 3 && csrA >= 1 && csrA <= 3) {
             const old = csrA === 1 ? this.fflags : csrA === 2 ? this.frm : (this.frm << 5) | this.fflags;
             const src = d.funct3 & 4 ? d.rs1 : ua, op = d.funct3 & 3;
@@ -768,6 +787,37 @@ export class ISS {
       trap: t ? { cause: t.cause, interrupt: false, ...(this.vm ? { tval: t.tval >>> 0 } : {}) } : undefined, halted: this.halted,
       ...(this.vm ? { priv: privBefore, ...(this.stepWalks.length ? { walks: this.stepWalks } : {}) } : {}),
     };
+  }
+
+  /** The vector state as riscv/rvv.ts sees it: the fields of this model, its registers and memory. */
+  private vctx(): VContext {
+    const iss = this;
+    return {
+      vlenb: this.vlenb, vregs: this.vregs, x: this.x,
+      get vl() { return iss.vl; }, set vl(v: number) { iss.vl = v; },
+      get vtype() { return iss.vtype; }, set vtype(v: number) { iss.vtype = v; },
+      load: (addr, bytes) => this.load(addr, bytes === 1 ? 4 : bytes === 2 ? 5 : 2) >>> 0,
+      store: (addr, bytes, v) => this.store(addr, bytes === 1 ? 0 : bytes === 2 ? 1 : 2, v),
+    };
+  }
+
+  /** A vector instruction (riscv/rvv.ts): illegal ones trap in system mode and do nothing otherwise. */
+  private stepVector(pc: number, word: number, size: number): StepInfo {
+    const r = execV(word, this.vctx());
+    const text = disasm(word, pc, this.custom, 32, this.mac);
+    this.steps++;
+    if (r.illegal && this.system) {
+      this.enterTrap(new Trap(CAUSE.ILLEGAL), pc);
+      this.mtime = (this.mtime + 1) >>> 0;
+      return { pc, word, text, rd: 0, trap: { cause: CAUSE.ILLEGAL, interrupt: false }, halted: false };
+    }
+    let rd = 0, value: number | undefined;
+    if (r.rd) { rd = r.rd; value = r.value! >>> 0; this.x[rd] = value; }
+    this.pc = (pc + size) >>> 0;
+    this.halted = false;
+    this.retired++;
+    if (this.system) this.mtime = (this.mtime + 1) >>> 0;
+    return { pc, word, text, rd, value, ...(r.vwrite ? { vwrite: r.vwrite } : {}), ...(r.loads ? { vloads: r.loads } : {}), ...(r.stores ? { vstores: r.stores } : {}), halted: false };
   }
 
   run(maxSteps = 10000): number {

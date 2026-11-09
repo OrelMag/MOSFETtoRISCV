@@ -2,6 +2,7 @@
 // the instruction-set simulator and the instruction explorer.
 
 import { slotOpcode, specOf, type CustomRow } from './custom';
+import { disasmV } from './rvv';
 
 export type Fmt = 'R' | 'R4' | 'I' | 'S' | 'B' | 'U' | 'J';
 
@@ -170,6 +171,8 @@ export const CSRS: Record<string, number> = {
   fflags: 0x001, frm: 0x002, fcsr: 0x003,
   // lane cores (read-only): lane in the warp, warp number, lanes per warp, thread id, active mask
   lane: 0xcc0, warp: 0xcc1, nlanes: 0xcc2, tid: 0xcc3, tmask: 0xcc4, nwarps: 0xcc5,
+  // the vector extension (riscv/rvv.ts): vl, vtype and vlenb are read-only; vstart and the fixed-point ones read 0
+  vstart: 0x008, vxsat: 0x009, vxrm: 0x00a, vcsr: 0x00f, vl: 0xc20, vtype: 0xc21, vlenb: 0xc22,
 };
 
 /** Rounding-mode operand names (rm field); 7 = dyn (use frm). */
@@ -319,7 +322,7 @@ const frn = (r: number) => FABI[r];
 export function disasm(word: number, pc?: number, custom?: readonly CustomRow[], xlen: Xlen = 32, mac = false): string {
   const d = decode(word, custom, xlen, mac);
   const tgt = (off: number) => (pc === undefined ? `${off}` : `0x${u32(pc + off).toString(16)}`);
-  if (!d.spec) return `.word 0x${d.word.toString(16).padStart(8, '0')}`;
+  if (!d.spec) return disasmV(word, ABI) ?? `.word 0x${d.word.toString(16).padStart(8, '0')}`;
   const n = d.name;
   if (word === 0x00000013) return 'nop';
   const fp = d.spec.fp;

@@ -1,6 +1,21 @@
 # Chapter plan: Vectors (RVV), the bridge from cores to lanes
 
-Status: PLAN + MOCKUP for the author's approval. Nothing is built. Mockup: `E:/mockups/rvv/index.html` (three steps,
+Status: **APPROVED by the author on 2026-11-09, with all ten decisions as recommended** (relayed by the Coordinator).
+Order: … power → vectors → lanes (Rock's Power chapter also goes before lanes). Built in three stages, each a tip.
+
+Stage 1 (golden model, branch feat/rvv-iss):
+- `riscv/rvv.ts`: decode / encode / assemble / disassemble / execute for the subset below, vtype rules, vector CSRs.
+- `ISS({ v: { vlen } })`: the vector state is ISS fields (vregs, vl, vtype), so save() / restore() carry it; StepInfo
+  gains vwrite, vloads, vstores; an illegal vector instruction traps in system mode and does nothing otherwise.
+- `isa.ts` disassembles vector words, `asm.ts` assembles them, CSRS names vl / vtype / vlenb / vstart and the fixed-point CSRs.
+- `randomProgram32({ v })`: a quarter of the units are vector units, each opening with its own vset.
+- Spike: config `zve` (`rv32im_zicsr_zve32x_zvl128b`), the boot sets mstatus.VS, the log parser reads vector registers,
+  the comparison checks every logged register, every register ours changed, element loads and stores, vstart / vl / vtype.
+  Spike only runs on CI (spike.yml).
+- One difference from the plan below: Spike also requires a mask result never to sit inside a source group except
+  on its first register (require_noover); the model follows it.
+
+Mockup: `E:/mockups/rvv/index.html` (three steps,
 light and dark; screenshots `light.png`, `dark.png`, `phone-light.png`, `phone-dark.png` beside it).
 
 Numbers are marked **measured** (computed today on main by `stats()`) or **estimated** (to be measured once built,
