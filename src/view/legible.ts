@@ -224,6 +224,44 @@ export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, bl
   }
   self = -1;
 
+  // 2b. blocks that repeat (the same label and size, REPEAT_MIN or more: a bank of RAMs, a row of lanes) read alike, where they
+  //     can: the largest layout one of them got that every one of them takes clear of other names, other blocks and each other
+  const rect = (i: number, l: NameLayout) => asBox(nameRect(boxes[i], l, scale));
+  const groups = new Map<string, number[]>();
+  for (const i of names) {
+    const b = boxes[i], k = [textOf(b), b.w, b.h, b.rot].join('|');
+    groups.set(k, [...(groups.get(k) ?? []), i]);
+  }
+  for (const g of groups.values()) {
+    if (g.length < REPEAT_MIN) continue;
+    const looks = [...new Map(g.flatMap((i) => (out[i] ? [[JSON.stringify(out[i]), out[i]!] as const] : []))).values()];
+    if (looks.length < 2) continue;
+    const inG = new Set(g);
+    const outside = out.flatMap((l, j) => (l && !inG.has(j) ? [rect(j, l)] : []));
+    // each look given to as many of them as take it (in drawing order), clear of what is outside the group and of each other
+    const takers = (l: NameLayout) => {
+      const taken: Box[] = [], who: number[] = [];
+      // the names the old renderer drew first: they are never lost (pass 1)
+      for (const i of [...g].sort((a, c) => Number(wasDrawn.has(c)) - Number(wasDrawn.has(a)) || a - c)) {
+        const r = rect(i, l);
+        // a block that already has this look keeps it as the passes above allowed it (an old name over its neighbours)
+        const had = JSON.stringify(out[i]) === JSON.stringify(l);
+        if ((had || others(boxes[i], l)) && !outside.some((k) => crosses(r, k)) && !taken.some((k) => crosses(r, k))) { taken.push(r); who.push(i); }
+      }
+      return who;
+    };
+    // a look may not drop a name the old renderer drew, nor shrink one it kept at full size (one that covered no other block:
+    // pass 1); of the rest, every one of them if a look allows it, else the look most of them take (the larger on a tie): one
+    // style, the rest unnamed; none left: the group stays as it is
+    const keepsOld = (l: NameLayout, who: number[]) => g.every((i) => !(wasDrawn.has(i) && out[i]) || (who.includes(i) && (out[i]!.px < NAME_PX || l.px >= NAME_PX)));
+    const best = looks.map((l) => ({ l, who: takers(l) })).filter((x) => keepsOld(x.l, x.who))
+      .sort((x, y) => y.who.length - x.who.length || y.l.px - x.l.px)[0];
+    if (!best) continue;
+    for (const i of g) out[i] = best.who.includes(i) ? best.l : null;
+  }
+  kept.length = 0;
+  out.forEach((l, i) => { if (l) kept.push(rect(i, l)); });
+
   // 3. constant values: their label's own size (at least readable), over the capsule, clear of every name and block
   for (const i of order) {
     const b = boxes[i];
@@ -233,6 +271,9 @@ export function planLayouts(boxes: NameBox[], scale: number, minBlockPx = 10, bl
   }
   return out;
 }
+
+/** How many blocks of one label and size make a repeat that is drawn alike (2b in planLayouts). */
+export const REPEAT_MIN = 3;
 
 /** A constant's value that is only zeros (0, 00, 000, 0x0, 0b0): nothing to read at fit. */
 export const isZeroRun = (t: string): boolean => /^(0[xb])?0+$/i.test(t.trim());
