@@ -51,7 +51,27 @@ class Faults {
     // probe mode (analysis.ts) takes clicks too: the brush goes first while it is on
     this.prevPress = ed.tools.onPress;
     ed.tools.onPress = (hit, e) => (this.brush ? this.press(hit, e) : this.prevPress?.(hit, e) ?? false);
-    this.off.push(ed.onChange(() => this.draw()), ed.onSimChange(() => this.draw()));
+    // a rebuild resolves the faults (stale ones, refusals) after the edit's diagnostics were drawn: draw them again
+    let seen: typeof ed.sim.faults | null = null;
+    const simChange = () => {
+      this.draw();
+      if (ed.sim.faults === seen) return;
+      const had = seen;
+      seen = ed.sim.faults;
+      // every rebuild makes a new state: only a chip with faults (now or before) needs its diagnostics again
+      if (!ed.doc.faults?.length && !had?.stale.size && !had?.problems.length) return;
+      ed.view.setDiags(ed.diags);
+      ed.props.rebuild();
+    };
+    // the properties key on the selection, not on the faults: rebuild the list when they change
+    let faults = ed.doc.faults;
+    const change = () => {
+      this.draw();
+      if (ed.doc.faults === faults) return;
+      faults = ed.doc.faults;
+      ed.props.rebuild();
+    };
+    this.off.push(ed.onChange(change), ed.onSimChange(simChange));
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && this.brush && !typing(e.target)) return this.setBrush(false);
       if (typing(e.target) || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -90,7 +110,7 @@ class Faults {
     this.brush = on;
     this.ed.el.querySelector('.sb-canvas')?.classList.toggle('faulting', on);
     this.ed.renderActions();
-    this.ed.props.update(true);
+    this.ed.props.rebuild();
     if (on) this.ed.toast('Fault brush: click a wire, pointer or pin to break it (B or Esc to leave)');
   }
 
@@ -281,7 +301,7 @@ class Faults {
       if (f.off) continue;
       const wires = 'wires' in f.target ? f.target.wires : undefined;
       const pins = 'pin' in f.target ? [f.target.pin] : undefined;
-      if (st.stale.has(f.id)) out.push({ level: 'warn', msg: `Fault ${this.describe(f)} is on nothing`, fix: 'its wire, pointer or pin is gone. Remove it in the properties.' });
+      if (st.stale.has(f.id)) out.push({ level: 'warn', msg: `A fault (${this.describe(f, false)}) has nothing to act on`, fix: 'its wire, pointer or pin is gone. Remove it in the properties.' });
       else out.push({ level: 'hint', msg: `Fault: ${this.describe(f)}`, fix: 'set with the fault brush (B). Switch it off or remove it in the properties.', wires, pins });
     }
     for (const p of st.problems) out.push({ level: 'warn', msg: 'A fault could not be set', fix: `${p}.` });
