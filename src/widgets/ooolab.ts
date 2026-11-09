@@ -4,6 +4,7 @@
 // be built that way (bench/ooprice.ts: its window sizes; any other shape is timed, not priced).
 
 import { groupDigits } from '../sim/numfmt';
+import { numOf } from '../chapters/order';
 import { assemble } from '../riscv/asm';
 import { compilePy } from '../lang/compile';
 import { PY_PROGRAMS } from '../lang/pyprograms';
@@ -138,7 +139,7 @@ export function oooLabWidget(): Widget {
   const progSel = h('select', { class: 'ooo-sel', id: 'lab-prog', 'aria-label': 'Program' },
     h('option', { value: 'set' }, `The benchmark set (${GRID_PROGRAMS.length} programs, geometric mean)`),
     h('optgroup', { label: 'One program' }, ...[...GRID_PROGRAMS, ...OOO_PROGRAMS.map((p) => p.id)].map((id) => h('option', { value: id }, oooProgram(id).name))),
-    h('optgroup', { label: 'Your own' }, h('option', { value: 'asm' }, 'Your assembly…'), h('option', { value: 'py' }, 'Your Python (chapter 15)…'))) as HTMLSelectElement;
+    h('optgroup', { label: 'Your own' }, h('option', { value: 'asm' }, 'Your assembly…'), h('option', { value: 'py' }, `Your Python (chapter ${numOf('python')})…`))) as HTMLSelectElement;
   const srcBox = h('textarea', { class: 'lab-src', spellcheck: 'false', 'aria-label': 'Program source', rows: '10' }) as HTMLTextAreaElement;
   const srcMsg = h('p', { class: 'lab-msg', role: 'status' });
   const srcWrap = h('div', { class: 'lab-srcwrap' }, srcBox, srcMsg);
@@ -170,9 +171,11 @@ export function oooLabWidget(): Widget {
   // ----- the results
   const cpiEl = h('b', { class: 'lab-big' }, '–');
   const vsEl = h('b', null, '–'), mpkiEl = h('b', null, '–'), ipcEl = h('b', null, '–'), nandEl = h('b', null, '–'), perEl = h('b', null, '–');
-  const kv = (label: string | Node, v: HTMLElement, cls = '') => h('div', { class: `lab-kv ${cls}` }, h('span', null, label), v);
-  const headline = h('div', { class: 'lab-head' }, kv('CPI', cpiEl, 'main'), kv('against our core', vsEl), kv('IPC', ipcEl),
-    kv('mispredictions / 1000 instr', mpkiEl), kv('NANDs', nandEl), kv('period · delays / instr', perEl));
+  const kv = (label: string | Node, v: HTMLElement, cls = '', title: string | null = null) => h('div', { class: `lab-kv ${cls}`, title }, h('span', null, label), v);
+  const headline = h('div', { class: 'lab-head' }, kv('CPI', cpiEl, 'main', 'Clock cycles per instruction (lower is faster)'),
+    kv('against our core', vsEl, '', 'This CPI against the default core\'s on the same program'), kv('IPC', ipcEl, '', 'Instructions per clock cycle: 1 / CPI'),
+    kv('mispredictions / 1000 instr', mpkiEl), kv('NANDs', nandEl),
+    kv('period · delays / instr', perEl, '', 'Clock period in NAND delays · the time of one instruction in NAND delays (period × CPI)'));
   const problemsEl = h('div', { class: 'lab-problems', role: 'alert', hidden: true });
   const status = h('span', { class: 'lab-status', 'aria-live': 'polite' });
   const bar = h('div', { class: 'lab-bar', role: 'img' });
@@ -264,7 +267,7 @@ export function oooLabWidget(): Widget {
     barLegend.replaceChildren(...shown.map((c) => h('span', null, h('i', { class: `s-${c}` }), `${SLOT_LABEL[c]} ${pct(c)}`)));
     // per program
     progTable.replaceChildren(h('table', { class: 'data ooo-tab num' },
-      h('tr', null, ...['program', 'instructions', 'cycles', 'CPI', 'our core', 'mispredictions'].map((t) => h('th', null, t))),
+      h('tr', null, ...['program', 'instructions', 'cycles', 'CPI', 'CPI, our core', 'mispredictions'].map((t) => h('th', null, t))),
       ...runs.map((r, i) => h('tr', null, h('td', null, r.prog.name), ...[nands(r.stats.instructions), nands(r.stats.cycles), fix(cpis[i]),
         fix(base[i].cycles / Math.max(1, base[i].instructions)), String(r.stats.mispredicts)].map((v) => h('td', null, v))))));
     tlPick.replaceChildren(...runs.map((r, i) => h('option', { value: String(i) }, r.prog.name)));
@@ -303,8 +306,9 @@ export function oooLabWidget(): Widget {
 
   function keep(): void {
     if (!last) return;
-    const name = LAB_PRESETS.find(([, c]) => key(c) === key(cfg))?.[0] ?? `Shape ${kept.length + 1}`;
     const i = kept.findIndex((k) => key(k.cfg) === key(cfg));
+    // kept again (to refresh its CPI after a program change): it keeps its name
+    const name = kept[i]?.name ?? LAB_PRESETS.find(([, c]) => key(c) === key(cfg))?.[0] ?? `Shape ${kept.length + 1}`;
     const row = { name, cfg: fullShape(cfg), cpi: last.cpi, price: priceOf(cfg) };
     if (i >= 0) kept[i] = row; else kept.push(row);
     if (kept.length > 8) kept.shift();

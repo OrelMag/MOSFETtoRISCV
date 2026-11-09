@@ -229,7 +229,7 @@ export const families: Family[] = [
   nBit('popcnt', 'Population count', 'arithmetic', [2, 4, 8, 16, 32], 8, (n) => `popcnt${n}`, popcount),
   nBit('abs', 'Absolute value', 'arithmetic', [4, 8, 16, 32], 8, (n) => `abs${n}`, absValue),
   // gates
-  { id: 'pla', name: 'PLA (AND + OR planes)', category: 'gate', params: [{ name: 'function', values: [0, 1], initial: 0, label: (v) => PLAS[v] }], key: (p) => `pla_${PLAS[p.function]}`, make: (p) => pla(PLAS[p.function]) },
+  { id: 'pla', name: 'PLA (AND + OR planes)', category: 'gate', params: [{ name: 'function', values: [0, 1], initial: 0, label: (v) => ['full adder', '7-segment decoder'][v] }], key: (p) => `pla_${PLAS[p.function]}`, make: (p) => pla(PLAS[p.function]) },
   nBit('parity', 'Parity', 'gate', [3, 4, 8, 16, 32], 8, (n) => `parity${n}`, parity),
   { id: 'hamenc', name: 'Hamming SEC-DED encoder', category: 'gate', params: [count('data bits', [4, 8, 16], 8)], key: (p) => `hamenc${p['data bits']}`, make: (p) => hammingEnc(p['data bits']) },
   { id: 'hamdec', name: 'Hamming SEC-DED decoder', category: 'gate', params: [count('data bits', [4, 8, 16], 8)], key: (p) => `hamdec${p['data bits']}`, make: (p) => hammingDec(p['data bits']) },
@@ -279,7 +279,7 @@ export const families: Family[] = [
   nBit('reg', 'Register', 'sequential', [1, 2, 4, 8, 16], 4, (n) => `reg${n}`, register),
   nBit('creg', 'Register with clear', 'sequential', [1, 4, 8, 16, 32], 4, (n) => `creg${n}`, clearableRegister),
   nBit('counter', 'Counter', 'sequential', [2, 3, 4, 8], 4, (n) => `counter${n}`, counter),
-  { id: 'timer', name: 'Timer', category: 'sequential', params: [count('period', TIMER_PERIODS, 1000)], key: (p) => `timer${p.period}`, make: (p) => timer(p.period) },
+  { id: 'timer', name: 'Timer', category: 'sequential', params: [{ ...count('period', TIMER_PERIODS, 1000), label: (v) => `every ${v} clocks` }], key: (p) => `timer${p.period}`, make: (p) => timer(p.period) },
   nBit('smul', 'Iterative multiplier', 'sequential', [4, 8, 16, 32], 8, (n) => `smul${n}`, seqMul),
   nBit('pmul', 'Pipelined multiplier', 'sequential', [4, 8, 16, 32], 8, (n) => `pmul${n}`, pipeMul),
   nBit('updown', 'Up/down counter', 'sequential', [2, 4, 8, 16], 4, (n) => `updown${n}`, upDownCounter),
