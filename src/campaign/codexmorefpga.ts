@@ -19,15 +19,16 @@ a OR b OR c OR d      → 1 everywhere but 0      → 0xFFFE</pre>Write the outp
       'Counting gates inside a LUT: a LUT costs the same whatever it computes; only its number of inputs matters.',
       'Thinking bigger LUTs are always better: each extra input doubles the bits and the multiplexer (60 NANDs at k = 4, 252 at k = 6) to save fewer and fewer LUTs.',
     ],
+    lib: 'lut4', compare: ['lut2', 'full_adder'],
     chapters: [at(1, 'A look-up table is a memory'), at(2, 'Any function of four inputs'), at(3, 'Covering a netlist with LUTs')],
   },
   fpga: {
     idea: `An <b>FPGA</b> is a chip of uncommitted parts: thousands of look-up tables and flip-flops, some block RAMs, and a mesh of tracks joined by switches. Configuration bits, loaded when it powers on, fill the tables and close the switches, and from then on it is a circuit like any other, every part working at once.`,
     example: {
       title: 'Our computer on a Tang Nano 9K',
-      body: `<pre>LUT4          5 271 of 8 640   (61 %)
-flip-flops    1 178
-block RAM        10 of 26      (RAM 8, ROM 2)
+      body: `<pre>LUT4          5271 of 8640   (61 %)
+flip-flops    1178
+block RAM       10 of 26     (RAM 8, ROM 2)
 slowest path  40.9 ns → 24.4 MHz (routing 58 %)</pre>The same Verilog the sandbox exports, through Yosys and nextpnr.`,
     },
     mistakes: [
@@ -40,10 +41,10 @@ slowest path  40.9 ns → 24.4 MHz (routing 58 %)</pre>The same Verilog the sand
     idea: `Everything that makes an FPGA one circuit and not another is a bit: a LUT's table entry, a routing switch, a cell's mode, a memory word's initial value. The tools write them all into one file, the <b>bitstream</b>, which the chip reads from flash at power-on. Loading another is rebuilding the hardware.`,
     example: {
       title: 'Where the bits go on the GW1NR-9',
-      body: `<pre>frame                       2 904 bits
-fabric (the counter)          712 frames = 2 067 648 bits
-  of which LUT tables        138 240 bits (7 %)
-our computer                1 224 frames (+512: memory contents)</pre>Most of the bitstream is routing, not logic.`,
+      body: `<pre>frame                        2904 bits
+fabric (the counter)          712 frames = 2 067 648 bits
+  of which LUT tables        138 240 bits (7 %)
+our computer                 1224 frames (+512: memory contents)</pre>Most of the bitstream is routing, not logic.`,
     },
     mistakes: [
       'Thinking the bitstream is mostly logic: the LUT tables are a small share; the switches between them are most of it.',
@@ -55,9 +56,9 @@ our computer                1 224 frames (+512: memory contents)</pre>Most of th
     idea: `Memories built from LUTs and flip-flops run out fast: a flip-flop per bit, multiplexers to read them. So FPGAs carry <b>block RAMs</b>, real SRAM arrays beside the logic, a few dozen of them. They read through a register on a clock edge, so a design whose memories answer within the cycle needs a second, faster memory clock, as our export adds.`,
     example: {
       title: 'Our computer\'s memories',
-      body: `<pre>RAM  4K × 32 = 131 072 bits → 8 blocks of 16 Kbit
-ROM  1K × 32 =  32 768 bits → 2 blocks
-register file 31 × 32       → 992 flip-flops, 1 999 LUTs</pre>The register file is read twice and written once in a cycle: one block RAM cannot do that.`,
+      body: `<pre>RAM  4K × 32 = 131 072 bits → 8 blocks of 16 Kbit
+ROM  1K × 32 =  32 768 bits → 2 blocks
+register file 31 × 32       → 992 flip-flops, 1999 LUTs</pre>The register file is read twice and written once in a cycle: one block RAM cannot do that.`,
     },
     mistakes: [
       'Expecting every memory in the Verilog to become block RAM: too many ports, an asynchronous read or a constant word keeps it in the fabric.',
@@ -77,6 +78,7 @@ carry  cout = p ? cin : a</pre>a = b = 1, cin = 1: p = 0, y = 1, cout = a = 1.`,
       'Expecting any adder to use the chain: the tools find it in a + b, not in a netlist of NANDs, which they map to LUTs gate by gate.',
       'Giving a register its own LUT: the flip-flop after the LUT is free; a pass-through LUT appears only when nothing else feeds it.',
     ],
+    lib: 'fpga_slice',
     chapters: [at(4, 'The logic cell')],
   },
   switchbox: {

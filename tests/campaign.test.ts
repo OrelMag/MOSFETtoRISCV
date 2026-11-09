@@ -82,6 +82,9 @@ describe('the campaign graph', () => {
     expect(libAllowed(r, 'xor')).toBe(false);
     expect(libAllowed(ruleFor('m_ram'), 'dec2e')).toBe(true);
     expect(libAllowed(ruleFor('m_ram'), 'mux4x4')).toBe(true);
+    // the look-up table is built from 2:1 muxes: the ready trees and LUTs are withheld
+    for (const id of ['mux16x1', 'mux8x1', 'mux4x1', 'lut4', 'lut2']) expect(libAllowed(ruleFor('m_lut'), id), id).toBe(false);
+    expect(libAllowed(ruleFor('m_lut'), 'mux2')).toBe(true);
   });
 
   it('status follows requirements; Unlock all opens everything', () => {

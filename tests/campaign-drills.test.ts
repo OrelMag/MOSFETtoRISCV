@@ -222,3 +222,42 @@ describe('Act P drills', () => {
     for (const w of CARD_WORDS) expect([...w].every((c) => punchOf(c) !== null), w).toBe(true);
   });
 });
+
+describe('the LUT drill', () => {
+  it('every question\'s answer is its function\'s truth table, bit i at address i, and the usual mistakes are named', async () => {
+    const { lutCfg, lutFn } = await import('../src/campaign/drills');
+    // spot checks against configurations written out by hand
+    expect(lutCfg({ say: '', f: (i) => +(i === 15) })).toBe(0x8000);
+    expect(lutCfg({ say: '', f: (i) => (i & 1) ^ ((i >> 1) & 1) })).toBe(0x6666);
+    expect(lutCfg({ say: '', f: (i) => +(i !== 0) })).toBe(0xfffe);
+    const r = rng(2026), kinds = new Set<string>();
+    for (let n = 0; n < 400; n++) {
+      const q = DRILLS.lut.make(r);
+      kinds.add(q.prompt.replace(/<i>[a-d]+<\/i>|\d+/g, '_'));
+      const cfg = parseNum(q.answer)!;
+      expect(q.answer).toMatch(/^0x[0-9A-F]{4}$/);
+      expect(q.check(q.answer).ok, q.prompt).toBe(true);
+      expect(q.check(`0b${cfg.toString(2).padStart(16, '0')}`).ok).toBe(true);
+      expect(q.check(q.answer.slice(2)).ok).toBe(true);
+      const rev = parseInt(cfg.toString(2).padStart(16, '0').split('').reverse().join(''), 2);
+      if (rev !== cfg) expect(q.check(`0x${rev.toString(16)}`).why).toMatch(/backwards/);
+      const inv = ~cfg & 0xffff;
+      if (inv !== rev) expect(q.check(`0x${inv.toString(16)}`).why).toMatch(/inverted/);
+      expect(q.check('hello').ok).toBe(false);
+    }
+    expect(kinds.size).toBeGreaterThanOrEqual(12);
+    // the sentences read back: the multiplexer's and the AND's, parsed from the words, give the same table
+    const at = (i: number, v: string) => (i >> 'abcd'.indexOf(v)) & 1;
+    const r2 = rng(7);
+    let muxes = 0, ands = 0;
+    for (let n = 0; n < 400; n++) {
+      const fn = lutFn(r2), say = fn.say.replace(/<\/?i>/g, '');
+      const m = /^(\w) when (\w) is 0, (\w) when \2 is 1/.exec(say);
+      if (m) { muxes++; for (let i = 0; i < 16; i++) expect(fn.f(i)).toBe(at(i, m[2]) ? at(i, m[3]) : at(i, m[1])); }
+      const a = /^1 only when ([a-d, ]+?) are all 1$/.exec(say.replace(' and ', ', '));
+      if (a) { ands++; const vs = a[1].split(/, /); for (let i = 0; i < 16; i++) expect(fn.f(i)).toBe(+vs.every((v) => at(i, v))); }
+    }
+    expect(muxes).toBeGreaterThan(10);
+    expect(ands).toBeGreaterThan(10);
+  });
+});

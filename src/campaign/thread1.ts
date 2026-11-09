@@ -96,6 +96,22 @@ export const THREAD1: Record<string, NodeThread> = {
       'Reads are combinational: a register in the read path returns the word one cycle late.',
     ],
   },
+  m_lut: {
+    uses: ['imem'], // the program ROM is the same circuit: bits read through a tree by an address, fixed instead of configured
+    usedFor: { d_lut: 'its 16 configuration bits, written from a function in words' },
+    pitfalls: [
+      'The first level of the tree selects with i0: bits 2k and 2k + 1 differ only there. Swapped levels read the table out of order.',
+      'Bit k of cfg is the output for i = k: 0x8000 is the AND, not 0x0001.',
+    ],
+  },
+  d_lut: {
+    uses: ['imem'], // writing a ROM's contents: the program ROM's words are set the same way
+    usedFor: {},
+    pitfalls: [
+      'Writing the column top-down from address 0 gives the table backwards: address 0 is bit 0, the right end.',
+      'A function that ignores an input still fills all sixteen rows: its pattern repeats, it does not shrink.',
+    ],
+  },
   m_rf: {
     uses: ['rf'],
     usedFor: {

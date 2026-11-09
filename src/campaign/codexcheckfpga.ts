@@ -13,11 +13,11 @@ export const CHECKFPGA: Record<string, Quiz[]> = {
       why: ['', 'That is the AND: 1 only when all four inputs are 1.', 'That is the NOR: 1 only when all are 0.', 'That is a XOR b, ignoring c and d.'],
     },
     {
-      question: 'A 9-NAND full adder and a 1 250-NAND ALU slice each fit in one LUT4\'s inputs. Which costs more LUT hardware?',
-      options: ['Neither: a LUT4 is the same 16 bits and 60 NANDs whatever it computes', 'The ALU slice', 'The full adder'],
+      question: 'One LUT4 computes a AND b. Another computes the full adder\'s carry, the majority of a, b and c. Which costs more LUT hardware?',
+      options: ['Neither: a LUT4 is the same 16 bits and 60 NANDs whatever it computes', 'The majority', 'The AND'],
       answer: 0,
       explain: 'A look-up table stores the function\'s truth table. Its size depends on the number of inputs, never on the gates the function would take.',
-      why: ['', 'A function of four inputs is 16 bits however it was drawn.', 'The full adder\'s 9 NANDs do not make its table smaller.'],
+      why: ['', 'Any function of up to four inputs is 16 bits however many gates it would take.', 'The AND\'s single gate does not make its table smaller; its unused inputs just repeat the pattern.'],
     },
   ],
   fpga: [
@@ -55,9 +55,9 @@ export const CHECKFPGA: Record<string, Quiz[]> = {
   bram: [
     {
       question: 'Why does our 4K × 32 RAM take 8 block RAMs?',
-      options: ['131 072 bits over 16 Kbit (16 384 bits) a block', 'One block per 512 words is the rule', 'Each block holds one byte lane'],
+      options: ['131 072 bits over 16 Kbit (16 384 bits) a block', 'One block per 512 words is the rule', 'Each block holds one byte lane'],
       answer: 0,
-      explain: '4 096 × 32 = 131 072 bits, and 131 072 / 16 384 = 8.',
+      explain: '4096 × 32 = 131 072 bits, and 131 072 / 16 384 = 8.',
       why: ['', 'The count follows from the bits, not from a fixed number of words.', 'The split is by capacity; four byte lanes would be four, not eight.'],
     },
     {

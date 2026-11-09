@@ -24,7 +24,7 @@ export const ACT_ENDS: Record<number, ActEnd> = {
   3: {
     can: 'Hold state: the PC, a register file of seven registers and x0 (2172 NANDs, nearly half the core to come), memories as parts.',
     cannot: 'Decide what to do with them: every mux and enable you built waits for someone to set it. The instruction word does that, so first learn what the words say, by programming. Act 4.',
-    next: 'i_isa', sides: [{ node: 'm_ram' }],
+    next: 'i_isa', sides: [{ node: 'm_ram' }, { node: 'm_lut' }],
   },
   4: {
     can: 'On the golden model: loops, arrays, function calls. Multiplying took 28 to 134 instructions per product, 74 on average.',

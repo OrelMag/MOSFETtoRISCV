@@ -49,6 +49,60 @@ describe('the FPGA chapter', () => {
   });
 });
 
+describe('the FPGA codex quotes the chapter\'s numbers', () => {
+  it('every number in the entries, their fuller texts and questions comes from facts.ts', async () => {
+    const { CODEX_FPGA } = await import('../src/campaign/codexfpga');
+    const { MOREFPGA } = await import('../src/campaign/codexmorefpga');
+    const { CHECKFPGA } = await import('../src/campaign/codexcheckfpga');
+    const { COUNTER, block, fabricBits, pct, ramAsFlipFlops } = await import('../src/fpga/facts');
+    const { groupDigits: g } = await import('../src/sim/numfmt');
+    const raw = JSON.stringify([CODEX_FPGA, MOREFPGA, CHECKFPGA]);
+    // the site's grouping: a narrow no-break space from 5 digits up, never a plain space
+    expect(raw).not.toMatch(/\d \d{3}(?!\d)/);
+    const all = raw.replace(/ +/g, ' ');
+    const has = (s: string) => expect(all, s).toContain(s);
+    const D = COMPUTER.device, p = pathShares(), rf = block('cpu.rf'), lb = lutConfigBits(), fb = fabricBits();
+    has(`fifteen 2:1 muxes, ${lutCost(4).nands} NANDs`);
+    has(`the same ${lutCost(4).bits} bits and ${lutCost(4).nands} NANDs whatever it computes`);
+    has(`a LUT6 is ${lutCost(6).bits} bits and ${lutCost(6).nands} NANDs`);
+    has(`(${lutCost(4).nands} NANDs at k = 4, ${lutCost(6).nands} at k = 6)`);
+    has(`takes ${g(D.lut4.used)} of its ${g(D.lut4.available)} LUTs, ${g(D.dff.used)} flip-flops and ${D.bsram.used} of ${D.bsram.available} block RAMs`);
+    has(`allows ${COMPUTER.fmax.clk.toFixed(1)} MHz`);
+    has(`LUT4 ${g(D.lut4.used)} of ${g(D.lut4.available)} (${pct(D.lut4.used, D.lut4.available)} %)`);
+    has(`uses ${pct(D.lut4.used, D.lut4.available)} % of the GW1NR-9`);
+    has(`block RAM ${D.bsram.used} of ${D.bsram.available} (RAM ${bsramFor(RAM_WORDS, RAM_BITS)}, ROM ${bsramFor(ROM_WORDS, 32)})`);
+    has(`slowest path ${p.ns.toFixed(1)} ns → ${COMPUTER.fmax.clk.toFixed(1)} MHz (routing ${p.routingPct} %)`);
+    const bs = COUNTER.bitstream, extra = COMPUTER.bitstream.frames - bs.frames;
+    has(`frames of ${g(bs.frameBits)} bits: ${g(bs.frames)} frames for the fabric, ${g(fb)} bits, of which the LUT tables are only ${g(lb)} (${pct(lb, fb)} %)`);
+    has(`adds ${extra} frames`);
+    has(`frame ${g(bs.frameBits)} bits`);
+    has(`fabric (the counter) ${g(bs.frames)} frames = ${g(fb)} bits`);
+    has(`of which LUT tables ${g(lb)} bits (${pct(lb, fb)} %)`);
+    has(`our computer ${g(COMPUTER.bitstream.frames)} frames (+${extra}: memory contents)`);
+    has(`the LUT tables are ${pct(lb, fb)} %`);
+    has(`${extra} frames longer`);
+    const rff = ramAsFlipFlops(), ramBits = RAM_WORDS * RAM_BITS, block16 = 16 * 1024;
+    has(`has ${D.bsram.available} of 16 Kbit`);
+    has(`takes ${bsramFor(RAM_WORDS, RAM_BITS)} of them; in flip-flops its ${g(ramBits)} bits would be ${rff.times.toFixed(0)} times`);
+    has(`stays in ${g(rf.ffs)} flip-flops and ${g(rf.luts)} LUTs`);
+    has(`RAM 4K × 32 = ${g(ramBits)} bits → ${bsramFor(RAM_WORDS, RAM_BITS)} blocks`);
+    has(`ROM 1K × 32 = ${g(ROM_WORDS * 32)} bits → ${bsramFor(ROM_WORDS, 32)} blocks`);
+    has(`→ ${g(rf.ffs)} flip-flops, ${g(rf.luts)} LUTs`);
+    has(`${g(ramBits)} bits over 16 Kbit (${g(block16)} bits)`);
+    has(`${g(RAM_WORDS)} × ${RAM_BITS} = ${g(ramBits)} bits, and ${g(ramBits)} / ${g(block16)} = ${bsramFor(RAM_WORDS, RAM_BITS)}`);
+    has(`It is ${g(rf.ffs)} bits`);
+    has(`the ${D.alu.used} carry cells`);
+    has(`shows ${D.alu.used} carry cells`);
+    has(`routing took ${p.routing.toFixed(1)} ns of ${p.ns.toFixed(1)}, logic ${p.logic.toFixed(1)}`);
+    has(`routing ${p.routing.toFixed(1)} ns (${p.routingPct} %)`);
+    has(`logic ${p.logic.toFixed(1)} ns (${p.lut4} LUT4s, ${p.wideMux} wide multiplexers)`);
+    has(`skew ${p.skew.toFixed(1)} ns`);
+    has(`total ${p.ns.toFixed(1)} ns → ${COMPUTER.fmax.clk.toFixed(1)} MHz`);
+    has(`routing took ${p.routing.toFixed(1)} ns and logic ${p.logic.toFixed(1)} ns`);
+    has(`most of the ${p.ns.toFixed(1)} ns`);
+  });
+});
+
 describe('the bitstream', () => {
   it('the counter, with no block RAM, gives the fabric; the computer adds frames for its memories\' contents', async () => {
     const { COUNTER, fabricBits, lutConfigBits } = await import('../src/fpga/facts');

@@ -241,6 +241,7 @@ export const THREAD0: Record<string, NodeThread> = {
       s_pc: 'one: pc + 1 or a loaded target (reset is an AND row, cheaper than a second mux)',
       m_rf: 'trees of it are the two 8:1 read ports, 343 NANDs each',
       m_ram: 'a 4:1 tree reads the selected word',
+      m_lut: 'one bit wide, a 16:1 tree of it is a look-up table',
       c_imm: 'not inside it (it is wiring only): the core\'s 4:1 bus mux picks one of its four immediates',
       c_npc: 'chooses the target: pc + imm or rs1 + imm',
       pi_reg: 'puts 0 in front of the flip-flops on clr: a bubble',
