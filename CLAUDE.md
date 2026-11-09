@@ -733,7 +733,9 @@ src/riscv/rv16/ isa16.ts (fields, encode / decode / disasm), asm16.ts, iss16.ts 
                one memory taking turns, warp 0 first, wasted turns counted; bar waits for the other warp or its end (mask 0);
                stepWarp(w) for other issue orders; raster: lane 0's stores to 0xFFF0 … 0xFFF6 draw at once into 0xF000, draws
                listed), randprog.ts (seeded random
-               programs for fuzzing cores)
+               programs for fuzzing cores); custom16.ts (your own instructions: R-type rows rd ← f(rs1, rs2) in OPX's free funct3 values, the
+               4-bit opcode being full; decode16 / disasm16 / assemble16 / Iss16({ custom }) take them, lib/rv16/cpu.ts control16(rows) is CTL16
+               itself without rows; tests/rv16-custom.test.ts pins every rv16 part's and campaign answer's fingerprint: scripts/rv16-fp.ts --write)
 src/isa/       Custom ISA: table.ts (IsaDoc: instructions as mnemonic + operand letters + bit pattern, operand kinds reg / enum
                / imm / addr; IsaTable: assemble, disasm (most specific pattern), fields, words, problems; sanitizeIsa),
                presets.ts (ISA4_PRESET: the 4-bit ISA as a table, equal to asm4 / disasm4 on every word), isa.ts (Isa:
@@ -1193,7 +1195,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  the search's `>` action; Apply = setRef in one undo step
   owninstr.ts    Custom instructions… (the CPU drawer's Custom…, a ROM's program editor): up to three rows on an
                  rv32i_core, their problems, data path, signals and generated golden-model code, the control unit's cost
-                 measured; Apply (one undo step): the core part becomes { core: { custom } } ({ core: { custom, pipe: true } } on rv32i_pipe_core, lib/pipeline.ts ports), the ROM ref gets a copy; the controls (LINES, dataPath, issCode) live in widgets/ownrow.ts
+                 measured; Apply (one undo step): the core part becomes { core: { custom } } ({ core: { custom, pipe: true } } on rv32i_pipe_core, lib/pipeline.ts ports), the ROM ref gets a copy; the controls (LINES, dataPath, issCode) live in widgets/ownrow.ts;
+                 owninstr16.ts the same dialog on the RV16 reference core / pipeline (rv16_cpu, rv16_pipe_111): format fixed to R, a free OPX funct3
+                 per row, Apply = { core16: { custom, pipe? } } and the RV16 ROM's custom16 copy; cpu16.ts's monitor runs the rows
   cpuui.ts       plugin: the CPU panel (docked drawer: status, listing with the PC and pipeline stages, a
                  click marks the instruction's parts (insthw names) and colours its field wires
                  (instrMarks → wires by net), field breakdown (widgets/instrfields), pipeline diagram
