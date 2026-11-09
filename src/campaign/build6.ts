@@ -72,7 +72,7 @@ export const BUILD6: Record<string, () => BuildChallenge> = {
     answer: refOf('pi_haz', () => HAZ16, 'Hazard unit'),
   }),
   pi_core0: pipeLevel('pi_core0', 'Pipeline I: five stages', 0, { fwd: false, stall: false, flush: false }, 1,
-    'Cut your core into F, D, E, M, W with pipeline registers. The programs leave two independent instructions between every producer and its user, and have no branches: no hazards yet.',
+    'Cut your core into F, D, E, M, W with pipeline registers. The programs leave two independent instructions between every producer and its user, and have no branches: no hazards yet, provided the register file is written at the falling edge, so that an instruction in D reads what W writes in the same cycle.',
     'two nops after every instruction, no branches; one instruction per cycle once the pipeline is full.'),
   pi_core1: pipeLevel('pi_core1', 'Pipeline II: forwarding', 1, { fwd: true, stall: false, flush: false }, 1,
     'Now a result is used by the very next instruction. Forward it from M or W into E instead of waiting for the register file.',

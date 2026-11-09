@@ -76,6 +76,21 @@ function goalEl(ch: BuildChallenge): HTMLElement {
   return h('span', { class: 'sb-chal-sum sb-chal-goal', title: rule(ch.allowed)[1] }, 'Goal: ', h('b', null, g.goal), ` · ${g.rule}`, g.par ? ` · par ${g.par}` : '');
 }
 
+/** What each score badge measures, for its tooltip (a newcomer meets depth and period here before the timing chapters). */
+const UNIT_MEANS: Record<string, string> = {
+  NAND: 'NAND gates in your circuit, every part counted down to its NANDs',
+  depth: 'NAND delays on the longest path from an input to an output',
+  period: 'the clock period: NAND delays on the longest path from one clock edge to the next',
+  cycles: 'clock cycles to run every test',
+  transistors: 'transistors in your circuit',
+  edit: 'changes from the drawing you started with (moving parts and redrawing wires are free)',
+  edits: 'changes from the drawing you started with (moving parts and redrawing wires are free)',
+};
+
+/** A score badge's tooltip: what it measures, then how it stands against par. */
+export const scoreTitle = (unit: string, cls: string): string =>
+  [UNIT_MEANS[unit], cls === 'par' ? 'at or under par' : cls ? 'over par (allowed: par is a target)' : ''].filter(Boolean).join('; ').replace(/^./, (c) => c.toUpperCase());
+
 function deviceItems(r: CheckResult, lim: Limits, item: (v: number, unit: string, par?: number, before?: boolean) => HTMLElement | null): (HTMLElement | null)[] {
   const s = r.score;
   return [
@@ -360,7 +375,7 @@ class ChallengeUi {
     const item = (v: number | null | undefined, unit: string, par?: number, before = false) => {
       if (v === null || v === undefined) return null;
       const cls = par === undefined ? '' : v <= par ? 'par' : 'over';
-      return h('span', { class: cls, title: cls === 'par' ? 'At or under par' : cls ? 'Over par' : '' },
+      return h('span', { class: cls, title: scoreTitle(unit, cls) },
         before ? `${unit} ` : null, h('b', null, groupDigits(v)), before ? null : ` ${unit}`, par !== undefined ? h('small', null, ` par ${par}`) : null);
     };
     const lv = this.level;
@@ -491,7 +506,7 @@ class ChallengeUi {
     const lim = ch.limits ?? {};
     const item = (v: number, unit: string, par?: number, before = false) => {
       const cls = par === undefined ? '' : v <= par ? 'par' : 'over';
-      return h('span', { class: cls, title: cls === 'par' ? 'At or under par' : cls ? 'Over par (allowed: par is a target)' : '' },
+      return h('span', { class: cls, title: scoreTitle(unit, cls) },
         before ? `${unit} ` : null, h('b', null, groupDigits(v)), before ? null : ` ${unit}`, par !== undefined ? h('small', null, ` par ${par}`) : null);
     };
     const period = r.score.period;
@@ -520,7 +535,7 @@ class ChallengeUi {
     if (ch.check.kind === 'custom' && ch.check.slow && !this.announced) {
       this.announced = true;
       const btn = document.querySelector<HTMLButtonElement>('[data-chal="check"]');
-      if (btn) { btn.disabled = true; btn.textContent = 'Checking… the page holds still'; }
+      if (btn) { btn.disabled = true; btn.textContent = 'Checking… (the page pauses)'; }
       requestAnimationFrame(() => setTimeout(() => { this.check(); this.announced = false; }, 0));
       return;
     }

@@ -124,7 +124,7 @@ export const BUILDFP: Record<string, () => BuildChallenge> = {
   }),
   o_fpround: () => ({
     id: 'o_fpround', title: 'Rounding decision', level: 'arithmetic', allowed: 'nand',
-    brief: 'The heart of every rounder. Given the last bit kept (<b>lsb</b>), the first bit dropped (the guard bit <b>g</b>), the OR of everything below it (the sticky bit <b>s</b>), the <b>sign</b> and the mode <b>rm</b>: <b>up</b> = add one to the kept bits. RNE (0): up when g and (s or lsb), ties to even. RTZ (1): never. RDN (2): when negative and g or s. RUP (3): when positive and g or s. RMM (4): when g. <b>toInf</b>: does an overflow become ∞ (RNE, RMM, and the direction rounded towards) rather than the largest finite number? Modes 5 to 7 behave as RTZ.',
+    brief: 'The heart of every rounder. Given the last bit kept (<b>lsb</b>), the first bit dropped (the guard bit <b>g</b>), the OR of everything below it (the sticky bit <b>s</b>), the <b>sign</b> and the mode <b>rm</b>: <b>up</b> = add one to the kept bits. RNE (0): up when g and (s or lsb), ties to even. RTZ (1): never. RDN (2): when negative and (g or s). RUP (3): when positive and (g or s). RMM (4): when g. <b>toInf</b>: does an overflow become ∞ (RNE, RMM, and the direction rounded towards) rather than the largest finite number? Modes 5 to 7 behave as RTZ.',
     ports: pins([['rm', 3], ['sign'], ['lsb'], ['g'], ['s']], [['up'], ['toInf']]),
     check: { kind: 'table', spec: ([rm, sign, lsb, g, s]) => [roundUp(rm, sign, !!lsb, !!g, !!s) ? 1 : 0, overflowToInf(rm, sign) ? 1 : 0] },
     answer: fpRefOf('o_fpround', () => ROUND_DECIDE, 'Rounding decision'),
@@ -169,7 +169,7 @@ export const BUILDFP: Record<string, () => BuildChallenge> = {
   }),
   o_fpcvt: () => ({
     id: 'o_fpcvt', title: 'Integer to float', level: 'arithmetic', allowed: 'nand',
-    brief: 'fcvt from a 16-bit integer <b>x</b> (two\'s complement when <b>signed</b>, else unsigned) to binary16, rounded in mode <b>rm</b>, with <b>flags</b> {NV, DZ, OF, UF, NX}. The magnitude is a significand whose top bit weighs 2^15: normalize & round does the rest. Integers above 2048 lose low bits (NX); unsigned 65 535 rounds up past the largest finite in some modes (OF).',
+    brief: 'fcvt from a 16-bit integer <b>x</b> (two\'s complement when <b>signed</b>, else unsigned) to binary16, rounded in mode <b>rm</b>, with <b>flags</b> {NV, DZ, OF, UF, NX}. The magnitude is a significand whose top bit weighs 2^15: normalize & round does the rest. Integers above 2048 can lose low bits (NX); unsigned 65 535 rounds up past the largest finite in some modes (OF).',
     ports: pins([['x', 16], ['signed'], ['rm', 3]], [['y', 16], ['flags', 5]]),
     check: {
       kind: 'table', spec: ([x, s, rm]) => { const r = fpFromIntX(x, !!s, F16, rm, 16); return [r.y, r.fl]; },
