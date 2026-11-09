@@ -1,7 +1,10 @@
 // Chapter 51, A router: IPv4's real bytes, longest-prefix match as a trie in RAM, the fast path in gates compared with net/fastpath.ts at every
 // output of every clock, the slow path it hands the rest to, and the two routing protocols on the invented network of net/routing.ts.
 
-import { ROUTER_FAST, RT_CHECK, RT_REWRITE, RT_WALK, cam, equal, register } from '../lib';
+import { equal } from '../lib/combinational';
+import { ROUTER_FAST, RT_CHECK, RT_REWRITE, RT_WALK } from '../lib/router';
+import { register } from '../lib/sequential';
+import { cam } from '../lib/storage';
 import { bigRam } from '../lib/bigmem';
 import { CAUSE_NAMES, C_FORWARD, C_LOCAL, C_NO_ROUTE, C_TTL } from '../net/fastpath';
 import { BYTE_CYCLES, engineCycles, FRAME_60, portsServed, WIRE_60 } from '../widgets/router';

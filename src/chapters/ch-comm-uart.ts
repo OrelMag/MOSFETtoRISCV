@@ -1,6 +1,9 @@
 import { tolerance, toleranceClosedForm, UART_8N1 } from '../comm/startstop';
 import { bytesPerSecond, divisorFor, FIFO_DEPTH, fifoBudget, OVERSAMPLE, SLOW_LIMIT_BACK_TO_BACK, SLOW_LIMIT_ISOLATED, UART_DIV_BITS, UART_TOLERANCE } from '../comm/uart';
-import { AXI_UART, baudGen, fifo, shiftRegister, SYNC2, UART_CORE, UART_RX, UART_TX } from '../lib';
+import { shiftRegister } from '../lib/seqparts';
+import { fifo } from '../lib/storage';
+import { SYNC2 } from '../lib/sync';
+import { AXI_UART, baudGen, UART_CORE, UART_RX, UART_TX } from '../lib/uart';
 import { UART_COSTS, uartIrqSource, uartPollSource } from '../riscv/uartprograms';
 import { stats } from '../sim/stats';
 import { baudWidget, busUartApi, coreApi, coreScene, coreState, fifoWidget, frameWidget, rxScene, rxState, twoApi, twoComputersNands, twoScene, txScene, TWO_DIV, uartBusScene } from '../widgets/uart';

@@ -1,7 +1,9 @@
 // Chapter 12's deeper steps, after "The real thing: 32 x 32": a read of the register being written, the file built from
 // latches, and the file of a dual-issue core. Numbers come from the generators (tests/deepseq.test.ts pins them).
 
-import { D_LATCH, DFFE, latchFile, latchWord, regfile, regfile2w, rfBypass } from '../../lib';
+import { regfile, regfile2w } from '../../lib/regfile';
+import { latchFile, latchWord, rfBypass } from '../../lib/rfdeep';
+import { D_LATCH, DFFE } from '../../lib/sequential';
 import { groupDigits } from '../../sim/numfmt';
 import { stats } from '../../sim/stats';
 import { pack } from '../../sim/values';

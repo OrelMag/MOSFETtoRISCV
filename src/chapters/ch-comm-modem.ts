@@ -8,7 +8,10 @@ import {
   ACC_BITS, BELL103, bitsPerSymbol, DS0, FS, FTW_MARK, FTW_SPACE, gapDb, gapToShannonDb, MODEMS, ncoHz, ncoSnrDb, PCM_RATE, RX_LONG,
   SAMPLES_PER_BIT, serClosed, SINE_K, SINE_W, snrForSer, tuningWord, constellation, monteCarlo,
 } from '../comm/modem';
-import { arrayMul, FSK_LINK, FSK_RX, FSK_TX, MODEM_LINE, NCO, rca, register, SINE_ROM } from '../lib';
+import { rca } from '../lib/combinational';
+import { FSK_LINK, FSK_RX, FSK_TX, MODEM_LINE, NCO, SINE_ROM } from '../lib/modem';
+import { arrayMul } from '../lib/muldiv';
+import { register } from '../lib/sequential';
 import { flatten } from '../sim/flatten';
 import { stats } from '../sim/stats';
 import { analyzeTiming, PS_PER_NAND } from '../sim/timing';

@@ -13,7 +13,7 @@ import { KEEPER, keeperLimit, mNode, noisyEdge, receive, thresholds, transitions
 import { findNode } from '../sim/flatten';
 import { CLK_TO_Q, PS_PER_NAND, SETUP } from '../sim/timing';
 import { pack } from '../sim/values';
-import { asyncFifo, BIN2GRAY, GRAY2BIN, SYNC_BENCH, PULSE_SYNC } from '../lib';
+import { asyncFifo, BIN2GRAY, GRAY2BIN, SYNC_BENCH, PULSE_SYNC } from '../lib/sync';
 import { stats } from '../sim/stats';
 import { h, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';

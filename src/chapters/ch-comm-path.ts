@@ -1,6 +1,8 @@
 // Chapter 53, The internet path: an invented network of networks as a packet-level model (net/internet.ts), BGP between its networks, DNS in real
 // bytes, traceroute, one frame carried through chapter 51's gates hop by hop, every delay computed, and what fetching a page adds up to.
 
+// the registry is read here (a part by id): the whole library, not only what the imports below register (tests/firstload.test.ts)
+import '../lib';
 import { CLOCK_NS } from '../dram/timing';
 import { ASES, AS_BRACK, AS_FERN, AS_QUIL, asPrefix, HOSTS, hostIp, Internet, linkBetween, linksOf, LINKS, probeFrame, R, ROUTERS, traceroute } from '../net/internet';
 import { keyOf } from '../net/internetbgp';

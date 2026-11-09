@@ -19,7 +19,8 @@
 import type { RGB } from '../gl/instances';
 import type { Vec3 } from '../gl/math';
 import { box, cyl, rod, type Anchor, type Part } from '../gl/parts';
-import { koggeStone, rca } from '../lib';
+import { rca } from '../lib/combinational';
+import { koggeStone } from '../lib/fastadd';
 import { groupNum } from '../sim/numfmt';
 import { logicDepth } from '../sim/stats';
 

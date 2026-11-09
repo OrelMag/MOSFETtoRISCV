@@ -1,7 +1,7 @@
 // Chapter 11: how long each operation takes on the 32-bit ALU, sensitized (opdelay.ts) rather than counted: the control
 // input is fixed, the operands change, and the delay is the last change on the result. Ripple adder against Kogge-Stone.
 
-import { alu } from '../lib';
+import { alu } from '../lib/alu';
 import { portSettle } from '../sim/opdelay';
 import { logicDepth } from '../sim/stats';
 import { h } from '../ui/dom';

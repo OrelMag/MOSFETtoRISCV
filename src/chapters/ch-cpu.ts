@@ -1,5 +1,8 @@
 import { groupDigits, groupNum } from '../sim/numfmt';
-import { alu, addSub, bitwise, CONTROL, regfile, shifter } from '../lib';
+import { alu, bitwise, shifter } from '../lib/alu';
+import { addSub } from '../lib/combinational';
+import { CONTROL } from '../lib/cpu';
+import { regfile } from '../lib/regfile';
 import { cpuState } from '../riscv/cosim';
 import { PROGRAMS } from '../riscv/programs';
 import { logicDepth, stats } from '../sim/stats';

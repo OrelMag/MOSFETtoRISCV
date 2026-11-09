@@ -8,12 +8,12 @@ import { fullWindow, PROTO_NAMES, rttOf, simulate, utilization, type Proto } fro
 import { bitsLsb, CRC8, CRC16, CRC32_INIT, CRC32_RESIDUE, crc32, divisionSteps, fcsBytes, parityUndetected, parityWeights, stepBits, undetected, weightDistribution, wordBits } from '../comm/crc';
 import { codeOf, crcOnly, crossover, crossoverTime, deliveryTime, secdedCrc } from '../comm/fec';
 import { cobsEncode, FLAG, frame, receive, stuffedMask } from '../comm/framing';
-import { parity } from '../lib';
+import { parity } from '../lib/coding';
 import { rng } from '../phys/line';
 import { logicDepth, stats } from '../sim/stats';
 import { h, keepFocus, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
-import { crcUnit } from '../lib';
+import { crcUnit } from '../lib/crc';
 import { CRC32_REFLECTED } from '../comm/crc';
 import { fitText, slider } from './mosparts';
 import { groupNum } from '../sim/numfmt';

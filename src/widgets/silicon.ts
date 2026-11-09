@@ -2,7 +2,11 @@
 // floorplan and wafer economics. The numbers are computed from this site's own netlists.
 
 import { groupDigits } from '../sim/numfmt';
-import { FULL_ADDER, alu, counter, dataMemory, dualCore, rca, singleCycleCpu } from '../lib';
+import { alu } from '../lib/alu';
+import { FULL_ADDER, rca } from '../lib/combinational';
+import { dataMemory, singleCycleCpu } from '../lib/cpu';
+import { dualCore } from '../lib/multicore';
+import { counter } from '../lib/sequential';
 import { assemble } from '../riscv/asm';
 import { MC_PROGRAMS } from '../riscv/mcprograms';
 import { PROGRAMS } from '../riscv/programs';

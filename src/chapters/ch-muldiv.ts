@@ -1,5 +1,10 @@
 import { groupDigits } from '../sim/numfmt';
-import { BOOTH_ENC, MDU, SRT_SELECT, arrayDiv, arrayMul, boothMul, csa, divStep, nrArrayDiv, pipeMul, popcount, rca, seqDivider, seqMul, srt4Divider, srtDivider, treeMul } from '../lib';
+import { popcount } from '../lib/coding';
+import { rca } from '../lib/combinational';
+import { SRT_SELECT, nrArrayDiv, srtDivider } from '../lib/divide';
+import { BOOTH_ENC, MDU, arrayDiv, arrayMul, csa, divStep, seqDivider, treeMul } from '../lib/muldiv';
+import { boothMul, pipeMul, seqMul } from '../lib/multiply';
+import { srt4Divider } from '../lib/srt4';
 import { cpuState } from '../riscv/cosim';
 import { flatten } from '../sim/flatten';
 import { CLK_TO_Q, SETUP, analyzeTiming } from '../sim/timing';

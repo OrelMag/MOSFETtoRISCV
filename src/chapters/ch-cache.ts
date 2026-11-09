@@ -1,4 +1,8 @@
-import { DFFE, DRAM_CELL, SRAM_CELL, SRAM_COLUMN, cachedMemory, eccChannel, hammingDec, hammingEnc, sramArray, wayLookup2 } from '../lib';
+import { sramArray } from '../lib/arrays';
+import { cachedMemory, wayLookup2 } from '../lib/cache';
+import { DRAM_CELL, SRAM_CELL, SRAM_COLUMN } from '../lib/cells';
+import { eccChannel, hammingDec, hammingEnc } from '../lib/coding';
+import { DFFE } from '../lib/sequential';
 import { assemble } from '../riscv/asm';
 import { CACHE_CPU_PROGRAMS, TRACE_PROGRAMS } from '../riscv/cprograms';
 import { cpuState } from '../riscv/cosim';

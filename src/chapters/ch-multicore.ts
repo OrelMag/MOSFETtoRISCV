@@ -1,4 +1,4 @@
-import { ARBITER2 } from '../lib';
+import { ARBITER2 } from '../lib/mpdecode';
 import { MC_PROGRAMS } from '../riscv/mcprograms';
 import { pack } from '../sim/values';
 import type { Stage } from '../view/stage';
