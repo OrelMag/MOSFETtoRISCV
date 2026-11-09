@@ -152,7 +152,7 @@ export const chBasics: Chapter = {
         options: ['13', '11', '1101', '14'],
         answer: 0,
         explain: '8 + 4 + 0 + 1 = 13.',
-        why: ['Right: 8 + 4 + 1.', '11 is 1011: the places worth 4 and 2 are swapped.', 'That is the pattern read as a decimal number.', '14 is 1110.'],
+        why: ['Right: 8 + 4 + 1.', '11 is 1011: the two middle lamps are swapped.', 'That is the pattern read as a decimal number.', '14 is 1110.'],
       },
       {
         question: 'A switch on the return wire of a lamp\'s loop is opened. What happens?',

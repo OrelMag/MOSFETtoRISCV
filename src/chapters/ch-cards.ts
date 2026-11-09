@@ -130,7 +130,7 @@ export const chCards: Chapter = {
         pitfall: `<p>Counting an OR by adding two dials. A person who is both married and born abroad steps both dials, so their sum counts them twice; the parallel contacts step one dial once.
           The same mistake appears in a database query that adds two group counts instead of counting the union.</p>`,
         real: `<p>Later tabulators moved the wiring to a removable plugboard, so a machine was reprogrammed by plugging wires: a program held in wires, between the fixed
-          machine and the deck of data. Hollerith's firm, merged into C-T-R in 1911, was renamed IBM in 1924, and the card stayed the computer's input for half a century.</p>`,
+          machine and the deck of data. Hollerith's firm was merged into C-T-R in 1911, which took the name IBM in 1924.</p>`,
       },
       widget: () => withModel(censusWidget(), press3d()),
       challenge: {
@@ -164,7 +164,7 @@ export const chCards: Chapter = {
         numbers: `<table class="mini"><tr><th>holes in a column</th>${[0, 1, 2, 3, 4].map((k) => `<td>${k}</td>`).join('')}</tr>
           <tr><th>patterns</th>${[0, 1, 2, 3, 4].map((k) => `<td>${choose(ROWS, k)}</td>`).join('')}</tr></table>`,
         pitfall: `<p>Treating a column as a byte. A column is 12 bits of which only ${CHARSET.length} patterns mean anything, and an unnamed pattern is a punch error that the machine rejects or reads as no character.
-          Two columns do not make a 16-bit value either: binary cards (like this chapter's object cards) use all 12 rows of a column as bits, outside the Hollerith code.</p>`,
+          Two columns do not make a 16-bit value either: binary cards (the IBM 704's; this chapter's object cards punch only row 9) use all 12 rows of a column as bits, outside the Hollerith code.</p>`,
         real: `<p>IBM's EBCDIC, the character code of the System/360, grew out of the card code: its letters sit in the same zone-and-digit groups with gaps (A to I, J to R, S to Z), which is why
           the alphabet is not contiguous there. The 80-column card shaped terminals too: 80 characters a line.</p>`,
       },
