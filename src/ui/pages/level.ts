@@ -539,7 +539,7 @@ export class LevelPage implements Page {
     const m = measured(r.score);
     const par = n.par ?? {};
     const c = caseOf(n.id);
-    const alts = (c?.alts ?? []).map((a) => ({ name: a.name, cost: altCost(a) }));
+    const alts = (c?.alts ?? []).map((a) => ({ name: a.name, cost: altCost(a), saves: a.saves }));
     const metrics = (['edits', 'nand', 'transistors', 'relays', 'tubes', 'steps', 'depth', 'period', 'cycles'] as Metric[]).filter((k) => par[k] !== undefined || (k === 'transistors' && par.nand !== undefined));
     const cell = (v: number | null | undefined) => (v === undefined || v === null ? '—' : groupDigits(v));
     const table = metrics.length ? h('table', { class: 'lv-res-table' },
@@ -594,14 +594,14 @@ export class LevelPage implements Page {
   }
 
   /** What the result is worth in the finished CPU: its copies there, times the NANDs saved (or still to save). */
-  private fillCallout(el: HTMLElement, yours: number | undefined, par: number | undefined, alts: { name: string; cost: { nand?: number } }[]): void {
+  private fillCallout(el: HTMLElement, yours: number | undefined, par: number | undefined, alts: { name: string; cost: { nand?: number }; saves?: false }[]): void {
     const n = this.node!;
     const k = copiesInFinal(n), part = countedPart(n);
     if (k <= 0 || !part || yours === undefined) return el.remove();
     const parts: (string | Node)[] = [`The finished CPU holds `, h('b', null, groupDigits(k)), ` × ${part.name}.`];
     // Against the first alternative the case lists (the textbook way), not the costliest: a later one may do more (a reset).
     const base = alts[0];
-    if (base?.cost.nand !== undefined && base.cost.nand > yours) {
+    if (base && base.saves !== false && base.cost.nand !== undefined && base.cost.nand > yours) {
       parts.push(` Compared with “${base.name}”, your design saves `, h('b', null, groupDigits((base.cost.nand - yours) * k)), ' NANDs there.');
     }
     if (par !== undefined && yours > par) parts.push(' At par it would be ', h('b', null, groupDigits((yours - par) * k)), ' fewer.');
