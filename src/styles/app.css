@@ -3065,3 +3065,7 @@ svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .ne
 .zoom-read[hidden] { display: none; }
 /* The stage's keyboard part cursor (view/kcursor.ts, Stage's arrows): a ring over the part or pin it stands on. */
 svg .kcursor { fill: none; stroke: var(--accent); stroke-width: 0.28; pointer-events: none; }
+
+/* ch fastadd: a Verilog listing whose lines point at the gates they became; the critical path's lines carry a bar */
+pre.code.vsrc .ln { color: var(--muted); font-style: normal; user-select: none; }
+pre.code.vsrc .vl.crit { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }

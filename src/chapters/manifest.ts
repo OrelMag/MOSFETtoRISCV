@@ -199,6 +199,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Overclock it" },
     { title: "Swap in fast adders", challenge: "quiz" },
     { title: "When fan-out costs", challenge: "quiz" },
+    { title: "A Verilog adder, and its critical path", challenge: "quiz" },
   ] },
   { id: "pipeline", num: 17, title: "Pipelining", blurb: "Five stages working on five instructions at once, and the hazards that come with it.", level: "Processor", builds: ["registers","cpu","python"], recap: {"checks":3}, steps: [
     { title: "Overlap the work" },
