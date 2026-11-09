@@ -153,7 +153,7 @@ The random programs above compare the CPUs with our golden model; [Spike](https:
 the RISC-V reference simulator, checks the golden model itself, on the same kind of programs, one
 instruction at a time (`tests/verify/spike.ts`, `scripts/spike-oracle.ts`).
 
-- **The programs.** `randomProgram32` for six ISA variants: RV32I, RV32IM, RV32IF (the CPUs' user-level
+- **The programs.** `randomProgram32` for six ISA variants (and the `vm` config below): RV32I, RV32IM, RV32IF (the CPUs' user-level
   sets), RV32IMF with byte and halfword access (everything at once), and the system CPUs' RV32I(M) +
   Zicsr in machine mode with CSRs, `ecall`, `ebreak`, illegal words and misaligned loads, stores and
   jumps. Two options keep them runnable on Spike and leave every other program unchanged: `dataBase`
@@ -162,6 +162,24 @@ instruction at a time (`tests/verify/spike.ts`, `scripts/spike-oracle.ts`).
   memory-mapped `mtime`; Spike's CLINT ticks on its own schedule). A seventh, `imc`, adds the C extension; an
   eighth, `rv64im` (`tests/verify/spike64.ts`), runs `randomProgram64` with M on ISS64 against
   `--isa=rv64im_zicsr`.
+- **The `vm` config (privilege modes and Sv32, the ISS option `vm`).** `randomProgram32({ vm })` boots in M, writes
+  Sv32 page tables into the 64 KiB data region (the code mapped by one identity superpage or eight 4 KiB pages; a
+  4-page window at virtual 0x80_0000 whose entries are good, read-only, wrong-mode, invalid, reserved W-without-R,
+  A = 0, D = 0 or execute-only, in a random physical order; probe slots for a superpage alias of physical memory, a
+  misaligned superpage, a table and a page beyond 2^32, an unmapped slot and an empty table), sets `satp`, MPP
+  (U or S), SUM and MXR, and `mret`s into the usual random body. In U or S the body's CSR accesses, `ecall`s,
+  `mret` / `sret` / `wfi` and loads and stores hit page faults (causes 12 / 13 / 15, `mtval` = the virtual address),
+  access faults (1 / 5 / 7) and illegal instructions; the M handler logs cause / `mtval` / `mepc` into memory, then
+  maps the page (for the pages it was given a fix for: a PTE write and `sfence.vma`) and retries, or skips the
+  instruction; a jump to a page without X comes back through `ra`; a last `ecall` with a magic `s9` ends in M. Spike
+  runs with its default `--priv=msu`; its boot stub sets PMP entry 0 to all of memory (S and U reach memory only through
+  PMP) before it jumps to the program. The comparison also checks Spike's privilege digit against ours, compares
+  every trap (also those whose `epc` is outside the program: a fetch fault), and reads `sstatus`, `satp` and the
+  other S CSRs through the model. Spike updates A and D itself only with `menvcfg.ADUE`, off at reset, so its fault on
+  A = 0 / D = 0 is the software-managed behaviour decision D2 of the VM plan takes. Not generated, because
+  Spike and our model deliberately differ: MPRV, TVM / TW / TSR (read zero in ours), `wfi` in S (Spike waits for an
+  interrupt), `sret`, writes to `satp` / `sstatus` / `mcounteren`, ASIDs, interrupts. Directed tests of the same
+  rules are `tests/iss-vm.test.ts`.
 - **The image.** An ELF32 written in TypeScript (`tests/verify/elf.ts`, no toolchain): the program, a boot
   stub (turns the FPU on, `mstatus.FS`, which Spike requires and our ISS does not model, then jumps to
   the program) and an exit stub writing `tohost`, where the final jump-to-self went. For `rv64im`, an ELF64

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { assemble } from '../src/riscv/asm';
 import { CSRS, decode, disasm } from '../src/riscv/isa';
 import { CAUSE, ISS, PRIV, type StepInfo } from '../src/riscv/iss';
+import { CODE, ORACLE_CONFIGS, compareWithSpike, issAsSpikeLog, oracleCase, oracleIss, parseSpikeLog } from './verify/spike';
 
 const V = 1, R = 2, W = 4, X = 8, U = 16, A = 64, D = 128;
 const pte = (ppn: number, flags: number) => ((ppn << 10) | flags) >>> 0;
@@ -414,5 +415,32 @@ describe('encodings', () => {
     expect(disasm(w[4])).toBe('csrrs t1, sstatus, zero');
     expect(CSRS.satp).toBe(0x180);
     expect(CSRS.sstatus).toBe(0x100);
+  });
+});
+
+describe('the vm oracle programs', () => {
+  it('boot in M, drop to U or S, reach the halt through the final ecall, and meet every kind of fault', () => {
+    const cfg = ORACLE_CONFIGS.find((c) => c.id === 'vm')!;
+    const seen = new Set<string>();
+    let sMode = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const c = oracleCase(cfg, seed);
+      const iss = oracleIss(c);
+      const modes = new Set<number>();
+      let n = 0;
+      for (; iss.pc !== CODE + c.halt && n < 20000; n++) {
+        const info = iss.step();
+        modes.add(info.priv!);
+        if (info.trap) seen.add(`${info.priv}:${info.trap.cause}`);
+      }
+      expect(iss.pc, `seed ${seed}`).toBe(CODE + c.halt);
+      expect(iss.priv).toBe(PRIV.M);
+      if (modes.has(PRIV.S)) sMode++;
+      expect(modes.has(PRIV.S) && modes.has(PRIV.U)).toBe(false);
+      // Spike-format self log agrees with the model
+      expect(compareWithSpike(c, parseSpikeLog(issAsSpikeLog(c))).diff, `seed ${seed}`).toBe('');
+    }
+    expect(sMode).toBeGreaterThan(5);
+    for (const k of ['0:12', '0:13', '0:15', '0:8', '0:2', '0:5', '0:7', '0:1', '1:13', '1:15', '1:9', '1:12']) expect(seen, k).toContain(k);
   });
 });
