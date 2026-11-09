@@ -1049,7 +1049,7 @@ export class Tools {
         if (!f) return;
         done();
         if (f.item.disabled) return void ed.toast(f.item.disabled, 'err');
-        this.arm(f.item, f.key);
+        ed.armPart(f.item, f.key);
         return;
       }
       case 'F2': done(); this.renameSel(); return;
@@ -1253,9 +1253,9 @@ export class Tools {
   private wireFromKeyboard(): void {
     const ed = this.ed;
     const t = this.target(this.kcPoint());
-    if (t.end && !('wire' in t.end)) return this.keyWire(t.end, t.pos);
+    if (t.end) return this.keyWire(t.end, t.pos); // a wire under the cursor: a branch from that point, as a press there does
     const own = ownPorts(ed.doc, ed.defOf, ed.sel);
-    if (!own.length) return ed.announce('Put the cursor on a pin first: N steps to the next pin');
+    if (!own.length) return ed.announce('Put the cursor on a pin or a wire first: N steps to the next pin');
     this.keyWire(own[0].end, own[0].pos);
   }
 
@@ -1274,7 +1274,7 @@ export class Tools {
     let list = ownPorts(ed.doc, ed.defOf, ed.sel);
     if (!list.length && this.kcOn && this.kc) {
       const t = this.target(this.kc);
-      if (t.end && !('wire' in t.end)) list = [{ end: t.end, pos: t.pos }];
+      if (t.end) list = [{ end: t.end, pos: t.pos }];
     }
     return list.slice(0, 8).map((a) => ({ label: `Start a wire from ${endName(ed.doc, ed.defOf, a.end)}`, run: () => this.keyWire(a.end, a.pos) }));
   }
