@@ -15,6 +15,8 @@ import { oooCpu } from '../lib/ooocore';
 import { dualPipeCpu } from '../lib/pipe2w';
 import { pipelinedCpu } from '../lib/pipeline';
 import { systemCpu } from '../lib/system';
+import { VM_DMEM_K, VM_IMEM_K, VM_PROGRAMS } from '../riscv/vmprograms';
+import { newVmLink, vmPanel, type VmLink } from './vmpanel';
 import { fsmView } from './fsmpanel';
 import { isBook } from '../lib/ucode';
 import { assemble, type AsmResult } from '../riscv/asm';
@@ -67,6 +69,8 @@ export interface CpuSceneOptions {
   predictor?: boolean;
   /** The complete machine: Zicsr, traps, interrupts and memory-mapped I/O (adds the I/O panel). */
   system?: boolean;
+  /** The system CPU's virtual-memory variant (chapter 'vmem'): M / S / U, Sv32, two TLBs and a walker that stalls the CPU; implies system. The golden model runs with vm; the panel shows the mode, satp and the TLBs. */
+  vm?: boolean;
   /** Add the M extension to the system CPU (multiply / divide unit). */
   m?: boolean;
   /** Single-cycle CPU with a data cache in front of a slow main memory (adds cache statistics): see CpuOptions.dcache. */
@@ -108,31 +112,33 @@ const oooImemK = (words: number[]) => Math.max(6, Math.ceil(Math.log2(Math.max(1
 
 /** A scene running `source` on the single-cycle CPU, with the CPU panel attached. */
 export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
-  const opts = sceneOpts.wide ? { ...sceneOpts, pipeline: true, m: true } : sceneOpts.ooo ? { ...sceneOpts, m: true } : sceneOpts;
+  const opts = sceneOpts.wide ? { ...sceneOpts, pipeline: true, m: true } : sceneOpts.ooo ? { ...sceneOpts, m: true } : sceneOpts.vm ? { ...sceneOpts, system: true } : sceneOpts;
   // the C core runs any program compressed, unless the program says otherwise (.option norvc / rvc)
   const asm = assemble(opts.c && !/^\s*\.option\s/m.test(opts.source) ? `.option rvc\n${opts.source}` : opts.source, opts.custom, { mac: opts.mac });
   // the CPU panel and the Out of order panel share the selected instruction
   const link: OooLink = {};
+  const vmLink = newVmLink();
   return {
     ...(opts.ooo ? { engine: 'cycle' as const } : {}),
     root: opts.wide ? dualPipeCpu(asm.words, { dmemK: 6 })
       : opts.ooo ? oooCpu(asm.words, { imemK: oooImemK(asm.words), dmemK: 6 })
       : opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder, microcode: opts.microcode })
+      : opts.vm ? systemCpu(asm.words, { vm: true, imemK: VM_IMEM_K, dmemK: VM_DMEM_K })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
       : opts.pipeline ? pipelinedCpu(asm.words, { imemK: opts.imemK, dmemK: opts.dmemK, adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram, custom: opts.custom })
         : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c, custom: opts.custom, mac: opts.mac }),
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
-    panels: [cpuPanel({ ...opts, asm, link }), ...(opts.pipeline ? [pipeDiagram(asm)] : []),
-      ...(opts.ooo ? [oooPanel(asm.words, { imemWords: 2 ** oooImemK(asm.words), dmemWords: 64 }, link)] : []), ...(opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true, { program: opts.microcode, onEdit: opts.onMicrocode })] : []), ...(opts.timing ? [timingPanel] : []), ...(opts.extraPanels ?? [])],
+    panels: [cpuPanel({ ...opts, asm, link, vmLink }), ...(opts.pipeline ? [pipeDiagram(asm)] : []),
+      ...(opts.ooo ? [oooPanel(asm.words, { imemWords: 2 ** oooImemK(asm.words), dmemWords: 64 }, link)] : []), ...(opts.vm ? [vmPanel(vmLink)] : opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true, { program: opts.microcode, onEdit: opts.onMicrocode })] : []), ...(opts.timing ? [timingPanel] : []), ...(opts.extraPanels ?? [])],
   };
 }
 
-function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): ScenePanel {
+function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink; vmLink?: VmLink }): ScenePanel {
   return (stage: Stage): Widget => {
     const asm = opts.asm;
-    const issOpts = opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.ooo ? { dmemWords: 64, imemWords: 2 ** oooImemK(asm.words) } : opts.dcache || opts.wide ? { dmemWords: 64 }
+    const issOpts = opts.vm ? { system: true, vm: true, imemWords: 2 ** VM_IMEM_K, dmemWords: 2 ** VM_DMEM_K } : opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.ooo ? { dmemWords: 64, imemWords: 2 ** oooImemK(asm.words) } : opts.dcache || opts.wide ? { dmemWords: 64 }
       : { ...(opts.imemK ? { imemWords: 2 ** opts.imemK } : {}), ...(opts.dmemK ? { dmemWords: 2 ** opts.dmemK } : {}), ...(opts.c ? { c: true } : {}), ...(opts.mac ? { mac: true } : {}) };
     let iss = new ISS(asm.words, opts.custom ? { ...issOpts, custom: opts.custom } : issOpts);
     let lastX: number[] = new Array(32).fill(0);
@@ -220,7 +226,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     };
     const wb = opts.dcache === 'wb' || opts.dcache === 'wb2';
     const sel = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
-    const progs = opts.fpu ? [...F_PROGRAMS, ...PROGRAMS] : opts.dcache ? [...CACHE_CPU_PROGRAMS, ...PROGRAMS] : (opts.pipeline || opts.ooo) && opts.m ? [...PIPE_M_PROGRAMS, ...PROGRAMS] : opts.m ? [...M_PROGRAMS, ...SYSTEM_PROGRAMS, ...PROGRAMS] : opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
+    const progs = opts.fpu ? [...F_PROGRAMS, ...PROGRAMS] : opts.dcache ? [...CACHE_CPU_PROGRAMS, ...PROGRAMS] : (opts.pipeline || opts.ooo) && opts.m ? [...PIPE_M_PROGRAMS, ...PROGRAMS] : opts.m ? [...M_PROGRAMS, ...SYSTEM_PROGRAMS, ...PROGRAMS] : opts.vm ? [...VM_PROGRAMS, ...PROGRAMS] : opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
     for (const p of progs) sel.append(h('option', { value: p.id }, p.name));
     sel.append(h('option', { value: '__custom' }, 'My program'));
     const match = progs.find((p) => p.source === opts.source);
@@ -254,7 +260,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
 
     // Slow mode: the learner sets the pace and the level of detail; the highlight follows execution.
     /** Cycles and instructions differ only when an instruction can take several cycles. */
-    const multiCycle = !!(opts.pipeline || opts.ooo || opts.multicycle || opts.m || opts.dcache || opts.icache);
+    const multiCycle = !!(opts.pipeline || opts.ooo || opts.multicycle || opts.vm || opts.m || opts.dcache || opts.icache);
     const finished = () => iss.halted || !!mismatch || stage.cycles > 20000;
     const slowCtl = slowControls(stage, { multiCycle, finished, onStart: () => { stopRun(); bpHit = null; bpLine.hidden = true; } });
 
@@ -280,7 +286,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
             }
             editor.setDiagnostics(gaps(r));
             // the ROM has a fixed size (an out-of-order scene sizes it to the program): a longer program wraps the PC
-            const cap = opts.ooo ? Infinity : opts.system ? 128 : 2 ** (opts.imemK ?? 6);
+            const cap = opts.ooo ? Infinity : opts.vm ? 2 ** VM_IMEM_K : opts.system ? 128 : 2 ** (opts.imemK ?? 6);
             if (r.words.length > cap) {
               errBox.textContent = `program is ${r.words.length} words, the ROM holds ${cap}`;
               return;
@@ -333,7 +339,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       ...(opts.fpu ? [h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)'), fregs] : []),
       ...(opts.dcache ? [h('div', { class: 'cpu-sec' }, opts.dcache === 'wb2' ? 'Data cache (2 sets × 2 ways × 4 words, write-back)' : opts.dcache === 'wb' ? 'Data cache (4 lines × 4 words, write-back)' : 'Data cache (4 lines × 4 words)'), dlines] : []),
       h('div', { class: 'cpu-sec' }, wb ? 'Memory as the program sees it (dirty lines included)' : opts.dcache ? 'Main memory (non-zero words)' : 'Data memory (non-zero words)'), mem);
-    const title = h('h4', null, opts.mac ? 'RV32I + MAC CPU' : opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.wide ? 'RV32IM dual-issue pipeline' : opts.ooo ? 'RV32IM out-of-order core' : opts.pipeline ? (opts.m ? 'RV32IM pipeline' : 'RV32I pipeline') : opts.c ? 'RV32IC CPU' : 'RV32I CPU', h('span', { class: 'fold-hint' }));
+    const title = h('h4', null, opts.mac ? 'RV32I + MAC CPU' : opts.multicycle ? 'RV32I multicycle' : opts.fpu ? (opts.pipeline ? 'RV32IF pipeline' : 'RV32IF CPU') : opts.vm ? 'RV32I system with virtual memory' : opts.system ? (opts.m ? 'RV32IM system' : 'RV32I system') : opts.wide ? 'RV32IM dual-issue pipeline' : opts.ooo ? 'RV32IM out-of-order core' : opts.pipeline ? (opts.m ? 'RV32IM pipeline' : 'RV32I pipeline') : opts.c ? 'RV32IC CPU' : 'RV32I CPU', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel cpu-panel', 'data-dock': 'right', 'data-fold': 'narrow', 'data-phone': 'flow', ...(opts.foldCpu ? { 'data-keep': 'folded' } : {}) }, title, body);
 
     // Golden model in lock-step: it executes one instruction whenever the hardware retires one
@@ -369,6 +375,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
           const before = narrKind === 'instr' ? [...iss.x] : null;
           const info = iss.step();
           stepped = info.text;
+          if (opts.vmLink) opts.vmLink.accesses += info.walks?.length ?? 0;
           if (before) narr = narrateInstr(before, info);
           log.push({ cycle: stage.cycles, pc: info.pc, text: info.text, effect: stepEffect(info) });
           if (log.length > LOG_MAX) log.shift();
@@ -447,7 +454,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       if (!stage.inEdge) accPrev = st.acc;
       const parts: HTMLElement[] = [
         h('span', null, `cycle ${stage.cycles}`),
-        h('span', null, opts.pipeline || opts.m || opts.fpu || opts.multicycle ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
+        h('span', null, opts.pipeline || opts.m || opts.fpu || opts.multicycle || opts.vm ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
         ...(opts.m && !opts.ooo && (opts.pipeline ? divStall(sim) : !retiring(sim)) ? [h('span', { class: 'warn', title: 'The iterative divider is working; the PC and register writes are stalled' }, 'dividing… stalled')] : []),
         ...(opts.fpu && !opts.pipeline && !retiring(sim) ? [h('span', { class: 'warn', title: 'An iterative unit (fdiv.s / fsqrt.s) is working; the PC and register writes are stalled' }, 'fdiv / fsqrt… stalled')] : []),
         ...(opts.dcache ? [h('span', null, `${wb ? 'accesses' : 'loads'} ${loads} · misses ${misses}${loads ? ` · hit rate ${(100 * (loads - misses) / loads).toFixed(0)} %` : ''}`)] : []),

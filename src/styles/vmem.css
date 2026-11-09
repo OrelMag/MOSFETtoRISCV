@@ -1,0 +1,73 @@
+/* Chapter 'vmem' (widgets/vmem.ts, widgets/vmpanel.ts). Field colours follow the theme through light-dark(). */
+.vm-widget {
+  --vm-f1: light-dark(#2a78d6, #5b9bff); --vm-f0: light-dark(#14906a, #2cc28c); --vm-fo: light-dark(#b97800, #e0a020); --vm-fp: light-dark(#d04a7d, #e56a98);
+  --vm-pa: light-dark(#2a78d6, #5b9bff); --vm-pb: light-dark(#e0602c, #f07a45); --vm-pc: light-dark(#14906a, #2cc28c);
+}
+.vm-widget .sub { margin: 8px 0; }
+.vm-widget .bad { color: var(--bad); }
+.vm-widget .good { color: var(--good); }
+.vm-in { font: 600 13px var(--font-mono); padding: 4px 8px; border: 1px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text); width: 14ch; }
+.vm-widget label { font-size: 12.5px; color: var(--text-2); display: inline-flex; gap: 6px; align-items: center; }
+
+/* frames of physical memory */
+.vm-frames { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; margin: 10px 0; }
+.vm-frame { border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 2px; text-align: center; font: 500 10.5px var(--font-mono); color: var(--text-2); background: var(--surface-2); display: flex; flex-direction: column; gap: 2px; min-height: 58px; }
+.vm-frame b { font-size: 16px; color: #fff; min-height: 20px; }
+.vm-frame.pA { background: var(--vm-pa); } .vm-frame.pB { background: var(--vm-pb); } .vm-frame.pC { background: var(--vm-pc); }
+.vm-frame.pA span, .vm-frame.pB span, .vm-frame.pC span { color: #fff; }
+.vm-frame.free { background: repeating-linear-gradient(45deg, var(--surface-2), var(--surface-2) 6px, var(--surface-3) 6px, var(--surface-3) 12px); }
+.vm-frame .a { opacity: .85; }
+.rb-legend .vm-frame { display: inline-block; width: 12px; height: 12px; min-height: 0; padding: 0; margin-right: 5px; vertical-align: -2px; }
+
+/* address bits */
+.vm-bits { display: grid; grid-template-columns: repeat(32, minmax(9px, 1fr)); gap: 1px; max-width: 680px; margin: 10px 0 4px; }
+.vm-bit { font: 600 11.5px var(--font-mono); text-align: center; padding: 4px 0; color: #fff; border: 0; border-radius: 2px; cursor: pointer; }
+span.vm-bit { cursor: default; }
+.vm-bit.v1 { background: var(--vm-f1); } .vm-bit.v0 { background: var(--vm-f0); } .vm-bit.of { background: var(--vm-fo); }
+.vm-bit.hot { outline: 2px solid var(--text); outline-offset: -1px; }
+.vm-bl { font: 500 11.5px var(--font-mono); color: var(--text-2); grid-column: span 10; }
+.vm-bl.c { grid-column: span 12; }
+.vm-fld { display: grid; grid-template-columns: 11em 6em 1fr; gap: 8px; align-items: baseline; padding: 4px 8px; border-left: 4px solid var(--border); font-size: 12.5px; }
+.vm-fld.v1 { border-color: var(--vm-f1); } .vm-fld.v0 { border-color: var(--vm-f0); } .vm-fld.of { border-color: var(--vm-fo); }
+.vm-fld.hot { background: var(--surface-2); }
+@media (max-width: 560px) { .vm-fld { grid-template-columns: 1fr; gap: 0; } .vm-bit { font-size: 9px; padding: 3px 0; } }
+
+/* the PTE */
+.vm-pte { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0; align-items: stretch; }
+.vm-pte-ppn, .vm-pte-rsw, .vm-pbit { border: 1px solid var(--border-strong); border-radius: 7px; padding: 5px 8px; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 11px; color: var(--text-2); background: var(--surface); }
+.vm-pte-ppn { background: var(--vm-fp); color: #fff; border-color: transparent; min-width: 150px; }
+.vm-pte-ppn code { color: #fff; font-weight: 700; font-size: 13px; }
+.vm-pte-rsw { opacity: .7; }
+.vm-pbit { min-width: 46px; cursor: pointer; font-family: inherit; }
+.vm-pbit b { font-size: 14px; color: var(--text); }
+.vm-pbit code { font-size: 15px; }
+.vm-pbit.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.vm-pbit.on b, .vm-pbit.on code { color: #fff; }
+.vm-perm td, .vm-perm th { padding: 4px 12px; text-align: left; }
+.vm-perm td.ok { background: var(--good-soft); color: var(--good); }
+.vm-perm td.no { background: var(--bad-soft); color: var(--bad); }
+
+/* the walk */
+.vm-svg { width: 100%; max-width: 560px; display: block; }
+.vm-svg text { font-family: var(--font-mono); }
+.vm-svg .vm-t { font-size: 10.5px; fill: var(--muted); }
+.vm-svg .vm-c { font-size: 11px; fill: var(--text); }
+.vm-svg .vm-w { font-size: 12px; font-weight: 600; fill: #fff; }
+.vm-svg .vm-cell { fill: var(--box-fill); stroke: var(--box-stroke); }
+.vm-svg .vm-cell.sel { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+.vm-svg .dim { opacity: .35; }
+.vm-svg .vm-arrow { fill: none; stroke: var(--accent); stroke-width: 2; }
+.vm-svg .vm-pp { fill: var(--vm-fp); } .vm-svg .vm-of { fill: var(--vm-fo); }
+
+/* cost tables */
+.vm-costtab td, .vm-costtab th { padding: 3px 10px; text-align: right; white-space: nowrap; }
+.vm-costtab td:first-child, .vm-costtab th:first-child { text-align: left; }
+.vm-costtab tr.ours td { background: var(--accent-soft); font-weight: 600; }
+
+/* the panel */
+.vm-panel .vm-walker { margin: 6px 0; padding: 4px 8px; border-radius: 6px; background: var(--surface-2); font-size: 12px; }
+.vm-panel .vm-walker.on { background: var(--warn-soft); color: var(--warn-text, var(--warn)); font-weight: 600; }
+.vm-tlbtab { font-family: var(--font-mono); font-size: 11.5px; }
+.vm-tlbtab th, .vm-tlbtab td { padding: 2px 8px; text-align: left; white-space: nowrap; }
+.vm-tlbtab tr.hit td { background: var(--good-soft); }
+@media (pointer: coarse) { .vm-pbit { min-width: 52px; min-height: 52px; } .vm-bit { min-height: 36px; } }

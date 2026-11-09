@@ -188,7 +188,7 @@ user:
   li a7, 93
   ecall`;
 
-export interface VmProgram { id: 'walk' | 'pager' | 'guard'; name: string; source: string; note: string }
+export interface VmProgram { result?: { reg: string; value: number }; id: 'walk' | 'pager' | 'guard'; name: string; source: string; note: string }
 export const VM_PROGRAMS: VmProgram[] = [
   { id: 'walk', name: 'Two pages, three rounds', source: VM_WALK, note: 'user code reads frame B and updates frame A three times, then prints OK' },
   { id: 'pager', name: 'Demand paging', source: VM_PAGER, note: 'two unmapped pages: each first touch faults, the handler maps a frame and the access runs again' },
