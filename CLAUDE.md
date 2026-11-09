@@ -191,6 +191,9 @@ src/sim/       simulation core (no DOM)
                  source; at 0: every input) to pins, constants and storage (a loop of ≤ LATCH gates, a stateful behaviour);
                  foldAt / whyAt fold the trace into one drill level's steps (a child's gates into the child, the bits each cause
                  uses), sayStep words them, explainNets does both (tests/explain.test.ts: the cited pins alone decide the value)
+  lutmap.ts      lutMap(def | design, { k }): technology mapping onto k-input LUTs (the FPGA chapter, docs/PLAN-FPGA.md): priority cuts,
+                 depth first then area flow; storage loops (gate SCCs) and behaviour leaves are boundaries, tie cells fold into the tables;
+                 Lut { out, ins, table: bigint, gates, level }; evalLuts (tests/lutmap.test.ts: equal to GateSim on every net it drives)
   ablate.ts      Break a part: ablate(def, path) removes each child of a level (outputs open), then holds it at 0 and 1, over
                  the whole truth table (≤ MAX_BITS inputs, bit-parallel three-valued), against the intact one; roleText
                  (tests/ablate.test.ts: equal to simulating the netlist without the part)
@@ -511,6 +514,8 @@ src/lib/       the component library (registered in `registry` via define())
                  srt4Divider(n) (radix 4, n/2 + 3 cycles); iterCtrl(n) handles any step count
   pipem.ts       MUL_E / MUL_M (Booth tree in E, 64-bit Kogge–Stone in M), DIV_E (radix-4 SRT, stall until done); divE(abort)
                  (with an abort input: iterCtrl(n, abort) / srt4Divider(n, abort); DIV_E = divE(false), unchanged)
+  fpga.ts        the FPGA chapter's parts: lut(k) (cfg bits as an input, muxTree(k, 1) inside; LUT2, LUT4 = 60 NANDs), SLICE (LUT4 + carry
+                 chain + DFF + output select), ROUTE_SWITCH (TGATE + inverter at switch level); tests/fpga.test.ts
   multiply.ts    seqMul(n) (shift and add), boothRow / boothPP / boothReduce / boothTree / boothMul(n) (radix-4 Booth,
                  sign-constant trick), pipeMul(n) (3-stage pipelined Booth)
   adders.ts      carrySelect(n, k), carrySkip(n, k), BCD_DIGIT, bcdAdder(d)

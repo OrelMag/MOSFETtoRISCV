@@ -2,8 +2,16 @@
 
 A chapter that explains what the sandbox's **File ▸ Export Verilog for FPGA…** already does: the same netlist that chapter
 `silicon` turns into masks goes onto a chip whose logic is a grid of look-up tables, whose wires are switches, and whose
-memories are blocks of RAM, configured in milliseconds rather than manufactured in months. Status: **plan and mockup only**,
-waiting for the author's approval (Phase 23, "From netlist to FPGA"). Mockup: `E:/mockups/fpga/index.html` (steps 2, 4 and 9, light
+memories are blocks of RAM, configured in milliseconds rather than manufactured in months.
+
+**Status: APPROVED by the author on 2026-11-09 as shown in the mockup, with every recommended decision below**, including the
+order silicon → fpga → verify (chapter id `fpga`; Ross's verification chapter `verify` follows it). Built in stages, each a tip:
+1. sim/lutmap.ts + lib/fpga.ts with tests ✅ (feat/fpga-lut)
+2. CI numbers: nextpnr-himbaechel + Apicula in a workflow, fpgacosts.json pinned (parse the workflow YAML before merging)
+3. The chapter (numOf everywhere; every "to be measured" cell measured before it reaches the prose)
+4. Codex entries, the side level and the drill
+
+Phase 23, "From netlist to FPGA". Mockup: `E:/mockups/fpga/index.html` (steps 2, 4 and 9, light
 and dark; screenshots `E:/mockups/fpga/{a,b,c}-{light,dark}.png`).
 
 ## What exists already
@@ -43,7 +51,7 @@ and dark; screenshots `E:/mockups/fpga/{a,b,c}-{light,dark}.png`).
 | 1 | Hardware you can rewrite | widget `fpgaWhy` | A mask set against a board: cost, weeks, how many times you can change it. The computer of the sandbox, the same Verilog, both ways. Sets up the question: what kind of chip can become any circuit? |
 | 2 | A look-up table is a memory | **scene** `LUT4` (new, lib/fpga.ts) | 16 configuration flip-flops (or constants) into a 16:1 mux tree built from `muxTree` (60 NANDs, fifteen 2:1 muxes in four levels); the four inputs are the select. Config bits are clickable; presets AND, XOR, full-adder sum, carry, majority. The truth table *is* the config. NAND cost of a LUT4 against the 9-NAND full adder it replaces. Mockup step A. |
 | 3 | Any function of four inputs | widget `lutProgrammer` | Type a Boolean expression (lib/boolexpr.ts) → the 16 bits; 2^16 functions, one cell. Why 4 (or 6) inputs: the mux grows 2^k, the logic it replaces grows slower. Table: k vs cost vs coverage. |
-| 4 | Covering a netlist with LUTs | **widget** `lutCover` over our circuits (new sim/lutmap.ts) | Technology mapping again, now onto LUT4s: the 9-NAND full adder (6 deep: 2 LUTs, 1 level), the 4-bit ripple adder (36 NANDs, 12 deep: 8 LUTs, 4 levels expected), the ALU; cuts drawn over the gates, NAND depth vs LUT depth, LUT count. Our mapper is checked equal by simulation; its counts are compared with Yosys's (`abc -lut 4`). Mockup step B. |
+| 4 | Covering a netlist with LUTs | **widget** `lutCover` over our circuits (new sim/lutmap.ts) | Technology mapping again, now onto LUT4s: the 9-NAND full adder (6 deep: 2 LUTs, 1 level), the 4-bit ripple adder (36 NANDs, 12 deep: measured 10 LUTs, 3 levels: the mapper splits the carry into generate / propagate two bits at a time, which the step can show), the ALU; cuts drawn over the gates, NAND depth vs LUT depth, LUT count. Our mapper is checked equal by simulation; its counts are compared with Yosys's (`abc -lut 4`). Mockup step B. |
 | 5 | The logic cell | scene `SLICE` (LUT4 + DFF + carry mux + output select) | What sits beside the LUT: a flip-flop (so a registered output costs no extra cell) and a dedicated carry chain. The ripple adder in plain LUTs against the same adder on the carry chain (LUTs and levels). Gowin's names (CLS, CFU, ALU mode) in a Layers aside, marked as the vendor's. |
 | 6 | The wires are switches | scene `SWITCHBOX` at switch level (TGATEs from lib/switchparts.ts, config flip-flops) | A routing switch is a transmission gate held on by a configuration bit; a switch box joins tracks. Island-style grid widget (`fpgaRoute`): place a few LUTs, route nets through switch boxes with our Lee router (sim/pnr.ts), count switches per net. The point: most of the area and most of the delay is routing. |
 | 7 | Memories: block RAM or flip-flops | widget `bsramVsFf` | Our 4K × 32 RAM as flip-flops + mux trees (LUTs, FFs it would take, too many for the device) against one 18-Kbit block RAM column. Why the export reads memories through a register on the board's clock (memClock) and why it is still cycle-equal (fpga-memcheck). |
@@ -59,11 +67,13 @@ closed. Tours (Beats): step 2 (an input change walks down the mux tree), step 5 
 
 ## New code
 
-- **lib/fpga.ts**: `lut(k, config?)` (configuration as constant inputs or flip-flops; muxTree under it; spec = the truth table),
-  `SLICE` (LUT4 + DFF + carry mux + output select), `switchBox(n)` at switch level (TGATEs + config bits), `islandGrid(w, h)`
-  for the routing widget. Specs and behaviour tests as usual; layout tests apply.
-- **sim/lutmap.ts**: k-feasible cut enumeration (priority cuts), depth-optimal then area recovery, on our flat NAND netlist (or on a
-  drill level, so a box maps as a whole); returns LUTs with their truth tables and their cover of the gates. Checked by
+- **lib/fpga.ts** (stage 1, built): `lut(k)` (the configuration bits are a `cfg` input; muxTree under it; a LUT4 is 60 NANDs; spec =
+  the truth table up to k = 5), `SLICE` (LUT4 + carry: p ⊕ cin and cout = p ? cin : i0, a DFF, output select), `ROUTE_SWITCH` (a
+  transmission gate and its inverter at switch level: 4 transistors). Stage 3 adds `switchBox(n)` and `islandGrid(w, h)` for the
+  routing widget. Specs and behaviour tests as usual; layout tests apply.
+- **sim/lutmap.ts** (stage 1, built): k-feasible priority cuts (k 2 … 6), depth-optimal then area recovery by area flow, on our flat
+  NAND netlist; storage loops (gate SCCs) and behaviour leaves are boundaries, tie cells fold into the tables; returns LUTs with their
+  tables (bigint: 64 bits at k = 6), levels and the gates each covers. Measured: full adder 2 LUTs / 1 level, rca4 10 / 3. Checked by
   simulating the mapped LUT netlist against the original over every input (≤ 12 bits) or random vectors. Numbers compared with
   Yosys's in a script, not pinned (they will differ: Yosys maps before our hierarchy is flattened the same way).
 - **scripts/fpga-pnr.ts** + CI job: `nextpnr-himbaechel` for Gowin (Apicula's chip database; both on PyPI as YoWASP packages, as
