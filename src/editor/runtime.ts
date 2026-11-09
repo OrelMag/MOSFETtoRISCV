@@ -299,13 +299,26 @@ export class EditorSim {
   /** simKey, and the faults that are on (a fault switched on or off rebuilds, its state carried). */
   private keyOf(c: Compiled): string {
     const on = this.doc?.faults?.filter((f) => !f.off) ?? [];
-    return on.length ? `${simKey(c)}|faults:${JSON.stringify(on)}` : simKey(c);
+    const k = on.length ? `${simKey(c)}|faults:${JSON.stringify(on)}` : simKey(c);
+    return this.hidden ? `${k}|hidden:${this.hidden.key}` : k;
+  }
+
+  /**
+   * Faults applied to this simulation and shown nowhere (no badge, list row or diagnostic): a break-it level's planted
+   * fault (challengeui.ts), on the nets of the chip's root node. Setting another rebuilds, state carried.
+   */
+  private hidden: { key: string; at: (root: HierNode) => FlatFault[] } | null = null;
+  setHidden(h: { key: string; at: (root: HierNode) => FlatFault[] } | null): void {
+    if ((h?.key ?? null) === (this.hidden?.key ?? null)) return;
+    this.hidden = h;
+    if (this.latest) this.update(this.latest, this.pins, this.doc ?? undefined);
   }
 
   /** The chip's faults that are on, on the flat nets of `d` (gate level only), applied. */
   private withFaults(c: Compiled, d: FlatDesign): FlatDesign {
     const st: FaultState = { applied: new Map(), stale: new Set(), problems: [] };
     this.faults = st;
+    if (this.hidden && c.mode === 'gate') d = applyFaults(d, this.hidden.at(d.root)).design;
     const doc = this.doc, on = doc?.faults?.filter((f) => !f.off) ?? [];
     if (!doc || !on.length) return d;
     if (c.mode !== 'gate') {

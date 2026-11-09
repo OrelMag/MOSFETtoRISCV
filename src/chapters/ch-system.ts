@@ -3,6 +3,8 @@ import { LOAD_EXTRACT, STORE_ALIGN, bankedMemory } from '../lib/lsu';
 import { CSR_UNIT, SYS_DECODE, TRAP_UNIT, systemCpu } from '../lib/system';
 import { withoutParts } from '../lib/tech';
 import { cpuState } from '../riscv/cosim';
+import { assemble } from '../riscv/asm';
+import { ISS } from '../riscv/iss';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
 import { crossover } from '../riscv/pollirq';
 import { stats } from '../sim/stats';
@@ -18,6 +20,71 @@ const nd = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 /** The byte enables of a store: size 0 byte, 1 half, 2 word, at a byte offset 0..3. */
 const enables = (size: number, off: number) => (size === 0 ? 1 << off : size === 1 ? 3 << (off & 2) : 15);
 const bin4 = (n: number) => n.toString(2).padStart(4, '0');
+/**
+ * One timer tick on the golden model (the system-mode ISS, which the CPU panel holds the gates to): the timer program run to its first
+ * interrupt and back, the machine-mode state at four moments. The chapter's worked example; tests/worked-examples.test.ts pins it.
+ */
+export function timerTick() {
+  const a = assemble(sys('timer')), iss = new ISS(a.words, { system: true });
+  const handler = a.labels.get('handler')!;
+  const at = () => ({ pc: iss.pc, mtime: iss.mtime, mtimecmp: iss.mtimecmp, mtip: (iss.mip >> 7) & 1, mie: +iss.mie, mpie: +iss.mpie, mepc: iss.mepc, mcause: iss.mcause >>> 0, retired: iss.retired });
+  let guard = 0;
+  const run = (until: () => boolean) => { while (!until()) { iss.step(); if (++guard > 500) throw new Error('timerTick: no tick'); } };
+  run(() => !!(iss.mip & 0x80) && iss.mie);
+  const pending = at();
+  iss.step();
+  const taken = at();
+  run(() => !(iss.mip & 0x80));
+  const cleared = at();
+  run(() => iss.pc === taken.mepc);
+  const back = at();
+  return { handler, pending, taken, cleared, back, cost: back.mtime - pending.mtime, period: cleared.mtimecmp - pending.mtimecmp };
+}
+
+const hex8 = (v: number) => `0x${(v >>> 0).toString(16).padStart(8, '0')}`;
+
+/** The worked example: the four moments as a table, and what each row shows. */
+function tickWorked(): string {
+  const T = timerTick();
+  const row = (r: typeof T.pending, what: string) => `<tr><th>${what}</th><td>${r.pc}</td><td>${r.mtime}</td><td>${r.mtimecmp}</td><td>${r.mtip}</td><td>${r.mie}</td><td>${r.mpie}</td><td>${r.mepc}</td><td>${hex8(r.mcause)}</td></tr>`;
+  return `<details class="deeper"><summary>Worked example: one tick, register by register</summary>
+    <p>The program above run on the golden model to its first interrupt and back. Each row is the machine state between two steps.</p>
+    <div class="worked-wrap"><table class="pipe-trace"><thead><tr><th></th><th>pc</th><th>mtime</th><th>mtimecmp</th><th>MTIP</th><th>MIE</th><th>MPIE</th><th>mepc</th><th>mcause</th></tr></thead><tbody>
+    ${row(T.pending, '1. pending')}${row(T.taken, '2. taken')}${row(T.cleared, '3. source cleared')}${row(T.back, '4. after mret')}</tbody></table></div>
+    <ol>
+    <li>mtime has reached mtimecmp (${T.pending.mtime} ≥ ${T.pending.mtimecmp}), so MTIP = 1; MTIE and MIE are both set, so the interrupt is taken
+    instead of the instruction at pc ${T.pending.pc} (the loop's <code>addi</code>).</li>
+    <li>One step and no instruction retired (${T.pending.retired} before, ${T.taken.retired} after). mepc = ${T.taken.mepc}, the instruction that did not run,
+    so nothing needs adding to it; mcause = ${hex8(T.taken.mcause)}, bit 31 for an interrupt and ${T.taken.mcause & 0xff} for the machine timer;
+    MPIE keeps the old MIE and MIE = 0; pc = mtvec = ${T.handler}.</li>
+    <li>The handler's store moves mtimecmp to ${T.cleared.mtimecmp}: mtime (${T.cleared.mtime}) is below it again and MTIP falls. Without this the
+    same interrupt would be taken again right after <code>mret</code>.</li>
+    <li><code>mret</code>: pc = mepc = ${T.back.pc}, MIE = MPIE = 1. The loop goes on where it was.</li>
+    </ol>
+    <p>The tick, from pending to back in the loop, took ${T.cost} cycles of mtime: the trap entry and the handler's instructions. One tick every
+    ${T.period} cycles: ${Math.round((T.cost / T.period) * 100)} % of the machine.</p></details>`;
+}
+
+/** The chapter's common mistakes, each against this machine's own behaviour. */
+function trapMistakes(): string {
+  const T = timerTick();
+  return `<details class="deeper"><summary>Common mistakes with traps and interrupts</summary><ul>
+    <li><strong>Adding 4 to mepc for every trap.</strong> mepc holds the instruction that did not run. After an ecall, or a fault the handler emulates
+    or skips, the handler moves on (+ 4); after an interrupt it must not, because that instruction never ran: the tick in "The timer interrupt"
+    returns to ${T.taken.mepc} itself.</li>
+    <li><strong>Reading mcause without bit 31.</strong> ${hex8(T.taken.mcause)} is the machine timer interrupt; ${T.taken.mcause & 0xff} alone would be a
+    store access fault. A handler tests bit 31 first, then the code.</li>
+    <li><strong>Not clearing the source.</strong> The timer and the external line are levels: while mtime ≥ mtimecmp, or the line is high, the
+    interrupt stays pending and <code>mret</code> takes it again at once. The handler moves mtimecmp or acknowledges the device.</li>
+    <li><strong>Setting MIE in a handler before saving mepc and mcause.</strong> A second trap overwrites both: there is one copy of each. Save
+    them first, as "Nested interrupts" does.</li>
+    <li><strong>Using registers the interrupted code owns.</strong> The trap saves only the pc. An interrupt comes between any two instructions,
+    so a handler that changes a register without saving and restoring it breaks the program at a random place.</li>
+    <li><strong>"Interrupts always beat polling."</strong> Each event costs a trap, a handler and an <code>mret</code>. Measured on this machine,
+    polling does more work when events come more often than one per ${crossover(6)} cycles (with 6 instructions of work between polls).</li>
+  </ul></details>`;
+}
+
 /** NANDs of the privileged-architecture hardware: the CSR unit, the trap unit and the system decoder. */
 const TRAP_NANDS = nd(CSR_UNIT) + nd(TRAP_UNIT) + nd(SYS_DECODE);
 
@@ -473,7 +540,8 @@ export const chTraps: Chapter = {
         and sets MIE again; the step "Nested interrupts" does exactly that.</p></details>
         <p>The compare-and-interrupt arrangement is the same in every timer: a counter that always runs, a register the software sets to "wake me at this time", and a comparator. Because the handler sets the next compare value relative to the previous one, the ticks do not drift even if some handlers
         run late.</p>
-        <div class="try">Let the clock run and watch the dots, mepc (where the loop was interrupted) and s1 (tick count).</div>`,
+        <div class="try">Let the clock run and watch the dots, mepc (where the loop was interrupted) and s1 (tick count).</div>
+        ${tickWorked()}`,
       scene: () => cpuScene({ source: sys('timer'), system: true, highlight: ['io', 'csr'] }),
       tour: {
         beats: [
@@ -548,7 +616,8 @@ export const chTraps: Chapter = {
         <span data-show="v0 v1 v2 v3 v4 v5 v6">mtval</span>; the trap signal is <span data-show="any">the OR of all sources</span>.
         Together with the CSR unit and the system decoder this is about ${kNands(TRAP_NANDS)} NANDs: privilege and interrupts are not free, but
         they are what turns a calculator into a computer that can run an operating system.</p>
-        <p>Measured: the trap unit is ${nd(TRAP_UNIT)} NANDs, the CSR unit ${nd(CSR_UNIT)} and the system decoder ${nd(SYS_DECODE)}, together ${kNands(TRAP_NANDS)} of the ${kNands(sysNands(false).core)} in the machine without its program ROM.</p>`,
+        <p>Measured: the trap unit is ${nd(TRAP_UNIT)} NANDs, the CSR unit ${nd(CSR_UNIT)} and the system decoder ${nd(SYS_DECODE)}, together ${kNands(TRAP_NANDS)} of the ${kNands(sysNands(false).core)} in the machine without its program ROM.</p>
+        ${trapMistakes()}`,
       scene: () => ({ root: TRAP_UNIT, inputs: { illegal: 1 } }),
       tour: {
         beats: [

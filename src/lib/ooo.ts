@@ -310,7 +310,6 @@ export function iqEntry(P: number, tw = TAG, S = 4): ComponentDef {
     b.wire('vQ.q', 'valid');
     b.wire(`${fs}.o0`, 'portQ'); b.wire(`${fs}.o1`, 'loadQ'); b.wire(`${fs}.o2`, 'divQ'); b.wire(`${fs}.o3`, 'lat2Q');
     b.wire('payR.q', 'payQ');
-    const R = b.right;
     const W: Record<string, number> = { tagA: TAG, tagB: TAG, valA: 32, valB: 32, smask: S, pay: P, bt0: TAG, bt1: TAG, bx0: 32, bx1: 32, sdone: S };
     const outs: [string, number][] = [['valid', 1], ['ready', 1], ['portQ', 1], ['loadQ', 1], ['divQ', 1], ['lat2Q', 1], ['opA', 32], ['opB', 32], ['payQ', P]];
     return define({
@@ -318,7 +317,7 @@ export function iqEntry(P: number, tw = TAG, S = 4): ComponentDef {
       summary: 'An instruction waiting for its operands. Each operand is ready, or tagged with the reorder-buffer entry that will produce it; that tag on a result bus wakes the operand up (its value captured, and passed on at once, so the entry can go in the same cycle). A load also waits for the stores before it. Picked or flushed, the entry is free again.',
       ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))), ...outs.map(([n, w]) => (w > 1 ? bus(n, w, 'out') : bit(n, 'out')))],
       symbol: { kind: 'box', label: 'IQ ENTRY' },
-      netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries(outs.map(([n], i) => [n, [R, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { room: true, wires: { 'valAQ.q': true, 'valBQ.q': true, 'ts.o0': false, 'ts.o1': false }, nudge: { payR: 2 } }),
     });
   });
 }
@@ -362,25 +361,42 @@ export function select(Q: number): ComponentDef {
     const b = new Builder(18, 16, 3);
     b.pins('cand', 'older');
     const c = b.op(splitter(ones(Q)), ['cand'], undefined, 'cs');
-    const o = b.op(splitter(ones(Q * (Q - 1))), ['older'], undefined, 'os');
-    b.next();
-    const blocked: string[] = [];
-    for (let e = 0; e < Q; e++) {
-      const older = Array.from({ length: Q }, (_, j) => j).filter((j) => j !== e).map((j) => b.op1(AND, [`${c}.o${j}`, `${o}.o${ageBit(j, e, Q)}`], undefined, `o${j}_${e}`));
-      blocked.push(b.name(b.op1(orN(Q - 1), older, undefined, `blk${e}`), `older than ${e}`, true));
-      if (e % 2 === 1) b.next();
+    // the matrix by rows: row j is "j is older than each other entry", Q - 1 bits in entry order (ageBit)
+    const o = b.op(splitter(Array(Q).fill(Q - 1)), ['older'], undefined, 'os');
+    // a column per entry j: its row of the matrix runs down beside its candidate bit, one AND per other entry e
+    const older: string[][] = Array.from({ length: Q }, () => []);
+    for (let j = 0; j < Q; j++) {
+      const r = b.op(splitter(ones(Q - 1)), [b.name(`${o}.o${j}`, `row ${j}`, true)], undefined, `r${j}`);
+      for (let e = 0; e < Q; e++) if (e !== j) older[e].push(b.op1(AND, [`${c}.o${j}`, `${r}.o${e < j ? e : e - 1}`], undefined, `o${j}_${e}`));
     }
-    b.next();
+    const blocked = Array.from({ length: Q }, (_, e) => b.name(b.op1(orN(Q - 1), older[e], undefined, `blk${e}`), `older than ${e}`));
     const g = Array.from({ length: Q }, (_, e) => b.op1(AND, [`${c}.o${e}`, b.op1(NOT, [blocked[e]], undefined, `nb${e}`)], undefined, `g${e}`));
-    b.next();
-    b.wire(b.op1(merger(ones(Q)), g, undefined, 'grant'), 'grant');
-    const R = b.right;
+    // a crossbar: entry e's band holds its Q - 1 ANDs, one per column, STEP apart so no output grazes the next column's
+    // gate, each output running straight to its own input of e's OR; the grant merger's inputs at the bands' pitch
+    const STEP = 3, BAND = STEP * (Q - 1) + 2, T0 = 4 + 2 * Q + 6, col = (j: number) => 30 + 13 * j, XO = col(Q) + 4;
+    const put = (n: string, x: number, y: number) => { b.instances.find((i) => i.name === n.split('.')[0])!.at = [x, y]; };
+    put('os', 4, 0);
+    put('cs', 4, 2 * (Q - 1) + 4);
+    for (let j = 0; j < Q; j++) put(`r${j}`, col(j) - 6, 0);
+    for (let e = 0; e < Q; e++) {
+      // e's OR centred on the band: input k at orY + 1 + 2k, its AND's output at T + STEP·k + 2
+      const T = T0 + e * BAND, orY = T + Q - 1;
+      older[e].forEach((n, k) => put(n, col(Number(n.slice(1, n.indexOf('_')))), T + STEP * k));
+      put(`blk${e}`, XO, orY);
+      put(`nb${e}`, XO + 8, orY + Q - 2);
+      put(`g${e}`, XO + 15, orY + Q - 4);
+    }
+    const g0 = T0 + 2 * Q - 3; // g0's output (orY + Q - 4 + 2 in band 0)
+    const gm = b.op1(merger(ones(Q), BAND), g, undefined, 'grant');
+    put(gm, XO + 24, g0 - 1);
+    b.wire(gm, 'grant');
+    const R = XO + 32;
     return define({
       id: `select${Q}`, name: 'Select (oldest ready)', category: 'cpu',
       summary: 'Grants the oldest of the candidate entries: a candidate wins when no other candidate is older (the age matrix). With wakeup it forms the loop that sets the clock: a result\'s tag wakes its consumers, and select must pick among them in the same cycle.',
       ports: [bus('cand', Q, 'in'), bus('older', Q * (Q - 1), 'in'), bus('grant', Q, 'out')],
       symbol: { kind: 'box', label: 'SELECT' },
-      netlist: () => ({ pins: { cand: [0, 2], older: [0, 4], grant: [R, 2] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { cand: [0, 2 * (Q - 1) + 4 + Q], older: [0, Q], grant: [R, g0 - 1 + Q * BAND / 2] }, instances: b.instances, nets: b.nets() }),
     });
   });
 }
@@ -869,7 +885,6 @@ export function storeQueue(S: number): ComponentDef {
     const low = k === 1 ? cb(0) : k === 2 ? b.op1(AND, [cb(1), cb(0)], undefined, 'is3') : b.op1(andN(k), Array.from({ length: k }, (_, i) => cb(i)), undefined, 'is3');
     b.wire(b.op1(NOT, [b.op1(OR, [cb(k), low], undefined, 'atLeast3')], undefined, 'room2'), 'free2');
     b.wire(tail, 'tail'); b.wire(`${tl}.o0`, 'idx0'); b.wire(at1, 'idx1'); b.wire(pend, 'pend'); b.wire(doneV, 'done');
-    const R0 = b.right;
     const W: Record<string, number> = { sidx: k, saddr: 32, sdata: 32, ltail: L, laddr: 32 };
     const outs: [string, number][] = [['free1', 1], ['free2', 1], ['tail', L], ['idx0', k], ['idx1', k], ['pend', S], ['done', S], ['fwdHit', 1], ['fwdData', 32], ['memWe', 1], ['memAddr', 32], ['memData', 32]];
     return define({
@@ -877,7 +892,7 @@ export function storeQueue(S: number): ComponentDef {
       summary: 'Stores wait here from dispatch to commit: executing writes their address and data, commit drains the oldest into the data memory, one a cycle, so memory only ever changes in program order. A load meanwhile takes its value from the youngest older store to the same word, if there is one (store-to-load forwarding).',
       ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))), ...outs.map(([n, w]) => (w > 1 ? bus(n, w, 'out') : bit(n, 'out')))],
       symbol: { kind: 'box', label: 'STORE QUEUE' },
-      netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries(outs.map(([n], i) => [n, [R0, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { room: true, wires: { 'd0.y2': false, 'n3.y': false, 'older.s': false, 'f0.o2': false, 'f3.o2': false, 'maddr.out': false } }),
     });
   });
 }
@@ -1009,14 +1024,13 @@ export function ratRow(TAG: number): ComponentDef {
   b.next();
   b.op(register(1 + TAG), [nx, one, 'clk'], 'mapping', 'map');
   b.wire('map.q', 'q');
-  const R = b.right;
   const W: Record<string, number> = { me: 5, rd0: 5, tag0: TAG, rd1: 5, tag1: TAG, crd0: 5, crd1: 5 };
   return define({
     id: TAG === 4 ? 'ratrow' : `ratrow${TAG}`, name: 'Rename-table row', category: 'cpu',
     summary: 'One register\'s mapping, with its own name: a dispatch slot whose destination is this register maps it, a committing instruction whose destination it is unmaps it (if it still names that instruction), a flush unmaps it.',
     ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))), bus('q', 1 + TAG, 'out')],
     symbol: { kind: 'box', label: 'MAPPING' },
-    netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), q: [R, 2] }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b),
   });
   });
 }
@@ -1134,7 +1148,6 @@ export function ratTable(TAG: number): ComponentDef {
     const sp = b.op(splitter([1, TAG]), [y], undefined, `os${i}`);
     b.wire(`${sp}.o0`, `${nm}v`); b.wire(`${sp}.o1`, `${nm}t`);
   });
-  const R0 = b.right;
   const W: Record<string, number> = { rs1_0: 5, rs2_0: 5, rs1_1: 5, rs2_1: 5, rd0: 5, tag0: TAG, rd1: 5, tag1: TAG, crd0: 5, ctag0: TAG, crd1: 5, ctag1: TAG };
   const outs = ['a0', 'b0', 'a1', 'b1'].flatMap((n): [string, number][] => [[`${n}v`, 1], [`${n}t`, TAG]]);
   return define({
@@ -1142,7 +1155,7 @@ export function ratTable(TAG: number): ComponentDef {
     summary: 'For each register, the reorder-buffer entry of the youngest instruction in flight that writes it, or none (the register file has the value). Dispatch looks up both instructions\' sources (the second sees the first\'s destination) and maps their destinations; a commit unmaps a register still naming the committing instruction; a flush unmaps them all.',
     ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))), ...outs.map(([n, w]) => (w > 1 ? bus(n, w, 'out') : bit(n, 'out')))],
     symbol: { kind: 'box', label: 'RENAME TABLE' },
-    netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries(outs.map(([n], i) => [n, [R0, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { room: true, wires: { 'byp2.y': false, 'rows.maps': true } }),
   });
   });
 }
