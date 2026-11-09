@@ -66,6 +66,20 @@ export interface TestDoc {
   src: string;
 }
 
+/**
+ * A breakpoint (breakpoints.ts): Run stops after the step on which its condition holds (breakexpr.ts), or, with `pc`, when the
+ * instruction at that address retires (the CPU drawer's gutter). Kept on the chip, never compiled.
+ */
+export interface BreakDoc {
+  id: string;
+  cond?: string;
+  pc?: number;
+  /** Switched off in the list (kept, not checked). */
+  off?: true;
+  /** Checked on every change of its signals (gate mode), not only after rising edges. */
+  gate?: true;
+}
+
 export interface TableDoc {
   ins: string[];
   outs: string[];
@@ -173,6 +187,8 @@ export interface ChipDoc {
   fsm?: FsmDoc;
   /** Test tables run against the chip (testtable.ts): never compiled, so editing one rebuilds nothing. */
   tests?: TestDoc[];
+  /** Breakpoints (breakpoints.ts): never compiled, like the tests. */
+  breaks?: BreakDoc[];
   pins: PinDoc[];
   parts: PartDoc[];
   wires: WireDoc[];
