@@ -376,7 +376,7 @@ export function pipeMul(n: number): ComponentDef {
     const R = b.right;
     return define({
       id: `pmul${n}`, name: `${n}×${n} pipelined Booth multiplier`, category: 'sequential',
-      summary: 'Registers after the operands, after the Booth rows and after the compressor tree: the clock period is the slowest stage instead of the whole multiplier. Latency four edges, throughput one product per cycle.',
+      summary: 'Registers after the operands, the Booth rows, the compressor tree and the final adder: the clock period is the slowest stage instead of the whole multiplier. Latency four edges, throughput one product per cycle.',
       ports: [bit('clk', 'in', 'bottom', true), bus('a', n, 'in'), bus('b', n, 'in'), bus('p', W, 'out')],
       symbol: { kind: 'box', label: `PIPE MUL${n}` },
       netlist: () => ({ pins: { a: [0, 4], b: [0, 8], clk: [0, 14], p: [R, 6] }, instances: b.instances, nets: b.nets() }),

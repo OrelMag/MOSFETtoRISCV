@@ -581,7 +581,7 @@ export function axiFlash(image: ArrayLike<number>, g: FlashGeometry = { blocks: 
   const words = g.blocks * g.pagesPerBlock * g.wordsPerPage;
   return {
     id: `axiflash_${image.length}_${hashWords(image)}`, name: `Flash slave (${words} words, ${g.wordsPerPage}-word pages)`, category: 'memory',
-    summary: `A NAND flash behind the bus, read only: a word in the page buffer comes the next cycle; any other costs a page read into the buffer, ${FLASH_TIMES.read} cycles.`,
+    summary: `A NAND flash behind the bus, read only: a read of a word in the page buffer takes 3 cycles, address to data (RAM takes 2); any other first reads its page into the buffer, ${FLASH_TIMES.read + 2} cycles in all.`,
     ports, symbol: { kind: 'box', label: 'FLASH' },
     behavior: {
       delay: 4,
@@ -832,7 +832,7 @@ export function axiFlashWindow(k: number, read = FLASH_TIMES.read): ComponentDef
     const ports: PortDef[] = [...slavePorts(), bus('data', 32, 'in'), bit('clk', 'in', 'bottom', true), bus('addr', k, 'out')];
     return define({
       id, name: `Flash window (${2 ** k} words, 16-word pages)`, category: 'memory',
-      summary: `A flash's timing over a ROM of ${2 ** k} words that holds its contents (addr out, data in): a word of the page in the buffer comes 2 cycles after its address, any other after a page read of ${read} cycles (chapter 37). Writes are dropped.`,
+      summary: `A flash's timing over a ROM of ${2 ** k} words that holds its contents (addr out, data in): a read of a word in the page buffer takes 3 cycles, address to data, any other first reads its page into the buffer, ${read + 2} cycles in all (chapter 37). Writes are dropped.`,
       ports, symbol: { kind: 'box', label: 'FLASH' },
       netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
     });
