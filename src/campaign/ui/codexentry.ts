@@ -26,7 +26,7 @@ import { statusOf } from '../graph';
 import { levelChallenge } from '../levels';
 import { progress } from '../progress';
 import type { CampaignNode } from '../types';
-import { buildsOn, leadsTo, neighbours, seeAlso, teachingLevels } from '../codexlinks';
+import { buildsOn, leadsTo, needsRv16Note, neighbours, RV16_NOTE, seeAlso, teachingLevels } from '../codexlinks';
 import type { CodexMore } from '../codexmore';
 import { DRILLS, rng, type Drill } from '../drills';
 import { libCost } from '../measure';
@@ -154,8 +154,10 @@ function linksEl(e: CodexEntry, more: CodexMore | undefined): HTMLElement {
     return el;
   };
   const cx = (xs: CodexEntry[]) => xs.map((x) => chip('', `#/campaign/codex/${x.id}`, x.title));
+  const text = [e.body, more?.idea ?? '', more?.example?.body ?? '', ...(more?.mistakes ?? [])].join(' ');
+  const note = needsRv16Note(text, more?.chapters ?? []) ? h('p', { class: 'cx-note' }, RV16_NOTE) : null;
   return h('div', { class: 'cx-rows' },
-    row('Learn it', learn), row('In 3D', modelChips(e.id)), row('Builds on', cx(builds)), row('Leads to', cx(leads)), row('See also', cx(also)));
+    row('Learn it', learn), note, row('In 3D', modelChips(e.id)), row('Builds on', cx(builds)), row('Leads to', cx(leads)), row('See also', cx(also)));
 }
 
 /** The 3D models that show an entry (the codex's model index): no secret, so a locked entry lists them too. */
