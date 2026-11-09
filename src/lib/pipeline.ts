@@ -509,7 +509,7 @@ function buildBtb(nF: 1 | 2): ComponentDef {
   return define({
     id: two ? 'btb16x2' : 'btb16', name: `Branch target buffer (16 entries${two ? ', two fetch ports' : ''})`, category: 'cpu',
     summary: two
-      ? '16 entries indexed by PC[5:2], each {valid, tag = PC[31:6], target, 2-bit counter, is-jump}. Fetch looks up both slots of its pair at once (pc and pc + 4, two read ports); Execute writes the outcome back through the third.'
+      ? '16 entries indexed by PC[5:2], each {valid, tag = PC[31:6], target, 2-bit counter, is-jump}. Fetch looks up both slots of its pair at once (pc and pc + 4, two read ports); Execute reads its own entry through a third read port (the counter to step) and writes the updated entry through the decoder.'
       : '16 entries indexed by PC[5:2], each {valid, tag = PC[31:6], target, 2-bit counter, is-jump}. Fetch reads it to predict; Execute writes the outcome back. Built from the register file\'s parts: a decoder, registers and two read ports.',
     ports: [
       bus('pcF', 32, 'in'), ...(two ? [bus('pcF1', 32, 'in')] : []), bus('pcE', 32, 'in'), bit('updE', 'in'), bit('takenE', 'in'), bit('isJumpE', 'in'), bus('targetE', 32, 'in'),

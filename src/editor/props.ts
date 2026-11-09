@@ -16,6 +16,7 @@ import { logicDepth, romSize, stats } from '../sim/stats';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { parseBig } from '../sim/values';
 import { h, icon, undoKey } from '../ui/dom';
+import { settings } from '../ui/settings';
 import { type Diag, diagText } from './compile';
 import type { Editor } from './editor';
 import { pinKnob, pointerGeom } from './geom';
@@ -464,7 +465,8 @@ export class PropsPanel {
       // no input reaches an output without a flip-flop (a computer behind its switches): no depth to show
       el.hidden = d === 0;
       if (d === 0) return;
-      const load = d === null ? null : logicDepth(def, 'load');
+      // the load figure once Faster adders (which teaches it) has been opened, or with Load chosen as the default (as the Inspector)
+      const load = d === null || !(settings.loadDelay || settings.visited('fastadd').length) ? null : logicDepth(def, 'load');
       el.textContent = d === null ? 'sequential' : load === null ? `depth ${d}` : `depth ${d} · ${fmtDelay(load, 'load')} under load`;
       el.title = load === null ? '' : DELAY_NOTE;
     }, 300);
