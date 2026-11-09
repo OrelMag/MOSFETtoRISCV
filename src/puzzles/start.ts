@@ -4,7 +4,7 @@
 // learner's single-cycle campaign cores. No DOM.
 
 import { groupDigits } from '../sim/numfmt';
-import { nodeOfChip } from '../campaign/levels';
+import type { CampaignNode } from '../campaign/types';
 import type { ChipDoc, Workspace } from '../editor/model';
 import { uniqueName } from '../editor/model';
 import { openChip } from '../editor/session';
@@ -53,14 +53,15 @@ function isCore16(def: ComponentDef | undefined): boolean {
 }
 
 /** Every CPU the puzzle can start on: the ready-wired computers, the learner's chips with a program ROM, their single-cycle campaign cores. */
-export function startCandidates(ws: Workspace, defOf: (chip: string) => ComponentDef | undefined): Candidate[] {
+/** `nodeOf`: a campaign level's chip → its level (editor/challengecamp.ts nodeOfChip, loaded by the caller when the workspace holds one). */
+export function startCandidates(ws: Workspace, defOf: (chip: string) => ComponentDef | undefined, nodeOf: (chip: string) => CampaignNode | undefined = () => undefined): Candidate[] {
   const out: Candidate[] = REF_COMPUTERS.map((c) => ({
     choice: { kind: 'ref', cpu: c.id }, name: c.name, tag: 'ready', lang: c.lang, langLabel: langName(c.lang),
     detail: `${c.width}-bit puzzle ports, wired`,
   }));
   for (const [id, doc] of Object.entries(ws.chips)) {
     if (id.startsWith('u_pz_')) continue;
-    const node = nodeOfChip(id);
+    const node = nodeOf(id);
     if (node && SINGLE_CYCLE_CORES.has(node.id) && isCore16(defOf(id))) {
       const def = defOf(id)!;
       out.push({ choice: { kind: 'core', chip: id }, name: doc.name, tag: 'campaign core', lang: 'rv16', langLabel: langName('rv16'), detail: `your ${node.title} in the RV16 puzzle computer · core ${groupDigits(hardwareNands(def))} NANDs`, nands: hardwareNands(def) });

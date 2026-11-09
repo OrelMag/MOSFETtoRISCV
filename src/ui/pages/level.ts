@@ -19,7 +19,8 @@ import { codexById } from '../../campaign/codex';
 import { levelUses, teachingLevels } from '../../campaign/codexlinks';
 import { type AreaUnit, areaBars, METRIC, measured } from '../../campaign/grade';
 import { isDone, nextAvailable, statusOf } from '../../campaign/graph';
-import { levelChallenge, levelChipId } from '../../campaign/levels';
+import { levelChallenge, levelChipId, nodeOfChip } from '../../campaign/levels';
+import { addBench, addLaneBench, addPongBench, failingTest } from '../../campaign/bench';
 import { altCost, copiesInFinal, countedPart, finalCpu } from '../../campaign/measure';
 import { hasWalk as hasWalkOf, walkOf, warmWalk } from '../../campaign/walk';
 import { actName, actTitle, nodeById } from '../../campaign/nodes';
@@ -28,6 +29,7 @@ import type { CampaignNode, Metric, Par } from '../../campaign/types';
 import { criteria, gradeTable } from '../../campaign/ui/levelinfo';
 import { hideGlossary, markTerms, setCodexOpener } from '../../campaign/ui/glossaryui';
 import { anatomySvg } from '../../campaign/ui/svgs';
+import { provideCampaign } from '../../editor/campaignlink';
 import { installChallenges } from '../../editor/challengeui';
 import { type BuildChallenge, type CheckResult, importAnswer, ruleKind, solveChallenge, startChallenge } from '../../editor/challenges';
 import { Editor } from '../../editor/editor';
@@ -43,6 +45,9 @@ import { WalkMode } from './levelwalk';
 import { tipsOf } from '../../campaign/nudges';
 import { blockUse, closedAct, pitfallsOf } from '../../campaign/thread';
 import { actEndEl, nextAfter, reachEl, type ThreadCtx, whyStackEl } from '../../campaign/ui/whystack';
+
+// The challenge strip loads the campaign on demand (editor/campaignlink.ts); this page has it already.
+provideCampaign({ addBench, addLaneBench, addPongBench, failingTest, measured, isDone, nextAvailable, levelChallenge, nodeOfChip, actName, actTitle, tipsOf, progress });
 
 /** The codex's mistakes (codexmore, a chunk of its own), once loaded: the Task tab's pitfalls add them. */
 let mistakesOf: ((id: string) => string[] | undefined) | undefined;
