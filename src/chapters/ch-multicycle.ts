@@ -21,9 +21,9 @@ const FIND_MC = findIt({
   hints: [
     'The very first instruction, <code>li a0, 0</code>, already writes a wrong value, 0xc, where its immediate is 0: the register file wrote what the CPU decoded.',
     'Between Fetch and Write-back the CPU decodes the instruction from one register, held across the steps. When should that register load?',
-    'The instruction register should load in Fetch only. Its enable, <code>ir.en</code>, is stuck at 1.',
+    'The instruction register should load in Fetch only. Its enable, <code>IRWrite</code>, is stuck at 1.',
   ],
-  fault: 'The instruction register\'s enable was stuck at 1: the IR loaded a word from memory at every clock edge, not only in Fetch. By the time the state machine reached Execute and Write-back, the IR held another word than the one fetched, so the first instruction to write a register already wrote a wrong value. The state machine itself was right: it was decoding the wrong word.',
+  fault: 'The instruction register\'s enable, <code>IRWrite</code>, was stuck at 1: the IR loaded a word from memory at every clock edge, not only in Fetch. By the time the state machine reached Execute and Write-back, the IR held another word than the one fetched, so the first instruction to write a register already wrote a wrong value. The state machine itself was right: it was decoding the wrong word.',
 });
 
 /** Cycles an instruction takes: Fetch and Decode, then the states from its dispatch target until the table returns to Fetch

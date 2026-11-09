@@ -67,7 +67,7 @@ describe('find-it steps', () => {
     // memWrite stuck at 1 shows otherwise
     const memWrite = plantedFaults(root, [{ kind: 'stuck1', end: 'ctl.memWrite' }]);
     expect(memWrite).toHaveLength(1);
-    expect(wouldText(runWith(memWrite), planted)).toMatch(/would be different|run right to the end/);
+    expect(wouldText(runWith(memWrite), planted)).toMatch(/would first show otherwise|run right to the end/);
     expect(wouldText(null, planted)).toMatch(/run right to the end/);
   }, 30_000);
 });

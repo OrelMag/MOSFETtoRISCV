@@ -24,9 +24,9 @@ const FIND_SYS = findIt({
   hints: [
     'The first wrong register is t2, written by <code>csrr t2, mepc</code> in the handler: the hardware read 0x14, the model 0x10.',
     '0x14 and 0x10 differ in one bit, 0x4: bit 2. The trap saved the right address (the first ecall is at 0x10); where does a read of mepc come from?',
-    'The CSR unit\'s <code>mepcOut</code> bus, bit 2, stuck at 1.',
+    'The CSR unit\'s <code>mepc</code> output, the register\'s value on its way out (to the trap unit for <code>mret</code>, and to the CSR read): bit 2, stuck at 1.',
   ],
-  fault: 'Bit 2 of the CSR unit\'s <code>mepcOut</code> was stuck at 1. The trap saved the right address in mepc, 0x10, but every read of it came out with bit 2 set: <code>csrr t2, mepc</code> gave 0x14, and the handler returned past the instruction it should have come back to. A single bit, and only on one path: the trap itself was right, which is why the fault showed only once the handler read mepc.',
+  fault: 'Bit 2 of the CSR unit\'s <code>mepc</code> output was stuck at 1. The trap saved the right address in mepc, 0x10, but every read of it came out with bit 2 set: <code>csrr t2, mepc</code> gave 0x14, and the handler returned past the instruction it should have come back to. A single bit, and only on one path: the trap itself was right, which is why the fault showed only once the handler read mepc.',
 });
 const nd = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 /** The byte enables of a store: size 0 byte, 1 half, 2 word, at a byte offset 0..3. */

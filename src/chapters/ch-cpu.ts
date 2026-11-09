@@ -32,9 +32,9 @@ const FIND_CPU = findIt({
   hints: [
     'The first wrong register is written by <code>li t0, 1</code>, which is <code>addi t0, zero, 1</code>: an instruction with an immediate. The <code>add</code> instructions come later.',
     'addi\'s second ALU operand should be the immediate, not a register. One control signal chooses between the two at the SrcB multiplexer.',
-    'The control unit\'s <code>aluSrcB</code> output: right-click its wire and choose stuck at 0.',
+    'The control unit\'s <code>ALUSrcB</code> output: right-click its wire and choose stuck at 0.',
   ],
-  fault: 'The control unit\'s <code>aluSrcB</code> was stuck at 0, so the ALU\'s second operand was always rs2, never the immediate. In <code>addi t0, zero, 1</code> the immediate\'s low bits sit where an R-type keeps rs2\'s number: 1, register x1 (ra), which holds 0, so t0 became 0 + 0. The first instruction, <code>li a0, 0</code>, went wrong the same way, but its right answer is also 0: a fault shows only where it changes a value.',
+  fault: 'The control unit\'s <code>ALUSrcB</code> was stuck at 0, so the ALU\'s second operand was always rs2, never the immediate. In <code>addi t0, zero, 1</code> the immediate\'s low bits sit where an R-type keeps rs2\'s number: 1, register x1 (ra), which holds 0, so t0 became 0 + 0. The first instruction, <code>li a0, 0</code>, went wrong the same way, but its right answer is also 0: a fault shows only where it changes a value.',
 });
 const fmt = groupDigits;
 

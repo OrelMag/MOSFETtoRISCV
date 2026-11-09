@@ -58,11 +58,11 @@ export function accusedRight(planted: readonly FlatFault[], kind: 'stuck0' | 'st
  * computed by firstWrong. The same first symptom is said so: another fault can look alike at first.
  */
 export function wouldText(would: FirstWrong | null, planted: FirstWrong | null): string {
-  const here = planted ? ` This CPU: ${planted.text} (cycle ${planted.cycle}).` : '';
+  const here = planted ? ` This CPU: ${planted.text}.` : '';
   if (!would) return `with it, this program would run right to the end.${here}`;
-  if (planted && would.text === planted.text && would.cycle === planted.cycle)
-    return `it would first show exactly as this CPU does (${would.text}, cycle ${would.cycle}), but it is another wire: what else could give that value?`;
-  return `the first wrong instruction would be different: ${would.text} (cycle ${would.cycle}).${here}`;
+  if (planted && would.text === planted.text)
+    return `it would first show exactly as this CPU does (${would.text}), but it is another wire: what else could give that value?`;
+  return `it would first show otherwise: ${would.text}.${here}`;
 }
 
 /** The panel: how to accuse, every accusation so far with what that fault would do, and the fault once found. */
