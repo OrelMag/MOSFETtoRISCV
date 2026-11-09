@@ -56,7 +56,8 @@ export class WorkbenchPage implements Page {
     this.libName = h('span', { class: 'bench-libname' });
     this.libBtn = h('button', { class: 'btn sm bench-libbtn', 'aria-controls': 'bench-library', 'aria-expanded': 'false', title: 'Show or hide the component library',
       onclick: () => this.showLibrary(!this.el.classList.contains('lib-open')) }, icon('menu', 15), h('b', null, 'Components'), this.libName, icon('chevD', 14)) as HTMLButtonElement;
-    this.el = h('div', { class: 'bench' }, this.libBtn, lib, this.stage.el, inspector.el);
+    // the page's heading for screen readers (the stage bar names the component)
+    this.el = h('div', { class: 'bench' }, h('h1', { class: 'sr-only' }, 'Workbench'), this.libBtn, lib, this.stage.el, inspector.el);
     // Each level opened is a history entry (ui/drillpath.ts): #/workbench/<id>/<instance>/…
     this.stage.onNavigate(() => {
       if (this.current) syncDrill(this.hash(), this.routing);
