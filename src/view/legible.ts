@@ -270,6 +270,18 @@ export interface TagEl { g: SVGGElement; tip: [number, number]; rect: R; named: 
 
 export interface NameEl { t: SVGTextElement; box: NameBox }
 
+/** The learner's say over the rule (View options ▸ Labels): the fixed names' size as a factor of NAME_PX (0: none, a block keeps
+ *  its own label however small), and whether text under MIN_TEXT_PX is hidden at all. */
+export const legibleOptions = { names: 1, hideSmall: true };
+const live = new WeakMap<SVGSVGElement, Legibility>();
+/** New options, applied to every schematic on the page at once. */
+export function setLegibleOptions(o: Partial<typeof legibleOptions>): void {
+  if ((o.names ?? legibleOptions.names) === legibleOptions.names && (o.hideSmall ?? legibleOptions.hideSmall) === legibleOptions.hideSmall) return;
+  Object.assign(legibleOptions, o);
+  if (typeof document === 'undefined') return;
+  for (const svg of document.querySelectorAll<SVGSVGElement>('svg.lg')) live.get(svg)?.refresh();
+}
+
 /** The rule applied to one schematic svg: classes for the text kinds, the fixed names. */
 export class Legibility {
   private hidden = new Set<string>();
@@ -293,7 +305,17 @@ export class Legibility {
   /** Planning runs this long after the scale stopped changing (ms). */
   settleMs = 60;
 
-  constructor(private svg: SVGSVGElement) { svg.classList.add('lg'); }
+  constructor(private svg: SVGSVGElement) { svg.classList.add('lg'); live.set(svg, this); }
+
+  /** The scale names are planned at: a larger name is the same name on a smaller drawing (Infinity: no fixed names). */
+  private get nameScale(): number { return legibleOptions.names > 0 ? this.scale / legibleOptions.names : Infinity; }
+
+  /** The options changed: everything planned again at the current scale. */
+  refresh(): void {
+    this.planScale = 0;
+    this.fontScale = 0;
+    if (this.scale > 0) this.view(this.scale);
+  }
 
   /** The blocks that may carry a fixed name (a new drawing replaces them all). */
   setNames(names: NameEl[]): void {
@@ -337,12 +359,12 @@ export class Legibility {
   view(scale: number): void {
     if (!(scale > 0)) return;
     this.scale = scale;
-    const hide = new Set(hiddenKinds(scale));
+    const hide = new Set(legibleOptions.hideSmall ? hiddenKinds(scale) : []);
     for (const k of this.hidden) if (!hide.has(k)) this.svg.classList.remove('lg-h-' + k);
     for (const k of hide) if (!this.hidden.has(k)) this.svg.classList.add('lg-h-' + k);
     this.hidden = hide;
     if (this.tags.length && Math.abs(scale / this.tagScale - 1) > 0.01) this.planTagSizes();
-    const fixed = needsFixedNames(scale);
+    const fixed = needsFixedNames(this.nameScale);
     this.svg.classList.toggle('lg-nm', fixed && this.names.length > 0);
     if (!this.names.length) return;
     if (this.planScale === 0 || fixed !== this.wasFixed) { this.wasFixed = fixed; this.plan(); }
@@ -363,8 +385,8 @@ export class Legibility {
     if (!this.shown.length || Math.abs(this.scale / this.fontScale - 1) < 0.002) return;
     this.fontScale = this.scale;
     for (const { t, l } of this.shown) {
-      t.setAttribute('font-size', String(l.px / this.scale));
-      t.setAttribute('stroke-width', String(Math.min(l.over ? 3.2 : 2.6, l.px * (l.over ? 0.28 : 0.22)) / this.scale));
+      t.setAttribute('font-size', String(l.px / this.nameScale));
+      t.setAttribute('stroke-width', String(Math.min(l.over ? 3.2 : 2.6, l.px * (l.over ? 0.28 : 0.22)) / this.nameScale));
       t.classList.toggle('lg-over', !!l.over);
     }
   }
@@ -390,7 +412,7 @@ export class Legibility {
     clearTimeout(this.timer);
     this.lastPlan = performance.now();
     this.planScale = this.scale;
-    const next = planLayouts(this.names.map((n) => n.box), this.scale, 10, this.tagBlocks.length ? this.nameBlocks : undefined, this.wires);
+    const next = planLayouts(this.names.map((n) => n.box), this.nameScale, 10 / (legibleOptions.names || 1), this.tagBlocks.length ? this.nameBlocks : undefined, this.wires);
     this.shown = [];
     next.forEach((l, i) => {
       const v = l !== null, t = this.names[i].t;
@@ -399,7 +421,7 @@ export class Legibility {
     });
     this.on = next.map((l) => l !== null);
     // tags are enlarged only where no name (overflowing its block, perhaps) is
-    this.nameRects = next.flatMap((l, i) => (l ? [nameRect(this.names[i].box, l, this.scale)] : []));
+    this.nameRects = next.flatMap((l, i) => (l ? [nameRect(this.names[i].box, l, this.nameScale)] : []));
     if (this.tags.length) this.planTagSizes();
     this.fontScale = 0;
     this.size();

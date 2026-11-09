@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { PRESETS, settings } from '../src/ui/settings';
+import { applyTheme, PRESETS, settings } from '../src/ui/settings';
+import { legibleOptions } from '../src/view/legible';
 import { evalOnce, simulate } from '../src/sim/harness';
 import { PREVIEW_DEF } from '../src/ui/viewpreview';
 
@@ -124,6 +125,22 @@ describe('view options', () => {
     settings.setView(before.view);
     expect([settings.theme, settings.palette, settings.vivid, settings.netColors]).toEqual(['dark', 'default', true, true]);
     settings.set('theme', 'auto');
+  });
+
+  it('the preview never draws the fixed-size names over its own labels (they set an inline display)', () => {
+    expect(css('app.css')).toMatch(/\.pal-preview \.lg-name \{ display: none !important; \}/);
+  });
+
+  it('zoomed-out names and small text follow the options, and the reset brings them back', () => {
+    // applyTheme hands them to view/legible.ts first, then sets the page's attributes (no document here)
+    const apply = () => { try { applyTheme(); } catch { /* node */ } };
+    settings.set('zoomNames', 'large'); settings.set('hideSmall', false); apply();
+    expect(legibleOptions).toEqual({ names: 4 / 3, hideSmall: false });
+    settings.set('zoomNames', 'off'); apply();
+    expect(legibleOptions.names).toBe(0);
+    settings.resetView(); apply();
+    expect([settings.zoomNames, settings.hideSmall]).toEqual(['normal', true]);
+    expect(legibleOptions).toEqual({ names: 1, hideSmall: true });
   });
 
   it('the preview is a working circuit: a ^ b, the low bit inverted', () => {
