@@ -65,6 +65,91 @@ const FIND_PIPE = findIt({
   fault: 'The hazard unit\'s <code>enFD</code> and <code>enPC</code> were stuck at 1: the PC and the F/D register could never hold. At the load-use pair the hazard unit still saw the hazard and put a bubble into Execute, but with nothing held, the bubble took the <code>addi</code>\'s place instead of going in front of it: the addi was lost and t5 kept its 0. Either wire, named stuck at 1, counts.',
 });
 
+/**
+ * HAZARDS on the gate-level pipeline, cycle by cycle from power-on: the instruction (its index in the program) in F, D, E, M and W
+ * (-1: none or a bubble), then fwdA, fwdB (0 register file, 1 from W, 2 from M), stall, flush. tests/worked-examples.test.ts measures it again.
+ */
+export const HAZARD_TRACE: readonly (readonly number[])[] = [
+  [0, -1, -1, -1, -1, 0, 0, 0, 0],
+  [1, 0, -1, -1, -1, 0, 0, 0, 0],
+  [2, 1, 0, -1, -1, 0, 0, 0, 0],
+  [3, 2, 1, 0, -1, 0, 0, 0, 0],
+  [4, 3, 2, 1, 0, 1, 2, 0, 0],
+  [5, 4, 3, 2, 1, 2, 0, 0, 0],
+  [6, 5, 4, 3, 2, 0, 2, 0, 0],
+  [7, 6, 5, 4, 3, 0, 0, 1, 0],
+  [7, 6, -1, 5, 4, 0, 0, 0, 0],
+  [8, 7, 6, -1, 5, 1, 0, 0, 0],
+  [9, 8, 7, 6, -1, 2, 2, 0, 1],
+  [10, -1, -1, 7, 6, 0, 0, 0, 0],
+  [11, 10, -1, -1, 7, 0, 0, 0, 0],
+  [12, 11, 10, -1, -1, 0, 0, 0, 0],
+  [13, 12, 11, 10, -1, 0, 0, 0, 1],
+  [11, -1, -1, 11, 10, 0, 0, 0, 0],
+];
+
+/** The worked example read off HAZARD_TRACE, up to the last instruction before `halt` retiring: what each hazard cost. */
+export function hazardSums() {
+  const T = HAZARD_TRACE, halt = 11;
+  const last = T.reduce((m, r) => Math.max(m, r[4] === halt ? -1 : r[4]), -1);
+  const cycles = T.findIndex((r) => r[4] === last) + 1, run = T.slice(0, cycles);
+  return {
+    last, cycles, fill: 4,
+    retired: new Set(run.map((r) => r[4]).filter((i) => i >= 0)).size,
+    stalls: run.filter((r) => r[7]).length,
+    flushed: run.filter((r) => r[8] && r[2] < last).reduce((n, r) => n + r.slice(0, 2).filter((x) => x >= 0).length, 0),
+  };
+}
+
+/** The worked example: the hazard program as a pipeline diagram (rows instructions, columns cycles), its events and its sum. */
+function hazardWorked(): string {
+  const S = hazardSums(), T = HAZARD_TRACE.slice(0, S.cycles), text = assemble(HAZARDS).lines.map((l) => l.text.replace(/\s+/g, ' '));
+  const STAGE = ['F', 'D', 'E', 'M', 'W'], FROM = ['', 'W', 'M'];
+  const rows = Array.from({ length: S.last + 1 }, (_, i) => {
+    const flushed = !T.some((r) => r[4] === i);
+    const cells = T.map((r, c) => {
+      const st = r.slice(0, 5).indexOf(i);
+      const held = st >= 0 && st <= 1 && c > 0 && T[c - 1][st] === i;
+      return `<td${held ? ' title="held by the stall"' : ''}>${st < 0 ? '' : STAGE[st] + (held ? '*' : '')}</td>`;
+    }).join('');
+    return `<tr${flushed ? ' class="flushed" title="fetched on the wrong path, then flushed"' : ''}><th><code>${text[i]}</code>${flushed ? ' (flushed)' : ''}</th>${cells}</tr>`;
+  }).join('');
+  const ev: string[] = [];
+  T.forEach((r, c) => {
+    if (r[5] || r[6]) ev.push(`cycle ${c}: <code>${text[r[2]]}</code> in E takes ${[r[5] ? `rs1 from ${FROM[r[5]]}` : '', r[6] ? `rs2 from ${FROM[r[6]]}` : ''].filter(Boolean).join(' and ')}`);
+    if (r[7]) ev.push(`cycle ${c}: a load in E, <code>${text[r[1]]}</code> in D reads its result: stall, D held a cycle and a bubble sent into E`);
+    if (r[8] && r[2] < S.last) ev.push(`cycle ${c}: <code>${text[r[2]]}</code> in E is taken: the ${r.slice(0, 2).filter((x) => x >= 0).length} instructions in F and D are flushed and Fetch goes to the target`);
+  });
+  return `<details class="deeper"><summary>Worked example: every hazard, cycle by cycle</summary>
+    <p>The hazard program of the last two steps, run on this pipeline's gates from power-on. A row is an instruction, a column a clock
+    cycle, a cell the stage the instruction is in during that cycle (* = held where it was by a stall).</p>
+    <div class="worked-wrap"><table class="pipe-trace"><thead><tr><th>cycle</th>${T.map((_, c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+    <ul>${ev.map((x) => `<li>${x}.</li>`).join('')}</ul>
+    <p>The sum: ${S.retired} instructions retire (the ${S.flushed} flushed ones never do) in ${S.cycles} cycles = ${S.fill} to fill the line +
+    ${S.retired} + ${S.stalls} bubble + ${S.flushed} flushed. Past the fill that is (${S.retired} + ${S.stalls} + ${S.flushed}) / ${S.retired} =
+    ${((S.retired + S.stalls + S.flushed) / S.retired).toFixed(2)} cycles per instruction, against 1 for a program without hazards.</p></details>`;
+}
+
+/** The chapter's common mistakes, each with this pipeline's own numbers. */
+function pipeMistakes(): string {
+  const S = hazardSums(), T5 = cut(5);
+  return `<details class="deeper"><summary>Common mistakes with pipelines</summary><ul>
+    <li><strong>"Five stages, five times faster."</strong> Each stage adds a register (${CLK_TO_Q + SETUP} NAND delays of clock-to-Q and setup), and
+    the clock waits for the slowest stage. Even five perfectly even stages of this CPU's logic give a period of ${T5}, not 155 / 5 = ${155 / 5}: at
+    best ${(155 / T5).toFixed(2)}× faster, and only if the CPI stays 1.</li>
+    <li><strong>"Pipelining makes an instruction faster."</strong> One instruction now spends five clocks in the machine: 5 × ${T5} = ${5 * T5} NAND
+    delays even with even stages, against 155 on the single-cycle CPU. What improves is the rate: one instruction finishes per clock.</li>
+    <li><strong>"The CPI is 1."</strong> Only without hazards. The worked example in Control hazards runs ${S.retired} instructions in
+    ${S.cycles} cycles, ${((S.retired + S.stalls + S.flushed) / S.retired).toFixed(2)} per instruction past the fill; the table above measures Fibonacci.</li>
+    <li><strong>"Forwarding removes every stall."</strong> Not after a load: its word exists only at the end of M, when the next instruction's E has
+    already begun. One bubble each time, unless the compiler puts an independent instruction in between.</li>
+    <li><strong>"A flush has to undo the wrong-path instructions."</strong> There is nothing to undo: they are flushed from F and D, before any
+    stage that writes a register or memory. Resolving branches later than that would need real undo.</li>
+    <li><strong>Forwarding from the wrong writer.</strong> When M and W both write the register, the newer one (M) wins; and x0 is never forwarded,
+    since its writes are discarded.</li>
+  </ul></details>`;
+}
+
 /** The assembly line's programs (the step's and the codex model page's, so both show the same three). */
 export const ASSEMBLY_PROGRAMS: readonly AssemblyProgram[] = [
   { id: 'indep', name: 'Independent instructions', source: INDEP },
@@ -351,7 +436,8 @@ export const chPipeline: Chapter = {
         <p>The flush is safe because nothing the two wrong-path instructions did is visible yet: they have not reached M (no store) or W (no
         register write). A design that resolved branches later than the first stage that changes state would need much more care.
         The same flush is how a pipeline keeps a faulting instruction from leaving younger ones half done (see In real silicon, below).</p>
-        <div class="try">Pulse until the loop branch is taken: two instructions turn into bubbles.</div>`,
+        <div class="try">Pulse until the loop branch is taken: two instructions turn into bubbles.</div>
+        ${hazardWorked()}`,
       scene: () => ({ ...cpuScene({ source: src('sum'), pipeline: true, highlight: ['npc', 'hz', 'pcmux'] }), autoClock: false }),
       tries: [(st) => !!snap(st)?.flush],
       tour: {
@@ -423,7 +509,8 @@ export const chPipeline: Chapter = {
         <p>Pipelining pays when stages are balanced. Real designs: precompute forwarding selects a stage early, compute branch
         conditions with a dedicated comparator, predict branches, and split the slowest stage. Here the clock must fit
         the slowest stage, and in a real chip memory access, not the ALU, dominates the single-cycle path.</p>
-        <p><a href="#/c/pipepay/0">The next chapter</a> does exactly that, one measured step at a time.</p>`,
+        <p><a href="#/c/pipepay/0">The next chapter</a> does exactly that, one measured step at a time.</p>
+        ${pipeMistakes()}`,
       widget: () => payWidget(),
       more: {
         derive: `<p>Speed-up over the single-cycle CPU = (CPI₁ × T₁) / (CPI_pipe × T_pipe). With CPI₁ = 1, a pipeline gains only if its period

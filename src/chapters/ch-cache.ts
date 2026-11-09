@@ -128,6 +128,56 @@ function amat(levels: [number, number][], mem: number): number {
   return levels.reduceRight((below, [hit, miss]) => hit + miss * below, mem);
 }
 
+/** The worked example's loop: s += a[i] + b[i] for i = 0 … 7, with a at 0x00 and b at 0x40, one cache size apart: its loads in order. */
+export const PAIR_TRACE: readonly number[] = Array.from({ length: 16 }, (_, k) => (k % 2 ? 0x40 : 0) + 4 * (k >> 1));
+/** The step's cache (64 bytes, 16-byte lines, 8-bit addresses) direct-mapped and 2-way, on PAIR_TRACE: each access and the totals. */
+export function pairRun() {
+  const run = (ways: number) => {
+    const c = new CacheModel({ size: 64, line: 16, ways, replacement: 'lru', write: 'wt' });
+    return PAIR_TRACE.map((a) => c.access(a));
+  };
+  const dm = run(1), w2 = run(2), MISS = 8;
+  const count = (r: ReturnType<typeof run>, k?: string) => r.filter((x) => !x.hit && (!k || x.kind === k)).length;
+  return { dm, w2, MISS, dmMiss: count(dm), dmConflict: count(dm, 'conflict'), dmCompulsory: count(dm, 'compulsory'), w2Miss: count(w2) };
+}
+
+/** The worked example: the trace through both caches, access by access, and the cost. */
+function pairWorked(): string {
+  const R = pairRun(), sp = split(64, 16, 1, 8), hx = (a: number) => `0x${a.toString(16).padStart(2, '0').toUpperCase()}`;
+  const rows = PAIR_TRACE.map((a, k) => {
+    const d = R.dm[k], w = R.w2[k];
+    return `<tr><th>${k % 2 ? 'b' : 'a'}[${k >> 1}]</th><td>${hx(a)}</td><td>${a >> (sp.off + sp.idx)}</td><td>${(a >> sp.off) & (2 ** sp.idx - 1)}</td><td>${(a >> 2) & 3}</td><td>${d.hit ? 'hit' : `miss (${d.kind})`}</td><td>${w.hit ? 'hit' : `miss (${w.kind})`}</td></tr>`;
+  }).join('');
+  return `<details class="deeper"><summary>Worked example: two arrays one cache apart</summary>
+    <p>A loop adds <code>a[i] + b[i]</code> for i = 0 to 7, with the word arrays a at 0x00 and b at 0x40, on the cache of "A direct-mapped cache" (64 bytes,
+    16-byte lines, 8-bit addresses: ${sp.tag} tag, ${sp.idx} index, ${sp.off} offset bits). The loads alternate a, b, a, b. Beside it the same 64 bytes as 2 ways.</p>
+    <div class="worked-wrap"><table class="pipe-trace"><thead><tr><th>load</th><th>address</th><th>tag</th><th>index</th><th>word</th><th>direct-mapped</th><th>2-way</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p>a[i] and b[i] are 0x40 = 64 bytes apart: the same index, different tags. Direct-mapped, each load evicts the line the next one needs, so all
+    ${PAIR_TRACE.length} loads miss: ${R.dmCompulsory} compulsory (each line's first touch) and ${R.dmConflict} conflict, although the loop needs only two lines at a
+    time and the cache has four. At ${R.MISS} cycles a miss that is ${R.dmMiss * R.MISS} stall cycles. With 2 ways a set holds both lines: ${R.w2Miss} misses, all
+    compulsory, ${R.w2Miss * R.MISS} cycles. Moving b one line further (to 0x50) would fix the direct-mapped cache too: what a conflict miss needs is a
+    different place, not more room.</p></details>`;
+}
+
+/** The chapter's common mistakes, each with this chapter's own numbers. */
+function cacheMistakes(): string {
+  const sp = split(64, 16, 1, 8), R = pairRun();
+  return `<details class="deeper"><summary>Common mistakes with caches</summary><ul>
+    <li><strong>Counting the offset in words.</strong> Addresses count bytes, so a 16-byte line needs ${sp.off} offset bits (2 for the byte, 2 for the
+    word), not 2. Get it wrong and the index and the tag shift with it.</li>
+    <li><strong>"Every miss means the cache is too small."</strong> Only capacity misses do. The worked example in "The three Cs" misses
+    ${R.dmMiss} times although it needs only two lines at a time and the cache has four; 2 ways of the same size bring it to ${R.w2Miss}.</li>
+    <li><strong>Adding the latencies.</strong> AMAT = hit time + miss rate × miss penalty, applied level by level: 4 + 0.05 × (12 + 0.2 × 250) =
+    ${amat([[4, 0.05], [12, 0.2]], 250).toFixed(1)} cycles in the example above, not 4 + 12 + 250 = ${4 + 12 + 250}.</li>
+    <li><strong>Mixing local and global miss rates.</strong> 20 % of L2's own accesses is ${pct(0.05 * 0.2)} of all accesses behind a 5 % L1. The formula takes
+    the local rate at each level.</li>
+    <li><strong>Assuming a store miss fetches the line.</strong> It depends on the policy: the write-through cache of this chapter does not allocate (the
+    store only goes to memory); a write-back cache allocates, then writes the dirty line back when it is evicted.</li>
+    <li><strong>Forgetting the valid bit.</strong> After Reset the tag arrays hold whatever they hold; without the valid bit an address whose tag happens to
+    match would hit on garbage.</li>
+  </ul></details>`;
+}
+
 export const chCache: Chapter = {
   id: 'cache', num: numOf('cache'), title: 'Caches & the memory hierarchy', level: 'Memory',
   blurb: 'SRAM and DRAM at transistor level, direct-mapped and set-associative caches, the three Cs, and a CPU that stalls on a miss.',
@@ -631,7 +681,8 @@ export const chCache: Chapter = {
         size would also take, and conflict misses are the remainder, the ones that exist only because of the mapping. That definition is exactly how the explorer of the last step
         classifies them, and it says what to do about each: bigger lines or prefetching, a bigger cache, more ways or a better placement of the data.</p>
         <p>The hit path is where associativity costs time. The tag comparison cannot start before the stored tags are read, and the hit signal then drives a multiplexer that picks the
-        data: this lookup is ${stats(wayLookup2(3, 8)).nands} NANDs and ${logicDepth(wayLookup2(3, 8))} deep for two ways with 3-bit tags and 8-bit data.</p>`,
+        data: this lookup is ${stats(wayLookup2(3, 8)).nands} NANDs and ${logicDepth(wayLookup2(3, 8))} deep for two ways with 3-bit tags and 8-bit data.</p>
+        ${pairWorked()}`,
       scene: () => ({ root: wayLookup2(3, 8), inputs: { tag: 5, v0: 1, tag0: 2, d0: 0x11, v1: 1, tag1: 5, d1: 0x22 } }),
       tour: {
         beats: [
@@ -851,7 +902,8 @@ export const chCache: Chapter = {
         its compulsory misses into hits, at the cost of bandwidth and, when it guesses wrong, of lines it evicts for nothing.</p>
         <p>Weigh the terms of the example: of its ${amat([[4, 0.05], [12, 0.2]], 250).toFixed(1)} cycles on average, the L1 hit accounts for 4, the L2 for ${(0.05 * 12).toFixed(1)}
         and DRAM for ${(0.05 * 0.2 * 250).toFixed(1)}. The slowest level adds only that much although it costs 250 cycles per access, because two caches stand between it and the processor; it is still the term that
-        grows fastest when a miss rate worsens.</p>`,
+        grows fastest when a miss rate worsens.</p>
+        ${cacheMistakes()}`,
       more: {
         derive: `<p>Local miss rates multiply on the way down. The fraction of all accesses that reach DRAM is 0.05 × 0.2 = ${pct(0.05 * 0.2)}, and each costs 250 cycles: 2.5 cycles an access
           on average. AMAT = L1 hit + m<sub>1</sub> (L2 hit + m<sub>2</sub> × DRAM) = 4 + 0.05 × (12 + 0.2 × 250) = ${amat([[4, 0.05], [12, 0.2]], 250).toFixed(1)}. Leave out L2 and it is
