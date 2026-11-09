@@ -3059,3 +3059,5 @@ svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .ne
 .level-badge.yield { visibility: hidden; }
 
 .zoom-read[hidden] { display: none; }
+/* The stage's keyboard part cursor (view/kcursor.ts, Stage's arrows): a ring over the part or pin it stands on. */
+svg .kcursor { fill: none; stroke: var(--accent); stroke-width: 0.28; pointer-events: none; }
