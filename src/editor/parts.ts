@@ -5,6 +5,9 @@
 
 import { muxTree } from '../lib/combinational';
 import { sanitizeRows } from '../riscv/custom';
+import { sanitizeRows16 } from '../riscv/rv16/custom16';
+import { rv16Core } from '../lib/rv16/cpu';
+import { rv16Pipe } from '../lib/rv16/pipe';
 import { microController } from '../lib/multicycle';
 import { sanitizeProgram } from '../lib/ucode';
 import { singleCycleCpu } from '../lib/cpu';
@@ -106,6 +109,10 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
   if ('core' in ref) {
     const custom = sanitizeRows(ref.core.custom);
     return ref.core.pipe ? pipelinedCpu([], { adder: 'ks', ports: true, custom, ...(ref.core.m ? { m: true } : ref.core.dcache ? { dcache: 'wt' as const } : {}) }) : singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true, custom });
+  }
+  if ('core16' in ref) {
+    const custom = sanitizeRows16(ref.core16.custom);
+    return ref.core16.pipe ? rv16Pipe({ fwd: true, stall: true, flush: true, custom }) : rv16Core(true, false, '', false, custom);
   }
   return { error: 'unknown part kind' };
 }

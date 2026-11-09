@@ -5,6 +5,7 @@
 
 import { carryParts, clampSlot, parseWithOffsets, wiresOf, type CField, type CGroup, type CInstr, type ComposeIsa, type CSlot, type Parts } from '../../isa/composekit';
 import { assemble16, PSEUDO16 } from './asm16';
+import type { Custom16Row } from './custom16';
 import { BY_NAME16, CSRS16, decode16, disasm16, encCSR, encI, encJ, encR, encSB, encSH, encSIMT, encSYS, encU, INSTRS16, REG_NAMES16, SIMT_RS1, type Instr16 } from './isa16';
 
 const reg = (key: string, dest = false): CSlot => ({ key, label: key, kind: 'reg', names: REG_NAMES16, min: 0, max: 7, step: 1, dest });
@@ -27,8 +28,15 @@ function slots16(s: Instr16): CSlot[] {
 
 const INSTRS = new Map(INSTRS16.map((s): [string, CInstr] => [s.name, { id: s.name, name: s.name, slots: slots16(s) }]));
 
+/** A row as an instruction (R-type in OPX at its funct3). */
+const rowSpec = (r: Custom16Row): Instr16 => ({ name: r.name, fmt: 'R', op: 2, f3: r.f3, ext: 'custom' });
+const specOf = (id: string, rows: readonly Custom16Row[]): Instr16 | undefined => {
+  const r = rows.find((x) => x.name === id);
+  return r ? rowSpec(r) : BY_NAME16.get(id);
+};
+
 function encode16(s: Instr16, p: Parts): number {
-  const ins = INSTRS.get(s.name)!;
+  const ins = INSTRS.get(s.name) ?? { id: s.name, name: s.name, slots: slots16(s) };
   const v = (k: string) => {
     const sl = ins.slots.find((x) => x.key === k);
     return sl ? clampSlot(sl, p[k] ?? 0) : 0;
@@ -51,8 +59,8 @@ const F = (key: string, label: string, hi: number, lo: number, role: CField['rol
   ({ key, label, hi, lo, role, used, meaning, value: (w >> lo) & ((1 << (hi - lo + 1)) - 1) });
 const rn = (w: number, lo: number) => { const r = (w >> lo) & 7; return `x${r} (${REG_NAMES16[r]})`; };
 
-function fields16(w: number): CField[] {
-  const d = decode16(w), s = d.spec;
+function fields16(w: number, rows: readonly Custom16Row[] = []): CField[] {
+  const d = decode16(w, rows), s = d.spec;
   const op = F('op', 'op', 3, 0, 'op', w, s ? `${s.name}` : 'not an RV16 instruction');
   const rd = (used = true) => F('rd', 'rd', 6, 4, 'rd', w, used ? rn(w, 4) : 'ignored', used);
   const rs1 = (used = true) => F('rs1', 'rs1', 9, 7, 'rs', w, used ? rn(w, 7) : 'ignored', used);
@@ -91,29 +99,30 @@ export const GROUPS16: CGroup[] = [
   { name: 'SIMT (lanes)', ids: ['split', 'join', 'tmc', 'bar'], more: true },
 ];
 
-function loose16(word: number): { id: string; parts: Parts } | null {
-  const d = decode16(word & 0xffff);
+function loose16(word: number, rows: readonly Custom16Row[] = []): { id: string; parts: Parts } | null {
+  const d = decode16(word & 0xffff, rows);
   if (!d.spec) return null;
   const all: Parts = { rd: d.rd, rs1: d.rs1, rs2: d.rs2, csr: d.csr, imm: d.spec.fmt === 'U' ? d.imm >> 6 : d.imm };
-  return { id: d.spec.name, parts: carryParts(all, {}, INSTRS.get(d.spec.name)!) };
+  return { id: d.spec.name, parts: carryParts(all, {}, INSTRS.get(d.spec.name) ?? { id: d.spec.name, name: d.spec.name, slots: slots16(d.spec) }) };
 }
 
 const BRANCH16 = new Set(['beqz', 'bnez', 'bltz', 'bgez', 'blez', 'bgtz', 'bgt', 'ble', 'j']);
 
-/** RV16 for the instruction builder. */
-export const RV16_COMPOSE: ComposeIsa = {
+/** RV16 for the instruction builder; rows: the core's own instructions (custom16.ts), a group of their own. */
+export function rv16Compose(rows: readonly Custom16Row[] = []): ComposeIsa {
+  return {
   id: 'rv16', name: 'RV16', wordBits: 16, step: 1, start: encI(4, 3, 3, -1),
-  groups: GROUPS16,
-  instr: (id) => INSTRS.get(id),
-  encode: (id, parts) => encode16(BY_NAME16.get(id)!, parts),
+  groups: rows.length ? [GROUPS16[0], { name: 'Yours', ids: rows.map((r) => r.name) }, ...GROUPS16.slice(1)] : GROUPS16,
+  instr: (id) => { const r = rows.find((x) => x.name === id); return r ? { id: r.name, name: r.name, slots: slots16(rowSpec(r)) } : INSTRS.get(id); },
+  encode: (id, parts) => encode16(specOf(id, rows)!, parts),
   decode(word) {
-    const c = loose16(word);
-    return c && encode16(BY_NAME16.get(c.id)!, c.parts) === (word & 0xffff) ? c : null;
+    const c = loose16(word, rows);
+    return c && encode16(specOf(c.id, rows)!, c.parts) === (word & 0xffff) ? c : null;
   },
-  loose: loose16,
-  fields: fields16,
+  loose: (word) => loose16(word, rows),
+  fields: (word) => fields16(word, rows),
   imm(word) {
-    const d = decode16(word & 0xffff);
+    const d = decode16(word & 0xffff, rows);
     const src = d.spec && IMM_SRC[d.spec.fmt];
     if (!d.spec || !src) return null;
     const note = d.spec.fmt === 'U' ? 'imm[9:0] shifted up 6: the low 6 bits tied to ground'
@@ -121,18 +130,21 @@ export const RV16_COMPOSE: ComposeIsa = {
     return { wires: wiresOf(word, src.bits, 16, src.signed, src.shift), value: d.imm, text: d.spec.fmt === 'U' ? `0x${d.imm.toString(16)}` : String(d.imm), note };
   },
   text(word, pc, labels) {
-    const d = decode16(word & 0xffff);
-    const base = disasm16(word);
+    const d = decode16(word & 0xffff, rows);
+    const base = disasm16(word, undefined, rows);
     if (pc === undefined || !labels || !d.spec || (d.spec.fmt !== 'B' && d.spec.fmt !== 'J') || base === 'halt') return base;
     for (const [name, at] of labels) if (at === pc + d.imm) return base.replace(/-?\d+$/, name);
     return base;
   },
-  parse: (line, pc, labels) => parseWithOffsets(line, assemble16, 16, pc, labels, (op) => {
-    const s = BY_NAME16.get(op);
+  parse: (line, pc, labels) => parseWithOffsets(line, (src) => assemble16(src, rows), 16, pc, labels, (op) => {
+    const s = specOf(op, rows);
     return s ? s.fmt === 'B' || s.fmt === 'J' : BRANCH16.has(op) && PSEUDO16.includes(op);
   }),
   program(src) {
-    const r = assemble16(src);
+    const r = assemble16(src, rows);
     return { lines: r.lines, labels: r.labels, errors: r.errors, end: r.words.length };
   },
-};
+  };
+}
+
+export const RV16_COMPOSE: ComposeIsa = rv16Compose();

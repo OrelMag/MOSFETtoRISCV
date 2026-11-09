@@ -19,7 +19,8 @@ import { pack } from '../sim/values';
 import type { Chips, Mismatch, MonitorSim, Retired } from './cpu';
 import { partNode, refValue } from './cpu';
 import { romImage, type RomRef } from './memory';
-import type { ChipDoc, PartDoc } from './model';
+import { type ChipDoc, type PartDoc, rv16CoreOf } from './model';
+import type { Custom16Row } from '../riscv/rv16/custom16';
 import { isError, partDef } from './parts';
 import { ioNodes, ioState, type SwitchState } from './ioparts';
 import type { HierNode } from '../sim/flatten';
@@ -37,6 +38,8 @@ export interface Rv16Desc {
   switches?: true;
   /** A screen part: stores to SCREEN16_IO paint it, not the data memory (the io bench). */
   screen?: true;
+  /** The core's own instructions (a { core16 } part: riscv/rv16/custom16.ts): the golden model runs them. */
+  custom?: Custom16Row[];
 }
 
 /** The pins that make a part a core (CORE_PORTS of lib/rv16/cpu.ts). */
@@ -48,7 +51,7 @@ const isRv16Rom = (p: PartDoc): p is Rv16RomPart => 'rom' in p.ref && p.ref.rom.
 /** A part's ports (a user chip's pins, a library part's ports), or null. */
 function portsOf(p: PartDoc, chips: Chips | undefined): { name: string; dir: string; width: number }[] | null {
   if ('chip' in p.ref) return chips?.[p.ref.chip]?.pins ?? null;
-  if (!('lib' in p.ref)) return null;
+  if (!('lib' in p.ref) && !('core16' in p.ref)) return null;
   const d = partDef(p.ref, () => undefined);
   return isError(d) ? null : d.ports;
 }
@@ -71,12 +74,25 @@ export function detectRv16(doc: ChipDoc, chips?: Chips): Rv16Desc | null {
         return m ? [{ id: q.id, k: Math.round(Math.log2(Number(m[1]))) }] : [];
       });
       return {
+        ...(rv16CoreOf(p.ref)?.custom.length ? { custom: rv16CoreOf(p.ref)!.custom } : {}),
         rom: rom.id, core: p.id, system: ports.some((q) => q.name === 'irq' && q.dir === 'in'), ...(rams.length === 1 ? { ram: rams[0] } : {}),
         ...(doc.parts.some((q) => 'switches' in q.ref) ? { switches: true as const } : {}), ...(doc.parts.some((q) => 'screen' in q.ref) ? { screen: true as const } : {}),
       };
     }
   }
   return null;
+}
+
+/**
+ * The RV16 computer Custom instructions may change (editor/owninstr16.ts): the reference core or pipeline placed here, on a
+ * chip of the learner's own. Never a campaign level's or walkthrough's chip, nor a puzzle's (they are graded on what the core
+ * costs), nor the level screen.
+ */
+export function customizable16(doc: ChipDoc, chips: Chips | undefined, chipId: string, level: boolean): Rv16Desc | null {
+  if (level || /^u_(ch_|pz_|walk_)/.test(chipId)) return null;
+  const d = detectRv16(doc, chips);
+  const core = d ? doc.parts.find((p) => p.id === d.core) : undefined;
+  return core && rv16CoreOf(core.ref) ? d : null;
 }
 
 /** The program an RV16 ROM part holds, padded to the ROM's size (it wraps like the hardware). */
@@ -181,7 +197,7 @@ export class Rv16Monitor {
     this.problem = !d ? 'no RV16 ROM and core' : !this.prog ? `the program in ROM '${d.rom}' does not build` : simHasPuzzlePorts(this.es.sim) ? PUZZLE_NO_GOLDEN : simHasCardReader(this.es.sim) ? CARDS_NO_GOLDEN : null;
     // A RAM decoded on its low bits: the model's memory wraps the same way and starts with its contents.
     const data = new Map((d?.ram?.init ?? []).map((v, i) => [i, v] as [number, number]));
-    this.iss = d && this.prog && !this.problem ? new Iss16(this.prog.words, { m: true, system: d.system, screen: !!d.screen, ...(d.ram ? { dmemWords: 2 ** d.ram.k, wrap: true } : {}) }, data) : null;
+    this.iss = d && this.prog && !this.problem ? new Iss16(this.prog.words, { m: true, system: d.system, screen: !!d.screen, ...(d.custom ? { custom: d.custom } : {}), ...(d.ram ? { dmemWords: 2 ** d.ram.k, wrap: true } : {}) }, data) : null;
     this.fill(this.regQ);
   }
 
@@ -201,7 +217,7 @@ export class Rv16Monitor {
     const e = r && st ? (r.n <= st.n ? r : st) : r ?? st;
     if (!e) return null;
     const what = e === this.swWait ? `${REG_NAMES16[e.rd!]} ← the switches` : e.rd !== undefined ? `${REG_NAMES16[e.rd]} ← ${hex4(e.value)}` : `[${hex4(e.addr!)}] ← ${hex4(e.value)}`;
-    return `${what} from “${disasm16(e.instr, e.pc)}” @ ${hex4(e.pc)}`;
+    return `${what} from “${disasm16(e.instr, e.pc, this.desc?.custom)}” @ ${hex4(e.pc)}`;
   }
 
   /** A port of the core, read through the hierarchy (its outputs need not be wired to anything). */
@@ -236,7 +252,7 @@ export class Rv16Monitor {
     const iss = this.iss;
     for (let n = 0; iss && !q.length && !iss.halted && n < Rv16Monitor.QUIET; n++) {
       if (this.desc?.switches && iss.nextLoad() === MMIO16.SWITCHES) {
-        const rd = decode16(iss.imem[iss.pc] ?? 0).rd;
+        const rd = decode16(iss.imem[iss.pc] ?? 0, this.desc?.custom).rd;
         if (rd && !this.swWait && q === this.regQ) {
           // wait here for the hardware's write: it says what the switches read when the core loaded them
           this.swWait = { n: iss.steps + 1, pc: iss.pc, instr: iss.imem[iss.pc], rd, value: -1, sw: true };
@@ -287,13 +303,13 @@ export class Rv16Monitor {
     this.lastWrite = -1;
     if (!this.iss || !this.synced || this.mismatch || !('rwe' in s)) return;
     const cycle = this.es.cycles;
-    const where = (e: Expect) => `“${disasm16(e.instr, e.pc)}” @ ${hex4(e.pc)}`;
+    const where = (e: Expect) => `“${disasm16(e.instr, e.pc, this.desc?.custom)}” @ ${hex4(e.pc)}`;
     const fail = (what: string, name: string, e: Expect | undefined, got: number, detail: string) =>
-      (this.mismatch = { what, name, expected: e?.value ?? 0, got, after: e ? disasm16(e.instr, e.pc) : this.log.at(-1)?.text ?? 'the reset', cycle, detail });
+      (this.mismatch = { what, name, expected: e?.value ?? 0, got, after: e ? disasm16(e.instr, e.pc, this.desc?.custom) : this.log.at(-1)?.text ?? 'the reset', cycle, detail });
     const done = (e: Expect, effect: string) => {
       this.retired++;
       this.seq++;
-      this.log.push({ cycle, pc: e.pc, text: disasm16(e.instr, e.pc), effect });
+      this.log.push({ cycle, pc: e.pc, text: disasm16(e.instr, e.pc, this.desc?.custom), effect });
       if (this.log.length > Rv16Monitor.LOG) this.log.shift();
     };
     if (s.rwe === null || s.dwe === null || s.rwe < 0 || s.dwe < 0) return void fail('rwe', 'write enable', undefined, -1, 'rwe or dwe is X (unknown): the bench cannot tell whether the core writes');

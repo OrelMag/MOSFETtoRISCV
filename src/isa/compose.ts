@@ -7,7 +7,8 @@ import { assemble4 } from '../isa4/asm4';
 import { RV32_COMPOSE, RV64_COMPOSE, rv32Compose } from '../riscv/compose';
 import { RVC_COMPOSE } from '../riscv/composec';
 import type { CustomRow } from '../riscv/custom';
-import { RV16_COMPOSE } from '../riscv/rv16/compose16';
+import { RV16_COMPOSE, rv16Compose } from '../riscv/rv16/compose16';
+import type { Custom16Row } from '../riscv/rv16/custom16';
 import { codeOf, clampSlot, wiresOf, type CField, type CInstr, type ComposeIsa, type CSlot, type Parts, type ProgramInfo } from './composekit';
 import { ISA4_PRESET } from './presets';
 import { tableOf, type IsaDoc } from './table';
@@ -208,11 +209,11 @@ export const CPU4_COMPOSE: ComposeIsa = {
 const tables = new WeakMap<IsaDoc, ComposeIsa>();
 
 /** The builder's ISA for a ROM language ('asm', 'rv16', 'cpu4'; 'isa' with its table), or null. */
-export function composeIsaOf(lang: string, table?: IsaDoc, custom?: readonly CustomRow[], ext?: { c?: boolean; xlen?: 64 }): ComposeIsa | null {
+export function composeIsaOf(lang: string, table?: IsaDoc, custom?: readonly CustomRow[], ext?: { c?: boolean; xlen?: 64; custom16?: readonly Custom16Row[] }): ComposeIsa | null {
   if (lang === 'asm' && ext?.c) return RVC_COMPOSE;
   if (lang === 'asm' && ext?.xlen === 64) return RV64_COMPOSE;
   if (lang === 'asm') return custom?.length ? rv32Compose(custom) : RV32_COMPOSE;
-  if (lang === 'rv16') return RV16_COMPOSE;
+  if (lang === 'rv16') return ext?.custom16?.length ? rv16Compose(ext.custom16) : RV16_COMPOSE;
   if (lang === 'cpu4') return CPU4_COMPOSE;
   if (lang === 'isa' && table) {
     let c = tables.get(table);

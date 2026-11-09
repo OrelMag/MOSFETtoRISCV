@@ -4,6 +4,8 @@
 // This table is the single source of truth for the assembler, the golden model, the disassembler
 // and the instruction drills.
 
+import type { Custom16Row } from './custom16';
+
 export const OP16 = {
   SYSTEM: 0, OP: 1, OPX: 2, MD: 3, ADDI: 4, SHI: 5, LW: 6, LUI: 7,
   BEQ: 8, BNE: 9, BLT: 10, BGE: 11, JAL: 12, JALR: 13, SW: 14, /* 15: LUI (op[3] is an immediate bit) */
@@ -19,7 +21,7 @@ export interface Instr16 {
   /** SHI: the shift type in imm[5:4]; SYS: the rs2 field. */
   sub?: number;
   /** In the optional M extension (MD opcode), the system (CSR / trap) part, or the lane cores' SIMT part. */
-  ext?: 'm' | 'system' | 'simt';
+  ext?: 'm' | 'system' | 'simt' | 'custom';
 }
 
 const R = (name: string, op: number, f3: number, ext?: 'm'): Instr16 => ({ name, fmt: 'R', op, f3, ...(ext ? { ext } : {}) });
@@ -112,8 +114,8 @@ export interface Decoded16 {
   csr: number;
 }
 
-/** Decode a word. spec is null for an illegal instruction. */
-export function decode16(w: number): Decoded16 {
+/** Decode a word. spec is null for an illegal instruction. custom: the core's own rows (custom16.ts), in OPX's free funct3 values. */
+export function decode16(w: number, custom?: readonly Custom16Row[]): Decoded16 {
   w &= 0xffff;
   const f = fields16(w);
   const d: Decoded16 = { spec: null, rd: f.rd, rs1: f.rs1, rs2: f.rs2, imm: 0, csr: f.rs2 };
@@ -126,6 +128,10 @@ export function decode16(w: number): Decoded16 {
       break;
     case 1: case 2: case 3:
       spec = INSTRS16.find((i) => i.fmt === 'R' && i.op === op && i.f3 === f.f3);
+      if (!spec && op === OP16.OPX && custom?.length) {
+        const r = custom.find((x) => x.f3 === f.f3);
+        if (r) spec = { name: r.name, fmt: 'R', op, f3: r.f3, ext: 'custom' };
+      }
       break;
     case 5:
       spec = INSTRS16.find((i) => i.fmt === 'SH' && i.sub === ((w >> 14) & 3));
@@ -141,8 +147,8 @@ export function decode16(w: number): Decoded16 {
 const rn = (r: number) => REG_NAMES16[r];
 
 /** Assembly text of a word; pc (a word address) resolves branch and jump targets. */
-export function disasm16(w: number, pc?: number): string {
-  const d = decode16(w);
+export function disasm16(w: number, pc?: number, custom?: readonly Custom16Row[]): string {
+  const d = decode16(w, custom);
   const s = d.spec;
   if (!s) return `.word 0x${(w & 0xffff).toString(16).padStart(4, '0')}`;
   const tgt = (off: number) => (pc === undefined ? String(off) : `0x${((pc + off) & 0xffff).toString(16)}`);
