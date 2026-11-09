@@ -14,7 +14,7 @@ import { h } from '../dom';
 import type { Page } from './chapter';
 
 type Key = 'name' | 'cat' | 'transistors' | 'nands' | 'depth' | 'period' | 'levels' | 'parts' | 'devices' | 'watts' | 'mass';
-interface Col { k: Key; label: string; sub?: string }
+interface Col { k: Key; label: string; sub?: string; title?: string }
 /** The columns in CMOS, and in relays or tubes: devices, the same steps as time, power and mass instead of the boxes. */
 function columns(t: TechId): Col[] {
   if (t === 'cmos') {
@@ -23,7 +23,7 @@ function columns(t: TechId): Col[] {
       { k: 'cat', label: 'Category' },
       { k: 'transistors', label: 'Transistors' },
       { k: 'nands', label: 'NAND gates', sub: 'log scale' },
-      { k: 'depth', label: 'Depth', sub: 'gate delays' },
+      { k: 'depth', label: 'Depth', sub: 'NAND delays' },
       { k: 'period', label: 'Clock period', sub: 'NAND delays · MHz' },
       { k: 'levels', label: 'Levels', sub: 'boxes deep' },
       { k: 'parts', label: 'Boxes inside', sub: 'all levels' },
@@ -37,8 +37,8 @@ function columns(t: TechId): Col[] {
     { k: 'nands', label: 'NAND gates', sub: 'log scale' },
     { k: 'depth', label: 'Depth', sub: `${step}s · time` },
     { k: 'period', label: 'Clock period', sub: `${step}s · rate` },
-    { k: 'watts', label: 'Power', sub: 'average' },
-    { k: 'mass', label: 'Mass', sub: 'volume' },
+    { k: 'watts', label: 'Power', sub: 'average', title: 'Under the conditions in the note below the table' },
+    { k: 'mass', label: 'Mass', sub: 'volume', title: 'Under the conditions in the note below the table' },
   ];
 }
 const TECH_LABEL: Record<TechId, string> = { cmos: 'CMOS', relay: 'Relays', tube: 'Tubes' };
@@ -96,11 +96,11 @@ export class HwStatsPage implements Page {
       benchTabs('stats'),
       h('h1', null, 'Hardware statistics'),
       h('p', { class: 'hw-sub' }, 'Every library component and the chapters’ CPUs, measured from their own netlists: what each costs ',
-        '(transistors, NAND gates), how slow its combinational logic is (gate delays on the worst path) and, for a clocked part, ',
+        '(transistors, NAND gates), how slow its combinational logic is (NAND delays on the worst path) and, for a clocked part, ',
         'the clock period its slowest register-to-register path needs. Click a name to open it on the workbench.'),
       this.tiles,
       h('div', { class: 'hw-controls' }, search, this.techBtns, this.chips,
-        h('div', { class: 'hw-switches' }, check('Group sizes', true, (v) => { this.group = v; }), check('Show wiring parts', false, (v) => { this.wiring = v; }))),
+        h('div', { class: 'hw-switches' }, check('Group sizes', true, (v) => { this.group = v; }), check('Show splitters, mergers and wire parts', false, (v) => { this.wiring = v; }))),
       this.count, this.status,
       h('div', { class: 'hw-table-wrap' }, h('table', { class: 'hw-table' }, h('thead', null, this.head), this.body)),
       h('p', { class: 'hw-note' }, `${PS_NOTE} Depth is given for combinational parts, the period for clocked ones; switch-level parts (transistor circuits, SRAM cells) have neither.`),
@@ -123,7 +123,7 @@ export class HwStatsPage implements Page {
       this.renderTiles();
       this.renderChips();
       this.render();
-    }, (e) => { this.status.textContent = `The statistics could not be computed: ${String(e)}`; });
+    }, (e) => { this.status.textContent = `The statistics could not be computed (${String(e)}). Reload the page to try again.`; });
   }
 
   destroy(): void {
@@ -172,8 +172,8 @@ export class HwStatsPage implements Page {
     this.tiles.replaceChildren(
       tile(groupDigits(lib.length), `components (${fams} families of sizes), ${this.rows.length - lib.length} wiring parts`),
       tile(`${num(b.nands)} NANDs`, 'largest: ', link(b)),
-      tile(`${d.depth} delays`, 'deepest combinational: ', link(d)),
-      tile(`${p.period} delays`, 'slowest clock: ', link(p), ` (${mhz(p.period!)} MHz)`));
+      tile(`${d.depth} NAND delays`, 'deepest combinational: ', link(d)),
+      tile(`${p.period} NAND delays`, 'slowest clock: ', link(p), ` (${mhz(p.period!)} MHz)`));
   }
 
   private renderChips(): void {
@@ -194,7 +194,7 @@ export class HwStatsPage implements Page {
 
   private renderHead(): void {
     this.head.replaceChildren(...columns(this.tech).map((c) => {
-      const th = h('th', { scope: 'col', 'aria-sort': this.sort === c.k ? (this.dir > 0 ? 'ascending' : 'descending') : null },
+      const th = h('th', { scope: 'col', title: c.title ?? null, 'aria-sort': this.sort === c.k ? (this.dir > 0 ? 'ascending' : 'descending') : null },
         h('button', null, c.label, this.sort === c.k ? h('span', { class: 'hw-arrow' }, this.dir > 0 ? ' ▲' : ' ▼') : null, c.sub ? h('small', null, c.sub) : null));
       th.addEventListener('click', () => {
         this.dir = this.sort === c.k ? -this.dir : c.k === 'name' || c.k === 'cat' ? 1 : -1;

@@ -65,14 +65,14 @@ export class BenchmarksPage implements Page {
       h('p', { class: 'hw-sub' }, 'One fixed set of programs on every CPU the chapters build, each simulated gate by gate to its last ',
         'instruction, its final registers and memory checked against the golden model. Time is cycles × the clock period static timing ',
         'gives, so a CPU is fast only if it is short in both. Energy counts every net’s toggles, glitches included. Open a row for its cache misses, stalls and energy.'),
+      h('p', { class: 'hw-sub' }, 'CPI: clock cycles per instruction. Golden model: the instruction-set simulator every CPU on the site is checked against, instruction by instruction.'),
       this.tiles(),
       h('section', { class: 'bm-card' }, this.chartHead, this.chartBox),
       h('div', { class: 'hw-controls' }, h('span', { class: 'bm-lbl' }, 'Show'), this.metricChips, this.unit, h('span', { class: 'bm-sep' }), h('span', { class: 'bm-lbl' }, 'CPUs'), this.famChips),
       h('div', { class: 'hw-table-wrap bm-wrap' }, h('table', { class: 'hw-table bm-table' }, h('thead', null, this.head), this.body)),
       this.programs(),
       h('p', { class: 'hw-note' }, `${PS_NOTE} NAND counts include the ${RESULTS.dmemWords}-word data memory (and the caches), not the `,
-        `${RESULTS.imemWords}-word instruction ROM, whose size follows the program (a larger ROM is a deeper read tree: the single-cycle CPU’s period here is a few delays above the chapters’, which run smaller programs). The dual-core runs each program on hart 0, hart 1 parked. `,
-        'Measured by scripts/benchmarks.ts.'),
+        `${RESULTS.imemWords}-word instruction ROM, whose size follows the program (a larger ROM is a deeper read tree: the single-cycle CPU’s period here is a few delays above the chapters’, which run smaller programs). The dual-core runs each program on hart 0, hart 1 parked.`),
       h('p', { class: 'hw-note' }, `Energy at ${VDD} V: each run simulated again on the event-driven gate simulator, every net’s toggles counted. ${POWER_NOTE}`),
       this.back));
     // the way back shows only while the chart is off screen and a dot has taken the page away from it

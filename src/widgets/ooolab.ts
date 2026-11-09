@@ -80,7 +80,7 @@ export function oooLabWidget(): Widget {
   let progId = saved.prog ?? 'set';
   let asmSrc = saved.asm ?? DEFAULT_ASM, pySrc = saved.py ?? DEFAULT_PY;
   let focus = 0, from = 0, token = 0, timer = 0;
-  const kept: { name: string; cfg: Shape; cpi: number; price: Price | null }[] = [];
+  const kept: { name: string; prog: string; cfg: Shape; cpi: number; price: Price | null }[] = [];
   const baseCache = new Map<string, OooStats>();
   let last: { runs: RunOut[]; cpi: number; base: number } | null = null;
 
@@ -304,12 +304,16 @@ export function oooLabWidget(): Widget {
     tlBox.replaceChildren(tl);
   }
 
+  /** What a CPI was measured on: kept rows from different programs are not comparable. */
+  const progLabel = () => progId === 'set' ? 'benchmark set' : progId === 'asm' ? 'your assembly' : progId === 'py' ? 'your Python' : oooProgram(progId).name;
+
   function keep(): void {
     if (!last) return;
-    const i = kept.findIndex((k) => key(k.cfg) === key(cfg));
-    // kept again (to refresh its CPI after a program change): it keeps its name
-    const name = kept[i]?.name ?? LAB_PRESETS.find(([, c]) => key(c) === key(cfg))?.[0] ?? `Shape ${kept.length + 1}`;
-    const row = { name, cfg: fullShape(cfg), cpi: last.cpi, price: priceOf(cfg) };
+    const prog = progLabel();
+    const i = kept.findIndex((k) => key(k.cfg) === key(cfg) && k.prog === prog);
+    // the same shape kept again on the same program refreshes its row and keeps its name
+    const name = kept.find((k) => key(k.cfg) === key(cfg))?.name ?? LAB_PRESETS.find(([, c]) => key(c) === key(cfg))?.[0] ?? `Shape ${kept.length + 1}`;
+    const row = { name, prog, cfg: fullShape(cfg), cpi: last.cpi, price: priceOf(cfg) };
     if (i >= 0) kept[i] = row; else kept.push(row);
     if (kept.length > 8) kept.shift();
     renderKept();
@@ -317,10 +321,13 @@ export function oooLabWidget(): Widget {
 
   function renderKept(): void {
     if (!kept.length) { keptTable.replaceChildren(h('p', { class: 'sub' }, 'Keep a shape to compare it with the next.')); return; }
+    const prog = progLabel();
     keptTable.replaceChildren(h('table', { class: 'data ooo-tab num lab-kept' },
-      h('tr', null, ...['shape', 'CPI', 'NANDs', 'delays / instr', ''].map((t) => h('th', null, t))),
-      ...kept.map((k, i) => h('tr', { class: key(k.cfg) === key(cfg) ? 'ours' : '' },
+      h('tr', null, ...['shape', 'program', 'CPI', 'NANDs', 'delays / instr', ''].map((t) => h('th', null, t))),
+      ...kept.map((k, i) => h('tr', { class: `${key(k.cfg) === key(cfg) && k.prog === prog ? 'ours' : ''}${k.prog !== prog ? ' other' : ''}`,
+        title: k.prog !== prog ? `Measured on ${k.prog}, not on ${prog}: keep it again to compare` : null },
         h('td', null, h('button', { type: 'button', class: 'lab-link', title: 'Load this shape', onclick: () => { cfg = fullShape(k.cfg); changed(); } }, k.name)),
+        h('td', null, k.prog),
         h('td', null, fix(k.cpi)), h('td', null, k.price ? nands(k.price.nands) : '–'), h('td', null, k.price ? fix(k.price.period * k.cpi, 1) : '–'),
         h('td', null, h('button', { type: 'button', class: 'lab-x', 'aria-label': `Forget ${k.name}`, onclick: () => { kept.splice(i, 1); renderKept(); } }, '×'))))));
   }
@@ -338,6 +345,8 @@ export function oooLabWidget(): Widget {
       h('div', { class: 'lab-out' },
         sec('Program'), progSel, srcWrap, problemsEl,
         headline, status,
+        h('p', { class: 'sub lab-explain' }, 'Against our core: this CPI next to the default core\'s on the same program. NANDs and the period exist only for shapes ',
+          'the gate-level core can be built in (its own 2-wide ports, predictor and latencies; the window sizes vary): other shapes are timed, not priced.'),
         sec('Where the commit slots went', 'commit width × cycles; an empty slot goes to what the oldest instruction waits for'), bar, barLegend,
         h('div', { class: 'lab-two' },
           h('div', null, sec('Per program'), progTable),

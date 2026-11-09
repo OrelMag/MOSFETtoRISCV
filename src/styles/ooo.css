@@ -151,3 +151,5 @@
 
 /* The knobs stay in view while the results (the timeline, the per-program table) scroll past: change, see, change. */
 @media (min-width: 861px) { .lab-knobs { position: sticky; top: 8px; align-self: start; max-height: calc(100dvh - 16px); overflow-y: auto; } }
+/* a kept row measured on another program than the one shown: not comparable */
+.lab-kept tr.other td { color: var(--muted); font-style: italic; }
