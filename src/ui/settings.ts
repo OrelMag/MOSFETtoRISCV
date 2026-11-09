@@ -2,6 +2,7 @@
 
 import type { Radix } from '../sim/values';
 import { moveProgress, STEP_MOVES } from '../chapters/stepmoves';
+import { setLegibleOptions } from '../view/legible';
 
 export type Theme = 'auto' | 'light' | 'dark';
 /** What one slow-mode tick advances: a gate delay, a clock cycle, or a retired instruction. */
@@ -14,6 +15,9 @@ export type Palette = 'default' | 'cb' | 'lsim' | 'contrast' | 'print';
 export type WireScale = 'thin' | 'normal' | 'thick';
 /** The canvas's grid: points, lines, or a bare canvas. */
 export type GridStyle = 'dots' | 'lines' | 'off';
+/** Block names drawn at a fixed size once their own label is too small (view/legible.ts): none, 12 px, or 16 px. */
+export type ZoomNames = 'off' | 'normal' | 'large';
+const ZOOM_NAME_K: Record<ZoomNames, number> = { off: 0, normal: 1, large: 4 / 3 };
 
 /** Wire palettes (colours live in styles/palettes.css). */
 export const PALETTES: { id: Palette; name: string; blurb: string }[] = [
@@ -70,6 +74,9 @@ interface State {
   partNames: boolean;
   busValues: boolean;
   tapRanges: boolean;
+  /** Zoomed out: block names at a fixed readable size over their blocks, and text too small to read hidden (view/legible.ts). */
+  zoomNames: ZoomNames;
+  hideSmall: boolean;
   /** Prose size in the chapter pane, percent of the designed size (TEXT_SIZES); schematics never scale. */
   textSize: number;
   /** The chapter pane's text held to a comfortable line length (about 62 characters), centred where the pane is wider. */
@@ -94,7 +101,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, reduceMotion: false, wireScale: 'normal', grid: 'dots', portNames: true, partNames: true, busValues: true, tapRanges: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, reduceMotion: false, wireScale: 'normal', grid: 'dots', portNames: true, partNames: true, busValues: true, tapRanges: true, zoomNames: 'normal', hideSmall: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
 
 function load(): State {
   try {
@@ -114,18 +121,18 @@ function load(): State {
 }
 
 /** What the View options menu holds, and so what its reset puts back: never progress, the theme or the panes. */
-const VIEW_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'vividNets', 'glossary', 'simpleWires', 'autoClock', 'loadDelay', 'singleKeys', 'minimap', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'busValues', 'tapRanges', 'textSize', 'narrowText'] as const;
+const VIEW_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'vividNets', 'glossary', 'simpleWires', 'autoClock', 'loadDelay', 'singleKeys', 'minimap', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'busValues', 'tapRanges', 'zoomNames', 'hideSmall', 'textSize', 'narrowText'] as const;
 export type ViewState = Pick<State, (typeof VIEW_KEYS)[number]>;
 
 /** What a preset decides: how the circuits look and how large the prose reads, never how the site behaves (shortcuts, new wires, the clock). */
-const LOOK_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'busValues', 'tapRanges', 'textSize'] as const;
+const LOOK_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'busValues', 'tapRanges', 'zoomNames', 'hideSmall', 'textSize'] as const;
 type LookKey = (typeof LOOK_KEYS)[number];
 export type PresetId = 'standard' | 'classroom' | 'print' | 'plain';
 
 /** Each preset names only what differs from the defaults. */
 export const PRESETS: { id: PresetId; name: string; blurb: string; theme?: Theme; look: Partial<Pick<State, LookKey>> }[] = [
   { id: 'standard', name: 'Standard', blurb: 'The look the site ships with', look: {} },
-  { id: 'classroom', name: 'Classroom', blurb: 'For a projector: high contrast, thick wires, larger text, no motion', look: { palette: 'contrast', cartoon: false, wireFlow: false, reduceMotion: true, wireScale: 'thick', textSize: 120 } },
+  { id: 'classroom', name: 'Classroom', blurb: 'For a projector: high contrast, thick wires, larger text, no motion', look: { palette: 'contrast', cartoon: false, wireFlow: false, reduceMotion: true, wireScale: 'thick', zoomNames: 'large', textSize: 120 } },
   { id: 'print', name: 'Paper', blurb: 'Light and monochrome, for screenshots that will be printed: no colour fills, no grid, no motion', theme: 'light', look: { palette: 'print', vivid: false, board: false, cartoon: false, modules: false, netColors: false, wireFlow: false, reduceMotion: true, grid: 'off' } },
   { id: 'plain', name: 'Plain', blurb: 'A textbook schematic: outlined parts, one wire colour, nothing moving along the wires', look: { vivid: false, board: false, cartoon: false, modules: false, netColors: false, wireFlow: false } },
 ];
@@ -175,13 +182,15 @@ export const settings = {
   get partNames() { return state.partNames; },
   get busValues() { return state.busValues; },
   get tapRanges() { return state.tapRanges; },
+  get zoomNames() { return state.zoomNames; },
+  get hideSmall() { return state.hideSmall; },
   get textSize() { return state.textSize; },
   get narrowText() { return state.narrowText; },
   get analyzer() { return state.analyzer; },
   get speed() { return state.speed; },
   get traceLevel() { return state.traceLevel; },
   get traceRate() { return state.traceRate; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'reduceMotion' | 'wireScale' | 'grid' | 'portNames' | 'partNames' | 'busValues' | 'tapRanges' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'reduceMotion' | 'wireScale' | 'grid' | 'portNames' | 'partNames' | 'busValues' | 'tapRanges' | 'zoomNames' | 'hideSmall' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
     state[k] = v;
     // Colour per net set by hand: the vivid look no longer owns it.
     if (k === 'netColors') state.vividNets = false;
@@ -284,6 +293,8 @@ export const settings = {
 };
 
 export function applyTheme(): void {
+  // the schematics' zoomed-out names and small text (view/legible.ts): not attributes, the plan is computed per view
+  setLegibleOptions({ names: ZOOM_NAME_K[state.zoomNames] ?? 1, hideSmall: state.hideSmall !== false });
   const root = document.documentElement;
   if (state.theme === 'auto') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', state.theme);

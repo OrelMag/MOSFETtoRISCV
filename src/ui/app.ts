@@ -10,7 +10,7 @@ import { homePage } from './pages/home';
 import type { WorkbenchPage } from './pages/workbench';
 import { notes, NOTES_KEY } from './notes';
 import { focusStage, installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
-import { applyTheme, PALETTES, PRESETS, settings, TEXT_SIZES, type GridStyle, type Theme, type ViewState, type WireScale } from './settings';
+import { applyTheme, PALETTES, PRESETS, settings, TEXT_SIZES, type GridStyle, type Theme, type ViewState, type WireScale, type ZoomNames } from './settings';
 import { systemReducedMotion } from './motion';
 import { parseDrill } from './drillpath';
 import { applyPendingView, decodeView, setPendingView, splitView } from './viewlink';
@@ -219,7 +219,7 @@ export function startApp(root: HTMLElement): void {
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Reduce motion'), motionWhy));
   // Text on the schematics: fewer words on a dense level; names come back under the pointer.
-  const labelItem = (key: 'portNames' | 'partNames' | 'busValues' | 'tapRanges', title: string, about: string) =>
+  const labelItem = (key: 'portNames' | 'partNames' | 'busValues' | 'tapRanges' | 'hideSmall', title: string, about: string) =>
     h('button', { role: 'menuitemcheckbox', class: 'pal-flow', 'data-label': key, onclick: () => { settings.set(key, !settings[key]); applyTheme(); } },
       h('span', { class: 'pal-flow-sw' }, h('i')),
       h('span', null, h('b', null, title), h('small', null, about)));
@@ -228,7 +228,10 @@ export function startApp(root: HTMLElement): void {
     labelItem('partNames', 'Part names', 'Block and instance names; off, pointing at a part shows them once it is large enough to read'),
     labelItem('busValues', 'Bus values', 'Live values on the buses, standing or riding along'),
     labelItem('tapRanges', 'Bit ranges', 'Where a bus is tapped ([7:0]); off, shown on a net you point at or select'),
+    labelItem('hideSmall', 'Hide unreadable text', 'Zoomed out, text under 7 px on screen is left out; off, every label stays however small'),
   ];
+  // Zoomed out, a block's name is drawn at a fixed size over it (view/legible.ts): how large, or not at all.
+  const namesRow = choiceRow<ZoomNames>('Names when zoomed out', () => settings.zoomNames, (v) => settings.set('zoomNames', v), [['off', 'Off'], ['normal', 'Normal'], ['large', 'Large']]);
   // Both live elsewhere too: M and the minimap's own button, the switch on the key sheet.
   const minimapItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('minimap', !settings.minimap) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
@@ -244,7 +247,7 @@ export function startApp(root: HTMLElement): void {
     syncTools();
     undoItem.focus();
   } }, 'Reset view options to defaults');
-  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, modItem, netItem, flowItem, wiresRow.row, gridRow.row, motionItem, palHead('Labels'), ...labelItems, palHead('Behaviour'), simpleItem, clockItem, delayItem, minimapItem, singleItem, resetItem);
+  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, modItem, netItem, flowItem, wiresRow.row, gridRow.row, motionItem, palHead('Labels'), ...labelItems, namesRow.row, palHead('Behaviour'), simpleItem, clockItem, delayItem, minimapItem, singleItem, resetItem);
   const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: presets, text size, wire colours and thickness, the look of parts, grid, motion, labels, and how the circuits behave', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
   const palOpen = (on: boolean) => {
     palMenu.classList.toggle('open', on);
@@ -291,6 +294,7 @@ export function startApp(root: HTMLElement): void {
     for (const b of labelItems) b.setAttribute('aria-checked', String(settings[b.dataset.label as 'portNames']));
     wiresRow.sync();
     gridRow.sync();
+    namesRow.sync();
     const sysMotion = systemReducedMotion();
     motionItem.setAttribute('aria-checked', String(sysMotion || settings.reduceMotion));
     motionItem.disabled = sysMotion;
