@@ -364,7 +364,7 @@ export const chSilicon: Chapter = {
         <p>That is the whole path: a voltage-controlled switch, a NAND, gates, adders, latches, memories, an ALU, a single-cycle RISC-V, a pipeline, interrupts,
         multiplication, caches, microcode, floating point, several instructions a cycle out of order, two cores, and geometry on a wafer. Every value on every wire along the way was computed, not drawn, and every box can still be opened all the way down to
         the four transistors of a NAND.</p>
-        <p>Four chapters stay with this machine: <a href="#/c/fpga/0">chapter ${numOf('fpga')}</a> puts the same design on an FPGA, <a href="#/c/verify/0">chapter ${numOf('verify')}</a> asks how anyone knows it works,
+        <p>Four chapters stay with this machine: <a href="#/c/fpga/0">chapter ${numOf('fpga')}</a> puts the same design on a chip that is configured rather than made for it, <a href="#/c/verify/0">chapter ${numOf('verify')}</a> asks how anyone knows it works,
         <a href="#/c/sidechan/0">chapter ${numOf('sidechan')}</a> finds what it leaks while working, and <a href="#/c/power/0">chapter ${numOf('power')}</a> measures what all of this costs in energy, toggle by toggle, and how a chip spends less.
         The journey goes on with the same bricks arranged for throughput: <a href="#/c/lanes/0">chapters ${numOf('lanes')}</a>–${numOf('graphics')} build a GPU, from lanes sharing
         one instruction stream to a rasterizer drawing into a frame buffer. <a href="#/c/dram/0">Chapters ${numOf('dram')}</a>–${numOf('bus')} go below the caches: a DRAM
