@@ -244,16 +244,16 @@ export const chIO: Chapter = {
       scene: () => cpuScene({ source: sys('leds'), system: true }),
       tour: {
         beats: [
-          { title: 'Switches at 0x5A', reset: true, set: { switches: 0x5a }, cycles: 5, show: ['io'], expect: { leds: 0x5a, pcOut: 20 },
-            say: '<p>With the switches at 0x5A, one pass of the loop (<code>lw</code>, two instructions on a copy that is never used, <code>sw</code>) has copied them to the LEDs: leds = {v:leds} ({b:leds}).</p>' },
+          { title: 'Switches at 0x5A', reset: true, set: { switches: 0x5a }, cycles: 3, show: ['io'], expect: { leds: 0x5a, pcOut: 12 },
+            say: '<p>With the switches at 0x5A, one pass of the loop (<code>lw</code>, then <code>sw</code>) has copied them to the LEDs: leds = {v:leds} ({b:leds}).</p>' },
           { title: 'Flip them', set: { switches: 0xa5 }, cycles: 1, show: ['io'], expect: { leds: 0x5a },
             say: '<p>The switches are now 0xA5, but the LEDs still show {v:leds}: the program has not read the switches again yet. Nothing links the two except the loop.</p>' },
-          { title: 'The loop catches up', cycles: 4, show: ['io'], expect: { leds: 0xa5, pcOut: 20 },
-            say: '<p>One more pass and the LEDs follow: leds = {v:leds}. The response time is 4 to 8 cycles here, depending on where the loop was.</p>' },
+          { title: 'The loop catches up', cycles: 2, show: ['io'], expect: { leds: 0xa5, pcOut: 12 },
+            say: '<p>One more pass and the LEDs follow: leds = {v:leds}. The response time is 2 to 4 cycles here, depending on where the loop was.</p>' },
         ],
       },
       more: {
-        derive: `<p>The loop is five instructions (<code>lw</code>, <code>not</code>, <code>andi</code>, <code>sw</code>, <code>j</code>), so the LEDs follow the switches in 4 to 8 cycles: a flip just after the <code>lw</code> samples waits for the next pass, then for its <code>sw</code>. At the scene's 2 Hz clock that is visible; at a hardware clock of tens of MHz it is not.</p>`,
+        derive: `<p>The loop is three instructions (<code>lw</code>, <code>sw</code>, <code>j</code>), so the LEDs follow the switches in 2 to 4 cycles: a flip just before the <code>lw</code> shows two cycles later, one just after it waits for the next pass, then for its <code>sw</code>. At the scene's 2 Hz clock that is visible; at a hardware clock of tens of MHz it is not.</p>`,
         pitfall: `<p>Expecting an input to be latched. If the switches change and change back between two loads, the program never sees it. Real devices that must not miss events latch them in a status register, or raise an interrupt (the next chapter).</p>`,
       },
       tries: [(st) => st.value('leds') > 0],
