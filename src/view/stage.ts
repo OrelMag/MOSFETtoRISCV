@@ -2204,6 +2204,11 @@ export class Stage {
     }
   }
 
+  /** The whole scene's switching activity since it loaded (or a Reset, a step back, Restart): the Power panel's. Null off GateSim. */
+  power(): LivePower | null {
+    return this.rootCtx ? this.livePower(this.rootCtx, this.rootCtx.node) : null;
+  }
+
   /** The scene's switching activity for a node of its own gate-level simulation (an opened NAND's or ROM's sub-simulation has none). */
   private livePower(ctx: ViewCtx, node: HierNode): LivePower | null {
     const sim = this.sim;
