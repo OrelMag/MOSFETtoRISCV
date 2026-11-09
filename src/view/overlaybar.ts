@@ -74,7 +74,7 @@ export function nextOverlay(cur: OverlayKind | null, refusals: Partial<Record<Ov
 /** The legend: the bands with their text values and counts, what is measured, and a button that turns it off. */
 export function overlayLegend(r: OverlayResult, close: () => void): HTMLElement {
   const L = r.legend;
-  return h('div', { class: 'ov-legend', role: 'region', 'aria-label': `${L.title} overlay legend` },
+  return h('div', { class: 'ov-legend', role: 'region', 'aria-label': `${L.title} overlay legend`, title: `${L.rows.map((r) => `${r.label}: ${r.count}`).join(' · ')}. ${L.note}` },
     h('div', { class: 'ov-lh' }, h('b', null, L.title), h('small', null, L.unit),
       h('button', { class: 'ov-x', title: 'Turn the overlay off (Shift O)', 'aria-label': 'Turn the overlay off', onclick: (e: Event) => { e.stopPropagation(); close(); } }, '×')),
     h('ul', { class: 'ov-rows' }, L.rows.map((row) => h('li', null,

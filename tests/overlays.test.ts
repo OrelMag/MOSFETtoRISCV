@@ -91,3 +91,19 @@ describe('overlays', () => {
     expect(overlayRefusal('unknown', { level: 'switch', engine: 'nmos' })).toMatch(/NMOS/);
   });
 });
+
+describe('O / Shift O', () => {
+  it('cycles through the overlays that apply, from the last one used; Shift O turns it off', async () => {
+    const { nextOverlay } = await import('../src/view/overlaybar');
+    const none = {};
+    expect(nextOverlay('slack', none, false)).toBe('activity');
+    expect(nextOverlay('unknown', none, false)).toBe('slack');
+    expect(nextOverlay('slack', none, true)).toBe(null);
+    // a switch-level scene: Slack and Activity do not apply
+    const sw = { slack: 'x', activity: 'x' };
+    expect(nextOverlay('load', sw, false)).toBe('unknown');
+    expect(nextOverlay('unknown', sw, false)).toBe('load');
+    expect(['load', 'unknown']).toContain(nextOverlay(null, sw, false));
+    expect(nextOverlay(null, { slack: 'x', activity: 'x', load: 'x', unknown: 'x' }, false)).toBe(null);
+  });
+});

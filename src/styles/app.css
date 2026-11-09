@@ -1216,6 +1216,10 @@ svg.schematic.ov :is(.wire-flow, .flow-tokens) { display: none; }
 .ov-rows li { display: flex; align-items: center; gap: 6px; }
 .ov-rows b { font: 600 11.5px var(--font-mono); min-width: 5.6em; }
 .ov-note { margin: 6px 0 0; color: var(--text-2); line-height: 1.4; }
+/* no free corner for the whole legend (Stage.placeLegend): the bands in two columns, the note left to the title's tooltip */
+.ov-legend:is(.compact, .mini) .ov-note, .ov-legend.mini :is(.ov-rows, .ov-lh small) { display: none; }
+.ov-legend.compact .ov-rows { grid-template-columns: 1fr 1fr; column-gap: 10px; }
+.ov-legend.compact .ov-rows b { min-width: 0; }
 @media (max-width: 760px) {
   .ov-legend { left: 8px; right: 8px; bottom: 8px; max-width: none; padding: 6px 8px; }
   .ov-rows { grid-template-columns: 1fr 1fr; column-gap: 10px; }

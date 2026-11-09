@@ -248,6 +248,9 @@ export class Stage {
   private ovLast = 0;
   private ovTimer = 0;
   private ovListeners = new Set<() => void>();
+  /** While a legend shows: the panels and notes it keeps clear of change size (a fold, a panel filling in) → placed again. */
+  private ovRO: ResizeObserver | null = null;
+  private ovRaf = 0;
   private moreMenu: HTMLElement;
   /** The bar's buttons fitBar may move into More, in that order, with what each does there. */
   private shedGroups: { els: HTMLElement[]; items: { label: string; hint?: string; icon: string; on?: () => boolean; run: () => void }[] }[] = [];
@@ -2332,25 +2335,37 @@ export class Stage {
 
   /**
    * The legend goes in the first corner where it covers no panel, challenge note or Why? card: bottom right (clear of
-   * the right-docked panels), bottom left, top left under the level badge, top right; none free, bottom right. On a
-   * phone app.css lays it across the bottom.
+   * the right-docked panels), bottom left, top left under the level badge, top right. None free: the same corners with
+   * the legend compact (its note left to the tooltip), then down to its title line, then the corner where it covers the least. On a phone app.css
+   * lays it across the bottom.
    */
   private placeLegend(): void {
     const L = this.ovLegend;
     if (!L) return;
     L.style.cssText = '';
+    L.classList.remove('compact', 'mini');
     if (window.matchMedia('(max-width: 760px)').matches) return;
     const c = this.canvas.getBoundingClientRect();
     const blocks = [...this.panels.map((p) => p.el), this.why.el, ...this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')]
       .map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
     const spots = ['', 'left:12px;right:auto', 'left:12px;right:auto;top:44px;bottom:auto', 'top:44px;bottom:auto'];
-    for (const css of spots) {
-      L.style.cssText = css;
-      const r = L.getBoundingClientRect();
-      const inside = r.left >= c.left && r.right <= c.right && r.top >= c.top && r.bottom <= c.bottom;
-      if (inside && !blocks.some((b) => r.left < b.right && b.left < r.right && r.top < b.bottom && b.top < r.bottom)) return;
+    let best = { css: '', size: '', cost: Infinity };
+    for (const size of ['', 'compact', 'mini']) {
+      L.classList.remove('compact', 'mini');
+      if (size) L.classList.add(size);
+      for (const css of spots) {
+        L.style.cssText = css;
+        const r = L.getBoundingClientRect();
+        const out = Math.max(0, c.left - r.left) + Math.max(0, r.right - c.right) + Math.max(0, c.top - r.top) + Math.max(0, r.bottom - c.bottom);
+        let cost = out * 1e4;
+        for (const b of blocks) cost += Math.max(0, Math.min(r.right, b.right) - Math.max(r.left, b.left)) * Math.max(0, Math.min(r.bottom, b.bottom) - Math.max(r.top, b.top));
+        if (cost === 0) return;
+        if (cost < best.cost) best = { css, size, cost };
+      }
     }
-    L.style.cssText = '';
+    L.classList.remove('compact', 'mini');
+    if (best.size) L.classList.add(best.size);
+    L.style.cssText = best.css;
   }
 
   /** Live overlays (Activity, Unknown) follow the simulation, at most every 100 ms; a level redrawn without its marks gets them back. */
@@ -2410,6 +2425,13 @@ export class Stage {
     else if (old) old.remove();
     else if (this.ovLegend) this.canvas.append(this.ovLegend);
     this.placeLegend();
+    this.ovRO?.disconnect();
+    if (this.ovLegend) {
+      this.ovRO ??= new ResizeObserver(() => {
+        if (!this.ovRaf) this.ovRaf = requestAnimationFrame(() => { this.ovRaf = 0; this.placeLegend(); });
+      });
+      for (const el of [...this.panels.map((p) => p.el), this.why.el, ...this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')]) this.ovRO.observe(el);
+    }
     // the legend came or went: a fitted circuit moves clear of it
     if (!!old !== !!this.ovLegend) this.view.setCover(this.covers(), true);
   }

@@ -157,7 +157,7 @@ export function loadOverlay(design: FlatDesign, node: HierNode): OverlayResult {
   return {
     kind: 'load', inst: new Map(), net,
     legend: {
-      title: 'Load', unit: 'NAND inputs a wire drives (its busiest bit)',
+      title: 'Load', unit: 'NAND inputs driven (busiest bit)',
       rows: [`> ${4 * B}`, `${2 * B + 1}–${4 * B}`, `${B}–${2 * B}`, `2–${B - 1}`, '0–1'].map((l, b) => ({ band: b, label: l, count: plural(hist(net, b), 'wire') })),
       note: `From ${B} inputs on, a buffer in front of the wire makes it faster (the load-dependent delay model). About ${ONE_INPUT.toFixed(1)} fF an input with its wire, illustrative 28 nm. Counted from the structure: no simulation.`,
     },
