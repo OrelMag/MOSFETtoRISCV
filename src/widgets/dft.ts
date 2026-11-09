@@ -24,7 +24,7 @@ const n0 = (n: number) => groupDigits(n);
 const model = (def: ComponentDef): FaultModel => { const m = faultModel(def); if (typeof m === 'string') throw new Error(m); return m; };
 const btn = (label: string, f: () => void, cls = 'btn sm') => { const b = h('button', { class: cls }, label); b.addEventListener('click', f); return b; };
 const sidePanel = (cls: string, title: string, ...kids: (Node | string)[]) =>
-  h('div', { class: `mem-panel cpu-panel mc-panel vf-side ${cls}`, 'data-dock': 'right', 'data-fold': 'narrow' }, h('h4', null, title, h('span', { class: 'fold-hint' })), ...kids);
+  h('div', { class: `mem-panel cpu-panel mc-panel vf-side ${cls}`, 'data-dock': 'right' }, h('h4', null, title, h('span', { class: 'fold-hint' })), ...kids);
 
 /** A fault of a model as a planted one: an input bit by its port, a NAND by its instance path (under `prefix`). */
 export function siteFault(m: FaultModel, i: number, prefix: string[] = []) {
@@ -172,13 +172,13 @@ const bistPanel: ScenePanel = (stage: Stage) => {
     ...m.faults.map((_, i) => h('option', { value: String(i) }, `${faultName(m, i)}${escapes.has(i) ? ' (escapes)' : ''}`))) as HTMLSelectElement;
   sel.value = String(bistPick);
   sel.addEventListener('change', () => { bistPick = Number(sel.value); stage.load(bistScene()); });
-  const out = h('div', { class: 'vf-status', role: 'status' }, `Press Self-test: reset loads the pattern generator with 1, then ${BIST_PATTERNS} clocks; the good signature is ${good}.`);
+  const out = h('div', { class: 'vf-status', role: 'status' }, `Press Self-test: reset loads the pattern generator with 1, then ${BIST_PATTERNS} clocks; the good signature is ${good} (0x${good.toString(16)}).`);
   const run = () => {
     stage.checkpoint();
     stage.setInput('rst', 1); stage.pulse(); stage.setInput('rst', 0);
     stage.runCycles(BIST_PATTERNS);
     const sig = stage.value('sig');
-    out.replaceChildren(h('b', { class: sig === good ? 'vf-pass' : 'vf-fail' }, sig === good ? 'PASS' : 'FAIL'), ` signature ${sig}, good ${good}.${sig === good && bistPick >= 0 ? ' The fault changed some sums, but the signature came out the same: it escaped.' : ''}`);
+    out.replaceChildren(h('b', { class: sig === good ? 'vf-pass' : 'vf-fail' }, sig === good ? 'PASS' : 'FAIL'), ` signature ${sig} (0x${sig.toString(16)}), good ${good} (0x${good.toString(16)}).${sig === good && bistPick >= 0 ? ' The fault changed some sums, but the signature came out the same: it escaped.' : ''}`);
     stage.refresh();
   };
   return { el: sidePanel('vf-bist', 'Self-test', sel, btn('Self-test', run, 'btn sm primary'), out) };

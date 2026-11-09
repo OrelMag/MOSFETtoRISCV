@@ -6,20 +6,21 @@ import { RATIOS } from '../src/comm/asyncfifo';
 import { readings, worstError } from '../src/comm/graybus';
 import { chClocks } from '../src/chapters/ch-comm-clocks';
 import { chapterById } from '../src/chapters';
+import { numOf } from '../src/chapters/order';
 import { asyncFifo, INV_CMOS, SCHMITT, syncN } from '../src/lib';
 import { metrics } from '../src/phys/inverter';
 import { KEEPER, thresholds } from '../src/phys/schmitt';
 import { TAU_PS } from '../src/phys/metastable';
 import { stats } from '../src/sim/stats';
 
-describe('chapter 42 typed numbers', () => {
-  it('is chapter 42, nine steps, and builds on earlier chapters', () => {
-    expect(chClocks.num).toBe(42);
+describe("the clocks chapter's place", () => {
+  it('sits where order.ts puts it, nine steps, building on earlier chapters', () => {
+    expect(chClocks.num).toBe(numOf('clocks'));
     expect(chClocks.steps).toHaveLength(9);
     expect(chapterById('clocks')).toBe(chClocks);
-    for (const id of chClocks.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(42);
-    expect(chapterById('latches')!.num).toBe(8);
-    expect(chapterById('wire')!.num).toBe(41);
+    for (const id of chClocks.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(chClocks.num);
+    expect(chapterById('latches')!.num).toBe(numOf('latches'));
+    expect(chapterById('wire')!.num).toBe(numOf('wire'));
   });
   it('step 1: the 0.5 V spike is inside the noise margin', () => {
     const m = metrics(1);

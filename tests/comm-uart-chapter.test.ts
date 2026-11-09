@@ -3,10 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { tolerance, UART_8N1 } from '../src/comm/startstop';
 import { bytesPerSecond, divisorFor, fifoBudget } from '../src/comm/uart';
 import { chUart } from '../src/chapters/ch-comm-uart';
+import { numOf } from '../src/chapters/order';
 
-describe('chapter 43 typed numbers', () => {
-  it('is chapter 43, eight steps, building on the chapters before it', () => {
-    expect(chUart.num).toBe(43);
+describe("the UART chapter's place", () => {
+  it('sits where order.ts puts it, eight steps, building on the chapters before it', () => {
+    expect(chUart.num).toBe(numOf('uart'));
     expect(chUart.steps.length).toBe(8);
     expect(chUart.builds).toEqual(expect.arrayContaining(['clocks', 'bus']));
     expect(chUart.recap!.check!.length).toBe(3);

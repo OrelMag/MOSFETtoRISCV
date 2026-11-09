@@ -37,6 +37,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "ooo": () => import('./ch-ooo').then((m) => m.chOoo),
   "multicore": () => import('./ch-multicore').then((m) => m.chMulticore),
   "silicon": () => import('./ch-silicon').then((m) => m.chSilicon),
+  "verify": () => import('./ch-verify').then((m) => m.chVerify),
   "lanes": () => import('./ch-gpu').then((m) => m.chLanes),
   "simt": () => import('./ch-gpu').then((m) => m.chSimt),
   "warps": () => import('./ch-gpu').then((m) => m.chWarps),
