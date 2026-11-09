@@ -79,7 +79,9 @@ export function nextAvailable(view: ProgressView, unlockAll = false, after?: str
   const from = after ? order.findIndex((n) => n.id === after) + 1 : 0;
   const rotated = [...order.slice(from), ...order.slice(0, from)];
   const open = (n: CampaignNode) => !n.soon && ['available', 'started'].includes(statusOf(n, view, unlockAll));
-  return rotated.find((n) => !n.optional && open(n)) ?? rotated.find(open);
+  // Continue (no level just passed): a required level the learner began comes first, wherever it is on the map
+  const begun = after ? undefined : rotated.find((n) => !n.optional && open(n) && view(n.id)?.status === 'started');
+  return begun ?? rotated.find((n) => !n.optional && open(n)) ?? rotated.find(open);
 }
 
 /** Nodes that list `id` among their requirements. */
