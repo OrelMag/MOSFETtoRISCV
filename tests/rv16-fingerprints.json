@@ -137,6 +137,7 @@
   "cp_m_bus": "b602449d",
   "cp_m_dma": "544005db",
   "cp_m_flash": "00d006f3",
-  "cp_sp_goertzel": "4bb64495"
+  "cp_sp_goertzel": "4bb64495",
+  "cp_x_core": "29ce3e97"
  }
 }
