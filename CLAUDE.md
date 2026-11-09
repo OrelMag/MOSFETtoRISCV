@@ -1166,6 +1166,14 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  runTest (Check's seqStart / seqStep, keeping every output), fillOutputs (plain rows' outputs from a run),
                  starterTest; testsui.ts: plugin, the Tests pane in slots.bottom (a tab per table, text beside its rows,
                  run after every edit up to AUTO_STEPS, Fill outputs from the circuit, a failing row → the test player)
+  breakpoints.ts breakpoints (ChipDoc.breaks: a condition or a PC, `off`, `gate`; kept out of the compile hash like tests):
+                 breakexpr.ts the condition language (DOM-free: == != < <= > >=, & | ^ ~, && || !, x[3] / x[7:4], rose / fell
+                 / changed, any radix; BigInt, unknown bits tracked: an unknown condition never stops); Breakpoints resolves
+                 names (pin, pointer, part.port, a path into placed chips: resolveName) on each build, checks after every
+                 rising edge (edgeHooks) or, `gate` in gate mode, after every gate delay (EditorSim.tickHooks), and asks
+                 EditorSim.requestStop: Run / runCycles stop once the step is complete, like a halt part (stopReason);
+                 pcRetired for the CPU drawer's gutter; breakui.ts: plugin, the Breakpoints props section (the list; on a
+                 selected pin / pointer / wire the ones reading it and Stop when <name>…), the stopping one's wires lit
   puzzleui.ts    plugin: the Puzzles drawer, the start dialog (puzzles/start.ts candidates), and while a puzzle chip
                  (u_pz_<id>) is open the strip: brief, tests (a click plays one: puzzles/replay.ts), Check, score
                  against par, the cycles / NANDs chart, Show answer, Do it for me; PUZZLE IN gets the selected test's
