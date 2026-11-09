@@ -12,7 +12,7 @@
 // cell: a behaviour with no inputs) is folded into the truth tables.
 
 import { flatten, type FlatDesign } from './flatten';
-import type { ComponentDef } from './types';
+import { isExternal, type ComponentDef } from './types';
 
 export interface Lut {
   /** The net it drives. */
@@ -72,8 +72,10 @@ export function lutMap(src: ComponentDef | FlatDesign, opts: LutMapOptions = {})
     if (l.kind === 'nand') { gateOf[l.outputs[0][0]] = i; nands.push(i); return; }
     if (l.kind !== 'behavior') throw new Error(`lutMap: a ${l.kind} leaf (${l.node.path.join('.')}): map gate-level designs only`);
     const ins = l.inputs.flat();
-    if (!ins.length && l.def.behavior?.eval && !l.def.behavior.seq) {
-      const v = l.def.behavior.eval([], undefined as never) as number[];
+    // a tie cell: no inputs, no state, not the world outside (a key, a switch bank, a screen keep state or are poked)
+    const bh = l.def.behavior;
+    if (!ins.length && bh?.eval && !bh.seq && !bh.init && !isExternal(l.def)) {
+      const v = bh.eval([], undefined as never) as number[];
       l.outputs.forEach((o, p) => o.forEach((n, b) => consts.set(n, ((v[p] >> b) & 1) as 0 | 1)));
       return;
     }

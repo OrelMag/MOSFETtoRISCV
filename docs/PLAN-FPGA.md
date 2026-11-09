@@ -7,7 +7,7 @@ memories are blocks of RAM, configured in milliseconds rather than manufactured 
 **Status: APPROVED by the author on 2026-11-09 as shown in the mockup, with every recommended decision below**, including the
 order silicon → fpga → verify (chapter id `fpga`; Ross's verification chapter `verify` follows it). Built in stages, each a tip:
 1. sim/lutmap.ts + lib/fpga.ts with tests ✅ (feat/fpga-lut)
-2. CI numbers: nextpnr-himbaechel + Apicula in a workflow, fpgacosts.json pinned (parse the workflow YAML before merging)
+2. CI numbers: nextpnr-himbaechel + Apicula in a workflow, fpgacosts.json pinned ✅ (feat/fpga-pnr: scripts/fpga-pnr.ts, .github/workflows/fpga.yml)
 3. The chapter (numOf everywhere; every "to be measured" cell measured before it reaches the prose)
 4. Codex entries, the side level and the drill
 
