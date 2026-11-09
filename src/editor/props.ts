@@ -417,7 +417,7 @@ export class PropsPanel {
     const swatch = h('span', { class: 'sb-hue', style: `--chip-h:${doc.hue ?? 250}` });
     hue.addEventListener('input', () => swatch.setAttribute('style', `--chip-h:${hue.value}`));
     hue.addEventListener('change', () => editDoc({ hue: Number(hue.value) }));
-    const notes = h('textarea', { rows: '3', placeholder: 'What it does, how to use it…' }, doc.notes ?? '') as HTMLTextAreaElement;
+    const notes = h('textarea', { rows: '3', placeholder: 'What it does, how to use it…', 'aria-label': 'Notes' }, doc.notes ?? '') as HTMLTextAreaElement;
     notes.addEventListener('change', () => editDoc({ notes: notes.value.trim() || undefined }));
     const ports = c?.def.ports ?? [];
     const out = this.section('Chip',

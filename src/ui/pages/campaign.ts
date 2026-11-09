@@ -177,9 +177,9 @@ export class CampaignPage implements Page {
     const cap = a === 'n' && b && !nodeById(b) ? [...CAPSTONES, ...COMM_CAPSTONES, ...DSP_CAPSTONES].find((c) => c.id === b && c.route) : undefined;
     if (cap) { location.replace(cap.route!); return; }
     // an address that names no level or entry: the shared notice, with the way back, not the map under a wrong address
-    if (a === 'n' && b && !nodeById(b)) this.main.replaceChildren(notFound(`No level called “${b}”`, 'The address may be stale or mistyped.', [['Open the campaign map', '#/campaign'], ['Open the codex', '#/campaign/codex']]));
-    else if (a === 'codex' && b && b !== ANALOGY_INDEX_ID && b !== MODELS_INDEX_ID && !codexById(b)) this.main.replaceChildren(notFound(`No codex entry called “${b}”`, 'The address may be stale or mistyped.', [['Open the codex', '#/campaign/codex'], ['Open the campaign map', '#/campaign']]));
-    else if (a && a !== 'n' && a !== 'codex' && a !== 'intro') this.main.replaceChildren(notFound(`No campaign page called “${a}”`, 'The map, the intro and the codex are the pages here.', [['Open the campaign map', '#/campaign'], ['Open the codex', '#/campaign/codex']]));
+    if (a === 'n' && b && !nodeById(b)) this.main.replaceChildren(notFound(`No level called “${b}”`, 'The address may be stale or mistyped.', [['Open the campaign map', '#/campaign'], ['Open the codex', '#/campaign/codex']], 'h2'));
+    else if (a === 'codex' && b && b !== ANALOGY_INDEX_ID && b !== MODELS_INDEX_ID && !codexById(b)) this.main.replaceChildren(notFound(`No codex entry called “${b}”`, 'The address may be stale or mistyped.', [['Open the codex', '#/campaign/codex'], ['Open the campaign map', '#/campaign']], 'h2'));
+    else if (a && a !== 'n' && a !== 'codex' && a !== 'intro') this.main.replaceChildren(notFound(`No campaign page called “${a}”`, 'The map, the intro and the codex are the pages here.', [['Open the campaign map', '#/campaign'], ['Open the codex', '#/campaign/codex']], 'h2'));
     else if (a === 'intro') this.main.replaceChildren(this.introView());
     else if (a === 'codex') this.main.replaceChildren(this.codexView(b));
     else this.main.replaceChildren(this.mapView(a === 'n' ? b : undefined));

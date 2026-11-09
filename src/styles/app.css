@@ -1419,6 +1419,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 /* ---------- widgets ---------- */
 .widget { padding: 20px; max-width: 980px; margin: 0 auto; }
 .widget h3 { margin: 0 0 4px; font-size: 16px; }
+.widget .nf-title { margin: 0 0 4px; font-size: 16px; }
 .widget .sub { color: var(--text-2); font-size: 14px; margin: 0 0 14px; }
 .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
 .wgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
