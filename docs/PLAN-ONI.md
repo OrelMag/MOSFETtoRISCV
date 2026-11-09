@@ -190,10 +190,17 @@ hand-edited chip.
 
 ---
 
-## Open questions for the author
+## Decisions (author, 2026-11-09)
 
-1. A: is merging a cut trunk into its nearest branch acceptable? The alternative is to refuse a cut through a
-   branched trunk and say so.
-2. B: should breakpoints also exist on chapter scenes outside the CPU panel (any stage, from the Timing panel)?
-3. C: which overlays make the first cut? Suggested: Slack, Activity, Load, Unknown. Energy and Clock come second.
-4. D: should faults be available in campaign levels (a "break it" mode), or only in the sandbox?
+1. A: a cut through a branched trunk **splits it and keeps both sides** (each side merged into its nearest
+   branch), as described above.
+2. B: breakpoints go in the **sandbox and the CPU panels** (the sandbox's CPU drawer and the chapters' CPU panel).
+   Other chapter stages are left out for now.
+3. C: the first version has **Slack, Activity, Load and Unknown**. Energy and Clock come in a second round.
+   Mockup first.
+4. D: faults go in the **sandbox and a campaign "break it" mode**. A level can plant faults (`sim/faults.ts`
+   entries in the level's BuildChallenge) for the learner to locate. The learner answers by naming the faulty
+   net, or by pointing at it with the fault tool's pick, and the answer is checked against the planted fault.
+   This builds on the bug-hunt levels (13 fix-the-fault levels): the faults move out of hand-edited reference
+   chips into planted entries. It needs its own short design (UI of the answer, grading, which levels) before
+   it is built, after the sandbox brush ships.
