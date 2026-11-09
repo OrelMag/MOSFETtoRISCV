@@ -240,7 +240,7 @@ export const CASES0: Record<string, LevelCase> = {
   m_lut: {
     problem: 'A truth table of four inputs is 16 bits. Store them and let the inputs pick one, and the circuit computes whatever function the bits say: this is the look-up table an FPGA is made of, thousands of them, each set by its configuration bits when the chip powers on.',
     without: 'Every function would need its own gates, fixed when the chip is made: changing the logic would mean a new chip.',
-    cost: 'Fifteen 2:1 muxes, 60 NANDs and 16 configuration bits, whatever the function: a full adder\'s sum (9 NANDs drawn as gates) costs a whole LUT, and so does a four-input function that would take dozens. Each extra input doubles both.',
+    cost: 'Fifteen 2:1 muxes, 60 NANDs and 16 configuration bits, whatever the function: the 9-NAND full adder takes two LUTs, one for the sum and one for the carry, and a four-input function that would take dozens of NANDs still takes one. Each extra input doubles the bits and the multiplexer.',
     alts: [{ name: 'A two-input LUT (4 bits)', lib: 'lut2' }, { name: 'The full adder in gates', lib: 'full_adder' }],
   },
   d_lut: {
