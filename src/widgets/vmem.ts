@@ -75,7 +75,7 @@ export function spacesWidget(): Widget {
     const strip = h('div', { class: 'vm-frames' }, ...p.frames.map((f, i) => h('div', { class: `vm-frame ${f ? `p${f}` : 'free'}` }, h('b', null, f ?? ''), h('span', null, `frame ${i}`), h('span', { class: 'a' }, hex(i * 4096, 4)))));
     const writes = scheme === 'none'
       ? h('p', { class: 'sub' }, 'Both programs run ', h('code', null, 'sw 0(zero)'), ' with their own data: A stores 7, then B stores 9 at address 0. Reading address 0, A now finds ', h('b', { class: 'bad' }, '9'), '.')
-      : h('p', { class: 'sub' }, 'Both run ', h('code', null, 'sw 0(zero)'), ': A\'s address 0 is frame 0 (', h('code', null, hex(0, 4)), '), B\'s is frame 4 (', h('code', null, hex(4 * 4096, 5)), '). A reads back its own ', h('b', { class: 'good' }, '7'), '.');
+      : h('p', { class: 'sub' }, 'Both run ', h('code', null, 'sw 0(zero)'), ': A\'s address 0 is frame 0 (', h('code', null, hex(0, 4)), '), B\'s is frame 4 (', h('code', null, hex(4 * 4096, 4)), '). A reads back its own ', h('b', { class: 'good' }, '7'), '.');
     out.replaceChildren(strip, writes, h('p', { class: p.fits ? 'sub' : 'sub bad' }, p.fits ? '' : 'Does not fit. ', p.note),
       h('div', { class: 'legend rb-legend' }, ...[['pA', 'program A'], ['pB', 'program B'], ['pC', 'program C'], ['free', 'free']].map(([c, l]) => h('span', null, h('i', { class: `vm-frame ${c}` }), l))));
   };
@@ -318,7 +318,7 @@ export function costWidget(): Widget {
     const rel = (n: number) => `${n >= 0 ? '+' : '−'}${groupDigits(Math.abs(n))}`;
     const base = tlbNands(2);
     out.replaceChildren(
-      h('p', { class: 'sub' }, `${PATTERNS.find((p) => p[0] === pattern)![2]}; ${pages} pages = ${pages * 4} KiB of data. ${groupDigits(N)} data accesses through the entries' round-robin replacement; each miss costs one walk of ${WALK_CYCLES} cycles on the gates. The benchmark programs make ${per.toFixed(2)} loads and stores per instruction.`),
+      h('p', { class: 'sub' }, `${PATTERNS.find((p) => p[0] === pattern)![2].replace(/^./, (c) => c.toUpperCase())}; ${pages} pages = ${pages * 4} KiB of data. ${groupDigits(N)} data accesses through the entries' round-robin replacement; each miss costs one walk of ${WALK_CYCLES} cycles on the gates. The benchmark programs make ${per.toFixed(2)} loads and stores per instruction.`),
       h('div', { class: 'scroll' }, h('table', { class: 'data vm-costtab' },
         h('tr', null, ['entries in each TLB', 'miss rate', 'cycles per instruction', 'NANDs, both TLBs', 'against 4 entries'].map((x) => h('th', null, x))),
         ...rows.map((r) => h('tr', { class: r.ours ? 'ours' : '' }, h('td', null, `${r.e}${r.ours ? ' (ours)' : ''}`), h('td', null, `${(100 * r.m.rate).toFixed(r.m.rate < 0.01 ? 2 : 1)} %`), h('td', null, r.cpi.toFixed(3)), h('td', null, groupDigits(r.nands)), h('td', null, r.ours ? '' : rel(r.nands - base))))

@@ -86,9 +86,9 @@ export const chVmem: Chapter = {
       },
       {
         question: 'The handler of a page fault writes a new page-table entry and returns with mret, but leaves out sfence.vma. On this hardware, what can go wrong?',
-        options: ['Nothing: a fault never fills a TLB, so no stale entry exists for that page', 'The new mapping is ignored forever', 'The CPU stalls', 'The walker writes the entry back wrongly'],
+        options: ['Nothing: a walk that finds no valid entry fills no TLB entry, so no stale one exists for that page', 'The new mapping is ignored forever', 'The CPU stalls', 'The walker writes the entry back wrongly'],
         answer: 0,
-        explain: 'The walk that faulted filled no entry (a failing walk leaves both TLBs as they were), so the retry walks again and finds the new entry. The omission bites when an entry already in the page table is changed or removed: a TLB may still hold the old translation until sfence.vma. A handler should still issue it, because the specification does not promise what a TLB caches.',
+        explain: 'The walk that faulted filled no entry (a walk that finds no valid entry leaves both TLBs as they were), so the retry walks again and finds the new entry. The omission bites when an entry already in the page table is changed or removed: a TLB may still hold the old translation until sfence.vma. A handler should still issue it, because the specification does not promise what a TLB caches.',
         why: ['', 'It is not ignored: the next walk reads the new entry from memory.', 'A stall lasts only as long as a walk (a few cycles).', 'The walker is read-only; it never writes a page table (software sets A and D).'],
       },
     ],
@@ -101,7 +101,7 @@ export const chVmem: Chapter = {
         way both start at address 0. Put them in one memory and the second one's first store lands on the first one's data. The programs did
         nothing wrong; the machine gave them the same addresses.</p>
         <p>The oldest fix is a <strong>base register</strong>: every address the program issues is added to a number the machine holds for it, so
-        program B's address 0 is physical 0x3000. It works, and it protects: a limit register refuses addresses beyond the program's size. It
+        program B's address 0 is physical 0x4000. It works, and it protects: a limit register refuses addresses beyond the program's size. It
         costs one adder in the address path. What it cannot do is move a program in pieces. Each program must sit in one contiguous run of memory,
         and after programs have come and gone the free space is scattered: in the widget, three frames are free but not three in a row, so a third
         program does not fit though there is room.</p>
@@ -258,8 +258,8 @@ export const chVmem: Chapter = {
         the trap, ${RUN.pager.traps[0].handlerSteps} instructions of handler, and the walks that the flush forces afterwards: the run makes ${RUN.pager.imiss + RUN.pager.dmiss} walks for the three pages it uses (code and the two new ones), where the previous scene, with its three pages already mapped, makes ${RUN.walk.imiss + RUN.walk.dmiss}.</p>
         <p>This is <strong>demand paging</strong>: nothing is mapped until the first touch. A real system adds a disk: the handler reads the page in from there, the program waits for milliseconds instead of cycles,
         and when frames run short the handler takes one from another page and writes its contents out first.</p>
-        <p>Two details of this hardware. All traps go to machine mode, with the page table's owner running untranslated, so a handler never faults itself. And a failing walk fills no TLB entry: the
-        retry walks again and finds the new entry.</p>`,
+        <p>Two details of this hardware. All traps go to machine mode, with the page table's owner running untranslated, so a handler never faults itself. And a walk that finds no valid entry fills nothing in the TLB: the
+        retry walks again and finds the new entry. (A page that exists but is forbidden is different: its entry is cached, and the permission check refuses it from there.)</p>`,
       scene: () => vmScene(VM_PAGER, [], ['csr', 'trap', 'mmu']),
       lit: 'The CSRs, the trap unit and the MMU',
       challenge: {
