@@ -21,6 +21,7 @@ import { cacheExplorer, dramWidget, hierarchyWidget } from '../widgets/cache';
 import { hierarchy3d } from '../widgets/hierarchy3d';
 import { DEFAULT_HITS, amatCycles } from '../widgets/hierarchy3ddata';
 import { withModel } from '../widgets/modelhost';
+import { findIt } from '../widgets/findfault';
 import { cpuScene } from '../widgets/cpupanel';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -36,6 +37,19 @@ function netAt(st: Stage, path: string[], net: string): number {
 }
 
 const csrc = (id: string) => CACHE_CPU_PROGRAMS.find((p) => p.id === id)!.source;
+
+/** Find it: the CPU with a cache whose stall is stuck (sim/faults.ts), never drawn. */
+const FIND_CACHE = findIt({
+  source: csrc('reuse'), dcache: true, adder: 'ks',
+  planted: [{ kind: 'stuck0', end: 'dm.stall' }],
+  goal: 'Find the planted fault: name the wire and the value it is stuck at.',
+  hints: [
+    'Every store comes out right; the first wrong register is written by <code>lw t1, 0(t0)</code>, which read 0 where memory holds 4.',
+    'The loads miss at the start of each line. On a miss the cache needs several cycles to bring the line from memory. What makes the CPU wait for it?',
+    'The cache\'s <code>stall</code> output freezes the CPU during a miss. It is stuck at 0.',
+  ],
+  fault: 'The cache\'s <code>stall</code> was stuck at 0: on a miss the CPU never waited for the line to arrive from memory, and a load took whatever the cache had before it came. The first load reads a[0], which is 0, so a wrong 0 looked right; the second, a[1] = 4, gave it away. Stores still went through to memory (write-through), so only loads showed it.',
+});
 
 // Numbers the prose quotes, computed from the circuits and models rather than typed.
 const ff = stats(DFFE).transistors;
@@ -158,7 +172,7 @@ export const chCache: Chapter = {
       },
     ],
   },
-  parts: [['Memory cells', 6], ['How a cache works', 4], ['A CPU with a cache', 3], ['Fetch and the pipeline', 2], ['Average access time', 1]],
+  parts: [['Memory cells', 6], ['How a cache works', 4], ['A CPU with a cache', 3], ['Fetch and the pipeline', 2], ['Average access time', 1], ['Find the fault', 1]],
   steps: [
     {
       title: 'Six transistors per bit',
@@ -862,6 +876,20 @@ export const chCache: Chapter = {
         why: ['That charges an L1 miss only the L2 hit time, and forgets the 20 % of L2 accesses that go on to DRAM.', '', 'That sends every L1 miss straight to DRAM, as if there were no L2.', 'That adds the three latencies, as if every access went all the way to DRAM.'],
         explain: 'L2 AMAT = 12 + 0.2 × 250 = 62. L1 AMAT = 4 + 0.05 × 62 = 7.1 cycles. The DRAM latency of 250 cycles is diluted by two levels of hits to under twice the L1 hit time.',
       },
+    },
+    {
+      title: 'Find it: a cache that does not wait',
+      deep: true,
+      body: `
+        <p>The CPU with its data cache, summing an array twice, with one wire stuck at 0 or 1. The cache and the CPU keep a contract:
+        on a hit the word is ready in the same cycle, on a miss the CPU waits until it is. Find the wire that breaks it.</p>
+        <p>Press <strong>Run to halt</strong> (or <strong>Step</strong>) in the CPU panel. After every cycle it compares the registers with the
+        golden model, so it stops at the first instruction the hardware got wrong, and names the register, both values and the instruction.
+        Read that line as a clue: which instruction, which register, which value instead of which. Then right-click the wire you suspect and
+        choose <strong>It is stuck at 0 here</strong> or <strong>… at 1</strong> (a bus asks for the bit). A wrong guess costs nothing: the
+        panel runs the same program with the fault you named instead and says where that one would first show, which is a clue too.</p>`,
+      scene: FIND_CACHE.scene,
+      challenge: FIND_CACHE.challenge,
     },
   ],
 };

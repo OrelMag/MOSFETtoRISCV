@@ -176,6 +176,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Run real programs", challenge: "reach" },
     { title: "What sets the period", challenge: "quiz" },
     { title: "Your own instruction", challenge: "reach" },
+    { title: "Find it: a stuck wire", challenge: "reach" },
   ] },
   { id: "python", num: 15, title: "From Python to gates", blurb: "A Python program compiled to RV32I by the site's own compiler and run on the gate-level CPU, line by line down to the toggles.", level: "Software", builds: ["isa","cpu"], recap: {"checks":3}, steps: [
     { title: "One program, three languages" },
@@ -211,6 +212,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Does it pay? Measured", challenge: "quiz" },
     { title: "Your own instruction, pipelined" },
     { title: "A compiled program on the pipeline", challenge: "quiz" },
+    { title: "Find it: a pipeline that cannot wait", challenge: "reach" },
   ] },
   { id: "pipepay", num: 18, title: "Making the pipeline pay", blurb: "Balance the stages, then predict branches: measured, step by step.", level: "Processor", builds: ["pipeline","fastadd"], recap: {"checks":3}, steps: [
     { title: "Look-ahead forwarding" },
@@ -241,6 +243,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A request that waits", challenge: "reach" },
     { title: "Inside the trap unit" },
     { title: "Precise traps in a pipeline", challenge: "quiz" },
+    { title: "Find it: a handler that returns to the wrong place", challenge: "reach" },
   ] },
   { id: "muldiv", num: 21, title: "Multiply & divide", blurb: "Array and Wallace-tree multipliers, Baugh–Wooley and Booth, restoring, non-restoring and SRT division, and the M extension in the single-cycle and pipelined CPUs.", level: "Arithmetic", builds: ["adders","fastadd","pipeline","python","io"], recap: {"checks":4}, steps: [
     { title: "Long multiplication is AND and add", challenge: "reach" },
@@ -287,6 +290,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Caching instructions too", challenge: "quiz" },
     { title: "A cache in the pipeline", challenge: "quiz" },
     { title: "Average memory access time", challenge: "quiz" },
+    { title: "Find it: a cache that does not wait", challenge: "reach" },
   ] },
   { id: "multicycle", num: 23, title: "Multicycle & microcode", blurb: "One ALU and one memory port reused over several short cycles, sequenced by a hardwired state machine or by microcode.", level: "Processor", builds: ["registers","cpu"], recap: {"checks":3}, steps: [
     { title: "Several short cycles" },
@@ -296,6 +300,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Same CPU, microprogrammed" },
     { title: "Was it worth it?", challenge: "quiz" },
     { title: "Paint the microcode", challenge: "reach" },
+    { title: "Find it: a register that never holds", challenge: "reach" },
   ] },
   { id: "float", num: 24, title: "Floating point", blurb: "IEEE 754 from the bits up: unpack, align, add or multiply, normalize, round in five modes with exception flags, and an FPU in the CPU.", level: "Arithmetic", builds: ["muldiv","pipeline"], recap: {"checks":3}, steps: [
     { title: "Scientific notation in binary", challenge: "quiz" },

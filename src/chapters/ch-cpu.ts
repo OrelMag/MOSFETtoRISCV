@@ -9,6 +9,7 @@ import { logicDepth, stats } from '../sim/stats';
 import { netlistOf } from '../sim/types';
 import { pack } from '../sim/values';
 import { cpuScene } from '../widgets/cpupanel';
+import { findIt } from '../widgets/findfault';
 import { memGridPanel } from '../widgets/memgrid';
 import { OWN_COST, ownInstrScene, ownInstrSolved, solveOwnInstr } from '../widgets/owninstr';
 import { controlPanel, CONTROL_SOURCE, CPU_NANDS, cpuPeriodWidget, PERIOD } from '../widgets/cpucost';
@@ -22,6 +23,19 @@ import { numOf } from './order';
 
 const { control: CONTROL_NANDS, and5: AND5_NANDS, lwx: LWX_NANDS } = OWN_COST;
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
+
+/** Find it: the single-cycle CPU with one wire stuck (sim/faults.ts), never drawn. */
+const FIND_CPU = findIt({
+  source: src('sum'),
+  planted: [{ kind: 'stuck0', end: 'ctl.aluSrcB' }],
+  goal: 'Find the planted fault: name the wire and the value it is stuck at.',
+  hints: [
+    'The first wrong register is written by <code>li t0, 1</code>, which is <code>addi t0, zero, 1</code>: an instruction with an immediate. The <code>add</code> instructions come later.',
+    'addi\'s second ALU operand should be the immediate, not a register. One control signal chooses between the two at the SrcB multiplexer.',
+    'The control unit\'s <code>aluSrcB</code> output: right-click its wire and choose stuck at 0.',
+  ],
+  fault: 'The control unit\'s <code>aluSrcB</code> was stuck at 0, so the ALU\'s second operand was always rs2, never the immediate. In <code>addi t0, zero, 1</code> the immediate\'s low bits sit where an R-type keeps rs2\'s number: 1, register x1 (ra), which holds 0, so t0 became 0 + 0. The first instruction, <code>li a0, 0</code>, went wrong the same way, but its right answer is also 0: a fault shows only where it changes a value.',
+});
 const fmt = groupDigits;
 
 /** The 32 × 32 register file's NANDs by part: registers w1…w31, read ports rp1 / rp2, the rest (decoder). */
@@ -1036,6 +1050,22 @@ export const chSingleCycle: Chapter = {
         answer: 'Set <code>write rd</code> to yes and <code>result</code> to memory (ALU A = rs1, ALU B = rs2 and ALU op = add stay): rd ← mem[rs1 + rs2]. Build the CPU, run to halt: the sum, 3 + 5 + … + 17 = 80, ends in mem[0]. The control unit grows by 14 NANDs.',
         solve: solveOwnInstr,
       },
+    },
+    {
+      title: 'Find it: a stuck wire',
+      deep: true,
+      body: `
+        <p>The same CPU again, with one thing changed: somewhere in it one wire is stuck at 0 or at 1, as a broken transistor or a short
+        to a rail would leave it. Nothing on the drawing says where. Your job is to find it, the way a chip is debugged: run a program
+        whose right answer you know and look at the first place the machine disagrees.</p>
+        <p>Press <strong>Run to halt</strong> (or <strong>Step</strong>) in the CPU panel. After every cycle it compares the registers with the
+        golden model, so it stops at the first instruction the hardware got wrong, and names the register, both values and the instruction.
+        Read that line as a clue: which instruction, which register, which value instead of which. Then right-click the wire you suspect and
+        choose <strong>It is stuck at 0 here</strong> or <strong>… at 1</strong> (a bus asks for the bit). A wrong guess costs nothing: the
+        panel runs the same program with the fault you named instead and says where that one would first show, which is a clue too.</p>
+        <p>The program is the sum loop of 1 to 10. The fault is not in the register file or the ALU: they compute what they are told.</p>`,
+      scene: FIND_CPU.scene,
+      challenge: FIND_CPU.challenge,
     },
   ],
 };

@@ -11,6 +11,7 @@ import { netlistOf, outPorts } from '../sim/types';
 import { h } from '../ui/dom';
 import type { Stage, Widget } from '../view/stage';
 import { cpuScene } from '../widgets/cpupanel';
+import { findIt } from '../widgets/findfault';
 import { PY_PROGRAMS } from '../lang/pyprograms';
 import { pyScene } from '../widgets/python';
 import { assembly3d } from '../widgets/assembly3d';
@@ -50,6 +51,19 @@ export const HAZARDS = `# every kind of hazard, in order
         addi t6, zero, 98    # flushed
 skip:   addi a0, t5, 1
 halt:   j    halt`;
+
+/** Find it: the pipeline with its stall enables stuck (sim/faults.ts), never drawn. */
+const FIND_PIPE = findIt({
+  source: HAZARDS, pipeline: true,
+  planted: [{ kind: 'stuck1', end: 'hz.enFD' }, { kind: 'stuck1', end: 'hz.enPC' }],
+  goal: 'Find the planted fault: name a wire and the value it is stuck at.',
+  hints: [
+    'Forwarding works: <code>add</code> and <code>sub</code> come out right. The first wrong register is written by the <code>addi</code> just after the load.',
+    'A load\'s value does not exist until Memory has read it, so the instruction after it must wait a cycle. What has to happen for an instruction to wait in Decode?',
+    'To hold, the PC and the F/D register must not load. The hazard unit\'s <code>enFD</code> (or <code>enPC</code>) is stuck at 1.',
+  ],
+  fault: 'The hazard unit\'s <code>enFD</code> and <code>enPC</code> were stuck at 1: the PC and the F/D register could never hold. At the load-use pair the hazard unit still saw the hazard and put a bubble into Execute, but with nothing held, the bubble took the <code>addi</code>\'s place instead of going in front of it: the addi was lost and t5 kept its 0. Either wire, named stuck at 1, counts.',
+});
 
 /** The assembly line's programs (the step's and the codex model page's, so both show the same three). */
 export const ASSEMBLY_PROGRAMS: readonly AssemblyProgram[] = [
@@ -476,6 +490,22 @@ export const chPipeline: Chapter = {
         explain: 'Forwarding moves a result from a later stage register to an earlier stage\'s input in the same cycle; a load\'s value does not exist until Memory has read the RAM. The hazard unit holds the add in Decode one cycle and sends a bubble down behind the load. An add feeding an add needs no bubble: its result exists at the end of Execute.',
         why: ['', 'A load occupies each stage for one cycle; the cost is the dependent instruction waiting.', 'Stores do not wait for branches; branches only squash what is behind them.', 'Instruction and data memories are separate (Harvard), which is why a load never stalls the fetch.'],
       },
+    },
+    {
+      title: 'Find it: a pipeline that cannot wait',
+      deep: true,
+      body: `
+        <p>The pipeline again, running the program with every kind of hazard, with one fault planted in it: a control wire stuck at 0
+        or 1, which nothing on the drawing shows. Find it.</p>
+        <p>Press <strong>Run to halt</strong> (or <strong>Step</strong>) in the CPU panel. After every cycle it compares the registers with the
+        golden model, so it stops at the first instruction the hardware got wrong, and names the register, both values and the instruction.
+        Read that line as a clue: which instruction, which register, which value instead of which. Then right-click the wire you suspect and
+        choose <strong>It is stuck at 0 here</strong> or <strong>… at 1</strong> (a bus asks for the bit). A wrong guess costs nothing: the
+        panel runs the same program with the fault you named instead and says where that one would first show, which is a clue too.</p>
+        <p>In a pipeline the panel compares the registers when an instruction leaves Write-back, so the cycle it names is when the wrong
+        value retired, a few cycles after the stage that went wrong.</p>`,
+      scene: FIND_PIPE.scene,
+      challenge: FIND_PIPE.challenge,
     },
   ],
 };

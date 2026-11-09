@@ -7,10 +7,24 @@ import { PROGRAMS } from '../riscv/programs';
 import { h } from '../ui/dom';
 import type { Scene, Stage, Widget } from '../view/stage';
 import { controllerPanel, cpuScene } from '../widgets/cpupanel';
+import { findIt } from '../widgets/findfault';
 import type { Chapter } from './types';
 import { numOf } from './order';
 
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
+
+/** Find it: the multicycle CPU with one wire stuck (sim/faults.ts), never drawn. */
+const FIND_MC = findIt({
+  source: src('sum'), multicycle: 'fsm',
+  planted: [{ kind: 'stuck1', end: 'ir.en' }],
+  goal: 'Find the planted fault: name the wire and the value it is stuck at.',
+  hints: [
+    'The very first instruction, <code>li a0, 0</code>, already writes a wrong value, 0xc, where its immediate is 0: the register file wrote what the CPU decoded.',
+    'Between Fetch and Write-back the CPU decodes the instruction from one register, held across the steps. When should that register load?',
+    'The instruction register should load in Fetch only. Its enable, <code>ir.en</code>, is stuck at 1.',
+  ],
+  fault: 'The instruction register\'s enable was stuck at 1: the IR loaded a word from memory at every clock edge, not only in Fetch. By the time the state machine reached Execute and Write-back, the IR held another word than the one fetched, so the first instruction to write a register already wrote a wrong value. The state machine itself was right: it was decoding the wrong word.',
+});
 
 /** Cycles an instruction takes: Fetch and Decode, then the states from its dispatch target until the table returns to Fetch
  *  (`mem`: the state a load or store goes to after MemAdr). */
@@ -348,6 +362,21 @@ export const chMulticycle: Chapter = {
           st.load(sc);
         },
       },
+    },
+    {
+      title: 'Find it: a register that never holds',
+      deep: true,
+      body: `
+        <p>The multicycle CPU with its hardwired state machine, running the sum loop, with one wire stuck at 0 or 1 somewhere. In this
+        CPU values live in registers between the steps of an instruction, and every one of those registers loads only when the state
+        machine says so: that is the place to look.</p>
+        <p>Press <strong>Run to halt</strong> (or <strong>Step</strong>) in the CPU panel. After every cycle it compares the registers with the
+        golden model, so it stops at the first instruction the hardware got wrong, and names the register, both values and the instruction.
+        Read that line as a clue: which instruction, which register, which value instead of which. Then right-click the wire you suspect and
+        choose <strong>It is stuck at 0 here</strong> or <strong>… at 1</strong> (a bus asks for the bit). A wrong guess costs nothing: the
+        panel runs the same program with the fault you named instead and says where that one would first show, which is a clue too.</p>`,
+      scene: FIND_MC.scene,
+      challenge: FIND_MC.challenge,
     },
   ],
 };

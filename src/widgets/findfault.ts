@@ -44,6 +44,27 @@ const stateOf = (stage: Stage, spec: FindSpec): State => {
 const MENU_BITS = 32;
 const same = (a: readonly number[], b: readonly number[]) => a.length === b.length && [...a].sort((x, y) => x - y).every((v, i) => v === [...b].sort((x, y) => x - y)[i]);
 
+/**
+ * Is an accusation right? Only one of the planted faults, exactly: the same value on the same flat nets (a fault planted
+ * on two nets, as the pipeline's two stall enables, is found by either). On a CPU a neighbouring net that happens to show
+ * the same symptom does not count, as on the campaign's CPU bench.
+ */
+export function accusedRight(planted: readonly FlatFault[], kind: 'stuck0' | 'stuck1', nets: readonly number[]): boolean {
+  return planted.some((f) => f.kind === kind && same(f.nets, nets));
+}
+
+/**
+ * What a wrong accusation's fault would have done to the program (`would`) beside what this CPU did (`planted`), both
+ * computed by firstWrong. The same first symptom is said so: another fault can look alike at first.
+ */
+export function wouldText(would: FirstWrong | null, planted: FirstWrong | null): string {
+  const here = planted ? ` This CPU: ${planted.text} (cycle ${planted.cycle}).` : '';
+  if (!would) return `with it, this program would run right to the end.${here}`;
+  if (planted && would.text === planted.text && would.cycle === planted.cycle)
+    return `it would first show exactly as this CPU does (${would.text}, cycle ${would.cycle}), but it is another wire: what else could give that value?`;
+  return `the first wrong instruction would be different: ${would.text} (cycle ${would.cycle}).${here}`;
+}
+
 /** The panel: how to accuse, every accusation so far with what that fault would do, and the fault once found. */
 export function findPanel(spec: FindSpec): ScenePanel {
   return (stage: Stage): Widget => {
@@ -60,7 +81,7 @@ export function findPanel(spec: FindSpec): ScenePanel {
     const accuse = (nets: readonly number[], name: string, kind: 'stuck0' | 'stuck1') => {
       const p = planted();
       if (!p) return;
-      const right = p.length === 1 && p[0].kind === kind && same(p[0].nets, nets);
+      const right = accusedRight(p, kind, nets);
       // what this fault would do to the same program: the CPU without the planted fault, with this one instead
       const would = right ? null : firstWrong(plantedDef(spec.healthy(), (n) => (n.parent === null ? [{ kind, nets }] : []), 'accused'), spec.words, spec.iss, { inputs: spec.inputs, pipelined: spec.pipelined });
       st.tries.push({ name, kind, right, would });
@@ -85,10 +106,7 @@ export function findPanel(spec: FindSpec): ScenePanel {
         const v = t.kind === 'stuck0' ? 0 : 1;
         if (t.right) return h('li', { class: 'good' }, `✓ ${t.name} stuck at ${v}: that is the fault.`);
         plantedWrong ??= firstWrong(plantedDef(spec.healthy(), (n) => (n.parent === null ? planted() ?? [] : []), 'planted'), spec.words, spec.iss, { inputs: spec.inputs, pipelined: spec.pipelined });
-        const here = plantedWrong ? ` This CPU: ${plantedWrong.text} (cycle ${plantedWrong.cycle}).` : '';
-        return h('li', { class: 'bad' }, `✗ ${t.name} stuck at ${v}: `, t.would
-          ? `the first wrong instruction would be different: ${t.would.text} (cycle ${t.would.cycle}).${here}`
-          : `with it, this program would run right to the end.${here}`);
+        return h('li', { class: 'bad' }, `✗ ${t.name} stuck at ${v}: ${wouldText(t.would, plantedWrong)}`);
       });
       body.replaceChildren(
         st.found
@@ -107,13 +125,18 @@ export function findPanel(spec: FindSpec): ScenePanel {
 
 /** The step's challenge: name the planted fault. Show answer says what it was; Do it for me names it (helped). */
 export function findChallenge(spec: FindSpec, goal: string, hints: string[]): Challenge {
-  return {
+  const ch: Challenge = {
     kind: 'reach', goal, hints,
     check: (stage) => states.get(stage)?.get(spec)?.found === true,
     answer: spec.fault,
     solve: (stage) => { const s = stateOf(stage, spec); s.found = true; s.helped = true; stage.refresh(); },
   };
+  findSpecs.set(ch, spec);
+  return ch;
 }
+
+/** A find-it challenge's spec (tests: every chapter's planted fault shows, and only there). */
+export const findSpecs = new WeakMap<Challenge, FindSpec>();
 
 /**
  * A chapter's find-it step from its CPU scene's options: the scene (the CPU with the fault planted, the Find the fault
