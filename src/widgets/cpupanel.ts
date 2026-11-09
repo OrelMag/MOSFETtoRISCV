@@ -166,6 +166,11 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     const status = holdHeight(h('div', { class: 'cpu-status' }));
     // On a halt, in words: how long it ran, and the answer when the program names its register (Program.result).
     const haltLine = h('div', { class: 'cpu-halt', role: 'status', hidden: true });
+    // PC breakpoints (a click on a line's gutter, kept while the scene is open): Run to halt, Slow and the stage's Run stop
+    // after the edge on which the golden model retires that instruction
+    const bps = new Set<number>();
+    let bpHit: number | null = null;
+    const bpLine = h('div', { class: 'cpu-halt cpu-bp-hit', role: 'status', hidden: true });
     const listing = h('div', { class: 'cpu-listing' });
     const regs = h('div', { class: 'cpu-regs' });
     const mem = h('div', { class: 'cpu-mem' });
@@ -215,12 +220,13 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       if (running) return stopRun();
       slowCtl.stop();
       slowCtl.tracing = false;
+      bpHit = null;
       // Back after a run returns to where it started.
       stage.checkpoint();
       runBtn.textContent = 'Stop';
       const tick = () => {
-        stage.runCycles(opts.ooo ? 2 : opts.pipeline ? 3 : opts.m || opts.fpu || opts.dcache || opts.icache || opts.multicycle ? 10 : 4, () => iss.halted);
-        if (iss.halted || mismatch || stage.cycles > 20000) return stopRun();
+        stage.runCycles(opts.ooo ? 2 : opts.pipeline ? 3 : opts.m || opts.fpu || opts.dcache || opts.icache || opts.multicycle ? 10 : 4, () => iss.halted || bpHit !== null);
+        if (iss.halted || mismatch || bpHit !== null || stage.cycles > 20000) return stopRun();
         running = requestAnimationFrame(tick);
       };
       running = requestAnimationFrame(tick);
@@ -230,7 +236,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     /** Cycles and instructions differ only when an instruction can take several cycles. */
     const multiCycle = !!(opts.pipeline || opts.ooo || opts.multicycle || opts.m || opts.dcache || opts.icache);
     const finished = () => iss.halted || !!mismatch || stage.cycles > 20000;
-    const slowCtl = slowControls(stage, { multiCycle, finished, onStart: () => stopRun() });
+    const slowCtl = slowControls(stage, { multiCycle, finished, onStart: () => { stopRun(); bpHit = null; bpLine.hidden = true; } });
 
     // Errors go to the gutter as you type (debounced) and below the box on Assemble & load.
     const errBox = h('div', { class: 'asm-errors' });
@@ -298,7 +304,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     const body = h('div', { class: 'cpu-body' },
       h('div', { class: 'param-row', style: 'margin-bottom:6px' }, ...(opts.extraPanels?.length ? [] : [sel, editBtn]), runBtn),
       slowCtl.el,
-      editWrap, hwNote, status, haltLine, now,
+      editWrap, hwNote, status, haltLine, bpLine, now,
       h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its hardware')), listing, usePath,
       h('div', { class: 'cpu-sec' }, 'Fields', h('span', { class: 'cpu-sec-hint' }, 'point at a field: its wires')), fieldsBox,
       ...(narrKind ? [h('div', { class: 'cpu-sec' }, 'Narrate', h('span', { class: 'cpu-sec-hint' }, narrKind === 'cycle' ? 'this cycle, stage by stage' : 'the last instruction, unit by unit')), narrBox] : []),
@@ -316,6 +322,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     let willRetire = 0;
     stage.edgeHooks.add({
       before: () => {
+        // a new edge: the run that stopped on a breakpoint has moved on
+        if (bpHit !== null) { bpHit = null; bpLine.hidden = true; }
         willRetire = stage.sim ? retireCount(stage.sim) : 0;
         stallRun = stage.sim && cacheStall(stage.sim) ? stallRun + 1 : 0;
         if (opts.dcache && stage.sim) {
@@ -335,6 +343,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       after: () => {
         if (willRetire) slowCtl.retired();
         if (!willRetire || iss.halted || !stage.sim) return;
+        const hitBefore = bpHit;
         let stepped = ''; // the instruction the model ran last: the one a mismatch is "after"
         for (let k = 0; k < willRetire && !iss.halted; k++) {
           const before = narrKind === 'instr' ? [...iss.x] : null;
@@ -344,6 +353,13 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
           log.push({ cycle: stage.cycles, pc: info.pc, text: info.text, effect: stepEffect(info) });
           if (log.length > LOG_MAX) log.shift();
           logSeq++;
+          if (bps.has(info.pc >>> 0) && bpHit === null) bpHit = info.pc >>> 0;
+        }
+        if (bpHit !== null && hitBefore === null) {
+          bpLine.hidden = false;
+          bpLine.textContent = `Stopped: breakpoint at ${hex(bpHit, 4)} retired after cycle ${groupDigits(stage.cycles)}`;
+          // after this edge is over: the stage's Run and Slow stop where they are (Run to halt checks bpHit itself)
+          queueMicrotask(() => { if (stage.clockRunning) stage.stopClock(); slowCtl.stop(); });
         }
         if (!mismatch) {
           const x = cpuState(stage.sim).x;
@@ -473,7 +489,9 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       const keepScroll = listing.scrollTop;
       listing.replaceChildren(...asm.lines.map((l) => {
         const sel = l.addr === selPc;
-        const line = h('div', { class: `ln${l.addr === shownPc ? ' cur' : ''}${sel ? ' sel' : ''}`, title: 'Show the hardware this instruction uses' },
+        const bpG = h('button', { class: 'bp-g', title: 'Breakpoint: stop when this instruction retires', 'aria-label': `Breakpoint at ${hex(l.addr, 4)}`, 'aria-pressed': String(bps.has(l.addr)) });
+        bpG.addEventListener('click', (e) => { e.stopPropagation(); if (!bps.delete(l.addr)) bps.add(l.addr); update(); });
+        const line = h('div', { class: `ln${l.addr === shownPc ? ' cur' : ''}${sel ? ' sel' : ''}${bps.has(l.addr) ? ' bp' : ''}`, title: 'Show the hardware this instruction uses' }, bpG,
           h('span', { class: 'a' }, l.addr.toString(16).padStart(4, '0')),
           h('span', { class: 'w' }, l.word.toString(16).padStart(l.size === 2 ? 4 : 8, '0')),
           h('span', { class: 't' }, l.text),
