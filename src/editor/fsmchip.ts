@@ -19,6 +19,7 @@ import { openChip } from './session';
 import { drawTable, tableCost, tableProblem } from './ttable';
 import { controllerOf, dataProblem, exprText, fsmdTopDef, parseExpr, planOf } from './fsmd';
 import { UserLibrary } from './library';
+import { untangled } from './untangle';
 
 export const FSM_MAX_STATES = 16;
 export const FSM_MAX_IN = 6;
@@ -251,12 +252,14 @@ export function setFsm(ws: Workspace, id: string, doc: FsmDoc): Workspace | { er
     id, name: top.name, refOf: (d) => (d === nextDef ? { chip: ids.next } : d === outDef ? { chip: ids.out } : undefined),
   });
   if ('error' in drawn) return drawn;
+  // the router can leave two nets on one line: the lint would warn on a chip the learner cannot edit
+  const flat = untangled(drawn, chips);
   const old = new Map(top.pins.map((p) => [p.name, p]));
   const pins = drawn.pins.map((p) => {
     const o = old.get(p.name);
     return o && o.dir === p.dir && o.value !== undefined ? { ...p, value: o.value } : p;
   });
-  chips[id] = { ...top, pins, parts: drawn.parts, wires: drawn.wires, labels: drawn.labels, fsm: doc };
+  chips[id] = { ...top, pins, parts: flat.parts, wires: flat.wires, labels: flat.labels, fsm: doc };
   return { ...ws, chips };
 }
 
@@ -276,13 +279,14 @@ function setFsmd(ws: Workspace, id: string, doc: FsmDoc): Workspace | { error: s
   if (!ctlDef || err) return { error: `controller: ${err?.msg ?? 'does not compile'}` };
   const drawn = docFromDef(fsmdTopDef(doc, ctlDef, plan), { id, name: top.name, refOf: (d) => (d === ctlDef ? { chip: cid } : undefined) });
   if ('error' in drawn) return drawn;
+  const flat = untangled(drawn, w1.chips);
   const prev = new Map(top.pins.map((p) => [p.name, p]));
   const pins = drawn.pins.map((p) => {
     const o = prev.get(p.name);
     return o && o.dir === p.dir && o.width === p.width && o.value !== undefined ? { ...p, value: o.value } : p;
   });
   // the controller's tables of an earlier plain machine go
-  const chips = { ...w1.chips, [id]: { ...top, pins, parts: drawn.parts, wires: drawn.wires, labels: drawn.labels, fsm: doc } };
+  const chips = { ...w1.chips, [id]: { ...top, pins, parts: flat.parts, wires: flat.wires, labels: flat.labels, fsm: doc } };
   for (const t of Object.values(childIds(id))) if (chips[t]?.table?.of === id) delete chips[t];
   return { ...w1, chips };
 }

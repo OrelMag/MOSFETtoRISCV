@@ -152,6 +152,8 @@ export function deadParts(doc: ChipDoc, built: Compiled): string[] {
   if (!nl) return [];
   const sinks = built.def.ports.some((p) => p.dir !== 'in') || nl.instances.some((i) => !i.def.ports.some((p) => p.dir !== 'in'));
   if (!sinks) return [];
+  // a PLA keeps both rails of every input whether a term reads them or not, and its chip is drawn from the table, not by hand
+  if (doc.table?.form === 'pla') return [];
   const ids = new Set(doc.parts.map((p) => p.id));
   return deadInstances(nl, built.def.ports).filter((n) => ids.has(n));
 }
