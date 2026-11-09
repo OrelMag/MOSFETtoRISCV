@@ -417,3 +417,29 @@ describe('names at the 1280 px fits, against real blocks only', () => {
     });
   }
 });
+
+describe('repeated blocks read alike', () => {
+  it('a column of 16 equal banks (chapter 22\'s megabyte) gets one name layout at its fits', async () => {
+    const { bigRam } = await import('../src/lib/bigmem');
+    const def = bigRam(20, 8);
+    const insts = def.netlist!().instances;
+    const blocks = insts.map((i) => { const { w, h } = symbolGeom(i.def), at = i.at ?? [0, 0]; return { x: at[0], y: at[1], w, h }; });
+    const named = insts.flatMap((i, k) => {
+      const { w, h } = symbolGeom(i.def), t = i.def.symbol.label ?? i.def.name;
+      return i.def.symbol.kind === 'box' && nameEligible(t, w, h) ? [{ k, n: i.name, box: { cx: blocks[k].x + w / 2, cy: blocks[k].y + h / 2, w, h, chars: t.length, rot: nameRotated(w, h), text: t } as NameBox }] : [];
+    });
+    const banks = named.flatMap((x, i) => (/^bank\d+$/.test(x.n) ? [i] : []));
+    expect(banks.length).toBe(16);
+    // (around 1.6 the old renderer's names leave two sizes: those it drew clear of other blocks stay at NAME_PX, and the ones
+    // squeezed between them are never dropped; 2.14 is the 1280 × 800 fit)
+    for (const scale of [1.2, 2, 2.14, 2.4, 2.8, 3.2, 4, 6]) {
+      const plan = planLayouts(named.map((x) => x.box), scale, 10, blocks);
+      const named16 = banks.filter((i) => plan[i]);
+      expect(new Set(named16.map((i) => JSON.stringify(plan[i]))).size, `scale ${scale}`).toBe(1);
+      expect(named16.length, `scale ${scale}`).toBeGreaterThanOrEqual(8);
+      // and still no name over another
+      const rects = plan.map((l, k) => (l ? nameRect(named[k].box, l, scale) : null));
+      rects.forEach((a, i) => rects.slice(i + 1).forEach((c) => { if (a && c) expect(a.x < c.x + c.w && c.x < a.x + a.w && a.y < c.y + c.h && c.y < a.y + a.h, `scale ${scale}`).toBe(false); }));
+    }
+  });
+});
