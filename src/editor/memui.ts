@@ -46,7 +46,13 @@ const LANGS: Record<ProgramLang, { name: string; code: CodeLang; shape: Partial<
 };
 
 /** A ROM's highlighter and language name: a custom instruction set's from its table. */
-const codeOf = (r: Pick<RomRef, 'lang' | 'isa'>): CodeLang => (r.lang === 'isa' && r.isa ? { table: r.isa } : LANGS[r.lang].code);
+const codeOf = (r: Pick<RomRef, 'lang' | 'isa'> & Partial<Pick<RomRef, 'custom' | 'custom16' | 'mac'>>): CodeLang => {
+  if (r.lang === 'isa' && r.isa) return { table: r.isa };
+  // the core's own instructions (the ROM's copy of its rows) highlight as instructions: they assemble
+  if (r.lang === 'asm' && r.custom?.length) return { base: r.mac ? 'rvmacasm' : 'rvasm', ops: r.custom.map((c) => c.name) };
+  if (r.lang === 'rv16' && r.custom16?.length) return { base: 'rv16asm', ops: r.custom16.map((c) => c.name) };
+  return LANGS[r.lang].code;
+};
 const langName = (r: Pick<RomRef, 'lang' | 'isa'>) => (r.lang === 'isa' && r.isa ? r.isa.name : LANGS[r.lang].name);
 
 // ---- palette -------------------------------------------------------------------------------
