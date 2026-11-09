@@ -45,7 +45,7 @@ const F = vmFigures();
 const RUN = { walk: runVmModel(VM_WALK), pager: runVmModel(VM_PAGER), guard: runVmModel(VM_GUARD) };
 const hex = (v: number) => '0x' + (v >>> 0).toString(16).toUpperCase();
 /** The scene: the virtual-memory CPU running a chapter program, the stage opened on `path` with `highlight` lit there. */
-const vmScene = (source: string, path: string[], highlight: string[]): Scene => ({ ...cpuScene({ vm: true, source, highlight }), path, autoClock: false });
+const vmScene = (source: string, path: string[], highlight: string[]): Scene => ({ ...cpuScene({ vm: true, source, highlight }), path, autoClock: false, noRemix: true });
 
 const P = placement('base', true), Q = placement('paging', true);
 
