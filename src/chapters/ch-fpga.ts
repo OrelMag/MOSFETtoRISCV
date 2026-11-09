@@ -2,7 +2,7 @@ import { groupDigits } from '../sim/numfmt';
 import { LUT4, SLICE } from '../lib/fpga';
 import { FULL_ADDER } from '../lib/combinational';
 import { BOARD } from '../editor/fpga';
-import { bsramFor, COMPUTER, COSTS, COUNTER, coverOf, COVER_IDS, block, kSweep, lutConfigBits, lutCost, nandsPerLut, pathShares, pct, ramAsFlipFlops, RAM_BITS, RAM_WORDS, ROM_WORDS } from '../fpga/facts';
+import { bsramFor, COMPUTER, COSTS, COUNTER, coverOf, COVER_IDS, block, fabricBits, kSweep, lutConfigBits, lutCost, nandsPerLut, pathShares, pct, ramAsFlipFlops, RAM_BITS, RAM_WORDS, ROM_WORDS } from '../fpga/facts';
 import { flowWidget, lutCoverPanel, lutProgramWidget, pathWidget, reportWidget, switchBoxWidget } from '../widgets/fpga';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -60,8 +60,8 @@ export const chFpga: Chapter = {
       title: 'Hardware you can rewrite',
       body: `
         <p>The last chapter took a netlist to masks: months in a fab, and the circuit is fixed forever. A <strong>field-programmable gate array</strong> (FPGA) turns that around. It is a chip
-        made once, in large numbers, holding thousands of small configurable blocks and a grid of wires with switches at the crossings. What circuit it is depends on a few hundred
-        thousand <strong>configuration bits</strong> loaded at power-on, the <strong>bitstream</strong>. Load another and it is another circuit, in milliseconds.</p>
+        made once, in large numbers, holding thousands of small configurable blocks and a grid of wires with switches at the crossings. What circuit it is depends on about ${(fabricBits() / 1e6).toFixed(1)} million
+        <strong>configuration bits</strong> loaded at power-on, the <strong>bitstream</strong>. Load another and it is another circuit.</p>
         <p>The sandbox already makes the input: File ▸ Export Verilog for FPGA writes the design and a board top for a ${COSTS.board}, a small board with a Gowin ${BOARD.family} chip.
         This chapter follows that file through the open tools, Yosys and nextpnr, and puts every number they report beside our own estimates from the NAND netlist.</p>
         <p>The price of the flexibility is size and speed: a configurable block does what a few gates do, with far more transistors, and every wire passes switches. The steps below build the
@@ -206,8 +206,10 @@ export const chFpga: Chapter = {
         on a clock edge, which is why the export adds the memory clock (the board's ${BOARD.clockMHz} MHz) beside the design's.</p>
         <p>The register file did not go into block RAM: it is read on two ports and written on a third in the same cycle, and its register x0 is a constant. It stays as ${num(rf.ffs)} flip-flops
         (31 × 32) and ${num(rf.luts)} LUTs of read multiplexers and write decoding, the largest block by name. Read the other names with care: Yosys names a LUT after the net it drives, and ${num(ram.luts)} LUTs
-        under <code>mem.ram</code> are the logic that feeds the RAM's sampled address and data: the register file's read port and the ALU, named after where their result ends.</p>
-        <p>The <strong>configuration</strong>: the LUTs alone hold ${num(lutConfigBits())} bits (${num(D.lut4.available)} × 16); every switch, flip-flop setting and block RAM's contents add theirs.</p>`;
+        under <code>mem.ram</code> are the logic that feeds the RAM's sampled address and data: mostly the register file's read port for the store data, named after the register where its result ends.</p>
+        <p>The <strong>configuration</strong>: Apycula's packer writes the bitstream as frames of ${num(COUNTER.bitstream.frameBits)} bits. The counter's, with no memory contents, is ${num(COUNTER.bitstream.frames)} frames,
+        ${num(fabricBits())} bits for the fabric; the LUTs' tables are ${num(lutConfigBits())} of them (${num(D.lut4.available)} × 16), ${pct(lutConfigBits(), fabricBits())} %. The rest
+        sets the routing switches, the cells' modes and the clocks. The computer's bitstream adds ${num(C.bitstream.frames - COUNTER.bitstream.frames)} frames for its block RAMs' contents, the program among them.</p>`;
       },
       title: 'Our computer on a Tang Nano 9K',
       widget: reportWidget,
@@ -232,7 +234,8 @@ export const chFpga: Chapter = {
         <p>After routing, nextpnr times every path with the delays of the cells and wires it actually used. The design clock's slowest path, register to register, takes
         ${pathShares().ns.toFixed(1)} ns, ${C.fmax.clk.toFixed(1)} MHz at most. It runs from a register-file flip-flop through the read multiplexers and the ALU to the program counter: ${pathShares().lut4} LUT4s
         and ${pathShares().wideMux} of the multiplexers that join two LUTs into a 5- to 8-input function. Our mapping finds at most ${C.ours.lutLevels} LUT levels between any two storage elements, close to the tool's
-        ${pathShares().lut4}; our static timing gives ${C.ours.period} NAND delays for the period.</p>
+        ${pathShares().lut4}; our static timing gives ${C.ours.period} NAND delays for the period. The two do not time the same stretch: our period covers a whole instruction in one cycle, the
+        program ROM's read and the RAM's included, while the export puts both memories behind registers on the memory clock, so the tool's path is only the logic between them.</p>
         <p>Where the time goes: routing ${pathShares().routingPct} %, logic ${pathShares().logicPct} %, clock skew ${pathShares().skewPct} %. The skew is large because the design clock is the board's
         ${BOARD.clockMHz} MHz divided by 2<sup>${BOARD.divLog2}</sup> in a counter, so it reaches the flip-flops over ordinary routing, not the chip's clock network. On a custom chip the clock tree is built for the
         design; on an FPGA, a clock made in logic pays for it.</p>

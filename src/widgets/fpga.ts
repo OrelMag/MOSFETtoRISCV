@@ -23,7 +23,7 @@ export function flowWidget(): Widget {
   return {
     el: panel('One netlist, two ends', 'The same exported Verilog goes two ways. Silicon fixes the circuit in masks; an FPGA keeps a fixed chip and loads the circuit as bits.',
       row('Silicon', 'asic', [verilog, ['Yosys', 'standard cells'], ['OpenROAD', 'place, route'], ['GDS', 'masks'], ['fab', 'months']]),
-      row('FPGA', 'fpga', [verilog, ['Yosys', 'LUTs, flip-flops'], ['nextpnr', 'place, route'], ['bitstream', 'configuration bits'], ['load', 'milliseconds']])),
+      row('FPGA', 'fpga', [verilog, ['Yosys', 'LUTs, flip-flops'], ['nextpnr', 'place, route'], ['bitstream', 'configuration bits'], ['load', 'at power-on']])),
   };
 }
 

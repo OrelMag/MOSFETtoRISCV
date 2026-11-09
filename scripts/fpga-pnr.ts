@@ -28,7 +28,7 @@ const write = args.includes('--write');
 const ids = args.filter((a) => !a.startsWith('--'));
 const scripts = join(process.env.APPDATA ?? '', 'Python/Python313/Scripts');
 const tool = (env: string, name: string) => process.env[env] ?? (existsSync(join(scripts, `${name}.exe`)) ? join(scripts, `${name}.exe`) : name);
-const yosys = tool('YOSYS', 'yowasp-yosys'), nextpnr = tool('NEXTPNR', 'yowasp-nextpnr-himbaechel-gowin');
+const yosys = tool('YOSYS', 'yowasp-yosys'), nextpnr = tool('NEXTPNR', 'yowasp-nextpnr-himbaechel-gowin'), pack = tool('GOWIN_PACK', 'gowin_pack');
 // nextpnr prints its version on stderr
 const firstLine = (cmd: string, flag: string) => { const r = spawnSync(cmd, [flag], { encoding: 'utf8' }); return `${r.stdout}${r.stderr}`.trim().split('\n')[0]; };
 
@@ -80,6 +80,8 @@ for (const id of ids.length ? ids : ['counter7', 'computer']) {
   console.log(`${id}: placing and routing…`);
   execFileSync(nextpnr, ['--device', BOARD.device, '--vopt', `family=${BOARD.family}`, '--vopt', 'cst=tangnano9k.cst', '--json', 'pnr.json',
     '--report', 'report.json', '--write', 'routed.json', '--freq', String(BOARD.clockMHz), '--timing-allow-fail', '--seed', '1', '-l', 'pnr.log', '-q'], { cwd: dir, stdio: 'inherit' });
+  console.log(`${id}: packing the bitstream…`);
+  execFileSync(pack, ['-d', BOARD.family, '-o', `${id}.fs`, 'routed.json'], { cwd: dir, stdio: 'inherit' });
   const r = JSON.parse(readFileSync(join(dir, 'report.json'), 'utf8')) as {
     fmax: Record<string, { achieved: number }>; utilization: Record<string, { used: number; available: number }>;
     critical_paths: { from: string; to: string; path: { type: string; delay: number }[] }[];
@@ -108,6 +110,7 @@ for (const id of ids.length ? ids : ['counter7', 'computer']) {
       luts: own.path.filter((s) => s.type === 'logic').length,
       ...onPath(join(dir, 'routed.json'), own.path),
     },
+    bitstream: frames(join(dir, `${id}.fs`)),
     ours: { nands: m.nands + m.loops.length, lutMapLuts: m.luts.length, lutLevels: m.depth, period: st?.period ?? null },
   };
   examples[id] = one;
@@ -116,7 +119,8 @@ for (const id of ids.length ? ids : ['counter7', 'computer']) {
 
 const costs: FpgaCosts = {
   board: BOARD.name, device: BOARD.device,
-  tools: { yosys: firstLine(yosys, '-V').replace(/\s*\(.*$/, '').trim(), nextpnr: (/Version\s*([^)]+)/.exec(firstLine(nextpnr, '--version'))?.[1] ?? '').trim() },
+  // gowin_pack has no version flag: the version pinned in .github/workflows/fpga.yml
+  tools: { apycula: '0.32', yosys: firstLine(yosys, '-V').replace(/\s*\(.*$/, '').trim(), nextpnr: (/Version\s*([^)]+)/.exec(firstLine(nextpnr, '--version'))?.[1] ?? '').trim() },
   examples,
 };
 if (write) {
@@ -139,4 +143,11 @@ function onPath(file: string, path: { type: string; from?: { cell: string } }[])
   for (const m of Object.values(j.modules)) for (const [n, c] of Object.entries(m.cells)) type.set(n, c.type);
   const kinds = path.filter((s) => s.type === 'logic').map((s) => type.get(s.from?.cell ?? '') ?? '');
   return { lut4: kinds.filter((k) => k === 'LUT4').length, wideMux: kinds.filter((k) => k.startsWith('MUX2_LUT')).length };
+}
+
+/** The configuration frames gowin_pack wrote (.fs: one frame a line of 0s and 1s, the longest lines; the short ones are commands). */
+function frames(file: string): { frames: number; frameBits: number } {
+  const lines = readFileSync(file, 'utf8').split(/\r?\n/).filter((l) => /^[01]+$/.test(l));
+  const frameBits = Math.max(...lines.map((l) => l.length));
+  return { frames: lines.filter((l) => l.length === frameBits).length, frameBits };
 }

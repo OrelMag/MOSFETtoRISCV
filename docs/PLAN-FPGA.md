@@ -8,7 +8,7 @@ memories are blocks of RAM, configured in milliseconds rather than manufactured 
 order silicon → fpga → verify (chapter id `fpga`; Ross's verification chapter `verify` follows it). Built in stages, each a tip:
 1. sim/lutmap.ts + lib/fpga.ts with tests ✅ (feat/fpga-lut)
 2. CI numbers: nextpnr-himbaechel + Apicula in a workflow, fpgacosts.json pinned ✅ (feat/fpga-pnr: scripts/fpga-pnr.ts, .github/workflows/fpga.yml)
-3. The chapter (numOf everywhere; every "to be measured" cell measured before it reaches the prose)
+3. The chapter (numOf everywhere; every "to be measured" cell measured before it reaches the prose) ✅ (feat/fpga-chapter: chapters/ch-fpga.ts, src/fpga/facts.ts, widgets/fpga.ts; nine steps; the bitstream measured with Apycula gowin_pack; the switch box is a DOM widget, not switchBox(n) / islandGrid(w, h))
 4. Codex entries, the side level and the drill
 
 Phase 23, "From netlist to FPGA". Mockup: `E:/mockups/fpga/index.html` (steps 2, 4 and 9, light

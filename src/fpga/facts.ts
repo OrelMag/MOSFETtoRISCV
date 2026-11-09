@@ -55,6 +55,9 @@ export const ROM_WORDS = 1024;
 /** Configuration bits in the LUTs alone: every LUT4 of the device holds 16. */
 export const lutConfigBits = () => COMPUTER.device.lut4.available * 16;
 
+/** Configuration bits of the whole fabric: the counter's bitstream, which holds no memory contents (the computer's adds frames for its block RAMs). */
+export const fabricBits = () => COUNTER.bitstream.frames * COUNTER.bitstream.frameBits;
+
 /** The block a cell came from, by name (fpgacosts' blocks). */
 export const block = (name: string) => COMPUTER.blocks.find((b) => b.name === name) ?? { name, luts: 0, ffs: 0, bsram: 0 };
 

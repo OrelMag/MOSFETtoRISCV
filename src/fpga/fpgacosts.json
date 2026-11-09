@@ -2,6 +2,7 @@
  "board": "Sipeed Tang Nano 9K",
  "device": "GW1NR-LV9QN88PC6/I5",
  "tools": {
+  "apycula": "0.32",
   "yosys": "Yosys 0.69",
   "nextpnr": "nextpnr-0.11.1"
  },
@@ -79,6 +80,10 @@
     "luts": 1,
     "lut4": 1,
     "wideMux": 0
+   },
+   "bitstream": {
+    "frames": 712,
+    "frameBits": 2904
    },
    "ours": {
     "nands": 79,
@@ -220,6 +225,10 @@
     "luts": 28,
     "lut4": 8,
     "wideMux": 20
+   },
+   "bitstream": {
+    "frames": 1224,
+    "frameBits": 2904
    },
    "ours": {
     "nands": 32414,

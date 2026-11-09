@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: npm ci
-      - run: pip install yowasp-yosys==0.69.0.0.post1233 yowasp-nextpnr-himbaechel-gowin==0.11.1.0.post826
+      - run: pip install yowasp-yosys==0.69.0.0.post1233 yowasp-nextpnr-himbaechel-gowin==0.11.1.0.post826 apycula==0.32
       - run: npx vite-node scripts/fpga-pnr.ts counter7 computer --write
       - name: The numbers match the checked-in ones
         run: git diff --exit-code src/fpga/fpgacosts.json

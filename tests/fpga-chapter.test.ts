@@ -48,3 +48,13 @@ describe('the FPGA chapter', () => {
     expect(nandsPerLut()).toBeGreaterThan(1);
   });
 });
+
+describe('the bitstream', () => {
+  it('the counter, with no block RAM, gives the fabric; the computer adds frames for its memories\' contents', async () => {
+    const { COUNTER, fabricBits, lutConfigBits } = await import('../src/fpga/facts');
+    expect(COUNTER.device.bsram.used).toBe(0);
+    expect(COMPUTER.bitstream.frameBits).toBe(COUNTER.bitstream.frameBits);
+    expect(COMPUTER.bitstream.frames).toBeGreaterThan(COUNTER.bitstream.frames);
+    expect(fabricBits()).toBeGreaterThan(10 * lutConfigBits());
+  });
+});

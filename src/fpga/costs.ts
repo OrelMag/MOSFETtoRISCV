@@ -19,6 +19,8 @@ export interface FpgaExample {
   fmax: Record<string, number>;
   /** The design clock's critical path, ns, split by kind; luts: the logic cells on it, of which lut4 LUTs and wideMux the multiplexers joining two LUTs into a wider function. */
   critical: { clock: string; ns: number; skew: number; clkToQ: number; logic: number; routing: number; setup: number; luts: number; lut4: number; wideMux: number };
+  /** The packed bitstream (Apycula's gowin_pack): configuration frames and the bits in each, its checksum included. */
+  bitstream: { frames: number; frameBits: number };
   /** Our estimates: NANDs (mapped + kept as storage loops), lutMap's LUT4 count and levels, the static period in NAND delays. */
   ours: { nands: number; lutMapLuts: number; lutLevels: number; period: number | null };
 }
@@ -26,7 +28,7 @@ export interface FpgaExample {
 export interface FpgaCosts {
   board: string;
   device: string;
-  tools: { yosys: string; nextpnr: string };
+  tools: { apycula: string; yosys: string; nextpnr: string };
   examples: Record<string, FpgaExample>;
 }
 
