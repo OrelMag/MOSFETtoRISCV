@@ -119,3 +119,24 @@ describe('side channels: step 3 on the gates', () => {
     quoted(`a divide, ${LAT.div} cycles`);
   }, 120_000);
 });
+
+describe('side channels: the codex quotes the same numbers', () => {
+  it('every number in the entries, their fuller texts and questions is the chapter\'s', async () => {
+    const { CODEX_SIDE } = await import('../src/campaign/codexside');
+    const { MORESIDE } = await import('../src/campaign/codexmoreside');
+    const { CHECKSIDE } = await import('../src/campaign/codexcheckside');
+    const all = JSON.stringify([CODEX_SIDE, MORESIDE, CHECKSIDE]).replace(/\u202f|\u202f/g, ' ');
+    const has = (s: string) => expect(all, s).toContain(s);
+    const wrong = pwRun('-').cycles, step = pwRun(PASSWORD[0]).cycles - wrong;
+    has(`takes ${wrong} cycles for a wrong first letter and ${step} more`);
+    has(`takes ${pwRun('aaaa', true).cycles} cycles for every guess, against ${wrong} to ${pwRun(PASSWORD).cycles}`);
+    const t = timesIn(dmemOf(run(assemble(probeSource(9)).words, { spec: SIDE_SPEC })));
+    has(`comes back in ${Math.min(...t)} cycles, the others in ${Math.max(...t)} (a hit against a miss of ${SIDE_MISS}`);
+    has(`one in ${Math.min(...t)} cycles, fifteen in ${Math.max(...t)}`);
+    const per = (g: 'none' | 'fence' | 'mask') => { const c = (n: number) => run(assemble(callsSource(g, n)).words, sideConfig(g)).stats.cycles; return (c(48) - c(16)) / 32; };
+    has(`${per('fence')} cycles a call against ${per('none')} without it`);
+    has(`(${per('mask')} cycles a call)`);
+    has(`for 16 cycles`);
+    expect(all).toContain(`a 20-cycle miss`);
+  });
+});
