@@ -8,14 +8,18 @@ import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
 import { pack } from '../sim/values';
+import { groupDigits } from '../sim/numfmt';
 import { counter, osImage, OS_DMEM_K, OS_IMEM_K, OS_SLICE, PCB, PCB0, PCB_SIZE, spinner2, type OsImage } from '../riscv/osprograms';
 import { captureSwitch, overheadAt, planOf, type Overhead, type SwitchFrame } from '../riscv/osrun';
 import { cpuScene } from './cpupanel';
+import { frameRun } from './slowctl';
 import '../styles/vmem.css';
 import '../styles/os.css';
 
 const hex = (v: number, d = 0) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(d, '0');
 export const PROC_NAMES = ['A', 'B'];
+/** The slices the strip's selector offers. */
+export const PANEL_SLICES = [200, 600, 1500, 4000];
 const REGS = ['zero', 'ra', 'sp', 'gp', 'tp', 't0', 't1', 't2', 's0', 's1', 'a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11', 't3', 't4', 't5', 't6'];
 
 /** The standard pair of processes of the chapter's scenes. */
@@ -56,7 +60,15 @@ export function osPanel(o: { slice: number; reload: (slice: number) => Scene; ke
     const legend = h('div', { class: 'os-legend' });
     const consoleEl = h('pre', { class: 'console os-console' });
     const blocks = h('div', { class: 'os-blocks' });
-    const slices = [200, 600, 1500, 4000];
+    let stopRun: (() => void) | null = null;
+    const nextBtn = h('button', { type: 'button', class: 'btn sm', title: 'Run until the kernel gives the CPU to the other process' }, 'Next switch');
+    nextBtn.addEventListener('click', () => {
+      if (stopRun) { stopRun(); return; }
+      const target = switches + 1;
+      nextBtn.textContent = 'Stop';
+      stopRun = frameRun(stage, () => switches >= target || stage.cycles > 200000, () => { stopRun = null; nextBtn.textContent = 'Next switch'; update(); stage.refresh?.(); });
+    });
+    const slices = PANEL_SLICES;
     const sel = h('select', { 'aria-label': 'time slice in retired instructions' }, ...slices.map((s) => h('option', { value: String(s) }, `${s} instructions`))) as HTMLSelectElement;
     sel.value = String(slices.includes(o.slice) ? o.slice : OS_SLICE);
     sel.addEventListener('change', () => stage.load(o.reload(Number(sel.value))));
@@ -98,7 +110,7 @@ export function osPanel(o: { slice: number; reload: (slice: number) => Scene; ke
     });
     const el = h('div', { class: 'mem-panel io-panel os-panel', 'data-dock': 'left', 'data-fold': 'narrow', 'data-phone': 'flow', ...(o.keep ? { 'data-keep': o.keep } : {}) },
       h('h4', null, 'Who has the CPU', h('span', { class: 'fold-hint' })),
-      h('div', { class: 'param-row' }, h('label', { class: 'os-slice' }, 'Time slice ', sel)),
+      h('div', { class: 'param-row' }, h('label', { class: 'os-slice' }, 'Time slice ', sel), nextBtn),
       strip, legend,
       h('div', { class: 'cpu-sec' }, 'Console, by process'), consoleEl,
       h('div', { class: 'cpu-sec' }, 'Process control blocks'), blocks);
@@ -109,7 +121,7 @@ export function osPanel(o: { slice: number; reload: (slice: number) => Scene; ke
       const all = total[0] + total[1] + total[2] + total[3];
       legend.replaceChildren(
         ...[0, 1, 2, 3].map((k) => h('span', null, h('i', { class: `os-seg k${k}` }), `${KIND_NAME[k]} ${total[k]}`)),
-        h('span', { class: 'os-sum' }, `${switches} switches · the kernel and the walks took ${all ? Math.round((100 * (total[2] + total[3])) / all) : 0} % of ${all} cycles (the last ${WINDOW} drawn)`));
+        h('span', { class: 'os-sum' }, `${switches} switch${switches === 1 ? "" : "es"} · the kernel and the walks took ${all ? Math.round((100 * (total[2] + total[3])) / all) : 0} % of ${all} cycles (the last ${WINDOW} drawn)`));
       // the console, one colour per process
       const parts: (string | HTMLElement)[] = [];
       let run = '', who = -1;
@@ -128,6 +140,7 @@ export function osPanel(o: { slice: number; reload: (slice: number) => Scene; ke
         h('tr', null, h('th', null, ''), ...PROC_NAMES.map((n) => h('th', null, n))),
         h('tr', null, h('td', null, 'state'), ...PROC_NAMES.map((_, p) => { const a = PCB0 + p * PCB_SIZE, st = mem[(a + PCB.state) / 4]; return h('td', null, st === 1 && cur === a && priv === 0 ? 'running' : names[st] ?? '?'); })),
         h('tr', null, h('td', null, 'saved pc'), ...PROC_NAMES.map((_, p) => h('td', null, mem[(PCB0 + p * PCB_SIZE) / 4] ? hex(mem[(PCB0 + p * PCB_SIZE) / 4], 4) : '-'))),
+        h('tr', null, h('td', null, 'sp'), ...PROC_NAMES.map((_, p) => h('td', null, mem[(PCB0 + p * PCB_SIZE + 8) / 4] ? hex(mem[(PCB0 + p * PCB_SIZE + 8) / 4], 4) : '-'))),
         h('tr', null, h('td', null, 'satp'), ...PROC_NAMES.map((_, p) => h('td', null, mem[(PCB0 + p * PCB_SIZE + PCB.satp) / 4] ? hex(mem[(PCB0 + p * PCB_SIZE + PCB.satp) / 4], 8) : '-'))),
         h('tr', null, h('td', null, 'slices'), ...PROC_NAMES.map((_, p) => h('td', null, String(mem[(PCB0 + p * PCB_SIZE + PCB.slices) / 4] >>> 0)))),
         h('tr', null, h('td', null, 'user cycles'), ...PROC_NAMES.map((_, p) => h('td', null, String(total[p]))))));
@@ -223,14 +236,14 @@ export function sliceWidget(): Widget {
     const r = rows[pick];
     out.replaceChildren(
       h('table', { class: 'data os-cost' },
-        h('tr', null, ...['slice', 'switches in 40 000 instructions', 'kernel', 'walks', 'sharing costs'].map((t) => h('th', null, t))),
+        h('tr', null, ...['slice', `switches in ${groupDigits(OVERHEAD_STEPS)} instructions`, 'kernel', 'walks', 'sharing costs'].map((t) => h('th', null, t))),
         ...rows.map((x, i) => h('tr', { class: i === pick ? 'sel' : '', onclick: () => { pick = i; draw(); } },
           h('td', null, `${x.slice} instr.`), h('td', null, String(x.switches)), h('td', null, `${x.kernel}`), h('td', null, `${x.walk}`),
           h('td', null, h('span', { class: 'os-bar' }, h('i', { style: `width:${Math.min(100, Math.round(100 * x.overhead))}%` })), ` ${(100 * x.overhead).toFixed(1)} %`)))),
       h('p', { class: 'sub' }, `With a slice of ${r.slice} instructions the CPU spends ${(100 * r.overhead).toFixed(1)} % of its cycles in the kernel and in page-table walks, and a process that is ready may wait up to ${r.slice} + ${switchCycles} cycles for its turn. A longer slice wastes less and answers slower.`));
   };
   const el = h('div', { class: 'widget vm-widget os-widget' }, out,
-    h('p', { class: 'sub' }, 'Two processes that only compute, run for 40 000 retired instructions on the golden model; "kernel" counts the cycles in machine mode after the boot, "walks" the stall cycles of the TLB refills after each satp write.'));
+    h('p', { class: 'sub' }, `Two processes that only compute, run for ${groupDigits(OVERHEAD_STEPS)} retired instructions on the golden model; "kernel" counts the cycles in machine mode after the boot, "walks" the stall cycles of the TLB refills after each satp write.`));
   draw();
   return { el };
 }

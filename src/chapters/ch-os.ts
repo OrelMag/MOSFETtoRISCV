@@ -1,11 +1,10 @@
 import { compilePy } from '../lang/compile';
 import { PY_PROGRAMS } from '../lang/pyprograms';
-import { counter, hello, OS_DMEM_K, OS_SLICE, PCB_SIZE, PY_DMEM_WORDS, osImage, privateWord, rogueCsr, spinner2 } from '../riscv/osprograms';
+import { NREGS, ROOT_OF, SYS, counter, hello, OS_DMEM_K, OS_SLICE, PCB_SIZE, PY_DMEM_WORDS, osImage, privateWord, rogueCsr, spinner2 } from '../riscv/osprograms';
 import { captureSwitch, overheadAt, planOf, runOs, tripsOf } from '../riscv/osrun';
 import { WALK_CYCLES } from '../riscv/vmprograms';
 import { groupDigits } from '../sim/numfmt';
-import { overheadTable, planWidget, osScene, sliceWidget, SLICES, switchWidget } from '../widgets/os';
-import { vmFigures } from './ch-vmem';
+import { OVERHEAD_STEPS, PANEL_SLICES, overheadTable, planWidget, osScene, sliceWidget, SLICES, switchWidget } from '../widgets/os';
 import type { Scene } from '../view/stage';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -21,19 +20,17 @@ export interface OsFigures {
   /** One switch from process A to process B, the timer's: instructions in each phase, in all, and the clock cycles from the interrupt to B's first instruction. */
   saveInstr: number; chooseInstr: number; restoreInstr: number; switchInstr: number; switchCycles: number; switchStall: number;
   /** Cycles from the trap to the mret, for each kind of trip into the kernel. */
-  putchar: number; write1: number; write5: number; writeMax: number; yieldTrip: number; exitTrip: number; tickStays: number; tickSwitches: number;
+  putchar: number; write1: number; write5: number; writeMax: number; yieldTrip: number; exitTrip: number; tickStays: number; tickSwitches: number; stayWalks: number;
   /** Page-table walks a process pays after the kernel gave it the CPU, and the instructions it then runs before the next interrupt. */
   refillWalks: number; sliceUser: number;
   /** Boot: instructions before the first user instruction. */
   bootInstr: number;
   /** Sharing's price at the default slice, in percent of cycles, and the same at the table's shortest and longest slices. */
-  slice: number; overhead: number; overheadShort: number; overheadLong: number;
+  slice: number; overhead: number; overheadShort: number; overheadLong: number; overheadAt: number[];
   /** The plan: frames used of the data memory. */
   frames: number; usedFrames: number;
   /** Two Python programs as processes. */
   py: { a: string; b: string; steps: number; cycles: number; switches: number; outA: number; outB: number; calls: number };
-  /** The vm CPU's size, from chapter vmem's count (program ROM left out). */
-  nands: number;
 }
 
 const PY_A = 'fibloop', PY_B = 'squares';
@@ -61,18 +58,17 @@ export function osFigures(): OsFigures {
     kernelWords: pair.kernelWords, kernelBytes: pair.kernelWords * 4,
     saveInstr: count('save'), chooseInstr: count('choose'), restoreInstr: count('restore'), switchInstr: sw.length, switchCycles: sw[sw.length - 1].cycles, switchStall: sw[sw.length - 1].cycles - sw.length,
     putchar: first(hello('x'), 1).kernelCycles, write1: first(writeOnce(5), 2).kernelCycles, write5: first(writeOnce(12345), 2).kernelCycles, writeMax: first(writeOnce(-2147483648), 2).kernelCycles,
-    yieldTrip: first(yieldOnce, 3, counter(1, 3)).kernelCycles, exitTrip: first(exitNow, 93).kernelCycles, tickStays: stays.kernelCycles, tickSwitches: timer.kernelCycles,
+    yieldTrip: first(yieldOnce, 3, counter(1, 3)).kernelCycles, exitTrip: first(exitNow, 93).kernelCycles, tickStays: stays.kernelCycles, tickSwitches: timer.kernelCycles, stayWalks: stays.userWalks,
     refillWalks: timer.userWalks, sliceUser: tripsOf(runOs(osImage([spinner2, spinner2]), 3000), 'timer')[0].userSteps,
     bootInstr,
     slice: OS_SLICE, overhead: Math.round(1000 * overheadAt(OS_SLICE, 40000, (s) => osImage([spinner2, spinner2], { slice: s })).overhead) / 10,
-    overheadShort: Math.round(1000 * over[0].overhead) / 10, overheadLong: Math.round(1000 * over[over.length - 1].overhead) / 10,
+    overheadShort: Math.round(1000 * over[0].overhead) / 10, overheadLong: Math.round(1000 * over[over.length - 1].overhead) / 10, overheadAt: over.map((o) => Math.round(1000 * o.overhead) / 10),
     frames: 2 ** OS_DMEM_K / 1024, usedFrames,
     py: {
       a: PY_A, b: PY_B, steps: run.steps, cycles: run.cycles, switches: run.trips.filter((t) => t.from !== t.to).length,
       outA: run.byProc[0].split('\n').filter(Boolean).length, outB: run.byProc[1].split('\n').filter(Boolean).length,
       calls: run.trips.filter((t) => t.cause === 8 && t.call === 2).length,
     },
-    nands: vmFigures().vm,
   };
   return figs;
 }
@@ -92,7 +88,7 @@ export const chOs: Chapter = {
   goals: [
     'run a program in user mode and see what it may not do',
     'follow a system call: ecall, the trap, the kernel\'s answer, mret',
-    'switch from one program to another: save 31 registers, load 31, change satp, and say what it costs in cycles',
+    `switch from one program to another: save ${NREGS} registers, load ${NREGS}, change satp, and say what it costs in cycles`,
     'share the CPU with a timer interrupt and a round-robin scheduler, and price the slice',
   ],
   builds: ['vmem', 'traps', 'python'],
@@ -100,8 +96,8 @@ export const chOs: Chapter = {
     keep: [
       `A process is a program with an address space (a page table, a satp), a saved set of registers and a state, all in a process control block the kernel keeps. The kernel is the machine-mode program that owns the tables, the blocks and the timer: ${n(F.kernelWords)} instructions here.`,
       'User mode may not touch the machine: a machine register is an illegal instruction (cause 2), a page the table does not give it is a page fault (13 or 15), and both end the process, not the machine. Everything the process needs from outside it asks for with ecall: a number in a7, an argument in a0.',
-      `A system call is a trap and a return: the CPU saves nothing but the PC, so the kernel's first job is to save the 31 registers. It cost ${F.putchar} cycles to print one character, ${F.write1} to print a one-digit number (the kernel has no divider and converts by subtraction).`,
-      `A context switch saves 31 registers, picks the next ready block, writes satp, flushes the TLBs and loads 31 registers: ${F.switchCycles} cycles from the timer interrupt to the next process's first instruction, ${F.switchStall} of them the walk that fetches it.`,
+      `A system call is a trap and a return: the CPU saves nothing but the PC, so the kernel's first job is to save the ${NREGS} registers. It cost ${F.putchar} cycles to print one character, ${F.write1} to print a one-digit number (the kernel has no divider and converts by subtraction).`,
+      `A context switch saves ${NREGS} registers, picks the next ready block, writes satp, flushes the TLBs and loads ${NREGS} registers: ${F.switchCycles} cycles from the timer interrupt to the next process's first instruction, ${F.switchStall} of them the walk that fetches it.`,
       `The timer decides who runs: mtimecmp is armed one slice ahead at every switch, so a process that never gives up the CPU loses it after ${F.slice} retired instructions. Round robin is the ring of control blocks and a loop that finds the next ready one.`,
       `Sharing has a price in kernel cycles and cold TLBs: ${F.overhead} % of the cycles at a ${F.slice}-instruction slice, ${F.overheadShort} % at ${SLICES[0]} and ${F.overheadLong} % at ${n(SLICES[SLICES.length - 1])}. A long slice wastes less and makes a ready process wait longer.`,
     ],
@@ -181,9 +177,9 @@ export const chOs: Chapter = {
     {
       title: 'System calls: ecall with a number in a7',
       body: `
-        <p>A process can do nothing but compute. To print, to stop, to give up the CPU it must ask. The request is one instruction: <code>ecall</code> raises a trap with cause 8 ("from user mode"), the number of the service in <code>a7</code> and its argument in <code>a0</code>. That is a convention of the kernel, a convention of this kernel, not of the hardware. It offers four: 1 puts the low byte of a0 on the console, 2 writes a0 as a signed decimal number with the process's letter in front and a new line after, 3 yields the CPU, 93 exits (the number is Linux's, for RISC-V).</p>
+        <p>A process can do nothing but compute. To print, to stop, to give up the CPU it must ask. The request is one instruction: <code>ecall</code> raises a trap with cause 8 ("from user mode"), the number of the service in <code>a7</code> and its argument in <code>a0</code>. That is a convention of this kernel, not of the hardware. It offers four: ${SYS.putchar} puts the low byte of a0 on the console, ${SYS.write} writes a0 as a signed decimal number with the process's letter in front and a new line after, ${SYS.yield} yields the CPU, ${SYS.exit} exits (the number is Linux's, for RISC-V).</p>
         <p>The trap sets <code>mepc</code> to the <code>ecall</code> itself, so the kernel adds 4 before returning, or the process would ask again forever. Between the trap and the <code>mret</code> the kernel needs registers, and the process's are all live, so the first thing the handler does is
-        swap <code>t0</code> with <code>mscratch</code>: the CSR holds the address of the running process's control block, and after the swap <code>t0</code> points to it and the process's <code>t0</code> sits in <code>mscratch</code>, safe. Then 30 stores, one for each other register, and the kernel is free.
+        swap <code>t0</code> with <code>mscratch</code>: the CSR holds the address of the running process's control block, and after the swap <code>t0</code> points to it and the process's <code>t0</code> sits in <code>mscratch</code>, safe. Then ${NREGS - 1} stores, one for each other register, and the kernel is free.
         Returning is the same in reverse. Every register of the process comes back as it was, except the one the call answers in.</p>
         <p>What a call costs is the number of instructions between the trap and the return, because the CPU retires one each cycle: <strong>${F.putchar} cycles</strong> for putchar, ${F.yieldTrip} for yield, and ${F.exitTrip} for exit, all dominated by saving and restoring. Writing a number costs <strong>${F.write1}</strong> cycles for a
         single digit, ${F.write5} for five, ${F.writeMax} for −2 147 483 648: the CPU has no divide here (chapter ${numOf('muldiv')} is not in this variant), so the kernel peels off each power of ten by repeated subtraction.</p>
@@ -202,7 +198,7 @@ export const chOs: Chapter = {
     {
       title: 'The process control block and the context switch',
       body: `
-        <p>The CPU has one set of 31 registers. Two processes each believe they have it. The kernel makes it true by keeping each process's registers in memory while it waits: the <strong>process control block</strong>, ${PCB_SIZE} bytes for each, with the saved PC at offset 0, register <em>n</em> at 4<em>n</em>, then the process's <code>satp</code>,
+        <p>The CPU has one set of ${NREGS} registers. Two processes each believe they have it. The kernel makes it true by keeping each process's registers in memory while it waits: the <strong>process control block</strong>, ${PCB_SIZE} bytes for each, with the saved PC at offset 0, register <em>n</em> at 4<em>n</em>, then the process's <code>satp</code>,
         its state (ready or gone), the number of slices it has had and the letter it prints. Taking the CPU from one process and giving it to another is a <strong>context switch</strong>, and it is these steps:</p>
         <ol>
           <li><strong>Save</strong> (${F.saveInstr} cycles, the interrupt's own included): the trap handler stores every register and the PC into the running process's block.</li>
@@ -210,10 +206,10 @@ export const chOs: Chapter = {
           <li><strong>Restore</strong> (${F.restoreInstr} cycles): write the new block's <code>satp</code> and run <code>sfence.vma</code> (the cached translations belong to the old address space), put its PC in <code>mepc</code>, load its registers and <code>mret</code>.</li>
         </ol>
         <p>The widget replays one switch from the golden model, an instruction at a time: A's block on the left, the CPU in the middle, B's block on the right. Watch the stores fill A's block while the CPU's registers stay put, then the loads empty B's block into them. Counted in clock cycles: ${F.saveInstr} to save, ${F.chooseInstr} to choose, ${F.restoreInstr} to restore, one for B's first instruction, and ${F.switchStall} more in which the CPU waits for the page-table walk that fetching that instruction needs, because writing <code>satp</code> emptied the TLBs. <strong>${F.switchCycles} clock cycles</strong> from the interrupt to B's first instruction.</p>
-        <p>The cost is the register count made visible. A machine with 31 registers moves 62 words per switch on top of the bookkeeping. This is why real machines pay attention to how much state a switch has to move, and why a lightweight thread that shares its address space saves the <code>satp</code> write and the refill.</p>`,
+        <p>The cost is the register count made visible. A machine with ${NREGS} registers moves ${2 * NREGS} words per switch on top of the bookkeeping. This is why real machines pay attention to how much state a switch has to move, and why a lightweight thread that shares its address space saves the <code>satp</code> write and the refill.</p>`,
       widget: switchWidget,
       more: {
-        numbers: `One timer switch (golden model, the gates agree cycle for cycle): ${F.saveInstr} cycles of save, ${F.chooseInstr} of choosing, ${F.restoreInstr} of restoring, one more for B's first instruction; ${F.switchStall} stall cycles for the walk. A timer interrupt that finds nobody else to run ends with the same process and costs ${F.tickStays} cycles in the kernel instead of ${F.tickSwitches}: no satp write, no flush.`,
+        numbers: `One timer switch (golden model, the gates agree cycle for cycle): ${F.saveInstr} cycles of save, ${F.chooseInstr} of choosing, ${F.restoreInstr} of restoring, one more for B's first instruction; ${F.switchStall} stall cycles for the walk. A timer interrupt that finds nobody else to run ends with the same process: ${F.tickStays} cycles in the kernel against ${F.tickSwitches}, the scan for the next block eating most of what the satp write and the flush would have cost. The saving is after the return: nothing was flushed, so the process pays ${F.stayWalks} walks where the other kind of return pays ${F.refillWalks}.`,
         pitfall: 'Writing satp without sfence.vma, on a machine whose TLB keeps translations, lets the new process use the old one\'s mappings until the entries are replaced. This hardware flushes on a satp write as well; the specification does not promise it, so the kernel writes sfence.vma anyway.',
       },
       challenge: {
@@ -221,7 +217,7 @@ export const chOs: Chapter = {
         question: 'Why does the trap handler start with csrrw t0, mscratch, t0 rather than a store?',
         options: ['It needs one register to hold the control block\'s address, and every register still belongs to the process', 'mscratch is the only register a store may use', 'A store would take a page fault', 'It saves the PC and the registers in one instruction'],
         answer: 0,
-        explain: 'A store needs a base register, and the first store cannot clobber any process value. Swapping t0 with the CSR leaves the process\'s t0 in mscratch and the block\'s address in t0; after the other 30 stores the kernel reads t0 back and stores it as well.',
+        explain: 'A store needs a base register, and the first store cannot clobber any process value. Swapping t0 with the CSR leaves the process\'s t0 in mscratch and the block\'s address in t0; after the other stores the kernel reads t0 back and stores it as well.',
         why: ['', 'Stores can use any register as base; the problem is that every register is full of the process\'s data.', 'The kernel runs in machine mode with no translation, so a store to its own frame cannot fault.', 'One instruction swaps two registers; saving the whole set takes thirty-odd stores.'],
       },
     },
@@ -234,13 +230,13 @@ export const chOs: Chapter = {
         and the hatched yellow is the CPU waiting for a page walk; the console takes the colour of whichever process wrote.</p>
         <p>Run it and watch the grey between the long blocks. It is the kernel at work, and here mostly not the switches: every number a process prints is a system call of ${F.write1} cycles and more (step 3), and the programs print every few instructions. A slice gives a process about ${F.sliceUser} of its ${F.slice} instructions, since the timer is armed in the middle of the switch and the rest of the kernel's return counts against the slice. The order on the console is not written anywhere in the programs: the
         timer decided it, which also means it can differ if the slice changes. Try another slice in the panel.</p>
-        <div class="try">Pick a 200-instruction slice and run again: the numbers interleave more finely, and the grey share grows.</div>`,
+        <div class="try">Pick a ${PANEL_SLICES[0]}-instruction slice and run again: the numbers interleave more finely, and the grey share grows.</div>`,
       scene: scenes.share,
       lit: 'The timer and the privilege logic',
       challenge: {
         kind: 'quiz',
         question: 'Process A is in an endless loop and never calls the kernel. Why does process B still get to run?',
-        options: ['The timer interrupt is taken in user mode whatever the process is doing, and the kernel switches', 'The assembler inserts a yield into every loop', 'The CPU stops a program after 600 instructions by itself', 'A page fault eventually happens and the kernel runs the other process'],
+        options: ['The timer interrupt is taken in user mode whatever the process is doing, and the kernel switches', 'The assembler inserts a yield into every loop', `The CPU stops a program after ${F.slice} instructions by itself`, 'A page fault eventually happens and the kernel runs the other process'],
         answer: 0,
         explain: 'mtimecmp was set one slice ahead; when mtime reaches it the interrupt is pending, and with the CPU in user mode it is taken at once. The handler is the kernel\'s, and a process cannot mask it.',
         why: ['', 'Nothing in a program\'s code is inserted by the toolchain here; a loop with no calls stays a loop.', 'The CPU has no notion of a time slice: it only compares two registers and raises an interrupt line.', 'A loop that stays inside its mapped pages never faults; the interrupt is the only thing that ends it.'],
@@ -251,7 +247,7 @@ export const chOs: Chapter = {
       body: `
         <p>The counters of the last step both keep their counts in the word at 0x1000, and neither ever sees the other's value. This step makes it the point. The two processes are built from the same source except for a number: each stores its identity (7 and 9) in the word at 0x1000, spins for a while so the other has time to run in between,
         then reads the word back and prints it. If the word were shared, one of them would print the other's number.</p>
-        <p>What keeps them apart is one register. Every translation starts at <code>satp</code>, and the kernel writes a different one at each switch: A's points at the root table in frame 1, B's at the root table in frame 5. The same virtual address walks two different chains of tables and ends in two different frames. That is the whole mechanism, no copying and no checks in the program.
+        <p>What keeps them apart is one register. Every translation starts at <code>satp</code>, and the kernel writes a different one at each switch: A's points at the root table in frame ${ROOT_OF[0] >>> 12}, B's at the root table in frame ${ROOT_OF[1] >>> 12}. The same virtual address walks two different chains of tables and ends in two different frames. That is the whole mechanism, no copying and no checks in the program.
         The cost is the one the last step measured: a <code>satp</code> write forgets every cached translation, so the process that has just been given the CPU walks again for its code page and its data page, ${F.refillWalks} walks of ${WALK_CYCLES} cycles each in its first slice. Real machines tag each TLB entry with an address-space number so that a switch does not have to flush; this one has none.</p>
         <p>The processes protect each other in the other direction too. A has no entry in its table for B's frames, so there is no virtual address, however wild, with which it can read B's data. The only shared things are the kernel's frame (which user mode may not touch) and the console, which only the kernel writes.</p>`,
       scene: scenes.spaces,
@@ -270,8 +266,7 @@ export const chOs: Chapter = {
       body: `
         <p>Everything the kernel does is cycles the processes do not get. Two kinds: the kernel's own instructions (a trap, save, choose, restore, return: ${F.tickSwitches} cycles in the kernel for a timer interrupt that switches) and the cold start of the process it hands the CPU to (the TLBs were emptied, so its first slice begins with ${F.refillWalks} walks).
         Per switch that is about ${F.switchCycles + (F.refillWalks - 1) * WALK_CYCLES} cycles.</p>
-        <p>What matters is how often it is paid, and that is the slice. The table runs two processes that only compute for 40 000 retired instructions at each slice, and counts every cycle the kernel and the walks took after the boot. At ${F.slice} instructions the machine gives away <strong>${F.overhead} %</strong> of its cycles to sharing; at ${SLICES[0]} the kernel eats ${F.overheadShort} %, at ${n(SLICES[SLICES.length - 1])} only ${F.overheadLong} %. A slice shorter than
-        a switch spends nearly all its time switching.</p>
+        <p>What matters is how often it is paid, and that is the slice. The table runs two processes that only compute for ${n(OVERHEAD_STEPS)} retired instructions at each slice, and counts every cycle the kernel and the walks took after the boot. At ${F.slice} instructions the machine gives away <strong>${F.overhead} %</strong> of its cycles to sharing; at ${SLICES[0]} the kernel eats ${F.overheadShort} %, at ${n(SLICES[SLICES.length - 1])} only ${F.overheadLong} %.</p>
         <p>Why not a very long slice? Because the other side of the trade is <em>latency</em>: a process that is ready waits, in the worst case, for the whole slice of the one that runs, plus the switch. For a program that reads a key and must answer in a few milliseconds that is the budget; for a long computation it does not matter at all. The slice is the one number an operating system gives up on both: it has to be long enough that the processes get done, short
         enough that the user does not notice. Real kernels run the timer at 100 to 1 000 times a second, on CPUs that execute a few billion instructions a second; the slice is millions of instructions and the overhead a fraction of a percent.</p>
         <p>Click a row to see the arithmetic for that slice.</p>`,
@@ -281,10 +276,10 @@ export const chOs: Chapter = {
       },
       challenge: {
         kind: 'quiz',
-        question: 'The slice is cut from 1 600 to 400 instructions. Which is true?',
+        question: `The slice is cut from ${n(SLICES[4])} to ${SLICES[2]} instructions. Which is true?`,
         options: ['The kernel and the walks take a larger share of the cycles, and a ready process waits less', 'The kernel takes a smaller share, because each slice does less', 'Nothing changes except the interleaving on the console', 'Both the share and the wait grow'],
         answer: 0,
-        explain: 'Four times as many switches for the same work, each costing about the same, so the overhead is about four times larger; but a process waits only one 400-instruction slice (plus a switch) for its turn instead of 1 600.',
+        explain: `${SLICES[4] / SLICES[2]} times as many switches for the same work, each costing about the same, so the overhead is several times larger (${F.overheadAt[2]} % against ${F.overheadAt[4]} % in the table); but a process waits only one ${SLICES[2]}-instruction slice (plus a switch) for its turn instead of ${n(SLICES[4])}.`,
         why: ['', 'A smaller slice does not make the switch cheaper; it makes it more frequent.', 'The overhead column of the table changes strongly; the interleaving is just the visible part.', 'The wait is the other process\'s slice; shortening it shortens the wait.'],
       },
     },

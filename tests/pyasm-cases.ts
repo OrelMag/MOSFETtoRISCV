@@ -18,10 +18,11 @@ export function snapshotCases(): Record<string, string> {
     out[name] = c.error ? `error:${c.error.message}` : fnv(c.asm);
   };
   for (const p of PY_PROGRAMS) for (const dm of [64, 512, 1024]) for (const m of [false, true]) add(`${p.id}/${dm}/${m ? 'm' : ''}`, p.source, { dmemWords: dm, m });
-  for (const p of PY_STRING_PROGRAMS) for (const m of [false, true]) add(`str:${p.id}/${m ? 'm' : ''}`, p.source, { dmemWords: 1024, m });
-  for (let s = 1; s <= 60; s++) { add(`rand${s}`, randomPyProgram(s), { dmemWords: 512 }); add(`rand${s}/m`, randomPyProgram(s), { dmemWords: 512, m: true }); }
-  for (let s = 1; s <= 20; s++) add(`randmem${s}`, randomPyProgram(s, true), { dmemWords: 512 });
-  for (let s = 1; s <= 20; s++) add(`randstr${s}`, randomStrProgram(s), { dmemWords: 1024 });
+  // the options the tests and widgets pass: dmemWords 64 (PY_DMEM_K 6), 512, 1024; heapBytes 200 / 400 / the default; seeds 1..300 as pylang.test.ts runs them
+  for (const p of PY_STRING_PROGRAMS) for (const m of [false, true]) for (const dm of [512, 1024]) for (const hb of [undefined, 200, 400]) add(`str:${p.id}/${dm}/${hb ?? ''}/${m ? 'm' : ''}`, p.source, { dmemWords: dm, m, heapBytes: hb });
+  for (let s = 1; s <= 300; s++) { add(`rand${s}`, randomPyProgram(s), { dmemWords: 512 }); add(`rand${s}/m`, randomPyProgram(s), { dmemWords: 512, m: true }); }
+  for (let s = 1; s <= 300; s++) add(`randmem${s}`, randomPyProgram(s, true), { dmemWords: 512 });
+  for (let s = 1; s <= 300; s++) { add(`randstr${s}`, randomStrProgram(s), { dmemWords: 1024, heapBytes: 400 }); add(`randstr${s}/512`, randomStrProgram(s), { dmemWords: 512 }); }
   add('default', 'print(1)\n', {});
   return out;
 }

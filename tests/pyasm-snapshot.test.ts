@@ -7,7 +7,7 @@ describe('compiler output unchanged by the user target', () => {
   it('every sample and fuzz seed generates the same assembly', () => {
     const now = snapshotCases();
     expect(Object.keys(now).length).toBe(Object.keys(snapshot).length);
-    expect(Object.keys(now).length).toBeGreaterThan(300);
+    expect(Object.keys(now).length).toBeGreaterThan(1500);
     const changed = Object.keys(snapshot).filter((k) => (snapshot as Record<string, string>)[k] !== now[k]);
     expect(changed).toEqual([]);
   });

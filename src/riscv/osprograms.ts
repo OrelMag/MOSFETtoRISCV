@@ -22,6 +22,8 @@ import { assemble } from './asm';
 import { VM_A, VM_D, VM_R, VM_U, VM_V, VM_W, VM_X } from './vmprograms';
 
 export const OS_IMEM_K = 12, OS_DMEM_K = 14;
+/** The registers a switch moves each way: x1 .. x31. */
+export const NREGS = 31;
 export const CONSOLE = '0x80000000';
 export const PCB0 = 0x100, PCB_SIZE = 0x100, NPROC = 2;
 export const PCB = { satp: 128, state: 132, slices: 136, tag: 140 } as const;

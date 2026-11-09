@@ -27,6 +27,11 @@ describe('the kernel on the golden model', () => {
     expect(r.byProc[0]).toBe('A 7\n');
     expect(r.byProc[1]).toBe('B 9\n');
     // process A's page 1 is the frame at root + 0x3000 + ... : root, leaf, page 0, page 1
+    // B's store lands between A's store and A's read: the CPU was taken from A before its write call, and B ran long enough to store
+    const first = r.trips.find((t) => t.cause === 0x80000007)!;
+    expect([first.from, first.to]).toEqual([0, 1]);
+    expect(tripsOf(r, 2).find((t) => t.from === 0)!.at).toBeGreaterThan(first.at);
+    expect(first.userSteps).toBeGreaterThan(5);
     const pageOf = (root: number) => r.iss.dmem[(root + 0x3000) / 4];
     expect([pageOf(ROOT_OF[0]), pageOf(ROOT_OF[1])]).toEqual([7, 9]);
     expect(VA.data1).toBe(0x1000);
@@ -62,13 +67,20 @@ describe('the kernel on the golden model', () => {
   });
 });
 
+const GATE_CASES: [string, string[], string][] = [
+  ...OS_DEMOS.map((d) => [d.id, d.procs, WANT[d.id]] as [string, string[], string]),
+  // both processes store at 0x1000 and read it back: the other's store lands in between (asserted above on the model)
+  ['private word at 0x1000', [privateWord(7), privateWord(9)], 'A 7\nB 9\nall done\n'],
+  ['a store into the kernel\'s frame, the other carries on', [rogueStore, counter(1, 3, 20)], 'o!A killed, cause 15\nB 1\nB 2\nB 3\nall done\n'],
+];
+
 describe('the kernel on the gates, in lock step with the golden model', () => {
-  it.each(OS_DEMOS.map((d) => [d.id, d] as const))('%s', async (id, d) => {
-    const img = osImage(d.procs, { slice: d.slice });
+  it.each(GATE_CASES)('%s', async (id, procs, want) => {
+    const img = osImage(procs, { slice: OS_DEMOS.find((x) => x.id === id)?.slice });
     const r = await lockstep(img.words, { imemK: OS_IMEM_K, dmemK: OS_DMEM_K, maxCycles: 20000, pause: tick });
     expect(r.why).toBe('');
     expect(r.halted).toBe(true);
-    expect(r.iss.console).toBe(WANT[id]);
+    expect(r.iss.console).toBe(want);
     const m = runOs(img);
     // the gates stall WALK_CYCLES per TLB miss and retire once a cycle otherwise
     expect(r.stalls).toBe(WALK_CYCLES * m.walks);

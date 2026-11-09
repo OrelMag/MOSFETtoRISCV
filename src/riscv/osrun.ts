@@ -110,6 +110,9 @@ export interface SwitchFrame {
   /** The register this instruction wrote (0: none) and the PCB word it stored to (-1: none). */
   wrote: number;
   stored: [number, number] | null;
+  /** The process the CPU was taken from and the one it was given to (the same on every frame). */
+  from: number;
+  to: number;
 }
 
 const pcbWords = (iss: ISS, p: number) => Array.from({ length: 32 }, (_, i) => iss.dmem[(PCB0 + p * PCB_SIZE) / 4 + i] >>> 0);
@@ -143,11 +146,11 @@ export function captureSwitch(img: OsImage, maxSteps = 100000): SwitchFrame[] {
     const wrote = xs.findIndex((v, i) => i > 0 && (v | 0) !== (iss.x[i] | 0));
     let stored: [number, number] | null = null;
     for (let p = 0; p < 2; p++) for (let i = 0; i < 32; i++) if (post[p][i] !== pre[p][i]) stored = [p, i];
-    frames.push({ i: frames.length, pc, text: first ? 'timer interrupt: MTIP and a user instruction fetched' : info.text, phase: first ? 'save' : phase, cycles: cyc, regs: [...iss.x].map((v) => v >>> 0), pcb: post as [number[], number[]], wrote: wrote < 0 ? 0 : wrote, stored });
+    frames.push({ i: frames.length, pc, text: first ? 'timer interrupt: MTIP and a user instruction fetched' : info.text, phase: first ? 'save' : phase, cycles: cyc, regs: [...iss.x].map((v) => v >>> 0), pcb: post as [number[], number[]], wrote: wrote < 0 ? 0 : wrote, stored, from: procOf(from), to: -1 });
     if (info.text.startsWith('mret')) mretSeen = true;
     if (mretSeen && user) {
       const next = iss.dmem[0] >>> 0;
-      if (next !== from) return frames;
+      if (next !== from) { for (const f of frames) f.to = procOf(next); return frames; }
       inTrip = false; // the kernel gave the CPU back to the same process: look at the next interrupt
     }
     void trap;

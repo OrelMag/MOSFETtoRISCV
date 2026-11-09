@@ -18,12 +18,11 @@ describe('the figures the chapter quotes', () => {
     expect(osFigures()).toEqual({
       kernelWords: 361, kernelBytes: 1444,
       saveInstr: 37, chooseInstr: 23, restoreInstr: 38, switchInstr: 99, switchCycles: 102, switchStall: 3,
-      putchar: 84, write1: 171, write5: 219, writeMax: 360, yieldTrip: 109, exitTrip: 114, tickStays: 97, tickSwitches: 98,
+      putchar: 84, write1: 171, write5: 219, writeMax: 360, yieldTrip: 109, exitTrip: 114, tickStays: 97, tickSwitches: 98, stayWalks: 0,
       refillWalks: 2, sliceUser: 542, bootInstr: 123,
-      slice: 600, overhead: 16, overheadShort: 70.8, overheadLong: 0.8,
+      slice: 600, overhead: 16, overheadShort: 70.8, overheadLong: 0.8, overheadAt: [70.8, 42, 23.1, 12.1, 6.2, 3.2, 1.6, 0.8],
       frames: 16, usedFrames: 9,
       py: { a: 'fibloop', b: 'squares', steps: 5874, cycles: 5928, switches: 8, outA: 15, outB: 10, calls: 25 },
-      nands: 79701,
     });
   });
 
@@ -41,8 +40,12 @@ describe('the figures the chapter quotes', () => {
     expect(f.filter((x) => x.phase === 'save').length + f.filter((x) => x.phase === 'choose').length + f.filter((x) => x.phase === 'restore').length + 1).toBe(f.length);
     // one cycle a step, and the walk that fetches B's first instruction
     expect(f[f.length - 1].cycles).toBe(f.length + WALK_CYCLES);
-    // A's registers end up in A's block and come out of B's into the CPU: the CPU's s0 (x8) is B's 0x1000 at the end, A's block holds A's
+    // the CPU is taken from A and given to B, A's registers are in A's block (its s0 is 0x1000) and B, which has not run yet, loads zeros
+    expect([f[0].from, f[0].to]).toEqual([0, 1]);
     const last = f[f.length - 1];
+    expect(last.pcb[0][8]).toBe(0x1000);
+    // B has not run: its block is empty but for the PC it will start at, and the CPU holds what B's first instruction loaded
+    expect(last.pcb[1].slice(1).every((v) => v === 0)).toBe(true);
     expect(last.regs[8]).toBe(0x1000);
     expect(last.pcb[0][0]).not.toBe(0);
   });
