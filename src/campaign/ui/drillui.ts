@@ -67,6 +67,13 @@ export function drillCard(n: CampaignNode): HTMLElement {
     };
     const check = () => {
       if (revealed) return next();
+      // nothing typed yet is not a wrong answer: mistakes cost stars
+      if (!input.value.trim()) {
+        fb.className = 'cp-drill-fb';
+        fb.replaceChildren('Type an answer first, or Show answer.');
+        input.focus();
+        return;
+      }
       const res = q.check(input.value);
       if (res.ok) {
         right++;
