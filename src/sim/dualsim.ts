@@ -196,6 +196,18 @@ export class DualSim implements Sim {
     this.onFast = false;
   }
 
+  /** Force nets to bits now (sim/faults.ts flipBits): on GateSim, which hands the state back to the cycle engine at a later settle. */
+  forceNets(nets: readonly number[], bits: ArrayLike<number>): void {
+    this.toGate();
+    this.gate.forceNets(nets, bits);
+  }
+
+  /** GateSim.recheck, on GateSim. */
+  recheck(nets: readonly number[]): void {
+    this.toGate();
+    this.gate.recheck(nets);
+  }
+
   /**
    * Running is about to start (Run, Run to halt): build and enter the cycle engine now if it is
    * wanted, rather than after the warm-up settles, so its one-time cost falls outside a frame's budget.
@@ -208,6 +220,10 @@ export class DualSim implements Sim {
   /** After a settle on GateSim: move to the cycle engine if wanted and possible. */
   private tryFast(): void {
     if (!this.prefer || this.onFast || this.trace || this.settles < this.retryAt) return;
+    if (this.design.extraDelay?.size) {
+      this.whyNot = 'a slow fault is set (the cycle engine has no gate delays)';
+      return;
+    }
     const g = this.gate;
     if (g.busy()) return;
     if (g.unstable) {

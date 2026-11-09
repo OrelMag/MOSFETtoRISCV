@@ -108,11 +108,13 @@ export class GateSim implements Sim {
           outs++;
         }
       }
-      const d = l.kind === 'nand' ? 1 : Math.max(1, l.def.behavior?.delay ?? 1);
+      // a slow fault (sim/faults.ts) adds delays to its driving leaf; a slowed NAND leaves the fast path (opA stays -1)
+      const slow = design.extraDelay?.get(li) ?? 0;
+      const d = (l.kind === 'nand' ? 1 : Math.max(1, l.def.behavior?.delay ?? 1)) + slow;
       // A longer delay would wrap the event wheel and fire early: refuse it rather than clamp it.
       if (d >= RING) throw new Error(`${pathOf(l)}: delay ${d} exceeds the event wheel (max ${RING - 1})`);
       this.delay[li] = d;
-      if (l.kind === 'nand') {
+      if (l.kind === 'nand' && !slow) {
         this.opA[li] = l.inputs[0][0];
         this.opB[li] = l.inputs[1][0];
         this.opY[li] = l.outputs[0][0];
@@ -212,6 +214,21 @@ export class GateSim implements Sim {
       const b = (bits[i] === B0 || bits[i] === B1 ? bits[i] : BX) as Bit;
       if (this.val[net] !== b) this.force(net, b);
     });
+  }
+
+  /** The leaf driving each net (−1: none), built on first use. */
+  private drivers: Int32Array | null = null;
+
+  /**
+   * Evaluate again the leaves driving these nets (sim/faults.ts flipBits): after a forced flip has settled, a net a
+   * loop holds keeps its value, a net its driver computes from elsewhere takes the driven one back at the next settle.
+   */
+  recheck(nets: readonly number[]): void {
+    if (!this.drivers) {
+      const d = this.drivers = new Int32Array(this.design.netCount).fill(-1);
+      for (let li = 0; li + 1 < this.outStart.length; li++) for (let q = this.outStart[li]; q < this.outStart[li + 1]; q++) d[this.outList[q]] = li;
+    }
+    for (const n of nets) if (this.drivers[n] >= 0) this.markDirty(this.drivers[n]);
   }
 
   busy(): boolean {
@@ -622,6 +639,8 @@ export class GateSim implements Sim {
   private evalBehavior(li: number, out: Bit[]): void {
     const leaf = this.design.leaves[li];
     const v = this.val;
+    // a NAND off the fast path (a slow fault): its own function, its delay from this.delay
+    if (leaf.kind === 'nand') { out[0] = NAND_T[(v[leaf.inputs[0][0]] << 2) | v[leaf.inputs[1][0]]] as Bit; return; }
     const ins = leaf.inputs.map((p) => pack(p.map((net) => v[net])));
     const outs = leaf.def.behavior!.eval(ins, this.state[li]);
     const ops = outPorts(leaf.def);

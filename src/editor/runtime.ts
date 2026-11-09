@@ -29,14 +29,16 @@
 // added to a chip that had none is a new chance: it starts ticking whatever happened before.
 
 import { DualSim } from '../sim/dualsim';
-import { flatten } from '../sim/flatten';
+import { type FlatDesign, flatten } from '../sim/flatten';
+import { applyFaults, type FlatFault } from '../sim/faults';
 import type { PowerOnMode, Sim } from '../sim/sim';
 import { shortText, SwitchSim, WEAK_H, weakTag } from '../sim/switchsim';
 import { B1, type Bit, BZ, type ComponentDef, netlistOf } from '../sim/types';
 import { unpackBig } from '../sim/values';
 import type { HierNode } from '../sim/flatten';
 import { checkSimulatable, type Compiled, type Diag } from './compile';
-import { pinBig, type PinDoc, type PinValue } from './model';
+import { type ChipDoc, pinBig, type PinDoc, type PinValue } from './model';
+import { resolveProbe } from './probes';
 import { holdSwitches } from './ioparts';
 import { HALT_PREFIX, KEYBOARD_DEPTH, KEYBOARD_ID, keyBindOf, type KeyboardState, type KeyState } from './parts';
 
@@ -123,6 +125,13 @@ const serial = (d: ComponentDef) => serials.get(d) ?? (serials.set(d, nextSerial
 export function simKey(c: Compiled): string {
   const insts = netlistOf(c.def)?.instances ?? [];
   return `${c.connKey}|${c.mode}|${insts.map((i) => `${i.name}:${serial(i.def)}`).join(',')}`;
+}
+
+/** The fault brush in a simulation (EditorSim.faults): fault id → the flat nets it is on; ids whose target no longer resolves; refusals. */
+export interface FaultState {
+  applied: Map<string, number[]>;
+  stale: Set<string>;
+  problems: string[];
 }
 
 export class EditorSim {
@@ -212,7 +221,11 @@ export class EditorSim {
 
   private latest: Compiled | null = null;
   private pins: PinDoc[] = [];
+  /** The chip's document, for its faults (their targets resolve against each build). */
+  private doc: ChipDoc | null = null;
   private key = '';
+  /** The fault brush's faults in this simulation (faultui.ts): resolved targets, those that no longer resolve, refusals. */
+  faults: FaultState = { applied: new Map(), stale: new Set(), problems: [] };
   private timer: ReturnType<typeof setTimeout> | null = null;
   private raf = 0;
   private lastFrame = 0;
@@ -251,10 +264,11 @@ export class EditorSim {
   }
 
   /** Take the latest compile of the chip (on every edit). */
-  update(c: Compiled, pins: PinDoc[]): void {
+  update(c: Compiled, pins: PinDoc[], doc?: ChipDoc): void {
     this.latest = c;
     this.pins = pins;
-    const key = simKey(c);
+    this.doc = doc ?? null;
+    const key = this.keyOf(c);
     if (key === this.key) {
       if (this.timer) { clearTimeout(this.timer); this.timer = null; }
       this.built = c;
@@ -276,13 +290,43 @@ export class EditorSim {
     return this.timer !== null;
   }
 
+  /** simKey, and the faults that are on (a fault switched on or off rebuilds, its state carried). */
+  private keyOf(c: Compiled): string {
+    const on = this.doc?.faults?.filter((f) => !f.off) ?? [];
+    return on.length ? `${simKey(c)}|faults:${JSON.stringify(on)}` : simKey(c);
+  }
+
+  /** The chip's faults that are on, on the flat nets of `d` (gate level only), applied. */
+  private withFaults(c: Compiled, d: FlatDesign): FlatDesign {
+    const st: FaultState = { applied: new Map(), stale: new Set(), problems: [] };
+    this.faults = st;
+    const doc = this.doc, on = doc?.faults?.filter((f) => !f.off) ?? [];
+    if (!doc || !on.length) return d;
+    if (c.mode !== 'gate') {
+      st.problems.push('faults apply at gate level only: this chip is simulated at switch level');
+      return d;
+    }
+    const flat: FlatFault[] = [];
+    for (const f of on) {
+      const r = resolveProbe(f.target, doc, c, d);
+      if (!r || !r.nets.length) { st.stale.add(f.id); continue; }
+      const nets = f.bit === undefined ? r.nets : r.nets[f.bit] === undefined ? [] : [r.nets[f.bit]];
+      if (!nets.length) { st.stale.add(f.id); continue; }
+      st.applied.set(f.id, nets);
+      flat.push({ kind: f.kind, nets, delay: f.delay });
+    }
+    const out = applyFaults(d, flat);
+    st.problems.push(...out.problems);
+    return out.design;
+  }
+
   private rebuild(): void {
     if (this.timer) { clearTimeout(this.timer); this.timer = null; }
     const c = this.latest;
     if (!c) return;
-    const key = simKey(c);
+    const key = this.keyOf(c);
     try {
-      const d = flatten(c.def, { mode: c.mode });
+      const d = this.withFaults(c, flatten(c.def, { mode: c.mode }));
       // gate level: GateSim, and the cycle engine while running in cycle mode (DualSim switches)
       const sim: Sim = c.mode === 'gate' ? new DualSim(d) : new SwitchSim(d);
       if (sim instanceof DualSim) sim.preferFast = this.mode === 'cycle';

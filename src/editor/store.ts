@@ -9,6 +9,8 @@ import { sanitizeIsa } from '../isa/table';
 import { sanitizeRows } from '../riscv/custom';
 import { isBook, sanitizeProgram } from '../lib/ucode';
 import { sanitizeCpu } from './cpu';
+import type { ProbeTarget } from './probes';
+import { MAX_SLOW } from '../sim/faults';
 import { mergeFolders, sanitizeFolders } from './folders';
 import { same } from './history';
 import { MAX_KEY_LENGTH } from './parts';
@@ -18,7 +20,7 @@ import { FACE_MAX, isEmptyFace, SCALE_MAX, SCALE_MIN, SIDES } from './face';
 import { PUZZLE_MAX_WIDTH } from './puzzleparts';
 import {
   type FsmDoc, type TableDoc, SCHEMA, chipDeps, portCoreRef, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
-  type ChipDoc, type CommentDoc, type FaceDisplayDoc, type FaceDoc, type FacePinDoc, type FaceSide, type DisplayKind, type EndRef, type ExitDir, type FolderDoc, type LabelDoc, type NetHue, type PartDoc, type PartRef,
+  type ChipDoc, type CommentDoc, type FaultDoc, type FaceDisplayDoc, type FaceDoc, type FacePinDoc, type FaceSide, type DisplayKind, type EndRef, type ExitDir, type FolderDoc, type LabelDoc, type NetHue, type PartDoc, type PartRef,
   type PinDoc, type PinValue, type SectionDoc, type Vec, type WireDoc, type Workspace, SECTION_MIN,
 } from './model';
 
@@ -161,6 +163,36 @@ function sanitizeTable(x: unknown): ChipDoc['table'] {
   if (ins.length < 1 || ins.length > 8 || outs.length < 1 || outs.length > 16 || x.rows.length !== outs.length) return undefined;
   if (!x.rows.every((r) => str(r) && r.length === 1 << ins.length && !/[^01-]/.test(r))) return undefined;
   return compact({ ins: [...ins], outs: [...outs], rows: [...(x.rows as string[])], form: (x.form === 'andor' || x.form === 'pla' || x.form === 'rom' ? x.form : 'nand') as TableDoc['form'], of: str(x.of) && isIdent(x.of) ? x.of : undefined });
+}
+
+/** A probe-style target (probes.ts ProbeTarget): wires, a pin, a pointer, or a net inside a part. */
+function sanitizeTarget(x: unknown): ProbeTarget | undefined {
+  if (!isObj(x)) return undefined;
+  if (Array.isArray(x.wires)) { const w = x.wires.filter(str).slice(0, 4096); return w.length ? { wires: w } : undefined; }
+  if (str(x.pin)) return { pin: x.pin };
+  if (str(x.pointer)) return { pointer: x.pointer };
+  if (Array.isArray(x.path) && x.path.every(str) && num(x.net) && x.net >= 0) return { path: [...x.path], net: Math.round(x.net), ...(str(x.ends) ? { ends: x.ends } : {}) };
+  return undefined;
+}
+
+/** The fault brush's faults (faultui.ts): at most MAX_FAULTS, each with a target it can resolve. */
+export const MAX_FAULTS = 64;
+function sanitizeFaults(x: unknown): ChipDoc['faults'] {
+  if (!Array.isArray(x)) return undefined;
+  const out: FaultDoc[] = [];
+  for (const f of x) {
+    if (!isObj(f) || !str(f.id) || (f.kind !== 'stuck0' && f.kind !== 'stuck1' && f.kind !== 'slow')) continue;
+    const target = sanitizeTarget(f.target);
+    if (!target) continue;
+    out.push(compact({
+      id: f.id, kind: f.kind, target,
+      bit: num(f.bit) && f.bit >= 0 ? Math.round(f.bit) : undefined,
+      delay: f.kind === 'slow' ? Math.min(MAX_SLOW, Math.max(1, num(f.delay) ? Math.round(f.delay) : 1)) : undefined,
+      off: f.off === true ? true : undefined,
+    }) as FaultDoc);
+    if (out.length >= MAX_FAULTS) break;
+  }
+  return out.length ? out : undefined;
 }
 
 /** A chip's test tables (testtable.ts): a name and the source text each, at most MAX_TESTS of MAX_TEST_SRC characters. */
@@ -329,6 +361,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
     table: sanitizeTable(c.table),
     fsm: sanitizeFsm(c.fsm),
     tests: sanitizeTests(c.tests),
+    faults: sanitizeFaults(c.faults),
     pins: uniquePins, parts, wires, labels,
     comments: comments.length ? comments : undefined,
     sections: sections.length ? sections : undefined,

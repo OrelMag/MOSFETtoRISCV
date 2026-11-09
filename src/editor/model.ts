@@ -15,6 +15,7 @@ import type { Microprogram } from '../lib/multicycle';
 import { instPort, type ExitDir, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
 import type { CpuDoc } from './cpu';
+import type { ProbeTarget } from './probes';
 import type { ReaderRef } from './cardparts';
 import type { ScreenRef } from './ioparts';
 
@@ -181,6 +182,22 @@ export interface ChipDoc {
   comments?: CommentDoc[];
   /** Titled frames drawn around groups of parts: saved and shared, never compiled (absent: none). */
   sections?: SectionDoc[];
+  /** The fault brush's faults (faultui.ts): saved with the chip, never compiled into it; the simulation applies those on. */
+  faults?: FaultDoc[];
+}
+
+/**
+ * A fault on something the user drew (sim/faults.ts): stuck at 0 or 1, or slow (+delay gate delays). Its target is
+ * named as a probe's is (probes.ts), so it follows the net through edits; `bit`: one bit of a bus (absent: every bit).
+ */
+export interface FaultDoc {
+  id: string;
+  kind: 'stuck0' | 'stuck1' | 'slow';
+  target: ProbeTarget;
+  bit?: number;
+  delay?: number;
+  /** Switched off in the list (kept, not applied). */
+  off?: boolean;
 }
 
 /**
