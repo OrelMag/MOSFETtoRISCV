@@ -1,7 +1,31 @@
 # Plan: "Side channels" (Phase 23)
 
 Roadmap item: "Side channels: Spectre on our out-of-order core and its cache". This is a plan and a mockup
-(E:/mockups/sidechan/). Nothing is built until the author approves.
+(E:/mockups/sidechan/).
+
+**Approved 2026-11-09** by the author as shown (artifact BXrBAGTWZqzEv7jMBp2Dtw), with all six decisions as recommended.
+Built in stages:
+1. The model's spec mode, with tests (feat/sidechan-spec).
+2. The chapter, after `verify`.
+3. The codex, and the AES power step only if it measures feasible.
+
+Every number in the mockup is computed and pinned before it reaches the prose.
+
+Stage 1 as built:
+- `ooomodel.ts` spec mode (`SpecConfig`; `isRdcycle`, `isFence`); `CacheModel.holds`.
+- `riscv/sideprograms.ts`: the attacker program for each defence, and the cache and memory map.
+- `tests/ooo-fingerprint.test.ts`: every configuration × program, cycle by cycle, pinned before the change.
+- `tests/sidechan-spec.test.ts`:
+  - the program recovers the secret over 32 secrets, and each defence recovers nothing;
+  - the out-of-bounds load ran on the wrong path and was flushed;
+  - a miss measures 18 cycles more than a hit;
+  - the benchmarks keep their architectural state;
+  - wrong-path stores vanish;
+  - the fence barrier.
+
+One choice made while building: `csrr cycle` serializes fetch on a wrong path too. Otherwise the code after the victim's
+`ret` runs on the wrong path into the attacker's timing loop, and that loop's own probe loads fill lines. Real attack
+code serializes there for the same reason.
 
 ## Placement
 
