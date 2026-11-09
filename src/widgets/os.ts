@@ -22,11 +22,11 @@ const REGS = ['zero', 'ra', 'sp', 'gp', 'tp', 't0', 't1', 't2', 's0', 's1', 'a0'
 export const sharePair = (): string[] => [counter(1, 6), counter(10, 6)];
 
 /** A scene: the kernel with these processes on the virtual-memory CPU, the cycle engine, the CPU panel, the translation panel and the strip. */
-export function osScene(o: { procs: string[]; slice?: number; highlight?: string[]; names?: string[] }): Scene {
+export function osScene(o: { procs: string[]; slice?: number; highlight?: string[]; keep?: 'open' | 'folded' }): Scene {
   const img = osImage(o.procs, { slice: o.slice });
   const reload = (slice: number) => osScene({ ...o, slice });
   return {
-    ...cpuScene({ vm: true, source: img.source, highlight: o.highlight, imemK: OS_IMEM_K, dmemK: OS_DMEM_K, hideFiller: true, extraPanels: [osPanel({ slice: o.slice ?? OS_SLICE, reload })] }),
+    ...cpuScene({ vm: true, source: img.source, highlight: o.highlight, imemK: OS_IMEM_K, dmemK: OS_DMEM_K, hideFiller: true, extraPanels: [osPanel({ slice: o.slice ?? OS_SLICE, reload, keep: o.keep })] }),
     engine: 'cycle', autoClock: false, noRemix: true,
   };
 }
@@ -45,7 +45,7 @@ function dmemOf(sim: Sim, root: HierNode): ArrayLike<number> | undefined {
   return (sim.leafState(dm.leafIndex) as { mem: ArrayLike<number> } | undefined)?.mem;
 }
 
-export function osPanel(o: { slice: number; reload: (slice: number) => Scene }): ScenePanel {
+export function osPanel(o: { slice: number; reload: (slice: number) => Scene; keep?: 'open' | 'folded' }): ScenePanel {
   return (stage: Stage): Widget => {
     let segs: { k: Kind; n: number }[] = [];
     let win = 0;
@@ -96,7 +96,7 @@ export function osPanel(o: { slice: number; reload: (slice: number) => Scene }):
       save: () => ({ segs: segs.map((s) => ({ ...s })), win, total: [...total], con: [...con], switches, lastRun }),
       restore: (v) => { const s = v as { segs: typeof segs; win: number; total: number[]; con: typeof con; switches: number; lastRun: number }; segs = s.segs.map((x) => ({ ...x })); win = s.win; s.total.forEach((t, i) => (total[i] = t)); con = [...s.con]; switches = s.switches; lastRun = s.lastRun; },
     });
-    const el = h('div', { class: 'mem-panel io-panel os-panel', 'data-dock': 'left', 'data-fold': 'narrow', 'data-phone': 'flow' },
+    const el = h('div', { class: 'mem-panel io-panel os-panel', 'data-dock': 'left', 'data-fold': 'narrow', 'data-phone': 'flow', ...(o.keep ? { 'data-keep': o.keep } : {}) },
       h('h4', null, 'Who has the CPU', h('span', { class: 'fold-hint' })),
       h('div', { class: 'param-row' }, h('label', { class: 'os-slice' }, 'Time slice ', sel)),
       strip, legend,
@@ -109,7 +109,7 @@ export function osPanel(o: { slice: number; reload: (slice: number) => Scene }):
       const all = total[0] + total[1] + total[2] + total[3];
       legend.replaceChildren(
         ...[0, 1, 2, 3].map((k) => h('span', null, h('i', { class: `os-seg k${k}` }), `${KIND_NAME[k]} ${total[k]}`)),
-        h('span', { class: 'os-sum' }, `${switches} switches · sharing costs ${all ? Math.round((100 * (total[2] + total[3])) / all) : 0} % of ${all} cycles (the last ${WINDOW} drawn)`));
+        h('span', { class: 'os-sum' }, `${switches} switches · the kernel and the walks took ${all ? Math.round((100 * (total[2] + total[3])) / all) : 0} % of ${all} cycles (the last ${WINDOW} drawn)`));
       // the console, one colour per process
       const parts: (string | HTMLElement)[] = [];
       let run = '', who = -1;
@@ -192,7 +192,7 @@ export function switchWidget(): Widget {
     const hotCpu = f.wrote, hotA = f.stored && f.stored[0] === 0 ? f.stored[1] : -1, hotB = f.stored && f.stored[0] === 1 ? f.stored[1] : -1;
     view.replaceChildren(
       h('div', { class: `os-now ph-${f.phase}` }, h('code', null, `${hex(f.pc, 4)}  ${f.text}`), h('span', null, PHASES[f.phase]),
-        h('b', null, `instruction ${f.i + 1} of ${frames.length} · ${f.cycles} cycles since the interrupt`)),
+        h('b', null, `cycle ${f.i + 1} of ${frames.length} · ${f.cycles} clock ${f.cycles === 1 ? 'cycle' : 'cycles'} since the interrupt`)),
       h('div', { class: 'os-rfs' }, grid('Process A\'s control block', f.pcb[0], hotA, 'a'), grid('The CPU\'s registers', f.regs, hotCpu, 'cpu'), grid('Process B\'s control block', f.pcb[1], hotB, 'b')));
   };
   const last = frames[frames.length - 1];
@@ -200,7 +200,7 @@ export function switchWidget(): Widget {
     h('div', { class: 'rb-ctl' }, play, h('button', { type: 'button', class: 'btn sm', onclick: () => { stop(); go(at - 1); } }, 'Back'), h('button', { type: 'button', class: 'btn sm', onclick: () => { stop(); go(at + 1); } }, 'Step'),
       h('button', { type: 'button', class: 'btn sm', onclick: () => { stop(); go(0); } }, 'Restart'), slider),
     view,
-    h('p', { class: 'sub' }, `One switch from process A to process B, taken from the golden model running the kernel of this chapter: ${frames.length} instructions, ${last.cycles} clock cycles from the interrupt to the first instruction of B, the page walk for that instruction included.`));
+    h('p', { class: 'sub' }, `One switch from process A to process B, taken from the golden model running the kernel of this chapter: ${frames.length} cycles of work and ${last.cycles - frames.length} of waiting for a page-table walk: ${last.cycles} clock cycles from the interrupt to the first instruction of B.`));
   go(0);
   return { el, destroy: stop };
 }

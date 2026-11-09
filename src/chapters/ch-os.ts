@@ -79,11 +79,11 @@ export function osFigures(): OsFigures {
 const F = osFigures();
 
 const scenes = {
-  rogue: (): Scene => osScene({ procs: [rogueCsr, counter(1, 3, 20)], highlight: ['csr', 'trap'] }),
-  calls: (): Scene => osScene({ procs: [hello('Hi', true), counter(10, 3, 20)], highlight: ['csr', 'trap'] }),
-  share: (): Scene => osScene({ procs: [counter(1, 6), counter(10, 6)], highlight: ['csr', 'io'] }),
-  spaces: (): Scene => osScene({ procs: [privateWord(7), privateWord(9)], highlight: ['mmu'] }),
-  python: (): Scene => osScene({ procs: [pyProcess(PY_A), pyProcess(PY_B)], highlight: ['csr', 'mmu'] }),
+  rogue: (): Scene => osScene({ procs: [rogueCsr, counter(1, 3, 20)], highlight: ['csr', 'trap'], keep: 'folded' }),
+  calls: (): Scene => osScene({ procs: [hello('Hi', true), counter(10, 3, 20)], highlight: ['csr', 'trap'], keep: 'folded' }),
+  share: (): Scene => osScene({ procs: [counter(1, 6), counter(10, 6)], highlight: ['csr', 'io'], keep: 'open' }),
+  spaces: (): Scene => osScene({ procs: [privateWord(7), privateWord(9)], highlight: ['mmu'], keep: 'folded' }),
+  python: (): Scene => osScene({ procs: [pyProcess(PY_A), pyProcess(PY_B)], highlight: ['csr', 'mmu'], keep: 'open' }),
 };
 
 export const chOs: Chapter = {
@@ -232,7 +232,7 @@ export const chOs: Chapter = {
         machine timer interrupt is taken. In user mode it is always taken (an interrupt is only held back while the CPU is in machine mode with <code>MIE</code> clear). The kernel arms it with the first process and on every switch: <code>mtimecmp = mtime + slice</code>, ${F.slice} retired instructions here. <code>mtime</code> counts retired instructions, not clock cycles, so the cycles a page walk stalls do not shorten a slice.</p>
         <p>The scene runs the whole machine. Process A counts 1, 2, 3 … in the word at 0x1000 and writes each value; process B counts 10, 20, 30 …; each spins between writes. Neither calls <code>yield</code>. The strip is built from what the gates do every clock edge: the privilege mode, the walker's stall, and the kernel's variable that names the running process. Blue is A, orange is B, grey is the kernel
         and the hatched yellow is the CPU waiting for a page walk; the console takes the colour of whichever process wrote.</p>
-        <p>Run it and watch the grey slivers between the long blocks. A slice gives a process about ${F.sliceUser} of its ${F.slice} instructions, since the timer is armed in the middle of the switch and the rest of the kernel's return counts against the slice. The order on the console is not written anywhere in the programs: the
+        <p>Run it and watch the grey between the long blocks. It is the kernel at work, and here mostly not the switches: every number a process prints is a system call of ${F.write1} cycles and more (step 3), and the programs print every few instructions. A slice gives a process about ${F.sliceUser} of its ${F.slice} instructions, since the timer is armed in the middle of the switch and the rest of the kernel's return counts against the slice. The order on the console is not written anywhere in the programs: the
         timer decided it, which also means it can differ if the slice changes. Try another slice in the panel.</p>
         <div class="try">Pick a 200-instruction slice and run again: the numbers interleave more finely, and the grey share grows.</div>`,
       scene: scenes.share,
