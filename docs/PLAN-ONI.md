@@ -269,7 +269,7 @@ accepted, a neighbouring net is rejected with a distinguishing vector.
    E:/mockups/oni-breakit/.
 3. Card tags: the break-it levels read **FIND IT**, the bug hunts **FIX IT**.
 
-**As built (v1).** Faults are planted by a part's port (), not by a wire id, so they survive the drawing.
+**As built (v1).** Faults are planted by a part's port (`fa2.cin`), not by a wire id, so they survive the drawing.
 The planted fault is applied wherever the level is simulated (the canvas, Check and the test player) but never shown:
 no badge, list row or diagnostic. Check shows the failing cases and never records a pass; only a right accusation does.
 The level's chip is read-only (it is the reference drawing), and the learner's own hypothesis faults are off on it.
