@@ -23,7 +23,7 @@ export interface Analogy {
 
 export const ANALOGIES: Analogy[] = [
   {
-    chapter: 'basics', step: 'A loop of wire', title: 'Water in a closed loop of pipes',
+    chapter: 'basics', step: 'A loop of wire', title: 'Water in a closed loop of pipes', figure: 'water-loop',
     body: `<p>A pump lifts water into a tank; it runs down a pipe, turns a water wheel and comes back to the pump. Shut a valve
       anywhere and the wheel stops, because the whole loop stops at once.</p>`,
     map: [['Voltage', 'how high the tank sits above the return pipe (pressure)'], ['Current', 'how much water passes a point each second'],
@@ -34,7 +34,7 @@ export const ANALOGIES: Analogy[] = [
       be half empty; a wire cannot run short of charge.`,
   },
   {
-    chapter: 'mosfet', step: 'Three regions', title: 'A faucet whose handle is a voltage',
+    chapter: 'mosfet', step: 'Three regions', title: 'A faucet whose handle is a voltage', figure: 'water-fet',
     body: `<p>The gate turns the handle. Below the threshold (0.45 V on this chapter's 1.8 V process) the faucet is shut however
       hard the tank behind it pushes. Past it, the flow grows with the pressure difference across the faucet, until the outlet
       starts to <em>regulate</em>: from then on a lower basin adds almost nothing, because the handle sets the flow, not the
