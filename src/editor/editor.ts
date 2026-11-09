@@ -1212,7 +1212,10 @@ export class Editor {
   /** A halt part stopped Run. */
   private halted(): void {
     const sim = this.sim;
-    this.toast(sim.hasClock ? `Halted after cycle ${sim.cycles}` : sim.engine === 'gate' ? `Halted at t = ${sim.time}` : 'Halted');
+    const when = sim.hasClock ? `after cycle ${sim.cycles}` : sim.engine === 'gate' ? `at t = ${sim.time}` : '';
+    // a breakpoint (breakui.ts) names its condition; a halt part says Halted
+    const why = sim.stopReason && sim.stopReason !== 'halt' ? `Stopped: ${sim.stopReason}` : 'Halted';
+    this.toast(when ? `${why} ${when}` : why);
   }
 
   private updateStatus(): void {

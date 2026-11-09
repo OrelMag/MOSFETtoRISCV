@@ -58,14 +58,17 @@ export class Breakpoints {
   private resets = -1;
   /** The breakpoint that stopped the run last (its id), until the next run. */
   stoppedBy: string | null = null;
-  private readonly hook = { after: () => this.check() };
+  private readonly hook = { after: () => this.check('edge') };
+  private readonly tick = () => this.check('tick');
 
   constructor(readonly sim: EditorSim) {
     sim.edgeHooks.add(this.hook);
+    sim.tickHooks.add(this.tick);
   }
 
   dispose(): void {
     this.sim.edgeHooks.delete(this.hook);
+    this.sim.tickHooks.delete(this.tick);
   }
 
   /** Resolve the chip's breakpoints against the simulation now (memories kept for a condition that did not change). */
@@ -99,12 +102,17 @@ export class Breakpoints {
     this.sim.requestStop(breakText(l.doc));
   }
 
-  /** After a rising edge: every enabled condition, in list order (each keeps its rose / fell memory, so all are evaluated). */
-  check(): void {
+  /**
+   * After a rising edge, or after a gate delay in gate mode: every enabled condition checked at that grain, in list order
+   * (each keeps its rose / fell memory, so all are evaluated). An "every change" breakpoint is checked after each gate delay
+   * in gate mode (a run then stops between two edges) and after each edge in cycle mode.
+   */
+  check(at: 'edge' | 'tick' = 'edge'): void {
     const sim = this.sim.sim;
     if (!sim) return;
+    const fine = this.sim.mode === 'gate';
     for (const l of this.live) {
-      if (!l.expr || l.doc.off) continue;
+      if (!l.expr || l.doc.off || (at === 'tick') !== (fine && !!l.doc.gate)) continue;
       const r = evalBreak(l.expr, (n) => { const nets = l.nets.get(n); return nets ? (sim.getBits(nets) as ArrayLike<Bit>) : null; }, l.mem);
       l.status.unknown = r.unknown;
       if (r.hit) this.count(l);

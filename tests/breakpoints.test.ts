@@ -67,6 +67,22 @@ describe('breakpoints', () => {
     expect(es.cycles).toBe(5);
   });
 
+  it('"every change" stops between two edges in gate mode, the moment the condition holds', () => {
+    const run = (gate: boolean) => {
+      const { es, count } = setup(counter([{ id: 'b1', cond: 'q == 5', ...(gate ? { gate: true as const } : {}) }]));
+      es.setMode('gate');
+      for (let i = 0; i < 500 && !es.stoppedOnHalt; i++) es.advance(1);
+      return { stopped: es.stoppedOnHalt, q: count(), t: es.time };
+    };
+    const edge = run(false), fine = run(true);
+    expect(fine).toMatchObject({ stopped: true, q: 5 });
+    expect(fine.t).toBeLessThan(edge.t);
+    // in cycle mode it is checked after each edge like the others
+    const { es, count } = setup(counter([{ id: 'b1', cond: 'q == 5', gate: true }]));
+    es.advance(1);
+    expect([es.stoppedOnHalt, count(), es.cycles]).toEqual([true, 5, 5]);
+  });
+
   it('rose() holds once per edge of its signal; a switched-off one and an unknown name never stop', () => {
     const { es, bp } = setup(counter([{ id: 'r', cond: 'rose(q[1])' }, { id: 'off', cond: 'q == 1', off: true }, { id: 'm', cond: 'nope == 1' }]));
     expect(es.runCycles(100)).toBe(2);

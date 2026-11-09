@@ -211,6 +211,8 @@ export class EditorSim {
   stopReason: string | null = null;
   /** Rising-edge observers (every edge the run loop, Step, a click on a clock or runCycles makes). */
   readonly edgeHooks = new Set<EdgeHook>();
+  /** Gate-mode observers: after every gate delay the run loop or Step takes (breakpoints checked on every change). */
+  readonly tickHooks = new Set<() => void>();
 
   private latest: Compiled | null = null;
   private pins: PinDoc[] = [];
@@ -702,6 +704,7 @@ export class EditorSim {
     if (sim.busy()) {
       if (sim.kind === 'gate') sim.step();
       else sim.settle();
+      for (const f of this.tickHooks) f();
       return true;
     }
     this.endEdge();

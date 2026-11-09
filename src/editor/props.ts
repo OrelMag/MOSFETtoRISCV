@@ -95,8 +95,8 @@ export class PropsPanel {
       ...(s.sections ?? []).map((id) => doc.sections?.find((p) => p.id === id)),
     ];
     const none = !objs.length;
-    const key = JSON.stringify([ed.chipId, s, objs.map(ser), none ? [doc.name, doc.hue, doc.notes, ser(doc.pins), ser(ed.compiled?.def), Object.keys(ed.ws.chips).length, ed.ws.folders] : 0,
-      s.labels?.length ? doc.labels.map((l) => l.name) : 0]);
+    const key = JSON.stringify([ed.chipId, s, objs.map(ser), none ? [doc.name, doc.hue, doc.notes, ser(doc.pins), ser(doc.breaks), ser(ed.compiled?.def), Object.keys(ed.ws.chips).length, ed.ws.folders] : 0,
+      s.labels?.length ? doc.labels.map((l) => l.name) : 0, none ? 0 : ser(doc.breaks)]);
     if (key !== this.key && (force || !this.body.contains(document.activeElement))) {
       this.key = key;
       this.body.replaceChildren();
