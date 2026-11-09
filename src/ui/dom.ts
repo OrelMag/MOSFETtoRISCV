@@ -95,7 +95,7 @@ export function clear(el: Element): void {
 }
 
 /** Inline icon set (stroke icons, 24×24, currentColor). */
-const ICONS: Record<string, string> = {
+export const ICONS: Record<string, string> = {
   screen: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M7 8h2v2H7zM11 8h2v2h-2zM7 12h2"/>',
   io: '<rect x="2" y="7" width="20" height="10" rx="5"/><circle cx="16" cy="12" r="2.5"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
@@ -132,7 +132,6 @@ const ICONS: Record<string, string> = {
   // a lightbulb: Why? explains, it is not Help (a ? would read as help)
   why: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
   probe: '<path d="M14 3l7 7-4 1-7 7-3-3 7-7z"/><path d="M7 17l-4 4"/>',
-  scissors: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/>',
   wave: '<path d="M2 12h4V6h6v12h6v-6h4"/>',
   table: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M10 4v16"/>',
   // Memory: a RAM package; Inspect: a page under a lens; Tests: a checklist (each distinct from the plain table)

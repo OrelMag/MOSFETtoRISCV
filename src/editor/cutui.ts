@@ -4,10 +4,14 @@
 // Not on a level screen unless the level lists 'cut'.
 
 import { type Vec } from '../sim/geometry';
+import { ICONS } from '../ui/dom';
 import { matches, shortcutAllowed } from '../ui/keys';
 import { cutCrossings, cutWireNear, cutWires } from './cut';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
 import { hitWire } from './geom';
+
+// kept off the first page's path (ui/dom.ts holds the icons every page needs)
+ICONS.scissors = '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/>';
 
 const typing = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
