@@ -7,6 +7,7 @@
 import {
   CAUSE, CSR16, decode16, MIP_MEIP, CSR16_UNUSED, MMIO16, MMIO_BASE, MSTATUS_MIE, MSTATUS_MPIE, SCREEN16_IO, sext,
 } from './isa16';
+import { alu16, aluCtl16, execCustom16, type Custom16Row } from './custom16';
 
 export interface Iss16Options {
   /** Data memory words (default 65536: the whole address space). */
@@ -30,6 +31,8 @@ export interface Iss16Options {
    * of `screen` instead of writing the data memory; a load there reads the data memory as at any other address.
    */
   screen?: boolean;
+  /** The core's own instructions (custom16.ts): R-type rows in OPX's free funct3 values. */
+  custom?: readonly Custom16Row[];
 }
 
 /** The boot puzzle's devices (Iss16Options.dma): DMA registers below the MMIO block, flash in the upper half. */
@@ -78,7 +81,7 @@ export class Iss16 {
   readonly opts: Required<Iss16Options>;
 
   constructor(program: ArrayLike<number>, opts: Iss16Options = {}, data?: Map<number, number>) {
-    this.opts = { dmemWords: 65536, m: false, system: false, strictInit: false, wrap: false, dma: false, screen: false, ...opts };
+    this.opts = { dmemWords: 65536, m: false, system: false, strictInit: false, wrap: false, dma: false, screen: false, custom: [], ...opts };
     this.imem = new Uint16Array(Math.max(1, program.length));
     this.imem.set(Array.from(program, (w) => w & M16));
     this.dmem = new Uint16Array(this.opts.dmemWords);
@@ -210,7 +213,7 @@ export class Iss16 {
       this.steps++;
       return info;
     }
-    const d = decode16(instr);
+    const d = decode16(instr, this.opts.custom);
     const s = d.spec;
     let next = (pc + 1) & M16;
     const illegal = () => {
@@ -225,6 +228,10 @@ export class Iss16 {
       if (!s || (s.ext === 'm' && !this.opts.m) || (s.ext === 'system' && !this.opts.system) || s.ext === 'simt') illegal();
       else {
         const a = () => this.rd(d.rs1), b = () => this.rd(d.rs2);
+        if (s.ext === 'custom') {
+          const r = this.opts.custom.find((x) => x.f3 === s.f3)!;
+          this.wr(d.rd, execCustom16(r, a(), b(), (y) => this.load(y)), info);
+        }
         switch (s.name) {
           case 'add': this.wr(d.rd, a() + b(), info); break;
           case 'sub': this.wr(d.rd, a() - b(), info); break;
@@ -297,7 +304,11 @@ export class Iss16 {
     if (this.halted) return null;
     const c = this.csr;
     if (this.opts.system && this.irq && c[CSR16.mstatus] & MSTATUS_MIE && c[CSR16.mie] & MIP_MEIP) return null;
-    const d = decode16(this.pc < this.imem.length ? this.imem[this.pc] : 0);
+    const d = decode16(this.pc < this.imem.length ? this.imem[this.pc] : 0, this.opts.custom);
+    if (d.spec?.ext === 'custom') {
+      const r = this.opts.custom.find((x) => x.f3 === d.spec!.f3)!;
+      return r.result === 'mem' ? alu16(aluCtl16(r), this.x[d.rs1], this.x[d.rs2]) : null;
+    }
     return d.spec?.name === 'lw' ? (this.x[d.rs1] + d.imm) & M16 : null;
   }
 

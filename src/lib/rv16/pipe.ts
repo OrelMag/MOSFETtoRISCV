@@ -12,7 +12,8 @@ import { koggeStone } from '../fastadd';
 import { orN } from '../wide';
 import { AND, NOT, OR, XOR } from '../gates';
 import { TIE0, TIE1 } from '../transistors';
-import { BRANCH16, branch16, CTL16, IMM16, NEXTPC16, NEXTPC16F } from './cpu';
+import { rowsKey16, type Custom16Row } from '../../riscv/rv16/custom16';
+import { BRANCH16, branch16, control16, IMM16, NEXTPC16, NEXTPC16F } from './cpu';
 import { ADD16, choose4, INC16, MUX16, RF8, RV16_ALU16, RV16_ALU16KS, RV16_DFF, RV16_DREG16, RV16_REG16 } from './logic';
 import { foldBands } from '../fold';
 import { CSR16F, ILL16, SYSDEC16, trapCause } from './system';
@@ -128,6 +129,8 @@ export interface Rv16PipeOptions {
   predict?: boolean;
   /** Kogge–Stone adders: in E the ALU (Core IV's), the branch comparator's less-than and next PC; predict's target in F. */
   fast?: boolean;
+  /** The core's own instructions (riscv/rv16/custom16.ts): control16(custom) in D; nothing else changes (a memory row is a load to the hazard unit). */
+  custom?: readonly Custom16Row[];
 }
 
 const pipes = new Map<string, ComponentDef>();
@@ -139,7 +142,7 @@ const pipes = new Map<string, ComponentDef>();
  * resolves in E, redirecting the PC and flushing F/D and D/E.
  */
 export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
-  const key = `${+o.fwd}${+o.stall}${+o.flush}${o.sys === 'exc' ? 'e' : o.sys ? 's' : ''}${o.predict ? 'p' : ''}${o.fast ? 'k' : ''}`;
+  const key = `${+o.fwd}${+o.stall}${+o.flush}${o.sys === 'exc' ? 'e' : o.sys ? 's' : ''}${o.predict ? 'p' : ''}${o.fast ? 'k' : ''}${o.custom?.length ? `x${rowsKey16(o.custom)}` : ''}`;
   let d = pipes.get(key);
   if (d) return d;
   const b = new Builder(10, 16, 6);
@@ -199,7 +202,7 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
   // ---- D: decode, read registers ----
   const f = b.op(splitter([2, 2, 3, 3, 3, 3], 4), [instrD], 'fields');
   const rdD = b.name(`${f}.o2`, 'rdD', true), rs1D = b.name(`${f}.o3`, 'rs1D', true), rs2D = b.name(`${f}.o4`, 'rs2D', true);
-  const ctl = b.op(CTL16, [instrD], 'control');
+  const ctl = b.op(control16(o.custom), [instrD], 'control');
   const imm = b.op(IMM16, [instrD], 'immediates');
   b.next();
   // Without flushes there are no jumps: the J immediate is never selected.
@@ -368,6 +371,7 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
       + (o.fwd ? 'Forwarding from M and W into E. ' : '') + (o.stall ? 'A load followed by a user stalls one cycle. ' : '') + (o.flush ? 'Branches and jumps resolve in E and flush two instructions. ' : '') + (o.sys === 'exc' ? 'Exceptions are taken in E: precise, with a valid bit so bubbles never trap; no interrupts.' : o.sys ? 'Traps and the external interrupt are taken in E: precise, with a valid bit so bubbles never trap.' : '') + (o.fast ? ' Kogge–Stone adders in E: ALU, branch comparator, next PC.' : ''),
     ports: [{ name: 'clk', width: 1, dir: 'in', clock: true }, bit('rst', 'in'), bus('instr', 16, 'in'), bus('drdata', 16, 'in'), ...(o.sys ? [bit('irq', 'in')] : []),
       bus('pc', 16, 'out'), bus('daddr', 16, 'out'), bus('dwdata', 16, 'out'), bit('dwe', 'out'), bit('rwe', 'out'), bus('rwa', 3, 'out'), bus('rwd', 16, 'out')],
+    ...(o.custom?.length ? { name: `${name}, with ${o.custom.map((r) => r.name).join(', ')}` } : {}),
     symbol: { kind: 'box', label: 'RV16 PIPE' },
     // a core is too wide to read at fit in one strip: two bands (lib/fold.ts)
     netlist: () => foldBands({
