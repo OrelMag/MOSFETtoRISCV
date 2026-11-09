@@ -1,8 +1,16 @@
 # Design note: GateSim with loaded delays on a finer grain
 
 Phase 19's open item: the event-driven simulator times every NAND by its load, in tenths of a unit, so glitches and races
-follow the loads the way static timing already does (sim/delay.ts, the Timing panels' Unit / Load switch). **Status: design
-note only, nothing built.** Written 2026-11-09 for the Coordinator; decisions below carry a recommendation each.
+follow the loads the way static timing already does (sim/delay.ts, the Timing panels' Unit / Load switch). **Status: APPROVED by
+the author on 2026-11-09 as recommended** (every decision below), through the Coordinator. The Load-dependent delay setting
+also times the sandbox's and the workbench's gate-level simulation, and its menu text says so; chapter scenes stay on the unit
+model unless a step sets `Scene.delay: 'load'`. The four chapter uses ("What it lets chapters show") are **not** approved:
+they are content proposals 32–35 in E:/audit/ship/PROPOSALS.md. Every stage goes through the runner gate, and each tip reports
+the sim-perf numbers against the acceptance below.
+
+Progress:
+1. Fingerprints ✅ (feat/finedelay-1): tests/gatesimfingerprint.ts, tests/gatesim-fingerprints.json, taken on main cd8e0eb9 with
+   scripts/gatesim-fp.ts.
 
 ## What exists
 
