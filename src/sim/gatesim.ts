@@ -51,7 +51,8 @@ export class GateSim implements Sim {
     return this.now / this.ticksPerUnit;
   }
   set time(t: number) {
-    this.now = Math.round(t * this.ticksPerUnit);
+    // under the unit model a time is taken as given, as it always was (no rounding)
+    this.now = this.ticksPerUnit === 1 ? t : Math.round(t * this.ticksPerUnit);
   }
   /** The time in ticks (exact). */
   get ticks(): number {
@@ -536,7 +537,8 @@ export class GateSim implements Sim {
    * still pending beyond it (a clock edge that does not wait for the logic to settle).
    */
   runUntil(t: number): void {
-    const end = Math.round(t * this.ticksPerUnit), mask = this.mask;
+    // under the unit model the end is t itself, as it always was: events up to it, then stand at it
+    const end = this.ticksPerUnit === 1 ? t : Math.round(t * this.ticksPerUnit), mask = this.mask;
     for (;;) {
       if (this.dLen) this.evalDirty();
       if (this.pendingEvents === 0) break;

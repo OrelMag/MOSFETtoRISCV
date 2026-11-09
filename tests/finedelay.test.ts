@@ -7,7 +7,8 @@ import { rca } from '../src/lib/combinational';
 import { singleCycleCpu } from '../src/lib/cpu';
 import { pipelinedCpu } from '../src/lib/pipeline';
 import { skewPair } from '../src/lib/seqdeep';
-import { DFF_R } from '../src/lib/seqparts';
+import { DFF_R, lfsr, shiftRegister } from '../src/lib/seqparts';
+import { counter } from '../src/lib/sequential';
 import { assemble } from '../src/riscv/asm';
 import { leafDelays } from '../src/sim/delay';
 import { logicDepth } from '../src/sim/stats';
@@ -130,6 +131,29 @@ describe('load-dependent delay against the cycle engine', () => {
       }
       expect(loaded.unstable).toBe(false);
     }, 120_000);
+  }
+
+  // flip-flop to flip-flop with no logic between (shift register, LFSR, counter): where a hold race would show if the loads
+  // moved a flip-flop's internal timing off the cycle engine's unit-delay tables
+  for (const [name, def] of [['8-bit counter', counter(8)], ['8-bit LFSR', lfsr(8)], ['4-bit shift register', shiftRegister(4)]] as const) {
+    it(`${name}: every net equal after every edge, random inputs, under load against the cycle engine`, () => {
+      const d = flatten(def, { mode: 'gate' });
+      const loaded = new GateSim(d, { delay: 'load' }), fast = new DualSim(d);
+      fast.preferFast = true;
+      fast.prepare();
+      const ins = def.ports.filter((p) => p.dir === 'in' && p.name !== 'clk');
+      let x = 99;
+      for (let c = 0; c < 400; c++) {
+        for (const p of ins) {
+          x = (Math.imul(x, 1103515245) + 12345) >>> 0;
+          const v = (x >>> 7) & ((1 << p.width) - 1);
+          for (const s of [loaded, fast]) s.setInput(p.name, v);
+        }
+        for (const v of [1, 0]) for (const s of [loaded, fast]) { s.setInput('clk', v); s.settle(); }
+        if (c > 8) expect(fast.engine, fast.whyNot).toBe('cycle');
+        for (let n = 0; n < d.netCount; n++) if (loaded.get(n) !== fast.get(n)) throw new Error(`${name}, edge ${c}: net ${n} ${loaded.get(n)} ≠ ${fast.get(n)}`);
+      }
+    });
   }
 
   it('a flip-flop with an asynchronous reset: equal every step of random d / rst_n / clk', () => {
