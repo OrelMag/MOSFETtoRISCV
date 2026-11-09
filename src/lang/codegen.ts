@@ -266,6 +266,7 @@ export class CodeGen {
       this.layout.lists.push({ name: l.name, addr, len: l.len });
       addr += 4 * l.len;
     }
+    let reach = addr; // absolute addressing (n(zero)) must reach everything up to here
     // A program with strings: its literals (stored at start-up, they cannot come from the ROM), then the heap; the output follows.
     if (scope.usesStr) {
       const lits: string[] = [];
@@ -278,12 +279,13 @@ export class CodeGen {
         this.layout.strings.push({ addr, text });
         addr += 4 + 4 * Math.ceil(text.length / 4);
       }
+      reach = addr;
       this.layout.heap = { base: addr, end: addr + this.heapBytes };
       this.heapEnd = addr + this.heapBytes;
       addr += this.heapBytes;
     }
     this.layout.outBase = addr;
-    if (addr > 2040 || addr > 4 * this.dmemWords - 32) this.err(`the variables and lists need ${addr / 4} words: data memory has ${this.dmemWords}, and the stack and output need room too`, 1);
+    if (reach > 2040 || addr > 4 * this.dmemWords - 32) this.err(`the variables and lists need ${addr / 4} words: data memory has ${this.dmemWords}, and the stack and output need room too`, 1);
     this.layout.homes.push(...homes.values());
 
     // The frame: stack, output pointer, the program, halt.

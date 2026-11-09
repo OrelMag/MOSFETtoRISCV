@@ -112,3 +112,83 @@ export function randomPyProgram(seed: number, memory = false): string {
   out.push(`print(${G.join(', ')})`, 'for i in range(8):', '    print(L[i])');
   return out.join('\n') + '\n';
 }
+
+/**
+ * A seeded random program with strings, on a stream of its own (randomPyProgram's seeds are untouched). Every index is
+ * guarded (`s[i % len(s)] if len(s) > 0 else …`) so the interpreter and the compiled code never reach an index error;
+ * the heap is the only thing a long program can use up (the test skips those the interpreter stops).
+ */
+export function randomStrProgram(seed: number): string {
+  const r = rng(seed * 2654435761 + 12345);
+  const out: string[] = [];
+  const LITS = ['""', '"a"', '"ab"', '"hello"', '"x y"', '"\\n"', '"it\\\'s"', '"q#r"', "'Z'", '"abcdefg"'];
+  const SV = ['s0', 's1', 's2'], IV = ['g0', 'g1'];
+  const funcs: { name: string; ret: 'str' | 'int' }[] = [];
+  const intE = (sv: string[], iv: string[], d: number): string => {
+    const k = d <= 0 ? r.int(2) : r.int(9);
+    switch (k) {
+      case 0: return String(r.pick([0, 1, 2, 3, 7, -1, -2, 100]));
+      case 1: return r.pick(iv);
+      case 2: return `len(${strE(sv, iv, d - 1)})`;
+      case 3: { const s = r.pick(sv); return `(ord(${s}[${intE(sv, iv, d - 1)} % len(${s})]) if len(${s}) > 0 else 0)`; }
+      case 4: return `(${strE(sv, iv, d - 1)} ${r.pick(['==', '!='])} ${strE(sv, iv, d - 1)})`;
+      case 5: return `ord(chr(${intE(sv, iv, d - 1)} & 127))`;
+      case 6: return `(${intE(sv, iv, d - 1)} ${r.pick(['+', '-', '*', '&', '^'])} ${intE(sv, iv, d - 1)})`;
+      case 7: { const f = funcs.filter((x) => x.ret === 'int'); return f.length ? `${r.pick(f).name}(${strE(sv, iv, d - 1)}, ${intE(sv, iv, d - 1)})` : r.pick(iv); }
+      default: return `(${intE(sv, iv, d - 1)} if ${intE(sv, iv, d - 1)} else ${intE(sv, iv, d - 1)})`;
+    }
+  };
+  const strE = (sv: string[], iv: string[], d: number): string => {
+    const k = d <= 0 ? r.int(2) : r.int(8);
+    switch (k) {
+      case 0: return r.pick(LITS);
+      case 1: return r.pick(sv);
+      case 2: case 3: return `(${strE(sv, iv, d - 1)} + ${strE(sv, iv, d - 1)})`;
+      case 4: return `chr(32 + (${intE(sv, iv, d - 1)} & 63))`;
+      case 5: { const s = r.pick(sv); return `(${s}[${intE(sv, iv, d - 1)} % len(${s})] if len(${s}) > 0 else "?")`; }
+      case 6: { const f = funcs.filter((x) => x.ret === 'str'); return f.length ? `${r.pick(f).name}(${strE(sv, iv, d - 1)}, ${intE(sv, iv, d - 1)})` : r.pick(sv); }
+      default: return `(${strE(sv, iv, d - 1)} if ${intE(sv, iv, d - 1)} else ${strE(sv, iv, d - 1)})`;
+    }
+  };
+  const block = (ind: string, sv: string[], iv: string[], ws: string[], wi: string[], depth: number, n: number, lines: string[]) => {
+    for (let i = 0; i < n; i++) {
+      const k = depth <= 0 ? r.int(5) : r.int(8);
+      switch (k) {
+        case 0: lines.push(`${ind}${r.pick(ws)} = ${strE(sv, iv, 2)}`); break;
+        case 1: lines.push(`${ind}${r.pick(ws)} += ${strE(sv, iv, 1)}`); break;
+        case 2: lines.push(`${ind}${r.pick(wi)} = ${intE(sv, iv, 2)}`); break;
+        case 3: lines.push(`${ind}print(${strE(sv, iv, 2)})`); break;
+        case 4: lines.push(`${ind}print(${r.pick(['', `${strE(sv, iv, 1)}, `])}${intE(sv, iv, 2)}${r.next() < 0.5 ? `, ${strE(sv, iv, 1)}` : ''})`); break;
+        case 5:
+          lines.push(`${ind}if ${intE(sv, iv, 2)}:`);
+          block(ind + '    ', sv, iv, ws, wi, depth - 1, 1 + r.int(2), lines);
+          if (r.next() < 0.5) { lines.push(`${ind}else:`); block(ind + '    ', sv, iv, ws, wi, depth - 1, 1 + r.int(2), lines); }
+          break;
+        case 6: {
+          const v = `k${depth}${r.int(9)}`;
+          lines.push(`${ind}for ${v} in range(${r.int(3)}):`);
+          block(ind + '    ', sv, [...iv, v], ws, wi, depth - 1, 1 + r.int(2), lines);
+          break;
+        }
+        default: lines.push(`${ind}${r.pick(wi)} += len(${strE(sv, iv, 1)})`);
+      }
+    }
+  };
+  for (const s of SV) out.push(`${s} = ${r.pick(LITS)}`);
+  for (const g of IV) out.push(`${g} = ${r.int(5)}`);
+  const nf = r.int(3);
+  for (let f = 0; f < nf; f++) {
+    const ret = r.next() < 0.5 ? 'str' : 'int';
+    const name = `f${f}`;
+    const lines = [`def ${name}(p, q):`, `    u = ${strE(['p'], ['q'], 2)}`, `    w = ${intE(['p', 'u'], ['q'], 2)}`];
+    block('    ', ['p', 'u'], ['q', 'w'], ['u'], ['w'], 1, 1 + r.int(2), lines);
+    lines.push(`    return ${ret === 'str' ? strE(['p', 'u'], ['q', 'w'], 2) : intE(['p', 'u'], ['q', 'w'], 2)}`);
+    out.push(...lines);
+    funcs.push({ name, ret });
+  }
+  // a function's parameter types come from its calls: call each once
+  for (const f of funcs) out.push(f.ret === 'str' ? `s0 = ${f.name}(${strE(SV, IV, 1)}, ${intE(SV, IV, 1)})` : `g0 = ${f.name}(${strE(SV, IV, 1)}, ${intE(SV, IV, 1)})`);
+  block('', SV, IV, SV, IV, 2, 4 + r.int(5), out);
+  out.push(`print(${SV.join(', ')}, ${IV.join(', ')})`);
+  return out.join('\n') + '\n';
+}
