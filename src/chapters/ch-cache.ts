@@ -881,6 +881,7 @@ export const chCache: Chapter = {
       title: 'Find it: a cache that does not wait',
       deep: true,
       body: `
+        <p><em>Optional: a deep dive. Nothing later relies on it.</em></p>
         <p>The CPU with its data cache, summing an array twice, with one wire stuck at 0 or 1. The cache and the CPU keep a contract:
         on a hit the word is ready in the same cycle, on a miss the CPU waits until it is. Find the wire that breaks it.</p>
         <p>Press <strong>Run to halt</strong> (or <strong>Step</strong>) in the CPU panel. After every cycle it compares the registers with the

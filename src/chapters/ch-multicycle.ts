@@ -367,6 +367,7 @@ export const chMulticycle: Chapter = {
       title: 'Find it: a register that never holds',
       deep: true,
       body: `
+        <p><em>Optional: a deep dive. Nothing later relies on it.</em></p>
         <p>The multicycle CPU with its hardwired state machine, running the sum loop, with one wire stuck at 0 or 1 somewhere. In this
         CPU values live in registers between the steps of an instruction, and every one of those registers loads only when the state
         machine says so: that is the place to look.</p>

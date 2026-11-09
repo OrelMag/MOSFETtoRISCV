@@ -1316,6 +1316,10 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  with it and never passes); the learner accuses with the fault brush (B), right when challenges.ts symptomsDiffer finds
                  every output of every case the same (the CPU bench: the same net); NodeProgress.wrong, par { wrong: 0 }: a star each;
                  on the canvas EditorSim.setHidden, Editor.bodyLock (challengeui.ts); tests/breakit.test.ts
+                 The core CPU chapters (cpu, pipeline, multicycle, traps, cache) end in a deep "find it" step: widgets/findfault.ts findIt
+                 (cpuScene({ planted }): sim/faults.ts withPlanted, the Find the fault panel, Stage.accuser rows lead a wire's menu; right =
+                 accusedRight: a planted fault's exact nets and value; a wrong one answered by riscv/firstwrong.ts on that fault, computed);
+                 tests/findit.test.ts
   levels.ts      levelChallenge(node): the base BuildChallenge with the campaign rule and par, id cp_<node>,
                  chip u_ch_cp_<node>; nodeOfChip; startCandidates / startFrom (a core level begun as a copy of an
                  earlier core level's chip, plus the new pins)
@@ -1739,7 +1743,7 @@ The guide around the prose (ui/pages/chapter.ts, looks.ts; tests/chapter-guide.t
   steps, 4–7 short unique names (tests/chapter-guide.test.ts). Parts only group the steps in their order, so no address or saved
   progress moves; ui/chapterparts.ts draws one segment per part, the status line and the list (the current part open, folded to
   begin with on a phone or a short screen). `deep: true` on a step marks a deep dive: it stays in order and is never hidden or
-  locked, so nothing later may rely on it (no campaign level or other chapter links it, the recap's questions are not about it).
+  locked, so nothing later may rely on it (no campaign level or other chapter links it, the recap's questions are not about it). A chapter without parts may end in deep steps only (tests/chapter-guide.test.ts); they say they are optional.
 
 ## Major changes: mockup first
 

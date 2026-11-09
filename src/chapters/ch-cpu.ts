@@ -1055,6 +1055,7 @@ export const chSingleCycle: Chapter = {
       title: 'Find it: a stuck wire',
       deep: true,
       body: `
+        <p><em>Optional: a deep dive. Nothing later relies on it.</em></p>
         <p>The same CPU again, with one thing changed: somewhere in it one wire is stuck at 0 or at 1, as a broken transistor or a short
         to a rail would leave it. Nothing on the drawing says where. Your job is to find it, the way a chip is debugged: run a program
         whose right answer you know and look at the first place the machine disagrees.</p>

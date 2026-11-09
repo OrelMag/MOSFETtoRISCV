@@ -495,6 +495,7 @@ export const chPipeline: Chapter = {
       title: 'Find it: a pipeline that cannot wait',
       deep: true,
       body: `
+        <p><em>Optional: a deep dive. Nothing later relies on it.</em></p>
         <p>The pipeline again, running the program with every kind of hazard, with one fault planted in it: a control wire stuck at 0
         or 1, which nothing on the drawing shows. Find it.</p>
         <p>Press <strong>Run to halt</strong> (or <strong>Step</strong>) in the CPU panel. After every cycle it compares the registers with the

@@ -624,6 +624,7 @@ export const chTraps: Chapter = {
       title: 'Find it: a handler that returns to the wrong place',
       deep: true,
       body: `
+        <p><em>Optional: a deep dive. Nothing later relies on it.</em></p>
         <p>The tiny operating system again: the program puts a character in a0 and traps with <code>ecall</code>; the handler prints it,
         moves mepc past the ecall and returns. One wire in the CPU is stuck at 0 or 1, here one bit of a bus. Find it.</p>
         <p>Press <strong>Run to halt</strong> (or <strong>Step</strong>) in the CPU panel. After every cycle it compares the registers with the
