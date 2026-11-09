@@ -38,6 +38,7 @@ import { shedActions } from './toolbarfit';
 import { Tools } from './tools';
 import { EditorView } from './view';
 import { Buzzers } from './audio';
+import { fmtTime } from '../sim/edge';
 
 export interface ToolbarAction {
   id: string;
@@ -253,7 +254,7 @@ export class Editor {
         'drag from a pin: wire · hold: menu · double-tap: open · pinch: zoom', 'sandbox', ' sb-hint'));
     this.slots = { overlay, bottom: h('div', { class: 'sb-bottom' }), top: h('div', { class: 'sb-top-slot' }), left: h('div', { class: 'sb-left' }), run: h('div', { class: 'sb-runrow' }) };
 
-    this.sim = new EditorSim({ gateRate: () => settings.speed });
+    this.sim = new EditorSim({ gateRate: () => settings.speed, delay: () => (settings.loadDelay ? 'load' : 'unit') });
     this.sim.onChange = () => this.simChanged();
     this.sim.onHalt = () => this.halted();
 
@@ -297,6 +298,8 @@ export class Editor {
     this.buildControls();
     this.unsub = settings.onChange(() => {
       this.view.radix = settings.radix;
+      // Load-dependent delay switched: the open chip's gate-level simulation is rebuilt on the other model, state carried
+      this.sim.delayChanged();
       this.repaint();
     });
     // a phone shows one tab (the rest are in Open…): rotating or resizing across 760 px redraws the tabs
@@ -676,7 +679,7 @@ export class Editor {
       let s = this.sims.get(id);
       this.sims.delete(id);
       if (!s) {
-        s = new EditorSim({ gateRate: () => settings.speed });
+        s = new EditorSim({ gateRate: () => settings.speed, delay: () => (settings.loadDelay ? 'load' : 'unit') });
         s.mode = old.mode;
         s.hz = old.hz;
         s.powerOn = old.powerOn;
@@ -1230,7 +1233,7 @@ export class Editor {
   /** A halt part stopped Run. */
   private halted(): void {
     const sim = this.sim;
-    const when = sim.hasClock ? `after cycle ${sim.cycles}` : sim.engine === 'gate' ? `at t = ${sim.time}` : '';
+    const when = sim.hasClock ? `after cycle ${sim.cycles}` : sim.engine === 'gate' ? `at t = ${fmtTime(sim.sim ?? {}, sim.time)}` : '';
     // a breakpoint (breakui.ts) names its condition; a halt part says Halted
     const why = sim.stopReason && sim.stopReason !== 'halt' ? `Stopped: ${sim.stopReason}` : 'Halted';
     this.toast(when ? `${why} ${when}` : why);
@@ -1263,7 +1266,7 @@ export class Editor {
       }
       if (sim.hasClock) bits.push(`${sim.cycles} cycles`);
       // gate delays only count on the event-driven engine (the cycle engine has no time)
-      if (sim.engine === 'gate') bits.push(`t = ${sim.time}`);
+      if (sim.engine === 'gate') bits.push(`t = ${fmtTime(sim.sim ?? {}, sim.time)}`);
       if (sim.running && sim.mode === 'cycle' && sim.hasClock) {
         // what the clock really ran at over the last second; the setting too when it falls short
         const short = Number.isFinite(sim.hz) && sim.achievedHz < 0.9 * sim.hz;

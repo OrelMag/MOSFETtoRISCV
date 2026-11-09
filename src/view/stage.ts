@@ -8,13 +8,13 @@ import { type FlatDesign, findNode, flatten, flattenAsync, type HierNode } from 
 import { fmtCount, LoadPlan } from '../sim/loadplan';
 import { nextTask } from '../sim/tasks';
 import { LoadCard } from './loadcard';
-import { GateSim } from '../sim/gatesim';
+import { GateSim, LOAD_TICKS } from '../sim/gatesim';
 import { OverlayBar, nextOverlay, overlayLegend } from './overlaybar';
 import { type OverlayKind, type OverlayResult, activityOverlay, loadOverlay, overlayRefusal, slackOverlay, unknownOverlay } from './overlays';
 import type { DelayModel } from '../sim/delay';
 import { SwitchSim } from '../sim/switchsim';
 import { needsSwitchLevel } from '../sim/harness';
-import { completeEdge, type Edge, lowerClock, riseEdge, stepEdge } from '../sim/edge';
+import { completeEdge, type Edge, fmtTime, lowerClock, riseEdge, stepEdge } from '../sim/edge';
 import { PowerMeter } from '../sim/power';
 import { RELAY_STEP_MS } from '../phys/relay';
 import { stats } from '../sim/stats';
@@ -80,6 +80,11 @@ export interface Scene {
    * event-driven switch-level engine.
    */
   engine?: 'cycle' | 'nmos';
+  /**
+   * 'load': GateSim times each NAND by its load, in tenths of a unit (docs/PLAN-FINEDELAY.md). A chapter scene is on the unit
+   * model unless it says so; the workbench follows settings.loadDelay (Stage.delayFromSetting).
+   */
+  delay?: 'unit' | 'load';
   /**
    * false: no Memory contents panel. A scene that declares no panels gets one by itself when its circuit holds a memory
    * (view/memfind.ts: a RAM, a register file, a cache's arrays …); a scene with panels of its own decides for itself.
@@ -544,6 +549,11 @@ export class Stage {
       this.view.radix = settings.radix;
       this.inspector.radix = settings.radix;
       this.board.radix = settings.radix;
+      // the workbench follows the Load-dependent delay setting: a scene on the other model is built again, at the same level
+      if (this.scene && this.sim?.kind === 'gate' && (this.sim.ticksPerUnit ?? 1) !== (this.delayOf(this.scene) === 'load' ? LOAD_TICKS : 1)) {
+        this.load(this.scene, this.path.length ? this.path : undefined);
+        return;
+      }
       this.refresh();
     });
     this.view.radix = settings.radix;
@@ -799,11 +809,23 @@ export class Stage {
     return needsSwitchLevel(scene.root) ? 'switch' : 'gate';
   }
 
+  /**
+   * Follow settings.loadDelay for scenes that do not choose (the workbench sets this); a chapter's scenes stay on the unit
+   * model unless a step asks (Scene.delay), so what the prose quotes in gate delays holds for every reader.
+   */
+  delayFromSetting = false;
+
+  /** The delay model a scene is simulated with. */
+  delayOf(scene: Scene): 'unit' | 'load' {
+    return scene.delay ?? (this.delayFromSetting && settings.loadDelay ? 'load' : 'unit');
+  }
+
   /** The simulation of a flattened design, powered on and settled. */
   private makeEngine(scene: Scene, design: FlatDesign, level: 'gate' | 'switch'): void {
     this.scene = scene;
+    const delay = { delay: this.delayOf(scene) };
     const sim: Sim = level === 'switch' ? switchSim(design, scene.engine === 'nmos')
-      : scene.engine === 'cycle' ? new DualSim(design) : new GateSim(design);
+      : scene.engine === 'cycle' ? new DualSim(design, delay) : new GateSim(design, delay);
     if (sim instanceof DualSim) sim.preferFast = true;
     for (const [k, v] of Object.entries(scene.inputs ?? {})) sim.setInput(k, v);
     sim.reset(scene.powerOn ?? 'zero');
@@ -1810,6 +1832,7 @@ export class Stage {
   private startAnim(): void {
     this.stopAnim();
     const sim = this.sim!;
+    if ((sim.ticksPerUnit ?? 1) !== 1) { this.startTimedAnim(sim); return; }
     const tick = () => {
       if (!sim.step()) {
         this.stopAnim();
@@ -1819,6 +1842,27 @@ export class Stage {
     };
     tick();
     if (sim.busy()) this.anim = setInterval(tick, 1000 / settings.speed);
+  }
+
+  /**
+   * Slow motion under load-dependent delay: a step goes to the next change, which may be a tenth of a unit on or two
+   * units on, so each waits in proportion to the time it advanced (a unit lasts what one gate delay lasts at the unit
+   * model): a heavily loaded gate is visibly slower. stopAnim clears it (a timeout id, cleared like an interval's).
+   */
+  private startTimedAnim(sim: Sim): void {
+    const unitMs = 1000 / settings.speed;
+    const tick = () => {
+      const t0 = sim.time;
+      const more = sim.step();
+      const dt = Math.max(0.1, sim.time - t0);
+      if (!more) {
+        this.stopAnim();
+        this.lastSettle = sim.time - this.changeStart;
+      }
+      this.refreshFlowing(0.95 * unitMs * dt);
+      if (more && sim.busy()) this.anim = setTimeout(tick, unitMs * Math.max(0.1, (sim.nextEventTime?.() ?? sim.time + 1) - sim.time)) as unknown as ReturnType<typeof setInterval>;
+    };
+    tick();
   }
 
   stopAnim(): void {
@@ -2119,9 +2163,13 @@ export class Stage {
     } else if (sim.unstable && this.relayTime) msg = 'oscillating: the relays never settle';
     else if (sim.unstable) msg = 'race detected: resolved (metastability)';
     else if (busy && this.relayTime) msg = `switching… relay step ${sim.time - this.changeStart}`;
-    else if (busy) msg = `propagating… t = ${sim.time - this.changeStart}`;
+    else if (busy) msg = `propagating… t = ${fmtTime(sim, sim.time - this.changeStart)}`;
     else if (this.lastSettle !== null && this.relayTime) msg = `settled in ${this.lastSettle} relay step${this.lastSettle === 1 ? '' : 's'} (${(this.lastSettle * RELAY_STEP_MS).toFixed(1)} ms)`;
-    else if (this.lastSettle !== null && sim.kind === 'gate') msg = `${this.clockPort() && this.cycles ? 'edge ' : ''}settled in ${this.lastSettle} delay${this.lastSettle === 1 ? '' : 's'}`;
+    else if (this.lastSettle !== null && sim.kind === 'gate') {
+      // under load-dependent delay the time is in units with tenths (a unit = a NAND driving one input)
+      const loaded = (sim.ticksPerUnit ?? 1) !== 1, word = loaded ? 'unit' : 'delay';
+      msg = `${this.clockPort() && this.cycles ? 'edge ' : ''}settled in ${fmtTime(sim, this.lastSettle)} ${word}${this.lastSettle === 1 ? '' : 's'}${loaded ? ' (load-dependent delay)' : ''}`;
+    }
     else msg = this.relayTime ? 'relays at rest' : sim.kind === 'switch' ? 'solved instantly' : 'settled';
     const warn = sim.unstable || (!!this.period && this.lateCount > 0);
     this.setStatus(h('span', { class: `pulse${busy ? ' busy' : ''}${warn ? ' warn' : ''}` }), msg);

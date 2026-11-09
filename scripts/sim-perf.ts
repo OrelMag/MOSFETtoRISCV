@@ -1,5 +1,5 @@
 // Simulation speed of big sandbox circuits (no DOM): clock cycles per second.
-// Run: npx vite-node scripts/sim-perf.ts [--ref] [--dump <dir>]
+// Run: npx vite-node scripts/sim-perf.ts [--ref] [--dump <dir>] [--storage] [--delay load]
 //
 // Each CPU of the chapters is opened in the sandbox (remixDef, as "Open in Sandbox" does) running a
 // program that never halts, plus the single-cycle CPU with a 64K × 32 data memory (lib/bigmem.ts)
@@ -70,6 +70,8 @@ const args = process.argv.slice(2);
 const dump = args.includes('--dump') ? args[args.indexOf('--dump') + 1] : null;
 const withRef = args.includes('--ref');
 const onlyStorage = args.includes('--storage');
+// --delay load: EditorSim's gate-level simulation on load-dependent delay (docs/PLAN-FINEDELAY.md); the cycle engine is unaffected
+const delayModel: 'unit' | 'load' = args[args.indexOf('--delay') + 1] === 'load' && args.includes('--delay') ? 'load' : 'unit';
 
 /** Busy forever: ALU, a store and a load every pass, a taken branch (never `j .`, which halts). */
 const LOOP = assemble(`
@@ -150,7 +152,7 @@ const CPUS: [string, ComponentDef, boolean][] = onlyStorage ? [] : [
 for (const [name, def, big] of CPUS) {
   const { ws, id } = open(def, big);
   const lib = new UserLibrary(ws);
-  const es = new EditorSim({ debounceMs: 0 });
+  const es = new EditorSim({ debounceMs: 0, delay: () => delayModel });
   const tb = performance.now();
   es.update(lib.compiled(id)!, ws.chips[id].pins);
   const build = performance.now() - tb;
@@ -229,7 +231,7 @@ const STORAGE: [string, () => { ws: Workspace; id: string }][] = [
 ];
 for (const [name, make] of STORAGE) {
   const { ws, id } = make();
-  const es = new EditorSim({ debounceMs: 0 });
+  const es = new EditorSim({ debounceMs: 0, delay: () => delayModel });
   es.update(new UserLibrary(ws).compiled(id)!, ws.chips[id].pins);
   const sim = es.sim as DualSim;
   console.log(`
@@ -251,7 +253,7 @@ let seed = 1;
 const rnd = () => ((seed = (seed * 1103515245 + 12345) >>> 0) / 2 ** 32);
 const word = () => `0x${Array.from({ length: 16 }, () => Math.floor(rnd() * 16).toString(16)).join('')}`;
 for (const fast of [false, true]) {
-  const es = new EditorSim({ debounceMs: 0 });
+  const es = new EditorSim({ debounceMs: 0, delay: () => delayModel });
   es.update(kc, ks.pins);
   (es.sim as DualSim).preferFast = fast;
   const pa = ks.pins.find((p) => p.name === 'a')!, pb = ks.pins.find((p) => p.name === 'b')!;

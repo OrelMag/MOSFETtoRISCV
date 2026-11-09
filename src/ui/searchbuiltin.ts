@@ -208,7 +208,7 @@ registerActions((ctx) => {
     act('vivid', 'Vivid look', `bright filled parts, thick wires (${onOff(settings.vivid)})`, () => { settings.setVivid(!settings.vivid); applyTheme(); }),
     act('gloss', 'Hover definitions', `codex terms underlined in the chapters (${onOff(settings.glossary)})`, toggle('glossary')),
     act('clock', 'Automatic clock', `a circuit with a clock starts running (${onOff(settings.autoClock)})`, toggle('autoClock')),
-    act('delay', 'Load-dependent delay', `timing panels and the inspector time each NAND by its load (${onOff(settings.loadDelay)})`, toggle('loadDelay')),
+    act('delay', 'Load-dependent delay', `timing panels, the inspector and sandbox / workbench gate-level simulation time each NAND by its load (${onOff(settings.loadDelay)})`, toggle('loadDelay')),
     act('simple', 'Simple connections', `sandbox: straight wires at any angle (${onOff(settings.simpleWires)})`, toggle('simpleWires')),
     act('text.bigger', 'Larger text', `chapter prose ${Math.min(130, settings.textSize + 10)}% (now ${settings.textSize}%)`, () => { settings.set('textSize', Math.min(130, settings.textSize + 10)); applyTheme(); }),
     act('text.smaller', 'Smaller text', `chapter prose ${Math.max(90, settings.textSize - 10)}% (now ${settings.textSize}%)`, () => { settings.set('textSize', Math.max(90, settings.textSize - 10)); applyTheme(); }),

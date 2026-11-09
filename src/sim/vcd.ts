@@ -1,6 +1,9 @@
 // Value Change Dump (IEEE 1364 §18) of recorded traces, for GTKWave, Surfer and friends.
 // One time unit is one NAND delay; we declare it as 1 ns, which is roughly right for a
 // NAND2 with a fan-out of a few in an old process and keeps viewers' rulers sensible.
+// Under load-dependent delay (toVcd's `loaded`) the times are written in picoseconds instead.
+
+import { PS_PER_UNIT } from './delay';
 
 /**
  * A recorded signal: value v[i] holds from time t[i] (−1 = unknown / floating). A BigInt value
@@ -28,12 +31,22 @@ function valueText(v: number | bigint, width: number, id: string): string {
   return `b${v < 0 ? 'x' : v.toString(2)} ${id}`;
 }
 
-export function toVcd(signals: TraceSignal[], opts: { date?: string; scope?: string } = {}): string {
+/**
+ * `loaded`: the times are in units of the load-dependent delay model (tenths: sim/delay.ts), written in picoseconds at
+ * its illustrative PS_PER_UNIT, so a tenth of a unit stays a distinct instant. Otherwise a unit is a NAND delay, 1 ns.
+ */
+export function toVcd(signals: TraceSignal[], opts: { date?: string; scope?: string; loaded?: boolean } = {}): string {
   const out: string[] = [];
   if (opts.date) out.push(`$date ${opts.date} $end`);
   out.push('$version From Switch to CPU logic analyzer $end');
-  out.push('$comment 1 time unit = 1 NAND gate delay $end');
-  out.push('$timescale 1ns $end');
+  if (opts.loaded) {
+    out.push(`$comment load-dependent delay: 1 unit (a NAND driving one input) = ${PS_PER_UNIT.toFixed(1)} ps, illustrative $end`);
+    out.push('$timescale 1ps $end');
+  } else {
+    out.push('$comment 1 time unit = 1 NAND gate delay $end');
+    out.push('$timescale 1ns $end');
+  }
+  const at = (t: number) => (opts.loaded ? Math.round(t * PS_PER_UNIT) : t);
   out.push(`$scope module ${(opts.scope ?? 'top').replace(/[^\w$]/g, '_')} $end`);
   const ids = signals.map((_, i) => code(i));
   signals.forEach((sg, i) => {
@@ -48,7 +61,7 @@ export function toVcd(signals: TraceSignal[], opts: { date?: string; scope?: str
   // The first instant holds the initial values ($dumpvars), later ones the changes.
   for (let k = 0; k < ev.length;) {
     const t = ev[k][0];
-    out.push(`#${t}`);
+    out.push(`#${at(t)}`);
     if (k === 0) out.push('$dumpvars');
     for (; k < ev.length && ev[k][0] === t; k++) out.push(valueText(ev[k][2], signals[ev[k][1]].width, ids[ev[k][1]]));
     if (t === ev[0][0]) out.push('$end');

@@ -332,7 +332,7 @@ export class LogicAnalyzer {
     const step = [1, 2, 5, 10].map((k) => k * mag).find((k) => k >= raw) ?? raw;
     for (let t = Math.ceil(t0 / step) * step; t <= t0 + span; t += step) {
       parts.push(s('line', { x1: x(t), x2: x(t), y1: RULER_H - 4, y2: H, class: 'la-tick' }));
-      parts.push(s('text', { x: x(t) + 3, y: RULER_H - 6, class: 'la-time' }, String(Math.round(t))));
+      parts.push(s('text', { x: x(t) + 3, y: RULER_H - 6, class: 'la-time' }, this.fine && step < 1 ? t.toFixed(1) : String(Math.round(t))));
     }
     // Rising clock edges: where flip-flops capture.
     for (const e of this.edges) if (e >= t0 && e <= t0 + span) parts.push(s('line', { x1: x(e), x2: x(e), y1: RULER_H, y2: H, class: 'la-edge' }));
@@ -392,7 +392,7 @@ export class LogicAnalyzer {
 
     // Names column: value at the hover position, else cursor A, else now.
     const at = this.hoverT ?? this.cursorA ?? now;
-    this.names.replaceChildren(h('div', { class: 'la-name ruler' }, `t = ${Math.round(at)}`),
+    this.names.replaceChildren(h('div', { class: 'la-name ruler' }, `t = ${this.tText(this.snap(at))}`),
       ...this.lanes.map((l) => {
         const tr = this.traces.get(l.id);
         const v = tr ? this.valueAt(tr, at) : NaN;
@@ -403,7 +403,22 @@ export class LogicAnalyzer {
           h('button', { class: 'x', title: 'Remove lane', 'aria-label': `Remove ${l.label}`, onclick: () => this.remove(l.id) }, '×'));
       }));
     const a = this.cursorA, b = this.cursorB;
-    this.readout.textContent = a === null ? '' : b === null ? `A = ${a}` : `A = ${a} · B = ${b} · Δ = ${Math.abs(b - a)} gate delays`;
+    const T = (t: number) => this.tText(t);
+    this.readout.textContent = a === null ? '' : b === null ? `A = ${T(a)}` : `A = ${T(a)} · B = ${T(b)} · Δ = ${T(Math.abs(b - a))} ${this.fine ? 'units (load-dependent delay)' : 'gate delays'}`;
+  }
+
+  /** Under load-dependent delay the recorded times are tenths of a unit (sim/gatesim.ts): cursors and labels follow. */
+  private get fine(): boolean {
+    return (this.sim?.ticksPerUnit ?? 1) !== 1;
+  }
+
+  /** A time snapped to the grain the simulation runs on: whole delays, or tenths. */
+  private snap(t: number): number {
+    return this.fine ? Math.round(t * 10) / 10 : Math.round(t);
+  }
+
+  private tText(t: number): string {
+    return this.fine ? t.toFixed(1) : String(t);
   }
 
   private installPointer(): void {
@@ -446,7 +461,7 @@ export class LogicAnalyzer {
           this.follow = false;
         }
       }
-      this.hoverT = Math.round(tAt(e.clientX));
+      this.hoverT = this.snap(tAt(e.clientX));
       this.update();
     });
     this.plot.addEventListener('pointerleave', () => {
@@ -455,7 +470,7 @@ export class LogicAnalyzer {
     });
     this.plot.addEventListener('pointerup', (e) => {
       if (drag && !drag.moved) {
-        const t = Math.round(tAt(e.clientX));
+        const t = this.snap(tAt(e.clientX));
         if (e.shiftKey) this.cursorB = t;
         else { this.cursorA = t; this.cursorB = null; }
       }
@@ -486,7 +501,7 @@ export class LogicAnalyzer {
       const tr = this.traces.get(l.id) ?? { t: [], v: [] };
       return { name: l.title, width: l.width, t: tr.t, v: tr.v };
     });
-    const text = toVcd(signals, { date: new Date().toISOString(), scope: 'scene' });
+    const text = toVcd(signals, { date: new Date().toISOString(), scope: 'scene', loaded: this.fine });
     const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: 'text/plain' })), download: 'trace.vcd' });
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);

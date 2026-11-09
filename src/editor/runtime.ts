@@ -67,6 +67,8 @@ export interface EditorSimOptions {
   gateRate?: () => number;
   /** Per-frame time budget in cycle mode (ms): fixed when given, else it adapts to the frame rate (FrameBudget). */
   budgetMs?: number;
+  /** The gate-level delay model (default 'unit'): the editor passes settings.loadDelay; a change rebuilds, state carried. */
+  delay?: () => 'unit' | 'load';
 }
 
 /**
@@ -262,6 +264,15 @@ export class EditorSim {
     this.gateRate = opts.gateRate ?? (() => 12);
     this.fixedBudget = opts.budgetMs;
     this.frameBudget = opts.budgetMs === undefined ? new FrameBudget() : null;
+    this.delayModel = opts.delay ?? (() => 'unit');
+  }
+
+  /** The gate-level delay model now (EditorSimOptions.delay). */
+  private readonly delayModel: () => 'unit' | 'load';
+
+  /** The delay model may have changed (the setting): rebuild on the other one, the state carried. */
+  delayChanged(): void {
+    if (this.latest && this.keyOf(this.latest) !== this.key) this.update(this.latest, this.pins, this.doc ?? undefined);
   }
 
   /** How long a frame of Run may simulate (ms). */
@@ -299,7 +310,9 @@ export class EditorSim {
   /** simKey, and the faults that are on (a fault switched on or off rebuilds, its state carried). */
   private keyOf(c: Compiled): string {
     const on = this.doc?.faults?.filter((f) => !f.off) ?? [];
-    const k = on.length ? `${simKey(c)}|faults:${JSON.stringify(on)}` : simKey(c);
+    const k0 = on.length ? `${simKey(c)}|faults:${JSON.stringify(on)}` : simKey(c);
+    // the unit model's key is as it always was; the load model rebuilds (gate level only: switch level has no gate time)
+    const k = c.mode === 'gate' && this.delayModel() === 'load' ? `${k0}|delay:load` : k0;
     return this.hidden ? `${k}|hidden:${this.hidden.key}` : k;
   }
 
@@ -347,7 +360,7 @@ export class EditorSim {
     try {
       const d = this.withFaults(c, flatten(c.def, { mode: c.mode }));
       // gate level: GateSim, and the cycle engine while running in cycle mode (DualSim switches)
-      const sim: Sim = c.mode === 'gate' ? new DualSim(d) : new SwitchSim(d);
+      const sim: Sim = c.mode === 'gate' ? new DualSim(d, { delay: this.delayModel() }) : new SwitchSim(d);
       if (sim instanceof DualSim) sim.preferFast = this.mode === 'cycle';
       // Unknown values do not carry (unless X is the power-on mode): storage that went X while
       // half wired (a clock not connected yet) starts from its power-on value once it is.
@@ -791,7 +804,7 @@ export class EditorSim {
     // the cycle engine's one-time set-up is not part of a frame's work
     if (this.mode === 'cycle' && sim instanceof DualSim && clks.length) sim.prepare();
     const t0 = now();
-    let n = 0;
+    let n = 0, cost = 1;
     this.haltHit = false;
     // a stop asked for before Run (a Step that hit a breakpoint) is not this run's
     if (!this.running) this.stopAsk = null;
@@ -805,8 +818,15 @@ export class EditorSim {
           this.endEdge();
           n++;
         }
-      } else if (!this.gateTick(sim, clks)) { this.due = 0; break; } else n++;
-      if (Number.isFinite(this.due)) this.due--;
+      } else {
+        const t = sim.time;
+        if (!this.gateTick(sim, clks)) { this.due = 0; break; }
+        n++;
+        // under load-dependent delay a step goes to the next change: the rate counts units, so a step costs what it advanced
+        if ((sim.ticksPerUnit ?? 1) !== 1 && sim.time > t) cost = sim.time - t;
+      }
+      if (Number.isFinite(this.due)) this.due -= cost;
+      cost = 1;
       // a halt stops Run once its cycle is complete (cycle mode: after the fall)
       const why = this.mode === 'cycle' && this.clkHigh ? null : this.stopNow();
       if (why) { this.haltHit = true; this.stopReason = why; this.stopAsk = null; this.due = 0; break; }

@@ -40,6 +40,30 @@ Progress:
    | ks64, settles/s | 20410, 21435 | 21175, 21373 |
 
    sim-perf's load-model column needs EditorSim to take the model: stage 3.
+3. Views ✅ (feat/finedelay-3): `Scene.delay`; `Stage.delayFromSetting` (the workbench sets it; a toggle reloads the scene at
+   its level); EditorSim's `delay` option in its rebuild key and `delayChanged()` (the editor calls it on a settings change,
+   state carried); the setting's menu and search text say it now times sandbox and workbench simulation; the run bar, the
+   stage's status line and the analyzer read tenths (`fmtTime`), cursors snap to tenths; slow motion under load waits in
+   proportion to the time each step advanced (the stage's timed animation, EditorSim's gate rate counts units); VCD in
+   picoseconds at PS_PER_UNIT under load (unchanged otherwise); sim-perf `--delay load`. tests/finedelay-views.test.ts.
+
+   sim-perf, 2026-11-10, EditorSim cycle mode at max, cycles/s, one run each, back to back:
+
+   | | GateSim, unit | GateSim, load | load / unit | cycle engine, load |
+   |---|---|---|---|---|
+   | single-cycle RV32I | 1708 | 1493 | 87 % | 13170 (unit 13207) |
+   | single-cycle, 64K × 32 memory | 2865 | 2410 | 84 % | 14685 |
+   | pipelined RV32I | 2012 | 1798 | 89 % | 10438 |
+   | system RV32I | 1195 | 1019 | 85 % | 8651 |
+   | dual-core / 4-core | 1120 / 705 | 978 / 610 | 87 % / 87 % | 7962 / 4652 |
+   | pipelined RV16 on its bench | 3631 | 3341 | 92 % | **refused** (GateSim, 3343; unit 17467) |
+   | 8-bit counter (NAND flip-flops) / LFSR | 349956 / 742737 | 286548 / 645016 | 82 % / 87 % | 924001 / 2222563 |
+   | ÷16 ripple divider (GateSim both ways) | 2216613 | 1741881 | 79 % | |
+   | ks64, settles/s | 21319 | 18231 | 86 % | 28433 |
+
+   The campaign's pipelined RV16 writes its register file at the falling edge, through one inverter: under load the clock-chain
+   rule refuses the cycle engine there. An inverted clock is likely safe (the edges are half a period apart), but that is
+   not shown, so the rule stays conservative; such a design runs on GateSim under load, correct and slower.
 
 ## What exists
 
