@@ -94,7 +94,7 @@ export const chTubes: Chapter = {
         ${WARM.t10.toFixed(1)} s, and the full current arrives by ${WARM.t90.toFixed(1)} s.</p>
         <p>The grid is the point. It is a field, not a current: held negative it collects no electrons, so it takes no power to
         hold a level. That is the same idea as <span data-ahead="mosfet">the MOSFET's gate (the voltage-controlled switch of a transistor)</span>
-        (<a href="#/c/mosfet/0">chapter 1</a>), reached fifty years earlier, with a vacuum in place of an oxide. What the tube pays for it is
+        (<a href="#/c/mosfet/0">chapter ${numOf('mosfet')}</a>), reached fifty years earlier, with a vacuum in place of an oxide. What the tube pays for it is
         the heater: ${w2(HEATER_W)} W per section just to keep the cathode emitting, switching or not.</p>
         <div class="try">Switch it on from cold. Then sweep the grid and watch the plate: ${v(V_LOW)} V conducting,
         ${B_PLUS} V cut off.</div>`,
@@ -128,7 +128,7 @@ export const chTubes: Chapter = {
       body: `
         <p>As a switch, <span data-show="v1">the triode</span> sits under <span data-show="rl">its plate resistor</span>, cathode on ground. Grid at 1: current flows and the
         plate falls to ${v(V_LOW)} V, a 0. Grid at 0: the tube is cut off and the resistor pulls the plate to
-        ${B_PLUS} V, a 1. That is <strong>ratioed logic</strong> (<a href="#/c/inverter/0">chapter 2</a> meets it again in pseudo-NMOS): the tube wins
+        ${B_PLUS} V, a 1. That is <strong>ratioed logic</strong> (<a href="#/c/inverter/0">chapter ${numOf('inverter')}</a> meets it again in pseudo-NMOS): the tube wins
         over the resistor, and while it conducts, current flows from B+ (the +${B_PLUS} V plate supply) to ground for nothing.</p>
         <p>Electrons only leave the hot cathode, so current crosses the tube one way only. A triode can pull its
         plate down or push its cathode up, but it never passes a signal back the way a contact does (or, from
@@ -136,7 +136,7 @@ export const chTubes: Chapter = {
         The orange line is the beam: it shows while the tube conducts.</p>
         <p>The plate resistor is the price of the output: while the tube conducts, ${w2(SEC.resistor)} W goes into it and ${w2(SEC.plate)} W into the tube, from the supply
         to ground, on top of the heater. A <span data-ahead="cmos inverter">CMOS inverter (a pair of complementary transistors)</span> has no such standing path; the tube circuit is the pseudo-NMOS inverter of
-        <a href="#/c/inverter/4">chapter 2</a>, with a pull-up resistor that never turns off and a tube that, conducting, never pulls the plate below 81 V.</p>
+        <a href="#/c/inverter/4">chapter ${numOf('inverter')}</a>, with a pull-up resistor that never turns off and a tube that, conducting, never pulls the plate below 81 V.</p>
         <div class="try">Toggle <code>g</code> and watch the beam and the plate.</div>`,
       scene: () => ({ root: TRIODE_SWITCH, inputs: { g: 0 } }),
       tries: [(st) => st.value('y') === 0],
@@ -333,7 +333,7 @@ export const chTubes: Chapter = {
         decimal digit of its accumulators in a ring of ten of these pairs.</p>
         <p>Why it holds: each stage inverts its input, and two such stages in a loop have two stable states and one unstable in between. A small
         disturbance at the middle grows round the loop (the loop gain is above 1) until one tube is fully on and the other fully off. That is the same
-        regenerative loop as the cross-coupled NANDs of <a href="#/c/latches/0">chapter 8</a>, with a plate resistor and a divider in place of the gate.
+        regenerative loop as the cross-coupled NANDs of <a href="#/c/latches/0">chapter ${numOf('latches')}</a>, with a plate resistor and a divider in place of the gate.
         It costs ${stats(ECCLES_JORDAN).triodes} triode sections and ${stats(ECCLES_JORDAN).diodes} steering diodes, and it burns heater and plate power for as long as it holds.</p>
         <div class="try">Set, let go, and the bit stays. Then reset.</div>`,
       scene: () => ({ root: ECCLES_JORDAN, inputs: { set: 0, reset: 1 } }),
@@ -362,7 +362,7 @@ export const chTubes: Chapter = {
           and fed them back in at the far end: hundreds of bits per tank, but serial, a word coming round once per
           circulation, about a millisecond. The <strong>Williams tube</strong> (the Manchester Baby, 1948) stored bits as
           charge spots on a cathode-ray tube's screen, read through a pickup plate and rewritten, refreshed like
-          <a href="#/c/dram/0">chapter 35</a>'s DRAM: 1024 bits a tube, random access, temperamental.
+          <a href="#/c/dram/0">chapter ${numOf('dram')}</a>'s DRAM: 1024 bits a tube, random access, temperamental.
           <strong>Magnetic core</strong> (Whirlwind, 1953) won: a ferrite ring a bit, magnetized one way or the other,
           random access in microseconds, kept with the power off, read destructively and rewritten. Core held main
           memory until semiconductor DRAM displaced it in the 1970s.</p>`,
@@ -381,7 +381,7 @@ export const chTubes: Chapter = {
     {
       title: 'What it costs',
       body: `
-        <p>Here is <a href="#/c/adders/0">chapter 6</a>'s nine-NAND full adder with <span data-show="g1 g2 g3 g4 g5 g6 g7 g8 g9">every NAND a tube NAND</span>: ${stats(TUBE_FA).triodes} triode
+        <p>Here is <a href="#/c/adders/0">chapter ${numOf('adders')}</a>'s nine-NAND full adder with <span data-show="g1 g2 g3 g4 g5 g6 g7 g8 g9">every NAND a tube NAND</span>: ${stats(TUBE_FA).triodes} triode
         sections, ${stats(TUBE_FA).diodes} diode sections, about ${v(9 * BRICK.total)} W. A tube gate switches in about
         ${TUBE_STEP_US.toFixed(0)} µs (the plate resistor charging the next grid, an estimate), about
         ${thin(Math.round(RELAY_STEP_MS * 1e3 / TUBE_STEP_US / 100) * 100)} times faster than a relay's ${RELAY_STEP_MS} ms and still some
@@ -394,8 +394,8 @@ export const chTubes: Chapter = {
         building the computer twice, one on line and one on standby, and by running tubes at reduced voltage
         (marginal checking) to find the weak ones before they failed.</p>
         <p>The transistor switches with no heater, no vacuum and no warm-up: the bipolar point-contact transistor in 1947,
-        then <span data-ahead="mosfet">the MOSFET (a voltage-controlled transistor switch) in 1959</span>, which is where <a href="#/c/mosfet/0">chapter 1</a> begins.
-        <a href="#/c/silicon/0">Chapter 28</a> prices the CPU you build in relays and in tubes.</p>`,
+        then <span data-ahead="mosfet">the MOSFET (a voltage-controlled transistor switch) in 1959</span>, which is where <a href="#/c/mosfet/0">chapter ${numOf('mosfet')}</a> begins.
+        <a href="#/c/silicon/0">Chapter ${numOf('silicon')}</a> prices the CPU you build in relays and in tubes.</p>`,
       scene: () => ({ root: TUBE_FA, inputs: { a: 1, b: 1, cin: 0 } }),
       ledger: { kind: 'add', a: 'a', b: 'b', sum: 's', width: 1, cin: 'cin', cout: 'cout', col: () => ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8', 'g9'] },
       tour: {
@@ -409,7 +409,7 @@ export const chTubes: Chapter = {
         ],
       },
       more: {
-        derive: `<p>The adder is the nine-NAND full adder of <a href="#/c/adders/0">chapter 6</a> with each NAND a brick: ${stats(TUBE_FA).triodes} triode sections, ${stats(TUBE_FA).diodes} diode sections and
+        derive: `<p>The adder is the nine-NAND full adder of <a href="#/c/adders/0">chapter ${numOf('adders')}</a> with each NAND a brick: ${stats(TUBE_FA).triodes} triode sections, ${stats(TUBE_FA).diodes} diode sections and
           ${stats(TUBE_FA).resistors} resistors. Power: 9 × ${w2(BRICK.total)} W = ${w2(9 * BRICK.total)} W. A 32-bit ripple adder is ${logicDepth(rca(32))} steps deep, about ${(logicDepth(rca(32))! * TUBE_STEP_US).toFixed(0)} µs per
           sum in tubes, against ${(logicDepth(rca(32))! * RELAY_STEP_MS).toFixed(0)} ms through relay-per-NAND bricks.</p>`,
         pitfall: `<p>Quoting a tube machine's power as its switching power. The heaters burn ${(100 * BRICK.heaters / BRICK.total).toFixed(0)} % of a brick's ${w2(BRICK.total)} W whether the gate switches or not, so a

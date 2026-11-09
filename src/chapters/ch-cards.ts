@@ -223,7 +223,7 @@ export const chCards: Chapter = {
         a card. Like a keyboard it stands for the world outside, so it costs no gates.</p>
         <p>This deck is the sum program, ${SUM_DECK.cards.length} cards. Feeding it into a computer's memory is a job for a little program
         of its own: the IBM 1401's <strong>Load</strong> key read the first card into memory and ran it, and that card read the
-        rest. <a href="#/c/bus/5">Chapter 38</a> builds that boot loader on a bus computer, and the sandbox has the card reader as a part, with
+        rest. <a href="#/c/bus/5">Chapter ${numOf('bus')}</a> builds that boot loader on a bus computer, and the sandbox has the card reader as a part, with
         decks made from any stored program.</p>
         <p>The interface is a <span data-ahead="handshake">handshake (a ready signal answered by a take signal)</span> of the oldest kind. The reader says <code>ready</code>; the computer says <code>next</code>; the transfer happens at a
         clock edge where both are 1. Neither side can force the other: a slow program leaves the card waiting at the station, a slow reader leaves the program polling <code>ready</code>, and a program that

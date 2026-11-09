@@ -161,7 +161,7 @@ export const chPixels: Chapter = {
         <p>The <span data-show="rast"><strong>rasterizer</strong></span> turns a triangle into pixel writes, one a cycle. Open it:</p>
         <ul>
           <li><strong>Set-up</strong> (6389 NANDs): A and B by subtraction, the top-left bias, the bounding box by comparators, and eight products on one
-          10 × 10 Booth multiplier (<a href="#/c/muldiv/0">chapter 21</a>, 1601 NANDs) in eight cycles: twice the area (its sign culls), then each edge's value at the first tile.</li>
+          10 × 10 Booth multiplier (<a href="#/c/muldiv/0">chapter ${numOf('muldiv')}</a>, 1601 NANDs) in eight cycles: twice the area (its sign culls), then each edge's value at the first tile.</li>
           <li>Three <strong>edge steppers</strong> (1330 NANDs each): E, a register R for the start of the current band, one adder / subtractor whose operand
           is dx = 4A, dy = 4B or four times either (a wired shift), and a second adder for the tile test.</li>
           <li>The <strong>tile walk</strong> (753 NANDs): a state machine over the box in 4 × 4-pixel tiles.</li>
@@ -202,7 +202,7 @@ export const chPixels: Chapter = {
         <p>z is linear across the triangle, a plane like the edges: z = z<sub>0</sub> + Z<sub>x</sub>·Δx + Z<sub>y</sub>·Δy with
         Z<sub>x</sub> = (A<sub>0</sub>·(z<sub>2</sub> − z<sub>0</sub>) + A<sub>2</sub>·(z<sub>1</sub> − z<sub>0</sub>)) / (2·area) (the barycentric weights,
         differentiated), Z<sub>y</sub> the same with B. So a fourth stepper walks it with the edges. Its <span data-show="rast"><strong>depth set-up</strong></span>
-        needs a division: four products on its own Booth multiplier, two divisions on <a href="#/c/muldiv/0">chapter 21</a>'s non-restoring divider (30 bits, 32 cycles each) and ten shift-and-add steps for
+        needs a division: four products on its own Booth multiplier, two divisions on <a href="#/c/muldiv/0">chapter ${numOf('muldiv')}</a>'s non-restoring divider (30 bits, 32 cycles each) and ten shift-and-add steps for
         z at the first tile. That is about 80 cycles that start during the edge set-up, so 76 more cycles before the walk, and 12 032 NANDs, more than the rest of the rasterizer; real GPUs share one set-up unit
         among many pixel pipelines.</p>
         <p>The buffer keeps 16 bits a pixel. The <span data-show="rop">ROP</span> (raster operations: the depth test and the blend) reads it at the pixel's
@@ -366,8 +366,8 @@ export const chGfxPipeline: Chapter = {
       title: 'Vertices are a kernel',
       body: `
         <p>Every vertex of a mesh goes through the same arithmetic, independently of the others: rotate it, place it on the screen. That is a
-        <strong>kernel</strong>, one thread a vertex, on <a href="#/c/warps/0">chapter 31</a>'s warp core: here <span data-show="warp0">one warp</span> of
-        <span data-show="lane0 lane1 lane2 lane3">four lanes</span> with <a href="#/c/feed/0">chapter 32</a>'s multipliers.</p>
+        <strong>kernel</strong>, one thread a vertex, on <a href="#/c/warps/0">chapter ${numOf('warps')}</a>'s warp core: here <span data-show="warp0">one warp</span> of
+        <span data-show="lane0 lane1 lane2 lane3">four lanes</span> with <a href="#/c/feed/0">chapter ${numOf('feed')}</a>'s multipliers.</p>
         <p>Fixed point, <strong>16.16</strong>: sin θ comes from a table of 64 entries (a turn in 64 frames), cos θ is the same table a quarter turn on.
         Model coordinates are quarter pixels around the centre (|x| ≤ 100), so x·cos θ stays below 2<sup>24</sup>: <code>mul</code>'s low word is the whole
         product and <code>srai 16</code> drops the fraction. Then</p>
@@ -427,7 +427,7 @@ export const chGfxPipeline: Chapter = {
       title: 'The pipeline',
       body: `
         <p>Six blocks, the first one programmable: the <span data-show="core">warp core</span> running the vertex kernel, the
-        <span data-show="cmd"><strong>command unit</strong></span>, <a href="#/c/pixels/0">chapter 33</a>'s <span data-show="rast">rasterizer</span> with its
+        <span data-show="cmd"><strong>command unit</strong></span>, <a href="#/c/pixels/0">chapter ${numOf('pixels')}</a>'s <span data-show="rast">rasterizer</span> with its
         depth set-up, the <span data-show="rop">depth test and blend</span>, the <span data-show="fb">two frames</span> and the
         <span data-show="scan">scan-out</span>. The command unit (1997 NANDs, one flip-flop a state) runs every frame:</p>
         <ul>
@@ -439,7 +439,7 @@ export const chGfxPipeline: Chapter = {
         </ul>
         <p>The vertex buffer is double-buffered like the framebuffer, so the kernel computes frame f + 1 while frame f is drawn.</p>
 
-        <p>The triangle's frame is 6144 cycles: the clear 4438 (the launch cycle, then <a href="#/c/pixels/0">chapter 33</a>'s ${fmt(CLEAR)}-cycle clear
+        <p>The triangle's frame is 6144 cycles: the clear 4438 (the launch cycle, then <a href="#/c/pixels/0">chapter ${numOf('pixels')}</a>'s ${fmt(CLEAR)}-cycle clear
         from go), the triangle 1268, waiting for vsync 438; the kernel's 60 cycles hide inside the clear.
         A frame ends at a flip, and flips happen only at vsync, every 1024 cycles: the frame time snaps to six scan-outs.</p>
         <div class="try">One frame, then read the timeline: who works when. Click the BACK frame under the screen and step through a frame: the clear sweeps away the picture from two frames ago, then each triangle lands, and the two vertex buffers trade roles. Open the command unit and watch its state register.</div>`,
@@ -497,7 +497,7 @@ export const chGfxPipeline: Chapter = {
 
         <p>The surprise is the clear: 72 % of the triangle's frame, one pixel a cycle. The same 16 threads clear the frame in software in 804 cycles,
         four pixels per store. Real GPUs never clear pixel by pixel: they mark tiles as cleared (fast clear) and supply the colour when a tile is first
-        read. Drawing goes the other way: the software kernel takes 6825 cycles for the triangle the rasterizer draws in 1268, on <a href="#/c/warps/0">chapter 31</a>'s four-warp core, whose logic alone is 488 609 NANDs: matching the rasterizer in software would take five or six of them,
+        read. Drawing goes the other way: the software kernel takes 6825 cycles for the triangle the rasterizer draws in 1268, on <a href="#/c/warps/0">chapter ${numOf('warps')}</a>'s four-warp core, whose logic alone is 488 609 NANDs: matching the rasterizer in software would take five or six of them,
         against 26 708.</p>
         <p>Scaled to 1920 × 1080, this design would spend two million cycles a frame on the clear alone.</p>
         <p>Read the widget as a budget: gates on one axis, cycles on the other, per block. A block that is large and idle (the warp core) is a candidate for sharing with other work; a block that is small and busy (the rasterizer)
@@ -556,7 +556,7 @@ export const chGfxPipeline: Chapter = {
       title: 'A faster clear',
       body: `
         <p>The clear writes the same colour into every pixel and the same far depth into every depth entry: it needs no edge functions, no tile walk,
-        no depth test. <a href="#/c/pixels/0">Chapter 33</a> let the rasterizer do it because the rasterizer was there, a pixel a cycle: 4438 of the triangle's 6144 cycles.</p>
+        no depth test. <a href="#/c/pixels/0">Chapter ${numOf('pixels')}</a> let the rasterizer do it because the rasterizer was there, a pixel a cycle: 4438 of the triangle's 6144 cycles.</p>
         <p>The <span data-show="clear"><strong>clear unit</strong></span> is a 10-bit word counter, 278 NANDs. The <span data-show="cmd">command unit</span>
         starts it at launch, instead of the rasterizer, and it drives one word address a cycle with a write enable that reaches all four byte banks of the
         <span data-show="fb">back frame</span>: four RGB332 pixels a cycle, 1024 cycles a frame. The

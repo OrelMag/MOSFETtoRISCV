@@ -36,7 +36,7 @@ function hallStep(): Step {
     const perBit = dm.nands / (32 * 32);
     text = `
       <p>Nothing in this course needed silicon: every circuit is NANDs, and a NAND can be <span data-ahead="relay">a relay (an electromagnetic switch; prologue P1)</span> or <span data-ahead="triode">a triode (a vacuum tube whose grid voltage switches its current) with two
-      diodes (prologue P2)</span>. Here is the single-cycle RV32I of <a href="#/c/cpu/0">chapter 14</a> priced that way, block by block, and stood on a floor at
+      diodes (prologue P2)</span>. Here is the single-cycle RV32I of <a href="#/c/cpu/0">chapter ${numOf('cpu')}</a> priced that way, block by block, and stood on a floor at
       physical scale. Its ${num(f.nands)} NANDs (the program ROM left out: relay machines read their programs from film or
       cards) become <strong>${num(r.total.devices)} relays</strong>, ${num(r.total.fanout)} of them extra coils, because a
       relay has ${RELAY_CONTACTS} contacts and many nets feed more inputs than that. At ${RELAY_RACK.relays} to a rack that is
@@ -256,7 +256,7 @@ export const chSilicon: Chapter = {
       title: 'Wires and the clock',
       body: `
         <p>On a modern chip, wires and not transistors dominate delay and power. A long wire has resistance and capacitance proportional to its length, so its delay
-        grows with the square of the length unless buffers are inserted. The static timing analysis of <a href="#/c/fastadd/0">chapter 16</a> counted NAND delays only. After routing, the tools
+        grows with the square of the length unless buffers are inserted. The static timing analysis of <a href="#/c/fastadd/0">chapter ${numOf('fastadd')}</a> counted NAND delays only. After routing, the tools
         repeat it with the real wire parasitics and fix the violations (timing closure).</p>
         <p>The most important wire is the clock: it should reach every flip-flop at the same moment. A flip-flop needs its input steady from a
         <strong>setup</strong> time before the capturing edge to a <strong>hold</strong> time after it, and the difference in clock arrival (skew) shifts
@@ -278,7 +278,7 @@ export const chSilicon: Chapter = {
           power. <strong>Clock gating</strong> is the cheapest cure: an enable, latched so that it cannot glitch, stops the clock of a register that is
           not being written; synthesis inserts it from enables such as the register file's write enables.</p>
           <p><strong>Leakage</strong> is the other part: an off transistor still conducts a little, a current that grows about tenfold for every 60 to
-          100 mV less threshold voltage. It flows whether the logic switches or not (the reason Dennard scaling ended, <a href="#/c/multicore/0">chapter 27</a>),
+          100 mV less threshold voltage. It flows whether the logic switches or not (the reason Dennard scaling ended, <a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>),
           and is fought with high-threshold cells off the critical path and power gating, switching an idle block's supply off. The current arrives through a
           <strong>power grid</strong>: wide straps on the top metal layers down to each cell row's VDD and GND rails. Its resistance drops the supply (IR drop)
           and slows the cells far from the pads, so the grid is sized and checked like the timing.</p>`,
@@ -289,7 +289,7 @@ export const chSilicon: Chapter = {
     {
       title: 'A floorplan of our dual-core',
       body: `
-        <p>Put it all together: the dual-core of <a href="#/c/multicore/0">chapter 27</a>, sized from its netlist. In the open SkyWater 130 nm process its logic would fill about 0.73 mm × 0.73 mm.
+        <p>Put it all together: the dual-core of <a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>, sized from its netlist. In the open SkyWater 130 nm process its logic would fill about 0.73 mm × 0.73 mm.
         At 28 nm it shrinks to about 0.2 mm on a side, and then the ring of bond pads, not the logic, sets the die size (pad-limited). Real systems-on-chip are the opposite: billions of transistors, with memories as dense SRAM macros, not flip-flops.</p>
         <p>The open-source flow is real: Yosys (synthesis) and OpenROAD (placement, clock tree, routing) take Verilog like the structural Verilog on every component's Verilog tab and produce
         a layout in SkyWater's process. The next step does it, and its table puts this estimate (each NAND equivalent priced as one NAND2 cell)
@@ -316,7 +316,7 @@ export const chSilicon: Chapter = {
         into the final GDS file, the format a foundry manufactures from (the steps run by OpenROAD-flow-scripts).</p>
         <p>Before the flow ran, the exported Verilog was checked: Yosys's synthesized gate netlist, simulated cycle by cycle, matches this site's own gate-level
         simulation on all four multi-core programs. Colour the cells by block to find the two cores, the shared memory and the arbiter; zoom in until the routing shows.</p>
-        <p>The second design is the system CPU of <a href="#/c/traps/0">chapter 20</a> with the M extension: RV32IM, the CSRs, traps and interrupts, its two memories
+        <p>The second design is the system CPU of <a href="#/c/traps/0">chapter ${numOf('traps')}</a> with the M extension: RV32IM, the CSRs, traps and interrupts, its two memories
         outside its ports as SRAM macros would be (checked the same way, on a bench with its ROM and data memory). Under each layout, our own estimates of the same design
         stand beside the flow's: the area if every NAND equivalent were a NAND2 cell, against what the cells took, block by block; our critical path in NAND delays, against
         OpenSTA's in nanoseconds after routing. Their ratio says what one of our unit delays is worth in a real 130 nm layout.</p>
@@ -364,8 +364,8 @@ export const chSilicon: Chapter = {
         <p>That is the whole path: a voltage-controlled switch, a NAND, gates, adders, latches, memories, an ALU, a single-cycle RISC-V, a pipeline, interrupts,
         multiplication, caches, microcode, floating point, several instructions a cycle out of order, two cores, and geometry on a wafer. Every value on every wire along the way was computed, not drawn, and every box can still be opened all the way down to
         the four transistors of a NAND.</p>
-        <p>The journey goes on with the same bricks arranged for throughput: <a href="#/c/lanes/0">chapters 29–34</a> build a GPU, from lanes sharing
-        one instruction stream to a rasterizer drawing into a frame buffer. <a href="#/c/dram/0">Chapters 35–38</a> go below the caches: a DRAM
+        <p>The journey goes on with the same bricks arranged for throughput: <a href="#/c/lanes/0">chapters ${numOf('lanes')}</a>–${numOf('graphics')} build a GPU, from lanes sharing
+        one instruction stream to a rasterizer drawing into a frame buffer. <a href="#/c/dram/0">Chapters ${numOf('dram')}</a>–${numOf('bus')} go below the caches: a DRAM
         cell by cell, its controller, flash, and a bus with <span data-ahead="dma">DMA (a device that copies memory blocks without the CPU)</span> that boots a computer from flash. Chapters <a href="#/c/telegraph/0">${numOf('telegraph')}</a>–<a href="#/c/datacentre/0">${numOf('datacentre')}</a> take the machine out of the box (wires and clocks, UARTs, modems, error codes, Ethernet, networks, radio) and chapters <a href="#/c/fixed/0">${numOf('fixed')}</a>–<a href="#/c/sdr/0">${numOf('sdr')}</a> process the signals in fixed-point arithmetic, down to a DSP core. The appendices rebuild a real chip, the
         <a href="#/c/appendix-6502/0">6502</a>, in NMOS transistors, and run <a href="#/c/appendix-doom/0">Doom</a> on the RV32IM system, a window of it
         on the gates.</p>
