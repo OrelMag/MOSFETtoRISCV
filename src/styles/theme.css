@@ -1,11 +1,29 @@
 /* Design tokens. Every colour is defined for light and dark; "auto" follows the OS. */
 
+/* Stand-ins with Inter's and JetBrains Mono's metrics, shown until the web fonts arrive (display=swap): local fonts scaled to
+   the same advance widths and line boxes, so the swap no longer rewraps the top bar, headers and tables (a header one button
+   short of its wrap point jumped by 380 px). Measured in Chrome at 100 px over a sentence of UI words: Inter is 1.064 / 1.074 ×
+   Arial at 400 / 500 and 1.016 / 1.025 / 1.036 × Arial Bold at 600 / 700 / 800, ascent 97, descent 24; JetBrains Mono is
+   1.000 × Courier New, ascent 102, descent 30. The overrides are divided by size-adjust, which scales them too. */
+@font-face { font-family: 'Inter Fallback'; font-weight: 100 449; src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('Arimo');
+  size-adjust: 106.4%; ascent-override: 91.2%; descent-override: 22.6%; line-gap-override: 0%; }
+@font-face { font-family: 'Inter Fallback'; font-weight: 450 549; src: local('Arial'), local('ArialMT'), local('Liberation Sans'), local('Arimo');
+  size-adjust: 107.4%; ascent-override: 90.3%; descent-override: 22.3%; line-gap-override: 0%; }
+@font-face { font-family: 'Inter Fallback'; font-weight: 550 649; src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('Arimo Bold');
+  size-adjust: 101.6%; ascent-override: 95.5%; descent-override: 23.6%; line-gap-override: 0%; }
+@font-face { font-family: 'Inter Fallback'; font-weight: 650 749; src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('Arimo Bold');
+  size-adjust: 102.5%; ascent-override: 94.6%; descent-override: 23.4%; line-gap-override: 0%; }
+@font-face { font-family: 'Inter Fallback'; font-weight: 750 1000; src: local('Arial Bold'), local('Arial-BoldMT'), local('Liberation Sans Bold'), local('Arimo Bold');
+  size-adjust: 103.6%; ascent-override: 93.6%; descent-override: 23.2%; line-gap-override: 0%; }
+@font-face { font-family: 'JetBrains Mono Fallback'; src: local('Courier New'), local('CourierNewPSMT'), local('Liberation Mono'), local('Cousine');
+  size-adjust: 100%; ascent-override: 102%; descent-override: 30%; line-gap-override: 0%; }
+
 :root {
   --page-gutter: clamp(16px, 3vw, 32px); /* one side gutter for every page: home, path, notes, campaign, statistics */
   --warn-text: light-dark(#9a5300, var(--warn)); /* --warn as small text: 3.4:1 on --warn-soft in light, this 5:1 */
   color-scheme: light;
-  --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
+  --font-ui: 'Inter', 'Inter Fallback', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace;
 
   --bg: #f5f6fa;
   --surface: #ffffff;
