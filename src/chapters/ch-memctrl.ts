@@ -84,15 +84,15 @@ export const chMemCtrl: Chapter = {
     {
       title: 'Commands',
       body: `
-        <p><a href="#/c/dram/0">Chapter 35</a> drove a DRAM by hand: activate a row, sense, read or write, close, precharge, each at the right moment, and refresh
-        before the charge leaks away. The cache of <a href="#/c/cache/0">chapter 22</a> knows none of that: it asks for a line and waits. Between them sits a
+        <p><a href="#/c/dram/0">Chapter ${numOf('dram')}</a> drove a DRAM by hand: activate a row, sense, read or write, close, precharge, each at the right moment, and refresh
+        before the charge leaks away. The cache of <a href="#/c/cache/0">chapter ${numOf('cache')}</a> knows none of that: it asks for a line and waits. Between them sits a
         <strong>memory controller</strong>, a state machine that knows the device's commands and timing rules, turns each request into commands at legal
         cycles, and refreshes on time whether anyone asks or not. Its choices (keep a row open or close it, which address bits pick the bank, which request
         to serve first) decide what each miss costs, so the chapter measures them on the benchmarks.</p>
         <p>Six commands do the work. <strong>ACT</strong> opens a row in a bank, <strong>RD</strong> / <strong>WR</strong>
         move a burst from or to the open row, <strong>PRE</strong> closes it (<strong>PREA</strong>: every bank), <strong>REF</strong>
         refreshes. A DDR4 device also takes MRS (set the mode registers: CL, burst length), ZQ (calibrate the output drivers),
-        self-refresh entry / exit and power-down, which this model leaves out. Each working command has a rule about when it may come (<a href="#/c/dram/0">chapter 35</a>): tRCD after an ACT before a column command, tRP after a PRE
+        self-refresh entry / exit and power-down, which this model leaves out. Each working command has a rule about when it may come (<a href="#/c/dram/0">chapter ${numOf('dram')}</a>): tRCD after an ACT before a column command, tRP after a PRE
         before the next ACT, tRAS before a row may close, tRFC of silence after a REF. <span data-show="dev">The device</span> here checks every one: a broken rule raises its error flag and names the rule, and a
         column command that breaks one reads X.</p>
         <p><span data-show="ctrl">The controller</span> turns "read line 5" into the right commands at the right cycles. In gates it is small: <span data-show="ctrl.st">seven state
@@ -233,7 +233,7 @@ export const chMemCtrl: Chapter = {
     {
       title: 'The CPU behind it',
       body: `
-        <p>The <span data-show="dm">write-back cache</span> of <a href="#/c/cache/0">chapter 22</a> had a miss controller counting to a fixed 8 or 12. Here it asks instead. On a miss it
+        <p>The <span data-show="dm">write-back cache</span> of <a href="#/c/cache/0">chapter ${numOf('cache')}</a> had a miss controller counting to a fixed 8 or 12. Here it asks instead. On a miss it
         raises <code>req</code> with the line address; if the victim is dirty it first asks for a write (<code>wr</code>) with the victim's
         address, and the controller says which word it wants each cycle; then it asks for the fill and writes each word as
         <code>dv</code> (data valid: the device is delivering a read word) says. The tag is written with the last word. The stall lasts exactly as long as the DRAM takes.</p>
@@ -319,7 +319,7 @@ export const chMemCtrl: Chapter = {
         oldest of all only when nothing hits. With a CPU and a write buffer working on two rows of one bank, FCFS turns every request
         into a conflict; FR-FCFS batches each row's requests, as deep as the queue lets it.</p>
         <p>It needs requests to choose from. This chapter's controller has one: the cache asks for a line and waits. A queue comes with a
-        write buffer, several cores (<a href="#/c/multicore/0">chapter 27</a>) or <span data-ahead="dma">a DMA engine (hardware that copies memory blocks without the CPU)</span> (<a href="#/c/bus/0">chapter 38</a>). Its cost is the queue itself, address and data
+        write buffer, several cores (<a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>) or <span data-ahead="dma">a DMA engine (hardware that copies memory blocks without the CPU)</span> (<a href="#/c/bus/0">chapter ${numOf('bus')}</a>). Its cost is the queue itself, address and data
         registers per entry, and a row-hit comparator per entry feeding a priority encoder. FR-FCFS is also unfair: a stream of hits can
         hold an old request back, so real controllers cap how long a request may wait.</p>
         <p>The idea generalizes: the DRAM is a device whose cost depends on state, so the controller's schedule is an optimization over that state, the way a compiler
