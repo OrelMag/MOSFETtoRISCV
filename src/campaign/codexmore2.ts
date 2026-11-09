@@ -205,7 +205,7 @@ offset = bits 11:0  = 0xA10
     chapters: [
       { chapter: 'cache', step: 6, label: 'The memory hierarchy' },
       { chapter: 'vmem', step: 0, label: 'Two programs, one memory' },
-      { chapter: 'vmem', step: 3, label: 'Sv32's walk: two reads before the real one' },
+      { chapter: 'vmem', step: 3, label: 'The Sv32 walk: two reads before the real one' },
       { chapter: 'vmem', step: 5, label: 'The TLB: remembering translations' },
       { chapter: 'vmem', step: 6, label: 'Page faults: mapping on demand' },
     ],

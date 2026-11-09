@@ -292,7 +292,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Two programs, one memory", challenge: "quiz" },
     { title: "Pages: a number and an offset", challenge: "quiz" },
     { title: "The page-table entry", challenge: "quiz" },
-    { title: "Sv32's walk: two reads before the real one", challenge: "quiz" },
+    { title: "The Sv32 walk: two reads before the real one", challenge: "quiz" },
     { title: "The walker in gates", challenge: "quiz" },
     { title: "The TLB: remembering translations", challenge: "quiz" },
     { title: "Page faults: mapping on demand", challenge: "quiz" },

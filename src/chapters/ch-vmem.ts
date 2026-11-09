@@ -175,7 +175,7 @@ export const chVmem: Chapter = {
       },
     },
     {
-      title: 'Sv32\'s walk: two reads before the real one',
+      title: 'The Sv32 walk: two reads before the real one',
       body: `
         <p>The processor holds the address of the root table in the <strong>satp</strong> register (a mode bit and a 22-bit physical page number), and the operating system
         changes it to change address spaces. For one access the hardware does this:</p>
