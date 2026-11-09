@@ -71,6 +71,8 @@ ISS should leave it green before merging (its failure artifact keeps the program
 and the computer through Yosys synth_gowin and nextpnr-himbaechel (pinned YoWASP versions) on the Tang Nano 9K, and fails when the result differs from the
 checked-in `src/fpga/fpgacosts.json` (device use, LUTs per block, post-route Fmax, the critical path split into skew / logic / routing, beside lutMap and
 static timing; the new file is an artifact). tests/fpgacosts.test.ts fails when the export no longer hashes as it was measured: run the script with --write.
+The chapter `fpga` (chapters/ch-fpga.ts, after silicon) quotes only src/fpga/facts.ts: lutMap / stats computed on first use and fpgacosts.json (tests/fpga-chapter.test.ts pins
+them); widgets/fpga.ts its widgets (LUT programmer, the LUTs panel lighting each LUT's gates, switch box, the report, the critical path), styles/fpga.css.
 `.github/workflows/layout.yml` (pushes touching scripts/layout/, export-layout.ts, vexport.ts) runs OpenROAD-flow-scripts on sky130
 per design (`export-layout.ts dual | sys`: Verilog, config, source.json with our NAND counts per block and static timing), ~35 min
 each; main and manual runs publish the release layout-latest (dual-core at its root, system core under sys/), which the deploy unpacks
