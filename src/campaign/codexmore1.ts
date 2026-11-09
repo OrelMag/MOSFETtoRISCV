@@ -831,7 +831,7 @@ next:   pc ← mtvec, mepc ← pc of the illegal word, mcause ← 2</pre>`,
       'Taking an interrupt on a bubble: mepc would be the bubble\'s PC; RV16 gates the interrupt with E\'s valid bit.',
     ],
     anatomy: ['csr', 'p2', 'p3'],
-    chapters: [{ chapter: 'traps', step: 2, label: 'Exceptions' }],
+    chapters: [{ chapter: 'traps', step: 2, label: 'Exceptions' }, { chapter: 'traps', step: 10, label: 'Precise traps in a pipeline' }],
   },
 
   // ---- side quests

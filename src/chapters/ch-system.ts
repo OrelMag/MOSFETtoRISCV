@@ -572,6 +572,40 @@ export const chTraps: Chapter = {
         numbers: `<table class="mini"><tr><th>unit</th><th>NANDs</th></tr><tr><td>CSR unit</td><td>${nd(CSR_UNIT)}</td></tr><tr><td>trap unit</td><td>${nd(TRAP_UNIT)}</td></tr><tr><td>system decoder</td><td>${nd(SYS_DECODE)}</td></tr><tr><td>together</td><td>${TRAP_NANDS}</td></tr></table>`,
       },
     },
+    {
+      title: 'Precise traps in a pipeline',
+      body: `
+        <p>The single-cycle CPU of this chapter finishes one instruction before it starts the next, so a trap always falls between two instructions.
+        The pipeline of <a href="#/c/pipeline/0">chapter ${numOf('pipeline')}</a> holds five at once. A trap there is <strong>precise</strong> when it looks the same:
+        every instruction older than the trapping one has finished, none younger has changed a register, memory or a CSR, and mepc names
+        the trapping instruction. A handler can then fix the cause and return, and the program cannot tell it was interrupted.</p>
+        <p>The rule that makes it work is to take every trap in one stage. The campaign's pipeline (<a href="#/campaign/n/y_ptrap">Pipeline V: exceptions</a>,
+        16-bit, but the same design) takes them in E:</p>
+        <ul>
+        <li><strong>The trapping instruction does nothing.</strong> It has written nothing yet (register writes happen in W, stores in M), and the trap
+        clears its own register write and store enable on the way out of E.</li>
+        <li><strong>Older instructions finish.</strong> The ones in M and W go on as usual: their results are part of the state the handler sees.</li>
+        <li><strong>Younger instructions are flushed.</strong> The two behind it, in F/D and D/E, are cleared exactly as a taken branch clears them, and the PC
+        loads mtvec instead of a branch target: the trap is one more input of the redirect.</li>
+        <li><strong>Bubbles never trap.</strong> A stall or a flush puts an all-zero word into the pipeline, which decodes as an illegal instruction.
+        So every stage carries a <em>valid</em> bit, and only a valid instruction may trap. An interrupt waits for a valid instruction in E too:
+        a bubble has no pc of its own to put in mepc.</li>
+        </ul>
+        <p>E works because every exception of this ISA is known by the end of decode: an illegal word, ecall, ebreak. A cause found later, a
+        misaligned or faulting load in M say, is carried down the pipeline with its instruction as a flag and acted on at one commit point,
+        so that everything younger can still be flushed. Out-of-order cores do the same at the head of the reorder buffer
+        (<a href="#/c/ooo/0">chapter ${numOf('ooo')}</a>).</p>
+        <p>The price, measured on the campaign's cores: precise exceptions take Pipeline IV (forwarding, the load-use stall and branch flushes) from 9218 to 12 031 NANDs (the CSR file, the
+        system decoder, the valid bits and the trap path) and its period from 78 to 81 delays; the external interrupt on top adds 7 NANDs.</p>`,
+      challenge: {
+        kind: 'quiz',
+        question: 'Pipeline V takes traps in E. An illegal word is in E, an <code>lw</code> in M and an <code>add</code> in D. Which of them changes the machine\'s state?',
+        options: ['Only the lw: it finishes, the add is flushed, the illegal word writes nothing', 'None: a trap freezes the whole pipeline', 'The lw and the add: the add was already decoded', 'All three'],
+        answer: 0,
+        explain: 'Precise: everything older than the trap finishes (the lw writes its register in W), nothing younger runs (the add is flushed with F/D), and the trapping instruction itself writes nothing; mepc holds its address.',
+        why: ['', 'Freezing the lw would lose a result the program has already been promised: an older instruction must finish.', 'Decoding changes no state; the add is flushed before it writes anything, as behind a taken branch.', 'The illegal instruction does not run: the trap clears its writes.'],
+      },
+    },
   ],
 };
 
