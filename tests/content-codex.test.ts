@@ -1,6 +1,7 @@
 // The codex's quoted numbers against the library, read from the entries' text: a change to either side fails here.
 // (The codex files are plain strings; this test is their guard. Re-measure with stats() / corePeriod before editing.)
 
+import { numOf } from '../src/chapters/order';
 import { beforeAll, describe, expect, it } from 'vitest';
 import '../src/lib';
 import { CODEX, codexById } from '../src/campaign/codex';
@@ -200,7 +201,7 @@ describe('the glossary in the chapters', () => {
   });
 
   it('keeps the GPU act\'s terms out of the chapters before it', () => {
-    for (const c of chapters) expect([...chapterSkip(c)].sort(), c.id).toEqual(c.num < 29 ? ['barrier', 'lane', 'warp'] : []);
+    for (const c of chapters) expect([...chapterSkip(c)].sort(), c.id).toEqual(c.num < numOf('lanes') ? ['barrier', 'lane', 'warp'] : []);
     // The loom's warp in the prologue is found by the glossary but skipped there.
     const cards = chapters.find((c) => c.id === 'cards')!;
     const found = cards.steps.flatMap((s) => ids(plain(s.body)));

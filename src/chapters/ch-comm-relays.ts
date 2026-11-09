@@ -45,8 +45,8 @@ const V34_ETA = V34.rate / V34.B;
 const TONE = { B: 3100, db: 30 };
 
 const LADDER: [number, string][] = [
-  [39, 'Two machines, one wire'], [40, 'The telephone exchange'], [41, 'A wire is not a wire'], [42, 'Crossing clocks'], [43, 'A UART'],
-  [44, 'SPI and I²C'], [numOf('signals'), 'Signals and spectrum'], [numOf('noise'), 'Noise and detection'], [numOf('modem'), 'Modems'], [numOf('carriers'), 'Many carriers'], [numOf('serial'), 'Fast serial links'], [numOf('glass'), 'Light in glass'], [numOf('errors'), 'When bits go wrong'], [numOf('codes'), 'Codes near the limit'], [numOf('pcie'), 'PCIe and USB'], [numOf('ethernet'), 'Ethernet'], [numOf('switch'), 'A switch'],
+  [numOf('telegraph'), 'Two machines, one wire'], [numOf('exchange'), 'The telephone exchange'], [numOf('wire'), 'A wire is not a wire'], [numOf('clocks'), 'Crossing clocks'], [numOf('uart'), 'A UART'],
+  [numOf('spi'), 'SPI and I²C'], [numOf('signals'), 'Signals and spectrum'], [numOf('noise'), 'Noise and detection'], [numOf('modem'), 'Modems'], [numOf('carriers'), 'Many carriers'], [numOf('serial'), 'Fast serial links'], [numOf('glass'), 'Light in glass'], [numOf('errors'), 'When bits go wrong'], [numOf('codes'), 'Codes near the limit'], [numOf('pcie'), 'PCIe and USB'], [numOf('ethernet'), 'Ethernet'], [numOf('switch'), 'A switch'],
   [numOf('network'), 'Computers on a network'], [numOf('router'), 'A router'], [numOf('tcp'), 'TCP'], [numOf('queues'), 'Queues and congestion'], [numOf('secret'), 'Keeping it secret'], [numOf('path'), 'The internet path'], [numOf('radio'), 'Radio'], [numOf('wifi'), 'Wi-Fi'], [numOf('cellular'), 'Cellular'], [numOf('datacentre'), 'Inside the data centre'], [numOf('bench'), 'The expert\'s bench'],
 ];
 /** The five questions, with the chapters of the track that answer each. */
@@ -168,7 +168,7 @@ export const chTelegraph: Chapter = {
         <p>The relay was devised for exactly this. A weak current from the line operates <span data-show="st0">a relay</span>, and the relay's make contact closes a
         circuit of its own: a local battery onto the next line. The sounder, or the next station, sees a full-strength copy. Relays were on telegraph lines in the telegraph's early decades; Joseph Henry's electromagnets and Edward Davy's relay are the names usually attached to the idea.</p>
         <p>This is the first <strong>regenerator</strong>: the output has no memory of how weak or noisy the input was, only of whether it crossed the threshold.
-        It is what a gate does to a level (<a href="#/c/inverter/0">chapter 2</a>), done with an armature. Here a chain of ${stats(telegraphChain(3)).relays} stations: <span data-show="st0 st1 st2">key to sounder</span> through
+        It is what a gate does to a level (<a href="#/c/inverter/0">chapter ${numOf('inverter')}</a>), done with an armature. Here a chain of ${stats(telegraphChain(3)).relays} stations: <span data-show="st0 st1 st2">key to sounder</span> through
         three relays, each on a battery of its own. The cost is time: the signal crosses one <em>relay step</em> per station (the time for every armature to move once, as in <a href="#/c/relays/0">the relay prologue</a>), ${RELAY_STEP_MS} ms with our relay, so the sounder follows the key 3
         steps later, the status line's <em>settled in 3 relay steps</em>.</p>
         <div class="try">Press the key and count steps to the sounder. Then release it.</div>`,
@@ -189,7 +189,7 @@ export const chTelegraph: Chapter = {
           have been timed to, and a ${f0(TG_MS)} ms dot loses ${f1(SHRINK_MS)} ms at every station until nothing is left after ${Math.ceil(TG_MS / SHRINK_MS)}. Real repeaters biased their relays to balance the two times.</p>`,
         pitfall: `<p>Calling a relay an amplifier. It has no gain curve: the contact is open or closed, and the output is the same whatever the input current was above its threshold. A repeater therefore restores a signal
           that was merely <em>weak</em>; one that was <em>wrong</em> (a pulse stretched, shortened or inverted by noise) is repeated wrongly, at full strength.</p>`,
-        real: `<p>The same part switched a telephone call a century later: <a href="#/c/exchange/0">the next chapter</a> builds an exchange from nothing but relay contacts. <a href="#/c/wire/0">Chapter 41</a> returns to repeaters on a chip's wire.</p>`,
+        real: `<p>The same part switched a telephone call a century later: <a href="#/c/exchange/0">the next chapter</a> builds an exchange from nothing but relay contacts. <a href="#/c/wire/0">Chapter ${numOf('wire')}</a> returns to repeaters on a chip's wire.</p>`,
       },
       tries: [(st) => st.value('sounder') === 1],
       challenge: {
@@ -374,7 +374,7 @@ export const chExchange: Chapter = {
         <p>The counter below is <span data-show="st0 st1 st2">three toggle stages</span> of three relays each. In a stage the <em>pulse relay</em> p follows its input; a master m and a slave s hold the state, and each is fed through p's contacts:
         <code>m' = p ? ¬s : m</code> and <code>s' = p ? s : m</code>. While the pulse is up, m takes the inverse of s and s holds; when it falls, s copies m. So s toggles
         once per pulse, on the falling edge, however long the pulse lasts. (The prologue's clock divider, by contrast, would flip on every step its input stays up.) This is the master-slave pair of
-        <a href="#/c/latches/0">chapter 8</a> with relay steps as the phases. Each stage's slave clocks the next, a ripple counter, and <span data-show="hr">the hang-up relay</span> opens the rail that feeds every master and slave, so a caller who hangs up releases the counter.</p>
+        <a href="#/c/latches/0">chapter ${numOf('latches')}</a> with relay steps as the phases. Each stage's slave clocks the next, a ripple counter, and <span data-show="hr">the hang-up relay</span> opens the rail that feeds every master and slave, so a caller who hangs up releases the counter.</p>
         <p>The whole counter is ${CTR.relays} relays: three per bit and one to hang up. Measured on this circuit, a pulse that rises settles in at most ${SETTLE.rise} relay steps and one that falls in at most ${SETTLE.fall} (${f0(SETTLE.fall * RELAY_STEP_MS)} ms at ${RELAY_STEP_MS} ms a step, the ripple through all three bits). That fits the 100 ms period of a dial but not always its roughly 40 ms make interval: the worst ripple can still be moving when the next pulse begins. The count stays right because each stage is clocked by an edge and holds its state, not by the time between edges.</p>
         <div class="try">Pulse three times, then hang up.</div>`,
       scene: () => ({ root: DIAL_COUNTER, inputs: { pulse: 0, hangup: 0 }, animate: true }),

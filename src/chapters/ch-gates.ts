@@ -428,7 +428,7 @@ export const chBinary: Chapter = {
         unit when the signs differ. One's complement must add the carry out back in at the bottom (an <em>end-around carry</em>, a second
         trip along the carry chain). Bias must subtract 8 after every addition. Two's complement uses the unsigned adder unchanged: it is
         arithmetic modulo 2ⁿ, with each value's representative picked from −2ⁿ⁻¹ … 2ⁿ⁻¹ − 1.</p>
-        <p>The others survive where their strengths matter. Floating point (<a href="#/c/float/0">chapter 24</a>) keeps its significand
+        <p>The others survive where their strengths matter. Floating point (<a href="#/c/float/0">chapter ${numOf('float')}</a>) keeps its significand
         in sign-magnitude, which multiplies easily, and its exponent biased, so that exponents compare like unsigned integers. The Internet
         checksum is a one's-complement sum.</p>`,
       widget: () => encodingsWidget(),
@@ -460,7 +460,7 @@ export const chBinary: Chapter = {
         adds 0 + 0 + c, carries nothing out, and the sum's sign is c: overflow is c = 1 against a carry out of 0. With both negative it adds
         1 + 1 + c, always carries out, and the sign is c again: overflow is c = 0 against 1. With opposite signs it adds 1 + 0 + c, which
         carries out exactly when c = 1, so the two carries always agree.</p>
-        <p>So the flags are cheap: C is a wire and V one XOR. The adders of <a href="#/c/adders/5">chapter 6</a> bring both out, and
+        <p>So the flags are cheap: C is a wire and V one XOR. The adders of <a href="#/c/adders/5">chapter ${numOf('adders')}</a> bring both out, and
         comparisons are built on them: a &lt; b unsigned is "a − b borrows", and signed it is the sign of a − b, corrected by V.</p>`,
       widget: () => overflowWidget(),
       more: {
@@ -524,8 +524,8 @@ export const chBinary: Chapter = {
         <span data-show="mz">zero</span> half those inputs go to a <span data-show="gnd">tie to GND</span>. No gates, no delay.
         Narrowing is cheaper still: drop the top wires. Read as signed, the value survives only if every dropped bit equals the new top bit; read as unsigned, only if every dropped bit is 0.</p>
         <p>Which one is right is not in the bits: the instruction says. RISC-V's <code>lb</code> sign-extends a loaded byte and <code>lbu</code>
-        zero-extends it (<a href="#/c/io/0">chapter 19</a>), and every 12-bit <span data-ahead="immediates">immediate (a constant stored inside the instruction word)</span> is sign-extended to 32 bits
-        (<a href="#/c/isa/0">chapter 13</a>).</p>
+        zero-extends it (<a href="#/c/io/0">chapter ${numOf('io')}</a>), and every 12-bit <span data-ahead="immediates">immediate (a constant stored inside the instruction word)</span> is sign-extended to 32 bits
+        (<a href="#/c/isa/0">chapter ${numOf('isa')}</a>).</p>
         <div class="try">Set a = 1011. s reads 0xFB (−5 signed), z reads 0x0B (11).</div>`,
       scene: () => ({ root: EXTEND4_8, inputs: { a: 6 } }),
       tries: [(st) => st.getInput('a') === 11],
@@ -561,7 +561,7 @@ export const chBinary: Chapter = {
         The bit shifted out is the remainder, and a set one pulls a negative result down. A compiler dividing a signed number by a
         power of two adds a correction first.</p>
         <p>Cost: no gates for a fixed shift. A shift by an amount held in a register needs muxes: <span data-ahead="shifter">the barrel shifter (log₂ n stages of multiplexers, each shifting by a power
-        of two or passing the word on)</span> of <a href="#/c/alu/1">chapter 11</a>.</p>
+        of two or passing the word on)</span> of <a href="#/c/alu/1">chapter ${numOf('alu')}</a>.</p>
         <div class="try">Set a = 0xF9 (−7): sll = 0xF2 (−14), srl = 0x7C (124), sra = 0xFC (−4).</div>`,
       scene: () => ({ root: SHIFTS8, inputs: { a: 0x2C } }),
       tries: [(st) => st.getInput('a') === 0xF9],
@@ -593,9 +593,9 @@ export const chBinary: Chapter = {
         <p>The price is a fixed step and a fixed range. Q4.4 counts in sixteenths up to 15.9375, and every value in between rounds to the
         nearest step. Some decimal fractions never fit exactly. 0.1 is 1/10, and 10 has a factor of 5 that no power of two contains, so its
         binary expansion repeats for ever, as 1/3 does in decimal. More bits shrink the error but never remove it.</p>
-        <p>DSPs, audio codecs and texture coordinates carry fractions this way, and the vertex kernel of <a href="#/c/graphics/0">chapter 34</a>
+        <p>DSPs, audio codecs and texture coordinates carry fractions this way, and the vertex kernel of <a href="#/c/graphics/0">chapter ${numOf('graphics')}</a>
         rotates in 16.16 fixed point. When a range must stretch from tiny to huge the point has to move with the number: that is floating
-        point, <a href="#/c/float/0">chapter 24</a>.</p>`,
+        point, <a href="#/c/float/0">chapter ${numOf('float')}</a>.</p>`,
       widget: () => fixedWidget(),
       more: {
         derive: `<p>Qa.f × Qb.f: (x / 2ᶠ)(y / 2ᶠ) = xy / 2²ᶠ, so the integer product has 2f fraction bits and a shift right by f brings it back

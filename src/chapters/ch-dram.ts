@@ -102,7 +102,7 @@ export const chDram: Chapter = {
     {
       title: 'An array of capacitors',
       body: `
-        <p>An SRAM bit costs six transistors (<a href="#/c/cache/0">chapter 22</a>). A DRAM bit is one access transistor and one capacitor of about
+        <p>An SRAM bit costs six transistors (<a href="#/c/cache/0">chapter ${numOf('cache')}</a>). A DRAM bit is one access transistor and one capacitor of about
         ${CELL_C} fF: the <strong>1T1C</strong> cell. The bit is the charge on the capacitor, so nothing holds it; it only has
         to survive until it is read or refreshed. A 16 Gbit DDR5 die holds seventeen billion of these.</p>
         <p>Each row of cells shares a <strong>word line</strong> (the access transistors' gates, raised by the
@@ -319,7 +319,7 @@ export const chDram: Chapter = {
         before the activate (a <strong>conflict</strong>).</p>
         <p>Rows are interleaved over the banks, so consecutive lines fill a row and then move on to the next bank. Banks are
         independent: while one waits for its precharge or activate, another can be read, and a controller with several requests
-        overlaps them (bank-level parallelism; DDR4 groups its 16 banks in 4 bank groups, <a href="#/c/memctrl/0">chapter 36</a>). Two streams that land in the same bank keep closing each
+        overlaps them (bank-level parallelism; DDR4 groups its 16 banks in 4 bank groups, <a href="#/c/memctrl/0">chapter ${numOf('memctrl')}</a>). Two streams that land in the same bank keep closing each
         other's rows. A memory copy whose destination sits a multiple of the bank stride away does exactly that.</p>
         <p>The row buffer is why access order matters more than access count. Sequential addresses cost one activate per row and a stream of
         cheap column commands; a stride that hops rows costs an activate and a precharge for every word. The same program can therefore run
@@ -358,8 +358,8 @@ export const chDram: Chapter = {
         At our single-cycle CPU's ${CLOCK_NS.toFixed(2)} ns clock that is ${TIMING.tRCD} cycles each. After the column command the data comes as a
         <strong>burst</strong>: here a 4-word cache line, one word a cycle.</p>
         <p>A row hit is then ${accessCycles('hit', TIMING)} cycles, a miss ${accessCycles('miss', TIMING)}, a conflict ${accessCycles('conflict', TIMING)}.
-        <a href="#/c/cache/0">Chapter 22</a>'s caches charge a fixed ${WB_MISS_CLEAN} for a miss (${WB_MISS_DIRTY} with a dirty victim to write back first);
-        ${WB_MISS_CLEAN} is a row hit. <a href="#/c/memctrl/0">Chapter 36</a> builds the controller that issues these
+        <a href="#/c/cache/0">Chapter ${numOf('cache')}</a>'s caches charge a fixed ${WB_MISS_CLEAN} for a miss (${WB_MISS_DIRTY} with a dirty victim to write back first);
+        ${WB_MISS_CLEAN} is a row hit. <a href="#/c/memctrl/0">Chapter ${numOf('memctrl')}</a> builds the controller that issues these
         commands, and lets the caches pay what the row buffer says.</p>
         <p>Latency is older than DRAM. EDSAC (1949) kept its words as sound pulses circulating in tubes of mercury, with no address at all: a word could be
         read only as it came round, so the wait was up to a whole circulation, about a millisecond. Re-amplifying and re-launching every pulse each trip is
