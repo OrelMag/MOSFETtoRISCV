@@ -9,6 +9,8 @@ import { backX, CMOS_GATES, cmosLayout, cmosOutput, cmosSolve, place, type CmosK
 import { cmosKindOf } from '../src/view/cmosdraw';
 
 const BUBBLE = 0.3; // view/symbols.ts
+/** The body outline while the inside shows (styles/cmos.css --cm-outline): half of it lies inside the body. */
+const OUTLINE = 0.16;
 const KINDS = [...CMOS_GATES] as CmosKind[];
 const inverting = (k: string) => k === 'nand' || k === 'nor' || k === 'xnor' || k === 'not';
 
@@ -55,8 +57,8 @@ describe('working gates', () => {
       const l = cmosLayout(k), p = place(l, bw, g.h);
       const bad: string[] = [];
       const check = (x: number, y: number, r: number, what: string) => {
-        // the point and its stroke's reach in four directions, plus a hair of air before the outline
-        const m = r + 0.02;
+        // the point and its stroke's reach in four directions, clear of the outline's inner half with a little air
+        const m = r + OUTLINE / 2 + 0.04;
         for (const [dx, dy] of [[0, 0], [m, 0], [-m, 0], [0, m], [0, -m]]) if (!inBody(k, bw, g.h, x + dx, y + dy)) { bad.push(`${what} (${x.toFixed(2)}, ${y.toFixed(2)})`); return; }
       };
       for (const q of l.prims) for (const { at, r } of pointsOf(q)) {

@@ -54,3 +54,10 @@
 svg.cmos-mid .cmos :is(.plate, .glead, .pbub, .cdot, .cflow, .ch-glow) { display: none; }
 svg.cmos-mid .cmos :is(.ch-on, .ch-off) { stroke-width: calc(0.16px * var(--ck, 1)); stroke-linecap: round; }
 svg.cmos-mid .cmos .cw { stroke-width: calc(0.06px * var(--ck, 1)); }
+
+/* while the inside shows, the body is a neutral panel (the vivid fills would swallow the 0 colour), as in the mockup */
+/* the outline drawn thinner (tests/cmosgate.test.ts keeps every part clear of its inner half: CMOS_OUTLINE) */
+:root { --cm-outline: 0.16px; --cm-body: light-dark(#fbfcff, #1b2030); --cm-edge: light-dark(#3a4052, #aab2c6); }
+:root[data-gates='cmos'] svg:is(.cmos-mid, .cmos-full) .sym:has(.cmos) :is(.sym-body, .sym-line) { fill: var(--cm-body); stroke: var(--cm-edge); stroke-width: var(--cm-outline); }
+:root[data-gates='cmos'] svg:is(.cmos-mid, .cmos-full) .sym:has(.cmos) .sym-line { fill: none; }
+.cmos { --sym-stroke: var(--cm-edge); --sym-fill: var(--cm-body); }

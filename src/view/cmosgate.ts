@@ -106,11 +106,11 @@ function nand(sh: Sheet, st: string, x0: number, xin: number, ia: string, ib: st
 /** NOR at x0 (column c = x0 + 1.4). Output tap at (c + 0.5, 2). */
 function nor(sh: Sheet, st: string, x0: number, xin: number, ia: string, ib: string): Vec {
   const c = x0 + 1.4, L = c - 0.5, R = c + 0.5, ba = x0 + 0.42, bv = c + 0.25;
-  sh.rail('hi', c - 0.25, c + 0.25, 0.45); sh.rail('lo', L - 0.18, R + 0.15, 3.25);
-  sh.wire('vdd', [[[c, 0.45], [c, 0.7]]]);
+  sh.rail('hi', c - 0.2, c + 0.2, 0.58); sh.rail('lo', L - 0.15, R + 0.1, 3.15);
+  sh.wire('vdd', [[[c, 0.58], [c, 0.7]]]);
   sh.wire(st + '.mid', [[[c, 1.3], [c, 1.45]]]);
   sh.wire(st + '.out', [[[c, 1.95], [c, 2]], [[L, 2.2], [L, 2], [R, 2], [R, 2.2]]]);
-  sh.wire('gnd', [[[L, 2.8], [L, 3.25]], [[R, 2.8], [R, 3.25]]]);
+  sh.wire('gnd', [[[L, 2.8], [L, 3.15]], [[R, 2.8], [R, 3.15]]]);
   sh.wire(ia, [[[xin, 1], [c - 0.25, 1]], [[ba, 1], [ba, 2.5], [L - 0.25, 2.5]]]); sh.dot(ia, ba, 1);
   // b: along the bottom (hop over Na's ground lead), up between the NMOS (hop over the output bus) to Pb's gate on the right
   sh.wire(ib, [[[xin, 3], [bv, 3], [bv, 1.7]]], [{ at: [L, 3], vertical: false }, { at: [bv, 2], vertical: true }]);
@@ -135,7 +135,7 @@ function inv(sh: Sheet, st: string, c: number, xin: number, yin: number, ia: str
 /** XOR's four NANDs (n1 = a NAND b, n2 = a NAND n1, n3 = b NAND n1, y = n2 NAND n3), mini bricks of height s. */
 function xorBricks(sh: Sheet, kind: string, bw: number, s: number): Vec {
   const W = 0.95 * s, O = W + 0.22 * s; // body width, output pin offset (past the bubble)
-  const x1 = backX(kind, 1) + 0.14, m1x = x1 + 0.15, bus = m1x + O + 0.1, m2x = bus + 0.12, n2x = m2x + O + 0.08, m4x = n2x + 0.1;
+  const x1 = backX(kind, 2) + 0.17, m1x = x1 + 0.15, bus = m1x + O + 0.1, m2x = bus + 0.12, n2x = m2x + O + 0.08, m4x = n2x + 0.1;
   const c2 = 1.05, c3 = 2.95;
   const pin = (x: number, cy: number) => ({ a: [x, cy - 0.23 * s] as Vec, b: [x, cy + 0.23 * s] as Vec, o: [x + O, cy] as Vec });
   const m1 = pin(m1x, 2), m2 = pin(m2x, c2), m3 = pin(m2x, c3), m4 = pin(m4x, 2);
@@ -165,9 +165,9 @@ export function cmosLayout(kind: CmosKind): CmosLayout {
     const t1 = nand(sh, 's1', -0.15, 0, 'a', 'b');
     tap = inv(sh, 's2', 3.0, t1[0], t1[1], 's1.out', 0.62, 3.38); outNet = 's2.out';
   } else if (kind === 'or') {
-    const t1 = nor(sh, 's1', -0.08, backX(kind, 1), 'a', 'b');
-    tap = inv(sh, 's2', 2.7, t1[0], t1[1], 's1.out', 1.05, 2.95, 0.2); outNet = 's2.out';
-  } else { bw = kind === 'xor' ? 4 : 3.4; tap = xorBricks(sh, kind, bw, kind === 'xor' ? 0.7 : 0.55); outNet = 'x'; }
+    const t1 = nor(sh, 's1', 0, backX(kind, 1), 'a', 'b');
+    tap = inv(sh, 's2', 2.45, t1[0], t1[1], 's1.out', 0.95, 2.9, 0.17); outNet = 's2.out';
+  } else { bw = kind === 'xor' ? 4 : 3.4; tap = xorBricks(sh, kind, bw, kind === 'xor' ? 0.62 : 0.48); outNet = 'x'; }
   const out: Vec[] = tap[1] === 2 ? [tap, [bw, 2]] : [tap, [tap[0], 2], [bw, 2]];
   l = { kind, bw, h: 4, prims: sh.prims, out, outNet };
   memo.set(kind, l);
