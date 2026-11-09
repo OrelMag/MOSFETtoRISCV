@@ -1,6 +1,7 @@
 # Plan: four features borrowed from Oxygen Not Included
 
-Status: plan only, nothing built (2026-11-09). Source: a review of what *Oxygen Not Included* (ONI) does
+Status: C (the overlay bar: Slack, Activity, Load, Unknown) built on feat/oni-overlay after the approved mockup (2026-11-09);
+A, B and D not built. Source: a review of what *Oxygen Not Included* (ONI) does
 well that fits this site. Four features were picked:
 
 | # | ONI feature | Ours | Where | Size |

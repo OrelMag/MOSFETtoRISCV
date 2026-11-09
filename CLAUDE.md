@@ -207,8 +207,8 @@ src/sim/       simulation core (no DOM)
                  timingGraph: the graph it walks (boundaries, drivers, delays, arrival on demand), shared with slack.ts
   slack.ts       slackOf(design, model): every leaf's and flip-flop's longest path through it (arrival + the longest path on
                  to a capture), input → output without flip-flops; slackAt(s, path): slack per instance of a drill level;
-                 slackBand / SLACK_BANDS, slackHeat (band + tooltip): the Timing panels' heatmap (view/delayui.ts heatToggle /
-                 heatLegend; Stage.heat / SchematicView.heat set data-slack on instances, app.css --slack-0…4)
+                 slackBand / SLACK_BANDS, slackHeat (band + tooltip): the Slack overlay (view/overlays.ts; the Timing panels'
+                 heatToggle is a shortcut to it)
   netcap.ts      FF_INPUT / FF_DRIVER / FF_WIRE, netCaps, driverOf (shared by power.ts and delay.ts; power re-exports them)
   delay.ts       load-dependent delay (Phase 19): logical effort per NAND (d = p + g·h), DelayModel 'unit' | 'load'
                  (buffer chain where it pays) | 'drawn' (none); netLoads (outputs load one input), inputArrivals (inputs
@@ -560,7 +560,14 @@ src/riscv/     cycletime.ts (chapter 14: the single-cycle CPU on GateSim over ra
                tests/ooosnap.test.ts: equal to the model every cycle), randprog32.ts (seeded random RV32 programs per ISA; { custom }: about a fifth of the units are the rows, addresses kept in the window through BASE and a masked offset, jumps one instruction on or to a label), randprog64.ts (RV64I(M): W ops, ld / sd / lwu, 64-bit constants),
                benchprograms.ts (the benchmark set: fib, sort, matmul (+ mul), CRC-32, a float kernel; each with
                its result computed in TypeScript)
-src/view/      memfind.ts (DOM-free: findMemories(sim): every RAM / register file at any depth, once per build: w<i> registers,
+src/view/      overlays.ts (DOM-free, the overlay bar's quantities per level: slackOverlay, activityOverlay (GateSim toggles since the overlay came
+               on, per clock or input change), loadOverlay (fan-out, bands around BUFFER_FANOUT), unknownOverlay (X wires; sources: an X out
+               with no X in or storage of its own), overlayRefusal (cycle engine: no Activity; switch level: Load and Unknown; NMOS: none);
+               marks with a band 0…4 or x and a text value, a legend with units; tests/overlays.test.ts), overlaybar.ts (OverlayBar: four
+               buttons, a select on a phone; nextOverlay; overlayLegend). SchematicView.overlay sets data-ov on parts and wires (app.css
+               --ov-0…4, the rest faded); Stage.setOverlay / overlayKind / onOverlay (settings.overlay: where O starts, never on at load;
+               placeLegend: the first free corner, then compact, then its title line; smoke OVERLAY_DRIVE);
+               memfind.ts (DOM-free: findMemories(sim): every RAM / register file at any depth, once per build: w<i> registers,
                a large RAM's leaf state, byte lanes b0–b3, or same-kind registers under pins naming a write port (wa|addr + we +
                wd|din|d + clk: rv16_rf, a learner's RAM / register file) placed by probeWrites (each address written on a private
                copy; a decoder on the wrong register becomes a problem); memMarks: read / next-write rows from the memory's own
@@ -1034,6 +1041,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  cut at branch points; distance from the driver, sink or junction at the far end), for flowing bits
   probes.ts      ProbeTarget (wires / pin / pointer name) → flat nets of each new build (resolveProbe)
   sta.ts         chipTiming: static timing of a chip, critical path mapped to its parts / wires / pins
+  overlayui.ts   plugin: the overlay bar at the run row's end (view/overlaybar.ts), O / Shift O, the legend bottom left; marks on
+                 parts by id and on wires / pointers through the compiled net maps after every repaint; Activity sets DualSim's
+                 preferFast off while on; analysis.ts's heat toggle calls setEditorOverlay
   lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open (openInputs),
                  parts driving nothing that reaches an output (deadParts)
   cpu.ts         ChipDoc.cpu (rom, pc / retire as NetRef: pin / pointer / wire / part port, regs, fregs,
