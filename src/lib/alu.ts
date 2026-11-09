@@ -322,7 +322,7 @@ export function aluOf(n: number, adder: 'rca' | 'ks', MX: ComponentDef, SH: Comp
   const spec = aluSpec(n);
   return define({
     id, name, category: 'arithmetic',
-    summary: 'Every RV32I integer operation in one block: add, subtract, shifts, set-less-than, XOR, OR, AND. All units compute in parallel; a multiplexer picks one result.',
+    summary: 'Every RV32I integer operation in one block: add, subtract, shifts, set-less-than, XOR, OR, AND. All units compute in parallel; a multiplexer picks one result. neg, ovf and carry are the adder-subtractor\'s flags (meaningful when it subtracts: SUB, SLT, SLTU); zero is y = 0.',
     ports: [bus('a', n, 'in'), bus('b', n, 'in'), bus('ctl', 4, 'in', 'bottom'), bus('y', n, 'out'), bit('zero', 'out'), bit('neg', 'out'), bit('ovf', 'out'), bit('carry', 'out')],
     symbol: { kind: 'box', label: 'ALU' },
     spec,

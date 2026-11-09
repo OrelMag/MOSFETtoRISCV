@@ -403,7 +403,7 @@ export function ringCounter(n: number, johnson = false): ComponentDef {
     return define({
       id, name: `${n}-bit ${johnson ? 'Johnson' : 'ring'} counter`, category: 'sequential',
       summary: johnson
-        ? `A shift register whose inverted top bit re-enters at the bottom: 0000 → 0001 → 0011 → … → 1111 → 1110 → …, ${2 * n} states from ${n} flip-flops, and any state is recognised by one 2-input gate. Only one bit changes per step.`
+        ? `A shift register whose inverted top bit re-enters at the bottom: ${'0'.repeat(n)} → ${'0'.repeat(n - 1)}1 → ${'0'.repeat(n - 2)}11 → … → ${'1'.repeat(n)} → ${'1'.repeat(n - 1)}0 → …, ${2 * n} states from ${n} flip-flops, and any state is recognised by one 2-input gate. Only one bit changes per step.`
         : `A shift register whose top bit re-enters at the bottom: one 1 circulates through ${n} states. No decoder needed (the outputs are already one-hot), at the cost of ${n} flip-flops for ${n} states.`,
       ports: [bit('init', 'in'), bit('clk', 'in', 'bottom', true), bus('q', n, 'out')],
       symbol: { kind: 'box', label: johnson ? `JOHNSON${n}` : `RING${n}` },
@@ -450,7 +450,7 @@ export function clockDivider(k: number): ComponentDef {
     const R = 8 + dx * k + 8;
     return define({
       id: `clkdiv${k}`, name: `÷${2 ** k} ripple clock divider`, category: 'sequential',
-      summary: `${k} toggle flip-flops in a chain, each clocked by the one before: output i is the clock divided by 2^(i+1). As a counter it counts down and its bits settle one stage after another (ripple), so its value is briefly wrong after every edge; synchronous counters share one clock instead.`,
+      summary: `${k === 1 ? 'One toggle flip-flop' : `${k} toggle flip-flops in a chain, each clocked by the one before`}: output i is the clock divided by 2^(i+1). As a counter it counts down and its bits settle one stage after another (ripple), so its value is briefly wrong after every edge; synchronous counters share one clock instead.`,
       ports: [bit('clk', 'in', 'left', true), bit('rst_n', 'in'), bus('q', k, 'out')],
       symbol: { kind: 'box', label: `÷${2 ** k}` },
       netlist: () => ({ pins: { clk: [0, 4 + g.ports.clk.pos[1]], rst_n: [0, 4 + g.h + 4], q: [R, 4 + g.h + 6 + k] }, instances, nets }),
