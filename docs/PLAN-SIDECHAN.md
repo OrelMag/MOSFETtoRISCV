@@ -148,6 +148,21 @@ Teaching only, at textbook level:
    gate-level `aesSbox`: per random plaintext byte, the switched energy from `sim/power.ts`'s PowerMeter, correlated with
    the Hamming weight of S-box(p ⊕ guess) for all 256 guesses; the right key byte stands out. Alternative: leave it out.
    Not yet measured: whether 64 / 256 / 1024 traces suffice is computed before the step is written.
+
+   **Measured 2026-11-09 (scripts/sidechan-cpa.ts): not feasible as the textbook attack, so the step is not built.**
+   - The setup: one trace is the switched capacitance, glitches included, of loading S(p ⊕ k) into an 8-bit register
+     that held S(0), measured on the gate-level tower-field `aesSbox`. This is the byte-serial setting.
+   - The textbook model, the register's Hamming distance HW(S(p ⊕ g) ⊕ S(0)), correlates only 0.17 with the energy over
+     all 256 inputs.
+     - The S-box's own glitching (126 to 22 263 fF a load) swamps the register's few bits.
+     - Over 20 keys, the right one is found 1 / 20 times with 64 traces, 3 / 20 with 256 and 0 / 20 with 1024 (median
+       rank 3).
+   - A weaker model, the Hamming weight of the S-box's input HW(p ⊕ g), correlates 0.47. It finds the key 11 / 20
+     times with 64 or 256 traces, and 16 / 20 with 1024.
+     - That target is the XOR before the S-box, with ghost keys one bit away. It is not the attack the books teach.
+   - So the step would teach either an attack that does not work on our gates, or a different one than the literature's.
+     Neither is honest at textbook level. If wanted later, a masked or register-heavy design would make the textbook
+     attack measurable; that is a hardware change of its own.
 6. **Variant 2 / Meltdown:** layers only (recommended). Meltdown needs a privilege check the wrong path ignores. Our core
    has no privilege modes before `os`, and the honest version needs page tables (`vmem`).
 

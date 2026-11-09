@@ -37,6 +37,7 @@ const BOOK = [
   'multicore',
   'silicon',
   'verify',
+  'sidechan',
   'lanes',
   'simt',
   'warps',
