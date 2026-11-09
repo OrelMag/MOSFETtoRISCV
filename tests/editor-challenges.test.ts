@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHALLENGES, challengeById } from '../src/editor/challengeset';
 import {
-  type BuildChallenge, challengeChipId, challengeOf, checkChallenge, importAnswer, LEVELS, solveChallenge, startChallenge,
+  type BuildChallenge, challengeChipId, challengeOf, checkChallenge, importAnswer, LEVELS, MAX_FAILED, solveChallenge, startChallenge,
 } from '../src/editor/challenges';
 import { checkSimulatable } from '../src/editor/compile';
 import { UserLibrary } from '../src/editor/library';
@@ -250,5 +250,21 @@ describe('weak levels fail a switch-level check', () => {
     const r = check(c, doc);
     expect(r.ok).toBe(false);
     expect(r.failures).toEqual(['a=0 → y=L (a weak 0, 0.30 V), expected y=0', 'a=1 → y=H (a weak 1, 0.80 V), expected y=1']);
+  });
+});
+
+describe('a table check that fails more rows than it keeps', () => {
+  it('counts every wrong row (wrong) while failed keeps the first MAX_FAILED', () => {
+    // 16 inputs: 65 536 rows, all wrong on a chip with its pins only (outputs undriven read X)
+    const c: BuildChallenge = {
+      id: 'wide_id', title: 'identity', level: LEVELS[0].id, allowed: 'nand', brief: '',
+      ports: [{ name: 'a', dir: 'in', width: 16 }, { name: 'y', dir: 'out', width: 16 }],
+      check: { kind: 'table', spec: (v) => [v[0]] },
+    } as BuildChallenge;
+    const { ws, chipId } = startChallenge(emptyWorkspace(), c);
+    const r = check(c, ws.chips[chipId]);
+    expect(r.tested).toBe(65536);
+    expect(r.failed?.length).toBe(MAX_FAILED);
+    expect(r.wrong).toBe(65536);
   });
 });

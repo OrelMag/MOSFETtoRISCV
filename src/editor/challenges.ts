@@ -206,6 +206,8 @@ export interface CheckResult {
    * a custom bench's tests. Absent when nothing was simulated.
    */
   failed?: number[];
+  /** How many cases failed in all, where the check counts past MAX_FAILED (a table): failed keeps only the first. */
+  wrong?: number;
 }
 
 /** Progress key in settings.solve(). */
@@ -277,7 +279,7 @@ const RANDOM_VECTORS = 4096;
 const ZERO: Score = { nand: 0, transistors: 0, depth: null };
 
 /** What a simulation run found. */
-interface Run { failures: string[]; tested: number; vector?: Record<string, number>; cycles?: number; period?: number; failed?: number[]; relays?: number; steps?: number }
+interface Run { failures: string[]; tested: number; wrong?: number; vector?: Record<string, number>; cycles?: number; period?: number; failed?: number[]; relays?: number; steps?: number }
 
 /** Check a compiled chip against a challenge. Never throws. */
 export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefined): CheckResult {
@@ -304,6 +306,7 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
       res.tested = r.tested;
       if (r.vector) res.vector = r.vector;
       if (r.failed) res.failed = r.failed.slice(0, MAX_FAILED);
+      if (r.wrong !== undefined) res.wrong = r.wrong;
       if (r.cycles !== undefined) res.score.cycles = r.cycles;
       if (r.period !== undefined) res.score.period = r.period;
       if (r.relays !== undefined) res.score.relays = r.relays;
@@ -595,7 +598,7 @@ function runTable(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], 
   }
   rest.forEach((v, i) => slow(v, from + i));
   if (bad > failures.length) failures.push(`… ${bad - failures.length} more of ${vs.length} rows wrong`);
-  return { failures, tested: vs.length, failed, ...(vector ? { vector } : {}), ...(relays ? { steps } : {}) };
+  return { failures, tested: vs.length, failed, wrong: bad, ...(vector ? { vector } : {}), ...(relays ? { steps } : {}) };
 }
 
 function runSequence(def: ComponentDef, mode: 'gate' | 'switch', ports: PinSpec[], check: Extract<ChallengeCheck, { kind: 'sequence' }>): Run {
