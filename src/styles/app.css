@@ -1386,7 +1386,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .card .done-badge.seen { color: var(--muted); background: none; border: 1px dashed var(--border-strong); }
 .features { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin-bottom: 44px; }
 .feature { padding: 16px; border-radius: var(--radius); background: var(--surface-2); border: 1px solid var(--border); }
-.feature h4 { margin: 8px 0 4px; font-size: 15px; }
+.feature h3 { margin: 8px 0 4px; font-size: 15px; }
 .feature p { margin: 0; font-size: 13.5px; color: var(--text-2); }
 .feature .icon { color: var(--accent); }
 .footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); padding-top: 18px; }

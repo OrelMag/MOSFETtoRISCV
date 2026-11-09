@@ -147,7 +147,7 @@ export class LevelPage implements Page {
     this.edWrap.append(this.editor.el);
     // A bug hunt opens with its symptom: Check run once on the drawing as the colleague left it.
     if (fresh && n.bug) setTimeout(() => this.chal?.check(), 0);
-    this.el = h('div', { class: 'lv-page' }, this.bar, h('div', { class: 'lv-body' }, this.side, this.edWrap));
+    this.el = h('div', { class: 'lv-page' }, h('h1', { class: 'sr-only' }, n.title), this.bar, h('div', { class: 'lv-body' }, this.side, this.edWrap));
     // The properties overlay stops above the strip and the run row (Show answer and Do it for me live there)
     const fitProps = () => {
       const mid = this.edWrap.querySelector('.sb-mid');

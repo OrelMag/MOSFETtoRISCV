@@ -24,6 +24,7 @@ import { MAIN_PROJECT, readProjects, setCurrentProject } from '../../editor/proj
 import '../../editor/features';
 import '../../editor/minimap';
 import { maybeCoach } from '../coachmarks';
+import { h } from '../dom';
 import type { Page } from './chapter';
 
 /** Chips of campaign levels (campaign/levels.ts levelChipId): kept in the first project. */
@@ -71,6 +72,8 @@ export class SandboxPage implements Page {
 
   private build(chipId: string | undefined, project: string): Editor {
     const ed = new Editor(chipId, { project });
+    // the page's heading for screen readers (the tab bar names the chip)
+    ed.el.prepend(h('h1', { class: 'sr-only' }, 'Sandbox'));
     this.files = installFiles(ed);
     this.parts = [installChallenges(ed), this.files, installProjects(ed, { switchTo: (id, note) => this.switchTo(id, undefined, note) })];
     return ed;
