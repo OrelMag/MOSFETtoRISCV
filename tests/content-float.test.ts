@@ -34,7 +34,7 @@ describe('chapter 24 (floating point) quotes measured numbers', () => {
     has(`multiplier costs about <strong>${fmt(nands(mul), 100)}</strong> (mostly its 24 × 24 tree) and is ${depth(mul)} deep`);
     has(`float32 fma: ${fmt(nands(fma), 100)} NANDs, ${depth(fma)} deep: deeper than either multiplier (${depth(mul)}) or adder (${depth(add)}), but shallower than the two in a row (${depth(mul) + depth(add)})`);
     has(`multiply (${depth(fmaMultiply(F32))} deep), align and add (${depth(fmaAdd(F32))}), round (${depth(fmaRound(F32))}: the 52-bit normalize &amp; round, ${depth(normRound(F32, 52))},`);
-    has(`the fma ${fmt(nands(fma), 100)} and ${depth(fma)}, one rounding against ${depth(mul) + depth(add)} for fmul then fadd`);
+    has(`the fma ${fmt(nands(fma), 100)} and ${depth(fma)}, with one rounding, against ${depth(mul) + depth(add)} deep and two roundings for fmul then fadd`);
   });
 
   it('rounding: the mode decision and the shared normalize & round', () => {
