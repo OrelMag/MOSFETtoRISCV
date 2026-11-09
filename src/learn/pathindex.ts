@@ -566,7 +566,7 @@ export const PATH_LEVELS: Record<string, LevelFact> = {
   "sp_sd": {"title":"Sigma-delta loop","kind":"build","requires":["sp_sat"],"optional":true},
   "t_inv": {"title":"CMOS inverter","kind":"build","requires":["intro"]},
   "t_nand": {"title":"CMOS NAND","kind":"build","requires":["t_inv"]},
-  "t_nor": {"title":"CMOS NOR","kind":"build","requires":["t_inv"],"optional":true},
+  "t_nor": {"title":"CMOS NOR","kind":"build","requires":["t_nand"],"optional":true},
   "y_csr": {"title":"CSR file","kind":"build","requires":["s_reg16","g_dec","g_mux8","y_lesson"]},
   "y_final": {"title":"Finale: interrupts","kind":"core","requires":["y_ptrap","y_irq","p_handler"]},
   "y_irq": {"title":"Interrupts","kind":"core","requires":["y_trap"]},
