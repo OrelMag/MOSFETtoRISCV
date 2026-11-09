@@ -33,7 +33,8 @@ function inBody(k: CmosKind, bw: number, h: number, x: number, y: number): boole
 
 /** The points a primitive covers, with the half-width of what is drawn there. */
 function pointsOf(q: Prim): { at: Vec; r: number; entry?: boolean }[] {
-  if (q.t === 'wire') return q.pts.map((at) => ({ at, r: 0.03 }));
+  // a wire: its corners and hop bulges, and points along every segment (the OR family's back is concave)
+  if (q.t === 'wire') return [...q.pts, ...q.segs.flatMap((s) => s.slice(1).flatMap((b, i) => [1, 2, 3, 4, 5, 6, 7].map((k) => [s[i][0] + ((b[0] - s[i][0]) * k) / 8, s[i][1] + ((b[1] - s[i][1]) * k) / 8] as Vec)))].map((at) => ({ at, r: 0.03 }));
   if (q.t === 'dot') return [{ at: q.at, r: 0.055 }];
   if (q.t === 'rail') return [{ at: [q.x1, q.y], r: 0.04 }, { at: [q.x2, q.y], r: 0.04 }, ...(q.kind === 'lo' ? [{ at: [(q.x1 + q.x2) / 2, q.y + 0.16] as Vec, r: 0.04 }] : [])];
   if (q.t === 'fet') {
@@ -65,6 +66,8 @@ describe('working gates', () => {
         const x = at[0] * p.sx, y = at[1] * p.sy + p.oy;
         // a wire may start on the back edge: that is where the input enters
         if (q.t === 'wire' && Math.abs(at[0] - backX(k, at[1])) < 1e-6) continue;
+        // ... and runs on its row through the outline's width before it is inside
+        if (q.t === 'wire' && (k === 'not' ? at[1] === 2 : at[1] === 1 || at[1] === 3) && at[0] < backX(k, at[1]) + 0.35) continue;
         check(x, y, r * Math.min(p.sx, p.sy), q.t + ('net' in q ? ' ' + q.net : 'dev' in q ? ' ' + q.dev : ''));
       }
       // the output wire: inside, ending on the right edge (its last point)

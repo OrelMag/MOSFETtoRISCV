@@ -37,7 +37,8 @@ export function drawCmos(def: ComponentDef, bw: number, h: number): SVGGElement 
       inner.append(s('path', { class: `crail ${q.kind}`, d: q.kind === 'hi' ? `M${q.x1},${q.y}H${q.x2}` : `M${q.x1},${q.y}H${q.x2}M${m - 0.1},${q.y + 0.08}H${m + 0.1}M${m - 0.045},${q.y + 0.15}H${m + 0.045}` }));
     } else if (q.t === 'wire') {
       inner.append(s('path', { class: 'cw', 'data-n': q.net, d: q.d }));
-      flows.push(s('path', { class: 'cflow', 'data-n': q.net, d: q.d }));
+      // pellets where charge moves: not on the supply leads, which would crawl forever
+      if (q.net !== 'vdd') flows.push(s('path', { class: 'cflow', 'data-n': q.net, d: q.d }));
     } else if (q.t === 'dot') inner.append(s('circle', { class: 'cdot', 'data-n': q.net, cx: q.at[0], cy: q.at[1], r: 0.055 }));
     else if (q.t === 'fet') {
       const g = s('g', { class: 'cfet', 'data-d': q.dev, 'data-n': q.net });
@@ -94,8 +95,13 @@ export function paintCmos(root: Element, ins: (Bit | undefined)[] | null): void 
 
 /** Detail by scale (px per grid unit), as classes on the svg: transistors in full, simplified, or none (the gate as before). */
 export const CMOS_FULL_PX = 22, CMOS_MID_PX = 11;
-export function cmosLod(svg: Element, scale: number): void {
-  if (!(scale > 0)) return;
-  svg.classList.toggle('cmos-full', scale >= CMOS_FULL_PX);
-  svg.classList.toggle('cmos-mid', scale >= CMOS_MID_PX && scale < CMOS_FULL_PX);
+/** Returns true when the drawing has just become visible (the caller repaints: paints are skipped while hidden). */
+export function cmosLod(svg: Element, scale: number): boolean {
+  const was = cmosShown(svg);
+  const ok = scale > 0; // not laid out yet: nothing shown until a real scale arrives
+  svg.classList.toggle('cmos-full', ok && scale >= CMOS_FULL_PX);
+  svg.classList.toggle('cmos-mid', ok && scale >= CMOS_MID_PX && scale < CMOS_FULL_PX);
+  return !was && cmosShown(svg);
 }
+/** Is the inner drawing shown in this svg at its current scale? */
+export const cmosShown = (svg: Element): boolean => svg.classList.contains('cmos-full') || svg.classList.contains('cmos-mid');

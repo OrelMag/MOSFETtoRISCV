@@ -19,7 +19,7 @@ import { drawnNetlist } from './wirefirst';
 import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
 import { drawnHue, netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
-import { cmosLod, paintCmos } from './cmosdraw';
+import { cmosLod, cmosShown, paintCmos } from './cmosdraw';
 import type { ViewFocus } from '../ui/viewlink';
 import type { NetEnd } from './netfacts';
 import type { ElsewhereHost, ExplainHost, MeasureHost } from './tracemenu';
@@ -210,7 +210,7 @@ export class SchematicView {
     this.legible = new Legibility(this.el);
     this.cam.listeners.add(() => {
       this.legible.view(this.cam.pxPerUnit());
-      cmosLod(this.el, this.cam.pxPerUnit());
+      if (cmosLod(this.el, this.cam.pxPerUnit())) this.update();
     });
     installPanZoom(this.el, this.cam, {
       // shift-drag on the canvas picks parts (bandSelect) instead of panning
@@ -587,7 +587,8 @@ export class SchematicView {
     }
     this.updatePins();
     // Working gates: each drawn inside from its own input bits.
-    for (const c of this.cmos) paintCmos(c.el, c.ins.map((p) => ctx.childPortBits(c.name, p)[0]));
+    // (only while shown at this scale: cmosLod repaints when it appears)
+    if (this.cmos.length && cmosShown(this.el)) for (const c of this.cmos) paintCmos(c.el, c.ins.map((p) => ctx.childPortBits(c.name, p)[0]));
     // Transistors: show which ones conduct.
     if (ctx.sim instanceof SwitchSim || ctx.sim instanceof NmosSim) {
       for (const [name, g] of this.insts) {

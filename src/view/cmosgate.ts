@@ -16,7 +16,7 @@ export type CmosKind = 'not' | 'nand' | 'nor' | 'and' | 'or' | 'xor' | 'xnor';
 export type Level = 'hi' | 'lo' | 'float' | 'x';
 
 export type Prim =
-  | { t: 'wire'; net: string; d: string; pts: Vec[] }
+  | { t: 'wire'; net: string; d: string; pts: Vec[]; segs: Vec[][] }
   | { t: 'dot'; net: string; at: Vec }
   | { t: 'rail'; kind: 'hi' | 'lo'; x1: number; x2: number; y: number }
   /** A MOSFET: channel vertical at x from y1 to y2, gate plate on `side` (-1 left, 1 right); lit by `net` when on. */
@@ -73,7 +73,7 @@ class Sheet {
       pts.push(...s);
       d += ' ';
     }
-    this.prims.push({ t: 'wire', net, d: d.trim(), pts });
+    this.prims.push({ t: 'wire', net, d: d.trim(), pts, segs });
   }
   dot(net: string, x: number, y: number): void { this.prims.push({ t: 'dot', net, at: [x, y] }); }
   rail(kind: 'hi' | 'lo', x1: number, x2: number, y: number): void { this.prims.push({ t: 'rail', kind, x1, x2, y }); }
@@ -105,7 +105,7 @@ function nand(sh: Sheet, st: string, x0: number, xin: number, ia: string, ib: st
 }
 /** NOR at x0 (column c = x0 + 1.4). Output tap at (c + 0.5, 2). */
 function nor(sh: Sheet, st: string, x0: number, xin: number, ia: string, ib: string): Vec {
-  const c = x0 + 1.4, L = c - 0.5, R = c + 0.5, ba = x0 + 0.42, bv = c + 0.25;
+  const c = x0 + 1.4, L = c - 0.5, R = c + 0.5, ba = x0 + 0.5, bv = c + 0.25;
   sh.rail('hi', c - 0.2, c + 0.2, 0.58); sh.rail('lo', L - 0.15, R + 0.1, 3.15);
   sh.wire('vdd', [[[c, 0.58], [c, 0.7]]]);
   sh.wire(st + '.mid', [[[c, 1.3], [c, 1.45]]]);
