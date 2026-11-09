@@ -71,7 +71,7 @@ export const chPython: Chapter = {
         <p>Four lines become 12 instructions. Each variable gets a register (<code>total</code> → s0,
         <code>i</code> → s1), the loop's test becomes one branch, and <code>total += i</code> one <code>add</code>.
         <code>print</code> is a store at gp, the output pointer, and gp moves on a word.</p>
-        <p>Nothing here is new hardware: the words on the right go into chapter 14's ROM, and the decoder splits them
+        <p>Nothing here is new hardware: the words on the right go into chapter ${numOf('cpu')}'s ROM, and the decoder splits them
         into exactly the fields it split from hand-written assembly. Point at a line in any column; click to pin it and
         see its fields.</p>
         <p>The mapping has a fixed shape: each Python line owns a contiguous run of instructions, and a line that is a loop header owns the test and the jump back as well.
@@ -118,7 +118,7 @@ export const chPython: Chapter = {
     {
       title: 'What * // % cost',
       body: `
-        <p>RV32I has no multiply or divide instructions (chapter 21 adds them in hardware). The compiler
+        <p>RV32I has no multiply or divide instructions (chapter ${numOf('muldiv')} adds them in hardware). The compiler
         spends instructions instead.</p>
         <p>A power of two is a shift or a mask: <code>n % 2</code> is one <code>andi</code>, <code>n // 2</code> one
         <code>srai</code> (an arithmetic shift is exactly what Python's <code>//</code> does for 2), <code>x * 8</code> one
@@ -127,10 +127,10 @@ export const chPython: Chapter = {
         <code>rt.divmod</code> runs 32 passes of shift, compare, subtract, then fixes the signs for Python's rounding
         toward minus infinity.</p>
         <p>Measured: Collatz from 27 runs 938 cycles, every line a few instructions. In gcd, <code>t = a % b</code>
-        costs about 240 cycles a call, 1472 of the program's 1545. Chapter 21's divider does the same 32 steps in
+        costs about 240 cycles a call, 1472 of the program's 1545. Chapter ${numOf('muldiv')}'s divider does the same 32 steps in
         hardware, with no instruction fetched between them.</p>
         <p>The lesson generalizes: the cost of an operator is the number of instructions behind it, and an operator that looks like one indivisible step in the source can hide a loop. A programmer who
-        knows the target sees that <code>%</code> by a power of two is free and <code>%</code> by a variable is a function call; a hardware divider (chapter 21) moves that loop out of
+        knows the target sees that <code>%</code> by a power of two is free and <code>%</code> by a variable is a function call; a hardware divider (chapter ${numOf('muldiv')}) moves that loop out of
         the instruction stream, trading area for cycles, as every earlier chapter did.</p>`,
       widget: () => pyCost(['gcd']),
       more: {
@@ -148,7 +148,7 @@ export const chPython: Chapter = {
     {
       title: 'Run it on the gates',
       body: `
-        <p>The CPU is chapter 14's, gate for gate, with a 256-word ROM and 64 words of data memory: 100 979 NANDs,
+        <p>The CPU is chapter ${numOf('cpu')}'s, gate for gate, with a 256-word ROM and 64 words of data memory: 100 979 NANDs,
         403 916 transistors. The <em>Python</em> panel beside the CPU panel reads it: the PC through the compiler's map
         gives the line running, the registers and data memory give the variables, the words from the output's start to
         gp give what was printed.</p>

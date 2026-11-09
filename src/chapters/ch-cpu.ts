@@ -11,7 +11,7 @@ import { pack } from '../sim/values';
 import { cpuScene } from '../widgets/cpupanel';
 import { memGridPanel } from '../widgets/memgrid';
 import { OWN_COST, ownInstrScene, ownInstrSolved, solveOwnInstr } from '../widgets/owninstr';
-import { controlPanel, CONTROL_SOURCE, cpuPeriodWidget, PERIOD } from '../widgets/cpucost';
+import { controlPanel, CONTROL_SOURCE, CPU_NANDS, cpuPeriodWidget, PERIOD } from '../widgets/cpucost';
 import { abiTable, expand, pseudoWidget, SUM_CALLS, SUM_RUN, sumRun } from '../widgets/abi';
 import { assemblerWorkspace, fetchLoop, instructionExplorer } from '../widgets/riscv';
 import type { Stage } from '../view/stage';
@@ -100,11 +100,11 @@ export const chAlu: Chapter = {
       body: `
         <p>Most RISC-V instructions do one thing to two 32-bit words: add or subtract them, AND, OR or XOR them, shift one by the other, or compare them.
         That is ten operations (add, sub, sll, slt, sltu, xor, srl, sra, or, and), and the <strong>ALU</strong> (arithmetic logic unit) is one block that does all ten,
-        picking the one an instruction asks for with a 4-bit control code. An instruction is a 32-bit word (<a href="#/c/isa/0">chapter 13</a> lays out its formats);
+        picking the one an instruction asks for with a 4-bit control code. An instruction is a 32-bit word (<a href="#/c/isa/0">chapter ${numOf('isa')}</a> lays out its formats);
         in the register-to-register ones, called R-type, two small fields of that word, funct3 (3 bits) and one bit of funct7, name the operation, and the ALU's
         code is chosen to be exactly those four bits. Most operations also come in an <span data-ahead="immediates">immediate form, whose second operand is a constant written into the instruction word</span>
         (<code>addi</code>, <code>andi</code>, <code>slli</code> …).</p>
-        <p>The units are built from parts you have: chapter 6's adder for add, sub and the comparisons, chapter 7's multiplexers for the shifter and for picking
+        <p>The units are built from parts you have: chapter ${numOf('adders')}'s adder for add, sub and the comparisons, chapter ${numOf('routing')}'s multiplexers for the shifter and for picking
         the result. First the cheapest of them.</p>
         <p>AND, OR and XOR on words are just <span data-show="g0 g1 g2 g3 g4 g5 g6 g7">n independent gates</span>: no carries, no interaction between bit positions,
         depth 2–3 NANDs regardless of width. They cost O(n) area and O(1) delay.</p>
@@ -230,7 +230,7 @@ export const chAlu: Chapter = {
         ctl[3] selects SUB over ADD and SRA over SRL; SLT and SLTU also force subtraction.</p>
         <p>The codes are chosen to match R-type encodings: for <code>add</code> … <code>and</code>,
         <code>ctl = {funct7[5], funct3}</code>, plain wiring. Other instructions need a few gates in
-        <a href="#/c/cpu/0">chapter 14</a>'s control logic. OP-IMM has no funct7: bit 30 is imm[10], so it passes as ctl[3]
+        <a href="#/c/cpu/0">chapter ${numOf('cpu')}</a>'s control logic. OP-IMM has no funct7: bit 30 is imm[10], so it passes as ctl[3]
         only for the shifts (funct3 = 101: <code>srai</code>); else <code>addi a0, a0, -1</code> would subtract. Loads, stores,
         <code>jalr</code> and <code>auipc</code> force ADD (an address; their funct3 is a width or nothing), branches force SUB
         and read the flags. With op = R ∨ OP-IMM: ctl[2:0] = op ∧ funct3, ctl[3] = op ∧ funct7[5] ∧ (R ∨ funct3 = 101) ∨ branch.</p>
@@ -258,7 +258,7 @@ export const chAlu: Chapter = {
       more: {
         derive: `<p>The path through the ALU is the longest unit plus what follows it: the adder-subtractor's ${A32.addDepth} delays, then the flag logic that SLT and SLTU need and the 8:1 select reach the result at 87, and the zero detector over the result makes it
           ${A32.depth} in all. The remaining ${A32.depth - A32.addDepth} delays are that tail, the shifter's ${A32.shDepth} and the logic unit's ${BW.xor.depth} are far behind. That is why replacing the ripple adder
-          is chapter 16's first move.</p>`,
+          is chapter ${numOf('fastadd')}'s first move.</p>`,
         pitfall: `<p>Decoding ctl from funct3 alone is the classic bug: <code>add</code> and <code>sub</code> share funct3 = 000 and differ only in funct7[5]; <code>srl</code> and
           <code>sra</code> likewise. In the OP-IMM form the same bit is part of the immediate, so passing it blindly turns <code>addi a0, a0, -1</code> into a subtraction. Try ctl = 1000 and 0000 above.</p>`,
         real: `<p>Wide cores replicate this: several ALUs, a separate shifter and a multiplier with its own pipeline, selected per issue slot. The flags are still the adder's; real designs
@@ -294,7 +294,7 @@ export const chRegfile: Chapter = {
       'Two asynchronous read ports and one synchronous write port: two operands in, one result out, every cycle.',
       'Structure: a write decoder, one register with enable per word, every word bundled onto one bus, and a mux tree per read port.',
       'x0 has no flip-flops: its slot is a constant 0 and writes to it go nowhere. <code>li</code> (addi rd, x0, imm), <code>nop</code>, <code>j</code> (jal x0), <code>beqz</code>, <code>neg</code> (sub rd, x0, rs) and <code>ret</code> (jalr x0, 0(ra)) are pseudo-instructions built on it; <code>mv</code> is addi rd, rs, 0 and needs none.',
-      `RISC-V: 31 × 32 flip-flops, a 5→32 decoder, two 32:1 trees of 32-bit words: ${fmt(RF_COST.total)} NANDs, nearly half of the whole CPU of chapter 14 (about 48 000 without its program ROM).`,
+      `RISC-V: 31 × 32 flip-flops, a 5→32 decoder, two 32:1 trees of 32-bit words: ${fmt(RF_COST.total)} NANDs, nearly half of the whole CPU of chapter ${numOf('cpu')} (about 48 000 without its program ROM).`,
       `A bypass (a comparator and a word mux per read port, ${RF_NUMBERS().by - RF_NUMBERS().rf} NANDs for two) returns the incoming write data for a same-cycle read, never for x0. A latch file stores a bit in ${RF_NUMBERS().latch} NANDs against ${RF_NUMBERS().dff}: ${fmt(RF_NUMBERS().lf)} instead of ${fmt(RF_NUMBERS().rf)}, but its data path is transparent for the whole high phase. With two write ports the younger instruction (port 1) wins a shared register.`,
       `Here every read port is a whole mux tree: a third would add ${fmt(RF_COST.port)} NANDs. A custom memory cell adds a port for about two transistors per bit.`,
     ],
@@ -327,14 +327,14 @@ export const chRegfile: Chapter = {
     {
       title: 'A memory with two read ports',
       body: `
-        <p><a href="#/c/registers/0">Chapter 9</a> kept one word in a register; <a href="#/c/memory/0">chapter 10</a> kept many behind an address. A processor needs
+        <p><a href="#/c/registers/0">Chapter ${numOf('registers')}</a> kept one word in a register; <a href="#/c/memory/0">chapter ${numOf('memory')}</a> kept many behind an address. A processor needs
         something in between: a few dozen words that every instruction can name directly, two of them read and one written in the same cycle. RISC-V has 32,
-        x0 to x31, and an instruction names them by number: <code>add x5, x6, x7</code> reads x6 and x7 and writes their sum to x5 (<a href="#/c/isa/0">chapter 13</a>
+        x0 to x31, and an instruction names them by number: <code>add x5, x6, x7</code> reads x6 and x7 and writes their sum to x5 (<a href="#/c/isa/0">chapter ${numOf('isa')}</a>
         shows the three 5-bit register numbers in the instruction word). The block that holds them is the <strong>register file</strong>: a small memory with more than one port.</p>
         <p>Such an instruction needs two operands and produces one result per cycle, so the register file has
         <strong>two asynchronous <span data-show="rp1 rp2">read ports</span></strong> and <strong>one synchronous write
         port</strong> (<span data-show="dec">a decoder</span> enabling one register). Structurally it is the
-        memory array from <a href="#/c/memory/0">chapter 10</a> with a second mux tree.</p>
+        memory array from <a href="#/c/memory/0">chapter ${numOf('memory')}</a> with a second mux tree.</p>
         <p>All register outputs are bundled into <span data-show="bundle">one wide bus</span> feeding both read ports; that is the usual way to draw
         "every word reaches every port". Register <span data-show="x0">x0</span> does not exist: its slot is a constant 0, and writes to it go nowhere.
         That gives <code>li</code>, <code>nop</code>, <code>j</code>, <code>beqz</code>, <code>neg</code> and <code>ret</code> for free as pseudo-instructions, each an ordinary instruction with x0 as a source or destination.</p>
@@ -466,12 +466,12 @@ export const chIsa: Chapter = {
         is only numbers: 32-bit words in a memory, one per <strong>instruction</strong>. Each word is a small order: add two registers,
         load a word, jump if equal.</p>
         <p>The state a program can see is three things: the <strong>program counter</strong> (PC, the byte address of the next
-        instruction), 32 <strong>registers</strong> x0–x31 of 32 bits (chapter 12's register file; x0 always reads 0), and memory.
+        instruction), 32 <strong>registers</strong> x0–x31 of 32 bits (chapter ${numOf('regfile')}'s register file; x0 always reads 0), and memory.
         The processor runs one loop forever:</p>
         <ol>
           <li><strong>Fetch</strong>: read the word at PC.</li>
           <li><strong>Decode</strong>: split it into fields: the operation, the registers it names, a constant.</li>
-          <li><strong>Execute</strong>: read the source registers, compute (chapter 11's ALU), write the result to a register or to memory.</li>
+          <li><strong>Execute</strong>: read the source registers, compute (chapter ${numOf('alu')}'s ALU), write the result to a register or to memory.</li>
           <li><strong>Next</strong>: PC ← PC + 4, unless the instruction is a branch or a jump, which writes PC itself.</li>
         </ol>
         <p>The last rule is where loops and decisions come from: a branch compares two registers and, if the condition holds, sends PC
@@ -480,7 +480,7 @@ export const chIsa: Chapter = {
         <code>sw</code>: the only ones that touch memory, which makes RISC-V a <em>load–store</em> architecture) and <strong>control</strong>
         (<code>beq</code>, <code>jal</code>: they change PC).</p>
         <p>The <strong>instruction set</strong> (ISA) is the contract between the two sides: which word means what. Software is written
-        against it, and any hardware that honours it runs that software. Chapter 14 builds one in gates that does the whole loop in a
+        against it, and any hardware that honours it runs that software. Chapter ${numOf('cpu')} builds one in gates that does the whole loop in a
         single clock cycle. The rest of this chapter is the contract itself: how an instruction is packed into 32 bits, and how text
         becomes those words.</p>
         <p>Reading the listing: <code>add a1, a1, a0</code> is a1 ← a1 + a0. Registers go by their ABI names, which say how compiled code
@@ -493,13 +493,13 @@ export const chIsa: Chapter = {
         numbers: `<p>32 registers take 5 bits to name, so an instruction naming three of them spends 15 of its 32 bits on that. 16
           registers would free 3 bits for constants; 64 would cost 3 more and a bigger, slower register file. A register read is one
           multiplexer tree inside the processor; a memory access in a real machine is anywhere from a few cycles (a cache) to a hundred or
-          more (DRAM, chapter 35), which is why compute instructions only ever see registers.</p>`,
+          more (DRAM, chapter ${numOf('dram')}), which is why compute instructions only ever see registers.</p>`,
         pitfall: `<p>PC counts bytes, not instructions: the next instruction is at PC + 4, and the instruction at index n is at 4n. And
           x0 is not a place to keep a value: writing it is allowed and discarded, which is what makes <code>addi zero, zero, 0</code> a
           no-op and <code>add a0, a1, zero</code> a move.</p>`,
-        real: `<p>Here instructions and data sit in separate memories (chapter 14's CPU has an instruction ROM and a data memory), as in a
-          Harvard machine. A PC or a phone keeps both in one memory, as von Neumann's design did, with separate caches in front (chapter 22).
-          One memory is what lets a program be loaded as data and then run: chapter 38's computer boots by copying a program from flash into
+        real: `<p>Here instructions and data sit in separate memories (chapter ${numOf('cpu')}'s CPU has an instruction ROM and a data memory), as in a
+          Harvard machine. A PC or a phone keeps both in one memory, as von Neumann's design did, with separate caches in front (chapter ${numOf('cache')}).
+          One memory is what lets a program be loaded as data and then run: chapter ${numOf('bus')}'s computer boots by copying a program from flash into
           RAM and jumping to it.</p>`,
       },
     },
@@ -616,7 +616,7 @@ export const chIsa: Chapter = {
         <p>The <strong>stack</strong> is a region of data memory that sp points into, growing down, kept 16-byte aligned. A function that calls another needs a <strong>frame</strong>: it saves ra (the call overwrites it) and any s register it uses. Below is the standard recursion <code>sumto(n) = n + sumto(n − 1)</code>. Run it: for n = 3 it takes ${SUM_RUN.instrs} instructions, reaches ${SUM_RUN.depth} bytes of stack (four frames of 16) and leaves ${SUM_RUN.result} in a0.
         The dead frames stay in memory below sp: in the data-memory list, address 0x7c holds ${SUM_RUN.mem.find(([a]) => a === 124)![1]} (the return address into the caller), and each deeper frame holds the n it saved in s0 (${[104, 88, 72].map((a) => SUM_RUN.mem.find(([x]) => x === a)![1]).join(', ')}) and a return address inside <code>sumto</code>.</p>
         <p>Each level of recursion costs ${sumRun(1).instrs - sumRun(0).instrs} instructions here, and only three of them (the test, the decrement, the add) are the function's work; the rest open and close the frame, save and restore two registers, <code>call</code> and <code>ret</code>. A <strong>leaf</strong> function (calling nothing) needs no frame at all. This is the price of a convention, and what a compiler tries to avoid:
-        <a href="#/c/python/0">chapter 15</a> shows one choosing registers to do so.</p>
+        <a href="#/c/python/0">chapter ${numOf('python')}</a> shows one choosing registers to do so.</p>
         <div class="try">Change <code>li a0, 3</code> to 4 and read the instruction count, then delete the line that restores s0 and watch the result.</div>`,
       widget: () => assemblerWorkspace(SUM_CALLS),
       more: {
@@ -677,7 +677,7 @@ export const chSingleCycle: Chapter = {
       'Control comes from the opcode: RegWrite, ALUSrcB, ResultSrc, MemWrite, ImmSrc, and ALUControl: {funct7[5], funct3} for an R-type; funct3 for OP-IMM, with bit 30 only for <code>srai</code>; ADD for loads, stores, <code>jalr</code> and <code>auipc</code>; SUB for branches.',
       'Branches subtract in the ALU and read its flags (beq Z, bne ¬Z, blt N⊕V, bge ¬(N⊕V), bltu ¬C, bgeu C); a separate adder computes PC + imm<sub>B</sub>.',
       '<code>jal</code> writes PC + 4 and jumps to PC + imm<sub>J</sub>; <code>jalr</code> jumps to rs1 + imm with bit 0 cleared by wiring.',
-      'About 48 000 NANDs without the program ROM, 155 NAND delays per cycle with ripple adders (103 with a <span data-ahead="prefix">Kogge–Stone adder (a parallel-prefix adder: its carry takes about log₂ n levels)</span>), and the clock must fit the slowest path: the ALU compare of a branch through the next-PC select, not a load. Measured on random programs the average cycle settles in about half of that.',
+      `About ${groupDigits(Math.round(CPU_NANDS / 1000) * 1000)} NANDs without the program ROM, 155 NAND delays per cycle with ripple adders (103 with a <span data-ahead="prefix">Kogge–Stone adder (a parallel-prefix adder: its carry takes about log₂ n levels)</span>), and the clock must fit the slowest path: the ALU compare of a branch through the next-PC select, not a load. Measured on random programs the average cycle settles in about half of that.`,
     ],
     practise: ['c_imm', 'c_ctl', 'c_br', 'c_npc', 'c_core1', 'c_core2', 'c_core3'],
     check: [
@@ -757,7 +757,7 @@ export const chSingleCycle: Chapter = {
       },
       more: {
         derive: `<p>A cycle's length is the longest path from a state element to a state element. For this machine that is PC → instruction memory → decode and immediate → ALU → next-PC select → PC: about 155 NAND delays with ripple adders. Cycles for a program = instructions executed, since each takes exactly one, so the program's time
-          is instructions × 155 delays whatever mix it has. The pipeline of chapter 17 attacks the second factor: a shorter period, at the price of some stall cycles.</p>`,
+          is instructions × 155 delays whatever mix it has. The pipeline of chapter ${numOf('pipeline')} attacks the second factor: a shorter period, at the price of some stall cycles.</p>`,
         pitfall: `<p>Judging the machine by the program text: a loop is one block of code and many cycles. The Pulse counter and the PC tell the truth. Count cycles as instructions executed, and a
           taken branch as one cycle, not two: the single-cycle machine pays nothing extra for a taken branch; a pipeline does.</p>`,
         real: `<p>Almost no shipping core is single-cycle: even small microcontroller cores split the datapath over two or three stages, and this design is where they start. The panel's Slow button
@@ -769,7 +769,7 @@ export const chSingleCycle: Chapter = {
       title: 'The control table',
       body: `
         <p>The datapath does whatever its multiplexers and write enables say. The <span data-show="ctl">control unit</span> is where an instruction's meaning becomes those settings, and it is small: a function of the opcode (7 bits), funct3 (3) and funct7 (7), ${CONTROL_NANDS} NANDs and ${logicDepth(CONTROL)} NAND delays deep, with no state. It decodes the opcode to one of nine classes, then each output is an OR of the classes that need it. The panel beside the circuit is that table, evaluated by the simulator on one instruction of each class: <strong>click a row</strong> to run that instruction on the datapath and watch the signals.</p>
-        <p>Read it by columns. <strong>RegWrite</strong> is 1 for everything but stores and branches; <strong>MemWrite</strong> is the store class and nothing else; <strong>ResultSrc</strong> picks what is written back: the ALU, the memory word, PC + 4 (the link of a jump) or the immediate (<code>lui</code>). <strong>SrcA</strong> is the PC only for <code>auipc</code>, <strong>SrcB</strong> the register for R-type and branches, where it matters (<code>jal</code> and <code>lui</code> show rs2 as well, unused). <strong>ImmSrc</strong> names the immediate format of chapter 13; a column that does not matter for a class (the ImmSrc of an <code>add</code>) is whatever the logic gives, not a don't care the gates exploit.</p>
+        <p>Read it by columns. <strong>RegWrite</strong> is 1 for everything but stores and branches; <strong>MemWrite</strong> is the store class and nothing else; <strong>ResultSrc</strong> picks what is written back: the ALU, the memory word, PC + 4 (the link of a jump) or the immediate (<code>lui</code>). <strong>SrcA</strong> is the PC only for <code>auipc</code>, <strong>SrcB</strong> the register for R-type and branches, where it matters (<code>jal</code> and <code>lui</code> show rs2 as well, unused). <strong>ImmSrc</strong> names the immediate format of chapter ${numOf('isa')}; a column that does not matter for a class (the ImmSrc of an <code>add</code>) is whatever the logic gives, not a don't care the gates exploit.</p>
         <p>The one column with real logic is <strong>ALUControl</strong>. R-type passes {funct7[5], funct3}: <code>add</code> and <code>sub</code> differ in that bit alone. OP-IMM passes funct3 only, because bit 30 of an <code>addi</code> is part of its immediate; the exception is <code>srai</code>, which is how it differs from <code>srli</code>. Loads, stores, <code>jalr</code> and <code>auipc</code> force ADD whatever their funct3 says (it holds a width or nothing), and branches force SUB. The branch kind then reads the ALU's flags.</p>
         <p>Because a new instruction is a new row, the cost of one is countable: the last step of this chapter adds a row and prices it.</p>
         <div class="try">Click <code>sw</code>, then <code>lw</code>: only RegWrite, MemWrite, ResultSrc and ImmSrc (I against S) differ, and the ALU adds rs1 and the immediate either way.</div>`,
@@ -964,7 +964,7 @@ export const chSingleCycle: Chapter = {
       },
       more: {
         derive: `<p>Cycle count of the program: four setup instructions, 6 per iteration × 12 iterations, one final jump to itself: 4 + 72 + 1 = 77 instructions, and 77 cycles, since each takes one. The
-          challenge says "about 75" for that reason. At roughly 200 cycles per second in the browser, the run takes under half a second; at the 155-delay period and the illustrative 25 ps a delay of chapter 16, a cycle is about
+          challenge says "about 75" for that reason. At roughly 200 cycles per second in the browser, the run takes under half a second; at the 155-delay period and the illustrative 25 ps a delay of chapter ${numOf('fastadd')}, a cycle is about
           4 ns and the whole run about 0.3 µs.</p>`,
         pitfall: `<p>A program that "works" on the simulator and not on the gates, or the reverse, almost always uses an instruction the hardware leaves out: byte and halfword accesses, <code>fence</code>,
           <code>ecall</code>. The panel stops at the first mismatch and names the register: start there, not at the end of the run.</p>`,
@@ -1009,7 +1009,7 @@ export const chSingleCycle: Chapter = {
         ALU operation, <code>memWrite</code>, the result mux (ALU, memory, PC + 4, imm) and the next-PC choice. The data path does not change: fetch, register read, ALU, memory and
         write-back are already there, and the row only picks which of them the instruction uses.</p>
         <p>Cost, from the circuit: the control unit is ${CONTROL_NANDS} NANDs. A new instruction class adds one 5-input AND on the opcode rails (${AND5_NANDS} NANDs) and one more OR input on every signal
-        its row asserts: <code>lwx</code> asserts <code>regWrite</code> and <code>resSrc0</code>, so ${LWX_NANDS - CONTROL_NANDS} NANDs in all, ${((LWX_NANDS - CONTROL_NANDS) / 48000 * 100).toFixed(2)} % of the core. The decoder here matches
+        its row asserts: <code>lwx</code> asserts <code>regWrite</code> and <code>resSrc0</code>, so ${LWX_NANDS - CONTROL_NANDS} NANDs in all, ${((LWX_NANDS - CONTROL_NANDS) / CPU_NANDS * 100).toFixed(2)} % of the core. The decoder here matches
         opcode[6:2] only, so funct3 and funct7 are free for the instruction's own use and one opcode holds one instruction; a decoder that also matches funct3 shares an opcode among eight, for
         a few ANDs more per instruction.</p>
         <p>What it buys: the loop on the left sums eight words. Without the instruction each element takes <code>add t4, a0, t0</code> and <code>lw t2, 0(t4)</code>; with <code>lwx</code> it is one instruction,

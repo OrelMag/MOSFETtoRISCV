@@ -409,7 +409,7 @@ export const chCache: Chapter = {
         derive: `<p>Charge sharing: a cell capacitor C<sub>c</sub> = ${CELL_C} fF at V<sub>c</sub> joined to a bit line of C<sub>b</sub> = ${BITLINE_C} fF precharged to V<sub>DD</sub> / 2 settles at
           (C<sub>c</sub> V<sub>c</sub> + C<sub>b</sub> V<sub>DD</sub> / 2) / (C<sub>c</sub> + C<sub>b</sub>). Reading a stored 1 moves the line by
           (V<sub>DD</sub> / 2) · C<sub>c</sub> / (C<sub>c</sub> + C<sub>b</sub>) = ${(100 * CELL_C / (CELL_C + BITLINE_C) / 2).toFixed(1)} % of V<sub>DD</sub>: ${(CELL_C / (CELL_C + BITLINE_C)).toFixed(2)} of the half swing. The ratio
-          C<sub>c</sub> / C<sub>b</sub> sets how small the signal is, and why a sense amplifier is not optional. <a href="#/c/dram/0">Chapter 35</a> measures it on the array.</p>`,
+          C<sub>c</sub> / C<sub>b</sub> sets how small the signal is, and why a sense amplifier is not optional. <a href="#/c/dram/0">Chapter ${numOf('dram')}</a> measures it on the array.</p>`,
         pitfall: `<p>Reading q as a permanent value. It is a charge: dropping wl only makes it last a while. Any model of DRAM needs a leak and a refresh; this scene advances no real time, so the cell looks permanent
           until the next write.</p>`,
         real: `<p>Modern DRAM cells are a transistor with a deep trench or a stacked capacitor of some tens of femtofarads, with every row refreshed each 64 ms. The array and its
@@ -432,7 +432,7 @@ export const chCache: Chapter = {
     {
       title: 'Leaks, refresh and sense amplifiers',
       deep: true,
-      body: `<p>The stored charge leaks through the off transistor and the junction, so every row must be read and rewritten periodically. A read only produces a small voltage on the bit line. <a href="#/c/dram/0">Chapter 35</a> builds the array, the precharge to VDD/2 and the sense amplifier at transistor level, with the charge sharing measured in millivolts.</p>
+      body: `<p>The stored charge leaks through the off transistor and the junction, so every row must be read and rewritten periodically. A read only produces a small voltage on the bit line. <a href="#/c/dram/0">Chapter ${numOf('dram')}</a> builds the array, the precharge to VDD/2 and the sense amplifier at transistor level, with the charge sharing measured in millivolts.</p>
         <p>Refresh is a tax on every access. The controller must issue a refresh command every ${TIMING.tREFI} of our cycles, and each one keeps the bank busy for ${TIMING.tRFC}:
         a bank is unavailable ${pct(TIMING.tRFC / TIMING.tREFI)} of the time to a request that arrives at a random moment, and a request that collides with a refresh waits out
         the rest of it. The sense amplifier does double duty: it detects the small difference between the bit lines and, driving them to full levels, restores the cell

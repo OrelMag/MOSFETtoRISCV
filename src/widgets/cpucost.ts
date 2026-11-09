@@ -94,6 +94,9 @@ export function controlPanel(stage: Stage): Widget {
 
 // ---- the clock period ----------------------------------------------------------------------------------
 
+/** The single-cycle CPU's NANDs without its program ROM, ripple adders (chapter 14 quotes it; pinned by tests/ship-figures.test.ts). */
+export const CPU_NANDS = 48434;
+
 /** The static critical path of the CPU with each adder, NAND delays per block (sim/timing.ts; pinned by tests/cycletime.test.ts). */
 export const PERIOD = {
   rca: { pc: 155, rf: 132, dm: 79, stages: [['pc', 3], ['imem', 18], ['ctl', 11], ['imm', 7], ['srcB', 2], ['alu', 93], ['npc', 11], ['pcmux', 5], ['setup', 5]] as [string, number][] },

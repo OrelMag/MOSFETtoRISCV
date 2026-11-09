@@ -97,7 +97,7 @@ export const chIO: Chapter = {
         and raises <strong><span data-show="dec bsel">byte enables</span></strong> only for the addressed bytes: <code>sb</code> to address 2 enables byte 2, <code>sh</code>
         to address 2 enables bytes 2–3. A halfword at an odd address, or a word not on a 4-byte boundary, is
         <span data-show="mis"><em>misaligned</em></span>. RISC-V lets an implementation either handle a misaligned access (two memory accesses stitched together) or
-        <span data-ahead="traps">trap (stop and jump to a handler routine in software; chapter 20)</span> and leave it to software; the complete CPU traps.</p>
+        <span data-ahead="traps">trap (stop and jump to a handler routine in software; chapter ${numOf('traps')})</span> and leave it to software; the complete CPU traps.</p>
         <p>Replication is the cheap part of the idea: instead of steering the byte to the right lane, put it on all four and let the enables decide which lane listens. The data path is then four copies of the same wires, and the byte never has to reach a chosen lane. The only data multiplexer picks by size alone (byte copies, half copies or the word), not by address; it is most of the unit's cost. The enables are a small
         decoder of the low two address bits and the size: ${nd(STORE_ALIGN)} NANDs for the whole unit. It also produces <em>misaligned</em>, which the CPU turns into a trap.</p>
         <div class="try">Set size = 0 (byte) and step addr through 0–3: one enable bit moves across.</div>`,
@@ -279,7 +279,7 @@ export const chTraps: Chapter = {
       'A trap: PC ← mtvec, mepc ← the address of the trapping instruction, mcause ← the reason, MPIE ← MIE, MIE ← 0. <code>mret</code> jumps to mepc and restores MIE. mtvec\'s low two bits are its MODE: 0 direct (every trap to BASE), 1 vectored (interrupt <em>n</em> to BASE + 4<em>n</em>); here MODE is wired to 0.',
       'mcause: 2 illegal instruction, 3 breakpoint, 4 misaligned load, 6 misaligned store, 11 ecall; interrupts set bit 31 (0x80000007 timer, 0x8000000B external). A trapping instruction writes nothing.',
       'An interrupt is pending in mip while its source holds, and taken at the next instruction boundary only if enabled in mie and globally by mstatus.MIE.',
-      'Priority: interrupts (external, then timer), then illegal instruction, ebreak, ecall, misaligned fetch, load, store. CSR unit, trap unit and system decoder: about 10 000 NANDs.',
+      `Priority: interrupts (external, then timer), then illegal instruction, ebreak, ecall, misaligned fetch, load, store. CSR unit, trap unit and system decoder: about ${kNands(TRAP_NANDS)} NANDs.`,
       'The hardware saves only the PC and the cause: a handler saves every register it uses (mscratch gives it a register to swap with sp), nests only by saving mepc and mcause and setting MIE again, and an idle loop waits in <code>wfi</code>. Machine mode is the only mode here; with user mode, mstatus.MPP says where a trap came from and ecall\'s cause is 8 from U, 11 from M.',
       `Polling spends cycles on looks and reacts at its next look; an interrupt spends a trap, a handler and an mret per event and reacts at the next instruction boundary. Measured here the crossing is at one event per ${crossover(6)} cycles with 6 instructions of work between polls.`,
       'A bare interrupt line forgets a pulse that ends while MIE = 0; an interrupt controller holds a pending bit per source until it is claimed, offers the highest enabled one, and clears it on the claim. Vectored mtvec sends interrupt <em>n</em> to BASE + 4<em>n</em> with five ANDs and four ORs.',
@@ -341,7 +341,7 @@ export const chTraps: Chapter = {
         <p>So far the CPU runs one program that never stops to ask anything. A real computer needs three ways out of it. An instruction that cannot run (an
         undefined word, a misaligned load) must stop somewhere sensible instead of doing something undefined. A program must be able to ask a more privileged
         one, the operating system, to do work for it. And a device must be able to say "now", so the program does not have to keep reading
-        <a href="#/c/io/0">chapter 19</a>'s switches in a loop to notice that one flipped. All three are one mechanism, a <strong>trap</strong>: the hardware
+        <a href="#/c/io/0">chapter ${numOf('io')}</a>'s switches in a loop to notice that one flipped. All three are one mechanism, a <strong>trap</strong>: the hardware
         saves where it was and why, and jumps to a handler written in software. That takes a few registers of its own, which is where this chapter starts.</p>
         <p>A second, separate register space: <strong>CSRs</strong>, addressed by a 12-bit number and accessed only with
         <code>csrrw</code> (swap), <code>csrrs</code> (set bits) and <code>csrrc</code> (clear bits), plus immediate forms. This CPU implements a
@@ -529,7 +529,7 @@ export const chTraps: Chapter = {
         ],
       },
       more: {
-        derive: `<p>Interrupt latency is the time to the next instruction boundary. At one instruction a cycle that is one edge: the instruction that was about to run (mepc) is held back, the trap takes its place, and after <code>mret</code> it runs. Nothing in the main loop is lost or repeated. With a multi-cycle or pipelined core the boundary can be tens of cycles away; with a divide in progress, as in chapter 21, it waits for the divide.</p>`,
+        derive: `<p>Interrupt latency is the time to the next instruction boundary. At one instruction a cycle that is one edge: the instruction that was about to run (mepc) is held back, the trap takes its place, and after <code>mret</code> it runs. Nothing in the main loop is lost or repeated. With a multi-cycle or pipelined core the boundary can be tens of cycles away; with a divide in progress, as in chapter ${numOf('muldiv')}, it waits for the divide.</p>`,
         pitfall: `<p>Holding the IRQ button across the handler. The line is checked at every boundary and the handler clears nothing at the source, so if irq stayed high the CPU would take the interrupt again at the first boundary after <code>mret</code>. The scene\'s button is a one-cycle pulse for that reason; a real device holds its line until software acknowledges it.</p>`,
       },
       challenge: {
@@ -546,7 +546,7 @@ export const chTraps: Chapter = {
       body: `
         <p>Seven 2:1 multiplexer pairs in a chain build the <span data-show="c0 c1 c2 c3 c4 c5 c6">cause</span> and
         <span data-show="v0 v1 v2 v3 v4 v5 v6">mtval</span>; the trap signal is <span data-show="any">the OR of all sources</span>.
-        Together with the CSR unit and the system decoder this is about 10 000 NANDs: privilege and interrupts are not free, but
+        Together with the CSR unit and the system decoder this is about ${kNands(TRAP_NANDS)} NANDs: privilege and interrupts are not free, but
         they are what turns a calculator into a computer that can run an operating system.</p>
         <p>Measured: the trap unit is ${nd(TRAP_UNIT)} NANDs, the CSR unit ${nd(CSR_UNIT)} and the system decoder ${nd(SYS_DECODE)}, together ${kNands(TRAP_NANDS)} of the ${kNands(sysNands(false).core)} in the machine without its program ROM.</p>`,
       scene: () => ({ root: TRAP_UNIT, inputs: { illegal: 1 } }),
