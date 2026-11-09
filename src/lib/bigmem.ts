@@ -35,8 +35,8 @@ export const BIG_MAX_K = 21;
 /** At most 2^4 banks per level. */
 const FAN_K = 4;
 
-/** A word count as people say it: 512, 4K, 64K. */
-export const kWords = (n: number) => (n >= 1024 && n % 1024 === 0 ? `${n / 1024}K` : String(n));
+/** A word count as people say it: 512, 4K, 64K, 1M. */
+export const kWords = (n: number) => (n >= 2 ** 20 && n % 2 ** 20 === 0 ? `${n / 2 ** 20}M` : n >= 1024 && n % 1024 === 0 ? `${n / 1024}K` : String(n));
 
 /** Bank size one level down. */
 const subK = (k: number) => Math.max(BANK_K, k - FAN_K);

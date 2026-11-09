@@ -353,7 +353,7 @@ RV16: separate imem and dmem, so neither happens</pre>`,
       'Counting Harvard as free: two memories or two ports cost area; the guided chapter\'s multicycle CPU serves fetches and loads from one port to save it.',
     ],
     anatomy: ['imem', 'dmem'],
-    chapters: [{ chapter: 'cpu', step: 0, label: 'The datapath' }, { chapter: 'cache', step: 12, label: 'Caching instructions too' }],
+    chapters: [{ chapter: 'cpu', step: 0, label: 'The datapath' }, { chapter: 'cache', step: 13, label: 'Caching instructions too' }],
   },
 
   // ---- ISA and software
@@ -1438,7 +1438,7 @@ masks: 1111 ×4, 1100 ×4, 1000 ×3, 0100 ×2, 1100 ×2, 0011 ×2, 1111 ×2</pre
       'Closing the open row to refresh another and losing the hit: leave the refreshed row open; the next request may want it.',
     ],
     lib: 'rv16_bank',
-    chapters: [{ chapter: 'dram', step: 3, label: 'Leaks and refresh' }, { chapter: 'memctrl', step: 2, label: 'Refresh' }, { chapter: 'cache', step: 3, label: 'Leaks, refresh and sense amplifiers' }],
+    chapters: [{ chapter: 'dram', step: 3, label: 'Leaks and refresh' }, { chapter: 'memctrl', step: 2, label: 'Refresh' }, { chapter: 'cache', step: 4, label: 'Leaks, refresh and sense amplifiers' }],
   },
   dramtiming: {
     idea: 'A DRAM chip has no clock of its own for its array: its rules are delays, set in nanoseconds by the physics of the array, and the controller counts them in its own cycles. <b>tRCD</b>: from ACT until the row is in the amplifiers and a column may be read or written. <b>tCAS</b> (CAS latency): from RD to the data. <b>tRAS</b>: from ACT until the row may close, the time the amplifiers need to restore the cells. <b>tRP</b>: from PRE until the bit lines are back at VDD/2 and another row may open. <b>tRFC</b>: a refresh keeps the chip busy.<br>DDR4-3200 says 13.75 ns for tRCD, tCAS and tRP and 32 ns for tRAS; at this campaign\'s 3.95 ns clock that is 4, 4, 4 and 9 cycles (rounded up: a command one cycle early is a broken rule, one late only slower). A controller keeps a counter per rule, or, with one request at a time, counters of the cycles since the last ACT and the last PRE.',

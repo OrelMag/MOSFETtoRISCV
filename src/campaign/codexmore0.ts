@@ -431,7 +431,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Assuming write-through is free: every store goes to memory, so a store-heavy loop runs at memory speed unless a write buffer absorbs it.',
     ],
     lib: 'rv16_cache', anatomy: ['dmem'],
-    chapters: [{ chapter: 'cache', step: 6, label: 'A direct-mapped cache' }, { chapter: 'cache', step: 8, label: 'The three Cs and associativity' }, { chapter: 'cache', step: 10, label: 'Write-back: dirty lines' }],
+    chapters: [{ chapter: 'cache', step: 7, label: 'A direct-mapped cache' }, { chapter: 'cache', step: 9, label: 'The three Cs and associativity' }, { chapter: 'cache', step: 11, label: 'Write-back: dirty lines' }],
   },
 
   // ---- tools
@@ -633,7 +633,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Forgetting that a read is destructive: closing the word line before the amplifier has fired leaves the cell at 0.6 or 0.4, half way to forgotten.',
     ],
     lib: 'rv16_dramcol',
-    chapters: [{ chapter: 'dram', step: 1, label: 'The read, in slow motion' }, { chapter: 'dram', step: 2, label: 'The sense amplifier' }, { chapter: 'cache', step: 2, label: 'One transistor per bit: DRAM' }, { chapter: 'cache', step: 3, label: 'Leaks, refresh and sense amplifiers' }],
+    chapters: [{ chapter: 'dram', step: 1, label: 'The read, in slow motion' }, { chapter: 'dram', step: 2, label: 'The sense amplifier' }, { chapter: 'cache', step: 3, label: 'One transistor per bit: DRAM' }, { chapter: 'cache', step: 4, label: 'Leaks, refresh and sense amplifiers' }],
   },
   dma: {
     idea: 'A processor copying a buffer spends a load, a store and loop overhead on every word, and waits on memory for each. A <b>DMA engine</b> is a second bus master built for that one job: the processor stores a source, a destination and a length into its registers and moves on; the engine reads a word, writes it, steps its pointers and counts down, then raises an interrupt. Disk controllers, network cards and display controllers all move their data this way.<br>The engine competes for the bus like any master, so the arbiter decides who waits; a processor with caches mostly does not notice. m_dma is 1366 NANDs: four 16-bit registers (source, destination, count, the word in flight) are 832 of them, three incrementers and the load muxes most of the rest. Its count register holds NOT(words left) and counts up, so the incrementer\'s carry, true when the register is all ones, says the copy is complete, len = 0 included, with no comparator.',

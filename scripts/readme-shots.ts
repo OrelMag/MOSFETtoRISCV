@@ -216,7 +216,7 @@ dwell: 2500,
     },
   },
   {
-    name: 'cache', route: '#/c/cache/7',
+    name: 'cache', route: '#/c/cache/8',
     why: 'The cache explorer on the column-major matrix sum, played To the end: the hit rate and the 3C misses.',
     wait: SHOWN, then: [press('To the end')], dwell: 2500,
   },

@@ -269,6 +269,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
   { id: "cache", num: 22, title: "Caches & the memory hierarchy", blurb: "SRAM and DRAM at transistor level, direct-mapped and set-associative caches, the three Cs, and a CPU that stalls on a miss.", level: "Memory", builds: ["memory","cpu","pipeline"], recap: {"checks":3}, steps: [
     { title: "Six transistors per bit", challenge: "reach" },
     { title: "From a column to an array", challenge: "reach" },
+    { title: "From an array to a megabyte", challenge: "reach" },
     { title: "One transistor per bit: DRAM", challenge: "quiz" },
     { title: "Leaks, refresh and sense amplifiers" },
     { title: "Errors and ECC", challenge: "reach" },

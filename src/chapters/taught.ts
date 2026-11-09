@@ -152,6 +152,7 @@ export const TAUGHT: Record<string, string> = {
   writepolicy: 'cache',
   vm: 'traps',
   sram: 'cache',
+  mats: 'cache',
   ecc: 'cache',
   rowhammer: 'dram',
   rv32i: 'isa',
