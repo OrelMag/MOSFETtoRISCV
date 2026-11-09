@@ -100,6 +100,8 @@ export class CampaignPage implements Page {
   private cxListOpen = false;
   /** Until when a map redraw (its columns found) should bring the selected level into view again. */
   private revealUntil = 0;
+  /** The learner scrolled or clicked in the map: from then on it keeps their place instead of landing on the next level. */
+  private mapTouched = false;
   readonly kind = 'campaign';
   readonly el: HTMLElement;
   private main = h('div', { class: 'cp-main' });
@@ -332,11 +334,14 @@ export class CampaignPage implements Page {
       scroll.scrollTop += r.top - v.top - (v.height - r.height) / 2;
       scroll.scrollLeft += r.left - v.left - (v.width - r.width) / 2;
     };
-    const landUntil = !sel && !this.mapScroll && frontier ? performance.now() + 1000 : 0;
+    const landUntil = !sel && !this.mapTouched && frontier ? performance.now() + 1000 : 0;
+    for (const ev of ['wheel', 'pointerdown', 'touchstart', 'keydown']) scroll.addEventListener(ev, () => { this.mapTouched = true; }, { passive: true });
     if (landUntil) requestAnimationFrame(land);
     this.mapFit?.disconnect();
     this.mapFit = new ResizeObserver(() => {
       const cols = mapColsFor(scroll.clientWidth);
+      // the map's box settles after the first frame (a phone lays the page out twice): land again within the first second
+      if (performance.now() < landUntil && !this.mapTouched && (scroll.clientWidth <= 0 || cols === this.mapCols)) return land();
       if (scroll.clientWidth <= 0 || cols === this.mapCols) return;
       this.mapCols = cols;
       const refocus = keepFocus(scroll);
@@ -345,7 +350,7 @@ export class CampaignPage implements Page {
       refocus();
       // the first draw guessed the columns: the selected level moved
       if (performance.now() < this.revealUntil) this.reveal();
-      else if (performance.now() < landUntil) land();
+      else if (performance.now() < landUntil && !this.mapTouched) land();
     });
     this.mapFit.observe(scroll);
     return h('div', { class: 'cp-split' },
