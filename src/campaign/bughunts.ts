@@ -12,6 +12,7 @@ import { type ChipDoc, emptyWorkspace } from '../editor/model';
 import { Builder } from '../lib/builder';
 import { resolveComponent } from '../lib/resolve';
 import { type ComponentDef, type Netlist, netlistOf } from '../sim/types';
+import { breakItNodes } from './breakit';
 import type { CampaignNode, ChapterLink, Par } from './types';
 
 interface Hunt {
@@ -363,6 +364,7 @@ export function withBugHunts(nodes: CampaignNode[]): CampaignNode[] {
       base: huntChallenge(h, a.base),
     });
   }
+  for (const [after, n] of breakItNodes(byId, DEBUG_ACT)) put(after, n);
   const fast = byId.get('c_fast');
   if (fast) put('c_fast', timingNode(fast));
   return nodes.flatMap((n) => [n, ...(extra.get(n.id) ?? [])]);

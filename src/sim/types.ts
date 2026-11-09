@@ -4,6 +4,8 @@
 
 import type { Sim } from './sim';
 import type { Stats } from './stats';
+import type { HierNode } from './flatten';
+import type { FlatFault } from './faults';
 
 /** A single bit on a wire: 0, 1, X (unknown / contention) or Z (floating, switch level only). */
 export const B0 = 0;
@@ -223,6 +225,11 @@ export interface ComponentDef {
   behavior?: Behavior;
   /** Simulate by behaviour by default (the structure is still shown when the box is opened). */
   preferBehavior?: boolean;
+  /**
+   * Faults planted in this component wherever it is flattened (sim/faults.ts; a break-it level's chip under Check, inside
+   * whatever bench wraps it): given its node, the faults on its nets. Never drawn, counted or exported.
+   */
+  planted?: (node: HierNode) => FlatFault[];
   /**
    * What stats() would count in the structure, computed without building it: for a structure too
    * large to walk (the 2^23-word WAD ROM: millions of instances). Must equal the walk (tested).

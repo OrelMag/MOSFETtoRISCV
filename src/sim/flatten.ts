@@ -3,6 +3,7 @@
 // flat nets its ports and internal wires map to, so any level can be viewed live from a
 // single simulation. That is what makes every box transparent at no extra cost.
 
+import { applyFaults } from './faults';
 import {
   type ComponentDef, type HierLeafKind, inPorts, isSwitchPrim, netlistOf, outPorts, parseEnd,
 } from './types';
@@ -334,12 +335,16 @@ export function* flattenSteps(rootDef: ComponentDef, opts: FlattenOptions = {}, 
     done.add(a);
     for (let i = 0; i < a.length; i++) a[i] = id(a[i]);
   };
+  // components with planted faults (sim/faults.ts), applied once the nets are final
+  const plantedAt: HierNode[] = [];
   const walk = (n: HierNode): void => {
+    if (n.def.planted) plantedAt.push(n);
     for (const k in n.ports) remap(n.ports[k]);
     n.nets?.forEach(remap);
     n.children?.forEach(walk);
   };
   function* walkG(n: HierNode, depth: number): Generator<FlattenProgress, void> {
+    if (n.def.planted) plantedAt.push(n);
     for (const k in n.ports) remap(n.ports[k]);
     n.nets?.forEach(remap);
     if (!n.children) return;
@@ -367,7 +372,8 @@ export function* flattenSteps(rootDef: ComponentDef, opts: FlattenOptions = {}, 
   for (const [raw, w] of capW) capWeight.set(id(raw), Math.max(w, capWeight.get(id(raw)) ?? 0));
   const leaks = new Map<number, number>();
   for (const [raw, h] of leakRaw) leaks.set(id(raw), Math.min(h, leaks.get(id(raw)) ?? Infinity));
-  return { root, netCount: dense.size, leaves, powerOn, caps, capWeight, leaks };
+  const design: FlatDesign = { root, netCount: dense.size, leaves, powerOn, caps, capWeight, leaks };
+  return plantedAt.length ? applyFaults(design, plantedAt.flatMap((n) => n.def.planted!(n))).design : design;
 }
 
 /** Flatten a hierarchical design in one go (the callers that need the answer now, and the tests). */

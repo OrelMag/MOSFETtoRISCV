@@ -21,9 +21,9 @@ export const ROW_HEAD = 22;
 export const ACT_ROWS: Readonly<Record<number, readonly { label: string; ids: readonly string[]; flow?: boolean }[]>> = {
   // Debugging: no level requires another, so each row is a flow (side by side in the listed order: the curriculum's)
   14: [
-    { label: 'Logic and arithmetic', ids: ['b_fa', 'b_dec', 'b_mux', 'b_carry', 'b_sub', 'b_slt'], flow: true },
-    { label: 'State', ids: ['b_dff', 'b_cnt', 'b_x0'], flow: true },
-    { label: 'The core', ids: ['b_imm', 'b_jal', 'b_fwd', 'b_timing'], flow: true },
+    { label: 'Logic and arithmetic', ids: ['b_fa', 'b_dec', 'x_dec', 'b_mux', 'b_carry', 'x_add4', 'b_sub', 'b_slt'], flow: true },
+    { label: 'State', ids: ['b_dff', 'b_cnt', 'x_cnt', 'b_x0'], flow: true },
+    { label: 'The core', ids: ['b_imm', 'b_jal', 'x_core', 'b_fwd', 'b_timing'], flow: true },
   ],
   13: [
     { label: 'Arithmetic', ids: ['sp_sat', 'sp_mac', 'sp_circ'] },
