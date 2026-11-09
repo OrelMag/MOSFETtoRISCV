@@ -78,7 +78,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'chapter.prev', group: 'chapter', caps: ['{'], does: 'previous chapter', match: [{ code: 'BracketLeft', codeOnly: true, shift: true }] },
   // ---- the stage (chapters and the workbench)
   { id: 'stage.focus', group: 'stage', caps: ['S'], does: 'focus the circuit (Tab from it goes on to its controls)', match: [letter('s')] },
-  { id: 'stage.fold', group: 'stage', caps: ['F'], does: 'focus mode: fold every panel and the inspector for the circuit alone; again to bring them back', match: [letter('f')] },
+  { id: 'stage.fold', group: 'stage', caps: ['F'], does: 'focus mode: fold every panel and the inspector; again to unfold them', match: [letter('f')] },
   { id: 'stage.probe', group: 'stage', caps: ['P'], does: 'probe mode: click wires to record them', match: [letter('p')] },
   { id: 'stage.why', group: 'stage', caps: ['W'], does: 'Why? mode: click a wire to trace its value to its causes', match: [letter('w')] },
   { id: 'stage.menu', group: 'stage', caps: ['Menu', '·', 'Shift F10'], does: 'the menu of the selected wire or part, else of this level, with a list to pick any of them' },
@@ -94,7 +94,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'sb.fav', group: 'place', caps: ['1', '…', '9'], does: 'arm favourite n; a click places it (Shift-click: several)', taken: ['1', '2', '3', '4', '5', '6', '7', '8', '9'] },
   { id: 'sb.pointer', group: 'place', caps: ['L', '·', 'T'], does: 'arm a pointer · a comment (same pointer name = same net)', match: [letter('l')], taken: ['l', 't'] },
   { id: 'sb.comment', group: 'place', caps: [], does: '', match: [letter('t')] },
-  { id: 'sb.section', group: 'place', caps: ['G'], does: 'group the selection in a section (a titled frame its contents move with); with nothing selected, a new section in the view', match: [letter('g')] },
+  { id: 'sb.section', group: 'place', caps: ['G'], does: 'group the selection in a titled frame that moves with it; with nothing selected, a new section in the view', match: [letter('g')] },
   { id: 'sb.kcursor', group: 'place', caps: ['Alt ←↑↓→'], does: 'keyboard cursor: move it (Shift: ×5); plain arrows move it too while a part is armed, a wire begun or nothing is selected, else they nudge the selection' },
   { id: 'sb.kplace', group: 'place', caps: ['↵', '·', 'Space'], does: 'place the armed part at the cursor (Shift: keep it armed); with none armed ↵ uses what is under the cursor: an input toggles, a part or pointer is selected and a second ↵ acts on it' },
   { id: 'sb.palette', group: 'place', caps: ['↑↓', 'Home End'], does: 'in the parts list (one Tab stop): move, ← → fold a group, type a name to jump, ↵ arms the part and moves to the canvas' },
