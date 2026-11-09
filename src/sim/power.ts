@@ -93,6 +93,11 @@ export class PowerMeter {
     this.marks++;
   }
 
+  /** Settled (functional) toggles of net i counted by mark() since reset; the rest of toggles(i) are glitches. */
+  settled(i: number): number {
+    return this.func[i];
+  }
+
   /** Toggles of net i since reset. */
   toggles(i: number): number {
     return (this.sim.toggles?.[i] ?? 0) - this.base[i];

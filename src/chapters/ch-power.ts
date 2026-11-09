@@ -193,10 +193,13 @@ export const chPower: Chapter = {
       body: `
         <p>Measured side by side on “sum”: <strong>${pj(plain.pj)} → ${pj(gated.pj)} per cycle</strong>, ${pct(1 - gated.pj / plain.pj)} less, for a CPU that is also smaller. The clock net all but disappears
         and the data memory falls from ${pj(blk('dm'))} to ${pj(blk('dm', gated))}.</p>
-        <p>Not every bar shrinks. The register file's grows, from ${pj(blk('rf'))} to ${pj(blk('rf', gated))}, and the share of glitches rises from ${pct(plain.glitch)} to ${pct(gated.glitch)}.
-        A gated register changes a few gate delays after the rest of the CPU (its clock passes through the latch's AND first), so the read multiplexers and the ALU see their
-        inputs arrive in two waves and switch twice. The clock gate moved the edge, and the logic paid for it in glitches. That is clock skew showing up in the energy bill,
-        and real clock trees are balanced so that the gated and ungated flip-flops see their edges together.</p>`,
+        <p>Not every bar shrinks. The register file's grows, from ${pj(blk('rf'))} to ${pj(blk('rf', gated))}: its glitches go from ${pj(plain.rfGlitchPj)} to ${pj(gated.rfGlitchPj)} a cycle,
+        ${pj(gated.rfRegGlitchPj)} of them inside the registers themselves. A flip-flop whose clock is held at 0 keeps its master latch open, so the master of every register that is not written
+        follows the write-data bus, every change and every glitch of it, cycle after cycle. In the plain register file the enable multiplexer fed each flip-flop its own q, and an
+        unwritten master saw nothing move. Gating the clock moved that cost from the clock to the data.</p>
+        <p>The share of glitches rises from ${pct(plain.glitch)} to ${pct(gated.glitch)} for two reasons, then: those new glitches (${pj(plain.glitchPj)} → ${pj(gated.glitchPj)} a cycle in all), and the
+        settled toggles that vanished with the clock's (${pj(plain.settledPj)} → ${pj(gated.settledPj)}). Real designs answer the first with flip-flops whose master closes too, or by holding the
+        write data still when nothing is written.</p>`,
       widget: gatedWidget,
     },
     {
@@ -208,7 +211,10 @@ export const chPower: Chapter = {
         <b>low-leakage</b> one at ${lp.ioff * 1e12} pA per µm, with ${pct(lp.ion / hp.ion)} of its on current. Their thresholds follow from those currents: ${deviceOf(hp).vt.toFixed(2)} V and
         ${deviceOf(lp).vt.toFixed(2)} V. Which transistors of a NAND are off depends on its inputs, and the simulator knows every input. Summed over the CPU's NANDs, cycle by cycle:
         <strong>${(plain.leakUw.hp).toFixed(0)} µW</strong> in the high-performance process, ${(plain.leakUw.lp * 1e3).toFixed(0)} nW in the low-leakage one.</p>
-        <p>At ${V_NOM} V that is ${pct(POWER.atVdd.hp.leakPj / atV('hp'))} of an instruction's energy, small next to switching. It stops being small when the clock slows down, or stops.</p>`,
+        <p>At ${V_NOM} V that is ${pct(POWER.atVdd.hp.leakPj / atV('hp'))} of an instruction's energy, small next to switching. It stops being small when the clock slows down, or stops.
+        On a real high-performance chip leakage is a much larger share (it is what ended Dennard scaling, <a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>), and every simplification here pushes
+        the figure down: our transistors are only ${(deviceOf(hp).w * 1000).toFixed(0)} nm wide, because the book's 25 ps per NAND is slow for a 28 nm-class process; the model leaves out DIBL, which raises the off
+        current of short channels; it is taken at room temperature, where leakage is lowest; and it has no SRAM arrays, whose millions of idle cells leak the most.</p>`,
       widget: leakWidget,
       more: {
         real: `<p>Real processes offer several thresholds in one library: fast, leaky cells on the critical paths and slow, frugal ones everywhere else. Leakage also grows steeply with temperature,

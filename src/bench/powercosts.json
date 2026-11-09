@@ -90,7 +90,11 @@
    "lp": 0.04592
   },
   "totalFf": 101800,
-  "wakePj": 39.64
+  "wakePj": 39.64,
+  "glitchPj": 5.873,
+  "settledPj": 15.18,
+  "rfGlitchPj": 0.3653,
+  "rfRegGlitchPj": 0.08801
  },
  "gated": {
   "nands": 48938,
@@ -180,7 +184,11 @@
    "lp": 0.03968
   },
   "totalFf": 85880,
-  "wakePj": 33.7
+  "wakePj": 33.7,
+  "glitchPj": 9.693,
+  "settledPj": 4.22,
+  "rfGlitchPj": 3.553,
+  "rfRegGlitchPj": 3.292
  },
  "device": {
   "hp": {

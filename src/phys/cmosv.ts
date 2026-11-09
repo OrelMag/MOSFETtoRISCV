@@ -47,11 +47,11 @@ export interface Process {
 export const PROCESSES: Record<Process['id'], Process> = {
   hp: {
     id: 'hp', name: 'High performance', ion: 1355e-6, ioff: 100e-9,
-    source: 'ITRS 2013 (PIDS), high-performance logic: off current held at 100 nA/µm; on current 1 355 µA/µm (the 2013–14 requirement, at 0.85 V; taken here at 0.9 V)',
+    source: 'ITRS 2013 (PIDS), high-performance logic: off current held at 100 nA/µm; on current 1 355 µA/µm, the 2013–14 requirement (at 0.85 V) as quoted in later literature, taken here at 0.9 V',
   },
   lp: {
     id: 'lp', name: 'Low leakage', ion: 0.35 * 1355e-6, ioff: 10e-12,
-    source: 'ITRS 2013 (PIDS), low-standby-power logic: off current 10 pA/µm, four decades under high performance\'s; on current at least 35 % of high performance\'s',
+    source: 'ITRS 2013 (PIDS), low-standby-power logic: off current 10 pA/µm, four decades under high performance\'s; on current taken as 35 % of high performance\'s, the roadmap\'s floor for it as summarised in later literature',
   },
 };
 
