@@ -2,7 +2,7 @@
 // loads, the log parser on lines in Spike's formats, and the comparison against a Spike-format log of our own
 // ISS, which must agree with itself and catch a changed value, a missing trap or a different store.
 import { describe, expect, it } from 'vitest';
-import { CODE, DATA, DMEM_WORDS, EXIT, FROMHOST, ORACLE_CONFIGS, STUB, TOHOST, compareWithSpike, issAsSpikeLog, oracleCase, oracleIss, parseSpikeLog } from './verify/spike';
+import { CODE, DATA, DMEM_WORDS, VM_DMEM_WORDS, EXIT, FROMHOST, ORACLE_CONFIGS, STUB, TOHOST, compareWithSpike, issAsSpikeLog, oracleCase, oracleIss, parseSpikeLog } from './verify/spike';
 
 /** The few ELF fields Spike reads: entry, loadable segments, symbols by name. */
 function readElf(b: Uint8Array) {
@@ -73,7 +73,7 @@ describe('Spike oracle', () => {
         const iss = oracleIss(c);
         iss.memTrace = [];
         while (iss.pc !== CODE + c.halt && iss.steps < 20_000) iss.step();
-        const out = iss.memTrace.filter((m) => m.addr < DATA || m.addr >= DATA + 4 * DMEM_WORDS);
+        const out = iss.memTrace.filter((m) => m.addr < DATA || m.addr >= DATA + 4 * (cfg.vm ? VM_DMEM_WORDS : DMEM_WORDS));
         expect(out, `${cfg.id} seed ${seed}`).toEqual([]);
       }
     }

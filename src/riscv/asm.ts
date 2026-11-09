@@ -417,6 +417,8 @@ function encode(st: Stmt, labels: Map<string, number>, custom: readonly CustomRo
     case 'csrci': need(2); return [encI(OPCODES.SYSTEM, 0, 7, imm(args[1], 0, 31), csr(args[0]))];
     case 'mret': need(0); return [0x30200073];
     case 'wfi': need(0); return [0x10500073];
+    case 'sret': need(0); return [0x10200073];
+    case 'sfence.vma': if (args.length > 2) need(2); return [((0x09 << 25) | ((args.length > 1 ? reg(args[1]) : 0) << 20) | ((args.length > 0 ? reg(args[0]) : 0) << 15) | OPCODES.SYSTEM) >>> 0];
     case 'nop': need(0); return [encI(OPCODES.OPIMM, 0, 0, 0, 0)];
     case 'mv': need(2); return [encI(OPCODES.OPIMM, reg(args[0]), 0, reg(args[1]), 0)];
     case 'not': need(2); return [encI(OPCODES.OPIMM, reg(args[0]), 4, reg(args[1]), -1)];

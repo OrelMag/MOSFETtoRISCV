@@ -69,6 +69,9 @@ export const INSTRS: InstrSpec[] = [
   { name: 'ebreak', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 0, hw: false },
   { name: 'mret', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 0, hw: false },
   { name: 'wfi', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 0, hw: false },
+  // privileged, supervisor level (the golden model's vm option; illegal elsewhere)
+  { name: 'sret', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 0, hw: false },
+  { name: 'sfence.vma', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 0, hw: false },
   { name: 'csrrw', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 1, hw: false },
   { name: 'csrrs', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 2, hw: false },
   { name: 'csrrc', fmt: 'I', opcode: OPCODES.SYSTEM, funct3: 3, hw: false },
@@ -159,7 +162,10 @@ export const BY_NAME = new Map(INSTRS.map((i) => [i.name, i]));
 /** Machine-mode CSRs implemented by the full system CPU. */
 export const CSRS: Record<string, number> = {
   mstatus: 0x300, misa: 0x301, mie: 0x304, mstatush: 0x310, mtvec: 0x305, mscratch: 0x340, mepc: 0x341, mcause: 0x342,
-  mtval: 0x343, mip: 0x344, mcycle: 0xb00, cycle: 0xc00, mvendorid: 0xf11, marchid: 0xf12, mimpid: 0xf13, mhartid: 0xf14,
+  mtval: 0x343, mip: 0x344, mcycle: 0xb00,
+  // supervisor level (the vm option): sstatus is a view of mstatus; satp holds the Sv32 root; delegation and counter enables read zero
+  sstatus: 0x100, sie: 0x104, stvec: 0x105, scounteren: 0x106, sscratch: 0x140, sepc: 0x141, scause: 0x142, stval: 0x143, sip: 0x144, satp: 0x180,
+  medeleg: 0x302, mideleg: 0x303, mcounteren: 0x306, cycle: 0xc00, mvendorid: 0xf11, marchid: 0xf12, mimpid: 0xf13, mhartid: 0xf14,
   // F extension: accrued exception flags, dynamic rounding mode, and both together
   fflags: 0x001, frm: 0x002, fcsr: 0x003,
   // lane cores (read-only): lane in the warp, warp number, lanes per warp, thread id, active mask
@@ -282,7 +288,7 @@ export function decode(word: number, custom?: readonly CustomRow[], xlen: Xlen =
     if (shift && s.funct7 === undefined) continue;
     if (s.opcode === OPCODES.SYSTEM && funct3 === 0) {
       const imm = w >>> 20;
-      const want = imm === 0 ? 'ecall' : imm === 1 ? 'ebreak' : imm === 0x302 ? 'mret' : imm === 0x105 ? 'wfi' : '';
+      const want = imm === 0 ? 'ecall' : imm === 1 ? 'ebreak' : imm === 0x302 ? 'mret' : imm === 0x105 ? 'wfi' : imm === 0x102 ? 'sret' : imm >>> 5 === 9 && rd === 0 ? 'sfence.vma' : '';
       if (s.name !== want) continue;
     }
     spec = s;
@@ -337,6 +343,7 @@ export function disasm(word: number, pc?: number, custom?: readonly CustomRow[],
         const csr = CSR_NAMES[(word >>> 20) & 0xfff] ?? `0x${((word >>> 20) & 0xfff).toString(16)}`;
         return d.funct3 & 4 ? `${n} ${rn(d.rd)}, ${csr}, ${d.rs1}` : `${n} ${rn(d.rd)}, ${csr}, ${rn(d.rs1)}`;
       }
+      if (n === 'sfence.vma') return `${n} ${rn(d.rs1)}, ${rn(d.rs2)}`;
       if (d.opcode === OPCODES.SYSTEM || d.opcode === OPCODES.FENCE) return n;
       return `${n} ${rn(d.rd)}, ${rn(d.rs1)}, ${d.imm}`;
     case 'S': return `${n} ${rn(d.rs2)}, ${d.imm}(${rn(d.rs1)})`;
