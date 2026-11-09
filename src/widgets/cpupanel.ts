@@ -24,7 +24,9 @@ import { narrateCycle, narrateInstr, type NarrLine } from '../riscv/narrate';
 import { ABI, decode, disasm, regNumber } from '../riscv/isa';
 import type { CustomRow } from '../riscv/custom';
 import { accHex } from '../dsp/mac';
-import { ISS, type ModelState } from '../riscv/iss';
+import { type IssOptions, ISS, type ModelState } from '../riscv/iss';
+import { type PlantedFault, withPlanted } from '../sim/faults';
+import type { ComponentDef } from '../sim/types';
 import { disasmC, expand16, parcelAt } from '../riscv/rvc';
 import { PROGRAMS } from '../riscv/programs';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
@@ -57,6 +59,8 @@ const hex = (v: number, d = 8) => '0x' + (v >>> 0).toString(16).toUpperCase().pa
 
 export interface CpuSceneOptions {
   source: string;
+  /** Faults planted in the CPU's silicon, never drawn (a chapter's "find it" step: widgets/findfault.ts). */
+  planted?: PlantedFault[];
   highlight?: string[];
   adder?: 'rca' | 'ks';
   /** Attach the static-timing panel. */
@@ -113,15 +117,10 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
   const asm = assemble(opts.c && !/^\s*\.option\s/m.test(opts.source) ? `.option rvc\n${opts.source}` : opts.source, opts.custom, { mac: opts.mac });
   // the CPU panel and the Out of order panel share the selected instruction
   const link: OooLink = {};
+  const root = cpuRoot(opts, asm);
   return {
     ...(opts.ooo ? { engine: 'cycle' as const } : {}),
-    root: opts.wide ? dualPipeCpu(asm.words, { dmemK: 6 })
-      : opts.ooo ? oooCpu(asm.words, { imemK: oooImemK(asm.words), dmemK: 6 })
-      : opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder, microcode: opts.microcode })
-      : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
-      : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
-      : opts.pipeline ? pipelinedCpu(asm.words, { imemK: opts.imemK, dmemK: opts.dmemK, adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram, custom: opts.custom })
-        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c, custom: opts.custom, mac: opts.mac }),
+    root: opts.planted ? withPlanted(root, opts.planted) : root,
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
     panels: [cpuPanel({ ...opts, asm, link }), ...(opts.pipeline ? [pipeDiagram(asm)] : []),
@@ -129,11 +128,27 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
   };
 }
 
+/** The scene's CPU, healthy (no planted faults): the one the options and the program build. */
+export function cpuRoot(opts: CpuSceneOptions, asm: AsmResult): ComponentDef {
+  return opts.wide ? dualPipeCpu(asm.words, { dmemK: 6 })
+      : opts.ooo ? oooCpu(asm.words, { imemK: oooImemK(asm.words), dmemK: 6 })
+      : opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder, microcode: opts.microcode })
+      : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
+      : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
+      : opts.pipeline ? pipelinedCpu(asm.words, { imemK: opts.imemK, dmemK: opts.dmemK, adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram, custom: opts.custom })
+        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c, custom: opts.custom, mac: opts.mac });
+}
+
+/** The golden model's options for a scene (what the CPU panel runs beside the gates). */
+export function issOptsOf(opts: CpuSceneOptions, asm: AsmResult): IssOptions {
+  return opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.ooo ? { dmemWords: 64, imemWords: 2 ** oooImemK(asm.words) } : opts.dcache || opts.wide ? { dmemWords: 64 }
+    : { ...(opts.imemK ? { imemWords: 2 ** opts.imemK } : {}), ...(opts.dmemK ? { dmemWords: 2 ** opts.dmemK } : {}), ...(opts.c ? { c: true } : {}), ...(opts.mac ? { mac: true } : {}) };
+}
+
 function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): ScenePanel {
   return (stage: Stage): Widget => {
     const asm = opts.asm;
-    const issOpts = opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.ooo ? { dmemWords: 64, imemWords: 2 ** oooImemK(asm.words) } : opts.dcache || opts.wide ? { dmemWords: 64 }
-      : { ...(opts.imemK ? { imemWords: 2 ** opts.imemK } : {}), ...(opts.dmemK ? { dmemWords: 2 ** opts.dmemK } : {}), ...(opts.c ? { c: true } : {}), ...(opts.mac ? { mac: true } : {}) };
+    const issOpts = issOptsOf(opts, asm);
     let iss = new ISS(asm.words, opts.custom ? { ...issOpts, custom: opts.custom } : issOpts);
     let lastX: number[] = new Array(32).fill(0);
     let accPrev: bigint | undefined = 0n;

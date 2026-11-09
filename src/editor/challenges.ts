@@ -5,8 +5,8 @@
 // Every challenge carries a reference answer as chip documents (challengeset.ts). No DOM here.
 
 import { BitSim } from '../sim/bitsim';
-import { findNode, flatten, type FlatDesign, type HierNode } from '../sim/flatten';
-import { type FlatFault, plantedDef } from '../sim/faults';
+import { flatten, type FlatDesign } from '../sim/flatten';
+import { type FlatFault, plantedDef, type PlantedFault, withPlanted } from '../sim/faults';
 import { GateSim } from '../sim/gatesim';
 import type { Sim } from '../sim/sim';
 import { reachesTransistors } from '../sim/harness';
@@ -331,29 +331,8 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
   return res;
 }
 
-/** A planted fault: a net of the chip's top level named by a part's port ('fa2.cin'), stuck at 0 or 1; `bit`: one bit of a bus. */
-export interface PlantedFault {
-  kind: 'stuck0' | 'stuck1';
-  end: string;
-  bit?: number;
-}
-
-/** The flat nets a planted fault sits on, from the chip's node (null: no such part or port). */
-export function plantedNets(node: HierNode, p: PlantedFault): number[] | null {
-  const dot = p.end.lastIndexOf('.');
-  const nets = findNode(node, [p.end.slice(0, dot)])?.ports[p.end.slice(dot + 1)];
-  if (!nets) return null;
-  if (p.bit === undefined) return [...nets];
-  return nets[p.bit] === undefined ? null : [nets[p.bit]];
-}
-
-/** The planted faults on a chip's node, as flat faults. */
-export const plantedFaults = (node: HierNode, planted: readonly PlantedFault[]): FlatFault[] =>
-  planted.flatMap((p) => { const nets = plantedNets(node, p); return nets ? [{ kind: p.kind, nets }] : []; });
-
-/** The chip with a break-it level's faults planted in it, wherever a check flattens it. */
-export const withPlanted = (def: ComponentDef, planted: readonly PlantedFault[]): ComponentDef =>
-  plantedDef(def, (node) => plantedFaults(node, planted));
+// planted faults live in sim/faults.ts (chapter scenes use them too); re-exported for the editor
+export { type PlantedFault, plantedFaults, plantedNets, withPlanted } from '../sim/faults';
 
 /**
  * Do two sets of faults on the same chip look the same from outside? Every case of the level's test (each table row, each
