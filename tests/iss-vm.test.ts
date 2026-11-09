@@ -444,3 +444,53 @@ describe('the vm oracle programs', () => {
     for (const k of ['0:12', '0:13', '0:15', '0:8', '0:2', '0:5', '0:7', '0:1', '1:13', '1:15', '1:9', '1:12']) expect(seen, k).toContain(k);
   });
 });
+
+describe('a timer interrupt takes U back to M (the whole path, from M code)', () => {
+  for (const mapped of [false, true]) {
+    it(`mret into a U loop${mapped ? ' with the code mapped by Sv32' : ''}, mtimecmp written by a store, MTIE set`, () => {
+      const iss = machine();
+      iss.mtvec = 0x100;
+      if (mapped) tables(iss, { 1: pte(1, V | R | X | U | A) });
+      put(iss, 0, `
+        li t0, 0x100
+        csrw mtvec, t0
+        li t0, 0x80000014
+        li t1, 40
+        sw t1, 0(t0)        # mtimecmp
+        li t0, 0x80
+        csrs mie, t0        # MTIE
+        li t0, ${mapped ? satpOf(0) : 0}
+        csrw satp, t0
+        li t0, 0x1000
+        csrw mepc, t0
+        csrw mstatus, zero  # MPP = U, MIE clear: U takes the interrupt anyway
+        mret`);
+      put(iss, 0x100, 'csrr s2, mcause\ncsrr s3, mepc\nj .');
+      put(iss, 0x1000, 'l: addi a0, a0, 1\nj l');
+      let taken: StepInfo | undefined;
+      for (let i = 0; i < 400 && !taken; i++) {
+        const info = iss.step();
+        if (info.trap) taken = info;
+      }
+      expect(taken!.trap).toMatchObject({ cause: CAUSE.TIMER_IRQ, interrupt: true });
+      expect(taken!.priv).toBe(PRIV.U);
+      expect([iss.priv, iss.mpp, iss.mie, iss.mpie]).toEqual([PRIV.M, PRIV.U, false, false]);
+      expect(iss.mepc).toBeGreaterThanOrEqual(0x1000);
+      expect(iss.mepc).toBeLessThanOrEqual(0x1004);
+      expect(iss.x[10]).toBeGreaterThan(5);
+      iss.run(4);
+      expect([iss.x[18] >>> 0, iss.x[19]]).toEqual([CAUSE.TIMER_IRQ, iss.mepc]);
+    });
+  }
+});
+
+describe('FastISS keeps vm-only instructions illegal', () => {
+  it('sret and sfence.vma trap as illegal instructions', async () => {
+    const { FastISS } = await import('../src/riscv/fastiss');
+    for (const src of ['sret', 'sfence.vma']) {
+      const f = new FastISS(assemble(src).words, { system: true });
+      f.step();
+      expect(f.mcause).toBe(CAUSE.ILLEGAL);
+    }
+  });
+});

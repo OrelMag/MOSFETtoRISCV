@@ -11,7 +11,7 @@ lock-step test. The checks below do not rely on that model alone.
 | **Official riscv-tests** (rv32ui, rv32um, rv32uf, rv32ua, rv32mi) | the tests themselves (self-checking) | `tests/verify-*.test.ts`, `scripts/rvtests.ts` | all of them, every CPU |
 | **Official riscv-tests for RV64** (rv64ui, rv64um) | the tests themselves | `tests/verify-rv64-iss.test.ts` | all of them, on the RV64 golden model |
 | **Random programs** | our golden model, final state | `tests/verify-*.test.ts`, `scripts/fuzz32.ts` | seeds 1–32 per CPU |
-| **Spike**, the reference simulator, on random programs (RV32 variants and RV64IM) | Spike, commit by commit | `scripts/spike-oracle.ts`, `.github/workflows/spike.yml` | its plumbing only (no Spike); CI on every ISA change |
+| **Spike**, the reference simulator, on random programs (RV32 variants, M / S / U with Sv32 page tables, and RV64IM) | Spike, commit by commit | `scripts/spike-oracle.ts`, `.github/workflows/spike.yml` | its plumbing only (no Spike); CI on every ISA change |
 | **Coverage** of the riscv-tests and random programs | — | `tests/verify-*.test.ts`, `scripts/coverage.ts` | no gaps allowed |
 | Exported Verilog (dual-core, system CPUs, the system core with ports), synthesized by Yosys | our gate-level simulation | `scripts/verify-export.ts` | CI gate before deploy |
 
@@ -177,8 +177,8 @@ instruction at a time (`tests/verify/spike.ts`, `scripts/spike-oracle.ts`).
   every trap (also those whose `epc` is outside the program: a fetch fault), and reads `sstatus`, `satp` and the
   other S CSRs through the model. Spike updates A and D itself only with `menvcfg.ADUE`, off at reset, so its fault on
   A = 0 / D = 0 is the software-managed behaviour decision D2 of the VM plan takes. Not generated, because
-  Spike and our model deliberately differ: MPRV, TVM / TW / TSR (read zero in ours), `wfi` in S (Spike waits for an
-  interrupt), `sret`, writes to `satp` / `sstatus` / `mcounteren`, ASIDs, interrupts. Directed tests of the same
+  Spike and our model deliberately differ or would not finish: MPRV, TVM / TW / TSR (read zero in ours), `wfi` in S
+  (Spike waits for an interrupt), `sret` in S (it jumps through `sepc`; in U it is generated, and illegal), writes to `satp` / `sstatus` / `mcounteren`, ASIDs, interrupts. Directed tests of the same
   rules are `tests/iss-vm.test.ts`.
 - **The image.** An ELF32 written in TypeScript (`tests/verify/elf.ts`, no toolchain): the program, a boot
   stub (turns the FPU on, `mstatus.FS`, which Spike requires and our ISS does not model, then jumps to
@@ -201,6 +201,8 @@ instruction at a time (`tests/verify/spike.ts`, `scripts/spike-oracle.ts`).
   range of 4000 every night. Locally (no Spike on Windows), `--self` checks the plumbing against a
   Spike-format log of our own ISS, as `tests/spike-oracle.test.ts` (and `spike-oracle64.test.ts` for ISS64) does
   in `npm test`. The workflow runs every config by default, `rv64im` included; `spike-oracle.ts rv64im` runs it alone.
+- **Result of the `vm` config.** Seeds 1–1000 against Spike `5a76066` (run 42646153108): 1000 programs, 662 384 instructions
+  and traps compared, 1 684 allowances (the `mtval` of illegal instructions and breakpoints), no difference, first time.
 - **Result.** Seeds 1–1000 on all six variants (Spike revision `5a76066`): 6000 programs, 1 236 958
   instructions compared, no difference in what a program computes. The first run stopped every system program
   at its first `mret`, where Spike wrote `mstatush` and `tcontrol`: `tcontrol` belongs to an extension we do
