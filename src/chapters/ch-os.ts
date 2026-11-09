@@ -52,7 +52,7 @@ export function osFigures(): OsFigures {
   const count = (p: string) => sw.filter((f) => f.phase === p).length;
   const first = (src: string, k: number | 'timer', other = exitNow) => tripsOf(runOs(osImage([src, other])), k)[0];
   const stays = tripsOf(runOs(osImage([spinner2, exitNow]), 3000), 'timer').find((t) => t.from === t.to)!;
-  const timer = tripsOf(runOs(osImage([spinner2, spinner2]), 3000), 'timer')[0];
+  const timer = tripsOf(runOs(pair), 'timer')[0];
   const run = runOs(osImage([pyProcess(PY_A), pyProcess(PY_B)]), 400000);
   const over = overheadTable();
   const bootInstr = runOs(pair, 400).who.findIndex((w) => w < 2);
@@ -62,7 +62,7 @@ export function osFigures(): OsFigures {
     saveInstr: count('save'), chooseInstr: count('choose'), restoreInstr: count('restore'), switchInstr: sw.length, switchCycles: sw[sw.length - 1].cycles, switchStall: sw[sw.length - 1].cycles - sw.length,
     putchar: first(hello('x'), 1).kernelCycles, write1: first(writeOnce(5), 2).kernelCycles, write5: first(writeOnce(12345), 2).kernelCycles, writeMax: first(writeOnce(-2147483648), 2).kernelCycles,
     yieldTrip: first(yieldOnce, 3, counter(1, 3)).kernelCycles, exitTrip: first(exitNow, 93).kernelCycles, tickStays: stays.kernelCycles, tickSwitches: timer.kernelCycles,
-    refillWalks: timer.userWalks, sliceUser: timer.userSteps,
+    refillWalks: timer.userWalks, sliceUser: tripsOf(runOs(osImage([spinner2, spinner2]), 3000), 'timer')[0].userSteps,
     bootInstr,
     slice: OS_SLICE, overhead: Math.round(1000 * overheadAt(OS_SLICE, 40000, (s) => osImage([spinner2, spinner2], { slice: s })).overhead) / 10,
     overheadShort: Math.round(1000 * over[0].overhead) / 10, overheadLong: Math.round(1000 * over[over.length - 1].overhead) / 10,
@@ -101,7 +101,7 @@ export const chOs: Chapter = {
       `A process is a program with an address space (a page table, a satp), a saved set of registers and a state, all in a process control block the kernel keeps. The kernel is the machine-mode program that owns the tables, the blocks and the timer: ${n(F.kernelWords)} instructions here.`,
       'User mode may not touch the machine: a machine register is an illegal instruction (cause 2), a page the table does not give it is a page fault (13 or 15), and both end the process, not the machine. Everything the process needs from outside it asks for with ecall: a number in a7, an argument in a0.',
       `A system call is a trap and a return: the CPU saves nothing but the PC, so the kernel's first job is to save the 31 registers. It cost ${F.putchar} cycles to print one character, ${F.write1} to print a one-digit number (the kernel has no divider and converts by subtraction).`,
-      `A context switch saves 31 registers, picks the next ready block, writes satp, flushes the TLBs and loads 31 registers: ${F.switchInstr} instructions and ${F.switchCycles} cycles from the timer interrupt to the next process's first instruction, ${F.switchStall} of them the walk that fetches it.`,
+      `A context switch saves 31 registers, picks the next ready block, writes satp, flushes the TLBs and loads 31 registers: ${F.switchCycles} cycles from the timer interrupt to the next process's first instruction, ${F.switchStall} of them the walk that fetches it.`,
       `The timer decides who runs: mtimecmp is armed one slice ahead at every switch, so a process that never gives up the CPU loses it after ${F.slice} retired instructions. Round robin is the ring of control blocks and a loop that finds the next ready one.`,
       `Sharing has a price in kernel cycles and cold TLBs: ${F.overhead} % of the cycles at a ${F.slice}-instruction slice, ${F.overheadShort} % at ${SLICES[0]} and ${F.overheadLong} % at ${n(SLICES[SLICES.length - 1])}. A long slice wastes less and makes a ready process wait longer.`,
     ],
@@ -205,16 +205,15 @@ export const chOs: Chapter = {
         <p>The CPU has one set of 31 registers. Two processes each believe they have it. The kernel makes it true by keeping each process's registers in memory while it waits: the <strong>process control block</strong>, ${PCB_SIZE} bytes for each, with the saved PC at offset 0, register <em>n</em> at 4<em>n</em>, then the process's <code>satp</code>,
         its state (ready or gone), the number of slices it has had and the letter it prints. Taking the CPU from one process and giving it to another is a <strong>context switch</strong>, and it is these steps:</p>
         <ol>
-          <li><strong>Save</strong> (${F.saveInstr} instructions): the trap handler stores every register and the PC into the running process's block.</li>
-          <li><strong>Choose</strong> (${F.chooseInstr}): re-arm the timer one slice ahead, then look round the ring of blocks for the next one whose state is ready.</li>
-          <li><strong>Restore</strong> (${F.restoreInstr}): write the new block's <code>satp</code> and run <code>sfence.vma</code> (the cached translations belong to the old address space), put its PC in <code>mepc</code>, load its registers and <code>mret</code>.</li>
+          <li><strong>Save</strong> (${F.saveInstr} cycles, the interrupt's own included): the trap handler stores every register and the PC into the running process's block.</li>
+          <li><strong>Choose</strong> (${F.chooseInstr} cycles): re-arm the timer one slice ahead, then look round the ring of blocks for the next one whose state is ready.</li>
+          <li><strong>Restore</strong> (${F.restoreInstr} cycles): write the new block's <code>satp</code> and run <code>sfence.vma</code> (the cached translations belong to the old address space), put its PC in <code>mepc</code>, load its registers and <code>mret</code>.</li>
         </ol>
-        <p>The widget replays one switch from the golden model, an instruction at a time: A's block on the left, the CPU in the middle, B's block on the right. Watch the stores fill A's block while the CPU's registers stay put, then the loads empty B's block into them. Altogether ${F.switchInstr} instructions and
-        <strong>${F.switchCycles} clock cycles</strong> from the interrupt to B's first instruction. ${F.switchInstr} of those are instruction cycles; the other ${F.switchStall} are the page-table walk that fetching B's first instruction needs, because writing <code>satp</code> emptied the TLBs.</p>
+        <p>The widget replays one switch from the golden model, an instruction at a time: A's block on the left, the CPU in the middle, B's block on the right. Watch the stores fill A's block while the CPU's registers stay put, then the loads empty B's block into them. Counted in clock cycles: ${F.saveInstr} to save, ${F.chooseInstr} to choose, ${F.restoreInstr} to restore, one for B's first instruction, and ${F.switchStall} more in which the CPU waits for the page-table walk that fetching that instruction needs, because writing <code>satp</code> emptied the TLBs. <strong>${F.switchCycles} clock cycles</strong> from the interrupt to B's first instruction.</p>
         <p>The cost is the register count made visible. A machine with 31 registers moves 62 words per switch on top of the bookkeeping. This is why real machines pay attention to how much state a switch has to move, and why a lightweight thread that shares its address space saves the <code>satp</code> write and the refill.</p>`,
       widget: switchWidget,
       more: {
-        numbers: `One timer switch (golden model, the gates agree cycle for cycle): ${F.saveInstr} instructions of save, ${F.chooseInstr} of choosing, ${F.restoreInstr} of restoring, one more for B's first instruction; ${F.switchStall} stall cycles for the walk. A timer interrupt that finds nobody else to run ends with the same process and costs ${F.tickStays} cycles in the kernel instead of ${F.tickSwitches}: no satp write, no flush.`,
+        numbers: `One timer switch (golden model, the gates agree cycle for cycle): ${F.saveInstr} cycles of save, ${F.chooseInstr} of choosing, ${F.restoreInstr} of restoring, one more for B's first instruction; ${F.switchStall} stall cycles for the walk. A timer interrupt that finds nobody else to run ends with the same process and costs ${F.tickStays} cycles in the kernel instead of ${F.tickSwitches}: no satp write, no flush.`,
         pitfall: 'Writing satp without sfence.vma, on a machine whose TLB keeps translations, lets the new process use the old one\'s mappings until the entries are replaced. This hardware flushes on a satp write as well; the specification does not promise it, so the kernel writes sfence.vma anyway.',
       },
       challenge: {
@@ -294,7 +293,7 @@ export const chOs: Chapter = {
       body: `
         <p>Chapter ${numOf('python')} compiled a subset of Python to RISC-V; its programs were alone on the machine, <code>print</code> stored a word into memory and the program ended in a loop. As processes they need two changes, and this chapter adds them as a <strong>target</strong> of the compiler, so that nothing else about it changes. With the target on, <code>print</code> becomes
         the write call (a7 = 2, the value in a0, with a0 and a7 saved on the stack around it because a function's variables may live there) and the end of the program becomes exit (a7 = 93). The compiler's data lives from address 0 up and its stack ends at 0x2000: the two data pages of the process, which the kernel mapped for every process already.</p>
-        <p>The scene loads the compiled Fibonacci loop (${F.py.outA} numbers) as process A and the squares (${F.py.outB}) as process B. The golden model runs both in ${n(F.py.steps)} instructions and ${n(F.py.cycles)} clock cycles, with ${F.py.switches} switches and ${F.py.calls} write calls, and each process's output
+        <p>The scene loads the compiled Fibonacci loop (${F.py.outA} numbers) as process A and the squares (${F.py.outB}) as process B. The golden model runs both in ${n(F.py.steps)} steps and ${n(F.py.cycles)} clock cycles, with ${F.py.switches} switches and ${F.py.calls} write calls, and each process's output
         is exactly what the Python interpreter of chapter ${numOf('python')} prints for it; the tests hold the model to the gates and each program to the interpreter. The console shows them interleaved by the timer.</p>
         <p>A <code>print</code> that was two instructions is now a trap, ${F.write1} to ${F.write5} cycles in the kernel, because the number has to be turned into digits and sent to a device the program cannot touch. The program has not changed; what it means has. That is what an operating system is, in one example.</p>
         <div class="try">Run to halt. Both outputs appear in full, each in its colour, and every line starts with the letter of the process that printed it.</div>`,

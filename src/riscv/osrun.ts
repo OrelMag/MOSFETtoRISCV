@@ -119,7 +119,7 @@ export function captureSwitch(img: OsImage, maxSteps = 100000): SwitchFrame[] {
   const iss = new ISS(img.words, { system: true, vm: true, imemWords: 2 ** OS_IMEM_K, dmemWords: 2 ** OS_DMEM_K });
   const it = new TlbModel(4), dt = new TlbModel(4);
   const L = img.labels, trap = L.get('trap')!, saved = L.get('trap_saved')!, sw = L.get('go_switch')!;
-  let frames: SwitchFrame[] = [], cyc = 0, inTrip = false, mretSeen = false;
+  let frames: SwitchFrame[] = [], cyc = 0, inTrip = false, mretSeen = false, from = -1;
   while (iss.steps < maxSteps && !iss.halted) {
     const cur = iss.dmem[0] >>> 0;
     const before = it.misses + dt.misses, xs = [...iss.x];
@@ -131,7 +131,7 @@ export function captureSwitch(img: OsImage, maxSteps = 100000): SwitchFrame[] {
     }
     if (info.text.startsWith('sfence.vma') || /^csrr?w?i? satp/.test(info.text)) { it.flush(); dt.flush(); }
     const c = 1 + WALK_CYCLES * (it.misses + dt.misses - before);
-    if (info.priv === 0 && info.trap && info.trap.cause === 0x80000007) { inTrip = true; frames = []; cyc = 0; mretSeen = false; }
+    if (info.priv === 0 && info.trap && info.trap.cause === 0x80000007) { inTrip = true; frames = []; cyc = 0; mretSeen = false; from = cur; }
     if (!inTrip) continue;
     cyc += c;
     const pc = info.pc >>> 0;
@@ -147,7 +147,7 @@ export function captureSwitch(img: OsImage, maxSteps = 100000): SwitchFrame[] {
     if (info.text.startsWith('mret')) mretSeen = true;
     if (mretSeen && user) {
       const next = iss.dmem[0] >>> 0;
-      if (next !== cur) return frames;
+      if (next !== from) return frames;
       inTrip = false; // the kernel gave the CPU back to the same process: look at the next interrupt
     }
     void trap;
