@@ -280,8 +280,8 @@ export const chAdders: Chapter = {
         <span data-show="pin:cin"><code>cin</code></span> to 1. The carry has to pass through every full adder in turn, like a row of falling
         dominoes, and each sum bit flips from 1 to 0 as the carry passes it. Watch the status line: it reports how many gate delays the
         adder took to settle.</p>
-        <p>The carry crosses all eight columns: ${pathDepth(rca(8), 'cin', 's')} gate delays on the status line here, 2 per column for seven columns, then the last sum's XOR. The longest path through the adder, from column 0's a or b, is ${logicDepth(rca(8))}: with a = 0xFF and cin = 1, change b from 0x01 to 0x00. Most inputs settle sooner, because a carry chain
-        stops at the first column that generates or kills. But a clock must be slow enough for the worst case, so the worst case sets the speed.
+        <p>The carry crosses all eight columns: ${pathDepth(rca(8), 'cin', 's')} gate delays on the status line here, 2 per column for seven columns, then the last sum's XOR. The longest path through the adder, from column 0's a or b, is ${logicDepth(rca(8))}: with a = 0xFF and cin = 0, change b from 0x01 to 0x00. Most inputs settle sooner, because a carry chain
+        stops at the first column that generates or kills. But whatever uses the sum must wait for the worst case, so the worst case sets the speed.
         A 64-bit ripple adder needs ${logicDepth(rca(64))}. Faster adders compute the carries in parallel: that is
         <a href="#/c/fastadd/0">a later chapter</a>.</p>`,
       scene: () => ({ root: rca(8), inputs: { a: 0xff, b: 0, cin: 0 }, animate: true }),
@@ -313,7 +313,7 @@ export const chAdders: Chapter = {
         <p>Put <span data-show="x0 x1 x2 x3 x4 x5 x6 x7">an XOR on every <code>b</code> input</span>: with <code>sub = 1</code> each XOR inverts its bit, with
         <code>sub = 0</code> it passes the bit unchanged (x ⊕ 0 = x, x ⊕ 1 = ¬x). Feed <code>sub</code> into the carry-in as well to add the 1.
         One circuit now adds <em>and</em> subtracts, for ${stats(addSub(8)).nands - stats(rca(8)).nands} NANDs more than the plain adder
-        (${stats(addSub(8)).nands} in all at 8 bits).</p>
+        (eight XORs, and one more for the overflow flag below; ${stats(addSub(8)).nands} in all at 8 bits).</p>
         <p>It also reports overflow. <code>cout</code> is the unsigned flag: a carry out of an add, or no carry out of a subtract (a
         borrow). The signed result is wrong exactly when the carry into the top bit differs from the carry out of it:
         <span data-show="vx"><code>v = c7 XOR c8</code></span> here, and <code>n</code> is the top bit of s.</p>
@@ -509,7 +509,7 @@ export const chRouting: Chapter = {
       body: `
         <p>A computer is full of choices made by a number: which of 32 registers to write, which word of memory to read, which of several results to keep.
         Two blocks make every one of them. A <em>decoder</em> turns a number into one raised wire among 2ⁿ, a choice to act on (write this row); a
-        <em>multiplexer</em> uses a number to pass one of 2ⁿ inputs to its output, a choice to read (this word). <a href="#/c/gates/0">Chapter 4</a> built the 2:1
+        <em>multiplexer</em> uses a number to pass one of 2ⁿ inputs to its output, a choice to read (this word). <a href="#/c/gates/6">Chapter 4</a> built the 2:1
         multiplexer; this chapter widens both and prices them, and every memory after it is built on the pair.</p>
         <p>A <strong>decoder</strong> takes an n-bit number and raises exactly one of its 2ⁿ outputs. For input 2,
         output <span data-show="g2"><code>y2</code></span> is 1 and all others are 0. This is called "one-hot".</p>
@@ -701,7 +701,7 @@ export const chRouting: Chapter = {
         OR of every input whose index has bit j set. Eight inputs, <span data-show="u1 u2 u3">three 4-input ORs</span>, ${stats(encoder(8)).nands} NANDs.</p>
         <p>Input 0 is not connected to anything: "input 0 is set" and "nothing is set" both give 0. With two inputs set the output is
         the OR of their indices, which is meaningless. Both problems need the next circuit.</p>
-        <p>It is cheap, as the arithmetic suggests: no multiplexers, no inverters on the data path, ${stats(encoder(8)).nands / 3} NANDs per output bit, ${logicDepth(encoder(8))} gate delays deep. Its weakness is the assumption: it works only when exactly one input is high,
+        <p>It is cheap, as the arithmetic suggests: no multiplexers and no select logic, ${stats(encoder(8)).nands / 3} NANDs per output bit, ${logicDepth(encoder(8))} gate delays deep. Its weakness is the assumption: it works only when exactly one input is high,
         and nothing in the circuit checks that.</p>`,
       tour: {
         beats: [
@@ -735,7 +735,7 @@ export const chRouting: Chapter = {
         to tell "request 0" from "no request". It is built recursively: <span data-show="lo hi">two half-size encoders</span>, and if the upper half has any
         request it wins, so its <code>v</code> becomes the top index bit and steers <span data-show="mx">a multiplexer</span> for the low bits.</p>
         <p>log₂ n − 1 levels of multiplexers: ${logicDepth(priorityEncoder(8))} gate delays for 8 inputs, ${logicDepth(priorityEncoder(32))} for 32. Arbiters (who is served first), floating-point
-        normalization (find the leading 1) and content-addressable memories all rely on one.</p>
+        normalization (find the leading 1) and content-addressable memories (looked up by value, not by address) all rely on one.</p>
         <p>The recursion is the design: an n-input encoder is two (n/2)-input encoders and a 2:1 choice. The cost is ${stats(priorityEncoder(8)).nands} NANDs for 8 inputs and ${stats(priorityEncoder(32)).nands} for 32, a bit more than linear, and the delay grows by a multiplexer for every doubling.
         Unlike the plain encoder, any request pattern is legal; an unrealistic one just has the same answer as its highest bit.</p>`,
       tour: {
@@ -805,7 +805,7 @@ export const chRouting: Chapter = {
           = ${stats(demux(2, 4)).nands} at k = 2, w = 4.</p>`,
         real: `<p>Demultiplexers distribute a result to one of several destinations: a write-back bus into a register file, a network switch's port selector, a DMA engine addressing a peripheral. Parallel-to-serial and serial-to-parallel
           conversions (the shift register) are time-domain versions of the same idea.</p>`,
-        pitfall: `<p>Assuming deselected outputs are "disconnected". They are driven to 0, so two demultiplexers feeding one wire fight if both are ever selected: combine them with an OR, not a shared wire, or use tri-state outputs where the sharing is a bus.</p>`,
+        pitfall: `<p>Assuming deselected outputs are "disconnected". They are driven to 0, so two demultiplexers feeding one wire fight whenever one drives a 1 against the other's 0, selected or not: combine them with an OR, not a shared wire, or use tri-state outputs where the sharing is a bus.</p>`,
       },
       scene: () => ({ root: demux(2, 4), inputs: { x: 0xa, s: 2 } }),
     },

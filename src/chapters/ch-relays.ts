@@ -72,7 +72,7 @@ export const chRelays: Chapter = {
         armature is pulled in, and the stud it carries moves the contact springs: the <strong>common</strong> leaves
         its <em>break</em> contact (NC, normally closed) and touches its <em>make</em> contact (NO, normally open).
         Switch the current off and the spring pulls everything back.</p>
-        <p>This is a telephone relay on 24 V, on a lumped model: the coil's current rises with L / R and L grows as
+        <p>This is a telephone relay on 24 V, on a lumped model: the coil's current rises with a time constant L / R (the coil's inductance over its resistance) and L grows as
         the gap closes (the dip in the current is the armature moving); the pull goes as (N·I)² / gap² against a
         preloaded spring; the contact blade is a mass that strikes and bounces. It closes at
         ${ms(PULL.pull ?? 0)} V and opens only below ${ms(PULL.drop ?? 0)} V, and it is closed for good
@@ -82,7 +82,7 @@ export const chRelays: Chapter = {
         armature across the open gap takes ${ms(PULL.pull ?? 0)} V, but once it is in, the gap is nearly gone and a
         fraction of the current holds it, so it lets go only at ${ms(PULL.drop ?? 0)} V. A supply that sags between the two
         changes nothing. And because the coil's own contact keeps the full supply on it, a relay can hold a bit (step 6); the hysteresis is margin on top. Second, <strong>time</strong>: the
-        step is partly electrical and partly mechanical: the coil's current builds with L / R, which is ${ms(coilTau(0) * 1e3)} ms with the armature open and ${(coilTau(RELAY.travel) * 1e3).toFixed(0)} ms once it is closed (the iron's inductance rises as the gap goes), so the armature starts to move after about 4.5 ms; then an armature and blade of a few grams travel and the blade stops bouncing. Twice the voltage, four times the power, shortens it by only about a quarter. At switch-off the coil's current has to go somewhere: here it discharges through a ${RELAY.Rq / 1e3} kΩ quench resistor across the coil, so the terminal voltage jumps to −R<sub>q</sub>·I. The close-up switches off at 15 ms, with the current still rising (about 29 mA of 60), which gives the −117 V; let the coil settle first (Off at 60 ms) and the same resistor sees 60 mA and −240 V.</p>
+        step is partly electrical and partly mechanical: the coil's current builds with L / R, which is ${ms(coilTau(0) * 1e3)} ms with the armature open and ${(coilTau(RELAY.travel) * 1e3).toFixed(0)} ms once it is closed (the iron's inductance rises as the gap goes), so the armature starts to move about 3.5 ms after switch-on; then an armature and blade of a few grams travel and the blade stops bouncing. Twice the voltage, four times the power, shortens it by only about a quarter. At switch-off the coil's current has to go somewhere: here it discharges through a ${RELAY.Rq / 1e3} kΩ quench resistor across the coil, so the terminal voltage jumps to −R<sub>q</sub>·I. The close-up switches off at 15 ms, with the current still rising (about 29 mA of 60), which gives the −117 V; let the coil settle first (Off at 60 ms) and the same resistor sees 60 mA and −240 V.</p>
         <div class="try">Drag the supply below the pull-in voltage, and play the switch-off: the coil's current has to
         go somewhere. Then sweep the supply down and back up: the armature drops out at one voltage and pulls in at another.</div>`,
       more: {
@@ -313,8 +313,8 @@ export const chRelays: Chapter = {
         derive: `<p>The next state is q⁺ = set + q·¬reset: set feeds the coil, or q does, unless reset cuts the holding line. That is the SR latch of
           <a href="#/c/latches/0">chapter 8</a> (set dominant here), in three relays (set, reset and the holding relay k) where the NAND version takes ${stats(SR_LATCH).nands} gates, though those relays also supply the set and reset inputs.
           Holding works because of the feedback: k's own contact keeps the full supply on its coil. Hysteresis adds margin: the bit survives a supply sagging to ${ms(PULL.drop ?? 0)} V, well below the pull-in (${ms(PULL.pull ?? 0)} V).</p>`,
-        pitfall: `<p>Looking for a clock. There is none: the latch is level-sensitive, a set pulse shorter than a relay step does nothing (the armature never arrives)
-          and a longer one is enough. Note too that "both inputs at 0" does not say what q is: the state lives in k, not in the inputs.</p>`,
+        pitfall: `<p>Looking for a clock. There is none: the latch is level-sensitive, a set pulse shorter than a relay step does nothing (the armature never arrives),
+          and a safe one lasts about two steps, since set's own relay must pull in before k's coil is fed. Note too that "both inputs at 0" does not say what q is: the state lives in k, not in the inputs.</p>`,
         real: `<p>The Z3 held 64 words of 22 bits in relays, one relay a bit: ${thin(Z3.memory)} of its ${thin(Z3.relays)} relays. A holding relay draws its coil current for as long as it
           holds, ${RELAY_POWER.toFixed(2)} W on average here, which is why relay memory stayed small.</p>`,
       },

@@ -127,7 +127,7 @@ export const chAlu: Chapter = {
         derive: `<p>Cost at 32 bits, from the circuit: AND ${BW.and.per * 32} NANDs, OR ${BW.or.per * 32}, XOR ${BW.xor.per * 32}; a 32-bit ALU's bitwise unit is the three together, ${(BW.and.per + BW.or.per + BW.xor.per) * 32}
           NANDs, against ${fmt(A32.nands)} for the whole ALU. Depth does not depend on the width: a 64-bit unit is the same ${BW.xor.depth} delays deep and twice the area.</p>`,
         pitfall: `<p>The logical immediates are sign-extended like every I-type immediate. <code>andi a0, a0, 0x7F0</code> masks with 0x000007F0, but 0x800 does not
-          fit in 12 signed bits (it would read as -2048), and writing <code>andi a0, a0, -16</code> masks with 0xFFFFFFF0. A mask wider than 11 bits needs <code>lui</code> first.</p>`,
+          fit in 12 signed bits (it would read as -2048), and writing <code>andi a0, a0, -16</code> masks with 0xFFFFFFF0. A mask outside −2048 … 2047 (0x800, 0xFFF) needs <code>lui</code> first.</p>`,
         real: `<p>In a datapath the logic unit is laid out as a bit-slice: 32 or 64 identical cells in a column of wires, so the regularity that makes it cheap
           here also makes it easy to lay out. SIMD units reuse the same idea: a 256-bit AND is just more slices.</p>`,
       },
@@ -168,7 +168,7 @@ export const chAlu: Chapter = {
         numbers: `<table class="mini"><tr><th>width</th><th>stages</th><th>NANDs</th><th>depth</th></tr>${[8, 16, 32, 64].map((n) => `<tr><td>${n}</td><td>${Math.log2(n)}</td><td>${fmt(stats(shifter(n)).nands)}</td><td>${logicDepth(shifter(n))}</td></tr>`).join('')}</table>
           <p>Depth grows by two with each doubling of the width (one more mux stage); area a little more than doubles each time.</p>`,
         pitfall: `<p>The shift amount is only the low log₂ n bits of rs2: in RV32I <code>sll</code> by 32 is a shift by 0, not zero. A compiler that wants "shift out everything" must test
-          the amount first. The ALU shifter does not saturate, which is also why <code>sra</code> by a large amount never needs a special case.</p>`,
+          the amount first. The ALU shifter does not saturate either: <code>sra</code> by 32 is also a shift by 0, not a word of sign bits.</p>`,
         real: `<p>Cores use this structure, often with a funnel shifter (a 2n-bit input, n bits out) that serves rotates and both directions in the same
           log-depth rows. In a fast core the shifter is its own unit beside the adder and its result is picked by the output mux, exactly as the next steps show.</p>`,
       },
