@@ -1,6 +1,10 @@
-# Plan: Virtual memory and A tiny operating system (roadmap Phase 23, proposed)
+# Plan: Virtual memory and A tiny operating system (roadmap Phase 23)
 
-Status: **plan and mockup only, nothing built.** Mockup: `E:/mockups/vm-os/vm-os-mockup.html` (light and dark, three key steps).
+Status: **APPROVED by the author on 2026-11-09, as shown, with all five decisions D1–D5 as recommended below.** Mockup:
+`E:/mockups/vm-os/vm-os-mockup.html` (also https://claude.ai/artifact/YHQy2jsqAW35zjfWjUdoTh). Build order, one tip to the
+Coordinator per stage: (1) golden model + Spike oracle configs (runner gate + spike.yml before landing), (2) gates as a
+variant `systemCpu({ vm: true })` with chapters 19–20 unchanged, (3) the two chapters, (4) codex and campaign levels. Every
+number marked as an estimate here is measured before it reaches the prose.
 Two chapters that chain: the first gives every program its own addresses, the second runs two programs on one CPU. Both
 extend the system CPU of chapters 19–20 (`lib/system.ts`, 88 383 NANDs with its data memory, period 126 NAND delays,
 `src/bench/results.json`) and the golden model's system mode (`riscv/iss.ts`), which today know only machine mode:
