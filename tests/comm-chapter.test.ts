@@ -1,6 +1,7 @@
 // Chapter 42's typed numbers: the figures the prose and the quizzes state by hand are pinned here to the models and
 // circuits they describe (the computed ones come from the code and need no pin).
 
+import { numOf } from '../src/chapters/order';
 import { describe, expect, it } from 'vitest';
 import { RATIOS } from '../src/comm/asyncfifo';
 import { readings, worstError } from '../src/comm/graybus';
@@ -13,13 +14,13 @@ import { TAU_PS } from '../src/phys/metastable';
 import { stats } from '../src/sim/stats';
 
 describe('chapter 42 typed numbers', () => {
-  it('is chapter 42, nine steps, and builds on earlier chapters', () => {
-    expect(chClocks.num).toBe(42);
+  it('follows the wire chapter, nine steps, and builds on earlier chapters', () => {
+    expect(chClocks.num).toBe(numOf('clocks'));
     expect(chClocks.steps).toHaveLength(9);
     expect(chapterById('clocks')).toBe(chClocks);
-    for (const id of chClocks.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(42);
+    for (const id of chClocks.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(chClocks.num);
     expect(chapterById('latches')!.num).toBe(8);
-    expect(chapterById('wire')!.num).toBe(41);
+    expect(chapterById('wire')!.num).toBe(numOf('clocks') - 1);
   });
   it('step 1: the 0.5 V spike is inside the noise margin', () => {
     const m = metrics(1);
