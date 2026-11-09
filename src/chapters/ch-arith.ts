@@ -1,5 +1,7 @@
 import type { ComponentDef } from '../sim/types';
-import { addSub, bcdAdder, decoder, demux, encoder, FULL_ADDER, FULL_ADDER_HA, HALF_ADDER, busMux2, magComparator, muxTree, priorityEncoder, rca } from '../lib';
+import { bcdAdder } from '../lib/adders';
+import { demux, encoder, magComparator, priorityEncoder } from '../lib/coding';
+import { addSub, decoder, FULL_ADDER, FULL_ADDER_HA, HALF_ADDER, busMux2, muxTree, rca } from '../lib/combinational';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { AND, MUX2 } from '../lib/gates';

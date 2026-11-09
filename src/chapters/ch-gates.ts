@@ -1,6 +1,9 @@
 import { groupDigits } from '../sim/numfmt';
 import type { ComponentDef } from '../sim/types';
-import { AND, EXTEND4_8, MUX2, NAND, NEGATE4, NOR, NOT, OR, SHIFTS8, XNOR, XOR, equal } from '../lib';
+import { equal } from '../lib/combinational';
+import { AND, MUX2, NOR, NOT, OR, XNOR, XOR } from '../lib/gates';
+import { EXTEND4_8, NEGATE4, SHIFTS8 } from '../lib/numbers';
+import { NAND } from '../lib/transistors';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { numberWidget } from '../widgets/numbers';
