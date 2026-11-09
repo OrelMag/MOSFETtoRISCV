@@ -28,7 +28,8 @@ export interface FindSpec {
   fault: string;
 }
 
-interface Accusation { name: string; kind: 'stuck0' | 'stuck1'; right: boolean; would: FirstWrong | null }
+/** `would`: what that fault does to the program, once computed (undefined while it runs). */
+interface Accusation { name: string; kind: 'stuck0' | 'stuck1'; right: boolean; would?: FirstWrong }
 interface State { found: boolean; helped: boolean; tries: Accusation[] }
 
 // per stage and step (a chapter's stage stays across its steps)
@@ -57,11 +58,12 @@ export function accusedRight(planted: readonly FlatFault[], kind: 'stuck0' | 'st
  * What a wrong accusation's fault would have done to the program (`would`) beside what this CPU did (`planted`), both
  * computed by firstWrong. The same first symptom is said so: another fault can look alike at first.
  */
-export function wouldText(would: FirstWrong | null, planted: FirstWrong | null): string {
-  const here = planted ? ` This CPU: ${planted.text}.` : '';
-  if (!would) return `with it, this program would run right to the end.${here}`;
-  if (planted && would.text === planted.text)
+export function wouldText(would: FirstWrong, planted: FirstWrong): string {
+  const here = planted.kind === 'clean' ? '' : ` This CPU: ${planted.text}.`;
+  if (would.kind === 'clean') return `with it, this program would run right to the end with every register and memory word right.${here}`;
+  if (would.kind === planted.kind && would.text === planted.text)
     return `it would first show exactly as this CPU does (${would.text}), but it is another wire: what else could give that value?`;
+  if (would.kind === 'hung') return `with it, the CPU would stop finishing instructions: ${would.text}.${here}`;
   return `it would first show otherwise: ${would.text}.${here}`;
 }
 
@@ -69,7 +71,7 @@ export function wouldText(would: FirstWrong | null, planted: FirstWrong | null):
 export function findPanel(spec: FindSpec): ScenePanel {
   return (stage: Stage): Widget => {
     const st = stateOf(stage, spec);
-    let plantedWrong: FirstWrong | null | undefined;
+    let plantedWrong: FirstWrong | undefined;
     const title = h('h4', null, 'Find the fault', h('span', { class: 'fold-hint' }));
     const body = h('div', { class: 'find-body' });
     const el = h('div', { class: 'mem-panel find-panel', 'data-dock': 'left', 'data-phone': 'flow' }, title, body);
@@ -82,12 +84,20 @@ export function findPanel(spec: FindSpec): ScenePanel {
       const p = planted();
       if (!p) return;
       const right = accusedRight(p, kind, nets);
-      // what this fault would do to the same program: the CPU without the planted fault, with this one instead
-      const would = right ? null : firstWrong(plantedDef(spec.healthy(), (n) => (n.parent === null ? [{ kind, nets }] : []), 'accused'), spec.words, spec.iss, { inputs: spec.inputs, pipelined: spec.pipelined });
-      st.tries.push({ name, kind, right, would });
+      const t: Accusation = { name, kind, right };
+      st.tries.push(t);
       if (right) st.found = true;
       paint();
       stage.refresh();
+      if (right) return;
+      // what this fault would do to the same program (the CPU without the planted fault, with this one instead): a
+      // second or so of simulation, after the menu has closed and the row says it is running
+      // (two tasks of about 0.3 s each, not one: the page stays responsive between them)
+      const run = (faults: FlatFault[], tag: string) => firstWrong(plantedDef(spec.healthy(), (n) => (n.parent === null ? faults : []), tag), spec.words, spec.iss, { inputs: spec.inputs, pipelined: spec.pipelined });
+      setTimeout(() => {
+        plantedWrong ??= run(p, 'planted');
+        setTimeout(() => { t.would = run([{ kind, nets }], 'accused'); paint(); }, 0);
+      }, 30);
     };
 
     stage.accuser = (flat, name) => {
@@ -105,8 +115,9 @@ export function findPanel(spec: FindSpec): ScenePanel {
       const rows = st.tries.map((t) => {
         const v = t.kind === 'stuck0' ? 0 : 1;
         if (t.right) return h('li', { class: 'good' }, `✓ ${t.name} stuck at ${v}: that is the fault.`);
-        plantedWrong ??= firstWrong(plantedDef(spec.healthy(), (n) => (n.parent === null ? planted() ?? [] : []), 'planted'), spec.words, spec.iss, { inputs: spec.inputs, pipelined: spec.pipelined });
-        return h('li', { class: 'bad' }, `✗ ${t.name} stuck at ${v}: ${wouldText(t.would, plantedWrong)}`);
+        return h('li', { class: 'bad' }, `✗ ${t.name} stuck at ${v}: `, t.would && plantedWrong
+          ? wouldText(t.would, plantedWrong)
+          : h('span', { class: 'sub' }, 'not this one; running the program with that fault instead…'));
       });
       body.replaceChildren(
         st.found

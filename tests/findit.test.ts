@@ -39,10 +39,9 @@ describe('find-it steps', () => {
       expect(plantedFaults(sceneRoot, spec.planted).map((f) => f.nets)).toEqual(planted.map((f) => f.nets));
 
       const run = (def: typeof scene.root) => firstWrong(def, spec.words, spec.iss, { inputs: spec.inputs, pipelined: spec.pipelined });
-      expect(run(spec.healthy())).toBeNull();
+      expect(run(spec.healthy()).kind).toBe('clean');
       await tick();
-      const shown = run(scene.root);
-      expect(shown, 'the planted fault never shows').not.toBeNull();
+      expect(run(scene.root).kind, 'the planted fault shows as a wrong value').toBe('wrong');
 
       // the accusation rule: each planted fault is right, its other value and a neighbouring bit are not
       for (const f of planted) {
@@ -53,21 +52,35 @@ describe('find-it steps', () => {
     }, 60_000);
   }
 
-  it('a wrong accusation is answered with what that fault would do, computed', () => {
-    const { spec } = findStep('cpu');
+  // what a wrong accusation's fault does, computed: the three outcomes on the steps' own CPUs
+  const outcome = (id: string, fault: Parameters<typeof plantedFaults>[1]) => {
+    const { spec } = findStep(id);
     const root = flatten(spec.healthy(), { mode: 'gate' }).root;
-    const runWith = (faults: ReturnType<typeof plantedFaults>) =>
-      firstWrong(plantedDef(spec.healthy(), (n) => (n.parent === null ? faults : []), 'accused'), spec.words, spec.iss, { inputs: spec.inputs });
-    const planted = runWith(plantedFaults(root, spec.planted));
-    expect(planted).not.toBeNull();
-    // regWrite stuck at 0 first shows exactly as aluSrcB stuck at 0 does (t0 stays 0): said so, not called different
-    const regWrite = plantedFaults(root, [{ kind: 'stuck0', end: 'ctl.regWrite' }]);
-    expect(regWrite).toHaveLength(1);
-    expect(wouldText(runWith(regWrite), planted)).toMatch(/exactly as this CPU does/);
-    // memWrite stuck at 1 shows otherwise
-    const memWrite = plantedFaults(root, [{ kind: 'stuck1', end: 'ctl.memWrite' }]);
-    expect(memWrite).toHaveLength(1);
-    expect(wouldText(runWith(memWrite), planted)).toMatch(/would first show otherwise|run right to the end/);
-    expect(wouldText(null, planted)).toMatch(/run right to the end/);
+    const faults = plantedFaults(root, fault);
+    expect(faults).toHaveLength(fault.length);
+    const runWith = (ff: ReturnType<typeof plantedFaults>) =>
+      firstWrong(plantedDef(spec.healthy(), (n) => (n.parent === null ? ff : []), 'accused'), spec.words, spec.iss, { inputs: spec.inputs, pipelined: spec.pipelined });
+    return { would: runWith(faults), planted: runWith(plantedFaults(root, spec.planted)) };
+  };
+
+  it('a fault that first looks the same is said so (cpu: RegWrite stuck at 0)', () => {
+    const { would, planted } = outcome('cpu', [{ kind: 'stuck0', end: 'ctl.regWrite' }]);
+    expect(wouldText(would, planted)).toMatch(/exactly as this CPU does/);
   }, 30_000);
+
+  it('a fault seen only in memory is caught at the end (cpu: MemWrite stuck at 0)', () => {
+    const { would, planted } = outcome('cpu', [{ kind: 'stuck0', end: 'ctl.memWrite' }]);
+    expect(would.kind).toBe('wrong');
+    expect(would.text).toMatch(/word at address 0x0 differs at the end/);
+    expect(wouldText(would, planted)).toMatch(/would first show otherwise/);
+  }, 30_000);
+
+  it('a CPU that stops finishing instructions is hung, not clean (cache: stall stuck at 1; pipeline: enFD, enPC stuck at 0)', async () => {
+    const c = outcome('cache', [{ kind: 'stuck1', end: 'dm.stall' }]);
+    expect(c.would.kind).toBe('hung');
+    expect(wouldText(c.would, c.planted)).toMatch(/stop finishing instructions/);
+    await tick();
+    const p = outcome('pipeline', [{ kind: 'stuck0', end: 'hz.enFD' }, { kind: 'stuck0', end: 'hz.enPC' }]);
+    expect(p.would.kind).toBe('hung');
+  }, 60_000);
 });

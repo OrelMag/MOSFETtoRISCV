@@ -44,11 +44,11 @@ const FIND_CACHE = findIt({
   planted: [{ kind: 'stuck0', end: 'dm.stall' }],
   goal: 'Find the planted fault: name the wire and the value it is stuck at.',
   hints: [
-    'Every store comes out right; the first wrong register is written by <code>lw t1, 0(t0)</code>, which read 0 where memory holds 4.',
+    'The array is filled right (the stores go straight through to memory). The first wrong register is written by <code>lw t1, 0(t0)</code>, which read 0 where memory holds 4.',
     'The loads miss at the start of each line. On a miss the cache needs several cycles to bring the line from memory. What makes the CPU wait for it?',
     'The cache\'s <code>stall</code> output freezes the CPU during a miss. It is stuck at 0.',
   ],
-  fault: 'The cache\'s <code>stall</code> was stuck at 0: on a miss the CPU never waited for the line to arrive from memory, and a load took whatever the cache had before it came. The first load reads a[0], which is 0, so a wrong 0 looked right; the second, a[1] = 4, gave it away. Stores still went through to memory (write-through), so only loads showed it.',
+  fault: 'The cache\'s <code>stall</code> was stuck at 0: on a miss the CPU never waited for the line to arrive from memory, and a load took whatever the cache had before it came. The first load reads a[0], which is 0, so a wrong 0 looked right; the second, a[1] = 4, gave it away.',
 });
 
 // Numbers the prose quotes, computed from the circuits and models rather than typed.
