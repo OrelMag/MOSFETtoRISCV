@@ -28,12 +28,9 @@ Most of it. A learner can already build a half adder without the mouse:
 2. **W cannot start a branch from a wire.** wireFromKeyboard refuses a wire under the cursor (`!('wire' in t.end)`),
    so a fan-out (one input to two gates) needs the mouse or a second wire from the far pin. Fix: W on a wire starts
    at its branch point (the mouse already does this: tools.ts target → `{ wire, at }`).
-3. **The cursor is silent.** Arrows move it with no word for a screen reader, so a blind learner cannot tell when it
-   reaches a pin. Fix: after the cursor stops (250 ms), announce what is under it when something is: "pin a of x
-   (XOR)", "wire a → x.a, n.a", "part x (XOR)"; nothing on empty grid (it would chatter). The same words as the menu
-   and ↵ use (hitName / endName).
+3. **The cursor is silent?** No: checked in the code, kcSet already says what is under the cursor after every move (a polite, atomic live region; once per move, never while it stays still). Nothing to build.
 4. **N while wiring skips wires.** Ending on a wire works with ↵, but N only steps pins. Leave it: arrows reach any
-   wire, and gap 3 says when the cursor is on one. (Listed so it is a decision, not an oversight.)
+   wire, and the cursor says when it is on one. (Listed so it is a decision, not an oversight.)
 
 ## Keys
 
@@ -48,13 +45,12 @@ No new key. Each fix rides a key that already means the same thing (W wire, ↵ 
 
 ## Tests
 
-- tests/editor-keys.test.ts (jsdom, as the existing key tests): a digit arms with the cursor on and focus on the
-  canvas; W on a wire's interior starts a draft from `{ wire, at }` and ↵ on a pin makes a junction (compileChip:
-  the three ends on one net); the announcement after a cursor move names the pin.
-- A keyboard-only half adder in the browser (CDP drive, as for the cut tool): two inputs, XOR, AND, two outputs,
-  a fan-out from each input by W on a wire, toggle the inputs, read s and c from the announcements.
+- The editor's key handling needs the page (no test here builds an Editor: the repo has no DOM environment), so the
+  check is a browser drive (CDP, as for the cut tool): a keyboard-only half adder from an empty chip. Parts armed from
+  the search (↵) and by a favourite's digit, placed with ↵; a fan-out from each input by W on its wire; the inputs
+  toggled; s and c read from the announcements; the chip compiled and its truth table checked from the page.
 
 ## Cost
 
-tools.ts, editor.ts (armPart: a `byKey` flag), searchactions.ts (pass it), ui/keys.ts (two descriptions). Editor core:
-full gate on a runner.
+tools.ts (W and the menu take a wire; a digit arms through armPart), editor.ts (armPart: armed by a key, read from the
+event being handled, so the search needs no change), ui/keys.ts (two descriptions). Editor core: full gate on a runner.

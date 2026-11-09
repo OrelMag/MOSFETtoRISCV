@@ -1307,11 +1307,14 @@ export class Editor {
 
   /** Arm a palette item: the next click on the canvas places it (the phone's drawer closes). */
   armPart(item: PaletteItem, key: string): void {
-    // from the parts list with the keyboard: on to the canvas, where the arrows move the cursor and Enter places it
+    // armed by a key (the parts list, the search's ↵, a favourite's digit): on to the canvas, where the arrows move
+    // the cursor and Enter places it. The search runs its row inside its keydown, so the event says how it was picked.
     const fromList = !!document.activeElement?.closest?.('.sb-palette');
+    const ev = (globalThis as { event?: Event }).event;
+    const byKey = fromList || (typeof KeyboardEvent !== 'undefined' && ev instanceof KeyboardEvent);
     this.tools.arm(item, key);
     if (this.partsDrawer) this.showParts(false);
-    if (fromList && !coarsePointer()) {
+    if (byKey && !coarsePointer()) {
       this.tools.keyboardStart();
       this.view.svg.focus({ preventScroll: true });
       return void this.toast(`${item.name}: arrow keys move the cursor, Enter places it (Esc cancels)`);
