@@ -13,7 +13,7 @@ import { stats } from '../sim/stats';
 import { h, icon, undoKey } from '../ui/dom';
 import { dataPath, issCode, LINES } from '../widgets/ownrow';
 import { partAt, resolveCpu } from './cpu';
-import { detectRv16 } from './cpu16';
+import { customizable16, detectRv16 } from './cpu16';
 import type { Editor } from './editor';
 import { type ChipDoc, type PartRef, portCoreOf, portCoreRef } from './model';
 import { setRef } from './ops';
@@ -29,8 +29,9 @@ export function openCustomInstructions(ed: Editor, after?: () => void): void {
   const core = desc?.core ? ed.doc.parts.find((p) => p.id === desc.core) : undefined;
   if (!desc || !core) {
     // an RV16 computer: its own dialog (rows in OPX's free funct3 values)
-    const r16 = detectRv16(ed.doc, ed.ws.chips);
+    const r16 = customizable16(ed.doc, ed.ws.chips, ed.chipId, !!ed.level);
     if (r16) return void import('./owninstr16').then((m) => m.openCustom16(ed, r16, after));
+    if (detectRv16(ed.doc, ed.ws.chips)) return void ed.toast('Custom instructions on RV16 need the reference core (rv16_cpu, as in Examples ▸ RV16: Pong) or its pipeline (rv16_pipe_111), on a chip of your own: not a level’s or a puzzle’s, which are graded on the core as it is', 'err');
   }
   if (!desc || !core) return void ed.toast('Custom instructions need a placed RV32I core (single-cycle or pipelined) with a program ROM (as in Examples ▸ Computer)', 'err');
   open?.remove();

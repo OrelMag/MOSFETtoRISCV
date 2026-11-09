@@ -16,6 +16,7 @@ import { assemble16 } from '../src/riscv/rv16/asm16';
 import { decode16, disasm16 } from '../src/riscv/rv16/isa16';
 import { Iss16 } from '../src/riscv/rv16/iss16';
 import { randomProgram } from '../src/riscv/rv16/randprog';
+import { RV16_COMPOSE, rv16Compose } from '../src/riscv/rv16/compose16';
 import { evalOnce, simulate } from '../src/sim/harness';
 import { netlistOf } from '../src/sim/types';
 import { labelOverlaps, routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
@@ -40,6 +41,11 @@ describe('RV16 without custom rows', () => {
 
   it('random programs are the same without rows', () => {
     expect(randomProgram(9, 3, 40, undefined, [])).toBe(randomProgram(9, 3, 40));
+    // the hash of these three programs as randprog.ts made them before rows existed (origin/main 48736b0a)
+    const s = ([1, 2, 3] as const).map((l) => randomProgram(9, l, 40, l === 3 ? 'all' : undefined)).join('|');
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+    expect([(h >>> 0).toString(16), s.length]).toEqual(['e9977f70', 3399]);
   });
 });
 
@@ -101,6 +107,18 @@ describe('RV16 custom rows: the model', () => {
     expect(sanitizeRows16([LWX, { ...LWSUB, f3: 1 }, { ...LWOR, f3: 5 }, LWOR, 'x'])).toEqual([LWX, LWOR]);
   });
 
+  it('the instruction builder and tiles know them (rv16Compose)', () => {
+    const isa = rv16Compose([LWX, LWOR]);
+    const w = assemble16('lwx a0, a1, a2', [LWX]).words[0];
+    expect(isa.encode('lwx', { rd: 3, rs1: 4, rs2: 5 })).toBe(w);
+    expect(isa.decode(w)).toEqual({ id: 'lwx', parts: { rd: 3, rs1: 4, rs2: 5 } });
+    expect(isa.text(w)).toBe('lwx a0, a1, a2');
+    expect(isa.program('lwx a0, a1, a2\nlwor t0, a0, zero').errors).toEqual([]);
+    expect(isa.groups.find((g) => g.name === 'Yours')!.ids).toEqual(['lwx', 'lwor']);
+    expect(RV16_COMPOSE.decode(w)).toBe(null);
+    expect(rv16Compose()).not.toBe(RV16_COMPOSE);
+  });
+
   it('the golden model runs them', () => {
     const rows = [LWX, LWSUB, LWOR];
     const a = assemble16('.data\nd: .word 5, 6, 7, 8\n.text\nli a0, 1\nli a1, 2\nlwx t0, a0, a1\nlwsub t1, a1, a0\nlwor a2, a0, a1\nhalt', rows);
@@ -146,10 +164,17 @@ describe('RV16 custom rows: the cores against the golden model', () => {
     }
   }
 
-  it('the control unit with rows draws cleanly', () => {
-    const d = control16(SETS[2]), nl = netlistOf(d)!;
-    expect(symbolOverlaps(nl)).toEqual([]);
-    expect(labelOverlaps(d, nl)).toEqual([]);
-    expect(wireOverlaps(routeNetlist(d, nl).nets).length).toBe(0);
-  });
+  // the row variants are never built by the registry-wide layout tests: what look inside draws on a { core16 } part
+  for (const [what, d] of [
+    ['the control unit', () => control16(SETS[2])],
+    ['the single-cycle core', () => rv16Core(true, false, '', false, SETS[2])],
+    ['the pipeline', () => rv16Pipe({ fwd: true, stall: true, flush: true, custom: SETS[2] })],
+  ] as const) {
+    it(`${what} with rows draws cleanly`, () => {
+      const def = d(), nl = netlistOf(def)!;
+      expect(symbolOverlaps(nl)).toEqual([]);
+      expect(labelOverlaps(def, nl)).toEqual([]);
+      expect(wireOverlaps(routeNetlist(def, nl).nets).length).toBe(0);
+    });
+  }
 });

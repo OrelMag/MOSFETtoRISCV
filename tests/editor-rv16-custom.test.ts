@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { levelChallenge } from '../src/campaign/levels';
 import { nodeById } from '../src/campaign/nodes';
-import { detectRv16, rv16Program, Rv16Monitor } from '../src/editor/cpu16';
+import { customizable16, detectRv16, rv16Program, Rv16Monitor } from '../src/editor/cpu16';
 import { UserLibrary } from '../src/editor/library';
 import { emptyWorkspace, rv16CoreOf, rv16CoreRef } from '../src/editor/model';
 import { sanitizeChip, sanitizeRef } from '../src/editor/store';
@@ -76,6 +76,18 @@ describe('RV16 custom instructions in the sandbox', { timeout: 120000 }, () => {
       expect(m.log.some((e) => e.text.startsWith('lwx t0, zero, a0'))).toBe(true);
     });
   }
+
+  it('Custom instructions are offered only on a chip of the learner’s own with the reference core or pipeline', () => {
+    const doc = levelChallenge(nodeById('c_computer')!)!.answer().at(-1)!;
+    expect(customizable16(doc, {}, 'u_mine', false)).not.toBeNull();
+    // a level's chip (sandbox or level screen), a walkthrough's, a puzzle's: never
+    for (const id of ['u_ch_cp_c_computer', 'u_walk_c_computer', 'u_pz_sum']) expect(customizable16(doc, {}, id, false), id).toBeNull();
+    expect(customizable16(doc, {}, 'u_mine', true)).toBeNull();
+    // the trap cores are not offered (their illegal-instruction detector would take a row for an illegal word)
+    const sys = { ...doc, parts: doc.parts.map((p) => ('lib' in p.ref && p.ref.lib === 'rv16_cpu' ? { ...p, ref: { lib: 'rv16_pipe_111s' } } : p)) };
+    expect(detectRv16(sys, {})).not.toBeNull();
+    expect(customizable16(sys, {}, 'u_mine', false)).toBeNull();
+  });
 
   it('without the row in the core, the ROM does not assemble (the program names an instruction the core lacks)', () => {
     const { doc } = computer(false, []);

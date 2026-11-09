@@ -127,7 +127,7 @@ function buildControl(rows: readonly Custom16Row[], key: string): ComponentDef {
   const memRows: string[] = [];
   if (rows.length) {
     const hit = b.op(decoder(3, true), [b.op1(merger([1, 1, 1], 2), [f0, f1, f2], 'f3'), opx], 'your rows');
-    const h = (r: Custom16Row) => b.name(`${hit}.y${r.f3}`, `is_${r.name}`, true);
+    const h = (r: Custom16Row) => b.name(`${hit}.y${r.f3}`, `is_${r.name.replaceAll('.', '_')}`, true);
     b.next();
     const low = rows.filter((r) => r.alu !== 'f3').map(h), alt = rows.filter((r) => r.alu !== 'sub').map(h);
     memRows.push(...rows.filter((r) => r.result === 'mem').map(h));

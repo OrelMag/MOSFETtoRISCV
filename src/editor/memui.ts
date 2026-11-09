@@ -15,6 +15,7 @@ import { type Editor, registerToolbarAction } from './editor';
 import {
   addrValue, convertProgram, initText, type ListingRow, parseInit, readRam, ROM_SAMPLES, romImage, romIndex, romListing, type RomRef, sampleK,
 } from './memory';
+import { customizable16 } from './cpu16';
 import type { PartDoc } from './model';
 import { setRef } from './ops';
 import { portCoreOf, portCoreRef } from './model';
@@ -374,7 +375,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
   // Every language with instructions: the instruction builder on the caret's line (Ctrl+Space), and the
   // program as tiles (a view of the text: a click builds a line, a drag moves it).
   const hasIsa = applied.lang !== 'hex' && applied.lang !== '6502' && applied.lang !== 'dsp24'; // DSP24 has no instruction builder (see isa/isa.ts)
-  const isaOf = () => import('../isa/compose').then((c) => c.composeIsaOf(applied.lang, applied.isa, applied.custom, { c: applied.c, xlen: applied.xlen }));
+  const isaOf = () => import('../isa/compose').then((c) => c.composeIsaOf(applied.lang, applied.isa, applied.custom, { c: applied.c, xlen: applied.xlen, custom16: applied.custom16 }));
   // RV32: the CPU's own instructions (editor/owninstr.ts), from the footer or a free custom slot in the builder;
   // the program editor closes for it and reopens after
   const customInstrs = () => {
@@ -408,7 +409,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
       h('div', { class: 'sb-rom-dlg-foot' }, status,
         builder?.button,
         // An RV32 program's CPU can learn its own instructions (editor/owninstr.ts); the editor reopens after
-        applied.lang === 'asm' || applied.lang === 'rv16' ? h('button', { class: 'btn sm ghost', title: 'Your own instructions for this CPU: the core and the golden model learn them, and this program can use them', onclick: customInstrs }, 'Custom instructions…') : null,
+        applied.lang === 'asm' || (applied.lang === 'rv16' && customizable16(ed.doc, ed.ws.chips, ed.chipId, !!ed.level)) ? h('button', { class: 'btn sm ghost', title: 'Your own instructions for this CPU: the core and the golden model learn them, and this program can use them', onclick: customInstrs }, 'Custom instructions…') : null,
         h('button', { class: 'btn sm ghost', title: 'Download the program in the box as a deck of punched cards (.deck.json)', onclick: () => saveRomDeck(ed, partId, ce.value, chipId) }, 'Save as deck'),
         chipId === ed.chipId ? h('button', { class: 'btn sm ghost', title: 'Replace the program with the words of a deck of cards (applied at once: one undo step)', onclick: () => void pickDeck(ed).then((d) => {
           if (!d || !loadDeckIntoRom(ed, partId, d)) return;

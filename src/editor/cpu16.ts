@@ -83,6 +83,18 @@ export function detectRv16(doc: ChipDoc, chips?: Chips): Rv16Desc | null {
   return null;
 }
 
+/**
+ * The RV16 computer Custom instructions may change (editor/owninstr16.ts): the reference core or pipeline placed here, on a
+ * chip of the learner's own. Never a campaign level's or walkthrough's chip, nor a puzzle's (they are graded on what the core
+ * costs), nor the level screen.
+ */
+export function customizable16(doc: ChipDoc, chips: Chips | undefined, chipId: string, level: boolean): Rv16Desc | null {
+  if (level || /^u_(ch_|pz_|walk_)/.test(chipId)) return null;
+  const d = detectRv16(doc, chips);
+  const core = d ? doc.parts.find((p) => p.id === d.core) : undefined;
+  return core && rv16CoreOf(core.ref) ? d : null;
+}
+
 /** The program an RV16 ROM part holds, padded to the ROM's size (it wraps like the hardware). */
 export function rv16Program(doc: ChipDoc, rom: string): { words: number[]; k: number } | null {
   const p = doc.parts.find((q) => q.id === rom);

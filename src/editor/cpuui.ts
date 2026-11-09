@@ -41,9 +41,9 @@ import { type Editor, registerEditorPlugin, registerToolbarAction } from './edit
 import { ioInfo, ioLeaf, type SwitchState } from './ioparts';
 import { romImage } from './memory';
 import { openProgramEditor } from './memui';
-import { type ChipDoc, rv16CoreOf } from './model';
+import type { ChipDoc } from './model';
 import { detectMulti, type MultiDesc, MultiMonitor } from './multicpu';
-import { detectRv16, type Rv16Desc, Rv16Monitor } from './cpu16';
+import { customizable16, detectRv16, type Rv16Desc, Rv16Monitor } from './cpu16';
 import { disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { OPCODES } from '../m6502/isa';
 import { type Cpu4Desc, Cpu4Monitor, cpu4Use, detectCpu4 } from './cpu4mon';
@@ -331,8 +331,7 @@ class CpuPanel {
         this.customBtn.textContent = this.desc?.iss.custom?.length ? `Custom: ${this.desc.iss.custom.map((r) => r.name).join(', ')}` : 'Custom…';
         this.rv16 = this.multi || this.desc || this.rv64 ? null : detectRv16(ed.doc, chips);
         // the RV16 reference core and pipeline take rows too (owninstr16.ts)
-        const core16 = this.rv16 ? ed.doc.parts.find((p) => p.id === this.rv16!.core) : undefined;
-        if (core16 && rv16CoreOf(core16.ref)) {
+        if (this.rv16 && customizable16(ed.doc, chips, ed.chipId, !!ed.level)) {
           this.customBtn.hidden = false;
           this.customBtn.textContent = this.rv16!.custom?.length ? `Custom: ${this.rv16!.custom.map((r) => r.name).join(', ')}` : 'Custom…';
         }
