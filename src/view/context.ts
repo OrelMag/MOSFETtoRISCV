@@ -138,6 +138,12 @@ export class ViewCtx {
     return this.sim.getBits(this.node.ports[port]);
   }
 
+  /** A child instance's port bits (empty when it has no such port here). */
+  childPortBits(name: string, port: string): Bit[] {
+    const nets = this.node.children?.get(name)?.ports[port];
+    return nets ? this.sim.getBits(nets) : [];
+  }
+
   /** Leaf index of a child in this simulation, if it is a leaf here. */
   childLeaf(name: string): number | undefined {
     return this.node.children?.get(name)?.leafIndex;

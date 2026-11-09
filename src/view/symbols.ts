@@ -5,6 +5,7 @@ import { isBoxKind, orientedBox, orientGeom, orientPoint, poleX, type Rot, symbo
 import type { Category, ComponentDef } from '../sim/types';
 import { s } from '../ui/dom';
 import { boxText, ICON, iconSpot } from './boxtext';
+import { drawCmos } from './cmosdraw';
 import { type PinGeom, type Rect, textWidth } from './route';
 
 const BUBBLE = 0.3;
@@ -297,6 +298,10 @@ function drawUpright(def: ComponentDef, flip: boolean): SVGGElement {
           inner.append(s('path', { d: `M0,${y} H${curve + 0.05}`, class: 'sym-line' }));
         }
       }
+      // Working gates: the transistors (or NANDs) inside, hidden unless the setting and the scale allow (cmosdraw.ts)
+      const inverting = k === 'nand' || k === 'nor' || k === 'xnor' || k === 'not';
+      const cm = drawCmos(def, w - (inverting ? 2 * BUBBLE : 0), h);
+      if (cm) inner.append(cm);
       break;
     }
     case 'mux': {

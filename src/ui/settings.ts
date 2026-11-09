@@ -47,6 +47,8 @@ interface State {
   board: boolean;
   /** With the vivid look: cartoon parts (shadows, gloss, category icons, rounded outlines and lettering). */
   cartoon: boolean;
+  /** With cartoon parts: gates drawn with what works inside them (transistors, or NANDs for XOR), live (view/cmosdraw.ts). */
+  workingGates: boolean;
   /** The vivid look switched colour per net on (so switching it off turns that off again). */
   vividNets: boolean;
   /** Defaults revision the stored settings were last brought up to (1: the vivid look and cartoon parts on). */
@@ -101,7 +103,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, reduceMotion: false, wireScale: 'normal', grid: 'dots', portNames: true, partNames: true, busValues: true, tapRanges: true, zoomNames: 'normal', hideSmall: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, workingGates: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, reduceMotion: false, wireScale: 'normal', grid: 'dots', portNames: true, partNames: true, busValues: true, tapRanges: true, zoomNames: 'normal', hideSmall: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
 
 function load(): State {
   try {
@@ -121,11 +123,11 @@ function load(): State {
 }
 
 /** What the View options menu holds, and so what its reset puts back: never progress, the theme or the panes. */
-const VIEW_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'vividNets', 'glossary', 'simpleWires', 'autoClock', 'loadDelay', 'singleKeys', 'minimap', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'busValues', 'tapRanges', 'zoomNames', 'hideSmall', 'textSize', 'narrowText'] as const;
+const VIEW_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'workingGates', 'vividNets', 'glossary', 'simpleWires', 'autoClock', 'loadDelay', 'singleKeys', 'minimap', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'busValues', 'tapRanges', 'zoomNames', 'hideSmall', 'textSize', 'narrowText'] as const;
 export type ViewState = Pick<State, (typeof VIEW_KEYS)[number]>;
 
 /** What a preset decides: how the circuits look and how large the prose reads, never how the site behaves (shortcuts, new wires, the clock). */
-const LOOK_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'busValues', 'tapRanges', 'zoomNames', 'hideSmall', 'textSize'] as const;
+const LOOK_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'workingGates', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'busValues', 'tapRanges', 'zoomNames', 'hideSmall', 'textSize'] as const;
 type LookKey = (typeof LOOK_KEYS)[number];
 export type PresetId = 'standard' | 'classroom' | 'print' | 'plain';
 
@@ -169,6 +171,7 @@ export const settings = {
   get vivid() { return state.vivid; },
   get board() { return state.board; },
   get cartoon() { return state.cartoon; },
+  get workingGates() { return state.workingGates; },
   get glossary() { return state.glossary; },
   get simpleWires() { return state.simpleWires; },
   get autoClock() { return state.autoClock; },
@@ -190,7 +193,7 @@ export const settings = {
   get speed() { return state.speed; },
   get traceLevel() { return state.traceLevel; },
   get traceRate() { return state.traceRate; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'reduceMotion' | 'wireScale' | 'grid' | 'portNames' | 'partNames' | 'busValues' | 'tapRanges' | 'zoomNames' | 'hideSmall' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'workingGates' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'reduceMotion' | 'wireScale' | 'grid' | 'portNames' | 'partNames' | 'busValues' | 'tapRanges' | 'zoomNames' | 'hideSmall' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
     state[k] = v;
     // Colour per net set by hand: the vivid look no longer owns it.
     if (k === 'netColors') state.vividNets = false;
@@ -326,4 +329,6 @@ export function applyTheme(): void {
   else root.removeAttribute('data-board');
   if (state.vivid && state.cartoon) root.setAttribute('data-parts', 'cartoon');
   else root.removeAttribute('data-parts');
+  if (state.vivid && state.cartoon && state.workingGates) root.setAttribute('data-gates', 'cmos');
+  else root.removeAttribute('data-gates');
 }

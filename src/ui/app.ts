@@ -156,6 +156,13 @@ export function startApp(root: HTMLElement): void {
   } }, h('span', { class: 'pal-cartoon-sw' }, s('svg', { viewBox: '0 0 46 18', 'aria-hidden': 'true' },
     s('path', { class: 'sh', d: 'M15,3 H24 A7,7 0 0 1 24,17 H15 Z' }), s('path', { class: 'bd', d: 'M13,1.5 H22 A7,7 0 0 1 22,15.5 H13 Z' }), s('path', { class: 'gl', d: 'M15.5,4.5 H21' }))),
   h('span', null, h('b', null, 'Cartoon parts'), h('small', null, 'Vivid look: chunky parts with shadows, gloss and small icons')));
+  // Working gates: each gate drawn as what works inside it (view/cmosdraw.ts); needs cartoon parts.
+  const gatesItem = h('button', { role: 'menuitemcheckbox', class: 'pal-gates', onclick: () => {
+    settings.set('workingGates', !settings.workingGates);
+    applyTheme();
+  } }, h('span', { class: 'pal-gates-sw' }, s('svg', { viewBox: '0 0 46 18', 'aria-hidden': 'true' },
+    s('path', { class: 'bd', d: 'M12,1.5 H22 A7.5,7.5 0 0 1 22,16.5 H12 Z' }), s('path', { class: 'rl', d: 'M16,4 H26' }), s('path', { class: 'ch', d: 'M18,5.5 V9.5 M24,5.5 V9.5' }), s('path', { class: 'ch off', d: 'M21,10.5 V14' }))),
+  h('span', null, h('b', null, 'Working gates'), h('small', null, 'Cartoon parts: each gate shows its transistors, live, when zoomed in')));
   // Module colours: library boxes tinted by kind (view/symbols.ts CATEGORY_HUE).
   const modItem = h('button', { role: 'menuitemcheckbox', class: 'pal-mod', onclick: () => {
     settings.set('modules', !settings.modules);
@@ -247,7 +254,7 @@ export function startApp(root: HTMLElement): void {
     syncTools();
     undoItem.focus();
   } }, 'Reset view options to defaults');
-  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, modItem, netItem, flowItem, wiresRow.row, gridRow.row, motionItem, palHead('Labels'), ...labelItems, namesRow.row, palHead('Behaviour'), simpleItem, clockItem, delayItem, minimapItem, singleItem, resetItem);
+  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, gatesItem, modItem, netItem, flowItem, wiresRow.row, gridRow.row, motionItem, palHead('Labels'), ...labelItems, namesRow.row, palHead('Behaviour'), simpleItem, clockItem, delayItem, minimapItem, singleItem, resetItem);
   const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: presets, text size, wire colours and thickness, the look of parts, grid, motion, labels, and how the circuits behave', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
   const palOpen = (on: boolean) => {
     palMenu.classList.toggle('open', on);
@@ -283,6 +290,8 @@ export function startApp(root: HTMLElement): void {
     boardItem.disabled = !settings.vivid;
     cartoonItem.setAttribute('aria-checked', String(settings.cartoon));
     cartoonItem.disabled = !settings.vivid;
+    gatesItem.setAttribute('aria-checked', String(settings.workingGates));
+    gatesItem.disabled = !settings.vivid || !settings.cartoon;
     modItem.setAttribute('aria-checked', String(settings.modules));
     flowItem.setAttribute('aria-checked', String(settings.wireFlow));
     netItem.setAttribute('aria-checked', String(settings.netColors));

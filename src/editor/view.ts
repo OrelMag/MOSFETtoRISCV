@@ -17,6 +17,7 @@ import { netKey, setNetHue, spreadHues, USER_HUE } from '../view/nethue';
 import { junctions, type PinGeom, textWidth } from '../view/route';
 import { bitClass, busClass } from '../view/schematic';
 import { drawPinGlyph, drawSymbol, instNameAt, type PinGlyph, placePinValue } from '../view/symbols';
+import { cmosLod, paintCmos } from '../view/cmosdraw';
 import type { Compiled, Diag } from './compile';
 import { type WireFlow, wireFlows } from './flowdir';
 import { openOutputs, partBox, pinBody, pinKnob, pointerGeom, portHandles, wireGroups } from './geom';
@@ -55,7 +56,7 @@ export interface ViewValues {
   readonly sim: Sim | null;
 }
 
-interface PartEls { doc: PartDoc; def: ComponentDef | undefined; g: SVGGElement; disp?: DisplayEls; faces?: FaceEls[]; cls: string }
+interface PartEls { doc: PartDoc; def: ComponentDef | undefined; g: SVGGElement; disp?: DisplayEls; faces?: FaceEls[]; cls: string; cmos?: Element | null }
 interface WireEls {
   doc: WireDoc; poly: Vec[] | null; key: string; ver: number; path: SVGPathElement; hit: SVGPathElement; width: number; cls: string;
   /** Flowing bits: which way the signal runs (null: no driver reaches it) as lanes, the pellet overlays of a
@@ -169,6 +170,8 @@ export class EditorView {
       this.gSections, this.gComments, this.gWires, this.gFlow, this.gDots, gTokens, this.gHits, this.gParts, this.gPins, this.gLabels, this.gValues, this.gOver);
     host.append(this.svg);
     this.cam = new Camera(this.svg, host);
+    // working gates: transistors drawn only where the zoom gives them room
+    this.cam.listeners.add(() => cmosLod(this.svg, this.cam.pxPerUnit()));
     this.cam.vb = { x: -4, y: -4, w: 60, h: 36 };
     this.cam.apply();
   }
@@ -726,6 +729,9 @@ export class EditorView {
       else if (e.disp?.kind === 'keyboard') this.paintKeyboard(e.disp, v?.endBits(`p:${id}.code`) ?? null, v?.endBits(`p:${id}.ready`) ?? null, v?.keyboardQueue(id) ?? null);
       else if (e.disp) paintDisplay(e.disp, v?.endBits(`p:${id}.a`) ?? null, this.radix);
       if (e.faces) paintFace(e.faces, v?.sim ?? null, v?.sim?.design.root.children?.get(id) ?? null, this.radix);
+      // working gates: the inside of a library gate from its input pins
+      if (e.cmos === undefined) e.cmos = e.g.querySelector('.cmos');
+      if (e.cmos && e.def) paintCmos(e.cmos, v ? e.def.ports.filter((p) => p.dir !== 'out').map((p) => v.endBits(`p:${id}.${p.name}`)?.[0]) : null);
       const c = v?.conducting(id);
       e.g.classList.toggle('conducting', c === 1);
       e.g.classList.toggle('maybe', c === 2);

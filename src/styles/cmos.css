@@ -1,0 +1,56 @@
+/* Working gates (settings.workingGates, data-gates='cmos' on <html> with cartoon parts): a gate's inside drawn by
+   view/cmosdraw.ts. Shown only where the view's scale gives it room (svg.cmos-full / .cmos-mid, set by cmosLod).
+   Nets by level: hi (from VDD) the palette's 1, lo (from ground) --cm-lo, float dashed, x the X colour. Strokes are in
+   reference units, times --ck where the drawing is scaled down (the inverter). */
+:root { --cm-lo: light-dark(#2563eb, #6aa5ff); }
+:root[data-palette='cb'] { --cm-lo: light-dark(#007a5a, #3ed6a6); }
+:root[data-palette='print'] { --cm-lo: var(--w0); }
+
+.cmos { display: none; pointer-events: none; }
+:root[data-gates='cmos'] svg:is(.cmos-mid, .cmos-full) .cmos { display: inline; }
+/* the cartoon gloss would run across the transistors */
+:root[data-gates='cmos'] svg:is(.cmos-mid, .cmos-full) .sym:has(.cmos) .sym-gloss { display: none; }
+
+.cmos .cw { fill: none; stroke: color-mix(in srgb, var(--sym-stroke) 45%, transparent); stroke-width: calc(0.04px * var(--ck, 1)); stroke-linecap: round; stroke-linejoin: round; }
+.cmos .cw.hi { stroke: var(--w1); stroke-width: calc(0.05px * var(--ck, 1)); }
+.cmos .cw.lo { stroke: var(--cm-lo); stroke-width: calc(0.05px * var(--ck, 1)); }
+.cmos .cw.x { stroke: var(--wx); stroke-width: calc(0.05px * var(--ck, 1)); }
+.cmos .cw.float { stroke-dasharray: 0.08 0.07; }
+.cmos .cdot { fill: color-mix(in srgb, var(--sym-stroke) 45%, transparent); }
+.cmos .cdot.hi { fill: var(--w1); } .cmos .cdot.lo { fill: var(--cm-lo); } .cmos .cdot.x { fill: var(--wx); }
+.cmos .crail { fill: none; stroke-width: calc(0.06px * var(--ck, 1)); stroke-linecap: round; }
+.cmos .crail.hi { stroke: var(--w1); } .cmos .crail.lo { stroke: var(--cm-lo); }
+
+/* transistors: a broken channel when off, solid when on (lit by the rail it passes), dashed X when unknown */
+.cmos .cfet path { fill: none; }
+.cmos .ch-on, .cmos .ch-glow { display: none; }
+.cmos .ch-off { stroke: var(--sym-stroke); stroke-opacity: 0.55; stroke-width: calc(0.05px * var(--ck, 1)); }
+.cmos .ch-on { stroke: var(--sym-stroke); stroke-width: calc(0.055px * var(--ck, 1)); }
+.cmos .cfet.on .ch-on { display: inline; }
+.cmos .cfet.on .ch-off { display: none; }
+.cmos .cfet.on.hi .ch-on { stroke: var(--w1); } .cmos .cfet.on.lo .ch-on { stroke: var(--cm-lo); }
+.cmos .cfet.on:is(.hi, .lo) .ch-glow { display: inline; stroke-width: calc(0.18px * var(--ck, 1)); stroke-linecap: round; stroke-opacity: 0.28; }
+.cmos .cfet.on.hi .ch-glow { stroke: var(--w1); } .cmos .cfet.on.lo .ch-glow { stroke: var(--cm-lo); }
+.cmos .cfet.maybe .ch-on { display: inline; stroke: var(--wx); stroke-dasharray: 0.05 0.05; }
+.cmos .cfet.maybe .ch-off { display: none; }
+.cmos .plate { stroke: var(--sym-stroke); stroke-width: calc(0.04px * var(--ck, 1)); }
+.cmos .glead { stroke: var(--sym-stroke); stroke-width: calc(0.03px * var(--ck, 1)); }
+.cmos .pbub { fill: var(--sym-fill); stroke: var(--sym-stroke); stroke-width: calc(0.025px * var(--ck, 1)); }
+
+/* XOR / XNOR: its NANDs */
+.cmos .mbody { fill: color-mix(in srgb, var(--sym-fill) 82%, var(--sym-stroke)); stroke: var(--sym-stroke); stroke-width: 0.04px; stroke-linejoin: round; }
+.cmos .mbub { fill: var(--sym-fill); stroke: var(--sym-stroke); stroke-width: 0.03px; }
+.cmos .cmini.hi .mbub { fill: var(--w1); stroke: var(--w1); }
+.cmos .cmini.lo .mbub { fill: var(--cm-lo); stroke: var(--cm-lo); }
+
+/* charge flowing: pellets on every wire at 1, as on the wires outside (Flowing bits) */
+.cmos .cflow { display: none; fill: none; stroke: var(--flow1, #fff); stroke-width: calc(0.028px * var(--ck, 1)); stroke-dasharray: 0.09 0.27; stroke-linecap: butt; }
+.cmos .cflow.hi { display: inline; animation: cmos-flow 0.3s linear infinite; }
+@keyframes cmos-flow { from { stroke-dashoffset: 0.36; } to { stroke-dashoffset: 0; } }
+:root[data-wireflow='off'] .cmos .cflow, :root[data-reduce-motion] .cmos .cflow { display: none; }
+@media (prefers-reduced-motion: reduce) { .cmos .cflow { display: none; } }
+
+/* simpler when the gate is small: fat pills for channels, no gate plates, no pellets */
+svg.cmos-mid .cmos :is(.plate, .glead, .pbub, .cdot, .cflow, .ch-glow) { display: none; }
+svg.cmos-mid .cmos :is(.ch-on, .ch-off) { stroke-width: calc(0.16px * var(--ck, 1)); stroke-linecap: round; }
+svg.cmos-mid .cmos .cw { stroke-width: calc(0.06px * var(--ck, 1)); }

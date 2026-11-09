@@ -2,6 +2,7 @@ import './styles/theme.css';
 import './styles/palettes.css';
 import './styles/app.css';
 import './styles/vivid.css';
+import './styles/cmos.css';
 import './styles/codeedit.css';
 import './styles/mosfet.css';
 import './styles/m6502.css';
