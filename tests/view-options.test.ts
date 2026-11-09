@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { applyTheme, PRESETS, settings } from '../src/ui/settings';
-import { legibleOptions } from '../src/view/legible';
+import { legibleOptions } from '../src/ui/legibleopts';
 import { evalOnce, simulate } from '../src/sim/harness';
 import { PREVIEW_DEF } from '../src/ui/viewpreview';
 

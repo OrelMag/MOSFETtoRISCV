@@ -2,7 +2,7 @@
 
 import type { Radix } from '../sim/values';
 import { moveProgress, STEP_MOVES } from '../chapters/stepmoves';
-import { setLegibleOptions } from '../view/legible';
+import { setLegibleOptions } from './legibleopts';
 
 export type Theme = 'auto' | 'light' | 'dark';
 /** What one slow-mode tick advances: a gate delay, a clock cycle, or a retired instruction. */
