@@ -4,6 +4,7 @@ import { runPy } from '../src/lang/interp';
 import { PY_PROGRAMS, PY_STRING_PROGRAMS, ch } from '../src/lang/pyprograms';
 import { randomStrProgram } from '../src/lang/randpy';
 import { ISS } from '../src/riscv/iss';
+import { ABI } from '../src/riscv/isa';
 
 const pow2 = (n: number) => 2 ** Math.max(1, Math.ceil(Math.log2(Math.max(2, n))));
 
@@ -209,4 +210,22 @@ describe('Python strings: the fuzz', () => {
     console.log(`string programs: ${ran} compared, ${stopped} filled the heap`);
     expect(ran).toBeGreaterThan(SEEDS * 0.8);
   }, 180000);
+});
+
+describe('Python strings: what the panel reads back', () => {
+  it('a str variable is read through its pointer, the output as text, the heap as blocks', async () => {
+    const { strAt, outputLines, quoted } = await import('../src/widgets/python');
+    const p = PY_STRING_PROGRAMS[0];
+    const { c, iss, ref, out } = both(p.source, { dmem: 64 });
+    const L = c.layout!;
+    const line = L.homes.find((h) => h.name === 'line')!;
+    expect(line.str).toBe(true);
+    const ptr = line.reg ? iss.x[ABI.indexOf(line.reg)] : iss.dmem[line.addr! >>> 2];
+    expect(strAt(iss.dmem, ptr)).toBe('Hello, world!');
+    expect(strAt(iss.dmem, 0)).toBeNull();
+    expect(outputLines(out, ref)).toEqual([quoted('Hello, world!'), '13']);
+    // the heap's first block is "Hello, " and the blocks end exactly at tp
+    expect(strAt(iss.dmem, L.heap!.base)).toBe('Hello, ');
+    expect(outputLines([1, 2], null)).toBeNull();
+  });
 });
