@@ -1,4 +1,4 @@
-// Chapter 28 widgets: cell layout, fabrication, technology mapping, place & route, clock tree,
+// Chapter silicon widgets: cell layout, fabrication, technology mapping, place & route, clock tree,
 // floorplan and wafer economics. The numbers are computed from this site's own netlists.
 
 import { groupDigits } from '../sim/numfmt';

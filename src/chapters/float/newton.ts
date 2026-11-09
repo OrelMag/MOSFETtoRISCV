@@ -1,4 +1,4 @@
-// Chapter 24, steps after "fma in the CPU": division on the fma (Newton-Raphson, Markstein's correction) and what the F
+// Chapter float, steps after "fma in the CPU": division on the fma (Newton-Raphson, Markstein's correction) and what the F
 // extension buys against a soft-float routine. Every number the prose quotes is measured in tests/newton.test.ts (the ulp
 // counts and instruction counts on the golden model, the cycles on both gate-level CPUs).
 

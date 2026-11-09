@@ -227,7 +227,7 @@ export const chCards: Chapter = {
         decks made from any stored program.</p>
         <p>The interface is a <span data-ahead="handshake">handshake (a ready signal answered by a take signal)</span> of the oldest kind. The reader says <code>ready</code>; the computer says <code>next</code>; the transfer happens at a
         clock edge where both are 1. Neither side can force the other: a slow program leaves the card waiting at the station, a slow reader leaves the program polling <code>ready</code>, and a program that
-        never raises <code>next</code> reads nothing. The same ready and take protocol returns on the bus in chapter 38 and in every streaming interface since.</p>
+        never raises <code>next</code> reads nothing. The same ready and take protocol returns on the bus in chapter ${numOf('bus')} and in every streaming interface since.</p>
         <div class="try">Set <code>next</code> to 1 and Pulse: each card's word appears on <code>data</code>, with ${FEED} empty
         cycles between cards while the reader feeds.</div>`,
       scene: () => ({ root: READER, inputs: { next: 0 }, clock: 'clk', autoClock: false, panels: [readerPanel] }),
@@ -254,7 +254,7 @@ export const chCards: Chapter = {
         pitfall: `<p>Reading data when ready is 0. Between cards data is 0, which is a valid word: a program that takes it as a card gets a stream of zeros and loses the card it should have waited for. Take a card only at an edge where
           ready was 1, and use empty, not a zero word, to know the deck has ended.</p>`,
         real: `<p>The IBM 1402 read ${READER_CPM} cards a minute, a card every 75 ms. A machine this fast needed a buffer: the reader fed a memory area by itself and the CPU was told when a card was in, the beginning of channels
-          and direct memory access (chapter 38 has the DMA engine).</p>`,
+          and direct memory access (chapter ${numOf('bus')} has the DMA engine).</p>`,
       },
       challenge: {
         kind: 'reach', goal: 'Read the whole deck, until the reader says empty.',

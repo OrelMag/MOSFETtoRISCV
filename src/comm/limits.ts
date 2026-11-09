@@ -1,4 +1,4 @@
-// Nyquist and Shannon (chapter 39). DOM-free.
+// Nyquist and Shannon (chapter telegraph). DOM-free.
 
 /** Nyquist (Hartley): at most 2B independent symbols a second through a channel of bandwidth B Hz; M levels carry log2 M bits each. */
 export const nyquistSymbolRate = (B: number): number => 2 * B;

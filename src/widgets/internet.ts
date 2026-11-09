@@ -1,5 +1,5 @@
-// Chapter 53's explorers on the invented network of net/internet.ts: the map with any router's table, BGP in rounds, DNS with its bytes, traceroute,
-// a frame carried hop by hop through the gates of chapter 51's fast path, one packet's delays, and a whole page.
+// Chapter pcie's explorers on the invented network of net/internet.ts: the map with any router's table, BGP in rounds, DNS with its bytes, traceroute,
+// a frame carried hop by hop through the gates of chapter errors's fast path, one packet's delays, and a whole page.
 
 import '../styles/router.css';
 import '../styles/internet.css';
@@ -106,7 +106,7 @@ const routeSource = (r: number, prefix: number, len: number): string => {
   return 'between networks: BGP';
 };
 
-/** The map, a pair of hosts, and any router's table: where chapter 51's trie gets its contents. */
+/** The map, a pair of hosts, and any router's table: where chapter errors's trie gets its contents. */
 export function networkWidget(): Widget {
   const down = new Set<string>();
   let from = LAPTOP, to = WWW, sel = 0;

@@ -67,7 +67,7 @@ export const tubeFailEvery = (tubes: number): number => (ENIAC.failH * ENIAC.tub
 /** Floor (m²) a tube machine of `panels` would take at ENIAC's room per panel (167 m² for 40 panels, card equipment and plant included). */
 export const eniacRoom = (panels: number): number => (panels * ENIAC.room) / ENIAC_PANEL.count;
 
-/** A NAND2 in a 28 nm-class process (µm², chapter 28's floorplan) at 70 % utilization. */
+/** A NAND2 in a 28 nm-class process (µm², chapter silicon's floorplan) at 70 % utilization. */
 export const NAND2_UM2 = 0.3;
 export const UTILIZATION = 0.7;
 

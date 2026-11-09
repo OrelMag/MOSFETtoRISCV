@@ -1,4 +1,4 @@
-// Chapter 41: the package between a pad and a pin, in 3D (loaded on demand, modelhost.ts).
+// Chapter wire: the package between a pad and a pin, in 3D (loaded on demand, modelhost.ts).
 
 import type { Widget } from '../view/stage';
 import { lazyModel } from './modelhost';

@@ -1,4 +1,4 @@
-// Chapter 43's last scene: two bus computers, each with a UART and its own clock pin, their tx and rx crossed through two
+// Chapter uart's last scene: two bus computers, each with a UART and its own clock pin, their tx and rx crossed through two
 // line parts (lib/uart.ts LINE). The clocks are unrelated: a panel drives clkA and clkB at chosen rates.
 
 import { symbolGeom } from '../sim/geometry';
@@ -8,6 +8,7 @@ import { define } from './define';
 import { busComputer, type SocOptions } from './soc';
 import { lineDef } from './uart';
 
+import { numOf } from '../chapters/order';
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
 
@@ -57,7 +58,7 @@ export function twoComputers(srcA: number[], srcB: number[], o: TwoOptions = {})
   for (const p of ports) if (p.dir === 'out') { pins[p.name] = [x1 + ga.w + 14, y]; y += 3; }
   d = define({
     id, name: 'Two computers on a wire', category: 'cpu',
-    summary: 'Two bus computers, each with a UART at 0x3000_0000, a keyboard and a console, on unrelated clocks (clkA, clkB). A\'s tx goes through a line part to B\'s rx and B\'s tx to A\'s rx. The line parts stand for the cable: chapter 41 models what is inside.',
+    summary: `Two bus computers, each with a UART at 0x3000_0000, a keyboard and a console, on unrelated clocks (clkA, clkB). A's tx goes through a line part to B's rx and B's tx to A's rx. The line parts stand for the cable: chapter ${numOf('wire')} models what is inside.`,
     ports, symbol: { kind: 'box', label: 'TWO COMPUTERS' },
     netlist: () => ({ pins, instances, nets }),
   });

@@ -1,4 +1,4 @@
-// Chapter 52's explorers: segments on a ladder that any one of can be lost, the window, the timer, the sawtooth (all on net/tcpsim.ts, which is net/tcp.ts over a modelled
+// Chapter codes's explorers: segments on a ladder that any one of can be lost, the window, the timer, the sawtooth (all on net/tcpsim.ts, which is net/tcp.ts over a modelled
 // bottleneck), the Python TCP itself on the model-speed bench, and a gate window on it.
 
 import '../styles/tcp.css';

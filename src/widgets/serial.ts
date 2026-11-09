@@ -1,4 +1,4 @@
-// Chapter 46's explainers: Manchester against NRZ, running disparity on a typed byte stream, the scrambler, the eye diagram with
+// Chapter noise's explainers: Manchester against NRZ, running disparity on a typed byte stream, the scrambler, the eye diagram with
 // equalization, PAM4 against NRZ, and the media table. Every number comes from comm/linecode.ts or phys/line.ts; the gate-level
 // link is widgets/serdes.ts.
 

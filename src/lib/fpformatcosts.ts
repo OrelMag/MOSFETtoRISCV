@@ -1,4 +1,4 @@
-// Chapter 24's "Narrower and wider" comparison: the adder, multiplier and fma of lib/fpu.ts built at six formats, measured
+// Chapter float's "Narrower and wider" comparison: the adder, multiplier and fma of lib/fpu.ts built at six formats, measured
 // once (NANDs from stats(), depth from logicDepth()) and kept here as plain numbers so the chapter imports no circuit
 // (float64's fma alone is 70 000 NANDs). tests/fpformats.test.ts rebuilds and re-measures every one.
 // `tree` is the significand multiplier's own NANDs inside fpMul, `round` its normalize & round.

@@ -183,7 +183,7 @@ export const chMulticore: Chapter = {
         derive: `<p>With p the priority bit: g0 = r0 · ¬(r1 · p), g1 = r1 · ¬(r0 · ¬p), and p′ = p XOR (r0 · r1). If only one request is high, its grant is 1 whatever p is. If both are high, exactly
           one grant is: g0 when p = 0, g1 when p = 1, and p flips. So over any run of conflicts the grants alternate, and a core waits at most one cycle for a grant.
           For n requesters the same idea needs a pointer and a mask: a loser waits at most n − 1 grants.</p>`,
-        real: `<p>Round robin is the default in bus interconnects (chapter 38's bus uses it for its masters); fixed priority is used where one requester must never wait, such as an
+        real: `<p>Round robin is the default in bus interconnects (chapter ${numOf('bus')}'s bus uses it for its masters); fixed priority is used where one requester must never wait, such as an
           interrupt controller, with a limit on how much of the bandwidth the high-priority side may take.</p>`,
         pitfall: `<p>Fixed priority "because it is simpler". A busy core 0 would then win every conflict and core 1 would starve for as long as it lasted: the system is correct and one of its cores never runs.
           The single flip-flop is the cost of avoiding that.</p>`,

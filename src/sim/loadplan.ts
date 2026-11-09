@@ -6,7 +6,7 @@ import { groupDigits } from './numfmt';
 export interface PhaseSpec {
   id: string;
   label: string;
-  /** Its share of the bar (relative; from measuring chapter 34). */
+  /** Its share of the bar (relative; from measuring chapter graphics). */
   weight: number;
   /** How a running count reads after the label (done and total as shown); none: no count. */
   unit?: string;

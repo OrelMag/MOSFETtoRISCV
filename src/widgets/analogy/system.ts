@@ -1,4 +1,4 @@
-// DOM-free models behind chapter 26-38's system analogy figures (merge H: kitchen, squad, movers, doorbell, fourway).
+// DOM-free models behind chapter ooo-bus's system analogy figures (merge H: kitchen, squad, movers, doorbell, fourway).
 // Heavy models (the out-of-order core, the SIMT golden model, the ISS) are imported here only: this module loads with
 // its figures, never from ui/analogyfigs.ts.
 

@@ -14,6 +14,7 @@ import {
 } from './memmap';
 import { slug } from './model';
 
+import { numOf } from '../chapters/order';
 type Tab = 'map' | 'decoder' | 'export';
 let open: HTMLElement | null = null;
 
@@ -267,7 +268,7 @@ export function openMemoryMap(ed: Editor): void {
         h('button', { type: 'button', class: 'mp-act', onclick: () => { tab = 'export'; render(); } }, 'Export: C header + linker script'));
     }
     kids.push(h('div', { class: 'mp-grow' }),
-      h('p', { class: 'mp-note' }, 'The golden model of chapter 38 (bus/model.ts BusModel) takes the same map: busMapOf(map) is its `map` option, and the tests run this example with a moved region against it. The CPU drawer does not follow bus cores.'),
+      h('p', { class: 'mp-note' }, `The golden model of chapter ${numOf('bus')} (bus/model.ts BusModel) takes the same map: busMapOf(map) is its \`map\` option, and the tests run this example with a moved region against it. The CPU drawer does not follow bus cores.`),
       changed() ? h('button', { type: 'button', class: 'btn ghost sm', onclick: () => { draft = onChip; sel = null; announce('Reset to the chip'); render(); } }, 'Reset to the chip') : null,
       h('button', { type: 'button', class: 'btn primary mp-apply', disabled: n > 0 || !changed(), onclick: apply },
         n ? `Apply to the bus (fix ${n} problem${n > 1 ? 's' : ''} first)` : changed() ? 'Apply to the bus' : 'Nothing to apply'));

@@ -1,4 +1,4 @@
-// Phase 17c: the out-of-order core's units (chapter 26). Each follows the rules of riscv/ooomodel.ts, the model the
+// Phase 17c: the out-of-order core's units (chapter ooo). Each follows the rules of riscv/ooomodel.ts, the model the
 // core must equal cycle for cycle (the plan's "model's rules" list, E:/mockups/ooo/PLAN-17b-17d.md), and each is
 // checked against those rules in tests/ooounits.test.ts.
 
@@ -196,7 +196,7 @@ export function btbCommit(): ComponentDef {
 export const TAG = 4;
 
 /**
- * The sizes of the core's windows (the lab's knobs, chapter 26): reorder buffer, issue queue and store queue entries,
+ * The sizes of the core's windows (the lab's knobs, chapter ooo): reorder buffer, issue queue and store queue entries,
  * powers of two. The defaults are the chapter's core; another size builds the same units at that size, with ids of
  * their own (the defaults keep theirs).
  */

@@ -25,6 +25,7 @@ import { withBugHunts } from './bughunts';
 import { NODES_COMM } from './nodescomm';
 import { NODES_DSP } from './nodesdsp';
 
+import { numOf } from '../chapters/order';
 const sandbox = (id: string) => (): BuildChallenge => {
   const c = challengeById(id);
   if (!c) throw new Error(`no sandbox challenge ${id}`);
@@ -744,7 +745,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   // Phases 3 and 4 of the GPU track: warps and memory, then graphics.
   {
     id: 'k_coal', act: 9, title: 'Coalescer', kind: 'build', optional: true, requires: ['k_simd'], base: BUILDK.k_coal, par: { nand: 467, depth: 27 },
-    why: 'Four memory ports are four memories; one port a line wide serves every lane whose word is in the line: 467 NANDs. The two-warp core keeps a port per lane and does not place it; chapter 32\'s access unit (5870 NANDs) does.',
+    why: `Four memory ports are four memories; one port a line wide serves every lane whose word is in the line: 467 NANDs. The two-warp core keeps a port per lane and does not place it; chapter ${numOf('feed')}'s access unit (5870 NANDs) does.`,
     tips: ['Drop each address’s two low bits: what is left (14 bits) names its line.', 'The leader is the lowest active lane, exactly as in your mask; a 4:1 bus mux picks its line.', 'Lane 0, when active, is the leader: it needs no comparator. Lanes 1–3: an equality comparator each, ANDed with their mask bit.', 'left = mask XOR served: served never contains an inactive lane.'],
     codex: ['coalescing'], unlocks: ['rv16_coal4'], chapters: [{ chapter: 'feed', label: 'One port, a line wide' }, { chapter: 'feed', step: 1, label: 'Coalescing' }],
   },
@@ -756,13 +757,13 @@ export const NODES: CampaignNode[] = withBugHunts([
   },
   {
     id: 'p_hist', act: 9, title: 'Histogram', kind: 'program', optional: true, requires: ['k_warps'], par: { cycles: 176, laneops: 702 },
-    why: 'No atomic add: two threads that update one counter lose a count. Privatize (128 words of counters), synchronize (bar), combine: 176 cycles, every lane busy. Real GPUs added atomics, chapter 32\'s amoadd.w.',
+    why: `No atomic add: two threads that update one counter lose a count. Privatize (128 words of counters), synchronize (bar), combine: 176 cycles, every lane busy. Real GPUs added atomics, chapter ${numOf('feed')}'s amoadd.w.`,
     tips: ['Thread t counts value v in the word 8·v + t: then bin b’s eight counters sit in a row, at 8·b.', 'Thread t takes elements t, t + 8, …: n is a multiple of 8, so every lane has the same number.', 'After bar, every thread adds up two bins: their sixteen counters are the words 16·tid … 16·tid + 15.', 'The warps take turns, so a kernel without bar can look right. The grader also lets warp 1 run ahead of warp 0.'],
     codex: ['privatization', 'barrier'], chapters: [{ chapter: 'feed', step: 3, label: 'A barrier' }, { chapter: 'feed', step: 4, label: 'Atomics' }],
   },
   {
     id: 'k_edge', act: 9, title: 'Edge stepper', kind: 'build', optional: true, requires: ['k_lesson'], base: BUILDK.k_edge, par: { nand: 963, period: 58 },
-    why: 'The lanes could rasterize: chapter 34 measured 6825 cycles for one triangle on 16 threads, against 1268 on a rasterizer of 26 708 NANDs. The edge function is linear, so each step is one add: 963 NANDs an edge.',
+    why: `The lanes could rasterize: chapter ${numOf('graphics')} measured 6825 cycles for one triangle on 16 threads, against 1268 on a rasterizer of 26 708 NANDs. The edge function is linear, so each step is one add: 963 NANDs an edge.`,
     tips: ['Two 16-bit registers: E, and R, where the current band started (a band is four rows of pixels).', 'One adder / subtractor: its first operand is E, R (band) or 2E (double, a wired shift); its second a, 4a, b or 4b (wired shifts too); subtract only for up.', 'Load and band write R as well as E; hold writes neither.', 'inside: NOT of E\'s bit 15.'],
     codex: ['edgefn'], unlocks: ['rv16_edge'], chapters: [{ chapter: 'pixels', label: 'Pixels and triangles' }],
   },

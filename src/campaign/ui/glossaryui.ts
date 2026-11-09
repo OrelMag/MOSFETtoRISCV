@@ -8,7 +8,7 @@ import { h, icon } from '../../ui/dom';
 import { CODEX_KINDS, codexById } from '../codex';
 import { Glossary, GLOSS_SKIP } from '../glossary';
 
-/** A chapter's skip set for markTerms (the GPU act's terms before chapter 29). */
+/** A chapter's skip set for markTerms (the GPU act's terms before chapter lanes). */
 export { chapterSkip } from '../glossary';
 
 let gloss: Glossary | null = null;

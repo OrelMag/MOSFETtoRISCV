@@ -1,4 +1,4 @@
-// Chapter 52's explorers: net/tcp.ts's two endpoints across a bottleneck, event by event, fast enough to move a slider. The network is a model and says so: a queue
+// Chapter codes's explorers: net/tcp.ts's two endpoints across a bottleneck, event by event, fast enough to move a slider. The network is a model and says so: a queue
 // of whole frames in front of a link of so many clocks a byte, and a propagation delay each way. Times are clock cycles, as on the real stack (net/lanbench.ts).
 
 import { ip4 } from '../comm/netframes';

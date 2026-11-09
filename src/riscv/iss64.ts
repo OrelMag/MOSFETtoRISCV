@@ -1,4 +1,4 @@
-// The golden model of RV64I / M (chapter 25's 64-bit core): user-level instructions only, registers as BigInt.
+// The golden model of RV64I / M (chapter widths's 64-bit core): user-level instructions only, registers as BigInt.
 // Memory is organised as the gate-level core's: an instruction ROM of 32-bit words, and a data memory of 64-bit
 // doublewords (kept as pairs of 32-bit words, low first, so the riscv-tests data loader fills it as it fills an
 // RV32 memory) that wraps around its size. A load or store reaches inside its doubleword only, aligned to its own

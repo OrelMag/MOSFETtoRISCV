@@ -1,4 +1,4 @@
-// Sample programs for chapter 25's 64-bit core (assemble with { xlen: 64 }). Each ends in a self-loop ("halt") and
+// Sample programs for chapter widths's 64-bit core (assemble with { xlen: 64 }). Each ends in a self-loop ("halt") and
 // names the register it leaves its answer in; tests/rv64.test.ts runs every one on the golden model.
 
 export interface Program64 {

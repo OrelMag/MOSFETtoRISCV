@@ -335,7 +335,7 @@ export const chMosfet: Chapter = {
       },
       more: {
         derive: `<p>A node with no DC path to a rail keeps its charge: it sits where it was and drifts with leakage. With a load C and a leak current I<sub>leak</sub>, the voltage falls at I<sub>leak</sub> / C, which
-          for the ${loadOf(2)} fF load of the last step and a nanoamp of leakage is ${(1e-9 / (loadOf(2) * 1e-15) * 1e-6).toFixed(1)} V/µs: it loses a level in microseconds. (Chapter 35's DRAM stores a bit on exactly this node, and refreshes it before the charge is gone.)
+          for the ${loadOf(2)} fF load of the last step and a nanoamp of leakage is ${(1e-9 / (loadOf(2) * 1e-15) * 1e-6).toFixed(1)} V/µs: it loses a level in microseconds. (Chapter ${numOf('dram')}'s DRAM stores a bit on exactly this node, and refreshes it before the charge is gone.)
           For logic the rule is simpler: every output must be driven for every valid input.</p>`,
         pitfall: `<p>Reading Z as "probably 0". A floating input to a following gate can sit at any voltage, including the middle, where both its transistors conduct a little and it draws current; the Z
           is drawn in its own colour for that reason. In the sandbox a floating output that feeds logic is flagged.</p>`,

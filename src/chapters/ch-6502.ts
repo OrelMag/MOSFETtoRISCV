@@ -236,7 +236,7 @@ ${PHASES}
       more: {
         derive: `<p>Each bit of the bus costs, per source, two series pull-downs (enable and bit), and per destination one pass transistor: 2s + d transistors for s sources and d destinations. A conducting source sets the line to
           0, a non-conducting source leaves it; the line after φ1 is therefore the AND of the enabled sources' bits, and with no source enabled it stays at its precharge, 1. Read inverted, the same line is the OR of the complements. The ALU's AND and OR do not use this: they have gates of their own.</p>`,
-        real: `<p>Precharged, discharge-only lines are the same idea as dynamic logic, domino logic and the Manchester carry chain, and as DRAM's bit lines (chapter 35). Wherever a wire is long, the line's capacitance is large
+        real: `<p>Precharged, discharge-only lines are the same idea as dynamic logic, domino logic and the Manchester carry chain, and as DRAM's bit lines (chapter ${numOf('dram')}). Wherever a wire is long, the line's capacitance is large
           and a weak driver can only discharge it fast: precharge turns that into the fast path every cycle. A modern CPU has precharged structures in its register files' read ports, cache bit lines and
           wide gates; what has gone is the global bus built that way.</p>`,
         pitfall: `<p>Enabling a source before the precharge, or reading the line after it has leaked. In φ1 the line holds only charge, so a read that comes late gets a drooped 1 that may be taken for X. And two sources on one line is not the same as two sources on one driven bus: the AND is a feature here, an error there.</p>`,

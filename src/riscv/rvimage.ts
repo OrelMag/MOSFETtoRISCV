@@ -2,7 +2,7 @@
 // which reads the prebuilt images from disk): the data section is put in place by code appended to the image, reached
 // by retargeting the reset jump at address 0. Browser-safe (no Node API): the microcode painter's check uses it too.
 
-/** bare64: bare for RV64 (rv64ui, rv64um), for chapter 25's 64-bit core and its golden model (src/riscv/iss64.ts). */
+/** bare64: bare for RV64 (rv64ui, rv64um), for chapter widths's 64-bit core and its golden model (src/riscv/iss64.ts). */
 export type Env = 'p' | 'bare' | 'bare-mp' | 'bare64';
 
 export interface RvImage {

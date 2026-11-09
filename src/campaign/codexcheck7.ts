@@ -1,4 +1,4 @@
-// Check yourself questions for the entries of codexmore5.ts (see codexcheck.ts), group 7: Communication, chapters 45-47. Answers
+// Check yourself questions for the entries of codexmore5.ts (see codexcheck.ts), group 7: Communication, chapters signals-modem. Answers
 // first: the quiz shuffles the options (ui/quiz.ts shuffleOrder). Numbers pinned by tests/content-codexcomm.test.ts. No DOM.
 
 import type { Quiz } from '../chapters/types';

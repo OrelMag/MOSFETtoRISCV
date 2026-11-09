@@ -1,5 +1,5 @@
-// Chapter 43's UART in gates: a baud generator (a 16× tick), a transmitter and a receiver around the book's universal
-// shift register, two 16-byte FIFOs (lib/storage.ts fifo), a status register, and the core as a slave on chapter 38's
+// Chapter uart's UART in gates: a baud generator (a 16× tick), a transmitter and a receiver around the book's universal
+// shift register, two 16-byte FIFOs (lib/storage.ts fifo), a status register, and the core as a slave on chapter bus's
 // bus. comm/uart.ts is the same machine edge by edge (tests/comm-uart.test.ts compares every output every cycle).
 //
 // Reset is all zeros, so the polarities are chosen to make zero mean idle: the transmitter stores the inverse of its line
@@ -19,6 +19,7 @@ import { fifo } from './storage';
 import { SYNC2 } from './sync';
 import { bitwise } from './wide';
 
+import { numOf } from '../chapters/order';
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
 
@@ -293,7 +294,7 @@ export const UART_CORE: ComponentDef = (() => {
 // ---- the bus slave -----------------------------------------------------------------------------------------------------
 
 /**
- * The core as a slave on chapter 38's bus (AXI-lite-shaped): +0 DATA (write: queue a byte to send; read: the oldest received
+ * The core as a slave on chapter bus's bus (AXI-lite-shaped): +0 DATA (write: queue a byte to send; read: the oldest received
  * byte, taken from the FIFO the cycle after the read's handshake), +4 STATUS (bit 0 rx not empty, 1 tx full, 2 tx idle, 3 framing
  * error, 4 overrun; a write of 1 to bit 3 or 4 clears it), +8 DIVISOR, +12 interrupt enables (bit 0 rx not empty, bit 1 tx FIFO
  * empty). irq is the OR of the enabled conditions.
@@ -351,12 +352,12 @@ export const isLine = (s: unknown): s is LineState => !!s && typeof s === 'objec
  * The wire between two computers as one box: q is what d was `delay - 1` sender clock edges ago (the delay in the
  * sender's clock, so propagation is part of the model), and noise = 1 at an edge flips the sampled level (a glitch). It
  * holds a level the way a pulled-up line does and starts idle (1). The one part of the book that does not end in
- * transistors: a transmission line is chapter 41's model (phys/line.ts), not a circuit.
+ * transistors: a transmission line is chapter wire's model (phys/line.ts), not a circuit.
  */
 export function lineDef(delay = 2): ComponentDef {
   return memo(`line${delay}`, () => { const d: ComponentDef = {
     id: `line${delay}`, name: `Line (${delay} cycles)`, category: 'memory',
-    summary: `A wire between two machines as one box: the level the sender drove, ${delay} sender clock cycles later, with an input that flips it for a cycle (noise). Pulled up: idle is 1. It stands for the cable and costs nothing; chapter 41 models what is inside.`,
+    summary: `A wire between two machines as one box: the level the sender drove, ${delay} sender clock cycles later, with an input that flips it for a cycle (noise). Pulled up: idle is 1. It stands for the cable and costs nothing; chapter ${numOf('wire')} models what is inside.`,
     ports: [bit('d', 'in'), bit('noise', 'in'), bit('clk', 'in', 'bottom', true), bit('q', 'out')],
     symbol: { kind: 'box', label: 'LINE' }, modelPanel: 'cable',
     behavior: {

@@ -1,4 +1,4 @@
-// The fuller texts of the Communication entries of chapters 51-53 (codexcomm.ts): the router, TCP and the internet path. Every number is the chapter's own, computed from net/ and the library
+// The fuller texts of the Communication entries of chapters errors-pcie (codexcomm.ts): the router, TCP and the internet path. Every number is the chapter's own, computed from net/ and the library
 // (tests/content-codexcomm.test.ts pins them to the models, to the gate counts and to the chapter steps that print them). No DOM.
 
 import type { CodexMore } from './codexmore';

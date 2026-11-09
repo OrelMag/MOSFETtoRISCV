@@ -1,6 +1,6 @@
 import { idleIn, NicCore, type NicIn, type NicOut } from '../comm/nic';
 import { UartCore, type UartIn } from '../comm/uart';
-// The memory map of chapter 38's computer, as the golden model sees it: RAM from address 0 (code beyond
+// The memory map of chapter bus's computer, as the golden model sees it: RAM from address 0 (code beyond
 // the boot ROM and every load and store below the flash), the flash read-only at 0x1000_0000, the DRAM at
 // 0x2000_0000, the DMA engine's registers at 0x4000_0000, the screen's frame buffer at 0x5000_0000, the
 // keyboard at 0x6000_0000, the card reader at 0x7000_0000, nothing elsewhere (reads 0). The DMA copies at once
@@ -123,7 +123,7 @@ export class UartDevice {
 }
 
 /**
- * The NIC at 0x7000_0000 as the golden model sees it: comm/nic.ts's core stepped edge by edge, with the bus answering its master as chapter 38's RAM slave does
+ * The NIC at 0x7000_0000 as the golden model sees it: comm/nic.ts's core stepped edge by edge, with the bus answering its master as chapter bus's RAM slave does
  * (a transaction's response comes the clock after its address; one at a time), a register write landing at its handshake edge (`now` − 1) and a read seeing
  * the state before it (`now` − 2), as UartDevice. Frames move between the NIC and this model's RAM at the edges the gates move them.
  *

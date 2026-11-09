@@ -1,4 +1,4 @@
-// How routers learn their tables (chapter 51), on a network that is a model: routers and links with a cost, no packets. Distance vector
+// How routers learn their tables (chapter errors), on a network that is a model: routers and links with a cost, no packets. Distance vector
 // in synchronous rounds (what RIP does) and link state (what OSPF does: flood every link's state, then Dijkstra). The network is invented,
 // and labelled so; the site never touches the learner's real one (roadmap decision 6).
 

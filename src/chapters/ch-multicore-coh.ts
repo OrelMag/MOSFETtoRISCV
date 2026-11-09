@@ -1,4 +1,4 @@
-// Chapter 27's cache steps: private caches in gates, MSI snooping, the spin lock measured, lr.w / sc.w. Every number in
+// Chapter multicore's cache steps: private caches in gates, MSI snooping, the spin lock measured, lr.w / sc.w. Every number in
 // the prose is counted: NANDs from the netlists (lib/cohcosts.ts), cycles and bus transactions from the timing model that
 // tests/coherent.test.ts holds to the gates cycle for cycle (riscv/cohrun.ts).
 

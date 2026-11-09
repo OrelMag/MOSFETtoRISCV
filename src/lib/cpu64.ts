@@ -1,4 +1,4 @@
-// Chapter 25, part 2: one single-cycle core at either register width, so RV32IM and RV64IM can be compared from
+// Chapter widths, part 2: one single-cycle core at either register width, so RV32IM and RV64IM can be compared from
 // the same drawing. At 64 bits everything that holds or computes a register value doubles (PC, register file,
 // ALU, adders, the M unit, the data path to memory), the immediate generator stays 32 bits wide (its result
 // sign-extended by wiring: free), and two blocks are new: the W unit, which keeps RV32's 32-bit arithmetic
@@ -78,7 +78,7 @@ export function clearBit0(xlen: Xlen): ComponentDef {
 }
 
 /**
- * Chapter 25's scene for the W instructions: the W unit around the 64-bit ALU, as the core wires them (operands
+ * Chapter widths's scene for the W instructions: the W unit around the 64-bit ALU, as the core wires them (operands
  * through the unit, the ALU's result back into it). y64 is what the ALU computed, y what the register would get.
  * funct3 and alt are the ALU's operation (alt = funct7[5]: sub, sra).
  */

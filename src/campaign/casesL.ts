@@ -9,7 +9,7 @@ export const CASESL: Record<string, LevelCase> = {
   l_sync: {
     problem: 'Two clocks that are not the same crystal have every phase between them. A signal from the other domain can change within a flip-flop\'s setup-and-hold window, and then the flip-flop goes metastable: neither 0 nor 1 for a time that has no upper bound, only a probability. At 1.6 GHz with data changing at 160 MHz a window of 25 ps is hit ten million times a second.',
     without: 'With one flip-flop read by 8 NAND delays of logic, the undecided level gets 275 ps to fall to a rail and the port fails about once in 1.6 days. Different gates reading it differently is how a metastable bit becomes a wrong state in a machine.',
-    cost: 'Two flip-flops, 22 NANDs and a cycle of latency buy about 2 million years. The asynchronous FIFO of chapter 42 is this two-flop synchronizer on each pointer.',
+    cost: `Two flip-flops, 22 NANDs and a cycle of latency buy about 2 million years. The asynchronous FIFO of chapter ${numOf('clocks')} is this two-flop synchronizer on each pointer.`,
     alts: [{ name: 'Two-flop synchronizer (library)', lib: 'sync2' }, { name: 'Three-flop synchronizer (library)', lib: 'sync3' }],
   },
   l_uarttx: {
@@ -54,7 +54,7 @@ export const CASESL: Record<string, LevelCase> = {
     cost: 'One relay, one relay step (8.2 ms) of delay per station. A signal crosses n stations in n steps, and each one shortens a dot by a little: repeaters balanced their relays to make the two edges equal. A regenerator is also where a signal that was wrong gets repeated wrongly at full strength.',
   },
   l_dial: {
-    problem: 'An automatic exchange has to connect a caller to one of its lines when it hears a number: the dial opens the loop n times, and the exchange counts. Strowger\'s switch did it with a magnet, a ratchet and a contact wiper; the relay version counts the pulses in a chain of toggle stages and selects with contacts on the same relays. Chapter 40 builds it for eight lines; the real thing used ten and many ranks.',
+    problem: `An automatic exchange has to connect a caller to one of its lines when it hears a number: the dial opens the loop n times, and the exchange counts. Strowger's switch did it with a magnet, a ratchet and a contact wiper; the relay version counts the pulses in a chain of toggle stages and selects with contacts on the same relays. Chapter ${numOf('exchange')} builds it for eight lines; the real thing used ten and many ranks.`,
     without: 'Without the counter nothing remembers which pulse this is. Without the contact tree a decoder of gates, here relays, would turn the count into a selection and add a relay step.',
     cost: 'Ten relays: three toggle stages of three each and the hang-up relay. The tree is free, contacts on relays that exist anyway. The step costs a few relay steps of ripple: the fall of bit 0 clocks bit 1, whose fall clocks bit 2.',
   },

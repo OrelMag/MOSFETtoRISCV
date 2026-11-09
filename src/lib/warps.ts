@@ -1,4 +1,4 @@
-// The warp core of chapter 31: the lane core of chapters 29–30 holding W warps at once, so that a
+// The warp core of chapter warps: the lane core of chapters lanes–simt holding W warps at once, so that a
 // load's latency is hidden by running other warps instead of waiting. The golden model is
 // riscv/warps.ts (it steps the warp the scheduler issued).
 //
@@ -6,9 +6,9 @@
 //                 scoreboard: a pending bit per register, set when the warp issues a load, cleared
 //                 when the load comes back
 //   hazard check  the warp's next instruction reads or writes a pending register: not ready
-//   scheduler     the round-robin arbiter of chapter 27 over the ready warps; one issues per cycle
+//   scheduler     the round-robin arbiter of chapter multicore over the ready warps; one issues per cycle
 //   lanes         as before, with one register bank per warp (the warp number picks the bank)
-//   memory        an L-cycle pipeline in front of a memory with a port per lane (chapter 32 turns
+//   memory        an L-cycle pipeline in front of a memory with a port per lane (chapter feed turns
 //                 that into one port and a coalescer); a returning load writes its warp's bank, so
 //                 that warp sits out the cycle (one write port per bank)
 
@@ -33,6 +33,7 @@ import { LANE_PITCH, LANE_TAP, laneMemPorts, MEM_INSET } from './lanegeom';
 import { accessUnit, lsuMemory } from './warpmem';
 import { bitwise, orN } from './wide';
 
+import { numOf } from '../chapters/order';
 const bit = (name: string, dir: 'in' | 'out', clock?: boolean): PortDef => ({ name, width: 1, dir, ...(clock ? { clock } : {}) });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
 const clkPort = (): PortDef => ({ name: 'clk', width: 1, dir: 'in', side: 'bottom', clock: true });
@@ -137,7 +138,7 @@ export function hazardSpec(instr: number, pending: number, amo = false): number 
   return (u.rs1 && p((instr >>> 15) & 31)) || (u.rs2 && p((instr >>> 20) & 31)) || (u.rd && p((instr >>> 7) & 31)) ? 1 : 0;
 }
 
-/** The scoreboard check; amo: chapter 32's, where amoadd.w reads rs2 too. */
+/** The scoreboard check; amo: chapter feed's, where amoadd.w reads rs2 too. */
 export function sbCheck(amo: boolean): ComponentDef {
   return memo(`warphazard${amo ? '_a' : ''}`, () => {
     const b = new Builder(16);
@@ -206,7 +207,7 @@ export const SCOREBOARD: ComponentDef = (() => {
 // ---- one warp's state ----------------------------------------------------------------------------
 
 /**
- * One warp: its PC, the SIMT control of chapter 30 (mask and stack), whether it runs, and its
+ * One warp: its PC, the SIMT control of chapter simt (mask and stack), whether it runs, and its
  * scoreboard. issue: the scheduler picked it (its PC, mask and stack move); spawn: wspawn starts it
  * at spawnPc with every lane active. It stops running after an instruction that jumps to itself or
  * empties its mask. first: warp 0, running from power-on (its started bit is stored inverted).
@@ -250,7 +251,7 @@ export function warpSlot(n: number, first: boolean): ComponentDef {
     const pins = edgePins(b, ins, ['pc', 'mask', 'run', 'pending']);
     return define({
       id: `warpslot${n}${first ? '_0' : ''}`, name: first ? 'Warp 0' : 'Warp', category: 'cpu',
-      summary: `One resident warp: its PC, its active mask and split / join stack (chapter 30), whether it runs, and its scoreboard. Only the warp the scheduler issues moves; wspawn starts the warp at spawnPc with all ${n} lanes active. It stops after an instruction that jumps to itself or turns every lane off.${first ? ' Warp 0 runs from power-on.' : ''}`,
+      summary: `One resident warp: its PC, its active mask and split / join stack (chapter ${numOf('simt')}), whether it runs, and its scoreboard. Only the warp the scheduler issues moves; wspawn starts the warp at spawnPc with all ${n} lanes active. It stops after an instruction that jumps to itself or turns every lane off.${first ? ' Warp 0 runs from power-on.' : ''}`,
       ports: [bit('issue', 'in'), bit('spawn', 'in'), bus('spawnPc', 32, 'in'), bus('nextPc', 32, 'in'), bit('isTmc', 'in'), bit('isSplit', 'in'), bit('isJoin', 'in'), bit('isPred', 'in'),
         bus('pred', n, 'in'), bus('leadA', 32, 'in'), bus('leadB', 32, 'in'), bus('pcPlus4', 32, 'in'), bus('setRd', 5, 'in'), bit('setEn', 'in'), bus('clrRd', 5, 'in'), bit('clrEn', 'in'), clkPort(),
         bus('pc', 32, 'out'), bus('mask', n, 'out'), bit('run', 'out'), bus('pending', 32, 'out')],
@@ -263,7 +264,7 @@ export function warpSlot(n: number, first: boolean): ComponentDef {
 // ---- a lane with a register bank per warp -------------------------------------------------------------
 
 /**
- * One lane of the warp core: chapter 29's lane with W register files, one per warp. The issuing
+ * One lane of the warp core: chapter lanes's lane with W register files, one per warp. The issuing
  * warp's bank is read and written (we); a returning load writes its warp's bank (retEn, retWarp,
  * retRd, retData), never the same bank in the same cycle (the scheduler skips that warp).
  */
@@ -345,7 +346,7 @@ export function warpLane(n: number, W: number, mul = false): ComponentDef {
  * A data memory of 2^k words with a read and a write port per lane. Reads are combinational; at the
  * clock edge every lane with we writes its word, and when several write one word the highest lane
  * wins (the golden model stores lowest lane first). xport: one more read port (xa → xq) for a reader outside
- * the core (chapter 34's command unit). w: the word width (the campaign's lane benches use 16).
+ * the core (chapter graphics's command unit). w: the word width (the campaign's lane benches use 16).
  */
 export function lanePortMemory(k: number, n: number, init?: ArrayLike<number>, xport = false, w = 32): ComponentDef {
   if (init && Array.from(init).some((v) => v)) return withInit(lanePortMemory(k, n, undefined, xport, w), init, w);
@@ -401,7 +402,7 @@ export function lanePortMemory(k: number, n: number, init?: ArrayLike<number>, x
     const xOut = xTree + outs.length * tw + 4;
     return define({
       id: mid, name: `Data memory, a port per lane (${N} words${xport ? ', one more read port' : ''})`, category: 'memory',
-      summary: `${N} words of ${w} bits, one read and one write port per lane: every lane reads its own word in the same cycle, and at the clock edge every lane with we set writes its word (the highest lane wins a word several write). Real memories do not have ${n} ports; chapter 32 gives them one port and a coalescer.${xport ? ' xa / xq: a read port for a unit outside the core.' : ''}`,
+      summary: `${N} words of ${w} bits, one read and one write port per lane: every lane reads its own word in the same cycle, and at the clock edge every lane with we set writes its word (the highest lane wins a word several write). Real memories do not have ${n} ports; chapter ${numOf('feed')} gives them one port and a coalescer.${xport ? ' xa / xq: a read port for a unit outside the core.' : ''}`,
       ports: [...L.map((i) => bus(`addr${i}`, k, 'in')), ...L.map((i) => bus(`wd${i}`, w, 'in')), bus('we', n, 'in'), ...(xport ? [bus('xa', k, 'in')] : []), clkPort(),
         ...outs.map((o) => bus(o, w, 'out'))],
       symbol: { kind: 'box', label: 'DATA MEM' },
@@ -489,7 +490,7 @@ export function memPipe(n: number, W: number, L: number, k: number, init?: Array
   });
 }
 
-// ---- chapter 32: amoadd.w, bar, mul -------------------------------------------------------------------
+// ---- chapter feed: amoadd.w, bar, mul -------------------------------------------------------------------
 
 /** [isAmo, isBar, isMul, opInt] for [op, funct3, funct7]: amoadd.w only (funct5 = 0); opInt shows it to CONTROL as lw. */
 export function extDecodeSpec([op, f3, f7]: number[]): number[] {
@@ -540,7 +541,7 @@ export interface WarpCoreOptions {
   /** The data memory's initial words (the kernel's input). */
   data?: ArrayLike<number>;
   /**
-   * Chapter 32's memory system: one port behind an access unit (lines of global memory, banks of
+   * Chapter feed's memory system: one port behind an access unit (lines of global memory, banks of
    * shared memory, one lane per amoadd.w), the issue port held until a memory instruction's last
    * access; bar and amoadd.w.
    */
@@ -553,7 +554,7 @@ export interface WarpCoreOptions {
   /** Multipliers in the lanes (mul). */
   mul?: boolean;
   /**
-   * A port for a unit outside the core (chapter 34's command unit): launch (one cycle, while every warp is done)
+   * A port for a unit outside the core (chapter graphics's command unit): launch (one cycle, while every warp is done)
    * starts warp 0 again at PC 0 with every lane active, as a dispatch does; xa (a word address) reads the data
    * memory on xq. Not with lsu.
    */

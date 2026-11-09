@@ -1,4 +1,4 @@
-// Chapter 43's programs for the computer with a UART (lib/soc.ts busComputer({ uart: true })): the UART at 0x3000_0000
+// Chapter uart's programs for the computer with a UART (lib/soc.ts busComputer({ uart: true })): the UART at 0x3000_0000
 // (data +0, status +4 [bit 0 rx not empty, bit 1 tx full, bit 2 tx idle, bit 3 framing error, bit 4 overrun],
 // divisor +8, interrupt enables +12), the keyboard at 0x6000_0000, the console at 0x8000_0000. Assembly for riscv/asm.ts.
 

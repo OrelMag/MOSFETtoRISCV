@@ -1,4 +1,4 @@
-// Chapter 50's widgets (Computers on a network): the path a byte takes from software to the wire, the descriptor ring, the checksum worked by hand and on
+// Chapter glass's widgets (Computers on a network): the path a byte takes from software to the wire, the descriptor ring, the checksum worked by hand and on
 // the CPU, frames field by field, the NIC on a loopback bench, two computers and a switch with their consoles and a capture, and the cost of a packet.
 // Models: comm/nic.ts (the NIC), comm/netframes.ts (frames and the checksum), the stack in comm/stack/ (Python compiled for the CPU).
 
@@ -364,7 +364,7 @@ export function lanScene(): Scene {
         h('div', { class: 'mc-row' }, run, save), read,
         h('div', { class: 'uart-cons2' }, h('div', null, h('div', { class: 'cpu-sec' }, 'Console A'), cons.A), h('div', null, h('div', { class: 'cpu-sec' }, 'Console B'), cons.B)),
         h('div', { class: 'cpu-sec' }, 'Frames at the switch'), list, detail,
-        h('p', { class: 'sub' }, `Both computers run the stack of this chapter, compiled from Python, on the gates of chapter 38 with a NIC; the switch is chapter ${numOf('switch')}'s. About 28 000 clocks to the first reply: seconds to tens of seconds at the speed shown.`));
+        h('p', { class: 'sub' }, `Both computers run the stack of this chapter, compiled from Python, on the gates of chapter ${numOf('bus')} with a NIC; the switch is chapter ${numOf('switch')}'s. About 28 000 clocks to the first reply: seconds to tens of seconds at the speed shown.`));
       return { el, update: paint, destroy: () => { loop.stop(); stage.edgeHooks.delete(hook); } };
     }],
   };

@@ -1,4 +1,4 @@
-// Where things sit in a networked computer's RAM (chapter 50). The Python subset's data (globals and lists from 0, the output after them, the
+// Where things sit in a networked computer's RAM (chapter glass). The Python subset's data (globals and lists from 0, the output after them, the
 // stack down from the top of its region) lives in the first dmemWords words; the NIC's two rings and its sixteen frame buffers sit above it, where
 // neither the compiler's stack nor its output can reach them. lib/soc.ts gives the computer a RAM of 2^13 words (32 KB).
 

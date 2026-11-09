@@ -1,4 +1,4 @@
-// Chapter 49's switch, DOM-free: the golden model the gates (lib/ethswitch.ts) are compared with every output every cycle, a traffic
+// Chapter serial's switch, DOM-free: the golden model the gates (lib/ethswitch.ts) are compared with every output every cycle, a traffic
 // simulator on that model, and the closed forms the chapter quotes.
 //
 // The switch has four ports. A port is a byte stream each way (comm/ethframe.ts: data, valid, last, ready; a frame from the

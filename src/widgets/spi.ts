@@ -1,4 +1,4 @@
-// Chapter 44's SPI widgets: the four modes drawn from the gate-level master (not from a picture), chip selects against a
+// Chapter spi's SPI widgets: the four modes drawn from the gate-level master (not from a picture), chip selects against a
 // daisy chain, and the panel that drives the master-and-two-memories scene with whole transactions.
 
 import '../styles/clocks.css';

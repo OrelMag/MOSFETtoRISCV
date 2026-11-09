@@ -238,7 +238,7 @@ async function browserDecode(bytes: Uint8Array, w: number, hh: number): Promise<
     return pictureOf(w, hh, (x, y) => d[4 * (y * w + x)]);
   } catch { return null; }
 }
-/** The quality the file widget opens at (chapter 80 quotes its size). */
+/** The quality the file widget opens at (chapter sensors quotes its size). */
 export const FILE_QUALITY = 75;
 export function fileWidget(): Widget {
   let q = FILE_QUALITY, own: Picture | null = null, token = 0, photo: Picture | null = null;

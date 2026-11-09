@@ -1,4 +1,4 @@
-// Convolutional codes and the Viterbi decoder (DOM-free): chapter 47's golden model for lib/viterbi.ts. Rate 1/2, feed-forward.
+// Convolutional codes and the Viterbi decoder (DOM-free): chapter modem's golden model for lib/viterbi.ts. Rate 1/2, feed-forward.
 //
 // The rules the gates follow, bit for bit:
 // - Generators are written with the most significant of K bits on the input bit: reg = (u << (K - 1)) | state, each output the

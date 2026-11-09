@@ -202,7 +202,7 @@ export const chAppendixSap: Chapter = {
         inverter makes <code>nclk</code>, which steps the control unit on the falling edge (see Microcode).</p>
         <p>Why <code>nclk</code> exists: the control unit changes its control word on the falling edge, half a period before the rising edge on which the registers load. That half period is the time the
         EEPROMs and the gates behind them have to settle, and it is why the control word is steady, never glitching, at the moment it matters. A computer that stepped its control unit on the same edge
-        as its registers would have a race between the new control word and the old data. (Stepping on the same edge is fine in a synchronous design with enables, as chapter 23's is. This one gates clocks with its control lines (OI, RI), so those lines must be steady before the clock rises and stay so while it is high.)</p>
+        as its registers would have a race between the new control word and the old data. (Stepping on the same edge is fine in a synchronous design with enables, as chapter ${numOf('multicycle')}'s is. This one gates clocks with its control lines (OI, RI), so those lines must be steady before the clock rises and stay so while it is high.)</p>
         <div class="try">Turn on <code>HLT</code> and Pulse: <code>clk</code> stays dark, so no register anywhere sees
         an edge.</div>`,
       tour: {

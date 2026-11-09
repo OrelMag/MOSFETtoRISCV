@@ -1,4 +1,4 @@
-// The bench of act 12's Forwarding path (l_fwd, chapter 51). The far end is a JavaScript model of a route table: longest prefix, the order of the tests, and the TTL and checksum
+// The bench of act 12's Forwarding path (l_fwd, chapter errors). The far end is a JavaScript model of a route table: longest prefix, the order of the tests, and the TTL and checksum
 // of a real IPv4 header. The new checksum it expects is the whole header summed again (comm/netframes.ts), not the update the circuit is asked to make, so the two
 // are independent. Lanes of a BitSim run one script each. No DOM.
 

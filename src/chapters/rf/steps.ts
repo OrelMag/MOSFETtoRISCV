@@ -10,6 +10,7 @@ import { pack } from '../../sim/values';
 import type { Stage } from '../../view/stage';
 import type { Step } from '../types';
 
+import { numOf } from '../order';
 const g = groupDigits;
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const pct = (a: number, b: number) => ((100 * a) / b).toFixed(1);
@@ -111,7 +112,7 @@ export const rfSteps: Step[] = [
     get body() {
       const N = RF_NUMBERS();
       return `
-      <p>The dual-issue core of chapter 26 retires two instructions a cycle, so its file has <strong>four read ports and two write ports</strong>. Reads scale by repetition: each port is another 32:1 tree over all the words, ${g(N.port)} NANDs at 32 × 32 (the third port of the 3-read file, ${g(N.r3)} NANDs in all). Writes are harder, because the two ports can name the same
+      <p>The dual-issue core of chapter ${numOf('ooo')} retires two instructions a cycle, so its file has <strong>four read ports and two write ports</strong>. Reads scale by repetition: each port is another 32:1 tree over all the words, ${g(N.port)} NANDs at 32 × 32 (the third port of the 3-read file, ${g(N.r3)} NANDs in all). Writes are harder, because the two ports can name the same
       register. <span data-show="ws5">Each register's write select</span> takes either decoder's output (OR) and picks port 1's data when port 1 is selected: <strong>port 1, the younger instruction, wins</strong>. That is exactly the program-order result of writing the older one first, and the lost write needs no cancelling.</p>
       <p>Complete file: ${g(N.r2)} NANDs, ${(N.r2 / N.rf).toFixed(2)}× the 2R1W file. Four read trees are ${g(4 * N.port)} of them (${pct(4 * N.port, N.r2)} %): for twice the instruction rate the cost of the file grows by about half, because the storage (${g(31 * 32 * N.dff)} NANDs) is paid once. In
       custom cells a port costs two transistors a bit and the file stays small; in gates, as here, the read trees take over.</p>

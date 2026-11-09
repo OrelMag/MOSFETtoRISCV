@@ -1,4 +1,4 @@
-// Chapter 51, A router: IPv4's real bytes, longest-prefix match as a trie in RAM, the fast path in gates compared with net/fastpath.ts at every
+// Chapter errors, A router: IPv4's real bytes, longest-prefix match as a trie in RAM, the fast path in gates compared with net/fastpath.ts at every
 // output of every clock, the slow path it hands the rest to, and the two routing protocols on the invented network of net/routing.ts.
 
 import { equal } from '../lib/combinational';

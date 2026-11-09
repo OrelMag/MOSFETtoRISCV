@@ -1,6 +1,6 @@
-// Reference answers of Act 12's Ethernet levels (campaign/buildcomm.ts), built lazily like the chapters' MACs: a full-duplex MAC (chapter 48's
+// Reference answers of Act 12's Ethernet levels (campaign/buildcomm.ts), built lazily like the chapters' MACs: a full-duplex MAC (chapter carriers's
 // transmitter and receiver with the carrier and collision pins tied off) and the learning decision of a four-port switch on station numbers
-// (chapter 49's table and flood rule at a size a level can ask for: the model of the real 48-bit hashed table is comm/ethswitch.ts).
+// (chapter serial's table and flood rule at a size a level can ask for: the model of the real 48-bit hashed table is comm/ethswitch.ts).
 
 import type { ComponentDef } from '../sim/types';
 import { rca } from './combinational';
@@ -106,7 +106,7 @@ const fwdDefs = new Map<boolean, ComponentDef>();
 /**
  * A router's forwarding decision at the size of a level: four routes (prefix, a length of 0 to 4 bytes, a port), written one at a time, and for a header's fields in parallel
  * the answer in the next clock: drop a bad header, send a TTL that has run out up to the slow path, else the longest prefix that matches: no route or port 3 goes up too.
- * Forwarded, the TTL is one lower and the checksum is updated as RFC 1624 says: complement it, add 0xFEFF with the carry brought round, complement it. Chapter 51's fast path does this on a stream, with a trie.
+ * Forwarded, the TTL is one lower and the checksum is updated as RFC 1624 says: complement it, add 0xFEFF with the carry brought round, complement it. Chapter errors's fast path does this on a stream, with a trie.
  */
 export function fwdPath(shortcut = false): ComponentDef {
   const hit = fwdDefs.get(shortcut);

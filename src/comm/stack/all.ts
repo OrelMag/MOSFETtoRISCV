@@ -1,4 +1,4 @@
-// The layers in the order they are compiled. Chapter 52 adds TCP after UDP.
+// The layers in the order they are compiled. Chapter codes adds TCP after UDP.
 
 import { ARP } from './arp';
 import { ETH } from './eth';

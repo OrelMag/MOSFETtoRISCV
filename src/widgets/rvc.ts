@@ -1,4 +1,4 @@
-// Chapter 25's explorers for the C extension: code size measured on our own programs, a 16-bit parcel taken apart
+// Chapter widths's explorers for the C extension: code size measured on our own programs, a 16-bit parcel taken apart
 // bit by bit next to the instruction it stands for, and what the C core costs.
 
 import { groupDigits } from '../sim/numfmt';

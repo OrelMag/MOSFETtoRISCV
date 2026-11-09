@@ -1,4 +1,4 @@
-// Chapter 52's applications: a sender of a known stream, and a receiver that checks it and prints what it found. Each computer sets its gateway and, since
+// Chapter codes's applications: a sender of a known stream, and a receiver that checks it and prints what it found. Each computer sets its gateway and, since
 // the router's slow path is not on this bench, knows the gateway's MAC from a table (a static ARP entry) instead of asking. Clocks are the CPU's timer.
 
 import { TCP_K } from '../../net/tcp';

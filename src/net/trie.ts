@@ -1,4 +1,4 @@
-// The routing table as a router's fast path holds it (chapter 51): a binary trie in RAM, one read a level, and the table a next hop
+// The routing table as a router's fast path holds it (chapter errors): a binary trie in RAM, one read a level, and the table a next hop
 // points into. DOM-free; lib/router.ts walks the same words in gates, and `lpmLinear` is the definition the walk is tested against.
 //
 // A trie word is 24 bits: hop[23:20] (0: no route ends here), child0[19:10], child1[9:0] (0: no child; node 0 is the root and nobody's

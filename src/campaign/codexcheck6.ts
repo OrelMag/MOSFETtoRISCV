@@ -1,4 +1,4 @@
-// Check yourself questions for the entries of codexmore4.ts (see codexcheck.ts), group 6: Communication, chapters 39-44. Answers
+// Check yourself questions for the entries of codexmore4.ts (see codexcheck.ts), group 6: Communication, chapters telegraph-spi. Answers
 // first: the quiz shuffles the options (ui/quiz.ts shuffleOrder). Numbers pinned by tests/content-codexcomm.test.ts. No DOM.
 
 import type { Quiz } from '../chapters/types';

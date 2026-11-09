@@ -1,4 +1,4 @@
-// Chapter 47's convolutional code in gates: the encoder (a shift register and two XOR trees) and a Viterbi decoder for any K, one add-compare-select
+// Chapter modem's convolutional code in gates: the encoder (a shift register and two XOR trees) and a Viterbi decoder for any K, one add-compare-select
 // and one register-exchange survivor per state. The rules are comm/conv.ts's header; tests/comm-codes-gates.test.ts compares every metric, select
 // and output every clock with that model, at K = 3 and at K = 7, hard and with three-bit levels.
 

@@ -1,4 +1,4 @@
-// Chapter 44's SPI in gates: a master (any of the four modes, CS, a done flag) and a target with a 256-byte memory behind the
+// Chapter spi's SPI in gates: a master (any of the four modes, CS, a done flag) and a target with a 256-byte memory behind the
 // 25-series command set. Both are written with lib/rtl.ts, so they are NAND gates and the library's flip-flops in boxes of their
 // own; comm/spi.ts holds the models the tests compare them with every cycle.
 
@@ -15,6 +15,7 @@ import { simulate } from '../sim/harness';
 import { pack } from '../sim/values';
 import type { ComponentDef, NetDef } from '../sim/types';
 
+import { numOf } from '../chapters/order';
 let master: ComponentDef | undefined;
 
 /** The master: a prescaler (SCLK edges every second clock), a five-bit edge counter, one shift register both ways, CS = not busy. */
@@ -71,7 +72,7 @@ let device: ComponentDef | undefined;
  * wrap writes within a page) in mode 0. It is not a mode 3 part: its last byte of a write is committed on the falling edge after the eighth rising
  * edge, which a mode 3 master (SCLK idles high) never makes before it raises CS; a real part commits on CS rising. Everything inside is
  * clocked by SCLK itself, rising for what it samples and falling for what it changes, and reset while CS is high; there is no
- * system clock. MISO is 0 while CS is high (a real part lets go of the line there; the switch-level bus of chapters 5 and 44 can show that).
+ * system clock. MISO is 0 while CS is high (a real part lets go of the line there; the switch-level bus of chapters 5 and spi can show that).
  */
 export function spiDevice(): ComponentDef {
   if (device) return device;
@@ -131,7 +132,7 @@ export { define };
 let pair: ComponentDef | undefined;
 
 /**
- * Chapter 44's scene: one master and two 256-byte memories on SCLK, MOSI and MISO, with a chip select each: `sel` chooses which
+ * Chapter spi's scene: one master and two 256-byte memories on SCLK, MOSI and MISO, with a chip select each: `sel` chooses which
  * select follows the master's; the master runs in mode 0 (the memories' only mode). Placed by hand: the master left, the two
  * memories right, the select glue between, every wire a net label.
  */
@@ -224,7 +225,7 @@ export function masterRun(mode: SpiMode, tx: number, peer: number): MasterRun {
   return { clocks, rx: out('rx'), edges };
 }
 
-// ---- the master behind chapter 38's bus ---------------------------------------------------------------------------------------
+// ---- the master behind chapter bus's bus ---------------------------------------------------------------------------------------
 
 let axi: ComponentDef | undefined;
 
@@ -239,7 +240,7 @@ export function axiSpi(): ComponentDef {
   if (axi) return axi;
   const m = new Rtl({
     id: 'axi_spi', name: 'SPI master (bus slave)', category: 'memory', label: 'SPI slave',
-    summary: 'Chapter 44\'s SPI master behind chapter 38\'s bus: +0 DATA (store: send a byte, load: the byte received), +4 STATUS (bit 0 busy, bit 1 done), +8 CTRL (CPOL, CPHA, hold CS low, interrupt enable). sclk, mosi and cs_n are the pins; miso comes in.',
+    summary: `Chapter ${numOf('spi')}'s SPI master behind chapter ${numOf('bus')}'s bus: +0 DATA (store: send a byte, load: the byte received), +4 STATUS (bit 0 busy, bit 1 done), +8 CTRL (CPOL, CPHA, hold CS low, interrupt enable). sclk, mosi and cs_n are the pins; miso comes in.`,
     notes: 'regs: the bus handshake and the registers. The master inside is the chapter\'s SPI master, unchanged.',
   });
   const clk = m.input('clk', { clock: true });

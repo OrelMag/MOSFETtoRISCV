@@ -1,4 +1,4 @@
-// Chapter 39 and 40's relays at switch level: the telegraph repeater (a coil on the incoming line closes a contact that
+// Chapter telegraph and exchange's relays at switch level: the telegraph repeater (a coil on the incoming line closes a contact that
 // puts a local battery on the next line), and below, the dial exchange (pulse counter, selector, crossbar). Every part is
 // relay(n) contacts and coils on SwitchSim, so time counts relay steps. Outputs end on a load (the next coil, drawn as a
 // pull-down) like lib/relays.ts.

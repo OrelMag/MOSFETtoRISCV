@@ -15,6 +15,7 @@ import { pollIrqWidget } from '../widgets/pollirq';
 import type { Stage } from '../view/stage';
 import type { Step } from './types';
 
+import { numOf } from './order';
 const sys = (id: string) => SYSTEM_PROGRAMS.find((p) => p.id === id)!.source;
 const nd = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const reg = (st: Stage, i: number): number => { try { return st.sim ? cpuState(st.sim).x[i] : -1; } catch { return -1; } };
@@ -105,7 +106,7 @@ export const IO_MORE: Step[] = [
         <tr><td>mtimecmp 0x14</td><td>last value</td><td>32 bits kept</td><td>a store can end the timer request (mtip falls)</td></tr></table>
       <p>Memory promises that a load returns the last store and that doing either twice is the same as once. A device register promises neither: a store to the console prints every time, so
       repeating it is not idempotent; a status register changes between two loads; and some registers act on a <em>read</em>: a UART's receive register pops the byte, a keyboard queue
-      drops its oldest key (the sandbox's keyboard part and chapter 38's key slave work this way), and a request controller's <em>claim</em> register (chapter 20) returns the
+      drops its oldest key (the sandbox's keyboard part and chapter ${numOf('bus')}'s key slave work this way), and a request controller's <em>claim</em> register (chapter 20) returns the
       pending source and clears it. So I/O cannot sit behind <span data-ahead="cache">a cache (a small fast copy of recent memory, chapter 22)</span>, loads and stores to it must not be reordered or merged, and a compiler is told so with <code>volatile</code>.
       A pipeline that speculates must not issue such a load early: real cores hold device accesses until the instruction can no longer be cancelled. (The system CPU here has no pipeline, so the question does not arise.)</p>`,
     scene: () => cpuScene({ source: sys('bytes'), system: true, highlight: ['io'] }),

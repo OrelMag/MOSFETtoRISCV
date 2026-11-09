@@ -1,4 +1,4 @@
-// Chapter 24 widgets: an IEEE 754 bit explorer for several formats, and the number line of every
+// Chapter float widgets: an IEEE 754 bit explorer for several formats, and the number line of every
 // value of a tiny format (where the spacing of floats becomes visible).
 
 import { F16, F32, fpValue, parts, roundTo, type FpFormat } from '../sim/fpref';

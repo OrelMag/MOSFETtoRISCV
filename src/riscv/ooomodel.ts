@@ -1,4 +1,4 @@
-// The out-of-order core as a cycle-level model (chapter 26): the reference the gate-level core must match cycle for
+// The out-of-order core as a cycle-level model (chapter ooo): the reference the gate-level core must match cycle for
 // cycle, and what the chapter's explorers run at any size. DOM-free.
 //
 // The core (OOO_CORE; P6 style: values wait in the reorder buffer, the rename table maps a register to a ROB entry):
@@ -25,7 +25,7 @@
 //              (from its committed copy); fetch restarts at the right PC next cycle. With recover: 'resolve' the flush
 //              happens when the branch executes instead (the model only: it needs rename-table checkpoints).
 //
-// Beyond the core (the lab, chapter 26): fetch and commit widths apart from the ports, any number of ports each with
+// Beyond the core (the lab, chapter ooo): fetch and commit widths apart from the ports, any number of ports each with
 // its own units (portsOf gives the ports above), and a pipelined divider. Every commit slot is accounted for
 // (stats.slots): committed, or charged to what the oldest instruction in flight waits for once issue is done (its
 // producer's unit, older stores for a load, a busy divider, a port or bus taken, the one store a cycle; from a flush

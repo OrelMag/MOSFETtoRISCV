@@ -1,4 +1,4 @@
-// The 4 x 4 DRAM array of chapter 35 on a SwitchSim of its own (DOM-free), driven by the same protocol as the chapter's
+// The 4 x 4 DRAM array of chapter dram on a SwitchSim of its own (DOM-free), driven by the same protocol as the chapter's
 // panel (widgets/dram.ts dramScene): precharge, activate, sense, close, refresh, and Wait = SwitchSim.leak. It settles
 // only when an operation is called, never per frame. Every charge the 3D model draws is read back with `level`.
 

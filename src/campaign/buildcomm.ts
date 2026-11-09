@@ -1,6 +1,6 @@
 // Act 12's build levels (Links, roadmap Phase 21 g): relays as repeaters and selectors, the synchronizer, a UART's two halves,
 // an I²C controller, CRC-32, the 8b/10b encoder and clock recovery, each against the far end of its link on a bench
-// (commcheck.ts). The reference answers are chapters 39–47's library circuits drawn as chips. No DOM.
+// (commcheck.ts). The reference answers are chapters telegraph–modem's library circuits drawn as chips. No DOM.
 
 import type { BuildChallenge, PinSpec } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
@@ -118,7 +118,7 @@ export const BUILDCOMM: Record<string, () => BuildChallenge> = {
   }),
   l_i2c: () => ({
     id: 'l_i2c', title: 'I²C controller', level: 'sequential', allowed: 'nand',
-    brief: 'Two wires, any number of devices, each pulling a line low and never driving it high: a line is 1 only if nobody pulls it. <b>sda_o</b> = 1 pulls SDA to ground (an open-drain pad: the NMOS of chapter 44), 0 lets go; <b>sda_i</b> and <b>scl_i</b> are the wires read back. The pad is not part of this level: the bench is the wire (a JavaScript model of the wired AND, not a switch-level circuit), a target (a four-register device model) and, in some tests, a rival controller model; your controller is gates and sees the wire only through sda_i and scl_i. '
+    brief: `Two wires, any number of devices, each pulling a line low and never driving it high: a line is 1 only if nobody pulls it. <b>sda_o</b> = 1 pulls SDA to ground (an open-drain pad: the NMOS of chapter ${numOf('spi')}), 0 lets go; <b>sda_i</b> and <b>scl_i</b> are the wires read back. The pad is not part of this level: the bench is the wire (a JavaScript model of the wired AND, not a switch-level circuit), a target (a four-register device model) and, in some tests, a rival controller model; your controller is gates and sees the wire only through sda_i and scl_i. `
       + 'One command at a time: <b>go</b> with <b>cmd</b> (0 START, 1 WRITE a byte and read the ACK, 2 READ a byte, 3 STOP) and <b>din</b> (the byte; for a READ, din[0] = 1 sends NACK instead of ACK). <b>ready</b> is 1 when idle and 0 from the clock after go until the command is over. A command is bit cells of four phases of two clocks each: 0 SCL pulled low and SDA set, 1 SCL released (and the cell waits here until SCL really reads high: the target or another controller may stretch it), 2 SCL high, SDA sampled at its end, 3 SCL pulled low again. START and STOP are one cell; a byte is eight cells and a ninth for the acknowledge, most significant bit first. '
       + '<b>ack</b> = 1 if the target answered a WRITE; <b>dout</b> is the byte read; <b>lost</b> = 1 when you let go of SDA (sent a 1) and read a 0 in the same cell: arbitration is lost, and both lines must be released at once, so that the winner\'s frame goes on unharmed. The bench runs the golden controller beside yours, clock by clock, and names the first line that differs.',
     ports: pinsOf(i2cController()),

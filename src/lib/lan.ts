@@ -1,5 +1,5 @@
-// Chapter 50's last scene: two bus computers, each with a NIC, and a switch between them. The computers' serial pairs (txd, txen out; rxd, crs in) meet
-// the switch through one MAC pair a port (chapter 48's receiver and transmitter, here on the switch's side of the cable): the receiver turns the
+// Chapter glass's last scene: two bus computers, each with a NIC, and a switch between them. The computers' serial pairs (txd, txen out; rxd, crs in) meet
+// the switch through one MAC pair a port (chapter carriers's receiver and transmitter, here on the switch's side of the cable): the receiver turns the
 // bits of a port into the byte stream the switch takes in, the transmitter turns the switch's stream back into bits. Ports 2 and 3 are unused (their
 // receive streams idle, their transmit sides always ready, so that a flooded frame leaves). One clock for everything.
 //

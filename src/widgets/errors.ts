@@ -1,4 +1,4 @@
-// Chapter 47's explainers (When bits go wrong): flip bits and watch parity respond, CRC-32 of a message you edit and the long
+// Chapter modem's explainers (When bits go wrong): flip bits and watch parity respond, CRC-32 of a message you edit and the long
 // division behind a CRC-8, how often each check lets a corrupted word through, the CRC register panel on the gate-level scene,
 // a frame with its flags and stuffed zeros, a repeat-request timeline against its closed form, and forward error correction
 // against retransmission. Every number comes from comm/crc.ts, framing.ts, arq.ts, fec.ts.

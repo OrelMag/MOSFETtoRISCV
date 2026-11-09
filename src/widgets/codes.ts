@@ -1,4 +1,4 @@
-// Chapter 47's stronger codes: bit error rate against Eb/N0 (closed forms from comm/ber.ts, a live run of the real decoders on top), the convolutional
+// Chapter modem's stronger codes: bit error rate against Eb/N0 (closed forms from comm/ber.ts, a live run of the real decoders on top), the convolutional
 // encoder and the Viterbi decoder on their gate-level scenes with the golden model in lock step and the trellis drawn from it, the Reed-Solomon encoder
 // with the model's decoder on the word it made, and interleaving against a burst.
 

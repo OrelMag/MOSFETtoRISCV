@@ -1,4 +1,4 @@
-// Fourier for chapters 45 and 46 (DOM-free). A periodic NRZ pattern as harmonics, through phys/line.ts's single pole; the DFT, a
+// Fourier for chapters signals and noise (DOM-free). A periodic NRZ pattern as harmonics, through phys/line.ts's single pole; the DFT, a
 // radix-2 FFT and its count of multiplications; an OFDM block over an FIR channel. tests/comm-fourier.test.ts holds the harmonic sum
 // to the pole's closed-form periodic response, the FFT to the plain DFT, and the block to one complex tap per tone.
 
@@ -15,7 +15,7 @@ export const PATTERNS: { name: string; bits: number[] }[] = [
 
 /** The time constant of a pole of `b` GHz, in ns (as phys/line.ts's channel; 1000 / (2π b) there is in ps). */
 export const tauOf = (b: number): number => 1 / (2 * Math.PI * b);
-/** What a pole of `b` GHz keeps of the last level after one bit at `r` Gb/s: chapter 46's a. */
+/** What a pole of `b` GHz keeps of the last level after one bit at `r` Gb/s: chapter noise's a. */
 export const aOf = (r: number, b: number): number => Math.exp((-2 * Math.PI * b) / r);
 /** The pole's gain at `f` GHz. */
 export const poleGain = (f: number, b: number): number => 1 / Math.hypot(1, f / b);
@@ -120,7 +120,7 @@ export function dft(x: Cx): Cx {
   return { re, im };
 }
 
-/** Multiplications of a radix-2 FFT of N points, one a butterfly, the trivial twiddles counted (as chapter 45 does). */
+/** Multiplications of a radix-2 FFT of N points, one a butterfly, the trivial twiddles counted (as chapter signals does). */
 export const fftMults = (N: number): number => (N / 2) * Math.log2(N);
 
 /** A radix-2 decimation-in-time FFT of a power-of-two length; `mults` counts its butterflies. `inverse` divides by N. */

@@ -1,4 +1,4 @@
-// Morse and ITA2 (Baudot-Murray) codes with their timing (chapter 39). DOM-free.
+// Morse and ITA2 (Baudot-Murray) codes with their timing (chapter telegraph). DOM-free.
 
 /** International Morse: '.' dot, '-' dash. */
 export const MORSE: Record<string, string> = {

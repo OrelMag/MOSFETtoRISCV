@@ -1,4 +1,4 @@
-// Chapter 25's width comparison, measured on lib/cpu64.ts xlenCpu (defaults: 64-word ROM, 32-word data memory, Kogge–Stone
+// Chapter widths's width comparison, measured on lib/cpu64.ts xlenCpu (defaults: 64-word ROM, 32-word data memory, Kogge–Stone
 // adders) and kept here as plain numbers so the chapter imports no circuit. tests/cpu64.test.ts rebuilds and remeasures
 // every one. NANDs: the program ROM left out (as the benchmarks count them); period: static timing, in NAND delays.
 

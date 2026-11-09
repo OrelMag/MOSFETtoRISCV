@@ -1,4 +1,4 @@
-// The coherent dual-core's timing model (chapter 27, lib/coherent.ts), cycle for cycle. The header is the
+// The coherent dual-core's timing model (chapter multicore, lib/coherent.ts), cycle for cycle. The header is the
 // specification the gates follow; tests/coherent.test.ts holds both to it at every clock edge.
 //
 // MACHINE. Two cores, each behind a private write-back cache of 4 sets x 4-word lines, direct-mapped, and one

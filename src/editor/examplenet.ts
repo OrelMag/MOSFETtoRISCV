@@ -1,10 +1,10 @@
-// Examples ▸ Two computers on a switch: chapter 50's last scene as a sandbox chip. Two RV32I bus cores, each with a boot ROM, a RAM and a
+// Examples ▸ Two computers on a switch: chapter glass's last scene as a sandbox chip. Two RV32I bus cores, each with a boot ROM, a RAM and a
 // NIC (slave code 0x7; its master link sits on the interconnect's second master port), joined by a four-port learning switch through a
 // MAC pair a port. Computer A sends a frame to B's address, B prints it and answers; the first frame is flooded (the switch has not met
 // B), the answer goes to A's port alone, and the later frames of A go to B's port alone: watch the switch's counters.
 //
 // Everything is built on first use (build functions): the NIC, the switch and the MACs are large, and nothing here may be registered
-// at import (tests/editor-unravel.test.ts round-trips every registered part). No chapter 50 stack: the drivers are short assembly,
+// at import (tests/editor-unravel.test.ts round-trips every registered part). No chapter glass stack: the drivers are short assembly,
 // and the frames are raw Ethernet (type 0x0800, a five-byte payload), so a boot ROM of 256 words holds each.
 
 import { MAP } from '../bus/model';

@@ -1,4 +1,4 @@
-// What the coherent dual-core's caches cost, counted from the gates (chapter 27's cache steps quote these; tests/coherent-costs.test.ts
+// What the coherent dual-core's caches cost, counted from the gates (chapter multicore's cache steps quote these; tests/coherent-costs.test.ts
 // pins the chapter's text to them).
 
 import { stats } from '../sim/stats';

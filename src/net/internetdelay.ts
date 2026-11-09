@@ -1,13 +1,13 @@
-// What a packet's journey costs on chapter 53's network: four delays per hop, each from something stated. Propagation: the length over the
+// What a packet's journey costs on chapter pcie's network: four delays per hop, each from something stated. Propagation: the length over the
 // speed of light in fibre, an assumed 200 000 km/s. Serialization: the frame's bits over the link's rate. Queueing: M/M/1's mean wait for cross
 // traffic of a stated load and packet size, an assumption about traffic, and a seeded packet-by-packet queue for one packet's own luck.
-// Engine: chapter 51's fast path, its cycles at the book's clock; a real router's is far wider, so at real rates this term is an upper bound.
+// Engine: chapter errors's fast path, its cycles at the book's clock; a real router's is far wider, so at real rates this term is an upper bound.
 
 import { CLOCK_NS } from '../dram/timing';
 import { LINKS, type Journey, type NetLink } from './internet';
 
 export const FIBRE_KM_PER_S = 200_000;
-/** Preamble 8, FCS 4, inter-frame gap 12: what a frame without its FCS costs beyond its own bytes on the wire (chapter 48). */
+/** Preamble 8, FCS 4, inter-frame gap 12: what a frame without its FCS costs beyond its own bytes on the wire (chapter carriers). */
 export const WIRE_EXTRA = 24;
 /** The mean size of the cross traffic a queue holds: assumed. */
 export const CROSS_BYTES = 800;
@@ -21,7 +21,7 @@ export function queueMs(l: NetLink, load = l.load): number {
   if (load >= 1) return Infinity;
   return (load / (1 - load)) * serMs(l, CROSS_BYTES - WIRE_EXTRA);
 }
-/** The fast path's cycles (the same count as chapter 51's engineCycles, which a test holds equal): frame in, decide, the walk, the port, frame out. */
+/** The fast path's cycles (the same count as chapter errors's engineCycles, which a test holds equal): frame in, decide, the walk, the port, frame out. */
 export const engineMs = (frame: number, reads: number): number => ((frame + 1 + reads + 1 + frame) * CLOCK_NS) / 1e6;
 
 export interface HopDelay { router: number; link: NetLink | null; engine: number; prop: number; ser: number; queue: number; total: number }

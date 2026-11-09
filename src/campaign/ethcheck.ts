@@ -1,4 +1,4 @@
-// The benches of act 12's Ethernet levels (chapters 48 and 49). The far end of a link is a JavaScript model that knows the rules and names the
+// The benches of act 12's Ethernet levels (chapters carriers and serial). The far end of a link is a JavaScript model that knows the rules and names the
 // first one a circuit breaks: a receiver that decodes the wire a bit at a time and checks every field of a frame, a sender of good and bad
 // frames that expects the byte stream and the verdict, and a learning switch's model that knows who is where. Lanes of a BitSim run one
 // scenario each. No DOM.

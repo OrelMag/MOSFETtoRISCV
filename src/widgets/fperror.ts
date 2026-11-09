@@ -1,4 +1,4 @@
-// Chapter 24: error in practice. errorLab(): an expression evaluated in float32 (operation by operation, src/sim/fpref.ts) and
+// Chapter float: error in practice. errorLab(): an expression evaluated in float32 (operation by operation, src/sim/fpref.ts) and
 // exactly (src/sim/errorlab.ts), with the error of every step in ulps and relative terms. sumLab(): naive, pairwise and Kahan
 // sums against the exact sum and their worst-case bounds (src/sim/sumerror.ts). Nothing on screen is typed in: all computed.
 

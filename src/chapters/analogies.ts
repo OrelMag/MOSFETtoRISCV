@@ -1,3 +1,4 @@
+import { numOf } from './order';
 // Analogies (DOM-free): a familiar picture for an abstract idea, shown folded under the step it belongs to and in the
 // codex entries it explains. Every one says where it stops being true (`breaks`), because the reader is an engineer and
 // a picture that misleads costs more than it saves. Steps are named by title (tests/analogies.test.ts checks each one
@@ -191,7 +192,7 @@ export const ANALOGIES: Analogy[] = [
     body: `<p>Each stored bit is a bucket with a pinhole: a 1 is a full bucket, and it drains on its own. Nothing is wrong with it;
       that is what the part is. Reading shares the bucket with a much bigger pipe and leaves both near half, whatever it held, so the read must fill it back.
       Refresh is the rounds: visit every bucket in turn and top it up before a full one has sunk so low that nobody can say
-      whether it was full. Chapter 35 builds the bit lines and the sense amplifiers, with the numbers.</p>`,
+      whether it was full. Chapter ${numOf('dram')} builds the bit lines and the sense amplifiers, with the numbers.</p>`,
     breaks: `A real cell leaks at a rate that differs from cell to cell and doubles for about every 10 °C, so the rounds are timed by
       the worst bucket on the hottest day. And the rounds are not free: a refresh closes every bank, and any request, to any row, waits for it.`,
   },

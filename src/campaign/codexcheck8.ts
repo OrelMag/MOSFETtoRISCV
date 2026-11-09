@@ -1,4 +1,4 @@
-// Check yourself questions for the entries of codexmore6.ts (see codexcheck.ts), group 8: Communication, chapters 48-50. Answers
+// Check yourself questions for the entries of codexmore6.ts (see codexcheck.ts), group 8: Communication, chapters carriers-glass. Answers
 // first: the quiz shuffles the options (ui/quiz.ts shuffleOrder). Numbers pinned by tests/content-codexcomm.test.ts. No DOM.
 
 import type { Quiz } from '../chapters/types';

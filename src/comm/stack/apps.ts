@@ -1,4 +1,4 @@
-// The applications of chapter 50, in the Python subset, run on top of the stack: a ping that prints each round trip to the console, a host that only
+// The applications of chapter glass, in the Python subset, run on top of the stack: a ping that prints each round trip to the console, a host that only
 // answers (the stack does the work: its main loop is net_poll), and a UDP echo. The subset has no strings, so text is copied into RAM at start
 // from generated store8 lines and printed from there.
 

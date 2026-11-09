@@ -1,4 +1,4 @@
-// Chapter 42's widgets (Crossing clocks): what a receiver decides (noise margins and gain), the Schmitt trigger's
+// Chapter clocks's widgets (Crossing clocks): what a receiver decides (noise margins and gain), the Schmitt trigger's
 // hysteresis and a noisy slow edge, why unrelated clocks land in the setup window, the metastability model's MTBF, what a
 // sampler reads mid-change (binary against Gray), and the panel that ticks two clocks separately over a gate-level
 // circuit. Models: phys/inverter.ts, schmitt.ts, metastable.ts; comm/phase.ts, graybus.ts, asyncfifo.ts.
@@ -21,6 +21,7 @@ import { VDD } from './mosphys';
 import { fitText, slider } from './mosparts';
 import { MS_TIMING } from '../chapters/seq/timing';
 
+import { numOf } from '../chapters/order';
 const nf = (x: number, d = 2) => x.toFixed(d);
 const decimals = (step: number): number => String(step).split('.')[1]?.length ?? 0;
 
@@ -85,7 +86,7 @@ export function receiverWidget(): Widget {
       h('div', { class: 'panel' }, h('h3', null, 'The receiver is an amplifier'), f.svg),
       h('div', { class: 'panel' }, h('h3', null, 'Levels and margins'), lad.svg)),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, vSl.el, nSl.el),
-      h('p', { class: 'sub mos-note' }, `Matched inverter of chapter 2 (Wp/Wn = ${MOBILITY_RATIO}, VDD ${VDD} V). VIL ${nf(m.vil)} V and VIH ${nf(m.vih)} V are where the slope is −1; the driver's levels are the outputs there (VOL ${nf(m.vol)} V, VOH ${nf(m.voh)} V). Noise is the worst-case offset added at the receiver by supply bounce, crosstalk and reflections, chapter 41.`)),
+      h('p', { class: 'sub mos-note' }, `Matched inverter of chapter 2 (Wp/Wn = ${MOBILITY_RATIO}, VDD ${VDD} V). VIL ${nf(m.vil)} V and VIH ${nf(m.vih)} V are where the slope is −1; the driver's levels are the outputs there (VOL ${nf(m.vol)} V, VOH ${nf(m.voh)} V). Noise is the worst-case offset added at the receiver by supply bounce, crosstalk and reflections, chapter ${numOf('wire')}.`)),
     h('div', { class: 'mos-chips' }, ...chips), verdict);
   paint();
   return { el };

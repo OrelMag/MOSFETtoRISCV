@@ -1,4 +1,4 @@
-// Chapter 40's Strowger selector in 3D: this entry stays tiny; the model (widgets/strowger3dview.ts, the renderer) loads
+// Chapter exchange's Strowger selector in 3D: this entry stays tiny; the model (widgets/strowger3dview.ts, the renderer) loads
 // as its own chunks when the step opens.
 
 import { lazyModel } from './modelhost';

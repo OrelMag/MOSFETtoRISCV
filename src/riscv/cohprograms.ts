@@ -1,4 +1,4 @@
-// Programs for the coherent dual-core (chapter 27's cache steps). Both cores run the same code; csrr mhartid tells
+// Programs for the coherent dual-core (chapter multicore's cache steps). Both cores run the same code; csrr mhartid tells
 // them apart. The shared counter is at 64 (line 4), the lock of the lock programs at 80 (line 5).
 
 import { MC_PROGRAMS } from './mcprograms';

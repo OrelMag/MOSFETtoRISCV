@@ -1,4 +1,4 @@
-// A router's fast path, cycle by cycle (chapter 51): the golden model lib/router.ts is compared with at every output of every clock.
+// A router's fast path, cycle by cycle (chapter errors): the golden model lib/router.ts is compared with at every output of every clock.
 //
 // One frame at a time on comm/ethframe.ts's stream, from the destination address on, without FCS. RX: the bytes go into the packet
 // buffer while the header's facts are collected, a byte a cycle. DECIDE: one cycle turns them into drop, up to the slow path, or a route

@@ -1,5 +1,5 @@
 // RFC 792, the part ping uses: echo request (type 8) answered by echo reply (type 0), data copied back unchanged, and a sender of echo
-// requests that notes the reply. Other ICMP messages (unreachable, time exceeded) are dropped here; the router of chapter 51 sends them.
+// requests that notes the reply. Other ICMP messages (unreachable, time exceeded) are dropped here; the router of chapter errors sends them.
 
 import type { StackModule } from './index';
 

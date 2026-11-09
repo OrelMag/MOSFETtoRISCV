@@ -1,4 +1,4 @@
-// Chapter 47's Reed-Solomon in gates: multiplying by a constant in GF(256) is linear over GF(2), so it is an XOR network read off the golden model
+// Chapter modem's Reed-Solomon in gates: multiplying by a constant in GF(256) is linear over GF(2), so it is an XOR network read off the golden model
 // (comm/crc.ts xorPlan, as the CRC's); the encoder is the textbook LFSR over bytes, one such multiplier a generator coefficient; the syndrome unit
 // evaluates the received word at each root. A general multiplier sizes what a decoder would need: the decoder itself is only in comm/rs.ts.
 // tests/comm-codes-gates.test.ts compares every register every clock, and the encoder ends on the published QR check bytes.

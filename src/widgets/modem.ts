@@ -1,4 +1,4 @@
-// Chapter 45's explainers: the voice channel and its tones, the FSK waveform (driven by the same integer models the gates are
+// Chapter signals's explainers: the voice channel and its tones, the FSK waveform (driven by the same integer models the gates are
 // checked against), a carrier with an in-phase and a quadrature part, a constellation in noise (measured against the closed
 // form), Shannon's limit against the modems that approached it, ADSL's bit loading, and the gate-level scenes' panels.
 // Models: comm/modem.ts, comm/limits.ts.

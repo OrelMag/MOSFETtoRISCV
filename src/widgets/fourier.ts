@@ -1,4 +1,4 @@
-// The Fourier explainers of chapters 46 and 45: a bit pattern as harmonics, cut or sent through the channel's pole, in time and in
+// The Fourier explainers of chapters noise and signals: a bit pattern as harmonics, cut or sent through the channel's pole, in time and in
 // frequency; and a block of QPSK tones through an inverse FFT, a prefix, an echo and an FFT back. Every number is comm/fourier.ts's.
 
 import { aOf, fftMults, gibbsOvershoot, ofdmLink, PATTERNS, poleAt, poleGain, qpskErrors, randomQpsk, seriesOf, sumAt, throughPole, toDb, toneGains } from '../comm/fourier';

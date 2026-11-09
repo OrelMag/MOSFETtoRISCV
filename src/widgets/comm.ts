@@ -1,4 +1,4 @@
-// Chapter 39's explainers: the line that fades (phys/telegraph.ts), Morse against ITA2 (comm/codes.ts), and the two limits
+// Chapter telegraph's explainers: the line that fades (phys/telegraph.ts), Morse against ITA2 (comm/codes.ts), and the two limits
 // (comm/limits.ts). Every number shown is computed by the DOM-free model; the sliders are the learner's.
 
 import { ITA2_UNITS, codeBits, ita2Encode, morseEncode } from '../comm/codes';

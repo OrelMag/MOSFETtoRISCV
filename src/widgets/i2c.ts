@@ -1,4 +1,4 @@
-// Chapter 44's I²C widgets: what the pull-up costs (rise time against the I²C-bus specification's limits, static current),
+// Chapter spi's I²C widgets: what the pull-up costs (rise time against the I²C-bus specification's limits, static current),
 // and the panels that drive the switch-level bus scenes: a frame with its decode, and two controllers starting together.
 
 import '../styles/clocks.css';

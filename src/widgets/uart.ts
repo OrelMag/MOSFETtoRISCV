@@ -1,4 +1,4 @@
-// Chapter 43's widgets (A UART): the transmitter and receiver scenes with their panels, the clock-error panel with its
+// Chapter uart's widgets (A UART): the transmitter and receiver scenes with their panels, the clock-error panel with its
 // search for the limit, the core on a bench for the error cases, the baud-rate table, the FIFO budget, the UART on the
 // bus, and two computers on a wire. Models: comm/uart.ts (edge by edge, equal to the gates), comm/startstop.ts.
 
