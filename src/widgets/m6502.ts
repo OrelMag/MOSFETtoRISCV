@@ -11,6 +11,7 @@ import { Cpu6502, type Cpu6502State, Ram64 } from '../m6502/iss';
 import { IO6502, PROGRAMS } from '../m6502/programs';
 import type { NmosSim } from '../sim/nmossim';
 import { h } from '../ui/dom';
+import { holdHeight } from '../ui/holdsize';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { codeEditor } from './codeedit';
 
@@ -187,7 +188,7 @@ function m6502Panel(opts: M6502SceneOptions): ScenePanel {
         h('button', { class: 'btn sm', onclick: () => { editWrap.style.display = 'none'; } }, 'Close')));
     const editBtn = h('button', { class: 'btn sm', onclick: () => { editWrap.style.display = editWrap.style.display === 'none' ? 'block' : 'none'; } }, 'Edit');
 
-    const status = h('div', { class: 'cpu-status' });
+    const status = holdHeight(h('div', { class: 'cpu-status' }));
     const listing = h('div', { class: 'cpu-listing m65-listing' });
     const regs = h('div', { class: 'cpu-regs m65-regs' });
     const flags = h('div', { class: 'm65-flags' });
