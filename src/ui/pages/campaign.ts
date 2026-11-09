@@ -314,7 +314,8 @@ export class CampaignPage implements Page {
     const legend = h('div', { class: 'cp-legend' },
       h('span', { class: 'l available' }, 'available'), h('span', { class: 'l solved' }, 'solved'), h('span', { class: 'l skipped' }, 'skipped'),
       h('span', { class: 'l locked' }, 'locked'), h('span', { class: 'l opt' }, 'optional'), NODES.some((n) => n.soon) ? h('span', { class: 'l soon' }, 'coming soon') : null,
-      h('span', { class: 'l port', title: 'Lines between acts are drawn for the level you point at or select' }, 'builds on earlier acts (point at it)'));
+      h('span', { class: 'l port', title: 'Lines between acts are drawn for the level you point at or select' }, 'builds on earlier acts (point at it)'),
+      h('span', { class: 'l blk', title: 'The tag under a card names the block of the CPU (The CPU tab) the level builds or feeds; everywhere: every block uses it' }, 'the CPU block it goes into'));
     // The frontier: the next open level is ringed, and a map opened with no level selected scrolls to it
     const frontier = nextAvailable(p.view, p.unlockAll)?.id;
     const ring = () => scroll.querySelector('.cp-node.next')?.classList.remove('next');

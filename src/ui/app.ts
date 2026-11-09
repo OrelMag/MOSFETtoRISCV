@@ -130,7 +130,9 @@ export function startApp(root: HTMLElement): void {
     syncTools();
   } }, 'Undo: back to what you had');
   palMenu.append(previewHost, palHead('Presets'), h('div', { class: 'pal-presets', role: 'group', 'aria-label': 'Presets' }, presetBtns), undoItem);
-  palMenu.append(palHead('Wire colours'));
+  // With colour per net on (the default look), wires show their net's hue, not these 0 / 1 colours: say so where they are chosen.
+  const palNote = h('p', { class: 'pal-note' }, 'Colour per net is on (Look, below): each net keeps its own hue, bright = 1, dim = 0. These colours show with it off.');
+  palMenu.append(palHead('Wire colours'), palNote);
   for (const p of PALETTES) {
     const item = h('button', { role: 'menuitemradio', 'data-p': p.id, onclick: () => {
       settings.set('palette', p.id);
@@ -283,6 +285,7 @@ export function startApp(root: HTMLElement): void {
   const syncTools = () => {
     for (const b of palMenu.querySelectorAll<HTMLButtonElement>('button[data-p]')) b.setAttribute('aria-checked', String(b.dataset.p === settings.palette));
     vividItem.setAttribute('aria-checked', String(settings.vivid));
+    palNote.hidden = !settings.netColors;
     boardItem.setAttribute('aria-checked', String(settings.board));
     boardItem.disabled = !settings.vivid;
     cartoonItem.setAttribute('aria-checked', String(settings.cartoon));

@@ -59,7 +59,7 @@ export const SANDBOX_BEATS: readonly CoachBeat[] = [
 
 /** The first-run stage tour: three beats; the rest of the controls are one line on the ? sheet ("Show me the controls" plays all seven). */
 export const STAGE_SHORT: readonly string[] = ['drill', 'walk', 'probe'];
-export const SHORT_TAIL = ' Why?, Step, Share and Open in Sandbox are on the ? sheet.';
+export const SHORT_TAIL = ' Show me the controls, on the ? sheet, tours Why?, Step, Share and Open in Sandbox.';
 
 /** The beat as this screen reads it: its touch wording (title and text) when touch is the main pointer. */
 export const beatText = (b: CoachBeat, coarse: boolean): { title: string; text: string } =>
