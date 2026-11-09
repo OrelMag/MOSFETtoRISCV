@@ -52,3 +52,21 @@ describe('traps: one tick, register by register', () => {
     expect(chTraps.steps.find((s) => s.title === 'Inside the trap unit')!.body).toContain('Common mistakes with traps and interrupts');
   }, 60000);
 });
+
+describe('caches: two arrays one cache apart', () => {
+  it('is the cache model on the loop, and the step\'s cache costs 8 cycles a miss', async () => {
+    const { pairRun, PAIR_TRACE, chCache } = await import('../src/chapters/ch-cache');
+    const { CacheModel } = await import('../src/sim/cachemodel');
+    const R = pairRun();
+    expect([R.dmMiss, R.dmCompulsory, R.dmConflict, R.w2Miss]).toEqual([16, 4, 12, 4]);
+    expect(R.w2.filter((x) => !x.hit).every((x) => x.kind === 'compulsory')).toBe(true);
+    // b moved one line on (0x50): the direct-mapped cache takes only the compulsory misses, as the text says
+    const c = new CacheModel({ size: 64, line: 16, ways: 1, replacement: 'lru', write: 'wt' });
+    expect(PAIR_TRACE.map((a) => (a >= 0x40 ? a + 16 : a)).filter((a) => !c.access(a).hit).length).toBe(4);
+    // the miss time quoted is the gate-level cache's (the direct-mapped step's tour: miss → hit in 4 + 4 edges)
+    const dm = chCache.steps.find((s) => s.title === 'A direct-mapped cache')!;
+    expect(dm.tour!.beats.slice(1, 3).reduce((n, b) => n + (b.cycles ?? 0), 0)).toBe(R.MISS);
+    expect(chCache.steps.find((s) => s.title === 'The three Cs and associativity')!.body).toContain('Worked example: two arrays one cache apart');
+    expect(chCache.steps.find((s) => s.title === 'Average memory access time')!.body).toContain('Common mistakes with caches');
+  });
+});
