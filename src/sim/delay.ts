@@ -81,11 +81,12 @@ export function leafDelays(d: FlatDesign, model: DelayModel): Float64Array {
   const loads = model !== 'unit' ? netLoads(d) : null;
   const out = new Float64Array(d.leaves.length);
   d.leaves.forEach((l, i) => {
-    if (l.kind !== 'nand') { out[i] = l.def.behavior?.delay ?? 1; return; }
-    if (!loads) { out[i] = 1; return; }
+    const slow = d.extraDelay?.get(i) ?? 0; // a slow fault (sim/faults.ts)
+    if (l.kind !== 'nand') { out[i] = (l.def.behavior?.delay ?? 1) + slow; return; }
+    if (!loads) { out[i] = 1 + slow; return; }
     let load = 0;
     for (const p of l.outputs) for (const net of p) load = Math.max(load, loads[net]);
-    out[i] = nandDelay(load, model === 'load');
+    out[i] = nandDelay(load, model === 'load') + slow;
   });
   if (model !== 'unit') leafCache[model].set(d, out);
   return out;

@@ -8,7 +8,7 @@
 /** The order actions leave the bar in, least used first; ids not listed (later plugins) go before these. */
 export const SHED_ORDER: readonly string[] = [
   // cpu late: only a chip with a CPU has it, and below 1340 px its drawer no longer opens by itself (dock.ts tightForDrawer), so this is the way in
-  'section', 'bookmark', 'help', 'type', 'memory', 'screens', 'inspect', 'puzzles', 'challenges', 'play', 'tests', 'timing', 'probe', 'timingmenu', 'package', 'cpu', 'examples',
+  'section', 'bookmark', 'help', 'type', 'memory', 'screens', 'inspect', 'puzzles', 'challenges', 'play', 'tests', 'timing', 'probe', 'faults', 'timingmenu', 'package', 'cpu', 'examples',
   'zout', 'zin', 'iobar', 'fit', 'redo', 'undo', 'props', 'file',
 ];
 

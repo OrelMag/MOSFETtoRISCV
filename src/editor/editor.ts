@@ -683,7 +683,7 @@ export class Editor {
       this.simChip = id;
       this.buildControls();
     }
-    this.sim.update(this.compiled, doc.pins);
+    this.sim.update(this.compiled, doc.pins, doc);
     this.view.setDiags(this.diags);
     this.repaint();
     this.renderTabs();

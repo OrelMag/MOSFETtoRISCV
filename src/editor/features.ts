@@ -17,6 +17,8 @@ import './keys';
 import './analysis';
 // The Cut tool (K): a line dragged across wires cuts them.
 import './cutui';
+// after analysis: the fault brush wraps probe mode's click handler
+import './faultui';
 // Test tables on a chip (Digital's test syntax), run after every edit.
 import './testsui';
 // Breakpoints: Run stops when a condition on the chip's signals holds.

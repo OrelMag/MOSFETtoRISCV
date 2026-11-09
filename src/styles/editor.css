@@ -675,3 +675,16 @@ select.sb-open { field-sizing: content; max-width: 9.5em; }
 .ed-cut { pointer-events: none; }
 svg path.wire.cutting { stroke-dasharray: 0.35 0.25; opacity: 0.7; }
 .sb-canvas.cutting { cursor: crosshair; }
+
+/* The fault brush (faultui.ts): lightning badges on faulted nets, the list in the properties. */
+.ed-faults .fault-badge circle { fill: var(--warn); stroke: var(--bg); stroke-width: 0.12; }
+.ed-faults .fault-badge path { fill: var(--bg); stroke: none; }
+.ed-faults .fault-badge text { font-size: 0.95px; font-weight: 700; fill: var(--warn); }
+.ed-faults .fault-badge.off { opacity: 0.4; }
+.ed-faults .fault-badge.stale circle { fill: var(--muted); }
+.sb-canvas.faulting { cursor: crosshair; }
+.sb-fault-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; }
+.sb-fault-row.stale label { color: var(--muted); text-decoration: line-through; }
+.sb-fault-num { width: 5em; }
+.sb-sum.warn { color: var(--warn); }
+@media (pointer: coarse) { .sb-fault-row .icon-btn { min-width: 40px; min-height: 40px; } }
