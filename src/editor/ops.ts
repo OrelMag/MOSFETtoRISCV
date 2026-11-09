@@ -52,6 +52,7 @@ export function idPrefix(ref: PartRef): string {
   if ('screen' in ref) return 'scr';
   if ('reader' in ref) return 'cr';
   if ('ucode' in ref) return 'uc';
+  if ('core16' in ref) return 'g';
   return 'rom' in ref ? 'rom' : 'ram';
 }
 

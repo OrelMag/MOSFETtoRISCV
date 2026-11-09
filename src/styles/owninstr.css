@@ -17,6 +17,9 @@
 .oi-enc label { display: grid; gap: 3px; font-size: 11.5px; color: var(--muted); }
 .oi-enc input, .oi-enc select { font: 13px var(--font-mono); color: var(--text); background: var(--surface); border: 1px solid var(--border-strong); border-radius: 6px; padding: 4px 7px; }
 .oi-name { width: 110px; }
+/* RV16: the format is fixed (R), shown where the RV32 dialog has its select */
+.oi-fixed { font: 13px var(--font-mono); color: var(--text-2); padding: 5px 0; }
+.oi-why { margin-top: 10px; }
 .oi-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 @media (max-width: 900px) { .oi-cols { grid-template-columns: minmax(0, 1fr); } .oi-body { grid-template-columns: minmax(0, 1fr); } }
 .oi-ctl { display: grid; gap: 6px; align-content: start; }

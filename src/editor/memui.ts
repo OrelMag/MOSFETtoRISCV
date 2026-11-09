@@ -408,7 +408,7 @@ export function openProgramEditor(ed: Editor, partId: string, chipId = ed.chipId
       h('div', { class: 'sb-rom-dlg-foot' }, status,
         builder?.button,
         // An RV32 program's CPU can learn its own instructions (editor/owninstr.ts); the editor reopens after
-        applied.lang === 'asm' ? h('button', { class: 'btn sm ghost', title: 'Your own instructions for this CPU: the core and the golden model learn them, and this program can use them', onclick: customInstrs }, 'Custom instructions…') : null,
+        applied.lang === 'asm' || applied.lang === 'rv16' ? h('button', { class: 'btn sm ghost', title: 'Your own instructions for this CPU: the core and the golden model learn them, and this program can use them', onclick: customInstrs }, 'Custom instructions…') : null,
         h('button', { class: 'btn sm ghost', title: 'Download the program in the box as a deck of punched cards (.deck.json)', onclick: () => saveRomDeck(ed, partId, ce.value, chipId) }, 'Save as deck'),
         chipId === ed.chipId ? h('button', { class: 'btn sm ghost', title: 'Replace the program with the words of a deck of cards (applied at once: one undo step)', onclick: () => void pickDeck(ed).then((d) => {
           if (!d || !loadDeckIntoRom(ed, partId, d)) return;
