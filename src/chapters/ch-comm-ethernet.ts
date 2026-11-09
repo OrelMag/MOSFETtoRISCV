@@ -1,3 +1,5 @@
+// the registry is read here (a part by id): the whole library, not only what the imports below register (tests/firstload.test.ts)
+import '../lib';
 import { CRC32_REFLECTED, CRC32_RESIDUE } from '../comm/crc';
 import { FCS_BYTES, HEADER_BYTES, MAX_FRAME, MIN_FRAME, MIN_PAYLOAD, PREAMBLE, SFD } from '../comm/ethframe';
 import {
