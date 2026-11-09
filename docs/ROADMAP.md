@@ -1337,6 +1337,31 @@ main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
     View options sticky headings and Tab leaving the menu (app.ts, app.css), the relay full adder's pointers (93a4a054), the skip link (da9f2ffb); the
     "factor 1.4" claim in datacentre is no longer in the chapter
 
+### Phase 23 — Ship review and what comes after it (2026-11-09) 🚧
+
+The ship review (five fresh reviewers; plan and findings in E:/audit/ship/) checked every chapter up to Communication, the codex and campaign
+tied to them, the sandbox modes, performance, layout shift and a production pass; batches 1–3 landed (726beeb3, 8b1d4695, 3708abb5). Every
+proposal it raised was approved and is being built (E:/audit/ship/PROPOSALS.md), with the four ONI features (docs/PLAN-ONI.md).
+
+Approved to build now (2026-11-09):
+- ⏳ Python: strings and a heap (chapter 15; the item under Phase 18)
+- ⏳ A chapter step with the Verilog adder, its critical path mapped back to the source lines (the item under Phase 19)
+- ⏳ A part cursor on the stage (run, step, inputs, zoom by key), then placing and wiring in the sandbox by keyboard (the item under
+  Cross-cutting features)
+
+Proposed, kept for later (the author's choice, 2026-11-09; each needs a plan and a mockup before it is built):
+- ⏳ Virtual memory: Sv32 page tables, a TLB, page faults, after traps (20) and caches (22)
+- ⏳ A tiny operating system: user mode, `ecall`, a timer-driven scheduler and a context switch on our CPU, two programs sharing it
+- ⏳ How do you know it works?: the golden model in lock-step, riscv-tests, fuzzing, then manufacturing test (scan chains, stuck-at faults,
+  BIST); builds on the fault brush
+- ⏳ Power: dynamic and static power, clock gating, voltage and frequency scaling, measured with sim/power.ts
+- ⏳ Side channels: Spectre on our out-of-order core and its cache, after chapters 22 and 26
+- ⏳ From netlist to FPGA: look-up tables, our design mapped onto the Tang Nano (the FPGA export exists, no chapter explains it)
+- ⏳ Vectors (RVV) as a bridge from multicore into the GPU chapters
+- ⏳ Break-it steps: one planted fault per core chapter, once the fault brush ships
+- ⏳ A classroom kit: an assignment as a share link, a progress export a teacher can collect
+- ⏳ A worked example and a common-mistakes aside in the densest chapters (pipelining, traps, caches, floating point)
+
 ## Open questions for the author
 - Target audience depth: high-school / first-year university / practitioner refresher?
 - ~~Should challenges *gate* progress?~~ Decided: the campaign gates softly (skip and Unlock all), the chapters stay open.
