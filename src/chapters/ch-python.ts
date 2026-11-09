@@ -270,9 +270,9 @@ export const chPython: Chapter = {
       title: 'Strings',
       body: `
         <p>Everything so far was a number. A string is not one, but it can be made of them: this compiler keeps a <code>str</code> as a block in data memory, a word holding its length and then its bytes, one character a byte, and a
-        variable that holds a str holds the <em>address</em> of its block. Nothing in the CPU knows about strings: <code>lw</code> reads the length and <code>lbu</code> a character, as they would anywhere.</p>
+        variable that holds a str holds the <em>address</em> of its block. Nothing in the CPU knows about strings: the chapter's CPU only loads and stores whole words, so reading a character is a load of its word, a shift and a mask, and writing one is an or into a word that is still zero.</p>
         <p>The literals in the source have to be in data memory before the program runs, and the ROM cannot be read as data, so the first instructions store them a word at a time (${HELLO_C.layout!.strings!.length} literals here, from [${HELLO_C.layout!.strings![0].addr}] up). What you can do with a str costs a few instructions:
-        <code>len(s)</code> is one load; <code>s[i]</code> checks the index against the length (a negative one counts from the end) and loads a byte; <code>s == t</code> compares the lengths, then the bytes; <code>print(s)</code> stores its characters one to a word in the output, and the panel shows them as text.
+        <code>len(s)</code> is one load; <code>s[i]</code> checks the index against the length (a negative one counts from the end) and reads a byte; <code>s == t</code> compares the lengths, then the bytes; <code>print(s)</code> stores its characters one to a word in the output, and the panel shows them as text.
         <code>s + t</code> is the expensive one: it must build a <em>new</em> block big enough for both and copy them in.</p>
         <p>Where does the new block go? Into the <em>heap</em>: a stretch of data memory reserved after the literals, with a register, <code>tp</code>, pointing at its first free byte. A block takes its text plus the length word, rounded up to a whole word (${strBlock(1)} bytes for one character, ${strBlock(5)} for five);
         then tp moves past it. The panel lists the blocks from the heap's start up to tp. The three joins in this program take ${HELLO.heap} bytes of the heap's ${HEAP_BYTES}, and the longest string, "Hello, world!", is 13 characters in a ${strBlock(13)}-byte block.</p>
@@ -291,7 +291,7 @@ export const chPython: Chapter = {
         question: `The palindrome sample tests ord(s[i]) != ord(s[n - 1 - i]) in a loop and leaves the heap empty (${PAL.heap} bytes). Had it compared s[i] != s[n - 1 - i], what would each pass cost the heap?`,
         options: [`Two blocks of ${strBlock(1)} bytes: each s[i] is a str of its own`, 'Nothing: comparing never allocates', `One block of ${strBlock(1)} bytes for the result of the comparison`, 'The length of s, rounded up to a word'],
         answer: 0,
-        explain: 'In Python s[i] is a one-character str: a new block with a length word and one padded word. The compiler turns ord(s[i]) into a single byte load and skips the block; a bare s[i] cannot be skipped.',
+        explain: 'In Python s[i] is a one-character str: a new block with a length word and one padded word. The compiler turns ord(s[i]) into a read of the byte alone and skips the block; a bare s[i] cannot be skipped.',
         why: ['', 'The two characters must exist as strs before == can compare them; only ord(s[i]) is optimised.', 'The comparison produces a 0 or a 1, an int in a register.', 'Indexing copies one character, not the string.'],
       },
     },

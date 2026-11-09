@@ -229,3 +229,40 @@ describe('Python strings: what the panel reads back', () => {
     expect(outputLines([1, 2], null)).toBeNull();
   });
 });
+
+describe('Python strings: the chapter scenes', () => {
+  it('every string sample loads in the chapter CPU (pyScene would swap in another program otherwise) and ends within 20 000 cycles', async () => {
+    const { pyCompile, pyProblem } = await import('../src/widgets/python');
+    for (const p of PY_STRING_PROGRAMS) {
+      expect(pyProblem(pyCompile(p.source)), p.id).toBeNull();
+      expect(pyProblem(pyCompile(p.source, true)), p.id).toBeNull();
+      expect(both(p.source, { dmem: 64 }).iss.steps, p.id).toBeLessThan(20_000);
+    }
+  });
+  for (const id of PY_STRING_PROGRAMS.map((q) => q.id)) {
+    it(`${id}: the gate-level CPU in lock step with the golden model, and the heap where the interpreter says`, async () => {
+      const [{ singleCycleCpu }, { clockCycle, cpuState }, { flatten }, { GateSim }, { PY_IMEM_K, PY_DMEM_K }] = await Promise.all([
+        import('../src/lib'), import('../src/riscv/cosim'), import('../src/sim/flatten'), import('../src/sim/gatesim'), import('../src/widgets/python'),
+      ]);
+      const p = PY_STRING_PROGRAMS.find((q) => q.id === id)!;
+      const c = compilePy(p.source, { dmemWords: 2 ** PY_DMEM_K });
+      expect(c.error).toBeNull();
+      const sim = new GateSim(flatten(singleCycleCpu(c.words, { imemK: PY_IMEM_K, dmemK: PY_DMEM_K })));
+      sim.setInput('clk', 0);
+      sim.settle();
+      const iss = new ISS(c.words, { dmemWords: 2 ** PY_DMEM_K, imemWords: 2 ** PY_IMEM_K });
+      let cycles = 0;
+      while (!iss.halted && cycles < 6000) {
+        expect(cpuState(sim).pc, `cycle ${cycles}`).toBe(iss.pc);
+        iss.step();
+        clockCycle(sim);
+        cycles++;
+        expect(cpuState(sim).x, `cycle ${cycles}`).toEqual([...iss.x]);
+      }
+      expect(iss.halted).toBe(true);
+      const st = cpuState(sim);
+      expect(outputOf(c.layout!, st.x[3], st.dmem)).toEqual(p.expect);
+      expect(st.x[4] - c.layout!.heap!.base).toBe(p.heap);
+    }, 300000);
+  }
+});

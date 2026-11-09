@@ -696,7 +696,7 @@ print(len(line))
     id: 'palindrome',
     name: 'Palindrome',
     group: 'Strings',
-    blurb: 'ord(s[i]) is one byte load: no one-character string is made, so the heap stays empty.',
+    blurb: 'ord(s[i]) reads the byte alone: no one-character string is made, so the heap stays empty.',
     heap: 0,
     expect: [1, 0, 1],
     source: `def is_pal(s):

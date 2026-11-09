@@ -1024,14 +1024,27 @@ export class CodeGen {
     }
   }
 
-  /** The string routines. Blocks are a length word then the bytes; the heap is a bump arena at tp that nothing frees. A failed check (heap full, index out of range, ord of a long str, chr out of range) jumps to the halt. */
+  /**
+   * The string routines. Blocks are a length word then the bytes, packed little-endian; the heap is a bump arena at tp that nothing frees.
+   * The chapter's CPU loads and stores whole words only, so a byte is read as its word, shifted and masked, and written by or-ing it into
+   * a word that is still zero (heap and literal memory power on to zero and a byte is written once). A failed check (heap full, index out
+   * of range, ord of a long str, chr out of range) jumps to the halt.
+   */
   private emitStrRuntime(R: (lines: string[]) => void): void {
     const halt = this.haltLabel, end = this.heapEnd, has = (n: string) => this.runtime.has(n);
     const blank = () => this.out.push({ text: '', py: null });
+    /** dst = the byte at the address in `addr` (dst may be addr); s is a scratch. */
+    const ldb = (dst: string, addr: string, s: string): string[] => [
+      `andi ${s}, ${addr}, -4`, `lw   ${s}, 0(${s})`, `andi ${dst}, ${addr}, 3`, `slli ${dst}, ${dst}, 3`, `srl  ${dst}, ${s}, ${dst}`, `andi ${dst}, ${dst}, 255`,
+    ];
+    /** The byte `val` (0..255, clobbered) or-ed into the zero byte at address `c`; s1, s2 scratch. */
+    const stb = (val: string, c: string, s1: string, s2: string): string[] => [
+      `andi ${s1}, ${c}, 3`, `slli ${s1}, ${s1}, 3`, `sll  ${val}, ${val}, ${s1}`, `andi ${s1}, ${c}, -4`, `lw   ${s2}, 0(${s1})`, `or   ${s2}, ${s2}, ${val}`, `sw   ${s2}, 0(${s1})`,
+    ];
     if (has('concat')) {
       blank();
       R([
-        '# a0 = a0 + a1: a new block at tp (4 + the bytes rounded up to a word), both strs copied in; a full heap stops the program',
+        '# a0 = a0 + a1: a new block at tp (4 + the bytes rounded up to a word), both strs copied in a byte at a time; a full heap stops the program',
         'rt.concat:',
         'lw   a2, 0(a0)',
         'lw   a3, 0(a1)',
@@ -1042,30 +1055,33 @@ export class CodeGen {
         `li   a6, ${end}`,
         `bgtu a5, a6, ${halt}`,
         'sw   a4, 0(tp)',
-        'mv   a4, tp',
+        'addi sp, sp, -4',
+        'sw   tp, 0(sp)',
         'addi a6, tp, 4',
         'mv   tp, a5',
         'addi a0, a0, 4',
         'add  a2, a0, a2',
         'rt.concat.a:',
         'bgeu a0, a2, rt.concat.b',
-        'lbu  a5, 0(a0)',
-        'sb   a5, 0(a6)',
+        ...ldb('a5', 'a0', 'a4'),
+        ...stb('a5', 'a6', 'a4', 'a7'),
         'addi a0, a0, 1',
         'addi a6, a6, 1',
         'j    rt.concat.a',
         'rt.concat.b:',
+        'lw   a2, 0(a1)',
         'addi a1, a1, 4',
-        'add  a3, a1, a3',
+        'add  a2, a1, a2',
         'rt.concat.c:',
-        'bgeu a1, a3, rt.concat.d',
-        'lbu  a5, 0(a1)',
-        'sb   a5, 0(a6)',
+        'bgeu a1, a2, rt.concat.d',
+        ...ldb('a5', 'a1', 'a4'),
+        ...stb('a5', 'a6', 'a4', 'a7'),
         'addi a1, a1, 1',
         'addi a6, a6, 1',
         'j    rt.concat.c',
         'rt.concat.d:',
-        'mv   a0, a4',
+        'lw   a0, 0(sp)',
+        'addi sp, sp, 4',
         'ret',
       ]);
     }
@@ -1082,9 +1098,9 @@ export class CodeGen {
         'add  a2, a0, a2',
         'rt.streq.a:',
         'bgeu a0, a2, rt.streq.yes',
-        'lbu  a4, 0(a0)',
-        'lbu  a5, 0(a1)',
-        'bne  a4, a5, rt.streq.no',
+        ...ldb('a3', 'a0', 'a5'),
+        ...ldb('a4', 'a1', 'a5'),
+        'bne  a3, a4, rt.streq.no',
         'addi a0, a0, 1',
         'addi a1, a1, 1',
         'j    rt.streq.a',
@@ -1107,7 +1123,8 @@ export class CodeGen {
         'rt.sidx.p:',
         `bgeu a1, a2, ${halt}`,
         'add  a0, a0, a1',
-        'lbu  a0, 4(a0)',
+        'addi a0, a0, 4',
+        ...ldb('a0', 'a0', 'a3'),
         'ret',
       ]);
     }
@@ -1119,7 +1136,8 @@ export class CodeGen {
         'lw   a1, 0(a0)',
         'li   a2, 1',
         `bne  a1, a2, ${halt}`,
-        'lbu  a0, 4(a0)',
+        'addi a0, a0, 4',
+        ...ldb('a0', 'a0', 'a3'),
         'ret',
       ]);
     }
@@ -1135,7 +1153,7 @@ export class CodeGen {
         `bgtu a3, a4, ${halt}`,
         'li   a1, 1',
         'sw   a1, 0(tp)',
-        'sb   a0, 4(tp)',
+        'sw   a0, 4(tp)',
         'mv   a0, tp',
         'mv   tp, a3',
         'ret',
@@ -1151,7 +1169,7 @@ export class CodeGen {
         'add  a1, a0, a1',
         'rt.pstr.a:',
         'bgeu a0, a1, rt.pstr.b',
-        'lbu  a2, 0(a0)',
+        ...ldb('a2', 'a0', 'a3'),
         'sw   a2, 0(gp)',
         'addi gp, gp, 4',
         'addi a0, a0, 1',
@@ -1161,5 +1179,4 @@ export class CodeGen {
       ]);
     }
   }
-
 }

@@ -794,7 +794,7 @@ src/lang/      chapter 15's Python subset → RV32I (DOM-free): ast.ts (the tree
                are the last of ch-pipe.ts and ch-muldiv.ts (their numbers: tests/pypipe.test.ts; scripts/pypipe-table.ts).
                Strings (opt-in: a literal, chr() or ord() runs types.ts, and a program without one compiles to identical words, asm and layout): a str is the address of a
                length-prefixed block (a word, then the bytes); literals are stored by the prologue after the lists, then a fixed HEAP_BYTES (96) bump heap at tp (layout.heap / .strings
-               exist only then), the output after it. + s[i] (a str of its own, 8 bytes; ord(s[i]) is a byte load) chr() make blocks (strBlock); the rt.concat / streq / sidx / ord / chr /
+               exist only then), the output after it. + s[i] (a str of its own, 8 bytes; ord(s[i]) reads the byte alone; the CPU has word access only, so bytes are shifted and masked) chr() make blocks (strBlock); the rt.concat / streq / sidx / ord / chr /
                pstr routines use only a0–a7 (a function using them is not a leaf). A full heap, an index out of range, ord of a longer str, chr past 255: the machine jumps to halt, the interpreter
                raises (compare outputs up to there). isStr / strCmp marks on the tree are the type pass's result; print puts a str's characters one word each (RunResult.strOut says which
                words, the panel's outputLines); randomStrProgram (its own stream), PY_STRING_PROGRAMS (apart from PY_PROGRAMS: rvc / ooolab iterate those), tests/pystrings.test.ts; chapter 15's last two steps
