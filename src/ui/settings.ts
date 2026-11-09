@@ -47,7 +47,7 @@ interface State {
   board: boolean;
   /** With the vivid look: cartoon parts (shadows, gloss, category icons, rounded outlines and lettering). */
   cartoon: boolean;
-  /** With cartoon parts: gates drawn with what works inside them (transistors, or NANDs for XOR), live (view/cmosdraw.ts). */
+  /** With cartoon parts: transistors inside gates (view/cmosdraw.ts). */
   workingGates: boolean;
   /** The vivid look switched colour per net on (so switching it off turns that off again). */
   vividNets: boolean;

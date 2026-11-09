@@ -73,7 +73,8 @@ describe('the first-load path', () => {
   it('stays small (source bytes of the scripts it reaches)', () => {
     const bytes = files.filter((f) => f.endsWith('.ts')).reduce((n, f) => n + statSync(f).size, 0);
     // about 270 KB now, a third of it the generated outline; the chapters, library and simulators were 4.3 MB of output
-    expect(bytes).toBeLessThan(330_000);
+    // 331 000: the Working gates setting and its View options switch (2026-11-09, approved by the author)
+    expect(bytes).toBeLessThan(331_000);
   });
 
   it('loads the route pages and the chapters by import(), not by import', () => {

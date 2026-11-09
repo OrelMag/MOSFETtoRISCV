@@ -156,13 +156,10 @@ export function startApp(root: HTMLElement): void {
   } }, h('span', { class: 'pal-cartoon-sw' }, s('svg', { viewBox: '0 0 46 18', 'aria-hidden': 'true' },
     s('path', { class: 'sh', d: 'M15,3 H24 A7,7 0 0 1 24,17 H15 Z' }), s('path', { class: 'bd', d: 'M13,1.5 H22 A7,7 0 0 1 22,15.5 H13 Z' }), s('path', { class: 'gl', d: 'M15.5,4.5 H21' }))),
   h('span', null, h('b', null, 'Cartoon parts'), h('small', null, 'Vivid look: chunky parts with shadows, gloss and small icons')));
-  // Working gates: each gate drawn as what works inside it (view/cmosdraw.ts); needs cartoon parts.
-  const gatesItem = h('button', { role: 'menuitemcheckbox', class: 'pal-gates', onclick: () => {
+  const gatesItem = h('button', { role: 'menuitemcheckbox', onclick: () => {
     settings.set('workingGates', !settings.workingGates);
     applyTheme();
-  } }, h('span', { class: 'pal-gates-sw' }, s('svg', { viewBox: '0 0 46 18', 'aria-hidden': 'true' },
-    s('path', { class: 'bd', d: 'M12,1.5 H22 A7.5,7.5 0 0 1 22,16.5 H12 Z' }), s('path', { class: 'rl', d: 'M16,4 H26' }), s('path', { class: 'ch', d: 'M18,5.5 V9.5 M24,5.5 V9.5' }), s('path', { class: 'ch off', d: 'M21,10.5 V14' }))),
-  h('span', null, h('b', null, 'Working gates'), h('small', null, 'Cartoon parts: each gate shows its transistors, live, when zoomed in')));
+  } }, h('span', { class: 'pal-gates-sw' }), h('span', null, h('b', null, 'Working gates'), h('small', null, 'Cartoon parts: transistors inside, live')));
   // Module colours: library boxes tinted by kind (view/symbols.ts CATEGORY_HUE).
   const modItem = h('button', { role: 'menuitemcheckbox', class: 'pal-mod', onclick: () => {
     settings.set('modules', !settings.modules);
