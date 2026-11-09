@@ -1359,7 +1359,6 @@ Proposed, kept for later (the author's choice, 2026-11-09; each needs a plan and
 - ⏳ From netlist to FPGA: look-up tables, our design mapped onto the Tang Nano (the FPGA export exists, no chapter explains it)
 - ⏳ Vectors (RVV) as a bridge from multicore into the GPU chapters
 - ⏳ Break-it steps: one planted fault per core chapter, once the fault brush ships
-- ⏳ A classroom kit: an assignment as a share link, a progress export a teacher can collect
 - ⏳ A worked example and a common-mistakes aside in the densest chapters (pipelining, traps, caches, floating point)
 
 ## Open questions for the author
