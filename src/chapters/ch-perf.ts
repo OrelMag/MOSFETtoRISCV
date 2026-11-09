@@ -2,6 +2,9 @@ import { carrySelect, carrySkip } from '../lib/adders';
 import { alu, isZero } from '../lib/alu';
 import { muxTree, rca } from '../lib/combinational';
 import { CLA4, addSubFast, brentKung, koggeStone, sklansky } from '../lib/fastadd';
+import { arrivals } from '../hdl/srcmap';
+import { VADDER_SOURCE } from '../hdl/vadder';
+import { VADDER_LINES, VADDER_NET, VADDER_PATH, VERILOG_ADD4 } from '../lib/vadder';
 import { FF_INPUT, FF_WIRE } from '../sim/netcap';
 import { nandDelay } from '../sim/delay';
 import { logicDepth, stats } from '../sim/stats';
@@ -26,6 +29,21 @@ const FAMILY = (rows: [string, (n: number) => ComponentDef][], widths: number[])
 const CPU_PERIOD = 155, ALU_RIPPLE = D(alu(32)), ALU_KS = D(alu(32, 'ks'));
 const PS = PS_PER_NAND; // illustrative ps per NAND delay (the timing panel's conversion)
 const fo16 = { drawn: fmt(nandDelay(16 * (FF_INPUT + FF_WIRE), false)), buffered: fmt(nandDelay(16 * (FF_INPUT + FF_WIRE))) };
+
+/** The Verilog adder step: its source with each line pointing at the gates it became, the critical path's lines marked. */
+const esc = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const VADDER_HTML = VADDER_SOURCE.trimEnd().split('\n').map((text, i) => {
+  const ln = i + 1;
+  const cells = VADDER_NET.cells.filter((c) => VADDER_LINES[c.name].includes(ln)).map((c) => c.name);
+  const row = `<i class="ln">${String(ln).padStart(2)}</i>  ${esc(text)}`;
+  return cells.length ? `<span class="vl${VADDER_PATH.lines.includes(ln) ? ' crit' : ''}" data-show="${cells.join(' ')}">${row}</span>` : row;
+}).join('\n');
+const PATH_LINES = VADDER_PATH.lines.map((l) => `<code>${l}</code>`).join(', ');
+const VERILOG_ADD4_NANDS = N(VERILOG_ADD4);
+const ARR = arrivals(VADDER_NET);
+const ARR_C4 = ARR[VADDER_NET.ports.find((p) => p.name === 'co')!.nets[0]];
+const VERILOG_ADD4_ARRIVALS = VADDER_NET.ports.filter((p) => p.dir === 'out')
+  .flatMap((p) => p.nets.map((n, i) => `<code>${p.nets.length === 1 ? p.name : `${p.name}[${i}]`}</code> ${ARR[n]}`)).join(', ');
 
 export const chFastAdders: Chapter = {
   id: 'fastadd', num: numOf('fastadd'), title: 'Faster adders', level: 'Optimization',
@@ -431,6 +449,42 @@ export const chFastAdders: Chapter = {
           'It has the most cells and wires, but each cell drives at most two cells per level: its loads stay light.',
           'The number of levels is only the unit-delay view. What each level drives decides the rest.'],
         explain: `As drawn: Sklansky ${fmt(logicDepth(sklansky(64), 'drawn'))}, Brent–Kung ${fmt(logicDepth(brentKung(64), 'drawn'))}, Kogge–Stone ${fmt(logicDepth(koggeStone(64), 'drawn'))} units. Sklansky's last level has one cell driving 32. Buffer trees bring it to ${fmt(logicDepth(sklansky(64), 'load'))}, against Kogge–Stone's ${fmt(logicDepth(koggeStone(64), 'load'))}.`,
+      },
+    },
+    {
+      title: 'A Verilog adder, and its critical path',
+      body: `
+        <p>Every adder so far was drawn gate by gate. A designer usually writes it as text instead, in a <span data-ahead="hdl">hardware description language (here Verilog)</span>,
+        and a program turns the text into gates: <span data-ahead="synthesis">synthesis, which picks gates that compute what the text says and wires them up</span>. This is the lookahead recipe of this chapter, generate and propagate and a carry per bit, as ${VADDER_SOURCE.split('\n').filter((l) => l.includes('wire')).length} lines of Verilog.
+        Yosys, an open-source synthesizer, mapped it onto NANDs and inverters once; the circuit on the stage is its result, held equal to a fresh Yosys run by this site's tests, so nothing is fetched when the page opens.</p>
+        <pre class="code vsrc">${VADDER_HTML}</pre>
+        <p>Each line declares a wire and what drives it: <code>p</code> and <code>g</code> are the propagate and generate of the previous steps, <code>c1</code>–<code>c4</code> the carries,
+        <code>sum</code> the result. Hover a line to light the <span data-show="${VADDER_PATH.cells.join(' ')}">gates it became</span>. After synthesis a gate has no name of its own, so the
+        <code>(* keep *)</code> marks do the tracing: synthesis must leave each marked wire as a net, and a gate is blamed on the line of the marked wire it feeds. A gate shared by two lines shows under both.</p>
+        <p>The critical path is the longest chain of gates from an input to an output: ${VADDER_PATH.depth} NAND delays, from <code>${VADDER_PATH.from}</code> to <code>${VADDER_PATH.to}</code>
+        (${VADDER_PATH.cells.length} of the ${VERILOG_ADD4_NANDS} gates, lit on the circuit). The bar beside a source line marks the lines it came from: ${PATH_LINES}.
+        It enters through the propagate, crosses the carries <code>c1</code>, <code>c2</code>, <code>c3</code> in turn, and leaves through the sum. The same ripple as the hand-drawn adder, found by the tool in the text.
+        It ends at <code>s[3]</code>, not at the carry-out: <code>c4</code> settles after ${ARR_C4} delays, the last sum bit, which needs <code>c3</code> and one more XOR, after ${VADDER_PATH.depth}.</p>
+        <p>The price of writing it this way: ${VERILOG_ADD4_NANDS} NANDs and depth ${VADDER_PATH.depth}, against ${N(rca(4))} and ${D(rca(4))} for the hand-drawn ripple adder of the first step.
+        The recipe is the same; the hand-drawn full adder shares its first NAND between sum and carry, and synthesis here, with every named wire fixed, does not find that.</p>
+        <div class="try">Toggle <code>ci</code>: with a = 7 and b = 0 the carry crosses <code>c1</code>, <code>c2</code> and <code>c3</code> one after another, the lit path.</div>
+        <p>To edit the text yourself, open <em>Examples ▸ The same adder in Verilog</em> in the sandbox: it synthesizes a Verilog chip as you type.</p>`,
+      scene: () => ({ root: VERILOG_ADD4, inputs: { a: 7, b: 0, ci: 0 }, highlight: VADDER_PATH.cells, animate: true }),
+      actions: [{ label: 'Toggle ci', run: (st) => st.toggleInput('ci') }],
+      tries: [(st) => st.getInput('ci') === 1],
+      lit: `The ${VADDER_PATH.cells.length} gates of the critical path, ${VADDER_PATH.from} → ${VADDER_PATH.to}`,
+      more: {
+        derive: `<p>Each cell's arrival is one more than its latest input, with every input at 0. The outputs, in NAND delays:
+          ${VERILOG_ADD4_ARRIVALS}</p>`,
+        real: `<p>Static timing tools in a real flow report the same thing, a chain of cells from a start point to an end point, but name the nets and cells, not the source lines: ABC rebuilds the logic, so source locations are lost on the way (here too: the gates carry none). That is why designers name the wires they want to find again, and why a timing report is read against the netlist.</p>`,
+        pitfall: `<p>Reading the blame as exact. A gate with no marked wire after it has no line, and a gate that feeds two marked wires is listed under both. With fewer <code>keep</code> marks the lines would be fewer and the netlist smaller, and a path could no longer be pointed at.</p>`,
+      },
+      challenge: {
+        kind: 'quiz', question: 'The critical path of this adder ends at s[3], not at the carry-out co. Why?',
+        options: ['The last sum bit needs the carry c3 and then a further XOR, which is deeper than the AND-OR that makes c4', 'co is not connected to the carries', 'Synthesis puts the sum last on purpose', 'Static timing only looks at the sum outputs'],
+        answer: 0,
+        why: ['', 'co is c4, the last carry.', 'Synthesis does not order outputs; each settles when its inputs allow.', 'Timing covers every output; here the sum bit happens to be the slowest.'],
+        explain: `co (c4) settles after ${ARR_C4} NAND delays; s[3] = p3 ⊕ c3 after ${VADDER_PATH.depth}.`,
       },
     },
   ],

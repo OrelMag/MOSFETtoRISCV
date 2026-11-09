@@ -104,6 +104,13 @@ export function cellLines(net: GateNet): Record<string, number[]> {
   return Object.fromEntries(Object.entries(lines).map(([k, v]) => [k, [...v].sort((a, b) => a - b)]));
 }
 
+/** NAND delays at which each cell's output settles in the worst case (one per cell, inputs at 0). */
+export function arrivals(net: GateNet): Record<string, number> {
+  const t: Record<string, number> = {};
+  for (const c of net.cells) t[c.name] = 1 + Math.max(0, ...c.in.map((i) => t[i] ?? 0));
+  return t;
+}
+
 export interface CriticalPath {
   /** Cells from the input side to the output side. */
   cells: string[];
@@ -112,7 +119,7 @@ export interface CriticalPath {
   to: string;
   /** NAND delays: one per cell. */
   depth: number;
-  /** The Verilog lines the path comes from, in the order the path first meets them. */
+  /** The Verilog lines the path comes from, ascending. */
   lines: number[];
 }
 
@@ -147,5 +154,6 @@ export function criticalPathOf(net: GateNet): CriticalPath {
   const per = cellLines(net);
   const lines: number[] = [];
   for (const c of cells) for (const l of per[c]) if (!lines.includes(l)) lines.push(l);
+  lines.sort((a, b) => a - b);
   return { cells, from: cur, to, depth: top, lines };
 }

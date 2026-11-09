@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { criticalPathOf, cellLines } from '../src/hdl/srcmap';
+import { cellLines } from '../src/hdl/srcmap';
 import { VADDER_SOURCE } from '../src/hdl/vadder';
 import net from '../src/hdl/vadder.net.json';
 import { evalOnce, simulate } from '../src/sim/harness';
