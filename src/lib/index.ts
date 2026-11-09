@@ -77,6 +77,7 @@ export * from './numbers';
 export * from './intc';
 export * from './seqdeep';
 export * from './rfdeep';
+export * from './fpga';
 export * from './sync';
 export * from './uart';
 export * from './uartlink';
