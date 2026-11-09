@@ -356,7 +356,26 @@ src/lib/       the component library (registered in `registry` via define())
   system.ts      SYS_DECODE (illegal-instruction detection), CSR_UNIT, TRAP_UNIT, IO_UNIT,
                  systemCpu(program, { m }): the complete RV32I(M) + Zicsr + M-mode traps / interrupts + MMIO;
                  with m the CPU gains a `retire` output (low while a divide stalls it); { bus } (not with m): busMemUnit
-                 in place of the data memory, the AXI master ports at the CPU's pins, retire
+                 in place of the data memory, the AXI master ports at the CPU's pins, retire; { vm } (not with m or bus): privilege
+                 levels M / S / U and Sv32 (lib/vm.ts), `retire` low while the walker reads page tables; the default
+                 CPUs are pinned gate for gate by tests/sys-default-pin.test.ts (ids, NAND counts, period, netlist fingerprints),
+                 so a vm-only twin has its own id: sysDecode(m, vm), ioUnit(vm) (mtime counts only while not stalled: the golden
+                 model has one mtime step per instruction and no walk cycles), a data memory above 2^6 words is bankedBigRam
+  vm.ts          the vm variant's units (golden model: riscv/iss.ts with `vm`): tlb('i' | 'd') (4 entries by VPN, round-robin
+                 fill, flush clears all valid bits; superpages are filled one 4 KiB page at a time; entries hold the raw flags
+                 and the 22-bit PPN, so every permission check and the "PA >= 2^32" access fault run on the TLB's output, for a
+                 hit and for the retry after a fill alike; nothing a walk faults on is cached), pcheck (the permission check),
+                 walker() (idle / level 1 / level 0 / fault: reads PTEs through the data memory, 3 stall cycles to a 4 KiB leaf,
+                 2 to a superpage, the fault trap in the cycle after), mmu() (both TLBs, checks and walker between the PC / the
+                 load-store address and the memories; a data access is looked up only for a legal, aligned load or store whose fetch
+                 went through; the stall gates the PC, every write and the trap through NoTrap; a walk starts only when no interrupt
+                 is taken, and an interrupt only while the walker is idle), csrUnitVm() (privilege level stored inverted, MPP WARL,
+                 SPP / SIE / SPIE / SUM / MXR / FS, sstatus as a view, stvec sscratch sepc scause stval satp; a write to satp
+                 flushes both TLBs, so the golden model, which has no TLB, never sees a stale entry; software still
+                 issues sfence.vma after editing a PTE), trapUnitVm() (the cause from the winner's constant: interrupt, fetch
+                 faults, illegal, ebreak, ecall 8 + level, misaligned, then data faults). tests/verify/vmlock.ts: lock step of
+                 the CPU against ISS({ system, vm }) after every retirement (registers, PC, level, mstatus, every CSR, mtime, memory);
+                 tests/vm-programs.ts the directed programs (tests/vm-cpu.test.ts), vm-cpu-fuzz.test.ts the random ones
   cells.ts       NMOS_STRONG / PMOS_WEAK, SRAM_CELL (6T), SRAM_COLUMN, DRAM_CELL (switch level)
   arrays.ts      WRITE_DRIVER, SENSE_AMP (latch type), sramColumn(R), sramArray(R, C): switch-level SRAM with periphery
   dramctrl.ts    chapter 36: dramCtrl(cfg) (CtrlModel in gates, tests/dramctrl.test.ts compares every output every cycle),
