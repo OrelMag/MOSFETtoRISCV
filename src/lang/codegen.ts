@@ -7,10 +7,10 @@
 // variables (a leaf calls nothing, so nothing clobbers them); gp points at the next free word of the output
 // (print stores there); sp is the stack. Globals that a function reads or writes live in data memory.
 
-import { PyError } from './ast';
+import { HEAP_BYTES, PyError } from './ast';
 import type { BinOpName, CmpOpName, Expr, Module, Stmt, Target } from './ast';
 import { binop, cmpop } from './interp';
-import { walkExpr, stmtExprs } from './scope';
+import { walkExpr, walkStmts, stmtExprs } from './scope';
 import type { FuncInfo, Scope } from './scope';
 
 export const TEMPS = ['t0', 't1', 't2', 't3', 't4', 't5', 't6'] as const;
@@ -32,6 +32,8 @@ export interface Home {
   addr?: number;
   /** Made by the compiler (a loop's counter or bound), not named in the source. */
   hidden?: boolean;
+  /** Holds a str: a pointer to a length-prefixed block (absent: an int). */
+  str?: true;
 }
 
 export interface Layout {
@@ -46,6 +48,24 @@ export interface Layout {
   runtime: string[];
   /** The program's functions, in order (each the label of its first instruction). */
   funcs: string[];
+  /** Only in a program that uses strings: its literals, stored in data memory at start-up (a length word, then the bytes). */
+  strings?: { addr: number; text: string }[];
+  /** Only in a program that uses strings: the bump heap (tp points at the next free byte; nothing is freed). The output starts at its end. */
+  heap?: { base: number; end: number };
+}
+
+/** Does this code need a string runtime routine (a call that clobbers a0–a7 and ra)? */
+function needsStrRt(body: Stmt[]): boolean {
+  let need = false;
+  walkStmts(body, (s) => {
+    if (s.kind === 'aug' && s.isStr) need = true;
+    for (const r of stmtExprs(s)) walkExpr(r, (x) => {
+      if ((x.kind === 'bin' || x.kind === 'index') && x.isStr) need = true;
+      else if (x.kind === 'cmp' && x.strCmp) need = true;
+      else if (x.kind === 'call' && (x.fn === 'chr' || x.fn === 'ord' || (x.fn === 'print' && x.args.some((a) => a.isStr)))) need = true;
+    });
+  });
+  return need;
 }
 
 const fitsI = (v: number) => v >= -2048 && v <= 2047;
@@ -200,8 +220,11 @@ export class CodeGen {
   private readonly memHomes = new Map<string, Home>();
   private readonly listAddr = new Map<string, { addr: number; len: number }>();
   private readonly runtime = new Set<string>();
+  private readonly pool = new Map<string, number>();
+  private haltLabel = 'halt';
+  private heapEnd = 0;
 
-  constructor(private readonly mod: Module, private readonly scope: Scope, private readonly dmemWords: number, private readonly m = false) {
+  constructor(private readonly mod: Module, private readonly scope: Scope, private readonly dmemWords: number, private readonly m = false, private readonly heapBytes = HEAP_BYTES) {
     const body = foldStmts(mod.body);
     this.mod = { ...mod, body };
     for (const s of body) if (s.kind === 'def') { const f = scope.funcs.get(s.name)!; f.body = s.body; }
@@ -231,16 +254,33 @@ export class CodeGen {
     let sNext = 0;
     for (const n of [...scope.globals, ...topNames.filter((n) => !scope.globals.includes(n))]) {
       const hidden = !scope.globals.includes(n);
+      const str = scope.strVars?.has(`.${n}`) ? { str: true as const } : {};
       if (scope.shared.has(n) || sNext >= SREGS.length) {
-        const h: Home = { name: n, scope: '', addr, ...(hidden ? { hidden } : {}) };
+        const h: Home = { name: n, scope: '', addr, ...(hidden ? { hidden } : {}), ...str };
         addr += 4;
         homes.set(n, h); this.memHomes.set(n, h);
-      } else homes.set(n, { name: n, scope: '', reg: SREGS[sNext++], ...(hidden ? { hidden } : {}) });
+      } else homes.set(n, { name: n, scope: '', reg: SREGS[sNext++], ...(hidden ? { hidden } : {}), ...str });
     }
     for (const l of scope.lists.values()) {
       this.listAddr.set(l.name, { addr, len: l.len });
       this.layout.lists.push({ name: l.name, addr, len: l.len });
       addr += 4 * l.len;
+    }
+    // A program with strings: its literals (stored at start-up, they cannot come from the ROM), then the heap; the output follows.
+    if (scope.usesStr) {
+      const lits: string[] = [];
+      const scan = (b: Stmt[]) => walkStmts(b, (s) => { for (const r of stmtExprs(s)) walkExpr(r, (x) => { if (x.kind === 'str' && !lits.includes(x.value)) lits.push(x.value); }); });
+      scan(top);
+      for (const f of scope.funcs.values()) scan(f.body);
+      this.layout.strings = [];
+      for (const text of lits) {
+        this.pool.set(text, addr);
+        this.layout.strings.push({ addr, text });
+        addr += 4 + 4 * Math.ceil(text.length / 4);
+      }
+      this.layout.heap = { base: addr, end: addr + this.heapBytes };
+      this.heapEnd = addr + this.heapBytes;
+      addr += this.heapBytes;
     }
     this.layout.outBase = addr;
     if (addr > 2040 || addr > 4 * this.dmemWords - 32) this.err(`the variables and lists need ${addr / 4} words: data memory has ${this.dmemWords}, and the stack and output need room too`, 1);
@@ -251,10 +291,20 @@ export class CodeGen {
     this.comment('set up: the stack at the top of data memory, the output after the data');
     this.emit(`li   sp, ${this.layout.stackTop}`);
     this.emit(`li   gp, ${this.layout.outBase}`);
+    if (this.layout.heap) {
+      this.comment('strings: the heap pointer (tp), then the literals, stored word by word');
+      this.emit(`li   tp, ${this.layout.heap.base}`);
+      for (const { addr: a, text } of this.layout.strings!) {
+        const words = [text.length];
+        for (let i = 0; i < text.length; i += 4) words.push(Array.from({ length: 4 }, (_, k) => (text.charCodeAt(i + k) || 0) << (8 * k)).reduce((x, y) => x | y, 0));
+        words.forEach((w, i) => { if (w !== 0) { this.emit(`li   t0, ${w | 0}`); this.emit(`sw   t0, ${a + 4 * i}(zero)`); } });
+      }
+    }
     this.fn = { name: '', info: null, homes, retLabel: null, saved: [] };
     for (const s of top) this.stmt(s);
     this.line = null;
     const halt = scope.funcs.has('halt') ? 'program.halt' : 'halt';
+    this.haltLabel = halt;
     this.label(halt);
     this.emit(`j    ${halt}`);
 
@@ -291,12 +341,12 @@ export class CodeGen {
     const hidden = this.planLoops(f.body, f.name, new Set());
     const rt = new Set<string>();
     if (!this.m) stmtsRuntime(f.body, rt);
-    const leaf = !f.callsUser && rt.size === 0;
+    const leaf = !f.callsUser && rt.size === 0 && !(this.scope.usesStr && needsStrRt(f.body));
     const names = [...f.locals, ...hidden];
     const regs = leaf ? [...AREGS, ...SREGS] : SREGS;
     if (names.length > regs.length) this.err(`${f.name}() has ${names.length} variables: the compiler keeps them in registers, at most ${regs.length}`, f.line);
     const homes = new Map<string, Home>();
-    names.forEach((n, i) => homes.set(n, { name: n, scope: f.name, reg: regs[i], ...(i >= f.locals.length ? { hidden: true } : {}) }));
+    names.forEach((n, i) => homes.set(n, { name: n, scope: f.name, reg: regs[i], ...(i >= f.locals.length ? { hidden: true } : {}), ...(this.scope.strVars?.has(`${f.name}.${n}`) ? { str: true as const } : {}) }));
     for (const [n, h] of this.memHomes) if (!homes.has(n)) homes.set(n, h);
     this.layout.homes.push(...[...homes.values()].filter((h) => h.scope === f.name));
     const saved = [...(leaf ? [] : ['ra']), ...names.map((n) => homes.get(n)!.reg!).filter((r) => r.startsWith('s'))];
@@ -347,7 +397,7 @@ export class CodeGen {
       }
       case 'aug': {
         if (s.target.kind === 'name') {
-          const value: Expr = { kind: 'bin', line: s.line, op: s.op, left: { kind: 'name', line: s.line, id: s.target.id }, right: s.value };
+          const value: Expr = { kind: 'bin', line: s.line, op: s.op, left: { kind: 'name', line: s.line, id: s.target.id, ...(s.isStr ? { isStr: true as const } : {}) }, right: s.value, ...(s.isStr ? { isStr: true as const } : {}) };
           return this.assignName(s.target.id, value);
         }
         // xs[i] op= v: the element's address is computed once
@@ -508,7 +558,7 @@ export class CodeGen {
   /** Evaluate into `dest` (a variable's register, a0, or a temporary). */
   private genTo(e: Expr, d: number, dest: string): void {
     // These write their destination once, after reading every operand: they can compute straight into it.
-    const direct = e.kind === 'num' || e.kind === 'name' || e.kind === 'bin' || e.kind === 'unary' || e.kind === 'index'
+    const direct = e.kind === 'num' || e.kind === 'str' || e.kind === 'name' || e.kind === 'bin' || e.kind === 'unary' || e.kind === 'index'
       || (e.kind === 'cmp' && e.ops.length === 1) || (e.kind === 'call' && !['min', 'max', 'print'].includes(e.fn));
     if (direct) { this.gen(e, d, dest); return; }
     const r = this.gen(e, d);
@@ -531,6 +581,11 @@ export class CodeGen {
         this.emit(`li   ${r}, ${e.value}`);
         return r;
       }
+      case 'str': {
+        const r = dest ?? this.tmp(d);
+        this.emit(`li   ${r}, ${this.pool.get(e.value)}`);
+        return r;
+      }
       case 'name': {
         const h = this.home(e.id);
         if (h.reg) return into(h.reg);
@@ -539,6 +594,12 @@ export class CodeGen {
         return r;
       }
       case 'index': {
+        if (e.isStr) {
+          // s[i] is a str of its own: the byte, then a one-character block on the heap
+          this.strIndex(e, d);
+          this.rtCall('chr', []);
+          return this.fromA0(d, dest);
+        }
         const { addr: base } = this.listAddr.get(e.list)!;
         const r = dest ?? this.tmp(d);
         if (e.index.kind === 'num') { this.emit(`lw   ${r}, ${base + 4 * e.index.value}(zero)`); return r; }
@@ -549,6 +610,10 @@ export class CodeGen {
         return r;
       }
       case 'bin': {
+        if (e.isStr) {
+          this.rtCall('concat', [this.gen(e.left, d), this.gen(e.right, d + 1)]);
+          return this.fromA0(d, dest);
+        }
         let { left, right } = e;
         if (left.kind === 'num' && right.kind !== 'num' && ['+', '*', '&', '|', '^'].includes(e.op)) [left, right] = [right, left];
         const l = this.gen(left, d);
@@ -562,6 +627,12 @@ export class CodeGen {
         return r;
       }
       case 'cmp': {
+        if (e.strCmp) {
+          this.rtCall('streq', [this.gen(e.args[0], d), this.gen(e.args[1], d + 1)]);
+          const r = dest ?? this.tmp(d);
+          this.emit(e.ops[0] === '==' ? `mv   ${r}, a0` : `xori ${r}, a0, 1`);
+          return r;
+        }
         if (e.ops.length === 1) return this.cmpValue(e.ops[0], e.args[0], e.args[1], d, dest ?? this.tmp(d));
         const r = this.tmp(d), no = this.newLabel('cmp'), end = `${no}.end`;
         this.jumpIf(e, false, no, d);
@@ -725,6 +796,7 @@ export class CodeGen {
         return;
       }
       case 'cmp': {
+        if (e.strCmp) break;
         const skip = when && e.ops.length > 1 ? this.newLabel('cmp') : null;
         let l = this.gen(e.args[0], d);
         for (let k = 0; k < e.ops.length; k++) {
@@ -757,6 +829,15 @@ export class CodeGen {
   private call(e: Expr & { kind: 'call' }, d: number, dest?: string): string {
     switch (e.fn) {
       case 'print': {
+        if (e.args.some((a) => a.isStr)) {
+          // strings among the arguments: all are evaluated first, then each is printed in turn (a str is its characters, one word each)
+          const regs = e.args.map((a, i) => this.gen(a, d + i));
+          e.args.forEach((a, i) => {
+            if (a.isStr) this.rtCall('pstr', [regs[i]]);
+            else { this.emit(`sw   ${regs[i]}, 0(gp)`); this.emit('addi gp, gp, 4'); }
+          });
+          return dest ? (this.emit(`li   ${dest}, 0`), dest) : 'zero';
+        }
         // Python evaluates every argument before printing any: those up to the last that calls a function
         // (which may print) wait in temporaries; the rest are stored as soon as they are computed.
         const calls = e.args.map((a) => { let c = false; walkExpr(a, (x) => { if (x.kind === 'call' && this.scope.funcs.has(x.fn)) c = true; }); return c; });
@@ -769,8 +850,20 @@ export class CodeGen {
       }
       case 'len': {
         const r = dest ?? this.tmp(d);
+        if (e.args[0].isStr) { this.emit(`lw   ${r}, 0(${this.gen(e.args[0], d)})`); return r; }
         this.emit(`li   ${r}, ${this.listAddr.get((e.args[0] as { id: string }).id)!.len}`);
         return r;
+      }
+      case 'ord': {
+        // ord(s[i]) is the byte alone, with no one-character str made
+        const a = e.args[0];
+        if (a.kind === 'index' && a.isStr) this.strIndex(a, d);
+        else this.rtCall('ord', [this.gen(a, d)]);
+        return this.fromA0(d, dest);
+      }
+      case 'chr': {
+        this.rtCall('chr', [this.gen(e.args[0], d)]);
+        return this.fromA0(d, dest);
       }
       case 'abs': {
         const a = this.gen(e.args[0], d), s = this.tmp(d + 1), r = dest ?? this.tmp(d);
@@ -824,6 +917,25 @@ export class CodeGen {
     return r;
   }
 
+  /** A string runtime routine: arguments into a0…, jal. The routines use only a0–a7 (and tp, gp), so live temporaries survive. */
+  private rtCall(name: string, args: string[]): void {
+    this.runtime.add(name);
+    args.forEach((r, i) => { if (r !== `a${i}`) this.emit(`mv   a${i}, ${r}`); });
+    this.emit(`jal  ra, rt.${name}`);
+  }
+
+  private fromA0(d: number, dest?: string): string {
+    const r = dest ?? this.tmp(d);
+    this.emit(`mv   ${r}, a0`);
+    return r;
+  }
+
+  /** a0 = the byte s[i] (Python's negative indices; out of range stops the program). */
+  private strIndex(e: Expr & { kind: 'index' }, d: number): void {
+    const s = this.gen({ kind: 'name', line: e.line, id: e.list, isStr: true }, d);
+    this.rtCall('sidx', [s, this.gen(e.index, d + 1)]);
+  }
+
   /** An address expression as (register, byte offset): a constant added to or subtracted from it rides in the instruction's immediate. */
   private addrOf(a: Expr, d: number): [string, number] {
     if (a.kind === 'bin' && (a.op === '+' || a.op === '-') && a.right.kind === 'num') {
@@ -857,6 +969,7 @@ export class CodeGen {
         'ret',
       ]);
     }
+    this.emitStrRuntime(R);
     if (this.runtime.has('divmod')) {
       this.out.push({ text: '', py: null });
       R([
@@ -908,4 +1021,143 @@ export class CodeGen {
       ]);
     }
   }
+
+  /** The string routines. Blocks are a length word then the bytes; the heap is a bump arena at tp that nothing frees. A failed check (heap full, index out of range, ord of a long str, chr out of range) jumps to the halt. */
+  private emitStrRuntime(R: (lines: string[]) => void): void {
+    const halt = this.haltLabel, end = this.heapEnd, has = (n: string) => this.runtime.has(n);
+    const blank = () => this.out.push({ text: '', py: null });
+    if (has('concat')) {
+      blank();
+      R([
+        '# a0 = a0 + a1: a new block at tp (4 + the bytes rounded up to a word), both strs copied in; a full heap stops the program',
+        'rt.concat:',
+        'lw   a2, 0(a0)',
+        'lw   a3, 0(a1)',
+        'add  a4, a2, a3',
+        'addi a5, a4, 7',
+        'andi a5, a5, -4',
+        'add  a5, a5, tp',
+        `li   a6, ${end}`,
+        `bgtu a5, a6, ${halt}`,
+        'sw   a4, 0(tp)',
+        'mv   a4, tp',
+        'addi a6, tp, 4',
+        'mv   tp, a5',
+        'addi a0, a0, 4',
+        'add  a2, a0, a2',
+        'rt.concat.a:',
+        'bgeu a0, a2, rt.concat.b',
+        'lbu  a5, 0(a0)',
+        'sb   a5, 0(a6)',
+        'addi a0, a0, 1',
+        'addi a6, a6, 1',
+        'j    rt.concat.a',
+        'rt.concat.b:',
+        'addi a1, a1, 4',
+        'add  a3, a1, a3',
+        'rt.concat.c:',
+        'bgeu a1, a3, rt.concat.d',
+        'lbu  a5, 0(a1)',
+        'sb   a5, 0(a6)',
+        'addi a1, a1, 1',
+        'addi a6, a6, 1',
+        'j    rt.concat.c',
+        'rt.concat.d:',
+        'mv   a0, a4',
+        'ret',
+      ]);
+    }
+    if (has('streq')) {
+      blank();
+      R([
+        '# a0 = 1 if the strs a0 and a1 are equal (same length, same bytes), else 0',
+        'rt.streq:',
+        'lw   a2, 0(a0)',
+        'lw   a3, 0(a1)',
+        'bne  a2, a3, rt.streq.no',
+        'addi a0, a0, 4',
+        'addi a1, a1, 4',
+        'add  a2, a0, a2',
+        'rt.streq.a:',
+        'bgeu a0, a2, rt.streq.yes',
+        'lbu  a4, 0(a0)',
+        'lbu  a5, 0(a1)',
+        'bne  a4, a5, rt.streq.no',
+        'addi a0, a0, 1',
+        'addi a1, a1, 1',
+        'j    rt.streq.a',
+        'rt.streq.yes:',
+        'li   a0, 1',
+        'ret',
+        'rt.streq.no:',
+        'li   a0, 0',
+        'ret',
+      ]);
+    }
+    if (has('sidx')) {
+      blank();
+      R([
+        '# a0 = the byte s[i] (a0 = s, a1 = i): a negative i counts from the end; outside 0..len-1 stops the program',
+        'rt.sidx:',
+        'lw   a2, 0(a0)',
+        'bgez a1, rt.sidx.p',
+        'add  a1, a1, a2',
+        'rt.sidx.p:',
+        `bgeu a1, a2, ${halt}`,
+        'add  a0, a0, a1',
+        'lbu  a0, 4(a0)',
+        'ret',
+      ]);
+    }
+    if (has('ord')) {
+      blank();
+      R([
+        '# a0 = the code of the one character in the str a0 (any other length stops the program)',
+        'rt.ord:',
+        'lw   a1, 0(a0)',
+        'li   a2, 1',
+        `bne  a1, a2, ${halt}`,
+        'lbu  a0, 4(a0)',
+        'ret',
+      ]);
+    }
+    if (has('chr')) {
+      blank();
+      R([
+        '# a0 = a one-character str holding the byte a0: 8 bytes at tp (0..255 only; a full heap stops the program)',
+        'rt.chr:',
+        'li   a1, 255',
+        `bgtu a0, a1, ${halt}`,
+        'addi a3, tp, 8',
+        `li   a4, ${end}`,
+        `bgtu a3, a4, ${halt}`,
+        'li   a1, 1',
+        'sw   a1, 0(tp)',
+        'sb   a0, 4(tp)',
+        'mv   a0, tp',
+        'mv   tp, a3',
+        'ret',
+      ]);
+    }
+    if (has('pstr')) {
+      blank();
+      R([
+        '# print the str a0: its bytes, one word each, at gp',
+        'rt.pstr:',
+        'lw   a1, 0(a0)',
+        'addi a0, a0, 4',
+        'add  a1, a0, a1',
+        'rt.pstr.a:',
+        'bgeu a0, a1, rt.pstr.b',
+        'lbu  a2, 0(a0)',
+        'sw   a2, 0(gp)',
+        'addi gp, gp, 4',
+        'addi a0, a0, 1',
+        'j    rt.pstr.a',
+        'rt.pstr.b:',
+        'ret',
+      ]);
+    }
+  }
+
 }
