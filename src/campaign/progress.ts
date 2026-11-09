@@ -28,6 +28,8 @@ export interface NodeProgress {
   stars?: 1 | 2 | 3;
   /** Tips revealed so far. */
   tips?: number;
+  /** A break-it level: wrong accusations so far (each costs a star; campaign/breakit.ts). */
+  wrong?: number;
   /** Opened at least once (a lesson's codex entries unlock on opening). */
   seen?: boolean;
   /** A program puzzle's source. */
@@ -92,11 +94,12 @@ export function sanitizeCampaign(raw: unknown): CampaignState {
     if (v.stars === 1 || v.stars === 2 || v.stars === 3) p.stars = v.stars;
     if (isObj(v.best)) {
       const b: Measured = {};
-      for (const [k, x] of Object.entries(v.best)) if (typeof x === 'number' && Number.isFinite(x) && x >= 0 && ['nand', 'transistors', 'depth', 'period', 'cycles', 'size', 'mistakes', 'idle', 'laneops', 'relays', 'tubes', 'steps'].includes(k)) b[k as keyof Measured] = x;
+      for (const [k, x] of Object.entries(v.best)) if (typeof x === 'number' && Number.isFinite(x) && x >= 0 && ['nand', 'transistors', 'depth', 'period', 'cycles', 'size', 'mistakes', 'idle', 'laneops', 'relays', 'tubes', 'steps', 'edits', 'wrong'].includes(k)) b[k as keyof Measured] = x;
       p.best = b;
     }
     if (typeof v.tips === 'number' && v.tips >= 0) p.tips = Math.floor(Math.min(v.tips, 20));
     if (v.seen === true) p.seen = true;
+    if (typeof v.wrong === 'number' && v.wrong >= 0) p.wrong = Math.floor(Math.min(v.wrong, 999));
     if (v.helped === true) p.helped = true;
     if (typeof v.helpKey === 'string' && v.helpKey.length < 200) p.helpKey = v.helpKey;
     if (typeof v.src === 'string' && v.src.length < 100_000) p.src = v.src;
@@ -184,6 +187,14 @@ export class Progress {
     p.seen = true;
     if (started && !p.status) p.status = 'started';
     if (JSON.stringify(p) !== before) this.save(false);
+  }
+
+  /** A wrong accusation on a break-it level: counted, never forgotten. Returns the count. */
+  accusedWrong(id: string): number {
+    const p = this.node(id);
+    p.wrong = (p.wrong ?? 0) + 1;
+    this.save(false);
+    return p.wrong;
   }
 
   /** Do it for me replaced the circuit: remember which one, so a Check of it unchanged counts as helped. */
@@ -369,6 +380,8 @@ export function mergeCampaign(a: CampaignState, b: CampaignState): CampaignState
     const tips = Math.max(x.tips ?? 0, y.tips ?? 0);
     if (tips) p.tips = tips;
     if (x.seen || y.seen) p.seen = true;
+    const wrong = Math.max(x.wrong ?? 0, y.wrong ?? 0);
+    if (wrong) p.wrong = wrong;
     if ((x.helped || y.helped) && p.stars === undefined) p.helped = true;
     else delete p.helped;
     if (!p.helped && !(x.helpKey ?? y.helpKey)) delete p.helpKey;

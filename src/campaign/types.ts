@@ -16,7 +16,7 @@ export interface ChapterLink {
 }
 
 /** Metrics a level is graded on (lower is better). */
-export type Metric = 'nand' | 'transistors' | 'depth' | 'period' | 'cycles' | 'size' | 'mistakes' | 'idle' | 'laneops' | 'relays' | 'tubes' | 'steps' | 'edits';
+export type Metric = 'nand' | 'transistors' | 'depth' | 'period' | 'cycles' | 'size' | 'mistakes' | 'idle' | 'laneops' | 'relays' | 'tubes' | 'steps' | 'edits' | 'wrong';
 
 /** A bug hunt: a level that starts from a faulty drawing of a block an earlier level built (bughunts.ts). */
 export interface BugInfo {
@@ -30,6 +30,8 @@ export interface BugInfo {
   lesson: string;
   /** Parts lit by Show answer: paths of part ids from the level's chip ('fwd.m1'). */
   marks: string[];
+  /** A break-it level (campaign/breakit.ts): the drawing is right and a fault is planted in it; the learner finds it (FIND IT), not fixes it (FIX IT). */
+  find?: boolean;
 }
 
 export type Par = Partial<Record<Metric, number>>;

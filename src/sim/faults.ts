@@ -117,6 +117,15 @@ export function applyFaults(d: FlatDesign, faults: readonly FlatFault[]): ApplyR
 /** The nets readers see: a stuck net read as its constant (a probe or a drawing of a stuck net shows the fault). */
 export const seenNets = (d: FlatDesign, nets: readonly number[]): number[] => (d.stuckTo ? nets.map((n) => d.stuckTo!.get(n) ?? n) : [...nets]);
 
+/**
+ * The same component with faults planted (ComponentDef.planted): wherever it is flattened, alone or inside a bench, the
+ * faults `at(node)` names on its nets are applied. A new definition (its own id), so caches keyed on the healthy one stay
+ * healthy. `at` resolves on the node it is given: part ports through findNode(node, [part]).ports.
+ */
+export function plantedDef(def: ComponentDef, at: (node: HierNode) => FlatFault[], tag = 'planted'): ComponentDef {
+  return { ...def, id: `${def.id}_${tag}`, planted: at };
+}
+
 /** A stable text of the faults, for a simulation's key. '' with none. */
 export const faultsKey = (faults: readonly FlatFault[]): string =>
   faults.map((f) => `${f.kind}${f.kind === 'slow' ? `+${f.delay ?? 1}` : ''}:${f.nets.join('.')}`).sort().join(',');
