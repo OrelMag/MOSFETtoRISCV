@@ -11,6 +11,8 @@
 //     a bare zero run (0, 00, 0x0) is never drawn at fit. The plan is computed when the scale settles, from the blocks'
 //     sizes alone: no layout reads.
 
+import { legibleOptions, onLegibleOptions } from '../ui/legibleopts';
+
 /** Smallest text (px on screen) any schematic text is drawn at. */
 export const MIN_TEXT_PX = 7;
 /** Size (px) of a block name drawn at a fixed size; a label whose own size reaches it is drawn as usual. */
@@ -270,17 +272,12 @@ export interface TagEl { g: SVGGElement; tip: [number, number]; rect: R; named: 
 
 export interface NameEl { t: SVGTextElement; box: NameBox }
 
-/** The learner's say over the rule (View options ▸ Labels): the fixed names' size as a factor of NAME_PX (0: none, a block keeps
- *  its own label however small), and whether text under MIN_TEXT_PX is hidden at all. */
-export const legibleOptions = { names: 1, hideSmall: true };
 const live = new WeakMap<SVGSVGElement, Legibility>();
-/** New options, applied to every schematic on the page at once. */
-export function setLegibleOptions(o: Partial<typeof legibleOptions>): void {
-  if ((o.names ?? legibleOptions.names) === legibleOptions.names && (o.hideSmall ?? legibleOptions.hideSmall) === legibleOptions.hideSmall) return;
-  Object.assign(legibleOptions, o);
+// new options (ui/legibleopts.ts, View options ▸ Labels) apply to every schematic on the page at once
+onLegibleOptions(() => {
   if (typeof document === 'undefined') return;
   for (const svg of document.querySelectorAll<SVGSVGElement>('svg.lg')) live.get(svg)?.refresh();
-}
+});
 
 /** The rule applied to one schematic svg: classes for the text kinds, the fixed names. */
 export class Legibility {
