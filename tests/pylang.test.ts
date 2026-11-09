@@ -193,7 +193,7 @@ print(1 + sq(2) + sq(3) * 2, add3(sq(1), sq(2) + 1, add3(1, 2, sq(xs[2]))), xs[1
 describe('Python subset: errors', () => {
   const bad: [string, RegExp][] = [
     ['x = 1.5', /only integers/],
-    ['print("hi")', /strings are not supported/],
+    ["print(\"hi)", /not closed/],
     ['x = 3 / 2', /use \/\/ for integer division/],
     ['if x:\nprint(1)', /indented block/],
     ['print(y)', /name "y" is not defined/],

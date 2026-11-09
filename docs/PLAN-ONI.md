@@ -1,6 +1,6 @@
 # Plan: four features borrowed from Oxygen Not Included
 
-Status: B (Breakpoints) built on feat/oni-breakpoints (2026-11-09); A, C, D not built. Source: a review of what *Oxygen Not Included* (ONI) does
+Status: all four built (2026-11-09): A the Cut tool, B breakpoints, D the fault brush (batch 5), C the overlay bar (batch 6). Source: a review of what *Oxygen Not Included* (ONI) does
 well that fits this site. Four features were picked:
 
 | # | ONI feature | Ours | Where | Size |

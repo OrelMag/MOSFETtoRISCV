@@ -15,7 +15,8 @@ import { CLK_TO_Q, PS_NOTE, PS_PER_NAND, SETUP } from '../sim/timing';
 import { h, icon, s } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { LogicAnalyzer, type Lane } from '../view/analyzer';
-import { defaultDelay, delaySwitch, heatLegend, heatToggle, heavyList } from '../view/delayui';
+import { defaultDelay, delaySwitch, heatToggle, heavyList } from '../view/delayui';
+import { editorOverlay, onEditorOverlay, setEditorOverlay } from './overlayui';
 import { textWidth } from '../view/route';
 import type { Compiled } from './compile';
 import { type Editor, registerDiagSource, registerEditorPlugin, registerToolbarAction } from './editor';
@@ -26,7 +27,7 @@ import { type ProbeTarget, resolveProbe, sameTarget } from './probes';
 import { setProbeRow } from './probehook';
 import { registerPropsSection } from './props';
 import type { EditorSim } from './runtime';
-import { type SlackMap, slackHeat, slackOf } from '../sim/slack';
+import { type SlackMap, slackOf } from '../sim/slack';
 import { type ChipTiming, chipTiming } from './sta';
 import { matches, shortcutAllowed } from '../ui/keys';
 
@@ -49,9 +50,8 @@ class Analysis {
   probing = false;
   open = false;
   showCrit = false;
-  /** The slack heatmap on the chip's parts (off by default). */
-  showHeat = false;
   private heat: SlackMap | null = null;
+  private ovSub: (() => void) | null = null;
   /** Lane id → what it follows (current chip). */
   private targets = new Map<number, ProbeTarget>();
   private chips = new Map<string, ChipLanes>();
@@ -467,7 +467,7 @@ class Analysis {
     const ed = this.ed, es = ed.sim;
     const c = ed.compiled;
     const design = es.sim && es.sim.kind === 'gate' && es.built?.connKey === c?.connKey ? es.sim.design : null;
-    const key = [c, design, this.showCrit, this.showHeat, this.delayModel];
+    const key = [c, design, this.showCrit, editorOverlay(this.ed), this.delayModel];
     if (key.every((k, i) => k === this.timingKey[i])) return;
     this.timingKey = key;
     this.timing = c ? chipTiming(ed.doc, c, design, this.delayModel) : null;
@@ -485,11 +485,18 @@ class Analysis {
     const el = this.timingEl;
     const t = this.timing;
     const m = this.delayModel;
-    const sw = t && (t.ok || t.depth !== undefined) ? delaySwitch(m, (x) => { this.delayModel = x; this.updateTiming(); }) : null;
+    const sw = t && (t.ok || t.depth !== undefined) ? delaySwitch(m, (x) => {
+      this.delayModel = x;
+      if (editorOverlay(this.ed) === 'slack') setEditorOverlay(this.ed, 'slack', x);
+      this.updateTiming();
+    }) : null;
     el.replaceChildren(h('h3', { class: 'sb-tm-h' }, 'Timing', ...(sw ? [sw] : [])));
     if (!t) return void el.append(h('p', { class: 'sb-sum' }, 'Computing…'));
-    const heatBtn = this.heat ? heatToggle(this.showHeat, () => { this.showHeat = !this.showHeat; this.timingKey = []; this.updateTiming(); }) : null;
-    const legend = this.heat && this.showHeat ? [heatLegend(this.heat.clocked)] : [];
+    // the slack heatmap is the overlay bar's Slack (overlayui.ts): this toggle is a shortcut to it, in this section's delay model
+    if (!this.ovSub) this.ovSub = onEditorOverlay(this.ed, () => { this.timingKey = []; this.updateTiming(); });
+    const heatOn = editorOverlay(this.ed) === 'slack';
+    const heatBtn = this.heat ? heatToggle(heatOn, () => setEditorOverlay(this.ed, heatOn ? null : 'slack', this.delayModel)) : null;
+    const legend: HTMLElement[] = [];
     if (!t.ok) return void el.append(h('p', { class: 'sb-sum' }, t.why), ...(heatBtn ? [h('div', { class: 'sb-btns' }, heatBtn)] : []), ...legend);
     const r = t.report;
     const f = (x: number) => fmtDelay(x, m);
@@ -520,7 +527,6 @@ class Analysis {
     g.replaceChildren();
     const svg = this.ed.view.svg;
     svg.querySelectorAll('.ed-crit').forEach((e) => e.classList.remove('ed-crit'));
-    this.drawHeat();
     const t = this.timing;
     if (!this.showCrit || !t?.ok) return;
     for (const id of t.path.wires) {
@@ -529,20 +535,6 @@ class Analysis {
     }
     for (const id of t.path.parts) svg.querySelector(`[data-part="${CSS.escape(id)}"]`)?.classList.add('ed-crit');
     for (const id of t.path.pins) svg.querySelector(`[data-pin-id="${CSS.escape(id)}"]`)?.classList.add('ed-crit');
-  }
-
-  /** The slack heatmap on the chip's parts (parts are redrawn in place, so it is set again after every repaint). */
-  private drawHeat(): void {
-    const svg = this.ed.view.svg;
-    const map = this.showHeat && this.heat ? slackHeat(this.heat, []) : null;
-    svg.classList.toggle('slack-heat', !!map);
-    for (const g of svg.querySelectorAll<SVGGElement>('g.ed-part[data-part]')) {
-      const hm = map?.get(g.getAttribute('data-part')!);
-      g.querySelector(':scope > title.slack-tip')?.remove();
-      if (!hm) { g.removeAttribute('data-slack'); continue; }
-      g.setAttribute('data-slack', String(hm.band));
-      g.prepend(s('title', { class: 'slack-tip' }, hm.tip));
-    }
   }
 }
 

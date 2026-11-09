@@ -108,7 +108,7 @@ export function startApp(root: HTMLElement): void {
   // Palette menu: a swatch button opening a small list (0, 1, X and bus colours per entry).
   const swatch = () => h('span', { class: 'pal-sw' }, h('i', { class: 's0' }), h('i', { class: 's1' }), h('i', { class: 'sx' }), h('i', { class: 'sb' }));
   const palMenu = h('div', { class: 'pal-menu', role: 'menu', 'aria-label': 'View options' });
-  // Sections, so the long list reads as four short ones (the backup lives on the home page, the search's actions and the storage note).
+  // Sections, so the long list reads as four short ones.
   const palHead = (t: string) => h('div', { class: 'pal-head', role: 'presentation' }, t);
   // Presets first: the short way through a long list. Each offers its undo until the menu closes.
   const previewHost = h('div', { class: 'pal-preview', 'aria-hidden': 'true' });
@@ -344,7 +344,7 @@ export function startApp(root: HTMLElement): void {
   // A route that loads its page asynchronously must not mount it if another route came since.
   let routeSeq = 0;
   // A lazy route with nothing on screen yet (the first load): a placeholder rather than an empty page.
-  // With a page already shown it stays until the new one is ready, and a thin bar on the top edge says something is coming (styles/app.css).
+  // With a page shown it stays until the new one is ready; a thin bar on the top edge says something is coming.
   const busy = (on: boolean) => document.documentElement.toggleAttribute('data-busy', on);
   const pending = () => { busy(true); if (!page) view.replaceChildren(loadingPanel()); };
   const route = () => {
