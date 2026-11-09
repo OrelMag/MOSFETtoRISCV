@@ -34,3 +34,21 @@ describe('pipelining: every hazard, cycle by cycle', () => {
     expect(chPipeline.steps.find((s) => s.title === 'Does it pay? Measured')!.body).toContain('Common mistakes with pipelines');
   });
 });
+
+describe('traps: one tick, register by register', () => {
+  it('is the golden model\'s run of the timer program', async () => {
+    const { timerTick, chTraps } = await import('../src/chapters/ch-system');
+    const T = timerTick();
+    expect(T.pending).toMatchObject({ pc: 40, mtime: 44, mtimecmp: 44, mtip: 1, mie: 1 });
+    expect(T.taken).toMatchObject({ pc: T.handler, mepc: 40, mcause: 0x80000007, mie: 0, mpie: 1, retired: T.pending.retired });
+    expect(T.cleared).toMatchObject({ mtimecmp: 84, mtip: 0 });
+    expect(T.back).toMatchObject({ pc: 40, mie: 1 });
+    expect([T.cost, T.period]).toEqual([8, 40]);
+    // the timer step's tour holds the gates to the same moment: the handler at pc 48 after 45 cycles
+    const step = chTraps.steps.find((s) => s.title === 'The timer interrupt')!;
+    expect(T.handler).toBe(48);
+    expect(step.tour!.beats[0].cycles! + step.tour!.beats[1].cycles!).toBe(T.taken.mtime);
+    expect(step.body).toContain('Worked example: one tick, register by register');
+    expect(chTraps.steps.find((s) => s.title === 'Inside the trap unit')!.body).toContain('Common mistakes with traps and interrupts');
+  }, 60000);
+});
