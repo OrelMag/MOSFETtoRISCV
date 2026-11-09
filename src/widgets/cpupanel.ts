@@ -634,8 +634,10 @@ function pipeDiagram(asm: AsmResult): ScenePanel {
         if (stage.cycles === 0) history.clear();
         record();
       }
-      grid.replaceChildren(...pipeGridRows(history.snaps, (pc) => asm.words[pc >>> 2]));
-      grid.scrollLeft = grid.scrollWidth; // the newest cycle in view (a narrow panel scrolls the grid)
+      grid.replaceChildren(...pipeGridRows(history.snaps, (pc) => asm.words[pc >>> 2], 12, true));
+      // the newest cycle in view (a narrow panel scrolls the grid; the columns after it are blank until those cycles run)
+      const cells = grid.querySelectorAll<HTMLElement>('.pg-row.head > .pg-c:not(.pad)'), newest = cells[cells.length - 1];
+      grid.scrollLeft = newest ? Math.max(0, newest.getBoundingClientRect().right - grid.getBoundingClientRect().left + grid.scrollLeft - grid.clientWidth) : 0;
     };
     update();
     return { el, update };

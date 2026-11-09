@@ -1,6 +1,7 @@
 // Load times and jumping UI in headless Chrome (ship review, track D). No dependency: Chrome over the DevTools Protocol.
 //   node node_modules/vite-node/vite-node.mjs scripts/perf-probe.ts [--url <site>] [--port n] [--throttle n] [--only s]
 //     [--switch] (route switches in one page after the first) [--act] (each route's actions: Run, menus …) [--json out.json]
+//     [--raw] (every layout shift with its elements' rects before -> after)
 // A fresh browser context per route (first load: cold cache) and, with --switch, one page that moves through the routes by
 // hash. Per load: DOMContentLoaded, LCP, settled (no request, long task or DOM change for QUIET ms), JS bytes, long tasks,
 // CLS and the elements that moved. With --act a route's actions are played after it settles and the shifts and resizes
@@ -184,7 +185,7 @@ async function main() {
         return { dcl: Math.round(n ? n.domContentLoadedEventEnd : 0), lcp: P.lcp, longs: P.longs.length, longMs: P.longs.reduce((a, l) => a + l.d, 0), maxLong: P.longs.reduce((a, l) => Math.max(a, l.d), 0),
           cls: P.shifts.reduce((a, x) => a + x.v, 0), shifts: P.shifts }; })()`);
       const row: any = { route: r.name, ...s, dcl: nav.dcl, lcp: nav.lcp, longTasks: nav.longs, longMs: nav.longMs, maxLong: nav.maxLong,
-        cls: +nav.cls.toFixed(4), kb: Object.fromEntries(Object.entries(tab.bytes).map(([k, v]) => [k, Math.round(v / 1024)])), loadShifts: fmtShift(nav.shifts), errors: tab.errors };
+        cls: +nav.cls.toFixed(4), kb: Object.fromEntries(Object.entries(tab.bytes).map(([k, v]) => [k, Math.round(v / 1024)])), loadShifts: fmtShift(nav.shifts), rawShifts: has('--raw') ? nav.shifts : undefined, errors: tab.errors };
       if (has('--act') && r.acts) {
         await tab.eval(`(() => { const P = window.__perf; P.shifts.length = 0; P.resizes.length = 0; P.watch(); })()`);
         await sleep(700);

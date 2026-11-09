@@ -423,7 +423,7 @@ export class Stage {
     // zoom and Fit work on the boards too (their own camera)
     const upBtn = btn('up', 'Up one level (Esc)', () => this.up()), fitBtn = btn('fit', 'Fit to screen', () => (this.boardOn ? this.board.fitAll() : this.view.fit()));
     upBtn.classList.add('sch-only');
-    const bar = this.bar = h('div', { class: 'stage-bar' },
+    const bar = this.bar = h('div', { class: 'stage-bar unfit' },
       this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, this.probeBtn, this.whyBtn, this.timingBtn, moreWrap,
       upBtn, readBtn, zoomOut, zoomIn, fitBtn,
       this.panesBtn);
@@ -434,7 +434,7 @@ export class Stage {
     this.hint = hintBadge('double-click a part to open it · drag a part or a wire to move it (shift: pick several) · right-click for layout · drag to pan · wheel or pinch to zoom',
       'double-tap a part: open · drag: move / pan (a wire: tap it first) · pinch: zoom', 'stage', '', HINT_AUTO_MS);
     this.canvas.append(this.levelBadge, this.hint, this.dock, this.board.el, this.why.el);
-    this.controls = h('div', { class: 'controls' });
+    this.controls = h('div', { class: 'controls unfit' });
     this.status = h('div', { class: 'status' });
     this.el = h('section', { class: 'stage' }, bar, this.canvas, this.analyzer.el, this.controls);
     this.analyzer.onClose = () => this.showAnalyzer(false);
@@ -534,6 +534,12 @@ export class Stage {
       this.fitBar();
       this.fitControls();
       this.hugPhone();
+      // The bars are laid out once before this first fit (their buttons with their words): they stay invisible until then,
+      // or dropping the words counted as a layout shift of the whole bar and the run row on every load.
+      if (this.canvas.clientWidth > 0) {
+        this.bar.classList.remove('unfit');
+        this.controls.classList.remove('unfit');
+      }
     }).observe(this.canvas);
     // a chapter's challenge note (ui/stagenotes.ts, put over the canvas by the page) comes, grows and goes: the boards'
     // caption and top follow it (boardCover)

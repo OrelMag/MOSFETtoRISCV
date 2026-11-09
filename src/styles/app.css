@@ -1861,6 +1861,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
   background: hsl(var(--h, 220) 70% 50% / 0.18); color: var(--text); }
 .pg-row.head .pg-c { background: none; color: var(--muted); }
 .pg-c.bubble { background: var(--surface-2); color: var(--muted); }
+.pg-c.pad { background: none; }
 .pg-row.ev .pg-c { background: none; color: var(--warn); font-size: 9.5px; white-space: normal; line-height: 1.15; }
 
 .io-panel { width: 330px; }
@@ -2642,6 +2643,9 @@ svg.schematic.focus .inst.ghost { opacity: 0.5; }
 
 /* A stage still building its scene (Stage.load): its bar and run row have nothing to act on yet. */
 .stage[aria-busy] .stage-bar > :not(.crumbs), .stage[aria-busy] .controls { visibility: hidden; }
+/* Until the stage's first fit (Stage: the canvas's ResizeObserver) the bar's buttons and the run row have not dropped their
+   words yet: invisible, so the fit is not a layout shift. */
+.stage-bar.unfit > :not(.crumbs), .controls.unfit { visibility: hidden; }
 
 /* The Memory contents picker (widgets/memgrid.ts) at finger size. */
 @media (pointer: coarse) { .mem-pick { min-height: 40px; } }
