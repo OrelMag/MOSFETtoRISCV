@@ -51,6 +51,12 @@ export function stepEdge(sim: Sim, e: Edge): boolean {
 /** A time for a readout: as it is under the unit model (whole delays), one decimal under load-dependent delay. */
 export const fmtTime = (sim: Pick<Sim, 'ticksPerUnit'>, t: number): string => ((sim.ticksPerUnit ?? 1) === 1 ? String(t) : t.toFixed(1));
 
+/** A measured span snapped to the engine's tick (whole delays, or tenths under load), so float residue never reads as a change. */
+export const onTick = (sim: Pick<Sim, 'ticksPerUnit'>, t: number): number => {
+  const k = sim.ticksPerUnit ?? 1;
+  return k === 1 ? t : Math.round(t * k) / k;
+};
+
 /** Where one step goes: a unit on under the unit model; else the next event, capped at `end` (the edge's or a run's). */
 export function nextStepTime(sim: Sim, end: number | null = null): number {
   if ((sim.ticksPerUnit ?? 1) === 1 || !sim.nextEventTime) return sim.time + 1;

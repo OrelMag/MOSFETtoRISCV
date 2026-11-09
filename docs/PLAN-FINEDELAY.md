@@ -64,6 +64,18 @@ Progress:
    The campaign's pipelined RV16 writes its register file at the falling edge, through one inverter: under load the clock-chain
    rule refuses the cycle engine there. An inverted clock is likely safe (the edges are half a period apart), but that is
    not shown, so the rule stays conservative; such a design runs on GateSim under load, correct and slower.
+4. Measurers ✅ (feat/finedelay-4): settle.ts outputSettle, opdelay.ts portSettle, edgetiming.ts (captureAt, clkToQ, sweepEdge,
+   qTrace) and riscv/cycletime.ts measureClasses take an optional model, default 'unit' (every caller unchanged); under 'load'
+   spans are snapped to tenths (edge.ts `onTick`), the sweep steps a tenth, cycletime's static period uses the same model.
+   No engine change, so the sim-perf numbers are stage 3's. tests/finedelay-measure.test.ts. Measured, unit → load:
+
+   | | unit | load |
+   |---|---|---|
+   | rca8 worst sensitized settle (static depth) | 18 (20) | 29.5 (33.9) |
+   | DFF setup / hold / clk-to-q rise / fall | 1 / 1 / 2 / 3 | 2 / 1.5 / 2.5 / 3.5 |
+   | DFF_EDGE6 setup / hold / clk-to-q rise / fall | −1 / 3 / 2 / 5 | −3.5 / 4 / 3.5 / 7 |
+   | single-cycle RV32I worst cycle (static period), 304 cycles | 131 (155) | 203.8 (242.9) |
+5. Chapter steps: waiting for the author (E:/audit/ship/PROPOSALS.md rows 32–35).
 
 ## What exists
 

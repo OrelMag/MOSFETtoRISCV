@@ -7,7 +7,7 @@
 import { singleCycleCpu } from '../lib/cpu';
 import { assemble } from './asm';
 import { randomProgram32 } from './randprog32';
-import { riseEdge } from '../sim/edge';
+import { onTick, riseEdge } from '../sim/edge';
 import { flatten } from '../sim/flatten';
 import { GateSim } from '../sim/gatesim';
 import { analyzeTiming } from '../sim/timing';
@@ -34,10 +34,15 @@ export interface CycleTimes {
   period: number;
   stages: { inst: string; arrival: number }[];
   cycles: number;
+  /** The delay model both measurements used: 'load' times every NAND by what it drives, in tenths of a unit. */
+  model: 'unit' | 'load';
 }
 
-/** Run random programs (seeds) of n units on the CPU and time every cycle. `tick` lets a caller yield between programs. */
-export async function measureClasses(adder: 'rca' | 'ks', seeds: number[] = [1, 2, 3], n = 60, tick?: () => Promise<void>): Promise<CycleTimes> {
+/**
+ * Run random programs (seeds) of n units on the CPU and time every cycle. `tick` lets a caller yield between programs.
+ * `model` 'load' runs the simulation and the static timing on load-dependent delay (sim/delay.ts).
+ */
+export async function measureClasses(adder: 'rca' | 'ks', seeds: number[] = [1, 2, 3], n = 60, tick?: () => Promise<void>, model: 'unit' | 'load' = 'unit'): Promise<CycleTimes> {
   const acc = new Map<string, number[]>();
   let cycles = 0;
   let period = 0, stages: { inst: string; arrival: number }[] = [];
@@ -46,10 +51,10 @@ export async function measureClasses(adder: 'rca' | 'ks', seeds: number[] = [1, 
     const cpu = singleCycleCpu(words, { adder });
     const design = flatten(cpu, { mode: 'gate' });
     if (!period) {
-      const rep = analyzeTiming(design);
+      const rep = analyzeTiming(design, { delay: model });
       if (rep) { period = rep.period; stages = rep.stages; }
     }
-    const sim = new GateSim(design);
+    const sim = new GateSim(design, { delay: model });
     sim.setInput('clk', 0);
     sim.settle();
     const pcPort = sim.design.root.ports.pcOut;
@@ -60,7 +65,7 @@ export async function measureClasses(adder: 'rca' | 'ks', seeds: number[] = [1, 
       const t0 = sim.time;
       riseEdge(sim, 'clk');
       sim.settle();
-      const d = sim.time - t0;
+      const d = onTick(sim, sim.time - t0);
       sim.setInput('clk', 0);
       sim.settle();
       pc = pcOf();
@@ -75,5 +80,5 @@ export async function measureClasses(adder: 'rca' | 'ks', seeds: number[] = [1, 
     const v = acc.get(c.cls) ?? [];
     return { cls: c.cls, label: c.label, n: v.length, max: v.length ? Math.max(...v) : 0, mean: v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0 };
   });
-  return { adder, classes, worst: Math.max(...classes.map((c) => c.max)), period, stages, cycles };
+  return { adder, classes, worst: Math.max(...classes.map((c) => c.max)), period, stages, cycles, model };
 }
