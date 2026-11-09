@@ -399,3 +399,27 @@ export class WireDraft {
     return p.slice(1, -1);
   }
 }
+
+/**
+ * Where the segment a–b crosses a wire's polyline (the Cut tool): one point per crossing, in order along the polyline.
+ * A touch at either end of the polyline does not count (that is a pin or a port, not the wire), and neither does a
+ * stretch the segment runs along (parallel overlap: no single point to cut at).
+ */
+export function segmentCrossings(poly: Vec[], a: Vec, b: Vec): Vec[] {
+  const out: Vec[] = [];
+  const first = poly[0], last = poly[poly.length - 1];
+  const at = (p: Vec, q: Vec) => Math.abs(p[0] - q[0]) < 1e-6 && Math.abs(p[1] - q[1]) < 1e-6;
+  const [rx, ry] = [b[0] - a[0], b[1] - a[1]];
+  for (let i = 1; i < poly.length; i++) {
+    const p = poly[i - 1], [sx, sy] = [poly[i][0] - p[0], poly[i][1] - p[1]];
+    const den = rx * sy - ry * sx;
+    if (Math.abs(den) < 1e-12) continue;
+    const t = ((p[0] - a[0]) * sy - (p[1] - a[1]) * sx) / den; // along the cut
+    const u = ((p[0] - a[0]) * ry - (p[1] - a[1]) * rx) / den; // along the wire's segment
+    if (t < -1e-9 || t > 1 + 1e-9 || u < -1e-9 || u > 1 + 1e-9) continue;
+    const q: Vec = sx === 0 ? [p[0], p[1] + u * sy] : sy === 0 ? [p[0] + u * sx, p[1]] : [p[0] + u * sx, p[1] + u * sy];
+    if (at(q, first) || at(q, last) || out.some((o) => at(o, q))) continue; // a corner is crossed once, not once per segment
+    out.push(q);
+  }
+  return out;
+}

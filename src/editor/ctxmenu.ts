@@ -26,6 +26,7 @@ import type { ProbeTarget } from './probes';
 import { exportImage, shareDialog } from './fileui';
 import { copyAsChip, explainOn, handout } from './levelgate';
 import type { WireDoc } from './model';
+import { cutAllowed, cutWireHere, toggleCut } from './cutui';
 
 export { closeMenu as closeContextMenu, type MenuEntry, showMenu } from '../ui/menu';
 type Entry = MenuEntry;
@@ -51,6 +52,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
       { label: 'Add a comment here', key: 'T', run: () => t.placeAt({ id: 'comment', name: 'Comment', place: { comment: true } }, at) },
       { label: 'Add a pointer here', key: 'L', run: () => t.placeAt({ id: 'pointer', name: 'Pointer', place: { pointer: true } }, at) },
       { label: 'Add a section here', run: () => t.addSectionAt(at) },
+      ...(cutAllowed(ed) ? [{ label: 'Cut tool: drag across wires', key: 'K', run: () => toggleCut(ed) }] : []),
       null,
       { label: 'Select all', key: 'Ctrl+A', run: () => ed.select({ parts: ed.doc.parts.map((p) => p.id), pins: ed.doc.pins.map((p) => p.id), wires: ed.doc.wires.map((w) => w.id), labels: ed.doc.labels.map((l) => l.id), ...(ed.doc.comments?.length ? { comments: ed.doc.comments.map((c) => c.id) } : {}) }), disabled: !ed.doc.parts.length && !ed.doc.pins.length && !ed.doc.wires.length && !ed.doc.labels.length && !ed.doc.comments?.length },
       { label: 'Fit to view', run: () => ed.fitView() },
@@ -152,6 +154,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
         ...shape,
       ] }, null,
       { label: 'Collapse to pointers…', run: () => collapseDialog(ed, id) },
+      ...(cutAllowed(ed) ? [{ label: 'Cut the wire here', key: 'K', run: () => cutWireHere(ed, id, at) }] : []),
       ...pick,
       null, { label: 'Delete', key: 'Del', run: () => t.del() },
     ];

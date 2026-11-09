@@ -669,3 +669,9 @@ select.sb-open { field-sizing: content; max-width: 9.5em; }
 .sb-mini th { text-align: left; color: var(--text-2); font-weight: 500; padding: 2px 6px 2px 0; }
 .sb-mini td { padding: 2px 6px 2px 0; font-variant-numeric: tabular-nums; }
 .sb-mini tr.stale td { color: var(--muted); }
+/* The Cut tool (cutui.ts): the dragged line, the crossings, the wires about to be cut. */
+.ed-cut-line { stroke: var(--ed-err); stroke-width: 0.12; stroke-dasharray: 0.5 0.3; pointer-events: none; }
+.ed-cut-x { fill: var(--surface); stroke: var(--ed-err); stroke-width: 0.12; pointer-events: none; }
+.ed-cut { pointer-events: none; }
+svg path.wire.cutting { stroke-dasharray: 0.35 0.25; opacity: 0.7; }
+.sb-canvas.cutting { cursor: crosshair; }
