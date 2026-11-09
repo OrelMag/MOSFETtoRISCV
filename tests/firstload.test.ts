@@ -76,7 +76,8 @@ describe('the first-load path', () => {
     // 331 000: the Working gates setting and its View options switch (2026-11-09, approved by the author)
     // 335 000 (2026-11-09, ship review batch 4): the generated outline grows by a line per new chapter step (~150 bytes); this test is for
     // a chapter, the library or a simulator pulled onto the first page (tens of KB), not for a step title. Raise it by steps, with the reason.
-    expect(bytes).toBeLessThan(335_000);
+    // 345 000 (2026-11-09, batch 10): six approved chapters (fpga, verify, sidechan now; vmem, os, power next) add ~70 outline lines
+    expect(bytes).toBeLessThan(345_000);
   });
 
   it('loads the route pages and the chapters by import(), not by import', () => {
