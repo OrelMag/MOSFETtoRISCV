@@ -203,7 +203,7 @@ const HUNTS: Hunt[] = [
   },
   {
     id: 'b_cnt', after: 's_cnt4', title: 'Never past seven',
-    report: 'The 4-bit counter counts 0, 1, … 7 and then 0 again, and a reset leaves bit 3 alone. Bits 0–2 are fine.',
+    report: 'The 4-bit counter counts 0, 1, … 7 and then 0 again, and a reset with en low does not always clear bit 3. Bits 0–2 are fine.',
     tips: ['Only bit 3 misbehaves, and only from 7 on. Compare its column with bit 2’s.', 'Each bit is ¬rst AND the incremented value: g3 should take ¬rst.', 'g3 takes ¬en instead of ¬rst.'],
     fault: 'g3 read ¬en instead of ¬rst. While counting (en = 1) it forced bit 3 to 0, so 7 + 1 became 0; under reset with en = 0 it let bit 3 through.',
     kind: 'miswire', marks: ['g3'],

@@ -76,11 +76,11 @@ const grp = (s: string) => s.replace(/(.{4})(?=.)/g, '$1 ');
 function numAnswer(want: number, base: 2 | 10 | 16): Question['check'] {
   const name = base === 2 ? 'binary' : base === 16 ? 'hexadecimal' : 'decimal';
   return (a) => {
-    const t = a.trim().toLowerCase().replace(/[_\s]/g, '');
+    const t = a.trim().toLowerCase().replace(/[_\s]/g, '').replace(/−/g, '-');
     let v: number | null = null;
     if (base === 2) { const m = t.match(/^(?:0b)?([01]+)$/); v = m ? parseInt(m[1], 2) : null; }
     else if (base === 16) { const m = t.match(/^(?:0x)?([0-9a-f]+)$/); v = m ? parseInt(m[1], 16) : null; }
-    else v = parseNum(t);
+    else v = /^-?\d+$/.test(t) ? parseInt(t, 10) : null;
     if (v === null) return { ok: false, why: `write a ${name} number` };
     return { ok: v === want, why: v === want ? undefined : 'not that value' };
   };
@@ -174,7 +174,7 @@ const twos: Drill = {
       const sum = a + b, ovf = sum < -128 || sum > 127;
       return {
         prompt: `In 8 bits, <b>${a} + ${b}</b>: does it overflow (signed)? Answer <code>yes</code> or <code>no</code>.`,
-        check: (t) => { const y = /^\s*(y|yes|1|true)\s*$/i.test(t), n = /^\s*(n|no|0|false)\s*$/i.test(t); return { ok: (y && ovf) || (n && !ovf), why: y || n ? 'no' : 'yes or no' }; },
+        check: (t) => { const y = /^\s*(y|yes|1|true)\s*$/i.test(t), n = /^\s*(n|no|0|false)\s*$/i.test(t); return { ok: (y && ovf) || (n && !ovf), why: y || n ? '' : 'answer yes or no' }; },
         answer: ovf ? 'yes' : 'no', explain: `The true sum is ${sum}; 8 bits hold −128 … 127. Overflow ⇔ both operands have the same sign and the result the other.`,
       };
     }
@@ -284,7 +284,7 @@ export const SIMPLIFY: { src: string; vars: string[]; steps: string[]; why: stri
 
 const boolean: Drill = {
   id: 'boolean', title: 'Simplify', goal: 6,
-  how: 'Write an equivalent expression with no more literals (variable occurrences) than asked. NOT: ¬ (or \' or ~); AND: · or juxtaposition; OR: +.',
+  how: 'Write an equivalent expression with no more literals (variable occurrences) than asked. NOT: ¬ (or \' or ~); AND: · or juxtaposition; OR: +; ⊕ is XOR (1 when its two inputs differ; ^ also works).',
   make(r) {
     const q = SIMPLIFY[int(r, 0, SIMPLIFY.length - 1)];
     const p = parseBool(q.src, q.vars);
@@ -566,7 +566,7 @@ function qtyAnswer(want: number, unit: 'V' | 'ms' | 'W', tol: number, rel = fals
 function yesNo(want: boolean): Question['check'] {
   return (t) => {
     const y = /^\s*(y|yes|1|true|closed)\s*$/i.test(t), n = /^\s*(n|no|0|false|open)\s*$/i.test(t);
-    return { ok: (y && want) || (n && !want), why: y || n ? 'no' : 'yes or no' };
+    return { ok: (y && want) || (n && !want), why: y || n ? '' : 'answer yes or no' };
   };
 }
 
