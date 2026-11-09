@@ -1,13 +1,13 @@
 // Chapter 43's typed numbers (the computed ones come from the code and need no pin), and its shape.
+import { numOf } from '../src/chapters/order';
 import { describe, expect, it } from 'vitest';
 import { tolerance, UART_8N1 } from '../src/comm/startstop';
 import { bytesPerSecond, divisorFor, fifoBudget } from '../src/comm/uart';
 import { chUart } from '../src/chapters/ch-comm-uart';
-import { numOf } from '../src/chapters/order';
 
-describe("the UART chapter's place", () => {
-  it('sits where order.ts puts it, eight steps, building on the chapters before it', () => {
-    expect(chUart.num).toBe(numOf('uart'));
+describe('chapter 43 typed numbers', () => {
+  it('follows the clocks chapter, eight steps, building on the chapters before it', () => {
+    expect(chUart.num).toBe(numOf('clocks') + 1);
     expect(chUart.steps.length).toBe(8);
     expect(chUart.builds).toEqual(expect.arrayContaining(['clocks', 'bus']));
     expect(chUart.recap!.check!.length).toBe(3);

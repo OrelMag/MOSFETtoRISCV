@@ -1,26 +1,26 @@
 // Chapter 42's typed numbers: the figures the prose and the quizzes state by hand are pinned here to the models and
 // circuits they describe (the computed ones come from the code and need no pin).
 
+import { numOf } from '../src/chapters/order';
 import { describe, expect, it } from 'vitest';
 import { RATIOS } from '../src/comm/asyncfifo';
 import { readings, worstError } from '../src/comm/graybus';
 import { chClocks } from '../src/chapters/ch-comm-clocks';
 import { chapterById } from '../src/chapters';
-import { numOf } from '../src/chapters/order';
 import { asyncFifo, INV_CMOS, SCHMITT, syncN } from '../src/lib';
 import { metrics } from '../src/phys/inverter';
 import { KEEPER, thresholds } from '../src/phys/schmitt';
 import { TAU_PS } from '../src/phys/metastable';
 import { stats } from '../src/sim/stats';
 
-describe("the clocks chapter's place", () => {
-  it('sits where order.ts puts it, nine steps, building on earlier chapters', () => {
+describe('chapter 42 typed numbers', () => {
+  it('follows the wire chapter, nine steps, and builds on earlier chapters', () => {
     expect(chClocks.num).toBe(numOf('clocks'));
     expect(chClocks.steps).toHaveLength(9);
     expect(chapterById('clocks')).toBe(chClocks);
     for (const id of chClocks.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(chClocks.num);
-    expect(chapterById('latches')!.num).toBe(numOf('latches'));
-    expect(chapterById('wire')!.num).toBe(numOf('wire'));
+    expect(chapterById('latches')!.num).toBe(8);
+    expect(chapterById('wire')!.num).toBe(numOf('clocks') - 1);
   });
   it('step 1: the 0.5 V spike is inside the noise margin', () => {
     const m = metrics(1);
