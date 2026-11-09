@@ -3145,7 +3145,7 @@ svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .ne
 svg .kcursor { fill: none; stroke: var(--accent); stroke-width: 0.28; pointer-events: none; }
 
 /* ch fastadd: a Verilog listing whose lines point at the gates they became; the critical path's lines carry a bar */
-pre.code.vsrc .ln { color: var(--muted); font-style: normal; user-select: none; }
+pre.code.vsrc .ln { color: var(--muted); font-style: normal; user-select: none; padding-left: 7px; } /* room for the critical-path bar */
 pre.code.vsrc .vl.crit { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
 /* the overlay bar's buttons, select and legend close (view/overlaybar.ts) */
 @media (pointer: coarse) { .ov-seg .ov-btn, .ov-sel { min-height: 40px; } .ov-x { min-width: 40px; min-height: 40px; } }
