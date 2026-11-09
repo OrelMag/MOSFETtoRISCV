@@ -209,7 +209,7 @@ export const chBus: Chapter = {
       title: 'Two masters',
       body: `
         <p>A <span data-show="dma">DMA engine</span> is a second <strong>master</strong>: it starts transactions of its own. Two masters, one bus: the interconnect's
-        <span data-show="bus.grant"><strong>arbiter</strong></span> (<a href="#/c/multicore/0">chapter 27</a>'s round-robin arbiter) grants the bus to one requester, and the grant is held until
+        <span data-show="bus.grant"><strong>arbiter</strong></span> (<a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>'s round-robin arbiter) grants the bus to one requester, and the grant is held until
         that transaction's response: one transaction at a time. The other master's valid stays up meanwhile; it simply waits.</p>
         <p><span data-show="bus">The interconnect</span> is the arbiter, the multiplexers that route the granted master's signals to the addressed slave and the
         slave's answer back, and the decoder: ${nands(axiBus(2, [0, 1, 4, 15]))} NANDs for two masters and four slaves.
@@ -262,11 +262,11 @@ export const chBus: Chapter = {
         derive: `<p>A copy of n words is 4 setup stores plus a read and a write per word: 4 + 2n transactions, all but the four on the DMA's own account. By the CPU, a copy costs a load and a store per word,
           each at least 2 bus cycles, plus the loop's instructions, and nothing else runs. The DMA's wall-clock time is longer than the sum of its transactions, because the first flash word adds the
           page read and the engine does one transaction at a time; the point is that the CPU is free during it.</p>`,
-        real: `<p>The CPU here has no data cache, so RAM is the only copy. Put a write-back cache (<a href="#/c/cache/0">chapter 22</a>) in front of it
+        real: `<p>The CPU here has no data cache, so RAM is the only copy. Put a write-back cache (<a href="#/c/cache/0">chapter ${numOf('cache')}</a>) in front of it
           and the DMA, which talks to RAM directly, sees two problems. Copying <em>out</em> of a buffer the CPU just wrote, it reads RAM
           while the new data still sits in dirty cache lines: the driver must <strong>clean</strong> (write back) those lines first.
           Copying <em>in</em>, it writes RAM under lines the cache still holds: the driver must <strong>invalidate</strong> them before the transfer, so no dirty line is later evicted over the incoming data, and again after it on a CPU that speculates or prefetches, so the CPU does not read a refilled stale line. Embedded systems do this in software around every transfer; bigger systems make the DMA's accesses
-          <strong>coherent</strong>, snooping them against the caches as a second core's would be (<a href="#/c/multicore/0">chapter 27</a>).
+          <strong>coherent</strong>, snooping them against the caches as a second core's would be (<a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>).
           Either way, the stores that fill the buffer must reach memory before the store that starts the engine: on a CPU that
           reorders memory accesses, a <strong>fence</strong> goes before that MMIO kick.</p>`,
         pitfall: `<p>Starting the engine before the data is in memory, or reading the destination before the interrupt. Both look right in a quick test, because the copy is fast, and fail only under load. In the
@@ -325,7 +325,7 @@ export const chBus: Chapter = {
           'The boot ROM waits for the DMA to finish before it jumps into RAM: the copy is over.',
           'The NOP is what the decoder sees while the word is on its way: a consequence of the wait, not its cause.',
         ],
-        explain: 'An instruction from RAM is a bus read like any load: the address one cycle, the word the next, then the cycle that executes it. A load or store from RAM code costs one more. Caches (<a href="#/c/cache/0">chapter 22</a>) are what lets a real CPU fetch at full speed from slow memory.',
+        explain: `An instruction from RAM is a bus read like any load: the address one cycle, the word the next, then the cycle that executes it. A load or store from RAM code costs one more. Caches (<a href="#/c/cache/0">chapter ${numOf('cache')}</a>) are what lets a real CPU fetch at full speed from slow memory.`,
       },
     },
     {
@@ -381,11 +381,11 @@ export const chBus: Chapter = {
       title: 'Everything on one bus',
       body: `
         <p>Three more slaves, and the computer has what a small system on a chip has. At 0x2000_0000, the <span data-show="dram"><strong>DRAM</strong></span> of
-        <a href="#/c/memctrl/0">chapter 36</a> behind its controller and a bus adapter (adapter and controller:
+        <a href="#/c/memctrl/0">chapter ${numOf('memctrl')}</a> behind its controller and a bus adapter (adapter and controller:
         ${nands(axiDram())} NANDs). A load costs 10 cycles on an open row, 14 on a closed bank, 18 when another row is open, more
-        behind a refresh, against 2 for the on-chip RAM: the code stays in RAM, and this is the gap the caches of <a href="#/c/cache/0">chapter 22</a> close.</p>
+        behind a refresh, against 2 for the on-chip RAM: the code stays in RAM, and this is the gap the caches of <a href="#/c/cache/0">chapter ${numOf('cache')}</a> close.</p>
         <p>At 0x5000_0000, a <span data-show="screen"><strong>screen</strong></span>: a ${SOC_SCREEN} × ${SOC_SCREEN} frame buffer, a byte a pixel (RGB332), built like the RAM in four
-        byte lanes so that sb draws one pixel; a display reads it as <a href="#/c/pixels/0">chapter 33</a>'s scan-out reads its frame. At 0x6000_0000, a
+        byte lanes so that sb draws one pixel; a display reads it as <a href="#/c/pixels/0">chapter ${numOf('pixels')}</a>'s scan-out reads its frame. At 0x6000_0000, a
         <span data-show="keys kbd"><strong>keyboard</strong></span>: +4 says whether a key waits, and reading +0 <em>takes</em> it (the slave pulses ack, the acknowledge that drops the key, in the cycle after the read's
         handshake, ${nands(AXI_KEYS)} NANDs). A read with a side effect: such a register must never sit behind a cache, nor be read
         twice by a CPU that guesses ahead.</p>
