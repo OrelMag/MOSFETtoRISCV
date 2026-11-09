@@ -20,6 +20,7 @@ import type { ChipDoc, FaultDoc } from './model';
 import { type ProbeTarget, resolveProbe, sameTarget } from './probes';
 import { registerPropsSection } from './props';
 import { MAX_FAULTS } from './store';
+import { isLevelChipId } from './levelgate';
 
 const typing = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
@@ -55,7 +56,7 @@ class Faults {
       if (e.key === 'Escape' && this.brush && !typing(e.target)) return this.setBrush(false);
       if (typing(e.target) || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
       if ((e.target as HTMLElement | null)?.closest?.('.sb-help, .key-help')) return;
-      if (matches(e, 'sb.fault') && shortcutAllowed(e)) { e.preventDefault(); this.setBrush(!this.brush); }
+      if (matches(e, 'sb.fault') && shortcutAllowed(e) && !ed.level) { e.preventDefault(); this.setBrush(!this.brush); }
     };
     document.addEventListener('keydown', key);
     this.off.push(() => document.removeEventListener('keydown', key));
@@ -71,7 +72,17 @@ class Faults {
     return this.ed.compiled?.mode !== 'switch';
   }
 
+  /** A campaign level or challenge chip: Check tests the chip as drawn, so a fault there would only mislead (docs/PLAN-ONI.md D2). */
+  get barred(): boolean {
+    const id = this.ed.doc.id;
+    return !!this.ed.level || isLevelChipId(id) || id.startsWith('u_ch_') || id.startsWith('u_pz_');
+  }
+
   setBrush(on: boolean): void {
+    if (on && this.barred) {
+      this.ed.toast('The fault brush is for your own chips: a level or challenge is checked as drawn');
+      on = false;
+    }
     if (on && !this.gate) {
       this.ed.toast('Faults act on gates: this chip is solved at switch level');
       on = false;
@@ -303,7 +314,7 @@ class Faults {
     return h('section', { class: 'sb-sec-props sb-faults' },
       h('h3', null, 'Faults'),
       h('p', { class: 'sb-sum' }, all.length
-        ? 'Saved with the chip, never part of it: switch one off to heal it, Undo to take it back.'
+        ? 'Saved with the chip, never part of it: switch one off to heal it, Undo to take it back. Only this tab’s simulation has them: Check, the Tests pane and a chip that places this one see it healthy.'
         : 'Break the circuit on purpose: stuck at 0 or 1, slow, or a bit flipped once. Click a wire with the brush.'),
       ...rows,
       ...st.problems.map((p) => h('p', { class: 'sb-sum warn' }, p)),
@@ -361,6 +372,7 @@ registerEditorPlugin((ed) => {
 registerToolbarAction({
   id: 'faults', title: 'Fault brush (B): click a wire to make it stuck, slow, or flip it once', icon: 'flag', label: 'Faults', menu: 'Fault brush (B)', order: 62, under: 'timingmenu',
   run: (ed) => { const f = of.get(ed); f?.setBrush(!f.brush); },
+  shown: (ed) => !ed.level,
   active: (ed) => !!of.get(ed)?.brush,
 });
 

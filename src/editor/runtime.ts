@@ -30,7 +30,7 @@
 
 import { DualSim } from '../sim/dualsim';
 import { type FlatDesign, flatten } from '../sim/flatten';
-import { applyFaults, type FlatFault } from '../sim/faults';
+import { applyFaults, type FlatFault, seenNets } from '../sim/faults';
 import type { PowerOnMode, Sim } from '../sim/sim';
 import { shortText, SwitchSim, WEAK_H, weakTag } from '../sim/switchsim';
 import { B1, type Bit, BZ, type ComponentDef, netlistOf } from '../sim/types';
@@ -513,8 +513,7 @@ export class EditorSim {
     if (i === undefined || i < 0 || !this.sim) return null;
     const nets = this.sim.design.root.nets?.[i];
     // a stuck net is drawn as its readers see it
-    const to = this.sim.design.stuckTo;
-    return nets ? this.sim.getBits(to ? nets.map((n) => to.get(n) ?? n) : nets) : null;
+    return nets ? this.sim.getBits(seenNets(this.sim.design, nets)) : null;
   }
   wireBits(id: string): Bit[] | null {
     return this.netBits(this.built?.netOfWire.get(id));

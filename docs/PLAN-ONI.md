@@ -161,13 +161,14 @@ hand-edited chip.
 **Where faults are applied.** All of this works on the flattened design, so every engine sees the same faults:
 - **Stuck-at** is a rewrite after `flatten`: a fresh constant net, and every leaf input reading the faulted net
   gets it instead. Copy the affected input arrays: the flattener shares them, so never mutate one in place. The
-  original driver still drives its net, so a probe on the driver side shows the healthy value, as a real
-  stuck-at on the input would. GateSim, CycleSim and BitSim need no change. It is part of `simKey`, so toggling
+  original driver still drives its net (`design.stuckTo` maps it to the constant: the sandbox draws the wire,
+  its value pill and probe lanes as the readers see it; Why? still traces the driver). GateSim, CycleSim and BitSim need no change. It is part of `simKey`, so toggling
   one rebuilds the simulation with state carried (`carry.ts`).
-- **Flip once** writes state, with no rebuild: GateSim forces both latches of the storage cluster (the way
-  `doom/gates.ts` loadGates seeds registers), and big memories go through `Sim.poke` on the leaf state. The flip
-  is taken at the next settle and then hands back. DualSim hands the state over. Each flip is one entry in the
-  Back history.
+- **Flip once** writes state, with no rebuild (as built): `flipBits` forces the clicked nets to their inverse
+  (GateSim.forceNets, on DualSim through GateSim), settles, evaluates their drivers again and settles once more. A
+  bit a loop stores keeps the flip; a net a gate computes goes back, and the toast says which. Big memories flip a
+  word bit through `Sim.poke` on the leaf state (the Faults list). The sandbox has no Back history, so a flip is
+  not undone (the next write or Reset moves on); the chapters' stage, which has Back, does not have the brush.
 - **Slow** needs a per-leaf extra delay in GateSim (today it uses unit delay). Add an optional `extraDelay`
   typed array, with the transport-delay event queue unchanged otherwise. CycleSim ignores timing, so a slow fault
   pins DualSim to GateSim (`whyNot`: "a slow fault is set"). Static timing (`timing.ts`, `editor/sta.ts`) adds

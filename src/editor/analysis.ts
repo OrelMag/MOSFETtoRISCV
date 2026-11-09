@@ -10,6 +10,7 @@
 import { instPort, type Vec } from '../sim/geometry';
 import type { Sim } from '../sim/sim';
 import { DELAY_NOTE, type DelayModel, delayWord, fmtDelay, psPer } from '../sim/delay';
+import { seenNets } from '../sim/faults';
 import { CLK_TO_Q, PS_NOTE, PS_PER_NAND, SETUP } from '../sim/timing';
 import { h, icon, s } from '../ui/dom';
 import { settings } from '../ui/settings';
@@ -213,7 +214,8 @@ class Analysis {
       const r = sim && es.built ? resolveProbe(w.target, this.ed.doc, es.built, sim.design) : null;
       // Without a simulation the lanes wait (kept with no nets until the next build).
       if (!r && sim) continue;
-      lanes.push({ label: r?.label ?? '…', title: this.title(r?.label ?? ''), nets: r?.nets ?? [], width: r?.nets.length ?? 1, color: w.color, probe: w.probe, clock: w.clock });
+      // a stuck net: the lane reads what the wire shows (its readers' value)
+      lanes.push({ label: r?.label ?? '…', title: this.title(r?.label ?? ''), nets: r && sim ? seenNets(sim.design, r.nets) : [], width: r?.nets.length ?? 1, color: w.color, probe: w.probe, clock: w.clock });
       ts.push(r?.target ?? w.target);
     }
     this.la.setLanes(lanes);
@@ -246,7 +248,7 @@ class Analysis {
       if (!r) { this.targets.delete(l.id); return null; }
       this.targets.set(l.id, r.target);
       if (l.probe) { l.label = r.label; l.title = this.title(r.label); }
-      return r.nets;
+      return seenNets(sim.design, r.nets);
     });
     this.pause();
     this.internal = false;

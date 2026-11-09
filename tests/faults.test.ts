@@ -6,7 +6,8 @@ import { rca } from '../src/lib/combinational';
 import { BitSim } from '../src/sim/bitsim';
 import { CycleSim } from '../src/sim/cyclesim';
 import { DualSim } from '../src/sim/dualsim';
-import { applyFaults, type FlatFault, faultsKey, flipBits, flipRamBit } from '../src/sim/faults';
+import { applyFaults, type FlatFault, faultsKey, flipBits, flipRamBit, seenNets } from '../src/sim/faults';
+import { resolveProbe } from '../src/editor/probes';
 import { bigRam } from '../src/lib/bigmem';
 import { findNode, flatten, type FlatDesign } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
@@ -221,6 +222,9 @@ describe('in the sandbox (EditorSim)', () => {
     es.update(compileLib(doc), doc.pins, doc);
     es.flush();
     const y = pack(es.pinBits('y')!), w1 = pack(es.wireBits('w1')!);
+    // a probe's lane (analysis.ts) reads seenNets of the probe's nets: the value the wire is drawn with
+    const r = resolveProbe({ wires: ['w1'] }, doc, es.built!, es.sim!.design)!;
+    expect(pack(es.sim!.getBits(seenNets(es.sim!.design, r.nets)))).toBe(w1);
     const st = es.faults;
     es.destroy();
     return { y, w1, st };

@@ -114,6 +114,9 @@ export function applyFaults(d: FlatDesign, faults: readonly FlatFault[]): ApplyR
   return { design: { ...d, root, netCount, leaves, ...(extra.size ? { extraDelay: extra } : {}), ...(stuckTo.size ? { stuckTo } : {}) }, problems };
 }
 
+/** The nets readers see: a stuck net read as its constant (a probe or a drawing of a stuck net shows the fault). */
+export const seenNets = (d: FlatDesign, nets: readonly number[]): number[] => (d.stuckTo ? nets.map((n) => d.stuckTo!.get(n) ?? n) : [...nets]);
+
 /** A stable text of the faults, for a simulation's key. '' with none. */
 export const faultsKey = (faults: readonly FlatFault[]): string =>
   faults.map((f) => `${f.kind}${f.kind === 'slow' ? `+${f.delay ?? 1}` : ''}:${f.nets.join('.')}`).sort().join(',');
