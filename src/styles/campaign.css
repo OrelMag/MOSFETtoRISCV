@@ -58,6 +58,7 @@
   .cp-edge, .cp-node { transition: opacity 0.12s; }
 }
 .cp-port { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; }
+.cp-legend .blk::before { content: 'ALU'; width: auto; height: auto; padding: 1px 4px; border-radius: 6px; font: 600 9px/1.2 var(--mono, monospace); color: var(--muted); }
 .cp-legend .port::before { border-radius: 50%; border-color: var(--accent); width: 7px; height: 7px; }
 .cp-node { cursor: pointer; outline: none; }
 .cp-node .cp-card { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.4; transition: stroke 0.12s, fill 0.12s; }
