@@ -31,7 +31,6 @@ export const THREAD0: Record<string, NodeThread> = {
     uses: ['all'],
     usedFor: {
       t_nand: 'the same rule with two inputs: NMOS in series, PMOS in parallel',
-      t_nor: 'the dual: PMOS in series, NMOS in parallel',
     },
     pitfalls: [
       'PMOS between VDD and y, NMOS between y and GND: swapped, each passes only a weak level (an NMOS passes a poor 1).',
@@ -40,7 +39,10 @@ export const THREAD0: Record<string, NodeThread> = {
   },
   t_nand: {
     uses: ['all'],
-    usedFor: { g_not: 'from here the only brick: a NOT is one with its inputs tied' },
+    usedFor: {
+      g_not: 'from here the only brick: a NOT is one with its inputs tied',
+      t_nor: 'the dual: PMOS in series, NMOS in parallel',
+    },
     pitfalls: [
       'NMOS in series, PMOS in parallel: the other way round is a NOR.',
       'With the PMOS in series too, a = 1, b = 0 leaves y floating (Z): no network conducts.',

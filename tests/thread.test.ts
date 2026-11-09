@@ -261,7 +261,7 @@ describe('after a pass', () => {
     // fast adders are required now: the 16-bit adder's side quests are the multipliers
     expect(sideQuest('a_add16', view([]))?.optional).toBe(true);
     expect(sideQuest('a_add16', view([]))?.id).not.toBe('o_fastadd');
-    expect(sideQuest('t_inv', view([]))?.id).toBe('t_nor');
+    expect(sideQuest('t_nand', view([]))?.id).toBe('t_nor');
   });
 
   it('knows when a pass closes an act, and where its card leads', () => {

@@ -7,7 +7,7 @@ import { define, merger, ones, splitter } from './define';
 import { OR, XOR } from './gates';
 import { TIE0 } from './transistors';
 
-const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
+const bus = (name: string, width: number, dir: 'in' | 'out', doc?: string): PortDef => ({ name, width, dir, ...(doc ? { doc } : {}) });
 
 function memo<A extends unknown[]>(f: (...a: A) => ComponentDef): (...a: A) => ComponentDef {
   const cache = new Map<string, ComponentDef>();
@@ -53,7 +53,7 @@ export const negator = memo((n: number): ComponentDef => {
   return define({
     id: `negate${n}`, name: `${n}-bit negator`, category: 'arithmetic',
     summary: 'Two\'s-complement negation from XORs and ORs: every bit above the lowest 1 is inverted, the rest pass.',
-    ports: [bus('a', n, 'in'), bus('y', n, 'out')],
+    ports: [bus('a', n, 'in', 'the number, two\'s complement'), bus('y', n, 'out', '−a: every bit above a\'s lowest 1 inverted')],
     symbol: { kind: 'box', label: '−a' },
     spec: ([a]) => [(M + 1 - a) & M],
     netlist: () => ({ pins: { a: [0, 1 + (P * n) / 2], y: [MX + 4, (P * n) / 2] }, instances, nets }),
@@ -85,7 +85,7 @@ export const extender = memo((m: number, n: number): ComponentDef => {
   return define({
     id: `extend${m}_${n}`, name: `Extend ${m}→${n} bits`, category: 'plumbing',
     summary: `Sign extension copies bit ${m - 1} into bits ${n - 1}…${m}; zero extension ties them to 0. Both are wiring: no gates.`,
-    ports: [bus('a', m, 'in'), bus('s', n, 'out'), bus('z', n, 'out')],
+    ports: [bus('a', m, 'in', `the ${m}-bit value`), bus('s', n, 'out', `sign-extended to ${n} bits (a signed a)`), bus('z', n, 'out', `zero-extended to ${n} bits (an unsigned a)`)],
     symbol: { kind: 'box', label: 'EXT' },
     spec: ([a]) => [a & top ? a + fill : a, a],
     netlist: () => ({ pins: { a: [1, Z / 2 + m / 2], s: [20, n], z: [20, Z + n] }, instances, nets }),
@@ -125,7 +125,7 @@ export const shifts1 = memo((n: number): ComponentDef => {
   return define({
     id: `shifts1_${n}`, name: `${n}-bit shifts by one`, category: 'plumbing',
     summary: 'Shift left, logical right and arithmetic right by one place: each a splitter and a merger one row apart. Wiring, no gates.',
-    ports: [bus('a', n, 'in'), bus('sll', n, 'out'), bus('srl', n, 'out'), bus('sra', n, 'out')],
+    ports: [bus('a', n, 'in', 'the word to shift'), bus('sll', n, 'out', 'a shifted left by one, a 0 in at the bottom'), bus('srl', n, 'out', 'a shifted right by one, a 0 in at the top'), bus('sra', n, 'out', 'a shifted right by one, the sign bit copied in at the top')],
     symbol: { kind: 'box', label: '≪ ≫' },
     spec: ([a]) => [(a * 2) & M, a >>> 1, (a >>> 1) | (a & top)],
     netlist: () => ({

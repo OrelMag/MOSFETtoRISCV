@@ -78,7 +78,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     chapters: [{ chapter: 'nand', label: 'The NAND gate' }, { chapter: 'nand', step: 4, label: 'One brick to build everything' }],
   },
   {
-    id: 't_nor', act: 0, title: 'CMOS NOR', kind: 'build', optional: true, requires: ['t_inv'], base: sandbox('t_nor'),
+    id: 't_nor', act: 0, title: 'CMOS NOR', kind: 'build', optional: true, requires: ['t_nand'], base: sandbox('t_nor'),
     why: 'NOR is NAND\'s dual, also complete and also 4 transistors, yet the campaign builds on NAND: NOR puts its PMOS in series, and holes are about 2–3× less mobile than electrons. Nothing later uses this cell; at gate level a NOR is four NANDs.',
     tips: ['Swap series and parallel relative to the NAND.', 'y = 1 only when a = b = 0: that network is the one in series, and it is the PMOS pair.', 'NMOS in series is the NAND again: y = 0 only for a = b = 1 fails the 01 and 10 rows.'],
     codex: ['nor', 'duality'], unlocks: ['nor_cmos'], par: { transistors: 4 },
