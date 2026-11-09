@@ -27,7 +27,6 @@ import type { CustomRow } from '../riscv/custom';
 import { accHex } from '../dsp/mac';
 import { type IssOptions, ISS, type ModelState } from '../riscv/iss';
 import { type PlantedFault, withPlanted } from '../sim/faults';
-import type { ComponentDef } from '../sim/types';
 import { disasmC, expand16, parcelAt } from '../riscv/rvc';
 import { PROGRAMS } from '../riscv/programs';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
