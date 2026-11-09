@@ -29,6 +29,16 @@ const COVER: Record<string, string[]> = {
   CSRs: ['cause:2', 'cause:8', 'cause:9', 'csrrw@1', 'csrrw@3', 'csrrs@1'],
 };
 
+describe('vm CPU on the event-driven (gate delay) simulator', () => {
+  it.each(PROGS.filter((p) => /basic|interrupts|satp and/.test(p.name)).map((p) => [p.name, p] as const))('%s', async (_, p) => {
+    const a = assemble(p.source);
+    const imemK = Math.max(8, Math.ceil(Math.log2(a.words.length)));
+    const r = await lockstep(a.words, { imemK, dmemK: p.dmemK ?? 12, maxCycles: p.max, engine: 'gate', pause: tick });
+    expect(r.why).toBe('');
+    expect(r.halted).toBe(true);
+  }, 300_000);
+});
+
 describe('vm CPU in lock step with the golden model', () => {
   it.each(PROGS.map((p) => [p.name, p] as const))('%s', async (_, p) => {
     const a = assemble(p.source);

@@ -40,6 +40,8 @@ export interface VmLockResult {
   /** Page faults and access faults seen by the model, by cause. */
   causes: Record<number, number>;
   walks: number;
+  /** How many times the CPU stalled for n cycles in a row (a walk: 3 to a 4 KiB leaf, 2 to a superpage, 1 to a fault at level 1 ...). */
+  stallRuns: Record<number, number>;
   /** Interrupts taken, by the level they interrupted. */
   irqs: number[];
   /** Instructions that retired without trapping, by mnemonic and level. */
@@ -141,8 +143,8 @@ export async function lockstep(words: number[], o: VmLockOptions = {}): Promise<
   const iss = new ISS(words, { system: true, vm: true, dmemWords: 2 ** dmemK, imemWords: 2 ** imemK });
   const root = design.root;
   const retirePort = root.ports.retire;
-  const res: VmLockResult = { ok: true, why: '', cycles: 0, steps: 0, stalls: 0, byPriv: [0, 0, 0, 0], causes: {}, walks: 0, irqs: [0, 0, 0, 0], ops: {}, iss, hw: sim, design, halted: false };
-  let after = 0;
+  const res: VmLockResult = { ok: true, why: '', cycles: 0, steps: 0, stalls: 0, byPriv: [0, 0, 0, 0], causes: {}, walks: 0, irqs: [0, 0, 0, 0], ops: {}, stallRuns: {}, iss, hw: sim, design, halted: false };
+  let after = 0, run = 0;
   for (let c = 0; c < max; c++) {
     if (o.pause && (c & 63) === 63) await o.pause();
     const irq = o.irq ? o.irq(iss.steps) : false;
@@ -154,7 +156,8 @@ export async function lockstep(words: number[], o: VmLockOptions = {}): Promise<
     if (ret && pcHw !== iss.pc >>> 0) { res.ok = false; res.why = `cycle ${c}: retiring at ${hex(pcHw)}, model at ${hex(iss.pc)}`; break; }
     sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.settle();
     res.cycles++;
-    if (!ret) { res.stalls++; continue; }
+    if (!ret) { res.stalls++; run++; continue; }
+    if (run) { res.stallRuns[run] = (res.stallRuns[run] ?? 0) + 1; run = 0; }
     const info: StepInfo = iss.step();
     res.steps++;
     if (info.priv !== undefined) res.byPriv[info.priv]++;
