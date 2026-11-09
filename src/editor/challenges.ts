@@ -189,6 +189,8 @@ export interface Score {
   steps?: number;
   /** A bug hunt: edits from the drawing it started as (edits.ts). */
   edits?: number;
+  /** A break-it level: wrong accusations before the right one (campaign/breakit.ts). */
+  wrong?: number;
 }
 
 export interface CheckResult {

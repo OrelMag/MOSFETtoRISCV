@@ -318,7 +318,7 @@ describe('the map and the anatomy', () => {
 
   it('folds the optional acts to a header until one of their levels is opened, or as the learner left them', () => {
     // Act P and the acts after the finale; never the main path
-    expect([...OPTIONAL_ACTS].sort((a, b) => a - b)).toEqual([8, 9, 10, 11, 12, 13]);
+    expect([...OPTIONAL_ACTS].sort((a, b) => a - b)).toEqual([8, 9, 10, 11, 12, 13, 14]);
     const none = () => undefined;
     expect(foldedActs(none, none)).toEqual(OPTIONAL_ACTS);
     // a level of act P opened (its state exists), or selected: act P unfolds

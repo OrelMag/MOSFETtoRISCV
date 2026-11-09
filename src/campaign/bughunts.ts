@@ -252,6 +252,9 @@ const HUNTS: Hunt[] = [
 
 const TIMING_ID = 'b_timing';
 
+/** The optional act every debugging level sits in (bug hunts, timing closure, break-it levels): labelled "Debugging". */
+export const DEBUG_ACT = 14;
+
 /** acc ← rst ? 0 : (acc << sh) + x, with the ripple adder or Kogge–Stone. */
 function shiftAcc(fast: boolean): ComponentDef {
   const b = new Builder(8, 10, 4);
@@ -326,7 +329,7 @@ function huntChallenge(h: Hunt, target: () => BuildChallenge): () => BuildChalle
 const timingNode = (after: CampaignNode): CampaignNode => {
   let base: ComponentDef | undefined;
   return {
-    id: TIMING_ID, act: after.act, title: 'Timing closure', kind: 'build', optional: true, requires: [after.id],
+    id: TIMING_ID, act: DEBUG_ACT, title: 'Timing closure', kind: 'build', optional: true, requires: [after.id],
     why: 'This block is right: every test passes with a slow clock. It goes into a system clocked at a period of 40 NAND delays, and static timing says it needs more. Bring the register-to-register path to 40 or under, keeping the results right, for as few NANDs as you can.',
     tips: ['Open the Timing panel: which part holds most of the critical path?', 'The shifter and the adder are both on the path from acc back to acc. Which one is the long one?', 'The ripple adder is 36 delays; a Kogge–Stone adder (unlocked by Fast adders) does the same sum in far fewer.'],
     codex: ['criticalpath'], par: { period: 40, nand: 858 },
@@ -353,7 +356,7 @@ export function withBugHunts(nodes: CampaignNode[]): CampaignNode[] {
     const a = byId.get(h.after);
     if (!a?.base) throw new Error(`bug hunt ${h.id}: no build level ${h.after}`);
     put(h.after, {
-      id: h.id, act: a.act, title: h.title, kind: a.kind === 'core' ? 'core' : 'build', optional: true, requires: [h.after],
+      id: h.id, act: DEBUG_ACT, title: h.title, kind: a.kind === 'core' ? 'core' : 'build', optional: true, requires: [h.after],
       why: h.report, tips: h.tips, codex: h.codex ?? [], par: h.par, ...(h.chapters ? { chapters: h.chapters } : {}),
       withhold: [...(a.unlocks ?? []), ...(h.withhold ?? [])],
       bug: { after: h.after, fault: h.fault, kind: h.kind, lesson: h.lesson, marks: h.marks },

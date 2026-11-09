@@ -18,7 +18,13 @@ export const ROW_HEAD = 22;
  * Acts drawn as labelled rows, each laid out like an act of its own: the side quests by subject, the GPU by
  * what it adds. Every level of such an act is in exactly one row; no level requires one in a later row.
  */
-export const ACT_ROWS: Readonly<Record<number, readonly { label: string; ids: readonly string[] }[]>> = {
+export const ACT_ROWS: Readonly<Record<number, readonly { label: string; ids: readonly string[]; flow?: boolean }[]>> = {
+  // Debugging: no level requires another, so each row is a flow (side by side in the listed order: the curriculum's)
+  14: [
+    { label: 'Logic and arithmetic', ids: ['b_fa', 'b_dec', 'b_mux', 'b_carry', 'b_sub', 'b_slt'], flow: true },
+    { label: 'State', ids: ['b_dff', 'b_cnt', 'b_x0'], flow: true },
+    { label: 'The core', ids: ['b_imm', 'b_jal', 'b_fwd', 'b_timing'], flow: true },
+  ],
   13: [
     { label: 'Arithmetic', ids: ['sp_sat', 'sp_mac', 'sp_circ'] },
     { label: 'Filters', ids: ['sp_biquad', 'sp_goertzel', 'sp_cic'] },
@@ -184,8 +190,9 @@ export function mapLayout(maxCols = Infinity, folded: ReadonlySet<number> = new 
       continue;
     }
     // An act with labelled rows lays each row out as an act of its own (columns from the row's chains), one under the other.
-    const groups = ACT_ROWS[act.num]?.map((r) => ({ label: r.label as string | undefined, ns: ns.filter((n) => r.ids.includes(n.id)) }))
-      ?? [{ label: undefined, ns }];
+    // a flow row: its levels side by side in the listed order (none requires another)
+    const groups = ACT_ROWS[act.num]?.map((r) => ({ label: r.label as string | undefined, flow: !!r.flow, ns: ns.filter((n) => r.ids.includes(n.id)).sort((a, b) => (r.flow ? r.ids.indexOf(a.id) - r.ids.indexOf(b.id) : 0)) }))
+      ?? [{ label: undefined, flow: false, ns }];
     const rowOfId = new Map(groups.flatMap((g, gi) => g.ns.map((n) => [n.id, gi] as const)));
     const rowLabels: { label: string; y: number }[] = [];
     const blurb = text?.blurb(act.num);
@@ -193,7 +200,7 @@ export function mapLayout(maxCols = Infinity, folded: ReadonlySet<number> = new 
     let top = y + BAND_HEAD + (sub ? sub.length * SUB_LINE + 4 : 0), line = 0;
     groups.forEach((g, gi) => {
       const cols: CampaignNode[][] = [];
-      const colIn = (n: CampaignNode): number => (ACT_ROWS[act.num] ? rowCol(n) : colOf(n));
+      const colIn = (n: CampaignNode): number => (g.flow ? g.ns.indexOf(n) : ACT_ROWS[act.num] ? rowCol(n) : colOf(n));
       const rc = new Map<string, number>();
       const rowCol = (n: CampaignNode): number => {
         const c = rc.get(n.id);

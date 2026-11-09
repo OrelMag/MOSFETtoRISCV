@@ -226,7 +226,7 @@ export class LevelPage implements Page {
     this.bar.replaceChildren(...[
       h('a', { class: 'lv-back', href: `#/campaign/n/${n.id}`, title: 'The campaign map' }, icon('chevL', 14), 'Map'),
       h('span', { class: 'lv-crumb' }, h('span', { class: 'lv-act' }, `${actName(n.act)} · ${actTitle(n.act)}`, h('span', { class: 'sep' }, '›')), h('b', null, n.title)),
-      n.bug ? h('span', { class: 'lv-badge lv-kind bug', title: n.bug.kind === 'timing closure' ? 'The block is right and too slow: make it meet the period' : 'A faulty drawing to fix in as few edits as you can' }, 'BUG HUNT') : h('span', { class: 'lv-badge lv-kind' }, KIND_LABEL[n.kind]),
+      n.bug ? h('span', { class: 'lv-badge lv-kind bug', title: n.bug.kind === 'timing closure' ? 'The block is right and too slow: make it meet the period' : n.bug.find ? 'A right drawing with a fault planted in it: find it and name it with the fault brush' : 'A faulty drawing to fix in as few edits as you can' }, n.bug.find ? 'FIND IT' : 'FIX IT') : h('span', { class: 'lv-badge lv-kind' }, KIND_LABEL[n.kind]),
       st === 'solved' ? h('span', { class: 'lv-badge good' }, 'SOLVED') : st === 'skipped' ? h('span', { class: 'lv-badge' }, 'SKIPPED') : null,
       parText.length ? h('span', { class: 'lv-par', title: 'Par: three stars at or under it on every metric' }, 'par ', h('b', null, parText.join(' · '))) : null,
       np?.stars ? h('span', { class: 'lv-stars', title: `Best: ${np.stars} of 3 stars` }, '★'.repeat(np.stars), h('span', { class: 'off' }, '★'.repeat(3 - np.stars))) : null,

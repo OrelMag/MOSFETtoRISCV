@@ -30,7 +30,7 @@ describe('card top row', () => {
 
   it('keeps the plain labels when they fit', () => {
     expect(cardHeads({ kind: 'build', optional: false, soon: false, bug: undefined }, 'locked').kind).toBe('build');
-    expect(cardHeads({ kind: 'build', optional: true, soon: false, bug: BUG }, 'locked')).toMatchObject({ kind: 'bug hunt · opt', status: 'locked' });
+    expect(cardHeads({ kind: 'build', optional: true, soon: false, bug: BUG }, 'locked')).toMatchObject({ kind: 'fix it · opt', status: 'locked' });
     expect(cardHeads({ kind: 'build', optional: false, soon: false, bug: undefined }, 'solved', 2).status).toBe('★★☆');
   });
 
