@@ -107,7 +107,7 @@ export const chPython: Chapter = {
       widget: () => pyLinked('collatz', 7),
       more: {
         derive: `<p><code>3 * n + 1</code> with n in s0: the constant 3 has two bits set, so the product is <code>slli t1, s0, 1</code> (2n) then <code>add t0, t1, s0</code> (2n + n), and the
-          <code>+ 1</code> with the store back is <code>addi s0, t0, 1</code>. Three instructions, three cycles, no multiply. Compare the generic route (<code>rt.mul</code>, next step) a loop of a few instructions per bit of the multiplier. The
+          <code>+ 1</code> with the store back is <code>addi s0, t0, 1</code>. Three instructions, three cycles, no multiply. Compare the generic route (<code>rt.mul</code>, next step): a loop of a few instructions per bit of the multiplier. The
           compiler chooses between them by the constant\'s bit pattern.</p>`,
         pitfall: `<p>Writing an expression nested more than seven deep, usually by accident in a long arithmetic formula: the compiler refuses it and says so. Break it with a variable. Also remember that
           every Python integer here is 32-bit and wraps: <code>x * 1000003</code> silently overflows where real Python would grow.</p>`,
@@ -123,7 +123,7 @@ export const chPython: Chapter = {
         <p>A power of two is a shift or a mask: <code>n % 2</code> is one <code>andi</code>, <code>n // 2</code> one
         <code>srai</code> (an arithmetic shift is exactly what Python's <code>//</code> does for 2), <code>x * 8</code> one
         <code>slli</code>. A constant with two bits set, or one less than a power of two, is one or two shifts and an add or a
-        subtract. Anything else calls a routine: <code>rt.mul</code> adds one shifted copy per bit of the multiplier,
+        subtract. Anything else calls a routine: <code>rt.mul</code> makes one pass per bit of the multiplier, adding a shifted copy for each bit that is set,
         <code>rt.divmod</code> runs 32 passes of shift, compare, subtract, then fixes the signs for Python's rounding
         toward minus infinity.</p>
         <p>Measured: Collatz from 27 runs 938 cycles, every line a few instructions. In gcd, <code>t = a % b</code>
@@ -135,7 +135,7 @@ export const chPython: Chapter = {
       widget: () => pyCost(['gcd']),
       more: {
         derive: `<p><code>x * 5</code> = <code>x * 4 + x</code>: <code>slli</code> then <code>add</code>, two cycles. <code>x * 7</code> = <code>x * 8 − x</code>: <code>slli</code> then <code>sub</code>.
-          A constant that is not 2^k, 2^a + 2^b or 2^a − 1, such as 11, is not worth the shifts and calls <code>rt.mul</code>: one shifted add per significant bit of the multiplier: 4 passes for 11, 32 for a negative one. <code>rt.divmod</code> does the
+          A constant that is not 2^k, 2^a + 2^b or 2^a − 1, such as 11, is not worth the shifts and calls <code>rt.mul</code>: one pass per bit up to the multiplier's highest set bit, an add for each bit that is set: 4 passes (3 adds) for 11, 32 passes for a negative one. <code>rt.divmod</code> does the
           long division you learned in school in binary: shift the next dividend bit into the remainder, subtract the divisor if it fits, record a quotient bit. 32 passes, a few instructions each, about 240 cycles in all.</p>`,
         numbers: `<table class="mini"><tr><th>program</th><th>instructions</th><th>cycles</th></tr>${COST.map((r) => `<tr><td>${r.name}</td><td>${r.words}</td><td>${fmt(r.steps)}</td></tr>`).join('')}</table>
           <p>Measured on the golden model, which takes one cycle per instruction on the single-cycle CPU. The gap between instructions in the listing and cycles run is the loop count.</p>`,
@@ -197,7 +197,7 @@ export const chPython: Chapter = {
       title: 'Functions are a stack',
       body: `
         <p>A call is <code>jal ra, fib</code>: the return address goes to ra and the PC to the function. Since fib
-        calls itself, it must keep ra and its n somewhere the next call will not overwrite: its prologue moves sp down
+        calls itself, it must keep ra, and the s0 that holds its n and that the next call will reuse, somewhere the next call will not overwrite: its prologue moves sp down
         two words and stores them; its epilogue loads them back and returns with <code>ret</code>.</p>
         <p>One more word appears during <code>fib(n - 1) + fib(n - 2)</code>: fib(n − 1)'s result is in t0 when the
         second call starts, and the callee uses t0 too, so the caller saves it below sp and loads it after. The stack

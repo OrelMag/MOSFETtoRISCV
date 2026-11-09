@@ -130,7 +130,7 @@ export const chAlu: Chapter = {
         derive: `<p>Cost at 32 bits, from the circuit: AND ${BW.and.per * 32} NANDs, OR ${BW.or.per * 32}, XOR ${BW.xor.per * 32}; a 32-bit ALU's bitwise unit is the three together, ${(BW.and.per + BW.or.per + BW.xor.per) * 32}
           NANDs, against ${fmt(A32.nands)} for the whole ALU. Depth does not depend on the width: a 64-bit unit is the same ${BW.xor.depth} delays deep and twice the area.</p>`,
         pitfall: `<p>The logical immediates are sign-extended like every I-type immediate. <code>andi a0, a0, 0x7F0</code> masks with 0x000007F0, but 0x800 does not
-          fit in 12 signed bits (it would read as -2048), and writing <code>andi a0, a0, -16</code> masks with 0xFFFFFFF0. A mask wider than 11 bits needs <code>lui</code> first.</p>`,
+          fit in 12 signed bits (it would read as -2048), and writing <code>andi a0, a0, -16</code> masks with 0xFFFFFFF0. A mask outside −2048 … 2047 (0x800, 0xFFF) needs <code>lui</code> first.</p>`,
         real: `<p>In a datapath the logic unit is laid out as a bit-slice: 32 or 64 identical cells in a column of wires, so the regularity that makes it cheap
           here also makes it easy to lay out. SIMD units reuse the same idea: a 256-bit AND is just more slices.</p>`,
       },
@@ -171,7 +171,7 @@ export const chAlu: Chapter = {
         numbers: `<table class="mini"><tr><th>width</th><th>stages</th><th>NANDs</th><th>depth</th></tr>${[8, 16, 32, 64].map((n) => `<tr><td>${n}</td><td>${Math.log2(n)}</td><td>${fmt(stats(shifter(n)).nands)}</td><td>${logicDepth(shifter(n))}</td></tr>`).join('')}</table>
           <p>Depth grows by two with each doubling of the width (one more mux stage); area a little more than doubles each time.</p>`,
         pitfall: `<p>The shift amount is only the low log₂ n bits of rs2: in RV32I <code>sll</code> by 32 is a shift by 0, not zero. A compiler that wants "shift out everything" must test
-          the amount first. The ALU shifter does not saturate, which is also why <code>sra</code> by a large amount never needs a special case.</p>`,
+          the amount first. The ALU shifter does not saturate either: <code>sra</code> by 32 is also a shift by 0, not a word of sign bits.</p>`,
         real: `<p>Cores use this structure, often with a funnel shifter (a 2n-bit input, n bits out) that serves rotates and both directions in the same
           log-depth rows. In a fast core the shifter is its own unit beside the adder and its result is picked by the output mux, exactly as the next steps show.</p>`,
       },
@@ -427,11 +427,11 @@ export const chIsa: Chapter = {
       'Every instruction is 32 bits; the opcode (bits 6:0) picks one of six formats: R, I, S, B, U, J.',
       'rs1 (19:15), rs2 (24:20) and rd (11:7) never move, so register reads start in parallel with decoding.',
       'Immediates pay for it: S splits its immediate around rs2, B and J scramble theirs so the sign is always bit 31. Within one format each immediate bit is a wire, a copy of bit 31, or 0; a multiplexer on the format picks among them.',
-      'Branch and jump offsets count 2-byte units (bit 0 is not stored), so 32-bit instructions reach 2-byte targets unchanged when the 16-bit C extension is present.',
+      'Branch and jump offsets count 2-byte units (bit 0 is not stored), so a 32-bit branch can reach a 2-byte-aligned instruction without a new encoding when the 16-bit compressed (C) extension is present.',
       'The assembler works in two passes: labels first (<code>li</code> may grow to <code>lui</code> + <code>addi</code>), then encoding. The instruction-set simulator, written from the specification, is the reference every gate-level CPU is checked against.',
       'Offsets count from the branch or jump\'s own PC. Every I-type immediate is sign-extended, andi / ori / xori / sltiu included. <code>la</code> and <code>call</code> are <code>auipc</code> + addi / jalr: PC-relative, ±2 GiB, with the upper part rounded by + 0x800 like <code>li</code>.',
-      'Pseudo-instructions are the assembler’s, not the hardware’s: <code>mv</code>, <code>neg</code>, <code>ret</code>, <code>j</code> put x0 in a slot, <code>bgt</code> swaps operands, <code>li</code> is one or two words, <code>la</code> / <code>call</code> an <code>auipc</code> pair.',
-      'The calling convention is agreement, not hardware: a0–a7 carry arguments, s0–s11 and sp are callee-saved, a, t and ra are caller-saved; a function that calls another saves ra in a 16-byte-aligned frame, and a leaf needs none.',
+      'Pseudo-instructions are the assembler’s, not the hardware’s: <code>neg</code>, <code>ret</code>, <code>j</code> put x0 in a slot, <code>mv</code> is an <code>addi</code> with a zero immediate, <code>bgt</code> swaps operands, <code>li</code> is one or two words, <code>la</code> / <code>call</code> an <code>auipc</code> pair.',
+      'The calling convention is agreement, not hardware: a0–a7 carry arguments, s0–s11 and sp are callee-saved, a0–a7, t0–t6 and ra are caller-saved; a function that calls another saves ra in a 16-byte-aligned frame, and a leaf needs none.',
     ],
     practise: ['i_enc', 'p_add', 'p_loop', 'p_call'],
     check: [
@@ -495,7 +495,7 @@ export const chIsa: Chapter = {
           multiplexer tree inside the processor; a memory access in a real machine is anywhere from a few cycles (a cache) to a hundred or
           more (DRAM, chapter 35), which is why compute instructions only ever see registers.</p>`,
         pitfall: `<p>PC counts bytes, not instructions: the next instruction is at PC + 4, and the instruction at index n is at 4n. And
-          x0 is not a register you can use: writing it is allowed and discarded, which is what makes <code>addi zero, zero, 0</code> a
+          x0 is not a place to keep a value: writing it is allowed and discarded, which is what makes <code>addi zero, zero, 0</code> a
           no-op and <code>add a0, a1, zero</code> a move.</p>`,
         real: `<p>Here instructions and data sit in separate memories (chapter 14's CPU has an instruction ROM and a data memory), as in a
           Harvard machine. A PC or a phone keeps both in one memory, as von Neumann's design did, with separate caches in front (chapter 22).
@@ -534,9 +534,9 @@ export const chIsa: Chapter = {
         from one instruction bit, a copy of bit 31 (dashed), or ground; within a format, no gates, and a multiplexer on the format picks among the wirings.</p>
         <p>The six formats: <strong>R</strong> (three registers: <code>add</code>), <strong>I</strong> (a register and a 12-bit immediate: <code>addi</code>, loads,
         <code>jalr</code>), <strong>S</strong> (two registers and a split immediate: stores), <strong>B</strong> (the same for branches, offset in halfwords),
-        <strong>U</strong> (a 20-bit upper immediate: <code>lui</code>, <code>auipc</code>) and <strong>J</strong> (<code>jal</code>, a 20-bit offset). Four are the
-        same few fields in different proportions. What the encoding does not spend is bits on decoding: with the sign always at bit 31, sign extension is one fan-out wire
-        and does not wait for the format to be known, and funct3 and funct7 stay put so the ALU control can start from them before the opcode has been decoded.</p>
+        <strong>U</strong> (a 20-bit upper immediate: <code>lui</code>, <code>auipc</code>) and <strong>J</strong> (<code>jal</code>, a 20-bit offset). R, I, S and U (B and J are S and U with their immediate bits rearranged)
+        differ only in how the bits beside the opcode are split between registers and immediate. What the encoding does not spend is bits on decoding: with the sign always at bit 31, sign extension is one fan-out wire
+        and does not wait for the format to be known, and funct3 (and funct7, where it exists) stay put so the ALU control can start from them before the opcode has been decoded.</p>
         <p>The cost shows up here and nowhere else. A B-type immediate takes bits from four places of the word, and the immediate generator is, per output bit, a selection among the formats driven by
         the opcode, plus wiring. A simpler layout would have made the assembler easier to write and the hardware slower.</p>
         <div class="try">Pick <code>beq</code> and drag its offset: bit 12 of the offset lands in instruction bit 31, bit 11 in bit 7.
@@ -545,14 +545,14 @@ export const chIsa: Chapter = {
       more: {
         derive: `<p>Encode <code>beq x1, x2, +16</code>: the offset 16 = 0b1_0000 has only imm[4] set. In a B-type word imm[4:1] sits in instruction bits 11:8, imm[4] on top, so bit 11 of the word is 1 beside the
           fixed fields. Decoding reverses it: imm[12] = inst[31], imm[11] = inst[7], imm[10:5] = inst[30:25], imm[4:1] = inst[11:8], imm[0] = 0. Four slices of the word, one constant, and the sign taken from bit 31.</p>`,
-        pitfall: `<p>Forgetting that the offset counts from the branch itself and is stored without bit 0: a hand-encoded <code>beq</code> with the offset in bytes shifted left one place lands twice as far as intended.
+        pitfall: `<p>Forgetting that the offset counts from the branch itself and is stored without bit 0: a hand-encoded <code>beq</code> whose field holds the byte offset rather than offset / 2 (the field is imm[12:1]) lands twice as far as intended.
           The explorer shows the same bits two ways; check that the decoded offset and the one you meant agree.</p>`,
         real: `<p>RISC-V chose this layout after the MIPS and Alpha experience: the immediate generator is a small part of the decode path. The compressed (C) extension adds 16-bit forms of its own; an expander turns each into its 32-bit twin, so the decoder behind it sees one set of formats. ARM's A32 spends its bits differently, on conditional execution of every instruction, and its decode is correspondingly heavier.</p>`,
       },
       challenge: {
         kind: 'quiz', question: 'Why is the branch offset stored in units of 2 bytes, not 4, even though RV32I instructions are 4 bytes?',
-        options: ['To reach farther', 'To support the 16-bit compressed (C) extension without a new encoding', 'Because bit 0 is used for the condition'], answer: 1,
-        why: ['Halfword units do reach farther than byte units, but word units would reach farther still: range is not why it stops at 2.', '', 'The condition is in funct3. Bit 0 of the offset is simply not stored, since it is always 0.'],
+        options: ['To reach farther than word units would', 'To support the 16-bit compressed (C) extension without a new encoding', 'Because bit 0 is used for the condition'], answer: 1,
+        why: ['The reverse: word units would reach twice as far as halfword units. Range is not why the unit stops at 2 bytes.', '', 'The condition is in funct3. Bit 0 of the offset is simply not stored, since it is always 0.'],
         explain: 'With the C extension instructions can sit on 2-byte boundaries. Encoding offsets in halfwords keeps the 32-bit branch format unchanged when C is present.',
       },
     },
@@ -565,7 +565,7 @@ export const chIsa: Chapter = {
         every earlier line expands to. Pass 1 only counts and records labels; pass 2, with every address fixed, encodes. A pseudo-instruction whose size depends on its operand
         (<code>li</code> with a constant that does not fit 12 bits) is why pass 1 must know the size before it knows the encoding.</p>
         <p>The result runs immediately on an <strong>instruction-set simulator</strong>, written directly from the
-        specification. The gate-level CPU in the next chapter is checked against it after every clock cycle: the simulator is
+        specification. The gate-level CPU in the next chapter is checked against it after every instruction: the simulator is
         the definition of what the hardware must do, and a disagreement on any register after any instruction is a hardware bug.</p>
         <div class="try">Edit the program: errors show up with their line numbers, and the machine code updates as you type.</div>`,
       widget: () => assemblerWorkspace(src('sum')),
@@ -588,7 +588,7 @@ export const chIsa: Chapter = {
         <p>RV32I has neither <code>mv</code> nor <code>li</code> nor <code>ret</code> nor <code>call</code>. Those are <strong>pseudo-instructions</strong>: names the assembler accepts and replaces with one or two real ones. They cost the hardware nothing, which is the design point:
         <code>x0</code> reads as 0 and discards writes, so most of them are an ordinary instruction with x0 in a slot. The table is made by running each line through this site's assembler; nothing in it is typed.</p>
         <ul>
-        <li><strong>x0 in a slot.</strong> <code>mv a0, a1</code> is <code>${expand('mv a0, a1').words[0]}</code>, <code>neg</code> a subtraction from zero, <code>beqz</code> a compare against zero, <code>j</code> a <code>jal</code> that discards the link, <code>ret</code> is <code>${expand('ret').words[0]}</code>.</li>
+        <li><strong>x0 in a slot.</strong> <code>neg</code> a subtraction from zero, <code>beqz</code> a compare against zero, <code>j</code> a <code>jal</code> that discards the link, <code>ret</code> is <code>${expand('ret').words[0]}</code>. <code>mv a0, a1</code> uses a zero immediate instead: <code>${expand('mv a0, a1').words[0]}</code>.</li>
         <li><strong>Operands swapped.</strong> There is no <code>bgt</code>: the assembler writes <code>${expand('bgt a0, a1, L').words[0].replace(/, 0x\d+$/, ', L')}</code>. Four comparisons (<code>blt</code>, <code>bge</code> and their unsigned forms) are enough when the operands can swap.</li>
         <li><strong>Constants.</strong> <code>li</code> is one word if the value fits a signed 12-bit immediate (−2048 … 2047), a lone <code>lui</code> if the low 12 bits are 0, and otherwise two: <code>lui</code> for the top 20 bits, <code>addi</code> for the low 12. Because addi sign-extends, the top part is rounded: 0x12845 is <code>${expand('li t0, 0x12845').words.join('  ;  ')}</code>.</li>
         <li><strong>Addresses.</strong> <code>la</code>, <code>call</code> and <code>tail</code> are an <code>auipc</code> (PC + upper 20 bits) and a 12-bit completion, so a symbol anywhere within ±2 GiB is reached without a fixed address: <code>${expand('call L').words.join('  ;  ')}</code>.</li>
@@ -628,7 +628,7 @@ export const chIsa: Chapter = {
         kind: 'quiz', question: 'A function keeps a loop counter in <code>t0</code> and calls <code>printf</code> inside the loop. What is wrong?',
         options: ['Nothing: t0 holds the counter', 'printf may overwrite t0: the counter belongs in an s register, or on the stack across the call', 'Only ra may not be used across a call'], answer: 1,
         why: ['t registers are caller-saved: the callee is free to use them.', '', 'ra is overwritten by the call itself; all the a and t registers are lost too.'],
-        explain: 'a, t and ra are caller-saved; a value that must survive a call goes in s0–s11 (which the callee then saves and restores) or is stored in the caller\'s own frame.',
+        explain: 'a0–a7, t0–t6 and ra are caller-saved; a value that must survive a call goes in s0–s11 (which the callee then saves and restores) or is stored in the caller\'s own frame.',
       },
     },
   ],
@@ -707,7 +707,7 @@ export const chSingleCycle: Chapter = {
         options: ['From 155 to 103: the same 52 delays, since the path crosses the ALU once', 'To a third, since the ALU is 93 of 155', 'Not at all: the load path is the longest'],
         answer: 0,
         explain: 'The longest path crosses the ALU once, so its length falls by exactly what the ALU saves. What remains (fetch, decode, next-PC select: 62 delays) is now 60% of the period.',
-        why: ['', 'Only the ALU part of the path shrinks; the 62 delays around it stay.', 'The register-file path (132, the ALU result written back) is shorter than the branch path (155) and falls too.'],
+        why: ['', 'Only the ALU part of the path shrinks; the 62 delays around it stay.', 'No load is the longest: its word reaches the result mux long before the ALU result does. The path that sets the period is the branch compare through the next-PC select, and it shrinks with the ALU.'],
       },
       {
         question: 'A program of mostly <code>addi</code> runs on the single-cycle CPU. Why is each instruction no faster than a load?',
@@ -735,7 +735,7 @@ export const chSingleCycle: Chapter = {
         <p>Click a program line: its <strong>fields</strong> appear in the panel and the wires that carry them take the
         same colours (opcode to the control unit, rd to the write address, and so on). Point at a field to follow only
         its wires; open <code>imm</code> or <code>ctl</code> and the colours follow you inside.</p>
-        <p>Two registers carry state across a cycle: the PC and the register file (and the data memory on a store). Everything else is combinational, a function of those,
+        <p>State crosses a cycle in two places: the PC and the register file (and the data memory on a store). Everything else is combinational, a function of those,
         so one instruction is one pass of signals through a few thousand gates, and the clock only has to wait until they settle. That is the whole design:
         the next chapters change how long the wait is and how many instructions share it, not what the instruction does.</p>
         <p>Program order is the PC's job: it normally steps by 4, and a branch or jump replaces the +4 with a target. Instruction memory is a ROM read by the PC with no clock,
@@ -851,7 +851,7 @@ export const chSingleCycle: Chapter = {
         <span data-show="dm">data memory</span> writes), data = rs2. Nothing is written back.
         <code>lw</code>: same address computation, ResultSrc = memory (the <span data-show="res">result mux</span> passes the loaded word). On paper that is the longest path:
         clock → PC → instruction memory → register file → ALU (32-bit ripple add) → data-memory read mux → result mux → register
-        file input. <a href="#/c/fastadd/0">Chapter 16</a> measures this machine and finds a surprise.</p>
+        file input. The step "What sets the period" measures this machine and finds a surprise.</p>
         <p>Both use the ALU as an address adder, and that reuse is why the immediate formats differ: I-type for the load (rs1 + imm<sub>I</sub>), S-type for the store
         (rs1 + imm<sub>S</sub>), with the same rs1 and the same ALU operation. A store has no destination register, so the 5 bits that would hold rd carry the low immediate bits
         and RegWrite stays 0. The data memory reads asynchronously like the instruction memory, so a load's data is on the result mux within the cycle; a store changes memory only at the edge.</p>
@@ -873,7 +873,7 @@ export const chSingleCycle: Chapter = {
       },
       more: {
         derive: `<p>On paper the load's path is the longest: clock → PC → instruction memory → decode and immediate → ALU add → data-memory address decode and read mux → result mux → register file input.
-          Every stage is a series term, so lw costs the sum, and add costs the sum without the memory term. With a realistic memory that holds and the clock must fit lw, so add idles for the length of the data-memory read. On this machine it does not: the memory is small and reads only low address bits, so its word reaches the result mux at 71 delays while the ALU's result arrives at 123 (the step 'What sets the period' measures it).</p>`,
+          Every stage is a series term, so lw costs the sum, and add costs the sum without the memory term. With a realistic memory (slower and larger than here) the clock must fit lw, so add idles for the length of the data-memory read. On this machine it does not: the memory is small and reads only low address bits, so its word reaches the result mux at 71 delays while the ALU's result arrives at 123 (the step 'What sets the period' measures it).</p>`,
         pitfall: `<p>An offset is signed and in bytes. <code>lw t1, 8(zero)</code> addresses byte 8, which is word 2 of the memory; the panel shows words, and the first time the address looks "off by four" it
           is this. A store\'s immediate is split in the word (imm[11:5] at the top, imm[4:0] where rd would be), so reading it off the hex by eye mis-reads it.</p>`,
         real: `<p>On a real machine this step is where most of the time goes: a load goes to a cache whose hit takes several cycles and a miss takes hundreds. The "memory in one cycle" abstraction is only true
@@ -1004,7 +1004,7 @@ export const chSingleCycle: Chapter = {
     {
       title: 'Your own instruction',
       body: `
-        <p>The control unit is a lookup table from opcode to nine signals, so a new instruction is a new row of it. RISC-V reserves four major opcodes for this
+        <p>The control unit is a lookup table from opcode to ten signals, so a new instruction is a new row of it. RISC-V reserves four major opcodes for this
         (<code>custom-0…3</code>; the first is used later by the GPU chapters, so a free choice here is one of the other three). The row is the whole definition: <code>regWrite</code>, ALU A (rs1 or PC) and B (rs2 or imm), the
         ALU operation, <code>memWrite</code>, the result mux (ALU, memory, PC + 4, imm) and the next-PC choice. The data path does not change: fetch, register read, ALU, memory and
         write-back are already there, and the row only picks which of them the instruction uses.</p>

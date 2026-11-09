@@ -248,13 +248,13 @@ export const chCache: Chapter = {
       title: 'From a column to an array',
       body: `
         <p>A real SRAM is a grid. Each row of cells shares a <strong>word line</strong>, raised by <span data-show="dec">a row decoder</span> (the gate-level decoder
-        of <a href="#/c/routing/0">chapter 7</a>, here running as its transistors); <span data-show="col0 col1 col2 col3">each column</span> shares a bit-line pair with its own precharge,
+        of <a href="#/c/routing/0">chapter ${numOf('routing')}</a>, here running as its transistors); <span data-show="col0 col1 col2 col3">each column</span> shares a bit-line pair with its own precharge,
         <span data-show="col0.wd"><strong>write driver</strong></span>
         and <span data-show="col0.sa"><strong>sense amplifier</strong></span>. One access reads or writes a whole row, one bit per column.</p>
         <p>The sense amplifier is a latch: while <code>sae</code> (sense amplifier enable) = 0 it follows the bit lines (unpowered, so it never drives them); when
         <code>sae</code> rises it isolates itself and latches the value, which it holds while the bit lines are precharged for the next access.
         In silicon it also <em>amplifies</em>: it fires when the bit lines differ by ~100 mV, long before a small cell could swing a long
-        bit line fully. Here the swing is full; <a href="#/c/dram/0">chapter 35</a> opens a DRAM, where it is not.</p>
+        bit line fully. Here the swing is full; <a href="#/c/dram/0">chapter ${numOf('dram')}</a> opens a DRAM, where it is not.</p>
         <p>Cost of this 4×4: ${sramT(4)} transistors, of which the cells are ${cell6 * 16}. The periphery is shared per row and per column, so it amortizes:
         at 8×8 the cells are ${pct((cell6 * 64) / sramT(8))}, and in a real 32 KB array over 90 %. Sixteen bits of flip-flop registers would cost ${16 * ff}.</p>
         <p>The sequence is the cell's, one level up. A write needs the word line and the write driver at the same time; a read needs precharge, then the word line, then
@@ -398,7 +398,7 @@ export const chCache: Chapter = {
           { title: 'Write a 1', set: { bl: 1 }, expect: { q: 1 },
             say: '<p>bl = 1 charges the capacitor again: q = {v:q}. The charge on it is the bit.</p>' },
           { title: 'Isolate', set: { wl: 0 }, expect: { q: 1 },
-            say: '<p>The word line falls. The transistor is off and the capacitor holds q = {v:q}, with nothing driving it. In silicon this charge fades: the weakest cells within tens of milliseconds, which is why every row is refreshed each 64 ms, most far more slowly; here the simulator holds it until the next write.</p>' },
+            say: '<p>The word line falls. The transistor is off and the capacitor holds q = {v:q}, with nothing driving it. In silicon this charge fades: the weakest cells within tens of milliseconds, so every row is refreshed each 64 ms (most cells would hold far longer); here the simulator holds it until the next write.</p>' },
           { title: 'The bit line moves', set: { bl: 0 }, expect: { q: 1 },
             say: '<p>bl swings to {v:bl} and q does not follow: the cell is isolated. This is how thousands of cells share one bit line, with only the selected row connected.</p>' },
           { title: 'Open again', set: { wl: 1 }, expect: { q: 0 },
@@ -439,12 +439,12 @@ export const chCache: Chapter = {
         it just read. Row by row, that is also the refresh.</p>`,
       widget: dramWidget,
       more: {
-        derive: `<p>If every row must be visited within the retention time (64 ms), and a bank has N rows, one row is refreshed each 64 ms / N. For the DDR4-3200 model used here
-          that interval is tREFI = ${TIMING.tREFI} cycles, in which the controller refreshes a group of rows in tRFC = ${TIMING.tRFC} cycles. Overhead = tRFC / tREFI =
+        derive: `<p>If every row must be visited within the retention time (64 ms), and a bank has N rows, the controller must refresh a row every 64 ms / N on average. One refresh command
+          covers a group of rows, so in the DDR4-3200 model used here commands come tREFI = ${TIMING.tREFI} cycles apart, and each keeps the bank busy for tRFC = ${TIMING.tRFC} cycles. Overhead = tRFC / tREFI =
           ${TIMING.tRFC} / ${TIMING.tREFI} = ${(100 * TIMING.tRFC / TIMING.tREFI).toFixed(1)} %. Bigger chips have more rows to visit in the same 64 ms, so tRFC grows with density and
           refresh costs a larger share.</p>`,
         pitfall: `<p>Treating a read as free. Because the read empties the cell, the access is a read followed by a restore: the row cannot be precharged until it is rewritten (the
-          tRAS rule). A model that charges only the read time makes DRAM look faster than it is.</p>`,
+          row-active minimum, tRAS, of <a href="#/c/dram/0">chapter ${numOf('dram')}</a>). A model that charges only the read time makes DRAM look faster than it is.</p>`,
         real: `<p>Controllers hide refresh by issuing it per bank while others are busy, by postponing a few commands, and by running it in the shadow of idle time. Each cell is
           not equal: weak cells leak early, and server memory pairs refresh with ECC (the next step) to catch the few that lose their charge between visits.</p>`,
       },
@@ -701,7 +701,7 @@ export const chCache: Chapter = {
         miss whose victim is dirty must write it back first: 12 cycles instead of 8. <span data-show="dm.fsm">The miss controller</span> is a 4-bit counter: 0–3 write the
         victim back, 4–7 wait, 8–11 fill, and a clean victim jumps from 0 to 5.</p>
         <p>The panel's memory view now shows the memory <em>as the program sees it</em>: main memory overlaid with the dirty lines, which are
-        the only up-to-date copy. That is <span data-ahead="coherence">the coherence problem (several copies of one address disagreeing)</span> of <a href="#/c/multicore/0">chapter 27</a> in its simplest form.</p>
+        the only up-to-date copy. That is <span data-ahead="coherence">the coherence problem (several copies of one address disagreeing)</span> of <a href="#/c/multicore/0">chapter ${numOf('multicore')}</a> in its simplest form.</p>
         <div class="try">Run "Update an array in place": 48 stores, every one a hit, because each follows a load of the same word; the first pass's loads miss 4 times and bring the lines in. Open <span data-show="dm.ram"><code>dm</code> → <code>ram</code></span>: main memory is still all zero.</div>`,
       scene: () => cpuScene({ source: csrc('inplace'), dcache: 'wb', adder: 'ks', highlight: ['dm'] }),
       more: {
@@ -709,7 +709,7 @@ export const chCache: Chapter = {
           traffic is n words against 4, so write-back wins once n &gt; 4 and loses when a line is dirtied once (a streaming store: 4 words out for 1 changed). In "Update an array in place" every
           word is stored 3 times, so each line takes 12 stores and writes back 4 words: 48 words of write-through traffic become 16. The dirty bit costs one flip-flop a line; the
           miss penalty rises from 8 to 12 cycles when the victim is dirty.</p>`,
-        pitfall: `<p>Forgetting that memory is stale. With write-back the cache holds the only current copy of a dirty line, so anything else that reads memory (a second core, a DMA engine, a
+        pitfall: `<p>Forgetting that memory is stale. With write-back the cache holds the only current copy of a dirty line, so anything else that reads memory (a second core, a device that copies memory by itself, a
           debugger's memory view) sees old data unless it asks the cache. The panel's memory view overlays the dirty lines for this reason; open <code>dm.ram</code> and compare.</p>`,
         real: `<p>Almost every cache from L2 outward is write-back, and most L1s. A write-through L1 is used where simplicity or error handling matters (its lines are never the only copy, so parity
           is enough), with a write buffer in front of the next level. Multicore parts add a protocol that keeps the copies consistent, so that the dirty copy in one core's cache is found when another asks.</p>`,
@@ -772,7 +772,7 @@ export const chCache: Chapter = {
           ${Math.ceil(11 / 4)} × 8 = ${8 * Math.ceil(11 / 4)} cycles added to the run.</p>`,
         pitfall: `<p>Letting a miss fetch garbage into the pipeline. While the line arrives the instruction on the bus is not the one at the PC; the CPU must treat it as a bubble
           (here retire is held low and the store or load behind it is blocked). Executing it would be a wrong-path instruction with side effects.</p>`,
-        real: `<p>Split L1 instruction and data caches are universal (the Harvard arrangement above L1, one unified memory below), usually 32 KB each. Instruction caches also feed a decoded-instruction
+        real: `<p>Split L1 instruction and data caches are universal (separate instruction and data caches at L1, one unified memory from L2 down), usually 32 KB each. Instruction caches also feed a decoded-instruction
           cache or loop buffer on wide cores, and are prefetched sequentially: the next line is requested before the current one is finished.</p>`,
       },
       challenge: {
@@ -831,7 +831,7 @@ export const chCache: Chapter = {
         line once, when it is evicted. That is why write-back dominates from L2 outward (and in most L1s): with several cores sharing one
         memory bus, bandwidth is the scarce resource.</p>
         <p>Two more choices shape a real hierarchy. <strong>Inclusive</strong> levels keep a copy of everything above them in the level below
-        (a snoop that misses L3 need not ask the L1s), at the price of duplicated capacity; <strong>exclusive</strong> levels hold each line in one
+        (a request from another core that misses in L3 need not ask this core's L1), at the price of duplicated capacity; <strong>exclusive</strong> levels hold each line in one
         place only, so L2 + L3 capacity adds up, at the price of moving lines both ways on every miss. And <strong>prefetching</strong> fetches
         lines before they are asked for: a next-line or stride prefetcher spots a sequential sweep (the row-major sum, "Vector add") and turns
         its compulsory misses into hits, at the cost of bandwidth and, when it guesses wrong, of lines it evicts for nothing.</p>

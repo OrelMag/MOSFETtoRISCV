@@ -131,9 +131,9 @@ export const chMulticycle: Chapter = {
         <strong>B</strong> (the source registers), <strong>Data</strong> (a loaded word) and <strong>ALUOut</strong>. The datapath now does whatever the
         <span data-show="ctrl">controller</span> says, one step at a time.</p>
         <p>(The memory port selects the program ROM or the data RAM by phase, so the sample programs keep their data at address 0.)</p>
-        <p>The point of sharing is area: one ALU instead of three adders, one memory port instead of two. Registers hold what crosses a clock edge, and the controller must now remember which step it is in, so it becomes a state machine. What this costs is time. An
+        <p>The aim of sharing is area: one ALU instead of three adders, one memory port instead of two (the last step counts whether it paid here: the registers that carry values across steps cost more than the adders saved). Registers hold what crosses a clock edge, and the controller must now remember which step it is in, so it becomes a state machine. What this costs is time. An
         instruction takes ${CYC.branch} to ${CYC.load} cycles instead of one, and the clock period only shrinks to the longest single step.</p>
-        <div class="try">Pulse the clock and follow the controller panel: an add takes Fetch, Decode, ExecuteR, ALUWB.</div>`,
+        <div class="try">Pulse the clock and follow the controller panel: the first instruction, <code>li a0, 0</code>, takes Fetch, Decode, ExecuteI, ALUWB (four cycles).</div>`,
       scene: () => cpuScene({ source: src('sum'), multicycle: 'fsm', highlight: ['ctrl'] }),
       tour: {
         beats: [
@@ -295,7 +295,7 @@ export const chMulticycle: Chapter = {
         so each instruction takes 300 to 340 delays instead of 103.
         The gate count does not even go down: <span data-show="ir oldpc ra rb data aluout">six 32-bit registers</span> (about 2900 NANDs) cost more than the two adders they replace.</p>
         <p>Multicycle machines made sense when memory was the expensive, slow part and logic was scarce. Their lasting legacy is the controller,
-        and the idea of overlapping the steps instead of serialising them: the pipeline of <a href="#/c/pipeline/0">chapter 17</a>.</p>
+        and the idea of overlapping the steps instead of serializing them, which you have already met as the pipeline of <a href="#/c/pipeline/0">chapter ${numOf('pipeline')}</a>.</p>
         <p>The accounting is time per instruction = CPI × period. A step is shorter than the whole single-cycle path, but an instruction needs several of them; the product is what matters, and here it is far above the single-cycle machine's one period of 103. The cheap controller
         (${sp(FSM_NANDS)} NANDs) is not the problem; the serial use of one ALU is.</p>`,
       scene: () => cpuScene({ source: src('gcd'), multicycle: 'fsm', timing: true }),
@@ -327,8 +327,8 @@ export const chMulticycle: Chapter = {
         the controller costs the same NANDs whatever you paint.</p>
         <div class="try">Open the microcode, select word 8 (ExecuteI) and look at what lights in the datapath sketch and on the circuit.</div>`,
       more: {
-        numbers: `Book: CPI ${facts.bookCpi.toFixed(2)} on the four benchmarks (${groupDigits(facts.instructions)} instructions). I-type instructions are ${pct(facts.iShare)} % of them, so one cycle fewer each
-          lowers the CPI by ${pct(facts.iShare)} / 100 = ${(facts.bookCpi - facts.solvedCpi).toFixed(2)}, to ${facts.solvedCpi.toFixed(2)}.`,
+        numbers: `<p>Book: CPI ${facts.bookCpi.toFixed(2)} on the four benchmarks (${groupDigits(facts.instructions)} instructions). I-type instructions are ${pct(facts.iShare)} % of them, so one cycle fewer each
+          lowers the CPI by ${pct(facts.iShare)} / 100 = ${(facts.bookCpi - facts.solvedCpi).toFixed(2)}, to ${facts.solvedCpi.toFixed(2)}.</p>`,
       },
       scene: () => { painted = bookProgram(); return ucodeScene(); },
       challenge: {

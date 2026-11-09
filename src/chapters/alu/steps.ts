@@ -74,7 +74,7 @@ export const aluSteps: Step[] = [
     title: 'Six branches from one subtraction',
     get body() {
       return `
-      <p>Chapter 5 gave the flags and the previous steps used two of them for <code>slt</code> and <code>sltu</code>. A branch needs no result at all, only a verdict, and the same subtraction serves all six: the branch unit (<span data-show="nz lt ge nc">three inverters and one XOR</span>) turns
+      <p>Chapter 5 gave the flags and the previous steps used two of them for <code>slt</code> and <code>sltu</code>. A conditional branch (an instruction that jumps only when a comparison of two numbers holds) needs no result at all, only a verdict, and the same subtraction serves all six: the branch unit (<span data-show="nz lt ge nc">three inverters and one XOR</span>) turns
       Z, N, V and C into one bit per <code>funct3</code>, and an <span data-show="cond">8:1 multiplexer</span> selects it.</p>
       <table class="mini"><tr><th>funct3</th><th>branch</th><th>taken when</th></tr>${BRANCHES.map((b) => `<tr><td>${b.f3.toString(2).padStart(3, '0')}</td><td><code>${b.name}</code></td><td>${b.expr}</td></tr>`).join('')}</table>
       <p>The condition logic costs ${NPC_COND.flags} NANDs plus ${NPC_COND.mux} for the select; with the jump and jalr muxing the whole next-PC decision is ${NPC_COND.all}. Which shortcut is tempting and wrong? Over all 65 536 pairs of 8-bit operands, N alone gives the wrong signed order for ${g(WRONG.nAlone)} of them (every

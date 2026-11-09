@@ -53,7 +53,7 @@ export const chMulticore: Chapter = {
       'Two copies of the single-cycle core share one single-port memory. A round-robin arbiter grants it to one core per cycle; the loser holds its PC and register write and tries again.',
       'Every access is atomic; a load–add–store sequence is not: two cores adding 1 twenty times each end at 20, not 40. <code>amoadd.w</code> reads, adds and writes in one arbitrated access: 40, every time.',
       'An <code>amoswap.w</code> spin lock makes any critical section safe, at a price: over four times the run time of the atomic add, the cores fighting for the port while they spin.',
-      'Private write-back caches disagree until they snoop: with no snooping core 1 reads a stale 0 for the 7 core 0 stored. MSI in gates is two state bits per line (I 00, S 10, M 11), BusRd / BusRdX / BusUpgr on a bus that carries one transaction at a time, a second copy of the tags for the snoop, and a Flush from the Modified holder written back on the way. The control is a few percent of a cache; the data array is nine tenths.',
+      'Private write-back caches disagree until they snoop: with no snooping core 1 reads a stale 0 for the 7 core 0 stored. MSI in gates is two state bits per line (I 00, S 10, M 11), BusRd / BusRdX / BusUpgr on a bus that carries one transaction at a time, a second copy of the tags for the snoop, and a Flush from the Modified holder written back on the way. The control is under a tenth of a cache; the data array is over nine tenths.',
       'Spinning on a Shared copy (test-and-test-and-set) puts a fraction of the bus traffic of spinning with <code>amoswap.w</code>, because a load that hits never reaches the bus. Two variables on one line ping-pong between caches (false sharing): the same loop, a line apart, runs about twice as fast with a fifteenth of the traffic. MESI\'s Exclusive state would make private data free.',
       '<code>lr.w</code> / <code>sc.w</code> keep a reservation (valid + line) per cache, cleared by any <code>sc.w</code>, by a snooped BusRdX / BusUpgr for the line or by an eviction. The atomic add as a retry loop is correct and costs failed <code>sc.w</code>s; without a hold-off after <code>lr.w</code> one core can starve the other until it stops.',
       'Real cores reorder (RVWMO): with store buffers both cores of the store-buffering test can read 0. A lock is taken with acquire (<code>amoswap.w.aq</code>) and freed with release (<code>.rl</code> or <code>fence rw,w</code>). LR/SC builds any other atomic as a retry loop, as the coherent dual-core does.',
@@ -98,7 +98,7 @@ export const chMulticore: Chapter = {
     {
       title: 'Why more cores?',
       body: `
-        <p>For thirty years each process generation made transistors smaller and faster, and in the ideal (Dennard scaling, 1974) lower-voltage at constant power density.
+        <p>For thirty years each process generation made transistors smaller and faster, and, in the ideal case (Dennard scaling, 1974), at lower voltage and constant power density.
         Clock rates climbed. Around 2005 the voltage stopped falling, because leakage current grows as the threshold voltage drops. Dynamic power is
         C·V²·f, so faster clocks now meant hotter chips. Frequencies have stayed near 3 to 5 GHz ever since.</p>
         <p>Moore's law kept delivering transistors, though, and the way to use them without raising the clock is <strong>more cores</strong>. Software
@@ -131,7 +131,7 @@ export const chMulticore: Chapter = {
       title: 'Two cores, one memory',
       body: `
         <p>Here are <span data-show="core0 core1">two copies of the single-cycle core</span>: the same component, instantiated twice. Open one: it has a memory <em>port</em> instead of a memory,
-        <span data-show="core0.mpd">a decoder for atomics</span>, and <span data-show="h0 h1">an input carrying its hart id</span>, which <code>csrr a0, mhartid</code> reads. Both run the same program and use the id to divide the work.</p>
+        <span data-show="core0.mpd">a decoder for atomics</span>, and <span data-show="h0 h1">an input carrying its hart id</span> (a hart is a hardware thread: here, one core), which <code>csrr a0, mhartid</code> reads. Both run the same program and use the id to divide the work.</p>
         <p><span data-show="dm">The shared memory</span> has one port, so an <span data-show="arb"><strong>arbiter</strong></span> grants it to one core per cycle. A core that loses holds its PC and register write for a cycle and
         tries again. A multi-hart instruction-set simulator (the reference model of the ISA) applies the same arbitration and checks both cores after every cycle.</p>
         <p>Each core keeps its own program ROM, so instruction fetch never competes: only loads and stores reach the shared port. That is why two cores running the same code stay
@@ -181,7 +181,7 @@ export const chMulticore: Chapter = {
       },
       more: {
         derive: `<p>With p the priority bit: g0 = r0 · ¬(r1 · p), g1 = r1 · ¬(r0 · ¬p), and p′ = p XOR (r0 · r1). If only one request is high, its grant is 1 whatever p is. If both are high, exactly
-          one grant is: g0 when p = 0, g1 when p = 1, and p flips. So over any run of conflicts the grants alternate, and a core waits at most one cycle for any grant it asks while the other is served.
+          one grant is: g0 when p = 0, g1 when p = 1, and p flips. So over any run of conflicts the grants alternate, and a core waits at most one cycle for a grant.
           For n requesters the same idea needs a pointer and a mask: a loser waits at most n − 1 grants.</p>`,
         real: `<p>Round robin is the default in bus interconnects (chapter 38's bus uses it for its masters); fixed priority is used where one requester must never wait, such as an
           interrupt controller, with a limit on how much of the bandwidth the high-priority side may take.</p>`,
@@ -357,7 +357,7 @@ export const chMulticore: Chapter = {
           why: ['That orders a read before a later write; the stores here are before the loads.', '', 'It orders reads among themselves; the store is not covered.', 'It orders stores among themselves; the load is not covered.'],
           explain: 'The earlier store must be visible before the later load is performed: predecessor w, successor r.' },
           { question: 'Which fence goes before the store that releases a lock, so the critical section\'s accesses are visible first?', options: ['fence rw,w', 'fence w,r', 'fence r,rw', 'None is needed'], answer: 0,
-          why: ['', 'That orders stores before loads, not before a store.', 'That is the acquire side, after taking the lock.', 'It is on this sequentially consistent machine, which is why the bug hides.'],
+          why: ['', 'That orders stores before loads, not before a store.', 'That is the acquire side, after taking the lock.', 'On this sequentially consistent machine none is needed, which is why the bug hides; on a core with a store buffer the question asks for one.'],
           explain: 'Everything before (r and w) must be performed before the releasing write: predecessor rw, successor w.' },
           { question: 'The dual-core of this chapter has one memory port. What does a fence change on it?', options: ['Nothing observable: order already holds', 'It flushes the cache', 'It stalls both cores', 'It makes AMOs atomic'], answer: 0,
           why: ['', 'There is nothing to flush; the ordering is a property of the one port.', 'No stall is needed when no access can pass another.', 'Atomicity comes from the AMO\'s read-modify-write on the port.'],

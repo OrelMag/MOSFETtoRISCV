@@ -51,7 +51,7 @@ describe('chapter 2 content', () => {
     const p = stats(INV_PSEUDO), c = stats(INV_CMOS);
     expect([p.transistors, p.resistors]).toEqual([1, 1]);
     expect(p.transistors + p.resistors).toBe(c.transistors);
-    expect(step(chInverter, 'The cheaper, hotter way: a pull-up').body).toContain('no device saved at one input');
+    expect(step(chInverter, 'The cheaper, hotter way: a pull-up').body).toContain('the same two devices');
   });
 
   it("the three-input NOR question marks the textbook count (a grounded-gate PMOS load) right", () => {

@@ -91,7 +91,7 @@ export const chPixels: Chapter = {
         <strong>front</strong> one read by the scan-out and the <strong>back</strong> one drawn into, and <span data-show="pin:swap"><strong>swap</strong></span>
         exchanges them: two address multiplexers change sides, nothing is copied. The flip <span data-show="pin:sync">waits for vsync</span>, so it falls between two frames. Without that wait the screen shows the top of one picture and the bottom of the other:
         <strong>tearing</strong>.</p>
-        <p>Cost: the scan-out and flip logic are 256 NANDs. The two frames are 64 Kbit of flip-flops, 1.35 million NANDs as drawn, simulated as two
+        <p>Cost: the scan-out and its flip are 256 NANDs, the frames' own multiplexers 245. The two frames are 64 Kbit of flip-flops, 1.35 million NANDs as drawn, simulated as two
         lookups (open a bank to see its flip-flops); real framebuffers are DRAM.</p>
         <p>Why the flip is not a copy: a copy of 4 KB would take at least one cycle per word, 1024 of them, during which the scan-out would read a half-copied frame. Exchanging which
         buffer each address multiplexer selects is one cycle and cannot be seen, provided it lands between two frames. That timing constraint, not the memory, is why a display
@@ -236,11 +236,10 @@ export const chPixels: Chapter = {
         <span data-show="pin:a">α</span> comes in eighths: (s·(a + 1) + d·(7 − a)) / 8, <span data-show="rop">six 4 × 4 array multipliers and three
         adders</span> (1074 NANDs); the division by 8 is wiring. The destination is the <span data-show="fb">back frame</span>'s pixel at the same address,
         read and rewritten in one cycle.</p>
-        <p>Unlike the depth test, blending is not commutative: red under a blue at 3/8 is a dark purple, the same blue under red is red. Renderers therefore
+        <p>Unlike the depth test, blending is not commutative: a blue at 3/8 over red is a dark purple, the same blue under an opaque red is red. Renderers therefore
         draw the opaque surfaces first, with the depth test, then the translucent ones sorted back to front. And here the top-left rule pays: a pixel on
         an edge shared by two translucent triangles is blended once, not twice.</p>
-        <p>The cost is arithmetic, not memory: the destination is read and the result written back at the same address in one cycle, so blending adds six small multipliers and three adders to the raster operations
-        unit and no extra cycle. What it adds is a dependency: each pixel's result depends on the one before it at the same address, so two translucent triangles cannot be drawn in parallel without a rule for who goes first.</p>
+        <p>The cost is arithmetic, not memory or time: no extra cycle. What blending adds is a dependency: each pixel's result depends on the one before it at the same address, so two translucent triangles cannot be drawn in parallel without a rule for who goes first.</p>
         <div class="try">Draw these in both orders and compare the overlap.</div>`,
       scene: () => depthScene('blend'),
       more: {
@@ -473,8 +472,7 @@ export const chGfxPipeline: Chapter = {
         three cycles (twice their area is negative).
         For a single convex solid that alone hides everything behind; depth is on all the same, and earns its 76 set-up cycles per triangle only where
         solids overlap. Its frames take 7168 to 8192 cycles: two or three faces, 2300 to 3200 cycles of drawing.</p>
-        <p>What the scene proves is agreement, not speed. Three independent models run beside the gates: the instruction-set simulator for the kernel, a check of the vertex buffer when the command unit reads it,
-        and the reference rasterizer for every pixel. A gate-level bug anywhere in 413 501 leaves would show up as a pixel that differs from the reference in some frame, which is why the pipeline can be trusted at this size.</p>
+        <p>What the scene proves is agreement, not speed. A gate-level bug anywhere in 413 501 leaves would show up as a pixel that differs from the reference in some frame, which is why the pipeline can be trusted at this size.</p>
         <div class="try">Run for a few frames, then pick the cube. Pause and open the rasterizer: its tile walk is wherever the timeline says.</div>`,
       scene: () => pipelineScene('triangle', { highlight: ['core', 'rast'] }),
       more: {

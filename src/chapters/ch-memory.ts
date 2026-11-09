@@ -89,8 +89,8 @@ export const chLatches: Chapter = {
       body: `
         <p>Every circuit so far was <em>combinational</em>: outputs depend only on the current inputs. Now feed
         outputs back into inputs.</p>
-        <p><span data-show="g1 g2">Two cross-coupled NANDs</span> form an <strong>SR latch</strong>. Its inputs are <em>active-low</em> (the bar over
-        the name means "acts when 0"):</p>
+        <p><span data-show="g1 g2">Two cross-coupled NANDs</span> form an <strong>SR latch</strong>. Its inputs are <em>active-low</em> (the suffix _n, a bar over
+        the name in textbooks, means "acts when 0"):</p>
         <ul><li>pull <code>s_n</code> to 0 → <strong>set</strong>: q becomes 1</li>
         <li>pull <code>r_n</code> to 0 → <strong>reset</strong>: q becomes 0</li>
         <li>both at 1 → <strong>hold</strong>: q keeps whatever it was. One bit of memory.</li></ul>
@@ -265,7 +265,7 @@ export const chLatches: Chapter = {
       },
       more: {
         derive: `<p>With t_cq the clock-to-q delay, t_logic the slowest path between two flip-flops, t_su the setup time and t_h the hold time, the constraints between a launching and a capturing flip-flop are
-          T ≥ t_cq + t_logic + t_su and t_cq + t_logic,min ≥ t_h. With the timing model's numbers for this flip-flop (clk-to-q ${CLK_TO_Q}, setup ${SETUP}) a stage of 20 NAND delays needs T ≥ ${CLK_TO_Q} + 20 + ${SETUP} = ${CLK_TO_Q + 20 + SETUP} delays. The first
+          T ≥ t_cq + t_logic + t_su and t_cq + t_logic,min ≥ t_h. With the timing model's budget for this flip-flop (clk-to-q ${CLK_TO_Q}, setup ${SETUP}: a little above what the next step measures) a stage of 20 NAND delays needs T ≥ ${CLK_TO_Q} + 20 + ${SETUP} = ${CLK_TO_Q + 20 + SETUP} delays. The first
           inequality is about the slow path, so a slower clock fixes it; the second is about the fast path and does not contain T at all.</p>`,
         real: `<p>A library flip-flop is a master–slave pair like this one, in 20 to 30 transistors with tuned sizes, against ${stats(DFF).transistors} here. Its datasheet lists setup, hold and clk-to-q as tables
           over the input slew and the output load, which is why real timing analysis is a calculation over a graph of such tables.</p>`,
@@ -431,7 +431,7 @@ export const chRegisters: Chapter = {
         <p>Cost: the register's ${nands(register(4))} NANDs plus the incrementer's ${nands(counter(4)) - nands(register(4))}, ${nands(counter(4))} for 4 bits. The incrementer is a half-adder chain, so
         its carry ripples: the slowest path between two edges is the carry from bit 0 to bit 3, and the clock period must cover it. A counter wraps at 2ⁿ: it counts 0 to 15 and
         then returns to 0, with no signal that it did.</p>
-        <div class="try">The clock runs by itself (with the automatic clock off, press <strong>Run</strong>): watch the count climb in the <strong>Timing</strong> panel. <strong>Pulse</strong> pauses it for one edge at a time.</div>`,
+        <div class="try">The clock runs by itself (if you switched the automatic clock off, press <strong>Run</strong>): watch the count climb in the <strong>Timing</strong> panel. <strong>Pulse</strong> pauses it for one edge at a time.</div>`,
       tour: {
         beats: [
           { title: 'Counting', reset: true, cycles: 3, show: ['reg', 'inc'], expect: { q: 3 },
@@ -666,7 +666,7 @@ export const chRegisters: Chapter = {
         ],
       },
       more: {
-        derive: `<p>The next state is q' = (q ≪ 1) | (qₙ ⊕ qₜ), with n the top tap and t the other. Over GF(2) this multiplies the state by x modulo x⁴ + x³ + 1. That polynomial is primitive (it divides x¹⁵ − 1 but no
+        derive: `<p>The next state is q' = (q ≪ 1) | (qₙ ⊕ qₜ), with n the top tap and t the other. Over GF(2) this is a linear map whose characteristic polynomial is x⁴ + x + 1, the reciprocal of the tap polynomial x⁴ + x³ + 1. Both are primitive (each divides x¹⁵ − 1 but no
           x^k − 1 for smaller k), so the period is exactly 2⁴ − 1 = ${2 ** 4 - 1}. The all-zero state is the only fixed point: 0 XOR 0 = 0, so a register that wakes up as 0 never starts.</p>`,
         real: `<p>CRC checksums are LFSRs fed by the data (Ethernet's CRC-32 is a 32-bit one). PRBS generators of 7, 15 or 31 bits test serial links; scramblers in PCIe and USB use them to avoid long runs of equal bits;
           GPS gives each satellite its own LFSR code.</p>`,
@@ -1164,8 +1164,8 @@ export const chMemory: Chapter = {
         <span data-show="u10 u11 u12 u13">its own comparator</span>, all comparing with the key at the same time, and
         <span data-show="u19">a priority encoder</span> (<a href="#/c/routing/6">chapter 7</a>) turns the matches into hit and index.
         A valid bit per entry keeps never-written entries from matching.</p>
-        <p>One comparator per entry is why CAMs stay small: an address-translation table has tens of entries, a fast buffer that may keep any line in any slot, a few
-        hundred lines at most, a network router's lookup table is the big exception, and burns power accordingly.</p>
+        <p>One comparator per entry is why CAMs stay small: an address-translation table has tens of entries and a fast buffer that may keep any line in any slot a few
+        hundred lines at most. A network router's lookup table is the big exception, and burns power accordingly.</p>
         <p>The search takes no clock and no sequencing: all entries compare in parallel, so the lookup time is one comparator plus one priority encoder, and only the encoder's log n grows with the entries. What grows is the area: this CAM has four 4-bit entries and costs ${nands(cam(2, 4))} NANDs,
         of which a comparator alone is ${nands(equal(4))}.</p>`,
       tour: {
@@ -1184,7 +1184,7 @@ export const chMemory: Chapter = {
       },
       more: {
         derive: `<p>Entry i matches when valid[i] ∧ (entry[i] = key); hit is the OR of the matches and the index comes from the priority encoder over them. Cost: n comparators of ${nands(equal(4))} NANDs (width 4) plus n·w flip-flops
-          plus the encoder, so the area is about n times a plain register file's per entry. Lookup delay is independent of n except for the encoder's log n.</p>`,
+          plus the encoder: each entry pays for a comparator on top of the register a plain register file would spend. Lookup delay is independent of n except for the encoder's log n.</p>`,
         real: `<p>CAM cells in network switches search millions of entries in one cycle, for IP routing, at a power cost that dominates the chip. In a CPU the CAM is the TLB and the tag array of fully associative
           caches; the comparison of 64 entries at once is why the TLB is small.</p>`,
         pitfall: `<p>Duplicates. If two entries hold the same key, two comparators fire, and the priority encoder reports only one (the highest). Software or the write logic must prevent duplicates or define which wins,

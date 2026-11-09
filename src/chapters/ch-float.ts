@@ -95,7 +95,7 @@ export const chFloat: Chapter = {
       'A float is (−1)<sup>s</sup> × 1.f × 2<sup>e − bias</sup>, the leading 1 hidden. Exponent 0 holds zero and the subnormals, all ones ∞ and NaN. Every binade holds the same 2<sup>M</sup> values (2<sup>23</sup> in float32), so precision is relative. A NaN\'s top fraction bit is its quiet bit (0: signaling, NV when used); every NaN RISC-V computes is the canonical 0x7FC00000.',
       'Guard, round and sticky bits are enough to round exactly. RNE rounds up when G = 1 and (S = 1 or the last kept bit is 1); the five modes differ in that one decision, a 62-NAND block.',
       'RISC-V never traps on a float exception: NV, DZ, OF, UF and NX accumulate in fflags. UF needs a result that is tiny (judged after rounding) <em>and</em> inexact.',
-      'float32: the adder is about 8200 NANDs and 181 deep, the multiplier 14 900 and 176, the fma 26 300 and 270, one rounding against 357 for fmul then fadd.',
+      'float32: the adder is about 8200 NANDs and 181 deep, the multiplier 14 900 and 176, the fma 26 300 and 270, with one rounding, against 357 deep and two roundings for fmul then fadd.',
       'In the single-cycle CPU the FPU triples the size and stretches the period from 103 to 313 NAND delays. Cut into E, M and X, the pipelined RV32IF runs at 121, is smaller (163 500 against 172 500 NANDs) and 1.3 to 2.2 times faster on six of the seven programs; the CSR-heavy one is 5 % slower.',
       'Cost follows the significand: the multiplier tree grows as M², so a bf16 multiplier (float32\'s exponent, 8-bit significand) costs 38 % of float32\'s NANDs and an FP8 one 14–16 %; float64\'s costs 3.2 times as much. The ML E4M3 is not IEEE: no infinities, max 448.',
       'A near / far adder splits by case: a far path (long alignment, at most a 2-place normalize) and a near path (exponents within 1: no aligner, long normalize). The split alone takes the float32 adder from 181 to 129 NAND delays for 6 % more NANDs; leading-zero anticipation takes it to 114 for 39 % more in all.',
@@ -188,7 +188,7 @@ export const chFloat: Chapter = {
           ${Array.from({ length: 2 ** F6.E - 2 }, (_, i) => i + 1).map((e) => `<tr><td>${e}</td><td>${sci(2 ** (e - bias(F6)))} … ${sci(2 ** (e - bias(F6) + 1))}</td><td>${2 ** F6.M}</td><td>${sci(2 ** (e - bias(F6) - F6.M))}</td></tr>`).join('')}</table>`,
         pitfall: `<p>Assuming that a − b = 0 means a = b. That holds with subnormals and fails without them, and every flush-to-zero mode gives it up for speed: values below the smallest normal become 0, and
           a program that divides by a difference can then divide by zero. Look for the hole on the line: nothing lies between 0 and the first mark.</p>`,
-        real: `<p>Hardware that flushes subnormals to zero (some GPUs, and x86 and Arm modes called FTZ and DAZ) does it because a subnormal result needs a normalization shift the fast path lacks: a slow microcode
+        real: `<p>Hardware that flushes subnormals to zero (some GPUs, and x86 modes called FTZ and DAZ, and Arm's FZ) does it because a subnormal result needs a normalization shift the fast path lacks: a slow microcode
           assist costing a hundred cycles or more on some CPUs. RISC-V requires gradual underflow in the base F extension.</p>`,
       },
     },
@@ -408,8 +408,8 @@ export const chFloat: Chapter = {
           <tr><td>NX</td><td>0</td><td>the rounded result differs from the exact one</td></tr><tr><td>UF</td><td>1</td><td>tiny after rounding and inexact</td></tr>
           <tr><td>OF</td><td>2</td><td>the rounded exponent is past the largest</td></tr><tr><td>DZ</td><td>3</td><td>finite, non-zero ÷ 0</td></tr>
           <tr><td>NV</td><td>4</td><td>the result is not defined (∞ − ∞, 0 × ∞, 0 ÷ 0, signaling NaN, bad conversion)</td></tr></table>`,
-        pitfall: `<p>Raising UF for every subnormal result. An exact subnormal (3 × 2<sup>−149</sup> in float32, say) is not an underflow, and raises nothing; only a tiny result that lost accuracy does. The challenge
-          below turns on this: UF without NX is never raised.</p>`,
+        pitfall: `<p>Raising UF for every subnormal result. An exact subnormal (3 × 2<sup>−149</sup> in float32, say) is not an underflow, and raises nothing; only a tiny result that lost accuracy does. The quiz in the
+          fcsr step turns on this: UF without NX is never raised.</p>`,
         real: `<p>Other architectures can trap on these exceptions; x86 can unmask them, RISC-V cannot. A program that wants a trap checks fflags after a region and branches. The cost of this choice is that
           a faulting operation in a long loop is found late; the gain is that the pipeline never has to take a precise exception out of the FPU.</p>`,
       },
@@ -539,7 +539,7 @@ export const chFloat: Chapter = {
           'done rises once every quotient bit has been made. Count clock pulses, not gate delays.',
           'The first pulse loads the remainder with the dividend; each later pulse makes one quotient bit. How many steps does M + 4 give with 3 fraction bits?',
         ],
-        answer: 'Eight pulses: one loads the remainder with the dividend, seven make one quotient bit each (M + 4 = 7), and in the ninth cycle done = 1 while normalize & round presents the result.',
+        answer: 'Eight pulses: one loads the remainder with the dividend, seven make one quotient bit each (M + 4 = 7), and after the eighth pulse done = 1 while normalize & round presents the result (M + 6 = 9 cycles, counting the one that observes it).',
         solve: (st) => { st.setInputs({ a: 0x38, b: 0x44, rm: 0, start: 1 }); st.runCycles(8); },
       },
     },
@@ -649,7 +649,7 @@ export const chFloat: Chapter = {
         format (3 exponent bits, 2 fraction bits) is exhaustive: every operand pair for add, subtract, multiply and divide, every triple and sign variant
         for the fma (one rounding mode per case, rotating). The 8-bit formats are sampled: every special or boundary operand (zeros, subnormals, the smallest and largest normals, infinities,
         NaNs) against every operand, plus 3000 random pairs; the fma on random triples biased towards cancellation. Square root and the conversions
-        see every 8-bit input. Well over a million cases in all; every pair of the 8-bit formats is a switch for a long run by hand, not part of the
+        see every 8-bit input. Well over a million cases in all; every pair of 8-bit operands is an opt-in run (FPU_EXHAUSTIVE=1), not part of the
         regular test suite. float32 is tested on random and special operands (subnormals, infinities, NaNs, cancellation), and against the host CPU in
         round to nearest even.</p>
         <div class="try">1.5 (0x3FC00000) + 2.25 (0x40100000) = 3.75 (0x40700000). Follow <span data-show="align add">the significands</span> through the aligner and the adder.</div>`; },
@@ -693,8 +693,8 @@ export const chFloat: Chapter = {
           <tr><td>multiplier</td><td>${grp(u32('mul').n)}</td></tr><tr><td>fused multiply-add</td><td>${grp(u32('fma').n)}</td></tr></table>`,
         pitfall: `<p>Comparing a float sum with feq.s against the number it should be. After ten additions of 0.1 the program's a1 holds ${hex32(tenth()[9])}, not 0x3F800000, and the comparison is false. A test for "close enough" uses a tolerance
           relative to the operands, not an exact comparison.</p>`,
-        real: `<p>Cores pipeline the FPU: an add or multiply takes 3 to 5 cycles, issued one a cycle, and the fused multiply-add is the same unit, so a dependent chain runs at one operation per latency. The last step of this chapter
-          builds the pipelined version and measures what the chain costs. Cores with double precision keep 64-bit f registers; a single there is NaN-boxed, its upper 32 bits all ones.</p>`,
+        real: `<p>Cores pipeline the FPU: an add or multiply takes 3 to 5 cycles, issued one a cycle, and the fused multiply-add is the same unit, so a dependent chain runs at one operation per latency. Two steps further on, "A pipelined FPU"
+          builds the pipelined version and "Pipelined vs single-cycle" measures what the chain costs. Cores with double precision keep 64-bit f registers; a single there is NaN-boxed, its upper 32 bits all ones.</p>`,
       })),
       challenge: {
         kind: 'reach', goal: 'Run the program to the end (a1 holds the bits of the sum).',

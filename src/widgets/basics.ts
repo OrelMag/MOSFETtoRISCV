@@ -139,7 +139,7 @@ export function misreads(levels: number, amp: number, seed = 7): number {
 export function noiseWidget(): Widget {
   let amp = NOISE.start;
   const plots = h('div', { class: 'bx-plots' });
-  const slider = h('input', { type: 'range', min: 0, max: 0.4, step: 0.01, value: amp, 'aria-label': 'noise' }) as HTMLInputElement;
+  const slider = h('input', { type: 'range', min: 0, max: 0.7, step: 0.01, value: amp, 'aria-label': 'noise' }) as HTMLInputElement;
   const val = h('output');
   const out = h('div');
   slider.addEventListener('input', () => { amp = +slider.value; render(); });

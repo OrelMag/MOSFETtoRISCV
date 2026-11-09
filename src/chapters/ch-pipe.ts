@@ -171,8 +171,8 @@ export const chPipeline: Chapter = {
         <strong>Pipelining</strong> cuts the datapath into five stages separated by <span data-show="FD DE EM MW">registers</span>
         (Fetch, Decode, Execute, Memory, Writeback) and starts a new instruction every cycle.</p>
         <p>Latency per instruction does not improve (it gets slightly worse: each stage now ends in a register, and the clock must fit the
-        slowest stage, not the average). <strong>Throughput</strong> can approach one instruction per cycle at a clock period set by the
-        slowest stage instead of the whole path. Five instructions are in flight at once, one per stage.</p>
+        slowest stage, not the average). <strong>Throughput</strong> can approach one instruction per cycle (a <strong>CPI</strong>, cycles per instruction, of 1) at a clock period set by the
+        slowest stage instead of the whole path; time per instruction is CPI × period. Five instructions are in flight at once, one per stage.</p>
         <p>Three things can stop an instruction from starting: a <strong>structural</strong> hazard (two instructions need
         one unit in the same cycle), a <strong>data</strong> hazard (an operand is not computed yet) and a <strong>control</strong>
         hazard (the next PC is not known yet). This design has no structural ones: separate instruction and data memories, a
@@ -204,7 +204,7 @@ export const chPipeline: Chapter = {
           (Prescott) ran hot and gained little. Small embedded cores (ARM Cortex-M0, many RISC-V microcontrollers) keep 2 or 3 stages: their
           memories are on chip and fast, and short pipelines need no branch prediction.</p>`,
         pitfall: `<p>"Five stages, so five times faster" ignores three things: the slowest stage sets the clock, every stage adds register overhead,
-          and hazards add cycles. The last step of this chapter measures all three on this design: the speed-up there is below one.</p>`,
+          and hazards add cycles. The step "Does it pay? Measured" measures all three on this design: the speed-up there is below one.</p>`,
       },
     },
     {
@@ -336,7 +336,7 @@ export const chPipeline: Chapter = {
         the panel. Real cores predict branches (dynamic predictors are often more than 95% accurate) and resolve them earlier.</p>
         <p>The flush is safe because nothing the two wrong-path instructions did is visible yet: they have not reached M (no store) or W (no
         register write). A design that resolved branches later than the first stage that changes state would need much more care.
-        The same flush is how a pipeline keeps a faulting instruction from leaving younger ones half done (In real silicon, below).</p>
+        The same flush is how a pipeline keeps a faulting instruction from leaving younger ones half done (see In real silicon, below).</p>
         <div class="try">Pulse until the loop branch is taken: two instructions turn into bubbles.</div>`,
       scene: () => ({ ...cpuScene({ source: src('sum'), pipeline: true, highlight: ['npc', 'hz', 'pcmux'] }), autoClock: false }),
       tries: [(st) => !!snap(st)?.flush],
@@ -453,7 +453,7 @@ export const chPipeline: Chapter = {
         <p>An instruction in Execute is an <em>issue</em> cycle of its line. An empty Execute is charged to the instruction that left it empty:
         a <em>stall</em> behind a load (its result arrives from Memory, one stage later than the next instruction's Execute wants it;
         forwarding cannot go back in time, so one bubble), or a <em>flush</em> behind a taken branch or jump (resolved in Execute, so the two
-        instructions fetched behind it are squashed: two bubbles). A not-taken branch costs nothing. The lines add up to the clock, always: cycles = instructions + stalls + flushes + fill.</p>
+        instructions fetched behind it are squashed: two bubbles). A not-taken branch costs nothing. The lines add up to the clock, always: cycles = instructions + stalls + flushes + fill (the cycles before the first instruction reaches Execute; the two it then takes to leave through Memory and Writeback are charged to no line).</p>
         <p>Measured on <code>prefix</code>: ${fmt(PREFIX.cycles)} cycles for ${fmt(PREFIX.instr)} instructions, CPI ${(PREFIX.cycles / PREFIX.instr).toFixed(2)}.
         ${fmt(PREFIX.stall)} are stalls (<code>xs[i] += xs[i - 1]</code> loads a value its next instruction adds, and <code>print(xs[i])</code> loads a value its next instruction stores), ${fmt(PREFIX.flush)} flushes
         (${fmt(PREFIX.flush / 2)} taken branches and jumps), ${PREFIX.fill} the pipeline filling. The routines suffer worse: gcd's <code>%</code> loop is branches,

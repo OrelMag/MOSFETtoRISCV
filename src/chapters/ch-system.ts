@@ -4,6 +4,7 @@ import { CSR_UNIT, SYS_DECODE, TRAP_UNIT, systemCpu } from '../lib/system';
 import { withoutParts } from '../lib/tech';
 import { cpuState } from '../riscv/cosim';
 import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
+import { crossover } from '../riscv/pollirq';
 import { stats } from '../sim/stats';
 import { pack } from '../sim/values';
 import { cpuScene } from '../widgets/cpupanel';
@@ -119,8 +120,8 @@ export const chIO: Chapter = {
       more: {
         derive: `<p>With o the low two address bits: a byte store enables lane o; a halfword store enables lanes 2·o[1] and 2·o[1] + 1 (misaligned if o[0] = 1); a word store enables all four (misaligned if o ≠ 0). The table of enables, most significant lane first:
           byte ${[0, 1, 2, 3].map((o) => `${o}: ${bin4(enables(0, o))}`).join(', ')}; half ${[0, 2].map((o) => `${o}: ${bin4(enables(1, o))}`).join(', ')}; word ${bin4(enables(2, 0))}.</p>`,
-        pitfall: `<p>Writing the data into lane 0 only. With be = 0100 and the byte in lane 0, lane 2 stores whatever was on the bus, zero in the first case. If a byte store puts the wrong value in memory, look at wdata first: all four lanes must show the byte.</p>`,
-        real: `<p>SRAM macros expose exactly these byte write masks, and DRAM modules a data mask line per byte. A cache that did not have them would have to read a line, modify it and write it back for every <code>sb</code>.</p>`,
+        pitfall: `<p>Writing the data into lane 0 only. With be = 0100 and the byte only in lane 0, lane 2 stores whatever its lane of the bus carries (often 0), not the byte. If a byte store puts the wrong value in memory, look at wdata first: all four lanes must show the byte.</p>`,
+        real: `<p>SRAM macros expose exactly these byte write masks, and DRAM modules a data mask line per byte. A cache (chapter ${numOf('cache')}) that did not have them would have to read a line, modify it and write it back for every <code>sb</code>.</p>`,
       },
     },
     {
@@ -280,7 +281,7 @@ export const chTraps: Chapter = {
       'An interrupt is pending in mip while its source holds, and taken at the next instruction boundary only if enabled in mie and globally by mstatus.MIE.',
       'Priority: interrupts (external, then timer), then illegal instruction, ebreak, ecall, misaligned fetch, load, store. CSR unit, trap unit and system decoder: about 10 000 NANDs.',
       'The hardware saves only the PC and the cause: a handler saves every register it uses (mscratch gives it a register to swap with sp), nests only by saving mepc and mcause and setting MIE again, and an idle loop waits in <code>wfi</code>. Machine mode is the only mode here; with user mode, mstatus.MPP says where a trap came from and ecall\'s cause is 8 from U, 11 from M.',
-      'Polling spends cycles on looks and reacts at its next look; an interrupt spends a trap, a handler and an mret per event and reacts at the next instruction boundary. Measured here the crossing is at one event per 30 cycles with 6 instructions of work between polls.',
+      `Polling spends cycles on looks and reacts at its next look; an interrupt spends a trap, a handler and an mret per event and reacts at the next instruction boundary. Measured here the crossing is at one event per ${crossover(6)} cycles with 6 instructions of work between polls.`,
       'A bare interrupt line forgets a pulse that ends while MIE = 0; an interrupt controller holds a pending bit per source until it is claimed, offers the highest enabled one, and clears it on the claim. Vectored mtvec sends interrupt <em>n</em> to BASE + 4<em>n</em> with five ANDs and four ORs.',
     ],
     practise: ['y_csr', 'y_trap', 'y_irq', 'p_handler', 'y_ptrap', 'y_final'],    check: [
@@ -382,7 +383,7 @@ export const chTraps: Chapter = {
         the PC goes to <code>mtvec</code> through the <span data-show="trapmux">trap / mret multiplexer</span>, the address of the
         interrupted instruction is saved in <code>mepc</code>, the reason in <code>mcause</code> (both in the
         <span data-show="csr">CSR unit</span>), and interrupts are disabled
-        (MIE → MPIE, MIE = 0). The handler ends with <code>mret</code>, which jumps back to <code>mepc</code> and restores MIE.
+        (mstatus's global interrupt-enable bit MIE is saved in MPIE, then cleared). The handler ends with <code>mret</code>, which jumps back to <code>mepc</code> and restores MIE.
         mtvec's low two bits are its MODE: 0 <em>direct</em> sends every trap to the same address, 1 <em>vectored</em> sends interrupt <em>n</em>
         to BASE + 4<em>n</em> (exceptions still to BASE), saving the handler the dispatch on mcause. Here the two bits are wired to 0: direct only.</p>
         <p><code>ecall</code> traps on purpose: it is how a program calls the operating system. Here a six-instruction "OS" prints the
@@ -468,9 +469,8 @@ export const chTraps: Chapter = {
         undoes it all before <code>mret</code>. That is the foundation of every multitasking operating system's scheduler tick: save one
         program's registers, load another's.</p>
         <details class="deeper"><summary>Deeper: nested interrupts</summary>
-        <p>The hardware does not nest: there is one mepc and one mcause, and the trap cleared MIE. A handler that should itself be interruptible
-        (a slow one, under a more urgent device) saves mepc, mcause and mstatus on its stack, then sets MIE again; before returning it clears MIE
-        and restores them. Arm's NVIC does this stacking and the priority comparison in hardware; RISC-V's CLIC does the priority comparison and preemption, and software still saves mepc and mcause.</p></details>
+        <p>The hardware does not nest: there is one mepc and one mcause, and the trap cleared MIE. A handler that must be interruptible saves them
+        and sets MIE again; the step "Nested interrupts" does exactly that.</p></details>
         <p>The compare-and-interrupt arrangement is the same in every timer: a counter that always runs, a register the software sets to "wake me at this time", and a comparator. Because the handler sets the next compare value relative to the previous one, the ticks do not drift even if some handlers
         run late.</p>
         <div class="try">Let the clock run and watch the dots, mepc (where the loop was interrupted) and s1 (tick count).</div>`,

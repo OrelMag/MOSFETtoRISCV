@@ -43,7 +43,7 @@ export const chWidths: Chapter = {
     'explain why an expander is mostly wiring, and fetch a 32-bit instruction that straddles two words',
     'say what 64 bits cost block by block, why RV64 kept 32-bit arithmetic (the W instructions), and weigh each core in NANDs and clock period',
   ],
-  builds: ['cpu', 'python', 'cache', 'float'],
+  builds: ['cpu', 'python', 'fastadd', 'muldiv', 'cache', 'float'],
   recap: {
     keep: [
       'Most instructions are short in what they say: copy a register, load a small constant, add a small number, touch the stack. The C extension gives those a 16-bit form. On our programs: 68 % of the compiled Python samples\' instructions, 34 % fewer bytes; the hand-written benchmarks 15–31 % fewer.',
@@ -287,7 +287,7 @@ export const chWidths: Chapter = {
         </table>
         <p>The area is small (+${((100 * (K.c.nands - K.plain.nands)) / K.plain.nands).toFixed(1)} %), but the clock is not: every instruction now passes the
         increment, the swap and the expander before decode, +${K.c.period - K.plain.period} NAND delays (+${pct(K.c.period, K.plain.period)} %). The Timing panel
-        shows the path. On this machine, with a ROM that delivers a full window every cycle, C makes the program a quarter smaller and the computer a quarter
+        shows the path. On this machine, with a ROM that delivers a full window every cycle, C makes the program a quarter to a third smaller and the computer a quarter
         slower. It pays where bytes are what limits: an instruction cache that holds a third more of the program, a flash or a bus that delivers 16 bits at a
         time, or a chip whose ROM is most of its area. A pipeline also hides the depth: the expander becomes part of fetch or decode, a stage of its own.</p>
         <p>Next: the other direction, a 64-bit core from the same width-parametric parts.</p>`,
@@ -352,7 +352,7 @@ export const chWidths: Chapter = {
         derive: `<p>Why each grows as it does. A ripple adder passes the carry through every bit: ${C64('rca')!.depth![0]} → ${C64('rca')!.depth![1]} delays for n = 32 → 64. A prefix adder has
           log<sub>2</sub> n levels: ${Math.log2(32)} → ${Math.log2(64)} levels of cells, ${C64('ks')!.depth![0]} → ${C64('ks')!.depth![1]} delays with the input and output stages. A multiplier forms n × n partial-product
           bits: ${32 * 32} → ${64 * 64}, a factor 4 in the AND array and the adders that sum it, for ${ratio(C64('mul')!.nands[1], C64('mul')!.nands[0], 1)}× the NANDs in the measured tree. A restoring divider retires one quotient bit a
-          step: n steps, so ${C64('div')!.depth![0]} → ${C64('div')!.depth![1]} cycles.</p>`,
+          step: n + 2 cycles (the load, n steps, the result), so ${C64('div')!.depth![0]} → ${C64('div')!.depth![1]} cycles.</p>`,
         real: `<p>Wide cores keep the 64-bit multiplier but pipeline it (three cycles is common) and divide with a higher radix so that a divide takes far fewer than ${C64('div')!.depth![1]} cycles.
           Few designs use a ripple adder anywhere on the critical path; the prefix adder is the default and its extra level is invisible next to the multiplier's.</p>`,
         pitfall: `<p>"64-bit means twice as slow and twice as big." The gates of a bit-parallel block double and its delay does not change; only blocks that
@@ -372,7 +372,7 @@ export const chWidths: Chapter = {
       title: 'The W instructions',
       body: `
         <p>A program written for RV32 assembles for RV64 unchanged, and mostly runs the same. But not always: code that relies on
-        32-bit wrap-around now sees bits above bit 31. Our sort benchmark's random generator (xorshift32) shifts left by 13 and right by 17;
+        32-bit wrap-around now sees bits above bit 31. Our sort benchmark's random generator (xorshift32) shifts left by 13, right by 17 and left by 5;
         on 64-bit registers the bits shifted past bit 31 come back down, and the program sorts different numbers. Our CRC-32 shifts its register
         right, and on RV64 the ones of a sign-extended value walk into bit 31.</p>
         <p>RV64 therefore kept 32-bit arithmetic as instructions of their own, on two new opcodes: <code>addw</code>, <code>subw</code>,
@@ -444,7 +444,7 @@ export const chWidths: Chapter = {
             <tr><td>A divide</td><td class="num">34 cycles</td><td class="num">66 cycles</td></tr>
           </tbody>
         </table>
-        <p>×${(X.rv64im.nands / X.rv32im.nands).toFixed(2)} the gates, most of it in the multiplier (×${(X.mUnit[64] / X.mUnit[32]).toFixed(1)}) and in storage
+        <p>×${(X.rv64im.nands / X.rv32im.nands).toFixed(2)} the gates, the largest share in the multiplier (×${(X.mUnit[64] / X.mUnit[32]).toFixed(1)}) and in storage
         that simply doubles. The period grows by ${pct(X.rv64im.period, X.rv32im.period)} %. The Timing panel shows the critical path running through the
         multiplier, whose tree gained levels and whose final adder doubled; without M the core goes from ${X.rv32i.period} to ${X.rv64i.period} delays,
         because the adders and the shifter gained a level and a W instruction's result passes the W unit. The benchmarks compute on 32-bit values, so the RV64 core runs the same loops (the generator's shifts and CRC-32's

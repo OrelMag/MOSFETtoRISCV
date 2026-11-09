@@ -1,5 +1,9 @@
 import { groupDigits } from '../sim/numfmt';
-import { AND, cmosNand, cmosNor, INV_CMOS, INV_PSEUDO, NAND, NMOS_SWITCH, NOR, NOR_CMOS, NOT, OR, PMOS_SWITCH, rca, ringOsc, WEAK_DEMO, XOR } from '../lib';
+import { cmosNand, cmosNor, ringOsc } from '../lib/cmosgates';
+import { rca } from '../lib/combinational';
+import { AND, NOR, NOT, OR, XOR } from '../lib/gates';
+import { INV_PSEUDO, WEAK_DEMO } from '../lib/switchparts';
+import { INV_CMOS, NAND, NMOS_SWITCH, NOR_CMOS, PMOS_SWITCH } from '../lib/transistors';
 import { metrics, MOBILITY_RATIO, strength, vout } from '../phys/inverter';
 import { chainDelay, FO4_TAU, P_INV, PS_PER_TAU } from '../phys/sizing';
 import { and4Tree, and4Wide, gNand, gNor, pGate } from '../phys/effort';
@@ -45,7 +49,7 @@ export const chMap: Chapter = {
         lists what its chapter builds with; a click opens the chapter.</div>`,
       more: {
         derive: `<p>One number shows why levels are needed. This site's 4-bit adder is ${stats(rca(4)).transistors} transistors; a 32-bit one is ${stats(rca(32)).transistors}, and each
-          doubling of width doubles the count. A processor is ${stats(rca(32)).transistors} transistors times thousands of such blocks: no one can hold that in mind transistor by
+          doubling of width doubles the count. A processor holds billions of transistors, millions of blocks the size of this adder: no one can hold that in mind transistor by
           transistor, but the same adder is "a + b" at the level above, and "a + b" has a one-line description.</p>`,
         pitfall: `<p>Reading "transparent box" as "every level is simulated in full". It is not: a simulation can cut at any level (a ROM as a lookup, an adder as arithmetic) and drop to the
           transistors only where you look. What stays true is that the cut is optional: the lower level exists, was used to build the upper one, and can be opened.</p>`,
@@ -296,7 +300,7 @@ export const chMosfet: Chapter = {
           for C·V² = ${loadOf(2)} fF · ${VDD}² = ${(loadOf(2) * VDD * VDD).toFixed(0)} fJ; half is dissipated in each network.</p>`,
         numbers: `<table class="mini"><tr><th>width</th><th>fan-out</th><th>load</th><th>delay to VDD / 2</th><th>energy per swing</th></tr>${[[1, 2], [1, 4], [2, 4], [4, 4]].map(([w, f]) => `<tr><td>${w}×</td><td>${f}</td><td>${loadOf(f)} fF</td><td>${discharge(w, loadOf(f)).t50.toFixed(0)} ps</td><td>${(loadOf(f) * VDD * VDD).toFixed(0)} fJ</td></tr>`).join('')}</table>`,
         pitfall: `<p>Sizing a transistor up to speed up a stage without counting what it does to the stage before. The wider device doubles its current and also doubles its own gate load, which the driving stage now charges: a
-          bigger load for the previous gate costs the delay you saved. Past the point where its own load dominates, widening only costs energy; chains of growing sizes (logical effort, which the Timing panel's Load setting uses) are how this is balanced.</p>`,
+          bigger load for the previous gate costs the delay you saved. Past the point where its own load dominates, widening only costs energy; chains of growing sizes (logical effort: chapters 2 and 3; the Timing panel's Load setting uses it) are how this is balanced.</p>`,
       },
       widget: () => mosCostWidget(),
       challenge: {
@@ -529,7 +533,7 @@ export const chInverter: Chapter = {
         and V<sub>IH</sub> = ${VTC_M.vih.toFixed(2)} V, where the outputs are V<sub>OH</sub> = ${VTC_M.voh.toFixed(2)} V and V<sub>OL</sub> = ${VTC_M.vol.toFixed(2)} V. So NM<sub>L</sub> = V<sub>IL</sub> − V<sub>OL</sub> = ${VTC_M.nmL.toFixed(2)} V,
         ${((100 * VTC_M.nmL) / VDD).toFixed(0)}% of the ${VDD} V supply, and the same on the high side. Make the PMOS narrower and one margin grows at the other's expense.</p>
         <p>This is what <em>restoring</em> means in volts. Between V<sub>IL</sub> and V<sub>IH</sub> the gain reaches ${VTC_M.gain.toFixed(0)} here (a simple model; real inverters sit at 5 to 20), and outside it the slope is below 1. A 0 that arrives at 0.45 V,
-        a quarter of the swing too high, leaves as ${vout(0.45, 1).toFixed(2)} V; the next gate sees that and outputs ${vout(vout(0.45, 1), 1).toFixed(2)} V. The error is gone after two stages. The shaded band is what the 0 / 1 / X simulator calls X: an input that
+        a quarter of the swing too high, leaves as ${vout(0.45, 1).toFixed(2)} V; the next gate sees that and outputs ${vout(vout(0.45, 1), 1).toFixed(2)} V. One stage already restores a full level, and a second is as clean. The shaded band is what the 0 / 1 / X simulator calls X: an input that
         lands there has no defined output.</p>
         <p>The price is in the middle. At V<sub>M</sub> both devices are saturated and a <strong>short-circuit current</strong> of ${VTC_SC.toFixed(0)} µA flows from VDD to ground. It lasts only while the input crosses the band, which is why slow edges burn power.</p>
         <div class="try">Set Vin to V<sub>M</sub> and read both regions, then make Wp / Wn 1 and watch the shaded band slide.</div>`,
@@ -611,7 +615,7 @@ export const chInverter: Chapter = {
         pull-up, n + 1 devices instead of 2n, which is why wide NORs (the row lines of a stored table) and open-drain buses still
         pull up.</p>
         <div class="try">Toggle <code>a</code> and watch the NMOS override the pull-up. The <span data-ahead="truthtable">truth table (the output listed for every input combination)</span> is the
-        CMOS inverter's: same function, no device saved at one input, none of the standby savings.</div>`,
+        CMOS inverter's: same function and the same two devices, none of the standby savings.</div>`,
       scene: () => ({ root: INV_PSEUDO, inputs: { a: 1 } }),
       tour: {
         beats: [
@@ -631,7 +635,7 @@ export const chInverter: Chapter = {
           <tr><th>pseudo-NMOS devices</th>${[2, 3, 4, 8].map((n) => `<td>${n + 1}</td>`).join('')}</tr></table>`,
         pitfall: `<p>Reading "n + 1 devices" as "half the area". The pull-up must be weak, so it is a long, narrow device, and the NMOS pull-downs must be wide enough to win the ratio; the count shrinks, the area does not shrink as much,
           and the standing current is paid whenever the output is low. A wide NOR with most outputs low (a ROM row at rest) burns the most.</p>`,
-        real: `<p>NMOS-only chips (the 6502 of Appendix A) were all pseudo-NMOS: depletion-mode loads as the pull-up, the only kind of pull-up their process made. CMOS replaced them because the standing current of
+        real: `<p>NMOS-only chips (the 6502 of Appendix A) used the same ratioed idea: depletion-mode loads as the pull-up, the only kind of pull-up their process made. CMOS replaced them because the standing current of
           a chip with thousands of gates in the low state became the chip's heat budget.</p>`,
       },
       challenge: {
@@ -953,7 +957,7 @@ export const chNand: Chapter = {
           <tr><td>CMOS</td><td>4 transistors</td><td>${fmtTime(TECH.cmos.step)}</td><td>1</td><td>on switching only</td></tr>
           <tr><td>Tubes</td><td>½ 6SN7 + 6AL5</td><td>${fmtTime(TECH.tube.step)}</td><td>${groupDigits(Math.round(TECH.tube.step / TECH.cmos.step))}</td><td>${TUBE_BRICK_POWER.toFixed(2)} W</td></tr>
           <tr><td>Relays</td><td>1 coil, ${RELAY_CONTACTS} poles</td><td>${fmtTime(TECH.relay.step)}</td><td>${groupDigits(Math.round(TECH.relay.step / TECH.cmos.step))}</td><td>${RELAY_POWER.toFixed(2)} W</td></tr></table>`,
-        pitfall: `<p>Comparing step counts across technologies. A relay adder wins on steps because its carry is a contact (P1), and loses on time by the ratio of the steps; the NAND price, which assumes none of those tricks,
+        pitfall: `<p>Comparing step counts across technologies. A relay adder takes far fewer steps than the same adder through the NAND brick, because its carry is a contact (P1), yet each relay step lasts some 10⁸ CMOS steps; the NAND price, which assumes none of those tricks,
           shows what each technology costs for the same logic. A native part and a NAND-mapped part are different questions, and the widget's Native view is the first.</p>`,
         real: `<p>Switching from relays to tubes to transistors cut the step by more than ${Math.floor(Math.log10(TECH.relay.step / TECH.cmos.step))} orders of magnitude, from the relay (${fmtTime(TECH.relay.step)}) to CMOS (${fmtTime(TECH.cmos.step)}), and area per gate by far more.
           No technology got there by one idea: each removed a limit (moving metal, a hot filament, the size of a switch) the last one had.</p>`,

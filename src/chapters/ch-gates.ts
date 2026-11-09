@@ -1,6 +1,9 @@
 import { groupDigits } from '../sim/numfmt';
 import type { ComponentDef } from '../sim/types';
-import { AND, EXTEND4_8, MUX2, NAND, NEGATE4, NOR, NOT, OR, SHIFTS8, XNOR, XOR, equal } from '../lib';
+import { equal } from '../lib/combinational';
+import { AND, MUX2, NOR, NOT, OR, XNOR, XOR } from '../lib/gates';
+import { EXTEND4_8, NEGATE4, SHIFTS8 } from '../lib/numbers';
+import { NAND } from '../lib/transistors';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { numberWidget } from '../widgets/numbers';
@@ -157,8 +160,8 @@ export const chGates: Chapter = {
         real: `<p>In CMOS an OR is a NOR followed by an inverter (6 transistors, against ${tr(OR)} here). The NOR is the slower of the two inverting gates: its
           PMOS transistors sit in series, and a PMOS conducts less current than an NMOS of the same size. That is one more reason libraries are
           NAND-heavy.</p>`,
-        pitfall: `<p>Forgetting the inverters: a plain NAND of a and b agrees with OR only on the two mixed rows. It gives 1 at a = b = 0 and 0 at a = b = 1, the opposite of OR, where
-          NAND gives 1 and OR gives 0. Truth tables are checked on every row for exactly this reason.</p>`,
+        pitfall: `<p>Forgetting the inverters: a plain NAND of a and b agrees with OR only on the two mixed rows. It gives 1 at a = b = 0 and 0 at a = b = 1, the opposite of OR on both
+          rows. Truth tables are checked on every row for exactly this reason.</p>`,
       },
       challenge: {
         kind: 'quiz', question: 'Which expression equals NOT(a AND b)?',
@@ -191,7 +194,7 @@ export const chGates: Chapter = {
       title: 'XOR: are they different?',
       body: `
         <p><strong>Exclusive OR</strong> outputs 1 when its inputs differ. It is the heart of binary addition
-        (1 + 1 = 0, carry 1) and of comparison: the sum bit of a column is a XOR b, and a XOR b is 0 exactly when two bits agree.</p>
+        (1 + 1 = 0, carry 1) and of comparison: the sum bit of a column is a XOR b XOR the carry in, and a XOR b is 0 exactly when two bits agree.</p>
         <p>The classic circuit uses ${nd(XOR)} NANDs and shares the first one cleverly:
         <span data-show="g1"><code>m = NAND(a, b)</code></span> feeds <span data-show="g2 g3">both middle gates</span>, which each mix m with one input;
         <span data-show="g4">the last NAND</span> combines them. The longest path (through m) is ${logicDepth(XOR)} delays; a direct
@@ -211,7 +214,7 @@ export const chGates: Chapter = {
       },
       more: {
         derive: `<p>With m = ¬(ab): g2 = ¬(a·m) = ¬(a·(¬a + ¬b)) = ¬(a·¬b), because a·¬a = 0. In the same way g3 = ¬(b·¬a). Then y = ¬(g2·g3) = ¬g2 + ¬g3 =
-          a·¬b + ¬a·b, which is a ⊕ b. Sharing m saves the two inverters a direct sum of products would use: ${nd(XOR)} NANDs against 5.</p>`,
+          a·¬b + ¬a·b, which is a ⊕ b. The shared m does the work of the two inverters a direct sum of products would use: ${nd(XOR)} NANDs against 5.</p>`,
         real: `<p>Standard-cell XORs are not made of four NANDs: they are 10 to 12 transistors in static CMOS, or 6 with transmission gates. XOR is an expensive gate in
           every technology, which is why adders (one XOR per bit for the sum) and parity trees are costly, and why designers avoid XOR where a simpler gate will do.</p>`,
         pitfall: `<p>Reading XOR as "or": the OR gate of the previous steps gives 1 at a = b = 1, XOR gives 0. For more than two inputs the XOR
@@ -236,7 +239,7 @@ export const chGates: Chapter = {
         the results together, and you have an <span data-ahead="comparator">equality comparator (a circuit whose output is 1 when two words are equal)</span> (the processor's <code>beq</code>
         instruction will need one).</p>
         <p>The price of that comparator grows with the width: for 32 bits, 32 XNORs and a tree that ANDs 32 results, ${nd(equal(32))} NANDs in all and
-        ${logicDepth(equal(32))} delays deep. Equality is cheap compared with <em>magnitude</em> comparison: each field's answer is one bit, not "greater" and "equal" with a rule for which bit decides.</p>`,
+        ${logicDepth(equal(32))} delays deep. Equality is cheap compared with <em>magnitude</em> comparison: each bit pair is judged on its own and the verdicts are ANDed, whereas "greater than" needs a rule that the highest differing bit decides.</p>`,
       scene: () => ({ root: XNOR, inputs: { a: 1, b: 1 } }),
       more: {
         derive: `<p>a XNOR b = ¬(a ⊕ b) = a·b + ¬a·¬b: both 1 or both 0. A word compare is x = y exactly when every bit pair agrees:
@@ -586,7 +589,7 @@ export const chBinary: Chapter = {
         <p>A binary point can sit anywhere: the bits to its right weigh ½, ¼, ⅛ … The hardware does not change. A number with f
         fraction bits is an integer that means x / 2ᶠ. Addition is the same adder, since the points line up. A product has 2f fraction bits,
         so it is shifted right by f, a constant shift as in the step before. This is <strong>fixed point</strong>, written Qm.f: m integer
-        bits, f fraction bits.</p>
+        bits, f fraction bits (unsigned here; a signed Qm.f spends one of the m on the sign, so signed Q4.4 runs from −8 to 7.9375).</p>
         <p>The price is a fixed step and a fixed range. Q4.4 counts in sixteenths up to 15.9375, and every value in between rounds to the
         nearest step. Some decimal fractions never fit exactly. 0.1 is 1/10, and 10 has a factor of 5 that no power of two contains, so its
         binary expansion repeats for ever, as 1/3 does in decimal. More bits shrink the error but never remove it.</p>

@@ -183,7 +183,7 @@ export const chSilicon: Chapter = {
         <p>The layout is cut into masks, and the wafer goes through the fab mask by mask: deposit, pattern with light, etch or implant, repeat. The masks are not the layout layers one to one. For this cell, in SkyWater's names: <strong>diff</strong> (the active area, whose complement is etched into oxide-filled trenches), <strong>nwell</strong>, <strong>poly</strong>, the implant windows <strong>nsdm</strong> and <strong>psdm</strong> (wider than the diffusion), contacts <strong>licon1</strong> and <strong>mcon</strong>, local interconnect <strong>li1</strong> and <strong>met1</strong>: about nine.
         Lithography sets the smallest feature. Today's leading processes print with 13.5 nm extreme-ultraviolet light.</p>
         <div class="try">Step to the n+ implant, then shift the poly mask: the source and drain follow the gate. Tick <em>implant before the gate</em> and the same shift leaves a channel uncovered on one side and the gate over the drain on the other.</div>
-        <p>Most of the cost of a chip is in these repetitions. A whole modern process has dozens of masks, each one a pass through coat, expose, develop, etch or implant and clean; a wafer spends weeks in
+        <p>Most of the cost of a chip is in these repetitions. A whole modern process has dozens of masks, each one a pass through coat, expose, develop, etch or implant and clean; a wafer spends weeks to months in
         the fab, and a single defect on any layer can kill the die it lands on. That is what the yield step prices.</p>`,
       widget: () => withModel(fabWidget(), masks3d()),
       more: {
@@ -366,7 +366,7 @@ export const chSilicon: Chapter = {
         the four transistors of a NAND.</p>
         <p>The journey goes on with the same bricks arranged for throughput: <a href="#/c/lanes/0">chapters 29–34</a> build a GPU, from lanes sharing
         one instruction stream to a rasterizer drawing into a frame buffer. <a href="#/c/dram/0">Chapters 35–38</a> go below the caches: a DRAM
-        cell by cell, its controller, flash, and a bus with <span data-ahead="dma">DMA (a device that copies memory blocks without the CPU)</span> that boots a computer from flash. The appendices rebuild a real chip, the
+        cell by cell, its controller, flash, and a bus with <span data-ahead="dma">DMA (a device that copies memory blocks without the CPU)</span> that boots a computer from flash. Chapters <a href="#/c/telegraph/0">${numOf('telegraph')}</a>–<a href="#/c/datacentre/0">${numOf('datacentre')}</a> take the machine out of the box (wires and clocks, UARTs, modems, error codes, Ethernet, networks, radio) and chapters <a href="#/c/fixed/0">${numOf('fixed')}</a>–<a href="#/c/sdr/0">${numOf('sdr')}</a> process the signals in fixed-point arithmetic, down to a DSP core. The appendices rebuild a real chip, the
         <a href="#/c/appendix-6502/0">6502</a>, in NMOS transistors, and run <a href="#/c/appendix-doom/0">Doom</a> on the RV32IM system, a window of it
         on the gates.</p>
         <p>Or go further on your own: build it for real on an FPGA from the Verilog tabs; read Harris &amp; Harris, Patterson &amp; Hennessy, or Weste &amp; Harris for CMOS VLSI; or tape out
