@@ -40,6 +40,10 @@ export interface VmLockResult {
   /** Page faults and access faults seen by the model, by cause. */
   causes: Record<number, number>;
   walks: number;
+  /** Interrupts taken, by the level they interrupted. */
+  irqs: number[];
+  /** Instructions that retired without trapping, by mnemonic and level. */
+  ops: Record<string, number[]>;
   iss: ISS;
   hw: Sim;
   design: FlatDesign;
@@ -137,7 +141,7 @@ export async function lockstep(words: number[], o: VmLockOptions = {}): Promise<
   const iss = new ISS(words, { system: true, vm: true, dmemWords: 2 ** dmemK, imemWords: 2 ** imemK });
   const root = design.root;
   const retirePort = root.ports.retire;
-  const res: VmLockResult = { ok: true, why: '', cycles: 0, steps: 0, stalls: 0, byPriv: [0, 0, 0, 0], causes: {}, walks: 0, iss, hw: sim, design, halted: false };
+  const res: VmLockResult = { ok: true, why: '', cycles: 0, steps: 0, stalls: 0, byPriv: [0, 0, 0, 0], causes: {}, walks: 0, irqs: [0, 0, 0, 0], ops: {}, iss, hw: sim, design, halted: false };
   let after = 0;
   for (let c = 0; c < max; c++) {
     if (o.pause && (c & 63) === 63) await o.pause();
@@ -154,6 +158,8 @@ export async function lockstep(words: number[], o: VmLockOptions = {}): Promise<
     const info: StepInfo = iss.step();
     res.steps++;
     if (info.priv !== undefined) res.byPriv[info.priv]++;
+    if (info.trap?.interrupt && info.priv !== undefined) res.irqs[info.priv]++;
+    if (!info.trap && info.priv !== undefined) (res.ops[info.text.split(' ')[0]] ??= [0, 0, 0, 0])[info.priv]++;
     if (info.trap && !info.trap.interrupt) res.causes[info.trap.cause] = (res.causes[info.trap.cause] ?? 0) + 1;
     res.walks += info.walks?.filter((w) => w.ptes.length).length ?? 0;
     const why = diffArch(issArch(iss), hwArch(sim, root));
