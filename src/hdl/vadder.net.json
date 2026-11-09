@@ -1,0 +1,525 @@
+{
+ "module": "add4",
+ "ports": [
+  {
+   "name": "a",
+   "dir": "in",
+   "nets": [
+    "a0",
+    "a1",
+    "a2",
+    "a3"
+   ]
+  },
+  {
+   "name": "b",
+   "dir": "in",
+   "nets": [
+    "b0",
+    "b1",
+    "b2",
+    "b3"
+   ]
+  },
+  {
+   "name": "ci",
+   "dir": "in",
+   "nets": [
+    "ci"
+   ]
+  },
+  {
+   "name": "s",
+   "dir": "out",
+   "nets": [
+    "g35",
+    "g42",
+    "g47",
+    "g51"
+   ]
+  },
+  {
+   "name": "co",
+   "dir": "out",
+   "nets": [
+    "g49"
+   ]
+  }
+ ],
+ "cells": [
+  {
+   "name": "g0",
+   "type": "NOT",
+   "in": [
+    "a2"
+   ]
+  },
+  {
+   "name": "g1",
+   "type": "NOT",
+   "in": [
+    "b2"
+   ]
+  },
+  {
+   "name": "g2",
+   "type": "NOT",
+   "in": [
+    "a1"
+   ]
+  },
+  {
+   "name": "g3",
+   "type": "NOT",
+   "in": [
+    "b1"
+   ]
+  },
+  {
+   "name": "g4",
+   "type": "NOT",
+   "in": [
+    "a0"
+   ]
+  },
+  {
+   "name": "g5",
+   "type": "NOT",
+   "in": [
+    "b0"
+   ]
+  },
+  {
+   "name": "g6",
+   "type": "NOT",
+   "in": [
+    "ci"
+   ]
+  },
+  {
+   "name": "g7",
+   "type": "NOT",
+   "in": [
+    "a3"
+   ]
+  },
+  {
+   "name": "g8",
+   "type": "NOT",
+   "in": [
+    "b3"
+   ]
+  },
+  {
+   "name": "g9",
+   "type": "NAND",
+   "in": [
+    "a2",
+    "b2"
+   ]
+  },
+  {
+   "name": "g10",
+   "type": "NAND",
+   "in": [
+    "a1",
+    "b1"
+   ]
+  },
+  {
+   "name": "g11",
+   "type": "NAND",
+   "in": [
+    "a0",
+    "b0"
+   ]
+  },
+  {
+   "name": "g12",
+   "type": "NAND",
+   "in": [
+    "a3",
+    "b3"
+   ]
+  },
+  {
+   "name": "g13",
+   "type": "NOT",
+   "in": [
+    "g9"
+   ]
+  },
+  {
+   "name": "g14",
+   "type": "NAND",
+   "in": [
+    "g0",
+    "g1"
+   ]
+  },
+  {
+   "name": "g15",
+   "type": "NOT",
+   "in": [
+    "g10"
+   ]
+  },
+  {
+   "name": "g16",
+   "type": "NOT",
+   "in": [
+    "g11"
+   ]
+  },
+  {
+   "name": "g17",
+   "type": "NAND",
+   "in": [
+    "g4",
+    "g5"
+   ]
+  },
+  {
+   "name": "g18",
+   "type": "NAND",
+   "in": [
+    "g2",
+    "g3"
+   ]
+  },
+  {
+   "name": "g19",
+   "type": "NOT",
+   "in": [
+    "g12"
+   ]
+  },
+  {
+   "name": "g20",
+   "type": "NAND",
+   "in": [
+    "g7",
+    "g8"
+   ]
+  },
+  {
+   "name": "g21",
+   "type": "NAND",
+   "in": [
+    "g9",
+    "g14"
+   ]
+  },
+  {
+   "name": "g22",
+   "type": "NAND",
+   "in": [
+    "g11",
+    "g17"
+   ]
+  },
+  {
+   "name": "g23",
+   "type": "NAND",
+   "in": [
+    "g10",
+    "g18"
+   ]
+  },
+  {
+   "name": "g24",
+   "type": "NAND",
+   "in": [
+    "g12",
+    "g20"
+   ]
+  },
+  {
+   "name": "g25",
+   "type": "NOT",
+   "in": [
+    "g21"
+   ]
+  },
+  {
+   "name": "g26",
+   "type": "NOT",
+   "in": [
+    "g22"
+   ]
+  },
+  {
+   "name": "g27",
+   "type": "NOT",
+   "in": [
+    "g23"
+   ]
+  },
+  {
+   "name": "g28",
+   "type": "NAND",
+   "in": [
+    "g6",
+    "g22"
+   ]
+  },
+  {
+   "name": "g29",
+   "type": "NOT",
+   "in": [
+    "g24"
+   ]
+  },
+  {
+   "name": "g30",
+   "type": "NAND",
+   "in": [
+    "ci",
+    "g26"
+   ]
+  },
+  {
+   "name": "g31",
+   "type": "NAND",
+   "in": [
+    "g11",
+    "g30"
+   ]
+  },
+  {
+   "name": "g32",
+   "type": "NAND",
+   "in": [
+    "g30",
+    "g28"
+   ]
+  },
+  {
+   "name": "g33",
+   "type": "NOT",
+   "in": [
+    "g31"
+   ]
+  },
+  {
+   "name": "g34",
+   "type": "NAND",
+   "in": [
+    "g31",
+    "g27"
+   ]
+  },
+  {
+   "name": "g35",
+   "type": "NOT",
+   "in": [
+    "g32"
+   ]
+  },
+  {
+   "name": "g36",
+   "type": "NAND",
+   "in": [
+    "g10",
+    "g34"
+   ]
+  },
+  {
+   "name": "g37",
+   "type": "NAND",
+   "in": [
+    "g33",
+    "g23"
+   ]
+  },
+  {
+   "name": "g38",
+   "type": "NOT",
+   "in": [
+    "g36"
+   ]
+  },
+  {
+   "name": "g39",
+   "type": "NAND",
+   "in": [
+    "g25",
+    "g36"
+   ]
+  },
+  {
+   "name": "g40",
+   "type": "NAND",
+   "in": [
+    "g34",
+    "g37"
+   ]
+  },
+  {
+   "name": "g41",
+   "type": "NAND",
+   "in": [
+    "g21",
+    "g38"
+   ]
+  },
+  {
+   "name": "g42",
+   "type": "NOT",
+   "in": [
+    "g40"
+   ]
+  },
+  {
+   "name": "g43",
+   "type": "NAND",
+   "in": [
+    "g9",
+    "g39"
+   ]
+  },
+  {
+   "name": "g44",
+   "type": "NAND",
+   "in": [
+    "g39",
+    "g41"
+   ]
+  },
+  {
+   "name": "g45",
+   "type": "NOT",
+   "in": [
+    "g43"
+   ]
+  },
+  {
+   "name": "g46",
+   "type": "NAND",
+   "in": [
+    "g29",
+    "g43"
+   ]
+  },
+  {
+   "name": "g47",
+   "type": "NOT",
+   "in": [
+    "g44"
+   ]
+  },
+  {
+   "name": "g48",
+   "type": "NAND",
+   "in": [
+    "g24",
+    "g45"
+   ]
+  },
+  {
+   "name": "g49",
+   "type": "NAND",
+   "in": [
+    "g12",
+    "g46"
+   ]
+  },
+  {
+   "name": "g50",
+   "type": "NAND",
+   "in": [
+    "g46",
+    "g48"
+   ]
+  },
+  {
+   "name": "g51",
+   "type": "NOT",
+   "in": [
+    "g50"
+   ]
+  }
+ ],
+ "kept": [
+  {
+   "name": "c1",
+   "net": "g31",
+   "line": 10
+  },
+  {
+   "name": "c2",
+   "net": "g36",
+   "line": 11
+  },
+  {
+   "name": "c3",
+   "net": "g43",
+   "line": 12
+  },
+  {
+   "name": "c4",
+   "net": "g49",
+   "line": 13
+  },
+  {
+   "name": "g[0]",
+   "net": "g16",
+   "line": 9
+  },
+  {
+   "name": "g[1]",
+   "net": "g15",
+   "line": 9
+  },
+  {
+   "name": "g[2]",
+   "net": "g13",
+   "line": 9
+  },
+  {
+   "name": "g[3]",
+   "net": "g19",
+   "line": 9
+  },
+  {
+   "name": "p[0]",
+   "net": "g26",
+   "line": 8
+  },
+  {
+   "name": "p[1]",
+   "net": "g27",
+   "line": 8
+  },
+  {
+   "name": "p[2]",
+   "net": "g25",
+   "line": 8
+  },
+  {
+   "name": "p[3]",
+   "net": "g29",
+   "line": 8
+  },
+  {
+   "name": "sum[0]",
+   "net": "g35",
+   "line": 14
+  },
+  {
+   "name": "sum[1]",
+   "net": "g42",
+   "line": 14
+  },
+  {
+   "name": "sum[2]",
+   "net": "g47",
+   "line": 14
+  },
+  {
+   "name": "sum[3]",
+   "net": "g51",
+   "line": 14
+  }
+ ]
+}

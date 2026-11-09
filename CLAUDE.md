@@ -207,8 +207,8 @@ src/sim/       simulation core (no DOM)
                  timingGraph: the graph it walks (boundaries, drivers, delays, arrival on demand), shared with slack.ts
   slack.ts       slackOf(design, model): every leaf's and flip-flop's longest path through it (arrival + the longest path on
                  to a capture), input → output without flip-flops; slackAt(s, path): slack per instance of a drill level;
-                 slackBand / SLACK_BANDS, slackHeat (band + tooltip): the Timing panels' heatmap (view/delayui.ts heatToggle /
-                 heatLegend; Stage.heat / SchematicView.heat set data-slack on instances, app.css --slack-0…4)
+                 slackBand / SLACK_BANDS, slackHeat (band + tooltip): the Slack overlay (view/overlays.ts; the Timing panels'
+                 heatToggle is a shortcut to it)
   netcap.ts      FF_INPUT / FF_DRIVER / FF_WIRE, netCaps, driverOf (shared by power.ts and delay.ts; power re-exports them)
   delay.ts       load-dependent delay (Phase 19): logical effort per NAND (d = p + g·h), DelayModel 'unit' | 'load'
                  (buffer chain where it pays) | 'drawn' (none); netLoads (outputs load one input), inputArrivals (inputs
@@ -580,7 +580,14 @@ src/riscv/     cycletime.ts (chapter 14: the single-cycle CPU on GateSim over ra
                tests/ooosnap.test.ts: equal to the model every cycle), randprog32.ts (seeded random RV32 programs per ISA; { custom }: about a fifth of the units are the rows, addresses kept in the window through BASE and a masked offset, jumps one instruction on or to a label), randprog64.ts (RV64I(M): W ops, ld / sd / lwu, 64-bit constants),
                benchprograms.ts (the benchmark set: fib, sort, matmul (+ mul), CRC-32, a float kernel; each with
                its result computed in TypeScript)
-src/view/      memfind.ts (DOM-free: findMemories(sim): every RAM / register file at any depth, once per build: w<i> registers,
+src/view/      overlays.ts (DOM-free, the overlay bar's quantities per level: slackOverlay, activityOverlay (GateSim toggles since the overlay came
+               on, per clock or input change), loadOverlay (fan-out, bands around BUFFER_FANOUT), unknownOverlay (X wires; sources: an X out
+               with no X in or storage of its own), overlayRefusal (cycle engine: no Activity; switch level: Load and Unknown; NMOS: none);
+               marks with a band 0…4 or x and a text value, a legend with units; tests/overlays.test.ts), overlaybar.ts (OverlayBar: four
+               buttons, a select on a phone; nextOverlay; overlayLegend). SchematicView.overlay sets data-ov on parts and wires (app.css
+               --ov-0…4, the rest faded); Stage.setOverlay / overlayKind / onOverlay (settings.overlay: where O starts, never on at load;
+               placeLegend: the first free corner, then compact, then its title line; smoke OVERLAY_DRIVE);
+               memfind.ts (DOM-free: findMemories(sim): every RAM / register file at any depth, once per build: w<i> registers,
                a large RAM's leaf state, byte lanes b0–b3, or same-kind registers under pins naming a write port (wa|addr + we +
                wd|din|d + clk: rv16_rf, a learner's RAM / register file) placed by probeWrites (each address written on a private
                copy; a decoder on the wrong register becomes a problem); memMarks: read / next-write rows from the memory's own
@@ -811,7 +818,13 @@ src/lang/      chapter 15's Python subset → RV32I (DOM-free): ast.ts (the tree
                compiles and interprets them, also for RV32IM, PY_FUZZ=n for a sweep). widgets/python.ts pyScene({ pipeline, m,
                switch }): the pipelined CPU with the Python panel (cause bars per line, totals, the RV32I | RV32IM switch and the
                M unit's NAND cost; `switch: false` hides both: chapter 17 uses it, chapter 21 shows them); the two chapter steps
-               are the last of ch-pipe.ts and ch-muldiv.ts (their numbers: tests/pypipe.test.ts; scripts/pypipe-table.ts)
+               are the last of ch-pipe.ts and ch-muldiv.ts (their numbers: tests/pypipe.test.ts; scripts/pypipe-table.ts).
+               Strings (opt-in: a literal, chr() or ord() runs types.ts, and a program without one compiles to identical words, asm and layout): a str is the address of a
+               length-prefixed block (a word, then the bytes); literals are stored by the prologue after the lists, then a fixed HEAP_BYTES (96) bump heap at tp (layout.heap / .strings
+               exist only then), the output after it. + s[i] (a str of its own, 8 bytes; ord(s[i]) reads the byte alone; the CPU has word access only, so bytes are shifted and masked) chr() make blocks (strBlock); the rt.concat / streq / sidx / ord / chr /
+               pstr routines use only a0–a7 (a function using them is not a leaf). A full heap, an index out of range, ord of a longer str, chr past 255: the machine jumps to halt, the interpreter
+               raises (compare outputs up to there). isStr / strCmp marks on the tree are the type pass's result; print puts a str's characters one word each (RunResult.strOut says which
+               words, the panel's outputLines); randomStrProgram (its own stream), PY_STRING_PROGRAMS (apart from PY_PROGRAMS: rvc / ooolab iterate those), tests/pystrings.test.ts; chapter 15's last two steps
 src/isa4/      the 4-bit CPU's ISA: isa4.ts (the 4004's opcode map in 16-bit words: decode4 / disasm4 / fields4; words the
                table does not name run as NOP), asm4.ts, iss4.ts (golden model; halts on a JUN to itself), programs4.ts
 src/crypto/     enigma.ts: the naval Enigma M4 (DOM-free): wirings, notches, pawl stepping (nextMoves: the double step), trace (the current's
@@ -1054,6 +1067,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  cut at branch points; distance from the driver, sink or junction at the far end), for flowing bits
   probes.ts      ProbeTarget (wires / pin / pointer name) → flat nets of each new build (resolveProbe)
   sta.ts         chipTiming: static timing of a chip, critical path mapped to its parts / wires / pins
+  overlayui.ts   plugin: the overlay bar at the run row's end (view/overlaybar.ts), O / Shift O, the legend bottom left; marks on
+                 parts by id and on wires / pointers through the compiled net maps after every repaint; Activity sets DualSim's
+                 preferFast off while on; analysis.ts's heat toggle calls setEditorOverlay
   lint.ts        lintChip: two nets drawn on one line, pointers without a twin, inputs left open (openInputs),
                  parts driving nothing that reaches an output (deadParts)
   cpu.ts         ChipDoc.cpu (rom, pc / retire as NetRef: pin / pointer / wire / part port, regs, fregs,
@@ -1310,10 +1326,16 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  act 0: ACTS is in map order, so look acts up by number: actName / actTitle)
   graph.ts       ancestors, topo, ruleFor(id) (NAND + unlocks of the requirements' closure: fixed per level),
                  statusOf (locked / available / started / solved / skipped; Unlock all), nextAvailable
-  bughunts.ts    bug hunts (withBugHunts: placed after the level each hangs off, optional): a fault planted in that level's
+  bughunts.ts    bug hunts (withBugHunts, optional, FIX IT; every debugging level sits in the Debugging act DEBUG_ACT = 14, rows by
+                 subject in layout.ts ACT_ROWS with flow: true, each requiring the level it breaks): a fault planted in that level's
                  reference netlist (move / swap / tie; `open`: a library block drawn as a chip of its own for a fault inside it),
                  drawn by docFromDef: BuildChallenge.start (the faulty chips), answer, baseline (edits); CampaignNode.bug
                  (fault, kind, lesson, marks) and withhold (LibRule.except); b_timing: a right block graded on period
+  breakit.ts     break-it levels (FIND IT, docs/PLAN-ONI.md D2): the earlier level's reference answer drawn right, a fault planted in it
+                 (BuildChallenge.planted: a part's port stuck at 0 / 1, ComponentDef.planted: flatten applies it inside any bench; Check runs
+                 with it and never passes); the learner accuses with the fault brush (B), right when challenges.ts symptomsDiffer finds
+                 every output of every case the same (the CPU bench: the same net); NodeProgress.wrong, par { wrong: 0 }: a star each;
+                 on the canvas EditorSim.setHidden, Editor.bodyLock (challengeui.ts); tests/breakit.test.ts
   levels.ts      levelChallenge(node): the base BuildChallenge with the campaign rule and par, id cp_<node>,
                  chip u_ch_cp_<node>; nodeOfChip; startCandidates / startFrom (a core level begun as a copy of an
                  earlier core level's chip, plus the new pins)

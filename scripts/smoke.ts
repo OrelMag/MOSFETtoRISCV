@@ -445,6 +445,43 @@ const GALLERY_DRIVE = `(async () => {
 })()`;
 
 /**
+ * The overlay bar: each overlay that applies here turned on in turn (its button, or the phone's select), then off. Its legend
+ * must be inside the canvas and cover none of the canvas's own buttons nor a docked panel.
+ */
+const OVERLAY_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const bar = [...document.querySelectorAll('.ov-bar')].find((b) => b.closest('.stage-bar, .sb-runrow'));
+  if (!bar) return ['no overlay bar'];
+  // the boards (a breadboard scene) have no overlay: the bar is hidden with them
+  if (bar.closest('.stage.bb-mode') || (!bar.offsetWidth && !bar.closest('.stage-bar')?.querySelector('.stage-more-wrap:not([hidden])'))) return [];
+  const host = bar.closest('.stage') ?? bar.closest('.sb-center') ?? document;
+  const canvas = host.querySelector('.canvas, .sb-canvas, svg.ed-svg');
+  const sel = bar.querySelector('.ov-sel');
+  const phone = getComputedStyle(sel).display !== 'none';
+  const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  for (const btn of bar.querySelectorAll('.ov-btn')) {
+    const k = btn.dataset.k;
+    if (btn.disabled) continue;
+    if (phone) { sel.value = k; sel.dispatchEvent(new Event('change')); } else btn.click();
+    await wait(450);
+    const L = host.querySelector('.ov-legend');
+    if (!L) { if (k !== 'slack') bad.push(k + ': no legend'); continue; }
+    const r = L.getBoundingClientRect(), c = canvas.getBoundingClientRect();
+    if (r.left < c.left - 1 || r.right > c.right + 1 || r.top < c.top - 1 || r.bottom > c.bottom + 1) bad.push(k + ': the legend leaves the canvas');
+    for (const b of host.querySelectorAll('.canvas button, .panel-dock > *, [data-dock]')) {
+      if (L.contains(b) || b.contains(L) || !b.offsetWidth) continue;
+      if (hit(r, b.getBoundingClientRect())) { bad.push(k + ': the legend covers ' + (b.getAttribute('aria-label') || b.className || b.tagName).toString().slice(0, 40)); break; }
+    }
+    if (!document.querySelector('svg.schematic.ov')) bad.push(k + ': nothing drawn as an overlay');
+  }
+  if (phone) { sel.value = ''; sel.dispatchEvent(new Event('change')); } else bar.querySelector('.ov-btn.on')?.click();
+  await wait(200);
+  if (host.querySelector('.ov-legend') || document.querySelector('svg.schematic.ov')) bad.push('the overlay did not turn off');
+  return bad;
+})()`;
+
+/**
  * Opens every Analogy aside on the step (a figure loads and mounts when its aside opens), turns on the Water | Cross-section
  * views of the step's widget, and waits for the figures to draw; a figure that stays empty or says it could not load is a problem.
  */
@@ -538,6 +575,15 @@ function routes(): Route[] {
   });
   for (const a of analogySteps) add(a.hash, light, ' (analogy open)', undefined, ANALOGY_DRIVE);
   for (const a of analogySteps.filter((x) => x.water || x.chapter === 'cache')) add(a.hash, light, ` (analogy open, ${phoneVp.name})`, phoneVp, ANALOGY_DRIVE);
+  // The overlay bar (view/overlays.ts): every overlay that applies, on each chapter's first circuit at 1280 px and on a few
+  // phones; its legend inside the canvas and clear of the canvas's buttons and docked panels (OVERLAY_DRIVE).
+  for (const c of chapters) {
+    const i = c.steps.findIndex((st) => !!st.scene);
+    if (i < 0) continue;
+    add(`#/c/${c.id}/${i}`, light, ' (overlays)', undefined, OVERLAY_DRIVE);
+    if (['gates', 'adder', 'cpu', 'pipe'].includes(c.id)) add(`#/c/${c.id}/${i}`, themed('dark'), ` (overlays, ${phoneVp.name}, dark)`, phoneVp, OVERLAY_DRIVE);
+  }
+  add('#/sandbox', light, ' (overlays)', undefined, OVERLAY_DRIVE);
   // The default of every workbench family (what the family picker opens first).
   for (const f of families) add(`#/workbench/${f.key(initialParams(f))}`, light);
   add('#/workbench/stats', light);

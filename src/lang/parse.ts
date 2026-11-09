@@ -4,7 +4,7 @@
 import { KEYWORDS, PyError } from './ast';
 import type { BinOpName, CmpOpName, Expr, Module, Stmt, Target } from './ast';
 
-type TokKind = 'name' | 'num' | 'op' | 'nl' | 'indent' | 'dedent' | 'eof';
+type TokKind = 'name' | 'num' | 'str' | 'op' | 'nl' | 'indent' | 'dedent' | 'eof';
 interface Tok { t: TokKind; v: string; line: number; col: number }
 
 const OPS = ['//=', '<<=', '>>=', '**=', '**', '//', '<<', '>>', '<=', '>=', '==', '!=', '+=', '-=', '*=', '%=', '&=', '|=', '^=', '->',
@@ -54,7 +54,26 @@ export function tokenize(src: string): Tok[] {
         out.push({ t: 'name', v: name[0], line: ln, col });
         i += name[0].length; any = true; continue;
       }
-      if (c === '"' || c === "'") throw new PyError('strings are not supported (print numbers)', ln, col);
+      if (c === '"' || c === "'") {
+        // a string literal, read whole here so a '#' inside it is not taken for a comment
+        if (rest.startsWith(c + c + c)) throw new PyError('triple-quoted strings are not supported', ln, col);
+        let v = '', j = 1;
+        for (;;) {
+          const ch = rest[j];
+          if (ch === undefined) throw new PyError('the string is not closed before the end of the line', ln, col);
+          if (ch === c) break;
+          if (ch === '\\') {
+            const nx = rest[j + 1];
+            const esc: Record<string, string> = { n: '\n', t: '\t', '\\': '\\', "'": "'", '"': '"' };
+            if (nx === undefined || !Object.hasOwn(esc, nx)) throw new PyError('unsupported escape: use \\n \\t \\\\ \\\' or \\"', ln, col + j);
+            v += esc[nx]; j += 2; continue;
+          }
+          if (ch < ' ' || ch > '~') throw new PyError('strings hold printable ASCII only (one byte a character)', ln, col + j);
+          v += ch; j++;
+        }
+        out.push({ t: 'str', v, line: ln, col });
+        i += j + 1; any = true; continue;
+      }
       const op = OPS.find((o) => rest.startsWith(o));
       if (!op) throw new PyError(`unexpected character "${c}"`, ln, col);
       if (op === '(' || op === '[') depth++;
@@ -357,6 +376,11 @@ class Parser {
       if (this.isOp(',')) this.err('tuples are not supported');
       this.eatOp(')');
       return e;
+    }
+    if (t.t === 'str') {
+      this.next();
+      if (this.isOp('[')) this.err('index a variable, not a literal: s = "abc", then s[0]');
+      return { kind: 'str', line, value: t.v };
     }
     if (this.isOp('[')) this.err('a list literal can only be assigned to a global name');
     if (t.t === 'name') {

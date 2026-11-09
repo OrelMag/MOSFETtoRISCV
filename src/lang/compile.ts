@@ -14,6 +14,8 @@ export interface CompileOptions {
   dmemWords?: number;
   /** Target RV32IM: * // % are mul / div / rem (floor-corrected) instead of the runtime routines. */
   m?: boolean;
+  /** The heap's size in bytes for a program that uses strings (default HEAP_BYTES). */
+  heapBytes?: number;
 }
 
 export interface Compiled {
@@ -39,7 +41,7 @@ export function compilePy(src: string, opts: CompileOptions = {}): Compiled {
   try {
     const mod = parse(src);
     const scope = analyze(mod);
-    gen = new CodeGen(mod, scope, dmemWords, opts.m ?? false);
+    gen = new CodeGen(mod, scope, dmemWords, opts.m ?? false, opts.heapBytes);
     lines = gen.generate();
   } catch (e) {
     if (e instanceof PyError) return fail(e);

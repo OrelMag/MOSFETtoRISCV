@@ -372,6 +372,9 @@ export class Editor {
     return d ?? undefined;
   }
 
+  /** A chip whose body may not change, and why (a break-it level's drawing). */
+  bodyLock: { id: string; why: string } | null = null;
+
   /** Change the current chip: one undo step. */
   edit(f: (doc: ChipDoc) => ChipDoc): void {
     const doc = this.doc;
@@ -379,6 +382,12 @@ export class Editor {
     if (next === doc) return;
     // A chip drawn from Verilog, a truth table or a state machine: its body follows the source (name, colour, notes, face,
     // comments and the wires' shapes stay editable).
+    // a break-it level's chip is the reference drawing (challengeui.ts): its body is not the learner's to change
+    if (this.bodyLock?.id === doc.id && bodyKey(next) !== bodyKey(doc)) {
+      this.toast(this.bodyLock.why, 'err');
+      if (this.history.inTransaction) this.view.render(doc, this.defOf);
+      return;
+    }
     if (isGenerated(this.ws, doc.id) && bodyKey(next) !== bodyKey(doc)) {
       this.toast(`${doc.name} is drawn from ${doc.fsm ? 'a state machine: edit the machine' : doc.table ? 'a truth table: edit the table' : 'Verilog: edit its text'}, or Detach it to draw on it`, 'err');
       if (this.history.inTransaction) this.view.render(doc, this.defOf);

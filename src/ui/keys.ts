@@ -24,9 +24,8 @@ export interface KeyLike {
 }
 
 /**
- * One way to press a binding. `key` is compared with event.key (lower-cased), and when the layout
- * typed a non-Latin character (Hebrew כ for F) with event.code instead. `codeOnly` compares event.code
- * alone: the brackets, which a Hebrew layout swaps. `shift` undefined: either.
+ * One way to press a binding: `key` against event.key (lower-cased), event.code on a non-Latin layout; `codeOnly`:
+ * event.code alone (brackets a Hebrew layout swaps). `shift` undefined: either.
  */
 export interface KeySpec {
   key?: string;
@@ -83,6 +82,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'stage.fold', group: 'stage', caps: ['F'], does: 'focus mode: fold every panel and the inspector for the circuit alone; again to bring them back', match: [letter('f')] },
   { id: 'stage.probe', group: 'stage', caps: ['P'], does: 'probe mode: click wires to record them', match: [letter('p')] },
   { id: 'stage.why', group: 'stage', caps: ['W'], does: 'Why? mode: click a wire to trace its value to its causes', match: [letter('w')] },
+  { id: 'stage.overlay', group: 'stage', caps: ['O', '·', 'Shift O'], does: 'next overlay (slack, activity, load, unknown) · overlay off', match: [letter('o')] },
   { id: 'stage.menu', group: 'stage', caps: ['Menu', '·', 'Shift F10'], does: 'the menu of the selected wire or part, else of this level, with a list to pick any of them' },
   { id: 'stage.up', group: 'stage', caps: ['Esc', '·', 'Backspace'], does: 'leave probe or Why? mode, else up one level' },
   { id: 'stage.undo', group: 'stage', caps: [`${MOD} Z`, '·', `${MOD} Y`], does: 'undo · redo moving parts' },
@@ -121,6 +121,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'sb.probe', group: 'view', caps: ['P'], does: 'probe mode: click wires to record them', match: [letter('p')], taken: ['p'] },
   { id: 'sb.cut', group: 'view', caps: ['K'], does: 'cut tool: drag across wires', match: [letter('k')], taken: ['k'] },
   { id: 'sb.fault', group: 'view', caps: ['B'], does: 'fault brush: break a wire', match: [letter('b')], taken: ['b'] },
+  { id: 'sb.overlay', group: 'view', caps: ['O', '·', 'Shift O'], does: 'next overlay (slack, activity, load, unknown) · overlay off', match: [letter('o')], taken: ['o'] },
   { id: 'sb.minimap', group: 'view', caps: ['M'], does: 'show or hide the minimap (it hides itself while the whole chip is in view)', match: [letter('m')], taken: ['m'] },
   { id: 'sb.space', group: 'view', caps: ['Space'], does: 'held: pan with a drag' },
   { id: 'sb.search', group: 'panels', caps: [`${MOD} K`, '·', '/'], does: 'search; > lists every toolbar action (Type, Package, Export…)', taken: ['/'] },
@@ -129,6 +130,12 @@ export const KEYS: readonly KeyDef[] = [
 ];
 
 const byId = new Map(KEYS.map((d) => [d.id, d]));
+
+// keys a lazy chunk adds (view/stagekeys.ts)
+export function addKeys(ks: KeyDef[]) {
+  for (const k of ks) if (!byId.has(k.id)) (KEYS as KeyDef[]).push(k), byId.set(k.id, k);
+}
+
 export const keyDef = (id: string): KeyDef | undefined => byId.get(id);
 
 /** A character from a non-Latin layout (Hebrew, Greek …): then the key's position decides. */

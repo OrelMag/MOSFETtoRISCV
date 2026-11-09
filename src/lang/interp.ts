@@ -2,7 +2,7 @@
 // It is the golden model for the compiler (tests run every program both ways and compare what they print),
 // and it says where Python itself would stop (a name read before it is set, an index out of range).
 
-import { PyError, wrap } from './ast';
+import { HEAP_BYTES, PyError, wrap } from './ast';
 import type { BinOpName, CmpOpName, Expr, Module, Stmt, Target } from './ast';
 import { parse } from './parse';
 import { analyze } from './scope';
@@ -44,9 +44,19 @@ export function cmpop(op: CmpOpName, a: number, b: number): boolean {
   }
 }
 
+/** A value: an int, or a str (the compiled program holds a pointer to a length-prefixed block in the heap or the literal pool). */
+type Val = number | string;
+
+/** Heap bytes a str of this length takes: its length word, then its bytes rounded up to a word. */
+export const strBlock = (len: number): number => 4 + ((len + 3) & ~3);
+
 export interface RunResult {
   output: number[];
-  globals: Map<string, number>;
+  /** Parallel to `output`: 0 for an int, else which str (1, 2, ...) the word is a character of. Words print as their character codes, one a word. */
+  strOut: number[];
+  /** Bytes of the heap taken so far (concatenations, s[i] and chr() each take a block; nothing is freed). */
+  heapUsed: number;
+  globals: Map<string, Val>;
   lists: Map<string, number[]>;
   /** Statements executed. */
   steps: number;
@@ -62,33 +72,47 @@ export const memStore8 = (m: Map<number, number>, a: number, v: number): void =>
 export const memLoad32 = (m: Map<number, number>, a: number): number => (memLoad8(m, a) | (memLoad8(m, a + 1) << 8) | (memLoad8(m, a + 2) << 16) | (memLoad8(m, a + 3) << 24)) | 0;
 export const memStore32 = (m: Map<number, number>, a: number, v: number): void => { for (let k = 0; k < 4; k++) memStore8(m, a + k, v >>> (8 * k)); };
 
-class Return { constructor(readonly value: number) {} }
+class Return { constructor(readonly value: Val) {} }
 class Break {}
 class Continue {}
 const BREAK = new Break(), CONTINUE = new Continue();
 
-export function runPy(src: string | Module, opts: { maxSteps?: number; maxDepth?: number; memory?: Map<number, number> } = {}): RunResult {
+export function runPy(src: string | Module, opts: { maxSteps?: number; maxDepth?: number; memory?: Map<number, number>; heapBytes?: number } = {}): RunResult {
   const mod = typeof src === 'string' ? parse(src) : src;
   const scope = analyze(mod);
-  return new Interp(scope, opts.maxSteps ?? 1_000_000, opts.maxDepth ?? 200, opts.memory ?? new Map()).run(mod);
+  return new Interp(scope, opts.maxSteps ?? 1_000_000, opts.maxDepth ?? 200, opts.memory ?? new Map(), opts.heapBytes ?? HEAP_BYTES).run(mod);
 }
 
 class Interp {
   readonly output: number[] = [];
-  readonly globals = new Map<string, number>();
+  readonly strOut: number[] = [];
+  heapUsed = 0;
+  private strN = 0;
+  readonly globals = new Map<string, Val>();
   readonly lists = new Map<string, number[]>();
   steps = 0;
   depth = 0;
-  constructor(private readonly scope: Scope, private readonly maxSteps: number, private readonly maxDepth: number, readonly memory: Map<number, number>) {}
+  constructor(private readonly scope: Scope, private readonly maxSteps: number, private readonly maxDepth: number, readonly memory: Map<number, number>, private readonly heapBytes: number) {}
 
   run(mod: Module): RunResult {
     try {
       this.block(mod.body, null);
     } catch (e) {
-      if (e instanceof PyError) return { output: this.output, globals: this.globals, lists: this.lists, steps: this.steps, error: e, memory: this.memory };
+      if (e instanceof PyError) return { ...this.result(), error: e };
       throw e;
     }
-    return { output: this.output, globals: this.globals, lists: this.lists, steps: this.steps, memory: this.memory };
+    return this.result();
+  }
+
+  private result(): RunResult {
+    return { output: this.output, strOut: this.strOut, heapUsed: this.heapUsed, globals: this.globals, lists: this.lists, steps: this.steps, memory: this.memory };
+  }
+
+  /** The bump heap: a block for a str of this many characters, or MemoryError when the arena is full (the compiled program stops there). */
+  private alloc(len: number, line: number): void {
+    const size = strBlock(len);
+    if (this.heapUsed + size > this.heapBytes) throw new PyError(`MemoryError: the heap (${this.heapBytes} bytes, never freed) is full`, line);
+    this.heapUsed += size;
   }
 
   private block(body: Stmt[], fr: Frame | null): void {
@@ -107,9 +131,13 @@ class Interp {
         // the index is evaluated once, as in Python
         if (s.target.kind === 'index') {
           const xs = this.lists.get(s.target.list)!;
-          const i = this.indexOf(xs, this.expr(s.target.index, fr), s.target.list, s.line);
-          xs[i] = binop(s.op, xs[i], this.expr(s.value, fr));
-        } else this.store(s.target, binop(s.op, this.load(s.target.id, fr, s.line), this.expr(s.value, fr)), fr, s.line);
+          const i = this.indexOf(xs, this.int(s.target.index, fr), s.target.list, s.line);
+          xs[i] = binop(s.op, xs[i], this.int(s.value, fr));
+        } else if (s.isStr) {
+          const a = this.load(s.target.id, fr, s.line) as string, b = this.expr(s.value, fr) as string;
+          this.alloc(a.length + b.length, s.line);
+          this.store(s.target, a + b, fr, s.line);
+        } else this.store(s.target, binop(s.op, this.load(s.target.id, fr, s.line) as number, this.expr(s.value, fr) as number), fr, s.line);
         return;
       }
       case 'expr': this.expr(s.value, fr); return;
@@ -121,7 +149,7 @@ class Interp {
         }
         return;
       case 'for': {
-        const start = this.expr(s.start, fr), stop = this.expr(s.stop, fr);
+        const start = this.int(s.start, fr), stop = this.int(s.stop, fr);
         for (let i = start; s.step > 0 ? i < stop : i > stop; i += s.step) {
           if (++this.steps > this.maxSteps) throw new PyError(`still running after ${this.maxSteps} statements`, s.line);
           this.store({ kind: 'name', line: s.line, id: s.v }, i, fr, s.line);
@@ -140,7 +168,7 @@ class Interp {
     return i;
   }
 
-  private load(id: string, fr: Frame | null, line: number): number {
+  private load(id: string, fr: Frame | null, line: number): Val {
     if (fr && fr.fn.locals.includes(id)) {
       const v = fr.vars.get(id);
       if (v === undefined) throw new PyError(`UnboundLocalError: "${id}" is read before it is set`, line);
@@ -151,59 +179,108 @@ class Interp {
     return v;
   }
 
-  private store(t: Target, v: number, fr: Frame | null, line: number): void {
+  private store(t: Target, v: Val, fr: Frame | null, line: number): void {
     if (t.kind === 'index') {
       const xs = this.lists.get(t.list)!;
-      xs[this.indexOf(xs, this.expr(t.index, fr), t.list, line)] = v;
+      xs[this.indexOf(xs, this.int(t.index, fr), t.list, line)] = v as number;
     } else if (fr && fr.fn.locals.includes(t.id)) fr.vars.set(t.id, v);
     else this.globals.set(t.id, v);
   }
 
-  expr(e: Expr, fr: Frame | null): number {
+  /** An expression the type pass says is an int. */
+  private int(e: Expr, fr: Frame | null): number { return this.expr(e, fr) as number; }
+
+  expr(e: Expr, fr: Frame | null): Val {
     switch (e.kind) {
       case 'num': return e.value;
+      case 'str': return e.value;
       case 'name': return this.load(e.id, fr, e.line);
-      case 'bin': { const a = this.expr(e.left, fr); return binop(e.op, a, this.expr(e.right, fr)); }
+      case 'bin': {
+        const a = this.expr(e.left, fr), b = this.expr(e.right, fr);
+        if (e.isStr) { this.alloc((a as string).length + (b as string).length, e.line); return (a as string) + (b as string); }
+        return binop(e.op, a as number, b as number);
+      }
       case 'unary': {
-        const a = this.expr(e.arg, fr);
+        const a = this.int(e.arg, fr);
         return e.op === '-' ? wrap(-a) : e.op === '~' ? ~a : e.op === 'not' ? (a ? 0 : 1) : a;
       }
       case 'bool': {
-        const a = this.expr(e.left, fr);
+        const a = this.int(e.left, fr);
         return (e.op === 'and' ? !a : !!a) ? a : this.expr(e.right, fr);
       }
       case 'cmp': {
-        let a = this.expr(e.args[0], fr);
+        if (e.strCmp) {
+          const a = this.expr(e.args[0], fr) as string, b = this.expr(e.args[1], fr) as string;
+          return +((e.ops[0] === '==') === (a === b));
+        }
+        let a = this.int(e.args[0], fr);
         for (let k = 0; k < e.ops.length; k++) {
-          const b = this.expr(e.args[k + 1], fr);
+          const b = this.int(e.args[k + 1], fr);
           if (!cmpop(e.ops[k], a, b)) return 0;
           a = b;
         }
         return 1;
       }
-      case 'ifexp': return this.expr(e.test, fr) ? this.expr(e.yes, fr) : this.expr(e.no, fr);
+      case 'ifexp': return this.int(e.test, fr) ? this.expr(e.yes, fr) : this.expr(e.no, fr);
       case 'index': {
+        if (e.isStr) {
+          const ch = this.charAt(e, fr);
+          this.alloc(1, e.line); // s[i] is a str of its own: a new block
+          return ch;
+        }
         const xs = this.lists.get(e.list);
         if (!xs) throw new PyError(`NameError: list "${e.list}" is used before it is created`, e.line);
-        return xs[this.indexOf(xs, this.expr(e.index, fr), e.list, e.line)];
+        return xs[this.indexOf(xs, this.int(e.index, fr), e.list, e.line)];
       }
       case 'list': throw new PyError('internal: list literal as a value', e.line);
       case 'call': return this.call(e, fr);
     }
   }
 
-  private call(e: Expr & { kind: 'call' }, fr: Frame | null): number {
-    const args = e.fn === 'len' ? [] : e.args.map((a) => this.expr(a, fr));
+  /** The character s[i] of a str variable, Python's negative indices included. */
+  private charAt(e: Expr & { kind: 'index' }, fr: Frame | null): string {
+    const s = this.load(e.list, fr, e.line) as string, i = this.int(e.index, fr);
+    const k = i < 0 ? i + s.length : i;
+    if (k < 0 || k >= s.length) throw new PyError(`IndexError: ${e.list}[${i}] is outside a str of length ${s.length}`, e.line);
+    return s[k];
+  }
+
+  private call(e: Expr & { kind: 'call' }, fr: Frame | null): Val {
+    if (e.fn === 'len') {
+      const a = e.args[0];
+      return a.isStr ? (this.expr(a, fr) as string).length : this.scope.lists.get((a as { id: string }).id)!.len;
+    }
+    if (e.fn === 'ord') {
+      const a = e.args[0];
+      // ord(s[i]) reads the byte and makes no str, as the compiled program does
+      if (a.kind === 'index' && a.isStr) return this.charAt(a, fr).charCodeAt(0);
+      const s = this.expr(a, fr) as string;
+      if (s.length !== 1) throw new PyError(`TypeError: ord() expected a str of length 1, got ${s.length}`, e.line);
+      return s.charCodeAt(0);
+    }
+    const args = e.args.map((a) => this.expr(a, fr));
     switch (e.fn) {
-      case 'print': this.output.push(...args); return 0;
-      case 'len': return this.scope.lists.get((e.args[0] as { id: string }).id)!.len;
-      case 'abs': return wrap(Math.abs(args[0]));
-      case 'min': return Math.min(...args);
-      case 'max': return Math.max(...args);
-      case 'load8': return memLoad8(this.memory, args[0]);
-      case 'load32': return memLoad32(this.memory, args[0]);
-      case 'store8': memStore8(this.memory, args[0], args[1]); return 0;
-      case 'store32': memStore32(this.memory, args[0], args[1]); return 0;
+      case 'print':
+        for (const a of args) {
+          if (typeof a === 'string') {
+            this.strN++;
+            for (let j = 0; j < a.length; j++) { this.output.push(a.charCodeAt(j)); this.strOut.push(this.strN); }
+          } else { this.output.push(a); this.strOut.push(0); }
+        }
+        return 0;
+      case 'chr': {
+        const n = args[0] as number;
+        if (n < 0 || n > 255) throw new PyError(`ValueError: chr() takes 0 to 255, got ${n}`, e.line);
+        this.alloc(1, e.line);
+        return String.fromCharCode(n);
+      }
+      case 'abs': return wrap(Math.abs(args[0] as number));
+      case 'min': return Math.min(...(args as number[]));
+      case 'max': return Math.max(...(args as number[]));
+      case 'load8': return memLoad8(this.memory, args[0] as number);
+      case 'load32': return memLoad32(this.memory, args[0] as number);
+      case 'store8': memStore8(this.memory, args[0] as number, args[1] as number); return 0;
+      case 'store32': memStore32(this.memory, args[0] as number, args[1] as number); return 0;
     }
     const fn = this.scope.funcs.get(e.fn)!;
     if (++this.depth > this.maxDepth) throw new PyError(`RecursionError: more than ${this.maxDepth} calls deep`, e.line);
@@ -220,4 +297,4 @@ class Interp {
   }
 }
 
-interface Frame { fn: FuncInfo; vars: Map<string, number> }
+interface Frame { fn: FuncInfo; vars: Map<string, Val> }
