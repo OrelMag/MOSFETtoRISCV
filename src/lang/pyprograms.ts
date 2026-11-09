@@ -663,3 +663,81 @@ print(x // 4, x % 4, -x // 4, -x % 4)
 `,
   },
 ];
+
+/** The text a string program prints: its words as characters (strOut from runPy marks which words are characters), numbers between them. */
+export const ch = (s: string): number[] => Array.from(s, (c) => c.charCodeAt(0));
+
+export interface PyStringProgram extends Omit<PyProgram, 'group'> {
+  group: 'Strings';
+  /** Heap bytes the program takes (a concatenation or an index makes a block; nothing is freed): tests pin it to the interpreter and to tp. */
+  heap: number;
+}
+
+/**
+ * Programs with strings, kept apart from PY_PROGRAMS: those feed the code-size and out-of-order widgets, and each has an
+ * exact cost pinned somewhere. They run on the chapter's CPU (64 words of data memory, so a 96-byte heap).
+ */
+export const PY_STRING_PROGRAMS: PyStringProgram[] = [
+  {
+    id: 'hello',
+    name: 'Hello, joined',
+    group: 'Strings',
+    blurb: 'Three literals joined with +: every + makes a new block on the heap, the old ones stay where they were.',
+    heap: 48,
+    expect: [...ch('Hello, world!'), 13],
+    source: `greeting = "Hello"
+name = "world"
+line = greeting + ", " + name + "!"
+print(line)
+print(len(line))
+`,
+  },
+  {
+    id: 'palindrome',
+    name: 'Palindrome',
+    group: 'Strings',
+    blurb: 'ord(s[i]) reads the byte alone: no one-character string is made, so the heap stays empty.',
+    heap: 0,
+    expect: [1, 0, 1],
+    source: `def is_pal(s):
+    n = len(s)
+    for i in range(n // 2):
+        if ord(s[i]) != ord(s[n - 1 - i]):
+            return 0
+    return 1
+
+print(is_pal("level"), is_pal("lever"), is_pal(""))
+`,
+  },
+  {
+    id: 'reverse',
+    name: 'Reverse a word',
+    group: 'Strings',
+    blurb: 'Here s[i] is a string of its own: each turn of the loop takes a block for the letter and another for the longer word.',
+    heap: 72,
+    expect: [...ch('draw'), ...ch('d'), 1, 1],
+    source: `word = "ward"
+back = ""
+for i in range(len(word)):
+    back = word[i] + back
+print(back, word[-1], back == "draw", back != word)
+`,
+  },
+  {
+    id: 'caesar',
+    name: 'Caesar shift',
+    group: 'Strings',
+    blurb: 'chr(ord(c) + 3): a function that takes and returns strings, called once a letter.',
+    heap: 72,
+    expect: [...ch('def')],
+    source: `def shift(c, k):
+    return chr((ord(c) - 97 + k) % 26 + 97)
+
+msg = "abc"
+out = ""
+for i in range(len(msg)):
+    out += shift(msg[i], 3)
+print(out)
+`,
+  },
+];

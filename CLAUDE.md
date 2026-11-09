@@ -791,7 +791,13 @@ src/lang/      chapter 15's Python subset → RV32I (DOM-free): ast.ts (the tree
                compiles and interprets them, also for RV32IM, PY_FUZZ=n for a sweep). widgets/python.ts pyScene({ pipeline, m,
                switch }): the pipelined CPU with the Python panel (cause bars per line, totals, the RV32I | RV32IM switch and the
                M unit's NAND cost; `switch: false` hides both: chapter 17 uses it, chapter 21 shows them); the two chapter steps
-               are the last of ch-pipe.ts and ch-muldiv.ts (their numbers: tests/pypipe.test.ts; scripts/pypipe-table.ts)
+               are the last of ch-pipe.ts and ch-muldiv.ts (their numbers: tests/pypipe.test.ts; scripts/pypipe-table.ts).
+               Strings (opt-in: a literal, chr() or ord() runs types.ts, and a program without one compiles to identical words, asm and layout): a str is the address of a
+               length-prefixed block (a word, then the bytes); literals are stored by the prologue after the lists, then a fixed HEAP_BYTES (96) bump heap at tp (layout.heap / .strings
+               exist only then), the output after it. + s[i] (a str of its own, 8 bytes; ord(s[i]) reads the byte alone; the CPU has word access only, so bytes are shifted and masked) chr() make blocks (strBlock); the rt.concat / streq / sidx / ord / chr /
+               pstr routines use only a0–a7 (a function using them is not a leaf). A full heap, an index out of range, ord of a longer str, chr past 255: the machine jumps to halt, the interpreter
+               raises (compare outputs up to there). isStr / strCmp marks on the tree are the type pass's result; print puts a str's characters one word each (RunResult.strOut says which
+               words, the panel's outputLines); randomStrProgram (its own stream), PY_STRING_PROGRAMS (apart from PY_PROGRAMS: rvc / ooolab iterate those), tests/pystrings.test.ts; chapter 15's last two steps
 src/isa4/      the 4-bit CPU's ISA: isa4.ts (the 4004's opcode map in 16-bit words: decode4 / disasm4 / fields4; words the
                table does not name run as NOP), asm4.ts, iss4.ts (golden model; halts on a JUN to itself), programs4.ts
 src/crypto/     enigma.ts: the naval Enigma M4 (DOM-free): wirings, notches, pawl stepping (nextMoves: the double step), trace (the current's

@@ -184,6 +184,8 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Run it on the gates", challenge: "reach" },
     { title: "Functions are a stack", challenge: "quiz" },
     { title: "Your own program" },
+    { title: "Strings", challenge: "quiz" },
+    { title: "A heap that never gives back" },
   ] },
   { id: "fastadd", num: 16, title: "Faster adders", blurb: "Carry-lookahead, Kogge–Stone, carry-select and carry-skip: trading gates for speed, measured on the CPU's critical path.", level: "Optimization", builds: ["adders","cpu"], recap: {"checks":3}, steps: [
     { title: "The ripple problem" },

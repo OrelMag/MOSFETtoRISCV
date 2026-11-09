@@ -4,27 +4,33 @@
 export type BinOpName = '+' | '-' | '*' | '//' | '%' | '&' | '|' | '^' | '<<' | '>>';
 export type CmpOpName = '<' | '<=' | '>' | '>=' | '==' | '!=';
 
-export type Expr =
+/** Set by the type pass (types.ts) on an expression whose value is a str (a pointer to a length-prefixed block); absent: an int. */
+export interface StrMark { isStr?: true }
+
+export type Expr = StrMark & (
   | { kind: 'num'; line: number; value: number }
+  /** A string literal ('…' or "…"): ASCII, the escapes \n \t \\ \' \\". */
+  | { kind: 'str'; line: number; value: string }
   | { kind: 'name'; line: number; id: string }
   | { kind: 'bin'; line: number; op: BinOpName; left: Expr; right: Expr }
   | { kind: 'unary'; line: number; op: '-' | '+' | '~' | 'not'; arg: Expr }
   /** `a and b` / `a or b`: the value of the operand that decided it, as in Python. */
   | { kind: 'bool'; line: number; op: 'and' | 'or'; left: Expr; right: Expr }
   /** A chain `a < b <= c`: every middle operand evaluated once. */
-  | { kind: 'cmp'; line: number; ops: CmpOpName[]; args: Expr[] }
+  | { kind: 'cmp'; line: number; ops: CmpOpName[]; args: Expr[]; strCmp?: true }
   | { kind: 'call'; line: number; fn: string; args: Expr[] }
   | { kind: 'index'; line: number; list: string; index: Expr }
   /** `a if c else b` */
   | { kind: 'ifexp'; line: number; test: Expr; yes: Expr; no: Expr }
   /** `[1, 2, 3]` or `[0] * n` (n constant): only as the value of a global list's assignment. */
-  | { kind: 'list'; line: number; items: Expr[]; repeat?: Expr };
+  | { kind: 'list'; line: number; items: Expr[]; repeat?: Expr });
 
 export type Target = { kind: 'name'; line: number; id: string } | { kind: 'index'; line: number; list: string; index: Expr };
 
 export type Stmt =
   | { kind: 'assign'; line: number; target: Target; value: Expr }
-  | { kind: 'aug'; line: number; target: Target; op: BinOpName; value: Expr }
+  /** isStr: the target is a str (`s += t`). */
+  | { kind: 'aug'; line: number; target: Target; op: BinOpName; value: Expr; isStr?: true }
   | { kind: 'expr'; line: number; value: Expr }
   | { kind: 'if'; line: number; test: Expr; body: Stmt[]; orelse: Stmt[]; elif?: boolean }
   | { kind: 'while'; line: number; test: Expr; body: Stmt[] }
@@ -49,7 +55,10 @@ export class PyError extends Error {
 }
 
 /** Built-in functions the compiler and the interpreter both know. */
-export const BUILTINS = ['print', 'len', 'abs', 'min', 'max', 'range', 'load8', 'store8', 'load32', 'store32'] as const;
+export const BUILTINS = ['print', 'len', 'abs', 'min', 'max', 'range', 'load8', 'store8', 'load32', 'store32', 'ord', 'chr'] as const;
+
+/** The bump heap's size in bytes (strings made at run time: concatenation, indexing, chr). It never grows and nothing frees it. */
+export const HEAP_BYTES = 96;
 
 /** The memory builtins: an address is an int, load8 is unsigned, load32 / store32 are little-endian and need a word-aligned address (as lw / sw do). */
 export const MEMORY_BUILTINS: Record<string, number> = { load8: 1, load32: 1, store8: 2, store32: 2 };
