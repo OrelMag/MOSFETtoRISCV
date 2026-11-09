@@ -2,8 +2,27 @@
 
 A new chapter on how the book's hardware is checked. The first half covers **design verification**: is the design right? The second half covers **manufacturing test**: was this chip made right? Everything in the first half already exists in this repository (tests/verify/, docs/VERIFICATION.md, the Spike workflow). The chapter turns it into something the learner can watch and play with. The second half builds on the fault brush (sim/faults.ts, ONI D, merged 48736b0a) and on sim/ablate.ts.
 
-Status: plan and mockup only. Nothing is built.
+Status: **approved by the author on 2026-11-09, as shown, with all six decisions as recommended** (mockup published as
+https://claude.ai/artifact/RbNcMnUD29z9BeaK7WKeYD). Being built in three stages, each landed as its own tip:
+1. Simulator and library (feat/verify-sim): sim/faultsim.ts, sim/atpg.ts, sim/march.ts, lib/dft.ts (scan), lib/bist.ts, tests.
+2. The chapter (steps, widgets, tours, recap), after silicon.
+3. Codex entries and the two campaign levels.
+
 Mockup: `E:/mockups/verify/index.html` (steps 2, 9 and 11, each in light and dark).
+
+Changes against the plan as approved, found while building stage 1:
+- The 4-bit ripple adder's smallest complete test set is **3** vectors, not 4 (the exact cover finds 3; greedy needs 4).
+  The full adder's is 3 too, but several 3-vector sets exist.
+- A planted fault in a chapter scene uses Rock's `plantedDef(def, at, tag)` (sim/faults.ts, feat/oni-breakit, batch 7),
+  not a new `Scene.faults` field (agreed with Rock). Chapter drill views read the driver's net, so a stuck wire there shows
+  its healthy value (the readers get the constant). Stage 2 decides whether the stage maps its reads through `seenNets`.
+- The full-scan cost is counted from the definitions (`scanCost`: flip-flops, multiplexer NANDs, chain length), not by
+  rebuilding the design with scan flip-flops (`withScan`): the numbers are the same and nothing large is built. The
+  pipelined CPU has **2 676** flip-flops: full scan adds 10 704 NANDs to its 68 957.
+- The March test is a reference model over a memory fault model in stage 1 (sim/march.ts: March C− finds all 312 single
+  faults of an 8-cell memory; writing and reading all 0s then all 1s finds 68). Its controller in gates comes with step 12
+  in stage 2.
+- The BIST adder's 5-bit signature lets **1** of the 90 faults escape (aliasing), which step 12 shows.
 
 ## Placement
 
@@ -38,7 +57,7 @@ Every number below was measured on this repository on 2026-11-09 (scratch script
 | 7 | A second oracle | widget: the Spike story as a recorded log, checked in and pinned: Spike's `mret` writes `mstatush`, and ours trapped on it as illegal. Shown as a commit-by-commit diff | Two independent models; the bug the CPU and our model shared, which no lock-step test could see. Then the Yosys round trip (synthesized netlist against our simulation) in one paragraph |
 | 8 | A chip comes back from the fab | scene: the 9-NAND full adder with the **fault brush** on the stage (a stuck-at on any net from a menu); its truth table with wrong rows in red | Defects (shorts, opens, particles from silicon's yield step) → the **stuck-at model**; a test is input vectors plus expected outputs, applied on a tester |
 | 9 | Fault coverage | widget `faultMatrix`: the full adder's **24** stuck-at faults (12 nets × 2) × **8** vectors, a dot where the vector catches the fault; click vectors into a test set and watch coverage. Then the 4-bit ripple adder: **90** faults, **512** vectors; random vectors cover 40 / 60 / 76 / 88 / 90 of 90 after 1 / 2 / 4 / 8 / 16 | Fault simulation; coverage = detected / modelled faults; random tests' long tail |
-| 10 | ATPG in miniature | widget: pick a fault, then **activate** (drive the net to the opposite value), **propagate** (sensitize a path: the other NAND inputs at 1), **justify** (back to the inputs), steps lit on the circuit. Greedy cover: **4** vectors; exact minimum: **3** (vectors 010, 101, 111 as a b cin); the 4-bit adder: **4** of 512 vectors catch all 90 | Automatic test pattern generation; greedy is not optimal; a redundant net would be untestable (show one built on purpose: a consensus term) |
+| 10 | ATPG in miniature | widget: pick a fault, then **activate** (drive the net to the opposite value), **propagate** (sensitize a path: the other NAND inputs at 1), **justify** (back to the inputs), steps lit on the circuit. Greedy cover: **4** vectors; exact minimum: **3** (one of several 3-vector sets); the 4-bit adder: greedy **4**, smallest **3** of 512 vectors catch all 90 | Automatic test pattern generation; greedy is not optimal; a redundant net would be untestable (show one built on purpose: a consensus term) |
 | 11 | Scan chains | scene: a 4-bit counter whose flip-flops are **scan flip-flops** (a 2-input mux in front of the D: `mux2` 4 NANDs + `dff` 11 = 15, **+36 %** per flip-flop); a `se` (scan enable) pin. Panel: shift a pattern in (4 clocks), one capture clock, shift the response out; a timeline of `si` / `so` | Sequential logic is hard to test; scan turns every flip-flop into an input and an output, so a sequential circuit is tested like a combinational one; the cost in NANDs and in test time (shift clocks per pattern) |
 | 12 | The chip tests itself | scene: BIST around the 4-bit adder: a **9-bit LFSR** (taps 9, 5) as pattern generator and a MISR compressing the sums into a signature; a 9-bit LFSR covers 65 / 73 / 87 / **90** of 90 faults after 4 / 8 / 16 / **32** patterns; then a memory March test on the RAM of chapter `memory` | LFSRs taught here (first use: the Ethernet chapter comes later, so it is explained in place); signature aliasing ≈ 2^−k; memory BIST |
 | 13 | What a CPU costs to test | widget: the pipelined CPU (**68 957** NANDs) with full scan: flip-flop count, scan NANDs, chain length → shift clocks per pattern, patterns for a coverage target, tester time per die, set against the wafer cost of silicon's yield step | Test cost is part of the chip's cost; JTAG (one paragraph); why 99 % stuck-at coverage is a common target and why it is not enough (transition faults: the fault brush's "slow") |
