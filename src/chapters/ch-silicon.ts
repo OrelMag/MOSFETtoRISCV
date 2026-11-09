@@ -279,7 +279,7 @@ export const chSilicon: Chapter = {
           not being written; synthesis inserts it from enables such as the register file's write enables.</p>
           <p><strong>Leakage</strong> is the other part: an off transistor still conducts a little, a current that grows about tenfold for every 60 to
           100 mV less threshold voltage. It flows whether the logic switches or not (the reason Dennard scaling ended, <a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>),
-          and is fought with high-threshold cells off the critical path and power gating, switching an idle block's supply off. The current arrives through a
+          and is fought with high-threshold cells off the critical path and <span data-ahead="powergating">power gating, switching an idle block's supply off</span>. The current arrives through a
           <strong>power grid</strong>: wide straps on the top metal layers down to each cell row's VDD and GND rails. Its resistance drops the supply (IR drop)
           and slows the cells far from the pads, so the grid is sized and checked like the timing.</p>`,
         pitfall: `<p>Fixing a failing hold check by slowing the clock. The period T appears only in the setup inequality; a hold violation is a race between the same edge and the new data, and stays however slow the

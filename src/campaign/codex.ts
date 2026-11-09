@@ -8,6 +8,7 @@ import { CODEX_NEW3 } from './codexnew3';
 import { CODEX_COMM } from './codexcomm';
 import { CODEX_COMM2 } from './codexcomm2';
 import { CODEX_DSP } from './codexdsp';
+import { CODEX_POWER } from './codexpower';
 
 export type CodexKind = 'component' | 'law' | 'tool' | 'concept' | 'trick';
 
@@ -89,7 +90,7 @@ export const CODEX: CodexEntry[] = [
   E('edge', 'Edge triggering', 'concept', 'State changes only at clock edges, so all registers update together and every combinational path has a whole cycle to settle. This discipline is what makes large synchronous designs tractable.', ['dff']),
   E('setuphold', 'Setup and hold', 'concept', 'd must be stable for setup before the edge and hold after it. Period ≥ clk-to-q + logic delay + setup. Hold violations (paths too short) cannot be fixed by slowing the clock.', ['criticalpath']),
   E('register', 'Register', 'component', 'n flip-flops sharing a clock, each with a mux feeding q back when en = 0.', ['clockgating']),
-  E('clockgating', 'Never gate the clock', 'trick', 'clk AND en glitches when en changes while clk is high, and delays the clock (skew). Use a mux (load enable) instead. Real clock gating uses a latch-based cell.', ['register']),
+  E('clockgating', 'Never gate the clock', 'trick', 'clk AND en glitches when en changes while clk is high, and delays the clock (skew). Use a mux (load enable) instead, or gate the clock only through a latch: the integrated clock gate (ICG) holds en in a latch open while clk is low, so the AND passes whole pulses or none. Gating the single-cycle CPU\'s register file and data memory that way takes it from 21.05 to 13.91 pJ a cycle and drops the enable muxes.', ['register']),
   E('counter', 'Counter', 'component', 'Register + incrementer: q ← q + 1 at every rising edge while en = 1, wrapping at 2<sup>n</sup>. The library’s 4-bit counter: 80 NANDs, period 17. The PC is a counter that can also load.', ['incrementer']),
   E('pc', 'Program counter', 'component', 'The register holding the current instruction\'s address. Next value: 0 on reset, pc + 1, a branch target, or a jump target (next-PC logic).', ['fde']),
   E('fsm', 'Finite-state machine', 'tool', 'A state register plus next-state and output logic. Design: list states, draw transitions, encode (binary, one-hot), write tables, minimise. Moore outputs depend on the state, Mealy on state and inputs.', ['microcode']),
@@ -199,6 +200,8 @@ export const CODEX: CodexEntry[] = [
   ...CODEX_COMM,
   ...CODEX_COMM2,
   ...CODEX_DSP,
+  // the Power chapter (codexpower.ts)
+  ...CODEX_POWER,
 ];
 
 export const codexById = (id: string): CodexEntry | undefined => CODEX.find((e) => e.id === id);

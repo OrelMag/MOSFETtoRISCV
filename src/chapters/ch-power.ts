@@ -45,6 +45,7 @@ export const chPower: Chapter = {
   ],
   builds: ['inverter', 'latches', 'cpu', 'pipeline', 'silicon'],
   recap: {
+    practise: ['s_icg'],
     keep: [
       `Every toggle of a net costs ½ C V² from the supply; a whole circuit's dynamic power is that summed over its nets and toggles, times the clock rate. Our single-cycle CPU spends ${pj(plain.pj)} per cycle on “sum” at ${V_NOM} V.`,
       `Activity is the data's: the same adder costs more on random operands than on counting. Glitches are toggles that end where they started: ${pct(sc.glitch)} of the single-cycle CPU's energy, ${pct(pipe.glitch)} of the pipeline's.`,

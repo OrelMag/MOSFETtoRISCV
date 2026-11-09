@@ -1058,7 +1058,7 @@ N alone would answer "not less"</pre>`,
   },
 
   clockgating: {
-    idea: `The tempting way to make a register load only when en = 1 is to AND the clock with en. It breaks two assumptions of synchronous design. Glitches: en comes from logic clocked by the same rising edge, so it changes while clk is high, and when it goes 0 → 1 then, clk · en rises mid-cycle and the register captures a value that has not settled. Skew: the gated clock arrives a gate later than everyone else's (2 NAND delays for an AND here), shifting this register's edge against the registers it exchanges data with and eating the hold margin.<br>The safe form leaves the clock alone and recirculates the data: a 2:1 mux in front of each flip-flop selects d when en = 1 and q when en = 0. It costs 4 NANDs per bit (a D flip-flop with enable is 15 NANDs against 11) and a mux delay on the d path. Low-power chips do gate clocks, with an integrated clock-gating cell: a latch transparent while clk is low captures en, so the AND sees an enable that cannot change while clk is high.<br>Act P's loader is that exception built by hand: it holds the 4-bit CPU back with clk AND run, and run comes from a flip-flop clocked on the falling edge, so it changes only while clk is low and the AND passes whole pulses or none. The rule is about the enable: an AND is safe exactly when its enable cannot change while clk is high.`,
+    idea: `The tempting way to make a register load only when en = 1 is to AND the clock with en. It breaks two assumptions of synchronous design. Glitches: en comes from logic clocked by the same rising edge, so it changes while clk is high, and when it goes 0 → 1 then, clk · en rises mid-cycle and the register captures a value that has not settled. Skew: the gated clock arrives a gate later than everyone else's (2 NAND delays for an AND here), shifting this register's edge against the registers it exchanges data with and eating the hold margin.<br>The safe form leaves the clock alone and recirculates the data: a 2:1 mux in front of each flip-flop selects d when en = 1 and q when en = 0. It costs 4 NANDs per bit (a D flip-flop with enable is 15 NANDs against 11) and a mux delay on the d path. Low-power chips do gate clocks, with an integrated clock-gating cell: a latch transparent while clk is low captures en, so the AND sees an enable that cannot change while clk is high.<br>Act P's loader is that exception built by hand: it holds the 4-bit CPU back with clk AND run, and run comes from a flip-flop clocked on the falling edge, so it changes only while clk is low and the AND passes whole pulses or none. The rule is about the enable: an AND is safe exactly when its enable cannot change while clk is high.<br>The integrated clock gate (ICG) makes that true for any enable. Like a flip-flop it asks en to be steady a little before the rising edge (setup) and just after it (hold); between those it may do anything. The Power chapter gates every register of the single-cycle CPU's register file and every word of its data memory with one: the clock net shrinks from 6 554 fF to 254, the enable muxes go (56 498 to 48 938 NANDs), and the CPU spends 13.91 pJ a cycle on “sum” instead of 21.05.`,
     example: {
       title: 'A 16-bit register two ways',
       body: `<pre>mux enable:   16 × (flip-flop 11 + mux 4) = 240 NANDs   (reg16)
@@ -1072,9 +1072,9 @@ and a clock 2 delays late at these 16 flip-flops</pre>`,
       'Leaving out the enable where a register must hold: a stalled PC that loads every cycle advances anyway.',
     ],
     lib: 'dffe',
-    compare: ['dff'],
+    compare: ['dff', 'icg'],
     anatomy: ['pc', 'rf', 'p1'],
-    chapters: [{ chapter: 'latches', step: 7, label: 'Load enable' }],
+    chapters: [{ chapter: 'latches', step: 7, label: 'Load enable' }, { chapter: 'power', step: 5, label: 'A clock gate that cannot glitch' }],
   },
 
   forwarding: {

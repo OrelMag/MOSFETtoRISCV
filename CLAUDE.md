@@ -1370,6 +1370,9 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  The Communication entries (chapters 39–47) are codexcomm.ts (summaries; COMM_AWAITING_LEVELS: ids no Act 12 level lists yet),
                  codexmore4–5.ts and codexcheck6–7.ts, every number pinned by tests/content-codexcomm.test.ts; uart / spi / crc are glossary SKIP
                  (the CPU chapters name them as examples long before chapter 43); new entries need a chapters/taught.ts row
+                 The Power chapter's entries (leakstate, powergating, dvfs, minenergy, darksilicon) are codexpower.ts (POWER_AWAITING_LEVELS),
+                 codexmorepow.ts and codexcheckpow.ts, their numbers pinned by tests/content-codexpower.test.ts; clockgating gained the ICG;
+                 act 3's optional s_icg (buildpow.ts: RV16_ICG, a custom bench changing en at every moment of the period) practises it
   codexlinks.ts  how entries connect: CODEX_ORDER, buildsOn / leadsTo (from the level graph), seeAlso (related both ways),
                  neighbours; ui/codexfigs.ts: figures from the site's widgets for entries without a part (number explorer,
                  instruction fields, adder comparison, the gate-level RV32I pipeline run a few cycles); the codex page

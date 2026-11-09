@@ -52,6 +52,7 @@ export const NUDGES: Record<string, string> = {
   s_dff: 'A door open for half a cycle lets values race through; two doors that are never open together do not.',
   s_reg4: 'Holding is a choice made at every edge, keep the old value or take the new one, never made by stopping the clock.',
   s_reg16: 'Reuse what you just built.',
+  s_icg: 'The enable may change at any moment; the clock that leaves must not. Something has to hold en still while the clock is high.',
   s_cnt4: 'Something has to remember the count between edges, and something has to work out the next one.',
   s_pc: 'Each cycle the next address is one of a few candidates, and reset must win over all of them.',
   s_fsm: 'Name every situation the machine can be in, and what moves it from one to the next.',
