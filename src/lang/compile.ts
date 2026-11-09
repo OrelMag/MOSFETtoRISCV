@@ -16,6 +16,12 @@ export interface CompileOptions {
   m?: boolean;
   /** The heap's size in bytes for a program that uses strings (default HEAP_BYTES). */
   heapBytes?: number;
+  /**
+   * Target a process under the kernel of riscv/osprograms.ts: print is the write system call (a7 = 2, a0 = the word; ints and the characters of
+   * strings alike, as runPy's output), the end of the program is exit (a7 = 93). gp is unused. Nothing else changes: with this off the
+   * generated assembly is what it always was (tests/pyasm-snapshot.test.ts).
+   */
+  user?: boolean;
 }
 
 export interface Compiled {
@@ -41,7 +47,7 @@ export function compilePy(src: string, opts: CompileOptions = {}): Compiled {
   try {
     const mod = parse(src);
     const scope = analyze(mod);
-    gen = new CodeGen(mod, scope, dmemWords, opts.m ?? false, opts.heapBytes);
+    gen = new CodeGen(mod, scope, dmemWords, opts.m ?? false, opts.heapBytes, opts.user ?? false);
     lines = gen.generate();
   } catch (e) {
     if (e instanceof PyError) return fail(e);
