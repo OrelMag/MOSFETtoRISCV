@@ -172,8 +172,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     const bps = new Set<number>();
     let bpHit: number | null = null;
     const bpLine = h('div', { class: 'cpu-halt cpu-bp-hit', role: 'status', hidden: true });
-    // focusable: ↑ ↓ move the selected line, B sets or clears its breakpoint (the gutter is out of the tab order)
-    const listing = h('div', { class: 'cpu-listing', tabindex: '0', 'aria-label': 'Program: ↑ ↓ select a line, B sets or clears its breakpoint' });
+    // focusable: ↑ ↓ move the selected line, F9 sets or clears its breakpoint (the gutter is out of the tab order)
+    const listing = h('div', { class: 'cpu-listing', tabindex: '0', 'aria-label': 'Program: ↑ ↓ select a line, F9 sets or clears its breakpoint' });
     listing.addEventListener('keydown', (e) => {
       if (e.target !== listing || e.altKey || e.ctrlKey || e.metaKey) return;
       const addrs = [...listing.querySelectorAll<HTMLElement>('.ln')].map((r) => Number(r.dataset.pc));
@@ -183,7 +183,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
         selPc = addrs[i < 0 ? 0 : Math.max(0, Math.min(addrs.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))] ?? null;
         update();
         listing.querySelector('.ln.sel')?.scrollIntoView({ block: 'nearest' });
-      } else if (e.key.toLowerCase() === 'b' || e.code === 'KeyB') {
+      } else if (e.key === 'F9') {
         if (i < 0) return;
         if (!bps.delete(addrs[i])) bps.add(addrs[i]);
         update();

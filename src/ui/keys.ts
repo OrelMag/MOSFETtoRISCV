@@ -71,7 +71,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'help', group: 'anywhere', caps: ['?'], does: 'the keys on this page', match: [{ key: '?' }] },
   { id: 'esc', group: 'anywhere', caps: ['Esc'], does: 'close the top dialog or menu (in search: clear the query first)' },
   { id: 'code.leave', group: 'anywhere', caps: ['Esc', 'Tab'], does: 'leave a code editor (there Tab indents)' },
-  { id: 'cpu.bp', group: 'anywhere', caps: ['B'], does: 'focused CPU listing: breakpoint on the line ↑ ↓ pick' },
+  { id: 'cpu.bp', group: 'anywhere', caps: ['F9'], does: 'focused CPU listing: breakpoint on the line ↑ ↓ pick' },
   { id: 'skip', group: 'anywhere', caps: ['Tab'], does: 'the first stop skips to the circuit on pages with one, else to the page' },
   // ---- chapter pages
   { id: 'step.next', group: 'chapter', caps: [']'], does: 'next step (at the end: the next chapter)', match: [{ code: 'BracketRight', codeOnly: true, shift: false }] },

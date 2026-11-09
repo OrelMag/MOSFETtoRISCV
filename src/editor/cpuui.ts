@@ -150,8 +150,8 @@ class CpuPanel {
   private status = holdHeight(h('div', { class: 'cpu-status' }));
   private gaps = h('div', { class: 'sb-cpu-gaps' });
   private now = h('div', { class: 'cpu-now' });
-  /** Focusable: ↑ ↓ move the selected line, B sets or clears its breakpoint (the gutter is out of the tab order). */
-  private listing = h('div', { class: 'cpu-listing sb-cpu-list', tabindex: '0', 'aria-label': 'Program: ↑ ↓ select a line, B sets or clears its breakpoint' });
+  /** Focusable: ↑ ↓ move the selected line, F9 sets or clears its breakpoint (the gutter is out of the tab order). */
+  private listing = h('div', { class: 'cpu-listing sb-cpu-list', tabindex: '0', 'aria-label': 'Program: ↑ ↓ select a line, F9 sets or clears its breakpoint' });
   private use = h('div', { class: 'cpu-use' });
   private progHint = h('span', { class: 'cpu-sec-hint' }, 'click a line: the parts it uses');
   /** Custom instructions on an RV32I core (editor/owninstr.ts): shown when the CPU has one. */
@@ -738,7 +738,7 @@ class CpuPanel {
       const next = addrs[i < 0 ? 0 : Math.max(0, Math.min(addrs.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
       if (next !== this.sel) this.select(next);
       this.rowOf.get(next)?.scrollIntoView({ block: 'nearest' });
-    } else if (e.key.toLowerCase() === 'b' || e.code === 'KeyB') {
+    } else if (e.key === 'F9') {
       e.preventDefault();
       if (i >= 0) this.toggleBreak(addrs[i]);
     }
