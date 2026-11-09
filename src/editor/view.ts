@@ -96,6 +96,9 @@ export class EditorView {
   private gLabels: SVGGElement;
   private gValues: SVGGElement;
   private gOver: SVGGElement;
+  /** The Cut tool's line and its crossing marks (cutui.ts). */
+  private cutLine: SVGGElement;
+  private cutMarked: string[] = [];
   private parts = new Map<string, PartEls>();
   private wires = new Map<string, WireEls>();
   private pins = new Map<string, PinEls>();
@@ -154,6 +157,7 @@ export class EditorView {
     this.gOver = L('ed-over');
     this.preview = s('path', { class: 'ed-preview', d: '' });
     this.band = s('rect', { class: 'ed-band', width: 0, height: 0, display: 'none' });
+    this.cutLine = s('g', { class: 'ed-cut', display: 'none' });
     this.hot = s('circle', { class: 'ed-hot', r: 0.42, display: 'none' });
     this.ghost = s('g', { class: 'ed-ghost' });
     this.kc = s('g', { class: 'ed-kc', display: 'none' },
@@ -163,7 +167,7 @@ export class EditorView {
     this.guides = s('g', { class: 'ed-guides' });
     this.gHandles = s('g', { class: 'ed-handles' });
     this.gPorts = s('g', { class: 'ed-ports' });
-    this.gOver.append(this.guides, this.gPorts, this.gHandles, this.ghost, this.preview, this.band, this.hot, this.kc);
+    this.gOver.append(this.guides, this.gPorts, this.gHandles, this.ghost, this.preview, this.band, this.cutLine, this.hot, this.kc);
     this.svg.append(defs,
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid)' }),
       s('rect', { class: 'grid-bg', x: -5000, y: -5000, width: 10000, height: 10000, fill: 'url(#ed-grid5)' }),
@@ -859,6 +863,23 @@ export class EditorView {
   showPreview(path: Vec[] | null, bad = false): void {
     this.preview.setAttribute('d', path && path.length > 1 ? pathD(path) : '');
     this.preview.setAttribute('class', `ed-preview${bad ? ' bad' : ''}`);
+  }
+
+  /**
+   * The Cut tool's preview: the dragged line, a mark at each crossing, and the crossed wires drawn as about to go
+   * (class `cutting`). null hides it.
+   */
+  showCut(a: Vec | null, b?: Vec, wires: ReadonlyMap<string, Vec[]> = new Map()): void {
+    for (const id of this.cutMarked) this.wires.get(id)?.path.classList.remove('cutting');
+    this.cutMarked = [];
+    if (!a || !b) return void this.cutLine.setAttribute('display', 'none');
+    const marks = [...wires.values()].flat().map(([x, y]) => s('circle', { class: 'ed-cut-x', cx: x, cy: y, r: 0.32 }));
+    this.cutLine.replaceChildren(s('line', { class: 'ed-cut-line', x1: a[0], y1: a[1], x2: b[0], y2: b[1] }), ...marks);
+    this.cutLine.setAttribute('display', 'inline');
+    for (const id of wires.keys()) {
+      const el = this.wires.get(id)?.path;
+      if (el) { el.classList.add('cutting'); this.cutMarked.push(id); }
+    }
   }
 
   showBand(a: Vec | null, b?: Vec): void {

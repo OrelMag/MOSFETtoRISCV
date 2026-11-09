@@ -49,6 +49,8 @@ type State =
    */
   | { k: 'reshape'; id: string; grab: WireGrab; at: Vec; base: ChipDoc; d: Vec; hover?: boolean }
   | { k: 'band'; at: Vec; add: boolean }
+  /** A mode that took the whole press (Tools.capture: the Cut tool's line). */
+  | { k: 'capture'; sx: number; sy: number; moved: boolean }
   /** A section's corner handle dragged: `fixed` is the opposite corner. */
   | { k: 'resize'; id: string; fixed: Vec }
   /** `held`: the button is still down since the press that started it (drag-to-connect). */
@@ -96,6 +98,11 @@ export class Tools {
   onPress: ((h: Hit, e: PointerEvent) => boolean | (() => void)) | null = null;
   /** The right-click menu (ctxmenu.ts plugs it in), at a screen point, for the selection or the canvas point `at`. */
   onContext: ((x: number, y: number, at: Vec) => void) | null = null;
+  /**
+   * A mode that takes whole presses (the Cut tool): `down` returns true to own the press, then gets every move and the
+   * release (`moved`: it left the click radius), or `cancel` (Esc, a lost pointer). Pans and pinches still come first.
+   */
+  capture: { down(p: Vec, e: PointerEvent): boolean; move(p: Vec): void; up(p: Vec, moved: boolean): void; cancel(): void } | null = null;
 
   constructor(private ed: Editor) {
     const svg = ed.view.svg;
@@ -181,6 +188,7 @@ export class Tools {
   cancel(): void {
     const st = this.state;
     if (st.k === 'move' || st.k === 'reshape') this.ed.cancel();
+    if (st.k === 'capture') this.capture?.cancel();
     // placed, finished or given up: the touch screen's "armed" pill has done its job
     this.ed.endMode();
     this.state = { k: 'idle' };
@@ -211,6 +219,7 @@ export class Tools {
     ed.view.svg.setPointerCapture(e.pointerId);
     closePopover();
     const st = this.state;
+    if (this.capture && (st.k === 'idle' || st.k === 'press') && this.capture.down(p, e)) return void (this.state = { k: 'capture', sx: e.clientX, sy: e.clientY, moved: false });
 
     // A bend carried without a mouse: the press picks it up, and it follows the finger until it lifts.
     if (st.k === 'reshape' && st.hover && this.touch) {
@@ -289,6 +298,10 @@ export class Tools {
     this.cursor = p;
     const st = this.state;
     switch (st.k) {
+      case 'capture':
+        if (!st.moved && Math.hypot(e.clientX - st.sx, e.clientY - st.sy) >= DRAG_PX) st.moved = true;
+        this.capture?.move(p);
+        return;
       case 'press': {
         if (Math.hypot(e.clientX - st.sx, e.clientY - st.sy) < DRAG_PX) return;
         // Dragged out of a knob's port side: a wire from the pin, as from its connection point.
@@ -378,6 +391,10 @@ export class Tools {
     const st = this.state;
     const p = this.world(e);
     switch (st.k) {
+      case 'capture':
+        this.state = { k: 'idle' };
+        this.capture?.up(p, st.moved);
+        return;
       case 'press': {
         this.state = { k: 'idle' };
         if (st.tap) return st.tap();
