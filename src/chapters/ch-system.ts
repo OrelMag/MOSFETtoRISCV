@@ -9,6 +9,7 @@ import { SYSTEM_PROGRAMS } from '../riscv/sysprograms';
 import { crossover } from '../riscv/pollirq';
 import { stats } from '../sim/stats';
 import { pack } from '../sim/values';
+import { findIt } from '../widgets/findfault';
 import { cpuScene } from '../widgets/cpupanel';
 import type { Stage } from '../view/stage';
 import { IO_MORE, TRAPS_MORE } from './ch-system-more';
@@ -16,6 +17,19 @@ import type { Chapter } from './types';
 import { numOf } from './order';
 
 const sys = (id: string) => SYSTEM_PROGRAMS.find((p) => p.id === id)!.source;
+
+/** Find it: the system CPU with one bit of a CSR read stuck (sim/faults.ts), never drawn. */
+const FIND_SYS = findIt({
+  source: sys('syscall'), system: true,
+  planted: [{ kind: 'stuck1', end: 'csr.mepcOut', bit: 2 }],
+  goal: 'Find the planted fault: name the wire, the bit and the value it is stuck at.',
+  hints: [
+    'The first wrong register is t2, written by <code>csrr t2, mepc</code> in the handler: the hardware read 0x14, the model 0x10.',
+    '0x14 and 0x10 differ in one bit, 0x4: bit 2. The trap saved the right address (the first ecall is at 0x10); where does a read of mepc come from?',
+    'The CSR unit\'s <code>mepc</code> output, the register\'s value on its way out (to the trap unit for <code>mret</code>, and to the CSR read): bit 2, stuck at 1.',
+  ],
+  fault: 'Bit 2 of the CSR unit\'s <code>mepc</code> output was stuck at 1. The trap saved the right address in mepc, 0x10, but every read of it came out with bit 2 set: <code>csrr t2, mepc</code> gave 0x14, and the handler returned past the instruction it should have come back to. A single bit, and only on one path: the trap itself was right, which is why the fault showed only once the handler read mepc.',
+});
 const nd = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 /** The byte enables of a store: size 0 byte, 1 half, 2 word, at a byte offset 0..3. */
 const enables = (size: number, off: number) => (size === 0 ? 1 << off : size === 1 ? 3 << (off & 2) : 15);
@@ -674,6 +688,22 @@ export const chTraps: Chapter = {
         explain: 'Precise: everything older than the trap finishes (the lw writes its register in W), nothing younger runs (the add is flushed with F/D), and the trapping instruction itself writes nothing; mepc holds its address.',
         why: ['', 'Freezing the lw would lose a result the program has already been promised: an older instruction must finish.', 'Decoding changes no state; the add is flushed before it writes anything, as behind a taken branch.', 'The illegal instruction does not run: the trap clears its writes.'],
       },
+    },
+    {
+      title: 'Find it: a handler that returns to the wrong place',
+      deep: true,
+      body: `
+        <p><em>Optional: a deep dive. Nothing later relies on it.</em></p>
+        <p>The tiny operating system again: the program puts a character in a0 and traps with <code>ecall</code>; the handler prints it,
+        moves mepc past the ecall and returns. One wire in the CPU is stuck at 0 or 1, here one bit of a bus. Find it.</p>
+        <p>Press <strong>Run to halt</strong> (or <strong>Step</strong>) in the CPU panel. After every cycle it compares the registers with the
+        golden model, so it stops at the first instruction the hardware got wrong, and names the register, both values and the instruction.
+        Read that line as a clue: which instruction, which register, which value instead of which. Then right-click the wire you suspect and
+        choose <strong>It is stuck at 0 here</strong> or <strong>… at 1</strong> (a bus asks for the bit). A wrong guess costs nothing: the
+        panel runs the same program with the fault you named instead and says where that one would first show, which is a clue too.</p>
+        <p>When the value is a number, compare the two in binary: one stuck bit changes a value by a power of two.</p>`,
+      scene: FIND_SYS.scene,
+      challenge: FIND_SYS.challenge,
     },
   ],
 };

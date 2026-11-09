@@ -43,7 +43,7 @@ import { romImage } from './memory';
 import { openProgramEditor } from './memui';
 import type { ChipDoc } from './model';
 import { detectMulti, type MultiDesc, MultiMonitor } from './multicpu';
-import { detectRv16, type Rv16Desc, Rv16Monitor } from './cpu16';
+import { customizable16, detectRv16, type Rv16Desc, Rv16Monitor } from './cpu16';
 import { disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { OPCODES } from '../m6502/isa';
 import { type Cpu4Desc, Cpu4Monitor, cpu4Use, detectCpu4 } from './cpu4mon';
@@ -330,6 +330,11 @@ class CpuPanel {
         this.ucodeBtn.textContent = uc && 'ucode' in uc.ref ? 'Microcode (edited)…' : 'Microcode…';
         this.customBtn.textContent = this.desc?.iss.custom?.length ? `Custom: ${this.desc.iss.custom.map((r) => r.name).join(', ')}` : 'Custom…';
         this.rv16 = this.multi || this.desc || this.rv64 ? null : detectRv16(ed.doc, chips);
+        // the RV16 reference core and pipeline take rows too (owninstr16.ts)
+        if (this.rv16 && customizable16(ed.doc, chips, ed.chipId, !!ed.level)) {
+          this.customBtn.hidden = false;
+          this.customBtn.textContent = this.rv16!.custom?.length ? `Custom: ${this.rv16!.custom.map((r) => r.name).join(', ')}` : 'Custom…';
+        }
         this.lanes = this.multi || this.desc || this.rv16 || this.rv64 ? null : detectLanes16(ed.doc, chips);
         this.m6502 = this.multi || this.desc || this.rv16 || this.lanes || this.rv64 ? null : detect6502(ed.doc, chips);
         this.dsp24 = this.multi || this.desc || this.rv16 || this.lanes || this.m6502 || this.rv64 ? null : detectDsp24(ed.doc, chips);
@@ -1016,7 +1021,7 @@ class CpuPanel {
     const w = pc !== null && pc >= 0 ? mon.wordAt(pc) : null;
     keyed(this.now, `${pc}|${w}`, () => (w === null
       ? [h('span', { class: 'fmt' }, 'PC'), h('code', null, pc === null ? 'not found' : 'unknown (X)')]
-      : [h('span', { class: 'fmt' }, 'RV16'), h('code', null, disasm16(w, pc!)), h('span', { class: 'hexw' }, `0x${hex4(pc!)}`)]));
+      : [h('span', { class: 'fmt' }, 'RV16'), h('code', null, disasm16(w, pc!, mon.desc?.custom)), h('span', { class: 'hexw' }, `0x${hex4(pc!)}`)]));
     this.fieldsSec.hidden = this.fields.hidden = this.pipeSec.hidden = this.pipe.hidden = this.ioSec.hidden = this.io.hidden = true;
     this.fregsSec.hidden = this.fregs.hidden = this.memSec.hidden = this.mem.hidden = true;
     keyed(this.use, '', () => []);

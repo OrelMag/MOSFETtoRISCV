@@ -178,6 +178,7 @@ export const TAUGHT: Record<string, string> = {
   shannon: 'telegraph',
   reflection: 'wire',
   cdc: 'clocks',
+  sidechannel: 'sidechan', consttime: 'sidechan', evictreload: 'sidechan', transient: 'sidechan', spectre: 'sidechan', specbarrier: 'sidechan',
   asyncfifo: 'clocks',
   uart: 'telegraph',
   spi: 'spi',

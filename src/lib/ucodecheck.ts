@@ -62,7 +62,7 @@ export function rv32uiImages(): Promise<RvImage[]> {
 }
 
 const yieldNow = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-function slicer(signal?: { aborted: boolean }) {
+export function slicer(signal?: { aborted: boolean }) {
   let t = performance.now();
   return async () => {
     if (signal?.aborted) throw new Error('aborted');
@@ -83,12 +83,12 @@ function laneLeaves(design: FlatDesign, sim: BitSim, prog: (lane: number) => num
   });
 }
 
-interface Job { name: string; words: number[]; golden: { instructions: number; x: number[]; dmem: number[] }; max: number; tohost?: number; label: string }
+export interface Job { name: string; words: number[]; golden: { instructions: number; x: number[]; dmem: number[] }; max: number; tohost?: number; label: string }
 
-interface LaneRun { cycles: number[]; verdicts: (number | undefined)[] }
+export interface LaneRun { cycles: number[]; verdicts: (number | undefined)[] }
 
 /** Up to 32 riscv-tests images on one build, one per lane: run until each has written its verdict to tohost. */
-async function runLanes(def: ComponentDef, jobs: Job[], imemK: number, tick: () => Promise<void>): Promise<LaneRun> {
+export async function runLanes(def: ComponentDef, jobs: Job[], imemK: number, tick: () => Promise<void>): Promise<LaneRun> {
   const design = flatten(def);
   const sim = new BitSim(design);
   const N = 2 ** imemK, n = jobs.length;

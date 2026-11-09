@@ -7,6 +7,7 @@ import { chIO, chTraps } from './ch-system';
 import { chMulDiv } from './ch-muldiv';
 import { chCache } from './ch-cache';
 import { chVmem } from './ch-vmem';
+import { chOs } from './ch-os';
 import { chMulticycle } from './ch-multicycle';
 import { chFloat } from './ch-float';
 import { chWidths } from './ch-widths';
@@ -14,6 +15,9 @@ import { chOoo } from './ch-ooo';
 import { chPython } from './ch-python';
 import { chMulticore } from './ch-multicore';
 import { chSilicon } from './ch-silicon';
+import { chFpga } from './ch-fpga';
+import { chVerify } from './ch-verify';
+import { chSidechan } from './ch-sidechan';
 import { chFeed, chLanes, chSimt, chWarps } from './ch-gpu';
 import { chGfxPipeline, chPixels } from './ch-gfx';
 import { chBinary, chGates } from './ch-gates';
@@ -82,7 +86,7 @@ export const chapters: Chapter[] = [
   // the prologue: before the transistor, labelled P1 …
   chRelays, chTubes, chCards,
   chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
-  chAlu, chRegfile, chIsa, chSingleCycle, chPython, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chVmem, chMulticycle, chFloat, chWidths, chOoo, chMulticore, chSilicon, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
+  chAlu, chRegfile, chIsa, chSingleCycle, chPython, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chVmem, chOs, chMulticycle, chFloat, chWidths, chOoo, chMulticore, chSilicon, chFpga, chVerify, chSidechan, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
   chDram, chMemCtrl, chFlash, chBus,
   chMessage, chTelegraph, chExchange, chWire, chClocks, chUart, chSpi, chSignals, chNoise, chModem, chCarriers, chSerial, chGlass, chErrors, chCodes, chPcie, chEthernet, chSwitch, chNetwork, chRouter, chTcp, chQueues, chSecret, chPath, chRadio, chWifi, chCellular, chDatacentre, chBench, chFixed, chZplane, chSpectrum, chFirDesign, chIir, chMultirate, chCordic, chMac, chDspCore, chConverters, chAdaptive, chSpeech, chMusic, chSensors, chPictures, chSdr,
   // the appendix: after the journey, lettered

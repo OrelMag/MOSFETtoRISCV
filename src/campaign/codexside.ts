@@ -1,0 +1,19 @@
+// Codex entries for the side-channels chapter (chapters/ch-sidechan.ts). Same shape as codex.ts, appended to CODEX there;
+// the fuller texts are codexmoreside.ts, the questions codexcheckside.ts. Every number is the chapter's own, measured on
+// our models and pinned by tests/sidechan-chapter.test.ts. No DOM, no library import: the chapters' hover cards load this.
+
+import type { CodexEntry, CodexKind } from './codex';
+
+const E = (id: string, title: string, kind: CodexKind, body: string, related?: string[]): CodexEntry => ({ id, title, kind, body, related });
+
+export const CODEX_SIDE: CodexEntry[] = [
+  E('sidechannel', 'Side channel', 'concept', 'An output nobody meant a program or circuit to have: how long it takes, which cache lines it left behind, the power it draws. The program can be correct, checked against its golden model instruction by instruction, and still leak through one. A password check that returns at the first wrong byte takes 8 cycles for a wrong first letter and 7 more for each letter that matches, so the time spells the password out letter by letter.', ['consttime', 'evictreload', 'spectre']),
+  E('consttime', 'Constant-time code', 'trick', 'Code whose time, and whose memory addresses, do not depend on a secret: no branch on it, no load whose address it chooses. A password check that ORs every byte\'s difference and answers once takes 38 cycles for every guess, against 8 to 33 for the one that stops early. It always pays the worst case, and compilers can undo it, so it is checked in the machine code.', ['sidechannel']),
+  E('evictreload', 'Evict + reload', 'tool', 'Reading the cache without reading anyone\'s data. The attacker evicts its own probe lines, lets the victim run, then reloads each line and times it: a line the victim touched comes back in 5 cycles, the others in 23 (a hit against a miss of 20, with the timer read twice). Flush + reload does the same with an instruction that flushes a line; prime + probe fills whole sets instead.', ['sidechannel', 'spectre']),
+  E('transient', 'Transient execution', 'concept', 'What an out-of-order core does on a path it later throws away: after a mispredicted branch it runs the predicted path, loads included, until the branch resolves and the flush removes the results. Architecturally nothing happened: no register keeps a value and the golden model never ran those instructions. On our gate-level core a wrong-path load holds a secret word in the reorder buffer for 16 cycles. It is safe only while nothing it did can be seen afterwards; the cache can be.', ['spectre', 'specbarrier']),
+  E('spectre', 'Spectre (bounds check bypass)', 'concept', 'Spectre variant 1 (Kocher et al., 2019): <code>if (x &lt; len) y = probe[array1[x] · 16]</code>, with len evicted so the check waits for memory. The predictor guesses "in bounds", the wrong path loads the byte past the array and then the probe line it names; the flush restores the registers, not the cache. Reloading the 16 probe lines finds the fast one. It needs a late branch, a wrong-path load of the secret and a second load addressed by it; break any link and it stops.', ['transient', 'evictreload', 'specbarrier']),
+  E('specbarrier', 'Speculation barrier', 'tool', 'An instruction after which nothing dispatches until every older branch has resolved, so a wrong path stops there. After the bounds check it stops Spectre variant 1, and costs every call: on our model 14 cycles a call against 8.5 without it. The alternatives: mask the index with the check\'s result (12 cycles a call), or keep wrong-path loads out of the cache in hardware (fill at commit: no cost to this victim). x86 has lfence, Arm CSDB and SB; RISC-V has no standard one yet.', ['spectre', 'transient']),
+];
+
+/** No campaign level teaches these: the test that wants every entry in a level skips them (tests/campaign.test.ts). */
+export const SIDE_AWAITING_LEVELS: ReadonlySet<string> = new Set(CODEX_SIDE.map((e) => e.id));

@@ -67,6 +67,12 @@ editor/fpga.ts as the File menu runs it, then Yosys `synth_gowin` on the design 
 the golden model against Spike, commit by commit (`scripts/spike-oracle.ts`, docs/VERIFICATION.md); a change to the
 ISS should leave it green before merging (its failure artifact keeps the program, ELF and Spike's log).
 `.github/workflows/tshark.yml` (pushes touching comm/pcap.ts, the frames, the stack, the capturing widgets or itself; not a deploy gate) has tshark read each chapter's capture, from the gates and the chapters' own frames (`scripts/tshark-oracle.ts`, `--dump` only writes the files, no tshark on Windows; tshark-lib.ts holds each frame to what its bytes claim: fields, protocols, checksums verified good, nothing malformed, no warnings); captures broken on purpose must be caught, and the .pcap files and tshark's output are kept as an artifact.
+`.github/workflows/fpga.yml` (pushes touching the FPGA export, lutmap, timing, src/fpga/; not a deploy gate) runs `scripts/fpga-pnr.ts`: the export of counter7
+and the computer through Yosys synth_gowin, nextpnr-himbaechel and Apycula's gowin_pack (pinned versions) on the Tang Nano 9K, and fails when the result differs from the
+checked-in `src/fpga/fpgacosts.json` (device use, LUTs per block, post-route Fmax, the critical path split into skew / logic / routing, beside lutMap and
+static timing; the new file is an artifact). tests/fpgacosts.test.ts fails when the export no longer hashes as it was measured: run the script with --write.
+The chapter `fpga` (chapters/ch-fpga.ts, after silicon) quotes only src/fpga/facts.ts: lutMap / stats computed on first use and fpgacosts.json (tests/fpga-chapter.test.ts pins
+them); widgets/fpga.ts its widgets (LUT programmer, the LUTs panel lighting each LUT's gates, switch box, the report, the critical path), styles/fpga.css.
 `.github/workflows/layout.yml` (pushes touching scripts/layout/, export-layout.ts, vexport.ts) runs OpenROAD-flow-scripts on sky130
 per design (`export-layout.ts dual | sys`: Verilog, config, source.json with our NAND counts per block and static timing), ~35 min
 each; main and manual runs publish the release layout-latest (dual-core at its root, system core under sys/), which the deploy unpacks
@@ -191,6 +197,9 @@ src/sim/       simulation core (no DOM)
                  source; at 0: every input) to pins, constants and storage (a loop of ≤ LATCH gates, a stateful behaviour);
                  foldAt / whyAt fold the trace into one drill level's steps (a child's gates into the child, the bits each cause
                  uses), sayStep words them, explainNets does both (tests/explain.test.ts: the cited pins alone decide the value)
+  lutmap.ts      lutMap(def | design, { k }): technology mapping onto k-input LUTs (the FPGA chapter, docs/PLAN-FPGA.md): priority cuts,
+                 depth first then area flow; storage loops (gate SCCs) and behaviour leaves are boundaries, tie cells fold into the tables;
+                 Lut { out, ins, table: bigint, gates, level }; evalLuts (tests/lutmap.test.ts: equal to GateSim on every net it drives)
   ablate.ts      Break a part: ablate(def, path) removes each child of a level (outputs open), then holds it at 0 and 1, over
                  the whole truth table (≤ MAX_BITS inputs, bit-parallel three-valued), against the intact one; roleText
                  (tests/ablate.test.ts: equal to simulating the netlist without the part)
@@ -530,6 +539,8 @@ src/lib/       the component library (registered in `registry` via define())
                  srt4Divider(n) (radix 4, n/2 + 3 cycles); iterCtrl(n) handles any step count
   pipem.ts       MUL_E / MUL_M (Booth tree in E, 64-bit Kogge–Stone in M), DIV_E (radix-4 SRT, stall until done); divE(abort)
                  (with an abort input: iterCtrl(n, abort) / srt4Divider(n, abort); DIV_E = divE(false), unchanged)
+  fpga.ts        the FPGA chapter's parts: lut(k) (cfg bits as an input, muxTree(k, 1) inside; LUT2, LUT4 = 60 NANDs), SLICE (LUT4 + carry
+                 chain + DFF + output select), ROUTE_SWITCH (TGATE + inverter at switch level); tests/fpga.test.ts
   multiply.ts    seqMul(n) (shift and add), boothRow / boothPP / boothReduce / boothTree / boothMul(n) (radix-4 Booth,
                  sign-constant trick), pipeMul(n) (3-stage pipelined Booth)
   adders.ts      carrySelect(n, k), carrySkip(n, k), BCD_DIGIT, bcdAdder(d)
@@ -760,7 +771,9 @@ src/riscv/rv16/ isa16.ts (fields, encode / decode / disasm), asm16.ts, iss16.ts 
                one memory taking turns, warp 0 first, wasted turns counted; bar waits for the other warp or its end (mask 0);
                stepWarp(w) for other issue orders; raster: lane 0's stores to 0xFFF0 … 0xFFF6 draw at once into 0xF000, draws
                listed), randprog.ts (seeded random
-               programs for fuzzing cores)
+               programs for fuzzing cores); custom16.ts (your own instructions: R-type rows rd ← f(rs1, rs2) in OPX's free funct3 values, the
+               4-bit opcode being full; decode16 / disasm16 / assemble16 / Iss16({ custom }) take them, lib/rv16/cpu.ts control16(rows) is CTL16
+               itself without rows; tests/rv16-custom.test.ts pins every rv16 part's and campaign answer's fingerprint: scripts/rv16-fp.ts --write)
 src/isa/       Custom ISA: table.ts (IsaDoc: instructions as mnemonic + operand letters + bit pattern, operand kinds reg / enum
                / imm / addr; IsaTable: assemble, disasm (most specific pattern), fields, words, problems; sanitizeIsa),
                presets.ts (ISA4_PRESET: the 4-bit ISA as a table, equal to asm4 / disasm4 on every word), isa.ts (Isa:
@@ -1229,7 +1242,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  the search's `>` action; Apply = setRef in one undo step
   owninstr.ts    Custom instructions… (the CPU drawer's Custom…, a ROM's program editor): up to three rows on an
                  rv32i_core, their problems, data path, signals and generated golden-model code, the control unit's cost
-                 measured; Apply (one undo step): the core part becomes { core: { custom } } ({ core: { custom, pipe: true } } on rv32i_pipe_core, lib/pipeline.ts ports), the ROM ref gets a copy; the controls (LINES, dataPath, issCode) live in widgets/ownrow.ts
+                 measured; Apply (one undo step): the core part becomes { core: { custom } } ({ core: { custom, pipe: true } } on rv32i_pipe_core, lib/pipeline.ts ports), the ROM ref gets a copy; the controls (LINES, dataPath, issCode) live in widgets/ownrow.ts;
+                 owninstr16.ts the same dialog on the RV16 reference core / pipeline (rv16_cpu, rv16_pipe_111): format fixed to R, a free OPX funct3
+                 per row, Apply = { core16: { custom, pipe? } } and the RV16 ROM's custom16 copy; cpu16.ts's monitor runs the rows
   cpuui.ts       plugin: the CPU panel (docked drawer: status, listing with the PC and pipeline stages, a
                  click marks the instruction's parts (insthw names) and colours its field wires
                  (instrMarks → wires by net), field breakdown (widgets/instrfields), pipeline diagram
@@ -1336,6 +1351,10 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  with it and never passes); the learner accuses with the fault brush (B), right when challenges.ts symptomsDiffer finds
                  every output of every case the same (the CPU bench: the same net); NodeProgress.wrong, par { wrong: 0 }: a star each;
                  on the canvas EditorSim.setHidden, Editor.bodyLock (challengeui.ts); tests/breakit.test.ts
+                 The core CPU chapters (cpu, pipeline, multicycle, traps, cache) end in a deep "find it" step: widgets/findfault.ts findIt
+                 (cpuScene({ planted }): sim/faults.ts withPlanted, the Find the fault panel, Stage.accuser rows lead a wire's menu; right =
+                 accusedRight: a planted fault's exact nets and value; a wrong one answered by riscv/firstwrong.ts on that fault, computed);
+                 tests/findit.test.ts
   levels.ts      levelChallenge(node): the base BuildChallenge with the campaign rule and par, id cp_<node>,
                  chip u_ch_cp_<node>; nodeOfChip; startCandidates / startFrom (a core level begun as a copy of an
                  earlier core level's chip, plus the new pins)
@@ -1759,7 +1778,7 @@ The guide around the prose (ui/pages/chapter.ts, looks.ts; tests/chapter-guide.t
   steps, 4–7 short unique names (tests/chapter-guide.test.ts). Parts only group the steps in their order, so no address or saved
   progress moves; ui/chapterparts.ts draws one segment per part, the status line and the list (the current part open, folded to
   begin with on a phone or a short screen). `deep: true` on a step marks a deep dive: it stays in order and is never hidden or
-  locked, so nothing later may rely on it (no campaign level or other chapter links it, the recap's questions are not about it).
+  locked, so nothing later may rely on it (no campaign level or other chapter links it, the recap's questions are not about it). A chapter without parts may end in deep steps only (tests/chapter-guide.test.ts); they say they are optional.
 
 ## Major changes: mockup first
 

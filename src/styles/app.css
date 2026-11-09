@@ -1535,6 +1535,10 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .mem-pick { display: block; width: 100%; margin: 0 0 6px; font: 12px var(--font); padding: 3px 6px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
 /* --warn is too faint for small text: the warning colour marks the edge, the text stays --text */
 .mem-note { margin: 6px 0 0; max-width: 300px; font-size: 12px; color: var(--text); border-left: 3px solid var(--warn); padding-left: 6px; }
+/* a chapter's "find it" step (widgets/findfault.ts): each accusation on a row of its own, its ✓ / ✗ the mark */
+.find-panel { max-width: 640px; }
+.find-tries { list-style: none; margin: 6px 0 0; padding: 0; }
+.find-tries li { margin: 0 0 6px; }
 .mem-panel {
   position: absolute; right: 12px; bottom: 12px; z-index: 3; max-height: calc(100% - 60px); overflow: auto;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-lg);

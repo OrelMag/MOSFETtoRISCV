@@ -97,3 +97,17 @@ describe('hex tokenizer', () => {
     for (const line of ['', '   ', '@0\t13 , 13', 'ff//c', 'x#y']) expect(join(tokenize(line, 'hex'))).toBe(line);
   });
 });
+
+describe('a core\'s own instructions', () => {
+  it('highlight as instructions in RV32 and RV16 assembly, as the ROM\'s rows assemble them', () => {
+    const rv32: CodeLang = { base: 'rvasm', ops: ['madd'] }, rv16: CodeLang = { base: 'rv16asm', ops: ['lwx'] };
+    expect(sig('madd a0, a1, a2', rv32)).toEqual(['op:madd', 'reg:a0', 'pun:,', 'reg:a1', 'pun:,', 'reg:a2']);
+    expect(sig('madd a0, a1, a2', 'rvasm')[0]).toBe('bad:madd');
+    expect(sig('l: LWX t0, zero, a0', rv16)[1]).toBe('op:LWX');
+    expect(sig('lwx t0, zero, a0', 'rv16asm')[0]).toBe('bad:lwx');
+    // the base ISA is untouched underneath
+    expect(sig('li a0, 1', rv16)).toEqual(sig('li a0, 1', 'rv16asm'));
+    expect(sig('nope a0', rv32)[0]).toBe('bad:nope');
+    expect(join(tokenize('  lwx t0, zero, a0 # x', rv16))).toBe('  lwx t0, zero, a0 # x');
+  });
+});

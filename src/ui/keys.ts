@@ -93,7 +93,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'model.home', group: 'model', caps: ['Home'], does: 'back to the starting view (or double-click)' },
   { id: 'model.full', group: 'model', caps: ['Esc'], does: 'leave full screen (the corner button enters it)' },
   // ---- the sandbox (and campaign levels)
-  { id: 'sb.fav', group: 'place', caps: ['1', '…', '9'], does: 'arm favourite n; a click places it (Shift-click: several)', taken: ['1', '2', '3', '4', '5', '6', '7', '8', '9'] },
+  { id: 'sb.fav', group: 'place', caps: ['1', '…', '9'], does: 'arm favourite n: the keyboard cursor comes on, ↵ or a click places it (Shift: several)', taken: ['1', '2', '3', '4', '5', '6', '7', '8', '9'] },
   { id: 'sb.pointer', group: 'place', caps: ['L', '·', 'T'], does: 'arm a pointer · a comment (same pointer name = same net)', match: [letter('l')], taken: ['l', 't'] },
   { id: 'sb.comment', group: 'place', caps: [], does: '', match: [letter('t')] },
   { id: 'sb.section', group: 'place', caps: ['G'], does: 'group the selection in a section (a titled frame its contents move with); with nothing selected, a new section in the view', match: [letter('g')] },
@@ -103,7 +103,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'sb.disarm', group: 'place', caps: ['Esc'], does: 'disarm · leave Type' },
   { id: 'sb.flipL', group: 'wire', caps: ['Space', '·', '/'], does: 'flip the wire\'s L while drawing', taken: ['/'] },
   { id: 'sb.corner', group: 'wire', caps: ['Backspace'], does: 'remove the last corner' },
-  { id: 'sb.wirekey', group: 'wire', caps: ['W'], does: 'start a wire from the pin under the cursor (or the selected part’s first pin)', match: [letter('w')], taken: ['w'] },
+  { id: 'sb.wirekey', group: 'wire', caps: ['W'], does: 'start a wire from the pin or wire under the cursor (else the selected part’s first pin)', match: [letter('w')], taken: ['w'] },
   { id: 'sb.nextpin', group: 'wire', caps: ['N', '·', 'Shift N'], does: 'cursor to the next · previous pin (the selected part’s, else the chip’s; while wiring: the next pin that can connect)', match: [letter('n')], taken: ['n'] },
   { id: 'sb.wireEnd', group: 'wire', caps: ['↵'], does: 'end the wire on the pin under the cursor (elsewhere: a bend)' },
   { id: 'sb.wireEsc', group: 'wire', caps: ['Esc'], does: 'cancel the wire' },

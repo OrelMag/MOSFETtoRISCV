@@ -16,6 +16,7 @@ import { TIE0 } from '../transistors';
 import { ADD16, choose4, CMP16, cmpWith, EQ16, INC16, MUX16, PC16, RF8, RV16_ALU16, RV16_ALU16KS, RV16_DREG16 } from './logic';
 import { foldBands } from '../fold';
 import { DIV16, MUL16 } from './md';
+import { aluCtl16, meaning16, rowsKey16, type Custom16Row } from '../../riscv/rv16/custom16';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -64,14 +65,17 @@ export const CTL_WIDTHS = [1, 1, 2, 4, 1, 2, 1, 1, 1];
 /**
  * The control unit's table: outputs and which bits matter (a don't-care is free to be anything).
  * isel: 0 I, 1 S/B, 2 J, 3 U. wb: 0 ALU, 1 memory, 2 pc + 1, 3 the immediate (lui).
- * MD and SYSTEM instructions are not part of RV16I: they do nothing.
+ * MD and SYSTEM instructions are not part of RV16I: they do nothing. rows: the core's own instructions (custom16.ts), each
+ * OP's signals with its own ALU control and, for a memory row, the load's result select.
  */
-export function controlSpec(w: number): { out: number[]; care: number[] } {
+export function controlSpec(w: number, rows: readonly Custom16Row[] = []): { out: number[]; care: number[] } {
   const op = w & 15, f3 = (w >> 13) & 7;
   const lui = (op & 7) === 7;
   let rwe = 0, bimm = 0, isel = 0, aluc = 0, mwe = 0, wb = 0, br = 0, jal = 0, jalr = 0;
   let cB = 0, cI = 0, cA = 0, cW = 0;
-  if (op === 1 || op === 2) { rwe = 1; aluc = (op === 2 ? 8 : 0) | f3; cB = cA = cW = 1; }
+  const row = op === 2 ? rows.find((r) => r.f3 === f3) : undefined;
+  if (row) { rwe = 1; aluc = aluCtl16(row); wb = row.result === 'mem' ? 1 : 0; cB = cA = cW = 1; }
+  else if (op === 1 || op === 2) { rwe = 1; aluc = (op === 2 ? 8 : 0) | f3; cB = cA = cW = 1; }
   else if (op === 4) { rwe = 1; bimm = 1; cB = cI = cA = cW = 1; }
   else if (op === 5) { rwe = 1; bimm = 1; const t = f3 >> 1; aluc = t === 0 ? 1 : t & 2 ? 13 : 5; cB = cI = cA = cW = 1; }
   else if (op === 6) { rwe = 1; bimm = 1; wb = 1; cB = cI = cA = cW = 1; }
@@ -83,8 +87,23 @@ export function controlSpec(w: number): { out: number[]; care: number[] } {
   return { out: [rwe, bimm, isel, aluc, mwe, wb, br, jal, jalr], care: [1, cB, cI ? 3 : 0, cA ? 15 : 0, 1, cW ? 3 : 0, 1, 1, 1] };
 }
 
-/** The control unit: a 4→16 decoder on the opcode, then an OR per signal. */
-export const CTL16: ComponentDef = (() => {
+const controls = new Map<string, ComponentDef>();
+
+/**
+ * The control unit: a 4→16 decoder on the opcode, then an OR per signal. rows (custom16.ts): a 3→8 decoder on funct3,
+ * enabled by OPX, finds a row; a row clears OPX's own ALU bits it does not want (alu[2:0] for add / sub, the alt bit for
+ * add / funct3) and a memory row joins wb[0] (the load's result). Without rows: CTL16 itself.
+ */
+export function control16(rows: readonly Custom16Row[] = []): ComponentDef {
+  const key = rowsKey16(rows);
+  let d = controls.get(key);
+  if (d) return d;
+  d = buildControl(rows, key);
+  controls.set(key, d);
+  return d;
+}
+
+function buildControl(rows: readonly Custom16Row[], key: string): ComponentDef {
   const b = new Builder(8, 14, 4);
   b.pins('instr');
   const s = b.op(splitter([4, 9, 1, 1, 1], 4), ['instr'], 'op, f3');
@@ -103,14 +122,29 @@ export const CTL16: ComponentDef = (() => {
   };
   const lui = or([y(7), y(15)], 'LUI');
   const opx = y(2), shi = y(5);
-  const alu1 = or([y(1), opx], 'OP | OPX');
+  // OPX's ALU bits, minus what a row clears (OPX alone: alu = 1 f3)
+  let opxLow = opx, opxAlt = opx;
+  const memRows: string[] = [];
+  if (rows.length) {
+    const hit = b.op(decoder(3, true), [b.op1(merger([1, 1, 1], 2), [f0, f1, f2], 'f3'), opx], 'your rows');
+    const h = (r: Custom16Row) => b.name(`${hit}.y${r.f3}`, `is_${r.name.replaceAll('.', '_')}`, true);
+    b.next();
+    const low = rows.filter((r) => r.alu !== 'f3').map(h), alt = rows.filter((r) => r.alu !== 'sub').map(h);
+    memRows.push(...rows.filter((r) => r.result === 'mem').map(h));
+    if (low.length) opxLow = b.op1(AND, [opx, b.op1(NOT, [or(low, 'add / sub rows')])], 'OPX, own f3');
+    if (alt.length) opxAlt = b.op1(AND, [opx, b.op1(NOT, [or(alt, 'rows without alt')])], 'OPX, alt');
+    b.next();
+  }
+  const alu1 = or([y(1), opxLow], 'OP | OPX');
   b.next();
   const rwe = or([y(1), y(2), y(4), y(5), y(6), y(12), y(13), lui], 'rwe');
   const bimm = or([y(4), y(5), y(6), y(14)], 'bimm');
+  const n0 = b.instances.length;
   const isel0 = or([y(8), y(9), y(10), y(11), y(14), lui], 'isel0');
+  const isel0Pads = b.instances.slice(n0).filter((i) => i.def === TIE0);
   const isel1 = or([y(12), lui], 'isel1');
   const br = or([y(8), y(9), y(10), y(11)], 'br');
-  const wb0 = or([y(6), lui], 'wb0');
+  const wb0 = or([y(6), lui, ...memRows], 'wb0');
   const wb1 = or([y(12), y(13), lui], 'wb1');
   // where a gate's port is, from the instance the Builder placed (for the hand placement below)
   const inst = (end: string) => b.instances.find((i) => i.name === end.split('.')[0])!;
@@ -126,7 +160,7 @@ export const CTL16: ComponentDef = (() => {
   b.next();
   const a2s = b.op1(AND, [shi, t]);
   const a0 = b.op1(OR, [a0r, shi], 'alu0');
-  const a3 = b.op1(OR, [opx, a3s], 'alu3');
+  const a3 = b.op1(OR, [opxAlt, a3s], 'alu3');
   b.next();
   const a2 = b.op1(OR, [a2r, a2s], 'alu2');
   b.next();
@@ -148,7 +182,7 @@ export const CTL16: ComponentDef = (() => {
   const XM = at(rwe)[0] + 6;
   inst(iselM).at = [XM, at(isel0)[1] - iselP / 2];
   inst(wbM).at = [XM, at(wb0)[1] - wbP / 2];
-  const pads = b.instances.filter((i) => i.def === TIE0);
+  const pads = isel0Pads;
   const isel0In = (k: number) => at(`${isel0.split('.')[0]}.i${k}`);
   pads.forEach((p, j) => { const q = isel0In(8 - pads.length + j); p.at = [q[0] - 10, q[1] - 1]; });
   const pinY: Record<string, number> = { rwe: at(rwe)[1], bimm: at(bimm)[1], isel: at(iselM)[1], br: at(br)[1], wb: at(wbM)[1], alu: at(aluM)[1] };
@@ -158,14 +192,17 @@ export const CTL16: ComponentDef = (() => {
   const taken: number[] = [];
   for (const n of CTL_OUTS) { let yy = pinY[n]; while (taken.some((t) => Math.abs(t - yy) < 2)) yy += 2; taken.push(yy); pinY[n] = yy; }
   return define({
-    id: 'rv16_ctl', name: 'Control unit (RV16)', category: 'cpu',
-    summary: 'Opcode → control signals: a 4→16 decoder, then each signal is the OR of the opcodes that need it. The ALU operation is {OPX, f3} (shifts: from the shift type).',
+    id: key ? `rv16_ctl_x${key}` : 'rv16_ctl', name: key ? `Control unit (RV16, with ${rows.map((r) => r.name).join(', ')})` : 'Control unit (RV16)', category: 'cpu',
+    summary: 'Opcode → control signals: a 4→16 decoder, then each signal is the OR of the opcodes that need it. The ALU operation is {OPX, f3} (shifts: from the shift type).'
+      + (key ? ` Your instructions, in OPX's free funct3 values: ${rows.map((r) => `${r.name} (f3 = ${r.f3}): ${meaning16(r)[0]}`).join('; ')}.` : ''),
     ports: [bus('instr', 16, 'in'), ...CTL_OUTS.map((n, i) => (CTL_WIDTHS[i] > 1 ? bus(n, CTL_WIDTHS[i], 'out') : bit(n, 'out')))],
     symbol: { kind: 'box', label: 'CONTROL' },
-    spec: ([w]) => controlSpec(w).out,
+    spec: ([w]) => controlSpec(w, rows).out,
     netlist: () => ({ pins: { instr: [0, 8], ...Object.fromEntries(CTL_OUTS.map((n) => [n, [R, pinY[n]] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
   });
-})();
+}
+
+export const CTL16: ComponentDef = control16();
 
 const branches = new Map<boolean, ComponentDef>();
 
@@ -250,10 +287,12 @@ export type CoreMd = '' | 'mul' | 'div';
  * the reference for Core I. full = true: all of RV16I, the PC loading next PC's pc + 1 (no second
  * incrementer). md: the MD opcode too (full only): a multiplier on the result mux, and a divider
  * that holds the PC until it is done. fast: a Kogge–Stone ALU (c_fast's reference); next PC keeps its ripple
- * adders, since the branch path through it ends two delays behind the load path either way.
+ * adders, since the branch path through it ends two delays behind the load path either way. custom: the core's own
+ * instructions (custom16.ts), in its control unit only (control16).
  */
-export function rv16Core(full: boolean, fast = false, md: CoreMd = '', arith = false): ComponentDef {
-  const key = `${full ? 'full' : arith ? 'arith' : 'straight'}${fast ? '_ks' : ''}${md ? `_${md}` : ''}`;
+export function rv16Core(full: boolean, fast = false, md: CoreMd = '', arith = false, custom: readonly Custom16Row[] = []): ComponentDef {
+  const cx = rowsKey16(custom);
+  const key = `${full ? 'full' : arith ? 'arith' : 'straight'}${fast ? '_ks' : ''}${md ? `_${md}` : ''}${cx ? `_x${cx}` : ''}`;
   let d = cores.get(key);
   if (d) return d;
   const b = new Builder(10, 16, 6);
@@ -262,7 +301,7 @@ export function rv16Core(full: boolean, fast = false, md: CoreMd = '', arith = f
   const cond = b.name(`${f}.o0`, 'cond', true), rd = b.name(`${f}.o2`, 'rd', true);
   const rs1 = b.name(`${f}.o3`, 'rs1f', true), rs2 = b.name(`${f}.o4`, 'rs2f', true);
   b.next();
-  const ctl = b.op(CTL16, ['instr'], 'control');
+  const ctl = b.op(control16(custom), ['instr'], 'control');
   const imm = b.op(IMM16, ['instr'], 'immediates');
   b.next();
   // Core I uses two immediates (I, U): isel bit 1 tells them apart. Without jumps, J is never selected.
@@ -349,8 +388,8 @@ export function rv16Core(full: boolean, fast = false, md: CoreMd = '', arith = f
   b.wire(wbv, 'rwd');
   const R = b.right;
   d = define({
-    id: `${full ? 'rv16_cpu' : arith ? 'rv16_cpu_alu' : 'rv16_cpu_nb'}${fast ? '_ks' : ''}${md === 'mul' ? '_m' : md === 'div' ? '_md' : ''}`,
-    name: `${full ? 'RV16 single-cycle core' : arith ? 'RV16 single-cycle core (arithmetic only)' : 'RV16 single-cycle core (no branches)'}${fast ? ', fast adders' : ''}${md === 'mul' ? ', multiply' : md === 'div' ? ', multiply and divide' : ''}`, category: 'cpu',
+    id: `${full ? 'rv16_cpu' : arith ? 'rv16_cpu_alu' : 'rv16_cpu_nb'}${fast ? '_ks' : ''}${md === 'mul' ? '_m' : md === 'div' ? '_md' : ''}${cx ? `_x${cx}` : ''}`,
+    name: `${full ? 'RV16 single-cycle core' : arith ? 'RV16 single-cycle core (arithmetic only)' : 'RV16 single-cycle core (no branches)'}${fast ? ', fast adders' : ''}${md === 'mul' ? ', multiply' : md === 'div' ? ', multiply and divide' : ''}${cx ? `, with ${custom.map((r) => r.name).join(', ')}` : ''}`, category: 'cpu',
     summary: 'PC → (instruction from the bench) → control and immediates → register file → ALU → result mux → register file. The bench serves instr = imem[pc] and drdata = dmem[daddr] combinationally.'
       + (md === 'mul' ? ' MD instructions take the multiplier\'s result instead.' : md === 'div' ? ' MD instructions take the multiplier\'s or the divider\'s result; a divide holds the PC (and writes nothing) until the divider is done.' : ''),
     ports: CORE_PORTS,

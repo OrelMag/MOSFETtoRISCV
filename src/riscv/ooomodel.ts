@@ -35,10 +35,38 @@
 // fixed latency. Only the correct path's control flow matters, which the golden model gives: it steps once per
 // correct-path instruction as it is fetched. Wrong-path instructions are fetched, renamed and executed like any other
 // (they compete for ports and buses with older ones) until the flush removes them.
+//
+// Spec mode (cfg.spec; the side-channels chapter, nothing else: without it every cycle is as above, pinned by
+// tests/ooo-fingerprint.test.ts). Timing then depends on data, as on a real core:
+//   - wrong-path instructions get values: at a misprediction a copy of the golden model is stepped down the predicted
+//     path as its instructions are fetched (its stores vanish with it), so a wrong-path load has an address;
+//   - a load's latency comes from a data cache (sim/cachemodel.ts): a hit lat.load, a miss spec.missLat. Its line is
+//     filled when it issues (the request is out: a flush does not call it back), wrong path or not; with fillAtCommit,
+//     only when it commits. A store writes the cache at commit;
+//   - csrr rd, cycle reads this model's cycle. It is serializing: fetch stops behind it, it issues as the oldest in
+//     flight, and the golden model steps it then, with that cycle written to rd;
+//   - with fenceBarrier, a fence is a speculation barrier: it dispatches only once no older branch or jalr is in flight.
 
+import { CacheModel, type CacheConfig } from '../sim/cachemodel';
 import { ISS, type IssOptions } from './iss';
-import { disasm } from './isa';
+import { decode, disasm } from './isa';
 import { classify, LAT, latencyOf, type Latencies, type UopClass } from './ilp';
+
+/** Spec mode (see the header). */
+export interface SpecConfig {
+  cache: CacheConfig;
+  /** Cycles from issue to result for a load that misses (a hit takes lat.load). */
+  missLat: number;
+  /** A load fills its line only when it commits (the hardware defence): a wrong-path load fills nothing. */
+  fillAtCommit?: boolean;
+  /** fence waits at dispatch until no older branch or jalr is in flight. */
+  fenceBarrier?: boolean;
+}
+
+/** csrr rd, cycle (or mcycle): csrrs with rs1 = x0. */
+export const isRdcycle = (w: number) => (w & 0x707f) === 0x2073 && ((w >>> 15) & 31) === 0 && ((w >>> 20) === 0xc00 || (w >>> 20) === 0xb00);
+/** fence (any predecessor / successor sets). */
+export const isFence = (w: number) => (w & 0x707f) === 0x000f;
 
 export type Predictor = 'perfect' | 'btb' | 'ras';
 
@@ -84,6 +112,8 @@ export interface OooConfig {
   branchPorts: 1 | 2;
   /** How an instruction that several ports take picks one: alternate, or the port with fewer waiting. */
   bind: 'alternate' | 'balance';
+  /** Spec mode: values on the wrong path, a data cache, a cycle counter (see the header). */
+  spec?: SpecConfig;
 }
 
 /** The gate-level core's shape (decisions D4–D6 of the plan). */
@@ -151,6 +181,12 @@ export interface Uop {
   state: UopState;
   /** ROB entry (circular index) once dispatched. */
   rob: number;
+  /** Spec mode: a load's or store's byte address (unknown on a wrong path the golden model's copy could not follow). */
+  addr?: number;
+  /** Spec mode: the load missed in the cache. */
+  miss?: boolean;
+  /** Spec mode: csrr rd, cycle (serializing; its value is the cycle it issues). */
+  rdcycle?: boolean;
 }
 
 export interface CycleInfo {
@@ -215,6 +251,12 @@ export class OooModel {
   /** The cycle of the last flush; until an instruction fetched after it commits, its slots go to the misprediction. */
   private flushedAt = -1;
   private recovering = false;
+  /** Spec mode: the data cache; the golden model's copy on a wrong path (null once it cannot go on); a csrr cycle fetch waits behind. */
+  readonly cache: CacheModel | null = null;
+  private shadow: ISS | null = null;
+  private shadowOn = false;
+  private serial: Uop | null = null;
+  private readonly issOpts: IssOptions;
 
   constructor(readonly words: number[], cfg: Partial<OooConfig> = {}, opts: IssOptions = {}) {
     this.cfg = { ...OOO_CORE, ...cfg, lat: { ...OOO_CORE.lat, ...cfg.lat } };
@@ -223,6 +265,8 @@ export class OooModel {
     this.shape = shapeOf(this.cfg);
     this.iterDiv = (this.cfg.divider ?? 'iterative') === 'iterative';
     this.iss = new ISS(words, { m: true, ...opts });
+    this.issOpts = { m: true, ...opts };
+    if (this.cfg.spec) this.cache = new CacheModel(this.cfg.spec.cache);
     this.imem = opts.imemWords ?? 1 << 16;
     this.btb = new Array(this.cfg.btb).fill(null);
     this.busy = this.shape.ports.map(() => new Set<number>());
@@ -288,6 +332,7 @@ export class OooModel {
       seq: this.seq++, pc, word, text: disasm(word, pc), cls: c.cls, rd: c.rd, srcs: c.srcs, wrong: this.wrongPath,
       pnext: 0, mispredict: false, deps: [], port: -1, f: this.cycle, d: -1, s: -1, x: -1, c: -1, state: 'fetched', rob: -1,
     };
+    if (this.cfg.spec) return this.fetchSpec(u);
     if (!this.wrongPath) {
       this.iss.step();
       u.next = this.iss.pc;
@@ -296,6 +341,51 @@ export class OooModel {
     u.pnext = this.cfg.predict === 'perfect' && !u.wrong ? u.next! : this.predict(pc, word);
     this.rasOp(this.rasSpec, u);
     if (!u.wrong && u.pnext !== u.next) { u.mispredict = true; this.wrongPath = true; }
+    if (u.wrong) this.stats.wrongPath++;
+    return u;
+  }
+
+  /** fetchOne in spec mode: addresses from the golden model (or its copy on a wrong path), csrr cycle held back. */
+  private fetchSpec(u: Uop): Uop {
+    const { pc, word } = u;
+    const addrOf = (x: ArrayLike<number>) => {
+      if (u.cls !== 'load' && u.cls !== 'store') return undefined;
+      const d = decode(word);
+      return (x[d.rs1] + d.imm) >>> 0;
+    };
+    if (isRdcycle(word)) {
+      // nothing after it is fetched until it has issued, on a wrong path too (a flush then lets fetch go on). On the
+      // correct path the golden model steps it when it issues (pick), with the cycle then
+      u.rdcycle = true;
+      u.rd = (word >>> 7) & 31;
+      u.pnext = (pc + 4) >>> 0;
+      if (!this.wrongPath) u.next = u.pnext;
+      else this.stats.wrongPath++;
+      this.serial = u;
+      return u;
+    }
+    if (!this.wrongPath) {
+      u.addr = addrOf(this.iss.x);
+      this.iss.step();
+      u.next = this.iss.pc;
+      if (u.rd) u.value = this.iss.x[u.rd];
+    } else if (this.shadow && this.shadowOn) {
+      u.addr = addrOf(this.shadow.x);
+      this.shadow.step();
+      if (u.rd) u.value = this.shadow.x[u.rd];
+      if (this.shadow.halted) this.shadowOn = false;
+    }
+    u.pnext = this.cfg.predict === 'perfect' && !u.wrong ? u.next! : this.predict(pc, word);
+    this.rasOp(this.rasSpec, u);
+    if (!u.wrong && u.pnext !== u.next) {
+      u.mispredict = true;
+      this.wrongPath = true;
+      // the wrong path runs on a copy of the golden model, from where fetch went instead
+      this.shadow ??= new ISS(this.words, this.issOpts);
+      this.shadow.restore(this.iss.save());
+      this.shadow.pc = u.pnext;
+      this.shadowOn = true;
+    }
     if (u.wrong) this.stats.wrongPath++;
     return u;
   }
@@ -326,6 +416,7 @@ export class OooModel {
       u.c = t;
       info.committed.push(u);
       this.stats.instructions++;
+      if (this.cache && u.addr !== undefined && (u.cls === 'store' || (u.cls === 'load' && cfg.spec!.fillAtCommit))) this.cache.access(u.addr, u.cls === 'store');
       this.trainBtb(u);
       this.rasOp(this.rasCommit, u);
       this.remember(u);
@@ -352,6 +443,7 @@ export class OooModel {
       if (rob < 1) { this.stats.robFull++; break; }
       if (needsIq && iq < 1) { this.stats.iqFull++; break; }
       if (u.cls === 'store' && sq < 1) { this.stats.sqFull++; break; }
+      if (cfg.spec?.fenceBarrier && isFence(u.word) && this.robList.some((o) => o.cls === 'branch' || o.cls === 'jalr')) break;
       this.fd.shift();
       rob--; if (needsIq) iq--; if (u.cls === 'store') sq--;
       const ratNow = this.rat();
@@ -376,13 +468,13 @@ export class OooModel {
     }
 
     // Fetch into the fetch register when it empties this cycle.
-    if (!this.fd.length && !this.halted) {
+    if (!this.fd.length && !this.halted && !this.serial) {
       let pc = this.fetchPc;
       for (let k = 0; k < this.shape.fetch; k++) {
         const u = this.fetchOne(pc);
         info.fetched.push(u);
         pc = u.pnext;
-        if (u.pnext !== ((u.pc + 4) >>> 0)) break;
+        if (u.pnext !== ((u.pc + 4) >>> 0) || u.rdcycle) break;
       }
       this.fd = info.fetched.slice();
       this.fetchPc = pc;
@@ -424,15 +516,31 @@ export class OooModel {
   private issue(t: number, info: CycleInfo): void {
     const cfg = this.cfg;
     const ready = (u: Uop) => u.state === 'queued' && u.d < t && u.deps.every((p) => p.x >= 0 && p.x <= t);
-    const lat = (u: Uop) => latencyOf(u.cls, cfg.lat);
+    const cache = this.cache;
+    // spec mode: a load's latency from the cache (looked at, not touched, until it is picked)
+    const lat = (u: Uop) => (cache && u.cls === 'load' && u.addr !== undefined && (u.miss ?? !cache.holds(u.addr)) ? cfg.spec!.missLat : latencyOf(u.cls, cfg.lat));
     const storesExecuted = (u: Uop) => this.robList.every((o) => o.seq >= u.seq || o.cls !== 'store' || (o.x >= 0 && o.x < t));
     const can = (u: Uop) => {
       if (!ready(u)) return false;
+      // csrr cycle issues as the oldest in flight (never on a wrong path: the cycle a mispredicted branch commits, the
+      // flush comes at its end, after issue)
+      if (u.rdcycle && (u.wrong || this.robList[0] !== u)) return false;
       if (u.cls === 'load' && !storesExecuted(u)) return false;
       if (u.cls === 'div' && this.iterDiv) { const d = this.div[u.port]; return !d || (d.x >= 0 && d.x <= t); }
       return !this.busy[u.port].has(t + lat(u));
     };
     const pick = (u: Uop) => {
+      if (cache && u.cls === 'load' && u.addr !== undefined) {
+        u.miss = !cache.holds(u.addr);
+        if (!cfg.spec!.fillAtCommit) cache.access(u.addr);
+      }
+      if (u.rdcycle) {
+        // the golden model steps it now, reading this cycle; fetch goes on behind it
+        this.iss.step();
+        if (u.rd) this.iss.x[u.rd] = t;
+        u.value = u.rd ? t : undefined;
+        this.serial = null;
+      }
       u.state = 'issued';
       u.s = t;
       if (u.cls === 'div' && this.iterDiv) this.div[u.port] = u;
@@ -475,6 +583,8 @@ export class OooModel {
     info.flushed.push(...gone);
     this.fetchPc = after.next!;
     this.wrongPath = false;
+    this.shadowOn = false;
+    if (this.serial && this.serial.seq > after.seq) this.serial = null;
     // The return-address stack: from its committed copy at commit; at resolve, as it would be after `after`.
     if (this.cfg.recover === 'commit') this.rasSpec = this.rasCommit.slice();
     else {

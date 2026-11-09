@@ -7,6 +7,7 @@
 
 import { sanitizeIsa } from '../isa/table';
 import { sanitizeRows } from '../riscv/custom';
+import { sanitizeRows16 } from '../riscv/rv16/custom16';
 import { isBook, sanitizeProgram } from '../lib/ucode';
 import { sanitizeCpu } from './cpu';
 import type { ProbeTarget } from './probes';
@@ -19,7 +20,7 @@ import { sanitizeReaderRef } from './cardparts';
 import { FACE_MAX, isEmptyFace, SCALE_MAX, SCALE_MIN, SIDES } from './face';
 import { PUZZLE_MAX_WIDTH } from './puzzleparts';
 import {
-  type FsmDoc, type TableDoc, SCHEMA, chipDeps, portCoreRef, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
+  type FsmDoc, type TableDoc, SCHEMA, chipDeps, portCoreRef, rv16CoreRef, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
   type ChipDoc, type CommentDoc, type FaultDoc, type FaceDisplayDoc, type FaceDoc, type FacePinDoc, type FaceSide, type DisplayKind, type EndRef, type ExitDir, type FolderDoc, type LabelDoc, type NetHue, type PartDoc, type PartRef,
   type PinDoc, type PinValue, type SectionDoc, type Vec, type WireDoc, type Workspace, SECTION_MIN,
 } from './model';
@@ -89,9 +90,10 @@ export function sanitizeRef(r: unknown): PartRef | null {
       return isa ? { rom: { k, w, addr, lang, src, isa } } : null;
     }
     const custom = lang === 'asm' ? sanitizeRows(r.rom.custom) : [];
+    const custom16 = lang === 'rv16' ? sanitizeRows16(r.rom.custom16) : [];
     const c = r.rom.c === true && addr === 'rv32' && w === 32 && (lang === 'asm' || lang === 'hex');
     const xlen = r.rom.xlen === 64 && lang === 'asm' && !c;
-    return { rom: { k, w, addr, lang, src, ...(custom.length ? { custom } : {}), ...(r.rom.mac === true && (lang === 'asm' || lang === 'hex') && w === 32 ? { mac: true as const } : {}), ...(c ? { c } : {}), ...(xlen ? { xlen: 64 as const } : {}) } };
+    return { rom: { k, w, addr, lang, src, ...(custom.length ? { custom } : {}), ...(custom16.length ? { custom16 } : {}), ...(r.rom.mac === true && (lang === 'asm' || lang === 'hex') && w === 32 ? { mac: true as const } : {}), ...(c ? { c } : {}), ...(xlen ? { xlen: 64 as const } : {}) } };
   }
   if (isObj(r.ucode)) {
     const p = sanitizeProgram(r.ucode);
@@ -101,6 +103,7 @@ export function sanitizeRef(r: unknown): PartRef | null {
     const custom = sanitizeRows(r.core.custom);
     return portCoreRef({ pipe: r.core.pipe === true, m: r.core.m === true, dcache: r.core.dcache === true, custom });
   }
+  if (isObj(r.core16)) return rv16CoreRef({ pipe: r.core16.pipe === true, custom: sanitizeRows16(r.core16.custom) });
   if (isObj(r.ram)) {
     const { k, w, init, ports } = r.ram;
     if (!int(k) || !int(w, 1)) return null;

@@ -1,0 +1,75 @@
+/* The chapter "How do you know it works?" (widgets/verify.ts, widgets/dft.ts): theme tokens only, so both themes follow. */
+
+.vf-wrap { overflow-x: auto; margin-top: 8px; }
+.vf-table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.vf-table th, .vf-table td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.vf-table thead th { color: var(--text-2); font-weight: 600; font-size: 12.5px; }
+.vf-table tbody th { font-weight: 600; white-space: nowrap; }
+.vf-table .vf-miss { color: var(--text-2); }
+.vf-table .vf-where, .vf-table .vf-by { color: var(--text-2); font-size: 12.5px; }
+.vf-rung { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 6px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 12px; }
+
+.vf-status { margin: 8px 0; font-size: 14px; }
+.vf-detail { margin-top: 8px; font-size: 13.5px; }
+.vf-detail .mono, .vf-src { font-family: var(--font-mono); font-size: 12.5px; }
+.vf-src { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; overflow-x: auto; margin: 6px 0 0; }
+
+.vf-grid { display: flex; flex-wrap: wrap; gap: 6px; }
+.vf-test { display: inline-flex; flex-direction: column; align-items: center; min-width: 58px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--good-soft); color: var(--text); font: 12.5px var(--font-mono); cursor: pointer; }
+.vf-test.bad { background: var(--bad-soft); border-color: var(--bad); }
+.vf-test small { color: var(--bad); font-size: 11px; }
+
+.vf-seeds { display: flex; flex-wrap: wrap; gap: 3px; margin: 6px 0; }
+.vf-seed { width: 22px; height: 22px; padding: 0; border-radius: 5px; border: 1px solid var(--border); background: var(--good-soft); font: 10.5px var(--font-mono); color: var(--text); }
+.vf-seed.bad { width: auto; min-width: 22px; padding: 0 4px; background: var(--bad-soft); border-color: var(--bad); cursor: pointer; }
+
+.vf-cov { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 10px; }
+.vf-op { font: 12px var(--font-mono); padding: 2px 6px; border-radius: 6px; border: 1px solid var(--border); }
+.vf-op.hit { background: var(--good-soft); }
+.vf-op.miss { background: var(--surface-2); color: var(--muted); border-style: dashed; }
+.vf-evrow { display: flex; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+.vf-evrow.miss b { color: var(--bad); }
+
+.vf-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; }
+.vf-card { flex: 1 1 240px; min-width: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+.vf-card h4 { margin: 0 0 6px; font-size: 13px; color: var(--text-2); }
+.vf-card .big { font-size: 22px; font-weight: 650; }
+.vf-bar { height: 10px; border-radius: 99px; background: var(--surface-3); overflow: hidden; margin: 6px 0 4px; }
+.vf-bar > div { height: 100%; background: var(--good); transition: width .25s; }
+.vf-curve svg text { fill: var(--text-2); font: 11px var(--font-ui); }
+.vf-curve .ax { stroke: var(--border-strong); }
+.vf-curve .ln { fill: none; stroke: var(--good); stroke-width: 2.5; }
+.vf-curve .pt { fill: var(--good); }
+
+.vf-fm { border-collapse: collapse; font: 12px var(--font-mono); }
+.vf-fm th, .vf-fm td { padding: 0; text-align: center; }
+.vf-fm thead th { padding: 2px 4px; color: var(--text-2); font-weight: 500; cursor: pointer; border-radius: 6px; }
+.vf-fm thead th.sel { background: var(--accent); color: var(--accent-text); }
+.vf-fm thead th:first-child { cursor: default; }
+.vf-fm tbody th { text-align: right; padding-right: 8px; color: var(--text-2); font-weight: 500; white-space: nowrap; }
+.vf-fm td i { display: block; width: 22px; height: 15px; margin: 1px; border-radius: 4px; background: var(--surface-3); }
+.vf-fm td i.d { background: color-mix(in srgb, var(--accent) 40%, var(--surface-3)); }
+.vf-fm td i.d.c { background: var(--accent); }
+.vf-fm tr.cov th { color: var(--good); }
+.vf-fm tr.unc th { color: var(--bad); }
+
+.vf-side .vf-tt { border-collapse: collapse; font: 12.5px var(--font-mono); margin-top: 6px; }
+.vf-side .vf-tt th, .vf-side .vf-tt td { padding: 2px 8px; text-align: center; }
+.vf-side .vf-tt th { font: 600 11.5px var(--font-ui); color: var(--text-2); }
+.vf-side .vf-tt tr.bad td { background: var(--bad-soft); }
+.vf-side .vf-tt tr.bad td:last-child { color: var(--bad); font-weight: 700; }
+.vf-steps { margin: 8px 0 0; padding-left: 20px; font-size: 13px; max-height: 260px; overflow-y: auto; }
+.vf-steps li { margin: 3px 0; }
+.vf-steps li.cur { font-weight: 600; }
+.vf-steps li.backtrack { color: var(--warn-text); }
+.vf-steps li.detected { color: var(--good); }
+.vf-steps li.untestable { color: var(--bad); }
+.vf-pass { color: var(--good); }
+.vf-fail { color: var(--bad); }
+.vf-cost p { margin: 6px 0; }
+
+@media (pointer: coarse) {
+  .vf-seed { width: 40px; height: 40px; }
+  .vf-test { min-height: 40px; }
+  .vf-fm thead th { min-width: 40px; height: 40px; }
+}
