@@ -311,7 +311,7 @@ export function stack(k: number, w: number): ComponentDef {
     ];
     return define({
       id: `stack${N}x${w}`, name: `${N}-word stack (${w}-bit)`, category: 'memory',
-      summary: `The stack pointer sp counts the words held. push writes din to slot sp and increments; pop decrements; top shows slot sp − 1. empty when sp = 0, full when sp = ${N}. A push and a pop together count as a push.`,
+      summary: `The stack pointer sp counts the words held. push writes din to slot sp and increments; pop decrements; top shows slot sp − 1. empty when sp = 0, full when sp = ${N}. A push and a pop together count as a push (on a full stack, neither happens).`,
       ports: [bit('push', 'in'), bit('pop', 'in'), bus('din', w, 'in'), clock(), bus('top', w, 'out'), bit('empty', 'out'), bit('full', 'out')],
       symbol: { kind: 'box', label: 'STACK' },
       netlist: () => ({
