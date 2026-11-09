@@ -25,8 +25,9 @@ import { settings } from '../ui/settings';
 import { CHALLENGES } from './challengeset';
 import {
   type Allowed, type BuildChallenge, challengeChipId, challengeOf, type CheckResult, builderViolations, checkChallenge, importAnswer, LEVELS, libAllowed, MAX_FAILED, type LibRule, type Limits,
-  ruleKind, scoreUnit, solveChallenge, solvedKey, startChallenge,
+  plantedFaults, ruleKind, scoreOf, scoreUnit, solveChallenge, solvedKey, startChallenge, symptomsDiffer,
 } from './challenges';
+import type { FlatFault } from '../sim/faults';
 import { dockPane, paneShown, showPane, undockPane } from './dock';
 import { fsmOf } from '../lib/fsms';
 import { readbackEl } from './fsmui';
@@ -35,6 +36,9 @@ import { type Editor, registerToolbarAction } from './editor';
 import { type PaletteItem, registerPaletteGroup } from './palette';
 import { TestPlayer } from './testplayer';
 import { testSet } from './testrun';
+import { brushOn, setAccuser, toggleBrush } from './faultui';
+import { resolveProbe, type ProbeTarget } from './probes';
+import { flatten } from '../sim/flatten';
 
 /** The campaign's code, on paths that run only once a level is open (ChallengeUi.level loaded it). */
 const C = () => campaignNow()!;
@@ -166,7 +170,7 @@ export interface LevelScreenHooks {
 }
 
 /** Install the challenge panel on an editor (once per page); returns its teardown. */
-export function installChallenges(ed: Editor, screen?: LevelScreenHooks): { destroy(): void; check(): void; refresh(): void } {
+export function installChallenges(ed: Editor, screen?: LevelScreenHooks): { destroy(): void; check(): void; refresh(): void; nameFault(): void } {
   let ui = uis.get(ed);
   if (!ui) uis.set(ed, (ui = new ChallengeUi(ed, screen)));
   return ui;
@@ -204,6 +208,9 @@ class ChallengeUi {
 
   destroy(): void {
     activeRule = null;
+    setAccuser(this.ed, null);
+    this.ed.sim.setHidden(null);
+    this.ed.bodyLock = null;
     this.closePlayer();
     this.unsub();
     this.unsubSim();
@@ -247,6 +254,10 @@ class ChallengeUi {
     if (ed.chipId !== this.lastChip) {
       this.lastChip = ed.chipId;
       this.confirming = false;
+      const planted = ch?.planted;
+      ed.sim.setHidden(planted ? { key: ch!.id, at: (root) => plantedFaults(root, planted) } : null);
+      ed.bodyLock = planted ? { id: ed.chipId, why: 'This drawing is right: the fault is in the silicon. Find it with Check and the probes, then Accuse (B)' } : null;
+      setAccuser(ed, planted ? { accuse: (t, k, b) => this.accuse(t, k, b), changed: () => this.refresh() } : null);
       const lib = ch && typeof ch.allowed === 'object' ? ch.allowed : null;
       if (lib !== activeRule) {
         activeRule = lib;
@@ -310,6 +321,7 @@ class ChallengeUi {
         h('button', { class: 'btn sm primary', 'data-chal': 'solve-yes', onclick: () => this.solve() }, 'Replace'),
         h('button', { class: 'btn sm ghost', onclick: () => { this.confirming = false; this.render(); } }, 'Cancel')]
       : [h('button', { class: 'btn sm primary', 'data-chal': 'check', title: 'Run the chip against the specification', onclick: () => this.check() }, icon('check', 14), 'Check'),
+        ...this.accuseEls(ch),
         h('button', { class: 'btn sm ghost', 'data-chal': 'answer', title: 'Import the reference answer as new chips (yours stay as they are)', onclick: () => this.showAnswer() }, 'Show answer'),
         h('button', { class: 'btn sm ghost', 'data-chal': 'solve', title: 'Replace this chip\'s circuit with the reference answer', onclick: () => { this.confirming = true; this.render(); } }, 'Do it for me')];
     this.panel.append(
@@ -360,7 +372,8 @@ class ChallengeUi {
         h('button', { class: 'btn sm ghost', 'data-chal': 'answer', title: 'The finished reference answer, shown in the walkthrough: your own circuit stays as it is (Do it for me replaces it)', onclick: () => (sc.showAnswer ? sc.showAnswer() : this.showAnswer()) }, 'Show answer'),
         h('button', { class: 'btn sm ghost', 'data-chal': 'solve', title: 'Replace this chip\'s circuit with the reference answer (one undo step)', onclick: () => { this.confirming = true; this.render(); } }, 'Do it for me')])];
     this.panel.append(h('header', { class: 'sb-chal-head' },
-      h('button', { class: 'btn sm primary', 'data-chal': 'check', title: 'Check runs every test and scores your circuit against par.', onclick: () => this.check() }, icon('check', 14), 'Check'),
+      h('button', { class: 'btn sm primary', 'data-chal': 'check', title: ch.planted ? 'Check runs every test on the faulty chip: the failing cases are your clues' : 'Check runs every test and scores your circuit against par.', onclick: () => this.check() }, icon('check', 14), 'Check'),
+      ...this.accuseEls(ch),
       res ? this.summaryEl(ch, res.r, stale) : goalEl(ch),
       failing ? this.foldEl(ch, res!.r) : null,
       h('span', { class: 'sb-chal-actions' }, ...actions)));
@@ -638,11 +651,75 @@ class ChallengeUi {
     ed.toast(names.length ? `Answer imported: ${names.join(', ')} (${undoKey()} removes it)` : 'The answer is already among your chips: opened it');
   }
 
+  // ---- break-it levels (campaign/breakit.ts) ---------------------------------------------------
+
+  /** The Accuse button and the wrong accusations so far, on a break-it level. */
+  private accuseEls(ch: BuildChallenge): HTMLElement[] {
+    if (!ch.planted) return [];
+    const on = brushOn(this.ed), lv = this.level;
+    const wrong = lv ? C().progress().get(lv.id)?.wrong ?? 0 : 0;
+    return [
+      h('button', { class: `btn sm${on ? ' primary' : ''}`, 'data-chal': 'accuse', 'aria-pressed': String(on), title: 'Accuse (B): click the wire you think is stuck, then say at what. A wrong accusation costs a star.', onclick: () => toggleBrush(this.ed) }, icon('bolt', 14), on ? 'Accusing…' : 'Accuse'),
+      ...(wrong ? [h('span', { class: 'sb-chal-wrong', title: 'Each wrong accusation costs a star' }, `${wrong} wrong`)] : []),
+    ];
+  }
+
+  /** The planted faults on the open chip's own nets (the same numbering as the canvas's simulation). */
+  private plantedHere(ch: BuildChallenge): FlatFault[] | null {
+    const c = this.ed.compiled;
+    return c && ch.planted ? plantedFaults(flatten(c.def, { mode: c.mode }).root, ch.planted) : null;
+  }
+
+  /** An accusation from the brush: right when it looks the same from outside as the planted fault (symptomsDiffer). */
+  private accuse(t: ProbeTarget, kind: 'stuck0' | 'stuck1', bit: number | undefined): void {
+    const ed = this.ed, ch = this.challenge, c = ed.compiled, sim = ed.sim.sim, built = ed.sim.built;
+    if (!ch?.planted || !c || !sim || !built) return;
+    const r = resolveProbe(t, ed.doc, built, sim.design);
+    const nets = !r ? [] : bit === undefined ? r.nets : r.nets[bit] === undefined ? [] : [r.nets[bit]];
+    const planted = this.plantedHere(ch);
+    if (!nets.length || !planted) { ed.toast('That is not on a net of the chip', 'err'); return; }
+    toggleBrush(ed);
+    const diff = symptomsDiffer(ch, c.def, c.mode, [{ kind, nets }], planted);
+    if (diff) {
+      const lv = this.level;
+      const n = lv ? C().progress().accusedWrong(lv.id) : 0;
+      ed.toast(`Not that one: ${diff.index >= 0 ? `with it, ${diff.text}` : 'the CPU bench needs the very net'}. ${n} wrong (a star each)`, 'err');
+      this.refresh();
+      return;
+    }
+    this.found(ch, false);
+  }
+
+  /** The fault is named (by the learner, or by Do it for me: helped). A pass, graded on the wrong accusations. */
+  private found(ch: BuildChallenge, helped: boolean): void {
+    const ed = this.ed, c = ed.compiled, lv = this.level;
+    if (!c) return;
+    const wrong = lv ? C().progress().get(lv.id)?.wrong ?? 0 : 0;
+    const r: CheckResult = { ok: true, failures: [], score: { ...scoreOf(c.def, c.mode, ch.check.kind !== 'table'), wrong }, restrictionViolations: [], tested: 0 };
+    this.results.set(ed.chipId, { r, conn: c.connKey });
+    this.version++;
+    if (lv) {
+      if (helped) C().progress().markHelp(lv.id, c.connKey);
+      const g = C().progress().solve(lv.id, C().measured(r.score), c.connKey);
+      const st = g.helped ? '(with help: no stars)' : '★'.repeat(g.stars) + '☆'.repeat(3 - g.stars);
+      if (this.screen) this.screen.checked(r, g);
+      else ed.toast(`Found: ${ch.title} ${st}`);
+    } else ed.toast(`Found: ${ch.title}`);
+    this.render();
+  }
+
+  /** Do it for me on a break-it level: the fault named for the learner (solved with help, no stars). */
+  nameFault(): void {
+    const ch = this.challenge;
+    if (ch?.planted) this.found(ch, true);
+  }
+
   private solve(): void {
     const ed = this.ed;
     const ch = this.challenge;
     this.confirming = false;
     if (!ch) return;
+    if (ch.planted) return this.nameFault();
     this.closePlayer();
     ed.editWs((ws) => solveChallenge(ws, ch).ws);
     // a level's pass of this circuit is the answer's: solved with help, no stars (campaign/progress.ts solve)

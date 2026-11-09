@@ -1315,10 +1315,16 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  act 0: ACTS is in map order, so look acts up by number: actName / actTitle)
   graph.ts       ancestors, topo, ruleFor(id) (NAND + unlocks of the requirements' closure: fixed per level),
                  statusOf (locked / available / started / solved / skipped; Unlock all), nextAvailable
-  bughunts.ts    bug hunts (withBugHunts: placed after the level each hangs off, optional): a fault planted in that level's
+  bughunts.ts    bug hunts (withBugHunts, optional, FIX IT; every debugging level sits in the Debugging act DEBUG_ACT = 14, rows by
+                 subject in layout.ts ACT_ROWS with flow: true, each requiring the level it breaks): a fault planted in that level's
                  reference netlist (move / swap / tie; `open`: a library block drawn as a chip of its own for a fault inside it),
                  drawn by docFromDef: BuildChallenge.start (the faulty chips), answer, baseline (edits); CampaignNode.bug
                  (fault, kind, lesson, marks) and withhold (LibRule.except); b_timing: a right block graded on period
+  breakit.ts     break-it levels (FIND IT, docs/PLAN-ONI.md D2): the earlier level's reference answer drawn right, a fault planted in it
+                 (BuildChallenge.planted: a part's port stuck at 0 / 1, ComponentDef.planted: flatten applies it inside any bench; Check runs
+                 with it and never passes); the learner accuses with the fault brush (B), right when challenges.ts symptomsDiffer finds
+                 every output of every case the same (the CPU bench: the same net); NodeProgress.wrong, par { wrong: 0 }: a star each;
+                 on the canvas EditorSim.setHidden, Editor.bodyLock (challengeui.ts); tests/breakit.test.ts
   levels.ts      levelChallenge(node): the base BuildChallenge with the campaign rule and par, id cp_<node>,
                  chip u_ch_cp_<node>; nodeOfChip; startCandidates / startFrom (a core level begun as a copy of an
                  earlier core level's chip, plus the new pins)

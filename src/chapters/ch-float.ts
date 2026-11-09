@@ -2,7 +2,7 @@ import { groupDigits } from '../sim/numfmt';
 import { FPU32, fpAdd, fpDiv, fpFma, fpMul, fpSqrt, fpToInt, fpUnpack, normRound, ROUND_DECIDE } from '../lib/fpu';
 import { cpuState } from '../riscv/cosim';
 import { F_PROGRAMS } from '../riscv/fprograms';
-import { F16, F32, type FpFormat } from '../sim/fpref';
+import { F16, F32, RM, type FpFormat, fpToIntX, fpValue } from '../sim/fpref';
 import { logicDepth, stats } from '../sim/stats';
 import type { ComponentDef } from '../sim/types';
 import { formatSteps } from './float/formats';
@@ -88,6 +88,70 @@ function lazy(make: () => Layers): Layers {
 const costRow = (name: string, make: (f: FpFormat) => ComponentDef, depth = true) =>
   `<tr><td>${name}</td>${FORMATS.map(([, f]) => { const d = make(f); return `<td>${grp(nands(d))}${depth ? ` / ${deep(d)}` : ''}</td>`; }).join('')}</tr>`;
 const costTable = (rows: string, depth = true) => `<table class="mini"><tr><th>${depth ? 'NANDs / depth' : 'NANDs'}</th>${FORMATS.map(([n]) => `<th>${n}</th>`).join('')}</tr>${rows}</table>`;
+
+/** The worked addition, in the chapter's 8-bit format: 3.25 + 0.46875, positive normals with a ≥ b (tests/worked-examples.test.ts: the reference and the gates agree). */
+export const ADD_EX = { a: 0x45, b: 0x2f } as const;
+
+/** Every step of a + b as the adder does it, in E4M3 (positive normals, a ≥ b, a finite sum): unpack, align with guard / round / sticky, add, normalize, round, pack. */
+export function addSteps(a: number = ADD_EX.a, b: number = ADD_EX.b) {
+  const { E, M } = E4M3, B = bias(E4M3), X = 3, mask = 2 ** M - 1;
+  const ea = (a >> M) & (2 ** E - 1), eb = (b >> M) & (2 ** E - 1);
+  const ma = (1 << M) | (a & mask), mb = (1 << M) | (b & mask), d = ea - eb;
+  const wide = mb << X, lost = wide & (2 ** d - 1);
+  const shifted = (wide >> d) | (lost ? 1 : 0);
+  let sum = (ma << X) + shifted, e = ea;
+  const carry = sum >= 2 << (M + X);
+  if (carry) { sum = (sum >> 1) | (sum & 1); e++; }
+  const kept = sum >> X, g = (sum >> 2) & 1, r = (sum >> 1) & 1, st = sum & 1;
+  const up = g === 1 && (r === 1 || st === 1 || (kept & 1) === 1);
+  let k2 = kept + (up ? 1 : 0);
+  if (k2 >= 2 << M) { k2 >>= 1; e++; }
+  const y = (e << M) | (k2 & mask);
+  return { B, ea, eb, ma, mb, d, shifted, sum, carry, kept, g, r, st, up, y, exact: fpValue(a, E4M3) + fpValue(b, E4M3) };
+}
+
+/** The worked example: the addition laid out line by line with the bits. */
+function addWorked(): string {
+  const S = addSteps(), { M } = E4M3, X = 3;
+  const sig = (v: number, w: number) => { const t = v.toString(2).padStart(w, '0'); return `${t[0]}.${t.slice(1)}`; };
+  const ext = (v: number) => { const t = v.toString(2).padStart(M + 1 + X, '0'); return `${t[0]}.${t.slice(1, M + 1)}|${t.slice(M + 1)}`; };
+  const hx = (v: number) => `0x${v.toString(16).toUpperCase().padStart(2, '0')}`;
+  const v = (bits: number) => fpValue(bits, E4M3);
+  return `<details class="deeper"><summary>Worked example: ${v(ADD_EX.a)} + ${v(ADD_EX.b)}, every step</summary>
+    <p>The 8-bit format of the circuits above (4 exponent bits, bias ${S.B}, 3 fraction bits), with the guard, round and sticky bits written after a bar.</p>
+    <ol>
+    <li><strong>Unpack.</strong> a = ${hx(ADD_EX.a)}: exponent field ${S.ea}, so 2<sup>${S.ea} − ${S.B}</sup> = 2<sup>${S.ea - S.B}</sup>, significand ${sig(S.ma, M + 1)}₂ with the hidden 1: ${v(ADD_EX.a)}.
+    b = ${hx(ADD_EX.b)}: field ${S.eb}, 2<sup>${String(S.eb - S.B).replace("-", "−")}</sup>, ${sig(S.mb, M + 1)}₂: ${v(ADD_EX.b)}.</li>
+    <li><strong>Align.</strong> The exponents differ by ${S.d}, so b's significand moves right ${S.d} places: ${ext(S.mb << X)} becomes ${ext(S.shifted)}. The bits
+    that pass the guard and round places are ORed into sticky.</li>
+    <li><strong>Add.</strong> ${ext(S.ma << X)} + ${ext(S.shifted)} = ${ext(S.sum)}${S.carry ? ', with a carry: one place right and the exponent up' : ': below 2, no carry, already normalized'}.</li>
+    <li><strong>Round.</strong> Kept ${sig(S.kept, M + 1)}, G = ${S.g}, R = ${S.r}, S = ${S.st}: ${S.up ? (S.g && !S.r && !S.st ? 'a tie with an odd last bit: round up to even' : 'more than half a unit is dropped: round up') : 'less than half (or a tie with an even last bit): keep'}.</li>
+    <li><strong>Pack.</strong> ${hx(S.y)} = ${v(S.y)}. The exact sum is ${S.exact}; the two neighbours here are ${v(S.y - 1)} and ${v(S.y)}, and ${v(S.y)} is the nearer. NX is raised: the result is not exact.</li>
+    </ol>
+    <p>Set a = ${hx(ADD_EX.a)} and b = ${hx(ADD_EX.b)} on the adder of the last step to see the same ${hx(S.y)} come out of the gates.</p></details>`;
+}
+
+/** The chapter's common mistakes, each with numbers computed here. */
+function floatMistakes(): string {
+  const S = addSteps(), sum10 = tenth()[9];
+  const f = Math.fround, big = f(1e8);
+  const f27 = new Uint32Array(new Float32Array([2.7]).buffer)[0];
+  const rtz = fpToIntX(f27, true, F32, RM.RTZ).y, rne = fpToIntX(f27, true, F32, RM.RNE).y;
+  return `<details class="deeper"><summary>Common mistakes with floating point</summary><ul>
+    <li><strong>Reading the exponent field as the exponent.</strong> It is biased: in the 8-bit format a field of ${S.ea} means 2<sup>${S.ea - S.B}</sup>
+    (bias ${S.B}); in float32 the bias is ${bias(F32)}.</li>
+    <li><strong>Forgetting the hidden 1.</strong> 0x${ADD_EX.a.toString(16).toUpperCase()} is 1.101₂ × 2<sup>${S.ea - S.B}</sup> = ${fpValue(ADD_EX.a, E4M3)}, not 0.101₂ × 2<sup>${S.ea - S.B}</sup> = ${0.625 * 2 ** (S.ea - S.B)}.
+    Only subnormals (exponent field 0) have no hidden 1.</li>
+    <li><strong>Believing 0.1 is stored exactly.</strong> float32 holds ${hex32(0.1)} = ${f(0.1).toPrecision(12)}, the nearest value. Added ten times it gives
+    ${sum10.toPrecision(9)}, so <code>sum == 1.0</code> is false.</li>
+    <li><strong>Testing computed values with ==.</strong> Compare with a tolerance scaled to the size of the values, or arrange the arithmetic so the
+    result is exact.</li>
+    <li><strong>Assuming the order of additions does not matter.</strong> (10<sup>8</sup> + 1) − 10<sup>8</sup> = ${f(f(big + 1) - big)} in float32, but
+    (10<sup>8</sup> − 10<sup>8</sup>) + 1 = ${f(f(big - big) + 1)}: each step is rounded, so floating-point addition is not associative.</li>
+    <li><strong>Expecting float-to-integer to round to nearest.</strong> In C, <code>(int)2.7</code> truncates to ${rtz} (rtz); the same conversion in round to nearest gives
+    ${rne}. The instruction takes the mode as a field.</li>
+  </ul></details>`;
+}
 
 export const chFloat: Chapter = {
   id: 'float', num: numOf('float'), title: 'Floating point', level: 'Arithmetic',
@@ -300,7 +364,8 @@ export const chFloat: Chapter = {
         <span data-show="pack">infinity</span>.</p>
         <p>Why ties go to even and not always up: rounding up every tie adds a small positive error each time, and in a long sum those errors accumulate in one direction. Rounding to the even neighbour
         takes the tie half the time down and half the time up, since the last bit of the neighbours alternates, so the errors cancel on average. The cost is the rule itself: the decision reads the last kept bit, the guard and the sticky bit, a few gates
-        on the carry path of the incrementer.</p>`,
+        on the carry path of the incrementer.</p>
+        ${addWorked()}`,
       scene: () => ({ root: normRound(E4M3, 8), inputs: { sign: 0, exp: 3, mant: 0b10011100, stin: 0, rm: 0 } }),
       tour: {
         beats: [
@@ -891,7 +956,8 @@ export const chFloat: Chapter = {
         <p>Load "Rounding surprises" in the program menu: 10⁸ + 1 = 10⁸, 2²⁴ + 1 becomes 2²⁴, +0 equals −0 although their bits differ, ∞ − ∞ is NaN,
         NaN is not equal to itself, and 10⁶⁴ overflows to infinity. Each of these is the specified, correctly rounded answer.</p>
         <p>Every one follows from the three facts of the chapter: a result is the nearest representable value, the spacing grows with the magnitude, and a few encodings stand for things that are not numbers. Once the gap between neighbours
-        exceeds the operand you add, that operand vanishes; once a result has no meaning, a NaN says so and propagates. Reading these as bugs is the common mistake; reading them as the arithmetic is the habit to build.</p>`,
+        exceeds the operand you add, that operand vanishes; once a result has no meaning, a NaN says so and propagates. Reading these as bugs is the common mistake; reading them as the arithmetic is the habit to build.</p>
+        ${floatMistakes()}`,
       scene: () => cpuScene({ source: fsrc('absorb'), fpu: true, adder: 'ks' }),
       more: {
         numbers: `<table class="mini"><tr><th>Expression (float32)</th><th>Result</th><th>Why</th></tr>

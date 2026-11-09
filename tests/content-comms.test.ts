@@ -1,4 +1,5 @@
 // Numbers and claims the Communication track's first two chapters type into their text, pinned to the models and circuits.
+import { numOf } from '../src/chapters/order';
 import { describe, expect, it } from 'vitest';
 import { chapters } from '../src/chapters';
 import { chExchange, chTelegraph } from '../src/chapters/ch-comm-relays';
@@ -49,8 +50,8 @@ describe('chapter 39 content', () => {
 
   it('the ladder agrees with the chapters that exist, and the first two are these', () => {
     const bySuffix = new Map(chapters.filter((c) => c.num > 0 && c.level === 'Communication').map((c) => [c.num, c.title]));
-    expect(bySuffix.get(39)).toBe('Two machines, one wire');
-    expect(bySuffix.get(40)).toBe('The telephone exchange');
+    expect(bySuffix.get(numOf('telegraph'))).toBe('Two machines, one wire');
+    expect(bySuffix.get(numOf('exchange'))).toBe('The telephone exchange');
     const step = chTelegraph.steps.at(-1)!.body;
     for (const [n, title] of bySuffix) expect(step, `${n}`).toContain(`<td>${n}</td><td>${title.replace('&', '&amp;')}</td>`);
   });

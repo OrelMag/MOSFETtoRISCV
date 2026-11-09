@@ -1,5 +1,6 @@
 // Chapters 29–34 (ch-gpu.ts, ch-gfx.ts): the numbers and claims their prose quotes that the text cannot compute in place,
 // measured here and read back from the text, so a change to either side fails.
+import { numOf } from '../src/chapters/order';
 import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
@@ -99,7 +100,7 @@ describe('chapter 33: the clear and the depth test', () => {
     expect(84 + 256 * 17).toBe(CLEAR_CYCLES);
     // chapter 34's clear phase is the launch cycle and the same clear
     expect(PIPE_COSTS.frames.find((f) => f.id === 'triangle')!.clear).toBe(CLEAR_CYCLES + 2);
-    expect(step(chGfxPipeline, 'The pipeline').replace(/<\/?a[^>]*>/g, '')).toContain(`the clear 4438 (the launch cycle, then chapter 33's ${fmt(CLEAR_CYCLES + 1)}-cycle clear`);
+    expect(step(chGfxPipeline, 'The pipeline').replace(/<\/?a[^>]*>/g, '')).toContain(`the clear 4438 (the launch cycle, then chapter ${numOf('pixels')}'s ${fmt(CLEAR_CYCLES + 1)}-cycle clear`);
   });
 
   it('the two crossing triangles never tie at a pixel centre, so both orders give the same picture', () => {

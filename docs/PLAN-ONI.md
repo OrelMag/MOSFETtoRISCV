@@ -208,7 +208,7 @@ hand-edited chip.
 
 ---
 
-## D2. "Break it": the campaign's fault-finding mode (design, for the author's approval; not built)
+## D2. "Break it": the campaign's fault-finding mode (approved by the author 2026-11-09; being built on feat/oni-breakit)
 
 **What it is.** An optional kind of level, `kind: 'locate'`, placed like a bug hunt after the level whose block it
 breaks. The learner gets that level's own reference answer, drawn as in a bug hunt (docFromDef, same part names),
@@ -258,5 +258,21 @@ next to the visible one); `editor/faultui.ts` gains an accuse mode used by `chal
 in `sim/faults.ts` (`sameSymptoms(design, a, b, vectors)`) with tests: each planted fault and its equivalents are
 accepted, a neighbouring net is rejected with a distinguishing vector.
 
-**Open for the author.** (1) Whether a wrong accusation should cost a star or only show the distinguishing vector.
-(2) Whether these sit beside the bug hunts on the map (folded into one "Debugging" header) or after each level.
+**Decisions (author, 2026-11-09).**
+1. A wrong accusation costs a star: none for ★★★, one for ★★, two or more for ★. Each wrong one shows the case that tells
+   the accused fault from the planted one. (The probe count drops out of the grading: stars come from accusations alone.)
+2. All 17 debugging levels move into one optional act on the map, folded by default like the other optional acts and
+   placed between Act 7 and Act 8: the 12 bug hunts, timing closure and the 4 break-it levels. Each still requires the
+   level it breaks. The act is labelled just **Debugging** (no "Act" prefix: no clash with Appendix D). Its levels sit
+   in three labelled rows by subject (Logic and arithmetic, State, The core) in curriculum order, on a new "flow" row
+   kind (levels side by side in a listed order, since none requires another). Approved from the mockup in
+   E:/mockups/oni-breakit/.
+3. Card tags: the break-it levels read **FIND IT**, the bug hunts **FIX IT**.
+
+**As built (v1).** Faults are planted by a part's port (`fa2.cin`), not by a wire id, so they survive the drawing.
+The planted fault is applied wherever the level is simulated (the canvas, Check and the test player) but never shown:
+no badge, list row or diagnostic. Check shows the failing cases and never records a pass; only a right accusation does.
+The level's chip is read-only (it is the reference drawing), and the learner's own hypothesis faults are off on it.
+"Equivalent" means the same outputs on every case of the level's test (every table row, every sequence step), not
+the same failing cases; the custom CPU bench has no per-step outputs, so there the accusation must name the planted
+net itself (any bit of it that the fault covers). Show answer reveals the fault and marks the pass as helped.

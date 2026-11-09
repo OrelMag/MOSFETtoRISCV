@@ -131,6 +131,7 @@ export const ICONS: Record<string, string> = {
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
   // a lightbulb: Why? explains, it is not Help (a ? would read as help)
   why: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
+  bolt: '<path d="M13 2L4 14h7l-2 8 9-12h-7z"/>',
   probe: '<path d="M14 3l7 7-4 1-7 7-3-3 7-7z"/><path d="M7 17l-4 4"/>',
   wave: '<path d="M2 12h4V6h6v12h6v-6h4"/>',
   table: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M10 4v16"/>',

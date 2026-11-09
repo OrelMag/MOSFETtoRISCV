@@ -226,7 +226,7 @@ export class LevelPage implements Page {
     this.bar.replaceChildren(...[
       h('a', { class: 'lv-back', href: `#/campaign/n/${n.id}`, title: 'The campaign map' }, icon('chevL', 14), 'Map'),
       h('span', { class: 'lv-crumb' }, h('span', { class: 'lv-act' }, `${actName(n.act)} · ${actTitle(n.act)}`, h('span', { class: 'sep' }, '›')), h('b', null, n.title)),
-      n.bug ? h('span', { class: 'lv-badge lv-kind bug', title: n.bug.kind === 'timing closure' ? 'The block is right and too slow: make it meet the period' : 'A faulty drawing to fix in as few edits as you can' }, 'BUG HUNT') : h('span', { class: 'lv-badge lv-kind' }, KIND_LABEL[n.kind]),
+      n.bug ? h('span', { class: 'lv-badge lv-kind bug', title: n.bug.kind === 'timing closure' ? 'The block is right and too slow: make it meet the period' : n.bug.find ? 'A right drawing with a fault planted in it: find it and name it with the fault brush' : 'A faulty drawing to fix in as few edits as you can' }, n.bug.find ? 'FIND IT' : 'FIX IT') : h('span', { class: 'lv-badge lv-kind' }, KIND_LABEL[n.kind]),
       st === 'solved' ? h('span', { class: 'lv-badge good' }, 'SOLVED') : st === 'skipped' ? h('span', { class: 'lv-badge' }, 'SKIPPED') : null,
       parText.length ? h('span', { class: 'lv-par', title: 'Par: three stars at or under it on every metric' }, 'par ', h('b', null, parText.join(' · '))) : null,
       np?.stars ? h('span', { class: 'lv-stars', title: `Best: ${np.stars} of 3 stars` }, '★'.repeat(np.stars), h('span', { class: 'off' }, '★'.repeat(3 - np.stars))) : null,
@@ -526,13 +526,19 @@ export class LevelPage implements Page {
     const top = [...new Set(bug.marks.map((m) => m.split('.')[0]))].filter((id) => ed.doc?.parts.some((p) => p.id === id));
     if (top.length) ed.select({ parts: top });
     const close = () => { this.result?.remove(); this.result = null; };
+    // a break-it level: the fault is the answer, so seeing it is help (a pass then earns no stars)
+    if (bug.find && ed.compiled?.connKey) progress().markHelp(n.id, ed.compiled.connKey);
+    const fix = () => { close(); ed.editWs((ws) => solveChallenge(ws, this.ch!).ws); if (ed.compiled?.connKey) progress().markHelp(n.id, ed.compiled.connKey); ed.toast('Fixed: the chip is the reference answer now (Ctrl+Z brings yours back)'); };
+    const name = () => { close(); this.chal?.nameFault(); };
     const card = h('div', { class: 'lv-result', role: 'dialog', 'aria-label': 'The fault' },
       h('h3', null, 'The fault: ', bug.kind),
       h('p', { html: bug.fault }),
       top.length ? h('p', { class: 'sub' }, `Selected on the canvas: ${top.join(', ')}${bug.marks.some((m) => m.includes('.')) ? ` (open it: ${bug.marks.filter((m) => m.includes('.')).map((m) => m.split('.').slice(1).join('.')).join(', ')})` : ''}.`) : null,
       h('div', { class: 'lv-res-act' },
         h('button', { class: 'btn ghost', onclick: close }, 'Close'),
-        h('button', { class: 'btn primary', title: 'Redraw the chip as the reference answer (Ctrl+Z brings yours back)', onclick: () => { close(); ed.editWs((ws) => solveChallenge(ws, this.ch!).ws); if (ed.compiled?.connKey) progress().markHelp(n.id, ed.compiled.connKey); ed.toast('Fixed: the chip is the reference answer now (Ctrl+Z brings yours back)'); } }, 'Do it for me')));
+        bug.find
+          ? h('button', { class: 'btn primary', title: 'Name the planted fault: solved with help, no stars', onclick: name }, 'Name it for me')
+          : h('button', { class: 'btn primary', title: 'Redraw the chip as the reference answer (Ctrl+Z brings yours back)', onclick: fix }, 'Do it for me')));
     this.result = h('div', { class: 'lv-veil', onclick: (e: Event) => { if (e.target === this.result) close(); } }, card);
     this.result.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Escape') close(); });
     this.edWrap.append(this.result);
