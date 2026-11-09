@@ -2328,10 +2328,14 @@ export class Stage {
     const live = this.shedGroups.filter((g) => g.els.some((el) => el.offsetWidth > 0));
     const shed = (k: number) => live.forEach((g, i) => g.els.forEach((el) => el.classList.toggle('shed', i < k)));
     const items = [...this.crumbs.querySelectorAll('button')];
-    if (!items.length) return this.toggleMore(false);
-    const cur = items[items.length - 1];
+    // every item of the bar inside its right edge (their own boxes: a menu open below one does not count). Checked even
+    // with no hierarchy yet: while a large scene loads the bar has its buttons but no names, and with every label shown it
+    // ran past the edge until the scene arrived (the smoke caught it under load on #/c/ooo/5)
+    const edge = bar.getBoundingClientRect().right + 1;
+    const inside = () => [...bar.children].every((c) => !(c as HTMLElement).offsetWidth || c.getBoundingClientRect().right <= edge);
+    const cur = items.at(-1);
     const crumbs = this.crumbs;
-    const fits = () => cur.scrollWidth <= cur.clientWidth + 1 && crumbs.scrollWidth <= crumbs.clientWidth + 1 && cur.offsetTop <= items[0].offsetTop + 2;
+    const fits = () => inside() && (!cur || (cur.scrollWidth <= cur.clientWidth + 1 && crumbs.scrollWidth <= crumbs.clientWidth + 1 && cur.offsetTop <= items[0].offsetTop + 2));
     if (fits()) return this.toggleMore(false);
     bar.classList.add('compact');
     if (fits()) return this.toggleMore(false);
@@ -2342,6 +2346,8 @@ export class Stage {
       shed(k);
       if (fits()) return;
     }
+    // no hierarchy to give a row of its own: keep everything that can go in More there
+    if (!cur) return;
     shed(0);
     moreWrap.hidden = true;
     this.toggleMore(false);
