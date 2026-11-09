@@ -57,7 +57,7 @@ export function carrySelect(n: number, k = 4): ComponentDef {
     const R = b.right;
     return define({
       id: `csel${n}_${k}`, name: `${n}-bit carry-select adder`, category: 'arithmetic',
-      summary: `${nb} blocks of ${k} bits. All blocks but the first are duplicated (carry-in 0 and 1) and work in parallel; the carry then only passes one multiplexer per block. About 1.8 times the area of ripple carry.`,
+      summary: `${nb} blocks of ${k} bits. All blocks but the first are duplicated (carry-in 0 and 1) and work in parallel; the carry then only passes one multiplexer per block. About 1.8 times the area of ripple carry at 8 bits, more with more blocks (2.4 times at 32 bits).`,
       ports: adderPorts(n),
       symbol: { kind: 'box', label: `CSEL${n}` },
       spec: n <= 24 ? addSpec(n) : undefined,
