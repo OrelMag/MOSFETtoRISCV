@@ -1176,7 +1176,7 @@ svg.schematic.focus .inst.hl .hit { animation: none; fill: color-mix(in srgb, va
 :root svg.schematic.ov .inst[data-ov='0'] .sym :is(.sym-body, .sym-box) { stroke: color-mix(in oklab, var(--slack-0) 55%, var(--text)); }
 :root svg.schematic.ov .inst[data-ov-src] .sym :is(.sym-body, .sym-box) { fill: color-mix(in oklab, var(--wx) 28%, var(--sym-fill)); stroke: var(--wx); stroke-dasharray: 0.5 0.25; }
 svg.schematic.ov .inst:not([data-ov]):not(.plumbing) { opacity: 0.45; }
-svg.schematic.ov :is(.wire, .net-tag, .tap-label, .bus-label, .dot, .tag-end):not([data-ov]) { opacity: 0.3; }
+svg.schematic.ov :is(.wire, .net-tag, .tap-label, .bus-label, .dot, .tag-end, .ed-ptr):not([data-ov]):not(.ed-ptr .wire) { opacity: 0.3; }
 svg.schematic.ov :is(.wire-flow, .flow-tokens) { display: none; }
 :root svg.schematic.ov .wire[data-ov] { stroke: var(--ov-c); opacity: 1; stroke-dasharray: none; filter: none; stroke-width: calc(var(--wire-w1) * var(--wire-k, 1) * 1.7); }
 :root svg.schematic.ov .wire.bus[data-ov] { stroke-width: calc(var(--wire-bus) * var(--wire-k, 1) * 1.15); }
