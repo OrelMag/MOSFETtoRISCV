@@ -11,6 +11,7 @@ import { retireCount } from '../riscv/cosim';
 import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
 import { h } from '../ui/dom';
+import { holdHeight } from '../ui/holdsize';
 import type { ScenePanel, Stage, Widget } from '../view/stage';
 import { legend, timeline } from './ooo';
 import '../styles/ooo.css';
@@ -160,7 +161,7 @@ export function oooView(onPick: (pc: number, port: number) => void): { el: HTMLE
 export function oooPanel(words: number[], mem: { imemWords: number; dmemWords: number }, link: OooLink): ScenePanel {
   return (stage: Stage): Widget => {
     const f = new OooFollower(words, mem);
-    const status = h('div', { class: 'cpu-status' });
+    const status = holdHeight(h('div', { class: 'cpu-status' }));
     const view = oooView((pc, port) => link.select?.(link.selected?.() === pc ? null : pc, port));
     const title = h('h4', null, 'Out of order', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel ooo-panel', 'data-dock': 'left', 'data-phone': 'flow' }, title, status, view.el);

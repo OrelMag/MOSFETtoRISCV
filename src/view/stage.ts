@@ -1760,7 +1760,7 @@ export class Stage {
     if (b.getAttribute('aria-pressed') === String(on)) return;
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', String(on));
-    b.replaceChildren(icon(on ? 'pause' : 'play', 14), h('span', { class: 'lbl' }, on ? 'Pause' : 'Run'));
+    b.replaceChildren(icon(on ? 'pause' : 'play', 14), h('span', { class: 'lbl', 'data-pad': on ? 'Run' : 'Pause' }, on ? 'Pause' : 'Run'));
     b.setAttribute('aria-label', on ? 'Pause the clock' : 'Run the clock');
     this.fitControls();
   }

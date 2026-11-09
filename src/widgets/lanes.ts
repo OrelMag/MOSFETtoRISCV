@@ -14,6 +14,7 @@ import type { Sim } from '../sim/sim';
 import { stats } from '../sim/stats';
 import type { ComponentDef } from '../sim/types';
 import { h } from '../ui/dom';
+import { holdHeight } from '../ui/holdsize';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { laneUse } from './insthw';
 import { frameRun, showInstrUse, slowControls } from './slowctl';
@@ -86,7 +87,7 @@ function warpPanel(p: SimtProgram, asm: AsmResult, n: number, opts: LaneSceneOpt
     /** Where the instruction of the edge in progress runs (Slow mode at gate level: the view moves under it). */
     let edgeAt: { pc: number; mask: number; served: number } | null = null;
     let willRetire = false;
-    const status = h('div', { class: 'cpu-status' });
+    const status = holdHeight(h('div', { class: 'cpu-status' }));
     const listing = h('div', { class: 'cpu-listing' });
     const usePath = h('div', { class: 'cpu-use' });
     const grid = h('div', { class: 'warp-grid' });

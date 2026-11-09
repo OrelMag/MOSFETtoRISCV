@@ -12,6 +12,7 @@ import type { ModelState } from '../riscv/iss';
 import { PROGRAMS64 } from '../riscv/programs64';
 import { BENCHMARKS, benchSource } from '../riscv/benchprograms';
 import { debounce, h } from '../ui/dom';
+import { holdHeight } from '../ui/holdsize';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { codeEditor } from './codeedit';
 import { slowControls } from './slowctl';
@@ -59,7 +60,7 @@ function cpu64Panel(opts: Cpu64SceneOptions & { xlen: 32 | 64; m: boolean }, asm
     let lastX: bigint[] = new Array(32).fill(0n);
     const log: { cycle: number; text: string; effect: string }[] = [];
 
-    const status = h('div', { class: 'cpu-status' });
+    const status = holdHeight(h('div', { class: 'cpu-status' }));
     const now = h('div', { class: 'cpu-now' });
     const listing = h('div', { class: 'cpu-listing' });
     const trace = h('div', { class: 'cpu-trace' });

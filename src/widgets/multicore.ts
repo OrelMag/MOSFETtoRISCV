@@ -11,6 +11,7 @@ import { MultiISS } from '../riscv/multi';
 import { Coherence, type CoherenceEvent, type Protocol } from '../sim/coherence';
 import { pack } from '../sim/values';
 import { h, icon } from '../ui/dom';
+import { holdHeight } from '../ui/holdsize';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 
 const hex = (v: number, d = 8) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(d, '0');
@@ -28,7 +29,7 @@ function dualPanel(source: string, asm: AsmResult): ScenePanel {
     let stalls = [0, 0];
     let running: number | null = null;
     let lastStall = [false, false];
-    const status = h('div', { class: 'cpu-status' });
+    const status = holdHeight(h('div', { class: 'cpu-status' }));
     const cols = h('div', { class: 'dual-cols' });
     const mem = h('div', { class: 'cpu-mem' });
     const sel = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
