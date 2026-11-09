@@ -157,11 +157,12 @@ describe('every playable level', () => {
     const asked = new Set(c.ports.map((p) => p.name));
     const top = lib.compiled(main.id)!.def;
     expect(deadInstances(netlistOf(top)!, top.ports.filter((p) => asked.has(p.name))), 'parts serving only unchecked outputs').toEqual([]);
-    const r = checkChallenge(c, lib.compiled(main.id));
+    // a break-it level's answer is an accusation (tests/breakit.test.ts): its drawing passes without the planted fault
+    const r = checkChallenge(c.planted ? { ...c, planted: undefined } : c, lib.compiled(main.id));
     expect(r.failures).toEqual([]);
     expect(r.restrictionViolations).toEqual([]);
     expect(r.ok).toBe(true);
-    expect(stars(measured(r.score), n.par)).toBe(3);
+    if (!c.planted) expect(stars(measured(r.score), n.par)).toBe(3);
   });
 
   // A part a level unlocks costs what its reference counts (docs/CAMPAIGN.md section 9): where the 49-NAND bus mux is
