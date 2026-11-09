@@ -1,7 +1,7 @@
 // Chapter 0, Basics: what a reader needs before the first switch. A loop of wire, why two levels, counting on lamps, a
 // rule as a table, a program as steps, and how this site draws a circuit. Numbers come from widgets/basics.ts.
 
-import { rca } from '../lib';
+import { rca } from '../lib/combinational';
 import { LOOP, loopAmps, misreads, NOISE, TOY, lampCountWidget, loopWidget, noiseWidget, switchTableWidget, toyMachineWidget } from '../widgets/basics';
 import type { Chapter } from './types';
 import { numOf } from './order';

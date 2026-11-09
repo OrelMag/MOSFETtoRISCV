@@ -1,5 +1,8 @@
 import { groupDigits } from '../sim/numfmt';
-import { DFF, RELAY_BUZZER, RELAY_LATCH, RELAY_NAND, RELAY_NOT, RELAY_XOR, SR_LATCH, XOR, relayAdder, rca } from '../lib';
+import { rca } from '../lib/combinational';
+import { XOR } from '../lib/gates';
+import { RELAY_BUZZER, RELAY_LATCH, RELAY_NAND, RELAY_NOT, RELAY_XOR, relayAdder } from '../lib/relays';
+import { DFF, SR_LATCH } from '../lib/sequential';
 import { NAND2_UM2, RELAY_CONTACTS, RELAY_MASS, RELAY_POWER, RELAY_VOLUME, fmtMass, fmtTime, fmtVolume, relayExtra } from '../lib/tech';
 import { RELAY, RELAY_COIL_POWER, RELAY_STEP_MS, RELAY_SUPPLY, Z3, coilTau, relayStatic } from '../phys/relay';
 import { logicDepth, stats } from '../sim/stats';

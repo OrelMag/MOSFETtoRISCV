@@ -1,5 +1,7 @@
 import { groupDigits } from '../sim/numfmt';
-import { DFF, ECCLES_JORDAN, FULL_ADDER, SR_LATCH, TRIODE_SWITCH, TUBE_FA, TUBE_NAND, TUBE_NOR, rca } from '../lib';
+import { FULL_ADDER, rca } from '../lib/combinational';
+import { DFF, SR_LATCH } from '../lib/sequential';
+import { ECCLES_JORDAN, TRIODE_SWITCH, TUBE_FA, TUBE_NAND, TUBE_NOR } from '../lib/tubes';
 import { RELAY_STEP_MS } from '../phys/relay';
 import {
   B_PLUS, DIVIDER_RATIO, ENIAC, HEATER_W, R_DIV_BOTTOM, R_DIV_TOP, R_PLATE, TUBE_STEP_US, V_BIAS, V_CUTOFF, V_LOW, dividerOut, gateLevels,

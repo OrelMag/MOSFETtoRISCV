@@ -1,5 +1,9 @@
 import { groupDigits } from '../sim/numfmt';
-import { AND, cmosNand, cmosNor, INV_CMOS, INV_PSEUDO, NAND, NMOS_SWITCH, NOR, NOR_CMOS, NOT, OR, PMOS_SWITCH, rca, ringOsc, WEAK_DEMO, XOR } from '../lib';
+import { cmosNand, cmosNor, ringOsc } from '../lib/cmosgates';
+import { rca } from '../lib/combinational';
+import { AND, NOR, NOT, OR, XOR } from '../lib/gates';
+import { INV_PSEUDO, WEAK_DEMO } from '../lib/switchparts';
+import { INV_CMOS, NAND, NMOS_SWITCH, NOR_CMOS, PMOS_SWITCH } from '../lib/transistors';
 import { metrics, MOBILITY_RATIO, strength, vout } from '../phys/inverter';
 import { chainDelay, FO4_TAU, P_INV, PS_PER_TAU } from '../phys/sizing';
 import { and4Tree, and4Wide, gNand, gNor, pGate } from '../phys/effort';
