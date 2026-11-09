@@ -19,6 +19,7 @@ import { iCache, wbCache } from './cache2';
 import type { DramConfig } from '../dram/controller';
 import { cfgKey } from './dramctrl';
 import { FCSR, FPU32, FP_DECODE } from './fpu';
+import { VECTOR_UNIT, VEC_LANES, VEC_VLEN, vecMemory } from './vector';
 import { MP_DECODE } from './mpdecode';
 import { regfile } from './regfile';
 import { register } from './sequential';
@@ -613,6 +614,12 @@ export interface CpuOptions {
    * keep custom-1 and custom-3 (custom-2 is the MAC's).
    */
   mac?: boolean;
+  /**
+   * The vector unit (chapter vectors, lib/vector.ts): four lanes, VLEN 128, the RVV subset of ISS({ v: { vlen: 128, gates: true } });
+   * the data memory becomes four word-interleaved banks (vecMemory), and the core gains `retire` (low while a vector
+   * instruction runs its beats). Not with the caches, the FPU, a shared memory, the C extension, the MAC or custom rows.
+   */
+  vector?: { lanes: 4; vlen: 128 };
 }
 
 /** PC + 4 with a parallel-prefix adder. */
@@ -649,18 +656,20 @@ export const PLUS4_FAST: ComponentDef = define({
 export function singleCycleCpu(program: number[], opts: CpuOptions = {}): ComponentDef {
   const IM = opts.c ? cFetch(program, opts.imemK ?? 6) : rom(program, opts.imemK ?? 6);
   const adder = opts.adder ?? 'rca';
-  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? `_dc${opts.dcache === true ? '' : opts.dcache}` : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}${opts.imemPort ? '_ip' : ''}${opts.icache ? '_ic' : ''}${opts.dram ? `_dram${cfgKey(opts.dram)}` : ''}${opts.custom?.length ? `_cx${rowsKey(opts.custom)}` : ''}${opts.c ? '_c' : ''}${opts.mac ? '_mac' : ''}`;
-  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, opts.dcache ?? false, !!opts.fpu, !!opts.shared, !!opts.imemPort, !!opts.icache, opts.imemK ?? 6, opts.dram, opts.custom ?? [], !!opts.c, !!opts.mac));
+  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? `_dc${opts.dcache === true ? '' : opts.dcache}` : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}${opts.imemPort ? '_ip' : ''}${opts.icache ? '_ic' : ''}${opts.dram ? `_dram${cfgKey(opts.dram)}` : ''}${opts.custom?.length ? `_cx${rowsKey(opts.custom)}` : ''}${opts.c ? '_c' : ''}${opts.mac ? '_mac' : ''}${opts.vector ? '_v' : ''}`;
+  if (opts.vector && (opts.vector.lanes !== VEC_LANES || opts.vector.vlen !== VEC_VLEN)) throw new Error(`singleCycleCpu: the vector unit is built with ${VEC_LANES} lanes and VLEN ${VEC_VLEN}`);
+  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, opts.dcache ?? false, !!opts.fpu, !!opts.shared, !!opts.imemPort, !!opts.icache, opts.imemK ?? 6, opts.dram, opts.custom ?? [], !!opts.c, !!opts.mac, !!opts.vector));
 }
 
-function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: boolean | 'wb' | 'wb2' = false, fpu = false, shared = false, imemPort = false, icache = false, imemK = 6, dram?: DramConfig, custom: readonly CustomRow[] = [], c = false, mac = false): ComponentDef {
+function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: boolean | 'wb' | 'wb2' = false, fpu = false, shared = false, imemPort = false, icache = false, imemK = 6, dram?: DramConfig, custom: readonly CustomRow[] = [], c = false, mac = false, vector = false): ComponentDef {
+  if (vector && (c || dcache || icache || fpu || shared || mac || custom.length)) throw new Error('singleCycleCpu: vector with a cache, the FPU, a shared memory, the C extension, the MAC or custom rows is not supported');
   if (mac && (c || dcache || icache || fpu || shared)) throw new Error('singleCycleCpu: mac with a cache, the FPU, a shared memory or the C extension is not supported');
   if (mac && custom.some((r) => r.slot === 2)) throw new Error('singleCycleCpu: custom-2 is the MAC\'s: a custom row may use custom-1 or custom-3');
   if (c && (dcache || icache || fpu || (shared && !imemPort))) throw new Error('singleCycleCpu: c with a cache, the FPU or a shared memory is not supported');
   if (dram && dcache !== 'wb' && dcache !== 'wb2') throw new Error('singleCycleCpu: dram needs a write-back data cache');
   if (icache && (fpu || shared)) throw new Error('singleCycleCpu: icache with fpu or shared is not supported');
   const IMEM = icache ? iCache(IM, 3, imemK) : IM;
-  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dcache === 'wb' ? wbCache(dmemK, 2, 1, dram) : dcache === 'wb2' ? wbCache(dmemK, 1, 2, dram) : dcache ? cachedMemory(dmemK) : dataMemory(dmemK);
+  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dcache === 'wb' ? wbCache(dmemK, 2, 1, dram) : dcache === 'wb2' ? wbCache(dmemK, 1, 2, dram) : dcache ? cachedMemory(dmemK) : vector ? vecMemory(dmemK) : dataMemory(dmemK);
   const M2 = busMux2(32), M4 = muxTree(2, 32), RES = mac ? muxTree(3, 32) : M4, ADD = adder === 'ks' ? koggeStone(32) : rca(32), SI = splitter([7, 5, 3, 5, 5, 7]);
   const P4 = c ? PLUS2OR4 : adder === 'ks' ? PLUS4_FAST : PLUS4;
   const g = (d: ComponentDef) => symbolGeom(d);
@@ -694,7 +703,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   const aluR = at.get('alu')![0] + g(ALU).w;
   // The plain core is drawn with wires: control below the datapath (selects take their signal from below), each signal
   // on its own row and the farthest lowest, feedback over the top and along the bottom. Variants keep their pointers.
-  const wired = !(icache && dcache) && !(imemPort && c);
+  const wired = !(icache && dcache) && !(imemPort && c) && !vector;
   const dmX = aluR + (wired ? 24 : 18);
   alignY('dm', DM, dmX, 'addr', P('alu', 'y')[1]);
   alignY('res', RES, dmX + g(DM).w + (dcache ? 18 : 10), 'd1', P('dm', 'rd')[1]); // a cache's stall / hit labels need room
@@ -1075,6 +1084,40 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     delete net('RegWrite').via?.['rf.we'];
   }
   const extraPorts: PortDef[] = [];
+  if (vector) {
+    // ---- the vector unit under the datapath: it reads the instruction and x[rs1] / x[rs2], writes x[rd] through a
+    // multiplexer after the result one, holds the PC (retire) while it runs, and drives the banks' vector port
+    const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => instances.push({ name, def, at: xy, label });
+    const net = (name: string) => nets.find((n) => n.name === name)!;
+    const tagged = (n: NetDef, ...ends: string[]) => { n.ends.push(...ends); if (Array.isArray(n.tags)) n.tags.push(...ends); else if (!n.tags) n.tags = ends; };
+    instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
+    nets.splice(nets.indexOf(net('en')), 1);
+    add('vu', VECTOR_UNIT, [8, bottom + 10], 'vector unit');
+    add('xw', M2, [resY[0] + 6, resY[1] - 6], 'result / vector');
+    add('rwo', OR, [56, bottom - 2]);
+    tagged(net('Instr'), 'vu.instr');
+    tagged(net('rd1'), 'vu.xa', 'dm.vBase');
+    tagged(net('WriteData'), 'vu.xb');
+    tagged(net('clk'), 'vu.clk');
+    const res = net('Result');
+    res.ends = ['res.y', 'xw.a'];
+    res.via = undefined;
+    net('RegWrite').ends = ['ctl.regWrite', 'rwo.a'];
+    nets.push(
+      { name: 'XResult', ends: ['xw.y', 'rf.wd'], tags: true },
+      { name: 'VXData', ends: ['vu.xData', 'xw.b'], tags: true },
+      { name: 'VXWrite', ends: ['vu.xWe', 'xw.s', 'rwo.b'], tags: true },
+      { name: 'XRegWrite', ends: ['rwo.y', 'rf.we'], tags: true },
+      { name: 'retire', ends: ['vu.retire', 'pc.en', 'retire'], tags: true },
+      { name: 'vAct', ends: ['vu.vAct', 'dm.vAct'], tags: true },
+      { name: 'vBeat', ends: ['vu.vBeat', 'dm.vBeat'], tags: true },
+      { name: 'vWe', ends: ['vu.vWe', 'dm.vWe'], tags: true },
+      { name: 'vWd', ends: ['vu.vWd', 'dm.vWd'], tags: true },
+      { name: 'vRd', ends: ['dm.vRd', 'vu.vRd'], tags: true },
+    );
+    pins.retire = [resY[0] + 22, bottom + 1];
+    extraPorts.push(bit('retire', 'out'));
+  }
   if (shared) {
     // ---- a core of the multi-core: memory goes through ports; atomics; hart id
     const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => instances.push({ name, def, at: xy, label });
@@ -1195,7 +1238,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   }
   for (const n of nets) if (n.via) for (const k of Object.keys(n.via)) if (!n.ends.includes(k)) delete n.via[k];
   return {
-    id: imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : c ? 'rv32ic_core' : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : '') + (mac ? '_mac' : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''}${c ? 'C' : ''}${mac ? ' + MAC' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
+    id: imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : c ? 'rv32ic_core' : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : '') + (mac ? '_mac' : '') + (vector ? '_v' : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''}${c ? 'C' : ''}${mac ? ' + MAC' : ''}${vector ? ' + vector unit' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
     summary: dcache === 'wb' || dcache === 'wb2'
       ? `The single-cycle processor with its data memory behind a ${dcache === 'wb2' ? '2-way set-associative' : 'direct-mapped'} write-back cache. Loads and stores that miss hold the PC and the register write (retire = 0): ${dram ? `as long as the DRAM controller takes for the line (${dram.banks} banks, ${dram.policy} page): 8 cycles on a row hit, 12 on a closed bank, 16 on another open row, plus a write-back of a dirty victim first` : '8 cycles, or 12 when a dirty line must be written back first'}.`
       : dcache

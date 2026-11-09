@@ -30,6 +30,8 @@ export function cpuTops(): ComponentDef[] {
   const w = assemble(PROGRAMS[0].source).words, cw = assemble(CACHE_CPU_PROGRAMS[0].source).words;
   return [
     singleCycleCpu(w), singleCycleCpu(w, { adder: 'ks' }), singleCycleCpu(w, { fpu: true }),
+    // chapter vectors: the vector unit beside the core, the data memory in four banks
+    singleCycleCpu(w, { dmemK: 6, vector: { lanes: 4, vlen: 128 } }),
     singleCycleCpu(cw, { dmemK: 6, dcache: true, adder: 'ks' }), singleCycleCpu(cw, { dmemK: 6, dcache: 'wb2', adder: 'ks' }),
     singleCycleCpu(cw, { icache: true, adder: 'ks' }), singleCycleCpu(cw, { dmemK: 6, dcache: 'wb', icache: true }),
     pipelinedCpu(w), pipelinedCpu(w, { adder: 'ks' }), pipelinedCpu(w, { adder: 'ks', balanced: true }),

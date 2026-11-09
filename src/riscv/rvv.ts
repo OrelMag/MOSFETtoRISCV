@@ -29,6 +29,8 @@ export interface VContext {
   vl: number;
   vtype: number;
   readonly x: Uint32Array;
+  /** The gate-level unit's subset (lib/vector.ts): SEW 32 only (e8 / e16 set vill), no vmul, unit-stride 32-bit loads and stores only. */
+  readonly gates?: boolean;
   /** A data-memory access of 1, 2 or 4 bytes (aligned; the ISS's own load / store). */
   load(addr: number, bytes: 1 | 2 | 4): number;
   store(addr: number, bytes: 1 | 2 | 4, v: number): void;
@@ -360,7 +362,7 @@ const regsOf = (emul: number) => Math.max(1, emul);
 
 function setVl(c: VContext, rd: number, avl: number | 'max' | 'keep', zimm: number): VResult {
   const t = vtypeOf(zimm, c.vlenb);
-  if (!t) { c.vtype = VILL; c.vl = 0; return { rd, value: 0 }; }
+  if (!t || (c.gates && t.sew !== 32)) { c.vtype = VILL; c.vl = 0; return { rd, value: 0 }; }
   const vlmax = vlmaxOf(t, c.vlenb);
   c.vtype = zimm >>> 0;
   c.vl = avl === 'max' ? vlmax : avl === 'keep' ? Math.min(c.vl, vlmax) : Math.min(avl >>> 0, vlmax);
@@ -377,6 +379,7 @@ export function execV(w: number, c: VContext): VResult {
   if (k.k === 'vsetvl') return setVl(c, k.rd, k.rs1 ? x[k.rs1] : k.rd ? 'max' : 'keep', x[k.rs2]);
   const t = vtypeOf(c.vtype, c.vlenb);
   if (!t) return { illegal: true };
+  if (c.gates && (k.k === 'mul' || (k.k === 'mem' && (k.strided || k.eew !== 32)))) return { illegal: true };
   const { sew, lmul } = t, vl = c.vl;
   const active = (vm: boolean, i: number) => !vm || maskBit(c, 0, i) === 1;
   switch (k.k) {

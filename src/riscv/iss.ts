@@ -73,7 +73,7 @@ export interface IssOptions {
   /** Privilege modes M / S / U and Sv32 (see the header; needs `system`). Off: the machine-mode-only system. */
   vm?: boolean;
   /** The vector extension, Zve32x (riscv/rvv.ts): VLEN in bits (a power of two, 32 … 1024). */
-  v?: { vlen: number };
+  v?: { vlen: number; gates?: boolean };
 }
 
 /** Privilege levels (the encoding of mstatus.MPP and the commit log's first digit). */
@@ -202,6 +202,8 @@ export class ISS {
   private readonly imemWords: number;
   /** The vector extension (IssOptions.v): VLEN / 8, 0 without it; the 32 registers as bytes; vl and vtype. */
   readonly vlenb: number;
+  /** IssOptions.v.gates: the gate-level vector unit's subset (riscv/rvv.ts VContext.gates). */
+  readonly vGates: boolean;
   readonly vregs: Uint8Array;
   vl = 0;
   vtype = 0x80000000;
@@ -269,6 +271,7 @@ export class ISS {
     const vlen = opts.v?.vlen ?? 0;
     if (vlen && (vlen & (vlen - 1) || vlen < 32 || vlen > 1024)) throw new Error(`VLEN ${vlen}: a power of two from 32 to 1024`);
     this.vlenb = vlen / 8;
+    this.vGates = !!opts.v?.gates;
     this.vregs = new Uint8Array(32 * this.vlenb);
   }
 
@@ -793,7 +796,7 @@ export class ISS {
   private vctx(): VContext {
     const iss = this;
     return {
-      vlenb: this.vlenb, vregs: this.vregs, x: this.x,
+      vlenb: this.vlenb, vregs: this.vregs, x: this.x, gates: this.vGates,
       get vl() { return iss.vl; }, set vl(v: number) { iss.vl = v; },
       get vtype() { return iss.vtype; }, set vtype(v: number) { iss.vtype = v; },
       load: (addr, bytes) => this.load(addr, bytes === 1 ? 4 : bytes === 2 ? 5 : 2) >>> 0,

@@ -25,6 +25,8 @@ export interface Isa {
   c?: boolean;
   /** Custom instructions (riscv/custom.ts): the CPU's control unit decodes them, the programs use them. */
   custom?: readonly CustomRow[];
+  /** The vector unit's subset of RVV (lib/vector.ts; the golden model with v: { vlen: 128, gates: true }): the random programs use it. */
+  v?: boolean;
 }
 
 export interface CpuConfig {
@@ -79,6 +81,7 @@ export const CPUS: CpuConfig[] = [
 
 /** Verified like the others (tests/verify-system.test.ts) but not benchmarked: the saved results and the README's counts are the default CPUs'. */
 export const EXTRA_CPUS: CpuConfig[] = [
+  { id: 'sc-v', name: 'Single-cycle RV32I + vector unit (4 lanes, VLEN 128)', isa: { v: true }, env: 'bare', dmemK: 5, cpi: 9, build: (w, imemK, dmemK) => singleCycleCpu(w, { imemK, dmemK, vector: { lanes: 4, vlen: 128 } }) },
   { id: 'sys-vm', name: 'System with virtual memory (M / S / U, Sv32)', isa: { sub: true, system: true, vm: true }, env: 'p', imemK: 7, cpi: 8, build: (w, imemK, dmemK) => systemCpu(w, { imemK, dmemK, vm: true }) },
 ];
 
@@ -112,5 +115,5 @@ export function notApplicable(cfg: Pick<CpuConfig, 'isa' | 'fixedDmemK'>, name: 
 
 /** The golden model configured like a CPU's ISA. */
 export function issOptions(isa: Isa): IssOptions {
-  return { system: !!isa.system, vm: !!isa.vm, m: !!isa.m, f: !!isa.f, c: !!isa.c, ...(isa.custom ? { custom: isa.custom } : {}) };
+  return { system: !!isa.system, vm: !!isa.vm, m: !!isa.m, f: !!isa.f, c: !!isa.c, ...(isa.custom ? { custom: isa.custom } : {}), ...(isa.v ? { v: { vlen: 128, gates: true } } : {}) };
 }

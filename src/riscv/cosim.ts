@@ -7,7 +7,7 @@ import type { Sim } from '../sim/sim';
 import { pack } from '../sim/values';
 
 /** Read the CPU's architectural state from a simulation of singleCycleCpu(). */
-export function cpuState(sim: Pick<Sim, 'getBits' | 'design'> & Partial<Pick<Sim, 'leafState'>>, root: HierNode = sim.design.root): { pc: number; x: number[]; dmem: number[]; f?: number[]; fcsr?: number; acc?: bigint } {
+export function cpuState(sim: Pick<Sim, 'getBits' | 'design'> & Partial<Pick<Sim, 'leafState'>>, root: HierNode = sim.design.root): { pc: number; x: number[]; dmem: number[]; f?: number[]; fcsr?: number; acc?: bigint; v?: Uint8Array; vl?: number; vtype?: number } {
   const rf = root.children!.get('rf')!;
   const x = [0];
   for (let i = 1; i < 32; i++) x.push(pack(sim.getBits(rf.children!.get(`w${i}`)!.ports.q)) >>> 0);
@@ -22,7 +22,27 @@ export function cpuState(sim: Pick<Sim, 'getBits' | 'design'> & Partial<Pick<Sim
   // the MAC core's accumulator (its unit's register, 40 bits, signed), compared with the golden model's like any register
   const accPort = root.ports.accOut;
   const acc = accPort ? BigInt.asIntN(40, bitsBig(sim.getBits(accPort))) : undefined;
-  return { pc, x, dmem, f, fcsr, ...(acc !== undefined ? { acc } : {}) };
+  const vu = root.children!.get('vu');
+  return { pc, x, dmem, f, fcsr, ...(acc !== undefined ? { acc } : {}), ...(vu ? vectorState(sim, vu) : {}) };
+}
+
+/**
+ * The vector unit's state (lib/vector.ts VECTOR_UNIT) as the golden model keeps it: the 32 registers as bytes (lane i
+ * holds bytes 4i … 4i + 3 of each), vl, and vtype (vill reads 1 << 31).
+ */
+export function vectorState(sim: Pick<Sim, 'getBits'>, vu: HierNode): { v: Uint8Array; vl: number; vtype: number } {
+  const lanes = [...vu.children!.keys()].filter((n) => /^lane\d+$/.test(n)).length;
+  const v = new Uint8Array(32 * 4 * lanes);
+  for (let i = 0; i < lanes; i++) {
+    const rf = vu.children!.get(`lane${i}`)!.children!.get('vrf')!;
+    for (let r = 0; r < 32; r++) {
+      const w = pack(sim.getBits(rf.children!.get(`w${r}`)!.ports.q));
+      for (let k = 0; k < 4; k++) v[r * 4 * lanes + 4 * i + k] = (w >>> (8 * k)) & 0xff;
+    }
+  }
+  const cfg = vu.children!.get('cfg')!.children!;
+  const q = (n: string) => pack(sim.getBits(cfg.get(n)!.ports.q));
+  return { v, vl: q('vlReg'), vtype: q('okReg') ? q('vtReg') : 0x80000000 };
 }
 
 /** The words of a data memory `dm` (plain, byte-banked, or main memory behind a cache) as a program reads them. */
@@ -37,6 +57,11 @@ export function dmemWords(sim: Pick<Sim, 'getBits'> & Partial<Pick<Sim, 'leafSta
   } else if (dev) {
     // main memory is a DRAM device (a behavioural leaf): its words by CPU address
     for (let a = 0; a < dev.mem.length; a++) dmem[a] = dev.read(a) >>> 0;
+  } else if (dm.children?.has('wb0')) {
+    // four word-interleaved banks (lib/vector.ts vecMemory): word 4·row + j is row `row` of bank j
+    for (let j = 0; j < 4; j++) {
+      for (const [name, n] of dm.children!.get(`wb${j}`)!.children!) if (/^w\d+$/.test(name)) dmem[4 * Number(name.slice(1)) + j] = pack(sim.getBits(n.ports.q)) >>> 0;
+    }
   } else if (ram) {
     for (const [name, n] of ram.children!) if (/^w\d+$/.test(name)) dmem[Number(name.slice(1))] = pack(sim.getBits(n.ports.q)) >>> 0;
   } else {

@@ -41,8 +41,8 @@ const hex = (v: number) => `0x${(v >>> 0).toString(16).padStart(8, '0')}`;
 export const fuzzDmemK = (cfg: CpuConfig) => cfg.fixedDmemK ?? 5;
 
 export function fuzzOptions(cfg: CpuConfig, n: number): Rand32Options {
-  const { sub, m, f, system, mp, c, custom } = cfg.isa;
-  return { n, sub, m, f, system, mp, c, ...(custom ? { custom } : {}), dmemWords: 2 ** fuzzDmemK(cfg) };
+  const { sub, m, f, system, mp, c, custom, v } = cfg.isa;
+  return { n, sub, m, f, system, mp, c, ...(custom ? { custom } : {}), ...(v ? { v, vGates: true } : {}), dmemWords: 2 ** fuzzDmemK(cfg) };
 }
 
 /** A program for `cfg` from `seed`, run on the golden model to its halt. */
