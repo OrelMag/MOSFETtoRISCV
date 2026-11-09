@@ -277,7 +277,7 @@ export const chPower: Chapter = {
         Then the supply stopped falling: a lower threshold leaks exponentially more. Transistors kept shrinking, so the power per mm² of a chip running flat out kept rising.</p>
         <p>Packed onto a die, our CPU's logic draws watts per mm². Within a laptop's or a phone's power budget, only part of a large die can run at full speed at once; the rest must
         stay idle, gated or slowed: <b>dark silicon</b>. Designers spend it on specialised blocks that each do one job at a fraction of the energy, and that are dark when not needed. A GPU is one,
-        built from many simple lanes doing the same work: the <a href="#/c/lanes/0">next chapter</a> begins it.</p>`,
+        built from many simple lanes doing the same work: <a href="#/c/lanes/0">chapter ${numOf('lanes')}</a> begins one.</p>`,
       widget: densityWidget,
     },
   ],
