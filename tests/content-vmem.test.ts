@@ -12,7 +12,7 @@ describe('the figures the chapter quotes', () => {
   it('NANDs and delays of the virtual-memory CPU against the system CPU of chapters 19-20', () => {
     expect(vmFigures()).toEqual({
       tlbI: 3632, tlbD: 3848, walker: 691, mmu: 8765, permitI: 15, permitD: 32,
-      base: 67131, vm: 79701, basePeriod: 126, vmPeriod: 169, fetchLookup: 28, dataLookup: 41,
+      base: 67131, vm: 79701, basePeriod: 126, vmPeriod: 169, scenePeriod: 193, fetchLookup: 28, dataLookup: 41,
     });
   });
   it('TLBs of 2, 4, 8, 16 and 32 entries, both sides, counted from the generators', () => {

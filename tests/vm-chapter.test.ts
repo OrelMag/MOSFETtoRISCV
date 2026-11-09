@@ -2,7 +2,7 @@
 // model-side numbers the chapter quotes (riscv/vmrun.ts) held to the gates' stall cycles.
 import { describe, expect, it } from 'vitest';
 import { assemble } from '../src/riscv/asm';
-import { VM_PROGRAMS, VM_IMEM_K, VM_DMEM_K, WALK_CYCLES, SUPER_CYCLES } from '../src/riscv/vmprograms';
+import { VM_PROGRAMS, VM_IMEM_K, VM_DMEM_K, WALK_CYCLES, SUPER_CYCLES, vmCustom, vmPte, VM_V, VM_R, VM_W, VM_U, VM_A, VM_D } from '../src/riscv/vmprograms';
 import { runVmModel } from '../src/riscv/vmrun';
 import { lockstep } from './verify/vmlock';
 import { PROGS } from './vm-programs';
@@ -24,6 +24,35 @@ describe('the chapter programs on the gates, in lock step with the golden model'
     expect(r.stalls).toBe(WALK_CYCLES * (m.imiss + m.dmiss));
     // and the gates retire (or trap) once a step: the cycles to the halt are the model's steps plus the stalls
     expect(r.cycles).toBeGreaterThanOrEqual(m.cycles);
+  }, 300_000);
+
+  it('a walk to a 4 MiB superpage stalls SUPER_CYCLES cycles, and an empty root entry stops after the same one read', async () => {
+    // root[1] is a 4 MiB superpage (virtual 0x40_0000), root[2] is empty (virtual 0x80_0000); a load from each, and the fetch's own walk first
+    const src = vmCustom(`  li a0, 0x400000
+  lw a1, 0(a0)
+  li a0, 0x800000
+  lw a2, 0(a0)`, [[1, vmPte(0x400000, VM_V | VM_R | VM_W | VM_U | VM_A | VM_D)]]);
+    const r = await lockstep(assemble(src).words, { imemK: VM_IMEM_K, dmemK: VM_DMEM_K, maxCycles: 3000, pause: tick });
+    expect(r.why).toBe('');
+    expect(r.halted).toBe(true);
+    // the fetch of the user code walks to a 4 KiB leaf, then the superpage load and the load that faults at level 1
+    expect(r.stallRuns).toEqual({ [WALK_CYCLES]: 1, [SUPER_CYCLES]: 2 });
+    expect(r.causes[13]).toBe(1);
+    const m = runVmModel(src);
+    expect(r.stalls).toBe(WALK_CYCLES * m.imiss + SUPER_CYCLES * m.dmiss);
+  }, 300_000);
+
+  it('a forbidden page is cached all the same: the second refused store hits the TLB (the model fills on a structurally good leaf)', async () => {
+    const src = vmCustom(`  li a0, 0x2000
+  li a2, 5
+  sw a2, 0(a0)
+  sw a2, 0(a0)`);
+    const r = await lockstep(assemble(src).words, { imemK: VM_IMEM_K, dmemK: VM_DMEM_K, maxCycles: 3000, pause: tick });
+    expect(r.why).toBe('');
+    expect(r.causes[15]).toBe(2);
+    const m = runVmModel(src);
+    expect([m.imiss, m.dmiss]).toEqual([1, 1]);
+    expect(r.stalls).toBe(WALK_CYCLES * 2);
   }, 300_000);
 
   it('a walk to a 4 KiB leaf stalls WALK_CYCLES cycles, to a 4 MiB superpage SUPER_CYCLES', async () => {

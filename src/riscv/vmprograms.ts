@@ -188,6 +188,14 @@ user:
   li a7, 93
   ecall`;
 
+/** User code of your own under the protection program's tables and handler (W / R printed for a store / load page fault), with extra root-table entries; the tests' directed walks. */
+export const vmCustom = (user: string, root: [number, number][] = []): string =>
+  boot(GUARD, [...LEAF_BASE, ...root.map(([i, v]): [number, number] => [VM_ROOT + 4 * i, v])].map(([a, v]) => [a, v] as [number, number]), 'user') + `
+user:
+${user}
+  li a7, 93
+  ecall`;
+
 export interface VmProgram { result?: { reg: string; value: number }; id: 'walk' | 'pager' | 'guard'; name: string; source: string; note: string }
 export const VM_PROGRAMS: VmProgram[] = [
   { id: 'walk', name: 'Two pages, three rounds', source: VM_WALK, note: 'user code reads frame B and updates frame A three times, then prints OK' },

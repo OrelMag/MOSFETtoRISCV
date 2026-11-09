@@ -6,7 +6,7 @@ import { analyzeTiming } from '../sim/timing';
 import { stats } from '../sim/stats';
 import { groupDigits } from '../sim/numfmt';
 import { runVmModel } from '../riscv/vmrun';
-import { SUPER_CYCLES, VM_GUARD, VM_PAGER, VM_WALK, WALK_CYCLES } from '../riscv/vmprograms';
+import { SUPER_CYCLES, VM_DMEM_K, VM_GUARD, VM_IMEM_K, VM_PAGER, VM_WALK, WALK_CYCLES } from '../riscv/vmprograms';
 import { cpuScene } from '../widgets/cpupanel';
 import { costWidget, placement, pteWidget, spacesWidget, vaWidget, walkWidget } from '../widgets/vmem';
 import type { Scene } from '../view/stage';
@@ -22,6 +22,8 @@ export interface VmFigures {
   /** The system CPU of chapters 19–20 and its virtual-memory variant, program ROM left out. */
   base: number; vm: number;
   basePeriod: number; vmPeriod: number;
+  /** The virtual-memory CPU as the scenes build it (256-word program ROM, 4 096-word data memory): its clock period. */
+  scenePeriod: number;
   /** Delays the instruction side's and the data side's translation add on the critical path. */
   fetchLookup: number; dataLookup: number;
 }
@@ -31,10 +33,11 @@ export function vmFigures(): VmFigures {
   const b = systemCpu([], {}), v = systemCpu([], { vm: true });
   const core = (d: typeof b) => stats(withoutParts(d, ['imem'])).nands;
   const tb = analyzeTiming(flatten(b, { mode: 'gate' }))!, tv = analyzeTiming(flatten(v, { mode: 'gate' }))!;
+  const ts = analyzeTiming(flatten(systemCpu([], { vm: true, imemK: VM_IMEM_K, dmemK: VM_DMEM_K }), { mode: 'gate' }))!;
   const at = (r: typeof tv, inst: string, nth = 0) => r.stages.filter((s) => s.inst === inst)[nth]?.arrival ?? 0;
   figs = {
     tlbI: nd(tlb('i')), tlbD: nd(tlb('d')), walker: nd(walker()), mmu: nd(mmu()), permitI: nd(pcheck('i')), permitD: nd(pcheck('d')),
-    base: core(b), vm: core(v), basePeriod: tb.period, vmPeriod: tv.period,
+    base: core(b), vm: core(v), basePeriod: tb.period, vmPeriod: tv.period, scenePeriod: ts.period,
     fetchLookup: at(tv, 'mmu', 0) - at(tv, 'pc'), dataLookup: at(tv, 'mmu', 1) - at(tv, 'alu'),
   };
   return figs;
@@ -297,11 +300,11 @@ export const chVmem: Chapter = {
     {
       title: 'What it costs',
       body: `
-        <p>The system CPU of chapters ${numOf('io')}–${numOf('traps')} is ${n(F.base)} NANDs without its program ROM and takes ${F.basePeriod} NAND delays to a clock. With the privilege levels, the supervisor
+        <p>The system CPU of chapters ${numOf('io')}–${numOf('traps')} is ${n(F.base)} NANDs without its program ROM and takes ${F.basePeriod} NAND delays to a clock (counted with its 128-word program ROM and 32-word data memory, as in those chapters). With the privilege levels, the supervisor
         registers, two TLBs and the walker (the machine of this chapter's scenes, built from those same units) it is ${n(F.vm)} NANDs, <strong>${n(F.vm - F.base)} more</strong> (${Math.round((100 * (F.vm - F.base)) / F.base)} %), and the period
         is ${F.vmPeriod}. The MMU alone is ${n(F.mmu)} NANDs of that: ${n(F.tlbI)} and ${n(F.tlbD)} for the TLBs, ${n(F.walker)} for the walker, the rest the permission checks. The clock grows because the
         translation sits in series with everything: the fetch address goes through the instruction TLB before the program memory (${F.fetchLookup} delays on the longest path), and a load or store's address through the data TLB and
-        its permission check on the way to the memory (${F.dataLookup} more).</p>
+        its permission check on the way to the memory (${F.dataLookup} more). The scenes of this chapter need room for page tables, so they use a 256-word program ROM and a 4 096-word data memory, and with those larger memories the longest path is ${F.scenePeriod} delays; the NAND counts here are for the small memory.</p>
         <p>These figures are this book's single-cycle CPU, counted from its own gates; the virtual-memory CPU is not in the Benchmarks tab or the sandbox, so there is no table of
         other machines to set it against, and none is claimed here.</p>
         <p>What the TLB buys depends on the program. The benchmark programs below touch one page of code and one of data, so with any TLB the cost is two cold misses and nothing else.

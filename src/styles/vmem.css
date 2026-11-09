@@ -71,3 +71,15 @@ span.vm-bit { cursor: default; }
 .vm-tlbtab th, .vm-tlbtab td { padding: 2px 8px; text-align: left; white-space: nowrap; }
 .vm-tlbtab tr.hit td { background: var(--good-soft); }
 @media (pointer: coarse) { .vm-pbit { min-width: 52px; min-height: 52px; } .vm-bit { min-height: 36px; } }
+
+/* narrow screens: tables and the walk scroll sideways inside their own box, controls wrap */
+.vm-widget .seg { flex-wrap: wrap; max-width: 100%; }
+.vm-walk { overflow-x: auto; }
+.vm-costtab th { white-space: normal; text-align: right; vertical-align: bottom; }
+.vm-costtab th:first-child { text-align: left; }
+@media (max-width: 560px) {
+  .vm-svg { min-width: 500px; }
+  .vm-costtab { font-size: 11px; }
+  .vm-costtab td, .vm-costtab th { padding: 3px 5px; }
+  .vm-widget .seg button { padding: 4px 8px; }
+}
