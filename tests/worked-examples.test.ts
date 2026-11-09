@@ -70,3 +70,27 @@ describe('caches: two arrays one cache apart', () => {
     expect(chCache.steps.find((s) => s.title === 'Average memory access time')!.body).toContain('Common mistakes with caches');
   });
 });
+
+describe('floating point: 3.25 + 0.46875, every step', () => {
+  it('ends where the reference and the gate-level adder end', async () => {
+    const { ADD_EX, addSteps, chFloat } = await import('../src/chapters/ch-float');
+    const { fpAddX, fpValue } = await import('../src/sim/fpref');
+    const { fpAdd } = await import('../src/lib/fpu');
+    const E4M3 = { E: 4, M: 3 };
+    const S = addSteps();
+    const ref = fpAddX(ADD_EX.a, ADD_EX.b, false, E4M3);
+    expect(S.y).toBe(ref.y);
+    expect(ref.fl & 1).toBe(1);
+    expect([S.d, S.g, S.r, S.st, S.up, S.carry]).toEqual([3, 1, 1, 1, true, false]);
+    expect([fpValue(ADD_EX.a, E4M3), fpValue(ADD_EX.b, E4M3), fpValue(S.y, E4M3), S.exact]).toEqual([3.25, 0.46875, 3.75, 3.71875]);
+    // the circuit of the addition step
+    const sim = new GateSim(flatten(fpAdd(E4M3)));
+    sim.setInput('a', ADD_EX.a); sim.setInput('b', ADD_EX.b); sim.setInput('sub', 0); sim.settle();
+    const y = sim.getBits(sim.design.root.ports.y).reduce<number>((v, b, i) => v + (b === 1 ? 2 ** i : 0), 0);
+    expect(y).toBe(S.y);
+    // every pair of positive normals a ≥ b whose sum stays finite (the steps have no overflow case) agrees with the reference
+    for (let a = 0x08; a < 0x70; a++) for (let b = 0x08; b <= a; b++) expect(addSteps(a, b).y, `${a} + ${b}`).toBe(fpAddX(a, b, false, E4M3).y);
+    expect(chFloat.steps.find((s) => s.title === 'Round to nearest, ties to even')!.body).toContain('every step');
+    expect(chFloat.steps.find((s) => s.title === 'Rounding surprises')!.body).toContain('Common mistakes with floating point');
+  }, 60000);
+});
