@@ -207,7 +207,7 @@ retlab:
 
 /** 3. A superpage, remapping with sfence.vma, a satp switch between two roots, a data access through the I/O window. */
 const remap: Prog = {
-  name: 'remap: sfence.vma, satp switch, superpage, I/O through a mapping', max: 8000, note: 'a changed PTE is seen after sfence.vma; a new root after the satp write; physical 0x8000_0010 read from U',
+  name: 'remap: sfence.vma, satp switch, superpage, I/O through a mapping', max: 8000, dmemK: 13, note: 'a changed PTE is seen after sfence.vma; a new root after the satp write; physical 0x8000_0010 read from U',
   source: boot(
     [
       [LEAF + 4 * 14, (0x80000 * 1024 + (V | R | W | U | A | D)) >>> 0],
@@ -236,6 +236,7 @@ ${ld('a6', 0xc00010)}
 ${ld('t2', 0xc00014)}
 ${st('a6', 0xc00018)}
 ${ld('t3', 0x400010)}
+${ld('a7', 0x1000)}
 ${toM('m2')}
 m2:
   ${word(0x2020, 0)}
@@ -250,6 +251,20 @@ ${ld('t3', 0x400000)}
 ${ld('t4', 0x400004)}
 ${toM('m3')}
 m3:
+  ${word(PAGE_A, 0x1111aaaa)}
+  ${word(PAGE_B, 0x2222bbbb)}
+  ${word(0x4000, pte(0x5000, V))}
+  ${word(0x5000 + 4 * 4, pte(0, V | R | X | U | A))}
+  ${word(0x5000 + 4 * 1, pte(PAGE_B, V | R | W | U | A | D))}
+  ${word(0x5000 + 4 * 2, pte(PAGE_A, V | R | U | A | D))}
+  li t0, 0x80000004
+  csrw satp, t0
+${enterU('u5')}
+u5:
+${ld('a1', 0x1000)}
+${ld('a2', 0x2000)}
+${toM('m4')}
+m4:
   li t0, 0x80000000
   csrw satp, t0
   sfence.vma zero, zero

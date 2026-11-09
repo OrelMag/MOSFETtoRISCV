@@ -17,6 +17,8 @@ export interface Isa {
   f?: boolean;
   /** Zicsr, machine-mode traps and interrupts. */
   system?: boolean;
+  /** Privilege modes M / S / U and Sv32 (the golden model's vm option; needs system). */
+  vm?: boolean;
   /** csrr mhartid, amoswap.w, amoadd.w (the multi-core). */
   mp?: boolean;
   /** The C extension: programs are assembled with .option rvc. */
@@ -72,6 +74,7 @@ export const CPUS: CpuConfig[] = [
   { id: 'fppipe', name: 'Pipelined RV32IF (six stages)', isa: { f: true }, env: 'bare', cpi: 30, build: (w, imemK, dmemK) => pipelinedFpCpu(w, { imemK, dmemK }) },
   { id: 'sys', name: 'System (Zicsr, traps, I/O)', isa: { sub: true, system: true }, env: 'p', imemK: 7, cpi: 1, build: (w, imemK, dmemK) => systemCpu(w, { imemK, dmemK }) },
   { id: 'sys-m', name: 'System RV32IM', isa: { sub: true, system: true, m: true }, env: 'p', imemK: 7, cpi: 34, build: (w, imemK, dmemK) => systemCpu(w, { imemK, dmemK, m: true }) },
+  { id: 'sys-vm', name: 'System with virtual memory (M / S / U, Sv32)', isa: { sub: true, system: true, vm: true }, env: 'p', imemK: 7, cpi: 8, build: (w, imemK, dmemK) => systemCpu(w, { imemK, dmemK, vm: true }) },
   { id: 'dual', name: 'Dual-core (hart 0)', isa: { mp: true }, env: 'bare-mp', cpi: 2, build: (w, imemK, dmemK) => dualCore(w, dmemK, false, imemK) },
 ];
 
@@ -98,11 +101,12 @@ export function notApplicable(cfg: Pick<CpuConfig, 'isa' | 'fixedDmemK'>, name: 
   if (suite === 'rv32ua' && !(isa.mp && MP_AMO.has(t))) return isa.mp ? 'only amoswap.w and amoadd.w' : 'no atomics';
   if (suite === 'rv32mi' && !isa.system) return 'no CSRs or traps';
   if (suite === 'rv32mi' && MI_OPTIONAL[t]) return MI_OPTIONAL[t];
+  if (isa.vm && suite === 'rv32mi' && t === 'illegal') return 'needs mstatus.TVM (sfence.vma and satp trap in S mode), which the golden model leaves out';
   if (cfg.fixedDmemK !== undefined && dataWords > 2 ** cfg.fixedDmemK) return `data does not fit the ${2 ** cfg.fixedDmemK}-word main memory`;
   return undefined;
 }
 
 /** The golden model configured like a CPU's ISA. */
 export function issOptions(isa: Isa): IssOptions {
-  return { system: !!isa.system, m: !!isa.m, f: !!isa.f, c: !!isa.c, ...(isa.custom ? { custom: isa.custom } : {}) };
+  return { system: !!isa.system, vm: !!isa.vm, m: !!isa.m, f: !!isa.f, c: !!isa.c, ...(isa.custom ? { custom: isa.custom } : {}) };
 }
