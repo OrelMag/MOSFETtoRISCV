@@ -33,16 +33,20 @@ export class PipeHistory {
   }
 }
 
-/** The grid's rows (head, one per stage, events) for the last `n` cycles; `wordAt(pc)`: the instruction there. */
-export function pipeGridRows(snaps: PipeSnap[], wordAt: (pc: number) => number | undefined, n = 12): HTMLElement[] {
+/**
+ * The grid's rows (head, one per stage, events) for the last `n` cycles; `wordAt(pc)`: the instruction there. `pad`: blank cells
+ * for the cycles not run yet, so the grid is `n` columns wide from the first cycle (growing, it re-packed the panels around it).
+ */
+export function pipeGridRows(snaps: PipeSnap[], wordAt: (pc: number) => number | undefined, n = 12, pad = false): HTMLElement[] {
   const shown = snaps.slice(-n);
+  const blank = () => (pad ? Array.from({ length: n - shown.length }, () => h('span', { class: 'pg-c pad', 'aria-hidden': 'true' })) : []);
   const stages = shown[shown.length - 1]?.stages ?? ['F', 'D', 'E', 'M', 'W'];
   const mnem = (pc: number) => {
     const w = wordAt(pc);
     return w === undefined ? 'nop' : disasm(w, pc).split(' ')[0];
   };
   const hue = (pc: number) => (pc * 47) % 360;
-  const head = h('div', { class: 'pg-row head' }, h('span', { class: 'pg-st' }, ''), shown.map((s) => h('span', { class: 'pg-c' }, String(s.cycle))));
+  const head = h('div', { class: 'pg-row head' }, h('span', { class: 'pg-st' }, ''), shown.map((s) => h('span', { class: 'pg-c' }, String(s.cycle))), blank());
   // a dual-issue pipeline: each stage's second lane (the younger instruction) in a row under it
   const wide = shown.some((s) => s.slots1);
   const row = (st: string, pick: (s: PipeSnap) => PipeSnap['slots'][number] | undefined, lane1 = false) =>
@@ -51,7 +55,7 @@ export function pipeGridRows(snaps: PipeSnap[], wordAt: (pc: number) => number |
         const slot = pick(s);
         if (!slot?.valid) return h('span', { class: 'pg-c bubble', title: 'bubble' }, '·');
         return h('span', { class: 'pg-c', style: `--h:${hue(slot.pc)}`, title: `${hex(slot.pc, 4)}: ${disasm(wordAt(slot.pc) ?? 0x13, slot.pc)}` }, mnem(slot.pc));
-      }));
+      }), blank());
   const rows = stages.flatMap((st, si) => [row(st, (s) => s.slots[si]), ...(wide ? [row(`${st}₁`, (s) => s.slots1?.[si], true)] : [])]);
   const ev = h('div', { class: 'pg-row ev' }, h('span', { class: 'pg-st' }, ''), shown.map((s) => {
     const tags: string[] = [];
@@ -63,6 +67,6 @@ export function pipeGridRows(snaps: PipeSnap[], wordAt: (pc: number) => number |
     if (s.fwdA === 1 || s.fwdB === 1) tags.push('W→E');
     if (s.byp) tags.push('W→D');
     return h('span', { class: 'pg-c ev', title: tags.join(', ') }, tags.join(' '));
-  }));
+  }), blank());
   return [head, ...rows, ev];
 }
