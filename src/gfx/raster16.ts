@@ -1,7 +1,7 @@
 // The campaign's rasterizer (act 9: k_edge, k_tile, k_raster, k_frame), as plain arithmetic: chapter 33's edge
 // functions, top-left rule and tile walk (gfx/raster.ts) at RV16 sizes. Vertices are 7-bit quarter pixels on a
 // 32 × 32 screen, so every E fits 16 bits (|E| ≤ 2·127² = 32 258), and the tiles are 0 … 7 each way. The set-up has
-// no multiplier: each stepper's own adder computes its E at the first tile by shift-and-add (18 cycles), then one
+// no multiplier: each stepper's own adder computes its E at the first tile by shift-and-add (17 cycles), then one
 // cycle culls back faces from the sum of the three E (twice the area), and the walk starts. No DOM.
 
 import { CMD, rasterize, setup, tilePixel, type Vtx } from './raster';

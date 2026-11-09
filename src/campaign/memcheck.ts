@@ -454,7 +454,7 @@ export function runDma(def: ComponentDef, mode: 'gate' | 'switch', traces = dmaT
 /**
  * m_flash's chip: 4 blocks of 4 pages, a page one 16-bit word plus a 4-bit spare area (tag). Erased, a page reads
  * all ones; programming can only clear bits, so a page is programmed once between erases. Times scaled from chapter
- * 34's (read, program, erase): busy for this many cycles after the command.
+ * 37's (read, program, erase): busy for this many cycles after the command.
  */
 export const FLASH16 = { blocks: 4, pages: 4, logical: 8, tR: 2, tP: 6, tE: 20 } as const;
 /** Flash commands (fcmd). */

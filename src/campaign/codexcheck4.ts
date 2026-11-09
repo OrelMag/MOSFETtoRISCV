@@ -256,14 +256,14 @@ export const CHECK4: Record<string, Quiz[]> = {
       question: 'Why does an H-tree distribute the clock with little skew?',
       options: ['Every path from the root to a leaf has the same length', 'It uses thicker wires', 'It clocks each flip-flop separately', 'It runs at half the frequency'],
       answer: 0,
-      explain: 'Each level splits into four equal branches, so all leaves are the same distance from the source. A single spine from one edge reaches near and far flip-flops at different times.',
+      explain: 'Each level splits into two equal branches, so all leaves are the same distance from the source. A single spine from one edge reaches near and far flip-flops at different times.',
       why: ['', 'Wire width changes delay per length, not the mismatch between paths.', 'It is one net branching to all of them; equal branch lengths are the point.', 'The tree does not change the frequency.'],
     },
   ],
   power: [
     {
       question: 'A NAND output drives two NAND inputs (C = 2.1 fF in the site\'s model). What energy does one 0 → 1 transition cost at 0.9 V?',
-      options: ['About 0.85 fJ (½·C·V²)', 'About 1.7 fJ (C·V²)', 'About 1.9 fJ (C·V)', 'Nothing: CMOS has no static current'],
+      options: ['About 0.85 fJ (½·C·V²)', 'About 1.7 fJ (C·V²)', 'About 1.9 fC (C·V)', 'Nothing: CMOS has no static current'],
       answer: 0,
       explain: 'A full swing 0 → 1 → 0 draws C·V² from the supply; each transition costs half: 0.5 × 2.1 fF × 0.81 V² ≈ 0.85 fJ.',
       why: ['', 'C·V² is the cost of a full cycle, two transitions.', 'C·V is the charge moved, not the energy.', 'No static current, but every transition moves charge, and that is the dynamic power.'],
