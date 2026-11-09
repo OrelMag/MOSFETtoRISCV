@@ -216,7 +216,7 @@ export const chPipeline: Chapter = {
         that will be used later, plus a <em>valid</em> bit. ID/EX is the widest; after E the operands and most control bits are gone.</p>
         <p>Each is a wide register with an <strong>enable</strong> (de-assert to stall) and a <strong>synchronous clear</strong>
         (assert to replace the contents with a bubble: all control bits 0, so it writes nothing). Open one: it is the register
-        from <a href="#/c/registers/0">chapter 9</a> with a mask in front. Stalls and flushes, the next steps' tools, are nothing more
+        from <a href="#/c/registers/0">chapter ${numOf('registers')}</a> with a mask in front. Stalls and flushes, the next steps' tools, are nothing more
         than these two inputs.</p>
         <p>Note the <span data-show="rf">register file</span>: written in W, read in D. An instruction's destination
         register number (rd) and its RegWrite bit travel with it so that, when it writes back three cycles later, the right
@@ -356,7 +356,7 @@ export const chPipeline: Chapter = {
           memory. That is a <strong>precise</strong> exception. A pipeline gets it by recording the exception in the pipeline register beside the
           instruction, doing nothing yet, and acting when it reaches a late stage (before any store of its own commits): squash it and everything
           behind, save its PC (<code>mepc</code>), fetch the handler. An older instruction's exception, discovered later, still wins because it
-          reaches that stage first. This pipeline takes no traps; <a href="#/c/traps/0">chapter 20</a> adds them to the single-cycle CPU.</p>`,
+          reaches that stage first. This pipeline takes no traps; <a href="#/c/traps/0">chapter ${numOf('traps')}</a> adds them to the single-cycle CPU.</p>`,
         derive: `<p>Cycles per iteration = instructions + 2 × (taken branches). With a branch taken on a fraction t of the instructions, CPI ≈ 1 + 2t
           (plus load-use stalls). For this loop t = 1/3: CPI = 5/3.</p>`,
         pitfall: `<p>"Predict not taken" is the worst guess for loops, whose closing branch is taken on every iteration but the last. Static
@@ -446,7 +446,7 @@ export const chPipeline: Chapter = {
     {
       title: 'A compiled program on the pipeline',
       body: `
-        <p>Chapter 15's compiler and Python panel, on this chapter's CPU: the compiled words are the same RV32I, only the machine changes. The five-stage pipeline (F, D, E, M, W) runs them
+        <p>Chapter ${numOf('python')}'s compiler and Python panel, on this chapter's CPU: the compiled words are the same RV32I, only the machine changes. The five-stage pipeline (F, D, E, M, W) runs them
         on ${fmt(PIPE.nands)} NANDs against the single-cycle CPU's ${fmt(SINGLE.nands)} (+${(100 * (PIPE.nands - SINGLE.nands) / SINGLE.nands).toFixed(1)} %: four stage registers, forwarding, the
         <span data-show="hz">hazard unit</span>). A cycle is no longer an instruction, so the panel reads the pipeline's own signals at every edge and charges
         <em>each clock to exactly one Python line</em>.</p>
@@ -457,7 +457,7 @@ export const chPipeline: Chapter = {
         <p>Measured on <code>prefix</code>: ${fmt(PREFIX.cycles)} cycles for ${fmt(PREFIX.instr)} instructions, CPI ${(PREFIX.cycles / PREFIX.instr).toFixed(2)}.
         ${fmt(PREFIX.stall)} are stalls (<code>xs[i] += xs[i - 1]</code> loads a value its next instruction adds, and <code>print(xs[i])</code> loads a value its next instruction stores), ${fmt(PREFIX.flush)} flushes
         (${fmt(PREFIX.flush / 2)} taken branches and jumps), ${PREFIX.fill} the pipeline filling. The routines suffer worse: gcd's <code>%</code> loop is branches,
-        and the same program takes ${fmt(GCD_I.cycles)} cycles for ${fmt(GCD_I.instr)} instructions (CPI ${(GCD_I.cycles / GCD_I.instr).toFixed(2)}), ${fmt(GCD_I.flush)} of them flushes. A pipeline can win only through its shorter clock, and this one does not yet: its period does not fall far enough to pay for the CPI ("Does it pay? Measured"). Chapter 18 balances it.</p>`,
+        and the same program takes ${fmt(GCD_I.cycles)} cycles for ${fmt(GCD_I.instr)} instructions (CPI ${(GCD_I.cycles / GCD_I.instr).toFixed(2)}), ${fmt(GCD_I.flush)} of them flushes. A pipeline can win only through its shorter clock, and this one does not yet: its period does not fall far enough to pay for the CPI ("Does it pay? Measured"). Chapter ${numOf('pipepay')} balances it.</p>`,
       scene: () => pyScene(pySrc('prefix'), { pipeline: true, switch: false }),
       more: {
         derive: `<p>The charge rule, from the stage registers' valid bits: Execute valid → that instruction's line (one cycle; a divide's extra cycles are counted apart). Execute empty → the youngest older instruction still in Memory or
@@ -465,7 +465,7 @@ export const chPipeline: Chapter = {
           A runtime routine's cycles go to the line that called it, so <code>a % b</code> shows its loop's flushes.</p>`,
         pitfall: `<p>Reading CPI as speed. A program's time is cycles × period. A stall-free pipeline has CPI 1 and the short clock; every bubble is a cycle spent on nothing, but a single-cycle machine pays the long clock on <em>every</em>
           instruction. Compare cycles only between machines with the same clock, and always report both.</p>`,
-        real: `<p>Real pipelines hide most flushes with branch prediction (chapter 18) and caches; here the branch is resolved in Execute and always predicted not-taken, the plainest design, so every loop iteration pays two bubbles.
+        real: `<p>Real pipelines hide most flushes with branch prediction (chapter ${numOf('pipepay')}) and caches; here the branch is resolved in Execute and always predicted not-taken, the plainest design, so every loop iteration pays two bubbles.
           The same accounting, per source line, is what a profiler reading hardware performance counters reports.</p>`,
       },
       challenge: {

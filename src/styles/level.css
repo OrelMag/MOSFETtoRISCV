@@ -257,6 +257,7 @@
 .lv-verdict.ok { background: var(--good-soft); color: var(--good); font-weight: 600; display: flex; align-items: center; gap: 4px; }
 /* the codex guide: where to learn it and how it connects, the lead sentence, figures, Check yourself, previous / next */
 .cx-rows { display: grid; gap: 6px; margin-top: 12px; }
+.cx-note { margin: -2px 0 2px; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .cx-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .cx-row-k { font: 600 11px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); min-width: 78px; }
 .cx-idea p { margin: 0 0 0.8em; }

@@ -628,7 +628,7 @@ and the branch path is now two delays behind (74):
   },
 
   pipeline: {
-    idea: `Pipelining cuts the single-cycle path with registers so that each piece, a stage, takes one cycle and works on a different instruction: five are in flight, in F, D, E, M and W. Throughput rises to one instruction per (shorter) cycle; the latency of one instruction grows slightly, five cycles plus register overhead. The ideal period is the single-cycle path ÷ 5 + clk-to-q + setup, reached only if the stages are balanced and nothing stalls.<br>The RV16 pipeline shows both limits. Its period is 78 NAND delays against the single-cycle core's 98, because E holds the forwarding logic, the operand muxes and the ripple ALU in one stage (13 + 3 + 2 + 50 delays, then 4 through the E/M register's clear and enable muxes, plus 6 of clk-to-q and setup), and the branch path through the ripple comparator and the PC redirect is only one delay shorter. And each taken branch costs 2 cycles. Measured on the core tests, the plain pipeline is only 4% faster than the single-cycle core (116 610 against 121 128 NAND delays): its CPI eats most of the 20% the period gained, and on the nested loops below it is slower. With static branch prediction it is 12% faster there. The rest of the gain has to come from balancing E: a faster ALU and comparator, an earlier branch decision.`,
+    idea: `Pipelining cuts the single-cycle path with registers so that each piece, a stage, takes one cycle and works on a different instruction: five are in flight, in F, D, E, M and W (fetch, decode, execute, memory, write-back; the pipeline chapter names the registers between them IF/ID, ID/EX, EX/MEM, MEM/WB, the codex and the campaign F/D, D/E, E/M, M/W). Throughput rises to one instruction per (shorter) cycle; the latency of one instruction grows slightly, five cycles plus register overhead. The ideal period is the single-cycle path ÷ 5 + clk-to-q + setup, reached only if the stages are balanced and nothing stalls.<br>The RV16 pipeline shows both limits. Its period is 78 NAND delays against the single-cycle core's 98, because E holds the forwarding logic, the operand muxes and the ripple ALU in one stage (13 + 3 + 2 + 50 delays, then 4 through the E/M register's clear and enable muxes, plus 6 of clk-to-q and setup), and the branch path through the ripple comparator and the PC redirect is only one delay shorter. And each taken branch costs 2 cycles. Measured on the core tests, the plain pipeline is only 4% faster than the single-cycle core (116 610 against 121 128 NAND delays): its CPI eats most of the 20% the period gained, and on the nested loops below it is slower. With static branch prediction it is 12% faster there. The rest of the gain has to come from balancing E: a faster ALU and comparator, an earlier branch decision.`,
     example: {
       title: 'Five in flight, and the measured cost',
       body: `<pre>cycle    1  2  3  4  5  6  7  8  9
@@ -831,7 +831,7 @@ next:   pc ← mtvec, mepc ← pc of the illegal word, mcause ← 2</pre>`,
       'Taking an interrupt on a bubble: mepc would be the bubble\'s PC; RV16 gates the interrupt with E\'s valid bit.',
     ],
     anatomy: ['csr', 'p2', 'p3'],
-    chapters: [{ chapter: 'traps', step: 2, label: 'Exceptions' }],
+    chapters: [{ chapter: 'traps', step: 2, label: 'Exceptions' }, { chapter: 'traps', step: 10, label: 'Precise traps in a pipeline' }],
   },
 
   // ---- side quests

@@ -581,7 +581,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'y_ptrap', act: 7, title: 'Pipeline V: exceptions', kind: 'core', requires: ['pi_core3', 'y_trap'], base: BUILD7.y_ptrap, par: { nand: 12031, period: 81, cycles: 2361 },
     why: 'Pipeline IV holds five instructions, so a trap must be precise: older ones finish, younger ones are cancelled, and mepc names the culprit. Taking traps in E, where the instruction has written nothing yet, does it: +2813 NANDs over Pipeline IV, period 81. The finale adds the interrupt to this core.',
     tips: ['Take traps in E: older instructions in M and W still complete, younger ones in F and D are flushed.', 'Carry a valid bit: a bubble\'s all-zero word would otherwise look like an illegal instruction.', 'A CSR instruction reads and writes in E; its old value travels down as the result.'],
-    codex: ['precise', 'flush'], chapters: [{ chapter: 'traps', step: 9, label: 'Inside the trap unit' }],
+    codex: ['precise', 'flush'], chapters: [{ chapter: 'traps', step: 10, label: 'Precise traps in a pipeline' }],
   },
   {
     id: 'y_final', act: 7, title: 'Finale: interrupts', kind: 'core', requires: ['y_ptrap', 'y_irq', 'p_handler'], base: BUILD7.y_final, par: { nand: 12038, period: 81, cycles: 2399 },

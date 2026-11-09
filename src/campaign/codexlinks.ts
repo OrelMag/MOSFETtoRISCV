@@ -142,3 +142,12 @@ export function neighbours(id: string): { prev?: CodexEntry; next?: CodexEntry }
 
 /** Plain text of an entry's summary, for search. */
 export const plainSummary = (e: CodexEntry): string => e.body.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ');
+
+/** The chapters that build the CPU at 32 bits (RV32I and its extensions): an entry quoting RV16 numbers that sends a reader there says so. */
+export const RV32_CHAPTERS: ReadonlySet<string> = new Set(['alu', 'regfile', 'isa', 'cpu', 'python', 'fastadd', 'pipeline', 'pipepay', 'io', 'traps', 'muldiv', 'cache', 'multicycle']);
+
+/** Does an entry whose text is `text` and whose chapter links are `chapters` need the RV16 note beside them? */
+export const needsRv16Note = (text: string, chapters: readonly { chapter: string }[]): boolean =>
+  /\bRV16\b/.test(text) && chapters.some((c) => RV32_CHAPTERS.has(c.chapter));
+
+export const RV16_NOTE = 'Where this entry quotes RV16, the campaign’s 16-bit ISA, the chapters build the same at 32 bits (RV32I): widths, counts and periods differ.';
