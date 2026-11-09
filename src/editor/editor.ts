@@ -830,7 +830,7 @@ export class Editor {
     const others = Object.values(ws.chips).filter(listed);
     if (others.length) {
       const opt = (c: ChipDoc) => h('option', { value: c.id }, c.name);
-      const sel = h('select', { class: 'sb-open', 'aria-label': 'Open a chip', title: 'Open another of your chips' },
+      const sel = h('select', { class: 'sb-open', 'aria-label': 'Open a chip', title: `Open another of your chips (${others.length})`, 'data-count': String(others.length) },
         h('option', { value: '' }, `Open… (${others.length})`),
         folderGroups(ws, listed).flatMap((g) => (!g.chips.length ? [] : g.name === null ? g.chips.map(opt) : [h('optgroup', { label: g.name }, g.chips.map(opt))]))) as HTMLSelectElement;
       sel.addEventListener('change', () => sel.value && this.openChip(sel.value));
@@ -849,6 +849,15 @@ export class Editor {
   /** Scroll the open chip's tab into view, clear of the sticky Open… / New chip group (many tabs scroll). */
   private showActiveTab(): void {
     const t = this.tabs, on = t.querySelector<HTMLElement>('.sb-tab.on');
+    // Open… gives way before the chip names: only its count while a tab's name is cut or the strip scrolls (not on a phone,
+    // whose one tab always ends in an ellipsis and whose Open… is on a row of its own)
+    const open = t.querySelector<HTMLSelectElement>(':scope > .sb-new-grp > select.sb-open');
+    if (open?.options[0]) {
+      const n = open.dataset.count ?? '', first = open.options[0];
+      first.textContent = `Open… (${n})`;
+      const cut = () => t.scrollWidth > t.clientWidth + 1 || [...t.querySelectorAll<HTMLElement>('.sb-tab-label')].some((l) => l.scrollWidth > l.clientWidth + 1);
+      if (!matchMedia('(max-width: 760px)').matches && cut()) first.textContent = `(${n})`;
+    }
     if (t.scrollWidth <= t.clientWidth) return void (t.scrollLeft = 0);
     if (!on) return;
     const tail = t.querySelector<HTMLElement>(':scope > .sb-new-grp')?.offsetWidth ?? 0;
