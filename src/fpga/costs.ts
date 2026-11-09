@@ -10,14 +10,17 @@ export interface FpgaExample {
   exportHash: string;
   /** After place and route. */
   device: { lut4: Use; alu: Use; dff: Use; bsram: Use };
-  /** LUTs as Yosys left them (LUT1–LUT4 cells), after nextpnr packed them into slices, and after routing (device.lut4). */
-  lut4Stages: { synth: number; packed: number; routed: number };
+  /** LUTs as Yosys left them (LUT1–LUT4 cells), after packing (ALU cells take LUT slots too), after routing (device.lut4); passthrough: the routed ones the
+   *  placer inserted in front of a flip-flop whose D input does not come from the LUT beside it in its slice (named *_passthrough_lut). */
+  lut4Stages: { synth: number; packed: number; routed: number; passthrough: number };
   /** By block (dut.<block> and dut.<block>.<part>, by the names Yosys keeps; board: the board top's glue), largest first. */
   blocks: { name: string; luts: number; ffs: number; bsram: number }[];
   /** Post-route maximum frequency per clock, MHz (clk: the design's, divided from the board's; mem_clk: the board's 27 MHz). */
   fmax: Record<string, number>;
-  /** The design clock's critical path, ns, split by kind; luts: the LUTs on it. */
-  critical: { clock: string; ns: number; skew: number; clkToQ: number; logic: number; routing: number; setup: number; luts: number };
+  /** The design clock's critical path, ns, split by kind; luts: the logic cells on it, of which lut4 LUTs and wideMux the multiplexers joining two LUTs into a wider function. */
+  critical: { clock: string; ns: number; skew: number; clkToQ: number; logic: number; routing: number; setup: number; luts: number; lut4: number; wideMux: number };
+  /** The packed bitstream (Apycula's gowin_pack): configuration frames and the bits in each, its checksum included. */
+  bitstream: { frames: number; frameBits: number };
   /** Our estimates: NANDs (mapped + kept as storage loops), lutMap's LUT4 count and levels, the static period in NAND delays. */
   ours: { nands: number; lutMapLuts: number; lutLevels: number; period: number | null };
 }
@@ -25,7 +28,7 @@ export interface FpgaExample {
 export interface FpgaCosts {
   board: string;
   device: string;
-  tools: { yosys: string; nextpnr: string };
+  tools: { apycula: string; yosys: string; nextpnr: string };
   examples: Record<string, FpgaExample>;
 }
 

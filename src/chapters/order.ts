@@ -36,6 +36,7 @@ const BOOK = [
   'ooo',
   'multicore',
   'silicon',
+  'fpga',
   'verify',
   'sidechan',
   'lanes',

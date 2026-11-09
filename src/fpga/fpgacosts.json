@@ -2,6 +2,7 @@
  "board": "Sipeed Tang Nano 9K",
  "device": "GW1NR-LV9QN88PC6/I5",
  "tools": {
+  "apycula": "0.32",
   "yosys": "Yosys 0.69",
   "nextpnr": "nextpnr-0.11.1"
  },
@@ -29,7 +30,8 @@
    "lut4Stages": {
     "synth": 12,
     "packed": 36,
-    "routed": 12
+    "routed": 12,
+    "passthrough": 0
    },
    "blocks": [
     {
@@ -75,7 +77,13 @@
     "logic": 1.098,
     "routing": 0.412,
     "setup": 0.399,
-    "luts": 1
+    "luts": 1,
+    "lut4": 1,
+    "wideMux": 0
+   },
+   "bitstream": {
+    "frames": 712,
+    "frameBits": 2904
    },
    "ours": {
     "nands": 79,
@@ -107,7 +115,8 @@
    "lut4Stages": {
     "synth": 4179,
     "packed": 4203,
-    "routed": 5271
+    "routed": 5271,
+    "passthrough": 1092
    },
    "blocks": [
     {
@@ -213,7 +222,13 @@
     "logic": 13.052,
     "routing": 23.703,
     "setup": 0.399,
-    "luts": 28
+    "luts": 28,
+    "lut4": 8,
+    "wideMux": 20
+   },
+   "bitstream": {
+    "frames": 1224,
+    "frameBits": 2904
    },
    "ours": {
     "nands": 32414,

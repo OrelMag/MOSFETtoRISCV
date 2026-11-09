@@ -1,0 +1,74 @@
+/* ---------- From netlist to FPGA (src/widgets/fpga.ts). Colours from the theme tokens, so both themes follow. ---------- */
+.fpga-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@container (max-width: 640px) { .fpga-two { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 760px) { .fpga-two { grid-template-columns: minmax(0, 1fr); } .fpga-lut { max-width: 440px; } }
+.fpga-w .sub { margin: 8px 0 4px; }
+
+/* the two flows */
+.fpga-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 8px 0; padding: 8px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+.fpga-flow-name { font-weight: 700; min-width: 56px; }
+.fpga-flow.fpga .fpga-flow-name { color: var(--accent); }
+.fpga-stage { display: flex; flex-direction: column; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); font-size: 13px; }
+.fpga-stage span { font-size: 11.5px; color: var(--muted); }
+.fpga-arrow { color: var(--muted); }
+
+/* a LUT */
+.fpga-lut, .fpga-sbox { width: 100%; height: auto; display: block; }
+.fpga-t { fill: var(--accent); font: 700 12px var(--font-sans, sans-serif); }
+.fpga-cell { fill: var(--surface-2); stroke: var(--border-strong); stroke-width: 1; }
+.fpga-cell.one { fill: color-mix(in srgb, var(--w1) 40%, var(--surface)); }
+.fpga-cell.sel { stroke: var(--accent); stroke-width: 2.2; }
+.fpga-cv { fill: var(--text); font: 700 10px var(--font-mono); text-anchor: middle; }
+.fpga-wire { fill: none; stroke: var(--w0); stroke-width: 1.2; }
+.fpga-wire.on { stroke-width: 2.4; }
+.fpga-wire.w1, .fpga-track.w1, .fpga-pass.w1 { stroke: var(--w1); }
+.fpga-mux { fill: var(--surface); stroke: var(--accent); stroke-width: 1.2; }
+.fpga-sel, .fpga-y { fill: var(--muted); font: 700 11px var(--font-mono); }
+.fpga-y { text-anchor: end; font-size: 12px; }
+.fpga-sel.w1, .fpga-y.w1 { fill: var(--text); }
+.fpga-bits { display: flex; flex-wrap: wrap; gap: 3px; margin: 2px 0 6px; }
+.fpga-bit { min-width: 26px; padding: 3px 5px; border-radius: 5px; border: 1.5px solid var(--border-strong); background: var(--surface-2); color: var(--text); font: 700 12px var(--font-mono); cursor: pointer; }
+.fpga-bit.one { background: color-mix(in srgb, var(--w1) 35%, var(--surface)); }
+.fpga-bit.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+.fpga-in[aria-pressed="true"] { border-color: var(--accent); }
+.fpga-expr { font: 13px var(--font-mono); padding: 4px 6px; min-width: 0; width: 100%; }
+.fpga-err { color: var(--warn); }
+.fpga-hex { font-family: var(--font-mono); color: var(--text); }
+.fpga-tt td { font-family: var(--font-mono); text-align: center; padding: 1px 6px; }
+.fpga-tt td.y1 { font-weight: 700; }
+.fpga-tt td.sel { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+/* the LUTs panel */
+.fpga-panel { max-width: 340px; }
+.fpga-luts { margin: 4px 0 0; padding-left: 20px; max-height: 300px; overflow: auto; }
+.fpga-lutrow { display: block; width: 100%; text-align: left; padding: 3px 6px; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--text); font: 12px var(--font-mono); cursor: pointer; }
+.fpga-lutrow:hover, .fpga-lutrow[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* a switch box */
+.fpga-sbox { max-width: 280px; }
+.fpga-boxbg { fill: var(--surface-2); stroke: var(--border-strong); stroke-dasharray: 5 4; }
+.fpga-track { stroke: var(--w0); stroke-width: 3; }
+.fpga-track.on { stroke-width: 4.5; }
+.fpga-pass { fill: none; stroke: var(--border-strong); stroke-width: 1.4; stroke-dasharray: 3 4; }
+.fpga-pass.on { stroke: var(--accent); stroke-width: 3; stroke-dasharray: none; }
+.fpga-pass.on.w1 { stroke: var(--w1); }
+
+/* the report */
+.fpga-use { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 12.5px; margin: 3px 0; }
+.fpga-use-bar { height: 10px; border-radius: 5px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+.fpga-use-bar i { display: block; height: 100%; width: calc(var(--f) * 100%); background: var(--accent); }
+.fpga-use-n { font-family: var(--font-mono); color: var(--text-2); }
+
+/* the critical path */
+.fpga-path { display: flex; height: 26px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); margin: 8px 0 4px; }
+.fpga-path i, .fpga-key::before { background: var(--muted); }
+.fpga-path .route, .fpga-key.route::before { background: var(--accent); }
+.fpga-path .logic, .fpga-key.logic::before { background: var(--good); }
+.fpga-path .skew, .fpga-key.skew::before { background: var(--warn); }
+.fpga-path .cq, .fpga-key.cq::before { background: var(--text-2); }
+.fpga-keys { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; margin-bottom: 6px; }
+.fpga-key::before { content: ""; display: inline-block; width: 12px; height: 10px; margin-right: 5px; border-radius: 2px; vertical-align: middle; }
+
+@media (pointer: coarse) {
+  .fpga-bit, .fpga-lutrow { min-height: 40px; min-width: 40px; }
+}

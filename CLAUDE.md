@@ -68,9 +68,11 @@ the golden model against Spike, commit by commit (`scripts/spike-oracle.ts`, doc
 ISS should leave it green before merging (its failure artifact keeps the program, ELF and Spike's log).
 `.github/workflows/tshark.yml` (pushes touching comm/pcap.ts, the frames, the stack, the capturing widgets or itself; not a deploy gate) has tshark read each chapter's capture, from the gates and the chapters' own frames (`scripts/tshark-oracle.ts`, `--dump` only writes the files, no tshark on Windows; tshark-lib.ts holds each frame to what its bytes claim: fields, protocols, checksums verified good, nothing malformed, no warnings); captures broken on purpose must be caught, and the .pcap files and tshark's output are kept as an artifact.
 `.github/workflows/fpga.yml` (pushes touching the FPGA export, lutmap, timing, src/fpga/; not a deploy gate) runs `scripts/fpga-pnr.ts`: the export of counter7
-and the computer through Yosys synth_gowin and nextpnr-himbaechel (pinned YoWASP versions) on the Tang Nano 9K, and fails when the result differs from the
+and the computer through Yosys synth_gowin, nextpnr-himbaechel and Apycula's gowin_pack (pinned versions) on the Tang Nano 9K, and fails when the result differs from the
 checked-in `src/fpga/fpgacosts.json` (device use, LUTs per block, post-route Fmax, the critical path split into skew / logic / routing, beside lutMap and
 static timing; the new file is an artifact). tests/fpgacosts.test.ts fails when the export no longer hashes as it was measured: run the script with --write.
+The chapter `fpga` (chapters/ch-fpga.ts, after silicon) quotes only src/fpga/facts.ts: lutMap / stats computed on first use and fpgacosts.json (tests/fpga-chapter.test.ts pins
+them); widgets/fpga.ts its widgets (LUT programmer, the LUTs panel lighting each LUT's gates, switch box, the report, the critical path), styles/fpga.css.
 `.github/workflows/layout.yml` (pushes touching scripts/layout/, export-layout.ts, vexport.ts) runs OpenROAD-flow-scripts on sky130
 per design (`export-layout.ts dual | sys`: Verilog, config, source.json with our NAND counts per block and static timing), ~35 min
 each; main and manual runs publish the release layout-latest (dual-core at its root, system core under sys/), which the deploy unpacks
