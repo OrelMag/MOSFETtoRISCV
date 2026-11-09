@@ -56,7 +56,8 @@ export class WorkbenchPage implements Page {
     this.libName = h('span', { class: 'bench-libname' });
     this.libBtn = h('button', { class: 'btn sm bench-libbtn', 'aria-controls': 'bench-library', 'aria-expanded': 'false', title: 'Show or hide the component library',
       onclick: () => this.showLibrary(!this.el.classList.contains('lib-open')) }, icon('menu', 15), h('b', null, 'Components'), this.libName, icon('chevD', 14)) as HTMLButtonElement;
-    this.el = h('div', { class: 'bench' }, this.libBtn, lib, this.stage.el, inspector.el);
+    // the page's heading for screen readers (the stage bar names the component)
+    this.el = h('div', { class: 'bench' }, h('h1', { class: 'sr-only' }, 'Workbench'), this.libBtn, lib, this.stage.el, inspector.el);
     // Each level opened is a history entry (ui/drillpath.ts): #/workbench/<id>/<instance>/…
     this.stage.onNavigate(() => {
       if (this.current) syncDrill(this.hash(), this.routing);
@@ -146,7 +147,7 @@ export class WorkbenchPage implements Page {
     this.params.append(h('span', { class: 'param-k' }, 'Size of this part'));
     for (const p of f.fam.params) {
       const sel = h('select', { 'aria-label': p.name }) as HTMLSelectElement;
-      for (const v of p.values) sel.append(h('option', { value: v, selected: v === f.values[p.name] }, p.label ? p.label(v) : `${v} ${v === 1 ? p.name.replace(/s$/, '') : p.name}`));
+      for (const v of p.values) sel.append(h('option', { value: v, selected: v === f.values[p.name] }, p.label ? p.label(v) : `${v} ${v === 1 ? p.name.replace(/(\w+?)s\b/, '$1') : p.name}`));
       sel.addEventListener('change', () => {
         const values = { ...f.values, [p.name]: Number(sel.value) };
         this.open(f.fam.make(values).id);
@@ -167,7 +168,7 @@ export class WorkbenchPage implements Page {
       const fam = familyOf(this.current)?.fam;
       for (const it of shown) {
         const on = it.id === this.current || (!!it.family && familyOf(it.id)?.fam === fam);
-        l.append(h('button', { class: `lib-item${on ? ' on' : ''}`, 'aria-current': on ? 'true' : null, onclick: () => this.open(it.id) }, it.name, it.family ? h('small', null, 'n-bit') : null));
+        l.append(h('button', { class: `lib-item${on ? ' on' : ''}`, 'aria-current': on ? 'true' : null, onclick: () => this.open(it.id) }, it.name, it.family ? h('small', null, 'sizes') : null));
       }
     }
     if (!any) l.append(h('div', { class: 'lib-empty' }, `No component matches “${this.filter}”. `, h('button', { class: 'btn sm', onclick: () => { this.search.value = ''; this.filter = ''; this.renderList(); this.search.focus(); } }, 'Clear the search')));

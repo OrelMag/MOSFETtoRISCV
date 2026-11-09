@@ -1,7 +1,13 @@
 import { groupDigits } from '../sim/numfmt';
-import { cam, decoder, equal, fifo, LFSR_TAPS, MUX2, muxTree, pla, PLA_PRESETS, plaTerms, regfileMP, romArray, stack, clockDivider, counter, DFF, DFF_R, DFFE, D_LATCH, JKFF, lfsr, ram, register, ringCounter, shiftRegister, SR_LATCH, upDownCounter } from '../lib';
+import { decoder, equal, muxTree } from '../lib/combinational';
+import { MUX2 } from '../lib/gates';
+import { ram } from '../lib/memory';
+import { LFSR_TAPS, clockDivider, DFF_R, JKFF, lfsr, ringCounter, shiftRegister, upDownCounter } from '../lib/seqparts';
+import { counter, DFF, DFFE, D_LATCH, register, SR_LATCH } from '../lib/sequential';
+import { cam, fifo, pla, PLA_PRESETS, plaTerms, regfileMP, romArray, stack } from '../lib/storage';
 import { CLK_TO_Q, SETUP } from '../sim/timing';
-import { DFF_EDGE6, DET101, DET101_FSM, RV16_DFF, RV16_DFFE, RV16_DLATCH } from '../lib';
+import { DET101, DET101_FSM, RV16_DFF, RV16_DFFE, RV16_DLATCH } from '../lib/rv16';
+import { DFF_EDGE6 } from '../lib/seqdeep';
 import { logicDepth, stats } from '../sim/stats';
 import { pack } from '../sim/values';
 import { MS_TIMING, timingSteps } from './seq/timing';

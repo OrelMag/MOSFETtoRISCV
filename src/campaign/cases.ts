@@ -20,6 +20,8 @@ export interface CaseAlt {
   nand?: number;
   depth?: number;
   note?: string;
+  /** false: it does more than this block (the cost moves elsewhere in the core), so the after-pass card claims no NANDs saved against it. */
+  saves?: false;
 }
 
 export interface LevelCase {

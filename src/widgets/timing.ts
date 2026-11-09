@@ -1,7 +1,10 @@
 // Static-timing panel for CPU scenes, and the adder cost/speed comparison.
 
 import { groupDigits } from '../sim/numfmt';
-import { brentKung, busMux2, CLA4, koggeStone, ram, rca, register, sklansky } from '../lib';
+import { busMux2, rca } from '../lib/combinational';
+import { brentKung, CLA4, koggeStone, sklansky } from '../lib/fastadd';
+import { ram } from '../lib/memory';
+import { register } from '../lib/sequential';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { analyzeTiming, CLK_TO_Q, PS_NOTE, PS_PER_NAND, SETUP, type TimingReport } from '../sim/timing';

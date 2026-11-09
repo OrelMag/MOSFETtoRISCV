@@ -11,10 +11,10 @@ import { h } from '../dom';
 import type { Page } from './chapter';
 
 const CHOICES: { persona: Persona; title: string; text: string; tier: Tier; then: string }[] = [
-  { persona: 'new', title: 'New to hardware and code', text: 'You can follow a recipe and do school algebra.', tier: 0, then: 'Tier 0: Before the switch, then the map' },
-  { persona: 'software', title: 'I write software', text: 'Binary and if / else are familiar; gates and clocks are not.', tier: 1, then: 'Tier 1: transistors to memory' },
-  { persona: 'logic', title: 'I know digital logic', text: 'Gates, flip-flops, maybe some Verilog.', tier: 2, then: 'Tier 2: the ALU to a CPU, tier 1 to test out' },
-  { persona: 'hardware', title: 'I design hardware', text: 'Show me where this goes past a textbook.', tier: 3, then: 'Tier 3: pipelines, caches, floating point' },
+  { persona: 'new', title: 'New to hardware and code', text: 'You can follow a recipe and do school algebra.', tier: 0, then: 'Tier 0 · Zero: Before the switch, then the map' },
+  { persona: 'software', title: 'I write software', text: 'Binary and if / else are familiar; gates and clocks are not.', tier: 1, then: 'Tier 1 · Foundations: transistors to memory' },
+  { persona: 'logic', title: 'I know digital logic', text: 'Gates, flip-flops, maybe some Verilog.', tier: 2, then: 'Tier 2 · Builder: the ALU to a CPU, tier 1 to test out' },
+  { persona: 'hardware', title: 'I design hardware', text: 'Show me where this goes past a textbook.', tier: 3, then: 'Tier 3 · Architect: pipelines, caches, floating point' },
 ];
 
 export class StartPage implements Page {

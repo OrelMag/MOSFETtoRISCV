@@ -2,7 +2,9 @@
 // after "float32: the same circuit, bigger". Every number the prose quotes is measured from the circuits when the
 // step is first read (tests/fpnearfar.test.ts pins them).
 
-import { fpAdd, fpAddNearFar, lza, lzc, addSubFast } from '../../lib';
+import { addSubFast } from '../../lib/fastadd';
+import { fpAddNearFar, lza } from '../../lib/fpnearfar';
+import { fpAdd, lzc } from '../../lib/fpu';
 import { groupDigits } from '../../sim/numfmt';
 import { F32, fpAddX } from '../../sim/fpref';
 import { logicDepth, stats } from '../../sim/stats';

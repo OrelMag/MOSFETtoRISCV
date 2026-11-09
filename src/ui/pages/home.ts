@@ -64,7 +64,7 @@ export function homePage(): Page {
       h('h3', null, c.title), h('p', null, c.blurb), h('div', { class: 'meta' }, h('span', null, 'coming soon'))));
 
   const feature = (ic: string, title: string, text: string) =>
-    h('div', { class: 'feature' }, icon(ic, 22), h('h4', null, title), h('p', null, text));
+    h('div', { class: 'feature' }, icon(ic, 22), h('h3', null, title), h('p', null, text));
 
   const el = h('div', { class: 'scroll' }, h('div', { class: 'home' },
     h('section', { class: 'hero' },

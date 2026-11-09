@@ -4,7 +4,7 @@
 import '../styles/router.css';
 import '../styles/internet.css';
 import { pcapFile, type Captured } from '../comm/pcap';
-import { routerFastPath } from '../lib';
+import { routerFastPath } from '../lib/router';
 import { saveFile } from '../view/image';
 import { slider } from './mosparts';
 import { CAUSE_NAMES, C_FORWARD, FastPathModel, S_RX, type FpIn } from '../net/fastpath';

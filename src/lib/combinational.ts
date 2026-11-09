@@ -163,7 +163,7 @@ export const rca = memo((n: number): ComponentDef => {
   const M = mask(n);
   return define({
     id: `rca${n}`, name: `${n}-bit ripple-carry adder`, category: 'arithmetic',
-    summary: `${n} full adders in a chain. Simple and small, but the carry must ripple through every stage.`,
+    summary: `${n === 1 ? 'One full adder' : `${n} full adders in a chain`}. Simple and small, but the carry must ripple through every stage.`,
     ports: [
       { name: 'a', width: n, dir: 'in' }, { name: 'b', width: n, dir: 'in' }, bit('cin', 'in', 'top'),
       { name: 's', width: n, dir: 'out' }, bit('cout', 'out', 'bottom'),
@@ -396,7 +396,7 @@ export const decoder = memo((n: number, en: boolean = false, rowPitch: number = 
   outs.forEach((p, k) => (pins[p.name] = [XG + 7, Y0 + pitch * k + gh / 2]));
   return define({
     id: `dec${n}${en ? 'e' : ''}${rowPitch ? `_p${rowPitch}` : ''}`, name: `${n}→${N} decoder${en ? ' with enable' : ''}`, category: 'routing',
-    summary: `Turns an ${n}-bit number into ${N} wires, exactly one of which is 1${en ? ' (when enabled)' : ''}. One AND per output.`,
+    summary: `Turns a ${n}-bit number into ${N} wires, exactly one of which is 1${en ? ' (when enabled)' : ''}. One AND per output.`,
     ports: [{ name: 'a', width: n, dir: 'in' }, ...(en ? [bit('en', 'in')] : []), ...outs],
     symbol: { kind: 'box', label: `DEC ${n}→${N}`, pitch: rowPitch || undefined },
     spec: ([a, e]) => Array.from({ length: N }, (_, k) => (a === k && (!en || e === 1) ? 1 : 0)),

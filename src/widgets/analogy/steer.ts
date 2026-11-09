@@ -1,7 +1,9 @@
 // DOM-free models behind the "steering signals" analogy figures (railway points, switchboard, microphone).
 // Everything comes from the site's own parts: MUX2 on GateSim, decoder(n) with its stats, TRIBUF on SwitchSim.
 
-import { decoder, MUX2, TRIBUF } from '../../lib';
+import { decoder } from '../../lib/combinational';
+import { MUX2 } from '../../lib/gates';
+import { TRIBUF } from '../../lib/switchparts';
 import { flatten } from '../../sim/flatten';
 import { GateSim } from '../../sim/gatesim';
 import { evalOnce, simulate } from '../../sim/harness';

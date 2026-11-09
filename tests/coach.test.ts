@@ -17,7 +17,7 @@ describe('coach marks', () => {
     for (const coarse of [false, true]) {
       const short = beatsOf('stage', coarse, true);
       expect(short.map((b) => b.id)).toEqual(['drill', 'walk', 'probe']);
-      expect(short[2].text.endsWith('Why?, Step, Share and Open in Sandbox are on the ? sheet.')).toBe(true);
+      expect(short[2].text.endsWith('Show me the controls, on the ? sheet, tours Why?, Step, Share and Open in Sandbox.')).toBe(true);
       expect(short[0].text).not.toMatch(/sheet/);
       expect(beatsOf('stage', coarse, false)).toHaveLength(STAGE_BEATS.length);
     }

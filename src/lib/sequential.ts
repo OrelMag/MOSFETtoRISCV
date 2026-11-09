@@ -181,7 +181,7 @@ export const register = memo((n: number): ComponentDef => {
   const mid = (P * n) / 2;
   return define({
     id: `reg${n}`, name: `${n}-bit register`, category: 'sequential',
-    summary: `${n} enable flip-flops sharing one clock and one enable: stores a ${n}-bit word.`,
+    summary: `${n} enable flip-flop${n === 1 ? '' : 's'} sharing one clock and one enable: stores a ${n}-bit word.`,
     ports: [{ name: 'd', width: n, dir: 'in' }, bit('en', 'in'), bit('clk', 'in', 'bottom', true), { name: 'q', width: n, dir: 'out' }],
     symbol: { kind: 'box', label: `REG${n}` },
     netlist: () => ({

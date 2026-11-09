@@ -2,7 +2,7 @@
 // for any stride and offset, global lines or shared banks), and when tiling a matrix multiply pays
 // (the timing model, which the tests check against the gate-level core, swept over memory bandwidth).
 
-import { accessUnit } from '../lib';
+import { accessUnit } from '../lib/warpmem';
 import { assemble } from '../riscv/asm';
 import { WARP_DMEM_K, WARP_PROGRAMS, WARP_SMEM_K } from '../riscv/warpprograms';
 import { warpTiming, type WarpTiming } from '../riscv/warptiming';

@@ -24,7 +24,7 @@ import { h, icon, undoKey } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { CHALLENGES } from './challengeset';
 import {
-  type Allowed, type BuildChallenge, challengeChipId, challengeOf, type CheckResult, builderViolations, checkChallenge, importAnswer, LEVELS, libAllowed, type LibRule, type Limits,
+  type Allowed, type BuildChallenge, challengeChipId, challengeOf, type CheckResult, builderViolations, checkChallenge, importAnswer, LEVELS, libAllowed, MAX_FAILED, type LibRule, type Limits,
   ruleKind, scoreUnit, solveChallenge, solvedKey, startChallenge,
 } from './challenges';
 import { dockPane, paneShown, showPane, undockPane } from './dock';
@@ -373,9 +373,11 @@ class ChallengeUi {
   /** A failing result's size, and Show / Hide for the details. */
   private foldEl(ch: BuildChallenge, r: CheckResult): HTMLElement {
     const bad = r.failed?.length ?? 0;
+    // failed keeps the first MAX_FAILED: the table's own count, else say there may be more
+    const count = r.wrong !== undefined ? groupDigits(r.wrong) : `${groupDigits(bad)}${bad >= MAX_FAILED ? '+' : ''}`;
     const what = ch.check.kind === 'table' ? 'rows' : ch.check.kind === 'custom' ? `${ch.check.unit ?? 'test'}s` : 'steps';
     const text = r.restrictionViolations.length && !bad ? `${r.restrictionViolations.length} part${r.restrictionViolations.length > 1 ? 's' : ''} not allowed`
-      : !r.tested ? 'not simulated' : r.failed || !r.failures.length ? `${bad} of ${r.tested} ${what} wrong` : `${r.failures.length} problem${r.failures.length > 1 ? 's' : ''} in ${r.tested} ${what}`;
+      : !r.tested ? 'not simulated' : r.failed || !r.failures.length ? `${count} of ${groupDigits(r.tested)} ${what} wrong` : `${r.failures.length} problem${r.failures.length > 1 ? 's' : ''} in ${r.tested} ${what}`;
     const open = !!this.openResult;
     return h('span', { class: 'sb-chal-fold-line' }, text, ' · ',
       h('button', { class: 'btn-link', 'data-chal': 'details', 'aria-expanded': String(open), onclick: () => { this.openResult = !open; this.version++; this.render(); } }, open ? 'Hide' : 'Show'));

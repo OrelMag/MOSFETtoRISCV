@@ -8,7 +8,8 @@ import { CRC32_POLY, CRC32_REFLECTED, CRC32_RESIDUE, CRC8, crc32, parityUndetect
 import { codeOf, crcOnly, crossover, crossoverTime, secdedCrc } from '../comm/fec';
 import { cobsWorst, stuffRate } from '../comm/framing';
 import { CLOCK_NS } from '../dram/timing';
-import { crcNext, crcUnit, eccChannel, hammingDec, hammingEnc, hammingLayout, parity } from '../lib';
+import { eccChannel, hammingDec, hammingEnc, hammingLayout, parity } from '../lib/coding';
+import { crcNext, crcUnit } from '../lib/crc';
 import { berOf } from '../phys/line';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';

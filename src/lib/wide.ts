@@ -71,7 +71,7 @@ function gateTree(gate: ComponentDef, n: number, id: string, name: string, spec:
   const pins: Record<string, [number, number]> = { y: [5 + col * 8 + 2, ypos.get(level[0])!] };
   ins.forEach((p, i) => (pins[p.name] = [1, 2 + 2 * i]));
   return define({
-    id, name, category: 'gate', summary: `A tree of ${n - 1} two-input gates, ${col} levels deep.`,
+    id, name, category: 'gate', summary: `A tree of ${n - 1} two-input gates, ${col} levels deep.${id.startsWith('xor') ? ' The output is the parity: 1 when an odd number of inputs are 1.' : ''}`,
     ports: [...ins, bit('y', 'out')], symbol: { kind: gate.symbol.kind }, spec,
     netlist: () => ({ pins, instances, nets }),
   });

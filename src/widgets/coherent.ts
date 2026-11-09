@@ -4,7 +4,7 @@
 // and with a plain sequentially consistent replay of the same retirement order (what the program would see if there
 // were one memory), which is what the first cache step's stale read is measured against.
 
-import { coherentDualCore } from '../lib';
+import { coherentDualCore } from '../lib/coherent';
 import { readCache, readMem } from '../lib/cohread';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { type BusEvent, CohModel, ST_NAMES } from '../riscv/cohmodel';

@@ -1,7 +1,7 @@
 // Panel that rebuilds the RAM scene at a size of the learner's choosing.
 
 import { groupDigits } from '../sim/numfmt';
-import { ram } from '../lib';
+import { ram } from '../lib/memory';
 import { stats } from '../sim/stats';
 import { h } from '../ui/dom';
 import type { ScenePanel, Stage, Widget } from '../view/stage';

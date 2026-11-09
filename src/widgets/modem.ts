@@ -12,7 +12,7 @@ import { dbToRatio, levelsSupported, ratioToDb, shannon, snrNeeded } from '../co
 import { gaussian, rng } from '../phys/line';
 import { findNode } from '../sim/flatten';
 import { pack } from '../sim/values';
-import { FSK_LINK, NCO } from '../lib';
+import { FSK_LINK, NCO } from '../lib/modem';
 import { h, s } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { fitText, slider } from './mosparts';

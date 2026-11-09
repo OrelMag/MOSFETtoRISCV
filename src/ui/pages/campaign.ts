@@ -100,6 +100,8 @@ export class CampaignPage implements Page {
   private cxListOpen = false;
   /** Until when a map redraw (its columns found) should bring the selected level into view again. */
   private revealUntil = 0;
+  /** The learner scrolled or clicked in the map: from then on it keeps their place instead of landing on the next level. */
+  private mapTouched = false;
   readonly kind = 'campaign';
   readonly el: HTMLElement;
   private main = h('div', { class: 'cp-main' });
@@ -177,9 +179,9 @@ export class CampaignPage implements Page {
     const cap = a === 'n' && b && !nodeById(b) ? [...CAPSTONES, ...COMM_CAPSTONES, ...DSP_CAPSTONES].find((c) => c.id === b && c.route) : undefined;
     if (cap) { location.replace(cap.route!); return; }
     // an address that names no level or entry: the shared notice, with the way back, not the map under a wrong address
-    if (a === 'n' && b && !nodeById(b)) this.main.replaceChildren(notFound(`No level called “${b}”`, 'The address may be stale or mistyped.', [['Open the campaign map', '#/campaign'], ['Open the codex', '#/campaign/codex']]));
-    else if (a === 'codex' && b && b !== ANALOGY_INDEX_ID && b !== MODELS_INDEX_ID && !codexById(b)) this.main.replaceChildren(notFound(`No codex entry called “${b}”`, 'The address may be stale or mistyped.', [['Open the codex', '#/campaign/codex'], ['Open the campaign map', '#/campaign']]));
-    else if (a && a !== 'n' && a !== 'codex' && a !== 'intro') this.main.replaceChildren(notFound(`No campaign page called “${a}”`, 'The map, the intro and the codex are the pages here.', [['Open the campaign map', '#/campaign'], ['Open the codex', '#/campaign/codex']]));
+    if (a === 'n' && b && !nodeById(b)) this.main.replaceChildren(notFound(`No level called “${b}”`, 'The address may be stale or mistyped.', [['Open the campaign map', '#/campaign'], ['Open the codex', '#/campaign/codex']], 'h2'));
+    else if (a === 'codex' && b && b !== ANALOGY_INDEX_ID && b !== MODELS_INDEX_ID && !codexById(b)) this.main.replaceChildren(notFound(`No codex entry called “${b}”`, 'The address may be stale or mistyped.', [['Open the codex', '#/campaign/codex'], ['Open the campaign map', '#/campaign']], 'h2'));
+    else if (a && a !== 'n' && a !== 'codex' && a !== 'intro') this.main.replaceChildren(notFound(`No campaign page called “${a}”`, 'The map, the intro and the codex are the pages here.', [['Open the campaign map', '#/campaign'], ['Open the codex', '#/campaign/codex']], 'h2'));
     else if (a === 'intro') this.main.replaceChildren(this.introView());
     else if (a === 'codex') this.main.replaceChildren(this.codexView(b));
     else this.main.replaceChildren(this.mapView(a === 'n' ? b : undefined));
@@ -314,7 +316,8 @@ export class CampaignPage implements Page {
     const legend = h('div', { class: 'cp-legend' },
       h('span', { class: 'l available' }, 'available'), h('span', { class: 'l solved' }, 'solved'), h('span', { class: 'l skipped' }, 'skipped'),
       h('span', { class: 'l locked' }, 'locked'), h('span', { class: 'l opt' }, 'optional'), NODES.some((n) => n.soon) ? h('span', { class: 'l soon' }, 'coming soon') : null,
-      h('span', { class: 'l port', title: 'Lines between acts are drawn for the level you point at or select' }, 'builds on earlier acts (point at it)'));
+      h('span', { class: 'l port', title: 'Lines between acts are drawn for the level you point at or select' }, 'builds on earlier acts (point at it)'),
+      h('span', { class: 'l blk', title: 'The tag under a card names the block of the CPU (The CPU tab) the level builds or feeds; everywhere: every block uses it' }, 'the CPU block it goes into'));
     // The frontier: the next open level is ringed, and a map opened with no level selected scrolls to it
     const frontier = nextAvailable(p.view, p.unlockAll)?.id;
     const ring = () => scroll.querySelector('.cp-node.next')?.classList.remove('next');
@@ -324,18 +327,22 @@ export class CampaignPage implements Page {
     };
     const scroll = h('div', { class: 'cp-map-scroll' }, draw(this.mapCols));
     mark();
-    if (!sel && !this.mapScroll && frontier) {
-      requestAnimationFrame(() => {
-        const node = scroll.querySelector<SVGGraphicsElement>('.cp-node.next');
-        if (!node) return;
-        const r = node.getBoundingClientRect(), v = scroll.getBoundingClientRect();
-        scroll.scrollTop += r.top - v.top - (v.height - r.height) / 2;
-        scroll.scrollLeft += r.left - v.left - (v.width - r.width) / 2;
-      });
-    }
+    // centre the ringed level; again if the first redraw (the real column count) moves it within the first second
+    const land = () => {
+      const node = scroll.querySelector<SVGGraphicsElement>('.cp-node.next');
+      if (!node) return;
+      const r = node.getBoundingClientRect(), v = scroll.getBoundingClientRect();
+      scroll.scrollTop += r.top - v.top - (v.height - r.height) / 2;
+      scroll.scrollLeft += r.left - v.left - (v.width - r.width) / 2;
+    };
+    const landUntil = !sel && !this.mapTouched && frontier ? performance.now() + 1000 : 0;
+    for (const ev of ['wheel', 'pointerdown', 'touchstart', 'keydown']) scroll.addEventListener(ev, () => { this.mapTouched = true; }, { passive: true });
+    if (landUntil) requestAnimationFrame(land);
     this.mapFit?.disconnect();
     this.mapFit = new ResizeObserver(() => {
       const cols = mapColsFor(scroll.clientWidth);
+      // the map's box settles after the first frame (a phone lays the page out twice): land again within the first second
+      if (performance.now() < landUntil && !this.mapTouched && (scroll.clientWidth <= 0 || cols === this.mapCols)) return land();
       if (scroll.clientWidth <= 0 || cols === this.mapCols) return;
       this.mapCols = cols;
       const refocus = keepFocus(scroll);
@@ -344,6 +351,7 @@ export class CampaignPage implements Page {
       refocus();
       // the first draw guessed the columns: the selected level moved
       if (performance.now() < this.revealUntil) this.reveal();
+      else if (performance.now() < landUntil && !this.mapTouched) land();
     });
     this.mapFit.observe(scroll);
     return h('div', { class: 'cp-split' },

@@ -2,7 +2,8 @@
 // the golden model, nested interrupts, the vectored trap target, and an interrupt controller that latches a request.
 // Stand-alone circuits (lib/intc.ts) sit beside the system CPU, which is unchanged.
 
-import { INTC4, IntcModel, TRAP_UNIT, VECTOR_TARGET, vectorTargetOf } from '../lib';
+import { INTC4, IntcModel, VECTOR_TARGET, vectorTargetOf } from '../lib/intc';
+import { TRAP_UNIT } from '../lib/system';
 import { assemble } from '../riscv/asm';
 import { cpuState } from '../riscv/cosim';
 import { ISS } from '../riscv/iss';

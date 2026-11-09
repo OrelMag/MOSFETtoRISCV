@@ -445,7 +445,10 @@ class Analysis {
     if (ed.sim.running || ed.sim.cycles > 0 || hasRun.has(ed)) hasRun.add(ed);
     const soft = !hasRun.has(ed);
     if (c.built !== ed.compiled || c.doc !== ed.doc || c.soft !== soft) {
-      this.lintCache = { built: ed.compiled, doc: ed.doc, soft, r: ed.compiled ? lintChip(ed.doc, ed.compiled, ed.view.polys, { soft }) : { diags: [], open: [] } };
+      const r = ed.compiled ? lintChip(ed.doc, ed.compiled, ed.view.polys, { soft }) : { diags: [], open: [] };
+      // a walkthrough's chip (levelwalk.ts) is the reference half built on purpose: what is not wired on yet is a hint, not a warning
+      if (ed.doc.id.startsWith('u_walk_')) r.diags = r.diags.map((d) => (d.level === 'warn' ? { ...d, level: 'hint' } : d));
+      this.lintCache = { built: ed.compiled, doc: ed.doc, soft, r };
     }
     return this.lintCache.r;
   }

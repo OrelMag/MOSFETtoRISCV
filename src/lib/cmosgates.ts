@@ -17,6 +17,19 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
 
 const INPUTS = ['a', 'b', 'c', 'd'];
 
+/** The cell at switch level in Verilog, (drain, source, gate) as transistors.ts writes it: the series devices run
+ *  output → m1 → … → rail (NAND: the NMOS to gnd; NOR: the PMOS from vdd), the parallel ones output to the rail. */
+function cellVerilog(id: string, ins: string[], nand: boolean): string {
+  const n = ins.length, mid = Array.from({ length: n - 1 }, (_, i) => `m${i + 1}`);
+  const node = (k: number, end: string) => (k === 0 ? 'y' : k === n ? end : mid[k - 1]);
+  const lines = nand
+    ? [...ins.map((g, i) => `  pmos p${i + 1} (y, vdd, ${g});`), ...ins.map((g, i) => `  nmos n${i + 1} (${node(i, 'gnd')}, ${node(i + 1, 'gnd')}, ${g});`)]
+    // NOR's series PMOS run the other way: p1's source is vdd, pn's drain the output
+    : [...ins.map((g, i) => `  pmos p${i + 1} (${i === n - 1 ? 'y' : mid[i]}, ${i === 0 ? 'vdd' : mid[i - 1]}, ${g});`), ...ins.map((g, i) => `  nmos n${i + 1} (y, gnd, ${g});`)];
+  return [`module ${id} (input ${ins.join(', ')}, output y);`, '  supply1 vdd; supply0 gnd;', `  wire ${mid.join(', ')};`,
+    `  // ${nand ? 'parallel pull-up, series pull-down' : 'series pull-up, parallel pull-down'}`, ...lines, 'endmodule'].join('\n');
+}
+
 /** n-input CMOS NAND (n = 3 or 4): n PMOS in parallel, n NMOS in series, 2n transistors. */
 export function cmosNand(n: number): ComponentDef {
   if (n < 3 || n > 4) throw new Error('cmosNand: 3 or 4 inputs (2 is NAND)');
@@ -43,12 +56,12 @@ export function cmosNand(n: number): ComponentDef {
       symbol: { kind: 'box', label: `NAND${n}` },
       spec: (v) => [v.every((b) => b) ? 0 : 1],
       netlist: () => ({ level: 'switch', pins, instances, nets }),
-      hdl: { verilog: `module nand${n}_cmos (input ${ins.join(', ')}, output y);\n  supply1 vdd; supply0 gnd;\n  wire ${Array.from({ length: n - 1 }, (_, i) => `m${i + 1}`).join(', ')};\n  // parallel pull-up, series pull-down\nendmodule` },
+      hdl: { verilog: cellVerilog(`nand${n}_cmos`, ins, true) },
     });
   });
 }
 
-/** n-input CMOS NOR (n = 3): n PMOS in series, n NMOS in parallel. */
+/** n-input CMOS NOR (n = 3 or 4): n PMOS in series, n NMOS in parallel. */
 export function cmosNor(n: number): ComponentDef {
   if (n < 3 || n > 4) throw new Error('cmosNor: 3 or 4 inputs (2 is NOR_CMOS)');
   return memo(`nor${n}_cmos`, () => {
@@ -74,7 +87,7 @@ export function cmosNor(n: number): ComponentDef {
       symbol: { kind: 'box', label: `NOR${n}` },
       spec: (v) => [v.some((b) => b) ? 0 : 1],
       netlist: () => ({ level: 'switch', pins, instances, nets }),
-      hdl: { verilog: `module nor${n}_cmos (input ${ins.join(', ')}, output y);\n  supply1 vdd; supply0 gnd;\n  // series pull-up, parallel pull-down\nendmodule` },
+      hdl: { verilog: cellVerilog(`nor${n}_cmos`, ins, false) },
     });
   });
 }

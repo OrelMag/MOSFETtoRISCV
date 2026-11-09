@@ -1,6 +1,6 @@
 // Chapter 8's clock-skew scene: a panel to choose how many buffers delay the second flip-flop's clock (2 gate delays each).
 
-import { skewPair } from '../lib';
+import { skewPair } from '../lib/seqdeep';
 import { h } from '../ui/dom';
 import type { ScenePanel, Stage, Widget } from '../view/stage';
 
