@@ -9,6 +9,9 @@ import { fmtCount, LoadPlan } from '../sim/loadplan';
 import { nextTask } from '../sim/tasks';
 import { LoadCard } from './loadcard';
 import { GateSim } from '../sim/gatesim';
+import { OverlayBar, nextOverlay, overlayLegend } from './overlaybar';
+import { type OverlayKind, type OverlayResult, activityOverlay, loadOverlay, overlayRefusal, slackOverlay, unknownOverlay } from './overlays';
+import type { DelayModel } from '../sim/delay';
 import { SwitchSim } from '../sim/switchsim';
 import { needsSwitchLevel } from '../sim/harness';
 import { completeEdge, type Edge, lowerClock, riseEdge, stepEdge } from '../sim/edge';
@@ -237,6 +240,19 @@ export class Stage {
   private readZoom = false;
   /** Aborted by destroy(): the document listeners this stage added. */
   private life = new AbortController();
+  /** The overlay bar (view/overlays.ts): the kind on, its legend over the canvas, the delay model Slack uses, Activity's window. */
+  private ovBar: OverlayBar;
+  private ovKind: OverlayKind | null = null;
+  private ovLegend: HTMLElement | null = null;
+  private ovModel: DelayModel | null = null;
+  private ovCache = new Map<string, { design: FlatDesign; r: OverlayResult | null }>();
+  private ovWin: { sim: GateSim; base: Uint32Array; cycles: number; changes: number; sig: string } | null = null;
+  private ovLast = 0;
+  private ovTimer = 0;
+  private ovListeners = new Set<() => void>();
+  /** While a legend shows: the panels and notes it keeps clear of change size (a fold, a panel filling in) → placed again. */
+  private ovRO: ResizeObserver | null = null;
+  private ovRaf = 0;
   private moreMenu: HTMLElement;
   /** The bar's buttons fitBar may move into More, in that order, with what each does there. */
   private shedGroups: { els: HTMLElement[]; items: { label: string; hint?: string; icon: string; on?: () => boolean; run: () => void }[] }[] = [];
@@ -292,6 +308,7 @@ export class Stage {
       h('button', { class: `btn ghost icon-only${cls}`, title, 'aria-label': title, onclick: fn }, icon(ic, 16));
     this.probeBtn = h('button', { class: 'btn ghost sm toggle probe-btn keep', title: 'Probe mode (P): click any wire to add it to the timing diagram', onclick: () => this.setProbeMode(!this.probeMode) },
       icon('probe', 15), h('span', { class: 'lbl' }, 'Probe')) as HTMLButtonElement;
+    this.ovBar = new OverlayBar((k) => this.setOverlay(k));
     this.why = new WhyPanel({
       ctx: () => this.ctx,
       light: (names) => (names.length ? this.view.highlight(names, true) : this.view.highlight(this.ctx === this.rootCtx ? this.scene?.highlight ?? [] : [])),
@@ -395,6 +412,7 @@ export class Stage {
       { els: [this.timingBtn], items: [{ label: 'Timing diagram', icon: 'wave', on: () => pressed(this.timingBtn), run: () => this.timingBtn.click() }] },
       { els: [this.probeBtn], items: [{ label: 'Probe mode (P)', icon: 'probe', on: () => pressed(this.probeBtn), run: () => this.probeBtn.click() }] },
       { els: [this.whyBtn], items: [{ label: 'Why? (W)', icon: 'why', on: () => pressed(this.whyBtn), run: () => this.whyBtn.click() }] },
+      { els: [this.ovBar.el], items: (['slack', 'activity', 'load', 'unknown'] as const).map((k) => ({ label: `Overlay: ${k[0].toUpperCase() + k.slice(1)}`, hint: this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
     ];
     // Schematic | Breadboard (a scene with Scene.breadboard), and the jumpers' look while the boards are shown
     const segBtn = (label: string, title: string, fn: () => void) => h('button', { title, 'aria-pressed': 'false', onclick: fn }, label);
@@ -421,12 +439,12 @@ export class Stage {
         ...[...this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')].map((n) => n.getBoundingClientRect()),
       ],
     });
-    for (const b of [imgWrap, layoutBtn, this.probeBtn, this.whyBtn]) b.classList.add('sch-only');
+    for (const b of [imgWrap, layoutBtn, this.probeBtn, this.whyBtn, this.ovBar.el]) b.classList.add('sch-only');
     // zoom and Fit work on the boards too (their own camera)
     const upBtn = btn('up', 'Up one level (Esc)', () => this.up()), fitBtn = btn('fit', 'Fit to screen', () => (this.boardOn ? this.board.fitAll() : this.view.fit()));
     upBtn.classList.add('sch-only');
     const bar = this.bar = h('div', { class: 'stage-bar unfit' },
-      this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, this.probeBtn, this.whyBtn, this.timingBtn, moreWrap,
+      this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, this.probeBtn, this.whyBtn, this.ovBar.el, this.timingBtn, moreWrap,
       upBtn, readBtn, zoomOut, zoomIn, fitBtn,
       this.panesBtn);
     this.canvas = h('div', { class: 'canvas' });
@@ -544,6 +562,7 @@ export class Stage {
         this.bar.classList.remove('unfit');
         this.controls.classList.remove('unfit');
       }
+      this.placeLegend();
     }).observe(this.canvas);
     // a chapter's challenge note (ui/stagenotes.ts, put over the canvas by the page) comes, grows and goes: the boards'
     // caption and top follow it (boardCover)
@@ -558,7 +577,11 @@ export class Stage {
       this.fitControls();
     }, { signal: this.life.signal });
     // F: the circuit alone (every panel and the inspector folded); a second press gives them back
-    this.life.signal.addEventListener('abort', bindKeys({ 'stage.fold': () => this.focusMode() }));
+    this.life.signal.addEventListener('abort', bindKeys({
+      'stage.fold': () => this.focusMode(),
+      // O: the next overlay that applies here, Shift O: off (not on the boards, which have none)
+      'stage.overlay': (e) => (this.ctx && !this.boardOn ? this.setOverlay(nextOverlay(this.ovKind, this.ovRefusals(), e.shiftKey)) : false),
+    }));
   }
 
   /** The panels' and the inspector's fold before focusMode() put them away (null: not in focus mode). */
@@ -902,6 +925,7 @@ export class Stage {
     this.syncPins();
     this.view.cover = this.covers();
     this.view.show(ctx, ctx === this.rootCtx);
+    this.paintOverlay();
     // a drill folds the right-docked panels (the board and the schematic want the room, at any width), and the top level
     // gets them back as they were, unless the learner folded or unfolded one by hand meanwhile (foldChoice)
     if (this.drillFold) {
@@ -1043,6 +1067,8 @@ export class Stage {
     bb.setAttribute('aria-pressed', String(on));
     if (on) this.setProbeMode(false);
     this.syncPins();
+    // the boards have no overlay: its legend goes, and comes back with the schematic
+    if (this.ovKind) this.paintOverlay();
     this.fitBar();
   }
 
@@ -2127,6 +2153,7 @@ export class Stage {
     this.panels.forEach((p) => p.update?.());
     this.analyzer.update();
     this.why.update();
+    this.tickOverlay();
     this.showInspector();
     this.updateControls();
     if (!this.leaf) this.levelBadge.textContent = `level: ${LEVEL_NAME[this.levelOf()] ?? 'blocks'}`;
@@ -2340,9 +2367,150 @@ export class Stage {
     if (this.ctx === this.rootCtx) this.board.highlight(names);
   }
 
-  /** Tint the current view's instances by slack (sim/slack.ts slackHeat; null clears); dropped on navigation. */
+  /** The overlay on (null: none): the stage bar's, O / Shift O, the Timing panel's heat toggle. */
+  get overlayKind(): OverlayKind | null {
+    return this.ovKind;
+  }
+
+  /** Listen to the overlay being turned on, off or changed (the Timing panel's heat toggle follows it). */
+  onOverlay(f: () => void): () => void {
+    this.ovListeners.add(f);
+    return () => this.ovListeners.delete(f);
+  }
+
+  /** What this scene runs on, for which overlays apply. */
+  private ovRefusals(): Partial<Record<OverlayKind, string>> {
+    const sim = this.sim, ctx = this.ctx;
+    if (!sim || !ctx) return {};
+    const c = { level: sim.kind, engine: this.scene?.engine, sub: ctx.sim !== sim } as const;
+    const out: Partial<Record<OverlayKind, string>> = {};
+    for (const k of ['slack', 'activity', 'load', 'unknown'] as const) {
+      const why = overlayRefusal(k, c);
+      if (why) out[k] = why;
+    }
+    return out;
+  }
+
+  /**
+   * Turn an overlay on (null: off). It stays on across levels and scenes until turned off, and is never on at a page
+   * load (settings.overlay only remembers where O starts). `model`: the delay model Slack uses (the Timing panel's).
+   */
+  setOverlay(kind: OverlayKind | null, model?: DelayModel): void {
+    if (model) this.ovModel = model;
+    if (kind && this.ovRefusals()[kind]) kind = null;
+    if (kind === 'activity' && this.ovKind !== 'activity') this.ovWin = null;
+    this.ovKind = kind;
+    if (kind && settings.overlay !== kind) settings.set('overlay', kind);
+    this.paintOverlay();
+    this.ovListeners.forEach((f) => f());
+  }
+
+  /** Tint the current view's instances by slack (sim/slack.ts slackHeat; null clears): the Slack overlay. */
   heat(map: Map<string, { band: number; tip: string }> | null): void {
     this.view.heat(map);
+  }
+
+  /**
+   * The legend goes in the first corner where it covers no panel, challenge note or Why? card: bottom right (clear of
+   * the right-docked panels), bottom left, top left under the level badge, top right. None free: the same corners with
+   * the legend compact (its note left to the tooltip), then down to its title line, then the corner where it covers the least. On a phone app.css
+   * lays it across the bottom.
+   */
+  private placeLegend(): void {
+    const L = this.ovLegend;
+    if (!L) return;
+    L.style.cssText = '';
+    L.classList.remove('compact', 'mini');
+    if (window.matchMedia('(max-width: 760px)').matches) return;
+    const c = this.canvas.getBoundingClientRect();
+    const blocks = [...this.panels.map((p) => p.el), this.why.el, ...this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')]
+      .map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+    const spots = ['', 'left:12px;right:auto', 'left:12px;right:auto;top:44px;bottom:auto', 'top:44px;bottom:auto'];
+    let best = { css: '', size: '', cost: Infinity };
+    for (const size of ['', 'compact', 'mini']) {
+      L.classList.remove('compact', 'mini');
+      if (size) L.classList.add(size);
+      for (const css of spots) {
+        L.style.cssText = css;
+        const r = L.getBoundingClientRect();
+        const out = Math.max(0, c.left - r.left) + Math.max(0, r.right - c.right) + Math.max(0, c.top - r.top) + Math.max(0, r.bottom - c.bottom);
+        let cost = out * 1e4;
+        for (const b of blocks) cost += Math.max(0, Math.min(r.right, b.right) - Math.max(r.left, b.left)) * Math.max(0, Math.min(r.bottom, b.bottom) - Math.max(r.top, b.top));
+        if (cost === 0) return;
+        if (cost < best.cost) best = { css, size, cost };
+      }
+    }
+    L.classList.remove('compact', 'mini');
+    if (best.size) L.classList.add(best.size);
+    L.style.cssText = best.css;
+  }
+
+  /** Live overlays (Activity, Unknown) follow the simulation, at most every 100 ms; a level redrawn without its marks gets them back. */
+  private tickOverlay(): void {
+    if (!this.ovKind) return;
+    if (this.ovKind === 'activity') this.countActivity();
+    const stale = !this.view.el.classList.contains('ov');
+    if (!stale && this.ovKind !== 'activity' && this.ovKind !== 'unknown') return;
+    const wait = 100 - (performance.now() - this.ovLast);
+    if (stale || wait <= 0) return this.paintOverlay();
+    if (!this.ovTimer) this.ovTimer = window.setTimeout(() => { this.ovTimer = 0; this.paintOverlay(); }, wait);
+  }
+
+  /** Activity's window: toggles since the overlay came on, over the clock cycles or input changes since. */
+  private countActivity(): { units: number; clocked: boolean } | null {
+    const sim = this.sim;
+    if (!(sim instanceof GateSim)) return null;
+    const ins = this.scene?.root.ports.filter((p) => p.dir === 'in') ?? [];
+    const sig = ins.map((p) => sim.getInputBits(p.name).join('')).join('|');
+    if (!this.ovWin || this.ovWin.sim !== sim) {
+      if (!sim.toggles) sim.countToggles();
+      this.ovWin = { sim, base: new Uint32Array(sim.toggles!), cycles: this.cycles, changes: 0, sig };
+    } else if (sig !== this.ovWin.sig) {
+      this.ovWin.sig = sig;
+      this.ovWin.changes++;
+    }
+    const clocked = !!this.clockPort();
+    return { units: clocked ? this.cycles - this.ovWin.cycles : this.ovWin.changes, clocked };
+  }
+
+  /** Compute the overlay for the level on screen and draw it with its legend (static ones are cached per level). */
+  private paintOverlay(): void {
+    if (this.ovTimer) { clearTimeout(this.ovTimer); this.ovTimer = 0; }
+    this.ovLast = performance.now();
+    const ctx = this.ctx, sim = this.sim, kind = this.ovKind;
+    this.ovBar.set(kind, this.ovRefusals());
+    let r: OverlayResult | null = null;
+    if (kind && ctx && sim && !this.boardOn && !this.leaf && !this.ovRefusals()[kind]) {
+      const design = ctx.sim.design, key = `${kind}|${this.ovModel ?? (settings.loadDelay ? 'load' : 'unit')}|${ctx.path.join('.')}`;
+      if (kind === 'slack' || kind === 'load') {
+        const hit = this.ovCache.get(key);
+        if (hit && hit.design === design) r = hit.r;
+        else {
+          r = kind === 'slack' ? slackOverlay(design, ctx.path, this.ovModel ?? (settings.loadDelay ? 'load' : 'unit')) : loadOverlay(design, ctx.node);
+          this.ovCache.set(key, { design, r });
+        }
+      } else if (kind === 'unknown') r = unknownOverlay(ctx.sim, ctx.node);
+      else {
+        const w = this.countActivity();
+        if (w && this.ovWin) r = activityOverlay(ctx.node, this.ovWin.sim.toggles!, this.ovWin.base, w.units, w.clocked);
+      }
+    }
+    this.view.overlay(r);
+    const old = this.ovLegend;
+    this.ovLegend = r ? overlayLegend(r, () => this.setOverlay(null)) : null;
+    if (old && this.ovLegend) old.replaceWith(this.ovLegend);
+    else if (old) old.remove();
+    else if (this.ovLegend) this.canvas.append(this.ovLegend);
+    this.placeLegend();
+    this.ovRO?.disconnect();
+    if (this.ovLegend) {
+      this.ovRO ??= new ResizeObserver(() => {
+        if (!this.ovRaf) this.ovRaf = requestAnimationFrame(() => { this.ovRaf = 0; this.placeLegend(); });
+      });
+      for (const el of [...this.panels.map((p) => p.el), this.why.el, ...this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')]) this.ovRO.observe(el);
+    }
+    // the legend came or went: a fitted circuit moves clear of it
+    if (!!old !== !!this.ovLegend) this.view.setCover(this.covers(), true);
   }
 
   /** Draw instances of the current view as removed (a tour's "before"); [] restores them. */
@@ -2514,6 +2682,7 @@ export class Stage {
     this.clearNotesOfPanels();
     this.yieldBadge();
     this.placeWhy();
+    this.placeLegend();
     this.boardCover();
     this.drillLayout();
     this.dockOut();
@@ -2638,7 +2807,7 @@ export class Stage {
   private covers(hint = true): Rect[] {
     const c = this.canvas.getBoundingClientRect();
     const out: Rect[] = [];
-    for (const el of [...this.panels.map((p) => p.el), ...(hint ? [this.hint] : []), ...(this.drill ? [this.board.el] : []), this.why.el]) {
+    for (const el of [...this.panels.map((p) => p.el), ...(hint ? [this.hint] : []), ...(this.drill ? [this.board.el] : []), this.why.el, ...(this.ovLegend ? [this.ovLegend] : [])]) {
       const r = el.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) out.push({ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height });
     }

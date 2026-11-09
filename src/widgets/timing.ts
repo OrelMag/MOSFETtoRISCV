@@ -11,8 +11,7 @@ import { analyzeTiming, CLK_TO_Q, PS_NOTE, PS_PER_NAND, SETUP, type TimingReport
 import { DELAY_NOTE, type DelayModel, delayWord, fanoutOf, fmtDelay, nandDelay, netLoads, psPer } from '../sim/delay';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { h } from '../ui/dom';
-import { slackHeat, slackOf } from '../sim/slack';
-import { defaultDelay, delaySwitch, heatLegend, heatToggle, heavyList } from '../view/delayui';
+import { defaultDelay, delaySwitch, heatToggle, heavyList } from '../view/delayui';
 import type { ScenePanel, Stage, Widget } from '../view/stage';
 
 const reports = { unit: new WeakMap<object, TimingReport | null>(), load: new WeakMap<object, TimingReport | null>(), drawn: new WeakMap<object, TimingReport | null>() };
@@ -38,13 +37,11 @@ export const timingPanel: ScenePanel = (stage: Stage): Widget => {
     stage.highlight(on && r ? [...new Set(r.stages.map((s) => s.inst))] : []);
   };
   btn.addEventListener('click', () => { on = !on; apply(); });
-  // The slack heatmap follows the level on screen (any drill level of the design the stage simulates).
-  let heat = false;
-  const applyHeat = () => {
-    const sl = heat ? slackOf(design, model) : null;
-    stage.heat(sl ? slackHeat(sl, stage.path) : null);
-  };
-  const offNav = stage.onNavigate(applyHeat);
+  // The slack heatmap is the stage's Slack overlay (the bar's state: it follows the level on screen); this toggle is a
+  // shortcut to it, in this panel's delay model.
+  const heatOn = () => stage.overlayKind === 'slack';
+  const applyHeat = () => { if (heatOn()) stage.setOverlay('slack', model); };
+  const offOv = stage.onOverlay(() => render());
   const render = () => {
     const r = reportOf(model);
     sw.replaceChildren(delaySwitch(model, (m) => { model = m; render(); apply(); applyHeat(); }));
@@ -70,13 +67,12 @@ export const timingPanel: ScenePanel = (stage: Stage): Widget => {
       h('p', { class: 'sub', style: 'margin:6px 0 0;font-size:12px' }, model === 'load'
         ? `Unit delay: ${other.period} NAND delays, ${otherMhz.toFixed(0)} MHz.`
         : `Under load: ${fmtDelay(other.period, 'load')} units, ${otherMhz.toFixed(0)} MHz.`),
-      h('div', { class: 'tm-btns' }, btn, heatToggle(heat, () => { heat = !heat; render(); applyHeat(); })),
-      ...(heat ? [heatLegend(true)] : []),
+      h('div', { class: 'tm-btns' }, btn, heatToggle(heatOn(), () => stage.setOverlay(heatOn() ? null : 'slack', model))),
     );
   };
   render();
   apply();
-  return { el, destroy: () => { offNav(); stage.highlight([]); stage.heat(null); } };
+  return { el, destroy: () => { offOv(); stage.highlight([]); } };
 };
 
 export function adderComparison(): Widget {

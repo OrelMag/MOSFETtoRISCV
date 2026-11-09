@@ -19,6 +19,8 @@ import './analysis';
 import './cutui';
 // after analysis: the fault brush wraps probe mode's click handler
 import './faultui';
+// the overlay bar (Slack, Activity, Load, Unknown) in the run row
+import './overlayui';
 // Test tables on a chip (Digital's test syntax), run after every edit.
 import './testsui';
 // Breakpoints: Run stops when a condition on the chip's signals holds.

@@ -90,6 +90,8 @@ interface State {
   /** CPU slow mode: the step unit, and steps (cycles or instructions) per second. */
   traceLevel: TraceLevel;
   traceRate: number;
+  /** The overlay used last (view/overlays.ts): where O starts. Never on at load. */
+  overlay: string;
   /** chapterId → indices of visited steps */
   visited: Record<string, number[]>;
   /** The chapter step viewed last (the home page's Continue). */
@@ -103,7 +105,7 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, workingGates: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, reduceMotion: false, wireScale: 'normal', grid: 'dots', portNames: true, partNames: true, busValues: true, tapRanges: true, zoomNames: 'normal', hideSmall: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, visited: {}, solved: {}, openActs: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, workingGates: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, reduceMotion: false, wireScale: 'normal', grid: 'dots', portNames: true, partNames: true, busValues: true, tapRanges: true, zoomNames: 'normal', hideSmall: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, overlay: 'slack', visited: {}, solved: {}, openActs: {} };
 
 function load(): State {
   try {
@@ -192,8 +194,9 @@ export const settings = {
   get analyzer() { return state.analyzer; },
   get speed() { return state.speed; },
   get traceLevel() { return state.traceLevel; },
+  get overlay() { return state.overlay; },
   get traceRate() { return state.traceRate; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'workingGates' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'reduceMotion' | 'wireScale' | 'grid' | 'portNames' | 'partNames' | 'busValues' | 'tapRanges' | 'zoomNames' | 'hideSmall' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate'>(k: K, v: State[K]): void {
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'workingGates' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'reduceMotion' | 'wireScale' | 'grid' | 'portNames' | 'partNames' | 'busValues' | 'tapRanges' | 'zoomNames' | 'hideSmall' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate' | 'overlay'>(k: K, v: State[K]): void {
     state[k] = v;
     // Colour per net set by hand: the vivid look no longer owns it.
     if (k === 'netColors') state.vividNets = false;
