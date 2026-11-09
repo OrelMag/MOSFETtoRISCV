@@ -5,7 +5,8 @@
 // Every challenge carries a reference answer as chip documents (challengeset.ts). No DOM here.
 
 import { BitSim } from '../sim/bitsim';
-import { flatten, type FlatDesign } from '../sim/flatten';
+import { findNode, flatten, type FlatDesign, type HierNode } from '../sim/flatten';
+import { type FlatFault, plantedDef } from '../sim/faults';
 import { GateSim } from '../sim/gatesim';
 import type { Sim } from '../sim/sim';
 import { reachesTransistors } from '../sim/harness';
@@ -171,6 +172,11 @@ export interface BuildChallenge {
   start?: () => ChipDoc[];
   /** The starting drawing compiled: Check scores `edits` (edits.ts) against it. */
   baseline?: () => ComponentDef;
+  /**
+   * A break-it level (campaign/breakit.ts): faults planted in the chip under test, never drawn. Check runs with them (the
+   * failing cases are the clues) and never passes; a right accusation (symptomsDiffer) does.
+   */
+  planted?: PlantedFault[];
 }
 
 export interface Score {
@@ -189,6 +195,8 @@ export interface Score {
   steps?: number;
   /** A bug hunt: edits from the drawing it started as (edits.ts). */
   edits?: number;
+  /** A break-it level: wrong accusations before the right one (campaign/breakit.ts). */
+  wrong?: number;
 }
 
 export interface CheckResult {
@@ -289,8 +297,9 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
     return res;
   }
   try {
-    const def = compiled.def;
-    res.score = scoreOf(def, compiled.mode, ch.check.kind !== 'table');
+    // a break-it level: the planted faults go into every simulation of the chip (its score is the healthy drawing's)
+    const def = ch.planted ? withPlanted(compiled.def, ch.planted) : compiled.def;
+    res.score = scoreOf(compiled.def, compiled.mode, ch.check.kind !== 'table');
     res.restrictionViolations = violations(def, ch.allowed);
     const pinProblems = checkPins(def, ch.ports);
     const errors = compiled.diags.filter((d) => d.level === 'error').map((d) => `error: ${diagText(d)}`);
@@ -317,7 +326,72 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
     res.failures.push(`cannot simulate: ${e instanceof Error ? e.message : String(e)}`);
   }
   res.ok = !res.failures.length && !res.restrictionViolations.length;
+  // only a right accusation passes a break-it level
+  if (ch.planted && res.ok) { res.ok = false; res.failures.push('every case passes: the planted fault is masked (this level is broken)'); }
   return res;
+}
+
+/** A planted fault: a net of the chip's top level named by a part's port ('fa2.cin'), stuck at 0 or 1; `bit`: one bit of a bus. */
+export interface PlantedFault {
+  kind: 'stuck0' | 'stuck1';
+  end: string;
+  bit?: number;
+}
+
+/** The flat nets a planted fault sits on, from the chip's node (null: no such part or port). */
+export function plantedNets(node: HierNode, p: PlantedFault): number[] | null {
+  const dot = p.end.lastIndexOf('.');
+  const nets = findNode(node, [p.end.slice(0, dot)])?.ports[p.end.slice(dot + 1)];
+  if (!nets) return null;
+  if (p.bit === undefined) return [...nets];
+  return nets[p.bit] === undefined ? null : [nets[p.bit]];
+}
+
+/** The planted faults on a chip's node, as flat faults. */
+export const plantedFaults = (node: HierNode, planted: readonly PlantedFault[]): FlatFault[] =>
+  planted.flatMap((p) => { const nets = plantedNets(node, p); return nets ? [{ kind: p.kind, nets }] : []; });
+
+/** The chip with a break-it level's faults planted in it, wherever a check flattens it. */
+export const withPlanted = (def: ComponentDef, planted: readonly PlantedFault[]): ComponentDef =>
+  plantedDef(def, (node) => plantedFaults(node, planted));
+
+/**
+ * Do two sets of faults on the same chip look the same from outside? Every case of the level's test (each table row, each
+ * sequence step) is run with each, and every output compared bit for bit, X included. Returns the first case where they
+ * differ (its index and the two readings), or null: equivalent, as far as this test can tell. Faults are on the nets of
+ * flatten(def) itself (the chip at the root). A custom bench has no per-case outputs: there they are the same only when
+ * they are the same faults (kind and nets).
+ */
+export function symptomsDiffer(ch: BuildChallenge, def: ComponentDef, mode: 'gate' | 'switch', a: readonly FlatFault[], b: readonly FlatFault[]):
+  { index: number; text: string } | null {
+  const c = ch.check;
+  if (c.kind === 'custom') {
+    const key = (fs: readonly FlatFault[]) => fs.map((f) => `${f.kind}:${[...f.nets].sort((x, y) => x - y).join('.')}`).sort().join(',');
+    return key(a) === key(b) ? null : { index: -1, text: 'a different net' };
+  }
+  const at = (fs: readonly FlatFault[]) => plantedDef(def, (node) => (node.parent === null ? [...fs] : []), 'accused');
+  const O = outs(ch.ports);
+  const read = (sim: Sim) => O.map((p) => `${p.name}=${fmtBits(readBits(sim, p.name))}`).join(' ');
+  const sa = simFor(at(a), mode).sim, sb = simFor(at(b), mode).sim;
+  if (c.kind === 'table') {
+    const I = ins(ch.ports);
+    const rows = tableRows(c, ch.ports);
+    for (let k = 0; k < rows.length; k++) {
+      for (const s of [sa, sb]) { I.forEach((p, i) => s.setInput(p.name, rows[k][i])); s.settle(); }
+      const ra = read(sa), rb = read(sb);
+      if (ra !== rb) return { index: k, text: `${fmtIns(I, rows[k])}: ${ra} against ${rb}` };
+    }
+    return null;
+  }
+  const clk = seqClock(ch.ports);
+  const va = seqStart(sa, ch.ports, c), vb = seqStart(sb, ch.ports, c);
+  for (let k = 0; k < c.steps.length; k++) {
+    seqStep(sa, clk, c.steps[k], k, va);
+    seqStep(sb, clk, c.steps[k], k, vb);
+    const ra = read(sa), rb = read(sb);
+    if (ra !== rb) return { index: k, text: `step ${k + 1}: ${ra} against ${rb}` };
+  }
+  return null;
 }
 
 /** The score Check reports: NANDs, transistors, depth (gate level), period when clocked and sequential. */

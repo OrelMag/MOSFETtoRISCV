@@ -1325,7 +1325,7 @@ main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
   - FPU CPU and the pipeline variants (fast adders, balanced + predictor, data cache, M) redrawn on fix/circuits-cpu-variants
     (tests/redrawclear-cpuvariants.test.ts); the M and bus system CPUs on the plain system's wires (pointers 82 % → 25 %, 87 % → 43 %: the
     bus's 16 channels at the pins) and the CSR unit's select crossbar as lanes (29 % → 21 %) on fix/circuits-sys-variants
-    (tests/redrawclear-sysvariants.test.ts); still open: the out-of-order units (ooo/5–7, 10)
+    (tests/redrawclear-sysvariants.test.ts); the out-of-order units (ooo/5–7, 10) on feat/ooo-redraw: rename table 50 % → 30 %, its row 56 % → 0, issue-queue entry 55 % → 30 %, store queue 66 % → 39 %, select as a crossbar 56 % → 12 % (tests/redrawclear-ooo.test.ts); the core's top and its issue queue / reorder buffer are not redrawn
   - rv16_mux16 (needs a bit-sliced redraw) and srt4div8 (not switched to layered.ts): unchanged on main (git log)
   - Warp core with lsu (chapter 32): net nMo still runs through a part — routeNetlist + wiresThroughParts on warpCore({ warps: 8, lanes: 8, lsu, mul }) returns { nMo }
   - Communication circuits left on purpose: CRC-32 next-state crossings (inherent), I²C target t0 (layered's 14-unit channel cap), the computer-with-NIC bus top
@@ -1350,17 +1350,16 @@ Approved to build now (2026-11-09):
   Cross-cutting features)
 
 Proposed, kept for later (the author's choice, 2026-11-09; each needs a plan and a mockup before it is built):
-- ⏳ Virtual memory: Sv32 page tables, a TLB, page faults, after traps (20) and caches (22)
-- ⏳ A tiny operating system: user mode, `ecall`, a timer-driven scheduler and a context switch on our CPU, two programs sharing it
-- ⏳ How do you know it works?: the golden model in lock-step, riscv-tests, fuzzing, then manufacturing test (scan chains, stuck-at faults,
+- 🚧 (approved 2026-11-09, docs/PLAN-VM-OS.md) Virtual memory: Sv32 page tables, a TLB, page faults, after traps (20) and caches (22)
+- 🚧 (approved 2026-11-09) A tiny operating system: user mode, `ecall`, a timer-driven scheduler and a context switch on our CPU, two programs sharing it
+- 🚧 (approved 2026-11-09, docs/PLAN-VERIFY.md) How do you know it works?: the golden model in lock-step, riscv-tests, fuzzing, then manufacturing test (scan chains, stuck-at faults,
   BIST); builds on the fault brush
 - ⏳ Power: dynamic and static power, clock gating, voltage and frequency scaling, measured with sim/power.ts
 - ⏳ Side channels: Spectre on our out-of-order core and its cache, after chapters 22 and 26
 - ⏳ From netlist to FPGA: look-up tables, our design mapped onto the Tang Nano (the FPGA export exists, no chapter explains it)
 - ⏳ Vectors (RVV) as a bridge from multicore into the GPU chapters
 - ⏳ Break-it steps: one planted fault per core chapter, once the fault brush ships
-- ⏳ A classroom kit: an assignment as a share link, a progress export a teacher can collect
-- ⏳ A worked example and a common-mistakes aside in the densest chapters (pipelining, traps, caches, floating point)
+- ✅ A worked example and a common-mistakes aside in the densest chapters (pipelining, traps, caches, floating point): folded asides, numbers pinned by tests/worked-examples.test.ts
 
 ## Open questions for the author
 - Target audience depth: high-school / first-year university / practitioner refresher?

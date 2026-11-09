@@ -172,7 +172,7 @@ export function usedLater(id: string): LaterUse[] {
   const f = threadOf(id)?.usedFor ?? {};
   const ds = dependents(id);
   // a bug hunt says what it is: the same block, drawn with a fault to find
-  const clause = (d: CampaignNode) => f[d.id] ?? (d.bug ? `a bug hunt: this block drawn with a fault (${d.bug.kind}) to find and fix` : undefined);
+  const clause = (d: CampaignNode) => f[d.id] ?? (d.bug ? (d.bug.find ? `find it: this block with a fault planted in it (${d.bug.kind}) to name` : `fix it: this block drawn with a fault (${d.bug.kind}) to find and fix`) : undefined);
   return [...ds.filter((d) => !d.optional), ...ds.filter((d) => d.optional)].map((node) => { const c = clause(node); return { node, ...(c ? { clause: c } : {}) }; });
 }
 

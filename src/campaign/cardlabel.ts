@@ -14,7 +14,7 @@ export function levelCardLabel(n: Pick<CampaignNode, 'kind' | 'title' | 'optiona
   const parts = [n.soon ? 'coming soon' : STATUS_LABEL[st].toLowerCase()];
   if (!n.soon && st === 'solved' && n.kind !== 'lesson') parts.push(stars ? `${stars} of 3 stars` : helped ? 'solved with help, no stars' : '0 of 3 stars');
   if (n.optional) parts.push('optional');
-  return `${n.bug ? `Bug hunt: ${n.title}` : `${KIND_LABEL[n.kind]}: ${n.title}`}, ${parts.join(', ')}`;
+  return `${n.bug ? `${n.bug.find ? 'Find it' : 'Fix it'}: ${n.title}` : `${KIND_LABEL[n.kind]}: ${n.title}`}, ${parts.join(', ')}`;
 }
 
 /** What a rule's `prefix*` stands for, in words (a family of library parts of any size). */
@@ -53,13 +53,16 @@ export function cardHeads(n: Pick<CampaignNode, 'kind' | 'optional' | 'soon' | '
   else if (st === 'skipped') { status = 'skipped'; statusClass = 'skip'; }
   else if (st === 'locked') { status = 'locked'; statusClass = 'lock'; }
   const kind = (base: string, opt: string) => [base, n.optional ? opt : '', n.soon ? 'soon' : ''].filter(Boolean).join(' · ');
-  const base = n.bug ? 'bug hunt' : KIND_MARK[n.kind];
-  const variants = [kind(base, 'optional'), kind(base, 'opt'), kind(n.bug ? 'bug' : base, 'opt')];
+  const base = n.bug ? bugTag(n.bug) : KIND_MARK[n.kind];
+  const variants = [kind(base, 'optional'), kind(base, 'opt'), kind(n.bug ? (n.bug.find ? 'find' : 'fix') : base, 'opt')];
   const room = CARD_W - 2 * CARD_PAD - HEAD_GAP;
   const fit = variants.find((v) => kindWidth(v) + (status ? statusWidth(status) : 0) <= room);
   if (fit !== undefined) return { kind: fit, status, statusClass };
   return { kind: variants[2], status: '', statusClass: '' };
 }
+
+/** A debugging level's tag: a break-it level is found (FIND IT), a bug hunt fixed (FIX IT). */
+export const bugTag = (b: { find?: boolean }): string => (b.find ? 'find it' : 'fix it');
 
 /** "Needs A, B. Unlocks C." for a card's description (titles of the levels its lines join). */
 export function relationText(needs: readonly string[], unlocks: readonly string[]): string {

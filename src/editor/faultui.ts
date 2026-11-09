@@ -76,7 +76,7 @@ class Faults {
       if (e.key === 'Escape' && this.brush && !typing(e.target)) return this.setBrush(false);
       if (typing(e.target) || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
       if ((e.target as HTMLElement | null)?.closest?.('.sb-help, .key-help')) return;
-      if (matches(e, 'sb.fault') && shortcutAllowed(e) && !ed.level) { e.preventDefault(); this.setBrush(!this.brush); }
+      if (matches(e, 'sb.fault') && shortcutAllowed(e) && (!ed.level || accusers.has(ed))) { e.preventDefault(); this.setBrush(!this.brush); }
     };
     document.addEventListener('keydown', key);
     this.off.push(() => document.removeEventListener('keydown', key));
@@ -98,7 +98,27 @@ class Faults {
     return !!this.ed.level || isLevelChipId(id) || id.startsWith('u_ch_') || id.startsWith('u_pz_');
   }
 
+  /** A break-it level is open: the brush accuses instead of planting (challengeui.ts setAccuser). */
+  get accuser(): Accuser | undefined {
+    return accusers.get(this.ed);
+  }
+
   setBrush(on: boolean): void {
+    if (on && this.accuser) {
+      this.brush = true;
+      this.ed.el.querySelector('.sb-canvas')?.classList.add('faulting');
+      this.ed.renderActions();
+      this.accuser.changed?.();
+      this.ed.toast('Accuse: click the wire you think is stuck, then say at what (B or Esc to stop)');
+      return;
+    }
+    if (!on && this.accuser) {
+      this.brush = false;
+      this.ed.el.querySelector('.sb-canvas')?.classList.remove('faulting');
+      this.ed.renderActions();
+      this.accuser.changed?.();
+      return;
+    }
     if (on && this.barred) {
       this.ed.toast('The fault brush is for your own chips: a level or challenge is checked as drawn');
       on = false;
@@ -149,6 +169,17 @@ class Faults {
       return;
     }
     const w = nets.length;
+    const acc = this.accuser;
+    if (acc) {
+      // a break-it level: only accusations (no faults of the learner's own on a planted chip)
+      const say = (kind: 'stuck0' | 'stuck1'): MenuEntry => {
+        const label = `It is stuck at ${kind === 'stuck0' ? 0 : 1} here`;
+        return w === 1 ? { label, run: () => acc.accuse(t, kind, undefined) }
+          : { label, sub: Array.from({ length: Math.min(w, MENU_BITS) }, (_, b) => ({ label: `Bit ${b}`, run: () => acc.accuse(t, kind, b) })) };
+      };
+      showMenu(x, y, [say('stuck0'), say('stuck1')], { label: 'Accuse', owner: this });
+      return;
+    }
     const bits = (run: (bit: number | undefined) => void, all = true): MenuEntry[] => [
       ...(all ? [{ label: `All ${w} bits`, run: () => run(undefined) }, null] : []),
       ...Array.from({ length: Math.min(w, MENU_BITS) }, (_, b) => ({ label: `Bit ${b}`, run: () => run(b) })),
@@ -382,6 +413,28 @@ class Faults {
 
 const of = new WeakMap<Editor, Faults>();
 
+/** What a break-it level does with an accusation (challengeui.ts): judge it against the planted fault. */
+export interface Accuser {
+  accuse(target: ProbeTarget, kind: 'stuck0' | 'stuck1', bit: number | undefined): void;
+  /** The brush went on or off (the strip's Accuse button follows it). */
+  changed?(): void;
+}
+const accusers = new WeakMap<Editor, Accuser>();
+
+/** Turn the brush into an accuser on this editor (a break-it level's chip is open), or back (null). */
+export function setAccuser(ed: Editor, a: Accuser | null): void {
+  const was = accusers.get(ed);
+  if (a) accusers.set(ed, a);
+  else accusers.delete(ed);
+  if (was && !a) of.get(ed)?.setBrush(false);
+}
+
+/** Is the brush on (accusing, on a break-it level)? */
+export const brushOn = (ed: Editor): boolean => !!of.get(ed)?.brush;
+
+/** Switch the brush on or off (the strip's Accuse button). */
+export const toggleBrush = (ed: Editor): void => { const f = of.get(ed); f?.setBrush(!f.brush); };
+
 registerEditorPlugin((ed) => {
   const f = new Faults(ed);
   of.set(ed, f);
@@ -390,7 +443,7 @@ registerEditorPlugin((ed) => {
 });
 
 registerToolbarAction({
-  id: 'faults', title: 'Fault brush (B): click a wire to make it stuck, slow, or flip it once', icon: 'flag', label: 'Faults', menu: 'Fault brush (B)', order: 62, under: 'timingmenu',
+  id: 'faults', title: 'Fault brush (B): click a wire to make it stuck, slow, or flip it once', icon: 'bolt', label: 'Faults', menu: 'Fault brush (B)', order: 62, under: 'timingmenu',
   run: (ed) => { const f = of.get(ed); f?.setBrush(!f.brush); },
   shown: (ed) => !ed.level,
   active: (ed) => !!of.get(ed)?.brush,

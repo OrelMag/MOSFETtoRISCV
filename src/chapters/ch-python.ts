@@ -1,7 +1,9 @@
 import { groupDigits } from '../sim/numfmt';
 import { cpuState } from '../riscv/cosim';
 import { pyCompile, pyCost, pyLinked, pyProfile, pyScene } from '../widgets/python';
-import { PY_PROGRAMS } from '../lang/pyprograms';
+import { PY_PROGRAMS, PY_STRING_PROGRAMS } from '../lang/pyprograms';
+import { strBlock } from '../lang/interp';
+import { HEAP_BYTES } from '../lang/ast';
 import type { Chapter } from './types';
 import { numOf } from './order';
 
@@ -10,6 +12,9 @@ import { numOf } from './order';
 
 const src = (id: string) => PY_PROGRAMS.find((p) => p.id === id)!.source;
 const fmt = groupDigits;
+const strSrc = (id: string) => PY_STRING_PROGRAMS.find((p) => p.id === id)!;
+const HELLO = strSrc('hello'), REVERSE = strSrc('reverse'), PAL = strSrc('palindrome');
+const HELLO_C = pyCompile(HELLO.source), REVERSE_C = pyCompile(REVERSE.source);
 
 /** Cycles the golden model needs for a sample program, and per Python line (own + runtime routines called from it). */
 const PROF = (id: string) => { const c = pyCompile(src(id)); return { c, p: pyProfile(c) }; };
@@ -259,6 +264,50 @@ export const chPython: Chapter = {
           because the stack grew into it. When a program prints a wrong number only for larger inputs, compare the stack region with the output region.</p>`,
         real: `<p>Operating systems give a program a large virtual address space with the stack and heap far apart and an unmapped guard page between them, so an overflow is a fault, not a silent overwrite.
           Memory protection is hardware, and its absence here is why the failure is quiet.</p>`,
+      },
+    },
+    {
+      title: 'Strings',
+      body: `
+        <p>Everything so far was a number. A string is not one, but it can be made of them: this compiler keeps a <code>str</code> as a block in data memory, a word holding its length and then its bytes, one character a byte, and a
+        variable that holds a str holds the <em>address</em> of its block. Nothing in the CPU knows about strings: the chapter's CPU only loads and stores whole words, so reading a character is a load of its word, a shift and a mask, and writing one is an or into a word that is still zero.</p>
+        <p>The literals in the source have to be in data memory before the program runs, and the ROM cannot be read as data, so the first instructions store them a word at a time (${HELLO_C.layout!.strings!.length} literals here, from [${HELLO_C.layout!.strings![0].addr}] up). What you can do with a str costs a few instructions:
+        <code>len(s)</code> is one load; <code>s[i]</code> checks the index against the length (a negative one counts from the end) and reads a byte; <code>s == t</code> compares the lengths, then the bytes; <code>print(s)</code> stores its characters one to a word in the output, and the panel shows them as text.
+        <code>s + t</code> is the expensive one: it must build a <em>new</em> block big enough for both and copy them in.</p>
+        <p>Where does the new block go? Into the <em>heap</em>: a stretch of data memory reserved after the literals, with a register, <code>tp</code>, pointing at its first free byte. A block takes its text plus the length word, rounded up to a whole word (${strBlock(1)} bytes for one character, ${strBlock(5)} for five);
+        then tp moves past it. The panel lists the blocks from the heap's start up to tp. The three joins in this program take ${HELLO.heap} bytes of the heap's ${HEAP_BYTES}, and the longest string, "Hello, world!", is 13 characters in a ${strBlock(13)}-byte block.</p>
+        <p>Types are checked before anything runs: a name is an int or a str for the whole program, <code>"a" + 1</code> is an error on its line (there is no automatic conversion: <code>chr(n)</code> makes a one-character str from a code and <code>ord(c)</code> gives the code of one), and a str has no truth value, so you write
+        <code>len(s) &gt; 0</code> or <code>s == ""</code>. A program with no string in it compiles to exactly the instructions it did before.</p>`,
+      scene: () => pyScene(HELLO.source),
+      more: {
+        derive: `<p>"Hello" + ", " is 5 + 2 = 7 characters, 4 + 8 = ${strBlock(7)} bytes; adding "world" makes 12 characters, ${strBlock(12)} bytes; adding "!" makes 13, ${strBlock(13)} bytes: ${strBlock(7)} + ${strBlock(12)} + ${strBlock(13)} = ${HELLO.heap}.
+          The program is ${HELLO_C.words.length} instructions, most of them the literals' stores and the calls to <code>rt.concat</code>.</p>`,
+        pitfall: `<p>A str is an address, so two names for the same text hold two copies of one number, and <code>==</code> must read the bytes to know whether two blocks hold the same characters. Comparing the addresses would be one instruction, and would say "different" for "ab" and "ab" made in two places.</p>`,
+        real: `<p>C keeps a string as bytes ending in a zero and finds its length by walking to it; Python and Rust keep the length beside the text, as here, which makes <code>len</code> one load and an overrun checkable. Real strings are Unicode, a character one to four bytes, so
+          <code>s[i]</code> is not a single load. Here a character is one byte of printable ASCII, and the compiler says so when a literal holds anything else.</p>`,
+      },
+      challenge: {
+        kind: 'quiz',
+        question: `The palindrome sample tests ord(s[i]) != ord(s[n - 1 - i]) in a loop and leaves the heap empty (${PAL.heap} bytes). Had it compared s[i] != s[n - 1 - i], what would each pass cost the heap?`,
+        options: [`Two blocks of ${strBlock(1)} bytes: each s[i] is a str of its own`, 'Nothing: comparing never allocates', `One block of ${strBlock(1)} bytes for the result of the comparison`, 'The length of s, rounded up to a word'],
+        answer: 0,
+        explain: 'In Python s[i] is a one-character str: a new block with a length word and one padded word. The compiler turns ord(s[i]) into a read of the byte alone and skips the block; a bare s[i] cannot be skipped.',
+        why: ['', 'The two characters must exist as strs before == can compare them; only ord(s[i]) is optimised.', 'The comparison produces a 0 or a 1, an int in a register.', 'Indexing copies one character, not the string.'],
+      },
+    },
+    {
+      title: 'A heap that never gives back',
+      body: `
+        <p>The heap here is the simplest there is: a pointer that only moves forward. Making a block is <code>tp</code> += its size; freeing is not a thing. Run the program beside this text and watch tp: reversing the four-letter word "ward" does
+        <code>back = word[i] + back</code> four times, and each pass makes the one-character str <code>word[i]</code> (${strBlock(1)} bytes) and then the longer word (${[1, 2, 3, 4].map((n) => strBlock(n)).join(', ')} bytes). The old words stay in the heap, unreachable, because nothing frees them: ${REVERSE.heap} of the ${HEAP_BYTES} bytes are gone when the loop ends, though the program needs only "draw".</p>
+        <p>The heap is a fixed ${HEAP_BYTES} bytes, so a program that builds too much does not slow down: the routine that makes a block compares tp with the end of the heap and, when the block does not fit, the program <em>stops</em> (it jumps to its halt loop, with the output so far in place). The golden interpreter counts the same bytes and reports <code>MemoryError</code> at that line. An index past the end of a str, <code>ord</code> of a string longer than one character and <code>chr</code> of a number above 255 stop the program the same way.</p>
+        <p>The other two regions have the shape you met above: the stack grows down from the top of data memory and the output up from just after the heap. The heap never meets either, because it is a reserved stretch and not a region that grows; the price is that its size is fixed before the program runs.</p>`,
+      scene: () => pyScene(REVERSE.source),
+      more: {
+        derive: `<p>Pass i makes word[i] (${strBlock(1)} bytes) and the new <code>back</code>, i + 1 characters. For "ward": ${[1, 2, 3, 4].map((n) => `${strBlock(1)} + ${strBlock(n)}`).join(' + ')}, then <code>word[-1]</code> in the print is one more ${strBlock(1)}: ${5 * strBlock(1) + [1, 2, 3, 4].reduce((a, n) => a + strBlock(n), 0)} bytes, the panel's count. The program is ${REVERSE_C.words.length} instructions.</p>`,
+        pitfall: `<p>A loop that builds a string one piece at a time is quadratic here in time and in heap: the n-th join copies n characters into a block of its own and leaves the one before it behind. The same loop in Python itself makes the same copies but gives the old blocks back.</p>`,
+        real: `<p>A bump allocator is a real technique: arenas in compilers and game engines make blocks by moving a pointer and free them all at once by moving it back. <code>malloc</code> and <code>free</code> keep lists of free blocks so single blocks can be reused, which costs a search and fragments the memory;
+          a garbage collector finds the blocks nothing points to and frees them for you, which needs to know where every pointer is. This heap does none of that, which is why a program here can run out while holding almost nothing.</p>`,
       },
     },
   ],

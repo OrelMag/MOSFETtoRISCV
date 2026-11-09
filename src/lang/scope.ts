@@ -5,6 +5,7 @@
 import { BUILTINS, MEMORY_BUILTINS, PyError } from './ast';
 import type { Expr, Module, Stmt } from './ast';
 import { constValue } from './parse';
+import { typePass } from './types';
 
 export interface FuncInfo {
   name: string;
@@ -28,11 +29,15 @@ export interface Scope {
   globals: string[];
   /** Global scalars a function reads or writes: these must live in memory, where every function sees them. */
   shared: Set<string>;
+  /** The program has a string literal or calls chr() / ord(): the type pass ran (types.ts). Absent for an int-only program. */
+  usesStr?: true;
+  /** With usesStr: the variables that hold a str, as "<function>.<name>" ("" for the top level and the globals: ".name"). */
+  strVars?: Set<string>;
 }
 
 const MAX_LIST = 1024;
 
-function walkStmts(body: Stmt[], f: (s: Stmt) => void): void {
+export function walkStmts(body: Stmt[], f: (s: Stmt) => void): void {
   for (const s of body) {
     f(s);
     if (s.kind === 'if') { walkStmts(s.body, f); walkStmts(s.orelse, f); }
@@ -46,8 +51,8 @@ export function walkExpr(e: Expr, f: (e: Expr) => void): void {
     case 'bin': case 'bool': walkExpr(e.left, f); walkExpr(e.right, f); break;
     case 'unary': walkExpr(e.arg, f); break;
     case 'cmp': e.args.forEach((a) => walkExpr(a, f)); break;
-    // len(xs) is a constant: its argument names a list, it is not read as a value
-    case 'call': if (e.fn !== 'len') e.args.forEach((a) => walkExpr(a, f)); break;
+    // len(xs) is a constant: its argument names a list (or a str variable, which the caller checks), it is not read as a value
+    case 'call': if (e.fn !== 'len' || e.args[0]?.kind !== 'name') e.args.forEach((a) => walkExpr(a, f)); break;
     case 'index': walkExpr(e.index, f); break;
     case 'ifexp': walkExpr(e.test, f); walkExpr(e.yes, f); walkExpr(e.no, f); break;
     case 'list': e.items.forEach((a) => walkExpr(a, f)); if (e.repeat) walkExpr(e.repeat, f); break;
@@ -72,6 +77,14 @@ export function analyze(mod: Module): Scope {
   const globals: string[] = [];
   const shared = new Set<string>();
   const builtin = (n: string) => (BUILTINS as readonly string[]).includes(n);
+  // Strings are opt-in: a literal, chr() or ord() switches on the type pass and the checks that go with it.
+  let usesStr = false;
+  {
+    const look = (e: Expr) => { if (e.kind === 'str' || (e.kind === 'call' && (e.fn === 'chr' || e.fn === 'ord'))) usesStr = true; };
+    const scan = (body: Stmt[]) => walkStmts(body, (s) => { for (const r of stmtExprs(s)) walkExpr(r, look); });
+    scan(mod.body);
+    for (const s of mod.body) if (s.kind === 'def') scan(s.body);
+  }
 
   // Pass 1: top-level definitions (functions, lists, scalars).
   for (const s of mod.body) {
@@ -152,31 +165,39 @@ export function analyze(mod: Module): Scope {
   // Pass 3: every use resolves, calls have the right arity.
   const checkExprs = (body: Stmt[], fn: FuncInfo | null) => {
     const isLocal = (n: string) => !!fn && fn.locals.includes(n);
+    /** A name read as a value must be set somewhere; a global read in a function lives in memory. */
+    const useName = (id: string, line: number) => {
+      if (isLocal(id)) return;
+      if (lists.has(id)) throw new PyError(`"${id}" is a list: index it, or use len(${id})`, line);
+      if (funcs.has(id)) throw new PyError(`"${id}" is a function: call it`, line);
+      if (builtin(id)) throw new PyError(`"${id}" is a built-in function: call it`, line);
+      if (!globals.includes(id)) throw new PyError(`name "${id}" is not defined`, line);
+      if (fn) shared.add(id);
+    };
     walkStmts(body, (s) => {
       if (s.kind === 'def') return;
       if ((s.kind === 'assign' || s.kind === 'aug') && s.target.kind === 'index') {
-        if (!lists.has(s.target.list) || isLocal(s.target.list)) throw new PyError(`"${s.target.list}" is not a list`, s.line);
+        if (!lists.has(s.target.list) || isLocal(s.target.list)) throw new PyError(usesStr && (isLocal(s.target.list) || globals.includes(s.target.list)) ? 'a str cannot be changed in place: build a new one with +' : `"${s.target.list}" is not a list`, s.line);
       }
       if (s.kind === 'for' && lists.has(s.v) && !isLocal(s.v)) throw new PyError(`"${s.v}" is a list`, s.line);
       for (const root of stmtExprs(s)) walkExpr(root, (e) => {
         if (e.kind === 'list' && !(s.kind === 'assign' && s.value === e)) throw new PyError('a list literal can only be assigned to a global name', e.line);
-        if (e.kind === 'name') {
-          if (isLocal(e.id)) return;
-          if (lists.has(e.id)) throw new PyError(`"${e.id}" is a list: index it, or use len(${e.id})`, e.line);
-          if (funcs.has(e.id)) throw new PyError(`"${e.id}" is a function: call it`, e.line);
-          if (builtin(e.id)) throw new PyError(`"${e.id}" is a built-in function: call it`, e.line);
-          if (!globals.includes(e.id)) throw new PyError(`name "${e.id}" is not defined`, e.line);
-          if (fn) shared.add(e.id);
-        } else if (e.kind === 'index') {
-          if (!lists.has(e.list) || isLocal(e.list)) throw new PyError(`"${e.list}" is not a list`, e.line);
+        if (e.kind === 'name') useName(e.id, e.line);
+        else if (e.kind === 'index') {
+          if (!lists.has(e.list) || isLocal(e.list)) {
+            if (!usesStr) throw new PyError(`"${e.list}" is not a list`, e.line);
+            useName(e.list, e.line); // a str: the type pass checks it is one
+          }
         } else if (e.kind === 'call') {
           const n = e.args.length;
           if (e.fn === 'len') {
             const a = e.args[0];
-            if (n !== 1 || a.kind !== 'name' || !lists.has(a.id) || isLocal(a.id)) throw new PyError('len() takes one list', e.line);
-            return;
+            if (n === 1 && a.kind === 'name' && lists.has(a.id) && !isLocal(a.id)) return;
+            if (n === 1 && usesStr) { if (a.kind === 'name') useName(a.id, a.line); return; } // a str: typed below
+            throw new PyError('len() takes one list', e.line);
           }
           if (e.fn === 'print') { if (n < 1) throw new PyError('print() needs a value to print', e.line); return; }
+          if (e.fn === 'ord' || e.fn === 'chr') { if (n !== 1) throw new PyError(`${e.fn}() takes one argument`, e.line); return; }
           if (e.fn === 'abs') { if (n !== 1) throw new PyError('abs() takes one argument', e.line); return; }
           if (e.fn === 'min' || e.fn === 'max') { if (n < 2) throw new PyError(`${e.fn}() takes two or more arguments`, e.line); return; }
           if (Object.hasOwn(MEMORY_BUILTINS, e.fn)) { if (n !== MEMORY_BUILTINS[e.fn]) throw new PyError(`${e.fn}() takes ${MEMORY_BUILTINS[e.fn]} argument${MEMORY_BUILTINS[e.fn] === 1 ? '' : 's'}, got ${n}`, e.line); return; }
@@ -201,5 +222,10 @@ export function analyze(mod: Module): Scope {
     walkStmts([s], (t) => { for (const r of stmtExprs(t)) walkExpr(r, (e) => { if (e.kind === 'call' && funcs.has(e.fn)) calls.push(e); }); });
     for (const c of calls) if (!defined.has(c.fn)) throw new PyError(`"${c.fn}" is called before its def runs`, c.line);
   }
-  return { funcs, lists, globals, shared };
+  const scope: Scope = { funcs, lists, globals, shared };
+  if (usesStr) {
+    scope.usesStr = true;
+    typePass(mod.body, scope);
+  }
+  return scope;
 }

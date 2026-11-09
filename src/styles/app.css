@@ -523,6 +523,14 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .prose details.deeper > summary { cursor: pointer; font-weight: 600; font-size: 13.5px; color: var(--text-2); }
 .prose details.deeper[open] > summary { margin-bottom: 6px; }
 .prose details.deeper p { font-size: 13.5px; }
+/* worked examples inside a deeper aside (ch-pipe.ts hazardWorked): a wide table scrolls on its own, a pipeline diagram's cells stay narrow */
+.prose .worked-wrap { overflow-x: auto; max-width: 100%; }
+.prose table.pipe-trace { margin: 0.4em 0 0.6em; font-size: 12px; }
+.prose table.pipe-trace :is(th, td) { padding: 2px 5px; border: 1px solid var(--border); text-align: center; }
+.prose table.pipe-trace tbody th { text-align: left; white-space: nowrap; font-weight: 400; }
+.prose table.pipe-trace tr.flushed { color: var(--muted); }
+.prose table.pipe-trace tr.flushed code { text-decoration: line-through; }
+.prose details.deeper li { font-size: 13.5px; margin: 0.3em 0; }
 /* a try ticked: quieter than a solved check (green), which is what the chapter's counter counts */
 .prose .try.tried { border-style: solid; }
 .prose .try-done { display: flex; align-items: center; gap: 4px; margin-top: 4px; color: var(--text-2); font-weight: 600; font-size: 13px; }
@@ -1133,21 +1141,99 @@ svg.schematic.focus .inst.hl .hit { animation: none; fill: color-mix(in srgb, va
   --slack-3: hsl(80 22% 36%);
   --slack-4: hsl(220 14% 38%);
 }
-.inst[data-slack='0'], .slack-legend .sk0 { --slack-c: var(--slack-0); }
-.inst[data-slack='1'], .slack-legend .sk1 { --slack-c: var(--slack-1); }
-.inst[data-slack='2'], .slack-legend .sk2 { --slack-c: var(--slack-2); }
-.inst[data-slack='3'], .slack-legend .sk3 { --slack-c: var(--slack-3); }
-.inst[data-slack='4'], .slack-legend .sk4 { --slack-c: var(--slack-4); }
+.inst[data-ov='0'], .slack-legend .sk0 { --slack-c: var(--slack-0); }
+.inst[data-ov='1'], .slack-legend .sk1 { --slack-c: var(--slack-1); }
+.inst[data-ov='2'], .slack-legend .sk2 { --slack-c: var(--slack-2); }
+.inst[data-ov='3'], .slack-legend .sk3 { --slack-c: var(--slack-3); }
+.inst[data-ov='4'], .slack-legend .sk4 { --slack-c: var(--slack-4); }
+/* The overlay bar (view/overlays.ts): one quantity at a time. Parts are filled with the slack tokens (tuned as fills
+   for each theme and look), wires drawn in --ov-0…4 (tuned as lines on each board); X is the palette's own --wx.
+   Everything left unmarked fades. */
+:root {
+  --ov-0: #d62828;
+  --ov-1: #dd6a12;
+  --ov-2: #a8860a;
+  --ov-3: #1e9070;
+  --ov-4: #3a6cb5;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ov-0: #ff5f5f;
+    --ov-1: #ff9a3c;
+    --ov-2: #f0cf4a;
+    --ov-3: #5fc7a4;
+    --ov-4: #6f9fe6;
+  }
+}
+:root[data-theme='dark'],
+:root[data-look='vivid'][data-board='dark'] svg.schematic {
+  --ov-0: #ff5f5f;
+  --ov-1: #ff9a3c;
+  --ov-2: #f0cf4a;
+  --ov-3: #5fc7a4;
+  --ov-4: #6f9fe6;
+}
+[data-ov='0'] { --ov-c: var(--ov-0); }
+[data-ov='1'] { --ov-c: var(--ov-1); }
+[data-ov='2'] { --ov-c: var(--ov-2); }
+[data-ov='3'] { --ov-c: var(--ov-3); }
+[data-ov='4'] { --ov-c: var(--ov-4); }
+[data-ov='x'] { --ov-c: var(--wx); }
 /* above the module and vivid body colours */
-:root svg.schematic.slack-heat .inst[data-slack] .sym :is(.sym-body, .sym-box) { fill: var(--slack-c); }
-:root svg.schematic.slack-heat .inst[data-slack='0'] .sym :is(.sym-body, .sym-box) { stroke: color-mix(in oklab, var(--slack-0) 55%, var(--text)); }
-svg.schematic.slack-heat .inst:not([data-slack]):not(.plumbing) { opacity: 0.45; }
+:root svg.schematic.ov .inst[data-ov]:not([data-ov='x']) .sym :is(.sym-body, .sym-box) { fill: var(--slack-c); }
+:root svg.schematic.ov .inst[data-ov='0'] .sym :is(.sym-body, .sym-box) { stroke: color-mix(in oklab, var(--slack-0) 55%, var(--text)); }
+:root svg.schematic.ov .inst[data-ov-src] .sym :is(.sym-body, .sym-box) { fill: color-mix(in oklab, var(--wx) 28%, var(--sym-fill)); stroke: var(--wx); stroke-dasharray: 0.5 0.25; }
+svg.schematic.ov .inst:not([data-ov]):not(.plumbing) { opacity: 0.45; }
+svg.schematic.ov :is(.wire, .net-tag, .tap-label, .bus-label, .dot, .tag-end, .ed-ptr):not([data-ov]):not(.ed-ptr .wire) { opacity: 0.3; }
+svg.schematic.ov :is(.wire-flow, .flow-tokens) { display: none; }
+:root svg.schematic.ov .wire[data-ov] { stroke: var(--ov-c); opacity: 1; stroke-dasharray: none; filter: none; stroke-width: calc(var(--wire-w1) * var(--wire-k, 1) * 1.7); }
+:root svg.schematic.ov .wire.bus[data-ov] { stroke-width: calc(var(--wire-bus) * var(--wire-k, 1) * 1.15); }
+:root svg.schematic.ov-activity .wire[data-ov='4'], :root svg.schematic.ov-load .wire[data-ov='4'] { stroke-width: calc(var(--wire-w0) * var(--wire-k, 1)); }
+:root svg.schematic.ov .dot[data-ov] { fill: var(--ov-c); }
 .slack-legend { margin-top: 8px; font-size: 12px; color: var(--text-2); }
 .slack-legend .sk-key { display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .slack-legend .sk-key span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .slack-legend i { width: 14px; height: 10px; border-radius: 3px; background: var(--slack-c); border: 1px solid var(--border-strong); }
 .slack-legend p { margin: 6px 0 0; line-height: 1.4; }
 .tm-btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+/* The overlay bar (view/overlaybar.ts): four buttons in the stage bar and the sandbox's run row, one select on a phone;
+   the legend bottom right over the canvas, clear of the right-docked panels (--panel-inset), across the bottom on a phone. */
+.ov-bar { display: inline-flex; align-items: center; }
+.ov-seg { gap: 1px; }
+.ov-seg .ov-btn { display: inline-flex; align-items: center; gap: 5px; font: 600 12px var(--font-ui); }
+.ov-seg .ov-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
+.ov-seg .ov-btn.on { color: var(--text); box-shadow: var(--shadow), inset 0 0 0 1px var(--accent); }
+.ov-sel { display: none; font: 600 12px var(--font-ui); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 3px 6px; max-width: 150px; }
+.stage-bar.compact.tight .ov-btn .lbl { display: none; }
+@media (max-width: 760px) { .ov-seg { display: none; } .ov-sel { display: inline-block; } }
+.ov-sw { display: inline-block; flex: none; width: 14px; height: 10px; border-radius: 3px; background: var(--ov-c); border: 1px solid color-mix(in srgb, var(--ov-c) 60%, var(--text)); box-sizing: border-box; }
+.ov-btn .ov-sw { width: 9px; height: 9px; border-radius: 2px; }
+.ov-sw.src { background: transparent; border: 2px dashed var(--wx); }
+.ov-legend {
+  position: absolute; right: max(12px, var(--panel-inset, 0px)); bottom: 10px; z-index: 3; max-width: 310px; box-sizing: border-box;
+  padding: 8px 10px; border-radius: 10px; font-size: 12px; color: var(--text);
+  background: color-mix(in srgb, var(--surface) 95%, transparent); border: 1px solid var(--border-strong); box-shadow: var(--shadow);
+}
+/* the how-to line under it would be cut: the legend is the more useful of the two while an overlay is on */
+.canvas:has(> .ov-legend) > .hint-badge { display: none; }
+.ov-lh { display: flex; align-items: baseline; gap: 8px; }
+.ov-lh small { flex: 1; color: var(--muted); font-size: 11.5px; }
+.ov-x { border: 0; background: none; color: var(--muted); font-size: 17px; line-height: 1; padding: 0 2px; cursor: pointer; align-self: center; }
+.ov-x:hover { color: var(--text); }
+.ov-rows { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.ov-rows li { display: flex; align-items: center; gap: 6px; }
+.ov-rows b { font: 600 11.5px var(--font-mono); min-width: 5.6em; }
+.ov-note { margin: 6px 0 0; color: var(--text-2); line-height: 1.4; }
+/* no free corner for the whole legend (Stage.placeLegend): the bands in two columns, the note left to the title's tooltip */
+.ov-legend:is(.compact, .mini) .ov-note, .ov-legend.mini :is(.ov-rows, .ov-lh small) { display: none; }
+.ov-legend.compact .ov-rows { grid-template-columns: 1fr 1fr; column-gap: 10px; }
+.ov-legend.compact .ov-rows b { min-width: 0; }
+@media (max-width: 760px) {
+  .ov-legend { left: 8px; right: 8px; bottom: 8px; max-width: none; padding: 6px 8px; }
+  .ov-rows { grid-template-columns: 1fr 1fr; column-gap: 10px; }
+  .ov-rows b { min-width: 0; }
+  .ov-note { font-size: 11.5px; }
+}
 .open-badge { opacity: 0; transition: opacity 0.15s; cursor: pointer; }
 .open-badge circle { fill: var(--accent); }
 .open-badge .icon { color: #fff; stroke-width: 2.6; }
@@ -3063,3 +3149,11 @@ svg.schematic.lg.lg-h-tag .net-tag.net-hover rect, svg.schematic.lg.lg-h-tag .ne
 .level-badge.yield { visibility: hidden; }
 
 .zoom-read[hidden] { display: none; }
+/* The stage's keyboard part cursor (view/kcursor.ts, Stage's arrows): a ring over the part or pin it stands on. */
+svg .kcursor { fill: none; stroke: var(--accent); stroke-width: 0.28; pointer-events: none; }
+
+/* ch fastadd: a Verilog listing whose lines point at the gates they became; the critical path's lines carry a bar */
+pre.code.vsrc .ln { color: var(--muted); font-style: normal; user-select: none; padding-left: 7px; } /* room for the critical-path bar */
+pre.code.vsrc .vl.crit { box-shadow: inset 3px 0 0 var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+/* the overlay bar's buttons, select and legend close (view/overlaybar.ts) */
+@media (pointer: coarse) { .ov-seg .ov-btn, .ov-sel { min-height: 40px; } .ov-x { min-width: 40px; min-height: 40px; } }
