@@ -295,7 +295,7 @@ export const WALKS3: Record<string, WalkScript> = {
     },
     {
       title: 'Hold the CPU by its clock',
-      text: 'gate = clk AND run: the CPU sees no edge until the memory is its own. 2 NANDs. Act 3 warns against gating a clock; this one is safe because run changes only while clk is low (next step), so clk AND run never makes a short pulse: whole pulses or none. That is the rule a clock-gating cell (ICG) enforces in silicon: a latch, open while clk is low, holds the enable steady through the high phase.',
+      text: 'gate = clk AND run: the CPU sees no edge until the memory is its own. 2 NANDs. A clock is never gated with a plain AND (a glitch on the gate makes an extra edge); this one is safe because run changes only while clk is low (next step), so clk AND run never makes a short pulse: whole pulses or none. That is the rule a clock-gating cell (ICG) enforces in silicon: a latch, open while clk is low, holds the enable steady through the high phase.',
       parts: ['gate'], codex: ['clockgating'],
       why: 'While the RAM is half loaded, the CPU must not fetch. Blocking its clock freezes the whole machine, PC included, without changing the CPU.',
       whyNot: { text: 'Gating with a run that changes while clk is high gives a short pulse and a false edge: the next step is what prevents it.' },

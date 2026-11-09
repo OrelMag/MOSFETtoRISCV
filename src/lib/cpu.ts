@@ -77,7 +77,7 @@ export function rom(words: number[], k = 6, label?: string): ComponentDef {
       behavior: { eval: ([a]) => [a < 0 ? -1 : content[Math.floor(a / 4) % N]], delay: 3 * k },
       preferBehavior: true,
       netlist: () => ({ pins: { addr: [0, mg.h + 6 + 1 + 0], data: [16 + mg.w + 6, mg.ports.y.pos[1]] }, instances, nets }),
-      notes: 'Simulated as a lookup table for speed. Its structure (shown when you open it) is the real circuit: a 64:1 multiplexer tree of 32-bit words whose inputs are wired to the program\'s bits.',
+      notes: `Simulated as a lookup table for speed. Its structure (shown when you open it) is the real circuit: a ${N}:1 multiplexer tree of 32-bit words whose inputs are wired to the program\'s bits.`,
     } satisfies ComponentDef;
   });
 }

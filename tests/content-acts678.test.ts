@@ -169,7 +169,7 @@ describe('act 6: the numbers', () => {
 
   it('multicycle', () => {
     const m = par('o_mc'), c3 = par('c_core3');
-    expect(why('o_mc')).toContain(`period ${c3.period} → ${m.period}, but Core III's programs take ${sp(m.cycles!)} cycles instead of ${sp(c3.cycles!)}, ${((m.period! * m.cycles!) / (c3.period! * c3.cycles!)).toFixed(1)} times as long`);
+    expect(why('o_mc')).toContain(`period ${c3.period} → ${m.period}, but Core III's programs take ${sp(m.cycles!)} cycles instead of ${sp(c3.cycles!)}: ${((m.period! * m.cycles!) / (c3.period! * c3.cycles!)).toFixed(1)} times the time`);
   });
 });
 

@@ -52,7 +52,7 @@ export const MORE3: Record<string, CodexMore> = {
   },
   tristate: {
     idea: 'One wire, many sources: each drives it through a <b>tri-state buffer</b>, which passes its input while enabled and lets go (Z, high impedance) otherwise, and a decoder enables exactly one. However many sources, one wire per bit and no multiplexer tree. Boards and early computers were built this way, and it survives at chip pins: a memory\'s data bus, open-drain lines such as I²C.<br>Inside chips the multiplexer won. Two enables overlapping for a moment let two drivers fight, a short from supply to ground through both; none enabled leaves the wire floating until a pull-up or a keeper holds it; static timing, scan test and FPGA fabrics want one driver per net. Here the buffer (TRIBUF, 8 transistors) has no gate-level model, so a chip using it simulates at switch level, and the solver names any short it finds.',
-    example: { title: 'Four sources on a 1-bit wire', body: '<pre>tri-state     4 TRIBUFs = 32 transistors, enables from a 2→4 decoder\nmultiplexer   3 two-input muxes = 12 NANDs = 48 transistors, 2 select bits</pre>' },
+    example: { title: 'Four sources on a 1-bit wire', body: '<pre>tri-state     4 TRIBUFs = 32 transistors, plus a 2→4 decoder for the enables (not counted)\nmultiplexer   3 two-input muxes = 12 NANDs = 48 transistors, 2 select bits</pre>' },
     mistakes: [
       'Changing the select so that the new driver turns on before the old one lets go: for a moment both drive, a crowbar current.',
       'Reading a bus nobody drives: it floats; a pull-up or a bus keeper gives it a level.',

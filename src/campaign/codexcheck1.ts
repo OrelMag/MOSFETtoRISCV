@@ -254,11 +254,11 @@ export const CHECK1: Record<string, Quiz[]> = {
       why: ['That is 1-bit history: the exit flips it to not taken, and the first iteration of the next run mispredicts too.', '', 'That is predict-not-taken: every taken branch is a miss.'],
     },
     {
-      question: 'Why does predicting "taken" need a branch target buffer to pay off?',
-      options: ['The BTB holds the direction; the counters alone cannot predict', 'It does not: a 2-bit counter alone redirects fetch in F', 'Without it the target is known only after decode, so even a correct taken guess loses a cycle'],
+      question: 'Why does a dynamic predictor\'s "taken" guess need a target as well as a direction?',
+      options: ['The BTB holds the direction; the counters alone cannot predict', 'It does not: a 2-bit counter alone redirects fetch in F', 'A counter holds only a direction: the target must come from somewhere in F, a BTB indexed by the PC or an adder on the fetched word, or a correct taken guess still loses a cycle'],
       answer: 2,
-      explain: 'Fetch needs the next PC in the same cycle; the BTB, indexed by the PC, supplies the target before the branch is even decoded.',
-      why: ['The counters hold the direction; the BTB stores the target.', 'A counter says "taken" but not where to: the target comes from decoding the instruction, a cycle later.', ''],
+      explain: 'Fetch needs the next PC in the same cycle. A BTB, indexed by the PC, supplies the target before the branch is decoded; RV16\'s static predictor instead adds pc + imm on the fetched word with a second adder, and pays 2 delays of period for it.',
+      why: ['The counters hold the direction; the BTB stores the target.', 'A counter says "taken" but not where to: without a BTB or an adder in F, the target comes from decoding the instruction, a cycle later.', ''],
     },
   ],
   division: [

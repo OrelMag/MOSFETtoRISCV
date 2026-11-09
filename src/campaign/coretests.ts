@@ -60,7 +60,7 @@ const MEMORY = `# stores then loads, negative offsets, a load right after a stor
 `;
 
 const UNROLLED = `# a small table summed without a loop
-        li   t0, 0x40
+        li   t0, 0x80
         lw   a0, 0(t0)
         lw   a1, 1(t0)
         add  a0, a0, a1

@@ -813,6 +813,9 @@ html[data-widget-step] .slow-btn { display: none; }
 .controls.compact .ctl-acts { gap: 4px; }
 .controls.compact .ctl-acts .lbl { display: none; }
 .controls.compact .ctl-acts .label { display: none; }
+/* A label that swaps words (Run / Pause) is as wide as the wider one: the other sits in a second row of no height. */
+.lbl[data-pad] { display: inline-grid; }
+.lbl[data-pad]::after { content: attr(data-pad); height: 0; overflow: hidden; visibility: hidden; }
 .status { margin-left: auto; font: 12px var(--font-mono); color: var(--muted); display: flex; align-items: center; gap: 8px; }
 .stage .controls .status { justify-content: flex-end; flex: 1 1 auto; min-width: 7em; contain: inline-size; }
 .status .pulse { flex: none; }

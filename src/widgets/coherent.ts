@@ -14,6 +14,7 @@ import { cpuState } from '../riscv/cosim';
 import { ABI, disasm } from '../riscv/isa';
 import { MultiISS } from '../riscv/multi';
 import { h } from '../ui/dom';
+import { holdHeight } from '../ui/holdsize';
 import { cohUse, isMem } from './cohuse';
 import { showInstrUse, slowControls } from './slowctl';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
@@ -59,7 +60,7 @@ function coherencePanel(source: string, asm: AsmResult, opts: CoherentSceneOpts)
     let stale: Stale | null = null;
     let running: number | null = null;
     let sel: { core: number; set: number } | null = null;
-    const status = h('div', { class: 'cpu-status' });
+    const status = holdHeight(h('div', { class: 'cpu-status' }));
     const verdict = h('div', { class: 'coh-verdict' });
     const cores = h('div', { class: 'coh-cores' });
     const busEl = h('div', { class: 'coh-bus' });

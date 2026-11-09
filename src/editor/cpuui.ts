@@ -23,6 +23,7 @@ import type { Sim } from '../sim/sim';
 import { analyzeTiming } from '../sim/timing';
 import { pack } from '../sim/values';
 import { h, icon } from '../ui/dom';
+import { holdHeight } from '../ui/holdsize';
 import type { FieldKey } from '../riscv/fields';
 import { instrBreakdown } from '../widgets/instrfields';
 import { coreUnitNames, instrMarks, instrUse, oooUse, STAGE_UNITS, stageUse } from '../widgets/insthw';
@@ -140,7 +141,7 @@ class CpuPanel {
   private off: (() => void)[] = [];
 
   private title = h('h3', null);
-  private status = h('div', { class: 'cpu-status' });
+  private status = holdHeight(h('div', { class: 'cpu-status' }));
   private gaps = h('div', { class: 'sb-cpu-gaps' });
   private now = h('div', { class: 'cpu-now' });
   private listing = h('div', { class: 'cpu-listing sb-cpu-list' });
@@ -594,7 +595,8 @@ class CpuPanel {
       this.meterCycles = es.cycles;
     }
     const steps = mon.retired - this.meterRetired, cycles = es.cycles - this.meterCycles;
-    if (steps <= 0 || cycles <= 0) return [];
+    // an invisible stand-in until the first instruction: the status line keeps its lines (widgets/cpupanel.ts does the same)
+    if (steps <= 0 || cycles <= 0) return [h('span', { style: 'visibility:hidden', 'aria-hidden': 'true' }, '≈ 00.0 pJ / instr · 0.00 mW')];
     let period = this.periods.get(sim.design);
     if (period === undefined) this.periods.set(sim.design, (period = analyzeTiming(sim.design)?.period ?? null));
     const fj = energyFj(this.meter.totals().switched);

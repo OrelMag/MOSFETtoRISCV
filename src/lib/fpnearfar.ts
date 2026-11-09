@@ -187,7 +187,7 @@ function farPath(f: FpFormat): ComponentDef {
     b.wire(e, 'e');
     return define({
       id: `fpnffar${E}_${M}`, name: 'Far path', category: 'arithmetic',
-      summary: 'For an addition, or a subtraction whose exponents differ by 2 or more: shift the smaller significand right by the difference (sticky bit kept), add or subtract, then normalize. The sum is in [1, 4) after an addition and in (½, 2) after a subtraction with d ≥ 2, so at most one place right (a carry) or two places left: two multiplexer rows, no leading-zero count, and the result is never subnormal unless both operands are.',
+      summary: 'For an addition, or a subtraction whose exponents differ by 2 or more: shift the smaller significand right by the difference (sticky bit kept), add or subtract, then normalize. The sum is in [1, 4) after an addition and in (½, 2) after a subtraction with d ≥ 2, so at most one place right (a carry) or one place left past the empty carry place (two left-shift rows in all), no leading-zero count, and the result is never subnormal unless both operands are.',
       ports: [bus('eB', E, 'in'), bus('mB', M + 1, 'in'), bus('mS', M + 1, 'in'), bus('d', E, 'in'), bit('sub', 'in'), bus('m', w, 'out'), bus('e', XE, 'out')],
       symbol: { kind: 'box', label: 'FAR' },
       netlist: () => ({ pins: { eB: [0, 4], mB: [0, 10], mS: [0, 16], d: [0, 22], sub: [0, 28], m: [b.right, 4], e: [b.right, 10] }, instances: b.instances, nets: b.nets() }),

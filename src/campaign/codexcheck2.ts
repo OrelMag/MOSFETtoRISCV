@@ -469,7 +469,7 @@ export const CHECK2: Record<string, Quiz[]> = {
       options: ['74: the branch path takes over', '66', '76: the ALU is no longer critical'],
       answer: 0,
       explain: 'The load path drops to 66, but the branch path (through the ripple comparator) stays at 74 and now sets the period.',
-      why: ['', 'Shortening one path only helps until the next-longest one becomes critical.', 'The ALU is still on the load path, which is critical at 76; it improves, but only by 2.'],
+      why: ['', 'Shortening one path only helps until the next-longest one becomes critical.', 'The ALU is still on the load path, which is critical at 76: the period improves, but only from 76 to 74.'],
     },
     {
       question: 'Simulating a block on your test vectors shows 30 delays to settle; static timing reports 44. Which sets the clock?',

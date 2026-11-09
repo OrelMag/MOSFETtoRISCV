@@ -52,6 +52,7 @@ const ROUTES: Route[] = [
   { name: 'campaign codex', hash: '#/campaign/codex' },
   { name: 'path', hash: '#/path' },
   { name: 'notes', hash: '#/notes' },
+  { name: 'notes visited20', hash: '?visit=basics,map,relays,tubes,mosfet,inverter,nand,gates,binary,adders,routing,latches,registers,memory,alu,regfile,isa,cpu,python,pipeline#/notes' },
   { name: 'phone ch gates 2', hash: '#/c/gates/2', phone: true },
 ];
 
@@ -126,7 +127,7 @@ class Tab {
     if (phone) await this.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 3, mobile: true });
     await this.send('Page.addScriptToEvaluateOnNewDocument', { source: INSTRUMENT });
     // First-run coach marks would cover the page and count as shifts of their own.
-    await this.send('Page.addScriptToEvaluateOnNewDocument', { source: `try { const k = 'mosfet2riscv:settings'; const s = JSON.parse(localStorage.getItem(k) || '{}'); if (!s.coachDone) { s.coachDone = { stage: true, sandbox: true }; localStorage.setItem(k, JSON.stringify(s)); } } catch (e) {}` });
+    await this.send('Page.addScriptToEvaluateOnNewDocument', { source: `try { const k = 'mosfet2riscv:v1'; const s = JSON.parse(localStorage.getItem(k) || '{}'); if (!s.coachDone || !Object.keys(s.coachDone).length) { s.coachDone = { stage: true, sandbox: true }; if (location.search.includes('visit=')) { const ids = new URLSearchParams(location.search).get('visit').split(','); s.visited = Object.fromEntries(ids.map((c) => [c, [0]])); } localStorage.setItem(k, JSON.stringify(s)); } } catch (e) {}` });
   }
   send(m: string, p: object = {}) { return this.cdp.send(m, p, this.s); }
   ev({ method, params: p }: Msg) {

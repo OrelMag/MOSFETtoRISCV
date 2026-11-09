@@ -11,7 +11,11 @@ import { noteHaystack, placeLabel } from '../notelabel';
 import { type NoteItem, notes, openNoteNext, placeHref, snippet } from '../notes';
 import { quizBox } from '../quiz';
 import { buildQueue, type QueueItem, reviewLog, summarize } from '../review';
-import { allQuestions, type ReviewQ } from '../reviewqs';
+// campaign/nodes.ts (lesson titles) reaches lib/resolve.ts: the whole registry, as on the campaign page (tests/firstload.test.ts)
+import '../../lib';
+import { buildQuestions, type ReviewQ } from '../reviewbuild';
+import { loadChapter } from '../../chapters/load';
+import { outline } from '../../chapters/outline';
 import { settings } from '../settings';
 import type { Page } from './chapter';
 
@@ -33,6 +37,9 @@ export class NotesPage implements Page {
   private at = 0;
   private done = 0;
   private soonDone = new Set<string>();
+  /** The questions of the chapters visited (loaded on demand: importing every chapter froze the page for seconds). */
+  private qs: ReviewQ[] | null = null;
+  private alive = true;
 
   constructor() {
     const search = h('input', { type: 'search', class: 'np-search', placeholder: 'Search notes', 'aria-label': 'Search notes' }) as HTMLInputElement;
@@ -50,6 +57,7 @@ export class NotesPage implements Page {
 
   destroy(): void {
     this.off();
+    this.alive = false;
   }
 
   private renderList(): void {
@@ -87,9 +95,19 @@ export class NotesPage implements Page {
   }
 
   private startReview(): void {
-    const qs = allQuestions();
+    if (!this.qs) {
+      this.review.replaceChildren(h('div', { class: 'np-rhead' }, h('h2', null, 'Review')), h('p', { class: 'np-empty' }, 'Gathering the questions…'));
+      const visited = outline.filter((c) => settings.visited(c.id).length > 0);
+      Promise.all(visited.map((c) => loadChapter(c.id))).then((chs) => {
+        this.qs = buildQuestions(chs);
+        if (this.alive) this.startReview();
+      }, () => {
+        if (this.alive) this.review.replaceChildren(h('p', { class: 'np-empty' }, 'The questions could not load: reload the page to try again.'));
+      });
+      return;
+    }
     const o = this.opts();
-    this.queue = buildQueue(qs, reviewLog().state, { ...o, limit: SESSION });
+    this.queue = buildQueue(this.qs, reviewLog().state, { ...o, limit: SESSION });
     this.at = 0;
     this.done = 0;
     this.soonDone.clear();
@@ -97,7 +115,7 @@ export class NotesPage implements Page {
   }
 
   private summaryLine(): string {
-    const s = summarize(allQuestions(), reviewLog().state, this.opts());
+    const s = summarize(this.qs ?? [], reviewLog().state, this.opts());
     const parts = [`${this.done} of ${this.queue.length} today`];
     if (s.missed) parts.push(`${s.missed} missed before`);
     if (s.stale) parts.push(`${s.stale} not seen for 2 weeks`);

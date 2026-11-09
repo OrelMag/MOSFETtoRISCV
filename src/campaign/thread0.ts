@@ -12,7 +12,7 @@ export const THREAD0: Record<string, NodeThread> = {
       t_inv: 'the switch every block on the diagram is made of, built first',
       l_bool: 'the control unit, the decoders and the next-PC logic are logic: algebra makes them cheap',
       n_bin: 'the PC, the registers and every memory word are 16-bit numbers',
-      r_pull: 'the same logic in relays, what the Z3 was built from',
+      r_pull: 'the relay itself, a magnet against a spring, what the Z3 was built from',
       v_inv: 'the same logic in vacuum tubes, what ENIAC was built from',
       h_card: 'how the program got into a machine before there was a ROM',
     },
@@ -156,7 +156,7 @@ export const THREAD0: Record<string, NodeThread> = {
   g_or: {
     uses: ['ctl', 'npc', 'alu'],
     usedFor: {
-      g_xor: 'one textbook XOR is (a + b) · ¬(a·b), 6 NANDs; par is 4',
+      g_xor: 'the sum of products ¬a·b + a·¬b is 5 NANDs and (a + b) · ¬(a·b) is 6; par is 4',
       g_sop: 'the sum of the products: an OR of ANDs is NAND–NAND once the inversions cancel',
       g_wide: 'fifteen of them in a balanced tree: the 16-input zero detect',
       pi_reg: 'one OR loads the register on en or clr (a flush loads the zeros)',
@@ -236,7 +236,7 @@ export const THREAD0: Record<string, NodeThread> = {
     uses: ['rf', 'alu', 'npc', 'wb', 'pc'],
     usedFor: {
       a_shift16: 'six of them: four shift levels and a bit reversal on each side',
-      s_pc: 'two: pc + 1 or a loaded target, then 0 on reset',
+      s_pc: 'one: pc + 1 or a loaded target (reset is an AND row, cheaper than a second mux)',
       m_rf: 'trees of it are the two 8:1 read ports, 343 NANDs each',
       m_ram: 'a 4:1 tree reads the selected word',
       c_imm: 'not inside it (it is wiring only): the core\'s 4:1 bus mux picks one of its four immediates',

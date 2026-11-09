@@ -1,7 +1,7 @@
 // Chapter 37's flash at switch level. The floating-gate transistor (prim 'fgmos', SwitchSim) is an
 // NMOS whose threshold is stored charge: erased it conducts at the read voltage, programmed it does
 // not. A NOR array puts every cell between its bit line and a common source (one contact per cell,
-// random reads); a NAND block puts eight in series between a string select and a ground select
+// random reads); a NAND block puts N in series between a string select and a ground select
 // (one contact per string: density), and reads a cell by passing the others. Program pulls a bit
 // line low for each 0 to write (a 1 inhibits), one pulse at a time; erase empties a whole block.
 
