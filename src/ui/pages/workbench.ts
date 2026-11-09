@@ -147,7 +147,7 @@ export class WorkbenchPage implements Page {
     this.params.append(h('span', { class: 'param-k' }, 'Size of this part'));
     for (const p of f.fam.params) {
       const sel = h('select', { 'aria-label': p.name }) as HTMLSelectElement;
-      for (const v of p.values) sel.append(h('option', { value: v, selected: v === f.values[p.name] }, p.label ? p.label(v) : `${v} ${v === 1 ? p.name.replace(/s$/, '') : p.name}`));
+      for (const v of p.values) sel.append(h('option', { value: v, selected: v === f.values[p.name] }, p.label ? p.label(v) : `${v} ${v === 1 ? p.name.replace(/(\w+?)s\b/, '$1') : p.name}`));
       sel.addEventListener('change', () => {
         const values = { ...f.values, [p.name]: Number(sel.value) };
         this.open(f.fam.make(values).id);
@@ -168,7 +168,7 @@ export class WorkbenchPage implements Page {
       const fam = familyOf(this.current)?.fam;
       for (const it of shown) {
         const on = it.id === this.current || (!!it.family && familyOf(it.id)?.fam === fam);
-        l.append(h('button', { class: `lib-item${on ? ' on' : ''}`, 'aria-current': on ? 'true' : null, onclick: () => this.open(it.id) }, it.name, it.family ? h('small', null, 'n-bit') : null));
+        l.append(h('button', { class: `lib-item${on ? ' on' : ''}`, 'aria-current': on ? 'true' : null, onclick: () => this.open(it.id) }, it.name, it.family ? h('small', null, 'sizes') : null));
       }
     }
     if (!any) l.append(h('div', { class: 'lib-empty' }, `No component matches “${this.filter}”. `, h('button', { class: 'btn sm', onclick: () => { this.search.value = ''; this.filter = ''; this.renderList(); this.search.focus(); } }, 'Clear the search')));

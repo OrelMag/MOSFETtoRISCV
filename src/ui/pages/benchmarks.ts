@@ -48,6 +48,8 @@ export class BenchmarksPage implements Page {
   private open = new Set<string>();
   private metricChips = h('div', { class: 'hw-chips' });
   private famChips = h('div', { class: 'hw-chips' });
+  /** The shown metric's unit: the table's cells are bare numbers. */
+  private unit = h('span', { class: 'bm-lbl' });
   private head = h('tr');
   private body = h('tbody');
   private tip = h('div', { class: 'bm-tip', hidden: true });
@@ -65,7 +67,7 @@ export class BenchmarksPage implements Page {
         'gives, so a CPU is fast only if it is short in both. Energy counts every net’s toggles, glitches included. Open a row for its cache misses, stalls and energy.'),
       this.tiles(),
       h('section', { class: 'bm-card' }, this.chartHead, this.chartBox),
-      h('div', { class: 'hw-controls' }, h('span', { class: 'bm-lbl' }, 'Show'), this.metricChips, h('span', { class: 'bm-sep' }), h('span', { class: 'bm-lbl' }, 'CPUs'), this.famChips),
+      h('div', { class: 'hw-controls' }, h('span', { class: 'bm-lbl' }, 'Show'), this.metricChips, this.unit, h('span', { class: 'bm-sep' }), h('span', { class: 'bm-lbl' }, 'CPUs'), this.famChips),
       h('div', { class: 'hw-table-wrap bm-wrap' }, h('table', { class: 'hw-table bm-table' }, h('thead', null, this.head), this.body)),
       this.programs(),
       h('p', { class: 'hw-note' }, `${PS_NOTE} NAND counts include the ${RESULTS.dmemWords}-word data memory (and the caches), not the `,
@@ -171,7 +173,7 @@ export class BenchmarksPage implements Page {
 
   private showTip(c: BenchCpu, fx: number, fy: number): void {
     this.tip.replaceChildren(h('b', null, c.name), c.id !== c.name ? h('small', null, c.id) : '',
-      h('span', null, `${fmt(meanOf(c, 'time'), 1)} µs · ${fmt(c.nands)} NAND${c.offChip ? ' + a DRAM chip' : ''} · CPI ${fmt(meanOf(c, 'cpi'), 2)} · ${mhz(c.period)} MHz · ${fmt(meanOf(c, 'energy'))} nJ`));
+      h('span', null, `${fmt(meanOf(c, 'time'), 1)} µs · ${fmt(c.nands)} NAND gates${c.offChip ? ' + a DRAM chip' : ''} · CPI ${fmt(meanOf(c, 'cpi'), 2)} · ${mhz(c.period)} MHz · ${fmt(meanOf(c, 'energy'))} nJ`));
     this.tip.hidden = false;
     this.tip.style.left = `${(fx * 100).toFixed(1)}%`;
     this.tip.style.top = `${(fy * 100).toFixed(1)}%`;
@@ -188,6 +190,7 @@ export class BenchmarksPage implements Page {
 
   private render(): void {
     const m = METRICS.find((x) => x.k === this.metric)!;
+    this.unit.textContent = `in ${m.unit}`;
     this.metricChips.replaceChildren(...METRICS.map((x) => this.chip(x.label, x.k === this.metric, () => { this.metric = x.k; })));
     this.famChips.replaceChildren(...FAMILIES.map((f) => this.chip(f.label, this.fams.has(f.key), () => {
       if (!this.fams.has(f.key)) this.fams.add(f.key);
@@ -259,8 +262,9 @@ export class BenchmarksPage implements Page {
     const glitch = (r: (typeof c.runs)[number]) => (r.switched ? `${Math.round(100 * (1 - (r.functional ?? 0) / r.switched))} %` : '—');
     return h('tr', { class: 'bm-detail' }, h('td', { colspan: span },
       h('table', null,
-        h('thead', null, h('tr', null, ...['Program', 'Instructions', 'Cycles', 'CPI', 'Time', 'Energy', 'per instr.', 'glitches', 'power',
-          ...(d ? ['D-cache misses', 'D stall cycles'] : []), ...(i ? ['I-cache misses', 'I stall cycles'] : [])].map((t) => h('th', null, t)))),
+        h('thead', null, h('tr', null, ...['Program', 'Instructions', 'Cycles', 'CPI', 'Time', 'Energy', 'Energy / instr.', 'Glitch share', 'Avg power',
+          ...(d ? ['Data-cache misses', 'Data-cache stall cycles'] : []), ...(i ? ['Instr.-cache misses', 'Instr.-cache stall cycles'] : [])]
+          .map((t) => h('th', { title: t === 'Glitch share' ? 'Share of toggles that were glitches: changes undone before the value settled' : t === 'CPI' ? 'Clock cycles per instruction' : null }, t)))),
         h('tbody', null, ...c.runs.map((r) => h('tr', null, h('td', null, name(r.bench)), h('td', null, fmt(r.instructions)), h('td', null, fmt(r.cycles)),
           h('td', null, fmt(r.cycles / r.instructions, 2)), h('td', null, `${fmt(runUs(c, r), 1)} µs`),
           h('td', null, `${fmt(runNj(r))} nJ`), h('td', null, `${fmt((runNj(r) * 1e3) / r.instructions, 1)} pJ`), h('td', null, glitch(r)),
