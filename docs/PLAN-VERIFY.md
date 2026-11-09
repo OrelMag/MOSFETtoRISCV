@@ -24,6 +24,21 @@ Changes against the plan as approved, found while building stage 1:
   in stage 2.
 - The BIST adder's 5-bit signature lets **1** of the 90 faults escape (aliasing), which step 12 shows.
 
+Stage 2 (the chapter, feat/verify-chapter), against the plan:
+- **Placement**: `verify` after `silicon` in order.ts. The author's order is silicon → fpga → verify → sidechan; John's
+  `fpga` lands later and goes in between.
+- **Step 4's bug** needs no generator option: the old lost-branch bug is exactly one stuck-at fault, the `pcEn` OR's inverter
+  on its taken input (`pcEn.g2` stuck at 1), planted with plantedDef. With today's generator it fails seeds 3, 15 and 42 of
+  the first 64 (CI's run in 2026 saw 5 of 256 with the generator then); seed 3 shrinks from 111 instructions to 4.
+- **Step 3** plants `alu.slt` stuck at 0, not the forwarding fault: the riscv-tests' own loader needs forwarding, so with that
+  fault every test hangs. With the slt fault exactly slt and slti fail, at case 4.
+- **Step 5** ("Make it small") is an ordinary step: `deep` is only for chapters with parts (15 steps or more).
+- **Step 7** shows the "What this found" table (src/verify/data.ts, held to docs/VERIFICATION.md by a test), not a Spike log:
+  Spike runs only on CI, and a log written by hand would be invented.
+- **Step 12**: the March test is the reference model's numbers in the text; its controller in gates is not built.
+- The drill views keep reading the driver's net (a stuck wire shows what its gate drives; the readers see the constant),
+  and step 8's text says so. No change to view/.
+
 ## Placement
 
 - **Order.** Place it in `order.ts` right after `'silicon'` and before `'lanes'`. With VM and OS approved as chapters 23 and 24 after cache, silicon becomes chapter 30 and this becomes **chapter 31**. The text never types the number (`numOf('verify')`).
