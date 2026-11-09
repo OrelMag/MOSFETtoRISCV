@@ -1350,16 +1350,16 @@ Approved to build now (2026-11-09):
   Cross-cutting features)
 
 Proposed, kept for later (the author's choice, 2026-11-09; each needs a plan and a mockup before it is built):
-- ⏳ Virtual memory: Sv32 page tables, a TLB, page faults, after traps (20) and caches (22)
-- ⏳ A tiny operating system: user mode, `ecall`, a timer-driven scheduler and a context switch on our CPU, two programs sharing it
-- ⏳ How do you know it works?: the golden model in lock-step, riscv-tests, fuzzing, then manufacturing test (scan chains, stuck-at faults,
+- 🚧 (approved 2026-11-09, docs/PLAN-VM-OS.md) Virtual memory: Sv32 page tables, a TLB, page faults, after traps (20) and caches (22)
+- 🚧 (approved 2026-11-09) A tiny operating system: user mode, `ecall`, a timer-driven scheduler and a context switch on our CPU, two programs sharing it
+- 🚧 (approved 2026-11-09, docs/PLAN-VERIFY.md) How do you know it works?: the golden model in lock-step, riscv-tests, fuzzing, then manufacturing test (scan chains, stuck-at faults,
   BIST); builds on the fault brush
 - ⏳ Power: dynamic and static power, clock gating, voltage and frequency scaling, measured with sim/power.ts
 - ⏳ Side channels: Spectre on our out-of-order core and its cache, after chapters 22 and 26
 - ⏳ From netlist to FPGA: look-up tables, our design mapped onto the Tang Nano (the FPGA export exists, no chapter explains it)
 - ⏳ Vectors (RVV) as a bridge from multicore into the GPU chapters
 - ⏳ Break-it steps: one planted fault per core chapter, once the fault brush ships
-- ⏳ A worked example and a common-mistakes aside in the densest chapters (pipelining, traps, caches, floating point)
+- ✅ A worked example and a common-mistakes aside in the densest chapters (pipelining, traps, caches, floating point): folded asides, numbers pinned by tests/worked-examples.test.ts
 
 ## Open questions for the author
 - Target audience depth: high-school / first-year university / practitioner refresher?
