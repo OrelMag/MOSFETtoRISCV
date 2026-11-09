@@ -15,6 +15,7 @@ import { type Puzzle, PUZZLE_GROUPS, puzzleChipId, puzzleOfChip, PUZZLES, type P
 import { refPoints, refProgram, type RefPoint } from '../puzzles/refs';
 import { PuzzleReplay } from '../puzzles/replay';
 import { findPorts, hardwareNands, programRoms, programWords, type PuzzleRun, runPuzzle } from '../puzzles/run';
+import { campaignNow, isLevelChip, loadCampaign } from './campaignlink';
 import { type Candidate, chipLang, startCandidates, startPuzzle, type StartChoice, withProgram } from '../puzzles/start';
 import { inputOn } from '../puzzles/puzzles';
 import { dockPane, paneShown, showPane, undockPane } from './dock';
@@ -402,9 +403,15 @@ class PuzzleUi {
     } else this.openStart(p, false);
   }
 
-  private openStart(p: Puzzle, replace: boolean): void {
+  private openStart(p: Puzzle, replace: boolean, withoutCampaign = false): void {
     const ed = this.ed;
-    const cands = startCandidates(ed.ws, (id) => ed.lib.defOf(id));
+    // the learner's campaign cores are candidates too: the campaign's code first, when the workspace holds a level's chip
+    // (if it cannot load, the dialog opens without them)
+    if (!withoutCampaign && !campaignNow() && Object.keys(ed.ws.chips).some(isLevelChip)) {
+      void loadCampaign().then(() => this.openStart(p, replace), () => this.openStart(p, replace, true));
+      return;
+    }
+    const cands = startCandidates(ed.ws, (id) => ed.lib.defOf(id), (id) => campaignNow()?.nodeOfChip(id));
     let pick: Candidate = cands[0];
     const opt = (c: Candidate) => {
       const el = h('label', { class: `sb-pz-opt${c === pick ? ' on' : ''}` },

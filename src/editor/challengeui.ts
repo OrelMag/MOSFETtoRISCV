@@ -13,14 +13,10 @@
 
 import { groupDigits } from '../sim/numfmt';
 import '../styles/sbchallenges.css';
-import { addBench, addLaneBench, addPongBench, failingTest } from '../campaign/bench';
-import { coreSpecOf } from '../campaign/corecheck';
-import { measured } from '../campaign/grade';
-import { isDone, nextAvailable } from '../campaign/graph';
-import { levelChallenge, nodeOfChip } from '../campaign/levels';
-import { actName, actTitle } from '../campaign/nodes';
-import { type PassGrade, progress } from '../campaign/progress';
+import type { CoreCheck, CoreSpec } from '../campaign/corecheck';
+import type { PassGrade } from '../campaign/progress';
 import type { CampaignNode } from '../campaign/types';
+import { campaignNow, isLevelChip, loadCampaign } from './campaignlink';
 import { CATS, libraryItems } from '../lib/catalog';
 import { resolveComponent } from '../lib/resolve';
 import { stats } from '../sim/stats';
@@ -39,7 +35,11 @@ import { type Editor, registerToolbarAction } from './editor';
 import { type PaletteItem, registerPaletteGroup } from './palette';
 import { TestPlayer } from './testplayer';
 import { testSet } from './testrun';
-import { tipsOf } from '../campaign/nudges';
+
+/** The campaign's code, on paths that run only once a level is open (ChallengeUi.level loaded it). */
+const C = () => campaignNow()!;
+/** A core level's programs (campaign/corecheck.ts coreSpecOf, which would load the campaign). */
+const coreSpecOf = (c: BuildChallenge['check']): CoreSpec | null => ('core' in c ? (c as CoreCheck).core : null);
 
 const RULE: Record<'transistors' | 'nand' | 'any', [string, string]> = {
   transistors: ['transistors only', 'Transistors, rails, wiring and your own chips built from them'],
@@ -214,14 +214,26 @@ class ChallengeUi {
 
   /** The campaign level of the open chip, if it is one. */
   private get level(): CampaignNode | undefined {
-    const n = nodeOfChip(this.ed.chipId);
-    return n && levelChallenge(n) ? n : undefined;
+    if (!isLevelChip(this.ed.chipId)) return undefined;
+    const c = campaignNow();
+    if (!c) {
+      // a level's chip: the campaign's code loads, then the strip starts over as if the chip had just opened
+      void loadCampaign().then(() => {
+        if (uis.get(this.ed) !== this) return;
+        this.lastChip = '';
+        this.key = '';
+        this.sync();
+      });
+      return undefined;
+    }
+    const n = c.nodeOfChip(this.ed.chipId);
+    return n && c.levelChallenge(n) ? n : undefined;
   }
 
   private get challenge(): BuildChallenge | undefined {
     if (this.screen?.challenge) return this.screen.challenge;
     const n = this.level;
-    return n ? levelChallenge(n) : challengeOf(this.ed.chipId, CHALLENGES);
+    return n ? C().levelChallenge(n) : isLevelChip(this.ed.chipId) ? undefined : challengeOf(this.ed.chipId, CHALLENGES);
   }
 
   private sync(): void {
@@ -242,7 +254,7 @@ class ChallengeUi {
         ed.refresh();
         ed.palette.render();
       }
-      if (this.level) progress().open(this.level.id, true);
+      if (this.level) C().progress().open(this.level.id, true);
       // The level screen's palette is locked to the rule already.
       const restricted = !!ch && ch.allowed !== 'any' && !this.screen;
       if (restricted && !ed.ws.purist) {
@@ -283,7 +295,7 @@ class ChallengeUi {
     const res = ch ? this.results.get(ed.chipId) : undefined;
     const stale = !!res && res.conn !== ed.compiled?.connKey;
     const lv = this.level;
-    const lp = lv ? progress().get(lv.id) : undefined;
+    const lp = lv ? C().progress().get(lv.id) : undefined;
     const key = JSON.stringify([ed.chipId, !!ch, this.collapsed, this.confirming, this.version, stale, ch && settings.isSolved(solvedKey(ch)), lp, this.screen?.solutions?.()]);
     if (key === this.key) return;
     this.key = key;
@@ -305,7 +317,7 @@ class ChallengeUi {
         h('button', { class: `btn ghost icon-only sb-chal-fold${this.collapsed ? '' : ' open'}`, title: this.collapsed ? 'Show the brief' : 'Hide the brief', 'aria-expanded': String(!this.collapsed),
           onclick: () => { this.collapsed = !this.collapsed; this.render(); } }, icon('chevR', 14)),
         lv
-          ? h('a', { class: `sb-chal-flag${solved ? ' solved' : ''}`, href: `#/campaign/n/${lv.id}`, title: `Back to the campaign: ${actTitle(lv.act)}` }, icon(solved ? 'check' : 'flag', 13), `Campaign · ${actName(lv.act)}`)
+          ? h('a', { class: `sb-chal-flag${solved ? ' solved' : ''}`, href: `#/campaign/n/${lv.id}`, title: `Back to the campaign: ${C().actTitle(lv.act)}` }, icon(solved ? 'check' : 'flag', 13), `Campaign · ${C().actName(lv.act)}`)
           : h('span', { class: `sb-chal-flag${solved ? ' solved' : ''}`, title: solved ? 'Solved' : 'Challenge' }, icon(solved ? 'check' : 'flag', 13), LEVELS.find((l) => l.id === ch.level)?.title ?? ch.level),
         h('h3', null, ch.title),
         lv && lp?.stars ? h('span', { class: 'sb-chal-stars', title: `Best: ${lp.stars} of 3 stars` }, '★'.repeat(lp.stars) + '☆'.repeat(3 - lp.stars)) : null,
@@ -381,7 +393,7 @@ class ChallengeUi {
         before ? `${unit} ` : null, h('b', null, groupDigits(v)), before ? null : ` ${unit}`, par !== undefined ? h('small', null, ` par ${par}`) : null);
     };
     const lv = this.level;
-    const lp = lv ? progress().get(lv.id) : undefined;
+    const lp = lv ? C().progress().get(lv.id) : undefined;
     const unit = scoreUnit(ch);
     const score = unit === 'transistors' ? [item(r.score.transistors, 'transistors', lim.maxTransistors)]
       : unit === 'devices' ? deviceItems(r, lim, item)
@@ -426,6 +438,7 @@ class ChallengeUi {
 
   /** A campaign level's tips (one at a time) and its way back / onward. */
   private levelEl(n: CampaignNode): HTMLElement {
+    const { progress, tipsOf, isDone, nextAvailable, levelChallenge } = C();
     const p = progress();
     const shown = Math.min(p.get(n.id)?.tips ?? 0, tipsOf(n).length);
     const tips = h('ol', { class: 'sb-chal-tips' }, tipsOf(n).slice(0, shown).map((t) => {
@@ -491,7 +504,7 @@ class ChallengeUi {
     if (undriven.length) box.append(h('p', { class: 'sb-chal-hint' }, `${undriven.join(', ')} = X: nothing drives ${undriven.length > 1 ? 'them' : 'it'} to a 0 or a 1 yet. Wire ${undriven.length > 1 ? 'each' : 'it'} to a gate's output, and check that no input it depends on is left open.`));
     // A core level: open the first failing program as a computer around this core, with the CPU panel.
     const spec = coreSpecOf(ch.check);
-    const t = spec && r.failures.length ? failingTest(spec, r.failures[0]) : null;
+    const t = spec && r.failures.length ? campaignNow()?.failingTest(spec, r.failures[0]) ?? null : null;
     if (t) {
       box.append(h('button', { class: 'sb-chal-apply', 'data-chal': 'bench', title: `A new chip: this program in a ROM, your core, ${spec?.lanes ? 'a data memory with a port per lane' : 'a RAM and LEDs'}; the CPU panel runs it against the golden model and stops at the first wrong write`, onclick: () => this.debug(t) },
         icon('code', 13), `Debug “${t.name}” in the sandbox`));
@@ -555,7 +568,7 @@ class ChallengeUi {
     this.collapsed = false;
     const lv = this.level;
     if (r.ok && lv) {
-      const g = progress().solve(lv.id, measured(r.score), ed.compiled?.connKey);
+      const g = C().progress().solve(lv.id, C().measured(r.score), ed.compiled?.connKey);
       const st = g.helped ? '(with help: no stars)' : '★'.repeat(g.stars) + '☆'.repeat(3 - g.stars);
       if (this.screen) this.screen.checked(r, g);
       else ed.toast(`${g.first ? 'Solved' : 'Passes'}: ${ch.title} ${st}${g.best && !g.first ? ' (new best)' : ''}`);
@@ -580,14 +593,14 @@ class ChallengeUi {
     if (this.drawer) this.renderList();
   }
 
-  private debug(t: NonNullable<ReturnType<typeof failingTest>>): void {
+  private debug(t: NonNullable<ReturnType<typeof import('../campaign/bench').failingTest>>): void {
     const ed = this.ed;
     const core = ed.compiled?.def, coreId = ed.chipId;
     const spec = this.challenge ? coreSpecOf(this.challenge.check) : null;
     if (!core) return;
     let err = '';
     ed.editWs((ws) => {
-      const b = spec?.lanes ? addLaneBench(ws, core, coreId, t, spec) : addBench(ws, core, coreId, t);
+      const b = spec?.lanes ? C().addLaneBench(ws, core, coreId, t, spec) : C().addBench(ws, core, coreId, t);
       if ('error' in b) { err = b.error; return ws; }
       return b.ws;
     });
@@ -603,7 +616,7 @@ class ChallengeUi {
     if (!core) return;
     let err = '';
     ed.editWs((ws) => {
-      const b = addPongBench(ws, core, coreId);
+      const b = C().addPongBench(ws, core, coreId);
       if ('error' in b) { err = b.error; return ws; }
       return b.ws;
     });
@@ -634,7 +647,7 @@ class ChallengeUi {
     ed.editWs((ws) => solveChallenge(ws, ch).ws);
     // a level's pass of this circuit is the answer's: solved with help, no stars (campaign/progress.ts solve)
     const lv = this.level;
-    if (lv && ed.compiled?.connKey) progress().markHelp(lv.id, ed.compiled.connKey);
+    if (lv && ed.compiled?.connKey) C().progress().markHelp(lv.id, ed.compiled.connKey);
     this.results.delete(challengeChipId(ch));
     this.version++;
     ed.toast(`Replaced with the reference answer (${undoKey()} brings yours back)`);
