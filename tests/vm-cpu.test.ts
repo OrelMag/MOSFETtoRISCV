@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { assemble } from '../src/riscv/asm';
 import { tick } from './yieldtick';
-import { PROGS } from './vm-programs';
+import { IRQ_PIN, PROGS } from './vm-programs';
 import { lockstep, type VmLockResult } from './verify/vmlock';
 
 /** The entries of `what` that the run did not reach: cause:n, irq:level, walks:, or mnemonic@level (retired without trapping). */
@@ -50,5 +50,18 @@ describe('vm CPU in lock step with the golden model', () => {
     expect(r.halted).toBe(true);
     const key = Object.keys(COVER).find((k) => p.name.includes(k))!;
     expect(missing(r, COVER[key]), `${p.name}: not reached (${JSON.stringify({ causes: r.causes, irqs: r.irqs, byPriv: r.byPriv })})`).toEqual([]);
+  }, 300_000);
+});
+
+describe('the external interrupt pin and walks', () => {
+  it('pulses of one step land between and during walks and are taken at the instruction boundary', async () => {
+    const a = assemble(IRQ_PIN.source);
+    expect(a.errors).toEqual([]);
+    const imemK = Math.max(8, Math.ceil(Math.log2(a.words.length)));
+    // a pulse that starts at a step whose instruction needs a walk is taken in the cycle before the walk starts
+    const r = await lockstep(a.words, { imemK, dmemK: 12, maxCycles: IRQ_PIN.max, irq: (steps) => steps % 7 === 6, pause: tick });
+    expect(r.why).toBe('');
+    expect(r.halted).toBe(true);
+    expect(r.irqs[0], 'interrupts taken from U').toBeGreaterThan(5);
   }, 300_000);
 });

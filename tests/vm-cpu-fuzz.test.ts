@@ -22,3 +22,19 @@ describe('random vm programs in lock step', () => {
     expect(r.halted).toBe(true);
   }, 300_000);
 });
+
+// The same programs with the timer armed (the oracle leaves it out: Spike has no mtime at our address): an interrupt every
+// few instructions, taken from U, S and M between and around walks. The handler does not acknowledge it, so each interrupt
+// costs the interrupted instruction (it is skipped); the lock step has to agree through all of that.
+const NT = Number(process.env.VM_FUZZ_TIMER ?? 6);
+describe('random vm programs with timer interrupts in lock step', () => {
+  it.each(Array.from({ length: NT }, (_, i) => FROM + i))('seed %i', async (seed) => {
+    const src = randomProgram32(seed, { n: 60, sub: true, system: true, dmemWords: 4096, dataBase: VM_WINDOW, timer: true, vm: { code: 0, data: DATA } });
+    const a = assemble(src);
+    expect(a.errors.map((e) => `line ${e.line}: ${e.message}`)).toEqual([]);
+    const imemK = Math.max(8, Math.ceil(Math.log2(a.words.length)));
+    const r = await lockstep(a.words, { imemK, dmemK: 14, maxCycles: 30_000, pause: tick });
+    console.log(`timer seed ${seed}: ${r.steps} steps, U/S/M ${r.byPriv[0]}/${r.byPriv[1]}/${r.byPriv[3]}, interrupts by level U/S/M ${r.irqs[0]}/${r.irqs[1]}/${r.irqs[3]}, halted ${r.halted}`);
+    expect(r.why).toBe('');
+  }, 300_000);
+});

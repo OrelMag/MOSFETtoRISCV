@@ -9,7 +9,7 @@ import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
 import { type ComponentDef, netlistOf } from '../src/sim/types';
 import { routeNetlist, wireOverlaps } from '../src/view/route';
-import { bigMemTops, cpuTops, doomTops, macTops } from './tops';
+import { bigMemTops, cpuTops, doomTops, macTops, vmTops } from './tops';
 import '../src/lib/macunit';
 
 // Build the parametric designs the chapters show, so their schematics are in the registry too.
@@ -19,6 +19,7 @@ singleCycleCpu(words, { adder: 'ks' });
 pipelinedCpu(words, { adder: 'ks', balanced: true, predictor: true });
 pipelinedCpu(words);
 systemCpu(words, { m: true });
+systemCpu(words, { vm: true });
 multicycleCpu(words, { control: 'fsm' });
 multicycleCpu(words, { control: 'micro' });
 dualCore(words);
@@ -47,7 +48,7 @@ function allDefs(): ComponentDef[] {
     seen.add(d);
     for (const i of netlistOf(d)?.instances ?? []) visit(i.def);
   };
-  for (const d of [...cpuTops(), ...macTops(), ...bigMemTops(), ...doomTops()]) visit(d);
+  for (const d of [...cpuTops(), ...macTops(), ...bigMemTops(), ...doomTops(), ...vmTops()]) visit(d);
   return [...seen];
 }
 

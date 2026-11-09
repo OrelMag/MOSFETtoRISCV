@@ -214,7 +214,7 @@ export function walker(): ComponentDef {
       ports: [bit('start', 'in'), bus('satpPpn', 22, 'in'), bus('vpn', 20, 'in'), bus('pte', 32, 'in'), clk(),
         bus('pteAddr', 32, 'out'), bit('walkOut', 'out'), bit('idleOut', 'out'), bit('stall', 'out'), bit('fault', 'out'), bit('faultAcc', 'out'), bit('fill', 'out'), bus('fppn', 22, 'out'), bus('fflags', 5, 'out')],
       symbol: { kind: 'box', label: 'WALKER' },
-      netlist: laid(b, { keepOrder: true, room: true }),
+      netlist: laid(b, { keepOrder: true, room: true, gap: 8 }),
     });
   });
 }
@@ -288,7 +288,7 @@ export function mmu(): ComponentDef {
         bus('fpa', 32, 'out'), bus('dpa', 32, 'out'), bus('maddr', 32, 'out'), bit('stall', 'out'), bit('idle', 'out'),
         bit('fetchPage', 'out'), bit('fetchAcc', 'out'), bit('dataPage', 'out'), bit('dataAcc', 'out')],
       symbol: { kind: 'box', label: 'MMU' },
-      netlist: laid(b, { keepOrder: true, room: true }),
+      netlist: laid(b, { keepOrder: true, room: true, gap: 10 }),
     });
   });
 }
@@ -350,7 +350,7 @@ export function csrUnitVm(): ComponentDef {
     const mieS = b.op(splitter([1, 1]), [`${rMieR}.q`], 'MTIE, MEIE');
     const sd = andB(b, `${fs}.o0`, `${fs}.o1`);
     // read values
-    const z = { 1: gnd, 2: zero(2), 3: zero(3), 7: zero(7), 11: zero(11), 20: zero(20), 27: zero(27) } as Record<number, string>;
+    const z = { 1: gnd, 2: zero(2), 3: zero(3), 7: zero(7), 11: zero(11), 20: zero(20) } as Record<number, string>;
     const mstatus = b.op1(merger([1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 1, 1, 11, 1]), [gnd, `${rSie}.q`, gnd, `${rMie}.q`, gnd, `${rSpie}.q`, gnd, `${rMpie}.q`, `${rSpp}.q`, z[2], `${rMpp}.q`, `${rFs}.q`, z[3], `${rSum}.q`, `${rMxr}.q`, z[11], sd], 'mstatus');
     const sstatus = b.op1(merger([1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 3, 1, 1, 11, 1]), [gnd, `${rSie}.q`, gnd, gnd, gnd, `${rSpie}.q`, gnd, gnd, `${rSpp}.q`, z[2], z[2], `${rFs}.q`, z[3], `${rSum}.q`, `${rMxr}.q`, z[11], sd], 'sstatus');
     const misa = b.op1(constWord(32, 0x40140100), [], 'misa');
@@ -435,7 +435,7 @@ export function csrUnitVm(): ComponentDef {
         bus('rdata', 32, 'out'), bit('known', 'out'), bus('mtvecOut', 32, 'out'), bus('mepcOut', 32, 'out'), bus('sepcOut', 32, 'out'), bit('irqTake', 'out'), bus('irqCause', 32, 'out'),
         bus('priv', 2, 'out'), bit('sum', 'out'), bit('mxr', 'out'), bit('satpMode', 'out'), bus('satpPpn', 22, 'out'), bit('satpWr', 'out')],
       symbol: { kind: 'box', label: 'CSRs' },
-      netlist: laid(b, { keepOrder: true, room: true }),
+      netlist: laid(b, { keepOrder: true, room: true, gap: 6, vgap: 2 }),
     });
   });
 }
@@ -480,6 +480,7 @@ export function trapUnitVm(): ComponentDef {
       win[r] = none ? andB(b, r, none) : r;
       none = none ? andB(b, none, notB(b, r)) : notB(b, r);
     }
+    const anyReq = notB(b, none);
     b.next();
     const ic = b.op(splitter([4, 27, 1]), ['irqCause'], 'interrupt cause');
     const ps = b.op(splitter([1, 1]), ['priv'], 'level');
@@ -497,7 +498,7 @@ export function trapUnitVm(): ComponentDef {
     const low = b.op1(merger(ones(4)), [0, 1, 2, 3].map(bitsOf), 'cause[3:0]');
     b.next();
     b.wire(b.op1(merger([4, 27, 1]), [low, b.op1(constWord(27, 0), []), 'irq'], 'cause'), 'cause');
-    b.wire(orB(b, ...reqs), 'trap');
+    b.wire(anyReq, 'trap');
     // mtval
     const selPc = orB(b, win.fetchPage, win.fetchAcc);
     const selAddr = orB(b, win.loadMis, win.storeMis, win.loadPage, win.storePage, win.loadAcc, win.storeAcc);
@@ -512,7 +513,7 @@ export function trapUnitVm(): ComponentDef {
         bus('addr', 32, 'in'), bus('target', 32, 'in'), bus('pc', 32, 'in'),
         bit('trap', 'out'), bus('cause', 32, 'out'), bus('tval', 32, 'out')],
       symbol: { kind: 'box', label: 'TRAP' },
-      netlist: laid(b, { keepOrder: true, room: true }),
+      netlist: laid(b, { keepOrder: true, room: true, gap: 6, vgap: 2 }),
     });
   });
 }

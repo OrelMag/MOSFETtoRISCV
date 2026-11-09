@@ -699,7 +699,7 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   alignY('res', M8, P('ld', 'value')[0] + 8, 'd1', P('ld', 'value')[1]);
   place('plus4', P4, [36, Y - 10]);
   alignY('target', ADD, rfR + 18, 'a', Y + 26);
-  place('gndT', TIE0, wired ? [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 1] : [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 5]);
+  place('gndT', TIE0, wired ? [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 1] : [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - (vm ? 0 : 5)]);
   if (wired) place('clr0', CLEAR_BIT0, [141, 75]); else alignY('clr0', CLEAR_BIT0, aluR + 12, 'in', Y + 40);
   place('gndJ', TIE0, [P('clr0', 'zero')[0] - 6, P('clr0', 'zero')[1] + 1]);
   place('ctl', CONTROL, wired ? [44, 86] : [26, 0]);
@@ -874,7 +874,7 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
     addEnd('ALUResult', 'mmu.va');
     addEnd('MemRead', 'mmu.pteData');
     nets.push(
-      { name: 'FetchPA', ends: ['mmu.fpa', 'imem.addr'], tags: true },
+      { name: 'fpa', ends: ['mmu.fpa', 'imem.addr'], tags: true },
       { name: 'DataPA', ends: ['mmu.dpa', 'io.addr', 'isIO.in'], tags: true },
       { name: 'MemAddr', ends: ['mmu.maddr', 'dm.addr'], tags: true },
       // the CSR unit's mode outputs and the decode's new inputs and outputs

@@ -566,3 +566,27 @@ ${matrix([])}
 };
 
 export const PROGS: Prog[] = [basic, faults, remap, interrupts, sret, satpS, csrs];
+
+/** 8. The external interrupt pin pulsed while walks are under way (tests/vm-cpu.test.ts raises it from the step count). */
+export const IRQ_PIN: Prog = {
+  name: 'irq pin: external interrupts between walks', max: 20000,
+  note: 'MEIE set, the pin pulses for one step every few instructions; taken from U between and during walks, never inside one',
+  source: boot([], [], `  li t0, 0x800
+  csrw mie, t0
+${enterU('uloop')}
+uloop:
+  li s0, 0x1000
+  lw a0, 0(s0)
+  li s2, 0x2000
+  lw a1, 0(s2)
+  sw a0, 4(s0)
+  li s3, 0x7000
+  lw a2, 0(s3)
+  li s4, 0x8000
+  lw a3, 0(s4)
+  addi s1, s1, 1
+  li t2, 80
+  blt s1, t2, uloop
+  li a7, 93
+  ecall`),
+};
