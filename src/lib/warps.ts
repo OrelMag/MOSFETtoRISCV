@@ -401,7 +401,7 @@ export function lanePortMemory(k: number, n: number, init?: ArrayLike<number>, x
     const xOut = xTree + outs.length * tw + 4;
     return define({
       id: mid, name: `Data memory, a port per lane (${N} words${xport ? ', one more read port' : ''})`, category: 'memory',
-      summary: `${N} words of ${w} bits, one read and one write port per lane: every lane reads its own word in the same cycle, and a store writes all of them at once (the highest lane wins a word several write). Real memories do not have ${n} ports; chapter 32 gives them one port and a coalescer.${xport ? ' xa / xq: a read port for a unit outside the core.' : ''}`,
+      summary: `${N} words of ${w} bits, one read and one write port per lane: every lane reads its own word in the same cycle, and at the clock edge every lane with we set writes its word (the highest lane wins a word several write). Real memories do not have ${n} ports; chapter 32 gives them one port and a coalescer.${xport ? ' xa / xq: a read port for a unit outside the core.' : ''}`,
       ports: [...L.map((i) => bus(`addr${i}`, k, 'in')), ...L.map((i) => bus(`wd${i}`, w, 'in')), bus('we', n, 'in'), ...(xport ? [bus('xa', k, 'in')] : []), clkPort(),
         ...outs.map((o) => bus(o, w, 'out'))],
       symbol: { kind: 'box', label: 'DATA MEM' },

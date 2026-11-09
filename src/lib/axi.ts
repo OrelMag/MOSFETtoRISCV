@@ -200,7 +200,7 @@ export function axiDecoder(codes: number[]): ComponentDef {
     const ports: PortDef[] = [bus('awaddr', 32, 'in'), bus('araddr', 32, 'in'), bit('awvalid', 'in'), bit('busy', 'in'), bit('clk', 'in', 'bottom', true), ...Array.from({ length: S }, (_, k) => bit(`sel${k}`, 'out'))];
     return define({
       id: `axidec${codes.join('_')}`, name: `Bus address decoder (${S} slaves)`, category: 'memory',
-      summary: `Slave k answers addresses whose top four bits are ${codes.slice(0, S - 1).map((c) => c.toString(16)).join(', ')}; any other goes to the last (default) slave. The choice is held while the bus is busy.`,
+      summary: `Slaves 0 … ${S - 2} answer addresses whose top four bits are ${codes.slice(0, S - 1).map((c) => c.toString(16)).join(', ')} (hex), in that order; any other address goes to the last (default) slave. The choice is held while the bus is busy.`,
       ports, symbol: { kind: 'box', label: 'DECODE' },
       netlist: () => ({ pins: sidePins(ports, b.right), instances: b.instances, nets: b.nets() }),
     });
@@ -663,7 +663,7 @@ export function busBench(image: ArrayLike<number>, k = 10, wait = 0): ComponentD
     const R = b.right;
     return define({
       id, name: 'Bus bench (a requester, DMA, flash, RAM)', category: 'memory',
-      summary: 'A request port standing in for the CPU and the DMA engine share one bus to a RAM (from 0), a flash (0x1000_0000) and the DMA\'s registers (0x4000_0000).',
+      summary: 'A request port standing in for the CPU, and the DMA engine, share one bus to a RAM (from 0), a flash (0x1000_0000) and the DMA\'s registers (0x4000_0000).',
       ports: [bit('req', 'in'), bit('we', 'in'), bus('addr', 32, 'in'), bus('wdata', 32, 'in'), bus('be', 4, 'in'), bit('clk', 'in', 'bottom', true), bit('done', 'out'), bus('rdata', 32, 'out'), bit('irq', 'out')],
       symbol: { kind: 'box', label: 'BUS BENCH' },
       netlist: () => ({ pins: { req: [0, 4], we: [0, 8], addr: [0, 12], wdata: [0, 16], be: [0, 20], clk: [0, 26], done: [R, 4], rdata: [R, 8], irq: [R, 12] }, instances: b.instances, nets: b.nets() }),

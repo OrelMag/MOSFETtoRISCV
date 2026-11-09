@@ -1,6 +1,7 @@
 // Look up any component by id, including parameterized ones (rca8, ram16x8, …), and the
 // parameter families shown in the workbench.
 
+import { numOf } from '../chapters/order';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import type { FpFormat } from '../sim/fpref';
 import { addSub, andN, busMux2, decoder, equal, incrementer, muxTree, rca } from './combinational';
@@ -97,7 +98,7 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^fpcvt(\d+)_(\d+)_(\d+)$/, (m) => fpFromInt({ E: +m[1], M: +m[2] }, +m[3])],
   // the sandbox bus with other slave codes (the memory-map designer's Apply makes one: a saved chip places it by id)
   [/^axibus2_(\d+(?:_\d+)*)_b$/, (m) => sandboxBus(m[1].split('_').map(Number))],
-  // chapter 43's UART slave with its bus ports packed, and the line part with its delay in the id (the sandbox's Communication group)
+  // the UART chapter's slave with its bus ports packed, and the line part with its delay in the id (the sandbox's Communication group)
   [/^axi_uart_b$/, () => AXI_UART_B],
   // chapters 48–50's NIC with both bus links packed, its MACs, the switch with any options in its id, and the SPI master as a bus slave
   // (all built on first use: they are large, and the registry-wide tests would round-trip them)
@@ -301,11 +302,11 @@ export const families: Family[] = [
     key: (p) => (p.bits === 1 ? `sync${p.flops}` : `sync${p.flops}x${p.bits}`), make: (p) => syncN(p.flops, p.bits),
   },
   {
-    id: 'spi', name: 'SPI (chapter 44)', category: 'sequential', params: [{ name: 'part', values: [0, 1, 2], initial: 0, label: (v) => ['master', '256-byte memory', 'master with two memories'][v] }],
+    id: 'spi', name: `SPI (chapter ${numOf('spi')})`, category: 'sequential', params: [{ name: 'part', values: [0, 1, 2], initial: 0, label: (v) => ['master', '256-byte memory', 'master with two memories'][v] }],
     key: (p) => ['spi_master', 'spi_device', 'spi_pair'][p.part], make: (p) => [spiMaster, spiDevice, spiPair][p.part](),
   },
   {
-    id: 'i2c', name: 'I²C (chapter 44)', category: 'sequential', params: [{ name: 'part', values: [0, 1, 2, 3, 4], initial: 0, label: (v) => ['controller', 'target (4 registers)', 'wired-AND of two open-drain stages', 'bus: one controller, one target', 'bus: two controllers, one target'][v] }],
+    id: 'i2c', name: `I²C (chapter ${numOf('spi')})`, category: 'sequential', params: [{ name: 'part', values: [0, 1, 2, 3, 4], initial: 0, label: (v) => ['controller', 'target (4 registers)', 'wired-AND of two open-drain stages', 'bus: one controller, one target', 'bus: two controllers, one target'][v] }],
     key: (p) => ['i2c_controller', 'i2c_target', 'i2c_wired2', 'i2c_bus_1c50', 'i2c_bus_2c50'][p.part], make: (p) => [i2cController, i2cTarget, i2cWired2, () => i2cBus(1, [{ adr: 0x50 }]), () => i2cBus(2, [{ adr: 0x50 }])][p.part](),
   },
   nBit('iter', 'Iteration control', 'sequential', [4, 8, 16, 32], 8, (n) => `iter${n}`, iterCtrl),
