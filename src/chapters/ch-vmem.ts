@@ -130,7 +130,7 @@ export const chVmem: Chapter = {
         the <em>offset</em>, the byte's place inside a 4 KiB page, and the other <strong>20</strong> are the <em>virtual page number</em>. The offset is
         never translated; the page number is.</p>
         <p>A flat table with one entry per page number would have ${n(2 ** 20)} entries of 4 bytes, ${(2 ** 20 * 4) / 2 ** 20} MiB for every program, almost all of it
-        for pages the program never touches. Sv32 splits the page number again, <span data-show="mmu">10 bits and 10 bits</span>: <strong>VPN[1]</strong>
+        for pages the program never touches. Sv32 splits the page number again, 10 bits and 10 bits: <strong>VPN[1]</strong>
         indexes a <em>root table</em>, <strong>VPN[0]</strong> a <em>second table</em> that the root entry points to. Each table has ${1 << 10} entries of 4 bytes,
         ${(1 << 10) * 4} bytes: exactly one page, so tables are allocated and moved like any other page. A program using a few
         pages needs one root table and a second table or two, a few pages of tables instead of ${(2 ** 20 * 4) / 4096}.</p>
@@ -205,7 +205,7 @@ export const chVmem: Chapter = {
       body: `
         <p>The walker is a small state machine that does the reading: <span data-show="wk">idle</span>; <em>level 1</em>, where it reads the root entry; <em>level 0</em>, the second
         table's; and <em>fault</em>. It sits on the data memory's own port: while it walks, the address the memory sees is the table entry's, not the program's
-        (<span data-show="mmu">the MMU</span> multiplexes them), and the word that comes back is checked by the same gates that apply the rules of step 3.</p>
+        (the MMU multiplexes them), and the word that comes back is checked by the same gates that apply the rules of step 3.</p>
         <p>Nothing about this machine knows how to wait, so the CPU is told to: while the walker is busy, <code>stall</code> holds the program counter, blocks every register and memory write and
         keeps the timer from counting. A walk to a 4 KiB leaf holds the CPU for ${WALK_CYCLES} cycles: the cycle the miss is seen, the root read, the second-table read. In the scene, press <em>Run</em> or <em>Step</em>: the
         cycle count runs on while the instruction count waits, and the panel says <em>stalled</em>. The first walk comes when user code starts, at the very first fetch.</p>

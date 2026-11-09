@@ -754,7 +754,7 @@ export const chRegisters: Chapter = {
       body: `
         <p>A counter is a register whose next value is a fixed function of its value. Let that function read inputs too and you have a
         <strong>finite-state machine</strong>: a state register, next-state logic, output logic. It is how hardware runs a sequence (a divider's
-        iterations, a memory refill, the steps of a CPU that spends several cycles per instruction in <a href="#/c/multicycle/0">chapter 23</a>).</p>
+        iterations, a memory refill, the steps of a CPU that spends several cycles per instruction in <a href="#/c/multicycle/0">chapter ${numOf('multicycle')}</a>).</p>
         <p>The design is mechanical. Recognise 1, 0, 1 on a serial input x, overlaps included: S0 has seen nothing useful, S1 a 1, S2 a 1 then
         a 0. Draw the transitions, encode the states in two flip-flops (s1 s0 = 00, 01, 10), write the table:</p>
         <table class="cmp fsm-tt"><thead><tr><th>s1 s0</th><th>x</th><th>n1 n0</th><th>y</th></tr></thead><tbody>
