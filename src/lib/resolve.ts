@@ -252,13 +252,13 @@ export const families: Family[] = [
   },
   {
     id: 'dec', name: 'Decoder', category: 'routing',
-    params: [bits([1, 2, 3, 4], 2), flag('enable', 'with enable', 'no enable')],
+    params: [{ ...bits([1, 2, 3, 4], 2), label: (v) => `${v} address bit${v === 1 ? '' : 's'} → ${2 ** v} outputs` }, flag('enable', 'with enable', 'no enable')],
     key: (p) => `dec${p.bits}${p.enable ? 'e' : ''}`, make: (p) => decoder(p.bits, p.enable === 1),
   },
   nBit('mux2x', 'Bus multiplexer 2:1', 'routing', [2, 4, 8, 16], 4, (n) => `mux2x${n}`, busMux2),
   {
     id: 'mux', name: 'Multiplexer tree', category: 'routing',
-    params: [count('inputs', [2, 4, 8, 16], 4), bits([1, 2, 4, 8], 1)],
+    params: [count('inputs', [2, 4, 8, 16], 4), { ...bits([1, 2, 4, 8], 1), label: (v) => `${v} bit${v === 1 ? '' : 's'} wide` }],
     key: (p) => (p.inputs === 2 ? `mux2tree${p.bits}` : `mux${p.inputs}x${p.bits}`), make: (p) => muxTree(log2(p.inputs), p.bits),
   },
   {

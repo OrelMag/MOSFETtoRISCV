@@ -444,7 +444,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Assuming two levels is always best: wide ORs become trees of 2-input gates, and a factored form can be smaller at the same depth.',
     ],
     lib: 'pla_fa', anatomy: ['ctl'],
-    chapters: [{ chapter: 'memory', step: 5, label: 'The PLA' }],
+    chapters: [{ chapter: 'gates', step: 6, label: 'The multiplexer: a digital switch' }, { chapter: 'memory', step: 5, label: 'The PLA' }],
   },
   kmap: {
     idea: 'A Karnaugh map is the truth table drawn so that algebra becomes geometry. Rows and columns are labelled in Gray code (00, 01, 11, 10), so touching cells, including across the edges, differ in exactly one variable. A rectangle of 2ᵏ cells that are all 1 is one product term with k variables gone: the ones that change inside it. Minimize by covering every 1 with the largest rectangles, as few as possible; a 1 that only one rectangle can cover makes that rectangle essential. Don\'t-cares join a rectangle when they make it larger and are left out otherwise.<br>It is exact and quick by eye up to 4 variables, workable at 5–6 with paired maps, and useless beyond, where Quine–McCluskey takes over. It also shows hazards: two adjacent rectangles with no third bridging them mark a possible glitch, which a consensus rectangle removes.',

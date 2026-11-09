@@ -6,7 +6,10 @@ import { describe, expect, it } from 'vitest';
 import { importDigital, isDigitalFile, normalizeWires } from '../src/import/digital';
 import type { ImportResult, SourceFile } from '../src/import/report';
 import { UserLibrary } from '../src/editor/library';
-import { SCHEMA, type ChipDoc } from '../src/editor/model';
+import { SCHEMA, type ChipDoc, type PartRef, polyline } from '../src/editor/model';
+import { partBox, pinBody } from '../src/editor/geom';
+import { lintChip } from '../src/editor/lint';
+import { partDef } from '../src/editor/parts';
 import { sanitizeChip } from '../src/editor/store';
 import { simulate } from '../src/sim/harness';
 import { pack } from '../src/sim/values';
@@ -231,5 +234,36 @@ describe('Digital import', () => {
     const part = r.chips.find((c) => c.id === r.top)!.parts.find((p) => 'chip' in p.ref && p.ref.chip === stub.id)!;
     expect(top.netOfEnd.get(`p:${part.id}.in0`)).toBeGreaterThanOrEqual(0);
     expect(top.netOfEnd.get(`p:${part.id}.out0`)).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('Digital import: the drawing', () => {
+  const crosses = (a: { x: number; y: number; w: number; h: number }, b: typeof a) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  const sets = [['arith.dig'], ['counter2.dig'], ['full-adder.dig', 'half-adder.dig'], ['gates.dig'], ['half-adder.dig'], ['ram.dig'], ['reverse4.dig'], ['seq.dig'], ['unknown.dig']];
+  for (const names of sets) {
+    it(`${names[0]}: no part on another part or on a pin (Digital's boxes are smaller than ours: the sheet is stretched)`, () => {
+      const { r, lib } = load(names);
+      for (const c of r.chips) {
+        if (!names.some((n) => n.replace(/\.dig$/, '').toLowerCase() === c.name.toLowerCase())) continue;
+        const defOf = (p: { ref: PartRef }) => { const d = 'chip' in p.ref ? lib.defOf(p.ref.chip) : partDef(p.ref, (x) => lib.defOf(x)); return !d || 'error' in d ? undefined : d; };
+        // a part tied to another (a constant, an inverter on a negated input) sits beside it on purpose: only boxes apart in Digital
+        const boxes = c.parts.map((p) => ({ id: p.id, r: partBox(defOf(p), p.at, p.flip, p.rot) }));
+        const pins = c.pins.map((p) => ({ id: p.name, r: pinBody(p) }));
+        const bad: string[] = [];
+        boxes.forEach((a, i) => {
+          for (const b of boxes.slice(i + 1)) if (crosses(a.r, b.r)) bad.push(`${a.id} on ${b.id}`);
+          for (const p of pins) if (crosses(a.r, p.r)) bad.push(`${a.id} on pin ${p.id}`);
+        });
+        expect(bad, c.name).toEqual([]);
+      }
+    });
+  }
+  it('arith.dig opens without "two nets drawn on one line"', () => {
+    const { r, lib } = load(['arith.dig']);
+    const c = r.chips.find((x) => x.id === r.top)!;
+    const defOf = (p: { ref: PartRef }) => { const d = 'chip' in p.ref ? lib.defOf(p.ref.chip) : partDef(p.ref, (x) => lib.defOf(x)); return !d || 'error' in d ? undefined : d; };
+    const polys = new Map(c.wires.flatMap((w) => { const p = polyline(c, w, defOf); return p ? [[w.id, p] as const] : []; }));
+    const lines = lintChip(c, lib.compiled(c.id)!, polys).diags.filter((d) => d.msg.startsWith('two nets drawn on one line'));
+    expect(lines.map((d) => d.msg)).toEqual([]);
   });
 });

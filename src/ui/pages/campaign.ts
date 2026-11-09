@@ -259,7 +259,7 @@ export class CampaignPage implements Page {
     this.head.replaceChildren(
       h('div', { class: 'cp-title' },
         h('h1', null, 'Campaign'),
-        h('p', null, 'From a transistor NAND to a pipelined 16-bit RISC-V processor, one block at a time.')),
+        h('p', null, 'From a transistor NAND to a pipelined 16-bit RISC-V processor, one block at a time; then, if you like, relays and tubes, arithmetic units, a GPU, memory, links and signal processing.')),
       h('div', { class: 'cp-stats' },
         h('span', null, h('b', null, `${sum.requiredDone}/${sum.required}`), ' required levels'),
         h('span', null, h('b', null, `${sum.done}`), ' done in all'),
@@ -398,22 +398,22 @@ export class CampaignPage implements Page {
         const fig = liveSchematic(f.lib);
         if (fig) el.append(h('figure', { class: 'cx-fig cp-lesson-fig' }, fig, h('figcaption', null, f.caption, ' ', h('a', { href: `#/workbench/${f.lib}` }, 'Open it on the workbench'), '.')));
       }
-      el.append(h('section', { class: 'cx-check cp-lesson-check' }, h('h4', null, 'Check yourself'),
+      el.append(h('section', { class: 'cx-check cp-lesson-check' }, h('h3', null, 'Check yourself'),
         ...extra.check.map((q, k) => quizBox(q, `lesson:${n.body}:${k}`, `${k + 1} of ${extra.check.length}`, () => {}))));
     }
     // A drill's question and a program's editor with its Check come first, right under the title: the essay (why,
     // costs, criteria) is reference for after the first try, so it sits below them.
     let practice: HTMLElement[] = [];
-    if (ch) el.append(h('div', { class: 'cp-brief' }, h('h4', null, 'The task'), html('p', '', ch.brief)));
+    if (ch) el.append(h('div', { class: 'cp-brief' }, h('h3', null, 'The task'), html('p', '', ch.brief)));
     if (n.kind === 'drill' && n.drill && !n.soon && st !== 'locked') {
       let card = this.cards.get(n.id);
       if (!card) this.cards.set(n.id, (card = drillCard(n)));
-      practice = [h('div', { class: 'cp-drill-wrap' }, h('h4', null, 'Practice'), card)];
+      practice = [h('div', { class: 'cp-drill-wrap' }, h('h3', null, 'Practice'), card)];
     }
     const pz = n.kind === 'program' && !n.soon ? PUZZLES[n.id] : undefined;
     if (pz) {
-      practice = [h('div', { class: 'cp-brief' }, h('h4', null, 'The task'), html('p', '', pz.brief))];
-      el.append(h('div', { class: 'cp-criteria' }, h('h4', null, 'Success criteria'),
+      practice = [h('div', { class: 'cp-brief' }, h('h3', null, 'The task'), html('p', '', pz.brief))];
+      el.append(h('div', { class: 'cp-criteria' }, h('h3', null, 'Success criteria'),
           h('ul', null, h('li', null, pz.host
             ? `${pz.tests().length} scenarios: a model of the router and the far host answers ARP, checks every field of your echo request, and replies; the 'K' must follow the true reply and no other frame. Graded on words and clocks`
             : pz.nic
@@ -427,7 +427,7 @@ export class CampaignPage implements Page {
       if (st !== 'locked') {
         let card = this.cards.get(n.id);
         if (!card) this.cards.set(n.id, (card = puzzleCard(n)));
-        practice.push(h('div', { class: 'cp-drill-wrap' }, h('h4', null, 'Your program'), card));
+        practice.push(h('div', { class: 'cp-drill-wrap' }, h('h3', null, 'Your program'), card));
       }
     }
     if (practice.length) {
@@ -436,13 +436,13 @@ export class CampaignPage implements Page {
     }
 
     if (n.kind === 'drill' && n.par?.mistakes !== undefined) {
-      el.append(h('div', { class: 'cp-grade' }, h('h4', null, 'Grading'),
+      el.append(h('div', { class: 'cp-grade' }, h('h3', null, 'Grading'),
         h('p', { class: 'sub' }, `Passed after the required number of correct answers. ★★★ with at most ${n.par.mistakes} mistakes (a shown answer counts as one), ★★ with at most ${Math.floor(n.par.mistakes * 1.5)}.`)));
     }
     if (pz) el.append(gradeTable(n));
     // Success criteria and grading.
     if (ch) {
-      el.append(h('div', { class: 'cp-criteria' }, h('h4', null, 'Success criteria'),
+      el.append(h('div', { class: 'cp-criteria' }, h('h3', null, 'Success criteria'),
         h('ul', null, criteria(ch).map((c) => h('li', null, c)))));
       el.append(gradeTable(n));
     }
@@ -458,7 +458,7 @@ export class CampaignPage implements Page {
     // Tips, one at a time.
     if (tipsOf(n).length && !n.soon) {
       const shown = Math.min(np?.tips ?? 0, tipsOf(n).length);
-      el.append(h('div', { class: 'cp-tips' }, h('h4', null, 'Tips'),
+      el.append(h('div', { class: 'cp-tips' }, h('h3', null, 'Tips'),
         shown ? h('ol', null, tipsOf(n).slice(0, shown).map((t) => { const li = h('li'); li.innerHTML = t; return li; })) : null,
         shown < tipsOf(n).length ? h('button', { class: 'btn sm ghost', onclick: () => p.revealTip(n.id, tipsOf(n).length) }, icon('info', 14), shown ? 'Another tip' : 'Show a tip') : null));
     }
@@ -466,7 +466,7 @@ export class CampaignPage implements Page {
     // Codex and chapters.
     const unlocked = p.codexUnlocked();
     if (n.codex.length) {
-      el.append(h('div', { class: 'cp-codex-chips' }, h('h4', null, 'Codex'),
+      el.append(h('div', { class: 'cp-codex-chips' }, h('h3', null, 'Codex'),
         n.codex.map((c) => {
           const e = codexById(c);
           if (!e) return null;
@@ -475,7 +475,7 @@ export class CampaignPage implements Page {
         })));
     }
     if (n.chapters?.length) {
-      el.append(h('div', { class: 'cp-chapters' }, h('h4', null, 'Go deeper'),
+      el.append(h('div', { class: 'cp-chapters' }, h('h3', null, 'Go deeper'),
         n.chapters.map((c) => h('a', { class: 'cp-chip', href: `#/c/${c.chapter}/${c.step ?? 0}` }, icon('book', 13), c.label))));
     }
     // A done level that closes its act (the last of a chain in it): what the machine can do now.
@@ -644,13 +644,13 @@ export class CampaignPage implements Page {
     const fold = this.cxView === 'act';
     const folds: (() => void)[] = [];
     const sections = groups.map((g) => {
-      const parts = g.parts.map((x) => ({ ...x, h: x.sub ? h('h5', { title: x.sub === 'Further' ? 'Unlocked by this act\'s levels, which do not need them: read beyond the task' : '' }, x.sub) : null }));
+      const parts = g.parts.map((x) => ({ ...x, h: x.sub ? h('h3', { title: x.sub === 'Further' ? 'Unlocked by this act\'s levels, which do not need them: read beyond the task' : '' }, x.sub) : null }));
       const holdsSel = !!sel && g.parts.some((x) => [...x.ul.children].some((li) => (li as HTMLElement).dataset.id === sel));
       if (holdsSel) this.cxOpen.add(g.head);
-      const el = h('section', { class: 'cx-grp' }, h('h4', null, g.head), parts.flatMap((x) => [x.h, x.ul]));
+      const el = h('section', { class: 'cx-grp' }, h('h2', null, g.head), parts.flatMap((x) => [x.h, x.ul]));
       if (fold) {
         const btn = h('button', { class: 'cx-grp-t', type: 'button' }, g.head) as HTMLButtonElement;
-        el.querySelector('h4')!.replaceChildren(btn);
+        el.querySelector('h2')!.replaceChildren(btn);
         const sync = () => {
           const open = this.cxOpen.has(g.head) || !!this.cxKind;
           el.classList.toggle('folded', !open);
@@ -796,14 +796,14 @@ export class CampaignPage implements Page {
       h('p', { class: 'cx-landing-go' },
         h('a', { class: 'btn primary', href: `#/campaign/codex/${CODEX_ORDER[0].id}` }, `Start reading: ${CODEX_ORDER[0].title}`, icon('chevR', 14)),
         firstNew && firstNew !== CODEX_ORDER[0] ? h('a', { class: 'btn ghost', href: `#/campaign/codex/${firstNew.id}`, title: 'The first entry in reading order you have not discovered' }, `First undiscovered: ${firstNew.title}`) : null),
-      h('section', null, h('h4', null, 'Analogies'),
+      h('section', null, h('h3', null, 'Analogies'),
         h('p', null, `${ANALOGIES.length} familiar pictures for abstract ideas, each with where it stops being true: `,
           h('a', { href: `#/campaign/codex/${ANALOGY_INDEX_ID}` }, 'the analogy index'), '.')),
-      recent.length ? h('section', null, h('h4', null, 'Recently discovered'), h('div', null, recent.map(link))) : null,
-      next ? h('section', null, h('h4', null, 'Next to discover'),
+      recent.length ? h('section', null, h('h3', null, 'Recently discovered'), h('div', null, recent.map(link))) : null,
+      next ? h('section', null, h('h3', null, 'Next to discover'),
         h('p', { class: 'sub' }, 'With ', h('a', { href: levelChallenge(next) && !next.soon ? `#/campaign/play/${next.id}` : `#/campaign/n/${next.id}` }, next.title), coming.length ? ':' : ': nothing new for the codex.'),
         coming.length ? h('div', null, coming.map(link)) : null) : null,
-      h('section', null, h('h4', null, 'By act'),
+      h('section', null, h('h3', null, 'By act'),
         h('table', { class: 'cx-acts' }, CODEX_ACTS.map((g) => {
           const all = [...g.main, ...g.further];
           const have = all.filter((x) => unlocked.has(x.id)).length;

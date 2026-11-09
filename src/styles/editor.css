@@ -85,7 +85,7 @@
 .sb-tabs { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: thin; }
 .sb-tab {
   display: inline-flex; align-items: center; border-radius: 8px; border: 1px solid transparent;
-  background: var(--surface-2); color: var(--text-2); flex: 0 1 auto; min-width: 104px; max-width: 220px;
+  background: var(--surface-2); color: var(--text-2); flex: 0 1 auto; min-width: 128px; max-width: 220px;
 }
 /* tabs give way to each other (names end in an ellipsis) before the strip scrolls, the open one last; editor.ts fitActions
    measures them at their natural width (.measure) to decide how much of the bar they get */
@@ -96,7 +96,8 @@
 .sb-tab-name { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* a long name ends in an ellipsis before the close button (the text node of a flex button cannot) */
 .sb-tab-name { min-width: 0; }
-.sb-tab-name > svg, .sb-tab-x { flex: none; }
+/* a tab keeps about eight letters of its name (five beside a .v badge) before the strip scrolls: "m." said nothing */
+.sb-tab-name > svg, .sb-tab-name > .sb-tab-hdl, .sb-tab-x { flex: none; }
 .sb-tab-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .sb-tab-x { padding: 4px 6px 4px 0; opacity: 0.6; }
 .sb-tab-x:hover { opacity: 1; }
@@ -113,6 +114,9 @@ select.sb-open {
   background-repeat: no-repeat; background-position: right 8px center;
 }
 select.sb-open:hover { background-color: var(--surface-2); color: var(--text); }
+/* a select is as wide as its longest option (a chip name): sized to the label it shows instead, so it gives the tabs room
+   (editor.ts showActiveTab shortens the label to the count when a tab name is cut); capped where field-sizing is unknown */
+select.sb-open { field-sizing: content; max-width: 9.5em; }
 /* Open… and New chip ▾ stay in view at the end of the tabs when they scroll (New chip was cut under the autosave
    indicator; alone sticky, it covered Open…); the tabs slide under the group (editor.ts showActiveTab keeps the
    open one clear of it) */

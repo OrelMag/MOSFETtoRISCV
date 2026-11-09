@@ -477,7 +477,7 @@ export const chOoo: Chapter = {
     {
       title: 'The reorder buffer, in gates',
       body: `
-        <p>Here is the whole core: <span data-show="pc imem btb ras fp">fetch</span> of two words a cycle with the BTB and
+        <p>The reorder buffer is shown in place, inside the complete core (the step "The whole core" counts its cost): <span data-show="pc imem btb ras fp">fetch</span> of two words a cycle with the BTB and
         the return stack, <span data-show="dc rat bind">decode, rename and binding to a port</span>, <span data-show="iq">the
         issue queue</span>, two ports with <span data-show="e1_0 e1_1">an ALU each</span>, and on port 1
         <span data-show="mule mulm div">the multiplier and the divider</span>, <span data-show="rob">the reorder
