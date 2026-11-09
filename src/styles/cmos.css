@@ -29,7 +29,7 @@
 .cmos .cfet.on .ch-on { display: inline; }
 .cmos .cfet.on .ch-off { display: none; }
 .cmos .cfet.on.hi .ch-on { stroke: var(--w1); } .cmos .cfet.on.lo .ch-on { stroke: var(--cm-lo); }
-.cmos .cfet.on:is(.hi, .lo) .ch-glow { display: inline; stroke-width: calc(0.18px * var(--ck, 1)); stroke-linecap: round; stroke-opacity: 0.28; }
+.cmos .cfet.on:is(.hi, .lo) .ch-glow { display: inline; stroke-width: calc(0.12px * var(--ck, 1)); stroke-linecap: round; stroke-opacity: 0.25; }
 .cmos .cfet.on.hi .ch-glow { stroke: var(--w1); } .cmos .cfet.on.lo .ch-glow { stroke: var(--cm-lo); }
 .cmos .cfet.maybe .ch-on { display: inline; stroke: var(--wx); stroke-dasharray: 0.05 0.05; }
 .cmos .cfet.maybe .ch-off { display: none; }
