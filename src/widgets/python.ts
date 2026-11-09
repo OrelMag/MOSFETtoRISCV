@@ -6,7 +6,9 @@
 import { compilePy, outputOf } from '../lang/compile';
 import type { Compiled } from '../lang/compile';
 import type { Home } from '../lang/codegen';
-import { PY_GROUPS, PY_PROGRAMS } from '../lang/pyprograms';
+import { PY_GROUPS, PY_PROGRAMS, PY_STRING_PROGRAMS } from '../lang/pyprograms';
+import { runPy } from '../lang/interp';
+import { strBlock } from '../lang/interp';
 import { cpuState, pipeSnap } from '../riscv/cosim';
 import { lineTotal, PipeProfile } from '../lang/pipeprof';
 import type { LineCost } from '../lang/pipeprof';
@@ -49,12 +51,43 @@ export function pyProblem(c: Compiled): string | null {
 const signed = (v: number) => String(v | 0);
 const hex8 = (v: number) => (v >>> 0).toString(16).padStart(8, '0');
 const progOf = (id: string) => PY_PROGRAMS.find((p) => p.id === id)!;
+const anyProg = (id: string) => PY_PROGRAMS.find((p) => p.id === id) ?? PY_STRING_PROGRAMS.find((p) => p.id === id);
+
+/** A str as the source would write it: quoted, with the control characters spelled out. */
+export const quoted = (s: string): string => `"${s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\t/g, '\\t')}"`;
+
+/** The str a pointer names in data memory (a length word, then the bytes), or null when it points nowhere a str could be. */
+export function strAt(dmem: ArrayLike<number>, ptr: number): string | null {
+  if (ptr <= 0 || ptr & 3 || ptr + 4 > 4 * dmem.length) return null;
+  const n = dmem[ptr >>> 2] >>> 0;
+  if (n > 4 * dmem.length || ptr + 4 + n > 4 * dmem.length) return null;
+  let s = '';
+  for (let i = 0; i < n; i++) s += String.fromCharCode((dmem[(ptr + 4 + i) >>> 2] >>> (8 * ((ptr + 4 + i) & 3))) & 255);
+  return s;
+}
+
+/** What a string program printed so far: its characters in quotes, one print argument a line, numbers as numbers. Null: no string in the program. */
+export function outputLines(printed: number[], ref: { output: number[]; strOut: number[] } | null): string[] | null {
+  if (!ref || !ref.strOut.some((k) => k)) return null;
+  const lines: string[] = [];
+  let run = '', id = 0;
+  const flush = () => { if (id) lines.push(quoted(run)); run = ''; id = 0; };
+  for (let i = 0; i < printed.length; i++) {
+    if (printed[i] !== ref.output[i]) { flush(); lines.push(String(printed[i] | 0)); continue; }
+    const k = ref.strOut[i];
+    if (k && k === id) run += String.fromCharCode(printed[i]);
+    else { flush(); if (k) { id = k; run = String.fromCharCode(printed[i]); } else lines.push(String(printed[i] | 0)); }
+  }
+  flush();
+  return lines;
+}
 
 /** The program list in its sections; the chosen program's blurb in `blurb`. */
-function programPicker(label: string, blurb: HTMLElement): HTMLSelectElement {
+function programPicker(label: string, blurb: HTMLElement, strings = false): HTMLSelectElement {
   const sel = h('select', { class: 'py-sel', 'aria-label': label }) as HTMLSelectElement;
   for (const g of PY_GROUPS) sel.append(h('optgroup', { label: g }, ...PY_PROGRAMS.filter((p) => p.group === g).map((p) => h('option', { value: p.id }, p.name))));
-  sel.addEventListener('change', () => { blurb.textContent = PY_PROGRAMS.find((p) => p.id === sel.value)?.blurb ?? ''; });
+  if (strings) sel.append(h('optgroup', { label: 'Strings' }, ...PY_STRING_PROGRAMS.map((p) => h('option', { value: p.id }, p.name))));
+  sel.addEventListener('change', () => { blurb.textContent = anyProg(sel.value)?.blurb ?? ''; });
   return sel;
 }
 
@@ -130,6 +163,8 @@ function homeTable(c: Compiled): HTMLElement {
   const add = (k: string, v: string, title?: string) => rows.push(h('span', title ? { title } : null, k), h('span', null, v));
   for (const hm of L.homes.filter((x) => !x.hidden)) add(`${hm.scope ? `${hm.scope}: ` : ''}${hm.name}`, hm.reg ?? `data memory [${hm.addr}]`, hm.reg ? 'a register' : 'a word of data memory: a function reads or writes it');
   for (const l of L.lists) add(`${l.name}[${l.len}]`, `data memory [${l.addr}…${l.addr + 4 * l.len - 4}]`);
+  if (L.strings) add('string literals', L.strings.map((s) => `${quoted(s.text)} [${s.addr}]`).join(', '), 'stored in data memory by the first instructions: a length word, then the bytes');
+  if (L.heap) add('the heap (tp)', `[${L.heap.base}…${L.heap.end - 4}], tp starts at ${L.heap.base}`, 'concatenation, s[i] and chr() take a block at tp and move it on; nothing is ever freed');
   add('the output (gp)', `from [${L.outBase}] up`, 'print stores each value at gp and moves gp on a word');
   add('the stack (sp)', `down from ${L.stackTop}`, 'calls save the return address and registers here');
   if (L.runtime.length) add('runtime routines', L.runtime.map((r) => `rt.${r}`).join(', '), 'RV32I has no multiplier or divider: these loops do it');
@@ -244,13 +279,16 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
     let selLine: number | null = null;
     let timer: number | null = null;
 
-    const mine = PY_PROGRAMS.find((p) => p.source === source);
+    const strProg = !!L.heap;
+    const mine = PY_PROGRAMS.find((p) => p.source === source) ?? PY_STRING_PROGRAMS.find((p) => p.source === source);
+    // the golden model's run: which printed words are characters (a program of ints needs none of it)
+    const ref = strProg ? runPy(source, { heapBytes: L.heap!.end - L.heap!.base }) : null;
     const blurb = h('div', { class: 'py-blurb' }, mine?.blurb ?? '');
-    const sel = programPicker('Python program', blurb);
+    const sel = programPicker('Python program', blurb, strProg || !!mine && PY_STRING_PROGRAMS.includes(mine as never));
     sel.append(h('option', { value: '__custom' }, 'My program'));
     sel.value = mine?.id ?? '__custom';
     sel.addEventListener('change', () => {
-      const p = PY_PROGRAMS.find((q) => q.id === sel.value);
+      const p = anyProg(sel.value);
       if (p) stage.load(pyScene(p.source, { edit: !editWrap.hidden, pipeline: pipe, m: withM, switch: sw }));
     });
 
@@ -291,6 +329,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
     const thisLine = h('div', { class: 'py-kv' });
     const vars = h('div', { class: 'py-kv' });
     const out = h('div', { class: 'py-out', 'aria-live': 'polite' });
+    const heapBox = h('div', { class: 'py-kv py-heap' });
     const stackBox = h('div', { class: 'py-kv py-stack' });
     const hasFuncs = L.funcs.length > 0;
     // Bottom-left, beside the CPU panel on the right (two right-docked panels would cover each other).
@@ -306,6 +345,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
           h('div', { class: 'cpu-sec' }, pipe ? 'This line, in the pipeline' : 'This line, on the hardware'), thisLine),
         h('div', null,
           h('div', { class: 'cpu-sec' }, 'Variables, read from the gates'), vars,
+          ...(L.heap ? [h('div', { class: 'cpu-sec' }, `The heap (tp, from ${L.heap.base})`), heapBox] : []),
           h('div', { class: 'cpu-sec' }, `Output (data memory from ${L.outBase} up to gp)`), out,
           ...(hasFuncs ? [h('div', { class: 'cpu-sec' }, `The stack (from sp up to ${L.stackTop})`), stackBox] : []))));
     // folding is the stage's (data-fold: the title's click, and the first layout may start it folded beside the CPU panel and the diagram)
@@ -504,11 +544,25 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
         const key = `${hm.scope}.${hm.name}`;
         if (seen.has(key)) return [];
         seen.add(key);
-        return [h('span', null, `${hm.scope ? `${hm.scope}: ` : ''}${hm.name} `, h('span', { class: 'py-where' }, hm.reg ?? `[${hm.addr}]`)), h('span', null, signed(valueOf(hm, st.x, dmem)))];
+        const v = valueOf(hm, st.x, dmem), text = hm.str ? strAt(dmem, v) : null;
+        return [h('span', null, `${hm.scope ? `${hm.scope}: ` : ''}${hm.name} `, h('span', { class: 'py-where' }, hm.reg ?? `[${hm.addr}]`)),
+          hm.str ? h('span', { title: text === null ? 'not set yet' : `a pointer: the str is at [${v}]` }, text === null ? '(not set)' : `${quoted(text)} → [${v}]`) : h('span', null, signed(v))];
       }), ...L.lists.flatMap((l) => [h('span', null, `${l.name} `, h('span', { class: 'py-where' }, `[${l.addr}]`)),
         h('span', { class: 'py-list' }, `[${Array.from({ length: Math.min(l.len, 16) }, (_, i) => signed(dmem[(l.addr >>> 2) + i] ?? 0)).join(', ')}${l.len > 16 ? ', …' : ''}]`)]));
       const printed = outputOf(L, st.x[3], dmem);
-      out.textContent = printed.length ? printed.join('\n') : ' ';
+      const shownOut = outputLines(printed, ref);
+      out.textContent = printed.length ? (shownOut ?? printed).join('\n') : ' ';
+      if (L.heap) {
+        // the heap from its base to tp: blocks follow one another, each a length word and its bytes rounded up to a word
+        const tp = st.x[4], rows: HTMLElement[] = [h('span', { title: 'tp, the next free byte; the heap never gives anything back' }, 'tp'), h('span', null, `[${tp}]: ${tp - L.heap.base} of ${L.heap.end - L.heap.base} bytes used`)];
+        for (let a = L.heap.base; a < tp && a < L.heap.end; ) {
+          const s = strAt(dmem, a);
+          if (s === null) break;
+          rows.push(h('span', { class: 'py-where' }, `[${a}]`), h('span', null, quoted(s)));
+          a += strBlock(s.length);
+        }
+        heapBox.replaceChildren(...rows);
+      }
       if (hasFuncs) {
         const rows: HTMLElement[] = [];
         for (let a = L.stackTop - 4; a >= st.x[2]; a -= 4) rows.push(h('span', null, `[${a}] `, h('span', { class: 'py-where' }, stack.get(a) ?? '')), h('span', null, signed(dmem[a >>> 2] ?? 0)));

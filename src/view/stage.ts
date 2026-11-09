@@ -9,6 +9,9 @@ import { fmtCount, LoadPlan } from '../sim/loadplan';
 import { nextTask } from '../sim/tasks';
 import { LoadCard } from './loadcard';
 import { GateSim } from '../sim/gatesim';
+import { OverlayBar, nextOverlay, overlayLegend } from './overlaybar';
+import { type OverlayKind, type OverlayResult, activityOverlay, loadOverlay, overlayRefusal, slackOverlay, unknownOverlay } from './overlays';
+import type { DelayModel } from '../sim/delay';
 import { SwitchSim } from '../sim/switchsim';
 import { needsSwitchLevel } from '../sim/harness';
 import { completeEdge, type Edge, lowerClock, riseEdge, stepEdge } from '../sim/edge';
@@ -37,6 +40,8 @@ import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
+import { type CursorItem, firstItem, nextInDir } from './kcursor';
+import './stagekeys';
 import { isMenuKey } from '../ui/menu';
 import type { ElsewhereHost, ExplainHost, MeasureHost } from './tracemenu';
 import { powerOff } from './truthrule';
@@ -235,6 +240,19 @@ export class Stage {
   private readZoom = false;
   /** Aborted by destroy(): the document listeners this stage added. */
   private life = new AbortController();
+  /** The overlay bar (view/overlays.ts): the kind on, its legend over the canvas, the delay model Slack uses, Activity's window. */
+  private ovBar: OverlayBar;
+  private ovKind: OverlayKind | null = null;
+  private ovLegend: HTMLElement | null = null;
+  private ovModel: DelayModel | null = null;
+  private ovCache = new Map<string, { design: FlatDesign; r: OverlayResult | null }>();
+  private ovWin: { sim: GateSim; base: Uint32Array; cycles: number; changes: number; sig: string } | null = null;
+  private ovLast = 0;
+  private ovTimer = 0;
+  private ovListeners = new Set<() => void>();
+  /** While a legend shows: the panels and notes it keeps clear of change size (a fold, a panel filling in) → placed again. */
+  private ovRO: ResizeObserver | null = null;
+  private ovRaf = 0;
   private moreMenu: HTMLElement;
   /** The bar's buttons fitBar may move into More, in that order, with what each does there. */
   private shedGroups: { els: HTMLElement[]; items: { label: string; hint?: string; icon: string; on?: () => boolean; run: () => void }[] }[] = [];
@@ -290,6 +308,7 @@ export class Stage {
       h('button', { class: `btn ghost icon-only${cls}`, title, 'aria-label': title, onclick: fn }, icon(ic, 16));
     this.probeBtn = h('button', { class: 'btn ghost sm toggle probe-btn keep', title: 'Probe mode (P): click any wire to add it to the timing diagram', onclick: () => this.setProbeMode(!this.probeMode) },
       icon('probe', 15), h('span', { class: 'lbl' }, 'Probe')) as HTMLButtonElement;
+    this.ovBar = new OverlayBar((k) => this.setOverlay(k));
     this.why = new WhyPanel({
       ctx: () => this.ctx,
       light: (names) => (names.length ? this.view.highlight(names, true) : this.view.highlight(this.ctx === this.rootCtx ? this.scene?.highlight ?? [] : [])),
@@ -393,6 +412,7 @@ export class Stage {
       { els: [this.timingBtn], items: [{ label: 'Timing diagram', icon: 'wave', on: () => pressed(this.timingBtn), run: () => this.timingBtn.click() }] },
       { els: [this.probeBtn], items: [{ label: 'Probe mode (P)', icon: 'probe', on: () => pressed(this.probeBtn), run: () => this.probeBtn.click() }] },
       { els: [this.whyBtn], items: [{ label: 'Why? (W)', icon: 'why', on: () => pressed(this.whyBtn), run: () => this.whyBtn.click() }] },
+      { els: [this.ovBar.el], items: (['slack', 'activity', 'load', 'unknown'] as const).map((k) => ({ label: `Overlay: ${k[0].toUpperCase() + k.slice(1)}`, hint: this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
     ];
     // Schematic | Breadboard (a scene with Scene.breadboard), and the jumpers' look while the boards are shown
     const segBtn = (label: string, title: string, fn: () => void) => h('button', { title, 'aria-pressed': 'false', onclick: fn }, label);
@@ -419,12 +439,12 @@ export class Stage {
         ...[...this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')].map((n) => n.getBoundingClientRect()),
       ],
     });
-    for (const b of [imgWrap, layoutBtn, this.probeBtn, this.whyBtn]) b.classList.add('sch-only');
+    for (const b of [imgWrap, layoutBtn, this.probeBtn, this.whyBtn, this.ovBar.el]) b.classList.add('sch-only');
     // zoom and Fit work on the boards too (their own camera)
     const upBtn = btn('up', 'Up one level (Esc)', () => this.up()), fitBtn = btn('fit', 'Fit to screen', () => (this.boardOn ? this.board.fitAll() : this.view.fit()));
     upBtn.classList.add('sch-only');
     const bar = this.bar = h('div', { class: 'stage-bar unfit' },
-      this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, this.probeBtn, this.whyBtn, this.timingBtn, moreWrap,
+      this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, this.probeBtn, this.whyBtn, this.ovBar.el, this.timingBtn, moreWrap,
       upBtn, readBtn, zoomOut, zoomIn, fitBtn,
       this.panesBtn);
     this.canvas = h('div', { class: 'canvas' });
@@ -478,9 +498,11 @@ export class Stage {
       // on the circuit, or a control of its drawing: a button or a panel with the focus keeps the browser's own menu
       if (isMenuKey(e) && !this.boardOn && (e.target === this.el || this.view.el.contains(e.target as Node))) {
         e.preventDefault();
-        this.view.keyMenu(e.target === this.el ? null : e.target as Element);
+        this.view.keyMenu(e.target === this.el ? this.view.cursorEl() : e.target as Element);
         return;
       }
+      // the part cursor, run, step and zoom: only while the circuit itself has the focus (a panel's or a 3D model's own keys stay theirs)
+      if (e.target === this.el && !this.boardOn && this.cursorKey(e)) { e.preventDefault(); return; }
       // the learner's layout: undo / redo, and Esc lets go of picked parts before it goes up a level
       const k = e.key.toLowerCase();
       if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'y')) {
@@ -540,6 +562,7 @@ export class Stage {
         this.bar.classList.remove('unfit');
         this.controls.classList.remove('unfit');
       }
+      this.placeLegend();
     }).observe(this.canvas);
     // a chapter's challenge note (ui/stagenotes.ts, put over the canvas by the page) comes, grows and goes: the boards'
     // caption and top follow it (boardCover)
@@ -554,7 +577,11 @@ export class Stage {
       this.fitControls();
     }, { signal: this.life.signal });
     // F: the circuit alone (every panel and the inspector folded); a second press gives them back
-    this.life.signal.addEventListener('abort', bindKeys({ 'stage.fold': () => this.focusMode() }));
+    this.life.signal.addEventListener('abort', bindKeys({
+      'stage.fold': () => this.focusMode(),
+      // O: the next overlay that applies here, Shift O: off (not on the boards, which have none)
+      'stage.overlay': (e) => (this.ctx && !this.boardOn ? this.setOverlay(nextOverlay(this.ovKind, this.ovRefusals(), e.shiftKey)) : false),
+    }));
   }
 
   /** The panels' and the inspector's fold before focusMode() put them away (null: not in focus mode). */
@@ -898,6 +925,7 @@ export class Stage {
     this.syncPins();
     this.view.cover = this.covers();
     this.view.show(ctx, ctx === this.rootCtx);
+    this.paintOverlay();
     // a drill folds the right-docked panels (the board and the schematic want the room, at any width), and the top level
     // gets them back as they were, unless the learner folded or unfolded one by hand meanwhile (foldChoice)
     if (this.drillFold) {
@@ -1039,6 +1067,8 @@ export class Stage {
     bb.setAttribute('aria-pressed', String(on));
     if (on) this.setProbeMode(false);
     this.syncPins();
+    // the boards have no overlay: its legend goes, and comes back with the schematic
+    if (this.ovKind) this.paintOverlay();
     this.fitBar();
   }
 
@@ -1341,6 +1371,73 @@ export class Stage {
       return;
     }
     this.setInput(port, v);
+  }
+
+  /** Says what the keyboard cursor reached (a polite live region inside the stage). */
+  private sayEl: HTMLElement | null = null;
+  private say(text: string): void {
+    if (!this.sayEl) { this.sayEl = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' }); this.el.append(this.sayEl); }
+    const el = this.sayEl;
+    el.textContent = '';
+    setTimeout(() => { el.textContent = text; }, 30);
+  }
+
+  /** The cursor's item in words; a top-level pin drawn as a colour only (one bit) gets its value from the simulation. */
+  private cursorWords(): string {
+    const t = this.view.cursorText(), it = this.view.cursor;
+    if (!it || it.kind !== 'pin' || t.includes('=') || this.ctx !== this.rootCtx || !this.sim?.design.root.ports[it.name]) return t;
+    const n = this.value(it.name);
+    return `${t} = ${Number.isFinite(n) && n >= 0 ? n : 'X'}`;
+  }
+
+  /**
+   * The stage's keys while the circuit itself has the focus (ui/keys.ts, the stage group): the part cursor (arrows, Home,
+   * End), ↵ / Space on what it stands on, Ctrl ↵ run, . > , pulse / step / back, + − 0 zoom. True when the key was taken.
+   */
+  private cursorKey(e: KeyboardEvent): boolean {
+    const v = this.view;
+    const mod = e.ctrlKey || e.metaKey;
+    const arrow = ({ ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' } as const)[e.key as 'ArrowLeft'];
+    const land = (it: CursorItem | null) => {
+      if (!it) return;
+      v.setCursor(it);
+      if (it.kind === 'inst') this.select(it.name);
+      this.say(this.cursorWords());
+    };
+    if (arrow && !mod && !e.altKey) {
+      const cur = v.cursor;
+      land(cur ? nextInDir(v.cursorItems(), cur, arrow) ?? cur : firstItem(v.cursorItems()));
+      return true;
+    }
+    if ((e.key === 'Home' || e.key === 'End') && !mod) { land(firstItem(v.cursorItems(), e.key === 'Home' ? 'in' : 'out')); return true; }
+    if (e.key === 'Enter' && mod) {
+      if (!this.runBtn) this.say('No clock on this circuit to run');
+      else this.runBtn.click();
+      return true;
+    }
+    const it = v.cursor;
+    if ((e.key === 'Enter' || e.key === ' ') && it && !mod) {
+      if (it.kind === 'pin' && it.dir !== 'out' && v.drivable) {
+        const pin = this.ctx?.def.ports.find((p) => p.name === it.name);
+        if (pin && pin.width > 1) {
+          if (e.key === ' ') return false;
+          const r = v.cursorEl()?.getBoundingClientRect();
+          if (r) this.editInput(it.name, r);
+        } else this.toggleInput(it.name);
+        setTimeout(() => this.say(this.cursorWords()), 50);
+      } else if (it.kind === 'inst' && e.key === 'Enter' && this.ctx?.canOpen(it.name)) this.open(it.name);
+      else this.say(this.cursorWords());
+      return true;
+    }
+    if (mod || e.altKey || !shortcutAllowed(e)) return false;
+    const again = () => { if (v.cursor) setTimeout(() => this.say(this.cursorWords()), 50); };
+    if (matches(e, 'cursor.pulse')) { if (this.runBtn) { this.pulse(); again(); } else this.say('No clock on this circuit'); return true; }
+    if (matches(e, 'cursor.step')) { if (this.sim?.kind === 'gate' || this.relayTime) { this.stepOnce(); again(); } return true; }
+    if (matches(e, 'cursor.back')) { if (this.back()) again(); else this.say('Nothing to go back to'); return true; }
+    if (matches(e, 'cursor.zoomin')) { v.zoom(0.8); return true; }
+    if (matches(e, 'cursor.zoomout')) { v.zoom(1.25); return true; }
+    if (matches(e, 'cursor.fit')) { v.fit(); return true; }
+    return false;
   }
 
   private editInput(port: string, anchor: DOMRect): void {
@@ -2056,6 +2153,7 @@ export class Stage {
     this.panels.forEach((p) => p.update?.());
     this.analyzer.update();
     this.why.update();
+    this.tickOverlay();
     this.showInspector();
     this.updateControls();
     if (!this.leaf) this.levelBadge.textContent = `level: ${LEVEL_NAME[this.levelOf()] ?? 'blocks'}`;
@@ -2269,9 +2367,150 @@ export class Stage {
     if (this.ctx === this.rootCtx) this.board.highlight(names);
   }
 
-  /** Tint the current view's instances by slack (sim/slack.ts slackHeat; null clears); dropped on navigation. */
+  /** The overlay on (null: none): the stage bar's, O / Shift O, the Timing panel's heat toggle. */
+  get overlayKind(): OverlayKind | null {
+    return this.ovKind;
+  }
+
+  /** Listen to the overlay being turned on, off or changed (the Timing panel's heat toggle follows it). */
+  onOverlay(f: () => void): () => void {
+    this.ovListeners.add(f);
+    return () => this.ovListeners.delete(f);
+  }
+
+  /** What this scene runs on, for which overlays apply. */
+  private ovRefusals(): Partial<Record<OverlayKind, string>> {
+    const sim = this.sim, ctx = this.ctx;
+    if (!sim || !ctx) return {};
+    const c = { level: sim.kind, engine: this.scene?.engine, sub: ctx.sim !== sim } as const;
+    const out: Partial<Record<OverlayKind, string>> = {};
+    for (const k of ['slack', 'activity', 'load', 'unknown'] as const) {
+      const why = overlayRefusal(k, c);
+      if (why) out[k] = why;
+    }
+    return out;
+  }
+
+  /**
+   * Turn an overlay on (null: off). It stays on across levels and scenes until turned off, and is never on at a page
+   * load (settings.overlay only remembers where O starts). `model`: the delay model Slack uses (the Timing panel's).
+   */
+  setOverlay(kind: OverlayKind | null, model?: DelayModel): void {
+    if (model) this.ovModel = model;
+    if (kind && this.ovRefusals()[kind]) kind = null;
+    if (kind === 'activity' && this.ovKind !== 'activity') this.ovWin = null;
+    this.ovKind = kind;
+    if (kind && settings.overlay !== kind) settings.set('overlay', kind);
+    this.paintOverlay();
+    this.ovListeners.forEach((f) => f());
+  }
+
+  /** Tint the current view's instances by slack (sim/slack.ts slackHeat; null clears): the Slack overlay. */
   heat(map: Map<string, { band: number; tip: string }> | null): void {
     this.view.heat(map);
+  }
+
+  /**
+   * The legend goes in the first corner where it covers no panel, challenge note or Why? card: bottom right (clear of
+   * the right-docked panels), bottom left, top left under the level badge, top right. None free: the same corners with
+   * the legend compact (its note left to the tooltip), then down to its title line, then the corner where it covers the least. On a phone app.css
+   * lays it across the bottom.
+   */
+  private placeLegend(): void {
+    const L = this.ovLegend;
+    if (!L) return;
+    L.style.cssText = '';
+    L.classList.remove('compact', 'mini');
+    if (window.matchMedia('(max-width: 760px)').matches) return;
+    const c = this.canvas.getBoundingClientRect();
+    const blocks = [...this.panels.map((p) => p.el), this.why.el, ...this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')]
+      .map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+    const spots = ['', 'left:12px;right:auto', 'left:12px;right:auto;top:44px;bottom:auto', 'top:44px;bottom:auto'];
+    let best = { css: '', size: '', cost: Infinity };
+    for (const size of ['', 'compact', 'mini']) {
+      L.classList.remove('compact', 'mini');
+      if (size) L.classList.add(size);
+      for (const css of spots) {
+        L.style.cssText = css;
+        const r = L.getBoundingClientRect();
+        const out = Math.max(0, c.left - r.left) + Math.max(0, r.right - c.right) + Math.max(0, c.top - r.top) + Math.max(0, r.bottom - c.bottom);
+        let cost = out * 1e4;
+        for (const b of blocks) cost += Math.max(0, Math.min(r.right, b.right) - Math.max(r.left, b.left)) * Math.max(0, Math.min(r.bottom, b.bottom) - Math.max(r.top, b.top));
+        if (cost === 0) return;
+        if (cost < best.cost) best = { css, size, cost };
+      }
+    }
+    L.classList.remove('compact', 'mini');
+    if (best.size) L.classList.add(best.size);
+    L.style.cssText = best.css;
+  }
+
+  /** Live overlays (Activity, Unknown) follow the simulation, at most every 100 ms; a level redrawn without its marks gets them back. */
+  private tickOverlay(): void {
+    if (!this.ovKind) return;
+    if (this.ovKind === 'activity') this.countActivity();
+    const stale = !this.view.el.classList.contains('ov');
+    if (!stale && this.ovKind !== 'activity' && this.ovKind !== 'unknown') return;
+    const wait = 100 - (performance.now() - this.ovLast);
+    if (stale || wait <= 0) return this.paintOverlay();
+    if (!this.ovTimer) this.ovTimer = window.setTimeout(() => { this.ovTimer = 0; this.paintOverlay(); }, wait);
+  }
+
+  /** Activity's window: toggles since the overlay came on, over the clock cycles or input changes since. */
+  private countActivity(): { units: number; clocked: boolean } | null {
+    const sim = this.sim;
+    if (!(sim instanceof GateSim)) return null;
+    const ins = this.scene?.root.ports.filter((p) => p.dir === 'in') ?? [];
+    const sig = ins.map((p) => sim.getInputBits(p.name).join('')).join('|');
+    if (!this.ovWin || this.ovWin.sim !== sim) {
+      if (!sim.toggles) sim.countToggles();
+      this.ovWin = { sim, base: new Uint32Array(sim.toggles!), cycles: this.cycles, changes: 0, sig };
+    } else if (sig !== this.ovWin.sig) {
+      this.ovWin.sig = sig;
+      this.ovWin.changes++;
+    }
+    const clocked = !!this.clockPort();
+    return { units: clocked ? this.cycles - this.ovWin.cycles : this.ovWin.changes, clocked };
+  }
+
+  /** Compute the overlay for the level on screen and draw it with its legend (static ones are cached per level). */
+  private paintOverlay(): void {
+    if (this.ovTimer) { clearTimeout(this.ovTimer); this.ovTimer = 0; }
+    this.ovLast = performance.now();
+    const ctx = this.ctx, sim = this.sim, kind = this.ovKind;
+    this.ovBar.set(kind, this.ovRefusals());
+    let r: OverlayResult | null = null;
+    if (kind && ctx && sim && !this.boardOn && !this.leaf && !this.ovRefusals()[kind]) {
+      const design = ctx.sim.design, key = `${kind}|${this.ovModel ?? (settings.loadDelay ? 'load' : 'unit')}|${ctx.path.join('.')}`;
+      if (kind === 'slack' || kind === 'load') {
+        const hit = this.ovCache.get(key);
+        if (hit && hit.design === design) r = hit.r;
+        else {
+          r = kind === 'slack' ? slackOverlay(design, ctx.path, this.ovModel ?? (settings.loadDelay ? 'load' : 'unit')) : loadOverlay(design, ctx.node);
+          this.ovCache.set(key, { design, r });
+        }
+      } else if (kind === 'unknown') r = unknownOverlay(ctx.sim, ctx.node);
+      else {
+        const w = this.countActivity();
+        if (w && this.ovWin) r = activityOverlay(ctx.node, this.ovWin.sim.toggles!, this.ovWin.base, w.units, w.clocked);
+      }
+    }
+    this.view.overlay(r);
+    const old = this.ovLegend;
+    this.ovLegend = r ? overlayLegend(r, () => this.setOverlay(null)) : null;
+    if (old && this.ovLegend) old.replaceWith(this.ovLegend);
+    else if (old) old.remove();
+    else if (this.ovLegend) this.canvas.append(this.ovLegend);
+    this.placeLegend();
+    this.ovRO?.disconnect();
+    if (this.ovLegend) {
+      this.ovRO ??= new ResizeObserver(() => {
+        if (!this.ovRaf) this.ovRaf = requestAnimationFrame(() => { this.ovRaf = 0; this.placeLegend(); });
+      });
+      for (const el of [...this.panels.map((p) => p.el), this.why.el, ...this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')]) this.ovRO.observe(el);
+    }
+    // the legend came or went: a fitted circuit moves clear of it
+    if (!!old !== !!this.ovLegend) this.view.setCover(this.covers(), true);
   }
 
   /** Draw instances of the current view as removed (a tour's "before"); [] restores them. */
@@ -2443,6 +2682,7 @@ export class Stage {
     this.clearNotesOfPanels();
     this.yieldBadge();
     this.placeWhy();
+    this.placeLegend();
     this.boardCover();
     this.drillLayout();
     this.dockOut();
@@ -2567,7 +2807,7 @@ export class Stage {
   private covers(hint = true): Rect[] {
     const c = this.canvas.getBoundingClientRect();
     const out: Rect[] = [];
-    for (const el of [...this.panels.map((p) => p.el), ...(hint ? [this.hint] : []), ...(this.drill ? [this.board.el] : []), this.why.el]) {
+    for (const el of [...this.panels.map((p) => p.el), ...(hint ? [this.hint] : []), ...(this.drill ? [this.board.el] : []), this.why.el, ...(this.ovLegend ? [this.ovLegend] : [])]) {
       const r = el.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) out.push({ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height });
     }

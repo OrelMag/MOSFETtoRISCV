@@ -247,6 +247,10 @@ select.sb-open { field-sizing: content; max-width: 9.5em; }
 .sb-runrow > .sb-iobar { flex: 1 1 auto; }
 .sb-runrow > .sb-controls { flex: 100 1 560px; }
 .sb-runrow > .sb-iobar[hidden] { display: none; }
+/* the overlay bar (editor/overlayui.ts) at the run row's end; its legend over the canvas's bottom left (the minimap has the right) */
+.sb-runrow > .sb-ov-bar { flex: none; padding: 4px 10px; }
+.ov-legend.sb-ov-legend { left: 12px; right: auto; bottom: 12px; z-index: 4; }
+@media (max-width: 760px) { .ov-legend.sb-ov-legend { left: 8px; right: 8px; bottom: 8px; } }
 .sb-controls .seg button { padding: 3px 9px; }
 .sb-rate { display: inline-flex; }
 .sb-level {

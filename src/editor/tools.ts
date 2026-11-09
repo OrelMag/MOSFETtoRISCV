@@ -25,7 +25,7 @@ import { lookInside } from './inside';
 import { flipSwitch, ioInfo, switchAt, type SwitchState } from './ioparts';
 import { canTurn, faceHit, nodeAt } from './face';
 import { toggleSwitch } from './ioface';
-import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, knobPortSide, nextSameName, onPinKnob, partAnchor, pointerGeom, sectionCornerAt, snapPt, WireDraft } from './geom';
+import { branchPoint, drives, grabOn, type Hit, hitTest, hitWire, knobPortSide, nextSameName, onPinKnob, partAnchor, partBox, pointerGeom, sectionCornerAt, snapPt, WireDraft } from './geom';
 import { renamePin } from './chips';
 import { type ChipDoc, commentBox, sectionCorners, endGeom, endKey, type EndRef, type ExitDir as Face, type PinDoc, pinBig, pinValue } from './model';
 import {
@@ -34,6 +34,7 @@ import {
 } from './ops';
 import type { PaletteItem } from './palette';
 import { matches, shortcutAllowed } from '../ui/keys';
+import './sbkeys';
 
 type State =
   | { k: 'idle' }
@@ -1177,6 +1178,23 @@ export class Tools {
       else this.kcSet(a.pos);
       return true;
     }
+    // [ ] the cursor to the previous / next part, in reading order (N's counterpart for parts); ↵ then selects it
+    if (matches(e, 'sb.nextpart') && (st.k === 'idle' || st.k === 'wire')) {
+      const boxes = ed.doc.parts.flatMap((p) => { const d = ed.defOf(p); return d ? [{ id: p.id, b: partBox(d, p.at, p.flip, p.rot) }] : []; });
+      const mid = (b: { x: number; y: number; w: number; h: number }): Vec => snapPt([b.x + b.w / 2, b.y + b.h / 2]);
+      const order = boxes.sort((a, b) => Math.round(mid(a.b)[1] / 2) - Math.round(mid(b.b)[1] / 2) || mid(a.b)[0] - mid(b.b)[0]);
+      if (!order.length) { ed.announce('No parts here'); return true; }
+      const here = this.kcOn ? this.kcPoint() : null;
+      const at = here ? order.findIndex(({ b }) => here[0] >= b.x && here[0] <= b.x + b.w && here[1] >= b.y && here[1] <= b.y + b.h) : -1;
+      const dir = e.code === 'BracketLeft' ? -1 : 1;
+      const next = order[at < 0 ? (dir > 0 ? 0 : order.length - 1) : (at + dir + order.length) % order.length];
+      this.kcSet(mid(next.b));
+      return true;
+    }
+    if (matches(e, 'sb.stepkey')) { ed.sim.stepOnce(); return true; }
+    if (matches(e, 'sb.zoomin')) { ed.view.cam.zoom(0.8); return true; }
+    if (matches(e, 'sb.zoomout')) { ed.view.cam.zoom(1.25); return true; }
+    if (matches(e, 'sb.fit')) { ed.fitView(); return true; }
     if (matches(e, 'sb.wirekey') && st.k === 'idle') {
       this.wireFromKeyboard();
       return true;
