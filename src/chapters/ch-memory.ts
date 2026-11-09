@@ -1051,8 +1051,8 @@ export const chMemory: Chapter = {
         terms the outputs need, and an OR plane that sums them. The terms here come from Quine–McCluskey minimization, run when the page loads.</p>
         <p>The 7-segment font needs ${plaTerms(PLA_PRESETS.seg7).terms.length} terms (more than the ROM's 16 words, because the seven outputs share few of them), but each term is a
         2- or 3-input AND, so the PLA costs ${nands(pla('seg7'))} NANDs against ${nands(romArray('seg7'))} for the ROM. Early microprocessors decoded instructions with PLAs (the 6502's
-        decode ROM is one), and PALs, GALs and CPLDs are their field-programmable descendants. An FPGA's lookup table is the other branch:
-        a tiny ROM, 16 or 64 SRAM bits read by a mux tree on its inputs.</p>
+        decode ROM is one), and PALs, GALs and CPLDs are their field-programmable descendants. The other branch is the lookup table of an <span data-ahead="fpga">FPGA (a chip of small tables and switches whose
+        function is loaded as configuration bits; chapter ${numOf('fpga')} puts our computer on one)</span>: a tiny ROM, 16 or 64 SRAM bits read by a mux tree on its inputs.</p>
         <div class="try">Set x to 0–15 and read y as segments a (bit 0) to g (bit 6). Open <span data-show="u5">a term</span>, then
         <span data-show="u33">an output's OR gate</span>.</div>`,
       more: {

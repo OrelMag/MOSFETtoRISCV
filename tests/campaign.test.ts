@@ -9,6 +9,7 @@ import { partNames } from '../src/campaign/cardlabel';
 import { CODEX, codexById } from '../src/campaign/codex';
 import { COMM_AWAITING_LEVELS } from '../src/campaign/codexcomm';
 import { DSP_AWAITING_LEVELS } from '../src/campaign/codexdsp';
+import { FPGA_AWAITING_LEVELS } from '../src/campaign/codexfpga';
 import { measured, stars } from '../src/campaign/grade';
 import { ancestors, nextAvailable, ruleFor, statusOf, topo } from '../src/campaign/graph';
 import { ACT_ROWS, FOLDED_H, foldedActs, MAP_MIN_SCALE, MAP_MIN_W, mapColsFor, mapLayout, NODE_H, NODE_W, OPTIONAL_ACTS } from '../src/campaign/layout';
@@ -70,7 +71,7 @@ describe('the campaign graph', () => {
     }
     // Every codex entry is taught somewhere.
     const taught = new Set(NODES.flatMap((n) => n.codex));
-    for (const e of CODEX) if (!COMM_AWAITING_LEVELS.has(e.id) && !DSP_AWAITING_LEVELS.has(e.id)) expect(taught.has(e.id), `codex ${e.id} is in no level`).toBe(true);
+    for (const e of CODEX) if (!COMM_AWAITING_LEVELS.has(e.id) && !DSP_AWAITING_LEVELS.has(e.id) && !FPGA_AWAITING_LEVELS.has(e.id)) expect(taught.has(e.id), `codex ${e.id} is in no level`).toBe(true);
   });
 
   it('a level\'s rule is NAND plus what its requirements unlock, never its own parts', () => {

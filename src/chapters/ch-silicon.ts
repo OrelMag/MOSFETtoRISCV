@@ -369,7 +369,7 @@ export const chSilicon: Chapter = {
         cell by cell, its controller, flash, and a bus with <span data-ahead="dma">DMA (a device that copies memory blocks without the CPU)</span> that boots a computer from flash. Chapters <a href="#/c/telegraph/0">${numOf('telegraph')}</a>–<a href="#/c/datacentre/0">${numOf('datacentre')}</a> take the machine out of the box (wires and clocks, UARTs, modems, error codes, Ethernet, networks, radio) and chapters <a href="#/c/fixed/0">${numOf('fixed')}</a>–<a href="#/c/sdr/0">${numOf('sdr')}</a> process the signals in fixed-point arithmetic, down to a DSP core. The appendices rebuild a real chip, the
         <a href="#/c/appendix-6502/0">6502</a>, in NMOS transistors, and run <a href="#/c/appendix-doom/0">Doom</a> on the RV32IM system, a window of it
         on the gates.</p>
-        <p>Or go further on your own: build it for real on an FPGA from the Verilog tabs; read Harris &amp; Harris, Patterson &amp; Hennessy, or Weste &amp; Harris for CMOS VLSI; or tape out
+        <p>Or go further on your own: build it for real on an <a href="#/c/fpga/0">FPGA (chapter ${numOf('fpga')})</a> from the Verilog tabs; read Harris &amp; Harris, Patterson &amp; Hennessy, or Weste &amp; Harris for CMOS VLSI; or tape out
         a design on an open-source shuttle.</p>
         <p>What carried through was one discipline: a block is described by its ports and its behaviour, built from smaller blocks, and checked against that description at every level. The abstraction
         was never opaque, which is why the same page that shows a CPU also shows the four transistors of a NAND, and why the numbers at the bottom (transistors, delays, energy) add up at the top.</p>`,

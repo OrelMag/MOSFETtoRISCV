@@ -178,6 +178,7 @@ export const TAUGHT: Record<string, string> = {
   shannon: 'telegraph',
   reflection: 'wire',
   cdc: 'clocks',
+  lut: 'fpga', fpga: 'fpga', bitstream: 'fpga', bram: 'fpga', logiccell: 'fpga', switchbox: 'fpga',
   asyncfifo: 'clocks',
   uart: 'telegraph',
   spi: 'spi',

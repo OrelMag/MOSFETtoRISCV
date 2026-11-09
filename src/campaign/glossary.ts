@@ -9,6 +9,7 @@ import { CODEX, type CodexEntry } from './codex';
 import { numOf } from '../chapters/order';
 import { ALIASES_COMM2 } from './codexcomm2';
 import { ALIASES_DSP } from './codexdsp';
+import { ALIASES_FPGA } from './codexfpga';
 
 /** Other names an entry goes by in the chapters' prose. */
 export const ALIASES: Record<string, string[]> = {
@@ -53,6 +54,8 @@ export const ALIASES: Record<string, string[]> = {
   ...ALIASES_COMM2,
   // the Signal processing level (codexdsp.ts)
   ...ALIASES_DSP,
+  // the FPGA chapter (codexfpga.ts)
+  ...ALIASES_FPGA,
 };
 
 /** Entries never marked automatically: their names are everyday words in the prose. */
