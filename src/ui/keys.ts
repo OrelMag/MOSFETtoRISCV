@@ -24,9 +24,8 @@ export interface KeyLike {
 }
 
 /**
- * One way to press a binding. `key` is compared with event.key (lower-cased), and when the layout
- * typed a non-Latin character (Hebrew כ for F) with event.code instead. `codeOnly` compares event.code
- * alone: the brackets, which a Hebrew layout swaps. `shift` undefined: either.
+ * One way to press a binding: `key` against event.key (lower-cased), event.code on a non-Latin layout; `codeOnly`:
+ * event.code alone (brackets a Hebrew layout swaps). `shift` undefined: either.
  */
 export interface KeySpec {
   key?: string;
@@ -129,6 +128,12 @@ export const KEYS: readonly KeyDef[] = [
 ];
 
 const byId = new Map(KEYS.map((d) => [d.id, d]));
+
+// keys a lazy chunk adds (view/stagekeys.ts)
+export function addKeys(ks: KeyDef[]) {
+  for (const k of ks) if (!byId.has(k.id)) (KEYS as KeyDef[]).push(k), byId.set(k.id, k);
+}
+
 export const keyDef = (id: string): KeyDef | undefined => byId.get(id);
 
 /** A character from a non-Latin layout (Hebrew, Greek …): then the key's position decides. */

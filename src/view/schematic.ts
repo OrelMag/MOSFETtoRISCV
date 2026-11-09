@@ -29,6 +29,7 @@ import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showM
 import { installHold } from '../ui/holdpress';
 import { isConstantDef } from '../sim/constant';
 import { isGeneratedNetName, Legibility, nameEligible, nameRotated, type NameEl, type Seg, type TagEl } from './legible';
+import type { CursorItem } from './kcursor';
 
 /** A note's marker on a part of the level shown. */
 export interface NotePin {
@@ -194,6 +195,9 @@ export class SchematicView {
   /** Where each part is drawn now, and its box (grid units); how long the last routing took. */
   private atOf = new Map<string, Vec>();
   private boxes = new Map<string, Rect>();
+  /** The keyboard part cursor (Stage's arrows): the item under it and its ring, cleared when a level is shown. */
+  private kcur: CursorItem | null = null;
+  private kring: SVGRectElement | null = null;
   /** Instances a block name may cover (legible.ts): constants (tie cells too) and pure wiring (splitters, mergers, alias boxes). */
   private quiet = new Set<string>();
   /** Gates drawn with their insides (working gates): painted from their input ports in update(). */
@@ -301,6 +305,8 @@ export class SchematicView {
     this.cmos = [];
     this.atOf.clear();
     this.boxes.clear();
+    this.kcur = null;
+    this.kring = null;
     this.quiet.clear();
     if (!base) return;
     let lay = this.arrange ? layoutOf(ctx.def.id) : undefined;
@@ -909,6 +915,56 @@ export class SchematicView {
     this.centerOn(w.net.tags[k].pos);
     w.tags[k].classList.add('net-ping');
     setTimeout(() => w.tags[k].classList.remove('net-ping'), 900);
+  }
+
+  /** What the keyboard cursor can stand on: this level's parts (wiring and constants left out) and its own pins. */
+  cursorItems(): CursorItem[] {
+    const items: CursorItem[] = [];
+    for (const [name, b] of this.boxes) if (!this.quiet.has(name)) items.push({ kind: 'inst', name, ...b });
+    for (const { pin } of this.pins) items.push({ kind: 'pin', name: pin.name, dir: pin.dir, x: pin.pos[0] - 1.5, y: pin.pos[1] - 1.5, w: 3, h: 3 });
+    return items;
+  }
+
+  get cursor(): CursorItem | null {
+    return this.kcur;
+  }
+
+  /** Put the keyboard cursor on an item (null: none): a ring around it, panned into view. */
+  setCursor(it: CursorItem | null): void {
+    this.kcur = it;
+    if (!it) return void this.kring?.remove();
+    if (!this.kring) this.kring = s('rect', { class: 'kcursor', rx: 0.8 });
+    const m = 0.7;
+    for (const [k, v] of [['x', it.x - m], ['y', it.y - m], ['width', it.w + 2 * m], ['height', it.h + 2 * m]] as const) this.kring.setAttribute(k, String(v));
+    this.el.append(this.kring); // last: over everything
+    this.centerOn([it.x + it.w / 2, it.y + it.h / 2]);
+  }
+
+  /** Can the learner drive this level's input pins (the top level of a scene)? */
+  get drivable(): boolean {
+    return this.interactive;
+  }
+
+  /** The item under the cursor in words, for a screen reader: a pin and its value as shown, a part's name and kind. */
+  cursorText(): string {
+    const it = this.kcur;
+    if (!it) return '';
+    if (it.kind === 'pin') {
+      const p = this.pins.find((q) => q.pin.name === it.name);
+      const v = p?.value?.textContent?.trim();
+      return `${it.dir === 'out' ? 'output' : 'input'} ${it.name}${v ? ` = ${v}` : ''}`;
+    }
+    const inst = this.base?.instances.find((i) => i.name === it.name);
+    const what = inst ? inst.label ?? inst.def.name : it.name;
+    const open = this.ctx?.canOpen(it.name) ? ', Enter opens it' : '';
+    return `${what} (${it.name})${open}`;
+  }
+
+  /** The drawn element of the item under the cursor (for the menu key), if any. */
+  cursorEl(): Element | null {
+    const it = this.kcur;
+    if (!it) return null;
+    return it.kind === 'inst' ? this.insts.get(it.name) ?? null : this.pins.find((p) => p.pin.name === it.name)?.g ?? null;
   }
 
   /** Zoom to an instance (about `span` grid units wide around it). */

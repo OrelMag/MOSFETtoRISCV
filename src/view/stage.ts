@@ -37,6 +37,8 @@ import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
 import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard';
 import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
+import { type CursorItem, firstItem, nextInDir } from './kcursor';
+import './stagekeys';
 import { isMenuKey } from '../ui/menu';
 import type { ElsewhereHost, ExplainHost, MeasureHost } from './tracemenu';
 import { powerOff } from './truthrule';
@@ -478,9 +480,11 @@ export class Stage {
       // on the circuit, or a control of its drawing: a button or a panel with the focus keeps the browser's own menu
       if (isMenuKey(e) && !this.boardOn && (e.target === this.el || this.view.el.contains(e.target as Node))) {
         e.preventDefault();
-        this.view.keyMenu(e.target === this.el ? null : e.target as Element);
+        this.view.keyMenu(e.target === this.el ? this.view.cursorEl() : e.target as Element);
         return;
       }
+      // the part cursor, run, step and zoom: only while the circuit itself has the focus (a panel's or a 3D model's own keys stay theirs)
+      if (e.target === this.el && !this.boardOn && this.cursorKey(e)) { e.preventDefault(); return; }
       // the learner's layout: undo / redo, and Esc lets go of picked parts before it goes up a level
       const k = e.key.toLowerCase();
       if ((e.ctrlKey || e.metaKey) && (k === 'z' || k === 'y')) {
@@ -1341,6 +1345,73 @@ export class Stage {
       return;
     }
     this.setInput(port, v);
+  }
+
+  /** Says what the keyboard cursor reached (a polite live region inside the stage). */
+  private sayEl: HTMLElement | null = null;
+  private say(text: string): void {
+    if (!this.sayEl) { this.sayEl = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' }); this.el.append(this.sayEl); }
+    const el = this.sayEl;
+    el.textContent = '';
+    setTimeout(() => { el.textContent = text; }, 30);
+  }
+
+  /** The cursor's item in words; a top-level pin drawn as a colour only (one bit) gets its value from the simulation. */
+  private cursorWords(): string {
+    const t = this.view.cursorText(), it = this.view.cursor;
+    if (!it || it.kind !== 'pin' || t.includes('=') || this.ctx !== this.rootCtx || !this.sim?.design.root.ports[it.name]) return t;
+    const n = this.value(it.name);
+    return `${t} = ${Number.isFinite(n) && n >= 0 ? n : 'X'}`;
+  }
+
+  /**
+   * The stage's keys while the circuit itself has the focus (ui/keys.ts, the stage group): the part cursor (arrows, Home,
+   * End), ↵ / Space on what it stands on, Ctrl ↵ run, . > , pulse / step / back, + − 0 zoom. True when the key was taken.
+   */
+  private cursorKey(e: KeyboardEvent): boolean {
+    const v = this.view;
+    const mod = e.ctrlKey || e.metaKey;
+    const arrow = ({ ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' } as const)[e.key as 'ArrowLeft'];
+    const land = (it: CursorItem | null) => {
+      if (!it) return;
+      v.setCursor(it);
+      if (it.kind === 'inst') this.select(it.name);
+      this.say(this.cursorWords());
+    };
+    if (arrow && !mod && !e.altKey) {
+      const cur = v.cursor;
+      land(cur ? nextInDir(v.cursorItems(), cur, arrow) ?? cur : firstItem(v.cursorItems()));
+      return true;
+    }
+    if ((e.key === 'Home' || e.key === 'End') && !mod) { land(firstItem(v.cursorItems(), e.key === 'Home' ? 'in' : 'out')); return true; }
+    if (e.key === 'Enter' && mod) {
+      if (!this.runBtn) this.say('No clock on this circuit to run');
+      else this.runBtn.click();
+      return true;
+    }
+    const it = v.cursor;
+    if ((e.key === 'Enter' || e.key === ' ') && it && !mod) {
+      if (it.kind === 'pin' && it.dir !== 'out' && v.drivable) {
+        const pin = this.ctx?.def.ports.find((p) => p.name === it.name);
+        if (pin && pin.width > 1) {
+          if (e.key === ' ') return false;
+          const r = v.cursorEl()?.getBoundingClientRect();
+          if (r) this.editInput(it.name, r);
+        } else this.toggleInput(it.name);
+        setTimeout(() => this.say(this.cursorWords()), 50);
+      } else if (it.kind === 'inst' && e.key === 'Enter' && this.ctx?.canOpen(it.name)) this.open(it.name);
+      else this.say(this.cursorWords());
+      return true;
+    }
+    if (mod || e.altKey || !shortcutAllowed(e)) return false;
+    const again = () => { if (v.cursor) setTimeout(() => this.say(this.cursorWords()), 50); };
+    if (matches(e, 'cursor.pulse')) { if (this.runBtn) { this.pulse(); again(); } else this.say('No clock on this circuit'); return true; }
+    if (matches(e, 'cursor.step')) { if (this.sim?.kind === 'gate' || this.relayTime) { this.stepOnce(); again(); } return true; }
+    if (matches(e, 'cursor.back')) { if (this.back()) again(); else this.say('Nothing to go back to'); return true; }
+    if (matches(e, 'cursor.zoomin')) { v.zoom(0.8); return true; }
+    if (matches(e, 'cursor.zoomout')) { v.zoom(1.25); return true; }
+    if (matches(e, 'cursor.fit')) { v.fit(); return true; }
+    return false;
   }
 
   private editInput(port: string, anchor: DOMRect): void {
