@@ -106,6 +106,7 @@ for (const id of ids.length ? ids : ['counter7', 'computer']) {
       clock: `${own.from} → ${own.to}`, ns: +own.path.reduce((a, s) => a + s.delay, 0).toFixed(3),
       skew: sum('clk-skew'), clkToQ: sum('clk-to-q'), logic: sum('logic'), routing: sum('routing'), setup: sum('setup'),
       luts: own.path.filter((s) => s.type === 'logic').length,
+      ...onPath(join(dir, 'routed.json'), own.path),
     },
     ours: { nands: m.nands + m.loops.length, lutMapLuts: m.luts.length, lutLevels: m.depth, period: st?.period ?? null },
   };
@@ -129,4 +130,13 @@ if (write) {
 function passthroughs(file: string): number {
   const j = JSON.parse(readFileSync(file, 'utf8')) as { modules: Record<string, { cells: Record<string, { type: string }> }> };
   return Object.values(j.modules).reduce((n, m) => n + Object.entries(m.cells).filter(([name, c]) => LUT.test(c.type) && name.includes('passthrough')).length, 0);
+}
+
+/** The design clock's critical path by cell kind: LUT4s, and the wide multiplexers (MUX2_LUT5 … LUT8) that join two LUTs' outputs into a 5- to 8-input function. */
+function onPath(file: string, path: { type: string; from?: { cell: string } }[]): { lut4: number; wideMux: number } {
+  const j = JSON.parse(readFileSync(file, 'utf8')) as { modules: Record<string, { cells: Record<string, { type: string }> }> };
+  const type = new Map<string, string>();
+  for (const m of Object.values(j.modules)) for (const [n, c] of Object.entries(m.cells)) type.set(n, c.type);
+  const kinds = path.filter((s) => s.type === 'logic').map((s) => type.get(s.from?.cell ?? '') ?? '');
+  return { lut4: kinds.filter((k) => k === 'LUT4').length, wideMux: kinds.filter((k) => k.startsWith('MUX2_LUT')).length };
 }

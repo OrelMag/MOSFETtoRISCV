@@ -76,7 +76,9 @@
     "logic": 1.098,
     "routing": 0.412,
     "setup": 0.399,
-    "luts": 1
+    "luts": 1,
+    "lut4": 1,
+    "wideMux": 0
    },
    "ours": {
     "nands": 79,
@@ -215,7 +217,9 @@
     "logic": 13.052,
     "routing": 23.703,
     "setup": 0.399,
-    "luts": 28
+    "luts": 28,
+    "lut4": 8,
+    "wideMux": 20
    },
    "ours": {
     "nands": 32414,

@@ -17,8 +17,8 @@ export interface FpgaExample {
   blocks: { name: string; luts: number; ffs: number; bsram: number }[];
   /** Post-route maximum frequency per clock, MHz (clk: the design's, divided from the board's; mem_clk: the board's 27 MHz). */
   fmax: Record<string, number>;
-  /** The design clock's critical path, ns, split by kind; luts: the LUTs on it. */
-  critical: { clock: string; ns: number; skew: number; clkToQ: number; logic: number; routing: number; setup: number; luts: number };
+  /** The design clock's critical path, ns, split by kind; luts: the logic cells on it, of which lut4 LUTs and wideMux the multiplexers joining two LUTs into a wider function. */
+  critical: { clock: string; ns: number; skew: number; clkToQ: number; logic: number; routing: number; setup: number; luts: number; lut4: number; wideMux: number };
   /** Our estimates: NANDs (mapped + kept as storage loops), lutMap's LUT4 count and levels, the static period in NAND delays. */
   ours: { nands: number; lutMapLuts: number; lutLevels: number; period: number | null };
 }
