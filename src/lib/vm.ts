@@ -52,20 +52,21 @@ export const TLB_FLAGS = { i: ['x', 'u'], d: ['r', 'w', 'x', 'u', 'd'] } as cons
  * a valid flip-flop that a flush clears, a comparator and, behind them, a priority encoder and multiplexers that deliver the
  * matching entry's PPN and flags. A fill writes the entry the round-robin pointer names and advances it.
  */
-export function tlb(kind: 'i' | 'd'): ComponentDef {
-  return memo(`tlb_${kind}`, () => {
+export function tlb(kind: 'i' | 'd', k = 2): ComponentDef {
+  const n = 2 ** k;
+  return memo(k === 2 ? `tlb_${kind}` : `tlb_${kind}_${n}`, () => {
     const nf = TLB_FLAGS[kind].length, W = 20 + 22 + nf;
     const b = new Builder(18, 14);
     b.pins('key', 'fill', 'fppn', 'fflags', 'flush', 'clk');
     // the write side: a round-robin pointer, a decoder, the word to store
-    const ptr = b.op(register(2), ['', 'fill', 'clk'], 'round-robin pointer', 'ptr');
-    const inc = b.op1(incrementer(2), [`${ptr}.q`], '+ 1');
+    const ptr = b.op(register(k), ['', 'fill', 'clk'], 'round-robin pointer', 'ptr');
+    const inc = b.op1(incrementer(k), [`${ptr}.q`], '+ 1');
     b.wire(inc, `${ptr}.d`);
-    const dec = b.op(decoder(2, true), [`${ptr}.q`, 'fill'], 'entry to write');
+    const dec = b.op(decoder(k, true), [`${ptr}.q`, 'fill'], 'entry to write');
     const word = b.name(b.op1(merger([20, 22, nf]), ['key', 'fppn', 'fflags'], '{vpn, ppn, flags}'), 'word', true);
     const nflush = notB(b, 'flush');
     b.next();
-    const ent = Array.from({ length: 4 }, (_, i) => {
+    const ent = Array.from({ length: n }, (_, i) => {
       const q = b.op(register(W), [word, `${dec}.y${i}`, 'clk'], `entry ${i}`, `e${i}`);
       const en = orB(b, `${dec}.y${i}`, 'flush');
       const v = b.op1(register(1), [nflush, en, 'clk'], `valid ${i}`, `v${i}`);
@@ -76,20 +77,20 @@ export function tlb(kind: 'i' | 'd'): ComponentDef {
     b.next();
     const hits = ent.map((e, i) => andB(b, b.op1(equal(20), [`${parts[i]}.o0`, 'key'], `= key? ${i}`), e.v));
     b.next();
-    const pe = b.op(priorityEncoder(4), [b.op1(merger(ones(4)), hits, 'matches')], 'which matched');
+    const pe = b.op(priorityEncoder(n), [b.op1(merger(ones(n)), hits, 'matches')], 'which matched');
     b.next();
     b.wire(`${pe}.v`, 'hit');
-    b.wire(b.op1(muxTree(2, 22), [...parts.map((p) => `${p}.o1`), `${pe}.y`], 'PPN'), 'ppn');
-    b.wire(b.op1(muxTree(2, nf), [...parts.map((p) => `${p}.o2`), `${pe}.y`], 'flags'), 'flags');
+    b.wire(b.op1(muxTree(k, 22), [...parts.map((p) => `${p}.o1`), `${pe}.y`], 'PPN'), 'ppn');
+    b.wire(b.op1(muxTree(k, nf), [...parts.map((p) => `${p}.o2`), `${pe}.y`], 'flags'), 'flags');
     return define({
-      id: `tlb_${kind}`, name: `${kind === 'i' ? 'Instruction' : 'Data'} TLB (4 entries)`, category: 'memory',
-      summary: `Four translations kept at once, searched by virtual page number (a comparator per entry, like chapter 10's CAM): an entry holds the 22-bit physical page number and the page's flags (${TLB_FLAGS[kind].join(', ')}). A fill replaces entries in turn; flush forgets them all. Superpages are filled one 4 KiB page at a time.`,
+      id: k === 2 ? `tlb_${kind}` : `tlb_${kind}_${n}`, name: `${kind === 'i' ? 'Instruction' : 'Data'} TLB (${n} entries)`, category: 'memory',
+      summary: `${n} translations kept at once, searched by virtual page number (a comparator per entry, like chapter 10's CAM): an entry holds the 22-bit physical page number and the page's flags (${TLB_FLAGS[kind].join(', ')}). A fill replaces entries in turn; flush forgets them all. Superpages are filled one 4 KiB page at a time.`,
       ports: [bus('key', 20, 'in'), bit('fill', 'in'), bus('fppn', 22, 'in'), bus('fflags', nf, 'in'), bit('flush', 'in'), clk(), bit('hit', 'out'), bus('ppn', 22, 'out'), bus('flags', nf, 'out')],
       symbol: { kind: 'box', label: kind === 'i' ? 'I-TLB' : 'D-TLB' },
       netlist: laid(b, { keepOrder: true, room: true }),
       hdl: {
-        verilog: `// 4 entries, round-robin fill; flush clears every valid bit
-for (i = 0; i < 4; i++) if (valid[i] && vpn[i] == key) begin hit = 1; ppn = ppn_q[i]; flags = flags_q[i]; end
+        verilog: `// ${n} entries, round-robin fill; flush clears every valid bit
+for (i = 0; i < ${n}; i++) if (valid[i] && vpn[i] == key) begin hit = 1; ppn = ppn_q[i]; flags = flags_q[i]; end
 always_ff @(posedge clk) begin
   if (flush) valid <= '0;
   else if (fill) begin vpn[ptr] <= key; ppn_q[ptr] <= fppn; flags_q[ptr] <= fflags; valid[ptr] <= 1; ptr <= ptr + 1; end
