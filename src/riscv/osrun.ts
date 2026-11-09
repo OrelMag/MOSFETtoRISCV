@@ -93,3 +93,129 @@ export const tripsOf = (run: OsRun, kind: number | 'timer' | 'fault'): Trip[] =>
   run.trips.filter((t) => (kind === 'timer' ? t.cause === 0x80000007 : kind === 'fault' ? t.cause !== 8 && t.cause < 0x80000000 : t.cause === 8 && t.call === kind));
 
 export { SYS };
+
+// ---- the context switch, step by step (chapter 'os' step 4)
+
+export interface SwitchFrame {
+  /** Instruction number within the excursion (0 = the trap being taken). */
+  i: number;
+  pc: number;
+  text: string;
+  phase: 'save' | 'choose' | 'restore' | 'user';
+  /** Cycles since the trap, this instruction's walk stalls included. */
+  cycles: number;
+  /** The CPU's registers x0..x31 after this instruction, and the first 32 words of each PCB (word 0 the saved PC, then x1..x31). */
+  regs: number[];
+  pcb: [number[], number[]];
+  /** The register this instruction wrote (0: none) and the PCB word it stored to (-1: none). */
+  wrote: number;
+  stored: [number, number] | null;
+}
+
+const pcbWords = (iss: ISS, p: number) => Array.from({ length: 32 }, (_, i) => iss.dmem[(PCB0 + p * PCB_SIZE) / 4 + i] >>> 0);
+
+/** The first timer interrupt after which the kernel gives the CPU to the other process, from the trap to the other process's first instruction. */
+export function captureSwitch(img: OsImage, maxSteps = 100000): SwitchFrame[] {
+  const iss = new ISS(img.words, { system: true, vm: true, imemWords: 2 ** OS_IMEM_K, dmemWords: 2 ** OS_DMEM_K });
+  const it = new TlbModel(4), dt = new TlbModel(4);
+  const L = img.labels, trap = L.get('trap')!, saved = L.get('trap_saved')!, sw = L.get('go_switch')!;
+  let frames: SwitchFrame[] = [], cyc = 0, inTrip = false, mretSeen = false;
+  while (iss.steps < maxSteps && !iss.halted) {
+    const cur = iss.dmem[0] >>> 0;
+    const before = it.misses + dt.misses, xs = [...iss.x];
+    const pre = [pcbWords(iss, 0), pcbWords(iss, 1)];
+    const info = iss.step();
+    for (const w of info.walks ?? []) {
+      const t = w.access === 'fetch' ? it : dt, vpn = w.va >>> 12;
+      if (w.fault !== undefined) { if (fills(w)) t.access(vpn); else if (!t.has(vpn)) t.misses++; } else t.access(vpn);
+    }
+    if (info.text.startsWith('sfence.vma') || /^csrr?w?i? satp/.test(info.text)) { it.flush(); dt.flush(); }
+    const c = 1 + WALK_CYCLES * (it.misses + dt.misses - before);
+    if (info.priv === 0 && info.trap && info.trap.cause === 0x80000007) { inTrip = true; frames = []; cyc = 0; mretSeen = false; }
+    if (!inTrip) continue;
+    cyc += c;
+    const pc = info.pc >>> 0;
+    const user = info.priv === 0 && !info.trap;
+    const phase: SwitchFrame['phase'] = user ? 'user' : pc >= sw && info.text !== 'ebreak' ? 'restore' : pc >= saved ? 'choose' : 'save';
+    // the trapping step itself is in the user process, taken to mtvec; call it the first of the save
+    const first = frames.length === 0;
+    const post = [pcbWords(iss, 0), pcbWords(iss, 1)];
+    const wrote = xs.findIndex((v, i) => i > 0 && (v | 0) !== (iss.x[i] | 0));
+    let stored: [number, number] | null = null;
+    for (let p = 0; p < 2; p++) for (let i = 0; i < 32; i++) if (post[p][i] !== pre[p][i]) stored = [p, i];
+    frames.push({ i: frames.length, pc, text: first ? 'timer interrupt: MTIP and a user instruction fetched' : info.text, phase: first ? 'save' : phase, cycles: cyc, regs: [...iss.x].map((v) => v >>> 0), pcb: post as [number[], number[]], wrote: wrote < 0 ? 0 : wrote, stored });
+    if (info.text.startsWith('mret')) mretSeen = true;
+    if (mretSeen && user) {
+      const next = iss.dmem[0] >>> 0;
+      if (next !== cur) return frames;
+      inTrip = false; // the kernel gave the CPU back to the same process: look at the next interrupt
+    }
+    void trap;
+  }
+  return frames;
+}
+
+/** Time slice against what the kernel and the walks take: two spinners run for `total` retired instructions on a slice of `slice` instructions. */
+export interface Overhead { slice: number; switches: number; kernel: number; walk: number; user: number; cycles: number; overhead: number }
+export function overheadAt(slice: number, total: number, mk: (slice: number) => OsImage): Overhead {
+  const r = runOs(mk(slice), total);
+  let k = 0, u = 0, wk = 0, cycles = 0;
+  const first = r.who.findIndex((w) => w < 2); // the boot is not the price of sharing
+  for (let i = Math.max(0, first); i < r.who.length; i++) {
+    cycles += r.cost[i];
+    const walk = (r.cost[i] - 1);
+    wk += walk;
+    if (r.who[i] === 2) k++; else u++;
+  }
+  const switches = r.trips.filter((t) => t.from !== t.to).length;
+  return { slice, switches, kernel: k, walk: wk, user: u, cycles, overhead: (k + wk) / cycles };
+}
+
+// ---- the plan of memory (chapter 'os' step 1): read from the page tables the kernel itself built
+
+/** The golden model stopped at the kernel's first mret: tables built, the first process about to run. */
+export function booted(img: OsImage): ISS {
+  const iss = new ISS(img.words, { system: true, vm: true, imemWords: 2 ** OS_IMEM_K, dmemWords: 2 ** OS_DMEM_K });
+  while (iss.priv !== 0 && iss.steps < 5000) iss.step();
+  return iss;
+}
+
+export interface MapRow { va: number; pte: number; flags: string; pa: number; what: string }
+export interface Plan {
+  /** Sixteen data frames: who owns each (the kernel's frame, a process's root table, second table, page 0 / page 1, or none). */
+  dataFrames: { owner: number; role: string }[];
+  /** The ROM's four frames. */
+  romFrames: { owner: number; role: string }[];
+  maps: MapRow[][];
+  satp: number[];
+}
+
+const FLAG_NAMES = 'VRWXUGAD';
+export const flagsOf = (pte: number) => [...FLAG_NAMES].map((c, i) => ((pte >>> i) & 1 ? c : '·')).join('');
+
+export function planOf(img: OsImage): Plan {
+  const iss = booted(img);
+  const dataFrames = Array.from({ length: 2 ** OS_DMEM_K / 1024 }, () => ({ owner: -1, role: 'free' }));
+  dataFrames[0] = { owner: 2, role: 'kernel: variables, process control blocks' };
+  const maps: MapRow[][] = [], satps: number[] = [];
+  const what: Record<number, string> = { 0: 'data page 0', 1: 'data page 1', 2: 'the kernel\'s frame (U = 0)', 4: 'code' };
+  for (let p = 0; p < 2; p++) {
+    const satp = iss.dmem[(PCB0 + p * PCB_SIZE + 128) / 4] >>> 0;
+    satps.push(satp);
+    const root = (satp & 0x3fffff) * 4096;
+    const rootPte = iss.dmem[root / 4] >>> 0, leaf = (rootPte >>> 10) * 4096;
+    dataFrames[root >>> 12] = { owner: p, role: 'root table' };
+    dataFrames[leaf >>> 12] = { owner: p, role: 'second table' };
+    const rows: MapRow[] = [];
+    for (let i = 0; i < 8; i++) {
+      const pte = iss.dmem[leaf / 4 + i] >>> 0;
+      if (!(pte & 1)) continue;
+      const pa = (pte >>> 10) * 4096, va = i * 4096;
+      rows.push({ va, pte, flags: flagsOf(pte), pa, what: what[i] ?? 'mapped' });
+      if (i === 0 || i === 1) dataFrames[pa >>> 12] = { owner: p, role: `data page ${i}` };
+    }
+    maps.push(rows);
+  }
+  const romFrames = [{ owner: 2, role: 'kernel code' }, { owner: 0, role: 'process A code' }, { owner: 1, role: 'process B code' }, { owner: -1, role: 'free' }];
+  return { dataFrames, romFrames, maps, satp: satps };
+}

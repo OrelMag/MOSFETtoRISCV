@@ -117,7 +117,8 @@ boot:
   sw t0, 0(zero)
   li t6, ${CONSOLE}
   lw t1, 16(t6)
-  addi t1, t1, ${slice}
+  li t2, ${slice}
+  add t1, t1, t2
   sw t1, 20(t6)
   li t1, 0x80
   csrs mie, t1
@@ -194,7 +195,8 @@ ${say('\n')}
 schedule:
   li t6, ${CONSOLE}
   lw t1, 16(t6)
-  addi t1, t1, ${slice}
+  li t2, ${slice}
+  add t1, t1, t2
   sw t1, 20(t6)
   mv t1, t0
   li t3, 1
@@ -373,3 +375,12 @@ export const OS_DEMOS: OsDemo[] = [
 
 /** A Python-subset program as a process (src/lang compilePy with the user target): its data starts at VA 0 and its stack ends at 0x2000, both in the process's own two pages. */
 export const PY_DMEM_WORDS = 2048;
+
+/** Two processes that only compute (and touch their word at 0x1000), for measuring what a slice costs. */
+export const spinner2 = `  li s0, ${VA.data1}
+loop:
+  lw t0, 0(s0)
+  addi t0, t0, 1
+  sw t0, 0(s0)
+  j loop
+`;

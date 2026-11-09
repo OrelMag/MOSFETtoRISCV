@@ -1,0 +1,50 @@
+/* Chapter 'os' (widgets/os.ts): the strip, the plan of memory, the context switch, the cost table. Process colours follow the theme. */
+.os-widget, .os-panel {
+  --os-a: light-dark(#2a78d6, #5b9bff); --os-b: light-dark(#d9531e, #f07a45); --os-k: light-dark(#6b7384, #8b93a8); --os-w: light-dark(#b97800, #e0a020);
+}
+.os-strip { display: flex; height: 28px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-strong); background: var(--surface-2); margin: 6px 0; }
+.os-seg { display: grid; place-items: center; font: 600 11px var(--font-mono); color: #fff; min-width: 1px; }
+.os-seg.k0 { background: var(--os-a); } .os-seg.k1 { background: var(--os-b); } .os-seg.k2 { background: var(--os-k); }
+.os-seg.k3 { background: repeating-linear-gradient(45deg, var(--os-w), var(--os-w) 3px, transparent 3px, transparent 6px); }
+.os-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-2); margin: 4px 0 8px; }
+.os-legend i.os-seg, .os-legend i.os-frame { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; min-height: 0; padding: 0; }
+.os-sum { flex-basis: 100%; }
+.os-console { min-height: 3.5em; max-height: 9em; overflow: auto; white-space: pre-wrap; }
+.os-c0 { color: var(--os-a); } .os-c1 { color: var(--os-b); } .os-c2 { color: var(--os-k); }
+.os-slice { font-size: 12.5px; color: var(--text-2); display: inline-flex; gap: 6px; align-items: center; }
+.os-pcb td, .os-pcb th { padding: 2px 8px; text-align: left; font-family: var(--font-mono); font-size: 12px; }
+
+/* plan of memory */
+.os-frames { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; margin: 6px 0 10px; }
+.os-frames.rom { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 50%; }
+.os-frame { border: 1px solid var(--border-strong); border-radius: 6px; padding: 4px 2px; text-align: center; font: 500 10px var(--font-mono); color: var(--text-2); background: var(--surface-2); display: flex; flex-direction: column; gap: 1px; min-height: 52px; }
+.os-frame b { font-size: 15px; min-height: 18px; color: #fff; }
+.os-frame.o-a { background: var(--os-a); } .os-frame.o-b { background: var(--os-b); } .os-frame.o-k { background: var(--os-k); }
+.os-frame.o-a span, .os-frame.o-b span, .os-frame.o-k span { color: #fff; }
+.os-frame.o-free { background: repeating-linear-gradient(45deg, var(--surface-2), var(--surface-2) 6px, var(--surface-3) 6px, var(--surface-3) 12px); }
+.os-maps { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin: 8px 0; }
+.os-map caption { text-align: left; font-size: 12px; color: var(--text-2); padding-bottom: 4px; }
+.os-map td, .os-map th, .os-cost td, .os-cost th { padding: 2px 8px; text-align: left; font-size: 12px; }
+.os-map td { font-family: var(--font-mono); }
+
+/* the context switch */
+.os-now { border: 1px solid var(--border-strong); border-left-width: 5px; border-radius: 7px; padding: 6px 10px; display: flex; flex-direction: column; gap: 2px; margin: 6px 0; font-size: 12.5px; background: var(--surface); }
+.os-now code { font-size: 13px; font-weight: 600; }
+.os-now.ph-save { border-left-color: var(--os-a); } .os-now.ph-choose { border-left-color: var(--os-k); } .os-now.ph-restore { border-left-color: var(--os-b); } .os-now.ph-user { border-left-color: var(--os-b); }
+.os-rfs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.os-rf h5 { margin: 0 0 4px; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.os-cells { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 2px; }
+.os-cell { border: 1px solid var(--border); border-radius: 4px; padding: 1px 3px; display: flex; justify-content: space-between; gap: 3px; font: 500 10px var(--font-mono); background: var(--surface-2); color: var(--text-2); }
+.os-cell code { font-size: 10px; color: var(--text); }
+.os-cell.nz code { font-weight: 700; }
+.os-cell.hot { background: var(--accent); border-color: var(--accent); }
+.os-cell.hot span, .os-cell.hot code { color: #fff; }
+.os-rf.a .os-cell.nz { border-color: var(--os-a); } .os-rf.b .os-cell.nz { border-color: var(--os-b); }
+@media (max-width: 760px) { .os-rfs { grid-template-columns: minmax(0, 1fr); } .os-frames { grid-template-columns: repeat(4, minmax(0, 1fr)); } .os-frames.rom { max-width: none; } }
+
+/* the cost table */
+.os-cost tr { cursor: pointer; }
+.os-cost tr.sel td { background: var(--accent-soft); }
+.os-bar { display: inline-block; width: 90px; height: 8px; background: var(--surface-3); border-radius: 4px; overflow: hidden; vertical-align: middle; }
+.os-bar i { display: block; height: 100%; background: var(--os-k); }
+@media (pointer: coarse) { .os-cost td { padding: 8px; } }

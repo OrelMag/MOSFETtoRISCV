@@ -95,6 +95,8 @@ export interface CpuSceneOptions {
   /** The single-cycle CPU's ROM (2^imemK words) and data memory (2^dmemK words), when not the defaults (6 and 5). */
   imemK?: number;
   dmemK?: number;
+  /** vm: leave the `.word` filler lines (a ROM image with the kernel and each process in a frame of its own, riscv/osprograms.ts) out of the listing. */
+  hideFiller?: boolean;
   /** Panels docked beside the CPU panel (chapter 15's Python panel); with them the program is theirs to choose. */
   extraPanels?: ScenePanel[];
   /** The CPU panel starts folded: another panel is the step's (chapter 14's control table). */
@@ -123,7 +125,7 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
     root: opts.wide ? dualPipeCpu(asm.words, { dmemK: 6 })
       : opts.ooo ? oooCpu(asm.words, { imemK: oooImemK(asm.words), dmemK: 6 })
       : opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder, microcode: opts.microcode })
-      : opts.vm ? systemCpu(asm.words, { vm: true, imemK: VM_IMEM_K, dmemK: VM_DMEM_K })
+      : opts.vm ? systemCpu(asm.words, { vm: true, imemK: opts.imemK ?? VM_IMEM_K, dmemK: opts.dmemK ?? VM_DMEM_K })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
       : opts.pipeline ? pipelinedCpu(asm.words, { imemK: opts.imemK, dmemK: opts.dmemK, adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram, custom: opts.custom })
@@ -138,7 +140,7 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
 function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink; vmLink?: VmLink }): ScenePanel {
   return (stage: Stage): Widget => {
     const asm = opts.asm;
-    const issOpts = opts.vm ? { system: true, vm: true, imemWords: 2 ** VM_IMEM_K, dmemWords: 2 ** VM_DMEM_K } : opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.ooo ? { dmemWords: 64, imemWords: 2 ** oooImemK(asm.words) } : opts.dcache || opts.wide ? { dmemWords: 64 }
+    const issOpts = opts.vm ? { system: true, vm: true, imemWords: 2 ** (opts.imemK ?? VM_IMEM_K), dmemWords: 2 ** (opts.dmemK ?? VM_DMEM_K) } : opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.ooo ? { dmemWords: 64, imemWords: 2 ** oooImemK(asm.words) } : opts.dcache || opts.wide ? { dmemWords: 64 }
       : { ...(opts.imemK ? { imemWords: 2 ** opts.imemK } : {}), ...(opts.dmemK ? { dmemWords: 2 ** opts.dmemK } : {}), ...(opts.c ? { c: true } : {}), ...(opts.mac ? { mac: true } : {}) };
     let iss = new ISS(asm.words, opts.custom ? { ...issOpts, custom: opts.custom } : issOpts);
     let lastX: number[] = new Array(32).fill(0);
@@ -286,7 +288,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink; vmLi
             }
             editor.setDiagnostics(gaps(r));
             // the ROM has a fixed size (an out-of-order scene sizes it to the program): a longer program wraps the PC
-            const cap = opts.ooo ? Infinity : opts.vm ? 2 ** VM_IMEM_K : opts.system ? 128 : 2 ** (opts.imemK ?? 6);
+            const cap = opts.ooo ? Infinity : opts.vm ? 2 ** (opts.imemK ?? VM_IMEM_K) : opts.system ? 128 : 2 ** (opts.imemK ?? 6);
             if (r.words.length > cap) {
               errBox.textContent = `program is ${r.words.length} words, the ROM holds ${cap}`;
               return;
@@ -482,7 +484,9 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink; vmLi
         narrBox.replaceChildren(...(narr.length ? narr.map((l) => h('div', { class: 'narr-row' }, h('span', { class: 'narr-unit' }, l.unit), h('span', null, l.text)))
           : [h('div', { class: 'narr-empty' }, narrKind === 'cycle' ? 'Pulse: each stage says what it does with its instruction.' : 'Step or Pulse: the instruction just executed is told unit by unit, with its values.')]));
       }
-      const shownPc = opts.multicycle && !atBoundary ? iss.pc : st.pc;
+      // with translation on, the listing is of the ROM: the PC is a virtual address, its instruction sits where the page table says
+      const physPc = (pc: number) => (opts.vm ? iss.walk(pc, 'fetch').pa ?? pc : pc);
+      const shownPc = opts.multicycle && !atBoundary ? iss.pc : physPc(st.pc);
       const w = wordAt(shownPc);
       const d = decode(w, opts.custom, 32, opts.mac);
       const short = opts.c ? parcelAt(asm.words, shownPc) : null;
@@ -514,7 +518,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink; vmLi
         for (const r of snap.rob) at(r.pc, r.done ? 'ROB' : snap.iq.some((e) => e.tag === r.tag) ? 'IQ' : 'EX');
       }
       const keepScroll = listing.scrollTop;
-      listing.replaceChildren(...asm.lines.map((l) => {
+      listing.replaceChildren(...asm.lines.filter((l) => !(opts.hideFiller && l.word === 0 && l.text.trim().startsWith('.word'))).map((l) => {
         const sel = l.addr === selPc;
         const bpG = h('button', { class: 'bp-g', tabindex: '-1', title: 'Breakpoint: stop when this instruction retires', 'aria-label': `Breakpoint at ${hex(l.addr, 4)}`, 'aria-pressed': String(bps.has(l.addr)) });
         bpG.addEventListener('click', (e) => { e.stopPropagation(); if (!bps.delete(l.addr)) bps.add(l.addr); update(); });

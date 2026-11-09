@@ -1,7 +1,6 @@
 // The tiny operating system (riscv/osprograms.ts): its demos on the golden model, then on the gate-level vm CPU in lock step (tests/verify/vmlock.ts),
 // the model-side cycle counts (riscv/osrun.ts) held to the gates' stall cycles.
 import { describe, expect, it } from 'vitest';
-import { ISS } from '../src/riscv/iss';
 import { OS_DEMOS, OS_DMEM_K, OS_IMEM_K, ROOT_OF, VA, counter, hello, osImage, privateWord, rogueCsr, rogueLoad, rogueStore } from '../src/riscv/osprograms';
 import { runOs, tripsOf } from '../src/riscv/osrun';
 import { WALK_CYCLES } from '../src/riscv/vmprograms';
