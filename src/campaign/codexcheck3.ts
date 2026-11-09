@@ -156,7 +156,7 @@ export const CHECK3: Record<string, Quiz[]> = {
       why: ['Every pixel is independent: four lanes take four at a time.', '', 'Every element is independent; the strided loop splits it over the lanes.', 'Each sum is independent of the others: an ideal case for lanes.'],
     },
     {
-      question: 'A kernel takes 200 instructions on the scalar core (period 98) and 56 warp instructions on the 4-lane SIMD core (period 100). What throughput gain is that?',
+      question: 'A kernel takes 200 instructions on the scalar core (period 98) and 56 instructions on the 4-lane SIMD core (period 100). What throughput gain is that?',
       options: ['3.5×', '3.6×: 200 / 56', '4×: four lanes'],
       answer: 0,
       explain: 'Compare times: 200 × 98 = 19 600 NAND delays against 56 × 100 = 5600, a factor of 3.5.',

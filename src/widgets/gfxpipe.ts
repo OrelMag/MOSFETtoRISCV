@@ -14,6 +14,7 @@ import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
 import { pack } from '../sim/values';
 import { h, s } from '../ui/dom';
+import { holdHeight } from '../ui/holdsize';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { FrameMemory } from './framemem';
 import { backFrame, ScanCapture } from './screen';
@@ -222,8 +223,8 @@ function pipelinePanel(meshId: Mesh['id'], opts: PipeSceneOptions): ScenePanel {
       framesTable(PIPE_COSTS.frames.filter((x) => x.id === meshId || x.id === `${meshId}_w`), opts.clear === 'word' ? `${meshId}_w` : meshId, (x) => (x.id.endsWith('_w') ? 'a word a cycle' : 'a pixel a cycle'))) : null;
 
     const cv = h('canvas', { class: 'gfx-screen', width: 256, height: 256, 'aria-label': 'the screen' }) as HTMLCanvasElement;
-    const status = h('div', { class: 'cpu-status' });
-    const checks = h('div', { class: 'cpu-status' });
+    const status = holdHeight(h('div', { class: 'cpu-status' }));
+    const checks = holdHeight(h('div', { class: 'cpu-status' }));
     const tl = h('div', { class: 'gfx-tl-wrap' });
     // the two vertex buffers in the core's memory, packed X | Y << 8 | Z << 16: the kernel writes the next frame's while
     // the command unit reads this frame's

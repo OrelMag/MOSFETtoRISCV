@@ -68,7 +68,7 @@ export const MOREP: Record<string, CodexMore> = {
   },
   hollerith: {
     idea: 'Herman Hollerith\'s cards tallied the 1890 US census: one card per person, a hole for each answer, counted by spring pins that dropped through the holes into mercury cups, closing circuits. IBM\'s 80-column card (1928) holds one character per column as holes in up to three of its twelve rows: the zone rows 12, 11 and 0 at the top, then the digit rows 1–9. A digit is one hole. A letter is a zone and a digit: A–I are 12-1 … 12-9, J–R are 11-1 … 11-9, S–Z are 0-2 … 0-9. Signs add an 8: "." is 12-3-8, "$" is 11-3-8.<br>Binary machines did not need characters: they punched words. On an object card here the word is in row 9, one bit a column, column 1 the most significant, so a 16-bit word takes columns 1–16 of one card and a program is a deck of them.',
-    example: { title: 'Three columns', body: '<pre>H  = 12-8\nE  = 12-5\n7  = 7\n.  = 12-3-8</pre>' },
+    example: { title: 'Four columns', body: '<pre>H  = 12-8\nE  = 12-5\n7  = 7\n.  = 12-3-8</pre>' },
     mistakes: ['Reading row 0 as a digit when it carries a zone: 0-2 is S, not "0 and 2".', 'Counting rows from the top as 0–11: the printed rows are 12, 11, 0, 1, …, 9.'],
     chapters: [{ chapter: 'cards', step: 2, label: 'Eighty columns' }, { chapter: 'cards', step: 3, label: 'A program on cards' }],
   },

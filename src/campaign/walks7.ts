@@ -90,7 +90,7 @@ export const WALKS7: Record<string, WalkScript> = {
     },
     {
       title: 'When to refresh',
-      text: 'refresh = due + (timer ≥ 8) · no request; bit 3 of the timer is the ≥ 8 test. An idle cycle past 8 refreshes early, so most refreshes cost the requests nothing; at 15 one goes ahead of any request.',
+      text: 'refresh = due + (timer ≥ 8) · no request; bit 3 of the timer is the ≥ 8 test. An idle cycle at 8 or more refreshes early, so most refreshes cost the requests nothing; at 15 one goes ahead of any request.',
       parts: ['u8', 'u9', 'u10', 'u11'],
       why: 'Refreshing when idle hides the cost from requests. The forced refresh at 15 keeps the deadline under constant traffic.',
       whyNot: { text: 'Refreshing only at the deadline stalls a request every time. Refreshing only when idle gives no guarantee under constant traffic.' },

@@ -10,7 +10,7 @@ import type { LevelCase } from './cases';
 export const CASES1: Record<string, LevelCase> = {
   // ---- Act 4: the instruction set and programs ------------------------------------------------
   i_isa: {
-    problem: 'Hardware needs a specification before it can be built: which state exists (pc, x0–x7, 64 K words of data), what each instruction does to it, and how it is spelled in bits. RV16 is RISC-V cut to 16 bits: load / store (only <code>lw</code> and <code>sw</code> touch memory), fixed field positions (rs1, rs2 and rd never move, so the register file is read while the opcode is still being decoded) and x0 = 0 (a constant and a discard target, which makes <code>mv</code>, <code>nop</code>, <code>j</code> and <code>beqz</code> pseudo-instructions with no opcode of their own).',
+    problem: 'Hardware needs a specification before it can be built: which state exists (pc, x0–x7, 64 K words of data), what each instruction does to it, and how it is spelled in bits. RV16 is RISC-V cut to 16 bits: load / store (only <code>lw</code> and <code>sw</code> touch memory), fixed field positions (rs1, rs2 and rd never move, so the register file is read while the opcode is still being decoded) and x0 = 0 (a constant and a discard target, which makes <code>li</code>, <code>nop</code>, <code>j</code> and <code>beqz</code> pseudo-instructions with no opcode of their own).',
     without: 'Act 5\'s blocks would have nothing to be checked against: the golden model every core bench compares with, register write by register write, is this specification run in software.',
     cost: '23 instructions in 16-bit words. The width sets the costs downstream: three-bit register fields mean eight registers, so the register file is 2172 NANDs; immediates that never move make the immediate generator 0 NANDs; a 4-bit opcode makes the control unit\'s first stage a 4→16 decoder, 100 of its 200 NANDs. The price is paid in instructions: 6-bit offsets, no <code>andi</code>, no <code>bltu</code>, no bytes.',
   },
@@ -29,7 +29,7 @@ export const CASES1: Record<string, LevelCase> = {
   },
   p_mem: {
     problem: 'Data beyond eight registers lives in memory, and only <code>lw</code> and <code>sw</code> reach it. Their offsets are 6 bits (−32 … 31), so an array is walked with its address in a register: <code>lw t1, 0(t0)</code> loads a[i], <code>addi t0, t0, 1</code> steps one word (RV16 is word addressed), a signed <code>bge</code> keeps the larger. The address goes through the ALU\'s adder, as for <code>add</code>.',
-    without: 'Eight registers are all the data a program can hold: no arrays, no tables, no stack.',
+    without: 'Seven registers (and x0) are all the data a program can hold: no arrays, no tables, no stack.',
     cost: '14 words, 77 instructions on average. The loop loads t1 and compares it in the very next instruction: on Pipeline IV, which keeps Pipeline III\'s stall, that pair stalls one cycle, since the loaded word exists only after M. Loading with <code>lw t1, 1(t0)</code> before the <code>addi</code> puts an independent instruction between them and removes the stall.',
   },
   p_call: {
@@ -85,7 +85,7 @@ export const CASES1: Record<string, LevelCase> = {
   },
   c_core2: {
     problem: '<code>lw</code> and <code>sw</code> reach the data memory. The ALU adds rs1 and the 6-bit offset (bimm = 1, operation add); a load writes <code>drdata</code> back through the result mux\'s second input, a store puts rs2 on <code>dwdata</code> and raises <code>dwe</code> for one clock edge. Addresses count 16-bit words, and the top seven (0xFFF9–0xFFFF) are devices, reached as negative offsets from x0.',
-    without: 'Eight registers are all the data a program has: no arrays, no stack, no I/O.',
+    without: 'Seven registers (and x0) are all the data a program has: no arrays, no stack, no I/O.',
     cost: '+98 NANDs over Core I (3990): the address is the ALU\'s add, but stores bring the S/B immediate format and loads the memory\'s word, so the immediate and the result each choose among three and gain a second 2:1 mux (49 NANDs; 4:1 bus muxes come with jumps). The price is mostly time: the data memory read sits behind the ALU in the same cycle (period 98 against 84), and fetch and load both read memory in that cycle, which is why a single-cycle core has separate instruction and data memories (Harvard).',
   },
   c_core3: {
@@ -346,7 +346,7 @@ export const CASES1: Record<string, LevelCase> = {
   },
   p_saxpy: {
     problem: 'y ← a·x + y is the shape of most throughput work: every element independent. Thread t takes elements t, t + 4, …, so the lanes walk the arrays side by side and each pass touches four neighbouring words. There is no multiply, but a is the same in every lane, so the shift-and-add loop over its bits branches identically everywhere and the leader is never wrong.',
-    without: 'One lane doing everything (<code>tmc</code> to lane 0, stride 1): 281 cycles on average against 90, 3.1× slower, with the other three lanes masked 72% of the time.',
+    without: 'One lane doing everything (<code>tmc</code> to lane 0, stride 1): 281 cycles on average against 90, 3.1× slower, with 72% of its lane-steps idle (the other three lanes masked).',
     cost: '23 words, 90 cycles, 360 lane-ops, no lane idle: 7 instructions per element per set bit of a. The one-lane version does fewer lane-ops (287): four lanes run the loop\'s control (the bit test, the counters, the jumps) four times, 25% more work for 3.1× the speed. The stride-4 layout is also what a coalescer rewards: the four lanes\' words share one line, where contiguous quarters put them n / 4 words apart.',
   },
   p_reduce: {
@@ -371,7 +371,7 @@ export const CASES1: Record<string, LevelCase> = {
     cost: '41 words, 176 cycles, 702 lane-ops, no lane idle. Privatizing costs 8× the counters and a combine pass. Real GPUs add an atomic instead: chapter 32\'s <code>amoadd.w</code> counts in one instruction, serving the leader alone, one lane per access.',
   },
   k_edge: {
-    problem: 'Deciding whether a pixel is inside a triangle takes three edge functions, E = A·(x − xᵢ) + B·(y − yᵢ), each a sum of two products. The rasterizer evaluates them for every pixel it visits, one a cycle. Because E is linear, the next pixel to the right is E + 4A and the one below E + 4B (quarter-pixel units): after the first pixel, every value is one addition away. The stepper keeps E and the start of the band, R, so that a new row of tiles can begin from R + 4B. Why in hardware at all: the test is the same few adds at every pixel, which is what fixed-function hardware is for; a kernel on the lanes spends instructions on the walk, the tests and the stores around them.',
+    problem: 'Deciding whether a pixel is inside a triangle takes three edge functions, E = A·(x − xᵢ) + B·(y − yᵢ), each a sum of two products. The rasterizer evaluates them for every pixel it visits, one a cycle. Because E is linear, the next pixel to the right is E + a and the one below E + b, with a = 4A and b = 4B (quarter-pixel units): after the first pixel, every value is one addition away. The stepper keeps E and the start of the band, R, so that the next band of tiles (four pixel rows down) can begin from R + 4b. Why in hardware at all: the test is the same few adds at every pixel, which is what fixed-function hardware is for; a kernel on the lanes spends instructions on the walk, the tests and the stores around them.',
     without: 'Evaluating E from scratch costs two 8 × 8 multiplications per edge per pixel: six 8 × 8 array multipliers (632 NANDs each, 3792 in all) to keep one pixel a cycle, against three adders.',
     cost: '963 NANDs, period 58: the two 16-bit registers are 416, the six 16-bit muxes that choose the base (E, R or 2E) and the operand (a, 4a, b or 4b) 294, the adder / subtractor 212, the command decoder 30. Chapter 33\'s stepper is the same idea at 18 bits with the tile test built in; here the test is the rasterizer\'s.',
     alts: [{ name: 'Chapter 33\'s edge stepper (18 bits, with the tile test)', lib: 'edge_step' }],
@@ -379,7 +379,7 @@ export const CASES1: Record<string, LevelCase> = {
   k_tile: {
     problem: 'The rasterizer must visit every pixel that may be inside, one a cycle, and should visit as few others as possible. The tile walk covers the bounding box in 4 × 4-pixel tiles, band by band. One TEST cycle at a tile\'s top-left pixel decides the whole tile (the rasterizer checks each edge at the tile\'s best corner); an accepted tile\'s 16 pixels follow in a column serpentine, so each step is one pixel up, down or right and the edge steppers only ever add.',
     without: 'A plain scan of the bounding box spends a cycle on every pixel of the box, inside or not: about twice the triangle\'s area for a typical triangle, far more for a thin diagonal one. Chapter 33 measured 1914 cycles against 3368 for its large triangle and 888 against 3848 for a sliver.',
-    cost: '479 NANDs, period 26: twelve flip-flops of state (busy, TEST, the pixel counter, the tile x and y, 156 in registers), three 4-bit incrementers (108), two 3-bit comparators for the last tile, and the logic that turns the position into the steppers\' commands. One extra register per edge (the band start R) is the stepper\'s share of the scheme.',
+    cost: '479 NANDs, period 26: fourteen flip-flops of state (busy, TEST, and the 12 bits of the pixel counter and the tile x and y: 156 NANDs in registers), three 4-bit incrementers (108), two 3-bit comparators for the last tile, and the logic that turns the position into the steppers\' commands. One extra register per edge (the band start R) is the stepper\'s share of the scheme.',
     alts: [{ name: 'Chapter 33\'s tile walk (64 × 64, with the set-up phases)', lib: 'rast_walk' }],
   },
   k_raster: {
@@ -410,7 +410,7 @@ export const CASES1: Record<string, LevelCase> = {
     cost: '34 transistors: the amplifier 8, the write driver 22 (its gates are NANDs at switch level), the two cells one each, and two of your own: the precharge transistor and the equalizer, which precharges the reference line through the bit line. A real chip pays one amplifier per column, shared by every cell on it: hundreds of cells per amplifier.',
   },
   m_bank: {
-    problem: 'Once a row is open its words are a cycle away, and every other row is draining: a bank needs someone who remembers which row is open, decides when to close it, and opens every row again before its charge is gone. Here the array leaves all of that to you, as the DRAMs of the 1970s did: RAS-only refresh, a row pointer and a timer in the controller.',
+    problem: 'Once a row is open its words are a cycle away, and every other row is draining: a bank needs someone who remembers which row is open, decides when to close it, and opens every row again before its charge is gone. Here the array leaves all of that to you, as the DRAMs of the 1970s did: RAS-only refresh (opening a row restores it, nothing else), a row pointer and a timer in the controller.',
     without: 'Without refresh the first row nobody touched for 288 cycles is gone; the long-pause trace loses one before its first request. Without the open row, every access pays an ACT and a PRE.',
     cost: '319 NANDs, period 30: the state is 165 (a flip-flop and three 4-bit registers: open row, refresh pointer, timer), two incrementers and a row comparator 66, the decisions the rest. 5917 cycles over the eight traces. In a computer it would sit between a cache\'s miss port and the cell array, as 1970s controllers did; no later level places it: the next one hands refresh and the row buffers to the chip and keeps only the timing rules.',
     alts: [{ name: 'The DDR-style controller (next level)', lib: 'rv16_dramctrl' }],

@@ -13,7 +13,7 @@ export const ACT_ENDS: Record<number, ActEnd> = {
   },
   1: {
     can: 'Any truth table as gates (K-map, NAND–NAND), choose between words (bus mux), pick one of eight (decoder, 30 NANDs), tell whether two words are equal (110 NANDs, depth 12).',
-    cannot: 'Treat a word as a number. There is no adding, so an RV16 <code>add</code> is still out of reach. Act 2.',
+    cannot: 'Do arithmetic on a word. There is no adding, so an RV16 <code>add</code> is still out of reach. Act 2.',
     next: 'a_ha',
   },
   2: {

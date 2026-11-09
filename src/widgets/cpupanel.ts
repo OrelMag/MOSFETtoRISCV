@@ -37,6 +37,7 @@ import { bitsToF32, flagNames, RM_NAMES } from '../sim/fpref';
 import { CAUSE } from '../riscv/iss';
 import { pack } from '../sim/values';
 import { debounce, h } from '../ui/dom';
+import { holdHeight } from '../ui/holdsize';
 import { codeEditor } from './codeedit';
 import { stepEffect } from '../riscv/trace';
 import { DECK_EXT, deckFromJson, deckToJson } from '../cards/card';
@@ -162,7 +163,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     const fieldsBox = h('div', { class: 'cpu-fields' });
     let fieldsShown = '';
 
-    const status = h('div', { class: 'cpu-status' });
+    const status = holdHeight(h('div', { class: 'cpu-status' }));
     // On a halt, in words: how long it ran, and the answer when the program names its register (Program.result).
     const haltLine = h('div', { class: 'cpu-halt', role: 'status', hidden: true });
     const listing = h('div', { class: 'cpu-listing' });
@@ -174,16 +175,23 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
     let loads = 0, misses = 0, prevStall = false, stallRun = 0;
     /** Energy (sim/power.ts): toggles counted from reset, or from the last Back (a restored state's toggles are not known). */
     let meter: PowerMeter | null = null, meterSteps = 0, meterCycles = 0, period: number | null | undefined;
+    let lastEnergy: HTMLElement | null = null;
     const restartMeter = () => { meter?.reset(); meterSteps = iss.steps; meterCycles = stage.cycles; };
     const energy = (sim: Sim): HTMLElement[] => {
       if (!(sim instanceof GateSim)) return [];
       if (!meter || meter.sim !== sim) { meter = new PowerMeter(sim); meterSteps = iss.steps; meterCycles = stage.cycles; }
       const steps = iss.steps - meterSteps, cycles = stage.cycles - meterCycles;
-      if (steps <= 0 || cycles <= 0 || stage.inEdge) return [];
+      // Always an item on a GateSim, so the status line never gains or loses a line over it: before the first
+      // instruction an invisible stand-in of the same shape, mid-edge the last figure.
+      if (steps <= 0 || cycles <= 0) lastEnergy = null;
+      if (steps <= 0 || cycles <= 0 || stage.inEdge) {
+        return [lastEnergy ?? h('span', { style: 'visibility:hidden', 'aria-hidden': 'true' }, '≈ 00.0 pJ / instr · 0.00 mW')];
+      }
       if (period === undefined) period = analyzeTiming(sim.design)?.period ?? null;
       const fj = energyFj(meter.totals().switched);
-      return [h('span', { title: `${POWER_NOTE} Over the last ${steps} instructions (from reset or the last Back); power at the clock static timing allows.` },
-        `≈ ${fmtEnergy(fj / steps)} / instr${period ? ` · ${fmtPower(powerW(fj / cycles, period))}` : ''}`)];
+      lastEnergy = h('span', { title: `${POWER_NOTE} Over the last ${steps} instructions (from reset or the last Back); power at the clock static timing allows.` },
+        `≈ ${fmtEnergy(fj / steps)} / instr${period ? ` · ${fmtPower(powerW(fj / cycles, period))}` : ''}`);
+      return [lastEnergy];
     };
     const wb = opts.dcache === 'wb' || opts.dcache === 'wb2';
     const sel = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
@@ -411,7 +419,8 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
         ...energy(sim),
         mismatch ? h('span', { class: 'bad' }, `✗ ${mismatch}`) : h('span', { class: 'good', title: 'Every register and the PC match the instruction-set simulator after every cycle' }, '✓ matches golden model'),
       ];
-      if (halted) parts.push(h('span', { class: 'warn' }, 'halted'));
+      // always in the line, hidden until it applies: appearing at the halt it wrapped the line and moved every panel below
+      parts.push(h('span', { class: 'warn', style: halted ? null : 'visibility:hidden', 'aria-hidden': halted ? null : 'true' }, 'halted'));
       status.replaceChildren(...parts);
       haltLine.hidden = !halted || !!mismatch;
       if (halted && !mismatch) {

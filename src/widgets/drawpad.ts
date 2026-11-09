@@ -9,6 +9,7 @@ import {
 } from '../gfx/tessellate';
 import { GPU30Z, VERTEX_PINS } from '../lib/raster';
 import { h } from '../ui/dom';
+import { holdHeight } from '../ui/holdsize';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { rgb332 } from '../gfx/raster';
 import { CLEAR, type DrawLink, opInputs, screenPanel } from './screen';
@@ -59,7 +60,7 @@ function drawPanel(link: DrawLink): ScenePanel {
 
     const S = 2; // canvas pixels per quarter pixel
     const pad = h('canvas', { class: 'gfx-pad', width: 256 * S, height: 256 * S, tabindex: '0', 'aria-label': 'drawing pad, 64 by 64 pixels' }) as HTMLCanvasElement;
-    const status = h('div', { class: 'cpu-status' });
+    const status = holdHeight(h('div', { class: 'cpu-status' }));
     const hint = h('p', { class: 'cpu-sec-hint' });
 
     const change = (f: () => void) => {
