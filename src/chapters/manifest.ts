@@ -238,7 +238,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A request that waits", challenge: "reach" },
     { title: "Inside the trap unit" },
   ] },
-  { id: "muldiv", num: 21, title: "Multiply & divide", blurb: "Array and Wallace-tree multipliers, Baugh–Wooley and Booth, restoring, non-restoring and SRT division, and the M extension in the single-cycle and pipelined CPUs.", level: "Arithmetic", builds: ["adders","fastadd","pipeline","python"], recap: {"checks":4}, steps: [
+  { id: "muldiv", num: 21, title: "Multiply & divide", blurb: "Array and Wallace-tree multipliers, Baugh–Wooley and Booth, restoring, non-restoring and SRT division, and the M extension in the single-cycle and pipelined CPUs.", level: "Arithmetic", builds: ["adders","fastadd","pipeline","python","io"], recap: {"checks":4}, steps: [
     { title: "Long multiplication is AND and add", challenge: "reach" },
     { title: "Or reuse one adder", challenge: "reach" },
     { title: "The array is slow" },

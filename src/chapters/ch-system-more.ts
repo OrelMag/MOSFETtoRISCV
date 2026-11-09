@@ -93,7 +93,7 @@ export const IO_MORE: Step[] = [
     title: 'Registers with side effects',
     body: `
       <p>An I/O address looks like memory and is not. Each register is a wire into a device, and the <span data-show="io">I/O unit</span> here decodes <em>only</em> the word:
-      it has no byte enables. A store of any size puts the lane-replicated data on the bus (chapter 19's store unit), and the register takes it whole.
+      it has no byte enables. A store of any size puts the lane-replicated data on the bus (the store unit of this chapter's first steps), and the register takes it whole.
       <code>sb</code> of 0x2A to <code>mtimecmp</code> (0x8000_0014) writes ${hex(SB_CMP.cmp)}; <code>sh</code> of 0x1234 writes ${hex(SH_CMP.cmp)}; <code>sw</code> of 0x1234 writes ${hex(SW_CMP.cmp)}.
       An <code>sb</code> of 0xAB to the LED register at offset 1 still lights the LEDs with ${hex(SB_LED_OFF.leds, 2)}. Software that wants a byte-sized field in a wider register has to read the word, merge and write it back.</p>
       <table class="mini"><tr><th>register</th><th>load</th><th>store</th><th>side effect</th></tr>
@@ -175,7 +175,7 @@ export const TRAPS_MORE: Step[] = [
     tour: {
       beats: [
         { title: 'Set up', reset: true, cycles: 10, show: ['csr'], expect: { pcOut: 40 },
-          say: '<p>mtvec, the first deadline, mie = timer + external (0x880), MIE on. The loop counts in s0.</p>' },
+          say: '<p>mtvec, the first deadline and mie = timer + external (0x880) are set; the next instruction, at pc {v:pcOut}, turns MIE on. Then the loop counts in s0.</p>' },
         { title: 'The timer interrupt', cycles: 35, show: ['csr', 'trap'], expect: { pcOut: 52 },
           say: '<p>Taken at the next boundary: pc = {v:pcOut}, MIE cleared, mepc is the loop instruction. One handler address serves both causes: it reads mcause and branches.</p>' },
         { title: 'Open the door', cycles: 15, show: ['csr'], expect: { pcOut: 112 },
@@ -189,7 +189,7 @@ export const TRAPS_MORE: Step[] = [
       ],
     },
     more: {
-      derive: `<p>Depth 2 costs the outer handler 5 instructions of ceremony before the slow work and 5 after (save mepc, load mie, write mie, set a flag, set MIE; clear MIE, restore mie, restore mepc, count, mret), and an urgent interrupt waits at most ~13 instructions (dispatch, the tick, reaching <code>csrsi</code>) or ~8 at the end of the handler, instead of the whole handler. A press that lands while MIE is 0 is not lost if the line is held; the one-cycle button here must land in the window, which is why the next step adds a request latch.</p>`,
+      derive: `<p>Depth 2 costs the outer handler about 6 instructions of ceremony before the slow work and 8 after (save mepc, load mie, write mie, set a flag, set MIE; clear MIE, restore mie, restore mepc, count, mret), and an urgent interrupt waits at most ~13 instructions (dispatch, the tick, reaching <code>csrsi</code>) or ~8 at the end of the handler, instead of the whole handler. A press that lands while MIE is 0 is not lost if the line is held; the one-cycle button here must land in the window, which is why the next step adds a request latch.</p>`,
       pitfall: `<p>Forgetting to save mepc: the nested trap overwrites it and the outer <code>mret</code> returns into the inner handler's interrupted instruction, so the main loop is skipped or repeated, silently. The same for mcause if the outer handler reads it after the window opens.</p>`,
     },
     challenge: {
@@ -213,7 +213,7 @@ export const TRAPS_MORE: Step[] = [
     scene: () => ({ root: VECTOR_TARGET, inputs: { mtvec: 0x1001, cause: 0x80000007 } }),
     tries: [(st) => st.getInput('cause') === 0x8000000b && st.getInput('mtvec') === 0x1001],
     more: {
-      derive: `<p>target = BASE | (MODE ∧ int ? code << 2 : 0). The OR equals the sum only because BASE[5:2] = 0, The spec requires only 4-byte alignment and lets vectored mode demand more, so an implementation can do without an adder: this block requires 64 bytes, like the FE310 (Ibex: 256); a table placed unaligned would add, with a 4-bit incrementer's worth of carry. Saved per interrupt: the load of mcause, the compare and the branch, ~4 cycles of 1-cycle instructions; on a deep pipeline the mispredicted indirect jump of a software dispatch costs more.</p>`,
+      derive: `<p>target = BASE | (MODE ∧ int ? code << 2 : 0). The OR equals the sum only because BASE[5:2] = 0. The spec requires only 4-byte alignment and lets vectored mode demand more, so an implementation can do without an adder: this block requires 64 bytes, like the FE310 (Ibex: 256); a table placed unaligned would add, with a 4-bit incrementer's worth of carry. Saved per interrupt: the load of mcause, the compare and the branch, ~4 cycles of 1-cycle instructions; on a deep pipeline the mispredicted indirect jump of a software dispatch costs more.</p>`,
       real: `<p>Rocket, CVA6 and Ibex implement vectored mtvec; Ibex's 32-entry table sits on a 256-byte boundary. Embedded Arm cores always use a table, one word per exception number, loaded by the hardware.</p>`,
       pitfall: `<p>The vector table slots are 4 bytes, so each is one <code>j</code> (±1 MiB) or a compressed jump; a handler that is further away needs a trampoline. And mcause for a synchronous exception has bit 31 clear: an ecall never indexes the table.</p>`,
     },
