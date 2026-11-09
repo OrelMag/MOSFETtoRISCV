@@ -15,6 +15,7 @@ import { BUILDH } from './buildh';
 import { BUILD_LUT } from './buildlut';
 import { BUILDK } from './buildk';
 import { BUILDM } from './buildm';
+import { BUILDPOW } from './buildpow';
 import { BUILDR } from './buildr';
 import { lzc, ROUND_DECIDE } from '../lib/fpu';
 import { arrayMul, seqDivider } from '../lib/muldiv';
@@ -346,6 +347,12 @@ export const NODES: CampaignNode[] = withBugHunts([
     why: 'A register whose input is its own value plus one counts clock edges: the PC without jumps, a divider\'s step counter, every timer. Par is 79 NANDs at period 17: the incrementer\'s carry is inside the loop, so it sets the clock. The program counter is the same loop, 16 bits wide, with a load.',
     tips: ['q ← rst ? 0 : en ? q + 1 : q.', 'rst wins over en: clear the next value after the enable mux, not only on the incremented path.', 'Feed the incrementer from q, the register\'s output: from d it is a combinational loop.'], codex: ['counter'], unlocks: ['counter4'], par: { nand: 79, period: 17 },
     chapters: [{ chapter: 'registers', step: 2, label: 'A counter' }],
+  },
+  {
+    id: 's_icg', act: 3, title: 'Clock gate', kind: 'build', optional: true, requires: ['s_reg4'], base: BUILDPOW.s_icg,
+    why: 'A register holds by reloading its own q, and its clock never stops: every flip-flop toggles inside on every edge, written or not. Stopping the clock saves that, but a bare clk AND en makes an edge of its own when en changes while clk is high. A latch open only while clk is low freezes en, so the AND passes whole pulses: 7 NANDs at par, one gate for a whole register.',
+    tips: ['A latch in front of the AND: which half of the clock should it be open in?', 'Open while clk is low: its enable is ¬clk. Your D latch, an inverter and an AND: 4 + 1 + 2 = 7 NANDs.', 'Open while clk is high, it passes the very change of en that the AND must not see, and the bench finds the runt pulse.'],
+    chapters: [{ chapter: 'power', step: 5, label: 'A clock gate that cannot glitch' }], codex: ['clockgating'], unlocks: [], par: { nand: 7 },
   },
   {
     id: 's_pc', act: 3, title: 'Program counter', kind: 'build', requires: ['s_reg16', 'a_inc16', 'g_mux8'],

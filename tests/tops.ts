@@ -29,7 +29,7 @@ export function macTops(): ComponentDef[] {
 export function cpuTops(): ComponentDef[] {
   const w = assemble(PROGRAMS[0].source).words, cw = assemble(CACHE_CPU_PROGRAMS[0].source).words;
   return [
-    singleCycleCpu(w), singleCycleCpu(w, { adder: 'ks' }), singleCycleCpu(w, { fpu: true }),
+    singleCycleCpu(w), singleCycleCpu(w, { adder: 'ks' }), singleCycleCpu(w, { fpu: true }), singleCycleCpu(w, { gatedClocks: true }),
     singleCycleCpu(cw, { dmemK: 6, dcache: true, adder: 'ks' }), singleCycleCpu(cw, { dmemK: 6, dcache: 'wb2', adder: 'ks' }),
     singleCycleCpu(cw, { icache: true, adder: 'ks' }), singleCycleCpu(cw, { dmemK: 6, dcache: 'wb', icache: true }),
     pipelinedCpu(w), pipelinedCpu(w, { adder: 'ks' }), pipelinedCpu(w, { adder: 'ks', balanced: true }),

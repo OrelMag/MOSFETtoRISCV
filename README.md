@@ -17,15 +17,15 @@ sky130 layouts, whose reports stand beside the site's own area and timing estima
 both ways: any circuit exports as Verilog, and Verilog written in the sandbox is synthesized by Yosys
 in the page into chips that open down to the transistors like everything else.
 
-Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journey-->85<!--/n--> chapters,
+Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journey-->86<!--/n--> chapters,
 <!--n:onramps-->2<!--/n--> on-ramps for newcomers, <!--n:prologue-->3<!--/n--> prologue chapters and <!--n:appendices-->4<!--/n--> appendices), the **[campaign](https://switchtocpu.com/#/campaign)**
-(<!--n:levels-->168<!--/n--> levels: build it to unlock it, or fix it), the **[workbench](https://switchtocpu.com/#/workbench/rca4)**
+(<!--n:levels-->169<!--/n--> levels: build it to unlock it, or fix it), the **[workbench](https://switchtocpu.com/#/workbench/rca4)**
 (any component on its own, with statistics, benchmarks and the out-of-order lab) and the
 **[sandbox](https://switchtocpu.com/#/sandbox)** (your own circuits, up to whole computers).
 
 ## The journey
 
-**<!--n:journey-->85<!--/n--> chapters.** The first <!--n:ch.silicon-->28<!--/n--> run from the MOSFET, the CMOS inverter and NAND, through gates, binary numbers,
+**<!--n:journey-->86<!--/n--> chapters.** The first <!--n:ch.power-->32<!--/n--> run from the MOSFET, the CMOS inverter and NAND, through gates, binary numbers,
 adders, multiplexers, latches, registers and memory arrays, to the ALU, the register file, RV32I
 assembly and a single-cycle CPU. Then Python compiled to RV32I by the site's own compiler and run on
 those gates, faster adders, pipelining (hazards, forwarding, branch prediction), bytes and
@@ -34,14 +34,17 @@ floating point (RV32F), the C extension (an expander in gates in front of the de
 same core at 64 bits, the W instructions, what width costs block by block), a gate-level out-of-order
 core (renaming, a reorder buffer, speculation) and a lab to reshape it (width, ports, window sizes, on
 the benchmarks, your assembly or your Python, each commit slot accounted for, the window sizes priced
-from the gates), many cores (atomics, coherence) and place and route on
-silicon. Four tracks follow: a **GPU** (a lane core,
+from the gates), many cores (atomics, coherence), place and route on
+silicon, the same design on an FPGA (look-up tables, our computer on a Tang Nano 9K), how it is known to work (lock step,
+fuzzing, stuck-at faults, scan chains, self-test), side channels (a timing leak, Spectre on our out-of-order model and
+what each defence costs) and power (every toggle measured, glitches, a clock gate that cannot glitch on our CPU, leakage from the
+circuit's own state, the minimum-energy point). Four tracks follow: a **GPU** (a lane core,
 SIMT warps with divergence, latency hiding, coalescing and banked shared memory, a rasterizer with
 depth and blending, and a graphics pipeline whose vertex kernel runs on the warp core), **memory in
 depth** (a DRAM at switch level, a DDR-style controller, flash with its translation layer, a bus with
 DMA that boots a computer from flash), **communication**, and **signal processing**.
 
-**Communication** (chapters <!--n:comm.first-->42<!--/n--> to <!--n:comm.last-->69<!--/n-->, with an on-ramp, Sending a message) starts from why moving a bit
+**Communication** (chapters <!--n:comm.first-->43<!--/n--> to <!--n:comm.last-->70<!--/n-->, with an on-ramp, Sending a message) starts from why moving a bit
 is harder than computing one, on a telegraph line and a dial exchange of relays. Then the wire: RC,
 reflections and termination, metastability and clock crossing, a UART, SPI and I²C. Then the channel:
 Fourier, noise and Shannon's limit, modems, FFTs and OFDM, SerDes with clock recovery and the eye, fibre.
@@ -55,7 +58,7 @@ gates, cellular and the data centre close it, and **The expert's bench** ends it
 the cause, from real faults injected into these models. Where gates would teach nothing (radio, glass,
 cellular, queues, the data centre) the chapter says it runs a model, and labels what is assumed.
 
-**Signal processing** (chapters <!--n:dsp.first-->70<!--/n--> to <!--n:dsp.last-->85<!--/n-->, <!--n:dsp.count-->16<!--/n--> of them, after the expert's bench) asks what a computer does with a
+**Signal processing** (chapters <!--n:dsp.first-->71<!--/n--> to <!--n:dsp.last-->86<!--/n-->, <!--n:dsp.count-->16<!--/n--> of them, after the expert's bench) asks what a computer does with a
 sample once it has one. Numbers that fit (saturation instead of wrap, guard bits, Q formats), the
 z-plane, measuring a spectrum, FIR design to a mask, IIR and the stability feedback costs, changing the
 rate for a fraction of the price, and CORDIC, rotation by shifts. Then the machine: a MAC added to the
@@ -72,7 +75,7 @@ radio's band are models, and each chapter says what is assumed.
 A **Basics** chapter (a circuit, two levels, counting in binary, truth tables, programs, how to read a schematic here) starts the journey for anyone who needs it,
 and no term is used before the chapter that teaches it (a test holds that at zero). Before chapter 1,
 an optional **prologue** builds the same logic from relays, from vacuum tubes and from punched cards.
-After chapter <!--n:journey-->85<!--/n-->, <!--n:appendices-->4<!--/n--> **appendices**: the MOS 6502 rebuilt at transistor level, Doom compiled for the
+After chapter <!--n:journey-->86<!--/n-->, <!--n:appendices-->4<!--/n--> **appendices**: the MOS 6502 rebuilt at transistor level, Doom compiled for the
 site's RV32IM, Ben Eater's SAP-1 breadboard computer, its 74xx chips built from our gates, drawn on
 breadboards and run in lock step with a golden model, and Bit Runner, an original game in 74xx counters and gates with no CPU.
 
@@ -107,27 +110,27 @@ review queue; one backup file carries all progress; the site installs as an app 
 <td><img src="docs/images/ooo.png" alt="The out-of-order core running bubble sort with its reorder buffer and rename table"><br><sub><b>Ch. <!--n:ch.ooo-->26<!--/n--></b>: a 359k-NAND out-of-order core; its reorder buffer, issue queue and rename table read from the gates.</sub></td>
 </tr>
 <tr>
-<td><img src="docs/images/drawpad.png" alt="A drawing of a house sent to the gate-level GPU and shown on its screen"><br><sub><b>Ch. <!--n:ch.pixels-->36<!--/n--></b>: draw a picture, cut it into triangles and send it to a 2.7M-NAND rasterizer; the screen is checked pixel for pixel.</sub></td>
-<td><img src="docs/images/dram.png" alt="A 4 × 4 DRAM array at switch level with each cell's charge"><br><sub><b>Ch. <!--n:ch.dram-->38<!--/n--></b>: a DRAM read in slow motion: charge sharing on the bit line, the sense amplifier, leakage and refresh.</sub></td>
+<td><img src="docs/images/drawpad.png" alt="A drawing of a house sent to the gate-level GPU and shown on its screen"><br><sub><b>Ch. <!--n:ch.pixels-->37<!--/n--></b>: draw a picture, cut it into triangles and send it to a 2.7M-NAND rasterizer; the screen is checked pixel for pixel.</sub></td>
+<td><img src="docs/images/dram.png" alt="A 4 × 4 DRAM array at switch level with each cell's charge"><br><sub><b>Ch. <!--n:ch.dram-->39<!--/n--></b>: a DRAM read in slow motion: charge sharing on the bit line, the sense amplifier, leakage and refresh.</sub></td>
 </tr>
 <tr>
-<td><img src="docs/images/ping.png" alt="Two computers and a switch in gates, with a ping and the frames at the switch listed"><br><sub><b>Ch. <!--n:ch.network-->59<!--/n--></b>: a ping on the gates: two CPUs running a stack compiled from Python, a NIC and a switch, 12 million NANDs. The frames are listed as they pass, and Save capture writes a <code>.pcap</code>.</sub></td>
-<td><img src="docs/images/eye.png" alt="An eye diagram with sliders for rate, bandwidth and noise, and the error rate computed"><br><sub><b>Ch. <!--n:ch.serial-->52<!--/n--></b>: the eye of a fast serial link: rate, band and noise on sliders, with eye height, error rate and the fastest rate computed.</sub></td>
+<td><img src="docs/images/ping.png" alt="Two computers and a switch in gates, with a ping and the frames at the switch listed"><br><sub><b>Ch. <!--n:ch.network-->60<!--/n--></b>: a ping on the gates: two CPUs running a stack compiled from Python, a NIC and a switch, 12 million NANDs. The frames are listed as they pass, and Save capture writes a <code>.pcap</code>.</sub></td>
+<td><img src="docs/images/eye.png" alt="An eye diagram with sliders for rate, bandwidth and noise, and the error rate computed"><br><sub><b>Ch. <!--n:ch.serial-->53<!--/n--></b>: the eye of a fast serial link: rate, band and noise on sliders, with eye height, error rate and the fastest rate computed.</sub></td>
 </tr>
 <tr>
-<td><img src="docs/images/enigma.png" alt="The naval Enigma M4 in 3D, lid open, with its parts labelled"><br><sub><b>Ch. <!--n:ch.secret-->63<!--/n--></b>: an Enigma M4 in 3D that deciphers a real 1942 message on its own wheels, beside the same machine in gates.</sub></td>
-<td><img src="docs/images/wifi.png" alt="Three Wi-Fi stations in gates with the frames of two hidden stations overlapping"><br><sub><b>Ch. <!--n:ch.wifi-->66<!--/n--></b>: the hidden terminal: three stations in gates, each in lock step with its model, on the standard's own timings. Tick RTS / CTS and watch what it buys.</sub></td>
+<td><img src="docs/images/enigma.png" alt="The naval Enigma M4 in 3D, lid open, with its parts labelled"><br><sub><b>Ch. <!--n:ch.secret-->64<!--/n--></b>: an Enigma M4 in 3D that deciphers a real 1942 message on its own wheels, beside the same machine in gates.</sub></td>
+<td><img src="docs/images/wifi.png" alt="Three Wi-Fi stations in gates with the frames of two hidden stations overlapping"><br><sub><b>Ch. <!--n:ch.wifi-->67<!--/n--></b>: the hidden terminal: three stations in gates, each in lock step with its model, on the standard's own timings. Tick RTS / CTS and watch what it buys.</sub></td>
 </tr>
 <tr>
-<td><img src="docs/images/path.png" alt="A table of every hop of one packet with its light, bits, queue and engine delays"><br><sub><b>Ch. <!--n:ch.path-->64<!--/n--></b>: one packet, all the way: every hop's delay computed, on an invented network. In the backbone light is everything; on the access line, bits and queues.</sub></td>
-<td><img src="docs/images/bench.png" alt="A fault case: a report, a link budget, the access point's counters and a sniffer's list, and four causes to choose from"><br><sub><b>Ch. <!--n:ch.bench-->69<!--/n--></b>: the expert's bench: a report and the evidence, from a fault really switched on in the book's models. Capstone 4 draws eight at random, with nothing said until the end.</sub></td>
+<td><img src="docs/images/path.png" alt="A table of every hop of one packet with its light, bits, queue and engine delays"><br><sub><b>Ch. <!--n:ch.path-->65<!--/n--></b>: one packet, all the way: every hop's delay computed, on an invented network. In the backbone light is everything; on the access line, bits and queues.</sub></td>
+<td><img src="docs/images/bench.png" alt="A fault case: a report, a link budget, the access point's counters and a sniffer's list, and four causes to choose from"><br><sub><b>Ch. <!--n:ch.bench-->70<!--/n--></b>: the expert's bench: a report and the evidence, from a fault really switched on in the book's models. Capstone 4 draws eight at random, with nothing said until the end.</sub></td>
 </tr>
 <tr>
-<td><img src="docs/images/sdr.png" alt="The software radio: four stations in one band, the dial turned to one of them, its spectrum before and after the channel filter"><br><sub><b>Ch. <!--n:ch.sdr-->85<!--/n--></b>: a software radio: four stations in one band, a mixer and decimating chain in gates, a dial to turn.</sub></td>
+<td><img src="docs/images/sdr.png" alt="The software radio: four stations in one band, the dial turned to one of them, its spectrum before and after the channel filter"><br><sub><b>Ch. <!--n:ch.sdr-->86<!--/n--></b>: a software radio: four stations in one band, a mixer and decimating chain in gates, a dial to turn.</sub></td>
 <td><img src="docs/images/cap_tune.png" alt="The Tune it capstone: a receive chain built from the software radio's blocks, with each block's settings and its cost in NANDs and multiplies"><br><sub><b>Capstone</b>: Tune it. A band you have not seen and a weak station: build the chain, and the message must decode on bands held back.</sub></td>
 </tr>
 <tr>
-<td><img src="docs/images/warps.png" alt="The warp core drawn as blocks: the lanes side by side, the issue logic above and the memory below"><br><sub><b>Ch. <!--n:ch.warps-->34<!--/n--></b>: the warp core drawn as blocks: lanes, issue and scoreboard, and the memory, each one opens down to gates.</sub></td>
+<td><img src="docs/images/warps.png" alt="The warp core drawn as blocks: the lanes side by side, the issue logic above and the memory below"><br><sub><b>Ch. <!--n:ch.warps-->35<!--/n--></b>: the warp core drawn as blocks: lanes, issue and scoreboard, and the memory, each one opens down to gates.</sub></td>
 <td><img src="docs/images/control.png" alt="The CPU's control unit drawn as blocks: the opcode decoder and the signal groups it drives"><br><sub><b>Ch. <!--n:ch.alu-->11<!--/n--></b>: the control unit as blocks: the opcode decoder and the signals it asserts, each box a circuit you can open.</sub></td>
 </tr>
 <tr>
@@ -146,7 +149,7 @@ frames.
 
 ![The campaign map with the first acts under way](docs/images/campaign.png)
 
-A tree of **<!--n:levels-->168<!--/n--> levels in <!--n:acts-->15<!--/n--> acts**, in the spirit of *Turing Complete*, from a NAND made of
+A tree of **<!--n:levels-->169<!--/n--> levels in <!--n:acts-->15<!--/n--> acts**, in the spirit of *Turing Complete*, from a NAND made of
 transistors to a pipelined, interrupt-capable 16-bit RISC-V-like CPU (RV16), with optional acts:
 before the transistor (relays, tubes, cards), arithmetic units (floating point, multiply, divide), a GPU
 (four lanes, the active mask, a reconvergence stack, two warps, a rasterizer) and memory (a DRAM column,
@@ -178,7 +181,7 @@ Each level plays on a screen of its own: the brief, why the CPU needs the block 
 against the alternatives and its copies in the finished CPU), the level's parts only, a hint ladder
 from a nudge to the full walkthrough, and Build along (the next step's parts as outlines, the
 learner's wiring checked against the reference). Number and Boolean drills (generated, with exact
-checkers), assembly puzzles on the golden model and a codex of <!--n:codex-->350<!--/n--> entries sit alongside: each with a
+checkers), assembly puzzles on the golden model and a codex of <!--n:codex-->355<!--/n--> entries sit alongside: each with a
 live figure, a worked example, Check yourself questions and links to what it builds on and leads to,
 searchable by alias, read beside the level without leaving it, and shown as hover definitions in the
 chapters, with an index of every analogy. Practice questions (predict, what breaks) and drills come back
@@ -392,7 +395,7 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
   The ISA is RV32 (I, M, F, C, Zicsr, the atomics; lr.w / sc.w on the coherent dual-core), and RV64I / M on chapter <!--n:ch.widths-->25<!--/n-->'s
   single-cycle core and its golden model; no RV64 in the pipelines yet.
 - **Radio, glass, cellular, queues and the data centre are models**, labelled as such in their chapters, with
-  their assumptions stated; the internet of chapter <!--n:ch.path-->64<!--/n--> is invented, with lengths and rates of the usual size. The
+  their assumptions stated; the internet of chapter <!--n:ch.path-->65<!--/n--> is invented, with lengths and rates of the usual size. The
   capture check reads the book's frames only, not a learner's design. The switch capstone has been passed by a
   second design generated by code, not yet by a person drawing it: its brief gives our estimate of the work.
 - **Signal processing is bit-exact where it is built and a model where it is not.** The converters' analog side, the speech, music and picture

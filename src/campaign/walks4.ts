@@ -64,6 +64,29 @@ export const WALKS4: Record<string, WalkScript> = {
     },
   ],
 
+  s_icg: [
+    {
+      title: 'The latch, open while the clock is low',
+      text: 'latch is your 4-NAND D latch on en. inv gives it ¬clk for its enable, so it follows en while clk = 0 and holds it from each rising edge through the high half. 5 NANDs so far.',
+      parts: ['inv', 'latch'], codex: ['clockgating'],
+      why: 'en may change at any time; the AND below must see it change only while the clock is low, when its output is 0 anyway.',
+      whyNot: { text: 'With the latch open while clk is high, en passes straight through exactly when the AND passes the clock.' },
+      ask: {
+        question: 'The latch holds en while clk is high. Why that half and not the low one?',
+        options: ['While clk is high the AND passes the clock, so en must not move then', 'A latch is faster while clk is high', 'So en is sampled at the falling edge', 'Either half works'],
+        answer: 0,
+        explain: 'gclk = clk · en_l: only while clk = 1 can a change of en_l reach gclk. Frozen then, it starts or stops whole pulses only.',
+        why: ['', 'Speed has nothing to do with it: which half it is open in decides what reaches the AND.', 'It closes at the rising edge, so it holds the value en had at that edge through the high half.', 'Open in the high half it passes en to the AND when the AND passes the clock: the runt pulse is back.'],
+      },
+    },
+    {
+      title: 'The AND',
+      text: 'nand and inv2 make the AND: gclk = clk · en_l, so the clock gets through while the held en_l is 1, in whole pulses or none. 7 NANDs: par. One gate for a whole register, where a mux in front of each flip-flop costs 4 NANDs a bit.',
+      parts: ['nand', 'inv2'],
+      why: 'The AND is the gate itself; the latch only makes its enable safe.',
+      whyNot: { text: 'An OR with ¬en holds the clock high instead, and only moves the glitch to the other half.' },
+    },
+  ],
   s_cnt4: [
     {
       title: 'The count',

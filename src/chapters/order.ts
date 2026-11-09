@@ -39,6 +39,7 @@ const BOOK = [
   'fpga',
   'verify',
   'sidechan',
+  'power',
   'lanes',
   'simt',
   'warps',

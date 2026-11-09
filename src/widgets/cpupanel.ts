@@ -107,6 +107,8 @@ export interface CpuSceneOptions {
   mac?: boolean;
   /** The CPU as simulated, from the CPU as drawn: a planted fault (sim/faults.ts plantedDef; the chapter "How do you know it works?"). Memoize it per def. */
   wrap?: (def: ComponentDef) => ComponentDef;
+  /** The single-cycle CPU with clock-gated registers and memory (the Power chapter; lib/clockgate.ts). */
+  gatedClocks?: boolean;
 }
 
 /** The out-of-order core's instruction ROM: 2^k words, at least 64. */
@@ -140,7 +142,7 @@ export function cpuRoot(opts: CpuSceneOptions, asm: AsmResult): ComponentDef {
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
       : opts.pipeline ? pipelinedCpu(asm.words, { imemK: opts.imemK, dmemK: opts.dmemK, adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram, custom: opts.custom })
-        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c, custom: opts.custom, mac: opts.mac });
+        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c, custom: opts.custom, mac: opts.mac, gatedClocks: opts.gatedClocks });
 }
 
 /** The golden model's options for a scene (what the CPU panel runs beside the gates). */
