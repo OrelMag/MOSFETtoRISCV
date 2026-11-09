@@ -205,10 +205,14 @@ export class EditorSim {
   achievedHz = 0;
   /** Called whenever values on screen may have changed. */
   onChange: () => void = () => {};
-  /** Called when a halt part stops Run (after the pause). */
+  /** Called when a halt part or a breakpoint stops Run (after the pause); `stopReason` says which. */
   onHalt: () => void = () => {};
+  /** Why Run or runCycles stopped last: 'halt' (a halt part), a breakpoint's text, or null (it did not stop on its own). */
+  stopReason: string | null = null;
   /** Rising-edge observers (every edge the run loop, Step, a click on a clock or runCycles makes). */
   readonly edgeHooks = new Set<EdgeHook>();
+  /** Gate-mode observers: after every gate delay the run loop or Step takes (breakpoints checked on every change). */
+  readonly tickHooks = new Set<() => void>();
 
   private latest: Compiled | null = null;
   private pins: PinDoc[] = [];
@@ -227,6 +231,8 @@ export class EditorSim {
   private haltNets: number[] = [];
   /** advance() stopped on a halt: the run loop pauses. */
   private haltHit = false;
+  /** A stop asked for during this step (a breakpoint that held): acted on like a halt once the step is complete. */
+  private stopAsk: string | null = null;
   /** Key parts of the current simulation (leaf index, the key each listens to) and keyboard parts (leaf indices). */
   private keyLeaves: { li: number; bind: string }[] = [];
   private kbdLeaves: number[] = [];
@@ -529,6 +535,18 @@ export class EditorSim {
   get hasHalt(): boolean {
     return this.haltNets.length > 0;
   }
+  /**
+   * Stop Run (and runCycles) once this step is complete, like a halt part reading 1 (a breakpoint that held, breakpoints.ts).
+   * Step and a hand-clocked edge ignore it. The first reason asked for in a step is the one kept.
+   */
+  requestStop(reason: string): void {
+    this.stopAsk ??= reason;
+  }
+  /** Why Run would stop after this step, if it would: a halt part, else a stop asked for. */
+  private stopNow(): string | null {
+    return this.halted ? 'halt' : this.stopAsk;
+  }
+
   /** Some halt part's input reads 1 on at least one bit (X and Z do not halt). */
   get halted(): boolean {
     const sim = this.sim;
@@ -668,10 +686,14 @@ export class EditorSim {
     if (this.mode === 'cycle' && sim instanceof DualSim) sim.prepare();
     const t0 = now();
     let k = 0;
+    this.stopAsk = null;
+    this.stopReason = null;
     while (k < n && !stop?.()) {
       this.cycle(sim, clks);
       k++;
-      if (this.halted || now() - t0 > budgetMs) break;
+      const why = this.stopNow();
+      if (why) { this.stopReason = why; this.stopAsk = null; break; }
+      if (now() - t0 > budgetMs) break;
     }
     this.onChange();
     return k;
@@ -682,6 +704,7 @@ export class EditorSim {
     if (sim.busy()) {
       if (sim.kind === 'gate') sim.step();
       else sim.settle();
+      for (const f of this.tickHooks) f();
       return true;
     }
     this.endEdge();
@@ -712,6 +735,8 @@ export class EditorSim {
     const t0 = now();
     let n = 0;
     this.haltHit = false;
+    // a stop asked for before Run (a Step that hit a breakpoint) is not this run's
+    if (!this.running) this.stopAsk = null;
     while (this.due >= 1 || !Number.isFinite(this.due)) {
       if (this.mode === 'cycle') {
         if (!clks.length) { this.quiet(sim); this.due = 0; break; }
@@ -725,7 +750,8 @@ export class EditorSim {
       } else if (!this.gateTick(sim, clks)) { this.due = 0; break; } else n++;
       if (Number.isFinite(this.due)) this.due--;
       // a halt stops Run once its cycle is complete (cycle mode: after the fall)
-      if (this.halted && !(this.mode === 'cycle' && this.clkHigh)) { this.haltHit = true; this.due = 0; break; }
+      const why = this.mode === 'cycle' && this.clkHigh ? null : this.stopNow();
+      if (why) { this.haltHit = true; this.stopReason = why; this.stopAsk = null; this.due = 0; break; }
       if (now() - t0 > budgetMs) break;
     }
     // Behind schedule: drop the backlog rather than spiral (the achieved rate shows it).
@@ -741,6 +767,7 @@ export class EditorSim {
   /** Step: one cycle (cycle mode) or one gate delay (gate mode); a running clock pauses first. */
   stepOnce(): void {
     if (this.running) this.pause();
+    this.stopAsk = null;
     this.autoTried = true;
     this.flush();
     const sim = this.sim;
@@ -762,6 +789,8 @@ export class EditorSim {
     this.clkHigh = false;
     this.edgeOpen = false;
     this.cycles = 0;
+    this.stopAsk = null;
+    this.stopReason = null;
     this.resets++;
     this.due = 0;
     this.applyPins(sim);
@@ -807,6 +836,8 @@ export class EditorSim {
     this.autoTried = true;
     if (this.running) return;
     this.running = true;
+    this.stopAsk = null;
+    this.stopReason = null;
     this.lastFrame = now();
     this.lastWork = 0;
     this.samples = [];

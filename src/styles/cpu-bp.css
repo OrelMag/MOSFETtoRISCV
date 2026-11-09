@@ -1,0 +1,12 @@
+/* PC breakpoints on a CPU listing (the sandbox's CPU drawer, the chapters' CPU panel): a gutter before each row, a dot when
+   set, a faint ring when switched off, a ring on hover. Loaded with those panels, not on the first page. */
+.cpu-listing .ln .bp-g { flex: none; align-self: center; width: 12px; height: 12px; margin: 0 -2px 0 -4px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
+.cpu-listing .ln .bp-g:hover, .cpu-listing .ln .bp-g:focus-visible { box-shadow: inset 0 0 0 1.5px var(--bad); }
+.cpu-listing .ln.bp .bp-g { background: var(--bad); }
+.cpu-listing .ln.bp-off .bp-g { box-shadow: inset 0 0 0 1.5px var(--muted); }
+/* a finger: the whole row's height and a wider target (the row itself still selects the instruction) */
+@media (pointer: coarse) {
+  .cpu-listing .ln .bp-g { width: 32px; height: 32px; margin: -4px -4px -4px -8px; border-radius: 8px; }
+  .cpu-listing .ln.bp .bp-g { background: radial-gradient(circle, var(--bad) 0 6px, transparent 7px); }
+  .cpu-listing .ln.bp-off .bp-g { background: radial-gradient(circle, transparent 0 5px, var(--muted) 5px 6.5px, transparent 7px); box-shadow: none; }
+}

@@ -19,6 +19,8 @@ import './analysis';
 import './cutui';
 // Test tables on a chip (Digital's test syntax), run after every edit.
 import './testsui';
+// Breakpoints: Run stops when a condition on the chip's signals holds.
+import './breakui';
 // The CPU panel: program, registers, memory and the golden model for a chip that is a processor.
 import './cpuui';
 // Every RAM and register file inside, live: the Memory drawer.

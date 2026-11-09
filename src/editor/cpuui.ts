@@ -55,6 +55,9 @@ import { detectSap, type SapDesc, SapMonitor, sapSteps, sapUse } from './sapmon'
 import { openSapProgram } from './sapui';
 import { CTRL, CTRL_LABEL, ctrlText, disasm as sapDisasm, SAP_CTRL } from '../sap/isa';
 import { registerPropsSection } from './props';
+import { addBreak, breakpointsOf } from './breakui';
+import { retireFollower } from './breakpoints';
+import '../styles/cpu-bp.css';
 import { type EdgeHook, type EditorSim, FrameBudget } from './runtime';
 
 /** Cycles Run to halt gives a program before it stops on its own. */
@@ -84,6 +87,9 @@ const monKind = (m: Mon) => (m instanceof Rv64Monitor ? 'rv64' : m instanceof Sa
 /** Monitors whose ROM listing is word addressed (rows keyed 4 × the word index, like the RV32 listings; the 6502's: a byte a word). */
 const wordListed = (m: Mon): m is Rv16Monitor | LaneMonitor | Cpu4Monitor | Dsp24Monitor | M6502Monitor => m instanceof Rv16Monitor || m instanceof LaneMonitor || m instanceof Cpu4Monitor || m instanceof Dsp24Monitor || m instanceof M6502Monitor;
 interface Entry { chip: string; mon: Mon; pipe: PipeHistory; hook: EdgeHook }
+
+/** A retired PC's listing row key (an RV16 listing's rows are keyed like the others': 4 × the word index; the 6502's by ROM byte). */
+const listRow = (mon: Mon, pc: number): number => (mon instanceof M6502Monitor ? 4 * (mon.romIndex(pc) ?? 0) : wordListed(mon) ? 4 * pc : pc);
 
 /** Children replaced only when `key` changed (the panel redraws on every simulation change). */
 function keyed(el: HTMLElement, key: string, build: () => (Node | string)[]): void {
@@ -144,7 +150,8 @@ class CpuPanel {
   private status = holdHeight(h('div', { class: 'cpu-status' }));
   private gaps = h('div', { class: 'sb-cpu-gaps' });
   private now = h('div', { class: 'cpu-now' });
-  private listing = h('div', { class: 'cpu-listing sb-cpu-list' });
+  /** Focusable: ↑ ↓ move the selected line, F9 sets or clears its breakpoint (the gutter is out of the tab order). */
+  private listing = h('div', { class: 'cpu-listing sb-cpu-list', tabindex: '0', 'aria-label': 'Program: ↑ ↓ select a line, F9 sets or clears its breakpoint' });
   private use = h('div', { class: 'cpu-use' });
   private progHint = h('span', { class: 'cpu-sec-hint' }, 'click a line: the parts it uses');
   /** Custom instructions on an RV32I core (editor/owninstr.ts): shown when the CPU has one. */
@@ -235,6 +242,7 @@ class CpuPanel {
     this.el.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Escape') this.setOpen(false, true);
+      else if (e.target === this.listing) this.listingKey(e);
     });
     this.off.push(ed.onSimChange(() => this.sync()), ed.onChange(() => this.sync()));
     this.sync();
@@ -344,7 +352,10 @@ class CpuPanel {
         const doc = () => ed.ws.chips[chip] ?? ed.doc, ws = () => ed.ws.chips;
         const mon: Mon = this.rv64 ? new Rv64Monitor(es, doc, ws) : this.sap ? new SapMonitor(es, doc, ws) : this.multi ? new MultiMonitor(es, doc, ws) : this.rv16 ? new Rv16Monitor(es, doc, ws) : this.lanes ? new LaneMonitor(es, doc, ws) : this.m6502 ? new M6502Monitor(es, doc, ws) : this.dsp24 ? new Dsp24Monitor(es, doc, ws) : this.cpu4 ? new Cpu4Monitor(es, doc, ws) : new CpuMonitor(es, doc, ws);
         const pipe = new PipeHistory();
-        const hook: EdgeHook = { after: () => { if (es.sim) pipe.record(es.sim, pipeRoot(es.sim, mon instanceof CpuMonitor ? mon.desc : null), es.cycles); } };
+        // PC breakpoints (the listing's gutter): every instruction the golden model retired at this edge, by its listing row
+        const follow = 'log' in mon ? retireFollower(mon, (pc) => listRow(mon, pc)) : null;
+        const retiredPcs = () => follow?.(ed.sim === es ? breakpointsOf(ed) : null);
+        const hook: EdgeHook = { after: () => { if (es.sim) pipe.record(es.sim, pipeRoot(es.sim, mon instanceof CpuMonitor ? mon.desc : null), es.cycles); retiredPcs(); } };
         es.edgeHooks.add(hook);
         entry = { chip, mon, pipe, hook };
         this.monitors.set(es, entry);
@@ -412,6 +423,12 @@ class CpuPanel {
       last = t;
       m.runToHalt(this.runBudget.ms, this.runCap);
       work = performance.now() - t;
+      // a breakpoint held (breakui.ts): stop where it did, and say which
+      const why = this.ed.sim.stopReason;
+      if (why && why !== 'halt') {
+        this.ed.toast(`Stopped: ${why} after cycle ${groupDigits(this.ed.sim.cycles)}`);
+        return this.stopRun();
+      }
       if (m.done || this.ed.sim.cycles >= this.runCap) {
         if (!m.done) this.ed.toast(`Stopped after ${groupDigits(RUN_CAP)} cycles without halting`);
         return this.stopRun();
@@ -650,14 +667,14 @@ class CpuPanel {
         this.rows = ls.filter((l) => l.text).map((l) => {
           const n = l.op ? OPCODES[l.word]?.bytes ?? 1 : 1;
           const bytes = ls.slice(l.addr / 4, l.addr / 4 + n).map((x) => x.word.toString(16).padStart(2, '0')).join(' ');
-          const row = h('div', { class: 'ln', 'data-pc': String(l.addr), title: 'Select this instruction' },
+          const row = h('div', { class: 'ln', 'data-pc': String(l.addr), title: 'Select this instruction' }, this.gutter(l.addr),
             h('span', { class: 'a' }, l.at !== undefined ? l.at.toString(16).padStart(4, '0') : `[${l.addr / 4}]`), h('span', { class: 'w' }, bytes.padEnd(8)), h('span', { class: 't' }, l.text));
           row.addEventListener('click', () => this.select(l.addr));
           this.rowOf.set(l.addr, row);
           return row;
         });
       } else this.rows = (img?.lines ?? []).map((l) => {
-        const row = h('div', { class: 'ln', 'data-pc': String(l.addr), title: 'Mark the parts this instruction uses' },
+        const row = h('div', { class: 'ln', 'data-pc': String(l.addr), title: 'Mark the parts this instruction uses' }, this.gutter(l.addr),
           h('span', { class: 'a' }, (rr!.lang === 'rv16' || rr!.lang === 'cpu4' || rr!.lang === 'dsp24' || rr!.lang === 'isa' ? l.addr / 4 : l.addr).toString(16).padStart(rr!.lang === 'cpu4' || rr!.lang === 'dsp24' || rr!.lang === 'isa' ? 2 : 4, '0')), h('span', { class: 'w' }, rr!.w === 24 ? (l.word >>> 0).toString(16).padStart(6, '0') : rr!.w <= 16 || l.size === 2 ? hex4(l.word) : hex8(l.word)), h('span', { class: 't' }, l.text));
         row.addEventListener('click', () => this.select(l.addr));
         this.rowOf.set(l.addr, row);
@@ -665,11 +682,16 @@ class CpuPanel {
       });
       this.listing.replaceChildren(...(this.rows.length ? this.rows : [h('div', { class: 'ln' }, img?.error ?? 'empty program')]));
     }
-    const ck = `${pc}|${this.sel}|${tags?.map((s) => `${s.tag}${s.pc}`).join(',')}`;
+    const bps = (this.ed.doc.breaks ?? []).filter((b) => b.pc !== undefined);
+    const ck = `${pc}|${this.sel}|${tags?.map((s) => `${s.tag}${s.pc}`).join(',')}|${bps.map((b) => `${b.pc}${b.off ? '-' : ''}`).join(',')}`;
     if (ck === this.curKey) return;
     this.curKey = ck;
     for (const row of this.rows) {
       const a = Number(row.dataset.pc);
+      const b = bps.find((x) => x.pc === a);
+      row.classList.toggle('bp', !!b && !b.off);
+      row.classList.toggle('bp-off', !!b?.off);
+      row.querySelector('.bp-g')?.setAttribute('aria-pressed', String(!!b));
       row.classList.toggle('cur', a === pc || (pc === null && !!tags?.some((t) => t.pc === a)));
       row.classList.toggle('sel', a === this.sel);
       row.querySelectorAll('.stg').forEach((e) => e.remove());
@@ -686,6 +708,40 @@ class CpuPanel {
     this.now.replaceChildren(...(w === null
       ? [h('span', { class: 'fmt' }, 'PC'), h('code', null, noPc)]
       : [h('span', { class: 'fmt' }, `${decode(w, this.desc?.iss.custom, 32, this.desc?.iss.mac).fmt}-type${mon instanceof CpuMonitor && mon.compressedAt(pc!) ? ' · 16-bit' : ''}`), h('code', null, disasm(w, pc!, this.desc?.iss.custom, 32, this.desc?.iss.mac)), h('span', { class: 'hexw' }, `0x${hex4(pc!)}`)]));
+  }
+
+  /** A listing row's gutter: a click sets or clears a PC breakpoint (Run and Run to halt stop when that instruction retires). */
+  private gutter(addr: number): HTMLElement {
+    const g = h('button', { class: 'bp-g', tabindex: '-1', 'aria-pressed': 'false', title: 'Breakpoint: stop when this instruction retires', 'aria-label': `Breakpoint at 0x${addr.toString(16)}` });
+    g.addEventListener('click', (e) => { e.stopPropagation(); this.toggleBreak(addr); });
+    return g;
+  }
+
+  /** Set or clear the PC breakpoint at a listing row (one undo step). */
+  private toggleBreak(addr: number): void {
+    const ed = this.ed, has = (ed.doc.breaks ?? []).some((b) => b.pc === addr);
+    if (has) ed.edit((d) => { const breaks = (d.breaks ?? []).filter((b) => b.pc !== addr); const { breaks: _, ...rest } = d; return breaks.length ? { ...rest, breaks } : rest; });
+    else addBreak(ed, { pc: addr }, false);
+    this.curKey = '';
+    this.render();
+  }
+
+  /** The listing's keys: ↑ ↓ move the selection (from the current line), B toggles the selected line's breakpoint. */
+  private listingKey(e: KeyboardEvent): void {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const addrs = this.rows.map((r) => Number(r.dataset.pc)).filter((a) => !Number.isNaN(a));
+    if (!addrs.length) return;
+    const cur = this.sel ?? Number(this.listing.querySelector<HTMLElement>('.ln.cur')?.dataset.pc ?? NaN);
+    const i = addrs.indexOf(cur);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next = addrs[i < 0 ? 0 : Math.max(0, Math.min(addrs.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+      if (next !== this.sel) this.select(next);
+      this.rowOf.get(next)?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'F9') {
+      e.preventDefault();
+      if (i >= 0) this.toggleBreak(addrs[i]);
+    }
   }
 
   /** A listing line clicked: mark the parts its instruction uses (the site's CPUs' names), or clear. */
@@ -878,8 +934,7 @@ class CpuPanel {
     keyed(this.traceSec, rv16 ? 'rv16' : m65 ? 'm6502' : sap ? 'sap' : 'cpu', () => (rv16 ? ['Checked writes', h('span', { class: 'cpu-sec-hint' }, 'register writes and stores, newest last')]
       : sap ? ['Clock steps', h('span', { class: 'cpu-sec-hint' }, 'each step’s control word and what it loaded; newest last')]
       : ['Retired', h('span', { class: 'cpu-sec-hint' }, m65 ? 'what each did, its stores and cycles; newest last' : 'by the golden model, newest last')]));
-    // An RV16 listing's rows are keyed like the others' (4 × the word index).
-    const row = (pc: number) => (mon instanceof M6502Monitor ? 4 * (mon.romIndex(pc) ?? 0) : wordListed(mon) ? 4 * pc : pc);
+    const row = (pc: number) => listRow(mon, pc);
     this.traceSec.hidden = this.trace.hidden = !show;
     const narr = mon instanceof CpuMonitor && show ? mon.narr : [];
     this.narrSec.hidden = this.narr.hidden = !(mon instanceof CpuMonitor && show && !mon.desc?.pipeline);

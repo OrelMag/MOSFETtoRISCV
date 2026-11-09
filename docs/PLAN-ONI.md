@@ -1,6 +1,6 @@
 # Plan: four features borrowed from Oxygen Not Included
 
-Status: plan only, nothing built (2026-11-09). Source: a review of what *Oxygen Not Included* (ONI) does
+Status: B (Breakpoints) built on feat/oni-breakpoints (2026-11-09); A, C, D not built. Source: a review of what *Oxygen Not Included* (ONI) does
 well that fits this site. Four features were picked:
 
 | # | ONI feature | Ours | Where | Size |

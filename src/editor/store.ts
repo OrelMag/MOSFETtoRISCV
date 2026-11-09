@@ -172,6 +172,17 @@ function sanitizeTests(x: unknown): ChipDoc['tests'] {
   return t.length ? t : undefined;
 }
 
+/** A chip's breakpoints: a condition (at most MAX_BREAK_COND characters) or a PC each, at most MAX_BREAKS. */
+export const MAX_BREAKS = 64, MAX_BREAK_COND = 400;
+function sanitizeBreaks(x: unknown): ChipDoc['breaks'] {
+  if (!Array.isArray(x)) return undefined;
+  const ids = new Set<string>();
+  const t = x.filter((d): d is Record<string, unknown> & { id: string } => isObj(d) && str(d.id) && !!d.id && d.id.length <= 32 && !ids.has(d.id) && !!ids.add(d.id)
+    && ((str(d.cond) && d.cond.length <= MAX_BREAK_COND) || (num(d.pc) && Number.isInteger(d.pc) && d.pc >= 0)))
+    .slice(0, MAX_BREAKS).map((d) => compact({ id: d.id, cond: str(d.cond) ? d.cond : undefined, pc: str(d.cond) ? undefined : d.pc as number, off: d.off === true ? true as const : undefined, gate: d.gate === true ? true as const : undefined }));
+  return t.length ? t : undefined;
+}
+
 /** A state-machine chip's machine (fsmchip.ts): names as pins, states with positions, arcs between them. */
 function sanitizeFsm(x: unknown): ChipDoc['fsm'] {
   if (!isObj(x) || !Array.isArray(x.ins) || !Array.isArray(x.outs) || !Array.isArray(x.states) || !Array.isArray(x.arcs)) return undefined;
@@ -329,6 +340,7 @@ export function sanitizeChip(c: unknown): ChipDoc | null {
     table: sanitizeTable(c.table),
     fsm: sanitizeFsm(c.fsm),
     tests: sanitizeTests(c.tests),
+    breaks: sanitizeBreaks(c.breaks),
     pins: uniquePins, parts, wires, labels,
     comments: comments.length ? comments : undefined,
     sections: sections.length ? sections : undefined,

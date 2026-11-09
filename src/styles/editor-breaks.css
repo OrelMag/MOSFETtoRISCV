@@ -1,0 +1,16 @@
+/* The sandbox's breakpoints (editor/breakui.ts): the properties section's rows and the wires lit when one stops a run. */
+.sb-bp-row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 2px 6px; margin: 4px 0; }
+.sb-bp-row > input[type=checkbox] { margin: 0; }
+.sb-bp-cond { font-family: var(--font-mono); font-size: 12px; min-width: 0; width: 100%; }
+.sb-bp-pc { font-family: var(--font-mono); font-size: 12px; }
+.sb-bp-st, .sb-bp-gate { grid-column: 2 / 4; font-size: 12px; color: var(--muted); }
+.sb-bp-st.hit { color: var(--text); font-weight: 600; }
+.sb-bp-st.err { color: var(--bad); }
+.sb-bp-st.warn { color: var(--warn-text); }
+.sb-bp-gate { display: flex; align-items: center; gap: 4px; }
+.sb-bp-gate input { margin: 0; }
+svg .wire.bp-lit { stroke-width: calc(var(--wire-w1, 2px) * var(--wire-k, 1) * 2.2); filter: drop-shadow(0 0 2px var(--accent)); }
+@media (pointer: coarse) {
+  .sb-bp-row > input[type=checkbox], .sb-bp-gate input { width: 22px; height: 22px; }
+  .sb-bp-row .btn.icon { min-width: 40px; min-height: 40px; }
+}
