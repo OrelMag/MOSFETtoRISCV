@@ -199,7 +199,7 @@ export const chMemCtrl: Chapter = {
         <p>Refresh is the one thing in this chapter that the program cannot predict or avoid. It raises the average cost slightly and the worst case a lot:
         the typical request is unaffected, while the one behind a REF waits several times its normal latency. That tail, not the average,
         is what shows up in real-time systems.</p>
-        <div class="try">Read a few lines and watch "refresh in" count down. Idle 50 past zero: PA (precharge all), REF, then nothing.</div>`,
+        <div class="try">Read a few lines and watch "refresh in" count down. Press Idle 50 until it passes zero: PA (precharge all), REF, then nothing.</div>`,
       more: {
         derive: `<p>The sequence is PREA (tRP = ${TIMING.tRP}), REF, then tRFC = ${TIMING.tRFC} silent cycles, after which the request still needs its own miss, ${accessCycles('miss', TIMING)}.
           The worst case is a request arriving the cycle the refresh starts: ${TIMING.tRP} + ${TIMING.tRFC} + ${accessCycles('miss', TIMING)} = ${TIMING.tRP + TIMING.tRFC + accessCycles('miss', TIMING)} cycles, against a conflict's

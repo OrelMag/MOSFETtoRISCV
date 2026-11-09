@@ -67,7 +67,7 @@ export const chLanes: Chapter = {
     {
       title: 'Latency or throughput',
       body: `
-        <p>Chapters <a href="#/c/fastadd/0">16</a> to <a href="#/c/float/0">24</a> spent gates on <em>latency</em>: forwarding, branch prediction and caches all make one instruction stream finish sooner. Many
+        <p>Chapters <a href="#/c/pipeline/0">17</a> to <a href="#/c/ooo/0">26</a> spent gates on <em>latency</em>: forwarding, branch prediction, caches and out-of-order issue all make one instruction stream finish sooner. Many
         workloads are instead thousands of independent copies of one small program: a pixel, a matrix element, a neuron's activation. For them the figure of
         merit is results per second per gate (and per watt), and the latency of any one result hardly matters.</p>
         <p><a href="#/c/multicore/0">Chapter 27</a> got parallelism by copying whole cores. The other way is to keep <strong>one instruction stream</strong> and copy only the datapath: one
@@ -146,7 +146,7 @@ export const chLanes: Chapter = {
         once. When lanes disagree, the leader's choice is wrong for the others; <a href="#/c/simt/0">chapter 30</a> fixes that.</p>
         <p>Why the lowest lane and not a vote: the choice must be a pure function of the mask, cheap in gates and the same on every run. A fixed order is one
         priority chain; a majority would need a population count and a tie-break, and would still leave the minority lanes wrong. The leader also supplies the
-        address a <code>jalr</code> jumps to and the operands <code>tmc</code> and <code>split</code> read, so everything the single PC needs from the lanes goes through
+        address a <code>jalr</code> jumps to and the operands of the mask instructions of <a href="#/c/simt/0">chapter 30</a>, so everything the single PC needs from the lanes goes through
         the same one-hot multiplexers.</p>`,
       scene: () => laneCoreScene('saxpy', { highlight: ['lead', 'lF', 'lAlu', 'npc'] }),
       tour: {
@@ -198,7 +198,7 @@ export const chLanes: Chapter = {
           ${(SAXPY.instrs * SAXPY.lanes / SAXPY_CYCLES).toFixed(2)} lane-instructions per cycle against the ${SAXPY.lanes} the ALUs could do. The memory share is
           ${pct(SAXPY.mem * SAXPY.lanes, SAXPY_CYCLES)} of the cycles for ${pct(SAXPY.mem, SAXPY.instrs)} of the instructions.</p>`,
         pitfall: `<p>A masked-off lane is skipped, not served: with lanes 0, 1 and 3 active a store takes 3 cycles, not 4. The cost scales with the active lanes, which is the
-          opposite of a uniform branch, where it is constant. Watch <code>retire</code> in the Warp panel: it drops for exactly as many cycles as there are lanes served.</p>`,
+          opposite of a uniform branch, where it is constant. Watch <code>retire</code> in the Warp panel: it stays low until the cycle that serves the last lane, so one cycle fewer than there are lanes served.</p>`,
         real: `<p>A real memory system takes a whole warp's addresses at once and merges those on one cache line into one access (coalescing, chapter 32), so a store of 32 neighbouring
           words costs one or a few accesses, not 32. One lane per cycle is the worst case, kept here as the thing to beat.</p>`,
       },
@@ -613,7 +613,7 @@ export const chWarps: Chapter = {
           <p>Nor is it all done by a hardware scoreboard. Since Maxwell (2014), NVIDIA's compiler writes control bits beside each instruction: for fixed-latency operations
           a <em>stall count</em>, the cycles to wait before the warp's next instruction; for variable-latency ones (memory, special functions) one of six
           dependency barriers per warp, which the instruction sets and a later one waits on. AMD's compiler inserts <code>s_waitcnt</code>, waiting until the
-          counter of outstanding memory operations falls far enough. And an SM is four partitions, each with its own warp scheduler issuing one warp a cycle from
+          counter of outstanding memory operations falls far enough. And a streaming multiprocessor (SM) is four partitions, each with its own warp scheduler issuing one warp a cycle from
           its own pool: four of this chapter's scheduler side by side.</p>`,
       },
       challenge: {
@@ -914,8 +914,8 @@ export const chFeed: Chapter = {
     {
       title: 'Atomics',
       body: `
-        <p>A histogram: 64 values from 0 to 15, one count per value. Each thread adds 1 to the bin of each of its values, and two threads (two lanes of one warp,
-        even) may hit the same bin at once. With <code>lw</code>, <code>addi</code>, <code>sw</code> they would all read the same count, add one, and store: four
+        <p>A histogram: 64 values from 0 to 15, one count per value. Each thread adds 1 to the bin of each of its values, and two threads (even two lanes of one warp)
+        may hit the same bin at once. With <code>lw</code>, <code>addi</code>, <code>sw</code> they would all read the same count, add one, and store: four
         lanes on one bin count once.</p>
         <p><code>amoadd.w rd, rs2, (rs1)</code> reads the word at rs1, writes it back plus rs2 and returns the old value, all in one memory access, so nothing
         comes in between. This core serves it <strong>one lane per access</strong>, lowest first: the <span data-show="acc">access unit</span> sends the

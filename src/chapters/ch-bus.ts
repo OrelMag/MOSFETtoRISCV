@@ -47,7 +47,7 @@ export const chBus: Chapter = {
     'explain what the arbiter grants, and what one transaction at a time costs when a slave is slow',
     'program a DMA engine, and boot a computer from flash or cards into RAM',
   ],
-  builds: ['io', 'multicore', 'flash'],
+  builds: ['io', 'cache', 'multicore', 'memctrl', 'flash'],
   recap: {
     keep: [
       'A transfer happens at the rising edge where <strong>valid</strong> and <strong>ready</strong> are both 1. The sender raises valid without waiting for ready; either side may stretch the wait.',
@@ -359,8 +359,7 @@ export const chBus: Chapter = {
         real: `<p>The 1401 and its relatives booted from cards, tape or disk the same way: a button that loads the first record into fixed locations and starts there. Modern machines add layers: a mask ROM, then a
           flash-resident first stage, then the operating system's loader. Whatever is first is read-only or hard-wired, because nothing else can be trusted to exist yet. Bootstrapping is also the origin of the word "reboot".</p>`,
         pitfall: `<p>Each card also carries a <strong>sequence number</strong> in columns 73–80 (10, 20, 30, …, so that a card can be slipped in
-          between). A dropped deck is not lost: a card sorter, one column a pass, puts it back in order. The loader cannot tell: an unsorted
-          deck loads, and runs as nonsense. A deck out of order is the usual way a boot fails: the loader reads cards in the order they sit in the hopper, and a deck dropped and restacked by hand is wrong in exactly that way.</p>`,
+          between). A dropped deck is not lost: a card sorter, one column a pass, puts it back in order on those numbers. The loader never looks at them: it reads cards in the order they sit in the hopper, so a deck restacked by hand loads, and runs as nonsense. That is the usual way a boot fails.</p>`,
         numbers: `<table class="mini"><tr><th></th><th>cycles / card</th></tr>
           <tr><td>loop alone, no feed delay</td><td>${(CARD_BOOT_0.cycles / CARD_DECK.cards.length).toFixed(1)}</td></tr>
           <tr><td>with the reader's ${CARD_FEED}-edge feed</td><td>${(CARD_BOOT.cycles / CARD_DECK.cards.length).toFixed(1)}</td></tr>
