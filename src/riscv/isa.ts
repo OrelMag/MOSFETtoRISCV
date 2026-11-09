@@ -109,7 +109,7 @@ export const INSTRS: InstrSpec[] = [
   // A extension: the two atomic memory operations the multi-core chapter uses (aq / rl bits ignored)
   { name: 'amoswap.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x04, hw: false },
   { name: 'amoadd.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x00, hw: false },
-  // load-reserved / store-conditional (chapter 27's coherent caches): a reservation on the 16-byte line of the address
+  // load-reserved / store-conditional (chapter multicore's coherent caches): a reservation on the 16-byte line of the address
   { name: 'lr.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x08, hw: false },
   { name: 'sc.w', fmt: 'R', opcode: OPCODES.AMO, funct3: 2, funct7: 0x0c, hw: false },
   // SIMT (the lane cores of the GPU chapters): warp control on custom-0, funct3 selects, as in Vortex

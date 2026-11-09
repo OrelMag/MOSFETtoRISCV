@@ -1,4 +1,4 @@
-// Interleaving (DOM-free): a block interleaver and a burst channel, for chapter 47's last step. A burst of b channel bits lands at most
+// Interleaving (DOM-free): a block interleaver and a burst channel, for chapter modem's last step. A burst of b channel bits lands at most
 // ⌈b / D⌉ bits in any of the D code words written across it, so a code that corrects t in a word survives bursts up to D · t. It costs a
 // buffer of D words at each end and D words of delay, and it adds no redundancy.
 

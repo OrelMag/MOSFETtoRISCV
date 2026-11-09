@@ -1,4 +1,4 @@
-// Chapter 52, TCP: a reliable stream over datagrams that may not arrive. The rules are net/tcp.ts, the same rules compiled from the Python subset (comm/stack/tcp.ts) run on
+// Chapter codes, TCP: a reliable stream over datagrams that may not arrive. The rules are net/tcp.ts, the same rules compiled from the Python subset (comm/stack/tcp.ts) run on
 // the model-speed bench, and a gate window puts one computer of a running transfer into its gates. The figures come from src/net/tcpcosts.json (scripts/tcp-costs.ts).
 
 import { CLOCK_NS, LINK_MBPS } from '../comm/mac';

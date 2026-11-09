@@ -1,6 +1,6 @@
-// Act 12, Links (roadmap Phase 21 g): optional levels from chapters 39–47 (relays, crossing clocks, a UART, I²C, CRC, 8b/10b, clock
-// recovery) and the Ethernet ones of chapters 48-50 (a MAC, a learning switch, a packet driver). The two levels whose parts come with
-// chapters 51-53 (a router, the stack) are on the map as "coming soon" in the order they will play. No DOM.
+// Act 12, Links (roadmap Phase 21 g): optional levels from chapters telegraph–modem (relays, crossing clocks, a UART, I²C, CRC, 8b/10b, clock
+// recovery) and the Ethernet ones of chapters carriers-glass (a MAC, a learning switch, a packet driver). The two levels whose parts come with
+// chapters errors-pcie (a router, the stack) are on the map as "coming soon" in the order they will play. No DOM.
 
 import type { CampaignNode } from './types';
 import { BUILDCOMM } from './buildcomm';
@@ -11,10 +11,11 @@ import { CDR, CDR_CTL, ENC34, ENC56, ENC8B10B } from '../lib/serdes';
 import { UART_RX, UART_TX } from '../lib/uart';
 import { ethMacFd, fwdPath, swBrain } from '../lib/ethlevels';
 
+import { numOf } from '../chapters/order';
 export const NODES_COMM: CampaignNode[] = [
   {
     id: 'l_repeater', act: 12, title: 'Relay repeater', kind: 'build', optional: true, requires: ['c_computer'], base: BUILDCOMM.l_repeater, par: { relays: 1, steps: 1 },
-    why: 'A long telegraph line weakens with its length until the far relay no longer pulls in. A relay half way, on a battery of its own, sends a fresh copy: the first regenerator, one relay and one relay step. Chapter 39\'s line, and every amplifier and gate since, does the same.',
+    why: `A long telegraph line weakens with its length until the far relay no longer pulls in. A relay half way, on a battery of its own, sends a fresh copy: the first regenerator, one relay and one relay step. Chapter ${numOf('telegraph')}'s line, and every amplifier and gate since, does the same.`,
     tips: ['The coil of the relay is the end of the first section: line on its a end, GND on its b end.', 'The second section starts at a battery: VDD behind the relay\'s make contact (c to no). Nothing on out may connect to line.', 'End out on a load: a pull-down, the next coil.'],
     codex: ['relay', 'openzero'], chapters: [{ chapter: 'telegraph', step: 2, label: 'The relay as a repeater' }],
   },

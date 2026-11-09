@@ -1,8 +1,8 @@
-// Chapter 50's network interface card, DOM-free: the golden model lib/nic.ts (the gates) is compared with every output after every
+// Chapter glass's network interface card, DOM-free: the golden model lib/nic.ts (the gates) is compared with every output after every
 // clock, and bus/model.ts's NicDevice steps it beside the instruction-set simulator.
 //
 // What it is: a bus slave with eight registers, a bus master that moves frames between two rings of descriptors in RAM and the MAC
-// (comm/mac.ts, chapter 48), and an interrupt line. Full duplex only (col is tied low: no restart, no backoff).
+// (comm/mac.ts, chapter carriers), and an interrupt line. Full duplex only (col is tied low: no restart, no backoff).
 //
 // A descriptor is two words. Word 0 is the buffer's address (low 16 bits), word 1 has OWN in bit 31 (1: the NIC holds it) and in the
 // low 11 bits the length. The software hands a descriptor over by setting OWN; the NIC hands it back by clearing it, so the

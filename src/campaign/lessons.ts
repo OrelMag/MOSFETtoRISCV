@@ -1,3 +1,4 @@
+import { numOf } from '../chapters/order';
 // The campaign's lesson texts (HTML), by the `body` key of their node. Dense and concrete: what
 // the thing is, what it costs, why the CPU needs it. No DOM.
 
@@ -409,7 +410,7 @@ a <b>REF</b> command every 7.8 µs (tREFI), with every bank closed.</p>
 <p>Behind a cache, DRAM's latency is paid on misses only. The RV32I single-cycle core with chapter
 22's 2-way write-back cache misses 73 times on matmul whatever is behind it. With a fixed line fill
 (8 cycles, 12 when a dirty line goes back first) those misses stall it 676 cycles, 3029 in all; over
-chapter 36's DRAM controller with open pages 1022 (3375); with closed pages 1341 (3694). The cache
+chapter ${numOf('memctrl')}'s DRAM controller with open pages 1022 (3375); with closed pages 1341 (3694). The cache
 decides how often the core goes to DRAM; the controller, how long each trip takes.</p>
 <h4>Other masters, other memories</h4>
 <p>A display, a DMA engine or a second core want memory too, so the data port becomes a <b>bus</b>:

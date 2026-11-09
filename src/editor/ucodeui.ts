@@ -9,10 +9,11 @@ import { setRef } from './ops';
 import { microcodePart, microprogramOfPart } from './ucodepart';
 import { undoKey } from '../ui/dom';
 
+import { numOf } from '../chapters/order';
 /** Open the painter on the chip's multicycle CPU. */
 export function openMicrocodeEditor(ed: Editor): void {
   const part = microcodePart(ed.doc, ed.sel.parts);
-  if (!part) return void ed.toast('Microcode needs a multicycle CPU with a microprogrammed controller (Open in Sandbox on chapter 23\'s microcode CPU)', 'err');
+  if (!part) return void ed.toast(`Microcode needs a multicycle CPU with a microprogrammed controller (Open in Sandbox on chapter ${numOf('multicycle')}'s microcode CPU)`, 'err');
   void import('../widgets/ucodepainter').then((m) => m.openMicrocode({
     program: microprogramOfPart(part), host: ed.el, mode: 'dialog', subtitle: part.id,
     onClose: () => ed.view.svg.focus?.(),

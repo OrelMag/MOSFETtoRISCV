@@ -1,4 +1,4 @@
-// Chapter 52's TCP in the Python subset: the rules of net/tcp.ts, function by function (tests/net-tcp-stack.test.ts compares every byte sent and every
+// Chapter codes's TCP in the Python subset: the rules of net/tcp.ts, function by function (tests/net-tcp-stack.test.ts compares every byte sent and every
 // state variable with that model). One connection. The send and receive buffers are rings in the RAM above the NIC's frame buffers, indexed by sequence
 // number; a retransmission is rebuilt from the send ring, so no copy of a segment is kept. Sequence numbers and times are compared on their difference,
 // so they wrap. The segment being handled sits in globals (seg_*): a function has only so many registers.

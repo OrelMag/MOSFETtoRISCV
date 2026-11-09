@@ -1,4 +1,4 @@
-// Chapter 24's faster adder: the dual-path (near / far) adder and its leading-zero anticipation. Two steps, placed
+// Chapter float's faster adder: the dual-path (near / far) adder and its leading-zero anticipation. Two steps, placed
 // after "float32: the same circuit, bigger". Every number the prose quotes is measured from the circuits when the
 // step is first read (tests/fpnearfar.test.ts pins them).
 

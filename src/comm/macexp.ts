@@ -1,4 +1,4 @@
-// Experiments on the software segment (comm/mac.ts) for chapter 48's widgets: two stations a cable apart, and n stations under
+// Experiments on the software segment (comm/mac.ts) for chapter carriers's widgets: two stations a cable apart, and n stations under
 // a Poisson load. DOM-free; everything below the arrivals is the MAC model, clock by clock, the same machine the gates are
 // compared with.
 

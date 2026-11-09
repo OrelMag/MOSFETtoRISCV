@@ -1,4 +1,4 @@
-// Chapter 48's Ethernet MAC, DOM-free: the golden model of each block, clock by clock. lib/ethernet.ts builds the same
+// Chapter carriers's Ethernet MAC, DOM-free: the golden model of each block, clock by clock. lib/ethernet.ts builds the same
 // machines in gates and tests/comm-mac.test.ts compares every output after every clock. A block here is written as the
 // gates are: registers updated together from their old values, pulses that last one clock, no hidden state.
 //

@@ -1,4 +1,4 @@
-// Chapter 25's 64-bit core on the stage: the RV64IM single-cycle CPU (lib/cpu64.ts xlenCpu) with a CPU panel of its
+// Chapter widths's 64-bit core on the stage: the RV64IM single-cycle CPU (lib/cpu64.ts xlenCpu) with a CPU panel of its
 // own, the golden model (riscv/iss64.ts) in lock step after every retirement. Registers are 64 bits, so every value
 // is read as a BigInt (sim/values.ts packBig), never through a JS number.
 

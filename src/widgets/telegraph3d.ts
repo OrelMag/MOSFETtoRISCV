@@ -1,4 +1,4 @@
-// Chapter 39: a telegraph key and sounder in 3D (loaded on demand, modelhost.ts).
+// Chapter telegraph: a telegraph key and sounder in 3D (loaded on demand, modelhost.ts).
 
 import type { Widget } from '../view/stage';
 import { lazyModel } from './modelhost';

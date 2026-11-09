@@ -1,4 +1,4 @@
-// What chapter 43's panels do to a simulation, without the DOM, so that tests can run exactly the same code on the gates.
+// What chapter uart's panels do to a simulation, without the DOM, so that tests can run exactly the same code on the gates.
 
 import { findNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';

@@ -1,4 +1,4 @@
-// Chapter 51's explorers: the IPv4 header's bytes, longest-prefix match as a walk down a trie, the fast path's scene with a frame sent through
+// Chapter errors's explorers: the IPv4 header's bytes, longest-prefix match as a walk down a trie, the fast path's scene with a frame sent through
 // the gates beside its golden model, and the two routing protocols on the invented network of net/routing.ts.
 
 import '../styles/router.css';
@@ -114,7 +114,7 @@ export function lpmWidget(): Widget {
 
 // ---- what one engine carries ------------------------------------------------------------------------------------------------------
 
-/** On the link of chapter 46's speed (decision 7): a byte is eight bits of 4 cycles. */
+/** On the link of chapter noise's speed (decision 7): a byte is eight bits of 4 cycles. */
 export const BYTE_CYCLES = 8 * CYCLES_PER_BIT;
 export const FRAME_60 = 60;
 /** On the wire beyond the stream: FCS, preamble and SFD, gap. */

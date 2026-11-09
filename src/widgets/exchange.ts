@@ -1,4 +1,4 @@
-// Chapter 40's explainers: the cost of wiring everyone to everyone, of a switching network, the busy tone (Erlang B)
+// Chapter exchange's explainers: the cost of wiring everyone to everyone, of a switching network, the busy tone (Erlang B)
 // and the teleprinter's start-stop frame. All numbers come from comm/exchange.ts and comm/startstop.ts.
 
 import { bestClos, capacityAt, clos, crossbarCrosspoints, erlangB, foldedCrosspoints, meshWires, offered, trunksFor } from '../comm/exchange';

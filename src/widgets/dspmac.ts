@@ -14,6 +14,7 @@ import '../styles/line.css';
 import '../styles/dspmac.css';
 import { groupNum } from '../sim/numfmt';
 
+import { numOf } from '../chapters/order';
 // ---- the measured figures ---------------------------------------------------------------------------------------------------------------
 
 interface BenchFig { cycles: number; setupCycles: number; kernel: number; products: number }
@@ -186,7 +187,7 @@ export function tableWidget(): Widget {
   paint();
   return { el: h('div', { class: 'widget mos dm-w' }, h('div', { class: 'panel' }, h('h3', null, 'One benchmark, five machines'), h('label', { class: 'dm-sel' }, 'Benchmark ', sel),
     h('div', { class: 'ln-scroll' }, h('table', { class: 'ln-table' }, h('thead', null, h('tr', null, h('th', null, 'Machine'), h('th', null, 'Kernel clocks'), h('th', null, 'Clocks a product'), h('th', null, 'NANDs'), h('th', null, 'Period'), h('th', null, 'NAND delays a product'))), body)),
-    h('p', { class: 'sub' }, 'Kernel clocks are measured on gates with the data setup taken out. NANDs are the core without its program ROM, with the 32-word data memory; the period is static timing in NAND delays. RV32IM is chapter 25\'s one-drawing core at 32 bits (Kogge–Stone adders), because the single-cycle core of chapter 14 has no M.'))) };
+    h('p', { class: 'sub' }, `Kernel clocks are measured on gates with the data setup taken out. NANDs are the core without its program ROM, with the 32-word data memory; the period is static timing in NAND delays. RV32IM is chapter ${numOf('widths')}'s one-drawing core at 32 bits (Kogge–Stone adders), because the single-cycle core of chapter 14 has no M.`))) };
 }
 
 // ---- a filter on the CPU panel ---------------------------------------------------------------------------------------------------------------

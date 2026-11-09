@@ -1,4 +1,4 @@
-// The C extension's expander in gates (chapter 25): the 32 bits at the PC in, the instruction the rest of the
+// The C extension's expander in gates (chapter widths): the 32 bits at the PC in, the instruction the rest of the
 // core runs out. A 16-bit parcel (low bits ≠ 11) is rewritten into its 32-bit instruction, anything else passes
 // through. Two parts: C_FORMS recognizes which of the 30 forms the parcel is (one-hot, plus `pass` for a 32-bit
 // instruction), and six field multiplexers build the instruction a RISC-V field at a time.

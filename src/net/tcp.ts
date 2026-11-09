@@ -1,4 +1,4 @@
-// Chapter 52's TCP, the reference: one connection, RFC 9293's state machine, RFC 6298's retransmission timer, RFC 5681's congestion control with
+// Chapter codes's TCP, the reference: one connection, RFC 9293's state machine, RFC 6298's retransmission timer, RFC 5681's congestion control with
 // RFC 3465's byte counting (no multiply or divide on an RV32I without M). DOM-free; comm/stack/tcp.ts is the same rules in the Python subset, and
 // tests/net-tcp-stack.test.ts makes the two emit the same bytes on the same inputs.
 //
@@ -18,7 +18,7 @@ export const STATE_NAMES = ['CLOSED', 'LISTEN', 'SYN_SENT', 'SYN_RCVD', 'ESTABLI
 
 /** Sizes and times, the same constants as the Python. Buffers are powers of two, in the 1.8 KB of RAM above the NIC's frame buffers (stack/layout.ts). */
 export const TCP_K = {
-  /** Data bytes a segment: a 118-byte frame, which also fits chapter 50's switch cell of 128 with its FCS. */
+  /** Data bytes a segment: a 118-byte frame, which also fits chapter glass's switch cell of 128 with its FCS. */
   MSS: 64,
   SND: 1024,
   RCV: 512,

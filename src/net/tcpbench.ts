@@ -1,4 +1,4 @@
-// Chapter 52's setting: computer A sends computer B a stream across a router, the Python TCP on both, on the model-speed bench (net/lanbench.ts). Shared by the chapter's
+// Chapter codes's setting: computer A sends computer B a stream across a router, the Python TCP on both, on the model-speed bench (net/lanbench.ts). Shared by the chapter's
 // panels, scripts/tcp-costs.ts (src/net/tcpcosts.json) and the tests.
 
 import { ip4 } from '../comm/netframes';

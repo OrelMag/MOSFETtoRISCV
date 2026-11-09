@@ -75,7 +75,7 @@ export interface CpuSceneOptions {
   m?: boolean;
   /** Single-cycle CPU with a data cache in front of a slow main memory (adds cache statistics): see CpuOptions.dcache. */
   dcache?: boolean | 'wb' | 'wb2';
-  /** With dcache 'wb' / 'wb2': main memory is chapter 36's DRAM controller and device. */
+  /** With dcache 'wb' / 'wb2': main memory is chapter memctrl's DRAM controller and device. */
   dram?: DramConfig;
   /** Fetch through an instruction cache (adds fetch-miss stalls). */
   icache?: boolean;
@@ -84,13 +84,13 @@ export interface CpuSceneOptions {
   /** With multicycle 'micro': an edited microprogram (lib/ucode.ts), and the controller panel's "Microcode…" button. */
   microcode?: Microprogram;
   onMicrocode?: (stage: Stage) => void;
-  /** Single-cycle CPU with the FPU and f registers (chapter 24). */
+  /** Single-cycle CPU with the FPU and f registers (chapter float). */
   fpu?: boolean;
   /** Show the program editor. */
   editable?: boolean;
-  /** The dual-issue RV32IM pipeline of chapter 26 (implies pipeline and m: two lanes in the listing and the diagram). */
+  /** The dual-issue RV32IM pipeline of chapter ooo (implies pipeline and m: two lanes in the listing and the diagram). */
   wide?: boolean;
-  /** Chapter 26's out-of-order core (implies m; runs on the cycle engine; adds the Out of order panel). */
+  /** Chapter ooo's out-of-order core (implies m; runs on the cycle engine; adds the Out of order panel). */
   ooo?: boolean;
   /** The single-cycle CPU's ROM (2^imemK words) and data memory (2^dmemK words), when not the defaults (6 and 5). */
   imemK?: number;
@@ -99,7 +99,7 @@ export interface CpuSceneOptions {
   extraPanels?: ScenePanel[];
   /** The CPU panel starts folded: another panel is the step's (chapter 14's control table). */
   foldCpu?: boolean;
-  /** The single-cycle RV32IC CPU (chapter 25): 16-bit instructions in the listing at 2-byte addresses. */
+  /** The single-cycle RV32IC CPU (chapter widths): 16-bit instructions in the listing at 2-byte addresses. */
   c?: boolean;
   /** The CPU's custom instructions (riscv/custom.ts): single-cycle or pipelined; assembled, run on the golden model and decoded by the control unit. */
   custom?: readonly CustomRow[];

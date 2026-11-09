@@ -382,7 +382,7 @@ export const chRelays: Chapter = {
         ${Z3.hz} Hz), its program read from punched film.
         <span data-show="fa0 fa1 fa2 fa3">The relay adder above</span> beats the <span data-ahead="ripple cmos">CMOS ripple adder (transistor gates, the carry passed from column to column)</span> in <em>steps</em> (1 against ${logicDepth(rca(32))} at 32 bits),
         and loses by eight orders of magnitude in time per step. That trade, and the tube's answer to it, is <a href="#/c/tubes/0">the next
-        chapter</a>. <a href="#/c/silicon/0">Chapter 28</a> prices the whole CPU you build in relays and tubes.</p>`,
+        chapter</a>. <a href="#/c/silicon/0">Chapter ${numOf('silicon')}</a> prices the whole CPU you build in relays and tubes.</p>`,
       scene: () => ({ root: ADD4, inputs: { a: 15, b: 1 }, animate: true }),
       more: {
         derive: `<p>The 4-bit adder above is ${stats(ADD4).relays} relays. At ${RELAY_POWER.toFixed(2)} W average each (${RELAY_COIL_POWER.toFixed(2)} W with the coil on, on about half the time) it draws about

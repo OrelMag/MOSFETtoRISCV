@@ -353,7 +353,7 @@ class InsideView {
   private openLeaf(name: string): void {
     const ctx = this.ctx!;
     const node = ctx.node.children!.get(name)!, def = node.def;
-    // a model (a line part: chapter 41's cable) shows its panel; a transistor its cross-section
+    // a model (a line part: chapter wire's cable) shows its panel; a transistor its cross-section
     const w = def.modelPanel
       ? modelLeaf(def, { state: () => (node.leafIndex === undefined ? undefined : ctx.sim.leafState(node.leafIndex)) })
       : transistorLeaf(def, () => ctx.transistorGate(name));

@@ -1,4 +1,4 @@
-// Examples ▸ Two computers: chapter 43's last scene as a sandbox chip. Two RV32I bus cores, each with a boot ROM, a RAM and a
+// Examples ▸ Two computers: chapter uart's last scene as a sandbox chip. Two RV32I bus cores, each with a boot ROM, a RAM and a
 // UART slave (0x3000_0000) on its own bus, and a console; A's tx goes through a line part to B's rx and B's tx through
 // another to A's rx. Each computer is a chip of its own (double-click to open: the core, the bus, the slaves), so the top
 // level is four boxes, two lines and two consoles. The CPU drawer sits out (resolveCpu: a bus core's memory and interrupts
@@ -13,6 +13,7 @@ import type { ChipDoc, PartRef } from './model';
 import { Sheet, chipBox } from './example6502';
 import { isError, partDef } from './parts';
 
+import { numOf } from '../chapters/order';
 /** Clock cycles a bit lasts at divisor 1: the UART counts 16 ticks to a bit, a tick every `div` cycles. */
 export const TWO_DIV = 1;
 /** How many times A says ping. */
@@ -63,7 +64,7 @@ ${say('pong')}
         j    wait
 ${SUBS}`;
 
-export const TWO_NOTES = 'Two computers talking over a wire, as chapter 43 ends. Each computer (double-click to open it) is an RV32I bus core with a boot ROM, a 16 KB RAM and a UART at 0x3000_0000 '
+export const TWO_NOTES = `Two computers talking over a wire, as chapter ${numOf('uart')} ends. Each computer (double-click to open it) is an RV32I bus core with a boot ROM, a 16 KB RAM and a UART at 0x3000_0000 `
   + '(data +0, status +4: bit 0 receive FIFO not empty, bit 1 transmit FIFO full; divisor +8), on a bus of its own (the bus has two master ports; the second asks for nothing), and a console on the core. '
   + `A says ping and prints the answer, ${TWO_ROUNDS} times; B prints what it hears and answers pong at each new line. `
   + 'Each wire between them is a line part: a model of a cable (it delays what was sent by 2 clock cycles and flips it for a cycle while its noise input is 1), the one box here that does not end in transistors; everything else opens down to MOSFETs. '

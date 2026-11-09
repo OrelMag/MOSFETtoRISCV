@@ -1,4 +1,4 @@
-// Chapter 51's fast path in gates, on comm/ethframe.ts's byte stream: net/fastpath.ts is its golden model, compared at every output of
+// Chapter errors's fast path in gates, on comm/ethframe.ts's byte stream: net/fastpath.ts is its golden model, compared at every output of
 // every clock (tests/net-fastpath.test.ts). Memories are bigRam (roadmap decision 11): the packet buffer, the routes as a binary trie, the
 // next-hop table as bytes, so no 48-bit register or comparator exists anywhere: a MAC is checked and written a byte at a time.
 

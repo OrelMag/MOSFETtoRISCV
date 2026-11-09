@@ -10,7 +10,7 @@ export interface Benchmark {
   /** Extensions the program needs (it runs only on CPUs that have them). */
   needs?: { m?: boolean; f?: boolean };
   source: string;
-  /** The program for RV64 (chapter 25), where it differs: its 32-bit arithmetic made explicit with the W instructions. */
+  /** The program for RV64 (chapter widths), where it differs: its 32-bit arithmetic made explicit with the W instructions. */
   source64?: string;
   /** Data-memory words the program leaves behind (word index → value), computed in TypeScript. */
   expect(): Map<number, number>;

@@ -1,4 +1,4 @@
-// DNS for chapter 53: RFC 1035's real message bytes and an iterative resolver with a cache, on the invented network. The names are under
+// DNS for chapter pcie: RFC 1035's real message bytes and an iterative resolver with a cache, on the invented network. The names are under
 // .example (RFC 2606), so none can exist. Only A and NS records, no retries, no EDNS, no DNSSEC, and a query that is lost is not modelled.
 
 import { hostFrame, hostId, hostIp, Internet, udpSegment } from './internet';

@@ -1,5 +1,5 @@
 // The floating gate in 3D (loaded on demand, modelhost.ts): a NAND string of four cells whose charge follows
-// phys/fgate.ts, i.e. chapter 37's rule (lib/flash.ts, sim/switchsim.ts). The learner pulses program on a chosen cell,
+// phys/fgate.ts, i.e. chapter flash's rule (lib/flash.ts, sim/switchsim.ts). The learner pulses program on a chosen cell,
 // erases the block (the electrons leave down through the tunnel oxide into the well) and reads the string with the other
 // cells at the pass voltage. The coupling-ratio slider shows what sets the voltage across the tunnel oxide and the size
 // of the Vt window; the pass/fail rule itself is the chapter's.

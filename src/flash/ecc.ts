@@ -1,4 +1,4 @@
-// Chapter 37: how many bit errors a page's error-correcting code absorbs. A BCH code over GF(2^m) with t-bit
+// Chapter flash: how many bit errors a page's error-correcting code absorbs. A BCH code over GF(2^m) with t-bit
 // correction adds m·t parity bits to a codeword of `data` bits; the codeword fails when it has more than t errors.
 // Raw bit errors are independent with probability p (the raw bit error rate, RBER).
 

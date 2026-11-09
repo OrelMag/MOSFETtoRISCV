@@ -1,4 +1,4 @@
-// Chapter 49's explainers that need no circuit: shared capacity against reserved, the address table's price and hit rate, the
+// Chapter serial's explainers that need no circuit: shared capacity against reserved, the address table's price and hit rate, the
 // latency of store-and-forward against cut-through, head-of-line blocking measured on the golden model, and what full duplex removed.
 // Models: comm/ethswitch.ts.
 

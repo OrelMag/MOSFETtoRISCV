@@ -1,4 +1,4 @@
-// Chapter 25's explorers for RV64: what each building block costs at 32 and at 64 bits.
+// Chapter widths's explorers for RV64: what each building block costs at 32 and at 64 bits.
 
 import { groupDigits } from '../sim/numfmt';
 import { h } from '../ui/dom';

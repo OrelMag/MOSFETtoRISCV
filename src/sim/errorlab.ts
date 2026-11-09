@@ -1,4 +1,4 @@
-// Chapter 24's error lab (DOM-free): an expression evaluated twice, in float32 (src/sim/fpref.ts, round to nearest even,
+// Chapter float's error lab (DOM-free): an expression evaluated twice, in float32 (src/sim/fpref.ts, round to nearest even,
 // operation by operation) and exactly (BigInt rationals; sqrt to 2^-160), so that every error figure on screen is computed.
 // A decimal literal is the real number it spells; the float evaluation rounds it to float32 first, like a compiler does.
 

@@ -1,4 +1,4 @@
-// Chapter 41, A wire is not a wire (level Communication): what happens between a driver's drain and a receiver's gate. The
+// Chapter wire, A wire is not a wire (level Communication): what happens between a driver's drain and a receiver's gate. The
 // model is phys/line.ts (every number below is computed from it), the pad is lib/pad.ts at switch level, the explainers are
 // widgets/line.ts. The line is the one box in the book that does not end in transistors (roadmap Phase 21, decisions 2 and 3).
 

@@ -1,4 +1,4 @@
-// Chapter 24, error in practice: measuring error (ulps, relative error, ε against u, cancellation), summing many numbers
+// Chapter float, error in practice: measuring error (ulps, relative error, ε against u, cancellation), summing many numbers
 // (naive, pairwise, Kahan) and Kahan on the CPU. Every figure in the prose is computed by sim/errorlab.ts / sumerror.ts,
 // the same code the widgets run, and pinned by tests/fperror.test.ts.
 

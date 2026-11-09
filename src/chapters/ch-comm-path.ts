@@ -1,5 +1,5 @@
-// Chapter 53, The internet path: an invented network of networks as a packet-level model (net/internet.ts), BGP between its networks, DNS in real
-// bytes, traceroute, one frame carried through chapter 51's gates hop by hop, every delay computed, and what fetching a page adds up to.
+// Chapter pcie, The internet path: an invented network of networks as a packet-level model (net/internet.ts), BGP between its networks, DNS in real
+// bytes, traceroute, one frame carried through chapter errors's gates hop by hop, every delay computed, and what fetching a page adds up to.
 
 // the registry is read here (a part by id): the whole library, not only what the imports below register (tests/firstload.test.ts)
 import '../lib';

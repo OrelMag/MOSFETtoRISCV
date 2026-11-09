@@ -1,4 +1,4 @@
-// Chapter 27's cache steps: the coherent dual-core (lib/coherent.ts) with the Coherence panel. The panel shows both
+// Chapter multicore's cache steps: the coherent dual-core (lib/coherent.ts) with the Coherence panel. The panel shows both
 // caches line by line (read from the flip-flops), the reservations, the bus's last transactions and its counters; it
 // follows the gates with riscv/cohmodel.ts (the cycle-exact timing model: every retirement, every line, every edge)
 // and with a plain sequentially consistent replay of the same retirement order (what the program would see if there

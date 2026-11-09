@@ -1,4 +1,4 @@
-// Chapters 19–20 and 34: blocks that stand beside the system CPU rather than inside it (systemCpu, TRAP_UNIT and
+// Chapters 19–20 and graphics: blocks that stand beside the system CPU rather than inside it (systemCpu, TRAP_UNIT and
 // CSR_UNIT are untouched): the vectored trap target, a latched interrupt controller, and the bilinear texture filter.
 
 import { symbolGeom } from '../sim/geometry';

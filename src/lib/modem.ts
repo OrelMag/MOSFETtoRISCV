@@ -1,4 +1,4 @@
-// Chapter 45's modem in gates: a numerically controlled oscillator (phase accumulator + sine ROM), an FSK transmitter made of
+// Chapter signals's modem in gates: a numerically controlled oscillator (phase accumulator + sine ROM), an FSK transmitter made of
 // it, a stand-in for the line (a delay of whole sample clocks and a hit input that flips a sample's sign), and an FSK
 // receiver that slices the sample's sign and counts the samples between rising edges. The integer cycle models are in
 // comm/modem.ts; tests/comm-modem.test.ts compares every output every cycle. Everything here is NAND gates and the

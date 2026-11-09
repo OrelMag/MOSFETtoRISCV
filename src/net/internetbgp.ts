@@ -1,5 +1,5 @@
-// BGP between the networks of chapter 53 (net/internet.ts), in synchronous rounds. A path-vector protocol: a route is a prefix and the whole
-// list of networks it crosses, so a network sees itself in a path and refuses it, which is what ends chapter 51's counting to infinity.
+// BGP between the networks of chapter pcie (net/internet.ts), in synchronous rounds. A path-vector protocol: a route is a prefix and the whole
+// list of networks it crosses, so a network sees itself in a path and refuses it, which is what ends chapter errors's counting to infinity.
 // Choice and export follow money, as in practice (Gao-Rexford): a route from a customer before a peer's before a provider's, then the
 // shorter path, then the lower AS number; only your own and your customers' routes go to peers and providers. BGP's other attributes,
 // sessions, timers and route reflectors are left out; the rounds are the simplest and kindest timing.

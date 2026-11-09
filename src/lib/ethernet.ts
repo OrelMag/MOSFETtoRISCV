@@ -1,4 +1,4 @@
-// Chapter 48's Ethernet in gates: the MAC transmitter (preamble, SFD, pad, FCS, the gap, and CSMA/CD: carrier sense,
+// Chapter carriers's Ethernet in gates: the MAC transmitter (preamble, SFD, pad, FCS, the gap, and CSMA/CD: carrier sense,
 // collision, jam, truncated binary exponential backoff), the receiver (SFD hunt, byte stream, FCS check, address filter),
 // the shared wire, a station that puts frame buffers (lib/bigmem.ts) around the two MACs, and a segment of four stations
 // on one cable. Everything but the wire is NAND gates and the library's flip-flops in boxes of their own (lib/rtl.ts);
@@ -288,8 +288,8 @@ const wires = new Map<string, ComponentDef>();
 
 /**
  * The cable: stations at positions x (in clocks of propagation) along it. Each hears the OR of the others' signals, delayed
- * by the distance; two senders at once superpose into garbage. One box, like chapter 43's LINE: a transmission line is
- * chapter 41's model (phys/line.ts), not a circuit, so this is the part of the book that does not end in transistors.
+ * by the distance; two senders at once superpose into garbage. One box, like chapter uart's LINE: a transmission line is
+ * chapter wire's model (phys/line.ts), not a circuit, so this is the part of the book that does not end in transistors.
  * clash is the cable's own view of two drivers on at once.
  */
 export function sharedWire(x: readonly number[]): ComponentDef {

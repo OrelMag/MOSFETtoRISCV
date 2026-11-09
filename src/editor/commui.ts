@@ -94,7 +94,7 @@ function lineProps(ed: Editor, p: PartDoc): HTMLElement {
     row('d (sent)', d), row('noise', noise, 'Held at 1 over a clock edge it flips the level that edge samples'), row('q (arrives)', q),
     row('In flight', inflight, 'The levels sampled at the last edges, oldest first (q shows the first next)'),
     h('p', { class: 'sb-sum' }, 'q is d as it was delay − 1 sender edges ago; idle is 1 (a pulled-up line), and a reset puts idle back on the whole wire.'),
-    h('p', { class: 'sb-sum' }, 'This box is a model, not a circuit: a transmission line is chapter 41\'s physics (double-click for its panel), not transistors. It costs nothing. Verilog leaves a comment; the FPGA export turns d into an output and q into an input of the top module, to be joined with a wire on the board. The delay and the noise input belong to the model and are not exported.'));
+    h('p', { class: 'sb-sum' }, `This box is a model, not a circuit: a transmission line is chapter ${numOf('wire')}'s physics (double-click for its panel), not transistors. It costs nothing. Verilog leaves a comment; the FPGA export turns d into an output and q into an input of the top module, to be joined with a wire on the board. The delay and the noise input belong to the model and are not exported.`));
   live(out, () => {
     const node = nodeOf(ed, p.id), sim = ed.sim.sim;
     if (!node || !sim) { for (const e of [d, noise, q, inflight]) set(e, '–'); return; }
@@ -267,13 +267,13 @@ function switchProps(ed: Editor, p: PartDoc): HTMLElement {
 function spiProps(ed: Editor, p: PartDoc): HTMLElement {
   const mode = h('code'), hold = h('code'), ie = h('code'), busy = h('code'), done = h('code'), rx = h('code'), pins = h('code');
   const out = h('section', { class: 'sb-sec-props sb-io-props' }, h('h3', null, 'SPI controller'),
-    row('Mode', mode, 'CTRL bits 0 (CPOL: SCLK idles high) and 1 (CPHA: data changes on the leading edge). Chapter 44\'s memory is a mode 0 part'),
+    row('Mode', mode, `CTRL bits 0 (CPOL: SCLK idles high) and 1 (CPHA: data changes on the leading edge). Chapter ${numOf('spi')}'s memory is a mode 0 part`),
     row('Hold CS', hold, 'CTRL bit 2: CS stays low between bytes, for a transaction of several. Drop it while the last byte is under way'),
     row('Interrupt enable', ie, 'CTRL bit 3: irq follows the done flag'),
     row('Busy', busy, 'STATUS bit 0: a byte is being shifted'), row('Done', done, 'STATUS bit 1: the last byte has ended; the next store to DATA, or a write of 1 to this bit, clears it'),
     row('Last byte in', rx, 'DATA at +0 on a load: what MISO delivered while the last byte went out'),
     row('sclk mosi cs_n', pins),
-    h('p', { class: 'sb-sum' }, 'Registers: +0 DATA (store: send a byte, ignored while busy; load: the byte received), +4 STATUS, +8 CTRL. One SCLK edge every two clocks. Open it for the master of chapter 44: prescaler, edge counter and one shift register both ways, down to gates.'));
+    h('p', { class: 'sb-sum' }, `Registers: +0 DATA (store: send a byte, ignored while busy; load: the byte received), +4 STATUS, +8 CTRL. One SCLK edge every two clocks. Open it for the master of chapter ${numOf('spi')}: prescaler, edge counter and one shift register both ways, down to gates.`));
   live(out, () => {
     const node = nodeOf(ed, p.id), sim = ed.sim.sim, core = node ? findDef(node, 'axi_spi') : null, regs = core?.children?.get('regs');
     if (!core || !sim || !regs?.nets) { for (const e of [mode, hold, ie, busy, done, rx, pins]) set(e, '–'); return; }

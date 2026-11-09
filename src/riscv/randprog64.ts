@@ -1,4 +1,4 @@
-// Seeded random RV64I / M programs, for fuzzing chapter 25's 64-bit core against its golden model (iss64.ts) and
+// Seeded random RV64I / M programs, for fuzzing chapter widths's 64-bit core against its golden model (iss64.ts) and
 // that model against Spike (tests/verify/spike64.ts). Drawn the way randprog32.ts draws RV32 ones: every register
 // written before it is read, branches and jumps forward, loops a bounded count, loads and stores inside a window of
 // the data memory, a jump to itself at the end; sources are often the last few destinations (forwarding, load-use).

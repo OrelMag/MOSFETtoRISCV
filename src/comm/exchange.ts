@@ -1,4 +1,4 @@
-// What a switching network costs, and how often it is busy (chapter 40). DOM-free.
+// What a switching network costs, and how often it is busy (chapter exchange). DOM-free.
 
 /** Wires of a full mesh of n telephones. */
 export const meshWires = (n: number): number => (n * (n - 1)) / 2;

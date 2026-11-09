@@ -1,4 +1,4 @@
-// Chapter 24: the formats side by side. formatsWidget: range, precision and bit budget of six formats, and one number
+// Chapter float: the formats side by side. formatsWidget: range, precision and bit budget of six formats, and one number
 // rounded into each; formatCostWidget: the pinned cost of an adder, multiplier and fma per format (lib/fpformatcosts.ts,
 // re-measured by tests/fpformats.test.ts). float64 never goes through a JS integer: its bits come from a DataView.
 

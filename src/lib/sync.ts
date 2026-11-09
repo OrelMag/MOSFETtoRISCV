@@ -1,4 +1,4 @@
-// Chapter 42's parts: a receiver that decides (a Schmitt trigger at switch level) and the circuits that cross from one
+// Chapter clocks's parts: a receiver that decides (a Schmitt trigger at switch level) and the circuits that cross from one
 // clock to another (synchronizers, a toggle pulse synchronizer, Gray code, an asynchronous FIFO). Everything past the
 // Schmitt trigger is NAND gates and the library's flip-flops. The gate-level simulator treats each clock edge as an
 // event in a total order: it shows the structure and the latency of these circuits, not the race a real asynchronous

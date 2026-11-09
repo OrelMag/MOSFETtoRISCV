@@ -55,7 +55,7 @@ export const WALKS8: Record<string, WalkScript> = {
         why: ['', 'Overwriting would cut the frame short and put a bit of two different bytes on the line.', 'There is no second register: a UART transmitter has one frame register, and the FIFO in front of it holds the queue.', 'Restarting would need load to ignore busy, and the start bit would repeat.'],
       },
       why: 'The handshake is one AND with the busy flag: taken is 1 in exactly the cycle a byte is accepted.',
-      whyNot: { text: 'Accepting while busy needs a second register. The FIFO of chapter 43 does exactly that, in front of the transmitter.' },
+      whyNot: { text: `Accepting while busy needs a second register. The FIFO of chapter ${numOf('uart')} does exactly that, in front of the transmitter.` },
     },
     {
       title: 'The last tick of the last bit',

@@ -1,4 +1,4 @@
-// Chapter 41's explainers: the driver and its load, an RC wire, repeaters, a wavefront on a line, reflections, termination, noise
+// Chapter wire's explainers: the driver and its load, an RC wire, repeaters, a wavefront on a line, reflections, termination, noise
 // (crosstalk, ground bounce, a differential pair, an eye), and the panel beside the I/O pad. Every number and every curve is
 // computed in phys/line.ts; this file draws and wires sliders.
 
@@ -238,7 +238,7 @@ export function flightWidget(): Widget {
     chips.set(2, `${z0} Ω`, `√(L′ / C′) with L′ = ${lp.toFixed(0)} nH/m, C′ = ${cp.toFixed(0)} pF/m`);
     chips.set(3, lumped ? 'a node' : 'a line', lumped ? 'delay ≤ rise / 6: draw it as one wire' : 'delay > rise / 6: the voltage depends on where and when', lumped ? 'ok' : 'bad');
     verdict.textContent = lumped
-      ? `The edge takes ${ns(rise)}, the signal ${ns(td)} to cross: by the time the edge is over, the whole trace has followed it. The trace is a node with a capacitance, and chapter 41's earlier steps apply.`
+      ? `The edge takes ${ns(rise)}, the signal ${ns(td)} to cross: by the time the edge is over, the whole trace has followed it. The trace is a node with a capacitance, and chapter ${numOf('wire')}'s earlier steps apply.`
       : `The edge is ${((rise / td) * 100).toFixed(0)} % of the flight time: the near end is already high while the far end has not yet heard of it. The line carries a front, ${((rise * 1000) / PCB_PS_PER_MM).toFixed(0)} mm long, at ${(1000 / PCB_PS_PER_MM / 1).toFixed(0)} mm/ns.`;
   };
   const lSl = slider('Length', 5, 600, 5, len, (v) => `${v} mm`, (v) => { len = v; paint(); });

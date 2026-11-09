@@ -1,4 +1,4 @@
-// Chapter 35: the DRAM array in 3D (loaded on demand, modelhost.ts).
+// Chapter dram: the DRAM array in 3D (loaded on demand, modelhost.ts).
 
 import type { Widget } from '../view/stage';
 import { lazyModel } from './modelhost';

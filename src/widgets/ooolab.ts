@@ -1,4 +1,4 @@
-// The out-of-order lab (chapter 26's "Your own core", the workbench's Lab tab): the model of the core (riscv/ooomodel.ts)
+// The out-of-order lab (chapter ooo's "Your own core", the workbench's Lab tab): the model of the core (riscv/ooomodel.ts)
 // in any shape, on the chapter's programs, the learner's assembly or chapter 15's Python. CPI against our core, where
 // the commit slots went (stats.slots), a timeline of the run, and a price from the gates where the gate-level core can
 // be built that way (bench/ooprice.ts: its window sizes; any other shape is timed, not priced).

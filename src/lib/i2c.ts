@@ -1,4 +1,4 @@
-// Chapter 44's I²C: an open-drain pad from two kinds of device (an NMOS to ground and a buffer that reads the wire back), a
+// Chapter spi's I²C: an open-drain pad from two kinds of device (an NMOS to ground and a buffer that reads the wire back), a
 // controller and a target written in gates (lib/rtl.ts), and the bus they share: SDA and SCL, each pulled up by a resistor and
 // pulled down by any pad whose controller or target says so. comm/i2c.ts has the models the gates follow every clock.
 

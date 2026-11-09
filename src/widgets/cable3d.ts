@@ -1,4 +1,4 @@
-// Chapter 41: why a pair is twisted, in 3D (loaded on demand, modelhost.ts).
+// Chapter wire: why a pair is twisted, in 3D (loaded on demand, modelhost.ts).
 
 import type { Widget } from '../view/stage';
 import { lazyModel } from './modelhost';

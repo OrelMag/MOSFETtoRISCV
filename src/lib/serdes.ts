@@ -1,4 +1,4 @@
-// Chapter 46's parts: the line codes in gates (Manchester, 8b/10b, the self-synchronizing scrambler), a sender whose bit clock is a
+// Chapter noise's parts: the line codes in gates (Manchester, 8b/10b, the self-synchronizing scrambler), a sender whose bit clock is a
 // phase accumulator, a serializer, a line (a model: delay and an error stream), a receiver that finds the bit clock in the data
 // (an Alexander bang-bang phase detector, a vote filter and a strobe counter) and a deserializer that aligns on the comma.
 // Everything runs on ONE clock; the sender's bit rate is a number of that clock (comm/serdes.ts), so the two ends are unrelated at the

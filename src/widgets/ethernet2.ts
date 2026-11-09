@@ -1,4 +1,4 @@
-// Chapter 48's model-driven widgets (the collision timeline, the minimum-frame arithmetic, the throughput curve) and the
+// Chapter carriers's model-driven widgets (the collision timeline, the minimum-frame arithmetic, the throughput curve) and the
 // segment scene: four gate-level stations on one cable, frames moving, collisions counted, Save capture.
 
 import '../styles/clocks.css';

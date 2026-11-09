@@ -1,4 +1,4 @@
-// Chapter 50's driver in RV32 assembly, for a computer with a NIC (lib/soc.ts busComputer({ nic: true })) whose transmitter is wired back to its
+// Chapter glass's driver in RV32 assembly, for a computer with a NIC (lib/soc.ts busComputer({ nic: true })) whose transmitter is wired back to its
 // receiver (loopback): initialise the rings, send one 64-byte frame to its own address, and take it in again, polling the descriptor or by the NIC's
 // interrupt. The timer (mtime at 0x8000_0010) stamps each step, so the cost of every part of the path is read off the gates' own clock.
 //

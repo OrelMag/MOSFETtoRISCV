@@ -1,4 +1,4 @@
-// Start-stop framing and what a receiver whose clock is slightly off sees (chapter 40; chapter 43's UART reuses it with
+// Start-stop framing and what a receiver whose clock is slightly off sees (chapter exchange; chapter uart's UART reuses it with
 // another frame). DOM-free. A frame is a start unit (line 0), `data` units sent bit 1 first, an optional parity unit and
 // a stop of `stop` units (line 1); the line idles at 1. The receiver's only synchronization is the start edge: after
 // it, it samples at fixed offsets of its own clock, `pos` of the way into each bit. Time is in transmitter units.

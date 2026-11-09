@@ -74,15 +74,15 @@ export const chUart: Chapter = {
     {
       title: 'One byte, no clock',
       body: `
-        <p>Two machines, one wire, and (chapter 42) two clocks with no relation between them. A byte can still cross if the sender wraps it in a <strong>frame</strong> that gives the receiver one thing to align to.
+        <p>Two machines, one wire, and (chapter ${numOf('clocks')}) two clocks with no relation between them. A byte can still cross if the sender wraps it in a <strong>frame</strong> that gives the receiver one thing to align to.
         The line idles at 1. A <strong>start bit</strong> of 0 begins the frame, the eight data bits follow <strong>least significant first</strong>, and a <strong>stop bit</strong> of 1 ends it. The line is then idle again, and the
-        next start bit can come at once or any time later. Ten bit times carry eight bits of payload: 80 %. Chapter 39's five-unit ITA2 code was framed the same way, with a start unit and a stop of one and a half units
-        (<code>ITA2_START_STOP</code> in <code>comm/startstop.ts</code>), a motor with a cam finding the start where this chapter uses a counter; chapter 40 worked out how far such a receiver's clock may be off.</p>
+        next start bit can come at once or any time later. Ten bit times carry eight bits of payload: 80 %. Chapter ${numOf('telegraph')}'s five-unit ITA2 code was framed the same way, with a start unit and a stop of one and a half units
+        (<code>ITA2_START_STOP</code> in <code>comm/startstop.ts</code>), a motor with a cam finding the start where this chapter uses a counter; chapter ${numOf('exchange')} worked out how far such a receiver's clock may be off.</p>
         <p>The start bit is the synchronizer. Because the idle level is 1, the falling edge is unambiguous, and from that edge on the receiver's own clock decides when to look at the line, once per bit, for nine more bits.
         Whatever the two clocks do, they only have to agree for ten bit times, which is why the tolerance is a few percent where a clocked link needs parts per million. The stop bit has two jobs. It guarantees that the
         line returns to 1 so that the next start is a falling edge, and it is the receiver's check: a 0 where the stop should be means the sampling went wrong, a <em>framing error</em>.</p>
         <p>LSB first suits a shift register: the receiver shifts right, the first bit ends up at the bottom after eight shifts, and the byte is in place without reordering. This chapter builds both ends from
-        the library's parts (a shift register, counters, a synchronizer, FIFOs), connects the UART to the bus of chapter 38 and puts two computers at opposite ends of a wire.</p>`,
+        the library's parts (a shift register, counters, a synchronizer, FIFOs), connects the UART to the bus of chapter ${numOf('bus')} and puts two computers at opposite ends of a wire.</p>`,
       widget: frameWidget,
       challenge: {
         kind: 'quiz',
@@ -146,7 +146,7 @@ export const chUart: Chapter = {
     {
       title: 'Sampling in the middle',
       body: `
-        <p>The receiver gets no clock, only a line that changes at the sender's times. Its rx input crosses into its own clock through a ${nands(SYNC2)}-NAND two-flop synchronizer (chapter 42) and enters the state machine as
+        <p>The receiver gets no clock, only a line that changes at the sender's times. Its rx input crosses into its own clock through a ${nands(SYNC2)}-NAND two-flop synchronizer (chapter ${numOf('clocks')}) and enters the state machine as
         the inverse of the line, so that reset is idle. The machine runs on the baud generator's ticks. <strong>Idle</strong> waits for a tick with the line low. <strong>Start</strong> counts 8 more ticks, to the middle of the start bit,
         and looks again: still low, a real start bit; high, a glitch, back to idle. <strong>Data</strong> samples every 16 ticks into an 8-bit shift register. <strong>Stop</strong> samples once more and reports the byte if the line is 1
         or a framing error if it is 0. The machine returns to idle at that sample, in the <em>middle</em> of the stop bit and not at its end: a sender whose clock is a little fast starts its next frame before the receiver's idea of the stop bit has
@@ -203,7 +203,7 @@ export const chUart: Chapter = {
         can be raised when the FIFO is not empty (this chapter's driver) or, in a UART with a trigger level, when it holds a chosen number of bytes. A trigger of 8 has a price: a lone byte is not reported until
         more arrive, so real parts add a timeout.</p>
         <p>The widget does the arithmetic. At 115 200 baud and a trigger of 8 the CPU has ${SLACK.slackUs.toFixed(0)} µs between the interrupt and the first lost byte (${(SLACK.slackUs - BYTE_US).toFixed(0)} µs to be safe: a byte already in the shift register lands too), and takes ${n0(IRQ_PER_S)} interrupts a second at a level of 1 against ${n0(IRQ_PER_S / 8)} at a level of 8, for the
-        same handler work per byte. At 3 Mbaud the same FIFO leaves ${SLACK3M.slackUs.toFixed(0)} µs, and that is where a DMA engine (chapter 38) takes over.</p>
+        same handler work per byte. At 3 Mbaud the same FIFO leaves ${SLACK3M.slackUs.toFixed(0)} µs, and that is where a DMA engine (chapter ${numOf('bus')}) takes over.</p>
         <p>When the receiver cannot keep up, the sender has to be told. <strong>RTS/CTS</strong> uses two extra wires: the receiver drops its RTS (the sender's CTS) when its FIFO is nearly full, and a sender checks CTS before it starts each frame. A frame already started still arrives, so the threshold leaves
         room for one more byte. <strong>XON/XOFF</strong> uses no wires: the receiver sends the characters 0x13 (XOFF) and 0x11 (XON) on its own tx. It has to leave room for every byte in flight plus the time the character takes to reach the other end and be acted on, and the data stream cannot contain those two values. A
         transmit FIFO has the mirror problem, and there the CPU is the sender: the status bit <code>tx full</code> is its flow control.</p>`,
@@ -221,7 +221,7 @@ export const chUart: Chapter = {
       title: 'A UART on the bus',
       get body() {
         return `
-        <p>The core becomes a slave on chapter 38's bus (<code>AXI_UART</code>, ${n0(nands(AXI_UART))} NANDs with the core) at 0x3000_0000: <strong>+0 data</strong> (store: queue a byte; load: the oldest received byte), <strong>+4 status</strong>
+        <p>The core becomes a slave on chapter ${numOf('bus')}'s bus (<code>AXI_UART</code>, ${n0(nands(AXI_UART))} NANDs with the core) at 0x3000_0000: <strong>+0 data</strong> (store: queue a byte; load: the oldest received byte), <strong>+4 status</strong>
         (bit 0 receive not empty, 1 transmit full, 2 transmit idle, 3 framing error, 4 overrun; storing a 1 to bit 3 or 4 clears it), <strong>+8 divisor</strong>, <strong>+12 interrupt enables</strong> (bit 0: receive not empty, bit 1: transmit FIFO empty).
         The slave only decodes: write strobes into the core, and a read-data register latched at the handshake. A load from +0 pops the FIFO <em>one cycle after</em> the handshake, from a flip-flop (the pattern of the keyboard and card-reader slaves),
         so that the address handshake has no combinational path to the FIFO that supplies the data. The UART's <code>irq</code> is ORed with the DMA's into the CPU's external interrupt.</p>
@@ -246,8 +246,8 @@ export const chUart: Chapter = {
       title: 'Two computers chat',
       get body() {
         return `
-        <p>Two copies of chapter 38's computer, each with a UART, a keyboard and a console, on <strong>unrelated clocks</strong>. A's tx goes through a line part to B's rx and B's tx back to A's rx. The line is the one box in the chapter that does not end in transistors:
-        it stands for the cable (it delays the level by two sender cycles and has an input that flips it, for noise) and chapter 41's model is what is inside. Each computer runs the chat program: keys typed go out on the UART, bytes received go to the console. A polls;
+        <p>Two copies of chapter ${numOf('bus')}'s computer, each with a UART, a keyboard and a console, on <strong>unrelated clocks</strong>. A's tx goes through a line part to B's rx and B's tx back to A's rx. The line is the one box in the chapter that does not end in transistors:
+        it stands for the cable (it delays the level by two sender cycles and has an input that flips it, for noise) and chapter ${numOf('wire')}'s model is what is inside. Each computer runs the chat program: keys typed go out on the UART, bytes received go to the console. A polls;
         B takes its bytes by interrupt. Everything else, both CPUs, both UARTs and their FIFOs, runs as gates on the cycle engine, each computer on its own clock pin, the edges merged in time order.</p>
         <p>Type on A and the text appears on B's console, and the other way. The slider gives clock B an error against clock A. Typed text goes out in bursts, back to back, so the slow side of clock B is the tight one: ${pct(SLOW_LIMIT_BACK_TO_BACK, 1)}. Within ±4 % the chat works in both directions (tested); between 4.4 % and 5 % a direction already garbles, and by ±9 % neither works. The consoles
         show wrong characters or lose them. The glitch button flips the wire from A to B for six cycles, under the ${8 * TWO_DIV} cycles of confirmation (half a bit), so a receiver in idle treats it as a false start; inside a frame it would corrupt a bit instead.</p>

@@ -1,4 +1,4 @@
-// Chapter 49's scenes: the four-port switch at gate level with a rig of four hosts around it. The rig is a bench: it plays
+// Chapter serial's scenes: the four-port switch at gate level with a rig of four hosts around it. The rig is a bench: it plays
 // frames into the receive streams, reads the transmit streams and runs the golden model (comm/ethswitch.ts) beside the gates,
 // comparing every output at every edge. It hangs on the stage's edge hooks, so Pulse, Step and Run clock it as well as its own button.
 

@@ -1,4 +1,4 @@
-// A NAND string of floating-gate cells (chapter 37): the charge rule is src/lib/flash.ts's and src/sim/switchsim.ts's
+// A NAND string of floating-gate cells (chapter flash): the charge rule is src/lib/flash.ts's and src/sim/switchsim.ts's
 // (FG_STEP a pulse, a read at V_READ conducts while the charge is under FG_READ), not a second copy of it. The string
 // has four cells in series; a read puts V_READ on the chosen control gate and PASS_V on the others.
 

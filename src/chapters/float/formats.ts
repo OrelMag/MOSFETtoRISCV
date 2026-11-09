@@ -1,4 +1,4 @@
-// Chapter 24's formats beyond float32: binary16, bfloat16, the two 8-bit formats and float64 from the same generators.
+// Chapter float's formats beyond float32: binary16, bfloat16, the two 8-bit formats and float64 from the same generators.
 // Costs are the pinned table lib/fpformatcosts.ts (tests/fpformats.test.ts re-measures it); ranges are computed.
 
 import { FORMAT_COSTS as C, formatRange } from '../../lib/fpformatcosts';

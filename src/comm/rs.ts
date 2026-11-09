@@ -1,4 +1,4 @@
-// Reed-Solomon over GF(256) (DOM-free): chapter 47's golden model for lib/rs.ts, and the decoder, which is built only here.
+// Reed-Solomon over GF(256) (DOM-free): chapter modem's golden model for lib/rs.ts, and the decoder, which is built only here.
 // The field is the widely used one, x^8 + x^4 + x^3 + x^2 + 1 (0x11D), with primitive element 2; the generator's roots are
 // α^0 … α^(2t-1). That is QR's code and DVB's RS(204, 188) shortened from (255, 239): tests/comm-codes.test.ts holds the encoder to
 // published QR vectors. CCSDS's 0x187, dual-basis code is a different one.

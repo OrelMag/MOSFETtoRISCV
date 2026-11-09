@@ -1,4 +1,4 @@
-// Chapter 47's CRC hardware: the register's next-state function as XOR trees (crcNext), and the register around it (crcUnit).
+// Chapter modem's CRC hardware: the register's next-state function as XOR trees (crcNext), and the register around it (crcUnit).
 // The XOR network is read off the golden model (comm/crc.ts nextMatrix): the next state is linear in the state and the
 // data, so bit i of it is the XOR of the inputs its row names. One bit a clock is the textbook shift register with a tap
 // at each 1 of the generator; w bits at once is the same function applied w times, collapsed into one network.

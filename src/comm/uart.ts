@@ -1,4 +1,4 @@
-// Chapter 43's UART as a golden model, edge by edge (DOM-free). lib/uart.ts builds the same machine in gates and
+// Chapter uart's UART as a golden model, edge by edge (DOM-free). lib/uart.ts builds the same machine in gates and
 // tests/comm-uart.test.ts compares them on every output every cycle; bus/model.ts wraps the same stepper as the
 // computer's UART device, so the instruction-level model and the gates share one description of the timing.
 //

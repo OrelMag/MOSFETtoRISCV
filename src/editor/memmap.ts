@@ -20,6 +20,7 @@ import type { ChipDoc, EndRef, LabelDoc, PartDoc, PartRef, WireDoc } from './mod
 import { nextId, uniqueName } from './model';
 import { isError, partDef } from './parts';
 
+import { numOf } from '../chapters/order';
 /** The size of every window: a[27:0]. */
 export const WINDOW = 2 ** 28;
 /** The number of windows (a[31:28]). */
@@ -40,7 +41,7 @@ export interface KindInfo {
 export const KINDS: Record<Kind, KindInfo> = {
   ram: { label: 'RAM', about: 'axiRam: four byte lanes, answers the cycle after the address', placeable: true, tone: 'ram' },
   flash: { label: 'Flash', about: 'axiFlashWindow over a ROM part that holds the contents; read only', placeable: true, tone: 'flash' },
-  dram: { label: 'DRAM', about: 'chapter 36\'s controller and device behind one slave', placeable: true, tone: 'dram' },
+  dram: { label: 'DRAM', about: `chapter ${numOf('memctrl')}'s controller and device behind one slave`, placeable: true, tone: 'dram' },
   screen: { label: 'Screen', about: 'a store to base + 256·y + 4·x paints pixel (x, y)', placeable: true, tone: 'screen' },
   io: { label: 'Keys + timer', about: 'keyboard at +0 / +4, timer count and irq at +8 / +12', placeable: true, tone: 'io' },
   dma: { label: 'DMA registers', about: 'src, dst, len, ctrl: the DMA engine\'s own slave port (moved, not added)', placeable: false, tone: 'io' },

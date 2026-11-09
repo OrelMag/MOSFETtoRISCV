@@ -1,7 +1,7 @@
 // Two computers and what lies between them, at model speed: the golden model on each CPU, comm/nic.ts's NIC and comm/mac.ts's MACs, on one clock.
-// Chapter 52's long transfers run here. A load or store on the bus costs a clock more; contention between the CPU and the NIC's DMA is not modelled, which
-// puts chapter 50's ping within 5 clocks of the gates' 14 689 (tests/net-lanbench.test.ts). Between the computers: chapter 50's switch model, or a router
-// as a queue in front of a slower link, frame by frame: it decrements the TTL, fixes the checksum and rewrites the addresses as chapter 51's fast path does.
+// Chapter codes's long transfers run here. A load or store on the bus costs a clock more; contention between the CPU and the NIC's DMA is not modelled, which
+// puts chapter glass's ping within 5 clocks of the gates' 14 689 (tests/net-lanbench.test.ts). Between the computers: chapter glass's switch model, or a router
+// as a queue in front of a slower link, frame by frame: it decrements the TTL, fixes the checksum and rewrites the addresses as chapter errors's fast path does.
 
 import { BusModel } from '../bus/model';
 import { idleIn, SwitchModel, type SwitchOpts } from '../comm/ethswitch';
@@ -60,7 +60,7 @@ export interface Middle {
   step(c: number, rx: RxByte[], ready: number[]): StreamByte[];
 }
 
-/** Chapter 50's switch. */
+/** Chapter glass's switch. */
 export class SwitchMiddle implements Middle {
   private readonly sw: SwitchModel;
   private readonly inp = idleIn();

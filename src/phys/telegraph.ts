@@ -1,4 +1,4 @@
-// A telegraph line as a resistor (Phase 21, chapter 39). DOM-free. A key, a battery, a wire and a main-line sounder
+// A telegraph line as a resistor (Phase 21, chapter telegraph). DOM-free. A key, a battery, a wire and a main-line sounder
 // coil are one series loop: the current is V / (R_line + R_coil), and the coil pulls in only above its pull-in current.
 // The sounder is the relay model of phys/relay.ts rewound to a main-line sounder's resistance (SOUNDER_R, 120 Ω:
 // Western Union's 15B in the Railroad Telegraphers Handbook; GPO and Canadian main-line sounders were 20 Ω, Science

@@ -23,7 +23,7 @@ const f1 = (x: number) => x.toFixed(1);
 const f0 = (x: number) => x.toFixed(0);
 const mA = (i: number) => f1(1e3 * i);
 
-// ---- chapter 39: numbers computed here; the ones typed in the text are pinned by tests/content-comms.test.ts
+// ---- chapter telegraph: numbers computed here; the ones typed in the text are pinned by tests/content-comms.test.ts
 
 /** A NAND output toggling one NAND input over a short wire, ½ C V² (fJ): the repo's illustrative 28 nm-class numbers. */
 const NAND_C = FF_INPUT + FF_WIRE + FF_DRIVER;
@@ -295,7 +295,7 @@ export const chTelegraph: Chapter = {
   ],
 };
 
-// ---- chapter 40
+// ---- chapter exchange
 
 const CTR = stats(DIAL_COUNTER), SEL = stats(DIAL_SELECTOR), XB = stats(CROSSBAR3);
 const BEST = bestClos(1024);

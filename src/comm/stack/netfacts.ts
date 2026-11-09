@@ -1,4 +1,4 @@
-// The numbers chapter 50 quotes about its ping, derived in one place from the ping's own size (apps.ts pingApp) and the measurement of the gates
+// The numbers chapter glass quotes about its ping, derived in one place from the ping's own size (apps.ts pingApp) and the measurement of the gates
 // (netcosts.json, scripts/net-costs.ts --write), so that the prose, the widgets and tests/comm-net-facts.test.ts cannot drift apart. DOM-free.
 
 import NET from './netcosts.json';

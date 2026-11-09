@@ -1,5 +1,5 @@
 // A chip package opened up (loaded on demand, modelhost.ts): die, pads, bond wires, lead frame, board. The bounce is
-// phys/line.ts's groundBounce on the current of a pad (line.ts padSwing), the same call as chapter 41's noise panel, so
+// phys/line.ts's groundBounce on the current of a pad (line.ts padSwing), the same call as chapter wire's noise panel, so
 // the two agree at the same settings; the ground wires are the return path, and bonding more of them divides L.
 
 import '../styles/package3d.css';

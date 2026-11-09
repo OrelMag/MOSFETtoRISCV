@@ -947,7 +947,7 @@ export const chFloat: Chapter = {
           'To forward loads',
         ], answer: 0,
         why: ['', 'The ALU still has its one cycle in E; X adds latency to the pipe, not time to any stage.', 'The register file writes in one cycle, in W. The extra stage is there for ordering.', 'Loads are forwarded from X because they pass through it: a consequence of the extra stage, not its reason.'],
-        explain: 'With different path lengths a younger integer instruction would finish before an older FP instruction: write-after-write and precise state would need extra logic (extra tracking of pending results, as in chapter 26, or a reorder buffer). Equal lengths keep it simple; the cost is one more forwarding source (X) and one stage of latency for nothing.',
+        explain: `With different path lengths a younger integer instruction would finish before an older FP instruction: write-after-write and precise state would need extra logic (extra tracking of pending results, as in chapter ${numOf('ooo')}, or a reorder buffer). Equal lengths keep it simple; the cost is one more forwarding source (X) and one stage of latency for nothing.`,
       },
     },
     {

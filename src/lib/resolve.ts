@@ -100,7 +100,7 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^axibus2_(\d+(?:_\d+)*)_b$/, (m) => sandboxBus(m[1].split('_').map(Number))],
   // the UART chapter's slave with its bus ports packed, and the line part with its delay in the id (the sandbox's Communication group)
   [/^axi_uart_b$/, () => AXI_UART_B],
-  // chapters 48–50's NIC with both bus links packed, its MACs, the switch with any options in its id, and the SPI master as a bus slave
+  // chapters carriers–glass's NIC with both bus links packed, its MACs, the switch with any options in its id, and the SPI master as a bus slave
   // (all built on first use: they are large, and the registry-wide tests would round-trip them)
   [/^nic$/, () => nic()],
   [/^nic_b$/, () => nicB()],

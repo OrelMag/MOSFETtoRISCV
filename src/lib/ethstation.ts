@@ -1,4 +1,4 @@
-// Chapter 48's station and segment: the frame source and receive buffer (lib/bigmem.ts RAMs behind the pointers of the buffer
+// Chapter carriers's station and segment: the frame source and receive buffer (lib/bigmem.ts RAMs behind the pointers of the buffer
 // policy), a station that wraps the two MACs with the carrier / collision glue and is hand-placed so that it reads at fit, and
 // a segment of four stations on one shared wire. comm/mac.ts's Station and Segment are the models the tests compare them with.
 

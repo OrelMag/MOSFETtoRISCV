@@ -1,4 +1,4 @@
-// A clockless serial link at 4 cycles a bit, cycle by cycle (chapter 46), DOM-free: the golden model lib/serdes.ts is compared with
+// A clockless serial link at 4 cycles a bit, cycle by cycle (chapter noise), DOM-free: the golden model lib/serdes.ts is compared with
 // every output after every edge. The sender's bit clock is a phase accumulator (so its rate is a number we can offset), the receiver
 // has only the line: it samples it every cycle, finds the transitions with an Alexander (bang-bang) phase detector, and slides its
 // bit strobe by one sample when enough votes agree.

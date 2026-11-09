@@ -1,6 +1,6 @@
-// Chapter 53's internet: a packet-level model of an invented network of networks. Eight autonomous systems, routers and hosts; link state
+// Chapter pcie's internet: a packet-level model of an invented network of networks. Eight autonomous systems, routers and hosts; link state
 // inside each one (net/routing.ts), BGP between them (internetbgp.ts); from both, each router's table as prefixes, then as the trie and
-// next-hop bytes of chapter 51's fast path. A frame is forwarded here byte by byte, and tests/net-internet-gates runs the same bytes through
+// next-hop bytes of chapter errors's fast path. A frame is forwarded here byte by byte, and tests/net-internet-gates runs the same bytes through
 // the gates at every hop. A static site cannot run a real traceroute, and this one never touches the learner's network (roadmap decision 6).
 //
 // Nothing here is anyone's: AS numbers from the documentation range (RFC 5398: 64496-64511), addresses from private 10/8 (RFC 1918), names
@@ -224,7 +224,7 @@ export class Internet {
     return t;
   }
 
-  /** What a router does with a frame, by reading its bytes: chapter 51's rules, written apart from net/fastpath.ts and held equal to it. */
+  /** What a router does with a frame, by reading its bytes: chapter errors's rules, written apart from net/fastpath.ts and held equal to it. */
   forward(r: number, frame: readonly number[]): HopResult {
     const own = routerMac(r), t = this.tableOf(r), ip = parseIp(frame.slice(14));
     if (!own.every((b, i) => frame[i] === b)) return { kind: 'drop', why: 'another machine\'s MAC', reads: 0 };
@@ -281,7 +281,7 @@ export function udpSegment(src: number, dst: number, sport: number, dport: numbe
 }
 
 export const TCP_SYN = 2, TCP_ACK = 16, TCP_PSH = 8;
-/** RFC 793's header, no options, for the bytes of one request; the protocol is chapter 52's. */
+/** RFC 793's header, no options, for the bytes of one request; the protocol is chapter codes's. */
 export function tcpSegment(src: number, dst: number, sport: number, dport: number, seq: number, ack: number, flags: number, data: readonly number[]): number[] {
   const seg = [...be16(sport), ...be16(dport), ...be32(seq), ...be32(ack), 0x50, flags, ...be16(65535), 0, 0, 0, 0, ...data];
   const c = checksum(seg, onesSum([...be32(src), ...be32(dst), 0, PROTO_TCP, ...be16(seg.length)]));
@@ -377,7 +377,7 @@ export function linksOf(j: Journey): number[] {
 /** Every entry an independent scan of the routes would pick: the trie's answer checked in tests. */
 export const scanRoute = (t: RouterTable, ip: number): number => lpmLinear(t.routes, ip);
 
-/** The writes that fill a fast path's two memories with a router's table: what its slow path does when routing changes (chapter 51's cfg port). */
+/** The writes that fill a fast path's two memories with a router's table: what its slow path does when routing changes (chapter errors's cfg port). */
 export function loadWrites(t: RouterTable): { cfgWe: 1; cfgT: 0 | 1; cfgA: number; cfgD: number }[] {
   const w: { cfgWe: 1; cfgT: 0 | 1; cfgA: number; cfgD: number }[] = t.trie.map((d, a) => ({ cfgWe: 1, cfgT: 0, cfgA: a, cfgD: d }));
   const used = (Math.max(...Object.keys(t.hops).map(Number)) + 1) * 8;

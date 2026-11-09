@@ -1,4 +1,4 @@
-// Chapter 45's golden models (DOM-free): the numerically controlled oscillator, the FSK modulator and the period-counting
+// Chapter signals's golden models (DOM-free): the numerically controlled oscillator, the FSK modulator and the period-counting
 // demodulator that lib/modem.ts builds in gates (exact integer cycle models, compared with the gates every output every
 // cycle in tests/comm-modem.test.ts), then the float side: Gray-coded PSK / QAM constellations, their symbol error rate in
 // closed form against a seeded Monte Carlo, the modems of the voice-band era and ADSL's bit loading.

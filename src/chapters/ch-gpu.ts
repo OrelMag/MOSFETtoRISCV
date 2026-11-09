@@ -14,10 +14,10 @@ function halted(st: Stage): boolean {
 
 const pct = (a: number, b: number) => `${Math.round((100 * a) / b)} %`;
 const fmt = groupDigits;
-/** saxpy on the lane core (chapter 29): instructions run, loads and stores among them, lanes; one cycle per active lane for a memory instruction. */
+/** saxpy on the lane core (chapter lanes): instructions run, loads and stores among them, lanes; one cycle per active lane for a memory instruction. */
 const SAXPY = { instrs: 74, mem: 20, lanes: 4 };
 const SAXPY_CYCLES = SAXPY.instrs - SAXPY.mem + SAXPY.mem * SAXPY.lanes;
-/** Chapter 31: one warp on saxpy64 with 8-cycle loads. */
+/** Chapter warps: one warp on saxpy64 with 8-cycle loads. */
 const WARP1 = { instrs: 154, cycles: 266, latency: 8 };
 
 export const chLanes: Chapter = {
@@ -199,7 +199,7 @@ export const chLanes: Chapter = {
           ${pct(SAXPY.mem * SAXPY.lanes, SAXPY_CYCLES)} of the cycles for ${pct(SAXPY.mem, SAXPY.instrs)} of the instructions.</p>`,
         pitfall: `<p>A masked-off lane is skipped, not served: with lanes 0, 1 and 3 active a store takes 3 cycles, not 4. The cost scales with the active lanes, which is the
           opposite of a uniform branch, where it is constant. Watch <code>retire</code> in the Warp panel: it stays low until the cycle that serves the last lane, so one cycle fewer than there are lanes served.</p>`,
-        real: `<p>A real memory system takes a whole warp's addresses at once and merges those on one cache line into one access (coalescing, chapter 32), so a store of 32 neighbouring
+        real: `<p>A real memory system takes a whole warp's addresses at once and merges those on one cache line into one access (coalescing, chapter ${numOf('feed')}), so a store of 32 neighbouring
           words costs one or a few accesses, not 32. One lane per cycle is the worst case, kept here as the thing to beat.</p>`,
       },
       challenge: {
@@ -687,7 +687,7 @@ export const chWarps: Chapter = {
           the same code a cycle apart and reach their stalls together: the idle cycles of one are the idle cycles of the others.</p>`,
         pitfall: `<p>"Ready" is not "has work": a warp that is not running (done, or not yet spawned) never wins, and a warp whose load is being written back sits out the cycle so that
           the issue and the write do not share a bank's port. Count the ready bits in the panel before blaming the scheduler for an empty slot.</p>`,
-        real: `<p>Real schedulers also weigh age and fairness (greedy-then-oldest is common) and can dual-issue; the arbiter here is the same round-robin as chapter 27's, which
+        real: `<p>Real schedulers also weigh age and fairness (greedy-then-oldest is common) and can dual-issue; the arbiter here is the same round-robin as chapter ${numOf('multicore')}'s, which
           is enough to show the effect and cheap enough to draw.</p>`,
       },
       challenge: {

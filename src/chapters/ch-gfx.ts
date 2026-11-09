@@ -18,12 +18,12 @@ const nd = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const MIP_BYTES = Array.from({ length: 9 }, (_, k) => (256 >> k) ** 2).reduce((a, b) => a + b, 0);
 /** The rasterizer's clear, from go: the cycles before the walk's first test, then every 4 × 4 tile of the screen (a test and 16 pixels). */
 const CLEAR = CLEAR_CYCLES + 1;
-/** The screen of chapters 33-34: 64 x 64 pixels, one byte each, four to a word. */
+/** The screen of chapters pixels-graphics: 64 x 64 pixels, one byte each, four to a word. */
 const SCREEN = { w: 64, bytesPerPixel: 1, perWord: 4 };
 const FRAME_BYTES = SCREEN.w * SCREEN.w * SCREEN.bytesPerPixel;
 const FRAME_WORDS = FRAME_BYTES / SCREEN.perWord;
 const pct = (a: number, b: number) => `${Math.round((100 * a) / b)} %`;
-/** The edge function of chapter 33's rasterizer at p, for vertices a to b (quarter pixels). */
+/** The edge function of chapter pixels's rasterizer at p, for vertices a to b (quarter pixels). */
 const edgeAt = (a: [number, number], b: [number, number], p: [number, number]) => (a[1] - b[1]) * (p[0] - a[0]) + (b[0] - a[0]) * (p[1] - a[1]);
 /** A frame ends at a flip, and flips happen only at vsync: cycles rounded up to whole scan-outs. */
 const P: [number, number] = [98, 102];
@@ -412,7 +412,7 @@ export const chGfxPipeline: Chapter = {
           stops at the screen's edge, so only triangles that leave even the guard band are clipped.</li>
           <li>The <strong>perspective divide</strong>, x / w, y / w, z / w, gives normalized coordinates (−1 … 1), and the <strong>viewport</strong>
           transform scales them to pixels in fixed point (8 sub-pixel bits is common; here 2).</li>
-          <li><strong>Perspective-correct interpolation</strong>: z / w is linear on the screen, so depth stays a plane as in chapter 33; but texture
+          <li><strong>Perspective-correct interpolation</strong>: z / w is linear on the screen, so depth stays a plane as in chapter ${numOf('pixels')}; but texture
           coordinates and colours are not. The rasterizer interpolates a / w and 1 / w linearly and divides per pixel, one reciprocal a pixel.</li>
           </ul>`,
       },
@@ -530,7 +530,7 @@ export const chGfxPipeline: Chapter = {
         <strong>texel</strong> at that position. Almost never does (u, v) land on a texel centre. Taking the nearest texel is blocky when magnified; <strong>bilinear filtering</strong> blends the four around it, weighted by how
         close the point is to each: with fractions <em>fx</em>, <em>fy</em> of the way across, first interpolate along x in both rows, then along y between the results. Three linear interpolations
         (<span data-show="u0 u1 u2">lerps</span>), each y = (a · (16 − f) + b · f) &gt;&gt; 4 for a 4-bit fraction: two 8 × 8 multipliers, an adder, and the low four bits dropped.</p>
-        <p>One lerp is ${fmt(nd(LERP8))} NANDs, a bilinear unit ${fmt(nd(BILINEAR8))}, and an RGB332 pixel needs one per colour channel: ${fmt(3 * nd(BILINEAR8))}. For scale, chapter 33's whole blend unit (<code>BLEND332</code>) is ${fmt(nd(BLEND332))}.
+        <p>One lerp is ${fmt(nd(LERP8))} NANDs, a bilinear unit ${fmt(nd(BILINEAR8))}, and an RGB332 pixel needs one per colour channel: ${fmt(3 * nd(BILINEAR8))}. For scale, chapter ${numOf('pixels')}'s whole blend unit (<code>BLEND332</code>) is ${fmt(nd(BLEND332))}.
         Each sample also reads <strong>4 texels</strong> from memory, and a texture cache exists mainly to serve them: neighbouring pixels share most of their texels. Each stage truncates, so the result can fall up to 1.875 below the exact weighted
         average, never above it (${bilinearRef(0, 255, 0, 255, 8, 0)} here against 127.5 for the midpoint of 0 and 255): the tests check the circuit against the reference over random inputs.</p>
         <p>Minified textures are the harder half. A 256 × 256 image drawn 32 pixels wide steps 8 texels per pixel; bilinear would read 4 texels spread over 8 and shimmer. A <strong>mipmap</strong> keeps the image at half size,

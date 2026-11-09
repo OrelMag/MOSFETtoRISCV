@@ -1,4 +1,4 @@
-// Chapter 41's I/O pad at switch level: the last transistors before the wire and the first after it. The output path is a
+// Chapter wire's I/O pad at switch level: the last transistors before the wire and the first after it. The output path is a
 // tri-state driver (switchparts.ts TRIINV) behind a chain of inverters, each four times the last (chapter 2's sizing for
 // a load of 64: 4×, 16×, 64×, then the 256× output stage); the input path is a small buffer reading the pin. A bidirectional
 // pin: with en = 0 the pad lets go (Z) and whatever is on the wire reaches y.

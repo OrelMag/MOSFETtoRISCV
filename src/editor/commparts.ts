@@ -1,5 +1,5 @@
-// The sandbox's communication parts (Phase 21, "Communication"): the line, the UART core and slave, chapter 50's NIC, the MACs and
-// chapter 49's switch, and chapter 44's SPI controller and memory. All are library parts a document names by id (`line<delay>`, `axi_uart_b`,
+// The sandbox's communication parts (Phase 21, "Communication"): the line, the UART core and slave, chapter glass's NIC, the MACs and
+// chapter serial's switch, and chapter spi's SPI controller and memory. All are library parts a document names by id (`line<delay>`, `axi_uart_b`,
 // `nic_b`, `ethswitch_…` and the others resolve from the name alone in lib/resolve.ts, so they survive save, reload, share links and Open in
 // Sandbox with no sanitizer of their own); this file is what the editor knows about them, DOM-free (commui.ts draws the palette group and
 // the property sections). A CommPart is a palette item, a test for "is this placed part one of mine", and a note on what its box stands for.
@@ -29,9 +29,9 @@ export interface CommPart {
 }
 
 export const LINE_DEFAULT = 2;
-/** The switch the palette places: chapter 50's cells (128 bytes, two a port: a frame up to 128 bytes, a small simulation) with a slower age tick (an entry lives 64 · 256 clocks, so it outlasts a ping and its pong); the properties change it. */
+/** The switch the palette places: chapter glass's cells (128 bytes, two a port: a frame up to 128 bytes, a small simulation) with a slower age tick (an entry lives 64 · 256 clocks, so it outlasts a ping and its pong); the properties change it. */
 export const SANDBOX_SWITCH: Partial<SwitchOpts> = { cellK: 7, cells: 2, tickLog2: 8 };
-export const LINE_MODEL = 'A model of a cable (chapter 41), the one box here that does not end in transistors: opening it shows its panel, not a circuit. It costs nothing, and the exports say so: Verilog leaves it as a comment, and the FPGA export turns d into an output and q into an input of the top module (join them with a wire on the board).';
+export const LINE_MODEL = `A model of a cable (chapter ${numOf('wire')}), the one box here that does not end in transistors: opening it shows its panel, not a circuit. It costs nothing, and the exports say so: Verilog leaves it as a comment, and the FPGA export turns d into an output and q into an input of the top module (join them with a wire on the board).`;
 
 const isLib = (ref: PartRef, f: (id: string) => boolean) => 'lib' in ref && f(ref.lib);
 
@@ -52,11 +52,11 @@ export const COMM_PARTS: CommPart[] = [
   },
   {
     id: 'uart', name: 'UART', ref: { lib: 'uart_full' }, owns: (r) => isLib(r, (id) => id === 'uart_full'),
-    title: "Chapter 43\'s UART core in gates: baud generator, transmitter, receiver, a 16-byte FIFO each way. push + data queue a byte to send, pop takes the oldest received; wval with divWe / ieWe / clrWe writes the divisor, interrupt enables and clears the sticky errors. tx and rx are the line pins",
+    title: `Chapter ${numOf('uart')}\'s UART core in gates: baud generator, transmitter, receiver, a 16-byte FIFO each way. push + data queue a byte to send, pop takes the oldest received; wval with divWe / ieWe / clrWe writes the divisor, interrupt enables and clears the sticky errors. tx and rx are the line pins`,
   },
   {
     id: 'uart_bus', name: 'UART slave', tag: 'bus', ref: { lib: 'axi_uart_b' }, owns: (r) => isLib(r, (id) => id === 'axi_uart_b' || id === 'axi_uart'),
-    title: "The UART core behind chapter 38\'s bus, its bus ports packed into a request and a response bus: +0 data, +4 status, +8 divisor, +12 interrupt enables. Give it a slave code on the interconnect (0x3 in Examples ▸ Two computers)",
+    title: `The UART core behind chapter ${numOf('bus')}\'s bus, its bus ports packed into a request and a response bus: +0 data, +4 status, +8 divisor, +12 interrupt enables. Give it a slave code on the interconnect (0x3 in Examples ▸ Two computers)`,
   },
   {
     id: 'nic', name: 'NIC', tag: 'bus', ref: { lib: 'nic_b' }, owns: (r) => isLib(r, (id) => id === 'nic_b' || id === 'nic'),
@@ -76,7 +76,7 @@ export const COMM_PARTS: CommPart[] = [
   },
   {
     id: 'spi', name: 'SPI controller', tag: 'bus', ref: { lib: 'axi_spi_b' }, owns: (r) => isLib(r, (id) => id === 'axi_spi_b' || id === 'axi_spi'),
-    title: "Chapter 44's SPI master behind the bus: +0 data (a store sends a byte, a load reads the byte that came in), +4 status (bit 0 busy, bit 1 done), +8 control (bit 0 CPOL, bit 1 CPHA, bit 2 hold CS low, bit 3 interrupt enable). Pins sclk, mosi, cs_n, miso. Give it a slave code on the interconnect",
+    title: `Chapter ${numOf('spi')}'s SPI master behind the bus: +0 data (a store sends a byte, a load reads the byte that came in), +4 status (bit 0 busy, bit 1 done), +8 control (bit 0 CPOL, bit 1 CPHA, bit 2 hold CS low, bit 3 interrupt enable). Pins sclk, mosi, cs_n, miso. Give it a slave code on the interconnect`,
   },
   {
     id: 'spi_mem', name: 'SPI memory', ref: { lib: 'spi_device' }, owns: (r) => isLib(r, (id) => id === 'spi_device'),

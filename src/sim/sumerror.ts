@@ -1,4 +1,4 @@
-// Chapter 24's summation lab (DOM-free): naive, pairwise and Kahan sums of float32 terms against the exact sum (BigInt).
+// Chapter float's summation lab (DOM-free): naive, pairwise and Kahan sums of float32 terms against the exact sum (BigInt).
 // Math.fround of a double sum of two float32s is the correctly rounded float32 sum (a double holds it exactly first),
 // so the loops here are the CPU's fadd.s / fsub.s (tests/fperror.test.ts holds the Kahan loop equal to the RV32F program).
 

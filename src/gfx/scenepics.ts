@@ -1,4 +1,4 @@
-// The two pictures chapter 33's first scene keeps in its frame buffers (DOM-free, so the CRT model and the tests can
+// The two pictures chapter pixels's first scene keeps in its frame buffers (DOM-free, so the CRT model and the tests can
 // hold them without the screen panel): colour bars over a grey ramp, and rings around the centre. RGB332, 64 × 64.
 
 import { FB_W as W } from './raster';

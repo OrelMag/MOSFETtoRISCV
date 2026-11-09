@@ -1,4 +1,4 @@
-// The workbench's Lab tab (#/workbench/lab, its own chunk): chapter 26's out-of-order lab on a page of its own.
+// The workbench's Lab tab (#/workbench/lab, its own chunk): chapter ooo's out-of-order lab on a page of its own.
 
 import { numOf } from '../../chapters/order';
 import { oooLabWidget } from '../../widgets/ooolab';

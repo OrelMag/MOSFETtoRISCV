@@ -1,4 +1,5 @@
-// Chapter numbers follow from the book's order (chapters/order.ts). Chapters from the modem on move as chapters are inserted, so text
+// Chapter numbers follow from the book's order (chapters/order.ts). Chapters after the cache chapter move as chapters are inserted (the
+// virtual memory and OS chapters go there, the new Throughput chapters before the lanes), so text
 // must not type those numbers: it says `chapter ${numOf('modem')}`. A typed number below them is stable; comments are not read.
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -9,7 +10,7 @@ import { MANIFEST } from '../src/chapters/manifest';
 import { BOOK_ORDER, numOf, type ChapterId } from '../src/chapters/order';
 
 /** The first number that may move: everything before it stays put when a chapter is inserted further on. */
-const FLOOR = numOf('spi') + 1;
+const FLOOR = numOf('cache') + 1;
 const REF = /\b(?:chapters?|ch\.?)\s+(\d+(?:\s*(?:,\s*and|,|–|-|to|and|or|&)\s*\d+)*)/gi;
 
 /** The typed numbers in a piece of text that a later insertion could make wrong. */

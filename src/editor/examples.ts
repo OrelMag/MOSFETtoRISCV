@@ -474,7 +474,7 @@ export const EXAMPLES: Example[] = [
   },
   {
     id: 'bussystem', group: 'computers', short: 'Masters, slaves and a boot from flash.', name: 'System on a bus',
-    blurb: 'Chapter 38\'s computer: an RV32I core and a DMA engine on one bus to RAM, a flash it boots from, the DRAM of chapter 36, a screen, a keyboard and a timer. Clock rate max, Run, then type.',
+    blurb: `Chapter ${numOf('bus')}'s computer: an RV32I core and a DMA engine on one bus to RAM, a flash it boots from, the DRAM of chapter ${numOf('memctrl')}, a screen, a keyboard and a timer. Clock rate max, Run, then type.`,
     build: busSystemChip,
   },
   {
@@ -485,7 +485,7 @@ export const EXAMPLES: Example[] = [
   },
   {
     id: 'twocomputers', group: 'computers', short: 'Two computers chat over a wire.', name: 'Two computers on a wire',
-    blurb: 'The last scene of chapter 43: two RV32I bus cores, each with a boot ROM, RAM, a UART and a console, joined by two line parts (a model of a cable). A sends a message, B answers it. Hold a NOISE button to corrupt a byte in flight.',
+    blurb: `The last scene of chapter ${numOf('uart')}: two RV32I bus cores, each with a boot ROM, RAM, a UART and a console, joined by two line parts (a model of a cable). A sends a message, B answers it. Hold a NOISE button to corrupt a byte in flight.`,
     build: (id, n, _sub, docs) => twoComputersChip(id, n, { a: docs.a, b: docs.b }),
     subchips: { a: { name: 'Computer A', build: (id, n) => uartComputerChip(id, n, 'A') }, b: { name: 'Computer B', build: (id, n) => uartComputerChip(id, n, 'B') } },
     hz: 5000,

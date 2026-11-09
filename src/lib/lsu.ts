@@ -191,7 +191,7 @@ function buildBanked(k: number): ComponentDef {
   });
 }
 
-// ---- any width: the 64-bit core's load / store unit (chapter 25) ------------------------------------------
+// ---- any width: the 64-bit core's load / store unit (chapter widths) ------------------------------------------
 // The same three blocks at XLEN bits (XLEN / 8 byte lanes); at 32 bits they are the objects above. Every access
 // stays inside its word, aligned to its own size (lh at 8k + 7 reads bytes 6 and 7), as riscv/iss64.ts models it.
 

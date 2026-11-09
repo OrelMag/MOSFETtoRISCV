@@ -1,5 +1,5 @@
-// Chapter 50's network interface card in gates: a bus slave with eight registers, a bus master that moves frames between two
-// rings of descriptors in RAM and the Ethernet MAC of chapter 48 (lib/ethernet.ts macTx, macRx), and an interrupt. Everything is
+// Chapter glass's network interface card in gates: a bus slave with eight registers, a bus master that moves frames between two
+// rings of descriptors in RAM and the Ethernet MAC of chapter carriers (lib/ethernet.ts macTx, macRx), and an interrupt. Everything is
 // NAND gates and the library's flip-flops in boxes of their own (lib/rtl.ts); comm/nic.ts is the golden model the tests compare it
 // with after every clock, and says what the descriptors, the registers and the engines do.
 //

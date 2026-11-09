@@ -1,4 +1,4 @@
-// Chapter 27's coherent dual-core: each core behind a private write-back cache of 4 sets x 4 words that snoops a
+// Chapter multicore's coherent dual-core: each core behind a private write-back cache of 4 sets x 4 words that snoops a
 // shared bus (MSI: two state bits per line; BusRd, BusRdX, BusUpgr; a Modified holder answers with a Flush that
 // is written back to memory on the same transaction). Beside dualCore (lib/multicore.ts), which stays as it is:
 // the cores are the same ComponentDef, the arbiter is the same ARBITER2, the memory the same dataMemory.
@@ -289,12 +289,12 @@ export interface CoherentOptions {
   /** Shared memory 2^dmemK words (5 or 6). */
   dmemK?: number;
   imemK?: number;
-  /** false: the caches never snoop (chapter 27's first cache step). */
+  /** false: the caches never snoop (chapter multicore's first cache step). */
   coherent?: boolean;
 }
 
 /**
- * The dual-core of chapter 27 behind coherent caches. The cores are dualCore's; each core's data port goes to its
+ * The dual-core of chapter multicore behind coherent caches. The cores are dualCore's; each core's data port goes to its
  * cache instead of the arbiter, and the caches share the bus. Outputs per core: pc, retire (low while its access
  * waits), grant (the cache lets the access go on); busy for the bus.
  */

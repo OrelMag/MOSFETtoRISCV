@@ -1,4 +1,4 @@
-// Check yourself questions for the entries of codexmore7.ts (see codexcheck.ts), group 9: Communication, chapters 51-53. Answers first: the quiz shuffles the options
+// Check yourself questions for the entries of codexmore7.ts (see codexcheck.ts), group 9: Communication, chapters errors-pcie. Answers first: the quiz shuffles the options
 // (ui/quiz.ts shuffleOrder). Numbers pinned by tests/content-codexcomm.test.ts. No DOM.
 
 import type { Quiz } from '../chapters/types';

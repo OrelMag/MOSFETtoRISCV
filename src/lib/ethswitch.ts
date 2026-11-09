@@ -1,4 +1,4 @@
-// Chapter 49's switch in gates: the address table (MAC_TABLE), a port's buffer with its queues (INPUT_BUFFER), the output port
+// Chapter serial's switch in gates: the address table (MAC_TABLE), a port's buffer with its queues (INPUT_BUFFER), the output port
 // (an arbiter and the busy / source registers), the crossbar of multiplexers, the table's client port, and SWITCH4 with its four
 // ports. Everything is written with lib/rtl.ts (NAND gates, the library's flip-flops, fifo, arbiterN and portMemory in boxes of their
 // own); comm/ethswitch.ts is the golden model they are compared with every cycle.
@@ -15,6 +15,7 @@ import { fifo } from './storage';
 import { portMemory } from './portmem';
 import { Rtl, type Sig } from './rtl';
 
+import { numOf } from '../chapters/order';
 void Arbiter;
 const cache = new Map<string, ComponentDef>();
 const memo = (key: string, make: () => ComponentDef): ComponentDef => { let d = cache.get(key); if (!d) { d = make(); cache.set(key, d); } return d; };
@@ -332,7 +333,7 @@ export function outputPort(): ComponentDef {
   return memo('eth_out', () => {
     const m = new Rtl({
       id: 'eth_out', name: 'Output port', category: 'sequential', label: 'OUTPUT',
-      summary: 'Four inputs may ask for this output in a cycle; the round-robin arbiter of chapter 27 grants one. The grant sets busy and records which input drives the output; busy clears on the last byte that moves.',
+      summary: `Four inputs may ask for this output in a cycle; the round-robin arbiter of chapter ${numOf('multicore')} grants one. The grant sets busy and records which input drives the output; busy clears on the last byte that moves.`,
     });
     const clk = m.input('clk', { clock: true }), r = m.inputBus('r', 4), end = m.input('end');
     const g = m.part(arbiterN(4), [...r, clk], 'who goes', 'arb');

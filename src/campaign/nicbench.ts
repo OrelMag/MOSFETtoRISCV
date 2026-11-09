@@ -1,4 +1,4 @@
-// The packet driver level (l_driver, act 12): a program in RV32 assembly for the computer of chapter 50 (a system CPU, RAM and a NIC at
+// The packet driver level (l_driver, act 12): a program in RV32 assembly for the computer of chapter glass (a system CPU, RAM and a NIC at
 // 0x7000_0000 with a ring of eight receive descriptors and one of eight transmit descriptors). The far end of the cable is a JavaScript
 // model that sends frames to the NIC and reads what the NIC sends back; it names the first rule the driver breaks. Graded on the program's
 // size and on the clocks from the end of a request on the wire to the start of its reply. No DOM.

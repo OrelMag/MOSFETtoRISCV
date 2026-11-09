@@ -10,6 +10,7 @@ import { define, merger, ones, splitter } from './define';
 import { AND, NOT } from './gates';
 import { GND, INV_CMOS, NMOS, PMOS, VDD } from './transistors';
 
+import { numOf } from '../chapters/order';
 const bit = (name: string, dir: 'in' | 'out' | 'inout', side?: PortDef['side']): PortDef => ({ name, width: 1, dir, side });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
 
@@ -104,7 +105,7 @@ export const SENSE_AMP: ComponentDef = define({
   notes: `In silicon the bit line moves only ~100 mV before the sense amplifier fires: waiting for a full swing
     through one small cell would take far too long, and the regenerative latch turns the small difference into a full
     logic level. Here the bit line swings fully, so this latch shows the other job of a sense amplifier, holding the
-    result while the bit lines are precharged again. The small-signal read is chapter 35's DRAM, where the switch-level
+    result while the bit lines are precharged again. The small-signal read is chapter ${numOf('dram')}'s DRAM, where the switch-level
     simulator keeps bit-line charge as a level.`,
   hdl: { verilog: '// behaviour: q follows ~blb while sae = 0, holds while sae = 1\nalways_latch if (!sae) q = ~blb;' },
 });

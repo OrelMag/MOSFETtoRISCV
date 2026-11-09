@@ -1,4 +1,4 @@
-// Chapter 46's gate-level scene: the SerDes link (lib/serdes.ts) and the panel beside it. The panel keeps a strip of the last cycles of
+// Chapter noise's gate-level scene: the SerDes link (lib/serdes.ts) and the panel beside it. The panel keeps a strip of the last cycles of
 // the line, the sender's words against what the receiver decoded, and the clock-recovery loop's own numbers; it runs the link
 // on the stage's simulation (the gate simulator: every flip-flop shares one clock, so the cycle engine could run it too, but a
 // Step then shows each gate delay).

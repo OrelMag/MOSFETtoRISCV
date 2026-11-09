@@ -1,4 +1,4 @@
-// Reach the far host (l_host, act 12): RV32 assembly on chapter 50's computer that pings a machine on another network, with no stack underneath it. The far end of the cable is a
+// Reach the far host (l_host, act 12): RV32 assembly on chapter glass's computer that pings a machine on another network, with no stack underneath it. The far end of the cable is a
 // JavaScript model of a router and the host behind it: it answers ARP for the gateway, checks every field of the echo request, names the first rule broken, and sends the
 // reply back through the gateway. Other traffic arrives too, and each scenario's gateway has another MAC, so nothing can be assumed. Graded on the program's size and the clocks
 // to the answer. Frames for it are built by comm/netframes.ts; the checks read the bytes by fixed offsets. No DOM.

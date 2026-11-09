@@ -1,4 +1,4 @@
-// Chapter 28's "How chips are made", the inverter in 3D mask by mask. Stays tiny: the model loads as its own chunk.
+// Chapter silicon's "How chips are made", the inverter in 3D mask by mask. Stays tiny: the model loads as its own chunk.
 
 import type { Widget } from '../view/stage';
 import { lazyModel } from './modelhost';

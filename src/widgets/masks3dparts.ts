@@ -1,4 +1,4 @@
-// A chip built mask by mask, as parts (DOM-free, tested): the standard cell of chapter 28's layout step, taken through
+// A chip built mask by mask, as parts (DOM-free, tested): the standard cell of chapter silicon's layout step, taken through
 // the process in the order of sky130's flow (isolation first, then the well, gate stack, implants, contacts, metal).
 // Layout x runs across the cell, layout y down it, layout z up; the stage's y is up, so (x, y, z) → (x, z, y).
 //

@@ -1,4 +1,4 @@
-// The fuller texts of the Communication entries of chapters 45-47 (codexcomm.ts): modems, fast serial links, codes. Every number
+// The fuller texts of the Communication entries of chapters signals-modem (codexcomm.ts): modems, fast serial links, codes. Every number
 // is the chapter's own, computed from comm/ and phys/ (tests/content-codexcomm.test.ts pins them to the models and to the
 // chapter steps that print them). No DOM.
 

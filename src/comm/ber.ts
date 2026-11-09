@@ -1,4 +1,4 @@
-// Bit error rate against Eb/N0 (DOM-free): chapter 47's plot. BPSK on Gaussian noise. The rate scaling is the whole game: a code of
+// Bit error rate against Eb/N0 (DOM-free): chapter modem's plot. BPSK on Gaussian noise. The rate scaling is the whole game: a code of
 // rate R spends Eb on 1/R channel bits, so each channel bit sees R · Eb/N0 and its raw error rate is Q(√(2 R Eb/N0)). Q is phys/line.ts's and
 // the limit's arithmetic comm/limits.ts's. Closed forms here; tests/comm-codes.test.ts holds them to seeded runs of the real decoders.
 

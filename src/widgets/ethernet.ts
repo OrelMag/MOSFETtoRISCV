@@ -1,4 +1,4 @@
-// Chapter 48's scenes and widgets (Ethernet): the frame builder, the transmitter, receiver and carrier-sense scenes on the
+// Chapter carriers's scenes and widgets (Ethernet): the frame builder, the transmitter, receiver and carrier-sense scenes on the
 // gate-level station (lib/ethernet.ts), shared helpers for the segment scene and the model-driven widgets in
 // widgets/ethernet2.ts. Models: comm/mac.ts (clock by clock, equal to the gates), comm/macexp.ts.
 
