@@ -164,6 +164,22 @@ export const CHECK4: Record<string, Quiz[]> = {
       why: ['', 'Real cells are much smaller than drawn here; the share changes because the periphery amortizes.', 'Every array needs decoders and sense amplifiers.', 'The cell stays 6T; only the periphery\'s share shrinks.'],
     },
   ],
+  mats: [
+    {
+      question: 'A megabyte of SRAM is built from mats of 256 rows × 256 columns, read 8 bits at a time. How do its 20 byte-address bits split?',
+      options: ['7 pick the mat, 8 the row, 5 the 8 columns out of 256', '8 pick the mat, 8 the row, 4 the column', '10 pick the row, 10 the column', '12 pick the mat, 8 the row'],
+      answer: 0,
+      explain: '8 388 608 / 65 536 = 128 mats: 7 bits. 256 rows: 8 bits. 256 columns read 8 at a time is 32 groups: 5 bits. 7 + 8 + 5 = 20.',
+      why: ['', '2⁸ = 256 mats of 64 Kbit would be 2 MB.', 'That is one square array of 1024 × 1024 bytes, the layout mats exist to avoid.', 'Twelve mat bits are 4096 mats, and the bits then add up to more than 20.'],
+    },
+    {
+      question: 'Doubling a mat\'s columns from 256 to 512 makes its word line about how much slower?',
+      options: ['4 times: its resistance and its capacitance both double', '2 times', 'The same: the decoder drives it', '√2 times'],
+      answer: 0,
+      explain: 'A distributed RC line has an Elmore delay of about r c L² / 2, so its delay grows with the square of its length. The bit lines are unchanged: they still carry 256 cells.',
+      why: ['', 'Only the capacitance alone would double it; the resistance doubles too.', 'A stronger driver helps only the start of the line: the delay along the wire is set by the wire\'s own resistance and capacitance.', 'Nothing about an RC line goes with the square root of its length.'],
+    },
+  ],
   ecc: [
     {
       question: 'How many check bits does SEC-DED add to 64 data bits?',

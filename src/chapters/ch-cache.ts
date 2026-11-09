@@ -4,6 +4,10 @@ import { CACHE_CPU_PROGRAMS, TRACE_PROGRAMS } from '../riscv/cprograms';
 import { cpuState } from '../riscv/cosim';
 import { ISS } from '../riscv/iss';
 import { CELL_C, BITLINE_C } from '../lib/dram';
+import { bigRam, kWords, ramLeafState } from '../lib/bigmem';
+import { groupDigits } from '../sim/numfmt';
+import type { ComponentDef } from '../sim/types';
+import { MAT_REF, MAT_WORD, MB_BITS, matShape, matSizePanel } from '../widgets/matsize';
 import { CacheModel, type CacheConfig } from '../sim/cachemodel';
 import { TIMING } from '../dram/timing';
 import { logicDepth, stats } from '../sim/stats';
@@ -61,6 +65,46 @@ function missRate(trace: string, cfg: Partial<CacheConfig>): number {
   return (100 * m.stats.misses) / m.stats.accesses;
 }
 const fixed = (x: number) => (x < 10 ? x.toFixed(1) : String(Math.round(x)));
+
+// "From an array to a megabyte": a 1M × 8 bigRam, its levels read off its own netlists, and the path to one address.
+const MB_K = 20, MB_RAM = bigRam(MB_K, 8), MB_ADDR = 0xc0ffe;
+const addrBits = (d: ComponentDef) => d.ports.find((p) => p.name === 'addr')!.width;
+/** Each level above the gate-level banks: its words and how many banks it splits them into. */
+const MB_LEVELS: { words: number; banks: number }[] = [];
+let mbBottom: ComponentDef = MB_RAM;
+for (;;) {
+  const banks = mbBottom.netlist!().instances.filter((i) => /^bank\d+$/.test(i.name));
+  if (!banks.length) break;
+  MB_LEVELS.push({ words: 2 ** addrBits(mbBottom), banks: banks.length });
+  mbBottom = banks[0].def;
+}
+const BANK_WORDS = 2 ** addrBits(mbBottom);
+const MB_TOP_BITS = Math.log2(MB_LEVELS[0].banks);
+const MB_SIDE = Math.round(Math.sqrt(MB_BITS));
+const REF_MAT = matShape(Math.log2(MAT_REF), Math.log2(MAT_REF));
+const MB_T = stats(MB_RAM).transistors;
+/** The banks to open for MB_ADDR, the word at the bottom, and the address cut into the fields each level decodes. */
+const MB_PATH = (() => {
+  const banks: string[] = [], fields: string[] = [];
+  let a = MB_ADDR, k = MB_K;
+  for (const l of MB_LEVELS) {
+    const b = Math.log2(l.banks), low = k - b;
+    banks.push(`bank${a >> low}`);
+    fields.push((a >> low).toString(2).padStart(b, '0'));
+    a &= 2 ** low - 1; k = low;
+  }
+  fields.push(a.toString(2).padStart(k, '0'));
+  return { banks, word: `w${a}`, fields: fields.join(' | ') };
+})();
+/** The byte at MB_ADDR, from the top bank's state in the scene's simulation (-1: unknown). */
+function mbWord(st: Stage): number {
+  const ctx = st.rootCtx;
+  if (!ctx) return -1;
+  const low = MB_K - MB_TOP_BITS;
+  const s = ramLeafState(ctx.sim, ctx.node.children?.get(`bank${MB_ADDR >> low}`));
+  const i = MB_ADDR & (2 ** low - 1);
+  return !s || s.x[i] ? -1 : s.mem[i];
+}
 /** Average memory access time, outermost level last: each [hit time, local miss rate] over what lies below; mem is the last latency. */
 function amat(levels: [number, number][], mem: number): number {
   return levels.reduceRight((below, [hit, miss]) => hit + miss * below, mem);
@@ -79,6 +123,7 @@ export const chCache: Chapter = {
   recap: {
     keep: [
       'A 6T SRAM cell is two cross-coupled inverters and two access transistors: 6 transistors a bit, against 60 for a flip-flop with enable. Sizing (pull-down &gt; access &gt; pull-up) keeps a read from flipping the cell and lets a write flip it. DRAM is one transistor and one capacitor, paid for with refresh and slow, destructive reads.',
+      `A large memory is many mats, not one array: a word line's RC delay grows with the square of its length and a bit line's swing time with its cells. A megabyte in ${REF_MAT.mats} mats of ${MAT_REF} × ${MAT_REF} splits its ${MB_K} address bits ${REF_MAT.matBits} mat + ${REF_MAT.rowBits} row + ${REF_MAT.colBits} column; a global decoder enables one mat and global data lines bring its bits out.`,
       'SEC-DED: Hamming check bits at positions 1, 2, 4, … spell the position of one flipped bit, and one more parity bit tells one error from two. 8 data bits need 5 extra, 64 need 8: the 72-bit ECC word.',
       'Address = tag | index | word offset | byte offset. A hit is valid AND stored tag = address tag. Here a miss stalls 8 cycles (4 of latency, then 4 to copy the line); a dirty victim adds 4 to write it back first.',
       'Misses are compulsory, capacity or conflict. Ways remove conflict misses at the price of comparators, a wider hit multiplexer and replacement state: "Two arrays, one set" drops from 33 misses (direct-mapped write-back) to 9 with two ways.',
@@ -109,7 +154,7 @@ export const chCache: Chapter = {
       },
     ],
   },
-  parts: [['Memory cells', 5], ['How a cache works', 4], ['A CPU with a cache', 3], ['Fetch and the pipeline', 2], ['Average access time', 1]],
+  parts: [['Memory cells', 6], ['How a cache works', 4], ['A CPU with a cache', 3], ['Fetch and the pipeline', 2], ['Average access time', 1]],
   steps: [
     {
       title: 'Six transistors per bit',
@@ -258,6 +303,75 @@ export const chCache: Chapter = {
           st.setInputs({ pre_n: 0 }); st.setInputs({ pre_n: 1 });
           st.setInputs({ wl: 1 }); st.setInputs({ sae: 1 }); st.setInputs({ wl: 0 });
         },
+      },
+    },
+    {
+      title: 'From an array to a megabyte',
+      body: `
+        <p>A megabyte is ${groupDigits(MB_BITS)} bits. As one square array that is ${MB_SIDE} cells a side: every word line crosses ${MB_SIDE} cells and every
+        bit line carries ${MB_SIDE}. A word line is a distributed RC line, its resistance and its capacitance both growing with its length, so its delay grows
+        with the <em>square</em> of the length: ${(MB_SIDE / MAT_REF).toFixed(1)} times the ${MAT_REF} cells of a modest row is about ${Math.round((MB_SIDE / MAT_REF) ** 2)} times slower.
+        A bit line fails another way. The selected cell discharges it with a roughly constant current, so the time to reach the ~100 mV the sense amplifier needs
+        grows with the line's capacitance, the cells on it: ${(MB_SIDE / MAT_REF).toFixed(0)} times longer.</p>
+        <p>So nobody builds one array. The memory is cut into <strong>mats</strong> (sub-arrays) of a few hundred rows and columns, each the array of the last
+        step with its own row decoder, precharge, column multiplexer and sense amplifiers. In mats of ${MAT_REF} × ${MAT_REF} a megabyte is ${REF_MAT.mats} of them,
+        and the ${MB_K} address bits of a byte split three ways: ${REF_MAT.matBits} pick the mat, ${REF_MAT.rowBits} the row in it, ${REF_MAT.colBits} the ${MAT_WORD} columns
+        out of ${MAT_REF}.</p>
+        <p>Decoding happens in two levels. A global decoder enables one mat, and only that mat raises a local word line and swings its bit lines: a read
+        charges ${MAT_REF} bit lines, not every column a chip-wide row would cross (the <em>divided word line</em>). The chosen mat's
+        ${MAT_WORD} bits reach the pins on <em>global data lines</em>, usually laid out as an H-tree so that every mat is about the same wire length away.</p>
+        <p>The memory on the stage is organized the same way. <span data-show="sa">The top ${MB_TOP_BITS} address bits</span> go to
+        <span data-show="dec">a ${MB_TOP_BITS}-to-${MB_LEVELS[0].banks} decoder</span> that gives one bank its write enable, and
+        <span data-show="rmux">a ${MB_LEVELS[0].banks}:1 multiplexer tree</span> brings that bank's byte back. Every bank is the same again,
+        ${MB_LEVELS.length} levels of it (${MB_LEVELS.map((l) => kWords(l.words)).join(' → ')} words), down to banks of ${kWords(BANK_WORDS)} words built from gates:
+        the RAM of <a href="#/c/memory/3">chapter ${numOf('memory')}</a>. Two differences from silicon. Where a real chip has a 6T cell, this one has an enable flip-flop, so it
+        counts ${groupDigits(MB_T)} transistors, ${groupDigits(MB_BITS * ff)} of them in the flip-flops against ${groupDigits(MB_BITS * cell6)} for the same bits in 6T cells.
+        And the multiplexer tree stands in for global data lines, which are a precharged bus that only the enabled mat drives.</p>
+        <p>The panel cuts the megabyte into mats of any shape. Long rows make the word line slow, tall columns make the bit line slow, and both make each read
+        swing more charge. Small mats repeat the decoder and the sense amplifiers so often that the cells lose their share of the area.</p>
+        <div class="try">Store 0xA5 at address 0xC0FFE: set <code>addr</code>, <code>din</code> and <code>we</code>, then Pulse.</div>
+        <div class="try">Open the banks that hold it, one level at a time, down to the flip-flops of word ${MB_PATH.word}.</div>`,
+      scene: () => ({ root: MB_RAM, inputs: { addr: MB_ADDR, din: 0xa5, we: 0, clk: 0 }, autoClock: false, highlight: ['dec', 'rmux'], panels: [matSizePanel] }),
+      tries: [
+        (st) => mbWord(st) === 0xa5,
+        (st) => st.path.join('.').startsWith(MB_PATH.banks.join('.')),
+      ],
+      tour: {
+        beats: [
+          { title: 'The bank', at: [], set: { addr: MB_ADDR, din: 0xa5, we: 1, clk: 0 }, show: ['sa', 'dec'], expect: { dout: 0 },
+            say: `<p>Address 0xC0FFE. Its top ${MB_TOP_BITS} bits are 0x${(MB_ADDR >> (MB_K - MB_TOP_BITS)).toString(16).toUpperCase()}, so the decoder raises the write enable of ${MB_PATH.banks[0]} alone; the other bits go to every bank. dout = {v:dout}: nothing is stored there yet.</p>` },
+          { title: 'Write', cycles: 1, show: [MB_PATH.banks[0]], expect: { dout: 0xa5 },
+            say: '<p>One rising edge: the enabled bank stores the byte, and the multiplexer tree, steered by the same top bits, brings it back. dout = {v:dout} (0xA5).</p>' },
+          { title: 'Same low bits, another bank', set: { we: 0, addr: MB_ADDR & (2 ** (MB_K - MB_TOP_BITS) - 1) }, show: ['rmux', 'bank0'], expect: { dout: 0 },
+            say: '<p>Clear the top bits and the low bits stay the same: the address now falls in bank0, which holds nothing at that place. dout = {v:dout}.</p>' },
+          { title: 'Down to the word', set: { addr: MB_ADDR }, at: MB_PATH.banks, show: [MB_PATH.word], expect: { dout: 0xa5 },
+            say: `<p>Back at 0xC0FFE, opened bank by bank: ${MB_PATH.banks.join(' → ')}, each picked by the next address bits. Here are the gates: word ${MB_PATH.word} of a ${kWords(BANK_WORDS)}-word RAM, eight enable flip-flops holding 0xA5.</p>` },
+        ],
+      },
+      more: {
+        derive: `<p>A wire of length L has resistance r L and capacitance c L. Driven from one end, its Elmore delay is about r c L² / 2: double the row and the word line is four
+          times slower. A bit line of R cells has capacitance R C<sub>cell</sub> + its wire; the cell sinks a current I, so the swing ΔV takes t = C ΔV / I, linear in R.
+          The address bits always add up: for a mat of R rows and C columns read ${MAT_WORD} bits at a time, log₂(${groupDigits(MB_BITS)} / R C) mat bits + log₂ R row bits
+          + log₂(C / ${MAT_WORD}) column bits = ${MB_K}.</p>`,
+        numbers: `<table class="mini"><tr><th>Level</th><th>Banks</th><th>Bank size</th><th>Address bits it decodes</th></tr>
+          ${MB_LEVELS.map((l) => `<tr><td>${kWords(l.words)} × 8</td><td>${l.banks}</td><td>${kWords(l.words / l.banks)} words</td><td>${Math.log2(l.banks)}</td></tr>`).join('')}
+          <tr><td>${kWords(BANK_WORDS)} × 8 (gates)</td><td>${BANK_WORDS} words</td><td>8 flip-flops</td><td>${Math.log2(BANK_WORDS)}</td></tr></table>`,
+        real: `<p>The divided word line was introduced by Mitsubishi in 1983 (Yoshimoto et al., a 64 Kbit CMOS SRAM); Hitachi's hierarchical word decoding (1990) took it to
+          more levels for 4 Mbit parts. Large SRAMs also carry spare rows and columns in each mat. At test, fuses record the faulty addresses, and a comparator per spare (a small
+          content-addressable memory) sends an access to the spare instead, which turns most dies with a few bad cells into good ones. Caches add the tag arrays and the way
+          multiplexers of the next steps on top.</p>`,
+        pitfall: `<p>Reading the cell share of the last step as the share of a whole memory. That figure is cells over one array with its own periphery; a real macro also
+          spends area on global decoders, data lines, repair and power straps, so its share of the area is lower.</p>`,
+      },
+      challenge: {
+        kind: 'reach', goal: `Store 0xA5 at address 0xC0FFE, then open the banks down to the ${kWords(BANK_WORDS)}-word bank of flip-flops that holds it.`,
+        check: (st) => mbWord(st) === 0xa5 && st.path.join('.') === MB_PATH.banks.join('.'),
+        hints: [
+          'Write first: addr = 0xC0FFE, din = 0xA5, we = 1, then Pulse.',
+          `Each level decodes the next address bits. At the top, the highest ${MB_TOP_BITS} bits of 0xC0FFE pick the bank to open.`,
+        ],
+        answer: `addr = 0xC0FFE, din = 0xA5, we = 1, Pulse. Then open ${MB_PATH.banks.join(', then ')}: 0xC0FFE = ${MB_PATH.fields}.`,
+        solve: (st) => { st.goTo([]); st.setInputs({ addr: MB_ADDR, din: 0xa5, we: 1 }); st.pulse(); st.setInputs({ we: 0 }); st.goTo(MB_PATH.banks); },
       },
     },
     {

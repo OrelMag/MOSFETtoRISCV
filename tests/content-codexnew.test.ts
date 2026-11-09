@@ -14,6 +14,8 @@ import { DDR4_3200 } from '../src/dram/timing';
 import { carrySelect, carrySkip } from '../src/lib/adders';
 import { wayLookup2 } from '../src/lib/cache';
 import { sramArray } from '../src/lib/arrays';
+import { bigRam } from '../src/lib/bigmem';
+import { MB_BITS, matShape } from '../src/widgets/matsize';
 import { hammingDecodeRef, hammingDec, hammingEnc, hammingEncodeRef } from '../src/lib/coding';
 import { rca } from '../src/lib/combinational';
 import { koggeStone } from '../src/lib/fastadd';
@@ -75,6 +77,23 @@ describe('the journey\'s codex entries', () => {
     quotes('fma', nands(fma), logicDepth(fma)!, logicDepth(fpMul(F32))! + logicDepth(fpAdd(F32))!);
     expect(text('fma')).toContain(`${logicDepth(fpMul(F32))} + ${logicDepth(fpAdd(F32))}`);
     stepSays('float', 11, 'multiply (92 deep)'); stepSays('float', 20, 'from 274 to 368');
+  });
+
+  it('quote the mats as computed, and the 1M × 8 memory as built', () => {
+    const s = matShape(8, 8);
+    quotes('mats', MB_BITS, 256 * 256, s.mats, Math.round(Math.sqrt(MB_BITS)), Math.round((Math.sqrt(MB_BITS) / 256) ** 2));
+    expect(text('mats')).toContain(`${s.matBits} mat + ${s.rowBits} row + ${s.colBits} column`);
+    expect(text('mats')).toContain(`${s.matBits} mat | ${s.rowBits} row | ${s.colBits} column`);
+    const levels: number[] = [];
+    for (let d: ComponentDef = bigRam(20, 8); ;) {
+      const banks = d.netlist!().instances.filter((i) => /^bank\d+$/.test(i.name));
+      if (!banks.length) { expect(text('mats')).toContain(`then ${2 ** d.ports.find((p) => p.name === 'addr')!.width} words of flip-flops`); break; }
+      levels.push(banks.length);
+      d = banks[0].def;
+    }
+    expect(text('mats')).toContain(`${levels.join(' → ')} banks`);
+    expect(chapterById('cache')!.steps[2].title).toBe('From an array to a megabyte');
+    stepSays('cache', 2, 'divided word line');
   });
 
   it('quote ECC, SRAM, flip-flops and decoders as measured', () => {

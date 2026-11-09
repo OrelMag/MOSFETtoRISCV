@@ -26,7 +26,7 @@ export const MORE2: Record<string, CodexMore> = {
     ],
     chapters: [
       { chapter: 'multicore', step: 6, label: 'Caches and coherence' },
-      { chapter: 'cache', step: 10, label: 'Write-back: dirty lines' },
+      { chapter: 'cache', step: 11, label: 'Write-back: dirty lines' },
       { chapter: 'bus', step: 3, label: 'DMA' },
     ],
   },
@@ -122,8 +122,8 @@ L1:   4 + 0.05 × 62  = 7.1 cycles
     ],
     anatomy: ['dmem'],
     chapters: [
-      { chapter: 'cache', step: 14, label: 'Average memory access time' },
-      { chapter: 'cache', step: 9, label: 'A CPU that waits for memory' },
+      { chapter: 'cache', step: 15, label: 'Average memory access time' },
+      { chapter: 'cache', step: 10, label: 'A CPU that waits for memory' },
       { chapter: 'memctrl', step: 3, label: 'The CPU behind it' },
     ],
   },
@@ -140,8 +140,8 @@ L1:   4 + 0.05 × 62  = 7.1 cycles
     ],
     anatomy: ['dmem'],
     chapters: [
-      { chapter: 'cache', step: 8, label: 'The three Cs and associativity' },
-      { chapter: 'cache', step: 7, label: 'Exploring caches on real traces' },
+      { chapter: 'cache', step: 9, label: 'The three Cs and associativity' },
+      { chapter: 'cache', step: 8, label: 'Exploring caches on real traces' },
     ],
   },
   assoc: {
@@ -158,9 +158,9 @@ L1:   4 + 0.05 × 62  = 7.1 cycles
     lib: 'way2_3_8',
     anatomy: ['dmem'],
     chapters: [
-      { chapter: 'cache', step: 8, label: 'The three Cs and associativity' },
-      { chapter: 'cache', step: 11, label: 'Two ways and an LRU bit' },
-      { chapter: 'cache', step: 7, label: 'Exploring caches on real traces' },
+      { chapter: 'cache', step: 9, label: 'The three Cs and associativity' },
+      { chapter: 'cache', step: 12, label: 'Two ways and an LRU bit' },
+      { chapter: 'cache', step: 8, label: 'Exploring caches on real traces' },
     ],
   },
   writepolicy: {
@@ -180,9 +180,9 @@ read miss        8 cycles               8, or 12 with a dirty victim:
     ],
     anatomy: ['dmem'],
     chapters: [
-      { chapter: 'cache', step: 10, label: 'Write-back: dirty lines' },
-      { chapter: 'cache', step: 6, label: 'A direct-mapped cache' },
-      { chapter: 'cache', step: 14, label: 'Average memory access time' },
+      { chapter: 'cache', step: 11, label: 'Write-back: dirty lines' },
+      { chapter: 'cache', step: 7, label: 'A direct-mapped cache' },
+      { chapter: 'cache', step: 15, label: 'Average memory access time' },
     ],
   },
   vm: {
@@ -201,7 +201,7 @@ offset = bits 11:0  = 0xA10
       'Indexing the L1 with bits above the page offset without handling aliases: two virtual addresses of one physical line can then sit in different sets.',
     ],
     chapters: [
-      { chapter: 'cache', step: 5, label: 'The memory hierarchy' },
+      { chapter: 'cache', step: 6, label: 'The memory hierarchy' },
       { chapter: 'traps', step: 2, label: 'Exceptions' },
     ],
   },
@@ -224,6 +224,28 @@ real 32 KB array          cells over 90 %</pre>16 bits of flip-flop registers wo
     chapters: [
       { chapter: 'cache', step: 0, label: 'Six transistors per bit' },
       { chapter: 'cache', step: 1, label: 'From a column to an array' },
+      { chapter: 'cache', step: 2, label: 'From an array to a megabyte' },
+    ],
+  },
+  mats: {
+    idea: `One array does not scale. A word line is a distributed RC line: its resistance and its capacitance both grow with its length, so its delay grows with the square of the cells it crosses. A bit line is discharged by one small cell with a roughly constant current, so the time to the ~100 mV a sense amplifier needs grows with the cells on it. A megabyte as one square array would be 2896 cells a side: about 128 times the word-line delay of a 256-cell row and 11 times the bit-line time.<br>So a large SRAM is cut into <b>mats</b> (sub-arrays) of a few hundred rows and columns, each a complete array with its own row decoder, precharge, column multiplexer and sense amplifiers. Decoding happens in two levels: a global decoder enables one mat, and only that mat raises a local word line and swings its bit lines (the <b>divided word line</b>, Mitsubishi 1983). The mat's bits reach the pins on <b>global data lines</b>, often an H-tree so every mat is about the same wire away. Spare rows and columns in each mat, steered by fuses set at test, repair most faulty dies.`,
+    example: {
+      title: 'A megabyte in mats of 256 × 256 (chapter 22)',
+      body: `<pre>bits                 8 388 608
+mats                 128 of 65 536 bits
+address (20 bits)    7 mat | 8 row | 5 column (8 of 256)
+the site's 1M × 8    16 → 16 → 16 → 4 banks, then 64 words of flip-flops</pre>The site's memory decodes the same way, a level of banks at a time, with an enable flip-flop where silicon has a 6T cell and a multiplexer tree where it has global data lines.`,
+    },
+    mistakes: [
+      'Making a mat as wide as possible to save decoders: the word line\'s delay grows with the square of its length, so long rows get slow far faster than they get cheap.',
+      'Making mats tiny: every mat repeats its decoder strip and sense amplifiers, and the cells lose their share of the area.',
+      'Taking the cell share of one array for a whole memory: global decoders, data lines, repair and power straps take area too.',
+    ],
+    chapters: [
+      { chapter: 'cache', step: 2, label: 'From an array to a megabyte' },
+      { chapter: 'memory', step: 3, label: 'Scale it up' },
+      { chapter: 'dram', step: 5, label: 'Rows, columns, banks' },
+      { chapter: 'appendix-doom', step: 4, label: 'Hand it to the gates' },
     ],
   },
   ecc: {
@@ -248,7 +270,7 @@ flip 6 and 9:     syndrome 6⊕9 = 15, parity even → double</pre>Here: encoder
     lib: 'ecc8',
     compare: ['hamenc8', 'hamdec8'],
     chapters: [
-      { chapter: 'cache', step: 4, label: 'Errors and ECC' },
+      { chapter: 'cache', step: 5, label: 'Errors and ECC' },
       { chapter: 'errors', step: 1, label: 'Locating the error' },
     ],
   },
@@ -510,7 +532,7 @@ cycle 19  add issues        (26 if each load were waited out in turn)</pre>The w
     ],
     chapters: [{ chapter: 'ooo', step: 3, label: 'The scoreboard (CDC 6600, 1964)' }, 
       { chapter: 'warps', step: 1, label: 'A scoreboard' },
-      { chapter: 'cache', step: 13, label: 'A cache in the pipeline' },
+      { chapter: 'cache', step: 14, label: 'A cache in the pipeline' },
     ],
   },
   occupancy: {

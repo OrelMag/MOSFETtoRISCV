@@ -806,7 +806,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'm_bank', act: 10, title: 'A bank with refresh', kind: 'build', optional: true, requires: ['m_sense'], base: BUILDM.m_bank, par: { nand: 319, period: 30, cycles: 5917 },
     why: 'An open row\'s words are a cycle away; another row costs a close and an open, and every row leaks. 319 NANDs keep the open row and refresh, the 1970s way: between a cache\'s miss port and the cell array.',
     tips: ['State: is a row open, which one, the next row to refresh, and a counter of the cycles since the last refresh.', 'A request hits when a row is open and it is the request\'s row: RW, busy = 0. Otherwise PRE if a row is open, else ACT the request\'s row; busy = 1.', 'A refresh is just ACT of the refresh row (after a PRE if needed): leave that row open, the next request may want it. 16 rows in 288 cycles: one refresh every 18 cycles is enough.', 'Refresh early when nobody is asking (the timer past 8), and force it when it is due (15), ahead of any request.'],
-    codex: ['refresh', 'rowhammer', 'ecc'], unlocks: ['rv16_bank'], chapters: [{ chapter: 'dram', step: 3, label: 'Leaks and refresh' }, { chapter: 'dram', step: 5, label: 'Rows, columns, banks' }],
+    codex: ['refresh', 'rowhammer', 'ecc', 'mats'], unlocks: ['rv16_bank'], chapters: [{ chapter: 'dram', step: 3, label: 'Leaks and refresh' }, { chapter: 'dram', step: 5, label: 'Rows, columns, banks' }],
   },
   {
     id: 'm_ctrl', act: 10, title: 'Row-buffer controller', kind: 'build', optional: true, requires: ['m_bank'], base: BUILDM.m_ctrl, par: { nand: 779, period: 36, cycles: 10690 },
@@ -818,7 +818,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'o_cache', act: 10, title: 'A cache', kind: 'build', optional: true, requires: ['m_ctrl'], base: BUILD9.o_cache, par: { nand: 3497, period: 36 },
     why: 'Your controller answers tCAS = 4 cycles after a read on the open row, tRP + tRCD + tCAS = 12 on another; every core assumed one. A small memory of recent words, a tag and a valid bit each, answers most at once: 3497 NANDs.',
     tips: ['Two small RAMs indexed by addr[2:0]: one for the data, one for {valid, tag}.', 'hit = valid AND (stored tag = addr[7:3]): a 5-bit equality comparator.', 'Write the line when wr, or when rd and not hit; its data is wdata on a write, mdata on a fill.', 'At power-on every valid bit is 0: nothing hits until it is filled.'],
-    codex: ['cache', 'threecs', 'assoc', 'writepolicy'], chapters: [{ chapter: 'cache', step: 6, label: 'A direct-mapped cache' }, { chapter: 'memctrl', step: 3, label: 'The CPU behind it' }],
+    codex: ['cache', 'threecs', 'assoc', 'writepolicy'], chapters: [{ chapter: 'cache', step: 7, label: 'A direct-mapped cache' }, { chapter: 'memctrl', step: 3, label: 'The CPU behind it' }],
   },
   {
     id: 'm_bus', act: 10, title: 'Two masters, one bus', kind: 'build', optional: true, requires: ['m_lesson'], base: BUILDM.m_bus, par: { nand: 282, period: 26 },
