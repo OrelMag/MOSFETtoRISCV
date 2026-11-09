@@ -13,6 +13,7 @@ import { GateSim } from '../sim/gatesim';
 import { analyzeTiming } from '../sim/timing';
 import { B0, B1, type ComponentDef } from '../sim/types';
 import { assemble16 } from '../riscv/rv16/asm16';
+import type { Custom16Row } from '../riscv/rv16/custom16';
 import { disasm16, MMIO16, MMIO_BASE, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { Iss16 } from '../riscv/rv16/iss16';
 
@@ -49,6 +50,8 @@ export interface CoreSpec {
    * single-cycle core in cycle 1), so a core that does not pipeline cannot pass as one on its period alone.
    */
   minFirstWrite?: number;
+  /** The core's own instructions (riscv/rv16/custom16.ts): the tests assemble and the golden model runs them (sandbox cores, tests). */
+  custom?: readonly Custom16Row[];
 }
 
 interface Event { pc: number; instr: number; rd?: number; addr?: number; value: number }
@@ -67,10 +70,10 @@ const hex = (v: number) => `0x${(v & 0xffff).toString(16).padStart(4, '0')}`;
 const rname = (r: number) => `${REG_NAMES16[r]} (x${r})`;
 
 /** Run a test on the golden model; throws when the test itself is broken (a bug in the campaign). */
-export function golden(t: CoreTest, spec: Pick<CoreSpec, 'm' | 'system'>, maxSteps = 20000): Golden {
-  const a = t.words ? { words: t.words, data: t.data ?? new Map<number, number>(), errors: [] } : assemble16(t.src ?? '');
+export function golden(t: CoreTest, spec: Pick<CoreSpec, 'm' | 'system' | 'custom'>, maxSteps = 20000): Golden {
+  const a = t.words ? { words: t.words, data: t.data ?? new Map<number, number>(), errors: [] } : assemble16(t.src ?? '', spec.custom);
   if (a.errors.length) throw new Error(`core test ${t.name}: ${a.errors[0].line}: ${a.errors[0].message}`);
-  const iss = new Iss16(a.words, { m: spec.m, system: spec.system, strictInit: true }, a.data);
+  const iss = new Iss16(a.words, { m: spec.m, system: spec.system, strictInit: true, ...(spec.custom?.length ? { custom: spec.custom } : {}) }, a.data);
   const regs: Event[] = [], stores: Event[] = [];
   while (!iss.halted && iss.steps < (t.bounded ?? maxSteps)) {
     const s = iss.step();
