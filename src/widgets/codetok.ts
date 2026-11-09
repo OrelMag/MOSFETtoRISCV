@@ -18,8 +18,10 @@ import { BUILTINS, KEYWORDS } from '../lang/ast';
 import { SAP_BY_NAME } from '../sap/isa';
 
 /** rvasm: RV32 assembly; rv16asm: the campaign's RV16; cpu4asm: the 4-bit CPU's; m6502asm: the 6502's (Appendix A); sapasm: the
- *  SAP-1's (Appendix C); hex: words; py: the Python subset of chapter 15. */
-export type CodeLang = 'rvasm' | 'rvmacasm' | 'rv16asm' | 'cpu4asm' | 'dsp24asm' | 'm6502asm' | 'sapasm' | 'hex' | 'py' | { table: IsaDoc };
+ *  SAP-1's (Appendix C); hex: words; py: the Python subset of chapter 15. { base, ops }: RV32 or RV16 assembly with the core's
+ *  own instructions (riscv/custom.ts, riscv/rv16/custom16.ts rows) as mnemonics too, as the ROM's copy of the rows assembles them. */
+export type CodeLang = 'rvasm' | 'rvmacasm' | 'rv16asm' | 'cpu4asm' | 'dsp24asm' | 'm6502asm' | 'sapasm' | 'hex' | 'py' | { table: IsaDoc }
+  | { base: 'rvasm' | 'rvmacasm' | 'rv16asm'; ops: readonly string[] };
 
 /** Token classes (CSS: .tk-<cls>); '' is plain text / whitespace.
  *  com comment · lbl label · op instruction · ps pseudo-instruction · dir directive · reg register
@@ -122,6 +124,17 @@ function tableWords(doc: IsaDoc): AsmWords {
     operand: (s) => (regs.has(s.toLowerCase()) ? 'reg' : kws.has(s.toLowerCase()) ? 'kw' : 'sym'),
   };
   tableCache.set(doc, w);
+  return w;
+}
+
+// A core's own instructions on top of its ISA's words (one AsmWords per list of names).
+const withOps = new WeakMap<readonly string[], AsmWords>();
+function customWords(base: AsmWords, ops: readonly string[]): AsmWords {
+  let w = withOps.get(ops);
+  if (w) return w;
+  const names = new Set(ops.map((o) => o.toLowerCase()));
+  w = { ...base, mnemonic: (s) => (names.has(s.toLowerCase()) ? 'op' : base.mnemonic(s)) };
+  withOps.set(ops, w);
   return w;
 }
 
@@ -246,7 +259,7 @@ function py(line: string): Tok[] {
 
 /** Split one line into classified tokens; their texts concatenate to `line`. */
 export function tokenize(line: string, lang: CodeLang): Tok[] {
-  if (typeof lang === 'object') return rvasm(line, tableWords(lang.table));
+  if (typeof lang === 'object') return 'table' in lang ? rvasm(line, tableWords(lang.table)) : rvasm(line, customWords(lang.base === 'rv16asm' ? RV16 : lang.base === 'rvmacasm' ? RV32MAC : RV32, lang.ops));
   if (lang === 'm6502asm') return m6502asm(line);
   if (lang === 'py') return py(line);
   return lang === 'hex' ? hex(line) : rvasm(line, lang === 'rv16asm' ? RV16 : lang === 'cpu4asm' ? CPU4 : lang === 'dsp24asm' ? DSP24 : lang === 'sapasm' ? SAP : lang === 'rvmacasm' ? RV32MAC : RV32);
