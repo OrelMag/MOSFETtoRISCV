@@ -1,6 +1,6 @@
 // Keyboard: one table of every key the site answers (the help sheets are drawn from it), matching that
 // survives a non-Latin layout, the single-key switch (WCAG 2.1.4) and the global dispatcher. DOM-free
-// apart from installKeys, so the table and the matching are tested in Node.
+// but installKeys (tested in Node).
 //
 // Order of the listeners: Ctrl/⌘ K runs in the window's capture phase, so a drawer or dialog that stops
 // keydown in the bubble phase can't swallow it. Every other global key runs in the window's bubble phase,
@@ -71,6 +71,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'help', group: 'anywhere', caps: ['?'], does: 'the keys on this page', match: [{ key: '?' }] },
   { id: 'esc', group: 'anywhere', caps: ['Esc'], does: 'close the top dialog or menu (in search: clear the query first)' },
   { id: 'code.leave', group: 'anywhere', caps: ['Esc', 'Tab'], does: 'leave a code editor (there Tab indents)' },
+  { id: 'cpu.bp', group: 'anywhere', caps: ['B'], does: 'focused CPU listing: breakpoint on the line ↑ ↓ pick' },
   { id: 'skip', group: 'anywhere', caps: ['Tab'], does: 'the first stop skips to the circuit on pages with one, else to the page' },
   // ---- chapter pages
   { id: 'step.next', group: 'chapter', caps: [']'], does: 'next step (at the end: the next chapter)', match: [{ code: 'BracketRight', codeOnly: true, shift: false }] },
@@ -128,7 +129,7 @@ export const KEYS: readonly KeyDef[] = [
 const byId = new Map(KEYS.map((d) => [d.id, d]));
 export const keyDef = (id: string): KeyDef | undefined => byId.get(id);
 
-/** A character from a non-Latin layout (Hebrew, Cyrillic, Greek …): then the key's position decides. */
+/** A character from a non-Latin layout (Hebrew, Greek …): then the key's position decides. */
 const foreign = (k: string) => [...k].length === 1 && k.codePointAt(0)! > 0x7f;
 
 /** Does the event press `s`? */
@@ -226,7 +227,7 @@ export function installKeys(): void {
     if (!e.altKey) run(e, 'capture');
   }, true);
   window.addEventListener('keydown', (e) => {
-    // a modal dialog open (search, a key sheet) has the keyboard: a global key must not open another over it
+    // a modal open (search, a key sheet) keeps the keyboard: no global key opens another over it
     if (e.defaultPrevented || ownsKeys(e.target) || !shortcutAllowed(e) || modalOpen()) return;
     run(e, 'bubble');
   });

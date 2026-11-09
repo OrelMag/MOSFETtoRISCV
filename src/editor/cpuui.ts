@@ -150,7 +150,8 @@ class CpuPanel {
   private status = holdHeight(h('div', { class: 'cpu-status' }));
   private gaps = h('div', { class: 'sb-cpu-gaps' });
   private now = h('div', { class: 'cpu-now' });
-  private listing = h('div', { class: 'cpu-listing sb-cpu-list' });
+  /** Focusable: ↑ ↓ move the selected line, B sets or clears its breakpoint (the gutter is out of the tab order). */
+  private listing = h('div', { class: 'cpu-listing sb-cpu-list', tabindex: '0', 'aria-label': 'Program: ↑ ↓ select a line, B sets or clears its breakpoint' });
   private use = h('div', { class: 'cpu-use' });
   private progHint = h('span', { class: 'cpu-sec-hint' }, 'click a line: the parts it uses');
   /** Custom instructions on an RV32I core (editor/owninstr.ts): shown when the CPU has one. */
@@ -241,6 +242,7 @@ class CpuPanel {
     this.el.addEventListener('keydown', (e) => {
       e.stopPropagation();
       if (e.key === 'Escape') this.setOpen(false, true);
+      else if (e.target === this.listing) this.listingKey(e);
     });
     this.off.push(ed.onSimChange(() => this.sync()), ed.onChange(() => this.sync()));
     this.sync();
@@ -711,15 +713,35 @@ class CpuPanel {
   /** A listing row's gutter: a click sets or clears a PC breakpoint (Run and Run to halt stop when that instruction retires). */
   private gutter(addr: number): HTMLElement {
     const g = h('button', { class: 'bp-g', tabindex: '-1', 'aria-pressed': 'false', title: 'Breakpoint: stop when this instruction retires', 'aria-label': `Breakpoint at 0x${addr.toString(16)}` });
-    g.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const ed = this.ed, has = (ed.doc.breaks ?? []).some((b) => b.pc === addr);
-      if (has) ed.edit((d) => { const breaks = (d.breaks ?? []).filter((b) => b.pc !== addr); const { breaks: _, ...rest } = d; return breaks.length ? { ...rest, breaks } : rest; });
-      else addBreak(ed, { pc: addr }, false);
-      this.curKey = '';
-      this.render();
-    });
+    g.addEventListener('click', (e) => { e.stopPropagation(); this.toggleBreak(addr); });
     return g;
+  }
+
+  /** Set or clear the PC breakpoint at a listing row (one undo step). */
+  private toggleBreak(addr: number): void {
+    const ed = this.ed, has = (ed.doc.breaks ?? []).some((b) => b.pc === addr);
+    if (has) ed.edit((d) => { const breaks = (d.breaks ?? []).filter((b) => b.pc !== addr); const { breaks: _, ...rest } = d; return breaks.length ? { ...rest, breaks } : rest; });
+    else addBreak(ed, { pc: addr }, false);
+    this.curKey = '';
+    this.render();
+  }
+
+  /** The listing's keys: ↑ ↓ move the selection (from the current line), B toggles the selected line's breakpoint. */
+  private listingKey(e: KeyboardEvent): void {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const addrs = this.rows.map((r) => Number(r.dataset.pc)).filter((a) => !Number.isNaN(a));
+    if (!addrs.length) return;
+    const cur = this.sel ?? Number(this.listing.querySelector<HTMLElement>('.ln.cur')?.dataset.pc ?? NaN);
+    const i = addrs.indexOf(cur);
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const next = addrs[i < 0 ? 0 : Math.max(0, Math.min(addrs.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))];
+      if (next !== this.sel) this.select(next);
+      this.rowOf.get(next)?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key.toLowerCase() === 'b' || e.code === 'KeyB') {
+      e.preventDefault();
+      if (i >= 0) this.toggleBreak(addrs[i]);
+    }
   }
 
   /** A listing line clicked: mark the parts its instruction uses (the site's CPUs' names), or clear. */
