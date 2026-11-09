@@ -208,7 +208,7 @@ export const BUILD1: Record<string, () => BuildChallenge> = {
   }),
   g_eq16: () => ({
     id: 'g_eq16', title: 'Equality', level: 'gates', allowed: 'nand',
-    brief: '<b>eq = (a = b)</b> on 16-bit words. beq / bne use it, and so does the pipeline\'s forwarding logic.',
+    brief: '<b>eq = (a = b)</b> on 16-bit words. beq / bne use it; the pipeline\'s forwarding logic makes the same test on 3-bit register numbers.',
     ports: pins([['a', 16], ['b', 16]], [['eq']]),
     check: { kind: 'table', spec: ([a, b]) => [a === b ? 1 : 0], vectors: () => pairs16() },
     answer: refOf('g_eq16', () => EQ16, 'Equality'),

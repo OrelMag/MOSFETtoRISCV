@@ -18,7 +18,7 @@ export const CASESP: Record<string, LevelCase> = {
   },
   r_xor: {
     problem: 'A changeover contact is a 2:1 multiplexer that passes both ways. Built from those, XOR needs no gates: relay a puts the supply on one of two lines, relay b connects the output to the other one. The adder, the comparator and the parity checks of relay machines are made of this pattern.',
-    without: 'Mapped from NANDs, XOR is four of them, three deep: four relays and three relay steps, 25 ms where contacts take 8.',
+    without: 'Mapped from NANDs, XOR is four of them, three deep: four relays and three relay steps, 25 ms where contacts take 8.2.',
     cost: 'Two relays, one step. The saving comes from what relays have and transistors do not: a full-strength switch in both directions that also gives its complement (no and nc) for free.',
     alts: [{ name: 'XOR from four NANDs', lib: 'xor' }],
   },

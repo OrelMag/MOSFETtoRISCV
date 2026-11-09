@@ -153,7 +153,7 @@ export const PATH_SKILLS: Skill[] = [
   {"id":"register","title":"Register","tier":1,"chapter":"latches","steps":[7],"checks":["codex:register:0","codex:register:1"],"reach":[],"levels":["s_reg4","s_reg16"]},
   {"id":"clockgating","title":"Never gate the clock","tier":1,"chapter":"latches","steps":[7],"checks":["codex:clockgating:0","codex:clockgating:1"],"reach":[],"levels":["s_reg4"]},
   {"id":"incrementer","title":"Incrementer","tier":1,"chapter":"registers","steps":[2],"checks":["codex:incrementer:0","codex:incrementer:1"],"reach":["registers:2"],"levels":["a_inc16"]},
-  {"id":"counter","title":"Counter","tier":1,"chapter":"registers","steps":[2,3],"checks":["codex:counter:0","codex:counter:1"],"reach":["registers:2","registers:3"],"levels":["s_cnt4","b_cnt","sp_circ"]},
+  {"id":"counter","title":"Counter","tier":1,"chapter":"registers","steps":[2,3,9],"checks":["codex:counter:0","codex:counter:1"],"reach":["registers:2","registers:3"],"levels":["s_cnt4","b_cnt","sp_circ"]},
   {"id":"pc","title":"Program counter","tier":1,"chapter":"registers","steps":[2],"checks":["codex:pc:0","codex:pc:1"],"reach":["registers:2"],"levels":["s_pc","c_npc"]},
   {"id":"reset","title":"Reset and power-on","tier":1,"chapter":"registers","steps":[2,3],"checks":["codex:reset:0","codex:reset:1"],"reach":["registers:2","registers:3"],"levels":["s_pc"]},
   {"id":"fsm","title":"Finite-state machine","tier":1,"chapter":"registers","steps":[10],"checks":["codex:fsm:0","codex:fsm:1"],"reach":["registers:10"],"levels":["s_fsm","o_mc"]},

@@ -41,7 +41,7 @@ export const CASES0: Record<string, LevelCase> = {
   d_kmap: {
     problem: 'Algebra transforms a sum of products but does not say when it is minimal. A Karnaugh map draws the truth table in Gray order, so cells that touch differ in one bit: a group of 2^k cells is one product with k literals fewer. Don\'t-cares (inputs that never occur, like unused opcodes) may join any group. The control unit\'s 14 output bits are functions of the opcode and f3 found this way.',
     without: 'One product per row of the table: the prime detector read straight off its table is six minterms of four literals each; mapped, four products of three.',
-    cost: 'Nothing to build. Up to 4 variables the map is read by eye; beyond 5 a tabular method (Quine–McCluskey) finds the same minimum, as this drill\'s checker does.',
+    cost: 'Nothing to build. Up to 4 variables the map is read by eye; beyond 4 or 5 a tabular method (Quine–McCluskey) finds the same minimum, as this drill\'s checker does.',
   },
   g_not: {
     problem: 'Control signals are needed in both polarities. A mux needs ¬s next to s, the decoder ANDs the complements of the register number, a flip-flop\'s master latch runs on ¬clk, the ALU\'s sltu is ¬carry, and the pipeline writes its register file on ¬clk. NOT is a NAND with its inputs tied: ¬(a·a) = ¬a.',
@@ -218,7 +218,7 @@ export const CASES0: Record<string, LevelCase> = {
   },
   s_cnt4: {
     problem: 'A register whose input is its own value plus one counts clock edges: the program counter without jumps, the divider\'s step counter, every timer. A synchronous reset to 0 and an enable make it usable: q ← rst ? 0 : en ? q + 1 : q.',
-    cost: 'A 4-bit register, a 4-bit incrementer (20 NANDs, depth 9) and the reset gating. The library\'s counter (register and incrementer, no reset) is 80 NANDs with a clock period of 17: the incrementer\'s carry is inside the loop.',
+    cost: 'A 4-bit register (52 NANDs), a 4-bit incrementer (16, depth 7), the reset row (9) and the OR on the enable (2): 79. The library\'s counter (a 60-NAND register and a 20-NAND, depth-9 incrementer, no reset) is 80 NANDs with a clock period of 17: the incrementer\'s carry is inside the loop.',
     alts: [{ name: 'Library counter (no reset)', lib: 'counter4' }],
   },
   s_pc: {

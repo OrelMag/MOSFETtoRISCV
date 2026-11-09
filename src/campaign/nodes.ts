@@ -341,7 +341,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   {
     id: 's_cnt4', act: 3, title: '4-bit counter', kind: 'build', optional: true, requires: ['s_reg4', 'a_inc16'], base: sandbox('s_cnt4'),
     why: 'A register whose input is its own value plus one counts clock edges: the PC without jumps, a divider\'s step counter, every timer. Par is 79 NANDs at period 17: the incrementer\'s carry is inside the loop, so it sets the clock. The program counter is the same loop, 16 bits wide, with a load.',
-    tips: ['q ← rst ? 0 : q + 1 when en.', 'rst wins over en: clear the next value after the enable mux, not only on the incremented path.', 'Feed the incrementer from q, the register\'s output: from d it is a combinational loop.'], codex: ['counter'], unlocks: ['counter4'], par: { nand: 79, period: 17 },
+    tips: ['q ← rst ? 0 : en ? q + 1 : q.', 'rst wins over en: clear the next value after the enable mux, not only on the incremented path.', 'Feed the incrementer from q, the register\'s output: from d it is a combinational loop.'], codex: ['counter'], unlocks: ['counter4'], par: { nand: 79, period: 17 },
     chapters: [{ chapter: 'registers', step: 2, label: 'A counter' }],
   },
   {

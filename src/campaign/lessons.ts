@@ -46,7 +46,7 @@ thoroughly, real enough to run loops, functions, a stack and interrupt handlers.
   on the critical path: period 76.</li>
   <li><b>Act 6</b> overlaps five instructions in a pipeline (9218 NANDs, period 78); <b>act 7</b> lets it
   survive its own errors and listen to devices: traps and interrupts, 12 038 NANDs, the finale.</li>
-  <li>Acts 8, 9 and 10 are optional: arithmetic units, a GPU, the memory behind the data port.</li>
+  <li>Acts 8, 9 and 10 are optional: arithmetic units, a GPU, the memory behind the data port. So are acts 12 and 13, once the computer is built: links (how a bit gets to another machine) and signals (arithmetic on samples).</li>
 </ol>
 <h4>How the campaign works</h4>
 <ul>
