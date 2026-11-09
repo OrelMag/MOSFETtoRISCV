@@ -10,14 +10,14 @@
 import { describe, expect, it } from 'vitest';
 import type { FlatDesign } from '../../src/sim/flatten';
 import { HwCoverage, IsaCoverage, isaInstrs } from './coverage';
-import { CPUS, notApplicable } from './cpus';
+import { CPUS, EXTRA_CPUS, notApplicable } from './cpus';
 import { firstDivergence, fuzzCase, fuzzLanes } from './fuzz';
 import { images } from './images';
 import { cpuJobs, runLanes } from './run';
 
 export function verifyCpus(ids: string[]): void {
   for (const id of ids) {
-    const cfg = CPUS.find((c) => c.id === id)!;
+    const cfg = [...CPUS, ...EXTRA_CPUS].find((c) => c.id === id)!;
     describe(`${cfg.name} (${cfg.id})`, () => {
       const isa = new IsaCoverage(), hw: HwCoverage[] = [];
       const probe = (d: FlatDesign) => { const p = new HwCoverage(d); hw.push(p); return p; };

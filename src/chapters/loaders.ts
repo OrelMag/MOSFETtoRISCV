@@ -38,6 +38,8 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "multicore": () => import('./ch-multicore').then((m) => m.chMulticore),
   "silicon": () => import('./ch-silicon').then((m) => m.chSilicon),
   "fpga": () => import('./ch-fpga').then((m) => m.chFpga),
+  "verify": () => import('./ch-verify').then((m) => m.chVerify),
+  "sidechan": () => import('./ch-sidechan').then((m) => m.chSidechan),
   "lanes": () => import('./ch-gpu').then((m) => m.chLanes),
   "simt": () => import('./ch-gpu').then((m) => m.chSimt),
   "warps": () => import('./ch-gpu').then((m) => m.chWarps),

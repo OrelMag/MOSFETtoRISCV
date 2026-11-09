@@ -1,0 +1,18 @@
+/* The side-channels chapter's widgets (widgets/sidechan.ts). Theme tokens only, so both themes follow. */
+.sc-widget .sc-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.sc-chip { display: flex; flex-direction: column; min-width: 110px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+.sc-chip b { font: 600 18px/1.2 ui-monospace, Consolas, monospace; color: var(--text); }
+.sc-chip span { font-size: 12px; color: var(--muted); }
+.sc-keys { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; margin: 6px 0; max-width: 420px; }
+.sc-keys .key { font-family: ui-monospace, Consolas, monospace; }
+.sc-bars { display: block; width: 100%; max-width: 640px; height: auto; }
+.sc-bars rect.slow { fill: var(--border-strong); }
+.sc-bars rect.fast { fill: var(--good); }
+.sc-bars text { font-size: 12px; fill: var(--muted); }
+.sc-bars text.v { fill: var(--text); }
+.sc-code { font: 12.5px/1.5 ui-monospace, Consolas, monospace; margin: 6px 0 0; white-space: pre; overflow-x: auto; }
+.sc-table td.bad { color: var(--bad); font-weight: 600; }
+.sc-table td.good { color: var(--good); font-weight: 600; }
+@media (pointer: coarse) {
+  .sc-keys .key { min-height: 40px; }
+}

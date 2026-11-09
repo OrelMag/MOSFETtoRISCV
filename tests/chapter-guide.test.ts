@@ -141,9 +141,15 @@ describe('chapter guide', () => {
         expect(ps!.length, c.id).toBeLessThanOrEqual(7);
       }
     });
-    it('deep dives are only in chapters with parts, and nothing depends on them', () => {
+    it('deep dives are in chapters with parts or at a chapter\'s end, and nothing depends on them', () => {
       const deep = new Set(chapters.flatMap((c) => c.steps.flatMap((s, i) => (s.deep ? [c.id + ':' + i] : []))));
-      for (const c of chapters) if (c.steps.some((s) => s.deep)) expect(c.parts, c.id).toBeTruthy();
+      // without parts nothing marks a deep dive, so it must not interrupt the core path: only after its last step
+      // (the core CPU chapters' "find it" steps, which say they are optional)
+      for (const c of chapters) {
+        if (c.parts) continue;
+        const first = c.steps.findIndex((s) => s.deep);
+        if (first >= 0) expect(c.steps.slice(first).every((s) => s.deep), c.id).toBe(true);
+      }
       // a campaign level that sends the learner to a step needs it
       const nodeLinks = NODES.flatMap((n) => (n.chapters ?? []).map((l) => n.id + ' -> ' + l.chapter + ':' + l.step));
       expect(nodeLinks.filter((l) => deep.has(l.split(' -> ')[1]))).toEqual([]);

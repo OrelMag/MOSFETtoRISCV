@@ -28,9 +28,13 @@ export function cpuState(sim: Pick<Sim, 'getBits' | 'design'> & Partial<Pick<Sim
 /** The words of a data memory `dm` (plain, byte-banked, or main memory behind a cache) as a program reads them. */
 export function dmemWords(sim: Pick<Sim, 'getBits'> & Partial<Pick<Sim, 'leafState'>>, dm: HierNode): number[] {
   const dmem: number[] = [];
-  const ram = dm.children!.get('ram'), dram = dm.children!.get('dram');
+  const ram = dm.children?.get('ram'), dram = dm.children?.get('dram');
   const dev = dram?.leafIndex !== undefined && sim.leafState ? deviceIn(sim.leafState(dram.leafIndex)) : null;
-  if (dev) {
+  // a large RAM kept as one behavioural leaf (lib/bigmem.ts bankedBigRam: the vm system CPU's data memory)
+  const big = dm.leafIndex !== undefined && sim.leafState ? (sim.leafState(dm.leafIndex) as { mem?: ArrayLike<number> } | undefined)?.mem : undefined;
+  if (big && !dev && !ram) {
+    for (let a = 0; a < big.length; a++) dmem[a] = big[a] >>> 0;
+  } else if (dev) {
     // main memory is a DRAM device (a behavioural leaf): its words by CPU address
     for (let a = 0; a < dev.mem.length; a++) dmem[a] = dev.read(a) >>> 0;
   } else if (ram) {
@@ -125,6 +129,7 @@ export interface CacheLine { way: number; set: number; valid: boolean; dirty: bo
  * tags holding {dirty, valid, tag} and data). base = main-memory word index of the line's first word.
  */
 export function cacheLines(sim: Pick<Sim, 'getBits'>, dm: HierNode): CacheLine[] {
+  if (!dm.children) return []; // a memory kept as one leaf (no cache)
   const word = (arr: HierNode, i: number) => pack(sim.getBits(arr.children!.get(`w${i}`)!.ports.q)) >>> 0;
   const ways = dm.children!.has('way0') ? [...dm.children!.entries()].filter(([n]) => /^way\d$/.test(n)).map(([, n]) => n)
     : dm.children!.has('tags') ? [dm] : [];

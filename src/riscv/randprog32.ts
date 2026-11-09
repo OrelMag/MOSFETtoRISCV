@@ -33,6 +33,16 @@ export interface Rand32Options {
   /** Custom instructions (riscv/custom.ts): about a fifth of the units are one of the rows, set up so that every
    *  address they compute stays in the data window and every jump lands on an instruction (draws nothing without rows). */
   custom?: readonly CustomRow[];
+  /**
+   * Virtual memory (ISS option vm; needs system, dataBase = the window's virtual address, dmemWords = 4096 words, 4 pages):
+   * the program starts in M, builds Sv32 page tables in the data region at physical `data` (the code region is at `code`),
+   * drops to U or S with mret and runs the usual random body there. Its loads and stores range over 4 window pages whose
+   * entries are good, read-only, wrong-mode, invalid, reserved, A = 0, D = 0 or execute-only, and over probe pages (a
+   * superpage alias of physical memory, a misaligned superpage, a table or a page beyond 2^32, an unmapped one). The M handler
+   * logs cause, mtval and mepc, maps the page and retries (for a page it was given a fix for), or skips the instruction;
+   * a jump to a page without X comes back through ra; a last ecall (s9 = a magic number) ends in M at `halt`.
+   */
+  vm?: { code: number; data: number };
   /** The MAC core's mac, mac2, clracc and racc (about a quarter of the units), and now and then a word on custom-2 that is none of them (funct7 or funct3[2] set:
    *  it does nothing). Draws nothing without it. */
   mac?: boolean;
@@ -74,6 +84,14 @@ const FEDGE = [0, 0x80000000, 0x3f800000, 0xbfc00000, 0x7f800000, 0xff800000, 0x
 /** Words that are not RV32IM / Zicsr instructions (all-zero, all-one, slli with shamt[5], an unknown CSR, a 64-bit load). */
 const ILLEGAL = [0x00000000, 0xffffffff, 0x02051513, 0x7c002573, 0x00053503];
 
+/** The vm programs' page-table entry bits. */
+const PV = 1, PR = 2, PW = 4, PX = 8, PU = 16, PA = 64, PD = 128;
+export const VM_MAGIC = 0x5eed1234;
+/** Virtual layout of the vm programs: the root-level slots of the probe pages and what they hold. */
+export const VM_PROBES = { alias: 0x01400000, misaligned: 0x01800000, farTable: 0x01c00000, farPage: 0x02000000, unmapped: 0x02400000, emptyTable: 0x02800000 };
+/** Offsets in the data region of the vm programs (bytes): root table, window leaf table, code leaf table, log, fix table, window pages, an empty table. */
+export const VM_DATA = { root: 0, win: 0x1000, codeTable: 0x2000, log: 0x3000, fix: 0x3800, pages: 0x4000, empty: 0x8000 };
+
 export function randomProgram32(seed: number, o: Rand32Options = {}): string {
   const r = rng(seed * 2654435761 + 12345);
   const pick = <T>(xs: readonly T[]): T => xs[Math.floor(r() * xs.length)];
@@ -97,7 +115,88 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
 
   // prologue: trap handler (skips the trapping instruction; a timer interrupt is acknowledged by pushing
   // mtimecmp to the end of time), then every register gets a value and memory a few words
-  if (o.system) {
+  const vm = o.vm;
+  const D = o.dataBase;
+  const SMODE = vm ? r() < 0.35 : false;
+  const winPages = 4;
+  const winVa = (k: number) => (D ?? 0) + 4096 * k;
+  /** The window pages that may be jumped to: no X. */
+  let noExec: number[] = [];
+  if (vm) {
+    const { code, data } = vm;
+    const L = VM_DATA, uf = SMODE ? 0 : PU;
+    const pte = (ppn: number, flags: number) => (ppn * 1024 + flags) >>> 0;
+    const ppnOf = (pa: number) => pa / 4096;
+    emit('j main');
+    out.push('handler:');
+    for (const l of [
+      `csrr ${H0}, mcause`, `li ${H1}, ${VM_MAGIC}`, `bne s9, ${H1}, hnorm`, 'j halt',
+    ]) emit(l);
+    out.push('hnorm:');
+    for (const l of [
+      `li ${H1}, ${data + L.log}`, `lw s8, 0(${H1})`, `csrr s9, mtval`, `add ${H1}, ${H1}, s8`, `sw ${H0}, 16(${H1})`, `sw s9, 20(${H1})`,
+      'csrr s9, mepc', `sw s9, 24(${H1})`, 'addi s8, s8, 16', 'andi s8, s8, 0x3ff', `li ${H1}, ${data + L.log}`, `sw s8, 0(${H1})`,
+      `li ${H1}, 12`, `beq ${H0}, ${H1}, hfetch`, `li ${H1}, 1`, `beq ${H0}, ${H1}, hfetch`, `li ${H1}, 13`, `beq ${H0}, ${H1}, hfix`,
+      `li ${H1}, 15`, `bne ${H0}, ${H1}, hskip`,
+    ]) emit(l);
+    out.push('hfix:');
+    for (const l of [
+      `csrr ${H0}, mtval`, `srli ${H0}, ${H0}, 12`, `li ${H1}, ${winVa(0) >>> 12}`, `sub ${H0}, ${H0}, ${H1}`, `li ${H1}, ${winPages}`,
+      `bgeu ${H0}, ${H1}, hskip`, `slli ${H0}, ${H0}, 3`, `li ${H1}, ${data + L.fix}`, `add ${H0}, ${H0}, ${H1}`, `lw ${H1}, 0(${H0})`,
+      `beqz ${H1}, hskip`, `lw ${H0}, 4(${H0})`, `sw ${H0}, 0(${H1})`, 'sfence.vma zero, zero', 'mret',
+    ]) emit(l);
+    out.push('hfetch:');
+    emit('csrw mepc, ra');
+    emit('mret');
+    out.push('hskip:');
+    for (const l of [`csrr ${H0}, mepc`, `addi ${H0}, ${H0}, 4`, `csrw mepc, ${H0}`, 'mret']) emit(l);
+    out.push('main:');
+    emit(`la ${H0}, handler`);
+    emit(`csrw mtvec, ${H0}`);
+    const setw = (pa: number, v: number) => { emit(`li ${H0}, ${pa}`); emit(`li ${H1}, ${v >>> 0}`); emit(`sw ${H1}, 0(${H0})`); };
+    // the root: the code (one identity superpage, or 4 KiB pages), the window's leaf table, the probes
+    if (r() < 0.5) setw(data + L.root, pte(0, PV | PR | PX | PA | uf));
+    else {
+      setw(data + L.root, pte(ppnOf(data + L.codeTable), PV));
+      for (let i = 0; i < 8; i++) setw(data + L.codeTable + 4 * (((code >>> 12) & 0x3ff) + i), pte(ppnOf(code) + i, PV | PR | PX | PA | uf));
+    }
+    setw(data + L.root + 4 * 2, pte(ppnOf(data + L.win), PV));
+    const slot = (va: number) => data + L.root + 4 * (va >>> 22);
+    setw(slot(VM_PROBES.alias), pte(0, PV | PR | PW | PA | PD | uf));
+    setw(slot(VM_PROBES.misaligned), pte(1, PV | PR | PW | PA | PD | uf));
+    setw(slot(VM_PROBES.farTable), pte(0x300000, PV));
+    setw(slot(VM_PROBES.farPage), pte(0x100000, PV | PR | PW | PA | PD | uf));
+    setw(slot(VM_PROBES.emptyTable), pte(ppnOf(data + L.empty), PV));
+    // the window: a physical page each (a permutation), a state each, and for some a fix the handler installs
+    const perm = [0, 1, 2, 3];
+    for (let i = 3; i > 0; i--) { const j = int(0, i); [perm[i], perm[j]] = [perm[j], perm[i]]; }
+    const physical = (k: number) => data + L.pages + 4096 * perm[k];
+    const good = (k: number) => pte(ppnOf(physical(k)), PV | PR | PW | uf | PA | PD);
+    const STATES: [string, number][] = [
+      ['good', PV | PR | PW | uf | PA | PD], ['good', PV | PR | PW | uf | PA | PD], ['good', PV | PR | PW | uf | PA | PD],
+      ['ro', PV | PR | uf | PA | PD], ['wrongmode', PV | PR | PW | (SMODE ? PU : 0) | PA | PD], ['invalid', PR | PW | uf | PA | PD],
+      ['wonly', PV | PW | uf | PA | PD], ['a0', PV | PR | PW | uf | PD], ['d0', PV | PR | PW | uf | PA], ['xonly', PV | PX | uf | PA],
+    ];
+    noExec = [];
+    const fixes: number[] = [];
+    for (let k = 0; k < winPages; k++) {
+      const [name, flags] = pick(STATES);
+      setw(data + L.win + 4 * k, pte(ppnOf(physical(k)), flags));
+      if (name !== 'xonly') noExec.push(k);
+      if (name !== 'good' && r() < 0.65) fixes.push(k);
+    }
+    for (const k of fixes) { setw(data + L.fix + 8 * k, data + L.win + 4 * k); setw(data + L.fix + 8 * k + 4, good(k)); }
+    // enter the mode: satp, mstatus (MPP, SUM, MXR), mepc
+    emit(`li ${H0}, ${(0x80000000 | ppnOf(data)) >>> 0}`);
+    emit(`csrw satp, ${H0}`);
+    emit(`li ${H0}, ${((SMODE ? 1 : 0) << 11) | (r() < 0.4 ? 1 << 18 : 0) | (r() < 0.3 ? 1 << 19 : 0)}`);
+    emit(`csrw mstatus, ${H0}`);
+    emit(`la ${H0}, user`);
+    emit(`csrw mepc, ${H0}`);
+    emit('sfence.vma zero, zero');
+    emit('mret');
+    out.push('user:');
+  } else if (o.system) {
     emit('j main');
     out.push('handler:');
     emit(`csrr ${H0}, mcause`);
@@ -116,9 +215,9 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
     emit(`csrw mtvec, ${H0}`);
   }
   for (const x of POOL) emit(`li ${x}, ${word()}`);
-  const D = o.dataBase;
   emit(`li ${BASE}, ${(D ?? 0) + B / 2}`);
-  for (let i = 0; i < 4; i++) emit(`sw ${pick(POOL)}, ${4 * int(-W / 2, W / 2 - 1)}(${BASE})`);
+  const WH = vm ? 400 : W / 2;
+  for (let i = 0; i < 4; i++) emit(`sw ${pick(POOL)}, ${4 * int(-WH, WH - 1)}(${BASE})`);
   if (o.f) {
     for (const fr of FPOOL) { emit(`li ${T0}, ${r() < 0.7 ? pick(FEDGE) : word()}`); emit(`fmv.w.x ${fr}, ${T0}`); }
     emit(`fsrmi ${int(0, 4)}`);
@@ -139,6 +238,22 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
   /** A load or store of `size` bytes: base + offset in the window, or an address computed from a register. */
   const mem = (op: string, reg: string, size: number) => {
     const misalign = o.system && r() < 0.08 && size > 1;
+    if (vm) {
+      const kind = r();
+      if (kind < 0.3) {
+        const m = Math.floor(2040 / size);
+        emit(`${op} ${reg}, ${size * int(-m, m) + (misalign ? 1 : 0)}(${BASE})`);
+      } else if (kind < 0.7) {
+        emit(`li ${ADDR}, ${winVa(int(0, winPages - 1)) + size * int(0, 4096 / size - 1) + (misalign ? 1 : 0)}`);
+        emit(`${op} ${reg}, 0(${ADDR})`);
+      } else {
+        emit(`andi ${ADDR}, ${src()}, ${2047 & ~(misalign ? 0 : size - 1)}`);
+        emit(`li ${T0}, ${winVa(int(0, winPages - 1))}`);
+        emit(`add ${ADDR}, ${ADDR}, ${T0}`);
+        emit(`${op} ${reg}, 0(${ADDR})`);
+      }
+      return;
+    }
     if (r() < 0.3) {
       emit(`andi ${ADDR}, ${src()}, ${(B - 1) & ~(misalign ? 0 : size - 1)}`);
       if (D === undefined) emit(`${op} ${reg}, 0(${ADDR})`);
@@ -264,6 +379,20 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
       for (let k = int(1, 3); k > 0; k--) emit(`${pick(R_OPS)} ${dst()}, ${src()}, ${src()}`);
       emit(`addi ${LOOP}, ${LOOP}, -1`);
       emit(`bnez ${LOOP}, ${l}`);
+    } else if (vm && u < 0.2) {
+      // a probe page (a good alias, a misaligned superpage, a table or a page beyond 2^32, nothing at all) or a jump to a page without X
+      const v = r();
+      if (v < 0.6) {
+        const base = pick([VM_PROBES.alias, VM_PROBES.alias, VM_PROBES.misaligned, VM_PROBES.farTable, VM_PROBES.farPage, VM_PROBES.unmapped, VM_PROBES.emptyTable]);
+        // an alias reaches the window's physical pages; the others are tried at a small offset (a 32-bit machine would wrap the rest)
+        const off = base === VM_PROBES.alias ? vm.data + VM_DATA.pages + 4 * int(0, 4 * 1024 - 1) : base === VM_PROBES.farPage ? 0x2000 + 4 * int(0, 0x3800) : 4 * int(0, 255);
+        emit(`li ${ADDR}, ${base + off}`);
+        if (r() < 0.55) emit(`lw ${dst()}, 0(${ADDR})`); else emit(`sw ${src()}, 0(${ADDR})`);
+      } else {
+        const target = r() < 0.5 && noExec.length ? winVa(pick(noExec)) + 4 * int(0, 1023) : pick(Object.values(VM_PROBES)) + 4 * int(0, 255);
+        emit(`li s8, ${target}`);
+        emit('jalr ra, 0(s8)');
+      }
     } else if (u < 0.3) {
       const sizes = o.sub ? [1, 2, 4] : [4];
       const size = pick(sizes);
@@ -286,10 +415,12 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
       else emit(pick([`frflags ${dst()}`, `fsflags ${dst()}, ${src()}`, `fsrmi ${int(0, 4)}`, `frcsr ${dst()}`]));
     } else if (o.system && u < 0.42) {
       const v = r();
-      if (v < 0.35) emit(`${pick(['csrrw', 'csrrs', 'csrrc'])} ${dst()}, mscratch, ${src()}`);
-      else if (v < 0.5) emit(`${pick(['csrrwi', 'csrrsi', 'csrrci'])} ${dst()}, mscratch, ${int(0, 31)}`);
-      else if (v < 0.7) emit(`csrr ${dst()}, ${pick(['mcause', 'mepc', 'mtval', 'misa', 'mhartid', 'mvendorid', 'mstatus', 'mie', 'mscratch'])}`);
+      const scr = vm && SMODE && r() < 0.5 ? 'sscratch' : 'mscratch';
+      if (v < 0.35) emit(`${pick(['csrrw', 'csrrs', 'csrrc'])} ${dst()}, ${scr}, ${src()}`);
+      else if (v < 0.5) emit(`${pick(['csrrwi', 'csrrsi', 'csrrci'])} ${dst()}, ${scr}, ${int(0, 31)}`);
+      else if (v < 0.7) emit(`csrr ${dst()}, ${pick(['mcause', 'mepc', 'mtval', 'misa', 'mhartid', 'mvendorid', 'mstatus', 'mie', 'mscratch', ...(vm && SMODE ? ['sstatus', 'satp', 'sscratch', 'sepc', 'scause', 'stval', 'stvec', 'sie', 'sip'] : [])])}`);
       else if (v < 0.8) emit(pick(['ecall', 'ebreak']));
+      else if (vm && v < 0.9) emit(pick(['mret', 'sfence.vma zero, zero', ...(SMODE ? [] : ['wfi', 'sret'])])); // (wfi in S: Spike would wait for an interrupt)
       else emit(`.word 0x${(pick(ILLEGAL) >>> 0).toString(16)}`);
     } else if (o.mp && u < 0.38) {
       const v = r();
@@ -309,7 +440,10 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
     }
   }
   for (const p of pending.filter((q) => q.at >= n)) out.push(`${p.label}:`);
-  if (o.system) emit('csrci mstatus, 8');
+  if (vm) {
+    emit(`li s9, ${VM_MAGIC}`);
+    emit('ecall');
+  } else if (o.system) emit('csrci mstatus, 8');
   out.push('halt:');
   emit('j halt');
   return `${out.join('\n')}\n`;

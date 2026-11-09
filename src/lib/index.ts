@@ -102,3 +102,5 @@ export * from './macunit';
 // The DSP core without its memories is built on demand; register it so the sandbox's palette and saved chips resolve it by id.
 import { dsp24Core } from './dsp24core';
 dsp24Core();
+export * from './dft';
+export * from './bist';

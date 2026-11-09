@@ -9,7 +9,7 @@ import { busMux2, decoder, incrementer, muxTree } from './combinational';
 import { CLEAR_BIT0, CONTROL, IMM_GEN, NEXT_PC, PLUS4, PLUS4_FAST, rom } from './cpu';
 import { define, merger, splitter } from './define';
 import { addSubFast, fanout, koggeStone } from './fastadd';
-import { AND, NOT, OR } from './gates';
+import { AND, NOR, NOT, OR } from './gates';
 import { LOAD_EXTRACT, STORE_ALIGN, bankedMemory } from './lsu';
 import { equal, nonZero } from './pipeline';
 import { regfile } from './regfile';
@@ -20,6 +20,8 @@ import { bitwise, orN } from './wide';
 import { CSRS } from '../riscv/isa';
 import { MDU } from './muldiv';
 import { busMemUnit, M_IN, M_OUT } from './axi';
+import { csrUnitVm, mmu, trapUnitVm } from './vm';
+import { bankedBigRam } from './bigmem';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -62,8 +64,13 @@ function isConst(name: string, w: number, v: number, input: string, nets: NetDef
 
 // ---- illegal-instruction and system decoding --------------------------------------------------------
 
-export function sysDecode(m = false): ComponentDef {
-  return memo(`sysdec${m ? '_m' : ''}`, () => {
+/**
+ * vm: the privileged decode of the virtual-memory variant (lib/vm.ts): inputs priv (the privilege level) and rd, outputs sret and
+ * sfence; mret needs M, sret, sfence.vma and wfi need S, a CSR access needs the level its address names (cycle: M), a write to a
+ * read-only address (bits 11:10 = 11) is illegal, exactly as riscv/iss.ts with its vm option.
+ */
+export function sysDecode(m = false, vm = false): ComponentDef {
+  return memo(`sysdec${m ? '_m' : ''}${vm ? '_vm' : ''}`, () => {
   const ins: [string, ComponentDef, string?][] = [];
   const nets: NetDef[] = [];
   const C = (name: string, w: number, v: number, input: string) => isConst(name, w, v, input, nets, ins);
@@ -78,6 +85,7 @@ export function sysDecode(m = false): ComponentDef {
   const f7zero = C('f7z', 7, 0, 'funct7');
   const f7alt = C('f7a', 7, 0x20, 'funct7');
   const imm0 = C('ecall', 12, 0, 'imm12'), imm1 = C('ebreak', 12, 1, 'imm12'), immMret = C('mret', 12, 0x302, 'imm12'), immWfi = C('wfi', 12, 0x105, 'imm12');
+  const immSret = vm ? C('sret', 12, 0x102, 'imm12') : '', f7sfence = vm ? C('sfence', 7, 9, 'funct7') : '';
   // gates
   const g = (name: string, def: ComponentDef, ...inputs: string[]) => {
     ins.push([name, def]);
@@ -102,13 +110,30 @@ export function sysDecode(m = false): ComponentDef {
   const sysPriv = and('priv', opc.SYS, f3[0]);
   const ecall = and('isEcall', sysPriv, imm0), ebreak = and('isEbreak', sysPriv, imm1), mret = and('isMret', sysPriv, immMret), wfi = and('isWfi', sysPriv, immWfi);
   const csrOp = and('isCsr', opc.SYS, g('ncsr', NOT, or('notcsr', f3[0], f3[4])));
-  const okSys = or('okSys', ecall, ebreak, mret, wfi, and('okCsr', csrOp, 'csrKnown'));
+  let okSys: string;
+  let sret = '', sfence = '', csrWriteVm = '';
+  if (vm) {
+    ins.push(['pv', splitter([1, 1])], ['lv', splitter([8, 1, 1, 1, 1])]);
+    nets.push({ ends: ['priv', 'pv.in'], tags: true }, { ends: ['imm12', 'lv.in'], tags: true });
+    const privM = and('privM', 'pv.o0', 'pv.o1'), privS = and('privS', 'pv.o0', g('nprv1', NOT, 'pv.o1')), privGeS = 'pv.o0';
+    const rdNz = g('rdnz', nonZero(5), 'rd');
+    sret = and('isSret', sysPriv, immSret);
+    sfence = and('isSfence', and('sf7', sysPriv, f7sfence), g('rdz', NOT, rdNz));
+    const lvS = and('lvS', 'lv.o1', g('nlv1', NOT, 'lv.o2'));
+    const ro = and('roAddr', 'lv.o3', 'lv.o4');
+    csrWriteVm = and('csrW', csrOp, or('wr', or('isRw', f3[1], f3[5]), g('rsnz', nonZero(5), 'rs1')));
+    const csrLegal = and('csrLegal', 'csrKnown', or('lvOk', privM, and('lvOkS', privS, lvS)), g('nro', NOT, and('roW', csrWriteVm, ro)));
+    okSys = or('okSys', ecall, ebreak, and('mretOk', mret, privM), and('sretOk', sret, privGeS), and('sfOk', sfence, privGeS), and('wfiOk', wfi, privGeS), and('okCsr', csrOp, csrLegal));
+  } else okSys = or('okSys', ecall, ebreak, mret, wfi, and('okCsr', csrOp, 'csrKnown'));
   const legal = or('legal', okR, okI, okLoad, okStore, okBranch, opc.JAL, okJalr, opc.LUI, opc.AUIPC, okFence, okSys);
   const illegal = g('ill', NOT, legal);
   // csr writes unless csrrs/c (and immediate forms) with a zero source field
-  const rs1nz = g('rsnz', nonZero(5), 'rs1');
-  const isRw = or('isRw', f3[1], f3[5]);
-  const csrWrites = and('csrW', csrOp, or('wr', isRw, rs1nz));
+  let csrWrites = csrWriteVm;
+  if (!vm) {
+    const rs1nz = g('rsnz', nonZero(5), 'rs1');
+    const isRw = or('isRw', f3[1], f3[5]);
+    csrWrites = and('csrW', csrOp, or('wr', isRw, rs1nz));
+  }
   nets.push(
     { name: 'illegal', ends: [illegal, 'illegal'], tags: true },
     { name: 'ecall', ends: [ecall, 'ecall'], tags: true },
@@ -118,18 +143,19 @@ export function sysDecode(m = false): ComponentDef {
     { name: 'csrWrite', ends: [csrWrites, 'csrWrite'], tags: true },
   );
   if (m) nets.push({ name: 'isM', ends: [and('isMul', opc.R, f7one), 'isM'], tags: true });
+  if (vm) nets.push({ name: 'sret', ends: [sret, 'sret'], tags: true }, { name: 'sfence', ends: [sfence, 'sfence'], tags: true });
   // merge nets that share a driver (inputs used several times)
   const merged = mergeByDriver(nets);
-  const pins: Record<string, [number, number]> = { op: [0, 2], funct3: [0, 6], funct7: [0, 10], imm12: [0, 14], rs1: [0, 18], csrKnown: [0, 22] };
+  const pins: Record<string, [number, number]> = { op: [0, 2], funct3: [0, 6], funct7: [0, 10], imm12: [0, 14], rs1: [0, 18], csrKnown: [0, 22], ...(vm ? { priv: [0, 26], rd: [0, 30] } : {}) };
   const instances = columns(chunk(ins, 14), 12, 0, 12, 2);
   // room for the last column's output labels and the output pins' labels side by side
   const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 14;
-  ['illegal', 'ecall', 'ebreak', 'mret', 'csrOp', 'csrWrite', ...(m ? ['isM'] : [])].forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
+  ['illegal', 'ecall', 'ebreak', 'mret', 'csrOp', 'csrWrite', ...(m ? ['isM'] : []), ...(vm ? ['sret', 'sfence'] : [])].forEach((n, i) => (pins[n] = [right, 2 + 4 * i]));
   return define({
-    id: `sysdec${m ? '_m' : ''}`, name: 'System & illegal-instruction decoder', category: 'cpu',
+    id: `sysdec${m ? '_m' : ''}${vm ? '_vm' : ''}`, name: 'System & illegal-instruction decoder', category: 'cpu',
     summary: `Recognises ecall, ebreak, mret, wfi and the CSR instructions, and flags anything that is not a valid RV32I${m ? 'M' : ''} / Zicsr encoding as an illegal instruction (which traps).${m ? ' Also spots the M-extension instructions (OP with funct7 = 1).' : ''}`,
-    ports: [bus('op', 7, 'in'), bus('funct3', 3, 'in'), bus('funct7', 7, 'in'), bus('imm12', 12, 'in'), bus('rs1', 5, 'in'), bit('csrKnown', 'in'),
-      bit('illegal', 'out'), bit('ecall', 'out'), bit('ebreak', 'out'), bit('mret', 'out'), bit('csrOp', 'out'), bit('csrWrite', 'out'), ...(m ? [bit('isM', 'out')] : [])],
+    ports: [bus('op', 7, 'in'), bus('funct3', 3, 'in'), bus('funct7', 7, 'in'), bus('imm12', 12, 'in'), bus('rs1', 5, 'in'), bit('csrKnown', 'in'), ...(vm ? [bus('priv', 2, 'in'), bus('rd', 5, 'in')] : []),
+      bit('illegal', 'out'), bit('ecall', 'out'), bit('ebreak', 'out'), bit('mret', 'out'), bit('csrOp', 'out'), bit('csrWrite', 'out'), ...(m ? [bit('isM', 'out')] : []), ...(vm ? [bit('sret', 'out'), bit('sfence', 'out')] : [])],
     symbol: { kind: 'box', label: 'SYSTEM DECODE' },
     netlist: () => ({ pins, instances, nets: merged }),
   });
@@ -501,7 +527,9 @@ export const TRAP_UNIT: ComponentDef = (() => {
 
 // ---- memory-mapped I/O ---------------------------------------------------------------------------------------------
 
-export const IO_UNIT: ComponentDef = (() => {
+/** vm: the timer counts only while the CPU is not stalled (an input `tick`): the golden model has no walk cycles, one mtime step per instruction. */
+export function ioUnit(vm = false): ComponentDef {
+  return memo(`iounit${vm ? '_vm' : ''}`, () => {
   const ins: [string, ComponentDef, string?][] = [];
   const nets: NetDef[] = [];
   const net = (name: string | undefined, drv: string, ...s: string[]) => nets.push({ name, ends: [drv, ...s], tags: true });
@@ -518,7 +546,7 @@ export const IO_UNIT: ComponentDef = (() => {
   net('weLed', 'dec.y1', 'rLed.en');
   net('leds', 'rLed.q', 'leds', 'zLed.i0');
   // timer
-  ins.push(['mtime', incrementerCounter32(), 'mtime'], ['rCmp', register(32), 'mtimecmp'], ['cmp', addSubFast(32)], ['one', TIE1]);
+  ins.push(['mtime', incrementerCounter32(vm), 'mtime'], ['rCmp', register(32), 'mtimecmp'], ['cmp', addSubFast(32)], ['one', TIE1]);
   net('weCmp', 'dec.y5', 'rCmp.en');
   net('mtime', 'mtime.q', 'mtimeOut', 'cmp.a', 'rsel.d4');
   net('mtimecmp', 'rCmp.q', 'cmp.b', 'rsel.d5');
@@ -533,40 +561,43 @@ export const IO_UNIT: ComponentDef = (() => {
   net(undefined, 'z32.y', 'rsel.d0', 'rsel.d3', 'rsel.d6', 'rsel.d7');
   nets.push({ name: 'rdata', ends: ['rsel.y', 'rdata'] });
   net('clk', 'clk', 'rLed.clk', 'rCmp.clk', 'mtime.clk');
+  if (vm) net('tick', 'tick', 'mtime.en');
   const merged = mergeByDriver(nets);
   const instances = columns(chunk(ins, 6), 14, 0, 12, 3);
   const right = Math.max(...instances.map((i) => i.at![0] + symbolGeom(i.def).w)) + 8;
-  const pins: Record<string, [number, number]> = { addr: [0, 2], wdata: [0, 6], we: [0, 10], switches: [0, 14], clk: [0, 18] };
+  const pins: Record<string, [number, number]> = { addr: [0, 2], wdata: [0, 6], we: [0, 10], switches: [0, 14], clk: [0, 18], ...(vm ? { tick: [0, 22] } : {}) };
   // rdata straight out of the read multiplexer; the other outputs below its select label
   const rs = instances.find((i) => i.name === 'rsel')!, rg = symbolGeom(rs.def);
   pins.rdata = [right, rs.at![1] + rg.ports.y.pos[1]];
   ['consoleData', 'consoleValid', 'leds', 'mtimeOut', 'mtip'].forEach((n, i) => (pins[n] = [right, rs.at![1] + rg.h + 4 + 4 * i]));
   return define({
-    id: 'iounit', name: 'I/O devices', category: 'cpu',
+    id: vm ? 'iounit_vm' : 'iounit', name: 'I/O devices', category: 'cpu',
     summary: 'Memory-mapped devices: a console (store a byte to 0x8000_0000), LEDs (0x04), switches (0x08), a free-running cycle counter mtime (0x10) and its compare register mtimecmp (0x14). The timer interrupt is pending while mtime ≥ mtimecmp.',
-    ports: [bus('addr', 32, 'in'), bus('wdata', 32, 'in'), bit('we', 'in'), bus('switches', 8, 'in'), bit('clk', 'in', 'bottom', true),
+    ports: [bus('addr', 32, 'in'), bus('wdata', 32, 'in'), bit('we', 'in'), bus('switches', 8, 'in'), bit('clk', 'in', 'bottom', true), ...(vm ? [bit('tick', 'in')] : []),
       bus('rdata', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), bus('mtimeOut', 32, 'out'), bit('mtip', 'out')],
     symbol: { kind: 'box', label: 'I/O' },
     netlist: () => ({ pins, instances, nets: merged }),
   });
-})();
+  });
+}
+export const IO_UNIT: ComponentDef = ioUnit();
 
 /** A free-running 32-bit counter (register + incrementer), always enabled. */
-function incrementerCounter32(): ComponentDef {
-  return memo('ctr32', () => {
+function incrementerCounter32(vm = false): ComponentDef {
+  return memo(vm ? 'ctr32_en' : 'ctr32', () => {
     const R = register(32), I = incrementer(32);
     return define({
-      id: 'freectr32', name: '32-bit cycle counter', category: 'sequential',
-      summary: 'Counts clock cycles: a register whose input is its own value plus one.',
-      ports: [bit('clk', 'in', 'bottom', true), bus('q', 32, 'out')],
+      id: vm ? 'freectr32_en' : 'freectr32', name: '32-bit cycle counter', category: 'sequential',
+      summary: vm ? 'Counts clock cycles while en = 1 (the virtual-memory CPU holds it during a page walk): a register whose input is its own value plus one.' : 'Counts clock cycles: a register whose input is its own value plus one.',
+      ports: [bit('clk', 'in', 'bottom', true), ...(vm ? [bit('en', 'in')] : []), bus('q', 32, 'out')],
       symbol: { kind: 'box', label: 'COUNT' },
       netlist: () => ({
-        pins: { clk: [0, 20], q: [40, 4] },
-        instances: [{ name: 'r', def: R, at: [8, 2] }, { name: 'inc', def: I, at: [8, 14], flip: true }, { name: 'en', def: TIE1, at: [2, 5] }],
+        pins: { clk: [0, 20], q: [40, 4], ...(vm ? { en: [0, 8] } : {}) },
+        instances: [{ name: 'r', def: R, at: [8, 2] }, { name: 'inc', def: I, at: [8, 14], flip: true }, ...(vm ? [] : [{ name: 'en', def: TIE1, at: [2, 5] as [number, number] }])],
         nets: [
           { name: 'q', ends: ['r.q', 'q', 'inc.a'], tags: ['inc.a'] },
           { name: 'next', ends: ['inc.y', 'r.d'], tags: true },
-          { name: 'en', ends: ['en.y', 'r.en'] },
+          vm ? { name: 'en', ends: ['en', 'r.en'] } : { name: 'en', ends: ['en.y', 'r.en'] },
           { name: 'clk', ends: ['clk', 'r.clk'], tags: ['r.clk'] },
         ],
       }),
@@ -590,6 +621,13 @@ export interface SystemCpuOptions {
    * (retire = 0) and takes an interrupt only between bus accesses.
    */
   bus?: boolean;
+  /**
+   * Privilege levels M / S / U and Sv32 virtual memory (lib/vm.ts, golden model: riscv/iss.ts with its vm option): an MMU with two
+   * 4-entry TLBs and a hardware page-table walker, S-mode CSRs, page faults. Everything else stays as it is, and without this
+   * option the CPU is gate for gate what it was (tests/sys-default-pin.test.ts). A walk stalls the CPU (retire low) and the
+   * timer does not count while it does, so mtime advances once per retired instruction like the golden model's.
+   */
+  vm?: boolean;
 }
 
 export function systemCpu(program: number[], opts: SystemCpuOptions = {}): ComponentDef {
@@ -597,7 +635,8 @@ export function systemCpu(program: number[], opts: SystemCpuOptions = {}): Compo
   const IM = rom(program, imemK);
   const adder = opts.adder ?? 'ks', dmemK = opts.dmemK ?? 5;
   if (opts.bus && opts.m) throw new Error('systemCpu: bus and m together are not supported');
-  return memo(`sys_${IM.id}_${adder}${opts.m ? '_m' : ''}_${dmemK}${opts.bus ? '_bus' : ''}`, () => buildSystem(IM, adder, !!opts.m, dmemK, opts.bus ? imemK : 0));
+  if (opts.vm && (opts.m || opts.bus)) throw new Error('systemCpu: vm is not supported together with m or bus (the timer would have to count divide cycles and walk cycles differently)');
+  return memo(`sys_${IM.id}_${adder}${opts.m ? '_m' : ''}_${dmemK}${opts.bus ? '_bus' : ''}${opts.vm ? '_vm' : ''}`, () => buildSystem(IM, adder, !!opts.m, dmemK, opts.bus ? imemK : 0, !!opts.vm));
 }
 
 /**
@@ -611,10 +650,10 @@ export function systemCore(opts: { adder?: 'rca' | 'ks'; m?: boolean } = {}): Co
   return memo(`syscore_${adder}${opts.m ? '_m' : ''}`, () => buildSystem(null, adder, !!opts.m, 5));
 }
 
-function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, dmemK: number, busK = 0): ComponentDef {
+function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, dmemK: number, busK = 0, vm = false): ComponentDef {
   const ports = IM === null;
-  const SYSD = sysDecode(m), CSRU = csrUnit(m);
-  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = busK ? busMemUnit(busK) : bankedMemory(dmemK);
+  const SYSD = sysDecode(m, vm), CSRU = vm ? csrUnitVm() : csrUnit(m), TRAPU = vm ? trapUnitVm() : TRAP_UNIT, IOU = vm ? ioUnit(true) : IO_UNIT;
+  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = busK ? busMemUnit(busK) : vm && dmemK > 6 ? bankedBigRam(dmemK) : bankedMemory(dmemK);
   const M2 = busMux2(32), M4 = muxTree(2, 32), M8 = muxTree(3, 32), ADD = adder === 'ks' ? koggeStone(32) : rca(32);
   const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4;
   const SI = splitter([7, 5, 3, 5, 5, 7]), IMM12 = splitter([20, 12]);
@@ -630,10 +669,10 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
 
   // The system is drawn with wires (see the block after the nets), the M extension's and the bus's parts in the free
   // corner right of the CSRs; the core with ports keeps the author's pointers and its original placement.
-  const wired = !ports;
+  const wired = !ports && !vm;
   const Y = 36;
   alignY('pcmux', M4, wired ? 5 : 0, 'y', Y);
-  alignY('trapmux', M4, wired ? 13 : 10, 'd0', Y);
+  alignY('trapmux', vm ? M8 : M4, wired ? 13 : 10, 'd0', Y);
   alignY('pc', PC, 22, 'd', P('trapmux', 'y')[1]);
   place('one', TIE1, [17, P('pc', 'en')[1] - 1]);
   // the core with ports lays out as if the ROM were there (its instr pin where the ROM's data was)
@@ -653,14 +692,14 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   const dmX = wired ? 172 : aluR + 30 + (busK ? 16 : 0);
   if (!ports) alignY('dm', DM, dmX, 'addr', P('alu', 'y')[1]);
   // the bus's memory unit is taller than the data memory: the I/O unit goes below it
-  if (wired) place('io', IO_UNIT, [174, busK ? 74 : 68]); else alignY('io', IO_UNIT, aluR + 30, 'addr', Y + 70);
+  if (wired) place('io', IOU, [174, busK ? 74 : 68]); else alignY('io', IOU, aluR + 30, 'addr', Y + 70);
   // the bus's memory unit has a column of outputs on its right: room for their labels and the I/O read's lane
   alignY('ldsel', M2, dmX + g(DM).w + (wired ? (busK ? 18 : 10) : 8), 'a', ports ? P('alu', 'y')[1] : P('dm', 'rdata')[1]);
   alignY('ld', LOAD_EXTRACT, P('ldsel', 'y')[0] + 10, 'rdata', P('ldsel', 'y')[1]);
   alignY('res', M8, P('ld', 'value')[0] + 8, 'd1', P('ld', 'value')[1]);
   place('plus4', P4, [36, Y - 10]);
   alignY('target', ADD, rfR + 18, 'a', Y + 26);
-  place('gndT', TIE0, wired ? [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 1] : [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - 5]);
+  place('gndT', TIE0, wired ? [P('target', 'cin')[0] - 6, P('target', 'cin')[1] - 1] : [P('target', 'cin')[0] - 7, P('target', 'cin')[1] - (vm ? 0 : 5)]);
   if (wired) place('clr0', CLEAR_BIT0, [141, 75]); else alignY('clr0', CLEAR_BIT0, aluR + 12, 'in', Y + 40);
   place('gndJ', TIE0, [P('clr0', 'zero')[0] - 6, P('clr0', 'zero')[1] + 1]);
   place('ctl', CONTROL, wired ? [44, 86] : [26, 0]);
@@ -671,12 +710,12 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   // 24 units between the blocks: both facing sides carry labels
   if (wired) {
     place('sys', SYSD, [44, 114]);
-    place('trap', TRAP_UNIT, [130, 114]);
+    place('trap', TRAPU, [130, 114]);
     place('csr', CSRU, [158, 114]);
   } else {
     place('sys', SYSD, [4, yS + 4]);
     place('csr', CSRU, [4 + g(SYSD).w + 24, yS + 4]);
-    place('trap', TRAP_UNIT, [4 + g(SYSD).w + 24 + g(CSRU).w + 24, yS + 4]);
+    place('trap', TRAPU, [4 + g(SYSD).w + 24 + g(CSRU).w + 24, yS + 4]);
   }
   // glue logic
   const glue: [string, ComponentDef][] = [
@@ -686,7 +725,7 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
     ['psplit', splitter([1, 1])], ['rssplit', splitter([1, 1])], ['z32', constWord(32, 0)],
   ];
   // glue gates on a grid right of the trap unit, clear of the datapath (later additions continue it)
-  const gridX0 = 4 + g(SYSD).w + 24 + g(CSRU).w + 24, gridY0 = yS + 4 + Math.max(g(CSRU).h, g(SYSD).h, g(IO_UNIT).h) + 14;
+  const gridX0 = 4 + g(SYSD).w + 24 + g(CSRU).w + 24, gridY0 = yS + 4 + Math.max(g(CSRU).h, g(SYSD).h, g(IOU).h) + 14;
   let gi = 0;
   const gridAt = (): [number, number] => { const i = gi++; return [gridX0 + 24 * (i % 4), gridY0 + 14 * Math.floor(i / 4)]; };
   const GLUE: Record<string, [number, number]> = {
@@ -808,6 +847,92 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   nets.push({ name: 'csrWriteRaw', ends: ['sys.csrWrite', 'csrWq.a'], tags: true });
   nets.find((n) => n.name === 'NoTrap')!.ends.push('csrWq.b');
   nets.push({ name: 'csrWrite', ends: ['csrWq.y', 'csr.csrWrite'], tags: true });
+  if (vm) {
+    // ---- virtual memory (lib/vm.ts): privilege levels, S-mode CSRs, the MMU between the CPU's addresses and the memories
+    const net = (name: string) => nets.find((n) => n.name === name)!;
+    const add = (name: string, def: ComponentDef, xy: [number, number], label?: string) => { instances.push({ name, def, at: xy, label }); defs.set(name, def); at.set(name, xy); };
+    /** Ends added to a net (drawn as pointers) or taken from it. */
+    const addEnd = (n: string, ...ends: string[]) => { const x = net(n); x.ends.push(...ends); x.tags = x.tags === true ? true : [...(x.tags ?? []), ...ends]; };
+    const dropEnd = (n: string, ...ends: string[]) => {
+      const x = net(n);
+      x.ends = x.ends.filter((e) => !ends.includes(e));
+      if (Array.isArray(x.tags)) x.tags = x.tags.filter((e) => !ends.includes(e));
+    };
+    const below = Math.max(...instances.map((i) => i.at![1] + g(i.def).h)) + 10;
+    add('mmu', mmu(), [4, below], 'MMU');
+    // the glue: the stall gates the PC, every write and the trap; faults of loads and stores are told apart by the opcode
+    const GATES: [string, ComponentDef][] = [['nstall', NOT], ['trapq', AND], ['memOpg', OR], ['badg', OR], ['irqg', AND], ['sretq', AND], ['sfenceq', AND], ['flushg', OR],
+      ['nstore', NOT], ['ldp', AND], ['stp', AND], ['lda', AND], ['sta', AND]];
+    for (const [n, d] of GATES) add(n, d, gridAt());
+    // the PC is enabled by the stall's inverse: the always-high enable goes
+    instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
+    nets.splice(nets.indexOf(net('en')), 1);
+    // addresses: the PC and the load / store address in, the physical ones out
+    dropEnd('PC', 'imem.addr');
+    addEnd('PC', 'mmu.pc', 'trap.pc');
+    dropEnd('ALUResult', 'dm.addr', 'io.addr', 'isIO.in');
+    addEnd('ALUResult', 'mmu.va');
+    addEnd('MemRead', 'mmu.pteData');
+    nets.push(
+      { name: 'fpa', ends: ['mmu.fpa', 'imem.addr'], tags: true },
+      { name: 'DataPA', ends: ['mmu.dpa', 'io.addr', 'isIO.in'], tags: true },
+      { name: 'MemAddr', ends: ['mmu.maddr', 'dm.addr'], tags: true },
+      // the CSR unit's mode outputs and the decode's new inputs and outputs
+      { name: 'priv', ends: ['csr.priv', 'sys.priv', 'mmu.priv', 'trap.priv'], tags: true },
+      { name: 'sum', ends: ['csr.sum', 'mmu.sum'], tags: true },
+      { name: 'mxr', ends: ['csr.mxr', 'mmu.mxr'], tags: true },
+      { name: 'satpMode', ends: ['csr.satpMode', 'mmu.satpMode'], tags: true },
+      { name: 'satpPpn', ends: ['csr.satpPpn', 'mmu.satpPpn'], tags: true },
+      { name: 'sepc', ends: ['csr.sepcOut', 'trapmux.d4'], tags: true },
+      { name: 'sretRaw', ends: ['sys.sret', 'sretq.a'], tags: true },
+      { name: 'sfenceRaw', ends: ['sys.sfence', 'sfenceq.a'], tags: true },
+      { name: 'sret', ends: ['sretq.y', 'csr.sret', 'tsel.i2'], tags: true },
+      { name: 'sfence', ends: ['sfenceq.y', 'flushg.a'], tags: true },
+      { name: 'satpWr', ends: ['csr.satpWr', 'flushg.b'], tags: true },
+      { name: 'flush', ends: ['flushg.y', 'mmu.flush'], tags: true },
+    );
+    addEnd('rd', 'sys.rd');
+    addEnd('NoTrap', 'sretq.b', 'sfenceq.b');
+    // the PC mux has a third control (sret) and more inputs: sepc, and mtvec in the unused slots
+    addEnd('mtvec', 'trapmux.d5', 'trapmux.d6', 'trapmux.d7');
+    instances.splice(instances.findIndex((i) => i.name === 'tsel'), 1);
+    add('tsel', merger([1, 1, 1]), at.get('tsel')!);
+    // the stall gates the PC, the writes (NoTrap now also means "not stalled") and the trap raised by the unit
+    nets.splice(nets.indexOf(net('Trap')), 1);
+    instances.splice(instances.findIndex((i) => i.name === 'ntrap'), 1);
+    add('ntrap', NOR, at.get('ntrap')!);
+    nets.push(
+      { name: 'TrapRaw', ends: ['trap.trap', 'trapq.a', 'ntrap.a'], tags: true },
+      { name: 'stall', ends: ['mmu.stall', 'nstall.a', 'ntrap.b'], tags: true },
+      { name: 'retire', ends: ['nstall.y', 'trapq.b', 'pc.en', 'io.tick', 'retire'], tags: ['trapq.b', 'pc.en', 'io.tick', 'retire'] },
+      { name: 'Trap', ends: ['trapq.y', 'csr.trap', 'tsel.i1'], tags: true },
+    );
+    // interrupts are taken only while the walker is idle
+    net('irqTake').ends = ['csr.irqTake', 'irqg.a'];
+    nets.push(
+      { name: 'idle', ends: ['mmu.idle', 'irqg.b'], tags: true },
+      { name: 'irqTakeQ', ends: ['irqg.y', 'trap.irq', 'mmu.irqTake'], tags: true },
+    );
+    // the MMU's questions: a load or store, a legal and aligned one, a store; the faults of loads and stores told apart
+    addEnd('isLoad', 'memOpg.a');
+    addEnd('MemWriteCtl', 'memOpg.b', 'mmu.store', 'nstore.a', 'stp.b', 'sta.b');
+    addEnd('misaligned', 'badg.b');
+    addEnd('illegal', 'badg.a');
+    nets.push(
+      { name: 'memOp', ends: ['memOpg.y', 'mmu.memOp'], tags: true },
+      { name: 'bad', ends: ['badg.y', 'mmu.bad'], tags: true },
+      { name: 'notStore', ends: ['nstore.y', 'ldp.b', 'lda.b'], tags: true },
+      { name: 'dataPage', ends: ['mmu.dataPage', 'ldp.a', 'stp.a'], tags: true },
+      { name: 'dataAcc', ends: ['mmu.dataAcc', 'lda.a', 'sta.a'], tags: true },
+      { name: 'loadPage', ends: ['ldp.y', 'trap.loadPage'], tags: true },
+      { name: 'storePage', ends: ['stp.y', 'trap.storePage'], tags: true },
+      { name: 'loadAcc', ends: ['lda.y', 'trap.loadAcc'], tags: true },
+      { name: 'storeAcc', ends: ['sta.y', 'trap.storeAcc'], tags: true },
+      { name: 'fetchPage', ends: ['mmu.fetchPage', 'trap.fetchPage'], tags: true },
+      { name: 'fetchAcc', ends: ['mmu.fetchAcc', 'trap.fetchAcc'], tags: true },
+    );
+    addEnd('clk', 'mmu.clk');
+  }
   if (wired) {
     const net = (name: string) => nets.find((n) => n.name === name)!;
     /** Corner points on the way to each end of a net (a via is never moved by the router); `tags`: the ends still drawn as pointers. */
@@ -916,6 +1041,7 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
     const xR = P('res', 'y')[0] + 20;
     Object.assign(pins, { clk: [0, 100], switches: [166, 78 + at.get('io')![1] - 68], irq: [146, 140], pcOut: [xR, 30.5], consoleData: [xR, P('io', 'consoleData')[1]], consoleValid: [xR, P('io', 'consoleValid')[1]], leds: [xR, P('io', 'leds')[1]] });
     }
+  if (vm) pins.retire = [P('res', 'y')[0] + 20, yS + 6];
   if (ports) {
     // ---- a core with ports: the ROM and the data memory outside, only the timer's registers inside
     const net = (name: string) => nets.find((n) => n.name === name)!;
@@ -1082,9 +1208,9 @@ function buildSystem(IM: ComponentDef | null, adder: 'rca' | 'ks', m: boolean, d
   const busPorts: PortDef[] = busK ? [bit('retire', 'out'), ...M_OUT.map((sg) => (sg.endsWith('addr') || sg === 'wdata' ? bus(sg, 32, 'out') : sg === 'wstrb' ? bus(sg, 4, 'out') : bit(sg, 'out'))),
     ...M_IN.map((sg) => (sg === 'rdata' ? bus(sg, 32, 'in') : bit(sg, 'in')))] : [];
   return {
-    id: `sys_${IM!.id}${adder === 'ks' ? '' : '_rca'}${m ? '_m' : ''}${busK ? '_bus' : dmemK === 5 ? '' : `_d${dmemK}`}`, name: `RV32I${m ? 'M' : ''} system (single-cycle, Zicsr, traps, I/O${busK ? ', on a bus' : ''})`, category: 'cpu',
-    summary: `The complete processor: every RV32I instruction including byte and halfword memory access, the Zicsr instructions, machine-mode exceptions and interrupts, and memory-mapped I/O (console, LEDs, switches, timer).${m ? ' Plus the M extension: one-cycle multiplies and 34-cycle divides that stall the processor (retire = 0 while they run).' : ''}`,
-    ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bit('irq', 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), ...(m ? [bit('retire', 'out')] : []), ...busPorts],
+    id: `sys_${IM!.id}${adder === 'ks' ? '' : '_rca'}${m ? '_m' : ''}${busK ? '_bus' : dmemK === 5 ? '' : `_d${dmemK}`}${vm ? '_vm' : ''}`, name: `RV32I${m ? 'M' : ''} system (single-cycle, Zicsr, traps, I/O${busK ? ', on a bus' : ''}${vm ? ', M / S / U, Sv32' : ''})`, category: 'cpu',
+    summary: `The complete processor: every RV32I instruction including byte and halfword memory access, the Zicsr instructions, machine-mode exceptions and interrupts, and memory-mapped I/O (console, LEDs, switches, timer).${m ? ' Plus the M extension: one-cycle multiplies and 34-cycle divides that stall the processor (retire = 0 while they run).' : ''}${vm ? ' With virtual memory: privilege levels M, S and U, the supervisor registers, two small TLBs and a page-table walker that stalls the processor while it reads the page tables (retire = 0).' : ''}`,
+    ports: [bit('clk', 'in', 'left', true), bus('switches', 8, 'in'), bit('irq', 'in'), bus('pcOut', 32, 'out'), bus('consoleData', 8, 'out'), bit('consoleValid', 'out'), bus('leds', 8, 'out'), ...(m || vm ? [bit('retire', 'out')] : []), ...busPorts],
     symbol: { kind: 'box', label: m ? 'RV32IM SYSTEM' : 'RV32I SYSTEM' },
     netlist: () => ({ pins, instances, nets }),
   };

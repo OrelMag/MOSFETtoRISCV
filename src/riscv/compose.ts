@@ -33,7 +33,7 @@ export interface Composed { spec: InstrSpec; parts: Parts }
 export const NO_PARTS: Parts = { rd: 0, rs1: 0, rs2: 0, rs3: 0, imm: 0, csr: 0, rm: 7 };
 
 /** Instructions whose word is fixed (no operands; fence's ordering bits are not ours to set). */
-export const FIXED: Record<string, number> = { ecall: 0x00000073, ebreak: 0x00100073, mret: 0x30200073, wfi: 0x10500073, fence: 0x0ff0000f };
+export const FIXED: Record<string, number> = { ecall: 0x00000073, ebreak: 0x00100073, mret: 0x30200073, wfi: 0x10500073, sret: 0x10200073, 'sfence.vma': 0x12000073, fence: 0x0ff0000f };
 
 const isShift = (s: InstrSpec) => (s.opcode === OPCODES.OPIMM || s.opcode === OPCODES.OPIMM32) && (s.funct3 === 1 || s.funct3 === 5);
 const isCsr = (s: InstrSpec) => s.opcode === OPCODES.SYSTEM && (s.funct3 ?? 0) !== 0;

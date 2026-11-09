@@ -72,7 +72,7 @@ export function chapterSkip(c: { num: number }): Set<string> {
 }
 
 /** Phrases that use a term's word for something else: found, so no shorter term claims them, and never marked. */
-const NOT_TERMS = ['byte lane', 'PCIe lane', 'warp thread', 'energy barrier', 'fence off'];
+const NOT_TERMS = ['byte lane', 'PCIe lane', 'warp thread', 'energy barrier', 'speculation barrier', 'fence off'];
 
 export interface Term {
   id: string;

@@ -63,6 +63,12 @@ export class CacheModel {
     return { tag: Math.floor(block / this.sets), set: block % this.sets, offset: addr % this.cfg.line };
   }
 
+  /** Whether the line holding addr is in the cache, without touching anything (no fill, no LRU update, no counts). */
+  holds(addr: number): boolean {
+    const { tag, set } = this.split(addr);
+    return this.lines[set].some((l) => l.valid && l.tag === tag);
+  }
+
   access(addr: number, write = false): AccessResult {
     const { cfg, stats } = this;
     const block = Math.floor(addr / cfg.line);

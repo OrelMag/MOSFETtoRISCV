@@ -358,7 +358,26 @@ src/lib/       the component library (registered in `registry` via define())
   system.ts      SYS_DECODE (illegal-instruction detection), CSR_UNIT, TRAP_UNIT, IO_UNIT,
                  systemCpu(program, { m }): the complete RV32I(M) + Zicsr + M-mode traps / interrupts + MMIO;
                  with m the CPU gains a `retire` output (low while a divide stalls it); { bus } (not with m): busMemUnit
-                 in place of the data memory, the AXI master ports at the CPU's pins, retire
+                 in place of the data memory, the AXI master ports at the CPU's pins, retire; { vm } (not with m or bus): privilege
+                 levels M / S / U and Sv32 (lib/vm.ts), `retire` low while the walker reads page tables; the default
+                 CPUs are pinned gate for gate by tests/sys-default-pin.test.ts (ids, NAND counts, period, netlist fingerprints),
+                 so a vm-only twin has its own id: sysDecode(m, vm), ioUnit(vm) (mtime counts only while not stalled: the golden
+                 model has one mtime step per instruction and no walk cycles), a data memory above 2^6 words is bankedBigRam
+  vm.ts          the vm variant's units (golden model: riscv/iss.ts with `vm`): tlb('i' | 'd') (4 entries by VPN, round-robin
+                 fill, flush clears all valid bits; superpages are filled one 4 KiB page at a time; entries hold the raw flags
+                 and the 22-bit PPN, so every permission check and the "PA >= 2^32" access fault run on the TLB's output, for a
+                 hit and for the retry after a fill alike; nothing a walk faults on is cached), pcheck (the permission check),
+                 walker() (idle / level 1 / level 0 / fault: reads PTEs through the data memory, 3 stall cycles to a 4 KiB leaf,
+                 2 to a superpage, the fault trap in the cycle after), mmu() (both TLBs, checks and walker between the PC / the
+                 load-store address and the memories; a data access is looked up only for a legal, aligned load or store whose fetch
+                 went through; the stall gates the PC, every write and the trap through NoTrap; a walk starts only when no interrupt
+                 is taken, and an interrupt only while the walker is idle), csrUnitVm() (privilege level stored inverted, MPP WARL,
+                 SPP / SIE / SPIE / SUM / MXR / FS, sstatus as a view, stvec sscratch sepc scause stval satp; a write to satp
+                 flushes both TLBs, so the golden model, which has no TLB, never sees a stale entry; software still
+                 issues sfence.vma after editing a PTE), trapUnitVm() (the cause from the winner's constant: interrupt, fetch
+                 faults, illegal, ebreak, ecall 8 + level, misaligned, then data faults). tests/verify/vmlock.ts: lock step of
+                 the CPU against ISS({ system, vm }) after every retirement (registers, PC, level, mstatus, every CSR, mtime, memory);
+                 tests/vm-programs.ts the directed programs (tests/vm-cpu.test.ts), vm-cpu-fuzz.test.ts the random ones
   cells.ts       NMOS_STRONG / PMOS_WEAK, SRAM_CELL (6T), SRAM_COLUMN, DRAM_CELL (switch level)
   arrays.ts      WRITE_DRIVER, SENSE_AMP (latch type), sramColumn(R), sramArray(R, C): switch-level SRAM with periphery
   dramctrl.ts    chapter 36: dramCtrl(cfg) (CtrlModel in gates, tests/dramctrl.test.ts compares every output every cycle),
@@ -546,7 +565,8 @@ src/riscv/     cycletime.ts (chapter 14: the single-cycle CPU on GateSim over ra
                typed arrays, one switch, ~90 MIPS on Doom; RAM inline, other regions through overridable load / store / ioRead /
                ioWrite; no F; tests/fastiss.test.ts: lock step over riscv-tests and random programs), iss64.ts (ISS64: RV64I / M user level, BigInt registers, doubleword memory as word pairs;
                decode / disasm / assemble take xlen 64: INSTRS64, li64; programs64.ts its samples; benchprograms.ts benchSource(b, 64)), iss.ts (golden model; `system: true` adds MMIO, CSRs, traps,
-               interrupts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), cohmodel.ts (CohModel: the coherent dual-core's cycle-exact timing model, its header the spec the gates follow; harts' loads and stores go through its cache data, so the variant without snooping reproduces a stale read; invariants(): SWMR), cohprograms.ts (COH_PROGRAMS), cohfuzz.ts (seeded random programs with shared lines, conflict misses and lr / sc loops), cohrun.ts (runCoherent: a program to halt on the model, the numbers chapter 27 quotes; lineStates); lr.w / sc.w in isa / asm / ISS (a reservation on the 16-byte line: ISS.resValid / resLine; the caches' evictions and snooped invalidations are the model's to apply), narrate.ts (narrateInstr(regs before, StepInfo): one instruction in the single-cycle datapath unit by unit with its pollirq.ts (chapter 20: pollIrqSource / runPollIrq / crossover: a polling and a timer-interrupt program run on the system-mode ISS, cycles, work and latency measured; sysprograms also has poll and nested),
+               interrupts; `vm: true` on top: privilege M / S / U, Sv32 walks (A / D software-managed), sret, sfence.vma, S CSRs, ISS.priv / lastWalk / walk(),
+               header = the spec; Spike config `vm`, tests/iss-vm.test.ts; `mmio: true` only the console / LEDs / switches, decoded exactly, other I/O dropped; `m: true` makes M legal in system mode, divides advance mtime by 34), programs.ts / sysprograms.ts / mprograms.ts / pmprograms.ts / cprograms.ts / fprograms.ts / ioprograms.ts (samples; ioprograms: the sandbox computer's), multi.ts (MultiISS: N harts, shared memory, same arbitration), cohmodel.ts (CohModel: the coherent dual-core's cycle-exact timing model, its header the spec the gates follow; harts' loads and stores go through its cache data, so the variant without snooping reproduces a stale read; invariants(): SWMR), cohprograms.ts (COH_PROGRAMS), cohfuzz.ts (seeded random programs with shared lines, conflict misses and lr / sc loops), cohrun.ts (runCoherent: a program to halt on the model, the numbers chapter 27 quotes; lineStates); lr.w / sc.w in isa / asm / ISS (a reservation on the 16-byte line: ISS.resValid / resLine; the caches' evictions and snooped invalidations are the model's to apply), narrate.ts (narrateInstr(regs before, StepInfo): one instruction in the single-cycle datapath unit by unit with its pollirq.ts (chapter 20: pollIrqSource / runPollIrq / crossover: a polling and a timer-interrupt program run on the system-mode ISS, cycles, work and latency measured; sysprograms also has poll and nested),
                values; narrateCycle(PipeSnap, wordAt): each pipeline stage this cycle, with why it forwards, stalls or flushes; the
                CPU panel's and the sandbox CPU drawer's Narrate section; tests/narrate.test.ts: next pc and written value equal the
                golden model's over the sample programs), ilp.ts (chapter 26: classify(word) → class /
@@ -751,7 +771,9 @@ src/riscv/rv16/ isa16.ts (fields, encode / decode / disasm), asm16.ts, iss16.ts 
                one memory taking turns, warp 0 first, wasted turns counted; bar waits for the other warp or its end (mask 0);
                stepWarp(w) for other issue orders; raster: lane 0's stores to 0xFFF0 … 0xFFF6 draw at once into 0xF000, draws
                listed), randprog.ts (seeded random
-               programs for fuzzing cores)
+               programs for fuzzing cores); custom16.ts (your own instructions: R-type rows rd ← f(rs1, rs2) in OPX's free funct3 values, the
+               4-bit opcode being full; decode16 / disasm16 / assemble16 / Iss16({ custom }) take them, lib/rv16/cpu.ts control16(rows) is CTL16
+               itself without rows; tests/rv16-custom.test.ts pins every rv16 part's and campaign answer's fingerprint: scripts/rv16-fp.ts --write)
 src/isa/       Custom ISA: table.ts (IsaDoc: instructions as mnemonic + operand letters + bit pattern, operand kinds reg / enum
                / imm / addr; IsaTable: assemble, disasm (most specific pattern), fields, words, problems; sanitizeIsa),
                presets.ts (ISA4_PRESET: the 4-bit ISA as a table, equal to asm4 / disasm4 on every word), isa.ts (Isa:
@@ -1220,7 +1242,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
                  the search's `>` action; Apply = setRef in one undo step
   owninstr.ts    Custom instructions… (the CPU drawer's Custom…, a ROM's program editor): up to three rows on an
                  rv32i_core, their problems, data path, signals and generated golden-model code, the control unit's cost
-                 measured; Apply (one undo step): the core part becomes { core: { custom } } ({ core: { custom, pipe: true } } on rv32i_pipe_core, lib/pipeline.ts ports), the ROM ref gets a copy; the controls (LINES, dataPath, issCode) live in widgets/ownrow.ts
+                 measured; Apply (one undo step): the core part becomes { core: { custom } } ({ core: { custom, pipe: true } } on rv32i_pipe_core, lib/pipeline.ts ports), the ROM ref gets a copy; the controls (LINES, dataPath, issCode) live in widgets/ownrow.ts;
+                 owninstr16.ts the same dialog on the RV16 reference core / pipeline (rv16_cpu, rv16_pipe_111): format fixed to R, a free OPX funct3
+                 per row, Apply = { core16: { custom, pipe? } } and the RV16 ROM's custom16 copy; cpu16.ts's monitor runs the rows
   cpuui.ts       plugin: the CPU panel (docked drawer: status, listing with the PC and pipeline stages, a
                  click marks the instruction's parts (insthw names) and colours its field wires
                  (instrMarks → wires by net), field breakdown (widgets/instrfields), pipeline diagram
@@ -1327,6 +1351,10 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  with it and never passes); the learner accuses with the fault brush (B), right when challenges.ts symptomsDiffer finds
                  every output of every case the same (the CPU bench: the same net); NodeProgress.wrong, par { wrong: 0 }: a star each;
                  on the canvas EditorSim.setHidden, Editor.bodyLock (challengeui.ts); tests/breakit.test.ts
+                 The core CPU chapters (cpu, pipeline, multicycle, traps, cache) end in a deep "find it" step: widgets/findfault.ts findIt
+                 (cpuScene({ planted }): sim/faults.ts withPlanted, the Find the fault panel, Stage.accuser rows lead a wire's menu; right =
+                 accusedRight: a planted fault's exact nets and value; a wrong one answered by riscv/firstwrong.ts on that fault, computed);
+                 tests/findit.test.ts
   levels.ts      levelChallenge(node): the base BuildChallenge with the campaign rule and par, id cp_<node>,
                  chip u_ch_cp_<node>; nodeOfChip; startCandidates / startFrom (a core level begun as a copy of an
                  earlier core level's chip, plus the new pins)
@@ -1750,7 +1778,7 @@ The guide around the prose (ui/pages/chapter.ts, looks.ts; tests/chapter-guide.t
   steps, 4–7 short unique names (tests/chapter-guide.test.ts). Parts only group the steps in their order, so no address or saved
   progress moves; ui/chapterparts.ts draws one segment per part, the status line and the list (the current part open, folded to
   begin with on a phone or a short screen). `deep: true` on a step marks a deep dive: it stays in order and is never hidden or
-  locked, so nothing later may rely on it (no campaign level or other chapter links it, the recap's questions are not about it).
+  locked, so nothing later may rely on it (no campaign level or other chapter links it, the recap's questions are not about it). A chapter without parts may end in deep steps only (tests/chapter-guide.test.ts); they say they are optional.
 
 ## Major changes: mockup first
 

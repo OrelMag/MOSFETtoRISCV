@@ -3,6 +3,7 @@
 
 import { assemble } from '../riscv/asm';
 import type { CustomRow } from '../riscv/custom';
+import type { Custom16Row } from '../riscv/rv16/custom16';
 import { disasm } from '../riscv/isa';
 import { disasmC } from '../riscv/rvc';
 import { assemble16 } from '../riscv/rv16/asm16';
@@ -162,8 +163,8 @@ function build6502(src: string, k: number): BuiltProgram {
 }
 
 /** Build a program image. asm / rv16 / cpu4: that ISA's assembler; hex: one 32-bit word per token; 6502: bytes for a ROM of 2^k. */
-/** custom: an RV32 program's custom instructions (riscv/custom.ts). */
-export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 16, custom: readonly CustomRow[] = [], xlen: 32 | 64 = 32, mac = false): BuiltProgram {
+/** custom: an RV32 program's custom instructions (riscv/custom.ts); custom16: an RV16 program's (riscv/rv16/custom16.ts). */
+export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 16, custom: readonly CustomRow[] = [], xlen: 32 | 64 = 32, mac = false, custom16: readonly Custom16Row[] = []): BuiltProgram {
   if (lang === 'hex') return buildHex(src, mac);
   if (lang === '6502') return build6502(src, k);
   if (lang === 'isa') {
@@ -174,8 +175,8 @@ export function buildProgram(lang: ProgramLang, src: string, isa?: IsaDoc, k = 1
   }
   if (lang === 'rv16') {
     // Word addressed: line addr stays 4 × the word index, like the other languages' listings.
-    const r = assemble16(src);
-    return { words: r.words, errors: r.errors, lines: r.lines.map((l) => ({ addr: 4 * l.addr, word: l.word, text: disasm16(l.word, l.addr), srcLine: l.srcLine })) };
+    const r = assemble16(src, custom16);
+    return { words: r.words, errors: r.errors, lines: r.lines.map((l) => ({ addr: 4 * l.addr, word: l.word, text: disasm16(l.word, l.addr, custom16), srcLine: l.srcLine })) };
   }
   if (lang === 'dsp24') {
     const r = assemble24(src);

@@ -3,6 +3,7 @@
 // Shares number, operand and comment syntax with the RV32 assembler.
 
 import { AsmError, commentStart, parseImm, splitArgs } from '../asm';
+import type { Custom16Row } from './custom16';
 import {
   BY_NAME16, CSRS16, encCSR, encI, encSIMT, encJ, encR, encSB, encSH, encSYS, encU, hiLo, OP16, reg16, SIMT_RS1,
 } from './isa16';
@@ -53,7 +54,8 @@ function sizeOf(op: string, args: string[]): number {
   return 1;
 }
 
-export function assemble16(src: string): AsmResult16 {
+/** custom: the core's own instructions (riscv/rv16/custom16.ts), R-type in OPX's free funct3 values. */
+export function assemble16(src: string, custom: readonly Custom16Row[] = []): AsmResult16 {
   const stmts: Stmt[] = [];
   const labels = new Map<string, number>();
   const errors: { line: number; message: string }[] = [];
@@ -90,7 +92,7 @@ export function assemble16(src: string): AsmResult16 {
   const lines: AsmLine16[] = [];
   for (const st of stmts) {
     try {
-      const out = encode16(st, labels);
+      const out = encode16(st, labels, custom);
       if (out.length !== st.size) throw new AsmError('internal: size mismatch');
       out.forEach((w, k) => {
         if (st.data) dataMem.set(st.addr + k, w & 0xffff);
@@ -113,7 +115,7 @@ export function assemble16(src: string): AsmResult16 {
   return { words, data: dataMem, lines, labels, errors };
 }
 
-function encode16(st: Stmt, labels: Map<string, number>): number[] {
+function encode16(st: Stmt, labels: Map<string, number>, custom: readonly Custom16Row[]): number[] {
   const { op, args, addr } = st;
   const need = (n: number) => {
     if (args.length !== n) throw new AsmError(`${op} expects ${n} operand${n === 1 ? '' : 's'}, got ${args.length}`);
@@ -214,6 +216,8 @@ function encode16(st: Stmt, labels: Map<string, number>): number[] {
     });
   }
 
+  const row = custom.find((r) => r.name === op);
+  if (row) { need(3); return [encR(OP16.OPX, row.f3, reg(args[0]), reg(args[1]), reg(args[2]))]; }
   const spec = BY_NAME16.get(op);
   if (!spec) throw new AsmError(`unknown instruction "${op}"`);
   switch (spec.fmt) {

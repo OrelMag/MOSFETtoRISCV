@@ -1,7 +1,7 @@
 // Our golden model against Spike on random programs, commit by commit (tests/verify/spike.ts, docs/VERIFICATION.md).
 //   npx vite-node scripts/spike-oracle.ts [config ids…] [--seeds <from>..<to>] [--n <units>] [--spike <path>]
 //     [--jobs <n>] [--out <dir>] [--self]
-// Configs: i im if user sys sys-m imc, and rv64im (ISS64: tests/verify/spike64.ts) (default all). --out keeps each failure's program, ELF and Spike log, and a
+// Configs: i im if user sys sys-m imc vm (M / S / U + Sv32), and rv64im (ISS64: tests/verify/spike64.ts) (default all). --out keeps each failure's program, ELF and Spike log, and a
 // summary.json, for a CI artifact. --self compares the ISS with a Spike-format log of itself (no Spike needed:
 // the plumbing alone). Exits 1 on a difference.
 import { execFile } from 'node:child_process';

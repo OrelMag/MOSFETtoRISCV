@@ -11,6 +11,7 @@
 
 import type { IsaDoc } from '../isa/table';
 import type { CustomRow } from '../riscv/custom';
+import type { Custom16Row } from '../riscv/rv16/custom16';
 import type { Microprogram } from '../lib/multicycle';
 import { instPort, type ExitDir, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
@@ -343,6 +344,8 @@ export type PartRef =
       isa?: IsaDoc;
       /** lang 'asm': the CPU's custom instructions (riscv/custom.ts), a copy of its core's rows, so the program assembles. */
       custom?: CustomRow[];
+      /** lang 'rv16': the RV16 core's own instructions (riscv/rv16/custom16.ts), a copy of its core's rows, so the program assembles. */
+      custom16?: Custom16Row[];
       /** lang 'asm' / 'hex': the MAC core's mac, mac2, clracc and racc assemble and disassemble (riscv/isa.ts MAC_INSTRS). */
       mac?: true;
       /** lang 'asm' (or hex), byte addressed: the C extension. The ROM answers at any even address with the 32 bits starting there (lib/rvc.ts cWindowRom); `.option rvc` needs it. */
@@ -353,6 +356,8 @@ export type PartRef =
   | { core: { custom: CustomRow[]; /** The pipelined core (rv32i_pipe_core) instead of the single-cycle one. */ pipe?: true;
       /** Pipelined only: the M extension inside (rv32im_pipe_core). */ m?: true;
       /** Pipelined only: a write-through data cache in M in front of the memory port (rv32i_pipe_dc_core; not with m). */ dcache?: true } }
+  /** The campaign's RV16 reference core (rv16_cpu) or its pipeline (rv16_pipe_111) with custom instructions: rows in OPX's free funct3 values. */
+  | { core16: { custom: Custom16Row[]; /** The five-stage pipeline instead of the single-cycle core. */ pipe?: true } }
   /** The multicycle CPU's microprogrammed controller (mc_micro) with edited microcode: its ROMs hold this program (lib/ucode.ts). */
   | { ucode: Microprogram }
   /** Read-write memory: 2^k words of w bits; `init`: the words it holds at power-on ('to 0' mode). */
@@ -603,6 +608,21 @@ export function portCoreOf(ref: PartRef): { pipe: boolean; m: boolean; dcache: b
   if (ref.lib === 'rv32i_core') return { pipe: false, m: false, dcache: false, custom: [] };
   const p = PIPE_CORE_LIB.exec(ref.lib);
   return p ? { pipe: true, m: !!p[1], dcache: !!p[2], custom: [] } : null;
+}
+
+/** The RV16 cores that take custom rows: the reference single-cycle core and the five-stage pipeline (no traps: their illegal-instruction detector would refuse a row). */
+export const RV16_CUSTOM_LIBS = { single: 'rv16_cpu', pipe: 'rv16_pipe_111' } as const;
+
+/** What a placed RV16 core that takes custom rows is (null: another part), with its rows. */
+export function rv16CoreOf(ref: PartRef): { pipe: boolean; custom: Custom16Row[] } | null {
+  if ('core16' in ref) return { pipe: !!ref.core16.pipe, custom: ref.core16.custom };
+  if (!('lib' in ref)) return null;
+  return ref.lib === RV16_CUSTOM_LIBS.single ? { pipe: false, custom: [] } : ref.lib === RV16_CUSTOM_LIBS.pipe ? { pipe: true, custom: [] } : null;
+}
+
+/** The part for an RV16 core: its library id without rows, else { core16 }. */
+export function rv16CoreRef(o: { pipe: boolean; custom: Custom16Row[] }): PartRef {
+  return o.custom.length ? { core16: { custom: o.custom, ...(o.pipe ? { pipe: true as const } : {}) } } : { lib: o.pipe ? RV16_CUSTOM_LIBS.pipe : RV16_CUSTOM_LIBS.single };
 }
 
 /** The part for a port core: a library id while it has no custom rows, else { core } (m and dcache only on the pipelined one, not together). */

@@ -10,7 +10,7 @@
 // flip once: no rewrite; the stored bit is written in the running simulation (flipBits, flipRamBit).
 // No faults: applyFaults returns the design itself.
 
-import type { FlatDesign, FlatLeaf, HierNode } from './flatten';
+import { findNode, type FlatDesign, type FlatLeaf, type HierNode } from './flatten';
 import { B0, B1, type Bit, type ComponentDef } from './types';
 import type { Sim } from './sim';
 import type { RamState } from '../lib/bigmem';
@@ -125,6 +125,30 @@ export const seenNets = (d: FlatDesign, nets: readonly number[]): number[] => (d
 export function plantedDef(def: ComponentDef, at: (node: HierNode) => FlatFault[], tag = 'planted'): ComponentDef {
   return { ...def, id: `${def.id}_${tag}`, planted: at };
 }
+
+/** A planted fault: a net of the chip's top level named by a part's port ('fa2.cin'), stuck at 0 or 1; `bit`: one bit of a bus. */
+export interface PlantedFault {
+  kind: 'stuck0' | 'stuck1';
+  end: string;
+  bit?: number;
+}
+
+/** The flat nets a planted fault sits on, from the chip's node (null: no such part or port). */
+export function plantedNets(node: HierNode, p: PlantedFault): number[] | null {
+  const dot = p.end.lastIndexOf('.');
+  const nets = findNode(node, [p.end.slice(0, dot)])?.ports[p.end.slice(dot + 1)];
+  if (!nets) return null;
+  if (p.bit === undefined) return [...nets];
+  return nets[p.bit] === undefined ? null : [nets[p.bit]];
+}
+
+/** The planted faults on a chip's node, as flat faults. */
+export const plantedFaults = (node: HierNode, planted: readonly PlantedFault[]): FlatFault[] =>
+  planted.flatMap((p) => { const nets = plantedNets(node, p); return nets ? [{ kind: p.kind, nets }] : []; });
+
+/** The chip with a break-it level's faults planted in it, wherever a check flattens it. */
+export const withPlanted = (def: ComponentDef, planted: readonly PlantedFault[]): ComponentDef =>
+  plantedDef(def, (node) => plantedFaults(node, planted));
 
 /** A stable text of the faults, for a simulation's key. '' with none. */
 export const faultsKey = (faults: readonly FlatFault[]): string =>
