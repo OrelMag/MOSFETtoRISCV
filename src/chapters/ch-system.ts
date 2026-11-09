@@ -97,7 +97,7 @@ export const chIO: Chapter = {
         and raises <strong><span data-show="dec bsel">byte enables</span></strong> only for the addressed bytes: <code>sb</code> to address 2 enables byte 2, <code>sh</code>
         to address 2 enables bytes 2–3. A halfword at an odd address, or a word not on a 4-byte boundary, is
         <span data-show="mis"><em>misaligned</em></span>. RISC-V lets an implementation either handle a misaligned access (two memory accesses stitched together) or
-        <span data-ahead="traps">trap (stop and jump to a handler routine in software; chapter 20)</span> and leave it to software; the complete CPU traps.</p>
+        <span data-ahead="traps">trap (stop and jump to a handler routine in software; chapter ${numOf('traps')})</span> and leave it to software; the complete CPU traps.</p>
         <p>Replication is the cheap part of the idea: instead of steering the byte to the right lane, put it on all four and let the enables decide which lane listens. The data path is then four copies of the same wires, and the byte never has to reach a chosen lane. The only data multiplexer picks by size alone (byte copies, half copies or the word), not by address; it is most of the unit's cost. The enables are a small
         decoder of the low two address bits and the size: ${nd(STORE_ALIGN)} NANDs for the whole unit. It also produces <em>misaligned</em>, which the CPU turns into a trap.</p>
         <div class="try">Set size = 0 (byte) and step addr through 0–3: one enable bit moves across.</div>`,
@@ -244,16 +244,16 @@ export const chIO: Chapter = {
       scene: () => cpuScene({ source: sys('leds'), system: true }),
       tour: {
         beats: [
-          { title: 'Switches at 0x5A', reset: true, set: { switches: 0x5a }, cycles: 5, show: ['io'], expect: { leds: 0x5a, pcOut: 20 },
-            say: '<p>With the switches at 0x5A, one pass of the loop (<code>lw</code>, two instructions on a copy that is never used, <code>sw</code>) has copied them to the LEDs: leds = {v:leds} ({b:leds}).</p>' },
+          { title: 'Switches at 0x5A', reset: true, set: { switches: 0x5a }, cycles: 3, show: ['io'], expect: { leds: 0x5a, pcOut: 12 },
+            say: '<p>With the switches at 0x5A, one pass of the loop (<code>lw</code>, then <code>sw</code>) has copied them to the LEDs: leds = {v:leds} ({b:leds}).</p>' },
           { title: 'Flip them', set: { switches: 0xa5 }, cycles: 1, show: ['io'], expect: { leds: 0x5a },
             say: '<p>The switches are now 0xA5, but the LEDs still show {v:leds}: the program has not read the switches again yet. Nothing links the two except the loop.</p>' },
-          { title: 'The loop catches up', cycles: 4, show: ['io'], expect: { leds: 0xa5, pcOut: 20 },
-            say: '<p>One more pass and the LEDs follow: leds = {v:leds}. The response time is 4 to 8 cycles here, depending on where the loop was.</p>' },
+          { title: 'The loop catches up', cycles: 2, show: ['io'], expect: { leds: 0xa5, pcOut: 12 },
+            say: '<p>One more pass and the LEDs follow: leds = {v:leds}. The response time is 2 to 4 cycles here, depending on where the loop was.</p>' },
         ],
       },
       more: {
-        derive: `<p>The loop is five instructions (<code>lw</code>, <code>not</code>, <code>andi</code>, <code>sw</code>, <code>j</code>), so the LEDs follow the switches in 4 to 8 cycles: a flip just after the <code>lw</code> samples waits for the next pass, then for its <code>sw</code>. At the scene's 2 Hz clock that is visible; at a hardware clock of tens of MHz it is not.</p>`,
+        derive: `<p>The loop is three instructions (<code>lw</code>, <code>sw</code>, <code>j</code>), so the LEDs follow the switches in 2 to 4 cycles: a flip just before the <code>lw</code> shows two cycles later, one just after it waits for the next pass, then for its <code>sw</code>. At the scene's 2 Hz clock that is visible; at a hardware clock of tens of MHz it is not.</p>`,
         pitfall: `<p>Expecting an input to be latched. If the switches change and change back between two loads, the program never sees it. Real devices that must not miss events latch them in a status register, or raise an interrupt (the next chapter).</p>`,
       },
       tries: [(st) => st.value('leds') > 0],
@@ -279,7 +279,7 @@ export const chTraps: Chapter = {
       'A trap: PC ← mtvec, mepc ← the address of the trapping instruction, mcause ← the reason, MPIE ← MIE, MIE ← 0. <code>mret</code> jumps to mepc and restores MIE. mtvec\'s low two bits are its MODE: 0 direct (every trap to BASE), 1 vectored (interrupt <em>n</em> to BASE + 4<em>n</em>); here MODE is wired to 0.',
       'mcause: 2 illegal instruction, 3 breakpoint, 4 misaligned load, 6 misaligned store, 11 ecall; interrupts set bit 31 (0x80000007 timer, 0x8000000B external). A trapping instruction writes nothing.',
       'An interrupt is pending in mip while its source holds, and taken at the next instruction boundary only if enabled in mie and globally by mstatus.MIE.',
-      'Priority: interrupts (external, then timer), then illegal instruction, ebreak, ecall, misaligned fetch, load, store. CSR unit, trap unit and system decoder: about 10 000 NANDs.',
+      `Priority: interrupts (external, then timer), then illegal instruction, ebreak, ecall, misaligned fetch, load, store. CSR unit, trap unit and system decoder: about ${kNands(TRAP_NANDS)} NANDs.`,
       'The hardware saves only the PC and the cause: a handler saves every register it uses (mscratch gives it a register to swap with sp), nests only by saving mepc and mcause and setting MIE again, and an idle loop waits in <code>wfi</code>. Machine mode is the only mode here; with user mode, mstatus.MPP says where a trap came from and ecall\'s cause is 8 from U, 11 from M.',
       `Polling spends cycles on looks and reacts at its next look; an interrupt spends a trap, a handler and an mret per event and reacts at the next instruction boundary. Measured here the crossing is at one event per ${crossover(6)} cycles with 6 instructions of work between polls.`,
       'A bare interrupt line forgets a pulse that ends while MIE = 0; an interrupt controller holds a pending bit per source until it is claimed, offers the highest enabled one, and clears it on the claim. Vectored mtvec sends interrupt <em>n</em> to BASE + 4<em>n</em> with five ANDs and four ORs.',
@@ -341,7 +341,7 @@ export const chTraps: Chapter = {
         <p>So far the CPU runs one program that never stops to ask anything. A real computer needs three ways out of it. An instruction that cannot run (an
         undefined word, a misaligned load) must stop somewhere sensible instead of doing something undefined. A program must be able to ask a more privileged
         one, the operating system, to do work for it. And a device must be able to say "now", so the program does not have to keep reading
-        <a href="#/c/io/0">chapter 19</a>'s switches in a loop to notice that one flipped. All three are one mechanism, a <strong>trap</strong>: the hardware
+        <a href="#/c/io/0">chapter ${numOf('io')}</a>'s switches in a loop to notice that one flipped. All three are one mechanism, a <strong>trap</strong>: the hardware
         saves where it was and why, and jumps to a handler written in software. That takes a few registers of its own, which is where this chapter starts.</p>
         <p>A second, separate register space: <strong>CSRs</strong>, addressed by a 12-bit number and accessed only with
         <code>csrrw</code> (swap), <code>csrrs</code> (set bits) and <code>csrrc</code> (clear bits), plus immediate forms. This CPU implements a
@@ -529,7 +529,7 @@ export const chTraps: Chapter = {
         ],
       },
       more: {
-        derive: `<p>Interrupt latency is the time to the next instruction boundary. At one instruction a cycle that is one edge: the instruction that was about to run (mepc) is held back, the trap takes its place, and after <code>mret</code> it runs. Nothing in the main loop is lost or repeated. With a multi-cycle or pipelined core the boundary can be tens of cycles away; with a divide in progress, as in chapter 21, it waits for the divide.</p>`,
+        derive: `<p>Interrupt latency is the time to the next instruction boundary. At one instruction a cycle that is one edge: the instruction that was about to run (mepc) is held back, the trap takes its place, and after <code>mret</code> it runs. Nothing in the main loop is lost or repeated. With a multi-cycle or pipelined core the boundary can be tens of cycles away; with a divide in progress, as in chapter ${numOf('muldiv')}, it waits for the divide.</p>`,
         pitfall: `<p>Holding the IRQ button across the handler. The line is checked at every boundary and the handler clears nothing at the source, so if irq stayed high the CPU would take the interrupt again at the first boundary after <code>mret</code>. The scene\'s button is a one-cycle pulse for that reason; a real device holds its line until software acknowledges it.</p>`,
       },
       challenge: {
@@ -546,7 +546,7 @@ export const chTraps: Chapter = {
       body: `
         <p>Seven 2:1 multiplexer pairs in a chain build the <span data-show="c0 c1 c2 c3 c4 c5 c6">cause</span> and
         <span data-show="v0 v1 v2 v3 v4 v5 v6">mtval</span>; the trap signal is <span data-show="any">the OR of all sources</span>.
-        Together with the CSR unit and the system decoder this is about 10 000 NANDs: privilege and interrupts are not free, but
+        Together with the CSR unit and the system decoder this is about ${kNands(TRAP_NANDS)} NANDs: privilege and interrupts are not free, but
         they are what turns a calculator into a computer that can run an operating system.</p>
         <p>Measured: the trap unit is ${nd(TRAP_UNIT)} NANDs, the CSR unit ${nd(CSR_UNIT)} and the system decoder ${nd(SYS_DECODE)}, together ${kNands(TRAP_NANDS)} of the ${kNands(sysNands(false).core)} in the machine without its program ROM.</p>`,
       scene: () => ({ root: TRAP_UNIT, inputs: { illegal: 1 } }),
@@ -570,6 +570,40 @@ export const chTraps: Chapter = {
         derive: `<p>The chain is a priority encoder written as multiplexers: cause<sub>k</sub> = (source k asserted) ? code<sub>k</sub> : cause<sub>k−1</sub>, starting from the lowest priority. The same select picks tval. trap = OR of all sources, so a cycle with no source leaves cause 0 and no trap. Seven stages of a 32-bit 2:1 mux for each of cause and tval account for most of the unit\'s ${nd(TRAP_UNIT)} NANDs.</p>`,
         pitfall: `<p>Reading cause when trap is 0. The chain's output is only meaningful with trap = 1; with no source the multiplexers all pass 0. In software, mcause is read in the handler, never otherwise.</p>`,
         numbers: `<table class="mini"><tr><th>unit</th><th>NANDs</th></tr><tr><td>CSR unit</td><td>${nd(CSR_UNIT)}</td></tr><tr><td>trap unit</td><td>${nd(TRAP_UNIT)}</td></tr><tr><td>system decoder</td><td>${nd(SYS_DECODE)}</td></tr><tr><td>together</td><td>${TRAP_NANDS}</td></tr></table>`,
+      },
+    },
+    {
+      title: 'Precise traps in a pipeline',
+      body: `
+        <p>The single-cycle CPU of this chapter finishes one instruction before it starts the next, so a trap always falls between two instructions.
+        The pipeline of <a href="#/c/pipeline/0">chapter ${numOf('pipeline')}</a> holds five at once. A trap there is <strong>precise</strong> when it looks the same:
+        every instruction older than the trapping one has finished, none younger has changed a register, memory or a CSR, and mepc names
+        the trapping instruction. A handler can then fix the cause and return, and the program cannot tell it was interrupted.</p>
+        <p>The rule that makes it work is to take every trap in one stage. The campaign's pipeline (<a href="#/campaign/n/y_ptrap">Pipeline V: exceptions</a>,
+        16-bit, but the same design) takes them in E:</p>
+        <ul>
+        <li><strong>The trapping instruction does nothing.</strong> It has written nothing yet (register writes happen in W, stores in M), and the trap
+        clears its own register write and store enable on the way out of E.</li>
+        <li><strong>Older instructions finish.</strong> The ones in M and W go on as usual: their results are part of the state the handler sees.</li>
+        <li><strong>Younger instructions are flushed.</strong> The two behind it, in F/D and D/E, are cleared exactly as a taken branch clears them, and the PC
+        loads mtvec instead of a branch target: the trap is one more input of the redirect.</li>
+        <li><strong>Bubbles never trap.</strong> A stall or a flush puts an all-zero word into the pipeline, which decodes as an illegal instruction.
+        So every stage carries a <em>valid</em> bit, and only a valid instruction may trap. An interrupt waits for a valid instruction in E too:
+        a bubble has no pc of its own to put in mepc.</li>
+        </ul>
+        <p>E works because every exception of this ISA is known by the end of decode: an illegal word, ecall, ebreak. A cause found later, a
+        misaligned or faulting load in M say, is carried down the pipeline with its instruction as a flag and acted on at one commit point,
+        so that everything younger can still be flushed. Out-of-order cores do the same at the head of the reorder buffer
+        (<a href="#/c/ooo/0">chapter ${numOf('ooo')}</a>).</p>
+        <p>The price, measured on the campaign's cores: precise exceptions take Pipeline IV (forwarding, the load-use stall and branch flushes) from 9218 to 12 031 NANDs (the CSR file, the
+        system decoder, the valid bits and the trap path) and its period from 78 to 81 delays; the external interrupt on top adds 7 NANDs.</p>`,
+      challenge: {
+        kind: 'quiz',
+        question: 'Pipeline V takes traps in E. An illegal word is in E, an <code>lw</code> in M and an <code>add</code> in D. Which of them changes the machine\'s state?',
+        options: ['Only the lw: it finishes, the add is flushed, the illegal word writes nothing', 'None: a trap freezes the whole pipeline', 'The lw and the add: the add was already decoded', 'All three'],
+        answer: 0,
+        explain: 'Precise: everything older than the trap finishes (the lw writes its register in W), nothing younger runs (the add is flushed with F/D), and the trapping instruction itself writes nothing; mepc holds its address.',
+        why: ['', 'Freezing the lw would lose a result the program has already been promised: an older instruction must finish.', 'Decoding changes no state; the add is flushed before it writes anything, as behind a taken branch.', 'The illegal instruction does not run: the trap clears its writes.'],
       },
     },
   ],

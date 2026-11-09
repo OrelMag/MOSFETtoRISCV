@@ -80,7 +80,7 @@ export const chPipePay: Chapter = {
     {
       title: 'Look-ahead forwarding',
       body: `
-        <p><a href="#/c/pipeline/0">Chapter 17</a>'s pipeline did not pay. Its Execute stage keeps almost the whole single-cycle path: 145 NAND delays with ripple
+        <p><a href="#/c/pipeline/0">Chapter ${numOf('pipeline')}</a>'s pipeline did not pay. Its Execute stage keeps almost the whole single-cycle path: 145 NAND delays with ripple
         adders against at most 21 for the other stages, so at CPI 1.34 on fib an instruction takes about 194 delays, against the single-cycle CPU's 155. Kogge–Stone
         adders bring the period to 93, and E is still four times longer than its neighbours. Time per instruction is CPI × period, and this chapter works on
         both factors: first take the forwarding decision and the branch decision off E's path (a shorter period), then predict branches (fewer cycles lost to
@@ -153,7 +153,7 @@ export const chPipePay: Chapter = {
         derive: `<p>Two paths compete for the clock. In the basic pipeline a branch goes forwarding mux → ALU subtract → flags → result mux → zero detect → next-PC → flush, all in E. With a comparator it is forwarding mux → comparator (${CMP_DEPTH}) → flush,
           the ALU\'s ${ALU_KS_DEPTH} delays replaced by the comparator\'s ${CMP_DEPTH}. Both adders are Kogge–Stone, so the rest of the ALU path (result mux, zero detector) is what the comparator removes. The cost is the comparator (${fmt(CMP)} NANDs) and, for <code>jalr</code>, an adder
           for rs1 + imm (${fmt(JADD)}) that no longer shares the ALU.</p>`,
-        pitfall: `<p>Calling the old critical path "the ALU" and speeding up the ALU. After the adder swap of chapter 16 the ALU is not the only part of the branch path, and with the comparator the next critical path (see the question below) is forwarded operand →
+        pitfall: `<p>Calling the old critical path "the ALU" and speeding up the ALU. After the adder swap of chapter ${numOf('fastadd')} the ALU is not the only part of the branch path, and with the comparator the next critical path (see the question below) is forwarded operand →
           comparator → flush. Speed up the path the timing panel names, not the block you suspect.</p>`,
         real: `<p>Cores with a dedicated branch unit and the branch resolved in its own stage are the norm; the comparison is among the first things done in E. Compare-and-branch fusion goes further and treats the two instructions as one
           operation in the pipeline.</p>`,

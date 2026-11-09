@@ -5,7 +5,7 @@
 .lv-page { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--bg); }
 .lv-notice { display: grid; place-items: start center; padding: 40px 16px; }
 .lv-notice .panel { max-width: 520px; }
-.lv-notice .panel h3 { margin-top: 0; }
+.lv-notice .panel h1 { margin-top: 0; font-size: 1.17em; }
 .lv-notice-go { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .lv-bar {
@@ -43,7 +43,7 @@
 .lv-tabs small { font: 10.5px var(--font-mono); color: var(--muted); margin-left: 4px; }
 .lv-sidebody { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 16px 24px; display: grid; gap: 14px; align-content: start; font-size: 13.5px; color: var(--text-2); line-height: 1.55; }
 .lv-sidebody section { min-width: 0; }
-.lv-sidebody h4 { margin: 0 0 4px; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.lv-sidebody h3 { margin: 0 0 4px; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .lv-sidebody p { margin: 0; }
 .lv-sidebody b { color: var(--text); }
 .lv-sidebody code { font-family: var(--font-mono); font-size: 0.92em; }
@@ -59,8 +59,8 @@
 .lv-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; padding: 2px 9px; border-radius: 999px; border: 1px solid var(--border); color: var(--text); text-decoration: none; background: var(--surface); }
 .lv-chip:hover { border-color: var(--accent); color: var(--accent); }
 .lv-tips li { margin: 4px 0; }
-.lv-cx h4 { text-transform: none; letter-spacing: 0; font-size: 13.5px; color: var(--text); }
-.lv-cx.locked h4 { color: var(--muted); }
+.lv-cx h3 { text-transform: none; letter-spacing: 0; font-size: 13.5px; color: var(--text); }
+.lv-cx.locked h3 { color: var(--muted); }
 .lv-more { display: inline-flex; align-items: center; gap: 2px; margin-top: 4px; color: var(--accent); font-weight: 600; font-size: 12.5px; text-decoration: none; }
 
 /* The editor in level mode: no props column; properties float over the canvas while something is selected or pinned. */
@@ -103,7 +103,7 @@
   width: min(580px, 100%); max-height: 100%; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow-lg); padding: 20px 22px; display: grid; gap: 14px; font-size: 13.5px; color: var(--text-2);
 }
-.lv-result h3 { margin: 0; font-size: 20px; color: var(--text); display: flex; align-items: center; gap: 12px; }
+.lv-result > h3 { margin: 0; font-size: 20px; color: var(--text); display: flex; align-items: center; gap: 12px; }
 .lv-big { color: var(--warn); letter-spacing: 3px; font-size: 22px; }
 .lv-res-table { border-collapse: collapse; width: 100%; font-size: 12.5px; }
 .lv-res-table th { text-align: left; font: 600 11px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--border); }
@@ -186,7 +186,7 @@
 .cx-cols { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 22px; align-items: start; }
 /* one track no wider than the column: a worked example's long <pre> scrolls instead of widening every section under the figure */
 .cx-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
-.cx-entry h4 { margin: 0 0 5px; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.cx-entry h3 { margin: 0 0 5px; font: 600 11px var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 .cx-prose { font-size: 14.5px; line-height: 1.6; color: var(--text); max-width: 72ch; }
 .cx-example { font-size: 14px; }
 .cx-example pre { overflow-x: auto; }
@@ -257,6 +257,7 @@
 .lv-verdict.ok { background: var(--good-soft); color: var(--good); font-weight: 600; display: flex; align-items: center; gap: 4px; }
 /* the codex guide: where to learn it and how it connects, the lead sentence, figures, Check yourself, previous / next */
 .cx-rows { display: grid; gap: 6px; margin-top: 12px; }
+.cx-note { margin: -2px 0 2px; font-size: 12px; line-height: 1.4; color: var(--muted); }
 .cx-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .cx-row-k { font: 600 11px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); min-width: 78px; }
 .cx-idea p { margin: 0 0 0.8em; }

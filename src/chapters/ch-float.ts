@@ -33,6 +33,16 @@ function u32(name: 'add' | 'mul' | 'fma'): { n: number; d: number } {
   }
   return r;
 }
+/** The float32 adder's normalize & round (28-bit significand): its round and pack stages against the whole unit, measured once. */
+let nrMemo: { part: number; all: number } | undefined;
+export function nrShare(): { part: number; all: number } {
+  if (!nrMemo) {
+    const d = normRound(F32, 28), n = d.netlist!();
+    const p = (k: string) => nands(n.instances.find((i) => i.name === k)!.def as ComponentDef);
+    nrMemo = { part: p('rnd') + p('pack'), all: nands(d) };
+  }
+  return nrMemo;
+}
 /** The bits of a float32 as 0x…, from the host's Math.fround. */
 const hex32 = (x: number) => `0x${new Uint32Array(new Float32Array([x]).buffer)[0].toString(16).toUpperCase().padStart(8, '0')}`;
 /** The running sums of ten additions of float32 0.1, each rounded to float32. */
@@ -385,7 +395,7 @@ export const chFloat: Chapter = {
         <p>Underflow is subtle. A result is <span data-show="rnd"><em>tiny</em></span> if it lies below 2<sup>emin</sup>; RISC-V checks tininess <em>after rounding</em>,
         as if the exponent were unbounded. And UF is raised only if the tiny result is also inexact: a subnormal computed exactly raises nothing. Detecting
         "after rounding" costs <span data-show="rnd">a second rounding decision</span>: with G as the last bit and the bit below it (R) as the new guard, would the M + 1 kept
-        bits carry into 2<sup>emin</sup>? Modes and flags add about 250 NANDs (4.5 %) to the float32 normalize &amp; round unit. With its incrementers
+        bits carry into 2<sup>emin</sup>? Its last two stages, the rounding (every mode, the increment, tininess) and the packing (overflow to ∞ or the largest finite, the flags), are ${groupDigits(nrShare().part)} of the float32 adder's ${groupDigits(nrShare().all)} normalize &amp; round NANDs. With its incrementers
         and overflow test made parallel (see the pipelined FPU at the end of the chapter), the multiplier's instance (48-bit significand) is 6120 NANDs and
         102 NAND delays deep.</p>
         <div class="try">exp = 0, mant = 1111 0000: 1.111 × 2<sup>−7</sup>. It rounds to 0x08 = 2<sup>−6</sup>, the smallest normal, yet flags = UF NX (0x03): with an unbounded exponent it is exact at 1.111 × 2<sup>−7</sup>, below 2<sup>−6</sup>. Now mant = 1111 1100: the same result, but only NX. In RTZ (rm = 1) the first stays subnormal, 0x07.</div>`,
@@ -418,7 +428,7 @@ export const chFloat: Chapter = {
       title: 'Multiplication',
       body: `
         <p>Multiplication is simpler than addition: no alignment. <span data-show="sign">The sign is an XOR</span>, <span data-show="exp">the exponents add</span>
-        (minus one bias), and the significands go through <span data-show="mul">a tree multiplier</span> from <a href="#/c/muldiv/0">chapter 21</a>. The product of two
+        (minus one bias), and the significands go through <span data-show="mul">a tree multiplier</span> from <a href="#/c/muldiv/0">chapter ${numOf('muldiv')}</a>. The product of two
         numbers in [1, 2) lies in [1, 4), so normalization moves it at most one place, unless subnormal inputs leave leading zeros, which
         <span data-show="nr">the shared unit</span> handles anyway. <span data-show="special">∞ × 0 is NaN</span>.</p>
         <div class="try">a = b = 0x3A (1.25): 1.5625 = 1.1001₂ needs 4 fraction bits, an exact tie, so it rounds to the even neighbour 1.100₂ = 1.5 (0x3C). Then 0x46 (3.5) × 0x42 (2.5) = 8.75 = 1.00011₂ × 2³: above the tie, it rounds up to 9 (0x51).</div>`,
@@ -439,7 +449,7 @@ export const chFloat: Chapter = {
           (+1 on that shift). Everything below the M + 2 top bits becomes guard and sticky for the shared rounder. The cost is the significand multiplier: (M + 1)² partial-product bits, so it grows with the square of the
           precision, ${grp(nands(fpMul(F16)))} NANDs for float16 and ${grp(nands(fpMul(F32)))} for float32 (${(nands(fpMul(F32)) / nands(fpMul(F16))).toFixed(1)} times for 2.3 times the fraction width), against an adder that grows nearly linearly.</p>`,
         pitfall: `<p>Forgetting that the bias is subtracted once. Adding two biased exponents counts the bias twice: e<sub>a</sub> + e<sub>b</sub> − 7 here. On the circuit, 1.0 × 1.0 = 1.0 only because 7 + 7 − 7 = 7.</p>`,
-        real: `<p>Hardware multipliers use Booth recoding and a Wallace or Dadda tree, as chapter 21 builds; the product is kept in carry-save form until the last moment, and the rounder works on it before the final carry-propagate
+        real: `<p>Hardware multipliers use Booth recoding and a Wallace or Dadda tree, as chapter ${numOf('muldiv')} builds; the product is kept in carry-save form until the last moment, and the rounder works on it before the final carry-propagate
           add. Subnormal inputs need a leading-zero count in front of the multiplier or after it: this design does it after, in the shared normalizer.</p>`,
       })),
     },
@@ -495,7 +505,7 @@ export const chFloat: Chapter = {
       title: 'Division, one bit per clock',
       get body() { return `
         <p>Division has no shortcut like the multiplier's tree: each quotient bit depends on the remainder left by the previous one. So the FPU
-        reuses the integer divider of <a href="#/c/muldiv/0">chapter 21</a>: <strong>radix-2 restoring division</strong>, one step per clock. Both significands are first
+        reuses the integer divider of <a href="#/c/muldiv/0">chapter ${numOf('muldiv')}</a>: <strong>radix-2 restoring division</strong>, one step per clock. Both significands are first
         <span data-show="pa pb"><em>prenormalized</em></span> (a subnormal's leading zeros shifted out, the exponent lowered), so they lie in [1, 2) and the quotient in (½, 2).
         <span data-show="core.step">The step</span> tries remainder − divisor; if it does not borrow, the quotient bit is 1 and the difference is kept, otherwise the remainder is
         restored (<span data-show="core.rmux">a multiplexer</span>). M + 4 steps give the M + 1 kept bits, G and one more bit (for tininess) even when the quotient is below 1; the final
@@ -526,7 +536,7 @@ export const chFloat: Chapter = {
           error of the quotient, so r ≠ 0 is the sticky bit with no extra work.</p>`,
         pitfall: `<p>Sampling y before done. While busy the output pins show the rounder's view of a partial quotient, with flags that come and go (the tour passes through that state). Only done = 1 says the value is final, which is the
           reason the CPU stalls until then and gates the flag update with retire.</p>`,
-        real: `<p>Why restoring here: it is the integer step unchanged, and a mux is cheap. Chapter 21 built the alternatives. <a href="#/c/muldiv/16">Non-restoring division</a> drops the mux (add or subtract by the previous sign)
+        real: `<p>Why restoring here: it is the integer step unchanged, and a mux is cheap. Chapter ${numOf('muldiv')} built the alternatives. <a href="#/c/muldiv/16">Non-restoring division</a> drops the mux (add or subtract by the previous sign)
           but needs a correction step before the remainder can serve as a sticky bit. <a href="#/c/muldiv/17">SRT</a> keeps the remainder in carry-save form, so no carry chain sits in the loop, and
           <a href="#/c/muldiv/19">radix 4</a> makes two quotient bits a clock, at the price of a digit-selection table; real FPUs use radix-4 (or higher) SRT, shared with square root. Here the 58-delay step already
           fits well inside the CPU's clock (313 NAND delays single-cycle, 121 pipelined), so a shorter step buys nothing; fewer steps would: radix 4 would roughly halve the ${F32.M + 6} cycles.</p>
@@ -806,7 +816,7 @@ export const chFloat: Chapter = {
     {
       title: 'A pipelined FPU',
       body: `
-        <p>The five-stage pipeline of <a href="#/c/pipeline/0">chapter 17</a> gains <span data-show="MX XW">a sixth stage, <strong>X</strong></span>, between M and W. Every instruction, integer or FP,
+        <p>The five-stage pipeline of <a href="#/c/pipeline/0">chapter ${numOf('pipeline')}</a> gains <span data-show="MX XW">a sixth stage, <strong>X</strong></span>, between M and W. Every instruction, integer or FP,
         walks F D E M X W, so they all retire in program order and the instruction-set simulator can still be stepped at W. The FP pipe is the fused
         multiply-add cut into its three boxes: <span data-show="fpx"><em>multiply</em> in E</span>, <span data-show="fadd"><em>align and add</em> in M</span>,
         <span data-show="fres"><em>round</em> in X</span>. One rounder serves all the arithmetic (fadd, fmul, the fused multiply-adds, fcvt.s.w, fdiv, fsqrt), so the pipelined RV32IF CPU,

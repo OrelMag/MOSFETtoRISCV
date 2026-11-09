@@ -66,8 +66,6 @@ halt:   j    halt`,
     blurb: 'Copies the switches to the LEDs, forever. Flip the switches in the input bar.',
     source: `        li   a0, 0x80000000
 loop:   lw   t0, 8(a0)         # switches
-        not  t1, t0
-        andi t1, t1, 0xff
         sw   t0, 4(a0)         # LEDs = switches
         j    loop`,
   },

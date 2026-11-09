@@ -87,3 +87,8 @@ a.lp-item:hover { border-color: var(--accent); }
   .lp-item, .lp-th { min-height: 40px; }
   .lp-input { min-height: 40px; }
 }
+details.lp-cap > summary { cursor: pointer; list-style: none; }
+details.lp-cap > summary::-webkit-details-marker { display: none; }
+details.lp-cap > summary b::before { content: '▸ '; color: var(--muted); }
+details.lp-cap[open] > summary b::before { content: '▾ '; }
+details.lp-cap:not([open]) { gap: 0; }

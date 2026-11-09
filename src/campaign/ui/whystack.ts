@@ -23,7 +23,7 @@ const rich = (tag: 'p' | 'div' | 'span' | 'li', html: string, cls?: string) => {
   el.innerHTML = html;
   return el;
 };
-const sec = (title: string, ...body: (Node | null)[]) => h('section', { class: 'th-sec' }, h('h4', null, title), ...body);
+const sec = (title: string, ...body: (Node | null)[]) => h('section', { class: 'th-sec' }, h('h3', null, title), ...body);
 
 /** 16-bit adder → Adder / subtractor (Act 2) → … → ALU block. */
 export function chainEl(c: Chain, ctx: ThreadCtx): HTMLElement {
@@ -46,7 +46,7 @@ export function chainEl(c: Chain, ctx: ThreadCtx): HTMLElement {
  */
 export function whyStackEl(n: CampaignNode, ctx: ThreadCtx, mode: 'map' | 'level', opts: { cost?: HTMLElement; pitfalls?: () => void; title?: string } = {}): HTMLElement {
   const w = whyStack(n.id)!;
-  const el = h('div', { class: `th-why ${mode}` }, h('div', { class: 'th-leadbox' }, opts.title ? h('h4', null, opts.title) : null, rich('p', w.lead, 'th-lead')));
+  const el = h('div', { class: `th-why ${mode}` }, h('div', { class: 'th-leadbox' }, opts.title ? h('h3', null, opts.title) : null, rich('p', w.lead, 'th-lead')));
   if (w.chain) el.append(sec('Goes into', chainEl(w.chain, ctx)));
   if (w.problem) el.append(sec('The problem', rich('p', w.problem)));
   if (mode === 'level' && w.without) el.append(sec('Without it', rich('p', w.without)));
@@ -99,8 +99,8 @@ export function actEndEl(act: number, ctx: ThreadCtx, primary = true): HTMLEleme
   return h('div', { class: 'th-end', role: 'group', 'aria-label': `${actName(act)} complete` },
     h('div', { class: 'th-eyebrow' }, `${actName(act)} complete · ${actTitle(act)}`),
     h('div', { class: 'th-grid' },
-      h('div', { class: 'th-cell can' }, h('h4', null, 'Your machine can now'), rich('p', e.can)),
-      h('div', { class: 'th-cell cannot' }, h('h4', null, 'It still can’t'), rich('p', e.cannot))),
+      h('div', { class: 'th-cell can' }, h('h3', null, 'Your machine can now'), rich('p', e.can)),
+      h('div', { class: 'th-cell cannot' }, h('h3', null, 'It still can’t'), rich('p', e.cannot))),
     next || sides.length ? h('div', { class: 'th-row' },
       next ? h('a', { class: `btn${primary ? ' primary' : ''}`, href: ctx.route(next) }, e.nextLabel && next.id === e.next ? e.nextLabel : `${actName(next.act)}: ${next.title}`, icon('chevR', 14)) : null,
       sides.map((l) => h('a', { class: 'btn', href: ctx.route(l.node) }, l.label))) : null);
@@ -114,7 +114,7 @@ export function reachEl(n: CampaignNode, ctx: ThreadCtx): { el: HTMLElement | nu
   if (!r.length) return { el: null, next, side };
   const meter = (x: (typeof r)[number]) => (x.missing.length === 0 ? 'ready'
     : `${x.done} of ${x.total} done · needs ${x.missing.map((m) => m.title).join(', ')}`);
-  const el = h('div', { class: 'th-reach' }, h('h4', null, 'Now within reach'),
+  const el = h('div', { class: 'th-reach' }, h('h3', null, 'Now within reach'),
     h('ul', null, r.slice(0, 5).map((x) => h('li', { class: x.node === next ? 'top' : '' },
       h('span', null, h('a', { href: ctx.route(x.node) }, x.node.title), h('span', { class: 'th-act' }, actName(x.node.act)), x.clause ? [': ', x.clause] : null),
       h('span', { class: `th-meter${x.missing.length ? '' : ' ready'}` }, meter(x))))));

@@ -189,8 +189,10 @@ export class Inspector {
       if (!old || st.nands) cells.push([groupDigits(st.nands - (rom?.nands ?? 0)), rom ? 'NAND gates of logic' : 'NAND gates', romTip]);
       if (rom) cells.push([`+ ${romSize(rom)}`, `of ROM (${rom.chips} chip${rom.chips > 1 ? 's' : ''}: mux trees of ${groupDigits(rom.nands)} NANDs in the simulation)`, romTip]);
       if (depth !== null && depth > 0) {
-        const unit: [string, string] = [String(depth), 'gate delays (worst path)'];
-        const loaded = logicDepthSafe(d, 'load');
+        const unit: [string, string] = [String(depth), 'NAND delays (worst path)'];
+        // units under load are taught in Faster adders ("When fan-out costs"): shown once that chapter is opened, or with Load chosen as the default
+        const loadKnown = settings.loadDelay || settings.visited('fastadd').length > 0;
+        const loaded = loadKnown ? logicDepthSafe(d, 'load') : null;
         const load: [string, string, string] | null = loaded === null ? null : [fmtDelay(loaded, 'load'), 'units under load', DELAY_NOTE];
         cells.push(...(settings.loadDelay && load ? [load, unit] : load ? [unit, load] : [unit]));
       }

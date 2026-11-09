@@ -195,7 +195,7 @@ export class LevelPage implements Page {
     this.noTools = true;
     // a locked level links to what blocks it (its page when it is a level of the editor, else its map card)
     const go = (m: CampaignNode) => h('a', { class: 'btn primary', href: !m.soon && levelChallenge(m) && statusOf(m, progress().view, progress().unlockAll) !== 'locked' ? `#/campaign/play/${m.id}` : `#/campaign/n/${m.id}` }, m.title, icon('chevR', 14));
-    return h('div', { class: 'lv-page lv-notice' }, h('div', { class: 'panel' }, h('h3', null, title), h('p', { class: 'sub' }, text),
+    return h('div', { class: 'lv-page lv-notice' }, h('div', { class: 'panel' }, h('h1', null, title), h('p', { class: 'sub' }, text),
       h('p', { class: 'lv-notice-go' }, ...blockers.map(go), n && !n.soon && !blockers.length ? h('a', { class: 'btn primary', href: `#/campaign/n/${n.id}` }, `Open ${n.title}`, icon('chevR', 14)) : null,
       h('a', { class: 'btn', href: '#/campaign' }, icon('chevL', 14), 'Back to the map'))));
   }
@@ -261,6 +261,8 @@ export class LevelPage implements Page {
         onclick: () => { this.folded = narrow() && on; this.tab = id; this.renderSide(); } }, label, badge ? h('small', null, badge) : null);
     }));
     const body = h('div', { class: 'lv-sidebody', role: 'tabpanel' });
+    // the open tab names the panel for screen readers: its sections are h3 under it
+    body.append(h('h2', { class: 'sr-only' }, tabs.find(([id]) => id === this.tab)?.[1] ?? ''));
     if (this.tab === 'walk' && this.walk) body.append(this.walk.panel(n.par ?? {}, () => this.leaveWalk(), () => this.takeWalk(), () => this.finishWalk()));
     else if (this.tab === 'why') this.whyTab(body);
     else if (this.tab === 'task') this.taskTab(body);
@@ -308,7 +310,7 @@ export class LevelPage implements Page {
     let costSec: HTMLElement | undefined;
     // a bug hunt is graded on edits (or a period) the level bar shows: no cost table
     if (!n.bug && (c?.cost || alts.length || n.par)) {
-      const sec = h('section', null, h('h4', null, 'What it costs'));
+      const sec = h('section', null, h('h3', null, 'What it costs'));
       if (c?.cost) sec.append(rich('p', c.cost));
       const rows: [string, string][] = [];
       const par = n.par ?? {};
@@ -332,13 +334,13 @@ export class LevelPage implements Page {
       costSec = sec;
     }
     el.append(whyStackEl(n, this.ctx(), 'level', { cost: costSec, pitfalls: () => { this.tab = 'task'; this.folded = false; this.renderSide(); } }));
-    if (n.chapters?.length) el.append(h('section', null, h('h4', null, 'Go deeper'), h('div', { class: 'lv-chips' }, n.chapters.map((c2) => h('a', { class: 'lv-chip', href: `#/c/${c2.chapter}/${c2.step ?? 0}` }, icon('book', 12), c2.label)))));
+    if (n.chapters?.length) el.append(h('section', null, h('h3', null, 'Go deeper'), h('div', { class: 'lv-chips' }, n.chapters.map((c2) => h('a', { class: 'lv-chip', href: `#/c/${c2.chapter}/${c2.step ?? 0}` }, icon('book', 12), c2.label)))));
   }
 
   private taskTab(el: HTMLElement): void {
     const n = this.node!, ch = this.ch!;
-    el.append(h('section', null, h('h4', null, 'The task'), rich('p', ch.brief)),
-      h('section', { class: 'cp-criteria' }, h('h4', null, 'Success criteria'), h('ul', null, criteria(ch).map((c) => h('li', null, c)))),
+    el.append(h('section', null, h('h3', null, 'The task'), rich('p', ch.brief)),
+      h('section', { class: 'cp-criteria' }, h('h3', null, 'Success criteria'), h('ul', null, criteria(ch).map((c) => h('li', null, c)))),
       gradeTable(n));
     const rule = typeof ch.allowed === 'object' ? ch.allowed.lib.filter((x) => x !== 'nand') : [];
     const names = (ids: readonly string[]) => partNames(ids, (u) => resolveComponent(u)?.name).join(', ');
@@ -360,7 +362,7 @@ export class LevelPage implements Page {
     const all = pitfallsOf(n, mistakesOf);
     if (!all.length) return;
     const li = (t: string) => rich('li', t);
-    el.append(h('section', { class: 'lv-pits' }, h('h4', null, 'Pitfalls'),
+    el.append(h('section', { class: 'lv-pits' }, h('h3', null, 'Pitfalls'),
       h('ul', { class: 'th-pits' }, all.slice(0, 4).map(li)),
       all.length > 4 ? h('details', { class: 'th-more' }, h('summary', null, `${all.length - 4} more`), h('ul', { class: 'th-pits' }, all.slice(4).map(li))) : null));
   }
@@ -419,12 +421,12 @@ export class LevelPage implements Page {
       const e = codexById(cid);
       if (!e) continue;
       el.append(unlocked.has(cid)
-        ? h('section', { class: 'lv-cx' }, h('h4', null, e.title), rich('p', e.body), read(cid, 'Read the full entry'))
-        : h('section', { class: 'lv-cx locked' }, h('h4', null, e.title), rich('p', e.body), h('p', { class: 'sub' }, 'The full entry is added to the codex when you pass or skip this level.')));
+        ? h('section', { class: 'lv-cx' }, h('h3', null, e.title), rich('p', e.body), read(cid, 'Read the full entry'))
+        : h('section', { class: 'lv-cx locked' }, h('h3', null, e.title), rich('p', e.body), h('p', { class: 'sub' }, 'The full entry is added to the codex when you pass or skip this level.')));
     }
     const uses = levelUses(n.id);
     if (uses.length) {
-      el.append(h('section', { class: 'lv-cx-uses' }, h('h4', null, 'Uses'),
+      el.append(h('section', { class: 'lv-cx-uses' }, h('h3', null, 'Uses'),
         h('p', { class: 'sub' }, 'Taught by the levels before this one: what its parts and ideas rest on.'),
         h('div', { class: 'lv-chips' }, uses.map((e) => h('button', { class: `lv-chip${unlocked.has(e.id) ? '' : ' locked'}`, title: unlocked.has(e.id) ? 'Read it here' : 'Not discovered yet: its summary', onclick: () => this.readCodex(e.id) }, e.title)))));
     }
@@ -442,7 +444,7 @@ export class LevelPage implements Page {
     el.append(h('div', { class: 'lv-cx-nav' }, back, page));
     if (!open) {
       const where = teachingLevels(id);
-      el.append(h('section', { class: 'lv-cx locked' }, h('h4', null, e.title), rich('p', e.body),
+      el.append(h('section', { class: 'lv-cx locked' }, h('h3', null, e.title), rich('p', e.body),
         h('p', { class: 'sub' }, `The full entry unlocks when you pass or skip ${where.map((w) => w.title).join(' or ') || 'its level'}.`)));
       return;
     }
