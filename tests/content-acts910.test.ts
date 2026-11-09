@@ -212,7 +212,7 @@ describe('acts 9–10: the kernels, on the puzzle runner', () => {
     expect([r.size, r.cycles, r.laneOps, r.idle]).toEqual([23, par('p_saxpy').cycles, par('p_saxpy').laneops, 0]);
     expect(why('p_saxpy')).toContain(`${r.cycles} cycles, against ${one.cycles} for the same program on one lane`);
     const speed = (one.cycles / r.cycles).toFixed(1);
-    expect(kase('p_saxpy')).toContain(`${one.cycles} cycles on average against ${r.cycles}, ${speed}× slower, with the other three lanes masked ${one.idle}% of the time`);
+    expect(kase('p_saxpy')).toContain(`${one.cycles} cycles on average against ${r.cycles}, ${speed}× slower, with ${one.idle}% of its lane-steps idle (the other three lanes masked)`);
     expect(kase('p_saxpy')).toContain(`${r.size} words, ${r.cycles} cycles, ${r.laneOps} lane-ops, no lane idle`);
     expect(kase('p_saxpy')).toContain(`fewer lane-ops (${one.laneOps})`);
     expect(kase('p_saxpy')).toContain(`${pct(r.laneOps! - one.laneOps!, one.laneOps!)}% more work for ${speed}× the speed`);

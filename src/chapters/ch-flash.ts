@@ -57,7 +57,7 @@ export const chFlash: Chapter = {
     keep: [
       `Charge on the floating gate raises the threshold. Erased, Vt = ${vtOf(0)} V: the cell conducts at the ${V_READ} V read voltage and reads 1. Programmed, Vt ≥ ${V_READ} V: it reads 0. Here a pulse adds ${(5 * FG_STEP).toFixed(1)} V, so a program takes ${pulses} pulses, each followed by a verify.`,
       'Programming only clears bits (1 → 0); here a row at a time, each bit line programming or inhibiting its cell (NAND programs a page at once by tunnelling; real NOR a few bytes at a time by hot electrons). Only a block erase sets bits back to 1: <strong>flash cannot overwrite</strong>.',
-      `Real SLC: a page read ${FLASH_REAL_US.read} µs, a program ${FLASH_REAL_US.program} µs, a block erase ${FLASH_REAL_US.erase / 1000} ms. The model scales them down about ${SCALE}× (ratios kept): ${FLASH_TIMES.read}, ${FLASH_TIMES.program} and ${FLASH_TIMES.erase} cycles. Unscaled, a read alone is ${fmtN(READ_REAL)} of our cycles.`,
+      `Real SLC: a page read ${FLASH_REAL_US.read} µs, a program ${FLASH_REAL_US.program} µs, a block erase ${FLASH_REAL_US.erase / 1000} ms. The model scales them down about ${SCALE}× to powers of two (1 : 8 : 64 against the real 1 : 8 : 60): ${FLASH_TIMES.read}, ${FLASH_TIMES.program} and ${FLASH_TIMES.erase} cycles. Unscaled, a read alone is ${fmtN(READ_REAL)} of our cycles.`,
       'Several bits a cell (MLC 2, TLC 3, QLC 4: 4 to 16 threshold levels) trade margin for density: slower programs, fewer erases, and a stronger ECC with each generation. 3D NAND stands the strings up, hundreds of layers high.',
       'NOR: every cell on its bit line, about 10 F², random reads in tens of nanoseconds (boot code, execute in place). NAND: cells in series, about 4 F², a pass voltage on the other rows, pages in tens of microseconds (files, SSDs).',
       'The translation layer writes each version to a fresh page and maps logical to physical pages. Stale pages wait for garbage collection. Write amplification = page programs / host writes; spare space lowers it, wear levelling spreads the erases.',
@@ -176,7 +176,7 @@ export const chFlash: Chapter = {
         block and program the rows again. The times show what that costs: on a real SLC device a page read is
         ${FLASH_REAL_US.read} µs, a page program ${FLASH_REAL_US.program} µs, a block erase ${FLASH_REAL_US.erase / 1000} ms. At our
         ${CLOCK_NS.toFixed(2)} ns clock a read alone would be ${fmtN(READ_REAL)} cycles, so the model scales all three down about ${SCALE}×,
-        keeping their ratios: ${FLASH_TIMES.read}, ${FLASH_TIMES.program} and ${FLASH_TIMES.erase} cycles.</p>
+        rounding to powers of two (1 : 8 : 64 against the real 1 : 8 : 60): ${FLASH_TIMES.read}, ${FLASH_TIMES.program} and ${FLASH_TIMES.erase} cycles.</p>
         <p>Why a block and not a row: the erase is done through the well, which a whole plane shares; word-line bias then decides which cells it reaches, grounded in the block being erased and floating elsewhere, and that selection is done for a block's word lines together. So one row cannot be erased alone without disturbing its neighbours, and the controller's problem becomes what to do with
         the rest of a block when one row of it changes. The answer, two steps on, is not to change it in place.</p>
         <div class="try"><span data-show="c1_0 c1_1 c1_2 c1_3">Row 1</span> holds 1010. Make it 0110 and keep rows 0, 2 and 3 as they are.</div>`,

@@ -8,7 +8,7 @@ import type { CodexMore } from './codexmore';
 export const MORE2: Record<string, CodexMore> = {
   // ---- many cores
   coherence: {
-    idea: `Two private caches holding the same line can disagree the moment one of them is written. A coherence protocol keeps one rule per line: at any time either one cache may write it, or any number may read it, and a read returns the last value written. <b>Write-invalidate snooping</b> does it over a shared bus: every miss and every first write is broadcast, every other cache watches (snoops) and drops or hands over its copy. MSI keeps a state per line: Modified (the only copy, dirty), Shared (clean, maybe elsewhere), Invalid. A read miss broadcasts BusRd; a write to a Shared line broadcasts an upgrade that invalidates the others; a cache holding the line Modified supplies it and writes it back. MESI adds <b>Exclusive</b>: read with no other sharer, so a later write goes to Modified silently, the common case of private data. (MOESI and MESIF add an owner that forwards dirty or clean data without memory.)<br>A bus serializes every miss of every core, which stops scaling at a few dozen cores. A <b>directory</b> keeps, per line at its home memory, the state and a bit per cache that may share it; a write sends invalidations only to the sharers, point to point over any network. The price is storage: a full bit vector for 64 cores on 64-byte lines is 64 bits per 512, 12.5 %. Chapter 27's dual-core has no caches, so it needs no protocol: one port, one copy.`,
+    idea: `Two private caches holding the same line can disagree the moment one of them is written. A coherence protocol keeps one rule per line: at any time either one cache may write it, or any number may read it, and a read returns the last value written. <b>Write-invalidate snooping</b> does it over a shared bus: every miss and every first write is broadcast, every other cache watches (snoops) and drops or hands over its copy. MSI keeps a state per line: Modified (the only copy, dirty), Shared (clean, maybe elsewhere), Invalid. A read miss broadcasts BusRd; a write to a Shared line broadcasts an upgrade that invalidates the others; a cache holding the line Modified supplies it and writes it back. MESI adds <b>Exclusive</b>: read with no other sharer, so a later write goes to Modified silently, the common case of private data. (MOESI and MESIF add an owner that forwards dirty or clean data without memory.)<br>A bus serializes every miss of every core, which stops scaling at a few dozen cores. A <b>directory</b> keeps, per line at its home memory, the state and a bit per cache that may share it; a write sends invalidations only to the sharers, point to point over any network. The price is storage: a full bit vector for 64 cores on 64-byte lines is 64 bits per 512, 12.5 %. Chapter 27's dual-core has no caches until step 7, so it needs no protocol: one port, one copy; steps 7 and 8 add private caches and an MSI bus in gates.`,
     example: {
       title: 'Two cores, MSI against MESI (chapter 27\'s model)',
       body: `<pre>"Private read-then-write": each core reads, then writes, its own block
@@ -26,12 +26,13 @@ export const MORE2: Record<string, CodexMore> = {
     ],
     chapters: [
       { chapter: 'multicore', step: 6, label: 'Caches and coherence' },
+      { chapter: 'multicore', step: 8, label: 'Snooping: MSI in gates' },
       { chapter: 'cache', step: 11, label: 'Write-back: dirty lines' },
       { chapter: 'bus', step: 3, label: 'DMA' },
     ],
   },
   atomics: {
-    idea: `Every single load and store is atomic; a sequence is not. Two cores incrementing a shared counter with lw / addi / sw lose updates whenever one loads between the other's load and store: chapter 27's race ends at 20 instead of 40. The fix needs the hardware's help, in one of two shapes.<br><b>AMOs</b> (atomic memory operations) do the read, the operation and the write as one indivisible access: <code>amoadd.w rd, rs2, (rs1)</code> returns the old word in rd and stores old + rs2. The address is rs1 itself, no offset. In the dual-core the arbiter grants the port for that one access, so nothing can fall in between; MP_DECODE (257 NANDs a core) recognizes amoadd.w and amoswap.w and hands them to the control unit disguised as lw. With caches, the core takes the line exclusive and holds it for the operation; or the operation is sent to the memory or the shared cache ("far atomics", how GPUs do histograms).<br><b>LR/SC</b> splits it: <code>lr.w</code> loads and reserves the word, <code>sc.w</code> stores only if no other hart wrote it since, and writes 0 to rd on success, non-zero on failure. Any read-modify-write becomes a retry loop; RISC-V guarantees progress for constrained loops (at most 16 integer instructions, no other loads or stores between). RV32A has both: 9 AMOs (swap, add, and, or, xor, min, max, minu, maxu) and lr.w / sc.w. A lock is one AMO: <code>amoswap.w</code> 1 in, and an old 0 means it is yours.`,
+    idea: `Every single load and store is atomic; a sequence is not. Two cores incrementing a shared counter with lw / addi / sw lose updates whenever one loads between the other's load and store: chapter 27's race ends at 20 instead of 40. The fix needs the hardware's help, in one of two shapes.<br><b>AMOs</b> (atomic memory operations) do the read, the operation and the write as one indivisible access: <code>amoadd.w rd, rs2, (rs1)</code> returns the old word in rd and stores old + rs2. The address is rs1 itself, no offset. In the dual-core the arbiter grants the port for that one access, so nothing can fall in between; MP_DECODE (257 NANDs a core) recognizes amoadd.w and amoswap.w and hands them to the control unit disguised as lw. With caches, the core takes the line exclusive and holds it for the operation; or the operation is sent to the memory or the shared cache ("far atomics", how GPUs do histograms).<br><b>LR/SC</b> splits it: <code>lr.w</code> loads and reserves the word, <code>sc.w</code> stores only if no other hart wrote it since, and writes 0 to rd on success, non-zero on failure. The reservation is on the line, not the word: in chapter 27's caches a snooped invalidation of the line, an eviction or any <code>sc.w</code> clears it, so an <code>sc.w</code> may fail with no conflict on its own word. Any read-modify-write becomes a retry loop; RISC-V guarantees progress for constrained loops (at most 16 integer instructions, no other loads or stores between). RV32A has both: 9 AMOs (swap, add, and, or, xor, min, max, minu, maxu) and lr.w / sc.w. A lock is one AMO: <code>amoswap.w</code> 1 in, and an old 0 means it is yours.`,
     example: {
       title: 'One increment, three ways',
       body: `<pre># racy: another hart can store between lw and sw
@@ -59,6 +60,7 @@ retry:
     chapters: [
       { chapter: 'multicore', step: 4, label: 'Atomic read-modify-write' },
       { chapter: 'multicore', step: 5, label: 'A spin lock' },
+      { chapter: 'multicore', step: 10, label: 'lr.w and sc.w' },
       { chapter: 'feed', step: 4, label: 'Atomics' },
     ],
   },
@@ -272,6 +274,7 @@ flip 6 and 9:     syndrome 6⊕9 = 15, parity even → double</pre>Here: encoder
     chapters: [
       { chapter: 'cache', step: 5, label: 'Errors and ECC' },
       { chapter: 'errors', step: 1, label: 'Locating the error' },
+      { chapter: 'flash', step: 6, label: 'Bit errors and ECC' },
     ],
   },
 
