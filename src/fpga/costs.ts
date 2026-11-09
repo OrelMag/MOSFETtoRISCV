@@ -10,8 +10,9 @@ export interface FpgaExample {
   exportHash: string;
   /** After place and route. */
   device: { lut4: Use; alu: Use; dff: Use; bsram: Use };
-  /** LUTs as Yosys left them (LUT1–LUT4 cells), after nextpnr packed them into slices, and after routing (device.lut4). */
-  lut4Stages: { synth: number; packed: number; routed: number };
+  /** LUTs as Yosys left them (LUT1–LUT4 cells), after packing (ALU cells take LUT slots too), after routing (device.lut4); passthrough: the routed ones the
+   *  placer inserted in front of a flip-flop whose D input does not come from the LUT beside it in its slice (named *_passthrough_lut). */
+  lut4Stages: { synth: number; packed: number; routed: number; passthrough: number };
   /** By block (dut.<block> and dut.<block>.<part>, by the names Yosys keeps; board: the board top's glue), largest first. */
   blocks: { name: string; luts: number; ffs: number; bsram: number }[];
   /** Post-route maximum frequency per clock, MHz (clk: the design's, divided from the board's; mem_clk: the board's 27 MHz). */

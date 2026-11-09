@@ -79,7 +79,7 @@ for (const id of ids.length ? ids : ['counter7', 'computer']) {
   execFileSync(yosys, ['-q', '-l', 'pnr-synth.log', '-p', `read_verilog ${id}.v ${id}_board.v; synth_gowin -top ${out.board} -json pnr.json`], { cwd: dir, stdio: 'inherit' });
   console.log(`${id}: placing and routing…`);
   execFileSync(nextpnr, ['--device', BOARD.device, '--vopt', `family=${BOARD.family}`, '--vopt', 'cst=tangnano9k.cst', '--json', 'pnr.json',
-    '--report', 'report.json', '--freq', String(BOARD.clockMHz), '--timing-allow-fail', '--seed', '1', '-l', 'pnr.log', '-q'], { cwd: dir, stdio: 'inherit' });
+    '--report', 'report.json', '--write', 'routed.json', '--freq', String(BOARD.clockMHz), '--timing-allow-fail', '--seed', '1', '-l', 'pnr.log', '-q'], { cwd: dir, stdio: 'inherit' });
   const r = JSON.parse(readFileSync(join(dir, 'report.json'), 'utf8')) as {
     fmax: Record<string, { achieved: number }>; utilization: Record<string, { used: number; available: number }>;
     critical_paths: { from: string; to: string; path: { type: string; delay: number }[] }[];
@@ -99,7 +99,7 @@ for (const id of ids.length ? ids : ['counter7', 'computer']) {
   const one: FpgaExample = {
     exportHash: exportHash(out.files),
     device: { lut4: use('LUT4'), alu: use('ALU'), dff: use('DFF'), bsram: use('BSRAM') },
-    lut4Stages: { synth: synthLuts, packed: packedLuts, routed: use('LUT4').used },
+    lut4Stages: { synth: synthLuts, packed: packedLuts, routed: use('LUT4').used, passthrough: passthroughs(join(dir, 'routed.json')) },
     blocks: byBlock(net, out.board),
     fmax: Object.fromEntries(Object.entries(r.fmax).map(([k, v]) => [clockName(k), +v.achieved.toFixed(2)])),
     critical: {
@@ -123,4 +123,10 @@ if (write) {
   const old = existsSync(f) ? (JSON.parse(readFileSync(f, 'utf8')) as FpgaCosts) : null;
   writeFileSync(f, `${JSON.stringify({ ...costs, examples: { ...old?.examples, ...examples } }, null, 1)}\n`);
   console.log(`wrote ${f}`);
+}
+
+/** LUTs nextpnr added in front of flip-flops (a Gowin flip-flop takes D from the LUT beside it in its slice). */
+function passthroughs(file: string): number {
+  const j = JSON.parse(readFileSync(file, 'utf8')) as { modules: Record<string, { cells: Record<string, { type: string }> }> };
+  return Object.values(j.modules).reduce((n, m) => n + Object.entries(m.cells).filter(([name, c]) => LUT.test(c.type) && name.includes('passthrough')).length, 0);
 }

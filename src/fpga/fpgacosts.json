@@ -29,7 +29,8 @@
    "lut4Stages": {
     "synth": 12,
     "packed": 36,
-    "routed": 12
+    "routed": 12,
+    "passthrough": 0
    },
    "blocks": [
     {
@@ -107,7 +108,8 @@
    "lut4Stages": {
     "synth": 4179,
     "packed": 4203,
-    "routed": 5271
+    "routed": 5271,
+    "passthrough": 1092
    },
    "blocks": [
     {
