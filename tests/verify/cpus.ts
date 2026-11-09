@@ -74,8 +74,12 @@ export const CPUS: CpuConfig[] = [
   { id: 'fppipe', name: 'Pipelined RV32IF (six stages)', isa: { f: true }, env: 'bare', cpi: 30, build: (w, imemK, dmemK) => pipelinedFpCpu(w, { imemK, dmemK }) },
   { id: 'sys', name: 'System (Zicsr, traps, I/O)', isa: { sub: true, system: true }, env: 'p', imemK: 7, cpi: 1, build: (w, imemK, dmemK) => systemCpu(w, { imemK, dmemK }) },
   { id: 'sys-m', name: 'System RV32IM', isa: { sub: true, system: true, m: true }, env: 'p', imemK: 7, cpi: 34, build: (w, imemK, dmemK) => systemCpu(w, { imemK, dmemK, m: true }) },
-  { id: 'sys-vm', name: 'System with virtual memory (M / S / U, Sv32)', isa: { sub: true, system: true, vm: true }, env: 'p', imemK: 7, cpi: 8, build: (w, imemK, dmemK) => systemCpu(w, { imemK, dmemK, vm: true }) },
   { id: 'dual', name: 'Dual-core (hart 0)', isa: { mp: true }, env: 'bare-mp', cpi: 2, build: (w, imemK, dmemK) => dualCore(w, dmemK, false, imemK) },
+];
+
+/** Verified like the others (tests/verify-system.test.ts) but not benchmarked: the saved results and the README's counts are the default CPUs'. */
+export const EXTRA_CPUS: CpuConfig[] = [
+  { id: 'sys-vm', name: 'System with virtual memory (M / S / U, Sv32)', isa: { sub: true, system: true, vm: true }, env: 'p', imemK: 7, cpi: 8, build: (w, imemK, dmemK) => systemCpu(w, { imemK, dmemK, vm: true }) },
 ];
 
 /** Tests that need byte / halfword access. ld_st and st_ld pass on a word-only CPU too (every value they store is
