@@ -236,6 +236,15 @@ export function exactCover(d: Detection, faults: number, budget = 3_000_000): nu
     for (let i = 0; i < need.length; i++) if (!caught[i] && by[i].length < few) { few = by[i].length; pickF = i; }
     if (pickF < 0) { if (chosen.length < best.length) best = [...chosen]; return; }
     if (chosen.length + 1 >= best.length) return;
+    // lower bound: the faults left need at least ceil(left / the most any one vector catches) more vectors
+    let left = 0, most = 0;
+    for (let i = 0; i < need.length; i++) if (!caught[i]) left++;
+    for (let v = 0; v < d.vecs.length; v++) {
+      let k = 0;
+      for (let i = 0; i < need.length; i++) if (!caught[i] && detects(d, need[i], v)) k++;
+      if (k > most) most = k;
+    }
+    if (chosen.length + Math.ceil(left / most) >= best.length) return;
     for (const v of by[pickF]) {
       chosen.push(v);
       for (let i = 0; i < need.length; i++) if (detects(d, need[i], v)) caught[i]++;

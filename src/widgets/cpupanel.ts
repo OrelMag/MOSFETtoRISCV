@@ -2,6 +2,7 @@
 // register file, data memory, and a live check against the golden model (the ISS runs in
 // lock-step and every register is compared after each clock edge).
 
+import type { ComponentDef } from '../sim/types';
 import { groupDigits } from '../sim/numfmt';
 import type { DramConfig } from '../dram/controller';
 import { GateSim } from '../sim/gatesim';
@@ -101,6 +102,8 @@ export interface CpuSceneOptions {
   custom?: readonly CustomRow[];
   /** The MAC core (chapter "A MAC on the RV32"): mac, mac2, clracc and racc assemble, the golden model keeps the accumulator, and the panel shows it. */
   mac?: boolean;
+  /** The CPU as simulated, from the CPU as drawn: a planted fault (sim/faults.ts plantedDef; the chapter "How do you know it works?"). Memoize it per def. */
+  wrap?: (def: ComponentDef) => ComponentDef;
 }
 
 /** The out-of-order core's instruction ROM: 2^k words, at least 64. */
@@ -113,15 +116,16 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
   const asm = assemble(opts.c && !/^\s*\.option\s/m.test(opts.source) ? `.option rvc\n${opts.source}` : opts.source, opts.custom, { mac: opts.mac });
   // the CPU panel and the Out of order panel share the selected instruction
   const link: OooLink = {};
-  return {
-    ...(opts.ooo ? { engine: 'cycle' as const } : {}),
-    root: opts.wide ? dualPipeCpu(asm.words, { dmemK: 6 })
+  const root: ComponentDef = opts.wide ? dualPipeCpu(asm.words, { dmemK: 6 })
       : opts.ooo ? oooCpu(asm.words, { imemK: oooImemK(asm.words), dmemK: 6 })
       : opts.multicycle ? multicycleCpu(asm.words, { control: opts.multicycle, adder: opts.adder, microcode: opts.microcode })
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
       : opts.pipeline ? pipelinedCpu(asm.words, { imemK: opts.imemK, dmemK: opts.dmemK, adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram, custom: opts.custom })
-        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c, custom: opts.custom, mac: opts.mac }),
+        : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c, custom: opts.custom, mac: opts.mac });
+  return {
+    ...(opts.ooo ? { engine: 'cycle' as const } : {}),
+    root: opts.wrap ? opts.wrap(root) : root,
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
     panels: [cpuPanel({ ...opts, asm, link }), ...(opts.pipeline ? [pipeDiagram(asm)] : []),
