@@ -169,6 +169,7 @@ export const THREAD1: Record<string, NodeThread> = {
     usedFor: {
       p_call: 'loads and stores again: the stack is memory addressed by sp',
       p_sort: 'two loads and two stores per pair of neighbours',
+      p_print: 'the powers of ten in a .data table, walked by a pointer',
     },
     pitfalls: [
       '0x100 does not fit a 6-bit offset: the address goes into a register with <code>li</code>.',
@@ -322,7 +323,7 @@ export const THREAD1: Record<string, NodeThread> = {
     usedFor: { pi_lesson: 'the 76-delay cycle the pipeline cuts into stages' },
     pitfalls: [
       'Only what lies on the critical path pays: Kogge–Stone adders in next PC add 444 NANDs and leave the period at 76.',
-      'After a swap the path moves: time it again before swapping more.',
+      'After a swap, time it again: the path may or may not have moved, and a second swap only pays on the new critical path.',
       'Faster is not free: the Kogge–Stone ALU is 218 NANDs more than the ripple one, worth it only because it is on the path.',
     ],
   },

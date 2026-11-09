@@ -2,7 +2,7 @@ import { CLA4, addSubFast, alu, brentKung, carrySelect, carrySkip, isZero, kogge
 import { FF_INPUT, FF_WIRE } from '../sim/netcap';
 import { nandDelay } from '../sim/delay';
 import { logicDepth, stats } from '../sim/stats';
-import { CLK_TO_Q, SETUP } from '../sim/timing';
+import { CLK_TO_Q, PS_PER_NAND, SETUP } from '../sim/timing';
 import type { ComponentDef } from '../sim/types';
 import { PROGRAMS } from '../riscv/programs';
 import { cpuScene } from '../widgets/cpupanel';
@@ -21,7 +21,7 @@ const D = (d: ComponentDef) => logicDepth(d) ?? 0;
 const FAMILY = (rows: [string, (n: number) => ComponentDef][], widths: number[]) =>
   `<table class="mini"><tr><th>adder</th>${widths.map((n) => `<th>${n} bits</th>`).join('')}</tr>${rows.map(([name, make]) => `<tr><td>${name}</td>${widths.map((n) => `<td>${N(make(n))} NANDs, depth ${D(make(n))}</td>`).join('')}</tr>`).join('')}</table>`;
 const CPU_PERIOD = 155, ALU_RIPPLE = D(alu(32)), ALU_KS = D(alu(32, 'ks'));
-const PS = 25; // illustrative ps per NAND delay (the timing panel's conversion)
+const PS = PS_PER_NAND; // illustrative ps per NAND delay (the timing panel's conversion)
 const fo16 = { drawn: fmt(nandDelay(16 * (FF_INPUT + FF_WIRE), false)), buffered: fmt(nandDelay(16 * (FF_INPUT + FF_WIRE))) };
 
 export const chFastAdders: Chapter = {

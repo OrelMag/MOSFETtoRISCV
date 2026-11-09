@@ -10,7 +10,7 @@ import type { LevelCase } from './cases';
 export const CASES1: Record<string, LevelCase> = {
   // ---- Act 4: the instruction set and programs ------------------------------------------------
   i_isa: {
-    problem: 'Hardware needs a specification before it can be built: which state exists (pc, x0–x7, 64 K words of data), what each instruction does to it, and how it is spelled in bits. RV16 is RISC-V cut to 16 bits: load / store (only <code>lw</code> and <code>sw</code> touch memory), fixed field positions (rs1, rs2 and rd never move, so the register file is read while the opcode is still being decoded) and x0 = 0 (a constant and a discard target, which makes <code>mv</code>, <code>nop</code>, <code>j</code> and <code>beqz</code> pseudo-instructions with no opcode of their own).',
+    problem: 'Hardware needs a specification before it can be built: which state exists (pc, x0–x7, 64 K words of data), what each instruction does to it, and how it is spelled in bits. RV16 is RISC-V cut to 16 bits: load / store (only <code>lw</code> and <code>sw</code> touch memory), fixed field positions (rs1, rs2 and rd never move, so the register file is read while the opcode is still being decoded) and x0 = 0 (a constant and a discard target, which makes <code>li</code>, <code>nop</code>, <code>j</code> and <code>beqz</code> pseudo-instructions with no opcode of their own).',
     without: 'Act 5\'s blocks would have nothing to be checked against: the golden model every core bench compares with, register write by register write, is this specification run in software.',
     cost: '23 instructions in 16-bit words. The width sets the costs downstream: three-bit register fields mean eight registers, so the register file is 2172 NANDs; immediates that never move make the immediate generator 0 NANDs; a 4-bit opcode makes the control unit\'s first stage a 4→16 decoder, 100 of its 200 NANDs. The price is paid in instructions: 6-bit offsets, no <code>andi</code>, no <code>bltu</code>, no bytes.',
   },
@@ -29,7 +29,7 @@ export const CASES1: Record<string, LevelCase> = {
   },
   p_mem: {
     problem: 'Data beyond eight registers lives in memory, and only <code>lw</code> and <code>sw</code> reach it. Their offsets are 6 bits (−32 … 31), so an array is walked with its address in a register: <code>lw t1, 0(t0)</code> loads a[i], <code>addi t0, t0, 1</code> steps one word (RV16 is word addressed), a signed <code>bge</code> keeps the larger. The address goes through the ALU\'s adder, as for <code>add</code>.',
-    without: 'Eight registers are all the data a program can hold: no arrays, no tables, no stack.',
+    without: 'Seven registers (and x0) are all the data a program can hold: no arrays, no tables, no stack.',
     cost: '14 words, 77 instructions on average. The loop loads t1 and compares it in the very next instruction: on Pipeline IV, which keeps Pipeline III\'s stall, that pair stalls one cycle, since the loaded word exists only after M. Loading with <code>lw t1, 1(t0)</code> before the <code>addi</code> puts an independent instruction between them and removes the stall.',
   },
   p_call: {
@@ -85,7 +85,7 @@ export const CASES1: Record<string, LevelCase> = {
   },
   c_core2: {
     problem: '<code>lw</code> and <code>sw</code> reach the data memory. The ALU adds rs1 and the 6-bit offset (bimm = 1, operation add); a load writes <code>drdata</code> back through the result mux\'s second input, a store puts rs2 on <code>dwdata</code> and raises <code>dwe</code> for one clock edge. Addresses count 16-bit words, and the top seven (0xFFF9–0xFFFF) are devices, reached as negative offsets from x0.',
-    without: 'Eight registers are all the data a program has: no arrays, no stack, no I/O.',
+    without: 'Seven registers (and x0) are all the data a program has: no arrays, no stack, no I/O.',
     cost: '+98 NANDs over Core I (3990): the address is the ALU\'s add, but stores bring the S/B immediate format and loads the memory\'s word, so the immediate and the result each choose among three and gain a second 2:1 mux (49 NANDs; 4:1 bus muxes come with jumps). The price is mostly time: the data memory read sits behind the ALU in the same cycle (period 98 against 84), and fetch and load both read memory in that cycle, which is why a single-cycle core has separate instruction and data memories (Harvard).',
   },
   c_core3: {

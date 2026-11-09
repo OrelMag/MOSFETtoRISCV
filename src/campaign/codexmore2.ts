@@ -202,7 +202,6 @@ offset = bits 11:0  = 0xA10
     ],
     chapters: [
       { chapter: 'cache', step: 6, label: 'The memory hierarchy' },
-      { chapter: 'traps', step: 2, label: 'Exceptions' },
     ],
   },
   sram: {
@@ -460,7 +459,7 @@ eight compressor levels, then one fast adder</pre>csa8: 72 NANDs and 6 NAND dela
     ],
   },
   booth: {
-    idea: `A multiplier's cost is mostly its partial-product rows, one per multiplier bit. <b>Radix-4 Booth recoding</b> halves them: read the multiplier b two bits at a time with one bit of overlap, (b<sub>2i+1</sub>, b<sub>2i</sub>, b<sub>2i−1</sub>) with b<sub>−1</sub> = 0, and turn each group into a digit d<sub>i</sub> = −2·b<sub>2i+1</sub> + b<sub>2i</sub> + b<sub>2i−1</sub> in {−2, −1, 0, +1, +2}, so that b = Σ d<sub>i</sub>·4<sup>i</sup>. Every digit selects an easy row: 0, a, 2a (a one-bit shift), or their negation (invert, and add the 1 as a separate bit in the tree). Two's-complement multipliers need no correction, because the top group already carries the sign's negative weight.<br>The rows still have to be sign-extended; instead, each row's sign bit is inverted and one constant row, computed in advance, corrects them all. The encoder per digit is small (14 NANDs here), but every row bit becomes a select and an XOR instead of one AND, so Booth pays only when halving the rows saves more than that: from about 24 bits in NANDs here (7436 against 7706), always a few delays deeper, and it also means less wiring and power.`,
+    idea: `A multiplier's cost is mostly its partial-product rows, one per multiplier bit. <b>Radix-4 Booth recoding</b> halves them: read the multiplier b two bits at a time with one bit of overlap, (b<sub>2i+1</sub>, b<sub>2i</sub>, b<sub>2i−1</sub>) with b<sub>−1</sub> = 0, and turn each group into a digit d<sub>i</sub> = −2·b<sub>2i+1</sub> + b<sub>2i</sub> + b<sub>2i−1</sub> in {−2, −1, 0, +1, +2}, so that b = Σ d<sub>i</sub>·4<sup>i</sup>. Every digit selects an easy row: 0, a, 2a (a one-bit shift), or their negation (invert, and add the 1 as a separate bit in the tree). Two's-complement multipliers need no correction, because the top group already carries the sign's negative weight.<br>The rows still have to be sign-extended; instead, each row's sign bit is inverted and one constant row, computed in advance, corrects them all. The encoder per digit is small (14 NANDs here), but every row bit becomes a select and an XOR instead of one AND, so Booth pays only when halving the rows saves more than that: from about 18 bits in NANDs here (at 24: 7436 against 7706), always a few delays deeper, and it also means less wiring and power.`,
     example: {
       title: 'b = 100 = 0110 0100',
       body: `<pre>groups (b2i+1 b2i b2i−1), from the bottom:
@@ -498,7 +497,7 @@ fsub  1.25 − 1.25 → 0
 fma   x·x − 1.25  → 0.015625 = 2⁻⁶, exact, no flags
 
 float32 here     NANDs    depth
-fma              26 348    270   (multiply 92, align and add 91, round 106)
+fma              26 348    270   (the three boxes alone: multiply 92, align and add 91, round 106)
 fmul then fadd            357   (176 + 181)</pre>In the single-cycle RV32IF the fma took the period from 274 to 368 NAND delays: a pipelined FPU gives it several cycles instead.`,
     },
     mistakes: [

@@ -368,7 +368,7 @@ export const MORE0: Record<string, CodexMore> = {
   },
   cpi: {
     idea: 'Execution time = instruction count × CPI × clock period. The factors belong to different people: the instruction count to the ISA and the compiler, CPI (average cycles per instruction) to the microarchitecture, the period to the critical path and the process. A design change usually moves two of them in opposite directions, and only the product counts. Single-cycle: CPI = 1, period set by the slowest instruction. Multicycle: shorter period, CPI 3–5. Pipelined: the short period with CPI back near 1, plus stalls and flushes. A hardware multiplier cuts the instruction count of a multiply loop and may lengthen the period of everything else.<br>On this site the period is measured in NAND delays by static timing and CPI by counting cycles on real programs, so the law is checked, not quoted.',
-    example: { title: 'Two measured trade-offs', body: 'RV16, ripple → Kogge–Stone adders, same tests: 1236 cycles both, period 98 → 76: 121 128 → 93 936 delays, 22 % less time for 218 more NANDs (4720 → 4938: only the ALU, the adder on the critical path).<br>RV32 single-cycle → multicycle (chapter 23): period 103 → 85, CPI 1 → about 3.8: about 323 delays per instruction instead of 103, 3× slower.' },
+    example: { title: 'Two measured trade-offs', body: 'RV16, ripple → Kogge–Stone adders, same tests: 1236 cycles both, period 98 → 76: 121 128 → 93 936 delays, 22 % less time for 218 more NANDs (4720 → 4938: only the ALU, the adder on the critical path).<br>RV32 single-cycle → multicycle (chapter 23): period 103 → 85, CPI 1 → 3.6 to 4.1 on the chapter\'s programs: 300 to 340 delays per instruction instead of 103, about 3× slower.' },
     mistakes: [
       'Comparing clock rates across designs: a faster clock with a higher CPI can lose.',
       'Measuring CPI on programs that skip the slow cases: load-use pairs, taken branches, divides.',
@@ -527,7 +527,7 @@ export const MORE0: Record<string, CodexMore> = {
     mistakes: [
       'Updating the predictor with its own guess at fetch instead of the outcome at resolution: it then learns nothing.',
       'Indexing the table with high PC bits: nearby branches share an entry while most entries stay unused.',
-      'Predicting taken without a target: without a BTB the target is known only after decode, and a correct taken guess still loses a cycle.',
+      'Predicting taken without a target: a counter holds a direction only. The target has to be ready in F, from a BTB indexed by the PC or from pc + imm on the fetched word (RV16: a second adder, +2 delays of period); otherwise a correct taken guess still loses a cycle.',
     ],
     lib: 'satctr', anatomy: ['npc', 'p1'],
     chapters: [{ chapter: 'pipepay', step: 2, label: 'Predicting branches' }, { chapter: 'pipepay', step: 3, label: 'A 2-bit counter' }, { chapter: 'pipepay', step: 4, label: 'The price of prediction' }],

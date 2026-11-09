@@ -98,7 +98,7 @@ export const NUDGES: Record<string, string> = {
   o_mularr: 'Lay out the long multiplication you would write on paper, and build all of it at once.',
   o_mcore: 'The new opcode only needs a path from the operands to the register write.',
   o_div: 'Do long division by hand in binary, and notice that each step asks a single yes-or-no question.',
-  o_dcore: 'This is the first instruction that needs more than one cycle: the core must wait without losing its place.',
+  o_dcore: 'This is the first instruction of the single-cycle core that needs more than one cycle: the core must wait without losing its place.',
   o_fpunpack: 'Decide, from the exponent field alone, which kind of value this is.',
   o_fpround: 'Every rounding mode asks its own question about the same few bits.',
   o_fpsticky: 'The bits shifted out matter only as one answer: was any of them 1?',

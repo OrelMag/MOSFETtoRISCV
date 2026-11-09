@@ -842,7 +842,7 @@ export const chCache: Chapter = {
           ${[[0.05, 0.2], [0.025, 0.2], [0.05, 0.1], [0.1, 0.2]].map(([m1, m2]) => `<tr><td>${+(m1 * 100).toFixed(1)} %</td><td>${+(m2 * 100).toFixed(1)} %</td><td>${amat([[4, m1], [12, m2]], 250).toFixed(1)}</td></tr>`).join('')}</table>`,
         pitfall: `<p>Using a global miss rate where a local one is meant. "L2 misses 1 % of all accesses" and "L2 misses 20 % of the accesses it sees" describe the same cache; plug the wrong one into the
           formula and the answer is off by the L1 miss rate. The quiz's 20 % is local, and 5 % × 20 % = 1 % is the global rate to DRAM.</p>`,
-        real: `<p>The site's CPUs use physical addresses only. An operating system gives every program its own <strong>virtual</strong> address space:
+        real: `<p>One more term hides in the L1 hit time: address translation. The site's CPUs use physical addresses only. An operating system gives every program its own <strong>virtual</strong> address space:
         memory is split into <strong>pages</strong> (4 KB), and a <strong>page table</strong> in memory maps each virtual page to a physical one,
         with permission bits (read, write, execute, user). RISC-V's Sv32 walks a two-level table; a missing or forbidden page traps (a page fault)
         and the OS fixes it, possibly loading the page from disk. Walking the table on every access would multiply memory traffic, so a

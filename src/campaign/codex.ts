@@ -78,7 +78,7 @@ export const CODEX: CodexEntry[] = [
   E('flags', 'Comparison from subtraction', 'trick', 'From a + ¬b + 1: unsigned a < b ⇔ carry out = 0; equal ⇔ result = 0; signed a < b ⇔ N ⊕ V (the result\'s sign, corrected for overflow), or, reading only the carry: a\'s sign when the signs differ, else the unsigned answer.', ['overflow', 'subtract']),
   E('shifter', 'Barrel shifter', 'component', 'log2 n levels of muxes; level k shifts by 2^k when shamt bit k = 1. 16 bits: 4 levels × 16 muxes for one direction; the campaign\'s shifter reverses the bits around them for left shifts (6 levels of 49-NAND bus muxes, 299 NANDs, depth 14). Right arithmetic shifts fill with the sign bit.', ['mux']),
   E('alu', 'ALU', 'component', 'The arithmetic-logic unit computes every operation in parallel and selects one. RV16 control = {OPX, f3}: add, sub, sll, slt, sltu, xor, srl, sra, or, and.', ['subtract', 'shifter', 'flags']),
-  E('cla', 'Carry lookahead', 'tool', 'Per bit: generate g = a·b, propagate p = a ⊕ b; carry c(k+1) = gk + pk·ck. Expanding the recurrence computes carries in parallel. Prefix adders (Kogge–Stone, Brent–Kung) do it in log2 n levels.', ['prefix', 'ripple']),
+  E('cla', 'Carry lookahead', 'tool', 'Per bit: generate g = a·b, propagate p = a ⊕ b; carry c(k+1) = gk + pk·ck. Expanding the recurrence computes carries in parallel. Prefix adders do it in O(log n) levels: Kogge–Stone in log2 n, Brent–Kung in about twice that with far fewer cells.', ['prefix', 'ripple']),
   E('prefix', 'Prefix adder', 'tool', '(G, P) pairs combine associatively: (g1, p1) ∘ (g0, p0) = (g1 + p1·g0, p1·p0). A parallel-prefix tree computes every carry in log2 n levels. Kogge–Stone: minimum depth, most wires.', ['cla']),
 
   // ---- state

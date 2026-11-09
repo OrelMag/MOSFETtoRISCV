@@ -503,7 +503,7 @@ export const WALKS5: Record<string, WalkScript> = {
       title: 'The significands',
       text: 'The given 11 × 11 Wallace-tree multiplier (1696 NANDs, depth 48) gives a 22-bit product. Two significands in [1, 2) multiply to [1, 4): the product\'s top bit weighs 2, not 1.',
       parts: ['mul'], codex: ['arraymul'],
-      why: 'The 11 × 11 product is the deepest part of the unit, so a Wallace tree is used. It is already given.',
+      why: 'The 11 × 11 product is the one place the unit multiplies, and a Wallace tree sums its rows in logarithmic depth. It is already given.',
       whyNot: { text: 'An array multiplier does the same function in regular cells, but its depth grows linearly with the rows.' },
     },
     {
@@ -563,14 +563,14 @@ export const WALKS5: Record<string, WalkScript> = {
       text: 'eq = ¬unord · (both zero + same sign · |a| = |b|): equal patterns, or −0 against +0.',
       parts: ['u8', 'u9', 'u15', 'u16', 'u22'],
       why: 'Equal means equal patterns, or two zeros, whose patterns differ in the sign bit.',
-      whyNot: { text: 'Pattern equality alone says − 0 ≠ + 0, against IEEE.' },
+      whyNot: { text: 'Pattern equality alone says −0 ≠ +0, against IEEE.' },
     },
     {
       title: 'Less than',
       text: 'lt is three cases, ORed and gated by ¬unord: signs differ and a is negative (unless both are zeros); both non-negative and |a| < |b|; both negative and |a| > |b| (≥ and not =).',
       parts: ['u17', 'u11', 'u18', 'u10', 'u13', 'u19', 'u12', 'u20', 'u21', 'u23'],
       why: 'The sign decides first. For negative numbers the magnitude order flips, which is why two of the three cases test it.',
-      whyNot: { text: 'Comparing magnitudes alone gets negatives wrong: − 1 < − 2 would come out true.' },
+      whyNot: { text: 'Comparing magnitudes alone gets negatives wrong: −1 < −2 would come out true.' },
       ask: {
         question: 'a = −0 (0x8000), b = +0 (0x0000). The signs differ and a is negative. What must lt be?',
         options: ['0: −0 = +0, so the different-signs term needs its own both-zero test', '1: the negative one is smaller', '0, and the magnitude compare gives it for free'],
