@@ -95,6 +95,18 @@ describe('the campaign graph', () => {
     expect(statusOf(nodeById('t_nand')!, view)).toBe('available');
     expect(nextAvailable(view)?.id).toBe('t_nand');
   });
+
+  it('Continue goes back to a required level the learner started before an earlier open one', () => {
+    const st: Record<string, { status?: 'solved' | 'skipped' | 'started' }> = {};
+    const view = (id: string) => st[id];
+    for (const n of topo()) if (n.id !== 'o_fastadd' && n.act <= 4) st[n.id] = { status: 'solved' };
+    st.c_imm = { status: 'started' };
+    expect(nextAvailable(view, true)?.id).toBe('c_imm');
+    // after a pass, Next stays in map order from the level just passed
+    expect(nextAvailable(view, true, 'a_add16')?.id).toBe('o_fastadd');
+    delete st.c_imm.status;
+    expect(nextAvailable(view)?.id).toBe('o_fastadd');
+  });
 });
 
 describe('every playable level', () => {
