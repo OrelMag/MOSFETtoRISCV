@@ -327,7 +327,7 @@ const timingNode = (after: CampaignNode): CampaignNode => {
   let base: ComponentDef | undefined;
   return {
     id: TIMING_ID, act: after.act, title: 'Timing closure', kind: 'build', optional: true, requires: [after.id],
-    why: 'This block is right: every test passes with a slow clock. It goes into a system clocked at a period of 40 NAND delays, and static timing says it needs more. Bring the register-to-register path to 40 or under, keeping the results right, for as few NANDs as you can. A faster adder, work moved across the register, anything that passes. The Timing panel and the slack heatmap show where the time goes.',
+    why: 'This block is right: every test passes with a slow clock. It goes into a system clocked at a period of 40 NAND delays, and static timing says it needs more. Bring the register-to-register path to 40 or under, keeping the results right, for as few NANDs as you can.',
     tips: ['Open the Timing panel: which part holds most of the critical path?', 'The shifter and the adder are both on the path from acc back to acc. Which one is the long one?', 'The ripple adder is 36 delays; a Kogge–Stone adder (unlocked by Fast adders) does the same sum in far fewer.'],
     codex: ['criticalpath'], par: { period: 40, nand: 858 },
     bug: {

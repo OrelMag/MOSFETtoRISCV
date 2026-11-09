@@ -396,7 +396,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   },
   {
     id: 'p_mem', act: 4, title: 'Arrays', kind: 'program', requires: ['p_loop'], par: { size: 14, cycles: 77 },
-    why: 'Eight registers hold eight words; everything else lives in memory, reached only by <code>lw</code> and <code>sw</code> with a 6-bit offset (−32 … 31). An array is walked with its address in a register: 14 words, 77 instructions on average at par. Functions next keep their return addresses the same way, on a stack in memory.',
+    why: 'Seven registers hold seven words (x0 is always 0); everything else lives in memory, reached only by <code>lw</code> and <code>sw</code> with a 6-bit offset (−32 … 31). An array is walked with its address in a register: 14 words, 77 instructions on average at par. Functions next keep their return addresses the same way, on a stack in memory.',
     tips: ['Keep the address in a register and add 1 each step (word addressing).', 'Signed comparison: <code>bge a0, t1, skip</code> keeps the larger one in a0.', '0x0FF and 0x100 do not fit an offset: <code>li</code> the address into a register first.'],
     codex: ['loadstore'],
   },
@@ -419,7 +419,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     codex: [],
   },
   {
-    id: 'p_print', act: 4, title: 'Print a number', kind: 'program', optional: true, requires: ['p_mul'], par: { size: 23, cycles: 78 },
+    id: 'p_print', act: 4, title: 'Print a number', kind: 'program', optional: true, requires: ['p_mul', 'p_mem'], par: { size: 23, cycles: 78 },
     why: 'Numbers are binary inside and decimal on the console, and RV16I cannot divide. Each digit is how many times its power of ten can be subtracted before the rest drops below it: 23 words, 78 instructions on average at par, at most nine subtractions a digit.',
     tips: ['Keep 10000, 1000, 100, 10 in a .data table and walk it.', 'Unsigned compare: <code>sltu</code> then <code>bnez</code> (there is no bltu).', 'Skip leading zeros, but always print the last digit.'],
     codex: ['bin2dec'],
@@ -441,7 +441,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'c_ctl', act: 5, title: 'Control unit', kind: 'build', requires: ['i_enc', 'g_dec', 'd_kmap', 'g_sop'], base: BUILD5.c_ctl, par: { nand: 200, depth: 13 },
     why: 'The datapath\'s muxes and write enables have nobody to set them. The control unit is the opcode table as logic: a 4→16 decoder, then an OR per signal of the opcodes that need it, 200 NANDs and 13 delays at par. Core I\'s ALU learns its operation 13 delays after the word arrives.',
     tips: ['A 4→16 decoder on op gives one line per opcode.', 'Read the table a column at a time: each bit is an OR of rows. rwe = OP + OPX + ADDI + SHI + LW + LUI + JAL + JALR; isel0 = B + SW + LUI, isel1 = JAL + LUI; wb0 = LW + LUI, wb1 = JAL + JALR + LUI.', 'alu = {OPX, f3} for OP and OPX, from f3[2:1] for SHI, else add (0). An X is free: give it whatever shortens an OR.'],
-    chapters: [{ chapter: 'cpu', step: 2, label: 'ALU instructions' }], codex: ['control', 'dontcare'], unlocks: ['rv16_ctl'], anatomy: ['ctl'],
+    chapters: [{ chapter: 'cpu', step: 1, label: 'The control table' }], codex: ['control', 'dontcare'], unlocks: ['rv16_ctl'], anatomy: ['ctl'],
   },
   {
     id: 'c_br', act: 5, title: 'Branch comparator', kind: 'build', requires: ['g_eq16', 'a_slt', 'g_mux'], base: BUILD5.c_br, par: { nand: 287, depth: 44 },
@@ -481,15 +481,15 @@ export const NODES: CampaignNode[] = withBugHunts([
   },
   {
     id: 'c_fast', act: 5, title: 'Core IV: the critical path', kind: 'core', requires: ['c_core3', 'o_fastadd'], base: BUILD5.c_fast, par: { period: 76, cycles: 1236 },
-    why: 'Core III\'s period is 98 NAND delays, and 50 of them are the ripple ALU: every instruction waits for a carry to cross 16 bits, the ones that never add included. Static timing names that path; the fast adders you built shorten it: the same 1236 cycles at period 76 (par). Act 6 then cuts what is left of the path into stages.',
-    tips: ['The Timing panel shows the critical path through your core.', 'Swap the ripple adders on that path for the unlocked Kogge–Stone ALU and adders.', 'After the swap, look again: the path has moved. A fast adder that is now off it costs NANDs and buys no delay.'],
+    why: 'Core III\'s period is 98 NAND delays, and 50 of them are the ripple ALU: every instruction waits for a carry to cross 16 bits, the ones that never add included. Static timing names that path; the fast adders you built shorten it: the same 1236 cycles at period 76 (par).',
+    tips: ['The Timing panel shows the critical path through your core.', 'Swap the ripple adders on that path for the unlocked Kogge–Stone ALU and adders.', 'After the swap, look again: the same load path is 22 delays shorter, and the branch path is now close behind. A fast adder that is off the critical path costs NANDs and buys no delay.'],
     chapters: [{ chapter: 'fastadd', step: 9, label: 'Swap in fast adders' }], codex: ['criticalpath', 'cla', 'skew'],
   },
 
   // ---- Act 6 --------------------------------------------------------------------------------
   {
     id: 'o_mc', act: 6, title: 'Multicycle CPU', kind: 'core', optional: true, requires: ['c_core3'], base: BUILD9.o_mc, par: { nand: 5203, period: 76, cycles: 3865 },
-    why: 'Core III spends a whole cycle on every instruction, an add as long as a load. Cut the path with registers into 3 or 4 steps under a state machine: period 98 → 76, but Core III\'s programs take 3865 cycles instead of 1236, 2.4 times as long. Pipelining cuts the path the same way and keeps every step busy.',
+    why: 'Core III spends a whole cycle on every instruction, an add as long as a load. Cut the path with registers into 3 or 4 steps under a state machine: period 98 → 76, but Core III\'s programs take 3865 cycles instead of 1236: 2.4 times the time, even at its shorter period. Pipelining cuts the path the same way and keeps every step busy.',
     tips: ['One-hot states (a flip-flop each): F → E → M → W → F, skipping M unless the instruction loads or stores; reset → F.', 'The instruction register loads in F; everything after decodes from it, not from instr.', 'Registers cut the long path: the ALU result is registered at the end of E, and memory reads it in M.', 'Write rd and load the PC only in W; stores only in M.'],
     codex: ['multicycle', 'fsm', 'microcode', 'cpi'], chapters: [{ chapter: 'multicycle', label: 'Multicycle & microcode' }],
   },
@@ -525,7 +525,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   {
     id: 'pi_haz', act: 6, title: 'Hazard unit', kind: 'build', requires: ['g_eq16', 'pi_core1'], base: BUILD6.pi_haz, par: { nand: 53, depth: 12 },
     why: 'Pipeline II still needs a nop after every load: its word leaves memory at the end of M, when the user is already in E. The hazard unit, in D, spots that case and holds the front one cycle: 53 NANDs, and the stall is paid only when the next instruction reads the loaded register. Pipeline III wires it in.',
-    tips: ['A load in E: rwe and wb = memory.', 'Compare against the instruction in D, not in E: once the user is in E it is too late to hold it.', 'Being conservative is allowed: a stall too many only costs a cycle. One too few is wrong: test the load\'s rd against rs1 and rs2 both, even for a store, whose rs2 is the word it writes.'],
+    tips: ['A load in E (loadE) with a real destination: rdE is not x0.', 'Compare against the instruction in D, not in E: once the user is in E it is too late to hold it.', 'Being conservative is allowed: a stall too many only costs a cycle. One too few is wrong: test the load\'s rd against rs1 and rs2 both, even for a store, whose rs2 is the word it writes.'],
     codex: ['loaduse', 'scoreboard'], unlocks: ['rv16_haz'], anatomy: ['haz'], chapters: [{ chapter: 'pipeline', step: 3, label: 'The load-use stall' }],
   },
   {
@@ -600,7 +600,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'o_mulseq', act: 8, title: 'Shift-and-add multiplier', kind: 'build', optional: true, requires: ['a_add16', 's_reg16', 'p_mul'], base: BUILD8.o_mulseq, givesOf: partsOf(() => seqMul(16)), par: { nand: 1169, period: 48 },
     why: 'Act 4\'s software multiply took 28 to 134 instructions a product; this is that loop in hardware, one adder reused once per clock. 18 cycles of a 48-delay clock against one 150-deep pass: about 5.8 times the time, on less than half the NANDs (1169 against 2672). The Divider runs the same pattern, one datapath step per clock under a counter.',
     tips: ['The iteration counter is given: you build the datapath it steps.', 'The product register starts as {0, b}; each step adds a to its upper half if its lowest bit is 1, then shifts everything right.', 'The adder\'s carry out is the new top bit after the shift: dropping it is the classic miss, and only small products come out right.'],
-    codex: ['shiftadd'], chapters: [{ chapter: 'muldiv', label: 'Multiply & divide' }],
+    codex: ['shiftadd'], chapters: [{ chapter: 'muldiv', step: 1, label: 'Or reuse one adder' }],
   },
   {
     id: 'o_mularr', act: 8, title: 'Array multiplier', kind: 'build', optional: true, requires: ['a_add16'], base: BUILD8.o_mularr, givesOf: partsOf(() => arrayMul(8)), par: { nand: 632, depth: 70 },
@@ -622,7 +622,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   },
   {
     id: 'o_dcore', act: 8, title: 'Divide in the core', kind: 'core', optional: true, requires: ['o_mcore', 'o_div'], base: BUILD9.o_dcore, par: { nand: 10546, period: 193, cycles: 1859 },
-    why: 'Every instruction so far finished in one cycle; a divide takes 18. The core starts the divider, holds the PC and writes nothing until done, the single-cycle core\'s version of a stall: 10 546 NANDs at period 193, and the 23 programs take 1859 cycles. It ends the multiply-and-divide track.',
+    why: 'Every instruction on your single-cycle core finished in one cycle; a divide takes 18. The core starts the divider, holds the PC and writes nothing until done, the single-cycle core\'s version of a stall: 10 546 NANDs at period 193, and the 23 programs take 1859 cycles. It ends the multiply-and-divide track.',
     tips: ['start = (a divide); hold = start and not done. Hold the PC by loading it with itself: ld = ld | hold, target = hold ? pc : target.', 'Write nothing while holding: rwe for MD = MD and not hold.', 'Signs: an adder / subtractor with a = 0 negates when sub = 1. Negate the quotient only when b ≠ 0.'],
     codex: ['mext', 'division', 'stall'], unlocks: ['rv16_div'], chapters: [{ chapter: 'muldiv', step: 21, label: 'The M unit' }],
   },

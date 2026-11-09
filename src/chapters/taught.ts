@@ -150,7 +150,7 @@ export const TAUGHT: Record<string, string> = {
   threecs: 'cache',
   assoc: 'cache',
   writepolicy: 'cache',
-  vm: 'traps',
+  vm: 'cache',
   sram: 'cache',
   mats: 'cache',
   ecc: 'cache',

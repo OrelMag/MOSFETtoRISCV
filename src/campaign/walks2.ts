@@ -133,11 +133,11 @@ export const WALKS2: Record<string, WalkScript> = {
       whyNot: { text: 'Separate comparators for ≠ and ≥ would repeat the 110 and 169 NANDs of the two above; inverting the result costs one XOR.' },
       parts: ['u4'], codex: ['branches'],
       ask: {
-        question: 'The mux gives a = b for opcodes 8, 9 and a < b for 10, 11. bne (9) and bge (11) need the opposite. How do they get it?',
+        question: 'The mux gives a = b for opcodes 8, 9 and a < b for 10, 11. bne (9) and bge (11) need the opposite. What is the cheapest way to get it?',
         options: ['One XOR with cond[0] after the mux', 'Two more comparators, for a ≠ b and a ≥ b', 'A 4:1 mux over eq, ¬eq, lt and ¬lt', 'Swap a and b in the comparator for bge'],
         answer: 0,
         explain: 'bne = ¬(a = b) and bge = ¬(a < b), and cond[0] is 1 for exactly those two: take = pick ⊕ cond[0], 4 NANDs.',
-        why: ['', 'Inverting a result costs one gate; the existing comparators (110 and 169 NANDs) already hold the information.', 'It works, but cond[0] alone says whether to invert: one XOR replaces the wider mux and two inverters.', 'b < a is a > b, not a ≥ b: equal operands would not branch.'],
+        why: ['', 'Inverting a result costs one gate; the existing comparators (110 and 169 NANDs) already hold the information.', 'It would work, but a 4:1 mux and two inverters cost more than the one XOR that cond[0] already allows.', 'b < a is a > b, not a ≥ b: equal operands would not branch.'],
       },
     },
   ],
@@ -557,7 +557,7 @@ export const WALKS2: Record<string, WalkScript> = {
       title: 'Forwarding unit',
       text: 'E\'s rs1 and rs2 against rdM / rweM and rdW / rweW, which come back from the M and W control splitters placed below. 110 NANDs, depth 13.',
       why: 'The unit decides, per operand, where E takes its value. It compares E\'s source numbers against M\'s and W\'s destinations.',
-      whyNot: { text: 'Using a scoreboard that stalls until the register file is written would cover the same cases at a cycle per dependency.' },
+      whyNot: { text: 'Stalling until the register file is written (a pending-write check) would cover the same cases at a cycle per dependency.' },
       parts: ['u22', 'u23'], codex: ['forwarding'],
     },
     {
