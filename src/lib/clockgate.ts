@@ -107,3 +107,24 @@ endmodule`,
   cache.set(n, d);
   return d;
 }
+
+/** The Power chapter's scene: the same clock and enable through a bare AND and through an ICG, side by side. */
+export const CLOCK_GATES: ComponentDef = define({
+  id: 'clock_gates', name: 'Two clock gates', category: 'sequential',
+  summary: 'One clock and one enable into a bare AND and into an integrated clock gate: change en while clk is high and only the AND passes a piece of a pulse.',
+  ports: [bit('en', 'in'), bit('clk', 'in', 'left', true), bit('bare', 'out'), bit('gclk', 'out')],
+  symbol: { kind: 'box', label: 'CLOCK GATES' },
+  netlist: () => ({
+    pins: { en: [1, 3], clk: [1, 11], bare: [26, 4], gclk: [26, 12] },
+    instances: [
+      { name: 'and', def: AND, at: [14, 2] },
+      { name: 'icg', def: ICG, at: [12, 9] },
+    ],
+    nets: [
+      { name: 'en', ends: ['en', 'and.a', 'icg.en'], trunk: 6 },
+      { name: 'clk', ends: ['clk', 'and.b', 'icg.clk'], trunk: 9 },
+      { name: 'bare', ends: ['and.y', 'bare'] },
+      { name: 'gclk', ends: ['icg.gclk', 'gclk'] },
+    ],
+  }),
+});

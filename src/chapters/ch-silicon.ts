@@ -364,7 +364,8 @@ export const chSilicon: Chapter = {
         <p>That is the whole path: a voltage-controlled switch, a NAND, gates, adders, latches, memories, an ALU, a single-cycle RISC-V, a pipeline, interrupts,
         multiplication, caches, microcode, floating point, several instructions a cycle out of order, two cores, and geometry on a wafer. Every value on every wire along the way was computed, not drawn, and every box can still be opened all the way down to
         the four transistors of a NAND.</p>
-        <p>The journey goes on with the same bricks arranged for throughput: <a href="#/c/lanes/0">chapters ${numOf('lanes')}</a>–${numOf('graphics')} build a GPU, from lanes sharing
+        <p>First, <a href="#/c/power/0">chapter ${numOf('power')}</a> measures what all of this costs in energy, toggle by toggle, and how a chip spends less.
+        The journey then goes on with the same bricks arranged for throughput: <a href="#/c/lanes/0">chapters ${numOf('lanes')}</a>–${numOf('graphics')} build a GPU, from lanes sharing
         one instruction stream to a rasterizer drawing into a frame buffer. <a href="#/c/dram/0">Chapters ${numOf('dram')}</a>–${numOf('bus')} go below the caches: a DRAM
         cell by cell, its controller, flash, and a bus with <span data-ahead="dma">DMA (a device that copies memory blocks without the CPU)</span> that boots a computer from flash. Chapters <a href="#/c/telegraph/0">${numOf('telegraph')}</a>–<a href="#/c/datacentre/0">${numOf('datacentre')}</a> take the machine out of the box (wires and clocks, UARTs, modems, error codes, Ethernet, networks, radio) and chapters <a href="#/c/fixed/0">${numOf('fixed')}</a>–<a href="#/c/sdr/0">${numOf('sdr')}</a> process the signals in fixed-point arithmetic, down to a DSP core. The appendices rebuild a real chip, the
         <a href="#/c/appendix-6502/0">6502</a>, in NMOS transistors, and run <a href="#/c/appendix-doom/0">Doom</a> on the RV32IM system, a window of it

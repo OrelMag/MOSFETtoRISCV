@@ -34,6 +34,9 @@ export interface CpuPower {
   clockBy: [string, number][];
   /** Leakage (µW), averaged over the cycles' settled states, per process. */
   leakUw: Record<Process['id'], number>;
+  /** Every net's C summed (fF), and the supply energy (pJ) to charge the nets that are 1 at the end again after a power-off. */
+  totalFf: number;
+  wakePj: number;
 }
 
 /** Four significant digits: the numbers span from µW of leakage to pF of clock. */
@@ -62,6 +65,8 @@ export function measureCpu(gated: boolean): CpuPower {
     let n = l.node; while (n.parent?.parent) n = n.parent;
     by.set(n.name, (by.get(n.name) ?? 0) + 1); inputs++;
   }
+  let totalFf = 0, oneFf = 0;
+  for (let i = 0; i < m.caps.length; i++) { totalFf += m.caps[i]; if (sim.get(i) === 1) oneFf += m.caps[i]; }
   return {
     nands: stats(def).nands,
     period: analyzeTiming(d)!.period,
@@ -72,6 +77,8 @@ export function measureCpu(gated: boolean): CpuPower {
     clockInputs: inputs,
     clockBy: [...by].sort((a, b) => b[1] - a[1]),
     leakUw: { hp: r3((leak.hp / POWER_CYCLES) * 1e6), lp: r3((leak.lp / POWER_CYCLES) * 1e6) },
+    totalFf: r3(totalFf),
+    wakePj: r3(oneFf * VDD * VDD / 1e3),
   };
 }
 
@@ -90,7 +97,7 @@ export interface VPoint { v: number; mhz: number; dynPj: number; leakPj: number 
  * like one off transistor each (the average of their states, measured: `leakPerNand`) × v × the instruction's time,
  * the period stretched by the device law.
  */
-export function vPoint(p: Process, v: number, b: ReturnType<typeof benchOf>, nands: number, leakPerNand: number): VPoint {
+export function vPoint(p: Process, v: number, b: { ffPerInstr: number; cpi: number; period: number }, nands: number, leakPerNand: number): VPoint {
   const tInstr = b.cpi * b.period * PS_PER_NAND * 1e-12 * delayScale(p, v);
   const dyn = 0.5 * b.ffPerInstr * 1e-15 * v * v;
   const lk = nands * leakPerNand * (offAt(p, v) / offAt(p, V_NOM)) * v * tInstr;

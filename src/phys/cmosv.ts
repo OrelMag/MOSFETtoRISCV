@@ -93,6 +93,9 @@ export function current(p: Process, vg: number, vs: number, vd: number): number 
   return is * w * (F((vg - vt - N_SLOPE * vs) / u) - F((vg - vt - N_SLOPE * vd) / u));
 }
 
+/** What the leakage model leaves out, for the text beside its numbers. */
+export const nandLeakNote = 'Two off transistors in series leak half as much as one here; real ones leak several times less (the drain lowers the upper one\'s threshold less, DIBL, and the body effect raises it, both left out of this model), so a NAND with both inputs at 0 leaks least of all';
+
 /** On current at supply v: gate and drain at v. */
 export const onCurrent = (p: Process, v: number) => current(p, v, 0, v);
 /** Off current at supply v: gate at the source, v across it. */

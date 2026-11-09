@@ -54,15 +54,10 @@ export function powerPanel(opts: PowerPanelOptions = {}): ScenePanel {
         h('span', { class: 'pw-bar' + (name.startsWith('clock') ? ' clk' : '') , style: `width:${(100 * sw / max).toFixed(1)}%` }),
         h('span', { class: 'pw-num' }, `${fmtEnergy(energyFj(sw) / cycles)} · ${Math.round((100 * sw) / total)} %`),
       ]));
-      const leak = (['hp', 'lp'] as const).map((id) => {
-        const r = leakageOf(live.meter.sim, live.meter.design, PROCESSES[id]);
-        return h('div', null, h('b', null, fmtPower(r.watts)), h('span', null, `leaking now, ${PROCESSES[id].name.toLowerCase()} process`));
-      });
+      const leak = (['hp', 'lp'] as const).map((id) => fmtPower(leakageOf(live.meter.sim, live.meter.design, PROCESSES[id]).watts));
       body.replaceChildren(
-        h('div', { class: 'pw-kpi' },
-          h('div', null, h('b', null, fmtEnergy(fj)), h('span', null, `per ${per}, ${VDD} V`)),
-          ...(live.period ? [h('div', null, h('b', null, fmtPower(powerW(fj, live.period))), h('span', null, `dynamic, at a period of ${Math.round(live.period)} NAND delays`))] : []),
-          ...leak),
+        h('p', { class: 'pw-total' }, h('b', null, fmtEnergy(fj)), ` per ${per} at ${VDD} V`, ...(live.period ? [' · ', h('b', null, fmtPower(powerW(fj, live.period))), ` at ${Math.round(live.period)} NAND delays`] : [])),
+        h('p', { class: 'pw-total' }, 'Leaking now: ', h('b', null, leak[0]), ' high performance · ', h('b', null, leak[1]), ' low leakage'),
         bars,
         h('p', { class: 'sub' }, `Over the last ${cycles} ${per}${cycles === 1 ? '' : 's'}: every toggle of every net, glitches included, at ½ C V². Leakage: the NANDs’ off transistors in the state the circuit is in now.`),
         restart);

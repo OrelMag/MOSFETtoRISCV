@@ -3169,3 +3169,23 @@ pre.code.vsrc .vl.crit { box-shadow: inset 3px 0 0 var(--accent); background: co
 .pw-bar.clk { background: color-mix(in srgb, var(--accent) 45%, var(--muted)); }
 .pw-num { font: 11.5px var(--mono, ui-monospace, monospace); color: var(--muted); text-align: right; white-space: nowrap; }
 .power-panel .sub { font-size: 12px; color: var(--muted); margin: 8px 0 6px; }
+/* The Power chapter's widgets (widgets/power.ts) */
+.pw-widget h4 { margin: 12px 0 6px; font-size: 13px; }
+.pw-widget .pw-kpi { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.pw-seg { display: inline-flex; gap: 4px; align-self: end; }
+.pw-seg .btn.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.pw-svg { width: 100%; max-width: 640px; height: auto; display: block; margin-top: 8px; }
+.pw-svg text { font-size: 12px; fill: var(--text); }
+.pw-svg text.mut { fill: var(--muted); }
+.pw-svg .axis { stroke: var(--line); stroke-width: 1; }
+.pw-svg path { fill: none; }
+.pw-svg .pw-tot { stroke: var(--text); stroke-width: 2.2; }
+.pw-svg .pw-dyn { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.pw-svg .pw-leak { stroke: var(--warn); stroke-width: 1.5; stroke-dasharray: 2 3; }
+.pw-svg .pw-min { fill: var(--good); }
+.pw-svg .pw-min-t { fill: var(--good); font-weight: 600; }
+.pw-svg .pw-cursor { stroke: var(--accent); stroke-width: 1.5; }
+.pw-bar.gated { background: var(--good); }
+.pw-total { margin: 0 0 6px; font-size: 12.5px; color: var(--text-2); }
+.pw-total b { color: var(--text); }
+@media (pointer: coarse) { .pw-seg .btn, .power-panel .btn { min-height: 40px; } }

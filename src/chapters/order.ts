@@ -36,6 +36,7 @@ const BOOK = [
   'ooo',
   'multicore',
   'silicon',
+  'power',
   'lanes',
   'simt',
   'warps',
