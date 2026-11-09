@@ -19,6 +19,7 @@ import { drawnNetlist } from './wirefirst';
 import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
 import { drawnHue, netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
+import { cmosLod, cmosShown, paintCmos } from './cmosdraw';
 import type { ViewFocus } from '../ui/viewlink';
 import type { NetEnd } from './netfacts';
 import type { ElsewhereHost, ExplainHost, MeasureHost } from './tracemenu';
@@ -195,6 +196,8 @@ export class SchematicView {
   private boxes = new Map<string, Rect>();
   /** Instances a block name may cover (legible.ts): constants (tie cells too) and pure wiring (splitters, mergers, alias boxes). */
   private quiet = new Set<string>();
+  /** Gates drawn with their insides (working gates): painted from their input ports in update(). */
+  private cmos: { name: string; el: Element; ins: string[] }[] = [];
   private routeMs = 0;
   private tooltip: HTMLDivElement;
 
@@ -205,7 +208,10 @@ export class SchematicView {
     host.append(this.el, this.tooltip);
     this.cam = new Camera(this.el, host);
     this.legible = new Legibility(this.el);
-    this.cam.listeners.add(() => this.legible.view(this.cam.pxPerUnit()));
+    this.cam.listeners.add(() => {
+      this.legible.view(this.cam.pxPerUnit());
+      if (cmosLod(this.el, this.cam.pxPerUnit())) this.update();
+    });
     installPanZoom(this.el, this.cam, {
       // shift-drag on the canvas picks parts (bandSelect) instead of panning
       canStart: (e) => !(this.arrange === true && e.shiftKey) && !(e.target as Element).closest('.inst, .pin.clickable, .bus-label') && this.grabbedNet(e) < 0,
@@ -250,6 +256,7 @@ export class SchematicView {
     this.wires = [];
     this.pins = [];
     this.insts.clear();
+    this.cmos = [];
   }
 
   /** Markers for the notes pinned to this level's parts (replaces the previous ones; a name not on this level is skipped). */
@@ -291,6 +298,7 @@ export class SchematicView {
     this.wires = [];
     this.pins = [];
     this.insts.clear();
+    this.cmos = [];
     this.atOf.clear();
     this.boxes.clear();
     this.quiet.clear();
@@ -432,6 +440,8 @@ export class SchematicView {
       if (isConstantDef(inst.def) || inst.def.prim === 'alias') this.quiet.add(inst.name);
       g.append(s('rect', { class: 'hit', x: -0.4, y: -0.4, width: geo.w + 0.8, height: geo.h + 0.8, rx: 0.6 }));
       g.append(drawSymbol(inst.def, inst.flip, inst.rot));
+      const cm = g.querySelector('.cmos');
+      if (cm) this.cmos.push({ name: inst.name, el: cm, ins: inst.def.ports.filter((p) => p.dir !== 'out').map((p) => p.name) });
       const nameAt = instNameAt(inst.def, inst.flip, inst.rot);
       if (nameAt) g.append(s('text', { class: 'inst-name', x: nameAt.x, y: nameAt.y, 'text-anchor': nameAt.anchor }, inst.label ?? inst.name));
       // A fixed-size copy of the block's label for when its own is too small to read (legible.ts); decoration, so
@@ -576,6 +586,9 @@ export class SchematicView {
       }
     }
     this.updatePins();
+    // Working gates: each drawn inside from its own input bits.
+    // (only while shown at this scale: cmosLod repaints when it appears)
+    if (this.cmos.length && cmosShown(this.el)) for (const c of this.cmos) paintCmos(c.el, c.ins.map((p) => ctx.childPortBits(c.name, p)[0]));
     // Transistors: show which ones conduct.
     if (ctx.sim instanceof SwitchSim || ctx.sim instanceof NmosSim) {
       for (const [name, g] of this.insts) {
