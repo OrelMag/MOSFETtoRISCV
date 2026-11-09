@@ -370,3 +370,6 @@ export const OS_DEMOS: OsDemo[] = [
   { id: 'share', name: 'Two counters', note: 'both count in the word at 0x1000; the timer takes the CPU back', procs: [counter(1, 5), counter(10, 5)] },
   { id: 'wall', name: 'The wall', note: 'process A stores into the kernel\'s frame, process B reads an unmapped page', procs: [rogueStore, rogueLoad] },
 ];
+
+/** A Python-subset program as a process (src/lang compilePy with the user target): its data starts at VA 0 and its stack ends at 0x2000, both in the process's own two pages. */
+export const PY_DMEM_WORDS = 2048;
