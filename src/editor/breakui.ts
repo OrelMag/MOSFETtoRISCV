@@ -35,12 +35,12 @@ const newId = (doc: ChipDoc) => { const ids = new Set((doc.breaks ?? []).map((b)
 const setBreaks = (doc: ChipDoc, breaks: BreakDoc[]): ChipDoc => { const { breaks: _, ...rest } = doc; return breaks.length ? { ...rest, breaks } : rest; };
 
 /** Add a breakpoint (one undo step) and put the caret in its condition. */
-export function addBreak(ed: Editor, b: Omit<BreakDoc, 'id'>): void {
+export function addBreak(ed: Editor, b: Omit<BreakDoc, 'id'>, focus = true): void {
   if ((ed.doc.breaks?.length ?? 0) >= MAX_BREAKS) return ed.toast(`At most ${MAX_BREAKS} breakpoints on a chip`, 'err');
   const id = newId(ed.doc);
   ed.edit((d) => setBreaks(d, [...(d.breaks ?? []), { id, ...b }]));
   ed.props.update(true);
-  requestAnimationFrame(() => {
+  if (focus) requestAnimationFrame(() => {
     const i = ed.props.el.querySelector<HTMLInputElement>(`.sb-bp-row[data-id="${id}"] input.sb-bp-cond`);
     if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); }
   });
