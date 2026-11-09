@@ -246,7 +246,7 @@ export function shiftRegister(n: number): ComponentDef {
 }
 
 /** Feedback taps (bit numbers, 1-based as in x^n + … + 1) of maximal-length LFSRs. */
-export const LFSR_TAPS: Record<number, number[]> = { 3: [3, 2], 4: [4, 3], 5: [5, 3], 6: [6, 5], 7: [7, 6], 8: [8, 6, 5, 4], 16: [16, 15, 13, 4] };
+export const LFSR_TAPS: Record<number, number[]> = { 3: [3, 2], 4: [4, 3], 5: [5, 3], 6: [6, 5], 7: [7, 6], 8: [8, 6, 5, 4], 9: [9, 5], 16: [16, 15, 13, 4] };
 
 /** Software model of lfsr(n): the next state. */
 export const lfsrNext = (q: number, n: number) => {
