@@ -73,7 +73,10 @@ export function openNet(site: MenuSite, idx: number, x: number, y: number): bool
     more: elsewhereOf(events, { net: idx }),
     ...(events.measure ? { measure: events.measure({ net: idx }) } : {}),
   });
-  showMenu(x, y, site.layout.length ? [...rows, null, ...site.layout] : rows, { owner: site.owner, into, label: `Actions for wire ${f.name}`, ...(site.back ? { back: site.back } : {}) });
+  // a "find it" step's accusation rows lead the menu
+  const acc = events.accuse?.(ctx.node.nets?.[idx] ?? [], f.name) ?? [];
+  const all = acc.length ? [...acc, null, ...rows] : rows;
+  showMenu(x, y, site.layout.length ? [...all, null, ...site.layout] : all, { owner: site.owner, into, label: `Actions for wire ${f.name}`, ...(site.back ? { back: site.back } : {}) });
   return true;
 }
 

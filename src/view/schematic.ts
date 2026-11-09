@@ -65,6 +65,8 @@ export interface SchematicEvents {
   probeOf?(net: number): { color: number; label: string } | null;
   /** The learner moved a part or a wire, or unravelled a pointer (the level was redrawn). */
   layoutChanged?(): void;
+  /** A "find it" step (widgets/findfault.ts): its rows for a wire, given the wire's flat nets and name, first in its menu. */
+  accuse?(flat: readonly number[], name: string): MenuEntry[];
 }
 
 type MenuItem = NonNullable<MenuEntry>;

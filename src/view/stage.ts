@@ -42,7 +42,7 @@ import { BreadboardView, drillNotes, pinCard, type WireLook } from './breadboard
 import { bindKeys, matches, shortcutAllowed } from '../ui/keys';
 import { type CursorItem, firstItem, nextInDir } from './kcursor';
 import './stagekeys';
-import { isMenuKey } from '../ui/menu';
+import { isMenuKey, type MenuEntry } from '../ui/menu';
 import type { ElsewhereHost, ExplainHost, MeasureHost } from './tracemenu';
 import { powerOff } from './truthrule';
 import { WhyPanel } from './whypanel';
@@ -275,6 +275,11 @@ export class Stage {
   private meterPeriod: number | null | undefined;
   /** Observers of every rising clock edge: before (inputs still old) and after it settled. */
   readonly edgeHooks = new Set<{ before?: () => void; after?: () => void }>();
+  /**
+   * A "find it" step's accusation rows for a wire (widgets/findfault.ts sets it while its panel is up): given the wire's
+   * flat nets and name, the rows that lead its right-click menu.
+   */
+  accuser: ((flat: readonly number[], name: string) => MenuEntry[]) | null = null;
   /** The rising edge in progress (slow mode plays it one gate delay at a time). */
   private edge: StageEdge | null = null;
   private edgePeriod = 0;
@@ -479,6 +484,7 @@ export class Stage {
       measure: (t) => this.measure(t),
       up: () => this.up(),
       elsewhere: (t) => this.elsewhere(t),
+      accuse: (flat, name) => this.accuser?.(flat, name) ?? [],
     });
     this.view.onCamera(() => this.syncReadable());
     this.view.arrange = true;
