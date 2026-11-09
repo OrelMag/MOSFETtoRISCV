@@ -15,6 +15,8 @@ import './iobar';
 import './keys';
 // The analysis tools plug into every editor (probes, timing, lint).
 import './analysis';
+// after analysis: the fault brush wraps probe mode's click handler
+import './faultui';
 // Test tables on a chip (Digital's test syntax), run after every edit.
 import './testsui';
 // The CPU panel: program, registers, memory and the golden model for a chip that is a processor.

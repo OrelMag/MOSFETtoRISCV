@@ -512,7 +512,9 @@ export class EditorSim {
   netBits(i: number | undefined): Bit[] | null {
     if (i === undefined || i < 0 || !this.sim) return null;
     const nets = this.sim.design.root.nets?.[i];
-    return nets ? this.sim.getBits(nets) : null;
+    // a stuck net is drawn as its readers see it
+    const to = this.sim.design.stuckTo;
+    return nets ? this.sim.getBits(to ? nets.map((n) => to.get(n) ?? n) : nets) : null;
   }
   wireBits(id: string): Bit[] | null {
     return this.netBits(this.built?.netOfWire.get(id));

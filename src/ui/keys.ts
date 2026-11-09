@@ -1,11 +1,11 @@
 // Keyboard: one table of every key the site answers (the help sheets are drawn from it), matching that
 // survives a non-Latin layout, the single-key switch (WCAG 2.1.4) and the global dispatcher. DOM-free
-// apart from installKeys, so the table and the matching are tested in Node.
+// but installKeys: tested in Node.
 //
 // Order of the listeners: Ctrl/⌘ K runs in the window's capture phase, so a drawer or dialog that stops
 // keydown in the bubble phase can't swallow it. Every other global key runs in the window's bubble phase,
-// after the page's own document listeners: a key they took (preventDefault: the sandbox flipping a wire
-// with `/`, a Key part holding its letter, a code editor) never reaches it.
+// after the page's own document listeners: a key they took (preventDefault: the sandbox's `/`,
+// a Key part's letter, a code editor) never reaches it.
 
 import { settings } from './settings';
 
@@ -118,6 +118,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'sb.undo', group: 'edit', caps: [`${MOD} Z`, '·', `${MOD} Y`], does: `undo · redo (also ${MOD} Shift Z)` },
   { id: 'sb.run', group: 'view', caps: [`${MOD} ↵`], does: 'run / pause the simulation' },
   { id: 'sb.probe', group: 'view', caps: ['P'], does: 'probe mode: click wires to record them', match: [letter('p')], taken: ['p'] },
+  { id: 'sb.fault', group: 'view', caps: ['B'], does: 'fault brush: break a wire', match: [letter('b')], taken: ['b'] },
   { id: 'sb.minimap', group: 'view', caps: ['M'], does: 'show or hide the minimap (it hides itself while the whole chip is in view)', match: [letter('m')], taken: ['m'] },
   { id: 'sb.space', group: 'view', caps: ['Space'], does: 'held: pan with a drag' },
   { id: 'sb.search', group: 'panels', caps: [`${MOD} K`, '·', '/'], does: 'search; > lists every toolbar action (Type, Package, Export…)', taken: ['/'] },

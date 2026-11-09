@@ -50,6 +50,8 @@ export interface FlatDesign {
   leaks?: Map<number, number>;
   /** Gate delays added to a leaf by a slow fault (sim/faults.ts): GateSim and static timing; the cycle engine stands aside. */
   extraDelay?: Map<number, number>;
+  /** Stuck-at faults (sim/faults.ts): a stuck net → the net its readers read now (a drawing shows that one). */
+  stuckTo?: Map<number, number>;
 }
 
 /**

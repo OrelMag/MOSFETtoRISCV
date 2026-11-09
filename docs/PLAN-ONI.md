@@ -147,8 +147,8 @@ Each must read correctly in light and dark, vivid and plain, and on a phone.
 
 ## D. Fault brush (ONI's sandbox tools)
 
-**What the learner does.** In the sandbox, a Faults tool (toolbar; `F` is flip and focus mode, so check a key such as `Shift+F` against
-`ui/keys.ts` KEYS, whose `letter('f')` match may ignore Shift): click a wire or
+**What the learner does.** In the sandbox, the fault brush (Timing ▾ Fault brush, or `B` for break: Shift F already flips,
+as tests/keys.test.ts pins): click a wire, pointer or
 a pin and pick **stuck at 0**, **stuck at 1**, **flip once** (a stored bit: a flip-flop's output or a register
 bit inside a look-inside view) or **slow** (+k gate delays). A faulted net gets a lightning badge, and a "Faults"
 list shows them all with enable boxes. Clear all. Faults are volatile: saved with the chip, never compiled into
@@ -204,3 +204,58 @@ hand-edited chip.
    This builds on the bug-hunt levels (13 fix-the-fault levels): the faults move out of hand-edited reference
    chips into planted entries. It needs its own short design (UI of the answer, grading, which levels) before
    it is built, after the sandbox brush ships.
+
+---
+
+## D2. "Break it": the campaign's fault-finding mode (design, for the author's approval; not built)
+
+**What it is.** An optional kind of level, `kind: 'locate'`, placed like a bug hunt after the level whose block it
+breaks. The learner gets that level's own reference answer, drawn as in a bug hunt (docFromDef, same part names),
+with one fault planted as a `sim/faults.ts` entry, not as a wiring edit: the drawing is right, the circuit
+misbehaves. The task is to find *where*, not to fix it. Bug hunts stay as they are (find and repair a wiring
+mistake, graded on edits); "break it" is the other half of debugging: a manufacturing defect in a correct design,
+as a chip tester sees it.
+
+**What is planted.** `BuildChallenge.planted: FaultDoc[]` (usually one; a later level two), held outside the
+learner's chip: the level's simulation applies it the way EditorSim applies `ChipDoc.faults`, but the badge, the
+Faults list and the diagnostics never show it. Kinds: stuck at 0 / 1 on a net or one bit of a bus, and slow on
+one gate (then the level runs at a fixed clock period and the symptom is a wrong capture). Flip once is not a
+planted fault: it leaves no trace to find afterwards.
+
+**The answer UI.** The level's strip gains an **Accuse** button (and `B` on a level chip turns the fault brush
+into an accuse brush). With it, a click on a wire, pointer or pin, or on a net inside a look-inside view, opens
+the same picker as the brush, with its rows reading "It is stuck at 0 here", "It is stuck at 1 here", "This gate
+is slow" (a bus offers its bits). The pick is the answer. Before accusing, the learner may test hypotheses with
+the ordinary fault brush on their own copy: planting their guess and seeing whether the symptoms match is the
+skill being taught. Their own faults are theirs (shown, listed); the planted one never is.
+
+**Grading.** An accusation is right when its flat nets (resolved as faults are, `resolveProbe`) contain the
+planted net and the kind matches. Equivalent faults count as right: a stuck-at on a net with one reader is the
+same fault as a stuck-at on that reader's input, and a fault behind an inverter chain can be named on either side
+with the value inverted. "Equivalent" is decided by simulation, not by a table: the accused fault applied to the
+healthy design must fail exactly the same test vectors as the planted one (Check's vectors, exhaustive up to 12
+input bits as today, else the level's sequence). A wrong accusation says which vectors tell the two apart (the
+first one, played in the test player) and costs a star. Stars: ★ found, ★★ found within 3 accusations, ★★★ found
+with no wrong accusation and at most `par` probes (probes placed, counted by the analysis plugin). No edit count:
+nothing is repaired.
+
+**Which levels.** Start with four, each one a different way to look:
+1. after `a_add4` (the 4-bit adder): a carry stuck at 0 in bit 2. Read the truth table's failing rows; the
+   pattern (only sums that carry through bit 2 are wrong) names the net.
+2. after `g_dec` (the decoder): one output bit stuck at 1. Two outputs high at once; a probe on each output
+   finds it.
+3. after `s_cnt4` (the counter): a stuck-at 0 on a flip-flop's D. A sequence test: the count skips; the timing
+   panel shows which bit never rises.
+4. after `c_core3` (the RV16 single-cycle core): one bit of the ALU's B operand stuck at 1. The CPU bench's first
+   mismatch against the golden model points at an instruction; Why? and the drill-down find the bit.
+A fifth, after the pipelined core, with a slow gate on the forwarding path, comes once B (breakpoints) gives a
+"stop at the first mismatch".
+
+**Code (when approved).** `campaign/locate.ts` (the hunts as data: `after`, `planted`, `par`, report text);
+`BuildChallenge.planted` applied in `checkChallenge` and the level screen's EditorSim (a hidden `FaultState`
+next to the visible one); `editor/faultui.ts` gains an accuse mode used by `challengeui.ts`; the equivalence check
+in `sim/faults.ts` (`sameSymptoms(design, a, b, vectors)`) with tests: each planted fault and its equivalents are
+accepted, a neighbouring net is rejected with a distinguishing vector.
+
+**Open for the author.** (1) Whether a wrong accusation should cost a star or only show the distinguishing vector.
+(2) Whether these sit beside the bug hunts on the map (folded into one "Debugging" header) or after each level.

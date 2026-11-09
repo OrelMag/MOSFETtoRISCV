@@ -13,6 +13,9 @@ import { GateSim } from '../src/sim/gatesim';
 import type { Sim } from '../src/sim/sim';
 import { analyzeTiming } from '../src/sim/timing';
 import { pack } from '../src/sim/values';
+import type { ChipDoc } from '../src/editor/model';
+import { EditorSim } from '../src/editor/runtime';
+import { chip, compileLib, part, pin, wire } from './editorkit';
 
 const out = (s: Sim, p: string) => pack(s.getBits(s.design.root.ports[p]));
 const carry1 = (d: FlatDesign) => findNode(d.root, ['fa1'])!.ports.cin;
@@ -202,5 +205,39 @@ describe('slow', () => {
     const add = flatten(rca(4));
     expect(applyFaults(add, [{ kind: 'slow', nets: add.root.ports.a, delay: 2 }]).problems[0]).toMatch(/input pin/);
     expect(applyFaults(add, [{ kind: 'slow', nets: [carry1(add)[0]], delay: 99 }]).problems[0]).toMatch(/1 to 32/);
+  });
+});
+
+describe('in the sandbox (EditorSim)', () => {
+  // a NOT gate between two pins; the fault sits on its input wire
+  const base = (faults?: ChipDoc['faults']): ChipDoc => chip('u_f', 'F', {
+    pins: [{ ...pin('a', 'in', [0, 2]), value: 0 }, pin('y', 'out', [20, 2])],
+    parts: [part('n', { lib: 'not' }, [8, 0])],
+    wires: [wire('w1', 'pin:a', 'n.a'), wire('w2', 'n.y', 'pin:y')],
+    ...(faults ? { faults } : {}),
+  });
+  const run = (doc: ChipDoc) => {
+    const es = new EditorSim({ debounceMs: 0 });
+    es.update(compileLib(doc), doc.pins, doc);
+    es.flush();
+    const y = pack(es.pinBits('y')!), w1 = pack(es.wireBits('w1')!);
+    const st = es.faults;
+    es.destroy();
+    return { y, w1, st };
+  };
+
+  it('a chip\'s fault is applied to its simulation, drawn on its wire; switched off it heals', () => {
+    expect(run(base()).y).toBe(1);
+    const on = run(base([{ id: 'f1', kind: 'stuck1', target: { wires: ['w1'] } }]));
+    expect(on.y).toBe(0);
+    expect(on.w1).toBe(1); // the wire shows what its readers read
+    expect(on.st.applied.get('f1')?.length).toBe(1);
+    expect(run(base([{ id: 'f1', kind: 'stuck1', target: { wires: ['w1'] }, off: true }])).y).toBe(1);
+  });
+
+  it('a fault whose wire is gone is kept, marked stale', () => {
+    const r = run(base([{ id: 'f2', kind: 'stuck0', target: { wires: ['nope'] } }]));
+    expect(r.st.stale.has('f2')).toBe(true);
+    expect(r.y).toBe(1);
   });
 });

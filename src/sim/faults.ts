@@ -86,9 +86,10 @@ export function applyFaults(d: FlatDesign, faults: readonly FlatFault[]): ApplyR
   let netCount = d.netCount;
   let leaves = d.leaves;
   let root = d.root;
+  const stuckTo = new Map<number, number>();
   if (stuck.size) {
     // a fresh net per stuck net, driven by its constant
-    const to = new Map<number, number>();
+    const to = stuckTo;
     const ties: FlatLeaf[] = [];
     for (const [n, v] of stuck) {
       const y = netCount++;
@@ -110,7 +111,7 @@ export function applyFaults(d: FlatDesign, faults: readonly FlatFault[]): ApplyR
       root = Object.assign(Object.create(Object.getPrototypeOf(root)), root, { ports }) as HierNode;
     }
   }
-  return { design: { ...d, root, netCount, leaves, ...(extra.size ? { extraDelay: extra } : {}) }, problems };
+  return { design: { ...d, root, netCount, leaves, ...(extra.size ? { extraDelay: extra } : {}), ...(stuckTo.size ? { stuckTo } : {}) }, problems };
 }
 
 /** A stable text of the faults, for a simulation's key. '' with none. */
