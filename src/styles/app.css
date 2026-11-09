@@ -523,6 +523,14 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .prose details.deeper > summary { cursor: pointer; font-weight: 600; font-size: 13.5px; color: var(--text-2); }
 .prose details.deeper[open] > summary { margin-bottom: 6px; }
 .prose details.deeper p { font-size: 13.5px; }
+/* worked examples inside a deeper aside (ch-pipe.ts hazardWorked): a wide table scrolls on its own, a pipeline diagram's cells stay narrow */
+.prose .worked-wrap { overflow-x: auto; max-width: 100%; }
+.prose table.pipe-trace { margin: 0.4em 0 0.6em; font-size: 12px; }
+.prose table.pipe-trace :is(th, td) { padding: 2px 5px; border: 1px solid var(--border); text-align: center; }
+.prose table.pipe-trace tbody th { text-align: left; white-space: nowrap; font-weight: 400; }
+.prose table.pipe-trace tr.flushed { color: var(--muted); }
+.prose table.pipe-trace tr.flushed code { text-decoration: line-through; }
+.prose details.deeper li { font-size: 13.5px; margin: 0.3em 0; }
 /* a try ticked: quieter than a solved check (green), which is what the chapter's counter counts */
 .prose .try.tried { border-style: solid; }
 .prose .try-done { display: flex; align-items: center; gap: 4px; margin-top: 4px; color: var(--text-2); font-weight: 600; font-size: 13px; }
