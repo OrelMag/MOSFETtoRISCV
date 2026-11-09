@@ -7,7 +7,7 @@ import { reportLink } from './errors';
 /** [label, href] pairs; the first is the primary button. */
 export type Way = [string, string];
 
-/** `heading`: h1 when the notice is the whole page (app.ts), h2 under a page that has its own h1 (campaign, level). */
+/** `heading`: h2 under a page with its own h1. */
 export function notFound(title: string, text: string, ways: Way[], heading: 'h1' | 'h2' = 'h1'): HTMLElement {
   return h('div', { class: 'widget missing-chapter', role: 'status' }, h('div', { class: 'panel' },
     h(heading, { class: 'nf-title' }, title),
