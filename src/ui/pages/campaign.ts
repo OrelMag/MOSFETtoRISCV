@@ -324,15 +324,16 @@ export class CampaignPage implements Page {
     };
     const scroll = h('div', { class: 'cp-map-scroll' }, draw(this.mapCols));
     mark();
-    if (!sel && !this.mapScroll && frontier) {
-      requestAnimationFrame(() => {
-        const node = scroll.querySelector<SVGGraphicsElement>('.cp-node.next');
-        if (!node) return;
-        const r = node.getBoundingClientRect(), v = scroll.getBoundingClientRect();
-        scroll.scrollTop += r.top - v.top - (v.height - r.height) / 2;
-        scroll.scrollLeft += r.left - v.left - (v.width - r.width) / 2;
-      });
-    }
+    // centre the ringed level; again if the first redraw (the real column count) moves it within the first second
+    const land = () => {
+      const node = scroll.querySelector<SVGGraphicsElement>('.cp-node.next');
+      if (!node) return;
+      const r = node.getBoundingClientRect(), v = scroll.getBoundingClientRect();
+      scroll.scrollTop += r.top - v.top - (v.height - r.height) / 2;
+      scroll.scrollLeft += r.left - v.left - (v.width - r.width) / 2;
+    };
+    const landUntil = !sel && !this.mapScroll && frontier ? performance.now() + 1000 : 0;
+    if (landUntil) requestAnimationFrame(land);
     this.mapFit?.disconnect();
     this.mapFit = new ResizeObserver(() => {
       const cols = mapColsFor(scroll.clientWidth);
@@ -344,6 +345,7 @@ export class CampaignPage implements Page {
       refocus();
       // the first draw guessed the columns: the selected level moved
       if (performance.now() < this.revealUntil) this.reveal();
+      else if (performance.now() < landUntil) land();
     });
     this.mapFit.observe(scroll);
     return h('div', { class: 'cp-split' },
