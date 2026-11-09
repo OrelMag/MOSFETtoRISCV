@@ -1133,15 +1133,55 @@ svg.schematic.focus .inst.hl .hit { animation: none; fill: color-mix(in srgb, va
   --slack-3: hsl(80 22% 36%);
   --slack-4: hsl(220 14% 38%);
 }
-.inst[data-slack='0'], .slack-legend .sk0 { --slack-c: var(--slack-0); }
-.inst[data-slack='1'], .slack-legend .sk1 { --slack-c: var(--slack-1); }
-.inst[data-slack='2'], .slack-legend .sk2 { --slack-c: var(--slack-2); }
-.inst[data-slack='3'], .slack-legend .sk3 { --slack-c: var(--slack-3); }
-.inst[data-slack='4'], .slack-legend .sk4 { --slack-c: var(--slack-4); }
+.inst[data-ov='0'], .slack-legend .sk0 { --slack-c: var(--slack-0); }
+.inst[data-ov='1'], .slack-legend .sk1 { --slack-c: var(--slack-1); }
+.inst[data-ov='2'], .slack-legend .sk2 { --slack-c: var(--slack-2); }
+.inst[data-ov='3'], .slack-legend .sk3 { --slack-c: var(--slack-3); }
+.inst[data-ov='4'], .slack-legend .sk4 { --slack-c: var(--slack-4); }
+/* The overlay bar (view/overlays.ts): one quantity at a time. Parts are filled with the slack tokens (tuned as fills
+   for each theme and look), wires drawn in --ov-0…4 (tuned as lines on each board); X is the palette's own --wx.
+   Everything left unmarked fades. */
+:root {
+  --ov-0: #d62828;
+  --ov-1: #dd6a12;
+  --ov-2: #a8860a;
+  --ov-3: #1e9070;
+  --ov-4: #3a6cb5;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ov-0: #ff5f5f;
+    --ov-1: #ff9a3c;
+    --ov-2: #f0cf4a;
+    --ov-3: #5fc7a4;
+    --ov-4: #6f9fe6;
+  }
+}
+:root[data-theme='dark'],
+:root[data-look='vivid'][data-board='dark'] svg.schematic {
+  --ov-0: #ff5f5f;
+  --ov-1: #ff9a3c;
+  --ov-2: #f0cf4a;
+  --ov-3: #5fc7a4;
+  --ov-4: #6f9fe6;
+}
+[data-ov='0'] { --ov-c: var(--ov-0); }
+[data-ov='1'] { --ov-c: var(--ov-1); }
+[data-ov='2'] { --ov-c: var(--ov-2); }
+[data-ov='3'] { --ov-c: var(--ov-3); }
+[data-ov='4'] { --ov-c: var(--ov-4); }
+[data-ov='x'] { --ov-c: var(--wx); }
 /* above the module and vivid body colours */
-:root svg.schematic.slack-heat .inst[data-slack] .sym :is(.sym-body, .sym-box) { fill: var(--slack-c); }
-:root svg.schematic.slack-heat .inst[data-slack='0'] .sym :is(.sym-body, .sym-box) { stroke: color-mix(in oklab, var(--slack-0) 55%, var(--text)); }
-svg.schematic.slack-heat .inst:not([data-slack]):not(.plumbing) { opacity: 0.45; }
+:root svg.schematic.ov .inst[data-ov]:not([data-ov='x']) .sym :is(.sym-body, .sym-box) { fill: var(--slack-c); }
+:root svg.schematic.ov .inst[data-ov='0'] .sym :is(.sym-body, .sym-box) { stroke: color-mix(in oklab, var(--slack-0) 55%, var(--text)); }
+:root svg.schematic.ov .inst[data-ov-src] .sym :is(.sym-body, .sym-box) { fill: color-mix(in oklab, var(--wx) 28%, var(--sym-fill)); stroke: var(--wx); stroke-dasharray: 0.5 0.25; }
+svg.schematic.ov .inst:not([data-ov]):not(.plumbing) { opacity: 0.45; }
+svg.schematic.ov :is(.wire, .net-tag, .tap-label, .bus-label, .dot, .tag-end):not([data-ov]) { opacity: 0.3; }
+svg.schematic.ov :is(.wire-flow, .flow-tokens) { display: none; }
+:root svg.schematic.ov .wire[data-ov] { stroke: var(--ov-c); opacity: 1; stroke-dasharray: none; filter: none; stroke-width: calc(var(--wire-w1) * var(--wire-k, 1) * 1.7); }
+:root svg.schematic.ov .wire.bus[data-ov] { stroke-width: calc(var(--wire-bus) * var(--wire-k, 1) * 1.15); }
+:root svg.schematic.ov-activity .wire[data-ov='4'], :root svg.schematic.ov-load .wire[data-ov='4'] { stroke-width: calc(var(--wire-w0) * var(--wire-k, 1)); }
+:root svg.schematic.ov .dot[data-ov] { fill: var(--ov-c); }
 .slack-legend { margin-top: 8px; font-size: 12px; color: var(--text-2); }
 .slack-legend .sk-key { display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .slack-legend .sk-key span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }

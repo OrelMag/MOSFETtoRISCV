@@ -16,6 +16,7 @@ import type { ViewCtx } from './context';
 import { hopPathData, overlaps, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type Rect, type RoutedNet, type TapLabel } from './route';
 import { partnerLines } from './partners';
 import { drawnNetlist } from './wirefirst';
+import type { OverlayMarks } from './overlays';
 import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
 import { drawnHue, netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
@@ -89,6 +90,8 @@ interface WireEls {
   ants?: SVGPathElement[];
   antsKey?: string;
   lanes?: Lane[];
+  /** The wide invisible stroke a pointer finds the net by (its tooltip under an overlay). */
+  hit?: SVGPathElement;
   label?: SVGGElement;
   labelText?: SVGTextElement;
   labelBg?: SVGRectElement;
@@ -160,7 +163,8 @@ export class SchematicView {
   private netMarks = new Map<number, string>();
   private lastHl: { names: string[]; focus: boolean } = { names: [], focus: false };
   /** The slack heatmap on this level (instance → band and tooltip), kept across a relayout, dropped on another level. */
-  private heatMap: Map<string, { band: number; tip: string }> | null = null;
+  /** The overlay drawn (view/overlays.ts): marked parts and wires in their band, the rest faded. */
+  private ov: OverlayMarks | null = null;
   private probeG: SVGGElement | null = null;
   private flowG: SVGGElement | null = null;
   private labelG: SVGGElement | null = null;
@@ -291,7 +295,7 @@ export class SchematicView {
     this.faded.clear();
     this.netMarks = new Map();
     this.closeMenu();
-    if (!keepView) { this.group = new Set(); this.heatMap = null; }
+    if (!keepView) { this.group = new Set(); this.ov = null; }
     const authored = netlistOf(ctx.def);
     const base = this.base = authored ? drawnNetlist(ctx.def, authored) : null;
     this.el.replaceChildren();
@@ -384,7 +388,8 @@ export class SchematicView {
       // One wide invisible stroke per net makes thin wires easy to point at and click.
       if (net.paths.length) {
         const d = net.paths.map((p) => 'M' + p.map(([x, y]) => `${x},${y}`).join(' L')).join(' ');
-        hitG.append(s('path', { d, class: 'wire-hit', 'data-net': net.index }));
+        w.hit = s('path', { d, class: 'wire-hit', 'data-net': net.index });
+        hitG.append(w.hit);
       }
       for (const t of tapsOf.get(net.index) ?? []) {
         const g = s('g', { class: 'tap-label', 'data-net': net.index, 'data-ts': String(Math.min(8, Math.max(3, Math.round(t.size * 10)))) });
@@ -421,6 +426,7 @@ export class SchematicView {
         w.labelBg = bg;
       }
       this.wires.push(w);
+      this.paintOvWire(w);
     }
 
     // Instances
@@ -498,7 +504,7 @@ export class SchematicView {
       });
       this.insts.set(inst.name, g);
       instG.append(g);
-      this.paintHeat(inst.name, g);
+      this.paintOv(inst.name, g);
       this.paintNotePins(inst.name, g);
     }
 
@@ -828,22 +834,40 @@ export class SchematicView {
     }
   }
 
-  /**
-   * Tint instances by slack (band 0 = on the critical path … 4 = plenty of spare time; styles in app.css's
-   * slack tokens); instances left out stay untinted. null turns it off.
-   */
+  /** Tint instances by slack (sim/slack.ts slackHeat; null clears): the Slack overlay. */
   heat(map: Map<string, { band: number; tip: string }> | null): void {
-    this.heatMap = map;
-    this.el.classList.toggle('slack-heat', !!map);
-    for (const [name, g] of this.insts) this.paintHeat(name, g);
+    this.overlay(map ? { kind: 'slack', inst: map, net: new Map() } : null);
   }
 
-  private paintHeat(name: string, g: SVGGElement): void {
-    const h = this.heatMap?.get(name);
-    g.querySelector(':scope > title.slack-tip')?.remove();
-    if (!h) return void g.removeAttribute('data-slack');
-    g.setAttribute('data-slack', String(h.band));
-    g.prepend(s('title', { class: 'slack-tip' }, h.tip));
+  /**
+   * One overlay over this level (view/overlays.ts): each marked part and wire carries its band (data-ov: 0 … 4, or x)
+   * and its value as a tooltip; the rest fades (app.css, svg.schematic.ov). null clears.
+   */
+  overlay(o: OverlayMarks | null): void {
+    this.ov = o;
+    for (const c of [...this.el.classList]) if (c.startsWith('ov-')) this.el.classList.remove(c);
+    this.el.classList.toggle('ov', !!o);
+    if (o) this.el.classList.add(`ov-${o.kind}`);
+    for (const [name, g] of this.insts) this.paintOv(name, g);
+    for (const w of this.wires) this.paintOvWire(w);
+  }
+
+  private paintOv(name: string, g: SVGGElement): void {
+    const m = this.ov?.inst.get(name);
+    g.querySelector(':scope > title.ov-tip')?.remove();
+    if (!m) { g.removeAttribute('data-ov'); g.removeAttribute('data-ov-src'); return; }
+    g.setAttribute('data-ov', String(m.band));
+    g.toggleAttribute('data-ov-src', !!m.src);
+    g.prepend(s('title', { class: 'ov-tip' }, m.tip));
+  }
+
+  private paintOvWire(w: WireEls): void {
+    const m = this.ov?.net.get(w.net.index);
+    const els: Element[] = [...w.paths, ...w.tags, ...w.taps, ...w.dots, ...(w.label ? [w.label] : [])];
+    for (const e of els) if (m) e.setAttribute('data-ov', String(m.band)); else e.removeAttribute('data-ov');
+    if (!w.hit) return;
+    w.hit.querySelector('title')?.remove();
+    if (m) w.hit.append(s('title', null, m.tip));
   }
 
   select(name: string | null): void {

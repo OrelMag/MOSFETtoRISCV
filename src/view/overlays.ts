@@ -11,7 +11,7 @@ import type { FlatDesign, HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
 import { SLACK_BAND_LABELS, slackHeat, slackOf } from '../sim/slack';
 import { hasFeedback } from '../sim/stats';
-import { BX } from '../sim/types';
+import { BX, netlistOf } from '../sim/types';
 import { groupDigits } from '../sim/numfmt';
 import { FF_INPUT, FF_WIRE } from '../sim/netcap';
 
@@ -69,12 +69,10 @@ export const BUFFER_FANOUT: number = (() => {
   return 64;
 })();
 
-/** A net of the level by index: its flat bits (empty when not expanded). */
-const bitsOf = (node: HierNode, i: number) => node.nets?.[i] ?? [];
 
 /** The name a net goes by in a tooltip. */
 function netName(node: HierNode, i: number): string {
-  const nd = node.def.netlist?.()?.nets[i];
+  const nd = netlistOf(node.def)?.nets[i];
   return nd?.name ?? nd?.ends[0] ?? `net ${i}`;
 }
 
@@ -203,3 +201,6 @@ export function unknownOverlay(sim: Sim, node: HierNode): OverlayResult {
     },
   };
 }
+
+/** What a view draws of an overlay: the marks, without the legend. */
+export type OverlayMarks = Pick<OverlayResult, 'kind' | 'inst' | 'net'>;
