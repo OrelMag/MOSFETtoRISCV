@@ -131,7 +131,7 @@ export class StepNotes {
     }
     foot.append(h('button', { class: 'note-btn', type: 'button', onclick: () => store.remove(it.id) }, 'Delete'));
     const card = h('div', { class: 'note-card', 'data-note': it.id },
-      h('label', { class: 'note-k', for: id }, h('span', { class: 'note-no' }, String(n)), 'Your note', h('small', null, ' · only on this device, in the backup file')),
+      h('label', { class: 'note-k', for: id }, h('span', { class: 'note-no' }, String(n)), 'Your note', h('small', null, ' · kept on this device, and in a backup file')),
       ta, foot);
     this.cards.set(it.id, card);
     return card;
