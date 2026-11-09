@@ -182,6 +182,7 @@ export const THREAD0: Record<string, NodeThread> = {
       g_mux8: 'sixteen of it sharing one select and one ¬s',
       s_reg4: 'the enable: a mux feeds each flip-flop d or its own q',
       c_br: 'picks equality or less-than by the condition\'s bit 1',
+      m_lut: 'fifteen of it in a tree of four levels make a look-up table',
     },
     pitfalls: [
       's = 1 selects b; swapping a and b passes only half the table.',
@@ -241,7 +242,6 @@ export const THREAD0: Record<string, NodeThread> = {
       s_pc: 'one: pc + 1 or a loaded target (reset is an AND row, cheaper than a second mux)',
       m_rf: 'trees of it are the two 8:1 read ports, 343 NANDs each',
       m_ram: 'a 4:1 tree reads the selected word',
-      m_lut: 'one bit wide, a 16:1 tree of it is a look-up table',
       c_imm: 'not inside it (it is wiring only): the core\'s 4:1 bus mux picks one of its four immediates',
       c_npc: 'chooses the target: pc + imm or rs1 + imm',
       pi_reg: 'puts 0 in front of the flip-flops on clr: a bubble',

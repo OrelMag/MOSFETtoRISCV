@@ -12,7 +12,7 @@ import { BUILD9 } from './build9';
 import { BUILDCARD } from './buildcard';
 import { BUILDFP, FP_REF, fpGives, normSubs } from './buildfp';
 import { BUILDH } from './buildh';
-import { BUILD_LUT, LUT_WITHHOLD } from './buildlut';
+import { BUILD_LUT } from './buildlut';
 import { BUILDK } from './buildk';
 import { BUILDM } from './buildm';
 import { BUILDR } from './buildr';
@@ -363,14 +363,14 @@ export const NODES: CampaignNode[] = withBugHunts([
     codex: ['ram', 'sram'], unlocks: ['ram4x4'], par: { nand: 274, period: 11 }, chapters: [{ chapter: 'memory', step: 0, label: 'Four words, one address' }],
   },
   {
-    id: 'm_lut', act: 3, title: 'A look-up table', kind: 'build', optional: true, requires: ['g_mux8'], base: BUILD_LUT.m_lut, withhold: LUT_WITHHOLD,
+    id: 'm_lut', act: 3, title: 'A look-up table', kind: 'build', optional: true, requires: ['g_mux'], base: BUILD_LUT.m_lut,
     why: 'A memory read by its inputs computes any function of them: store a truth table in 16 bits and let four inputs pick one. That is an FPGA\'s logic cell, a LUT4: fifteen 2:1 multiplexers, 60 NANDs, whatever function it holds. Our RISC-V computer on a Tang Nano 9K is about five thousand of them.',
     tips: ['y = cfg[i]: the inputs are the address, the configuration is the data.', 'A tree: eight 2:1 muxes on i0 pick between neighbouring bits, four on i1 between those, then two, then one.', 'i0 is the lowest select bit and belongs on the first level: swapped levels read the bits in the wrong order and half the table fails.'],
     codex: ['lut'], par: { nand: 60, depth: 9 }, chapters: [{ chapter: 'fpga', step: 1, label: 'A look-up table is a memory' }],
   },
   {
     id: 'd_lut', act: 3, title: 'Program the LUT', kind: 'drill', optional: true, requires: ['m_lut'], drill: 'lut', par: { mistakes: 2 },
-    why: 'An FPGA is configured, not wired: every LUT holds its function as 16 bits. A function in words becomes those bits by writing its truth table, address 0 at bit 0. There are 65 536 of them, and the same 60 NANDs compute each one.',
+    why: 'An FPGA is configured, not wired: every LUT holds its function as 16 bits. A function in words becomes those bits by writing its truth table, address 0 at bit 0. There are 65 536 of them, and the same 60 NANDs compute each one.',
     tips: ['Go through the addresses 0 to 15 (d c b a in binary) and write the output of each: that column is the configuration.', 'Bit 0 is address 0, at the right end: read the column from address 15 down to 0 to write it in hex.', 'Four addresses make a hex digit: addresses 0–3 are the last digit.'],
     codex: ['lut'], chapters: [{ chapter: 'fpga', step: 2, label: 'Any function of four inputs' }],
   },

@@ -513,7 +513,7 @@ export const PATH_LEVELS: Record<string, LevelFact> = {
   "m_ctrl": {"title":"Row-buffer controller","kind":"build","requires":["m_bank"],"optional":true},
   "m_dma": {"title":"DMA engine","kind":"build","requires":["m_bus"],"optional":true},
   "m_flash": {"title":"Flash page store","kind":"build","requires":["m_lesson"],"optional":true},
-  "m_lut": {"title":"A look-up table","kind":"build","requires":["g_mux8"],"optional":true},
+  "m_lut": {"title":"A look-up table","kind":"build","requires":["g_mux"],"optional":true},
   "m_ram": {"title":"4 × 4 RAM","kind":"build","requires":["s_reg4","g_dec","g_mux8"],"optional":true},
   "m_rf": {"title":"Register file","kind":"build","requires":["s_reg16","g_dec","g_mux8"]},
   "m_sense": {"title":"A DRAM column","kind":"build","requires":["m_lesson"],"optional":true},

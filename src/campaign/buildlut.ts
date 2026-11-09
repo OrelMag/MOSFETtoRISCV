@@ -1,6 +1,6 @@
-// The FPGA chapter's side level in act 3: a look-up table from 2:1 multiplexers (m_lut). Its reference answer is the
-// library's LUT4 (lib/fpga.ts) drawn as a chip, with its 16:1 multiplexer as a chip of its own, so it is built and
-// checked under the level's rule (the library's ready multiplexer trees are withheld). No DOM.
+// The FPGA chapter's side level in act 3: a look-up table from 2:1 multiplexers (m_lut). It builds on g_mux only, so
+// its rule offers the 2:1 mux and NOT but none of the library's multiplexer trees. Its reference answer is the library's
+// LUT4 (lib/fpga.ts) drawn as a chip, with its 16:1 multiplexer as a chip of its own, so it passes under that rule. No DOM.
 
 import type { BuildChallenge, PinSpec } from '../editor/challenges';
 import { docFromDef } from '../editor/fromdef';
@@ -12,9 +12,6 @@ const pins = (ins: [string, number?][], outs: [string, number?][]): PinSpec[] =>
   ...ins.map(([name, width = 1]): PinSpec => ({ name, dir: 'in', width })),
   ...outs.map(([name, width = 1]): PinSpec => ({ name, dir: 'out', width })),
 ];
-
-/** The library parts the level takes away: every ready multiplexer tree and LUT (a 2:1 mux and the bus muxes stay). */
-export const LUT_WITHHOLD = ['mux4x1', 'mux8x1', 'mux16x1', 'mux32x1', 'lut2', 'lut4'];
 
 let answer: ChipDoc[] | undefined;
 function reference(): ChipDoc[] {
@@ -38,7 +35,7 @@ function oneHot(): number[][] {
 export const BUILD_LUT: Record<string, () => BuildChallenge> = {
   m_lut: () => ({
     id: 'm_lut', title: 'A look-up table', level: 'memory', allowed: 'nand',
-    brief: '<b>y = cfg[i]</b>: the 4-bit input <code>i</code> picks one of the 16 configuration bits <code>cfg</code>. Set cfg to a function\'s truth table (bit k = the output for i = k) and the circuit computes it: 0x8000 is the AND of the four bits of i, 0x6666 the XOR of the low two. This is an FPGA\'s logic cell. Build it from 2:1 multiplexers; the library\'s ready multiplexer trees are taken away.',
+    brief: '<b>y = cfg[i]</b>: the 4-bit input <code>i</code> picks one of the 16 configuration bits <code>cfg</code>. Set cfg to a function\'s truth table (bit k = the output for i = k) and the circuit computes it: 0x8000 is the AND of the four bits of i, 0x6666 the XOR of the low two. This is an FPGA\'s logic cell. Build it from 2:1 multiplexers.',
     ports: pins([['cfg', 16], ['i', 4]], [['y']]),
     check: { kind: 'table', spec: ([cfg, i]) => [(cfg >> i) & 1], vectors: oneHot },
     answer: reference,
