@@ -89,7 +89,7 @@ export const chVmem: Chapter = {
       },
       {
         question: 'The handler of a page fault writes a new page-table entry and returns with mret, but leaves out sfence.vma. On this hardware, what can go wrong?',
-        options: ['Nothing: a walk that finds no valid entry fills no TLB entry, so no stale one exists for that page', 'The new mapping is ignored forever', 'The CPU stalls', 'The walker writes the entry back wrongly'],
+        options: ['Nothing goes wrong here', 'The new mapping is ignored forever', 'The CPU stalls', 'The walker writes the entry back wrongly'],
         answer: 0,
         explain: 'The walk that faulted filled no entry (a walk that finds no valid entry leaves both TLBs as they were), so the retry walks again and finds the new entry. The omission bites when an entry already in the page table is changed or removed: a TLB may still hold the old translation until sfence.vma. A handler should still issue it, because the specification does not promise what a TLB caches.',
         why: ['', 'It is not ignored: the next walk reads the new entry from memory.', 'A stall lasts only as long as a walk (a few cycles).', 'The walker is read-only; it never writes a page table (software sets A and D).'],
@@ -197,7 +197,7 @@ export const chVmem: Chapter = {
       challenge: {
         kind: 'quiz',
         question: 'A load goes through Sv32 with nothing cached. How many memory reads does it make in all, to a normal 4 KiB page?',
-        options: ['3: root entry, second-table entry, the data', '1', '2', '4'],
+        options: ['3', '1', '2', '4'],
         answer: 0,
         explain: 'Two page-table reads and then the access itself. That tripling of memory traffic, on every fetch and every load and store, is why a cache of translations exists (step 6).',
         why: ['', 'One read would need a single flat table; Sv32 has two levels.', 'Two are the page-table reads; the access the program asked for is a third.', 'There are only two levels of table, so two walk reads plus the access.'],

@@ -2,6 +2,7 @@
 // thread quote is measured here (pars, library parts, the puzzle runner on the references and on the variants
 // the texts compare them with, the benchmark results, PIPE_COSTS) and read back from the text.
 
+import { numOf } from '../src/chapters/order';
 import { groupDigits } from '../src/sim/numfmt';
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
@@ -314,9 +315,9 @@ describe('acts 9–10: the memory numbers', () => {
     expect(lesson).toContain(`stall it ${fast.dstall} cycles, ${fmt(fast.cycles)} in all`);
     expect(lesson).toContain(`open pages ${fmt(open.dstall)} (${fmt(open.cycles)}); with closed pages ${fmt(closed.dstall)} (${fmt(closed.cycles)})`);
     expect(kase('m_lesson')).toContain(`misses ${fast.dmiss} times`);
-    expect(kase('m_lesson')).toContain(`stall ${fast.dstall} cycles (${fmt(fast.cycles)} in all), over chapter 36's DRAM controller with open pages ${fmt(open.dstall)} (${fmt(open.cycles)}), with closed pages ${fmt(closed.dstall)} (${fmt(closed.cycles)})`);
+    expect(kase('m_lesson')).toContain(`stall ${fast.dstall} cycles (${fmt(fast.cycles)} in all), over chapter ${numOf('memctrl')}'s DRAM controller with open pages ${fmt(open.dstall)} (${fmt(open.cycles)}), with closed pages ${fmt(closed.dstall)} (${fmt(closed.cycles)})`);
     expect(kase('o_cache')).toContain(`matmul misses ${fast.dmiss} times: ${fast.dstall} stall cycles`);
-    expect(kase('o_cache')).toContain(`${fmt(open.dstall)} behind chapter 36's open-page controller`);
+    expect(kase('o_cache')).toContain(`${fmt(open.dstall)} behind chapter ${numOf('memctrl')}'s open-page controller`);
   });
 
   it('the bus against a crossbar and chapter 38\'s bus; the DMA engine', () => {
