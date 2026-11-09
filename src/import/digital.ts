@@ -13,8 +13,10 @@
 // DOM-free: tests/import-digital.test.ts compiles and simulates what this makes.
 
 import { type ChipDoc, type CommentDoc, type EndRef, type ExitDir, isIdent, type LabelDoc, type PartDoc, type PartRef, type PinDoc,
-  slug, uniqueName, type Vec, type WireDoc } from '../editor/model';
+  defaultFace, slug, uniqueName, type Vec, type WireDoc } from '../editor/model';
 import { compileChip } from '../editor/compile';
+import { DIR, partBox, pinBody } from '../editor/geom';
+import { untangled } from '../editor/untangle';
 import { isError, partDef } from '../editor/parts';
 import { instPort, symbolGeom } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
@@ -1081,7 +1083,7 @@ class Sheet {
     }
 
     this.emitWires(wires, live);
-    this.placeParts();
+    this.stretch();
     return this.doc;
   }
 
@@ -1212,13 +1214,82 @@ class Sheet {
     }
   }
 
-  private placeParts() {
+  /**
+   * Digital's boxes are smaller than ours, so a part anchored on one port at Digital's point can cover its neighbours and
+   * the pins beside it. Each axis is stretched where that happens: a monotone map of Digital's coordinates (room added
+   * between two neighbouring values), applied to every point the sheet took from the file at once, so horizontal and
+   * vertical runs stay so and a junction stays on the run it names. Parts tied to another part (an inverter on a negated
+   * input, a constant) move with it.
+   */
+  private stretch() {
+    const room = [new Map<number, number>(), new Map<number, number>()];
+    const map = (v: number, ax: 0 | 1) => { let o = 0; for (const [at, r] of room[ax]) if (at <= v) o += r; return v + o; };
+    const M = (p: Vec): Vec => [map(p[0], 0), map(p[1], 1)];
+    // the Digital point each part hangs from (a tied part: its owner's)
+    const byPart = new Map(this.aligns.map((a) => [a.part, a]));
+    const rootOf = (id: string): string => { for (let k = 0, a = byPart.get(id); a?.rel && k < 16; k++, a = byPart.get(a.rel.part)) id = a.rel.part; return id; };
+    const xs = [new Set<number>(), new Set<number>()];
+    const note = (v: Vec) => { xs[0].add(v[0]); xs[1].add(v[1]); };
+    for (const a of this.aligns) if (a.at) note(a.at);
+    for (const p of this.doc.pins) note(p.at);
+    for (const w of this.doc.wires) w.pts.forEach(note);
+    const sorted = xs.map((s) => [...s].sort((a, b) => a - b));
+    const crosses = (a: { x: number; y: number; w: number; h: number }, b: typeof a) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    for (let round = 0; round < 64; round++) {
+      this.placeParts(M);
+      type Thing = { root: string; anchor: Vec; box: { x: number; y: number; w: number; h: number } };
+      const things: Thing[] = [];
+      for (const p of this.doc.parts) {
+        const r = rootOf(p.id), a = byPart.get(r)?.at, def = this.imp.defOf(p.ref);
+        if (a && def) things.push({ root: r, anchor: a, box: partBox(def, p.at, p.flip, p.rot) });
+      }
+      const parts = things.length;
+      for (const p of this.doc.pins) things.push({ root: `pin:${p.id}`, anchor: p.at, box: pinBody({ ...p, at: M(p.at) }) });
+      // the first two that overlap and that Digital put apart (two hung from one point cannot be pulled apart here)
+      let hit: { a: Thing; b: Thing; over: number[]; ax: 0 | 1 } | null = null;
+      for (let i = 0; i < parts && !hit; i++) for (let j = i + 1; j < things.length && !hit; j++) {
+        const a = things[i], b = things[j];
+        if (a.root === b.root || !crosses(a.box, b.box)) continue;
+        const over = [Math.min(a.box.x + a.box.w, b.box.x + b.box.w) - Math.max(a.box.x, b.box.x), Math.min(a.box.y + a.box.h, b.box.y + b.box.h) - Math.max(a.box.y, b.box.y)];
+        // apart along the axis that needs less room, where Digital put them apart on it
+        const axes = ([0, 1] as const).filter((ax) => a.anchor[ax] !== b.anchor[ax]).sort((p, q) => over[p] - over[q]);
+        if (axes.length) hit = { a, b, over, ax: axes[0] };
+      }
+      if (!hit) return this.applyStretch(M);
+      const { a, b, over, ax } = hit, [lo, hi] = a.anchor[ax] < b.anchor[ax] ? [a.anchor[ax], b.anchor[ax]] : [b.anchor[ax], a.anchor[ax]];
+      const at = sorted[ax].find((v) => v > lo && v <= hi) ?? hi;
+      room[ax].set(at, (room[ax].get(at) ?? 0) + Math.ceil(over[ax] + 1));
+    }
+    this.applyStretch(M);
+  }
+
+  /** Every point the sheet took from the file, through the stretch; the parts placed on it. */
+  private applyStretch(M: (p: Vec) => Vec) {
+    const d = this.doc;
+    for (const p of d.pins) p.at = M(p.at);
+    for (const l of d.labels) l.at = M(l.at);
+    for (const c of d.comments ?? []) c.at = M(c.at);
+    for (const w of d.wires) {
+      w.pts = w.pts.map(M);
+      for (const e of [w.a, w.b]) if ('wire' in e) e.at = M(e.at);
+    }
+    this.placeParts(M);
+    // a pin Digital set on a part's port (no wire between) would sit on the part's edge: two units out, the way it faces
+    // (its connection is a wire to that port, not the point)
+    const ports = new Set(d.parts.flatMap((p) => {
+      const def = this.imp.defOf(p.ref);
+      return def ? def.ports.map((q) => key(instPort(def, p.at, p.flip, q.name, p.rot).pos as DPt)) : [];
+    }));
+    for (const p of d.pins) if (ports.has(key(p.at as DPt))) { const [dx, dy] = DIR[defaultFace(p)]; p.at = [p.at[0] - 2 * dx, p.at[1] - 2 * dy]; }
+  }
+
+  private placeParts(M: (p: Vec) => Vec = (p) => p) {
     for (const al of this.aligns) {
       const p = this.doc.parts.find((q) => q.id === al.part)!;
       const def = this.imp.defOf(p.ref);
       if (!def) continue;
       const g = def.ports.some((q) => q.name === al.port) ? instPort(def, [0, 0], p.flip, al.port, p.rot).pos : [0, 0];
-      let target = al.at ?? [0, 0];
+      let target = al.at ? M(al.at) : [0, 0];
       if (al.rel) {
         const r = this.doc.parts.find((q) => q.id === al.rel!.part);
         const rd = r && this.imp.defOf(r.ref);
@@ -1356,7 +1427,8 @@ export function importDigital(files: SourceFile[], opts: ImportOptions): ImportR
     const sub = (base: string) => (state.get(base) === 'done' ? byBase.get(base) : undefined);
     const sheet = new Sheet(imp, c, imp.chipId(c.name), sub, (b) => byBase.has(b));
     for (const e of c.elems) sheet.element(e);
-    const doc = sheet.finish();
+    // no two nets on one line (the lint): where they would be, one becomes a pair of pointers
+    const doc = untangled(sheet.finish(), Object.fromEntries(imp.chips.map((x) => [x.id, x])));
     // our pin names for the Digital names its parents place
     const pins = new Map<string, string>();
     for (const n of [...c.ins, ...c.outs]) pins.set(n, sheet.pinMap.get(n) ?? n);
