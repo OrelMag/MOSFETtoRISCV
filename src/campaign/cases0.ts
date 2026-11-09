@@ -237,6 +237,15 @@ export const CASES0: Record<string, LevelCase> = {
     cost: 'Four 4-bit registers, a 2→4 decoder with enable and a 4:1 mux: the library\'s version is 306 NANDs (1224 transistors, 77 per bit). An SRAM bit is 6 transistors, read through shared bit lines and a sense amplifier: real memories are arrays of such cells.',
     alts: [{ name: '6T SRAM cell (one bit)', lib: 'sram6t' }],
   },
+  m_lut: {
+    problem: 'A truth table of four inputs is 16 bits. Store them and let the inputs pick one, and the circuit computes whatever function the bits say: this is the look-up table an FPGA is made of, thousands of them, each set by its configuration bits when the chip powers on.',
+    without: 'Every function would need its own gates, fixed when the chip is made: changing the logic would mean a new chip.',
+    cost: 'Fifteen 2:1 muxes, 60 NANDs and 16 configuration bits, whatever the function: the 9-NAND full adder takes two LUTs, one for the sum and one for the carry, and a four-input function that would take dozens of NANDs still takes one. Each extra input doubles the bits and the multiplexer.',
+    alts: [{ name: 'A two-input LUT (4 bits)', lib: 'lut2' }, { name: 'The full adder in gates', lib: 'full_adder' }],
+  },
+  d_lut: {
+    problem: 'Place-and-route tools turn every LUT\'s function into its 16 bits and write them into the bitstream, thousands of tables. By hand it is a truth table read in order: the output at address 0 is bit 0, at address 15 bit 15, and four rows make one hex digit.',
+  },
   m_rf: {
     problem: 'An R-type instruction reads two registers and writes a third in the same cycle, so the register file has two read ports (rs1 = instr[9:7], rs2 = instr[12:10]) and one write port (rd = instr[6:4]). Writes: the 3→8 decoder on rd, enabled by rwe, loads one of x1–x7 at the clock edge. Reads: two 8:1 bus muxes, combinational. x0 always reads 0: a constant, with no register behind it.',
     without: 'With one read port an R-type instruction would take two cycles; a real x0 would spend 208 NANDs storing a value no write may change.',

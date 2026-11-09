@@ -80,9 +80,12 @@ describe('acts 3–5 are complete', () => {
   });
 
   it('fills the thread: uses, pitfalls, a clause for every dependent', () => {
+    // the FPGA chapter's look-up table levels build an FPGA's cell, no block of RV16 (as act P and t_nor): no uses
+    const noBlock = new Set(['m_lut', 'd_lut']);
     for (const n of mine) {
       const t = threadOf(n.id);
-      expect(t?.uses?.length || n.anatomy?.length, `${n.id} uses`).toBeTruthy();
+      if (noBlock.has(n.id)) expect(t?.uses, `${n.id} uses`).toBeUndefined();
+      else expect(t?.uses?.length || n.anatomy?.length, `${n.id} uses`).toBeTruthy();
       expect(t?.pitfalls?.length, `${n.id} pitfalls`).toBeGreaterThanOrEqual(2);
       for (const d of dependents(n.id).filter((m) => !m.bug)) expect(t?.usedFor?.[d.id], `${n.id} → ${d.id}`).toBeTruthy();
     }

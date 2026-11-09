@@ -8,6 +8,7 @@ import { CODEX_NEW3 } from './codexnew3';
 import { CODEX_COMM } from './codexcomm';
 import { CODEX_COMM2 } from './codexcomm2';
 import { CODEX_DSP } from './codexdsp';
+import { CODEX_FPGA } from './codexfpga';
 import { CODEX_SIDE } from './codexside';
 
 import { numOf } from '../chapters/order';
@@ -201,6 +202,8 @@ export const CODEX: CodexEntry[] = [
   ...CODEX_COMM,
   ...CODEX_COMM2,
   ...CODEX_DSP,
+  // the FPGA chapter (codexfpga.ts)
+  ...CODEX_FPGA,
   // the side-channels chapter (codexside.ts)
   ...CODEX_SIDE,
 ];

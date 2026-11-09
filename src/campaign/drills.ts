@@ -915,4 +915,71 @@ const hollerith: Drill = {
   },
 };
 
-export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16, float, relay, hollerith };
+// ---- look-up tables (the FPGA chapter) ------------------------------------------------------------
+
+/** A LUT4's input names, i0 … i3 (as the chapter's LUT: address = d c b a, a the lowest bit). */
+const LUT_VARS = ['a', 'b', 'c', 'd'];
+const listed = (vs: string[], last = 'and') => (vs.length < 3 ? vs.join(` ${last} `) : `${vs.slice(0, -1).join(', ')} ${last} ${vs[vs.length - 1]}`);
+
+/** A function of four inputs in words, and its value at address i (0 … 15). */
+export interface LutFn { say: string; f(i: number): number }
+
+/** One of the drill's functions, drawn from r. Every one is exact: its configuration is read off f. */
+export function lutFn(r: () => number): LutFn {
+  const bit = (i: number, v: number) => (i >> v) & 1;
+  const pick = (n: number): number[] => {
+    const vs = [0, 1, 2, 3];
+    for (let k = 3; k > 0; k--) { const j = int(r, 0, k); [vs[k], vs[j]] = [vs[j], vs[k]]; }
+    return vs.slice(0, n).sort();
+  };
+  const names = (vs: number[]) => vs.map((v) => `<i>${LUT_VARS[v]}</i>`);
+  const kind = int(r, 0, 8);
+  if (kind === 0) { const vs = pick(int(r, 2, 3)); return { say: `1 only when ${listed(names(vs))} are all 1`, f: (i) => +vs.every((v) => bit(i, v)) }; }
+  if (kind === 1) { const vs = pick(int(r, 2, 3)); return { say: `1 when any of ${listed(names(vs), 'or')} is 1`, f: (i) => +vs.some((v) => bit(i, v)) }; }
+  if (kind === 2) { const vs = pick(int(r, 2, 3)); return { say: `1 when an odd number of ${listed(names(vs))} are 1`, f: (i) => vs.reduce((p, v) => p ^ bit(i, v), 0) }; }
+  if (kind === 3) { const vs = pick(3); return { say: `1 when at least two of ${listed(names(vs))} are 1`, f: (i) => +(vs.filter((v) => bit(i, v)).length >= 2) }; }
+  if (kind === 4) { const [x, y] = pick(2); const [nx, ny] = names([x, y]); return { say: `1 when ${nx} equals ${ny}, whatever the others`, f: (i) => +(bit(i, x) === bit(i, y)) }; }
+  if (kind === 5) { const k = int(r, 1, 3); return { say: `1 when exactly ${k} of the four inputs ${k === 1 ? 'is' : 'are'} 1`, f: (i) => +([0, 1, 2, 3].filter((v) => bit(i, v)).length === k) }; }
+  if (kind === 6) {
+    const [x, y, z] = pick(3), s = int(r, 0, 2), sel = [x, y, z][s], [p, q] = [x, y, z].filter((_, j) => j !== s), [ns, np, nq] = names([sel, p, q]);
+    return { say: `${np} when ${ns} is 0, ${nq} when ${ns} is 1 (a 2:1 multiplexer)`, f: (i) => (bit(i, sel) ? bit(i, q) : bit(i, p)) };
+  }
+  if (kind === 7) {
+    const m = int(r, 0, 2);
+    if (m === 0) return { say: '1 when the 4-bit number <i>dcba</i> is a prime', f: (i) => +[2, 3, 5, 7, 11, 13].includes(i) };
+    if (m === 1) { const k = int(r, 3, 5); return { say: `1 when the 4-bit number <i>dcba</i> is a multiple of ${k} (0 counts)`, f: (i) => +(i % k === 0) }; }
+    const k = int(r, 4, 12); return { say: `1 when the 4-bit number <i>dcba</i> is greater than ${k}`, f: (i) => +(i > k) };
+  }
+  return { say: '1 when the 2-bit number <i>ba</i> is greater than the 2-bit number <i>dc</i>', f: (i) => +((i & 3) > (i >> 2)) };
+}
+
+/** The 16 configuration bits of a function: bit i = its value at address i. */
+export const lutCfg = (fn: LutFn): number => Array.from({ length: 16 }, (_, i) => fn.f(i) << i).reduce((a, b) => a | b, 0);
+const rev16 = (v: number) => parseInt(bin(v, 16).split('').reverse().join(''), 2);
+
+const lut: Drill = {
+  id: 'lut', title: 'Program the LUT', goal: 6,
+  how: 'Write the 16 configuration bits of a LUT4 that computes the function: bit i is the output when the address <i>dcba</i> = i (a the lowest input). In hex (0x…, four digits) or in binary (0b…, bit 15 first).',
+  make(r) {
+    const fn = lutFn(r), cfg = lutCfg(fn);
+    const ones = Array.from({ length: 16 }, (_, i) => i).filter((i) => fn.f(i));
+    const prompt = `A LUT4 with inputs <i>d c b a</i> (a the lowest) must output ${fn.say}. Its configuration?`;
+    return {
+      prompt, placeholder: '0x0000', answer: `0x${hex(cfg, 16)}`,
+      explain: `The output is 1 at ${ones.length ? `address${ones.length > 1 ? 'es' : ''} ${ones.join(', ')}` : 'no address'}, so those bits are set: ${grp(bin(cfg, 16))} (bit 15 first) = 0x${hex(cfg, 16)}.`,
+      check: (t) => {
+        const s = t.trim().toLowerCase().replace(/[_\s]/g, '');
+        // without a prefix, four digits can only be hex and sixteen 0s and 1s only binary
+        const v = /^[0-9a-f]{4}$/.test(s) ? parseInt(s, 16) : /^[01]{16}$/.test(s) ? parseInt(s, 2) : parseNum(s);
+        if (v === null || v < 0 || v > 0xffff) return { ok: false, why: 'write 16 bits: 0x and four hex digits, or 0b and sixteen bits' };
+        if (v === cfg) return { ok: true };
+        if (v === rev16(cfg)) return { ok: false, why: 'that is the table backwards: bit 0, at the right, is address 0' };
+        if (v === (~cfg & 0xffff)) return { ok: false, why: 'every bit is inverted: that is the opposite function' };
+        const wrong = Array.from({ length: 16 }, (_, i) => i).filter((i) => ((v >> i) & 1) !== fn.f(i));
+        return { ok: false, why: `wrong at address${wrong.length > 1 ? 'es' : ''} ${wrong.slice(0, 4).join(', ')}${wrong.length > 4 ? ' …' : ''}` };
+      },
+    };
+  },
+};
+
+export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16, float, relay, hollerith, lut };

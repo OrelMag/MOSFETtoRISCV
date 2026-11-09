@@ -182,6 +182,7 @@ export const THREAD0: Record<string, NodeThread> = {
       g_mux8: 'sixteen of it sharing one select and one ¬s',
       s_reg4: 'the enable: a mux feeds each flip-flop d or its own q',
       c_br: 'picks equality or less-than by the condition\'s bit 1',
+      m_lut: 'fifteen of it in a tree of four levels make a look-up table',
     },
     pitfalls: [
       's = 1 selects b; swapping a and b passes only half the table.',

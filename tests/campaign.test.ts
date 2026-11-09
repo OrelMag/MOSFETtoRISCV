@@ -9,6 +9,7 @@ import { partNames } from '../src/campaign/cardlabel';
 import { CODEX, codexById } from '../src/campaign/codex';
 import { COMM_AWAITING_LEVELS } from '../src/campaign/codexcomm';
 import { DSP_AWAITING_LEVELS } from '../src/campaign/codexdsp';
+import { FPGA_AWAITING_LEVELS } from '../src/campaign/codexfpga';
 import { SIDE_AWAITING_LEVELS } from '../src/campaign/codexside';
 import { measured, stars } from '../src/campaign/grade';
 import { ancestors, nextAvailable, ruleFor, statusOf, topo } from '../src/campaign/graph';
@@ -71,7 +72,7 @@ describe('the campaign graph', () => {
     }
     // Every codex entry is taught somewhere.
     const taught = new Set(NODES.flatMap((n) => n.codex));
-    for (const e of CODEX) if (!COMM_AWAITING_LEVELS.has(e.id) && !DSP_AWAITING_LEVELS.has(e.id) && !SIDE_AWAITING_LEVELS.has(e.id)) expect(taught.has(e.id), `codex ${e.id} is in no level`).toBe(true);
+    for (const e of CODEX) if (!COMM_AWAITING_LEVELS.has(e.id) && !DSP_AWAITING_LEVELS.has(e.id) && !FPGA_AWAITING_LEVELS.has(e.id) && !SIDE_AWAITING_LEVELS.has(e.id)) expect(taught.has(e.id), `codex ${e.id} is in no level`).toBe(true);
   });
 
   it('a level\'s rule is NAND plus what its requirements unlock, never its own parts', () => {
@@ -82,6 +83,9 @@ describe('the campaign graph', () => {
     expect(libAllowed(r, 'xor')).toBe(false);
     expect(libAllowed(ruleFor('m_ram'), 'dec2e')).toBe(true);
     expect(libAllowed(ruleFor('m_ram'), 'mux4x4')).toBe(true);
+    // the look-up table builds on the 2:1 mux alone: no ready tree or LUT is on its shelf
+    for (const id of ['mux16x1', 'mux8x1', 'mux4x1', 'lut4', 'lut2']) expect(libAllowed(ruleFor('m_lut'), id), id).toBe(false);
+    expect(libAllowed(ruleFor('m_lut'), 'mux2')).toBe(true);
   });
 
   it('status follows requirements; Unlock all opens everything', () => {
