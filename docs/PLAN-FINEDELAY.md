@@ -25,6 +25,22 @@ Progress:
 
    Unit within ±2 % of main, pairs run alternately: inside the ±3 % acceptance. Load well above 50 % of unit.
 
+   scripts/sim-perf.ts, GateSim rows (EditorSim cycle mode at max, cycles/s), two rounds each, main's engine (a worktree of
+   stage 1) and this one run alternately; the divider again in three --storage rounds, as its first pair looked 3 % apart:
+
+   | | main's engine | this engine |
+   |---|---|---|
+   | single-cycle RV32I | 1656, 1682 | 1661, 1719 |
+   | single-cycle, 64K × 32 memory | 2860, 2822 | 2761, 2843 |
+   | pipelined RV32I | 1990, 1997 | 1994, 2023 |
+   | system RV32I | 1174, 1166 | 1168, 1165 |
+   | dual-core / 4-core | 1113, 1092 / 695, 696 | 1124, 1107 / 709, 702 |
+   | pipelined RV16 on its bench | 3577, 3562, 3601, 3580, 3565 | 3659, 3639, 3574, 3594, 3654 |
+   | ÷16 ripple divider (--storage) | 2408747, 2349202, 2428418 | 2385797, 2406601, 2373661 |
+   | ks64, settles/s | 20410, 21435 | 21175, 21373 |
+
+   sim-perf's load-model column needs EditorSim to take the model: stage 3.
+
 ## What exists
 
 - **sim/delay.ts** already computes a delay per leaf under three models: `leafDelays(d, 'unit' | 'load' | 'drawn')`. 'load' is
