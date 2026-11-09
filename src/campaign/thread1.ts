@@ -41,10 +41,19 @@ export const THREAD1: Record<string, NodeThread> = {
       s_reg16: 'four of them sharing clk and en',
       s_cnt4: 'holds the count; en = 0 holds it still',
       m_ram: 'one per word, en from the address decoder ANDed with we',
+      s_icg: 'the same enable, on the clock instead of a mux per bit',
     },
     pitfalls: [
       'clk AND en on the clock pin saves the muxes and fails: a change of en while clk is high is an edge.',
       'Swapped mux inputs (en = 1 selects q) make a register that never loads.',
+    ],
+  },
+  s_icg: {
+    uses: ['rf'],
+    usedFor: {},
+    pitfalls: [
+      'The latch open while clk is high passes a change of en straight to the AND: the runt pulse the gate exists to stop.',
+      'A gated register\'s flip-flops still need their clock inverted inside; gate the clock once, in front of all of them, not each flip-flop.',
     ],
   },
   s_reg16: {

@@ -208,6 +208,15 @@ export const CASES0: Record<string, LevelCase> = {
       { name: 'Gated clock (clk AND en)', nand: 38, note: 'Four 9-NAND flip-flops and one AND on the clock; it fails on silicon (glitches on en, skew).' },
     ],
   },
+  s_icg: {
+    problem: 'A register that is not written still sees every clock edge: each flip-flop\'s latches switch and the clock net is charged and discharged, cycle after cycle. Stopping its clock saves that energy, and the enable muxes too, if the stopped clock can never glitch.',
+    without: 'A bare clk AND en cuts a pulse short, or makes an extra one, whenever en changes while clk is high: a flip-flop that sees a runt edge may load, or go metastable.',
+    cost: 'A D latch (4), an inverter (1) and an AND (2): 7 NANDs at par, once for a whole register. On the single-cycle CPU, gating the register file and data memory saves about a third of the energy per cycle and the enable muxes.',
+    alts: [
+      { name: 'Library clock gate', lib: 'icg' },
+      { name: 'Bare clk AND en', nand: 2, note: 'Fails: a change of en while clk is high cuts or adds a pulse.' },
+    ],
+  },
   s_reg16: {
     problem: '16-bit registers hold all of RV16\'s state: the PC, x1–x7, the CSRs, and in the pipeline the instructions, operands and results passed between stages. Four 4-bit registers sharing clk and en make one.',
     cost: 'Four par 4-bit registers make 208 NANDs, the reference; the library\'s, from 11-NAND flip-flops, is 240. Clock period 8: clk-to-q 3, the enable mux 2, setup 3. Where a register loads every cycle (the PC, mstatus) the enable muxes would do no work: 16 bare flip-flops are 144 NANDs, and this level unlocks that register too.',
