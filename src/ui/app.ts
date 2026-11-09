@@ -131,7 +131,7 @@ export function startApp(root: HTMLElement): void {
   } }, 'Undo: back to what you had');
   palMenu.append(previewHost, palHead('Presets'), h('div', { class: 'pal-presets', role: 'group', 'aria-label': 'Presets' }, presetBtns), undoItem);
   // colour per net (the default) overrides these
-  const palNote = h('p', { class: 'pal-note' }, 'Colour per net is on (Look, below): each net keeps its own hue, bright 1, dim 0. These colours show with it off.');
+  const palNote = h('p', { class: 'pal-note' }, 'Colour per net is on (Look, below): each net keeps its own hue, bright = 1, dim = 0. These colours show with it off.');
   palMenu.append(palHead('Wire colours'), palNote);
   for (const p of PALETTES) {
     const item = h('button', { role: 'menuitemradio', 'data-p': p.id, onclick: () => {
