@@ -8,6 +8,7 @@ import {
   columnSettle, columnStep, columnWords, COLUMN_VOLTS, COLUMN_VT, FET_PIPE_R, fetWater, loopWater, pinchRadius, wasted,
   type ColumnIn, type ColumnStep, type FetWater, type LoopState, type P3,
 } from './water';
+import { VDD } from './mosphys';
 import { htmlSub, mountWater, type Parts, type WaterMount, type WaterScene } from './waterkit';
 
 const approach = (cur: number, tgt: number, dt: number, settle: boolean): number =>
@@ -75,6 +76,46 @@ export function mountLoop(host: HTMLElement, get: () => LoopState): WaterMount {
   return mountWater(host, loopScene(get));
 }
 
+/** A labelled range slider in volts, as the CMOS figure's. */
+function voltSlider(label: string, aria: string, max: number, value: number, set: (v: number) => void): HTMLElement {
+  const out = h('output', null, `${value.toFixed(2)} V`);
+  const input = h('input', { type: 'range', min: 0, max, step: 0.01, value, 'aria-label': aria }) as HTMLInputElement;
+  input.addEventListener('input', () => { out.textContent = `${Number(input.value).toFixed(2)} V`; set(Number(input.value)); });
+  return h('label', { class: 'wt-sl' }, h('span', null, label), input, out);
+}
+
+/** The loop as an aside figure (analogyfigs.ts 'water-loop'): loopWidget's Water scene with its own state (the aside sits
+ *  beside the widget, not inside it), a valve, a break in the return pipe, a second wheel, and readouts in both words. */
+export function loopFigure(): FigureMount {
+  return (host) => {
+    const st: LoopState = { closed: true, cut: false, lamps: 1 };
+    const stageHost = h('div');
+    const btn = (label: string) => h('button', { type: 'button', class: 'btn sm wt-btn', 'aria-pressed': 'false' }, label);
+    const valveBtn = btn('Shut the valve'), cutBtn = btn('Break the return pipe'), twoBtn = btn('Two wheels in a row');
+    const cell = (t: string) => { const v = h('b'); return { v, el: h('div', null, v, h('span', null, t)) }; };
+    const cells = [cell('flow, the same all round (current)'), cell('drop across each wheel (voltage)'), cell('power in each wheel')];
+    host.append(h('div', { class: 'wt-fig' }, stageHost, h('div', { class: 'wt-ctl' }, valveBtn, cutBtn, twoBtn),
+      h('div', { class: 'wt-chips' }, ...cells.map((c) => c.el))));
+    const readout = () => {
+      const m = loopWater(st);
+      cells[0].v.textContent = `${m.amps.toFixed(3)} A`;
+      cells[1].v.textContent = `${m.vLamp.toFixed(2)} V`;
+      cells[2].v.textContent = `${m.power.toFixed(3)} W`;
+      valveBtn.textContent = st.closed ? 'Shut the valve' : 'Open the valve';
+      valveBtn.setAttribute('aria-pressed', String(!st.closed));
+      cutBtn.textContent = st.cut ? 'Mend the return pipe' : 'Break the return pipe';
+      cutBtn.setAttribute('aria-pressed', String(st.cut));
+      twoBtn.setAttribute('aria-pressed', String(st.lamps === 2));
+    };
+    const mount = mountWater(stageHost, loopScene(() => st));
+    const change = () => { readout(); mount.kick(); };
+    valveBtn.addEventListener('click', () => { st.closed = !st.closed; change(); });
+    cutBtn.addEventListener('click', () => { st.cut = !st.cut; change(); });
+    twoBtn.addEventListener('click', () => { st.lamps = 3 - st.lamps; change(); });
+    readout();
+  };
+}
+
 // ---------------------------------------------------------------- 2 · the faucet
 
 const FET_PATH: P3[] = [[-2.4, -0.2, 0], [2.4, -0.2, 0]];
@@ -116,6 +157,30 @@ export function fetScene(get: () => { vg: number; vd: number }): WaterScene {
       p.valve([0, -0.2, 0], open, p.P.nmos);
       if (f.flow > 0) p.drops(FET_PATH, FET_DROPS, phase);
     },
+  };
+}
+
+/** The faucet as an aside figure (analogyfigs.ts 'water-fet'): fetScene with its own handle (gate) and tank level (drain),
+ *  starting where mosregions.ts starts, and the flow and region it gives. */
+export function fetFigure(): FigureMount {
+  return (host) => {
+    const st = { vg: 1.2, vd: 0.3 };
+    const stageHost = h('div');
+    const flow = h('b'), region = h('b');
+    const readout = () => {
+      const f = fetWater(st.vg, st.vd);
+      flow.textContent = `${Math.round(f.id)} µA`;
+      region.textContent = f.region.split(':')[0];
+    };
+    const change = () => { readout(); mount.kick(); };
+    // In the page before the stage mounts: it sizes itself from its host (cmosFigure / loopFigure do the same).
+    host.append(h('div', { class: 'wt-fig' }, stageHost,
+      h('div', { class: 'wt-ctl' },
+        voltSlider('Handle', 'Gate voltage: how far the handle is turned', VDD, st.vg, (v) => { st.vg = v; change(); }),
+        voltSlider('Tank', 'Drain voltage: the tank above the basin', VDD, st.vd, (v) => { st.vd = v; change(); })),
+      h('div', { class: 'wt-chips' }, h('div', null, flow, h('span', null, 'flow (drain current)')), h('div', null, region, h('span', null, 'region')))));
+    const mount = mountWater(stageHost, fetScene(() => st));
+    readout();
   };
 }
 

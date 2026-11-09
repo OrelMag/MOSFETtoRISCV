@@ -5,6 +5,8 @@
 export type FigureMount = (host: HTMLElement) => void;
 
 export const FIGURES: Record<string, () => Promise<FigureMount>> = {
+  'water-fet': async () => (await import('../widgets/waterscenes')).fetFigure(),
+  'water-loop': async () => (await import('../widgets/waterscenes')).loopFigure(),
   'water-cmos': async () => (await import('../widgets/waterscenes')).cmosFigure(false),
   'water-cmos-weak': async () => (await import('../widgets/waterscenes')).cmosFigure(true),
   buckets: () => import('../widgets/analogy/buckets').then((m) => m.default),

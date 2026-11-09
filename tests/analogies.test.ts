@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chapters } from '../src/chapters';
 import { ANALOGIES, ANALOGY_INDEX_ID, analogiesForCodex, analogiesOf, analogyIndex } from '../src/chapters/analogies';
+import { FIGURES } from '../src/ui/analogyfigs';
 import { CODEX } from '../src/campaign/codex';
 
 const text = (html: string) => html.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
@@ -51,17 +52,11 @@ describe('analogy figures', () => {
 });
 
 describe('analogy acceptance', () => {
-  // The two that open a widget with a Wire | Water or Cross-section | Water view (basics.ts loopWidget, mosregions.ts) instead.
-  const WATER_WIDGETS = ['basics/A loop of wire', 'mosfet/Three regions'];
-
-  it('every analogy has a figure, or sits on a step whose widget has a water view', () => {
-    const bare = ANALOGIES.filter((a) => !a.figure).map((a) => `${a.chapter}/${a.step}`);
-    expect(bare.sort()).toEqual([...WATER_WIDGETS].sort());
-    for (const key of WATER_WIDGETS) {
-      const [id, title] = key.split('/');
-      const step = chapters.find((c) => c.id === id)!.steps.find((s) => s.title === title)!;
-      expect(step.widget, key).toBeDefined();
-    }
+  // Every one, the two whose step widget also has a Water view included (the loop, the faucet): the card is read without
+  // the widget (a phone's text above the stage, a codex entry), so it carries the picture itself.
+  it('every analogy has a figure, and each figure is registered', () => {
+    expect(ANALOGIES.filter((a) => !a.figure).map((a) => `${a.chapter}/${a.step}`)).toEqual([]);
+    for (const a of ANALOGIES) expect(FIGURES[a.figure!], a.figure).toBeDefined();
   });
 
   it('the hover card finds an analogy for the entries that name one', () => {

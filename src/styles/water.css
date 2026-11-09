@@ -30,6 +30,7 @@
 
 /* a figure's own controls and readout */
 .wt-fig { display: grid; gap: 8px; margin: 10px 0; min-width: 0; }
+.wt-fig > * { min-width: 0; } /* the stage's host: its min-content is min-height × aspect, wider than a phone card */
 .wt-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
 .wt-sl { display: flex; align-items: center; gap: 10px; flex: 1 1 220px; min-width: 0; font-size: 13.5px; }
 .wt-sl span { flex: none; color: var(--text-2); }
