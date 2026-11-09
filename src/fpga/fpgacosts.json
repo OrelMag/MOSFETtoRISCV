@@ -1,0 +1,226 @@
+{
+ "board": "Sipeed Tang Nano 9K",
+ "device": "GW1NR-LV9QN88PC6/I5",
+ "tools": {
+  "yosys": "Yosys 0.69",
+  "nextpnr": "nextpnr-0.11.1"
+ },
+ "examples": {
+  "counter7": {
+   "exportHash": "fbea3acd",
+   "device": {
+    "lut4": {
+     "used": 12,
+     "available": 8640
+    },
+    "alu": {
+     "used": 24,
+     "available": 6480
+    },
+    "dff": {
+     "used": 26,
+     "available": 6480
+    },
+    "bsram": {
+     "used": 0,
+     "available": 26
+    }
+   },
+   "lut4Stages": {
+    "synth": 12,
+    "packed": 36,
+    "routed": 12
+   },
+   "blocks": [
+    {
+     "name": "cnt",
+     "luts": 10,
+     "ffs": 4,
+     "bsram": 0
+    },
+    {
+     "name": "cnt.reg_",
+     "luts": 10,
+     "ffs": 4,
+     "bsram": 0
+    },
+    {
+     "name": "board",
+     "luts": 1,
+     "ffs": 22,
+     "bsram": 0
+    },
+    {
+     "name": "font",
+     "luts": 1,
+     "ffs": 0,
+     "bsram": 0
+    },
+    {
+     "name": "font.mux",
+     "luts": 1,
+     "ffs": 0,
+     "bsram": 0
+    }
+   ],
+   "fmax": {
+    "clk": 351.37,
+    "board": 249
+   },
+   "critical": {
+    "clock": "posedge clk → posedge clk",
+    "ns": 2.846,
+    "skew": 0.479,
+    "clkToQ": 0.458,
+    "logic": 1.098,
+    "routing": 0.412,
+    "setup": 0.399,
+    "luts": 1
+   },
+   "ours": {
+    "nands": 79,
+    "lutMapLuts": 11,
+    "lutLevels": 1,
+    "period": 17
+   }
+  },
+  "computer": {
+   "exportHash": "c9bd831b",
+   "device": {
+    "lut4": {
+     "used": 5271,
+     "available": 8640
+    },
+    "alu": {
+     "used": 24,
+     "available": 6480
+    },
+    "dff": {
+     "used": 1178,
+     "available": 6480
+    },
+    "bsram": {
+     "used": 10,
+     "available": 26
+    }
+   },
+   "lut4Stages": {
+    "synth": 4179,
+    "packed": 4203,
+    "routed": 5271
+   },
+   "blocks": [
+    {
+     "name": "cpu",
+     "luts": 2322,
+     "ffs": 1030,
+     "bsram": 0
+    },
+    {
+     "name": "cpu.rf",
+     "luts": 1999,
+     "ffs": 992,
+     "bsram": 0
+    },
+    {
+     "name": "mem",
+     "luts": 1756,
+     "ffs": 118,
+     "bsram": 8
+    },
+    {
+     "name": "mem.ram",
+     "luts": 1691,
+     "ffs": 118,
+     "bsram": 8
+    },
+    {
+     "name": "cpu.pc",
+     "luts": 289,
+     "ffs": 32,
+     "bsram": 0
+    },
+    {
+     "name": "mem.dm",
+     "luts": 63,
+     "ffs": 0,
+     "bsram": 0
+    },
+    {
+     "name": "eq",
+     "luts": 62,
+     "ffs": 0,
+     "bsram": 0
+    },
+    {
+     "name": "eq.all",
+     "luts": 62,
+     "ffs": 0,
+     "bsram": 0
+    },
+    {
+     "name": "cpu.amux",
+     "luts": 34,
+     "ffs": 6,
+     "bsram": 0
+    },
+    {
+     "name": "board",
+     "luts": 30,
+     "ffs": 22,
+     "bsram": 0
+    },
+    {
+     "name": "dev",
+     "luts": 9,
+     "ffs": 8,
+     "bsram": 0
+    },
+    {
+     "name": "dev.ledr",
+     "luts": 9,
+     "ffs": 8,
+     "bsram": 0
+    },
+    {
+     "name": "mem.dec",
+     "luts": 2,
+     "ffs": 0,
+     "bsram": 0
+    },
+    {
+     "name": "imem",
+     "luts": 0,
+     "ffs": 0,
+     "bsram": 2
+    },
+    {
+     "name": "imem.rom",
+     "luts": 0,
+     "ffs": 0,
+     "bsram": 2
+    }
+   ],
+   "fmax": {
+    "clk": 24.44,
+    "mem_clk": 20.31
+   },
+   "critical": {
+    "clock": "posedge clk → posedge clk",
+    "ns": 40.909,
+    "skew": 3.297,
+    "clkToQ": 0.458,
+    "logic": 13.052,
+    "routing": 23.703,
+    "setup": 0.399,
+    "luts": 28
+   },
+   "ours": {
+    "nands": 32414,
+    "lutMapLuts": 5220,
+    "lutLevels": 7,
+    "period": 150
+   }
+  }
+ }
+}

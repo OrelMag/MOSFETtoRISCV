@@ -1,0 +1,51 @@
+name: FPGA numbers
+
+# The FPGA chapter's measurements (docs/PLAN-FPGA.md stage 2): the sandbox's FPGA export of counter7 and the computer through
+# Yosys synth_gowin and nextpnr-himbaechel (Apicula's Gowin database) for the Tang Nano 9K: device use, LUTs per block, post-route
+# Fmax and the critical path, beside lutMap's and the static timing's estimates (scripts/fpga-pnr.ts). The job measures again and
+# fails when the numbers differ from the checked-in src/fpga/fpgacosts.json, keeping the new file as an artifact to commit.
+# Not a deploy gate. The tool versions are pinned: another Yosys maps to other LUT counts.
+on:
+  push:
+    paths:
+      - 'src/editor/fpga.ts'
+      - 'src/sim/vexport.ts'
+      - 'src/sim/lutmap.ts'
+      - 'src/sim/timing.ts'
+      - 'src/fpga/**'
+      - 'src/editor/examples.ts'
+      - 'scripts/fpga-pnr.ts'
+      - '.github/workflows/fpga.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fpga:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: pip install yowasp-yosys==0.69.0.0.post1233 yowasp-nextpnr-himbaechel-gowin==0.11.1.0.post826
+      - run: npx vite-node scripts/fpga-pnr.ts counter7 computer --write
+      - name: The numbers match the checked-in ones
+        run: git diff --exit-code src/fpga/fpgacosts.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fpga-numbers
+          path: |
+            src/fpga/fpgacosts.json
+            layout/fpga/*/report.json
+            layout/fpga/*/pnr.log
+            layout/fpga/*/pnr-synth.log
+          if-no-files-found: warn
