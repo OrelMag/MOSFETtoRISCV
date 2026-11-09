@@ -162,7 +162,7 @@ export const chFastAdders: Chapter = {
         derive: `<p>Prefix on four bits, level by level, with (G, P)[i:j] for bits i down to j: level 0: [1:0], [2:1], [3:2] from neighbours. Level 1 combines each with the one two below: [3:0] = [3:2] ∘ [1:0],
           [2:0] = [2:1] ∘ [0:0] (once folded with cin), and so on. Two levels give all four prefixes. Each carry c<sub>i+1</sub> = G[i:0] needs one path of log₂ <em>n</em> cells, so depth grows by one cell per doubling.</p>
           ${FAMILY([['Kogge–Stone', koggeStone]], [8, 16, 32, 64])}`,
-        pitfall: `<p>Comparing prefix networks by cell count alone. Kogge–Stone has the most cells and the least depth and fan-out, and Brent–Kung the fewest cells and about twice the levels. The best choice depends on whether
+        pitfall: `<p>Comparing prefix networks by cell count alone. Kogge–Stone has the most cells and the least depth and fan-out, and Brent–Kung the fewest cells and about twice the prefix levels (${D(brentKung(32))} NAND delays against ${D(koggeStone(32))} at 32 bits). The best choice depends on whether
           area, depth or wiring is scarce; the table in the measured step puts them side by side.</p>`,
         real: `<p>High-performance cores use Kogge–Stone-like adders, often sparse (a prefix tree over every fourth bit and short ripple blocks between them) to cut the wires, or Ling and Han–Carlson variants. The wires, not
           the gates, are what makes a pure Kogge–Stone expensive on silicon: level <em>j</em> spans 2<sup>j</sup> bit positions.</p>`,
@@ -253,10 +253,10 @@ export const chFastAdders: Chapter = {
       body: `
         <p>The table is computed from the netlists: NAND count and worst-case depth for both adders. Kogge–Stone buys
         logarithmic depth with n·log n cells and, on silicon, long wires: level j's diagonal spans 2<sup>j</sup> rows.</p>
-        <p>Other members of the family trade those three costs differently: Brent–Kung (fewer cells, 2·log n depth),
+        <p>Other members of the family trade those three costs differently: Brent–Kung (fewer cells, about 2·log n prefix levels),
         Sklansky (minimum depth, high fan-out), Han–Carlson (a hybrid). Synthesis tools pick per timing constraint.</p>
         <p>Read the table by columns of cost: cells (NANDs) are area and power, depth is speed, and fan-out and wire length, which the table does not show, decide whether the depth survives layout.
-        At 32 bits Kogge–Stone is ${N(koggeStone(32))} NANDs deep ${D(koggeStone(32))}, Sklansky ${N(sklansky(32))} and ${D(sklansky(32))}, Brent–Kung ${N(brentKung(32))} and ${D(brentKung(32))}: the same logarithmic family, spread over a factor of ${(N(koggeStone(32)) / N(brentKung(32))).toFixed(1)} in area.</p>
+        At 32 bits Kogge–Stone is ${N(koggeStone(32))} NANDs and ${D(koggeStone(32))} deep, Sklansky ${N(sklansky(32))} and ${D(sklansky(32))}, Brent–Kung ${N(brentKung(32))} and ${D(brentKung(32))}: the same logarithmic family, spread over a factor of ${(N(koggeStone(32)) / N(brentKung(32))).toFixed(1)} in area.</p>
         <p>Below the table is the same race in brass: one column of Babbage's Difference Engine No. 2, whose carry ripples up a run of 9s one arm at a time, and the anticipating carriage he designed so that it would not.</p>`,
       widget: () => withModel(adderComparison(), babbage3d()),
       more: {
