@@ -7,7 +7,7 @@ import { levelChallenge } from '../src/campaign/levels';
 import { nodeById } from '../src/campaign/nodes';
 import { detectRv16, rv16Program, Rv16Monitor } from '../src/editor/cpu16';
 import { UserLibrary } from '../src/editor/library';
-import { type ChipDoc, emptyWorkspace, rv16CoreOf, rv16CoreRef } from '../src/editor/model';
+import { emptyWorkspace, rv16CoreOf, rv16CoreRef } from '../src/editor/model';
 import { sanitizeChip, sanitizeRef } from '../src/editor/store';
 import { EditorSim } from '../src/editor/runtime';
 import { issCode16, WHY_NO_IMM16 } from '../src/editor/owninstr16';
