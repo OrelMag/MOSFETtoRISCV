@@ -119,3 +119,42 @@ describe('breakpoints', () => {
     expect(simKey(lib(a))).toBe(simKey(lib(b)));
   });
 });
+
+describe('breakpoints on the sandbox computer', () => {
+  it('a PC breakpoint on a loop body hits once per iteration, on the cycle the golden model retires it; pcOut by path agrees', async () => {
+    await import('../src/lib');
+    const { addExample, EXAMPLES } = await import('../src/editor/examples');
+    const { CpuMonitor } = await import('../src/editor/cpu');
+    const { emptyWorkspace } = await import('../src/editor/model');
+    const { retireFollower } = await import('../src/editor/breakpoints');
+    const { assemble } = await import('../src/riscv/asm');
+    const { PICTURE } = await import('../src/riscv/ioprograms');
+    const run = (b: BreakDoc) => {
+      const { ws, id } = addExample(emptyWorkspace(), EXAMPLES.find((e) => e.id === 'computer')!);
+      const doc = { ...ws.chips[id], breaks: [b] };
+      const w2 = { ...ws, chips: { ...ws.chips, [id]: doc } };
+      const lib = new UserLibrary(w2);
+      const es = new EditorSim({ debounceMs: 0 });
+      es.update(lib.compiled(id)!, doc.pins);
+      const mon = new CpuMonitor(es, () => doc, () => w2.chips);
+      const bp = new Breakpoints(es);
+      bp.bind(doc);
+      const follow = retireFollower(mon);
+      es.edgeHooks.add({ after: () => follow(bp) });
+      const stops: number[] = [];
+      for (let k = 0; k < 3; k++) { es.runCycles(5000); stops.push(es.cycles); expect(es.stopReason).toBe(b.pc !== undefined ? `pc == 0x${b.pc.toString(16)}` : b.cond); }
+      return { stops, mon, es };
+    };
+    // the picture's inner loop: eight stores, two adds and the branch back
+    const lines = assemble(PICTURE).lines;
+    const body = lines.find((l) => l.text.replace(/\s+/g, ' ') === 'addi t0, t0, 32')!.addr;
+    const byPc = run({ id: 'p', pc: body });
+    expect(byPc.stops[1] - byPc.stops[0]).toBe(11);
+    expect(byPc.stops[2] - byPc.stops[1]).toBe(11);
+    // the stop is the cycle the golden model logged that instruction
+    expect(byPc.mon.log.at(-1)).toMatchObject({ pc: body, cycle: byPc.stops[2] });
+    // a condition on the core's own pins, by path: the next instruction's address is on pcOut after that same edge
+    const byCond = run({ id: 'c', cond: `cpu.pcOut == 0x${(body + 4).toString(16)}` });
+    expect(byCond.stops).toEqual(byPc.stops);
+  });
+});

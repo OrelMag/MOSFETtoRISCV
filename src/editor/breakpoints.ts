@@ -129,3 +129,21 @@ export class Breakpoints {
     return this.live.find((l) => l.doc.pc === pc)?.doc;
   }
 }
+
+/** A golden-model monitor as the CPU drawer has it: instructions retired since its reset, the latest of them last. */
+export interface RetireLog { readonly retired: number; readonly log: readonly { pc: number }[] }
+
+/**
+ * Follows a monitor's retirements edge by edge (call it after each edge, after the monitor's own hook): each instruction
+ * retired since the last call goes to `bp.pcRetired` by its listing row (`row`). With `bp` null (another chip shown) they
+ * are only counted, so none is reported late.
+ */
+export function retireFollower(mon: RetireLog, row: (pc: number) => number = (pc) => pc): (bp: Breakpoints | null) => void {
+  let seen = 0;
+  return (bp) => {
+    const r = mon.retired;
+    if (r < seen) seen = 0;
+    if (r > seen && bp) for (const e of mon.log.slice(-(r - seen))) bp.pcRetired(row(e.pc));
+    seen = r;
+  };
+}

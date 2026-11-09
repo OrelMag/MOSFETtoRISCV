@@ -67,7 +67,7 @@ function row(ed: Editor, b: BreakDoc): HTMLElement {
   let cond: HTMLElement;
   if (b.pc !== undefined) cond = h('span', { class: 'sb-bp-pc', title: 'Stops when the instruction at this address retires (the CPU drawer\'s listing)' }, breakText(b));
   else {
-    const i = h('input', { type: 'text', class: 'sb-bp-cond', value: b.cond ?? '', spellcheck: 'false', 'aria-label': 'Stop when', placeholder: 'pc == 0x40' }) as HTMLInputElement;
+    const i = h('input', { type: 'text', class: 'sb-bp-cond', value: b.cond ?? '', spellcheck: 'false', 'aria-label': 'Stop when', placeholder: 'count == 5' }) as HTMLInputElement;
     i.addEventListener('change', () => changeBreak(ed, b.id, (x) => ({ ...x, cond: i.value })));
     i.addEventListener('keydown', (e) => { if (e.key === 'Enter') i.blur(); });
     cond = i;

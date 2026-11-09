@@ -51,6 +51,7 @@ import { clearInstr, markInstr, slowControls } from './slowctl';
 import { instrBreakdown } from './instrfields';
 import { PipeHistory, pipeGridRows } from './pipegrid';
 import { timingPanel } from './timing';
+import '../styles/cpu-bp.css';
 
 const hex = (v: number, d = 8) => '0x' + (v >>> 0).toString(16).toUpperCase().padStart(d, '0');
 
@@ -489,7 +490,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink }): S
       const keepScroll = listing.scrollTop;
       listing.replaceChildren(...asm.lines.map((l) => {
         const sel = l.addr === selPc;
-        const bpG = h('button', { class: 'bp-g', title: 'Breakpoint: stop when this instruction retires', 'aria-label': `Breakpoint at ${hex(l.addr, 4)}`, 'aria-pressed': String(bps.has(l.addr)) });
+        const bpG = h('button', { class: 'bp-g', tabindex: '-1', title: 'Breakpoint: stop when this instruction retires', 'aria-label': `Breakpoint at ${hex(l.addr, 4)}`, 'aria-pressed': String(bps.has(l.addr)) });
         bpG.addEventListener('click', (e) => { e.stopPropagation(); if (!bps.delete(l.addr)) bps.add(l.addr); update(); });
         const line = h('div', { class: `ln${l.addr === shownPc ? ' cur' : ''}${sel ? ' sel' : ''}${bps.has(l.addr) ? ' bp' : ''}`, title: 'Show the hardware this instruction uses' }, bpG,
           h('span', { class: 'a' }, l.addr.toString(16).padStart(4, '0')),

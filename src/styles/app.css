@@ -1725,11 +1725,6 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .cpu-listing .ln { cursor: pointer; }
 .cpu-listing .ln:hover { background: var(--surface-2); }
 .cpu-listing .ln.sel { outline: 1.5px solid var(--hl); outline-offset: -1.5px; border-radius: 4px; }
-/* PC breakpoints: a gutter before each row (a dot when set; faint ring when switched off; a ring on hover) */
-.cpu-listing .ln .bp-g { flex: none; align-self: center; width: 12px; height: 12px; margin: 0 -2px 0 -4px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
-.cpu-listing .ln .bp-g:hover, .cpu-listing .ln .bp-g:focus-visible { box-shadow: inset 0 0 0 1.5px var(--bad); }
-.cpu-listing .ln.bp .bp-g { background: var(--bad); }
-.cpu-listing .ln.bp-off .bp-g { box-shadow: inset 0 0 0 1.5px var(--muted); }
 .cpu-listing .stg { margin-left: 6px; font: 700 10px var(--font-mono); padding: 0 4px; border-radius: 4px; background: var(--hl); color: var(--accent-text); }
 .cpu-listing .rom-btn { margin-left: auto; border: 1px solid var(--border); background: var(--surface); color: var(--accent); border-radius: 6px; font: 600 11px var(--font-ui); padding: 0 6px; cursor: pointer; flex: none; }
 /* the instruction text gives way (ellipsis) so stage tags and "in ROM" stay whole in a narrow panel */
@@ -2999,7 +2994,6 @@ html[data-busy]::before {
   .sb-hue-sw::before { inset: 6px; }
   .ctx-menu kbd { display: none; } /* shortcuts mean nothing to a finger */
   .ctx-copy { opacity: 1; }
-  .cpu-listing .ln .bp-g { width: 24px; height: 24px; margin: 0 -4px 0 -6px; }
   .ctx-menu.sheet {
     left: 0; right: 0; bottom: 0; top: auto; width: auto; max-width: none; max-height: 76dvh; border-radius: 14px 14px 0 0;
     padding: 8px max(8px, env(safe-area-inset-right, 0px)) max(10px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));

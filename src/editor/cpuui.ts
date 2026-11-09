@@ -56,6 +56,8 @@ import { openSapProgram } from './sapui';
 import { CTRL, CTRL_LABEL, ctrlText, disasm as sapDisasm, SAP_CTRL } from '../sap/isa';
 import { registerPropsSection } from './props';
 import { addBreak, breakpointsOf } from './breakui';
+import { retireFollower } from './breakpoints';
+import '../styles/cpu-bp.css';
 import { type EdgeHook, type EditorSim, FrameBudget } from './runtime';
 
 /** Cycles Run to halt gives a program before it stops on its own. */
@@ -349,16 +351,8 @@ class CpuPanel {
         const mon: Mon = this.rv64 ? new Rv64Monitor(es, doc, ws) : this.sap ? new SapMonitor(es, doc, ws) : this.multi ? new MultiMonitor(es, doc, ws) : this.rv16 ? new Rv16Monitor(es, doc, ws) : this.lanes ? new LaneMonitor(es, doc, ws) : this.m6502 ? new M6502Monitor(es, doc, ws) : this.dsp24 ? new Dsp24Monitor(es, doc, ws) : this.cpu4 ? new Cpu4Monitor(es, doc, ws) : new CpuMonitor(es, doc, ws);
         const pipe = new PipeHistory();
         // PC breakpoints (the listing's gutter): every instruction the golden model retired at this edge, by its listing row
-        let seen = 0;
-        const retiredPcs = () => {
-          const r = mon.retired;
-          if (r < seen) seen = 0;
-          if (r > seen && 'log' in mon && ed.sim === es) {
-            const bp = breakpointsOf(ed);
-            for (const e of mon.log.slice(-(r - seen))) bp.pcRetired(listRow(mon, e.pc));
-          }
-          seen = r;
-        };
+        const follow = 'log' in mon ? retireFollower(mon, (pc) => listRow(mon, pc)) : null;
+        const retiredPcs = () => follow?.(ed.sim === es ? breakpointsOf(ed) : null);
         const hook: EdgeHook = { after: () => { if (es.sim) pipe.record(es.sim, pipeRoot(es.sim, mon instanceof CpuMonitor ? mon.desc : null), es.cycles); retiredPcs(); } };
         es.edgeHooks.add(hook);
         entry = { chip, mon, pipe, hook };
@@ -695,6 +689,7 @@ class CpuPanel {
       const b = bps.find((x) => x.pc === a);
       row.classList.toggle('bp', !!b && !b.off);
       row.classList.toggle('bp-off', !!b?.off);
+      row.querySelector('.bp-g')?.setAttribute('aria-pressed', String(!!b));
       row.classList.toggle('cur', a === pc || (pc === null && !!tags?.some((t) => t.pc === a)));
       row.classList.toggle('sel', a === this.sel);
       row.querySelectorAll('.stg').forEach((e) => e.remove());
@@ -715,7 +710,7 @@ class CpuPanel {
 
   /** A listing row's gutter: a click sets or clears a PC breakpoint (Run and Run to halt stop when that instruction retires). */
   private gutter(addr: number): HTMLElement {
-    const g = h('button', { class: 'bp-g', title: 'Breakpoint: stop when this instruction retires', 'aria-label': `Breakpoint at 0x${addr.toString(16)}` });
+    const g = h('button', { class: 'bp-g', tabindex: '-1', 'aria-pressed': 'false', title: 'Breakpoint: stop when this instruction retires', 'aria-label': `Breakpoint at 0x${addr.toString(16)}` });
     g.addEventListener('click', (e) => {
       e.stopPropagation();
       const ed = this.ed, has = (ed.doc.breaks ?? []).some((b) => b.pc === addr);
