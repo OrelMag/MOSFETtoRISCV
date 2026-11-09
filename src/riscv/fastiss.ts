@@ -112,7 +112,7 @@ export class FastISS {
     const isM = d.opcode === OPCODES.OP && d.funct7 === 1;
     const isF = !!d.spec?.fp;
     let k: number = K.NOP;
-    if (this.system && (!d.spec || (isM && !this.m) || isF)) k = K.ILLEGAL;
+    if (this.system && (!d.spec || (isM && !this.m) || isF || d.name === 'sret' || d.name === 'sfence.vma')) k = K.ILLEGAL; // (the vm option is the ISS's alone)
     else if (isF) throw new Error(`FastISS: F instruction ${d.name} at word ${i} (not implemented)`);
     else if (d.spec?.mac) k = K.MAC + d.funct3;
     else if (isM) k = K.MUL + d.funct3;
