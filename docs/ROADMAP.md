@@ -632,7 +632,7 @@ challenges stay open. Added since:
   (scripts/vhdl-check.ts, not a deploy gate: every design analysed and elaborated, the combinational ones simulated against ours)
 - Performance budget: 60 fps rendering of ≤ 5 000 visible elements; ≥ 100 CPU cycles/s at gate level (met: the sandbox's
   single-cycle RV32I runs ~4–5 kHz in the page on the cycle engine, ~400 Hz on GateSim)
-- i18n-ready strings
+- ~~i18n-ready strings~~ Dropped by the author (2026-11-10); plan kept in E:/audit/ship/PLAN-I18N.md
 
 ### Phase 13 — Verification, precise claims, measurement ✅
 From an external review (2026-10). The project's depth is ahead of how it presents and proves itself: the CPUs are
