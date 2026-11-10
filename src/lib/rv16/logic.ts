@@ -3,6 +3,7 @@
 // solution (campaign/levels.ts: docFromDef). Drawn with the Builder; long or shared nets are labels.
 
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../../sim/types';
+import { instPort } from '../../sim/geometry';
 import { Builder } from '../builder';
 import { aluOf, constWord, shifterOf } from '../alu';
 import { busMux2, HALF_ADDER, muxTreeOf, rca, type Mux2Kind } from '../combinational';
@@ -154,31 +155,84 @@ const placeAt = (b: Builder, at: Record<string, [number, number]>): void => {
 
 /** 16-bit 2:1 bus multiplexer, y = s ? b : a, with one inverter on s shared by every bit: 3n + 1 NANDs. */
 export const MUX16: ComponentDef = (() => {
-  // a bit every P rows: ta (a·¬s) on top, tb (s·b) under it, y to their right; the splitters and the merger at the same pitch,
-  // so every tap runs straight across. s and ¬s go to sixteen gates each: pointers.
-  const P = 8, Y = 6, XS = 4, XG = 24, XY = 32, XM = 40;
-  const YI = Y + 9 - P / 2 + P * 16; // the inverter on s, two units under the b splitter's end
+  // Four columns of four bits, the most significant on the left (as a number is written), so the drawing is about as wide as
+  // it is tall rather than sixteen rows deep: readable at fit. In a column, a bit every P rows: ta (a·¬s) on top, tb (s·b)
+  // under it, y to their right, the column's splitters and merger at the same pitch so every tap runs straight across.
+  // a and b reach the columns from a band above the grid, one level per nibble (the right-most column's on top, each a over
+  // its b), and come down just left of their column; each column's y goes down past the grid to a band under it and on to
+  // the merger at the right. The bars of splitters and mergers hide no wire, so nothing crosses. s and ¬s go to sixteen
+  // gates each: pointers. Instance names as before (ta0 … y15, inv, sa, sb, my), the columns' own splitters and mergers
+  // sa_k / sb_k / my_k for nibble k.
+  const P = 8, C = 4, R = 4, CW = 34, XB = 4, XG = 9, XY = 16, XO = 22;
   const b = new Builder(8, 10, 2);
   b.pins('a', 'b', 's');
-  const sa = b.op(splitter(Array(16).fill(1), P), ['a'], undefined, 'sa');
-  const sb = b.op(splitter(Array(16).fill(1), P), ['b'], undefined, 'sb');
+  const sb = b.op(splitter([R, R, R, R], 4), ['b'], undefined, 'sb');
+  const sa = b.op(splitter([R, R, R, R], 4), ['a'], undefined, 'sa');
   const ns = b.name(b.op1(NOT, ['s'], '¬s', 'inv'), 'ns', true);
   b.name('s', 's', true);
-  const t = Array.from({ length: 16 }, (_, i) => [b.op1(NAND, [`${sa}.o${i}`, ns], undefined, `ta${i}`), b.op1(NAND, ['s', `${sb}.o${i}`], undefined, `tb${i}`)]);
-  const ys = t.map(([ta, tb], i) => b.op1(NAND, [ta, tb], `y${i}`, `y${i}`));
-  b.wire(b.op1(merger(Array(16).fill(1), P), ys, undefined, 'my'), 'y');
-  // ta.a at row Y + P i + 1, tb.b (tb under ta) at Y + P i + 7, y's output at Y + P i + 5: the splitters' and merger's taps sit P/2 + P i down
-  const at: Record<string, [number, number]> = { sa: [XS, Y + 1 - P / 2], sb: [XS + 10, Y + 7 - P / 2], inv: [XG - 6, YI], my: [XM, Y + 5 - P / 2] };
-  for (let i = 0; i < 16; i++) { at[`ta${i}`] = [XG, Y + P * i]; at[`tb${i}`] = [XG, Y + P * i + 4]; at[`y${i}`] = [XY, Y + P * i + 3]; }
+  const ys: string[] = [];
+  Array.from({ length: C }, (_, k) => {
+    const ca = b.op(splitter(Array(R).fill(1), P), [`${sa}.o${k}`], undefined, `sa_${k}`);
+    const cb = b.op(splitter(Array(R).fill(1), P), [`${sb}.o${k}`], undefined, `sb_${k}`);
+    const cy: string[] = [];
+    for (let r = 0; r < R; r++) {
+      const i = R * k + r;
+      const ta = b.op1(NAND, [`${ca}.o${r}`, ns], undefined, `ta${i}`), tb = b.op1(NAND, ['s', `${cb}.o${r}`], undefined, `tb${i}`);
+      cy.push(b.op1(NAND, [ta, tb], `y${i}`, `y${i}`));
+    }
+    const my = b.op1(merger(Array(R).fill(1), P), cy, undefined, `my_${k}`);
+    ys.push(my);
+    return { ca, cb, my };
+  });
+  const my = b.op1(merger([R, R, R, R], 2), ys, undefined, 'my');
+  b.wire(my, 'y');
+  // placement: column of nibble k at position C − 1 − k (left to right); rows from Y0
+  const BAND = 0, Y0 = BAND + 18, X0 = 24;
+  const xOf = (k: number) => X0 + CW * (C - 1 - k);
+  const at: Record<string, [number, number]> = { sb: [6, BAND + 1], sa: [14, BAND] };
+  for (let k = 0; k < C; k++) {
+    const X = xOf(k);
+    at[`sa_${k}`] = [X, Y0 + 1 - P / 2]; at[`sb_${k}`] = [X + XB, Y0 + 7 - P / 2]; at[`my_${k}`] = [X + XO, Y0 + 5 - P / 2];
+    for (let r = 0; r < R; r++) {
+      const i = R * k + r;
+      at[`ta${i}`] = [X + XG, Y0 + P * r]; at[`tb${i}`] = [X + XG, Y0 + P * r + 4]; at[`y${i}`] = [X + XY, Y0 + P * r + 3];
+    }
+  }
+  const GB = Y0 + P * R; // the grid's bottom
+  at.inv = [10, GB + 4];
   placeAt(b, at);
-  const R = XM + 6;
+  // the splitters' and mergers' ports where they landed
+  const inst = (n: string) => b.instances.find((x) => x.name === n)!;
+  const port = (n: string, p: string) => { const x = inst(n); return instPort(x.def, x.at!, x.flip, p, x.rot).pos; };
+  // sb sits one unit under sa: each b line one unit under its a line (the splitters share their pitch). Move sb so it does.
+  inst('sb').at = [6, inst('sa').at![1] + 1];
+  // the output merger at the right, its inputs (nibble 0 on top) on the band under the grid
+  const XM = X0 + CW * C;
+  inst('my').at = [XM, 0];
+  inst('my').at = [XM, GB + 6 - port('my', 'i0')[1]];
+  const nets = b.nets();
+  const netOf = (sink: string) => nets.find((n) => n.ends.includes(sink))!;
+  for (let k = 0; k < C; k++) {
+    const X = xOf(k);
+    const [ax, ay] = port(`sa_${k}`, 'in'), [bx, by] = port(`sb_${k}`, 'in');
+    const la = port('sa', `o${k}`)[1], lb = port('sb', `o${k}`)[1];
+    // a: along its level, down just left of the column (right of b's), in; b: further left, down under a's end, across the a splitter's bar
+    netOf(`sa_${k}.in`).via = { [`sa_${k}.in`]: [[X - 2, la], [X - 2, ay]] };
+    netOf(`sb_${k}.in`).via = { [`sb_${k}.in`]: [[X - 4, lb], [X - 4, by]] };
+    void ax; void bx;
+    // y_k: out of its merger, down in the gap right of the column, along its level to the output merger
+    const [, oy] = port(`my_${k}`, 'out'), [, iy] = port('my', `i${k}`);
+    netOf(`my.i${k}`).via = { [`my.i${k}`]: [[X + CW - 6, oy], [X + CW - 6, iy]] };
+  }
+  const R_ = XM + 6;
+  const pa = port('sa', 'in'), pb = port('sb', 'in'), ps = port('inv', 'a');
   return define({
     id: 'rv16_mux16', name: '16-bit 2:1 multiplexer (shared inverter)', category: 'routing',
-    summary: 'y = s ? b : a on 16-bit buses: per bit ¬(¬(a·¬s) · ¬(b·s)), three NANDs, and one inverter on s for all sixteen (49 NANDs, not 64).',
+    summary: 'y = s ? b : a on 16-bit buses: per bit ¬(¬(a·¬s) · ¬(b·s)), three NANDs, and one inverter on s for all sixteen (49 NANDs, not 64). Drawn as four columns of four bits.',
     ports: [bus('a', 16, 'in'), bus('b', 16, 'in'), { name: 's', width: 1, dir: 'in', side: 'bottom' }, bus('y', 16, 'out')],
     symbol: { kind: 'mux' },
     spec: ([a, b, s]) => [s ? b : a],
-    netlist: () => ({ pins: { a: [0, Y + 1 - P / 2 + 8 * P], b: [0, Y + 7 - P / 2 + 8 * P], s: [0, YI + 1], y: [R, Y + 5 - P / 2 + 8 * P] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { a: [0, pa[1]], b: [0, pb[1]], s: [0, ps[1]], y: [R_, port('my', 'out')[1]] }, instances: b.instances, nets }),
   });
 })();
 
