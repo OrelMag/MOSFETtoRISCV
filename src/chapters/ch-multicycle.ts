@@ -1,3 +1,5 @@
+import { RESULTS } from '../bench/summary';
+import { PROGRAMS_USED } from '../widgets/family360';
 import { groupDigits } from '../sim/numfmt';
 import facts from '../bench/ucodefacts.json';
 import { MC_DISPATCH, MC_FSM, MC_MICRO, MC_STATES } from '../lib/multicycle';
@@ -7,6 +9,7 @@ import { PROGRAMS } from '../riscv/programs';
 import { h } from '../ui/dom';
 import type { Scene, Stage, Widget } from '../view/stage';
 import { controllerPanel, cpuScene } from '../widgets/cpupanel';
+import { familyRows, familyWidget, microStore, spread } from '../widgets/family360';
 import { findIt } from '../widgets/findfault';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -45,6 +48,7 @@ const CYC = {
 };
 const sp = groupDigits;
 const FSM_NANDS = stats(MC_FSM).nands, MICRO_NANDS = stats(MC_MICRO).nands;
+const FAM = familyRows(), SPREAD = spread(FAM), MS = microStore();
 
 /** The state table as a page widget. */
 function stateTable(): Widget {
@@ -361,6 +365,38 @@ export const chMulticycle: Chapter = {
           verified.add(sc.root.id); // tests/ucode.test.ts holds this program to the golden model
           st.load(sc);
         },
+      },
+    },
+    {
+      title: 'One instruction set, many machines: System/360',
+      body: `
+        <p>On 7 April 1964 IBM announced System/360: six models behind one instruction set, with a performance range of a factor of 50 from the smallest to the largest.
+        A program written for one ran on the others, so a customer who outgrew a machine bought the next model and kept the software. The models were not
+        scaled copies of one design. They differed in <strong>data-path width</strong>: 8, 16, 32 and 64 bits on the Models 30, 40, 50 and 65. On the Model 30 an 8-bit
+        ALU did a 32-bit addition in byte-sized steps, and the instruction set was what its microcode made of that small machine. The control store held about
+        4 000 words of 50 to 60 bits (the sources differ; see Layers). The instruction set was a contract, and microcode was the translation from it to each machine.</p>
+        <p>The table runs the same experiment with our own hardware: RV32I built four ways, the same programs on each, every result checked against the golden model. All four
+        have fast adders, so the periods compare.
+        <strong>Cost</strong> is NANDs without the program ROM; <strong>time</strong> is CPI × period.</p>
+        <p>Read it for what it says about microcode. Making the controller microcoded adds ${sp(MICRO_NANDS - FSM_NANDS)} NANDs (the ROMs here are mux trees, as the previous steps said) and changes
+        neither CPI nor period: ${sp(FAM[2].nands)} NANDs against ${sp(FAM[1].nands)} for the same speed. The whole family spans only ${SPREAD.cost.toFixed(2)}× in cost, but ${SPREAD.time.toFixed(1)}× in time per instruction, and
+        the cheapest, the single-cycle CPU, is also the fastest. That is the opposite of System/360's trade, for two reasons. All four of ours keep the 32-bit register file, ALU and memory,
+        which are most of the gates, so the controller cannot move the price much; System/360 varied the data path itself and let microcode hide the difference. And here memory answers in the cycle it is asked, so nothing makes
+        the single-cycle machine wait; on a machine whose core memory takes microseconds, serial steps cost little extra.</p>
+        <p>The control store is small too: ${MS.words} words of ${MS.bits} bits, ${MS.total} bits in all, against more than 200 000 bits in a Model 30.
+        What a microcoded design buys is not speed or area at this scale but a table you can change: more instructions on the same data path, or a new instruction set on an old one.</p>`,
+      widget: familyWidget,
+      more: {
+        derive: `<p>Per instruction, in NAND delays: ${FAM.map((r) => `${r.label.toLowerCase()} ${r.cpi.toFixed(2)} × ${r.period} = ${Math.round(r.delaysPerInstr)}`).join('; ')}. At ${RESULTS.psPerNand} ps a delay that is ${FAM.map((r) => r.nsPerInstr.toFixed(1)).join(', ')} ns. Means are geometric over ${PROGRAMS_USED}. Microcode store: ${MS.words} microwords × (14 control + 4 next + 2 mode) bits = ${MS.total} bits, plus two small dispatch ROMs indexed by the opcode.</p>`,
+        pitfall: `<p>Reading this table as "microcode is slow". Both multicycle rows are slow because they take ${FAM[1].cpi.toFixed(1)} cycles an instruction on one shared ALU; the microcoded and hardwired controllers are identical in cycles. System/360 got its range from the data path; microcode only made one instruction set fit all of it.</p>`,
+        real: `<p><strong>Sources for the IBM figures.</strong> Announcement 7 April 1964, six models, performance range factor 50: G. M. Amdahl, G. A. Blaauw, F. P. Brooks Jr., "Architecture of the IBM System/360", IBM Journal of Research and Development 8(2), 1964, p. 87 (abstract). Data-path widths 8 / 16 / 32 / 64 bits and a Model 30 control store of 4k × 50 bits (Model 40: 4k × 52): the table "Microprogramming in IBM 360" in D. Patterson's slides for the SOSP 2015 history session, a secondary source. The Model 30's 8-bit data path: IBM Field Engineering Theory of Operation, via the Wikipedia article on the Model 30. That article, citing Weber's chapter, gives 4 032 words of 60 bits; the Model 40 article gives up to 8 192 words of 56 bits, half for the 1401 / 1410 compatibility feature. The sources disagree on word width and count, so the text says "about 4 000 words of 50 to 60 bits" and quotes no cycle times, which differ as well. Microprogram design for the family: S. G. Tucker, "Microprogram control for System/360", IBM Systems Journal 6(4), 1967, pp. 222-241.</p>`,
+      },
+      challenge: {
+        kind: 'quiz', question: 'In our four RV32I machines, what does making the controller microcoded change?',
+        options: ['Its cost in NANDs and nothing about CPI or period', 'The clock period, since a ROM is faster than logic', 'The CPI, since microcode can skip states', 'Nothing: the NAND count is the same'],
+        answer: 0,
+        why: ['', 'Both multicycle rows have the same period: the longest step is an ALU operation, whichever way the controller is built.', 'The book microprogram has exactly the state table\'s states, so every class takes the same cycles; only an edit such as the painter\'s changes that.', 'The microcoded CPU is larger by the difference in the two controllers\' gates, as the table shows.'],
+        explain: 'The microcoded and hardwired machines run the same states in the same cycles at the same period. Only the NAND count differs. The benefit of microcode is that the table is data, so one data path can serve a different instruction set or an extended one, which is what System/360 relied on.',
       },
     },
     {

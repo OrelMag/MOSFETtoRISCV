@@ -321,6 +321,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Same CPU, microprogrammed" },
     { title: "Was it worth it?", challenge: "quiz" },
     { title: "Paint the microcode", challenge: "reach" },
+    { title: "One instruction set, many machines: System/360", challenge: "quiz" },
     { title: "Find it: a register that never holds", challenge: "reach" },
   ] },
   { id: "float", num: 26, title: "Floating point", blurb: "IEEE 754 from the bits up: unpack, align, add or multiply, normalize, round in five modes with exception flags, and an FPU in the CPU.", level: "Arithmetic", builds: ["muldiv","pipeline"], recap: {"checks":3}, steps: [
