@@ -3,6 +3,11 @@
 // with the Baby panel (widgets/baby.ts). Sources: docs/PLAN-BABY.md.
 
 import { BEAT_US, DIGIT_US, HOLD_BEATS, HOLD_S, REFRESH_BEATS } from '../lib/baby';
+import { BABY_SERIAL, SERIAL_DIGITS } from '../lib/babyserial';
+import { SPOT_HALFLIFE } from '../lib/babytube';
+import { ssemWords } from '../ssem/asm';
+import { tubeLineScene, TUBE_K } from '../widgets/babytubeview';
+import { williams3d } from '../widgets/williams3d';
 import { groupDigits } from '../sim/numfmt';
 import { kilburnSource } from '../ssem/programs';
 import { babyScene } from '../widgets/baby';
@@ -20,6 +25,8 @@ export const BABY_COST = { timing: 151, decode: 57, control: 1036, acc: 1068, al
 export const BABY_STORE_NANDS = 19_653;
 /** Kilburn's routine on 1000 with regeneration off: the faded Stop on line 13 runs as JMP 0 (tests/baby.test.ts). */
 export const REGEN_OFF = { instrs: 8002, beats: 32_008 } as const;
+/** The serial subtractor against the word-wide one, in NANDs (tests/baby.test.ts). */
+export const SERIAL_COST = { stage: 28, addSub32: 420, serial: 2000 } as const;
 
 const MS_1948 = (4 * BEAT_US) / 1000;
 const MIN_1948 = (BABY_RUN.instrs * MS_1948) / 60000, MIN_BURTON = (BABY_RUN.instrs * 1.44) / 60000;
@@ -37,7 +44,7 @@ export const chAppendixBaby: Chapter = {
     'run Kilburn\'s highest-factor routine to the end, and price it against 1948 and against this site\'s CPUs',
   ],
   builds: ['registers', 'memory', 'cpu', 'multicycle', 'dram'],
-  soon: ['One digit at a time', 'Your own program'],
+  soon: ['Your own program'],
   recap: {
     keep: [
       'The Baby\'s program sat in the same read-write store as its data: 32 lines of 32 digits. An instruction is a line number (digits 0–4) and a function (digits 13–15); the rest of the word is ignored.',
@@ -107,9 +114,10 @@ export const chAppendixBaby: Chapter = {
         <p>The charge does not stay. Kilburn's report of December 1947 gives the screen a memory "of the order of 0.2
         seconds". At the machine's beat of ${BEAT_US} µs (32 digits of ${DIGIT_US} µs and four of fly-back) that is
         about ${HOLD_BEATS} beats. Reading also disturbs the charge, so a read must be followed by a rewrite.</p>
-        <p>Switch the face to <strong>Charge</strong>: each line fades from the moment it was last written and comes back
-        to full brightness when it is rewritten.</p>`,
-      scene: () => babyScene({ source: FULL, view: 'charge' }),
+        <p>The model shows the store tube with Kilburn's program on its face: the gun, the plates that steer the beam to a
+        line and a digit, and the wire-mesh pick-up plate in front of the glass with its lead to the amplifier. The tube was
+        a commercial CV1131, 12 inches across; its other dimensions here are estimates.</p>`,
+      widget: () => williams3d(ssemWords(FULL)),
     },
     {
       title: 'Regeneration',
@@ -128,10 +136,28 @@ export const chAppendixBaby: Chapter = {
         charge has leaked away: it reads as all dots, 0, which is JMP 0, and the machine jumps instead of stopping. That
         happens after ${k(REGEN_OFF.instrs)} instructions, ${k(REGEN_OFF.beats)} beats, about
         ${Math.round((REGEN_OFF.beats * BEAT_US) / 1e6)} seconds at 1948 speed.</p>
-        <div class="try">Press <strong>Regeneration on</strong> to turn it off, watch line 13 fade in the charge view, and
-        wait for the panel to name the instruction where the machine and the model part ways.</div>`,
+        <p>The face is drawn as <strong>charge</strong> here: each line fades from the moment it was last written and comes
+        back to full brightness when it is rewritten.</p>
+        <div class="try">Press <strong>Regeneration on</strong> to turn it off, watch line 13 fade, and wait for the panel
+        to name the instruction where the machine and the model part ways.</div>`,
       scene: () => babyScene({ source: small(1000), view: 'charge', highlight: ['wr', 'timing'] }),
       tries: [(st) => st.getInput('regen') === 0],
+    },
+    {
+      title: 'Inside the tube',
+      body: `
+        <p>Open the store and it is flip-flops: that is what it behaves like. To see the charge itself, here is one line of
+        ${2 ** TUBE_K} spots at switch level, built like the DRAM chapter's column: each spot a capacitor that leaks with a
+        half-life of ${SPOT_HALFLIFE} beats, the pick-up plate a sense amplifier that compares it with a reference at half
+        charge, and a write driver.</p>
+        <p>The <span data-show="scan">scanner</span> visits the spots in turn, four beats each: precharge, beam on, sense,
+        rewrite. The <span data-show="beam">beam</span> decoder picks the spot. What the pick-up read is held in a
+        flip-flop and driven back, so every spot is restored once every ${4 * 2 ** TUBE_K} beats. With <code>wr</code> = 1
+        the digit <code>d</code> is written in place of what was read when the beam reaches spot <code>wa</code>.</p>
+        <div class="try">Set <code>wr</code> to 1 and Pulse until the scanner has passed spot <code>wa</code>: its bar
+        fills. Then press <strong>Wait 700</strong>: with the scanner stopped the charge falls below the line, and the next
+        visit reads a dot.</div>`,
+      scene: () => tubeLineScene({ highlight: ['scan', 'beam'] }),
     },
     {
       title: 'Words, numbers, instructions',
@@ -212,6 +238,26 @@ export const chAppendixBaby: Chapter = {
         machine possible at all. The rest is small because a word-wide adder, a subtractor and a few registers are all a
         stored-program computer strictly needs.</p>`,
       scene: () => babyScene({ source: FULL, paused: true }),
+    },
+    {
+      title: 'One digit at a time',
+      body: `
+        <p>Our machine adds and subtracts a whole word in one clock. The Baby did not: its words came off the tubes one
+        digit at a time, digit 0 first, every ${DIGIT_US} µs, so its subtractor was a single
+        <span data-show="st">stage</span>: a full adder for a + ¬b, and a flip-flop that carries from one digit to the
+        next. The first digit gets a carry in of 1, the +1 of two's complement.</p>
+        <p>Here that stage sits between two shift registers that hand it a digit of a and of b each clock, and a third
+        register that collects the result. Pulse <code>load</code> for one clock, then hold <code>run</code> for
+        ${SERIAL_DIGITS} clocks: <code>r</code> becomes a − b, the same answer as the word-wide subtractor.</p>
+        <p>The price is time against gates. The stage is ${SERIAL_COST.stage} NANDs; a 32-digit ripple subtractor is
+        ${k(SERIAL_COST.addSub32)}, so the digit stage is ${Math.round(SERIAL_COST.addSub32 / SERIAL_COST.stage)} times
+        smaller and ${SERIAL_DIGITS} times slower. The whole unit here is ${k(SERIAL_COST.serial)} because our shift
+        registers are flip-flops; on the Baby the words circulated on the tubes themselves, so the shifting cost nothing
+        extra.</p>
+        <div class="try">Set <code>load</code> to 1, Pulse once, set it back to 0, set <code>run</code> to 1 and Pulse until
+        <code>r</code> shows 963.</div>`,
+      scene: () => ({ root: BABY_SERIAL, clock: 'clk', inputs: { a: 1000, b: 37, load: 0, run: 0 }, autoClock: false, highlight: ['st'] }),
+      tries: [(st) => st.value('r') === 963],
     },
     {
       title: 'Kilburn\'s program',

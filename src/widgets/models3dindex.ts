@@ -194,6 +194,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./crt3d').then((m) => m.crt3d()),
   },
   {
+    id: 'williams', title: 'A store on a picture tube', category: 'machines', chapter: 'appendix-baby', step: 1,
+    summary: 'The Manchester Baby\'s Williams tube: a raster of dots and dashes held as charge, read through a wire-mesh pick-up plate and rewritten before it leaks away.',
+    files: ['williams3d', 'williams3dview', 'williams3dparts'], factory: 'williams3d',
+    open: () => import('./williams3d').then((m) => m.williams3d()),
+  },
+  {
     id: 'babbage', title: 'Babbage\'s carry', category: 'machines', chapter: 'fastadd', step: 5,
     summary: 'A Difference Engine No. 2 column: a run of 9s carries one arm at a time, or all at once by the anticipating carriage.',
     files: ['babbage3d', 'babbage3dview', 'babbage3dparts'], factory: 'babbage3d', codex: ['ripple', 'cla', 'prefix'],

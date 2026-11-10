@@ -145,6 +145,10 @@ describe('Appendix E\'s numbers', () => {
     const n = (d: Parameters<typeof stats>[0]) => stats(d).nands;
     expect(BABY_COST).toEqual({ timing: n(BABY_TIMING), decode: n(BABY_DECODE), control: n(BABY_CONTROL), acc: n(BABY_ACC), all: n(babyComputer([])) });
     expect(BABY_STORE_NANDS).toBe(n(ram(5, 32)));
+    const { SERIAL_COST } = await import('../src/chapters/ch-baby');
+    const { BABY_SERIAL, SERIAL_STAGE } = await import('../src/lib/babyserial');
+    const { addSub } = await import('../src/lib/combinational');
+    expect(SERIAL_COST).toEqual({ stage: n(SERIAL_STAGE), addSub32: n(addSub(32)), serial: n(BABY_SERIAL) });
     // regeneration off: the follower names the first difference where the faded Stop runs as JMP 0
     const { BabyFollower, babyHw } = await import('../src/widgets/babymon');
     const w = ssemWords(kilburnSource(1000));

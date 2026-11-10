@@ -103,7 +103,7 @@ export const PATH_MINUTES: Record<string, number[]> = {
   "appendix-doom": [3,4,3,4,4],
   "appendix-sap": [7,6,6,6,6,6,6,6,7,6,6],
   "appendix-runner": [5,5,5,5,5,5,5,5,5],
-  "appendix-baby": [3,3,3,4,5,3,3,5,3],
+  "appendix-baby": [3,3,3,3,4,5,3,3,3,5,3],
 };
 
 /** Every skill, in journey order (learn/pathgen.ts computeSkills). */
@@ -1442,9 +1442,9 @@ export const PATH_REVIEW: ReviewRow[] = [
   ["appendix-runner:recap:0","appendix-runner",0],
   ["appendix-runner:recap:1","appendix-runner",0],
   ["appendix-runner:recap:2","appendix-runner",0],
-  ["appendix-baby:3","appendix-baby",0],
   ["appendix-baby:4","appendix-baby",0],
-  ["appendix-baby:7","appendix-baby",0],
+  ["appendix-baby:5","appendix-baby",0],
+  ["appendix-baby:9","appendix-baby",0],
   ["appendix-baby:recap:0","appendix-baby",0],
   ["appendix-baby:recap:1","appendix-baby",0],
   ["appendix-baby:recap:2","appendix-baby",0],
