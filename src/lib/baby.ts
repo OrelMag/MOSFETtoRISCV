@@ -303,6 +303,14 @@ export const BABY_WRITE: ComponentDef = (() => {
 
 // ---------------------------------------------------------------- the machine
 
+/** PI, the present instruction: a 32-bit register loaded at A1 (in 1948, a line on the control tube beside CI). */
+export const BABY_PI: ComponentDef = define({
+  ...register(32), id: 'baby_pi', name: 'Present instruction (PI)', category: 'sequential',
+  summary: 'The present instruction: the line fetched at A1, held while the instruction runs. On the Baby it was a second line on the same tube as CI.',
+  symbol: { ...register(32).symbol, label: 'PI' },
+});
+
+
 export const BABY_PORTS: PortDef[] = [
   clk(), bit('regen', 'in'),
   bus('ci', 32, 'out'), bus('pi', 32, 'out'), bus('a', 32, 'out'), bus('beat', 2, 'out'), bit('t', 'out'), bit('stop', 'out'),
@@ -330,7 +338,7 @@ export function babyComputer(words: ArrayLike<number> = []): ComponentDef {
   b.next();
   const st = b.op(store, [`${sc}.line`, `${wr}.din`, `${wr}.we`, 'clk'], 'store', 'store');
   b.next();
-  const pi = b.op1(register(32), [`${st}.dout`, `${tm}.a1`, 'clk'], 'PI', 'pi');
+  const pi = b.op1(BABY_PI, [`${st}.dout`, `${tm}.a1`, 'clk'], 'PI', 'pi');
   b.next();
   const dc = b.op(BABY_DECODE, [pi, `${tm}.a2`, ''], 'decode', 'dec');
   b.next();
