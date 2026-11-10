@@ -107,19 +107,28 @@ export function withoutProgram(cpu: ComponentDef): { def: ComponentDef; program:
 
 // ---------------------------------------------------------------- layout
 
-const layouts = new WeakMap<ComponentDef, Partial<Record<HallTech, Hall>>>();
+const layouts = new WeakMap<ComponentDef, Partial<Record<string, Hall>>>();
 
-/** The hall of `cpu` in relays or tubes (memoized per definition). */
-export function hallLayout(cpu: ComponentDef, tech: HallTech): Hall {
+/** The block a program store adds (lib/hallcards.ts: "load, then run"), by its instance name. */
+export const STORE_BLOCK = 'store';
+
+/**
+ * The hall of `cpu` in relays or tubes (memoized per definition). `store`: a program store to stand beside it (the deck read
+ * into it before the run), a block of its own priced alone, counted in the totals.
+ */
+export function hallLayout(cpu: ComponentDef, tech: HallTech, store?: ComponentDef): Hall {
   const memo = layouts.get(cpu) ?? {};
   layouts.set(cpu, memo);
-  const hit = memo[tech];
+  const key = store ? `${tech}+${store.id}` : tech;
+  const hit = memo[key];
   if (hit) return hit;
 
   const spec = CABINET[tech];
   const { def, program } = withoutProgram(cpu);
-  const total = price(def, tech, null);
-  if (!total) throw new Error(`${cpu.id}: cannot be built in ${tech}s`);
+  const cpuTotal = price(def, tech, null);
+  if (!cpuTotal) throw new Error(`${cpu.id}: cannot be built in ${tech}s`);
+  const storePriced = store ? price(store, tech, null) : null;
+  const total = storePriced ? addPriced(cpuTotal, storePriced) : cpuTotal;
   const blocks: HallBlock[] = [];
   for (const inst of netlistOf(def)!.instances) {
     if (inst.name === program) continue;
@@ -130,13 +139,14 @@ export function hallLayout(cpu: ComponentDef, tech: HallTech): Hall {
       devices: priced.devices, cabinets: 0, hue: 0,
     });
   }
+  if (store && storePriced) blocks.push({ name: STORE_BLOCK, label: 'Program store', def: store, nands: stats(store).nands, priced: storePriced, devices: storePriced.devices, cabinets: 0, hue: 0 });
   // Largest first; hues in that order, so the big blocks get distinct colours.
   blocks.sort((a, b) => b.priced.devices - a.priced.devices || a.name.localeCompare(b.name));
   blocks.forEach((b, i) => (b.hue = (i % HUES) + 1));
   // The devices only the whole sees (fan-out across block boundaries) are shared out in proportion to size, so the
   // hall holds exactly total.devices.
   const between = total.devices - blocks.reduce((s, b) => s + b.priced.devices, 0);
-  share(blocks, between);
+  share(blocks.filter((b) => b.name !== STORE_BLOCK), between); // fan-out between the CPU's blocks: the store stands apart
   for (const b of blocks) b.cabinets = Math.ceil(b.devices / spec.per);
 
   // Rows of cabinets, each block's cabinets side by side (a row may hold the end of one block and the start of the
@@ -163,8 +173,19 @@ export function hallLayout(cpu: ComponentDef, tech: HallTech): Hall {
     perRow, rows, width, depth, floor: width * rows * pitchZ,
     person: [-0.9, 0.9], speck: [-0.15, 1.0],
   };
-  memo[tech] = hall;
+  memo[key] = hall;
   return hall;
+}
+
+/** Two priced parts standing side by side: devices, power, volume and mass add up (a time does not: null). */
+function addPriced(a: Priced, b: Priced): Priced {
+  const add = (x: number | null, y: number | null) => (x === null || y === null ? null : x + y);
+  return {
+    ...a, devices: a.devices + b.devices, fanout: a.fanout + b.fanout,
+    ...(a.triodes !== undefined ? { triodes: a.triodes + (b.triodes ?? 0) } : {}), ...(a.diodes !== undefined ? { diodes: a.diodes + (b.diodes ?? 0) } : {}),
+    steps: null, time: null, power: add(a.power, b.power), plant: add(a.plant, b.plant), energy: add(a.energy, b.energy),
+    volume: add(a.volume, b.volume), mass: add(a.mass, b.mass), area: add(a.area, b.area),
+  };
 }
 
 /** Add n (any sign) to the blocks' devices in proportion to their own counts, by largest remainder. */
