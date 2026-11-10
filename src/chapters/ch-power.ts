@@ -81,15 +81,19 @@ export const chPower: Chapter = {
     {
       title: 'Where the energy goes',
       body: `
+        <p>The last chapter named power among the side channels: what a circuit draws from its supply depends on the data it works on. This chapter measures
+        that draw, and spends it as an engineer does: where it goes, and how to need less of it.</p>
         <p>Every wire is a small capacitor. When one goes from 0 to 1 the supply charges it, and when it goes back to 0 that charge drains to ground. The simulator
         counts every change of every net, and each net's capacitance follows from what it drives (${FF_INPUT} fF for each NAND input, ${FF_DRIVER} fF for its driver, ${FF_WIRE} fF
         of wire for each branch; illustrative values for a 28 nm-class process, like the 25 ps per NAND). From the two the
         Power panel adds up the energy, block by block, glitches included.</p>
         <p>Here is the single-cycle CPU of <a href="#/c/cpu/0">chapter ${numOf('cpu')}</a> running “sum”. Over its first ${POWER.cycles} cycles it spends
         <strong>${pj(plain.pj)} per cycle</strong> at ${V_NOM} V: at its period of ${plain.period} NAND delays (${ns(plain.period)} ns), ${(plain.pj / Number(ns(plain.period))).toFixed(1)} mW.
+        (The benchmarks later in the chapter need a larger data memory, whose deeper read multiplexer makes the same CPU's period ${sc.period}.)
+        These figures are over the first ${POWER.cycles} cycles; the Power panel beside the circuit shows a running window, so its own figures drift a little.
         Look at which blocks spend it. The <span data-show="dm">data memory</span> takes ${share('dm')}, the clock net alone ${share('clock (clk net)')}, the
         <span data-show="rf">register file</span> ${share('rf')}, and the <span data-show="alu">ALU</span>, which does the actual work, ${share('alu')}.</p>
-        <p>The two largest have nothing to compute in most cycles: “sum” stores one word in all, and writes one register a cycle at most.
+        <p>The data memory and the register file have nothing to compute in most cycles: “sum” stores one word in all, and writes one register a cycle at most.
         They are arrays of flip-flops, and every flip-flop's clock input toggles twice a cycle whether it is written or not. The next steps take the cost apart:
         what one toggle costs, how many toggles the data cause, how many are wasted, and then the clock.</p>
         <div class="try">Run the program and watch the Power panel's bars settle. Then turn on the <b>Activity</b> overlay (the stage bar's Overlay menu): the
@@ -124,8 +128,10 @@ export const chPower: Chapter = {
       body: `
         <p>Energy per cycle is ½ C V² summed over the toggles, so a circuit costs what its data make it toggle. Engineers write it as P = α C V² f: C the total
         capacitance, f the clock rate, and α, the <b>activity</b>, the fraction of that capacitance that is charged per cycle on average.</p>
-        <p>The same 8-bit adder, three streams of operands, every toggle counted on the gate-level simulator. Counting changes few bits a step; random operands change half of them;
-        a held operand barely moves the adder at all. A clock has α = 1: it rises and falls every cycle.</p>`,
+        <p>The same 8-bit adder, three streams of operands, every toggle counted on the gate-level simulator. Random operands change half of the input bits every step. Counting changes about two input bits
+        a step, random operands about eight, yet the bars differ far less than that: when a bit of a and the same bit of b flip together, their XOR inside the
+        full adder stays put, while one input flipping alone always reaches the sum. What costs is the toggles inside, not the inputs. A held operand barely moves
+        the adder at all. A clock has α = 1: it rises and falls every cycle.</p>`,
       widget: activityWidget,
       challenge: {
         kind: 'quiz', question: 'Two programs run on one CPU at one clock rate. One draws more power. What differs?',
@@ -142,7 +148,8 @@ export const chPower: Chapter = {
         intermediate changes are <b>glitches</b>. They cost ½ C V² each like any other toggle and achieve nothing. The simulator sees them because every gate has a delay;
         a meter that only compared each cycle's settled values would miss them.</p>
         <p>Glitches grow with logic depth: the deeper the path, the more times a signal can change on its way. Over the four benchmarks they are
-        <strong>${pct(sc.glitch)} of the single-cycle CPU's energy</strong>, against ${pct(pipe.glitch)} of the pipeline's: a pipeline register stops every wave of changes at the end of its stage.</p>`,
+        <strong>${pct(sc.glitch)} of the single-cycle CPU's energy</strong>, against ${pct(pipe.glitch)} of the pipeline's: a pipeline register stops every wave of changes at the end of its stage. The wider machines in the bars glitch more again: two
+        lanes, forwarding networks and wide selection logic add depth and fan-out inside each stage.</p>`,
       widget: glitchWidget,
       more: {
         real: `<p>Synthesis tools balance path delays where glitch power matters (arithmetic, multipliers), and a register in front of a deep block (operand isolation) keeps its inputs still while its result is not wanted.
@@ -168,8 +175,9 @@ export const chPower: Chapter = {
         <p>One latch fixes it. The <b>integrated clock gate</b> (ICG) puts a <span data-show="icg">D latch</span>, transparent while the clock is low, in front of the AND. en may change
         freely in the low half; at the rising edge the latch closes and holds it through the high half, so the AND passes whole pulses or none. Like a flip-flop, it asks that en be steady a little before the edge
         (${ICG_SETUP} NAND delays here) and just after it (${ICG_HOLD}).</p>
-        <div class="try">Turn the clock on, then flip <b>en</b> while clk is high and watch both outputs in the Timing panel: the <span data-show="pin:bare">bare AND</span> makes a short pulse, the
-        <span data-show="pin:gclk">ICG</span> does not.</div>`,
+        <div class="try">The clock runs by itself. Flip <b>en</b> while clk is high and watch both outputs in the Timing panel: the <span data-show="pin:bare">bare AND</span> makes a short pulse, the
+        <span data-show="pin:gclk">ICG</span> does not.</div>
+        <p>Build one yourself from NANDs in the campaign level <a href="#/campaign/n/s_icg">Clock gate</a>.</p>`,
       scene: () => ({ root: CLOCK_GATES, inputs: { en: 0, clk: 0 }, analyzer: true }),
       challenge: {
         kind: 'quiz', question: 'The ICG\'s latch is transparent while the clock is low. Why low, not high?',
@@ -207,15 +215,14 @@ export const chPower: Chapter = {
       title: 'Leakage',
       body: `
         <p>An off transistor is not quite off. Below its threshold the current falls by a decade for every ${SWING_MV.toFixed(0)} mV less gate voltage, but never reaches zero:
-        the square law of <a href="#/c/mosfet/0">chapter ${numOf('mosfet')}</a>, continued below threshold (the curve is in the next step). That <b>leakage</b> flows whether the circuit switches or not, so it is static power.</p>
+        the square law of <a href="#/c/mosfet/0">chapter ${numOf('mosfet')}</a>, continued below threshold (the curve is two steps on, in “Lower the voltage, slow the clock”). That <b>leakage</b> flows whether the circuit switches or not, so it is static power.</p>
         <p>Two processes, from the semiconductor roadmap's requirements for 2013: a <b>high-performance</b> one that leaks ${hp.ioff * 1e9} nA per µm of transistor width and a
         <b>low-leakage</b> one at ${lp.ioff * 1e12} pA per µm, with ${pct(lp.ion / hp.ion)} of its on current. Their thresholds follow from those currents: ${deviceOf(hp).vt.toFixed(2)} V and
         ${deviceOf(lp).vt.toFixed(2)} V. Which transistors of a NAND are off depends on its inputs, and the simulator knows every input. Summed over the CPU's NANDs, cycle by cycle:
         <strong>${(plain.leakUw.hp).toFixed(0)} µW</strong> in the high-performance process, ${(plain.leakUw.lp * 1e3).toFixed(0)} nW in the low-leakage one.</p>
         <p>At ${V_NOM} V that is ${pct(POWER.atVdd.hp.leakPj / atV('hp'))} of an instruction's energy, small next to switching. It stops being small when the clock slows down, or stops.
         On a real high-performance chip leakage is a much larger share (it is what ended Dennard scaling, <a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>), and every simplification here pushes
-        the figure down: our transistors are only ${(deviceOf(hp).w * 1000).toFixed(0)} nm wide, because the book's 25 ps per NAND is slow for a 28 nm-class process; the model leaves out DIBL, which raises the off
-        current of short channels; it is taken at room temperature, where leakage is lowest; and it has no SRAM arrays, whose millions of idle cells leak the most.</p>`,
+        the figure down: our transistors are only ${(deviceOf(hp).w * 1000).toFixed(0)} nm wide, because the book's 25 ps per NAND is slow for a 28 nm-class process; it is taken at room temperature, where leakage is lowest; and it has no SRAM arrays, whose millions of idle cells leak the most.</p>`,
       widget: leakWidget,
       more: {
         real: `<p>Real processes offer several thresholds in one library: fast, leaky cells on the critical paths and slow, frugal ones everywhere else. Leakage also grows steeply with temperature,
@@ -282,8 +289,8 @@ export const chPower: Chapter = {
         <p>Until about 2005 every new process shrank transistors and lowered the supply together, so a chip of the same area drew the same power (Dennard scaling, <a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>).
         Then the supply stopped falling: a lower threshold leaks exponentially more. Transistors kept shrinking, so the power per mm² of a chip running flat out kept rising.</p>
         <p>Packed onto a die, our CPU's logic draws watts per mm². Within a laptop's or a phone's power budget, only part of a large die can run at full speed at once; the rest must
-        stay idle, gated or slowed: <b>dark silicon</b>. Designers spend it on specialised blocks that each do one job at a fraction of the energy, and that are dark when not needed. A GPU is one,
-        built from many simple lanes doing the same work: <a href="#/c/lanes/0">chapter ${numOf('lanes')}</a> begins one.</p>`,
+        stay idle, gated or slowed: <b>dark silicon</b>. Designers spend it on specialised blocks that each do one job at a fraction of the energy, and that are dark when not needed. A vector unit
+        is one, many simple lanes doing the same work: <a href="#/c/vectors/0">chapter ${numOf('vectors')}</a> begins with it, and a GPU is that idea taken further.</p>`,
       widget: densityWidget,
     },
   ],

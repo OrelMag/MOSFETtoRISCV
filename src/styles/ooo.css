@@ -29,6 +29,13 @@
 .ooo-tl td.ins, .ooo-tl thead th:first-child { position: sticky; left: 0; z-index: 1; background: var(--tl-bg, var(--bg)); }
 .mem-panel .ooo-tl { --tl-bg: var(--surface); }
 @media (max-width: 560px) { .ooo-tl td.ins { font-size: 11px; padding-right: 8px; } .ooo-tl th.c { min-width: 19px; } }
+/* a scroll cue: a shadow on the right edge while cycles are hidden past it (the cover gradient scrolls with the content and hides it at the end) */
+.scroll:has(> .ooo-tl) {
+  background:
+    linear-gradient(to left, var(--tl-bg, var(--bg)) 40%, transparent) right / 28px 100% no-repeat local,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--text) 28%, transparent), transparent) right / 12px 100% no-repeat scroll;
+}
+.mem-panel .scroll:has(> .ooo-tl) { --tl-bg: var(--surface); }
 .ooo-tl tr.gone td.ins { color: var(--muted); text-decoration: line-through; }
 .ooo-tl tr.wrong td.ins { color: var(--muted); font-style: italic; }
 .ooo-tl td.c { padding: 0; text-align: center; }
