@@ -64,3 +64,22 @@
 }
 /* values on the board: not the page's code pills */
 .p8-panel code { background: none; padding: 0; border: 0; color: var(--p8-text); }
+
+/* the CPU drawer's panel (editor/pdp8drawer.ts): the same board, sized for a ~340 px drawer */
+.p8-drawer { display: grid; gap: 8px; }
+.p8-drawer .p8-panel { margin: 0; padding: 8px 10px; }
+.p8-drawer .p8-row { grid-template-columns: 26px 22px auto minmax(0, 1fr); gap: 6px; }
+.p8-drawer .p8-lamps { gap: 3px; }
+.p8-drawer .p8-grp { gap: 3px; padding: 2px 3px; }
+.p8-drawer .p8-lamp { width: 10px; height: 10px; }
+.p8-drawer .p8-val { grid-column: auto; }
+.p8-drawer .p8-state { flex-wrap: wrap; gap: 4px 12px; font-size: 10.5px; }
+.p8-drawer .p8-keys { margin: 8px 0 0; gap: 4px; }
+.p8-sw { width: 10px; height: 18px; padding: 0; border: 0; border-radius: 3px; cursor: pointer;
+  background: linear-gradient(to bottom, var(--p8-lamp-off) 50%, var(--p8-text) 50%); }
+.p8-sw.on { background: linear-gradient(to bottom, var(--p8-lamp-on) 50%, var(--p8-lamp-off) 50%); }
+.p8-sw:focus-visible { outline: 2px solid var(--p8-lamp-on); outline-offset: 1px; }
+@media (pointer: coarse) {
+  .p8-sw { width: 16px; height: 32px; }
+  .p8-drawer .p8-key { min-height: 40px; }
+}
