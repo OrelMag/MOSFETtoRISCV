@@ -339,7 +339,7 @@ export class EditorSim {
     this.faults = st;
     if (this.hidden && c.mode === 'gate') d = applyFaults(d, this.hidden.at(d.root)).design;
     // a placed chip's own faults (its fault list, on its own canvas, says what they are; here they only act)
-    if (this.placed && c.mode === 'gate') {
+    if (this.placed && this.doc && c.mode === 'gate' && faultsKeyOf(this.doc.id, this.placed.deps, this.placed.look, false)) {
       const below = chipFaults(d.root, this.placed.look, false);
       if (below.length) {
         const out = applyFaults(d, below);

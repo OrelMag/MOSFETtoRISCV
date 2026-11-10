@@ -50,7 +50,8 @@ export function chipFaults(node: HierNode, look: ChipLookup, self = true): FlatF
         }
       }
     }
-    n.children?.forEach((c) => visit(c, true));
+    // a user chip sits only inside the root or another user chip: library parts' insides (a CPU core's, a RAM's) are not walked
+    if (n === node || n.def.category === 'custom') n.children?.forEach((c) => visit(c, true));
   };
   visit(node, self);
   return out;
@@ -71,8 +72,9 @@ export function faultsKeyOf(id: string, deps: readonly string[], look: ChipLooku
  * otherwise, the planted faults it may carry already (a break-it level's) kept. Itself when there are none.
  */
 export function withChipFaults(def: ComponentDef, chip: string, look: ChipLookup, deps: readonly string[]): ComponentDef {
-  if (!faultsKeyOf(chip, deps, look)) return def;
   const prev = def.planted, doc = look.doc(chip), built = look.compiled(chip);
+  // gate level only, as on the canvas (a faulted chip placed beside a transistor is simulated at switch level there)
+  if (built?.mode !== 'gate' || !faultsKeyOf(chip, deps, look)) return def;
   // the root is this new def, not the library's compile: its own faults by the chip's id (the same netlist, the same nets)
   const own = (n: HierNode): FlatFault[] => (doc && built && built.mode === 'gate'
     ? faultsOn(doc).flatMap((f) => { const ff = faultAt(f, doc, built, n); return ff ? [ff] : []; }) : []);

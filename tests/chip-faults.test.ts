@@ -69,6 +69,45 @@ describe('a chip\'s faults in Check and the Tests pane', () => {
   });
 });
 
+describe('placed two levels down, turned and mirrored', () => {
+  // TOP places BUF turned a quarter; BUF's second INV is mirrored: the faults still find their nets on every copy
+  const top = (): ChipDoc => chip('u_top', 'TOP', {
+    pins: [{ ...pin('a', 'in', [0, 2]), value: 1 }, pin('y', 'out', [90, 2])],
+    parts: [{ ...part('b', { chip: 'u_buf' }, [20, 0]), rot: 1 }],
+    wires: [wire('t1', 'pin:a', 'b.a'), wire('t2', 'b.y', 'pin:y')],
+  });
+  const bufTurned = (): ChipDoc => ({ ...buf(), parts: buf().parts.map((p) => (p.id === 'i2' ? { ...p, flip: true } : p)) });
+
+  it('a fault two chips down fails the top chip\'s table and acts on its canvas', () => {
+    const run = (faults?: ChipDoc['faults']) => {
+      const ws = workspace(top(), bufTurned(), inv(faults));
+      const lib = new UserLibrary(ws), look = lookOf(ws, lib), c = lib.compiled('u_top')!;
+      expect(c.diags.filter((d) => d.level === 'error')).toEqual([]);
+      const plan = planTest(c.def, { name: 't', src: TABLES.buf }) as TestPlan;
+      const wrap = (d: typeof c.def) => withChipFaults(d, 'u_top', look, lib.deps('u_top'));
+      const es = new EditorSim({ debounceMs: 0 });
+      es.update(c, ws.chips.u_top.pins, ws.chips.u_top, { look, deps: lib.deps('u_top') });
+      es.flush();
+      const y1 = pack(es.pinBits('y')!);
+      es.destroy();
+      return { tests: runTest(wrap(c.def), 'gate', plan, ['a', 'y']).failed.length, check: checkChallenge(plan.ch, c, wrap).ok, y1 };
+    };
+    expect(run()).toEqual({ tests: 0, check: true, y1: 1 });
+    const bad = run(STUCK);
+    expect(bad.tests).toBeGreaterThan(0);
+    expect(bad.check).toBe(false);
+    expect(bad.y1).toBe(0); // a = 1 on the canvas: the stuck copies give 0
+  });
+
+  it('a chip simulated at switch level is left as it is', () => {
+    const { lib, look } = setup(STUCK);
+    const c = lib.compiled('u_buf')!;
+    const sw = { ...c, mode: 'switch' as const };
+    const fake = { ...look, compiled: (id: string) => (id === 'u_buf' ? sw : look.compiled(id)) };
+    expect(withChipFaults(c.def, 'u_buf', fake, lib.deps('u_buf'))).toBe(c.def);
+  });
+});
+
 describe('placed: the parent\'s canvas', () => {
   // the parent's simulation, as the editor builds it: y for a = 0 and a = 1
   const outs = (faults?: ChipDoc['faults']) => {

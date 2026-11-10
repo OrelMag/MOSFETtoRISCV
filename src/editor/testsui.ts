@@ -4,7 +4,7 @@
 // "Fill outputs from the circuit" writes what the circuit shows into the table. Edits of the text are one undo step
 // per pause in typing (TYPE_MS), as the Verilog pane's.
 
-import { lookOf, withChipFaults } from './chipfaults';
+import { faultsKeyOf, lookOf, withChipFaults } from './chipfaults';
 import { groupDigits } from '../sim/numfmt';
 import '../styles/editor-tests.css';
 import { h, icon, undoKey } from '../ui/dom';
@@ -51,7 +51,7 @@ class TestsPane {
   private sel = 0;
   private auto = true;
   /** Results by chip id and table index, for the compiled circuit they ran on. */
-  private outcomes = new Map<string, { built: unknown; srcs: string[]; res: Outcome[] }>();
+  private outcomes = new Map<string, { built: unknown; faults: string; srcs: string[]; res: Outcome[] }>();
   private typeTimer: ReturnType<typeof setTimeout> | null = null;
   private runTimer: ReturnType<typeof setTimeout> | null = null;
   private player: TestPlayer | null = null;
@@ -102,12 +102,14 @@ class TestsPane {
     const doc = this.ed.doc, c = this.ed.compiled;
     const srcs = this.tests.map((t) => t.src);
     const prev = this.outcomes.get(doc.id);
+    // a fault switched on or off (here or in a chip placed here) changes no compile: the runs are keyed on the faults too
+    const faults = faultsKeyOf(doc.id, this.ed.lib.deps(doc.id), lookOf(this.ed.ws, this.ed.lib));
     const res: Outcome[] = srcs.map((src, i) => {
-      const old = prev && prev.built === c && prev.srcs[i] === src ? prev.res[i] : undefined;
+      const old = prev && prev.built === c && prev.faults === faults && prev.srcs[i] === src ? prev.res[i] : undefined;
       if (old && !(force && old.waiting)) return old;
       return this.runOne(doc, this.tests[i], force);
     });
-    this.outcomes.set(doc.id, { built: c, srcs, res });
+    this.outcomes.set(doc.id, { built: c, faults, srcs, res });
     if (this.open && !this.typing()) this.render();
     this.ed.props.update();
     return res;
