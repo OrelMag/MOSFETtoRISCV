@@ -122,8 +122,9 @@ export class Pdp8 {
     const r: Pdp8Step = { pc: at, word, cycles };
     if (printed !== undefined) r.printed = printed;
     if (!this.run) r.halted = true;
-    // an interrupt: a JMS 0 between instructions; ION's own instruction runs one more first
-    if (this.ie && !this.ionDelay && (this.prn || this.kbd)) {
+    // an interrupt: a JMS 0 between instructions; ION's own instruction runs one more first. A HLT stops the machine
+    // before it: the interrupt waits for CONT (the gates take it at the next Fetch, before the next instruction).
+    if (this.run && this.ie && !this.ionDelay && (this.prn || this.kbd)) {
       this.mem[0] = this.pc; this.pc = 1; this.ie = false;
       this.cycles++; r.cycles++; r.interrupt = true;
     }
