@@ -8,10 +8,11 @@ import { masks3d } from '../widgets/masks3d';
 import { withModel } from '../widgets/modelhost';
 import { clockTreeWidget, fabWidget, floorplanWidget, mappingWidget, pnrWidget, waferWidget } from '../widgets/silicon';
 import { cabinetCounts, hallFacts, periodIn } from '../lib/hall';
-import { eniacRoom, fmtArea, fmtJoules, fmtMass, fmtRate, fmtTime, fmtWatts, RELAY_CONTACTS, RELAY_PLANT_W, TECH, TUBE_PLANT_W, tubeFailEvery } from '../lib/tech';
+import { eniacRoom, fmtArea, fmtJoules, fmtMass, fmtRate, fmtTime, fmtWatts, price, RELAY_CONTACTS, RELAY_PLANT_W, TECH, TUBE_PLANT_W, tubeFailEvery } from '../lib/tech';
 import { ENIAC, ENIAC_PANEL } from '../phys/triode';
 import { RELAY_RACK, Z3 } from '../phys/relay';
 import { machineHall } from '../widgets/hall';
+import { CARD_S, hallProgram, programStore, READER_711 } from '../lib/hallcards';
 import type { Chapter, Step } from './types';
 import { numOf } from './order';
 
@@ -34,6 +35,8 @@ function hallStep(): Step {
     const pr = periodIn(f.steps, 'relay'), pt = periodIn(f.steps, 'tube'), pc = periodIn(f.steps, 'cmos');
     const dm = r.blocks.find((b) => b.name === 'dm')!, rf = r.blocks.find((b) => b.name === 'rf')!;
     const perBit = dm.nands / (32 * 32);
+    const deck = hallProgram('rv32i').deck.cards.length, storeWords = 2 ** Math.ceil(Math.log2(deck));
+    const storeTubes = price(programStore('rv32i'), 'tube', null)!.devices, storeRelays = price(programStore('rv32i'), 'relay', null)!.devices;
     text = `
       <p>Nothing in this course needed silicon: every circuit is NANDs, and a NAND can be <span data-ahead="relay">a relay (an electromagnetic switch; prologue P1)</span> or <span data-ahead="triode">a triode (a vacuum tube whose grid voltage switches its current) with two
       diodes (prologue P2)</span>. Here is the single-cycle RV32I of <a href="#/c/cpu/0">chapter ${numOf('cpu')}</a> priced that way, block by block, and stood on a floor at
@@ -55,11 +58,21 @@ function hallStep(): Step {
       ${fmtArea(f.cmos.area!)} of silicon (28 nm-class NANDs, ${Math.round(TECH.cmos.step * 1e12)} ps each, faster than the sky130 cells measured earlier),
       the speck on the table by the person. An instruction costs ${fmtJoules(r.total.power! * pr)}
       in relays and ${fmtJoules(t.total.power! * pt)} in tubes, counting the devices alone.</p>
+      <p>The program comes off cards: a deck of ${deck} object cards, one instruction each, its source line printed along the top, in an
+      IBM 711 reader at the front of the hall (${Math.round(READER_711.w * 100)} × ${Math.round(READER_711.d * 100)} cm, ${Math.round(READER_711.h * 100)} cm high,
+      ${Math.round(READER_711.kg)} kg). It reads a card in ${fmtTime(CARD_S)} (150 cards a minute, IBM's figure for the 701's reader), so the relay
+      machine, at ${fmtTime(pr)} an instruction, can <strong>read as it runs</strong>: the next card is always there in time, and a loop is the
+      loop's cards going round again, as Harvard Mark I glued its program tape into loops. The tube machine cannot: one card takes as long as
+      ${num(CARD_S / pt)} of its instructions, so it would spend ${(100 * (1 - pt / CARD_S)).toFixed(2)} % of its time waiting. It <strong>loads,
+      then runs</strong>, as the 701 did: the deck read once into a program store (here the site's ${num(storeWords)}-word RAM, ${num(storeTubes)} more
+      tubes; ${num(storeRelays)} in relays, which the relay machine does not need). Once the instructions sit in a memory, the machine fetches them
+      at its own speed: the stored program.</p>
       <p>A relay machine of this size is a building. The cost is not in the logic's cleverness but in counting: every NAND is a device, every bit of
       storage is several, and a relay cannot drive many inputs, so the fan-out adds coils.</p>
       <div class="try">Run the program and watch the relays switch (or the plates glow): each cycle's settled values from the
       gate-level simulation, one relay or tube per NAND output of its block (a real relay machine would ripple through
-      ${f.steps} steps to get there). Click a rack to open its block.</div>`;
+      ${f.steps} steps to get there). Click a rack to open its block. Then switch to tubes, and between <em>Read as it runs</em> and
+      <em>Load, then run</em>: the reader's panel shows the card at the station and where the time went.</div>`;
     racks = `<p>Two blocks fill most of the floor: the register file (${rf.cabinets} racks) and the data memory (${dm.cabinets}), both
       flip-flops of NANDs, ${perBit.toFixed(1)} NANDs per bit of data memory. Racks are not shared between blocks, so every small
       block gets one of its own, and the packed count (${rc.packed} racks) is what a floor plan that shared racks would need.
