@@ -87,13 +87,13 @@ export function sanitizeRef(r: unknown): PartRef | null {
     if (!int(k) || (w !== 8 && w !== 16 && w !== 24 && w !== 32) || (addr !== 'word' && addr !== 'rv32') || (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16' && lang !== 'cpu4' && lang !== 'dsp24' && lang !== 'isa' && lang !== '6502') || !str(src)) return null;
     if (lang === 'isa') {
       const isa = sanitizeIsa(r.rom.isa);
-      return isa ? { rom: { k, w, addr, lang, src, isa } } : null;
+      return isa ? { rom: { k, w, addr, lang, src, isa, ...(r.rom.look === 'rope' ? { look: 'rope' as const } : {}) } } : null;
     }
     const custom = lang === 'asm' ? sanitizeRows(r.rom.custom) : [];
     const custom16 = lang === 'rv16' ? sanitizeRows16(r.rom.custom16) : [];
     const c = r.rom.c === true && addr === 'rv32' && w === 32 && (lang === 'asm' || lang === 'hex');
     const xlen = r.rom.xlen === 64 && lang === 'asm' && !c;
-    return { rom: { k, w, addr, lang, src, ...(custom.length ? { custom } : {}), ...(custom16.length ? { custom16 } : {}), ...(r.rom.mac === true && (lang === 'asm' || lang === 'hex') && w === 32 ? { mac: true as const } : {}), ...(c ? { c } : {}), ...(xlen ? { xlen: 64 as const } : {}) } };
+    return { rom: { k, w, addr, lang, src, ...(custom.length ? { custom } : {}), ...(custom16.length ? { custom16 } : {}), ...(r.rom.mac === true && (lang === 'asm' || lang === 'hex') && w === 32 ? { mac: true as const } : {}), ...(c ? { c } : {}), ...(xlen ? { xlen: 64 as const } : {}), ...(r.rom.look === 'rope' ? { look: 'rope' as const } : {}) } };
   }
   if (isObj(r.ucode)) {
     const p = sanitizeProgram(r.ucode);

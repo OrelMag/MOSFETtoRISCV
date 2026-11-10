@@ -1070,6 +1070,10 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 }
 .sym-line { fill: none; stroke: var(--sym-stroke); stroke-width: 0.15; stroke-linecap: round; }
 .sym-line.thick { stroke-width: 0.2; }
+/* core rope (view/symbols.ts ropeBand): ferrite rings, the enamelled copper sense wires */
+.sym-rope-tray { fill: var(--rope-tray); }
+.sym-core { fill: none; stroke: var(--rope-core); stroke-width: 0.3; }
+.sym-rope-wire { fill: none; stroke: var(--rope-wire); stroke-width: 0.16; stroke-linecap: round; }
 .sym-arrow { fill: none; stroke: var(--sym-stroke); stroke-width: 0.13; stroke-linejoin: round; }
 .sym-channel { stroke: var(--sym-stroke); stroke-width: 0.22; stroke-dasharray: 0.55 0.3; transition: stroke 0.15s; }
 .sym-dep { stroke: var(--dep-load); stroke-width: 0.34; }

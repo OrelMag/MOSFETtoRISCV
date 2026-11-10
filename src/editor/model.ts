@@ -342,6 +342,8 @@ export type PartRef =
   | { rom: { k: number; w: 8 | 16 | 24 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex' | 'rv16' | 'cpu4' | 'dsp24' | 'isa' | '6502'; src: string;
       /** lang 'isa': the instruction set, a copy of the workspace's table (so the ROM builds on its own, in a share link too). */
       isa?: IsaDoc;
+      /** Drawn as core rope, the AGC's read-only memory (cosmetic: the same ROM, a larger box threaded with its first words). */
+      look?: 'rope';
       /** lang 'asm': the CPU's custom instructions (riscv/custom.ts), a copy of its core's rows, so the program assembles. */
       custom?: CustomRow[];
       /** lang 'rv16': the RV16 core's own instructions (riscv/rv16/custom16.ts), a copy of its core's rows, so the program assembles. */
