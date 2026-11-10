@@ -193,3 +193,15 @@ describe('Open in Sandbox', () => {
     expect(eng.out('dout')).toBe(CORE_SAMPLE[6]);
   });
 });
+
+describe('the loop a core opens onto', () => {
+  it('a 0 runs out to +2 and switches up there; a 1 back to -2 and switches down', async () => {
+    const { LOOP_PATH, loopX, loopY } = await import('../src/widgets/coreloop');
+    expect(LOOP_PATH).toBe(`M${loopX(-3)},${loopY(0)} H${loopX(2)} V${loopY(1)} M${loopX(3)},${loopY(1)} H${loopX(-2)} V${loopY(0)}`);
+    // and that is the rule the leaf follows
+    expect(coreNext(0, 1, 1, true)).toBe(0);
+    expect(coreNext(0, 2, 2, true)).toBe(1);
+    expect(coreNext(1, -1, -1, true)).toBe(1);
+    expect(coreNext(1, -2, -2, true)).toBe(0);
+  });
+});

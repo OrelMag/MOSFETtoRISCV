@@ -88,7 +88,7 @@ export const CORE: ComponentDef = define({
  * plane keeps its bits with the power off. Not in the library: it is the core, at another starting value.
  */
 export const CORE_SET: ComponentDef = {
-  ...CORE, id: 'core_set', name: 'Ferrite core (holding a 1)',
+  ...CORE, id: 'core_set',
   behavior: { ...coreBehavior, init: (mode) => ({ ...fresh(mode), b: mode === 'x' ? -1 : mode === 'random' ? fresh(mode).b : 1 }) },
   hdl: { synth: coreSynth(true), verilog: coreSynth(true).join('\n') },
 };

@@ -12,6 +12,10 @@ const W = 300, H = 170, PAD = 28;
 const xOf = (d: number) => PAD + ((d + SPAN) / (2 * SPAN)) * (W - 2 * PAD);
 const yOf = (b: number) => (b ? PAD : H - PAD);
 
+/** The loop's outline: a 0 holds until the drive reaches +2 and switches up there; a 1 holds until -2 and switches down there. */
+export const LOOP_PATH = `M${xOf(-SPAN)},${yOf(0)} H${xOf(CORE_FULL)} V${yOf(1)} M${xOf(SPAN)},${yOf(1)} H${xOf(-CORE_FULL)} V${yOf(0)}`;
+export { xOf as loopX, yOf as loopY };
+
 /** What a drive of d half-selects is made of in this circuit (the phase that drives it). */
 function driveWords(lo: number, hi: number): string {
   if (lo !== hi) return 'unknown (a select line is X)';
@@ -29,8 +33,7 @@ export function coreLoopWidget(state: () => unknown): Widget {
   const pic = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'core-loop', role: 'img', 'aria-label': 'The core\'s square hysteresis loop with its bit and the drive through it now' },
     svg('line', { x1: PAD - 8, y1: H / 2, x2: W - PAD + 8, y2: H / 2, class: 'core-loop-axis' }),
     svg('line', { x1: xOf(0), y1: PAD - 10, x2: xOf(0), y2: H - PAD + 10, class: 'core-loop-axis' }),
-    // the loop: flat tops (it holds under anything short of a full select), vertical sides at +-2 (it switches there)
-    svg('path', { d: `M${xOf(-SPAN)},${yOf(1)} H${xOf(CORE_FULL)} V${yOf(0)} M${xOf(SPAN)},${yOf(0)} H${xOf(-CORE_FULL)} V${yOf(1)}`, class: 'core-loop-line' }),
+    svg('path', { d: LOOP_PATH, class: 'core-loop-line' }),
     svg('path', { d: `M${xOf(CORE_FULL) - 4},${H / 2 + 6} L${xOf(CORE_FULL)},${H / 2 - 2} L${xOf(CORE_FULL) + 4},${H / 2 + 6} M${xOf(-CORE_FULL) - 4},${H / 2 - 6} L${xOf(-CORE_FULL)},${H / 2 + 2} L${xOf(-CORE_FULL) + 4},${H / 2 - 6}`, class: 'core-loop-line' }),
     svg('text', { x: PAD - 12, y: yOf(1) + 4, class: 'core-loop-tick', 'text-anchor': 'end' }, '1'),
     svg('text', { x: PAD - 12, y: yOf(0) + 4, class: 'core-loop-tick', 'text-anchor': 'end' }, '0'),
