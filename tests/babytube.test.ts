@@ -26,7 +26,7 @@ function tube() {
     idle(n: number) { sim.leak(n); },
     /** Beats until the pick-up reads spot i (phase 2 of its visit), returning what it read. */
     readSpot(i: number) {
-      for (let n = 0; n < 2 * ROUND; n++) { t.beat(); if (clocks % 4 === 3 && Array.from({ length: K }, (_, b) => sim.get(root.ports.a[b])).reduce((v, x, b) => v + (x === B1 ? 1 << b : 0), 0) === i) return t.q(); }
+      for (let n = 0; n < 2 * ROUND; n++) { t.beat(); if (clocks % 4 === 3 && Array.from({ length: K }, (_, b) => sim.get(root.ports.a[b])).reduce<number>((v, x, b) => v + (x === B1 ? 1 << b : 0), 0) === i) return t.q(); }
       throw new Error('never reached');
     },
     write(i: number, v: number) {
@@ -100,7 +100,7 @@ describe('regeneration', () => {
     const word = 0b01011100;
     for (let i = 0; i < N; i++) t.write(i, (word >> i) & 1);
     t.idle(HOLD_BEATS + ROUND); // past the hold time
-    const got = Array.from({ length: N }, (_, i) => (t.readSpot(i) === B1 ? 1 : 0)).reduce((w, v, i) => w | (v << i), 0);
+    const got = Array.from({ length: N }, (_, i) => (t.readSpot(i) === B1 ? 1 : 0)).reduce<number>((w, v, i) => w | (v << i), 0);
     expect(got).toBe(0);
   });
 
