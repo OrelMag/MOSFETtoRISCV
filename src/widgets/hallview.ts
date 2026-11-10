@@ -5,6 +5,9 @@
 // engine): a relay's armature lights while its coil is energized (output 1), a tube glows brighter while its triode
 // conducts (output 0). A click on a rack names its block and links to its schematic. Without WebGL2 (or after a
 // lost context) the same layout is drawn as a flat isometric picture.
+// The program comes off cards (lib/hallcards.ts): an IBM 711 reader stands at the front, the deck read as it runs (relays: the
+// reader keeps up) or loaded first into a program store that joins the hall as racks of its own (tubes: the reader would idle
+// the machine); the reader's panel shows the card at the station, the counts and where the time went.
 
 import { groupDigits } from '../sim/numfmt';
 import '../styles/relay3d.css';
@@ -24,6 +27,10 @@ import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { ORBIT_HINT, modelFrame } from './modelframe';
+import { cardView } from './carddraw';
+import { deckReader } from '../cards/reader';
+import { CARD_S, defaultFeed, type FeedMode, HallFeed, hallProgram, programStore, READER_711 } from '../lib/hallcards';
+import { markJump } from '../ui/returnto';
 
 const num = (n: number) => groupDigits(Math.round(n));
 /** A clock rate, as Hz below 1 Hz too (not mHz). */
@@ -69,6 +76,7 @@ function tubeSlots(x: number, z: number, n: number, sp: Hall['spec']): Slot[] {
 
 interface Palette {
   hues: RGB[]; floor: RGB; face: RGB; chassis: RGB; relay: RGB; on: RGB; glass: RGB; glow: RGB; person: RGB; table: RGB; die: RGB; ring: RGB;
+  reader: RGB; stock: RGB; cable: RGB;
 }
 
 // ---------------------------------------------------------------- the live simulation
@@ -137,7 +145,13 @@ type Speed = 'real' | 'slow' | 'max';
 
 export function hallView(): Widget {
   let design: HallDesign = 'rv32i', tech: HallTech = 'relay', speed: Speed = 'real';
-  let hall = hallLayout(hallCpu(design).def, tech);
+  let feedMode: FeedMode = defaultFeed(tech);
+  const layoutOf = () => hallLayout(hallCpu(design).def, tech, feedMode === 'load' ? programStore(design) : undefined);
+  let hall = layoutOf();
+  const newFeed = () => new HallFeed(design, feedMode, periodIn(hallFacts(design).steps, tech));
+  let feed = newFeed();
+  /** Load mode: cards read into the store so far (fractional while one moves), before the first instruction. */
+  let loading = 0;
   let mode: 'wait' | 'gl' | 'flat' = 'wait';
   let renderer: Renderer | null = null, dead = false, selected = -1;
   let live: Live | null = null, liveFor: HallDesign | null = null, liveTimer = 0;
@@ -154,7 +168,7 @@ export function hallView(): Widget {
     return { el, sync };
   };
   const designSeg = seg<HallDesign>('CPU', [['cpu4', '4-bit CPU'], ['rv32i', 'RV32I single-cycle']], () => design, (v) => { if (v !== design) { design = v; relayout(); } });
-  const techSeg = seg<HallTech>('Technology', [['relay', 'Relays'], ['tube', 'Tubes']], () => tech, (v) => { if (v !== tech) { tech = v; relayout(); } });
+  const techSeg = seg<HallTech>('Technology', [['relay', 'Relays'], ['tube', 'Tubes']], () => tech, (v) => { if (v !== tech) { tech = v; feedMode = defaultFeed(tech); relayout(); } });
   const runBtn = h('button', { type: 'button', class: 'btn sm primary' }, 'Run') as HTMLButtonElement;
   const stepBtn = h('button', { type: 'button', class: 'btn sm' }, 'Step') as HTMLButtonElement;
   const resetBtn = h('button', { type: 'button', class: 'btn sm' }, 'Reset') as HTMLButtonElement;
@@ -169,6 +183,18 @@ export function hallView(): Widget {
   const ctl = h('div', { class: 'hall-ctl' }, designSeg.el, techSeg.el, chipBtn, viewBtn);
   const run = h('div', { class: 'hall-run' }, runBtn, stepBtn, resetBtn, speedSel, soundBtn, failBtn, cycOut);
 
+  // ---- the card reader's panel
+  const feedSeg = seg<FeedMode>('How the program is fed', [['stream', 'Read as it runs'], ['load', 'Load, then run']], () => feedMode, (v) => { if (v !== feedMode) { feedMode = v; relayout(); } });
+  const cv = cardView(hallProgram(design).deck.cards[0], { label: 'The card at the read station' });
+  const rdStatus = h('p', { class: 'hall-rd-status', 'aria-live': 'polite' });
+  const rdStats = h('div', { class: 'hall-rd-stats' });
+  const ledgerBar = h('div', { class: 'hall-rd-ledger', 'aria-hidden': 'true' });
+  const ledgerKey = h('div', { class: 'hall-rd-key' });
+  const editBtn = h('button', { type: 'button', class: 'btn sm', title: 'A copy of the deck in a card reader part, in a new sandbox chip: punch, sort or add cards there' }, 'Edit a copy in the Sandbox') as HTMLButtonElement;
+  const reader = h('section', { class: 'hall-rd', 'aria-label': 'The card reader' },
+    h('div', { class: 'hall-rd-head' }, h('h4', null, 'The card reader'), feedSeg.el),
+    h('div', { class: 'hall-rd-body' }, h('div', { class: 'hall-rd-card' }, cv.el), h('div', { class: 'hall-rd-side' }, rdStatus, rdStats, h('h5', null, 'Where the time went'), ledgerBar, ledgerKey, editBtn)));
+
   // ---- stage
   const canvas = h('canvas', { class: 'r3-canvas', tabindex: 0, 'aria-label': 'The CPU as a hall of racks in 3D: drag to orbit, right-drag or shift-drag to pan, wheel or pinch to zoom, click a rack to name its block' }) as HTMLCanvasElement;
   const flat = h('canvas', { class: 'hall-flat', tabindex: 0, 'aria-label': 'The CPU as a hall of racks, drawn flat: click a rack to name its block' }) as HTMLCanvasElement;
@@ -182,7 +208,7 @@ export function hallView(): Widget {
   const sum = h('div', { class: 'hall-sum' }), sub = h('p', { class: 'hall-sub' });
   const legend = h('div', { class: 'hall-legend' });
   const card = h('div', { class: 'hall-card', 'aria-live': 'polite' });
-  const el = h('div', { class: 'hall' }, ctl, run, stage, hint, sum, sub, legend, card);
+  const el = h('div', { class: 'hall' }, ctl, run, stage, hint, reader, sum, sub, legend, card);
 
   const colors = new CssColors(el);
   let palette: Palette | null = null;
@@ -193,6 +219,7 @@ export function hallView(): Widget {
       hues: Array.from({ length: 10 }, (_, i) => c(`--hl-${i + 1}`)),
       floor: c('--hl-floor'), face: c('--hl-face'), chassis: c('--hl-chassis'), relay: c('--hl-relay'), on: c('--hl-on'),
       glass: c('--hl-glass'), glow: c('--hl-glow'), person: c('--hl-person'), table: c('--hl-table'), die: c('--hl-die'), ring: c('--hl-ring'),
+      reader: c('--hl-reader'), stock: c('--hl-stock'), cable: c('--hl-cable'),
     };
     if (el.isConnected) palette = p;
     return p;
@@ -252,6 +279,20 @@ export function hallView(): Widget {
         b([cx, 0.05, c.z + sp.d / 2], [sp.w, 0.1, sp.d], scaleRgb(hue, 0.6), 0.05, em);
         for (let s = 0; s < TUBE_SHELVES; s++) b([cx, shelfY(s, sp) + 0.0075, c.z + sp.d / 2], [sp.w - 2 * t, 0.015, sp.d - t], P.chassis, 0.3);
       }
+    }
+    // the card reader at the front: the IBM 711's cabinet at its planning size, a hopper of cards and a stacker on top,
+    // the card on its way, and the cable to the CPU along the floor
+    {
+      const [rx, rz] = readerAt(), R = READER_711, top = R.h;
+      b([rx, R.h / 2, rz], [R.w, R.h, R.d], P.reader, 0.15);
+      const card = (x: number, n: number) => b([x, top + (n * 0.0012) / 2, rz - 0.05], [0.0826, Math.max(0.0012, n * 0.0012), 0.187], P.stock, 0.05);
+      const k = readerCards();
+      card(rx - 0.22, k.hopper);
+      card(rx + 0.22, k.stacker);
+      if (k.moving !== null) b([rx - 0.22 + 0.44 * k.moving, top + 0.004, rz - 0.05], [0.0826, 0.002, 0.187], P.stock, 0.1, scaleRgb(P.stock, 0.25));
+      const c0 = hall.cabinets[0], cx1 = c0 ? c0.x + sp.w / 2 : 0, cz1 = c0 ? c0.z + sp.d : 0;
+      b([(rx + R.w / 2 + cx1) / 2, 0.01, rz], [Math.abs(cx1 - rx - R.w / 2), 0.02, 0.04], P.cable, 0.1);
+      b([cx1, 0.01, (rz + cz1) / 2], [0.04, 0.02, Math.abs(rz - cz1)], P.cable, 0.1);
     }
     // a person, 1.75 m, facing the racks' fronts... and the viewer
     const [px, pz] = hall.person;
@@ -331,6 +372,7 @@ export function hallView(): Widget {
     if (failed >= 0 && slots[failed]) lbl(slots[failed].pos, 'the failed tube', 'r', 'fail');
     lbl(diePos(), `the same CPU in CMOS (${Math.round(dieSide() * 1e6)} µm square)`, 'l', 'die');
     lbl([hall.person[0] + 0.2, PERSON, hall.person[1]], `${PERSON} m`, 'r', 'minor');
+    lbl([readerAt()[0], READER_711.h + 0.05, readerAt()[1]], 'the card reader (IBM 711)', 't', 'reader');
     hall.blocks.forEach((b, bi) => {
       const own = hall.cabinets.filter((c) => c.block === bi && c.row === hall.cabinets.find((q) => q.block === bi)!.row);
       const x = (own[0].x + own[own.length - 1].x + sp.w) / 2;
@@ -363,7 +405,7 @@ export function hallView(): Widget {
   // ---- camera
   /** From the front left and above, the whole floor (the person and the table too) in the frame. */
   const homeView = () => {
-    const x0 = hall.person[0] - 0.5, x1 = hall.width, z0 = -hall.depth, z1 = hall.person[1] + 0.4, H = hall.spec.h;
+    const x0 = readerAt()[0] - READER_711.w, x1 = hall.width, z0 = -hall.depth, z1 = hall.person[1] + 0.4, H = hall.spec.h;
     const R = 0.5 * Math.hypot(x1 - x0, z1 - z0, H), aspect = canvas.clientWidth / Math.max(1, canvas.clientHeight) || 1.6;
     const fv = (35 * Math.PI) / 180, fh = 2 * Math.atan(Math.tan(fv / 2) * aspect);
     return { target: [(x0 + x1) / 2, H * 0.3, (z0 + z1) / 2] as Vec3, yaw: -0.62, pitch: 0.52, dist: ((aspect < 1 || canvas.clientWidth < 600 ? 1 : 0.75) * R) / Math.sin(Math.min(fv, fh) / 2) };
@@ -393,7 +435,7 @@ export function hallView(): Widget {
     const iso = (x: number, y: number, z: number): [number, number] => [(x + z) * c30, (z - x) * 0.5 - y];
     let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity;
     const grow = (x: number, y: number, z: number) => { const [a, b] = iso(x, y, z); a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); b1 = Math.max(b1, b); };
-    grow(0, sp.h, -hall.depth); grow(hall.width, 0, 0); grow(0, 0, 0); grow(hall.width, sp.h, -hall.depth); grow(hall.person[0], 0, hall.person[1]); grow(hall.person[0], PERSON, hall.person[1]);
+    grow(0, sp.h, -hall.depth); grow(hall.width, 0, 0); grow(0, 0, 0); grow(hall.width, sp.h, -hall.depth); grow(hall.person[0], 0, hall.person[1]); grow(hall.person[0], PERSON, hall.person[1]); grow(readerAt()[0] - READER_711.w, 0, readerAt()[1] + READER_711.d);
     const pad = 24, sc = Math.min((W - 2 * pad) / (a1 - a0), (H - 2 * pad) / (b1 - b0));
     const ox = pad - a0 * sc + (W - 2 * pad - (a1 - a0) * sc) / 2, oy = pad - b0 * sc + (H - 2 * pad - (b1 - b0) * sc) / 2;
     const S = (x: number, y: number, z: number): [number, number] => { const [a, b] = iso(x, y, z); return [ox + a * sc, oy + b * sc]; };
@@ -428,6 +470,16 @@ export function hallView(): Widget {
         }
       }
       flatHits.push({ block: c.block, pts: [front, top, left] });
+    }
+    // the card reader
+    {
+      const [rx, rz] = readerAt(), { w, d, h: rh } = READER_711, x = rx - w / 2, z = rz - d / 2;
+      poly([S(x, 0, z), S(x, 0, z + d), S(x, rh, z + d), S(x, rh, z)], css(P.reader, 0.62));
+      poly([S(x, rh, z), S(x + w, rh, z), S(x + w, rh, z + d), S(x, rh, z + d)], css(P.reader, 1.15));
+      poly([S(x, 0, z + d), S(x + w, 0, z + d), S(x + w, rh, z + d), S(x, rh, z + d)], css(P.reader, 0.85));
+      const [tx, ty] = S(rx, rh, rz);
+      ctx.font = '600 11px system-ui, sans-serif'; ctx.fillStyle = css(P.person); ctx.textAlign = 'center';
+      ctx.fillText('card reader', tx, ty - 8);
     }
     // the person and the CMOS table
     const [fx, fy] = S(hall.person[0], 0, hall.person[1]), [hx, hy] = S(hall.person[0], PERSON, hall.person[1]);
@@ -511,6 +563,60 @@ export function hallView(): Widget {
     if (mode === 'gl') pushScene(); else drawFlat();
   };
 
+  // ---- the card reader: where it stands, its cards, its panel
+  /** Floor position of the reader's centre: at the front, left of the person, its front to the aisle. */
+  function readerAt(): [number, number] { return [hall.person[0] - 1.3, hall.person[1] - 0.2]; }
+  /** Cards in the hopper and the stacker, and how far the moving one has gone (0 hopper … 1 stacker; null none). */
+  function readerCards(): { hopper: number; stacker: number; moving: number | null } {
+    const n = feed.cards;
+    if (feedMode === 'load') {
+      const done = Math.floor(loading), moving = feed.loaded || done >= n ? null : loading - done;
+      return { hopper: n - done - (moving !== null ? 1 : 0), stacker: feed.loaded ? n : done, moving };
+    }
+    // read as it runs: the loop deck. The cards before the station have gone through; the rest wait.
+    const at = feed.at;
+    return { hopper: n - (at + 1), stacker: at, moving: at >= 0 ? 0.5 : null };
+  }
+  const fmtS = (x: number) => (x === 0 ? '0 s' : x < 1 ? `${fmtTime(x)}` : `${x.toFixed(1)} s`);
+  function showReader(): void {
+    const p = hallProgram(design), n = feed.cards, per = periodIn(hallFacts(design).steps, tech);
+    const k = feedMode === 'load' && !feed.loaded ? Math.min(n - 1, Math.floor(loading)) : Math.max(0, feed.at);
+    cv.show(p.deck.cards[k]);
+    cv.mark(Array.from({ length: p.bits }, (_, i) => i));
+    const ratio = CARD_S / per;
+    rdStatus.className = `hall-rd-status${feedMode === 'stream' && CARD_S > per ? ' wait' : ''}`;
+    rdStatus.textContent = feed.outOfCards ? 'Out of cards: the program ran past the end of the deck.'
+      : feedMode === 'load' && !feed.loaded ? `Loading the deck into the program store: card ${Math.min(n, Math.floor(loading) + 1)} of ${n}, ${fmtTime(CARD_S)} a card. The machine starts when the last card is in.`
+      : feedMode === 'load' ? `The deck is in the store (read once, ${fmtS(feed.ledger.load)}). The machine fetches from the store at its own speed, ${fmtTime(per)} an instruction.`
+      : CARD_S > per ? `Card ${k + 1}: each instruction waits for its card. A card takes ${fmtTime(CARD_S)}, the instruction ${fmtTime(per)}: the reader is ${num(ratio)} times slower.`
+      : `Card ${k + 1}: the next card arrives in ${fmtTime(CARD_S)}, the instruction takes ${fmtTime(per)}, so the reader is never late.`;
+    const stat = (v: string, t: string) => h('div', null, h('b', null, v), h('small', null, t));
+    rdStats.replaceChildren(
+      stat(`${feed.at < 0 ? '–' : feed.at + 1} / ${n}`, `card at the PC (pc / ${p.pcStep === 4 ? 4 : 1})`),
+      feedMode === 'stream' ? stat(num(feed.passes), 'times round the loop deck') : stat(`${num(feed.loaded ? n : Math.floor(loading))} / ${n}`, 'cards in the store'),
+      stat(num(feed.loaded || feedMode === 'stream' ? feed.read : Math.floor(loading)), 'cards read'),
+    );
+    const L = { ...feed.ledger, load: feed.loaded ? feed.ledger.load : Math.floor(loading) * CARD_S }, all = L.compute + L.wait + L.load || 1;
+    ledgerBar.replaceChildren(...([['cpu', L.compute], ['wait', L.wait], ['load', L.load]] as const).filter(([, v]) => v > 0).map(([c, v]) => h('i', { class: `l-${c}`, style: `width: ${(100 * v) / all}%` })));
+    ledgerKey.replaceChildren(
+      h('span', null, h('i', { class: 'l-cpu' }), `computing ${fmtS(L.compute)}`),
+      h('span', null, h('i', { class: 'l-wait' }), `waiting for a card ${fmtS(L.wait)}`),
+      h('span', null, h('i', { class: 'l-load' }), `loading ${fmtS(L.load)}`),
+    );
+  }
+  /** The reader's cards moved: the static batch again (it holds the reader; the devices' batch is left alone). */
+  let readerKey = '';
+  function pushReader(): void {
+    const k = readerCards(), key = `${k.hopper}/${k.stacker}/${k.moving === null ? '-' : k.moving.toFixed(2)}`;
+    if (key === readerKey) return;
+    readerKey = key;
+    if (mode === 'gl' && renderer) {
+      const box = staticParts().box, d = new Float32Array(box.length * INSTANCE_FLOATS);
+      box.forEach((x, i) => writeInstance(d, i, x));
+      renderer.updateBatch(0, d);
+    } else if (mode === 'flat') drawFlat();
+  }
+
   // ---- running
   const setChips = () => {
     const l = live && liveFor === design ? live : null;
@@ -525,13 +631,14 @@ export function hallView(): Widget {
   const speeds = () => {
     const per = periodIn(hallFacts(design).steps, tech);
     speedSel.replaceChildren(
-      h('option', { value: 'real' }, `${tech === 'relay' ? 'Relay' : 'Tube'} speed (${hz(per)})`),
+      h('option', { value: 'real' }, feed.instrTime > per ? `Card speed (${hz(feed.instrTime)}: the ${tech === 'relay' ? 'relays' : 'tubes'} wait for each card)` : `${tech === 'relay' ? 'Relay' : 'Tube'} speed (${hz(per)})`),
       h('option', { value: 'slow' }, '2 cycles/s'),
       h('option', { value: 'max' }, 'As fast as it simulates'),
     );
     speedSel.value = speed;
   };
-  const rate = () => (speed === 'real' ? 1 / periodIn(hallFacts(design).steps, tech) : speed === 'slow' ? 2 : Infinity);
+  // at the machine's own speed an instruction waits for its card when the reader is the slower (tubes read as they run)
+  const rate = () => (speed === 'real' ? 1 / feed.instrTime : speed === 'slow' ? 2 : Infinity);
 
   const paint = () => {
     const any = readStates();
@@ -543,6 +650,8 @@ export function hallView(): Widget {
 
   const cycle = (l: Live) => {
     const before = l.pc ? l.sim.getBits(l.pc).join('') : '';
+    feed.cycle();
+    if (feed.outOfCards) { l.halted = true; return; }
     clockCycle(l.sim);
     l.cycles++;
     if (l.halt && l.sim.get(l.halt[0]) === 1) l.halted = true;
@@ -555,13 +664,21 @@ export function hallView(): Widget {
     if (!running || !l || liveFor !== design) return;
     const dt = Math.min(0.25, (now - last) / 1000);
     last = now;
+    // load, then run: the deck goes through the reader into the store first, a card every CARD_S (at once when not real time)
+    if (feedMode === 'load' && !feed.loaded) {
+      loading = speed === 'real' ? loading + dt / CARD_S : feed.cards;
+      if (loading >= feed.cards) { loading = feed.cards; feed.load(); last = now; }
+      if (now - lastPaint >= 50) { lastPaint = now; showReader(); pushReader(); }
+      raf = requestAnimationFrame(tick);
+      return;
+    }
     const r = rate(), t0 = performance.now();
     owed = Math.min(owed + dt * r, Number.isFinite(r) ? Math.max(2, r * 0.25) : Infinity);
     while ((owed >= 1 || !Number.isFinite(r)) && performance.now() - t0 < 10 && !l.halted) { cycle(l); owed--; }
     if (l.halted) running = false;
-    if (now - lastPaint >= (reducedMotion() ? 250 : 50)) { lastPaint = now; paint(); setChips(); }
+    if (now - lastPaint >= (reducedMotion() ? 250 : 50)) { lastPaint = now; paint(); setChips(); showReader(); pushReader(); }
     if (running) raf = requestAnimationFrame(tick);
-    else { paint(); setChips(); }
+    else { paint(); setChips(); showReader(); pushReader(); }
   };
   const start = () => {
     const l = live;
@@ -578,7 +695,8 @@ export function hallView(): Widget {
     pause();
     clearTimeout(liveTimer);
     live = null; liveFor = null;
-    mapNets(); paint(); setChips();
+    feed = newFeed(); loading = 0;
+    mapNets(); paint(); setChips(); showReader(); pushReader();
     const want = design;
     // after the picture: flattening and settling the RV32I takes a few hundred ms
     liveTimer = window.setTimeout(() => {
@@ -589,7 +707,12 @@ export function hallView(): Widget {
   };
 
   runBtn.addEventListener('click', () => (running ? pause() : start()));
-  stepBtn.addEventListener('click', () => { const l = live; if (!l || l.halted || running) return; cycle(l); paint(); setChips(); });
+  stepBtn.addEventListener('click', () => {
+    const l = live;
+    if (!l || l.halted || running) return;
+    if (feedMode === 'load' && !feed.loaded) { loading = feed.cards; feed.load(); }
+    cycle(l); paint(); setChips(); showReader(); pushReader();
+  });
   resetBtn.addEventListener('click', () => { if (failed >= 0) { failed = -1; makeLabels(); } powerOn(); });
   failBtn.addEventListener('click', () => {
     if (!slots.length) return;
@@ -602,6 +725,17 @@ export function hallView(): Widget {
     if (mode === 'gl') pushScene(); else drawFlat();
   });
   speedSel.addEventListener('change', () => { speed = speedSel.value as Speed; owed = 0; });
+  editBtn.addEventListener('click', () => void import('../editor/remix').then((m) => {
+    const p = hallProgram(design);
+    const host: import('../sim/types').ComponentDef = {
+      id: `hall_deck_${design}`, name: `${p.deck.name} (the hall's deck)`, category: 'custom', ports: [], symbol: { kind: 'box', label: p.deck.name },
+      netlist: () => ({ instances: [{ name: 'reader', def: deckReader(p.deck, 'word', { bits: p.bits }), at: [2, 2] }], nets: [] }),
+    };
+    const res = m.remixIntoStorage(host);
+    if ('error' in res) { rdStatus.textContent = `Cannot open it in the sandbox: ${res.error}`; return; }
+    markJump();
+    location.hash = `#/sandbox/${res.id}`;
+  }));
   soundBtn.addEventListener('click', () => {
     sound = !sound;
     soundBtn.setAttribute('aria-pressed', String(sound));
@@ -632,8 +766,8 @@ export function hallView(): Widget {
 
   // ---- switching CPU or technology
   function relayout() {
-    const changed = liveFor !== design;
-    hall = hallLayout(hallCpu(design).def, tech);
+    hall = layoutOf();
+    feed = newFeed(); loading = 0;
     selected = -1; failed = -1;
     placeDevices();
     speeds();
@@ -641,8 +775,10 @@ export function hallView(): Widget {
     makeLabels();
     rehome();
     if (mode === 'gl') pushScene(); else drawFlat();
-    if (changed) powerOn(); else { state.fill(0); paint(); setChips(); }
-    designSeg.sync(); techSeg.sync();
+    // a new reader, so the machine starts again with it (the CPU at cycle 0, the deck in the hopper)
+    powerOn();
+    designSeg.sync(); techSeg.sync(); feedSeg.sync();
+    showReader();
   }
 
   const setMode = (m: 'gl' | 'flat') => {

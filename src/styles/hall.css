@@ -22,6 +22,9 @@
   --hl-glass: light-dark(#8e9aa6, #6c7783);
   --hl-glow: light-dark(#ff7a1a, #ff8a2e);
   --hl-person: light-dark(#2a3040, #d9dce4);
+  --hl-reader: light-dark(#5b6f86, #8aa0b8);
+  --hl-stock: light-dark(#e8d6a4, #d6c38e);
+  --hl-cable: light-dark(#3a3f4a, #9aa0ad);
   --hl-table: light-dark(#8b6b4a, #7a5e42);
   --hl-die: light-dark(#30343c, #a9b0bd);
   --hl-ring: var(--accent);
@@ -62,3 +65,28 @@
   .hall3d .r3-stage { aspect-ratio: 1 / 1; }
   .hall3d .r3-lbl.small { display: none; }
 }
+
+/* the card reader's panel (lib/hallcards.ts) */
+.hall-rd { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 10px 12px; margin: 10px 0; }
+.hall-rd-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin-bottom: 8px; }
+.hall-rd-head h4 { margin: 0; font-size: 13px; }
+.hall-rd-head .seg button { padding: 3px 10px; font-size: 12.5px; }
+.hall-rd-body { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.hall-rd-card svg { width: 100%; height: auto; display: block; }
+.hall-rd-side { min-width: 0; font-size: 12.5px; }
+.hall-rd-side h5 { margin: 8px 0 4px; font-size: 12px; color: var(--text-2); }
+.hall-rd-status { margin: 0 0 8px; padding: 6px 9px; border-left: 3px solid var(--good); background: var(--surface-2); border-radius: 0 6px 6px 0; color: var(--text); }
+.hall-rd-status.wait { border-left-color: var(--bad); }
+.hall-rd-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.hall-rd-stats div { background: var(--surface-2); border-radius: 6px; padding: 5px 7px; }
+.hall-rd-stats b { display: block; font: 600 14px var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text); }
+.hall-rd-stats small { color: var(--text-2); font-size: 11.5px; }
+.hall-rd-ledger { display: flex; height: 12px; border-radius: 4px; overflow: hidden; border: 1px solid var(--border); background: var(--surface-2); }
+.hall-rd-ledger i, .hall-rd-key i { display: inline-block; }
+.hall-rd-key { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 8px; color: var(--text-2); font-size: 11.5px; }
+.hall-rd-key i { width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.hall-rd .l-cpu { background: var(--good); }
+.hall-rd .l-wait { background: var(--bad); }
+.hall-rd .l-load { background: var(--accent); }
+.hall3d .r3-lbl.reader b { color: var(--accent); }
+@container (max-width: 620px) { .hall-rd-body { grid-template-columns: 1fr; } }
