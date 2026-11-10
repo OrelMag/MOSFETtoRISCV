@@ -1500,7 +1500,17 @@ src/puzzles/   program puzzles (the sandbox's Puzzles drawer; roadmap Phase 12).
   refs4/16/32.ts reference programs; refdata.json their measurements (scripts/puzzles.ts --write; tests/puzzles.test.ts
                  checks both); measure.ts; grade.ts stars against the reference points (★★ none both cheaper and
                  faster, ★★★ cycles × NANDs below all), PuzzleProgress (own key); start.ts the choices and the puzzle chip;
-                 replay.ts the player (a test on the editor's own simulation, checkpoints for stepping back)
+                 replay.ts the player (a test on the editor's own simulation, checkpoints for stepping back); puzzleProgress():
+                 the page's one store (stream and device puzzles share it)
+  devices.ts     device puzzles (the Devices group): a world behind named pins, DeviceModel { drive, sense, start, sensors (from the
+                 state alone), step (rules: the first broken one is a fault), done, end, status }: CROSSING (lamps, a button), MAZE
+                 (a robot, walls), VEND (coins, an item, change); their tests; playWorld (a TypeScript controller, the tests'
+                 mutants); editor/devparts.ts the part (PartRef { device, en? }: an external `seq` leaf, the cycle engine runs a
+                 controller wired straight back into it; en: steps only where en = 1, a CPU paces it), devface.ts its live face;
+                 devrefs.ts the reference circuits (Builder, equal to REFERENCE_CONTROLLERS step for step: tests/puzzle-devices),
+                 the empty puzzle chip, a copy of a chip with the device; devpuzzles.ts DEVICE_PUZZLES, Check (runDevicePuzzle: no
+                 halt part, until done / a fault / the step limit), stars on NANDs against the reference's (parNands);
+                 devreplay.ts the player; editor/devpuzzleui.ts the strip, the start dialog and the drawer's group
 src/ui/        app shell, router, theme, settings, progress; menu.ts: the right-click menu's shell for every surface (MenuItem: label, key, hint, why = off for this reason in the row, the arrows stop on it, checked, sub = a group, a function when its code loads on demand; one menu at a time, every plain key while open, focus given back; flyouts, a bottom sheet with groups in place on a coarse pointer; showPicker, isMenuKey: the menu key and Shift+F10; editor/ctxmenu.ts and view/schematic.ts fill it; view/tracemenu.ts: the wire and part rows both share, view/netfacts.ts: a net's drivers and readers, its value exact at any width, DOM-free; editor/levelgate.ts: a level's chip hands out nothing but the learner's own; campaign/partindex.ts, loaded when Explain opens: a part's codex entry and chapter, gated on a level; Measure: probes (a ProbeTarget may name a net by path, look inside), sim/slack.ts through / pathThrough / netsOf: slack through any net and the path that sets it); pages/print.ts (PrintPage, its own chunk, #/c/<id>/print: the whole chapter as a book
                flow: goals, each step's title, address and prose (data-show / data-ahead dropped, details open, links absolute to SITE_URL), its figure with a
                numbered caption and a truth table, layers and analogies as asides (an analogy with a live figure: a note), questions with options and

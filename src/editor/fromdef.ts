@@ -15,6 +15,8 @@ import {
 import { partBox } from './geom';
 import { isError, MAX_WIDTH, partDef } from './parts';
 import { drawnNetlist, routedOnce } from '../view/wirefirst';
+import { deviceOf } from './devparts';
+import { puzzlePortOf } from './puzzleparts';
 
 /** A sandbox copy is drawn once: wires-first applies to levels up to this many nets (a stage stops at wirefirst.ts LOCAL_NETS). */
 const FROMDEF_NETS = 120;
@@ -312,6 +314,10 @@ function boxFace(def: ComponentDef, pins: PinDoc[], label: string): FaceDoc | un
 
 /** How a library part is placed: splitters and mergers by their widths, the rest by id. */
 function refOf(d: ComponentDef): PartRef {
+  const dev = deviceOf(d);
+  if (dev) return dev.en ? { device: dev.dev, en: true } : { device: dev.dev };
+  const pz = puzzlePortOf(d);
+  if (pz) return { puzzle: pz.kind, width: pz.width };
   if (d.prim === 'alias' && (d.symbol.kind === 'split' || d.symbol.kind === 'merge')) {
     const ws = d.ports.filter((p) => p.dir === (d.symbol.kind === 'split' ? 'out' : 'in')).map((p) => p.width);
     const pitch = d.symbol.pitch ?? 2;

@@ -347,7 +347,7 @@ export function faceHit(def: ComponentDef, flip: boolean, x: number, y: number, 
  */
 export function canTurn(ref: PartRef, def: ComponentDef | undefined): boolean {
   if (!def || ioInfo(def)) return false;
-  return !('display' in ref || 'key' in ref || 'keyboard' in ref || 'puzzle' in ref || 'reader' in ref);
+  return !('display' in ref || 'key' in ref || 'keyboard' in ref || 'puzzle' in ref || 'device' in ref || 'reader' in ref);
 }
 
 /** The hierarchy node at `path` below `node` (null when a level is not expanded in this simulation). */

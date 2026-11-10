@@ -11,7 +11,7 @@ import '../styles/sbchallenges.css';
 import '../styles/sbpuzzles.css';
 import { h, icon, undoKey } from '../ui/dom';
 import { REF_BY_ID, type RefCpu } from '../puzzles/computers';
-import { dominatedBy, isReferenceProgram, parFor, PuzzleProgress, type PuzzleScore, puzzleStars, refFront, type Stars } from '../puzzles/grade';
+import { dominatedBy, isReferenceProgram, parFor, puzzleProgress, type PuzzleScore, puzzleStars, refFront, type Stars } from '../puzzles/grade';
 import { type Puzzle, PUZZLE_GROUPS, puzzleChipId, puzzleOfChip, PUZZLES, type PuzzleTest } from '../puzzles/puzzles';
 import { refPoints, refProgram, type RefPoint } from '../puzzles/refs';
 import { PuzzleReplay } from '../puzzles/replay';
@@ -23,11 +23,12 @@ import { dockPane, paneShown, showPane, undockPane } from './dock';
 import { type Editor, registerEditorPlugin, registerToolbarAction } from './editor';
 import { loadedIn, type PuzzleInState } from './puzzleparts';
 import type { Sim } from '../sim/sim';
+import { deviceGroup, devicesSolved, setDeviceListToggle } from './devpuzzleui';
+import { DEVICE_PUZZLES } from '../puzzles/devpuzzles';
 
 const uis = new WeakMap<Editor, PuzzleUi>();
 
-let store: PuzzleProgress | null = null;
-const progress = () => (store ??= new PuzzleProgress(typeof localStorage === 'undefined' ? null : localStorage));
+const progress = puzzleProgress;
 
 const CPU_LABEL: Record<RefCpu, string> = { cpu4: '4-bit CPU', rv16: 'RV16', rv32: 'RV32I' };
 const fmtN = groupDigits;
@@ -370,9 +371,9 @@ class PuzzleUi {
     if (!d) return;
     const ws = this.ed.ws;
     const pg = progress();
-    const done = PUZZLES.filter((p) => pg.solved(p.id)).length;
+    const done = PUZZLES.filter((p) => pg.solved(p.id)).length + devicesSolved();
     const body = h('div', { class: 'sb-chal-list-body' },
-      h('p', { class: 'sb-chal-intro' }, 'Optional. Write a program for a CPU (one of the sandbox\'s, or one you built) that turns each test\'s input words into the expected output words. Check runs it on the gates and scores cycles, NANDs and the program\'s size against the reference CPUs.'));
+      h('p', { class: 'sb-chal-intro' }, 'Optional. Write a program for a CPU (one of the sandbox\'s, or one you built) that turns each test\'s input words into the expected output words. Check runs it on the gates and scores cycles, NANDs and the program\'s size against the reference CPUs. Devices: a circuit that drives a little world behind pins, scored on its NANDs.'));
     for (const g of PUZZLE_GROUPS) {
       const ps = PUZZLES.filter((p) => p.group === g.id);
       body.append(h('h4', null, h('span', null, g.title), h('small', { class: 'n' }, `${ps.filter((p) => pg.solved(p.id)).length}/${ps.length}`)));
@@ -390,8 +391,9 @@ class PuzzleUi {
         h('span', { class: 'go' }, cur ? 'open' : started ? 'Open' : 'Start')));
       }
     }
+    body.append(...deviceGroup(this.ed, () => this.closeList()));
     d.replaceChildren(
-      h('div', { class: 'sb-drawer-head' }, icon('puzzle', 15), h('h3', null, 'Puzzles'), h('span', { class: 'sb-chal-count' }, `${done}/${PUZZLES.length} solved`),
+      h('div', { class: 'sb-drawer-head' }, icon('puzzle', 15), h('h3', null, 'Puzzles'), h('span', { class: 'sb-chal-count' }, `${done}/${PUZZLES.length + DEVICE_PUZZLES.length} solved`),
         h('button', { class: 'btn ghost icon-only', title: 'Close', 'aria-label': 'Close the puzzles', onclick: () => this.closeList() }, icon('close', 15))),
       body);
   }
@@ -528,6 +530,8 @@ registerEditorPlugin((ed) => {
   uis.set(ed, ui);
   return () => ui.destroy();
 });
+
+setDeviceListToggle((ed) => uis.get(ed)?.toggleList());
 
 registerToolbarAction({
   id: 'puzzles', title: 'Program puzzles: write programs for a CPU, run on its gates and scored', icon: 'puzzle', label: 'Puzzles', menu: 'Puzzles', order: 65, under: 'play',
