@@ -645,7 +645,7 @@ src/view/      overlays.ts (DOM-free, the overlay bar's quantities per level: sl
                crumbvals.ts (the breadcrumb's live values, stage and look inside: each level the output carrying the one
                below, `bit [7] = 1` where the level above's bus was sliced),
                inspector (info with "Where it is used", "Power": powerpanel.ts, live from the stage's PowerMeter or
-               measurePower on random inputs, and "In relays and tubes": techtable.ts; truth table, Verilog + download), analyzer.ts (the Timing panel:
+               measurePower on random inputs, and "In relays and tubes": techtable.ts; truth table, HDL tab: Verilog and VHDL (sim/vhdl.ts) + download), analyzer.ts (the Timing panel:
                lanes from onTrace, cursors, VCD), stage.ts (probe mode, clock period, slow-motion
                fronts, the Image menu), image.ts (a drawn circuit as a standalone SVG: computed styles
                inlined, current theme; PNG at 2×; saveFile; exportSchematic for a stage's level, loaded on
