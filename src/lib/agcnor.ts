@@ -110,6 +110,18 @@ export const NOR_XNOR = norCircuit({
   ins: ['x', 'y'], outs: { z: 'z', n: 'n' },
   parts: [['n', ['x', 'y']], ['p', ['x', 'n']], ['q', ['y', 'n']], ['z', ['p', 'q']]],
   spec: ([x, y]) => [x ^ y ? 0 : 1, x | y ? 0 : 1],
+  // drawn by hand: n's trunk between the first gate and the pair it feeds, n out along the bottom; y crosses it once
+  place: {
+    at: { g_p: [24, 0], g_n: [10, 8], g_q: [24, 16], g_z: [38, 8] },
+    pins: { x: [0, 2], y: [0, 18], z: [52, 12], n: [52, 26] },
+    via: {
+      x: { 'g_n.a': [[6, 2], [6, 10]] },
+      y: { 'g_n.b': [[7, 18], [7, 12]], 'g_n.c': [[7, 18], [7, 14]] },
+      n: { 'g_p.b': [[21, 12], [21, 4]], 'g_p.c': [[21, 12], [21, 6]], 'g_q.b': [[21, 12], [21, 20]], 'g_q.c': [[21, 12], [21, 22]], n: [[21, 12], [21, 26]] },
+      p: { 'g_z.a': [[34, 4], [34, 10]] },
+      q: { 'g_z.b': [[36, 20], [36, 12]], 'g_z.c': [[36, 20], [36, 14]] },
+    },
+  },
 });
 
 /**
@@ -142,15 +154,41 @@ export const NOR_FA = norCircuit({
 export const NOR_LATCH = norCircuit({
   id: 'nor_latch', name: 'Latch in NOR3', summary: 'q follows d while en_n = 0 and holds while en_n = 1: two NOR gates set and reset a cross-coupled pair, which holds a bit while both are 0. d and ¬d both come in (a flip-flop\'s slave takes them from its master). 4 NOR3 gates.',
   ins: ['d', 'dn', 'en_n'], outs: { q: 'q', qn: 'qn' },
-  parts: [['s', ['dn', 'en_n']], ['r', ['d', 'en_n']], ['q', ['r', 'qn']], ['qn', ['s', 'q']]],
-  column: { g_s: 0, g_r: 0, g_q: 1, g_qn: 1 },
+  parts: [['s', ['en_n', 'en_n', 'dn']], ['r', ['d', 'en_n']], ['q', ['r', 'qn']], ['qn', ['q', 'q', 's']]],
+  // drawn by hand: reset and q on top, set and qn below, en_n between them on the left, the pair's feedback crossing once
+  place: {
+    at: { g_r: [10, 0], g_s: [10, 12], g_q: [26, 0], g_qn: [26, 12] },
+    pins: { d: [0, 2], en_n: [0, 10], dn: [0, 18], q: [44, 4], qn: [44, 16] },
+    via: {
+      en_n: { 'g_r.b': [[6, 10], [6, 4]], 'g_r.c': [[6, 10], [6, 6]], 'g_s.a': [[6, 10], [6, 14]], 'g_s.b': [[6, 10], [6, 16]] },
+      r: { 'g_q.a': [[22, 4], [22, 2]] },
+      s: { 'g_qn.c': [[22, 16], [22, 18]] },
+      q: { 'g_qn.a': [[36, 4], [36, 11], [24, 11], [24, 14]], 'g_qn.b': [[36, 4], [36, 11], [24, 11], [24, 16]] },
+      qn: { 'g_q.b': [[38, 16], [38, 9], [23, 9], [23, 4]], 'g_q.c': [[38, 16], [38, 9], [23, 9], [23, 6]] },
+    },
+  },
 });
 
 /** m = en ? d : q, and its inverse: the register's enable, in front of its master latch. */
 export const NOR_ENMUX = norCircuit({
   id: 'nor_enmux', name: 'Enable mux in NOR3', summary: 'm = en ? d : q (the register\'s own q, read as ¬q from qn) and mn = ¬m: en·d and ¬en·q as NORs of inverted inputs, their NOR is ¬m, one more gate m. 6 NOR3 gates.',
   ins: ['d', 'en', 'qn'], outs: { m: 'm', mn: 'mn' },
-  parts: [['enn', ['en']], ['dn', ['d']], ['x1', ['enn', 'dn']], ['x2', ['en', 'qn']], ['mn', ['x1', 'x2']], ['m', ['mn']]],
+  parts: [['enn', ['en']], ['dn', ['d']], ['x1', ['dn', 'enn']], ['x2', ['en', 'qn']], ['mn', ['x1', 'x2']], ['m', ['mn']]],
+  // drawn by hand: the two inverters, the two products, their NOR and its inverse in four columns, no crossing
+  place: {
+    at: { g_dn: [10, 0], g_enn: [10, 10], g_x1: [24, 0], g_x2: [24, 18], g_mn: [38, 8], g_m: [52, 8] },
+    pins: { d: [0, 4], en: [0, 14], qn: [0, 24], m: [66, 12], mn: [66, 20] },
+    via: {
+      d: { 'g_dn.a': [[7, 4], [7, 2]], 'g_dn.c': [[7, 4], [7, 6]] },
+      en: { 'g_enn.a': [[6, 14], [6, 12]], 'g_enn.c': [[6, 14], [6, 16]], 'g_x2.a': [[6, 14], [6, 20]] },
+      qn: { 'g_x2.b': [[21, 24], [21, 22]] },
+      dn: { 'g_x1.a': [[21, 4], [21, 2]] },
+      enn: { 'g_x1.b': [[22, 14], [22, 4]], 'g_x1.c': [[22, 14], [22, 6]] },
+      x1: { 'g_mn.a': [[35, 4], [35, 10]] },
+      x2: { 'g_mn.b': [[36, 22], [36, 12]], 'g_mn.c': [[36, 22], [36, 14]] },
+      mn: { 'g_m.a': [[49, 12], [49, 10]], 'g_m.c': [[49, 12], [49, 14]], mn: [[49, 12], [49, 20]] },
+    },
+  },
 });
 
 /**
@@ -167,7 +205,20 @@ export const NOR_REG = norCircuit({
     ['ckn', ['clk']],
     { name: 'slave', def: NOR_LATCH, ins: ['qm', 'qmn', 'ckn'], outs: ['q', 'qn'] },
   ],
-  column: { mux: 0, master: 1, g_ckn: 2, slave: 3 },
+  // drawn by hand: multiplexer, master and slave in a row, clk under them into the master and its inverter, q's inverse back along the bottom
+  place: {
+    at: { mux: [10, 0], master: [34, 0], g_ckn: [42, 10], slave: [56, 0] },
+    pins: { d: [0, 2], en: [0, 4], clk: [0, 14], q: [80, 3] },
+    via: {
+      m: { 'master.d': [[31, 3], [31, 2]] },
+      mn: { 'master.dn': [[32, 5], [32, 4]] },
+      clk: { 'master.en_n': [[30, 14], [30, 6]], 'g_ckn.a': [[40, 14], [40, 12]], 'g_ckn.c': [[40, 14], [40, 16]] },
+      qm: { 'slave.d': [[53, 3], [53, 2]] },
+      qmn: { 'slave.dn': [[54, 5], [54, 4]] },
+      ckn: { 'slave.en_n': [[55, 14], [55, 6]] },
+      qn: { 'mux.qn': [[74, 5], [74, 20], [7, 20], [7, 6]] },
+    },
+  },
 });
 
 /** A NOR3 circuit's netlist from a hand placement: one net per signal, its driver first. */
