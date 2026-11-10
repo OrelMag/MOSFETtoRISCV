@@ -58,7 +58,7 @@ describe('every registered netlist', () => {
   });
 
   it('maps every instance\'s ports by the names its entity declares', () => {
-    for (const d of defs.slice(0, 600)) {
+    for (const d of defs) {
       const { text } = vhdlHierarchy(d);
       const ports = declaredPorts(text);
       for (const m of text.matchAll(/: entity work\.(\w+) port map \((.*)\);/g)) {

@@ -455,10 +455,11 @@ export const chFastAdders: Chapter = {
       title: 'A Verilog adder, and its critical path',
       body: `
         <p>Every adder so far was drawn gate by gate. A designer usually writes it as text instead, in a <span data-ahead="hdl">hardware description language (here Verilog)</span>,
-        and a program turns the text into gates: <span data-ahead="synthesis">synthesis, which picks gates that compute what the text says and wires them up</span>. This is the lookahead recipe of this chapter, generate and propagate and a carry per bit, as ${VADDER_SOURCE.split('\n').filter((l) => l.includes('wire')).length} lines of Verilog.
+        and a program turns the text into gates: <span data-ahead="synthesis">synthesis, which picks gates that compute what the text says and wires them up</span>. This is the generate-and-propagate recipe of this chapter with a carry per bit, written as ${VADDER_SOURCE.split('\n').filter((l) => l.includes('wire')).length} lines of Verilog. Each carry here is written from the one before it, so it is still a ripple; writing every carry straight from <code>g</code>, <code>p</code> and <code>ci</code> would make it the lookahead.
         Yosys, an open-source synthesizer, mapped it onto NANDs and inverters once; the circuit on the stage is its result, held equal to a fresh Yosys run by this site's tests, so nothing is fetched when the page opens.</p>
         <pre class="code vsrc">${VADDER_HTML}</pre>
-        <p>Each line declares a wire and what drives it: <code>p</code> and <code>g</code> are the propagate and generate of the previous steps, <code>c1</code>–<code>c4</code> the carries,
+        <p>In Verilog <code>^</code> is XOR, <code>&amp;</code> AND and <code>|</code> OR; <code>[3:0]</code> makes a 4-bit bus and <code>g[0]</code> picks its lowest bit; <code>{c3, c2, c1, ci}</code> glues bits side by side into one bus.
+        Each line declares a wire and what drives it: <code>p</code> and <code>g</code> are the propagate and generate of the previous steps, <code>c1</code>–<code>c4</code> the carries,
         <code>sum</code> the result. Hover a line to light the <span data-show="${VADDER_PATH.cells.join(' ')}">gates it became</span>. After synthesis a gate has no name of its own, so the
         <code>(* keep *)</code> marks do the tracing: synthesis must leave each marked wire as a net, and a gate is blamed on the line of the marked wire it feeds. A gate shared by two lines shows under both.</p>
         <p>The critical path is the longest chain of gates from an input to an output: ${VADDER_PATH.depth} NAND delays, from <code>${VADDER_PATH.from}</code> to <code>${VADDER_PATH.to}</code>
@@ -466,9 +467,9 @@ export const chFastAdders: Chapter = {
         It enters through the propagate, crosses the carries <code>c1</code>, <code>c2</code>, <code>c3</code> in turn, and leaves through the sum. The same ripple as the hand-drawn adder, found by the tool in the text.
         It ends at <code>s[3]</code>, not at the carry-out: <code>c4</code> settles after ${ARR_C4} delays, the last sum bit, which needs <code>c3</code> and one more XOR, after ${VADDER_PATH.depth}.</p>
         <p>The price of writing it this way: ${VERILOG_ADD4_NANDS} NANDs and depth ${VADDER_PATH.depth}, against ${N(rca(4))} and ${D(rca(4))} for the hand-drawn ripple adder of the first step.
-        The recipe is the same; the hand-drawn full adder shares its first NAND between sum and carry, and synthesis here, with every named wire fixed, does not find that.</p>
+        The recipe is the same. The hand-drawn full adder was found by hand to share its first NAND between sum and carry; the text asks for <code>p</code> and <code>g</code> as wires of their own, and the gates came out larger.</p>
         <div class="try">Toggle <code>ci</code>: with a = 7 and b = 0 the carry crosses <code>c1</code>, <code>c2</code> and <code>c3</code> one after another, the lit path.</div>
-        <p>To edit the text yourself, open <em>Examples ▸ The same adder in Verilog</em> in the sandbox: it synthesizes a Verilog chip as you type.</p>`,
+        <p>To try it yourself, open <em>Examples ▸ The same adder in Verilog</em> in the sandbox: a Verilog chip that synthesizes as you type. It starts from the one-line form, <code>assign {co, s} = a + b + ci;</code>; paste the listing above into its Verilog pane to get this adder, and compare the two NAND counts.</p>`,
       scene: () => ({ root: VERILOG_ADD4, inputs: { a: 7, b: 0, ci: 0 }, highlight: VADDER_PATH.cells, animate: true }),
       actions: [{ label: 'Toggle ci', run: (st) => st.toggleInput('ci') }],
       tries: [(st) => st.getInput('ci') === 1],
@@ -477,7 +478,7 @@ export const chFastAdders: Chapter = {
         derive: `<p>Each cell's arrival is one more than its latest input, with every input at 0. The outputs, in NAND delays:
           ${VERILOG_ADD4_ARRIVALS}</p>`,
         real: `<p>Static timing tools in a real flow report the same thing, a chain of cells from a start point to an end point, but name the nets and cells, not the source lines: ABC rebuilds the logic, so source locations are lost on the way (here too: the gates carry none). That is why designers name the wires they want to find again, and why a timing report is read against the netlist.</p>`,
-        pitfall: `<p>Reading the blame as exact. A gate with no marked wire after it has no line, and a gate that feeds two marked wires is listed under both. With fewer <code>keep</code> marks the lines would be fewer and the netlist smaller, and a path could no longer be pointed at.</p>`,
+        pitfall: `<p>Reading the blame as exact. A gate with no marked wire after it has no line, and a gate that feeds two marked wires is listed under both. With fewer <code>keep</code> marks synthesis would be freer to merge gates, and a path could no longer be pointed at a line.</p>`,
       },
       challenge: {
         kind: 'quiz', question: 'The critical path of this adder ends at s[3], not at the carry-out co. Why?',

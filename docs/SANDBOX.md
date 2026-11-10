@@ -314,7 +314,7 @@ and the ISS options.
   them under it and on their lines; the canvas keeps the last good build, dimmed.
 - A Yosys JSON netlist (`write_json` after `synth`, any of Yosys's gate-level cells) imports as drawn
   chips. Not drawable: inout ports, word-level cells (synthesize first), vendor primitives (`LUT6`, …),
-  flip-flops with both an asynchronous set and reset. VHDL is not supported.
+  flip-flops with both an asynchronous set and reset. VHDL cannot be imported (VHDL out is in the inspector's HDL tab).
 - **Examples ▸ The same adder in Verilog**: the library's ADD4 and one line of Verilog side by side.
 
 ## Challenges

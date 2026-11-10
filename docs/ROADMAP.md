@@ -1100,7 +1100,7 @@ animated schematic). The site exports Verilog and already runs Yosys in CI, so i
 - ✅ Examples ▸ The same adder in Verilog: ADD4 beside `assign {co, s} = a + b + ci;` on the same inputs (36 against
   44 NANDs with the default gates)
 - ✅ A chapter step with the Verilog adder (Faster adders); the analysis of a Verilog chip's critical path mapped back to its source lines (5a732c2a)
-- ✅ VHDL out: the HDL tab and Export VHDL (.vhd), every export analysed and simulated by GHDL in CI (52167910). Left: VHDL in, through GHDL's Yosys plugin, once a WebAssembly build exists
+- ✅ VHDL out: the HDL tab and Export VHDL (.vhd), a set of designs (gates, adders, ALUs, latches and flip-flops, registers, memories, the register file, the single-cycle RV32I) analysed and elaborated by GHDL in CI (scripts/vhdl-check.ts), the combinational ones also simulated against ours (52167910). Left: VHDL in, through GHDL's Yosys plugin, once a WebAssembly build exists
 
 **Delay that depends on load** (Circuit Artist models wire delay from length and fan-out; here every NAND costs one
 unit, wires nothing). The fan-out capacitance per net is already computed for the power estimate (sim/power.ts).

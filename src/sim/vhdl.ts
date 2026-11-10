@@ -31,7 +31,7 @@ export function vhdlIdent(s: string, fallback = 'n'): string {
   return t;
 }
 
-/** ASCII text for a comment: VHDL-93 allows only ISO 8859-1 in a source file, comments included (GHDL refuses → and ×). */
+/** ASCII text for a comment: VHDL-93 allows only ISO 8859-1 in a source file, comments included (GHDL refuses →, which is not in it); ASCII keeps every tool safe. */
 const ASCII: Record<string, string> = { '→': '->', '←': '<-', '↔': '<->', '×': 'x', '·': '.', '≤': '<=', '≥': '>=', '≠': '/=',
   '–': '-', '—': '-', '−': '-', '‘': "'", '’': "'", '“': '"', '”': '"', '…': '...', 'µ': 'u', 'μ': 'u', 'π': 'pi',
   ' ': ' ', ' ': ' ', ' ': ' ', '²': '^2', '√': 'sqrt', '≈': '~', '±': '+/-', '⊕': 'xor', '¬': 'not ', '∧': 'and', '∨': 'or' };
@@ -175,13 +175,13 @@ export function structuralVhdl(def: ComponentDef): string | null {
       if (n) body.push(`  ${n} <= '${c.prim === 'vdd' ? '1' : '0'}';  -- ${c.prim === 'vdd' ? 'VDD' : 'GND'}`);
       continue;
     }
-    if (c.prim === 'nmos' || c.prim === 'pmos' || c.prim === 'dep' || c.prim === 'res' || c.prim === 'cap' || c.prim === 'fgmos'
-      || c.prim === 'relay' || c.prim === 'triode' || c.prim === 'diode' || c.prim === 'sense' || c.prim === 'vhalf') {
+    // every other primitive is below the gate level (switches, analog parts, a magnetic core): a comment, never an entity
+    if (c.prim && c.prim !== 'nand') {
       const what: Record<string, string> = {
         nmos: 'NMOS transistor', pmos: 'PMOS transistor', dep: 'depletion load', res: 'resistor', cap: 'capacitor', fgmos: 'floating-gate transistor',
-        relay: 'relay', triode: 'triode', diode: 'vacuum diode', sense: 'sense amplifier', vhalf: 'VDD/2 source',
+        relay: 'relay', triode: 'triode', diode: 'vacuum diode', sense: 'sense amplifier', vhalf: 'VDD/2 source', core: 'ferrite core',
       };
-      body.push(`  -- ${inst.name}: ${what[c.prim]} on ${nets()} (below the gate level: VHDL has no switches)`);
+      body.push(`  -- ${inst.name}: ${what[c.prim] ?? c.name} on ${nets()} (below the gate level: VHDL has no switches)`);
       continue;
     }
     if (isExternal(c)) {
