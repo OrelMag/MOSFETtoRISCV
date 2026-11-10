@@ -9,6 +9,7 @@ import { SEG7_FONT } from './memory';
 import { openChip } from './session';
 import { PICTURE } from '../riscv/ioprograms';
 import { CPU4_SUBCHIPS, cpu4Chip } from './example4';
+import { pdp8Chip, pdp8GatesChip } from './examplepdp8';
 import { dspChip } from './exampledsp';
 import { BENCH24 } from '../dsp/programs24';
 import { computer6502Chip, memory6502Chip } from './example6502';
@@ -16,6 +17,7 @@ import { SAP_SUBCHIPS, sapChip } from './examplesap';
 import { busSystemChip } from './examplebus';
 import { rv64Chip, rvcChip, rvvChip } from './exampleisa';
 import { cardsBootChip } from './examplecards';
+import { babyChip } from './examplebaby';
 import { twoComputersChip, uartComputerChip } from './examplecomms';
 import { lanComputerChip, lanSwitchChip, lanTopChip } from './examplenet';
 import { add4VerilogChip, sameAdderChip } from './examplehdl';
@@ -450,6 +452,17 @@ export const EXAMPLES: Example[] = [
     subchips: CPU4_SUBCHIPS,
     hz: 1000,
   },
+  {
+    id: 'pdp8', group: 'computers', short: 'Twelve switches, a row of lamps, a teletype.', name: 'PDP-8 front panel (1965)',
+    blurb: 'A ROM holding Hello, world in the PDP-8’s own instruction table (12-bit words, octal, PAL syntax), run on a model of the PDP-8 behind its front panel: lamps for PC, MA, MB, AC and L, the switch register, LOAD ADD, DEP, EXAM, START and a teletype.',
+    build: (id, n) => pdp8Chip(id, n),
+  },
+  {
+    id: 'pdp8g', group: 'computers', short: 'The PDP-8 built from gates, one edge per memory cycle.', name: 'PDP-8 in gates',
+    blurb: 'The PDP-8 as a circuit: a 12-bit processor of library parts (control with Fetch, Defer and Execute, MA and MB, PC, the accumulator and link with both operate groups and the MQ, the teletype IOTs) next to a 4K × 12 RAM holding Hello, world, a keyboard and a teleprinter. The switch register and the panel keys are pins: LOAD_ADD, then START.',
+    build: (id, n) => pdp8GatesChip(id, n),
+    hz: 2000,
+  },
   ...BENCH24.map((b, i): Example => ({
     id: i === 0 ? 'dsp-core' : `dsp-core-${b.id}`, group: 'computers', drawer: true,
     short: i === 0 ? 'A small DSP core: two memories, a MAC, a hardware loop.' : `The DSP core running ${b.name}.`,
@@ -464,6 +477,12 @@ export const EXAMPLES: Example[] = [
     build: (id, n, _sub, docs) => computer6502Chip(id, n, { mem: docs.mem, dev: docs.dev }),
     subchips: { mem: { name: 'Memory map', build: memory6502Chip }, dev: { name: 'Devices', build: (id, n) => devicesChip(id, n, 'at $4000 ($4000 console, $4001 LEDs, $4002 switches)') } },
     hz: 10000,
+  },
+  {
+    id: 'baby', group: 'computers', drawer: true, short: 'The first stored-program computer, 1948.', name: 'Manchester Baby (1948)',
+    blurb: 'The Small-Scale Experimental Machine in gates: 32 lines of 32 digits on a Williams tube, seven instructions, four beats each, running Kilburn’s highest-factor routine on 60. Run: the Stop lamp lights and line 27 holds 30. Switch REGEN off and the store fades.',
+    build: (id, n) => babyChip(id, n),
+    hz: 2000,
   },
   {
     id: 'sap1', group: 'computers', drawer: true, short: 'The classic 8-bit teaching computer, chip by chip.', name: 'SAP-1 breadboard computer',

@@ -135,6 +135,8 @@ export interface StepInfo {
   /** A vector load's element addresses, a vector store's elements, in element order. */
   vloads?: number[];
   vstores?: { addr: number; value: number; bytes: 1 | 2 | 4 }[];
+  /** A vector instruction that was illegal (outside the subset, or vill) and did nothing: user mode only, system mode traps. */
+  vIllegal?: true;
   trap?: { cause: number; interrupt: boolean; tval?: number };
   halted: boolean;
   /** vm: the privilege level the step ran in (before a trap changed it). */
@@ -820,7 +822,7 @@ export class ISS {
     this.halted = false;
     this.retired++;
     if (this.system) this.mtime = (this.mtime + 1) >>> 0;
-    return { pc, word, text, rd, value, ...(r.vwrite ? { vwrite: r.vwrite } : {}), ...(r.loads ? { vloads: r.loads } : {}), ...(r.stores ? { vstores: r.stores } : {}), halted: false };
+    return { pc, word, text, rd, value, ...(r.vwrite ? { vwrite: r.vwrite } : {}), ...(r.loads ? { vloads: r.loads } : {}), ...(r.stores ? { vstores: r.stores } : {}), ...(r.illegal ? { vIllegal: true as const } : {}), halted: false };
   }
 
   run(maxSteps = 10000): number {

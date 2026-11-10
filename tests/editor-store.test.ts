@@ -146,7 +146,7 @@ describe('migrate', () => {
     const c = sanitizeChip({ id: 'u_k', parts: refs.map((ref, i) => ({ id: `p${i}`, ref, at: [0, 0] })) })!;
     expect(c.parts.map((p) => p.ref)).toEqual(refs);
     expect(c.name).toBe('u_k');
-    const bad = [{ split: [] }, { const: { width: 0, value: 1 } }, { display: 'lamp' }, { rom: { k: 4, w: 12, addr: 'word', lang: 'hex', src: '' } }, { ram: { k: 4 } }];
+    const bad = [{ split: [] }, { const: { width: 0, value: 1 } }, { display: 'lamp' }, { rom: { k: 4, w: 10, addr: 'word', lang: 'hex', src: '' } }, { ram: { k: 4 } }];
     expect(sanitizeChip({ id: 'u_k', parts: bad.map((ref, i) => ({ id: `p${i}`, ref, at: [0, 0] })) })!.parts).toEqual([]);
   });
 });

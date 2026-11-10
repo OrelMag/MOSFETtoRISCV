@@ -7,6 +7,7 @@ import { TAUGHT_COMM2 } from '../campaign/codexcomm2';
 import { TAUGHT_DSP } from '../campaign/codexdsp';
 import { TAUGHT_POWER } from '../campaign/codexpower';
 import { TAUGHT_VEC } from '../campaign/codexvec';
+import { TAUGHT_VERIFY } from '../campaign/codexverify';
 
 /** Codex id → the journey chapter that teaches it. */
 export const TAUGHT: Record<string, string> = {
@@ -167,6 +168,7 @@ export const TAUGHT: Record<string, string> = {
   mats: 'cache',
   ecc: 'cache',
   rowhammer: 'dram',
+  coremem: 'memory',
   rv32i: 'isa',
   stdcell: 'silicon',
   skew: 'latches',
@@ -233,6 +235,7 @@ export const TAUGHT: Record<string, string> = {
   ...TAUGHT_POWER,
   // the Vectors chapter's (campaign/codexvec.ts)
   ...TAUGHT_VEC,
+  ...TAUGHT_VERIFY,
 };
 
 /** Codex id → prologue / appendix chapters that explain it too (they read only what came before them). */
@@ -248,6 +251,8 @@ export const TAUGHT_OPTIONAL: Record<string, string[]> = {
   ecclesjordan: ['tubes'],
   hollerith: ['cards'],
   loader: ['cards'],
+  williamstube: ['appendix-baby'],
+  ssem: ['appendix-baby'],
   nand: ['relays', 'tubes'],
   xor: ['relays'],
   fulladder: ['relays'],

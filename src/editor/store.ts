@@ -17,6 +17,7 @@ import { same } from './history';
 import { MAX_KEY_LENGTH } from './parts';
 import { sanitizeIoRef } from './ioparts';
 import { sanitizeReaderRef } from './cardparts';
+import { sanitizeBabyRef } from './babypart';
 import { FACE_MAX, isEmptyFace, SCALE_MAX, SCALE_MIN, SIDES } from './face';
 import { PUZZLE_MAX_WIDTH } from './puzzleparts';
 import {
@@ -81,10 +82,11 @@ export function sanitizeRef(r: unknown): PartRef | null {
   if ('keyboard' in r) return r.keyboard === true ? { keyboard: true } : null;
   if ('console' in r || 'switches' in r || 'screen' in r) return sanitizeIoRef(r);
   if ('reader' in r) { const rd = sanitizeReaderRef(r.reader); return rd && { reader: rd }; }
+  if (isObj(r.baby)) return sanitizeBabyRef(r.baby);
   if ('puzzle' in r) return (r.puzzle === 'in' || r.puzzle === 'out') && int(r.width, 1) && r.width <= PUZZLE_MAX_WIDTH ? { puzzle: r.puzzle, width: r.width } : null;
   if (isObj(r.rom)) {
     const { k, w, addr, lang, src } = r.rom;
-    if (!int(k) || (w !== 8 && w !== 16 && w !== 24 && w !== 32) || (addr !== 'word' && addr !== 'rv32') || (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16' && lang !== 'cpu4' && lang !== 'dsp24' && lang !== 'isa' && lang !== '6502') || !str(src)) return null;
+    if (!int(k) || (w !== 8 && w !== 12 && w !== 16 && w !== 24 && w !== 32) || (addr !== 'word' && addr !== 'rv32') || (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16' && lang !== 'cpu4' && lang !== 'dsp24' && lang !== 'isa' && lang !== '6502') || !str(src)) return null;
     if (lang === 'isa') {
       const isa = sanitizeIsa(r.rom.isa);
       return isa ? { rom: { k, w, addr, lang, src, isa, ...(r.rom.look === 'rope' ? { look: 'rope' as const } : {}) } } : null;

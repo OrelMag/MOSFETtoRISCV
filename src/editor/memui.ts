@@ -25,7 +25,7 @@ import { RV64_SOURCE, RVC_SOURCE } from './exampleisa';
 import { MAX_ROM_K } from './parts';
 import { registerPropsSection } from './props';
 import type { ProgramLang } from './program';
-import { ISA4_PRESET } from '../isa/presets';
+import { ISA4_PRESET, ISA_PRESETS, PDP8_PRESET } from '../isa/presets';
 import { copyIsa, isaById, isaList } from './isaops';
 import { openIsaEditor } from './isaui';
 import { virtualRows } from './vlist';
@@ -199,7 +199,8 @@ registerPropsSection({
       set({ lang: s.lang, src: s.src, k: Math.max(r.k, sampleK(s.lang, s.src)), ...LANGS[s.lang].shape });
     });
 
-    const width = select(r.w, [[8, '8 bits'], [16, '16 bits'], [32, '32 bits']], (w) => set({ w }), 'Word width');
+    // a table's ROM has its table's width (12 bits: the PDP-8's), listed so the menu shows it
+    const width = select(r.w, [[8, '8 bits'], ...(r.w === 12 ? [[12, '12 bits'] as [RomRef['w'], string]] : []), [16, '16 bits'], [32, '32 bits']] as [RomRef['w'], string][], (w) => set({ w }), 'Word width');
     width.disabled = r.addr === 'rv32';
     const status = img.problems.length
       ? h('div', { class: 'sb-rom-err' }, h('b', null, `${img.problems.length} problem${img.problems.length > 1 ? 's' : ''}: the ROM is not built`),
@@ -226,7 +227,10 @@ registerPropsSection({
       status,
       h('div', { class: 'sb-btns' }, h('button', { class: 'btn sm primary', title: 'Edit the program with a live listing', onclick: () => openProgramEditor(ed, id) }, icon('code', 14), 'Edit program…'),
         h('button', { class: 'btn sm', title: 'Download the program as a deck of punched cards (.deck.json): one card a word, printed with its source line', onclick: () => saveRomDeck(ed, id) }, 'Save as deck'),
-        h('button', { class: 'btn sm', title: 'Replace the program with the words of a deck of cards (as hex, each card’s print a comment); a .deck.json dropped on the canvas does it too', onclick: () => void pickDeck(ed).then((d) => d && loadDeckIntoRom(ed, id, d)) }, 'Load deck…')),
+        h('button', { class: 'btn sm', title: 'Replace the program with the words of a deck of cards (as hex, each card’s print a comment); a .deck.json dropped on the canvas does it too', onclick: () => void pickDeck(ed).then((d) => d && loadDeckIntoRom(ed, id, d)) }, 'Load deck…'),
+        // a ROM in the PDP-8 table: its program runs on the PDP-8's model behind a front panel (loaded on the click)
+        r.lang === 'isa' && r.isa?.id === PDP8_PRESET.id ? h('button', { class: 'btn sm', title: 'Run this program on a PDP-8 with its front panel: lamps, switches, LOAD ADD, DEP, EXAM, START',
+          onclick: () => void import('./pdp8panel').then((p) => p.openPdp8Panel(ed, id)) }, 'Front panel…') : null),
       now, list.el);
 
     let key = '';
@@ -259,6 +263,8 @@ function languageSelect(ed: Editor, partId: string, r: RomRef, set: (patch: Part
   const sel = h('select', { 'aria-label': 'Language' },
     (['asm', 'rv16', 'cpu4', 'dsp24', '6502', 'hex'] as const).map((l) => h('option', { value: l, selected: cur === l }, LANGS[l].name)),
     isas.length ? h('optgroup', { label: 'Instruction sets' }, isas.map((d) => h('option', { value: `isa:${d.id}`, selected: cur === `isa:${d.id}` }, d.name))) : null,
+    // the shipped tables (the 4-bit CPU's, the PDP-8's) the workspace does not hold yet
+    h('optgroup', { label: 'Preset instruction sets' }, Object.values(ISA_PRESETS).filter((d) => !isas.some((i) => i.id === d.id)).map((d) => h('option', { value: `isa:${d.id}`, selected: cur === `isa:${d.id}` }, d.name))),
     h('optgroup', { label: 'Custom ISA' },
       r.lang === 'isa' && r.isa ? h('option', { value: '__edit' }, `Edit ${r.isa.name}…`) : null,
       h('option', { value: '__new' }, 'New instruction set…'))) as HTMLSelectElement;

@@ -28,6 +28,8 @@ export interface ComposerOpts {
   onChange?(word: number, ok: boolean): void;
   /** The front panel's Deposit button (Switches view): what it does with the word. */
   deposit?: { label: string; run(word: number): void };
+  /** Open on this view (else the last one picked). */
+  view?: 'fields' | 'switches';
   /** RV32: a free custom slot in the opcode map becomes a button ("Make it real…": the custom instructions dialog). */
   onCustomSlot?: () => void;
 }
@@ -43,6 +45,8 @@ export interface Composer {
   /** Whether the word is an instruction this builder builds. */
   readonly ok: boolean;
   set(word: number): void;
+  /** The address the word will sit at (targets and page-relative addresses are shown from it). */
+  setPc(pc: number): void;
   focus(): void;
 }
 
@@ -76,7 +80,8 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
   const mask = W === 32 ? 0xffffffff : 2 ** W - 1;
   const hex = (w: number) => '0x' + (w >>> 0).toString(16).padStart(W / 4, '0');
   const bitOf = (w: number, b: number) => (w >>> b) & 1;
-  const pc = opts.pc, labels = opts.labels;
+  let pc = opts.pc;
+  const labels = opts.labels;
 
   let word = ((opts.word ?? isa.start) & mask) >>> 0;
   // Each operand as last set by an instruction that has it: picking another operation keeps those, and
@@ -89,7 +94,7 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
   let hot = -1;
   /** Instruction bit feeding each immediate bit (this word's). */
   let srcOf: (number | 'zero')[] = [];
-  let view = lastView;
+  let view = opts.view ?? lastView;
 
   const pal = h('div', { class: 'cmp-pal' });
   const input = h('input', { class: 'cmp-in', type: 'text', spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Instruction as assembly or a hex word' }) as HTMLInputElement;
@@ -374,7 +379,7 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
     switch (slot.role) {
       case 'target': {
         const where = pc === undefined ? `${v >= 0 ? '+' : '−'}${Math.abs(v)} ${isa.step === 4 ? 'bytes' : 'words'}` : `target 0x${((pc + v) >>> 0).toString(16)}`;
-        const name = pc !== undefined && labels ? [...labels].find(([, a]) => a === pc + v)?.[0] : undefined;
+        const at = pc, name = at !== undefined && labels ? [...labels].find(([, a]) => a === at + v)?.[0] : undefined;
         return `${where}${name ? ` (${name})` : ''}. Reach: ${span}.`;
       }
       case 'upper': {
@@ -509,6 +514,7 @@ export function instrComposer(opts: ComposerOpts = {}): Composer {
     get text() { return isa.text(word, pc, labels); },
     get ok() { return !!cur(); },
     set(w: number) { set(w); },
+    setPc(p: number) { pc = p; render(null); },
     focus() { input.focus(); input.select(); },
   };
 }

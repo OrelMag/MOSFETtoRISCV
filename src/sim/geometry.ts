@@ -134,6 +134,12 @@ export function symbolGeom(def: ComponentDef): SymbolGeom {
       ports[poles[3 * i + 1].name] = { pos: [x + 1, 4], exit: 'down' };
       ports[poles[3 * i + 2].name] = { pos: [x - 1, 4], exit: 'down' };
     }
+  } else if (k === 'core') {
+    // a ring on its wires' crossing: the X line taps in from above, the Y line from the left, the sense winding runs
+    // left to right through it (si, so), the inhibit and the clock from below
+    g = { w: 4, h: 4, ports };
+    const at: Record<string, [Vec, ExitDir]> = { x: [[2, 0], 'up'], y: [[0, 1], 'left'], si: [[0, 3], 'left'], so: [[4, 3], 'right'], inh: [[1, 4], 'down'], clk: [[3, 4], 'down'] };
+    for (const p of def.ports) ports[p.name] = { pos: at[p.name][0], exit: at[p.name][1] };
   } else if (k === 'triode' || k === 'diode') {
     // a tube: plate (anode) on top, cathode at the bottom, a triode's grid on the left
     g = { w: 4, h: 4, ports };
@@ -219,7 +225,7 @@ export function orientGeom(def: ComponentDef, flip: boolean | undefined, rot: Ro
 
 /** Symbol kinds with a drawing of their own; every other kind is a box (symbolGeom's last case). */
 const DRAWN = new Set([...GATE2, 'not', 'buf', 'mux', 'split', 'merge', 'nmos', 'pmos', 'dep', 'res', 'pullup', 'pulldown', 'cap',
-  'tgate', 'tribuf', 'triinv', 'relay', 'triode', 'diode', 'vdd', 'gnd']);
+  'tgate', 'tribuf', 'triinv', 'relay', 'triode', 'diode', 'core', 'vdd', 'gnd']);
 export const isBoxKind = (def: ComponentDef) => !DRAWN.has(def.symbol.kind);
 
 const boxes = new WeakMap<ComponentDef, ComponentDef[]>();

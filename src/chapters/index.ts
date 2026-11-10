@@ -29,6 +29,7 @@ import { chBasics } from './ch-basics';
 import { chAppendix6502 } from './ch-6502';
 import { chAppendixDoom } from './ch-doom';
 import { chAppendixRunner } from './ch-runner';
+import { chAppendixBaby } from './ch-baby';
 import { chAppendixSap } from './ch-sap';
 import { chDram } from './ch-dram';
 import { chMemCtrl } from './ch-memctrl';
@@ -92,7 +93,7 @@ export const chapters: Chapter[] = [
   chDram, chMemCtrl, chFlash, chBus,
   chMessage, chTelegraph, chExchange, chWire, chClocks, chUart, chSpi, chSignals, chNoise, chModem, chCarriers, chSerial, chGlass, chErrors, chCodes, chPcie, chEthernet, chSwitch, chNetwork, chRouter, chTcp, chQueues, chSecret, chPath, chRadio, chWifi, chCellular, chDatacentre, chBench, chFixed, chZplane, chSpectrum, chFirDesign, chIir, chMultirate, chCordic, chMac, chDspCore, chConverters, chAdaptive, chSpeech, chMusic, chSensors, chPictures, chSdr,
   // the appendix: after the journey, lettered
-  chAppendix6502, chAppendixDoom, chAppendixSap, chAppendixRunner,
+  chAppendix6502, chAppendixDoom, chAppendixSap, chAppendixRunner, chAppendixBaby,
 ];
 
 // Planned chapters, shown as "coming soon" (none now: the GPU track is complete).

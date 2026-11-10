@@ -21,7 +21,7 @@ describe('A DSP core', () => {
   it('is on the signal processing level, with a recap of three quizzes', () => {
     expect(chDspCore.level).toBe(DSP_LEVEL);
     expect(chDspCore.recap!.check).toHaveLength(3);
-    expect(chDspCore.steps.length).toBe(8);
+    expect(chDspCore.steps.length).toBe(9);
   });
   it('the benchmark data in src are the oracle\'s', () => {
     expect(FIR16_DATA.h).toEqual(V.fir16.h); expect(FIR16_DATA.x).toEqual(V.fir16.x);

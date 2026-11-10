@@ -12,6 +12,8 @@ import { ALIASES_DSP } from './codexdsp';
 import { ALIASES_FPGA } from './codexfpga';
 import { ALIASES_POWER } from './codexpower';
 import { ALIASES_VEC } from './codexvec';
+import { ALIASES_VERIFY } from './codexverify';
+import { ALIASES_BABY } from './codexbaby';
 
 /** Other names an entry goes by in the chapters' prose. */
 export const ALIASES: Record<string, string[]> = {
@@ -44,7 +46,7 @@ export const ALIASES: Record<string, string[]> = {
   amdahl: ['Amdahl’s law', 'Amdahl'], pagetable: ['page table'], pagefault: ['page fault'], tlb: ['translation lookaside buffer'], privmode: ['privilege level', 'user mode', 'U mode'],
   ctxswitch: ['context switch'], ecc: ['Hamming code', 'SEC-DED'],
   stdcell: ['standard-cell', 'cell library'], metastability: ['metastable'], carrysave: ['carry-save', '3:2 compressor'],
-  booth: ['Booth'], zbuffer: ['z-buffer', 'depth test'], rowhammer: ['Rowhammer'],
+  booth: ['Booth'], zbuffer: ['z-buffer', 'depth test'], rowhammer: ['Rowhammer'], coremem: ['core memory', 'ferrite core', 'ferrite cores', 'coincident-current'],
   clock: ['clock period'], reset: ['power-on state', 'synchronous reset', 'asynchronous reset'], fpadder: ['floating-point adder'],
   tristate: ['tri-state', 'tri-state buffer', 'tri-state driver', 'tristate'], bin2dec: ['double dabble'],
   // Communication (codexcomm.ts)
@@ -63,6 +65,9 @@ export const ALIASES: Record<string, string[]> = {
   ...ALIASES_POWER,
   // the Vectors chapter (codexvec.ts)
   ...ALIASES_VEC,
+  ...ALIASES_VERIFY,
+  // Appendix E (codexbaby.ts)
+  ...ALIASES_BABY,
 };
 
 /** Entries never marked automatically: their names are everyday words in the prose. */

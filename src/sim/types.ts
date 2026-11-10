@@ -46,7 +46,9 @@ export type SymbolKind =
   /** An electromechanical relay: its coil and changeover contacts (prologue P1). */
   | 'relay'
   /** Vacuum tubes (prologue P2): a triode section, a diode section. */
-  | 'triode' | 'diode';
+  | 'triode' | 'diode'
+  /** A ferrite core (lib/coremem.ts): a ring on the crossing of its wires. */
+  | 'core';
 
 export interface SymbolSpec {
   kind: SymbolKind;
@@ -183,7 +185,7 @@ export interface InsideSeed {
 }
 
 /** Which model a part opens onto: the serial channel, the telephone line, a cable between two machines. */
-export type ModelPanel = 'serial' | 'phone' | 'cable';
+export type ModelPanel = 'serial' | 'phone' | 'cable' | 'core';
 
 export interface ComponentDef {
   id: string;
@@ -195,7 +197,7 @@ export interface ComponentDef {
   symbol: SymbolSpec;
 
   /** Built-in primitive handled directly by the simulators. */
-  prim?: 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'fgmos' | 'relay' | 'triode' | 'diode' | 'alias';
+  prim?: 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'fgmos' | 'relay' | 'triode' | 'diode' | 'core' | 'alias';
   /**
    * Switch level: drive strength of a conducting element, 0 … 4. Transistors are 2 (weak) … 4
    * (strong), default 3; a resistor (prim 'res') is 1 by default, weaker than any transistor, and 0

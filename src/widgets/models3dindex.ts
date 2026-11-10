@@ -166,7 +166,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'cores', title: 'A core memory plane', category: 'memory', chapter: 'memory', step: 10,
     summary: 'Sixteen ferrite cores on X, Y, sense and inhibit wires: only the core where two half currents cross flips; reads restore.',
-    files: ['core3d', 'core3dview', 'core3dparts'], factory: 'core3d', codex: ['ram', 'senseamp'],
+    files: ['core3d', 'core3dview', 'core3dparts'], factory: 'core3d', codex: ['coremem', 'ram', 'senseamp'],
     open: () => import('./core3d').then((m) => m.core3d()),
   },
   {
@@ -192,6 +192,12 @@ export const MODELS_3D: readonly Model3d[] = [
     summary: 'Gun, yoke and phosphor driven by the scan-out\'s own counter: the beam lights each pixel the circuit sends, then retraces.',
     files: ['crt3d', 'crt3dview', 'crt3dparts'], factory: 'crt3d', codex: ['doublebuffer'],
     open: () => import('./crt3d').then((m) => m.crt3d()),
+  },
+  {
+    id: 'williams', title: 'A store on a picture tube', category: 'machines', chapter: 'appendix-baby', step: 1,
+    summary: 'The Manchester Baby\'s Williams tube: a raster of dots and dashes held as charge, read through a wire-mesh pick-up plate and rewritten before it leaks away.',
+    files: ['williams3d', 'williams3dview', 'williams3dparts'], factory: 'williams3d',
+    open: () => import('./williams3d').then((m) => m.williams3d()),
   },
   {
     id: 'babbage', title: 'Babbage\'s carry', category: 'machines', chapter: 'fastadd', step: 5,

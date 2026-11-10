@@ -11,6 +11,10 @@
 // progress. Their rule (NAND + the parts unlocked by the levels below) fills the palette's
 // "Unlocked parts" group.
 
+import { faultsKeyOf, lookOf, withChipFaults } from './chipfaults';
+
+/** What a check result holds for: the connectivity and the faults switched on here or in a chip placed here. */
+const checkedOn = (ed: Editor): string => `${ed.compiled?.connKey ?? ''}|${faultsKeyOf(ed.chipId, ed.lib.deps(ed.chipId), lookOf(ed.ws, ed.lib))}`;
 import { groupDigits } from '../sim/numfmt';
 import '../styles/sbchallenges.css';
 import type { CoreCheck, CoreSpec } from '../campaign/corecheck';
@@ -308,7 +312,7 @@ class ChallengeUi {
     const ch = this.challenge;
     const ed = this.ed;
     const res = ch ? this.results.get(ed.chipId) : undefined;
-    const stale = !!res && res.conn !== ed.compiled?.connKey;
+    const stale = !!res && res.conn !== checkedOn(ed);
     const lv = this.level;
     const lp = lv ? C().progress().get(lv.id) : undefined;
     const key = JSON.stringify([ed.chipId, !!ch, this.collapsed, this.confirming, this.version, stale, ch && settings.isSolved(solvedKey(ch)), lp, this.screen?.solutions?.()]);
@@ -575,12 +579,12 @@ class ChallengeUi {
     // so a new result never opens over an old replay.
     this.closePlayer();
     // Check while "Replace your circuit?" waits: the check runs and the question stays (only Replace / Cancel / an edit end it)
-    const r = checkChallenge(ch, ed.compiled);
+    const r = checkChallenge(ch, ed.compiled, (d) => withChipFaults(d, ed.chipId, lookOf(ed.ws, ed.lib), ed.lib.deps(ed.chipId)));
     noteChecked(ed);
     // the truth-table and state-machine builders would hand in the answer here (challenges.ts builderViolations)
     const locked = builderViolations(ed.ws, [ed.chipId, ...ed.lib.deps(ed.chipId)], ch);
     if (locked.length) { r.restrictionViolations.push(...locked); r.ok = false; }
-    this.results.set(ed.chipId, { r, conn: ed.compiled?.connKey ?? '' });
+    this.results.set(ed.chipId, { r, conn: checkedOn(ed) });
     this.version++;
     this.collapsed = false;
     const lv = this.level;
@@ -700,7 +704,7 @@ class ChallengeUi {
     if (!c) return;
     const wrong = lv ? C().progress().get(lv.id)?.wrong ?? 0 : 0;
     const r: CheckResult = { ok: true, failures: [], score: { ...scoreOf(c.def, c.mode, ch.check.kind !== 'table'), wrong }, restrictionViolations: [], tested: 0 };
-    this.results.set(ed.chipId, { r, conn: c.connKey });
+    this.results.set(ed.chipId, { r, conn: checkedOn(ed) });
     this.version++;
     if (lv) {
       if (helped) C().progress().markHelp(lv.id, c.connKey);

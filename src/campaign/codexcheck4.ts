@@ -197,6 +197,22 @@ export const CHECK4: Record<string, Quiz[]> = {
       why: ['', 'Odd overall parity means an odd number of flips: one, as far as SEC-DED knows.', 'Two different positions never XOR to zero.', 'SEC-DED corrects one error and only detects two.'],
     },
   ],
+  coremem: [
+    {
+      question: 'A core plane drives one X wire and one Y wire with half the switching current each. What happens to the other cores on those two wires?',
+      options: ['They see half the switching current and keep their bits', 'They switch too, so the whole row and column is read', 'They see no current at all', 'They switch to 0 and must be written back'],
+      answer: 0,
+      explain: 'Only the crossing core sees both halves, the full switching current. Every other core on the X wire or the Y wire sees one half, below its switching current, so it holds: that is coincident-current selection.',
+      why: ['', 'Half the switching current does not switch a core with a square loop; if it did, every read would wipe a whole row and column.', 'The wire runs through every core of its row or column, so each of them carries its current.', 'Only the selected core is driven past its switching current; the others never move.'],
+    },
+    {
+      question: 'Why does a core memory write after every read?',
+      options: ['The read switches the selected cores to 0, destroying the word, so it is written back from the buffer', 'To refresh charge that leaks away', 'Because the sense wire also writes', 'To reset the inhibit wire'],
+      answer: 0,
+      explain: 'Reading drives the core toward 0: a 1 flips and its flux change is the signal. After READ the word is only in the buffer register; WRITE puts it back, with the inhibit holding the 0 bits.',
+      why: ['', 'Cores do not leak: a ring keeps its magnetisation with no power at all. DRAM is the memory that leaks.', 'The sense wire only carries the pulse to the amplifier; it drives no current through the cores.', 'The inhibit is driven during the write, per plane, from the buffer: nothing about it needs resetting.'],
+    },
+  ],
   rowhammer: [
     {
       question: 'Why does refreshing every row within 64 ms not protect against row hammer?',

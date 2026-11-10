@@ -189,6 +189,18 @@ function relay(poles: number): SVGElement[] {
  * triode the grid between them, dashed (electrons pass through it). The beam between cathode and plate shows while
  * the tube conducts (class conducting, from the view), the heater always glows.
  */
+/** A ferrite core: its four conductors meet in the ring's hole; the ring (its bit) and a digit are coloured by the view. */
+function core(): SVGElement[] {
+  const line = (d: string, cls = 'sym-line') => s('path', { d, class: cls });
+  return [
+    line('M2,0 V2 M0,1 L2,2 M1,4 L2,2 M3,4 V3.5', 'sym-line core-wire'),
+    line('M0,3 L2,2 L4,3', 'sym-line core-sense'),
+    s('ellipse', { cx: 2, cy: 2, rx: 1.3, ry: 0.62, transform: 'rotate(-45 2 2)', class: 'core-ring' }),
+    s('text', { x: 3.35, y: 1.1, class: 'sym-tiny core-digit core-d0', 'text-anchor': 'middle' }, '0'),
+    s('text', { x: 3.35, y: 1.1, class: 'sym-tiny core-digit core-d1', 'text-anchor': 'middle' }, '1'),
+  ];
+}
+
 function tube(triode: boolean): SVGElement[] {
   const line = (d: string, cls = 'sym-line') => s('path', { d, class: cls });
   const els: SVGElement[] = [
@@ -230,6 +242,7 @@ function uprightNameAt(def: ComponentDef): { x: number; y: number; anchor: 'star
   if (k === 'tgate' || k === 'tribuf' || k === 'triinv') return { x: 2.4, y: 0.95, anchor: 'start' };
   if (k === 'relay') return { x: 0.1, y: -0.45, anchor: 'start' };
   if (k === 'triode' || k === 'diode') return { x: 3.75, y: 3.55, anchor: 'start' };
+  if (k === 'core') return { x: 4.2, y: 1.6, anchor: 'start' };
   return { x: g.w / 2, y: -0.35, anchor: 'middle' };
 }
 
@@ -354,6 +367,9 @@ function drawUpright(def: ComponentDef, flip: boolean): SVGGElement {
       break;
     case 'triode': case 'diode':
       inner.append(...tube(k === 'triode'));
+      break;
+    case 'core':
+      inner.append(...core());
       break;
     case 'pullup':
       inner.append(...switchPart(k));

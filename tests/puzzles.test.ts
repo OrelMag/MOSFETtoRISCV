@@ -5,8 +5,9 @@
 
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
+import { lookOf } from '../src/editor/chipfaults';
 import { UserLibrary } from '../src/editor/library';
-import { emptyWorkspace, type Workspace } from '../src/editor/model';
+import { type ChipDoc, emptyWorkspace, type Workspace } from '../src/editor/model';
 import { partDef } from '../src/editor/parts';
 import { loadedIn, PUZZLE_NO_GOLDEN, puzzleIn, puzzleOut, puzzlePortOf, type PuzzleInState, type PuzzleOutState } from '../src/editor/puzzleparts';
 import { EditorSim } from '../src/editor/runtime';
@@ -157,6 +158,36 @@ describe('starting a puzzle', () => {
     const ws = { ...r.ws, chips: { ...r.ws.chips, [r.chipId]: doc } };
     const { c } = compile(ws, r.chipId);
     expect(runPuzzle(p, c, doc.pins).ok).toBe(true);
+  });
+
+  it('a faulted chip never passes: its own switched-on faults and those of a chip it places (editor/chipfaults.ts)', () => {
+    const p = PUZZLE_BY_ID.get('countdown')!;
+    const r = startPuzzle(emptyWorkspace(), p, { kind: 'ref', cpu: 'cpu4' }, () => undefined);
+    if ('error' in r) throw new Error(r.error);
+    const top = withProgram(r.ws.chips[r.chipId], REFS.cpu4.countdown)!;
+    const run = (ws: Workspace) => {
+      const { lib, c } = compile(ws, r.chipId);
+      return runPuzzle(p, c, ws.chips[r.chipId].pins, { doc: ws.chips[r.chipId], look: lookOf(ws, lib), deps: lib.deps(r.chipId) }).ok;
+    };
+    const ws = { ...r.ws, chips: { ...r.ws.chips, [r.chipId]: top } };
+    expect(run(ws)).toBe(true);
+    // its own: the halt part's input stuck at 0 (the program never stops)
+    const halt = top.parts.find((q) => 'display' in q.ref && (q.ref as { display: string }).display === 'halt')!;
+    const hw = top.wires.find((w) => JSON.stringify([w.a, w.b]).includes(`"${halt.id}"`))!;
+    const own = (off?: boolean) => ({ ...ws, chips: { ...ws.chips, [r.chipId]: { ...top, faults: [{ id: 'f1', kind: 'stuck0' as const, target: { wires: [hw.id] }, ...(off ? { off } : {}) }] } } });
+    expect(run(own())).toBe(false);
+    expect(run(own(true))).toBe(true);
+    // a placed chip's: the halt part moved into a chip of its own (pin h -> halt), the fault on the wire inside it
+    const hb = (off?: boolean): ChipDoc => ({
+      id: 'u_hb', name: 'HB', pins: [{ id: 'h', name: 'h', dir: 'in', width: 1, at: [0, 2] }],
+      parts: [{ id: 'hp', ref: { display: 'halt', width: 1 }, at: [6, 0] }], labels: [],
+      wires: [{ id: 'x1', a: { pin: 'h' }, b: { part: 'hp', port: 'a' }, pts: [] }],
+      faults: [{ id: 'g', kind: 'stuck0', target: { wires: ['x1'] }, ...(off ? { off } : {}) }],
+    });
+    const viaChip = { ...top, parts: top.parts.map((q) => (q.id === halt.id ? { ...q, ref: { chip: 'u_hb' } } : q)), wires: top.wires.map((w) => (w.id === hw.id ? { ...w, b: { part: halt.id, port: 'h' } } : w)) };
+    const placed = (off?: boolean): Workspace => ({ ...ws, chips: { ...ws.chips, u_hb: hb(off), [r.chipId]: viaChip } });
+    expect(run(placed(true))).toBe(true);
+    expect(run(placed())).toBe(false);
   });
 
   it('a copy of your chip gets the two ports and a halt part, unwired', () => {

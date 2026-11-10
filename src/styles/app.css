@@ -581,6 +581,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .stage-bar:not(.stacked) .crumbs > button { flex-shrink: 6; min-width: 3.2em; }
 .stage-bar:not(.stacked) .crumbs > button.cur { flex-shrink: 0; min-width: 0; }
 .stage-bar .crumbs > .sep { flex: none; }
+/* A level shrunk below its value pill drops the pill (Stage.markSqueezed): clipped, it was an empty coloured blob. */
+.stage-bar .crumbs > button.squeezed .val { display: none; }
 .stage-bar .shed { display: none; }
 .stage-more-menu { min-width: 260px; }
 .stage-more-menu button > svg { flex: none; color: var(--text-2); }
@@ -1095,6 +1097,25 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .tube-beam { stroke: var(--tube-glow); stroke-width: 0.5; opacity: 0; fill: none; transition: opacity 0.15s; }
 .conducting .tube-beam { opacity: 0.55; filter: drop-shadow(0 0 0.35px var(--tube-glow)); }
 .maybe .tube-beam { opacity: 0.4; stroke: var(--wx); stroke-dasharray: 0.3 0.25; }
+/* ferrite cores (lib/coremem.ts): the ring in its bit's wire colour, the digit beside it; wires lit by the current through the
+   core now (a half holds it, a full select switches it); the sense wire lit while the core switches */
+.core-ring { fill: none; stroke: var(--w0); stroke-width: 0.42; transition: stroke 0.15s; }
+.core-1 .core-ring { stroke: var(--w1); }
+.core-x .core-ring { stroke: var(--wx); stroke-dasharray: 0.35 0.25; }
+.core-d1, .core-1 .core-d0, .core-x .core-digit { display: none; }
+.core-1 .core-d1 { display: inline; }
+.core-half .core-wire { stroke: var(--channel-on); stroke-opacity: 0.6; }
+.core-full .core-wire { stroke: var(--channel-on); stroke-width: 0.26; }
+.core-full .core-ring { filter: drop-shadow(0 0 0.35px var(--channel-on)); }
+.core-loop { width: 100%; max-width: 420px; display: block; }
+.core-loop-axis { stroke: var(--muted); stroke-width: 1; }
+.core-loop-line { fill: none; stroke: var(--text-2); stroke-width: 2.5; stroke-linejoin: round; }
+.core-loop-tick { font: 500 11px var(--font-mono); fill: var(--muted); }
+.core-loop-dot { fill: var(--w0); stroke: var(--surface); stroke-width: 2; }
+.core-loop-dot.one { fill: var(--w1); }
+.core-loop-dot.x { fill: var(--wx); }
+.core-loop-move { fill: none; stroke: var(--channel-on); stroke-width: 3; stroke-dasharray: 4 3; }
+.core-pulse .core-sense { stroke: var(--channel-on); stroke-width: 0.26; filter: drop-shadow(0 0 0.3px var(--channel-on)); }
 .sym-bus { stroke: var(--plumb); stroke-width: 0.42; stroke-linecap: round; }
 .sym-bus-stub, .sym-tap { stroke: var(--plumb); stroke-width: 0.18; }
 .sym-tiny { font-size: 0.75px; fill: var(--muted); font-family: var(--font-mono); }
@@ -2483,6 +2504,34 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .mc-status { display: flex; flex-wrap: wrap; gap: 3px 12px; font-size: 12px; color: var(--text-2); background: var(--accent-soft); border-radius: 8px; padding: 5px 8px; margin: 2px 0 6px; }
 .mc-status b { color: var(--text); font-family: var(--font-mono); }
 .mc-status .bad { color: var(--wx); font-weight: 600; } .mc-status .good { color: var(--good); }
+/* the core store's panel (widgets/coremem.ts) */
+.core-say { font-size: 12px; line-height: 1.45; color: var(--text-2); margin: 0 0 6px; }
+.core-bit { min-width: 26px; font-family: var(--font-mono); }
+.core-inh { display: inline-flex; gap: 4px; align-items: center; }
+.core-words { display: grid; gap: 1px; font-size: 12px; }
+.core-word { display: grid; grid-template-columns: 22px 40px 1fr; gap: 6px; padding: 1px 4px; border-radius: 4px; color: var(--text-2); }
+.core-word b { font-family: var(--font-mono); color: var(--text); font-weight: 600; }
+.core-word.cur { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.core-word.out b { color: var(--wx); }
+/* the read-cycle figure (widgets/corefig.ts): theme tokens only */
+.core-fig { margin: 12px 0; }
+.core-fig-svg { width: 100%; height: auto; display: block; background: var(--surface-2); border-radius: 8px; }
+.core-fig figcaption { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+.cf-grid { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.6; }
+.cf-name { font: 600 10px var(--font-mono); fill: var(--text-2); }
+.cf-note { font: 500 9px var(--font-mono); fill: var(--muted); }
+.cf-wave { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.cf-dash { stroke-dasharray: 3 2; opacity: 0.7; }
+.cf-clk { stroke: var(--text-2); }
+.cf-full { stroke: var(--probe-0); }
+.cf-sense { stroke: var(--probe-2); }
+.cf-w { stroke: var(--probe-1); }
+.cf-inh { stroke: var(--probe-3); }
+.cf-box { fill: var(--surface); stroke: var(--muted); stroke-width: 0.8; }
+.cf-box.cf-read { fill: color-mix(in srgb, var(--probe-0) 26%, var(--surface)); }
+.cf-box.cf-write { fill: color-mix(in srgb, var(--probe-1) 26%, var(--surface)); }
+.cf-box.cf-lost { fill: color-mix(in srgb, var(--probe-5) 26%, var(--surface)); }
+.cf-boxtext { font: 600 9.5px var(--font-mono); fill: var(--text); }
 .mc-banks { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
 .mc-bank { font: 11.5px var(--font-mono); padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border); color: var(--text-2); }
 .mc-bank.open { border-color: var(--good); color: var(--text); }
@@ -2960,6 +3009,8 @@ svg.schematic.lg.lg-h-tap7 .tap-label[data-ts='7'], svg.schematic.lg.lg-h-tap8 .
 /* The inspector folds to a rail (view/inspector.ts): by the learner, or by the stage beside a circuit too large to read at
    its fit (Stage.autoInspector). Only where the inspector is a column (1181 px and up); a phone's or tablet's drawer is untouched. */
 .inspector .insp-rail, .insp-head .insp-fold { display: none; }
+/* until the first scene's fold is known (Stage.guessInspector): room kept, nothing painted that would then move */
+.inspector.insp-wait { visibility: hidden; }
 @media (min-width: 1181px) {
   .insp-head .insp-fold { display: flex; }
   .inspector.folded > :not(.insp-rail) { display: none; }
@@ -3202,3 +3253,4 @@ pre.code.vsrc .vl.crit { box-shadow: inset 3px 0 0 var(--accent); background: co
 .pw-total { margin: 0 0 6px; font-size: 12.5px; color: var(--text-2); }
 .pw-total b { color: var(--text); }
 @media (pointer: coarse) { .pw-seg .btn, .power-panel .btn { min-height: 40px; } }
+@media (pointer: coarse) { .core-bit, .core-panel .btn { min-height: 40px; } .core-bit { min-width: 40px; } .core-inh input { width: 22px; height: 22px; } }

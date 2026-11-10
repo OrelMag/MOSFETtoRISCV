@@ -39,8 +39,8 @@ npm run smoke        # every route of dist/ in headless Chrome, fails on any run
 npm run desktop      # build + desktop/ (Electron, own package): portable Windows .exe in desktop/release/
 ```
 
-`desktop/`: main.cjs serves the staged site (stage.mjs: dist/ without source maps, Google Fonts swapped for
-local @fontsource copies) on a private `app://mosfet` origin; data next to the .exe (PORTABLE_EXECUTABLE_DIR);
+`desktop/`: main.cjs serves the staged site (stage.mjs: dist/ without source maps; the fonts are the site's own,
+src/styles/fonts.css: Latin, Latin Extended and Greek subsets, OFL, the two first-screen faces preloaded by index.html) on a private `app://mosfet` origin; data next to the .exe (PORTABLE_EXECUTABLE_DIR);
 fuses off (runAsNode: VS Code sets ELECTRON_RUN_AS_NODE, so run `electron .` there with it unset). Share links
 made in the program point at the public site (editor/files.ts `SITE_URL`). `.github/workflows/desktop.yml`
 (after every successful deploy of main, from the deployed commit; manual; or a `v*` tag) publishes the release `desktop-latest`.
@@ -49,7 +49,7 @@ made in the program point at the public site (editor/files.ts `SITE_URL`). `.git
 Protocol over Node's WebSocket) serves dist/ with `vite preview` (or `--url <site>`) and opens every route generated
 from the code (chapter steps in both themes, each workbench family's default, campaign map / intro / codex / every
 level, sandbox and its examples seeded in localStorage), the gates chapter's print view (dark, and on a phone: every figure drawn, one print call; window.print is stubbed for every route) as a fresh load in parallel tabs (`--tabs n`), each in its own
-browser context; it fails on exceptions, console / browser errors, failed requests (`OPTIONAL`: layout/ and Google Fonts),
+browser context; it fails on exceptions, console / browser errors, failed requests (`OPTIONAL`: layout/ and the web fonts, which the touch routes block),
 "could not load" panels, editor error toasts / diagnostics, an empty main view, and horizontal overflow at 1280 px and on
 a 390 px phone (a few pages), and a sandbox toolbar label cut or scrolled out of view (also at 1440 and 1920 px), the open tab under Open… / New chip, and on every
 route a stage bar's button past its edge, the open level's name cut on a one-row stage bar (view/stage.ts fitBar: labels off, then
@@ -492,6 +492,13 @@ src/lib/       the component library (registered in `registry` via define())
   cpu4.ts        the 4-bit CPU (Examples ▸ 4-bit CPU): CPU4_PC (PC + 3-level stack), CPU4_DECODE (control4: the control
                  table, its spec), CPU4_REGS (16 × 4 in pairs), CPU4_ALU (alu4), CPU4_ACC, CPU4_IO (SRC + five ports), rom4(words)
                  (256 × 16, the sandbox ROM part's geometry), cpu4(words) (the computer; CPU4_STATE: paths of its registers)
+  pdp8.ts        the PDP-8 in gates (Examples ▸ PDP-8 in gates; golden model src/pdp8/pdp8.ts): one clock edge per major state (Fetch,
+                 Defer, Execute; an interrupt replaces a Fetch: core[0] ← PC, PC ← 0001); PDP8_CONTROL (state, IR, RUN, ION + its delay,
+                 the panel keys edge-detected: a key acts at its first edge, only stopped in Fetch, STOP any time), PDP8_MAB (effective
+                 address, core address, next MA / MB = the word written), PDP8_PC, PDP8_AC (adder, AND, PDP8_OPR1 / PDP8_OPR23 with
+                 specs opr1Ref / opr23Ref, MQ), PDP8_TTY (IOT 00 / 03 / 04, keyboard buffer, printer flag); PDP8_CORE (core outside:
+                 maddr / din / mwe / dout, kcode / kready / kack, tdata / twe), pdp8Computer(words) (bigRamWithInit(12, 12) inside);
+                 PDP8_STATE the registers' paths; tests/pdp8gates.test.ts: BitSim lanes in lock step with the model
   lanes.ts       the GPU chapters' lane core: laneCore(program, n, { dmemK, imemK }) (2 / 4 / 8 lanes: the single-cycle front
                  end, n laneUnit(n) boxes = registers + ALU + result mux, hand-placed in two bands), lowestOne(n) (the leader /
                  the next lane to serve), onehotMux(n, w), simtDecode(n) (custom-0 ops, lane CSRs 0xCC0–0xCC4), simtControl(n)
@@ -1139,6 +1146,12 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   cpu4mon.ts     detectCpu4 (a ROM in 4-bit assembly, or on a custom table: followed, not checked), Cpu4Monitor: Iss4 stepped at every rising edge with the TEST / switch
                  values the hardware sampled, every register compared (CPU4_STATE paths; elsewhere: followed, not checked);
                  cpu4Use: the blocks an instruction uses (the drawer's marks)
+  pdp8mon.ts     detectPdp8 (a placed pdp8_core: the RAM on its maddr, a keyboard part, the input pins on sr and each key, wires and
+                 pointers followed), Pdp8Monitor: the golden model joins at a known Fetch, mirrors the panel keys and the keyboard's
+                 waiting keys, steps at each retire and compares AC L MQ PC ION RUN, the printer flag and the words written; an
+                 interrupt the gates take after a key typed between two instructions must be due by the model's own rule;
+                 pdp8drawer.ts the CPU drawer's panel (lamps from the gates, 12 SR toggles on the SR pin, keys pulsed for one edge;
+                 Step when stopped = SING STEP); examplepdp8.ts pdp8GatesChip (and pdp8Chip: option (a), the model behind a ROM)
   exampleisa.ts  Examples ▸ RV32C and RV64 (Sheet): rvcChip = rv32ic_core + a ROM with its C box ticked (rom.c) + RAM + console + a halt part on the
                  expanded `j .` (cpu.instrOut); rv64Chip = rv64im_core + a ROM assembled for RV64 (rom.xlen = 64), no memory port. The ROM ref's `c`
                  (byte addressed, 32-bit words: cWindowRom, k <= C_ROM_MAX_K = 8; `.option rvc` without it is a ROM error) and `xlen` (assemble at 64)

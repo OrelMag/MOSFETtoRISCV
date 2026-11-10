@@ -125,6 +125,10 @@ export const CASES0: Record<string, LevelCase> = {
     cost: 'Two half adders and an OR cost 13 NANDs, depth 7, with 4 delays from carry in to carry out. Par shares the two XORs\' first NANDs with the carry: 9 NANDs, depth 6, and 2 delays from carry in to carry out. Of a 16-bit ripple adder\'s 36 delays, 28 are that path, bits 1 to 14.',
     alts: [{ name: 'Two half adders + OR', lib: 'full_adder_ha' }, { name: 'PLA (AND and OR planes)', lib: 'pla_fa' }],
   },
+  t_tests: {
+    problem: 'Every die is tested at the pins, and every vector costs tester time on every die, good or bad. A stuck-at fault holds one net at 0 or 1; a vector catches it when an output differs. The aim is the smallest set of vectors that catches every fault some vector can catch.',
+    cost: 'Nothing to build. The 4-bit ripple adder has 90 faults and 512 vectors; random vectors catch 40, 60, 76, 88, 90 after 1, 2, 4, 8, 16, and 3 chosen ones catch all 90. Greedy picks 4 for the full adder, where 3 are enough.',
+  },
   a_add4: {
     problem: 'Four full adders, each carry out wired to the next carry in, add two 4-bit words: the carry ripples from bit 0 upward. It is the unit RV16\'s 16-bit adders are built from, four per adder, in the next-PC logic\'s pc + imm and rs1 + imm. Correct and cheap; its delay grows with the width.',
     without: 'Without a carry chain bit k must see every lower bit directly: as a two-level circuit the top sum bit of a 4-bit adder has 9 inputs, of a 16-bit adder 33.',
@@ -224,6 +228,11 @@ export const CASES0: Record<string, LevelCase> = {
       { name: 'Library register', lib: 'reg16' },
       { name: 'Sixteen flip-flops, no enable', nand: 144, note: '16 × 9 NANDs; only for a register that loads at every edge.' },
     ],
+  },
+  t_scan: {
+    problem: 'A fault inside a counter shows at the pins only after the tester has counted to the right state, and a CPU has thousands of flip-flops. A scan register makes each one an input and an output the tester controls: with se = 1 they shift as one chain from si to so; with se = 0 the register works as before.',
+    cost: 'A 2:1 mux in front of each 9-NAND flip-flop: 13 NANDs a bit, 52, the price of the enable register (the mux picks the bit below instead of q). The library\'s scan register uses the 11-NAND flip-flop: 15 a bit, 60. On the pipelined CPU full scan adds 10 704 NANDs, 15.5 %.',
+    alts: [{ name: 'Library scan register (11-NAND flip-flops)', lib: 'scanreg4' }],
   },
   s_cnt4: {
     problem: 'A register whose input is its own value plus one counts clock edges: the program counter without jumps, the divider\'s step counter, every timer. A synchronous reset to 0 and an enable make it usable: q ← rst ? 0 : en ? q + 1 : q.',

@@ -25,7 +25,8 @@ export interface Cpu4Desc {
 }
 
 type Cpu4RomPart = PartDoc & { ref: { rom: RomRef } };
-const isCpu4Rom = (p: PartDoc): p is Cpu4RomPart => 'rom' in p.ref && (p.ref.rom.lang === 'cpu4' || (p.ref.rom.lang === 'isa' && !!p.ref.rom.isa));
+// a ROM on a custom table, but not the PDP-8's: its program runs on the PDP-8's own model behind the front panel (pdp8panel.ts)
+const isCpu4Rom = (p: PartDoc): p is Cpu4RomPart => 'rom' in p.ref && (p.ref.rom.lang === 'cpu4' || (p.ref.rom.lang === 'isa' && !!p.ref.rom.isa && p.ref.rom.isa.id !== 'pdp8'));
 
 /** A ROM in 4-bit assembly on the chip (the one called rom or imem first), or null. */
 export function detectCpu4(doc: ChipDoc, _chips?: Chips): Cpu4Desc | null {

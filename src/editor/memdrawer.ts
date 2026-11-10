@@ -14,7 +14,7 @@ import type { Sim } from '../sim/sim';
 /** While the clock runs the drawer redraws at most this often (as the CPU drawer). */
 const RUN_MS = 100;
 
-const kindOf = (m: MemInfo): string => m.built ? 'yours' : m.src.kind === 'big' ? 'large RAM' : m.prefix ? 'register file' : 'RAM';
+const kindOf = (m: MemInfo): string => m.built ? 'yours' : m.src.kind === 'big' ? 'large RAM' : m.src.kind === 'cores' ? 'core memory' : m.prefix ? 'register file' : 'RAM';
 
 class MemoryDrawer {
   readonly el: HTMLElement;
@@ -112,7 +112,7 @@ class MemoryDrawer {
       ? `${memSize(cur)}, order guessed: the words as drawn, their addresses could not be read off the circuit.`
       : cur.built
       ? `${memSize(cur)}: each word's address found by writing every ${cur.prefix ? 'register number' : 'address'} on a copy of this circuit.`
-      : `${memSize(cur)}${cur.src.kind === 'big' ? ', simulated as a lookup: words from its state' : ''}.`;
+      : `${memSize(cur)}${cur.src.kind === 'big' ? ', simulated as a lookup: words from its state' : cur.src.kind === 'cores' ? `, ${cur.width} planes of ferrite cores: a word is one core per plane` : ''}.`;
     this.src.hidden = !cur;
     this.goto.hidden = !cur || cur.words <= 64;
     const problems = cur?.built?.problems ?? [];

@@ -31,8 +31,12 @@ import '../styles/python.css';
 /** The chapter's CPU: the single-cycle RV32I of chapter 14 with a 256-word ROM and 64 words of data memory. */
 export const PY_IMEM_K = 8, PY_DMEM_K = 6;
 
-export function pyCompile(source: string, m = false): Compiled {
-  return compilePy(source, { dmemWords: 2 ** PY_DMEM_K, m });
+/** A scene's memories, when not the chapter's (PY_IMEM_K, PY_DMEM_K): the FFT programs need more. */
+export interface PyMem { imemK: number; dmemK: number }
+const PY_MEM: PyMem = { imemK: PY_IMEM_K, dmemK: PY_DMEM_K };
+
+export function pyCompile(source: string, m = false, mem: PyMem = PY_MEM): Compiled {
+  return compilePy(source, { dmemWords: 2 ** mem.dmemK, m });
 }
 
 /** NANDs of the pipelined CPU of these words without / with the M unit (the same ROM in both, so the difference is the unit). */
@@ -42,9 +46,9 @@ export function mUnitCost(words: number[]): { base: number; withM: number } {
 }
 
 /** Why a compiled program cannot be loaded (null: it can). */
-export function pyProblem(c: Compiled): string | null {
+export function pyProblem(c: Compiled, mem: PyMem = PY_MEM): string | null {
   if (c.error) return `line ${c.error.line}: ${c.error.message}`;
-  if (c.words.length > 2 ** PY_IMEM_K) return `${c.words.length} instructions: the ROM holds ${2 ** PY_IMEM_K}`;
+  if (c.words.length > 2 ** mem.imemK) return `${c.words.length} instructions: the ROM holds ${2 ** mem.imemK}`;
   return null;
 }
 
@@ -230,13 +234,16 @@ export interface PyOpts {
   m?: boolean;
   /** With pipeline: show the RV32I | RV32IM switch and the M unit's cost (default). Chapter 17 hides them: M is taught in chapter 21. */
   switch?: boolean;
+  /** Larger memories than the chapter's (the FFT steps); such a scene runs on the cycle engine. */
+  mem?: PyMem;
 }
 
 export function pyScene(source: string, o: PyOpts = {}): Scene {
   const m = !!o.pipeline && !!o.m;
-  let c = pyCompile(source, m);
-  if (pyProblem(c)) { source = PY_PROGRAMS[0].source; c = pyCompile(source, m); }
-  return cpuScene({ source: c.asm, imemK: PY_IMEM_K, dmemK: PY_DMEM_K, highlight: o.highlight, pipeline: o.pipeline, m, extraPanels: [pyPanel(c, source, !!o.edit, { pipeline: !!o.pipeline, m, sw: o.switch !== false })] });
+  const mem = o.mem ?? PY_MEM;
+  let c = pyCompile(source, m, mem);
+  if (pyProblem(c, mem)) { source = PY_PROGRAMS[0].source; c = pyCompile(source, m, mem); }
+  return cpuScene({ source: c.asm, imemK: mem.imemK, dmemK: mem.dmemK, highlight: o.highlight, pipeline: o.pipeline, m, cycleEngine: !!o.mem, extraPanels: [pyPanel(c, source, !!o.edit, { pipeline: !!o.pipeline, m, sw: o.switch !== false, mem: o.mem })] });
 }
 
 /** Which function the instruction at pc belongs to ('' the top level, null a runtime routine or the frame). */
@@ -264,12 +271,12 @@ interface PanelState {
   lastLine: number;
 }
 
-function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipeline: boolean; m: boolean; sw: boolean }): ScenePanel {
+function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipeline: boolean; m: boolean; sw: boolean; mem?: PyMem }): ScenePanel {
   return (stage: Stage): Widget => {
     const L = c.layout!, A = c.assembled!;
     const lines = pyLines(source);
     const haltPc = A.labels.get('halt') ?? A.labels.get('program.halt') ?? 0;
-    const { pipeline: pipe, m: withM, sw } = target;
+    const { pipeline: pipe, m: withM, sw, mem } = target;
     const prof = pipe ? new PipeProfile(c, haltPc) : null;
     /** The last instruction seen in Execute: the one the pipeline panel follows while Execute holds a bubble. */
     let lastE = 0;
@@ -289,16 +296,16 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
     sel.value = mine?.id ?? '__custom';
     sel.addEventListener('change', () => {
       const p = anyProg(sel.value);
-      if (p) stage.load(pyScene(p.source, { edit: !editWrap.hidden, pipeline: pipe, m: withM, switch: sw }));
+      if (p) stage.load(pyScene(p.source, { edit: !editWrap.hidden, pipeline: pipe, m: withM, switch: sw, mem }));
     });
 
     // the editor: compiles as you type, the error at its line in Python's terms
     const errBox = h('div', { class: 'asm-errors' });
     const stats = h('div', { class: 'py-hint' });
     const recheck = () => {
-      const k = pyCompile(editor.value, withM), why = pyProblem(k);
+      const k = pyCompile(editor.value, withM, mem), why = pyProblem(k, mem);
       editor.setDiagnostics(k.error ? [{ line: k.error.line, message: k.error.message }] : []);
-      stats.textContent = why ?? `${pyLines(editor.value).length} Python lines → ${k.words.length} instructions of the ROM's ${2 ** PY_IMEM_K}`;
+      stats.textContent = why ?? `${pyLines(editor.value).length} Python lines → ${k.words.length} instructions of the ROM's ${2 ** (mem ?? PY_MEM).imemK}`;
       errBox.textContent = '';
       return why;
     };
@@ -309,7 +316,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
         h('button', { class: 'btn sm primary', onclick: () => {
           const why = recheck();
           if (why) { errBox.textContent = why; return; }
-          stage.load(pyScene(editor.value, { edit: true, pipeline: pipe, m: withM, switch: sw }));
+          stage.load(pyScene(editor.value, { edit: true, pipeline: pipe, m: withM, switch: sw, mem }));
         } }, 'Compile & load'),
         h('button', { class: 'btn sm', onclick: () => { editWrap.hidden = true; } }, 'Close')));
     recheck();
@@ -319,7 +326,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
     const editBtn = h('button', { class: 'btn sm', onclick: () => { editWrap.hidden = !editWrap.hidden; } }, 'Edit');
     const targetBtn = (m: boolean) => h('button', {
       class: 'btn sm', 'aria-pressed': String(m === withM), title: m ? 'Compile for RV32IM and add the multiplier and divider to the pipeline: * // % become mul / div / rem' : 'Compile for RV32I: * // % call the shift-and-add and shift-and-subtract routines',
-      onclick: () => { if (m !== withM) stage.load(pyScene(source, { edit: !editWrap.hidden, pipeline: true, m, switch: sw })); },
+      onclick: () => { if (m !== withM) stage.load(pyScene(source, { edit: !editWrap.hidden, pipeline: true, m, switch: sw, mem })); },
     }, m ? 'RV32IM' : 'RV32I routines');
     const endBtn = h('button', { class: 'btn sm', title: 'Clock the pipeline until the program halts' }, 'Run to end');
 

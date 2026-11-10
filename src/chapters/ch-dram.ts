@@ -171,6 +171,10 @@ export const chDram: Chapter = {
         their charge, Σ C·V / Σ C, and the wires show their voltage. Everywhere else the circuit is still 0, 1, X and Z.</p>
         <p><span data-show="c1">The cell</span> lost its charge in the process: it now sits at the bit line's level too. Sharing destroys the bit, so a DRAM
         read must write the value back.</p>
+        <p>Core memory read the same way (<a href="#/c/memory/11">A core plane, wired</a>, in chapter ${numOf('memory')}): reading a core switched it to 0,
+        and every read cycle ended with a write that put the word back from a buffer register. DRAM keeps that discipline with one difference: the
+        sense amplifier itself drives the bit line back to a full level while the word line is still up, so the read restores the row, with no
+        separate write phase.</p>
         <p>Two consequences follow from one formula. The swing scales with Cs / (Cs + Cb), so it shrinks as more cells hang on a bit line,
         and the amplifier's offset sets a floor under it. And because the cell ends at the shared level, a cell left unrestored after an
         activate holds ${(share(1) * VDD_VOLTS).toFixed(2)} V instead of ${VDD_VOLTS} V: each uncorrected read cuts the next one's signal to a fifth, as the next step's quiz works out.</p>

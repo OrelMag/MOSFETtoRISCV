@@ -5,7 +5,8 @@ import { orientGeom, type Vec } from '../sim/geometry';
 import { NmosSim } from '../sim/nmossim';
 import { SwitchSim, VDD_VOLTS, weakLevel, weakTag } from '../sim/switchsim';
 import { B0, B1, BX, BZ, type Bit, type Netlist, netlistOf } from '../sim/types';
-import { describeBits, formatBits, type Radix } from '../sim/values';
+import { describeBits, formatBits, pack, type Radix } from '../sim/values';
+import { coreDrive, coreSwitching, isCoreState } from '../sim/core';
 import { h, icon, s, tx } from '../ui/dom';
 import { DoubleTap } from '../ui/doubletap';
 import { reducedMotion } from '../ui/motion';
@@ -208,6 +209,8 @@ export class SchematicView {
   private quiet = new Set<string>();
   /** Gates drawn with their insides (working gates): painted from their input ports in update(). */
   private cmos: { name: string; el: Element; ins: string[] }[] = [];
+  /** Ferrite cores drawn at this level (painted from their leaf state and the current through them). */
+  private cores: { name: string; el: Element }[] = [];
   private routeMs = 0;
   private tooltip: HTMLDivElement;
 
@@ -267,6 +270,7 @@ export class SchematicView {
     this.pins = [];
     this.insts.clear();
     this.cmos = [];
+    this.cores = [];
   }
 
   /** Markers for the notes pinned to this level's parts (replaces the previous ones; a name not on this level is skipped). */
@@ -309,6 +313,7 @@ export class SchematicView {
     this.pins = [];
     this.insts.clear();
     this.cmos = [];
+    this.cores = [];
     this.atOf.clear();
     this.boxes.clear();
     this.kcur = null;
@@ -456,6 +461,7 @@ export class SchematicView {
       g.append(drawSymbol(inst.def, inst.flip, inst.rot));
       const cm = g.querySelector('.cmos');
       if (cm) this.cmos.push({ name: inst.name, el: cm, ins: inst.def.ports.filter((p) => p.dir !== 'out').map((p) => p.name) });
+      if (inst.def.prim === 'core') this.cores.push({ name: inst.name, el: g });
       const nameAt = instNameAt(inst.def, inst.flip, inst.rot);
       if (nameAt) g.append(s('text', { class: 'inst-name', x: nameAt.x, y: nameAt.y, 'text-anchor': nameAt.anchor }, inst.label ?? inst.name));
       // A fixed-size copy of the block's label for when its own is too small to read (legible.ts); decoration, so
@@ -618,6 +624,25 @@ export class SchematicView {
         // partly on (its gate at a weak level): static current through it
         g.classList.toggle('leaky', ctx.sim instanceof SwitchSim && ctx.sim.leaky(li));
         if (k === 'relay' && ctx.sim instanceof SwitchSim) g.classList.toggle('energized', ctx.sim.relayEnergized(li) === 1);
+      }
+    }
+    // Ferrite cores: the ring shows its bit; its wires the current through it now (a half, or a full select where two
+    // halves meet); the sense wire the pulse of a core that is switching
+    if (this.cores.length) {
+      const sim = ctx.sim as { leafState?: (li: number) => unknown };
+      for (const c of this.cores) {
+        const li = ctx.childLeaf(c.name);
+        const st = li === undefined ? undefined : sim.leafState?.(li);
+        const b = isCoreState(st) ? st.b : -1;
+        const bits = (p: string) => pack(ctx.childPortBits(c.name, p));
+        const { lo, hi } = coreDrive(bits('x'), bits('y'), bits('inh'));
+        const amp = lo === hi ? Math.abs(lo) : -1;
+        const cl = c.el.classList;
+        cl.toggle('core-1', b === 1);
+        cl.toggle('core-x', b < 0);
+        cl.toggle('core-half', amp === 1);
+        cl.toggle('core-full', amp >= 2);
+        cl.toggle('core-pulse', coreSwitching(b, lo, hi) === 1);
       }
     }
   }

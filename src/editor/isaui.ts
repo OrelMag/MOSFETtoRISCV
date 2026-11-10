@@ -161,8 +161,8 @@ export function openIsaEditor(ed: Editor, id?: string): void {
     const ro = preset ? { disabled: true } : {};
     const name = h('input', { class: 'isa-name', value: doc.name, 'aria-label': 'Name', ...ro }) as HTMLInputElement;
     name.addEventListener('change', () => name.value.trim() && commit({ ...doc, name: name.value.trim() }));
-    const width = h('select', { 'aria-label': 'Word width', ...ro }, [8, 16, 32].map((w) => h('option', { value: String(w), selected: doc.wordBits === w }, `${w}-bit words`))) as HTMLSelectElement;
-    width.addEventListener('change', () => commit({ ...doc, wordBits: Number(width.value) as 8 | 16 | 32 }));
+    const width = h('select', { 'aria-label': 'Word width', ...ro }, [8, 12, 16, 32].map((w) => h('option', { value: String(w), selected: doc.wordBits === w }, `${w}-bit words`))) as HTMLSelectElement;
+    width.addEventListener('change', () => commit({ ...doc, wordBits: Number(width.value) as 8 | 12 | 16 | 32 }));
     const head = h('div', { class: 'isa-head' }, name, width,
       h('span', { class: 'sb-sum' }, preset ? 'A preset: copy it to make changes.' : uses.length ? `used by ${uses.length} ROM${uses.length > 1 ? 's' : ''} (${uses.map((u) => u.part).join(', ')})` : 'not used by a ROM yet'),
       h('span', { class: 'isa-head-btns' },

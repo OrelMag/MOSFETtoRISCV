@@ -62,7 +62,7 @@ export const chVerify: Chapter = {
       `A defect is modelled as a stuck-at fault: one net reads 0 or 1 whatever drives it. The full adder has ${FA_FAULTS}; three well-chosen vectors catch them all, where random vectors leave a long tail. A fault no vector can show sits on redundant logic.`,
       `Scan puts a multiplexer in front of every flip-flop (${SDFF} NANDs against ${DFFN}), so a tester shifts a state in, clocks once and shifts the answer out: sequential logic is tested like combinational logic. BIST puts the pattern generator (an LFSR) and the answer compressor (a MISR) on the chip.`,
     ],
-    practise: [],
+    practise: ['t_tests', 't_scan'],
     check: [
       {
         question: 'A pipelined CPU and its golden model agree on every final register after a random program. What has that shown?',

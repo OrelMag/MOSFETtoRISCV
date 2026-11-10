@@ -114,6 +114,38 @@ applicable: `rv64ui-fence_i` (self-modifying code: the instruction memory is a R
 (misaligned access: an access stays inside its doubleword). With M switched off the rv64um tests fail, as they
 should: the verdict discriminates.
 
+### Vectors: riscv-vector-tests
+
+[riscv-vector-tests](https://github.com/chipsalliance/riscv-vector-tests) generates self-checking tests per RVV
+instruction: Go writes the cases (every VL, LMUL, SEW, mask on / off), a patched Spike runs them and writes its
+results back into the source as `TEST_CASE`s. It runs on Linux only, so `.github/workflows/rvv-tests.yml` (manual)
+does that part at a pinned generator revision, Spike and toolchain, for VLEN 128, XLEN 32, integer only, selecting
+exactly the 80 instructions of our Zve32x subset, and uploads the stage-2 sources. `scripts/rvv-tests/build.mjs`
+compiles them against our bare environment (TEST_CASE compares against an immediate: our CPUs cannot load from the
+ROM; data at `0x100000` past a 1 KB gap that negative strides reach into) into `tests/verify/rvv-tests/`: per set
+an index (`.json`: revisions, toolchain, per test its checks and sizes) and its words (`.bin.br`, one brotli
+stream, 2.8 MB + 0.6 MB for the whole suite). The build is deterministic.
+
+- **As generated** (`v128`): 1 339 tests, 1 426 574 checks, all 80 instructions. All pass on the golden model
+  (`ISS({ v: { vlen: 128 } })`).
+- **Gate copies** (`v128-gates`): the gate-level unit is e32 only, has no multiplier and no strided access, and its
+  CPU has no Zicsr. `scripts/rvv-tests/gates.mjs` narrows each test by fixed rules: only the e32 blocks; whole-group
+  setup at e8 with AVL x0 written at e32 (the same bytes into the same registers); `csrwi vxrm` / `csrci vxsat`
+  dropped; test data used only by dropped blocks removed. 513 copies (413 564 checks) pass on the golden model both
+  in full and in the gate subset, where a vector instruction the gates would make an illegal no-op fails the test.
+  826 tests have no copy, each with its reason in `notApplicable`: 702 have no e32 block (`vadd.vv` at e8 or e16),
+  55 vmul (no multiplier in the lanes), 48 e8 / e16 loads and stores, 13 strided ones, 8 vset* (they check with
+  `csrr vl / vtype / vstart`).
+- **At gate level**: one copy per instruction (63 of 65; vle32.v and vse32.v need larger data memories and are in
+  every copy's setup), smallest first, on `sc-v` in two 32-lane batches with 2^10 data words, about 100 s.
+- A planted fault (an operand word of `vadd_vv-3` flipped) must fail test 38 on the golden model and on the gates.
+  Masked-off and tail elements are not checked by the generated cases (flipping them passes).
+
+`tests/verify-rvv-tests.test.ts` runs all of it; `npx vite-node scripts/rvv-tests/run.ts [dir]` runs the golden
+model part on a build. To rebuild: run the workflow, download its artifact, check out riscv-vector-tests at the
+revision it names, and `node scripts/rvv-tests/build.mjs <artifact> --rvt <checkout> [--cc <gcc>]` (xPack
+riscv-none-elf-gcc 15.2.0 here).
+
 ## Random programs
 
 `src/riscv/randprog32.ts` draws a program from a seed for what a CPU implements: ALU operations on

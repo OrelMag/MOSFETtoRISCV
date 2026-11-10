@@ -66,7 +66,9 @@ function cpu64Panel(opts: Cpu64SceneOptions & { xlen: 32 | 64; m: boolean }, asm
     const trace = h('div', { class: 'cpu-trace' });
     const regs = h('div', { class: 'cpu-regs cpu-regs64' });
     const mem = h('div', { class: 'cpu-mem' });
-    const haltLine = h('div', { class: 'cpu-halt', role: 'status', hidden: true });
+    // its place kept from the start, the longest such line unseen before the halt (as the 32-bit panel's): nothing moves at the halt
+    const haltLine = h('div', { class: 'cpu-halt', role: 'status' });
+    let haltShown = '';
 
     const sel = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
     for (const p of PROGS) sel.append(h('option', { value: p.id }, p.name));
@@ -121,7 +123,7 @@ function cpu64Panel(opts: Cpu64SceneOptions & { xlen: 32 | 64; m: boolean }, asm
       h('h4', null, name, h('span', { class: 'fold-hint' })),
       h('div', { class: 'cpu-body' },
         h('div', { class: 'param-row', style: 'margin-bottom:6px' }, sel, editBtn, runBtn),
-        slowCtl.el, editWrap, status, haltLine, now,
+        slowCtl.el, editWrap, status, holdHeight(h('div', { class: 'cpu-halt-slot' }, haltLine)), now,
         h('div', { class: 'cpu-sec' }, 'Program'), listing,
         h('div', { class: 'cpu-sec' }, 'Trace', h('span', { class: 'cpu-sec-hint' }, 'retired instructions, newest last')), trace,
         h('div', { class: 'cpu-sec' }, `Registers (${opts.xlen} bits)`), regs,
@@ -171,11 +173,20 @@ function cpu64Panel(opts: Cpu64SceneOptions & { xlen: 32 | 64; m: boolean }, asm
         h('span', null, `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}`),
         ...(stalled ? [h('span', { class: 'warn', title: 'The iterative divider is working; the PC and register writes wait' }, 'dividing… stalled')] : []),
         mismatch ? h('span', { class: 'bad' }, `✗ ${mismatch}`) : h('span', { class: 'good', title: 'Every register and the PC match the golden model after every instruction' }, '✓ matches golden model'),
-        ...(iss.halted ? [h('span', { class: 'warn' }, 'halted')] : []));
+        // always in the line, unseen until it applies (appearing at the halt it could wrap the line)
+        h('span', { class: 'warn', style: iss.halted ? null : 'visibility:hidden', 'aria-hidden': iss.halted ? null : 'true' }, 'halted'));
       const res = match?.result ? regNumber(match.result) : null;
-      haltLine.hidden = !iss.halted || !!mismatch;
-      if (iss.halted && !mismatch) haltLine.replaceChildren(`Halted after ${groupDigits(iss.steps)} instructions (${groupDigits(stage.cycles)} cycles)`,
-        res !== null && match ? h('span', null, ' · result ', h('b', null, `${match.result} = ${signed(iss.x[res])}`)) : '');
+      const real = iss.halted && !mismatch;
+      const steps = real ? iss.steps : 50000, cycles = real ? stage.cycles : 50000;
+      const val = real && res !== null ? signed(iss.x[res]) : '-9223372036854775808';
+      const hk = `${real}|${steps}|${cycles}|${match?.result}|${val}`;
+      if (hk !== haltShown) {
+        haltShown = hk;
+        haltLine.style.visibility = real ? '' : 'hidden';
+        haltLine.toggleAttribute('aria-hidden', !real);
+        haltLine.replaceChildren(`Halted after ${groupDigits(steps)} instructions (${groupDigits(cycles)} cycles)`,
+          res !== null && match ? h('span', null, ' · result ', h('b', null, `${match.result} = ${val}`)) : '');
+      }
       const pc = st.pc;
       const w = asm.words[Number(pc >> 2n)] ?? 0x13;
       now.replaceChildren(h('code', null, disasm(w, Number(pc & 0xffffffffn), undefined, opts.xlen)), h('span', { class: 'hexw' }, `0x${w.toString(16).padStart(8, '0')}`));

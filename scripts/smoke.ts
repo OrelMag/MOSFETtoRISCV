@@ -672,6 +672,11 @@ function routes(): Route[] {
     for (const v of [undefined, phone]) add(`#/c/network/${stepOf('Ping across the wire')}`, light, ` (running${v ? ', ' + v.name : ''})`, v, NET_DRIVE);
   }
   add(`#/campaign/play/${NODES.find((n) => n.kind === 'core')!.id}`, unlocked, ` (${phone.name})`, phone);
+  // A drill deep enough that the levels above the open one shrink to a few letters, with values in their pills (crumbvals.ts):
+  // an opened ferrite core of the core plane, dark (where a clipped pill showed as an empty coloured blob) and at 1280 px.
+  const mem = chapters.find((c) => c.id === 'memory');
+  const corePlane = mem?.steps.findIndex((st) => st.title === 'A core plane, wired') ?? -1;
+  if (corePlane >= 0) add(`#/c/memory/${corePlane}/p0/c12`, themed('dark'), ' (opened core, dark)');
   // The sandbox's toolbar at the common desktop widths too (CLIPPED: no label cut, nothing scrolled out of view).
   for (const width of [1440, 1920]) add('#/sandbox', light, ` (${width}px)`, { width, height: 900, mobile: false, name: `${width}px` });
   // The Examples gallery, opened from the toolbar (More on a phone), in both themes.
@@ -696,8 +701,8 @@ const OPTIONAL: [RegExp, string][] = [
   // The chip layout is published by the layout workflow and added to dist/ by CI's deploy job only;
   // widgets/chiplayout.ts shows a placeholder without it.
   [/\/layout\/[^/]+\.json(\?|$)/, 'layout assets'],
-  // Web fonts from a third party: the CSS falls back to system fonts, and an outage there must not block a deploy.
-  [/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, 'Google Fonts'],
+  // The web fonts (src/styles/fonts): the touch routes block them on purpose, and the CSS falls back to system fonts.
+  [/\.woff2(\?|$)/, 'web fonts'],
 ];
 const optional = (url: string) => OPTIONAL.some(([re]) => re.test(url));
 
@@ -968,6 +973,11 @@ const STAGE_BARS = `(() => {
     const R = bar.getBoundingClientRect().right;
     const cur = bar.querySelector('.crumbs > button:last-of-type');
     if (cur && !bar.classList.contains('stacked') && cur.scrollWidth > cur.clientWidth + 1) out.push('stage bar: the open level\\'s name cut: ' + cur.textContent.trim().slice(0, 32));
+    // a level's value pill clipped by its shrunk button reads as an empty blob (Stage.markSqueezed hides it instead)
+    for (const v of bar.querySelectorAll('.crumbs > button .val')) {
+      const b = v.closest('button'), vr = v.getBoundingClientRect(), br = b.getBoundingClientRect();
+      if (vr.width && (vr.right > br.right + 0.5 || vr.left < br.left - 0.5)) out.push('stage bar: a level value pill cut: ' + b.textContent.trim().slice(0, 32));
+    }
     // a row that scrolls sideways (a phone's pins: app.css .ctl-pins) keeps its buttons reachable
     const scrolls = (b) => { for (let e = b.parentElement; e && e !== bar; e = e.parentElement) if (/auto|scroll/.test(getComputedStyle(e).overflowX)) return true; return false; };
     for (const b of bar.querySelectorAll('button')) {
@@ -1085,7 +1095,7 @@ class Tab {
       await this.send('Emulation.setDeviceMetricsOverride', { width, height, mobile, deviceScaleFactor: mobile ? 2 : 1 });
       await this.send('Emulation.setTouchEmulationEnabled', { enabled: !!route.viewport.touch, maxTouchPoints: route.viewport.touch ? 5 : 1 });
       // the web font late or never (a slow network): the system fallback is the wider text the top bar must still fit
-      await this.send('Network.setBlockedURLs', { urls: route.viewport.touch ? ['*fonts.googleapis.com*', '*fonts.gstatic.com*'] : [] });
+      await this.send('Network.setBlockedURLs', { urls: route.viewport.touch ? ['*.woff2'] : [] });
       this.emulated = true;
     } else if (this.emulated) {
       await this.send('Emulation.clearDeviceMetricsOverride');

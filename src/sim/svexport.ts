@@ -46,6 +46,12 @@ function structureModules(root: ComponentDef): string[] {
       return;
     }
     const nl = netlistOf(d);
+    // a leaf that is its own element (a ferrite core): the body it gives for synthesis, as a module of its own
+    if (!nl && d.hdl?.synth) {
+      const ports = d.ports.map((p) => `  ${p.dir === 'in' ? 'input ' : 'output'} logic ${p.width > 1 ? `[${p.width - 1}:0] ` : ''}${p.name}`);
+      out.push(`module ${name} (\n${ports.join(',\n')}\n);\n${d.hdl.synth.join('\n')}\nendmodule`);
+      return;
+    }
     if (!nl) throw new Error(`${d.name} has no structure to export`);
     for (const i of nl.instances) {
       if (i.def.prim === 'alias' || isSwitchPrim(i.def) || isExternal(i.def)) continue; // written inline (verilog.ts)

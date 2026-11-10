@@ -22,6 +22,7 @@ import { ramInit, ramWithInit, romImage } from './memory';
 import { PORT_MAX_K, PORT_MAX_N, portMemory } from '../lib/portmem';
 import { ioRefDef } from './ioparts';
 import { readerRefDef } from './cardparts';
+import { babyRefDef } from './babypart';
 import { PUZZLE_MAX_WIDTH, puzzleIn, puzzleOut } from './puzzleparts';
 import { ROM_LEAF_K, romLevels, wordsHash } from '../lib/bigmem';
 import { cWindowRom } from '../lib/rvc';
@@ -88,6 +89,7 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
     return { error: 'puzzle port: in or out' };
   }
   if ('reader' in ref) return readerRefDef(ref.reader);
+  if ('baby' in ref) return babyRefDef(ref.baby.src);
   const io = ioRefDef(ref);
   if (io) return io;
   if ('ram' in ref) {
@@ -358,7 +360,7 @@ function ropeLook(d: ComponentDef, words: number[], w: number): ComponentDef {
 function romPartPlain(r: RomRef): PartResult {
   const { k, w, addr, lang, src } = r;
   if (!Number.isInteger(k) || k < 1 || k > MAX_ROM_K) return { error: `ROM: 2^k words with k = 1–${MAX_ROM_K}` };
-  if (w !== 8 && w !== 16 && w !== 24 && w !== 32) return { error: 'ROM: word width must be 8, 16, 24 or 32' };
+  if (w !== 8 && w !== 12 && w !== 16 && w !== 24 && w !== 32) return { error: 'ROM: word width must be 8, 12, 16, 24 or 32' };
   if (addr !== 'word' && addr !== 'rv32') return { error: `ROM: unknown addressing '${String(addr)}'` };
   if (addr === 'rv32' && w !== 32) return { error: 'ROM: byte addressing (rv32) needs 32-bit words' };
   if (lang !== 'asm' && lang !== 'hex' && lang !== 'rv16' && lang !== 'cpu4' && lang !== 'dsp24' && lang !== 'isa' && lang !== '6502') return { error: `ROM: unknown language '${String(lang)}'` };
@@ -394,7 +396,7 @@ function fnv(words: number[]): string {
  * Built here, not with rom() / constWord(), because those register every program's words in
  * the library registry for good.
  */
-export function wordRom(k: number, w: 8 | 16 | 24 | 32, addr: 'word' | 'rv32', words: number[]): ComponentDef {
+export function wordRom(k: number, w: 8 | 12 | 16 | 24 | 32, addr: 'word' | 'rv32', words: number[]): ComponentDef {
   const N = 2 ** k;
   const fill = addr === 'rv32' ? 0x00000013 : 0;
   const content = Uint32Array.from({ length: N }, (_, i) => (words[i] ?? fill) >>> 0);
@@ -417,7 +419,7 @@ export function wordRom(k: number, w: 8 | 16 | 24 | 32, addr: 'word' | 'rv32', w
 }
 
 /** A ROM of 2^k ≤ 2^8 words as one mux tree of constants (uncached: wordRom's, and a large ROM's banks). */
-function romTree(k: number, w: 8 | 16 | 24 | 32, rv: boolean, content: number[]): ComponentDef {
+function romTree(k: number, w: 8 | 12 | 16 | 24 | 32, rv: boolean, content: number[]): ComponentDef {
   const N = 2 ** k;
   const M = muxTree(k, w, 4);
   const mg = symbolGeom(M);
@@ -438,7 +440,7 @@ function romTree(k: number, w: 8 | 16 | 24 | 32, rv: boolean, content: number[])
     });
     return { pins: { addr: [0, mg.h + 7] as [number, number], data: [16 + mg.w + 6, mg.ports.y.pos[1]] as [number, number] }, instances, nets };
   };
-  const hex = (v: number) => `0x${v.toString(16).padStart(w / 4, '0')}`;
+  const hex = (v: number) => `0x${v.toString(16).padStart(Math.ceil(w / 4), '0')}`;
   return {
     id: `sb_rom${k}x${w}${rv ? 'b' : ''}_${fnv(content)}`, name: `ROM ${N}×${w}`, category: 'memory',
     summary: `${N} words of ${w} bits, read-only: a ${N}:1 multiplexer tree whose inputs are tied to constants.`
