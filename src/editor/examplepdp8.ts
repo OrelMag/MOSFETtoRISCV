@@ -35,7 +35,7 @@ export const PDP8G_KEYS: [port: string, pin: string][] = [
 ];
 
 /**
- * Examples ▸ PDP-8 in gates: lib/pdp8.ts's processor (4 579 NANDs, one clock edge per major state) as a part, a 4096 × 12 RAM
+ * Examples ▸ PDP-8 in gates: lib/pdp8.ts's processor (one clock edge per major state) as a part, a 4096 × 12 RAM
  * standing in for the core and holding Hello, world, the console teletype (a console part prints, a keyboard part types),
  * and the front panel: the switch register and the seven keys as the chip's pins (a key acts once when it goes to 1).
  * Every connection is a pointer pair, named for the signal.

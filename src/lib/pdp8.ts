@@ -357,7 +357,8 @@ export const PDP8_CONTROL: ComponentDef = (() => {
   // A key acts at the first edge it is down (DEC's were momentary): held, it does nothing more.
   const KEYS = ['ld', 'dep', 'exam', 'start', 'cont', 'stop', 'sstep'];
   const prev = bitsOf(b, b.op1(register(7), [b.op1(merger(ones(7)), KEYS, 'keys'), one, 'clk'], 'keys at the last edge', 'keyq'), 7, 'keys');
-  const pressed = Object.fromEntries(KEYS.map((k, n) => [k, b.name(b.op1(AND, [k, b.op1(NOT, [prev[n]])], `${k} pressed`), `p_${k}`, true)]));
+  // STOP acts on its level (at any edge, held or not): no edge detector for it
+  const pressed = Object.fromEntries(KEYS.flatMap((k, n) => (k === 'stop' ? [] : [[k, b.name(b.op1(AND, [k, b.op1(NOT, [prev[n]])], `${k} pressed`), `p_${k}`, true)]])));
   const wf = b.op(splitter([7, 1, 1, 3]), ['dout'], 'fields');
   const ind = b.name(`${wf}.o2`, 'ind', true), wop = b.name(`${wf}.o3`, 'wop', true);
   const st = b.op(register(2), ['', one, 'clk'], 'major state', 'st');
