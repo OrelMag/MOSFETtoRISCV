@@ -1,0 +1,15 @@
+/* The vector unit's view (widgets/vecview.ts): the Vectors chapter's Vector panel and the sandbox CPU drawer's Vector unit section.
+   Lanes take --series-1 … --series-4, as in the lanes chapter. */
+.vp-kpi { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.vp-kpi > div { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; min-width: 0; }
+.vp-kpi b { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vp-kpi span { font-size: 11px; color: var(--muted); }
+.vp-regs { display: grid; grid-template-columns: 30px repeat(4, minmax(0, 1fr)); gap: 2px 4px; font: 11.5px var(--mono, ui-monospace, monospace); max-height: 300px; overflow-y: auto; }
+.vp-n { color: var(--muted); }
+.vp-h { color: #fff; border-radius: 3px; text-align: center; font-size: 10.5px; }
+.vp-h.l0 { background: var(--series-1); }
+.vp-h.l1 { background: var(--series-2); }
+.vp-h.l2 { background: var(--series-3); }
+.vp-h.l3 { background: var(--series-4); }
+.vp-w { text-align: right; overflow: hidden; text-overflow: ellipsis; }
+.vec-panel .sub, .sb-vec .sub { font-size: 12px; color: var(--muted); margin: 8px 0 0; }

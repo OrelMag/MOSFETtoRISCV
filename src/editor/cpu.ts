@@ -21,7 +21,8 @@ import type { CustomRow } from '../riscv/custom';
 import { PUZZLE_NO_GOLDEN, simHasPuzzlePorts } from './puzzleparts';
 import { CARDS_NO_GOLDEN, simHasCardReader } from './cardparts';
 import { consoleAppend, consoleInit, type ConsoleState, consoleText, ioNodes, ioState, type SwitchState } from './ioparts';
-import { cacheLines } from '../riscv/cosim';
+import { cacheLines, dmemWords, vectorState } from '../riscv/cosim';
+import { isVectorWord } from '../riscv/rvv';
 import { ABI, FABI } from '../riscv/isa';
 import { ISS, type IssOptions } from '../riscv/iss';
 import { stepEffect } from '../riscv/trace';
@@ -53,6 +54,8 @@ export interface CpuIss {
   c?: boolean;
   /** The MAC core (a `macu` part of lib/macunit.ts): mac, mac2, clracc and racc are legal, and the accumulator is compared. Found, never a setting. */
   mac?: boolean;
+  /** The vector unit (rv32iv_core: chapter vectors' subset at VLEN 128): the model runs RVV, and v0–v31 and vl are compared. Found, never a setting. */
+  v?: { vlen: 128; gates: true };
 }
 
 /** ChipDoc.cpu: the user's settings; every field left out is detected. */
@@ -84,6 +87,8 @@ export interface CpuDesc extends CpuDoc {
   core?: string;
   /** The part with an `acc` output (the MAC core's unit); detected only. */
   acc?: string;
+  /** The vector core (rv32iv_core) at the top level: its unit is '<vcore>.vu'; detected only. */
+  vcore?: string;
   /** Which fields were detected rather than set by the user. */
   auto: Set<keyof CpuDoc>;
 }
@@ -192,12 +197,14 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const fcsr = partNamed(doc, 'fcsr');
   const mmio = !system && hasIoParts(doc, chips);
   const macu = doc.parts.find((p) => p.id === 'macu' && 'lib' in p.ref && p.ref.lib === 'macunit');
+  // rv32iv_core keeps its banked data memory and the vector unit inside the part
+  const vec = !!core && 'lib' in core.ref && core.ref.lib === 'rv32iv_core';
   const c = (core && 'lib' in core.ref && core.ref.lib === 'rv32ic_core') || !!(partAt(doc, rom, chips)?.part.ref as { rom?: { c?: boolean } } | undefined)?.rom?.c;
   return {
-    rom, pc, auto, iss: { ...(c ? { c } : {}), ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}), ...(macu ? { mac: true } : {}) },
-    ...(macu ? { acc: macu.id } : {}),
-    ...(regsPath ? { regs: regsPath } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : inner.length === 1 ? { dmem: inner[0] } : {}),
-    ...(retire ? { retire: { pin: retire.id } } : pipeCore ? { retire: { part: core!.id, port: 'retire' } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
+    rom, pc, auto, iss: { ...(vec ? { v: { vlen: 128, gates: true } as const } : {}), ...(c ? { c } : {}), ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}), ...(macu ? { mac: true } : {}) },
+    ...(macu ? { acc: macu.id } : {}), ...(vec ? { vcore: core!.id } : {}),
+    ...(regsPath ? { regs: regsPath } : {}), ...(fregs ? { fregs: fregs.id } : {}), ...(dmem ? { dmem: dmem.id } : vec ? { dmem: `${core!.id}.dm` } : inner.length === 1 ? { dmem: inner[0] } : {}),
+    ...(retire ? { retire: { pin: retire.id } } : pipeCore || vec ? { retire: { part: core!.id, port: 'retire' } } : {}), ...(pipeline ? { pipeline } : {}), ...(fcsr ? { fcsr: fcsr.id } : {}),
     ...(core && portCoreOf(core.ref) ? { core: core.id } : {}),
   };
 }
@@ -221,7 +228,7 @@ export function resolveCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   if (set.rom && !set.pc && det && 'part' in det.pc! && det.pc.port === 'addr') out.pc = { part: romId.split('.')[0], port: 'addr' };
   for (const k of ['regs', 'fregs', 'dmem'] as const) if (out[k] === '') delete out[k];
   // The core's custom rows follow the hardware, whatever the settings say about the rest.
-  out.iss = { ...out.iss, ...(det?.iss.custom ? { custom: det.iss.custom } : {}), ...(det?.iss.c ? { c: true } : {}), ...(det?.iss.mac ? { mac: true } : {}) };
+  out.iss = { ...out.iss, ...(det?.iss.custom ? { custom: det.iss.custom } : {}), ...(det?.iss.c ? { c: true } : {}), ...(det?.iss.mac ? { mac: true } : {}), ...(det?.iss.v ? { v: det.iss.v } : {}) };
   if (det?.acc) out.acc = det.acc;
   return out;
 }
@@ -375,6 +382,8 @@ export function readMem(sim: Sim, part: string | undefined): number[] | null {
   const leaf = ramLeafState(sim, n);
   if (leaf) return ramWords(leaf);
   if (!n?.expanded) return null;
+  // the vector CPU's four word-interleaved banks (lib/vector.ts vecMemory)
+  if (n.children?.has('wb0')) return dmemWords(sim, n);
   let words: number[] | null = null;
   const banks = [0, 1, 2, 3].map((i) => storageOf(n.children?.get(`b${i}`), 1));
   if (banks.every((b) => b)) {
@@ -733,17 +742,18 @@ export class CpuMonitor {
     const step = () => {
       const before = d.pipeline ? null : [...iss.x];
       const i = iss.step();
-      if (before) this.narr = narrateInstr(before, i);
+      // narrate.ts tells scalar instructions only: a vector one leaves the last story up
+      if (before && !(d.iss.v && isVectorWord(i.word))) this.narr = narrateInstr(before, i);
       return i;
     };
-    let info = step(), stored = !!info.store && !(iss.io && info.store.addr >= 0x80000000);
+    let info = step(), stored = (!!info.store && !(iss.io && info.store.addr >= 0x80000000)) || !!info.vstores?.length;
     for (let k = 0; ; ) {
       this.retired++;
       this.log.push({ cycle: this.es.cycles, pc: info.pc, text: info.text, effect: stepEffect(info) });
       if (this.log.length > CpuMonitor.LOG) this.log.shift();
       if (++k >= n || iss.halted) break;
       info = step();
-      stored ||= !!info.store && !(iss.io && info.store.addr >= 0x80000000);
+      stored ||= (!!info.store && !(iss.io && info.store.addr >= 0x80000000)) || !!info.vstores?.length;
     }
     this.seq++;
     if (this.mismatch) return;
@@ -766,6 +776,15 @@ export class CpuMonitor {
     if (fc !== null && fc !== ((iss.frm << 5) | iss.fflags)) return void at('fcsr', 'fcsr', (iss.frm << 5) | iss.fflags, fc);
     const acc = readAcc(sim, d.acc);
     if (acc !== null && iss.mac && acc !== iss.acc) return void at('acc', 'acc', Number(BigInt.asUintN(32, iss.acc)), Number(BigInt.asUintN(32, acc)), `acc: expected 0x${accHex(iss.acc)}, got 0x${accHex(acc)} (40 bits)`);
+    const vu = d.iss.v && d.vcore ? partNode(sim, `${d.vcore}.vu`) : undefined;
+    if (vu?.expanded) {
+      const hw = vectorState(sim, vu);
+      if (hw.vl !== iss.vl) return void at('vl', 'vl', iss.vl, hw.vl);
+      for (let r = 0; r < 32; r++) for (let e = 0; e < 4; e++) {
+        const w = (b: ArrayLike<number>) => (b[16 * r + 4 * e] | (b[16 * r + 4 * e + 1] << 8) | (b[16 * r + 4 * e + 2] << 16) | (b[16 * r + 4 * e + 3] << 24)) >>> 0;
+        if (w(hw.v) !== w(iss.vregs)) return void at(`v${r}`, `v${r}[${e}]`, w(iss.vregs), w(hw.v), `v${r} element ${e} (lane ${e})`);
+      }
+    }
     if (!d.pipeline && d.pc) {
       const pc = refValue(this.es, doc, d.pc);
       if (pc !== null && pc !== iss.pc >>> 0) return void at('pc', 'PC', iss.pc, pc);

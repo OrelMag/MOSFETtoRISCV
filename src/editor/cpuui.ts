@@ -59,6 +59,7 @@ import { addBreak, breakpointsOf } from './breakui';
 import { retireFollower } from './breakpoints';
 import '../styles/cpu-bp.css';
 import { type EdgeHook, type EditorSim, FrameBudget } from './runtime';
+import { vecView } from '../widgets/vecview';
 
 /** Cycles Run to halt gives a program before it stops on its own. */
 const RUN_CAP = 20000;
@@ -175,6 +176,9 @@ class CpuPanel {
   private csrs = h('div', { class: 'cpu-mem' });
   private regsSec = h('div', { class: 'cpu-sec' }, 'Registers');
   private regs = h('div', { class: 'cpu-regs' });
+  /** The vector core's unit (rv32iv_core): vl, vtype, the beat and v0–v31 by lane, the view the Vectors chapter's panel shows (widgets/vecview.ts). */
+  private vecSec = h('div', { class: 'cpu-sec' }, 'Vector unit', h('span', { class: 'cpu-sec-hint' }, 'read from the gates, a column per lane'));
+  private vec = h('div', { class: 'sb-vec' });
   private fregsSec = h('div', { class: 'cpu-sec' }, 'Floating-point registers (non-zero)');
   private fregs = h('div', { class: 'cpu-mem' });
   private memSec = h('div', { class: 'cpu-sec' });
@@ -231,6 +235,7 @@ class CpuPanel {
       this.oooSec, this.oooV.el,
       this.ioSec, this.io,
       this.regsSec, this.regs,
+      this.vecSec, this.vec,
       this.fregsSec, this.fregs,
       this.memSec, this.mem,
       this.narrSec, this.narr,
@@ -567,6 +572,7 @@ class CpuPanel {
     // Only an RV32 monitor on an out-of-order core shows it (renderOoo): never the 4-bit CPU, the 6502, RV16, lanes.
     this.oooSec.hidden = this.oooV.el.hidden = true;
     this.dsp.hidden = !(mon instanceof Dsp24Monitor);
+    this.vecSec.hidden = this.vec.hidden = true; // until renderVec finds a vector core
     if (mon instanceof Rv64Monitor) return this.renderRv64(mon);
     if (mon instanceof SapMonitor) return this.renderSap(mon);
     if (mon instanceof MultiMonitor) return this.renderMulti(mon);
@@ -584,9 +590,20 @@ class CpuPanel {
     this.renderOoo(mon);
     this.renderIo(mon);
     this.renderRegs(mon, r);
+    this.renderVec(d);
     this.renderMem(d, r);
     this.renderTrace(mon);
     this.computeMarks();
+  }
+
+  private renderVec(d: CpuDesc): void {
+    const sim = this.ed.sim.sim;
+    const vu = d.iss.v && d.vcore && sim ? partNode(sim, `${d.vcore}.vu`) : undefined;
+    this.vecSec.hidden = this.vec.hidden = !vu;
+    if (!vu || !sim) return;
+    if (!vu.expanded) { keyed(this.vec, 'flat', () => [h('div', { class: 'sb-sum' }, 'The vector unit is one behavioural block in this simulation: nothing to read.')]); return; }
+    const v = vecView(sim, vu);
+    keyed(this.vec, v.key, () => v.nodes);
   }
 
   private renderButtons(mon: Mon): void {

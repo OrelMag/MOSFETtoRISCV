@@ -2,10 +2,12 @@
 // extension (rv32ic_core: the C expander inside, PC + 2 after a 16-bit instruction) over a ROM that answers at any
 // even address (the ROM part with its C box ticked), a 64-word RAM and a console. The RV64 computer is the 64-bit core
 // (rv64im_core: 64-bit registers, ALU and PC, its data memory inside) under a plain program ROM and a console.
-// Both end on `j .`, which the halt part watches for; the CPU drawer follows them in lock step.
+// The RVV computer is chapter vectors' CPU with its program on a port (rv32iv_core: the vector unit and a banked data
+// memory inside). All end on `j .`, which the halt part watches for; the CPU drawer follows them in lock step.
 
 import type { ChipDoc } from './model';
 import { Sheet } from './example6502';
+import { vectorSaxpy } from '../riscv/vecprograms';
 
 export const C_RAM_K = 6;
 
@@ -112,4 +114,27 @@ export function rv64Chip(id: string, name: string, src = RV64_SOURCE): ChipDoc {
   s.part('halt', { display: 'halt', width: 1 }, [16, 21]);
   s.wire('hj.y', 'eq.a'); s.tap('eq.b', 'run'); s.wire('eq.eq', 'halt.a');
   return s.doc(id, name, { notes: NOTES_RV64 });
+}
+
+/** Examples ▸ RVV: chapter vectors' kernel, y = 3·x + y on 16 elements at m4 (x at word 0, y at word 16). */
+export const RVV_SOURCE = vectorSaxpy(4);
+
+export const NOTES_RVV = 'The vector core in the sandbox. rv32iv_core is chapter vectors\' CPU with its program on a port: the single-cycle RV32I core, the vector unit (four lanes, VLEN 128, '
+  + 'e32 at LMUL 1 to 8) and a data memory of 64 words in four word-interleaved banks, all inside the part. A vector instruction holds the PC for one beat per register of its group (retire = 0 meanwhile). '
+  + 'The CPU drawer runs the golden model with RVV in lock step and compares v0–v31 and vl as well as the scalar registers; its Vector unit section shows vl, vtype, the beat and the registers by lane. The halt part stops Run at `j .`.';
+
+/** The sandbox's vector computer: rv32iv_core and its program ROM. */
+export function rvvChip(id: string, name: string, src = RVV_SOURCE): ChipDoc {
+  const s = new Sheet();
+  s.pin('clk', 'in', [2, 2], 1, { kind: 'clock' });
+  s.tap('pin:clk', 'clk');
+  s.part('imem', { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src } }, [6, 5], { label: 'program' });
+  s.tap('imem.addr', 'pc'); s.tap('imem.data', 'instr');
+  s.part('cpu', { lib: 'rv32iv_core' }, [30, 6], { label: 'RV32I + vector core' });
+  s.tap('cpu.clk', 'clk'); s.tap('cpu.instr', 'instr'); s.tap('cpu.pcOut', 'pc'); s.tap('cpu.instrOut', 'run');
+  s.part('hj', { const: { width: 32, value: 0x6f } }, [2, 20], { label: 'j .' });
+  s.part('eq', { lib: 'eq32' }, [10, 19]);
+  s.part('halt', { display: 'halt', width: 1 }, [16, 21]);
+  s.wire('hj.y', 'eq.a'); s.tap('eq.b', 'run'); s.wire('eq.eq', 'halt.a');
+  return s.doc(id, name, { notes: NOTES_RVV });
 }

@@ -667,8 +667,8 @@ export function singleCycleCpu(program: number[], opts: CpuOptions = {}): Compon
 }
 
 function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: boolean | 'wb' | 'wb2' = false, fpu = false, shared = false, imemPort = false, icache = false, imemK = 6, dram?: DramConfig, custom: readonly CustomRow[] = [], c = false, mac = false, gated = false, vector = false): ComponentDef {
-  if (vector && (c || dcache || icache || fpu || shared || mac || custom.length)) throw new Error('singleCycleCpu: vector with a cache, the FPU, a shared memory, the C extension, the MAC or custom rows is not supported');
   if (gated && (dcache || shared || vector)) throw new Error('singleCycleCpu: gatedClocks needs the plain data memory');
+  if (vector && (c || dcache || icache || fpu || shared || mac || custom.length)) throw new Error('singleCycleCpu: vector with a cache, the FPU, a shared memory, the C extension, the MAC or custom rows is not supported');
   if (mac && (c || dcache || icache || fpu || shared)) throw new Error('singleCycleCpu: mac with a cache, the FPU, a shared memory or the C extension is not supported');
   if (mac && custom.some((r) => r.slot === 2)) throw new Error('singleCycleCpu: custom-2 is the MAC\'s: a custom row may use custom-1 or custom-3');
   if (c && (dcache || icache || fpu || (shared && !imemPort))) throw new Error('singleCycleCpu: c with a cache, the FPU or a shared memory is not supported');
@@ -1098,12 +1098,13 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     const tagged = (n: NetDef, ...ends: string[]) => { n.ends.push(...ends); if (Array.isArray(n.tags)) n.tags.push(...ends); else if (!n.tags) n.tags = ends; };
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     nets.splice(nets.indexOf(net('en')), 1);
-    add('vu', VECTOR_UNIT, [8, bottom + 10], 'vector unit');
+    add('vu', VECTOR_UNIT, [aluR - 6, bottom + 6], 'vector unit');
     add('xw', M2, [resY[0] + 6, resY[1] - 6], 'result / vector');
     add('rwo', OR, [56, bottom - 2]);
-    tagged(net('Instr'), 'vu.instr');
-    tagged(net('rd1'), 'vu.xa', 'dm.vBase');
-    tagged(net('WriteData'), 'vu.xb');
+    net('Instr').ends.push('vu.instr');
+    net('rd1').ends.push('vu.xa');
+    tagged(net('rd1'), 'dm.vBase');
+    net('WriteData').ends.push('vu.xb');
     tagged(net('clk'), 'vu.clk');
     const res = net('Result');
     res.ends = ['res.y', 'xw.a'];
@@ -1114,15 +1115,27 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       { name: 'VXData', ends: ['vu.xData', 'xw.b'], tags: true },
       { name: 'VXWrite', ends: ['vu.xWe', 'xw.s', 'rwo.b'], tags: true },
       { name: 'XRegWrite', ends: ['rwo.y', 'rf.we'], tags: true },
-      { name: 'retire', ends: ['vu.retire', 'pc.en', 'retire'], tags: true },
-      { name: 'vAct', ends: ['vu.vAct', 'dm.vAct'], tags: true },
-      { name: 'vBeat', ends: ['vu.vBeat', 'dm.vBeat'], tags: true },
-      { name: 'vWe', ends: ['vu.vWe', 'dm.vWe'], tags: true },
-      { name: 'vWd', ends: ['vu.vWd', 'dm.vWd'], tags: true },
-      { name: 'vRd', ends: ['dm.vRd', 'vu.vRd'], tags: true },
+      // retire runs on a row of its own under the clock, in a column right of the bank wires, to the PC's enable and the pin
+      { name: 'retire', ends: ['vu.retire', 'pc.en', 'retire'], via: { retire: [[aluR + 17, bottom + 16], [aluR + 17, bottom + 3]], 'pc.en': [[aluR + 17, bottom + 16], [aluR + 17, bottom + 3], [9, bottom + 3], [9, P('pc', 'en')[1]]] } },
+      { name: 'vAct', ends: ['vu.vAct', 'dm.vAct'] },
+      { name: 'vBeat', ends: ['vu.vBeat', 'dm.vBeat'] },
+      { name: 'vWe', ends: ['vu.vWe', 'dm.vWe'] },
+      { name: 'vWd', ends: ['vu.vWd', 'dm.vWd'] },
+      { name: 'vRd', ends: ['dm.vRd', 'vu.vRd'], via: { 'vu.vRd': [[P('dm', 'vRd')[0], bottom + 24], [aluR + 4, bottom + 24]] } },
     );
-    pins.retire = [resY[0] + 22, bottom + 1];
+    pins.retire = [resY[0] + 22, bottom + 3];
     extraPorts.push(bit('retire', 'out'));
+    if (imemPort) {
+      // the sandbox's rv32iv_core: the program comes from a ROM part on instr (pcOut its byte address); the banked data memory stays inside
+      instances.splice(instances.findIndex((i) => i.name === 'imem'), 1);
+      const pcn = net('PC');
+      pcn.ends = pcn.ends.filter((e) => e !== 'imem.addr');
+      if (Array.isArray(pcn.tags)) pcn.tags = pcn.tags.filter((e) => e !== 'imem.addr');
+      const ins = net('Instr');
+      ins.ends = ['instr', ...ins.ends.filter((e) => e !== 'imem.data')];
+      pins.instr = [P('imem', 'data')[0] - 1, P('imem', 'data')[1]];
+      extraPorts.push(bus('instr', 32, 'in'));
+    }
   }
   if (shared) {
     // ---- a core of the multi-core: memory goes through ports; atomics; hart id
@@ -1244,14 +1257,14 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   }
   for (const n of nets) if (n.via) for (const k of Object.keys(n.via)) if (!n.ends.includes(k)) delete n.via[k];
   return {
-    id: imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : c ? 'rv32ic_core' : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : '') + (mac ? '_mac' : '') + (vector ? '_v' : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''}${c ? 'C' : ''}${mac ? ' + MAC' : ''}${vector ? ' + vector unit' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
+    id: imemPort && vector ? 'rv32iv_core' : imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : c ? 'rv32ic_core' : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : '') + (mac ? '_mac' : '') + (vector ? '_v' : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''}${c ? 'C' : ''}${mac ? ' + MAC' : ''}${vector ? ' + vector unit' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
     summary: dcache === 'wb' || dcache === 'wb2'
       ? `The single-cycle processor with its data memory behind a ${dcache === 'wb2' ? '2-way set-associative' : 'direct-mapped'} write-back cache. Loads and stores that miss hold the PC and the register write (retire = 0): ${dram ? `as long as the DRAM controller takes for the line (${dram.banks} banks, ${dram.policy} page): 8 cycles on a row hit, 12 on a closed bank, 16 on another open row, plus a write-back of a dirty victim first` : '8 cycles, or 12 when a dirty line must be written back first'}.`
       : dcache
       ? 'The single-cycle processor with its data memory replaced by a slow main memory behind a 64-byte direct-mapped cache. A load that misses holds the PC and the register write (retire = 0) for 8 cycles while the line is fetched.'
       : 'A complete RISC-V processor: every instruction is fetched, decoded, executed and retired in one clock cycle. Built entirely from the blocks of the previous chapters.',
     ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out'), ...(mac ? [bus('accOut', 40, 'out')] : []), ...(dcache || icache ? [bit('retire', 'out')] : []), ...(dcache ? [bit('dhit', 'out')] : []), ...(icache ? [bit('ihit', 'out')] : []), ...(fpu ? [bit('retire', 'out')] : []), ...extraPorts],
-    symbol: { kind: 'box', label: shared ? 'CORE' : dcache ? 'RV32I + D$' : 'RV32I' },
+    symbol: { kind: 'box', label: shared ? 'CORE' : dcache ? 'RV32I + D$' : vector ? 'RV32I + V' : 'RV32I' },
     netlist: () => ({ pins, instances, nets }),
     hdl: { verilog: CPU_VERILOG },
   };
