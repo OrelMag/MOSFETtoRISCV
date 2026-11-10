@@ -34,6 +34,8 @@ export function openCustomInstructions(ed: Editor, after?: () => void): void {
     if (detectRv16(ed.doc, ed.ws.chips)) return void ed.toast('Custom instructions on RV16 need the reference core (rv16_cpu, as in Examples ▸ RV16: Pong) or its pipeline (rv16_pipe_111), on a chip of your own: not a level’s or a puzzle’s, which are graded on the core as it is', 'err');
   }
   if (!desc || !core) return void ed.toast('Custom instructions need a placed RV32I core (single-cycle or pipelined) with a program ROM (as in Examples ▸ Computer)', 'err');
+  // a custom row is a { core } part, which has no C expander: refused on the C cores rather than dropping the extension
+  if ('lib' in core.ref && (core.ref.lib === 'rv32ic_core' || portCoreOf(core.ref)?.c)) return void ed.toast('Custom instructions need an RV32I core without the C extension (rv32i_core or a pipelined core without C)', 'err');
   open?.remove();
   // the pipelined port core takes rows the same way (its control unit is the same CONTROL, in D)
   const kind = portCoreOf(core.ref) ?? { pipe: false, m: false, dcache: false, custom: [] };

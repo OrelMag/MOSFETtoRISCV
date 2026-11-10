@@ -901,6 +901,42 @@
    ]
   },
   {
+   "id": "pipe-c",
+   "name": "Pipelined RV32IC",
+   "nands": 82253,
+   "period": 145,
+   "runs": [
+    {
+     "bench": "fib",
+     "instructions": 4881,
+     "cycles": 7675,
+     "switched": 580303052,
+     "functional": 527646236
+    },
+    {
+     "bench": "sort",
+     "instructions": 2108,
+     "cycles": 3110,
+     "switched": 262387114,
+     "functional": 226334357
+    },
+    {
+     "bench": "matmul",
+     "instructions": 2353,
+     "cycles": 3241,
+     "switched": 241821728,
+     "functional": 220120060
+    },
+    {
+     "bench": "crc",
+     "instructions": 3049,
+     "cycles": 4637,
+     "switched": 392660654,
+     "functional": 327290590
+    }
+   ]
+  },
+  {
    "id": "pipe-2w",
    "name": "Dual-issue pipelined RV32IM",
    "nands": 193768,

@@ -199,7 +199,7 @@ export function detectCpu(doc: ChipDoc, chips?: Chips): CpuDesc | null {
   const macu = doc.parts.find((p) => p.id === 'macu' && 'lib' in p.ref && p.ref.lib === 'macunit');
   // rv32iv_core keeps its banked data memory and the vector unit inside the part
   const vec = !!core && 'lib' in core.ref && core.ref.lib === 'rv32iv_core';
-  const c = (core && 'lib' in core.ref && core.ref.lib === 'rv32ic_core') || !!(partAt(doc, rom, chips)?.part.ref as { rom?: { c?: boolean } } | undefined)?.rom?.c;
+  const c = (core && 'lib' in core.ref && core.ref.lib === 'rv32ic_core') || !!(core && portCoreOf(core.ref)?.c) || !!(partAt(doc, rom, chips)?.part.ref as { rom?: { c?: boolean } } | undefined)?.rom?.c;
   return {
     rom, pc, auto, iss: { ...(vec ? { v: { vlen: 128, gates: true } as const } : {}), ...(c ? { c } : {}), ...(system ? { system } : {}), ...(mmio ? { mmio } : {}), ...(system && retire ? { m: true } : {}), ...(system && fregs ? { f: true } : {}), ...(custom?.length ? { custom } : {}), ...(macu ? { mac: true } : {}) },
     ...(macu ? { acc: macu.id } : {}), ...(vec ? { vcore: core!.id } : {}),

@@ -235,7 +235,9 @@ export const chWidths: Chapter = {
         and the next above it, and <span data-show="cx">the expander</span> does the rest. Its <code>c</code> output tells the PC to step by 2 instead of 4.</p>
         <p>The program here starts with a 16-bit <code>c.li</code> at 0x000, so its 32-bit <code>lui</code> sits at 0x002–0x005.</p>
         <p>The cost of this is ${K.fetch} NANDs (the increment and the swaps) in series in front of the expander, and a new class of event: an instruction that crosses a word,
-        and in a real memory system a cache line or a page. The sequence below walks the program's addresses through it.</p>
+        and in a real memory system a cache line or a page. The sequence below walks the program's addresses through it.
+        The pipelined CPU takes C with this same unit in its fetch stage: the expanded instruction is what enters decode and PC + 2 rides along as the link value,
+        so the hazard unit and the forwarding paths do not change.</p>
         <p class="try">Set addr to 2: both banks light up for one instruction.</p>`,
       scene: () => ({ root: cFetch(straddle, 6), inputs: { addr: 0 } }),
       tour: {

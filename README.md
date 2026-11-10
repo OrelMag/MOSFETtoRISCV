@@ -310,7 +310,7 @@ false paths included, and in unit against load-dependent delay, where a prefix t
 being free);
 array, Wallace-tree and Booth multipliers; restoring, non-restoring and SRT dividers; single-cycle,
 multicycle (hardwired and microcoded), pipelined, dual-issue and out-of-order CPUs on clock period ×
-CPI. The workbench's Benchmarks tab runs one program set on all <!--n:cpus-->28<!--/n--> gate-level CPUs (cycles, period,
+CPI. The workbench's Benchmarks tab runs one program set on all <!--n:cpus-->29<!--/n--> gate-level CPUs (cycles, period,
 time, NANDs, misses, energy), and dynamic power is estimated from the circuit too: the gate simulator
 counts every net's toggles, glitches included, so the inspector splits a part's energy among its
 blocks and the CPU panel shows the energy per instruction as the program runs. Every component can
@@ -328,7 +328,7 @@ also be priced in relays and tubes.
 - **Components**: every combinational component carries a specification and is tested against its
   structure, exhaustively up to 12 input bits and on random vectors above; behavioural models
   (used to keep large designs fast) are proven equal to the structure they stand for.
-- **CPUs**: each of the <!--n:cpus-->28<!--/n--> (single-cycle, multicycle, pipelined, dual-issue, out-of-order, with caches
+- **CPUs**: each of the <!--n:cpus-->29<!--/n--> (single-cycle, multicycle, pipelined, dual-issue, out-of-order, with caches
   and a DRAM controller, system, M, F, C, dual-core) is co-simulated against the instruction-set
   simulator in `src/riscv/`, which steps in lock-step and compares registers, PC and memory at every
   retirement. Independently of that model, every RV32 CPU passes the official
