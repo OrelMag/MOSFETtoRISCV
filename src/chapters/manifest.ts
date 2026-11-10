@@ -1066,4 +1066,15 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Score: from digit to pixels", challenge: "quiz" },
     { title: "What a CPU buys", challenge: "quiz" },
   ] },
+  { id: "appendix-baby", num: 94, title: "The Manchester Baby, 1948", blurb: "The first machine to run a program from read-write electronic memory, in gates: 32 words on a cathode-ray tube that forgets within a fifth of a second unless it is rewritten, seven instructions, and Kilburn's first program run to the end.", level: "Valves, 1948", appendix: "E", builds: ["registers","memory","cpu","multicycle","dram"], recap: {"checks":3}, steps: [
+    { title: "Meet the Baby" },
+    { title: "A bit is a charge" },
+    { title: "Regeneration" },
+    { title: "Words, numbers, instructions", challenge: "quiz" },
+    { title: "Seven instructions", challenge: "quiz" },
+    { title: "Four beats" },
+    { title: "The machine in gates" },
+    { title: "Kilburn's program", challenge: "quiz" },
+    { title: "What 1948 bought" },
+  ] },
 ];

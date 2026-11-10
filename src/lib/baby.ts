@@ -21,6 +21,7 @@ import { addSub, busMux2, decoder, rca } from './combinational';
 import { define, splitter } from './define';
 import { AND, NOT, OR } from './gates';
 import { laid } from './layered';
+import { Placer, placedNets, type At } from './placer';
 import { ram } from './memory';
 import { ramBehavior, wordsHash, type RamState } from './bigmem';
 import { counter, DFF, DFFE, register } from './sequential';
@@ -108,6 +109,7 @@ export function babyStore(words: ArrayLike<number> = []): ComponentDef {
     ...base,
     id: init.some((v) => v) ? `baby_store_${wordsHash(init)}` : 'baby_store',
     name: 'Store (Williams tube)',
+    symbol: { ...base.symbol, label: 'STORE' },
     category: 'memory',
     summary: 'The main store: 32 lines of 32 digits as charge on a cathode-ray tube, read and rewritten line by line before it leaks away. Drawn here as the flip-flop memory it behaves like.',
     behavior: tubeBehavior(init),
@@ -157,6 +159,7 @@ export const BABY_DECODE: ComponentDef = (() => {
   const dec = b.op(decoder(3, true), [`${sp}.o1`, ''], undefined, 'dec');
   const go = b.op1(AND, ['a2', nh], undefined, 'go');
   b.wire(go, `${dec}.en`);
+  b.wire(go, 'retire');
   b.name(go, 'go');
   b.next();
   const sub = b.op1(OR, [`${dec}.y4`, `${dec}.y5`], undefined, 'or45');
@@ -165,8 +168,8 @@ export const BABY_DECODE: ComponentDef = (() => {
   b.wire(sub, 'sub'); b.wire(`${dec}.y6`, 'cmp'); b.wire(`${dec}.y7`, 'stp');
   return define({
     id: 'baby_decode', name: 'Function decode', category: 'routing',
-    summary: 'A 3-to-8 decoder on the function digits, enabled in the execute beat (A2) while the stop lamp is off. Functions 4 and 5 both subtract.',
-    ports: [bus('pi', 32, 'in'), bit('a2', 'in'), bit('h', 'in'), ...['jmp', 'jrp', 'ldn', 'sto', 'sub', 'cmp', 'stp'].map((n) => bit(n, 'out'))],
+    summary: 'A 3-to-8 decoder on the function digits, enabled in the execute beat (A2) while the stop lamp is off (retire: an instruction ends at the end of this beat). Functions 4 and 5 both subtract.',
+    ports: [bus('pi', 32, 'in'), bit('a2', 'in'), bit('h', 'in'), ...['jmp', 'jrp', 'ldn', 'sto', 'sub', 'cmp', 'stp', 'retire'].map((n) => bit(n, 'out'))],
     symbol: { kind: 'box', label: 'DECODE' },
     netlist: laid(b, { keepOrder: true }),
   });
@@ -250,6 +253,54 @@ export const BABY_ACC: ComponentDef = (() => {
   });
 })();
 
+// ---------------------------------------------------------------- the staticisor and the write path
+
+/**
+ * The staticisor: the 5-digit register that holds the line an action beat addresses (S1: CI's next value, S2: PI's line
+ * digits), and the switch that gives the tube the scan counter's line on scan beats instead.
+ */
+export const BABY_STAT: ComponentDef = (() => {
+  const b = new Builder(8, 12, 3);
+  b.pins('next', 'pi', 's1', 's2', 'action', 'scan');
+  const cs = b.op(splitter([5, 27]), ['next'], undefined, 'cs');
+  const ps = b.op(splitter([5, 27]), ['pi'], undefined, 'ps');
+  b.next();
+  const smux = b.op1(busMux2(5), [`${ps}.o0`, `${cs}.o0`, 's1'], undefined, 'smux');
+  const sen = b.op1(OR, ['s1', 's2'], undefined, 'sen');
+  b.next();
+  const stat = b.op1(register(5), [smux, sen, 'clk'], 'staticisor', 'stat');
+  b.next();
+  const addr = b.op1(busMux2(5), ['scan', stat, 'action'], undefined, 'amux');
+  b.wire(addr, 'line');
+  b.name(stat, 'stat'); b.name(addr, 'line');
+  return define({
+    id: 'baby_stat', name: 'Staticisor', category: 'sequential',
+    summary: 'Five flip-flops that hold the store line an action beat reads or writes: CI\'s at S1, PI\'s line number at S2. On scan beats the tube is given the scan counter\'s line instead.',
+    ports: [bus('next', 32, 'in'), bus('pi', 32, 'in'), bit('s1', 'in'), bit('s2', 'in'), bit('action', 'in'), bus('scan', 5, 'in'), clk(), bus('line', 5, 'out')],
+    symbol: { kind: 'box', label: 'STATICISOR' },
+    netlist: laid(b, { keepOrder: true }),
+  });
+})();
+
+/**
+ * What the tube writes back at each beat's edge: the line it just read (regeneration on a scan beat, the action beat's
+ * own line), or A for STO. A scan beat writes only while regeneration is on.
+ */
+export const BABY_WRITE: ComponentDef = (() => {
+  const b = new Builder(8, 12, 3);
+  b.pins('s', 'a', 'sto', 'action', 'regen');
+  const din = b.op1(busMux2(32), ['s', 'a', 'sto'], undefined, 'wmux');
+  const we = b.op1(OR, ['action', 'regen'], undefined, 'we');
+  b.wire(din, 'din'); b.wire(we, 'we');
+  return define({
+    id: 'baby_write', name: 'Rewrite', category: 'routing',
+    summary: 'Every line the tube reads is written back at the end of the beat: the regeneration that keeps the charge from leaking away. STO writes A instead.',
+    ports: [bus('s', 32, 'in'), bus('a', 32, 'in'), bit('sto', 'in'), bit('action', 'in'), bit('regen', 'in'), bus('din', 32, 'out'), bit('we', 'out')],
+    symbol: { kind: 'box', label: 'REWRITE' },
+    netlist: laid(b, { keepOrder: true }),
+  });
+})();
+
 // ---------------------------------------------------------------- the machine
 
 export const BABY_PORTS: PortDef[] = [
@@ -273,50 +324,63 @@ export function babyComputer(words: ArrayLike<number> = []): ComponentDef {
   b.pins('clk', 'regen');
   const tm = b.op(BABY_TIMING, ['clk'], 'beats', 'timing');
   b.next();
-  const stat5 = b.op1(busMux2(5), ['', '', `${tm}.s1`], 'staticisor in', 'smux');
-  const sen = b.op1(OR, [`${tm}.s1`, `${tm}.s2`], undefined, 'sen');
+  const sc = b.op(BABY_STAT, ['', '', `${tm}.s1`, `${tm}.s2`, `${tm}.action`, `${tm}.scan`, 'clk'], 'staticisor', 'stat');
   b.next();
-  const stat = b.op1(register(5), [stat5, sen, 'clk'], 'staticisor', 'stat');
-  const we = b.op1(OR, [`${tm}.action`, 'regen'], undefined, 'we');
+  const wr = b.op(BABY_WRITE, ['', '', '', `${tm}.action`, 'regen'], 'rewrite', 'wr');
   b.next();
-  const addr = b.op1(busMux2(5), [`${tm}.scan`, stat, `${tm}.action`], 'scan / action', 'amux');
-  b.next();
-  const st = b.op(store, [addr, '', we, 'clk'], 'store', 'store');
+  const st = b.op(store, [`${sc}.line`, `${wr}.din`, `${wr}.we`, 'clk'], 'store', 'store');
   b.next();
   const pi = b.op1(register(32), [`${st}.dout`, `${tm}.a1`, 'clk'], 'PI', 'pi');
-  const piLo = b.op(splitter([5, 27]), [pi], undefined, 'pis');
   b.next();
   const dc = b.op(BABY_DECODE, [pi, `${tm}.a2`, ''], 'decode', 'dec');
   b.next();
   const ctl = b.op(BABY_CONTROL, [`${st}.dout`, `${tm}.s1`, `${tm}.a2`, '', '', `${dc}.jmp`, `${dc}.jrp`, 'clk'], 'CI', 'ctl');
   const acc = b.op(BABY_ACC, [`${st}.dout`, `${dc}.ldn`, `${dc}.sub`, `${dc}.cmp`, `${dc}.stp`, `${tm}.s1`, '', 'clk'], 'A', 'acc');
-  const ciLo = b.op(splitter([5, 27]), [`${ctl}.next`], undefined, 'cis');
-  b.next();
-  const din = b.op1(busMux2(32), [`${st}.dout`, `${acc}.a`, `${dc}.sto`], 'rewrite / STO', 'wmux');
-  const nh = b.op1(NOT, [`${acc}.stop`], undefined, 'nh');
-  b.next();
-  const ret = b.op1(AND, [`${tm}.a2`, nh], undefined, 'ret');
   // wiring left open above
-  b.wire(`${ciLo}.o0`, `${stat5.split('.')[0]}.b`);
-  b.wire(`${piLo}.o0`, `${stat5.split('.')[0]}.a`);
-  b.wire(din, `${st}.din`);
+  b.wire(`${ctl}.next`, `${sc}.next`); b.wire(pi, `${sc}.pi`);
+  b.wire(`${st}.dout`, `${wr}.s`); b.wire(`${acc}.a`, `${wr}.a`); b.wire(`${dc}.sto`, `${wr}.sto`);
   for (const sink of [`${dc}.h`, `${ctl}.h`, `${acc}.h`]) b.wire(`${acc}.stop`, sink);
   b.wire(`${acc}.t`, `${ctl}.t`);
   b.wire(`${ctl}.ci`, 'ci'); b.wire(pi, 'pi'); b.wire(`${acc}.a`, 'a'); b.wire(`${tm}.beat`, 'beat');
-  b.wire(`${acc}.t`, 't'); b.wire(`${acc}.stop`, 'stop'); b.wire(ret, 'retire'); b.wire(addr, 'line');
-  b.name(`${st}.dout`, 'S', true); b.name(`${acc}.stop`, 'H', true); b.name(addr, 'line');
+  b.wire(`${acc}.t`, 't'); b.wire(`${acc}.stop`, 'stop'); b.wire(`${dc}.retire`, 'retire'); b.wire(`${sc}.line`, 'line');
+  b.name(`${st}.dout`, 'S', true); b.name(`${acc}.stop`, 'H', true); b.name(`${sc}.line`, 'line'); b.name(pi, 'PI');
   d = {
     id: store.id === 'baby_store' ? 'baby' : `baby_${store.id.slice('baby_store_'.length)}`,
     name: 'Manchester Baby (SSEM)', category: 'cpu',
     summary: 'The Small-Scale Experimental Machine of 21 June 1948: a 32 × 32 store on a Williams tube, the control CI, the present instruction PI, the accumulator A, seven instructions, four beats each.',
     ports: BABY_PORTS,
     symbol: { kind: 'box', label: 'BABY' },
-    netlist: laid(b, {}),
+    netlist: () => babyDrawing(b),
   };
   if (d.id === 'baby') define(d);
   babyCache.set(store.id, d);
   return d;
 }
 
+/**
+ * The top level as the main scene draws it: the beats on the left, the staticisor and the rewrite path feeding the tube,
+ * PI and the decoder after it, CI and A on the right. The data path is drawn with wires; the beat lines, H and the
+ * feedback from CI are labels.
+ */
+function babyDrawing(b: Builder): { instances: Builder['instances']; nets: ReturnType<typeof placedNets>; pins: Record<string, At> } {
+  const P = new Placer(b.instances);
+  const place: Record<string, At> = {
+    timing: [8, 12], stat: [34, 10], wr: [44, 30], store: [62, 15], pi: [84, 17], dec: [100, 13], ctl: [126, 3], acc: [126, 26],
+  };
+  for (const [nm, [x, y]] of Object.entries(place)) P.put('top', nm, x, y);
+  for (const i of b.instances) i.at = P.at.get(i.name)!;
+  const wired = new Set(['stat.line>store.addr', 'wr.din>store.din', 'wr.we>store.we', 'store.dout>pi.d', 'pi.q>dec.pi',
+    'dec.jmp>ctl.jmp', 'dec.jrp>ctl.jrp', 'timing.s1>stat.s1', 'dec.ldn>acc.ldn', 'dec.sub>acc.sub', 'dec.cmp>acc.cmp', 'dec.stp>acc.stp']);
+  const right = 156;
+  const outs = ['ci', 'pi', 'a', 'beat', 't', 'stop', 'retire', 'line'];
+  const pins: Record<string, At> = { clk: [0, 30], regen: [0, 36] };
+  outs.forEach((o, i) => (pins[o] = [right, 6 + 4 * i]));
+  const byPort = (inst: string) => ['timing', 'dec', 'ctl', 'acc', 'wr', 'stat'].includes(inst);
+  return { instances: b.instances, nets: placedNets(P, b.nets(), { wired, byPort }), pins };
+}
+
+/** The empty machine (the workbench's). */
+export const BABY: ComponentDef = babyComputer([]);
+
 /** Instance paths of the state the panels and tests read. */
-export const BABY_STATE = { store: 'store', ci: 'ctl.ci', pi: 'pi', a: 'acc.a', t: 'acc.t', h: 'acc.hff' } as const;
+export const BABY_STATE = { store: 'store', stat: 'stat.stat', ci: 'ctl.ci', pi: 'pi', a: 'acc.a', t: 'acc.t', h: 'acc.hff' } as const;

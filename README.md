@@ -18,7 +18,7 @@ both ways: any circuit exports as Verilog, and Verilog written in the sandbox is
 in the page into chips that open down to the transistors like everything else.
 
 Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journey-->89<!--/n--> chapters,
-<!--n:onramps-->2<!--/n--> on-ramps for newcomers, <!--n:prologue-->3<!--/n--> prologue chapters and <!--n:appendices-->4<!--/n--> appendices), the **[campaign](https://switchtocpu.com/#/campaign)**
+<!--n:onramps-->2<!--/n--> on-ramps for newcomers, <!--n:prologue-->3<!--/n--> prologue chapters and <!--n:appendices-->5<!--/n--> appendices), the **[campaign](https://switchtocpu.com/#/campaign)**
 (<!--n:levels-->172<!--/n--> levels: build it to unlock it, or fix it), the **[workbench](https://switchtocpu.com/#/workbench/rca4)**
 (any component on its own, with statistics, benchmarks and the out-of-order lab) and the
 **[sandbox](https://switchtocpu.com/#/sandbox)** (your own circuits, up to whole computers).
@@ -81,9 +81,11 @@ radio's band are models, and each chapter says what is assumed.
 A **Basics** chapter (a circuit, two levels, counting in binary, truth tables, programs, how to read a schematic here) starts the journey for anyone who needs it,
 and no term is used before the chapter that teaches it (a test holds that at zero). Before chapter 1,
 an optional **prologue** builds the same logic from relays, from vacuum tubes and from punched cards.
-After chapter <!--n:journey-->89<!--/n-->, <!--n:appendices-->4<!--/n--> **appendices**: the MOS 6502 rebuilt at transistor level, Doom compiled for the
+After chapter <!--n:journey-->89<!--/n-->, <!--n:appendices-->5<!--/n--> **appendices**: the MOS 6502 rebuilt at transistor level, Doom compiled for the
 site's RV32IM, Ben Eater's SAP-1 breadboard computer, its 74xx chips built from our gates, drawn on
-breadboards and run in lock step with a golden model, and Bit Runner, an original game in 74xx counters and gates with no CPU.
+breadboards and run in lock step with a golden model, Bit Runner, an original game in 74xx counters and gates with no CPU,
+and the Manchester Baby of 1948 in gates, its store a Williams tube that leaks unless regenerated, running Kilburn's
+highest-factor routine to the end.
 
 Each chapter opens with the problem before the mechanism and with its goals, and closes with a recap
 and Check yourself questions; challenges are optional, each with a revealable answer. Around the prose:

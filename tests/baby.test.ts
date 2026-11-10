@@ -130,6 +130,31 @@ describe('the Baby in gates', () => {
   it('costs (NANDs per block, the whole machine with its 1024-digit store)', () => {
     const n = (d: Parameters<typeof stats>[0]) => stats(d).nands;
     expect({ timing: n(BABY_TIMING), decode: n(BABY_DECODE), control: n(BABY_CONTROL), acc: n(BABY_ACC), all: n(babyComputer([])) })
-      .toEqual({ timing: 151, decode: 57, control: 1036, acc: 1068, all: 22697 });
+      .toEqual({ timing: 151, decode: 57, control: 1036, acc: 1068, all: 22694 });
+  });
+});
+
+describe('Appendix E\'s numbers', () => {
+  it('the chapter quotes what the machine measures', async () => {
+    const { BABY_RUN, BABY_COST, BABY_STORE_NANDS, REGEN_OFF } = await import('../src/chapters/ch-baby');
+    const { ram } = await import('../src/lib/memory');
+    const iss = new SsemISS(ssemWords(kilburnSource()));
+    iss.run();
+    const tried = (2 ** 18 - 1) - iss.store[27] + 1;
+    expect({ instrs: iss.instrs, accesses: iss.accesses, answer: iss.store[27], tried }).toEqual(BABY_RUN);
+    const n = (d: Parameters<typeof stats>[0]) => stats(d).nands;
+    expect(BABY_COST).toEqual({ timing: n(BABY_TIMING), decode: n(BABY_DECODE), control: n(BABY_CONTROL), acc: n(BABY_ACC), all: n(babyComputer([])) });
+    expect(BABY_STORE_NANDS).toBe(n(ram(5, 32)));
+    // regeneration off: the follower names the first difference where the faded Stop runs as JMP 0
+    const { BabyFollower, babyHw } = await import('../src/widgets/babymon');
+    const w = ssemWords(kilburnSource(1000));
+    const sim = boot(w, 0, true), mon = new BabyFollower(w);
+    let beats = 0;
+    while (!mon.mismatch && beats < 40000) {
+      mon.before(babyHw(sim)); edge(sim); mon.after(babyHw(sim)); beats++;
+      if (beats % 4000 === 0) await tick();
+    }
+    expect({ instrs: mon.iss.instrs, beats }).toEqual(REGEN_OFF);
+    expect(mon.mismatch).toMatch(/after line 13/);
   });
 });
