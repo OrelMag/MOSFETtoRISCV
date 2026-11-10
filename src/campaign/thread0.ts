@@ -152,6 +152,7 @@ export const THREAD0: Record<string, NodeThread> = {
       g_sop: 'each product term (NAND–NAND then removes the NOTs)',
       g_wide: 'the and3 … and8 it unlocks are balanced trees of it',
       a_shift16: 'two ANDs gate the fill bit: the sign only for an arithmetic right shift',
+      nor_basic: 'the same AND, NOR-built: a NOR of the two inverted inputs',
     },
     pitfalls: ['The NOT goes after the NAND, not before it: ¬a NAND ¬b is a + b.'],
   },
@@ -162,6 +163,7 @@ export const THREAD0: Record<string, NodeThread> = {
       g_sop: 'the sum of the products: an OR of ANDs is NAND–NAND once the inversions cancel',
       g_wide: 'fifteen of them in a balanced tree: the 16-input zero detect',
       pi_reg: 'one OR loads the register on en or clr (a flush loads the zeros)',
+      nor_basic: 'the same OR, NOR-built: a NOR and a NOT, one gate fewer',
     },
     pitfalls: ['Invert the inputs, not the output: a NOT after a NAND makes AND.'],
   },
@@ -303,7 +305,7 @@ export const THREAD0: Record<string, NodeThread> = {
   },
   a_fa: {
     uses: ['alu', 'npc', 'br'],
-    usedFor: { a_add4: 'four in a row, carry out into the next carry in' },
+    usedFor: { a_add4: 'four in a row, carry out into the next carry in', nor_fa: 'the same nine gates, every one a NOR' },
     pitfalls: [
       'cout is the majority of a, b and cin: (a ⊕ b)·cin alone misses a = b = 1.',
       'Par shares both XORs\' first NANDs with the carry: a separate majority circuit is 13 or more.',
@@ -402,6 +404,23 @@ export const THREAD0: Record<string, NodeThread> = {
     pitfalls: [
       'The combine (g, p) ∘ (g′, p′) = (g + p·g′, p·p′) is not commutative: the higher group goes on the left.',
       'cin enters as a generate below bit 0: dropping it passes every cin = 0 case.',
+    ],
+  },
+  // The NOR3 ladder: the AGC's gate. It builds no block of RV16 (as act P), so it has no uses.
+  nor_basic: {
+    usedFor: {
+      nor_fa: 'the two-input NOR (a NOR3 with an input tied) is every gate of the adder',
+      nor_reg: 'NOT and NOR, crossed, are the latch',
+    },
+    pitfalls: [
+      'A spare NOR3 input left open floats at switch level and can turn its transistor on: tie it to a used input.',
+      'NOR then NOT is OR, not AND: for AND the inversions go on the inputs.',
+    ],
+  },
+  nor_fa: {
+    pitfalls: [
+      'Swapping NANDs for NORs inverts every two-input XOR (it becomes XNOR): only the three-input XOR comes out right.',
+      'The carry is NOR(n1, n5), the first gates of the two halves, not a gate of its own inputs.',
     ],
   },
 };

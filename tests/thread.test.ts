@@ -47,9 +47,12 @@ describe('thread data', () => {
   });
 
   it('fills acts 1–2 (the pilot): uses, a clause for every required consumer, pitfalls', () => {
+    // the NOR3 ladder builds the Apollo Guidance Computer's gate, no block of RV16 (as act P): no uses
+    const noBlock = new Set(['nor_basic', 'nor_fa']);
     for (const n of NODES.filter((m) => (m.act === 1 || m.act === 2) && !m.bug)) {
       const t = threadOf(n.id);
-      expect(t?.uses?.length || n.anatomy?.length, `${n.id} uses`).toBeTruthy();
+      if (noBlock.has(n.id)) expect(t?.uses, `${n.id} uses`).toBeUndefined();
+      else expect(t?.uses?.length || n.anatomy?.length, `${n.id} uses`).toBeTruthy();
       expect(t?.pitfalls?.length, `${n.id} pitfalls`).toBeTruthy();
       for (const d of dependents(n.id)) if (!d.optional) expect(t?.usedFor?.[d.id], `${n.id} → ${d.id}`).toBeTruthy();
     }

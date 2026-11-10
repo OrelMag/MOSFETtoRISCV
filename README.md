@@ -19,7 +19,7 @@ in the page into chips that open down to the transistors like everything else.
 
 Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journey-->89<!--/n--> chapters,
 <!--n:onramps-->2<!--/n--> on-ramps for newcomers, <!--n:prologue-->3<!--/n--> prologue chapters and <!--n:appendices-->5<!--/n--> appendices), the **[campaign](https://switchtocpu.com/#/campaign)**
-(<!--n:levels-->174<!--/n--> levels: build it to unlock it, or fix it), the **[workbench](https://switchtocpu.com/#/workbench/rca4)**
+(<!--n:levels-->177<!--/n--> levels: build it to unlock it, or fix it), the **[workbench](https://switchtocpu.com/#/workbench/rca4)**
 (any component on its own, with statistics, benchmarks and the out-of-order lab) and the
 **[sandbox](https://switchtocpu.com/#/sandbox)** (your own circuits, up to whole computers).
 
@@ -157,7 +157,7 @@ frames.
 
 ![The campaign map with the first acts under way](docs/images/campaign.png)
 
-A tree of **<!--n:levels-->174<!--/n--> levels in <!--n:acts-->15<!--/n--> acts**, in the spirit of *Turing Complete*, from a NAND made of
+A tree of **<!--n:levels-->177<!--/n--> levels in <!--n:acts-->15<!--/n--> acts**, in the spirit of *Turing Complete*, from a NAND made of
 transistors to a pipelined, interrupt-capable 16-bit RISC-V-like CPU (RV16), with optional acts:
 before the transistor (relays, tubes, cards), arithmetic units (floating point, multiply, divide), a GPU
 (four lanes, the active mask, a reconvergence stack, two warps, a rasterizer) and memory (a DRAM column,

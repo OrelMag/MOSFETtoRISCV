@@ -320,7 +320,7 @@ export class LevelPage implements Page {
       const rows: [string, string][] = [];
       const par = n.par ?? {};
       // A relay or tube level compares in its own devices (the technology setting's price of a NAND alternative).
-      const devices = par.relays !== undefined || par.tubes !== undefined || par.steps !== undefined;
+      const devices = par.relays !== undefined || par.tubes !== undefined || par.steps !== undefined || par.nor3 !== undefined;
       // A transistor level compares in transistors (its parts have no NANDs: "0 NAND" said nothing).
       const fets = !devices && par.transistors !== undefined && par.nand === undefined;
       const fetText = (v: number | undefined) => (v === undefined ? '—' : `${groupDigits(v)} transistor${v === 1 ? '' : 's'}`);
@@ -348,9 +348,11 @@ export class LevelPage implements Page {
       h('section', { class: 'cp-criteria' }, h('h3', null, 'Success criteria'), h('ul', null, criteria(ch).map((c) => h('li', null, c)))),
       gradeTable(n));
     const rule = typeof ch.allowed === 'object' ? ch.allowed.lib.filter((x) => x !== 'nand') : [];
+    // a strict rule (act P, the NOR3 ladder) lists its parts alone: NAND is not among them
+    const strict = typeof ch.allowed === 'object' && !!ch.allowed.strict;
     const names = (ids: readonly string[]) => partNames(ids, (u) => resolveComponent(u)?.name).join(', ');
     el.append(h('section', { class: 'cp-deps' },
-      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), 'NAND, ', names(rule)) : null,
+      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), strict ? '' : 'NAND, ', names(rule)) : null,
       n.unlocks?.length ? h('p', null, h('b', null, 'Unlocks: '), names(n.unlocks)) : null));
     this.pitfalls(el);
   }
@@ -553,7 +555,7 @@ export class LevelPage implements Page {
     const par = n.par ?? {};
     const c = caseOf(n.id);
     const alts = (c?.alts ?? []).map((a) => ({ name: a.name, cost: altCost(a), saves: a.saves }));
-    const metrics = (['edits', 'nand', 'transistors', 'relays', 'tubes', 'steps', 'depth', 'period', 'cycles'] as Metric[]).filter((k) => par[k] !== undefined || (k === 'transistors' && par.nand !== undefined));
+    const metrics = (['edits', 'nand', 'transistors', 'relays', 'tubes', 'nor3', 'steps', 'depth', 'period', 'cycles'] as Metric[]).filter((k) => par[k] !== undefined || (k === 'transistors' && par.nand !== undefined));
     const cell = (v: number | null | undefined) => (v === undefined || v === null ? '—' : groupDigits(v));
     const table = metrics.length ? h('table', { class: 'lv-res-table' },
       h('tr', null, h('th', null, 'Metric'), h('th', null, 'Yours'), h('th', null, 'Par'), alts.map((a) => h('th', null, a.name))),
@@ -626,11 +628,14 @@ export class LevelPage implements Page {
 const narrow = () => matchMedia('(max-width: 900px)').matches;
 
 /** Relays, tube sections and relay steps of `c`, those the level grades (`par`) only. */
-function deviceText(c: { relays?: number; tubes?: number; steps?: number }, par: Par): string {
+function deviceText(c: { relays?: number; tubes?: number; nor3?: number; steps?: number; transistors?: number }, par: Par): string {
   const n = (v: number, one: string, many: string) => `${groupDigits(v)} ${v === 1 ? one : many}`;
   const out: string[] = [];
   if (c.relays !== undefined && par.relays !== undefined) out.push(n(c.relays, 'relay', 'relays'));
   if (c.tubes !== undefined && par.tubes !== undefined) out.push(n(c.tubes, 'tube section', 'tube sections'));
+  if (c.nor3 !== undefined && par.nor3 !== undefined) out.push(n(c.nor3, 'NOR3 gate', 'NOR3 gates'));
+  // a NOR3 level compares bricks: its NAND alternatives have no NOR3 gates, so both sides also say their transistors
+  if (par.nor3 !== undefined && c.transistors !== undefined) out.push(n(c.transistors, 'transistor', 'transistors'));
   if (c.steps !== undefined && par.steps !== undefined) out.push(n(c.steps, 'step', 'steps'));
   return out.join(' · ') || '—';
 }

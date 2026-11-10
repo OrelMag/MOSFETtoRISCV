@@ -280,4 +280,24 @@ export const CASES0: Record<string, LevelCase> = {
   m_mem: {
     problem: 'Programs live in ROM, data in RAM. Built like the register file, a 64-word RAM is 20166 NANDs (80664 transistors, about 79 per bit), over four times the single-cycle core. Real memories are dense arrays: an SRAM bit is 6 transistors, a DRAM bit one transistor and a capacitor. From here on memories are given; the core levels\' bench serves the instruction and data words in the same cycle.',
   },
+  // The NOR3 ladder (buildnor.ts): the Apollo Guidance Computer's gate. Sources: MIT drawing 2005011 (the gate) and
+  // E. C. Hall, R-700 vol. III (1972), p. 9-10, 13 and 67; the counts are tests/agcnor.test.ts's.
+  nor_basic: {
+    problem: 'Every gate on this site is built from NAND, but that is a choice. The Apollo Guidance Computer\'s logic was all three-input NOR gates: MIT judged that producing and qualifying even a second circuit type would cost more than it saved (Hall, R-700 vol. III, p. 10). Block II had about 5,700 of them, two to a flatpack.',
+    without: 'With one gate type, every function has to be spelled in it: NOT, OR and AND come first.',
+    cost: '5 NOR3 gates: 15 transistors and 20 resistors as MIT drew the gate, where NOT, AND and OR from CMOS NANDs are 6 gates and 24 transistors. NOR makes OR cheap where NAND makes AND cheap.',
+    alts: [{ name: 'OR from NANDs', lib: 'or' }, { name: 'AND from NANDs', lib: 'and' }],
+  },
+  nor_fa: {
+    problem: 'An adder is where a brick shows its price. The AGC added in one\'s complement with a carry chain built from NOR gates, two NOR stages per bit (Hall, R-700 vol. III, p. 67).',
+    without: 'With no NOR adder, the one-gate machine cannot add.',
+    cost: '9 NOR3 gates (27 transistors, 36 resistors), the 9-NAND adder\'s count: the dual wiring adds because the sum and the carry are self-dual. As CMOS NANDs the same adder is 36 transistors.',
+    alts: [{ name: 'Full adder from NANDs', lib: 'full_adder' }],
+  },
+  nor_reg: {
+    problem: 'A computer built from one gate stores its bits in that gate too: two NORs crossed are a latch. The register bit here is a master latch, a slave latch and an enable multiplexer, all NOR3.',
+    without: 'Without a register from the brick, a one-gate machine would need a second circuit type for storage, the thing MIT avoided.',
+    cost: '15 NOR3 gates (45 transistors, 60 resistors) against 13 NANDs (52 transistors) for one bit of the 4-bit register at par.',
+    alts: [{ name: 'Register bit from NANDs, at par', nand: 13, note: 'The 4-bit register level\'s par, 52 NANDs, over 4 bits: a 9-NAND flip-flop and a 4-NAND multiplexer.' }],
+  },
 };

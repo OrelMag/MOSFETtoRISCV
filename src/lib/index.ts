@@ -1,6 +1,7 @@
 // Importing this module registers the whole component library.
 export * from './transistors';
 export * from './switchparts';
+export * from './agcnor';
 export * from './nmos';
 export * from './gates';
 export * from './combinational';

@@ -140,6 +140,8 @@ export interface Limits {
   maxRelays?: number;
   /** Vacuum tube sections: triodes and diodes. */
   maxTubes?: number;
+  /** NOR3 gates (the AGC's RTL gate: the act-1 NOR3 ladder). */
+  maxNor3?: number;
   /** Relay steps from an input change until every armature rests. */
   maxSteps?: number;
   /** Edits from the drawing a bug hunt starts as. */
@@ -191,6 +193,8 @@ export interface Score {
   /** Relays and tube sections (triodes + diodes) of a switch-level chip that has any; a bench may price relays itself. */
   relays?: number;
   tubes?: number;
+  /** NOR3 gates of a chip built from them (lib/agcnor.ts). */
+  nor3?: number;
   /** Most relay steps one input change took to come to rest (a chip with relays). */
   steps?: number;
   /** A bug hunt: edits from the drawing it started as (edits.ts). */
@@ -377,7 +381,7 @@ export function symptomsDiffer(ch: BuildChallenge, def: ComponentDef, mode: 'gat
 
 /** The score Check reports: NANDs, transistors, depth (gate level), period when clocked and sequential. */
 export function scoreOf(def: ComponentDef, mode: 'gate' | 'switch', clocked: boolean): Score {
-  let s = { nands: 0, transistors: 0, relays: 0, triodes: 0, diodes: 0 };
+  let s: { nands: number; transistors: number; relays: number; triodes: number; diodes: number; nor3?: number } = { nands: 0, transistors: 0, relays: 0, triodes: 0, diodes: 0 };
   try { s = stats(def); } catch { /* a broken part: no score */ }
   let depth: number | null = null;
   let period: number | null = null;
@@ -389,7 +393,7 @@ export function scoreOf(def: ComponentDef, mode: 'gate' | 'switch', clocked: boo
       } catch { /* no timing */ }
     }
   }
-  const devices = { ...(s.relays ? { relays: s.relays } : {}), ...(s.triodes + s.diodes ? { tubes: s.triodes + s.diodes } : {}) };
+  const devices = { ...(s.relays ? { relays: s.relays } : {}), ...(s.triodes + s.diodes ? { tubes: s.triodes + s.diodes } : {}), ...(s.nor3 ? { nor3: s.nor3 } : {}) };
   return { nand: s.nands, transistors: s.transistors, depth, period, ...devices };
 }
 

@@ -43,6 +43,7 @@ export const THREAD1: Record<string, NodeThread> = {
       t_scan: 'the same mux in front of each flip-flop, choosing the bit below instead of q',
       m_ram: 'one per word, en from the address decoder ANDed with we',
       s_icg: 'the same enable, on the clock instead of a mux per bit',
+      nor_reg: 'one of its bits, rebuilt from NOR3 gates alone',
     },
     pitfalls: [
       'clk AND en on the clock pin saves the muxes and fails: a change of en while clk is high is an edge.',
@@ -357,6 +358,13 @@ export const THREAD1: Record<string, NodeThread> = {
       'Only what lies on the critical path pays: Kogge–Stone adders in next PC add 444 NANDs and leave the period at 76.',
       'After a swap, time it again: the path may or may not have moved, and a second swap only pays on the new critical path.',
       'Faster is not free: the Kogge–Stone ALU is 218 NANDs more than the ripple one, worth it only because it is on the path.',
+    ],
+  },
+  // The NOR3 ladder: the AGC's gate. It builds no block of RV16 (as act P), so it has no uses.
+  nor_reg: {
+    pitfalls: [
+      'Both latches open on the same clock phase make one transparent latch: d changing while clk is high reaches q.',
+      'Two NORs crossed hold only while set and reset are both 0: a latch whose set and reset are 1 together loses its bit.',
     ],
   },
 };

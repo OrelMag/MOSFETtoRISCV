@@ -24,7 +24,7 @@ const pinsOf = (def: ComponentDef): PinSpec[] => def.ports.map((p) => ({ name: p
 
 const answers = new Map<string, ChipDoc[]>();
 /** A reference answer: the top def drawn as a chip, and `subs` (def → chip) drawn as chips it places. */
-const refOf = (id: string, def: () => ComponentDef, name: string, subs: () => [ComponentDef, string][] = () => []) => (): ChipDoc[] => {
+export const refOf = (id: string, def: () => ComponentDef, name: string, subs: () => [ComponentDef, string][] = () => []) => (): ChipDoc[] => {
   let a = answers.get(id);
   if (a) return a;
   const chips = new Map(subs().map(([d, n], i) => [d, { id: `u_ref_cp_${id}_${i}`, name: `${n} ref` }]));
