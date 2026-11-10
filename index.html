@@ -20,10 +20,9 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="apple-touch-icon" href="icon-180.png" />
     <meta name="theme-color" content="#5b4cf0" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- The font CSS must not block the first paint (a third-party round trip): it loads as print and switches to all when it arrives. -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <!-- The faces the first screen sets text in (src/styles/fonts.css), fetched at once: they arrive before the prose is laid out. -->
+    <link rel="preload" href="/src/styles/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/src/styles/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
     <script>
       // Apply the saved theme before first paint to avoid a flash.
       try {
