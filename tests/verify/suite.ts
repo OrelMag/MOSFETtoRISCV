@@ -22,7 +22,7 @@ export function verifyCpus(ids: string[]): void {
       const isa = new IsaCoverage(), hw: HwCoverage[] = [];
       const probe = (d: FlatDesign) => { const p = new HwCoverage(d); hw.push(p); return p; };
       let runs = 0;
-      const batches = cpuJobs(cfg, images(cfg.env).filter((i) => !notApplicable(cfg, i.name, i.data.length)), isa);
+      const batches = cpuJobs(cfg, [cfg.env, ...(cfg.extraEnvs ?? [])].flatMap((e) => images(e)).filter((i) => !notApplicable(cfg, i.name, i.data.length)), isa);
       it('has at least 32 applicable riscv-tests', () => expect(batches.flatMap((b) => b.jobs).length).toBeGreaterThanOrEqual(32));
       for (const batch of batches) {
         const names = batch.jobs.map((j) => j.img.name);

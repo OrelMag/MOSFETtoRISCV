@@ -1,0 +1,52 @@
+name: RVC tests (build)
+
+# Builds the official rv32uc riscv-tests (the C extension) into tests/verify/riscv-tests/bare-c.json with the same pinned xPack
+# riscv-none-elf-gcc as scripts/doom/build.mjs (GCC_VERSION 15.2.0-1) and the riscv-tests revision every other image was built
+# from, and keeps the JSON as an artifact; the file is checked in (npm test needs no toolchain). Not a deploy gate. Run it by hand
+# to rebuild (a push of this file on its own branch runs it too: a workflow can only be dispatched once it is on main).
+on:
+  push:
+    branches: ['feat/rv32uc']
+    paths: ['.github/workflows/rvc-tests.yml', 'scripts/riscv-tests/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  XPACK: '15.2.0-1'
+  XPACK_SHA256: aaaa8060c914851a3e5ee1ba82cc3d6f80972f90638a05c6e823a37557a33758
+  RISCV_TESTS_REV: 7b68f7b91f827f8d94cc1c57ff123752c5c8f704
+  RISCV_TESTS_ENV_REV: 6de71edb142be36319e380ce782c3d1830c65d68
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: The pinned xPack toolchain
+        run: |
+          f="xpack-riscv-none-elf-gcc-$XPACK-linux-x64.tar.gz"
+          curl -fsSL -o "$f" "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v$XPACK/$f"
+          echo "$XPACK_SHA256  $f" | sha256sum -c -
+          mkdir -p ~/xpack && tar -xzf "$f" -C ~/xpack
+          ~/xpack/xpack-riscv-none-elf-gcc-$XPACK/bin/riscv-none-elf-gcc --version
+      - name: riscv-tests at the images' revision
+        run: |
+          git clone https://github.com/riscv-software-src/riscv-tests rt
+          git -C rt checkout "$RISCV_TESTS_REV"
+          git -C rt submodule update --init env
+          git -C rt/env checkout "$RISCV_TESTS_ENV_REV"
+      - name: Build rv32uc into bare-c.json
+        run: node scripts/riscv-tests/build.mjs rt --cc ~/xpack/xpack-riscv-none-elf-gcc-$XPACK/bin/riscv-none-elf-gcc --env bare-c
+      - name: Same as the checked-in file?
+        run: |
+          git diff --stat --exit-code -- tests/verify/riscv-tests/bare-c.json || echo "::notice::bare-c.json differs from the checked-in file (toolchain line or code), take the artifact"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: riscv-tests-bare-c
+          path: tests/verify/riscv-tests/bare-c.json

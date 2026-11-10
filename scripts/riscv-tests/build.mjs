@@ -7,7 +7,8 @@
 // assembler rejects GNU-isms of the sources (a .weak symbol made .global, the tcontrol CSR name). On Windows the
 // xPack riscv-none-elf-gcc zip works as is. Environments: p is the official one (CSRs, traps: the system CPU);
 // bare and bare-mp are ours (scripts/riscv-tests/env/bare: no CSRs), for the CPUs without traps; bare64 is bare
-// for RV64 (rv64ui, rv64um: chapter 25's 64-bit core and its golden model, src/riscv/iss64.ts). --env builds only
+// for RV64 (rv64ui, rv64um: chapter 25's 64-bit core and its golden model, src/riscv/iss64.ts); bare-c is bare with the C
+// extension (rv32uc: chapter 25's RV32IC core; built by .github/workflows/rvc-tests.yml with the pinned xPack). --env builds only
 // the environments named (each file records its own toolchain).
 
 import { execFileSync, execFile } from 'node:child_process';
@@ -30,6 +31,9 @@ const ENVS = {
   bare: { inc: join(here, 'env/bare'), defs: [], suites: ['rv32ui', 'rv32um', 'rv32uf'] },
   'bare-mp': { inc: join(here, 'env/bare'), defs: ['-DMOSFET_MP'], suites: ['rv32ui', 'rv32ua'] },
   bare64: { inc: join(here, 'env/bare'), defs: [], suites: ['rv64ui', 'rv64um'], xlen: 64 },
+  // rv32g, not rv32gc: the test turns compression on where it wants it (.option rvc), and the environment's reset jump must stay
+  // a 32-bit jal (the loader retargets it)
+  'bare-c': { inc: join(here, 'env/bare'), defs: [], suites: ['rv32uc'] },
 };
 const ARCH = { 32: ['-march=rv32g_zicsr_zifencei', '-mabi=ilp32'], 64: ['-march=rv64g_zicsr_zifencei', '-mabi=lp64'] };
 // The data section starts here (link.ld): word 0 of the data memory is tohost.
@@ -59,7 +63,11 @@ for (const [env, e] of Object.entries(ENVS).filter(([k]) => !only.length || only
       jobs.push(async () => {
         await compile(env, join(src, 'isa', suite, f), elf);
         const img = loadElf(readFileSync(elf));
-        return [name, { text: img.text.toString('base64'), data: img.data.toString('base64'), pass: img.syms.pass, fail: img.syms.fail }];
+        // a test that keeps its data in the code (rv32uc's rvc: a "data:" label in .text, loaded and stored): the words there,
+        // which the loader also stores into the data memory at that address, as a machine with one memory would see them
+        const at = img.syms.data;
+        const mirror = at !== undefined && at < DATA_BASE ? { addr: at, text: img.text.subarray(at, at + 16).toString('base64') } : undefined;
+        return [name, { text: img.text.toString('base64'), data: img.data.toString('base64'), pass: img.syms.pass, fail: img.syms.fail, ...(mirror ? { mirror } : {}) }];
       });
     }
   }

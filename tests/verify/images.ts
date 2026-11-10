@@ -24,7 +24,7 @@ export interface ImageFile {
   revision: Record<string, string>;
   toolchain: string;
   dataBase: number;
-  tests: Record<string, { text: string; data: string; pass?: number; fail?: number }>;
+  tests: Record<string, { text: string; data: string; pass?: number; fail?: number; mirror?: { addr: number; text: string } }>;
 }
 
 const words = (b64: string): number[] => {
@@ -43,7 +43,7 @@ export function imageFile(env: Env): ImageFile {
 export function images(env: Env, suite?: string): RvImage[] {
   const f = imageFile(env);
   return Object.entries(f.tests).filter(([n]) => !suite || n.startsWith(`${suite}-`))
-    .map(([name, t]) => ({ name, suite: name.split('-')[0], env, text: words(t.text), data: words(t.data), dataBase: f.dataBase }));
+    .map(([name, t]) => ({ name, suite: name.split('-')[0], env, text: words(t.text), data: words(t.data), dataBase: f.dataBase, ...(t.mirror ? { mirror: { addr: t.mirror.addr, words: words(t.mirror.text) } } : {}) }));
 }
 
 export function image(env: Env, name: string): RvImage {

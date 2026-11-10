@@ -41,7 +41,7 @@ export function loadElf(buf, DATA_BASE) {
       let e = stro + n;
       while (buf[e]) e++;
       const name = buf.toString('latin1', stro + n, e);
-      if (name === 'tohost' || name === 'fail' || name === 'pass') syms[name] = addr(s + SYM.value);
+      if (name === 'tohost' || name === 'fail' || name === 'pass' || name === 'data') syms[name] = addr(s + SYM.value);
     }
   }
   if (text.length === 0 || text[0].vaddr !== 0) throw new Error('code must start at address 0');
