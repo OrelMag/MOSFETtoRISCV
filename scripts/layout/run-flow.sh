@@ -22,6 +22,9 @@ for d in reports logs; do [ -d "$d/sky130hd/mosfet_riscv" ] && cp -r "$d/sky130h
 RES=results/sky130hd/mosfet_riscv/base
 if [ "$status" -ne 0 ] || [ ! -f "$RES/6_final.odb" ]; then echo "flow failed ($status)"; exit 1; fi
 openroad -no_init -exit "$WORK/scripts/layout/dump.tcl" 2>&1 | tail -5
+# every endpoint's worst path after routing, for scripts/sky-paths.ts
+openroad -no_init -exit "$WORK/scripts/layout/paths.tcl" 2>&1 | tail -8
+[ -f "$OUT/paths/paths_max.rpt" ] && gzip -9f "$OUT/paths/paths_max.rpt"
 LYP=$(ls platforms/sky130hd/*.lyp 2>/dev/null | head -1)
 if command -v klayout >/dev/null && [ -f "$RES/6_final.gds" ]; then
   mkdir -p "$OUT/tiles"

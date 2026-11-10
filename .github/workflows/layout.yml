@@ -59,7 +59,14 @@ jobs:
           mkdir -p layout/site/reports
           cp -r layout/out/reports/* layout/site/reports/ 2>/dev/null || true
           cp layout/design/mosfet_riscv.v layout/site/ || true
-          tar -czf layout-logs-${{ matrix.design }}.tar.gz -C layout out/flow.log out/logs out/reports out/run.json 2>/dev/null || tar -czf layout-logs-${{ matrix.design }}.tar.gz -C layout out/flow.log || true
+          tar -czf layout-logs-${{ matrix.design }}.tar.gz -C layout out/flow.log out/logs out/reports out/run.json $(cd layout && ls -d out/paths 2>/dev/null) 2>/dev/null || tar -czf layout-logs-${{ matrix.design }}.tar.gz -C layout out/flow.log || true
+      - name: Keep every endpoint's path (scripts/sky-paths.ts)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sky-paths-${{ matrix.design }}
+          path: layout/out/paths
+          if-no-files-found: ignore
       - name: Keep the logs
         if: always()
         uses: actions/upload-artifact@v4
