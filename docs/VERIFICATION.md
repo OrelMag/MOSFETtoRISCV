@@ -30,7 +30,11 @@ environment, with the source revision and toolchain), so `npm test` needs no RIS
   (`scripts/riscv-tests/env/bare`): the same test bodies and the same `tohost` contract, with a store
   and a jump-to-self instead of `ecall`. `bare-mp` adds env/p's `csrr mhartid` park so hart 1 of the
   dual-core waits while hart 0 runs the test. `bare64` is `bare` built for RV64 (`-march=rv64g`,
-  `-mabi=lp64`; the bare header already maps `RVTEST_RV64U`): rv64ui and rv64um (see RV64 below).
+  `-mabi=lp64`; the bare header already maps `RVTEST_RV64U`): rv64ui and rv64um (see RV64 below). `bare-c` is `bare`
+  for rv32uc (the C extension; built `rv32g`, the test turns on `.option rvc` itself), built in CI by
+  `.github/workflows/rvc-tests.yml` with the pinned xPack. Its one test, `rvc`, keeps a doubleword in its code and
+  loads and stores it, so the image records those words (`mirror`) and the loader also stores them into the data
+  memory at their address. The RV32IC core (`sc-c`) runs it at gate level (`tests/verify-c.test.ts`).
 - **Harvard memory.** Code is linked at 0 (the ROM), data at `0x10000`, which is word 0 of any data
   memory up to 16 K words (it wraps), with `tohost` first. Our CPUs have no loader, so the image gets a
   few instructions appended (`lui` / `addi` / `sw` per non-zero data word, encoded by hand rather than by
