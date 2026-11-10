@@ -64,6 +64,36 @@ export const WALKS4: Record<string, WalkScript> = {
     },
   ],
 
+  t_scan: [
+    {
+      title: 'Bit 0: d or si',
+      text: 'm0 chooses what f0 takes at the edge: d[0] while se = 0, the scan input si while se = 1. f0 is the 9-NAND flip-flop on the shared clock: 13 NANDs for the bit.',
+      parts: ['sd', 'm0', 'f0'], codex: ['scan', 'mux'],
+      why: 'Scan gives each flip-flop a second source. A mux in front of d picks it, and the clock is left alone, as in the enable register.',
+      whyNot: { text: 'A second flip-flop per bit for the test path doubles the storage; the mux costs 4 NANDs.' },
+    },
+    {
+      title: 'The chain',
+      text: 'm1, m2 and m3 take the bit below as their scan input: q0 feeds bit 1, q1 bit 2, q2 bit 3. With se = 1 every edge moves each bit up one and takes si into bit 0.',
+      parts: ['m1', 'f1', 'm2', 'f2', 'm3', 'f3'], codex: ['scan', 'register'],
+      why: 'Chained q to the next mux, the flip-flops form a shift register, so a tester reaches every one of them from one pin.',
+      whyNot: { text: 'Each bit its own scan pin would test the same way and cost a pin per flip-flop: a CPU has thousands.' },
+      ask: {
+        question: 'se = 1 and the chain is clocked four times with si = 0, 0, 1, 1. What does q hold?',
+        options: ['0011: the first bit in has moved up to bit 3', '1100: the first bit in stays in bit 0', '0000: only the last bit counts', '1111'],
+        answer: 0,
+        explain: 'Each edge moves every bit up one and puts si in bit 0. The first two 0s end in bits 3 and 2, the two 1s in bits 1 and 0.',
+        why: ['', 'Bit 0 takes a new si at every edge; the first bit in is pushed up three times.', 'Every bit shifts; nothing is dropped until it leaves bit 3.', 'Two of the four bits shifted in were 0.'],
+      },
+    },
+    {
+      title: 'q and so',
+      text: 'The merger gathers q, and so is q[3], the bit that leaves the chain next. 4 × 13 = 52 NANDs: par, the price of the enable register.',
+      parts: ['mq'],
+      why: 'so is the end of the chain: on a chip it runs on to the next block\'s si, and the last block\'s so is a pin.',
+      whyNot: { text: 'The library\'s scan register uses an 11-NAND flip-flop: 60 NANDs for the same chain.', alt: 'scanreg4' },
+    },
+  ],
   s_cnt4: [
     {
       title: 'The count',

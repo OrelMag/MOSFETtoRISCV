@@ -310,10 +310,18 @@ export const THREAD0: Record<string, NodeThread> = {
   },
   a_add4: {
     uses: ['alu', 'npc', 'br'],
-    usedFor: { a_add16: 'four of them, carries chained' },
+    usedFor: { a_add16: 'four of them, carries chained', t_tests: 'its 90 stuck-at faults, caught by 3 of its 512 vectors' },
     pitfalls: [
       'Watch the splitter\'s bit order: bit 0 is the one that gets cin.',
       'An open cin reads X, not 0: every sum it reaches is X.',
+    ],
+  },
+  t_tests: {
+    uses: ['alu'],
+    usedFor: {},
+    pitfalls: [
+      'A vector that drives a net to its stuck value shows nothing: catching stuck-at 0 needs a 1 there.',
+      'A difference blocked by a NAND whose other input is 0 never reaches an output.',
     ],
   },
   a_add16: {

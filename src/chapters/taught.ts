@@ -5,6 +5,7 @@
 
 import { TAUGHT_COMM2 } from '../campaign/codexcomm2';
 import { TAUGHT_DSP } from '../campaign/codexdsp';
+import { TAUGHT_VERIFY } from '../campaign/codexverify';
 
 /** Codex id → the journey chapter that teaches it. */
 export const TAUGHT: Record<string, string> = {
@@ -215,6 +216,7 @@ export const TAUGHT: Record<string, string> = {
   ...TAUGHT_COMM2,
   // the Signal processing level's (campaign/codexdsp.ts)
   ...TAUGHT_DSP,
+  ...TAUGHT_VERIFY,
 };
 
 /** Codex id → prologue / appendix chapters that explain it too (they read only what came before them). */

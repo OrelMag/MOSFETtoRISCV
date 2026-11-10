@@ -40,6 +40,7 @@ export const THREAD1: Record<string, NodeThread> = {
     usedFor: {
       s_reg16: 'four of them sharing clk and en',
       s_cnt4: 'holds the count; en = 0 holds it still',
+      t_scan: 'the same mux in front of each flip-flop, choosing the bit below instead of q',
       m_ram: 'one per word, en from the address decoder ANDed with we',
     },
     pitfalls: [
@@ -60,6 +61,14 @@ export const THREAD1: Record<string, NodeThread> = {
       'Nibbles merged back in another order than they were split pass every value with four equal nibbles and fail the rest.',
       'One en for all four registers: a register left on a constant en loads every edge or never.',
       'A register that loads every cycle needs no enable: tying en to 1 wastes 64 NANDs on muxes that always pick d.',
+    ],
+  },
+  t_scan: {
+    uses: ['rf', 'pc', 'csr'],
+    usedFor: {},
+    pitfalls: [
+      'Chaining downwards (bit k + 1 into bit k) puts the first bit shifted in at bit 0: 0, 0, 1, 1 reads 1100.',
+      'se on the clock instead of the muxes stops the register in test mode: scan is a choice of input, not of clock.',
     ],
   },
   s_cnt4: {
