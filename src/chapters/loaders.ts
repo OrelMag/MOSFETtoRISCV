@@ -31,6 +31,8 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "traps": () => import('./ch-system').then((m) => m.chTraps),
   "muldiv": () => import('./ch-muldiv').then((m) => m.chMulDiv),
   "cache": () => import('./ch-cache').then((m) => m.chCache),
+  "vmem": () => import('./ch-vmem').then((m) => m.chVmem),
+  "os": () => import('./ch-os').then((m) => m.chOs),
   "multicycle": () => import('./ch-multicycle').then((m) => m.chMulticycle),
   "float": () => import('./ch-float').then((m) => m.chFloat),
   "widths": () => import('./ch-widths').then((m) => m.chWidths),

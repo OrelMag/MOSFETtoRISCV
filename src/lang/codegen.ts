@@ -224,7 +224,7 @@ export class CodeGen {
   private haltLabel = 'halt';
   private heapEnd = 0;
 
-  constructor(private readonly mod: Module, private readonly scope: Scope, private readonly dmemWords: number, private readonly m = false, private readonly heapBytes = HEAP_BYTES) {
+  constructor(private readonly mod: Module, private readonly scope: Scope, private readonly dmemWords: number, private readonly m = false, private readonly heapBytes = HEAP_BYTES, private readonly user = false) {
     const body = foldStmts(mod.body);
     this.mod = { ...mod, body };
     for (const s of body) if (s.kind === 'def') { const f = scope.funcs.get(s.name)!; f.body = s.body; }
@@ -292,7 +292,7 @@ export class CodeGen {
     this.line = null;
     this.comment('set up: the stack at the top of data memory, the output after the data');
     this.emit(`li   sp, ${this.layout.stackTop}`);
-    this.emit(`li   gp, ${this.layout.outBase}`);
+    if (!this.user) this.emit(`li   gp, ${this.layout.outBase}`);
     if (this.layout.heap) {
       this.comment('strings: the heap pointer (tp), then the literals, stored word by word');
       this.emit(`li   tp, ${this.layout.heap.base}`);
@@ -308,6 +308,7 @@ export class CodeGen {
     const halt = scope.funcs.has('halt') ? 'program.halt' : 'halt';
     this.haltLabel = halt;
     this.label(halt);
+    if (this.user) { this.comment('user target: the end of the program is the exit system call'); this.emit('li   a7, 93'); this.emit('ecall'); }
     this.emit(`j    ${halt}`);
 
     for (const f of scope.funcs.values()) this.func(f);
@@ -828,6 +829,19 @@ export class CodeGen {
     this.emit(`${m[o]}, ${label}`);
   }
 
+  /** The user target's print: one word out through the write system call (a7 = 2, a0 = the word), a0 and a7 kept on the stack for the code that lives in them. */
+  private userWrite(reg: string): void {
+    this.emit('addi sp, sp, -8');
+    this.emit('sw   a0, 0(sp)');
+    this.emit('sw   a7, 4(sp)');
+    if (reg !== 'a0') this.emit(`mv   a0, ${reg}`);
+    this.emit('li   a7, 2');
+    this.emit('ecall');
+    this.emit('lw   a0, 0(sp)');
+    this.emit('lw   a7, 4(sp)');
+    this.emit('addi sp, sp, 8');
+  }
+
   private call(e: Expr & { kind: 'call' }, d: number, dest?: string): string {
     switch (e.fn) {
       case 'print': {
@@ -836,6 +850,7 @@ export class CodeGen {
           const regs = e.args.map((a, i) => this.gen(a, d + i));
           e.args.forEach((a, i) => {
             if (a.isStr) this.rtCall('pstr', [regs[i]]);
+            else if (this.user) this.userWrite(regs[i]);
             else { this.emit(`sw   ${regs[i]}, 0(gp)`); this.emit('addi gp, gp, 4'); }
           });
           return dest ? (this.emit(`li   ${dest}, 0`), dest) : 'zero';
@@ -845,9 +860,14 @@ export class CodeGen {
         const calls = e.args.map((a) => { let c = false; walkExpr(a, (x) => { if (x.kind === 'call' && this.scope.funcs.has(x.fn)) c = true; }); return c; });
         const held = calls.lastIndexOf(true) + 1;
         const regs = e.args.slice(0, held).map((a, i) => this.gen(a, d + i));
-        regs.forEach((r, i) => this.emit(`sw   ${r}, ${4 * i}(gp)`));
-        e.args.slice(held).forEach((a, i) => this.emit(`sw   ${this.gen(a, d)}, ${4 * (held + i)}(gp)`));
-        this.emit(`addi gp, gp, ${4 * e.args.length}`);
+        if (this.user) {
+          regs.forEach((r) => this.userWrite(r));
+          e.args.slice(held).forEach((a) => this.userWrite(this.gen(a, d)));
+        } else {
+          regs.forEach((r, i) => this.emit(`sw   ${r}, ${4 * i}(gp)`));
+          e.args.slice(held).forEach((a, i) => this.emit(`sw   ${this.gen(a, d)}, ${4 * (held + i)}(gp)`));
+          this.emit(`addi gp, gp, ${4 * e.args.length}`);
+        }
         return dest ? (this.emit(`li   ${dest}, 0`), dest) : 'zero';
       }
       case 'len': {
@@ -1162,7 +1182,7 @@ export class CodeGen {
     if (has('pstr')) {
       blank();
       R([
-        '# print the str a0: its bytes, one word each, at gp',
+        this.user ? '# print the str a0: its bytes, one word each, through the write system call' : '# print the str a0: its bytes, one word each, at gp',
         'rt.pstr:',
         'lw   a1, 0(a0)',
         'addi a0, a0, 4',
@@ -1170,8 +1190,7 @@ export class CodeGen {
         'rt.pstr.a:',
         'bgeu a0, a1, rt.pstr.b',
         ...ldb('a2', 'a0', 'a3'),
-        'sw   a2, 0(gp)',
-        'addi gp, gp, 4',
+        ...(this.user ? ['mv   a4, a0', 'mv   a0, a2', 'li   a7, 2', 'ecall', 'mv   a0, a4'] : ['sw   a2, 0(gp)', 'addi gp, gp, 4']),
         'addi a0, a0, 1',
         'j    rt.pstr.a',
         'rt.pstr.b:',
