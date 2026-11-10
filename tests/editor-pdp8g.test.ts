@@ -53,7 +53,7 @@ describe('the CPU drawer\'s PDP-8 monitor', () => {
 
   it('finds the processor, its RAM, the keyboard and the panel pins', () => {
     const { desc } = setup();
-    expect(desc).toMatchObject({ core: 'cpu', ram: 'core', kbd: 'kbd', sr: 'SR', keys: { ld: 'LOAD_ADD', start: 'START', sstep: 'SING_STEP' } });
+    expect(desc).toMatchObject({ core: 'cpu', ram: 'core', kbd: 'kbd', sr: 'SR', keys: { ld: 'LOAD_ADD', start: 'START', sstep: 'SING_INST' } });
   });
 
   it('follows Hello, world in lock step with the golden model to the HLT', () => {

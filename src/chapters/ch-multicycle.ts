@@ -376,7 +376,7 @@ export const chMulticycle: Chapter = {
       body: `
         <p>On 7 April 1964 IBM announced System/360: six models behind one instruction set, with a performance range of a factor of 50 from the smallest to the largest.
         A program written for one ran on the others, so a customer who outgrew a machine bought the next model and kept the software. The models were not
-        scaled copies of one design. They differed in <strong>data-path width</strong>: 8, 16, 32 and 64 bits on the Models 30, 40, 50 and 65, as Patterson tabulates them, and in price: a year's rental was ${groupDigits(IBM_RENT.m30)} for a Model 30 and ${groupDigits(IBM_RENT.m65)} for a Model 65 (1964 dollars), ${(IBM_RENT.m65 / IBM_RENT.m30).toFixed(1)} times as much. On the Model 30 an 8-bit
+        scaled copies of one design. They differed in <strong>data-path width</strong>: 8, 16, 32 and 64 bits on the Models 30, 40, 50 and 65 (the 65 came a year later, in place of two of the six announced), as David Patterson's history of the family tabulates them, and in price: a year's rental was ${groupDigits(IBM_RENT.m30)} for a Model 30 and ${groupDigits(IBM_RENT.m65)} for a Model 65 (1964 dollars), ${(IBM_RENT.m65 / IBM_RENT.m30).toFixed(1)} times as much. On the Model 30 an 8-bit
         ALU did a 32-bit addition in byte-sized steps, and the instruction set was what its microcode made of that small machine. The control store held about
         4 000 words of 50 to 60 bits (the sources differ; see Layers). The instruction set was a contract, and microcode was the translation from it to each machine.</p>
         <p>The table runs the same experiment with our own hardware: RV32I built four ways, the same programs on each, every result checked against the golden model. All four

@@ -15,7 +15,7 @@ const KEY_LABEL: [Pdp8Key, string, string][] = [
   ['exam', 'EXAM', 'MB ← core at PC, then PC + 1'],
   ['cont', 'CONT', 'Run on from PC, nothing cleared'],
   ['stop', 'STOP', 'Stop at the end of the instruction under way'],
-  ['sstep', 'SING STEP', 'One instruction, then stop'],
+  ['sstep', 'SING INST', 'One instruction, then stop (the real panel’s SING INST switch with CONT; its SING STEP was one memory cycle)'],
 ];
 
 export interface Pdp8PanelHooks {

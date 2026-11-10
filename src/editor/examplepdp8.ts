@@ -31,7 +31,7 @@ export function pdp8Chip(id: string, name: string): ChipDoc {
 
 /** The panel's keys as the gate-level processor's pins, with the names on the chip's input pins. */
 export const PDP8G_KEYS: [port: string, pin: string][] = [
-  ['ld', 'LOAD_ADD'], ['start', 'START'], ['dep', 'DEP'], ['exam', 'EXAM'], ['cont', 'CONT'], ['stop', 'STOP'], ['sstep', 'SING_STEP'],
+  ['ld', 'LOAD_ADD'], ['start', 'START'], ['dep', 'DEP'], ['exam', 'EXAM'], ['cont', 'CONT'], ['stop', 'STOP'], ['sstep', 'SING_INST'],
 ];
 
 /**

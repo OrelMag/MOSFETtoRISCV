@@ -328,7 +328,7 @@ export const PDP8_TTY: ComponentDef = (() => {
   b.wire(iof, 'iof');
   return define({
     id: 'pdp8_tty', name: 'Teletype (PDP-8)', category: 'cpu',
-    summary: 'The console teletype\'s IOTs. Keyboard (03): KSF skips while a key waits, KCC clears AC and takes the key, KRS ORs it into AC, KRB does both. Printer (04): TSF skips once the last character is printed, TCF clears that flag, TLS prints AC\'s 7 low bits and sets it. Device 00: ION, IOF.',
+    summary: 'The console teletype\'s IOTs. Keyboard (03): KSF skips while a key waits, KCC clears AC and the keyboard flag (ready for the next key), KRS ORs it into AC, KRB does both. Printer (04): TSF skips once the last character is printed, TCF clears that flag, TLS prints AC\'s 7 low bits and sets it. Device 00: ION, IOF.',
     ports: TTY_PORTS,
     symbol: { kind: 'box', label: 'TELETYPE' },
     netlist: laid(b, { keepOrder: true, room: true, wires: { kready: true } }),
