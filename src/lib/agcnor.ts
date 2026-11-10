@@ -20,7 +20,7 @@ import type { ComponentDef } from '../sim/types';
 const bit = (name: string, dir: 'in' | 'out') => ({ name, width: 1, dir });
 
 export const NOR3_RTL: ComponentDef = define({
-  id: 'nor3_rtl', name: 'NOR3 (RTL, as in the AGC)', category: 'cell',
+  id: 'nor3_rtl', name: 'NOR3 (RTL, as in the AGC)', category: 'gate',
   summary: 'y = ¬(a + b + c): three transistors to ground in parallel under one collector resistor, the Apollo Guidance Computer\'s only logic gate. Counted as drawn on MIT drawing 2005011, 3 transistors and 4 resistors; the three base resistors only limit current, so the simulation leaves them out.',
   ports: [bit('a', 'in'), bit('b', 'in'), bit('c', 'in'), bit('y', 'out')],
   symbol: { kind: 'box', label: 'NOR3' },

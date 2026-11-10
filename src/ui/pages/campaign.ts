@@ -452,7 +452,7 @@ export class CampaignPage implements Page {
     const rule = ch && typeof ch.allowed === 'object' ? ch.allowed.lib.filter((x) => x !== 'nand') : [];
     // (what it builds on and what uses it sit in the why stack, above)
     el.append(h('div', { class: 'cp-deps' },
-      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), 'NAND, ', partNames(rule, (u) => resolveComponent(u)?.name).join(', ')) : null,
+      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), ch && typeof ch.allowed === 'object' && ch.allowed.strict ? '' : 'NAND, ', partNames(rule, (u) => resolveComponent(u)?.name).join(', ')) : null,
       unlocks.length ? h('p', null, h('b', null, 'Unlocks: '), unlocks.join(', ')) : null));
 
     // Tips, one at a time.

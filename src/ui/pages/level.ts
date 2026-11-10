@@ -348,9 +348,11 @@ export class LevelPage implements Page {
       h('section', { class: 'cp-criteria' }, h('h3', null, 'Success criteria'), h('ul', null, criteria(ch).map((c) => h('li', null, c)))),
       gradeTable(n));
     const rule = typeof ch.allowed === 'object' ? ch.allowed.lib.filter((x) => x !== 'nand') : [];
+    // a strict rule (act P, the NOR3 ladder) lists its parts alone: NAND is not among them
+    const strict = typeof ch.allowed === 'object' && !!ch.allowed.strict;
     const names = (ids: readonly string[]) => partNames(ids, (u) => resolveComponent(u)?.name).join(', ');
     el.append(h('section', { class: 'cp-deps' },
-      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), 'NAND, ', names(rule)) : null,
+      rule.length ? h('p', null, h('b', null, 'Parts you may place: '), strict ? '' : 'NAND, ', names(rule)) : null,
       n.unlocks?.length ? h('p', null, h('b', null, 'Unlocks: '), names(n.unlocks)) : null));
     this.pitfalls(el);
   }
