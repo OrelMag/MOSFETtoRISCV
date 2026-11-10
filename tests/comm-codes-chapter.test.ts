@@ -58,22 +58,29 @@ describe('what the LDPC steps say', () => {
     expect(deAwgn(AWGN_SIGMA[0], 3, 6, { rounds: 3000 }).converged).toBe(true);
     expect(deAwgn(AWGN_SIGMA[1], 3, 6, { rounds: 3000 }).converged).toBe(false);
   });
-  it('the concatenated link: the words the step quotes, at each depth', async () => {
-    const run = async (depth: number, frames: number, db = 2.3) => { let failed = 0, words = 0, wrong = 0, bits = 0, wb = 0, tb = 0; for (let f = 0; f < 8; f++) for (let g = 0; g < 6; g++) { const r = concatTrial(db, { depth, frames, seed: 300 + f + 100 * g }); failed += r.failed; words += r.words; wrong += r.dataBitErrors; bits += r.dataBits; wb += r.byteErrors; tb += r.bytes; await tick(); } return [failed, words, wrong / bits, wb / tb]; };
-    const got = [await run(1, 8), await run(2, 4), await run(8, 1)];
-    // eslint-disable-next-line no-console
-    console.log('concat at 2.3 dB', got);
-    expect(got.map((x) => x[1])).toEqual([CONCAT_WORDS, CONCAT_WORDS, CONCAT_WORDS]);
-    expect(got.map((x) => x[0])).toEqual(CONCAT_MEASURED);
-    const at22 = await run(8, 1, 2.2);
-    // eslint-disable-next-line no-console
-    console.log('ber', at22[2], got[2][2]);
+  // The concatenated link, 48 seeded trials a run (8 seeds × 6), one test per run so each stays short on a loaded runner. Every count is pinned exactly.
+  const concatRun = async (depth: number, frames: number, db = 2.3) => { let failed = 0, words = 0, wrong = 0, bits = 0, wb = 0, tb = 0; for (let f = 0; f < 8; f++) for (let g = 0; g < 6; g++) { const r = concatTrial(db, { depth, frames, seed: 300 + f + 100 * g }); failed += r.failed; words += r.words; wrong += r.dataBitErrors; bits += r.dataBits; wb += r.byteErrors; tb += r.bytes; await tick(); } return [failed, words, wrong / bits, wb / tb]; };
+  // the step: the words fail as the binomial tail of their bytes says, within a factor of two
+  const binomialTail = (r: number[]) => { const p = rsWordFailure(255, 16, r[3]), m = r[0] / r[1]; expect(m / p).toBeGreaterThan(0.5); expect(m / p).toBeLessThan(2); };
+  [[1, 8], [2, 4]].forEach(([depth, frames], i) => it(`the concatenated link at 2.3 dB, depth ${depth}: the words the step quotes`, async () => {
+    const got = await concatRun(depth, frames);
+    expect(got[1]).toBe(CONCAT_WORDS);
+    expect(got[0]).toBe(CONCAT_MEASURED[i]);
+  }, 120000));
+  it('the concatenated link at 2.3 dB, depth 8: the words and the bit error rate the step quotes', async () => {
+    const got = await concatRun(8, 1);
+    expect(got[1]).toBe(CONCAT_WORDS);
+    expect(got[0]).toBe(CONCAT_MEASURED[2]);
+    expect(got[2]).toBeCloseTo(CONCAT_POINTS[1][1], 8);
+    binomialTail(got);
+  }, 120000);
+  it('the concatenated link at 2.2 dB, depth 8: the words and the bit error rate the step quotes', async () => {
+    const at22 = await concatRun(8, 1, 2.2);
     expect(at22[0]).toBe(CONCAT_FAILED_22);
     expect(at22[2]).toBeCloseTo(CONCAT_POINTS[0][1], 8);
-    expect(got[2][2]).toBeCloseTo(CONCAT_POINTS[1][1], 8);
-    // the step: the words fail as the binomial tail of their bytes says, within a factor of two
-    for (const r of [at22, got[2]]) { const p = rsWordFailure(255, 16, r[3]), m = r[0] / r[1]; expect(m / p).toBeGreaterThan(0.5); expect(m / p).toBeLessThan(2); }
-  }, 300000);
+    binomialTail(at22);
+  }, 120000);
+  it('the concatenated link quotes one measured count per depth', () => expect(CONCAT_MEASURED).toHaveLength(3));
   it('the waterfall\'s text: 504 bits beat K = 7 at 2.4 dB, and 8064 bits at 1.6 dB beat 504', () => {
     const short = regularCode(504, 3, 6, 5), long = regularCode(8064, 3, 6, 5), frames = (n: number) => Math.ceil(200000 / n);
     const s24 = ldpcTrial(short, 2.4, frames(504), { seed: 1, maxIter: 60 }), s16 = ldpcTrial(short, 1.6, frames(504), { seed: 1, maxIter: 60 }), l16 = ldpcTrial(long, 1.6, frames(8064), { seed: 1, maxIter: 60 });

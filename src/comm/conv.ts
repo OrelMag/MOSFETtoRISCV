@@ -65,6 +65,11 @@ export class Viterbi {
   surv: Uint8Array[];
   sel: Uint8Array;
   private exp: { a: number; b: number }[][];
+  private sBuf?: Uint8Array[];
+  private mBuf?: Uint32Array[];
+  private sViews?: Uint8Array[][];
+  private cur = 0;
+  private bm?: Uint32Array;
   constructor(readonly spec: ConvSpec, o: ViterbiOpts = {}) {
     this.n = statesOf(spec); this.q = o.q ?? 1; this.depth = o.depth ?? defaultDepth(spec.K); this.w = metricWidth(spec.K, this.q);
     this.metric = new Uint32Array(this.n); this.sel = new Uint8Array(this.n);
@@ -81,20 +86,28 @@ export class Viterbi {
   resetMetrics(): void { this.metric.fill(0); }
   /** One clock edge with en = 1: add, compare, select in every state at once. */
   step(r0: number, r1: number): void {
-    const M = 2 ** this.w, half = M / 2, { n, q } = this;
-    const m = new Uint32Array(n), surv: Uint8Array[] = new Array<Uint8Array>(n);
+    const M = 2 ** this.w, half = M / 2, { n, q, depth: D } = this, top = this.spec.K - 2;
+    // Two flat buffers of survivors and of metrics, swapped each step (every state reads the old ones): no allocation per step. this.surv / this.metric are
+    // views of the current pair; when a caller has put arrays of its own there (a restored snapshot), they are copied in first.
+    const sb = (this.sBuf ??= [new Uint8Array(n * D), new Uint8Array(n * D)]), mb = (this.mBuf ??= [new Uint32Array(n), new Uint32Array(n)]);
+    const views = (this.sViews ??= sb.map((buf) => Array.from({ length: n }, (_, ns) => buf.subarray(ns * D, ns * D + D)))), c = this.cur;
+    if (this.surv !== views[c]) for (let ns = 0; ns < n; ns++) views[c][ns].set(this.surv[ns]);
+    if (this.metric !== mb[c]) mb[c].set(this.metric);
+    const old = sb[c], next = sb[1 - c], om = mb[c], m = mb[1 - c];
+    // only four expected pairs exist: their branch metrics once per step, indexed 2a + b
+    const bm = (this.bm ??= new Uint32Array(4));
+    for (let e = 0; e < 4; e++) bm[e] = branchMetric(q, e >> 1, e & 1, r0, r1);
     for (let ns = 0; ns < n; ns++) {
-      const p0 = (ns << 1) & (n - 1), p1 = p0 | 1, [e0, e1] = this.exp[ns];
-      const c0 = (this.metric[p0] + branchMetric(q, e0.a, e0.b, r0, r1)) % M, c1 = (this.metric[p1] + branchMetric(q, e1.a, e1.b, r0, r1)) % M;
+      const p0 = (ns << 1) & (n - 1), p1 = p0 | 1, ex = this.exp[ns], e0 = ex[0], e1 = ex[1];
+      const c0 = (om[p0] + bm[2 * e0.a + e0.b]) % M, c1 = (om[p1] + bm[2 * e1.a + e1.b]) % M;
       const s = (c1 - c0 + M) % M >= half ? 1 : 0;
       this.sel[ns] = s;
       m[ns] = s ? c1 : c0;
-      const from = this.surv[s ? p1 : p0], to = new Uint8Array(this.depth);
-      to.set(from.subarray(0, this.depth - 1), 1);
-      to[0] = ns >>> (this.spec.K - 2);
-      surv[ns] = to;
+      const f = (s ? p1 : p0) * D, o = ns * D;
+      next[o] = ns >>> top;
+      next.set(old.subarray(f, f + D - 1), o + 1);
     }
-    this.metric = m; this.surv = surv;
+    this.cur = 1 - c; this.surv = views[1 - c]; this.metric = m;
   }
   /** The largest difference between two metrics, read through the wrap from the smallest: stays below half the range by construction. */
   spread(): number {
