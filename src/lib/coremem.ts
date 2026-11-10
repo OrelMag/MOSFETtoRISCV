@@ -204,7 +204,7 @@ function storeOf(words: readonly number[]): ComponentDef {
     { name: 'addr', ends: ['addr', 'sa.in'] },
     { name: 'din', ends: ['din', 'sd.in'] },
     { name: 'we', ends: ['we', 'op.d'] },
-    { name: 'go', ends: ['go', 'start.b'] },
+    { name: 'go', ends: ['go', 'start.b'], via: { 'start.b': [[13, 105], [13, 101]] } },
     { name: 'inhOn', ends: ['inhOn', 'inhon.b'] },
     { name: 'idle', ends: ['idle.y', 'start.a'] },
     { name: 'start', ends: ['start.y', 'rd.d', 'op.en', ...Array.from({ length: 4 }, (_, i) => `a${i}.en`), ...Array.from({ length: PLANES }, (_, i) => `d${i}.en`)], tags: true },
@@ -254,7 +254,7 @@ function storeOf(words: readonly number[]): ComponentDef {
     summary: 'Sixteen words of four bits in four core planes, Whirlwind\'s scheme in miniature: go starts a cycle, READ empties the addressed word into the buffer register through the sense windings, WRITE puts the buffer back (or din, when we = 1), the inhibit keeping the zeros.',
     ports: [bus('addr', 4, 'in'), bus('din', PLANES, 'in'), bit('we', 'in'), bit('go', 'in'), bit('inhOn', 'in'), bit('clk', 'in', 'bottom', true), bus('dout', PLANES, 'out'), bus('phase', 2, 'out')],
     symbol: { kind: 'box', label: 'CORE 16x4' },
-    netlist: () => ({ pins: { addr: [0, 19], din: [0, 61], we: [0, 86], go: [0, 101], inhOn: [0, 120], clk: [0, 126], dout: [132, 45], phase: [132, 106] }, instances, nets }),
+    netlist: () => ({ pins: { addr: [0, 19], din: [0, 61], we: [0, 86], go: [0, 105], inhOn: [0, 120], clk: [0, 126], dout: [132, 45], phase: [132, 106] }, instances, nets }),
   });
 }
 export const CORE_STORE = coreStore();

@@ -11,12 +11,14 @@
 // MA + 1 for JMS), AC & LINK (the adder, AND, both operate groups, MQ), TELETYPE (IOTs 03 and 04: keyboard buffer and
 // printer flag). pdp8Core leaves the core outside on maddr / din / mwe / dout; pdp8Computer puts a 4K × 12 RAM inside.
 
-import type { ComponentDef, PortDef } from '../sim/types';
+import type { ComponentDef, Netlist, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
+import { instPort } from '../sim/geometry';
 import { bigRamWithInit } from './bigmem';
 import { Builder } from './builder';
 import { andN, busMux2, decoder, equal, incrementer, muxTree, rca } from './combinational';
 import { define, merger, splitter } from './define';
+import { laid } from './layered';
 import { AND, NOR, NOT, OR, XOR } from './gates';
 import { DFFE, register } from './sequential';
 import { TIE1 } from './transistors';
@@ -28,6 +30,8 @@ const ins = (ps: PortDef[]) => ps.filter((p) => p.dir === 'in').map((p) => p.nam
 const outs = (ps: PortDef[]) => ps.filter((p) => p.dir === 'out').map((p) => p.name);
 const pinsAt = (names: string[], x: number, step = 4, y0 = 4): Record<string, [number, number]> =>
   Object.fromEntries(names.map((n, i) => [n, [x, y0 + step * i]]));
+/** A Builder level as drawn by its columns, the nets driven from `pointers` (driver ends) drawn as pointers: a wire there would run under a part. */
+const columns = (f: () => Netlist, pointers: string[] = []) => (): Netlist => { const nl = f(); return { ...nl, nets: nl.nets.map((n) => (pointers.includes(n.ends[0]) ? { ...n, tags: true } : n)) }; };
 const ones = (n: number) => Array<number>(n).fill(1);
 const M12 = 0o7777;
 
@@ -147,14 +151,13 @@ export const PDP8_OPR23: ComponentDef = (() => {
   b.next();
   b.wire(b.op1(busMux2(12), [ac2, ac3, g3], 'AC'), 'y');
   b.wire(b.op1(busMux2(12), ['mq', mq3, g3], 'MQ'), 'mqy');
-  const R = b.right;
   return define({
     id: 'pdp8_opr23', name: 'Operate groups 2 and 3 (PDP-8)', category: 'cpu',
     summary: 'Group 2: the skip test on AC and L (SMA SZA SNL; bit 3 turns it into SPA SNA SZL), then CLA, OSR (OR the switch register in) and HLT. Group 3: CLA, then MQA (OR the MQ in) and MQL (MQ ← AC, AC ← 0); both together swap them.',
     ports: OPR23_PORTS,
     symbol: { kind: 'box', label: 'GROUPS 2·3' },
     spec: ([w, l, ac, mq, sr]) => opr23Ref(w, l, ac, mq, sr),
-    netlist: () => ({ pins: { ...pinsAt(ins(OPR23_PORTS), 0, 6), ...pinsAt(outs(OPR23_PORTS), R, 6, 6) }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { room: true }),
   });
 })();
 
@@ -196,7 +199,7 @@ export const PDP8_AC: ComponentDef = (() => {
     summary: 'The accumulator, its link L and the MQ, with everything that computes their next values: AND, a 12-bit adder for TAD (its carry flips L), the two operate units, the teletype\'s result, or zero (DCA, START).',
     ports: AC_PORTS,
     symbol: { kind: 'box', label: 'AC & LINK' },
-    netlist: () => ({ pins: { ...pinsAt(ins(AC_PORTS), 0, 4), ...pinsAt(outs(AC_PORTS), R, 6, 6) }, instances: b.instances, nets: b.nets() }),
+    netlist: columns(() => ({ pins: { ...pinsAt(ins(AC_PORTS), 0, 4), ...pinsAt(outs(AC_PORTS), R, 6, 6) }, instances: b.instances, nets: b.nets() }), ['g23.skip']),
   });
 })();
 
@@ -277,7 +280,7 @@ export const PDP8_MAB: ComponentDef = (() => {
     summary: 'The memory address and buffer registers. The effective address is the word\'s 7 low bits on page 0 or on PC\'s page (bit 7). The core reads PC in Fetch and MA in Defer and Execute; the next MB is the word read, the word + 1 (ISZ, auto-index), AC (DCA) or PC (JMS, an interrupt), and it is also the word written.',
     ports: MAB_PORTS,
     symbol: { kind: 'box', label: 'MA & MB' },
-    netlist: () => ({ pins: { ...pinsAt(ins(MAB_PORTS), 0, 4), ...pinsAt(outs(MAB_PORTS), R, 4) }, instances: b.instances, nets: b.nets() }),
+    netlist: columns(() => ({ pins: { ...pinsAt(ins(MAB_PORTS), 0, 4), ...pinsAt(outs(MAB_PORTS), R, 4) }, instances: b.instances, nets: b.nets() }), ['mbr.q']),
   });
 })();
 
@@ -323,13 +326,12 @@ export const PDP8_TTY: ComponentDef = (() => {
   b.wire(b.op1(merger([7, 1]), [b.op(splitter([7, 5]), ['ac'], 'AC bits 6–0') + '.o0', b.op1(constWord(1, 0), [])], 'character'), 'tdata');
   b.wire(ion, 'ion');
   b.wire(iof, 'iof');
-  const R = b.right;
   return define({
     id: 'pdp8_tty', name: 'Teletype (PDP-8)', category: 'cpu',
     summary: 'The console teletype\'s IOTs. Keyboard (03): KSF skips while a key waits, KCC clears AC and takes the key, KRS ORs it into AC, KRB does both. Printer (04): TSF skips once the last character is printed, TCF clears that flag, TLS prints AC\'s 7 low bits and sets it. Device 00: ION, IOF.',
     ports: TTY_PORTS,
     symbol: { kind: 'box', label: 'TELETYPE' },
-    netlist: () => ({ pins: { ...pinsAt(ins(TTY_PORTS), 0, 4), ...pinsAt(outs(TTY_PORTS), R, 4) }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { keepOrder: true, room: true, wires: { kready: true } }),
   });
 })();
 
@@ -442,13 +444,12 @@ export const PDP8_CONTROL: ComponentDef = (() => {
   b.wire(ie, 'ie');
   b.wire(`${st}.q`, 'state');
   b.wire(`${ir}.q`, 'ir');
-  const R = b.right;
   return define({
     id: 'pdp8_control', name: 'Control (PDP-8)', category: 'cpu',
     summary: 'The major state (Fetch, Defer, Execute), the instruction register, RUN and the interrupt system, and the gates that turn them, the word read and the front panel\'s keys into every select and enable of the data path. An interrupt replaces a Fetch: core[0] ← PC, PC ← 0001.',
     ports: CTL_PORTS,
     symbol: { kind: 'box', label: 'CONTROL' },
-    netlist: () => ({ pins: { ...pinsAt(ins(CTL_PORTS), 0, 4), ...pinsAt(outs(CTL_PORTS), R, 4) }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { room: true, wires: { 'u21.y': false, 'u59.y': false, 'u73.out': false, 'u75.y': false, 'u48.y': false, 'u100.y': false, exam: true, start: true } }),
   });
 })();
 
@@ -519,9 +520,18 @@ export const PDP8_CORE: ComponentDef = (() => {
     summary: 'The DEC PDP-8 (1965) without its core memory: a 12-bit accumulator machine, one clock edge per memory cycle (Fetch, Defer, Execute). Control, MA & MB, PC, AC & link with both operate groups and the MQ, and the console teletype\'s IOTs; the front panel\'s keys and switch register as pins.',
     ports,
     symbol: { kind: 'box', label: 'PDP-8' },
-    netlist: () => ({ pins: { ...pinsAt(ins(ports), 0, 4), ...pinsAt(outs(ports), R, 6) }, instances: b.instances, nets: b.nets() }),
+    // the keys and kready level with CONTROL's ports, wired straight across; dout at CONTROL's, clk at its bottom port's height
+    netlist: () => ({ pins: { ...keyPins(b), ...pinsAt(outs(ports), R, 6) }, instances: b.instances, nets: b.nets() }),
   });
 })();
+
+/** The processor's input pins: each key, kready and dout level with the CONTROL port it feeds, sr above, clk and kcode below. */
+function keyPins(b: Builder): Record<string, [number, number]> {
+  const ctl = b.instances.find((i) => i.name === 'ctl')!;
+  const y = (p: string) => instPort(ctl.def, ctl.at!, ctl.flip, p).pos[1];
+  const at = (p: string): [number, number] => [0, y(p)];
+  return { sr: [0, y('dout') - 4], dout: at('dout'), kready: at('kready'), ...Object.fromEntries(PDP8_KEYS.map((k) => [k, at(k)])), clk: [0, y('sstep') + 6], kcode: [0, y('sstep') + 10] };
+}
 
 const computers = new Map<string, ComponentDef>();
 
