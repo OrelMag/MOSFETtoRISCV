@@ -42,3 +42,27 @@
 
 /* the large copy in the puzzle strip */
 .dev-big { display: block; width: 100%; max-width: 300px; height: auto; border-radius: 8px; }
+
+/* the strip's buttons wrap on a narrow screen (five of them: wider than a phone) */
+.sb-dev .sb-chal-actions { flex: 1 1 auto; flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; min-width: 0; }
+
+/* the Puzzles drawer: a device puzzle's pin glyph */
+.sb-dev-pins { display: inline-flex; gap: 2px; align-items: center; flex: none; }
+.sb-dev-pins b { width: 4px; height: 10px; border-radius: 1px; background: color-mix(in srgb, var(--good) 70%, var(--text) 10%); }
+
+/* the player: the face large beside a timeline of every step's pins */
+.sb-dev-stage { display: grid; grid-template-columns: minmax(140px, 200px) minmax(0, 1fr); gap: 12px; align-items: start; margin-top: 8px; }
+@media (max-width: 760px) { .sb-dev-stage { grid-template-columns: 1fr; } .sb-dev-big { max-width: 260px; } }
+.sb-dev-big .sb-tp-note { margin: 4px 0 0; }
+.sb-dev-lanes-wrap { overflow-x: auto; min-width: 0; }
+.sb-dev-lanes { display: block; width: 100%; min-width: 420px; height: auto; }
+.sb-dev-lanes .lbl { font: 600 10px var(--font-mono); fill: var(--text-2); }
+.sb-dev-lanes .lbl.sense { fill: var(--accent); }
+.sb-dev-lanes .base { stroke: var(--border); }
+.sb-dev-lanes .on.drive { fill: var(--series-2); }
+.sb-dev-lanes .on.sense { fill: var(--accent); }
+.sb-dev-lanes .on.x { fill: var(--warn); }
+.sb-dev-lanes .val { font: 600 8px var(--font-mono); fill: var(--surface); }
+.sb-dev-lanes .fault { fill: none; stroke: var(--warn); stroke-width: 2; }
+.sb-dev-lanes .cur { fill: var(--text); opacity: 0.55; }
+.sb-dev-lanes .tick { font: 9px var(--font-mono); fill: var(--muted); }

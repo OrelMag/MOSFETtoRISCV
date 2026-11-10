@@ -36,6 +36,8 @@ import { KEY as SANDBOX_KEY } from '../src/editor/store';
 import { NOTES_KEY } from '../src/ui/notes';
 import { LEARN_KEY } from '../src/learn/store';
 import { REVIEW_KEY } from '../src/ui/review';
+import { DEVICE_PUZZLES, devicePuzzleChipId } from '../src/puzzles/devpuzzles';
+import { emptyDeviceChip, referenceChip } from '../src/puzzles/devrefs';
 
 // ---- options ---------------------------------------------------------------------------------
 
@@ -116,6 +118,47 @@ function examplesWorkspace(): { json: string; ids: string[] } {
   }
   return { json: JSON.stringify(ws), ids };
 }
+
+/**
+ * The device puzzles' chips (the reference circuit of each), or with `failing` an empty crossing chip whose lamps nobody drives
+ * (every test fails at step 0 on an X pin).
+ */
+function devicesWorkspace(failing = false): string {
+  const chips = Object.fromEntries(DEVICE_PUZZLES.map((p) => {
+    const id = devicePuzzleChipId(p);
+    return [id, failing && p.dev === 'crossing' ? emptyDeviceChip(p.dev, id, p.title) : referenceChip(p.dev, id, p.title)];
+  }));
+  return JSON.stringify({ ...emptyWorkspace(), chips, open: Object.keys(chips) });
+}
+
+/**
+ * A device puzzle chip open: Check (every test passes, or with `fail` the first one fails with its reason), a test played a few
+ * steps (the player, the large face, the timeline), Done gives the circuit back.
+ */
+const deviceDrive = (fail: boolean) => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const strip = document.querySelector('.sb-dev');
+  if (!strip || strip.hidden) return ['no device puzzle strip'];
+  if (!document.querySelector('svg.ed-svg .dev-face')) bad.push('no device face on the canvas');
+  strip.querySelector('[data-pz=check]').click();
+  for (let i = 0; i < 100 && !strip.querySelector('tbody tr td.st')?.textContent; i++) await wait(100);
+  const marks = [...strip.querySelectorAll('tbody tr td.st')].map((t) => t.textContent).join('');
+  if (${fail}) { if (!marks.startsWith('✗') || !strip.querySelector('.sb-tp-note.err')) bad.push('expected a failing first test with its reason, got ' + marks); }
+  else if (!marks || /[^✓]/.test(marks)) bad.push('expected every test to pass, got ' + marks);
+  strip.querySelector('tbody tr[data-test="0"]').click();
+  await wait(400);
+  const fwd = () => document.querySelector('.sb-dev-player button[aria-label="One step forward"]');
+  if (!fwd()) return [...bad, 'the player did not open'];
+  for (let i = 0; i < 4; i++) { fwd()?.click(); await wait(80); }
+  if (!document.querySelector('.sb-dev-player .dev-big')) bad.push('no large face in the player');
+  if (!document.querySelector('.sb-dev-player .sb-dev-lanes rect')) bad.push('no timeline in the player');
+  const done = [...document.querySelectorAll('.sb-dev-player button')].find((b) => b.textContent.includes('Done'));
+  done?.click();
+  await wait(200);
+  if (document.querySelector('.sb-dev-player')) bad.push('Done did not close the player');
+  return bad;
+})()`;
 
 /** Opens File ▸ Memory map…, checks the windows, the three views and that the dialog fits, closes it with Esc. */
 const MEMMAP_DRIVE = `(async () => {
@@ -684,6 +727,11 @@ function routes(): Route[] {
   add('#/sandbox', light, ` (examples gallery, ${phoneVp.name})`, phoneVp, GALLERY_DRIVE);
   const ex = examplesWorkspace();
   for (const id of ex.ids) add(`#/sandbox/${id}`, { ...light, [SANDBOX_KEY]: ex.json });
+  // The device puzzles: each reference chip checked and played, in both themes; on a phone; and a failing chip.
+  const devWs = devicesWorkspace();
+  for (const theme of ['light', 'dark'] as const) for (const p of DEVICE_PUZZLES) add(`#/sandbox/${devicePuzzleChipId(p)}`, { ...themed(theme), [SANDBOX_KEY]: devWs }, ` (device puzzle, ${theme})`, undefined, deviceDrive(false));
+  add(`#/sandbox/${devicePuzzleChipId(DEVICE_PUZZLES[1])}`, { ...light, [SANDBOX_KEY]: devWs }, ` (device puzzle, ${phoneVp.name})`, phoneVp, deviceDrive(false));
+  add(`#/sandbox/${devicePuzzleChipId(DEVICE_PUZZLES[0])}`, { ...light, [SANDBOX_KEY]: devicesWorkspace(true) }, ' (device puzzle, failing)', undefined, deviceDrive(true));
   add('#/workbench/xor', light, ' (menu by key)', undefined, MENU_DRIVE);
   add('#/sandbox', light, ' (menu by key)', undefined, MENU_DRIVE);
   add('#/sandbox', light, ` (${TOUCH_VIEWPORTS[0].name}: hold, cancel, tap a pin)`, TOUCH_VIEWPORTS[0], TOUCH_DRIVE);

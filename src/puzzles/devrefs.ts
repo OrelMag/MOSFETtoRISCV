@@ -11,7 +11,7 @@ import { DFF, register } from '../lib/sequential';
 import { TIE0, TIE1 } from '../lib/transistors';
 import type { ComponentDef } from '../sim/types';
 import { docFromDef } from '../editor/fromdef';
-import type { ChipDoc, PartRef } from '../editor/model';
+import type { ChipDoc, PartDoc, PartRef } from '../editor/model';
 import { deviceDef } from '../editor/devparts';
 import type { DeviceId } from './devices';
 
@@ -170,4 +170,41 @@ export function referenceChip(dev: DeviceId, id: string, name: string): ChipDoc 
   const doc = docFromDef(referenceDef(dev), { id, name, refOf: TIE_REF });
   if ('error' in doc) throw new Error(`device reference ${dev}: ${doc.error}`);
   return doc;
+}
+
+/** A new puzzle chip with the device and a clock pin wired to it, nothing else: the learner draws the controller. */
+export function emptyDeviceChip(dev: DeviceId, id: string, name: string): ChipDoc {
+  const b = new Builder(24, 10, 4);
+  b.pins('clk');
+  const d = deviceDef(dev);
+  b.add(d, DEVICES_LABEL[dev], 'dev');
+  b.wire('clk', 'dev.clk');
+  const def: ComponentDef = {
+    id: `pzdev_empty_${dev}`, name, category: 'sequential', symbol: { kind: 'box', label: 'PUZZLE' }, ports: [CLK],
+    netlist: () => ({ pins: { clk: [0, 4] }, instances: b.instances, nets: b.nets() }),
+  };
+  const doc = docFromDef(def, { id, name });
+  if ('error' in doc) throw new Error(`device puzzle chip ${dev}: ${doc.error}`);
+  return { ...doc, notes: `Drive the ${DEVICES_LABEL[dev].toLowerCase()}'s pins on its left from what its pins on the right say: draw the controller here (gates, flip-flops, a state machine chip), then Check.` };
+}
+
+const DEVICES_LABEL: Record<DeviceId, string> = { crossing: 'Crossing', maze: 'Maze robot', vend: 'Vending machine' };
+
+/**
+ * A copy of the learner's chip `doc` for a device puzzle: the device placed unwired to the right of everything. `en`: the
+ * device steps only where en = 1 (a CPU paces the world: a chip with a program ROM).
+ */
+export function copyWithDevice(doc: ChipDoc, dev: DeviceId, id: string, name: string, en: boolean, widthOf: (p: PartDoc) => number): ChipDoc {
+  let right = 0, top = Infinity;
+  for (const p of doc.parts) { right = Math.max(right, p.at[0] + widthOf(p)); top = Math.min(top, p.at[1]); }
+  for (const p of doc.pins) right = Math.max(right, p.at[0] + 2);
+  if (!Number.isFinite(top)) top = 2;
+  const used = new Set(doc.parts.map((p) => p.id));
+  let pid = 'dev', i = 2;
+  while (used.has(pid)) pid = `dev${i++}`;
+  const part: PartDoc = { id: pid, ref: en ? { device: dev, en: true } : { device: dev }, at: [Math.ceil(right / 2) * 2 + 8, top], label: DEVICES_LABEL[dev].toLowerCase() };
+  return {
+    ...structuredClone(doc), id, name, parts: [...structuredClone(doc.parts), part],
+    notes: `A copy of “${doc.name}” for a device puzzle: wire the ${DEVICES_LABEL[dev].toLowerCase()}'s pins and its clk${en ? ', and pulse en once per world step' : ''}.${doc.notes ? `\n\n${doc.notes}` : ''}`,
+  };
 }

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CROSSING_MODEL, CROSSING_TESTS, type CrossingTest, DEVICE_IDS, DEVICES, MAZE_MODEL, MAZE_TESTS, type MazeTest, playWorld, VEND_MODEL, VEND_TESTS, type VendTest,
 } from '../src/puzzles/devices';
-import { REFERENCE_CONTROLLERS, referenceChip, referenceDef } from '../src/puzzles/devrefs';
+import { copyWithDevice, REFERENCE_CONTROLLERS, referenceChip, referenceDef } from '../src/puzzles/devrefs';
 import { DEVICE_PUZZLES, deviceStars, deviceTests, devicePuzzleChipId, devicePuzzleOfChip, findDevice, parNands, playDeviceTest, runDevicePuzzle } from '../src/puzzles/devpuzzles';
 import { deviceDef, deviceOf, deviceLeaves, type DeviceState } from '../src/editor/devparts';
 import { UserLibrary } from '../src/editor/library';
@@ -65,18 +65,17 @@ describe('the maze: every rule fires where it should', () => {
   it('the reference passes every maze; without its flip-flop it goes round in every one', () => {
     const steps = MAZE_TESTS.map((t) => cross0(t, REFERENCE_CONTROLLERS.maze()));
     expect(steps).toEqual([28, 45, 85, 9]);
+    // a fresh controller every step: "just turned" is always 0
+    const noFlop = (s: number[]) => REFERENCE_CONTROLLERS.maze()(s);
     for (const t of MAZE_TESTS) {
-      let held = 0;
-      const noFlop = (s: number[]) => { const out = REFERENCE_CONTROLLERS.maze()(s); held = out[1]; return out; };
       const r = playWorld(MAZE_MODEL, t, noFlop);
       expect(r.ok, t.name).toBe(false);
       expect(r.why).toMatch(/^not at the goal after \d+ steps .*going round\?$/);
-      expect(held).toBeGreaterThanOrEqual(0);
     }
   });
   it('a wall, two commands, an X', () => {
     const t = MAZE_TESTS[0] as MazeTest;
-    // the long way starts facing south with a wall ahead? no: open ahead, a wall on the left; turn right twice and drive into the wall
+    // the long way starts in the top-left corner facing south: turn right twice (now north) and drive into the outer wall
     const r = playWorld(MAZE_MODEL, t, script([[0, 0, 1], [0, 0, 1], [1, 0, 0]]));
     expect([r.ok, r.at, r.why]).toEqual([false, 2, 'drove forward into a wall at row 1, column 1, facing north']);
     expect(playWorld(MAZE_MODEL, t, () => [1, 1, 0]).why).toBe('fwd and left at once: one command a step');
@@ -132,6 +131,20 @@ describe('the device part', () => {
     expect(deviceDef('crossing').ports.map((p) => `${p.name}:${p.dir}`)).toEqual(['car_r:in', 'car_y:in', 'car_g:in', 'walk:in', 'clk:in', 'req:out']);
     expect(deviceDef('maze', true).ports.map((p) => p.name)).toEqual(['fwd', 'left', 'right', 'en', 'clk', 'wall_f', 'wall_l', 'wall_r', 'goal']);
     for (const dev of DEVICE_IDS) expect(DEVICES[dev].sense.length + DEVICES[dev].drive.length).toBeGreaterThan(0);
+  });
+  it('en paces the world: no step while en = 0, one per rising edge with en = 1; a chip copy gets the device beside it', () => {
+    const d = deviceDef('maze', true), m = MAZE_MODEL;
+    const st = d.behavior!.init!() as DeviceState;
+    const edge = (en: number, drive: number[]) => { d.behavior!.eval([...drive, en, 0], st); return d.behavior!.eval([...drive, en, 1], st); };
+    edge(0, [0, 0, 1]);
+    edge(0, [0, 0, 1]);
+    expect(st.n).toBe(0);
+    edge(1, [0, 0, 1]);
+    expect([st.n, (st.w as { d: number }).d]).toEqual([1, 3]);
+    // the sense pins follow the world alone, whatever the drive pins do between edges
+    expect(d.behavior!.eval([1, 1, 1, 1, 1], st)).toEqual(m.sensors(st.w as never));
+    const copy = copyWithDevice({ id: 'u_cpu', name: 'My CPU', pins: [], parts: [{ id: 'dev', ref: { lib: 'nand' }, at: [4, 2] }], wires: [], labels: [] }, 'maze', 'u_pz_maze', 'Puzzle', true, () => 6);
+    expect(copy.parts.at(-1)).toEqual({ id: 'dev2', ref: { device: 'maze', en: true }, at: [18, 2], label: 'maze robot' });
   });
 });
 

@@ -105,3 +105,8 @@ export class PuzzleProgress {
     try { this.kv?.setItem(PUZZLES_KEY, JSON.stringify(this.data)); } catch { /* storage full: progress stays in memory */ }
   }
 }
+
+let shared: PuzzleProgress | null = null;
+
+/** The page's one progress store (the stream and the device puzzles share it: two would overwrite each other's records). */
+export const puzzleProgress = (): PuzzleProgress => (shared ??= new PuzzleProgress(typeof localStorage === 'undefined' ? null : localStorage));

@@ -44,9 +44,9 @@ export const DEVICE_PUZZLES: DevicePuzzle[] = [
   },
   {
     id: 'vending', dev: 'vend', title: 'Vending machine', short: 'coins in, an item and change out',
-    brief: 'An item costs 30¢. <code>coin</code> shows a coin dropping (1 5¢, 2 10¢, 3 25¢); <code>buy</code> and <code>refund</code> are the buttons. '
+    brief: 'An item costs 30¢. <code>coin</code> shows a coin dropping (1 = 5¢, 2 = 10¢, 3 = 25¢); <code>buy</code> and <code>refund</code> are the buttons. '
       + 'Drop an item (<code>vend</code>) within 4 steps of a buy with 30¢ or more paid, and only then; after a sale or a refund give the rest back one coin a step '
-      + '(<code>chg</code>: 1 5¢, 2 10¢), all of it within 10 steps, and never more than is owed.',
+      + '(<code>chg</code>: 1 = 5¢, 2 = 10¢), all of it within 10 steps, and never more than is owed.',
     idea: 'A credit register in 5¢ units and one flip-flop, “paying out”. Each step credit becomes credit + the coin − 6 if it drops an item − the coin it gives back. '
       + 'It drops an item on buy when credit ≥ 6 and it is not paying out; it pays out after a sale with change left or a refund, 10¢ while 10¢ or more is left, then 5¢.',
   },
