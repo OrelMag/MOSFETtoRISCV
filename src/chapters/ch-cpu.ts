@@ -12,7 +12,7 @@ import { cpuScene } from '../widgets/cpupanel';
 import { findIt } from '../widgets/findfault';
 import { memGridPanel } from '../widgets/memgrid';
 import { OWN_COST, ownInstrScene, ownInstrSolved, solveOwnInstr } from '../widgets/owninstr';
-import { controlPanel, CONTROL_SOURCE, CPU_NANDS, cpuPeriodWidget, PERIOD } from '../widgets/cpucost';
+import { controlPanel, CONTROL_SOURCE, CPU_NANDS, cpuPeriodWidget, MEASURED, PERIOD, PERIOD_LOAD } from '../widgets/cpucost';
 import { abiTable, expand, pseudoWidget, SUM_CALLS, SUM_RUN, sumRun } from '../widgets/abi';
 import { assemblerWorkspace, fetchLoop, instructionExplorer } from '../widgets/riscv';
 import type { Stage } from '../view/stage';
@@ -20,6 +20,11 @@ import type { Chapter } from './types';
 import { aluSteps, BRANCH_WRONG, CTL_PARTS } from './alu/steps';
 import { RF_NUMBERS, rfSteps } from './rf/steps';
 import { numOf } from './order';
+
+/** A block's share of a critical path (cpucost.ts PERIOD / PERIOD_LOAD), fetch and decode (pc … srcB), and a rounded percentage. */
+const stageOf = (p: { stages: [string, number][] }, n: string) => p.stages.find(([k]) => k === n)![1];
+const fetchOf = (p: { stages: [string, number][] }) => Math.round(10 * p.stages.slice(0, 5).reduce((a, [, d]) => a + d, 0)) / 10;
+const pct = (a: number, b: number) => Math.round((100 * a) / b);
 
 const { control: CONTROL_NANDS, and5: AND5_NANDS, lwx: LWX_NANDS } = OWN_COST;
 const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
@@ -1007,6 +1012,7 @@ export const chSingleCycle: Chapter = {
       more: {
         derive: `<p>Period = clk-to-q (3) + logic + setup (3). The critical path in NAND delays, ripple: ${PERIOD.rca.stages.map(([n, d]) => `${n} ${d}`).join(', ')} = ${PERIOD.rca.pc} (the last entry, 5: 2 inside the PC register, then the setup of 3). At an illustrative 25 ps a delay that is ${(PERIOD.rca.pc * 0.025).toFixed(2)} ns, ${(1000 / (PERIOD.rca.pc * 0.025)).toFixed(0)} MHz; Kogge–Stone ${(PERIOD.ks.pc * 0.025).toFixed(2)} ns, ${(1000 / (PERIOD.ks.pc * 0.025)).toFixed(0)} MHz. Time for a program is instructions × period whatever the mix.</p>`,
         pitfall: `<p>Concluding that loads are the slowest instruction because memory is slow. Here the data memory is a small array, its write needs ${PERIOD.rca.dm} and the longest path is the compare-and-select of a branch. A large memory with a slow read changes the answer, which the memory chapters take up.</p>`,
+        numbers: `<p><strong>Load</strong> above times every NAND by what it drives instead of counting each as one delay: a gate driving many inputs is slower, and one unit is a NAND driving a single input (times in tenths). The static path grows to ${PERIOD_LOAD.rca.pc} units; the ripple ALU alone goes from ${stageOf(PERIOD.rca, 'alu')} to ${stageOf(PERIOD_LOAD.rca, 'alu')} (each carry gate drives several inputs), fetch and decode from ${fetchOf(PERIOD.rca)} to ${fetchOf(PERIOD_LOAD.rca)}, so the branch still sets the clock. Measured on the gates over the same programs, the longest cycle is ${MEASURED.rca.load.worst} units (an R-type), ${pct(MEASURED.rca.load.worst, PERIOD_LOAD.rca.pc)}% of the static path, against ${MEASURED.rca.unit.worst} of ${PERIOD.rca.pc} (${pct(MEASURED.rca.unit.worst, PERIOD.rca.pc)}%) with unit delays; Kogge–Stone ${MEASURED.ks.load.worst} of ${PERIOD_LOAD.ks.pc} (${pct(MEASURED.ks.load.worst, PERIOD_LOAD.ks.pc)}%). A measured time below the static one does not show a <em>false path</em> (a path static timing walks but no input can make change): random programs only give a lower bound, and the gap is there under both models. None is claimed here.</p>`,
       },
       challenge: {
         kind: 'quiz', question: `With ripple adders the static path is ${PERIOD.rca.pc} delays and the register file needs ${PERIOD.rca.rf}. Which instruction class sets the clock period?`,

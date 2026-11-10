@@ -22,3 +22,15 @@
 .es-read div { border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; background: var(--surface); font-size: 12px; color: var(--text-2); }
 .es-read b { display: block; font: 600 18px var(--font-mono); color: var(--text); }
 @media (max-width: 600px) { .es-strip { grid-template-columns: repeat(9, minmax(0, 1fr)); } }
+/* Load-dependent delay: a cell every tenth of a unit, so the strip scrolls rather than squeezing a cell under a few pixels;
+   a letter where the outcome changes (it may overhang the empty cells beside it), a number on whole units */
+.es-delay { margin-left: auto; }
+.es-scroll { overflow-x: auto; }
+.es-strip.fine { display: flex; gap: 0; min-width: 644px; margin-bottom: 2px; }
+.es-strip.fine .es-cell { flex: 1 0 4px; min-width: 4px; border-radius: 0; border-width: 0 0 0 1px; border-color: transparent; padding: 4px 0; overflow: visible; white-space: nowrap; font-size: 11px; }
+.es-strip.fine .es-cell:not(.tenth) { border-left-color: var(--border-strong, var(--border)); }
+.es-strip.fine .es-cell small { font-size: 9px; }
+.es-scale { position: relative; min-width: 644px; height: 14px; margin: 0 0 4px; font: 10px var(--font-mono); color: var(--muted); }
+.es-scale span { position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap; }
+.es-scale span:first-child { transform: none; }
+.es-scale span:last-child { transform: translateX(-100%); }

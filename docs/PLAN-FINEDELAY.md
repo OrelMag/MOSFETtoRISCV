@@ -75,7 +75,21 @@ Progress:
    | DFF setup / hold / clk-to-q rise / fall | 1 / 1 / 2 / 3 | 2 / 1.5 / 2.5 / 3.5 |
    | DFF_EDGE6 setup / hold / clk-to-q rise / fall | −1 / 3 / 2 / 5 | −3.5 / 4 / 3.5 / 7 |
    | single-cycle RV32I worst cycle (static period), 304 cycles | 131 (155) | 203.8 (242.9) |
-5. Chapter steps: waiting for the author (E:/audit/ship/PROPOSALS.md rows 32–35).
+5. Chapter steps ✅ (feat/finedelay-5; PROPOSALS rows 32–35, inside existing steps, no new step): a Unit / Load switch on the
+   step's scene or widget, defaulting to Unit (the prose, tours and challenges quote unit numbers), and a Layers paragraph with the
+   measured numbers (widgets/finedelay.ts FINE, cpucost.ts PERIOD_LOAD / MEASURED; tests/finedelay-chapters.test.ts).
+   - Adders, Watch the carry ripple: widgets/delaypanel.ts (Gate delays: the switch and the last change's toggles, settled /
+     glitches, fJ). 199 random additions: 12.39 glitch toggles per addition under unit, 14.51 under load; 23.72 → 24.96 fJ;
+     settled toggles (25.72) and their energy (17.04 fJ) equal under both. Unit already glitches: more glitches, not new ones.
+   - Gates, the multiplexer (row 34, the author's option a: no switch): the s-falling dip is 1 unit under both models (every gate
+     drives one input; a slower s delays g1 and g3 alike). A ¬s shared by 8 / 32 bits would make it 2.8 / 3.9 units (simulated).
+   - Chapter 8: the sweep widget steps tenths under load (setup / hold above); the master–slave's single undecided cell becomes a
+     band of 3.4 units (−1.9 … +1.4 for a rising d): the latch's NANDs no longer tie and a pulse is left circling under transport
+     delay. The skew pair's outcome per buffer count is unchanged; ff2's clock arrives 4 / 7 / 10 units late (unit 2 / 4 / 6),
+     clk-to-q 3.6 (unit 2).
+   - Chapter 14: the period widget's switch shows the load-model path (rca 242.9, ALU 154.8 of it; ks 149.2) and measures per class
+     under load (rca worst 203.8, ks 112.2). No false path is claimed from the gap: random programs give a lower bound, and the gap
+     is there under both models.
 
 ## What exists
 
