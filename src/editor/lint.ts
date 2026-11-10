@@ -23,7 +23,7 @@ export interface LintResult {
 /** At most this many overlap warnings (a badly drawn chip should not flood the list). */
 const MAX_OVERLAPS = 12;
 
-export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<string, Vec[]>, opts: { soft?: boolean } = {}): LintResult {
+export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<string, Vec[]>, opts: { soft?: boolean; /** every place two nets share a line, not the first MAX_OVERLAPS (untangle.ts fixes them all) */ allOverlaps?: boolean } = {}): LintResult {
   const diags: Diag[] = [];
   // Until the learner runs the chip, a part nothing is wired to yet is still being placed: its open inputs and
   // dead output are a hint (neutral, uncounted), not a warning.
@@ -80,10 +80,10 @@ export function lintChip(doc: ChipDoc, built: Compiled, polys: ReadonlyMap<strin
   const name = (s: Seg) => (s.net.startsWith('n') ? netName(Number(s.net.slice(1))) : `wire ${s.wire}`);
   let shown = 0;
   for (const p of pairs.values()) {
-    if (shown++ >= MAX_OVERLAPS) break;
+    if (!opts.allOverlaps && shown++ >= MAX_OVERLAPS) break;
     diags.push({ level: 'warn', msg: `two nets drawn on one line (${p.at}): ${name(p.nets[0])} and ${name(p.nets[1])}`, fix: 'They look joined but are not. Drag a segment of one aside.', wires: [...p.wires] });
   }
-  if (pairs.size > MAX_OVERLAPS) diags.push({ level: 'warn', msg: `${pairs.size - MAX_OVERLAPS} more places where two nets are drawn on one line` });
+  if (!opts.allOverlaps && pairs.size > MAX_OVERLAPS) diags.push({ level: 'warn', msg: `${pairs.size - MAX_OVERLAPS} more places where two nets are drawn on one line` });
 
   // ---- pointers going nowhere ----
   const count = new Map<string, number>();

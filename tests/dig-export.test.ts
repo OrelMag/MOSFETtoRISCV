@@ -59,7 +59,7 @@ function compare(a: ComponentDef, b: ComponentDef, clocks: Set<string>): string 
   return null;
 }
 
-/** Instances past which an exact chip is exported only (not read back or simulated). */
+/** Instances past which an exact chip is read back but not simulated (a whole CPU core: minutes on two GateSims). */
 const SIM_MAX = 20_000;
 const workspaces = EXAMPLES.map((ex) => ({ ex, ...addExample(emptyWorkspace(), ex) }));
 
@@ -102,8 +102,6 @@ describe('.dig export', () => {
         if (!out.exact) { expect(out.problems.length, `${ex.id} ${id}: inexact with no problem line`).toBeGreaterThan(0); continue; }
         exact++;
         const a = new UserLibrary(ws).defOf(id)!;
-        // a whole CPU core: our importer takes minutes to read a few hundred placed circuits back, and simulating it twice more
-        if (estimateInstances(a) > SIM_MAX) { large++; continue; }
         const r = importDigital(out.files, { taken: new Set() });
         if ('error' in r) { failures.push(`${ex.id} ${id}: ${r.error}`); continue; }
         if (r.problems.length) { failures.push(`${ex.id} ${id}: import problems: ${r.problems.slice(0, 3).join('; ')}`); continue; }
@@ -114,6 +112,7 @@ describe('.dig export', () => {
         const portsA = a.ports.map((p) => `${p.dir}:${p.name}:${p.width}`), portsB = new Set(b.ports.map((p) => `${p.dir}:${p.name}:${p.width}`));
         const missing = portsA.filter((p) => !portsB.has(p));
         if (missing.length) { failures.push(`${ex.id} ${id}: ports ${missing.join(', ')} not read back`); continue; }
+        if (estimateInstances(a) > SIM_MAX) { large++; await tick(); continue; }
         const clocks = new Set(ws.chips[id].pins.filter((p) => p.kind === 'clock' || (p.dir === 'in' && /^(clk|clock)$/i.test(p.name))).map((p) => p.name));
         const d = compare(a, b, clocks);
         if (d) failures.push(`${ex.id} ${id}: ${d}`);
@@ -121,8 +120,9 @@ describe('.dig export', () => {
         await tick();
       }
     }
-    console.log(`.dig export: ${chips} chips, ${exact} exact, ${compared} compared, ${large} too large to read back`);
+    console.log(`.dig export: ${chips} chips, ${exact} exact, ${compared} compared, ${large} read back but too large to simulate`);
     expect(failures).toEqual([]);
     expect(compared).toBeGreaterThanOrEqual(50);
+    expect(large, 'the RV64 and vector cores read back').toBeGreaterThanOrEqual(2);
   }, 300_000);
 });

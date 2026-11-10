@@ -14,7 +14,7 @@
 
 import { type ChipDoc, type CommentDoc, type EndRef, type ExitDir, isIdent, type LabelDoc, type PartDoc, type PartRef, type PinDoc,
   defaultFace, slug, uniqueName, type Vec, type WireDoc } from '../editor/model';
-import { compileChip } from '../editor/compile';
+import { type Compiled, compileChip } from '../editor/compile';
 import { DIR, partBox, pinBody } from '../editor/geom';
 import { untangled } from '../editor/untangle';
 import { isError, partDef } from '../editor/parts';
@@ -314,15 +314,20 @@ class Importer {
     return id;
   }
 
+  /** A chip this import made, compiled. */
+  chipDef(id: string): ComponentDef | undefined {
+    return this.defs.get(id);
+  }
+
   defOf(ref: PartRef): ComponentDef | null {
     const r = partDef(ref, (id) => this.defs.get(id));
     return isError(r) ? null : r;
   }
 
   /** Adds a finished chip (after the chips it places) and compiles it so its parents can place it. */
-  add(doc: ChipDoc): void {
+  add(doc: ChipDoc, built?: Compiled): void {
     this.chips.push(doc);
-    const c = compileChip(doc, (ref) => partDef(ref, (id) => this.defs.get(id)));
+    const c = built ?? compileChip(doc, (ref) => partDef(ref, (id) => this.defs.get(id)));
     this.defs.set(doc.id, c.def);
   }
 
@@ -1175,8 +1180,11 @@ class Sheet {
       const P = path.map((k) => this.pts.get(k)!);
       const a = endRef(path[0]), b = endRef(path[path.length - 1]);
       const pts: Vec[] = P.slice(1, -1).map(S);
-      if (terminal(path[0]) && 'part' in a) pts.unshift(S(P[0]));
-      if (terminal(path[path.length - 1]) && 'part' in b) pts.push(S(P[P.length - 1]));
+      // a part's port is not where Digital drew the pin (our shapes differ): its point stays as a corner, so the wire keeps its
+      // drawing; except on a lone segment to a pin or a pointer, where that corner only doubles the wire back on itself
+      const lone = P.length === 2 && !('part' in a && 'part' in b);
+      if (!lone && terminal(path[0]) && 'part' in a) pts.unshift(S(P[0]));
+      if (!lone && terminal(path[path.length - 1]) && 'part' in b) pts.push(S(P[P.length - 1]));
       const w: WireDoc = { id, a, b, pts };
       if (P.some((p, i) => i > 0 && p[0] !== P[i - 1][0] && p[1] !== P[i - 1][1])) w.straight = true;
       this.doc.wires.push(w);
@@ -1445,11 +1453,12 @@ export function importDigital(files: SourceFile[], opts: ImportOptions): ImportR
     const sheet = new Sheet(imp, c, imp.chipId(c.name), sub, (b) => byBase.has(b));
     for (const e of c.elems) sheet.element(e);
     // no two nets on one line (the lint): where they would be, one becomes a pair of pointers
-    const doc = untangled(sheet.finish(), Object.fromEntries(imp.chips.map((x) => [x.id, x])));
+    const made: { built?: Compiled } = {};
+    const doc = untangled(sheet.finish(), (id) => imp.chipDef(id), made);
     // our pin names for the Digital names its parents place
     const pins = new Map<string, string>();
     for (const n of [...c.ins, ...c.outs]) pins.set(n, sheet.pinMap.get(n) ?? n);
-    imp.add(doc);
+    imp.add(doc, made.built);
     imp.made.set(c.base, { id: doc.id, pins });
     state.set(c.base, 'done');
   };

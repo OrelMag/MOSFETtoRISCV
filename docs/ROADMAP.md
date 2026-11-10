@@ -1114,6 +1114,10 @@ and Digital are what courses already use, and Digital lets a student write tests
   files, one per circuit, parts mapped back through the import's table, connections as tunnels; what Digital has no element
   for is an empty circuit with its pins and a problem line. tests/dig-export.test.ts reads every Examples chip back through
   the importer and simulates both
+- ✅ Import speed (2026-11-10): reading back an exported RV64 core (118 circuits) took 210 s, now about 7 s. untangle.ts compiled
+  every chip placed so far once per chip and fixed 12 overlaps a round (the lint's display cap), at most 16 rounds; it now takes
+  the importer's compiled chips, fixes every overlap of a round at once and hands its compile on; a lone segment from a part
+  to a pin or pointer no longer doubles back through Digital's pin point. tests/dig-export.test.ts reads the cores back
 - Later: placing an imported circuit again by logic depth (the Verilog import's placer, generalized)
 
 **ISA breadth** (Ripes: RV64, the C extension): RV64I / RV64M and C in Phase 9, each checked by riscv-tests and Spike
