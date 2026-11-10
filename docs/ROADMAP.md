@@ -23,7 +23,7 @@ named as left, parked or dropped where they stand. Parked or dropped by the auth
 core's top level below ~60 % pointers (parked).
 
 **What's left** (each where it is described below):
-- Microcode leftovers: a Verilog export of an edited controller, the FSM controller as a grid, a new instruction in microcode (Phase 12)
+- Microcode leftovers: a Verilog export of an edited controller simulated against ours (it already exports and synthesizes in Yosys), the FSM controller as a grid, a new instruction in microcode (Phase 12)
 - The out-of-order core's top level with fewer pointers: the slot buses bundled or a hand-paired drawing (Audit program; parked branches named there)
 - FPGA: ROMs of ≤ 256 words and RAMs of ≤ 64 words into block RAM, not LUTs (Phase 20)
 - Static timing: a constant's arrival (tie cells) and wire length where a design is placed: two causes of the spread against OpenSTA (Phase 19)
@@ -501,7 +501,7 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   Fetch, loops), and a check on the edited CPU: the 32 rv32ui riscv-tests images on BitSim lanes plus the four benchmarks on the
   cycle engine, each against the golden model (~12 s), cycles per class and CPI before / after, the first mismatch named by a
   lock-step replay. Numbers in the chapter are src/bench/ucodefacts.json (scripts/ucode-facts.ts --write), pinned by tests/ucode.test.ts.
-  Left (in What's left above): a Verilog export of an edited controller, the FSM controller as a grid, a new instruction in microcode (needs the
+  Left (in What's left above): a Verilog export of an edited controller checked by simulation (it exports and synthesizes), the FSM controller as a grid, a new instruction in microcode (needs the
   decoder: use Custom instructions on the single-cycle core)
 State machine and truth table builders (requested 2026-10-25; mockup approved: sandbox chips whose body is generated,
 like a Verilog chip, Detach to draw on it; in the campaign everywhere except the levels they would solve). A truth
