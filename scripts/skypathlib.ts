@@ -5,9 +5,11 @@
 import type { FlatDesign, HierNode } from '../src/sim/flatten';
 import { FF_INPUT, FF_WIRE } from '../src/sim/netcap';
 import { type TimingGraph, timingGraph } from '../src/sim/timing';
+import { netlistOf } from '../src/sim/types';
 
-/** A cell output on a path: instance, master (sky130_fd_sc_hd__ dropped), its arc delay and arrival (ns), fan-out, net driven. */
-export interface SkyCell { inst: string; master: string; delay: number; time: number; fanout: number; net: string }
+/** A cell output on a path: instance, master (sky130_fd_sc_hd__ dropped), its arc delay and arrival (ns), fan-out, net driven, the
+ *  capacitance on that net (pF: pins and wire). */
+export interface SkyCell { inst: string; master: string; delay: number; time: number; fanout: number; net: string; cap: number }
 
 export interface SkyPath {
   start: string; end: string;
@@ -22,6 +24,10 @@ export interface SkyPath {
   /** Wire delays summed (ns): each input pin's delay after the driving output. */
   wire: number;
   cells: SkyCell[];
+  /** The endpoint pin (D, DE of a flip-flop with an enable; the port name at a port). */
+  pin: string;
+  /** The endpoint pin's cell (edfxtp_1 …; 'out' at a port). */
+  endMaster: string;
 }
 
 const OUT_PIN = /^\s+(\d+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+[\^v]\s+(\S+)\s+\((\S+)\)\s*$/;
@@ -46,17 +52,18 @@ export function parsePaths(text: string): SkyPath[] {
     const lat = /^\s+(-?[\d.]+)\s+(-?[\d.]+)\s+clock network delay/m.exec(body);
     if (lat) launch = +lat[2];
     const all: { cell: SkyCell; wire: number }[] = [];
+    let pin = '', endMaster = '';
     let wire = 0;
     for (let i = 0; i < bl.length; i++) {
       const o = OUT_PIN.exec(bl[i]);
       if (o) {
         const net = NET.exec(bl[i + 1] ?? '')?.[1] ?? '';
-        if (o[7] !== 'in') all.push({ cell: { inst: o[6].replace(/\/[^/]+$/, ''), master: o[7].replace(/^sky130_fd_sc_hd__/, ''), delay: +o[4], time: +o[5], fanout: +o[1], net }, wire });
+        if (o[7] !== 'in') all.push({ cell: { inst: o[6].replace(/\/[^/]+$/, ''), master: o[7].replace(/^sky130_fd_sc_hd__/, ''), delay: +o[4], time: +o[5], fanout: +o[1], net, cap: +o[2] }, wire });
         wire = 0;
         continue;
       }
       const p = IN_PIN.exec(bl[i]);
-      if (p) wire += +p[2];
+      if (p) { wire += +p[2]; pin = p[4].replace(/^.*\//, ''); endMaster = p[5].replace(/^sky130_fd_sc_hd__/, ''); }
     }
     const tail = wire; // into the endpoint's pin
     const f = all.findIndex((x) => isFlop(x.cell.master));
@@ -66,7 +73,7 @@ export function parsePaths(text: string): SkyPath[] {
     wire = tail + data.slice(f >= 0 ? 1 : 0).reduce((a, x) => a + x.wire, 0);
     const arrival = +(/(-?[\d.]+)\s+data arrival time/.exec(sec)?.[1] ?? NaN);
     const setup = port ? 0 : -(+(/(-?[\d.]+)\s+-?[\d.]+\s+library setup time/.exec(sec)?.[1] ?? 0));
-    out.push({ start, end, port, launch, arrival, setup, wire, cells });
+    out.push({ start, end, port, launch, arrival, setup, wire, cells, pin, endMaster });
   }
   return out;
 }
@@ -94,73 +101,210 @@ export interface Ours {
   launch: number; loaded: number;
   /** Gates on our worst path to it. */
   gates: number;
+  /** Where our worst path to it starts: a flip-flop's instance path, or an input bit (name[bit]). */
+  from: string;
 }
 
-/** Our worst arrival at a sky endpoint: a flip-flop's d / en (Yosys names its register `<instance>.q$_DFF…`), or an output bit. */
-export function oursAt(d: FlatDesign, g: TimingGraph, p: SkyPath): Ours | null {
-  let nets: number[] = [];
+const inputNames = new WeakMap<FlatDesign, Map<number, string>>();
+const inputByName = new WeakMap<FlatDesign, Map<string, number>>();
+/** Root input bits by OpenSTA's name for them. */
+function inputNets(d: FlatDesign): Map<string, number> {
+  let m = inputByName.get(d);
+  if (!m) {
+    const names = new Map<string, number>();
+    for (const p of d.root.def.ports) if (p.dir === 'in') d.root.ports[p.name].forEach((n, i) => names.set(p.width > 1 ? `${p.name}[${i}]` : p.name, n));
+    inputByName.set(d, (m = names));
+  }
+  return m;
+}
+
+/** Root input nets by name, as OpenSTA prints a port bit (name[bit], a 1-bit port bare). */
+function inputName(d: FlatDesign, net: number): string | undefined {
+  let m = inputNames.get(d);
+  if (!m) {
+    const names = new Map<number, string>();
+    for (const p of d.root.def.ports) if (p.dir === 'in') d.root.ports[p.name].forEach((n, i) => names.set(n, p.width > 1 ? `${p.name}[${i}]` : p.name));
+    inputNames.set(d, (m = names));
+  }
+  return m.get(net);
+}
+
+/** A register's instance path from Yosys's name for it (`rf.w15.ff29.q$_DFFE_PP_` → rf, w15, ff29). */
+export function flopPath(name: string): string[] {
+  const segs = segmentsOf(name.replace(/\$_\w+$/, ''));
+  if (segs[segs.length - 1] === 'q') segs.pop();
+  return segs;
+}
+
+/** The nets our timing reads at a sky endpoint: a flip-flop's d / en, or an output bit. */
+export function endpointNets(d: FlatDesign, p: SkyPath): number[] {
   if (p.port) {
     const m = /^([^[]+)(?:\[(\d+)\])?$/.exec(p.end);
     const bits = m && d.root.ports[m[1]];
-    if (!bits) return null;
-    nets = [bits[m[2] ? +m[2] : 0]];
-  } else {
-    const segs = segmentsOf(p.end.replace(/\$_\w+$/, ''));
-    if (segs[segs.length - 1] === 'q') segs.pop();
-    const n = nodeAt(d.root, segs);
-    const ff = n?.def.ff;
-    if (!n || !ff) return null;
-    nets = [n.ports[ff.d]?.[0], ...(ff.en ? [n.ports[ff.en]?.[0]] : [])].filter((x): x is number => x !== undefined);
+    return bits ? [bits[m[2] ? +m[2] : 0]] : [];
   }
+  const n = nodeAt(d.root, flopPath(p.end));
+  const ff = n?.def.ff;
+  if (!n || !ff) return [];
+  // an enabled flip-flop's two pins are two endpoints (D, DE); a cell without DE has the enable folded into D
+  const d0 = n.ports[ff.d]?.[0], e0 = ff.en ? n.ports[ff.en]?.[0] : undefined;
+  return (p.pin === 'DE' ? [e0] : p.pin === 'D' && /^edf/.test(p.endMaster) ? [d0] : [d0, e0]).filter((x): x is number => x !== undefined);
+}
+
+/** Our worst arrival at a sky endpoint, and where that path starts. */
+export function oursAt(d: FlatDesign, g: TimingGraph, p: SkyPath): Ours | null {
+  const nets = endpointNets(d, p);
   if (!nets.length) return null;
   let best = -1, net = -1;
   for (const x of nets) { const a = g.arr(x); if (a > best) { best = a; net = x; } }
   // trace back: the launch, and the time on heavy nets
-  let loaded = 0, gates = 0, launch = 0;
+  let loaded = 0, gates = 0, launch = 0, from = '';
   const seen = new Set<number>();
   while (net >= 0 && !seen.has(net)) {
     seen.add(net);
-    if (g.qSource.has(net)) { launch = g.arrival[net]; break; }
+    if (g.qSource.has(net)) { launch = g.arrival[net]; from = g.qSource.get(net)!.join('.'); break; }
     const dr = g.driver[net];
-    if (dr < 0) { launch = Math.max(0, g.arrival[net]); break; }
+    if (dr < 0) { launch = Math.max(0, g.arrival[net]); from = inputName(d, net) ?? ''; break; }
     gates++;
     const inArr = g.via[net] >= 0 ? g.arrival[g.via[net]] : 0;
     if (g.loads && g.loads[net] > 4 * ONE) loaded += g.arrival[net] - inArr;
     net = g.via[net];
   }
-  return { arrival: best, launch, loaded, gates };
+  return { arrival: best, launch, loaded, gates, from };
+}
+
+/** Does OpenSTA's startpoint name the start of our path (the same flip-flop, or the same input bit)? */
+export function sameStart(skyStart: string, ours: string): boolean {
+  if (!ours) return false;
+  if (ours === skyStart) return true;
+  const f = flopPath(skyStart).join('.');
+  // our boundary may be the flip-flop inside an enabled one (rf.w15.ff29.ff)
+  return !!f && (ours === f || ours.startsWith(`${f}.`));
+}
+
+/** A net of a path by its OpenSTA name: a port of an instance (L0_5.fa30.g4.y) or a named net of a level (WriteData[15]). */
+export function netByName(d: FlatDesign, name: string): number | undefined {
+  const m = /^(.*?)(?:\[(\d+)\])?$/.exec(name.split('\\').join(''))!;
+  const segs = segmentsOf(m[1]), bit = m[2] ? +m[2] : 0;
+  if (!segs.length || segs[segs.length - 1].startsWith('_')) return undefined;
+  let n: HierNode = d.root, i = 0;
+  while (i < segs.length - 1 && n.children?.get(segs[i])) { n = n.children.get(segs[i])!; i++; }
+  if (i === segs.length - 2) return n.children?.get(segs[i])?.ports[segs[i + 1]]?.[bit];
+  if (i === segs.length - 1 && !n.children?.get(segs[i])) {
+    // a named net of this level
+    const k = netlistOf(n.def)?.nets.findIndex((x) => x.name === segs[i]) ?? -1;
+    return k >= 0 ? n.nets?.[k]?.[bit] : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Our longest path from one startpoint (a flip-flop's outputs, or an input bit) to a net, under the graph's model: the
+ * same two ends as OpenSTA's path, so the delays compare route for route. -Infinity where the start does not reach.
+ */
+export function fromStart(d: FlatDesign, g: TimingGraph, start: string): ((net: number) => number) | null {
+  const src = new Map<number, number>();
+  const bit = inputNets(d).get(start);
+  if (bit !== undefined) src.set(bit, Math.max(0, g.arr(bit)));
+  else {
+    const f = flopPath(start).join('.');
+    if (f) for (const [net, path] of g.qSource) {
+      const p = path.join('.');
+      if (p === f || p.startsWith(`${f}.`)) src.set(net, g.clkToQ(net));
+    }
+  }
+  if (!src.size) return null;
+  const memo = new Float64Array(d.netCount).fill(NaN);
+  const opened = new Uint8Array(d.netCount);
+  return (target: number) => {
+    // iterative DFS as timing.ts's arr (paths are hundreds of gates deep); a net met again while open is a loop: unreachable
+    const stack = [target];
+    while (stack.length) {
+      const net = stack[stack.length - 1];
+      if (!Number.isNaN(memo[net])) { stack.pop(); continue; }
+      if (src.has(net)) { memo[net] = src.get(net)!; stack.pop(); continue; }
+      const dr = g.driver[net];
+      if (dr < 0 || g.qSource.has(net)) { memo[net] = -Infinity; stack.pop(); continue; }
+      if (!opened[net]) {
+        opened[net] = 1;
+        for (const p of g.tin[dr]) for (const i of p) if (Number.isNaN(memo[i]) && !opened[i]) stack.push(i);
+        continue;
+      }
+      let best = -Infinity;
+      for (const p of g.tin[dr]) for (const i of p) { const a = Number.isNaN(memo[i]) ? -Infinity : memo[i]; if (a > best) best = a; }
+      memo[net] = best === -Infinity ? -Infinity : best + g.delays[dr];
+      stack.pop();
+    }
+    return memo[target];
+  };
 }
 
 // one NAND input and its wire
 const ONE = FF_INPUT + FF_WIRE;
 
+/** The endpoint pin's kind: a flip-flop's data (D), its enable (DE), a flip-flop without an enable pin, an output. */
+export type PinKind = 'D' | 'DE' | 'D (no DE)' | 'port';
+
 export interface Row {
-  end: string; block: string; port: boolean;
+  end: string; block: string; port: boolean; kind: PinKind;
   /** Sky data time (ns): arrival less the launch clock latency. */
   sky: number;
   skyLaunch: number; skyBuf: number; skyWire: number; skyCells: number;
+  /** OpenSTA's startpoint; does our worst path to the same pin start there too (under both models)? */
+  start: string; same: boolean;
+  /** Our longest path from OpenSTA's startpoint to the same pin (unit, load): the same two ends; null if ours does not connect them. */
+  route: { unit: number; load: number } | null;
   unit: Ours; load: Ours;
+  /** Nets on the sky path that name one of ours: [sky time from launch (ns), our unit arrival, our load arrival, net name]. */
+  at: [number, number, number, string][];
 }
 
 /** Every sky path matched to ours under both models (unmatched endpoints counted). */
 export function matchPaths(d: FlatDesign, paths: SkyPath[], blockDepth = 1): { rows: Row[]; unmatched: string[] } {
   const gu = timingGraph(d, { outputs: true, delay: 'unit' }), gl = timingGraph(d, { outputs: true, delay: 'load' });
   const rows: Row[] = [], unmatched: string[] = [];
-  for (const p of paths) {
+  // one start's memo at a time (a net array per start would not fit for thousands of starts): paths taken in start order
+  let cur = '', s: { unit: ((n: number) => number) | null; load: ((n: number) => number) | null } = { unit: null, load: null };
+  const routeOf = (p: SkyPath) => {
+    if (p.start !== cur) { cur = p.start; s = { unit: fromStart(d, gu, p.start), load: fromStart(d, gl, p.start) }; }
+    if (!s.unit || !s.load) return null;
+    const nets = endpointNets(d, p);
+    const u = Math.max(...nets.map(s.unit)), l = Math.max(...nets.map(s.load));
+    return Number.isFinite(u) && Number.isFinite(l) ? { unit: u, load: l } : null;
+  };
+  for (const p of [...paths].sort((x, y) => (x.start < y.start ? -1 : x.start > y.start ? 1 : 0))) {
     const u = oursAt(d, gu, p), l = oursAt(d, gl, p);
     if (!u || !l) { unmatched.push(p.end); continue; }
     const first = p.cells[0];
     // the launch: a flip-flop's clk-to-q, or the input buffer after a port
     const skyLaunch = first && (isFlop(first.master) || p.start === first.inst || /^input\d/.test(first.inst)) ? first.delay : 0;
     const segs = p.port ? ['(outputs)'] : segmentsOf(p.end);
+    const at: Row['at'] = [];
+    for (const c of p.cells) {
+      const n = c.net ? netByName(d, c.net) : undefined;
+      if (n !== undefined) at.push([c.time - p.launch, gu.arr(n), gl.arr(n), c.net]);
+    }
     rows.push({
-      end: p.end, block: segs.slice(0, blockDepth).join('.'), port: p.port,
+      end: p.port ? p.end : `${p.end}/${p.pin}`, block: segs.slice(0, blockDepth).join('.'), port: p.port,
+      kind: p.port ? 'port' : p.pin === 'DE' ? 'DE' : /^edf/.test(p.endMaster) ? 'D' : 'D (no DE)',
       sky: p.arrival - p.launch, skyLaunch,
       skyBuf: p.cells.filter((c, i) => isBuffer(c.master) && !(i === 0 && skyLaunch)).reduce((a, c) => a + c.delay, 0),
-      skyWire: p.wire, skyCells: p.cells.length, unit: u, load: l,
+      skyWire: p.wire, skyCells: p.cells.length, start: p.start, same: sameStart(p.start, u.from) && sameStart(p.start, l.from), route: routeOf(p),
+      unit: u, load: l, at,
     });
   }
   return { rows, unmatched };
+}
+
+/** Rows with the same timing on both sides once (the register file's 31 words copy one path 31 times). */
+export function distinct(rows: Row[]): Row[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    const k = `${r.kind}|${r.sky.toFixed(3)}|${r.unit.arrival}|${r.load.arrival.toFixed(2)}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 export interface Spread { n: number; median: number; p10: number; p90: number; cv: number }
