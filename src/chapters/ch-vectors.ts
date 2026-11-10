@@ -210,7 +210,8 @@ export const chVectors: Chapter = {
         the elements whose bit is 1: <code>vadd.vi v16, v16, 10, v0.t</code> adds 10 to elements 0, 1 and 2 and leaves the others as they were (<code>mu</code>: mask undisturbed). In the
         gates, a lane whose element is masked off just does not write.</p>
         <p><code>vmerge.vxm v24, v8, a2, v0</code> picks, element by element, a2 where the bit is 1 and v8's element where it is 0. With a compare in front, that clamps a vector at a threshold
-        without a branch. The mask is explicit: the program, or the compiler, computes it and names it. The lanes of the following chapters will need a mask too, set implicitly by branches.</p>
+        without a branch. The mask is explicit: the program, or the compiler, computes it and names it. The lanes of the following chapters will need a mask too, set implicitly by branches.
+        The listing ends by adding up the clamped vector (<code>vredsum.vs</code>), the next step's subject.</p>
         <div class="try">Run “a mask you can see” to its end. In the Vector panel, v16's first three elements are 10, 11 and 12, and v24 is clamped at 6.</div>`,
       scene: scene('vmask', ['vu']),
       challenge: {

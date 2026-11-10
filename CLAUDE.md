@@ -501,6 +501,13 @@ src/lib/       the component library (registered in `registry` via define())
                  specs opr1Ref / opr23Ref, MQ), PDP8_TTY (IOT 00 / 03 / 04, keyboard buffer, printer flag); PDP8_CORE (core outside:
                  maddr / din / mwe / dout, kcode / kready / kack, tdata / twe), pdp8Computer(words) (bigRamWithInit(12, 12) inside);
                  PDP8_STATE the registers' paths; tests/pdp8gates.test.ts: BitSim lanes in lock step with the model
+  vector.ts      the Vectors chapter's vector unit in gates (VECTOR_UNIT: VLEN 128 on four lanes, each a 32-bit slice of all 32
+                 registers and an ALU; a group of LMUL registers takes LMUL beats while the core waits; vecMemory: four word-interleaved
+                 banks; a copy of v0): singleCycleCpu({ vector }), the sandbox's rv32iv_core (lib/resolve.ts, Examples ▸ RVV: editor/
+                 exampleisa.ts rvvChip; editor/cpu.ts gives the ISS { v }; the CPU drawer's Vector section is widgets/vecview.ts, shared with
+                 the chapter's Vector panel). Its golden model riscv/rvv.ts (the Zve32x subset of RVV 1.0: decode, encode, vtype rules,
+                 execute; ISS({ v }), Spike config zve), timing riscv/vecmodel.ts, programs riscv/vecprograms.ts, widgets/vectors.ts;
+                 bench/vectorcosts.json (scripts/vector-costs.ts --write, pinned by tests/vectors-chapter.test.ts); docs/PLAN-RVV.md
   lanes.ts       the GPU chapters' lane core: laneCore(program, n, { dmemK, imemK }) (2 / 4 / 8 lanes: the single-cycle front
                  end, n laneUnit(n) boxes = registers + ALU + result mux, hand-placed in two bands), lowestOne(n) (the leader /
                  the next lane to serve), onehotMux(n, w), simtDecode(n) (custom-0 ops, lane CSRs 0xCC0–0xCC4), simtControl(n)
