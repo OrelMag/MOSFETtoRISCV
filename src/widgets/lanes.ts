@@ -6,6 +6,9 @@ import { groupDigits } from '../sim/numfmt';
 import { alu } from '../lib/alu';
 import { laneCore } from '../lib/lanes';
 import { multiCore } from '../lib/multicore';
+import { singleCycleCpu } from '../lib/cpu';
+import vecCosts from '../bench/vectorcosts.json';
+import { vectorSaxpy } from '../riscv/vecprograms';
 import { regfile } from '../lib/regfile';
 import { assemble, type AsmResult } from '../riscv/asm';
 import { ABI, disasm } from '../riscv/isa';
@@ -273,7 +276,15 @@ export function lanesVsCoresWidget(): Widget {
   const cores: Design = { name: '4 cores', kind: 'multiCore(4)', parts: breakdown(MC, /^core\d$/, 4, romOf, /^(dm|arb|gm|enc|am|wm|we|h\d)$/), cycles: 0 };
   const sm = new SimtISS(wl, { lanes: 4 }); sm.run(5000); lanes.cycles = sm.cycles;
   const mm = new MultiISS(wc, 4); for (let c = 0; c < 5000 && !mm.halted; c++) mm.step(); cores.cycles = mm.cycles;
-  const rows = [cores, lanes];
+  // chapter vectors' CPU with the vector unit: its scalar register file and ALU, four register-file slices and lane ALUs, the
+  // banked memory; cycles from its golden model (bench/vectorcosts.json, which tests/vectors-chapter.test.ts holds to the gates)
+  const VC = singleCycleCpu(assemble(vectorSaxpy(4)).words, { vector: { lanes: 4, vlen: 128 } });
+  const vnl = VC.netlist!().instances;
+  const vrf = stats(regfile(5, 32)).nands + 4 * stats(regfile(5, 32, false)).nands, val = 5 * stats(alu(32)).nands;
+  const vrom = romOf(VC), vmem = vnl.filter((i) => i.name === 'dm').reduce((a, i) => a + stats(i.def).nands, 0);
+  const vector: Design = { name: '1 core + vector unit', kind: 'vector', parts: [vrf, val, vrom, stats(VC).nands - vrf - val - vrom - vmem, vmem],
+    cycles: vecCosts.machines.find((m) => m.id === 'vector')!.cycles };
+  const rows = [cores, lanes, vector];
   const tot = (d: Design) => d.parts.reduce((a, b) => a + b, 0);
   const max = Math.max(...rows.map(tot)) * 1.08;
   const W = 640, x0 = 130, bh = 26;
@@ -314,10 +325,10 @@ export function lanesVsCoresWidget(): Widget {
     ...rows.map((d) => h('tr', null, h('td', null, d.name), ...d.parts.map((v) => h('td', null, groupDigits(v))), h('td', null, groupDigits(tot(d))), h('td', null, String(d.cycles)))));
   const saving = 1 - tot(lanes) / tot(cores);
   el.append(h('div', { class: 'lvc-title' }, 'NAND gates by block, and cycles for saxpy on 16 elements'), legend, svg, table,
-    h('p', { class: 'sub' }, `The lanes cost ${(100 * saving).toFixed(0)} % less, and take ${lanes.cycles} cycles against ${cores.cycles}: `
+    h('p', { class: 'sub' }, `The lanes cost ${(100 * saving).toFixed(0)} % less than the cores, and take ${lanes.cycles} cycles against ${cores.cycles}: `
       + `${lanes.cycles > cores.cycles ? 'slower' : 'faster'}, because ${lanes.cycles > cores.cycles
         ? 'every load or store waits for all four lanes at once, while a core that waits on the memory port lets the others compute.'
-        : 'one instruction does four elements.'} Both designs have one memory port.`));
+        : 'one instruction does four elements.'} Both have one memory port. The vector unit takes ${vector.cycles} cycles: its memory is four banks, a line of four words a beat.`));
   return { el };
 }
 

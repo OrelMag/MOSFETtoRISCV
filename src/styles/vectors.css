@@ -1,0 +1,104 @@
+/* The Vectors chapter's widgets (widgets/vectors.ts). Lanes take --series-1 … --series-4, as in the lanes chapter. */
+.vec-widget { container-type: inline-size; }
+.vec-widget h4 { margin: 12px 0 6px; font-size: 13px; }
+.vec-ctl { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin: 6px 0 10px; }
+.vec-seg { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.vec-seg .btn.on { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.vec-lbl { font-size: 12px; color: var(--muted); margin-right: 4px; }
+.vec-slider { display: inline-flex; gap: 6px; align-items: center; }
+.vec-slider input { width: 150px; max-width: 40vw; }
+.vec-note { font-size: 13px; margin: 8px 0 0; }
+.vec-note .bad, .vec-widget .bad { color: var(--bad, #b42318); }
+
+.vec-roles { display: flex; gap: 3px; margin: 6px 0; }
+.vec-role { min-width: 0; border-radius: 4px; padding: 6px 8px; color: #fff; font-size: 12px; display: flex; flex-direction: column; }
+.vec-role b { font-size: 16px; }
+.vec-role span { overflow: hidden; text-overflow: ellipsis; }
+.vec-role.r0 { background: var(--series-1); }
+.vec-role.r1 { background: var(--series-2); }
+.vec-role.r2 { background: var(--series-3); }
+.vec-role.r3 { background: var(--series-4); }
+
+.vec-strip { display: flex; flex-wrap: wrap; gap: 2px; margin: 4px 0; }
+.vec-strip i { width: 12px; height: 18px; border-radius: 2px; }
+.vec-strip i.m0 { background: var(--series-1); }
+.vec-strip i.m1 { background: color-mix(in srgb, var(--series-1) 60%, var(--surface)); }
+.vec-strip i.tail { background: var(--series-4); }
+
+.vec-passes { display: grid; gap: 3px; max-height: 330px; overflow-y: auto; }
+.vec-pass { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.vec-cells { display: flex; flex-wrap: wrap; gap: 2px; }
+.vec-cells i { width: 14px; height: 14px; border-radius: 2px; background: var(--surface-2); border: 1px solid var(--line); }
+.vec-cells i.l0, .vrf-c.g.l0, .vp-h.l0 { background: var(--series-1); }
+.vec-cells i.l1, .vrf-c.g.l1, .vp-h.l1 { background: var(--series-2); }
+.vec-cells i.l2, .vrf-c.g.l2, .vp-h.l2 { background: var(--series-3); }
+.vec-cells i.l3, .vrf-c.g.l3, .vp-h.l3 { background: var(--series-4); }
+.vec-cells i[class^='l'] { border-color: transparent; }
+.vec-vl { font: 12px var(--mono, ui-monospace, monospace); color: var(--muted); }
+.vec-three { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+.vec-chip { font-size: 12px; border: 1px solid var(--line); border-radius: 12px; padding: 2px 9px; background: var(--surface); }
+.vec-chip.on { border-color: var(--accent); color: var(--accent); }
+
+.vrf-wrap { overflow-x: auto; }
+.vrf-grid { display: grid; grid-template-columns: 34px repeat(4, minmax(60px, 1fr)); gap: 1px 3px; font-size: 11px; }
+.vrf-h { color: var(--muted); text-align: center; padding-bottom: 2px; }
+.vrf-r { color: var(--muted); font: 11px var(--mono, ui-monospace, monospace); line-height: 15px; }
+.vrf-r.in { color: var(--accent); font-weight: 600; }
+.vrf-c { min-height: 15px; border: 1px solid var(--line); border-radius: 2px; background: var(--surface); display: flex; }
+.vrf-c i { flex: 1; text-align: center; font-style: normal; line-height: 13px; font-size: 10px; }
+.vrf-c.g { border-color: transparent; color: #fff; }
+.vrf-c.g i + i { border-left: 1px solid color-mix(in srgb, #fff 45%, transparent); }
+.vrf-c i.mask { color: var(--muted); font-size: 9.5px; white-space: nowrap; overflow: hidden; }
+.vrf-lanepick { display: none; }
+@container (max-width: 520px) {
+  .vrf-lanepick { display: inline-flex; }
+  .vrf-grid { grid-template-columns: 34px minmax(0, 1fr); }
+  .vrf-grid > .lane:not(.on) { display: none; }
+  .vec-pass { grid-template-columns: 48px minmax(0, 1fr); }
+  .vec-vl { grid-column: 2; }
+}
+
+.vec-chain { display: grid; gap: 10px; }
+.vec-chain-m { overflow-x: auto; }
+.vec-chain-m h4 { font-weight: 500; }
+.vec-tl { display: grid; grid-template-columns: 54px minmax(0, 1fr); gap: 2px 6px; align-items: center; }
+.vec-tl-n { font: 11px var(--mono, ui-monospace, monospace); color: var(--muted); }
+.vec-tl-row { display: grid; grid-template-columns: repeat(var(--cols), minmax(6px, 1fr)); gap: 1px; min-width: calc(var(--cols) * 7px); }
+.vec-tl-row i, .vec-legend i { height: 12px; border-radius: 2px; }
+.vec-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.vec-legend span { display: inline-flex; gap: 5px; align-items: center; }
+.vec-legend i { width: 12px; display: inline-block; }
+.u-load { background: var(--series-1); }
+.u-shift { background: var(--series-2); }
+.u-add { background: var(--series-3); }
+.u-store { background: var(--series-4); }
+
+.vec-mach { display: grid; gap: 4px; font-size: 13px; }
+.vm-h, .vm-r { display: grid; grid-template-columns: minmax(110px, 1.2fr) minmax(0, 1.6fr) minmax(0, 1.8fr) 70px; gap: 8px; align-items: center; }
+.vm-h { color: var(--muted); font-size: 12px; }
+.vm-r > span { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: center; min-width: 0; }
+.vm-track { display: block; flex-basis: 100%; }
+.vm-bar { display: block; height: 9px; border-radius: 3px; }
+.vm-bar.n { background: var(--series-1); }
+.vm-bar.t { background: var(--series-3); }
+.vm-r small { color: var(--muted); }
+.vm-ph { display: none; }
+.vm-r.vector .vm-name { font-weight: 600; color: var(--accent); }
+@container (max-width: 520px) {
+  .vm-h { display: none; }
+  .vm-r { grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); padding-top: 4px; }
+  .vm-r .vm-name { grid-column: 1 / -1; }
+  .vm-ph { display: inline; }
+}
+
+/* The Vector panel (vecPanel) */
+.vec-panel { max-width: 360px; }
+.vp-kpi { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; }
+.vp-kpi > div { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; min-width: 0; }
+.vp-kpi b { display: block; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vp-kpi span { font-size: 11px; color: var(--muted); }
+.vp-regs { display: grid; grid-template-columns: 30px repeat(4, minmax(0, 1fr)); gap: 2px 4px; font: 11.5px var(--mono, ui-monospace, monospace); max-height: 300px; overflow-y: auto; }
+.vp-n { color: var(--muted); }
+.vp-h { color: #fff; border-radius: 3px; text-align: center; font-size: 10.5px; }
+.vp-w { text-align: right; overflow: hidden; text-overflow: ellipsis; }
+.vec-panel .sub { font-size: 12px; color: var(--muted); margin: 8px 0 0; }

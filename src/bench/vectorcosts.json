@@ -1,0 +1,71 @@
+{
+ "machines": [
+  {
+   "id": "scalar",
+   "name": "One core",
+   "nands": 48434,
+   "period": 155,
+   "cycles": 276,
+   "instrs": 276
+  },
+  {
+   "id": "cores",
+   "name": "Four cores",
+   "nands": 149457,
+   "period": 117,
+   "cycles": 96,
+   "instrs": 317
+  },
+  {
+   "id": "vector",
+   "name": "One core + vector unit",
+   "nands": 169501,
+   "period": 191,
+   "cycles": 56,
+   "instrs": 23
+  },
+  {
+   "id": "lanes",
+   "name": "One core, four lanes",
+   "nands": 140979,
+   "period": 111,
+   "cycles": 134,
+   "instrs": 74
+  }
+ ],
+ "byLmul": [
+  {
+   "lmul": 1,
+   "instrs": 59,
+   "cycles": 74
+  },
+  {
+   "lmul": 2,
+   "instrs": 35,
+   "cycles": 62
+  },
+  {
+   "lmul": 4,
+   "instrs": 23,
+   "cycles": 56
+  },
+  {
+   "lmul": 8,
+   "instrs": 23,
+   "cycles": 80
+  }
+ ],
+ "unit": {
+  "total": 117222,
+  "lane": 27310,
+  "slice": 23621,
+  "alu": 2610,
+  "decode": 2174,
+  "cfg": 1852,
+  "seq": 831,
+  "acc": 2491,
+  "v0": 495,
+  "banks": 3714,
+  "memory": 23367
+ }
+}

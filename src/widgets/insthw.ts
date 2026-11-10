@@ -7,6 +7,7 @@ import { CLASSES } from '../lib/cpu';
 import { fieldAt, fieldRole, fieldsOf, SLICES, type FieldKey, type FieldRole } from '../riscv/fields';
 import { slotOpcode, uses, type CustomRow } from '../riscv/custom';
 import { decode, MAC_OPCODE, OPCODES } from '../riscv/isa';
+import { decodeV, OPI, type VKind } from '../riscv/rvv';
 import { netlistOf, type ComponentDef } from '../sim/types';
 
 export interface InstrUse {
@@ -31,6 +32,27 @@ function customUse(r: CustomRow): InstrUse {
   return { units, path: `${r.name}: ${path.join(' → ') || 'no data path work'}` };
 }
 
+/** A vector instruction on the single-cycle CPU with the vector unit (lib/vector.ts): instance `vu` beside the core. */
+function vectorUse(k: VKind): InstrUse {
+  const u = (extra: string[], path: string): InstrUse => ({ units: [...FETCH, 'vu', ...extra], path });
+  switch (k.k) {
+    case 'vsetvli': case 'vsetivli': case 'vsetvl':
+      return u(['rf', 'xw', 'rwo'], 'x[rs1] or the immediate → vset: vl = min(AVL, VLMAX), vtype → the vector unit\'s registers; vl → rd');
+    case 'mem':
+      return u(['rf', 'dm'], k.store ? 'x[rs1] → the banks\' vector port; each beat a register of the group, four words, one per bank, from the lanes'
+        : 'x[rs1] → the banks\' vector port; each beat four words, one per bank, into a register of the group');
+    case 'redsum': return u([], 'vs1[0], then the active elements of vs2, beat by beat → adder tree and accumulator → vd[0] (lane 0)');
+    case 'mvxs': return u(['xw', 'rwo', 'rf'], 'vs2[0] (lane 0) → x[rd]');
+    case 'mvsx': return u(['rf'], 'x[rs1] → vd[0] (lane 0), if vl > 0');
+    case 'vid': return u([], 'each lane\'s element index → vd, a register of the group a beat');
+    case 'opi':
+      if (OPI[k.name].mask) return u(k.form === 'vx' ? ['rf'] : [], 'the four lanes compare, four mask bits a beat → accumulator → vd (lane 0) on the last beat');
+      return u(k.form === 'vx' ? ['rf'] : [], 'vs2 and vs1, x[rs1] or the immediate → four lane ALUs, a register of the group a beat → vd');
+    case 'merge': return u(k.form === 'vx' ? ['rf'] : [], 'vs2 or vs1 / x[rs1] / the immediate, picked by v0 → four lanes, a register of the group a beat → vd');
+    case 'mul': return u([], 'vmul: the golden model only; the unit in gates leaves it out (it does nothing)');
+  }
+}
+
 export function instrUse(word: number, custom?: readonly CustomRow[], mac = false): InstrUse {
   if (mac && (word & 0x7f) === MAC_OPCODE && decode(word, custom, 32, true).spec?.mac) {
     const name = decode(word, custom, 32, true).name;
@@ -40,6 +62,8 @@ export function instrUse(word: number, custom?: readonly CustomRow[], mac = fals
   }
   const row = custom?.find((r) => slotOpcode(r.slot) === (word & 0x7f));
   if (row) return customUse(row);
+  const v = decodeV(word);
+  if (v) return vectorUse(v);
   const op = word & 0x7f, funct7 = word >>> 25;
   const u = (extra: string[], path: string): InstrUse => ({ units: [...FETCH, ...extra], path });
   switch (op) {

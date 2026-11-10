@@ -6,6 +6,7 @@
 import { TAUGHT_COMM2 } from '../campaign/codexcomm2';
 import { TAUGHT_DSP } from '../campaign/codexdsp';
 import { TAUGHT_POWER } from '../campaign/codexpower';
+import { TAUGHT_VEC } from '../campaign/codexvec';
 
 /** Codex id → the journey chapter that teaches it. */
 export const TAUGHT: Record<string, string> = {
@@ -111,7 +112,7 @@ export const TAUGHT: Record<string, string> = {
   multicycle: 'multicycle',
   signedmul: 'muldiv',
   throughput: 'pipeline',
-  simd: 'lanes',
+  simd: 'vectors',
   lane: 'lanes',
   vrf: 'lanes',
   activemask: 'simt',
@@ -220,6 +221,8 @@ export const TAUGHT: Record<string, string> = {
   ...TAUGHT_DSP,
   // the Power chapter's (campaign/codexpower.ts)
   ...TAUGHT_POWER,
+  // the Vectors chapter's (campaign/codexvec.ts)
+  ...TAUGHT_VEC,
 };
 
 /** Codex id → prologue / appendix chapters that explain it too (they read only what came before them). */

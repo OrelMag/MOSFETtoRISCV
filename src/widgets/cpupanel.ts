@@ -36,6 +36,7 @@ import { M_PROGRAMS } from '../riscv/mprograms';
 import { PIPE_M_PROGRAMS } from '../riscv/pmprograms';
 import { CACHE_CPU_PROGRAMS } from '../riscv/cprograms';
 import { F_PROGRAMS } from '../riscv/fprograms';
+import { VEC_PROGRAMS } from '../riscv/vecprograms';
 import { FABI } from '../riscv/isa';
 import { bitsToF32, flagNames, RM_NAMES } from '../sim/fpref';
 import { CAUSE } from '../riscv/iss';
@@ -115,6 +116,8 @@ export interface CpuSceneOptions {
   wrap?: (def: ComponentDef) => ComponentDef;
   /** The single-cycle CPU with clock-gated registers and memory (the Power chapter; lib/clockgate.ts). */
   gatedClocks?: boolean;
+  /** The single-cycle CPU with the vector unit beside it (the Vectors chapter; lib/vector.ts): four lanes, VLEN 128, its data memory in four banks. */
+  vector?: boolean;
 }
 
 /** The out-of-order core's instruction ROM: 2^k words, at least 64. */
@@ -150,11 +153,13 @@ export function cpuRoot(opts: CpuSceneOptions, asm: AsmResult): ComponentDef {
       : opts.system ? systemCpu(asm.words, { adder: opts.adder, m: opts.m })
       : opts.pipeline && opts.fpu ? pipelinedFpCpu(asm.words, { adder: opts.adder })
       : opts.pipeline ? pipelinedCpu(asm.words, { imemK: opts.imemK, dmemK: opts.dmemK, adder: opts.adder, balanced: opts.balanced, predictor: opts.predictor, dcache: opts.dcache === true ? 'wt' : opts.dcache || undefined, m: opts.m, dram: opts.dram, custom: opts.custom })
+        : opts.vector ? singleCycleCpu(asm.words, { adder: opts.adder, imemK: opts.imemK, dmemK: opts.dmemK ?? 6, vector: { lanes: 4, vlen: 128 } })
         : singleCycleCpu(asm.words, opts.dcache || opts.icache ? { adder: opts.adder, ...(opts.dcache ? { dmemK: 6, dcache: opts.dcache, dram: opts.dram } : {}), icache: opts.icache } : { adder: opts.adder, fpu: opts.fpu, imemK: opts.imemK, dmemK: opts.dmemK, c: opts.c, custom: opts.custom, mac: opts.mac, gatedClocks: opts.gatedClocks });
 }
 
 /** The golden model's options for a scene (what the CPU panel runs beside the gates). */
 export function issOptsOf(opts: CpuSceneOptions, asm: AsmResult): IssOptions {
+  if (opts.vector) return { ...(opts.imemK ? { imemWords: 2 ** opts.imemK } : {}), dmemWords: 2 ** (opts.dmemK ?? 6), v: { vlen: 128, gates: true } };
   return opts.vm ? { system: true, vm: true, imemWords: 2 ** (opts.imemK ?? VM_IMEM_K), dmemWords: 2 ** (opts.dmemK ?? VM_DMEM_K) } : opts.system ? { system: true, imemWords: 128, m: !!opts.m } : opts.ooo ? { dmemWords: 64, imemWords: 2 ** oooImemK(asm.words) } : opts.dcache || opts.wide ? { dmemWords: 64 }
     : { ...(opts.imemK ? { imemWords: 2 ** opts.imemK } : {}), ...(opts.dmemK ? { dmemWords: 2 ** opts.dmemK } : {}), ...(opts.c ? { c: true } : {}), ...(opts.mac ? { mac: true } : {}) };
 }
@@ -175,7 +180,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink; vmLi
     let logSeq = 0, logShown = 0;
     const trace = h('div', { class: 'cpu-trace' });
     /** Narration (riscv/narrate.ts): the single-cycle CPU's last instruction unit by unit, or the pipeline's cycle stage by stage. */
-    const narrKind = opts.ooo || opts.wide || opts.multicycle || opts.fpu ? null : opts.pipeline ? 'cycle' : 'instr';
+    const narrKind = opts.ooo || opts.wide || opts.multicycle || opts.fpu || opts.vector ? null : opts.pipeline ? 'cycle' : 'instr';
     const narrBox = h('div', { class: 'cpu-narr', 'aria-live': 'polite' });
     let narr: NarrLine[] = [];
     let narrShown: string | null = null; // null: the hint is drawn on the first update, as after a Reset
@@ -249,7 +254,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink; vmLi
     };
     const wb = opts.dcache === 'wb' || opts.dcache === 'wb2';
     const sel = h('select', { 'aria-label': 'program' }) as HTMLSelectElement;
-    const progs = opts.fpu ? [...F_PROGRAMS, ...PROGRAMS] : opts.dcache ? [...CACHE_CPU_PROGRAMS, ...PROGRAMS] : (opts.pipeline || opts.ooo) && opts.m ? [...PIPE_M_PROGRAMS, ...PROGRAMS] : opts.m ? [...M_PROGRAMS, ...SYSTEM_PROGRAMS, ...PROGRAMS] : opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
+    const progs = opts.vector ? [...VEC_PROGRAMS, ...PROGRAMS] : opts.fpu ? [...F_PROGRAMS, ...PROGRAMS] : opts.dcache ? [...CACHE_CPU_PROGRAMS, ...PROGRAMS] : (opts.pipeline || opts.ooo) && opts.m ? [...PIPE_M_PROGRAMS, ...PROGRAMS] : opts.m ? [...M_PROGRAMS, ...SYSTEM_PROGRAMS, ...PROGRAMS] : opts.system ? [...SYSTEM_PROGRAMS, ...PROGRAMS] : PROGRAMS;
     for (const p of progs) sel.append(h('option', { value: p.id }, p.name));
     sel.append(h('option', { value: '__custom' }, 'My program'));
     const match = progs.find((p) => p.source === opts.source);
@@ -421,6 +426,10 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink; vmLi
           if (fc !== undefined && fc !== ((iss.frm << 5) | iss.fflags) && diff < 0 && fd < 0) mismatch = `fcsr differs: hardware ${hex(fc, 2)}, model ${hex((iss.frm << 5) | iss.fflags, 2)}`;
           const sa = cpuState(stage.sim).acc;
           if (opts.mac && sa !== undefined && sa !== iss.acc && diff < 0 && fd < 0) mismatch = `acc differs after "${stepped || log.at(-1)?.text || 'reset'}": hardware ${accHex(sa)}, model ${accHex(iss.acc)}`;
+          const vs = opts.vector ? cpuState(stage.sim) : null;
+          const vr = vs?.v ? Array.from({ length: 32 }, (_, r) => r).find((r) => vs.v!.slice(16 * r, 16 * r + 16).some((b, k) => b !== iss.vregs[16 * r + k])) : undefined;
+          if (vs && vr !== undefined && diff < 0) mismatch = `v${vr} differs after "${stepped || log.at(-1)?.text || 'reset'}"`;
+          if (vs && vs.vl !== iss.vl && diff < 0) mismatch = `vl differs: hardware ${vs.vl}, model ${iss.vl}`;
           if (diff >= 0) mismatch = `${ABI[diff]} differs after "${stepped || log.at(-1)?.text || 'reset'}": hardware ${hex(x[diff])}, model ${hex(iss.x[diff])}`;
         }
       },
@@ -479,6 +488,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink; vmLi
         h('span', null, `cycle ${stage.cycles}`),
         h('span', null, opts.pipeline || opts.m || opts.fpu || opts.multicycle || opts.vm ? `retired ${iss.steps}${iss.steps ? ` · CPI ${(stage.cycles / iss.steps).toFixed(2)}` : ''}` : `PC ${hex(st.pc, 4)}`),
         ...(opts.m && !opts.ooo && (opts.pipeline ? divStall(sim) : !retiring(sim)) ? [h('span', { class: 'warn', title: 'The iterative divider is working; the PC and register writes are stalled' }, 'dividing… stalled')] : []),
+        ...(opts.vector && !retiring(sim) ? [h('span', { class: 'warn', title: 'The vector unit is working through a register group, a beat at a time; the PC waits' }, 'vector unit… the core waits')] : []),
         ...(opts.fpu && !opts.pipeline && !retiring(sim) ? [h('span', { class: 'warn', title: 'An iterative unit (fdiv.s / fsqrt.s) is working; the PC and register writes are stalled' }, 'fdiv / fsqrt… stalled')] : []),
         ...(opts.dcache ? [h('span', null, `${wb ? 'accesses' : 'loads'} ${loads} · misses ${misses}${loads ? ` · hit rate ${(100 * (loads - misses) / loads).toFixed(0)} %` : ''}`)] : []),
         ...((opts.dcache || opts.icache) && cacheStall(sim) ? [h('span', { class: 'warn', title: 'A cache missed: the PC and register write wait while the line is moved' }, `miss: waiting for memory (cycle ${stallRun + 1})`)] : []),

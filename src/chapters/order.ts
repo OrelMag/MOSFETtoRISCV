@@ -42,6 +42,7 @@ const BOOK = [
   'verify',
   'sidechan',
   'power',
+  'vectors',
   'lanes',
   'simt',
   'warps',
