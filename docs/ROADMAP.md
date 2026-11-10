@@ -249,8 +249,8 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   the specification, equal to it on all 65 536 parcels, 1 284 NANDs, 30 deep); singleCycleCpu({ c }) fetches through two
   halfword banks (cFetch) with PC + 2 / + 4: 49 884 against 48 434 NANDs, period 196 against 155. Verified like the
   RV32 cores (sc-c: riscv-tests, random programs with every C form, coverage, benchmarks) and against Spike (imc: 1 000
-  random programs). Not yet: C in the sandbox (a core part reading a halfword window, the CPU drawer), the instruction
-  builder's 16-bit formats, rv32uc images (needs GNU gcc), C on the pipelines
+  random programs). Since done: C in the sandbox (rv32ic_core, a window ROM, Examples ▸ RV32C, the CPU drawer: 055408a4) and the instruction
+  builder's 16-bit and RV64 formats (38e395db). Still open: rv32uc images (needs GNU gcc), C on the pipelines
 - A extension (LR/SC, AMO): not now (decided 2026-10-25)
 - ✅ RV64I / RV64M, chapter 25 part 2 (steps 6–8): decode / disassembly / the assembler at xlen 64 (INSTRS64 beside INSTRS, li of any
   64-bit constant), the golden model ISS64 (BigInt registers), one width-parametric single-cycle core xlenCpu at 32 and 64 bits (the
@@ -258,7 +258,8 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   at both widths, step 7 the W instructions (the benchmarks' xorshift and CRC need W shifts on RV64), step 8 the core against itself at
   32 bits (×2.35 NANDs, period 124 → 150). Checked by rv64ui / rv64um (65 of 67; fence_i and ma_data not applicable) on the golden model
   and on the gates, rv32ui / rv32um on the 32-bit build, random RV64 programs in lock step, and Spike rv64im (1000 / 1000 per push)
-- Virtual memory (Sv32), TLB, U/S/M privilege levels (stretch)
+- ✅ Virtual memory (Sv32), TLBs, M / S / U privilege: the ISS (8fa894d4), the system CPU with an MMU, TLBs and a walker in gates
+  (80c6c345, merged 85d6c60d), chapters vmem and os (merged d015d0d2)
 
 ### Phase 10 — Multi-core ✅ (chapter 27)
 - ✅ Gate-level dual-core: one core definition instantiated twice, csrr mhartid, shared memory behind a round-robin arbiter
@@ -459,13 +460,13 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   Custom… (and the program editor's Custom instructions…) on an rv32i_core; Apply makes it a { core: { custom } }
   part and gives the ROM a copy of the rows. Eight rows run in lock step on the gates (tests/custom-instr.test.ts);
   what a row cannot do in one cycle is named
-- ✅ 5b (RV32; RV16 still open). Done: chapter 14's reach challenge "Your own instruction" (define lwx so the array sums to 80; hints,
+- ✅ 5b (RV32, and RV16 since 2026-11-09). Done: chapter 14's reach challenge "Your own instruction" (define lwx so the array sums to 80; hints,
   Show answer, Do it for me: chapters/ch-cpu.ts); the pipelined CPU takes rows too (pipelinedCpu({ custom }): hazards read the row's
   control signals, so a load-like row stalls like a load; random programs with rows in lock step, tests/custom-pipe.test.ts; chapter step
   in ch-pipe.ts); the sandbox's pipelined port core (rv32i_pipe_core, { core: { custom, pipe } }) with Apply, the drawer lighting a custom
   row's units, and now its M (rv32im_pipe_core) and write-through data cache (rv32i_pipe_dc_core) variants, rows kept across them; the
-  field breakdown names a custom opcode by its row. Still open: RV16 (the campaign's core has no custom-row support: no row model,
-  assembler or hardware generator for it)
+  field breakdown names a custom opcode by its row. RV16 since: rows in OPX's free funct3 in the model, the assembler and both cores' control
+  (3e423e7c), Custom instructions on the sandbox's RV16 reference core and pipeline (3b623ea9)
 
 **More builders, after the instruction builder** (proposed 2026-10-19, kept for later)
 - ✅ Microcode painter (mockup approved 2026-11-01): the multicycle CPU's microprogram (lib/ucode.ts, multicycleCpu's `microcode`
@@ -632,7 +633,7 @@ challenges stay open. Added since:
   single-cycle RV32I runs ~4–5 kHz in the page on the cycle engine, ~400 Hz on GateSim)
 - i18n-ready strings
 
-### Phase 13 — Verification, precise claims, measurement 🚧
+### Phase 13 — Verification, precise claims, measurement ✅
 From an external review (2026-10). The project's depth is ahead of how it presents and proves itself: the CPUs are
 checked only against our own golden model, the README both oversells (gate delays) and undersells (the sky130 flow),
 and some measurements the simulator could make (power, benchmarks) are not made. Ideas the review raised that are
@@ -1185,7 +1186,7 @@ links, bus taps, duplicate and pin reordering. The gaps:
   ✅ Memories as block RAM (hdl.synthSync, vexport memClock): a RAM / ROM reads through a register on mem_clk, the
   board's 27 MHz clock (the design's clock is that divided by 2^DIV_LOG2), so the computer example went from ~13.1 K
   LUTs (memories as LUT RAM) to ~4.2 K LUTs + 10 BSRAM; cycle-exact against the asynchronous memories
-  (scripts/fpga-memcheck.ts). Open: no place-and-route in CI; ROMs of ≤ 256 words and RAMs of ≤ 64 words stay in LUTs
+  (scripts/fpga-memcheck.ts). Place and route since: nextpnr-himbaechel in fpga.yml, device use and post-route Fmax (b597d3f4). Open: ROMs of ≤ 256 words and RAMs of ≤ 64 words stay in LUTs
 - `.dig` export for Digital: low priority (Verilog already reaches it)
 
 ### Phase 21 — Quality of life: first-run tour, load progress, minimap ✅ (2026-11-01, mockups approved)
@@ -1223,7 +1224,7 @@ our RV32I is fifty times bigger. Mockup approved 2026-10-13 (lettered section af
   pass the layout rules; the chapter (8 steps), the running panel, the opcode matrix, the transistor ledger
 - ✅ The 6502 as a sandbox part (Library ▸ Processor parts, opening onto the transistor chip), ROMs in 6502
   assembly, Examples ▸ 6502 computer, the CPU panel following it
-- ⏳ Undocumented opcodes in the ISS
+- ✅ Undocumented opcodes in the ISS: the 85 stable NMOS ones, opt-in, checked against SingleStepTests (7b21be89)
 
 ### Notes, bookmarks and a review queue (2026-11-01) ✅
 
@@ -1272,7 +1273,7 @@ switch (48–49), e NIC + stack (50), f router + TCP + path (51–53), g campaig
 - ✅ b: chapter 44 SPI and I²C: comm/spi.ts, comm/i2c.ts, lib/rtl.ts, lib/spi.ts, lib/i2c.ts (the whole I²C bus at switch level); AXI_SPI left for g. Chapter 43 A UART: comm/uart.ts (the core edge by edge: the golden model the gates and bus/model.ts's UartDevice share), lib/uart.ts (BAUD_GEN, UART_TX, UART_RX, UART_CORE = id uart_full, AXI_UART at 0x3000_0000, LINE), lib/uartlink.ts (twoComputers: two bus computers on their own clock pins, tx crossed to rx through two LINE parts), busComputer({ uart: true }), riscv/uartprograms.ts (polled and interrupt drivers, UART_COSTS measured on the gates), widgets/uart.ts; tests/comm-uart*.test.ts. Chapter 44 (SPI and I²C) not started.
 - ✅ c: chapters 45–47 (modem, serial, errors): comm/ (modem, linecode, serdes, crc, framing, arq, fec), lib/modem.ts, lib/serdes.ts, lib/crc.ts, phys/line.ts equalization and PAM4. A line part opens onto its model's panel (`ComponentDef.modelPanel`, widgets/modelleaf.ts; decision 3). The 8b/10b encoder equals a vendor's printed table on all 268 symbols at both disparities (Xilinx UG196, tests/fixtures/8b10b-ug196.txt) and SATA 1.0's on the 258 it prints; IEEE 802.3's own Clause 36 tables are behind a login and were not read.
 - ✅ d: chapters 48–49: comm/ethframe.ts (frames and the byte stream), comm/pcap.ts, comm/mac.ts, comm/ethswitch.ts, lib/ethernet.ts, lib/ethstation.ts, lib/ethswitch.ts. The address table hashed in RAM is 1.5–1.66 × a CAM key store in our NAND accounting (a small RAM is flip-flops here), so decision 11's cost reason does not hold; the chapter says so. Captures read back by our own reader only: the tshark check of decision 5 is open.
-- ✅ e: chapter 50: comm/nic.ts + lib/nic.ts (NIC: registers, descriptor rings, DMA as a third bus master, MACs inside), bus/model.ts NicDevice, busComputer({ nic }) at 0x7000_0000, riscv/nicprograms.ts, comm/stack/ (eth, arp, ip, icmp, udp in the Python subset, now with load8 / store8 / load32 / store32), comm/netframes.ts, lib/lan.ts (two computers and a switch on the cycle engine), widgets/net.ts, ch-comm-net.ts. Ping runs on the gates (about 28 000 clocks to the first reply, 14 689 for the round trip); long runs on FastISS with a gate window and the tshark check of decision 5 are open.
+- ✅ e: chapter 50: comm/nic.ts + lib/nic.ts (NIC: registers, descriptor rings, DMA as a third bus master, MACs inside), bus/model.ts NicDevice, busComputer({ nic }) at 0x7000_0000, riscv/nicprograms.ts, comm/stack/ (eth, arp, ip, icmp, udp in the Python subset, now with load8 / store8 / load32 / store32), comm/netframes.ts, lib/lan.ts (two computers and a switch on the cycle engine), widgets/net.ts, ch-comm-net.ts. Ping runs on the gates (about 28 000 clocks to the first reply, 14 689 for the round trip); Long runs, a gate window and the tshark check of decision 5 came with chapter 52, on the golden model rather than FastISS (fast enough for the bench): net/lanbench.ts (018dc49a), net/gatewindow.ts (94245eee), tshark on TCP captures (344037c3, 721e9de9).
 - ✅ g (codex part, feat/comms-g-codex; landed 2026-11-05 with the extension, src/campaign/codexcomm*.ts): 18 entries for chapters 39–47 (shannon, reflection, cdc, asyncfifo, uart, spi, i2c, qam, ofdm, linecode, cdr, eye, equalization, crc, arq, viterbi, reedsolomon, interleave) with figures from the chapters' widgets and two checks each; Ethernet / switch / NIC / IP / TCP / router entries follow with chapters 48–53; Act 12's levels list the ids in `codex` and drop them from COMM_AWAITING_LEVELS.
 - ✅ g (sandbox parts, feat/comms-g-sandbox2; src/editor/commparts.ts): editor/commparts.ts rows for the NIC (`nic_b`, both bus links packed), the MACs (`eth_mac_rx` / `eth_mac_tx`), the switch (`ethswitch_<cellK>[_<cells>]<v|f><c|s>_<tableK>_<tickLog2>`, options in the id, changed in the properties) and the SPI controller (`axi_spi_b`, lib/spi.ts axiSpi: +0 DATA, +4 STATUS, +8 CTRL, on the cycle engine against comm/spi.ts SpiTarget; against the gate-level SPI memory the pair runs on GateSim, the memory being clocked by SCLK) and the SPI memory; all resolve by id (lib/resolve.ts patterns, built on first use) and are real gates in every export. Property sections read live state off named nets (commparts.ts nicView, switchTable). Examples ▸ Two computers on a switch (editor/examplenet.ts): raw frames, 3 pings, learned 2 / flooded 1; ~4 400 clocks/s in vitest, ~30 000 clocks for the run.
 - ✅ f (51): chapter 51 A router: net/ipv4.ts, net/trie.ts (longest-prefix match as a binary trie in RAM), net/fastpath.ts (golden model of the fast path), net/routing.ts (distance vector, link state on an invented network), lib/router.ts (the fast path in gates, compared every output every clock), widgets/router.ts. 
@@ -1323,14 +1324,13 @@ main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
   goals after the step's title, phone fold, prose width, 'Zoom to readable' for wide scenes, the tour off the goals, step-dot hit areas), the sandbox
   (keyboard-only building, phone layout, challenge strip, polish), the campaign (map, level screen, codex unlock, My path), the shell and workbench;
   one digit-grouping rule (U+202F, groupNum) across 62 formatters
-- Still open, checked against main at 0a60ff0b (batch 16) on 2026-11-08:
-  - FP unit tops (fpadd / fpmul / fpdiv / fpnf, #/c/float/3, 7, 9, 12, 15): in progress (Smith), a hierarchy restructure into sub-blocks that renames instances
-    the float tours point at
-  - FPU CPU and the pipeline variants (fast adders, balanced + predictor, data cache, M) redrawn on fix/circuits-cpu-variants
+- Checked against main at 0a60ff0b (batch 16) on 2026-11-08, ticked against 29e42383 on 2026-11-10:
+  - ✅ FP unit tops as stages (merged in batch 18, 93ecb5aa)
+  - ✅ FPU CPU and the pipeline variants (fast adders, balanced + predictor, data cache, M) redrawn (b42d89ab)
     (tests/redrawclear-cpuvariants.test.ts); the M and bus system CPUs on the plain system's wires (pointers 82 % → 25 %, 87 % → 43 %: the
-    bus's 16 channels at the pins) and the CSR unit's select crossbar as lanes (29 % → 21 %) on fix/circuits-sys-variants
-    (tests/redrawclear-sysvariants.test.ts); the out-of-order units (ooo/5–7, 10) on feat/ooo-redraw: rename table 50 % → 30 %, its row 56 % → 0, issue-queue entry 55 % → 30 %, store queue 66 % → 39 %, select as a crossbar 56 % → 12 % (tests/redrawclear-ooo.test.ts); the core's top and its issue queue / reorder buffer are not redrawn
-  - rv16_mux16 (needs a bit-sliced redraw) and srt4div8 (not switched to layered.ts): unchanged on main (git log)
+    bus's 16 channels at the pins) and the CSR unit's select crossbar as lanes (29 % → 21 %) (5b47e0ab)
+    (tests/redrawclear-sysvariants.test.ts); the out-of-order units (ooo/5–7, 10) (0bad7dca): rename table 50 % → 30 %, its row 56 % → 0, issue-queue entry 55 % → 30 %, store queue 66 % → 39 %, select as a crossbar 56 % → 12 % (tests/redrawclear-ooo.test.ts); the core's top and its issue queue / reorder buffer are not redrawn (parked)
+  - ✅ rv16_mux16 on one bit pitch (cce3a8b3) and srt4div8, registers level with what feeds them and nothing through a part (b41ea3a2)
   - Communication circuits left on purpose: CRC-32 next-state crossings (inherent), I²C target t0 (layered's 14-unit channel cap), the computer-with-NIC bus top
   - Kept by decision, not work to do: secret/7's computing-history digression; the recap `practise` list left empty for cellular, glass, pcie, radio, wifi
     and secret (it takes campaign nodes only; the capstones are not nodes)
@@ -1376,8 +1376,8 @@ The author's decisions of 2026-11-10:
 - ✅ A worked example and a common-mistakes aside in the densest chapters (pipelining, traps, caches, floating point): folded asides, numbers pinned by tests/worked-examples.test.ts
 
 ## Open questions for the author
-- Target audience depth: high-school / first-year university / practitioner refresher?
+- ~~Target audience depth?~~ Decided: from a technical newcomer to an engineer, chapter 0 (Basics) the floor (CLAUDE.md)
 - ~~Should challenges *gate* progress?~~ Decided: the campaign gates softly (skip and Unlock all), the chapters stay open.
-- Branding / name for the site?
-- Hosting target (GitHub Pages assumed; CI already included)
+- ~~Branding / name for the site?~~ Decided: From Switch to CPU (2026-11-08)
+- ~~Hosting target?~~ Decided: GitHub Pages at switchtocpu.com (custom domain, 2026-11-08), and the portable desktop .exe
 - Sound effects / gamification (badges)?
