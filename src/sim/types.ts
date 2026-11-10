@@ -183,7 +183,7 @@ export interface InsideSeed {
 }
 
 /** Which model a part opens onto: the serial channel, the telephone line, a cable between two machines. */
-export type ModelPanel = 'serial' | 'phone' | 'cable';
+export type ModelPanel = 'serial' | 'phone' | 'cable' | 'core';
 
 export interface ComponentDef {
   id: string;

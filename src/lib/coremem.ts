@@ -24,7 +24,6 @@
 
 import { CORE_FULL, coreDrive, coreNext, coreSwitching, type CoreState, isCoreState } from '../sim/core';
 import type { Behavior, ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
-import { Builder } from './builder';
 import { decoder } from './combinational';
 import { define, merger, ones, splitter } from './define';
 import { AND, MUX2, NOR, NOT } from './gates';
@@ -33,14 +32,21 @@ import { TIE0 } from './transistors';
 
 export { CORE_FULL, coreDrive, coreNext, coreSwitching, type CoreState, isCoreState };
 
+const cache = new Map<string, ComponentDef>();
+function memo(key: string, f: () => ComponentDef): ComponentDef {
+  let d = cache.get(key);
+  if (!d) cache.set(key, (d = f()));
+  return d;
+}
+
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, ...(clock ? { clock: true } : {}) });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
 
 const fresh = (mode?: 'x' | 'zero' | 'random'): CoreState => ({ b: mode === 'x' ? -1 : mode === 'random' ? (Math.random() < 0.5 ? 0 : 1) : 0, clk: 0, lo: 0, hi: 0 });
 
 /** The core in Verilog: a flip-flop that a full current sets or clears, and its sense pulse. x, y: bit 0 read, bit 1 write. */
-const CORE_SYNTH = [
-  "  reg b = 1'b0;  // the ring's magnetisation",
+const coreSynth = (one: boolean) => [
+  `  reg b = 1'b${one ? 1 : 0};  // the ring's magnetisation (as it powers on)`,
   '  // currents in half-select units: write halves one way, read halves and the inhibit the other',
   "  wire [2:0] up = {2'b0, x[1]} + {2'b0, y[1]};",
   "  wire [2:0] down = {2'b0, x[0]} + {2'b0, y[0]} + {2'b0, inh};",
@@ -72,9 +78,20 @@ export const CORE: ComponentDef = define({
   summary: 'One bit as the direction of a ferrite ring\'s magnetisation. The currents of the wires through it add: two half-selects in the same direction switch it, one alone (or a half cancelled by the inhibit) does not. Switching induces a pulse in the sense winding.',
   ports: [bus('x', 2, 'in', 'top'), bus('y', 2, 'in'), bit('inh', 'in', 'bottom'), bit('si', 'in'), bit('clk', 'in', 'bottom', true), bit('so', 'out')],
   symbol: { kind: 'core' },
+  modelPanel: 'core',
   behavior: coreBehavior,
-  hdl: { synth: CORE_SYNTH, verilog: CORE_SYNTH.join('\n') },
+  hdl: { synth: coreSynth(false), verilog: coreSynth(false).join('\n') },
 });
+
+/**
+ * The same core holding a 1 when the power comes on: a store with contents is built from both (coreStore), as a core
+ * plane keeps its bits with the power off. Not in the library: it is the core, at another starting value.
+ */
+export const CORE_SET: ComponentDef = {
+  ...CORE, id: 'core_set', name: 'Ferrite core (holding a 1)',
+  behavior: { ...coreBehavior, init: (mode) => ({ ...fresh(mode), b: mode === 'x' ? -1 : mode === 'random' ? fresh(mode).b : 1 }) },
+  hdl: { synth: coreSynth(true), verilog: coreSynth(true).join('\n') },
+};
 
 /** Rows, columns and planes of the store; a word is one core per plane. */
 const N = 4, PLANES = 4, WORDS = N * N;
@@ -85,15 +102,24 @@ const X0 = 16, Y0 = 14, P = 10;
 /** A core's instance name in a plane: c<row><column>. */
 export const coreName = (r: number, c: number) => `c${r}${c}`;
 
+/** Wiring: a line bus (read wires on bits 0-3, write wires on 4-7) to a pair per line, o<k> = (read k, write k). */
+const LINE_PAIRS: ComponentDef = {
+  id: 'core_line_pairs', name: 'Split lines into read / write pairs', category: 'plumbing',
+  summary: 'Pure wiring: each line\'s read wire and write wire side by side.',
+  ports: [bus('in', 2 * N, 'in'), ...Array.from({ length: N }, (_, k) => bus(`o${k}`, 2, 'out'))],
+  symbol: { kind: 'split', pitch: P }, prim: 'alias',
+  alias: Array.from({ length: N }, (_, k): [string, number, string, number][] => [['in', k, `o${k}`, 0], ['in', N + k, `o${k}`, 1]]).flat(),
+};
+
 /**
  * A 4 x 4 plane of cores: an X line along each row and a Y line down each column (each line two wires, its read and write
- * drivers: x and y carry them in pairs, row r on bits 2r, 2r + 1), one inhibit wire and one sense winding through all
+ * drivers: x and y carry line k's read wire on bit k and its write wire on bit 4 + k), one inhibit wire and one sense winding through all
  * sixteen, row by row. Only the core where a driven X and a driven Y cross sees a full current.
  */
-export const CORE_PLANE: ComponentDef = (() => {
+export const corePlane = (bits = 0): ComponentDef => memo(`plane${bits}`, () => {
   const instances: InstanceDef[] = [
-    { name: 'sx', def: splitter(ones(N).map(() => 2), P), at: [4, Y0 - 7] },
-    { name: 'sy', def: splitter(ones(N).map(() => 2), P), at: [X0 - 8, Y0 - 6], flip: true, rot: 3 },
+    { name: 'sx', def: LINE_PAIRS, at: [4, Y0 - 7] },
+    { name: 'sy', def: LINE_PAIRS, at: [X0 - 8, Y0 - 6], flip: true, rot: 3 },
     { name: 'z', def: TIE0, at: [X0 - 7, Y0 + 2] },
   ];
   const nets: NetDef[] = [
@@ -105,7 +131,7 @@ export const CORE_PLANE: ComponentDef = (() => {
   for (let r = 0; r < N; r++) {
     nets.push({ name: `x${r}`, ends: [`sx.o${r}`, ...Array.from({ length: N }, (_, c) => `${coreName(r, c)}.x`)] });
     nets.push({ name: `y${r}`, ends: [`sy.o${r}`, ...Array.from({ length: N }, (_, c) => `${coreName(c, r)}.y`)] });
-    for (let c = 0; c < N; c++) instances.push({ name: coreName(r, c), def: CORE, at: [X0 + P * c, Y0 + P * r] });
+    for (let c = 0; c < N; c++) instances.push({ name: coreName(r, c), def: bits >> (r * N + c) & 1 ? CORE_SET : CORE, at: [X0 + P * c, Y0 + P * r] });
   }
   // the sense winding, row by row: along a row from core to core, then back under it to the next row's first core
   let si = 'z.y';
@@ -121,8 +147,8 @@ export const CORE_PLANE: ComponentDef = (() => {
   }
   const R = X0 + P * (N - 1) + 10;
   nets.push({ name: 'sense', ends: [si, 's'] });
-  return define({
-    id: 'core_plane4', name: '4 x 4 core plane', category: 'memory',
+  return (bits ? (d: ComponentDef) => d : define)({
+    id: bits ? `core_plane4_${bits.toString(16).padStart(4, '0')}` : 'core_plane4', name: '4 x 4 core plane', category: 'memory',
     summary: 'Sixteen cores on a grid: an X line along each row and a Y line down each column (each with a read and a write driver), one inhibit wire and one sense winding through all sixteen. Only the core where a driven X and a driven Y cross sees a full current.',
     ports: [bus('x', 2 * N, 'in'), bus('y', 2 * N, 'in'), bit('inh', 'in'), bit('clk', 'in', 'bottom', true), bit('s', 'out')],
     symbol: { kind: 'box', label: 'PLANE' },
@@ -131,64 +157,102 @@ export const CORE_PLANE: ComponentDef = (() => {
       instances, nets,
     }),
   });
-})();
+});
+export const CORE_PLANE = corePlane();
 
 /**
- * The store: address, data and op registers taken at go; the phase register (READ, then WRITE); X and Y decoders with
- * a read and a write driver per line; an inhibit driver and a buffer bit per plane; four planes.
+ * The store: address, data and op registers taken at go; the phase register (READ, then WRITE); X and Y decoders with a
+ * read and a write driver per line (a line bus: the read wires on bits 0-3, the write wires on 4-7); an inhibit driver
+ * and a buffer bit per plane; four planes. Laid out by hand in bands: registers and phase on the left, the drivers, the
+ * planes with their inhibit drivers, the buffer.
  */
-export const CORE_STORE: ComponentDef = (() => {
-  const b = new Builder(16, 14, 5);
-  b.pins('addr', 'din', 'we', 'go', 'inhOn', 'clk');
-  // phase register: idle = neither; READ follows go when idle, WRITE follows READ
-  const idle = b.name(b.op1(NOR, ['rd.q', 'wr.q'], 'idle'), 'idle', true);
-  const start = b.name(b.op1(AND, [idle, 'go'], 'start'), 'start', true);
-  b.next();
-  b.op(DFF, [start, 'clk'], 'READ', 'rd');
-  b.op(DFF, ['rd.q', 'clk'], 'WRITE', 'wr');
-  b.name('rd.q', 'READ', true);
-  b.name('wr.q', 'WRITE', true);
-  // address, data and op taken at the start
-  const sa = b.op(splitter(ones(4), 3), ['addr']), sd = b.op(splitter(ones(PLANES), 3), ['din']);
-  b.next();
-  const a = Array.from({ length: 4 }, (_, i) => `${b.op(DFFE, [`${sa}.o${i}`, start, 'clk'], `a${i}`, `a${i}`)}.q`);
-  const d = Array.from({ length: PLANES }, (_, i) => `${b.op(DFFE, [`${sd}.o${i}`, start, 'clk'], `d${i}`, `d${i}`)}.q`);
-  const op = b.name(`${b.op(DFFE, ['we', start, 'clk'], 'we', 'op')}.q`, 'op', true);
-  b.next();
-  // address bits 3:2 pick the row (X), 1:0 the column (Y)
-  const ax = b.op1(merger([1, 1], 2), [a[2], a[3]]), ay = b.op1(merger([1, 1], 2), [a[0], a[1]]);
-  b.next();
-  // a line's read and write drivers side by side on its pair of wires: line k on bits 2k (read), 2k + 1 (write)
-  const lines = (sel: string, axis: string): string => {
-    const r = b.op(decoder(2, true), [sel, 'rd.q'], `${axis} read`, `${axis.toLowerCase()}r`);
-    const w = b.op(decoder(2, true), [sel, 'wr.q'], `${axis} write`, `${axis.toLowerCase()}w`);
-    return b.name(b.op1(merger(ones(2 * N), 2), Array.from({ length: 2 * N }, (_, k) => `${k & 1 ? w : r}.y${k >> 1}`)), axis.toLowerCase(), true);
-  };
-  const x = lines(ax, 'X'), y = lines(ay, 'Y');
-  b.next();
-  const inhOn = b.name(b.op1(AND, ['wr.q', 'inhOn'], 'inhibit on'), 'inhW', true);
-  b.next();
-  // per plane: its inhibit (WRITE and a 0 to write), its plane, its buffer bit (loaded at the edge that ends READ)
-  const q: string[] = [];
-  for (let p = 0; p < PLANES; p++) {
-    const zero = b.op1(NOT, [`buf${p}.q`], `not b${p}`);
-    const inh = b.name(b.op1(AND, [inhOn, zero], `inhibit ${p}`, `inh${p}`), `inh${p}`, true);
-    const s = b.name(`${b.op(CORE_PLANE, [x, y, inh, 'clk'], `plane ${p}`, `p${p}`)}.s`, `sense${p}`, true);
-    const nb = b.op1(MUX2, [s, d[p], op], `buffer in ${p}`);
-    q.push(`${b.op(DFFE, [nb, 'rd.q', 'clk'], `buffer ${p}`, `buf${p}`)}.q`);
+export const coreStore = (words: readonly number[] = []): ComponentDef => memo(`store${words.join(',')}`, () => {
+  // plane p holds bit p of every word: core k of the plane is word k
+  const planeBits = (p: number) => Array.from({ length: WORDS }, (_, k) => ((words[k] ?? 0) >> p & 1) << k).reduce((a, b) => a | b, 0);
+  const any = words.some((w) => w);
+  const PX = 76, PY = (p: number) => 4 + 24 * p; // the planes' column and rows
+  const inst = (name: string, def: ComponentDef, at: [number, number], label?: string): InstanceDef => ({ name, def, at, label });
+  const instances: InstanceDef[] = [
+    // address, data and op registers, each bit's d level with its splitter's output
+    inst('sa', splitter(ones(4), 10), [6, -1]),
+    ...Array.from({ length: 4 }, (_, i) => inst(`a${i}`, DFFE, [16, 2 + 10 * i], `a${i}`)),
+    inst('sd', splitter(ones(PLANES), 10), [6, 41]),
+    ...Array.from({ length: PLANES }, (_, i) => inst(`d${i}`, DFFE, [16, 44 + 10 * i], `d${i}`)),
+    inst('op', DFFE, [16, 84], 'we'),
+    // phase: idle = neither READ nor WRITE; READ follows go when idle, WRITE follows READ
+    inst('idle', NOR, [6, 98], 'idle'),
+    inst('start', AND, [16, 98], 'start'),
+    inst('rd', DFF, [36, 98], 'READ'),
+    inst('wr', DFF, [36, 110], 'WRITE'),
+    inst('inhon', AND, [54, 114], 'inhibit on'),
+    // address bits 1:0 pick the column (Y), 3:2 the row (X)
+    inst('ay', merger([1, 1], 10), [28, 0]),
+    inst('ax', merger([1, 1], 10), [28, 20]),
+    inst('yr', decoder(2, true), [36, 6], 'Y read'),
+    inst('yw', decoder(2, true), [36, 20], 'Y write'),
+    inst('xr', decoder(2, true), [36, 34], 'X read'),
+    inst('xw', decoder(2, true), [36, 48], 'X write'),
+    inst('ym', merger(ones(2 * N), 2), [52, 7]),
+    inst('xm', merger(ones(2 * N), 2), [52, 35]),
+  ];
+  const nets: NetDef[] = [
+    { name: 'addr', ends: ['addr', 'sa.in'] },
+    { name: 'din', ends: ['din', 'sd.in'] },
+    { name: 'we', ends: ['we', 'op.d'] },
+    { name: 'go', ends: ['go', 'start.b'] },
+    { name: 'inhOn', ends: ['inhOn', 'inhon.b'] },
+    { name: 'idle', ends: ['idle.y', 'start.a'] },
+    { name: 'start', ends: ['start.y', 'rd.d', 'op.en', ...Array.from({ length: 4 }, (_, i) => `a${i}.en`), ...Array.from({ length: PLANES }, (_, i) => `d${i}.en`)], tags: true },
+    { name: 'READ', ends: ['rd.q', 'wr.d', 'idle.a', 'yr.en', 'xr.en', ...Array.from({ length: PLANES }, (_, p) => `buf${p}.en`), 'mp.i0'], tags: true },
+    { name: 'WRITE', ends: ['wr.q', 'idle.b', 'yw.en', 'xw.en', 'inhon.a', 'mp.i1'], tags: true },
+    { name: 'inhW', ends: ['inhon.y', ...Array.from({ length: PLANES }, (_, p) => `inh${p}.a`)], tags: true },
+    { name: 'op', ends: ['op.q', ...Array.from({ length: PLANES }, (_, p) => `mx${p}.s`)], tags: true },
+    { name: 'ay', ends: ['ay.out', 'yr.a', 'yw.a'] },
+    { name: 'ax', ends: ['ax.out', 'xr.a', 'xw.a'] },
+    { name: 'y', ends: ['ym.out', ...Array.from({ length: PLANES }, (_, p) => `p${p}.y`)], tags: true },
+    { name: 'x', ends: ['xm.out', ...Array.from({ length: PLANES }, (_, p) => `p${p}.x`)], tags: true },
+    { name: 'clk', ends: ['clk', 'rd.clk', 'wr.clk', 'op.clk', ...['a', 'd', 'buf'].flatMap((r) => Array.from({ length: 4 }, (_, i) => `${r}${i}.clk`)), ...Array.from({ length: PLANES }, (_, p) => `p${p}.clk`)], tags: true },
+    { name: 'dout', ends: ['mo.out', 'dout'] },
+    { name: 'phase', ends: ['mp.out', 'phase'] },
+  ];
+  for (let i = 0; i < 4; i++) {
+    nets.push({ name: `addr${i}`, ends: [`sa.o${i}`, `a${i}.d`] });
+    nets.push({ name: `din${i}`, ends: [`sd.o${i}`, `d${i}.d`] });
+    nets.push({ name: `d${i}`, ends: [`d${i}.q`, `mx${i}.b`], tags: true });
   }
-  b.next();
-  b.wire(b.op1(merger(ones(PLANES), 3), q), 'dout');
-  b.wire(b.op1(merger([1, 1], 2), ['rd.q', 'wr.q']), 'phase');
-  const R = b.right + 6;
-  return define({
-    id: 'core_store16x4', name: '16 x 4 core store', category: 'memory',
+  nets.push({ name: 'a0', ends: ['a0.q', 'ay.i0'] }, { name: 'a1', ends: ['a1.q', 'ay.i1'] }, { name: 'a2', ends: ['a2.q', 'ax.i0'] }, { name: 'a3', ends: ['a3.q', 'ax.i1'] });
+  // a line's read wire on bit k of its bus, its write wire on bit 4 + k
+  for (const [dec, m, base] of [['yr', 'ym', 0], ['yw', 'ym', N], ['xr', 'xm', 0], ['xw', 'xm', N]] as const) {
+    for (let k = 0; k < N; k++) nets.push({ name: `${dec}${k}`, ends: [`${dec}.y${k}`, `${m}.i${base + k}`] });
+  }
+  // per plane: its inhibit (WRITE, inhibit on and a 0 to write), the plane, the buffer bit's input (sense, or din on a write)
+  for (let p = 0; p < PLANES; p++) {
+    const y = PY(p);
+    instances.push(
+      inst(`nb${p}`, NOT, [61, y + 6], `not b${p}`),
+      inst(`inh${p}`, AND, [66, y + 4], `inhibit ${p}`),
+      inst(`p${p}`, corePlane(planeBits(p)), [PX, y], `plane ${p}`),
+      inst(`mx${p}`, MUX2, [92, y + 2], `buffer in ${p}`),
+      inst(`buf${p}`, DFFE, [104, y + 3], `buffer ${p}`),
+    );
+    nets.push(
+      { name: `b${p}`, ends: [`buf${p}.q`, `mo.i${p}`, `nb${p}.a`], tags: true },
+      { name: `nb${p}`, ends: [`nb${p}.y`, `inh${p}.b`] },
+      { name: `inh${p}`, ends: [`inh${p}.y`, `p${p}.inh`] },
+      { name: `sense${p}`, ends: [`p${p}.s`, `mx${p}.a`] },
+      { name: `nbuf${p}`, ends: [`mx${p}.y`, `buf${p}.d`] },
+    );
+  }
+  instances.push(inst('mo', merger(ones(PLANES), 24), [124, -3]), inst('mp', merger([1, 1], 2), [124, 104]));
+  return (any ? (d: ComponentDef) => d : define)({
+    id: any ? `core_store16x4_${words.map((w) => (w & 15).toString(16)).join('')}` : 'core_store16x4', name: '16 x 4 core store', category: 'memory',
     summary: 'Sixteen words of four bits in four core planes, Whirlwind\'s scheme in miniature: go starts a cycle, READ empties the addressed word into the buffer register through the sense windings, WRITE puts the buffer back (or din, when we = 1), the inhibit keeping the zeros.',
     ports: [bus('addr', 4, 'in'), bus('din', PLANES, 'in'), bit('we', 'in'), bit('go', 'in'), bit('inhOn', 'in'), bit('clk', 'in', 'bottom', true), bus('dout', PLANES, 'out'), bus('phase', 2, 'out')],
     symbol: { kind: 'box', label: 'CORE 16x4' },
-    netlist: () => ({ pins: { addr: [0, 4], din: [0, 8], we: [0, 12], go: [0, 16], inhOn: [0, 20], clk: [0, 24], dout: [R, 4], phase: [R, 8] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: { addr: [0, 19], din: [0, 61], we: [0, 86], go: [0, 101], inhOn: [0, 120], clk: [0, 126], dout: [132, 45], phase: [132, 106] }, instances, nets }),
   });
-})();
+});
+export const CORE_STORE = coreStore();
 
 /** The store's inputs at a clock edge (inhOn defaults to 1: the inhibit drivers on). */
 export interface CoreInputs { addr: number; din: number; we: number; go: number; inhOn?: number }
@@ -197,6 +261,8 @@ export interface CoreInputs { addr: number; din: number; we: number; go: number;
 export class CoreModel {
   /** words[a] bit p = the core of word a in plane p (row a >> 2, column a & 3). */
   words = new Uint8Array(WORDS);
+  /** Power on with these words in the planes (coreStore(words)). */
+  constructor(init: readonly number[] = []) { init.forEach((w, k) => (this.words[k] = w & 15)); }
   rd = 0;
   wr = 0;
   addr = 0;

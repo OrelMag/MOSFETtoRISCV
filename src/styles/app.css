@@ -1101,6 +1101,14 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .core-half .core-wire { stroke: var(--channel-on); stroke-opacity: 0.6; }
 .core-full .core-wire { stroke: var(--channel-on); stroke-width: 0.26; }
 .core-full .core-ring { filter: drop-shadow(0 0 0.35px var(--channel-on)); }
+.core-loop { width: 100%; max-width: 420px; display: block; }
+.core-loop-axis { stroke: var(--muted); stroke-width: 1; }
+.core-loop-line { fill: none; stroke: var(--text-2); stroke-width: 2.5; stroke-linejoin: round; }
+.core-loop-tick { font: 500 11px var(--font-mono); fill: var(--muted); }
+.core-loop-dot { fill: var(--w0); stroke: var(--surface); stroke-width: 2; }
+.core-loop-dot.one { fill: var(--w1); }
+.core-loop-dot.x { fill: var(--wx); }
+.core-loop-move { fill: none; stroke: var(--channel-on); stroke-width: 3; stroke-dasharray: 4 3; }
 .core-pulse .core-sense { stroke: var(--channel-on); stroke-width: 0.26; filter: drop-shadow(0 0 0.3px var(--channel-on)); }
 .sym-bus { stroke: var(--plumb); stroke-width: 0.42; stroke-linecap: round; }
 .sym-bus-stub, .sym-tap { stroke: var(--plumb); stroke-width: 0.18; }

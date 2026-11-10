@@ -5,7 +5,7 @@ import type { ComponentDef, ModelPanel } from '../sim/types';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
 
-const MODELS: Record<ModelPanel, { title: string; text: string; load: () => Promise<Widget> }> = {
+const MODELS: Record<ModelPanel, { title: string; text: string; load: (state: () => unknown) => Promise<Widget> }> = {
   serial: {
     title: 'A channel, not a circuit',
     text: 'Copper has no gates to open, so this box ends here. The simulation only delays each bit and flips it where err is 1. The analog channel below is what that delay stands for: a low-pass line with noise, computed by the line model, and how much of a bit survives it.',
@@ -20,6 +20,11 @@ const MODELS: Record<ModelPanel, { title: string; text: string; load: () => Prom
     title: 'A cable, not a circuit',
     text: 'A transmission line has no gates to open, so this box ends here. The simulation only delays the level and flips it where noise is 1. Below is what that delay stands for: the wave on the line, its reflections and what terminates them.',
     load: () => import('./line').then((m) => m.terminationWidget()),
+  },
+  core: {
+    title: 'A ring of ferrite, not a circuit',
+    text: 'A core has no transistors to open: it is a ring that remembers a bit as the direction of its magnetisation. Below is the rule the simulation gives it, the idealised square loop, with this core\'s bit and the current through it now.',
+    load: (state) => import('./coreloop').then((m) => m.coreLoopWidget(state)),
   },
 };
 
@@ -38,7 +43,7 @@ export function modelLeaf(def: ComponentDef, o: { state: () => unknown; gates?: 
     o.gates ? h('button', { class: 'btn sm', onclick: o.gates }, 'Open the delay in gates') : null,
     body);
   let inner: Widget | null = null, gone = false;
-  m.load().then((w) => {
+  m.load(o.state).then((w) => {
     if (gone) { w.destroy?.(); return; }
     inner = w;
     body.replaceChildren(w.el);

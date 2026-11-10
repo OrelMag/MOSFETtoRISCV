@@ -153,3 +153,22 @@ describe('the core store as structural SystemVerilog', () => {
     expect(r.diags.filter((d) => d.level === 'error')).toEqual([]);
   }, 120_000);
 });
+
+describe('a store built with contents', () => {
+  it('powers on holding its words, and reads them back on every engine', async () => {
+    const { coreStore } = await import('../src/lib/coremem');
+    const words = Array.from({ length: CORE_WORDS }, (_, k) => (k * 7 + 3) & 15);
+    const def = coreStore(words);
+    expect(coreStore(words)).toBe(def);
+    expect(def.id).not.toBe(CORE_STORE.id);
+    for (const sim of [new GateSim(flatten(def)), new DualSim(flatten(def))]) {
+      sim.reset('zero');
+      const eng: Engine = { set: (p, v) => sim.setInput(p, v), settle: () => sim.settle(), out: (p) => pack(sim.getBits(sim.design.root.ports[p])) };
+      const m = new CoreModel(words);
+      for (let a = 0; a < CORE_WORDS; a++) {
+        for (const go of [1, 0, 0]) clock(eng, m, { addr: a, din: 0, we: 0, go, inhOn: 1 });
+        expect(eng.out('dout'), `word ${a}`).toBe(words[a]);
+      }
+    }
+  });
+});
