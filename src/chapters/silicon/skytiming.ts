@@ -19,6 +19,10 @@ export const SKY_TIMING = SKY as unknown as Record<'dual' | 'sys', Summary>;
 const NAME: Record<'dual' | 'sys', string> = { dual: 'dual-core', sys: 'system core (RV32IM)' };
 const pc = (x: number) => `${Math.round(x * 100)} %`;
 const f2 = (x: number) => x.toFixed(2);
+/** The layout runs' pages (the sky-paths artifacts the numbers come from). */
+const RUNS = 'https://github.com/OrelMag/MOSFETtoRISCV/actions/runs/';
+/** The value that occurs most often. */
+const top = (xs: string[]) => [...xs.reduce((m, x) => m.set(x, (m.get(x) ?? 0) + 1), new Map<string, number>())].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
 const code = (s: string) => `<code>${s.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code>`;
 // OpenSTA names a register bit after Yosys (rf.w25.ff12.q$_DFFE_PP_/D): the instance path is what our drawing shows
 const pin = (s: string) => s.replace(/\.q\$_[A-Z_]+_\//, '/').replace(/\//g, '.').replace(/\.(D|DE)$/, ' ($1)');
@@ -47,22 +51,23 @@ export function skyTimingHtml(): string {
   }).join('');
   const dual = SKY_TIMING.dual, sys = SKY_TIMING.sys;
   return `<p>Every endpoint of both layouts timed twice: by OpenSTA on the routed sky130 database (its worst path to each flip-flop pin and output: ${dual.endpoints} on the
-    dual-core, ${sys.endpoints} on the system core, layout run ${dual.run}), and by our static timing to the same pin, with the unit model (every NAND one delay) and the
+    dual-core, ${sys.endpoints} on the system core, <a href="${RUNS}${dual.run}" target="_blank" rel="noopener">layout run ${dual.run}</a>${sys.run !== dual.run ? ` and <a href="${RUNS}${sys.run}" target="_blank" rel="noopener">${sys.run}</a>` : ''}), and by our static timing to the same pin, with the unit model (every NAND one delay) and the
     load model (logical effort). If our model timed paths the way the cells do, one of our delays would be worth the same picoseconds on every path: the spread
-    (standard deviation over the mean) is the test, and the rank correlation ρ says whether the two at least order the paths alike. Paths of at least a quarter of
+    (standard deviation over the mean) is the test, and the rank correlation ρ (1: the same order, 0: unrelated) says whether the two at least order the paths alike. Paths of at least a quarter of
     the worst (${f2(dual.worst)} and ${f2(sys.worst)} ns), each distinct timing once.</p>
-  <table class="mini"><thead><tr><th>ps per our delay</th><th>median</th><th>p10–p90</th><th>spread</th><th>ρ</th></tr></thead><tbody>${spreads}</tbody></table>
+  <table class="mini"><thead><tr><th>ps per our delay</th><th>median</th><th>middle 80 %</th><th>spread</th><th>ρ</th></tr></thead><tbody>${spreads}</tbody></table>
   <p><strong>The load model does not narrow the spread here</strong>: ${pc(dual.worstUnit.cv)} → ${pc(dual.worstLoad.cv)} on the dual-core, ${pc(sys.worstUnit.cv)} → ${pc(sys.worstLoad.cv)} on the system core.
-    It orders the dual-core's paths a little better (ρ ${f2(dual.worstUnit.rho)} → ${f2(dual.worstLoad.rho)}), the system core's no better. Scale is not the error: about ${dual.worstLoad.median}–${sys.worstLoad.median} ps per
+    Nor does it order the paths much better: ρ ${f2(dual.worstUnit.rho)} → ${f2(dual.worstLoad.rho)} on the dual-core, ${f2(sys.worstUnit.rho)} → ${f2(sys.worstLoad.rho)} on the system core. Scale is not the error: about ${dual.worstLoad.median}–${sys.worstLoad.median} ps per
     load unit against the illustrative ${PS_PER_UNIT.toFixed(1)} is sky130 at 1.8 V against a 28 nm-class constant.</p>
-  <table class="mini"><thead><tr><th>endpoint block</th><th>paths</th><th>sky ns</th><th>ps / delay · unit</th></tr></thead><tbody>${blocks}</tbody></table>
+  <table class="mini"><thead><tr><th>endpoint block</th><th>paths</th><th>sky ns</th><th>ps per delay: unit · load</th></tr></thead><tbody>${blocks}</tbody></table>
   <p>Each block's slowest path: where it ends, where it starts on silicon (above) and where our worst path to the same pin starts (below):</p>
-  <table class="mini"><thead><tr><th>ends at</th><th>starts</th><th>sky ns</th><th>ps / delay · unit</th></tr></thead><tbody>${paths}</tbody></table>
+  <table class="mini"><thead><tr><th>ends at</th><th>starts</th><th>sky ns</th><th>ps per delay: unit · load</th></tr></thead><tbody>${paths}</tbody></table>
   <p>Two reasons they differ. On the dual-core ours starts at a constant inside the multiprocessor decoder (${code('mpd.kA')}): our timing gives a tie cell an arrival of
-    one delay, while synthesis folds constants into the logic, so on silicon that path does not exist (${dual.sameStart} of ${dual.paths} start alike). On the system core ours prefers the register behind a multiplexer, launched at
-    clock-to-q, where silicon's starts at the instruction input in front of it (${sys.sameStart} of ${sys.paths} alike). Timed from silicon's own start the spread is no narrower, so the routes are not the
+    one delay, while synthesis folds constants into the logic, so on silicon that path does not exist (${dual.sameStart} of ${dual.paths} start alike). On the system core both mostly start at the instruction input, at different bits: ours at
+    ${code(top(sys.slowest.map((p) => p.ours)))}, silicon's at ${code(top(sys.slowest.map((p) => p.start)))}, and in the register file ours starts at a register, launched at clock-to-q
+    (${sys.sameStart} of ${sys.paths} start alike): the two netlists are different circuits for the same logic, so their longest paths need not begin at the same pin. Timed from silicon's own start the spread is no narrower, so the routes are not the
     whole story: wires are.</p>
   <table class="mini"><thead><tr><th>net fan-out</th><th>sys: fF per input (nets)</th><th>dual</th></tr></thead><tbody>${caps}</tbody></table>
-  <p>Silicon's capacitance per input driven grows about threefold from a single sink to 5–16, pins and wire both, and the resizer splits wider nets into buffer trees. Our wire term is a constant per branch,
+  <p>Silicon's capacitance per input driven grows about threefold from a single sink to 5–16, pins and wire both, and the resizer (the flow's step that sizes cells and inserts buffers) splits wider nets into buffer trees. Our wire term is a constant per branch,
     so the load model charges a net's fan-out where silicon charges its length. The next step for the model is a wire term from placement, where a design has one.</p>`;
 }

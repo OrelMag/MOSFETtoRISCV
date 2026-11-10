@@ -11,7 +11,7 @@
 // progress. Their rule (NAND + the parts unlocked by the levels below) fills the palette's
 // "Unlocked parts" group.
 
-import { faultsKeyOf, lookOf, withChipFaults } from './chipfaults';
+import { faultsKeyOf, faultsNote, faultyChips, lookOf, withChipFaults } from './chipfaults';
 
 /** What a check result holds for: the connectivity and the faults switched on here or in a chip placed here. */
 const checkedOn = (ed: Editor): string => `${ed.compiled?.connKey ?? ''}|${faultsKeyOf(ed.chipId, ed.lib.deps(ed.chipId), lookOf(ed.ws, ed.lib))}`;
@@ -584,6 +584,9 @@ class ChallengeUi {
     // the truth-table and state-machine builders would hand in the answer here (challenges.ts builderViolations)
     const locked = builderViolations(ed.ws, [ed.chipId, ...ed.lib.deps(ed.chipId)], ch);
     if (locked.length) { r.restrictionViolations.push(...locked); r.ok = false; }
+    // the learner's own faults (in chips placed here): the run shows what they do, but a pass with them on does not count
+    const faulty = ch.planted ? [] : faultyChips(ed.chipId, ed.lib.deps(ed.chipId), lookOf(ed.ws, ed.lib));
+    if (faulty.length) { r.failures.unshift(faultsNote(faulty, r.ok)); r.ok = false; }
     this.results.set(ed.chipId, { r, conn: checkedOn(ed) });
     this.version++;
     this.collapsed = false;

@@ -82,7 +82,7 @@ describe('debug a failing core test in the sandbox', { timeout: 120000 }, () => 
     return { m, run, t };
   }
 
-  it('a passing core runs a test program to its halt with no mismatch, data and stack in the 64-word RAM', async () => {
+  it('a passing core runs a test program to its halt with no mismatch, data and stack in the bench’s RAM', async () => {
     const { m } = await bench('c_core3', 'c_core3', 'calls');
     expect(m.mismatch).toBeNull();
     expect(m.iss!.halted).toBe(true);

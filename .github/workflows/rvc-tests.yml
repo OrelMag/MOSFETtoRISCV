@@ -3,10 +3,10 @@ name: RVC tests (build)
 # Builds the official rv32uc riscv-tests (the C extension) into tests/verify/riscv-tests/bare-c.json with the same pinned xPack
 # riscv-none-elf-gcc as scripts/doom/build.mjs (GCC_VERSION 15.2.0-1) and the riscv-tests revision every other image was built
 # from, and keeps the JSON as an artifact; the file is checked in (npm test needs no toolchain). Not a deploy gate. Run it by hand
-# to rebuild (a push of this file on its own branch runs it too: a workflow can only be dispatched once it is on main).
+# to rebuild (Actions ▸ RVC tests (build) ▸ Run workflow), or push a change to the build scripts or this file.
 on:
   push:
-    branches: ['feat/rv32uc']
+    branches: ['main']
     paths: ['.github/workflows/rvc-tests.yml', 'scripts/riscv-tests/**']
   workflow_dispatch:
 

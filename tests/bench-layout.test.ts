@@ -41,9 +41,10 @@ function faults(doc: ChipDoc) {
 }
 
 describe('core benches', () => {
-  const variants = [['debug', RV16_CORE, false], ['debug with irq', RV16_CPU_IRQ, false], ['Pong', RV16_CORE, true], ['Pong with irq', RV16_CPU_IRQ, true]] as const;
-  it.each(variants)('%s: no part on another, no wire through a part, two rows wide', (_, core, io) => {
-    const doc = benchChip(core, '', 'core', PONG16_TEST, { io, id: 'u_b', name: 'b', coreRef: { lib: core.id } });
+  const IN_TEST = { name: 'a + b', src: 'lw a0, -4(x0)\nlw a1, -4(x0)\nadd a0, a0, a1\nsw a0, -3(x0)\nhalt\n', input: [2, 3] };
+  const variants = [['debug', RV16_CORE, false, PONG16_TEST], ['debug with irq', RV16_CPU_IRQ, false, PONG16_TEST], ['debug with IN', RV16_CORE, false, IN_TEST], ['debug with IN and irq', RV16_CPU_IRQ, false, IN_TEST], ['Pong', RV16_CORE, true, PONG16_TEST], ['Pong with irq', RV16_CPU_IRQ, true, PONG16_TEST], ['io with IN', RV16_CPU_IRQ, true, IN_TEST]] as const;
+  it.each(variants)('%s: no part on another, no wire through a part, two rows wide', (_, core, io, test) => {
+    const doc = benchChip(core, '', 'core', test, { io, id: 'u_b', name: 'b', coreRef: { lib: core.id } });
     if ('error' in doc) throw new Error(doc.error);
     expect(doc.parts.map((p) => p.id).filter((id) => !(id in BENCH_AT))).toEqual([]);
     const f = faults(doc);

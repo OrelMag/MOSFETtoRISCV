@@ -43,16 +43,6 @@
 /* the large copy in the puzzle strip */
 .dev-big { display: block; width: 100%; max-width: 300px; height: auto; border-radius: 8px; }
 
-/* the strip's buttons wrap on a narrow screen (five of them: wider than a phone) */
-.sb-dev .sb-chal-actions { flex: 1 1 auto; flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; min-width: 0; }
-
-/* a phone: the brief and tests above the score, not beside it (the score's fixed 300 px would leave the brief a word wide) */
-@media (max-width: 760px) {
-  .sb-dev .sb-pz-body { flex-direction: column; align-items: stretch; max-height: none; }
-  .sb-dev .sb-pz-left { width: 100%; }
-  .sb-dev .sb-pz-score { width: auto; }
-}
-
 /* the Puzzles drawer: a device puzzle's pin glyph */
 .sb-dev-pins { display: inline-flex; gap: 2px; align-items: center; flex: none; }
 .sb-dev-pins b { width: 4px; height: 10px; border-radius: 1px; background: color-mix(in srgb, var(--good) 70%, var(--text) 10%); }
