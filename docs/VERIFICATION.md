@@ -208,6 +208,33 @@ instruction at a time (`tests/verify/spike.ts`, `scripts/spike-oracle.ts`).
   at its first `mret`, where Spike wrote `mstatush` and `tcontrol`: `tcontrol` belongs to an extension we do
   not claim, but `mstatush` is part of RV32's machine mode, and ours trapped on it (see below).
 
+## The Apollo Guidance Computer and yaAGC
+
+Appendix F's golden model of the AGC (Block II: `src/agc/iss.ts`, its assembler `src/agc/asm.ts`) is checked against
+yaAGC, Virtual AGC's emulator, which runs the flight software, in lock step (`scripts/agc/oracle.ts`,
+`.github/workflows/agc-oracle.yml`; not a deploy gate).
+
+- **The harness.** yaAGC is GPLv2, so none of it is kept here: the workflow fetches `agc_engine.c` and its headers at a
+  pinned Virtual AGC revision and compiles them with `scripts/agc/harness.c`, which loads the rope image
+  (`ropeBin`: yaAGC's bank order 2, 3, 0, 1, 4 …), clears erasable memory, starts at 04000 and calls `agc_engine` once
+  per memory cycle with the scaler held (no counter ticks, no alarm, no restart) and no interrupt. After each
+  instruction it prints Z, A, L, Q, EB, FB, BB, the extracode flag, the index and the erasable words that changed.
+- **The comparison.** Every instruction's registers, every erasable word and the memory cycles it took. One exception,
+  on purpose: a BZF or BZMF that does not branch is 2 MCT in the model (R-700's timing table) and 1 in yaAGC.
+- **The programs.** Directed ones for the corners (`scripts/agc/directed.ts`: DV over every sign of A, L and the
+  divisor, in range, at |A| = |K| and out of range; MP over signs and zeros; CCS on the registers; the editing
+  registers; DAS / DDOUBL carries; RETURN; the bank registers; AUG / DIM; BZF / BZMF; MSU / QXCH) and seeded random
+  ones (`src/agc/randprog.ts`: straight-line code with forward branches, INDEX over a table, a subroutine, operands
+  in erasable, switched erasable, A / L / Q and the editing and bank registers). A program that never halts is
+  compared over its first 5000 instructions; one that reaches an instruction the model does not cover (I/O, RESUME)
+  up to it. On every push to the AGC code seeds 1..500, each week a new range of 2000.
+- **The comparison bites.** The same workflow spoils the model's answers on purpose (a bit of A, an erasable word,
+  a cycle count, in turn) and requires every program to fail.
+- **What following yaAGC settled.** Only A, L and Q hold 16 bits; L is overflow-corrected after every instruction;
+  RETURN (TC Q) leaves Q alone, so the next instruction is Q's contents, a TC that sets Q to 3; DV out of range runs
+  the hardware's division sequence; DV's dividend with halves of opposite signs is joined as yaAGC joins it.
+- **Not covered.** Interrupts, RESUME and EDRUPT, the counters and I/O channels, parity, the superbank.
+
 ## Coverage
 
 What the riscv-tests and the random programs reach on each CPU. Instructions and trap causes come

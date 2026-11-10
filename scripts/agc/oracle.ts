@@ -1,5 +1,5 @@
 // The AGC golden model (src/agc/iss.ts) against yaAGC in lock step: every program is assembled, run on the model to its
-// halt, written as a rope image, run on yaAGC through scripts/agc/harness.c for the same number of instructions, and
+// halt (or 5000 instructions, or an instruction the model does not cover), written as a rope image, run on yaAGC through scripts/agc/harness.c for the same number of instructions, and
 // compared after every instruction: Z, A, L, Q, EB, FB, BB, the extracode flag, the index, every erasable word, and the
 // memory cycles the instruction took. CI only (.github/workflows/agc-oracle.yml builds the harness from a pinned
 // Virtual AGC revision); the model's own tests run everywhere (tests/agc-iss.test.ts).
