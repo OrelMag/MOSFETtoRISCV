@@ -22,6 +22,7 @@ import { ramInit, ramWithInit, romImage } from './memory';
 import { PORT_MAX_K, PORT_MAX_N, portMemory } from '../lib/portmem';
 import { ioRefDef } from './ioparts';
 import { readerRefDef } from './cardparts';
+import { babyRefDef } from './babypart';
 import { PUZZLE_MAX_WIDTH, puzzleIn, puzzleOut } from './puzzleparts';
 import { ROM_LEAF_K, romLevels, wordsHash } from '../lib/bigmem';
 import { cWindowRom } from '../lib/rvc';
@@ -88,6 +89,7 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
     return { error: 'puzzle port: in or out' };
   }
   if ('reader' in ref) return readerRefDef(ref.reader);
+  if ('baby' in ref) return babyRefDef(ref.baby.src);
   const io = ioRefDef(ref);
   if (io) return io;
   if ('ram' in ref) {

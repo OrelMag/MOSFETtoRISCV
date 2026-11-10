@@ -191,7 +191,7 @@ Each level plays on a screen of its own: the brief, why the CPU needs the block 
 against the alternatives and its copies in the finished CPU), the level's parts only, a hint ladder
 from a nudge to the full walkthrough, and Build along (the next step's parts as outlines, the
 learner's wiring checked against the reference). Number and Boolean drills (generated, with exact
-checkers), assembly puzzles on the golden model and a codex of <!--n:codex-->370<!--/n--> entries sit alongside: each with a
+checkers), assembly puzzles on the golden model and a codex of <!--n:codex-->372<!--/n--> entries sit alongside: each with a
 live figure, a worked example, Check yourself questions and links to what it builds on and leads to,
 searchable by alias, read beside the level without leaving it, and shown as hover definitions in the
 chapters, with an index of every analogy. Practice questions (predict, what breaks) and drills come back
@@ -270,7 +270,7 @@ The sandbox builds **whole computers**. RAM and ROM parts go up to 64K words: on
 at run time over a real hierarchy of banks you can open down to the latches. A cycle engine runs
 them: storage, found by its structure (library flip-flops or ones drawn from NANDs, latches,
 resets), becomes verified tables and the rest is levelized, and every net equals the event-driven
-simulator's after every settle. `scripts/sim-perf.ts` measures the cycles per second of the CPUs on both engines. **Examples ▸** has <!--n:examples-->26<!--/n--> ready-made circuits, among them:
+simulator's after every settle. `scripts/sim-perf.ts` measures the cycles per second of the CPUs on both engines. **Examples ▸** has <!--n:examples-->27<!--/n--> ready-made circuits, among them:
 
 - **Computer**: the RV32I core, a program ROM in assembly, a memory chip, a 64 × 64 screen and a
   devices chip with the console, LEDs and switches. It greets you, paints a picture and halts, with
