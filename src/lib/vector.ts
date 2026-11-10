@@ -106,7 +106,8 @@ export const VINSIDE: ComponentDef = (() => {
     summary: 'A compare writes one mask register, which may overlap a source group only on the group\'s first register. inside = 1 when vd lies in the group of L = 2^lmul registers starting at r but is not r itself: the instruction is then illegal.',
     ports: [bus('vd', 5, 'in'), bus('r', 5, 'in'), bus('lmul', 2, 'in'), bit('inside', 'out')],
     symbol: { kind: 'box', label: 'vd in (r, r+L)' },
-    spec: ([vd, r, lmul]) => { const L = 1 << Math.min(lmul, 3); return [vd !== r && (vd & ~(L - 1)) === (r & ~(L - 1)) && vd % L !== 0 ? 1 : 0]; },
+    // r is taken as aligned (a misaligned source group makes the instruction illegal on its own): vd in r's aligned group, not its first
+    spec: ([vd, r, lmul]) => { const L = 1 << lmul; return [(vd & ~(L - 1)) === (r & ~(L - 1)) && vd % L !== 0 ? 1 : 0]; },
     netlist: () => ({ pins: edgePins(b, ['vd', 'r', 'lmul'], ['inside']), instances: b.instances, nets: b.nets() }),
   });
 })();
@@ -173,7 +174,8 @@ export const VEC_DECODE: ComponentDef = (() => {
   const picked = or(and(opiF3, or(D(4), D(5), D(6), D(7))), mergeLike);
   const vidOp = and(mvv, D(0x14));
   b.next();
-  b.wire(and(isV, F(7)), 'set');
+  // vsetvli (bit 31 = 0), vsetivli (31:30 = 11), vsetvl (31:25 = 1000000); other words of the group are not vsets
+  b.wire(and(isV, F(7), or(not(f6b[5]), f6b[4], and(D(0x20), masked))), 'set');
   b.wire(elem, 'elem');
   b.wire(maskL, 'mask');
   b.wire(redL, 'red');
@@ -208,10 +210,13 @@ export const VEC_DECODE: ComponentDef = (() => {
   });
 })();
 
-/** The golden model's vset* on a word (any vset form), for VSET_VL's spec: new vl, vtype's low byte as the hardware keeps it, legal. */
+/**
+ * The golden model's vset* on a word, for VSET_VL's spec: new vl, vtype's low byte as the hardware keeps it, legal. The form
+ * is read from bits 31:30 alone (VEC_DECODE only lets a word through that is a vset: vsetvl's bits 29:25 are 0).
+ */
 export function vsetRef(w: number, x1: number, x2: number, vl: number): [number, number, number] {
   w >>>= 0;
-  const setR = w >>> 25 === 0x40, setI = w >>> 30 === 3;
+  const setR = w >>> 30 === 2, setI = w >>> 30 === 3;
   const zimm = setR ? x2 >>> 0 : setI ? (w >>> 20) & 0x3ff : (w >>> 20) & 0x7ff;
   const t = vtypeOf(zimm, VEC_VLEN / 8);
   const legal = !!t && t.sew === 32;

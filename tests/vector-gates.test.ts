@@ -165,6 +165,8 @@ describe('the single-cycle CPU with the vector unit, in lock step with the golde
   it('vset\'s corner cases, the illegal instructions and the ones outside the subset do as the golden model does', () => {
     const r = lockstep(asm(`
       vadd.vv v1, v2, v3          # vill at power-on: nothing
+      li t1, 9
+      .word 0x82037357            # bit 31 set, 30 clear, not vsetvl: no vset (rd t1 keeps 9)
       csrr t1, vtype
       li t0, 30
       vsetvli t2, t0, e32, m8, ta, ma
