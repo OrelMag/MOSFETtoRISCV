@@ -234,6 +234,6 @@ describe('the PDP-8 in gates', () => {
   it('counts its NANDs', () => {
     const s = stats(PDP8_CORE);
     expect(s.nands).toBeGreaterThan(2000);
-    console.log('PDP-8 processor:', s.nands, 'NANDs, depth', s.depth);
+    console.log('PDP-8 processor:', s.nands, 'NANDs');
   });
 });
