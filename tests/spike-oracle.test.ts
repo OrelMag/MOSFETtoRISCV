@@ -105,4 +105,25 @@ describe('Spike oracle', () => {
     const tval = at(/tval/);
     expect(edit(tval, (l) => l.replace(/tval 0x[0-9a-f]+/, 'tval 0x00000004'))).toMatch(/mtval/);
   });
+
+  it('the vector config: reads the vector register lines of Spike, and reports a changed element, a lost write and a vector store', () => {
+    const zve = ORACLE_CONFIGS.find((c) => c.id === 'zve')!;
+    const ev = parseSpikeLog('core   0: 3 0x00010000 (0x0205e407) c8_vstart 0x00000000 e32 m1 l4 v8  0x00000004000000030000000200000001 mem 0x00020000 mem 0x00020004\n')[0];
+    expect(ev.kind === 'commit' && [ev.v.get(8), ev.loads.length, ev.csr.get(8)]).toEqual(['00000004000000030000000200000001', 2, 0]);
+    // a seed with a vector register write and a vector store
+    const VW = / v\d+ 0x/, VS = /^core\s+0: 3 .*\(0x[0-9a-f]{6}27\).* mem 0x[0-9a-f]+ 0x/;
+    let seed = 1, lines: string[] = [];
+    for (; seed < 50; seed++) {
+      lines = issAsSpikeLog(oracleCase(zve, seed)).split('\n');
+      if (lines.some((l) => VW.test(l)) && lines.some((l) => VS.test(l))) break;
+    }
+    expect(seed).toBeLessThan(50);
+    const c = oracleCase(zve, seed);
+    const edit = (i: number, f: (l: string) => string) => compareWithSpike(c, parseSpikeLog(lines.map((l, k) => (k === i ? f(l) : l)).join('\n'))).diff;
+    const vw = lines.findIndex((l) => VW.test(l));
+    expect(edit(vw, (l) => l.replace(/( v\d+ 0x[0-9a-f]*)([0-9a-f])/, (_m, p, d) => p + (d === '0' ? '1' : '0')))).toMatch(/v\d+: ours 0x[0-9a-f]+, Spike/);
+    expect(edit(vw, (l) => l.replace(/ e32 m1 l\d+( v\d+ 0x[0-9a-f]+)+/, ''))).toMatch(/Spike logged no write/);
+    const vs = lines.findIndex((l) => VS.test(l));
+    expect(edit(vs, (l) => l.replace(/ mem (0x[0-9a-f]+) (0x[0-9a-f]+)/, ' mem $1 0xff'))).toMatch(/vector stores: ours/);
+  });
 });

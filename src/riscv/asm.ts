@@ -3,6 +3,7 @@
 
 import { specOf, type CustomRow } from './custom';
 import { compress32, decodeC, scatter } from './rvc';
+import { assembleV, V_MNEMONICS } from './rvv';
 import { BY_NAME, BY_NAME64, CSRS, MAC_BY_NAME, encB, encI, encJ, encR, encR4, encS, encU, fregNumber, OPCODES, regNumber, RM_OPERANDS, type Xlen } from './isa';
 
 export interface AsmLine {
@@ -346,6 +347,10 @@ function encode(st: Stmt, labels: Map<string, number>, custom: readonly CustomRo
     if (!m) throw new AsmError(`expected offset(register), got "${s}"`);
     return { off: m[1].trim() ? imm(m[1], -2048, 2047) : 0, base: reg(m[2]) };
   };
+  // the vector extension (riscv/rvv.ts)
+  if (V_MNEMONICS.has(op)) {
+    try { return [assembleV(op, args, { reg, imm })]; } catch (e) { throw e instanceof AsmError ? e : new AsmError((e as Error).message); }
+  }
   // F pseudo-instructions
   if (op === 'fmv.s' || op === 'fneg.s' || op === 'fabs.s') {
     need(2);

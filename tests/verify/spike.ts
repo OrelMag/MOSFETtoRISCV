@@ -29,7 +29,7 @@ export const VM_SPIKE_MEM = `0x${CODE.toString(16)}:0x10000,0x${DATA.toString(16
 export interface OracleConfig {
   id: string;
   name: string;
-  isa: Pick<Rand32Options, 'sub' | 'm' | 'f' | 'system' | 'c'>;
+  isa: Pick<Rand32Options, 'sub' | 'm' | 'f' | 'system' | 'c' | 'v'>;
   /** Spike's --isa. */
   spike: string;
   /** Privilege modes and Sv32 (ISS option vm): Spike runs M / S / U, the data region is 64 KiB, the program builds its page tables (randprog32 vm). */
@@ -46,7 +46,11 @@ export const ORACLE_CONFIGS: OracleConfig[] = [
   { id: 'sys-m', name: 'RV32IM + Zicsr, machine mode, traps', isa: { sub: true, system: true, m: true }, spike: 'rv32im_zicsr' },
   { id: 'imc', name: 'RV32IMC, byte and halfword access', isa: { sub: true, m: true, c: true }, spike: 'rv32imc_zicsr' },
   { id: 'vm', name: 'RV32IM + Zicsr, M / S / U, Sv32 page tables, page faults', isa: { sub: true, system: true, m: true }, spike: 'rv32im_zicsr', vm: true },
+  // the vector chapter's ISA (riscv/rvv.ts): integer vectors, ELEN 32, VLEN 128 (Spike takes VLEN from zvl128b)
+  { id: 'zve', name: 'RV32IM + Zve32x, VLEN 128', isa: { m: true, v: true }, spike: 'rv32im_zicsr_zve32x_zvl128b' },
 ];
+/** VLEN of the vector config (its Spike string's zvl). */
+export const ORACLE_VLEN = 128;
 
 /** Spike's command line for an ELF and a log file. */
 export const spikeArgs = (cfg: OracleConfig, elf: string, log: string) =>
@@ -81,7 +85,7 @@ function jal0(off: number): number {
 export function oracleCase(cfg: OracleConfig, seed: number, n = 120): OracleCase {
   const source = cfg.vm
     ? randomProgram32(seed, { n, ...cfg.isa, dmemWords: 4096, dataBase: VM_WINDOW, timer: false, vm: { code: CODE, data: DATA } })
-    : randomProgram32(seed, { n, ...cfg.isa, dmemWords: DMEM_WORDS, dataBase: DATA, timer: false });
+    : randomProgram32(seed, { n, ...cfg.isa, dmemWords: DMEM_WORDS, dataBase: DATA, timer: false, vlen: ORACLE_VLEN });
   const asm = assemble(source);
   if (asm.errors.length) throw new Error(`seed ${seed}: line ${asm.errors[0].line}: ${asm.errors[0].message}`);
   const halt = asm.labels.get('halt')!;
@@ -93,10 +97,10 @@ export function oracleCase(cfg: OracleConfig, seed: number, n = 120): OracleCase
   const setHalf = (a: number, v: number) => { const k = a >>> 2, sh = (a & 2) * 8; code[k] = (((code[k] ?? 0) & ~(0xffff << sh)) | ((v & 0xffff) << sh)) >>> 0; };
   setHalf(halt, jal);
   setHalf(halt + 2, jal >>> 16);
-  // boot: the FPU on (mstatus.FS = dirty: Spike traps FP instructions while it is off), then the program
+  // boot: the FPU and the vector unit on (mstatus.FS / VS = dirty: Spike traps their instructions while they are off), then the program
   // (the vm config: Spike lets S and U touch memory only through PMP, so entry 0 covers everything, NAPOT read / write / execute)
   const pmp = cfg.vm ? 'li t0, -1\ncsrw 0x3b0, t0\nli t0, 0x1f\ncsrw 0x3a0, t0\n' : '';
-  const boot = words(`${cfg.isa.f ? 'li t0, 0x6000\ncsrs mstatus, t0\n' : ''}${pmp}li t0, ${CODE}\njr t0\n`);
+  const boot = words(`${cfg.isa.f ? 'li t0, 0x6000\ncsrs mstatus, t0\n' : ''}${cfg.isa.v ? 'li t0, 0x600\ncsrs mstatus, t0\n' : ''}${pmp}li t0, ${CODE}\njr t0\n`);
   const exit = words(`li t0, ${TOHOST}\nli t1, 1\nsw t1, 0(t0)\nloop: j loop\n`);
   const stub = new Array<number>((FROMHOST + 8 - STUB) / 4).fill(0);
   stub.splice(0, boot.length, ...boot);
@@ -107,7 +111,7 @@ export function oracleCase(cfg: OracleConfig, seed: number, n = 120): OracleCase
 
 /** Our ISS for a case, at the program's first instruction. */
 export function oracleIss(c: OracleCase): ISS {
-  const iss = new ISS(c.words, { system: !!c.cfg.isa.system, m: !!c.cfg.isa.m, f: !!c.cfg.isa.f, c: !!c.cfg.isa.c, vm: !!c.cfg.vm, dmemWords: c.cfg.vm ? VM_DMEM_WORDS : DMEM_WORDS, imemWords: 2 ** log2up(c.words.length) });
+  const iss = new ISS(c.words, { system: !!c.cfg.isa.system, m: !!c.cfg.isa.m, f: !!c.cfg.isa.f, c: !!c.cfg.isa.c, vm: !!c.cfg.vm, ...(c.cfg.isa.v ? { v: { vlen: ORACLE_VLEN } } : {}), dmemWords: c.cfg.vm ? VM_DMEM_WORDS : DMEM_WORDS, imemWords: 2 ** log2up(c.words.length) });
   iss.pc = CODE;
   return iss;
 }
@@ -123,6 +127,8 @@ export interface SpikeCommit {
   x: Map<number, number>;
   f: Map<number, number>;
   csr: Map<number, number>;
+  /** Vector registers written: the whole register as hex, most significant digit first, no 0x. */
+  v: Map<number, string>;
   loads: number[];
   stores: { addr: number; value: number; bits: number }[];
 }
@@ -151,7 +157,7 @@ export function parseSpikeLog(text: string): SpikeEvent[] {
     const s = lines[ln].trimEnd();
     let m = /^core\s+\d+:\s+(\d)\s+0x([0-9a-f]+)\s+\(0x([0-9a-f]+)\)(.*)$/.exec(s);
     if (m) {
-      const ev: SpikeCommit = { kind: 'commit', line: ln + 1, priv: +m[1], pc: num(m[2]), word: num(m[3]), x: new Map(), f: new Map(), csr: new Map(), loads: [], stores: [] };
+      const ev: SpikeCommit = { kind: 'commit', line: ln + 1, priv: +m[1], pc: num(m[2]), word: num(m[3]), x: new Map(), f: new Map(), csr: new Map(), v: new Map(), loads: [], stores: [] };
       const t = m[4].trim().split(/\s+/).filter(Boolean);
       for (let i = 0; i < t.length; i++) {
         let r: RegExpExecArray | null;
@@ -160,6 +166,7 @@ export function parseSpikeLog(text: string): SpikeEvent[] {
           if (t[i + 1]?.startsWith('0x')) { const v = t[++i]; ev.stores.push({ addr, value: num(v), bits: 4 * (v.length - 2) }); } else ev.loads.push(addr);
         } else if ((r = /^x(\d+)$/.exec(t[i]))) ev.x.set(+r[1], num(t[++i]));
         else if ((r = /^f(\d+)$/.exec(t[i]))) ev.f.set(+r[1], num(t[++i]));
+        else if ((r = /^v(\d+)$/.exec(t[i])) && t[i + 1]?.startsWith('0x')) ev.v.set(+r[1], t[++i].slice(2).toLowerCase());
         else if ((r = /^c(\d+)_\w+$/.exec(t[i]))) ev.csr.set(+r[1], num(t[++i]));
       }
       out.push(ev);
@@ -189,6 +196,12 @@ export interface OracleResult {
 
 const CAUSE_NAMES: Record<number, string> = Object.fromEntries(Object.entries(TRAPS).map(([k, v]) => [v, k.replace(/^trap_/, '')]));
 const STORE_BITS = [8, 16, 32];
+/** The vector CSRs Spike writes at user level: vstart (cleared by every vector instruction), vl, vtype. */
+const V_CSRS = [0x008, 0xc20, 0xc21];
+/** A vector register as Spike prints it: VLEN / 4 hex digits, most significant first. */
+const vhex = (iss: ISS, r: number) => Array.from(iss.vregs.subarray(r * iss.vlenb, (r + 1) * iss.vlenb)).reverse().map((b) => b.toString(16).padStart(2, '0')).join('');
+/** The vector registers whose bytes differ between two copies of the file. */
+const vchanged = (iss: ISS, before: Uint8Array) => [...Array(32).keys()].filter((r) => iss.vregs.subarray(r * iss.vlenb, (r + 1) * iss.vlenb).some((x, k) => x !== before[r * iss.vlenb + k]));
 /** CSRs Spike has and ours does not, which Spike's mret writes (with zero here). mstatush was one until Spike
  * showed it missing; ours now has it, read-only zero. */
 export const UNMODELLED: Record<number, string> = {
@@ -221,6 +234,7 @@ export function compareWithSpike(c: OracleCase, events: SpikeEvent[], limit = 20
     const ev = evs[i++];
     const la = loadAddr(iss, iss.instrAt(iss.pc).word);
     const priv0 = iss.priv;
+    const vbefore = iss.vlenb ? iss.vregs.slice() : undefined;
     const info = iss.step();
     steps++;
     if (!ev) return res(`${where(info)}: Spike's log ends here (it went elsewhere or stopped)`);
@@ -248,8 +262,19 @@ export function compareWithSpike(c: OracleCase, events: SpikeEvent[], limit = 20
     // f register
     if (info.fwrite && ev.f.get(info.fwrite.rd) !== info.fwrite.value >>> 0) out.push(`f${info.fwrite.rd}: ours ${hex(info.fwrite.value)}, Spike ${ev.f.has(info.fwrite.rd) ? hex(ev.f.get(info.fwrite.rd)!) : 'not written'}`);
     for (const [r, v] of ev.f) if (info.fwrite?.rd !== r) out.push(`f${r}: ours not written, Spike ${hex(v)}`);
+    // vector registers: each one Spike logged equals ours, and every one ours changed Spike logged
+    if (vbefore) {
+      for (const [r, h] of ev.v) if (vhex(iss, r) !== h.padStart(2 * iss.vlenb, '0')) out.push(`v${r}: ours 0x${vhex(iss, r)}, Spike 0x${h}`);
+      for (const r of vchanged(iss, vbefore)) if (!ev.v.has(r)) out.push(`v${r}: ours changed to 0x${vhex(iss, r)}, Spike logged no write`);
+    }
     // memory
-    if (info.store) {
+    if (info.vstores || info.vloads) {
+      const theirs = ev.stores.map((s) => `${s.bits / 8} bytes ${hex(s.value, s.bits / 4)} at ${hex(s.addr)}`).join(', ');
+      const ours = (info.vstores ?? []).map((s) => `${s.bytes} bytes ${hex(s.value, 2 * s.bytes)} at ${hex(s.addr)}`).join(', ');
+      if (theirs !== ours) out.push(`vector stores: ours ${ours || 'none'}, Spike ${theirs || 'none'}`);
+      const ol = (info.vloads ?? []).map((a) => hex(a)).join(', '), tl = ev.loads.map((a) => hex(a)).join(', ');
+      if (ol !== tl) out.push(`vector loads: ours ${ol || 'none'}, Spike ${tl || 'none'}`);
+    } else if (info.store) {
       const bits = STORE_BITS[decode(info.word).funct3 & 3] ?? 32, mask = bits === 32 ? 0xffffffff : 2 ** bits - 1;
       const s = ev.stores[0];
       if (!s || ev.stores.length > 1 || s.addr !== info.store.addr >>> 0 || s.bits !== bits || ((s.value & mask) >>> 0) !== ((info.store.value & mask) >>> 0))
@@ -258,7 +283,7 @@ export function compareWithSpike(c: OracleCase, events: SpikeEvent[], limit = 20
     if (la !== undefined && (ev.loads.length !== 1 || ev.loads[0] !== la)) out.push(`load address: ours ${hex(la)}, Spike ${ev.loads.map((a) => hex(a)).join(', ') || 'none'}`);
     // CSRs Spike wrote: ours must read the same (outside machine mode only the FP ones exist in ours)
     for (const [a, v] of ev.csr) {
-      if (!sys && !(a >= 1 && a <= 3)) continue;
+      if (!sys && !(a >= 1 && a <= 3) && !(c.cfg.isa.v && V_CSRS.includes(a))) continue;
       const o = iss.csrRead(a);
       if (o === null && v === 0 && UNMODELLED[a]) allowances++;
       else if (o === null) out.push(`CSR 0x${a.toString(16)}: ours has none, Spike wrote ${hex(v)}`);
@@ -281,7 +306,8 @@ export function issAsSpikeLog(c: OracleCase): string {
   const reg = (p: string, r: number, v: number) => ` ${p}${String(r).padEnd(2)} ${hex(v)}`;
   for (let n = 0; iss.pc !== CODE + c.halt && n < 20_000; n++) {
     const la = loadAddr(iss, iss.instrAt(iss.pc).word);
-    const ff = iss.fflags, frm = iss.frm;
+    const ff = iss.fflags, frm = iss.frm, vl = iss.vl, vtype = iss.vtype;
+    const vbefore = iss.vlenb ? iss.vregs.slice() : undefined;
     const info = iss.step();
     const bits = info.half !== undefined ? hex(info.half, 4) : hex(info.word);
     L.push(`core   0: ${hex(info.pc)} (${bits}) ${info.text}`);
@@ -297,6 +323,11 @@ export function issAsSpikeLog(c: OracleCase): string {
     const csrs: [number, number][] = [];
     if (iss.fflags !== ff) csrs.push([1, iss.fflags]);
     if (iss.frm !== frm) csrs.push([2, iss.frm]);
+    if (vbefore && /^v/.test(info.text)) {
+      csrs.push([0x008, 0]);
+      if (iss.vl !== vl) csrs.push([0xc20, iss.vl]);
+      if (iss.vtype !== vtype) csrs.push([0xc21, iss.vtype >>> 0]);
+    }
     if (d.opcode === OPCODES.SYSTEM && d.funct3 & 3 && c.cfg.isa.system) {
       const a = (info.word >>> 20) & 0xfff, writes = (d.funct3 & 3) === 1 || d.rs1 !== 0;
       if (writes && iss.csrRead(a) !== null && a !== CSRS.misa) csrs.push([a, iss.csrRead(a)!]);
@@ -311,6 +342,12 @@ export function issAsSpikeLog(c: OracleCase): string {
     if (info.rd) s += reg('x', info.rd, info.value!);
     if (info.fwrite) s += reg('f', info.fwrite.rd, info.fwrite.value);
     for (const [a, v] of csrs.sort((p, q) => p[0] - q[0])) s += ` c${a}_csr ${hex(v)}`;
+    if (vbefore) {
+      const regs = vchanged(iss, vbefore);
+      if (regs.length) s += ` e32 m1 l${iss.vl}` + regs.map((r) => ` v${r} 0x${vhex(iss, r)}`).join('');
+      for (const a of info.vloads ?? []) s += ` mem ${hex(a)}`;
+      for (const st of info.vstores ?? []) s += ` mem ${hex(st.addr)} ${hex(st.value, 2 * st.bytes)}`;
+    }
     if (la !== undefined) s += ` mem ${hex(la)}`;
     if (info.store) { const bits = STORE_BITS[d.funct3 & 3] ?? 32; s += ` mem ${hex(info.store.addr)} ${hex(info.store.value & (bits === 32 ? -1 : 2 ** bits - 1), bits / 4)}`; }
     L.push(s);
