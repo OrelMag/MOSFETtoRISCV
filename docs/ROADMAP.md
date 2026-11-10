@@ -1113,7 +1113,7 @@ and Digital are what courses already use, and Digital lets a student write tests
 - Later: placing an imported circuit again by logic depth (the Verilog import's placer, generalized); `.dig` export
 
 **ISA breadth** (Ripes: RV64, the C extension): RV64I / RV64M and C in Phase 9, each checked by riscv-tests and Spike
-like the RV32 cores. ✅ C (chapter 25, part 1); ✅ RV64I / M (part 2). Open: C and RV64 in the sandbox, the instruction builder's 16-bit and RV64 formats.
+like the RV32 cores. ✅ C (chapter 25, part 1); ✅ RV64I / M (part 2). ✅ C and RV64 in the sandbox, with the instruction builder's 16-bit and RV64 formats (1f7697b3; widths e3fa3cf1).
 
 ### Phase 20 — Reviewer feedback (2026-10-19) ⏳
 An outside review asked for CMOS realism, cross-layer debugging, campaign polish and an FPGA path. Much of it was
