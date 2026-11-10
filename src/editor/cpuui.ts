@@ -53,6 +53,8 @@ import { detect6502, flags6502, type M6502Desc, M6502Monitor } from './m6502mon'
 import { detectRv64, hex64, mismatch64Text, Rv64Monitor, type Rv64Desc } from './rv64mon';
 import { detectSap, type SapDesc, SapMonitor, sapSteps, sapUse } from './sapmon';
 import { openSapProgram } from './sapui';
+import { BabyMonitor, beatName, type BabyDesc, detectBaby } from './babymon';
+import { openBabyProgram } from './babyui';
 import { CTRL, CTRL_LABEL, ctrlText, disasm as sapDisasm, SAP_CTRL } from '../sap/isa';
 import { registerPropsSection } from './props';
 import { addBreak, breakpointsOf } from './breakui';
@@ -83,8 +85,8 @@ const CAUSE_NAMES: Record<number, string> = {
   [CAUSE.TIMER_IRQ]: 'timer interrupt', [CAUSE.EXTERNAL_IRQ]: 'external interrupt',
 };
 
-type Mon = CpuMonitor | MultiMonitor | Rv16Monitor | LaneMonitor | Cpu4Monitor | Dsp24Monitor | M6502Monitor | SapMonitor | Rv64Monitor;
-const monKind = (m: Mon) => (m instanceof Rv64Monitor ? 'rv64' : m instanceof SapMonitor ? 'sap' : m instanceof MultiMonitor ? 'multi' : m instanceof Rv16Monitor ? 'rv16' : m instanceof LaneMonitor ? 'lanes' : m instanceof Cpu4Monitor ? 'cpu4' : m instanceof Dsp24Monitor ? 'dsp24' : m instanceof M6502Monitor ? 'm6502' : 'cpu');
+type Mon = CpuMonitor | MultiMonitor | Rv16Monitor | LaneMonitor | Cpu4Monitor | Dsp24Monitor | M6502Monitor | SapMonitor | Rv64Monitor | BabyMonitor;
+const monKind = (m: Mon) => (m instanceof BabyMonitor ? 'baby' : m instanceof Rv64Monitor ? 'rv64' : m instanceof SapMonitor ? 'sap' : m instanceof MultiMonitor ? 'multi' : m instanceof Rv16Monitor ? 'rv16' : m instanceof LaneMonitor ? 'lanes' : m instanceof Cpu4Monitor ? 'cpu4' : m instanceof Dsp24Monitor ? 'dsp24' : m instanceof M6502Monitor ? 'm6502' : 'cpu');
 /** Monitors whose ROM listing is word addressed (rows keyed 4 × the word index, like the RV32 listings; the 6502's: a byte a word). */
 const wordListed = (m: Mon): m is Rv16Monitor | LaneMonitor | Cpu4Monitor | Dsp24Monitor | M6502Monitor => m instanceof Rv16Monitor || m instanceof LaneMonitor || m instanceof Cpu4Monitor || m instanceof Dsp24Monitor || m instanceof M6502Monitor;
 interface Entry { chip: string; mon: Mon; pipe: PipeHistory; hook: EdgeHook }
@@ -140,6 +142,8 @@ class CpuPanel {
   /** The DSP core (a ROM in DSP24 assembly and a placed dsp24_core): every register checked every clock. */
   private dsp24: Dsp24Desc | null = null;
   private rv64: Rv64Desc | null = null;
+  /** A Baby part (Examples > Manchester Baby): the golden model in lock step at every instruction (babymon.ts). */
+  private baby: BabyDesc | null = null;
   /** A 6502 part (and a ROM in 6502 assembly): followed instruction by instruction (the part is the cycle-exact model). */
   private m6502: M6502Desc | null = null;
   /** A SAP-1 (Examples ▸ SAP-1, or a placed sap1): the golden model in lock step every clock (sapmon.ts). */
@@ -345,22 +349,24 @@ class CpuPanel {
         this.dsp24 = this.multi || this.desc || this.rv16 || this.lanes || this.m6502 || this.rv64 ? null : detectDsp24(ed.doc, chips);
         this.cpu4 = this.multi || this.desc || this.rv16 || this.lanes || this.m6502 || this.rv64 || this.dsp24 ? null : detectCpu4(ed.doc, chips);
         if (this.sap) this.rv16 = this.lanes = this.m6502 = this.cpu4 = this.dsp24 = null;
-        const found = !!(this.sap || this.multi || this.rv64 || this.desc || this.rv16 || this.lanes || this.m6502 || this.cpu4 || this.dsp24);
+        this.baby = detectBaby(ed.doc, chips);
+        if (this.baby) this.sap = this.multi = this.rv64 = this.desc = this.rv16 = this.lanes = this.m6502 = this.cpu4 = this.dsp24 = null;
+        const found = !!(this.baby || this.sap || this.multi || this.rv64 || this.desc || this.rv16 || this.lanes || this.m6502 || this.cpu4 || this.dsp24);
         if (found !== this.found) {
           this.found = found;
           ed.renderActions(); // the toolbar's CPU button comes or goes
         }
       }
-      const want = this.rv64 ? 'rv64' : this.sap ? 'sap' : this.multi ? 'multi' : this.rv16 ? 'rv16' : this.lanes ? 'lanes' : this.m6502 ? 'm6502' : this.dsp24 ? 'dsp24' : this.cpu4 ? 'cpu4' : 'cpu';
+      const want = this.baby ? 'baby' : this.rv64 ? 'rv64' : this.sap ? 'sap' : this.multi ? 'multi' : this.rv16 ? 'rv16' : this.lanes ? 'lanes' : this.m6502 ? 'm6502' : this.dsp24 ? 'dsp24' : this.cpu4 ? 'cpu4' : 'cpu';
       // Monitors of chips that are gone, replaced by another simulation, or of another kind now.
       for (const [k, v] of this.monitors) {
         const kind = v.chip === chip && monKind(v.mon) !== want;
         if (!ed.ws.open.includes(v.chip) || (v.chip === chip && k !== es) || kind) { this.drop(k, v); this.monitors.delete(k); }
       }
       let entry = this.monitors.get(es);
-      if ((this.sap || this.rv64 || this.desc || this.multi || this.rv16 || this.lanes || this.cpu4 || this.dsp24 || this.m6502) && !entry) {
+      if ((this.baby || this.sap || this.rv64 || this.desc || this.multi || this.rv16 || this.lanes || this.cpu4 || this.dsp24 || this.m6502) && !entry) {
         const doc = () => ed.ws.chips[chip] ?? ed.doc, ws = () => ed.ws.chips;
-        const mon: Mon = this.rv64 ? new Rv64Monitor(es, doc, ws) : this.sap ? new SapMonitor(es, doc, ws) : this.multi ? new MultiMonitor(es, doc, ws) : this.rv16 ? new Rv16Monitor(es, doc, ws) : this.lanes ? new LaneMonitor(es, doc, ws) : this.m6502 ? new M6502Monitor(es, doc, ws) : this.dsp24 ? new Dsp24Monitor(es, doc, ws) : this.cpu4 ? new Cpu4Monitor(es, doc, ws) : new CpuMonitor(es, doc, ws);
+        const mon: Mon = this.baby ? new BabyMonitor(es, doc, ws) : this.rv64 ? new Rv64Monitor(es, doc, ws) : this.sap ? new SapMonitor(es, doc, ws) : this.multi ? new MultiMonitor(es, doc, ws) : this.rv16 ? new Rv16Monitor(es, doc, ws) : this.lanes ? new LaneMonitor(es, doc, ws) : this.m6502 ? new M6502Monitor(es, doc, ws) : this.dsp24 ? new Dsp24Monitor(es, doc, ws) : this.cpu4 ? new Cpu4Monitor(es, doc, ws) : new CpuMonitor(es, doc, ws);
         const pipe = new PipeHistory();
         // PC breakpoints (the listing's gutter): every instruction the golden model retired at this edge, by its listing row
         const follow = 'log' in mon ? retireFollower(mon, (pc) => listRow(mon, pc)) : null;
@@ -386,10 +392,10 @@ class CpuPanel {
         this.stopSlow();
         // A complete CPU opens its panel by itself (unless closed there); a chip without a program
         // ROM closes it; a bare datapath (a ROM and a PC) leaves it as it was.
-        const complete = !!(this.sap || this.rv64 || this.desc?.regs || this.multi || this.rv16 || this.lanes || this.cpu4 || this.dsp24 || this.m6502);
+        const complete = !!(this.baby || this.sap || this.rv64 || this.desc?.regs || this.multi || this.rv16 || this.lanes || this.cpu4 || this.dsp24 || this.m6502);
         if (complete && !this.closed.has(chip) && !tightForDrawer()) this.setOpen(true);
         else if (complete && !this.closed.has(chip)) this.hintPanel(chip);
-        else if (!this.sap && !this.rv64 && !this.desc && !this.multi && !this.rv16 && !this.lanes && !this.cpu4 && !this.dsp24 && !this.m6502) this.setOpen(false);
+        else if (!this.baby && !this.sap && !this.rv64 && !this.desc && !this.multi && !this.rv16 && !this.lanes && !this.cpu4 && !this.dsp24 && !this.m6502) this.setOpen(false);
       }
       this.redock();
       if (this.open) this.renderThrottled();
@@ -509,6 +515,7 @@ class CpuPanel {
   private editProgram(): void {
     const mon = this.mon;
     if (mon instanceof SapMonitor) return openSapProgram(this.ed, mon);
+    if (mon instanceof BabyMonitor) return mon.desc ? openBabyProgram(this.ed, mon.desc.part, mon.desc.src) : undefined;
     const rom = mon instanceof MultiMonitor ? this.multi?.cores[0]?.rom : mon && (wordListed(mon) || mon instanceof Rv64Monitor) ? mon.desc?.rom : this.desc?.rom;
     if (!rom) return;
     const at = partAt(this.ed.doc, rom, this.ed.ws.chips);
@@ -573,6 +580,7 @@ class CpuPanel {
     this.oooSec.hidden = this.oooV.el.hidden = true;
     this.dsp.hidden = !(mon instanceof Dsp24Monitor);
     this.vecSec.hidden = this.vec.hidden = true; // until renderVec finds a vector core
+    if (mon instanceof BabyMonitor) return this.renderBaby(mon);
     if (mon instanceof Rv64Monitor) return this.renderRv64(mon);
     if (mon instanceof SapMonitor) return this.renderSap(mon);
     if (mon instanceof MultiMonitor) return this.renderMulti(mon);
@@ -725,7 +733,7 @@ class CpuPanel {
       const top = cur.offsetTop - this.listing.offsetTop, bottom = top + cur.offsetHeight;
       if (top < this.listing.scrollTop || bottom > this.listing.scrollTop + this.listing.clientHeight) this.listing.scrollTop = Math.max(0, top - this.listing.clientHeight / 3);
     }
-    if (mon instanceof MultiMonitor || mon instanceof SapMonitor || mon instanceof Rv64Monitor || wordListed(mon)) return;
+    if (mon instanceof MultiMonitor || mon instanceof SapMonitor || mon instanceof BabyMonitor || mon instanceof Rv64Monitor || wordListed(mon)) return;
     const w = pc !== null && pc >= 0 ? mon.wordAt(pc) : null;
     this.now.replaceChildren(...(w === null
       ? [h('span', { class: 'fmt' }, 'PC'), h('code', null, noPc)]
@@ -779,7 +787,7 @@ class CpuPanel {
   private focusPc(): { pc: number; role: string } | null {
     const mon = this.mon;
     if (!mon) return null;
-    if (wordListed(mon) || mon instanceof SapMonitor || mon instanceof Rv64Monitor) return null;
+    if (wordListed(mon) || mon instanceof SapMonitor || mon instanceof BabyMonitor || mon instanceof Rv64Monitor) return null;
     if (this.sel !== null) return { pc: this.sel, role: 'selected' };
     if (mon instanceof MultiMonitor) return null;
     const d = mon.desc;
@@ -952,8 +960,9 @@ class CpuPanel {
     const show = mon instanceof CpuMonitor ? !!mon.desc?.regs : mon instanceof Cpu4Monitor ? !mon.desc?.table : true;
     const rv16 = mon instanceof Rv16Monitor || mon instanceof LaneMonitor;
     const m65 = mon instanceof M6502Monitor;
-    const sap = mon instanceof SapMonitor;
-    keyed(this.traceSec, rv16 ? 'rv16' : m65 ? 'm6502' : sap ? 'sap' : 'cpu', () => (rv16 ? ['Checked writes', h('span', { class: 'cpu-sec-hint' }, 'register writes and stores, newest last')]
+    const sap = mon instanceof SapMonitor, baby = mon instanceof BabyMonitor;
+    keyed(this.traceSec, rv16 ? 'rv16' : m65 ? 'm6502' : sap ? 'sap' : baby ? 'baby' : 'cpu', () => (rv16 ? ['Checked writes', h('span', { class: 'cpu-sec-hint' }, 'register writes and stores, newest last')]
+      : baby ? ['Instructions', h('span', { class: 'cpu-sec-hint' }, 'what each did to CI, A and the store; newest last')]
       : sap ? ['Clock steps', h('span', { class: 'cpu-sec-hint' }, 'each step’s control word and what it loaded; newest last')]
       : ['Retired', h('span', { class: 'cpu-sec-hint' }, m65 ? 'what each did, its stores and cycles; newest last' : 'by the golden model, newest last')]));
     const row = (pc: number) => listRow(mon, pc);
@@ -1428,6 +1437,60 @@ class CpuPanel {
     this.computeMarks();
   }
 
+  // ---- the Manchester Baby ------------------------------------------------------------------
+
+  private renderBaby(mon: BabyMonitor): void {
+    const es = this.ed.sim, r = mon.read();
+    const hx = (v: number) => (v < 0 ? '????????' : (v >>> 0).toString(16).padStart(8, '0'));
+    this.progHint.textContent = 'the store, live: a line not rewritten for 0.2 s has faded';
+    const bits: HTMLElement[] = [h('span', null, `beat ${es.cycles}`), h('span', { title: 'Instructions completed (four beats each)' }, `instructions ${mon.retired}`)];
+    if (mon.mismatch) bits.push(h('span', { class: 'bad', title: 'The first difference between the hardware and the Baby golden model; the check stops there' }, `✗ ${mismatchText(mon.mismatch)}`));
+    else if (mon.problem) bits.push(h('span', { class: 'warn' }, `no golden model: ${mon.problem}`));
+    else if (mon.unchecked) bits.push(h('span', { class: 'warn', title: mon.unchecked }, 'not checked'));
+    else if (!mon.synced) bits.push(h('span', { class: 'warn', title: 'The golden model starts with the hardware at power-on' }, 'golden model joins at the next Reset'));
+    else if (mon.checking) bits.push(h('span', { class: 'good', title: 'After every instruction CI, A and the Stop lamp match the Baby golden model' }, '✓ matches golden model'));
+    if (mon.iss?.halted || r?.stop === 1) bits.push(h('span', { class: 'warn', title: 'STP: the Stop lamp is lit' }, 'stopped'));
+    keyed(this.status, bits.map((b) => b.outerHTML).join(''), () => bits);
+    keyed(this.gaps, mon.unchecked ?? '', () => (mon.unchecked ? [h('div', null, h('b', null, 'Followed, not checked: '), mon.unchecked, '.')] : []));
+    // the store: a line per row, its word (hex), the statement or the number, where CI points
+    const cur = r && r.ci >= 0 ? r.ci & 31 : null;
+    const store = r?.store ?? Array<number>(32).fill(-1), age = r?.age ?? Array<number>(32).fill(0);
+    const lk = `baby|${store.join(',')}|${age.map((a) => (BabyMonitor.faded(a) ? 1 : 0)).join('')}|${cur}|${this.sel}|${mon.rowKey}`;
+    if (lk !== this.listKey) {
+      this.listKey = lk;
+      this.curKey = '';
+      this.rowOf.clear();
+      this.rows = store.map((w, i) => {
+        const row = h('div', { class: `ln${i === cur ? ' cur' : ''}${i === this.sel ? ' sel' : ''}`, 'data-pc': String(i), title: w < 0 ? 'Unknown (X)' : `Line ${i}: ${hx(w)}` },
+          h('span', { class: 'a' }, String(i).padStart(2, '0')), h('span', { class: 'w' }, hx(w)), h('span', { class: 't' }, mon.rowText(i, w)),
+          ...(BabyMonitor.faded(age[i]) ? [h('span', { class: 'stg', title: 'Not rewritten for 0.2 s: the charge is gone and the line reads as dots' }, 'faded')] : []),
+          ...(i === cur ? [h('span', { class: 'stg', title: 'The control register: the line of the last instruction' }, 'CI')] : []));
+        row.addEventListener('click', () => this.select(i));
+        this.rowOf.set(i, row);
+        return row;
+      });
+      this.listing.replaceChildren(...this.rows);
+    }
+    const beat = r?.beat ?? -1, q = (v: number | undefined) => (v === undefined || v < 0 && v !== -1 ? '?' : String(v | 0));
+    keyed(this.now, `${beat}|${r?.ci}|${r?.a}|${r?.t}|${r?.line}`, () => [
+      h('span', { class: 'fmt' }, beatName(beat)),
+      h('code', null, r ? `CI ${q(r.ci)}   A ${q(r.a)}   line ${r.line < 0 ? '?' : r.line}` : 'not simulated'),
+    ]);
+    this.fieldsSec.hidden = this.fields.hidden = this.pipeSec.hidden = this.pipe.hidden = this.ioSec.hidden = this.io.hidden = true;
+    this.fregsSec.hidden = this.fregs.hidden = this.memSec.hidden = this.mem.hidden = true;
+    const x = r ? [r.ci | 0, r.a | 0, r.t, r.stop] : null;
+    this.trackChanges(mon, [x]);
+    const chg = this.changed[0] ?? new Set<number>();
+    const names = ['CI', 'A', 'T', 'Stop'];
+    this.regsSec.textContent = 'Registers';
+    this.regs.classList.remove('sb-cpu-mregs');
+    if (!x) keyed(this.regs, 'none', () => [h('div', { class: 'sb-sum sb-cpu-span' }, 'Not simulated.')]);
+    else keyed(this.regs, `${x.join(',')}|${[...chg].join(',')}`, () => x.map((v, i) => h('div', { class: `r${chg.has(i) && es.cycles > 0 ? ' chg' : ''}${v ? '' : ' z'}`, title: `${names[i]} = ${v}` },
+      h('span', { class: 'n' }, names[i]), h('span', { class: 'v' }, i < 2 ? `${hx(v)} ${v}` : String(v)))));
+    this.renderTrace(mon);
+    this.computeMarks();
+  }
+
   // ---- a SAP-1 ------------------------------------------------------------------------------
 
   private renderSap(mon: SapMonitor): void {
@@ -1557,6 +1620,10 @@ class CpuPanel {
     if (mon instanceof Cpu4Monitor) return this.computeMarks4(mon);
     if (mon instanceof Dsp24Monitor) return this.computeMarksDsp(mon);
     if (mon instanceof SapMonitor) return this.computeMarksSap(mon);
+    if (mon instanceof BabyMonitor) {
+      if (this.marked.length || this.wireMarks.size) this.clearMarks();
+      return;
+    }
     if (mon instanceof Rv64Monitor || mon instanceof Rv16Monitor || mon instanceof LaneMonitor || mon instanceof M6502Monitor) {
       // The parts an instruction uses are named after the chapters' RV32 CPUs: nothing to mark here.
       if (this.marked.length || this.wireMarks.size) this.clearMarks();

@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import { babyChip, BABY_EXAMPLE_N } from '../src/editor/examplebaby';
 import { babyRefDef } from '../src/editor/babypart';
+import { BabyMonitor, detectBaby } from '../src/editor/babymon';
 import { addExample, EXAMPLES } from '../src/editor/examples';
 import { UserLibrary } from '../src/editor/library';
 import { lintChip } from '../src/editor/lint';
@@ -84,5 +85,71 @@ describe('the Manchester Baby example', () => {
     expect(iss.halted).toBe(true);
     expect(iss.store[KILBURN_ANSWER_LINE] | 0).toBe(BABY_EXAMPLE_N / 2);
     expect(tubeLine(es, KILBURN_ANSWER_LINE)).toBe(BABY_EXAMPLE_N / 2);
+  });
+});
+
+describe('the CPU drawer\'s monitor', () => {
+  const mk = () => {
+    const o = open();
+    const mon = new BabyMonitor(o.es, () => o.ws.chips[o.id], () => o.ws.chips);
+    return { ...o, mon };
+  };
+
+  it('is detected on the chip, and follows Kilburn\'s routine to its Stop instruction with every CI, A and the lamp equal to the model', () => {
+    const { ws, id, es, mon } = mk();
+    expect(detectBaby(ws.chips[id])).toMatchObject({ part: 'baby' });
+    expect(mon.checking).toBe(true);
+    for (let i = 0; i < 20 && !mon.done; i++) mon.runToHalt(1e9);
+    expect(mon.mismatch).toBeNull();
+    const iss = new SsemISS(ssemWords(kilburnSource(BABY_EXAMPLE_N)));
+    iss.run();
+    expect(mon.retired).toBe(iss.instrs);
+    expect(mon.iss!.halted).toBe(true);
+    expect(mon.read()!.store[KILBURN_ANSWER_LINE]).toBe(BABY_EXAMPLE_N / 2);
+    expect(mon.read()!.stop).toBe(1);
+    expect(mon.log.at(-1)).toMatchObject({ text: expect.stringContaining('STP'), effect: 'Stop' });
+    expect(es.cycles).toBeGreaterThanOrEqual(4 * iss.instrs - 4);
+  });
+
+  it('steps an instruction at a time (four beats), listing each line as the program wrote it or as it now reads', () => {
+    const { es, mon } = mk();
+    mon.stepInstr();
+    expect(mon.retired).toBe(1);
+    expect(es.cycles).toBeLessThanOrEqual(8);
+    expect(mon.log[0]).toMatchObject({ pc: 1, text: '1: LDN 24' });
+    const r = mon.read()!;
+    expect(mon.rowText(1, r.store[1])).toBe('LDN 24');
+    expect(mon.rowText(24, r.store[24])).toBe(`NUM ${BABY_EXAMPLE_N - 1}`);
+    expect(r.age.length).toBe(32);
+  });
+
+  it('with REGEN off the store fades, the run is followed but not checked, and the faded Stop is no longer there', () => {
+    const { ws, id, es, mon } = mk();
+    es.setInput(ws.chips[id].pins.find((p) => p.id === 'regen')!, 0);
+    for (let i = 0; i < 200 && es.cycles < 3000; i++) es.runCycles(500);
+    expect(mon.fading).toBe(true);
+    expect(mon.checking).toBe(false);
+    expect(mon.unchecked).toContain('REGEN is off');
+    expect(mon.mismatch).toBeNull();
+    expect(mon.read()!.age.some((a) => BabyMonitor.faded(a))).toBe(true);
+  });
+
+  it('a hardware that disagrees with the model is a mismatch, named', () => {
+    const { es, mon } = mk();
+    es.runCycles(1);
+    mon.iss!.ci = 7; // the model now believes CI = 7
+    for (let i = 0; i < 10 && !mon.mismatch; i++) es.runCycles(4);
+    expect(mon.mismatch).toMatchObject({ what: 'baby' });
+    expect(mon.mismatch!.detail).toContain('CI + T is');
+    expect(mon.done).toBe(true);
+  });
+
+  it('a program that does not assemble is a problem, not a crash', () => {
+    const o = mk();
+    const bad = { ...o.ws.chips[o.id], parts: o.ws.chips[o.id].parts.map((p) => ('baby' in p.ref ? { ...p, ref: { baby: { src: 'FOO 1' } } } : p)) };
+    const mon = new BabyMonitor(o.es, () => bad, () => undefined);
+    expect(mon.problem).toContain('unknown instruction');
+    expect(mon.checking).toBe(false);
+    expect(babyRefDef('FOO 1')).toMatchObject({ error: expect.any(String) });
   });
 });
