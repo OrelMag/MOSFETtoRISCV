@@ -33,6 +33,8 @@ const signed = (t: number) => (t > 0 ? `+${t}` : t < 0 ? `−${-t}` : '0');
 export function edgeSweepWidget(): Widget {
   let part = 'ms', dir: 'rise' | 'fall' = 'rise', sel = -2, model: Model = 'unit';
   const strip = h('div', { class: 'es-strip', role: 'group', 'aria-label': 'when d changes, in gate delays from the rising clock edge' });
+  // under load the cells are too narrow for their offsets: a scale under the strip, a mark every 2 units
+  const scale = h('div', { class: 'es-scale', 'aria-hidden': 'true' }, ...[-8, -6, -4, -2, 0, 2, 4, 6, 8].map((t) => h('span', { style: `left:${((t - LO + 0.05) * 100) / (HI - LO + 0.1)}%` }, signed(t))));
   const wave = s('svg', { class: 'es-wave', viewBox: '0 0 640 150', role: 'img' });
   const read = h('div', { class: 'es-read' });
   const say = h('p', { class: 'sub', role: 'status', 'aria-live': 'polite' });
@@ -77,11 +79,12 @@ export function edgeSweepWidget(): Widget {
     delaySlot.replaceChildren(delaySwitch(model, (m) => { model = m === 'load' ? 'load' : 'unit'; if (model === 'unit') sel = Math.round(sel); paint(); }));
     const sw = sweepOf(part, dir, model), fine = model !== 'unit', word = fine ? 'units' : 'delays';
     strip.classList.toggle('fine', fine);
+    scale.hidden = !fine;
     strip.replaceChildren(...sw.offsets.map((t, i) => {
       const o = sw.outcome[i], whole = Number.isInteger(t);
       // under load a cell every tenth: a letter only where the outcome changes, a number only on whole units
       const letter = !fine || i === 0 || sw.outcome[i - 1] !== o ? LETTER[o] : '';
-      const b = h('button', { type: 'button', class: `es-cell ${o}${fine && !whole ? ' tenth' : ''}`, 'aria-pressed': String(t === sel), 'aria-label': `d changes at ${signed(t)}: ${o === 'new' ? 'new value captured' : o === 'old' ? 'old value kept' : 'undecided'}` }, letter, h('small', null, !fine || whole ? signed(t) : ''));
+      const b = h('button', { type: 'button', class: `es-cell ${o}${fine && !whole ? ' tenth' : ''}`, 'aria-pressed': String(t === sel), 'aria-label': `d changes at ${signed(t)}: ${o === 'new' ? 'new value captured' : o === 'old' ? 'old value kept' : 'undecided'}` }, letter, ...(fine ? [] : [h('small', null, signed(t))]));
       b.addEventListener('click', () => { sel = t; paint(); });
       return b;
     }));
@@ -101,7 +104,7 @@ export function edgeSweepWidget(): Widget {
     el: h('div', { class: 'widget' }, h('div', { class: 'panel' },
       h('h3', null, 'Where does the edge catch d?'),
       h('p', { class: 'sub' }, `Each cell is a run of the flip-flop's real netlist: d flips t gate delays from the rising edge, then q is read once everything settles. N: the new d was captured. O: the edge still saw the old d. ?: neither (the cell's master latch never decided). The boundaries are the circuit's setup and hold times; the static timing of the CPU chapters budgets setup ${SETUP} and clock-to-q ${CLK_TO_Q}.`),
-      bar, strip,
+      bar, h('div', { class: 'es-scroll' }, strip, scale),
       h('p', { class: 'es-key' }, h('span', null, h('b', null, 'N'), 'new captured'), h('span', null, h('b', null, 'O'), 'old kept'), h('span', null, h('b', null, '?'), 'undecided (metastable)')),
       say, wave, read)),
   };
