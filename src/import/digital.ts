@@ -266,6 +266,19 @@ function shapeOf(e: DElem, sub: (base: string) => DCircuit | undefined): DPin[] 
   return l.map((p) => ({ name: p.name, dir: p.dir, at: place(e, p.l) }));
 }
 
+/** A Digital element's pins as this importer reads them, at the origin and unrotated (editor/digexport.ts places its elements by
+ *  these, so an exported file reads back through the same shapes). `subs`: a placed circuit's input and output labels by base name. */
+export function digitalPins(name: string, attrs: Readonly<Record<string, string | number | boolean>>,
+  subs: (base: string) => { ins: string[]; outs: string[] } | undefined = () => undefined): { name: string; dir: 'in' | 'out'; at: [number, number] }[] | null {
+  const m = new Map<string, XNode>();
+  for (const [k, v] of Object.entries(attrs)) m.set(k, { name: typeof v === 'boolean' ? 'boolean' : typeof v === 'number' ? 'int' : 'string', attrs: {}, children: [], text: String(v), parent: null });
+  const sub = (b: string): DCircuit | undefined => {
+    const c = subs(b);
+    return c && { file: b, base: b, name: b, elems: [], wires: [], width: 3, ins: c.ins, outs: c.outs };
+  };
+  return shapeOf({ name, attrs: m, pos: [0, 0], rot: 0, mirror: false }, sub);
+}
+
 // ---- the importer -----------------------------------------------------------------------------
 
 /** Pin names Digital allows ("~Q", "C out") → identifiers, unique in their chip. */
@@ -613,6 +626,8 @@ class Sheet {
   private claimed = new Set<string>();
   /** Notes that matter only when Digital wired that pin (a ROM's sel, a RAM's ld). */
   private ifWired: { e: DElem; at: DPt; msg: string }[] = [];
+  /** Where a constant 1 drives (a ROM's sel or a RAM's ld tied high, as the .dig export writes it, needs no note). */
+  private ones: DPt[] = [];
   private pending: { e: DElem; pins: DPin[] | null; title: string; label: string }[] = [];
   readonly pinMap = new Map<string, string>();
 
@@ -755,6 +770,7 @@ class Sheet {
         const v = e.name === 'Ground' ? 0n : e.name === 'VDD' ? (1n << BigInt(bits)) - 1n : (aBig(a, 'Value') ?? 1n);
         const value = Number(((v % (1n << BigInt(bits))) + (1n << BigInt(bits))) % (1n << BigInt(bits)));
         const id = this.addPart({ const: { width: bits, value } }, 'k', { port: 'y', at: e.pos });
+        if (bits === 1 && value === 1) this.ones.push(e.pos);
         out('out', { part: id, port: 'y' });
         t.add(e.name, 'constant');
         return;
@@ -1075,7 +1091,8 @@ class Sheet {
       if (w) pin.width = w;
     }
 
-    for (const n of this.ifWired) if (this.used.has(key(n.at))) this.problem(n.e, n.msg);
+    const high = new Set(this.ones.map((p) => uf.find(key(p))));
+    for (const n of this.ifWired) if (this.used.has(key(n.at)) && !high.has(uf.find(key(n.at)))) this.problem(n.e, n.msg);
     // stubs: pins as Digital draws them, or inferred from the wire ends around the element
     for (const s of this.pending) {
       this.cur = s.e;
