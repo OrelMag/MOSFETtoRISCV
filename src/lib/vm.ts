@@ -13,6 +13,7 @@
 //     issues sfence.vma after editing a page-table entry, which is the one stale-entry case the golden model has no
 //     counterpart for).
 
+import { nameNets } from './autoname';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { Builder } from './builder';
 import { andN, busMux2, decoder, equal, incrementer, muxTree } from './combinational';
@@ -64,12 +65,13 @@ export function tlb(kind: 'i' | 'd', k = 2): ComponentDef {
     b.wire(inc, `${ptr}.d`);
     const dec = b.op(decoder(k, true), [`${ptr}.q`, 'fill'], 'entry to write');
     const word = b.name(b.op1(merger([20, 22, nf]), ['key', 'fppn', 'fflags'], '{vpn, ppn, flags}'), 'word', true);
-    const nflush = notB(b, 'flush');
+    const nflush = b.name(notB(b, 'flush'), 'not flush');
     b.next();
     const ent = Array.from({ length: n }, (_, i) => {
       const q = b.op(register(W), [word, `${dec}.y${i}`, 'clk'], `entry ${i}`, `e${i}`);
       const en = orB(b, `${dec}.y${i}`, 'flush');
       const v = b.op1(register(1), [nflush, en, 'clk'], `valid ${i}`, `v${i}`);
+      b.name(v, `valid ${i}`);
       return { q: `${q}.q`, v };
     });
     b.next();
@@ -89,7 +91,7 @@ export function tlb(kind: 'i' | 'd', k = 2): ComponentDef {
       symbol: { kind: 'box', label: kind === 'i' ? 'I-TLB' : 'D-TLB' },
       // tuned on the 4-entry drawing (the scenes'): two parts moved off the valid bits' and entry 3's wires, the two nets that still
       // ran under a part drawn as pointers (tests/redrawclear-vmunits.test.ts)
-      netlist: laid(b, { keepOrder: true, room: true, ...(k === 2 ? { nudge: { u8: 2, u10: 4, u17: 2 }, wires: { 'u3.y': false, 'v2.q': false } } : {}) }),
+      netlist: laid(nameNets(b), { keepOrder: true, room: true, ...(k === 2 ? { nudge: { u8: 2, u10: 4, u17: 2 }, wires: { 'u3.y': false, 'v2.q': false } } : {}) }),
       hdl: {
         verilog: `// ${n} entries, round-robin fill; flush clears every valid bit
 for (i = 0; i < ${n}; i++) if (valid[i] && vpn[i] == key) begin hit = 1; ppn = ppn_q[i]; flags = flags_q[i]; end
@@ -176,6 +178,7 @@ export function walker(): ComponentDef {
     const table = b.name(b.op1(busMux2(22), [`${tbl}.q`, 'satpPpn', inL1], 'table'), 'table', true);
     const idx = b.op1(busMux2(10), [`${vs}.o0`, `${vs}.o1`, inL1], 'index');
     const ts = b.op(splitter([20, 1, 1]), [table], 'PPN[19:0], 20, 21');
+    b.name(`${ts}.o0`, 'table PPN');
     const t19 = b.op(splitter([19, 1]), [`${ts}.o0`]);
     // a table at or above 2^32 (PPN bits 21, 20) or in I/O space (bit 31 = PPN bit 19) is an access fault
     const addrBad = b.name(orB(b, `${ts}.o1`, `${ts}.o2`, `${t19}.o1`), 'addrBad', true);
@@ -218,7 +221,7 @@ export function walker(): ComponentDef {
         bus('pteAddr', 32, 'out'), bit('walkOut', 'out'), bit('idleOut', 'out'), bit('stall', 'out'), bit('fault', 'out'), bit('faultAcc', 'out'), bit('fill', 'out'), bus('fppn', 22, 'out'), bus('fflags', 5, 'out')],
       symbol: { kind: 'box', label: 'WALKER' },
       // two parts moved off the fault wire, and the level-0 bit that ran under a gate drawn as a pointer (tests/redrawclear-vmunits.test.ts)
-      netlist: laid(b, { keepOrder: true, room: true, gap: 8, nudge: { u40: -2, u47: -2 }, wires: { 'u10.o0': false } }),
+      netlist: laid(nameNets(b), { keepOrder: true, room: true, gap: 8, nudge: { u40: -2, u47: -2 }, wires: { 'u10.o0': false } }),
     });
   });
 }
@@ -242,6 +245,7 @@ export function mmu(): ComponentDef {
     const vas = b.op(splitter([12, 20]), ['va'], 'address: offset / vpn');
     b.next();
     const wk = b.op(walker(), ['', '', '', 'pteData', 'clk'], 'walker', 'wk');
+    b.name(`${wk}.pteAddr`, 'PTE address'); b.name(`${wk}.stall`, 'stall');
     const itlb = b.op(tlb('i'), [`${pcs}.o1`, '', '', '', 'flush', 'clk'], 'instruction TLB', 'itlb');
     const dtlb = b.op(tlb('d'), [`${vas}.o1`, '', '', '', 'flush', 'clk'], 'data TLB', 'dtlb');
     b.next();
@@ -293,7 +297,7 @@ export function mmu(): ComponentDef {
         bit('fetchPage', 'out'), bit('fetchAcc', 'out'), bit('dataPage', 'out'), bit('dataAcc', 'out')],
       symbol: { kind: 'box', label: 'MMU' },
       // the walker's table address and stall ran under the PC decoder and two gates: pointers (tests/redrawclear-vmunits.test.ts)
-      netlist: laid(b, { keepOrder: true, room: true, gap: 10, wires: { 'wk.pteAddr': false, 'wk.stall': false } }),
+      netlist: laid(nameNets(b), { keepOrder: true, room: true, gap: 10, wires: { 'wk.pteAddr': false, 'wk.stall': false } }),
     });
   });
 }
@@ -340,6 +344,7 @@ export function csrUnitVm(): ComponentDef {
     const wAny = b.name(orB(b, wStatusM, wStatusS), 'wStatus', true);
     // ---- new value: csrrw / csrrs / csrrc with a register or a 5-bit immediate
     const funct3 = b.op(splitter([2, 1]), ['funct3'], 'funct3');
+    b.name(`${funct3}.o0`, 'op');
     const src = b.name(b.op1(busMux2(32), ['rs1v', b.op1(merger([5, 27]), ['zimm5', zero(27)]), `${funct3}.o1`], 'rs1 / immediate'), 'src', true);
     b.next();
     // the registers' outputs come back into the read multiplexer: those are named first, then wired
@@ -361,6 +366,7 @@ export function csrUnitVm(): ComponentDef {
     const misa = b.op1(constWord(32, 0x40140100), [], 'misa');
     const mieV = b.op1(merger([7, 1, 3, 1, 20]), [z[7], `${mieS}.o0`, z[3], `${mieS}.o1`, z[20]], 'mie');
     const mipV = b.op1(merger([7, 1, 3, 1, 20]), [z[7], 'mtip', z[3], 'meip', z[20]], 'mip');
+    b.name(mstatus, 'mstatus value'); b.name(mipV, 'mip value');
     const mtvecV = b.op1(merger([2, 30]), [z[2], `${rMtvec}.q`], 'mtvec'), mepcV = b.op1(merger([2, 30]), [z[2], `${rMepc}.q`], 'mepc');
     const sepcV = b.op1(merger([2, 30]), [z[2], `${rSepc}.q`], 'sepc');
     const stvecV = b.op1(merger([1, 1, 30]), [`${rStvec0}.q`, gnd, `${rStvec}.q`], 'stvec');
@@ -422,7 +428,7 @@ export function csrUnitVm(): ComponentDef {
     // ---- the interrupt: taken while the level is below M or MIE is set
     const pv = b.op(splitter([1, 1]), [priv], 'level');
     const notM = b.op1(NAND, [`${pv}.o0`, `${pv}.o1`], 'below M?');
-    const ei = andB(b, `${mieS}.o1`, 'meip'), ti = andB(b, `${mieS}.o0`, 'mtip');
+    const ei = b.name(andB(b, `${mieS}.o1`, 'meip'), 'external irq'), ti = andB(b, `${mieS}.o0`, 'mtip');
     b.wire(andB(b, orB(b, notM, `${rMie}.q`), orB(b, ei, ti)), 'irqTake');
     b.wire(b.op1(busMux2(32), [b.op1(constWord(32, 0x80000007), []), b.op1(constWord(32, 0x8000000b), []), ei], 'interrupt cause'), 'irqCause');
     b.wire(known, 'known');
@@ -441,7 +447,7 @@ export function csrUnitVm(): ComponentDef {
         bus('priv', 2, 'out'), bit('sum', 'out'), bit('mxr', 'out'), bit('satpMode', 'out'), bus('satpPpn', 22, 'out'), bit('satpWr', 'out')],
       symbol: { kind: 'box', label: 'CSRs' },
       // four nets ran under the read multiplexer's neighbours and two gates: pointers (tests/redrawclear-vmunits.test.ts)
-      netlist: laid(b, { keepOrder: true, room: true, gap: 6, vgap: 2, wires: { 'u58.out': false, 'u62.out': false, 'u45.o0': false, 'u126.y': false } }),
+      netlist: laid(nameNets(b), { keepOrder: true, room: true, gap: 6, vgap: 2, wires: { 'u58.out': false, 'u62.out': false, 'u45.o0': false, 'u126.y': false } }),
     });
   });
 }
@@ -519,7 +525,7 @@ export function trapUnitVm(): ComponentDef {
         bus('addr', 32, 'in'), bus('target', 32, 'in'), bus('pc', 32, 'in'),
         bit('trap', 'out'), bus('cause', 32, 'out'), bus('tval', 32, 'out')],
       symbol: { kind: 'box', label: 'TRAP' },
-      netlist: laid(b, { keepOrder: true, room: true, gap: 6, vgap: 2 }),
+      netlist: laid(nameNets(b), { keepOrder: true, room: true, gap: 6, vgap: 2 }),
     });
   });
 }
