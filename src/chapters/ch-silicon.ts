@@ -14,6 +14,7 @@ import { RELAY_RACK, Z3 } from '../phys/relay';
 import { machineHall } from '../widgets/hall';
 import type { Chapter, Step } from './types';
 import { numOf } from './order';
+import { skyTimingHtml } from './silicon/skytiming';
 
 const num = (n: number) => groupDigits(Math.round(n));
 const times = (x: number) => (x >= 10 ? num(x) : x.toFixed(1));
@@ -331,6 +332,7 @@ export const chSilicon: Chapter = {
           sky130 process is a real 130 nm technology that a foundry runs for shuttle programs, so a design like this, inside a padded harness such as the open shuttles' Caravel, could go to fabrication; this GDS is the core block alone, with no pad ring and its memories outside its ports.</p>`,
         pitfall: `<p>Reading the area ratio as an error. Where sky130 is smaller than our count, a complex cell replaced several NANDs; where larger, Yosys spent big cells on adders (half-adder cells) and buffered heavily loaded nets, which our count has no price for.
           Neither is a mistake in either; they are two different questions, how many NANDs and how large the cells, and the table shows how far apart they are.</p>`,
+        numbers: skyTimingHtml(),
       },
     },
     {
