@@ -464,7 +464,7 @@ export function placePinValue(pin: PinGeom, glyph: Pick<PinGlyph, 'name' | 'valu
 }
 
 /**
- * A core-rope band (Appendix F) along a box's bottom: a ferrite core per bit, and per row a sense wire that threads a
+ * A core-rope band (Appendix F) along a box's bottom: a magnetic core per bit, and per row a sense wire that threads a
  * core where the row's bit is 1 and passes beside it where it is 0, so the wiring is the data.
  */
 function ropeBand(rows: number[][], w: number, h: number): SVGElement[] {
