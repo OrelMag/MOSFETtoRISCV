@@ -5,6 +5,8 @@ import { fieldsOf, immBits, SLICES } from '../src/riscv/fields';
 import { decode, immB, immI, immJ, immS, immU } from '../src/riscv/isa';
 import { netlistOf } from '../src/sim/types';
 import { instrMarks } from '../src/widgets/insthw';
+import { VEC_PROGRAMS } from '../src/riscv/vecprograms';
+import { isVectorWord } from '../src/riscv/rvv';
 
 const SAMPLES = `add t0, t1, t2
 sub a0, a1, a2
@@ -118,5 +120,35 @@ describe('field wires on the hardware', () => {
     expect(od.units).toContain('is_STORE');
     for (const u of od.units) expect(names(OPCODE_DECODER).has(u), u).toBe(true);
     expect(instrMarks(netlistOf(CONTROL)!.instances[0].def, add)).not.toBeNull();
+  });
+});
+
+describe('vector instruction fields', () => {
+  it('every word of the vector programs: real fields tiling bits 31..0, none unknown', () => {
+    const seen = new Set<string>();
+    for (const p of VEC_PROGRAMS) {
+      const asm = assemble(p.source);
+      expect(asm.errors, p.id).toEqual([]);
+      for (const w of asm.words) {
+        if (!isVectorWord(w)) continue;
+        const fs = fieldsOf(w);
+        let next = 31;
+        for (const f of fs) {
+          expect(f.hi, `${w.toString(16)} ${f.label}`).toBe(next);
+          expect(f.value).toBe(Math.floor(w / 2 ** f.lo) % 2 ** (f.hi - f.lo + 1));
+          expect(f.meaning, `${w.toString(16)} ${f.label}`).not.toMatch(/^\?$|not an RV32/);
+          next = f.lo - 1;
+        }
+        expect(next).toBe(-1);
+        seen.add(fs[0].meaning.split(':')[0]);
+      }
+    }
+    expect(seen.size).toBeGreaterThan(5);
+  });
+  it('vadd.vi v12, v8, 1: funct6, vm, vs2, the immediate, OPIVI, vd, OP-V', () => {
+    const w = assemble('vadd.vi v12, v8, 1').words[0];
+    expect(fieldsOf(w).map((f) => `${f.label}=${f.meaning}`)).toEqual([
+      'funct6=→ vadd', 'vm=1: every element', 'vs2=v8', 'imm[4:0]=imm = 1', 'funct3=OPIVI: vector, 5-bit immediate', 'vd=v12', 'opcode=OP-V (vector)',
+    ]);
   });
 });

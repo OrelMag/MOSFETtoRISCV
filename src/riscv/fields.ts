@@ -4,6 +4,7 @@
 
 import { ABI, CSR_NAMES, decode, FABI, IMM_SRC, IMM_TOP, OPCODES, RM_OPERANDS } from './isa';
 import type { CustomRow } from './custom';
+import { decodeV, F3 as VF3, type VKind, V_OPCODE } from './rvv';
 
 export type FieldKey = 'opcode' | 'rd' | 'funct3' | 'rs1' | 'rs2' | 'rs3' | 'funct7' | 'fmt' | 'imm' | 'shamt' | 'csr' | 'zimm' | 'funct12';
 export type FieldRole = 'op' | 'rd' | 'rs' | 'fn' | 'imm';
@@ -40,7 +41,7 @@ const OPNAME: Record<number, string> = {
   [OPCODES.BRANCH]: 'BRANCH', [OPCODES.LOAD]: 'LOAD', [OPCODES.STORE]: 'STORE', [OPCODES.OPIMM]: 'OP-IMM',
   [OPCODES.OP]: 'OP', [OPCODES.SYSTEM]: 'SYSTEM', [OPCODES.FENCE]: 'MISC-MEM', [OPCODES.LOADFP]: 'LOAD-FP',
   [OPCODES.STOREFP]: 'STORE-FP', [OPCODES.OPFP]: 'OP-FP', [OPCODES.AMO]: 'AMO', [OPCODES.OPIMM32]: 'OP-IMM-32 (W)', [OPCODES.OP32]: 'OP-32 (W)',
-  [OPCODES.FMADD]: 'MADD', [OPCODES.FMSUB]: 'MSUB', [OPCODES.FNMSUB]: 'NMSUB', [OPCODES.FNMADD]: 'NMADD',
+  [V_OPCODE]: 'OP-V (vector)', [OPCODES.FMADD]: 'MADD', [OPCODES.FMSUB]: 'MSUB', [OPCODES.FNMSUB]: 'NMSUB', [OPCODES.FNMADD]: 'NMADD',
 };
 
 const ALU3 = ['add/sub', 'sll', 'slt', 'sltu', 'xor', 'srl/sra', 'or', 'and'];
@@ -81,6 +82,8 @@ export function fieldsOf(word: number, custom?: readonly CustomRow[], xlen: 32 |
   const immVal = d.fmt === 'U' ? `0x${(d.imm >>> 12).toString(16)} << 12` : d.fmt === 'B' || d.fmt === 'J' ? `pc ${sgn(d.imm)}` : `${d.imm}`;
   const imm = (hi: number, lo: number, label: string) => F('imm', hi, lo, `imm = ${immVal}`, label);
 
+  const v = s ? null : decodeV(w);
+  if (v) return vectorFields(w, v, F);
   if (!s) return [F('funct7', 31, 25, '?'), F('rs2', 24, 20, '?'), F('rs1', 19, 15, '?'), F('funct3', 14, 12, '?'), F('rd', 11, 7, '?'), opcode];
 
   switch (d.fmt) {
@@ -142,4 +145,47 @@ export function immBits(word: number, custom?: readonly CustomRow[], xlen: 32 | 
     const src = map(i);
     return { bit: i, src, sign: src === 31 && i > IMM_TOP[fmt], value: src === 'zero' ? 0 : (word >>> src) & 1 };
   });
+}
+
+/** OP-V's funct3: the operands' kinds. */
+const VCAT: Record<number, string> = {
+  [VF3.IVV]: 'OPIVV: vector, vector', [VF3.IVX]: 'OPIVX: vector, scalar x', [VF3.IVI]: 'OPIVI: vector, 5-bit immediate',
+  [VF3.MVV]: 'OPMVV: vector, vector (reductions, moves)', [VF3.MVX]: 'OPMVX: vector, scalar x', [VF3.CFG]: 'OPCFG: set vl and vtype',
+};
+type MakeField = (key: FieldKey, hi: number, lo: number, meaning: string, label?: string, used?: boolean) => Field;
+
+/** A vector word's fields (RVV 1.0): funct6 · vm · vs2 · vs1 / rs1 / imm · funct3 · vd · opcode; the vset forms; a load / store. */
+function vectorFields(w: number, v: VKind, F: MakeField): Field[] {
+  const x = (r: number) => `x${r} (${ABI[r]})`;
+  const vreg = (hi: number, lo: number) => `v${bitsOf(w, hi, lo)}`;
+  const f3 = bitsOf(w, 14, 12);
+  const funct3 = F('funct3', 14, 12, VCAT[f3] ?? '?');
+  const vm = (masked: boolean) => F('fmt', 25, 25, masked ? '0: only where the bit of v0 is 1 (v0.t)' : '1: every element', 'vm');
+  const op = F('opcode', 6, 0, v.k === 'mem' ? `${v.store ? 'STORE-FP' : 'LOAD-FP'} with a vector width: a vector ${v.store ? 'store' : 'load'}` : 'OP-V (vector)');
+  switch (v.k) {
+    case 'vsetvli':
+      return [F('funct7', 31, 31, '0: vsetvli', 'bit 31'), F('imm', 30, 20, 'vtype: SEW, LMUL, ta / ma', 'zimm[10:0]'), F('rs1', 19, 15, `AVL from ${x(v.rs1)}`), funct3, F('rd', 11, 7, `vl to ${x(v.rd)}`), op];
+    case 'vsetivli':
+      return [F('funct7', 31, 30, '11: vsetivli', 'bits 31:30'), F('imm', 29, 20, 'vtype: SEW, LMUL, ta / ma', 'zimm[9:0]'), F('zimm', 19, 15, `AVL = ${v.uimm}`, 'uimm'), funct3, F('rd', 11, 7, `vl to ${x(v.rd)}`), op];
+    case 'vsetvl':
+      return [F('funct7', 31, 25, '1000000: vsetvl'), F('rs2', 24, 20, `vtype from ${x(v.rs2)}`), F('rs1', 19, 15, `AVL from ${x(v.rs1)}`), funct3, F('rd', 11, 7, `vl to ${x(v.rd)}`), op];
+    case 'mem':
+      return [F('funct7', 31, 26, `nf, mew, mop: ${v.strided ? 'strided' : 'unit stride'}`, 'nf|mew|mop'), vm(v.vm),
+        v.strided ? F('rs2', 24, 20, `stride from ${x(v.rs2)}`) : F('rs2', 24, 20, '0: unit stride', 'lumop'),
+        F('rs1', 19, 15, `base address from ${x(v.rs1)}`), F('funct3', 14, 12, `${v.eew}-bit elements`, 'width'),
+        F('rd', 11, 7, `v${v.v}`, v.store ? 'vs3' : 'vd'), op];
+  }
+  const name = v.k === 'opi' ? v.name : v.k === 'merge' ? (v.vm ? 'vmerge' : 'vmv.v') : v.k === 'redsum' ? 'vredsum' : v.k === 'mul' ? 'vmul'
+    : v.k === 'mvxs' ? 'vmv.x.s' : v.k === 'mvsx' ? 'vmv.s.x' : 'vid';
+  const masked = 'vm' in v && v.vm;
+  const shift = name === 'vsll' || name === 'vsrl' || name === 'vsra';
+  const imm5 = bitsOf(w, 19, 15), simm = !shift && imm5 & 16 ? imm5 - 32 : imm5;
+  const src = f3 === VF3.IVI ? F('imm', 19, 15, `imm = ${simm}`, 'imm[4:0]')
+    : f3 === VF3.IVX || f3 === VF3.MVX ? F('rs1', 19, 15, `scalar ${x(imm5)}`)
+      : v.k === 'vid' ? F('rs1', 19, 15, '10001: selects vid', 'vs1') : v.k === 'mvxs' ? F('rs1', 19, 15, '00000: selects vmv.x.s', 'vs1')
+        : F('rs1', 19, 15, vreg(19, 15), 'vs1');
+  const noVs2 = v.k === 'vid' || v.k === 'mvsx' || (v.k === 'merge' && !v.vm);
+  const vs2 = F('rs2', 24, 20, noVs2 ? 'must be 0' : vreg(24, 20), 'vs2', !noVs2);
+  const vd = v.k === 'mvxs' ? F('rd', 11, 7, x(v.rd)) : F('rd', 11, 7, vreg(11, 7), 'vd');
+  return [F('funct7', 31, 26, `→ ${name}`, 'funct6'), vm(masked), vs2, src, funct3, vd, op];
 }
