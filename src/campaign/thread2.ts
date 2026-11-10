@@ -162,10 +162,40 @@ export const THREAD2: Record<string, NodeThread> = {
   },
   y_final: {
     uses: ['csr', 'mmio'],
+    usedFor: {
+      y_tlb: 'the optional step to virtual memory: a page fault is a trap, taken the way this core takes its exceptions',
+      p_switch: 'the interrupt the context switch rides on: a timer interrupt ends a time slice, and the handler is p_handler\'s shape with every register saved',
+    },
     pitfalls: [
       'Taking the interrupt on a bubble: its D/E slot was cleared, so mepc would name an address the program never was at.',
       'mcause 11 instead of 0x800B: without bit 15 the handler takes the interrupt for an ecall.',
       'An exception beating the interrupt in E: the interrupt wins, and the exception is met again after mret.',
+    ],
+  },
+
+  y_tlb: {
+    uses: ['dmem'],
+    usedFor: { y_walk: 'the walker\'s fill output is the TLB\'s fill input: a leaf found by the walk is kept here for the next access' },
+    pitfalls: [
+      'A flush that clears only the valid bit of the entry being written: it must clear all four.',
+      'Letting a fill beat a flush on the same edge: the entry would be valid after a flush.',
+      'Comparing against an entry that was never filled: without a valid bit its power-on zeros match page 0.',
+    ],
+  },
+  y_walk: {
+    uses: ['dmem'],
+    pitfalls: [
+      'Taking a leaf at level 1 or a pointer at level 0: this walker has no superpages, and a pointer at the last level would walk through data.',
+      'Staying in the fault state for more than one cycle: the CPU takes the trap in that cycle and the next walk must be able to start.',
+      'Reading the second table at {root, vpn0}: the table is the one the first entry pointed to, which has to be remembered across the cycle.',
+    ],
+  },
+  p_switch: {
+    uses: ['csr', 'rf'],
+    pitfalls: [
+      'Saving a register after using it to hold the block\'s address: its value is gone.',
+      'Forgetting mepc: the other process resumes where the first one stopped.',
+      'Loading the stack pointer before the registers that are addressed through it: the block is no longer reachable.',
     ],
   },
 
