@@ -1,3 +1,5 @@
+import { RESULTS } from '../bench/summary';
+import { PROGRAMS_USED } from '../widgets/family360';
 import { groupDigits } from '../sim/numfmt';
 import facts from '../bench/ucodefacts.json';
 import { MC_DISPATCH, MC_FSM, MC_MICRO, MC_STATES } from '../lib/multicycle';
@@ -7,6 +9,7 @@ import { PROGRAMS } from '../riscv/programs';
 import { h } from '../ui/dom';
 import type { Scene, Stage, Widget } from '../view/stage';
 import { controllerPanel, cpuScene } from '../widgets/cpupanel';
+import { CHAPTER_PERIOD, familyRows, familyWidget, microStore, spread } from '../widgets/family360';
 import { findIt } from '../widgets/findfault';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -45,6 +48,11 @@ const CYC = {
 };
 const sp = groupDigits;
 const FSM_NANDS = stats(MC_FSM).nands, MICRO_NANDS = stats(MC_MICRO).nands;
+const FAM = familyRows(), SPREAD = spread(FAM), MS = microStore();
+/** Annual rental in 1964 dollars, Models 30 and 65: Patterson's SOSP 2015 table (the Sources paragraph). */
+const IBM_RENT = { m30: 48000, m65: 270000 };
+/** The chapter-sized CPUs' static periods (64-word instruction ROM), NAND delays: the timing panel's numbers. */
+const SC_P = CHAPTER_PERIOD.sc, MC_P = CHAPTER_PERIOD.mc;
 
 /** The state table as a page widget. */
 function stateTable(): Widget {
@@ -106,7 +114,7 @@ export const chMulticycle: Chapter = {
       'Hardwired control: a 4-bit state register, a 4→16 decoder, an AND gate per opcode-dependent transition and OR gates per signal: 412 NANDs.',
       'Microcode: a µPC addresses a ROM of microwords (14 control bits, a 4-bit next address, a 2-bit sequencing mode), with dispatch ROMs indexed by the opcode: 6124 NANDs here, because these ROMs are mux trees of constants.',
       'The microcode is a grid of cells you can paint: an I-type instruction written back in ExecuteI takes 3 cycles instead of 4, and the painter checks any edit against the golden model.',
-      'Period 85 NAND delays against the single-cycle CPU\'s 103 (both with Kogge–Stone adders), but CPI 3.6 to 4.0 on the sample programs: about 300 to 340 delays per instruction.',
+      `Period ${MC_P} NAND delays against the single-cycle CPU's ${SC_P} (both with Kogge–Stone adders), but CPI 3.6 to 4.0 on the sample programs: about 300 to 340 delays per instruction.`,
     ],
     practise: ['s_fsm', 'o_mc'],
     check: [
@@ -304,23 +312,23 @@ export const chMulticycle: Chapter = {
     {
       title: 'Was it worth it?',
       body: `
-        <p>Measured with the timing panel: the clock period drops from 103 to <strong>85</strong> NAND delays. The longest step is still a full
+        <p>Measured with the timing panel: the clock period drops from ${SC_P} to <strong>${MC_P}</strong> NAND delays. The longest step is still a full
         <span data-show="alu">ALU</span> operation followed by the <span data-show="npc">branch decision</span>. But the CPI is now <strong>3.6 to 4.0</strong> on the sample programs (this gcd: 51 instructions in 182 cycles, 3.57),
-        so each instruction takes 300 to 340 delays instead of 103.
+        so each instruction takes 300 to 340 delays instead of ${SC_P}.
         The gate count does not even go down: <span data-show="ir oldpc ra rb data aluout">six 32-bit registers</span> (about 2900 NANDs) cost more than the two adders they replace.</p>
         <p>Multicycle machines made sense when memory was the expensive, slow part and logic was scarce. Their lasting legacy is the controller,
         and the idea of overlapping the steps instead of serializing them, which you have already met as the pipeline of <a href="#/c/pipeline/0">chapter ${numOf('pipeline')}</a>.</p>
-        <p>The accounting is time per instruction = CPI × period. A step is shorter than the whole single-cycle path, but an instruction needs several of them; the product is what matters, and here it is far above the single-cycle machine's one period of 103. The cheap controller
+        <p>The accounting is time per instruction = CPI × period. A step is shorter than the whole single-cycle path, but an instruction needs several of them; the product is what matters, and here it is far above the single-cycle machine's one period of ${SC_P}. The cheap controller
         (${sp(FSM_NANDS)} NANDs) is not the problem; the serial use of one ALU is.</p>`,
       scene: () => cpuScene({ source: src('gcd'), multicycle: 'fsm', timing: true }),
       more: {
-        derive: `<p>Single-cycle: CPI 1 at a period of 103, so 103 delays per instruction. Multicycle: this gcd takes 182 cycles for 51 instructions, CPI ${(182 / 51).toFixed(2)}, at a period of 85: ${Math.round((182 / 51) * 85)} delays per instruction, ${((182 / 51) * 85 / 103).toFixed(1)} times slower. The period fell by ${Math.round((1 - 85 / 103) * 100)} %
+        derive: `<p>Single-cycle: CPI 1 at a period of ${SC_P}, so ${SC_P} delays per instruction. Multicycle: this gcd takes 182 cycles for 51 instructions, CPI ${(182 / 51).toFixed(2)}, at a period of ${MC_P}: ${Math.round((182 / 51) * MC_P)} delays per instruction, ${((182 / 51) * MC_P / SC_P).toFixed(1)} times slower. The period fell by ${Math.round((1 - MC_P / SC_P) * 100)} %
           while the cycle count per instruction rose by a factor of ${(182 / 51).toFixed(1)}.</p>`,
         pitfall: `<p>Expecting a shorter clock to pay. The longest step is still an ALU operation followed by the branch decision, so the period cannot fall far below the single-cycle machine's; to make multicycle competitive the steps must be balanced and overlapped, which is a pipeline.</p>`,
         real: `<p>Multicycle sequencing survives where logic is scarce or memory is slow relative to logic: small microcontrollers, and the microcoded parts of larger cores. Performance cores overlap instead.</p>`,
       },
       challenge: {
-        kind: 'quiz', question: 'The steps are unbalanced: the ALU step needs 85 delays, the others much less. What would make the multicycle CPU competitive?',
+        kind: 'quiz', question: `The steps are unbalanced: the ALU step needs ${MC_P} delays, the others much less. What would make the multicycle CPU competitive?`,
         options: ['A faster controller', 'Balancing the steps (e.g. splitting the ALU step) and overlapping consecutive instructions', 'More microcode', 'A bigger register file'],
         answer: 1,
         why: ['The longest step is the ALU operation and the branch decision, and CPI stays near 4 with any controller.', '', 'Microcode changes how the table is stored, not how long a step takes or how many steps there are.', 'A bigger register file sets neither the longest step nor the number of steps.'],
@@ -361,6 +369,38 @@ export const chMulticycle: Chapter = {
           verified.add(sc.root.id); // tests/ucode.test.ts holds this program to the golden model
           st.load(sc);
         },
+      },
+    },
+    {
+      title: 'One instruction set, many machines: System/360',
+      body: `
+        <p>On 7 April 1964 IBM announced System/360: six models behind one instruction set, with a performance range of a factor of 50 from the smallest to the largest.
+        A program written for one ran on the others, so a customer who outgrew a machine bought the next model and kept the software. The models were not
+        scaled copies of one design. They differed in <strong>data-path width</strong>: 8, 16, 32 and 64 bits on the Models 30, 40, 50 and 65, as Patterson tabulates them, and in price: a year's rental was ${groupDigits(IBM_RENT.m30)} for a Model 30 and ${groupDigits(IBM_RENT.m65)} for a Model 65 (1964 dollars), ${(IBM_RENT.m65 / IBM_RENT.m30).toFixed(1)} times as much. On the Model 30 an 8-bit
+        ALU did a 32-bit addition in byte-sized steps, and the instruction set was what its microcode made of that small machine. The control store held about
+        4 000 words of 50 to 60 bits (the sources differ; see Layers). The instruction set was a contract, and microcode was the translation from it to each machine.</p>
+        <p>The table runs the same experiment with our own hardware: RV32I built four ways, the same programs on each, every result checked against the golden model. All four
+        have fast adders, so the periods compare. (The single-cycle period is ${FAM[0].period} here, not the ${SC_P} of the earlier steps: the benchmarks run with a ${RESULTS.imemWords}-word program ROM, one multiplexer level deeper than the chapter's.)
+        <strong>Cost</strong> is NANDs without the program ROM; <strong>time</strong> is CPI × period.</p>
+        <p>Read it for what it says about microcode. Making the controller microcoded adds ${sp(MICRO_NANDS - FSM_NANDS)} NANDs (the ROMs here are mux trees, as the previous steps said) and changes
+        neither CPI nor period: ${sp(FAM[2].nands)} NANDs against ${sp(FAM[1].nands)} for the same speed. The whole family spans only ${SPREAD.cost.toFixed(2)}× in cost, but ${SPREAD.time.toFixed(1)}× in time per instruction, and
+        the cheapest, the single-cycle CPU, is also the fastest. That is the opposite of System/360's trade, for two reasons. All four of ours keep the 32-bit register file, ALU and memory,
+        which are most of the gates, so the controller cannot move the price much; System/360 varied the data path itself and let microcode hide the difference. And here memory answers in the cycle it is asked, so nothing makes
+        the single-cycle machine wait; on a machine whose core memory takes microseconds, serial steps cost little extra.</p>
+        <p>The control store is small too: ${MS.words} words of ${MS.bits} bits, ${MS.total} bits in all, against more than 200 000 bits in a Model 30.
+        What a microcoded design buys is not speed or area at this scale but a table you can change: more instructions on the same data path, or a new instruction set on an old one.</p>`,
+      widget: familyWidget,
+      more: {
+        derive: `<p>Per instruction, in NAND delays: ${FAM.map((r) => `${r.label.toLowerCase()} ${r.cpi.toFixed(2)} × ${r.period} = ${Math.round(r.delaysPerInstr)}`).join('; ')}. At ${RESULTS.psPerNand} ps a delay that is ${FAM.map((r) => r.nsPerInstr.toFixed(1)).join(', ')} ns. Means are geometric over ${PROGRAMS_USED}. Microcode store: ${MS.words} microwords × (14 control + 4 next + 2 mode) bits = ${MS.total} bits, plus two small dispatch ROMs indexed by the opcode.</p>`,
+        pitfall: `<p>Reading this table as "microcode is slow". Both multicycle rows are slow because they take ${FAM[1].cpi.toFixed(1)} cycles an instruction on one shared ALU; the microcoded and hardwired controllers are identical in cycles. System/360 got its range from the data path; microcode only made one instruction set fit all of it.</p>`,
+        real: `<p><strong>Sources for the IBM figures.</strong> Announcement 7 April 1964, six models, performance range factor 50: G. M. Amdahl, G. A. Blaauw, F. P. Brooks Jr., "Architecture of the IBM System/360", IBM Journal of Research and Development 8(2), 1964, p. 87 (abstract). Data-path widths 8 / 16 / 32 / 64 bits, control stores of 4K × 50 and 4K × 52 bits (Models 30, 40) and 2.75K × 85 and 2.75K × 87 (Models 50, 65), ROM cycles of 750, 625, 500 and 200 ns, and annual rentals of $48 000, $54 000, $115 000 and $270 000 in 1964 dollars: the table "Microprogramming in IBM 360" in D. Patterson's slides for the SOSP 2015 history session (sigops.org/sosp/sosp15/history/07-patterson-slides.pdf), a secondary source, read from the PDF. The Model 30's 8-bit data path: IBM Field Engineering Theory of Operation, via the Wikipedia article on the Model 30. That article, citing Weber's chapter, gives 4 032 words of 60 bits; the Model 40 article gives up to 8 192 words of 56 bits, half for the 1401 / 1410 compatibility feature. The sources disagree on word width and count, so the text says "about 4 000 words of 50 to 60 bits" and quotes no cycle times in the prose. Microprogram design for the family: S. G. Tucker, "Microprogram control for System/360", IBM Systems Journal 6(4), 1967, pp. 222-241.</p>`,
+      },
+      challenge: {
+        kind: 'quiz', question: 'In our four RV32I machines, what does making the controller microcoded change?',
+        options: ['Its cost in NANDs and nothing about CPI or period', 'The clock period, since a ROM is faster than logic', 'The CPI, since microcode can skip states', 'Nothing: the NAND count is the same'],
+        answer: 0,
+        why: ['', 'Both multicycle rows have the same period: the longest step is an ALU operation, whichever way the controller is built.', 'The book microprogram has exactly the state table\'s states, so every class takes the same cycles; only an edit such as the painter\'s changes that.', 'The microcoded CPU is larger by the difference in the two controllers\' gates, as the table shows.'],
+        explain: 'The microcoded and hardwired machines run the same states in the same cycles at the same period. Only the NAND count differs. The benefit of microcode is that the table is data, so one data path can serve a different instruction set or an extended one, which is what System/360 relied on.',
       },
     },
     {
