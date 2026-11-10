@@ -467,7 +467,7 @@ the 3D views.
   systems, each defined as a netlist of smaller components
 - `src/riscv/`, `src/lang/`: ISA tables, assembler, the golden model and a fast interpreter; the
   Python-subset compiler
-- `src/view/`: SVG schematics with drill-down, inspector (info, truth table, Verilog, power), timing panel
+- `src/view/`: SVG schematics with drill-down, inspector (info, truth table, HDL: Verilog and VHDL, power), timing panel
 - `src/widgets/`, `src/gl/`, `src/phys/`: the explainers, the 3D views and the physical models behind them
 - `src/editor/`: the sandbox (document model, compiler to components, user-chip library, editor UI)
 - `src/hdl/`: HDL in: Yosys in WebAssembly, and its JSON netlist turned into placed, routed chips

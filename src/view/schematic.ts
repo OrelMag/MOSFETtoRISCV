@@ -52,7 +52,7 @@ export interface SchematicEvents {
   why?(net: number): void;
   /** The menu's Inspect on a part, or (null) the level on screen. */
   inspect?(child: string | null): void;
-  /** May the menu offer Inspect now (a level's look inside: its drawer has a Verilog tab)? Absent: yes, if there is an inspect. */
+  /** May the menu offer Inspect now (a level's look inside: its drawer has an HDL tab)? Absent: yes, if there is an inspect. */
   canInspect?(): boolean;
   /** The menu's Explain for a part or (null) the level on screen: what it is about, and how this surface opens things. */
   explain?(child: string | null): { def: ComponentDef; host: ExplainHost } | null;

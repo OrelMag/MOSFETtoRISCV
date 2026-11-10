@@ -14,6 +14,7 @@ lock-step test. The checks below do not rely on that model alone.
 | **Spike**, the reference simulator, on random programs (RV32 variants, M / S / U with Sv32 page tables, and RV64IM) | Spike, commit by commit | `scripts/spike-oracle.ts`, `.github/workflows/spike.yml` | its plumbing only (no Spike); CI on every ISA change |
 | **Coverage** of the riscv-tests and random programs | — | `tests/verify-*.test.ts`, `scripts/coverage.ts` | no gaps allowed |
 | Exported Verilog (dual-core, system CPUs, the system core with ports), synthesized by Yosys | our gate-level simulation | `scripts/verify-export.ts` | CI gate before deploy |
+| The VHDL view (gates, adders, ALUs, registers, memories, the single-cycle RV32I), analysed and elaborated by GHDL; the combinational ones simulated | our gate-level simulation | `scripts/vhdl-check.ts`, `.github/workflows/vhdl.yml` | names and port maps over the registry (`tests/vhdl.test.ts`); GHDL in CI only, not a deploy gate |
 
 The riscv-tests come from another author, so they check the golden model too: it runs every image,
 with each CPU's ISA, before the CPU does.
