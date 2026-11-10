@@ -46,11 +46,11 @@ export function familyWidget(): Widget {
       h('h3', null, 'One instruction set, four machines'),
       h('p', { class: 'sub' }, `RV32I, all four run ${PROGRAMS_USED} and end in the same state as the golden model. Means over those programs; NANDs without the program ROM; delays are NAND delays, ${RESULTS.psPerNand} ps each.`),
       h('table', { class: 'cmp' },
-        h('thead', null, h('tr', null, ...['machine', 'NANDs', 'period', 'CPI', 'delays per instruction', 'ns per instruction', 'cheapest for its speed'].map((t) => h('th', null, t)))),
+        h('thead', null, h('tr', null, ...['machine', 'NANDs', 'period', 'CPI', 'delays / instr.', 'ns / instr.'].map((t) => h('th', null, t)))),
         h('tbody', null, rows.map((r) => h('tr', null,
           h('td', null, r.label), h('td', { class: 'num' }, groupDigits(r.nands)), h('td', { class: 'num' }, String(r.period)),
           h('td', { class: 'num' }, r.cpi.toFixed(2)), h('td', { class: 'num' }, String(Math.round(r.delaysPerInstr))),
-          h('td', { class: 'num' }, r.nsPerInstr.toFixed(1)), h('td', null, r.onFront ? 'yes' : '')))))),
+          h('td', { class: 'num' }, r.nsPerInstr.toFixed(1))))))),
     ),
   };
 }
