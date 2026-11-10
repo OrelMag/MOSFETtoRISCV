@@ -55,6 +55,8 @@ jobs:
           fi
           echo "seeds $SEEDS"
           npx vite-node scripts/agc/oracle.ts --harness /tmp/agc-harness --seeds "$SEEDS" --out agc-report
+      - name: The comparison catches a difference (the model spoiled on purpose, every program must fail)
+        run: npx vite-node scripts/agc/oracle.ts --harness /tmp/agc-harness --break --seeds 1..30 --out agc-break > /dev/null
       - if: always()
         uses: actions/upload-artifact@v4
         with:

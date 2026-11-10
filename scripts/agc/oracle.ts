@@ -21,6 +21,8 @@ const args = process.argv.slice(2);
 const arg = (name: string) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
 const harness = arg('--harness');
 const self = args.includes('--self');
+/** --break: the model's answers are spoiled on purpose (one bit of A, one erasable word, one cycle count, in turn): every program must fail, or the comparison sees nothing. */
+const spoil = args.includes('--break');
 const [from, to] = (arg('--seeds') ?? '1..200').split('..').map(Number);
 const length = Number(arg('--length') ?? 120);
 const outDir = arg('--out') ?? 'agc-oracle-out';
@@ -82,8 +84,12 @@ function check(name: string, src: string): boolean {
   let p: AgcProgram;
   try { p = assembleAgc(src); } catch (e) { console.log(`FAIL ${name}: assembler: ${(e as Error).message}`); return false; }
   const { snaps, steps } = runModel(p);
+  if (spoil) {
+    const i = Math.min(snaps.length - 1, 30), kind = count % 3;
+    if (kind === 0) snaps[i].a ^= 1; else if (kind === 1) snaps[i].mem.set(0o1777, 1); else snaps[i].cycles++;
+  }
   let oracle: Snap[];
-  if (self) oracle = snaps;
+  if (self) oracle = runModel(p).snaps; // a second run: spoiling one cannot reach the other
   else {
     mkdirSync(outDir, { recursive: true });
     const bin = join(outDir, `${name}.bin`);
@@ -107,4 +113,5 @@ let fails = 0, count = 0;
 for (const [name, src] of Object.entries(DIRECTED)) { count++; if (!check(name, src)) fails++; }
 for (let seed = from; seed <= to; seed++) { count++; if (!check(`seed${seed}`, randomAgcProgram(seed, { length }))) fails++; }
 console.log(`${count - fails} of ${count} programs in lock step${self ? ' (self check)' : ' with yaAGC'}`);
+if (spoil) { console.log(fails === count ? 'every spoiled program was caught' : `${count - fails} spoiled programs were NOT caught`); process.exit(fails === count ? 0 : 1); }
 process.exit(fails ? 1 : 0);

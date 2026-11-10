@@ -102,3 +102,15 @@ OUT     TS Y\n        CA X\n        TS Z1`, `V       OCT ${word.toString(8)}\nK0
     expect((b[0] << 8 | b[1]) >> 1).toBe(0o12345); // bank 2, word 0 first
   });
 });
+
+describe('AGC random programs (the oracle\'s)', () => {
+  it('assemble, and run on the model to a halt or 5000 instructions', async () => {
+    const { randomAgcProgram } = await import('../src/agc/randprog');
+    let halted = 0;
+    for (let seed = 1; seed <= 100; seed++) {
+      const m = new AgcISS(assembleAgc(randomAgcProgram(seed)).fixed);
+      try { if (m.run(5000).halted) halted++; } catch { /* wandered into I/O: the oracle compares up to it */ }
+    }
+    expect(halted).toBeGreaterThan(90);
+  });
+});
