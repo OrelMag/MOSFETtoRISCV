@@ -15,6 +15,19 @@ Stage 1 (golden model, branch feat/rvv-iss):
 - One difference from the plan below: Spike also requires a mask result never to sit inside a source group except
   on its first register (require_noover); the model follows it.
 
+Stage 2 (gates, branch feat/rvv-gates):
+- `ISS({ v: { vlen: 128, gates: true } })` is the gate subset as a golden model: e8 / e16 set vill, vmul, strided and narrow
+  accesses are illegal (no-ops in user mode); `randomProgram32({ v, vGates })` draws mostly inside it, now and then outside.
+- `lib/vector.ts`: VEC_DECODE (legality: vtype, alignment, masked v0, a mask inside a source group), VSET_VL (spec = the
+  golden model's vset), VEC_CFG (vl, vtype, the scalar results), VEC_SEQ (beats), VEC_LANE (regfile slice + VEC_ALU, spec),
+  VEC_ACC (vredsum's adder tree and the mask word), V0_SHADOW, VECTOR_UNIT, vecMemory(k) (four word-interleaved banks).
+  Instance names: `vu` (`dec`, `cfg`, `seq`, `lane0` … `lane3` with `vrf` and `alu`, `acc`, `v0`), the memory stays `dm`
+  (banks `wb0` … `wb3`); cosim.ts reads the vector state (`vectorState`) and the banks.
+- `singleCycleCpu(program, { vector: { lanes: 4, vlen: 128 } })`: without it the same object, gate for gate.
+- Differences from the plan: the v0 shadow is 32 flip-flops, not 128 (at e32 and VLEN 128, VLMAX ≤ 32: the mask is v0's
+  lane-0 word); the verify row `sc-v` is in EXTRA_CPUS (riscv-tests + fuzz, tests/verify-vector.test.ts) until stage 3,
+  because a CPUS row needs a chapter for the Benchmarks tab and a results.json run.
+
 Mockup: `E:/mockups/rvv/index.html` (three steps,
 light and dark; screenshots `light.png`, `dark.png`, `phone-light.png`, `phone-dark.png` beside it).
 
@@ -192,8 +205,13 @@ pitfall of writing LMUL m8 everywhere (register pressure: 4 register groups left
 | `alu(32)` | 2 610 | measured |
 | `MUL32` | 13 859 | measured (decision 4) |
 | Four VRF slices + four ALUs | 104 924 | measured parts |
-| v0 shadow, beat counter, vl / vtype, decode, bank muxes | ≈ 5 000 | **estimated** |
-| **CPU + vector unit** | **≈ 158 000** | **estimated** |
+| v0 shadow, beat counter, vl / vtype, decode, bank muxes | ≈ 5 000 | estimated in the plan |
+| **CPU + vector unit** | **≈ 158 000** | estimated in the plan |
+| One lane as built (`VEC_LANE`: slice + lane ALU + write mux) | 27 310 | measured (stage 2) |
+| `VEC_DECODE` / `VEC_CFG` / `VEC_SEQ` / `VEC_ACC` / `V0_SHADOW` | 2 163 / 1 852 / 831 / 2 491 / 495 | measured (stage 2) |
+| `VECTOR_UNIT` | 117 211 | measured (stage 2) |
+| `vecMemory(6)` against `dataMemory(6)` | 43 189 against 39 558 | measured (stage 2): +3 631 for the banks |
+| **CPU + vector unit, ROM left out** (dmemK 5) | **169 490** | measured (stage 2): +121 056 over the scalar CPU, 7 % over the estimate; period 191 against 155 |
 | `laneCore(…, 4)` (ROM left out) | 140 979 | measured; 92 545 over the scalar CPU |
 | `simtControl(4)` + `simtDecode(4)` | 3 630 + 544 | measured: the lane core's control, to compare with VEC_CTL |
 

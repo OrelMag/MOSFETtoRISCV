@@ -52,6 +52,9 @@ export interface Rand32Options {
   v?: boolean;
   /** VLEN for o.v (default 128). */
   vlen?: number;
+  /** With o.v: the gate-level unit's subset (ISS({ v: { gates: true } })): SEW 32, unit-stride 32-bit loads and stores, no vmul; now and then
+   *  a word outside it (an e8 / e16 vset, vmul, a strided or narrow access) that the unit must treat as the model does. */
+  vGates?: boolean;
 }
 
 /** mulberry32: small, fast, good enough. */
@@ -353,7 +356,7 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
   const vUnit = () => {
     const vlenb = (o.vlen ?? 128) / 8;
     // vtype: SEW 8 / 16 / 32, LMUL from 1/4 to 8 where SEW <= LMUL · 32
-    const sew = pick([8, 16, 32]);
+    const sew = o.vGates ? 32 : pick([8, 16, 32]);
     const lmuls = [0.25, 0.5, 1, 2, 4, 8].filter((l) => sew <= Math.min(l, 1) * 32);
     const lmul = pick(lmuls);
     const lmulText = lmul >= 1 ? `m${lmul}` : `mf${1 / lmul}`;
@@ -361,7 +364,7 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
     const vlmax = Math.floor((lmul * vlenb * 8) / sew);
     let vl: number;
     const s = r();
-    if (s < 0.08) emit(`vsetvli ${T0}, ${T0}, e64, m1, tu, mu`); // vill now and then (vl = 0): the next vset clears it
+    if (s < 0.08) emit(`vsetvli ${T0}, ${T0}, ${o.vGates && r() < 0.5 ? pick(['e8', 'e16']) : 'e64'}, m1, tu, mu`); // vill now and then (vl = 0): the next vset clears it
     if (s < 0.45) { const avl = int(0, 31); vl = Math.min(avl, vlmax); emit(`vsetivli ${dst()}, ${avl}, ${vt}`); }
     else if (s < 0.85) { const avl = r() < 0.2 ? int(0, 2) : int(0, 2 * vlmax + 3); vl = Math.min(avl, vlmax); emit(`li ${T0}, ${avl}`); emit(`vsetvli ${dst()}, ${T0}, ${vt}`); }
     else { vl = vlmax; const d = pick(POOL); recent.push(d); emit(`vsetvli ${d}, zero, ${vt}`); } // rd = x0 too would keep vl
@@ -386,16 +389,16 @@ export function randomProgram32(seed: number, o: Rand32Options = {}): string {
         if (r() < 0.5) emit(`vmerge.${f}m ${vreg(g, true)}, ${vreg()}, ${src1}, v0`);
         else emit(`vmv.v.${f[1]} ${vreg()}, ${src1}`);
       } else if (v < 0.56) emit(`vredsum.vs ${vreg(1)}, ${vreg()}, ${vreg(1)}${masked() ? ', v0.t' : ''}`);
-      else if (v < 0.62 && o.m) { const m = masked(), vv = r() < 0.5; emit(`vmul.${vv ? 'vv' : 'vx'} ${vreg(g, m)}, ${vreg()}, ${vv ? vreg() : src()}${m ? ', v0.t' : ''}`); }
+      else if (v < 0.62 && (o.vGates ? r() < 0.15 : o.m)) { const m = masked(), vv = r() < 0.5; emit(`vmul.${vv ? 'vv' : 'vx'} ${vreg(g, m)}, ${vreg()}, ${vv ? vreg() : src()}${m ? ', v0.t' : ''}`); }
       else if (v < 0.66) { const m = masked(); emit(`vid.v ${vreg(g, m)}${m ? ', v0.t' : ''}`); }
       else if (v < 0.72) emit(`vmv.x.s ${dst()}, ${vreg(1)}`);
       else if (v < 0.76) emit(`vmv.s.x ${vreg(1)}, ${src()}`);
       else if (v < 0.8) emit(`csrr ${dst()}, ${pick(['vl', 'vtype', 'vlenb'])}`);
       else {
         // a load or a store of EEW 8 / 16 / 32 whose EMUL is legal, every element inside the window
-        const eews = [8, 16, 32].filter((e) => { const em = (e / sew) * lmul; return em >= 1 / 8 && em <= 8; });
+        const eews = (o.vGates && r() < 0.9 ? [32] : [8, 16, 32]).filter((e) => { const em = (e / sew) * lmul; return em >= 1 / 8 && em <= 8; });
         const eew = pick(eews), em = Math.max(1, (eew / sew) * lmul), eb = eew / 8;
-        const store = r() < 0.45, m = masked(), strided = r() < 0.3;
+        const store = r() < 0.45, m = masked(), strided = r() < (o.vGates ? 0.04 : 0.3);
         let stride = strided ? eb * int(1, 3) : eb;
         if (vl > 0 && (vl - 1) * stride + eb > B) stride = eb;
         const span = vl > 0 ? (vl - 1) * stride + eb : eb;
