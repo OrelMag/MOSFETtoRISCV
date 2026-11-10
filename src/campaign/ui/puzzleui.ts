@@ -54,6 +54,7 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
   const runTests = () => {
     diagnose();
     ownOut.replaceChildren();
+    own?.clear();
     const r = runPuzzle(p, ed.value);
     if (r.errors.length) {
       result.className = 'cp-pz-result bad';

@@ -13,7 +13,7 @@ import type { ComponentDef } from '../sim/types';
 import { assemble16 } from '../riscv/rv16/asm16';
 import { disasm16, MMIO_BASE, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { Simt16 } from '../riscv/rv16/simt16';
-import { bitBench, type CoreCheck, type CoreSpec, type CoreTest, gateBench, memLeaf, type RunOptions } from './corecheck';
+import { bitBench, type CoreCheck, type CoreSpec, type CoreTest, drained, gateBench, memLeaf, type RunOptions } from './corecheck';
 
 interface Event { pc: number; instr: number; rd?: number; addr?: number; value: number }
 
@@ -65,6 +65,11 @@ interface Run {
 
 /** Run a lane core on the tests; failures name the test, the lane, the event and the instruction. */
 export function runLanes(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto', opts: RunOptions = {}): CustomRun {
+  return drained(runLanesSteps(def, mode, spec, engine, opts));
+}
+
+/** runLanes, yielding every 64 cycles. */
+export function* runLanesSteps(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto', opts: RunOptions = {}): Generator<void, CustomRun> {
   const own = opts.own;
   const n = spec.lanes ?? 4;
   if (mode === 'switch') return { failures: ['switch level: a core must simulate at gate level (no tri-states or floating nets)'], tested: 0 };
@@ -121,6 +126,7 @@ export function runLanes(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreS
     const limit = Math.max(...runs.map((r) => 2 * budgetOf(r)));
     const total = (evs: Event[][]) => evs.reduce((s, e) => s + e.length, 0);
     for (let cyc = 1; cyc <= limit + drain; cyc++) {
+      if ((cyc & 63) === 0) yield; // a long run hands control back (owncore.ts drives it within a frame budget)
       serve();
       const dwe = b.get('dwe'), rwe = b.get('rwe'), rwa = b.get('rwa'), pc = b.get('pc');
       const daddr = each('daddr', n).map((p) => b.get(p)), dwd = each('dwdata', n).map((p) => b.get(p)), rwd = each('rwd', n).map((p) => b.get(p));

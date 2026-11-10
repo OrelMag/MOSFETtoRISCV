@@ -187,8 +187,23 @@ export interface RunOptions {
 
 const PORTS_IN = ['clk', 'rst', 'instr', 'drdata'];
 
+/** A generator run to its end: the synchronous form of a bench that yields now and then. */
+export function drained<T>(g: Generator<void, T>): T {
+  for (;;) {
+    const r = g.next();
+    if (r.done) return r.value;
+  }
+}
+
+export type CoreRun = CustomRun & { perTest?: CoreTestRun[] };
+
 /** Run the core on the tests; failures name the test, the event and the instruction. */
-export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto', opts: RunOptions = {}): CustomRun & { perTest?: CoreTestRun[] } {
+export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto', opts: RunOptions = {}): CoreRun {
+  return drained(runCoreSteps(def, mode, spec, engine, opts));
+}
+
+/** runCore, yielding every 64 cycles. */
+export function* runCoreSteps(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto', opts: RunOptions = {}): Generator<void, CoreRun> {
   if (mode === 'switch') return { failures: ['switch level: a core must simulate at gate level (no tri-states or floating nets)'], tested: 0 };
   const have = new Set(def.ports.map((p) => p.name));
   const outs = ['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'].filter((p) => !have.has(p));
@@ -284,6 +299,7 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
     const budgetOf = (l: Lane) => (own ? Math.ceil(own.maxCycles(l.g.steps) / 2) : Math.ceil(spec.budget.cpi * l.g.steps + spec.budget.extra));
     const limit = Math.max(...lanes.map((l) => 2 * budgetOf(l)));
     for (let cyc = 1; cyc <= limit + drain; cyc++) {
+      if ((cyc & 63) === 0) yield; // a long run hands control back (owncore.ts drives it within a frame budget)
       if (hasIrq) b.set('irq', fill((l) => l.irq));
       serve();
       const dwe = b.get('dwe'), daddr = b.get('daddr'), dwd = b.get('dwdata'), rwe = b.get('rwe'), rwa = b.get('rwa'), rwd = b.get('rwd'), pc = b.get('pc');

@@ -14,66 +14,17 @@ import { Iss16 } from '../riscv/rv16/iss16';
 import { disasm16 } from '../riscv/rv16/isa16';
 import type { ComponentDef } from '../sim/types';
 import { addBench, type Bench } from './bench';
-import { type CoreDisagree, corePeriod, type CoreSpec, type CoreTest, coreSpecOf, runCore, type RunOptions } from './corecheck';
+import { type CoreDisagree, corePeriod, type CoreTest, drained, runCoreSteps, type RunOptions } from './corecheck';
+import { modelOnly, specOf, unfit } from './owncorefit';
 import { stats } from '../sim/stats';
-import { lanePeriod, runLanes } from './lanecheck';
-import { levelChallenge, levelChipId } from './levels';
-import { NODES, nodeById } from './nodes';
+import { lanePeriod, runLanesSteps } from './lanecheck';
+import { levelChipId } from './levels';
+import { nodeById } from './nodes';
 import { type ProgramPuzzle, puzzleMachine, runPuzzle } from './puzzles';
-import { runWarps, warpPeriod } from './warpcheck';
+import { runWarpsSteps, warpPeriod } from './warpcheck';
 
-/** A core level a program could run on, and why it cannot when it cannot. */
-export interface CoreOption {
-  id: string;
-  title: string;
-  /** The level is solved (its chip passed its bench). */
-  solved: boolean;
-  /** Why this program cannot run on this kind of core at all (a solved core still cannot). */
-  why?: string;
-}
+export { coreOptions, type CoreOption, modelOnly } from './owncorefit';
 
-/** Why a program level runs on the golden model only, or null. */
-export function modelOnly(p: ProgramPuzzle): string | null {
-  if (p.nic) return 'it runs on the RV32 computer with a network card: no campaign core has one';
-  if (p.dma) return 'it needs the bench’s DMA engine and flash, which the core benches do not have';
-  if (p.tests().some((t) => t.irqAt?.length)) return 'its tests raise interrupts at chosen instructions, which a core bench cannot time';
-  return null;
-}
-
-/** Why a core level's kind of core cannot run this program, or null. */
-function unfit(p: ProgramPuzzle, s: CoreSpec): string | null {
-  if (p.lanes) {
-    if (!s.lanes) return 'a scalar core: this is a kernel for lanes';
-    if (s.lanes !== p.lanes) return `${s.lanes} lanes, the kernel is for ${p.lanes}`;
-    if (!!p.warps !== !!s.warps) return p.warps ? 'one warp: the kernel needs two' : 'a warp core: the kernel is for one warp of lanes';
-    if (p.raster && !s.raster) return 'no rasterizer: the kernel draws';
-    return null;
-  }
-  if (s.lanes) return 'a lane core: this is a scalar program';
-  if (!s.rv16i) return 'it cannot run loads or branches yet';
-  if (p.m && !s.m) return 'it has no multiply or divide';
-  if (p.system && !s.system) return 'it has no CSRs or traps';
-  return null;
-}
-
-const specOf = (id: string): CoreSpec | null => {
-  const n = nodeById(id), ch = n && levelChallenge(n);
-  return ch ? coreSpecOf(ch.check) : null;
-};
-
-/** Every core level, in campaign order, with whether this program can run on it. */
-export function coreOptions(p: ProgramPuzzle, solved: (id: string) => boolean): CoreOption[] {
-  const only = modelOnly(p);
-  const out: CoreOption[] = [];
-  for (const n of NODES) {
-    if (n.kind !== 'core' || n.soon) continue;
-    const s = specOf(n.id);
-    if (!s) continue;
-    const why = only ?? unfit(p, s) ?? undefined;
-    out.push({ id: n.id, title: n.title, solved: solved(n.id), ...(why ? { why } : {}) });
-  }
-  return out;
-}
 
 /** One test on the core. */
 export interface OwnTest {
@@ -110,10 +61,19 @@ export function ownTests(p: ProgramPuzzle, src: string): CoreTest[] | { error: s
 }
 
 /** The learner's chip for a core level, compiled from the workspace. */
+// One library for every call: a workspace snapshot recompiles only the chips that changed, so a core's def stays the same
+// object between calls (coreFacts' cache) and a project with every level chip is not compiled again per lookup.
+const lib = new UserLibrary();
+let libWs: Workspace | null = null;
+
 export function coreDef(ws: Workspace, core: string): ComponentDef | { error: string } {
   const n = nodeById(core);
   if (!n) return { error: `no core level ${core}` };
-  const c = new UserLibrary(ws).compiled(levelChipId(n));
+  if (ws !== libWs) {
+    lib.update(ws);
+    libWs = ws;
+  }
+  const c = lib.compiled(levelChipId(n));
   if (!c) return { error: `${n.title} has no chip in this project` };
   const err = c.diags.find((d) => d.level === 'error');
   if (err) return { error: `${n.title}'s chip does not compile` };
@@ -123,32 +83,41 @@ export function coreDef(ws: Workspace, core: string): ComponentDef | { error: st
 
 /** Run a program level's tests on a core level's chip. Never throws. */
 export function runOnCore(p: ProgramPuzzle, src: string, core: string, ws: Workspace): OwnRun {
+  return drained(runOnCoreSteps(p, src, core, ws));
+}
+
+/** runOnCore, yielding every 64 cycles of the core and between tests: the level card drives it a frame at a time. */
+export function* runOnCoreSteps(p: ProgramPuzzle, src: string, core: string, ws: Workspace): Generator<void, OwnRun> {
   try {
     const s = specOf(core);
     if (!s) return { kind: 'error', error: `${core} is not a core level` };
     const why = modelOnly(p) ?? unfit(p, s);
     if (why) return { kind: 'error', error: why };
-    if (!runPuzzle(p, src).ok) return { kind: 'model' };
+    const model = runPuzzle(p, src);
+    if (!model.ok) return { kind: 'model' };
+    yield;
     const tests = ownTests(p, src);
     if ('error' in tests) return { kind: 'error', error: tests.error };
     const def = coreDef(ws, core);
     if ('error' in def) return { kind: 'error', error: def.error };
+    yield;
     const opts: RunOptions = { own: { maxCycles: OWN_CAP } };
-    let out: OwnTest[];
+    const out: OwnTest[] = [];
     if (!s.lanes) {
-      const r = runCore(def, 'gate', { ...s, tests: () => tests }, 'auto', opts);
+      const r = yield* runCoreSteps(def, 'gate', { ...s, tests: () => tests }, 'auto', opts);
       if (!r.perTest) return { kind: 'error', error: r.failures[0] ?? 'the core did not run' };
       // to the last write or store, then the model's few instructions after it at one cycle each (a single-cycle core: its exact count)
-      out = r.perTest.map((t) => ({ name: t.name, ok: t.ok, cycles: t.ok ? t.cycles + t.tail : t.cycles, steps: t.steps, writes: t.writes, ...(t.why ? { why: t.why } : {}) }));
+      out.push(...r.perTest.map((t) => ({ name: t.name, ok: t.ok, cycles: t.ok ? t.cycles + t.tail : t.cycles, steps: t.steps, writes: t.writes, ...(t.why ? { why: t.why } : {}) })));
     } else {
       // lanes and warps: one test a run, for each one's cycles; the model's count from runPuzzle
-      const model = runPuzzle(p, src).results;
-      const run = s.warps ? runWarps : runLanes;
-      out = tests.map((t, i) => {
-        const r = run(def, 'gate', { ...s, tests: () => [t] }, 'auto', opts);
-        if (!r.tested) return { name: t.name, ok: false, cycles: 0, steps: model[i]?.steps ?? 0, text: r.failures[0], writes: [] };
-        return { name: t.name, ok: !r.failures.length, cycles: r.cycles ?? 0, steps: model[i]?.steps ?? 0, writes: [], ...(r.failures.length ? { text: r.failures[0].replace(`${t.name}: `, '') } : {}) };
-      });
+      const run = s.warps ? runWarpsSteps : runLanesSteps;
+      for (const [i, t] of tests.entries()) {
+        const r = yield* run(def, 'gate', { ...s, tests: () => [t] }, 'auto', opts);
+        const steps = model.results[i]?.steps ?? 0;
+        if (!r.tested) out.push({ name: t.name, ok: false, cycles: 0, steps, text: r.failures[0], writes: [] });
+        else out.push({ name: t.name, ok: !r.failures.length, cycles: r.cycles ?? 0, steps, writes: [], ...(r.failures.length ? { text: r.failures[0].replace(`${t.name}: `, '') } : {}) });
+        yield;
+      }
     }
     const ok = out.every((t) => t.ok);
     const mean = (f: (t: OwnTest) => number) => Math.ceil(out.reduce((a, t) => a + f(t), 0) / Math.max(1, out.length));
@@ -157,7 +126,6 @@ export function runOnCore(p: ProgramPuzzle, src: string, core: string, ws: Works
     return { kind: 'error', error: e instanceof Error ? e.message : String(e) };
   }
 }
-
 /**
  * Step to it: both register files at the disagreement, the model's (run to that instruction) and the core's (its agreed writes):
  * just after the instruction when the core wrote a wrong register (so that register differs), else just before it.
@@ -181,9 +149,16 @@ export function registersAt(p: ProgramPuzzle, src: string, testIndex: number, t:
 }
 
 /** A test's program on the core's debug bench, in the sandbox (scalar tests that read no IN, with data in the bench's 64 words). */
+/** Why a test cannot go on the core's debug bench (no IN device, 64 words of RAM), or null. */
+export function benchRefusal(t: CoreTest): string | null {
+  if (t.input?.length) return 'this test reads IN, which the bench has no device for';
+  if ([...(t.data?.keys() ?? [])].some((k) => k >= 64)) return 'this test’s data lies beyond the bench’s 64 words of RAM';
+  return null;
+}
+
 export function ownBench(ws: Workspace, core: string, t: CoreTest): Bench | { error: string } {
-  if (t.input?.length) return { error: 'this test reads IN, which the bench has no device for' };
-  if ([...(t.data?.keys() ?? [])].some((k) => k >= 64)) return { error: 'this test’s data lies beyond the bench’s 64 words of RAM' };
+  const no = benchRefusal(t);
+  if (no) return { error: no };
   const def = coreDef(ws, core);
   if ('error' in def) return def;
   const n = nodeById(core)!;
@@ -192,11 +167,12 @@ export function ownBench(ws: Workspace, core: string, t: CoreTest): Bench | { er
 
 const facts = new WeakMap<ComponentDef, { nands: number; period: number | null }>();
 
-/** A core's NANDs and clock period (in NAND delays, with its bench's memories), for the readout. */
-export function coreFacts(ws: Workspace, core: string): { nands: number; period: number | null } | null {
+/** A core's NANDs and clock period (in NAND delays, with its bench's memories), for the readout; `cached`: only if known already. */
+export function coreFacts(ws: Workspace, core: string, cached = false): { nands: number; period: number | null } | null {
   const def = coreDef(ws, core), s = specOf(core);
   if ('error' in def || !s) return null;
   let f = facts.get(def);
+  if (!f && cached) return null;
   if (!f) {
     const period = s.warps ? warpPeriod(def, s.lanes) : s.lanes ? lanePeriod(def, s.lanes) : corePeriod(def);
     facts.set(def, (f = { nands: stats(def).nands, period }));

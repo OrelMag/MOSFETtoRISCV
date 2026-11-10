@@ -19,7 +19,7 @@ import { assemble16 } from '../riscv/rv16/asm16';
 import { disasm16, MMIO_BASE, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { Warps16 } from '../riscv/rv16/warps16';
 import { FB16 } from '../gfx/raster16';
-import { bitBench, type CoreCheck, type CoreSpec, type CoreTest, gateBench, memLeaf, type RunOptions } from './corecheck';
+import { bitBench, type CoreCheck, type CoreSpec, type CoreTest, drained, gateBench, memLeaf, type RunOptions } from './corecheck';
 
 interface Event { pc: number; instr: number; rd?: number; addr?: number; value: number }
 
@@ -87,6 +87,11 @@ const OUTS = (n: number) => ['pc', 'warp', ...each('daddr', n), ...each('dwdata'
 
 /** Run a two-warp core on the tests; failures name the test, the warp, the lane, the event and the instruction. */
 export function runWarps(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto', opts: RunOptions = {}): CustomRun {
+  return drained(runWarpsSteps(def, mode, spec, engine, opts));
+}
+
+/** runWarps, yielding every 64 cycles. */
+export function* runWarpsSteps(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto', opts: RunOptions = {}): Generator<void, CustomRun> {
   const own = opts.own;
   const n = spec.lanes ?? 4;
   const T = WARPS * n;
@@ -149,6 +154,7 @@ export function runWarps(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreS
     const limit = Math.max(...runs.map((r) => 2 * budgetOf(r)));
     const total = (evs: Event[][]) => evs.reduce((s, e) => s + e.length, 0);
     for (let cyc = 1; cyc <= limit + drain; cyc++) {
+      if ((cyc & 63) === 0) yield; // a long run hands control back (owncore.ts drives it within a frame budget)
       serve();
       const get = (p: string) => b.get(p);
       const warp = get('warp'), dwe = get('dwe'), rwe = get('rwe'), rwa = get('rwa'), lwe = get('lwe'), lwa = get('lwa'), pc = get('pc');

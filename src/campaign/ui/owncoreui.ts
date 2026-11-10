@@ -13,10 +13,18 @@ import { actName, nodeById } from '../nodes';
 import { progress } from '../progress';
 import { type ProgramPuzzle, puzzleUnit } from '../puzzles';
 import type { CampaignNode } from '../types';
-import { coreFacts, coreOptions, modelOnly, type OwnRun, type OwnTest, ownBench, ownTests, registersAt, runOnCore } from '../owncore';
+import { coreOptions, modelOnly } from '../owncorefit';
+import type { OwnRun, OwnTest } from '../owncore';
+
+/** The runner (the chip compiled, the benches, the bench builder): loaded on the first use. */
+type Runner = typeof import('../owncore');
+let runner: Runner | null = null;
+const loadRunner = (): Promise<Runner> => import('../owncore').then((m) => (runner = m));
 
 const hex = (v: number) => `0x${(v & 0xffff).toString(16).padStart(4, '0')}`;
 const num = (v: number) => groupDigits(v);
+/** Simulation time a frame while a run goes on. */
+const FRAME_MS = 12;
 
 export interface OwnCoreUi {
   el: HTMLElement;
@@ -24,6 +32,8 @@ export interface OwnCoreUi {
   on(): boolean;
   /** Run on the chosen core (the model passed) and show it under the model's result. */
   run(src: string, into: HTMLElement): void;
+  /** A new run of the tests: the last verdict's lit line goes. */
+  clear(): void;
 }
 
 /** The switch for a program level; null for a level no RV16 core runs (the NIC driver). */
@@ -46,13 +56,33 @@ export function ownCoreUi(n: CampaignNode, p: ProgramPuzzle, lineOf: (pc: number
   const pick = h('select', { 'aria-label': 'Which of your cores' }) as HTMLSelectElement;
   const sub = h('p', { class: 'sub' });
   const ws = (): Workspace => loadWorkspace();
+  // a core's facts are its static timing: worked out one core a frame, the list redrawn as each arrives
+  let missing: string[] = [];
+  const more = () => {
+    const id = missing.shift();
+    if (!id || !runner) return;
+    runner.coreFacts(ws(), id);
+    fill();
+  };
   const fill = () => {
     const w = ws();
+    missing = [];
     pick.replaceChildren(...opts.filter((o) => !o.why || o.solved).map((o) => {
-      const f = o.solved && !o.why ? coreFacts(w, o.id) : null;
+      const f = o.solved && !o.why && runner ? runner.coreFacts(w, o.id, true) : null;
+      if (o.solved && !o.why && runner && !f) missing.push(o.id);
       const text = o.why ? `${o.title} · ${o.why}` : !o.solved ? `${o.title} · not passed yet` : `${o.title}${f ? ` · ${num(f.nands)} NANDs${f.period !== null ? ` · period ${f.period}` : ''}` : ''}`;
       return h('option', { value: o.id, ...(o.why || !o.solved ? { disabled: true } : {}), ...(o.id === core ? { selected: true } : {}) }, text);
     }));
+    if (!runner) void loadRunner().then(fill);
+    else if (missing.length) setTimeout(more, 0);
+  };
+  let out: HTMLElement | null = null;
+  // the run in progress: a new run, a switch or a core change stops it
+  let ticket = 0;
+  const clear = () => {
+    ticket++;
+    light(null);
+    out?.replaceChildren();
   };
   const paint = () => {
     bModel.setAttribute('aria-pressed', String(!mine));
@@ -65,48 +95,67 @@ export function ownCoreUi(n: CampaignNode, p: ProgramPuzzle, lineOf: (pc: number
       sub.textContent = first ? `Pass ${first.title} (${actName(first.act)}) to run your programs on hardware you built.` : 'No campaign core runs this program yet.';
     } else sub.textContent = mine ? 'The model still decides pass or fail; your core must agree with it at every register write and store.' : '';
   };
-  bModel.onclick = () => { mine = false; pr.setRunOn(n.id, undefined); paint(); };
+  bModel.onclick = () => { mine = false; pr.setRunOn(n.id, undefined); clear(); paint(); };
   bCore.onclick = () => {
     if (!core) return;
     mine = true;
     pr.setRunOn(n.id, core);
+    clear();
     fill();
     paint();
   };
-  pick.onchange = () => { core = pick.value; pr.setRunOn(n.id, core); };
+  pick.onchange = () => { core = pick.value; pr.setRunOn(n.id, core); clear(); };
   if (mine) fill();
   paint();
   const el = h('div', { class: 'cp-runon' }, h('div', { class: 'cp-runon-row' }, label, seg, pick), sub);
 
   const run = (src: string, into: HTMLElement) => {
     if (!mine || !core) return;
+    out = into;
     const id = core, title = nodeById(id)?.title ?? id;
     const box = h('div', { class: 'cp-own', role: 'status' }, h('p', { class: 'sub' }, `Running on ${title}…`));
     into.append(box);
     // let the model's result paint first: a pipeline on a long test takes a moment
-    setTimeout(() => {
+    const run1 = ++ticket;
+    const t0 = performance.now();
+    void loadRunner().then((m) => {
       const w = ws();
-      const r = runOnCore(p, src, id, w);
-      box.replaceChildren(...view(r, id, title, w, src));
-      box.classList.toggle('ok', r.kind === 'done' && r.ok);
-      box.classList.toggle('bad', r.kind === 'error' || (r.kind === 'done' && !r.ok));
-      if (r.kind === 'model') box.remove();
-    }, 30);
+      const g = m.runOnCoreSteps(p, src, id, w);
+      // a slice of the run a frame (FRAME_MS), so the page stays live on a long kernel
+      const slice = () => {
+        if (run1 !== ticket) return;
+        const end = performance.now() + FRAME_MS;
+        let r: IteratorResult<void, OwnRun>;
+        do r = g.next(); while (!r.done && performance.now() < end);
+        if (!r.done) {
+          const secs = (performance.now() - t0) / 1000;
+          if (secs > 1) box.firstElementChild!.textContent = `Running on ${title}… ${secs.toFixed(0)} s`;
+          setTimeout(slice, 0);
+          return;
+        }
+        const res = r.value;
+        box.replaceChildren(...view(m, res, id, title, w, src));
+        box.classList.toggle('ok', res.kind === 'done' && res.ok);
+        box.classList.toggle('bad', res.kind === 'error' || (res.kind === 'done' && !res.ok));
+        if (res.kind === 'model') box.remove();
+      };
+      setTimeout(slice, 30);
+    });
   };
 
-  const view = (r: OwnRun, id: string, title: string, w: Workspace, src: string): (HTMLElement | string)[] => {
+  const view = (m: Runner, r: OwnRun, id: string, title: string, w: Workspace, src: string): (HTMLElement | string)[] => {
     if (r.kind === 'error') return [h('p', { class: 'cp-own-bad' }, h('b', null, `Cannot run on ${title}: `), r.error)];
     if (r.kind === 'model') return [];
     const unit = puzzleUnit(p);
     if (r.ok) {
       light(null);
-      const f = coreFacts(w, id);
+      const f = m.coreFacts(w, id);
       pr.coreRun(n.id, id, r.cycles);
       const cpi = r.steps ? r.cycles / r.steps : 0;
       const rows = r.tests.map((t) => h('tr', null, h('td', { class: 'ok' }, icon('check', 12)), h('td', null, t.name),
         h('td', { class: 'n' }, num(t.steps)), h('td', { class: 'n' }, num(t.cycles)), h('td', { class: 'n' }, t.steps ? (t.cycles / t.steps).toFixed(2) : '—')));
       const best = pr.get(n.id)?.cores ?? {};
-      const times = Object.entries(best).map(([c, cyc]) => ({ c, cyc, f: coreFacts(w, c) })).filter((x) => x.f?.period)
+      const times = Object.entries(best).map(([c, cyc]) => ({ c, cyc, f: m.coreFacts(w, c) })).filter((x) => x.f?.period)
         .map((x) => ({ c: x.c, t: x.cyc * x.f!.period!, cyc: x.cyc }));
       const top = Math.max(1, ...times.map((x) => x.t));
       const out: (HTMLElement | null)[] = [
@@ -137,7 +186,7 @@ export function ownCoreUi(n: CampaignNode, p: ProgramPuzzle, lineOf: (pc: number
     const before = why ? ` The ${num(why.agreed)} register write${why.agreed === 1 ? '' : 's'} and stores before it agreed.` : '';
     const regs = h('div', { class: 'cp-own-regs', hidden: true });
     const stepTo = () => {
-      const s = registersAt(p, src, i, t);
+      const s = m.registersAt(p, src, i, t);
       if (!s) return;
       regs.hidden = false;
       regs.replaceChildren(h('p', { class: 'sub' }, `Just ${s.after ? 'after' : 'before'} instruction ${num((why!.step ?? 0) + 1)} (pc ${hex(s.pc)}, ${s.text}):`),
@@ -147,11 +196,11 @@ export function ownCoreUi(n: CampaignNode, p: ProgramPuzzle, lineOf: (pc: number
             return h('tr', { class: a === b ? null : 'diff' }, h('th', null, name), h('td', { class: 'n' }, hex(a)), h('td', { class: 'n' }, hex(b)));
           })));
     };
-    const test = (() => { const all = ownTests(p, src); return Array.isArray(all) ? all[i] : null; })();
-    const benchWhy = p.lanes ? 'a lane core’s bench opens from its own level' : test?.input?.length ? 'this test reads IN, which the bench has no device for' : null;
+    const test = (() => { const all = m.ownTests(p, src); return Array.isArray(all) ? all[i] : null; })();
+    const benchWhy = p.lanes ? 'a lane core’s bench opens from its own level' : !test ? 'the code does not assemble' : m.benchRefusal(test);
     const bench = () => {
       if (!test) return;
-      const b = ownBench(loadWorkspace(), id, test);
+      const b = m.ownBench(loadWorkspace(), id, test);
       if ('error' in b) { regs.hidden = false; regs.replaceChildren(h('p', { class: 'sub' }, `Cannot build the bench: ${b.error}.`)); return; }
       saveWorkspace(b.ws);
       location.hash = `#/sandbox/${b.id}`;
@@ -167,7 +216,7 @@ export function ownCoreUi(n: CampaignNode, p: ProgramPuzzle, lineOf: (pc: number
     ];
   };
 
-  return { el, on: () => mine && !!core, run };
+  return { el, on: () => mine && !!core, run, clear };
 }
 
 export type { OwnTest };
