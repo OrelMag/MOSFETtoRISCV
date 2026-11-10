@@ -88,6 +88,7 @@ registerPaletteGroup({
     { id: 'core_dsp24', name: 'DSP core', title: 'The DSP core without its memories: instr in (from a Program ROM in DSP24 assembly), pc out; X and Y read on xaddr / xdata and yaddr / ydata, a store puts a word on wdata with xwe or ywe; out / outv send results, halt stops. Two RAM parts of 256 × 16 are its X and Y memories. The CPU drawer follows it.', place: { part: { lib: 'dsp24_core' } } },
     { id: 'prog_rom_dsp24', name: 'Program ROM (DSP24)', title: '256 words of 24 bits, word addressed, holding a DSP24 program (the FIR filter to start from; the benchmarks are in Edit program… ▸ samples)', place: { part: { rom: { k: 8, w: 24, addr: 'word', lang: 'dsp24', src: DSP_FIR } } } },
     { id: 'prog_rom_c', name: 'Program ROM (RV32C)', title: 'A Program ROM with the C extension ticked: reads at any even address, assembles .option rvc and c.* mnemonics', place: { part: { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src: RVC_SOURCE, c: true } } } },
+    { id: 'rope_rom', name: 'Core rope ROM', title: 'A ROM drawn as core rope, the read-only memory of the Apollo Guidance Computer: each sense wire threads a core for a 1 and passes it by for a 0, so the weaving is the program. The same ROM as any other (Look: box or core rope).', place: { part: { rom: { k: 6, w: 16, addr: 'word', lang: 'hex', src: '# the first two words are the ones threaded on the drawing\n0035\n0052\n', look: 'rope' } } } },
     { id: 'prog_rom_64', name: 'Program ROM (RV64)', title: 'A Program ROM assembled for RV64: ld, sd, the W instructions, li of any 64-bit constant', place: { part: { rom: { k: 6, w: 32, addr: 'rv32', lang: 'asm', src: RV64_SOURCE, xlen: 64 } } } },
   ],
 });
@@ -221,6 +222,7 @@ registerPropsSection({
         h('label', { class: 'sb-check', title: 'RV64: assemble for the 64-bit core (ld, sd, the W instructions, li of any 64-bit constant, 6-bit shifts). Needs rv64i_core or rv64im_core.' },
           h('input', { type: 'checkbox', checked: r.xlen === 64, 'aria-label': 'RV64', onchange: (e: Event) => set((e.target as HTMLInputElement).checked ? { xlen: 64, c: undefined } : { xlen: undefined }) }), 'RV64'))
         , 'C: 16-bit instructions at any even address (rv32ic_core). RV64: assemble for the 64-bit cores')] : []),
+      row('Look', select(r.look ?? 'box', [['box', 'box'], ['rope', 'core rope']], (v) => set({ look: v === 'rope' ? 'rope' : undefined }), 'Look'), 'core rope: drawn as the Apollo Guidance Computer\'s read-only memory, its first two words threaded through the cores (a 1 through the core, a 0 beside it); the same ROM'),
       row('Sample', sample),
       status,
       h('div', { class: 'sb-btns' }, h('button', { class: 'btn sm primary', title: 'Edit the program with a live listing', onclick: () => openProgramEditor(ed, id) }, icon('code', 14), 'Edit program…'),

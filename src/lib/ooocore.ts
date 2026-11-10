@@ -730,6 +730,8 @@ function oooDrawing(b: Builder, outs: string[]): { pins: Record<string, At>; net
       ['ctrl1', 'nret1', 'tr1', 'jj1', 'seq1', 'tk1', 'rcp1', 'rcq1'], ['cs0', 'cs1', 'cs', 'redir'], ['one1', 'two', 'count', 'now']]],
   ]);
 
+  // the divider two rows down: its inputs' labels clear of the E2 splitter's
+  P.put('units', 'div', P.x('div'), P.y('div') + 2);
   for (const i of b.instances) {
     const p = P.at.get(i.name);
     if (!p || p.some(Number.isNaN)) throw new Error(`oooCpu: no place for ${i.name}`);
@@ -738,5 +740,8 @@ function oooDrawing(b: Builder, outs: string[]): { pins: Record<string, At>; net
   const right = Math.max(...b.instances.map((i) => P.right(i.name))) + 12;
   const pins: Record<string, At> = { clk: [0, 2] };
   outs.forEach((p, i) => (pins[p] = [right, 2 + 3 * i]));
-  return { pins, nets: placedNets(P, raw) };
+  // nets whose wire could only pass under another part's body (the router finds no way round in these bands): pointers
+  const labelled = new Set(['pd1.call', 'pd1.ret', 'btb.pt1', 'btb.tgt1', 'F0.out', 'F1.out', 'selfA1.y', 'selfB1.y', 'pay0.out', 'st1d.y', 'sw.y', 'dstart.y',
+    'free1.y', 'v2_0.out', 'v1_0.out', 'hv0.o2', 'hv1.o2', 'ltail1.s']);
+  return { pins, nets: placedNets(P, raw, { labelled }) };
 }

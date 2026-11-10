@@ -391,6 +391,7 @@ export const chBus: Chapter = {
         twice by a CPU that guesses ahead.</p>
         <p>The boot ROM now copies ${SYSTEM_WORDS} words from the flash. The program waits for a key, prints it, appends it to a line kept in
         DRAM and paints an 8 × 8 block of its colour on the screen; Enter prints the line back from DRAM, last key first.</p>
+        <p>That is a whole computer, and the end of this level: every part of it runs on one clock, and a word crosses the bus in a few of its cycles. The next level, from <a href="#/c/message/0">Sending a message</a>, takes the wire out of the chip: what it costs to send a bit to another computer across a room or an ocean, where no clock is shared and nothing arrives unchanged.</p>
         <div class="try">Run, then type into the keyboard field (or Type hello⏎). Watch the blocks appear, Enter read the line back,
         and the DRAM counters: the line's words sit in one row, so after the first access nearly all are row hits.</div>`,
       more: {
