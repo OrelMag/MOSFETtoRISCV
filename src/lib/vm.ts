@@ -87,7 +87,9 @@ export function tlb(kind: 'i' | 'd', k = 2): ComponentDef {
       summary: `${n} translations kept at once, searched by virtual page number (a comparator per entry, like chapter 10's CAM): an entry holds the 22-bit physical page number and the page's flags (${TLB_FLAGS[kind].join(', ')}). A fill replaces entries in turn; flush forgets them all. Superpages are filled one 4 KiB page at a time.`,
       ports: [bus('key', 20, 'in'), bit('fill', 'in'), bus('fppn', 22, 'in'), bus('fflags', nf, 'in'), bit('flush', 'in'), clk(), bit('hit', 'out'), bus('ppn', 22, 'out'), bus('flags', nf, 'out')],
       symbol: { kind: 'box', label: kind === 'i' ? 'I-TLB' : 'D-TLB' },
-      netlist: laid(b, { keepOrder: true, room: true }),
+      // tuned on the 4-entry drawing (the scenes'): two parts moved off the valid bits' and entry 3's wires, the two nets that still
+      // ran under a part drawn as pointers (tests/redrawclear-vmunits.test.ts)
+      netlist: laid(b, { keepOrder: true, room: true, ...(k === 2 ? { nudge: { u8: 2, u10: 4, u17: 2 }, wires: { 'u3.y': false, 'v2.q': false } } : {}) }),
       hdl: {
         verilog: `// ${n} entries, round-robin fill; flush clears every valid bit
 for (i = 0; i < ${n}; i++) if (valid[i] && vpn[i] == key) begin hit = 1; ppn = ppn_q[i]; flags = flags_q[i]; end
@@ -215,7 +217,8 @@ export function walker(): ComponentDef {
       ports: [bit('start', 'in'), bus('satpPpn', 22, 'in'), bus('vpn', 20, 'in'), bus('pte', 32, 'in'), clk(),
         bus('pteAddr', 32, 'out'), bit('walkOut', 'out'), bit('idleOut', 'out'), bit('stall', 'out'), bit('fault', 'out'), bit('faultAcc', 'out'), bit('fill', 'out'), bus('fppn', 22, 'out'), bus('fflags', 5, 'out')],
       symbol: { kind: 'box', label: 'WALKER' },
-      netlist: laid(b, { keepOrder: true, room: true, gap: 8 }),
+      // two parts moved off the fault wire, and the level-0 bit that ran under a gate drawn as a pointer (tests/redrawclear-vmunits.test.ts)
+      netlist: laid(b, { keepOrder: true, room: true, gap: 8, nudge: { u40: -2, u47: -2 }, wires: { 'u10.o0': false } }),
     });
   });
 }
@@ -289,7 +292,8 @@ export function mmu(): ComponentDef {
         bus('fpa', 32, 'out'), bus('dpa', 32, 'out'), bus('maddr', 32, 'out'), bit('stall', 'out'), bit('idle', 'out'),
         bit('fetchPage', 'out'), bit('fetchAcc', 'out'), bit('dataPage', 'out'), bit('dataAcc', 'out')],
       symbol: { kind: 'box', label: 'MMU' },
-      netlist: laid(b, { keepOrder: true, room: true, gap: 10 }),
+      // the walker's table address and stall ran under the PC decoder and two gates: pointers (tests/redrawclear-vmunits.test.ts)
+      netlist: laid(b, { keepOrder: true, room: true, gap: 10, wires: { 'wk.pteAddr': false, 'wk.stall': false } }),
     });
   });
 }
@@ -436,7 +440,8 @@ export function csrUnitVm(): ComponentDef {
         bus('rdata', 32, 'out'), bit('known', 'out'), bus('mtvecOut', 32, 'out'), bus('mepcOut', 32, 'out'), bus('sepcOut', 32, 'out'), bit('irqTake', 'out'), bus('irqCause', 32, 'out'),
         bus('priv', 2, 'out'), bit('sum', 'out'), bit('mxr', 'out'), bit('satpMode', 'out'), bus('satpPpn', 22, 'out'), bit('satpWr', 'out')],
       symbol: { kind: 'box', label: 'CSRs' },
-      netlist: laid(b, { keepOrder: true, room: true, gap: 6, vgap: 2 }),
+      // four nets ran under the read multiplexer's neighbours and two gates: pointers (tests/redrawclear-vmunits.test.ts)
+      netlist: laid(b, { keepOrder: true, room: true, gap: 6, vgap: 2, wires: { 'u58.out': false, 'u62.out': false, 'u45.o0': false, 'u126.y': false } }),
     });
   });
 }

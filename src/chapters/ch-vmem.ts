@@ -66,7 +66,7 @@ export const chVmem: Chapter = {
     keep: [
       'A program is compiled for addresses of its own. Translation makes them true: the hardware turns every virtual address into a physical one on every fetch, load and store, so two programs can both use address 0 and never meet.',
       'Sv32 cuts a 32-bit address into VPN[1] (10 bits), VPN[0] (10 bits) and a 12-bit offset. Each table is 1 024 entries of 4 bytes, one page; the offset passes through unchanged. The walk is two reads, root then second table, before the access itself.',
-      'A page-table entry is a physical page number and flags: V R W X U G A D. R, W, X and U decide who may do what; A and D must be set by software on this hardware, or the access faults.',
+      'A page-table entry is a physical page number and flags: V R W X U G A D. R, W, X and U decide who may do what; on this hardware software must set A, and D for a page that may be stored to, or the access faults.',
       `The walker is a four-state machine on the data-memory port that stalls the CPU: ${WALK_CYCLES} cycles to a 4 KiB leaf, ${SUPER_CYCLES} to a 4 MiB superpage or an empty root entry. The result goes into a TLB, so the next access to the page costs nothing.`,
       `The TLB is a small content-addressable memory keyed by the virtual page number: ${n(F.tlbI)} NANDs for the instruction side and ${n(F.tlbD)} for the data side at 4 entries. sfence.vma, or a write to satp, forgets every entry; forgetting it after editing a page table is the classic bug.`,
       'A page fault is a trap (cause 12 fetch, 13 load, 15 store) with mtval = the faulting virtual address and mepc = the instruction. A handler that maps the page and executes sfence.vma and mret makes the instruction run again, this time to completion.',
@@ -154,7 +154,10 @@ export const chVmem: Chapter = {
       title: 'The page-table entry',
       body: `
         <p>A table entry is one 32-bit word: a <strong>physical page number</strong> in bits 31:10 (22 bits, so 4 KiB frames anywhere in 16 GiB), two bits left
-        to software, and eight flag bits. Everything the hardware needs to decide an access sits in them:</p>
+        to software, and eight flag bits. Some of the flags depend on who is asking. The CPU of this chapter is always in one of three
+        <strong>privilege modes</strong>, kept in a two-bit register: <em>machine</em> (M), where the trap handlers of chapter ${numOf('traps')} run, with every register in reach and no
+        translation; <em>supervisor</em> (S), meant for an operating system; and <em>user</em> (U), for programs. A trap enters M, and <code>mret</code> returns to the mode
+        the trap came from (the MPP field of <code>mstatus</code>). Everything the hardware needs to decide an access sits in the flags:</p>
         <ul>
           <li><strong>V</strong>, valid. Zero means the entry is empty; any walk that reaches it faults.</li>
           <li><strong>R W X</strong>: read, write, execute. With all three zero the entry is not a page but a <em>pointer</em> to the next table, which is how a root entry
@@ -234,7 +237,7 @@ export const chVmem: Chapter = {
         <strong>translation lookaside buffer</strong>, the TLB. This one is a tiny cache with four entries, each holding a virtual page number, the physical page number and the flags that matter.</p>
         <p>It is chapter ${numOf('memory')}'s content-addressable memory: all four entries compare their stored page number with the one asked for at the same time (a 20-bit comparator each), and a priority encoder
         picks the one that matched; no clock and no search. There are two of them, <span data-show="itlb">one for the instruction fetch</span> and <span data-show="dtlb">one for loads and stores</span>, because
-        both happen in the same cycle. At ${n(F.tlbI)} and ${n(F.tlbD)} NANDs they are ${n(F.tlbI + F.tlbD)} of the ${n(F.mmu)} NANDs of the whole MMU (TLBs, permission checks and walker): the memory of translations is the cost, the logic that fills it is not.</p>
+        both happen in the same cycle. At ${n(F.tlbI)} and ${n(F.tlbD)} NANDs they are ${n(F.tlbI + F.tlbD)} of the ${n(F.mmu)} NANDs of the whole MMU (TLBs, walker, permission checks and the multiplexers between them): the memory of translations is the cost, the logic that fills it is not.</p>
         <p>A <em>hit</em> costs nothing extra in cycles: the lookup is combinational and the physical address is out in the same cycle (it does add gate delays to the clock, see step 9). A <em>miss</em> starts the walker, whose
         result is written into the entry a round-robin pointer names, replacing in turn. The panel shows both TLBs live with the entry that matches the current address lit green, and counts walks against translated accesses.</p>
         <p>A TLB can be wrong in only one way: when the page table changes behind its back. <code>sfence.vma</code> is the instruction that says so; this hardware answers it, and any write to satp, by forgetting every entry.</p>`,
@@ -302,9 +305,11 @@ export const chVmem: Chapter = {
       body: `
         <p>The system CPU of chapters ${numOf('io')}–${numOf('traps')} is ${n(F.base)} NANDs without its program ROM and takes ${F.basePeriod} NAND delays to a clock (counted with its 128-word program ROM and 32-word data memory, as in those chapters). With the privilege levels, the supervisor
         registers, two TLBs and the walker (the machine of this chapter's scenes, built from those same units) it is ${n(F.vm)} NANDs, <strong>${n(F.vm - F.base)} more</strong> (${Math.round((100 * (F.vm - F.base)) / F.base)} %), and the period
-        is ${F.vmPeriod}. The MMU alone is ${n(F.mmu)} NANDs of that: ${n(F.tlbI)} and ${n(F.tlbD)} for the TLBs, ${n(F.walker)} for the walker, the rest the permission checks. The clock grows because the
+        is ${F.vmPeriod}. The MMU alone is ${n(F.mmu)} NANDs of that: ${n(F.tlbI)} and ${n(F.tlbD)} for the TLBs, ${n(F.walker)} for the walker, ${F.permitI + F.permitD} for the permission checks, and the other
+        ${n(F.mmu - F.tlbI - F.tlbD - F.walker - F.permitI - F.permitD)} for the multiplexers that put either the program's address or the walker's on the memory and the logic that decides a miss and a stall. The clock grows because the
         translation sits in series with everything: the fetch address goes through the instruction TLB before the program memory (${F.fetchLookup} delays on the longest path), and a load or store's address through the data TLB and
-        its permission check on the way to the memory (${F.dataLookup} more). The scenes of this chapter need room for page tables, so they use a 256-word program ROM and a 4 096-word data memory, and with those larger memories the longest path is ${F.scenePeriod} delays; the NAND counts here are for the small memory.</p>
+        its permission check on the way to the memory (${F.dataLookup} more). Those are ${F.fetchLookup + F.dataLookup} delays, more than the ${F.vmPeriod - F.basePeriod} the period grew: without translation the longest path
+        ran from the ALU through the next-PC and trap logic instead, and that path is now shorter than the one through the data TLB. The scenes of this chapter need room for page tables, so they use a 256-word program ROM and a 4 096-word data memory, and with those larger memories the longest path is ${F.scenePeriod} delays; the NAND counts here are for the small memory.</p>
         <p>These figures are this book's single-cycle CPU, counted from its own gates; the virtual-memory CPU is not in the Benchmarks tab or the sandbox, so there is no table of
         other machines to set it against, and none is claimed here.</p>
         <p>What the TLB buys depends on the program. The benchmark programs below touch one page of code and one of data, so with any TLB the cost is two cold misses and nothing else.
