@@ -173,3 +173,6 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # wait up to 30 min for Pages (the default 10 min times out on a busy day: the deploy then reports a failure)
+          timeout: 1800000

@@ -30,6 +30,8 @@ const BOOK = [
   'traps',
   'muldiv',
   'cache',
+  'vmem',
+  'os',
   'multicycle',
   'float',
   'widths',
