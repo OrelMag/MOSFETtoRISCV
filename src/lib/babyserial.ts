@@ -6,12 +6,12 @@
 // addSub(32) and does all 32 digits in one clock; tests/babyserial.test.ts holds this circuit to it on random words.
 //   SERIAL_STAGE   one digit per clock: not b, carry in = first OR carry flip-flop, a full adder, the carry flip-flop
 //   BABY_SERIAL    32 digits: A and B parallel-loaded into shift registers (shiftRegister(32)), the stage, the result
-//                  shifted into a register of 32 enabled flip-flops; load = 1 for one clock, then run = 1 for 32 clocks
+//                  shifted into a third shiftRegister(32); load = 1 for one clock, then run = 1 for 32 clocks
 
 import { Builder } from './builder';
 import { constWord } from './alu';
 import { FULL_ADDER } from './combinational';
-import { define, merger, ones, splitter } from './define';
+import { define, merger, splitter } from './define';
 import { AND, NOT, OR } from './gates';
 import { laid } from './layered';
 import { DFF, DFFE } from './sequential';
@@ -73,21 +73,20 @@ export const BABY_SERIAL: ComponentDef = (() => {
   b.next();
   const stage = b.op(SERIAL_STAGE, [`${da}.o0`, `${db}.o0`, ff, 'run', 'clk'], 'one digit', 'st');
   b.wire(ff, 'keep.a');
+  // the result: the same shift register as A and B, shifting right while run = 1 (mode 01) with the difference digit
+  // entering at the top, holding otherwise (mode 00); after 32 shifts digit 0 has reached bit 0
+  const rmode = b.op1(merger([1, 1]), ['run', zero], undefined, 'rmode');
+  const zw = b.op1(constWord(W, 0), [], '0', 'zw');
   b.next();
-  const rs: string[] = [];
-  for (let i = W - 1; i >= 0; i--) {
-    const f = b.op1(DFFE, [i === W - 1 ? `${stage}.s` : rs[0], 'run', 'clk'], undefined, `r${i}`);
-    rs.unshift(f);
-  }
-  const mr = b.op(merger(ones(W)), rs, undefined, 'mr');
-  b.wire(`${mr}.out`, 'r');
+  const sr = b.op(shiftRegister(W), [rmode, `${stage}.s`, zero, zw, 'clk'], 'R', 'sr');
+  b.wire(`${sr}.q`, 'r');
   b.wire(`${stage}.c`, 'carry');
   return define({
     id: 'baby_serial', name: 'Serial subtractor (1948)', category: 'arithmetic',
-    summary: 'The Baby\'s subtractor as the 1948 machine had it: a and b shifted through one full-adder stage a digit per clock, a carry flip-flop between digits, the difference shifted into a register. 32 clocks a word (8.5 µs each in 1948).',
+    summary: 'The Baby\'s subtractor as the 1948 machine had it: a and b shifted through one full-adder stage a digit per clock, a carry flip-flop between digits, the difference shifted into a third shift register. 32 clocks a word (8.5 µs each in 1948).',
     ports: [{ name: 'a', width: W, dir: 'in' }, { name: 'b', width: W, dir: 'in' }, bit('load', 'in'), bit('run', 'in'), bit('clk', 'in', 'bottom', true),
       { name: 'r', width: W, dir: 'out' }, bit('carry', 'out')],
     symbol: { kind: 'box', label: 'SERIAL SUB' },
-    netlist: laid(b, { keepOrder: true, wires: Object.fromEntries(rs.map((_, i) => [`r${i}.q`, true])) }),
+    netlist: laid(b, { keepOrder: true }),
   });
 })();
