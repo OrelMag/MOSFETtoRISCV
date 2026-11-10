@@ -2951,6 +2951,8 @@ svg.schematic.lg.lg-h-tap7 .tap-label[data-ts='7'], svg.schematic.lg.lg-h-tap8 .
 /* The inspector folds to a rail (view/inspector.ts): by the learner, or by the stage beside a circuit too large to read at
    its fit (Stage.autoInspector). Only where the inspector is a column (1181 px and up); a phone's or tablet's drawer is untouched. */
 .inspector .insp-rail, .insp-head .insp-fold { display: none; }
+/* until the first scene's fold is known (Stage.guessInspector): room kept, nothing painted that would then move */
+.inspector.insp-wait { visibility: hidden; }
 @media (min-width: 1181px) {
   .insp-head .insp-fold { display: flex; }
   .inspector.folded > :not(.insp-rail) { display: none; }
