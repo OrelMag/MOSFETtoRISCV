@@ -105,8 +105,9 @@ describe('rv32uc (the C extension)', () => {
 
   it('applies to the C cores only', () => {
     const verdicts = Object.fromEntries(CPUS.map((c) => [c.id, notApplicable(c, 'rv32uc-rvc') ?? 'runs']));
-    expect(Object.entries(verdicts).filter(([, v]) => v === 'runs').map(([id]) => id)).toEqual(['sc-c']);
+    expect(Object.entries(verdicts).filter(([, v]) => v === 'runs').map(([id]) => id)).toEqual(['sc-c', 'pipe-c']);
     expect(new Set(Object.values(verdicts).filter((v) => v !== 'runs'))).toEqual(new Set(['no C extension']));
     expect(CPUS.find((c) => c.id === 'sc-c')!.extraEnvs).toContain('bare-c');
+    expect(CPUS.find((c) => c.id === 'pipe-c')!.extraEnvs).toContain('bare-c');
   });
 });
