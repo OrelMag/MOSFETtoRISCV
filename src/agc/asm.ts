@@ -99,6 +99,7 @@ export function assembleAgc(src: string): AgcProgram {
     const place = (s: Stmt, w: number) => {
       if (pass2) {
         if (loc < 0o2000) throw new AgcAsmError(s.line, `code in erasable memory (location ${loc.toString(8)})`);
+        if (loc > 0o7777) throw new AgcAsmError(s.line, 'past the end of fixed-fixed memory (7777): put more in a bank of its own');
         const b = loc >= 0o4000 ? (loc < 0o6000 ? 2 : 3) : bank;
         fixed[b * BANK_WORDS + (loc & 0o1777)] = w & W15;
         listing.push({ line: s.line, bank: b, addr: loc, word: w & W15, text: s.text });
@@ -134,7 +135,9 @@ export function assembleAgc(src: string): AgcProgram {
         if (op in EXTRA_NO_OPERAND) { place(s, EXTRA_NO_OPERAND[op]); continue; }
         const e = EXTRA[op];
         if (!e) throw new AgcAsmError(s.line, `${op} after EXTEND: not an extracode`);
-        place(s, e.base + arg(e.kind)); continue;
+        place(s, e.base + arg(e.kind));
+        if (op === 'INDEX' || op === 'NDX') ext = true; // an indexed extracode is still one
+        continue;
       }
       if (op in NO_OPERAND) { place(s, NO_OPERAND[op]); if (op === 'EXTEND') ext = true; continue; }
       const b = BASIC[op];
