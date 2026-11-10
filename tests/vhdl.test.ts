@@ -122,4 +122,26 @@ describe('what has no gates to export', () => {
     for (const e of used) expect(declared.has(e), `entity ${e} declared`).toBe(true);
     expect(text.match(/-- c\d\d: ferrite core on /g)?.length).toBe(16);
   });
+  it('a bidirectional pin (the transmission gate) is an inout port, joined to its signal with a comment, port-mapped from a parent', () => {
+    const g = registry.get('tgate')!;
+    const inout = g.ports.filter((p) => p.dir === 'inout').map((p) => p.name);
+    expect(inout.length).toBeGreaterThan(0);
+    const { text } = vhdlHierarchy(g);
+    const pn = vhdlPorts(g);
+    for (const p of inout) {
+      expect(text).toContain(`    ${pn.get(p)} : inout std_logic`);
+      expect(text).toContain(`  -- ${pn.get(p)} is bidirectional: joined to `);
+    }
+    // its switches are comments, never entities
+    expect(text).not.toMatch(/entity work\.(nmos|pmos)\b/);
+    const name = entityName(g);
+    const top: ComponentDef = {
+      id: 't_vhdl_inout', name: 'inout wrap', category: 'switch', symbol: { kind: 'box' }, ports: g.ports,
+      netlist: () => ({ instances: [{ name: 'tg', def: g }], nets: g.ports.map((p) => ({ ends: [p.name, `tg.${p.name}`] })) }),
+    };
+    const t = vhdlHierarchy(top).text;
+    const map = t.match(new RegExp(`entity work\\.${name} port map \\((.*)\\);`))![1];
+    expect(map.split(', ').map((a) => a.split(' => ')[0].toLowerCase()).sort()).toEqual([...declaredPorts(t).get(name.toLowerCase())!].sort());
+    for (const p of inout) expect(t).toContain(`    ${vhdlPorts(top).get(p)} : inout std_logic`);
+  });
 });
