@@ -1095,8 +1095,12 @@ unit, wires nothing). The fan-out capacitance per net is already computed for th
 - ✅ Both numbers for the loads every design has: chapter 16's "When fan-out costs" table adds a 64-word memory's row decoder
   (address to a word's flip-flops, the read tree left out: widgets/timing.ts rowDecoderDelays) and a register's clock net
   (the one NAND driving every flip-flop's clock inputs, a buffer tree under load: clockNetDelays)
-- ⏳ Checked against silicon: per path, the load-weighted estimate against OpenSTA's after routing on the two sky130
-  layouts (today one NAND delay is worth ≈157–171 ps there; a load model should narrow the spread path to path)
+- ✅ Checked against silicon: per path, our unit and load estimates against OpenSTA's after routing on the two sky130
+  layouts (layout run 42780520333's every-endpoint report, John's scripts/skypathlib.ts; chapter silicon's "The real thing",
+  Numbers, from src/chapters/silicon/skytiming.json; tests/skypaths-spread.test.ts recomputes it from tests/sky/). The load
+  model does not narrow the spread: dual 15 → 21 %, sys 25 → 31 % (148 / 159 ps per NAND delay, 86 / 92 per load unit). Ours
+  starts elsewhere: a constant's arrival 1 (tie cells, the dual-core's mpd.kA), a register behind a mux on sys; silicon charges
+  a net's length where ours charges its fan-out (fF per input ≈3× from fan-out 1 to 5–16): the next item's ground
 - Wire length only where a design is placed (chapter 28's teaching placer, the OpenROAD runs), never from a
   schematic's drawn wires: a drawing's length is not a layout's
 
@@ -1329,7 +1333,10 @@ main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
   - FPU CPU and the pipeline variants (fast adders, balanced + predictor, data cache, M) redrawn on fix/circuits-cpu-variants
     (tests/redrawclear-cpuvariants.test.ts); the M and bus system CPUs on the plain system's wires (pointers 82 % → 25 %, 87 % → 43 %: the
     bus's 16 channels at the pins) and the CSR unit's select crossbar as lanes (29 % → 21 %) on fix/circuits-sys-variants
-    (tests/redrawclear-sysvariants.test.ts); the out-of-order units (ooo/5–7, 10) on feat/ooo-redraw: rename table 50 % → 30 %, its row 56 % → 0, issue-queue entry 55 % → 30 %, store queue 66 % → 39 %, select as a crossbar 56 % → 12 % (tests/redrawclear-ooo.test.ts); the core's top and its issue queue / reorder buffer are not redrawn
+    (tests/redrawclear-sysvariants.test.ts); the out-of-order units (ooo/5–7, 10) on feat/ooo-redraw: rename table 50 % → 30 %, its row 56 % → 0, issue-queue entry 55 % → 30 %, store queue 66 % → 39 %, select as a crossbar 56 % → 12 % (tests/redrawclear-ooo.test.ts); the issue queue drawn by hand 88.7 % → 56 % and the reorder
+    buffer's transpose a wiring box (BY FIELD) 1017 → 116 crossings, the top level clear of parts at 80 % (d2123db5).
+    OoO top level: ~60 % pointers is the floor on any placement; below 50 % needs the slot buses bundled or a hand-paired
+    drawing (parked: feat/ooo-top-place 3663a1c1 60.6 % / 90 crossings, feat/ooo-top-full 8aa54c7a)
   - rv16_mux16 (needs a bit-sliced redraw) and srt4div8 (not switched to layered.ts): unchanged on main (git log)
   - Warp core with lsu (chapter 32): net nMo still runs through a part — routeNetlist + wiresThroughParts on warpCore({ warps: 8, lanes: 8, lsu, mul }) returns { nMo }
   - Communication circuits left on purpose: CRC-32 next-state crossings (inherent), I²C target t0 (layered's 14-unit channel cap), the computer-with-NIC bus top
