@@ -11,6 +11,7 @@
 // progress. Their rule (NAND + the parts unlocked by the levels below) fills the palette's
 // "Unlocked parts" group.
 
+import { lookOf, withChipFaults } from './chipfaults';
 import { groupDigits } from '../sim/numfmt';
 import '../styles/sbchallenges.css';
 import type { CoreCheck, CoreSpec } from '../campaign/corecheck';
@@ -571,7 +572,7 @@ class ChallengeUi {
     // so a new result never opens over an old replay.
     this.closePlayer();
     // Check while "Replace your circuit?" waits: the check runs and the question stays (only Replace / Cancel / an edit end it)
-    const r = checkChallenge(ch, ed.compiled);
+    const r = checkChallenge(ch, ed.compiled, (d) => withChipFaults(d, ed.chipId, lookOf(ed.ws, ed.lib), ed.lib.deps(ed.chipId)));
     noteChecked(ed);
     // the truth-table and state-machine builders would hand in the answer here (challenges.ts builderViolations)
     const locked = builderViolations(ed.ws, [ed.chipId, ...ed.lib.deps(ed.chipId)], ch);

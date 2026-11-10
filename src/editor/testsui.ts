@@ -4,6 +4,7 @@
 // "Fill outputs from the circuit" writes what the circuit shows into the table. Edits of the text are one undo step
 // per pause in typing (TYPE_MS), as the Verilog pane's.
 
+import { lookOf, withChipFaults } from './chipfaults';
 import { groupDigits } from '../sim/numfmt';
 import '../styles/editor-tests.css';
 import { h, icon, undoKey } from '../ui/dom';
@@ -123,7 +124,9 @@ class TestsPane {
     const n = plan.ch.check.kind === 'sequence' ? plan.ch.check.steps.length : 0;
     if (n > AUTO_STEPS && !force) return { plan, names, waiting: true };
     const t0 = performance.now();
-    const run = runTest(c.def, c.mode === 'switch' ? 'switch' : 'gate', plan, names);
+    // the chip as its canvas runs it: its switched-on faults and its placed chips' (editor/chipfaults.ts)
+    const def = withChipFaults(c.def, doc.id, lookOf(this.ed.ws, this.ed.lib), this.ed.lib.deps(doc.id));
+    const run = runTest(def, c.mode === 'switch' ? 'switch' : 'gate', plan, names);
     void doc;
     return { plan, names, run, ms: performance.now() - t0 };
   }

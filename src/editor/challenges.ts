@@ -290,7 +290,7 @@ const ZERO: Score = { nand: 0, transistors: 0, depth: null };
 interface Run { failures: string[]; tested: number; wrong?: number; vector?: Record<string, number>; cycles?: number; period?: number; failed?: number[]; relays?: number; steps?: number }
 
 /** Check a compiled chip against a challenge. Never throws. */
-export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefined): CheckResult {
+export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefined, faulted?: (def: ComponentDef) => ComponentDef): CheckResult {
   const res: CheckResult = { ok: false, failures: [], score: { ...ZERO }, restrictionViolations: [], tested: 0 };
   if (!compiled) {
     res.failures.push('nothing to check: the chip does not exist');
@@ -298,7 +298,9 @@ export function checkChallenge(ch: BuildChallenge, compiled: Compiled | undefine
   }
   try {
     // a break-it level: the planted faults go into every simulation of the chip (its score is the healthy drawing's)
-    const def = ch.planted ? withPlanted(compiled.def, ch.planted) : compiled.def;
+    // `faulted`: the chip's own switched-on faults and its placed chips' (editor/chipfaults.ts), as the canvas runs it
+    const planted = ch.planted ? withPlanted(compiled.def, ch.planted) : compiled.def;
+    const def = faulted ? faulted(planted) : planted;
     res.score = scoreOf(compiled.def, compiled.mode, ch.check.kind !== 'table');
     res.restrictionViolations = violations(def, ch.allowed);
     const pinProblems = checkPins(def, ch.ports);
