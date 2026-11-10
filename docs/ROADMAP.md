@@ -441,7 +441,7 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   is both cheaper and faster, ★★★ cycles × NANDs below all. A chart plots the references, their front and your point.
   A click on a test plays it on the circuit, a cycle at a time, back and forth. Show answer gives the pseudocode and the
   references; Do it for me loads the reference program
-- ✅ Puzzle devices (c9f40bfd): Crossing, Maze robot and Vending machine, a world behind named pins as a third part kind (the sandbox's Devices group), its rules checked every clock, stars on NANDs against a reference circuit. Left: a CPU route (a program driving the device through en) and grading by cycles × NANDs as the stream puzzles are
+- ✅ Puzzle devices (c9f40bfd): Crossing, Maze robot and Vending machine, a world behind named pins as a third part kind (the sandbox's Devices group), its rules checked every clock, stars on NANDs against a reference circuit.. The CPU route (audit 2, 2026-11-10): a ready-wired RV32I computer with the device on its memory map (lw reads it, sw steps it), a reference program per device equal to the reference controller step for step, graded on cycles × NANDs as the stream puzzles are, its best kept apart from the circuit's
 - ✅ The campaign's RV16 program levels run on your own core (mockup approved 2026-11-10; campaign/owncore.ts): Run the
   tests on Golden model | Your core, the core levels passed with their NANDs and period; agrees (cycles, CPI, time in NAND
   delays beside the other cores, best per core kept, no star) or disagrees (the instruction lit, model vs core, Step to

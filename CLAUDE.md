@@ -1517,7 +1517,12 @@ src/puzzles/   program puzzles (the sandbox's Puzzles drawer; roadmap Phase 12).
                  devrefs.ts the reference circuits (Builder, equal to REFERENCE_CONTROLLERS step for step: tests/puzzle-devices),
                  the empty puzzle chip, a copy of a chip with the device; devpuzzles.ts DEVICE_PUZZLES, Check (runDevicePuzzle: no
                  halt part, until done / a fault / the step limit), stars on NANDs against the reference's (parNands);
-                 devreplay.ts the player; editor/devpuzzleui.ts the strip, the start dialog and the drawer's group
+                 devreplay.ts the player; editor/devpuzzleui.ts the strip, the start dialog and the drawer's group;
+                 devcpu.ts the CPU route: deviceComputerChip (rv32i_core + ROM + 64-word RAM, the device at 0x8000_0000: lw reads the
+                 sense pins packed from bit 0, sw to +4 drives them from the store data and is the world's step through en), DEVICE_PROGRAMS
+                 (each equal to REFERENCE_CONTROLLERS step for step), DEVICE_CPU_REFS (cycles / NANDs / words, pinned by
+                 tests/puzzle-devices-cpu.test.ts); a CPU (en) is graded by cycles × NANDs (deviceCpuStars) under cpuRecordId, a
+                 circuit on NANDs; devface shows an en device's last step, and the golden model sits out on a device (simHasPuzzlePorts)
 src/ui/        app shell, router, theme, settings, progress; menu.ts: the right-click menu's shell for every surface (MenuItem: label, key, hint, why = off for this reason in the row, the arrows stop on it, checked, sub = a group, a function when its code loads on demand; one menu at a time, every plain key while open, focus given back; flyouts, a bottom sheet with groups in place on a coarse pointer; showPicker, isMenuKey: the menu key and Shift+F10; editor/ctxmenu.ts and view/schematic.ts fill it; view/tracemenu.ts: the wire and part rows both share, view/netfacts.ts: a net's drivers and readers, its value exact at any width, DOM-free; editor/levelgate.ts: a level's chip hands out nothing but the learner's own; campaign/partindex.ts, loaded when Explain opens: a part's codex entry and chapter, gated on a level; Measure: probes (a ProbeTarget may name a net by path, look inside), sim/slack.ts through / pathThrough / netsOf: slack through any net and the path that sets it); pages/print.ts (PrintPage, its own chunk, #/c/<id>/print: the whole chapter as a book
                flow: goals, each step's title, address and prose (data-show / data-ahead dropped, details open, links absolute to SITE_URL), its figure with a
                numbered caption and a truth table, layers and analogies as asides (an analogy with a live figure: a note), questions with options and

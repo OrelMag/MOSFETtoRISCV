@@ -252,8 +252,9 @@ simulator, so whatever you build is a real component of the site. The full guide
 - **Programs on your own CPU**: a custom instruction set written as a table gives its own
   assembler and disassembler; <!--n:puzzles-->14<!--/n--> program puzzles run on the gates of a ready-made CPU or your own,
   scored on cycles, NANDs and program size. **Puzzle devices** (Crossing, Maze robot, Vending machine) put a
-  small world behind named pins: your circuit drives it, its rules are checked every clock, and stars count
-  NANDs against a reference circuit.
+  small world behind named pins: your circuit, or a program on a ready-wired RV32I computer, drives it, its
+  rules are checked every clock, and stars count NANDs against a reference circuit, or cycles × NANDs against a
+  reference program.
 - **Verilog chips**: write a module as text and Yosys, running in the page (WebAssembly, nothing
   uploaded), draws it from the library's gates beside the text a second after you stop typing;
   every module becomes a chip that opens down to NANDs and transistors. `.v` / `.sv` files and

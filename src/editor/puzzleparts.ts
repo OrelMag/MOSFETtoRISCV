@@ -12,6 +12,7 @@
 import type { ComponentDef } from '../sim/types';
 import type { Sim } from '../sim/sim';
 import type { HierNode } from '../sim/flatten';
+import { deviceOf } from './devparts';
 
 /** Widest puzzle port (packed behaviour values are exact to 53 bits; a CPU word is at most 32). */
 export const PUZZLE_MAX_WIDTH = 32;
@@ -145,17 +146,17 @@ export function puzzleLeaves(sim: Sim): { ins: PuzzleLeaf[]; outs: PuzzleLeaf[] 
   return r;
 }
 
-/** Does a hierarchy hold a puzzle port (in it or in any chip it places)? */
+/** Does a hierarchy hold a puzzle port or a puzzle device (in it or in any chip it places)? */
 export function hasPuzzlePorts(root: HierNode): boolean {
-  for (const c of root.children?.values() ?? []) if (puzzlePortOf(c.def) || hasPuzzlePorts(c)) return true;
+  for (const c of root.children?.values() ?? []) if (puzzlePortOf(c.def) || deviceOf(c.def) || hasPuzzlePorts(c)) return true;
   return false;
 }
 
 /**
- * Why a CPU drawer's golden model sits out on a puzzle chip: the program reads PUZZLE IN, which no golden
+ * Why a CPU drawer's golden model sits out on a puzzle chip: the program reads PUZZLE IN or a device, which no golden
  * model has, so the puzzle's tests check it instead (Check, the test player).
  */
-export const PUZZLE_NO_GOLDEN = 'a puzzle chip reads PUZZLE IN, which the golden model does not have: Check and the test player check it';
+export const PUZZLE_NO_GOLDEN = 'a puzzle chip reads PUZZLE IN or a puzzle device, which the golden model does not have: Check and the test player check it';
 
 /** Does a simulation hold a puzzle port (the monitors' golden models sit out)? */
 export const simHasPuzzlePorts = (sim: Sim | null): boolean => !!sim && hasPuzzlePorts(sim.design.root);
