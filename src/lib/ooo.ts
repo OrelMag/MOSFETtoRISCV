@@ -17,6 +17,7 @@ import { lowestOne, onehotMux } from './lanes';
 import { popcount } from './coding';
 import { nonZero } from './pipeline';
 import { laid } from './layered';
+import { type At, Placer, placedNets } from './placer';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -500,9 +501,65 @@ export function issueQueue(P: number, tw = TAG, Q = 8, S = 4): ComponentDef {
       summary: 'Where dispatched instructions wait for their operands. Each port picks, every cycle, the oldest entry bound to it that is ready and whose result will find its bus free; the result buses wake the waiting operands up. Dispatch fills the lowest free entries, two a cycle; an entry picked or flushed is free from the next cycle.',
       ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))), ...outs.map(([n, w]) => (w > 1 ? bus(n, w, 'out') : bit(n, 'out')))],
       symbol: { kind: 'box', label: 'ISSUE QUEUE' },
-      netlist: laid(b, { room: true, wires: { ...Object.fromEntries(['e0.ready', 'e2.ready', 'e3.ready', 'e5.ready', 'e6.ready', 'c0_0.y', 'c0_1.y', 'opA0m.y', 'opB0m.y', 'cl0.o0', 'any1.y', 'opA1m.y'].map((n) => [n, false])), 'e0.portQ': true } }),
+      netlist: () => iqDrawing(b, Q, chunks(P).length, ins, outs.map(([n]) => n)),
     });
   });
+}
+
+/**
+ * The issue queue drawn as it works: the free-entry logic in a band on top, the entries in two columns of rows, each with
+ * its own candidate logic beside it (bus free, divider free, ready, bound to port 0 or 1) and its class and payload taps;
+ * select, the grants and the per-port output multiplexers on the right. Wires inside a block, labels between blocks.
+ */
+function iqDrawing(b: Builder, Q: number, PC: number, ins: string[], outs: string[]) {
+  const P = new Placer(b.instances), raw = b.nets();
+  const top = P.cols('alloc', 10, 2, [['slot0', 'slot1'], ['valid'], ['free'], ['low0', 'nl0'], ['rest'], ['low1'], ['f0', 'f1', 'for1'], ['A0', 'A1'], ['a0s', 'a1s'], ['age']], 14, 4);
+  const DX = 12, ROWS = Math.ceil(Q / 2), ROWH = 54, Y0 = top.bottom + 12, CW = 72 + 6 * DX;
+  // an entry's outputs on its right: valid 15, ready 17, portQ 19, loadQ 21, divQ 23, lat2Q 25 (opA, opB, payQ below): the
+  // candidate chain runs left to right above them (bus free → not → or lat2 → divider mux → and ready → per port), each
+  // gate taking its entry signal from below
+  for (let e = 0; e < Q; e++) {
+    const g = `row${e}`, x = 24 + Math.floor(e / ROWS) * CW, y = Y0 + (e % ROWS) * ROWH, ex = x + 20, E = ex + 22;
+    P.put(g, `al${e}`, x, y - 2);
+    P.put(g, `in${e}`, x, y + 12);
+    P.put(g, `nf${e}`, ex - 6, y + 3);
+    P.put(g, `pk${e}`, x + 6, y + 40);
+    P.put(g, `e${e}`, ex, y);
+    P.put(g, `bn${e}`, E, y);
+    P.put(g, `nb${e}`, E + DX, y + 2);
+    P.put(g, `bo${e}`, E + 2 * DX, y + 1);
+    P.put(g, `ok${e}`, E + 3 * DX, y);
+    P.put(g, `c${e}`, E + 4 * DX, y + 14);
+    P.put(g, `np${e}`, E + 3 * DX, y + 22);
+    P.put(g, `c1_${e}`, E + 5 * DX, y + 14);
+    P.put(g, `c0_${e}`, E + 5 * DX, y + 20);
+    P.put(g, `w0_${e}`, E + 5 * DX, y + 1);
+    P.put(g, `w1_${e}`, E + 5 * DX, y + 7);
+  }
+  const xR = 24 + 2 * CW + 8;
+  const taps = (k: string) => Array.from({ length: Q }, (_, e) => `${k}${e}`);
+  // select and the grants; each port's class and payload taps (one per entry, by label) beside its multiplexers
+  const sel = P.cols('out', xR, Y0, [['cand0', 'cand1'], ['sel0', 'sel1'], ['gs0', 'gs1'], ['any0', 'any1', 'waiting0', 'waiting1'], ['cnt0c', 'cnt1c']], 16, 6);
+  const t0 = P.cols('taps', sel.right + 16, Y0, [taps('cls0_'), taps('cls1_')], 24, 10);
+  const m0 = P.cols('mux', t0.right + 30, Y0, [['opA0m', 'opB0m', 'cls0m', 'opA1m', 'opB1m', 'cls1m'], ['cl0', 'cl1']], 16, 6);
+  const t1 = P.cols('ptaps', m0.right + 16, Y0, [taps('ps0_'), taps('ps1_')], 24, 10);
+  P.cols('pmux', t1.right + 30, Y0, [Array.from({ length: PC }, (_, k) => `pay0m${k}`), ['pay0j'], Array.from({ length: PC }, (_, k) => `pay1m${k}`), ['pay1j']], 16, 6);
+  for (const i of b.instances) {
+    const p = P.at.get(i.name);
+    if (!p) throw new Error(`issue queue: no place for ${i.name}`);
+    i.at = p;
+  }
+  const right = Math.max(...b.instances.map((i) => P.right(i.name))) + 20;
+  const pins: Record<string, At> = {};
+  ins.forEach((n, i) => (pins[n] = [0, Y0 + 2 * i]));
+  outs.forEach((n, i) => (pins[n] = [right, Y0 + 2 * i]));
+  // a fan-out within one row or block, every sink to the right of its driver, is wired too
+  const wired = new Set<string>(), instOf = (e: string) => (e.includes('.') ? e.slice(0, e.indexOf('.')) : '');
+  for (const nt of raw) {
+    const d = instOf(nt.ends[0]), sinks = nt.ends.slice(1);
+    if (d && d !== 'free' && sinks.length > 1 && sinks.every((t) => { const si = instOf(t); return si && P.group.get(si) === P.group.get(d) && P.x(si) >= P.right(d); })) for (const t of sinks) wired.add(`${nt.ends[0]}>${t}`);
+  }
+  return { pins, instances: b.instances, nets: placedNets(P, raw, { wired }) as NetDef[] };
 }
 
 /** n inverters side by side. */
@@ -636,7 +693,7 @@ export function reorderBuffer(D: number, V: number, N = 16): ComponentDef {
   const id = `rob${N}_${D}_${V}`, k = sizeBits(N);
   if (N < 8) throw new Error('reorder buffer: 8 entries or more');
   return memo(id, () => {
-    const W = 1 + D + V, C = robCell(D, V), R = register(W), DEC = decoder(k, true, 10);
+    const W = 1 + D + V, C = robCell(D, V), R = register(W), DEC = decoder(k, true, 2);
     const b = new Builder(18, 24, 4);
     const ins = ['a0', 'a1', 'dd0', 'dd1', 'dn0', 'dn1', 'dv0', 'dv1', 'bw0', 'btag0', 'bv0', 'bw1', 'btag1', 'bv1', 'ce0', 'ce1', 'flush', 'rtag0', 'rtag1', 'rtag2', 'rtag3', 'clk'];
     b.pins(...ins);
