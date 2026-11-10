@@ -59,7 +59,13 @@ export function loadable(img: RvImage, minImemK = 6, minDmemK = 5): Loadable {
   if ((first & 0xfff) !== 0x06f) throw new Error(`${img.name}: word 0 is not a jal x0`);
   const start = text.length, back = jalTarget(first, 0);
   const loader: number[] = [lui(T1, img.dataBase >>> 12)];
-  img.data.forEach((w, i) => { if (w) loader.push(...li(T0, w), sw(T0, T1, 4 * i)); });
+  // sw's offset is a 12-bit signed immediate: past 2 KB of data, T1 moves on to the word being written
+  let base = 0;
+  img.data.forEach((w, i) => {
+    if (!w) return;
+    if (4 * i - base > 2047) { base = 4 * i; loader.push(...li(T1, img.dataBase + base)); }
+    loader.push(...li(T0, w), sw(T0, T1, 4 * i - base));
+  });
   loader.push(addi(T0, 0, 0), addi(T1, 0, 0));
   loader.push(jal(0, back - 4 * (start + loader.length)));
   text[0] = jal(0, 4 * start);

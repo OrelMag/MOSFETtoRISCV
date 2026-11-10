@@ -31,6 +31,7 @@
 import { DualSim } from '../sim/dualsim';
 import { type FlatDesign, flatten } from '../sim/flatten';
 import { applyFaults, type FlatFault, seenNets } from '../sim/faults';
+import { type ChipLookup, chipFaults, faultsKeyOf } from './chipfaults';
 import type { PowerOnMode, Sim } from '../sim/sim';
 import { shortText, SwitchSim, WEAK_H, weakTag } from '../sim/switchsim';
 import { B1, type Bit, BZ, type ComponentDef, netlistOf } from '../sim/types';
@@ -281,10 +282,11 @@ export class EditorSim {
   }
 
   /** Take the latest compile of the chip (on every edit). */
-  update(c: Compiled, pins: PinDoc[], doc?: ChipDoc): void {
+  update(c: Compiled, pins: PinDoc[], doc?: ChipDoc, placed?: { look: ChipLookup; deps: string[] }): void {
     this.latest = c;
     this.pins = pins;
     this.doc = doc ?? null;
+    this.placed = placed ?? null;
     const key = this.keyOf(c);
     if (key === this.key) {
       if (this.timer) { clearTimeout(this.timer); this.timer = null; }
@@ -310,7 +312,8 @@ export class EditorSim {
   /** simKey, and the faults that are on (a fault switched on or off rebuilds, its state carried). */
   private keyOf(c: Compiled): string {
     const on = this.doc?.faults?.filter((f) => !f.off) ?? [];
-    const k0 = on.length ? `${simKey(c)}|faults:${JSON.stringify(on)}` : simKey(c);
+    const below = this.doc && this.placed ? faultsKeyOf(this.doc.id, this.placed.deps, this.placed.look, false) : '';
+    const k0 = (on.length ? `${simKey(c)}|faults:${JSON.stringify(on)}` : simKey(c)) + (below ? `|placed:${below}` : '');
     // the unit model's key is as it always was; the load model rebuilds (gate level only: switch level has no gate time)
     const k = c.mode === 'gate' && this.delayModel() === 'load' ? `${k0}|delay:load` : k0;
     return this.hidden ? `${k}|hidden:${this.hidden.key}` : k;
@@ -327,11 +330,23 @@ export class EditorSim {
     if (this.latest) this.update(this.latest, this.pins, this.doc ?? undefined);
   }
 
-  /** The chip's faults that are on, on the flat nets of `d` (gate level only), applied. */
+  /** The chips this one places and where their documents are: their switched-on faults travel into this simulation. */
+  private placed: { look: ChipLookup; deps: string[] } | null = null;
+
+  /** The chip's faults that are on, and those of the chips it places, on the flat nets of `d` (gate level only), applied. */
   private withFaults(c: Compiled, d: FlatDesign): FlatDesign {
     const st: FaultState = { applied: new Map(), stale: new Set(), problems: [] };
     this.faults = st;
     if (this.hidden && c.mode === 'gate') d = applyFaults(d, this.hidden.at(d.root)).design;
+    // a placed chip's own faults (its fault list, on its own canvas, says what they are; here they only act)
+    if (this.placed && this.doc && c.mode === 'gate' && faultsKeyOf(this.doc.id, this.placed.deps, this.placed.look, false)) {
+      const below = chipFaults(d.root, this.placed.look, false);
+      if (below.length) {
+        const out = applyFaults(d, below);
+        st.problems.push(...out.problems.map((p) => `a placed chip's fault: ${p}`));
+        d = out.design;
+      }
+    }
     const doc = this.doc, on = doc?.faults?.filter((f) => !f.off) ?? [];
     if (!doc || !on.length) return d;
     if (c.mode !== 'gate') {
@@ -377,7 +392,8 @@ export class EditorSim {
       if (clocked && !this.clocked) this.autoTried = false;
       this.clocked = clocked;
       this.sim = sim;
-      this.haltNets = haltNets(sim.design.root);
+      // as a stuck-at fault leaves them read (sim/faults.ts seenNets): a halt line stuck at 0 never halts
+      this.haltNets = seenNets(sim.design, haltNets(sim.design.root));
       this.buildDiags = [];
     } catch (e) {
       const ds = checkSimulatable(c);

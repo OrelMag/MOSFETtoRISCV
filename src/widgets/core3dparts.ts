@@ -293,7 +293,7 @@ export function coreAnchors(narrow = false, threeWire = false): Anchor[] {
     { text: threeWire ? 'sense + inhibit wire' : 'sense wire (diagonal)', p: [(S[2][0] + S[3][0]) / 2, S[2][1], (S[2][2] + S[3][2]) / 2], side: 'r', n: up },
     ...(threeWire ? [] : [{ text: 'inhibit wire', p: [DRIVER - 6, (CY + OFF.xi[1]), rowZ(0)] as Vec3, side: 'r' as const, n: up }]),
     { text: 'sense amplifier', p: [SENSE_AMP[0], 5, SENSE_AMP[2]], side: 'r', n: up },
-    { text: '15 more planes, one per bit: same X and Y', p: [-DRIVER, STACK_DY, DRIVER], side: 'l', n: up },
+    { text: '16 more planes (15 bits, parity): same X and Y', p: [-DRIVER, STACK_DY, DRIVER], side: 'l', n: up },
   ];
 }
 

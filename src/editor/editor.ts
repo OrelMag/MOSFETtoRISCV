@@ -7,6 +7,7 @@
 // or volatile() (open tabs, input values: saved, never undone). refresh() then brings the
 // library, view, simulation and panels up to date; during a drag it runs once per frame.
 
+import { lookOf } from './chipfaults';
 import { setPageTitle } from '../ui/pagetitle';
 import { setUserResolver } from '../lib/resolve';
 import { bodyKey, isGenerated } from './hdl';
@@ -695,7 +696,7 @@ export class Editor {
       this.simChip = id;
       this.buildControls();
     }
-    this.sim.update(this.compiled, doc.pins, doc);
+    this.sim.update(this.compiled, doc.pins, doc, { look: lookOf(this.ws, this.lib), deps: this.lib.deps(doc.id) });
     this.view.setDiags(this.diags);
     this.repaint();
     this.renderTabs();

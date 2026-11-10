@@ -200,7 +200,10 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink; vmLi
 
     const status = holdHeight(h('div', { class: 'cpu-status' }));
     // On a halt, in words: how long it ran, and the answer when the program names its register (Program.result).
-    const haltLine = h('div', { class: 'cpu-halt', role: 'status', hidden: true });
+    // Its place is kept from the start (the slot below the status): before the halt it holds the longest such line, unseen,
+    // so the halt adds no height and moves nothing below it (the listing, the panels under the CPU panel).
+    const haltLine = h('div', { class: 'cpu-halt', role: 'status' });
+    let haltShown = '';
     // PC breakpoints (a click on a line's gutter, kept while the scene is open): Run to halt, Slow and the stage's Run stop
     // after the edge on which the golden model retires that instruction
     const bps = new Set<number>();
@@ -358,7 +361,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink; vmLi
     const body = h('div', { class: 'cpu-body' },
       h('div', { class: 'param-row', style: 'margin-bottom:6px' }, ...(opts.extraPanels?.length ? [] : [sel, editBtn]), runBtn),
       slowCtl.el,
-      editWrap, hwNote, status, haltLine, bpLine, now,
+      editWrap, hwNote, status, holdHeight(h('div', { class: 'cpu-halt-slot' }, haltLine, bpLine)), now,
       h('div', { class: 'cpu-sec' }, 'Program', h('span', { class: 'cpu-sec-hint' }, 'click a line: its hardware')), listing, usePath,
       h('div', { class: 'cpu-sec' }, 'Fields', h('span', { class: 'cpu-sec-hint' }, 'point at a field: its wires')), fieldsBox,
       ...(narrKind ? [h('div', { class: 'cpu-sec' }, 'Narrate', h('span', { class: 'cpu-sec-hint' }, narrKind === 'cycle' ? 'this cycle, stage by stage' : 'the last instruction, unit by unit')), narrBox] : []),
@@ -498,12 +501,20 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink; vmLi
       // always in the line, hidden until it applies: appearing at the halt it wrapped the line and moved every panel below
       parts.push(h('span', { class: 'warn', style: halted ? null : 'visibility:hidden', 'aria-hidden': halted ? null : 'true' }, 'halted'));
       status.replaceChildren(...parts);
-      haltLine.hidden = !halted || !!mismatch;
-      if (halted && !mismatch) {
-        const res = match?.result, r = res ? regNumber(res.reg) : null;
-        haltLine.replaceChildren(`Halted after ${groupDigits(iss.steps)} instruction${iss.steps === 1 ? '' : 's'}`,
-          multiCycle ? ` (${groupDigits(stage.cycles)} cycles)` : '',
-          res && r !== null ? h('span', { title: `The program leaves its answer in ${res.reg}` }, ' · result ', h('b', null, `${res.reg} = ${st.x[r] | 0}`), ` (${hex(st.x[r])})`) : '');
+      // the breakpoint's line takes the slot while it shows; otherwise the halt line, or its unseen stand-in: the most
+      // instructions and cycles a Run to halt goes to (20 000) and the widest result
+      const real = halted && !mismatch;
+      haltLine.hidden = !bpLine.hidden && !real;
+      const res = match?.result, r = res ? regNumber(res.reg) : null;
+      const steps = real ? iss.steps : 20000, cycles = real ? stage.cycles : 20000, val = real && r !== null ? st.x[r] : 0x80000000;
+      const hk = `${real}|${steps}|${cycles}|${res?.reg}|${val}`;
+      if (hk !== haltShown) {
+        haltShown = hk;
+        haltLine.style.visibility = real ? '' : 'hidden';
+        haltLine.toggleAttribute('aria-hidden', !real);
+        haltLine.replaceChildren(`Halted after ${groupDigits(steps)} instruction${steps === 1 ? '' : 's'}`,
+          multiCycle ? ` (${groupDigits(cycles)} cycles)` : '',
+          res && r !== null ? h('span', { title: `The program leaves its answer in ${res.reg}` }, ' · result ', h('b', null, `${res.reg} = ${val | 0}`), ` (${hex(val)})`) : '');
       }
       if (narrKind === 'cycle' && !stage.inEdge) {
         const p = pipeSnap(sim, sim.design.root, stage.cycles);

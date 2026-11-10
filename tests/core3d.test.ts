@@ -243,7 +243,7 @@ describe('real-plane details', () => {
     const ps = coreParts(pose(), PAL), ghosts = ps.filter((p) => ((p.color as number[])[3] ?? 1) < 1);
     expect(ghosts.length).toBe(17);
     expect(STACK_DY).toBeLessThan(-20);
-    expect(coreAnchors().some((a) => /15 more planes/.test(a.text))).toBe(true);
+    expect(coreAnchors().some((a) => /16 more planes/.test(a.text))).toBe(true);
   });
 
   it('a phone gets two labels', () => {
