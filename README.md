@@ -17,6 +17,10 @@ sky130 layouts, whose reports stand beside the site's own area and timing estima
 both ways: any circuit exports as Verilog, and Verilog written in the sandbox is synthesized by Yosys
 in the page into chips that open down to the transistors like everything else.
 
+The default look draws **working gates**: every NAND shows its four CMOS transistors inside its outline,
+switching on and off with the live values, so even a CPU-sized drawing still says what each gate is made of.
+The View options menu turns it off, and sets the palette, wire thickness, grid, labels and flowing bits.
+
 Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journey-->89<!--/n--> chapters,
 <!--n:onramps-->2<!--/n--> on-ramps for newcomers, <!--n:prologue-->3<!--/n--> prologue chapters and <!--n:appendices-->6<!--/n--> appendices), the **[campaign](https://switchtocpu.com/#/campaign)**
 (<!--n:levels-->177<!--/n--> levels: build it to unlock it, or fix it), the **[workbench](https://switchtocpu.com/#/workbench/rca4)**
@@ -147,6 +151,14 @@ review queue; one backup file carries all progress; the site installs as an app 
 <td><img src="docs/images/m6502.png" alt="The 6502 at transistor level running a program, its bus cycles listed"><br><sub><b>Appendix A</b>: a 4,513-transistor NMOS 6502, every bus cycle in lock-step with a cycle-exact model.</sub></td>
 <td><img src="docs/images/doom.png" alt="Doom running on the site's RV32IM with a live profile and instruction mix"><br><sub><b>Appendix B</b>: Doom compiled for RV32IM, with a live profile and instruction mix, and what each frame would cost on the gates.</sub></td>
 </tr>
+<tr>
+<td><img src="docs/images/baby.png" alt="The Manchester Baby in gates, its Williams-tube store shown as dots and dashes beside the datapath"><br><sub><b>Appendix E</b>: the Manchester Baby of 1948 in gates, its Williams-tube store leaking unless regenerated, in lock step with its model.</sub></td>
+<td><img src="docs/images/agc.png" alt="A core-rope module of the Apollo Guidance Computer in 3D, sense wires threaded through or around the cores"><br><sub><b>Appendix F</b>: the Apollo Guidance Computer's core rope in 3D: a program woven into wire, read core by core.</sub></td>
+</tr>
+<tr>
+<td><img src="docs/images/workinggates.png" alt="An XOR from four NAND gates, each drawn with its live CMOS transistors inside"><br><sub><b>Ch. <!--n:ch.gates-->4<!--/n--></b>: working gates, the default look: each NAND drawn as its live transistors inside its outline.</sub></td>
+<td><img src="docs/images/pdp8.png" alt="The PDP-8 in gates in the sandbox, with its front panel lamps and switches in the CPU drawer"><br><sub><b>Sandbox</b>: Examples ▸ PDP-8 in gates, its 1965 front panel of lamps and switches in the CPU drawer, a teleprinter on the bus.</sub></td>
+</tr>
 </table>
 
 Every CPU has a **CPU panel**: the program with the current instruction (click a line to light up
@@ -220,7 +232,7 @@ simulator, so whatever you build is a real component of the site. The full guide
   to any depth and edit them later: every user of the chip is rebuilt. A face editor puts pins on
   any side and the chip's displays, screens and switches on its box; chips go in folders, circuits
   in separate projects, favourites on keys 1–9.
-- **Wire colours**: right-click a wire for a colour for its whole net (or Auto, one hue per net); the View options menu sets the palette, thickness and flowing bits.
+- **Wire colours**: right-click a wire for a colour for its whole net (or Auto, one hue per net); the View options menu sets the palette, thickness, flowing bits and working gates (each NAND's live transistors inside it).
 - **Look inside** any placed part, live, down to the transistors; **Open in Sandbox** turns any
   schematic from the chapters or the workbench, CPUs included, into an editable copy.
 - Switch-level parts beyond the MOSFET: resistors, pull-ups / pull-downs, capacitors, transmission
