@@ -1357,7 +1357,7 @@ Proposed, kept for later (the author's choice, 2026-11-09; each needs a plan and
 - ⏳ Power: dynamic and static power, clock gating, voltage and frequency scaling, measured with sim/power.ts
 - ⏳ Side channels: Spectre on our out-of-order core and its cache, after chapters 22 and 26
 - ⏳ From netlist to FPGA: look-up tables, our design mapped onto the Tang Nano (the FPGA export exists, no chapter explains it)
-- ⏳ Vectors (RVV) as a bridge from multicore into the GPU chapters
+- ✅ Vectors (RVV), between Power and Lanes (docs/PLAN-RVV.md): riscv/rvv.ts and ISS({ v }) checked against Spike; lib/vector.ts, a four-lane unit with beats, banked memory and a v0 copy, on the single-cycle CPU (`sc-v`, riscv-tests and fuzz); chapters/ch-vectors.ts, eleven steps (strip-mining, LMUL, the unit in gates, masks, reductions, chaining as a timing model, the kernel on four machines, all measured: bench/vectorcosts.json); five codex entries
 - ⏳ Break-it steps: one planted fault per core chapter, once the fault brush ships
 - ✅ A worked example and a common-mistakes aside in the densest chapters (pipelining, traps, caches, floating point): folded asides, numbers pinned by tests/worked-examples.test.ts
 

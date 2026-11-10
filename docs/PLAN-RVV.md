@@ -28,6 +28,19 @@ Stage 2 (gates, branch feat/rvv-gates):
   lane-0 word); the verify row `sc-v` is in EXTRA_CPUS (riscv-tests + fuzz, tests/verify-vector.test.ts) until stage 3,
   because a CPUS row needs a chapter for the Benchmarks tab and a results.json run.
 
+Stage 3 (the chapter, branch feat/ch-vectors):
+- `chapters/ch-vectors.ts` (between power and lanes): eleven steps, recap and quizzes. Scenes are `cpuScene({ vector: true })` with the
+  Vector panel (vl, vtype, the beat, registers by lane); programs in `riscv/vecprograms.ts`.
+- `riscv/vecmodel.ts`: vecRun (the golden model with each instruction's beats, equal to the gates' cycles on every program the chapter
+  runs) and chainTimes (one at a time / separate units / chained: a timing model, not gates).
+- `bench/vectorcosts.ts` → vectorcosts.json (scripts/vector-costs.ts --write): the kernel on the scalar CPU, four cores, the vector CPU and
+  the lane core, NANDs without ROMs, periods and cycles; tests/vectors-chapter.test.ts recomputes it.
+- Widgets (`widgets/vectors.ts`, styles/vectors.css): the kernel's roles, the SIMD tail, strip-mining at three VLENs, the register file
+  by SEW / LMUL with a lane picker on a phone, chaining, the four machines.
+- Codex (campaign/codexvec.ts, codexmorevec.ts, codexcheckvec.ts): vlen, stripmine, lmul, vmask, chaining; `simd` is now taught here.
+- lanes: builds on vectors, points back in "Latency or throughput", and "Lanes against cores" draws the vector CPU as a third bar;
+  simt's active mask is set against v0.
+
 Mockup: `E:/mockups/rvv/index.html` (three steps,
 light and dark; screenshots `light.png`, `dark.png`, `phone-light.png`, `phone-dark.png` beside it).
 
@@ -208,10 +221,10 @@ pitfall of writing LMUL m8 everywhere (register pressure: 4 register groups left
 | v0 shadow, beat counter, vl / vtype, decode, bank muxes | ≈ 5 000 | estimated in the plan |
 | **CPU + vector unit** | **≈ 158 000** | estimated in the plan |
 | One lane as built (`VEC_LANE`: slice + lane ALU + write mux) | 27 310 | measured (stage 2) |
-| `VEC_DECODE` / `VEC_CFG` / `VEC_SEQ` / `VEC_ACC` / `V0_SHADOW` | 2 163 / 1 852 / 831 / 2 491 / 495 | measured (stage 2) |
-| `VECTOR_UNIT` | 117 211 | measured (stage 2) |
+| `VEC_DECODE` / `VEC_CFG` / `VEC_SEQ` / `VEC_ACC` / `V0_SHADOW` | 2 174 / 1 852 / 831 / 2 491 / 495 | measured (stage 2) |
+| `VECTOR_UNIT` | 117 222 | measured (stage 2) |
 | `vecMemory(6)` against `dataMemory(6)` | 43 189 against 39 558 | measured (stage 2): +3 631 for the banks |
-| **CPU + vector unit, ROM left out** (dmemK 5) | **169 490** | measured (stage 2): +121 056 over the scalar CPU, 7 % over the estimate; period 191 against 155 |
+| **CPU + vector unit, ROM left out** (dmemK 5) | **169 501** | measured (stage 2, after the vsetvl decoder fix): +121 067 over the scalar CPU, 7 % over the estimate; period 191 against 155 |
 | `laneCore(…, 4)` (ROM left out) | 140 979 | measured; 92 545 over the scalar CPU |
 | `simtControl(4)` + `simtDecode(4)` | 3 630 + 544 | measured: the lane core's control, to compare with VEC_CTL |
 

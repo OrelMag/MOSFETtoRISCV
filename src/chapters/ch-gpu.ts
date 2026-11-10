@@ -29,7 +29,7 @@ export const chLanes: Chapter = {
     'count the cycles of a load or store on one memory port: one per active lane',
     'explain why four lanes save under a fifth of the gates of four cores here, most of it program ROMs, and run saxpy slower',
   ],
-  builds: ['cpu', 'multicore'],
+  builds: ['cpu', 'multicore', 'vectors'],
   recap: {
     keep: [
       'A lane core is one PC, one program ROM, one control unit and N lanes, each a 31 × 32-bit register file, SrcA / SrcB multiplexers, an ALU and a result multiplexer. Every lane gets the same fields, control signals and immediate.',
@@ -75,6 +75,9 @@ export const chLanes: Chapter = {
         and the programmer can write an ordinary scalar program per element, a <em>thread</em>; the N threads stepping together form a <em>warp</em>. NVIDIA
         calls this SIMT (single instruction, multiple threads). Its warps are 32 threads, issued over 16 or 32 lanes depending on the unit (one instruction
         then takes two cycles or one); AMD's wavefronts are 32 or 64 threads. Ours has 4 threads on 4 lanes.</p>
+        <p><a href="#/c/vectors/0">Chapter ${numOf('vectors')}</a> shared the instruction stream another way: a vector unit beside the scalar core, four lanes behind it, and the
+        program naming whole vectors (<code>vadd.vv</code> over vl elements, with an explicit mask in v0). Here there are no vector instructions at all: each lane runs the
+        scalar program for its own element, and the hardware, not the program, keeps the mask.</p>
         <p>Why sharing the instruction stream pays: fetching, decoding and controlling an instruction costs the same gates whether one datapath uses the result
         or sixteen do, so the more identical work there is, the less each result carries of that overhead. It stops paying when the threads need different
         instructions, and the rest of this track is about what that costs and how real GPUs keep the lanes busy anyway.</p>`,
@@ -212,8 +215,9 @@ export const chLanes: Chapter = {
     {
       title: 'Lanes against cores',
       body: `
-        <p>The same work on <a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>'s cores, four of them, each finding its index with <code>csrr mhartid</code>, against the lane core. Both bars are counted
-        from the actual designs, and both cycle counts come from the instruction-set simulators, which the gate-level circuits match cycle for cycle.</p>
+        <p>The same work on <a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>'s cores, four of them, each finding its index with <code>csrr mhartid</code>, against the lane core, and
+        below them <a href="#/c/vectors/9">chapter ${numOf('vectors')}</a>'s core with its vector unit. Every bar is counted from the actual designs, and every cycle count comes from the
+        golden models, which the gate-level circuits match cycle for cycle.</p>
         <p>The lanes save the front end three times over, yet only 18 % of the gates, and most of that is program ROM: four cores read four copies of the
         program, the lanes one, and 24 192 of the 32 670 NANDs saved are those three ROMs. Leave the ROMs out of both and the lanes save 6 %: a lane is mostly
         its register file (23 141 of its 27 584 NANDs, flip-flops and multiplexers), and the PC, decoder and control they share are small beside it. And they are slower on saxpy, because a load or store stops all four lanes, while a core that waits for the memory port lets
@@ -289,7 +293,9 @@ export const chSimt: Chapter = {
         what the idle lanes cost.</p>
         <p>Each lane has one bit in the <span data-show="simt"><strong>active mask</strong></span>. A lane whose bit is 0 still sees every instruction, but its
         <span data-show="weg">register write enable</span> is off and the <span data-show="mseq">memory sequencer</span> skips it. The mask register stores the
-        mask inverted, so at power-on, with every flip-flop at 0, all lanes are active.</p>
+        mask inverted, so at power-on, with every flip-flop at 0, all lanes are active. <a href="#/c/vectors/6">Chapter ${numOf('vectors')}</a>'s vector unit had a mask too,
+        in v0, but there the program computed it with a compare and named it in each instruction; here it belongs to the hardware, set by <code>tmc</code> and, later in this
+        chapter, by <code>split</code> and <code>join</code> around a branch.</p>
         <p><code>tmc rs1</code> (thread mask control) loads the mask from the <span data-show="lA">leader's rs1</span>. Here every lane stores a value, then <code>tmc</code> with 1 leaves lane 0
         alone to add them up, and <code>tmc</code> with −1 brings the others back. While lane 0 works alone the other three idle: 45 % of the lane-steps do work in
         this kernel.</p>
