@@ -35,7 +35,7 @@ environment, with the source revision and toolchain), so `npm test` needs no RIS
   for rv32uc (the C extension; built `rv32g`, the test turns on `.option rvc` itself), built in CI by
   `.github/workflows/rvc-tests.yml` with the pinned xPack. Its one test, `rvc`, keeps a doubleword in its code and
   loads and stores it, so the image records those words (`mirror`) and the loader also stores them into the data
-  memory at their address. The RV32IC core (`sc-c`) runs it at gate level (`tests/verify-c.test.ts`).
+  memory at their address. The RV32IC cores (`sc-c` and the pipelined `pipe-c`) run it at gate level (`tests/verify-c.test.ts`, `tests/verify-pipe-c.test.ts`).
 - **Harvard memory.** Code is linked at 0 (the ROM), data at `0x10000`, which is word 0 of any data
   memory up to 16 K words (it wraps), with `tohost` first. Our CPUs have no loader, so the image gets a
   few instructions appended (`lui` / `addi` / `sw` per non-zero data word, encoded by hand rather than by
