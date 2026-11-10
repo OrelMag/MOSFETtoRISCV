@@ -107,6 +107,26 @@ describe('Appendix F: the one\'s-complement adder and the 4-bit register in NOR3
     c.set({ cc: 1 }); c.set({ cc: 0 });
     expect(word(c, 's')).toBe(15);
   });
+  it('the chapter\'s try, one switch at a time: from 0111 + 0001, b1 and b3 on, a1 off, b0 off last shows 0000; a cc pulse gives 1111, whatever the order', () => {
+    const start = { ...put('a', 0b0111), ...put('b', 0b0001), cc: 0 };
+    const c = sim(NOR_ADD4);
+    c.set(start);
+    expect(word(c, 's')).toBe(0b1000);
+    for (const [k, v] of [['b1', 1], ['b3', 1], ['a1', 0], ['b0', 0]] as const) c.set({ [k]: v });
+    expect(word(c, 's')).toBe(0);
+    c.set({ cc: 1 }); c.set({ cc: 0 });
+    expect(word(c, 's')).toBe(15);
+    // every order of the four flips: before the clear the ring may hold anything (carries, or X), after it the sum is −0
+    const flips = [['a1', 0], ['b0', 0], ['b1', 1], ['b3', 1]] as const;
+    const perms = <T,>(xs: readonly T[]): T[][] => (xs.length ? xs.flatMap((x, i) => perms([...xs.slice(0, i), ...xs.slice(i + 1)]).map((p) => [x, ...p])) : [[]]);
+    for (const order of perms(flips)) {
+      const d = sim(NOR_ADD4);
+      d.set(start);
+      for (const [k, v] of order) d.set({ [k]: v });
+      d.set({ cc: 1 }); d.set({ cc: 0 });
+      expect(word(d, 's'), order.map(([k]) => k).join(' ')).toBe(15);
+    }
+  });
   it('the 4-bit register takes d at a rising edge while en = 1; counts 38 and 60 gates', () => {
     const c = sim(NOR_REG4);
     c.set({ ...put('d', 0), en: 1, clk: 0 }); c.set({ clk: 1 });

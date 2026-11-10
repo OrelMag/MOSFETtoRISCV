@@ -1,8 +1,8 @@
 // Appendix F: the Apollo Guidance Computer (Block II), from its one gate up: the RTL NOR3 (lib/agcnor.ts), an adder
 // and a register built of nothing else, the one's-complement end-around carry, core rope (agc/rope.ts, the weave widget,
 // the rope model) and the instruction set on the golden model (agc/iss.ts, checked against yaAGC in CI:
-// scripts/agc/oracle.ts). Sources: R-700 vol. III, E. C. Hall, "MIT's Role in Project Apollo: The Apollo Guidance
-// Computer" (MIT Charles Stark Draper Laboratory, 1972), cited by printed page; K. Shirriff, "Software woven into wire"
+// scripts/agc/oracle.ts). Sources: R-700, E. C. Hall, "MIT's Role in Project Apollo", vol. III, "Computer Subsystem"
+// (Charles Stark Draper Laboratory, August 1972), cited by printed page; K. Shirriff, "Software woven into wire"
 // (righto.com, 2019) for the rope's cores.
 
 import { assembleAgc } from '../agc/asm';
@@ -95,8 +95,8 @@ export const chAppendixAgc: Chapter = {
       scene: () => ({ root: NOR3_RTL, inputs: { a: 0, b: 0, c: 0 } }),
       tries: [(st) => st.value('y') === 0],
       more: {
-        real: `<p>Sources: R-700 vol. III (E. C. Hall, <i>MIT's Role in Project Apollo: The Apollo Guidance Computer</i>, MIT
-          Charles Stark Draper Laboratory, 1972), cited by printed page; MIT drawing 2005011 (Schematic, Dual NOR Gate, 1965)
+        real: `<p>Sources: R-700, E. C. Hall, <i>MIT's Role in Project Apollo</i>, vol. III, <i>Computer Subsystem</i> (Charles
+          Stark Draper Laboratory, August 1972), cited by printed page; MIT drawing 2005011 (Schematic, Dual NOR Gate, 1965)
           for the gate; K. Shirriff's study of a Block II rope (righto.com, 2019) for the rope's cores; Virtual AGC's yaAGC,
           against which the golden model of the last step is checked instruction by instruction.</p>`,
       },
@@ -155,11 +155,12 @@ export const chAppendixAgc: Chapter = {
         good. So the ring runs through a <span data-show="g_eacin">gate</span> with a <strong>carry clear</strong>,
         <code>cc</code>: hold it at 1 while the operands change, so no stray carry survives, then let it go. A carry that
         is really generated still comes round; a + ¬a stays −0.</p>
-        <p>The AGC had the same problem. R-700 (p. 69): "One of the requirements for the control pulse sequence for Block II
-        division is for the removal of carry propagations in the adder", and "logic is therefore furnished to suppress
-        every fourth existing carry at the appropriate time" (every fourth, because the carry skip spans four bits).</p>
-        <div class="try">With cc at 0, set a to 0111 and b to 0001, then change them to 0101 and 1010: s shows 0000. Now
-        pulse cc to 1 and back: s becomes 1111.</div>`,
+        <p>R-700 records a related need in the real adder (p. 69): "One of the requirements for the control pulse sequence
+        for Block II division is for the removal of carry propagations in the adder", and "logic is therefore furnished to
+        suppress every fourth existing carry at the appropriate time".</p>
+        <div class="try">The adder starts at 0111 + 0001 = 1000, every carry a 1. Turn on b1 and b3, turn off a1, and last
+        turn off b0: a is now 0101 and b 1010, and s shows 0000, the +0 the ring held on to. Pulse cc to 1 and back: s
+        becomes 1111.</div>`,
       scene: () => ({ root: NOR_ADD4, inputs: { a0: 1, a1: 1, a2: 1, a3: 0, b0: 1, b1: 0, b2: 0, b3: 0, cc: 0 } }),
       challenge: {
         kind: 'quiz',
@@ -211,8 +212,9 @@ export const chAppendixAgc: Chapter = {
         cancels the switching current. ${BLOCK2_ROPE.modules} modules held the ${BLOCK2_ROPE.words.toLocaleString('en-US')}
         words, ${BLOCK2_ROPE.wordsPerModule.toLocaleString('en-US')} each, which makes ${BLOCK2_ROPE.coresPerModule} cores a
         module.</p>
-        <p>The cores are not the ferrite rings of chapter ${numOf('memory')}'s core memory (the AGC's erasable memory was
-        that kind). A rope core is a winding of permalloy ribbon on a steel bobbin (Shirriff 2019). Rope is dense, about 1,500
+        <p>The cores are not the ferrite rings of chapter ${numOf('memory')}'s core memory. R-700's parts count (Table
+        7-VIII, p. 266) lists 32,768 ferrite cores, 2,048 erasable words of 16 bits, and 3,072 tape-wound ones, six modules
+        of 512: a rope core is a winding of permalloy ribbon on a steel bobbin (Shirriff 2019). Rope is dense, about 1,500
         bits per cubic inch with its electronics (R-700), and it cannot be changed by a program: a new program is a new rope,
         woven by machine from a punched tape (R-700 p. 165) and plugged in from outside the sealed case.</p>
         <div class="try">Read a few words, then click a crossing to thread or unthread it and read the word again.</div>`,
