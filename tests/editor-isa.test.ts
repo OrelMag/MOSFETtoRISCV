@@ -108,7 +108,7 @@ describe('storage', () => {
     expect(back.isas).toEqual(ws.isas);
     expect(romOf(back, id)).toEqual(romOf(ws, id));
     const bad = JSON.parse(JSON.stringify(ws));
-    bad.isas.junk = { id: 'junk', name: 'x', wordBits: 12, operands: {}, instrs: [] };
+    bad.isas.junk = { id: 'junk', name: 'x', wordBits: 10, operands: {}, instrs: [] };
     expect(Object.keys((migrate(bad) as Workspace).isas!)).toEqual([isa.id]);
     expect(sanitizeIsa({ ...isa, operands: { r: { kind: 'nope' } } })).toBeNull();
     expect(sanitizeIsa(isa)).toEqual(isa);
