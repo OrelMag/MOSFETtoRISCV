@@ -32,7 +32,7 @@ export const chPython: Chapter = {
     'follow a Python line to its RV32I instructions, their machine words and the fields the decoder reads',
     'say where a compiler keeps variables (registers, data memory, the stack) and what an expression needs',
     'price a line in clock cycles, and say why <code>a % b</code> costs a loop on a CPU without a divider',
-    'run a Python program on the gates and read its variables, its output and its stack from the hardware',
+    'run a Python program on the gates and read its variables, its output, its stack and its heap of strings from the hardware',
   ],
   builds: ['isa', 'cpu'],
   recap: {
@@ -41,6 +41,7 @@ export const chPython: Chapter = {
       'Nothing new runs on the CPU: the compiled words are the same RV32I chapter 14 decodes, so the golden model checks a Python program cycle by cycle as it checked hand-written assembly.',
       'Cost is visible per line. On the single-cycle CPU a line costs one cycle per instruction it executes: <code>total += i</code> is one <code>add</code>; <code>a % b</code> with b unknown is a call to a 32-step shift-and-subtract routine, about 240 cycles.',
       'Calls cost frames: the return address and every saved register go to the stack and come back, and a value computed before a call waits there across it.',
+      `A string is a block in data memory, a length word and then its bytes, and a str variable holds the block's address: <code>len</code> is one load, <code>==</code> compares bytes, <code>+</code> makes a new block. New blocks come from a heap of ${HEAP_BYTES} bytes that only grows (tp moves forward, nothing is freed), so a loop that joins strings runs out of it.`,
     ],
     check: [
       {
@@ -71,8 +72,8 @@ export const chPython: Chapter = {
       title: 'One program, three languages',
       body: `
         <p>The site compiles a small Python to RV32I: integers (32-bit, they wrap), <code>if</code>, <code>while</code>,
-        <code>for … in range</code>, functions with recursion, global lists, <code>print</code>. No strings, floats or
-        objects: each needs a heap or a runtime the CPU does not have yet.</p>
+        <code>for … in range</code>, functions with recursion, global lists, <code>print</code>. No floats or objects: each
+        needs a runtime the CPU does not have. Strings come in the last two steps, with a heap of their own.</p>
         <p>Four lines become 12 instructions. Each variable gets a register (<code>total</code> → s0,
         <code>i</code> → s1), the loop's test becomes one branch, and <code>total += i</code> one <code>add</code>.
         <code>print</code> is a store at gp, the output pointer, and gp moves on a word.</p>
@@ -283,8 +284,10 @@ export const chPython: Chapter = {
         derive: `<p>"Hello" + ", " is 5 + 2 = 7 characters, 4 + 8 = ${strBlock(7)} bytes; adding "world" makes 12 characters, ${strBlock(12)} bytes; adding "!" makes 13, ${strBlock(13)} bytes: ${strBlock(7)} + ${strBlock(12)} + ${strBlock(13)} = ${HELLO.heap}.
           The program is ${HELLO_C.words.length} instructions, most of them the literals' stores and the calls to <code>rt.concat</code>.</p>`,
         pitfall: `<p>A str is an address, so two names for the same text hold two copies of one number, and <code>==</code> must read the bytes to know whether two blocks hold the same characters. Comparing the addresses would be one instruction, and would say "different" for "ab" and "ab" made in two places.</p>`,
-        real: `<p>C keeps a string as bytes ending in a zero and finds its length by walking to it; Python and Rust keep the length beside the text, as here, which makes <code>len</code> one load and an overrun checkable. Real strings are Unicode, a character one to four bytes, so
-          <code>s[i]</code> is not a single load. Here a character is one byte of printable ASCII, and the compiler says so when a literal holds anything else.</p>`,
+        real: `<p>C keeps a string as bytes ending in a zero and finds its length by walking to it; Python keeps the length in the string object beside the text, as here, and Rust in the
+          handle that points at the text, which makes <code>len</code> one load and an overrun checkable. Real strings are Unicode. In UTF-8 a character is one to four bytes, so the i-th one has to be
+          found by walking (Rust will not index a string by character for that reason); CPython instead stores each string with 1, 2 or 4 bytes for every character, the widest its text needs, so
+          <code>s[i]</code> stays one load. Here a character is one byte of printable ASCII, and the compiler says so when a literal holds anything else.</p>`,
       },
       challenge: {
         kind: 'quiz',

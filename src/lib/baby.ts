@@ -242,14 +242,15 @@ export const BABY_ACC: ComponentDef = (() => {
   const hq = b.op1(DFF, [hn, 'clk'], 'H', 'hff');
   b.wire(hq, `${hn.split('.')[0]}.a`);
   b.wire(a, 'a'); b.wire(t, 't'); b.wire(hq, 'stop');
-  b.name(a, 'a', true); b.name(hq, 'stop', true); b.name(t, 't');
+  b.name(a, 'a', true); b.name(hq, 'stop', true); b.name(t, 't'); b.name(en, 'load A');
   return define({
     id: 'baby_acc', name: 'Accumulator, test and stop', category: 'arithmetic',
     summary: 'The accumulator A and its subtractor (LDN loads 0 − S, SUB takes A − S), the test flip-flop T (A negative at CMP) and the stop flip-flop H.',
     ports: [bus('s', 32, 'in'), bit('ldn', 'in'), bit('sub', 'in'), bit('cmp', 'in'), bit('stp', 'in'), bit('s1', 'in'), bit('h', 'in'), clk(),
       bus('a', 32, 'out'), bit('t', 'out'), bit('stop', 'out')],
     symbol: { kind: 'box', label: 'ACC' },
-    netlist: laid(b, { keepOrder: true }),
+    // A's load enable ran under the subtractor: a pointer (tests/redrawclear-baby.test.ts)
+    netlist: laid(b, { keepOrder: true, wires: { 'en.y': false } }),
   });
 })();
 
