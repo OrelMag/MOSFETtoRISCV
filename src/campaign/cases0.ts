@@ -283,9 +283,9 @@ export const CASES0: Record<string, LevelCase> = {
   // The NOR3 ladder (buildnor.ts): the Apollo Guidance Computer's gate. Sources: MIT drawing 2005011 (the gate) and
   // E. C. Hall, R-700 vol. III (1972), p. 9-10, 13 and 67; the counts are tests/agcnor.test.ts's.
   nor_basic: {
-    problem: 'Every gate on this site is built from NAND, but that is a choice. The Apollo Guidance Computer\'s logic was all three-input NOR gates: MIT judged that producing and qualifying even a second circuit type would cost more than it saved (Hall, R-700 vol. III, p. 10). Block II had about 5,700 of them, two to a flatpack.',
+    problem: 'Every gate on this site is built from NAND, but that is a choice. The Apollo Guidance Computer\'s logic was all three-input NOR gates: MIT judged that producing and qualifying even a second circuit type would cost more than it saved (Hall, R-700 vol. III, p. 10). Block II had about 5,600 of them, two to a flatpack.',
     without: 'With one gate type, every function has to be spelled in it: NOT, OR and AND come first.',
-    cost: '5 NOR3 gates: 15 transistors and 20 resistors as MIT drew the gate, where NOT, AND and OR from CMOS NANDs are 6 gates and 24 transistors. NOR makes OR cheap where NAND makes AND cheap.',
+    cost: '5 NOR3 gates: 15 transistors and 20 resistors as MIT drew the gate. The same three outputs from CMOS NANDs, ¬a shared the same way, are also 5 gates (20 transistors): NOR makes OR cheap (2 gates against 3) where NAND makes AND cheap.',
     alts: [{ name: 'OR from NANDs', lib: 'or' }, { name: 'AND from NANDs', lib: 'and' }],
   },
   nor_fa: {

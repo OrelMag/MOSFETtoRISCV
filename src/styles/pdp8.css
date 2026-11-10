@@ -80,6 +80,6 @@
 .p8-sw.on { background: linear-gradient(to bottom, var(--p8-lamp-on) 50%, var(--p8-lamp-off) 50%); }
 .p8-sw:focus-visible { outline: 2px solid var(--p8-lamp-on); outline-offset: 1px; }
 @media (pointer: coarse) {
-  .p8-sw { width: 16px; height: 32px; }
+  .p8-sw { width: 16px; height: 40px; }
   .p8-drawer .p8-key { min-height: 40px; }
 }

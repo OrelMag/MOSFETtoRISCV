@@ -16,7 +16,7 @@ export const WALKSNOR: Record<string, WalkScript> = {
       text: 'g_nab is the NOR of a and b (its third input tied to b). g_o inverts it: o = a + b. Two gates where NAND needed three.',
       parts: ['g_nab', 'g_o'],
       why: 'NOR is OR with its output inverted, so one more inversion gives OR back. NOR makes OR cheap the way NAND makes AND cheap.',
-      whyNot: { text: 'An OR by De Morgan from inverted inputs, ¬(¬a·¬b), needs an AND of the inverted inputs: in NOR3 gates that is more gates, not fewer.' },
+      whyNot: { text: 'De Morgan\'s OR, ¬(¬a·¬b), is this same circuit: ¬a·¬b is NOR(a, b), one gate, and the NOT after it is g_o. Inverting a and b first and then combining them would cost two more gates for nothing.' },
     },
     {
       title: 'AND from the two inverters',
@@ -59,7 +59,7 @@ export const WALKSNOR: Record<string, WalkScript> = {
       text: 'g_co = NOR(n1, n5): the majority of a, b and ci, the carry out. Nine NOR3 gates, 27 transistors and 36 resistors: par. The same nine as CMOS NANDs are 36 transistors.',
       parts: ['g_co'], codex: ['majority'],
       why: 'The majority is self-dual too, so the NAND adder\'s carry gate, made a NOR, gives the carry again.',
-      whyNot: { text: 'With all three inputs of a NOR3 used, the majority alone is NOR3(NOR(a, b), NOR(b, ci), NOR(a, ci)): four gates, but they share nothing with the sum.' },
+      whyNot: { text: 'With all three inputs of a NOR3 used, the majority alone is NOR3(NOR(a, b), NOR(b, ci), NOR(a, ci)): four gates, and built that way they share nothing with the sum, so the adder would cost more than nine.' },
     },
   ],
   nor_reg: [

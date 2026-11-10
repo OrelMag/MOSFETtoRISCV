@@ -1,4 +1,4 @@
-// The DEC PDP-8 (the PDP-8/E's rules) as a golden model, DOM-free: 4096 words of 12-bit core, the accumulator AC with
+// The DEC PDP-8 (the PDP-8/E's rules: BSW came later, and the 1965 machine had the MQ only with its optional EAE) as a golden model, DOM-free: 4096 words of 12-bit core, the accumulator AC with
 // its link L, the program counter PC, the memory address and buffer registers MA / MB, the instruction register IR, the
 // MQ, the switch register SR, the console teletype (keyboard and printer flags) and the interrupt system. It does what
 // the instruction table (isa/presets.ts PDP8_PRESET) cannot say: indirect addressing through 0010–0017 adds 1 to the
@@ -88,7 +88,7 @@ export class Pdp8 {
     return { ea, defer };
   }
 
-  /** One instruction (also when stopped: SING STEP). */
+  /** One instruction (also when stopped: SING INST). */
   step(): Pdp8Step {
     const at = this.pc;
     this.ma = at; this.mb = this.mem[at]; this.ir = this.mb >> 9;

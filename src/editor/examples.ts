@@ -454,12 +454,12 @@ export const EXAMPLES: Example[] = [
   },
   {
     id: 'pdp8', group: 'computers', short: 'Twelve switches, a row of lamps, a teletype.', name: 'PDP-8 front panel (1965)',
-    blurb: 'A ROM holding Hello, world in the PDP-8’s own instruction table (12-bit words, octal, PAL syntax), run on a model of the PDP-8 behind its front panel: lamps for PC, MA, MB, AC and L, the switch register, LOAD ADD, DEP, EXAM, START and a teletype.',
+    blurb: 'DEC’s PDP-8 (1965): 4096 words of 12-bit core, read and rewritten in a 1.5 µs memory cycle. A ROM holds Hello, world in the PDP-8’s own instruction table (12-bit words, octal, PAL syntax), run on a model of the PDP-8 behind its front panel: lamps for PC, MA, MB, AC and L, the switch register, LOAD ADD, DEP, EXAM, START and a teletype. The instructions are the later PDP-8/E’s, a superset: BSW came later, and the 1965 machine had the MQ only with its optional EAE.',
     build: (id, n) => pdp8Chip(id, n),
   },
   {
     id: 'pdp8g', group: 'computers', short: 'The PDP-8 built from gates, one edge per memory cycle.', name: 'PDP-8 in gates',
-    blurb: 'The PDP-8 as a circuit: a 12-bit processor of library parts (control with Fetch, Defer and Execute, MA and MB, PC, the accumulator and link with both operate groups and the MQ, the teletype IOTs) next to a 4K × 12 RAM holding Hello, world, a keyboard and a teleprinter. The switch register and the panel keys are pins: LOAD_ADD, then START.',
+    blurb: 'The PDP-8 as a circuit: a 12-bit processor of library parts (control with Fetch, Defer and Execute, MA and MB, PC, the accumulator and link with both operate groups and the MQ, the teletype IOTs) next to a 4K × 12 RAM holding Hello, world, a keyboard and a teleprinter. The switch register and the panel keys are pins: LOAD_ADD, then START. As in the front-panel example, the instruction set is the PDP-8/E’s (BSW came later; in 1965 the MQ came only with the optional EAE).',
     build: (id, n) => pdp8GatesChip(id, n),
     hz: 2000,
   },

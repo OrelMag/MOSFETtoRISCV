@@ -68,6 +68,8 @@ import { vecView } from '../widgets/vecview';
 
 /** Cycles Run to halt gives a program before it stops on its own. */
 const RUN_CAP = 20000;
+/** The toast that offers the panel when it stayed closed for lack of room (hintPanel). */
+const PANEL_HINT = 'This chip has a CPU: the panel stays closed here to leave room for the circuit';
 /** How often the panel redraws while the clock runs (ms). */
 const RENDER_MS = 100;
 const now = () => performance.now();
@@ -296,6 +298,7 @@ class CpuPanel {
     if (byUser && !on) this.closed.add(this.ed.chipId);
     if (byUser && on) this.closed.delete(this.ed.chipId);
     if (on) {
+      this.ed.dismissToast(PANEL_HINT); // opened from the toolbar: the offer to open it is done
       this.width = 0;
       this.redock();
       this.listKey = this.curKey = '';
@@ -421,7 +424,7 @@ class CpuPanel {
     this.hinted.add(chip);
     setTimeout(() => {
       if (this.shownFor !== chip || this.open || document.querySelector('.coach-card, .tour-card, dialog[open]')) return;
-      this.ed.toast('This chip has a CPU: the panel stays closed here to leave room for the circuit', 'info', { label: 'Open CPU panel', run: () => this.setOpen(true, true) });
+      this.ed.toast(PANEL_HINT, 'info', { label: 'Open CPU panel', run: () => this.setOpen(true, true) });
     }, 1200);
   }
 
@@ -544,12 +547,12 @@ class CpuPanel {
     this.render();
   }
 
-  /** Step on a PDP-8: one instruction. Stopped, that is SING STEP (the panel's key); running, the instruction under way. */
+  /** Step on a PDP-8: one instruction. Stopped, that is SING INST (the panel's key); running, the instruction under way. */
   private stepPdp8(mon: Pdp8Monitor): void {
     const r = mon.read();
     if (r?.run !== 1 && r?.state === 0) {
       const pin = this.pdp8?.keys.sstep;
-      if (!pin) return this.ed.toast('Stopped, and no pin drives SING STEP: press CONT or START to run');
+      if (!pin) return this.ed.toast('Stopped, and no pin drives SING INST: press CONT or START to run');
       const from = mon.retired;
       this.pulsePin(pin);
       this.ed.sim.runCycles(4, () => mon.retired > from || mon.done);
@@ -658,7 +661,7 @@ class CpuPanel {
     this.runBtn.title = mon instanceof M6502Monitor ? `Clock until the program jumps to itself, or ${groupDigits(RUN_CAP)} cycles` : mon.checking ? `Clock until the program halts (the golden model says when), a mismatch, or ${groupDigits(RUN_CAP)} cycles`
       : 'Needs the golden model (a register file to check, a program that builds, a Reset) to know when the program halts';
     this.stepBtn.title = multi ? 'One clock cycle: every core that is not stalled retires an instruction'
-      : mon instanceof Rv16Monitor ? 'Clock until the core’s next register write or store' : mon instanceof LaneMonitor ? 'Clock until the core’s next checked write (a register write, a store or a pixel of any lane)' : mon instanceof Cpu4Monitor || mon instanceof Dsp24Monitor ? 'One clock: one instruction' : mon instanceof SapMonitor ? 'Clock to the next T0: one instruction (five steps)' : mon instanceof Pdp8Monitor ? 'One instruction: 1 to 3 memory cycles (stopped: SING STEP)' : mon instanceof M6502Monitor ? 'Clock to the next opcode fetch: one instruction (2 to 7 cycles)' : 'Clock until the next instruction retires';
+      : mon instanceof Rv16Monitor ? 'Clock until the core’s next register write or store' : mon instanceof LaneMonitor ? 'Clock until the core’s next checked write (a register write, a store or a pixel of any lane)' : mon instanceof Cpu4Monitor || mon instanceof Dsp24Monitor ? 'One clock: one instruction' : mon instanceof SapMonitor ? 'Clock to the next T0: one instruction (five steps)' : mon instanceof Pdp8Monitor ? 'One instruction: 1 to 3 memory cycles (stopped: SING INST)' : mon instanceof M6502Monitor ? 'Clock to the next opcode fetch: one instruction (2 to 7 cycles)' : 'Clock until the next instruction retires';
     keyed(this.slowBtn, `${!!this.slow}`, () => [icon(this.slow ? 'pause' : 'play', 14), this.slow ? 'Pause' : 'Slow']);
     this.slowBtn.classList.toggle('on', !!this.slow);
     this.slowBtn.title = `Run ${multi ? 'one cycle' : 'one instruction'} at a time at the rate beside it: the current instruction and the parts it uses stay marked`;

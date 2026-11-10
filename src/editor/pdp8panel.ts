@@ -1,7 +1,7 @@
 // The PDP-8 front panel: a ROM that holds a program in the PDP-8 table (isa/presets.ts PDP8_PRESET) is the core of a
 // PDP-8 run by its model (src/pdp8). The switch register is the instruction builder in its Switches view (set it by
 // hand, or build an instruction and see its bits); lamps show PC, MA, MB, AC with L, MQ, IR and RUN / ION; the keys are
-// the machine's: LOAD ADD, START, DEP, EXAM, CONT, STOP, SING STEP. Deposits change this panel's core, not the ROM's
+// the machine's: LOAD ADD, START, DEP, EXAM, CONT, STOP, SING INST (on the real panel a switch used with CONT; SING STEP, one memory cycle, is not here). Deposits change this panel's core, not the ROM's
 // program; the core survives closing the panel until the page reloads. The teletype prints and takes keys.
 
 import '../styles/pdp8.css';
@@ -100,7 +100,7 @@ export function openPdp8Panel(ed: Editor, partId: string): void {
     key('EXAM', 'Show core at PC in MB, then PC + 1', () => pdp.examine()),
     key('CONT', 'Run on from PC, nothing cleared', () => pdp.cont()),
     key('STOP', 'Stop after this instruction', () => pdp.stop()),
-    key('SING STEP', 'One instruction', () => { pdp.stop(); pdp.step(); }));
+    key('SING INST', 'One instruction (the real panel’s SING INST switch with CONT)', () => { pdp.stop(); pdp.step(); }));
   const speedSel = h('select', { 'aria-label': 'Speed' }, SPEEDS.map(([v, l]) => h('option', { value: String(v) }, l))) as HTMLSelectElement;
   speedSel.addEventListener('change', () => { speed = Number(speedSel.value); last = 0; owed = 0; });
   const typed = h('input', { type: 'text', class: 'p8-type', placeholder: 'Type on the keyboard…', 'aria-label': 'Type on the teletype keyboard', spellcheck: 'false' }) as HTMLInputElement;

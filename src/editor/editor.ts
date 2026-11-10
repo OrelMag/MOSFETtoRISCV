@@ -1318,6 +1318,11 @@ export class Editor {
     this.toastTimer = setTimeout(() => (this.toastEl.className = 'sb-toast'), action ? 7000 : 2800);
   }
 
+  /** Take down the toast if it still says `text` (its offer was taken some other way). */
+  dismissToast(text: string): void {
+    if (this.toastEl.textContent?.startsWith(text)) this.toastEl.className = 'sb-toast';
+  }
+
   /** Arm a palette item: the next click on the canvas places it (the phone's drawer closes). */
   armPart(item: PaletteItem, key: string): void {
     // armed by a key (the parts list, the search's ↵, a favourite's digit): on to the canvas, where the arrows move
