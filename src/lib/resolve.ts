@@ -85,6 +85,8 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   // the pipelined core with the same two ports (the sandbox's: Custom instructions… applies to it too)
   [/^rv32i(m)?_pipe(_dc)?_core$/, (m) => pipelinedCpu([], { adder: 'ks', ports: true, ...(m[1] ? { m: true } : {}), ...(m[2] ? { dcache: 'wt' as const } : {}) })],
   [/^rv32ic_core$/, () => singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true, c: true })],
+  // chapter vectors' CPU with its program on a port: the vector unit and the four-bank data memory (64 words) inside
+  [/^rv32iv_core$/, () => singleCycleCpu([], { imemPort: true, dmemK: 6, vector: { lanes: 4, vlen: 128 } })],
   [/^cpu_(\w+)$/, (m) => singleCycleCpu(assemble(PROGRAMS.find((p) => p.id === m[1])?.source ?? '').words)],
   [/^shift(\d+)$/, (m) => shifter(+m[1])],
   [/^zero(\d+)$/, (m) => isZero(+m[1])],

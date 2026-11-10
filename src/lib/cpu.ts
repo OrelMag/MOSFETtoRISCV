@@ -1125,6 +1125,17 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     );
     pins.retire = [resY[0] + 22, bottom + 3];
     extraPorts.push(bit('retire', 'out'));
+    if (imemPort) {
+      // the sandbox's rv32iv_core: the program comes from a ROM part on instr (pcOut its byte address); the banked data memory stays inside
+      instances.splice(instances.findIndex((i) => i.name === 'imem'), 1);
+      const pcn = net('PC');
+      pcn.ends = pcn.ends.filter((e) => e !== 'imem.addr');
+      if (Array.isArray(pcn.tags)) pcn.tags = pcn.tags.filter((e) => e !== 'imem.addr');
+      const ins = net('Instr');
+      ins.ends = ['instr', ...ins.ends.filter((e) => e !== 'imem.data')];
+      pins.instr = [P('imem', 'data')[0] - 1, P('imem', 'data')[1]];
+      extraPorts.push(bus('instr', 32, 'in'));
+    }
   }
   if (shared) {
     // ---- a core of the multi-core: memory goes through ports; atomics; hart id
@@ -1246,14 +1257,14 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   }
   for (const n of nets) if (n.via) for (const k of Object.keys(n.via)) if (!n.ends.includes(k)) delete n.via[k];
   return {
-    id: imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : c ? 'rv32ic_core' : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : '') + (mac ? '_mac' : '') + (vector ? '_v' : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''}${c ? 'C' : ''}${mac ? ' + MAC' : ''}${vector ? ' + vector unit' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
+    id: imemPort && vector ? 'rv32iv_core' : imemPort ? (custom.length ? `rv32i_cx${rowsKey(custom)}_core` : c ? 'rv32ic_core' : 'rv32i_core') : (custom.length ? `cx${rowsKey(custom)}_` : '') + key2(IM) + (adder === 'ks' ? '_ks' : '') + (dcache ? `_dc${dcache === true ? '' : dcache}${dmemK}` : dmemK !== 5 && !shared ? `_d${dmemK}` : '') + (icache ? '_ic' : '') + (fpu ? '_fp' : '') + (shared ? '_core' : '') + (dram ? `_dram${cfgKey(dram)}` : '') + (mac ? '_mac' : '') + (vector ? '_v' : ''), name: `Single-cycle RV32I${fpu ? 'F' : ''}${c ? 'C' : ''}${mac ? ' + MAC' : ''}${vector ? ' + vector unit' : ''} CPU${adder === 'ks' ? ' (fast adders)' : ''}${dcache ? ` with a ${dcache === true ? '' : 'write-back '}data cache` : ''}${dram ? ` over DRAM (${dram.policy} page)` : ''}${icache ? `${dcache ? ' and' : ' with'} an instruction cache` : ''}`, category: 'cpu',
     summary: dcache === 'wb' || dcache === 'wb2'
       ? `The single-cycle processor with its data memory behind a ${dcache === 'wb2' ? '2-way set-associative' : 'direct-mapped'} write-back cache. Loads and stores that miss hold the PC and the register write (retire = 0): ${dram ? `as long as the DRAM controller takes for the line (${dram.banks} banks, ${dram.policy} page): 8 cycles on a row hit, 12 on a closed bank, 16 on another open row, plus a write-back of a dirty victim first` : '8 cycles, or 12 when a dirty line must be written back first'}.`
       : dcache
       ? 'The single-cycle processor with its data memory replaced by a slow main memory behind a 64-byte direct-mapped cache. A load that misses holds the PC and the register write (retire = 0) for 8 cycles while the line is fetched.'
       : 'A complete RISC-V processor: every instruction is fetched, decoded, executed and retired in one clock cycle. Built entirely from the blocks of the previous chapters.',
     ports: [bit('clk', 'in', 'left', true), bus('pcOut', 32, 'out'), bus('instrOut', 32, 'out'), bus('aluOut', 32, 'out'), ...(mac ? [bus('accOut', 40, 'out')] : []), ...(dcache || icache ? [bit('retire', 'out')] : []), ...(dcache ? [bit('dhit', 'out')] : []), ...(icache ? [bit('ihit', 'out')] : []), ...(fpu ? [bit('retire', 'out')] : []), ...extraPorts],
-    symbol: { kind: 'box', label: shared ? 'CORE' : dcache ? 'RV32I + D$' : 'RV32I' },
+    symbol: { kind: 'box', label: shared ? 'CORE' : dcache ? 'RV32I + D$' : vector ? 'RV32I + V' : 'RV32I' },
     netlist: () => ({ pins, instances, nets }),
     hdl: { verilog: CPU_VERILOG },
   };

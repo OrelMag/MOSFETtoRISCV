@@ -290,3 +290,11 @@ growth matters for first-paint CPU scenes, `rvv.ts` can be loaded only when `v` 
 tests/firstload.test.ts either way: the ISS is not on the first-load path).
 
 Phone: the mockup scales its drawings down at 390 px (text too small). The built widgets must reflow instead (passes as a column of rows, the register file as one lane at a time with a lane picker, the unit stacked) and are checked by the smoke's phone routes.
+
+## After stage 3: the sandbox core (decision 10, built)
+
+`rv32iv_core` (lib/resolve.ts): `singleCycleCpu([], { imemPort: true, dmemK: 6, vector })`, the chapter's CPU with its ROM on `instr` / `pcOut`;
+the vector unit and the four-bank data memory stay inside (the sandbox's RAM part has no four-word port). The palette's Processor cores
+group places it; Examples ▸ RVV (editor/exampleisa.ts rvvChip) runs the chapter's saxpy at m4. editor/cpu.ts detectCpu gives the golden
+model `v` and finds `<core>.dm` and the core's `retire`; CpuMonitor compares vl and v0–v31 after each instruction; the CPU drawer's Vector
+unit section is widgets/vecview.ts, the same view as the chapter's panel. tests/editor-rvv-sandbox.test.ts.

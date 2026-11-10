@@ -14,7 +14,7 @@ import { BENCH24 } from '../dsp/programs24';
 import { computer6502Chip, memory6502Chip } from './example6502';
 import { SAP_SUBCHIPS, sapChip } from './examplesap';
 import { busSystemChip } from './examplebus';
-import { rv64Chip, rvcChip } from './exampleisa';
+import { rv64Chip, rvcChip, rvvChip } from './exampleisa';
 import { cardsBootChip } from './examplecards';
 import { twoComputersChip, uartComputerChip } from './examplecomms';
 import { lanComputerChip, lanSwitchChip, lanTopChip } from './examplenet';
@@ -514,6 +514,11 @@ export const EXAMPLES: Example[] = [
     id: 'rv64', group: 'widths', drawer: true, short: 'The core at 64 bits.', name: 'RV64: 64-bit registers',
     blurb: 'The 64-bit core with its program ROM assembled for RV64: ld / sd, the W instructions, a multiply and fib(90), all 64 bits in the CPU drawer, checked against the golden model.',
     build: (id, n) => rv64Chip(id, n),
+  },
+  {
+    id: 'rvv', group: 'widths', drawer: true, short: 'Four lanes, one instruction.', name: 'RVV: a vector unit',
+    blurb: 'The CPU of the Vectors chapter with its program on a ROM part: y = 3·x + y on 16 elements in 23 instructions, the vector registers by lane in the CPU drawer, checked against the golden model.',
+    build: (id, n) => rvvChip(id, n),
   },
   {
     id: 'rv16pong', group: 'computers', drawer: true, short: 'Pong on a screen and switches.', name: 'RV16: Pong on the campaign core',
