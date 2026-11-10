@@ -331,6 +331,8 @@ export const PDP8_TTY: ComponentDef = (() => {
     summary: 'The console teletype\'s IOTs. Keyboard (03): KSF skips while a key waits, KCC clears AC and the keyboard flag (ready for the next key), KRS ORs it into AC, KRB does both. Printer (04): TSF skips once the last character is printed, TCF clears that flag, TLS prints AC\'s 7 low bits and sets it. Device 00: ION, IOF.',
     ports: TTY_PORTS,
     symbol: { kind: 'box', label: 'TELETYPE' },
+    // area 1.96× the Builder's 80 × 156 column, past layered.ts's 1.3× rule, but wider than tall it fits a stage larger, with
+    // 25 pointers and 14 crossings in place of 40 and 32 and no wire under a part
     netlist: laid(b, { keepOrder: true, room: true, wires: { kready: true } }),
   });
 })();
@@ -449,6 +451,8 @@ export const PDP8_CONTROL: ComponentDef = (() => {
     summary: 'The major state (Fetch, Defer, Execute), the instruction register, RUN and the interrupt system, and the gates that turn them, the word read and the front panel\'s keys into every select and enable of the data path. An interrupt replaces a Fetch: core[0] ← PC, PC ← 0001.',
     ports: CTL_PORTS,
     symbol: { kind: 'box', label: 'CONTROL' },
+    // laid out wires first though the area grows 1.33× (layered.ts's rule is 1.3×): the Builder's 108 × 486 strip fitted a
+    // 16:10 stage at half this scale; the six nets turned to pointers ran under parts, exam / start read better as wires
     netlist: laid(b, { room: true, wires: { 'u21.y': false, 'u59.y': false, 'u73.out': false, 'u75.y': false, 'u48.y': false, 'u100.y': false, exam: true, start: true } }),
   });
 })();
