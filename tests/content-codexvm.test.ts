@@ -156,8 +156,8 @@ describe('the sequences notice the usual mistakes (replayed on mutated models)',
     // least-recently-used instead of round robin: a hit refreshes the entry, so a different page is evicted
     class Lru extends Tlb16Model {
       used = [0, 0, 0, 0]; t = 0;
-      find(key: number) { const e = super.find(key); if (e >= 0) this.used[e] = ++this.t; return e; }
-      edge(i: { key: number; fill: number }) {
+      override find(key: number) { const e = super.find(key); if (e >= 0) this.used[e] = ++this.t; return e; }
+      override edge(i: { key: number; fill: number }) {
         if (i.fill) {
           const free = this.valid.indexOf(false);
           this.ptr = free >= 0 ? free : this.used.indexOf(Math.min(...this.used));
@@ -166,7 +166,7 @@ describe('the sequences notice the usual mistakes (replayed on mutated models)',
         super.edge(i as never);
       }
     }
-    class FillWins extends Tlb16Model { edge(i: never) { const x = i as { fill: number; flush: number }; if (x.fill && x.flush) { super.edge({ ...x, flush: 0 } as never); } else super.edge(i); } }
+    class FillWins extends Tlb16Model { override edge(i: never) { const x = i as { fill: number; flush: number }; if (x.fill && x.flush) { super.edge({ ...x, flush: 0 } as never); } else super.edge(i); } }
     expect(tlbFails(new Lru())).toBe(true);
     expect(tlbFails(new FillWins())).toBe(true);
   });
@@ -182,8 +182,8 @@ describe('the sequences notice the usual mistakes (replayed on mutated models)',
   };
   it('a walker that takes a leaf at level 1, or a pointer at level 0, is caught', () => {
     expect(walkFails(new Walk16Model())).toBe(false);
-    class SuperLeaf extends Walk16Model { kind(pte: number) { const k = super.kind(pte); return this.state === 1 && k === 'fault' && (pte & 1) && (pte & 10) ? 'leaf' : k; } }
-    class PtrAtZero extends Walk16Model { kind(pte: number) { const k = super.kind(pte); return this.state === 2 && k === 'fault' && (pte & 1) && !(pte & 10) ? 'ptr' : k; } }
+    class SuperLeaf extends Walk16Model { override kind(pte: number) { const k = super.kind(pte); return this.state === 1 && k === 'fault' && (pte & 1) && (pte & 10) ? 'leaf' : k; } }
+    class PtrAtZero extends Walk16Model { override kind(pte: number) { const k = super.kind(pte); return this.state === 2 && k === 'fault' && (pte & 1) && !(pte & 10) ? 'ptr' : k; } }
     expect(walkFails(new SuperLeaf())).toBe(true);
     expect(walkFails(new PtrAtZero())).toBe(true);
   });
