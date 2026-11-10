@@ -581,6 +581,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .stage-bar:not(.stacked) .crumbs > button { flex-shrink: 6; min-width: 3.2em; }
 .stage-bar:not(.stacked) .crumbs > button.cur { flex-shrink: 0; min-width: 0; }
 .stage-bar .crumbs > .sep { flex: none; }
+/* A level shrunk below its value pill drops the pill (Stage.markSqueezed): clipped, it was an empty coloured blob. */
+.stage-bar .crumbs > button.squeezed .val { display: none; }
 .stage-bar .shed { display: none; }
 .stage-more-menu { min-width: 260px; }
 .stage-more-menu button > svg { flex: none; color: var(--text-2); }
