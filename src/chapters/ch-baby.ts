@@ -9,8 +9,9 @@ import { ssemWords } from '../ssem/asm';
 import { tubeLineScene, TUBE_K } from '../widgets/babytubeview';
 import { williams3d } from '../widgets/williams3d';
 import { groupDigits } from '../sim/numfmt';
-import { kilburnSource } from '../ssem/programs';
+import { kilburnSource, timesSource } from '../ssem/programs';
 import { babyScene } from '../widgets/baby';
+import { storeLine } from '../widgets/babymon';
 import { SAP_COST } from './ch-sap';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -44,7 +45,6 @@ export const chAppendixBaby: Chapter = {
     'run Kilburn\'s highest-factor routine to the end, and price it against 1948 and against this site\'s CPUs',
   ],
   builds: ['registers', 'memory', 'cpu', 'multicycle', 'dram'],
-  soon: ['Your own program'],
   recap: {
     keep: [
       'The Baby\'s program sat in the same read-write store as its data: 32 lines of 32 digits. An instruction is a line number (digits 0–4) and a function (digits 13–15); the rest of the word is ignored.',
@@ -284,6 +284,28 @@ export const chAppendixBaby: Chapter = {
         answer: 0,
         explain: 'The loop overshoots by one b. A − (−b) = A + b, the remainder, which is 0 exactly when b divides a.',
         why: ['', 'The next b is made in lines 14 to 18.', 'A is overwritten by line 11, not cleared here.', 'Only CMP sets the test flip-flop.'],
+      },
+    },
+    {
+      title: 'Your own program',
+      body: `
+        <p>Programs were written on paper in the notebook's notation, converted to binary and set into the store line by
+        line, each digit on one of a row of 32 buttons. Here you type them. The program in the box multiplies: with no adder, t + x is
+        written −(−t − x), so every addition is an LDN, a SUB and a STO, LDN, STO through a spare line. A counter in line
+        29 runs up from −y to 0 the same way, and CMP skips the Stop while it is still negative.</p>
+        <p>As loaded, it leaves 7 × 6 = 42 in line 31. Lines 14 to 25 are never reached: an unused line holds 0, which is
+        JMP 0.</p>`,
+      scene: () => babyScene({ source: timesSource(), editable: true, paused: true }),
+      challenge: {
+        kind: 'reach',
+        goal: 'Make the Baby leave 12 × 11 = 132 in line 31 and light its stop lamp.',
+        check: (st) => !!st.sim && st.value('stop') === 1 && storeLine(st.sim, 31) === 132,
+        hints: ['Only the numbers need to change: x is in line 30, and line 29 holds the counter\'s start, the negative of y.', 'Set line 30 to 12 and line 29 to −11, Assemble and load, then Run to the end.'],
+        answer: '<p>Change <code>29: NUM -6</code> to <code>29: NUM -11</code> and <code>30: NUM 7</code> to <code>30: NUM 12</code>, then Assemble and load and run to the stop lamp: line 31 reads 132.</p>',
+        solve: (st) => {
+          st.load(babyScene({ source: timesSource(12, 11), editable: true, paused: true }));
+          st.runCycles(10_000, () => st.value('stop') === 1);
+        },
       },
     },
     {

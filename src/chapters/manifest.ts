@@ -1077,6 +1077,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The machine in gates" },
     { title: "One digit at a time" },
     { title: "Kilburn's program", challenge: "quiz" },
+    { title: "Your own program", challenge: "reach" },
     { title: "What 1948 bought" },
   ] },
 ];

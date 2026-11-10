@@ -35,3 +35,6 @@
 .bb-spot.dash span { background: var(--good); }
 .bb-spot b { position: absolute; top: 2px; left: 0; right: 0; text-align: center; font: 600 10.5px var(--font-mono); color: var(--muted); }
 .bb-spot::after { content: ''; position: absolute; left: 0; right: 0; bottom: 50%; border-top: 1px dashed var(--muted); }
+.bb-edit summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+.bb-src { width: 100%; box-sizing: border-box; font: 12px/1.45 var(--font-mono); background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px; resize: vertical; }
+.bb-alarm { white-space: pre-wrap; }

@@ -36,3 +36,29 @@ export const kilburnSource = (a = 2 ** 18): string => `; Kilburn's highest facto
 
 /** The answer line and the number tried: line 27 holds b when the machine stops. */
 export const KILBURN_ANSWER_LINE = 27;
+
+/**
+ * Multiplication by repeated subtraction, for the appendix's "Your own program": line 31 = x × y. The Baby has no adder,
+ * so t + x is −(−t − x): LDN, SUB, STO, LDN, STO. The counter c runs from −y up to 0 the same way, and CMP skips the Stop
+ * while it is still negative. JMP 26 jumps to the line after the number line 26 holds (0): line 1.
+ */
+export const timesSource = (x = 7, y = 6): string => `; line 31 = x × y by repeated subtraction
+1:  LDN 31   ; A = -t
+    SUB 30   ; A = -t - x
+    STO 27
+    LDN 27   ; A = t + x
+    STO 31   ; t = t + x
+    LDN 29   ; A = -c
+    SUB 28   ; A = -c - 1
+    STO 27
+    LDN 27   ; A = c + 1
+    STO 29   ; c = c + 1
+    CMP      ; still negative: skip the Stop
+    STP
+    JMP 26   ; CI = 0: on to line 1
+26: NUM 0
+28: NUM 1
+29: NUM ${-y} ; c, counting up to 0
+30: NUM ${x} ; x
+31: NUM 0    ; t, the product
+`;

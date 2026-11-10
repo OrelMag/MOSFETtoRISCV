@@ -2,7 +2,7 @@
 // that ends an instruction (retire high just before it) and compares CI (+ T: the hardware keeps a CMP's skip in the
 // test flip-flop until the next S1), A and the stop lamp. babyHw reads the machine's pins and its tube.
 
-import { isTubeState, type TubeState } from '../lib/baby';
+import { HOLD_BEATS, isTubeState, type TubeState } from '../lib/baby';
 import { SsemISS } from '../ssem/iss';
 import type { Sim } from '../sim/sim';
 import { pack } from '../sim/values';
@@ -64,4 +64,11 @@ export function instructionsToStop(words: ArrayLike<number>, max = 50_000_000): 
   const iss = new SsemISS(words);
   iss.run(max);
   return iss.halted ? iss.instrs : null;
+}
+
+/** What store line i reads now (-1: X; a line past its hold time reads 0). */
+export function storeLine(sim: Sim, i: number): number {
+  const t = tubeOf(sim, tubeLeaf(sim));
+  if (!t) return -1;
+  return t.x[i] ? -1 : t.age[i] > HOLD_BEATS ? 0 : t.mem[i] | 0;
 }

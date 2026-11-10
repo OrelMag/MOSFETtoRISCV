@@ -162,3 +162,19 @@ describe('Appendix E\'s numbers', () => {
     expect(mon.mismatch).toMatch(/after line 13/);
   });
 });
+
+describe('Your own program', () => {
+  it('multiplies by repeated subtraction, on the model and the gates', async () => {
+    const { timesSource } = await import('../src/ssem/programs');
+    const { storeLine } = await import('../src/widgets/babymon');
+    for (const [x, y] of [[7, 6], [12, 11]]) {
+      const w = ssemWords(timesSource(x, y));
+      const iss = new SsemISS(w);
+      iss.run(100_000);
+      expect([iss.halted, iss.store[31]]).toEqual([true, x * y]);
+      const sim = boot(w, 1, true);
+      await lockStep(sim, new SsemISS(w), 10_000);
+      expect(storeLine(sim, 31)).toBe(x * y);
+    }
+  });
+});

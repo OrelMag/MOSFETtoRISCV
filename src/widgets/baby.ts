@@ -29,6 +29,8 @@ export interface BabyOptions {
   view?: 'face' | 'charge';
   /** Regeneration off from the start. */
   noRegen?: boolean;
+  /** A program box: edit the source, Assemble and load rebuilds the machine with it. */
+  editable?: boolean;
 }
 
 /** Beats a second at 1948 speed: a beat of 36 digits of 8.5 µs. */
@@ -224,6 +226,22 @@ function babyPanel(o: BabyOptions, words: number[], lines: { line: number; text:
     viewSel.value = view;
     viewSel.addEventListener('change', () => { view = viewSel.value as 'face' | 'charge'; paintFace(); });
 
+    // ---- the program box
+    let editor: HTMLElement | null = null;
+    if (o.editable) {
+      const ta = h('textarea', { class: 'bb-src', rows: '12', spellcheck: 'false', 'aria-label': 'program' }) as HTMLTextAreaElement;
+      ta.value = o.source;
+      const errs = h('div', { class: 'bb-alarm', hidden: true });
+      const load = h('button', { class: 'btn sm primary', type: 'button' }, 'Assemble and load');
+      load.addEventListener('click', () => {
+        const r = assembleSsem(ta.value);
+        errs.hidden = !r.errors.length;
+        errs.textContent = r.errors.map((e) => `line ${e.line}: ${e.message}`).join('\n');
+        if (!r.errors.length) { pause(); stage.load(babyScene({ ...o, source: ta.value, paused: true })); }
+      });
+      editor = h('details', { class: 'bb-edit', open: true }, h('summary', null, 'Program'), ta, h('div', { class: 'param-row' }, load), errs);
+    }
+
     const el = h('div', { class: 'mem-panel bb-panel', 'data-dock': 'right', 'data-phone': 'flow' },
       h('h4', null, 'Baby ', verdict, h('span', { class: 'fold-hint' })),
       h('div', { class: 'bb-body' },
@@ -231,7 +249,7 @@ function babyPanel(o: BabyOptions, words: number[], lines: { line: number; text:
         h('div', { class: 'param-row' }, viewSel, regenBtn),
         beats, regs,
         h('div', { class: 'param-row' }, runBtn, rateSel, beatBtn, instrBtn, endBtn),
-        progress, alarm, listing));
+        progress, alarm, editor, listing));
 
     const moving = settings.autoClock && !o.paused && !reducedMotion();
     const boot = requestAnimationFrame(() => { paintRegen(); paint(); if (moving) start(); });
