@@ -254,7 +254,7 @@ export function* runCoreSteps(def: ComponentDef, mode: 'gate' | 'switch', spec: 
       if (a < MMIO_BASE) return l.dmem[a];
       if (a === MMIO16.IN) return (l.g.input[k] ?? 0) & 0xffff;
       if (a === MMIO16.SWITCHES) return l.g.switches & 0xffff;
-      if (a === MMIO16.IRQ) return l.irq;
+      if (a === MMIO16.IRQ) return own ? l.irq : 0; // core levels have always read 0 there
       return 0;
     };
     // Which IN word a read now is: the IN reads the golden model made before the oldest event the core still owes. A core
