@@ -18,6 +18,8 @@ import { progress } from '../progress';
 import { FB16, rgb565, SCREEN16 } from '../../gfx/raster16';
 import { PUZZLES, puzzleMachine, puzzleUnit, runPuzzle } from '../puzzles';
 import type { CampaignNode } from '../types';
+import { DECK_EXT, deckFromJson, deckToJson } from '../../cards/card';
+import { deckSource, puzzleDeck } from '../puzzledeck';
 
 const hex = (v: number) => `0x${v.toString(16).padStart(4, '0')}`;
 const signed = (v: number) => String((v << 16) >> 16);
@@ -157,7 +159,8 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
         ed.value = p.ref;
         pr.setSource(n.id, p.ref);
         diagnose();
-      } }, 'Show solution')),
+      } }, 'Show solution'),
+      p.nic ? null : deckButtons(n, () => ed.value, (src) => { ed.value = src; pr.setSource(n.id, src); diagnose(); }, result)),
     result,
     p.nic ? null : h('details', { class: 'cp-pz-step' }, h('summary', null, p.warps ? 'Step through a test (the warps)' : p.lanes ? 'Step through a test (the warp)' : 'Step through a test'),
       h('div', { class: 'cp-pz-bar' }, sel,
@@ -178,4 +181,47 @@ function screenOf(m: Warps16): HTMLElement {
     ctx.putImageData(im, 0, 0);
   }
   return h('div', { class: 'cp-pz-screen-wrap' }, cv, h('p', { class: 'cp-pz-io' }, h('b', null, 'screen '), `0xF000 … 0xF3FF · ${m.draws.length} triangle${m.draws.length === 1 ? '' : 's'} drawn`));
+}
+
+/**
+ * Save as deck / Load deck: the code as punched cards (campaign/puzzledeck.ts), a .deck.json the sandbox's card
+ * reader and ROMs read too, and a deck loaded back as `.word` lines with each card's print as a comment.
+ */
+function deckButtons(n: CampaignNode, code: () => string, load: (src: string) => void, say: HTMLElement): HTMLElement {
+  const tell = (ok: boolean, msg: string) => {
+    say.className = `cp-pz-result ${ok ? 'ok' : 'bad'}`;
+    say.replaceChildren(h('p', null, msg));
+  };
+  const save = () => {
+    const deck = puzzleDeck(n.title, code());
+    if ('error' in deck) return tell(false, `Save as deck: ${deck.error}.`);
+    const a = h('a', { href: URL.createObjectURL(new Blob([deckToJson(deck)], { type: 'application/json' })), download: `${n.id}${DECK_EXT}` }) as HTMLAnchorElement;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    tell(true, `Saved ${deck.cards.length} cards as ${n.id}${DECK_EXT}: one card a word, each printed with its line of code.`);
+  };
+  const pick = () => {
+    const input = h('input', { type: 'file', accept: `${DECK_EXT},.json,application/json`, style: 'display:none' }) as HTMLInputElement;
+    input.addEventListener('change', () => {
+      const f = input.files?.[0];
+      input.remove();
+      if (!f) return;
+      void f.text().then((text) => {
+        const deck = deckFromJson(text);
+        if (typeof deck === 'string') return tell(false, `Load deck: ${f.name} is ${deck}.`);
+        const src = deckSource(deck);
+        if (typeof src !== 'string') return tell(false, `Load deck: ${src.error}.`);
+        if (!confirm(`Replace your code with the ${deck.cards.length} cards of "${deck.name}"?`)) return;
+        load(src);
+        tell(true, `Loaded ${deck.cards.length} cards: the words as .word lines, each with what its card printed.`);
+      });
+    });
+    document.body.append(input);
+    input.click();
+  };
+  return h('span', { class: 'cp-pz-deck' },
+    h('button', { class: 'btn sm ghost', title: 'Punch the code as a deck of cards (.deck.json), one card a word', onclick: save }, icon('download', 13), 'Save as deck'),
+    h('button', { class: 'btn sm ghost', title: 'Load a deck of cards (.deck.json) as the code', onclick: pick }, icon('upload', 13), 'Load deck…'));
 }

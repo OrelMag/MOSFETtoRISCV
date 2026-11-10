@@ -801,13 +801,14 @@ with punch cards.
   inverters in a row with the grids behind dividers, Eccles–Jordan), a relay drill on the physical model's curves, the
   Hollerith drill and the card loader; strict part rules (no MOSFET, no NAND), graded in relays, relay steps and tube
   sections, the CMOS alternatives priced the same way through the technology setting
-- ⏳ Cards for the RISC-V CPUs: any program (RV32 asm / hex in the ROM editor and the CPU panel, RV16 in the
+- ✅ Cards for the RISC-V CPUs: any program (RV32 asm / hex in the ROM editor and the CPU panel, RV16 in the
   campaign) exported as a deck, one instruction per card (its word punched in binary, the source line printed in
   Hollerith along the top, a sequence number in columns 73–80 as on real decks so a dropped deck can be sorted),
   and a deck loaded back into a ROM; drop a deck file on the canvas to load it
   - Done for the sandbox's ROMs (RV32 asm / hex, RV16, 4-bit CPU, custom ISAs: Save as deck / Load deck in the
     ROM properties and program editor, a .deck.json dropped on the canvas) and the chapters' CPU panel (cards/program.ts).
-    Still to do: the campaign's RV16 programs
+    The campaign's RV16 program levels too (campaign/puzzledeck.ts, 2026-11-10): Save as deck / Load deck… on the level's code,
+    data words after a .DATA card, a deck loaded back as .word lines (tests/puzzledeck.test.ts round-trips every level's reference)
 - ✅ A card-reader boot loader: a small sandbox example where the CPU starts from a boot ROM that reads cards from
   the reader part, word by word, into RAM and jumps to it, as IBM's machines loaded from cards (the 1401's Load
   key); the CPU drawer follows the loaded program like a ROM program, the golden model starting after the load
@@ -1380,4 +1381,4 @@ The author's decisions of 2026-11-10:
 - ~~Should challenges *gate* progress?~~ Decided: the campaign gates softly (skip and Unlock all), the chapters stay open.
 - ~~Branding / name for the site?~~ Decided: From Switch to CPU (2026-11-08)
 - ~~Hosting target?~~ Decided: GitHub Pages at switchtocpu.com (custom domain, 2026-11-08), and the portable desktop .exe
-- Sound effects / gamification (badges)?
+- ~~Sound effects / gamification (badges)?~~ Dropped by the author (2026-11-10)
