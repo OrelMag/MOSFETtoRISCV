@@ -1,0 +1,24 @@
+/* Appendix F: the weave widget (widgets/ropeweave.ts). Cores and sense wires take the rope tokens of theme.css
+   (--rope-core, --rope-wire), the read path the accent; every colour is a theme token, so both themes follow. */
+.rope-weave .rope-svg { width: 100%; height: auto; display: block; }
+.rope-svg .rope-lbl { font: 600 11px var(--font-mono, monospace); fill: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.rope-svg .rope-tag { font: 11px var(--font-mono, monospace); fill: var(--muted); }
+.rope-svg .rope-tag.dim { font-size: 10px; }
+.rope-svg .rope-core { fill: none; stroke: var(--rope-core); stroke-width: 9; opacity: 0.85; }
+.rope-svg .rope-core.on { stroke: var(--accent); opacity: 1; }
+.rope-svg .rope-sense { fill: none; stroke: var(--rope-wire); stroke-width: 1.6; opacity: 0.55; }
+.rope-svg .rope-sense.sel { opacity: 0.9; }
+.rope-svg .rope-sense.blocked { stroke-dasharray: 4 3; opacity: 0.8; }
+.rope-svg .rope-sense.on { stroke: var(--accent); stroke-width: 2.4; opacity: 1; }
+.rope-svg .rope-inh { fill: none; stroke: var(--muted); stroke-width: 1.4; opacity: 0.6; }
+.rope-svg .rope-inh.on { stroke: var(--warn); opacity: 1; stroke-width: 2; }
+.rope-svg .rope-bit { font: 700 13px var(--font-mono, monospace); fill: var(--muted); }
+.rope-svg .rope-bit.on { fill: var(--accent); }
+.rope-svg .rope-hit { fill: transparent; cursor: pointer; }
+.rope-svg .rope-hit:hover, .rope-svg .rope-hit:focus-visible { fill: color-mix(in srgb, var(--accent) 18%, transparent); outline: none; }
+.rope-weave .rope-read { margin: 8px 0 0; color: var(--text); }
+.rope-weave .rope-words { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.rope-weave .rope-w { display: inline-flex; gap: 6px; align-items: baseline; }
+.rope-weave .rope-w span { color: var(--muted); }
+.rope-weave .rope-w.on { border-color: var(--accent); color: var(--accent); }
+@media (pointer: coarse) { .rope-weave .rope-w { min-height: 40px; } }
