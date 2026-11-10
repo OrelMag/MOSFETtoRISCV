@@ -16,6 +16,7 @@ import { BUILD_LUT } from './buildlut';
 import { BUILDK } from './buildk';
 import { BUILDM } from './buildm';
 import { BUILDPOW } from './buildpow';
+import { BUILDVM } from './buildvm';
 import { BUILDR } from './buildr';
 import { lzc, ROUND_DECIDE } from '../lib/fpu';
 import { arrayMul, seqDivider } from '../lib/muldiv';
@@ -610,6 +611,25 @@ export const NODES: CampaignNode[] = withBugHunts([
     why: 'Pipeline V still polls. The finale takes the interrupt in E, on a valid instruction only: 7 NANDs, 12 038 in all. The 45 programs take 194 319 NAND delays against 197 600 on the single-cycle core with interrupts, and that 2% is all a ripple-adder pipeline wins; with Kogge–Stone adders in E it would be 28%.',
     tips: ['intr = MIE · MEIE · irq comes from the CSR file: wire the pin in and OR the interrupt into the trap.', 'Gate the interrupt with the valid bit too: a bubble in E has no pc of its own (its D/E slot was cleared), so mepc would name an address the program never was at.', 'mcause for the interrupt is 0x800B (bit 15, external cause 11): it wins over every exception.'],
     codex: ['interrupts'], chapters: [{ chapter: 'traps', step: 4, label: 'External interrupts' }, { chapter: 'pipepay', step: 5, label: 'Measured, all together' }],
+  },
+
+  {
+    id: 'y_tlb', act: 7, title: 'A TLB', kind: 'build', optional: true, requires: ['y_final'], base: BUILDVM.y_tlb, par: { nand: 1640, period: 16 },
+    why: 'Paging puts a table read in front of every memory access, two of them in Sv32. A TLB keeps the last translations in four entries searched at once, by comparators, and a miss goes to the walker. Here at RV16 scale, with 8-bit page numbers: 1640 NANDs, period 16, against 3632 and 3848 for the system CPU\'s two at full width.',
+    tips: ['Each entry is a register with an enable and a valid flip-flop. A decoder of the round-robin pointer, ANDed with fill, picks the one to write.', 'A comparator per entry on the key, ANDed with the entry\'s valid bit, gives four match lines; a priority encoder turns them into a hit and an index for the two multiplexers that deliver the page number and the flags.', 'Valid is cleared by flush and set by a write to its entry, and a flush wins: its next value is (not flush), enabled by (write or flush).'],
+    codex: ['page', 'tlb'], gives: ['reg*', 'inc*', 'dec*', 'eq*', 'prienc*', 'mux*'], unlocks: ['rv16_tlb'], chapters: [{ chapter: 'vmem', step: 5, label: 'The TLB: remembering translations' }],
+  },
+  {
+    id: 'y_walk', act: 7, title: 'The page-table walker', kind: 'build', optional: true, requires: ['y_tlb'], base: BUILDVM.y_walk, par: { nand: 243, period: 24 },
+    why: 'A miss in the TLB sends the walker down two levels of page table, one read each: a pointer, then a leaf, or a page fault. A state machine of four states, 243 NANDs, period 24; a walk to a leaf stalls the CPU for 3 cycles. The system CPU\'s walker, with superpages and access checks, is 691.',
+    tips: ['Two flip-flops are the state: idle 00, level 1 01, level 0 10, fault 11. Decode them once into four lines.', 'The table read is {root, vpn1} at level 1 and {table, vpn0} at level 0: a multiplexer on the level picks both the table and the index. The table register takes the entry\'s PPN when a pointer is followed.', 'Judge the entry once: bad = not V, or W without R; a pointer has R = X = 0. Level 1 accepts a pointer, level 0 a leaf; anything else is the fault state, which lasts one cycle.'],
+    codex: ['pagetable', 'sv32', 'pagefault'], gives: ['dff', 'reg*', 'mux*'], unlocks: ['rv16_walker'], chapters: [{ chapter: 'vmem', step: 3, label: 'The Sv32 walk: two reads before the real one' }, { chapter: 'vmem', step: 4, label: 'The walker in gates' }],
+  },
+  {
+    id: 'p_switch', act: 7, title: 'A context switch', kind: 'program', optional: true, requires: ['y_final'], par: { size: 92, cycles: 462 },
+    why: 'A timer interrupt ends a program\'s turn, and the handler is the context switch: save the registers of the one that ran and its resume address into its block, load the other\'s, mret. 26 instructions of handler; the programs compute with all seven registers, so one that is lost shows. The chapter\'s kernel does this for 31 registers.',
+    tips: ['The handler has no register to start with. <code>csrrw sp, mscratch, sp</code> swaps sp with mscratch: sp becomes the address of the running process\'s block, and the process\'s sp waits in mscratch.', 'Save the other six registers relative to sp first, then fetch the parked sp and mepc through a scratch register you have already saved.', 'To load: point sp at the other block, restore mepc and the parked sp through t0, then the six registers, and last another <code>csrrw sp, mscratch, sp</code> to give the process its own sp back. Acknowledge the device before mret.'],
+    codex: ['ctxswitch', 'process', 'scheduler'], chapters: [{ chapter: 'os', step: 3, label: 'The process control block and the context switch' }, { chapter: 'os', step: 4, label: 'Two programs, one CPU: the timer decides' }],
   },
 
   // ---- Act 8 --------------------------------------------------------------------------------

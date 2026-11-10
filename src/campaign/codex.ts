@@ -12,6 +12,7 @@ import { CODEX_FPGA } from './codexfpga';
 import { CODEX_SIDE } from './codexside';
 import { CODEX_POWER } from './codexpower';
 import { CODEX_VEC } from './codexvec';
+import { CODEX_VM } from './codexvm';
 
 import { numOf } from '../chapters/order';
 export type CodexKind = 'component' | 'law' | 'tool' | 'concept' | 'trick';
@@ -212,6 +213,8 @@ export const CODEX: CodexEntry[] = [
   ...CODEX_POWER,
   // the Vectors chapter (codexvec.ts)
   ...CODEX_VEC,
+  // virtual memory and the tiny operating system (codexvm.ts)
+  ...CODEX_VM,
 ];
 
 export const codexById = (id: string): CodexEntry | undefined => CODEX.find((e) => e.id === id);

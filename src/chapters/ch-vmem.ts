@@ -71,7 +71,7 @@ export const chVmem: Chapter = {
       `The TLB is a small content-addressable memory keyed by the virtual page number: ${n(F.tlbI)} NANDs for the instruction side and ${n(F.tlbD)} for the data side at 4 entries. sfence.vma, or a write to satp, forgets every entry; forgetting it after editing a page table is the classic bug.`,
       'A page fault is a trap (cause 12 fetch, 13 load, 15 store) with mtval = the faulting virtual address and mepc = the instruction. A handler that maps the page and executes sfence.vma and mret makes the instruction run again, this time to completion.',
     ],
-    practise: [],
+    practise: ['y_tlb', 'y_walk'],
     check: [
       {
         question: 'A user program loads from virtual address 0x0000_5004 and the translation succeeds. Which part of that address is copied unchanged into the physical address?',
@@ -271,7 +271,7 @@ export const chVmem: Chapter = {
         options: ['Nothing: mepc already holds the faulting instruction, which must run again', 'mepc + 4: skip the instruction', 'The faulting address from mtval', 'The address of the next free frame'],
         answer: 0,
         explain: 'A fault is the one kind of trap that should be retried: mepc is the instruction that did not complete, and mret goes back to it. Adding 4, as for an ecall, would skip the store the program is waiting for.',
-        why: ['', 'Skipping the instruction is right for a system call and wrong here: the store would never happen.', 'mtval is a data address, not a place to resume at; mepc already points at the instruction.', 'The frame address is what the handler writes into the page table, not into mepc.'],
+        why: ['', 'Skipping the instruction is right for an ecall and wrong here: the store would never happen.', 'mtval is a data address, not a place to resume at; mepc already points at the instruction.', 'The frame address is what the handler writes into the page table, not into mepc.'],
       },
     },
     {

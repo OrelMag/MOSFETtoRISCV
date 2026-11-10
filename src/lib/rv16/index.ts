@@ -8,3 +8,4 @@ export * from './md';
 export * from './multi';
 export * from './lanes16';
 export * from './raster16';
+export * from './vm16';

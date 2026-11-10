@@ -198,6 +198,22 @@ export const CASES1: Record<string, LevelCase> = {
     alts: [{ name: 'Single-cycle core with traps and interrupts', lib: 'rv16_cpu_irq' }, { name: 'The finale with branch prediction', nand: 12609, note: 'period 84, 2299 cycles: 193 116 NAND delays' }, { name: 'The finale with Kogge–Stone adders in E', nand: 12922, note: 'period 59, 2399 cycles: 141 541 NAND delays' }],
   },
 
+  y_tlb: {
+    problem: 'With paging, every fetch, load and store would first read the page table: two extra memory reads before the real one. The TLB remembers the last translations. It is a tiny content-addressable memory: four entries, each a virtual page number with the physical page number and flags it maps to, a comparator per entry, and a valid bit that a flush clears. A hit costs nothing extra; a miss starts the walker, whose answer is filled into the entry a round-robin pointer names. Here the page number is 8 bits and the frame 8 bits, three flags (r, w, x): the same machine as the system CPU\'s, which has 20-bit page numbers.',
+    without: 'Every access pays the walk. Or, with no flush, the entries outlive the page tables they were copied from, and a program reaches a frame it no longer owns.',
+    cost: '1640 NANDs, period 16: four 19-bit entries and their valid bits are most of it, four comparators and the two multiplexers the rest. The system CPU\'s two TLBs, at 20-bit page numbers and 22-bit frames, are 3632 (instruction side) and 3848 (data side).',
+  },
+  y_walk: {
+    problem: 'A TLB miss needs the translation from the page table in memory. The walker is a state machine that does it without the program\'s help: it reads the first-level entry at {root, vpn1}; if that is a pointer it reads the second-level entry at {that table, vpn0}; if that is a leaf it hands the frame and flags to the TLB and the access retries. Anything else (an invalid entry, a leaf where a pointer must be, a pointer where a leaf must be) is a page fault, reported for one cycle. While it walks, the CPU stalls.',
+    without: 'The operating system would refill the TLB in software on every miss, a trap and a handler for each one (some architectures do), or every access would read the tables itself.',
+    cost: '243 NANDs, period 24: two state flip-flops with their decode, an 8-bit register for the table, two multiplexers for the address and the flag logic. A walk to a leaf takes 3 cycles of stall. The system CPU\'s walker, with 22-bit page numbers, superpages and an access-fault check, is 691.',
+  },
+  p_switch: {
+    problem: 'Two programs share one CPU, and a timer interrupt ends each one\'s turn. The handler is the context switch: it saves the registers of the program that was running, its resume address and its stack pointer into that program\'s process control block, picks the other block, and loads everything it holds. The handler has no register to start with, so the CSR <code>mscratch</code> is swapped with sp: one instruction gives it a pointer to work from. The switch has to be exact: the programs here compute with all seven registers, and one lost register changes a result.',
+    without: 'Without a saved copy, the interrupted program\'s registers are the next one\'s, and the next one\'s are gone. Run to completion is the only schedule that works.',
+    cost: '26 instructions of handler for each switch, in a program of 92 words. The chapter\'s kernel does the same with 31 registers and a page-table pointer: 99 instructions, 102 cycles from the interrupt to the next program\'s first instruction.',
+  },
+
   // ---- Act 8: side quests ---------------------------------------------------------------------
   o_lesson: {
     problem: 'RV16I adds, subtracts, shifts and compares; it has no multiply, no divide and no floating point. Each can be done in software, in a unit that loops one step per clock, or in one combinational pass, and the choice moves a core\'s three graded numbers in different directions: NANDs, period and cycles.',
