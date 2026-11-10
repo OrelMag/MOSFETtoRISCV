@@ -172,3 +172,24 @@ describe('a store built with contents', () => {
     }
   });
 });
+
+describe('Open in Sandbox', () => {
+  it('the step\'s store comes over as chips that compile and still hold their words', async () => {
+    const { coreStore } = await import('../src/lib/coremem');
+    const { CORE_SAMPLE } = await import('../src/widgets/coremem');
+    const { remixDef } = await import('../src/editor/remix');
+    const { UserLibrary } = await import('../src/editor/library');
+    const { emptyWorkspace } = await import('../src/editor/model');
+    const r = remixDef(emptyWorkspace(), coreStore(CORE_SAMPLE));
+    if ('error' in r) throw new Error(r.error);
+    const lib = new UserLibrary({ ...r.ws, open: [r.id] });
+    for (const id of Object.keys(r.ws.chips)) expect(lib.compiled(id)!.diags.filter((d) => d.level === 'error'), id).toEqual([]);
+    const def = lib.compiled(r.id)!.def;
+    const s = new GateSim(flatten(def));
+    s.reset('zero');
+    const eng: Engine = { set: (p, v) => s.setInput(p, v), settle: () => s.settle(), out: (p) => pack(s.getBits(s.design.root.ports[p])) };
+    const m = new CoreModel(CORE_SAMPLE);
+    for (const go of [1, 0, 0]) clock(eng, m, { addr: 6, din: 0, we: 0, go, inhOn: 1 });
+    expect(eng.out('dout')).toBe(CORE_SAMPLE[6]);
+  });
+});

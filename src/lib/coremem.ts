@@ -166,7 +166,12 @@ export const CORE_PLANE = corePlane();
  * and a buffer bit per plane; four planes. Laid out by hand in bands: registers and phase on the left, the drivers, the
  * planes with their inhibit drivers, the buffer.
  */
-export const coreStore = (words: readonly number[] = []): ComponentDef => memo(`store${words.join(',')}`, () => {
+export const coreStore = (init: readonly number[] = []): ComponentDef => {
+  const words = Array.from({ length: WORDS }, (_, k) => (init[k] ?? 0) & 15);
+  return memo(`store${words.join(',')}`, () => storeOf(words));
+};
+
+function storeOf(words: readonly number[]): ComponentDef {
   // plane p holds bit p of every word: core k of the plane is word k
   const planeBits = (p: number) => Array.from({ length: WORDS }, (_, k) => ((words[k] ?? 0) >> p & 1) << k).reduce((a, b) => a | b, 0);
   const any = words.some((w) => w);
@@ -245,13 +250,13 @@ export const coreStore = (words: readonly number[] = []): ComponentDef => memo(`
   }
   instances.push(inst('mo', merger(ones(PLANES), 24), [124, -3]), inst('mp', merger([1, 1], 2), [124, 104]));
   return (any ? (d: ComponentDef) => d : define)({
-    id: any ? `core_store16x4_${words.map((w) => (w & 15).toString(16)).join('')}` : 'core_store16x4', name: '16 x 4 core store', category: 'memory',
+    id: any ? `core_store16x4_${words.map((w) => w.toString(16)).join('')}` : 'core_store16x4', name: '16 x 4 core store', category: 'memory',
     summary: 'Sixteen words of four bits in four core planes, Whirlwind\'s scheme in miniature: go starts a cycle, READ empties the addressed word into the buffer register through the sense windings, WRITE puts the buffer back (or din, when we = 1), the inhibit keeping the zeros.',
     ports: [bus('addr', 4, 'in'), bus('din', PLANES, 'in'), bit('we', 'in'), bit('go', 'in'), bit('inhOn', 'in'), bit('clk', 'in', 'bottom', true), bus('dout', PLANES, 'out'), bus('phase', 2, 'out')],
     symbol: { kind: 'box', label: 'CORE 16x4' },
     netlist: () => ({ pins: { addr: [0, 19], din: [0, 61], we: [0, 86], go: [0, 101], inhOn: [0, 120], clk: [0, 126], dout: [132, 45], phase: [132, 106] }, instances, nets }),
   });
-});
+}
 export const CORE_STORE = coreStore();
 
 /** The store's inputs at a clock edge (inhOn defaults to 1: the inhibit drivers on). */

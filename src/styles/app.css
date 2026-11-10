@@ -2498,6 +2498,15 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .mc-status { display: flex; flex-wrap: wrap; gap: 3px 12px; font-size: 12px; color: var(--text-2); background: var(--accent-soft); border-radius: 8px; padding: 5px 8px; margin: 2px 0 6px; }
 .mc-status b { color: var(--text); font-family: var(--font-mono); }
 .mc-status .bad { color: var(--wx); font-weight: 600; } .mc-status .good { color: var(--good); }
+/* the core store's panel (widgets/coremem.ts) */
+.core-say { font-size: 12px; line-height: 1.45; color: var(--text-2); margin: 0 0 6px; }
+.core-bit { min-width: 26px; font-family: var(--font-mono); }
+.core-inh { display: inline-flex; gap: 4px; align-items: center; }
+.core-words { display: grid; gap: 1px; font-size: 12px; }
+.core-word { display: grid; grid-template-columns: 22px 40px 1fr; gap: 6px; padding: 1px 4px; border-radius: 4px; color: var(--text-2); }
+.core-word b { font-family: var(--font-mono); color: var(--text); font-weight: 600; }
+.core-word.cur { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.core-word.out b { color: var(--wx); }
 .mc-banks { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; }
 .mc-bank { font: 11.5px var(--font-mono); padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border); color: var(--text-2); }
 .mc-bank.open { border-color: var(--good); color: var(--text); }
