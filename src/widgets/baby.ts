@@ -180,7 +180,10 @@ function babyPanel(o: BabyOptions, words: number[], lines: { line: number; text:
         last = due > r / 10 ? now : last + (due * 1000) / r;
       } else last = now;
       if (sim() instanceof DualSim) (sim() as DualSim).preferFast = true;
-      stage.runCycles(due, () => performance.now() > deadline || (toEnd && stopped()), 0, true);
+      // a first difference from the golden model pauses the run there, so the moment it went wrong stays on screen
+      const clean = !mon.mismatch;
+      stage.runCycles(due, () => performance.now() > deadline || (toEnd && stopped()) || (clean && !!mon.mismatch), 0, true);
+      if (clean && mon.mismatch) { pause(); return; }
       if (toEnd && stopped()) { pause(); return; }
       if (now - shownAt > 250) { shownAt = now; stage.refresh(); }
       paint();
@@ -247,9 +250,9 @@ function babyPanel(o: BabyOptions, words: number[], lines: { line: number; text:
       h('div', { class: 'bb-body' },
         h('div', { class: 'bb-crt' }, cv),
         h('div', { class: 'param-row' }, viewSel, regenBtn),
-        beats, regs,
+        beats, regs, alarm,
         h('div', { class: 'param-row' }, runBtn, rateSel, beatBtn, instrBtn, endBtn),
-        progress, alarm, editor, listing));
+        progress, editor, listing));
 
     const moving = settings.autoClock && !o.paused && !reducedMotion();
     const boot = requestAnimationFrame(() => { paintRegen(); paint(); if (moving) start(); });
