@@ -920,6 +920,8 @@ function warpCoreDrawing(b: Builder, { W, n, lsu, host }: { W: number; n: number
     P.row('spawn', `sp${w}`, 'b', G1 + 16, P.pin(`gt${w}`, P.out(`gt${w}`))[1]);
     gy = Math.max(P.bottom(`gt${w}`), P.bottom(`sp${w}`)) + 6;
   }
+  // two warps: rs1Hi has gt1 alone and is a wire; it rises beside its driver, clear of gt1's tie and the run flags below it
+  if (P.has('gt1')) { const xr = P.right('hiNz') + 2; vias.set('hiNz.y>gt1.a', [[xr, P.pin('hiNz', 'y')[1]], [xr, P.pin('gt1', 'a')[1]]]); }
   const uRun = feeding('anyRun');
   P.cols('out', G1 - 10, gy + 6, [['runs'], [uRun], ['anyRun'], ['haltedG', 'retireG']], 10);
 
@@ -973,7 +975,7 @@ function warpCoreDrawing(b: Builder, { W, n, lsu, host }: { W: number; n: number
     // a memory instruction's accesses: which lanes now (the access unit, unless it must wait), what is left, done, holding the port
     const a = P.cols('acc', 22, YL, [['todo', 'mo'], ['acc', 'memop'], ['nShA', 'wS', 'wG'], ['wait'], ['nWait'], ['go'], ['fGo'], ['srv']], 16);
     const uHeld = feeding('heldG');
-    const d = P.cols('done', 22, a.bottom + 10, [['allN', 'nMo'], ['nSrv'], ['rest'], ['restZ'], ['doneG'], ['nDone'], ['hold'], ['fH'], ['heldN'], ['heldW'], ['hw'], [uHeld]], 12);
+    const d = P.cols('done', 22, a.bottom + 10, [['allN'], ['nSrv'], ['rest'], ['nMo', 'restZ'], ['doneG'], ['nDone'], ['hold'], ['fH'], ['heldN'], ['heldW'], ['hw'], [uHeld]], 12);
     P.row('done', 'heldG', 'i0', P.right(uHeld) + 3, P.pin(uHeld, 'o0')[1]);
     P.put('done', 'left', P.x('restZ'), P.bottom('restZ') + 8);
     tie('done', 'left'); tie('done', 'heldW');
