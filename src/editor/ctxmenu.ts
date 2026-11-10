@@ -27,6 +27,7 @@ import { exportImage, shareDialog } from './fileui';
 import { copyAsChip, explainOn, handout } from './levelgate';
 import type { WireDoc } from './model';
 import { cutAllowed, cutWireHere, toggleCut } from './cutui';
+import { relayoutRow } from './relayoutui';
 
 export { closeMenu as closeContextMenu, type MenuEntry, showMenu } from '../ui/menu';
 type Entry = MenuEntry;
@@ -56,6 +57,7 @@ function entries(ed: Editor, at: Vec): Entry[] {
       null,
       { label: 'Select all', key: 'Ctrl+A', run: () => ed.select({ parts: ed.doc.parts.map((p) => p.id), pins: ed.doc.pins.map((p) => p.id), wires: ed.doc.wires.map((w) => w.id), labels: ed.doc.labels.map((l) => l.id), ...(ed.doc.comments?.length ? { comments: ed.doc.comments.map((c) => c.id) } : {}) }), disabled: !ed.doc.parts.length && !ed.doc.pins.length && !ed.doc.wires.length && !ed.doc.labels.length && !ed.doc.comments?.length },
       { label: 'Fit to view', run: () => ed.fitView() },
+      ...(ed.level ? [] : [relayoutRow(ed)]),
       { label: 'Undo', key: 'Ctrl+Z', run: () => ed.undo() },
     ];
   }

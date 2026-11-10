@@ -164,3 +164,32 @@ function clipsBox(a: Vec, b: Vec, x0: number, y0: number, x1: number, y1: number
   }
   return t1 - t0 > 1e-9;
 }
+
+/** Above this many parts the menu does not measure when it opens (the layout and its drawing take too long). */
+export const MEASURE_MAX_PARTS = 300;
+
+export type RelayoutOffer =
+  | { kind: 'better'; doc: ChipDoc; dropped: string[]; before: LayoutMetrics; after: LayoutMetrics }
+  | { kind: 'worse'; before: LayoutMetrics; after: LayoutMetrics }
+  | { kind: 'refused'; why: string };
+
+/** "a → b" for the reading that decides: crossings, then wires through parts when there are any. */
+export function offerText(before: LayoutMetrics, after: LayoutMetrics): string {
+  const parts = [`crossings ${before.crossings} → ${after.crossings}`];
+  if (before.throughParts || after.throughParts) parts.push(`through parts ${before.throughParts} → ${after.throughParts}`);
+  return parts.join(', ');
+}
+
+/**
+ * Lay the chip out again and measure both drawings: offered only when it reads better (fewer crossings plus wires through
+ * parts). Hand-drawn sheets often read better as drawn: their authors used tunnels where we would wire.
+ */
+export function relayoutOffer(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult, generated = false): RelayoutOffer {
+  const res = relayoutChip(doc, defOfRef, generated);
+  if ('error' in res) return { kind: 'refused', why: res.error };
+  const defOf: DefOf = (p) => { const d = defOfRef(p.ref); return 'error' in d ? undefined : d; };
+  const before = layoutMetrics(doc, defOf, compileChip(doc, defOfRef).netOfWire);
+  const after = layoutMetrics(res.doc, defOf, compileChip(res.doc, defOfRef).netOfWire);
+  const score = (m: LayoutMetrics) => m.crossings + m.throughParts;
+  return score(after) < score(before) ? { kind: 'better', ...res, before, after } : { kind: 'worse', before, after };
+}

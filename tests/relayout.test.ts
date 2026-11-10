@@ -11,7 +11,7 @@ import { SCHEMA, type ChipDoc, type PartRef, polyline } from '../src/editor/mode
 import { partBox, pinBody } from '../src/editor/geom';
 import { lintChip } from '../src/editor/lint';
 import { partDef } from '../src/editor/parts';
-import { layoutMetrics, relayoutChip, relayoutRefusal } from '../src/editor/relayout';
+import { layoutMetrics, relayoutChip, relayoutOffer, relayoutRefusal } from '../src/editor/relayout';
 import { sanitizeChip } from '../src/editor/store';
 import { importDigital } from '../src/import/digital';
 import { importLogisim } from '../src/import/logisim';
@@ -141,6 +141,17 @@ describe('lay out by logic depth', () => {
     const got = Object.fromEntries(rows.map((r) => [r.chip, r.metrics]));
     if (!Object.keys(PINNED).length) console.log(JSON.stringify(got, null, 2));
     expect(got).toEqual(PINNED);
+  });
+  it('is offered only where it reads better: fewer crossings plus wires through parts', () => {
+    const verdicts: Record<string, string> = {};
+    for (const names of SETS) {
+      const { r, lib } = load(names);
+      for (const c of r.chips) if (!lib.compiled(c.id)!.diags.some((d) => d.level === 'error')) verdicts[`${names[0]}: ${c.name}`] = relayoutOffer(c, (ref) => partDef(ref, (x) => lib.defOf(x))).kind;
+    }
+    const better = Object.keys(verdicts).filter((k) => verdicts[k] === 'better');
+    expect(better).toEqual(['counter2.dig: counter2', 'ram.dig: ram', 'counter.circ: counter']);
+    expect(verdicts['rom.circ: Joystick (not imported)']).toBe('refused');
+    expect(Object.values(verdicts).filter((v) => v === 'worse').length).toBe(Object.keys(verdicts).length - 4);
   });
   it('refuses what it cannot place, saying why', () => {
     const { r } = load(['rom.circ']);
