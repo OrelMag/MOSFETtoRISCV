@@ -1448,7 +1448,8 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  ports they join) and snap; nudges.ts: the first rung of the hint ladder (tipsOf: nudge, then tips)
   owncore.ts     a program level run on the learner's core level chip (ui/owncoreui.ts: the Run the tests on switch): coreOptions
                  (which cores fit, why not), runOnCore (model first, then the level's bench with RunOptions.own: IN / SWITCHES served
-                 from the test, no budget, perTest with CoreDisagree), registersAt (Step to it), ownBench; progress `on` / `cores`
+                 from the test, no budget, perTest with CoreDisagree), registersAt (Step to it), ownBench (Open on a bench: any scalar
+                 test, IN through bench.ts's IN device; tests/ownbench.test.ts); progress `on` / `cores`
   corecheck.ts   the CPU core bench (coreCheck carries its CoreSpec: coreSpecOf): instr / drdata served
                  combinationally, register-write and store traces
                  compared with iss16 in order, cycle budget, irq from stores to 0xFFF9, 32 BitSim lanes (GateSim
