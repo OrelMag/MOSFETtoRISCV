@@ -248,6 +248,8 @@ export const TAUGHT_OPTIONAL: Record<string, string[]> = {
   ecclesjordan: ['tubes'],
   hollerith: ['cards'],
   loader: ['cards'],
+  williamstube: ['appendix-baby'],
+  ssem: ['appendix-baby'],
   nand: ['relays', 'tubes'],
   xor: ['relays'],
   fulladder: ['relays'],

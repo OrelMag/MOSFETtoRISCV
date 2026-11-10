@@ -12,6 +12,7 @@ import { ALIASES_DSP } from './codexdsp';
 import { ALIASES_FPGA } from './codexfpga';
 import { ALIASES_POWER } from './codexpower';
 import { ALIASES_VEC } from './codexvec';
+import { ALIASES_BABY } from './codexbaby';
 
 /** Other names an entry goes by in the chapters' prose. */
 export const ALIASES: Record<string, string[]> = {
@@ -63,6 +64,8 @@ export const ALIASES: Record<string, string[]> = {
   ...ALIASES_POWER,
   // the Vectors chapter (codexvec.ts)
   ...ALIASES_VEC,
+  // Appendix E (codexbaby.ts)
+  ...ALIASES_BABY,
 };
 
 /** Entries never marked automatically: their names are everyday words in the prose. */
