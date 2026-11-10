@@ -1331,15 +1331,12 @@ main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
     bus's 16 channels at the pins) and the CSR unit's select crossbar as lanes (29 % → 21 %) on fix/circuits-sys-variants
     (tests/redrawclear-sysvariants.test.ts); the out-of-order units (ooo/5–7, 10) on feat/ooo-redraw: rename table 50 % → 30 %, its row 56 % → 0, issue-queue entry 55 % → 30 %, store queue 66 % → 39 %, select as a crossbar 56 % → 12 % (tests/redrawclear-ooo.test.ts); the core's top and its issue queue / reorder buffer are not redrawn
   - rv16_mux16 (needs a bit-sliced redraw) and srt4div8 (not switched to layered.ts): unchanged on main (git log)
-  - Warp core with lsu (chapter 32): net nMo still runs through a part — routeNetlist + wiresThroughParts on warpCore({ warps: 8, lanes: 8, lsu, mul }) returns { nMo }
   - Communication circuits left on purpose: CRC-32 next-state crossings (inherent), I²C target t0 (layered's 14-unit channel cap), the computer-with-NIC bus top
-  - Chapter seams: bus (38) ends without a pointer to chapter 39 (no numOf('message') in ch-bus.ts), sdr (81) never names the appendices (no mention in
-    ch-dsp-sdr.ts), datacentre has no pointer on to the expert's bench (no reference in ch-comm-dc.ts)
   - Kept by decision, not work to do: secret/7's computing-history digression; the recap `practise` list left empty for cellular, glass, pcie, radio, wifi
     and secret (it takes campaign nodes only; the capstones are not nodes)
   - Verified fixed on main, so not listed: first load under 200 ms (batch 16), HEX / BIN / DEC as one radio group and finger-sized section links (1d8a6547),
     View options sticky headings and Tab leaving the menu (app.ts, app.css), the relay full adder's pointers (93a4a054), the skip link (da9f2ffb); the
-    "factor 1.4" claim in datacentre is no longer in the chapter
+    "factor 1.4" claim in datacentre is no longer in the chapter; on fix/seams-warp (2026-11-10): the warp core's nMo and two-warp rs1Hi wires clear of every part (tests/warplayout.test.ts checks wiresThroughParts on every variant), and the chapter seams (bus on to Sending a message, sdr naming the five appendices, datacentre on to the expert's bench)
 
 ### Phase 23 — Ship review and what comes after it (2026-11-09) 🚧
 
