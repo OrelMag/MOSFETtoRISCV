@@ -189,7 +189,7 @@ export const chVerify: Chapter = {
       body: `
         <p>Every check so far trusts the golden model. Who checks it? <strong>Spike</strong>, the RISC-V reference simulator, written by others. CI runs random programs on both and compares them commit by commit: every instruction's PC, register write and memory access. A difference is a bug in one of the two.</p>
         <p>That is how the last bug in the table was found. Spike's <code>mret</code> writes the CSR <code>mstatush</code>; our model did not have it, so reading it trapped as illegal. The CPU agreed with our model, so no lock-step comparison could ever have seen it.</p>
-        <p>The table is everything the checks of this chapter found in this site's code, ${FOUND.length} bugs, and which check found each. ${cap(word(IN_MODEL))} sat in the golden model, which every other check trusts. riscv-tests found ${word(BY_TESTS)}, random programs ${word(BY_RANDOM)} and Spike ${word(BY_SPIKE)}: each of the other two found a bug that every riscv-test had passed.</p>
+        <p>The table is everything the checks of this chapter found in this site's code, ${FOUND.length} bugs, and which check found each. ${cap(word(IN_MODEL))} sat in the golden model, which every other check trusts. riscv-tests found ${word(BY_TESTS)}, random programs ${word(BY_RANDOM)} and Spike ${word(BY_SPIKE)}: each of the other two found a bug the riscv-tests did not.</p>
         <p>The last rung is the Verilog export: Yosys synthesizes the exported CPUs and every output of the resulting netlist is compared with this site's simulation, every cycle, before each deploy.</p>`,
       widget: () => foundWidget(),
       more: {

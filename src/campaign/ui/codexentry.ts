@@ -43,6 +43,8 @@ import { anatomySvg } from './svgs';
 const rich = (tag: 'p' | 'div' | 'li' | 'span', html: string, cls?: string) => {
   const el = h(tag, cls ? { class: cls } : null);
   el.innerHTML = html;
+  // a worked example's <pre> may scroll sideways on a phone: let the keyboard reach it
+  for (const pre of el.querySelectorAll('pre')) { pre.tabIndex = 0; pre.setAttribute('role', 'region'); pre.setAttribute('aria-label', 'Worked example, scrolls sideways'); }
   return el;
 };
 

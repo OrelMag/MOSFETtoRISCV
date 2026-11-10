@@ -269,7 +269,7 @@ export const chFpga: Chapter = {
         per unit, after months and a mask set; as an FPGA, real parallel hardware the same day, at a cost in area and speed.</p>
         <p>Measured here: each LUT stands for ${nandsPerLut().toFixed(1)} of our NANDs on average but is itself ${lutCost(4).nands} NANDs of multiplexer and 16 configuration bits, so the configurable fabric spends
         about ${(lutCost(4).nands / nandsPerLut()).toFixed(0)} NAND-equivalents of logic for each one it implements, before the routing switches. Published comparisons put FPGAs at tens of times the area and a few times the
-        delay of a standard-cell chip in the same process (Kuon and Rose, 2007: about 35 times the area of the logic and 3 to 5 times the delay, at 90 nm).</p>
+        delay of a standard-cell chip in the same process (Kuon and Rose, 2006–2007: 35 to 40 times the area for logic and flip-flops alone, 3.4 to 4.6 times the delay, at 90 nm).</p>
         <p>That decides their place: prototypes of chips (a CPU is tested on FPGAs before its masks are made), products made in thousands, hardware that must change after it ships, and computation where
         thousands of small units in parallel beat a processor's one instruction at a time.</p>
         <p>On an FPGA a design is tried before its masks are made. How anyone knows it is right, and that each chip made from it is, is the next chapter.</p>`;

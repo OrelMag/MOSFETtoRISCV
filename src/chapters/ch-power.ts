@@ -89,7 +89,7 @@ export const chPower: Chapter = {
         Power panel adds up the energy, block by block, glitches included.</p>
         <p>Here is the single-cycle CPU of <a href="#/c/cpu/0">chapter ${numOf('cpu')}</a> running “sum”. Over its first ${POWER.cycles} cycles it spends
         <strong>${pj(plain.pj)} per cycle</strong> at ${V_NOM} V: at its period of ${plain.period} NAND delays (${ns(plain.period)} ns), ${(plain.pj / Number(ns(plain.period))).toFixed(1)} mW.
-        (The benchmarks later in the chapter need a larger data memory, whose deeper read multiplexer makes the same CPU's period ${sc.period}.)
+        (The benchmarks later in the chapter are longer programs: their program ROM is a level deeper, its read arrives later, and the same CPU's period there is ${sc.period}.)
         These figures are over the first ${POWER.cycles} cycles; the Power panel beside the circuit shows a running window, so its own figures drift a little.
         Look at which blocks spend it. The <span data-show="dm">data memory</span> takes ${share('dm')}, the clock net alone ${share('clock (clk net)')}, the
         <span data-show="rf">register file</span> ${share('rf')}, and the <span data-show="alu">ALU</span>, which does the actual work, ${share('alu')}.</p>
@@ -129,9 +129,8 @@ export const chPower: Chapter = {
         <p>Energy per cycle is ½ C V² summed over the toggles, so a circuit costs what its data make it toggle. Engineers write it as P = α C V² f: C the total
         capacitance, f the clock rate, and α, the <b>activity</b>, the fraction of that capacitance that is charged per cycle on average.</p>
         <p>The same 8-bit adder, three streams of operands, every toggle counted on the gate-level simulator. Random operands change half of the input bits every step. Counting changes about two input bits
-        a step, random operands about eight, yet the bars differ far less than that: when a bit of a and the same bit of b flip together, their XOR inside the
-        full adder stays put, while one input flipping alone always reaches the sum. What costs is the toggles inside, not the inputs. A held operand barely moves
-        the adder at all. A clock has α = 1: it rises and falls every cycle.</p>`,
+        a step, random operands about eight, yet the bars differ far less than that: the energy is in the toggles inside the adder, its carries and the
+        glitches they make, and the number of input bits that changed is a poor guide to them. A held operand barely moves the adder at all. A clock has α = 1: it rises and falls every cycle.</p>`,
       widget: activityWidget,
       challenge: {
         kind: 'quiz', question: 'Two programs run on one CPU at one clock rate. One draws more power. What differs?',
