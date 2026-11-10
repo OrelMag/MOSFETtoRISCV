@@ -95,7 +95,7 @@ export function runPuzzle(p: Puzzle, compiled: Compiled, pins: PinDoc[], faults?
   try {
     es.setMode('cycle');
     // `faults`: the chip's document and where its placed chips are, so its switched-on faults and theirs act here as on
-    // the canvas (editor/chipfaults.ts): a faulted chip never passes
+    // the canvas (editor/chipfaults.ts): a faulted chip never passes, and the strips do not count a pass with faults on (faultyChips)
     es.update({ ...compiled, def: compiled.def }, pins, faults?.doc, faults && { look: faults.look, deps: faults.deps });
     const ports = findPorts(es);
     if (Array.isArray(ports)) return { ok: false, problems: ports, results: [], cycles: 0, width: 0 };

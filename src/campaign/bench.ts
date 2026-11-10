@@ -1,6 +1,6 @@
 // "Debug this test in the sandbox": a core-level or program-level test as a computer chip around the
-// learner's own core: an RV16 ROM holding the program, a 512-word RAM holding its data (decoded on
-// the low address bits, as the golden model's memory wraps), an LED register at LEDS and the
+// learner's own core: an RV16 ROM holding the program, a RAM holding its data (64 words, 512 when
+// the data needs them; decoded on the low address bits, as the golden model's memory wraps), an LED register at LEDS and the
 // interrupt line set by stores to IRQ, as the core bench does; stores to the I/O words (0xFFF7 up)
 // never reach the RAM. A test that reads IN gets a ROM of its words and a switch bank holding the
 // number of the next one, which the CPU drawer's golden model sets (a core has no read strobe). The
@@ -52,11 +52,13 @@ function sourceOf(t: CoreTest): { src: string; words: number[]; data: Map<number
 export interface Bench { ws: Workspace; id: string }
 
 /**
- * The bench's RAM: 512 words, decoded on daddr[8:0] (a stack anywhere wraps into it, as the golden model's memory
- * does); every program level's data fits (they use words 0–281). Written by any store below the I/O words (0xFFF7 up)
- * and, on the io bench, outside the screen: where the golden model's wrapped memory is written too.
+ * The bench's RAM: 64 words in gates (BENCH_RAM_MIN_K), or 512 (BENCH_RAM_K, a behavioural memory) when the test's data
+ * lies beyond word 63 (p_mem and p_sort use words 255–281). Decoded on the low address bits: a stack anywhere wraps into
+ * it, as the golden model's memory does. Written by any store below the I/O words (0xFFF7 up) and, on the io bench,
+ * outside the screen: where the golden model's wrapped memory is written too.
  */
 export const BENCH_RAM_K = 9;
+const BENCH_RAM_MIN_K = 6;
 
 /**
  * Where the bench's parts sit (grid units, top-left corners), every variant's: the top row is reset → core → address
@@ -110,7 +112,7 @@ export function benchChip(core: ComponentDef, coreId: string, coreName: string, 
   if ('error' in prog) return prog;
   const k = Math.max(2, Math.ceil(Math.log2(Math.max(2, prog.words.length))));
   if (k > MAX_ROM_K) return { error: `${prog.words.length} instructions do not fit in the sandbox's largest ROM (${2 ** MAX_ROM_K} words)` };
-  const ramK = BENCH_RAM_K;
+  const ramK = [...prog.data.keys()].some((a) => a >= 2 ** BENCH_RAM_MIN_K && a < MMIO_BASE) ? BENCH_RAM_K : BENCH_RAM_MIN_K;
   const init = new Array<number>(2 ** ramK).fill(0);
   for (const [a, v] of prog.data) if (a < 0xfff0) init[a % 2 ** ramK] = v & 0xffff;
   const romRef: PartRef = { rom: { k, w: 16, addr: 'word', lang: 'rv16', src: prog.src } };
@@ -214,7 +216,7 @@ export function addBench(ws: Workspace, core: ComponentDef, coreId: string, t: C
 /** The Pong program as a core test (the bench's ROM). */
 export const PONG16_TEST: CoreTest = { name: 'Pong', src: PONG16 };
 
-const PONG_NOTES = (core: string) => `Pong (RV16 assembly in the ROM: Edit program…) on ${core}, with the golden model in lock step in the CPU panel. Run (or set the clock rate high): your paddle is the left one, switch 7 up and switch 6 down; the computer plays the right one, or a second player with switch 4 on (switch 1 up, switch 0 down). The LEDs keep the score, yours in bits 7–4; five points win a game. The screen is 32 × 32 RGB565 at 0xF000 + 32·y + x (a store paints a pixel), the switches are read at 0xFFFA, the data memory is ${2 ** BENCH_RAM_K} words.`;
+const PONG_NOTES = (core: string) => `Pong (RV16 assembly in the ROM: Edit program…) on ${core}, with the golden model in lock step in the CPU panel. Run (or set the clock rate high): your paddle is the left one, switch 7 up and switch 6 down; the computer plays the right one, or a second player with switch 4 on (switch 1 up, switch 0 down). The LEDs keep the score, yours in bits 7–4; five points win a game. The screen is 32 × 32 RGB565 at 0xF000 + 32·y + x (a store paints a pixel), the switches are read at 0xFFFA, the data memory is ${2 ** BENCH_RAM_MIN_K} words.`;
 
 /** The Pong bench's clock: a frame is about 240 cycles. */
 export const PONG_HZ = 5000;

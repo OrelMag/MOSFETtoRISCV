@@ -20,7 +20,7 @@ import { tick } from './yieldtick';
 const CORES = ['c_core3', 'o_mc', 'pi_core3'];
 const solved = (ids: string[]): Workspace => ids.reduce((ws, id) => solveChallenge(ws, levelChallenge(nodeById(id)!)!).ws, emptyWorkspace());
 
-function onBench(ws: Workspace, core: string, test: Parameters<typeof ownBench>[2]) {
+function onBench(ws: Workspace, core: string, test: Parameters<typeof ownBench>[2], mode: 'cycle' | 'gate' = 'cycle') {
   const b = ownBench(ws, core, test);
   if ('error' in b) throw new Error(b.error);
   const doc = b.ws.chips[b.id];
@@ -29,6 +29,7 @@ function onBench(ws: Workspace, core: string, test: Parameters<typeof ownBench>[
   expect(detectRv16(doc, b.ws.chips)?.input?.words ?? []).toEqual((test.input ?? []).map((v) => v & 0xffff));
   const es = new EditorSim({ debounceMs: 0 });
   es.update(new UserLibrary(b.ws).compiled(b.id)!, doc.pins);
+  if (mode === 'gate') es.setMode('gate');
   const m = new Rv16Monitor(es, () => doc, () => b.ws.chips);
   m.runToHalt(Infinity, 30000);
   return { m, doc };
@@ -56,6 +57,21 @@ describe('a program level on the bench around your core', { timeout: 600000 }, (
       }
     });
   }
+
+  it('in gate-delay mode too (GateSim: the bank is poked and settled after each edge), and the RAM is 64 gate-level words unless the data needs 512', () => {
+    const p = PUZZLES.p_add;
+    const tests = ownTests(p, p.ref);
+    if ('error' in tests) throw new Error(tests.error);
+    for (const core of ['pi_core3', 'c_core3']) {
+      const { m, doc } = onBench(ws, core, tests[0], 'gate');
+      expect(m.mismatch, `${core}: ${m.mismatch?.detail}`).toBeNull();
+      expect(m.done).toBe(true);
+      expect(doc.parts.find((q) => q.id === 'mem')?.ref).toMatchObject({ ram: { k: 6 } });
+    }
+    const sort = ownTests(PUZZLES.p_sort, PUZZLES.p_sort.ref);
+    if ('error' in sort) throw new Error(sort.error);
+    expect(onBench(ws, 'c_core3', sort[0]).doc.parts.find((q) => q.id === 'mem')?.ref).toMatchObject({ ram: { k: 9 } });
+  });
 
   it('a core without branches disagrees on a program that loops', () => {
     const p = PUZZLES.p_loop;
