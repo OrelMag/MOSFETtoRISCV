@@ -18,7 +18,7 @@ import { copyWithDevice, emptyDeviceChip, referenceChip } from '../puzzles/devre
 import { DeviceReplay } from '../puzzles/devreplay';
 import { puzzleProgress } from '../puzzles/grade';
 import { hardwareNands, programRoms } from '../puzzles/run';
-import { lookOf } from './chipfaults';
+import { faultsNote, faultyChips, lookOf } from './chipfaults';
 import { deviceFaceSvg } from './devface';
 import { deviceState, type DeviceState } from './devparts';
 import { type Editor, registerEditorPlugin } from './editor';
@@ -202,7 +202,13 @@ class DeviceUi {
     setTimeout(() => {
       try {
         const c = ed.compiled;
-        const r = runDevicePuzzle(p, c, ed.doc.pins, { doc: ed.doc, look: lookOf(ed.ws, ed.lib), deps: ed.lib.deps(ed.chipId) });
+        let r = runDevicePuzzle(p, c, ed.doc.pins, { doc: ed.doc, look: lookOf(ed.ws, ed.lib), deps: ed.lib.deps(ed.chipId) });
+        // faults switched on in chips placed here act in the run; a pass with them does not count (chipfaults.ts faultyChips)
+        const faulty = faultyChips(ed.chipId, ed.lib.deps(ed.chipId), lookOf(ed.ws, ed.lib));
+        if (faulty.length) {
+          if (r.ok) r = { ...r, ok: false, problems: [faultsNote(faulty, true), ...r.problems] };
+          else ed.toast(faultsNote(faulty, false));
+        }
         const nands = r.ok ? hardwareNands(c.def) : null;
         const reference = r.ok && JSON.stringify(stripIds(ed.doc)) === JSON.stringify(stripIds(referenceChip(p.dev, ed.chipId, ed.doc.name)));
         const stars = nands !== null && !reference ? deviceStars(nands, parNands(p.dev)) : null;
