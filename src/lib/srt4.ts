@@ -3,7 +3,7 @@
 // on the top bits of the divisor. The thresholds are computed here from the containment conditions,
 // not copied from a table, and the tests check the whole divider against Math.floor.
 
-import { instPort, symbolGeom } from '../sim/geometry';
+import { instPort } from '../sim/geometry';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { mask } from '../sim/values';
 import { constWord, isZero } from './alu';
@@ -311,45 +311,91 @@ export function srt4Divider(n: number, abort = false): ComponentDef {
     b.next();
     const fin = b.op(srt4Finish(n), [S, C, X, QN, D, SH]);
     b.next();
-    b.wire(b.op1(bitwise('or', n), [`${fin}.q`, b.op1(fanout(n), [Z])], 'q (all ones if b = 0)'), 'q');
+    const q0 = b.op1(bitwise('or', n), [`${fin}.q`, b.op1(fanout(n), [Z])], 'q (all ones if b = 0)');
+    b.wire(q0, 'q');
     b.wire(`${fin}.r`, 'r');
     b.wire(`${ctl}.done`, 'done');
     b.wire(`${ctl}.busy`, 'busy');
-    // Placed by hand (Builder's columns ran the normalizer's d and s across the muxes, the digit splitters across the step): every
-    // register level with what feeds it, the normalizer under the control level with the divisor and shift registers.
+    // Placed by hand. The registers in one column, each level with its mux (S, C, X, −digits, then the divisor, shift and b = 0
+    // under them), their outputs running right as a band into FINISH in its port order; the step above the band, each of its
+    // inputs a riser from the band (the left-most to its top input), its two low-word splitters' words passing under it to the
+    // shift-in mergers on its right. The normalizer under the muxes it loads, the control at the bottom so done and busy run out
+    // along the bottom edge. Pointers only for the clock, load, step and the four next-state words looping back to the muxes.
     const inst = (nmI: string) => b.instances.find((i) => i.name === nmI)!;
-    const portY = (nmI: string, port: string) => { const i = inst(nmI); return instPort(i.def, i.at!, i.flip, port, i.rot).pos[1]; };
+    const portAt = (nmI: string, port: string) => { const i = inst(nmI); return instPort(i.def, i.at!, i.flip, port, i.rot).pos; };
+    const portY = (nmI: string, port: string) => portAt(nmI, port)[1];
     const put = (nmI: string, x: number, y: number) => { inst(nmI).at = [x, y]; };
+    const upsideDown = (nmI: string) => { const i = inst(nmI); i.flip = true; i.rot = 2; }; // mirrored top to bottom
     // `nmI` at column x, its port level with the driver's
     const level = (nmI: string, port: string, drv: string, dport: string, x: number) => { put(nmI, x, 0); put(nmI, x, portY(drv, dport) - portY(nmI, port)); };
     const at = (v: string) => v.slice(0, v.indexOf('.'));
-    const XM = 48, XR = 62, mux = [mS, mC, mX, mN];
-    put(ctl, 10, 30); // below the corner where the dividend's top bits split
-    mux.forEach((m, i) => put(m, XM, 2 + 12 * i));
-    const z6 = b.instances[b.instances.indexOf(inst(at(w0))) - 1].name; // the six zeros of hi / 4
-    level(at(w0), 'out', mS, 'b', 38); put(hs, 24, portY(at(w0), 'i0') - 1); put(z6, 12, 18); // out of the splitter's lanes: a pointer
-    level(at(x0), 'out', mX, 'b', 38);
-    // an argument's part is built before the part it feeds: the zero words just before their muxes
-    const zc = b.instances[b.instances.indexOf(inst(mC)) - 1].name, zn = b.instances[b.instances.indexOf(inst(mN)) - 1].name;
-    level(zc, 'y', mC, 'b', XM - 10); level(zn, 'y', mN, 'b', XM - 10);
-    [at(S), at(C), at(X), at(QN)].forEach((r, i) => level(r, 'd', mux[i], 'y', XR));
-    put(nm, 10, 54);
-    level(at(D), 'd', nm, 'd', XR); put(at(SH), XR, inst(at(D)).at![1] + 10); // the shift register under the divisor's, s bending down to it
-    const zr = at(Z), zb = b.instances[b.instances.indexOf(inst(zr)) - 1].name;
-    put(zb, XM, 76); level(zr, 'd', zb, 'z', XR);
-    // the digit splitters under the step, so their low words reach the shift-in mergers below it, not through it
-    const stI = inst(st), stBottom = stI.at![1] + symbolGeom(stI.def).h;
-    put(xs, stI.at![0] - 7, stBottom + 4); put(qs, stI.at![0] - 7, stBottom + 12);
-    // and the shift-in mergers below the step too, each one's low word level with its splitter
-    const mx = inst(at(xn)).at![0];
-    level(at(xn), 'i2', xs, 'o0', mx); level(at(nn), 'i2', qs, 'o0', mx);
-    const R = b.right;
+    const before = (nmI: string) => b.instances[b.instances.indexOf(inst(nmI)) - 1].name; // an argument's part is built just before
+    const XN = 6, XM = 44, XR = 58, Y1 = 20, P = 10, mux = [mS, mC, mX, mN], regs = [at(S), at(C), at(X), at(QN)];
+    mux.forEach((m, i) => put(m, XM, Y1 + P * i));
+    regs.forEach((r, i) => level(r, 'd', mux[i], 'y', XR));
+    const z6 = before(at(w0)), zc = before(mC), zn = before(mN);
+    // the loaded words' mergers back from the muxes, leaving room for the next-state pointers on the muxes' a inputs
+    level(at(w0), 'out', mS, 'b', XM - 10); level(z6, 'y', at(w0), 'i1', XM - 17);
+    upsideDown(at(x0)); level(at(x0), 'out', mX, 'b', XM - 10);
+    level(zc, 'y', mC, 'b', XM - 8); level(zn, 'y', mN, 'b', XM - 8);
+    put(nm, XN, Y1 + 4 * P + 2);
+    upsideDown(hs); put(hs, 22, portY(mS, 'b') + 6);
+    level(at(D), 'd', nm, 'd', XR); put(at(SH), XR, inst(at(D)).at![1] + P);
+    const zr = at(Z), zb = before(zr);
+    put(zr, XR, inst(at(SH)).at![1] + P); level(zb, 'z', zr, 'd', XR - 14); // clear of the load pointer on the register's en
+    put(ctl, XN, inst(zr).at![1] + 9);
+    // the step above the band, the risers between the register column and it
+    const XQ = XR + 8, XS = XQ + 18;
+    put(st, XS, 0);
+    upsideDown(xs); put(xs, XQ + 7, 13); put(qs, XQ + 14, 17);
+    const XO = XS + 12;
+    level(at(nn), 'i0', st, 'n1', XO + 3); level(at(xn), 'i0', st, 'p1', XO + 14);
+    const XF = XO + 4;
+    put(fin, XF, 0); put(fin, XF, portY(at(X), 'q') + 2 - portY(fin, 'qp')); // FINISH's qp a line under the dividend's
+    const XQ0 = XF + 20;
+    level(at(q0), 'a', fin, 'q', XQ0);
+    const fz = before(at(q0)); level(fz, 'out', at(q0), 'b', XQ0 - 4);
+    const R = XQ0 + 12;
+    const nets = b.nets();
+    // wires, not pointers, where a wire reads (Builder makes every net with several sinks a pointer)
+    const asWire = new Set(['S', 'C', 'X', 'QN', 'D', 'hi', 'bzero', 'a', 'b', 'zero6']);
+    for (const net of nets) if ((net.name && asWire.has(net.name)) || net.ends[0] === `${fz}.out`) delete net.tags;
+    const via = (sink: string, pts: [number, number][]) => { const net = nets.find((x) => x.ends.includes(sink))!; net.via = { ...net.via, [sink]: pts }; };
+    const rowOf = (r: string) => portY(r, 'q');
+    // the band: each register's word along its row, the ones above FINISH's input turning down (the lowest first), the ones
+    // below turning up (the highest first), so none crosses another
+    const band: [string, string][] = [[at(S), 's'], [at(C), 'c'], [at(X), 'qp'], [at(QN), 'qn'], [at(D), 'd'], [at(SH), 'sh']];
+    const turn = { [at(X)]: XF - 10, [at(C)]: XF - 8, [at(S)]: XF - 6, [at(QN)]: XF - 10, [at(D)]: XF - 8, [at(SH)]: XF - 6 };
+    for (const [r, p] of band) via(`${fin}.${p}`, [[turn[r], rowOf(r)], [turn[r], portY(fin, p)]]);
+    // the step's risers, left to right in its port order (s, c, x through the dividend's splitter, d); the −digits' splitter last
+    via(`${st}.s`, [[XQ + 2, rowOf(at(S))], [XQ + 2, portY(st, 's')]]);
+    via(`${st}.c`, [[XQ + 4, rowOf(at(C))], [XQ + 4, portY(st, 'c')]]);
+    via(`${xs}.in`, [[XQ + 6, rowOf(at(X))], [XQ + 6, portY(xs, 'in')]]);
+    via(`${st}.x`, [[XQ + 9, portY(xs, 'o1')], [XQ + 9, portY(st, 'x')]]);
+    via(`${st}.d`, [[XQ + 11, rowOf(at(D))], [XQ + 11, portY(st, 'd')]]);
+    via(`${qs}.in`, [[XQ + 13, rowOf(at(QN))], [XQ + 13, portY(qs, 'in')]]);
+    // the low words under the step and up into their mergers
+    via(`${at(nn)}.i2`, [[XO + 2, portY(qs, 'o0')], [XO + 2, portY(at(nn), 'i2')]]);
+    via(`${at(xn)}.i2`, [[XO + 13, portY(xs, 'o0')], [XO + 13, portY(at(xn), 'i2')]]);
+    via(`${at(xn)}.i1`, [[XO + 12, portY(st, 'p2')], [XO + 12, portY(at(xn), 'i1')]]);
+    // the normalizer's words up to the loads
+    via(`${hs}.in`, [[XN + 14, portY(nm, 'hi')], [XN + 14, portY(hs, 'in')]]);
+    via(`${at(x0)}.i0`, [[XM - 14, portY(nm, 'lo')], [XM - 14, portY(at(x0), 'i0')]]);
+    via(`${at(x0)}.i1`, [[24, portY(hs, 'o0')], [24, portY(at(x0), 'i1')]]);
+    via(`${at(w0)}.i0`, [[24, portY(hs, 'o1')], [24, portY(at(w0), 'i0')]]);
+    via(`${zb}.a`, [[3, portY(nm, 'b')], [3, portY(zb, 'a')]]);
+    // q: b = 0 up past FINISH to the fan-out; r down and out under it
+    via(`${fz}.in`, [[XQ0 - 6, rowOf(zr)], [XQ0 - 6, portY(fz, 'in')]]);
+    const rRow = portY(fin, 'sh') + 2;
+    via('r', [[XF + 11, portY(fin, 'r')], [XF + 11, rRow]]);
+    const pins = { a: [0, portY(nm, 'a')], b: [0, portY(nm, 'b')], start: [0, portY(ctl, 'start')], clk: [0, portY(ctl, 'busy') + 4], ...(abort ? { abort: [0, portY(ctl, 'abort')] } : {}),
+      q: [R, portY(at(q0), 'y')], r: [R, rRow], done: [R, portY(ctl, 'done')], busy: [R, portY(ctl, 'busy')] } as Record<string, [number, number]>;
     return define({
       id: `srt4div${n}${abort ? 'a' : ''}`, name: `${n}-bit iterative radix-4 SRT divider${abort ? ' (abortable)' : ''}`, category: 'sequential',
       summary: `Two quotient bits per clock: ${m} radix-4 steps (digits −2…+2) after normalizing, ${m + 2} cycles in all against ${n + 2} for radix 2. Each step is longer (a wider estimate and four comparisons) but still has no carry chain.`,
       ports: [bit('clk', 'in', 'bottom', true), bit('start', 'in'), bus('a', n, 'in'), bus('b', n, 'in'), ...(abort ? [bit('abort', 'in')] : []), bus('q', n, 'out'), bus('r', n, 'out'), bit('done', 'out'), bit('busy', 'out')],
       symbol: { kind: 'box', label: `SRT4 DIV${n}` },
-      netlist: () => ({ pins: { clk: [0, 30], start: [0, 6], a: [0, 14], b: [0, 18], ...(abort ? { abort: [0, 22] as [number, number] } : {}), q: [R, 6], r: [R, 10], done: [R, 14], busy: [R, 18] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins, instances: b.instances, nets }),
     });
   });
 }

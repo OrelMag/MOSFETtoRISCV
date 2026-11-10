@@ -184,7 +184,7 @@ export const WALKS1: Record<string, WalkScript> = {
   g_mux8: [
     {
       title: 'One inverter on s',
-      text: 'The splitters cut a and b into bits for free. inv = ¬s, once for all sixteen bits: your 1-bit mux inverts s for itself, and sixteen copies of it would spend 16 NANDs on the same signal.',
+      text: 'The splitters cut a and b into four nibbles for free, one per column (bits 12 to 15 on the left, as a number is written). inv = ¬s, once for all sixteen bits: your 1-bit mux inverts s for itself, and sixteen copies of it would spend 16 NANDs on the same signal.',
       parts: ['sa', 'sb', 'inv'], codex: ['mux', 'bus'],
       why: 'All sixteen bits select by the same s, so ¬s is computed once and distributed.',
       whyNot: { text: 'Giving each bit a whole 2:1 mux means sixteen copies of the same inverter: 16 NANDs spent on one signal.' },
@@ -192,28 +192,28 @@ export const WALKS1: Record<string, WalkScript> = {
     {
       title: 'Bits 0 to 3',
       text: 'Per bit, ta = ¬(a[k]·¬s), tb = ¬(b[k]·s) and y = ¬(ta·tb) = a[k]·¬s + b[k]·s: your 2:1 mux without its inverter, 3 NANDs. Depth 3 from s (through inv), 2 from the data.',
-      parts: ['ta0', 'tb0', 'y0', 'ta1', 'tb1', 'y1', 'ta2', 'tb2', 'y2', 'ta3', 'tb3', 'y3'],
+      parts: ['sa_0', 'sb_0', 'ta0', 'tb0', 'y0', 'ta1', 'tb1', 'y1', 'ta2', 'tb2', 'y2', 'ta3', 'tb3', 'y3', 'my_0'],
       why: 'Each bit is a 2:1 mux of three NANDs, taking ¬s from the shared inverter. The first four set the pattern.',
       whyNot: { text: 'Without the shared ¬s each bit would need its own inverter and a fourth NAND.' },
     },
     {
       title: 'One select for every bit',
       text: 's and ¬s fan out to every bit, so all bits switch together: y is either all of a or all of b, never a mix. Operations on buses are one gate per bit sharing their control.',
-      parts: ['ta4', 'tb4', 'y4', 'ta5', 'tb5', 'y5', 'ta6', 'tb6', 'y6', 'ta7', 'tb7', 'y7'], codex: ['fanin'],
+      parts: ['sa_1', 'sb_1', 'ta4', 'tb4', 'y4', 'ta5', 'tb5', 'y5', 'ta6', 'tb6', 'y6', 'ta7', 'tb7', 'y7', 'my_1'], codex: ['fanin'],
       why: 'The point of a bus mux: one control selects whole words. Every bit shares s and ¬s, so y is all of a or all of b.',
       whyNot: { text: 'Separate selects per bit would allow mixed words and need as many control wires as bits.' },
     },
     {
       title: 'Bits 8 to 11',
       text: 'inv now drives sixteen gates. Real cells pay for that fan-out with delay (or a buffer), which the unit-delay model here ignores.',
-      parts: ['ta8', 'tb8', 'y8', 'ta9', 'tb9', 'y9', 'ta10', 'tb10', 'y10', 'ta11', 'tb11', 'y11'],
+      parts: ['sa_2', 'sb_2', 'ta8', 'tb8', 'y8', 'ta9', 'tb9', 'y9', 'ta10', 'tb10', 'y10', 'ta11', 'tb11', 'y11', 'my_2'],
       why: 'The same cells again. Only the load on the shared inverter grows with each bit.',
       whyNot: { text: 'A second inverter to split the load costs a NAND and buys nothing in the unit-delay model.' },
     },
     {
       title: 'Merge the result',
-      text: 'Bits 12 to 15 complete the row and the merger joins the sixteen outputs into y. 3 × 16 + 1 = 49 NANDs, depth 3: par. Sixteen copies of your 2:1 mux (the library\'s mux2x16) cost 64 at the same depth.',
-      parts: ['ta12', 'tb12', 'y12', 'ta13', 'tb13', 'y13', 'ta14', 'tb14', 'y14', 'ta15', 'tb15', 'y15', 'my'],
+      text: 'Bits 12 to 15 complete the last column, and the mergers join the sixteen outputs into y, four by four. 3 × 16 + 1 = 49 NANDs, depth 3: par. Sixteen copies of your 2:1 mux (the library\'s mux2x16) cost 64 at the same depth.',
+      parts: ['sa_3', 'sb_3', 'ta12', 'tb12', 'y12', 'ta13', 'tb13', 'y13', 'ta14', 'tb14', 'y14', 'ta15', 'tb15', 'y15', 'my_3', 'my'],
       why: 'The merger turns sixteen wires back into the output bus at no cost. The total is three gates per bit plus one inverter.',
       whyNot: { text: 'Sixteen whole 2:1 muxes give the same function at 64 NANDs instead of 49.' },
       ask: {

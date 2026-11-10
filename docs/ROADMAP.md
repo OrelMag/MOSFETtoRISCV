@@ -1339,7 +1339,7 @@ main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
     (tests/redrawclear-cpuvariants.test.ts); the M and bus system CPUs on the plain system's wires (pointers 82 % → 25 %, 87 % → 43 %: the
     bus's 16 channels at the pins) and the CSR unit's select crossbar as lanes (29 % → 21 %) on fix/circuits-sys-variants
     (tests/redrawclear-sysvariants.test.ts); the out-of-order units (ooo/5–7, 10) on feat/ooo-redraw: rename table 50 % → 30 %, its row 56 % → 0, issue-queue entry 55 % → 30 %, store queue 66 % → 39 %, select as a crossbar 56 % → 12 % (tests/redrawclear-ooo.test.ts); the core's top and its issue queue / reorder buffer are not redrawn
-  - rv16_mux16 (needs a bit-sliced redraw) and srt4div8 (not switched to layered.ts): unchanged on main (git log)
+  - ~~rv16_mux16 (needs a bit-sliced redraw) and srt4div8 (not switched to layered.ts)~~ done on fix/redraw-mux16-srt4: rv16_mux16 re-laid out for legibility at fit (flat with the same instance names plus each column's own splitters and mergers, which g_mux8's walk now names; four columns of four bits: 0.33 → 2.6 wide for 1 tall, 0 crossings, 2 pointers); srt4div redrawn by hand (the register outputs a band into FINISH, the step's inputs rising from it: pointers 17 → 7 of 46, crossings 41 → 17, at every width) (tests/redrawclear-mux-srt.test.ts)
   - Communication circuits left on purpose: CRC-32 next-state crossings (inherent), I²C target t0 (layered's 14-unit channel cap), the computer-with-NIC bus top
   - Kept by decision, not work to do: secret/7's computing-history digression; the recap `practise` list left empty for cellular, glass, pcie, radio, wifi
     and secret (it takes campaign nodes only; the capstones are not nodes)
