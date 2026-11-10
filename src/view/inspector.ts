@@ -10,6 +10,7 @@ import { type Bit, BZ, type Category, type ComponentDef, inPorts, netlistOf, out
 import { formatBits, formatNumber, pack, type Radix } from '../sim/values';
 import { exportHdl, testableComb, type HdlFlavor } from '../sim/svexport';
 import { structuralVerilog } from '../sim/verilog';
+import { structuralVhdl, vhdlHierarchy } from '../sim/vhdl';
 import { h, icon } from '../ui/dom';
 import type { Parent } from '../lib/usage';
 import { powerBody, type LivePower } from './powerpanel';
@@ -80,7 +81,7 @@ export class Inspector {
     };
     add('info', 'Info', 'info');
     add('truth', 'Truth table', 'table');
-    add('hdl', 'Verilog', 'code');
+    add('hdl', 'HDL', 'code');
     const fold = h('button', { class: 'insp-fold', title: 'Fold the inspector: the circuit gets its width', 'aria-label': 'Fold the inspector', onclick: () => this.userFold(true) }, icon('sidebar', 14)) as HTMLButtonElement;
     this.rail = h('button', { class: 'insp-rail', title: 'Show the inspector', 'aria-label': 'Show the inspector', onclick: () => this.userFold(false) }, icon('sidebar', 14), h('span', null, 'Inspector')) as HTMLButtonElement;
     this.el = h('aside', { class: 'inspector' }, h('div', { class: 'insp-head' }, tabs, fold), this.body, this.rail);
@@ -369,6 +370,7 @@ export class Inspector {
       h('div', { class: 'dl-btns' },
         h('button', { class: 'btn sm', title: 'Every module exactly as drawn: NAND gates, flip-flops as NAND loops (.sv)', onclick: () => go('structure') }, icon('code', 14), 'Exact structure'),
         h('button', { class: 'btn sm', title: 'Synthesizable Verilog-2005 for Yosys / Verilator / FPGA tools: flip-flops as clocked processes (.v)', onclick: () => go('synth') }, icon('chip', 14), 'Synthesizable'),
+        h('button', { class: 'btn sm', title: 'Every entity exactly as drawn, in structural VHDL-93: NAND gates as entity nand2 (.vhd; not checked by a VHDL tool here)', onclick: () => { const f = vhdlHierarchy(d); download(f.filename, f.text); note.textContent = `${f.filename}: ${f.entities} entit${f.entities > 1 ? 'ies' : 'y'}.`; } }, icon('code', 14), 'VHDL'),
         h('label', { class: 'dl-tb', title: tbOk ? 'Append a self-checking testbench with vectors from this site’s simulation' : 'Testbenches are generated for loop-free (combinational) logic only' }, tb, 'testbench')),
       note);
   }
@@ -376,17 +378,19 @@ export class Inspector {
   private renderHdl(t: InspectTarget): void {
     const d = t.def;
     const gen = structuralVerilog(d);
-    const blocks: [string, string][] = [];
-    if (d.hdl?.verilog) blocks.push(['SystemVerilog', d.hdl.verilog]);
-    if (gen) blocks.push(['Structural (generated from this schematic)', gen]);
+    const vhd = structuralVhdl(d);
+    const blocks: [string, string, boolean][] = [];
+    if (d.hdl?.verilog) blocks.push(['SystemVerilog', d.hdl.verilog, false]);
+    if (gen) blocks.push(['Structural Verilog (generated from this schematic)', gen, false]);
+    if (vhd) blocks.push(['Structural VHDL (generated from this schematic)', vhd, true]);
     if (!blocks.length) {
       this.body.append(h('p', { class: 'empty' }, 'No HDL for this element.'));
       return;
     }
     if (gen) this.body.append(this.downloadRow(d));
-    for (const [title, code] of blocks) {
+    for (const [title, code, isVhdl] of blocks) {
       const copy = h('button', { class: 'btn ghost sm', onclick: () => navigator.clipboard?.writeText(code) }, 'Copy');
-      this.body.append(h('div', { class: 'code-head' }, title, copy), h('pre', { class: 'code', html: highlight(code) }));
+      this.body.append(h('div', { class: 'code-head' }, title, copy), h('pre', { class: 'code', html: isVhdl ? highlightVhdl(code) : highlight(code) }));
     }
   }
 }
@@ -430,6 +434,19 @@ export function truthTable(d: ComponentDef): { ins: number[]; outs: number[] }[]
 }
 
 const KW = /\b(module|endmodule|input|output|inout|logic|wire|assign|always_ff|always_comb|always|posedge|negedge|if|else|case|endcase|begin|end|for|genvar|parameter|int|supply0|supply1|nmos|pmos|rtran|tran|trireg|pullup|pulldown|default)\b/g;
+const VHDL_KW = /\b(library|use|entity|is|port|in|out|inout|end|architecture|of|signal|begin|map|open|downto|std_logic|std_logic_vector|nand|work)\b/gi;
+
+/** VHDL: -- comments, the keywords this generator writes. */
+function highlightVhdl(code: string): string {
+  const esc = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return esc.split('\n').map((line) => {
+    const i = line.indexOf('--');
+    const body = i >= 0 ? line.slice(0, i) : line;
+    const cm = i >= 0 ? `<span class="cm">${line.slice(i)}</span>` : '';
+    return body.replace(VHDL_KW, '<span class="kw">$1</span>').replace(/\b(\d+)\b/g, '<span class="num">$1</span>') + cm;
+  }).join('\n');
+}
+
 function highlight(code: string): string {
   const esc = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return esc.split('\n').map((line) => {

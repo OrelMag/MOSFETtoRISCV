@@ -110,8 +110,8 @@ export const chMap: Chapter = {
         <p>Every number on this site is <em>measured</em> from the circuit itself, not quoted from a book.
         That includes the "gate delays": how many gates a signal must pass through, which sets how fast the
         circuit can go.</p>
-        <p>The <strong>Verilog</strong> tab shows the same circuit as a hardware description. Chip designers
-        write Verilog, and tools turn it into gates like these.</p>
+        <p>The <strong>HDL</strong> tab shows the same circuit as a hardware description, in Verilog and in VHDL. Chip designers
+        write one of these languages, and tools turn it into gates like these.</p>
         <p>Cost is counted by the same rule at every level: a box costs the sum of what is inside it, down to the transistors. Delay is not a sum:
         it is the longest chain of gates a signal must pass through, so the adder's ${logicDepth(rca(4))} delays are less than its ${stats(rca(4)).nands} gates.</p>`,
       scene: () => ({ root: rca(4), inputs: { a: 9, b: 7 } }),
