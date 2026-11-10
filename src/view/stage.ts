@@ -33,7 +33,8 @@ import { Inspector, inspectorChoice } from './inspector';
 import { LABEL_UNITS, MIN_TEXT_PX } from './legible';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber, syncPopover } from './popover';
-import { chooseFolds, COVER_GAP, fitMinW, freeArea, KEEP_SCALE, roomBeside, showReadable, startFolded, type Rect } from './camera';
+import { chooseFolds, COVER_GAP, fitBox, fitMinW, freeArea, KEEP_SCALE, roomBeside, showReadable, startFolded, type Rect } from './camera';
+import { pinGeoms, symbolRects } from './route';
 import { applyLayout, layoutOf } from './layout';
 import { drawnNetlist } from './wirefirst';
 import { type NotePin, SchematicView } from './schematic';
@@ -222,6 +223,8 @@ export class Stage {
   private foldPending = false;
   /** The inspector's fold waits for the first layout of the scene (autoInspector). */
   private inspPending = false;
+  /** A scene being loaded whose inspector fold is still to be guessed once the stage has a size (guessInspector). */
+  private inspGuess: { scene: Scene; at?: string[] } | null = null;
   private anim: ReturnType<typeof setInterval> | null = null;
   private runClock: ReturnType<typeof setInterval> | null = null;
   private runBtn: HTMLElement | null = null;
@@ -313,6 +316,10 @@ export class Stage {
 
   constructor(inspector: Inspector) {
     this.inspector = inspector;
+    // Unseen (its room kept) until the first scene's fold is known: the page paints before the chapter's module has the
+    // scene, and an open inspector shown then would fold under the reader's eyes (guessInspector).
+    inspector.el.classList.add('insp-wait');
+    window.setTimeout(() => this.revealInspector(), 1500);
     this.crumbs = h('nav', { class: 'crumbs', 'aria-label': 'Hierarchy' });
     const btn = (ic: string, title: string, fn: () => void, cls = '') =>
       h('button', { class: `btn ghost icon-only${cls}`, title, 'aria-label': title, onclick: fn }, icon(ic, 16));
@@ -561,6 +568,7 @@ export class Stage {
     // The canvas also changes size during a run (the bottom bar rewraps as values and the status
     // change): a view the learner zoomed into must survive that.
     new ResizeObserver(() => {
+      this.guessInspector();
       this.autoInspector();
       this.autoFold();
       this.inset = this.rightInset();
@@ -661,7 +669,13 @@ export class Stage {
   }
 
   /** Replace the schematic with a bespoke widget (null returns to schematic mode). */
+  /** The inspector shown, its fold decided (or nothing left to decide it from). */
+  private revealInspector(): void {
+    this.inspector.el.classList.remove('insp-wait');
+  }
+
   showWidget(w: Widget | null): void {
+    if (w) this.revealInspector();
     // a widget in the canvas's place (a page's "unknown component"): nothing for the Why? card to explain
     if (w) this.why.setOn(false);
     if (w && this.pending) {
@@ -706,6 +720,8 @@ export class Stage {
   load(scene: Scene, at?: string[], builtMs = 0): void {
     const seq = ++this.loadSeq;
     const t0 = performance.now();
+    this.inspGuess = { scene, at };
+    this.guessInspector();
     const st = stats(scene.root);
     const size = st.nands + st.transistors / 4;
     if (size < BUSY_GATES) {
@@ -874,6 +890,8 @@ export class Stage {
     this.layoutDock(false);
     this.view.fit();
     this.hugPhone();
+    this.inspGuess = null;
+    this.revealInspector();
     this.inspPending = true;
     this.autoInspector();
     this.refresh();
@@ -2633,6 +2651,46 @@ export class Stage {
    * wins and is applied to every scene. Waits where nothing is laid out yet or the inspector is not a column
    * (full-width panes, a phone), and for the boards. The room it frees lets the scene's panels be chosen again.
    */
+  /**
+   * autoInspector's decision guessed before the build, so a big scene (built in slices, drawn up to a second later) does
+   * not move the prose and the stage when it appears: the level that will be drawn, framed from its parts' boxes and pins
+   * alone (no flatten, no routing), in the canvas with the inspector open. Made at the first layout after load() (on a
+   * first visit the page is not in the document yet), before anything paints. The scene's panels are not made yet and
+   * they only shrink the circuit, so they are left out, which can only guess "open" where the draw then folds (the late
+   * fold of before), never the other way. autoInspector still decides at the draw, unfolding and folding within one task:
+   * nothing paints in between, so a right guess moves nothing.
+   */
+  private guessInspector(): void {
+    const g = this.inspGuess;
+    if (!g) return;
+    const insp = this.inspector, { scene, at } = g;
+    if (inspectorChoice() !== null || (scene.breadboard && boardChoice) || (this.scene && !this.view.fitted)) { this.inspGuess = null; this.revealInspector(); return; }
+    let def: ComponentDef | undefined = scene.root;
+    for (const name of at ?? scene.path ?? []) def = def && netlistOf(def)?.instances.find((i) => i.name === name)?.def;
+    const nl = def && netlistOf(def);
+    if (!def || !nl) { this.inspGuess = null; this.revealInspector(); return; }
+    const was = insp.folded;
+    if (was) insp.setFolded(false, true);
+    const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
+    // not laid out yet, or the inspector is not a column here (a phone's drawer, full-width panes): the next layout
+    if (W <= 0 || H <= 0 || insp.el.offsetWidth <= 0) {
+      if (was) insp.setFolded(true, true);
+      if (W > 0) this.revealInspector(); // laid out, but no column to fold: a drawer
+      return;
+    }
+    this.inspGuess = null;
+    this.revealInspector();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    const grow = (x: number, y: number, w: number, h: number) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x + w); y1 = Math.max(y1, y + h); };
+    for (const { r } of symbolRects(nl)) grow(r.x, r.y, r.w, r.h);
+    for (const p of pinGeoms(def, nl).values()) grow(p.pos[0] - 3, p.pos[1] - 1, 6, 2);
+    if (!Number.isFinite(x0)) { if (was) insp.setFolded(true, true); return; }
+    // the margins schematic.ts frames with
+    const m = 3, vb = fitBox({ x: x0 - m, y: y0 - m - 1, w: x1 - x0 + 2 * m, h: y1 - y0 + 2 * m + 1 }, W, H);
+    const px = W / vb.w;
+    insp.setFolded(px > 0 && px * LABEL_UNITS < MIN_TEXT_PX, true);
+  }
+
   private autoInspector(): void {
     if (!this.inspPending) return;
     const insp = this.inspector, choice = inspectorChoice();
