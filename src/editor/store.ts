@@ -20,6 +20,7 @@ import { sanitizeReaderRef } from './cardparts';
 import { sanitizeBabyRef } from './babypart';
 import { FACE_MAX, isEmptyFace, SCALE_MAX, SCALE_MIN, SIDES } from './face';
 import { PUZZLE_MAX_WIDTH } from './puzzleparts';
+import { isDeviceId } from '../puzzles/devices';
 import {
   type FsmDoc, type TableDoc, SCHEMA, chipDeps, portCoreRef, rv16CoreRef, emptyWorkspace, isIdent, isPinValue, pinValue, uniqueName,
   type ChipDoc, type CommentDoc, type FaultDoc, type FaceDisplayDoc, type FaceDoc, type FacePinDoc, type FaceSide, type DisplayKind, type EndRef, type ExitDir, type FolderDoc, type LabelDoc, type NetHue, type PartDoc, type PartRef,
@@ -83,6 +84,7 @@ export function sanitizeRef(r: unknown): PartRef | null {
   if ('console' in r || 'switches' in r || 'screen' in r) return sanitizeIoRef(r);
   if ('reader' in r) { const rd = sanitizeReaderRef(r.reader); return rd && { reader: rd }; }
   if (isObj(r.baby)) return sanitizeBabyRef(r.baby);
+  if ('device' in r) return isDeviceId(r.device) ? (r.en === true ? { device: r.device, en: true } : { device: r.device }) : null;
   if ('puzzle' in r) return (r.puzzle === 'in' || r.puzzle === 'out') && int(r.width, 1) && r.width <= PUZZLE_MAX_WIDTH ? { puzzle: r.puzzle, width: r.width } : null;
   if (isObj(r.rom)) {
     const { k, w, addr, lang, src } = r.rom;

@@ -24,6 +24,7 @@ import { ioRefDef } from './ioparts';
 import { readerRefDef } from './cardparts';
 import { babyRefDef } from './babypart';
 import { PUZZLE_MAX_WIDTH, puzzleIn, puzzleOut } from './puzzleparts';
+import { deviceRefDef } from './devparts';
 import { ROM_LEAF_K, romLevels, wordsHash } from '../lib/bigmem';
 import { cWindowRom } from '../lib/rvc';
 
@@ -88,6 +89,7 @@ export function partDef(ref: PartRef, chipDef: (id: string) => ComponentDef | un
     if (ref.puzzle === 'out') return puzzleOut(ref.width);
     return { error: 'puzzle port: in or out' };
   }
+  if ('device' in ref) return deviceRefDef(ref);
   if ('reader' in ref) return readerRefDef(ref.reader);
   if ('baby' in ref) return babyRefDef(ref.baby.src);
   const io = ioRefDef(ref);

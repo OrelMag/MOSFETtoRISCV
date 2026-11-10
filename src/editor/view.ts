@@ -29,6 +29,7 @@ import type { Sel } from './ops';
 import { codeGlyph, keyLabel } from './parts';
 import { drawIoFace } from './ioface';
 import { pathKey } from './face';
+import { drawDeviceFace } from './devface';
 import { type DisplayEls, drawDisplay, drawFace, type FaceEls, paintDisplay, paintFace } from './dispface';
 import { ioInfo } from './ioparts';
 import type { Sim } from '../sim/sim';
@@ -515,7 +516,7 @@ export class EditorView {
     const geo = orientGeom(def, p.flip, p.rot);
     g.append(s('rect', { class: 'hit', x: -0.4, y: -0.4, width: geo.w + 0.8, height: geo.h + 0.8, rx: 0.6 }));
     let disp: DisplayEls | undefined;
-    const io = ioInfo(def) ? drawIoFace(def, !!p.flip) : null;
+    const io = ioInfo(def) ? drawIoFace(def, !!p.flip) : 'device' in p.ref && def ? drawDeviceFace(def, !!p.flip) : null;
     if (io) {
       g.append(drawSymbol(def, p.flip), io.g);
       disp = { kind: 'io', width: 0, segs: [], shown: '', face: io };

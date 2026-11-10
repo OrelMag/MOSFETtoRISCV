@@ -1,0 +1,44 @@
+/* The puzzle devices' faces (editor/devface.ts): a little world on a dark panel, the same in either theme (a screen,
+   not chrome), so its colours are fixed here. Units are the part's grid units (1 = 10 px on the canvas). Motion: the
+   robot glides and a fault shakes the face once, only without reduced motion (app.css turns animations off under
+   data-reduce-motion; the media query covers the system setting). */
+
+.dev-face { --dev-panel: #0c0e14; --dev-edge: #3a4254; --dev-ink: #c9cfdc; --dev-dim: #2a3040; --dev-red: #ff3b30; --dev-yellow: #ffc400;
+  --dev-green: #2fd36b; --dev-orange: #ff8a3d; --dev-bot: #3fd9c8; --dev-bad: #ff6b61; }
+.dev-panel { fill: var(--dev-panel); stroke: var(--dev-edge); stroke-width: 0.12; }
+.dev-face.fault .dev-panel { stroke: var(--dev-bad); stroke-width: 0.22; }
+.dev-housing { fill: #050608; stroke: var(--dev-edge); stroke-width: 0.08; }
+.dev-foot { font: 600 0.75px var(--font-mono); fill: var(--dev-ink); }
+.dev-face.fault .dev-foot { fill: var(--dev-bad); }
+.dev-small { font: 600 0.72px var(--font-mono); fill: var(--dev-ink); }
+.dev-lamp { fill: var(--dev-dim); stroke: #000; stroke-width: 0.1; }
+.dev-lamp.lamp-r.on { fill: var(--dev-red); }
+.dev-lamp.lamp-y.on { fill: var(--dev-yellow); }
+.dev-lamp.lamp-g.on { fill: var(--dev-green); }
+.dev-sign { font: 700 1.05px var(--font-mono); fill: var(--dev-dim); }
+.dev-sign.walk.on { fill: #e8f5ff; }
+.dev-sign.wait.on { fill: var(--dev-orange); }
+.dev-button { fill: var(--dev-dim); stroke: #8892a8; stroke-width: 0.14; }
+.dev-button.on { fill: var(--dev-orange); }
+.dev-floor { fill: #050608; }
+.dev-walls line { stroke: var(--dev-ink); stroke-width: 0.22; stroke-linecap: round; }
+.dev-goal { fill: none; stroke: var(--dev-green); stroke-width: 0.16; stroke-dasharray: 0.35 0.25; }
+.dev-trail { fill: var(--dev-bot); opacity: 0.5; }
+.dev-bot circle { fill: var(--dev-bot); stroke: #000; stroke-width: 0.1; }
+.dev-nose { fill: #000; }
+.dev-sense { stroke: var(--dev-red); stroke-width: 0.2; stroke-linecap: round; }
+.dev-lcd { font: 700 1.3px var(--font-mono); fill: var(--dev-green); }
+.dev-vend .dev-housing.on { stroke: var(--dev-orange); stroke-width: 0.2; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .dev-bot { transition: transform 0.22s ease-out; }
+  .dev-face.fault .dev-bot, .dev-face.fault .dev-housing { animation: dev-shake 0.24s ease-in-out 2; }
+}
+@keyframes dev-shake {
+  0%, 100% { translate: 0 0; }
+  33% { translate: -0.25px 0; }
+  66% { translate: 0.25px 0; }
+}
+
+/* the large copy in the puzzle strip */
+.dev-big { display: block; width: 100%; max-width: 300px; height: auto; border-radius: 8px; }

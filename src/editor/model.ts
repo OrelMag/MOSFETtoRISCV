@@ -19,6 +19,7 @@ import type { CpuDoc } from './cpu';
 import type { ProbeTarget } from './probes';
 import type { ReaderRef } from './cardparts';
 import type { ScreenRef } from './ioparts';
+import type { DeviceId } from '../puzzles/devices';
 
 export type { Vec, ExitDir };
 
@@ -333,6 +334,11 @@ export type PartRef =
    * rising clk edge), 'out' records the words written (data at a rising clk edge with we = 1). Zero cost.
    */
   | { puzzle: 'in' | 'out'; width: number }
+  /**
+   * A device puzzle's world behind named pins (editor/devparts.ts, puzzles/devices.ts): placed by the puzzle's Start. `en`: the world
+   * steps only at a rising clk edge where en = 1 (a CPU paces it). Zero cost.
+   */
+  | { device: DeviceId; en?: true }
   /**
    * A card reader (editor/cardparts.ts, cards/reader.ts): a deck of punched cards held in the document like a ROM's program;
    * next = 1 at a rising clk edge takes the card (word mode) or column (column mode) on data, ready says one waits. Zero cost.
