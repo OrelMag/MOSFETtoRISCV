@@ -1,0 +1,39 @@
+name: VHDL check
+
+# Does GHDL accept the VHDL the inspector's HDL tab shows? scripts/vhdl-check.ts writes each design's hierarchy (sim/vhdl.ts), GHDL
+# analyses and elaborates it (VHDL-93), and simulates the combinational ones on vectors from our own simulation. Not a deploy gate:
+# the VHDL is a view, the Verilog export is the one checked before a deploy (verify-hdl). The files are kept as an artifact.
+on:
+  push:
+    paths:
+      - 'src/sim/vhdl.ts'
+      - 'scripts/vhdl-check.ts'
+      - '.github/workflows/vhdl.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ghdl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: GHDL
+        run: |
+          sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ghdl
+          ghdl --version | head -1
+      - run: npm ci
+      - name: Analyse, elaborate, simulate
+        run: npx vite-node scripts/vhdl-check.ts --out .cache/vhdl
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vhdl
+          path: .cache/vhdl/*.vhd
+          retention-days: 14

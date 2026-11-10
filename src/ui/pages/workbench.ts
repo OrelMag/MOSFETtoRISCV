@@ -108,7 +108,7 @@ export class WorkbenchPage implements Page {
       // A stale or mistyped link: say so, offer the closest parts, and keep the library list to pick from.
       const near = suggestItems(id);
       this.current = '';
-      // nothing to describe: the Info / Table / Verilog pane would be three empty tabs
+      // nothing to describe: the Info / Table / HDL pane would be three empty tabs
       this.el.classList.add('no-part');
       this.libName.textContent = '';
       this.mark.replaceChildren();

@@ -32,7 +32,7 @@ sandbox level with the two games (I/O parts, chip faces, capacity, programs on y
 5. **Cost is visible.** Each component shows transistors / NANDs / gate depth, so the
    learner feels why carry-lookahead, pipelining or caches exist.
 6. **Real HDL.** Every component carries SystemVerilog: structural (generated from the
-   very netlist on screen) and behavioural (hand-written). VHDL view later.
+   very netlist on screen) and behavioural (hand-written), and structural VHDL beside it.
 7. **Static deploy.** `npm run build` → `dist/` that runs from any static host or sub-path.
 
 ---
@@ -627,7 +627,8 @@ challenges stay open. Added since:
 - ✅ Keyboard navigation beyond the shortcuts: one key table behind every `?` sheet, letters by position on non-Latin layouts, a switch for single-key shortcuts, `[ ] { }` through the chapters, a skip link and S to the circuit, Esc then Tab out of code editors, and the search (chapters, workbench, campaign, codex, `>` actions); a part cursor on the stage (arrows, ↵, Space; run, pulse, step, zoom; 8d86d6e2), and placing and wiring in the sandbox by keyboard (b9869531, 5f0c2f85: keyed arming, W branches from a wire)
 - ✅ Export the sandbox canvas as SVG / PNG (current theme), and the level on a chapter's or the workbench's stage (the
   stage bar's Image menu: the whole level with its live values, whatever the zoom, without probe flags)
-- VHDL view of every component
+- ✅ VHDL view of every component: the inspector's HDL tab and a .vhd download (sim/vhdl.ts), checked by GHDL in CI
+  (scripts/vhdl-check.ts, not a deploy gate: every design analysed and elaborated, the combinational ones simulated against ours)
 - Performance budget: 60 fps rendering of ≤ 5 000 visible elements; ≥ 100 CPU cycles/s at gate level (met: the sandbox's
   single-cycle RV32I runs ~4–5 kHz in the page on the cycle engine, ~400 Hz on GateSim)
 - i18n-ready strings
