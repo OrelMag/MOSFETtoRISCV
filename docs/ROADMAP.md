@@ -1085,7 +1085,10 @@ unit, wires nothing). The fan-out capacitance per net is already computed for th
   logicDepth(def, model); the Timing panels (CPU scenes, the sandbox) have a Unit / Load switch and list the heaviest
   nets on the path, the inspector and chip properties give both depths, the view menu's Load-dependent delay picks
   the default. The single-cycle CPU: 155 NAND delays, 242.9 units (its control nets drive up to 576 inputs)
-- ⏳ GateSim with the loaded delays on a finer grain (tenths of a unit) so glitches and races follow the loads too
+- ✅ GateSim with the loaded delays on a finer grain (tenths of a unit) so glitches and races follow the loads too
+  (docs/PLAN-FINEDELAY.md): stage 1, the unit-delay fingerprints (f930e1ad); stages 2–4, the tick engine, the Load-dependent
+  delay setting timing the sandbox's and the workbench's simulation, the measurers on the delay model (4a63bf39)
+- 🚧 Fine delay stage 5 (John): ship proposals 32, 33 and 35 as chapter steps on the loaded delays, 34 as prose only
 - ✅ Where it changes the story: chapter 16's last step, "When fan-out costs": ripple, Brent–Kung and Sklansky (new to
   the library, lib/fastadd.ts prefixAdder) and Kogge–Stone, and a wide select, in unit, load and as-drawn delay.
   Unit delay ties Sklansky with Kogge–Stone; drawn without buffers the 64-bit Sklansky is the slowest of the three
@@ -1168,7 +1171,8 @@ links, bus taps, duplicate and pin reordering. The gaps:
   at a load from the switches for the core's write (a pipeline reads them cycles earlier); every offering level's
   reference plays it in lock step, the screen equal pixel for pixel (tests/rv16-pong.test.ts)
 - Separate stars for area and for speed (functional / area-optimal / speed-optimal) instead of one rating over every
-  metric: a grading change across 125 levels' pars; decide before building
+  metric: a grading change across 125 levels' pars; decide before building. **Not now** (the author, 2026-10-19, and again
+  2026-11-10)
 
 **An FPGA path** (a student's CPU on a $15 board such as a Tang Nano):
 - ✅ File ▸ Export Verilog for FPGA: the synthesizable export (vexport.ts: flip-flops as processes, behavioural parts
@@ -1350,14 +1354,27 @@ Approved to build now (2026-11-09):
   Cross-cutting features)
 
 Proposed, kept for later (the author's choice, 2026-11-09; each needs a plan and a mockup before it is built):
-- 🚧 (approved 2026-11-09, docs/PLAN-VM-OS.md) Virtual memory: Sv32 page tables, a TLB, page faults, after traps (20) and caches (22)
-- 🚧 (approved 2026-11-09) A tiny operating system: user mode, `ecall`, a timer-driven scheduler and a context switch on our CPU, two programs sharing it
-- 🚧 (approved 2026-11-09, docs/PLAN-VERIFY.md) How do you know it works?: the golden model in lock-step, riscv-tests, fuzzing, then manufacturing test (scan chains, stuck-at faults,
-  BIST); builds on the fault brush
-- ⏳ Power: dynamic and static power, clock gating, voltage and frequency scaling, measured with sim/power.ts
-- ⏳ Side channels: Spectre on our out-of-order core and its cache, after chapters 22 and 26
-- ⏳ From netlist to FPGA: look-up tables, our design mapped onto the Tang Nano (the FPGA export exists, no chapter explains it)
-- ✅ Vectors (RVV), between Power and Lanes (docs/PLAN-RVV.md): riscv/rvv.ts and ISS({ v }) checked against Spike; lib/vector.ts, a four-lane unit with beats, banked memory and a v0 copy, on the single-cycle CPU (`sc-v`, riscv-tests and fuzz); chapters/ch-vectors.ts, eleven steps (strip-mining, LMUL, the unit in gates, masks, reductions, chaining as a timing model, the kernel on four machines, all measured: bench/vectorcosts.json); five codex entries
+- ✅ (docs/PLAN-VM-OS.md) Virtual memory: chapter 'vmem' after caches. The golden model's M / S / U modes and Sv32, checked against Spike
+  (82004ee5); the system CPU with an MMU in gates, `systemCpu({ vm: true })`: two 4-entry TLBs on the CAM, a walker that stalls the CPU,
+  the permission check (85d6c60d); the chapter (d015d0d2). Codex entries and the optional act 7 levels y_tlb and y_walk (54bbb169)
+- ✅ A tiny operating system: chapter 'os' after 'vmem' (d015d0d2). A kernel in assembly (riscv/osprograms.ts): system calls, a timer-driven
+  round-robin scheduler, a context switch through mscratch, `satp` per process; chapter 15's compiler with a `user` target, two Python programs
+  as processes. Codex entries and the program puzzle p_switch (54bbb169)
+- ✅ (docs/PLAN-VERIFY.md) How do you know it works?: fault simulation, ATPG, scan, BIST and March tests (8105eb34), the chapter (e62f0402)
+- 🚧 Verify stage 3 (Ross)
+- ✅ (docs/PLAN-POWER.md) Power: the chapter, its model, the clock gate, codex and the level s_icg (7d18d73b)
+- ✅ (docs/PLAN-SIDECHAN.md) Side channels: the out-of-order model's speculative mode (e59d0944), the chapter and its codex entries (c2cfa891)
+- ✅ (docs/PLAN-FPGA.md) From netlist to FPGA: the LUT mapper, FPGA parts and place-and-route numbers (14558791), the chapter (e6e7abf0), six codex
+  entries, the level m_lut and the drill d_lut (e2683bd8)
+- ✅ Vectors (RVV), between Power and Lanes (docs/PLAN-RVV.md): riscv/rvv.ts and ISS({ v }) checked against Spike; lib/vector.ts, a four-lane unit with beats, banked memory and a v0 copy, on the single-cycle CPU (`sc-v`, riscv-tests and fuzz); chapters/ch-vectors.ts, eleven steps (strip-mining, LMUL, the unit in gates, masks, reductions, chaining as a timing model, the kernel on four machines, all measured: bench/vectorcosts.json); five codex entries. Merged in stages: the golden model (cd71fe1a), the unit in gates (0e579d29), the chapter (9ea785a3)
+- 🚧 Vectors, further (Swan): an rv32iv core in the sandbox and its vector wiring drawn
+- 🚧 Ship proposals 29–31 (Rock, E:/audit/ship/PROPOSALS.md): the inspector's fold decided before a big scene's first frame, the CPU panel's
+  halt line reserved, a chip's switched-on faults applied in Check and the Tests pane
+
+The author's decisions of 2026-11-10:
+- Separate area and speed stars: still not now (the item under Phase 20)
+- The codex entries privmode and syscall stay without a campaign level (RV16 has no user mode; tests/campaign.test.ts VM_AWAITING_LEVELS)
+- y_tlb and y_walk keep handing out generic library blocks (registers, comparators, priority encoder, multiplexers)
 - ⏳ Break-it steps: one planted fault per core chapter, once the fault brush ships
 - ✅ A worked example and a common-mistakes aside in the densest chapters (pipelining, traps, caches, floating point): folded asides, numbers pinned by tests/worked-examples.test.ts
 
