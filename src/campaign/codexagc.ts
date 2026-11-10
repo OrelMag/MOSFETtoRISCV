@@ -16,8 +16,8 @@ export const CODEX_AGC: CodexEntry[] = [
     ['nor', 'isa', 'corerope', 'coremem', 'multicycle']),
 ];
 
-/** No campaign level teaches these (Appendix F is an optional appendix): the test that wants every entry in a level skips them (tests/campaign.test.ts). */
-export const AGC_AWAITING_LEVELS: ReadonlySet<string> = new Set(['corerope', 'agc']);
+/** No campaign level teaches these (Appendix F is an optional appendix; the NOR3 levels link 'agc'): the test that wants every entry in a level skips them (tests/campaign.test.ts). */
+export const AGC_AWAITING_LEVELS: ReadonlySet<string> = new Set(['corerope']);
 
 /** Other names an entry goes by in the chapters' prose (glossary.ts). */
 export const ALIASES_AGC: Record<string, string[]> = {

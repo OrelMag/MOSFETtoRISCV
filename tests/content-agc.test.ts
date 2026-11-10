@@ -49,8 +49,8 @@ describe('Appendix F: the Apollo Guidance Computer', () => {
       expect(CODEX.includes(e), e.id).toBe(true);
       expect(CHECKS[e.id]?.length, e.id).toBe(2);
       for (const r of e.related ?? []) expect(codexById(r), `${e.id} → ${r}`).toBeTruthy();
-      expect(NODES.some((n) => n.codex.includes(e.id)), `${e.id} is in a level now: drop it from AGC_AWAITING_LEVELS`).toBe(false);
-      expect(AGC_AWAITING_LEVELS.has(e.id)).toBe(true);
+      // in a level, or awaiting one: never both
+      expect(NODES.some((n) => n.codex.includes(e.id)), e.id).toBe(!AGC_AWAITING_LEVELS.has(e.id));
       for (const l of moreOf(e.id)!.chapters!) expect(ch.steps[l.step!].title, `${e.id} ${l.label}`).toBe(l.label);
       expect(TAUGHT[e.id]).toBeUndefined();
       expect(TAUGHT_OPTIONAL[e.id]).toEqual(['appendix-agc']);

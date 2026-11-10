@@ -41,7 +41,7 @@ export const chAppendixAgc: Chapter = {
     'read a word out of core rope, and say what changing a program in it takes',
     'run an AGC program instruction by instruction and price it in memory cycles',
   ],
-  builds: ['tubes', 'gates', 'adders', 'registers', 'memory', 'multicycle'],
+  builds: ['tubes', 'binary', 'gates', 'adders', 'registers', 'memory', 'multicycle'],
   recap: {
     keep: [
       'The AGC\'s logic is one circuit, a three-input NOR in resistor-transistor logic, two to a package in Block II: about 5600 gates (R-700 Table 2-1). Everything else, adder and registers included, is built from it.',
@@ -79,15 +79,16 @@ export const chAppendixAgc: Chapter = {
       title: 'Meet the AGC',
       body: `
         <p>The Apollo Guidance Computer flew in the command module and the lunar module. Block II, the version
-        that landed, has 15-bit words in one's complement, ${groupNum(BLOCK2_ROPE.words)} words of read-only
-        memory and 2048 of erasable, a memory cycle of ${MCT_US} µs, about 5600 gates in 2800 packages, 70 pounds and
+        that landed, has 15-bit words in one's complement (a number is negated by inverting every bit; step 4 shows what that
+        costs the adder), ${groupNum(BLOCK2_ROPE.words)} words of read-only <strong>fixed</strong> memory and 2048 of
+        <strong>erasable</strong> (read-write) memory, a memory cycle time (<strong>MCT</strong>) of ${MCT_US} µs, about 5600 gates in 2800 packages, 70 pounds and
         55 watts (Table 2-1 of R-700, E. C. Hall's 1972 history of the computer for MIT, the source of every number here).</p>
         <p>All of its logic is one circuit. In R-700's words it is "three NPN bipolar transistors and four resistors
         connected as a modified direct-coupled transistor logic or DCTL NOR gate", also called <strong>resistor-transistor
         logic</strong>: the transistors' emitters to ground, their collectors joined under one <span data-show="rc">collector
         resistor</span> to the supply, an input on each base. Any input high turns its transistor on and pulls the output
-        low. That is a three-input NOR, the same shape as the tube NOR of <a href="#/c/tubes/3">prologue P2</a>. (Block I's
-        chips held one gate type. Block II's came in two, a dual NOR gate and a dual "expander", which "differed only in
+        low. That is a three-input NOR, the same shape as the tube NOR of <a href="#/c/tubes/3">prologue P2</a>. (Block I, the
+        earlier design, used chips holding one gate type. Block II's came in two, a dual NOR gate and a dual "expander", which "differed only in
         interconnection pattern on the chip": one circuit, R-700 p. 228.)</p>
         <p>Here the transistors are drawn as the NMOS switches of chapter ${numOf('mosfet')}, and the collector resistor as
         a pull-up weaker than any of them. The three base resistors only limit the current into each base; they change no
@@ -134,8 +135,8 @@ export const chAppendixAgc: Chapter = {
         the carry in into the sum, and the <span data-show="g_co">carry gate</span> takes one inner signal from each.</p>
         <p>R-700 (p. 67) describes the Block I adder the same way: for each bit the sum of X, Y and the incoming carry, "and
         also developed the outgoing carry. The logic was arranged so as to limit the number of gate stages between incoming
-        and outgoing carries to 2, which is the minimum possible using NOR logic alone." At about 30 ns a gate, 16 bits made
-        32 gate delays, about 960 ns. Block II added a <strong>carry skip</strong> across groups of four bits, the idea of
+        and outgoing carries to 2, which is the minimum possible using NOR logic alone." So a carry crossing 16 bits went through
+        32 gates, each taking some tens of nanoseconds. Block II added a <strong>carry skip</strong> across groups of four bits, the idea of
         chapter ${numOf('fastadd')}.</p>
         <div class="try">Set a, b and ci to 1: s and co are both 1.</div>`,
       scene: () => ({ root: NOR_FA, inputs: { a: 1, b: 0, ci: 0 } }),
@@ -145,13 +146,13 @@ export const chAppendixAgc: Chapter = {
       title: 'The end-around carry',
       body: `
         <p>One's complement negates a number by inverting every bit, so there are two zeros, 0000 and 1111 (+0 and −0;
-        chapter ${numOf('gates')}). To add, add the bits and add the carry out of the top back in at the bottom: −3 + 6 is
+        chapter ${numOf('binary')}). To add, add the bits and add the carry out of the top back in at the bottom: −3 + 6 is
         1100 + 0110 = 1 0010, and the carry coming round makes it 0011, 3. So the adder is a ring: the
         <span data-show="fa3">top bit's</span> carry out feeds the <span data-show="fa0">bottom bit's</span> carry in.
         Four bits are ${AGC_NOR.add4} NOR gates.</p>
         <p>A ring has a catch. Add a number to its complement, 0101 + 1010: every column holds one 1, so every bit passes
         its carry on and none starts one. A carry of 0 all round is stable, giving 1111 (−0); so is a carry of 1 all round,
-        giving 0000 (+0). Which one the ring settles in depends on what it held before, and building this adder showed it is
+        giving 0000 (+0). Which one the ring settles in depends on what it held before, and it is
         worse than that: while the operands change, a gate can glitch for a moment and start a carry that then circles for
         good. So the ring runs through a <span data-show="g_eacin">gate</span> with a <strong>carry clear</strong>,
         <code>cc</code>: hold it at 1 while the operands change, so no stray carry survives, then let it go. A carry that
@@ -160,7 +161,7 @@ export const chAppendixAgc: Chapter = {
         for Block II division is for the removal of carry propagations in the adder", and "logic is therefore furnished to
         suppress every fourth existing carry at the appropriate time".</p>
         <div class="try">The adder starts at 0111 + 0001 = 1000, every carry a 1. Turn on b1 and b3, turn off a1, and last
-        turn off b0: a is now 0101 and b 1010, and s shows 0000, the +0 the ring held on to. Pulse cc to 1 and back: s
+        turn off b0 (in that order: the last change is the one that leaves a carry circling): a is now 0101 and b 1010, and s shows 0000, the +0 the ring held on to. Pulse cc to 1 and back: s
         becomes 1111.</div>`,
       scene: () => ({ root: NOR_ADD4, inputs: { a0: 1, a1: 1, a2: 1, a3: 0, b0: 1, b1: 0, b2: 0, b3: 0, cc: 0 } }),
       challenge: {
@@ -234,7 +235,7 @@ export const chAppendixAgc: Chapter = {
       body: `
         <p>A rope module seen whole: its ${BLOCK2_ROPE.coresPerModule} cores, the sense wires woven through and around them,
         the inhibit, set and reset wires that pick one core and switch it, and the diode and resistor parts of the selection
-        network in cordwood blocks beside them. Pick a core and a strand, step through a read, and watch which sense wires
+        network in cordwood blocks beside them (parts standing upright between two boards, packed like logs). Pick a core and a strand, step through a read, and watch which sense wires
         pulse.</p>`,
       widget: () => rope3d(),
     },
