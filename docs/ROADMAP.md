@@ -1110,7 +1110,11 @@ and Digital are what courses already use, and Digital lets a student write tests
   chip with the same pins; Digital's Testcase tables and Logisim test vectors come in as test tables
 - ✅ Test tables on any chip (editor/testtable.ts, testsui.ts): Digital's test syntax, a Tests pane run after every edit,
   rows with what the circuit showed, Fill outputs from the circuit, a failing row in the test player
-- Later: placing an imported circuit again by logic depth (the Verilog import's placer, generalized); `.dig` export
+- ✅ Placing an imported circuit again by logic depth (editor/placedepth.ts: the Verilog import's placer, shared; relayout.ts):
+  the canvas menu's "Lay out by logic depth" and a toast after an import, offered only where it measures better (crossings +
+  wires through parts); elsewhere off, with the numbers. On the importers' fixtures it helps 3 chips of 27: hand-drawn sheets
+  reach 0 crossings with tunnels where we wire first (tests/relayout.test.ts pins each verdict)
+- Later: `.dig` export
 
 **ISA breadth** (Ripes: RV64, the C extension): RV64I / RV64M and C in Phase 9, each checked by riscv-tests and Spike
 like the RV32 cores. ✅ C (chapter 25, part 1); ✅ RV64I / M (part 2). Open: C and RV64 in the sandbox, the instruction builder's 16-bit and RV64 formats.
