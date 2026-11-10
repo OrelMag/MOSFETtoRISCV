@@ -83,6 +83,7 @@ function sandboxExample(id: string): { storage: Record<string, string>; chip: st
 }
 const counter = sandboxExample('counter7');
 const computer = sandboxExample('computer');
+const pdp8 = sandboxExample('pdp8g');
 
 /** Campaign progress for the map: act 0 to the full adder solved at par, as a learner a few evenings in. */
 const UNDER_WAY: Record<string, Record<string, number>> = {
@@ -308,6 +309,26 @@ dwell: 2500,
     name: 'hall', route: '#/c/silicon/8',
     why: 'The single-cycle RV32I as racks of relays in a machine hall, a person for scale.',
     wait: SHOWN, dwell: 6000,
+  },
+  {
+    name: 'workinggates', route: '#/c/gates/4', w: 1170, h: 860, settings: { wide: true },
+    why: 'Working gates (the default look): the XOR from four NANDs, each NAND drawn as its live CMOS transistors inside its outline.',
+    wait: BUILT, dwell: 3000,
+  },
+  {
+    name: 'baby', route: '#/c/appendix-baby/7',
+    why: 'Appendix E: the Manchester Baby in gates, its Williams-tube store beside the datapath.',
+    wait: BUILT, dwell: 6000,
+  },
+  {
+    name: 'agc', route: '#/c/appendix-agc/6',
+    why: 'Appendix F: a core-rope module in 3D, sense wires threaded through or around the cores, the read panel beside it.',
+    wait: `${SHOWN} && document.querySelector('#view canvas')`, dwell: 6000,
+  },
+  {
+    name: 'pdp8', route: `#/sandbox/${pdp8.chip}`,
+    why: 'Examples ▸ PDP-8 in gates: the machine with its front panel and teletype, the CPU drawer following it.',
+    storage: pdp8.storage, wait: `document.querySelectorAll('#view svg.ed-svg path.wire[data-wire]').length > 3`, dwell: 5000,
   },
 ];
 
