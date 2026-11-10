@@ -691,47 +691,104 @@ function buildOoo(IM: ComponentDef, dmemK: number, sz: OooSizes, dflt: boolean):
  */
 function oooDrawing(b: Builder, outs: string[]): { pins: Record<string, At>; nets: ReturnType<typeof placedNets> } {
   const P = new Placer(b.instances), raw = b.nets();
-  const GAP = 14, BLOCK = 22, BAND = 18;
-  /** A block's columns from x (top at y); returns its right edge and bottom. */
-  const block = (grp: string, x: number, y: number, cols: string[][], gap = GAP) => P.cols(grp, x, y, cols, gap, 4);
-  const band = (y: number, blocks: [string, string[][], number?][]) => {
-    let x = 12, bottom = y;
-    for (const [grp, cols, gap] of blocks) {
-      const r = block(grp, x, y, cols, gap);
-      x = r.right + BLOCK;
-      bottom = Math.max(bottom, r.bottom);
+  const BLOCK = 22, VGAP = 5, GAPX = 16, MAXFAN = 6, SWEEPS = 4, SPLIT = 5, ROWGAP = 18;
+  const inst = (e: string) => (e.includes('.') ? e.slice(0, e.indexOf('.')) : '');
+  const portOf = (e: string) => e.slice(e.indexOf('.') + 1);
+  /**
+   * A block laid out by data flow: a part's column is its depth along the block's own nets (feedback edges cut), and its
+   * row follows the rows of the pins that drive it, so a chain of gates runs left to right in straight wires.
+   * Returns the right edge and the bottom.
+   */
+  const flow = (grp: string, x: number, y: number, cols: string[][], gap = 12): { right: number; bottom: number } => {
+    const names = cols.flat().filter((n) => P.has(n));
+    const inSet = new Set(names);
+    type Edge = { from: string; to: string; out: string; port: string };
+    const preds = new Map<string, Edge[]>(names.map((n) => [n, []]));
+    const succ = new Map<string, Edge[]>(names.map((n) => [n, []]));
+    for (const nt of raw) {
+      const d = inst(nt.ends[0]);
+      if (!inSet.has(d) || nt.ends.length - 1 > MAXFAN) continue;
+      for (const s of nt.ends.slice(1)) {
+        const si = inst(s);
+        if (!inSet.has(si) || si === d) continue;
+        const e = { from: d, to: si, out: portOf(nt.ends[0]), port: portOf(s) };
+        preds.get(si)!.push(e);
+        succ.get(d)!.push(e);
+      }
     }
-    return bottom;
+    // depth by DFS, edges into a part on the stack are feedback and ignored
+    const depth = new Map<string, number>(), state = new Map<string, number>();
+    const dfs = (n: string): number => {
+      if (depth.has(n)) return depth.get(n)!;
+      state.set(n, 1);
+      let d = 0;
+      for (const p of preds.get(n)!) if (state.get(p.from) !== 1) d = Math.max(d, dfs(p.from) + 1);
+      state.set(n, 2);
+      depth.set(n, d);
+      return d;
+    };
+    for (const n of names) dfs(n);
+    const maxD = Math.max(...names.map((n) => depth.get(n)!));
+    const columns: string[][] = [];
+    for (let c = 0; c <= maxD; c++) columns.push(names.filter((n) => depth.get(n) === c));
+    const colX: number[] = [];
+    let cx = x;
+    for (const col of columns) { colX.push(cx); if (col.length) cx += Math.max(...col.map((n) => P.w(n))) + gap; }
+    for (let c = 0; c <= maxD; c++) for (const n of columns[c]) P.put(grp, n, colX[c], y);
+    /** Pack column c with each part as near the rows of the pins it is wired to as the others allow. */
+    const pack = (c: number, useSucc: boolean) => {
+      const col = columns[c];
+      const want = new Map<string, number>();
+      col.forEach((n, i) => {
+        const ys: number[] = [];
+        for (const p of preds.get(n)!) if (depth.get(p.from)! < c && P.at.has(p.from)) ys.push(P.pin(p.from, p.out)[1] - (P.pin(n, p.port)[1] - P.y(n)));
+        if (useSucc) for (const e of succ.get(n)!) if (depth.get(e.to)! > c && P.at.has(e.to)) ys.push(P.pin(e.to, e.port)[1] - (P.pin(n, e.out)[1] - P.y(n)));
+        want.set(n, ys.length ? ys.reduce((a, v) => a + v, 0) / ys.length : (P.y(n) || y) + i * 1e-3);
+      });
+      col.sort((a, b2) => want.get(a)! - want.get(b2)!);
+      let cy = y;
+      for (const n of col) {
+        const ty = Math.max(cy, Math.round(want.get(n)!));
+        P.put(grp, n, colX[c], ty);
+        cy = ty + P.h(n) + VGAP;
+      }
+    };
+    for (let c = 0; c <= maxD; c++) pack(c, false);
+    for (let k = 0; k < SWEEPS; k++) {
+      if (k % 2 === 0) for (let c = maxD; c >= 0; c--) pack(c, true);
+      else for (let c = 0; c <= maxD; c++) pack(c, true);
+    }
+    const bottom = Math.max(...names.map((n) => P.bottom(n)));
+    const right = Math.max(...names.map((n) => P.right(n)));
+    return { right, bottom };
   };
-
-  // band A: fetch, the fetch register, decode (slot 1 under slot 0)
-  const a1 = band(4, [
-    ['fetch', [['one', 'zero', 'pc', 'plus4', 'plus8'], ['imem', 'pd0', 'pd1'], ['btb'], ['ras'], ['fp']]],
-    ['fdreg', [['F0', 'F1', 'fdEmpty'], ['nd1', 'shift', 'nv0', 'nv1', 'rest', 'went', 'fgo'], ['moved', 'kept0', 'kept1'], ['n0', 'n1'], ['fl0', 'fl1', 'fpcF'], ['fd0', 'fd1', 'fpcN']]],
-  ]);
-  const dx = P.extent('fetch', 'fdreg').right + BLOCK;
-  const d0 = block('dec', dx, 4, [['fd0s', 'si0'], ['ctl0', 'imm0'], ['cls0'], ['dpd0', 'kn0']]);
-  const d1 = block('dec', dx, d0.bottom + 8, [['fd1s', 'si1'], ['ctl1', 'imm1'], ['cls1'], ['dpd1', 'kn1']]);
-  // band B: dispatch and rename, the operands, the issue queue, the reorder buffer and memory
-  const yB = Math.max(a1, d1.bottom) + BAND;
-  const b1 = band(yB, [
-    ['dispatch', [['dc', 'bind'], ['wr0', 'wr1', 'known0', 'known1'], ['rat'], ['rf']]],
-    ['operands', [['sameA1', 'nzA1', 'selfA10', 'selfA1', 'sameB1', 'nzB1', 'selfB10', 'selfB1'], ['opA0', 'opB0'], ['opA1', 'opB1']]],
-    ['issue', [['st0d', 'st0bit', 'st0m', 'z2', 'st0n', 'ltail1'], ['ld0f', 'mask0', 'pend1', 'ld1f', 'mask1'], ['pay0', 'pay1'], ['al0', 'al1', 'nDivBusy', 'divFree'], ['iq']]],
-    ['rob', [['zrd0', 'rd0', 'zrd1', 'rd1', 'st1d', 'sw'], ['robD0', 'robD1', 'robV0', 'robV1'], ['rob'], ['sq', 'dm']], 18],
-  ]);
-  // band C: the ports, the long units, the result buses, commit
-  band(b1 + BAND, [
-    ['exec', [['l2p0', 'r2n0', 'v1n0', 'l2p1', 'r2n1', 'v1n1', 'nFlush'], ['e1in0', 'e1in1'], ['r2_0', 'e1_0', 'r2_1', 'e1_1'], ['e1s0', 'e1s1'], ['pp0', 'pp1', 'f3p1'], ['ex0', 'ex1'],
-      ['nl20', 'ndv0', 'now0', 'nl21', 'ndv1', 'now1']], 18],
-    ['units', [['ldv', 'ld2', 'v2n0', 'mu2', 'v2n1', 'dstart', 'taken1', 'free1'], ['e2in0', 'e2in1', 'dinfo'], ['e2_0', 'mule', 'e2_1'], ['e2s0', 'e2s1'], ['mulm', 'div']]],
-    ['buses', [['v1_0', 'v2_0', 'v1_1', 'v2_1', 'vd'], ['t2d', 'V2d'], ['bus0t', 'bus0V', 'bus0v', 'bus1t', 'bus1V', 'bus1v'], ['bus0x', 'bus1x']]],
-    ['commit', [['hd0', 'hv0', 'hd1', 'hv1'], ['halt0', 'link0', 'halt1', 'link1'], ['cm'], ['ctrl0', 'nret0', 'tr0', 'jj0', 'seq0', 'tk0', 'rcp0', 'rcq0'],
-      ['ctrl1', 'nret1', 'tr1', 'jj1', 'seq1', 'tk1', 'rcp1', 'rcq1'], ['cs0', 'cs1', 'cs', 'redir'], ['one1', 'two', 'count', 'now']]],
-  ]);
-
-  // the divider two rows down: its inputs' labels clear of the E2 splitter's
-  P.put('units', 'div', P.x('div'), P.y('div') + 2);
+  // one long row, an instruction's way through the core read left to right: fetch and the fetch register, decode, dispatch and rename,
+  // the operands, the issue queue, the reorder buffer with the store queue and memory, the ports, the long units with the result buses, commit.
+  // Each block flows by its own nets (flow); the row is one band, so a wire may run from block to block.
+  const blocks: string[][][] = [
+    [['one', 'zero', 'pc', 'plus4', 'plus8'], ['imem', 'pd0', 'pd1'], ['btb'], ['ras'], ['fp']],
+    [['F0', 'F1', 'fdEmpty'], ['nd1', 'shift', 'nv0', 'nv1', 'rest', 'went', 'fgo'], ['moved', 'kept0', 'kept1'], ['n0', 'n1'], ['fl0', 'fl1', 'fpcF'], ['fd0', 'fd1', 'fpcN']],
+    [['fd0s', 'si0', 'fd1s', 'si1'], ['ctl0', 'imm0', 'ctl1', 'imm1'], ['cls0', 'cls1'], ['dpd0', 'kn0', 'dpd1', 'kn1']],
+    [['dc', 'bind'], ['wr0', 'wr1', 'known0', 'known1'], ['rat'], ['rf']],
+    [['sameA1', 'nzA1', 'selfA10', 'selfA1', 'sameB1', 'nzB1', 'selfB10', 'selfB1'], ['opA0', 'opB0'], ['opA1', 'opB1']],
+    [['st0d', 'st0bit', 'st0m', 'z2', 'st0n', 'ltail1'], ['ld0f', 'mask0', 'pend1', 'ld1f', 'mask1'], ['pay0', 'pay1'], ['al0', 'al1', 'nDivBusy', 'divFree'], ['iq']],
+    [['zrd0', 'rd0', 'zrd1', 'rd1', 'st1d', 'sw'], ['robD0', 'robD1', 'robV0', 'robV1'], ['rob'], ['sq', 'dm']],
+    [['l2p0', 'r2n0', 'v1n0', 'l2p1', 'r2n1', 'v1n1', 'nFlush'], ['e1in0', 'e1in1'], ['r2_0', 'e1_0', 'r2_1', 'e1_1'], ['e1s0', 'e1s1'], ['pp0', 'pp1', 'f3p1'], ['ex0', 'ex1'], ['nl20', 'ndv0', 'now0', 'nl21', 'ndv1', 'now1']],
+    [['ldv', 'ld2', 'v2n0', 'mu2', 'v2n1', 'dstart', 'taken1', 'free1'], ['e2in0', 'e2in1', 'dinfo'], ['e2_0', 'mule', 'e2_1'], ['e2s0', 'e2s1'], ['mulm', 'div'],
+      ['v1_0', 'v2_0', 'v1_1', 'v2_1', 'vd'], ['t2d', 'V2d'], ['bus0t', 'bus0V', 'bus0v', 'bus1t', 'bus1V', 'bus1v'], ['bus0x', 'bus1x']],
+    [['hd0', 'hv0', 'hd1', 'hv1'], ['halt0', 'link0', 'halt1', 'link1'], ['cm'], ['ctrl0', 'nret0', 'tr0', 'jj0', 'seq0', 'tk0', 'rcp0', 'rcq0'],
+      ['ctrl1', 'nret1', 'tr1', 'jj1', 'seq1', 'tk1', 'rcp1', 'rcq1'], ['cs0', 'cs1', 'cs', 'redir'], ['one1', 'two', 'count', 'now']],
+  ];
+  // two rows, the second read on from the first: a block per stage, each flowing by its own nets
+  const rowOf = new Map<string, number>();
+  let bx = 12, ry = 4, rowBottom = 4, row = 0;
+  for (const [k, cols] of blocks.entries()) {
+    if (k === SPLIT) { row = 1; ry = rowBottom + ROWGAP; bx = 12; }
+    const fl = flow('row' + row, bx, ry, cols, GAPX);
+    bx = fl.right + BLOCK;
+    rowBottom = Math.max(rowBottom, fl.bottom);
+    for (const n of cols.flat()) rowOf.set(n, row);
+  }
   for (const i of b.instances) {
     const p = P.at.get(i.name);
     if (!p || p.some(Number.isNaN)) throw new Error(`oooCpu: no place for ${i.name}`);
@@ -741,7 +798,28 @@ function oooDrawing(b: Builder, outs: string[]): { pins: Record<string, At>; net
   const pins: Record<string, At> = { clk: [0, 2] };
   outs.forEach((p, i) => (pins[p] = [right, 2 + 3 * i]));
   // nets whose wire could only pass under another part's body (the router finds no way round in these bands): pointers
-  const labelled = new Set(['pd1.call', 'pd1.ret', 'btb.pt1', 'btb.tgt1', 'F0.out', 'F1.out', 'selfA1.y', 'selfB1.y', 'pay0.out', 'st1d.y', 'sw.y', 'dstart.y',
+  const labelled = new Set([
+    'plus4.y', 'plus8.y', 'fdEmpty.y', 'fd0s.o2', 'si0.o5', 'cls1.p1only', 'si0.o3',
+    'si0.o4', 'si1.o3', 'si1.o4', 'wr0.y', 'cls0.u2', 'pay1.out', 'robV1.out',
+    'iq.lat20', 'iq.load0', 'iq.div0', 'iq.opB0', 'iq.pay0', 'iq.load1', 'iq.opA1',
+    'iq.opB1', 'iq.pay1', 'e1s1.o2', 'e1s1.o0', 'dm.rd', 'sq.fwdData', 'sq.fwdHit',
+    'pp0.o0', 'ex0.next', 'f3p1.o0', 'pp1.o0', 'ex1.next', 'ex1.mis', 'now1.y',
+    'e2s1.o0', 'dinfo.out', 'now0.y', 'e2s1.o5', 'e2s1.o6', 'e2s1.o1', 'v1_1.out',
+    'rob.h0d', 'rob.h0v', 'rob.h1d', 'rob.h1v', 'rob.h0valid', 'rob.h0done', 'rob.h1valid',
+    'rob.h1done', 'hd1.o7', 'e1s1.o4', 'e1s1.o5', 'iq.lat21', 'btb.pt0', 'shift.y',
+    'cls0.u1', 'cls1.u2', 'iq.opA0', 'iq.div1', 'hd0.o2', 'hd0.o4', 'imem.data1',
+    'hd1.o6', 'e1s1.o3', 'rf.rd4', 'rat.a1v', 'st0d.y', 'nFlush.y', 'hd1.o2',
+    'e2s0.o4', 'rf.rd3', 'rat.b1v',
+    'pd1.call', 'pd1.ret', 'btb.pt1', 'btb.tgt1', 'F0.out', 'F1.out', 'selfA1.y', 'selfB1.y', 'pay0.out', 'st1d.y', 'sw.y', 'dstart.y',
     'free1.y', 'v2_0.out', 'v1_0.out', 'hv0.o2', 'hv1.o2', 'ltail1.s']);
-  return { pins, nets: placedNets(P, raw, { labelled }) };
+  // a net whose sinks all lie right of its driver in the same block is wired, however many they are
+  const wired = new Set<string>();
+  for (const nt of raw) {
+    const di = inst(nt.ends[0]);
+    if (!di || labelled.has(nt.ends[0]) || !P.at.has(di)) continue;
+    const sinks = nt.ends.slice(1).map(inst);
+    if (sinks.length > MAXFAN || sinks.some((si) => !P.at.has(si) || rowOf.get(si) !== rowOf.get(di) || P.x(si) < P.right(di))) continue;
+    for (const s of nt.ends.slice(1)) wired.add(`${nt.ends[0]}>${s}`);
+  }
+  return { pins, nets: placedNets(P, raw, { labelled, wired }) };
 }
