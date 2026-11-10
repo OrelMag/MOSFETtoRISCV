@@ -4,7 +4,7 @@
 // first), a pin, or a pointer name, and is resolved again against each new build. A probe whose
 // wires are all gone, or whose net was dropped, disappears with them.
 
-import { type FlatDesign, findNode } from '../sim/flatten';
+import { type FlatDesign, findNode, type HierNode } from '../sim/flatten';
 import { netlistOf } from '../sim/types';
 import type { Compiled } from './compile';
 import type { ChipDoc } from './model';
@@ -56,9 +56,14 @@ export function netOfTarget(t: ProbeTarget, doc: ChipDoc, built: Compiled): numb
  * built.def). Null when the target no longer exists or is not on a working net.
  */
 export function resolveProbe(t: ProbeTarget, doc: ChipDoc, built: Compiled, design: FlatDesign): ResolvedProbe | null {
+  return resolveProbeAt(t, doc, built, design.root);
+}
+
+/** resolveProbe on any node the chip was flattened as (a placed copy of it inside another chip: its faults travel with it). */
+export function resolveProbeAt(t: ProbeTarget, doc: ChipDoc, built: Compiled, root: HierNode): ResolvedProbe | null {
   if ('path' in t) {
     // a part opened onto its own simulation (a primitive's inside) has no nets in this one
-    const node = findNode(design.root, t.path);
+    const node = findNode(root, t.path);
     const flat = node?.nets?.[t.net];
     const nd = node && netlistOf(node.def)?.nets[t.net];
     if (!flat || !nd) return null;
@@ -67,11 +72,11 @@ export function resolveProbe(t: ProbeTarget, doc: ChipDoc, built: Compiled, desi
   }
   if ('pin' in t) {
     const pin = doc.pins.find((p) => p.id === t.pin);
-    const nets = pin && design.root.ports[pin.name];
+    const nets = pin && root.ports[pin.name];
     return pin && nets ? { nets: [...nets], label: pin.name, target: t, net: -1 } : null;
   }
   const net = netOfTarget(t, doc, built);
-  const flat = net >= 0 ? design.root.nets?.[net] : undefined;
+  const flat = net >= 0 ? root.nets?.[net] : undefined;
   if (!flat) return null;
   const nd = netlistOf(built.def)?.nets[net];
   // Its name, else the chip pin on it, else its driver (as the schematic's probes name nets).
