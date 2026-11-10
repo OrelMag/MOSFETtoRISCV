@@ -11,6 +11,7 @@ import '../src/lib';
 import { PROGRAMS } from '../src/riscv/programs';
 import { assemble } from '../src/riscv/asm';
 import { singleCycleCpu } from '../src/lib/cpu';
+import { bigRam } from '../src/lib/bigmem';
 import { registry } from '../src/lib/define';
 import { evalOnce, forEachInput, simulate } from '../src/sim/harness';
 import type { ComponentDef } from '../src/sim/types';
@@ -21,14 +22,18 @@ const out = args.includes('--out') ? args[args.indexOf('--out') + 1] : '.cache/v
 const dump = args.includes('--dump');
 
 /** Combinational designs: simulated against ours. */
-const COMB = ['nand', 'not', 'xor', 'mux2', 'fa', 'fa9', 'rca4', 'rca8', 'rca32', 'alu32', 'alu32ks', 'dec3', 'decoder3'];
-/** Sequential or large ones: analysed and elaborated only. */
-const ELAB = ['dff', 'sr_latch', 'd_latch', 'reg8', 'reg32', 'ram8x6', 'ram8x16', 'regfile32x32', 'inv_cmos'];
+const COMB = ['nand', 'not', 'xor', 'mux2', 'full_adder_ha', 'full_adder', 'rca4', 'rca8', 'rca32', 'alu32', 'alu32ks', 'dec3'];
+/** Sequential or large ones: analysed and elaborated only. core_plane4: ferrite cores, a primitive below the gate level (comments, no entity). */
+const ELAB = ['dff', 'sr_latch', 'd_latch', 'reg8', 'reg32', 'ram8x6', 'ram8x16', 'regfile32x32', 'inv_cmos', 'core_plane4'];
 
 const designs: [ComponentDef, boolean][] = [];
-for (const id of COMB) { const d = registry.get(id); if (d) designs.push([d, true]); }
-for (const id of ELAB) { const d = registry.get(id); if (d) designs.push([d, false]); }
+// an id that is not registered is an error, not a design quietly left out (fa, fa9 and decoder3 were, for a while)
+const must = (id: string) => { const d = registry.get(id); if (!d) throw new Error(`vhdl-check: no registered part '${id}'`); return d; };
+for (const id of COMB) designs.push([must(id), true]);
+for (const id of ELAB) designs.push([must(id), false]);
 designs.push([singleCycleCpu(assemble(PROGRAMS[0].source).words), false]);
+// a behaviour leaf: an entity with its ports and a comment architecture (a generator, so built here, not looked up)
+designs.push([bigRam(8, 8), false]);
 
 const bits = (v: number, w: number) => (w === 1 ? `'${v & 1}'` : `"${(v >>> 0).toString(2).padStart(w, '0').slice(-w)}"`);
 // numbers past 32 bits: BigInt

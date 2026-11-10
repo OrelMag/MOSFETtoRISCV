@@ -29,7 +29,7 @@ import type { Widget } from '../view/stage';
 import { ORBIT_HINT, modelFrame } from './modelframe';
 import { cardView } from './carddraw';
 import { deckReader } from '../cards/reader';
-import { CARD_S, defaultFeed, type FeedMode, HallFeed, hallProgram, programStore, READER_711 } from '../lib/hallcards';
+import { CARD_S, defaultFeed, type FeedMode, HallFeed, hallProgram, ledgerParts, programStore, READER_711, readerView } from '../lib/hallcards';
 import { markJump } from '../ui/returnto';
 
 const num = (n: number) => groupDigits(Math.round(n));
@@ -567,42 +567,18 @@ export function hallView(): Widget {
   /** Floor position of the reader's centre: at the front, left of the person, its front to the aisle. */
   function readerAt(): [number, number] { return [hall.person[0] - 1.3, hall.person[1] - 0.2]; }
   /** Cards in the hopper and the stacker, and how far the moving one has gone (0 hopper … 1 stacker; null none). */
-  function readerCards(): { hopper: number; stacker: number; moving: number | null } {
-    const n = feed.cards;
-    if (feedMode === 'load') {
-      const done = Math.floor(loading), moving = feed.loaded || done >= n ? null : loading - done;
-      return { hopper: n - done - (moving !== null ? 1 : 0), stacker: feed.loaded ? n : done, moving };
-    }
-    // read as it runs: the loop deck. The cards before the station have gone through; the rest wait.
-    const at = feed.at;
-    return { hopper: n - (at + 1), stacker: at, moving: at >= 0 ? 0.5 : null };
-  }
-  const fmtS = (x: number) => (x === 0 ? '0 s' : x < 1 ? `${fmtTime(x)}` : `${x.toFixed(1)} s`);
+  const readerCards = () => readerView(feed, loading, periodIn(hallFacts(design).steps, tech)).cards;
+  const LEDGER_WORDS = { cpu: 'computing', wait: 'waiting for a card', load: 'loading' } as const;
   function showReader(): void {
-    const p = hallProgram(design), n = feed.cards, per = periodIn(hallFacts(design).steps, tech);
-    const k = feedMode === 'load' && !feed.loaded ? Math.min(n - 1, Math.floor(loading)) : Math.max(0, feed.at);
-    cv.show(p.deck.cards[k]);
+    const p = hallProgram(design), v = readerView(feed, loading, periodIn(hallFacts(design).steps, tech));
+    cv.show(p.deck.cards[v.shown]);
     cv.mark(Array.from({ length: p.bits }, (_, i) => i));
-    const ratio = CARD_S / per;
-    rdStatus.className = `hall-rd-status${feedMode === 'stream' && CARD_S > per ? ' wait' : ''}`;
-    rdStatus.textContent = feed.outOfCards ? 'Out of cards: the program ran past the end of the deck.'
-      : feedMode === 'load' && !feed.loaded ? `Loading the deck into the program store: card ${Math.min(n, Math.floor(loading) + 1)} of ${n}, ${fmtTime(CARD_S)} a card. The machine starts when the last card is in.`
-      : feedMode === 'load' ? `The deck is in the store (read once, ${fmtS(feed.ledger.load)}). The machine fetches from the store at its own speed, ${fmtTime(per)} an instruction.`
-      : CARD_S > per ? `Card ${k + 1}: each instruction waits for its card. A card takes ${fmtTime(CARD_S)}, the instruction ${fmtTime(per)}: the reader is ${num(ratio)} times slower.`
-      : `Card ${k + 1}: the next card arrives in ${fmtTime(CARD_S)}, the instruction takes ${fmtTime(per)}, so the reader is never late.`;
-    const stat = (v: string, t: string) => h('div', null, h('b', null, v), h('small', null, t));
-    rdStats.replaceChildren(
-      stat(`${feed.at < 0 ? '–' : feed.at + 1} / ${n}`, `card at the PC (pc / ${p.pcStep === 4 ? 4 : 1})`),
-      feedMode === 'stream' ? stat(num(feed.passes), 'times round the loop deck') : stat(`${num(feed.loaded ? n : Math.floor(loading))} / ${n}`, 'cards in the store'),
-      stat(num(feed.loaded || feedMode === 'stream' ? feed.read : Math.floor(loading)), 'cards read'),
-    );
-    const L = { ...feed.ledger, load: feed.loaded ? feed.ledger.load : Math.floor(loading) * CARD_S }, all = L.compute + L.wait + L.load || 1;
-    ledgerBar.replaceChildren(...([['cpu', L.compute], ['wait', L.wait], ['load', L.load]] as const).filter(([, v]) => v > 0).map(([c, v]) => h('i', { class: `l-${c}`, style: `width: ${(100 * v) / all}%` })));
-    ledgerKey.replaceChildren(
-      h('span', null, h('i', { class: 'l-cpu' }), `computing ${fmtS(L.compute)}`),
-      h('span', null, h('i', { class: 'l-wait' }), `waiting for a card ${fmtS(L.wait)}`),
-      h('span', null, h('i', { class: 'l-load' }), `loading ${fmtS(L.load)}`),
-    );
+    rdStatus.className = `hall-rd-status${v.waiting ? ' wait' : ''}`;
+    rdStatus.textContent = v.status;
+    rdStats.replaceChildren(...v.stats.map((s) => h('div', null, h('b', null, s.value), h('small', null, s.label))));
+    const parts = ledgerParts(v.ledger);
+    ledgerBar.replaceChildren(...parts.filter((x) => x.s > 0).map((x) => h('i', { class: `l-${x.k}`, style: `width: ${100 * x.share}%` })));
+    ledgerKey.replaceChildren(...parts.map((x) => h('span', null, h('i', { class: `l-${x.k}` }), `${LEDGER_WORDS[x.k]} ${x.text}`)));
   }
   /** The reader's cards moved: the static batch again (it holds the reader; the devices' batch is left alone). */
   let readerKey = '';

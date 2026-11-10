@@ -5,8 +5,9 @@
 import { describe, expect, it } from 'vitest';
 import '../src/lib';
 import { registry } from '../src/lib/define';
-import { netlistOf } from '../src/sim/types';
-import { entityName, structuralVhdl, vhdlHierarchy, vhdlIdent } from '../src/sim/vhdl';
+import { bigRam } from '../src/lib/bigmem';
+import { type ComponentDef, netlistOf } from '../src/sim/types';
+import { entityName, structuralVhdl, vhdlHierarchy, vhdlIdent, vhdlPorts } from '../src/sim/vhdl';
 
 const LEGAL = /^[A-Za-z](_?[A-Za-z0-9])*$/;
 
@@ -90,5 +91,35 @@ describe('a hierarchy file', () => {
     const v = structuralVhdl(registry.get('inv_cmos')!)!;
     expect(v).toMatch(/PMOS transistor/);
     expect(v).not.toMatch(/entity work\.(nmos|pmos)/);
+  });
+});
+
+describe('what has no gates to export', () => {
+  it('a behaviour leaf (a big RAM) is an entity with its ports and a comment architecture, declared before it is used', () => {
+    const d = bigRam(8, 8);
+    expect(d.preferBehavior && d.behavior).toBeTruthy();
+    const { text } = vhdlHierarchy(d);
+    const name = entityName(d);
+    expect(text).toContain(`entity ${name} is\n  port (`);
+    expect(text).toContain(`architecture behaviour of ${name} is\nbegin\n  -- `);
+    const pn = vhdlPorts(d);
+    expect([...declaredPorts(text).get(name.toLowerCase())!].sort()).toEqual(d.ports.map((p) => pn.get(p.name)!.toLowerCase()).sort());
+    // placed in a design: declared before the architecture that uses it, port-mapped by the names it declares
+    const top: ComponentDef = {
+      id: 't_vhdl_wrap', name: 'wrap', category: 'memory', symbol: { kind: 'box' }, ports: d.ports,
+      netlist: () => ({ instances: [{ name: 'm', def: d }], nets: d.ports.map((p) => ({ ends: [p.name, `m.${p.name}`] })) }),
+    };
+    const t = vhdlHierarchy(top).text;
+    expect(t.indexOf(`entity ${name} is`)).toBeGreaterThanOrEqual(0);
+    expect(t.indexOf(`entity ${name} is`)).toBeLessThan(t.indexOf(`entity work.${name} port map`));
+    const map = t.match(new RegExp(`entity work\\.${name} port map \\((.*)\\);`))![1];
+    expect(map.split(', ').map((a) => a.split(' => ')[0].toLowerCase()).sort()).toEqual([...declaredPorts(t).get(name.toLowerCase())!].sort());
+  });
+  it('a primitive below the gate level (ferrite cores) is a comment, never an undeclared entity', () => {
+    const { text } = vhdlHierarchy(registry.get('core_plane4')!);
+    const used = [...text.matchAll(/: entity work\.(\w+) /g)].map((m) => m[1].toLowerCase());
+    const declared = declaredPorts(text);
+    for (const e of used) expect(declared.has(e), `entity ${e} declared`).toBe(true);
+    expect(text.match(/-- c\d\d: ferrite core on /g)?.length).toBe(16);
   });
 });
