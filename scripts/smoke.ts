@@ -696,8 +696,8 @@ const OPTIONAL: [RegExp, string][] = [
   // The chip layout is published by the layout workflow and added to dist/ by CI's deploy job only;
   // widgets/chiplayout.ts shows a placeholder without it.
   [/\/layout\/[^/]+\.json(\?|$)/, 'layout assets'],
-  // Web fonts from a third party: the CSS falls back to system fonts, and an outage there must not block a deploy.
-  [/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, 'Google Fonts'],
+  // The web fonts (src/styles/fonts): the touch routes block them on purpose, and the CSS falls back to system fonts.
+  [/\.woff2(\?|$)/, 'web fonts'],
 ];
 const optional = (url: string) => OPTIONAL.some(([re]) => re.test(url));
 
@@ -1085,7 +1085,7 @@ class Tab {
       await this.send('Emulation.setDeviceMetricsOverride', { width, height, mobile, deviceScaleFactor: mobile ? 2 : 1 });
       await this.send('Emulation.setTouchEmulationEnabled', { enabled: !!route.viewport.touch, maxTouchPoints: route.viewport.touch ? 5 : 1 });
       // the web font late or never (a slow network): the system fallback is the wider text the top bar must still fit
-      await this.send('Network.setBlockedURLs', { urls: route.viewport.touch ? ['*fonts.googleapis.com*', '*fonts.gstatic.com*'] : [] });
+      await this.send('Network.setBlockedURLs', { urls: route.viewport.touch ? ['*.woff2'] : [] });
       this.emulated = true;
     } else if (this.emulated) {
       await this.send('Emulation.clearDeviceMetricsOverride');

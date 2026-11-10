@@ -1,3 +1,4 @@
+import './styles/fonts.css';
 import './styles/theme.css';
 import './styles/palettes.css';
 import './styles/app.css';

@@ -14,7 +14,7 @@ export function metaOf(c: Chapter): ChapterMeta {
   if (c.label) m.label = c.label;
   if (c.builds?.length) m.builds = c.builds;
   if (c.recap) m.recap = { checks: c.recap.check?.length ?? 0 };
-  m.steps = c.steps.map((s) => ({ title: s.title, ...(s.challenge ? { challenge: s.challenge.kind } : {}) }));
+  m.steps = c.steps.map((s) => ({ title: s.title, ...(s.challenge ? { challenge: s.challenge.kind } : {}), ...(s.scene ? { stage: 'scene' as const } : s.widget ? { stage: 'widget' as const } : {}) }));
   return m;
 }
 
@@ -26,7 +26,7 @@ export function manifestSource(chs: readonly Chapter[]): string {
     const m = metaOf(c);
     const { steps, ...head } = m;
     const headTxt = Object.entries(head).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ');
-    const stepTxt = steps.map((s) => `    { title: ${q(s.title)}${s.challenge ? `, challenge: ${q(s.challenge)}` : ''} },`).join('\n');
+    const stepTxt = steps.map((s) => `    { title: ${q(s.title)}${s.challenge ? `, challenge: ${q(s.challenge)}` : ''}${s.stage ? `, stage: ${q(s.stage)}` : ''} },`).join('\n');
     return `  { ${headTxt}, steps: [\n${stepTxt}\n  ] },`;
   });
   return `${MANIFEST_HEADER}import type { ChapterMeta } from './meta';\n\nexport const MANIFEST: readonly ChapterMeta[] = [\n${rows.join('\n')}\n];\n`;

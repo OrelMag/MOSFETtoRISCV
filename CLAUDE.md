@@ -39,8 +39,8 @@ npm run smoke        # every route of dist/ in headless Chrome, fails on any run
 npm run desktop      # build + desktop/ (Electron, own package): portable Windows .exe in desktop/release/
 ```
 
-`desktop/`: main.cjs serves the staged site (stage.mjs: dist/ without source maps, Google Fonts swapped for
-local @fontsource copies) on a private `app://mosfet` origin; data next to the .exe (PORTABLE_EXECUTABLE_DIR);
+`desktop/`: main.cjs serves the staged site (stage.mjs: dist/ without source maps; the fonts are the site's own,
+src/styles/fonts.css: Latin, Latin Extended and Greek subsets, OFL, the two first-screen faces preloaded by index.html) on a private `app://mosfet` origin; data next to the .exe (PORTABLE_EXECUTABLE_DIR);
 fuses off (runAsNode: VS Code sets ELECTRON_RUN_AS_NODE, so run `electron .` there with it unset). Share links
 made in the program point at the public site (editor/files.ts `SITE_URL`). `.github/workflows/desktop.yml`
 (after every successful deploy of main, from the deployed commit; manual; or a `v*` tag) publishes the release `desktop-latest`.
@@ -49,7 +49,7 @@ made in the program point at the public site (editor/files.ts `SITE_URL`). `.git
 Protocol over Node's WebSocket) serves dist/ with `vite preview` (or `--url <site>`) and opens every route generated
 from the code (chapter steps in both themes, each workbench family's default, campaign map / intro / codex / every
 level, sandbox and its examples seeded in localStorage), the gates chapter's print view (dark, and on a phone: every figure drawn, one print call; window.print is stubbed for every route) as a fresh load in parallel tabs (`--tabs n`), each in its own
-browser context; it fails on exceptions, console / browser errors, failed requests (`OPTIONAL`: layout/ and Google Fonts),
+browser context; it fails on exceptions, console / browser errors, failed requests (`OPTIONAL`: layout/ and the web fonts, which the touch routes block),
 "could not load" panels, editor error toasts / diagnostics, an empty main view, and horizontal overflow at 1280 px and on
 a 390 px phone (a few pages), and a sandbox toolbar label cut or scrolled out of view (also at 1440 and 1920 px), the open tab under Open… / New chip, and on every
 route a stage bar's button past its edge, the open level's name cut on a one-row stage bar (view/stage.ts fitBar: labels off, then
