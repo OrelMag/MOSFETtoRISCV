@@ -25,8 +25,8 @@ Stage 2 (gates, branch feat/rvv-gates):
   (banks `wb0` … `wb3`); cosim.ts reads the vector state (`vectorState`) and the banks.
 - `singleCycleCpu(program, { vector: { lanes: 4, vlen: 128 } })`: without it the same object, gate for gate.
 - Differences from the plan: the v0 shadow is 32 flip-flops, not 128 (at e32 and VLEN 128, VLMAX ≤ 32: the mask is v0's
-  lane-0 word); the verify row `sc-v` is in EXTRA_CPUS (riscv-tests + fuzz, tests/verify-vector.test.ts) until stage 3,
-  because a CPUS row needs a chapter for the Benchmarks tab and a results.json run.
+  lane-0 word); the verify row `sc-v` stays in EXTRA_CPUS (riscv-tests + fuzz, tests/verify-vector.test.ts): the benchmark set is scalar, so a Benchmarks row would show the unit as pure cost;
+  the chapter measures the vector kernel itself (bench/vectorcosts.json).
 
 Stage 3 (the chapter, branch feat/ch-vectors):
 - `chapters/ch-vectors.ts` (between power and lanes): eleven steps, recap and quizzes. Scenes are `cpuScene({ vector: true })` with the
