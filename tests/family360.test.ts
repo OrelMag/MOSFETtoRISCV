@@ -1,7 +1,11 @@
 // The numbers chapter multicycle's System/360 step quotes, computed from bench/results.json and the microcode table.
 import { describe, expect, it } from 'vitest';
 import { chMulticycle } from '../src/chapters/ch-multicycle';
-import { familyRows, microStore, spread } from '../src/widgets/family360';
+import { multicycleCpu, singleCycleCpu } from '../src/lib';
+import { RESULTS } from '../src/bench/summary';
+import { flatten } from '../src/sim/flatten';
+import { analyzeTiming } from '../src/sim/timing';
+import { CHAPTER_PERIOD, familyRows, microStore, spread } from '../src/widgets/family360';
 
 describe('System/360 step', () => {
   const rows = familyRows();
@@ -22,11 +26,22 @@ describe('System/360 step', () => {
     expect(rows.filter((r) => r.onFront).map((r) => r.id)).toEqual(['sc-ks']);
     expect(rows.map((r) => Math.round(r.nsPerInstr * 100))).toEqual([265, 823, 823, 345]);
   });
+  it("the chapter-sized CPUs' periods, and the benchmark build's deeper ROM", () => {
+    const period = (d: Parameters<typeof flatten>[0]) => analyzeTiming(flatten(d, { mode: 'gate' }))!.period;
+    expect(period(multicycleCpu([], { control: 'fsm' }))).toBe(CHAPTER_PERIOD.mc);
+    expect(period(multicycleCpu([], { control: 'micro' }))).toBe(CHAPTER_PERIOD.mc);
+    expect(period(singleCycleCpu([], { adder: 'ks' }))).toBe(CHAPTER_PERIOD.sc);
+    // the benchmarks' 128-word program ROM (imemK 7): one mux level more, the table's single-cycle period
+    expect(RESULTS.imemWords).toBe(128);
+    expect(period(singleCycleCpu([], { adder: 'ks', imemK: 7 }))).toBe(rows[0].period);
+  });
   it('microcode store', () => expect(microStore()).toEqual({ words: 13, bits: 20, total: 260 }));
   it('the step comes before the deep dive, with a widget and a quiz', () => {
     const st = chMulticycle.steps.find((x) => x.title.includes('System/360'))!;
     expect(st.title).toMatch(/System\/360/);
     expect(st.widget).toBeTypeOf('function');
     expect(st.body).toContain('adds 5712 NANDs');
+    // Patterson's rentals, Model 65 over Model 30
+    expect(st.body).toContain('5.6 times as much');
   });
 });

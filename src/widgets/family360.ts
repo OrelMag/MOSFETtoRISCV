@@ -7,6 +7,7 @@ import { MC_PROGRAM } from '../lib/multicycle';
 import { WORD_BITS } from '../lib/ucode';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
+import { PERIOD } from './cpucost';
 
 /** The four RV32I implementations of the chapters, all with the fast (Kogge-Stone) adders so the periods compare. */
 export const FAMILY_360: { id: string; label: string }[] = [
@@ -36,6 +37,13 @@ export function spread(rows: FamilyRow[] = familyRows()) {
   const n = rows.map((r) => r.nands), t = rows.map((r) => r.nsPerInstr);
   return { cost: Math.max(...n) / Math.min(...n), time: Math.max(...t) / Math.min(...t) };
 }
+
+/**
+ * The static periods of the chapter's own CPUs (64-word instruction ROM, the timing panel's numbers), NAND delays: the
+ * single-cycle CPU with Kogge–Stone adders (cpucost.ts PERIOD, pinned by tests/cycletime.test.ts) and the multicycle CPU
+ * (pinned by tests/family360.test.ts). The benchmark builds hold a 128-word ROM, one mux level deeper: the table's 106.
+ */
+export const CHAPTER_PERIOD = { sc: PERIOD.ks.pc, mc: 85 };
 
 export const PROGRAMS_USED = COMMON.join(', ');
 
