@@ -491,7 +491,6 @@ export function issueQueue(P: number, tw = TAG, Q = 8, S = 4): ComponentDef {
     }
     b.wire(`${l0}.any`, 'free1');
     b.wire(`${l1}.any`, 'free2');
-    const R = b.right;
     const W: Record<string, number> = { bt0: tw, bt1: tw, bx0: 32, bx1: 32, sdone: S };
     for (const s of [0, 1]) for (const [n, w] of F) if (w > 1) W[`s${s}_${n}`] = w;
     const outs: [string, number][] = [['free1', 1], ['free2', 1], ['cnt0', CW], ['cnt1', CW],
@@ -501,7 +500,7 @@ export function issueQueue(P: number, tw = TAG, Q = 8, S = 4): ComponentDef {
       summary: 'Where dispatched instructions wait for their operands. Each port picks, every cycle, the oldest entry bound to it that is ready and whose result will find its bus free; the result buses wake the waiting operands up. Dispatch fills the lowest free entries, two a cycle; an entry picked or flushed is free from the next cycle.',
       ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : W[n] ? bus(n, W[n], 'in') : bit(n, 'in'))), ...outs.map(([n, w]) => (w > 1 ? bus(n, w, 'out') : bit(n, 'out')))],
       symbol: { kind: 'box', label: 'ISSUE QUEUE' },
-      netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries(outs.map(([n], i) => [n, [R, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { room: true, wires: { ...Object.fromEntries(['e0.ready', 'e2.ready', 'e3.ready', 'e5.ready', 'e6.ready', 'c0_0.y', 'c0_1.y', 'opA0m.y', 'opB0m.y', 'cl0.o0', 'any1.y', 'opA1m.y'].map((n) => [n, false])), 'e0.portQ': true } }),
     });
   });
 }
@@ -609,6 +608,24 @@ export function robCell(D: number, V: number): ComponentDef {
 }
 
 /**
+ * N words of fields F side by side regrouped field by field: output f<i> holds field i of every word, word 0 lowest. Pure
+ * wiring: it stands where N splitters and |F| mergers would cross every wire of one with every other.
+ */
+export function byField(N: number, F: readonly number[]): ComponentDef {
+  const id = `byfield${N}_${F.join('_')}`;
+  return memo(id, () => {
+    const W = F.reduce((a, w) => a + w, 0), off = F.map((_, i) => F.slice(0, i).reduce((a, w) => a + w, 0));
+    return define({
+      id, name: 'Fields of every entry', category: 'plumbing',
+      summary: `${N} entries of ${F.length} fields regrouped field by field: each output is one field of every entry, entry 0 lowest. Wiring only, zero gates, zero delay.`,
+      ports: [...Array.from({ length: N }, (_, e) => bus(`e${e}`, W, 'in')), ...F.map((w, i) => bus(`f${i}`, N * w, 'out'))],
+      symbol: { kind: 'box', label: 'BY FIELD' }, prim: 'alias',
+      alias: F.flatMap((w, i) => Array.from({ length: N * w }, (_, n): [string, number, string, number] => [`e${Math.floor(n / w)}`, off[i] + (n % w), `f${i}`, n])),
+    });
+  });
+}
+
+/**
  * The reorder buffer: 16 entries in program order between head and head + count. Dispatch allocates up to two at the
  * tail (slot 1 only with slot 0); the result buses write entries by tag; commit retires up to two from the head
  * (ce0, ce1: decided outside, from h0 / h1); flush empties it (after this cycle's commits). free1 / free2: room for one
@@ -647,14 +664,15 @@ export function reorderBuffer(D: number, V: number, N = 16): ComponentDef {
     // the entries bundled field by field: done, dispatch fields, value, execution info (each bundle within a sandbox
     // pin's 1024 bits, and an operand reads only done and value)
     const F = [1, D, 32, V - 32];
-    const fsp = qs.map((q, e) => b.op(splitter(F), [q], undefined, `fs${e}`));
-    b.next();
-    const bund = F.map((w, i) => b.name(b.op1(merger(Array(N).fill(w), 2), fsp.map((x) => `${x}.o${i}`), undefined, `all${i}`), ['done', 'dispatched', 'values', 'info'][i], true));
+    b.op(byField(N, F), qs, 'by field', 'fields');
+    const bund = F.map((_, i) => b.name(`fields.f${i}`, ['done', 'dispatched', 'values', 'info'][i], true));
     b.next();
     const rd = (i: number, sel: string, nm: string, label?: string) => b.op1(readPort(k, F[i]), [bund[i], sel], label, nm);
     // the two oldest, for commit; operands by tag
     const heads = ([['head.q', 'h0', 'head'], [head1, 'h1', 'head + 1']] as const).map(([sel, nm, lb]) => F.map((_, i) => rd(i, sel, `${nm}f${i}`, i ? undefined : lb)));
     const ops = [0, 1, 2, 3].map((k) => [rd(0, `rtag${k}`, `ro${k}d`, `operand ${k}`), rd(2, `rtag${k}`, `ro${k}v`)]);
+    // the head's fields reach the outputs as labels: a wire from these read ports would pass under the ones below them
+    for (const [n, nm] of [['h0f0', 'head done'], ['h0f2', 'head value'], ['h0f3', 'head info'], ['h1f0', 'head + 1 done']]) b.name(`${n}.y`, nm, true);
     b.next();
     // pointer updates: head += commits; count += allocations − commits; a flush leaves it empty
     const nC = b.op1(merger([1, 1]), [b.op1(XOR, ['ce0', 'ce1'], undefined, 'c1'), b.op1(AND, ['ce0', 'ce1'], undefined, 'c2')], undefined, 'nC');
@@ -680,7 +698,6 @@ export function reorderBuffer(D: number, V: number, N = 16): ComponentDef {
     heads.forEach((h, k) => { b.wire(h[0], `h${k}done`); b.wire(h[1], `h${k}d`); b.wire(b.op1(merger([32, V - 32]), [h[2], h[3]], undefined, `hv${k}`), `h${k}v`); });
     b.wire('head.q', 'headTag'); b.wire(head1, 'head1Tag'); b.wire(tail, 'tailTag'); b.wire(tail1, 'tail1Tag');
     for (const k of [0, 1, 2, 3]) { b.wire(ops[k][0], `rdone${k}`); b.wire(ops[k][1], `rval${k}`); }
-    const R0 = b.right;
     const Wd: Record<string, number> = { dd0: D, dd1: D, dv0: V, dv1: V, btag0: k, bv0: V, btag1: k, bv1: V, rtag0: k, rtag1: k, rtag2: k, rtag3: k };
     const outs: [string, number][] = [['free1', 1], ['free2', 1], ['h0valid', 1], ['h0done', 1], ['h0d', D], ['h0v', V], ['h1valid', 1], ['h1done', 1], ['h1d', D], ['h1v', V],
       ['headTag', k], ['head1Tag', k], ['tailTag', k], ['tail1Tag', k], ...[0, 1, 2, 3].flatMap((k): [string, number][] => [[`rdone${k}`, 1], [`rval${k}`, 32]])];
@@ -689,7 +706,7 @@ export function reorderBuffer(D: number, V: number, N = 16): ComponentDef {
       summary: 'The instructions in flight, in program order: dispatch appends up to two at the tail, a result bus marks its entry done with the value, and commit retires up to two done entries from the head, so the register file only ever sees results in order. A value waits here until then: P6 style, the entry\'s number is the instruction\'s tag.',
       ports: [...ins.map((n) => (n === 'clk' ? bit('clk', 'in', 'bottom', true) : Wd[n] ? bus(n, Wd[n], 'in') : bit(n, 'in'))), ...outs.map(([n, w]) => (w > 1 ? bus(n, w, 'out') : bit(n, 'out')))],
       symbol: { kind: 'box', label: 'REORDER BUFFER' },
-      netlist: () => ({ pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries(outs.map(([n], i) => [n, [R0, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }),
+      netlist: () => { const R0 = b.right; return { pins: { ...Object.fromEntries(ins.map((n, i) => [n, [0, 2 + 2 * i] as [number, number]])), ...Object.fromEntries(outs.map(([n], i) => [n, [R0, 2 + 2 * i] as [number, number]])) }, instances: b.instances, nets: b.nets() }; },
     });
   });
 }

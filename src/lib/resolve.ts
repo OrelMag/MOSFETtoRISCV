@@ -7,6 +7,7 @@ import type { FpFormat } from '../sim/fpref';
 import { addSub, andN, busMux2, decoder, equal, incrementer, muxTree, rca } from './combinational';
 import { registry } from './define';
 import { CORE_SET, corePlane, coreStore } from './coremem';
+import { byField } from './ooo';
 import { ram } from './memory';
 import { BANK_K, bigRam, ramBank } from './bigmem';
 import { alu, bitwise, constWord, isZero, orN, shifter, zext } from './alu';
@@ -58,6 +59,8 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^core_set$/, () => CORE_SET],
   [/^core_plane4_([0-9a-f]{4})$/, (m) => corePlane(parseInt(m[1], 16))],
   [/^core_store16x4_([0-9a-f]{16})$/, (m) => coreStore([...m[1]].map((c) => parseInt(c, 16)))],
+  // the reorder buffer's field regrouping (lib/ooo.ts byField): pure wiring, no netlist for a remix to carry
+  [/^byfield(\d+)_(\d+(?:_\d+)*)$/, (m) => byField(+m[1], m[2].split('_').map(Number))],
   [/^rca(\d+)$/, (m) => rca(+m[1])],
   [/^addsub(\d+)$/, (m) => addSub(+m[1])],
   [/^inc(\d+)$/, (m) => incrementer(+m[1])],
