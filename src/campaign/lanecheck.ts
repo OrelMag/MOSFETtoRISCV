@@ -13,7 +13,7 @@ import type { ComponentDef } from '../sim/types';
 import { assemble16 } from '../riscv/rv16/asm16';
 import { disasm16, MMIO_BASE, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { Simt16 } from '../riscv/rv16/simt16';
-import { bitBench, type CoreCheck, type CoreSpec, type CoreTest, gateBench, memLeaf } from './corecheck';
+import { bitBench, type CoreCheck, type CoreSpec, type CoreTest, drained, gateBench, memLeaf, type RunOptions } from './corecheck';
 
 interface Event { pc: number; instr: number; rd?: number; addr?: number; value: number }
 
@@ -32,10 +32,10 @@ const rname = (r: number) => `${REG_NAMES16[r]} (x${r})`;
 const each = (p: string, n: number) => Array.from({ length: n }, (_, i) => `${p}${i}`);
 
 /** Run a test on the lane golden model; throws when the test itself is broken (a bug in the campaign). */
-export function laneGolden(t: CoreTest, n: number, maxSteps = 20000): LaneGolden {
+export function laneGolden(t: CoreTest, n: number, maxSteps = 20000, loose = false): LaneGolden {
   const a = t.words ? { words: t.words, data: t.data ?? new Map<number, number>(), errors: [] } : assemble16(t.src ?? '');
   if (a.errors.length) throw new Error(`lane test ${t.name}: ${a.errors[0].line}: ${a.errors[0].message}`);
-  const w = new Simt16(a.words, { lanes: n, strictInit: true }, a.data);
+  const w = new Simt16(a.words, { lanes: n, strictInit: !loose }, a.data);
   const regs: Event[][] = Array.from({ length: n }, () => []), stores: Event[][] = Array.from({ length: n }, () => []);
   while (!w.halted && w.steps < maxSteps) {
     const s = w.step();
@@ -64,14 +64,20 @@ interface Run {
 }
 
 /** Run a lane core on the tests; failures name the test, the lane, the event and the instruction. */
-export function runLanes(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto'): CustomRun {
+export function runLanes(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto', opts: RunOptions = {}): CustomRun {
+  return drained(runLanesSteps(def, mode, spec, engine, opts));
+}
+
+/** runLanes, yielding every 64 cycles. */
+export function* runLanesSteps(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto', opts: RunOptions = {}): Generator<void, CustomRun> {
+  const own = opts.own;
   const n = spec.lanes ?? 4;
   if (mode === 'switch') return { failures: ['switch level: a core must simulate at gate level (no tri-states or floating nets)'], tested: 0 };
   const have = new Set(def.ports.map((p) => p.name));
   const OUTS = ['pc', ...each('daddr', n), ...each('dwdata', n), 'dwe', 'rwe', 'rwa', ...each('rwd', n)];
   const missing = OUTS.filter((p) => !have.has(p));
   if (missing.length) return { failures: [`missing pins: ${missing.join(', ')}`], tested: 0 };
-  const tests = spec.tests().map((t) => laneGolden(t, n));
+  const tests = spec.tests().map((t) => laneGolden(t, n, 20000, !!own));
   const bench = engine === 'gate' ? null : bitBench(def);
   const failures: string[] = [];
   const failed: number[] = [];
@@ -116,10 +122,11 @@ export function runLanes(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreS
     serve();
     edge();
     b.set('rst', fill(() => 0));
-    const budgetOf = (r: Run) => Math.ceil(spec.budget.cpi * r.g.steps + spec.budget.extra);
+    const budgetOf = (r: Run) => (own ? Math.ceil(own.maxCycles(r.g.steps) / 2) : Math.ceil(spec.budget.cpi * r.g.steps + spec.budget.extra));
     const limit = Math.max(...runs.map((r) => 2 * budgetOf(r)));
     const total = (evs: Event[][]) => evs.reduce((s, e) => s + e.length, 0);
     for (let cyc = 1; cyc <= limit + drain; cyc++) {
+      if ((cyc & 63) === 0) yield; // a long run hands control back (owncore.ts drives it within a frame budget)
       serve();
       const dwe = b.get('dwe'), rwe = b.get('rwe'), rwa = b.get('rwa'), pc = b.get('pc');
       const daddr = each('daddr', n).map((p) => b.get(p)), dwd = each('dwdata', n).map((p) => b.get(p)), rwd = each('rwd', n).map((p) => b.get(p));
@@ -167,7 +174,7 @@ export function runLanes(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreS
         const j = r.ri.findIndex((x, l) => x < r.g.regs[l].length), next = j >= 0 ? r.g.regs[j][r.ri[j]] : undefined;
         r.fail = `${r.g.name}: after ${r.cycles} cycles (budget ${budget}) only ${r.ri.reduce((s, x) => s + x, 0)} of ${total(r.g.regs)} register writes and ${r.si.reduce((s, x) => s + x, 0)} of ${total(r.g.stores)} stores happened`
           + (next ? `; next expected in lane ${j}: ${rname(next.rd!)} ← ${hex(next.value)} from "${disasm16(next.instr, next.pc)}"` : '');
-      } else if (!r.fail && r.doneAt > budget) r.fail = `${r.g.name}: correct, but ${r.doneAt} cycles for ${r.g.steps} warp instructions (budget ${budget})`;
+      } else if (!own && !r.fail && r.doneAt > budget) r.fail = `${r.g.name}: correct, but ${r.doneAt} cycles for ${r.g.steps} warp instructions (budget ${budget})`;
       if (r.fail) {
         failures.push(r.fail);
         failed.push(r.i);

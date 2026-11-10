@@ -296,7 +296,7 @@ The simulator already went further than both games: transistors and Z, gate dela
 metastability), X, static timing, VCD, Verilog with a Yosys-checked testbench, wide pins, golden-model
 CPUs, and every library part opens down to a MOSFET. What they had and the sandbox lacked was I/O,
 chip presentation, capacity and the program-solving half of Turing Complete; all four are now in, bar
-per-puzzle pins and the campaign's program levels on your own core.
+per-puzzle pins.
 
 **I/O parts** (placeable, zero-cost like the displays, absent from Verilog)
 - ✅ Key input (DLS Key, TC Keyboard): a Key part bound to a keyboard key (rebind it in the properties), 1 while the
@@ -421,8 +421,12 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   is both cheaper and faster, ★★★ cycles × NANDs below all. A chart plots the references, their front and your point.
   A click on a test plays it on the circuit, a cycle at a time, back and forth. Show answer gives the pseudocode and the
   references; Do it for me loads the reference program
-- ⏳ After the puzzles: per-puzzle pins (a maze robot's sensors, a traffic light's lamps) as a third part kind; the
-  campaign's RV16 program levels run on your own core
+- ⏳ After the puzzles: per-puzzle pins (a maze robot's sensors, a traffic light's lamps) as a third part kind
+- ✅ The campaign's RV16 program levels run on your own core (mockup approved 2026-11-10; campaign/owncore.ts): Run the
+  tests on Golden model | Your core, the core levels passed with their NANDs and period; agrees (cycles, CPI, time in NAND
+  delays beside the other cores, best per core kept, no star) or disagrees (the instruction lit, model vs core, Step to
+  it: both register files, Open on a bench, Fix the core). Lane and warp kernels on k_simd … k_frame; NIC, DMA and timed
+  interrupt levels stay on the model
 
 **Graphical instruction builder** (mockup approved 2026-10-19: four concepts, all to be built, RV32 first)
 - ✅ 1. Composer, RV32 (riscv/compose.ts, widgets/composer.ts): one instruction edited from any side. Pick the
@@ -802,13 +806,14 @@ with punch cards.
   inverters in a row with the grids behind dividers, Eccles–Jordan), a relay drill on the physical model's curves, the
   Hollerith drill and the card loader; strict part rules (no MOSFET, no NAND), graded in relays, relay steps and tube
   sections, the CMOS alternatives priced the same way through the technology setting
-- ⏳ Cards for the RISC-V CPUs: any program (RV32 asm / hex in the ROM editor and the CPU panel, RV16 in the
+- ✅ Cards for the RISC-V CPUs: any program (RV32 asm / hex in the ROM editor and the CPU panel, RV16 in the
   campaign) exported as a deck, one instruction per card (its word punched in binary, the source line printed in
   Hollerith along the top, a sequence number in columns 73–80 as on real decks so a dropped deck can be sorted),
   and a deck loaded back into a ROM; drop a deck file on the canvas to load it
   - Done for the sandbox's ROMs (RV32 asm / hex, RV16, 4-bit CPU, custom ISAs: Save as deck / Load deck in the
     ROM properties and program editor, a .deck.json dropped on the canvas) and the chapters' CPU panel (cards/program.ts).
-    Still to do: the campaign's RV16 programs
+    The campaign's RV16 program levels too (campaign/puzzledeck.ts, 2026-11-10): Save as deck / Load deck… on the level's code,
+    data words after a .DATA card, a deck loaded back as .word lines (tests/puzzledeck.test.ts round-trips every level's reference)
 - ✅ A card-reader boot loader: a small sandbox example where the CPU starts from a boot ROM that reads cards from
   the reader part, word by word, into RAM and jumps to it, as IBM's machines loaded from cards (the 1401's Load
   key); the CPU drawer follows the loaded program like a ROM program, the golden model starting after the load
@@ -1399,4 +1404,4 @@ The author's decisions of 2026-11-10:
 - ~~Should challenges *gate* progress?~~ Decided: the campaign gates softly (skip and Unlock all), the chapters stay open.
 - ~~Branding / name for the site?~~ Decided: From Switch to CPU (2026-11-08)
 - ~~Hosting target?~~ Decided: GitHub Pages at switchtocpu.com (custom domain, 2026-11-08), and the portable desktop .exe
-- Sound effects / gamification (badges)?
+- ~~Sound effects / gamification (badges)?~~ Dropped by the author (2026-11-10)

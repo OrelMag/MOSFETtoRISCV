@@ -19,7 +19,7 @@ import { assemble16 } from '../riscv/rv16/asm16';
 import { disasm16, MMIO_BASE, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { Warps16 } from '../riscv/rv16/warps16';
 import { FB16 } from '../gfx/raster16';
-import { bitBench, type CoreCheck, type CoreSpec, type CoreTest, gateBench, memLeaf } from './corecheck';
+import { bitBench, type CoreCheck, type CoreSpec, type CoreTest, drained, gateBench, memLeaf, type RunOptions } from './corecheck';
 
 interface Event { pc: number; instr: number; rd?: number; addr?: number; value: number }
 
@@ -43,10 +43,10 @@ const each = (p: string, n: number) => Array.from({ length: n }, (_, i) => `${p}
 const WARPS = 2;
 
 /** Run a test on the two-warp golden model; throws when the test itself is broken (a bug in the campaign). */
-export function warpGolden(t: CoreTest, n = 4, maxCycles = 40000, raster = false): WarpGolden {
+export function warpGolden(t: CoreTest, n = 4, maxCycles = 40000, raster = false, loose = false): WarpGolden {
   const a = t.words ? { words: t.words, data: t.data ?? new Map<number, number>(), errors: [] } : assemble16(t.src ?? '');
   if (a.errors.length) throw new Error(`warp test ${t.name}: ${a.errors[0].line}: ${a.errors[0].message}`);
-  const m = new Warps16(a.words, { lanes: n, warps: WARPS, strictInit: true, raster }, a.data);
+  const m = new Warps16(a.words, { lanes: n, warps: WARPS, strictInit: !loose, raster }, a.data);
   const T = WARPS * n;
   const regs: Event[][] = Array.from({ length: T }, () => []), stores: Event[][] = Array.from({ length: T }, () => []);
   while (!m.halted && m.steps < maxCycles) {
@@ -86,14 +86,20 @@ interface Run {
 const OUTS = (n: number) => ['pc', 'warp', ...each('daddr', n), ...each('dwdata', n), 'dwe', 'rwe', 'rwa', ...each('rwd', n), 'lwe', 'lwa', ...each('lwd', n)];
 
 /** Run a two-warp core on the tests; failures name the test, the warp, the lane, the event and the instruction. */
-export function runWarps(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto'): CustomRun {
+export function runWarps(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto', opts: RunOptions = {}): CustomRun {
+  return drained(runWarpsSteps(def, mode, spec, engine, opts));
+}
+
+/** runWarps, yielding every 64 cycles. */
+export function* runWarpsSteps(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto', opts: RunOptions = {}): Generator<void, CustomRun> {
+  const own = opts.own;
   const n = spec.lanes ?? 4;
   const T = WARPS * n;
   if (mode === 'switch') return { failures: ['switch level: a core must simulate at gate level (no tri-states or floating nets)'], tested: 0 };
   const have = new Set(def.ports.map((p) => p.name));
   const missing = [...OUTS(n), ...(spec.raster ? ['fa', 'fd', 'fwe'] : [])].filter((p) => !have.has(p));
   if (missing.length) return { failures: [`missing pins: ${missing.join(', ')}`], tested: 0 };
-  const tests = spec.tests().map((t) => warpGolden(t, n, 40000, !!spec.raster));
+  const tests = spec.tests().map((t) => warpGolden(t, n, 40000, !!spec.raster, !!own));
   const bench = engine === 'gate' ? null : bitBench(def);
   const failures: string[] = [];
   const failed: number[] = [];
@@ -144,10 +150,11 @@ export function runWarps(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreS
     runs.forEach((r) => (r.rdata = Array(n).fill(0)));
     b.set('rst', fill(() => 0));
     // a warp that waits for the rasterizer loses its turns: at most every busy cycle, twice
-    const budgetOf = (r: Run) => Math.ceil(spec.budget.cpi * r.g.cycles + spec.budget.extra + 2 * r.g.rasterCycles);
+    const budgetOf = (r: Run) => (own ? Math.ceil(own.maxCycles(r.g.cycles + r.g.rasterCycles) / 2) : Math.ceil(spec.budget.cpi * r.g.cycles + spec.budget.extra + 2 * r.g.rasterCycles));
     const limit = Math.max(...runs.map((r) => 2 * budgetOf(r)));
     const total = (evs: Event[][]) => evs.reduce((s, e) => s + e.length, 0);
     for (let cyc = 1; cyc <= limit + drain; cyc++) {
+      if ((cyc & 63) === 0) yield; // a long run hands control back (owncore.ts drives it within a frame budget)
       serve();
       const get = (p: string) => b.get(p);
       const warp = get('warp'), dwe = get('dwe'), rwe = get('rwe'), rwa = get('rwa'), lwe = get('lwe'), lwa = get('lwa'), pc = get('pc');
@@ -219,7 +226,7 @@ export function runWarps(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreS
         r.fail = `${r.g.name}: after ${r.cycles} cycles (budget ${budget}) only ${r.ri.reduce((s, v) => s + v, 0)} of ${total(r.g.regs)} register writes and ${r.si.reduce((s, v) => s + v, 0)} of ${total(r.g.stores)} stores happened`
           + (spec.raster ? `, ${r.pi} of ${r.g.pixels.length} pixel writes` : '')
           + (next ? `; next expected in warp ${Math.floor(t / n)}, lane ${t % n}: ${rname(next.rd!)} ← ${hex(next.value)} from "${disasm16(next.instr, next.pc)}"` : '');
-      } else if (!r.fail && r.doneAt > budget) r.fail = `${r.g.name}: correct, but ${r.doneAt} cycles where the warps taking turns need ${r.g.cycles} (budget ${budget})`;
+      } else if (!own && !r.fail && r.doneAt > budget) r.fail = `${r.g.name}: correct, but ${r.doneAt} cycles where the warps taking turns need ${r.g.cycles} (budget ${budget})`;
       if (r.fail) {
         failures.push(r.fail);
         failed.push(r.i);
