@@ -6,7 +6,12 @@ import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { AND, MUX2 } from '../lib/gates';
 import type { Chapter } from './types';
+import { delayPanel } from '../widgets/delaypanel';
+import { FINE, rippleVectors } from '../widgets/finedelay';
 import { numOf } from './order';
+
+const RG = { ...FINE.ripple, n: rippleVectors().length - 1 };
+const f2 = (x: number) => x.toFixed(2);
 
 /** NAND delays to one output port (logicDepth reports the deepest output; the subtractor's is v, not the carry). */
 function portDepth(def: ComponentDef, port: string): number {
@@ -286,7 +291,7 @@ export const chAdders: Chapter = {
         stops at the first column that generates or kills. But whatever uses the sum must wait for the worst case, so the worst case sets the speed.
         A 64-bit ripple adder needs ${logicDepth(rca(64))}. Faster adders compute the carries in parallel: that is
         <a href="#/c/fastadd/0">a later chapter</a>.</p>`,
-      scene: () => ({ root: rca(8), inputs: { a: 0xff, b: 0, cin: 0 }, animate: true }),
+      scene: () => ({ root: rca(8), inputs: { a: 0xff, b: 0, cin: 0 }, animate: true, panels: [delayPanel({ glitches: true })] }),
       actions: [{ label: 'Toggle cin', run: (st) => st.toggleInput('cin') }],
       ledger: { kind: 'add', a: 'a', b: 'b', cin: 'cin', sum: 's', cout: 'cout', width: 8, col: (i) => [`fa${i}`] },
       tour: {
@@ -304,7 +309,8 @@ export const chAdders: Chapter = {
           made ripple carry fast enough for 16 to 32 bits in the 1970s and 80s. Above that, carry-lookahead took over.</p>`,
         pitfall: `<p>Average-case delay is not the clock period. Random inputs give short carry chains (about log₂ n on average), but a single
           worst-case pair of inputs that ripples through every column would be read wrong, so the clock must allow for it.</p>`,
-        numbers: `<p>Longest path = 2 gate delays per bit plus 4: ${[8, 16, 32, 64].map((n) => `${n} bits: ${logicDepth(rca(n))}`).join(', ')}.</p>`,
+        numbers: `<p>Longest path = 2 gate delays per bit plus 4: ${[8, 16, 32, 64].map((n) => `${n} bits: ${logicDepth(rca(n))}`).join(', ')}.</p>
+          <p>A sum bit can change more than once before it settles: it flips when the column's own inputs arrive, then again when the carry reaches it. Those extra flips are <strong>glitches</strong>, and each one charges and discharges a wire for nothing. The <strong>Gate delays</strong> box counts them for the last change; <strong>Load</strong> there times every NAND by how many inputs it drives instead of one delay each, so paths that tie under unit delays no longer do. Over ${RG.n} random additions in a row this adder makes ${f2(RG.unit.toggles)} toggles per addition with unit delays, ${f2(RG.unit.glitches)} of them glitches, and ${f2(RG.load.toggles)} under load, ${f2(RG.load.glitches)} glitches: more glitches, not new ones. The energy they move, at ½ C V² a toggle with the capacitances of the power chapter, goes from ${f2(RG.unit.energy)} to ${f2(RG.load.energy)} fJ an addition, while the settled toggles (${f2(RG.unit.settled)}) and their energy (${f2(RG.unit.settledEnergy)} fJ) are the same under both: the delays change how the nets get there, never where they end.</p>`,
       },
     },
     {

@@ -6,6 +6,7 @@ import { DFF } from '../../lib/sequential';
 import { stats } from '../../sim/stats';
 import { CLK_TO_Q, SETUP } from '../../sim/timing';
 import { edgeSweepWidget, sweepOf } from '../../widgets/edgesweep';
+import { FINE } from '../../widgets/finedelay';
 import { skewPanel } from '../../widgets/skewpanel';
 import type { Step } from '../types';
 
@@ -14,6 +15,11 @@ const m = (id: 'ms' | 'e6') => {
   return { r, f, setup: Math.max(r.setup, f.setup), hold: Math.max(r.hold, f.hold), cq: Math.max(r.cqRise, r.cqFall, f.cqRise, f.cqFall) };
 };
 export const MS_TIMING = () => m('ms');
+
+/** The sweep's numbers under each delay model (widgets/finedelay.ts FINE.sweep, measured) and the skew pair's. */
+const FS = FINE.sweep, SK = FINE.skew;
+const sgn = (x: number) => (x < 0 ? `−${-x}` : x > 0 ? `+${x}` : '0');
+const band = (b: number[]) => (b[0] === b[1] ? `the one cell at ${sgn(b[0])}` : `a band from ${sgn(b[0])} to ${sgn(b[1])}, ${Math.round(10 * (b[1] - b[0] + 0.1)) / 10} units wide`);
 
 export const timingSteps: Step[] = [
   {
@@ -39,6 +45,8 @@ export const timingSteps: Step[] = [
         input slew and load. The "window" of a real cell is therefore a convention on a smooth curve, not the sharp band drawn here.</p>`,
       pitfall: `<p>Reading setup as "d must be stable for ${m('ms').setup} delays before the edge". It says that a change <em>earlier</em> than that is captured; a change later is either missed (the old value) or undecided. A signal that moves inside the window
         may produce either value, or a runt, and a design must never depend on which.</p>`,
+      numbers: `<p><strong>Load</strong> (the switch beside the direction) times every NAND by what it drives, in tenths of a unit, instead of one delay each; a cell then stands for a tenth. In the master–slave flip-flop, for a rising d, setup grows from ${FS.ms.rise.unit.setup} to ${FS.ms.rise.load.setup}, hold from ${FS.ms.rise.unit.hold} to ${FS.ms.rise.load.hold} and clock-to-q from ${FS.ms.rise.unit.cq.join(' / ')} to ${FS.ms.rise.load.cq.join(' / ')}; for a falling d setup ${FS.ms.fall.unit.setup} → ${FS.ms.fall.load.setup}, hold ${FS.ms.fall.unit.hold} → ${FS.ms.fall.load.hold}. The six-gate flip-flop: rising d setup ${FS.e6.rise.unit.setup} → ${FS.e6.rise.load.setup}, hold ${FS.e6.rise.unit.hold} → ${FS.e6.rise.load.hold}, clock-to-q ${FS.e6.rise.unit.cq.join(' / ')} → ${FS.e6.rise.load.cq.join(' / ')}.</p>
+        <p>The undecided cells change most. With unit delays the latch's two NANDs tie, and only a change at one exact offset leaves them racing; under load they no longer tie, and the master–slave's <code>?</code> for a rising d becomes ${band(FS.ms.rise.load.band)}: a change anywhere in it leaves a pulse running round the latch's loop, and the run never settles. The simulator passes a pulse however short (transport delay, under either model); a real gate swallows a pulse much shorter than its own delay, so the band on silicon is narrower: what is left of it is the metastable window.</p>`,
     },
     challenge: {
       kind: 'quiz',
@@ -76,6 +84,7 @@ export const timingSteps: Step[] = [
         survives while ${m('ms').r.cqRise} &ge; 2<em>k</em> + ${m('ms').hold}, i.e. k = 0 only. At k = 1 the change lands in the window (undecided); from k = 2 the new value wins.</p>`,
       pitfall: `<p>Slowing the clock to fix a hold failure. Setup is cured by a longer period; hold is a race between two edges of the same cycle and does not contain T at all. A chip with a hold violation is dead at every frequency, which is why hold is
         fixed before tape-out, not by binning.</p>`,
+      numbers: `<p>With <strong>Load</strong> in the Clock skew box every NAND is timed by what it drives. A buffer is no longer 2: ff2's clock arrives ${SK.load.slice(1).map((x) => x.late).join(', ')} units late for 1, 2, 3 buffers (unit: ${SK.unit.slice(1).map((x) => x.late).join(', ')}), the last inverter of each driving the flip-flop's clock inputs, and ff1's q changes ${SK.load[0].cq} units after the edge (unit: ${SK.unit[0].cq}). The outcome does not move: no buffer shifts one stage an edge, one buffer leaves ff2 undecided, two or three carry the bit through both. The race is between the same two paths, so it is decided the same way; only the margins are different.</p>`,
     },
     challenge: {
       kind: 'reach',

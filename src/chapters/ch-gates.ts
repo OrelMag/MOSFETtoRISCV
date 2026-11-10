@@ -9,7 +9,10 @@ import { logicDepth, stats } from '../sim/stats';
 import { numberWidget } from '../widgets/numbers';
 import { encodingsWidget, fixedWidget, overflowWidget } from '../widgets/numsys';
 import type { Chapter } from './types';
+import { FINE } from '../widgets/finedelay';
 import { numOf } from './order';
+
+const MUX_DIP = FINE.muxDip;
 
 const nd = (d: ComponentDef): number => stats(d).nands;
 const tr = (d: ComponentDef): number => stats(d).transistors;
@@ -291,6 +294,7 @@ export const chGates: Chapter = {
         pitfall: `<p>A mux can glitch while s changes even when a and b are equal. With a = b = 1, s falling from 1 to 0 turns g3 off one delay before g2, which waits
           for the inverted select: for one gate delay both are 1, and y dips to 0 and back. The settled output never changes, but anything sampling at the wrong moment, or a
           clock fed from it, sees a runt pulse. Watch it in the Timing panel.</p>`,
+        numbers: `<p>How wide is that dip? It lasts from g3's output rising to g2's output falling: the inverter's delay plus g2's, minus g3's. With every NAND one delay that is ${MUX_DIP.unit}. Timing each NAND by how many inputs it drives instead (the view menu's Load-dependent delay; one unit is a NAND driving a single input) changes nothing here: every gate of this mux drives one input, so all four take one unit and the dip is ${MUX_DIP.load} unit wide. A slower s does not widen it either, since it delays g1 and g3 alike. Only a slower inverter does: if one NAND made ¬s for a bus of 8 multiplexers, it would drive 8 inputs and the dip would be ${FINE.muxShared[8]} units wide; for 32, ${FINE.muxShared[32]}. Sharing the inverter saves NANDs and widens the glitch; the bus multiplexers on this site give each bit its own.</p>`,
       },
       challenge: {
         kind: 'reach', goal: 'Make the output follow input b, then set b = 1.',

@@ -8,6 +8,7 @@ import { measureClasses, type CycleTimes } from '../riscv/cycletime';
 import { evalOnce, simulate } from '../sim/harness';
 import { pack } from '../sim/values';
 import { h } from '../ui/dom';
+import { delaySwitch } from '../view/delayui';
 import type { Stage, Widget } from '../view/stage';
 import '../styles/cpucost.css';
 
@@ -103,38 +104,65 @@ export const PERIOD = {
   ks: { pc: 103, rf: 80, dm: 75, stages: [['pc', 3], ['imem', 18], ['ctl', 11], ['imm', 7], ['srcB', 2], ['alu', 41], ['npc', 11], ['pcmux', 5], ['setup', 5]] as [string, number][] },
 };
 
+/**
+ * The same path under load-dependent delay (each NAND by what it drives, in units with tenths; sim/delay.ts): rounded to a
+ * tenth, the last entry taking up the rounding so the ribbon adds up (pinned by tests/finedelay-chapters.test.ts).
+ */
+export const PERIOD_LOAD = {
+  rca: { pc: 242.9, rf: 213.6, dm: 123.8, stages: [['pc', 5], ['imem', 18], ['ctl', 23], ['imm', 8.5], ['srcB', 6], ['alu', 154.8], ['npc', 16.5], ['pcmux', 5], ['setup', 6.1]] as [string, number][] },
+  ks: { pc: 149.2, rf: 120, dm: 117.4, stages: [['pc', 4.9], ['imem', 18], ['ctl', 23], ['imm', 8.5], ['srcB', 6], ['alu', 61.3], ['npc', 16.5], ['pcmux', 5], ['setup', 6]] as [string, number][] },
+};
+
+/**
+ * What Measure on the gates finds (measureClasses(adder, [1, 2, 3], 60, …, model): 304 cycles), the longest settle per class
+ * and over all, the chapter's prose quotes (pinned by tests/finedelay-chapters.test.ts).
+ */
+export const MEASURED = {
+  rca: {
+    unit: { worst: 131, R: 131, I: 113, LOAD: 107, STORE: 106, BRANCH: 121, LUI: 109 },
+    load: { worst: 203.8, R: 203.8, I: 176.6, LOAD: 168, STORE: 168, BRANCH: 188.5, LUI: 176.6 },
+  },
+  ks: {
+    unit: { worst: 79, R: 79, I: 76, LOAD: 70, STORE: 69, BRANCH: 72, LUI: 73 },
+    load: { worst: 112.2, R: 112.2, I: 102.7, LOAD: 99.5, STORE: 99.5, BRANCH: 106, LUI: 100.7 },
+  },
+};
+
 export function cpuPeriodWidget(): Widget {
-  let adder: 'rca' | 'ks' = 'rca';
+  let adder: 'rca' | 'ks' = 'rca', model: 'unit' | 'load' = 'unit';
   const cache = new Map<string, CycleTimes>();
+  const delaySeg = h('div', { class: 'cp-delay' });
   const ribbon = h('div', { class: 'cp-ribbon' }), bars = h('div', { class: 'cp-bars' }), note = h('p', { class: 'sub' });
   const btn = h('button', { class: 'btn sm primary' }, 'Measure on the gates') as HTMLButtonElement;
   const sw = (['rca', 'ks'] as const).map((a) => h('button', { class: 'btn sm', onclick: () => { adder = a; paint(); } }, a === 'rca' ? 'Ripple adder' : 'Kogge–Stone'));
   const paint = () => {
     sw.forEach((b, i) => b.classList.toggle('primary', (i === 0) === (adder === 'rca')));
-    const p = PERIOD[adder];
-    ribbon.replaceChildren(...p.stages.map(([n, d]) => h('span', { class: 'cp-seg', style: `flex:${Math.max(d, 3)}`, title: `${n}: ${d} delays` }, h('b', null, n), h('i', null, String(d)))));
-    const r = cache.get(adder);
+    delaySeg.replaceChildren(delaySwitch(model, (m) => { model = m === 'load' ? 'load' : 'unit'; paint(); }));
+    const p = (model === 'unit' ? PERIOD : PERIOD_LOAD)[adder], unit = model === 'unit' ? 'delays' : 'units';
+    ribbon.replaceChildren(...p.stages.map(([n, d]) => h('span', { class: 'cp-seg', style: `flex:${Math.max(d, 3)}`, title: `${n}: ${d} ${unit}` }, h('b', null, n), h('i', null, String(d)))));
+    const r = cache.get(`${adder}/${model}`);
     const top = Math.max(p.pc, r?.worst ?? 0);
     bars.replaceChildren(
       h('div', { class: 'cp-row' }, h('span', null, 'static critical path'), h('div', { class: 'cp-track' }, h('div', { class: 'cp-fill st', style: `width:${(100 * p.pc) / top}%` })), h('b', null, String(p.pc))),
       ...(r ? r.classes.filter((c) => c.n).map((c) => h('div', { class: 'cp-row' }, h('span', null, h('code', null, c.cls), ` ${c.label}`),
         h('div', { class: 'cp-track' }, h('div', { class: 'cp-fill', style: `width:${(100 * c.max) / top}%` }), h('div', { class: 'cp-mean', style: `left:${(100 * c.mean) / top}%` })), h('b', null, `${c.max}`))) : []));
+    const word = model === 'unit' ? 'NAND delays' : 'units (each NAND timed by what it drives)';
     note.textContent = r
-      ? `Settle time after the edge over ${r.cycles} cycles of three random programs: bar = longest seen, tick = mean. The clock must cover the static path, ${p.pc} delays (${((p.pc * 25) / 1000).toFixed(2)} ns at 25 ps a delay), not the longest cycle seen.`
-      : `Static timing, in NAND delays: the clock must cover ${p.pc}. Writing the register file needs ${p.rf}, the data memory ${p.dm}.`;
-    btn.disabled = cache.has(adder);
+      ? `Settle time after the edge over ${r.cycles} cycles of three random programs: bar = longest seen, tick = mean. The clock must cover the static path, ${p.pc} ${unit}${model === 'unit' ? ` (${((p.pc * 25) / 1000).toFixed(2)} ns at 25 ps a delay)` : ''}, not the longest cycle seen.`
+      : `Static timing, in ${word}: the clock must cover ${p.pc}. Writing the register file needs ${p.rf}, the data memory ${p.dm}.`;
+    btn.disabled = cache.has(`${adder}/${model}`);
   };
   btn.addEventListener('click', async () => {
     btn.disabled = true;
     btn.textContent = 'Measuring …';
-    const a = adder;
-    cache.set(a, await measureClasses(a, [1, 2, 3], 60, () => new Promise((res) => setTimeout(res, 0))));
+    const a = adder, m = model;
+    cache.set(`${a}/${m}`, await measureClasses(a, [1, 2, 3], 60, () => new Promise((res) => setTimeout(res, 0)), m));
     btn.textContent = 'Measure on the gates';
     paint();
   });
   paint();
   return {
-    el: h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'The critical path, block by block (NAND delays)'), h('div', { class: 'cp-sws' }, ...sw), ribbon,
+    el: h('div', { class: 'widget' }, h('div', { class: 'panel' }, h('h3', null, 'The critical path, block by block'), h('div', { class: 'cp-sws' }, ...sw, delaySeg), ribbon,
       h('h3', null, 'Settle time by instruction class'), bars, h('div', null, btn), note)),
   };
 }
