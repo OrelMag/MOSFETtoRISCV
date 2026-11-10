@@ -13,6 +13,7 @@ import { UserLibrary } from '../src/editor/library';
 import { emptyWorkspace } from '../src/editor/model';
 import { EditorSim } from '../src/editor/runtime';
 import { sanitizeRef } from '../src/editor/store';
+import { decodeShare, encodeShare } from '../src/editor/share';
 import { partDef } from '../src/editor/parts';
 import { DualSim } from '../src/sim/dualsim';
 import { flatten } from '../src/sim/flatten';
@@ -43,6 +44,7 @@ describe('the crossing: every rule fires where it should', () => {
     ['walk with nobody', run([[Y, 2], [W, 1]]), 2, 'WALK with nobody waiting: only after a press'],
     ['walk too short', run([[G, 6], [Y, 2], [W, 3], [R, 1]]), 11, 'WALK for only 3 steps: at least 4'],
     ['never served', run([[G, 40]]), 15, 'the press at step 3 not served within 12 steps'],
+    ['yellow after red', run([[R, 1], [Y, 1]]), 1, 'yellow after red: red goes back to green'],
   ] as const)('%s', (_, xs, at, why) => {
     const r = cross(one, script(xs as number[][]));
     expect([r.ok, r.at, r.why]).toEqual([false, at, why]);
@@ -52,6 +54,10 @@ describe('the crossing: every rule fires where it should', () => {
     const r = cross(t, script(run([[G, 2], [Y, 2], [W, 4], [R, 1], [G, 2], [Y, 2], [W, 1]])));
     expect([r.ok, r.at, r.why]).toEqual([false, 13, 'WALK again after only 2 steps of green: cars get at least 6']);
     expect(cross(one, () => [0, 0, -1, 0]).why).toBe('car_g is X (unknown): drive every pin to 0 or 1');
+  });
+  it('at the end: a press still waiting', () => {
+    const r = cross({ name: 'short', steps: 10, presses: [3] }, script(run([[G, 10]])));
+    expect([r.ok, r.at, r.why]).toEqual([false, 10, 'the press at step 3 still waits at the end']);
   });
   it('a press while WALK is lit is not counted again', () => {
     const r = cross({ name: 'w', steps: 40, presses: [3, 10] }, REFERENCE_CONTROLLERS.crossing());
@@ -115,6 +121,13 @@ describe('the vending machine: every rule fires where it should', () => {
     expect([r.at, r.why]).toEqual([13, '5¢ change still owed 10 steps after step 4']);
     expect(vend(t35, at({ 5: [1, 0], 6: [0, 1] })).ok).toBe(true);
   });
+  it('at the end: a buy never served, change still owed', () => {
+    const buyLate: VendTest = { name: 'late', steps: 6, script: [[0, 'c10'], [1, 'c10'], [2, 'c10'], [5, 'buy']] };
+    expect([vend(buyLate, at({})).at, vend(buyLate, at({})).why]).toEqual([6, 'buy at step 5 never served']);
+    const owed: VendTest = { name: 'owed', steps: 6, script: [[0, 'c25'], [1, 'c10'], [3, 'buy']] };
+    const r = vend(owed, at({ 3: [1, 0] }));
+    expect([r.ok, r.at, r.why]).toEqual([false, 6, '5¢ change still owed at the end']);
+  });
 });
 
 describe('the device part', () => {
@@ -175,8 +188,28 @@ describe('the reference circuits on their gates', () => {
       // on the cycle engine (the device is a seq leaf: no loop through it)
       expect(es.engine, 'cycle engine').toBe('cycle');
       es.destroy();
+      // and on GateSim (gate mode: Gate delay, the Timing panel, probes), the same steps
+      const eg = new EditorSim({ debounceMs: 0 });
+      eg.setMode('gate');
+      eg.update(c, doc.pins);
+      const fg = findDevice(eg, p);
+      if (Array.isArray(fg)) throw new Error(fg.join('; '));
+      deviceTests(p).forEach((t, k) => {
+        expect(playDeviceTest(eg, fg, p, k).ok, `${t.name} on gates`).toBe(true);
+        const st = eg.sim!.leafState(fg.li) as DeviceState;
+        const want = playWorld(DEVICES[p.dev], t, REFERENCE_CONTROLLERS[p.dev]());
+        expect(st.frames.map((f) => [f.drive, f.sense]), `${t.name} on gates`).toEqual(want.frames.map((f) => [f.drive, f.sense]));
+      });
+      eg.destroy();
     });
   }
+  it('a device chip survives a share link (the same sanitizer as storage)', async () => {
+    const doc = referenceChip('maze', 'u_pz_maze', 'Maze');
+    const back = await decodeShare(await encodeShare([doc]));
+    if ('error' in back) throw new Error(back.error);
+    expect(back[0].parts.find((q) => 'device' in q.ref)?.ref).toEqual({ device: 'maze' });
+    expect(back[0]).toEqual(doc);
+  });
   it('the par: NANDs of each reference, and the stars', () => {
     const pars = Object.fromEntries(DEVICE_PUZZLES.map((p) => [p.id, parNands(p.dev)]));
     expect(pars).toMatchInlineSnapshot(`
