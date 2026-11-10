@@ -45,6 +45,10 @@ export interface NodeProgress {
   helpKey?: string;
   /** The design brief's submissions (cap_t4), newest first: what was measured, not the chip. */
   subs?: Submission[];
+  /** A program level: the core level whose chip the program runs on (campaign/owncore.ts); absent: the golden model. */
+  on?: string;
+  /** A program level: the best mean cycles a passing run took, per core level. A readout: graded nothing, earns no star. */
+  cores?: Record<string, number>;
 }
 
 /** What a pass earned: 0 stars is a lesson or a pass with the answer put in (`helped`). */
@@ -106,6 +110,12 @@ export function sanitizeCampaign(raw: unknown): CampaignState {
     if (typeof v.at === 'number' && Number.isFinite(v.at)) p.at = v.at;
     const subs = cleanSubs(v.subs);
     if (subs.length && isCapstone(id)) p.subs = subs;
+    if (typeof v.on === 'string' && nodeById(v.on)?.kind === 'core') p.on = v.on;
+    if (isObj(v.cores)) {
+      const c: Record<string, number> = {};
+      for (const [k, x] of Object.entries(v.cores)) if (nodeById(k)?.kind === 'core' && typeof x === 'number' && Number.isFinite(x) && x >= 0) c[k] = x;
+      if (Object.keys(c).length) p.cores = c;
+    }
     st.nodes[id] = p;
   }
   return st;
@@ -303,6 +313,24 @@ export class Progress {
     return p.tips;
   }
 
+  /** Which core a program level runs on (undefined: the golden model). Remembered per level. */
+  setRunOn(id: string, core: string | undefined): void {
+    const p = this.node(id);
+    if (core) p.on = core;
+    else delete p.on;
+    this.save(false);
+  }
+
+  /** A passing run of a program level on a core: its mean cycles, the fewest kept. Returns whether it is a new best. */
+  coreRun(id: string, core: string, cycles: number): boolean {
+    const p = this.node(id);
+    const was = p.cores?.[core];
+    if (was !== undefined && was <= cycles) return false;
+    p.cores = { ...p.cores, [core]: cycles };
+    this.save(false);
+    return true;
+  }
+
   /** A puzzle's source (saved as typed, without redrawing anything). */
   setSource(id: string, src: string): void {
     this.node(id).src = src;
@@ -389,6 +417,12 @@ export function mergeCampaign(a: CampaignState, b: CampaignState): CampaignState
     if (subs.length) p.subs = subs;
     p.src = y.src ?? x.src;
     if (p.src === undefined) delete p.src;
+    p.on = y.on ?? x.on;
+    if (p.on === undefined) delete p.on;
+    const cores: Record<string, number> = { ...x.cores };
+    for (const [k, v] of Object.entries(y.cores ?? {})) cores[k] = Math.min(v, cores[k] ?? Infinity);
+    if (Object.keys(cores).length) p.cores = cores;
+    else delete p.cores;
     out.nodes[id] = p;
   }
   return out;

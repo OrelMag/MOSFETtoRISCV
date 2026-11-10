@@ -27,6 +27,9 @@ export interface CoreTest {
   data?: Map<number, number>;
   /** A program that never halts (a game): only its first this-many instructions are expected; what the core does after is not judged. */
   bounded?: number;
+  /** Words read, in order, from IN (0xFFFC), and the switches' value: a campaign program level's test run on a core (owncore.ts). */
+  input?: number[];
+  switches?: number;
 }
 
 export interface CoreSpec {
@@ -54,7 +57,11 @@ export interface CoreSpec {
   custom?: readonly Custom16Row[];
 }
 
-interface Event { pc: number; instr: number; rd?: number; addr?: number; value: number }
+interface Event {
+  pc: number; instr: number; rd?: number; addr?: number; value: number;
+  /** The golden step that made it, the IN reads before that step, and whether the step read IN itself. */
+  step: number; inBefore: number; inLoad: boolean;
+}
 
 interface Golden {
   name: string;
@@ -64,28 +71,36 @@ interface Golden {
   stores: Event[];
   steps: number;
   bounded: boolean;
+  input: number[];
+  switches: number;
 }
 
 const hex = (v: number) => `0x${(v & 0xffff).toString(16).padStart(4, '0')}`;
 const rname = (r: number) => `${REG_NAMES16[r]} (x${r})`;
 
 /** Run a test on the golden model; throws when the test itself is broken (a bug in the campaign). */
-export function golden(t: CoreTest, spec: Pick<CoreSpec, 'm' | 'system' | 'custom'>, maxSteps = 20000): Golden {
+export function golden(t: CoreTest, spec: Pick<CoreSpec, 'm' | 'system' | 'custom'>, maxSteps = 20000, loose = false): Golden {
   const a = t.words ? { words: t.words, data: t.data ?? new Map<number, number>(), errors: [] } : assemble16(t.src ?? '', spec.custom);
   if (a.errors.length) throw new Error(`core test ${t.name}: ${a.errors[0].line}: ${a.errors[0].message}`);
-  const iss = new Iss16(a.words, { m: spec.m, system: spec.system, strictInit: true, ...(spec.custom?.length ? { custom: spec.custom } : {}) }, a.data);
+  // loose: a program level's code, run as runPuzzle runs it (no strict initialisation: a program that passes there passes here)
+  const iss = new Iss16(a.words, { m: spec.m, system: spec.system, strictInit: !loose, ...(spec.custom?.length ? { custom: spec.custom } : {}) }, a.data);
+  const input = [...(t.input ?? [])];
+  iss.input = [...input];
+  iss.switches = t.switches ?? 0;
   const regs: Event[] = [], stores: Event[] = [];
   while (!iss.halted && iss.steps < (t.bounded ?? maxSteps)) {
+    const step = iss.steps, inBefore = input.length - iss.input.length;
     const s = iss.step();
-    if (s.reg) regs.push({ pc: s.pc, instr: s.instr, rd: s.reg.rd, value: s.reg.value });
-    if (s.store) stores.push({ pc: s.pc, instr: s.instr, addr: s.store.addr, value: s.store.value });
+    const inLoad = input.length - iss.input.length > inBefore;
+    if (s.reg) regs.push({ pc: s.pc, instr: s.instr, rd: s.reg.rd, value: s.reg.value, step, inBefore, inLoad });
+    if (s.store) stores.push({ pc: s.pc, instr: s.instr, addr: s.store.addr, value: s.store.value, step, inBefore, inLoad });
   }
   if (iss.error || (!iss.halted && !t.bounded)) throw new Error(`core test ${t.name}: ${iss.error ?? 'does not halt'}`);
   const imem = new Uint16Array(65536);
   imem.set(a.words);
   const dmem = new Uint16Array(65536);
   for (const [k, v] of a.data) dmem[k] = v;
-  return { name: t.name, imem, dmem, regs, stores, steps: iss.steps, bounded: !!t.bounded };
+  return { name: t.name, imem, dmem, regs, stores, steps: iss.steps, bounded: !!t.bounded, input, switches: t.switches ?? 0 };
 }
 
 /** The two engines behind one face: per-lane inputs and outputs. */
@@ -138,17 +153,47 @@ interface Lane {
   /** The interrupt line, raised and lowered by stores to IRQ (0xFFF9). */
   irq: number;
   fail?: string;
+  /** The same failure as data (own-core runs). */
+  why?: CoreDisagree;
+  /** The register writes that matched, in order (Step to it rebuilds the core's registers from them). */
+  writes: { rd: number; value: number }[];
+}
+
+/** Where a core first parted from the golden model. */
+export interface CoreDisagree {
+  kind: 'reg' | 'store' | 'extra' | 'x' | 'stuck';
+  /** The golden step of the event expected (an index into the model's instructions), its pc and word. */
+  step?: number; pc?: number; instr?: number;
+  /** What the model did and what the core did, in words ('a1 (x11) ← 0x000a'). */
+  expected?: string; got?: string;
+  /** Register writes and stores that agreed before it. */
+  agreed: number;
+  cycle: number;
+}
+
+/** One test's run on a core: its cycles to the last expected event, the model's instructions, the matched writes. */
+export interface CoreTestRun {
+  name: string; i: number; ok: boolean; cycles: number; steps: number; why?: CoreDisagree; writes: { rd: number; value: number }[];
+  /** The model's instructions after its last register write or store (the halt among them): cycles stop at that event. */
+  tail: number;
+}
+
+export interface RunOptions {
+  /** A learner's program on their core (owncore.ts): no cycle budget (a slow core is not wrong) and no pipeline check; a hard cap of cycles instead. */
+  own?: { maxCycles: (steps: number) => number };
 }
 
 const PORTS_IN = ['clk', 'rst', 'instr', 'drdata'];
 
 /** Run the core on the tests; failures name the test, the event and the instruction. */
-export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto'): CustomRun {
+export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSpec, engine: 'auto' | 'gate' = 'auto', opts: RunOptions = {}): CustomRun & { perTest?: CoreTestRun[] } {
   if (mode === 'switch') return { failures: ['switch level: a core must simulate at gate level (no tri-states or floating nets)'], tested: 0 };
   const have = new Set(def.ports.map((p) => p.name));
   const outs = ['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'].filter((p) => !have.has(p));
   if (outs.length) return { failures: [`missing pins: ${outs.join(', ')}`], tested: 0 };
-  const tests = spec.tests().map((t) => golden(t, spec));
+  const own = opts.own;
+  const tests = spec.tests().map((t) => golden(t, spec, 20000, !!own));
+  const perTest: CoreTestRun[] = [];
   const bench = engine === 'gate' ? null : bitBench(def);
   const failures: string[] = [];
   const failed: number[] = [];
@@ -160,7 +205,7 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
   for (let i = 0; i < tests.length; i += width) groups.push(indexed.slice(i, i + width));
   for (const group of groups) {
     const b = bench && group === groups[0] ? bench : (engine === 'gate' ? null : bitBench(def)) ?? gateBench(def);
-    const lanes: Lane[] = group.map(({ g, i }) => ({ g, i, dmem: g.dmem.slice(), ri: 0, si: 0, cycles: 0, doneAt: -1, firstWrite: 0, irq: 0 }));
+    const lanes: Lane[] = group.map(({ g, i }) => ({ g, i, dmem: g.dmem.slice(), ri: 0, si: 0, cycles: 0, doneAt: -1, firstWrite: 0, irq: 0, writes: [] }));
     const hasIrq = have.has('irq');
     const n = lanes.length;
     const fill = (v: (l: Lane, k: number) => number) => {
@@ -178,14 +223,47 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
         b.set('instr', fill((l, k) => (Number.isNaN(pc[k]) ? 0 : l.g.imem[pc[k] & 0xffff])));
         b.settle();
         const da = b.get('daddr');
-        b.set('drdata', fill((l, k) => {
-          const a = da[k];
-          return Number.isNaN(a) || a >= MMIO_BASE ? 0 : l.dmem[a];
-        }));
-        if (pc.slice(0, n).every((v, k) => v === lastPc[k]) && da.slice(0, n).every((v, k) => v === lastA[k])) return;
+        b.set('drdata', fill((l, k) => read(l, da[k], inAt(l))));
+        if (pc.slice(0, n).every((v, k) => v === lastPc[k]) && da.slice(0, n).every((v, k) => v === lastA[k])) return ins();
         lastPc = pc;
         lastA = da;
       }
+      b.settle();
+      ins();
+    };
+    // A read of the bench's memory or its I/O. IN gives the test's words in order, as the golden model's IN does.
+    const read = (l: Lane, a: number, k: number) => {
+      if (Number.isNaN(a)) return 0;
+      if (a < MMIO_BASE) return l.dmem[a];
+      if (a === MMIO16.IN) return (l.g.input[k] ?? 0) & 0xffff;
+      if (a === MMIO16.SWITCHES) return l.g.switches & 0xffff;
+      if (a === MMIO16.IRQ) return l.irq;
+      return 0;
+    };
+    // Which IN word a read now is: the IN reads the golden model made before the oldest event the core still owes. A core
+    // whose memory stage sits one instruction behind the stage that writes registers (every campaign core: in-order, at most
+    // one register write a cycle) may be reading for the next instruction while it writes an IN load's result: then try
+    // the next word, and keep it unless the write itself moves (a single-cycle core, whose write is that read).
+    const oldest = (l: Lane): Event | undefined => {
+      const r = l.g.regs[l.ri], s = l.g.stores[l.si];
+      return !r ? s : !s ? r : r.step <= s.step ? r : s;
+    };
+    const inAt = (l: Lane) => oldest(l)?.inBefore ?? l.g.input.length;
+    const ins = () => {
+      if (!lanes.some((l) => l.g.input.length)) return;
+      const da = b.get('daddr');
+      if (!lanes.some((_, k) => da[k] === MMIO16.IN)) return;
+      const rwe = b.get('rwe'), rwa = b.get('rwa'), rwd = b.get('rwd');
+      const ahead = lanes.map((l, k) => {
+        const e = l.g.regs[l.ri];
+        return da[k] === MMIO16.IN && !!e && e === oldest(l) && e.inLoad && rwe[k] === 1 && rwa[k] === e.rd && rwd[k] === e.value;
+      });
+      if (!ahead.some(Boolean)) return;
+      b.set('drdata', fill((l, k) => read(l, da[k], inAt(l) + (ahead[k] ? 1 : 0))));
+      b.settle();
+      const moved = b.get('rwd').map((v, k) => k < n && ahead[k] && v !== rwd[k]);
+      if (!moved.some(Boolean)) return;
+      b.set('drdata', fill((l, k) => read(l, da[k], inAt(l) + (ahead[k] && !moved[k] ? 1 : 0))));
       b.settle();
     };
     const edge = () => {
@@ -201,7 +279,7 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
     b.set('rst', fill(() => 0));
     // A lane runs on past its budget (to twice it) so a slow core's cycles are counted to the end: the score
     // is the same whichever bench runs the core, and the failure says how many cycles it took.
-    const budgetOf = (l: Lane) => Math.ceil(spec.budget.cpi * l.g.steps + spec.budget.extra);
+    const budgetOf = (l: Lane) => (own ? Math.ceil(own.maxCycles(l.g.steps) / 2) : Math.ceil(spec.budget.cpi * l.g.steps + spec.budget.extra));
     const limit = Math.max(...lanes.map((l) => 2 * budgetOf(l)));
     for (let cyc = 1; cyc <= limit + drain; cyc++) {
       if (hasIrq) b.set('irq', fill((l) => l.irq));
@@ -212,16 +290,26 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
         l.cycles = cyc;
         const at = `cycle ${cyc} (pc ${Number.isNaN(pc[k]) ? 'X' : hex(pc[k])})`;
         const where = (e: Event) => `"${disasm16(e.instr, e.pc)}" @ ${hex(e.pc)}`;
+        const agreed = l.ri + l.si;
+        const say = (e: Event | undefined) => (e ? { step: e.step, pc: e.pc, instr: e.instr } : {});
         if (Number.isNaN(rwe[k]) || Number.isNaN(dwe[k])) {
           l.fail = `${l.g.name}: rwe or dwe is X at ${at}`;
+          l.why = { kind: 'x', ...say(oldest(l)), got: 'rwe or dwe is X', agreed, cycle: cyc };
           return;
         }
         if (rwe[k] && rwa[k] !== 0) {
           const e = l.g.regs[l.ri];
-          if (!e) { if (!l.g.bounded) l.fail = `${l.g.name}: an extra register write ${rname(rwa[k])} ← ${hex(rwd[k])} at ${at}: the program has ended`; }
-          else if (rwa[k] !== e.rd || rwd[k] !== e.value) {
-            l.fail = `${l.g.name}: register write #${l.ri + 1} is ${Number.isNaN(rwa[k]) ? 'X' : rname(rwa[k])} ← ${Number.isNaN(rwd[k]) ? 'X' : hex(rwd[k])} at ${at}; expected ${rname(e.rd!)} ← ${hex(e.value)} from ${where(e)}`;
+          const got = `${Number.isNaN(rwa[k]) ? 'X' : rname(rwa[k])} ← ${Number.isNaN(rwd[k]) ? 'X' : hex(rwd[k])}`;
+          if (!e) {
+            if (!l.g.bounded) {
+              l.fail = `${l.g.name}: an extra register write ${rname(rwa[k])} ← ${hex(rwd[k])} at ${at}: the program has ended`;
+              l.why = { kind: 'extra', got, agreed, cycle: cyc };
+            }
+          } else if (rwa[k] !== e.rd || rwd[k] !== e.value) {
+            l.fail = `${l.g.name}: register write #${l.ri + 1} is ${got} at ${at}; expected ${rname(e.rd!)} ← ${hex(e.value)} from ${where(e)}`;
+            l.why = { kind: 'reg', ...say(e), expected: `${rname(e.rd!)} ← ${hex(e.value)}`, got, agreed, cycle: cyc };
           } else {
+            l.writes.push({ rd: e.rd!, value: e.value });
             l.ri++;
             if (!l.firstWrite) l.firstWrite = cyc;
           }
@@ -229,9 +317,15 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
         if (!l.fail && dwe[k]) {
           const e = l.g.stores[l.si];
           const a = daddr[k], v = dwd[k];
-          if (!e) { if (!l.g.bounded) l.fail = `${l.g.name}: an extra store [${hex(a)}] ← ${hex(v)} at ${at}: the program has ended`; }
-          else if (a !== e.addr || v !== e.value) {
-            l.fail = `${l.g.name}: store #${l.si + 1} is [${Number.isNaN(a) ? 'X' : hex(a)}] ← ${Number.isNaN(v) ? 'X' : hex(v)} at ${at}; expected [${hex(e.addr!)}] ← ${hex(e.value)} from ${where(e)}`;
+          const got = `[${Number.isNaN(a) ? 'X' : hex(a)}] ← ${Number.isNaN(v) ? 'X' : hex(v)}`;
+          if (!e) {
+            if (!l.g.bounded) {
+              l.fail = `${l.g.name}: an extra store [${hex(a)}] ← ${hex(v)} at ${at}: the program has ended`;
+              l.why = { kind: 'extra', got, agreed, cycle: cyc };
+            }
+          } else if (a !== e.addr || v !== e.value) {
+            l.fail = `${l.g.name}: store #${l.si + 1} is ${got} at ${at}; expected [${hex(e.addr!)}] ← ${hex(e.value)} from ${where(e)}`;
+            l.why = { kind: 'store', ...say(e), expected: `[${hex(e.addr!)}] ← ${hex(e.value)}`, got, agreed, cycle: cyc };
           } else {
             l.si++;
             if (a < MMIO_BASE) l.dmem[a] = v;
@@ -246,10 +340,12 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
     for (const l of lanes) {
       const budget = budgetOf(l);
       if (!l.fail && l.doneAt < 0) {
+        const o = oldest(l);
+        l.why = { kind: 'stuck', ...(o ? { step: o.step, pc: o.pc, instr: o.instr } : {}), agreed: l.ri + l.si, cycle: l.cycles };
         l.fail = `${l.g.name}: after ${l.cycles} cycles (budget ${budget}) only ${l.ri} of ${l.g.regs.length} register writes and ${l.si} of ${l.g.stores.length} stores happened`
           + (l.g.regs[l.ri] ? `; next expected: ${rname(l.g.regs[l.ri].rd!)} ← ${hex(l.g.regs[l.ri].value)} from "${disasm16(l.g.regs[l.ri].instr, l.g.regs[l.ri].pc)}"` : '');
-      } else if (!l.fail && l.doneAt > budget) l.fail = `${l.g.name}: correct, but ${l.doneAt} cycles for ${l.g.steps} instructions (budget ${budget})`;
-      if (!l.fail && spec.minFirstWrite && l.firstWrite && l.firstWrite < spec.minFirstWrite) {
+      } else if (!own && !l.fail && l.doneAt > budget) l.fail = `${l.g.name}: correct, but ${l.doneAt} cycles for ${l.g.steps} instructions (budget ${budget})`;
+      if (!own && !l.fail && spec.minFirstWrite && l.firstWrite && l.firstWrite < spec.minFirstWrite) {
         l.fail = `${l.g.name}: the first register write came at cycle ${l.firstWrite}: a pipeline writes from W, at cycle ${spec.minFirstWrite} or later`;
       }
       if (l.fail) {
@@ -257,9 +353,11 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
         failed.push(l.i);
       }
       cycles += l.doneAt >= 0 ? l.doneAt : l.cycles;
+      const last = Math.max(l.g.regs.at(-1)?.step ?? -1, l.g.stores.at(-1)?.step ?? -1);
+      perTest[l.i] = { name: l.g.name, i: l.i, ok: !l.fail, cycles: l.doneAt >= 0 ? l.doneAt : l.cycles, steps: l.g.steps, why: l.why, writes: l.writes, tail: l.g.steps - 1 - last };
     }
   }
-  return { failures: failures.slice(0, 6).concat(failures.length > 6 ? [`… and ${failures.length - 6} more programs fail`] : []), tested: tests.length, cycles, failed };
+  return { failures: failures.slice(0, 6).concat(failures.length > 6 ? [`… and ${failures.length - 6} more programs fail`] : []), tested: tests.length, cycles, failed, perTest };
 }
 
 /** Read delay of the bench's memories, in NAND delays (an asynchronous SRAM / ROM read). */
