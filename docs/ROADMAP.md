@@ -15,6 +15,22 @@ Harris *Digital Design and Computer Architecture: RISC-V Edition*, and the compa
 in `References/` (NAND → pipelined RV32I, with SystemVerilog sources). Phase 12 brought the
 sandbox level with the two games (I/O parts, chip faces, capacity, programs on your own CPU).
 
+**Status (2026-11-10).** Feature work is closed: the author stopped new roadmap work after batch 22 (ba07c60f), which
+landed the last features (Appendix F, the machine hall's card reader, Lay out by logic depth, decks for the RV16 program
+levels and runs on your own core, C on the pipeline, the puzzle devices). Every phase below is done (✅) apart from the items
+named as left, parked or dropped where they stand. Parked or dropped by the author: i18n (dropped), sound effects and badges
+(dropped), separate area and speed stars (not now), the full A extension on the single-hart cores (not now), the out-of-order
+core's top level below ~60 % pointers (parked).
+
+**What's left** (each where it is described below):
+- Microcode leftovers: a Verilog export of an edited controller, the FSM controller as a grid, a new instruction in microcode (Phase 12)
+- The out-of-order core's top level with fewer pointers: the slot buses bundled or a hand-paired drawing (Audit program; parked branches named there)
+- FPGA: ROMs of ≤ 256 words and RAMs of ≤ 64 words into block RAM, not LUTs (Phase 20)
+- Static timing: a constant's arrival (tie cells) and wire length where a design is placed: two causes of the spread against OpenSTA (Phase 19)
+- VHDL in, through GHDL, once GHDL runs in WebAssembly (Phase 19; VHDL out is done)
+- The core bench's IN device, so "Open on a bench" works for the RV16 program levels that read input (Phase 12)
+- The puzzle devices: a CPU route (a program driving the device through en) and grading by cycles × NANDs as the stream puzzles are (Phase 12)
+
 ---
 
 ## Guiding principles
@@ -226,7 +242,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Data cache (write-through, write-back, 2-way) in the pipelined CPU: a miss freezes every stage, co-simulated at every retirement
 - ✅ Bus / interconnect basics, DRAM and flash in depth: Phase 16 (chapters 35–38, campaign act 10)
 
-### Phase 9 — Performance & optimization 🚧
+### Phase 9 — Performance & optimization ✅
 - ✅ Floating point (chapter 24): IEEE 754 explorer and number line; parametric gate-level FPU (unpack, align with sticky,
   add/sub, tree multiply, shared normalize & round with RNE and subnormals, compare, int→float), exhaustively tested on
   small formats and against host float32; single-cycle RV32IF CPU (subset) co-simulated with both register files
@@ -254,7 +270,8 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   pipelinedCpu({ c }) (cFetch in F, PC + 2 / + 4, the expanded instruction enters D, so hazards and forwarding are unchanged; not with the
   predictor), verified as pipe-c (riscv-tests, random programs with every C form, benchmarks: 82 253 against 80 798 NANDs, period 145 for both),
   the sandbox core rv32ic_pipe_core (+ M / D-cache variants, palette Processor cores, the CPU drawer with the pipeline view; tests/pipe-core-c.test.ts)
-- A extension (LR/SC, AMO): not now (decided 2026-10-25)
+- Not now (decided 2026-10-25): the full A extension (LR/SC, AMO) on the single-hart cores; the dual-cores carry the atomics
+  they need (Phase 10, chapter 27's coherent caches with lr.w / sc.w)
 - ✅ RV64I / RV64M, chapter 25 part 2 (steps 6–8): decode / disassembly / the assembler at xlen 64 (INSTRS64 beside INSTRS, li of any
   64-bit constant), the golden model ISS64 (BigInt registers), one width-parametric single-cycle core xlenCpu at 32 and 64 bits (the
   W unit around the 64-bit ALU and M unit, byte lanes for ld / sd / lwu), its own CPU panel on the stage; step 6 measures every generator
@@ -294,7 +311,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   counted, as the flow's zero output delay counts them) against OpenSTA's after routing (summarize.mjs reads 6_finish.rpt),
   both drawn as bars by block, and the ps one of our NAND delays is worth in that layout
 
-### Phase 12 — Parity with Turing Complete and Digital Logic Sim 🚧
+### Phase 12 — Parity with Turing Complete and Digital Logic Sim ✅
 The simulator already went further than both games: transistors and Z, gate delays (glitches,
 metastability), X, static timing, VCD, Verilog with a Yosys-checked testbench, wide pins, golden-model
 CPUs, and every library part opens down to a MOSFET. What they had and the sandbox lacked was I/O,
@@ -424,7 +441,7 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   is both cheaper and faster, ★★★ cycles × NANDs below all. A chart plots the references, their front and your point.
   A click on a test plays it on the circuit, a cycle at a time, back and forth. Show answer gives the pseudocode and the
   references; Do it for me loads the reference program
-- ⏳ After the puzzles: per-puzzle pins (a maze robot's sensors, a traffic light's lamps) as a third part kind
+- ✅ Puzzle devices (c9f40bfd): Crossing, Maze robot and Vending machine, a world behind named pins as a third part kind (the sandbox's Devices group), its rules checked every clock, stars on NANDs against a reference circuit. Left: a CPU route (a program driving the device through en) and grading by cycles × NANDs as the stream puzzles are
 - ✅ The campaign's RV16 program levels run on your own core (mockup approved 2026-11-10; campaign/owncore.ts): Run the
   tests on Golden model | Your core, the core levels passed with their NANDs and period; agrees (cycles, CPI, time in NAND
   delays beside the other cores, best per core kept, no star) or disagrees (the instruction lit, model vs core, Step to
@@ -484,7 +501,7 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   Fetch, loops), and a check on the edited CPU: the 32 rv32ui riscv-tests images on BitSim lanes plus the four benchmarks on the
   cycle engine, each against the golden model (~12 s), cycles per class and CPI before / after, the first mismatch named by a
   lock-step replay. Numbers in the chapter are src/bench/ucodefacts.json (scripts/ucode-facts.ts --write), pinned by tests/ucode.test.ts.
-  Not done: a Verilog export of an edited controller, the FSM controller as a grid, a new instruction in microcode (needs the
+  Left (in What's left above): a Verilog export of an edited controller, the FSM controller as a grid, a new instruction in microcode (needs the
   decoder: use Custom instructions on the single-cycle core)
 State machine and truth table builders (requested 2026-10-25; mockup approved: sandbox chips whose body is generated,
 like a Verilog chip, Detach to draw on it; in the campaign everywhere except the levels they would solve). A truth
@@ -546,7 +563,7 @@ a datapath (register transfers on real adders and registers), the textbook way a
   a counter, the switches, a multiply subroutine, TEST presses); the CPU drawer checks PC, A, CY, R0–R15, the stack,
   SRC and the ports every clock. Verified by lock-step on the samples and on 64 random ROMs (undefined words too)
 
-**Campaign** (🚧, plan and status in [`docs/CAMPAIGN.md`](CAMPAIGN.md)): a tree of levels from a
+**Campaign** (✅, plan and status in [`docs/CAMPAIGN.md`](CAMPAIGN.md)): a tree of levels from a
 transistor NAND to a pipelined 16-bit RISC-V-like CPU (RV16) with traps and interrupts. It has
 graded build challenges, number and Boolean drills, assembly puzzles, a codex, skip with a reference
 solution, and Unlock all. Its soft locks apply to the campaign only; the chapters and the sandbox
@@ -586,7 +603,7 @@ challenges stay open. Added since:
 
 **Not planned**: online leaderboards and score histograms (static site; share links take their place).
 
-### Cross-cutting features 🚧
+### Cross-cutting features ✅
 - ✅ Probe mode + logic-analyzer Timing panel (exact transitions in gate delays, clock edges,
   A/B cursors, VCD export); fixed-period clock that can be overclocked (late edges marked)
 - ✅ Wire palettes: default, colour-blind safe (Okabe–Ito), Logic Sim, high contrast, print
@@ -730,7 +747,7 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
 - A configurable-depth pipeline lab (3 / 5 / 7 stages): large; the adder swap, predictor, cache and multicycle
   comparisons already show the trade-offs
 
-### Phase 14 — Before the transistor: relays, vacuum tubes, punch cards 🚧
+### Phase 14 — Before the transistor: relays, vacuum tubes, punch cards ✅
 Why the MOSFET won is best felt, not told: build the same adder from relays and from tubes and *see* the machine
 it becomes. Mockup first for the 3D view, the technology setting and the new act. In the journey, a prologue act
 before the MOSFET chapter; in the campaign, an act of its own (or a side branch) ending in a machine programmed
@@ -795,11 +812,11 @@ with punch cards.
   IBM 029 code, source and object cards: a word in row 9, a sequence number in 73–80; deck files .deck.json, the
   sorter), widgets/carddraw.ts (a to-scale card); P3's editor and the sandbox reader's properties. Machine words
   go one per card along row 9 (the mockup's choice); a deck is reordered by dropping and sorting, not by hand
-- ⏳ A card reader part (sandbox and campaign) feeding a ROM or a word stream (like the keyboard part), and the
+- ✅ A card reader part (sandbox and campaign) feeding a ROM or a word stream (like the keyboard part), and the
   program input of the relay / tube machine
   - Sandbox part done (editor/cardparts.ts, cardui.ts): the deck in the document, word or column mode, feed delay;
     properties punch cards by hand, type source cards, load / save / drop / sort decks, punch one from a ROM, follow
-    the read station live; the campaign's reader in h_loader (14e). Still to do: the relay / tube machine's program input
+    the read station live; the campaign's reader in h_loader (14e). The machine hall's program input (42213723): relays read the deck as they run (0.4 s a card, the IBM 701's reader), tubes load it first into a store
 - ✅ In the campaign: a Hollerith-code drill (`h_card`) and a level where the program arrives on cards (`h_loader`:
   the learner's loader fills a RAM from the reader for the 4-bit CPU, graded in relays and cycles to load)
 
@@ -1059,7 +1076,7 @@ language and functions.
   came before it), not in chapter 15
 - ✅ Strings and a heap: str literals, len / index / + / ==, chr / ord, a bump heap that never gives back; the Python panel shows str variables, the heap blocks and printed text (chapter 15; c876ed1a)
 
-### Phase 19 — Where other tools still win ⏳
+### Phase 19 — Where other tools still win ✅
 From a comparison with other tools (2026-10-19): Digital, DigitalJS, Circuit Artist, FREESS and Ripes each still do
 something better. Their maturity, user bases and years of classroom polish are not roadmap items; the rest are. Each
 gap here, closed the site's way (computed, transparent down to the transistor, checked against an independent tool):
@@ -1083,7 +1100,7 @@ animated schematic). The site exports Verilog and already runs Yosys in CI, so i
 - ✅ Examples ▸ The same adder in Verilog: ADD4 beside `assign {co, s} = a + b + ci;` on the same inputs (36 against
   44 NANDs with the default gates)
 - ✅ A chapter step with the Verilog adder (Faster adders); the analysis of a Verilog chip's critical path mapped back to its source lines (5a732c2a)
-- VHDL through GHDL's Yosys plugin only if a WebAssembly build exists; else not planned
+- ✅ VHDL out: the HDL tab and Export VHDL (.vhd), every export analysed and simulated by GHDL in CI (52167910). Left: VHDL in, through GHDL's Yosys plugin, once a WebAssembly build exists
 
 **Delay that depends on load** (Circuit Artist models wire delay from length and fan-out; here every NAND costs one
 unit, wires nothing). The fan-out capacitance per net is already computed for the power estimate (sim/power.ts).
@@ -1098,7 +1115,7 @@ unit, wires nothing). The fan-out capacitance per net is already computed for th
 - ✅ GateSim with the loaded delays on a finer grain (tenths of a unit) so glitches and races follow the loads too
   (docs/PLAN-FINEDELAY.md): stage 1, the unit-delay fingerprints (f930e1ad); stages 2–4, the tick engine, the Load-dependent
   delay setting timing the sandbox's and the workbench's simulation, the measurers on the delay model (4a63bf39)
-- 🚧 Fine delay stage 5 (John): ship proposals 32, 33 and 35 as chapter steps on the loaded delays, 34 as prose only
+- ✅ Fine delay stage 5: ship proposals 32, 33 and 35 as chapter steps on the loaded delays, 34 as prose only (5bd49a0d)
 - ✅ Where it changes the story: chapter 16's last step, "When fan-out costs": ripple, Brent–Kung and Sklansky (new to
   the library, lib/fastadd.ts prefixAdder) and Kogge–Stone, and a wide select, in unit, load and as-drawn delay.
   Unit delay ties Sklansky with Kogge–Stone; drawn without buffers the 64-bit Sklansky is the slowest of the three
@@ -1140,7 +1157,7 @@ and Digital are what courses already use, and Digital lets a student write tests
 **ISA breadth** (Ripes: RV64, the C extension): RV64I / RV64M and C in Phase 9, each checked by riscv-tests and Spike
 like the RV32 cores. ✅ C (chapter 25, part 1); ✅ RV64I / M (part 2). ✅ C and RV64 in the sandbox, with the instruction builder's 16-bit and RV64 formats (1f7697b3; widths e3fa3cf1).
 
-### Phase 20 — Reviewer feedback (2026-10-19) ⏳
+### Phase 20 — Reviewer feedback (2026-10-19) ✅
 An outside review asked for CMOS realism, cross-layer debugging, campaign polish and an FPGA path. Much of it was
 already there: 0 / 1 / X / Z at switch level with shorts and floating nodes, the critical path drawn on the chip (unit
 and load-dependent delay), instruction fields coloured to match their wires (CPU panel), the logic analyzer with
@@ -1213,7 +1230,7 @@ links, bus taps, duplicate and pin reordering. The gaps:
   (scripts/fpga-memcheck.ts). Place and route since: nextpnr-himbaechel in fpga.yml, device use and post-route Fmax (b597d3f4). Open: ROMs of ≤ 256 words and RAMs of ≤ 64 words stay in LUTs
 - ✅ `.dig` export for Digital (File ▸ Export for Digital, 2026-11-10)
 
-### Phase 21 — Quality of life: first-run tour, load progress, minimap ✅ (2026-11-01, mockups approved)
+### Quality of life: first-run tour, load progress, minimap ✅ (2026-11-01, mockups approved)
 - ✅ Coach marks: the first scene a learner opens dims the page and walks the stage bar (drill, Probe + Timing, Why?, Back / Step / Slow,
   Open in Sandbox; a beat whose control is absent is skipped); a shorter tour of the sandbox; remembered in settings, replayed from
   the `?` sheet and the `>` actions
@@ -1365,7 +1382,7 @@ main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
     View options sticky headings and Tab leaving the menu (app.ts, app.css), the relay full adder's pointers (93a4a054), the skip link (da9f2ffb); the
     "factor 1.4" claim in datacentre is no longer in the chapter; on fix/seams-warp (2026-11-10): the warp core's nMo and two-warp rs1Hi wires clear of every part (tests/warplayout.test.ts checks wiresThroughParts on every variant), and the chapter seams (bus on to Sending a message, sdr naming the five appendices, datacentre on to the expert's bench)
 
-### Phase 23 — Ship review and what comes after it (2026-11-09) 🚧
+### Phase 23 — Ship review and what comes after it (2026-11-09) ✅
 
 The ship review (five fresh reviewers; plan and findings in E:/audit/ship/) checked every chapter up to Communication, the codex and campaign
 tied to them, the sandbox modes, performance, layout shift and a production pass; batches 1–3 landed (726beeb3, 8b1d4695, 3708abb5). Every
@@ -1385,14 +1402,14 @@ Proposed, kept for later (the author's choice, 2026-11-09; each needs a plan and
   round-robin scheduler, a context switch through mscratch, `satp` per process; chapter 15's compiler with a `user` target, two Python programs
   as processes. Codex entries and the program puzzle p_switch (54bbb169)
 - ✅ (docs/PLAN-VERIFY.md) How do you know it works?: fault simulation, ATPG, scan, BIST and March tests (8105eb34), the chapter (e62f0402)
-- 🚧 Verify stage 3 (Ross)
+- ✅ Verify stage 3 (ee3995b1)
 - ✅ (docs/PLAN-POWER.md) Power: the chapter, its model, the clock gate, codex and the level s_icg (7d18d73b)
 - ✅ (docs/PLAN-SIDECHAN.md) Side channels: the out-of-order model's speculative mode (e59d0944), the chapter and its codex entries (c2cfa891)
 - ✅ (docs/PLAN-FPGA.md) From netlist to FPGA: the LUT mapper, FPGA parts and place-and-route numbers (14558791), the chapter (e6e7abf0), six codex
   entries, the level m_lut and the drill d_lut (e2683bd8)
 - ✅ Vectors (RVV), between Power and Lanes (docs/PLAN-RVV.md): riscv/rvv.ts and ISS({ v }) checked against Spike; lib/vector.ts, a four-lane unit with beats, banked memory and a v0 copy, on the single-cycle CPU (`sc-v`, riscv-tests and fuzz); chapters/ch-vectors.ts, eleven steps (strip-mining, LMUL, the unit in gates, masks, reductions, chaining as a timing model, the kernel on four machines, all measured: bench/vectorcosts.json); five codex entries. Merged in stages: the golden model (cd71fe1a), the unit in gates (0e579d29), the chapter (9ea785a3)
-- 🚧 Vectors, further (Swan): an rv32iv core in the sandbox and its vector wiring drawn
-- 🚧 Ship proposals 29–31 (Rock, E:/audit/ship/PROPOSALS.md): the inspector's fold decided before a big scene's first frame, the CPU panel's
+- ✅ Vectors, further: an rv32iv core in the sandbox (Examples ▸ RVV) and its vector wiring drawn (5b2497f1); the riscv-vector-tests suite for Zve32x on the gates (8da71ef4)
+- ✅ Ship proposals 29–31 (E:/audit/ship/PROPOSALS.md; 647f356f, 89b422a4): the inspector's fold decided before a big scene's first frame, the CPU panel's
   halt line reserved, a chip's switched-on faults applied in Check and the Tests pane
 
 The author's decisions of 2026-11-10:
@@ -1401,6 +1418,23 @@ The author's decisions of 2026-11-10:
 - y_tlb and y_walk keep handing out generic library blocks (registers, comparators, priority encoder, multiplexers)
 - ✅ Break-it steps: Find the fault, a last step (deep) in the cpu, pipeline, multicycle, traps and cache chapters: a stuck-at fault planted on the chapter's CPU, the CPU panel's first mismatch as the clue, a wire accused from the right-click menu, a wrong accusation answered with its own first wrong instruction (riscv/firstwrong.ts; tests/findit.test.ts; cd8e0eb9)
 - ✅ A worked example and a common-mistakes aside in the densest chapters (pipelining, traps, caches, floating point): folded asides, numbers pinned by tests/worked-examples.test.ts
+
+Landed in batches 16–22 (2026-11-09 / 10), the last of the feature work:
+- ✅ The PDP-8: a front panel (1965) on its golden model (src/pdp8), then the PDP-8 in gates in the sandbox (pdp8_core, Examples ▸ PDP-8 in gates,
+  the CPU drawer's lamps and switch register in lock step with the model; 60a3e77a, 96100986)
+- ✅ Core memory: a core plane wired at memory step 11 (Whirlwind's 32 × 32 × 17 planes, the diagonal sense wire), the Memory drawer reads
+  core stores (03943890, 207c0fa9)
+- ✅ System/360 in the microcode chapter: one instruction set, many machines (f8b063bd)
+- ✅ The FFT as software: four steps in the spectrum chapter (the Python subset on the gate-level pipeline), and the same FFT on the DSP core (88f7a186)
+- ✅ Appendix E, the Manchester Baby (1948) in gates, with its Williams tube, codex entries, an ISA table and a sandbox example (8993285d)
+- ✅ Appendix F, the Apollo Guidance Computer: the NOR3 gate, a golden model checked against yaAGC, the adder ring, core rope and a 3D rope
+  module (29e42383, 0db78ecf, b86d9256)
+- ✅ VHDL out (52167910), export for Digital (.dig) and a faster Digital import (b3cd71b2), Lay out by logic depth (53fa4acc)
+- ✅ Our timing against OpenSTA on the sky130 layouts, path by path (a10cd682); rv32uc riscv-tests on the C core (6ed00182);
+  riscv-vector-tests' Zve32x subset on the gates (8da71ef4)
+- ✅ C on the five-stage pipeline and pipelined C cores in the sandbox (80b47b17); decks for the RV16 program levels and runs on your own
+  core (ee7f98d5); the puzzle devices (c9f40bfd); the machine hall's card reader (42213723)
+- ✅ Self-hosted fonts, preloaded: no shift on load (8861f0d0)
 
 ## Open questions for the author
 - ~~Target audience depth?~~ Decided: from a technical newcomer to an engineer, chapter 0 (Basics) the floor (CLAUDE.md)

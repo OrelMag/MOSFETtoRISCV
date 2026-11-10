@@ -587,9 +587,9 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
   the failures Check found, and edit while paused: the case plays again on the rebuilt circuit. A failing
   Check opens it on the first failure. Core levels list every program, each watchable on a bench.
 - ✅ **Codex as a glossary**: hover definitions in the chapters and on the level screen.
-- ⏳ **Achievements**: XOR in 4 NANDs, a full adder in 9, CPI < 1.2, a period below the
+- Dropped (the author, 2026-11-10: no badges): **Achievements**: XOR in 4 NANDs, a full adder in 9, CPI < 1.2, a period below the
   reference's.
-- ⏳ **A share link for campaign progress** (stars only).
+- Parked: **A share link for campaign progress** (stars only); progress travels in the backup file.
 - ✅ **Bug-hunt levels** (campaign/bughunts.ts; mockup approved 2026-11-03): twelve optional levels, each hanging off the level
   that builds its block, start from that level's reference answer with a planted fault (miswire, swapped pins, one column of
   many, a missing connection, a corner case, clocking, a spec rule, encoding, a datapath value off by one, a forwarding term),
@@ -600,18 +600,18 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
   the planted fix's edits.
 - ✅ **A timing level** (b_timing, after Core IV): shift and accumulate, right but at period 58 against a target of 40; graded
   on static period and NANDs (the Kogge–Stone answer: 36, 858 NANDs).
-- ⏳ **Where your NANDs go**: a per-component breakdown of your CPU.
-- ⏳ **Boss level**: snake on an LED matrix, on your own pipelined core.
+- Parked: **Where your NANDs go**: a per-component breakdown of your CPU.
+- Parked: **Boss level**: snake on an LED matrix, on your own pipelined core (Pong on your own core plays instead).
 - ✅ **Custom ISA**: done in the sandbox (roadmap Phase 12; `src/isa`, File ▸ Instruction sets…): a table of mnemonics,
   operands and bit patterns gives an assembler, disassembler, field view and ROM listing. Not from isa16's tables: the
   tables are their own format (the one preset is the 4-bit CPU's ISA), and RV16 sits beside them behind one Isa shape.
   Syntax only: a table has no golden model, so the campaign does not use it.
 - ✅ **A level screen of its own**, **why we are building it**, a **step-by-step solution walkthrough** in every
   level and a **fuller codex**: details in the roadmap's Phase 12, Campaign.
-- ⏳ **Before the transistor**: an act with relay and tube bricks, a 3D view of the machine and punch-card
+- ✅ **Before the transistor** (act P): an act with relay and tube bricks, a 3D view of the machine and punch-card
   programs (roadmap Phase 14).
-- 🚧 **GPU act**: act 9's compute levels are playable (lanes, lane register file, mask, SIMD core, reconvergence
-  stack, SIMT core, coalescer, two warps; saxpy, reduction and histogram kernels); the rasterizer follows (roadmap
+- ✅ **GPU act**: act 9's compute levels are playable (lanes, lane register file, mask, SIMD core, reconvergence
+  stack, SIMT core, coalescer, two warps; saxpy, reduction and histogram kernels), then the rasterizer (k_raster; roadmap
   Phase 15).
 - ✅ **Memory act**: act 10 (a DRAM column, a bank with refresh, a row-buffer controller, a two-master bus, a DMA
   engine, a flash page store and the boot puzzle; roadmap Phase 16e).

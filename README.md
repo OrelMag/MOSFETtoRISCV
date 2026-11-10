@@ -26,14 +26,14 @@ Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journe
 ## The journey
 
 **<!--n:journey-->89<!--/n--> chapters.** The first <!--n:ch.vectors-->35<!--/n--> run from the MOSFET, the CMOS inverter and NAND, through gates, binary numbers,
-adders, multiplexers, latches, registers and memory arrays, to the ALU, the register file, RV32I
+adders, multiplexers, latches, registers and memory arrays (a core plane among them), to the ALU, the register file, RV32I
 assembly and a single-cycle CPU. Then Python compiled to RV32I by the site's own compiler and run on
 those gates, faster adders, pipelining (hazards, forwarding, branch prediction), bytes and
 memory-mapped I/O, traps and interrupts, multiply / divide, caches, virtual memory (Sv32 page tables,
 a hardware walker that stalls the CPU, two TLBs on chapter <!--n:ch.memory-->10<!--/n-->'s CAM, page faults, M / S / U modes, all in gates
 beside the golden model), a tiny operating system (a kernel in assembly with system calls, a timer-driven
 round-robin scheduler and a context switch, two programs and then two Python programs sharing one gate-level
-CPU in address spaces of their own, every switch counted in cycles), multicycle and microcoded control,
+CPU in address spaces of their own, every switch counted in cycles), multicycle and microcoded control (and System/360: one instruction set, many machines),
 floating point (RV32F), the C extension (an expander in gates in front of the decoder) and RV64 (the
 same core at 64 bits, the W instructions, what width costs block by block), a gate-level out-of-order
 core (renaming, a reorder buffer, speculation) and a lab to reshape it (width, ports, window sizes, on
@@ -66,7 +66,7 @@ cellular, queues, the data centre) the chapter says it runs a model, and labels 
 
 **Signal processing** (chapters <!--n:dsp.first-->74<!--/n--> to <!--n:dsp.last-->89<!--/n-->, <!--n:dsp.count-->16<!--/n--> of them, after the expert's bench) asks what a computer does with a
 sample once it has one. Numbers that fit (saturation instead of wrap, guard bits, Q formats), the
-z-plane, measuring a spectrum, FIR design to a mask, IIR and the stability feedback costs, changing the
+z-plane, measuring a spectrum (an FFT written in Python and run on the gates, then on the DSP core), FIR design to a mask, IIR and the stability feedback costs, changing the
 rate for a fraction of the price, and CORDIC, rotation by shifts. Then the machine: a MAC added to the
 RV32 as four instructions on custom-2 and measured on the CPU panel, a DSP core with two memories, address
 generators and a loop with no branch, converters (compare and compare again, a ladder on the way back, then one bit
@@ -232,18 +232,23 @@ simulator, so whatever you build is a real component of the site. The full guide
   keyboard with a key queue, a pixel screen, a console, switch banks, a timer, a card reader with
   decks punched from a ROM, a halt part, random sources and cycle counters; comments on the canvas.
 - The **CPU panel** for any chip that is a processor, yours included, with the golden model in
-  lock-step (single-cycle and pipelined RV32I, RV32IC, RV64I / RV64IM, several cores, the out-of-order
-  core, the 6502, the 4-bit CPU, the SAP-1, the DSP core), and a **Memory** drawer showing every memory live.
+  lock-step (single-cycle and pipelined RV32I and RV32IC, RV32IV with its vector unit, RV64I / RV64IM, several
+  cores, the out-of-order core, the 6502, the 4-bit CPU, the SAP-1, the PDP-8, the Manchester Baby, the DSP core),
+  and a **Memory** drawer showing every memory live, core planes included.
 - **Your own instruction**: a custom RV32 instruction as a row of control signals, on the single-cycle
   or the pipelined core (hazards from its signals), checked against generated golden-model code.
 - **Programs on your own CPU**: a custom instruction set written as a table gives its own
   assembler and disassembler; <!--n:puzzles-->14<!--/n--> program puzzles run on the gates of a ready-made CPU or your own,
-  scored on cycles, NANDs and program size.
+  scored on cycles, NANDs and program size. **Puzzle devices** (Crossing, Maze robot, Vending machine) put a
+  small world behind named pins: your circuit drives it, its rules are checked every clock, and stars count
+  NANDs against a reference circuit.
 - **Verilog chips**: write a module as text and Yosys, running in the page (WebAssembly, nothing
   uploaded), draws it from the library's gates beside the text a second after you stop typing;
   every module becomes a chip that opens down to NANDs and transistors. `.v` / `.sv` files and
   Yosys JSON netlists import the same way, and File ▸ Export Verilog goes the other way: exported
   and imported back, a chip (a whole RV32I CPU among the tests) simulates equal to the original.
+  Every component also has a **VHDL** view (the inspector's HDL tab, a .vhd download), checked
+  by GHDL in CI.
 - **Truth-table and state-machine chips** (New chip ▾): fill a table (or paint a Karnaugh map) and get
   it minimized and built as NAND–NAND, AND–OR, a PLA or a ROM, each priced; draw a state diagram and get
   it encoded binary, Gray or one-hot around flip-flops, read back from the circuit against the diagram;
@@ -251,9 +256,11 @@ simulator, so whatever you build is a real component of the site. The full guide
   as that controller over a datapath of library registers, adders and comparators (GCD to start from).
 - **Digital and Logisim circuits import**: a `.dig` project or a Logisim-evolution `.circ` becomes
   chips in a folder, the file's drawing kept, each part mapped to ours (with a table of what became
-  what). **Test tables** on any chip, in Digital's test syntax: a Tests pane runs them after every
-  edit, fills outputs from the circuit, and opens a failing row in the test player; the imported
-  files' own tests come along.
+  what), and **Lay out by logic depth** is offered where it reads better than the file's drawing;
+  File ▸ Export for Digital writes a chip back as `.dig`. **Test tables** on any chip, in Digital's
+  test syntax: a Tests pane runs them after every edit, fills outputs from the circuit, and opens a
+  failing row in the test player; the imported files' own tests come along. Faults switched on in a
+  chip apply in Check, the Tests pane and the puzzles alike.
 - **File ▸ Memory map**: address regions (RAM, ROM, screen, console, keys) placed by window, overlaps
   and gaps named, the decoder generated as a chip, a C header and linker script written, applied as one
   undo step. **Microcode…**: the multicycle CPU's microprogram painted as a grid, checked against the
@@ -277,11 +284,14 @@ simulator's after every settle. `scripts/sim-perf.ts` measures the cycles per se
 - **Computer**: the RV32I core, a program ROM in assembly, a memory chip, a 64 × 64 screen and a
   devices chip with the console, LEDs and switches. It greets you, paints a picture and halts, with
   the golden model checking every instruction (above). A second version runs the **pipelined** RV32I
-  core on the same pins, with the pipeline diagram; **RV32C** and **RV64** examples run those cores, and the **DSP core** examples run its benchmark kernels (a FIR filter among them).
+  core on the same pins, with the pipeline diagram; **RV32C**, **RV64** and **RVV** (saxpy on a four-lane
+  vector unit) examples run those cores, and the **DSP core** examples run its benchmark kernels (a FIR filter among them).
+  The pipelined core also comes with C, and with M or a data cache, as parts of its own.
 - **4-bit CPU** (4004-inspired, 3 357 NANDs), **6502 computer** (the transistor-level 6502 as a
   part, a ROM in 6502 assembly), **System on a bus** (CPU and DMA masters, RAM, flash, screen,
   keyboard, timer behind an AXI-lite-style bus) and **Boot from cards** (a loader reading a punched
-  deck into RAM, then running it), and the **SAP-1** with its switches, bus LEDs and output digits. **RV16: Pong** puts the campaign's RV16 core on a bench with a
+  deck into RAM, then running it), the **SAP-1** with its switches, bus LEDs and output digits, the
+  **PDP-8** (its 1965 front panel on the model, and the PDP-8 in gates) and the **Manchester Baby** (1948). **RV16: Pong** puts the campaign's RV16 core on a bench with a
   screen and switches; a passed core level offers the same game on your own core.
 
 ## Measured, not drawn
@@ -321,7 +331,7 @@ also be priced in relays and tubes.
 <table>
 <tr>
 <td width="50%"><img src="docs/images/silicon.jpg" alt="The dual-core placed and routed in SkyWater 130 nm, coloured by block"><br><sub><b>Ch. <!--n:ch.silicon-->30<!--/n--></b>: the dual-core after Yosys and OpenROAD on sky130: 14.8k standard cells, coloured by block.</sub></td>
-<td width="50%"><img src="docs/images/hall.png" alt="The single-cycle RV32I as 78 racks of relays, a person for scale"><br><sub><b>Ch. <!--n:ch.silicon-->30<!--/n--></b>: the same RV32I as 55,699 relays, about 70 racks' worth (1.27 s an instruction), or 75,779 tubes.</sub></td>
+<td width="50%"><img src="docs/images/hall.png" alt="The single-cycle RV32I as 78 racks of relays, a person for scale"><br><sub><b>Ch. <!--n:ch.silicon-->30<!--/n--></b>: the same RV32I as 55,699 relays, about 70 racks' worth (1.27 s an instruction), or 75,779 tubes, its program read from punched cards.</sub></td>
 </tr>
 </table>
 
@@ -335,11 +345,14 @@ also be priced in relays and tubes.
   simulator in `src/riscv/`, which steps in lock-step and compares registers, PC and memory at every
   retirement. Independently of that model, every RV32 CPU passes the official
   [riscv-tests](https://github.com/riscv-software-src/riscv-tests) its ISA covers at gate level
-  (rv32ui, rv32um, rv32uf, rv32ua, rv32mi), runs seeded random programs against the golden model, and
+  (rv32ui, rv32um, rv32uf, rv32ua, rv32uc, rv32mi), runs seeded random programs against the golden model, and
   must reach every instruction and hardware event it has (forwarding paths, stalls, mispredictions,
   cache misses, traps). The out-of-order core also matches a cycle-exact model of its rules every
   cycle. Chapter <!--n:ch.widths-->27<!--/n-->'s single-cycle core runs in lock-step with the golden model at both widths, and
-  the RV64 golden model passes rv64ui and rv64um. Matrix, coverage and the bugs this found:
+  the RV64 golden model passes rv64ui and rv64um. The vector extension is held to
+  [riscv-vector-tests](https://github.com/chipsalliance/riscv-vector-tests) for our Zve32x subset:
+  1,339 tests (1.43 M checks, all 80 instructions) on the golden model, and the vector core at gate
+  level on the copies its e32 lanes can run. Matrix, coverage and the bugs this found:
   [docs/VERIFICATION.md](docs/VERIFICATION.md). The campaign's RV16 cores are fuzzed too.
 - **The golden model itself**: [Spike](https://github.com/riscv-software-src/riscv-isa-sim) runs in CI
   on random programs for eight ISA variants (seven RV32, the C extension among them, and RV64IM), its
@@ -347,6 +360,10 @@ also be priced in relays and tubes.
   new seeds each night.
 - **The 6502**: the cycle-exact model passes all 1.51 M SingleStepTests cases and Klaus Dormann's
   functional test; the transistor-level chip matches it on every bus cycle of both.
+- **The Apollo Guidance Computer**: Appendix F's golden model runs in lock step with yaAGC (Virtual
+  AGC's emulator, fetched and compiled in CI, never kept here) on directed and seeded random programs,
+  registers, erasable memory and memory cycles after every instruction; answers spoiled on purpose
+  must fail.
 - **Drawings**: every registered schematic is checked for nets sharing a line, overlapping symbols
   and hidden labels.
 - **HDL**: generated SystemVerilog comes with a self-checking testbench drawn from our own
@@ -356,12 +373,14 @@ also be priced in relays and tubes.
   the same way: both of our exporters' Verilog, through Yosys and back into chips, matches the
   original every output every cycle (library parts and the single-cycle CPU), and all 74 of Yosys's
   flip-flop and latch cells match its own definitions. The FPGA export goes through Yosys's
-  `synth_gowin` before every deploy.
+  `synth_gowin` before every deploy. The VHDL export is analysed and elaborated by GHDL in CI, and
+  the combinational designs are simulated against ours.
 - **Silicon**: `.github/workflows/layout.yml` runs the exported dual-core and the RV32IM system
   core (its memories outside its ports) through OpenROAD-flow-scripts on SkyWater 130 nm (synthesis,
   floorplan, placement, clock tree, routing); the GDS, tiles and reports are published into the site
   (chapter <!--n:ch.silicon-->30<!--/n-->), each beside our estimate of the same design: area per block from the NAND count,
-  the critical path in NAND delays against OpenSTA's after routing.
+  the critical path in NAND delays against OpenSTA's after routing, and then path by path: our unit
+  and load estimates for every endpoint against OpenSTA's report.
 - **Captures**: `.github/workflows/tshark.yml` has tshark read what Save capture writes, each chapter's
   frames from the gates and the chapters' own: every field and protocol against what the bytes claim, every
   checksum good, nothing malformed. Captures broken on purpose must be caught.
@@ -406,8 +425,9 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
   out-of-order core is built in gates only 2-wide (ROB 8–32, issue queue 4–16, store queue 2–8; the
   site's is ROB 16, issue queue 8): the lab's other shapes run on its cycle-exact model, timed but not
   priced.
-  The ISA is RV32 (I, M, F, C, Zicsr, the atomics; lr.w / sc.w on the coherent dual-core), and RV64I / M on chapter <!--n:ch.widths-->27<!--/n-->'s
-  single-cycle core and its golden model; no RV64 in the pipelines yet.
+  The ISA is RV32 (I, M, F, C, Zicsr, the atomics; lr.w / sc.w on the coherent dual-core; a Zve32x vector
+  subset on one single-cycle core, its gate-level lanes e32 only), and RV64I / M on chapter <!--n:ch.widths-->27<!--/n-->'s
+  single-cycle core and its golden model; RV64 is not in the pipelines.
 - **Radio, glass, cellular, queues and the data centre are models**, labelled as such in their chapters, with
   their assumptions stated; the internet of chapter <!--n:ch.path-->68<!--/n--> is invented, with lengths and rates of the usual size. The
   capture check reads the book's frames only, not a learner's design. The switch capstone has been passed by a
@@ -422,16 +442,17 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
 
 ## What's next
 
-The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next features:
+Feature work is closed; the full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). What is left:
 
-- **Load-dependent delay, further**: chapter steps that show races and glitches under load, and the
-  estimate checked path by path against the sky130 runs.
-- **Vectors, further**: an RVV core in the sandbox, with its vector wiring drawn.
-- **Verilog in the journey**: the same adder as text and as gates in a chapter step, and a Verilog
-  chip's critical path mapped back to its source lines.
-- **ISA breadth, further**: RV64 in the pipelines.
-- **`.dig` export** for Digital.
-- **Python, further**: strings and a heap.
+- **Microcode**: a Verilog export of an edited controller, the hardwired controller as a grid, a new
+  instruction in microcode.
+- **The out-of-order core's top level** drawn with fewer pointers (parked).
+- **FPGA**: small ROMs (≤ 256 words) and RAMs (≤ 64 words) into block RAM; they stay in LUTs today.
+- **Static timing**: a constant's arrival and, where a design is placed, wire length: two causes of the spread against OpenSTA.
+- **VHDL in**, through GHDL, once it runs in WebAssembly (VHDL out is done).
+- **The core bench's IN device**, so "Open on a bench" works for the RV16 program levels that read input.
+- **Puzzle devices**: a CPU route (a program driving the device) and grading on cycles × NANDs, as the
+  stream puzzles are.
 
 ## Run it
 
