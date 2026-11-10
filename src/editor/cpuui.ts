@@ -68,6 +68,8 @@ import { vecView } from '../widgets/vecview';
 
 /** Cycles Run to halt gives a program before it stops on its own. */
 const RUN_CAP = 20000;
+/** The toast that offers the panel when it stayed closed for lack of room (hintPanel). */
+const PANEL_HINT = 'This chip has a CPU: the panel stays closed here to leave room for the circuit';
 /** How often the panel redraws while the clock runs (ms). */
 const RENDER_MS = 100;
 const now = () => performance.now();
@@ -296,6 +298,7 @@ class CpuPanel {
     if (byUser && !on) this.closed.add(this.ed.chipId);
     if (byUser && on) this.closed.delete(this.ed.chipId);
     if (on) {
+      this.ed.dismissToast(PANEL_HINT); // opened from the toolbar: the offer to open it is done
       this.width = 0;
       this.redock();
       this.listKey = this.curKey = '';
@@ -421,7 +424,7 @@ class CpuPanel {
     this.hinted.add(chip);
     setTimeout(() => {
       if (this.shownFor !== chip || this.open || document.querySelector('.coach-card, .tour-card, dialog[open]')) return;
-      this.ed.toast('This chip has a CPU: the panel stays closed here to leave room for the circuit', 'info', { label: 'Open CPU panel', run: () => this.setOpen(true, true) });
+      this.ed.toast(PANEL_HINT, 'info', { label: 'Open CPU panel', run: () => this.setOpen(true, true) });
     }, 1200);
   }
 

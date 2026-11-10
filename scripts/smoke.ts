@@ -160,6 +160,50 @@ const deviceDrive = (fail: boolean) => `(async () => {
   return bad;
 })()`;
 
+/** PDP-8 front panel (Examples ▸ PDP-8 front panel): the ROM selected, Front panel… opened, its keys and lamps there, START pressed, nothing wider than the page. */
+const PDP8_PANEL_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const svg = document.querySelector('svg.ed-svg');
+  if (!svg) return ['no canvas'];
+  svg.setPointerCapture = () => {}; svg.releasePointerCapture = () => {}; svg.hasPointerCapture = () => false;
+  const part = svg.querySelector('[data-part="core"]');
+  if (!part) return ['no ROM part'];
+  const b = part.getBoundingClientRect(), x = b.left + b.width / 2, y = b.top + b.height / 2;
+  for (const t of ['pointerdown', 'pointerup']) svg.dispatchEvent(new PointerEvent(t, { pointerType: 'mouse', pointerId: 1, isPrimary: true, button: 0, buttons: t === 'pointerup' ? 0 : 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+  await wait(400);
+  const open = [...document.querySelectorAll('button')].find((e) => e.textContent.trim() === 'Front panel…');
+  if (!open) return ['no Front panel… button with the ROM selected'];
+  open.click(); await wait(1500);
+  const keys = [...document.querySelectorAll('.p8-key')].map((e) => e.textContent.trim());
+  for (const k of ['LOAD ADD', 'DEP', 'EXAM', 'START', 'CONT', 'STOP', 'SING INST']) if (!keys.includes(k)) bad.push('no ' + k + ' key on the front panel');
+  if (document.querySelectorAll('.p8-lamp').length < 60) bad.push('the lamps are missing');
+  [...document.querySelectorAll('.p8-key')].find((e) => e.textContent.trim() === 'START')?.click(); await wait(600);
+  for (const e of document.querySelectorAll('.p8-panel, .p8-keys')) if (e.scrollWidth > e.clientWidth + 1) bad.push(e.className + ' overflows sideways');
+  if (document.documentElement.scrollWidth > innerWidth + 1) bad.push('the page scrolls sideways with the front panel open');
+  return bad;
+})()`;
+
+/** PDP-8 in gates: the CPU drawer's front panel (opened from the toolbar when it did not open by itself): 12 switches, the keys, nothing too wide. */
+const PDP8_DRAWER_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const btn = (re) => [...document.querySelectorAll('button')].find((e) => re.test(e.textContent.trim()));
+  if (!document.querySelector('.p8-drawer')) {
+    const cpu = btn(/^CPU$/);
+    if (cpu) cpu.click(); else { btn(/^More/)?.click(); await wait(300); btn(/^CPU/)?.click(); }
+    await wait(1500);
+  }
+  const d = document.querySelector('.p8-drawer');
+  if (!d) return ['the CPU drawer shows no PDP-8 panel'];
+  if (d.querySelectorAll('.p8-sw').length !== 12) bad.push('expected 12 switches');
+  const keys = [...d.querySelectorAll('.p8-key')].map((e) => e.textContent.trim());
+  if (!keys.includes('SING INST')) bad.push('no SING INST key: ' + keys.join(', '));
+  for (const e of d.querySelectorAll('.p8-panel')) if (e.scrollWidth > e.clientWidth + 1) bad.push(e.className + ' overflows sideways');
+  if (document.documentElement.scrollWidth > innerWidth + 1) bad.push('the page scrolls sideways with the drawer open');
+  return bad;
+})()`;
+
 /** Opens File ▸ Memory map…, checks the windows, the three views and that the dialog fits, closes it with Esc. */
 const MEMMAP_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -736,6 +780,12 @@ function routes(): Route[] {
   add('#/sandbox', light, ' (menu by key)', undefined, MENU_DRIVE);
   add('#/sandbox', light, ` (${TOUCH_VIEWPORTS[0].name}: hold, cancel, tap a pin)`, TOUCH_VIEWPORTS[0], TOUCH_DRIVE);
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
+  // The PDP-8 examples driven: the front panel on the model, the CPU drawer on the gates; both themes and a phone.
+  for (const [theme, viewport] of [['light', undefined], ['dark', undefined], ['light', phoneVp]] as const) {
+    const tag = `${theme}${viewport ? ', phone' : ''}`;
+    add(`#/sandbox/${ex.ids[EXAMPLES.findIndex((e) => e.id === 'pdp8')]}`, { ...themed(theme), [SANDBOX_KEY]: ex.json }, ` (pdp8 front panel, ${tag})`, viewport, PDP8_PANEL_DRIVE);
+    add(`#/sandbox/${ex.ids[EXAMPLES.findIndex((e) => e.id === 'pdp8g')]}`, { ...themed(theme), [SANDBOX_KEY]: ex.json }, ` (pdp8 drawer, ${tag})`, viewport, PDP8_DRAWER_DRIVE);
+  }
   // The memory-map designer on System on a bus, opened from File, in both themes.
   for (const [theme, viewport] of [['light', undefined], ['dark', undefined]] as const) {
     add(`#/sandbox/${ex.ids[EXAMPLES.findIndex((e) => e.id === 'bussystem')]}`, { ...themed(theme), [SANDBOX_KEY]: ex.json }, ` (memory map, ${theme}${viewport ? ', phone' : ''})`, viewport, MEMMAP_DRIVE);

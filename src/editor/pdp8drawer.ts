@@ -73,7 +73,7 @@ export class Pdp8DrawerPanel {
       return b;
     }));
     this.el = h('div', { class: 'p8-drawer' },
-      h('div', { class: 'p8-panel', 'aria-label': 'Front panel lamps: the processor\'s registers' }, h('div', { class: 'p8-regs' }, Object.values(rows).map((r) => r.el)), state),
+      h('div', { class: 'p8-panel', role: 'group', 'aria-label': 'Front panel lamps: the processor\'s registers' }, h('div', { class: 'p8-regs' }, Object.values(rows).map((r) => r.el)), state),
       h('div', { class: 'p8-panel p8-srpanel' }, this.srBox, keys));
   }
 
