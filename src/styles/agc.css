@@ -32,3 +32,4 @@
 .agc-run :is(.agc-regs, .agc-vars) span { color: var(--muted); font-size: 12px; }
 .agc-run .agc-trace { font-size: 12.5px; width: 100%; }
 .agc-run .agc-trace code { white-space: pre; }
+.agc-run .sb-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }

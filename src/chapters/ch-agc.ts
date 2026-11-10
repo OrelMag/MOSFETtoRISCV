@@ -148,7 +148,7 @@ export const chAppendixAgc: Chapter = {
         1100 + 0110 = 1 0010, and the carry coming round makes it 0011, 3. So the adder is a ring: the
         <span data-show="fa3">top bit's</span> carry out feeds the <span data-show="fa0">bottom bit's</span> carry in.
         Four bits are ${AGC_NOR.add4} NOR gates.</p>
-        <p>A ring has a trap. Add a number to its complement, 0101 + 1010: every column holds one 1, so every bit passes
+        <p>A ring has a catch. Add a number to its complement, 0101 + 1010: every column holds one 1, so every bit passes
         its carry on and none starts one. A carry of 0 all round is stable, giving 1111 (−0); so is a carry of 1 all round,
         giving 0000 (+0). Which one the ring settles in depends on what it held before, and building this adder showed it is
         worse than that: while the operands change, a gate can glitch for a moment and start a carry that then circles for

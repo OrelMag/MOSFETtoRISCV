@@ -10,11 +10,11 @@ import { frameLoop } from './mosfet';
 import { modelStage } from './modelstage';
 import {
   BITS, CORES, CY, FIXED_WORDS, MODULE_CORES, MOD_X, MOD_Z, MODULES, SENSE_LINES, STRANDS, WORDS, WORDS_PER_CORE, WORD_BITS,
-  inhibitDriven, ropeAnchors, ropeParts, senseWord, type RopePalette, type RopePhase, type RopePose,
+  coreX, inhibitDriven, ropeAnchors, ropeParts, senseWord, type RopePalette, type RopePhase, type RopePose,
 } from './rope3dparts';
 
 const PHASE_MS = 1200;
-const CLOSE = { target: [-40, CY - 6, 0] as [number, number, number], yaw: 1.0, pitch: 0.3, dist: 300 };
+const CLOSE = { target: [coreX(2.5), CY - 2, 0] as [number, number, number], yaw: 0.95, pitch: 0.28, dist: 200 };
 const MODULE = { target: [MOD_X, 30, MOD_Z] as [number, number, number], yaw: 0.4, pitch: 0.75, dist: 1500 };
 const bits4 = (w: number) => Array.from({ length: BITS }, (_, b) => (w >> (BITS - 1 - b)) & 1).join('');
 

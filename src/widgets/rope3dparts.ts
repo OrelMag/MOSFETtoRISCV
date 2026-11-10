@@ -209,12 +209,12 @@ export function moduleParts(P: RopePalette): Part[] {
 
 export function ropeAnchors(p: RopePose, narrow = false): Anchor[] {
   const up: Vec3 = [0, 1, 0];
-  const through = WIRES.findIndex((w) => w.kind === 'sense' && w.strand === p.strand && threads(w.strand, w.bit, 1));
-  const around = WIRES.findIndex((w) => w.kind === 'sense' && w.strand === p.strand && !threads(w.strand, w.bit, 2));
+  const through = WIRES.findIndex((w) => w.kind === 'sense' && w.strand === p.strand && threads(w.strand, w.bit, 4));
+  const around = WIRES.findIndex((w) => w.kind === 'sense' && w.strand === p.strand && !threads(w.strand, w.bit, 3));
   const a: Anchor[] = [
-    { text: 'core: permalloy ribbon on a steel bobbin, 0.249 in', p: at(coreX(3), CORE_R, Math.PI * 0.35), side: 't', n: up },
-    { text: 'sense wire through the core: 1', p: at(coreX(1) + LEN, SLOT_R, slotAngle(Math.max(0, through))), side: 'b', n: up },
-    { text: 'sense wire round the core: 0', p: at(coreX(2), OUT_R, slotAngle(Math.max(0, around))), side: 'r', n: up, minor: narrow },
+    { text: 'core: permalloy ribbon on a steel bobbin, 0.249 in', p: at(coreX(6), CORE_R, Math.PI * 0.35), side: 't', n: up },
+    { text: 'sense wire through the core: 1', p: at(coreX(4) + LEN, SLOT_R, slotAngle(Math.max(0, through))), side: 'b', n: up },
+    { text: 'sense wire round the core: 0', p: at(coreX(3), OUT_R, slotAngle(Math.max(0, around))), side: 'r', n: up, minor: narrow },
   ];
   if (!narrow) a.push(
     { text: 'inhibit wires (address)', p: wirePath(WIRES.findIndex((w) => w.kind === 'inhibit'))[0], side: 'l', n: up },
