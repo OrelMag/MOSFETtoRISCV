@@ -624,7 +624,7 @@ challenges stay open. Added since:
   the wire-colour menu), in the chapters, the workbench and the sandbox
 - ✅ Offline desktop program: `npm run desktop` builds a portable Windows `.exe` (the built site in Electron, fonts
   bundled, data next to the `.exe`), published by the *Desktop program* workflow as the release `desktop-latest`
-- ⏳ Keyboard navigation beyond the shortcuts. Done: one key table behind every `?` sheet, letters by position on non-Latin layouts, a switch for single-key shortcuts, `[ ] { }` through the chapters, a skip link and S to the circuit, Esc then Tab out of code editors, and the search (chapters, workbench, campaign, codex, `>` actions). Next: a part cursor on the stage (run, step, inputs, zoom by key), then placing and wiring in the sandbox by keyboard
+- ✅ Keyboard navigation beyond the shortcuts: one key table behind every `?` sheet, letters by position on non-Latin layouts, a switch for single-key shortcuts, `[ ] { }` through the chapters, a skip link and S to the circuit, Esc then Tab out of code editors, and the search (chapters, workbench, campaign, codex, `>` actions); a part cursor on the stage (arrows, ↵, Space; run, pulse, step, zoom; 8d86d6e2), and placing and wiring in the sandbox by keyboard (b9869531, 5f0c2f85: keyed arming, W branches from a wire)
 - ✅ Export the sandbox canvas as SVG / PNG (current theme), and the level on a chapter's or the workbench's stage (the
   stage bar's Image menu: the whole level with its live values, whatever the zoom, without probe flags)
 - VHDL view of every component
@@ -1047,7 +1047,7 @@ language and functions.
   RV32IM (mul / div / rem with Python's floor correction instead of the routines, on the pipeline with the M unit: the last step
   of chapter 21, with the measured gate cost). Both live in the chapters that teach the hardware (each level uses only what
   came before it), not in chapter 15
-- ⏳ Strings and a heap
+- ✅ Strings and a heap: str literals, len / index / + / ==, chr / ord, a bump heap that never gives back; the Python panel shows str variables, the heap blocks and printed text (chapter 15; c876ed1a)
 
 ### Phase 19 — Where other tools still win ⏳
 From a comparison with other tools (2026-10-19): Digital, DigitalJS, Circuit Artist, FREESS and Ripes each still do
@@ -1072,7 +1072,7 @@ animated schematic). The site exports Verilog and already runs Yosys in CI, so i
   back simulates equal to the original, every output every cycle (tests/hdl-import.test.ts, Yosys from npm in Node)
 - ✅ Examples ▸ The same adder in Verilog: ADD4 beside `assign {co, s} = a + b + ci;` on the same inputs (36 against
   44 NANDs with the default gates)
-- ⏳ A chapter step with the Verilog adder; the analysis of a Verilog chip's critical path mapped back to its source lines
+- ✅ A chapter step with the Verilog adder (Faster adders); the analysis of a Verilog chip's critical path mapped back to its source lines (5a732c2a)
 - VHDL through GHDL's Yosys plugin only if a WebAssembly build exists; else not planned
 
 **Delay that depends on load** (Circuit Artist models wire delay from length and fan-out; here every NAND costs one
@@ -1113,7 +1113,7 @@ and Digital are what courses already use, and Digital lets a student write tests
 - Later: placing an imported circuit again by logic depth (the Verilog import's placer, generalized); `.dig` export
 
 **ISA breadth** (Ripes: RV64, the C extension): RV64I / RV64M and C in Phase 9, each checked by riscv-tests and Spike
-like the RV32 cores. ✅ C (chapter 25, part 1); ✅ RV64I / M (part 2). Open: C and RV64 in the sandbox, the instruction builder's 16-bit and RV64 formats.
+like the RV32 cores. ✅ C (chapter 25, part 1); ✅ RV64I / M (part 2). ✅ C and RV64 in the sandbox, with the instruction builder's 16-bit and RV64 formats (1f7697b3; widths e3fa3cf1).
 
 ### Phase 20 — Reviewer feedback (2026-10-19) ⏳
 An outside review asked for CMOS realism, cross-layer debugging, campaign polish and an FPGA path. Much of it was
@@ -1331,15 +1331,12 @@ main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
     bus's 16 channels at the pins) and the CSR unit's select crossbar as lanes (29 % → 21 %) on fix/circuits-sys-variants
     (tests/redrawclear-sysvariants.test.ts); the out-of-order units (ooo/5–7, 10) on feat/ooo-redraw: rename table 50 % → 30 %, its row 56 % → 0, issue-queue entry 55 % → 30 %, store queue 66 % → 39 %, select as a crossbar 56 % → 12 % (tests/redrawclear-ooo.test.ts); the core's top and its issue queue / reorder buffer are not redrawn
   - rv16_mux16 (needs a bit-sliced redraw) and srt4div8 (not switched to layered.ts): unchanged on main (git log)
-  - Warp core with lsu (chapter 32): net nMo still runs through a part — routeNetlist + wiresThroughParts on warpCore({ warps: 8, lanes: 8, lsu, mul }) returns { nMo }
   - Communication circuits left on purpose: CRC-32 next-state crossings (inherent), I²C target t0 (layered's 14-unit channel cap), the computer-with-NIC bus top
-  - Chapter seams: bus (38) ends without a pointer to chapter 39 (no numOf('message') in ch-bus.ts), sdr (81) never names the appendices (no mention in
-    ch-dsp-sdr.ts), datacentre has no pointer on to the expert's bench (no reference in ch-comm-dc.ts)
   - Kept by decision, not work to do: secret/7's computing-history digression; the recap `practise` list left empty for cellular, glass, pcie, radio, wifi
     and secret (it takes campaign nodes only; the capstones are not nodes)
   - Verified fixed on main, so not listed: first load under 200 ms (batch 16), HEX / BIN / DEC as one radio group and finger-sized section links (1d8a6547),
     View options sticky headings and Tab leaving the menu (app.ts, app.css), the relay full adder's pointers (93a4a054), the skip link (da9f2ffb); the
-    "factor 1.4" claim in datacentre is no longer in the chapter
+    "factor 1.4" claim in datacentre is no longer in the chapter; on fix/seams-warp (2026-11-10): the warp core's nMo and two-warp rs1Hi wires clear of every part (tests/warplayout.test.ts checks wiresThroughParts on every variant), and the chapter seams (bus on to Sending a message, sdr naming the five appendices, datacentre on to the expert's bench)
 
 ### Phase 23 — Ship review and what comes after it (2026-11-09) 🚧
 
@@ -1348,10 +1345,10 @@ tied to them, the sandbox modes, performance, layout shift and a production pass
 proposal it raised was approved and is being built (E:/audit/ship/PROPOSALS.md), with the four ONI features (docs/PLAN-ONI.md).
 
 Approved to build now (2026-11-09):
-- ⏳ Python: strings and a heap (chapter 15; the item under Phase 18)
-- ⏳ A chapter step with the Verilog adder, its critical path mapped back to the source lines (the item under Phase 19)
-- ⏳ A part cursor on the stage (run, step, inputs, zoom by key), then placing and wiring in the sandbox by keyboard (the item under
-  Cross-cutting features)
+- ✅ Python: strings and a heap (chapter 15; the item under Phase 18; c876ed1a)
+- ✅ A chapter step with the Verilog adder, its critical path mapped back to the source lines (the item under Phase 19; 5a732c2a)
+- ✅ A part cursor on the stage (run, step, inputs, zoom by key), then placing and wiring in the sandbox by keyboard (the item under
+  Cross-cutting features; 8d86d6e2, b9869531, 5f0c2f85)
 
 Proposed, kept for later (the author's choice, 2026-11-09; each needs a plan and a mockup before it is built):
 - ✅ (docs/PLAN-VM-OS.md) Virtual memory: chapter 'vmem' after caches. The golden model's M / S / U modes and Sv32, checked against Spike
@@ -1375,7 +1372,7 @@ The author's decisions of 2026-11-10:
 - Separate area and speed stars: still not now (the item under Phase 20)
 - The codex entries privmode and syscall stay without a campaign level (RV16 has no user mode; tests/campaign.test.ts VM_AWAITING_LEVELS)
 - y_tlb and y_walk keep handing out generic library blocks (registers, comparators, priority encoder, multiplexers)
-- ⏳ Break-it steps: one planted fault per core chapter, once the fault brush ships
+- ✅ Break-it steps: Find the fault, a last step (deep) in the cpu, pipeline, multicycle, traps and cache chapters: a stuck-at fault planted on the chapter's CPU, the CPU panel's first mismatch as the clue, a wire accused from the right-click menu, a wrong accusation answered with its own first wrong instruction (riscv/firstwrong.ts; tests/findit.test.ts; cd8e0eb9)
 - ✅ A worked example and a common-mistakes aside in the densest chapters (pipelining, traps, caches, floating point): folded asides, numbers pinned by tests/worked-examples.test.ts
 
 ## Open questions for the author
