@@ -39,6 +39,8 @@ export interface CpuConfig {
   dmemK?: number;
   /** The data memory size is fixed (main memory behind a cache). */
   fixedDmemK?: number;
+  /** More riscv-tests environments it runs besides env (bare-c: rv32uc for a C core). */
+  extraEnvs?: Env[];
   /** Cycles per instruction at worst (stalls, misses, divides), for the cycle budget. */
   cpi: number;
   build(words: number[], imemK: number, dmemK: number): ComponentDef;
@@ -57,7 +59,7 @@ export const CPUS: CpuConfig[] = [
   { id: 'sc-wb2-dramc', name: 'Single-cycle, 2-way write-back D-cache over DRAM (closed page)', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 40, build: (w, imemK) => singleCycleCpu(w, { imemK, dmemK: 6, dcache: 'wb2', adder: 'ks', dram: DRAM_CLOSED }) },
   { id: 'sc-ic', name: 'Single-cycle, I-cache', isa: {}, env: 'bare', cpi: 9, build: (w, imemK, dmemK) => singleCycleCpu(w, { imemK, dmemK, icache: true, adder: 'ks' }) },
   { id: 'sc-wb-ic', name: 'Single-cycle, write-back D-cache + I-cache', isa: {}, env: 'bare', fixedDmemK: 6, cpi: 22, build: (w, imemK) => singleCycleCpu(w, { imemK, dmemK: 6, dcache: 'wb', icache: true }) },
-  { id: 'sc-c', name: 'Single-cycle RV32IC', isa: { c: true }, env: 'bare', cpi: 1, build: (w, imemK, dmemK) => singleCycleCpu(w, { imemK, dmemK, c: true }) },
+  { id: 'sc-c', name: 'Single-cycle RV32IC', isa: { c: true }, env: 'bare', extraEnvs: ['bare-c'], cpi: 1, build: (w, imemK, dmemK) => singleCycleCpu(w, { imemK, dmemK, c: true }) },
   { id: 'sc-f', name: 'Single-cycle RV32IF', isa: { f: true }, env: 'bare', cpi: 30, build: (w, imemK, dmemK) => singleCycleCpu(w, { imemK, dmemK, fpu: true, adder: 'ks' }) },
   { id: 'mc-fsm', name: 'Multicycle, hardwired control', isa: {}, env: 'bare', cpi: 5, build: (w, imemK, dmemK) => multicycleCpu(w, { imemK, dmemK, control: 'fsm' }) },
   { id: 'mc-micro', name: 'Multicycle, microcode', isa: {}, env: 'bare', cpi: 5, build: (w, imemK, dmemK) => multicycleCpu(w, { imemK, dmemK, control: 'micro' }) },
@@ -107,6 +109,7 @@ export function notApplicable(cfg: Pick<CpuConfig, 'isa' | 'fixedDmemK'>, name: 
   if (suite === 'rv32uf' && !isa.f) return 'no F extension';
   if (suite === 'rv32ua' && !(isa.mp && MP_AMO.has(t))) return isa.mp ? 'only amoswap.w and amoadd.w' : 'no atomics';
   if (suite === 'rv32mi' && !isa.system) return 'no CSRs or traps';
+  if (suite === 'rv32uc' && !isa.c) return 'no C extension';
   if (suite === 'rv32mi' && MI_OPTIONAL[t]) return MI_OPTIONAL[t];
   if (isa.vm && suite === 'rv32mi' && t === 'illegal') return 'needs mstatus.TVM (sfence.vma and satp trap in S mode), which the golden model leaves out';
   if (cfg.fixedDmemK !== undefined && dataWords > 2 ** cfg.fixedDmemK) return `data does not fit the ${2 ** cfg.fixedDmemK}-word main memory`;

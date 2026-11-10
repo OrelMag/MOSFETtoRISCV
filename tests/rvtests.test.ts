@@ -13,6 +13,7 @@ const GOLDEN: Record<Exclude<Env, 'bare64'>, Isa> = { // bare64: ISS64, tests/ve
   bare: { sub: true, m: true, f: true },
   'bare-mp': { sub: true, mp: true },
   p: { sub: true, m: true, system: true },
+  'bare-c': { sub: true, c: true },
 };
 
 describe('riscv-tests images', () => {
@@ -80,4 +81,32 @@ describe('bit-parallel runs agree with the event-driven simulator', () => {
       expect(gate.count).toBe(lanes.count); // both look at tohost every 8 cycles
     }, 120_000);
   }
+});
+
+// rv32uc (env bare-c, built in CI: .github/workflows/rvc-tests.yml): one test, rvc, which keeps a doubleword in its code and loads
+// and stores it. On our Harvard machines the loader stores those code words into the data memory at their address too
+// (RvImage.mirror); without them the test fails where it first reads one. The RV32IC core runs it at gate level (verify-c.test.ts).
+describe('rv32uc (the C extension)', () => {
+  it('is built from the same riscv-tests revision as the other images, with its code-resident data recorded', () => {
+    const f = imageFile('bare-c');
+    expect(f.revision).toEqual(imageFile('bare').revision);
+    expect(f.toolchain).toMatch(/riscv-none-elf-gcc.*15\.2\.0/);
+    expect(Object.keys(f.tests)).toEqual(['rv32uc-rvc']);
+    const img = image('bare-c', 'rv32uc-rvc');
+    expect(img.mirror?.words).toHaveLength(4);
+  });
+
+  it('passes on the golden model with C; without the mirrored words it fails test 6, its first load from the code', () => {
+    const img = image('bare-c', 'rv32uc-rvc');
+    expect(runOnIss(img, loadable(img), { c: true }).text).toBe('pass');
+    const bare = { ...img, mirror: undefined };
+    expect(runOnIss(bare, loadable(bare), { c: true }).text).toBe('fails test 6');
+  });
+
+  it('applies to the C cores only', () => {
+    const verdicts = Object.fromEntries(CPUS.map((c) => [c.id, notApplicable(c, 'rv32uc-rvc') ?? 'runs']));
+    expect(Object.entries(verdicts).filter(([, v]) => v === 'runs').map(([id]) => id)).toEqual(['sc-c']);
+    expect(new Set(Object.values(verdicts).filter((v) => v !== 'runs'))).toEqual(new Set(['no C extension']));
+    expect(CPUS.find((c) => c.id === 'sc-c')!.extraEnvs).toContain('bare-c');
+  });
 });

@@ -2,8 +2,9 @@
 // which reads the prebuilt images from disk): the data section is put in place by code appended to the image, reached
 // by retargeting the reset jump at address 0. Browser-safe (no Node API): the microcode painter's check uses it too.
 
-/** bare64: bare for RV64 (rv64ui, rv64um), for chapter widths's 64-bit core and its golden model (src/riscv/iss64.ts). */
-export type Env = 'p' | 'bare' | 'bare-mp' | 'bare64';
+/** bare64: bare for RV64 (rv64ui, rv64um), for chapter widths's 64-bit core and its golden model (src/riscv/iss64.ts); bare-c: bare
+ *  with the C extension (rv32uc), for the RV32IC core. */
+export type Env = 'p' | 'bare' | 'bare-mp' | 'bare64' | 'bare-c';
 
 export interface RvImage {
   /** e.g. rv32ui-add */
@@ -13,6 +14,9 @@ export interface RvImage {
   text: number[];
   data: number[];
   dataBase: number;
+  /** Words the test keeps in its code and loads as data (rv32uc's "data:" label): stored into the data memory at their own
+   *  address too, as a machine with one memory would see them (ours wraps an address around its size). */
+  mirror?: { addr: number; words: number[] };
 }
 
 // ---- RV32I encodings ----------------------------------------------------------------------
@@ -66,11 +70,19 @@ export function loadable(img: RvImage, minImemK = 6, minDmemK = 5): Loadable {
     if (4 * i - base > 2047) { base = 4 * i; loader.push(...li(T1, img.dataBase + base)); }
     loader.push(...li(T0, w), sw(T0, T1, 4 * i - base));
   });
+  // the code's own data words, at their address: the data memory is grown until they land clear of the data section's words
+  let dmemK = Math.max(minDmemK, log2up(img.data.length));
+  if (img.mirror) {
+    const at = (k: number) => img.mirror!.words.map((_, i) => ((img.mirror!.addr >>> 2) + i) % 2 ** k);
+    while (at(dmemK).some((w) => w < img.data.length)) dmemK++;
+    loader.push(...li(T1, img.mirror.addr));
+    img.mirror.words.forEach((w, i) => loader.push(...li(T0, w), sw(T0, T1, 4 * i)));
+  }
   loader.push(addi(T0, 0, 0), addi(T1, 0, 0));
   loader.push(jal(0, back - 4 * (start + loader.length)));
   text[0] = jal(0, 4 * start);
   const all = [...text, ...loader];
-  return { words: all, imemK: Math.max(minImemK, log2up(all.length)), dmemK: Math.max(minDmemK, log2up(img.data.length)), tohost: 0 };
+  return { words: all, imemK: Math.max(minImemK, log2up(all.length)), dmemK, tohost: 0 };
 }
 
 /** What a test wrote to tohost: 1 passes; (n << 1) | 1 fails test n; env p writes 1337 | n on an unexpected trap. */
