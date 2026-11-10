@@ -8,8 +8,9 @@
 // part). One that finds no clear spot within MAX px is hidden (class `crowd`), as is one whose dot is outside the frame
 // or whose text would have to slide more than SLIDE px from it: the lower priority gives way, never an overlap.
 // With hysteresis, so a running model (the relay playing, the reader feeding) does not make labels jump or blink: a
-// label keeps its spot while that spot is clear and goes back nearer its dot only after HOLD frames; it hides only after
-// HOLD frames without a spot and shows again only after HOLD frames with one; a flipped side holds until the text
+// label keeps its spot while that spot is clear and goes back nearer its dot only after HOLD frames; it hides after
+// HOLD frames without a spot (at once if its spot would touch a text or a dot, leave the frame, or its dot is lost) and
+// shows again only after HOLD frames with one; a flipped side holds until the text
 // would sit UNFLIP px inside the frame on its own side. A model draws frames only on demand, so while any of those
 // counts is under way this runs again on the next animation frames by itself; and a label seen for the first time is
 // placed or hidden at once (nothing to keep steady yet).
@@ -86,7 +87,7 @@ export function declutterLabels(els: readonly HTMLElement[], opts: LabelOptions 
   // A dot outside the frame (its part is off screen) or under the buttons: the label cannot point at it.
   const lost = dots.map((d) => {
     const x = (d.l + d.r) / 2, y = (d.t + d.b) / 2;
-    return x < frame.l || x > frame.r || y < frame.t || y > frame.b || avoid.some((a) => x > a.l - 2 && x < a.r + 2 && y > a.t - 2 && y < a.b + 2);
+    return x < frame.l || x > frame.r || y < frame.t || y > frame.b || avoid.some((a) => near(d, a, 2, 2));
   });
   const base: [number, number][] = live.map(() => [0, 0]);
   const texts = live.map((e, k) => {
@@ -125,6 +126,15 @@ export function declutterLabels(els: readonly HTMLElement[], opts: LabelOptions 
       const b = shift(t, mv);
       return inside(b, frame) && !down.some((d) => near(b, d, gap, 1)) && !dots.some((d, j) => j !== k && near(b, d, 1, 1)) && !avoid.some((a) => near(b, a, 3, 3));
     };
+    // The hard rules, without the margins `clear` keeps: a label kept where it touches another text, covers a dot, leaves
+    // the frame or points at nothing it can show hides at once (a running model's pointer crossing a label would otherwise
+    // show the overlap for HOLD frames); one only short of a margin waits out the HOLD frames as before.
+    const tolerable = (mv: readonly [number, number]) => {
+      if (lost[k]) return false;
+      const b = shift(t, mv), F = EDGE + 1;
+      return inside(b, { l: frame.l - F, t: frame.t - F, r: frame.r + F, b: frame.b + F })
+        && !down.some((d) => near(b, d, 3, 0)) && !dots.some((d, j) => j !== k && near(b, d, 0, 0)) && !avoid.some((a) => near(b, a, 0, 0));
+    };
     let move = MOVES.find(clear) ?? null;
     if (!m.seen) {
       // first sight: nothing on screen to keep steady, so decide now
@@ -136,7 +146,7 @@ export function declutterLabels(els: readonly HTMLElement[], opts: LabelOptions 
       } else m.closer = 0;
       if (move && move !== m.move && clear(m.move) && dist(move) >= dist(m.move)) move = m.move;
       if (move) { m.fit++; m.miss = 0; } else { m.miss++; m.fit = 0; }
-      if (m.crowd ? m.fit >= HOLD : m.miss >= HOLD) { m.crowd = !m.crowd; m.fit = m.miss = 0; }
+      if (m.crowd ? m.fit >= HOLD : m.miss >= HOLD || (!move && !tolerable(m.move))) { m.crowd = !m.crowd; m.fit = m.miss = 0; }
       if (m.crowd ? m.fit > 0 : m.miss > 0) pending = true;
       if (m.closer > 0 && m.closer < HOLD) pending = true;
     }
