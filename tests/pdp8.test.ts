@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { PDP8_PRESET } from '../src/isa/presets';
+import { tableCompose } from '../src/isa/compose';
 import { tableOf } from '../src/isa/table';
 import { Pdp8 } from '../src/pdp8/pdp8';
 import { assemblePdp8, PDP8_HELLO } from '../src/pdp8/programs';
@@ -147,5 +148,14 @@ describe('Hello, world', () => {
     expect(m.run).toBe(false);
     m.cont(); m.runFor(10_000);
     expect(m.out).toBe(PDP8_HELLO.prints.repeat(2));
+  });
+});
+
+describe('the builder\'s palette over the PDP-8 table', () => {
+  it('names every row apart: TAD and TAD I, CLA in each of its three groups', () => {
+    const isa = tableCompose(PDP8_PRESET);
+    const names = isa.groups.flatMap((g) => g.ids.map((id) => isa.instr(id)!.name));
+    expect(new Set(names).size).toBe(names.length);
+    expect(names).toEqual(expect.arrayContaining(['TAD', 'TAD I', 'JMP I', 'CLA · group 1', 'CLA · group 2', 'CLA · group 3', 'SMA']));
   });
 });

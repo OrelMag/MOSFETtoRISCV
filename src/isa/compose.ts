@@ -22,6 +22,22 @@ export function tableCompose(doc: IsaDoc, id = `isa:${doc.id}`): ComposeIsa {
   const rows = t.compiled;
   const nbits = (r: number, l: string) => rows[r].bits.get(l)?.length ?? 0;
 
+  // The palette's name for a row (shown only, never assembled). A mnemonic several rows share gets what tells them apart:
+  // an operand that can only be one word (the PDP-8's TAD I), else the microinstruction group (CLA · group 2), else a number.
+  const uses = new Map<string, number>();
+  for (const c of rows) uses.set(c.def.mnemonic, (uses.get(c.def.mnemonic) ?? 0) + 1);
+  const fixedOf = (r: number): string[] => rows[r].def.operands.map((l) => doc.operands[l])
+    .flatMap((o) => o?.kind === 'enum' && !o.number && Object.keys(o.names).length === 1 ? Object.keys(o.names) : []);
+  const variantName = (r: number): string => {
+    const d = rows[r].def;
+    if ((uses.get(d.mnemonic) ?? 0) < 2) return d.mnemonic;
+    const fixed = fixedOf(r);
+    if (fixed.length) return `${d.mnemonic} ${fixed.join(' ')}`;
+    if (d.group) return `${d.mnemonic} · group ${d.group.replace(/^g/, '')}`;
+    // the one plain row among its variants keeps the bare name (TAD beside TAD I); several are numbered
+    const plain = rows.map((_, i) => i).filter((i) => rows[i].def.mnemonic === d.mnemonic && !rows[i].def.group && !fixedOf(i).length);
+    return plain.length < 2 ? d.mnemonic : `${d.mnemonic} · ${plain.indexOf(r) + 1}`;
+  };
   const slotOf = (r: number, l: string, i: number): CSlot => {
     const d = doc.operands[l];
     const n = nbits(r, l);
@@ -45,7 +61,7 @@ export function tableCompose(doc: IsaDoc, id = `isa:${doc.id}`): ComposeIsa {
       }
     }
   };
-  const instrs: CInstr[] = rows.map((c, r) => ({ id: String(r), name: c.def.mnemonic, summary: c.def.summary, slots: c.def.operands.map((l, i) => slotOf(r, l, i)) }));
+  const instrs: CInstr[] = rows.map((c, r) => ({ id: String(r), name: variantName(r), summary: c.def.summary, slots: c.def.operands.map((l, i) => slotOf(r, l, i)) }));
 
   /** An operand's value → its raw bits, and back. */
   const toRaw = (r: number, l: string, v: number) => {
