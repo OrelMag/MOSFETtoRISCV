@@ -60,7 +60,7 @@ function deviceComputerDef(dev: DeviceId, rom: ComponentDef): ComponentDef {
   const ram = must(partDef(RAM_REF, () => undefined));
   const b = new Builder(10, 12, 6);
   b.pins('clk');
-  const core = b.op(resolveComponent('rv32i_core')!, ['clk', '', b.op1(constWord(32, 0), [], 'hart 0'), '', b.op1(TIE1, [], 'granted')], 'RV32I core', 'cpu');
+  const core = b.op(resolveComponent('rv32i_core')!, ['clk', '', b.name(b.op1(constWord(32, 0), [], 'hart 0'), 'hartid'), '', b.name(b.op1(TIE1, [], 'granted'), 'grant')], 'RV32I core', 'cpu');
   const addr = b.name(`${core}.memAddr`, 'addr', true), dw = b.name(`${core}.memWData`, 'wdata', true);
   const we = b.name(`${core}.memWE`, 'we', true);
   b.next();
@@ -70,17 +70,18 @@ function deviceComputerDef(dev: DeviceId, rom: ComponentDef): ComponentDef {
   const bs = b.op(splitter([2, 1, 29], 4), [addr], 'bit 2');
   b.next();
   const io = b.name(`${as}.o3`, 'io', true), b2 = b.name(`${bs}.o1`, 'b2', true);
-  const ramWe = b.op1(AND, [we, b.op1(NOT, [io])], 'RAM write');
-  const step = b.name(b.op1(AND, [we, b.op1(AND, [io, b2], '= device')], 'step'), 'step', true);
+  const ramWe = b.name(b.op1(AND, [we, b.name(b.op1(NOT, [io]), 'ram')], 'RAM write'), 'ram_we');
+  const step = b.name(b.op1(AND, [we, b.name(b.op1(AND, [io, b2], '= device'), 'dev_sel')], 'step'), 'step', true);
   const dwid = m.drive.reduce((s, p) => s + p.width, 0), swid = m.sense.reduce((s, p) => s + p.width, 0);
   const ds = b.op(splitter([...m.drive.map((p) => p.width), 32 - dwid], 4), [dw], 'drive bits');
   b.next();
   const mem = b.op(ram, [`${as}.o1`, dw, ramWe, 'clk'], 'data (64 words)', 'ram');
   const d = b.op(deviceDef(dev, true), [...m.drive.map((p, i) => b.name(`${ds}.o${i}`, p.name, true)), step, 'clk'], m.title.toLowerCase(), 'dev');
   b.next();
-  const sense = b.op1(merger([...m.sense.map((p) => p.width), 32 - swid], 2), [...m.sense.map((p) => b.name(`${d}.${p.name}`, p.name, true)), b.op1(constWord(32 - swid, 0), [], '0')], 'sense word');
+  const sense = b.op1(merger([...m.sense.map((p) => p.width), 32 - swid], 2), [...m.sense.map((p) => b.name(`${d}.${p.name}`, p.name, true)), b.name(b.op1(constWord(32 - swid, 0), [], '0'), 'zero')], 'sense word');
+  b.name(sense, 'sense');
   b.next();
-  b.wire(b.op1(busMux2(32), [`${mem}.dout`, sense, io], 'read data'), `${core}.memRData`);
+  b.wire(b.name(b.op1(busMux2(32), [b.name(`${mem}.dout`, 'ram_data'), sense, io], 'read data'), 'rdata'), `${core}.memRData`);
   b.wire(instr, `${core}.instr`);
   return {
     id: `pzdev_cpu_${dev}`, name: 'device computer', category: 'cpu', symbol: { kind: 'box', label: 'COMPUTER' },
