@@ -247,7 +247,7 @@ export const NODES: CampaignNode[] = withBugHunts([
 
   {
     id: 'nor_basic', act: 1, title: 'NOT, OR, AND from NOR3', kind: 'build', optional: true, requires: ['g_and', 'g_or'], base: BUILDNOR.nor_basic, par: { nor3: 5 }, codex: ['demorgan', 'duality'],
-    why: 'NAND is our brick by choice, not by law. The Apollo Guidance Computer was built from one other gate, a three-input NOR: MIT judged that qualifying even a second circuit type would cost more than it saved. The same three functions from it: 5 NOR3 gates (15 transistors, 20 resistors as drawn), where the NAND levels took 6 NANDs (24 transistors).',
+    why: 'NAND is our brick by choice. The Apollo Guidance Computer was built from a three-input NOR alone: MIT judged that qualifying even a second circuit type would cost more than it saved. The same three functions from it: 5 NOR3 gates (15 transistors, 20 resistors as drawn), where the NAND levels took 6 NANDs (24 transistors).',
     tips: ['A NOR3 with its three inputs tied together is a NOT.', 'OR is a NOR followed by a NOT; tie the spare input to one of the other two.', 'AND by De Morgan: a·b = ¬(¬a + ¬b), a NOR of the two inverted inputs. ¬a is also an output: share it.'],
   },
 
@@ -321,7 +321,7 @@ export const NODES: CampaignNode[] = withBugHunts([
 
   {
     id: 'nor_fa', act: 2, title: 'A full adder in NOR3', kind: 'build', optional: true, requires: ['nor_basic', 'a_fa'], base: BUILDNOR.nor_fa, par: { nor3: 9 }, codex: ['duality', 'majority'],
-    why: 'The adder is where a brick shows its cost. Take the 9-NAND full adder and make every gate a NOR: each gate becomes its dual, and the sum and the majority are their own duals, so the same wiring still adds. 9 NOR3 gates, 27 transistors and 36 resistors, against 36 transistors in CMOS NANDs. The AGC\'s adder kept two NOR stages between a carry in and a carry out, the fewest NOR logic allows.',
+    why: 'Make every gate of the 9-NAND full adder a NOR: each gate turns into its dual, and the sum and the carry are their own duals, so the same wiring still adds. 9 NOR3 gates, 27 transistors and 36 resistors, against 36 transistors in CMOS NANDs.',
     tips: ['Start from your 9-NAND adder: same gates, same wires, every NAND a NOR3 with its spare input tied.', 'Why it works: a NOR network computes the dual of the NAND network\'s function. a ⊕ b ⊕ c and the majority give the same answer with every input and output inverted.', 'With all three inputs used, the majority alone is 4 gates: a NOR3 of the three pairwise NORs.'],
   },
 

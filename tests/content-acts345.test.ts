@@ -80,8 +80,9 @@ describe('acts 3–5 are complete', () => {
   });
 
   it('fills the thread: uses, pitfalls, a clause for every dependent', () => {
-    // the FPGA chapter's look-up table levels build an FPGA's cell, no block of RV16 (as act P and t_nor): no uses
-    const noBlock = new Set(['m_lut', 'd_lut']);
+    // the FPGA chapter's look-up table levels build an FPGA's cell, no block of RV16 (as act P and t_nor): no uses;
+    // nor_reg, a register bit in the Apollo Guidance Computer's NOR3 gates, neither
+    const noBlock = new Set(['m_lut', 'd_lut', 'nor_reg']);
     for (const n of mine) {
       const t = threadOf(n.id);
       if (noBlock.has(n.id)) expect(t?.uses, `${n.id} uses`).toBeUndefined();

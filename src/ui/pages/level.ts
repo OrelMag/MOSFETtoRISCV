@@ -626,12 +626,14 @@ export class LevelPage implements Page {
 const narrow = () => matchMedia('(max-width: 900px)').matches;
 
 /** Relays, tube sections and relay steps of `c`, those the level grades (`par`) only. */
-function deviceText(c: { relays?: number; tubes?: number; nor3?: number; steps?: number }, par: Par): string {
+function deviceText(c: { relays?: number; tubes?: number; nor3?: number; steps?: number; transistors?: number }, par: Par): string {
   const n = (v: number, one: string, many: string) => `${groupDigits(v)} ${v === 1 ? one : many}`;
   const out: string[] = [];
   if (c.relays !== undefined && par.relays !== undefined) out.push(n(c.relays, 'relay', 'relays'));
   if (c.tubes !== undefined && par.tubes !== undefined) out.push(n(c.tubes, 'tube section', 'tube sections'));
   if (c.nor3 !== undefined && par.nor3 !== undefined) out.push(n(c.nor3, 'NOR3 gate', 'NOR3 gates'));
+  // a NOR3 level compares bricks: its NAND alternatives have no NOR3 gates, so both sides also say their transistors
+  if (par.nor3 !== undefined && c.transistors !== undefined) out.push(n(c.transistors, 'transistor', 'transistors'));
   if (c.steps !== undefined && par.steps !== undefined) out.push(n(c.steps, 'step', 'steps'));
   return out.join(' · ') || '—';
 }
