@@ -361,7 +361,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   },
   {
     id: 't_scan', act: 3, title: '4-bit scan register', kind: 'build', optional: true, requires: ['s_reg4'], base: BUILDT.t_scan,
-    why: 'A tester can reach a counter\'s inner states only by counting to them. A scan register gives every flip-flop a second input: with se = 1 the flip-flops form a shift register from a scan-in pin to a scan-out pin, so a tester shifts any state in, clocks once, and shifts the answer out. 13 NANDs a bit with your 9-NAND flip-flop, the price of your enable register (the chapter\'s 11-NAND master–slave flip-flop makes it 15); a CPU pays it on every flip-flop.',
+    why: 'A tester can reach a counter\'s inner states only by counting to them. A scan register gives every flip-flop a second input: with se = 1 the flip-flops form a shift register from scan-in to scan-out, so a tester shifts any state in, clocks once, and shifts the answer out. 13 NANDs a bit on your 9-NAND flip-flop (15 on the chapter\'s 11-NAND one), the price of your enable register; a CPU pays it on every flip-flop.',
     tips: ['Like the enable register: a mux in front of each flip-flop. The mux chooses between d and the bit below instead of d and q.', 'Bit 0\'s mux takes si; bit k\'s takes q[k − 1]; so is q[3]. se drives every mux\'s select.', 'Shift the other way (q[k + 1] into bit k) and the first bit in lands in bit 0, not bit 3: the test shifts 0, 0, 1, 1 in and expects 0011 (3), not 1100.'],
     codex: ['scan'], par: { nand: 52 },
     chapters: [{ chapter: 'verify', step: 10, label: 'Scan chains' }],
