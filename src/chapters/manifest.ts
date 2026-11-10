@@ -321,6 +321,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Same CPU, microprogrammed", stage: "scene" },
     { title: "Was it worth it?", challenge: "quiz", stage: "scene" },
     { title: "Paint the microcode", challenge: "reach", stage: "scene" },
+    { title: "One instruction set, many machines: System/360", challenge: "quiz", stage: "widget" },
     { title: "Find it: a register that never holds", challenge: "reach", stage: "scene" },
   ] },
   { id: "float", num: 26, title: "Floating point", blurb: "IEEE 754 from the bits up: unpack, align, add or multiply, normalize, round in five modes with exception flags, and an FPU in the CPU.", level: "Arithmetic", builds: ["muldiv","pipeline"], recap: {"checks":3}, steps: [
@@ -891,7 +892,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Inside the circle", challenge: "quiz", stage: "widget" },
     { title: "Same gain, different delay", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "spectrum", num: 76, title: "Measuring a spectrum", blurb: "Why a pure tone shows a skirt: leakage, windows and what they trade, resolution against the number of samples, spectrograms, fast convolution by overlap-save, and a Goertzel cell in gates decoding a keypad.", level: "Signal processing", builds: ["signals","carriers","fixed","zplane"], recap: {"checks":3}, steps: [
+  { id: "spectrum", num: 76, title: "Measuring a spectrum", blurb: "Why a pure tone shows a skirt: leakage, windows and what they trade, resolution against the number of samples, spectrograms, fast convolution by overlap-save, and a Goertzel cell in gates decoding a keypad.", level: "Signal processing", builds: ["signals","carriers","fixed","zplane","python","pipeline","muldiv"], recap: {"checks":3}, steps: [
     { title: "A tone that is not a line", challenge: "quiz", stage: "widget" },
     { title: "A window is a choice of skirt", challenge: "quiz", stage: "widget" },
     { title: "What the skirt hides", challenge: "quiz", stage: "widget" },
@@ -900,6 +901,10 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Filtering by blocks", challenge: "quiz", stage: "widget" },
     { title: "One bin, cheaply: Goertzel", challenge: "quiz", stage: "widget" },
     { title: "A keypad in gates", challenge: "quiz", stage: "scene" },
+    { title: "The FFT as a program", challenge: "quiz", stage: "scene" },
+    { title: "In place, by loops", challenge: "quiz", stage: "scene" },
+    { title: "Making it fast", challenge: "quiz", stage: "scene" },
+    { title: "Real input, half the work", challenge: "quiz", stage: "scene" },
   ] },
   { id: "firdesign", num: 77, title: "FIR design", blurb: "How few taps meet a mask: linear phase, windows, Parks–McClellan, taps as words, folding, constants in signed digits, and one multiplier shared over the taps in gates.", level: "Signal processing", builds: ["signals","zplane","fixed","spectrum","muldiv"], recap: {"checks":3}, steps: [
     { title: "A mask, and mirror-image taps", challenge: "quiz", stage: "widget" },
@@ -951,7 +956,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Pairs, unrolling, and the alignment trap", challenge: "quiz", stage: "widget" },
     { title: "The measured table", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "dspcore", num: 82, title: "A DSP core", blurb: "What does a processor look like when the loop is the point? A small core of our own in gates: two memories read in one clock, address generators that step as they are read, a loop with no branch, and the MAC. Its filters, an FFT, and a measured comparison with the RV32 machines.", level: "Signal processing", builds: ["mac","cpu","carriers","fixed","firdesign"], recap: {"checks":3}, steps: [
+  { id: "dspcore", num: 82, title: "A DSP core", blurb: "What does a processor look like when the loop is the point? A small core of our own in gates: two memories read in one clock, address generators that step as they are read, a loop with no branch, and the MAC. Its filters, an FFT, and a measured comparison with the RV32 machines.", level: "Signal processing", builds: ["mac","cpu","carriers","fixed","firdesign","spectrum"], recap: {"checks":3}, steps: [
     { title: "What a loop costs", challenge: "quiz", stage: "widget" },
     { title: "Two memories, two buses", challenge: "reach", stage: "scene" },
     { title: "Address generators", challenge: "quiz", stage: "widget" },
@@ -960,6 +965,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A filter, a tap a clock", challenge: "reach", stage: "scene" },
     { title: "The FFT", challenge: "quiz", stage: "widget" },
     { title: "Against the RV32 machines", challenge: "quiz", stage: "widget" },
+    { title: "The same FFT on both", challenge: "quiz", stage: "widget" },
   ] },
   { id: "converters", num: 83, title: "Converters", blurb: "How does one bit make 16? Flash, SAR and R-2R as models, what a shaky clock costs, and sigma-delta in gates with a CIC decimating its bits, effective bits measured.", level: "Signal processing", builds: ["signals","noise","zplane","multirate","fixed"], recap: {"checks":3}, steps: [
     { title: "What a converter is judged by", challenge: "quiz" },
