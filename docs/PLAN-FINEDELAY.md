@@ -281,3 +281,58 @@ and slow motion there would start showing tenths and load-shaped glitches. The m
    `Scene.delay` for chapter steps.
 4. Measurers (settle, opdelay, edgetiming, cycletime) take the model.
 5. Chapter steps, after the author approves them.
+
+## Checked against silicon (roadmap "Load-dependent delay, further"): parked 2026-11-10
+
+Our static timing set beside OpenSTA's after routing on the two sky130 layouts, endpoint by endpoint (feat/finedelay-sky). **Parked
+by the author's priority change before the per-block table; nothing here is in chapter prose.**
+
+What exists:
+- `scripts/layout/paths.tcl` (run by run-flow.sh after the flow): the final database, the extracted SPEF, one full path per endpoint
+  (`report_checks -group_path_count 1000000 -endpoint_path_count 1`), kept as the `sky-paths-<design>` artifact and in the logs.
+  A branch run publishes nothing. **Merging it changes scripts/layout/, so the layout workflow runs on main and publishes
+  layout-latest again (and redeploys).**
+- `scripts/skypathlib.ts` (tests/skypaths.test.ts, fixtures cut from the real report) and `scripts/sky-paths.ts <dual | sys>
+  <paths_max.rpt.gz>`: each sky endpoint pin matched to ours (an enabled flip-flop is two endpoints, D and DE, matched to our
+  d / en); rows with the same timing on both sides once (a register file copies one path per word); our worst path to the pin, and
+  ours from the sky path's own startpoint to the same pin (`fromStart`); capacitance per input by fan-out; nets the report names
+  compared where they map to ours.
+
+Measured on layout run 42776050778 (paths with the sky data time ≥ ¼ of the worst, each distinct timing once; the inputs are that
+run's artifacts, not in the repo):
+
+| | distinct paths | ps per NAND delay (unit): median, p10 … p90, spread | ps per unit (load): median, p10 … p90, spread | rank correlation with sky, unit / load |
+|---|---|---|---|---|
+| dual, our worst path to the pin | 2234 | 148, 117 … 176, 15 % | 86, 63 … 109, 21 % | 0.93 / 0.95 |
+| dual, ours from sky's own start | 2234 | 219, 127 … 240, 25 % | 128, 66 … 158, 33 % | 0.74 / 0.07 |
+| sys, our worst path to the pin | 1223 | 159, 150 … 209, 25 % | 92, 86 … 123, 31 % | 0.47 / 0.49 |
+| sys, ours from sky's own start | 1223 | 173, 166 … 260, 32 % | 101, 94 … 152, 32 % | 0.59 / 0.49 |
+
+| net fan-out (drivers on a reported path) | sys: fF per input driven, median (p10 … p90) | dual | ours |
+|---|---|---|---|
+| 1 | 3.0 (2.0 … 9.0) | 3.0 (2.0 … 17.0) | 0.8 per input + 0.5 per driver |
+| 2–4 | 4.0 (3.0 … 9.5) | 5.0 (3.0 … 13.7) | |
+| 5–16 | 9.2 (4.8 … 14.7) | 10.7 (5.2 … 19.0) | |
+| 17–64 | 6.8 (4.0 … 11.4) | 6.6 (3.3 … 11.6) | |
+
+What it says so far:
+1. **The load model does not narrow the spread** on these layouts, which the roadmap expected: dual 15 → 21 %, sys 25 → 31 % (our
+   worst path), and no narrower timed from sky's own start. Rank order improves slightly on dual (0.93 → 0.95) and not on sys.
+2. **Scale is not the error.** About 90 ps per load unit against the illustrative 16.5 ps (PS_PER_UNIT) is sky130 at 1.8 V against
+   a 28 nm-class constant.
+3. **Different routes to the same pin.** Our worst path to a pin rarely starts where OpenSTA's does (16 of 1223 on sys, 0 of 2234
+   on dual): ours launches a flip-flop at clk-to-q 3 but an input at about 1 (inputArrivals), so it prefers the register behind a
+   mux; silicon's starts at the instruction input in front of it (sys's worst: instr[21] → four buf_4 stages fanning the
+   register file's read select out, 3.2 ns of 15.6 → read mux → multiplier → register file). D and DE are two populations
+   (sys: 169 and 154 ps per NAND delay, spreads 23 % and 3 %).
+4. **Wire grows with a net's span, not its count.** Silicon's capacitance per input driven rises about 3× from fan-out 1 to 5–16
+   (pins and wire); the resizer splits wider nets into buffer trees (no net above 64 on any reported path). Our wire term is
+   0.3 fF per branch, constant, so the model charges fan-out where silicon charges distance. This is the next roadmap item's
+   ground ("wire length only where a design is placed").
+5. Logic mapping: Yosys's complex cells (a221oi, o31ai, mux2i, ha_1) take several of our NAND levels in one, more in control
+   logic than in arithmetic; not yet measured per block.
+
+Where it stopped: layout run 42780520333 (same flow, the report asked for net lines under both field names: the first run's
+OpenSTA warned "unknown field nets", so no net names) was running. Next: run sky-paths.ts on its artifacts for the per-block table
+(sky time against ours at nets both name, e.g. WriteData[15], L0_5.fa30.g4.y), check D / DE spreads with it, then decide what to
+say in the chapters with the author.
