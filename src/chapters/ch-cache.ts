@@ -146,12 +146,12 @@ function pairWorked(): string {
   const R = pairRun(), sp = split(64, 16, 1, 8), hx = (a: number) => `0x${a.toString(16).padStart(2, '0').toUpperCase()}`;
   const rows = PAIR_TRACE.map((a, k) => {
     const d = R.dm[k], w = R.w2[k];
-    return `<tr><th>${k % 2 ? 'b' : 'a'}[${k >> 1}]</th><td>${hx(a)}</td><td>${a >> (sp.off + sp.idx)}</td><td>${(a >> sp.off) & (2 ** sp.idx - 1)}</td><td>${(a >> 2) & 3}</td><td>${d.hit ? 'hit' : `miss (${d.kind})`}</td><td>${w.hit ? 'hit' : `miss (${w.kind})`}</td></tr>`;
+    return `<tr><th>${k % 2 ? 'b' : 'a'}[${k >> 1}]</th><td>${hx(a)}</td><td>${d.hit ? 'hit' : `miss (${d.kind})`}</td><td>${w.hit ? 'hit' : `miss (${w.kind})`}</td><td>${a >> (sp.off + sp.idx)}</td><td>${(a >> sp.off) & (2 ** sp.idx - 1)}</td><td>${(a >> 2) & 3}</td></tr>`;
   }).join('');
   return `<details class="deeper"><summary>Worked example: two arrays one cache apart</summary>
     <p>A loop adds <code>a[i] + b[i]</code> for i = 0 to 7, with the word arrays a at 0x00 and b at 0x40, on the cache of "A direct-mapped cache" (64 bytes,
-    16-byte lines, 8-bit addresses: ${sp.tag} tag, ${sp.idx} index, ${sp.off} offset bits). The loads alternate a, b, a, b. Beside it the same 64 bytes as 2 ways.</p>
-    <div class="worked-wrap"><table class="pipe-trace"><thead><tr><th>load</th><th>address</th><th>tag</th><th>index</th><th>word</th><th>direct-mapped</th><th>2-way</th></tr></thead><tbody>${rows}</tbody></table></div>
+    16-byte lines, 8-bit addresses: ${sp.tag} tag, ${sp.idx} index, ${sp.off} offset bits). The loads alternate a, b, a, b. Beside it the same 64 bytes as 2 ways (1 index bit, ${sp.tag + 1} tag bits); the tag and index columns are the direct-mapped split.</p>
+    <div class="worked-wrap" tabindex="0" role="region" aria-label="Table, scrolls sideways"><table class="pipe-trace"><thead><tr><th>load</th><th>address</th><th>direct-mapped</th><th>2-way</th><th>tag (DM)</th><th>index (DM)</th><th>word</th></tr></thead><tbody>${rows}</tbody></table></div>
     <p>a[i] and b[i] are 0x40 = 64 bytes apart: the same index, different tags. Direct-mapped, each load evicts the line the next one needs, so all
     ${PAIR_TRACE.length} loads miss: ${R.dmCompulsory} compulsory (each line's first touch) and ${R.dmConflict} conflict, although the loop needs only two lines at a
     time and the cache has four. At ${R.MISS} cycles a miss that is ${R.dmMiss * R.MISS} stall cycles. With 2 ways a set holds both lines: ${R.w2Miss} misses, all
@@ -938,7 +938,7 @@ export const chCache: Chapter = {
         on a hit the word is ready in the same cycle, on a miss the CPU waits until it is. Find the wire that breaks it.</p>
         <p>Press <strong>Run to halt</strong> (or <strong>Step</strong>) in the CPU panel. After every cycle it compares the registers with the
         golden model, so it stops at the first instruction the hardware got wrong, and names the register, both values and the instruction.
-        Read that line as a clue: which instruction, which register, which value instead of which. Then right-click the wire you suspect and
+        Read that line as a clue: which instruction, which register, which value instead of which. Then right-click the wire you suspect (on a touch screen, press and hold it) and
         choose <strong>It is stuck at 0 here</strong> or <strong>… at 1</strong> (a bus asks for the bit). A wrong guess costs nothing: the
         panel runs the same program with the fault you named instead and says where that one would first show, which is a clue too.</p>`,
       scene: FIND_CACHE.scene,

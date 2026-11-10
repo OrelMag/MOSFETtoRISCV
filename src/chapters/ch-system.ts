@@ -24,7 +24,7 @@ const FIND_SYS = findIt({
   planted: [{ kind: 'stuck1', end: 'csr.mepcOut', bit: 2 }],
   goal: 'Find the planted fault: name the wire, the bit and the value it is stuck at.',
   hints: [
-    'The first wrong register is t2, written by <code>csrr t2, mepc</code> in the handler: the hardware read 0x14, the model 0x10.',
+    'The first wrong register is t2, written by <code>csrr t2, mepc</code> in the handler (the panel shows it as <code>csrrs t2, mepc, zero</code>, what csrr stands for): the hardware read 0x14, the model 0x10.',
     '0x14 and 0x10 differ in one bit, 0x4: bit 2. The trap saved the right address (the first ecall is at 0x10); where does a read of mepc come from?',
     'The CSR unit\'s <code>mepc</code> output, the register\'s value on its way out (to the trap unit for <code>mret</code>, and to the CSR read): bit 2, stuck at 1.',
   ],
@@ -63,7 +63,7 @@ function tickWorked(): string {
   const row = (r: typeof T.pending, what: string) => `<tr><th>${what}</th><td>${r.pc}</td><td>${r.mtime}</td><td>${r.mtimecmp}</td><td>${r.mtip}</td><td>${r.mie}</td><td>${r.mpie}</td><td>${r.mepc}</td><td>${hex8(r.mcause)}</td></tr>`;
   return `<details class="deeper"><summary>Worked example: one tick, register by register</summary>
     <p>The program above run on the golden model to its first interrupt and back. Each row is the machine state between two steps.</p>
-    <div class="worked-wrap"><table class="pipe-trace"><thead><tr><th></th><th>pc</th><th>mtime</th><th>mtimecmp</th><th>MTIP</th><th>MIE</th><th>MPIE</th><th>mepc</th><th>mcause</th></tr></thead><tbody>
+    <div class="worked-wrap" tabindex="0" role="region" aria-label="Table, scrolls sideways"><table class="pipe-trace"><thead><tr><th></th><th>pc</th><th>mtime</th><th>mtimecmp</th><th>MTIP</th><th>MIE</th><th>MPIE</th><th>mepc</th><th>mcause</th></tr></thead><tbody>
     ${row(T.pending, '1. pending')}${row(T.taken, '2. taken')}${row(T.cleared, '3. source cleared')}${row(T.back, '4. after mret')}</tbody></table></div>
     <ol>
     <li>mtime has reached mtimecmp (${T.pending.mtime} ≥ ${T.pending.mtimecmp}), so MTIP = 1; MTIE and MIE are both set, so the interrupt is taken
@@ -93,7 +93,7 @@ function trapMistakes(): string {
     <li><strong>Setting MIE in a handler before saving mepc and mcause.</strong> A second trap overwrites both: there is one copy of each. Save
     them first, as "Nested interrupts" does.</li>
     <li><strong>Using registers the interrupted code owns.</strong> The trap saves only the pc. An interrupt comes between any two instructions,
-    so a handler that changes a register without saving and restoring it breaks the program at a random place.</li>
+    so a handler that changes a register without saving and restoring it breaks the program at a random place. The short handlers of this chapter get away with it only because their main programs keep nothing in the registers the handlers use.</li>
     <li><strong>"Interrupts always beat polling."</strong> Each event costs a trap, a handler and an <code>mret</code>. Measured on this machine,
     polling does more work when events come more often than one per ${crossover(6)} cycles (with 6 instructions of work between polls).</li>
   </ul></details>`;
@@ -698,7 +698,7 @@ export const chTraps: Chapter = {
         moves mepc past the ecall and returns. One wire in the CPU is stuck at 0 or 1, here one bit of a bus. Find it.</p>
         <p>Press <strong>Run to halt</strong> (or <strong>Step</strong>) in the CPU panel. After every cycle it compares the registers with the
         golden model, so it stops at the first instruction the hardware got wrong, and names the register, both values and the instruction.
-        Read that line as a clue: which instruction, which register, which value instead of which. Then right-click the wire you suspect and
+        Read that line as a clue: which instruction, which register, which value instead of which. Then right-click the wire you suspect (on a touch screen, press and hold it) and
         choose <strong>It is stuck at 0 here</strong> or <strong>… at 1</strong> (a bus asks for the bit). A wrong guess costs nothing: the
         panel runs the same program with the fault you named instead and says where that one would first show, which is a clue too.</p>
         <p>When the value is a number, compare the two in binary: one stuck bit changes a value by a power of two.</p>`,

@@ -10,6 +10,8 @@ import { numOf } from './order';
 const num = (n: number) => groupDigits(Math.round(n));
 const C = COMPUTER, D = C.device, ST = C.lut4Stages;
 const rf = block('cpu.rf'), ram = block('mem.ram');
+/** The chip by its part family, as the codex and the checks name it; the tools call its family GW1N-9C (BOARD.family). */
+const CHIP = 'GW1NR-9';
 const divHz = BOARD.clockMHz * 1e6 / 2 ** BOARD.divLog2;
 
 export const chFpga: Chapter = {
@@ -62,13 +64,13 @@ export const chFpga: Chapter = {
         <p>The last chapter took a netlist to masks: months in a fab, and the circuit is fixed forever. A <strong>field-programmable gate array</strong> (FPGA) turns that around. It is a chip
         made once, in large numbers, holding thousands of small configurable blocks and a grid of wires with switches at the crossings. What circuit it is depends on about ${(fabricBits() / 1e6).toFixed(1)} million
         <strong>configuration bits</strong> loaded at power-on, the <strong>bitstream</strong>. Load another and it is another circuit.</p>
-        <p>The sandbox already makes the input: File ▸ Export Verilog for FPGA writes the design and a board top for a ${COSTS.board}, a small board with a Gowin ${BOARD.family} chip.
+        <p>The sandbox already makes the input: File ▸ Export Verilog for FPGA writes the design and a board top for a ${COSTS.board}, a small board with a Gowin ${CHIP} chip (the tools name its family ${BOARD.family}).
         This chapter follows that file through the open tools, Yosys and nextpnr, and puts every number they report beside our own estimates from the NAND netlist.</p>
         <p>The price of the flexibility is size and speed: a configurable block does what a few gates do, with far more transistors, and every wire passes switches. The steps below build the
         block, count what it costs, and then measure the whole computer.</p>`,
       widget: flowWidget,
       more: {
-        real: `<p>An FPGA of the ${BOARD.family}'s class holds about ${num(D.lut4.available / 1000)} thousand logic blocks; the largest parts hold millions, plus multipliers, memories and fast serial links.
+        real: `<p>An FPGA of the ${CHIP}'s class holds about ${num(D.lut4.available / 1000)} thousand logic blocks; the largest parts hold millions, plus multipliers, memories and fast serial links.
           Most products that ship in thousands rather than millions use FPGAs: the mask set for a modern process costs more than all the FPGAs they would ever buy.</p>`,
         pitfall: `<p>Calling Verilog a program the FPGA runs. Nothing is executed: the bitstream sets switches and table entries once, and from then on it is a circuit, every part working at once, like the
           ones drawn in this course.</p>`,
@@ -100,14 +102,14 @@ export const chFpga: Chapter = {
         const sweep = kSweep();
         return `
         <p>Every function of four inputs is one of 2<sup>16</sup> = ${num(2 ** 16)} truth tables, and the LUT holds any of them for the same cost. Type a function below, or click the stored bits, and see that the
-        circuit never changes: only the bits do.</p>
+        circuit never changes: only the bits do. The function names the inputs a, b, c, d: a is i[0], d is i[3].</p>
         <p>Why four inputs? Each input more doubles the table and the multiplexer, while a LUT covers more of the circuit. Mapping our 16-bit ALU (${num(coverOf('alu16').nands)} NANDs) at each size:</p>
         <table class="cmp"><thead><tr><th>k</th><th>LUTs</th><th>levels</th><th>NANDs a LUT</th><th>bits a LUT</th></tr></thead><tbody>
         ${sweep.map((r) => `<tr><td>${r.k}</td><td class="num">${num(r.luts)}</td><td class="num">${r.levels}</td><td class="num">${r.muxNands}</td><td class="num">${r.bits}</td></tr>`).join('')}
         </tbody></table>
         <p>From two inputs to four the LUT count falls by ${pct(sweep[0].luts - sweep[2].luts, sweep[0].luts)} % and the levels by ${pct(sweep[0].levels - sweep[2].levels, sweep[0].levels)} %; from four to six only by
         ${pct(sweep[2].luts - sweep[4].luts, sweep[2].luts)} % and ${pct(sweep[2].levels - sweep[4].levels, sweep[2].levels)} %, while each LUT costs ${(sweep[4].muxNands / sweep[2].muxNands).toFixed(1)} times as much. Four inputs is the classic
-        balance (the ${BOARD.family} uses it); the largest FPGAs today use six, with an output split into two smaller functions so a small one does not waste the whole table.</p>`;
+        balance (the ${CHIP} uses it); the largest FPGAs today use six, with an output split into two smaller functions so a small one does not waste the whole table.</p>`;
       },
       title: 'Any function of four inputs',
       widget: lutProgramWidget,
@@ -127,9 +129,9 @@ export const chFpga: Chapter = {
         depend on what it holds, so the aim is few LUTs and, above all, few levels of them, since every level is a LUT delay and a trip through the routing.</p>
         <p>The full adder of <a href="#/c/adders/0">chapter ${numOf('adders')}</a> is ${fa.nands} NANDs, ${fa.depth} gate delays deep. Its outputs depend on three inputs each, so it needs ${fa.luts} LUTs and ${fa.levels} level.
         Click a LUT in the panel to light the gates it replaces: some gates sit in both, copied, because a copy inside a LUT is free.</p>
-        <table class="cmp"><thead><tr><th>circuit</th><th>NANDs</th><th>gate delays</th><th>LUT4s</th><th>LUT levels</th></tr></thead><tbody>
+        <div class="worked-wrap" tabindex="0" role="region" aria-label="Table, scrolls sideways"><table class="cmp"><thead><tr><th>circuit</th><th>NANDs</th><th>gate delays</th><th>LUT4s</th><th>LUT levels</th></tr></thead><tbody>
         ${COVER_IDS.map((id) => { const c = coverOf(id); return `<tr><td>${c.name}</td><td class="num">${num(c.nands)}</td><td class="num">${c.depth}</td><td class="num">${num(c.luts)}</td><td class="num">${c.levels}</td></tr>`; }).join('')}
-        </tbody></table>
+        </tbody></table></div>
         <p>The 4-bit ripple adder shows the trade. One carry LUT per bit would ripple through four levels in ${2 * 4} LUTs; the mapper finds the least depth first, ${r4.levels} levels, and
         pays ${r4.luts - 8} more LUTs for it, by computing some carries straight from the inputs. Our mapper is this site's own (sim/lutmap.ts, priority cuts with area recovery); its result is checked against
         the gates for every input.</p>`;
@@ -141,7 +143,8 @@ export const chFpga: Chapter = {
         derive: `<p>The mapper enumerates <em>cuts</em>: for each net, sets of at most k nets that decide it. A gate's cuts are the merged cuts of its inputs, kept if they have no more than k leaves, so a net
           has few enough to keep the best dozen. Each net's best cut is the one whose leaves arrive earliest (depth), and then, off the critical path, the one with the least area flow: LUTs shared out
           among the nets that use them. The LUTs are read back from the outputs, taking each net's chosen cut.</p>`,
-        pitfall: `<p>Counting NANDs to estimate LUTs. A LUT holds anything of four inputs: a ${num(coverOf('mux16x1').nands)}-NAND multiplexer and a single XOR both fill whole LUTs. What counts is how many
+        pitfall: `<p>Counting NANDs to estimate LUTs. A LUT holds anything of four inputs: a ${coverOf('xor').nands}-NAND XOR fills a whole LUT, and so does any function of four inputs however many NANDs it takes, while the
+          ${num(coverOf('mux16x1').nands)}-NAND 16:1 multiplexer, with its 20 inputs, takes ${coverOf('mux16x1').luts}. What counts is how many
           signals each output depends on.</p>`,
       },
       challenge: {
@@ -155,7 +158,7 @@ export const chFpga: Chapter = {
     {
       title: 'The logic cell',
       body: `
-        <p>An FPGA's cell is more than a LUT. Here is one in the shape of the ${BOARD.family}'s: the LUT4, a <strong>flip-flop</strong> on its output, and a <strong>carry chain</strong>: two gates that pass
+        <p>An FPGA's cell is more than a LUT. Here is one in the shape of the ${CHIP}'s: the LUT4, a <strong>flip-flop</strong> on its output, and a <strong>carry chain</strong>: two gates that pass
         a carry straight to the next cell. With <code>arith</code> = 1 the LUT computes the propagate p = a XOR b, the output is p XOR cin, and the carry out is cin when p = 1 and a otherwise (when a = b,
         the carry is a). One cell per bit, and the carry crosses each cell through one multiplexer, not a LUT and the routing.</p>
         <p>With <code>reg</code> = 1 the output comes from the flip-flop: a register costs no extra cell. Registers and adders are almost free beside the LUTs, but only if the tools can see them.
@@ -201,7 +204,7 @@ export const chFpga: Chapter = {
         <p>Here is the result for the sandbox's computer (Examples ▸ Computer: the single-cycle RV32I with a 1K-word program ROM, ${RAM_WORDS / 1024}K words of RAM, a screen and devices).
         Our NAND netlist has ${num(C.ours.nands)} NANDs; Yosys made ${num(ST.synth)} LUTs, ${nandsPerLut().toFixed(1)} NANDs a LUT, and after placement and routing it fills ${pct(D.lut4.used, D.lut4.available)} % of the
         chip's ${num(D.lut4.available)} LUTs. Our own mapping of the same netlist gives ${num(C.ours.lutMapLuts)}.</p>
-        <p><strong>Memories</strong>: the RAM is ${num(RAM_WORDS * RAM_BITS)} bits. As flip-flops that would be ${rff.times.toFixed(0)} times all the chip has. The ${BOARD.family} holds ${D.bsram.available} <strong>block RAMs</strong>
+        <p><strong>Memories</strong>: the RAM is ${num(RAM_WORDS * RAM_BITS)} bits. As flip-flops that would be ${rff.times.toFixed(0)} times all the chip has. The ${CHIP} holds ${D.bsram.available} <strong>block RAMs</strong>
         of 16 Kbit each, real memory arrays beside the logic: the RAM takes ${bsramFor(RAM_WORDS, RAM_BITS)} and the ROM ${bsramFor(ROM_WORDS, 32)}, the ${D.bsram.used} the report shows. A block RAM reads through a register
         on a clock edge, which is why the export adds the memory clock (the board's ${BOARD.clockMHz} MHz) beside the design's.</p>
         <p>The register file did not go into block RAM: it is read on two ports and written on a third in the same cycle, and its register x0 is a constant. It stays as ${num(rf.ffs)} flip-flops
@@ -214,8 +217,8 @@ export const chFpga: Chapter = {
       title: 'Our computer on a Tang Nano 9K',
       widget: reportWidget,
       more: {
-        numbers: `<p>The steps from our netlist to the routed design: ${num(C.ours.nands)} NANDs → ${num(ST.synth)} LUTs from Yosys → ${num(ST.packed)} after packing (the ${D.alu.used} carry cells take LUT slots) →
-          ${num(ST.routed)} after routing, ${num(ST.passthrough)} of them pass-through LUTs in front of flip-flops. ${num(D.dff.used)} flip-flops of ${num(D.dff.available)}. The small example, Examples ▸ Counter
+        numbers: `<p>The steps from our netlist to the routed design: ${num(C.ours.nands)} NANDs → ${num(ST.synth)} LUTs from Yosys → ${num(ST.packed)} slots after packing (those LUTs and the ${D.alu.used} carry cells, which take LUT slots) →
+          ${num(ST.routed)} LUTs after routing, counted without the carry cells: the ${num(ST.synth)} plus ${num(ST.passthrough)} pass-through LUTs in front of flip-flops. ${num(D.dff.used)} flip-flops of ${num(D.dff.available)}. The small example, Examples ▸ Counter
           (${num(COUNTER.ours.nands)} NANDs), takes ${COUNTER.device.lut4.used} LUTs and runs its clock at up to ${COUNTER.fmax.clk.toFixed(0)} MHz.</p>`,
         pitfall: `<p>Reading a block's LUT count from the names in a report. After synthesis flattens and optimizes the design, a name only says which net a cell drives, and logic is often named after the
           register it feeds. Here the RAM's name carries a third of the CPU's logic.</p>`,
@@ -233,8 +236,8 @@ export const chFpga: Chapter = {
       body: `
         <p>After routing, nextpnr times every path with the delays of the cells and wires it actually used. The design clock's slowest path, register to register, takes
         ${pathShares().ns.toFixed(1)} ns, ${C.fmax.clk.toFixed(1)} MHz at most. It runs from a register-file flip-flop through the read multiplexers and the ALU to the program counter: ${pathShares().lut4} LUT4s
-        and ${pathShares().wideMux} of the multiplexers that join two LUTs into a 5- to 8-input function. Our mapping finds at most ${C.ours.lutLevels} LUT levels between any two storage elements, close to the tool's
-        ${pathShares().lut4}; our static timing gives ${C.ours.period} NAND delays for the period. The two do not time the same stretch: our period covers a whole instruction in one cycle, the
+        and ${pathShares().wideMux} of the multiplexers that join two LUTs into a 5- to 8-input function. Our mapping finds at most ${C.ours.lutLevels} LUT levels between any two storage elements, against the
+        ${pathShares().lut4} LUT4s on the tool's critical path, whose ${pathShares().wideMux} wide multiplexers a mapping into 4-input LUTs would count as further levels; our static timing gives ${C.ours.period} NAND delays for the period. The two do not time the same stretch: our period covers a whole instruction in one cycle, the
         program ROM's read and the RAM's included, while the export puts both memories behind registers on the memory clock, so the tool's path is only the logic between them.</p>
         <p>Where the time goes: routing ${pathShares().routingPct} %, logic ${pathShares().logicPct} %, clock skew ${pathShares().skewPct} %. The skew is large because the design clock is the board's
         ${BOARD.clockMHz} MHz divided by 2<sup>${BOARD.divLog2}</sup> in a counter, so it reaches the flip-flops over ordinary routing, not the chip's clock network. On a custom chip the clock tree is built for the
@@ -266,9 +269,10 @@ export const chFpga: Chapter = {
         per unit, after months and a mask set; as an FPGA, real parallel hardware the same day, at a cost in area and speed.</p>
         <p>Measured here: each LUT stands for ${nandsPerLut().toFixed(1)} of our NANDs on average but is itself ${lutCost(4).nands} NANDs of multiplexer and 16 configuration bits, so the configurable fabric spends
         about ${(lutCost(4).nands / nandsPerLut()).toFixed(0)} NAND-equivalents of logic for each one it implements, before the routing switches. Published comparisons put FPGAs at tens of times the area and a few times the
-        delay of a standard-cell chip in the same process.</p>
+        delay of a standard-cell chip in the same process (Kuon and Rose, 2007: about 35 times the area of the logic and 3 to 5 times the delay, at 90 nm).</p>
         <p>That decides their place: prototypes of chips (a CPU is tested on FPGAs before its masks are made), products made in thousands, hardware that must change after it ships, and computation where
-        thousands of small units in parallel beat a processor's one instruction at a time.</p>`;
+        thousands of small units in parallel beat a processor's one instruction at a time.</p>
+        <p>On an FPGA a design is tried before its masks are made. How anyone knows it is right, and that each chip made from it is, is the next chapter.</p>`;
       },
       title: 'FPGA, custom chip or processor?',
       widget: flowWidget,

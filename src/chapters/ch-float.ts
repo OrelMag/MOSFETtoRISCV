@@ -126,7 +126,7 @@ function addWorked(): string {
     that pass the guard and round places are ORed into sticky.</li>
     <li><strong>Add.</strong> ${ext(S.ma << X)} + ${ext(S.shifted)} = ${ext(S.sum)}${S.carry ? ', with a carry: one place right and the exponent up' : ': below 2, no carry, already normalized'}.</li>
     <li><strong>Round.</strong> Kept ${sig(S.kept, M + 1)}, G = ${S.g}, R = ${S.r}, S = ${S.st}: ${S.up ? (S.g && !S.r && !S.st ? 'a tie with an odd last bit: round up to even' : 'more than half a unit is dropped: round up') : 'less than half (or a tie with an even last bit): keep'}.</li>
-    <li><strong>Pack.</strong> ${hx(S.y)} = ${v(S.y)}. The exact sum is ${S.exact}; the two neighbours here are ${v(S.y - 1)} and ${v(S.y)}, and ${v(S.y)} is the nearer. NX is raised: the result is not exact.</li>
+    <li><strong>Pack.</strong> ${hx(S.y)} = ${v(S.y)}. The exact sum is ${S.exact}; the two neighbours here are ${v(S.y - 1)} and ${v(S.y)}, and ${v(S.y)} is the nearer. NX (the inexact flag of the step “Exception flags”) is raised: the result is not exact.</li>
     </ol>
     <p>Set a = ${hx(ADD_EX.a)} and b = ${hx(ADD_EX.b)} on the adder of the last step to see the same ${hx(S.y)} come out of the gates.</p></details>`;
 }
