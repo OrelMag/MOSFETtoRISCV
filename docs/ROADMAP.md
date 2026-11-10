@@ -1151,7 +1151,7 @@ and Digital are what courses already use, and Digital lets a student write tests
   to a pin or pointer no longer doubles back through Digital's pin point. tests/dig-export.test.ts reads the cores back
 - ✅ Placing an imported circuit again by logic depth (editor/placedepth.ts: the Verilog import's placer, shared; relayout.ts):
   the canvas menu's "Lay out by logic depth" and a toast after an import, offered only where it measures better (crossings +
-  wires through parts); elsewhere off, with the numbers. On the importers' fixtures it helps 3 chips of 27: hand-drawn sheets
+  wires through parts + half a point per pointer, so wires turned into pointers win nothing); elsewhere off, with the numbers. On the importers' fixtures it helps 13 chips of 27, mostly small ones whose tunnels become wires: larger hand-drawn sheets
   reach 0 crossings with tunnels where we wire first (tests/relayout.test.ts pins each verdict)
 
 **ISA breadth** (Ripes: RV64, the C extension): RV64I / RV64M and C in Phase 9, each checked by riscv-tests and Spike

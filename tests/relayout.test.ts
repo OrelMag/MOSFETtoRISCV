@@ -142,16 +142,22 @@ describe('lay out by logic depth', () => {
     if (!Object.keys(PINNED).length) console.log(JSON.stringify(got, null, 2));
     expect(got).toEqual(PINNED);
   });
-  it('is offered only where it reads better: fewer crossings plus wires through parts', () => {
+  it('is offered only where it reads better: fewer crossings plus wires through parts plus half a point per pointer', () => {
     const verdicts: Record<string, string> = {};
     for (const names of SETS) {
       const { r, lib } = load(names);
       for (const c of r.chips) if (!lib.compiled(c.id)!.diags.some((d) => d.level === 'error')) verdicts[`${names[0]}: ${c.name}`] = relayoutOffer(c, (ref) => partDef(ref, (x) => lib.defOf(x))).kind;
     }
     const better = Object.keys(verdicts).filter((k) => verdicts[k] === 'better');
-    expect(better).toEqual(['counter2.dig: counter2', 'ram.dig: ram', 'counter.circ: counter']);
+    // counter.circ's counter lost its wires through parts by turning wires into 9 more pointers: not offered; the small
+    // chips whose tunnels become wires at the cost of a crossing or two are
+    expect(better).toEqual([
+      'arith.dig: NOT ×4', 'arith.dig: Subtract 4 (Digital)', 'arith.dig: Compare 4 (Digital)', 'arith.dig: Compare 4 signed (Digital)',
+      'arith.dig: Negate 4 (Digital)', 'arith.dig: Sign-extend 4→6', 'arith.dig: Demultiplexer 2×4 (Digital)', 'counter2.dig: counter2',
+      'gates.dig: NAND 3×1', 'gates.dig: XOR 3×1', 'ram.dig: ram', 'seq.dig: Counter 3 (Digital)', 'counter.circ: D flip-flop',
+    ]);
     expect(verdicts['rom.circ: Joystick (not imported)']).toBe('refused');
-    expect(Object.values(verdicts).filter((v) => v === 'worse').length).toBe(Object.keys(verdicts).length - 4);
+    expect(Object.values(verdicts).filter((v) => v === 'worse').length).toBe(Object.keys(verdicts).length - 14);
   });
   it('refuses what it cannot place, saying why', () => {
     const { r } = load(['rom.circ']);
@@ -160,5 +166,29 @@ describe('lay out by logic depth', () => {
     const top = r.chips.find((c) => c.id === r.top)!;
     expect(relayoutRefusal(top, true)).toMatch(/generated/);
     expect(relayoutRefusal({ ...top, cpu: { pc: { wire: 'w1' } } } as ChipDoc, false)).toMatch(/processor settings/);
+  });
+  it('keeps the colours the learner gave nets: each coloured net is the same colour after', () => {
+    const { r, lib } = load(['counter2.dig']);
+    const defOfRef = (ref: PartRef) => partDef(ref, (x) => lib.defOf(x));
+    const c = r.chips.find((x) => x.id === r.top)!;
+    const built = lib.compiled(c.id)!;
+    // colour every wire of the first two nets that have wires
+    const nets = [...new Set(c.wires.map((w) => built.netOfWire.get(w.id)!).filter((n) => n >= 0))].slice(0, 2);
+    expect(nets.length).toBe(2);
+    const hues = [150, 290];
+    const coloured: ChipDoc = { ...c, wires: c.wires.map((w) => { const i = nets.indexOf(built.netOfWire.get(w.id)!); return i < 0 ? w : { ...w, hue: hues[i] }; }) };
+    const res = relayoutChip(coloured, defOfRef);
+    if ('error' in res) throw new Error(res.error);
+    const lib2 = new UserLibrary({ schema: SCHEMA, chips: { ...Object.fromEntries(r.chips.map((x) => [x.id, x])), [c.id]: res.doc }, open: [c.id] });
+    const after = lib2.compiled(c.id)!;
+    const key = (n: number) => [...built.netOfEnd].filter(([, m]) => m === n).map(([k]) => k).sort()[0];
+    nets.forEach((n, i) => {
+      const m = after.netOfEnd.get(key(n))!;
+      const pieces = [...res.doc.wires.filter((w) => after.netOfWire.get(w.id) === m), ...res.doc.labels.filter((l) => after.netOfLabel.get(l.id) === m)];
+      expect(pieces.length, `net ${n}`).toBeGreaterThan(0);
+      for (const p of pieces) expect(p.hue, `net ${n}`).toBe(hues[i]);
+    });
+    // and nothing else got a colour
+    expect(res.doc.wires.filter((w) => w.hue !== undefined && !nets.some((n, i) => w.hue === hues[i] && after.netOfWire.get(w.id) === after.netOfEnd.get(key(n))))).toEqual([]);
   });
 });

@@ -294,7 +294,7 @@ and the ISS options.
 - Right-click the empty canvas ▸ **Lay out by logic depth**: the parts placed left to right by logic depth (the Verilog
   import's placer), each column ordered to cut crossings, short forward nets as wires and the rest as pointers. One undo step;
   pins keep their order, so the chip looks the same where it is placed. It is measured first and offered only when it reads
-  better (fewer crossings plus wires through parts); otherwise the row is off and says by how much. An imported Digital or
+  better (fewer crossings plus wires through parts, a pair of pointers counting as one crossing); otherwise the row is off and says by how much. An imported Digital or
   Logisim file offers it in a toast for the chips it improves.
 
 ## Verilog chips
