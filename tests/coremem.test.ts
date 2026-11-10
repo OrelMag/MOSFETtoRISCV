@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CORE, CORE_PLANE, CORE_STORE, CoreModel, coreDrive, coreNext, coreSwitching, CORE_WORDS } from '../src/lib/coremem';
+import { CORE, CORE_PLANE, CORE_STORE, CORE_WORDS, type CoreInputs, CoreModel, coreDrive, coreNext, coreSwitching } from '../src/lib/coremem';
 import { BitSim } from '../src/sim/bitsim';
 import { DualSim } from '../src/sim/dualsim';
 import { flatten } from '../src/sim/flatten';
@@ -11,12 +11,14 @@ const lcg = (seed: number) => () => ((seed = (Math.imul(seed, 1103515245) + 1234
 
 describe('a ferrite core', () => {
   it('switches only on a full current, and holds under a half', () => {
-    // xr xw yr yw inh: write halves +1, read halves and inhibit -1
-    expect(coreDrive(0, 1, 0, 1, 0)).toEqual({ lo: 2, hi: 2 });
-    expect(coreDrive(0, 1, 0, 1, 1)).toEqual({ lo: 1, hi: 1 }); // inhibited: stays 0
-    expect(coreDrive(1, 0, 1, 0, 0)).toEqual({ lo: -2, hi: -2 });
-    expect(coreDrive(0, 1, 0, 0, 0)).toEqual({ lo: 1, hi: 1 }); // half-selected
-    expect(coreDrive(0, 1, 0, 2, 0)).toEqual({ lo: 1, hi: 2 }); // an unknown Y write
+    // x, y: a line's two wires packed (bit 0 read, bit 1 write); write halves +1, read halves and inhibit -1
+    const R = 1, W = 2;
+    expect(coreDrive(W, W, 0)).toEqual({ lo: 2, hi: 2 });
+    expect(coreDrive(W, W, 1)).toEqual({ lo: 1, hi: 1 }); // inhibited: stays 0
+    expect(coreDrive(R, R, 0)).toEqual({ lo: -2, hi: -2 });
+    expect(coreDrive(W, 0, 0)).toEqual({ lo: 1, hi: 1 }); // half-selected
+    expect(coreDrive(W, -1, 0)).toEqual({ lo: 0, hi: 2 }); // an unknown Y line: read, write, both or neither
+    expect(coreDrive(R | W, 0, 0)).toEqual({ lo: 0, hi: 0 }); // both drivers of one line cancel
     for (const b of [0, 1]) {
       expect(coreNext(b, 1, 1, true)).toBe(b);
       expect(coreNext(b, -1, -1, true)).toBe(b);
@@ -32,6 +34,7 @@ describe('a ferrite core', () => {
 
   it('costs a core and no transistor; the store has 64', () => {
     expect(stats(CORE).cores).toBe(1);
+    expect(stats(CORE).transistors ?? 0).toBe(0);
     expect(stats(CORE_PLANE).cores).toBe(16);
     expect(stats(CORE_STORE).cores).toBe(CORE_WORDS * 4);
   });
@@ -63,36 +66,61 @@ const engines: [string, () => Engine][] = [
   }],
 ];
 
+/** Random inputs for a clock; now and then the inhibit drivers are off (inhOn = 0). */
+const randomInputs = (r: () => number): Required<CoreInputs> =>
+  ({ addr: r() % CORE_WORDS, din: r() % 16, we: r() % 3 === 0 ? 1 : 0, go: r() % 4 ? 1 : 0, inhOn: r() % 10 ? 1 : 0 });
+
+/** One clock on an engine and on the model with the same inputs. */
+function clock(sim: Engine, m: CoreModel, i: Required<CoreInputs>): void {
+  for (const [p, v] of Object.entries(i)) sim.set(p, v);
+  sim.set('clk', 0);
+  sim.settle();
+  m.edge(i);
+  sim.set('clk', 1);
+  sim.settle();
+}
+
 describe('the 16 x 4 core store', () => {
   it.each(engines)('%s: every output every clock equals the model', (_, make) => {
     const sim = make(), m = new CoreModel(), r = lcg(3);
-    const edge = (i: { addr: number; din: number; we: number; go: number }) => {
-      sim.set('addr', i.addr); sim.set('din', i.din); sim.set('we', i.we); sim.set('go', i.go); sim.set('clk', 0);
-      sim.settle();
-      m.edge(i);
-      sim.set('clk', 1);
-      sim.settle();
-    };
+    const quiet = (addr = 0, go = 0) => clock(sim, m, { addr, din: 0, we: 0, go, inhOn: 1 });
     // two edges without go leave any engine idle; the model takes the buffer it powered up with
-    for (let k = 0; k < 2; k++) edge({ addr: 0, din: 0, we: 0, go: 0 });
+    quiet(); quiet();
     expect(sim.out('phase')).toBe(0);
     m.buf = sim.out('dout');
+    let unInhibited = 0;
     for (let cyc = 0; cyc < 600; cyc++) {
-      const i = { addr: r() % CORE_WORDS, din: r() % 16, we: r() % 3 === 0 ? 1 : 0, go: r() % 4 ? 1 : 0 };
-      edge(i);
-      const o = m.out;
-      expect(sim.out('phase'), `cycle ${cyc} phase`).toBe(o.phase);
-      expect(sim.out('dout'), `cycle ${cyc} dout`).toBe(o.dout);
+      const i = randomInputs(r);
+      if (m.wr && !i.inhOn) unInhibited++;
+      clock(sim, m, i);
+      expect(sim.out('phase'), `cycle ${cyc} phase`).toBe(m.out.phase);
+      expect(sim.out('dout'), `cycle ${cyc} dout`).toBe(m.out.dout);
     }
+    expect(unInhibited, 'some writes ran with the inhibit off').toBeGreaterThan(3);
     // the words read back are the ones last written (a read restores what it destroyed)
     const seen = new Set<number>();
-    for (let k = 0; k < 2; k++) edge({ addr: 0, din: 0, we: 0, go: 0 });
+    quiet(); quiet();
     for (let a = 0; a < CORE_WORDS; a++) {
-      for (const go of [1, 0, 0]) edge({ addr: a, din: 0, we: 0, go });
+      quiet(a, 1); quiet(a); quiet(a);
       expect(sim.out('dout'), `word ${a}`).toBe(m.words[a]);
       seen.add(m.words[a]);
     }
     expect(seen.size, 'the run left varied words').toBeGreaterThan(4);
+  });
+
+  it('without the inhibit, writing 0101 leaves 1111', () => {
+    const sim = engines[0][1](), m = new CoreModel();
+    const go = (addr: number, din: number, we: number, inhOn: number) => {
+      clock(sim, m, { addr, din, we, go: 1, inhOn });
+      clock(sim, m, { addr, din, we, go: 0, inhOn });
+      clock(sim, m, { addr, din, we, go: 0, inhOn });
+    };
+    go(6, 0b0101, 1, 0);
+    go(6, 0, 0, 1);
+    expect(sim.out('dout')).toBe(0b1111);
+    go(6, 0b0101, 1, 1);
+    go(6, 0, 0, 1);
+    expect(sim.out('dout')).toBe(0b0101);
   });
 });
 
@@ -105,16 +133,11 @@ describe('the core store in Verilog', () => {
     const { def } = compiledTop(await importVerilog(ex.verilog, { top: ex.top }));
     const s = new GateSim(flatten(def));
     s.reset('zero');
+    const sim: Engine = { set: (p, v) => s.setInput(p, v), settle: () => s.settle(), out: (p) => pack(s.getBits(s.design.root.ports[p])) };
     const m = new CoreModel(), r = lcg(9);
-    const out = (p: string) => pack(s.getBits(s.design.root.ports[p]));
     for (let cyc = 0; cyc < 300; cyc++) {
-      const i = { addr: r() % CORE_WORDS, din: r() % 16, we: r() % 3 === 0 ? 1 : 0, go: r() % 4 ? 1 : 0 };
-      s.setInput('addr', i.addr); s.setInput('din', i.din); s.setInput('we', i.we); s.setInput('go', i.go); s.setInput('clk', 0);
-      s.settle();
-      m.edge(i);
-      s.setInput('clk', 1);
-      s.settle();
-      expect([out('phase'), out('dout')], `cycle ${cyc}`).toEqual([m.out.phase, m.out.dout]);
+      clock(sim, m, randomInputs(r));
+      expect([sim.out('phase'), sim.out('dout')], `cycle ${cyc}`).toEqual([m.out.phase, m.out.dout]);
     }
   }, 120_000);
 });
@@ -125,7 +148,7 @@ describe('the core store as structural SystemVerilog', () => {
     const { exportHdl } = await import('../src/sim/svexport');
     const { synthesize } = await import('../src/hdl/yosys');
     const f = exportHdl(CORE_STORE, 'structure', false);
-    expect(f.text).toMatch(/module core \(\n {2}input  logic xr,/);
+    expect(f.text).toMatch(/module core \(\n {2}input  logic \[1:0\] x,/);
     const r = await synthesize({ 'top.sv': f.text }, { top: f.top });
     expect(r.diags.filter((d) => d.level === 'error')).toEqual([]);
   }, 120_000);

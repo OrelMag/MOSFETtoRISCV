@@ -1091,6 +1091,17 @@ svg.schematic { font-family: var(--font-ui); user-select: none; }
 .tube-beam { stroke: var(--tube-glow); stroke-width: 0.5; opacity: 0; fill: none; transition: opacity 0.15s; }
 .conducting .tube-beam { opacity: 0.55; filter: drop-shadow(0 0 0.35px var(--tube-glow)); }
 .maybe .tube-beam { opacity: 0.4; stroke: var(--wx); stroke-dasharray: 0.3 0.25; }
+/* ferrite cores (lib/coremem.ts): the ring in its bit's wire colour, the digit beside it; wires lit by the current through the
+   core now (a half holds it, a full select switches it); the sense wire lit while the core switches */
+.core-ring { fill: none; stroke: var(--w0); stroke-width: 0.42; transition: stroke 0.15s; }
+.core-1 .core-ring { stroke: var(--w1); }
+.core-x .core-ring { stroke: var(--wx); stroke-dasharray: 0.35 0.25; }
+.core-d1, .core-1 .core-d0, .core-x .core-digit { display: none; }
+.core-1 .core-d1 { display: inline; }
+.core-half .core-wire { stroke: var(--channel-on); stroke-opacity: 0.6; }
+.core-full .core-wire { stroke: var(--channel-on); stroke-width: 0.26; }
+.core-full .core-ring { filter: drop-shadow(0 0 0.35px var(--channel-on)); }
+.core-pulse .core-sense { stroke: var(--channel-on); stroke-width: 0.26; filter: drop-shadow(0 0 0.3px var(--channel-on)); }
 .sym-bus { stroke: var(--plumb); stroke-width: 0.42; stroke-linecap: round; }
 .sym-bus-stub, .sym-tap { stroke: var(--plumb); stroke-width: 0.18; }
 .sym-tiny { font-size: 0.75px; fill: var(--muted); font-family: var(--font-mono); }

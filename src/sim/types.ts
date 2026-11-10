@@ -46,7 +46,9 @@ export type SymbolKind =
   /** An electromechanical relay: its coil and changeover contacts (prologue P1). */
   | 'relay'
   /** Vacuum tubes (prologue P2): a triode section, a diode section. */
-  | 'triode' | 'diode';
+  | 'triode' | 'diode'
+  /** A ferrite core (lib/coremem.ts): a ring on the crossing of its wires. */
+  | 'core';
 
 export interface SymbolSpec {
   kind: SymbolKind;
