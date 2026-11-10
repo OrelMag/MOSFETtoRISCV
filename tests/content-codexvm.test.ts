@@ -13,6 +13,7 @@ import { osFigures } from '../src/chapters/ch-os';
 import { chapters } from '../src/chapters';
 import { TlbModel, missesOf } from '../src/sim/tlbmodel';
 import { Tlb16Model, Walk16Model } from '../src/lib/rv16/vm16';
+import { NREGS, SYS } from '../src/riscv/osprograms';
 import { WALK_CYCLES } from '../src/riscv/vmprograms';
 import { groupDigits } from '../src/sim/numfmt';
 
@@ -28,7 +29,12 @@ describe('the entries', () => {
     for (const v of [o.overhead, o.overheadShort, o.overheadLong, o.slice]) expect(sch, String(v)).toContain(String(v));
     expect(plain(CODEX.find((e) => e.id === 'process')!.body)).toBeTruthy();
     // the chapters' syscall numbers: 1 putchar, 2 write, 3 yield, 93 exit
-    expect(moreOf('syscall')!.idea).toContain('1 puts a character, 2 writes a number, 3 yields, 93 exits');
+    expect(moreOf('syscall')!.idea).toContain(`${SYS.putchar} puts a character, ${SYS.write} writes a number, ${SYS.yield} yields, ${SYS.exit} exits`);
+    // the registers a switch saves
+    expect(NREGS).toBe(31);
+    expect(moreOf('process')!.idea).toContain(`the ${NREGS} registers`);
+    expect(nodeById('p_switch')!.why).toContain(`for ${NREGS} registers`);
+    expect(caseOf('p_switch')!.cost).toContain(`with ${NREGS} registers`);
   });
 
   it('the TLB example: five pages in turn through four round-robin entries always miss, four pages miss four times', () => {
@@ -52,6 +58,16 @@ describe('the entries', () => {
 });
 
 describe('level texts', () => {
+  it('the miniature walker stalls ' + WALK_CYCLES + ' cycles to a leaf, as the system CPU\'s walker does', () => {
+    const m = new Walk16Model();
+    // idle with start, a pointer at level 1, a leaf at level 0
+    const ptr = (0x20 << 8) | 1, leaf = (0x41 << 8) | 3;
+    let stalls = 0;
+    for (const pte of [0, ptr, leaf]) { stalls += m.out(1, pte).stall; m.edge(1, pte); }
+    expect(m.state).toBe(0);
+    expect(stalls).toBe(WALK_CYCLES);
+  });
+
   it('y_tlb and y_walk quote their own par and the system CPU\'s blocks', () => {
     const f = vmFigures();
     const t = nodeById('y_tlb')!, w = nodeById('y_walk')!;
