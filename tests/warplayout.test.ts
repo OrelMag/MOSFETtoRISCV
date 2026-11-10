@@ -8,6 +8,7 @@ import { assemble } from '../src/riscv/asm';
 import { WARP_PROGRAMS } from '../src/riscv/warpprograms';
 import { netlistOf } from '../src/sim/types';
 import { backwardEnds, labelOverlaps, routeNetlist, symbolOverlaps, wireOverlaps } from '../src/view/route';
+import { wiresThroughParts } from '../src/view/wirefirst';
 
 const P = (id: string) => WARP_PROGRAMS.find((p) => p.id === id)!;
 // a small data memory: the top level's drawing does not depend on it
@@ -29,7 +30,7 @@ const variants: [string, string, WarpCoreOptions][] = [
 ];
 
 describe('warp core schematic', () => {
-  it.each(variants)('%s: no two nets on one line, no overlaps, no wire from behind a pin', (_, prog, o) => {
+  it.each(variants)('%s: no two nets on one line, no overlaps, no wire from behind a pin or through a part', (_, prog, o) => {
     const words = assemble(P(prog).source(o.lanes ?? 4)).words;
     const d = warpCore(words, { dmemK: 4, smemK: 4, ...o }), nl = netlistOf(d)!;
     const t0 = performance.now();
@@ -39,6 +40,7 @@ describe('warp core schematic', () => {
     expect(labelOverlaps(d, nl)).toEqual([]);
     expect(symbolOverlaps(nl)).toEqual([]);
     expect(backwardEnds(d, nl)).toEqual([]);
+    expect([...wiresThroughParts(nl, routed.nets)].map((i) => nl.nets[i].name ?? i), 'wires through a part').toEqual([]);
     // every label names one net: two nets drawn with the same name would read as one
     const names = nl.nets.map((n) => n.name).filter(Boolean);
     expect(names.length - new Set(names).size).toBe(0);

@@ -53,7 +53,7 @@ export const PATH_MINUTES: Record<string, number[]> = {
   "dram": [7,6,5,5,3,5,5],
   "memctrl": [7,5,5,5,5,5],
   "flash": [7,4,6,5,5,5,6],
-  "bus": [6,6,5,5,6,6,5],
+  "bus": [6,6,5,5,6,6,6],
   "message": [5,5,5,5,5,5,5],
   "telegraph": [4,5,6,5,5,5,3],
   "exchange": [5,7,6,3,6,5,5,6],
