@@ -61,6 +61,9 @@ export function coreView(stage: Stage): CoreView | null {
   return { phase: pack(sim.getBits(root.ports.phase)), addr, buf, words, sense, inhibit, inhOn: sim.getInput('inhOn') === 1 };
 }
 
+/** A phone: the panel may start folded there (it would cover the whole circuit); wider, it stays open, the step needs it. */
+const phone = () => typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches;
+
 const bits4 = (v: number) => (v < 0 ? 'xxxx' : v.toString(2).padStart(4, '0'));
 const planesOf = (mask: number) => Array.from({ length: CORE_PLANES }, (_, p) => p).filter((p) => mask >> p & 1);
 const list = (ps: number[]) => (ps.length ? ps.map((p) => `plane ${p}`).join(', ') : 'none');
@@ -152,7 +155,7 @@ function corePanel(): ScenePanel {
     const status = h('div', { class: 'mc-status core-status' });
     const say = h('p', { class: 'core-say' });
     const grid = h('div', { class: 'core-words' });
-    const el = h('div', { class: 'mem-panel cpu-panel core-panel', 'data-dock': 'right' },
+    const el = h('div', { class: 'mem-panel cpu-panel core-panel', 'data-dock': 'right', ...(phone() ? { 'data-fold': 'narrow' } : {}) },
       h('h4', null, 'Core store', h('span', { class: 'fold-hint' })),
       h('div', { class: 'mc-row' }, addrSel),
       h('div', { class: 'mc-row' }, h('span', null, 'data'), ...dataBits.map((d) => d.b), h('label', { class: 'core-inh' }, inh, ' inhibit drivers on')),
