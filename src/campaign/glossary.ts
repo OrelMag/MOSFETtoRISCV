@@ -44,7 +44,7 @@ export const ALIASES: Record<string, string[]> = {
   amdahl: ['Amdahl’s law', 'Amdahl'], pagetable: ['page table'], pagefault: ['page fault'], tlb: ['translation lookaside buffer'], privmode: ['privilege level', 'user mode', 'U mode'],
   ctxswitch: ['context switch'], ecc: ['Hamming code', 'SEC-DED'],
   stdcell: ['standard-cell', 'cell library'], metastability: ['metastable'], carrysave: ['carry-save', '3:2 compressor'],
-  booth: ['Booth'], zbuffer: ['z-buffer', 'depth test'], rowhammer: ['Rowhammer'],
+  booth: ['Booth'], zbuffer: ['z-buffer', 'depth test'], rowhammer: ['Rowhammer'], coremem: ['core memory', 'ferrite core', 'ferrite cores', 'coincident-current'],
   clock: ['clock period'], reset: ['power-on state', 'synchronous reset', 'asynchronous reset'], fpadder: ['floating-point adder'],
   tristate: ['tri-state', 'tri-state buffer', 'tri-state driver', 'tristate'], bin2dec: ['double dabble'],
   // Communication (codexcomm.ts)

@@ -842,7 +842,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     gives: ['drambit', 'blcap', 'dramsa', 'vhalf', 'wdrv'],
     why: 'A DRAM bit is 25 fF on a 100 fF line: a read moves the line by a tenth of the supply and leaves the cell at that level. The column turns it into a bit and restores the charge: 34 transistors. A row of them is a row buffer.',
     tips: ['Precharge: one NMOS from VDD/2 to the bit line, gate pre. A second NMOS between the two lines (the equalizer) gives the reference line VDD/2 too.', 'Both lines need the bit line capacitance: the amplifier compares their levels, and a line with no capacitance has no level to keep once pre falls.', 'Cells and the write driver hang on the bit line; the amplifier and the driver span both lines. Nothing else touches the reference line.', 'q can be the bit line itself: once the amplifier has fired it sits at a rail.'],
-    codex: ['senseamp'], unlocks: ['rv16_dramcol'], chapters: [{ chapter: 'dram', step: 2, label: 'The sense amplifier' }],
+    codex: ['senseamp', 'coremem'], unlocks: ['rv16_dramcol'], chapters: [{ chapter: 'dram', step: 2, label: 'The sense amplifier' }],
   },
   {
     id: 'm_bank', act: 10, title: 'A bank with refresh', kind: 'build', optional: true, requires: ['m_sense'], base: BUILDM.m_bank, par: { nand: 319, period: 30, cycles: 5917 },

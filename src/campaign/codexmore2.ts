@@ -282,6 +282,32 @@ flip 6 and 9:     syndrome 6⊕9 = 15, parity even → double</pre>Here: encoder
     ],
   },
 
+  coremem: {
+    idea: `A ferrite core is a ring of magnetic ceramic, about two millimetres across in the first planes, that holds one bit as the direction its magnetisation circulates. Its hysteresis loop is nearly square: below a switching current nothing moves, above it the core switches completely, and with no current it keeps its state, power or no power. A plane threads one X wire along each row and one Y wire down each column; driving one of each with half the switching current puts the full current on the one core where they cross and half on the others of that row and column, which hold. That is Forrester's coincident-current scheme (patent filed 1951, granted 1956), and it is why a plane needs no decoder inside it: 2n line drivers select any of n² bits.<br>Reading is destructive. The read currents drive the selected core toward 0; if it held a 1 it flips, and the change of flux induces a pulse in the <b>sense</b> wire threaded through every core of the plane, which an amplifier strobes into a buffer. The cycle then writes: write currents drive toward 1, and in every plane whose bit is 0 the <b>inhibit</b> wire carries half the current the other way, so that core sees only half and stays 0. A stack has one plane per bit of the word, all sharing the X and Y wires and each with its own sense and inhibit. Whirlwind ran two banks of 32 × 32 × 17 (16 bits and a parity bit) at 0.45 A a selection line, with a read-and-rewrite cycle of about 9 µs, against about 25 µs for the electrostatic tubes it replaced (MIT Report R-221, 1954; Project Whirlwind Summary Report 35). Core held main memory until semiconductor DRAM displaced it in the 1970s, by which time cycles were near a microsecond.<br>Chapter ${numOf('memory')}'s store simulates every core as a leaf with that rule, counted in half-selects (a write half +1, a read half or the inhibit -1, switching at ±2), among gates for everything else.`,
+    example: {
+      title: 'Reading word 6 of the 16 × 4 store (row 1, column 2), which holds 1011',
+      body: `<pre>READ   X row 1 and Y column 2 carry read halves (-1 each)
+       core (1,2) of each plane: -2, switches to 0
+       the other 6 cores on those lines: -1, hold
+       sense wires of planes 0, 1, 3 pulse (they held a 1)
+edge   buffer := 1011, word 6's cores all 0
+WRITE  the same lines carry write halves (+1 each)
+       plane 2's buffer bit is 0: its inhibit carries -1
+       planes 0, 1, 3: +2, switch to 1; plane 2: +1, stays 0
+edge   word 6 holds 1011 again</pre>Two clocks per access, read or write: a write is the same cycle with the new data put into the buffer in place of what was read.`,
+    },
+    mistakes: [
+      'Thinking a read leaves the core alone: the read current switches every 1 it reads to 0, so a core memory without its write-back phase forgets everything it is asked for.',
+      'Thinking the inhibit is a write-enable: it is a current against the write current, chosen per plane, that keeps one core at 0 while the others of the word switch to 1. Switch it off and every write writes 1s.',
+      'Driving the select lines harder to make cores switch faster: past the switching current, half-selected cores on the same lines start to switch too and lose their bits. The half-select current has a window, at least half the switching current and below all of it.',
+    ],
+    lib: 'core_plane4',
+    chapters: [
+      { chapter: 'memory', step: 10, label: 'Memory in rings of iron' },
+      { chapter: 'memory', step: 11, label: 'A core plane, wired' },
+      { chapter: 'dram', step: 1, label: 'The read, in slow motion' },
+    ],
+  },
   rowhammer: {
     idea: `Refresh is sized for leakage alone: every row is rewritten within 64 ms because a cell keeps its charge at least that long on its own. Row hammer breaks the assumption. Each activation of a row (the <em>aggressor</em>) raises its word line and swings its bit lines; through capacitive coupling between neighbouring word lines and charge injected into the substrate, the cells of the adjacent rows (the <em>victims</em>) lose a little charge every time. Enough activations before the victims' next refresh and their weakest cells flip. Kim et al. (ISCA 2014) found it in 110 of 129 DDR3 modules, the first flips after 139 000 activations of one row within a 64 ms window; as cells shrank the threshold fell, to about 10 000 in newer DDR4 and under 5000 per aggressor in some LPDDR4 parts. Hammering both neighbours of a victim (double-sided) needs fewer per row.<br>It is a security hole, not just a reliability one: a program flips bits in memory it cannot write. Project Zero (2015) flipped page-table bits to gain kernel privileges; later attacks reached across virtual machines and through JavaScript. Defences: count activations per row and refresh a hammered row's neighbours early (DDR4's target row refresh, inside the device; DDR5's refresh management commands and per-row activation counters), refresh the whole device more often (halving the window halves the activations an attacker gets), and ECC, which corrects one flip per word but not the several a determined attack can place. Chapter ${numOf('dram')}'s cells do not couple: each leaks alone.`,
     example: {

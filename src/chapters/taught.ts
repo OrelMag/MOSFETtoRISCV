@@ -167,6 +167,7 @@ export const TAUGHT: Record<string, string> = {
   mats: 'cache',
   ecc: 'cache',
   rowhammer: 'dram',
+  coremem: 'memory',
   rv32i: 'isa',
   stdcell: 'silicon',
   skew: 'latches',

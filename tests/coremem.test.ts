@@ -221,3 +221,26 @@ describe('one rule, two views', () => {
     }
   });
 });
+
+describe('the codex entry quotes the circuit', () => {
+  it('cores, the read of word 6, the half-select current', async () => {
+    const { codexById } = await import('../src/campaign/codex');
+    const { moreOf } = await import('../src/campaign/codexmore');
+    const { CHECK4 } = await import('../src/campaign/codexcheck4');
+    const { CORE_SAMPLE } = await import('../src/widgets/coremem');
+    const { HALF } = await import('../src/widgets/core3dparts');
+    const e = codexById('coremem')!, m = moreOf('coremem')!;
+    expect(e.body).toContain(`${stats(CORE_STORE).cores} cores, not a transistor among them, and ${stats(CORE_STORE).nands} NANDs`);
+    expect(stats(CORE).transistors ?? 0).toBe(0);
+    const w6 = CORE_SAMPLE[6].toString(2).padStart(4, '0');
+    expect(m.example!.title).toContain(`which holds ${w6}`);
+    expect(m.example!.body).toContain(`buffer := ${w6}`);
+    // the planes that pulse are the 1 bits, the inhibited one the 0 bit
+    const ones = [0, 1, 2, 3].filter((p) => CORE_SAMPLE[6] >> p & 1), zeros = [0, 1, 2, 3].filter((p) => !(CORE_SAMPLE[6] >> p & 1));
+    expect(m.example!.body).toContain(`sense wires of planes ${ones.join(', ')} pulse`);
+    expect(m.example!.body).toContain(`plane ${zeros[0]}'s buffer bit is 0`);
+    expect(m.example!.body).toContain('the other 6 cores');
+    expect(m.idea).toContain(`${HALF.toFixed(2)} A a selection line`);
+    expect(CHECK4.coremem).toHaveLength(2);
+  });
+});
