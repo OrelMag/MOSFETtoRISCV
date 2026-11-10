@@ -15,8 +15,8 @@ import type { Vec3 } from '../gl/math';
 import { box, cyl, rod, type Anchor, type Part } from '../gl/parts';
 
 export const N = 4;
-/** The currents, amperes. The half-select drive is Whirlwind's, 0.45 A on each selection line (MIT Report R-221, 1954, section
- *  5.21), so a full select is 0.90 A. The switching current Ic is the model's own figure between them: R-221 quotes the current
+/** The currents, amperes. The half-select drive is Whirlwind's, 0.45 A on each selected X and Y line, which R-221 (1954, section
+ *  5.21) calls a selection plane, so a full select is 0.90 A. The switching current Ic is the model's own figure between them: R-221 quotes the current
  *  that switches a core within a set time (about 0.85 to 0.95 A), not a threshold, and the rectangular loop is the idealisation. */
 export const HALF = 0.45, FULL = 2 * HALF, IC = 0.65;
 /** The slider's range. The working window is Ic/2 <= half < Ic (0.325 .. 0.65 A). */

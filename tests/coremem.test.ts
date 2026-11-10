@@ -240,7 +240,22 @@ describe('the codex entry quotes the circuit', () => {
     expect(m.example!.body).toContain(`sense wires of planes ${ones.join(', ')} pulse`);
     expect(m.example!.body).toContain(`plane ${zeros[0]}'s buffer bit is 0`);
     expect(m.example!.body).toContain('the other 6 cores');
-    expect(m.idea).toContain(`${HALF.toFixed(2)} A a selection line`);
+    expect(m.idea).toContain(`${HALF.toFixed(2)} A on each selected X and Y line`);
     expect(CHECK4.coremem).toHaveLength(2);
+  });
+});
+
+describe('the read-cycle figure', () => {
+  it('draws R-221\'s numbers, with the strobe inside the read current', async () => {
+    const { R221, readCycleFigure, whirlwindStrip } = await import('../src/widgets/corefig');
+    // the strobe, 0.5 µs into the sense pulse (which starts with the read current), ends before the read does
+    expect(R221.strobeAtUs + R221.strobeUs).toBeLessThan(R221.readUs);
+    expect(R221.readA).toBe((await import('../src/widgets/core3dparts')).HALF);
+    const w = whirlwindStrip();
+    for (const s of [`${R221.readUs} µs, ${R221.readA} A`, `≈ ${R221.senseV} V, ≈ ${R221.senseUs} µs`, `${R221.strobeUs} µs, inside the read`, `≈ ${R221.cycleUs} µs cycle`]) expect(w).toContain(s);
+    const f = readCycleFigure();
+    expect(f.match(/<svg/g)).toHaveLength(2);
+    expect(f).not.toMatch(/STROBE/); // two phases a cycle: the strobe is the edge that ends READ
+    expect(f).not.toMatch(/#[0-9a-f]{3,6}\b/i); // colours from the theme only
   });
 });

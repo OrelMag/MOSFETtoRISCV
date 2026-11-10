@@ -65,6 +65,10 @@ const bits4 = (v: number) => (v < 0 ? 'xxxx' : v.toString(2).padStart(4, '0'));
 const planesOf = (mask: number) => Array.from({ length: CORE_PLANES }, (_, p) => p).filter((p) => mask >> p & 1);
 const list = (ps: number[]) => (ps.length ? ps.map((p) => `plane ${p}`).join(', ') : 'none');
 
+/** The word the last READ took out of the cores (its address and value), while WRITE has yet to put it back. */
+const takenBy = new WeakMap<Stage, () => { addr: number; word: number } | null>();
+export const coreTaken = (st: Stage) => takenBy.get(st)?.() ?? null;
+
 /** The actions a challenge's solve uses: start a cycle, clock a phase. */
 const actions = new WeakMap<Stage, { start: (addr: number, we: boolean, din?: number) => void; phase: () => void; finish: () => void; inhibit: (on: boolean) => void }>();
 export const coreActions = (st: Stage) => actions.get(st);
@@ -122,6 +126,7 @@ function corePanel(): ScenePanel {
     const finish = () => { stage.checkpoint(); stage.runCycles(3, () => coreView(stage)?.phase === 0); stage.refresh(); };
     const inhibit = (on: boolean) => { stage.checkpoint(); sim().setInput('inhOn', +on); sim().settle(); stage.refresh(); };
     actions.set(stage, { start, phase, finish, inhibit });
+    takenBy.set(stage, () => taken);
 
     const btn = (label: string, title: string, f: () => void, cls = 'btn sm') => {
       const b = h('button', { class: cls, title }, label);
@@ -182,6 +187,6 @@ function corePanel(): ScenePanel {
       }));
     };
     update();
-    return { el, update, destroy: () => { stage.edgeHooks.delete(hook); actions.delete(stage); } };
+    return { el, update, destroy: () => { stage.edgeHooks.delete(hook); actions.delete(stage); takenBy.delete(stage); } };
   };
 }

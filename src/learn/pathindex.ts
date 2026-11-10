@@ -18,7 +18,7 @@ export const PATH_MINUTES: Record<string, number[]> = {
   "routing": [4,6,4,4,6,4,6,4],
   "latches": [6,4,6,5,5,6,7,4],
   "registers": [6,3,6,6,4,6,6,4,4,4,7],
-  "memory": [3,6,4,5,6,3,6,6,6,3,3,7],
+  "memory": [3,6,4,5,6,3,6,6,6,3,3,8],
   "alu": [5,4,6,6,6,7,5],
   "regfile": [7,3,6,6,6],
   "isa": [4,6,3,5,6],

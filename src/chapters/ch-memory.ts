@@ -16,7 +16,8 @@ import { memGridPanel } from '../widgets/memgrid';
 import { memSizePanel } from '../widgets/memsize';
 import { core3d } from '../widgets/core3d';
 import { CORE_PLANES, CORE_STORE, CORE_WORDS } from '../lib/coremem';
-import { CORE_SAMPLE, coreActions, coreScene, coreView } from '../widgets/coremem';
+import { coreActions, coreScene, coreTaken, coreView } from '../widgets/coremem';
+import { R221, readCycleFigure } from '../widgets/corefig';
 import { portCost } from '../widgets/storage';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
@@ -1239,13 +1240,14 @@ export const chMemory: Chapter = {
       title: 'A core plane, wired',
       body: `
         <p>The plane of the last step, as a circuit you can run. The store holds ${CORE_WORDS} words of ${CORE_PLANES} bits in ${CORE_PLANES} planes of 4 × 4 cores, one plane per bit, as Whirlwind stacked 17 planes of 32 × 32. Plane 0 is open: an X line along each row and a Y line down each column, each line two wires (one driven only during a read, one only during a write: <span data-show="sx sy">split out per line here</span>), and one inhibit wire and one sense wire through all sixteen cores. A word is one core per plane, at the same row and column of each.</p>
-        <p>Each core follows the square loop of the last step, counted in half-selects: a write half +1, a read half −1, the inhibit −1. At ±2 it switches; anything less, it holds. Click <b>Read</b> in the panel: the store takes the address and goes to READ. Word 6 is row 1, column 2, so those two lines carry read halves, and <span data-show="c12">the core where they cross</span> sees −2 and switches to 0. The six other cores on the two lines see −1 and keep their bits. A plane where the word held a 1 gets a pulse on <span data-show="pin:s">its sense wire</span>; the edge that ends READ is the strobe that loads the buffer register from the four sense wires. Whirlwind's strobe fell inside the read current too: in the core test of MIT Report R-221 it was a 0.1 µs pulse about 0.5 µs into the sense pulse, well within the 1.5 µs read.</p>
-        <p>The word is now gone from the cores and sits only in the buffer, so WRITE has to put it back: write halves on the same two lines, with <span data-show="pin:inh">the inhibit</span> carrying a half the other way in every plane whose buffer bit is 0, so that core sees +1 and stays 0. A write of new data is the same two phases, with the data loaded into the buffer in place of what was read. Every access is read, then write: two clocks here; about 9 µs in Whirlwind.</p>
+        <p>Each core follows the square loop of the last step, counted in half-selects: a write half +1, a read half −1, the inhibit −1. At ±2 it switches; anything less, it holds. Click <b>Read</b> in the panel: the store takes the address and goes to READ. Word 6 is row 1, column 2, so those two lines carry read halves, and <span data-show="c12">the core where they cross</span> sees −2 and switches to 0. The six other cores on the two lines see −1 and keep their bits. A plane where the word held a 1 gets a pulse on <span data-show="pin:s">its sense wire</span>; the edge that ends READ is the strobe that loads the buffer register from the four sense wires. Whirlwind's strobe fell inside the read current too: in the core test of MIT Report R-221 it was a ${R221.strobeUs} µs pulse about ${R221.strobeAtUs} µs into the sense pulse, well within the ${R221.readUs} µs read.</p>
+        <p>The word is now gone from the cores and sits only in the buffer, so WRITE has to put it back: write halves on the same two lines, with <span data-show="pin:inh">the inhibit</span> carrying a half the other way in every plane whose buffer bit is 0, so that core sees +1 and stays 0. A write of new data is the same two phases, with the data loaded into the buffer in place of what was read. Every access is read, then write: two clocks here; about ${R221.cycleUs} µs in Whirlwind.</p>
+        ${readCycleFigure()}
         <div class="try">Switch the inhibit drivers off in the panel, write 0000 into word 1 and read it back: what does every write become without the inhibit?</div>
         <p>The cores cost nothing in gates: ${groupDigits(stats(CORE_STORE).cores ?? 0)} rings, no transistor. The drivers, decoders, registers and phase control around them are ${groupDigits(nands(CORE_STORE))} NANDs, against ${groupDigits(nands(ram(4, 4)))} for a 16 × 4 flip-flop RAM built like the one at the start of this chapter, where every bit is a flip-flop. The periphery is shared: double the words and the cores double, while the decoders grow by a few gates per address bit. That is why core memory held its place into the 1970s.</p>`,
       lit: '',
       tour: {
-        label: 'Walk me through a read, and a write without the inhibit',
+        label: 'Walk me through a read cycle',
         beats: [
           { title: 'READ', reset: true, at: ['p0'], set: { addr: 6, we: 0, go: 1 }, cycles: 1, show: ['c12'], expect: { phase: 1 },
             say: '<p>The store took address 6 and is in READ. Row 1 and column 2 carry read halves; core c12 sees two of them, the others on those lines one. Word 6 holds 1011, so this plane\'s core is switching and its sense wire carries the pulse.</p>' },
@@ -1270,10 +1272,10 @@ export const chMemory: Chapter = {
           ${2 * (4 - 1)} others on its two lines see half. With n × n cores, 2n lines with a read and a write driver each, 4n drivers, select any of n² bits, and every plane of the stack shares them.
           The inhibit works the same way in reverse: one more wire through every core of a plane, carrying a half against the write, chosen per plane, so one word's bits are written
           by one X line, one Y line and a set of inhibit wires.</p>`,
-        real: `<p>Whirlwind's two banks were 32 × 32 × 17, with 0.45 A on each selection line (MIT Report R-221, 1954, section 5); the first went into service on 8 August 1953, with an access
-          time of 9 µs against about 25 µs for the electrostatic storage tubes it replaced (Project Whirlwind Summary Report 35). The sense signal was about 0.1 V and 1.2 µs long. Later
-          planes shared one wire for sense and inhibit, the sense wire was threaded on the diagonals so that half-selected cores' small pulses cancelled, and the cycle fell to about
-          1 µs by the mid-1960s.</p>`,
+        real: `<p>Whirlwind's two banks were 32 × 32 × 17, with ${R221.readA} A on each selected X and Y line (R-221 calls each a selection plane: the line runs through every digit plane;
+          MIT Report R-221, 1954, section 5). The first bank was installed on 8 August 1953, with an access time of 9 µs against about 25 µs for the electrostatic storage tubes it replaced
+          (Project Whirlwind Summary Report 35). The sense signal was about ${R221.senseV} V and ${R221.senseUs} µs long, and Whirlwind's sense wire already ran on the diagonals so that
+          half-selected cores' small pulses cancelled. Later planes shared one wire for sense and inhibit, and the cycle fell to about 1 µs by the mid-1960s.</p>`,
         pitfall: `<p>Reading the simulation as the physics. Here a half-selected core gives no pulse at all; a real one moves its flux a little and adds a small pulse to the sense wire, and
           thousands of them on a large plane are the noise the sense amplifier had to reject. The model leaves that noise out (we have no measured size for it to model from), so its
           sense wire is a clean OR of the cores that switched.</p>`,
@@ -1282,13 +1284,13 @@ export const chMemory: Chapter = {
       challenge: {
         kind: 'reach',
         goal: 'Catch word 13 read out: its cores all 0, the buffer holding what they held.',
-        check: (st) => { const v = coreView(st); return !!v && v.phase === 2 && v.addr === 13 && v.words[13] === 0 && v.buf === CORE_SAMPLE[13]; },
+        check: (st) => { const v = coreView(st), t = coreTaken(st); return !!v && !!t && v.phase === 2 && v.addr === 13 && t.addr === 13 && v.words[13] === 0 && v.buf === t.word; },
         hints: [
           'A read takes two clocks. After which of them are the cores empty while the buffer is full?',
           'Pick word 13, click Read, then Next phase once, and stop.',
         ],
-        answer: `Read word 13 and clock once more: the edge that ends READ switched all four of its cores to 0 (it held ${CORE_SAMPLE[13].toString(2).padStart(4, '0')}) and strobed the sense wires into the buffer. Until the edge that ends WRITE, the buffer is the only copy.`,
-        solve: (st) => { const a = coreActions(st); a?.start(13, false); a?.phase(); },
+        answer: 'Pick word 13, Read, and clock once more (Next phase): the edge that ends READ switched every 1 of word 13 to 0 and strobed the sense wires into the buffer. Until the edge that ends WRITE, the buffer is the only copy.',
+        solve: (st) => { const a = coreActions(st); if (coreView(st)?.phase) a?.finish(); a?.inhibit(true); a?.start(13, false); a?.phase(); },
       },
       scene: () => coreScene({ path: ['p0'], highlight: ['c12'] }),
     },
