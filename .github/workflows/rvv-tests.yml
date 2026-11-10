@@ -1,0 +1,86 @@
+name: RVV tests (generate)
+
+# Generates chipsalliance/riscv-vector-tests for our vector subset (src/riscv/rvv.ts: Zve32x integer, VLEN 128, RV32) and
+# keeps the self-checking stage-2 assembly as an artifact. The generator needs Go and a Spike it patches (pspike: it
+# records each result group so stage 2 can check it), so this runs here, never on Windows; `make all` ends by running
+# every stage-2 binary on Spike, so the artifact is checked before it is kept. scripts/rvv-tests/build.mjs then compiles
+# it against our bare environment into tests/verify/rvv-tests/*.json (checked in: npm test needs no toolchain).
+# Everything is pinned (the generator is deterministic: its random data is seeded by size), so a rerun gives the same files.
+# Run it by hand to move to a new generator revision or instruction list (a push of this file on its own branch runs it too:
+# a workflow can only be dispatched once it is on main).
+on:
+  push:
+    branches: ['feat/rvv-tests']
+    paths: ['.github/workflows/rvv-tests.yml']
+  workflow_dispatch:
+    inputs:
+      split:
+        description: 'Assembly lines per test file (SPLIT): keeps each image small enough for the gate-level data memory'
+        required: false
+        default: '1500'
+
+permissions:
+  contents: read
+
+env:
+  RVT_REV: f76bff121dce91b6b23e1d37be77a5e44af914c3
+  SPIKE_REV: 20feb9c2bf2a7deab964d8190b0cbd4b4131bec3
+  TOOLCHAIN: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.07.16/riscv64-elf-ubuntu-22.04-gcc-nightly-2025.07.16-nightly.tar.xz
+  # exactly the instructions src/riscv/rvv.ts implements (tests/verify/rvvtests.ts RVV_SUBSET lists the same names), matched
+  # against each config's file name; $$ because make expands the value once
+  PATTERN: '^(vsetvli|vsetivli|vsetvl|vadd\.v[vxi]|vsub\.v[vx]|vrsub\.v[xi]|vminu?\.v[vx]|vmaxu?\.v[vx]|vand\.v[vxi]|vor\.v[vxi]|vxor\.v[vxi]|vmseq\.v[vxi]|vmsne\.v[vxi]|vmsltu?\.v[vx]|vmsleu?\.v[vxi]|vmsgtu?\.v[xi]|vsll\.v[vxi]|vsrl\.v[vxi]|vsra\.v[vxi]|vmerge\.v[vxi]m|vmv\.v\.[vxi]|vredsum\.vs|vmul\.v[vx]|vmv\.x\.s|vmv\.s\.x|vid\.v|vl(s)?e(8|16|32)\.v|vs(s)?e(8|16|32)\.v)$$'
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: The generator at its pinned revision
+        run: |
+          git clone https://github.com/chipsalliance/riscv-vector-tests rvt
+          cd rvt && git checkout "$RVT_REV" && git submodule update --init --recursive
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.1'
+      - name: Spike's run-time dependency (it compiles its device tree with dtc)
+        run: sudo apt-get update && sudo apt-get install -y device-tree-compiler
+      - name: Cache the toolchain and Spike
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ~/riscv
+          key: rvt-${{ env.SPIKE_REV }}-2025.07.16
+      - name: Toolchain and Spike
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/tc && wget -O- -q "$TOOLCHAIN" | tar -xJf - -C ~/tc
+          mkdir -p ~/riscv && cp -r ~/tc/riscv/* ~/riscv/
+          git clone https://github.com/riscv-software-src/riscv-isa-sim /tmp/spike-src
+          cd /tmp/spike-src && git checkout "$SPIKE_REV"
+          mkdir build && cd build && ../configure --prefix="$HOME/riscv" && make -j"$(nproc)" && make install
+      - name: Generate, patch on Spike, merge, compile and run stage 2 on Spike
+        working-directory: rvt
+        run: |
+          export PATH="$HOME/riscv/bin:$PATH" RISCV="$HOME/riscv"
+          make generate-stage1 --environment-overrides VLEN=128 XLEN=32 MODE=machine INTEGER=1 SPLIT=${{ inputs.split || '1500' }} PATTERN="$PATTERN"
+          make all -j"$(nproc)" --environment-overrides VLEN=128 XLEN=32 MODE=machine INTEGER=1 SPLIT=${{ inputs.split || '1500' }} PATTERN="$PATTERN"
+          ls out/v128x32machine/tests/stage2 | wc -l
+      - name: What the artifact was made with
+        working-directory: rvt
+        run: |
+          {
+            echo "riscv-vector-tests $RVT_REV"
+            echo "spike $SPIKE_REV"
+            echo "toolchain $TOOLCHAIN"
+            echo "go $(go version)"
+            echo "split ${{ inputs.split || '1500' }}"
+            echo "pattern $PATTERN"
+          } > out/v128x32machine/tests/PROVENANCE.txt
+          cp -r macros out/v128x32machine/tests/macros
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rvv-tests-stage2
+          path: |
+            rvt/out/v128x32machine/tests/stage2
+            rvt/out/v128x32machine/tests/macros
+            rvt/out/v128x32machine/tests/PROVENANCE.txt
