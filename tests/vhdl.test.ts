@@ -136,7 +136,7 @@ describe('what has no gates to export', () => {
     expect(text).not.toMatch(/entity work\.(nmos|pmos)\b/);
     const name = entityName(g);
     const top: ComponentDef = {
-      id: 't_vhdl_inout', name: 'inout wrap', category: 'switch', symbol: { kind: 'box' }, ports: g.ports,
+      id: 't_vhdl_inout', name: 'inout wrap', category: g.category, symbol: { kind: 'box' }, ports: g.ports,
       netlist: () => ({ instances: [{ name: 'tg', def: g }], nets: g.ports.map((p) => ({ ends: [p.name, `tg.${p.name}`] })) }),
     };
     const t = vhdlHierarchy(top).text;
