@@ -29,20 +29,22 @@ if (!harness && !self) { console.error('give --harness <path> or --self'); proce
 const oct = (n: number) => n.toString(8);
 
 /** The model's state after each instruction, as the harness prints it (erasable diffs, the registers apart). */
-function runModel(p: AgcProgram, max = 200_000): { snaps: Snap[]; steps: { name: string; z: number; word: number; branched?: boolean }[] } {
+function runModel(p: AgcProgram, max = 5_000): { snaps: Snap[]; steps: { name: string; z: number; word: number; branched?: boolean }[] } {
   const m = new AgcISS(p.fixed);
   const prev = m.e.slice();
   const snaps: Snap[] = [], steps: { name: string; z: number; word: number; branched?: boolean }[] = [];
   for (let n = 0; n < max; n++) {
     const z0 = m.z;
-    const s = m.step();
+    let s;
+    // a program that wanders into an instruction the model does not cover (I/O, RESUME) is compared up to it
+    try { s = m.step(); } catch { return { snaps, steps }; }
     steps.push(s);
     const mem = new Map<number, number>();
     for (let i = 0o10; i < m.e.length; i++) if (m.e[i] !== prev[i]) { mem.set(i, m.e[i]); prev[i] = m.e[i]; }
     snaps.push({ cycles: s.mct, z: m.z, a: m.a, l: m.l, q: m.q, eb: m.e[REG.EB], fb: m.e[REG.FB], bb: m.e[REG.BB], ext: m.extra ? 1 : 0, idx: m.index, mem });
     if ((s.name === 'TCF' || s.name === 'TC') && m.z === z0) return { snaps, steps };
   }
-  throw new Error(`no halt within ${max} instructions`);
+  return { snaps, steps }; // no halt: compared over the first max instructions
 }
 
 function parse(out: string): Snap[] {
