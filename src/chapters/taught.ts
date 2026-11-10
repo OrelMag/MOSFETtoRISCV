@@ -111,7 +111,7 @@ export const TAUGHT: Record<string, string> = {
   multicycle: 'multicycle',
   signedmul: 'muldiv',
   throughput: 'pipeline',
-  simd: 'lanes',
+  simd: 'vectors',
   lane: 'lanes',
   vrf: 'lanes',
   activemask: 'simt',

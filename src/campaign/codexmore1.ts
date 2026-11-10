@@ -1182,7 +1182,7 @@ total                                        15 669</pre>The register files al
     ],
     lib: 'rv16_simd',
     compare: ['rv16_cpu', 'rv16_simt'],
-    chapters: [{ chapter: 'lanes', step: 1, label: 'One decoder, four ALUs' }, { chapter: 'lanes', step: 3, label: 'One memory port' }, { chapter: 'lanes', step: 4, label: 'Lanes against cores' }],
+    chapters: [{ chapter: 'vectors', step: 0, label: 'Same operation, many numbers' }, { chapter: 'lanes', step: 1, label: 'One decoder, four ALUs' }, { chapter: 'lanes', step: 3, label: 'One memory port' }, { chapter: 'lanes', step: 4, label: 'Lanes against cores' }],
   },
 
   leader: {
