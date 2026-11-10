@@ -205,3 +205,19 @@ describe('the loop a core opens onto', () => {
     expect(coreNext(1, -2, -2, true)).toBe(0);
   });
 });
+
+describe('one rule, two views', () => {
+  it('the 3D plane flips a core exactly where the circuit\'s core switches, for every drive', async () => {
+    const { applyDrive, HALF, idle } = await import('../src/widgets/core3dparts');
+    // the 3D model counts in amperes with Whirlwind's half select; the circuit in half-selects
+    for (const b of [0, 1]) for (const x of [-1, 0, 1]) for (const y of [-1, 0, 1]) for (const inh of [-1, 0, 1]) {
+      const d = idle();
+      d.x[0] = x; d.y[0] = y; d.inh = inh;
+      const bits = Array(16).fill(1 - b);
+      bits[0] = b;
+      const after = applyDrive(bits, d, HALF).after[0];
+      const units = x + y + inh;
+      expect(after, `bit ${b}, x ${x}, y ${y}, inh ${inh}`).toBe(coreNext(b, units, units, true));
+    }
+  });
+});

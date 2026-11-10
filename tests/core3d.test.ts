@@ -146,38 +146,40 @@ describe('the half-select current window', () => {
     expect(HALF_MAX).toBeGreaterThan(IC);
     expect(marginWindow()).toEqual({ lo: IC / 2, hi: IC });
     expect(marginOf(HALF)).toBe('ok');
-    expect(marginOf(0.2)).toBe('low');
-    expect(marginOf(0.225)).toBe('ok');
-    expect(marginOf(0.45)).toBe('high');
-    expect(marginOf(0.5)).toBe('high');
+    expect(marginOf(IC * 0.44)).toBe('low');
+    expect(marginOf(IC / 2)).toBe('ok');
+    expect(marginOf(IC)).toBe('high');
+    expect(marginOf(IC * 1.1)).toBe('high');
+    // the half select is Whirlwind's (R-221): 0.45 A, a full select 0.90 A, the model's Ic between them
+    expect([HALF, FULL]).toEqual([0.45, 0.9]);
   });
 
   const stray = (half: number, spread = false) => planOp(START, 5, 'read', { half, spread });
   const START = [1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0];
 
   it('inside the window every phase is clean, at any drive', () => {
-    for (let h = 0.23; h < 0.449; h += 0.01) for (const op of ['read', 'write0', 'write1'] as Op[]) {
+    for (let h = IC / 2 + 0.005; h < IC - 0.001; h += IC / 45) for (const op of ['read', 'write0', 'write1'] as Op[]) {
       for (const ph of planOp(START, 5, op, { half: h })) { expect(ph.missed).toBe(false); expect(ph.stray).toEqual([]); expect(ph.half).toBe(h); }
     }
   });
 
   it('below Ic/2 the addressed core does not flip: a 1 reads as a 0 and the write fails', () => {
-    const [rd, rs] = stray(0.22);
+    const [rd, rs] = stray(IC * 0.49);
     expect(START[5]).toBe(1);
     expect(rd.flipped).toEqual([]);
     expect(rd.pulse).toBe(false);
     expect(rd.senseBit).toBe(0); // the sense wire saw nothing
     expect(rd.missed).toBe(true);
     expect(rs.after[5]).toBe(1); // it still holds the 1; the read-back wrote a "0" that could not take
-    const w = planOp(START, 5, 'write1', { half: 0.2 });
+    const w = planOp(START, 5, 'write1', { half: IC * 0.44 });
     expect(w[0].missed).toBe(true);
     expect(w[1].after[5]).toBe(START[5]); // nothing changed: the write did not happen
-    expect(planOp([...START].fill(0), 5, 'write1', { half: 0.2 })[1].after[5]).toBe(0);
-    expect(planOp([...START].fill(0), 5, 'write1', { half: 0.2 })[1].missed).toBe(true);
+    expect(planOp([...START].fill(0), 5, 'write1', { half: IC * 0.44 })[1].after[5]).toBe(0);
+    expect(planOp([...START].fill(0), 5, 'write1', { half: IC * 0.44 })[1].missed).toBe(true);
   });
 
   it('at Ic or more a half select flips the whole row and column of the address', () => {
-    const [rd] = stray(0.5);
+    const [rd] = stray(IC * 1.1);
     expect(new Set(rd.flipped)).toEqual(new Set(halfSelected(5).filter((k) => START[k] === 1).concat([5])));
     expect(rd.stray.every((k) => halfSelected(5).includes(k))).toBe(true);
     expect(rd.stray.length).toBeGreaterThan(0);
@@ -189,8 +191,8 @@ describe('the half-select current window', () => {
   });
 
   it('write 0 above Ic: the inhibit cannot hold the crossing core, and the plane is wiped', () => {
-    const [, w] = planOp(START, 5, 'write0', { half: 0.5 });
-    expect(w.missed).toBe(true); // the crossing sees 0.5 A and takes a 1
+    const [, w] = planOp(START, 5, 'write0', { half: IC * 1.1 });
+    expect(w.missed).toBe(true); // the crossing sees 1.1 Ic and takes a 1
     expect(w.stray.length).toBeGreaterThan(0);
   });
 
@@ -201,8 +203,8 @@ describe('the half-select current window', () => {
     expect(w.lo).toBeGreaterThan(IC / 2);
     expect(w.hi).toBeLessThan(IC);
     expect(marginOf(HALF, true)).toBe('ok');
-    expect(marginOf(0.24, true)).toBe('low');
-    expect(marginOf(0.4, true)).toBe('high');
+    expect(marginOf(IC * 0.53, true)).toBe('low');
+    expect(marginOf(IC * 0.89, true)).toBe('high');
     expect(Math.max(...Array.from({ length: 16 }, (_, k) => icOf(k, true)))).toBeCloseTo(IC * 1.2, 9);
     expect(icOf(3)).toBe(IC);
     // behaviour agrees with the analytic window over a sweep, for every address
@@ -210,12 +212,12 @@ describe('the half-select current window', () => {
       const bad = planOp(START, a, 'read', { half: h, spread: true }).some((p) => p.missed || p.stray.length);
       if (marginOf(h, true) === 'ok') expect(bad).toBe(false);
     }
-    // at 0.38 A (inside the plain window) core 3, 20% weak and holding a 1, flips when the column is driven (address 7)
-    expect(marginOf(0.38)).toBe('ok');
-    expect(planOp(START, 7, 'read', { half: 0.38, spread: true })[0].stray).toContain(3);
+    // at 0.85 Ic (inside the plain window) core 3, 20% weak and holding a 1, flips when the column is driven (address 7)
+    expect(marginOf(IC * 0.85)).toBe('ok');
+    expect(planOp(START, 7, 'read', { half: IC * 0.85, spread: true })[0].stray).toContain(3);
   });
 
-  it('the default is unchanged: planOp without options is the 0.30 A plane', () => {
+  it('the default is unchanged: planOp without options is the 0.45 A plane', () => {
     expect(planOp(START, 5, 'read')[0].half).toBe(HALF);
   });
 });
@@ -256,11 +258,11 @@ describe('the cycle summary', () => {
   const B = [1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0];
   it('a clean cycle has none', () => expect(cycleFault(planOp(B, 5, 'read'), 'read')).toBe(''));
   it('too low: one sentence, one current', () => {
-    expect(cycleFault(planOp(B, 5, 'read', { half: 0.2 }), 'read')).toBe('Read failed: the addressed core never reached Ic (0.40 A against 0.45 A).');
-    expect(cycleFault(planOp(B, 5, 'write1', { half: 0.2 }), 'write1')).toBe('Write failed: the addressed core never reached Ic (0.40 A against 0.45 A).');
+    expect(cycleFault(planOp(B, 5, 'read', { half: 0.3 }), 'read')).toBe('Read failed: the addressed core never reached Ic (0.60 A against 0.65 A).');
+    expect(cycleFault(planOp(B, 5, 'write1', { half: 0.3 }), 'write1')).toBe('Write failed: the addressed core never reached Ic (0.60 A against 0.65 A).');
   });
   it('too high: strays counted once across phases, plural right', () => {
-    const plan = planOp(B, 5, 'read', { half: 0.5 }), n = new Set(plan.flatMap((p) => p.stray)).size;
+    const plan = planOp(B, 5, 'read', { half: IC * 1.1 }), n = new Set(plan.flatMap((p) => p.stray)).size;
     expect(cycleFault(plan, 'read')).toBe(`${n} other cores flipped and lost their data.`);
     expect(n).toBeGreaterThan(1);
   });

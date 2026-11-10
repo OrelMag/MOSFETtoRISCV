@@ -1,6 +1,6 @@
 // A 4 x 4 plane of ferrite cores as parts (DOM-free, tested). Coincident-current selection (Forrester, US 2,736,880): a core
 // sees the sum of the currents of the wires through it and flips only when that sum reaches the switching current Ic. One
-// X and one Y wire at half the full drive put 2 x half = 0.6 A on the crossing core and 0.3 A on every other core of that
+// X and one Y wire at half the full drive put 2 x half = 0.9 A on the crossing core and 0.45 A on every other core of that
 // row or column: below Ic, so those stay. A four-wire plane: X and Y select, a sense wire and an inhibit wire through every
 // core. The sense wire runs diagonally through all sixteen, as in real planes (Ken Shirriff on IBM S/360 core memory,
 // https://www.righto.com/2019/04/a-look-at-ibm-s360-core-memory-in-1960s.html); the inhibit parallels the X wires. A
@@ -8,18 +8,19 @@
 //
 // Read = drive the addressed core toward 0; a 1 flips and the sense wire pulses, a 0 does not move. The read destroys a 1, so
 // the cycle ends with a write phase that puts back what was read; to put back (or write) a 0 the inhibit wire carries half
-// the drive the other way, cancelling one half so the crossing core sees 0.3 A and holds.
+// the drive the other way, cancelling one half so the crossing core sees 0.45 A and holds.
 
 import type { RGB, RGBA } from '../gl/instances';
 import type { Vec3 } from '../gl/math';
 import { box, cyl, rod, type Anchor, type Part } from '../gl/parts';
 
 export const N = 4;
-/** The currents, amperes. The default half-select drive and the switching (coercive) current are figures of the model (no
- *  primary source for a 1950s drive-current band was found, so none is claimed); the rectangular loop is the idealisation. */
-export const HALF = 0.3, FULL = 2 * HALF, IC = 0.45;
-/** The slider's range. The working window is Ic/2 <= half < Ic (0.225 .. 0.45 A). */
-export const HALF_MIN = 0.2, HALF_MAX = 0.5;
+/** The currents, amperes. The half-select drive is Whirlwind's, 0.45 A on each selection line (MIT Report R-221, 1954, section
+ *  5.21), so a full select is 0.90 A. The switching current Ic is the model's own figure between them: R-221 quotes the current
+ *  that switches a core within a set time (about 0.85 to 0.95 A), not a threshold, and the rectangular loop is the idealisation. */
+export const HALF = 0.45, FULL = 2 * HALF, IC = 0.65;
+/** The slider's range. The working window is Ic/2 <= half < Ic (0.325 .. 0.65 A). */
+export const HALF_MIN = 0.3, HALF_MAX = 0.75;
 /** "Drive spread": each core its own Ic, up to 20 % off (real cores vary with batch and temperature; the pattern is fixed so
  *  the picture repeats). */
 const SPREAD = [0.2, -0.1, 0.05, -0.2, -0.15, 0.15, 0, 0.1, -0.05, 0.2, -0.2, 0.08, 0.12, -0.12, -0.02, 0.18];
