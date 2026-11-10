@@ -2340,7 +2340,18 @@ export class Stage {
 
   /** The breadcrumb's values follow the simulation (crumbvals.ts). */
   private syncCrumbVals(): void {
-    paintCrumbVals(this.crumbVals, settings.radix);
+    if (paintCrumbVals(this.crumbVals, settings.radix)) this.markSqueezed();
+  }
+
+  /** A level above the open one, shrunk to a few letters (app.css), would clip its value pill to an empty blob: it drops the pill
+   *  (.squeezed) and keeps its name's first letters; the value stays in the open level's chain below. Measured with the pill shown. */
+  private markSqueezed(): void {
+    const items = [...this.crumbs.querySelectorAll<HTMLElement>(':scope > button')];
+    for (const b of items.slice(0, -1)) {
+      if (!b.querySelector('.val')) continue;
+      b.classList.remove('squeezed');
+      if (b.scrollWidth > b.clientWidth + 1) b.classList.add('squeezed');
+    }
   }
 
   /**
@@ -2396,6 +2407,11 @@ export class Stage {
    *  its own above the buttons (.stacked), every button back in the bar. The levels above the open one shrink
    *  first (app.css): cut with an ellipsis, their names in their tooltips. */
   private fitBar(): void {
+    this.fitBarItems();
+    this.markSqueezed();
+  }
+
+  private fitBarItems(): void {
     const bar = this.bar;
     const moreWrap = this.moreBtn.parentElement!;
     bar.classList.remove('compact', 'tight', 'stacked');

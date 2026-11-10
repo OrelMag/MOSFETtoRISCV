@@ -174,12 +174,15 @@ export class Inspector {
     else if (d.prim === 'relay') cells.push(['1', 'relay'], [String((d.ports.length - 2) / 3), 'changeover contacts']);
     else if (d.prim === 'triode') cells.push(['1', 'triode section (half a 6SN7)']);
     else if (d.prim === 'diode') cells.push(['1', 'diode section (half a 6AL5)']);
+    else if (d.prim === 'core') cells.push(['1', 'ferrite core', 'A bit as a ring of ferrite: no transistor, no gate']);
     else if (d.prim !== 'alias' && d.prim !== 'vdd' && d.prim !== 'gnd') {
       // a relay or tube circuit counts relays or tube sections, not the transistors it has none of
       const old = st.relays + st.triodes + st.diodes;
       if (st.relays) cells.push([groupDigits(st.relays), `relay${st.relays > 1 ? 's' : ''}`]);
       if (st.triodes) cells.push([groupDigits(st.triodes), `triode section${st.triodes > 1 ? 's' : ''}`]);
       if (st.diodes) cells.push([groupDigits(st.diodes), `diode section${st.diodes > 1 ? 's' : ''}`]);
+      // core memory: a bit a ring, priced apart from the gates around it
+      if (st.cores) cells.push([groupDigits(st.cores), `ferrite core${st.cores > 1 ? 's' : ''}`, 'A bit each as a ring of ferrite: no transistor, no gate']);
       // ROM chips (a 28C16) are counted as the mux trees they simulate as: shown apart, so the logic's count stands alone
       const rom = st.rom;
       const romTip = rom ? `${romSize(rom)} of ROM, simulated as mux trees of ${groupDigits(rom.nands)} NANDs (${groupDigits(rom.transistors)} transistors) that are not counted here: on silicon a ROM is a transistor per bit and two decoders` : undefined;

@@ -55,14 +55,17 @@ export function crumbText(v: CrumbValue, radix: Radix): string {
 }
 
 /** Repaint the breadcrumb's value elements (every frame of the stage or the look-inside view). */
-export function paintCrumbVals(vals: readonly { el: HTMLElement; v: CrumbValue }[], radix: Radix): void {
+/** Paints the values; true when a text changed (its width may have). */
+export function paintCrumbVals(vals: readonly { el: HTMLElement; v: CrumbValue }[], radix: Radix): boolean {
+  let changed = false;
   for (const { el, v } of vals) {
     const txt = crumbText(v, radix);
-    if (el.textContent !== txt) el.textContent = txt;
+    if (el.textContent !== txt) { el.textContent = txt; changed = true; }
     const bits = v.read();
     el.classList.toggle('v1', bits.length === 1 && bits[0] === B1);
     el.classList.toggle('vx', bits.some((b) => b !== B0 && b !== B1));
   }
+  return changed;
 }
 
 /** The tooltip: which output, and where it sits in the level above. */
