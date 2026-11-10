@@ -5,6 +5,7 @@
 import { INSTRS24 } from '../dsp/isa24';
 import { aguWidget, benchWidget, dspApi, dspPerProduct, dspScene, FIG, fftWidget, instrTable, loopWidget, rvFigure, rvPerProduct, rvWithoutDm } from '../widgets/dspcore';
 import { numOf } from './order';
+import { FFT_BOTH_STEP } from './dspcore/fftboth';
 import type { Chapter } from './types';
 import { groupNum } from '../sim/numfmt';
 
@@ -20,7 +21,7 @@ export const chDspCore: Chapter = {
     'follow a hardware loop: start, end and count, and why it adds no instruction',
     'compare the core with the RV32 machines per product, in clocks and in time, and say what a real DSP pipelines that this one does not',
   ],
-  builds: ['mac', 'cpu', 'carriers', 'fixed', 'firdesign'],
+  builds: ['mac', 'cpu', 'carriers', 'fixed', 'firdesign', 'spectrum'],
   recap: {
     keep: [
       'A tap on a load-store machine is a load for each operand, two pointer steps, the multiply-accumulate and a branch. The DSP core folds the pointer steps into the access and the branch into a loop register, so the loop body is the multiply-accumulate alone.',
@@ -199,7 +200,7 @@ export const chDspCore: Chapter = {
         const dsp = rvFigure('rv32im');
         return `
         <p>Per product, so the machines' different block lengths do not matter. The DSP core is the winner in clocks everywhere, but its clock is longer: ${FIG.period} NAND delays against ${rvFigure('mac').period} for the MAC cores (${f2(FIG.period / rvFigure('mac').period)} times) and ${dsp.period} for the RV32IM, which has faster adders. The core's clock is long because one clock reaches from the ROM through decode, the pointer, the memory, the multiplier and the accumulator. Time per product is the product of the two, and that is what the table gives.</p>
-        <p>The FFT has no RV32 figure to compare with, since the MAC chapter did not run one. The core is ${n0(FIG.nands.core)} NANDs without memories. The RV32IM is ${n0(dsp.nands)} with its 32-word data memory and 32 × 32 registers, and ${n0(rvWithoutDm('rv32im'))} without the data memory, so the core is about ${f2(rvWithoutDm('rv32im') / FIG.nands.core)} times smaller than it, and ${f2(rvWithoutDm('mac') / FIG.nands.core)} times smaller than the MAC core (${n0(rvWithoutDm('mac'))}). Nearly half of that is the MAC with its adapter (${n0(FIG.nands.mac)} NANDs), with its idle second multiplier, which is the price of reusing the block unchanged.</p>
+        <p>The FFT is compared in the next step, on the same transform. The core is ${n0(FIG.nands.core)} NANDs without memories. The RV32IM is ${n0(dsp.nands)} with its 32-word data memory and 32 × 32 registers, and ${n0(rvWithoutDm('rv32im'))} without the data memory, so the core is about ${f2(rvWithoutDm('rv32im') / FIG.nands.core)} times smaller than it, and ${f2(rvWithoutDm('mac') / FIG.nands.core)} times smaller than the MAC core (${n0(rvWithoutDm('mac'))}). Nearly half of that is the MAC with its adapter (${n0(FIG.nands.mac)} NANDs), with its idle second multiplier, which is the price of reusing the block unchanged.</p>
         <p><strong>What a real DSP does.</strong> It pipelines this path: fetch, decode, address, memory, multiply, accumulate in stages, each short, so the clock is several times faster. The costs are visible in the programmer's model: the instruction after a branch still runs (a delay slot), a loaded value is not there for the next instruction, and the loop must be set up some instructions before it starts. This core pays none of those, and pays for it in the length of its clock.</p>`;
       },
       widget: benchWidget,
@@ -211,5 +212,6 @@ export const chDspCore: Chapter = {
         why: ['', 'Only if the clocks had the same period.', 'It is still faster per product; the gain is just smaller.', 'NANDs measure area, not time.'],
       },
     },
+    FFT_BOTH_STEP,
   ],
 };

@@ -95,6 +95,8 @@ export interface CpuSceneOptions {
   editable?: boolean;
   /** The dual-issue RV32IM pipeline of chapter ooo (implies pipeline and m: two lanes in the listing and the diagram). */
   wide?: boolean;
+  /** Run on the cycle engine (settled values only: no timing or probes), for a CPU too large for GateSim at a useful speed. */
+  cycleEngine?: boolean;
   /** Chapter ooo's out-of-order core (implies m; runs on the cycle engine; adds the Out of order panel). */
   ooo?: boolean;
   /** The single-cycle CPU's ROM (2^imemK words) and data memory (2^dmemK words), when not the defaults (6 and 5). */
@@ -135,7 +137,7 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
   const planted = opts.planted ? withPlanted(built, opts.planted) : built;
   const root = opts.wrap ? opts.wrap(planted) : planted;
   return {
-    ...(opts.ooo ? { engine: 'cycle' as const } : {}),
+    ...(opts.ooo || opts.cycleEngine ? { engine: 'cycle' as const } : {}),
     root,
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
