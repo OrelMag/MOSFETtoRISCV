@@ -11,6 +11,71 @@ the sim-perf numbers against the acceptance below.
 Progress:
 1. Fingerprints ✅ (feat/finedelay-1): tests/gatesimfingerprint.ts, tests/gatesim-fingerprints.json, taken on main cd8e0eb9 with
    scripts/gatesim-fp.ts.
+2. Engine ✅ (feat/finedelay-2): GateSim `delay: 'load'`, `ticks`, `nextEventTime()`, the wheel per instance with a mask; edge.ts
+   `nextStepTime`; DualSim passes the model and refuses the cycle engine on a clock chain under 'load' (CycleSim.clockChain);
+   tests/finedelay.test.ts (both CPUs in lock step with the cycle engine, every net every cycle). Measured with
+   scripts/finedelay-perf.ts on the bare engine, medians of 5 rounds of 1.5 s, 2026-11-10 (Node 22, a shared machine):
+
+   | | main's engine, unit | this engine, unit | this engine, load | load / unit |
+   |---|---|---|---|---|
+   | single-cycle RV32I, cycles/s | 1407, 1431 | 1453, 1442 | 1166 | 83 % |
+   | pipelined RV32I | 1688, 1679 | 1659, 1678 | 1551 | 91 % |
+   | system RV32I | 1031, 1026 | 1021, 1027 | 841 | 82 % |
+   | ks64 adder, settles/s | 51672, 50925 | 51384, 51550 | 45283 | 88 % |
+
+   Unit within ±2 % of main, pairs run alternately: inside the ±3 % acceptance. Load well above 50 % of unit.
+
+   scripts/sim-perf.ts, GateSim rows (EditorSim cycle mode at max, cycles/s), two rounds each, main's engine (a worktree of
+   stage 1) and this one run alternately; the divider again in three --storage rounds, as its first pair looked 3 % apart:
+
+   | | main's engine | this engine |
+   |---|---|---|
+   | single-cycle RV32I | 1656, 1682 | 1661, 1719 |
+   | single-cycle, 64K × 32 memory | 2860, 2822 | 2761, 2843 |
+   | pipelined RV32I | 1990, 1997 | 1994, 2023 |
+   | system RV32I | 1174, 1166 | 1168, 1165 |
+   | dual-core / 4-core | 1113, 1092 / 695, 696 | 1124, 1107 / 709, 702 |
+   | pipelined RV16 on its bench | 3577, 3562, 3601, 3580, 3565 | 3659, 3639, 3574, 3594, 3654 |
+   | ÷16 ripple divider (--storage) | 2408747, 2349202, 2428418 | 2385797, 2406601, 2373661 |
+   | ks64, settles/s | 20410, 21435 | 21175, 21373 |
+
+   sim-perf's load-model column needs EditorSim to take the model: stage 3.
+3. Views ✅ (feat/finedelay-3): `Scene.delay`; `Stage.delayFromSetting` (the workbench sets it; a toggle reloads the scene at
+   its level); EditorSim's `delay` option in its rebuild key and `delayChanged()` (the editor calls it on a settings change,
+   state carried); the setting's menu and search text say it now times sandbox and workbench simulation; the run bar, the
+   stage's status line and the analyzer read tenths (`fmtTime`), cursors snap to tenths; slow motion under load waits in
+   proportion to the time each step advanced (the stage's timed animation, EditorSim's gate rate counts units); VCD in
+   picoseconds at PS_PER_UNIT under load (unchanged otherwise); sim-perf `--delay load`. tests/finedelay-views.test.ts.
+
+   sim-perf, 2026-11-10, EditorSim cycle mode at max, cycles/s, one run each, back to back:
+
+   | | GateSim, unit | GateSim, load | load / unit | cycle engine, load |
+   |---|---|---|---|---|
+   | single-cycle RV32I | 1708 | 1493 | 87 % | 13170 (unit 13207) |
+   | single-cycle, 64K × 32 memory | 2865 | 2410 | 84 % | 14685 |
+   | pipelined RV32I | 2012 | 1798 | 89 % | 10438 |
+   | system RV32I | 1195 | 1019 | 85 % | 8651 |
+   | dual-core / 4-core | 1120 / 705 | 978 / 610 | 87 % / 87 % | 7962 / 4652 |
+   | pipelined RV16 on its bench | 3631 | 3341 | 92 % | **refused** (GateSim, 3343; unit 17467) |
+   | 8-bit counter (NAND flip-flops) / LFSR | 349956 / 742737 | 286548 / 645016 | 82 % / 87 % | 924001 / 2222563 |
+   | ÷16 ripple divider (GateSim both ways) | 2216613 | 1741881 | 79 % | |
+   | ks64, settles/s | 21319 | 18231 | 86 % | 28433 |
+
+   The campaign's pipelined RV16 writes its register file at the falling edge, through one inverter: under load the clock-chain
+   rule refuses the cycle engine there. An inverted clock is likely safe (the edges are half a period apart), but that is
+   not shown, so the rule stays conservative; such a design runs on GateSim under load, correct and slower.
+4. Measurers ✅ (feat/finedelay-4): settle.ts outputSettle, opdelay.ts portSettle, edgetiming.ts (captureAt, clkToQ, sweepEdge,
+   qTrace) and riscv/cycletime.ts measureClasses take an optional model, default 'unit' (every caller unchanged); under 'load'
+   spans are snapped to tenths (edge.ts `onTick`), the sweep steps a tenth, cycletime's static period uses the same model.
+   No engine change, so the sim-perf numbers are stage 3's. tests/finedelay-measure.test.ts. Measured, unit → load:
+
+   | | unit | load |
+   |---|---|---|
+   | rca8 worst sensitized settle (static depth) | 18 (20) | 29.5 (33.9) |
+   | DFF setup / hold / clk-to-q rise / fall | 1 / 1 / 2 / 3 | 2 / 1.5 / 2.5 / 3.5 |
+   | DFF_EDGE6 setup / hold / clk-to-q rise / fall | −1 / 3 / 2 / 5 | −3.5 / 4 / 3.5 / 7 |
+   | single-cycle RV32I worst cycle (static period), 304 cycles | 131 (155) | 203.8 (242.9) |
+5. Chapter steps: waiting for the author (E:/audit/ship/PROPOSALS.md rows 32–35).
 
 ## What exists
 

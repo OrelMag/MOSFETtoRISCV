@@ -116,7 +116,10 @@ src/sim/       simulation core (no DOM)
   loadplan.ts    LoadPlan: the phases of building a big scene (LOAD_PHASES: hierarchy, flatten, engine, draw), their times, the
                  running one's count, the bar's fraction (by weight) and the time left; tasks.ts nextTask(): a message-channel
                  yield so the page can paint between slices
-  gatesim.ts     event-driven 3-valued (0/1/X) simulator, unit NAND delay, transport delay,
+  gatesim.ts     event-driven 3-valued (0/1/X) simulator, unit NAND delay (or `delay: 'load'`: ticks of a tenth of a unit, each
+                 NAND by delay.ts leafDelays, the wheel sized to the longest delay; `time` stays in units, `ticks` exact; the unit model
+                 pinned by tests/gatesim-fingerprint.test.ts; DualSim refuses the cycle engine under 'load' where a clock reaches
+                 storage through gates, CycleSim.clockChain; docs/PLAN-FINEDELAY.md), transport delay,
                  relaxation for power-on and oscillation resolution; runUntil(t) for a
                  fixed-period clock (an edge does not wait for the logic to settle); onTrace +
                  watch() report every change of watched nets at its exact time; hot loops on typed arrays

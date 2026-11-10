@@ -1,6 +1,9 @@
 // Event-driven gate-level simulator over 1-bit nets with three values (0, 1, X).
 // Every NAND has a delay of one time unit; behavioural leaves use their declared delay.
 // Transport delay is used, so glitches are visible when propagation is animated.
+// With `delay: 'load'` (docs/PLAN-FINEDELAY.md) time runs in ticks of a tenth of a unit and each NAND takes its
+// load-dependent delay (sim/delay.ts leafDelays), rounded to a tick; `time` still reads in units. Under the unit model
+// (the default) a tick is a unit and everything is as it was: tests/gatesim-fingerprint.test.ts pins it.
 //
 // The hot loops work on flat typed arrays (a NAND's two input nets and its output net, fan-out
 // lists, an event wheel of growable typed buffers, a FIFO ring of dirty leaves). The semantics are
@@ -9,12 +12,16 @@
 // same relaxation, on CPUs and on sequential parts.
 
 import { matchNets, sharedInputs } from './carry';
+import { leafDelays } from './delay';
 import { findNode, type FlatDesign } from './flatten';
 import type { PowerOnMode, Sim, SimState } from './sim';
 import { B0, B1, BX, BZ, type Bit, outPorts } from './types';
 import { pack, unpack } from './values';
 
-const RING = 64; // event wheel size; must exceed the largest leaf delay
+const RING = 64; // the smallest event wheel; an instance grows it to a power of two above its largest delay in ticks
+const MAX_RING = 1 << 16;
+/** Ticks per unit under load-dependent delay: tenths. */
+export const LOAD_TICKS = 10;
 
 /** NAND of two 3-valued inputs, indexed by (a << 2) | b (Z reads as X). */
 const NAND_T = new Uint8Array(16);
@@ -28,12 +35,29 @@ export interface GateSimOptions {
   /** The power-on the constructor applies (default 'zero'). 'x' forces no storage loop: a caller that resets the way it
    *  wants anyway (view/memfind.ts's probe) skips the relaxation, which an oscillating loop drags out for seconds. */
   powerOn?: PowerOnMode;
+  /** 'unit' (default): every NAND one unit. 'load': each NAND by its load (sim/delay.ts), in tenths of a unit. */
+  delay?: 'unit' | 'load';
 }
 
 export class GateSim implements Sim {
   readonly kind = 'gate' as const;
   readonly design: FlatDesign;
-  time = 0;
+  /** Ticks per unit: 1 under the unit model, LOAD_TICKS under load-dependent delay. */
+  readonly ticksPerUnit: number;
+  /** The time in ticks. */
+  private now = 0;
+  /** The time in units (a tick is a tenth of one under load-dependent delay). */
+  get time(): number {
+    return this.now / this.ticksPerUnit;
+  }
+  set time(t: number) {
+    // under the unit model a time is taken as given, as it always was (no rounding)
+    this.now = this.ticksPerUnit === 1 ? t : Math.round(t * this.ticksPerUnit);
+  }
+  /** The time in ticks (exact). */
+  get ticks(): number {
+    return this.now;
+  }
   unstable = false;
   evaluations = 0;
   onTrace?: (net: number, value: Bit, time: number) => void;
@@ -68,9 +92,12 @@ export class GateSim implements Sim {
   private dLen = 0;
   private dirtyMark: Uint8Array;
   /** Event wheel: per slot, nets and values in the order scheduled, and how many. */
-  private wNets: Int32Array[] = Array.from({ length: RING }, () => new Int32Array(16));
-  private wVals: Uint8Array[] = Array.from({ length: RING }, () => new Uint8Array(16));
-  private wLen = new Int32Array(RING);
+  private ring = RING;
+  /** ring − 1: a slot is `ticks & mask`. */
+  private mask = RING - 1;
+  private wNets: Int32Array[];
+  private wVals: Uint8Array[];
+  private wLen: Int32Array;
   private pendingEvents = 0;
   private settleLimit: number;
   private out: Bit[] = [];
@@ -78,6 +105,9 @@ export class GateSim implements Sim {
   constructor(design: FlatDesign, opts: GateSimOptions = {}) {
     this.design = design;
     this.settleLimit = opts.settleLimit ?? 4000;
+    this.ticksPerUnit = opts.delay === 'load' ? LOAD_TICKS : 1;
+    // load-dependent delays in units (slow faults included), rounded to ticks below
+    const loaded = opts.delay === 'load' ? leafDelays(design, 'load') : null;
     const n = design.netCount;
     const leaves = design.leaves;
     const L = leaves.length;
@@ -110,9 +140,12 @@ export class GateSim implements Sim {
       }
       // a slow fault (sim/faults.ts) adds delays to its driving leaf; a slowed NAND leaves the fast path (opA stays -1)
       const slow = design.extraDelay?.get(li) ?? 0;
-      const d = (l.kind === 'nand' ? 1 : Math.max(1, l.def.behavior?.delay ?? 1)) + slow;
-      // A longer delay would wrap the event wheel and fire early: refuse it rather than clamp it.
-      if (d >= RING) throw new Error(`${pathOf(l)}: delay ${d} exceeds the event wheel (max ${RING - 1})`);
+      const d = loaded
+        ? Math.max(1, Math.round(loaded[li] * LOAD_TICKS))
+        : (l.kind === 'nand' ? 1 : Math.max(1, l.def.behavior?.delay ?? 1)) + slow;
+      // The wheel grows to hold any delay up to MAX_RING; a longer one would wrap and fire early: refuse it.
+      if (d >= MAX_RING) throw new Error(`${pathOf(l)}: delay ${d} exceeds the event wheel (max ${MAX_RING - 1} ticks)`);
+      while (d >= this.ring) this.ring *= 2;
       this.delay[li] = d;
       if (l.kind === 'nand' && !slow) {
         this.opA[li] = l.inputs[0][0];
@@ -134,6 +167,11 @@ export class GateSim implements Sim {
     leaves.forEach((l, li) => {
       for (const port of l.inputs) for (const net of port) this.fanList[fill[net]++] = li;
     });
+
+    this.mask = this.ring - 1;
+    this.wNets = Array.from({ length: this.ring }, () => new Int32Array(16));
+    this.wVals = Array.from({ length: this.ring }, () => new Uint8Array(16));
+    this.wLen = new Int32Array(this.ring);
 
     for (const p of design.root.def.ports) {
       if (p.dir === 'in') {
@@ -389,7 +427,7 @@ export class GateSim implements Sim {
     this.time = s.time;
     this.unstable = s.unstable;
     this.evaluations = s.evaluations;
-    for (let slot = 0; slot < RING; slot++) {
+    for (let slot = 0; slot < this.ring; slot++) {
       const nets = s.wheelNets[slot], n = nets.length;
       if (this.wNets[slot].length < n) {
         this.wNets[slot] = new Int32Array(n);
@@ -414,7 +452,7 @@ export class GateSim implements Sim {
   relax(): void {
     // Drop any timed events; relaxation replaces them.
     const { val, proj, opA, opB, opY, dq, dirtyMark, outStart, outList } = this;
-    for (let s = 0; s < RING; s++) {
+    for (let s = 0; s < this.ring; s++) {
       const nets = this.wNets[s];
       for (let i = 0; i < this.wLen[s]; i++) proj[nets[i]] = val[nets[i]];
       this.wLen[s] = 0;
@@ -454,17 +492,19 @@ export class GateSim implements Sim {
   step(): boolean {
     if (this.dLen) this.evalDirty();
     if (this.pendingEvents === 0) return false;
-    // Advance to the next time instant that holds events.
-    let t = this.time + 1;
-    while (this.wLen[t % RING] === 0) t++;
-    this.time = t;
-    const slot = t % RING;
+    // Advance to the next time instant (tick) that holds events.
+    const mask = this.mask;
+    let t = this.now + 1;
+    while (this.wLen[t & mask] === 0) t++;
+    this.now = t;
+    const slot = t & mask;
+    const tu = t / this.ticksPerUnit; // the time the trace hears, in units
     const nets = this.wNets[slot];
     const vals = this.wVals[slot];
     const n = this.wLen[slot];
     this.wLen[slot] = 0;
     this.pendingEvents -= n;
-    // nothing is scheduled into this slot before evalDirty (delays are 1 … RING − 1)
+    // nothing is scheduled into this slot before evalDirty (delays are 1 … ring − 1)
     const { val, fanStart, fanList, dirtyMark, dq, watched } = this;
     const cap = dq.length;
     const trace = this.anyWatched ? this.onTrace : undefined;
@@ -477,7 +517,7 @@ export class GateSim implements Sim {
       if (old === b) continue;
       val[net] = b;
       if (tog !== null && (old | b) === 1) tog[net]++;
-      if (trace && watched[net]) trace(net, b as Bit, t);
+      if (trace && watched[net]) trace(net, b as Bit, tu);
       for (let f = fanStart[net], e = fanStart[net + 1]; f < e; f++) {
         const li = fanList[f];
         if (dirtyMark[li]) continue;
@@ -497,22 +537,36 @@ export class GateSim implements Sim {
    * still pending beyond it (a clock edge that does not wait for the logic to settle).
    */
   runUntil(t: number): void {
+    // under the unit model the end is t itself, as it always was: events up to it, then stand at it
+    const end = this.ticksPerUnit === 1 ? t : Math.round(t * this.ticksPerUnit), mask = this.mask;
     for (;;) {
       if (this.dLen) this.evalDirty();
       if (this.pendingEvents === 0) break;
-      let n = this.time + 1;
-      while (this.wLen[n % RING] === 0) n++;
-      if (n > t) break;
+      let n = this.now + 1;
+      while (this.wLen[n & mask] === 0) n++;
+      if (n > end) break;
       this.step();
     }
-    if (t > this.time) this.time = t;
+    if (end > this.now) this.now = end;
+  }
+
+  /**
+   * The time (units) of the next instant that holds events, or null when nothing is pending. Leaves made dirty by an
+   * input change are evaluated first, as step() and runUntil() would. Stepping under load-dependent delay goes there.
+   */
+  nextEventTime(): number | null {
+    if (this.dLen) this.evalDirty();
+    if (this.pendingEvents === 0) return null;
+    let n = this.now + 1;
+    while (this.wLen[n & this.mask] === 0) n++;
+    return n / this.ticksPerUnit;
   }
 
   settle(): void {
-    const start = this.time;
+    const start = this.now, limit = this.settleLimit * this.ticksPerUnit;
     this.unstable = false;
     while (this.step()) {
-      if (this.time - start > this.settleLimit) {
+      if (this.now - start > limit) {
         // Oscillation (e.g. both inputs of an SR latch released together): resolve it.
         this.unstable = true;
         for (let i = 0; i < this.design.leaves.length; i++) this.markDirty(i);
@@ -565,6 +619,7 @@ export class GateSim implements Sim {
   }
 
   private evalDirty(): void {
+    if (this.ticksPerUnit !== 1) { this.evalDirtyLoaded(); return; }
     const n = this.dLen;
     const { val, proj, opA, opB, opY, dq, dirtyMark } = this;
     const cap = dq.length;
@@ -572,7 +627,7 @@ export class GateSim implements Sim {
     this.dHead = h + n >= cap ? h + n - cap : h + n;
     this.dLen = 0;
     // NANDs fire one delay later; nothing marks a leaf dirty while we evaluate
-    const slot1 = (this.time + 1) % RING;
+    const slot1 = (this.now + 1) & this.mask;
     let nets1 = this.wNets[slot1], vals1 = this.wVals[slot1], len1 = this.wLen[slot1];
     let scheduled = 0;
     for (let k = 0; k < n; k++) {
@@ -607,11 +662,68 @@ export class GateSim implements Sim {
     this.pendingEvents += scheduled;
   }
 
+  /**
+   * evalDirty under load-dependent delay: each NAND fires `delay[li]` ticks later. Most NANDs drive one input and take
+   * exactly one unit (LOAD_TICKS), so that slot's buffers stay cached; the rest are scheduled one by one.
+   */
+  private evalDirtyLoaded(): void {
+    const n = this.dLen;
+    const { val, proj, opA, opB, opY, dq, dirtyMark, delay, mask } = this;
+    const cap = dq.length;
+    let h = this.dHead;
+    this.dHead = h + n >= cap ? h + n - cap : h + n;
+    this.dLen = 0;
+    const now = this.now;
+    const slotU = (now + LOAD_TICKS) & mask;
+    let netsU = this.wNets[slotU], valsU = this.wVals[slotU], lenU = this.wLen[slotU];
+    let scheduled = 0;
+    for (let k = 0; k < n; k++) {
+      const li = dq[h];
+      if (++h === cap) h = 0;
+      dirtyMark[li] = 0;
+      const a = opA[li];
+      if (a >= 0) {
+        const y = NAND_T[(val[a] << 2) | val[opB[li]]];
+        const net = opY[li];
+        if (proj[net] === y) continue;
+        proj[net] = y;
+        scheduled++;
+        const d = delay[li];
+        if (d === LOAD_TICKS) {
+          if (lenU === netsU.length) {
+            this.wLen[slotU] = lenU;
+            this.grow(slotU);
+            netsU = this.wNets[slotU];
+            valsU = this.wVals[slotU];
+          }
+          netsU[lenU] = net;
+          valsU[lenU++] = y;
+          continue;
+        }
+        const slot = (now + d) & mask;
+        if (this.wLen[slot] === this.wNets[slot].length) this.grow(slot);
+        const i = this.wLen[slot]++;
+        this.wNets[slot][i] = net;
+        this.wVals[slot][i] = y;
+        continue;
+      }
+      // a behavioural leaf may schedule into the cached slot too: hand it back, then reload it
+      this.wLen[slotU] = lenU;
+      scheduled += this.evalBehaviorLeaf(li);
+      netsU = this.wNets[slotU];
+      valsU = this.wVals[slotU];
+      lenU = this.wLen[slotU];
+    }
+    this.wLen[slotU] = lenU;
+    this.evaluations += n;
+    this.pendingEvents += scheduled;
+  }
+
   /** Evaluate a behavioural leaf and schedule its changed outputs; returns how many. */
   private evalBehaviorLeaf(li: number): number {
     const out = this.out;
     this.evalBehavior(li, out);
-    const slot = (this.time + this.delay[li]) % RING;
+    const slot = (this.now + this.delay[li]) & this.mask;
     let scheduled = 0;
     for (let q = this.outStart[li], j = 0; q < this.outStart[li + 1]; q++) {
       const net = this.outList[q], b = out[j++];

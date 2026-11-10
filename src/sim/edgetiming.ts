@@ -1,12 +1,15 @@
 // Setup, hold and clock-to-q read off a flip-flop circuit (DOM-free): d is flipped t gate delays before / after the
 // rising clock edge, on GateSim, for every t in a range, and the value q settles to says which side of the edge caught
 // it. The window between "new value captured" and "old value kept" is the aperture; its edges are setup and hold.
+// Under load-dependent delay (`model` 'load') every time is in units with tenths, and the sweep steps a tenth at a time.
 
+import { onTick } from './edge';
 import { flatten } from './flatten';
-import { GateSim } from './gatesim';
+import { GateSim, LOAD_TICKS } from './gatesim';
 import type { ComponentDef } from './types';
 
 export type Capture = 'old' | 'new' | 'x';
+type Model = 'unit' | 'load';
 
 export interface EdgeSweep {
   /** Offsets of d's change from the clock edge in delays (negative: before it). */
@@ -22,11 +25,12 @@ export interface EdgeSweep {
   cqFall: number;
 }
 
+const PINS = { d: 'd', clk: 'clk', q: 'q' };
 
 /** One trial: d goes from `from` to `to` at offset t from the clock's rising edge. */
-export function captureAt(def: ComponentDef, from: 0 | 1, to: 0 | 1, t: number, pins = { d: 'd', clk: 'clk', q: 'q' }): Capture {
+export function captureAt(def: ComponentDef, from: 0 | 1, to: 0 | 1, t: number, pins = PINS, model: Model = 'unit'): Capture {
   const fd = flatten(def, { mode: 'gate' });
-  const sim = new GateSim(fd);
+  const sim = new GateSim(fd, { delay: model });
   sim.setInput(pins.d, from);
   sim.setInput(pins.clk, 0);
   sim.reset('zero');
@@ -55,9 +59,9 @@ export function captureAt(def: ComponentDef, from: 0 | 1, to: 0 | 1, t: number, 
 }
 
 /** Clock-to-q: delays from the edge until q settles on its new value (d stable). */
-export function clkToQ(def: ComponentDef, to: 0 | 1, pins = { d: 'd', clk: 'clk', q: 'q' }): number {
+export function clkToQ(def: ComponentDef, to: 0 | 1, pins = PINS, model: Model = 'unit'): number {
   const fd = flatten(def, { mode: 'gate' });
-  const sim = new GateSim(fd);
+  const sim = new GateSim(fd, { delay: model });
   const from = (1 - to) as 0 | 1;
   sim.setInput(pins.d, from); sim.setInput(pins.clk, 0); sim.reset('zero');
   sim.setInput(pins.d, from); sim.settle();
@@ -70,26 +74,38 @@ export function clkToQ(def: ComponentDef, to: 0 | 1, pins = { d: 'd', clk: 'clk'
   const t0 = sim.time;
   sim.setInput(pins.clk, 1);
   sim.settle();
-  return last < 0 ? -1 : last - t0;
+  return last < 0 ? -1 : onTick(sim, last - t0);
 }
 
-/** Sweep d's change over the offsets lo … hi for a rising (0 → 1) or falling (1 → 0) d. */
-export function sweepEdge(def: ComponentDef, dir: 'rise' | 'fall', lo = -10, hi = 10, pins = { d: 'd', clk: 'clk', q: 'q' }): EdgeSweep {
+/**
+ * Sweep d's change over the offsets lo … hi for a rising (0 → 1) or falling (1 → 0) d: whole delays under the unit model,
+ * tenths under load.
+ */
+export function sweepEdge(def: ComponentDef, dir: 'rise' | 'fall', lo = -10, hi = 10, pins = PINS, model: Model = 'unit'): EdgeSweep {
   const from = dir === 'rise' ? 0 : 1, to = (1 - from) as 0 | 1;
+  const per = model === 'unit' ? 1 : LOAD_TICKS, step = 1 / per;
   const offsets: number[] = [], outcome: Capture[] = [];
-  for (let t = lo; t <= hi; t++) { offsets.push(t); outcome.push(captureAt(def, from, to, t, pins)); }
+  for (let k = Math.round(lo * per); k <= Math.round(hi * per); k++) {
+    const t = per === 1 ? k : k / per;
+    offsets.push(t);
+    outcome.push(captureAt(def, from, to, t, pins, model));
+  }
+  const snap = (x: number) => (per === 1 ? x : Math.round(x * per) / per);
   let i = 0;
   while (i < offsets.length && outcome[i] === 'new') i++;
-  const setup = i === 0 ? -lo + 1 : -offsets[i - 1];
+  const setup = i === 0 ? snap(-lo + step) : -offsets[i - 1];
   let j = offsets.length;
   while (j > 0 && outcome[j - 1] === 'old') j--;
-  return { offsets, outcome, setup, hold: j === offsets.length ? hi + 1 : offsets[j], cqRise: clkToQ(def, 1, pins), cqFall: clkToQ(def, 0, pins) };
+  return {
+    offsets, outcome, setup, hold: j === offsets.length ? snap(hi + step) : offsets[j],
+    cqRise: clkToQ(def, 1, pins, model), cqFall: clkToQ(def, 0, pins, model),
+  };
 }
 
 /** q's changes for one trial, as [delays from the edge, value] pairs, up to `span` delays after the edge (a race never ends). */
-export function qTrace(def: ComponentDef, from: 0 | 1, to: 0 | 1, t: number, span = 14, pins = { d: 'd', clk: 'clk', q: 'q' }): { start: number; changes: [number, 0 | 1][] } {
+export function qTrace(def: ComponentDef, from: 0 | 1, to: 0 | 1, t: number, span = 14, pins = PINS, model: Model = 'unit'): { start: number; changes: [number, 0 | 1][] } {
   const fd = flatten(def, { mode: 'gate' });
-  const sim = new GateSim(fd);
+  const sim = new GateSim(fd, { delay: model });
   sim.setInput(pins.d, from); sim.setInput(pins.clk, 0); sim.reset('zero');
   sim.setInput(pins.d, from); sim.settle();
   sim.setInput(pins.clk, 1); sim.settle(); sim.setInput(pins.clk, 0); sim.settle();
@@ -97,7 +113,7 @@ export function qTrace(def: ComponentDef, from: 0 | 1, to: 0 | 1, t: number, spa
   const t0 = sim.time, changes: [number, 0 | 1][] = [];
   const start = sim.get(q) === 1 ? 1 : 0;
   const edge = t0 + Math.max(0, -t);
-  sim.onTrace = (net, b, time) => { if (net === q) changes.push([time - edge, b === 1 ? 1 : 0]); };
+  sim.onTrace = (net, b, time) => { if (net === q) changes.push([onTick(sim, time - edge), b === 1 ? 1 : 0]); };
   sim.watch([q]);
   if (t < 0) { sim.setInput(pins.d, to); sim.runUntil(edge); sim.setInput(pins.clk, 1); }
   else { sim.setInput(pins.clk, 1); sim.runUntil(t0 + t); sim.setInput(pins.d, to); }

@@ -193,10 +193,11 @@ export function startApp(root: HTMLElement): void {
   const clockItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('autoClock', !settings.autoClock) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Automatic clock'), h('small', null, 'A circuit with a clock starts running (2 Hz) when opened; Pulse, Step or Back pauses it')));
-  // Load-dependent delay: which side the Timing panels and the inspector open on (sim/delay.ts).
+  // Load-dependent delay: which side the Timing panels and the inspector open on (sim/delay.ts), and the delay model of the
+  // sandbox's and the workbench's gate-level simulation (docs/PLAN-FINEDELAY.md); a chapter scene chooses its own.
   const delayItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('loadDelay', !settings.loadDelay) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
-    h('span', null, h('b', null, 'Load-dependent delay'), h('small', null, 'Timing panels and the inspector open on each NAND timed by what it drives; the chapters quote unit delay')));
+    h('span', null, h('b', null, 'Load-dependent delay'), h('small', null, 'Each NAND timed by what it drives: the Timing panels, the inspector, and gate-level simulation in the sandbox and the workbench (in tenths of a delay). The chapters stay on unit delay')));
   // Reading: prose size in the chapter pane (never the circuits) and a held line length.
   const sizeStep = (d: number) => {
     const i = Math.max(0, Math.min(TEXT_SIZES.length - 1, TEXT_SIZES.indexOf(settings.textSize as 100) + d));

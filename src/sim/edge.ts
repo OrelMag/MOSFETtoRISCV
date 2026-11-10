@@ -36,13 +36,33 @@ export function edgeDone(sim: Sim, e: Edge): boolean {
   return e.end === null ? !sim.busy() : sim.time >= e.end;
 }
 
-/** Advance one gate delay. Returns true while the edge is still propagating. */
+/**
+ * Advance one gate delay. Returns true while the edge is still propagating. Under load-dependent delay (a finer grain)
+ * one step is the next change instead, never past the end of a fixed-period high phase.
+ */
 export function stepEdge(sim: Sim, e: Edge): boolean {
   if (edgeDone(sim, e)) return false;
   if (!sim.runUntil) sim.settle();
   else if (e.end === null && sim.time - e.start >= LIMIT) sim.settle();
-  else sim.runUntil(sim.time + 1);
+  else sim.runUntil(nextStepTime(sim, e.end));
   return !edgeDone(sim, e);
+}
+
+/** A time for a readout: as it is under the unit model (whole delays), one decimal under load-dependent delay. */
+export const fmtTime = (sim: Pick<Sim, 'ticksPerUnit'>, t: number): string => ((sim.ticksPerUnit ?? 1) === 1 ? String(t) : t.toFixed(1));
+
+/** A measured span snapped to the engine's tick (whole delays, or tenths under load), so float residue never reads as a change. */
+export const onTick = (sim: Pick<Sim, 'ticksPerUnit'>, t: number): number => {
+  const k = sim.ticksPerUnit ?? 1;
+  return k === 1 ? t : Math.round(t * k) / k;
+};
+
+/** Where one step goes: a unit on under the unit model; else the next event, capped at `end` (the edge's or a run's). */
+export function nextStepTime(sim: Sim, end: number | null = null): number {
+  if ((sim.ticksPerUnit ?? 1) === 1 || !sim.nextEventTime) return sim.time + 1;
+  const next = sim.nextEventTime();
+  if (next === null) return end ?? sim.time;
+  return end === null ? next : Math.min(next, end);
 }
 
 /** Finish the high phase at once. */

@@ -25,7 +25,7 @@ export interface FlatFault {
   delay?: number;
 }
 
-/** The most extra delay a slow fault may add (GateSim's event wheel holds 63 delays). */
+/** The most extra delay a slow fault may add (kept small: a slow gate, not a stopped one; GateSim's wheel would grow to hold more). */
 export const MAX_SLOW = 32;
 
 const tieDefs = new Map<number, ComponentDef>();

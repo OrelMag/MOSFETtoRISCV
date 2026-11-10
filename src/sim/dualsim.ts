@@ -139,6 +139,16 @@ export class DualSim implements Sim {
     this.gate.runUntil(t);
   }
 
+  get ticksPerUnit(): number {
+    return this.gate.ticksPerUnit;
+  }
+
+  /** Timing, so GateSim. */
+  nextEventTime(): number | null {
+    this.toGate();
+    return this.gate.nextEventTime();
+  }
+
   settle(): void {
     this.settles++;
     if (this.onFast) {
@@ -234,10 +244,14 @@ export class DualSim implements Sim {
     if (!this.built) {
       this.built = true;
       const r = CycleSim.build(this.design);
-      if (r instanceof CycleSim) {
+      if (!(r instanceof CycleSim)) this.whyNot = r.reason;
+      else if (g.ticksPerUnit !== 1 && r.clockChain > 0) {
+        // its tables come from unit-delay simulation; a clock through inverters may race otherwise under load
+        this.whyNot = `a clock reaches storage through ${r.clockChain} gate${r.clockChain === 1 ? '' : 's'}, which load-dependent delay may time differently from the cycle engine's unit-delay tables`;
+      } else {
         this.fast = r;
         r.watch(this.watched);
-      } else this.whyNot = r.reason;
+      }
     }
     if (!this.fast) return;
     // an X clock: the next settle may make it 0 / 1

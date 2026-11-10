@@ -40,6 +40,8 @@ export class WorkbenchPage implements Page {
     const inspector = this.inspector = new Inspector();
     this.stage = new Stage(inspector);
     this.stage.leafFactory = transistorLeaf;
+    // the workbench follows the Load-dependent delay setting (a chapter's scenes stay on the unit model)
+    this.stage.delayFromSetting = true;
     this.stage.onReady(() => maybeCoach('stage'));
     const search = h('input', { type: 'search', placeholder: 'Search components…', 'aria-label': 'Search components' }) as HTMLInputElement;
     search.addEventListener('input', () => { this.filter = search.value.toLowerCase(); this.renderList(); });
