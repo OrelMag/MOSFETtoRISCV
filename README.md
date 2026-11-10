@@ -25,11 +25,15 @@ Four ways in: the **[journey](https://switchtocpu.com/#/c/map/0)** (<!--n:journe
 
 ## The journey
 
-**<!--n:journey-->89<!--/n--> chapters.** The first <!--n:ch.power-->34<!--/n--> run from the MOSFET, the CMOS inverter and NAND, through gates, binary numbers,
+**<!--n:journey-->89<!--/n--> chapters.** The first <!--n:ch.vectors-->35<!--/n--> run from the MOSFET, the CMOS inverter and NAND, through gates, binary numbers,
 adders, multiplexers, latches, registers and memory arrays, to the ALU, the register file, RV32I
 assembly and a single-cycle CPU. Then Python compiled to RV32I by the site's own compiler and run on
 those gates, faster adders, pipelining (hazards, forwarding, branch prediction), bytes and
-memory-mapped I/O, traps and interrupts, multiply / divide, caches, multicycle and microcoded control,
+memory-mapped I/O, traps and interrupts, multiply / divide, caches, virtual memory (Sv32 page tables,
+a hardware walker that stalls the CPU, two TLBs on chapter <!--n:ch.memory-->10<!--/n-->'s CAM, page faults, M / S / U modes, all in gates
+beside the golden model), a tiny operating system (a kernel in assembly with system calls, a timer-driven
+round-robin scheduler and a context switch, two programs and then two Python programs sharing one gate-level
+CPU in address spaces of their own, every switch counted in cycles), multicycle and microcoded control,
 floating point (RV32F), the C extension (an expander in gates in front of the decoder) and RV64 (the
 same core at 64 bits, the W instructions, what width costs block by block), a gate-level out-of-order
 core (renaming, a reorder buffer, speculation) and a lab to reshape it (width, ports, window sizes, on
@@ -38,7 +42,9 @@ from the gates), many cores (atomics, coherence), place and route on
 silicon, the same design on an FPGA (look-up tables, our computer on a Tang Nano 9K), how it is known to work (lock step,
 fuzzing, stuck-at faults, scan chains, self-test), side channels (a timing leak, Spectre on our out-of-order model and
 what each defence costs) and power (every toggle measured, glitches, a clock gate that cannot glitch on our CPU, leakage from the
-circuit's own state, the minimum-energy point). Four tracks follow: a **GPU** (a lane core,
+circuit's own state, the minimum-energy point) and vectors (RVV: one loop written with `vsetvli` for any
+vector length, SEW and LMUL, a four-lane vector unit in gates that takes a long vector in beats, masks,
+reductions, chaining, the same kernel priced on vectors, lanes and cores). Four tracks follow: a **GPU** (a lane core,
 SIMT warps with divergence, latency hiding, coalescing and banked shared memory, a rasterizer with
 depth and blending, and a graphics pipeline whose vertex kernel runs on the warp core), **memory in
 depth** (a DRAM at switch level, a DDR-style controller, flash with its translation layer, a bus with
@@ -157,7 +163,9 @@ a controller, a bus with DMA, a flash store), links (a repeater, a UART, CRC, a 
 MAC, a switch, a forwarding path, a driver, a host) and signals (<!--n:dsp.levels-->8<!--/n--> levels: a saturating adder, a MAC with guard
 bits, a circular address, a biquad, Goertzel for one tone, a CIC decimator, a CORDIC stage, a sigma-delta loop). Each level is built only from parts earlier levels
 unlocked, checked by a full test set and graded against par (NANDs, transistors, depth, clock period;
-every level you build or solve has one). The order follows use: a level comes just before the first one that needs it,
+every level you build or solve has one). Later chapters add optional levels where they teach a block: a
+clock gate, a look-up table and a drill programming it, and, after the system CPU, a TLB, the page-table walker
+and a context switch written as a program puzzle. The order follows use: a level comes just before the first one that needs it,
 and its why reads as a thread (the problem, what it costs, where it goes next and which later levels
 reuse it), closing each act with what is now within reach. **My path** maps skills from the codex,
 reads mastery from what you have already done, and places you (Where are you starting?, test-outs);
@@ -203,7 +211,7 @@ simulator, so whatever you build is a real component of the site. The full guide
 - Watch values live, per clock cycle or one gate delay at a time; probe wires into a timing
   diagram (VCD export), and read a chip's static timing with its critical path drawn on it, in
   NAND delays or by load (logical effort: a gate driving many inputs is slower), with the heaviest
-  nets listed.
+  nets listed; the Load-dependent delay setting runs the simulation itself on the loaded delays.
 - **Package** a circuit as a chip (name, colour, pin order), use it in other circuits, nest chips
   to any depth and edit them later: every user of the chip is rebuilt. A face editor puts pins on
   any side and the chip's displays, screens and switches on its box; chips go in folders, circuits
@@ -375,7 +383,9 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
 - **Timing is in NAND delays.** By default every NAND costs one unit, whatever it drives; static
   timing finds the longest register-to-register path in those units. A load mode weighs each gate by
   logical effort (d = p + g·h, its fan-out capacitance from the power estimate's per-input and
-  per-branch values), in static timing only: the gate simulator still steps one unit per NAND. Clock
+  per-branch values), in static timing and, with the **Load-dependent delay** setting, in the gate simulator too: it then
+  times each NAND by its load in tenths of a unit, so glitches and races follow the loads, in the sandbox
+  and the workbench (chapter scenes stay on one unit per NAND unless a step asks for loads). Clock
   rates in MHz assume an **illustrative 25 ps per NAND** (a loaded NAND2 in a 28 nm-class process),
   not timing characterized from a cell library: no slew, wire RC, skew or corners. The sky130 run's
   own reports are the real numbers.
@@ -410,8 +420,9 @@ This is a teaching instrument for engineers, not a sign-off tool. What it models
 
 The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next features:
 
-- **Load-dependent delay, further**: the gate simulator on the loaded delays (glitches and races
-  following the loads), and the estimate checked path by path against the sky130 runs.
+- **Load-dependent delay, further**: chapter steps that show races and glitches under load, and the
+  estimate checked path by path against the sky130 runs.
+- **Vectors, further**: an RVV core in the sandbox, with its vector wiring drawn.
 - **Verilog in the journey**: the same adder as text and as gates in a chapter step, and a Verilog
   chip's critical path mapped back to its source lines.
 - **ISA breadth, further**: RV64 in the pipelines.
