@@ -20,6 +20,7 @@ import { PUZZLES, puzzleMachine, puzzleUnit, runPuzzle } from '../puzzles';
 import type { CampaignNode } from '../types';
 import { DECK_EXT, deckFromJson, deckToJson } from '../../cards/card';
 import { deckSource, puzzleDeck } from '../puzzledeck';
+import { ownCoreUi } from './owncoreui';
 
 const hex = (v: number) => `0x${v.toString(16).padStart(4, '0')}`;
 const signed = (v: number) => String((v << 16) >> 16);
@@ -41,15 +42,18 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
   });
   const result = h('div', { class: 'cp-pz-result', role: 'status', 'aria-live': 'polite' });
   const dbg = h('div', { class: 'cp-pz-dbg' });
+  const ownOut = h('div', { class: 'cp-own-out' });
   let asm: AsmResult16 = assemble16(ed.value);
   const diagnose = () => {
     asm = p.nic ? ({ ...assemble16(''), errors: assemble(ed.value).errors } as AsmResult16) : assemble16(ed.value);
     ed.setDiagnostics(asm.errors);
   };
   diagnose();
+  const own = ownCoreUi(n, p, (pc) => asm.lines.find((l) => l.addr === pc)?.srcLine ?? null, (line) => ed.setActiveLine(line));
 
   const runTests = () => {
     diagnose();
+    ownOut.replaceChildren();
     const r = runPuzzle(p, ed.value);
     if (r.errors.length) {
       result.className = 'cp-pz-result bad';
@@ -69,6 +73,7 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
     result.replaceChildren(head, h('table', { class: 'cp-pz-tests' },
       h('tr', null, h('th'), h('th', null, 'Test'), h('th', null, puzzleUnit(p)[0].toUpperCase() + puzzleUnit(p).slice(1)),
         lanes ? h('th', { title: 'Lane-steps with the lane masked off' }, 'Idle') : null, h('th')), rows));
+    if (r.ok && own?.on()) own.run(ed.value, ownOut);
   };
 
   // ---- the stepper ----
@@ -146,6 +151,7 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
 
   const card = h('div', { class: 'cp-puzzle' },
     ed.el,
+    own?.el ?? null,
     h('div', { class: 'cp-pz-bar' },
       h('button', { class: 'btn sm primary', onclick: runTests }, icon('play', 13), 'Run the tests'),
       h('button', { class: 'btn sm ghost', title: 'Back to the starter code', onclick: () => {
@@ -162,6 +168,7 @@ export function puzzleCard(n: CampaignNode): HTMLElement {
       } }, 'Show solution'),
       p.nic ? null : deckButtons(n, () => ed.value, (src) => { ed.value = src; pr.setSource(n.id, src); diagnose(); }, result)),
     result,
+    ownOut,
     p.nic ? null : h('details', { class: 'cp-pz-step' }, h('summary', null, p.warps ? 'Step through a test (the warps)' : p.lanes ? 'Step through a test (the warp)' : 'Step through a test'),
       h('div', { class: 'cp-pz-bar' }, sel,
         h('button', { class: 'btn sm', onclick: () => reset() }, icon('reset', 13), 'Restart'),

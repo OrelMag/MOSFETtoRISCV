@@ -296,7 +296,7 @@ The simulator already went further than both games: transistors and Z, gate dela
 metastability), X, static timing, VCD, Verilog with a Yosys-checked testbench, wide pins, golden-model
 CPUs, and every library part opens down to a MOSFET. What they had and the sandbox lacked was I/O,
 chip presentation, capacity and the program-solving half of Turing Complete; all four are now in, bar
-per-puzzle pins and the campaign's program levels on your own core.
+per-puzzle pins.
 
 **I/O parts** (placeable, zero-cost like the displays, absent from Verilog)
 - ✅ Key input (DLS Key, TC Keyboard): a Key part bound to a keyboard key (rebind it in the properties), 1 while the
@@ -421,8 +421,12 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   is both cheaper and faster, ★★★ cycles × NANDs below all. A chart plots the references, their front and your point.
   A click on a test plays it on the circuit, a cycle at a time, back and forth. Show answer gives the pseudocode and the
   references; Do it for me loads the reference program
-- ⏳ After the puzzles: per-puzzle pins (a maze robot's sensors, a traffic light's lamps) as a third part kind; the
-  campaign's RV16 program levels run on your own core
+- ⏳ After the puzzles: per-puzzle pins (a maze robot's sensors, a traffic light's lamps) as a third part kind
+- ✅ The campaign's RV16 program levels run on your own core (mockup approved 2026-11-10; campaign/owncore.ts): Run the
+  tests on Golden model | Your core, the core levels passed with their NANDs and period; agrees (cycles, CPI, time in NAND
+  delays beside the other cores, best per core kept, no star) or disagrees (the instruction lit, model vs core, Step to
+  it: both register files, Open on a bench, Fix the core). Lane and warp kernels on k_simd … k_frame; NIC, DMA and timed
+  interrupt levels stay on the model
 
 **Graphical instruction builder** (mockup approved 2026-10-19: four concepts, all to be built, RV32 first)
 - ✅ 1. Composer, RV32 (riscv/compose.ts, widgets/composer.ts): one instruction edited from any side. Pick the

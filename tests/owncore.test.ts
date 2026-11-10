@@ -72,6 +72,12 @@ describe('a program level on your own core', () => {
       const regs = registersAt(p, p.ref, i, t)!;
       expect(regs.model).toHaveLength(8);
       expect(regs.pc).toBe(t.why.pc);
+      if (t.why.kind === 'reg') {
+        // just after it: the register it wrote differs, and only that one
+        expect(regs.after).toBe(true);
+        const diff = regs.model.map((v, k) => (v !== regs.core[k] ? k : -1)).filter((k) => k >= 0);
+        expect(diff).toEqual([t.why.wrote!.rd]);
+      }
     }
   });
 
@@ -98,4 +104,27 @@ describe('a program level on your own core', () => {
       await tick();
     }
   }, 300_000);
+});
+
+describe('own-core progress', () => {
+  it('keeps the switch per level and the fewest cycles per core, through sanitize, merge and a backup', async () => {
+    const { Progress, sanitizeCampaign, mergeCampaign } = await import('../src/campaign/progress');
+    const kv = new Map<string, string>();
+    const store = { getItem: (k: string) => kv.get(k) ?? null, setItem: (k: string, v: string) => void kv.set(k, v), removeItem: (k: string) => void kv.delete(k) };
+    const pr = new Progress(store);
+    pr.setRunOn('p_loop', 'c_core3');
+    expect(pr.coreRun('p_loop', 'c_core3', 330)).toBe(true);
+    expect(pr.coreRun('p_loop', 'c_core3', 400)).toBe(false);
+    expect(pr.coreRun('p_loop', 'c_core3', 300)).toBe(true);
+    expect(new Progress(store).get('p_loop')).toMatchObject({ on: 'c_core3', cores: { c_core3: 300 } });
+    pr.setRunOn('p_loop', undefined);
+    expect(pr.get('p_loop')?.on).toBeUndefined();
+    // only core levels, finite non-negative counts
+    const s = sanitizeCampaign({ nodes: { p_add: { on: 'p_loop', cores: { c_core3: 5, p_loop: 3, pi_core3: -1, o_mc: 'x' } } } });
+    expect(s.nodes.p_add.on).toBeUndefined();
+    expect(s.nodes.p_add.cores).toEqual({ c_core3: 5 });
+    const m = mergeCampaign(sanitizeCampaign({ nodes: { p_add: { on: 'c_core3', cores: { c_core3: 9, o_mc: 20 } } } }),
+      sanitizeCampaign({ nodes: { p_add: { on: 'pi_core3', cores: { c_core3: 7, pi_core3: 11 } } } }));
+    expect(m.nodes.p_add).toMatchObject({ on: 'pi_core3', cores: { c_core3: 7, o_mc: 20, pi_core3: 11 } });
+  });
 });

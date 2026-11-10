@@ -263,6 +263,34 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 .cp-puzzle .code-edit { margin-bottom: 8px; }
 .cp-pz-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
 .cp-pz-deck { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+/* Run the tests on: Golden model | Your core (campaign/ui/owncoreui.ts) */
+.cp-runon { margin: 8px 0 4px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+.cp-runon-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cp-runon .lbl { font-size: 12.5px; color: var(--muted); }
+.cp-runon .sub:empty { display: none; }
+.cp-runon .sub { margin: 6px 0 0; font-size: 12.5px; }
+.cp-runon select { font: inherit; font-size: 13px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); max-width: 100%; min-width: 0; }
+.cp-seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
+.cp-seg button { font: inherit; font-size: 12.5px; font-weight: 600; padding: 5px 10px; background: var(--surface); color: var(--text-2, var(--text)); border: 0; cursor: pointer; }
+.cp-seg button + button { border-left: 1px solid var(--border-strong); }
+.cp-seg button[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent); }
+.cp-seg button:disabled { cursor: not-allowed; opacity: 0.55; }
+.cp-own { font-size: 13.5px; border-left: 3px solid var(--border-strong); padding: 2px 10px; margin: 6px 0; }
+.cp-own.ok { border-color: var(--good); background: var(--good-soft); }
+.cp-own.bad { border-color: var(--bad); background: var(--bad-soft); }
+.cp-own-ok b { color: var(--good); }
+.cp-own-bad b { color: var(--bad); }
+.cp-own-bad code, .cp-own-ok code { font-family: var(--font-mono); font-size: 12px; }
+.cp-own-readout { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 12.5px; margin: 6px 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.cp-own-readout dt { color: var(--muted); }
+.cp-own-readout dd { margin: 0; font-family: var(--font-mono); font-size: 12px; }
+.cp-own-bars { display: grid; gap: 4px; margin: 6px 0; }
+.cp-own-bars div { display: grid; grid-template-columns: minmax(90px, 140px) 1fr 80px; align-items: center; gap: 6px; font-size: 12px; }
+.cp-own-bars i { display: block; height: 8px; border-radius: 3px; background: var(--border-strong); }
+.cp-own-bars div.cur i { background: var(--accent); }
+.cp-own-bars .n { font-family: var(--font-mono); text-align: right; }
+.cp-own-regs .cp-pz-tests tr.diff td, .cp-own-regs .cp-pz-tests tr.diff th { color: var(--bad, var(--warn)); font-weight: 700; }
+
 .cp-pz-bar select { font: inherit; font-size: 13px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); max-width: 100%; }
 .cp-pz-result { font-size: 13.5px; border-left: 3px solid transparent; padding: 2px 10px; margin: 6px 0; }
 .cp-pz-result:empty { display: none; }
@@ -384,4 +412,5 @@ a.th-n:hover, a.th-n:focus-visible { border-color: var(--accent); color: var(--a
   .cp-unlock { min-height: 40px; padding: 0 10px; }
   .cp-unlock input { width: 20px; height: 20px; }
   .cp-chip { min-height: 40px; }
+  .cp-seg button, .cp-runon select { min-height: 40px; }
 }

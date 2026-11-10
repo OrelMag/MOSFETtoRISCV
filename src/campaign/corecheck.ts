@@ -166,6 +166,8 @@ export interface CoreDisagree {
   step?: number; pc?: number; instr?: number;
   /** What the model did and what the core did, in words ('a1 (x11) ← 0x000a'). */
   expected?: string; got?: string;
+  /** A wrong register write as numbers (Step to it shows the register file just after it). */
+  wrote?: { rd: number; value: number };
   /** Register writes and stores that agreed before it. */
   agreed: number;
   cycle: number;
@@ -307,7 +309,7 @@ export function runCore(def: ComponentDef, mode: 'gate' | 'switch', spec: CoreSp
             }
           } else if (rwa[k] !== e.rd || rwd[k] !== e.value) {
             l.fail = `${l.g.name}: register write #${l.ri + 1} is ${got} at ${at}; expected ${rname(e.rd!)} ← ${hex(e.value)} from ${where(e)}`;
-            l.why = { kind: 'reg', ...say(e), expected: `${rname(e.rd!)} ← ${hex(e.value)}`, got, agreed, cycle: cyc };
+            l.why = { kind: 'reg', ...say(e), expected: `${rname(e.rd!)} ← ${hex(e.value)}`, got, agreed, cycle: cyc, ...(Number.isNaN(rwa[k]) || Number.isNaN(rwd[k]) ? {} : { wrote: { rd: rwa[k], value: rwd[k] } }) };
           } else {
             l.writes.push({ rd: e.rd!, value: e.value });
             l.ri++;

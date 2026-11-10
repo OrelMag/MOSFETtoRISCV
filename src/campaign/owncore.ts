@@ -14,12 +14,13 @@ import { Iss16 } from '../riscv/rv16/iss16';
 import { disasm16 } from '../riscv/rv16/isa16';
 import type { ComponentDef } from '../sim/types';
 import { addBench, type Bench } from './bench';
-import { type CoreDisagree, type CoreSpec, type CoreTest, coreSpecOf, runCore, type RunOptions } from './corecheck';
-import { runLanes } from './lanecheck';
+import { type CoreDisagree, corePeriod, type CoreSpec, type CoreTest, coreSpecOf, runCore, type RunOptions } from './corecheck';
+import { stats } from '../sim/stats';
+import { lanePeriod, runLanes } from './lanecheck';
 import { levelChallenge, levelChipId } from './levels';
 import { NODES, nodeById } from './nodes';
 import { type ProgramPuzzle, puzzleMachine, runPuzzle } from './puzzles';
-import { runWarps } from './warpcheck';
+import { runWarps, warpPeriod } from './warpcheck';
 
 /** A core level a program could run on, and why it cannot when it cannot. */
 export interface CoreOption {
@@ -157,8 +158,11 @@ export function runOnCore(p: ProgramPuzzle, src: string, core: string, ws: Works
   }
 }
 
-/** Step to it: the registers just before the disagreement, the model's (run to that instruction) and the core's (its agreed writes). */
-export function registersAt(p: ProgramPuzzle, src: string, testIndex: number, t: OwnTest): { model: number[]; core: number[]; pc: number; text: string } | null {
+/**
+ * Step to it: both register files at the disagreement, the model's (run to that instruction) and the core's (its agreed writes):
+ * just after the instruction when the core wrote a wrong register (so that register differs), else just before it.
+ */
+export function registersAt(p: ProgramPuzzle, src: string, testIndex: number, t: OwnTest): { model: number[]; core: number[]; pc: number; text: string; after: boolean } | null {
   if (t.why?.step === undefined || p.lanes) return null;
   const a = assemble16(src);
   const pt = p.tests()[testIndex];
@@ -166,9 +170,14 @@ export function registersAt(p: ProgramPuzzle, src: string, testIndex: number, t:
   const mc = puzzleMachine(p, a.words, a.data, pt);
   if (!(mc instanceof Iss16)) return null;
   while (mc.steps < t.why.step && !mc.halted) mc.step();
+  const pc = mc.pc, text = disasm16(mc.imem[pc] ?? 0, pc);
   const core = new Array(8).fill(0);
   for (const w of t.writes) if (w.rd) core[w.rd] = w.value & 0xffff;
-  return { model: [...mc.x], core, pc: mc.pc, text: disasm16(mc.imem[mc.pc] ?? 0, mc.pc) };
+  const wrote = t.why.wrote;
+  if (!wrote) return { model: [...mc.x], core, pc, text, after: false };
+  mc.step();
+  if (wrote.rd) core[wrote.rd] = wrote.value & 0xffff;
+  return { model: [...mc.x], core, pc, text, after: true };
 }
 
 /** A test's program on the core's debug bench, in the sandbox (scalar tests that read no IN, with data in the bench's 64 words). */
@@ -179,4 +188,18 @@ export function ownBench(ws: Workspace, core: string, t: CoreTest): Bench | { er
   if ('error' in def) return def;
   const n = nodeById(core)!;
   return addBench(ws, def, levelChipId(n), t);
+}
+
+const facts = new WeakMap<ComponentDef, { nands: number; period: number | null }>();
+
+/** A core's NANDs and clock period (in NAND delays, with its bench's memories), for the readout. */
+export function coreFacts(ws: Workspace, core: string): { nands: number; period: number | null } | null {
+  const def = coreDef(ws, core), s = specOf(core);
+  if ('error' in def || !s) return null;
+  let f = facts.get(def);
+  if (!f) {
+    const period = s.warps ? warpPeriod(def, s.lanes) : s.lanes ? lanePeriod(def, s.lanes) : corePeriod(def);
+    facts.set(def, (f = { nands: stats(def).nands, period }));
+  }
+  return f;
 }
