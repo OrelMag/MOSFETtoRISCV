@@ -9,6 +9,7 @@ import { SEG7_FONT } from './memory';
 import { openChip } from './session';
 import { PICTURE } from '../riscv/ioprograms';
 import { CPU4_SUBCHIPS, cpu4Chip } from './example4';
+import { pdp8Chip } from './examplepdp8';
 import { dspChip } from './exampledsp';
 import { BENCH24 } from '../dsp/programs24';
 import { computer6502Chip, memory6502Chip } from './example6502';
@@ -449,6 +450,11 @@ export const EXAMPLES: Example[] = [
     build: (id, n, sub) => cpu4Chip(id, n, sub),
     subchips: CPU4_SUBCHIPS,
     hz: 1000,
+  },
+  {
+    id: 'pdp8', group: 'computers', short: 'Twelve switches, a row of lamps, a teletype.', name: 'PDP-8 front panel (1965)',
+    blurb: 'A ROM holding Hello, world in the PDP-8’s own instruction table (12-bit words, octal, PAL syntax), run on a model of the PDP-8 behind its front panel: lamps for PC, MA, MB, AC and L, the switch register, LOAD ADD, DEP, EXAM, START and a teletype.',
+    build: (id, n) => pdp8Chip(id, n),
   },
   ...BENCH24.map((b, i): Example => ({
     id: i === 0 ? 'dsp-core' : `dsp-core-${b.id}`, group: 'computers', drawer: true,

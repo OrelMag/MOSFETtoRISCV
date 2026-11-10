@@ -38,6 +38,8 @@ export function tableCompose(doc: IsaDoc, id = `isa:${doc.id}`): ComposeIsa {
         : { key: l, label: l, kind: 'num', min: 0, max: all - 1, step: 1, role: 'imm', hex: d.hex };
       case 'addr': {
         const s = d.scale ?? 1;
+        // paged (PDP-8): the top bit picks page zero or this page, the rest the word in it; the builder shows the bits
+        if (d.page) return { key: l, label: `${l}: page bit + word in the page`, kind: 'num', min: 0, max: all - 1, step: 1, role: 'imm' };
         return d.rel ? { key: l, label: l, kind: 'num', min: -(all / 2) * s, max: (all / 2 - 1) * s, step: s, role: 'target' }
           : { key: l, label: l, kind: 'num', min: 0, max: all - 1, step: 1, role: 'address', hex: true };
       }
