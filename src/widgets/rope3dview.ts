@@ -53,7 +53,7 @@ export function ropeView(): Widget {
       ['Phase', PH[st.phase]],
       ['Inhibit current', st.phase === 'set' ? inh.join('; ') : 'off'],
       ['Read', read === null ? 'not yet' : `${bits4(read)}: the wires that thread core ${st.addr}`],
-      ['A module', `${MODULE_CORES} cores × ${SENSE_LINES} sense wires = ${groupNum(MODULE_CORES * WORDS_PER_CORE)} words of ${WORD_BITS} bits; ${MODULES} modules = ${groupNum(FIXED_WORDS)} words`],
+      ['A module', `${MODULE_CORES} cores × ${WORDS_PER_CORE} words a core = ${groupNum(MODULE_CORES * WORDS_PER_CORE)} words of ${WORD_BITS} bits (${SENSE_LINES} sense wires a core); ${MODULES} modules = ${groupNum(FIXED_WORDS)} words`],
     ];
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
     chip.textContent = st.phase === 'idle' ? 'Idle' : st.phase === 'set' ? 'Set' : 'Reset';

@@ -249,7 +249,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   {
     id: 'nor_basic', act: 1, title: 'NOT, OR, AND from NOR3', kind: 'build', optional: true, requires: ['g_and', 'g_or'], base: BUILDNOR.nor_basic, par: { nor3: 5 }, codex: ['demorgan', 'duality', 'agc'],
     chapters: [{ chapter: 'appendix-agc', step: 1, label: 'One kind of gate' }],
-    why: 'NAND is our brick by choice. The Apollo Guidance Computer was built from a three-input NOR alone: MIT judged that qualifying even a second circuit type would cost more than it saved. The same three functions from it: 5 NOR3 gates (15 transistors, 20 resistors as drawn), where the NAND levels took 1 + 2 + 3 = 6 NANDs one by one (5 with ¬a shared). NOR makes OR the cheap one.',
+    why: 'NAND is our brick by choice. The Apollo Guidance Computer used a three-input NOR alone: MIT judged that qualifying a second circuit type would cost more than it saved. Here that is 5 NOR3 gates (15 transistors, 20 resistors), as many as NANDs with ¬a shared: NOR makes OR the cheap one.',
     tips: ['A NOR3 with its three inputs tied together is a NOT.', 'OR is a NOR followed by a NOT; tie the spare input to one of the other two.', 'AND by De Morgan: a·b = ¬(¬a + ¬b), a NOR of the two inverted inputs. ¬a is also an output: share it.'],
   },
 
