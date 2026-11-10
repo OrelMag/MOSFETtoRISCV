@@ -3,6 +3,7 @@
 // lib/goertzel.ts. Every number in the text is computed from them; what the text claims is tests/dsp-spectrum-chapter.test.ts.
 
 import { binsBreakEven, bestBlock, bestBlockFor, crossoverTaps, DTMF_FS, dtmfFreqs, fftRealMults, goertzelCoef, olsMults, resolvingSep, resolvingSepAt, skirtAt, stateBits, stateGain, weakestSeen, windowFigures, type WinKind } from '../dsp/spectrum';
+import { FFT_SW_STEPS } from './spectrum/fftsw';
 import { goertzelCell } from '../lib/goertzel';
 import { fftStream } from '../lib/fft';
 import { treeMul } from '../lib/muldiv';
@@ -48,7 +49,7 @@ export const chSpectrum: Chapter = {
     'filter with a long FIR by blocks (overlap-save), and say how many taps make that cheaper',
     'build one frequency detector from a recurrence in gates, size its state word, and decide when it beats an FFT',
   ],
-  builds: ['signals', 'carriers', 'fixed', 'zplane'],
+  builds: ['signals', 'carriers', 'fixed', 'zplane', 'python', 'pipeline', 'muldiv'],
   get recap() {
     const f = spectrumFacts();
     return {
@@ -255,5 +256,6 @@ export const chSpectrum: Chapter = {
         why: ['', 'Each register holds one state, and the width depends on how big a state gets.', 'The coefficient\'s width sets its resolution, not the state\'s range.', 'The product is rounded once whatever the width.'],
       },
     },
+    ...FFT_SW_STEPS,
   ],
 };

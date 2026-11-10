@@ -199,7 +199,7 @@ describe('step 8, the keypad in gates', () => {
 
 describe('the text', () => {
   it('every step has words, something to do and a challenge; no step is longer than the guide allows', () => {
-    expect(chSpectrum.steps.length).toBe(8);
+    expect(chSpectrum.steps.length).toBe(12);
     for (const s of chSpectrum.steps) { expect(s.body.length, s.title).toBeGreaterThan(900); expect(!!s.widget || !!s.scene, s.title).toBe(true); expect(s.challenge, s.title).toBeTruthy(); expect(s.body, s.title).toContain('class="try"'); }
   });
   it('links only to chapters in the book, and types no chapter number', () => {

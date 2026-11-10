@@ -891,7 +891,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Inside the circle", challenge: "quiz" },
     { title: "Same gain, different delay", challenge: "quiz" },
   ] },
-  { id: "spectrum", num: 76, title: "Measuring a spectrum", blurb: "Why a pure tone shows a skirt: leakage, windows and what they trade, resolution against the number of samples, spectrograms, fast convolution by overlap-save, and a Goertzel cell in gates decoding a keypad.", level: "Signal processing", builds: ["signals","carriers","fixed","zplane"], recap: {"checks":3}, steps: [
+  { id: "spectrum", num: 76, title: "Measuring a spectrum", blurb: "Why a pure tone shows a skirt: leakage, windows and what they trade, resolution against the number of samples, spectrograms, fast convolution by overlap-save, and a Goertzel cell in gates decoding a keypad.", level: "Signal processing", builds: ["signals","carriers","fixed","zplane","python","pipeline","muldiv"], recap: {"checks":3}, steps: [
     { title: "A tone that is not a line", challenge: "quiz" },
     { title: "A window is a choice of skirt", challenge: "quiz" },
     { title: "What the skirt hides", challenge: "quiz" },
@@ -900,6 +900,10 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Filtering by blocks", challenge: "quiz" },
     { title: "One bin, cheaply: Goertzel", challenge: "quiz" },
     { title: "A keypad in gates", challenge: "quiz" },
+    { title: "The FFT as a program", challenge: "quiz" },
+    { title: "In place, by loops", challenge: "quiz" },
+    { title: "Making it fast", challenge: "quiz" },
+    { title: "Real input, half the work", challenge: "quiz" },
   ] },
   { id: "firdesign", num: 77, title: "FIR design", blurb: "How few taps meet a mask: linear phase, windows, Parks–McClellan, taps as words, folding, constants in signed digits, and one multiplier shared over the taps in gates.", level: "Signal processing", builds: ["signals","zplane","fixed","spectrum","muldiv"], recap: {"checks":3}, steps: [
     { title: "A mask, and mirror-image taps", challenge: "quiz" },
@@ -951,7 +955,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Pairs, unrolling, and the alignment trap", challenge: "quiz" },
     { title: "The measured table", challenge: "quiz" },
   ] },
-  { id: "dspcore", num: 82, title: "A DSP core", blurb: "What does a processor look like when the loop is the point? A small core of our own in gates: two memories read in one clock, address generators that step as they are read, a loop with no branch, and the MAC. Its filters, an FFT, and a measured comparison with the RV32 machines.", level: "Signal processing", builds: ["mac","cpu","carriers","fixed","firdesign"], recap: {"checks":3}, steps: [
+  { id: "dspcore", num: 82, title: "A DSP core", blurb: "What does a processor look like when the loop is the point? A small core of our own in gates: two memories read in one clock, address generators that step as they are read, a loop with no branch, and the MAC. Its filters, an FFT, and a measured comparison with the RV32 machines.", level: "Signal processing", builds: ["mac","cpu","carriers","fixed","firdesign","spectrum"], recap: {"checks":3}, steps: [
     { title: "What a loop costs", challenge: "quiz" },
     { title: "Two memories, two buses", challenge: "reach" },
     { title: "Address generators", challenge: "quiz" },
@@ -960,6 +964,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A filter, a tap a clock", challenge: "reach" },
     { title: "The FFT", challenge: "quiz" },
     { title: "Against the RV32 machines", challenge: "quiz" },
+    { title: "The same FFT on both", challenge: "quiz" },
   ] },
   { id: "converters", num: 83, title: "Converters", blurb: "How does one bit make 16? Flash, SAR and R-2R as models, what a shaky clock costs, and sigma-delta in gates with a CIC decimating its bits, effective bits measured.", level: "Signal processing", builds: ["signals","noise","zplane","multirate","fixed"], recap: {"checks":3}, steps: [
     { title: "What a converter is judged by", challenge: "quiz" },
