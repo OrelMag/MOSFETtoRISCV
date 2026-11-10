@@ -324,6 +324,8 @@ Show / Hide is remembered per act (`layout.ts foldedActs`, `settings.actOpen`).
 - ✅ `s_pc`: program counter with reset and load ← s_reg16, a_inc16, g_mux8
 - ✅ *opt* `s_fsm`: a "101" detector (Mealy machine) from its state table ← s_dff, d_kmap
 - ✅ *opt* `m_ram` (ex) ← s_reg4, g_dec
+- ✅ *opt* `m_lut`: a look-up table, y = cfg[i] from 2:1 muxes (the FPGA chapter's LUT4; par 60 NANDs, depth 9) ← g_mux
+- ✅ *opt* `d_lut`: Program the LUT drill (a function in words → its 16 configuration bits) ← m_lut
 - ✅ `m_rf`: 8 × 16 register file, x0 = 0, model check ← s_reg16, g_dec, g_mux8
 - ✅ `m_mem`: ROM and RAM lesson (unlocks the memory parts) ← m_rf
 

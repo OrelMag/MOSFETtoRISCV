@@ -64,6 +64,29 @@ export const WALKS4: Record<string, WalkScript> = {
     },
   ],
 
+  s_icg: [
+    {
+      title: 'The latch, open while the clock is low',
+      text: 'latch is your 4-NAND D latch on en. inv gives it ¬clk for its enable, so it follows en while clk = 0 and holds it from each rising edge through the high half. 5 NANDs so far.',
+      parts: ['inv', 'latch'], codex: ['clockgating'],
+      why: 'en may change at any time; the AND below must see it change only while the clock is low, when its output is 0 anyway.',
+      whyNot: { text: 'With the latch open while clk is high, en passes straight through exactly when the AND passes the clock.' },
+      ask: {
+        question: 'The latch holds en while clk is high. Why that half and not the low one?',
+        options: ['While clk is high the AND passes the clock, so en must not move then', 'A latch is faster while clk is high', 'So en is sampled at the falling edge', 'Either half works'],
+        answer: 0,
+        explain: 'gclk = clk · en_l: only while clk = 1 can a change of en_l reach gclk. Frozen then, it starts or stops whole pulses only.',
+        why: ['', 'Speed has nothing to do with it: which half it is open in decides what reaches the AND.', 'It closes at the rising edge, so it holds the value en had at that edge through the high half.', 'Open in the high half it passes en to the AND when the AND passes the clock: the runt pulse is back.'],
+      },
+    },
+    {
+      title: 'The AND',
+      text: 'nand and inv2 make the AND: gclk = clk · en_l, so the clock gets through while the held en_l is 1, in whole pulses or none. 7 NANDs: par. One gate for a whole register, where a mux in front of each flip-flop costs 4 NANDs a bit.',
+      parts: ['nand', 'inv2'],
+      why: 'The AND is the gate itself; the latch only makes its enable safe.',
+      whyNot: { text: 'An OR with ¬en holds the clock high instead, and only moves the glitch to the other half.' },
+    },
+  ],
   s_cnt4: [
     {
       title: 'The count',
@@ -168,6 +191,30 @@ export const WALKS4: Record<string, WalkScript> = {
       parts: ['mux'], codex: ['mux', 'ram'],
       why: 'A mux selects the word. The read is combinational, so q follows addr at once.',
       whyNot: { text: 'Tri-state outputs per word would save mux gates, but the NAND world has no tri-state cell: they exist only at switch level.' },
+    },
+  ],
+
+  m_lut: [
+    {
+      title: 'The table',
+      text: 'A splitter breaks cfg into its 16 bits, one per row of the truth table: bit k is the output when i = k. Wiring only, 0 NANDs.',
+      parts: ['u0'], codex: ['lut'],
+      why: 'The configuration is the truth table itself, stored bit by bit: whatever function it holds, the circuit around it is the same.',
+      whyNot: { text: 'Gates for one function would compute only that function; a new one would mean a new circuit.' },
+    },
+    {
+      title: 'Sixteen to one',
+      text: 'Fifteen 2:1 muxes in four levels: eight on i0 choose between neighbouring bits, four on i1, two on i2, one on i3. 60 NANDs, depth 9 from a select bit, 8 from a configuration bit.',
+      parts: ['u1'], codex: ['mux', 'lut'],
+      ask: {
+        question: 'Which input should select at the first level of the tree, the one next to the 16 bits?',
+        options: ['i0, the lowest bit', 'i3, the highest bit', 'Any of them, as long as each level gets one', 'All four at every level'],
+        answer: 0,
+        explain: 'Bits 2k and 2k + 1 differ only in i0, so the first level picks between neighbours with i0; the next level\'s pairs differ in i1, and so on.',
+        why: ['', 'With i3 first, the first level would pick between bits 2k and 2k + 1 by i3: the table read out of order, half the rows wrong.', 'The order fixes which bit each address reads: with the levels swapped, i = 1 would read bit 8.', 'Each mux has one select; a level shares one input bit.'],
+      },
+      why: 'The four inputs are the address; each level of the tree halves the candidates by one address bit.',
+      whyNot: { text: 'A decoder on i and an OR of sixteen ANDs reads the same bit, for more NANDs.' },
     },
   ],
 

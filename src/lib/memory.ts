@@ -9,15 +9,17 @@ import { symbolGeom } from '../sim/geometry';
 import { define } from './define';
 import { decoder, muxTree } from './combinational';
 import { register } from './sequential';
+import { gatedRegister } from './clockgate';
 
 const cache = new Map<string, ComponentDef>();
 
-export function ram(k: number, w: number): ComponentDef {
-  const key = `${k}x${w}`;
+/** gated: each word clocked through its own clock gate (lib/clockgate.ts), the Power chapter's. */
+export function ram(k: number, w: number, gated = false): ComponentDef {
+  const key = `${k}x${w}${gated ? 'g' : ''}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const N = 2 ** k;
-  const R = register(w);
+  const R = gated ? gatedRegister(w) : register(w);
   const rg = symbolGeom(R);
   const pitch = Math.max(rg.h + 4, 10);
   const D = decoder(k, true, pitch);
@@ -57,7 +59,7 @@ export function ram(k: number, w: number): ComponentDef {
 
   const def = define({
     // past 2^6 words bigmem.ts's bigRam has ram<N>x<w>, a behavioural leaf: define() hands back the first part of an id, so sharing it would swap one for the other
-    id: k > 6 ? `ramg${N}x${w}` : `ram${N}x${w}`, name: `${N}×${w} memory`, category: 'memory',
+    id: `${k > 6 ? `ramg${N}x${w}` : `ram${N}x${w}`}${gated ? '_cg' : ''}`, name: `${N}×${w} memory${gated ? ', clock-gated' : ''}`, category: 'memory',
     summary: `${N} words of ${w} bits (${N * w} bits). Writing: the decoder enables exactly one word when we = 1. Reading: a multiplexer tree selects the addressed word.`,
     ports: [
       { name: 'addr', width: k, dir: 'in' },

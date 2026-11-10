@@ -41,10 +41,19 @@ export const THREAD1: Record<string, NodeThread> = {
       s_reg16: 'four of them sharing clk and en',
       s_cnt4: 'holds the count; en = 0 holds it still',
       m_ram: 'one per word, en from the address decoder ANDed with we',
+      s_icg: 'the same enable, on the clock instead of a mux per bit',
     },
     pitfalls: [
       'clk AND en on the clock pin saves the muxes and fails: a change of en while clk is high is an edge.',
       'Swapped mux inputs (en = 1 selects q) make a register that never loads.',
+    ],
+  },
+  s_icg: {
+    uses: ['rf'],
+    usedFor: {},
+    pitfalls: [
+      'The latch open while clk is high passes a change of en straight to the AND: the runt pulse the gate exists to stop.',
+      'A gated register\'s flip-flops still need their clock inverted inside; gate the clock once, in front of all of them, not each flip-flop.',
     ],
   },
   s_reg16: {
@@ -94,6 +103,20 @@ export const THREAD1: Record<string, NodeThread> = {
     pitfalls: [
       'The decoder\'s outputs must be gated by we: without it every edge writes the addressed word.',
       'Reads are combinational: a register in the read path returns the word one cycle late.',
+    ],
+  },
+  m_lut: { // optional and in no block: it builds an FPGA's cell, not a part of RV16
+    usedFor: { d_lut: 'its 16 configuration bits, written from a function in words' },
+    pitfalls: [
+      'The first level of the tree selects with i0: bits 2k and 2k + 1 differ only there. Swapped levels read the table out of order.',
+      'Bit k of cfg is the output for i = k: 0x8000 is the AND, not 0x0001.',
+    ],
+  },
+  d_lut: { // optional and in no block, like m_lut
+    usedFor: {},
+    pitfalls: [
+      'Writing the column top-down from address 0 gives the table backwards: address 0 is bit 0, the right end.',
+      'A function that ignores an input still fills all sixteen rows: its pattern repeats, it does not shrink.',
     ],
   },
   m_rf: {

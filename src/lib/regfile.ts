@@ -10,6 +10,7 @@ import { busMux2, decoder, muxTree } from './combinational';
 import { OR } from './gates';
 import { define, merger, splitter } from './define';
 import { register } from './sequential';
+import { gatedRegister } from './clockgate';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -164,12 +165,13 @@ assign rd1 = (ra1 == 0) ? '0 : x[ra1];   // likewise rd2, rd3, rd4`,
 /**
  * zero = false: register 0 is an ordinary register (the floating-point file has no hard-wired f0).
  * reads = 3 adds a third read port (rs3 of the fused multiply-add instructions).
+ * gated: each register clocked through its own clock gate (lib/clockgate.ts), the Power chapter's.
  */
-export function regfile(k: number, w: number, zero = true, reads: 2 | 3 = 2): ComponentDef {
-  return memo(`rf${k}x${w}${zero ? '' : 'f'}${reads === 3 ? '_3r' : ''}`, () => {
+export function regfile(k: number, w: number, zero = true, reads: 2 | 3 = 2, gated = false): ComponentDef {
+  return memo(`rf${k}x${w}${zero ? '' : 'f'}${reads === 3 ? '_3r' : ''}${gated ? '_g' : ''}`, () => {
     const pre = zero ? 'x' : 'f';
     const N = 2 ** k;
-    const R = register(w);
+    const R = gated ? gatedRegister(w) : register(w);
     const rg = symbolGeom(R);
     const P = Math.max(rg.h + 4, 10);
     const D = decoder(k, true, P);
@@ -227,7 +229,7 @@ export function regfile(k: number, w: number, zero = true, reads: 2 | 3 = 2): Co
     if (reads === 3) nets.push({ name: 'ra3', ends: ['ra3', 'rp3.sel'], via: { 'rp3.sel': [[sel3x, bottom + 8]] } }, { name: 'rd3', ends: ['rp3.y', 'rd3'] });
     const outX = xP + rpg.w + 6;
     return define({
-      id: `regfile${N}x${w}${zero ? '' : '_f'}${reads === 3 ? '_3r' : ''}`, name: `${zero ? 'Register file' : 'Floating-point register file'} (${N} × ${w}${reads === 3 ? ', 3 read ports' : ''})`, category: 'memory',
+      id: `regfile${N}x${w}${zero ? '' : '_f'}${reads === 3 ? '_3r' : ''}${gated ? '_g' : ''}`, name: `${zero ? 'Register file' : 'Floating-point register file'} (${N} × ${w}${reads === 3 ? ', 3 read ports' : ''}${gated ? ', clock-gated' : ''})`, category: 'memory',
       summary: `${N} registers of ${w} bits${zero ? '; x0 always reads 0' : ' (f0 is an ordinary register)'}. ${reads === 3 ? 'Three read ports (fused multiply-add reads three operands)' : 'Two read ports (two operands per instruction)'} and one write port, all in one cycle.`,
       ports: [
         bus('wa', k, 'in'), bus('ra1', k, 'in'), bus('ra2', k, 'in'), ...(reads === 3 ? [bus('ra3', k, 'in')] : []), bus('wd', w, 'in'), bit('we', 'in'),

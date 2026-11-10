@@ -52,10 +52,13 @@ export const NUDGES: Record<string, string> = {
   s_dff: 'A door open for half a cycle lets values race through; two doors that are never open together do not.',
   s_reg4: 'Holding is a choice made at every edge, keep the old value or take the new one, never made by stopping the clock.',
   s_reg16: 'Reuse what you just built.',
+  s_icg: 'The enable may change at any moment; the clock that leaves must not. Something has to hold en still while the clock is high.',
   s_cnt4: 'Something has to remember the count between edges, and something has to work out the next one.',
   s_pc: 'Each cycle the next address is one of a few candidates, and reset must win over all of them.',
   s_fsm: 'Name every situation the machine can be in, and what moves it from one to the next.',
   m_ram: 'Writing must pick one word and reading must pick one word: two different selections.',
+  m_lut: 'Think of the 16 bits as a memory and the four inputs as its address.',
+  d_lut: 'A function of four inputs has sixteen rows: write each row\'s output in its own bit.',
   m_rf: 'It is the small memory again, with more words, a second way to read, and one entry that must never change.',
   // act 4: the instruction set and programs
   i_enc: 'Cut the word at the field boundaries first; the opcode then tells you which fields are registers and which are pieces of an immediate.',

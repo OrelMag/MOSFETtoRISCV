@@ -26,7 +26,9 @@ import pinned from './rv16-fingerprints.json';
 describe('RV16 without custom rows', () => {
   it('every rv16 part and campaign answer keeps its fingerprint', () => {
     const now = rv16Fingerprints(NODES.map((n) => () => levelChallenge(n)));
-    expect(now.answers).toEqual(pinned.answers);
+    // every answer pinned before the custom rows existed is unchanged; levels added since (the Debugging act, m_lut, s_icg …)
+    // place rv16 parts too and simply are not in the pin, so they are not compared
+    for (const [id, f] of Object.entries(pinned.answers)) expect((now.answers as Record<string, string>)[id], id).toBe(f);
     for (const [id, f] of Object.entries(pinned.parts)) expect(now.parts[id], id).toBe(f);
   }, 60_000);
 

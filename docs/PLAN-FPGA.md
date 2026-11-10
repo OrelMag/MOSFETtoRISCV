@@ -9,7 +9,11 @@ order silicon → fpga → verify (chapter id `fpga`; Ross's verification chapte
 1. sim/lutmap.ts + lib/fpga.ts with tests ✅ (feat/fpga-lut)
 2. CI numbers: nextpnr-himbaechel + Apicula in a workflow, fpgacosts.json pinned ✅ (feat/fpga-pnr: scripts/fpga-pnr.ts, .github/workflows/fpga.yml)
 3. The chapter (numOf everywhere; every "to be measured" cell measured before it reaches the prose) ✅ (feat/fpga-chapter: chapters/ch-fpga.ts, src/fpga/facts.ts, widgets/fpga.ts; nine steps; the bitstream measured with Apycula gowin_pack; the switch box is a DOM widget, not switchBox(n) / islandGrid(w, h))
-4. Codex entries, the side level and the drill
+4. Codex entries, the side level and the drill ✅ (feat/fpga-codex: codexfpga.ts / codexmorefpga.ts / codexcheckfpga.ts, six entries,
+   their numbers pinned against facts.ts; `m_lut` and `d_lut` in act 3. Changed from the plan: the side level is in act 3, State and
+   memory, beside `m_ram` (act 4 is the instruction set), and it is the chapter's LUT4 as it stands, cfg an input and built from 2:1
+   muxes on `g_mux` alone; no flip-flops hold the configuration and there is no LUT2 rung. A registered variant, cfg loaded on `ld` at
+   the clock edge with a sequence bench, is open as a follow-up.)
 
 Phase 23, "From netlist to FPGA". Mockup: `E:/mockups/fpga/index.html` (steps 2, 4 and 9, light
 and dark; screenshots `E:/mockups/fpga/{a,b,c}-{light,dark}.png`).

@@ -84,12 +84,12 @@ export function rom(words: number[], k = 6, label?: string): ComponentDef {
 }
 
 /** Word-addressed data memory: 2^k words; the low two address bits are ignored. */
-export function dataMemory(k = 5): ComponentDef {
-  return memo(`dmem${k}`, () => {
-    const R = ram(k, 32);
+export function dataMemory(k = 5, gated = false): ComponentDef {
+  return memo(`dmem${k}${gated ? 'g' : ''}`, () => {
+    const R = ram(k, 32, gated);
     const rg = symbolGeom(R);
     return define({
-      id: `dmem${k}`, name: 'Data memory', category: 'memory',
+      id: `dmem${k}${gated ? '_cg' : ''}`, name: `Data memory${gated ? ', clock-gated' : ''}`, category: 'memory',
       summary: `${2 ** k} words (${4 * 2 ** k} bytes). The memory array from Chapter 10 at 32 bits wide; address bits [${k + 1}:2] select the word.`,
       ports: [bus('addr', 32, 'in'), bus('wd', 32, 'in'), bit('we', 'in'), bit('clk', 'in', 'bottom', true), bus('rd', 32, 'out')],
       symbol: { kind: 'box', label: 'DATA MEM' },
@@ -615,6 +615,11 @@ export interface CpuOptions {
    */
   mac?: boolean;
   /**
+   * Clock gating (the Power chapter): every register of the register file and every word of the data memory clocked
+   * through its own clock gate (lib/clockgate.ts), the write select its enable. Only with the plain data memory.
+   */
+  gatedClocks?: boolean;
+  /**
    * The vector unit (chapter vectors, lib/vector.ts): four lanes, VLEN 128, the RVV subset of ISS({ v: { vlen: 128, gates: true } });
    * the data memory becomes four word-interleaved banks (vecMemory), and the core gains `retire` (low while a vector
    * instruction runs its beats). Not with the caches, the FPU, a shared memory, the C extension, the MAC or custom rows.
@@ -656,12 +661,13 @@ export const PLUS4_FAST: ComponentDef = define({
 export function singleCycleCpu(program: number[], opts: CpuOptions = {}): ComponentDef {
   const IM = opts.c ? cFetch(program, opts.imemK ?? 6) : rom(program, opts.imemK ?? 6);
   const adder = opts.adder ?? 'rca';
-  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? `_dc${opts.dcache === true ? '' : opts.dcache}` : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}${opts.imemPort ? '_ip' : ''}${opts.icache ? '_ic' : ''}${opts.dram ? `_dram${cfgKey(opts.dram)}` : ''}${opts.custom?.length ? `_cx${rowsKey(opts.custom)}` : ''}${opts.c ? '_c' : ''}${opts.mac ? '_mac' : ''}${opts.vector ? '_v' : ''}`;
+  const key = `cpu1_${IM.id}_${opts.dmemK ?? 5}_${adder}${opts.dcache ? `_dc${opts.dcache === true ? '' : opts.dcache}` : ''}${opts.fpu ? '_fp' : ''}${opts.shared ? '_mp' : ''}${opts.imemPort ? '_ip' : ''}${opts.icache ? '_ic' : ''}${opts.dram ? `_dram${cfgKey(opts.dram)}` : ''}${opts.custom?.length ? `_cx${rowsKey(opts.custom)}` : ''}${opts.c ? '_c' : ''}${opts.mac ? '_mac' : ''}${opts.gatedClocks ? '_cg' : ''}${opts.vector ? '_v' : ''}`;
   if (opts.vector && (opts.vector.lanes !== VEC_LANES || opts.vector.vlen !== VEC_VLEN)) throw new Error(`singleCycleCpu: the vector unit is built with ${VEC_LANES} lanes and VLEN ${VEC_VLEN}`);
-  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, opts.dcache ?? false, !!opts.fpu, !!opts.shared, !!opts.imemPort, !!opts.icache, opts.imemK ?? 6, opts.dram, opts.custom ?? [], !!opts.c, !!opts.mac, !!opts.vector));
+  return memo(key, () => buildCpu(IM, opts.dmemK ?? 5, adder, opts.dcache ?? false, !!opts.fpu, !!opts.shared, !!opts.imemPort, !!opts.icache, opts.imemK ?? 6, opts.dram, opts.custom ?? [], !!opts.c, !!opts.mac, !!opts.gatedClocks, !!opts.vector));
 }
 
-function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: boolean | 'wb' | 'wb2' = false, fpu = false, shared = false, imemPort = false, icache = false, imemK = 6, dram?: DramConfig, custom: readonly CustomRow[] = [], c = false, mac = false, vector = false): ComponentDef {
+function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: boolean | 'wb' | 'wb2' = false, fpu = false, shared = false, imemPort = false, icache = false, imemK = 6, dram?: DramConfig, custom: readonly CustomRow[] = [], c = false, mac = false, gated = false, vector = false): ComponentDef {
+  if (gated && (dcache || shared || vector)) throw new Error('singleCycleCpu: gatedClocks needs the plain data memory');
   if (vector && (c || dcache || icache || fpu || shared || mac || custom.length)) throw new Error('singleCycleCpu: vector with a cache, the FPU, a shared memory, the C extension, the MAC or custom rows is not supported');
   if (mac && (c || dcache || icache || fpu || shared)) throw new Error('singleCycleCpu: mac with a cache, the FPU, a shared memory or the C extension is not supported');
   if (mac && custom.some((r) => r.slot === 2)) throw new Error('singleCycleCpu: custom-2 is the MAC\'s: a custom row may use custom-1 or custom-3');
@@ -669,7 +675,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
   if (dram && dcache !== 'wb' && dcache !== 'wb2') throw new Error('singleCycleCpu: dram needs a write-back data cache');
   if (icache && (fpu || shared)) throw new Error('singleCycleCpu: icache with fpu or shared is not supported');
   const IMEM = icache ? iCache(IM, 3, imemK) : IM;
-  const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder), DM = dcache === 'wb' ? wbCache(dmemK, 2, 1, dram) : dcache === 'wb2' ? wbCache(dmemK, 1, 2, dram) : dcache ? cachedMemory(dmemK) : vector ? vecMemory(dmemK) : dataMemory(dmemK);
+  const PC = register(32), RF = regfile(5, 32, true, 2, gated), ALU = alu(32, adder), DM = dcache === 'wb' ? wbCache(dmemK, 2, 1, dram) : dcache === 'wb2' ? wbCache(dmemK, 1, 2, dram) : dcache ? cachedMemory(dmemK) : vector ? vecMemory(dmemK) : dataMemory(dmemK, gated);
   const M2 = busMux2(32), M4 = muxTree(2, 32), RES = mac ? muxTree(3, 32) : M4, ADD = adder === 'ks' ? koggeStone(32) : rca(32), SI = splitter([7, 5, 3, 5, 5, 7]);
   const P4 = c ? PLUS2OR4 : adder === 'ks' ? PLUS4_FAST : PLUS4;
   const g = (d: ComponentDef) => symbolGeom(d);

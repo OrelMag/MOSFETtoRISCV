@@ -30,7 +30,7 @@ export const chFpga: Chapter = {
       `Routing is pass switches held by configuration bits. On our computer's slowest path routing took ${pathShares().routingPct} % of the time, logic ${pathShares().logicPct} %: on an FPGA the wires set the clock.`,
       `Large memories go to block RAM (${D.bsram.used} blocks for our ${RAM_WORDS * RAM_BITS / 1024} Kbit of RAM and ${ROM_WORDS * 32 / 1024} Kbit of ROM); a memory read from many ports at once, like the register file, stays in flip-flops and LUTs.`,
     ],
-    practise: [],
+    practise: ['m_lut', 'd_lut'],
     check: [
       {
         question: 'A 4-input LUT is configured as 0x8000. What does it compute?',

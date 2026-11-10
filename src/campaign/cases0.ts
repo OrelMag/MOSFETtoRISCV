@@ -208,6 +208,15 @@ export const CASES0: Record<string, LevelCase> = {
       { name: 'Gated clock (clk AND en)', nand: 38, note: 'Four 9-NAND flip-flops and one AND on the clock; it fails on silicon (glitches on en, skew).' },
     ],
   },
+  s_icg: {
+    problem: 'A register that is not written still sees every clock edge: each flip-flop\'s latches switch and the clock net is charged and discharged, cycle after cycle. Stopping its clock saves that energy, and the enable muxes too, if the stopped clock can never glitch.',
+    without: 'A bare clk AND en cuts a pulse short, or makes an extra one, whenever en changes while clk is high: a flip-flop that sees a runt edge may load, or go metastable.',
+    cost: 'A D latch (4), an inverter (1) and an AND (2): 7 NANDs at par, once for a whole register. On the single-cycle CPU, gating the register file and data memory saves about a third of the energy per cycle and the enable muxes.',
+    alts: [
+      { name: 'Library clock gate', lib: 'icg' },
+      { name: 'Bare clk AND en', nand: 2, note: 'Fails: a change of en while clk is high cuts or adds a pulse.' },
+    ],
+  },
   s_reg16: {
     problem: '16-bit registers hold all of RV16\'s state: the PC, x1–x7, the CSRs, and in the pipeline the instructions, operands and results passed between stages. Four 4-bit registers sharing clk and en make one.',
     cost: 'Four par 4-bit registers make 208 NANDs, the reference; the library\'s, from 11-NAND flip-flops, is 240. Clock period 8: clk-to-q 3, the enable mux 2, setup 3. Where a register loads every cycle (the PC, mstatus) the enable muxes would do no work: 16 bare flip-flops are 144 NANDs, and this level unlocks that register too.',
@@ -236,6 +245,15 @@ export const CASES0: Record<string, LevelCase> = {
     without: 'Every word would need its own wires to the CPU.',
     cost: 'Four 4-bit registers, a 2→4 decoder with enable and a 4:1 mux: the library\'s version is 306 NANDs (1224 transistors, 77 per bit). An SRAM bit is 6 transistors, read through shared bit lines and a sense amplifier: real memories are arrays of such cells.',
     alts: [{ name: '6T SRAM cell (one bit)', lib: 'sram6t' }],
+  },
+  m_lut: {
+    problem: 'A truth table of four inputs is 16 bits. Store them and let the inputs pick one, and the circuit computes whatever function the bits say: this is the look-up table an FPGA is made of, thousands of them, each set by its configuration bits when the chip powers on.',
+    without: 'Every function would need its own gates, fixed when the chip is made: changing the logic would mean a new chip.',
+    cost: 'Fifteen 2:1 muxes, 60 NANDs and 16 configuration bits, whatever the function: the 9-NAND full adder takes two LUTs, one for the sum and one for the carry, and a four-input function that would take dozens of NANDs still takes one. Each extra input doubles the bits and the multiplexer.',
+    alts: [{ name: 'A two-input LUT (4 bits)', lib: 'lut2' }, { name: 'The full adder in gates', lib: 'full_adder' }],
+  },
+  d_lut: {
+    problem: 'Place-and-route tools turn every LUT\'s function into its 16 bits and write them into the bitstream, thousands of tables. By hand it is a truth table read in order: the output at address 0 is bit 0, at address 15 bit 15, and four rows make one hex digit.',
   },
   m_rf: {
     problem: 'An R-type instruction reads two registers and writes a third in the same cycle, so the register file has two read ports (rs1 = instr[9:7], rs2 = instr[12:10]) and one write port (rd = instr[6:4]). Writes: the 3→8 decoder on rd, enabled by rwe, loads one of x1–x7 at the clock edge. Reads: two 8:1 bus muxes, combinational. x0 always reads 0: a constant, with no register behind it.',

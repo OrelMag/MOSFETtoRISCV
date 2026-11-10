@@ -219,6 +219,8 @@ src/sim/       simulation core (no DOM)
                  slackBand / SLACK_BANDS, slackHeat (band + tooltip): the Slack overlay (view/overlays.ts; the Timing panels'
                  heatToggle is a shortcut to it)
   netcap.ts      FF_INPUT / FF_DRIVER / FF_WIRE, netCaps, driverOf (shared by power.ts and delay.ts; power re-exports them)
+  leakage.ts     static power from a simulation's state (the Power chapter): each NAND by its inputs (all 1: n parallel PMOS off; k inputs 0:
+                 phys/cmosv.ts seriesOff(k)), X as both values, by child like PowerMeter.breakdown; non-NAND leaves counted apart
   delay.ts       load-dependent delay (Phase 19): logical effort per NAND (d = p + g·h), DelayModel 'unit' | 'load'
                  (buffer chain where it pays) | 'drawn' (none); netLoads (outputs load one input), inputArrivals (inputs
                  driven by a minimum NAND), leafDelays, heavyNets, PS_PER_UNIT, DELAY_NOTE; logicDepth(def, model);
@@ -271,6 +273,9 @@ src/lib/       the component library (registered in `registry` via define())
   regfile.ts     regfile(k, w) with x0 = 0, two read ports fed by one bundled word bus; regfile2w(k, w): 4 read, 2 write
                  ports (writeSelect per register: port 1, the younger instruction, wins), w<i> names like regfile
   seqdeep.ts     chapter 8's deeper parts: DFF_EDGE6 (the 7474: five NANDs and a NAND3, 8 NANDs against the master–slave's 11), CLK_BUF, skewPair(k)
+  clockgate.ts   the Power chapter's clock gating: ICG (D latch open while clk is low + AND; ICG_SETUP 4 / ICG_HOLD 1 NAND delays),
+                 gatedRegister(n) (register(n)'s pins and outline, plain DFFs behind one ICG); regfile(…, gated), ram(k, w, gated),
+                 dataMemory(k, gated), singleCycleCpu({ gatedClocks }) take it (ids _g / _cg; tests/power-model.test.ts)
                  (ff1 → ff2 with k buffers on the second clock: skew, hold race)
   rfdeep.ts      chapter 12's: rfBypass(k, w) (regfile + write-through: comparator, AND and word mux per read port, byp input, never x0), latchWord(w),
                  latchFile(k, w) (D latches enabled by decoder · clk: transparent for the whole high phase); regfile() itself is untouched
@@ -546,7 +551,9 @@ src/lib/       the component library (registered in `registry` via define())
   adders.ts      carrySelect(n, k), carrySkip(n, k), BCD_DIGIT, bcdAdder(d)
   muldiv.ts      ppRow, arrayMul(n), compressor()/csa(n) (3:2 rows with word offsets), treeMul(n, signed,
                  outW) (Wallace + KS), MUL32, BOOTH_ENC, divStep, arrayDiv, seqDivider(n), condNegate, MDU
-src/bench/     results.json (scripts/benchmarks.ts --write, checked in; each run's switched C from a GateSim rerun:
+src/bench/     powercosts.ts / powercosts.json: the Power chapter's numbers (plain vs clock-gated single-cycle CPU on `sum`, leakage,
+               the device law's minimum-energy point; scripts/power-costs.ts --write, tests/power-costs.test.ts recomputes them);
+               results.json (scripts/benchmarks.ts --write, checked in; each run's switched C from a GateSim rerun:
                tests/verify/bench.ts benchEnergy), summary.ts (DOM-free: times, energies, geometric means over
                the four RV32I programs, the cost / speed front, each CPU's family and chapter): the workbench's Benchmarks
                tab (ui/pages/benchmarks.ts, its own chunk); ooprice.ts: priceOf(shape) (an out-of-order shape's NANDs and period
@@ -1273,7 +1280,11 @@ src/comm/stack/ the stack as Python text (StackModule { name, py }): eth (rings,
                the Internet checksum) and dissects captures; tests/comm-stack.test.ts holds hand-derived frames, comm-netframes.test.ts compares the compiled stack with it.
                lib/lan.ts lanComputers(srcA, srcB): two computers with NICs, MAC pairs on switch ports 0 and 1, an ethSwitch (cells of 128 bytes, two a port; on the cycle engine
                1 200 to 1 600 clocks a second in node, 2 433 in headless Chrome with the time-sliced loop: the first ping reply in about 12 s), nicLoopback; widgets/net.ts the chapter's widgets and scenes (the ping's frame list is a mirror of the switch's receive streams).
-src/phys/      lumped physics models behind the prologue's close-ups (DOM-free): inverter.ts (chapter 2: the CMOS inverter's voltage transfer curve from widgets/mosphys.ts's square-law device, bisection on the current balance; metrics(k): V_M, V_IL / V_IH at slope −1, V_OH / V_OL, noise margins, peak gain; MOBILITY_RATIO 2.5 = a matched pair, V_M = VDD / 2), sizing.ts (an inverter chain by logical effort, D = N·F^(1/N) + N·p; bestStages, FO4_TAU = 5 τ), effort.ts (g of n-input NAND (n + 2) / 3 and NOR (2n + 1) / 3, pathDelay, the 4-input AND as one NAND4 + inverter or as a NAND2 / NOR2 tree); relay.ts (a 24 V telephone relay: saturating
+src/phys/      lumped physics models behind the prologue's close-ups (DOM-free): cmosv.ts (the Power chapter: chapter 2's square law with an EKV
+               subthreshold tail; PROCESSES hp / lp from ITRS 2013 PIDS on / off currents, the threshold solved from their ratio, the
+               width from 25 ps per NAND at V_NOM 0.9 V; onCurrent, offCurrent, seriesOff(k) (stacked off devices, no DIBL), gateDelay /
+               delayScale; widgets/powerscene.ts powerPanel: the scene panel of energy by block and leakage, from Stage.power(); the chapter is chapters/ch-power.ts
+               with widgets/power.ts, its prose's claims checked by tests/power-chapter.test.ts), inverter.ts (chapter 2: the CMOS inverter's voltage transfer curve from widgets/mosphys.ts's square-law device, bisection on the current balance; metrics(k): V_M, V_IL / V_IH at slope −1, V_OH / V_OL, noise margins, peak gain; MOBILITY_RATIO 2.5 = a matched pair, V_M = VDD / 2), sizing.ts (an inverter chain by logical effort, D = N·F^(1/N) + N·p; bestStages, FO4_TAU = 5 τ), effort.ts (g of n-input NAND (n + 2) / 3 and NOR (2n + 1) / 3, pathDelay, the 4-input AND as one NAND4 + inverter or as a NAND2 / NOR2 tree); relay.ts (a 24 V telephone relay: saturating
                flux, gap-dependent reluctance, armature and blade with a compliant, bouncing contact, quench resistor; relaySim,
                relayStatic (pull-in / drop-out), relaySummary; RELAY_STEP_MS: the settled time, the relay step's length
                (tests/phys-relay.test.ts holds it to the model), RELAY_COIL_POWER); triode.ts (a 6SN7 section: space-charge
@@ -1398,6 +1409,9 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  The Communication entries (chapters 39–47) are codexcomm.ts (summaries; COMM_AWAITING_LEVELS: ids no Act 12 level lists yet),
                  codexmore4–5.ts and codexcheck6–7.ts, every number pinned by tests/content-codexcomm.test.ts; uart / spi / crc are glossary SKIP
                  (the CPU chapters name them as examples long before chapter 43); new entries need a chapters/taught.ts row
+                 The Power chapter's entries (leakstate, powergating, dvfs, minenergy, darksilicon) are codexpower.ts (POWER_AWAITING_LEVELS),
+                 codexmorepow.ts and codexcheckpow.ts, their numbers pinned by tests/content-codexpower.test.ts; clockgating gained the ICG;
+                 act 3's optional s_icg (buildpow.ts: RV16_ICG, a custom bench changing en at every moment of the period) practises it
   codexlinks.ts  how entries connect: CODEX_ORDER, buildsOn / leadsTo (from the level graph), seeAlso (related both ways),
                  neighbours; ui/codexfigs.ts: figures from the site's widgets for entries without a part (number explorer,
                  instruction fields, adder comparison, the gate-level RV32I pipeline run a few cycles); the codex page

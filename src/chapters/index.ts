@@ -16,6 +16,7 @@ import { chSilicon } from './ch-silicon';
 import { chFpga } from './ch-fpga';
 import { chVerify } from './ch-verify';
 import { chSidechan } from './ch-sidechan';
+import { chPower } from './ch-power';
 import { chFeed, chLanes, chSimt, chWarps } from './ch-gpu';
 import { chGfxPipeline, chPixels } from './ch-gfx';
 import { chBinary, chGates } from './ch-gates';
@@ -84,7 +85,7 @@ export const chapters: Chapter[] = [
   // the prologue: before the transistor, labelled P1 …
   chRelays, chTubes, chCards,
   chMosfet, chInverter, chNand, chGates, chBinary, chAdders, chRouting, chLatches, chRegisters, chMemory,
-  chAlu, chRegfile, chIsa, chSingleCycle, chPython, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chWidths, chOoo, chMulticore, chSilicon, chFpga, chVerify, chSidechan, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
+  chAlu, chRegfile, chIsa, chSingleCycle, chPython, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chMulDiv, chCache, chMulticycle, chFloat, chWidths, chOoo, chMulticore, chSilicon, chFpga, chVerify, chSidechan, chPower, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
   chDram, chMemCtrl, chFlash, chBus,
   chMessage, chTelegraph, chExchange, chWire, chClocks, chUart, chSpi, chSignals, chNoise, chModem, chCarriers, chSerial, chGlass, chErrors, chCodes, chPcie, chEthernet, chSwitch, chNetwork, chRouter, chTcp, chQueues, chSecret, chPath, chRadio, chWifi, chCellular, chDatacentre, chBench, chFixed, chZplane, chSpectrum, chFirDesign, chIir, chMultirate, chCordic, chMac, chDspCore, chConverters, chAdaptive, chSpeech, chMusic, chSensors, chPictures, chSdr,
   // the appendix: after the journey, lettered
