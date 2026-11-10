@@ -77,15 +77,18 @@
 .vm-h, .vm-r { display: grid; grid-template-columns: minmax(110px, 1.2fr) minmax(0, 1.6fr) minmax(0, 1.8fr) 70px; gap: 8px; align-items: center; }
 .vm-h { color: var(--muted); font-size: 12px; }
 .vm-r > span { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: center; min-width: 0; }
-.vm-bar { display: block; height: 9px; border-radius: 3px; flex-basis: 100%; }
+.vm-track { display: block; flex-basis: 100%; }
+.vm-bar { display: block; height: 9px; border-radius: 3px; }
 .vm-bar.n { background: var(--series-1); }
 .vm-bar.t { background: var(--series-3); }
 .vm-r small { color: var(--muted); }
+.vm-ph { display: none; }
 .vm-r.vector .vm-name { font-weight: 600; color: var(--accent); }
 @container (max-width: 520px) {
   .vm-h { display: none; }
   .vm-r { grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); padding-top: 4px; }
   .vm-r .vm-name { grid-column: 1 / -1; }
+  .vm-ph { display: inline; }
 }
 
 /* The Vector panel (vecPanel) */

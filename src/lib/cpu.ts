@@ -1098,7 +1098,7 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     const tagged = (n: NetDef, ...ends: string[]) => { n.ends.push(...ends); if (Array.isArray(n.tags)) n.tags.push(...ends); else if (!n.tags) n.tags = ends; };
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     nets.splice(nets.indexOf(net('en')), 1);
-    add('vu', VECTOR_UNIT, [8, bottom + 10], 'vector unit');
+    add('vu', VECTOR_UNIT, [at.get('rf')![0] - 2, bottom + 6], 'vector unit');
     add('xw', M2, [resY[0] + 6, resY[1] - 6], 'result / vector');
     add('rwo', OR, [56, bottom - 2]);
     tagged(net('Instr'), 'vu.instr');

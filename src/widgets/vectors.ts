@@ -175,9 +175,9 @@ export function machinesWidget(): Widget {
     h('div', { class: 'vm-h', role: 'row' }, ...['machine', 'NANDs (no ROM)', 'time', 'NANDs × time'].map((t) => h('span', { role: 'columnheader' }, t))),
     ...ms.map((m) => h('div', { class: `vm-r ${m.id}`, role: 'row' },
       h('span', { role: 'cell', class: 'vm-name' }, m.name),
-      h('span', { role: 'cell' }, h('i', { class: 'vm-bar n', style: `width:${(100 * m.nands) / maxN}%` }), h('b', null, num(m.nands))),
-      h('span', { role: 'cell' }, h('i', { class: 'vm-bar t', style: `width:${(100 * ns(m)) / maxT}%` }), h('b', null, `${ns(m).toFixed(0)} ns`), h('small', null, ` ${m.cycles} cycles × ${m.period}`)),
-      h('span', { role: 'cell' }, h('b', null, `${((m.nands * ns(m)) / best).toFixed(2)}×`)))));
+      h('span', { role: 'cell' }, h('i', { class: 'vm-track' }, h('i', { class: 'vm-bar n', style: `width:${(100 * m.nands) / maxN}%` })), h('b', null, num(m.nands))),
+      h('span', { role: 'cell' }, h('i', { class: 'vm-track' }, h('i', { class: 'vm-bar t', style: `width:${(100 * ns(m)) / maxT}%` })), h('b', null, `${ns(m).toFixed(0)} ns`), h('small', null, ` ${m.cycles} cycles × ${m.period}`)),
+      h('span', { role: 'cell' }, h('small', { class: 'vm-ph' }, 'NANDs × time '), h('b', null, `${((m.nands * ns(m)) / best).toFixed(2)}×`)))));
   return panel('One kernel, four machines', 'y = 3·x + y on 16 elements, every machine in gates and timed by its golden model; the period is static timing, 25 ps a NAND delay.', tbl);
 }
 
@@ -208,7 +208,7 @@ export function vecPanel(): ScenePanel {
         h('div', { class: 'vp-kpi' },
           h('div', null, h('b', null, String(st.vl)), h('span', null, 'vl')),
           h('div', null, h('b', null, st.vtype === VILL ? 'vill' : vtypeText(st.vtype!).split(',').slice(0, 2).join(',')), h('span', null, 'vtype')),
-          h('div', null, h('b', null, cnt ? `${cnt}` : '–'), h('span', null, `beat counter (L = ${1 << lm})`))),
+          h('div', null, h('b', null, cnt ? `${cnt}` : '–'), h('span', null, `beat (L = ${1 << lm})`))),
         h('div', { class: 'vp-regs' }, h('span', { class: 'vp-n' }), ...[0, 1, 2, 3].map((i) => h('span', { class: `vp-h l${i}` }, `lane ${i}`)), ...regs),
         h('p', { class: 'sub' }, 'Each register\'s four 32-bit elements, one per lane (as signed numbers); registers that are all zero are left out, v0 aside.'));
     };
