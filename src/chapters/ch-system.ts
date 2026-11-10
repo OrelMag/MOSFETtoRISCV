@@ -361,7 +361,7 @@ export const chTraps: Chapter = {
       'mcause: 2 illegal instruction, 3 breakpoint, 4 misaligned load, 6 misaligned store, 11 ecall; interrupts set bit 31 (0x80000007 timer, 0x8000000B external). A trapping instruction writes nothing.',
       'An interrupt is pending in mip while its source holds, and taken at the next instruction boundary only if enabled in mie and globally by mstatus.MIE.',
       `Priority: interrupts (external, then timer), then illegal instruction, ebreak, ecall, misaligned fetch, load, store. CSR unit, trap unit and system decoder: about ${kNands(TRAP_NANDS)} NANDs.`,
-      'The hardware saves only the PC and the cause: a handler saves every register it uses (mscratch gives it a register to swap with sp), nests only by saving mepc and mcause and setting MIE again, and an idle loop waits in <code>wfi</code>. Machine mode is the only mode here; with user mode, mstatus.MPP says where a trap came from and ecall\'s cause is 8 from U, 11 from M.',
+      'The hardware saves only the PC and the cause: a handler saves every register it uses (mscratch gives it a register to swap with sp), nests only by saving mepc and mcause and setting MIE again, and an idle loop waits in <code>wfi</code>. Machine mode is the only mode here; with a lower mode, mstatus.MPP says where a trap came from and ecall\'s cause is 8 from U, 11 from M.',
       `Polling spends cycles on looks and reacts at its next look; an interrupt spends a trap, a handler and an mret per event and reacts at the next instruction boundary. Measured here the crossing is at one event per ${crossover(6)} cycles with 6 instructions of work between polls.`,
       'A bare interrupt line forgets a pulse that ends while MIE = 0; an interrupt controller holds a pending bit per source until it is claimed, offers the highest enabled one, and clears it on the claim. Vectored mtvec sends interrupt <em>n</em> to BASE + 4<em>n</em> with five ANDs and four ORs.',
     ],
@@ -547,7 +547,7 @@ export const chTraps: Chapter = {
         <p>The handler prints a dot and moves mtimecmp 40 cycles ahead. The main loop never knows it was interrupted, but only because this handler
         touches t1, t2 and s1, which the loop does not use. A real handler saves every register it uses first: it swaps sp with
         <code>mscratch</code> (<code>csrrw sp, mscratch, sp</code>), which the OS set to point at a save area, stores the registers there, and
-        undoes it all before <code>mret</code>. That is the foundation of every multitasking operating system's scheduler tick: save one
+        undoes it all before <code>mret</code>. That is the foundation of every multitasking operating system's time-slicing tick: save one
         program's registers, load another's.</p>
         <details class="deeper"><summary>Deeper: nested interrupts</summary>
         <p>The hardware does not nest: there is one mepc and one mcause, and the trap cleared MIE. A handler that must be interruptible saves them

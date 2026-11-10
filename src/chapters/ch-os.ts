@@ -101,7 +101,7 @@ export const chOs: Chapter = {
       `The timer decides who runs: mtimecmp is armed one slice ahead at every switch, so a process that never gives up the CPU loses it after ${F.slice} retired instructions. Round robin is the ring of control blocks and a loop that finds the next ready one.`,
       `Sharing has a price in kernel cycles and cold TLBs: ${F.overhead} % of the cycles at a ${F.slice}-instruction slice, ${F.overheadShort} % at ${SLICES[0]} and ${F.overheadLong} % at ${n(SLICES[SLICES.length - 1])}. A long slice wastes less and makes a ready process wait longer.`,
     ],
-    practise: [],
+    practise: ['p_switch'],
     check: [
       {
         question: 'A user program executes csrr t0, mstatus. What does the CPU do?',

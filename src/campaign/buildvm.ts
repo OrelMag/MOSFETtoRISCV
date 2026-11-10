@@ -144,7 +144,7 @@ export const BUILDVM: Record<string, () => BuildChallenge> = {
   y_tlb: () => ({
     id: 'y_tlb', title: 'A TLB', level: 'cpu', allowed: 'nand',
     brief: `A cache of address translations. <b>Lookup</b> is combinational: <b>key</b> is an ${VM16.vpnBits}-bit virtual page number; if one of the ${VM16.entries} entries holds it, <b>hit</b> = 1 and <b>ppn</b> (${VM16.ppnBits} bits) and <b>flags</b> (${VM16.flagBits} bits: r, w, x) are that entry's; on a miss only <code>hit</code> = 0 is checked. `
-      + 'At the clock edge: if <b>fill</b>, the entry the <b>round-robin pointer</b> names takes {key, fppn, fflags} and the pointer advances (0, 1, 2, 3, 0 …); if <b>flush</b>, every entry becomes invalid (the pointer stays; a flush wins over a fill on the same edge). '
+      + 'At the clock edge: if <b>fill</b>, the entry the <b>round-robin pointer</b> names takes {key, fppn, fflags} and the pointer advances (0, 1, 2, 3, 0 …); if <b>flush</b>, every entry becomes invalid (a flush wins over a fill on the same edge). '
       + 'Everything powers on at 0: no valid entries, pointer at entry 0. The bench never fills a page that is already in the TLB.',
     ports: pinsOf(TLB16),
     check: { kind: 'sequence', steps: tlbSeq() },
