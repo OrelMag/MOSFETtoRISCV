@@ -411,12 +411,12 @@ and that store is the world's step. The drive pins hang straight off the store d
 so the next load already sees the step's result. The strip names each device's bits.
 
 **Check** plays every test from power-on until the world is done, breaks a rule or reaches the test's step limit. A
-CPU gets up to 400 clock cycles a step. A click on a test plays it a world step at a time, with the device's face
+CPU gets 400 clock cycles a step on average (the test's steps × 400 in all). A click on a test plays it a world step at a time, with the device's face
 large and every step's pins on a timeline. A circuit is graded on NANDs against the reference circuit:
 ★ pass, ★★ within 1.5 × its NANDs, ★★★ at or below them. A CPU is graded as the program puzzles are, on cycles ×
 NANDs against the reference program on the RV32I computer. Its best is kept apart from the circuit's, and the drawer
-shows both. **Do it for me** puts the reference circuit on the chip, or, on a CPU, the reference program into its ROM
-(or the computer with it, when the chip's ROM sits in a sub-chip). The CPU drawer's golden model sits out on a device
+shows both. **Do it for me** puts the reference circuit on the chip, or, on a CPU, the reference program into the computer's ROM
+(a CPU of your own is replaced by the computer with it: its ISA and memory map are its own). The CPU drawer's golden model sits out on a device
 chip, because it has no device.
 
 ## Open in Sandbox

@@ -117,7 +117,7 @@ export function judgeDevice(st: DeviceState, t: DeviceTest, cycles: number): Dev
   const base = { name: t.name, steps: st.n, cycles, status: m.status(st.w) };
   if (st.fault) return { ...base, ok: false, why: `step ${st.n - 1}: ${st.fault}`, at: st.n - 1 };
   if (m.done(st.w)) return { ...base, ok: true };
-  if (st.n < t.steps) return { ...base, ok: false, why: `the world took only ${st.n} of ${t.steps} steps in ${cycles} cycles: does en pulse once a step?`, at: st.n };
+  if (st.n < t.steps) return { ...base, ok: false, why: `the world took only ${st.n} of ${t.steps} steps in ${cycles} cycles: does en pulse once a step (on the RV32I computer: a store to 4(s0))?`, at: st.n };
   const why = m.end(st.w);
   return why ? { ...base, ok: false, why, at: st.n } : { ...base, ok: true };
 }

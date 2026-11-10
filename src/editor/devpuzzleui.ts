@@ -155,12 +155,12 @@ class DeviceUi {
     this.panel.replaceChildren();
     if (!p) return;
     const actions = this.confirming
-      ? [h('span', { class: 'sb-chal-ask' }, cpu ? (this.romOnTop ? 'Put the reference program in the ROM?' : 'Replace this chip with the RV32I computer and its reference program?') : 'Replace this chip with the reference circuit?'),
+      ? [h('span', { class: 'sb-chal-ask' }, cpu ? (this.onComputer ? 'Put the reference program in the ROM?' : 'Replace this chip with the RV32I computer and its reference program?') : 'Replace this chip with the reference circuit?'),
         h('button', { class: 'btn sm primary', onclick: () => this.solve(p) }, 'Replace'),
         h('button', { class: 'btn sm ghost', onclick: () => { this.confirming = false; this.render(); } }, 'Cancel')]
       : [h('button', { class: 'btn sm primary', 'data-pz': 'check', title: 'Play every test on the circuit\'s gates', disabled: this.checking, onclick: () => this.check() }, icon('check', 14), this.checking ? 'Checking…' : 'Check'),
         h('button', { class: 'btn sm ghost', 'data-pz': 'answer', title: cpu ? 'The reference program' : 'How the reference circuit works', onclick: () => this.showAnswer(p) }, 'Show answer'),
-        h('button', { class: 'btn sm ghost', 'data-pz': 'solve', title: `${cpu ? (this.romOnTop ? 'Put the reference program in the ROM' : 'Replace this chip with the RV32I computer and its reference program') : 'Replace this chip with the reference circuit'} (${undoKey()} brings yours back)`, onclick: () => { this.confirming = true; this.render(); } }, 'Do it for me'),
+        h('button', { class: 'btn sm ghost', 'data-pz': 'solve', title: `${cpu ? (this.onComputer ? 'Put the reference program in the ROM' : 'Replace this chip with the RV32I computer and its reference program') : 'Replace this chip with the reference circuit'} (${undoKey()} brings yours back)`, onclick: () => { this.confirming = true; this.render(); } }, 'Do it for me'),
         h('button', { class: 'btn sm ghost', title: 'Start this puzzle again (this chip is replaced; Ctrl+Z brings it back)', onclick: () => this.openStart(p, true) }, 'Start over…'),
         h('button', { class: 'btn ghost icon-only', title: 'All puzzles', 'aria-label': 'All puzzles', onclick: () => listToggle?.(ed) }, icon('menu', 15))];
     this.panel.append(h('header', { class: 'sb-chal-head' },
@@ -182,20 +182,16 @@ class DeviceUi {
     if (this.replay?.test) this.panel.append(this.playerEl(p));
   }
 
-  /** Is this a CPU's chip (a program ROM drives the device through en)? */
+  /** Is this a CPU's chip: its device paced by en (the computer, or a copy of a chip with a program ROM)? The same test as
+   * Check's (DeviceRun.en: the device leaf's en), read from the document so the strip knows before a Check. */
   private get cpu(): boolean {
-    return programRoms(this.ed.doc, this.ed.ws.chips).length > 0;
+    return this.ed.doc.parts.some((q) => 'device' in q.ref && q.ref.en === true);
   }
 
-  /** One program ROM on the chip's own top level (Do it for me writes into it). */
-  private get romOnTop(): boolean {
-    return this.ed.doc.parts.filter((q) => 'rom' in q.ref).length === 1;
-  }
-
-  /** Is the chip the ready-wired RV32I computer (its I/O as devcpu.ts says)? */
+  /** Is the chip the ready-wired RV32I computer (its I/O as devcpu.ts says, so the reference program fits its ROM)? */
   private get onComputer(): boolean {
     const parts = this.ed.doc.parts;
-    return parts.some((q) => 'lib' in q.ref && q.ref.lib === 'rv32i_core') && parts.some((q) => 'device' in q.ref && q.ref.en === true);
+    return this.cpu && parts.some((q) => 'lib' in q.ref && q.ref.lib === 'rv32i_core') && parts.filter((q) => 'rom' in q.ref).length === 1;
   }
 
   private testsEl(p: DevicePuzzle, r: DeviceRun | undefined, stale: boolean): HTMLElement {
@@ -301,8 +297,8 @@ class DeviceUi {
     this.confirming = false;
     const ed = this.ed;
     if (this.cpu) {
-      // a ROM on the chip's top level takes the program (the learner's CPU stays); else the ready-wired computer replaces the chip
-      const next = (this.romOnTop && withProgram(ed.doc, DEVICE_PROGRAMS[p.dev])) || deviceComputerChip(p.dev, ed.chipId, ed.doc.name);
+      // the ready computer takes the program in its ROM; any other CPU (its own ISA, its own memory map) is replaced by the computer
+      const next = (this.onComputer && withProgram(ed.doc, DEVICE_PROGRAMS[p.dev])) || deviceComputerChip(p.dev, ed.chipId, ed.doc.name);
       ed.edit(() => next);
       progress().shown(cpuRecordId(p));
       return void ed.toast('The reference program is in the ROM: Check it, then try to beat it');

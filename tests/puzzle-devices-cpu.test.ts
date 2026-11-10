@@ -15,7 +15,12 @@ import { type DeviceState } from '../src/editor/devparts';
 import { faceInput } from '../src/editor/devface';
 import { simHasPuzzlePorts } from '../src/editor/puzzleparts';
 import { UserLibrary } from '../src/editor/library';
-import { emptyWorkspace } from '../src/editor/model';
+import { emptyWorkspace, polyline } from '../src/editor/model';
+import { partDef } from '../src/editor/parts';
+import { layoutMetrics } from '../src/editor/relayout';
+import { lintChip } from '../src/editor/lint';
+import { partBox } from '../src/editor/geom';
+import { DEVICE_IDS } from '../src/puzzles/devices';
 import { EditorSim } from '../src/editor/runtime';
 import { decodeShare, encodeShare } from '../src/editor/share';
 import { tick } from './yieldtick';
@@ -28,6 +33,25 @@ const compile = (doc: ReturnType<typeof deviceComputerChip>) => {
 };
 
 describe('the device computer and its reference programs', () => {
+  it('its drawing: no part on another, no two nets on one line; crossings, wires through parts and pointers pinned', () => {
+    // measured: moving the drive splitter into the device's column cut crossings but doubled the pointers (or added 49
+    // crossings on the vending machine), and a column of its own put two nets on one line: the drawing stays as built
+    const got: Record<string, string> = {};
+    for (const dev of DEVICE_IDS) {
+      const doc = deviceComputerChip(dev, 'u_x', 'x');
+      const lib = new UserLibrary({ ...emptyWorkspace(), chips: { u_x: doc } });
+      const c = lib.compiled('u_x')!;
+      const defOf = (p: { ref: Parameters<typeof partDef>[0] }) => { const d = partDef(p.ref, (x) => lib.defOf(x)); return 'error' in d ? undefined : d; };
+      const boxes = doc.parts.map((p) => ({ id: p.id, r: partBox(defOf(p), p.at, p.flip, p.rot) }));
+      boxes.forEach((a, i) => { for (const b of boxes.slice(i + 1)) expect(a.r.x < b.r.x + b.r.w && b.r.x < a.r.x + a.r.w && a.r.y < b.r.y + b.r.h && b.r.y < a.r.y + a.r.h, `${dev}: ${a.id} on ${b.id}`).toBe(false); });
+      const polys = new Map(doc.wires.flatMap((w) => { const p = polyline(doc, w, defOf); return p ? [[w.id, p] as const] : []; }));
+      expect(lintChip(doc, c, polys).diags.map((d) => d.msg).filter((m) => m.startsWith('two nets drawn on one line')), dev).toEqual([]);
+      const m = layoutMetrics(doc, defOf, c.netOfWire);
+      got[dev] = `cross ${m.crossings}, through ${m.throughParts}, pointers ${m.pointers}`;
+    }
+    expect(got).toEqual({ crossing: 'cross 16, through 0, pointers 26', maze: 'cross 19, through 0, pointers 26', vend: 'cross 14, through 0, pointers 26' });
+  });
+
   for (const p of DEVICE_PUZZLES) {
     it(`${p.title}: every test passes on the gates, step for step the reference controller, at the pinned point`, async () => {
       const doc = deviceComputerChip(p.dev, `u_pz_${p.id}`, p.title);
