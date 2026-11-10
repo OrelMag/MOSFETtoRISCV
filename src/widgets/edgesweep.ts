@@ -92,7 +92,7 @@ export function edgeSweepWidget(): Widget {
     const o = sw.outcome[sw.offsets.indexOf(sel)];
     say.textContent = o === 'new' ? `d changes ${signed(sel)} ${word} from the edge: q takes the new value.`
       : o === 'old' ? `d changes ${signed(sel)} ${word} from the edge: the edge already saw the old value, q keeps it.`
-        : `d changes ${signed(sel)} ${word} from the edge: the master's SR pair is released from both sides at once and never decides (the simulator stops it after ${'4000'} delays and picks one).`;
+        : `d changes ${signed(sel)} ${word} from the edge: the master's SR pair is released from both sides at once and never decides (the simulator stops it after ${'4000'} ${word} and picks one).`;
     const aperture = Math.round(10 * (sw.hold + sw.setup)) / 10;
     read.replaceChildren(
       ...([['setup', `${sw.setup}`, `${word} before the edge`], ['hold', `${sw.hold}`, `${word} after the edge`], ['aperture', `${aperture}`, 'setup + hold: the window d must not move in'],
