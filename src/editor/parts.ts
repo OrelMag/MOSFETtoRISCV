@@ -338,6 +338,26 @@ const ROM_CACHE_SIZE = 16;
 const romCache = new Map<string, ComponentDef>();
 
 function romPart(r: RomRef): PartResult {
+  const d = romPartPlain(r);
+  return r.look === 'rope' && !('error' in d) ? ropeLook(d as ComponentDef, romImage(r).words, r.w) : d;
+}
+
+const ropeLooks = new WeakMap<ComponentDef, ComponentDef>();
+/** The same ROM drawn as core rope: a box large enough for a band of cores, threaded with its first two words (its ports where they were). */
+function ropeLook(d: ComponentDef, words: number[], w: number): ComponentDef {
+  const hit = ropeLooks.get(d);
+  if (hit) return hit;
+  const g = symbolGeom(d);
+  const cores = Math.min(w, 7);
+  const rope = [0, 1].map((i) => Array.from({ length: cores }, (_, j) => ((words[i] ?? 0) >>> j) & 1));
+  const portPos = Object.fromEntries(Object.entries(g.ports).map(([n, p]) => [n, p.exit === 'left' || p.exit === 'right' ? p.pos[1] : p.pos[0]]));
+  const W = Math.max(g.w, 16), H = Math.max(g.h, 8);
+  const r: ComponentDef = { ...d, symbol: { ...d.symbol, w: W, h: H, portPos, rope, keepOut: [{ x: 1, y: H - 4.2, w: W - 4, h: 3.2 }] } };
+  ropeLooks.set(d, r);
+  return r;
+}
+
+function romPartPlain(r: RomRef): PartResult {
   const { k, w, addr, lang, src } = r;
   if (!Number.isInteger(k) || k < 1 || k > MAX_ROM_K) return { error: `ROM: 2^k words with k = 1–${MAX_ROM_K}` };
   if (w !== 8 && w !== 12 && w !== 16 && w !== 24 && w !== 32) return { error: 'ROM: word width must be 8, 12, 16, 24 or 32' };

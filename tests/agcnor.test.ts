@@ -83,3 +83,38 @@ describe('the NOR3 ladder (act 1–3, optional)', () => {
     expect(stats(NOT).nands + stats(AND).nands + stats(OR).nands).toBe(6);
   });
 });
+
+describe('Appendix F: the one\'s-complement adder and the 4-bit register in NOR3', async () => {
+  const { NOR_ADD4, NOR_REG4, onesAdd4 } = await import('../src/lib/agcnor');
+  const word = (c: ReturnType<typeof sim>, p: string) => [0, 1, 2, 3].reduce((v, i) => v | ((c.get(`${p}${i}`) === B1 ? 1 : 0) << i), 0);
+  const put = (p: string, v: number) => Object.fromEntries([0, 1, 2, 3].map((i) => [`${p}${i}`, (v >> i) & 1]));
+  it('adds in one\'s complement with the end-around carry, from any earlier state, when the carries are cleared first', () => {
+    const c = sim(NOR_ADD4);
+    for (const [pa, pb] of [[0, 0], [15, 1], [7, 8]]) for (let a = 0; a < 16; a++) for (let b = 0; b < 16; b++) {
+      c.set({ ...put('a', pa), ...put('b', pb), cc: 0 });
+      c.set({ ...put('a', a), ...put('b', b), cc: 1 });
+      c.set({ cc: 0 });
+      expect(word(c, 's'), `${a} + ${b} after ${pa} + ${pb}`).toBe(onesAdd4(a, b));
+    }
+    expect(onesAdd4(5, 10)).toBe(15); // a + ¬a is −0
+    expect(onesAdd4(12, 6)).toBe(3); // −3 + 6 = 3: the carry out of bit 3 comes back in
+  });
+  it('without the clear, a carry left circling makes a + ¬a +0 instead of −0 (the ring holds it)', () => {
+    const c = sim(NOR_ADD4);
+    c.set({ ...put('a', 7), ...put('b', 1), cc: 0 }); // 7 + 1: every carry 1
+    c.set({ ...put('a', 5), ...put('b', 10) });
+    expect(word(c, 's')).toBe(0);
+    c.set({ cc: 1 }); c.set({ cc: 0 });
+    expect(word(c, 's')).toBe(15);
+  });
+  it('the 4-bit register takes d at a rising edge while en = 1; counts 38 and 60 gates', () => {
+    const c = sim(NOR_REG4);
+    c.set({ ...put('d', 0), en: 1, clk: 0 }); c.set({ clk: 1 });
+    expect(word(c, 'q')).toBe(0);
+    c.set({ ...put('d', 9), clk: 0 }); expect(word(c, 'q')).toBe(0);
+    c.set({ clk: 1 }); expect(word(c, 'q')).toBe(9);
+    c.set({ ...put('d', 6), en: 0, clk: 0 }); c.set({ clk: 1 }); expect(word(c, 'q')).toBe(9);
+    expect(stats(NOR_ADD4)).toMatchObject({ nor3: 38, nands: 0 });
+    expect(stats(NOR_REG4)).toMatchObject({ nor3: 60, nands: 0 });
+  });
+});

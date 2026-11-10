@@ -387,6 +387,7 @@ function drawUpright(def: ComponentDef, flip: boolean): SVGGElement {
     default: {
       inner.append(s('rect', { x: 0, y: 0, width: w, height: h, rx: 0.6, class: 'sym-shadow sym-box-shadow', transform: `translate(${flip ? -SHADOW[0] : SHADOW[0]},${SHADOW[1]})` }),
         s('rect', { x: 0, y: 0, width: w, height: h, rx: 0.6, class: 'sym-body sym-box' }));
+      if (def.symbol.rope) inner.append(...ropeBand(def.symbol.rope, w, h));
       // Port names inside the box (not mirrored) and the label, as boxText places them.
       const t = boxText(def, flip);
       if (w > 2.5 && def.prim !== 'alias' && !t.ports.some((p) => p.side === 'top')) inner.append(s('path', { d: `M0.9,0.42 H${w - 0.9}`, class: 'sym-gloss' }));
@@ -476,4 +477,29 @@ export function placePinValue(pin: PinGeom, glyph: Pick<PinGlyph, 'name' | 'valu
   glyph.valueBg.setAttribute('width', String(tw));
   glyph.value.setAttribute('x', String(bx + tw / 2));
   if (back !== 0) glyph.name.setAttribute('x', String(back < 0 ? bx - 0.4 : bx + tw + 0.4));
+}
+
+/**
+ * A core-rope band (Appendix F) along a box's bottom: a magnetic core per bit, and per row a sense wire that threads a
+ * core where the row's bit is 1 and passes beside it where it is 0, so the wiring is the data.
+ */
+function ropeBand(rows: number[][], w: number, h: number): SVGElement[] {
+  const n = Math.max(0, ...rows.map((r) => r.length));
+  if (!n) return [];
+  // the band ends short of the bottom-right corner, where a box's category icon goes (iconSpot)
+  const left = 1, right = w - 3, cy = h - 2.6, pitch = Math.min(1.8, (right - left - 1.6) / Math.max(1, n - 1));
+  const x0 = (left + right - pitch * (n - 1)) / 2;
+  const out: SVGElement[] = [s('rect', { x: left, y: cy - 1.55, width: right - left, height: 3.1, rx: 0.35, class: 'sym-rope-tray' })];
+  rows.forEach((bits, i) => {
+    const y = cy + (i ? 0.16 : -0.16), off = i ? 1.05 : -1.05;
+    let d = `M${left + 0.2},${y}`;
+    bits.forEach((b, j) => {
+      const x = x0 + j * pitch;
+      d += b ? ` H${x + 0.9}` : ` H${x - 0.8} Q${x},${y + 2 * off} ${x + 0.8},${y} H${x + 0.9}`;
+    });
+    out.push(s('path', { d: `${d} H${right - 0.2}`, class: `sym-rope-wire w${i}` }));
+  });
+  // the cores drawn over the wires: a wire through the hole crosses the ring's middle, one passing by goes round it
+  for (let j = 0; j < n; j++) out.push(s('ellipse', { cx: x0 + j * pitch, cy, rx: 0.42, ry: 0.62, class: 'sym-core' }));
+  return out;
 }

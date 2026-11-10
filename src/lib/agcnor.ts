@@ -15,7 +15,7 @@ import { define } from './define';
 import { layered } from './layered';
 import { PULLUP } from './switchparts';
 import { GND, NMOS } from './transistors';
-import type { ComponentDef } from '../sim/types';
+import type { ComponentDef, Netlist } from '../sim/types';
 
 const bit = (name: string, dir: 'in' | 'out') => ({ name, width: 1, dir });
 
@@ -60,11 +60,14 @@ export type NorGate = [out: string, ins: string[]];
 /** A sub-block of a NOR3 circuit: an instance of another NOR3 circuit, its inputs and outputs as nets in port order. */
 export interface NorBlock { name: string; def: ComponentDef; ins: string[]; outs: string[] }
 
+/** A hand placement of a NOR3 circuit: instance corners, pin positions, and corner points per net and sink ('inst.port' or a pin). */
+export interface NorPlace { at: Record<string, [number, number]>; flip?: string[]; pins: Record<string, [number, number]>; via?: Record<string, Record<string, [number, number][]>> }
+
 /**
  * A circuit of NOR3 gates and smaller NOR3 circuits, laid out by logic depth (lib/layered.ts), every net a wire.
  * Parts in order; inputs are pin names or nets the parts drive. A gate is instance g_<its output net>.
  */
-export function norCircuit(d: { id: string; name: string; summary: string; ins: string[]; outs: Record<string, string>; parts: (NorGate | NorBlock)[]; spec?: ComponentDef['spec']; column?: Record<string, number> }): ComponentDef {
+export function norCircuit(d: { id: string; name: string; summary: string; ins: string[]; outs: Record<string, string>; parts: (NorGate | NorBlock)[]; spec?: ComponentDef['spec']; column?: Record<string, number>; place?: NorPlace }): ComponentDef {
   const parts: NorBlock[] = d.parts.map((x) => (Array.isArray(x)
     ? { name: `g_${x[0]}`, def: NOR3_RTL, ins: [0, 1, 2].map((i) => x[1][Math.min(i, x[1].length - 1)]), outs: [x[0]] }
     : x));
@@ -87,7 +90,7 @@ export function norCircuit(d: { id: string; name: string; summary: string; ins: 
     ports,
     symbol: { kind: 'box', label: d.name.toUpperCase() },
     ...(d.spec ? { spec: d.spec } : {}),
-    netlist: () => ({ ...layered(ports, b, { gap: 8, ...(d.column ? { column: d.column } : {}), wires: Object.fromEntries(b.nets().map((n) => [n.ends[0], true])) }), level: 'switch' }),
+    netlist: () => (d.place ? placed(d.place, d.ins, outs, d.outs, parts, driver) : { ...layered(ports, b, { gap: 8, ...(d.column ? { column: d.column } : {}), wires: Object.fromEntries(b.nets().map((n) => [n.ends[0], true])) }), level: 'switch' }),
   });
 }
 
@@ -123,6 +126,16 @@ export const NOR_FA = norCircuit({
     ['co', ['n1', 'n5']],
   ],
   spec: ([a, b, c]) => [a ^ b ^ c, a + b + c > 1 ? 1 : 0],
+  // drawn by hand: the sum runs straight out above the carry gate; n1 passes under the second XNOR to the carry gate
+  place: {
+    at: { xa: [10, 2], xb: [32, 2], g_co: [52, 8] },
+    pins: { a: [0, 4], b: [0, 6], ci: [0, 14], s: [66, 4], co: [66, 12] },
+    via: {
+      ci: { 'xb.y': [[28, 14], [28, 6]] },
+      n1: { 'g_co.a': [[26, 6], [26, 10]] },
+      n5: { 'g_co.b': [[49, 6], [49, 12]], 'g_co.c': [[49, 6], [49, 14]] },
+    },
+  },
 });
 
 /** A gated latch, open while en_n = 0: set = NOR(¬d, en_n), reset = NOR(d, en_n), into a cross-coupled NOR pair. */
@@ -155,4 +168,75 @@ export const NOR_REG = norCircuit({
     { name: 'slave', def: NOR_LATCH, ins: ['qm', 'qmn', 'ckn'], outs: ['q', 'qn'] },
   ],
   column: { mux: 0, master: 1, g_ckn: 2, slave: 3 },
+});
+
+/** A NOR3 circuit's netlist from a hand placement: one net per signal, its driver first. */
+function placed(p: NorPlace, ins: string[], outs: string[], outNet: Record<string, string>, parts: NorBlock[], driver: Map<string, string>): Netlist {
+  const portsOf = (def: ComponentDef, dir: 'in' | 'out') => def.ports.filter((q) => q.dir === dir).map((q) => q.name);
+  const ends = new Map<string, string[]>();
+  const end = (net: string) => { if (!ends.has(net)) ends.set(net, [driver.get(net) ?? net]); return ends.get(net)!; };
+  for (const q of parts) portsOf(q.def, 'in').forEach((port, i) => end(q.ins[i]).push(`${q.name}.${port}`));
+  for (const o of outs) end(outNet[o]).push(o);
+  for (const n of ins) end(n);
+  return {
+    level: 'switch',
+    pins: p.pins,
+    instances: parts.map((q) => ({ name: q.name, def: q.def, at: p.at[q.name], ...(p.flip?.includes(q.name) ? { flip: true } : {}) })),
+    nets: [...ends].map(([name, e]) => ({ name, ends: e, ...(p.via?.[name] ? { via: p.via[name] } : {}) })),
+  };
+}
+
+// ---- Appendix F: the one's-complement adder and register, in NOR3 ------------------------------
+
+const range = <T>(n: number, f: (i: number) => T): T[] => Array.from({ length: n }, (_, i) => f(i));
+
+/**
+ * nor_add4: a 4-bit one's-complement adder: four NOR3 full adders with the carry out of the top bit brought back into
+ * the bottom one (the end-around carry), so s = a + b in one's complement (−0 is 1111). The carry ring is a loop that
+ * can hold a carry nothing generates: when every bit propagates (a + ¬a) a carry of 0 all round and a carry of 1 all
+ * round are both stable (−0 and +0), and while the operands change a gate can glitch a carry into the ring that then
+ * stays. So the ring passes through two gates with a carry-clear input cc: hold cc = 1 while a and b change, then
+ * release it, and a + ¬a is −0 as the AGC's programs expect. (R-700 p. 69: Block II division needed "the removal of
+ * carry propagations in the adder", so logic was added to suppress the carries.) 38 NOR3 gates.
+ */
+export const NOR_ADD4 = norCircuit({
+  id: 'nor_add4', name: 'One\'s-complement adder in NOR3', summary: 'Four NOR3 full adders in a ring: the carry out of bit 3 comes back into bit 0 (the end-around carry), so s = a + b in one\'s complement on 4 bits. The ring passes through a carry clear (cc): held at 1 while the operands change, so no stray carry is left circling; then a + ¬a is −0. 38 NOR3 gates.',
+  ins: [...range(4, (i) => `a${i}`), ...range(4, (i) => `b${i}`), 'cc'], outs: Object.fromEntries(range(4, (i) => [`s${i}`, `s${i}`])),
+  parts: [
+    ...range(4, (i) => ({ name: `fa${i}`, def: NOR_FA, ins: [`a${i}`, `b${i}`, i === 0 ? 'eacin' : `c${i}`], outs: [`s${i}`, i === 3 ? 'eac' : `c${i + 1}`] })),
+    ['neac', ['eac']] as NorGate,
+    ['eacin', ['neac', 'cc']] as NorGate,
+  ],
+  place: {
+    at: { ...Object.fromEntries(range(4, (i) => [`fa${i}`, [20, 12 * i + 22] as [number, number]])), g_neac: [30, 0], g_eacin: [8, 8] },
+    flip: ['g_neac'],
+    pins: Object.fromEntries([
+      ...range(4, (i) => [`a${i}`, [0, 12 * i + 24]]), ...range(4, (i) => [`b${i}`, [0, 12 * i + 26]]), ...range(4, (i) => [`s${i}`, [60, 12 * i + 25]]), ['cc', [0, 12]],
+    ] as [string, [number, number]][]),
+    via: {
+      ...Object.fromEntries(range(3, (i) => [`c${i + 1}`, { [`fa${i + 1}.ci`]: [[41, 12 * i + 27], [41, 12 * i + 31], [17, 12 * i + 31], [17, 12 * i + 40]] }])),
+      eac: { 'g_neac.a': [[44, 63], [44, 2]], 'g_neac.b': [[44, 63], [44, 4]], 'g_neac.c': [[44, 63], [44, 6]] },
+      neac: { 'g_eacin.a': [[6, 4], [6, 10]] },
+      cc: { 'g_eacin.c': [[4, 12], [4, 14]] },
+      eacin: { 'fa0.ci': [[18, 12], [18, 28]] },
+    },
+  },
+});
+
+/** One's-complement sum of two 4-bit words, as nor_add4 gives it with its carries cleared first. */
+export const onesAdd4 = (a: number, b: number): number => { const s = a + b; return s > 15 ? (s + 1) & 15 : s; };
+
+/** nor_reg4: four NOR3 register bits on one enable and one clock: q takes d at the rising edge of clk while en = 1. 60 NOR3 gates. */
+export const NOR_REG4 = norCircuit({
+  id: 'nor_reg4', name: '4-bit register in NOR3', summary: 'Four NOR3 register bits sharing en and clk: q takes d at the rising edge of clk while en = 1, else holds. Each bit is a multiplexer, a master and a slave latch, 15 NOR3 gates; 60 in all.',
+  ins: [...range(4, (i) => `d${i}`), 'en', 'clk'], outs: Object.fromEntries(range(4, (i) => [`q${i}`, `q${i}`])),
+  parts: range(4, (i) => ({ name: `r${i}`, def: NOR_REG, ins: [`d${i}`, 'en', 'clk'], outs: [`q${i}`] })),
+  place: {
+    at: Object.fromEntries(range(4, (i) => [`r${i}`, [14, 12 * i + 2] as [number, number]])),
+    pins: Object.fromEntries([...range(4, (i) => [`d${i}`, [0, 12 * i + 4]]), ...range(4, (i) => [`q${i}`, [44, 12 * i + 6]]), ['en', [0, 50]], ['clk', [0, 52]]] as [string, [number, number]][]),
+    via: {
+      en: Object.fromEntries(range(4, (i) => [`r${i}.en`, [[8, 50], [8, 12 * i + 6]]])),
+      clk: Object.fromEntries(range(4, (i) => [`r${i}.clk`, [[10, 52], [10, 12 * i + 8]]])),
+    },
+  },
 });

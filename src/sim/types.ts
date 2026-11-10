@@ -71,6 +71,8 @@ export interface SymbolSpec {
   color?: number;
   /** Areas of a box (its own units) the label keeps clear of, or leaves the box when it cannot: a user chip's face displays. */
   keepOut?: { x: number; y: number; w: number; h: number }[];
+  /** Drawn as core rope (Appendix F): a band of magnetic cores, one per bit, and a sense wire per row that threads a core for a 1 and passes it by for a 0 (view/symbols.ts ropeBand). Rows of bits, low bit first. */
+  rope?: number[][];
 }
 
 export interface InstanceDef {
