@@ -743,5 +743,20 @@ function oooDrawing(b: Builder, outs: string[]): { pins: Record<string, At>; net
   // nets whose wire could only pass under another part's body (the router finds no way round in these bands): pointers
   const labelled = new Set(['pd1.call', 'pd1.ret', 'btb.pt1', 'btb.tgt1', 'F0.out', 'F1.out', 'selfA1.y', 'selfB1.y', 'pay0.out', 'st1d.y', 'sw.y', 'dstart.y',
     'free1.y', 'v2_0.out', 'v1_0.out', 'hv0.o2', 'hv1.o2', 'ltail1.s']);
-  return { pins, nets: placedNets(P, raw, { labelled }) };
+  // nets drawn whole as wires although a sink lies left of or below the driver (found by adding nets shortest first while no wire
+  // runs through a part and the crossings stay under 150): a wire back along a band beats a label pair, and the router goes round
+  const WIRED = new Set([
+    'nd1.y', 'moved.y', 'nv1.y', 'rest.y', 'went.y', 'ctl0.immSrc', 'ctl1.immSrc', 'nzA1.nz',
+    'selfA10.y', 'nzB1.nz', 'selfB10.y', 'st0bit.y0', 'st0bit.y1', 'st0bit.y2', 'st0bit.y3', 'ld0f.out',
+    'ld1f.out', 'z2.y', 'st0n.out', 'nDivBusy.y', 'zrd0.y', 'zrd1.y', 'sq.memAddr', 'sq.memData',
+    'sq.memWe', 'l2p0.y', 'ndv0.y', 'l2p1.y', 'ndv1.y', 'ld2.y', 'mu2.y', 'taken1.y',
+    'nret0.y', 'seq0.eq', 'nret1.y', 'seq1.eq', 'cs1.y', 'two.y', 'nl20.y', 'nl21.y',
+    'ctrl0.y', 'ctrl1.y', 'sameA1.eq', 'sameB1.eq', 'cs0.y', 'one1.y', 'fp.push0', 'fp.pop0',
+    'fp.push1', 'fp.pop1', 'mule.s', 'mule.c', 'pend1.y', 'pp1.o8', 'fp.pnext0', 'fp.v1',
+    'fp.pnext1', 'nv0.y', 'div.y', 'div.infoQ', 'cls1.div', 'cls1.lat2', 'div.tagQ', 'mulm.y',
+    'rob.h0done', 'rob.h1valid', 'rob.h1done', 'fd0.q', 'rf.rd2', 'dpd0.call', 'si0.o3',
+  ]);
+  const wired = new Set<string>();
+  for (const nt of raw) if (WIRED.has(nt.ends[0])) for (const s of nt.ends.slice(1)) wired.add(`${nt.ends[0]}>${s}`);
+  return { pins, nets: placedNets(P, raw, { labelled, wired }) };
 }

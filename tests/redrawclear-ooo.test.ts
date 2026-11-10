@@ -60,9 +60,10 @@ describe('select as a crossbar', () => {
   });
 });
 
-// The core's top level and its two largest blocks (chapter 26's steps 9 and 12 open them). The top keeps its five bands
-// (lib/ooocore.ts oooDrawing): 18 nets the router could only draw under another part are labels, so none runs through one
-// (75.6 % pointers, 103 crossings, 17 through parts before; laid out by depth instead it was 754 crossings, 57 through parts).
+// The core's top level and its two largest blocks (chapter 26's steps 9 and 12 open them). The top keeps its three bands
+// (lib/ooocore.ts oooDrawing): 18 nets the router could only draw under another part are labels, so none runs through one, and a
+// list of nets is drawn whole as wires although a sink lies left of or below the driver (80.0 % pointers, 49 crossings before; 62.6 %,
+// 148 now; the sized core 80 % and 60 before, 63.1 % and 150 now; no wire through a part either way).
 // The issue queue is drawn by hand as it works (lib/ooo.ts iqDrawing: 88.7 % pointers and 285 crossings before, 74.7 % and 161
 // laid out by depth, with small parts scattered): the free-entry logic on top, the entries in two columns of rows, each with its
 // candidate gates beside it, select and the multiplexers on the right. The reorder buffer keeps its 4 × 4 grid
@@ -73,8 +74,8 @@ describe('select as a crossbar', () => {
 const core = (o: { rob?: number; iq?: number; sq?: number } = {}) => oooCpu(assemble('li a0, 1\nj .').words, { imemK: 6, dmemK: 6, ...o });
 const part = (name: string, o = {}) => netlistOf(core(o))!.instances.find((i) => i.name === name)!.def;
 const big: [string, () => ComponentDef, { share?: number; count?: number; crossings: number }][] = [
-  ['core top level', () => core(), { share: 0.80, crossings: 49 }],
-  ['core top level (ROB 32, issue queue 16, store queue 8)', () => core({ rob: 32, iq: 16, sq: 8 }), { share: 0.80, crossings: 60 }],
+  ['core top level', () => core(), { share: 0.63, crossings: 148 }],
+  ['core top level (ROB 32, issue queue 16, store queue 8)', () => core({ rob: 32, iq: 16, sq: 8 }), { share: 0.64, crossings: 150 }],
   ['issue queue', () => part('iq'), { share: 0.56, crossings: 111 }],
   ['issue queue (16 entries)', () => part('iq', { rob: 32, iq: 16, sq: 8 }), { share: 0.55, crossings: 203 }],
   ['reorder buffer', () => part('rob'), { count: 151, crossings: 116 }],
