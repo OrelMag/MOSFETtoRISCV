@@ -378,7 +378,7 @@ function timeline(p: DevicePuzzle, st: DeviceState | null, end: number): HTMLEle
   const lanes = [...m.sense.map((x, i) => ({ name: x.name, of: (f: { sense: number[] }) => f.sense[i], w: x.width, kind: 'sense' })),
     ...m.drive.map((x, i) => ({ name: x.name, of: (f: { drive: number[] }) => f.drive[i], w: x.width, kind: 'drive' }))];
   const W = 640, L = 58, rowH = 15, H = lanes.length * rowH + 16;
-  const dx = (W - L - 6) / Math.max(1, end);
+  const dx = (W - L - 16) / Math.max(1, end);
   const NS = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -389,7 +389,7 @@ function timeline(p: DevicePuzzle, st: DeviceState | null, end: number): HTMLEle
   lanes.forEach((ln, i) => {
     const y = 4 + i * rowH;
     add('text', { x: L - 6, y: y + 10, 'text-anchor': 'end', class: `lbl ${ln.kind}` }, ln.name);
-    add('line', { x1: L, x2: W - 6, y1: y + 12, y2: y + 12, class: 'base' });
+    add('line', { x1: L, x2: W - 16, y1: y + 12, y2: y + 12, class: 'base' });
     for (const f of st?.frames ?? []) {
       const v = ln.of(f);
       if (!v) continue;
@@ -400,7 +400,7 @@ function timeline(p: DevicePuzzle, st: DeviceState | null, end: number): HTMLEle
   const bad = st?.frames.find((f) => f.fault);
   if (bad) add('rect', { x: L + bad.step * dx, y: 1, width: Math.max(2, dx), height: H - 14, class: 'fault' });
   if (st) add('rect', { x: L + Math.min(st.n, end) * dx - 1, y: 1, width: 2, height: H - 14, class: 'cur' });
-  for (let s = 0; s <= end; s += end > 60 ? 20 : 10) add('text', { x: L + s * dx, y: H - 2, class: 'tick' }, String(s));
+  for (let s = 0; s <= end; s += end > 60 ? 20 : 10) add('text', { x: L + s * dx, y: H - 2, 'text-anchor': 'middle', class: 'tick' }, String(s));
   return h('div', { class: 'sb-dev-lanes-wrap' }, svg);
 }
 
