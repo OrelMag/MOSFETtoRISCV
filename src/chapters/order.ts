@@ -103,6 +103,7 @@ const BOOK = [
   'appendix-sap',
   'appendix-runner',
   'appendix-baby',
+  'appendix-agc',
 ] as const;
 
 export type ChapterId = (typeof BOOK)[number];

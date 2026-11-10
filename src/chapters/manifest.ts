@@ -1087,4 +1087,14 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Your own program", challenge: "reach", stage: "scene" },
     { title: "What 1948 bought", stage: "scene" },
   ] },
+  { id: "appendix-agc", num: 95, title: "The Apollo Guidance Computer", blurb: "The computer that flew to the Moon, from its one gate up: a three-input NOR in resistor-transistor logic, an adder and a register built of nothing else, one's complement with its end-around carry, a program woven into wire, and the instruction set on a model checked against Virtual AGC.", level: "NOR gates, Apollo", appendix: "F", builds: ["tubes","gates","adders","registers","memory","multicycle"], recap: {"checks":3}, steps: [
+    { title: "Meet the AGC", stage: "scene" },
+    { title: "One kind of gate", challenge: "quiz", stage: "scene" },
+    { title: "A full adder in NOR", stage: "scene" },
+    { title: "The end-around carry", challenge: "quiz", stage: "scene" },
+    { title: "Registers of NOR gates", challenge: "quiz", stage: "scene" },
+    { title: "A program woven into wire", challenge: "quiz", stage: "widget" },
+    { title: "Inside a rope module", stage: "widget" },
+    { title: "Thirty-four instructions", challenge: "quiz", stage: "widget" },
+  ] },
 ];
