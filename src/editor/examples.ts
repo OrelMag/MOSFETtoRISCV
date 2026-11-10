@@ -16,6 +16,7 @@ import { SAP_SUBCHIPS, sapChip } from './examplesap';
 import { busSystemChip } from './examplebus';
 import { rv64Chip, rvcChip, rvvChip } from './exampleisa';
 import { cardsBootChip } from './examplecards';
+import { babyChip } from './examplebaby';
 import { twoComputersChip, uartComputerChip } from './examplecomms';
 import { lanComputerChip, lanSwitchChip, lanTopChip } from './examplenet';
 import { add4VerilogChip, sameAdderChip } from './examplehdl';
@@ -464,6 +465,12 @@ export const EXAMPLES: Example[] = [
     build: (id, n, _sub, docs) => computer6502Chip(id, n, { mem: docs.mem, dev: docs.dev }),
     subchips: { mem: { name: 'Memory map', build: memory6502Chip }, dev: { name: 'Devices', build: (id, n) => devicesChip(id, n, 'at $4000 ($4000 console, $4001 LEDs, $4002 switches)') } },
     hz: 10000,
+  },
+  {
+    id: 'baby', group: 'computers', drawer: true, short: 'The first stored-program computer, 1948.', name: 'Manchester Baby (1948)',
+    blurb: 'The Small-Scale Experimental Machine in gates: 32 lines of 32 digits on a Williams tube, seven instructions, four beats each, running Kilburn’s highest-factor routine on 60. Run: the Stop lamp lights and line 27 holds 30. Switch REGEN off and the store fades.',
+    build: (id, n) => babyChip(id, n),
+    hz: 2000,
   },
   {
     id: 'sap1', group: 'computers', drawer: true, short: 'The classic 8-bit teaching computer, chip by chip.', name: 'SAP-1 breadboard computer',
