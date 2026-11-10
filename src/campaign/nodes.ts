@@ -18,6 +18,7 @@ import { BUILDM } from './buildm';
 import { BUILDPOW } from './buildpow';
 import { BUILDVM } from './buildvm';
 import { BUILDR } from './buildr';
+import { BUILDNOR } from './buildnor';
 import { lzc, ROUND_DECIDE } from '../lib/fpu';
 import { arrayMul, seqDivider } from '../lib/muldiv';
 import { seqMul } from '../lib/multiply';
@@ -244,6 +245,12 @@ export const NODES: CampaignNode[] = withBugHunts([
     codex: ['comparator'], unlocks: ['rv16_eq16', 'eq*'], base: BUILD1.g_eq16, par: { nand: 110, depth: 12 },
     chapters: [{ chapter: 'gates', step: 5, label: 'XNOR: are they equal?' }] },
 
+  {
+    id: 'nor_basic', act: 1, title: 'NOT, OR, AND from NOR3', kind: 'build', optional: true, requires: ['g_and', 'g_or'], base: BUILDNOR.nor_basic, par: { nor3: 5 }, codex: ['demorgan', 'duality'],
+    why: 'NAND is our brick by choice, not by law. The Apollo Guidance Computer was built from one other gate, a three-input NOR: MIT judged that qualifying even a second circuit type would cost more than it saved. The same three functions from it: 5 NOR3 gates (15 transistors, 20 resistors as drawn), where the NAND levels took 6 NANDs (24 transistors).',
+    tips: ['A NOR3 with its three inputs tied together is a NOT.', 'OR is a NOR followed by a NOT; tie the spare input to one of the other two.', 'AND by De Morgan: a·b = ¬(¬a + ¬b), a NOR of the two inverted inputs. ¬a is also an output: share it.'],
+  },
+
   // ---- Act 2 --------------------------------------------------------------------------------
   {
     id: 'n_twos', act: 2, title: "Two's complement", kind: 'drill', requires: ['n_bin'], drill: 'twos', par: { mistakes: 2 },
@@ -311,6 +318,12 @@ export const NODES: CampaignNode[] = withBugHunts([
     why: 'The ripple carry crosses every bit and becomes the single-cycle core\'s critical path: the ALU is 50 of its 98 delays. A parallel-prefix tree computes every carry in 4 levels: 362 NANDs, depth 14, against the ripple adder\'s 144 and 36. Required: Core IV puts it in the ALU, period 76.',
     tips: ['Generate g = a·b, propagate p = a ⊕ b; (g, p) pairs combine associatively.', 'Kogge–Stone: log2(16) = 4 levels of combining.', 'The combine is not commutative (the higher group goes on the left), and cin enters as a generate below bit 0: drop it and only the cin = 0 cases pass.'],
     codex: ['cla', 'prefix', 'carryselect'], unlocks: ['ks16', 'cla4', 'rv16_alu16ks', 'rv16_nextpc_ks'], chapters: [{ chapter: 'fastadd', label: 'Faster adders' }], base: BUILD1.o_fastadd, par: { nand: 362, depth: 14 }, gives: ['gp', 'graycell', 'blackcell'] },
+
+  {
+    id: 'nor_fa', act: 2, title: 'A full adder in NOR3', kind: 'build', optional: true, requires: ['nor_basic', 'a_fa'], base: BUILDNOR.nor_fa, par: { nor3: 9 }, codex: ['duality', 'majority'],
+    why: 'The adder is where a brick shows its cost. Take the 9-NAND full adder and make every gate a NOR: each gate becomes its dual, and the sum and the majority are their own duals, so the same wiring still adds. 9 NOR3 gates, 27 transistors and 36 resistors, against 36 transistors in CMOS NANDs. The AGC\'s adder kept two NOR stages between a carry in and a carry out, the fewest NOR logic allows.',
+    tips: ['Start from your 9-NAND adder: same gates, same wires, every NAND a NOR3 with its spare input tied.', 'Why it works: a NOR network computes the dual of the NAND network\'s function. a ⊕ b ⊕ c and the majority give the same answer with every input and output inverted.', 'With all three inputs used, the majority alone is 4 gates: a NOR3 of the three pairwise NORs.'],
+  },
 
   // ---- Act 3 --------------------------------------------------------------------------------
   {
@@ -392,6 +405,12 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'm_mem', act: 3, title: 'ROM and RAM', kind: 'lesson', requires: ['m_rf'],
     why: 'Built like the register file, memory costs about 20 NANDs a bit: the 64-word RAM a small program needs would be 20 166 NANDs, over four times Core III. Real memories are arrays of 6-transistor or 1-transistor cells, so from here on ROM and RAM are given parts. Core II hangs the data RAM on the ALU\'s output.',
     body: 'mem', tips: [], chapters: [{ chapter: 'memory', step: 4, label: 'Read-only memory' }], codex: ['rom', 'harvard'], anatomy: ['imem', 'dmem'], unlocks: ['sb_rom*', 'ram*'],
+  },
+
+  {
+    id: 'nor_reg', act: 3, title: 'A register bit in NOR3', kind: 'build', optional: true, requires: ['nor_basic', 's_reg4'], base: BUILDNOR.nor_reg, par: { nor3: 15 }, codex: ['dlatch'],
+    why: 'Memory from the same single gate: two NORs crossed are a latch, two latches on opposite clock phases a flip-flop, and a multiplexer in front makes it hold. 15 NOR3 gates (45 transistors, 60 resistors) against 13 NANDs (52 transistors) for the register bit of your 4-bit register.',
+    tips: ['Two NOR3s, each reading the other\'s output, hold a bit: set pulls one output low, reset the other.', 'A latch open while its enable is 1: set = NOR(¬d, ¬en), reset = NOR(d, ¬en). For the master, open while clk = 0, clk itself is ¬en.', 'The enable: choose d or the register\'s own q in front of the master, as your NAND register did.'],
   },
 
   // ---- Act 4 --------------------------------------------------------------------------------

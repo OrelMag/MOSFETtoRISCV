@@ -1,7 +1,12 @@
 // The AGC's RTL NOR3 (lib/agcnor.ts) at switch level and the NOR3 ladder's reference answers: truth tables, the
 // register bit clocked, and their counts (NOR3 gates, the transistors and resistors drawing 2005011 shows).
 import { describe, expect, it } from 'vitest';
-import { FULL_ADDER, NOR3_RTL, NOR_BASIC, NOR_FA, NOR_REG } from '../src/lib';
+import { nodeById } from '../src/campaign/nodes';
+import { levelChallenge } from '../src/campaign/levels';
+import { checkChallenge } from '../src/editor/challenges';
+import { UserLibrary } from '../src/editor/library';
+import { AND, FULL_ADDER, NOR3_RTL, NOR_BASIC, NOR_FA, NOR_REG, NOT, OR } from '../src/lib';
+import { workspace } from './editorkit';
 import { flatten } from '../src/sim/flatten';
 import { stats } from '../src/sim/stats';
 import { SwitchSim } from '../src/sim/switchsim';
@@ -47,5 +52,34 @@ describe('the AGC NOR3 and the ladder\'s answers', () => {
       expect(stats(d), d.id).toMatchObject({ nor3: n, transistors: 3 * n, resistors: 4 * n, nands: 0 });
     }
     expect(stats(FULL_ADDER).nands).toBe(9); // the NAND adder the NOR one is the dual of: as many gates
+  });
+});
+
+describe('the NOR3 ladder (act 1–3, optional)', () => {
+  it('each level\'s reference answer passes Check on SwitchSim at par, scored in NOR3 gates; a NAND is refused', () => {
+    for (const id of ['nor_basic', 'nor_fa', 'nor_reg']) {
+      const n = nodeById(id)!;
+      const ch = levelChallenge(n)!;
+      const chips = ch.answer();
+      const main = chips[chips.length - 1];
+      const r = checkChallenge(ch, new UserLibrary(workspace(main, ...chips.slice(0, -1))).compiled(main.id));
+      expect(r.failures, id).toEqual([]);
+      expect(r.restrictionViolations, id).toEqual([]);
+      expect(r.ok, id).toBe(true);
+      expect(r.score.nor3, id).toBe(n.par!.nor3);
+    }
+    const ch = levelChallenge(nodeById('nor_basic')!)!;
+    const chips = ch.answer();
+    const main = chips[chips.length - 1];
+    const withNand = { ...main, parts: [...main.parts, { id: 'extra', ref: { lib: 'nand' }, at: [0, 40] as [number, number] }] };
+    expect(checkChallenge(ch, new UserLibrary(workspace(withNand)).compiled(main.id)).restrictionViolations.length).toBeGreaterThan(0);
+  });
+  it('the levels\' prose quotes the counts the gates give', () => {
+    const t = (d: ComponentDef) => stats(d).transistors;
+    expect([t(NOR_BASIC), stats(NOR_BASIC).resistors]).toEqual([15, 20]);
+    expect([t(NOR_FA), stats(NOR_FA).resistors, t(FULL_ADDER)]).toEqual([27, 36, 36]);
+    expect([t(NOR_REG), stats(NOR_REG).resistors]).toEqual([45, 60]);
+    expect(nodeById('s_reg4')!.par!.nand! / 4).toBe(13); // the NAND register bit at par: 13 NANDs, 52 transistors
+    expect(stats(NOT).nands + stats(AND).nands + stats(OR).nands).toBe(6);
   });
 });

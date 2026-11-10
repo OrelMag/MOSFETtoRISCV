@@ -16,6 +16,7 @@ export const METRIC: Record<Metric, { label: string; unit: string; hint: string 
   size: { label: 'Size', unit: 'words', hint: 'Program size in instruction words' },
   mistakes: { label: 'Mistakes', unit: 'mistakes', hint: 'Wrong answers and answers shown, before the drill was complete' },
   relays: { label: 'Relays', unit: 'relays', hint: 'Relays in the whole hierarchy (a coil and its contacts each)' },
+  nor3: { label: 'NOR3 gates', unit: 'NOR3', hint: 'Three-input NOR gates in the whole hierarchy (the Apollo Guidance Computer\'s gate: 3 transistors and 4 resistors each)' },
   tubes: { label: 'Tube sections', unit: 'sections', hint: 'Triode and diode sections (a 6SN7 bulb holds two triodes, a 6AL5 two diodes)' },
   steps: { label: 'Relay steps', unit: 'steps', hint: 'Most relay steps (about 8 ms each) one input change takes to come to rest' },
   idle: { label: 'Idle lanes', unit: '%', hint: 'Lane-steps with the lane switched off, as a share of all lane-steps (100 % − lane utilization), mean over the tests' },
@@ -32,6 +33,7 @@ export function measured(s: Score): Measured {
   if (s.cycles !== undefined) m.cycles = s.cycles;
   if (s.relays !== undefined) m.relays = s.relays;
   if (s.tubes !== undefined) m.tubes = s.tubes;
+  if (s.nor3 !== undefined) m.nor3 = s.nor3;
   if (s.steps !== undefined) m.steps = s.steps;
   if (s.edits !== undefined) m.edits = s.edits;
   if (s.wrong !== undefined) m.wrong = s.wrong;
@@ -66,7 +68,7 @@ export function better(a: { stars: number; m: Measured }, b: { stars: number; m:
 }
 
 /** The metrics the after-pass card draws area bars in. */
-export type AreaUnit = 'nand' | 'transistors' | 'relays' | 'tubes';
+export type AreaUnit = 'nand' | 'transistors' | 'relays' | 'tubes' | 'nor3';
 
 /**
  * The after-pass card's area bars: yours, par (when it differs from yours) and the level case's alternatives, in the
@@ -74,7 +76,7 @@ export type AreaUnit = 'nand' | 'transistors' | 'relays' | 'tubes';
  * NANDs), else NANDs. Null when there is nothing to compare: a single bar, or every value 0.
  */
 export function areaBars(m: Measured, par: Par, alts: readonly { name: string; cost: Partial<Record<AreaUnit, number>> }[]): { unit: AreaUnit; bars: [string, number, boolean][] } | null {
-  const unit: AreaUnit = par.relays !== undefined ? 'relays' : par.tubes !== undefined ? 'tubes'
+  const unit: AreaUnit = par.relays !== undefined ? 'relays' : par.tubes !== undefined ? 'tubes' : par.nor3 !== undefined ? 'nor3'
     : par.transistors !== undefined && par.nand === undefined ? 'transistors' : 'nand';
   const bars: [string, number, boolean][] = [];
   if (m[unit] !== undefined) bars.push(['Yours', m[unit]!, true]);

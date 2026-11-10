@@ -16,7 +16,7 @@ export interface ChapterLink {
 }
 
 /** Metrics a level is graded on (lower is better). */
-export type Metric = 'nand' | 'transistors' | 'depth' | 'period' | 'cycles' | 'size' | 'mistakes' | 'idle' | 'laneops' | 'relays' | 'tubes' | 'steps' | 'edits' | 'wrong';
+export type Metric = 'nand' | 'transistors' | 'depth' | 'period' | 'cycles' | 'size' | 'mistakes' | 'idle' | 'laneops' | 'relays' | 'tubes' | 'nor3' | 'steps' | 'edits' | 'wrong';
 
 /** A bug hunt: a level that starts from a faulty drawing of a block an earlier level built (bughunts.ts). */
 export interface BugInfo {
@@ -98,6 +98,7 @@ export function parLimits(par: Par | undefined): Limits | undefined {
   if (par.cycles !== undefined) l.maxCycles = par.cycles;
   if (par.relays !== undefined) l.maxRelays = par.relays;
   if (par.tubes !== undefined) l.maxTubes = par.tubes;
+  if (par.nor3 !== undefined) l.maxNor3 = par.nor3;
   if (par.steps !== undefined) l.maxSteps = par.steps;
   if (par.edits !== undefined) l.maxEdits = par.edits;
   return l;

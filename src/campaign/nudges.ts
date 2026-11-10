@@ -2,6 +2,7 @@
 // level's own tips (CampaignNode.tips, which get concrete quickly). No DOM.
 
 import type { CampaignNode } from './types';
+import { NUDGESNOR } from './walksnor';
 
 export const NUDGES: Record<string, string> = {
   // act 0: transistors
@@ -180,6 +181,7 @@ export const NUDGES: Record<string, string> = {
   l_repeater: 'A signal that arrived weak can only be made strong by something with a supply of its own.',
   l_dial: 'Count the falling edges, not the pulses; and let the contacts of the counting relays do the choosing.',
   p_boot: 'The copy runs on its own: the question is what the processor does while it waits.',
+  ...NUDGESNOR,
 };
 
 /** A level's tips in the order they are revealed: its nudge first, then its own tips. */

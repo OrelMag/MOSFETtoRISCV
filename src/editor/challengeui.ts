@@ -67,6 +67,7 @@ export function goalText(ch: BuildChallenge): { goal: string; rule: string; par:
     l.maxNand !== undefined ? `${n(l.maxNand)} NAND` : '',
     l.maxRelays !== undefined ? `${n(l.maxRelays)} relay${l.maxRelays === 1 ? '' : 's'}` : '',
     l.maxTubes !== undefined ? `${n(l.maxTubes)} tube section${l.maxTubes === 1 ? '' : 's'}` : '',
+    l.maxNor3 !== undefined ? `${n(l.maxNor3)} NOR3 gate${l.maxNor3 === 1 ? '' : 's'}` : '',
     l.maxSteps !== undefined ? `${n(l.maxSteps)} relay step${l.maxSteps === 1 ? '' : 's'}` : '',
     l.maxDepth !== undefined ? `depth ${n(l.maxDepth)}` : '',
     l.maxPeriod !== undefined ? `period ${n(l.maxPeriod)}` : '',
@@ -87,6 +88,8 @@ const UNIT_MEANS: Record<string, string> = {
   period: 'the clock period: NAND delays on the longest path from one clock edge to the next',
   cycles: 'clock cycles to run every test',
   transistors: 'transistors in your circuit',
+  'NOR3 gate': 'three-input NOR gates in your circuit, the only gate the Apollo Guidance Computer used',
+  'NOR3 gates': 'three-input NOR gates in your circuit, the only gate the Apollo Guidance Computer used',
   edit: 'changes from the drawing you started with (moving parts and redrawing wires are free)',
   edits: 'changes from the drawing you started with (moving parts and redrawing wires are free)',
 };
@@ -100,6 +103,7 @@ function deviceItems(r: CheckResult, lim: Limits, item: (v: number, unit: string
   return [
     s.relays !== undefined || lim.maxRelays !== undefined ? item(s.relays ?? 0, s.relays === 1 ? 'relay' : 'relays', lim.maxRelays) : null,
     s.tubes !== undefined || lim.maxTubes !== undefined ? item(s.tubes ?? 0, s.tubes === 1 ? 'tube section' : 'tube sections', lim.maxTubes) : null,
+    s.nor3 !== undefined || lim.maxNor3 !== undefined ? item(s.nor3 ?? 0, s.nor3 === 1 ? 'NOR3 gate' : 'NOR3 gates', lim.maxNor3) : null,
     s.steps !== undefined ? item(s.steps, s.steps === 1 ? 'relay step' : 'relay steps', lim.maxSteps) : null,
     // a bench that counts cycles (the card loader: cycles until run)
     s.cycles !== undefined ? item(s.cycles, 'cycles', lim.maxCycles) : null,
