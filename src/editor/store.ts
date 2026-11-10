@@ -17,6 +17,7 @@ import { same } from './history';
 import { MAX_KEY_LENGTH } from './parts';
 import { sanitizeIoRef } from './ioparts';
 import { sanitizeReaderRef } from './cardparts';
+import { sanitizeBabyRef } from './babypart';
 import { FACE_MAX, isEmptyFace, SCALE_MAX, SCALE_MIN, SIDES } from './face';
 import { PUZZLE_MAX_WIDTH } from './puzzleparts';
 import {
@@ -81,6 +82,7 @@ export function sanitizeRef(r: unknown): PartRef | null {
   if ('keyboard' in r) return r.keyboard === true ? { keyboard: true } : null;
   if ('console' in r || 'switches' in r || 'screen' in r) return sanitizeIoRef(r);
   if ('reader' in r) { const rd = sanitizeReaderRef(r.reader); return rd && { reader: rd }; }
+  if (isObj(r.baby)) return sanitizeBabyRef(r.baby);
   if ('puzzle' in r) return (r.puzzle === 'in' || r.puzzle === 'out') && int(r.width, 1) && r.width <= PUZZLE_MAX_WIDTH ? { puzzle: r.puzzle, width: r.width } : null;
   if (isObj(r.rom)) {
     const { k, w, addr, lang, src } = r.rom;

@@ -338,6 +338,8 @@ export type PartRef =
    * next = 1 at a rising clk edge takes the card (word mode) or column (column mode) on data, ready says one waits. Zero cost.
    */
   | { reader: ReaderRef }
+  /** The Manchester Baby (lib/baby.ts) with a program in its store, in the Baby's assembly (ssem/asm.ts): 32 lines, one per word. */
+  | { baby: { src: string } }
   /** Read-only memory: 2^k words of w bits. 'rv32' addresses bytes like a PC (addr = 4·word). */
   | { rom: { k: number; w: 8 | 12 | 16 | 24 | 32; addr: 'word' | 'rv32'; lang: 'asm' | 'hex' | 'rv16' | 'cpu4' | 'dsp24' | 'isa' | '6502'; src: string;
       /** lang 'isa': the instruction set, a copy of the workspace's table (so the ROM builds on its own, in a share link too). */

@@ -75,6 +75,7 @@ export * from './i2c';
 export * from './ttl';
 export * from './sap';
 export * from './bitrunner';
+export * from './baby';
 export * from './numbers';
 export * from './intc';
 export * from './seqdeep';
