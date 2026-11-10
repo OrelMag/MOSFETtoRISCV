@@ -572,10 +572,10 @@ export const VECTOR_UNIT: ComponentDef = (() => {
   return define({
     id: 'vunit', name: 'Vector unit (4 lanes, VLEN 128)', category: 'cpu',
     summary: 'The RVV subset in gates: vset*, integer arithmetic, logic, shifts, min / max, compares into a mask, vmerge / vmv, vredsum, vid, vmv.x.s / vmv.s.x and unit-stride vle32 / vse32, masked or not, at e32 and LMUL 1, 2, 4 or 8. Four lanes do four elements a beat; a group of L registers takes L beats (plus one for a compare or a reduction), and the scalar core waits meanwhile. e8 / e16 (vill), vmul and strided or narrow accesses are left to the golden model: here they do nothing.',
-    ports: [clkPort, bus('instr', 32, 'in'), bus('xa', 32, 'in'), bus('xb', 32, 'in'), bus('vRd', 128, 'in'),
-      bit('xWe', 'out'), bus('xData', 32, 'out'), bit('retire', 'out'), bit('vAct', 'out'), bus('vBeat', 3, 'out'), bus('vWe', 4, 'out'), bus('vWd', 128, 'out')],
+    ports: [clkPort, bus('instr', 32, 'in'), bus('xa', 32, 'in'), bus('xb', 32, 'in'), bus('vRd', 128, 'in', 'bottom'),
+      bit('vAct', 'out'), bus('vBeat', 3, 'out'), bus('vWe', 4, 'out'), bus('vWd', 128, 'out'), bit('retire', 'out'), bit('xWe', 'out'), bus('xData', 32, 'out')],
     symbol: { kind: 'box', label: 'VECTOR UNIT' },
-    netlist: () => ({ pins: edgePins(b, ['instr', 'xa', 'xb', 'vRd', 'clk'], ['xWe', 'xData', 'retire', 'vAct', 'vBeat', 'vWe', 'vWd']), instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: edgePins(b, ['instr', 'xa', 'xb', 'vRd', 'clk'], ['vAct', 'vBeat', 'vWe', 'vWd', 'retire', 'xWe', 'xData']), instances: b.instances, nets: b.nets() }),
   });
 })();
 
@@ -627,10 +627,10 @@ export function vecMemory(k: number): ComponentDef {
     return define({
       id: `vmem${k}`, name: 'Data memory (four banks)', category: 'memory',
       summary: `${2 ** k} words (${4 * 2 ** k} bytes) in four word-interleaved banks of ${2 ** R}: word w is in bank w mod 4. The scalar port reads and writes one word, as the single-cycle CPU's memory does; the vector port moves four consecutive words a beat, one per bank, so vle32 / vse32 take one beat per register whatever the base's alignment (the lanes rotated by its word offset).`,
-      ports: [bus('addr', 32, 'in'), bus('wd', 32, 'in'), bit('we', 'in'), clkPort, bit('vAct', 'in'), bus('vBase', 32, 'in'), bus('vBeat', 3, 'in'), bus('vWe', 4, 'in'), bus('vWd', 128, 'in'),
-        bus('rd', 32, 'out'), bus('vRd', 128, 'out', 'top')],
+      ports: [bus('addr', 32, 'in'), bus('wd', 32, 'in'), bit('we', 'in'), clkPort, bus('vBase', 32, 'in'), bit('vAct', 'in'), bus('vBeat', 3, 'in'), bus('vWe', 4, 'in'), bus('vWd', 128, 'in'),
+        bus('rd', 32, 'out'), bus('vRd', 128, 'out', 'bottom')],
       symbol: { kind: 'box', label: 'DATA MEM ×4' },
-      netlist: () => ({ pins: edgePins(b, ['addr', 'wd', 'we', 'vAct', 'vBase', 'vBeat', 'vWe', 'vWd', 'clk'], ['rd', 'vRd']), instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: edgePins(b, ['addr', 'wd', 'we', 'vBase', 'vAct', 'vBeat', 'vWe', 'vWd', 'clk'], ['rd', 'vRd']), instances: b.instances, nets: b.nets() }),
     });
   });
 }

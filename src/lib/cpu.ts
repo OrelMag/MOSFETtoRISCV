@@ -1098,12 +1098,13 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
     const tagged = (n: NetDef, ...ends: string[]) => { n.ends.push(...ends); if (Array.isArray(n.tags)) n.tags.push(...ends); else if (!n.tags) n.tags = ends; };
     instances.splice(instances.findIndex((i) => i.name === 'one'), 1);
     nets.splice(nets.indexOf(net('en')), 1);
-    add('vu', VECTOR_UNIT, [at.get('rf')![0] - 2, bottom + 6], 'vector unit');
+    add('vu', VECTOR_UNIT, [aluR - 6, bottom + 6], 'vector unit');
     add('xw', M2, [resY[0] + 6, resY[1] - 6], 'result / vector');
     add('rwo', OR, [56, bottom - 2]);
-    tagged(net('Instr'), 'vu.instr');
-    tagged(net('rd1'), 'vu.xa', 'dm.vBase');
-    tagged(net('WriteData'), 'vu.xb');
+    net('Instr').ends.push('vu.instr');
+    net('rd1').ends.push('vu.xa');
+    tagged(net('rd1'), 'dm.vBase');
+    net('WriteData').ends.push('vu.xb');
     tagged(net('clk'), 'vu.clk');
     const res = net('Result');
     res.ends = ['res.y', 'xw.a'];
@@ -1114,14 +1115,15 @@ function buildCpu(IM: ComponentDef, dmemK: number, adder: 'rca' | 'ks', dcache: 
       { name: 'VXData', ends: ['vu.xData', 'xw.b'], tags: true },
       { name: 'VXWrite', ends: ['vu.xWe', 'xw.s', 'rwo.b'], tags: true },
       { name: 'XRegWrite', ends: ['rwo.y', 'rf.we'], tags: true },
-      { name: 'retire', ends: ['vu.retire', 'pc.en', 'retire'], tags: true },
-      { name: 'vAct', ends: ['vu.vAct', 'dm.vAct'], tags: true },
-      { name: 'vBeat', ends: ['vu.vBeat', 'dm.vBeat'], tags: true },
-      { name: 'vWe', ends: ['vu.vWe', 'dm.vWe'], tags: true },
-      { name: 'vWd', ends: ['vu.vWd', 'dm.vWd'], tags: true },
-      { name: 'vRd', ends: ['dm.vRd', 'vu.vRd'], tags: true },
+      // retire runs on a row of its own under the clock, in a column right of the bank wires, to the PC's enable and the pin
+      { name: 'retire', ends: ['vu.retire', 'pc.en', 'retire'], via: { retire: [[aluR + 17, bottom + 16], [aluR + 17, bottom + 3]], 'pc.en': [[aluR + 17, bottom + 16], [aluR + 17, bottom + 3], [9, bottom + 3], [9, P('pc', 'en')[1]]] } },
+      { name: 'vAct', ends: ['vu.vAct', 'dm.vAct'] },
+      { name: 'vBeat', ends: ['vu.vBeat', 'dm.vBeat'] },
+      { name: 'vWe', ends: ['vu.vWe', 'dm.vWe'] },
+      { name: 'vWd', ends: ['vu.vWd', 'dm.vWd'] },
+      { name: 'vRd', ends: ['dm.vRd', 'vu.vRd'], via: { 'vu.vRd': [[P('dm', 'vRd')[0], bottom + 24], [aluR + 4, bottom + 24]] } },
     );
-    pins.retire = [resY[0] + 22, bottom + 1];
+    pins.retire = [resY[0] + 22, bottom + 3];
     extraPorts.push(bit('retire', 'out'));
   }
   if (shared) {
