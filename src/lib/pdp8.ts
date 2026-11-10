@@ -457,7 +457,8 @@ export const PDP8_CONTROL: ComponentDef = (() => {
 export const PDP8_KEYS = ['ld', 'dep', 'exam', 'start', 'cont', 'stop', 'sstep'] as const;
 
 const CORE_IN: PortDef[] = [bit('clk', 'in', true), bus('sr', 12, 'in'), ...PDP8_KEYS.map((k) => bit(k, 'in')), bus('dout', 12, 'in'), bus('kcode', 8, 'in'), bit('kready', 'in')];
-const CORE_OUT: PortDef[] = [bus('maddr', 12, 'out'), bus('din', 12, 'out'), bit('mwe', 'out'), bus('tdata', 8, 'out'), bit('twe', 'out'), bit('kack', 'out'), bit('retire', 'out'), bit('run', 'out')];
+const CORE_OUT: PortDef[] = [bus('maddr', 12, 'out'), bus('din', 12, 'out'), bit('mwe', 'out'), bus('tdata', 8, 'out'), bit('twe', 'out'), bit('kack', 'out'), bit('retire', 'out'), bit('run', 'out'),
+  bus('pc', 12, 'out'), bus('ac', 12, 'out'), bit('l', 'out')];
 
 /** The registers' paths in pdp8Core / pdp8Computer (the processor at `cpu` in the computer). */
 export const PDP8_STATE = {
@@ -497,6 +498,9 @@ function body(b: Builder, dout: string, mem: { addr: string; din: string; we: st
   b.wire(`${tty}.kack`, 'kack');
   b.wire(c('retire'), 'retire');
   b.wire(c('run'), 'run');
+  b.wire(pcv, 'pc');
+  b.wire(ac, 'ac');
+  b.wire(`${acl}.l`, 'l');
 }
 
 /**

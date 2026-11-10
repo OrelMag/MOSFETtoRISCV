@@ -9,7 +9,7 @@ import { SEG7_FONT } from './memory';
 import { openChip } from './session';
 import { PICTURE } from '../riscv/ioprograms';
 import { CPU4_SUBCHIPS, cpu4Chip } from './example4';
-import { pdp8Chip } from './examplepdp8';
+import { pdp8Chip, pdp8GatesChip } from './examplepdp8';
 import { dspChip } from './exampledsp';
 import { BENCH24 } from '../dsp/programs24';
 import { computer6502Chip, memory6502Chip } from './example6502';
@@ -455,6 +455,12 @@ export const EXAMPLES: Example[] = [
     id: 'pdp8', group: 'computers', short: 'Twelve switches, a row of lamps, a teletype.', name: 'PDP-8 front panel (1965)',
     blurb: 'A ROM holding Hello, world in the PDP-8’s own instruction table (12-bit words, octal, PAL syntax), run on a model of the PDP-8 behind its front panel: lamps for PC, MA, MB, AC and L, the switch register, LOAD ADD, DEP, EXAM, START and a teletype.',
     build: (id, n) => pdp8Chip(id, n),
+  },
+  {
+    id: 'pdp8g', group: 'computers', short: 'The PDP-8 built from gates, one edge per memory cycle.', name: 'PDP-8 in gates',
+    blurb: 'The PDP-8 as a circuit: a 12-bit processor of library parts (control with Fetch, Defer and Execute, MA and MB, PC, the accumulator and link with both operate groups and the MQ, the teletype IOTs) next to a 4K × 12 RAM holding Hello, world, a keyboard and a teleprinter. The switch register and the panel keys are pins: LOAD_ADD, then START.',
+    build: (id, n) => pdp8GatesChip(id, n),
+    hz: 2000,
   },
   ...BENCH24.map((b, i): Example => ({
     id: i === 0 ? 'dsp-core' : `dsp-core-${b.id}`, group: 'computers', drawer: true,
