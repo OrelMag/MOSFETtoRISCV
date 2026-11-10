@@ -23,6 +23,9 @@ export interface StepMeta {
   title: string;
   /** The step has a check: a reach challenge or a quiz (settings.solved key `<chapter>:<step>`). */
   challenge?: 'reach' | 'quiz';
+  /** What the step puts on the stage (absent: neither, the nearest earlier step's stays): read before the chapter loads, so the
+   *  top bar hides Slow motion on a widget step before the first paint (ui/app.ts). */
+  stage?: 'scene' | 'widget';
 }
 
 export interface ChapterMeta extends ChapterHead {

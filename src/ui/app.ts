@@ -1,6 +1,7 @@
 // App shell: top bar, theme, global settings and hash routing.
 
 import { outline, outlineOf } from '../chapters/outline';
+import { stageStepOf } from './stageborrow';
 import { loadChapter } from '../chapters/load';
 import { movedAddress } from '../chapters/stepmoves';
 import { h, icon, s } from './dom';
@@ -364,6 +365,13 @@ export function startApp(root: HTMLElement): void {
     const shows = stageTools(parts);
     radix.hidden = !shows.radix;
     animate.hidden = !shows.slow;
+    // A chapter step showing a widget (or nothing yet) hides Slow motion (app.css data-widget-step). The page sets it once the
+    // chapter's module is in; set from the outline now, before the first paint, the top bar does not narrow under the reader.
+    const chOut = key === 'c' ? outlineOf(parts[1] ?? outline[0].id) : undefined, stepNo = Number(parts[2] ?? 0);
+    if (chOut && parts[2] !== 'print' && Number.isInteger(stepNo) && stepNo >= 0 && stepNo < chOut.steps.length) {
+      const k = stageStepOf((j) => !!chOut.steps[j].stage, stepNo);
+      document.documentElement.toggleAttribute('data-widget-step', k < 0 || chOut.steps[k].stage === 'widget');
+    }
     if (key === 'c' && parts[1] && !outlineOf(parts[1])) {
       // a stale or mistyped link: say so rather than quietly showing another chapter under the wrong address
       const bad = parts[1];
