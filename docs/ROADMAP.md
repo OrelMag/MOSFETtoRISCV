@@ -1124,7 +1124,10 @@ and Digital are what courses already use, and Digital lets a student write tests
   every chip placed so far once per chip and fixed 12 overlaps a round (the lint's display cap), at most 16 rounds; it now takes
   the importer's compiled chips, fixes every overlap of a round at once and hands its compile on; a lone segment from a part
   to a pin or pointer no longer doubles back through Digital's pin point. tests/dig-export.test.ts reads the cores back
-- Later: placing an imported circuit again by logic depth (the Verilog import's placer, generalized)
+- ✅ Placing an imported circuit again by logic depth (editor/placedepth.ts: the Verilog import's placer, shared; relayout.ts):
+  the canvas menu's "Lay out by logic depth" and a toast after an import, offered only where it measures better (crossings +
+  wires through parts); elsewhere off, with the numbers. On the importers' fixtures it helps 3 chips of 27: hand-drawn sheets
+  reach 0 crossings with tunnels where we wire first (tests/relayout.test.ts pins each verdict)
 
 **ISA breadth** (Ripes: RV64, the C extension): RV64I / RV64M and C in Phase 9, each checked by riscv-tests and Spike
 like the RV32 cores. ✅ C (chapter 25, part 1); ✅ RV64I / M (part 2). ✅ C and RV64 in the sandbox, with the instruction builder's 16-bit and RV64 formats (1f7697b3; widths e3fa3cf1).

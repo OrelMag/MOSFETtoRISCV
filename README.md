@@ -428,7 +428,7 @@ The full plan and status is in [docs/ROADMAP.md](docs/ROADMAP.md). The next feat
 - **Verilog in the journey**: the same adder as text and as gates in a chapter step, and a Verilog
   chip's critical path mapped back to its source lines.
 - **ISA breadth, further**: RV64 in the pipelines.
-- **Imported circuits placed again** by logic depth (the Verilog import's placer), and `.dig` export.
+- **`.dig` export** for Digital.
 - **Python, further**: strings and a heap.
 
 ## Run it

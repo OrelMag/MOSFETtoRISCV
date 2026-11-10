@@ -8,6 +8,8 @@ import type { Editor } from '../editor/editor';
 import { dialog, registerFileImporter } from '../editor/fileui';
 import { addFolder, cleanFolderName, findFolder, moveToFolder } from '../editor/folders';
 import { h, undoKey } from '../ui/dom';
+import { betterOf } from '../editor/relayoutui';
+import { offerText } from '../editor/relayout';
 import type { ImportFailure, ImportOptions, ImportResult, SourceFile } from './report';
 
 export interface CircuitReader {
@@ -67,8 +69,26 @@ function show(ed: Editor, reader: CircuitReader, files: SourceFile[]): void {
     d.close();
     ed.openChip(top.id);
     ed.toast(`Imported ${r.chips.length} chip${r.chips.length === 1 ? '' : 's'} into “${name}”${tests ? `, with ${tests} test table${tests > 1 ? 's' : ''} (Tests)` : ''}. ${undoKey()} undoes it`);
+    offerLayout(ed, r.chips.map((c) => c.id));
   });
   go.focus();
+}
+
+/**
+ * After an import: the chips a layout by logic depth draws better (measured: crossings and wires through parts), offered
+ * in a toast as one more undo step. Where the author's sheet reads better (tunnels instead of wires), nothing is offered.
+ */
+function offerLayout(ed: Editor, ids: string[]): void {
+  const better = betterOf(ed, ed.ws, ids);
+  if (!better.length) return;
+  const what = better.length === 1
+    ? `${ed.ws.chips[better[0].id].name} reads better laid out by logic depth (${offerText(better[0].offer.before, better[0].offer.after)})`
+    : `${better.length} of the imported chips read better laid out by logic depth`;
+  ed.toast(what, 'info', { label: 'Lay out', run: () => {
+    ed.editWs((ws) => ({ ...ws, chips: { ...ws.chips, ...Object.fromEntries(better.map((b) => [b.id, b.offer.doc])) } }));
+    ed.fitView();
+    ed.toast(`Laid out ${better.length} chip${better.length === 1 ? '' : 's'} by logic depth. ${undoKey()} undoes it`);
+  } });
 }
 
 /** Registers a reader as a file importer: picked or dropped, alone or with the other files of its project. */
