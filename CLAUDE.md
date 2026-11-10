@@ -438,6 +438,8 @@ src/lib/       the component library (registered in `registry` via define())
                  triode.ts, the Z3 and ENIAC (tests hold them equal); cabinets (racks / panels), withoutParts (a CPU without
                  its program ROM), fmt* and TECH_NOTE; techsteps.ts designSteps(def): depth, period or relay steps
                  (SwitchSim); view/techtable.ts the table (inspector, sandbox chip properties, chapter 3's techcompare widget)
+  hallcards.ts   the machine hall's card reader (DOM-free): the golden model's card per fetch, read as it runs (relays) or load then run
+                 (tubes: a ram(4, 32) store priced in tubes), the time ledger (computing / waiting / loading), hallLayout(cpu, tech, store)
   flash.ts       chapter 37's flash at switch level: FG_CELL (prim 'fgmos'), vtOf / V_READ, norArray(R, C) (cells between
                  bit lines and a source line held high while programming), nandBlock(S, N) (strings with string / ground
                  selects, the other rows at the pass voltage); per column a pull-up, an output inverter and a NOR-gated
@@ -1084,6 +1086,11 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   unravel.ts     unravelPointer(s) (a pointer name → wires from the driver: square shapes, else A* on the half grid;
                  never on another net), collapseWire(s) (a wire tree → one pointer per end), pointersOf(sel), suggestName
   hops.ts        HopCache: wire hops recomputed for the moved wires and those crossing them only
+  placedepth.ts  placeByDepth: columns by logic depth (loops cut at storage), rows from the drivers, wires as via trunks; shared by the
+                 Verilog import (hdl/yosysjson.ts) and relayout.ts, which adds barycentre sweeps
+  relayout.ts    relayoutChip: a compiled chip placed again by depth and drawn with docFromDef (pin / part ids, captions, tests, face kept;
+                 refused for generated chips, inout pins, multi-driver nets, switch level); relayoutui.ts: the canvas menu row "Lay out by
+                 logic depth" and the post-import toast, offered only where crossings + wires through parts improve (else off, with the numbers)
   minimap.ts     plugin: the minimap at the canvas's bottom-right (parts in their category / chip hue, wires faint, the visible
                  area a frame: drag to pan, click to jump, arrows when focused; M, settings.minimap; hidden while the whole chip
                  is in view; clear of --dock-space), repainting on a document change (paintHooks, by identity) or Camera.listeners,
