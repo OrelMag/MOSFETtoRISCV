@@ -46,6 +46,7 @@ describe('every registered netlist', () => {
       const text = v!;
       expect(text, d.id).toContain(`entity ${entityName(d)} is`);
       expect(text.match(/^architecture /gm)?.length, d.id).toBe(1);
+      expect(/[^\x20-\x7e\n]/.test(text), `${d.id}: only ASCII (VHDL-93 refuses → even in a comment)`).toBe(false);
       const names: string[] = [];
       for (const m of text.matchAll(/^ {2}signal (\S+) :/gm)) names.push(m[1]);
       for (const m of text.matchAll(/^ {2}(\S+) : entity work\./gm)) names.push(m[1]);

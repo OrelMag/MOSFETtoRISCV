@@ -31,6 +31,14 @@ export function vhdlIdent(s: string, fallback = 'n'): string {
   return t;
 }
 
+/** ASCII text for a comment: VHDL-93 allows only ISO 8859-1 in a source file, comments included (GHDL refuses → and ×). */
+const ASCII: Record<string, string> = { '→': '->', '←': '<-', '↔': '<->', '×': 'x', '·': '.', '≤': '<=', '≥': '>=', '≠': '/=',
+  '–': '-', '—': '-', '−': '-', '‘': "'", '’': "'", '“': '"', '”': '"', '…': '...', 'µ': 'u', 'μ': 'u', 'π': 'pi',
+  ' ': ' ', ' ': ' ', ' ': ' ', '²': '^2', '√': 'sqrt', '≈': '~', '±': '+/-', '⊕': 'xor', '¬': 'not ', '∧': 'and', '∨': 'or' };
+export function vhdlText(s: string): string {
+  return s.replace(/[^\x20-\x7e\n]/g, (c) => ASCII[c] ?? (c.normalize('NFD').replace(/[^\x20-\x7e]/g, '') || '?'));
+}
+
 const ENTITY_NAME: Record<string, string> = { nand: 'nand2' };
 
 export function entityName(def: ComponentDef): string {
@@ -193,7 +201,7 @@ export function structuralVhdl(def: ComponentDef): string | null {
   lines.push('begin');
   lines.push(...body);
   lines.push('end architecture structure;');
-  return lines.join('\n');
+  return vhdlText(lines.join('\n'));
 }
 
 /**
@@ -220,5 +228,5 @@ export function vhdlHierarchy(def: ComponentDef): { text: string; entities: numb
     parts.push([`-- ${d.name}: simulated by its behaviour here (no structure to export)`, 'library ieee;', 'use ieee.std_logic_1164.all;', '',
       ...entityDecl(d, (p) => pn.get(p.name)!), '', `architecture behaviour of ${entityName(d)} is`, 'begin', `  -- ${d.summary ?? d.name}`, 'end architecture behaviour;'].join('\n'));
   }
-  return { text: parts.join('\n\n') + '\n', entities: parts.length, filename: `${entityName(def)}.vhd` };
+  return { text: vhdlText(parts.join('\n\n') + '\n'), entities: parts.length, filename: `${entityName(def)}.vhd` };
 }
