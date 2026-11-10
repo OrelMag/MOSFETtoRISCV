@@ -13,6 +13,7 @@ import { CODEX_SIDE } from './codexside';
 import { CODEX_POWER } from './codexpower';
 import { CODEX_VEC } from './codexvec';
 import { CODEX_VM } from './codexvm';
+import { CODEX_VERIFY } from './codexverify';
 
 import { numOf } from '../chapters/order';
 export type CodexKind = 'component' | 'law' | 'tool' | 'concept' | 'trick';
@@ -215,6 +216,8 @@ export const CODEX: CodexEntry[] = [
   ...CODEX_VEC,
   // virtual memory and the tiny operating system (codexvm.ts)
   ...CODEX_VM,
+  // verification and test (codexverify.ts)
+  ...CODEX_VERIFY,
 ];
 
 export const codexById = (id: string): CodexEntry | undefined => CODEX.find((e) => e.id === id);
