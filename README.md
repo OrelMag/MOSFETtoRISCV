@@ -268,7 +268,7 @@ The sandbox builds **whole computers**. RAM and ROM parts go up to 64K words: on
 at run time over a real hierarchy of banks you can open down to the latches. A cycle engine runs
 them: storage, found by its structure (library flip-flops or ones drawn from NANDs, latches,
 resets), becomes verified tables and the rest is levelized, and every net equals the event-driven
-simulator's after every settle. `scripts/sim-perf.ts` measures the cycles per second of the CPUs on both engines. **Examples ▸** has <!--n:examples-->26<!--/n--> ready-made circuits, among them:
+simulator's after every settle. `scripts/sim-perf.ts` measures the cycles per second of the CPUs on both engines. **Examples ▸** has <!--n:examples-->27<!--/n--> ready-made circuits, among them:
 
 - **Computer**: the RV32I core, a program ROM in assembly, a memory chip, a 64 × 64 screen and a
   devices chip with the console, LEDs and switches. It greets you, paints a picture and halts, with
