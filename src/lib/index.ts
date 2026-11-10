@@ -56,6 +56,7 @@ export * from './warpmem';
 export * from './fppipe';
 export * from './rv16';
 export * from './cpu4';
+export * from './pdp8';
 export * from './dsp24';
 export * from './dsp24agu';
 export * from './dsp24seq';

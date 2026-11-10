@@ -26,7 +26,7 @@ export interface Isa {
   /** The ROM language: 'asm' (RV32), 'rv16', 'cpu4', or 'isa:<id>' for a table. */
   id: string;
   name: string;
-  wordBits: 8 | 16 | 24 | 32;
+  wordBits: 8 | 12 | 16 | 24 | 32;
   /** 'byte': the PC counts bytes (RV32); 'word': it counts words. */
   addressing: 'byte' | 'word';
   assemble(src: string): IsaAsm;
