@@ -354,6 +354,10 @@ export const PDP8_CONTROL: ComponentDef = (() => {
   const b = new Builder(14, 12, 4);
   b.pins('dout', 'skipOpr', 'haltOpr', 'ttySkip', 'ttyAc', 'ion', 'iof', 'autoidx', 'zinc', 'prn', 'kready', 'ld', 'dep', 'exam', 'start', 'cont', 'stop', 'sstep', 'clk');
   const one = b.op1(TIE1, []);
+  // A key acts at the first edge it is down (DEC's were momentary): held, it does nothing more.
+  const KEYS = ['ld', 'dep', 'exam', 'start', 'cont', 'stop', 'sstep'];
+  const prev = bitsOf(b, b.op1(register(7), [b.op1(merger(ones(7)), KEYS, 'keys'), one, 'clk'], 'keys at the last edge', 'keyq'), 7, 'keys');
+  const pressed = Object.fromEntries(KEYS.map((k, n) => [k, b.name(b.op1(AND, [k, b.op1(NOT, [prev[n]])], `${k} pressed`), `p_${k}`, true)]));
   const wf = b.op(splitter([7, 1, 1, 3]), ['dout'], 'fields');
   const ind = b.name(`${wf}.o2`, 'ind', true), wop = b.name(`${wf}.o3`, 'wop', true);
   const st = b.op(register(2), ['', one, 'clk'], 'major state', 'st');
@@ -371,13 +375,13 @@ export const PDP8_CONTROL: ComponentDef = (() => {
   const od = b.op(decoder(3), [op], 'opcode');
   const O = ['and', 'tad', 'isz', 'dca', 'jms', 'jmp', 'iotop', 'opr'].map((n, i) => b.name(`${od}.y${i}`, n, true));
   const int = b.name(b.op1(AND, [b.op1(AND, [isF, b.op1(AND, [ie, b.op1(NOT, [dly])])]), b.op1(OR, ['prn', 'kready'])], 'interrupt?'), 'int', true);
-  const adv = b.name(b.op1(orN(3), [run, b.op1(NOT, [isF]), 'sstep'], 'advance'), 'adv', true);
+  const adv = b.name(b.op1(orN(3), [run, b.op1(NOT, [isF]), pressed.sstep], 'advance'), 'adv', true);
   const K = b.name(b.op1(AND, [nrun, isF], 'keys work'), 'K', true);
   b.next();
   const fA = b.op1(AND, [isF, adv]);
   const f = b.name(b.op1(AND, [fA, b.op1(NOT, [int])], 'Fetch'), 'f', true);
   const i = b.name(b.op1(AND, [fA, int], 'interrupt'), 'i', true);
-  const key = (k: string) => b.name(b.op1(AND, [k, K], k.toUpperCase()), `k_${k}`, true);
+  const key = (k: string) => b.name(b.op1(AND, [pressed[k], K], k.toUpperCase()), `k_${k}`, true);
   const kLd = key('ld'), kDep = key('dep'), kEx = key('exam'), kStart = key('start'), kCont = key('cont');
   const mri = b.name(b.op1(NOR, [O[6], O[7]], 'memory reference'), 'mri', true);
   b.next();
@@ -449,7 +453,7 @@ export const PDP8_CONTROL: ComponentDef = (() => {
 
 // ---- the processor and the computer ------------------------------------------------------------
 
-/** The front panel's keys, as pins: each acts at a rising edge while the machine is stopped (STOP at any time). */
+/** The front panel's keys, as pins: each acts at the first rising edge it is down, while the machine is stopped (STOP at any time). */
 export const PDP8_KEYS = ['ld', 'dep', 'exam', 'start', 'cont', 'stop', 'sstep'] as const;
 
 const CORE_IN: PortDef[] = [bit('clk', 'in', true), bus('sr', 12, 'in'), ...PDP8_KEYS.map((k) => bit(k, 'in')), bus('dout', 12, 'in'), bus('kcode', 8, 'in'), bit('kready', 'in')];

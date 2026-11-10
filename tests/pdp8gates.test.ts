@@ -231,6 +231,21 @@ describe('the PDP-8 in gates', () => {
     expect(bench.lanes.filter((l) => !l.done).length).toBeGreaterThan(24);
   });
 
+  it('acts on a front panel key once however long it is held', () => {
+    const bench = new Bench([{ words: [], start: 0o200 }]);
+    for (let c = 0; c < 4; c++) bench.cycle({ stop: 1 });
+    expect(bench.state(0).run).toBe(0);
+    bench.sim.setInput('sr', 0o300);
+    for (let c = 0; c < 3; c++) bench.cycle({ ld: 1 });
+    bench.sim.setInput('sr', 0o1234);
+    for (let c = 0; c < 3; c++) bench.cycle({ dep: 1 });
+    expect(bench.lanes[0].mem[0o300]).toBe(0o1234);
+    expect(bench.lanes[0].mem[0o301]).toBe(0);
+    expect(bench.state(0).pc).toBe(0o301);
+    for (let c = 0; c < 3; c++) bench.cycle({ sstep: 1 }); // one instruction: 0301 holds AND 0
+    expect(bench.state(0).pc).toBe(0o302);
+  });
+
   it('counts its NANDs', () => {
     const s = stats(PDP8_CORE);
     expect(s.nands).toBeGreaterThan(2000);
