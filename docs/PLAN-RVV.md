@@ -176,6 +176,9 @@ pitfall of writing LMUL m8 everywhere (register pressure: 4 register groups left
     addresses kept in the window as now.
 - The chipsalliance riscv-vector-tests suite (built, branch feat/rvv-tests): the whole suite for our subset is checked in,
   run on the golden model, narrowed copies on the gate subset and on sc-v lanes; docs/VERIFICATION.md "Vectors".
+  Parked 2026-11-10 (priority change): tip b53c3237 done and green locally; gate run 42775879934 had tests green and one
+  smoke route (#/c/sensors/5 3D labels on a phone, untouched here, passes locally) failing, its rerun pending. Open: vle32.v /
+  vse32.v tests on the lanes (they need 2^11-2^12 data words), and the Coordinator's view on checking in 3.4 MB.
 
 ## Gates
 
