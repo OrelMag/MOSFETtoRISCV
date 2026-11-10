@@ -8,6 +8,7 @@ import type { Compiled } from '../editor/compile';
 import type { ChipDoc, PartDoc, PinDoc } from '../editor/model';
 import { romImage } from '../editor/memory';
 import { loadedIn, type PuzzleInState, puzzleLeaves, type PuzzleOutState } from '../editor/puzzleparts';
+import type { ChipLookup } from '../editor/chipfaults';
 import { EditorSim } from '../editor/runtime';
 import { type ComponentDef, netlistOf } from '../sim/types';
 import { inputOn, outputFrom, type Puzzle, type PuzzleTest } from './puzzles';
@@ -89,11 +90,13 @@ export function judge(es: EditorSim, ports: PortsFound, p: Puzzle, t: PuzzleTest
  * Run every test of puzzle `p` on a compiled chip (`pins`: its pin documents, for the clock and any other
  * input). A fresh simulation of its own: the editor's is never touched.
  */
-export function runPuzzle(p: Puzzle, compiled: Compiled, pins: PinDoc[]): PuzzleRun {
+export function runPuzzle(p: Puzzle, compiled: Compiled, pins: PinDoc[], faults?: { doc: ChipDoc; look: ChipLookup; deps: string[] }): PuzzleRun {
   const es = new EditorSim({ debounceMs: 0 });
   try {
     es.setMode('cycle');
-    es.update({ ...compiled, def: compiled.def }, pins);
+    // `faults`: the chip's document and where its placed chips are, so its switched-on faults and theirs act here as on
+    // the canvas (editor/chipfaults.ts): a faulted chip never passes
+    es.update({ ...compiled, def: compiled.def }, pins, faults?.doc, faults && { look: faults.look, deps: faults.deps });
     const ports = findPorts(es);
     if (Array.isArray(ports)) return { ok: false, problems: ports, results: [], cycles: 0, width: 0 };
     const results = p.tests().map((t) => {

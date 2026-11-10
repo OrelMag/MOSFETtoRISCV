@@ -392,7 +392,8 @@ export class EditorSim {
       if (clocked && !this.clocked) this.autoTried = false;
       this.clocked = clocked;
       this.sim = sim;
-      this.haltNets = haltNets(sim.design.root);
+      // as a stuck-at fault leaves them read (sim/faults.ts seenNets): a halt line stuck at 0 never halts
+      this.haltNets = seenNets(sim.design, haltNets(sim.design.root));
       this.buildDiags = [];
     } catch (e) {
       const ds = checkSimulatable(c);
