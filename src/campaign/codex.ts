@@ -9,6 +9,7 @@ import { CODEX_COMM } from './codexcomm';
 import { CODEX_COMM2 } from './codexcomm2';
 import { CODEX_DSP } from './codexdsp';
 import { CODEX_SIDE } from './codexside';
+import { CODEX_VM } from './codexvm';
 
 import { numOf } from '../chapters/order';
 export type CodexKind = 'component' | 'law' | 'tool' | 'concept' | 'trick';
@@ -203,6 +204,8 @@ export const CODEX: CodexEntry[] = [
   ...CODEX_DSP,
   // the side-channels chapter (codexside.ts)
   ...CODEX_SIDE,
+  // virtual memory and the tiny operating system (codexvm.ts)
+  ...CODEX_VM,
 ];
 
 export const codexById = (id: string): CodexEntry | undefined => CODEX.find((e) => e.id === id);

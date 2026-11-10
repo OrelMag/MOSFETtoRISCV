@@ -155,6 +155,89 @@ const s16 = (v: number) => ((v & 0xffff) ^ 0x8000) - 0x8000;
 const KERNEL_HELP = 'Four lanes run your program in lock-step, one shared memory: <code>csrr rd, tid</code> gives each its number (0 … 3); lane <i>t</i> takes elements <i>t</i>, <i>t</i> + 4, <i>t</i> + 8, …. Graded on cycles (warp instructions) and lane-ops (each instruction times the lanes switched on for it: the work done).';
 const IO_HELP = 'Read a word with <code>lw rd, -4(x0)</code> (IN), write one with <code>sw rs, -3(x0)</code> (OUT), stop with <code>halt</code>.';
 
+// p_switch: two processes (given) and the boot that starts them; the learner writes the handler.
+const PROC_BOOT = `        la   t1, procB
+        sw   t1, 15(x0)      # B's block: it starts at procB
+        csrw mscratch, x0    # the running process's block: A's, at word 0
+        la   t0, handler
+        csrw mtvec, t0
+        li   t0, 0x800
+        csrw mie, t0         # MEIE
+        li   t0, 8
+        csrs mstatus, t0     # MIE: switching begins
+        j    procA
+`;
+const PROC_CODE = `
+procA:  li   ra, 3
+        li   sp, 5
+        li   a0, 7
+        li   a1, 11
+        li   a2, 13
+        li   t0, 17
+        li   t1, 12
+loopA:  add  ra, ra, sp
+        add  sp, sp, a0
+        add  a0, a0, a1
+        add  a1, a1, a2
+        add  a2, a2, t0
+        addi t0, t0, 3
+        addi t1, t1, -1
+        bnez t1, loopA
+        sw   ra, 16(x0)
+        sw   sp, 17(x0)
+        sw   a0, 18(x0)
+        sw   a1, 19(x0)
+        sw   a2, 20(x0)
+        sw   t0, 21(x0)
+        sw   t1, 22(x0)
+        li   t0, 1
+        sw   t0, 30(x0)      # A is done
+waitA:  lw   t0, 31(x0)
+        beqz t0, waitA
+        halt
+
+procB:  li   ra, 2
+        li   sp, 4
+        li   a0, 6
+        li   a1, 8
+        li   a2, 10
+        li   t0, 12
+        li   t1, 15
+loopB:  add  ra, ra, a2
+        xor  sp, sp, ra
+        add  a0, a0, sp
+        sub  a1, a1, a0
+        add  a2, a2, t0
+        addi t0, t0, 5
+        addi t1, t1, -1
+        bnez t1, loopB
+        sw   ra, 23(x0)
+        sw   sp, 24(x0)
+        sw   a0, 25(x0)
+        sw   a1, 26(x0)
+        sw   a2, 27(x0)
+        sw   t0, 28(x0)
+        sw   t1, 29(x0)
+        li   t0, 1
+        sw   t0, 31(x0)      # B is done
+waitB:  lw   t0, 30(x0)
+        beqz t0, waitB
+        halt
+`;
+/** What the two processes leave in memory, computed here, not by the reference handler. */
+function procExpect(): Record<number, number> {
+  let [ra, sp, a0, a1, a2, t0, t1] = [3, 5, 7, 11, 13, 17, 12];
+  for (; t1; t1--) { ra = u16(ra + sp); sp = u16(sp + a0); a0 = u16(a0 + a1); a1 = u16(a1 + a2); a2 = u16(a2 + t0); t0 = u16(t0 + 3); }
+  const A = [ra, sp, a0, a1, a2, t0, 0];
+  [ra, sp, a0, a1, a2, t0, t1] = [2, 4, 6, 8, 10, 12, 15];
+  for (; t1; t1--) { ra = u16(ra + a2); sp = sp ^ ra; a0 = u16(a0 + sp); a1 = u16(a1 - a0); a2 = u16(a2 + t0); t0 = u16(t0 + 5); }
+  const B = [ra, sp, a0, a1, a2, t0, 0];
+  const mem: Record<number, number> = { 30: 1, 31: 1 };
+  A.forEach((v, i) => (mem[16 + i] = v));
+  B.forEach((v, i) => (mem[23 + i] = v));
+  return mem;
+}
+
 export const PUZZLES: Record<string, ProgramPuzzle> = {
   l_driver: {
     brief: `The computer of chapter ${numOf('network')}: a system CPU, RAM and a NIC at 0x7000_0000 with two rings of eight descriptors (two words each: the buffer's address, then OWN | length; OWN = bit 31). Write the driver of a <b>reflector</b>: for every frame the NIC receives, send it back with its destination and source addresses swapped. The setup (rings, the NIC's address, enable) is given. `
@@ -250,6 +333,46 @@ export const PUZZLES: Record<string, ProgramPuzzle> = {
     ref: `        li   sp, 0x1000\n        la   t0, handler\n        csrw mtvec, t0\n        li   t0, 0x800\n        csrw mie, t0\n        li   a2, 0           # interrupts handled\n        li   t0, 8\n        csrs mstatus, t0\n        li   t1, 3\nwait:   blt  a2, t1, wait\n        halt\n\nhandler:\n        push t0\n        lw   t0, -4(x0)\n        add  t0, t0, t0\n        sw   t0, -3(x0)\n        sw   x0, -7(x0)      # acknowledge\n        addi a2, a2, 1\n        pop  t0\n        mret\n`,
     tests: () => [[20, 60, 100], [30, 45, 60], [50, 200, 400]].map((at, i) => ({ name: `interrupts at ${at.join(', ')}`, input: [5 + i, 1000, 0x7fff], irqAt: at, expect: { out: [u16(2 * (5 + i)), 2000, 0xfffe] } })),
     maxSteps: 3000, system: true,
+  },
+  p_switch: {
+    brief: 'Two processes share one CPU. A timer interrupt (the external one, raised by the bench) ends each time slice: <b>the handler is the context switch</b>. Each process keeps its 7 registers (ra, sp, a0, a1, a2, t0, t1) and its resume address in a <b>process control block</b>, 8 words: process A\'s at words 0 … 7, B\'s at 8 … 15, in the order ra, sp, a0, a1, a2, t0, t1, pc. '
+      + 'The boot code (given) sets <code>mscratch</code> to the running process\'s block, A\'s, and starts A; B\'s block holds only its entry point. Your handler must save every register of the interrupted process and its <code>mepc</code>, acknowledge the device (store 0 to IRQ, 0xFFF9), load the other process\'s registers and <code>mepc</code>, and <code>mret</code> into it. '
+      + 'The handler has no register of its own: <code>csrrw sp, mscratch, sp</code> swaps sp with mscratch, so sp holds the block\'s address and the process\'s sp waits in mscratch. Each process computes with all seven registers and writes them to memory when it is done (words 16 … 22 for A, 23 … 29 for B); a register lost in a switch changes the result. The interrupt arrives on a different schedule in each test, never closer than 45 instructions.',
+    starter: PROC_BOOT + `\nhandler:\n        # save the interrupted process: ra … t1, its sp (now in mscratch) and mepc, into the block at sp\n        \n        sw   x0, -7(x0)      # acknowledge the device\n        # point sp at the other block and load its registers and pc\n        \n        mret\n` + PROC_CODE,
+    ref: PROC_BOOT + `
+handler:
+        csrrw sp, mscratch, sp    # sp = this block, mscratch = the process's sp
+        sw   ra, 0(sp)
+        sw   a0, 2(sp)
+        sw   a1, 3(sp)
+        sw   a2, 4(sp)
+        sw   t0, 5(sp)
+        sw   t1, 6(sp)
+        csrr t0, mscratch
+        sw   t0, 1(sp)            # the process's sp
+        csrr t0, mepc
+        sw   t0, 7(sp)
+        sw   x0, -7(x0)           # acknowledge
+        li   t0, 8
+        sub  sp, t0, sp           # the other block: 8 - 0, 8 - 8
+        lw   t0, 7(sp)
+        csrw mepc, t0
+        lw   t0, 1(sp)
+        csrw mscratch, t0         # its sp, parked
+        lw   ra, 0(sp)
+        lw   a0, 2(sp)
+        lw   a1, 3(sp)
+        lw   a2, 4(sp)
+        lw   t0, 5(sp)
+        lw   t1, 6(sp)
+        csrrw sp, mscratch, sp    # sp = its sp, mscratch = its block
+        mret
+` + PROC_CODE,
+    tests: () => [[47, 13], [61, 5], [83, 29], [101, 41], [150, 17]].map(([every, first]) => ({
+      name: `a switch every ${every} instructions`, irqAt: Array.from({ length: 400 }, (_, i) => first + every * i),
+      expect: { mem: procExpect() },
+    })),
+    maxSteps: 8000, system: true,
   },
 
 

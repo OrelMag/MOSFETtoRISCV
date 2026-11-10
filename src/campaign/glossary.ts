@@ -38,7 +38,8 @@ export const ALIASES: Record<string, string[]> = {
   threecs: ['three Cs', 'compulsory miss', 'capacity miss', 'conflict miss'], assoc: ['set-associative', 'fully associative'],
   writepolicy: ['write-through', 'write-back cache', 'write-allocate'], skew: ['skew'], power: ['dynamic power', 'leakage power'],
   carryselect: ['carry-select'], doublebuffer: ['double buffer', 'double-buffered', 'back frame', 'front frame'],
-  amdahl: ['Amdahl’s law', 'Amdahl'], vm: ['page table', 'page fault'], ecc: ['Hamming code', 'SEC-DED'],
+  amdahl: ['Amdahl’s law', 'Amdahl'], pagetable: ['page table'], pagefault: ['page fault'], tlb: ['translation lookaside buffer'], privmode: ['privilege level', 'user mode', 'U mode'],
+  ctxswitch: ['context switch'], ecc: ['Hamming code', 'SEC-DED'],
   stdcell: ['standard-cell', 'cell library'], metastability: ['metastable'], carrysave: ['carry-save', '3:2 compressor'],
   booth: ['Booth'], zbuffer: ['z-buffer', 'depth test'], rowhammer: ['Rowhammer'],
   clock: ['clock period'], reset: ['power-on state', 'synchronous reset', 'asynchronous reset'], fpadder: ['floating-point adder'],
@@ -57,6 +58,8 @@ export const ALIASES: Record<string, string[]> = {
 
 /** Entries never marked automatically: their names are everyday words in the prose. */
 const SKIP = new Set(['abstraction', 'feedback', 'flags', 'identities', 'rounding', 'edge', 'stack', 'bus', 'counter', 'register', 'subtract',
+  // everyday words: a page of text, a process in general
+  'page', 'process',
   // acronyms the CPU chapters name as examples long before the Communication chapters teach them (registers, memory, io, widths, ooo)
   'uart', 'spi', 'crc']);
 
