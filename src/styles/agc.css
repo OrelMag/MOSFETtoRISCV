@@ -22,3 +22,14 @@
 .rope-weave .rope-w span { color: var(--muted); }
 .rope-weave .rope-w.on { border-color: var(--accent); color: var(--accent); }
 @media (pointer: coarse) { .rope-weave .rope-w { min-height: 40px; } }
+
+/* the instruction-set widget (widgets/agcrun.ts) */
+.agc-run .agc-src { width: 100%; box-sizing: border-box; font: 12.5px/1.45 var(--font-mono, monospace); background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px; resize: vertical; }
+.agc-run .agc-msg { margin: 6px 0 0; color: var(--muted); }
+.agc-run .agc-msg.bad { color: var(--bad); }
+.agc-run :is(.agc-regs, .agc-vars) { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; margin-bottom: 8px; }
+.agc-run :is(.agc-regs, .agc-vars) > div { display: flex; flex-direction: column; }
+.agc-run :is(.agc-regs, .agc-vars) span { color: var(--muted); font-size: 12px; }
+.agc-run .agc-trace { font-size: 12.5px; width: 100%; }
+.agc-run .agc-trace code { white-space: pre; }
+.agc-run .sb-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }

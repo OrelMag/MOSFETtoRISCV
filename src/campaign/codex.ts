@@ -15,6 +15,7 @@ import { CODEX_VEC } from './codexvec';
 import { CODEX_VM } from './codexvm';
 import { CODEX_VERIFY } from './codexverify';
 import { CODEX_BABY } from './codexbaby';
+import { CODEX_AGC } from './codexagc';
 
 import { numOf } from '../chapters/order';
 export type CodexKind = 'component' | 'law' | 'tool' | 'concept' | 'trick';
@@ -221,6 +222,8 @@ export const CODEX: CodexEntry[] = [
   ...CODEX_VERIFY,
   // Appendix E: the Manchester Baby (codexbaby.ts)
   ...CODEX_BABY,
+  // Appendix F: the Apollo Guidance Computer (codexagc.ts)
+  ...CODEX_AGC,
 ];
 
 export const codexById = (id: string): CodexEntry | undefined => CODEX.find((e) => e.id === id);

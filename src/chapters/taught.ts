@@ -253,6 +253,8 @@ export const TAUGHT_OPTIONAL: Record<string, string[]> = {
   loader: ['cards'],
   williamstube: ['appendix-baby'],
   ssem: ['appendix-baby'],
+  corerope: ['appendix-agc'],
+  agc: ['appendix-agc'],
   nand: ['relays', 'tubes'],
   xor: ['relays'],
   fulladder: ['relays'],

@@ -104,6 +104,7 @@ export const PATH_MINUTES: Record<string, number[]> = {
   "appendix-sap": [7,6,6,6,6,6,6,6,7,6,6],
   "appendix-runner": [5,5,5,5,5,5,5,5,5],
   "appendix-baby": [3,3,3,3,4,5,3,3,3,5,5,3],
+  "appendix-agc": [3,5,3,6,5,5,2,5],
 };
 
 /** Every skill, in journey order (learn/pathgen.ts computeSkills). */
@@ -1470,6 +1471,14 @@ export const PATH_REVIEW: ReviewRow[] = [
   ["appendix-baby:recap:0","appendix-baby",0],
   ["appendix-baby:recap:1","appendix-baby",0],
   ["appendix-baby:recap:2","appendix-baby",0],
+  ["appendix-agc:1","appendix-agc",0],
+  ["appendix-agc:3","appendix-agc",0],
+  ["appendix-agc:4","appendix-agc",0],
+  ["appendix-agc:5","appendix-agc",0],
+  ["appendix-agc:7","appendix-agc",0],
+  ["appendix-agc:recap:0","appendix-agc",0],
+  ["appendix-agc:recap:1","appendix-agc",0],
+  ["appendix-agc:recap:2","appendix-agc",0],
   ["codex:lut:0","",0],
   ["codex:lut:1","",0],
   ["codex:fpga:0","",0],
@@ -2236,6 +2245,10 @@ export const PATH_REVIEW: ReviewRow[] = [
   ["codex:williamstube:1","",0],
   ["codex:ssem:0","",0],
   ["codex:ssem:1","",0],
+  ["codex:corerope:0","",0],
+  ["codex:corerope:1","",0],
+  ["codex:agc:0","",0],
+  ["codex:agc:1","",0],
   ["lesson:mem:0","",0],
   ["lesson:mem:1","",0],
   ["lesson:isa:0","",0],

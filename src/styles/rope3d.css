@@ -1,0 +1,16 @@
+/* ---------- Core rope (widgets/rope3dview.ts): materials ---------- */
+.m3d {
+  --rp-ribbon: light-dark(#8a8d94, #a9adb6);    /* permalloy ribbon on its bobbin */
+  --rp-copper: light-dark(#b8692c, #e0894a);    /* enamelled copper sense wire */
+  --rp-inhibit: light-dark(#8a4bb0, #b47ad4);
+  --rp-set: light-dark(#2f7f4f, #5cc47e);
+  --rp-reset: light-dark(#2f6fb8, #6aa6e8);
+  --rp-live: light-dark(#e8a100, #ffc83a);      /* a wire carrying current, a pulse */
+  --rp-board: light-dark(#b8ab84, #6f6648);
+  --rp-res: light-dark(#c9b48a, #a8946a);
+  --rp-diode: light-dark(#3b3c42, #55575f);
+  --rp-lamp-off: light-dark(#5b5f6b, #3b3f4b);
+  --rp-sel: light-dark(#d9a21b, #ffc83a);
+}
+.rp-seg { display: flex; gap: 4px; flex-wrap: wrap; margin: 2px 0 10px; }
+.rp-seg .btn[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }

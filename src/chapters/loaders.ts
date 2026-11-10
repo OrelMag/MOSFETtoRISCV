@@ -104,4 +104,5 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "appendix-sap": () => import('./ch-sap').then((m) => m.chAppendixSap),
   "appendix-runner": () => import('./ch-runner').then((m) => m.chAppendixRunner),
   "appendix-baby": () => import('./ch-baby').then((m) => m.chAppendixBaby),
+  "appendix-agc": () => import('./ch-agc').then((m) => m.chAppendixAgc),
 };

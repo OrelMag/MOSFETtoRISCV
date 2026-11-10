@@ -200,6 +200,12 @@ export const MODELS_3D: readonly Model3d[] = [
     open: () => import('./williams3d').then((m) => m.williams3d()),
   },
   {
+    id: 'rope', title: 'Core rope', category: 'machines', chapter: 'appendix-agc', step: 6,
+    summary: 'Cores of an Apollo rope module: a sense wire threads a core for a 1 and passes it for a 0; inhibit, set and reset wires read one core at a time.',
+    files: ['rope3d', 'rope3dview', 'rope3dparts'], factory: 'rope3d', codex: ['corerope'],
+    open: () => import('./rope3d').then((m) => m.rope3d()),
+  },
+  {
     id: 'babbage', title: 'Babbage\'s carry', category: 'machines', chapter: 'fastadd', step: 5,
     summary: 'A Difference Engine No. 2 column: a run of 9s carries one arm at a time, or all at once by the anticipating carriage.',
     files: ['babbage3d', 'babbage3dview', 'babbage3dparts'], factory: 'babbage3d', codex: ['ripple', 'cla', 'prefix'],
