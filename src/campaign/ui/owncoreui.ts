@@ -70,8 +70,10 @@ export function ownCoreUi(n: CampaignNode, p: ProgramPuzzle, lineOf: (pc: number
     pick.replaceChildren(...opts.filter((o) => !o.why || o.solved).map((o) => {
       const f = o.solved && !o.why && runner ? runner.coreFacts(w, o.id, true) : null;
       if (o.solved && !o.why && runner && !f) missing.push(o.id);
-      const text = o.why ? `${o.title} · ${o.why}` : !o.solved ? `${o.title} · not passed yet` : `${o.title}${f ? ` · ${num(f.nands)} NANDs${f.period !== null ? ` · period ${f.period}` : ''}` : ''}`;
-      return h('option', { value: o.id, ...(o.why || !o.solved ? { disabled: true } : {}), ...(o.id === core ? { selected: true } : {}) }, text);
+      // the level's short name ("Core III: control flow" → "Core III"), so the facts fit the select; the full title on hover
+      const name = o.title.split(':')[0];
+      const text = o.why ? `${name} · ${o.why}` : !o.solved ? `${name} · not passed yet` : `${name}${f ? ` · ${num(f.nands)} NANDs${f.period !== null ? ` · period ${f.period}` : ''}` : ''}`;
+      return h('option', { value: o.id, title: o.title, ...(o.why || !o.solved ? { disabled: true } : {}), ...(o.id === core ? { selected: true } : {}) }, text);
     }));
     if (!runner) void loadRunner().then(fill);
     else if (missing.length) setTimeout(more, 0);
