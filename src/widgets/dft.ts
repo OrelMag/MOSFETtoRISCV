@@ -194,7 +194,7 @@ export function testCostWidget(): Widget {
     const len = Math.ceil(sc.flipFlops / chains), clocks = patterns * (len + 1) + len, t = clocks / (mhz * 1e6);
     out.replaceChildren(
       h('p', null, `Full scan: ${n0(sc.flipFlops)} flip-flops, each a scan flip-flop: ${n0(sc.nands)} NANDs more on the CPU's ${n0(nands)} (${((100 * sc.nands) / nands).toFixed(1)} %).`),
-      h('p', null, `${chains} chain${chains > 1 ? 's' : ''} of ${n0(len)}: each pattern shifts ${n0(len)} clocks in (the last answer shifting out at the same time) and captures in 1. ${n0(patterns)} patterns: ${n0(clocks)} clocks, `, h('b', null, t < 1e-3 ? `${(t * 1e6).toFixed(0)} µs` : `${(t * 1e3).toFixed(2)} ms`), ` per die at ${mhz} MHz.`),
+      h('p', null, `${chains} chain${chains > 1 ? 's' : ''} of ${n0(len)}: each pattern shifts ${n0(len)} clocks in (the last answer shifting out at the same time) and captures in 1; ${n0(patterns)} patterns take ${n0(clocks)} clocks, `, h('b', null, t < 1e-3 ? `${(t * 1e6).toFixed(0)} µs` : `${(t * 1e3).toFixed(2)} ms`), ` per die at ${mhz} MHz.`),
       h('p', { class: 'sub' }, 'More chains cost pins (two each: scan in, scan out) and save time in proportion; a tester\'s time is paid per second, for every die, good or bad.'));
   };
   const slider = (label: string, min: number, max: number, step: number, val: number, on: (v: number) => void, unit: string) => {

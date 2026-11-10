@@ -283,7 +283,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   {
     id: 't_tests', act: 2, title: 'Catch every fault', kind: 'drill', optional: true, requires: ['a_add4'], drill: 'testset', par: { mistakes: 2 },
     why: 'A die can come back from the fab with a net shorted to ground or to the supply. The tester only sees the pins, and every vector it applies costs tester time on every die. Your 4-bit adder has 90 such faults, and 3 of its 512 input vectors catch them all. Find the smallest sets for small blocks.',
-    tips: ['To catch a net stuck at 0, a vector must drive it to 1 (and the reverse), and every gate between it and an output must let the change through: a NAND passes a change only when its other inputs are 1.', 'Start from the vector that catches the most faults, then ask which faults are left and what each needs. Greedy is not always smallest: the full adder needs 3, greedy takes 4.', 'A fault no vector catches sits on logic the circuit did not need (the consensus circuit\'s b·c term): leave it.'],
+    tips: ['To catch a net stuck at 0, a vector must drive it to 1 (and the reverse), and every gate between it and an output must let the change through: a NAND passes a change only when its other inputs are 1.', 'Start from the vector that catches the most faults, then ask which faults are left and what each needs. Greedy is not always smallest: the full adder needs 3, greedy takes 4.', 'A fault no vector catches sits on logic the circuit did not need (a redundant term, like b·c added to a·b + ¬a·c, which those two terms already cover): leave it.'],
     codex: ['stuckat', 'faultcov', 'atpg'],
     chapters: [{ chapter: 'verify', step: 7, label: 'A chip comes back from the fab' }, { chapter: 'verify', step: 8, label: 'Fault coverage' }],
   },
@@ -361,7 +361,7 @@ export const NODES: CampaignNode[] = withBugHunts([
   },
   {
     id: 't_scan', act: 3, title: '4-bit scan register', kind: 'build', optional: true, requires: ['s_reg4'], base: BUILDT.t_scan,
-    why: 'A tester can reach a counter\'s inner states only by counting to them. A scan register gives every flip-flop a second input: with se = 1 the flip-flops form a shift register from a scan-in pin to a scan-out pin, so a tester shifts any state in, clocks once, and shifts the answer out. 13 NANDs a bit, the price of your enable register; a CPU pays it on every flip-flop.',
+    why: 'A tester can reach a counter\'s inner states only by counting to them. A scan register gives every flip-flop a second input: with se = 1 the flip-flops form a shift register from a scan-in pin to a scan-out pin, so a tester shifts any state in, clocks once, and shifts the answer out. 13 NANDs a bit with your 9-NAND flip-flop, the price of your enable register (the chapter\'s 11-NAND master–slave flip-flop makes it 15); a CPU pays it on every flip-flop.',
     tips: ['Like the enable register: a mux in front of each flip-flop. The mux chooses between d and the bit below instead of d and q.', 'Bit 0\'s mux takes si; bit k\'s takes q[k − 1]; so is q[3]. se drives every mux\'s select.', 'Shift the other way (q[k + 1] into bit k) and the first bit in lands in bit 0, not bit 3: the test shifts 0, 0, 1, 1 in and expects 0011 (3), not 1100.'],
     codex: ['scan'], par: { nand: 52 },
     chapters: [{ chapter: 'verify', step: 10, label: 'Scan chains' }],

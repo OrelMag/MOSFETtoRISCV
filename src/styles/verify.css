@@ -73,3 +73,10 @@
   .vf-test { min-height: 40px; }
   .vf-fm thead th { min-width: 40px; height: 40px; }
 }
+/* a phone: all 8 vector columns in view (they were cut at 111 with no cue that the table scrolls); 30 px stays above WCAG's 24 px target */
+@media (max-width: 480px) {
+  .vf-fm { font-size: 11px; }
+  .vf-fm thead th { min-width: 30px; padding: 2px 1px; }
+  .vf-fm tbody th { padding-right: 4px; }
+  .vf-fm td i { width: 26px; margin: 1px 2px; }
+}

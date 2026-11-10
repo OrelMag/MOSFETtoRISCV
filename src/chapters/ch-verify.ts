@@ -3,7 +3,7 @@ import { BIST_PATTERNS, bistSignature } from '../lib/bist';
 import { CONSENSUS, SCAN_DFF, scanCounter } from '../lib/dft';
 import { DFF } from '../lib/sequential';
 import { MUX2 } from '../lib/gates';
-import { allVectors, detect, detectable, faultModel, type FaultModel } from '../sim/faultsim';
+import { allVectors, detect, detectable, exactCover, faultModel, greedyCover, type FaultModel } from '../sim/faultsim';
 import { MARCH_C_MINUS, ZEROS_ONES, marchCoverage, marchOps, marchText } from '../sim/march';
 import { groupDigits } from '../sim/numfmt';
 import { stats } from '../sim/stats';
@@ -18,6 +18,17 @@ import { numOf } from './order';
 const n0 = (n: number) => groupDigits(n);
 const fm = faultModel(FULL_ADDER) as FaultModel;
 const FA_FAULTS = fm.faults.length, FA_SITES = fm.sites.length;
+const faDet = detect(fm, allVectors(fm));
+/** The full adder's test sets: greedy and the smallest complete one (tests/verify-chapter.test.ts pins them). */
+export const FA_GREEDY = greedyCover(faDet, FA_FAULTS).length, FA_SMALLEST = (exactCover(faDet, FA_FAULTS) ?? []).length;
+const WORDS = ['none', 'one', 'two', 'three', 'four', 'five', 'six'];
+const word = (n: number) => WORDS[n] ?? String(n);
+const cap = (t: string) => t[0].toUpperCase() + t.slice(1);
+/** Who found the table's bugs, from FOUND: riscv-tests, random programs, Spike; and how many sat in the golden model. */
+const foundBy = (re: RegExp) => FOUND.filter((x) => re.test(x.foundBy)).length;
+export const FOUND_BY = { tests: foundBy(/^rv32|riscv-tests/), random: foundBy(/^random/), spike: foundBy(/^Spike/) };
+const BY_TESTS = FOUND_BY.tests, BY_RANDOM = FOUND_BY.random, BY_SPIKE = FOUND_BY.spike;
+const IN_MODEL = FOUND.filter((x) => /Golden model/.test(x.where)).length;
 const cons = faultModel(CONSENSUS) as FaultModel;
 const CONS_UNTESTABLE = cons.faults.length - detectable(detect(cons, allVectors(cons)), cons.faults.length).length;
 const SDFF = stats(SCAN_DFF).nands, DFFN = stats(DFF).nands, MUXN = stats(MUX2).nands;
@@ -43,7 +54,8 @@ export const VERIFY_FACTS = {
 } as const;
 const F = VERIFY_FACTS;
 
-const lockstepScene = () => cpuScene({ source: LOCKSTEP_SOURCE, pipeline: true, wrap: (d) => withFault(d, FWD_FAULT), highlight: ['hz', 'fwdA'] });
+// autoClock off: the learner's Run produces the mismatch the step talks about, not a clock that ran before they arrived
+const lockstepScene = () => ({ ...cpuScene({ source: LOCKSTEP_SOURCE, pipeline: true, wrap: (d) => withFault(d, FWD_FAULT), highlight: ['hz', 'fwdA'] }), autoClock: false });
 
 export const chVerify: Chapter = {
   id: 'verify', num: numOf('verify'), title: 'How do you know it works?', level: 'Verification and test',
@@ -59,7 +71,7 @@ export const chVerify: Chapter = {
     keep: [
       'Verification asks whether the design is right; test asks whether one manufactured chip is the design. Each needs an oracle: something other than the circuit that says what the answer should be.',
       'Lock step compares the gates with the golden model at every retirement, so the first mismatch names the instruction. The riscv-tests check one instruction at a time against values someone else chose; random programs find interactions nobody wrote; coverage says what was never exercised; a second, independent model (Spike) checks the first.',
-      `A defect is modelled as a stuck-at fault: one net reads 0 or 1 whatever drives it. The full adder has ${FA_FAULTS}; three well-chosen vectors catch them all, where random vectors leave a long tail. A fault no vector can show sits on redundant logic.`,
+      `A defect is modelled as a stuck-at fault: one net reads 0 or 1 whatever drives it. The full adder has ${FA_FAULTS}; ${word(FA_SMALLEST)} well-chosen vectors catch them all, where random vectors leave a long tail. A fault no vector can show sits on redundant logic.`,
       `Scan puts a multiplexer in front of every flip-flop (${SDFF} NANDs against ${DFFN}), so a tester shifts a state in, clocks once and shifts the answer out: sequential logic is tested like combinational logic. BIST puts the pattern generator (an LFSR) and the answer compressor (a MISR) on the chip.`,
     ],
     practise: ['t_tests', 't_scan'],
@@ -93,7 +105,7 @@ export const chVerify: Chapter = {
       body: `
         <p>Every circuit in this book is simulated, and every CPU runs programs. But how do you <em>know</em> one is right? There are two questions, asked by different people at different times.</p>
         <p><strong>Is the design right?</strong> That is <em>verification</em>, done before anything is made. Its tool is an <strong>oracle</strong>: something other than the circuit that says what the answer should be. Here the main oracle is the <strong>golden model</strong> (the instruction-set simulator every CPU panel runs beside the gates), and the official tests, and a second simulator written by others check that model in turn.</p>
-        <p><strong>Was this chip made right?</strong> That is <em>test</em>, done on every die that comes off the wafer of the previous chapter. The design is known to be right; the question is whether a speck of dust shorted two wires on this one. The oracle is the design itself, and the hard part is reaching every gate from the few pins a tester touches.</p>
+        <p><strong>Was this chip made right?</strong> That is <em>test</em>, done on every die that comes off the wafer of chapter ${numOf('silicon')}. The design is known to be right; the question is whether a speck of dust shorted two wires on this one. The oracle is the design itself, and the hard part is reaching every gate from the few pins a tester touches.</p>
         <p>The table is every check this site's CPUs go through, ${LAYERS.length} rungs. Read the last two columns: each rung finds what the one before it cannot, and none of them alone is enough.</p>`,
       widget: () => verifyMap(),
       more: {
@@ -142,7 +154,7 @@ export const chVerify: Chapter = {
         <p>A pipeline's bugs live where instructions meet: a forward from M while a load stalls, a taken branch while an FP divide holds D. Nobody writes a test for every pair. A <strong>random program</strong> generator draws programs nobody wrote, weighted towards those meetings: sources taken from the last few destinations, branches right after loads, edge values like 0, −1 and the most negative number. Each runs on the golden model to its halt and on the gates, and the final state is compared.</p>
         <p>This site found one this way in the six-stage FP pipeline: a taken branch in E while D waited on an FP interlock lost its target, because the stall held the PC the branch had to load. The fix made the PC's enable "not stalled, or taken". Here it is planted back: that OR gate's taken input reads 0, exactly the old circuit.</p>
         <div class="try">Run a few batches. Of the first 64 seeds, ${F.fuzzFails64.length} fail (${F.fuzzFails64.join(', ')}). Click one: replayed alone in lock step, the CPU retires an instruction the model never reaches. Control flow went astray.</div>
-        <p>The rate is the lesson: about one program in twenty meets the bug, and each draws only a few dozen instructions. Run enough of them and rare meetings become certain. CI runs 32 seeds per CPU on every change and a new range every night.</p>`,
+        <p>The rate is the lesson: here about one program in twenty meets the bug (the table's run, on other seeds, met it in 5 of 256), and each draws only a few dozen instructions. Run enough of them and rare meetings become certain. CI runs 32 seeds per CPU on every change and a new range every night.</p>`,
       widget: () => fuzzWidget(),
       more: {
         derive: `<p>If each program meets a bug with probability p, n programs miss it with probability (1 − p)<sup>n</sup>. At p = ${F.fuzzFails64.length}/64 that is ${((1 - F.fuzzFails64.length / 64) ** 32 * 100).toFixed(0)} % for one batch of 32, and ${((1 - F.fuzzFails64.length / 64) ** 256 * 100).toFixed(4)} % for 256.</p>`,
@@ -177,7 +189,7 @@ export const chVerify: Chapter = {
       body: `
         <p>Every check so far trusts the golden model. Who checks it? <strong>Spike</strong>, the RISC-V reference simulator, written by others. CI runs random programs on both and compares them commit by commit: every instruction's PC, register write and memory access. A difference is a bug in one of the two.</p>
         <p>That is how the last bug in the table was found. Spike's <code>mret</code> writes the CSR <code>mstatush</code>; our model did not have it, so reading it trapped as illegal. The CPU agreed with our model, so no lock-step comparison could ever have seen it.</p>
-        <p>The table is everything the checks of this chapter found in this site's code, ${FOUND.length} bugs, and which check found each. Two were in the golden model, three in CPU designs, one in a generator. No single check found more than two.</p>
+        <p>The table is everything the checks of this chapter found in this site's code, ${FOUND.length} bugs, and which check found each. ${cap(word(IN_MODEL))} sat in the golden model, which every other check trusts. riscv-tests found ${word(BY_TESTS)}, random programs ${word(BY_RANDOM)} and Spike ${word(BY_SPIKE)}: each of the other two found a bug that every riscv-test had passed.</p>
         <p>The last rung is the Verilog export: Yosys synthesizes the exported CPUs and every output of the resulting netlist is compared with this site's simulation, every cycle, before each deploy.</p>`,
       widget: () => foundWidget(),
       more: {
@@ -187,7 +199,7 @@ export const chVerify: Chapter = {
     {
       title: 'A chip comes back from the fab',
       body: `
-        <p>Now the second question. The design is right; this die came off a wafer where a particle may have landed. The previous chapter priced that: at 0.1 defects per cm², a 100 mm² die is bad one time in ten. Each die must be tested before it is packaged and sold, and the tester only touches its pins.</p>
+        <p>Now the second question. The design is right; this die came off a wafer where a particle may have landed. Chapter ${numOf('silicon')} priced that: at 0.1 defects per cm², a 100 mm² die is bad one time in ten. Each die must be tested before it is packaged and sold, and the tester only touches its pins.</p>
         <p>Defects are opens, shorts and bad transistors, too many kinds to test one by one. The <strong>stuck-at fault model</strong> stands for most of them: one net reads 0, or 1, whatever drives it. A short to ground is a stuck-at-0; a gate whose pull-down never conducts is a stuck-at-1 on its output. The full adder has ${FA_SITES} nets (its 3 inputs and its 9 NANDs' outputs), so ${FA_FAULTS} stuck-at faults.</p>
         <div class="try">Plant a fault from the panel and watch the truth table: the rows in red are the input vectors that show this defect at s or cout. A tester applies vectors and compares the outputs; any red row rejects the die.</div>
         <p>The wire of a stuck net still shows what its gate drives (the gate is fine; its output is shorted downstream), while every gate reading it sees the stuck value.</p>`,
@@ -201,7 +213,7 @@ export const chVerify: Chapter = {
       title: 'Fault coverage',
       body: `
         <p>A vector <em>detects</em> a fault when the faulty circuit's outputs differ from the good one's on it. <strong>Fault coverage</strong> is the share of modelled faults a test set detects. The matrix runs all ${FA_FAULTS} faults against all 8 vectors: a <em>fault simulator</em>, here bit-parallel, 32 vectors per pass.</p>
-        <div class="try">Click vectors into a test set and reach ${FA_FAULTS} / ${FA_FAULTS} with as few as you can. Greedy (always the vector that catches the most faults not yet caught) needs four; three are enough.</div>
+        <div class="try">Click vectors into a test set and reach ${FA_FAULTS} / ${FA_FAULTS} with as few as you can. Greedy (always the vector that catches the most faults not yet caught) needs ${word(FA_GREEDY)}; ${word(FA_SMALLEST)} are enough.</div>
         <p>The 4-bit ripple adder has 9 inputs, so ${n0(F.rcaVectors)} vectors, and ${F.rcaFaults} faults. Random vectors catch ${F.rcaRandom.join(', ')} of them after 1, 2, 4, 8 and 16 vectors: fast at first, then a long tail, because the last faults are each shown by few vectors. Chosen well, ${F.rcaSmallest} vectors of the ${n0(F.rcaVectors)} catch all ${F.rcaFaults}.</p>
         <p>On a real chip with millions of faults the tail is what costs: random patterns reach most of the coverage cheaply, and deterministic vectors aimed at the remaining faults reach the rest.</p>`,
       widget: () => faultMatrixWidget(),
@@ -276,7 +288,7 @@ export const chVerify: Chapter = {
       body: `
         <p>Put it together on the pipelined CPU of chapter ${numOf('pipeline')}: ${n0(F.pipeFlipFlops)} flip-flops (the register file and the data memory are flip-flops here), ${n0(F.pipeNands)} NANDs. Full scan gives each flip-flop a multiplexer: ${n0(F.pipeFlipFlops * MUXN)} NANDs more, ${((100 * F.pipeFlipFlops * MUXN) / F.pipeNands).toFixed(1)} % of the CPU.</p>
         <p>Then time. On one chain, every pattern shifts ${n0(F.pipeFlipFlops)} clocks. Split into chains and the time falls in proportion, at two pins a chain. Move the sliders: a few thousand patterns on eight chains at 50 MHz take milliseconds per die, and the tester's time is paid for every die, good or bad.</p>
-        <p>That is why test is part of the design (<em>design for test</em>): scan, BIST and spare memory rows are decided with the rest of the chip, and the cost of testing is weighed against the cost of shipping a bad chip, which is far higher once it is in a product. The next chapters build GPUs, memories and networks; every one of them is tested this way.</p>`,
+        <p>That is why test is part of the design (<em>design for test</em>): scan, BIST and spare memory rows are decided with the rest of the chip, and the cost of testing is weighed against the cost of shipping a bad chip, which is far higher once it is in a product. Later chapters build vector units, GPUs, memories and networks; every one of them is tested this way.</p>`,
       widget: () => testCostWidget(),
       more: {
         real: `<p>Real chips do not scan their large memories (BIST does) and compress scan data: a decompressor on the chip expands a few tester channels into hundreds of internal chains, and a compactor folds the answers back. JTAG (IEEE 1149.1, 1990) gives every chip a standard four-wire test port, used to test the board's wiring between chips and, today, to debug the software on them.</p>`,

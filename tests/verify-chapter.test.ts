@@ -10,7 +10,8 @@ import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
 import { allVectors, coverageCurve, detect, exactCover, faultModel, greedyCover, randomVectors, responses, type FaultModel } from '../src/sim/faultsim';
 import { stats } from '../src/sim/stats';
-import { VERIFY_FACTS as F } from '../src/chapters/ch-verify';
+import { FA_GREEDY, FA_SMALLEST, FOUND_BY, VERIFY_FACTS as F } from '../src/chapters/ch-verify';
+import { FULL_ADDER } from '../src/lib/combinational';
 import { coverProgram, coverRandom, reached } from '../src/verify/coverage';
 import { FOUND } from '../src/verify/data';
 import { caseOf, firstDivergence, fuzzBatch, fuzzCase, shrink } from '../src/verify/fuzz';
@@ -37,6 +38,16 @@ describe('the chapter\'s numbers', () => {
     expect(coverageCurve(m, randomVectors(m, 32, 7), [1, 2, 4, 8, 16])).toEqual(F.rcaRandom);
     expect(greedyCover(d, m.faults.length)).toHaveLength(F.rcaGreedy);
     expect(exactCover(d, m.faults.length)).toHaveLength(F.rcaSmallest);
+  });
+
+  it('the full adder: greedy takes four vectors, three are enough (the step, t_tests and the codex say so)', () => {
+    const m = model(faultModel(FULL_ADDER)), d = detect(m, allVectors(m));
+    expect([greedyCover(d, m.faults.length).length, exactCover(d, m.faults.length)!.length]).toEqual([4, 3]);
+    expect([FA_GREEDY, FA_SMALLEST]).toEqual([4, 3]);
+  });
+
+  it('who found the table\'s bugs', () => {
+    expect(FOUND_BY).toEqual({ tests: 4, random: 1, spike: 1 });
   });
 
   it('the self-test: the escapes', () => {
