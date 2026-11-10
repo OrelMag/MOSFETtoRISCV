@@ -17,7 +17,7 @@
 import type { Rect } from '../view/route';
 import { DIR, attachPoints, drives, partBox, pinBody, pointerGeom } from './geom';
 import {
-  endGeom, endKey, nextId, onPolyline, orthogonal, polyline, straightLine, uniqueName,
+  endGeom, endKey, onPolyline, orthogonal, polyline, straightLine, uniqueName,
   type ChipDoc, type DefOf, type EndRef, type ExitDir, type LabelDoc, type Vec, type WireDoc,
 } from './model';
 import { nearestOn, type Edited, type Sel } from './ops';
@@ -595,7 +595,18 @@ export function suggestName(doc: ChipDoc, id: string, defOf: DefOf): string {
  * on a short stub pointing away from it. The tree's own pointers stay. Refused when the name
  * belongs to another net, or the tree reaches a pointer of another name.
  */
-export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefOf): Edited & { labels?: string[]; wires?: string[] } {
+/** nextId without copying the set or counting up from 1 each time: hundreds of collapses on one sheet stay linear. */
+const lastFree = new WeakMap<Set<string>, number>();
+function freeId(prefix: string, taken: Set<string>): string {
+  let i = lastFree.get(taken) ?? 1;
+  while (taken.has(`${prefix}${i}`)) i++;
+  lastFree.set(taken, i);
+  return `${prefix}${i}`;
+}
+
+export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefOf,
+  /** A wire's drawn path (collapseWires caches them across one batch: nothing moves, so each wire is drawn once). */
+  poly: (w: WireDoc) => ReturnType<typeof polyline> = (w) => polyline(doc, w, defOf)): Edited & { labels?: string[]; wires?: string[] } {
   const nm = name.trim();
   if (!nm) return { doc, reason: 'a pointer needs a name' };
   if (!doc.wires.some((w) => w.id === id)) return { doc, reason: `no wire '${id}'` };
@@ -613,7 +624,7 @@ export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefO
   const old = doc.wires.filter((w) => gone.has(w.id));
   const boxes: Rect[] = [...doc.parts.map((p) => partBox(defOf(p), p.at, p.flip, p.rot)), ...doc.pins.map(pinBody), ...doc.labels.map((l) => pointerGeom(l).rect)];
   // The other wires a stub must not run along (those on the same end are the same net).
-  const segs = new Scene({ ...doc, parts: [], pins: [], labels: [], wires }, defOf, new Set(), (w) => polyline(doc, w, defOf));
+  const segs = new Scene({ ...doc, parts: [], pins: [], labels: [], wires }, defOf, new Set(), poly);
   const endsOf = new Map(wires.map((w) => [w.id, [endKey(w.a), endKey(w.b)]]));
   const labels = [...doc.labels];
   const newLabels: string[] = [], newWires: string[] = [];
@@ -636,12 +647,12 @@ export function collapseWire(doc: ChipDoc, id: string, name: string, defOf: DefO
       return { p, along, clash: boxes.some(clash) };
     });
     const at = (spots.find((s) => !s.along && !s.clash) ?? spots.find((s) => !s.along) ?? spots[0]).p;
-    const lid = nextId('l', lids);
+    const lid = freeId('l', lids);
     lids.add(lid);
     const l: LabelDoc = { id: lid, name: nm, at, face, ...(hue !== undefined ? { hue } : {}) };
     labels.push(l);
     boxes.push(pointerGeom(l).rect);
-    const wid = nextId('w', wids);
+    const wid = freeId('w', wids);
     wids.add(wid);
     const w: WireDoc = { id: wid, a: e, b: { label: lid }, pts: [], ...(hue !== undefined ? { hue } : {}) };
     // A stored charge or power-on value belongs to the net: the first stub carries it.
@@ -663,10 +674,13 @@ export function collapseWires(doc: ChipDoc, ids: string[], defOf: DefOf): Edited
   const why: string[] = [];
   const labels: string[] = [];
   const done = new Set<string>();
+  // the wires a collapse keeps are the same objects with the same ends, and no part moves: draw each once
+  const drawn = new WeakMap<WireDoc, ReturnType<typeof polyline>>();
+  const poly = (w: WireDoc) => { if (!drawn.has(w)) drawn.set(w, polyline(out, w, defOf)); return drawn.get(w)!; };
   for (const id of ids) {
     if (done.has(id) || !out.wires.some((w) => w.id === id)) continue;
     for (const t of wireTree(out, id)) done.add(t);
-    const r = collapseWire(out, id, suggestName(out, id, defOf), defOf);
+    const r = collapseWire(out, id, suggestName(out, id, defOf), defOf, poly);
     if (r.reason) why.push(r.reason);
     else { out = r.doc; labels.push(...r.labels!); }
   }

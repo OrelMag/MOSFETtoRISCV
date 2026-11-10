@@ -108,6 +108,7 @@ const MENU: (MenuItem | null)[] = [
   null,
   { icon: 'code', label: 'Export Verilog', hint: 'the whole hierarchy as drawn, structural SystemVerilog (.sv) for simulators', run: (ed) => exportVerilog(ed) },
   { icon: 'code', label: 'Export Verilog for FPGA…', hint: 'synthesizable: flip-flops as processes, a board top and pins for a Tang Nano 9K (.zip)', run: (ed) => void exportFpga(ed) },
+  { icon: 'download', label: 'Export for Digital (.dig)…', hint: 'the chip and every chip and part inside it as Digital circuit files (a .dig, or a .zip of them)', run: (ed) => void exportDig(ed) },
   { icon: 'image', label: 'Export image (SVG)', hint: 'the canvas as drawn, in the current theme', run: (ed) => exportImage(ed, 'svg') },
   { icon: 'image', label: 'Export image (PNG)', hint: 'the same at 2× resolution', run: (ed) => void exportImage(ed, 'png') },
   null,
@@ -332,6 +333,35 @@ async function exportFpga(ed: Editor): Promise<void> {
   ], [
     h('button', { class: 'btn ghost sm', onclick: () => d.close() }, out.ok ? 'Cancel' : 'Close'),
     ...(out.ok ? [h('button', { class: 'btn primary sm', onclick: save }, glyph('download', 14), 'Download .zip')] : []),
+  ]);
+}
+
+/** The .dig export (editor/digexport.ts, loaded on demand): what it could not write in a dialog, one .dig or a .zip of them. */
+async function exportDig(ed: Editor): Promise<void> {
+  if (!ed.doc.parts.length && !ed.doc.pins.length) return void ed.toast('Nothing to export: the chip is empty', 'err');
+  if (ed.compiled?.diags.some((d) => d.level === 'error')) return void ed.toast('Fix the errors in this chip first (see the properties panel)', 'err');
+  const [{ digExport }, { zipFiles }] = await Promise.all([import('./digexport'), import('./zip')]);
+  let out: ReturnType<typeof digExport>;
+  try {
+    out = digExport(ed.ws, ed.chipId);
+  } catch (e) {
+    return void ed.toast(`Cannot export for Digital: ${(e as Error).message}`, 'err');
+  }
+  const base = fileBase(ed.doc.name), one = out.files.length === 1;
+  const save = () => {
+    if (one) saveFile(out.files[0].name, out.files[0].text, 'application/xml');
+    else saveFile(`${base}-digital.zip`, new Blob([zipFiles(out.files) as Uint8Array<ArrayBuffer>], { type: 'application/zip' }));
+    d.close();
+  };
+  const d = dialog(ed, 'Export for Digital', [
+    h('p', { class: 'sb-dlg-lead' }, one ? 'One circuit file, ' : `${plural(out.files.length, 'circuit file')} in a .zip: open `, h('code', null, out.top),
+      one ? ', to open in Digital.' : ' in Digital, with the others in the same folder (it finds the circuits it places by file name). Every connection is a tunnel named for its net.'),
+    out.problems.length
+      ? h('ul', { class: 'sb-fpga-report' }, out.problems.map((p) => h('li', { class: out.exact ? 'info' : 'warn' }, p)))
+      : h('p', { class: 'sb-dlg-msg ok' }, 'Every part has a Digital equivalent: the files compute what this chip computes.'),
+  ], [
+    h('button', { class: 'btn ghost sm', onclick: () => d.close() }, 'Cancel'),
+    h('button', { class: 'btn primary sm', onclick: save }, glyph('download', 14), one ? 'Download .dig' : 'Download .zip'),
   ]);
 }
 

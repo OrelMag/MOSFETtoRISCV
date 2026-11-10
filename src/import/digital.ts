@@ -14,7 +14,7 @@
 
 import { type ChipDoc, type CommentDoc, type EndRef, type ExitDir, isIdent, type LabelDoc, type PartDoc, type PartRef, type PinDoc,
   defaultFace, slug, uniqueName, type Vec, type WireDoc } from '../editor/model';
-import { compileChip } from '../editor/compile';
+import { type Compiled, compileChip } from '../editor/compile';
 import { DIR, partBox, pinBody } from '../editor/geom';
 import { untangled } from '../editor/untangle';
 import { isError, partDef } from '../editor/parts';
@@ -266,6 +266,19 @@ function shapeOf(e: DElem, sub: (base: string) => DCircuit | undefined): DPin[] 
   return l.map((p) => ({ name: p.name, dir: p.dir, at: place(e, p.l) }));
 }
 
+/** A Digital element's pins as this importer reads them, at the origin and unrotated (editor/digexport.ts places its elements by
+ *  these, so an exported file reads back through the same shapes). `subs`: a placed circuit's input and output labels by base name. */
+export function digitalPins(name: string, attrs: Readonly<Record<string, string | number | boolean>>,
+  subs: (base: string) => { ins: string[]; outs: string[] } | undefined = () => undefined): { name: string; dir: 'in' | 'out'; at: [number, number] }[] | null {
+  const m = new Map<string, XNode>();
+  for (const [k, v] of Object.entries(attrs)) m.set(k, { name: typeof v === 'boolean' ? 'boolean' : typeof v === 'number' ? 'int' : 'string', attrs: {}, children: [], text: String(v), parent: null });
+  const sub = (b: string): DCircuit | undefined => {
+    const c = subs(b);
+    return c && { file: b, base: b, name: b, elems: [], wires: [], width: 3, ins: c.ins, outs: c.outs };
+  };
+  return shapeOf({ name, attrs: m, pos: [0, 0], rot: 0, mirror: false }, sub);
+}
+
 // ---- the importer -----------------------------------------------------------------------------
 
 /** Pin names Digital allows ("~Q", "C out") → identifiers, unique in their chip. */
@@ -301,15 +314,20 @@ class Importer {
     return id;
   }
 
+  /** A chip this import made, compiled. */
+  chipDef(id: string): ComponentDef | undefined {
+    return this.defs.get(id);
+  }
+
   defOf(ref: PartRef): ComponentDef | null {
     const r = partDef(ref, (id) => this.defs.get(id));
     return isError(r) ? null : r;
   }
 
   /** Adds a finished chip (after the chips it places) and compiles it so its parents can place it. */
-  add(doc: ChipDoc): void {
+  add(doc: ChipDoc, built?: Compiled): void {
     this.chips.push(doc);
-    const c = compileChip(doc, (ref) => partDef(ref, (id) => this.defs.get(id)));
+    const c = built ?? compileChip(doc, (ref) => partDef(ref, (id) => this.defs.get(id)));
     this.defs.set(doc.id, c.def);
   }
 
@@ -613,6 +631,8 @@ class Sheet {
   private claimed = new Set<string>();
   /** Notes that matter only when Digital wired that pin (a ROM's sel, a RAM's ld). */
   private ifWired: { e: DElem; at: DPt; msg: string }[] = [];
+  /** Where a constant 1 drives (a ROM's sel or a RAM's ld tied high, as the .dig export writes it, needs no note). */
+  private ones: DPt[] = [];
   private pending: { e: DElem; pins: DPin[] | null; title: string; label: string }[] = [];
   readonly pinMap = new Map<string, string>();
 
@@ -755,6 +775,7 @@ class Sheet {
         const v = e.name === 'Ground' ? 0n : e.name === 'VDD' ? (1n << BigInt(bits)) - 1n : (aBig(a, 'Value') ?? 1n);
         const value = Number(((v % (1n << BigInt(bits))) + (1n << BigInt(bits))) % (1n << BigInt(bits)));
         const id = this.addPart({ const: { width: bits, value } }, 'k', { port: 'y', at: e.pos });
+        if (bits === 1 && value === 1) this.ones.push(e.pos);
         out('out', { part: id, port: 'y' });
         t.add(e.name, 'constant');
         return;
@@ -1075,7 +1096,8 @@ class Sheet {
       if (w) pin.width = w;
     }
 
-    for (const n of this.ifWired) if (this.used.has(key(n.at))) this.problem(n.e, n.msg);
+    const high = new Set(this.ones.map((p) => uf.find(key(p))));
+    for (const n of this.ifWired) if (this.used.has(key(n.at)) && !high.has(uf.find(key(n.at)))) this.problem(n.e, n.msg);
     // stubs: pins as Digital draws them, or inferred from the wire ends around the element
     for (const s of this.pending) {
       this.cur = s.e;
@@ -1158,8 +1180,11 @@ class Sheet {
       const P = path.map((k) => this.pts.get(k)!);
       const a = endRef(path[0]), b = endRef(path[path.length - 1]);
       const pts: Vec[] = P.slice(1, -1).map(S);
-      if (terminal(path[0]) && 'part' in a) pts.unshift(S(P[0]));
-      if (terminal(path[path.length - 1]) && 'part' in b) pts.push(S(P[P.length - 1]));
+      // a part's port is not where Digital drew the pin (our shapes differ): its point stays as a corner, so the wire keeps its
+      // drawing; except on a lone segment to a pin or a pointer, where that corner only doubles the wire back on itself
+      const lone = P.length === 2 && !('part' in a && 'part' in b);
+      if (!lone && terminal(path[0]) && 'part' in a) pts.unshift(S(P[0]));
+      if (!lone && terminal(path[path.length - 1]) && 'part' in b) pts.push(S(P[P.length - 1]));
       const w: WireDoc = { id, a, b, pts };
       if (P.some((p, i) => i > 0 && p[0] !== P[i - 1][0] && p[1] !== P[i - 1][1])) w.straight = true;
       this.doc.wires.push(w);
@@ -1428,11 +1453,12 @@ export function importDigital(files: SourceFile[], opts: ImportOptions): ImportR
     const sheet = new Sheet(imp, c, imp.chipId(c.name), sub, (b) => byBase.has(b));
     for (const e of c.elems) sheet.element(e);
     // no two nets on one line (the lint): where they would be, one becomes a pair of pointers
-    const doc = untangled(sheet.finish(), Object.fromEntries(imp.chips.map((x) => [x.id, x])));
+    const made: { built?: Compiled } = {};
+    const doc = untangled(sheet.finish(), (id) => imp.chipDef(id), made);
     // our pin names for the Digital names its parents place
     const pins = new Map<string, string>();
     for (const n of [...c.ins, ...c.outs]) pins.set(n, sheet.pinMap.get(n) ?? n);
-    imp.add(doc);
+    imp.add(doc, made.built);
     imp.made.set(c.base, { id: doc.id, pins });
     state.set(c.base, 'done');
   };

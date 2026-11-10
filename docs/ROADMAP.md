@@ -1111,7 +1111,15 @@ and Digital are what courses already use, and Digital lets a student write tests
   chip with the same pins; Digital's Testcase tables and Logisim test vectors come in as test tables
 - ✅ Test tables on any chip (editor/testtable.ts, testsui.ts): Digital's test syntax, a Tests pane run after every edit,
   rows with what the circuit showed, Fill outputs from the circuit, a failing row in the test player
-- Later: placing an imported circuit again by logic depth (the Verilog import's placer, generalized); `.dig` export
+- ✅ `.dig` export (editor/digexport.ts, File ▸ Export for Digital): a chip and every chip and library part inside it as Digital
+  files, one per circuit, parts mapped back through the import's table, connections as tunnels; what Digital has no element
+  for is an empty circuit with its pins and a problem line. tests/dig-export.test.ts reads every Examples chip back through
+  the importer and simulates both
+- ✅ Import speed (2026-11-10): reading back an exported RV64 core (118 circuits) took 210 s, now about 7 s. untangle.ts compiled
+  every chip placed so far once per chip and fixed 12 overlaps a round (the lint's display cap), at most 16 rounds; it now takes
+  the importer's compiled chips, fixes every overlap of a round at once and hands its compile on; a lone segment from a part
+  to a pin or pointer no longer doubles back through Digital's pin point. tests/dig-export.test.ts reads the cores back
+- Later: placing an imported circuit again by logic depth (the Verilog import's placer, generalized)
 
 **ISA breadth** (Ripes: RV64, the C extension): RV64I / RV64M and C in Phase 9, each checked by riscv-tests and Spike
 like the RV32 cores. ✅ C (chapter 25, part 1); ✅ RV64I / M (part 2). ✅ C and RV64 in the sandbox, with the instruction builder's 16-bit and RV64 formats (1f7697b3; widths e3fa3cf1).
@@ -1187,7 +1195,7 @@ links, bus taps, duplicate and pin reordering. The gaps:
   board's 27 MHz clock (the design's clock is that divided by 2^DIV_LOG2), so the computer example went from ~13.1 K
   LUTs (memories as LUT RAM) to ~4.2 K LUTs + 10 BSRAM; cycle-exact against the asynchronous memories
   (scripts/fpga-memcheck.ts). Open: no place-and-route in CI; ROMs of ≤ 256 words and RAMs of ≤ 64 words stay in LUTs
-- `.dig` export for Digital: low priority (Verilog already reaches it)
+- ✅ `.dig` export for Digital (File ▸ Export for Digital, 2026-11-10)
 
 ### Phase 21 — Quality of life: first-run tour, load progress, minimap ✅ (2026-11-01, mockups approved)
 - ✅ Coach marks: the first scene a learner opens dims the page and walks the stage bar (drill, Probe + Timing, Why?, Back / Step / Slow,
