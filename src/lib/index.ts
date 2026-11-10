@@ -34,6 +34,7 @@ export * from './seqparts';
 export * from './cmosgates';
 export * from './storage';
 export * from './cells';
+export * from './coremem';
 export * from './dram';
 export * from './sensor';
 export * from './flash';

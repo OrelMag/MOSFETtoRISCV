@@ -18,6 +18,8 @@ export interface Stats {
   /** Vacuum tube sections (prologue P2): triodes (a 6SN7 holds two) and diodes (a 6AL5 holds two). */
   triodes: number;
   diodes: number;
+  /** Ferrite cores (prim 'core', lib/coremem.ts): a bit each, no transistor; absent where there are none. */
+  cores?: number;
   /** Of the transistors, depletion-mode loads (NMOS logic's pull-ups). */
   depletion: number;
   /** Number of instances one level down. */
@@ -50,6 +52,7 @@ export function stats(def: ComponentDef): Stats {
   else if (def.prim === 'relay') s = { ...zero, relays: 1 };
   else if (def.prim === 'triode') s = { ...zero, triodes: 1 };
   else if (def.prim === 'diode') s = { ...zero, diodes: 1 };
+  else if (def.prim === 'core') s = { ...zero, cores: 1 };
   else if (def.prim && def.prim !== 'sense') s = zero; // a sense amplifier counts the transistors it is drawn with
   else if (def.statsOf) s = def.statsOf();
   else {
@@ -65,6 +68,7 @@ export function stats(def: ComponentDef): Stats {
         s.relays += c.relays;
         s.triodes += c.triodes;
         s.diodes += c.diodes;
+        if (c.cores) s.cores = (s.cores ?? 0) + c.cores;
         s.depletion += c.depletion;
         if (c.rom) {
           const r = (s.rom ??= { chips: 0, bytes: 0, size: c.rom.size, nands: 0, transistors: 0 });

@@ -193,7 +193,7 @@ export interface ComponentDef {
   symbol: SymbolSpec;
 
   /** Built-in primitive handled directly by the simulators. */
-  prim?: 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'fgmos' | 'relay' | 'triode' | 'diode' | 'alias';
+  prim?: 'nand' | 'nmos' | 'pmos' | 'dep' | 'vdd' | 'gnd' | 'vhalf' | 'res' | 'cap' | 'sense' | 'fgmos' | 'relay' | 'triode' | 'diode' | 'core' | 'alias';
   /**
    * Switch level: drive strength of a conducting element, 0 … 4. Transistors are 2 (weak) … 4
    * (strong), default 3; a resistor (prim 'res') is 1 by default, weaker than any transistor, and 0
