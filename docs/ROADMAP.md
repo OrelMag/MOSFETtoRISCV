@@ -250,7 +250,10 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   halfword banks (cFetch) with PC + 2 / + 4: 49 884 against 48 434 NANDs, period 196 against 155. Verified like the
   RV32 cores (sc-c: riscv-tests, random programs with every C form, coverage, benchmarks) and against Spike (imc: 1 000
   random programs). Not yet: C in the sandbox (a core part reading a halfword window, the CPU drawer), the instruction
-  builder's 16-bit formats, rv32uc images (needs GNU gcc), C on the pipelines
+  builder's 16-bit formats, rv32uc images (needs GNU gcc). C on the five-stage pipeline done: pipelinedCpu({ c }) (cFetch in F, PC + 2 / + 4, the
+  expanded instruction enters D, so hazards and forwarding are unchanged; not with the predictor), verified as pipe-c (riscv-tests,
+  random programs with every C form, benchmarks: 82 253 against 80 798 NANDs, period 145 for both), the sandbox core rv32ic_pipe_core
+  (+ M / D-cache variants, palette Processor cores, the CPU drawer with the pipeline view; tests/pipe-core-c.test.ts)
 - A extension (LR/SC, AMO): not now (decided 2026-10-25)
 - ✅ RV64I / RV64M, chapter 25 part 2 (steps 6–8): decode / disassembly / the assembler at xlen 64 (INSTRS64 beside INSTRS, li of any
   64-bit constant), the golden model ISS64 (BigInt registers), one width-parametric single-cycle core xlenCpu at 32 and 64 bits (the

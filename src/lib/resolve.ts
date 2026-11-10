@@ -88,7 +88,7 @@ const patterns: [RegExp, (m: RegExpMatchArray) => ComponentDef][] = [
   [/^rv32i_core$/, () => singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true })],
   [/^rv64(i|im)(?:_d(\d))?_core$/, (m) => xlenCpu([], { xlen: 64, m: m[1] === 'im', dmemK: m[2] ? +m[2] : 6, imemPort: true })],
   // the pipelined core with the same two ports (the sandbox's: Custom instructions… applies to it too)
-  [/^rv32i(m)?_pipe(_dc)?_core$/, (m) => pipelinedCpu([], { adder: 'ks', ports: true, ...(m[1] ? { m: true } : {}), ...(m[2] ? { dcache: 'wt' as const } : {}) })],
+  [/^rv32i(m)?(c)?_pipe(_dc)?_core$/, (m) => pipelinedCpu([], { adder: 'ks', ports: true, ...(m[1] ? { m: true } : {}), ...(m[2] ? { c: true } : {}), ...(m[3] ? { dcache: 'wt' as const } : {}) })],
   [/^rv32ic_core$/, () => singleCycleCpu([], { shared: true, adder: 'ks', imemPort: true, c: true })],
   // chapter vectors' CPU with its program on a port: the vector unit and the four-bank data memory (64 words) inside
   [/^rv32iv_core$/, () => singleCycleCpu([], { imemPort: true, dmemK: 6, vector: { lanes: 4, vlen: 128 } })],

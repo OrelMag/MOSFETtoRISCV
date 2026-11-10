@@ -600,16 +600,16 @@ export function chipDeps(doc: ChipDoc): string[] {
   return [...new Set(doc.parts.flatMap((p) => ('chip' in p.ref ? [p.ref.chip] : [])))];
 }
 
-/** The pipelined port cores by library id: rv32i_pipe_core, rv32im_pipe_core (M), rv32i_pipe_dc_core (a data cache). */
-export const PIPE_CORE_LIB = /^rv32i(m)?_pipe(_dc)?_core$/;
+/** The pipelined port cores by library id: rv32i_pipe_core, rv32im_pipe_core (M), rv32ic_pipe_core (C), rv32i_pipe_dc_core (a data cache), and their combinations. */
+export const PIPE_CORE_LIB = /^rv32i(m)?(c)?_pipe(_dc)?_core$/;
 
-/** What a placed RV32I port core is (null: not the single-cycle or pipelined RV32I port core): pipelined or not, M, data cache, custom rows. */
-export function portCoreOf(ref: PartRef): { pipe: boolean; m: boolean; dcache: boolean; custom: CustomRow[] } | null {
-  if ('core' in ref) return { pipe: !!ref.core.pipe, m: !!ref.core.m, dcache: !!ref.core.dcache, custom: ref.core.custom };
+/** What a placed RV32I port core is (null: not the single-cycle or pipelined RV32I port core): pipelined or not, M, C (pipelined only), data cache, custom rows. */
+export function portCoreOf(ref: PartRef): { pipe: boolean; m: boolean; c: boolean; dcache: boolean; custom: CustomRow[] } | null {
+  if ('core' in ref) return { pipe: !!ref.core.pipe, m: !!ref.core.m, c: false, dcache: !!ref.core.dcache, custom: ref.core.custom };
   if (!('lib' in ref)) return null;
-  if (ref.lib === 'rv32i_core') return { pipe: false, m: false, dcache: false, custom: [] };
+  if (ref.lib === 'rv32i_core') return { pipe: false, m: false, c: false, dcache: false, custom: [] };
   const p = PIPE_CORE_LIB.exec(ref.lib);
-  return p ? { pipe: true, m: !!p[1], dcache: !!p[2], custom: [] } : null;
+  return p ? { pipe: true, m: !!p[1], c: !!p[2], dcache: !!p[3], custom: [] } : null;
 }
 
 /** The RV16 cores that take custom rows: the reference single-cycle core and the five-stage pipeline (no traps: their illegal-instruction detector would refuse a row). */
@@ -627,9 +627,9 @@ export function rv16CoreRef(o: { pipe: boolean; custom: Custom16Row[] }): PartRe
   return o.custom.length ? { core16: { custom: o.custom, ...(o.pipe ? { pipe: true as const } : {}) } } : { lib: o.pipe ? RV16_CUSTOM_LIBS.pipe : RV16_CUSTOM_LIBS.single };
 }
 
-/** The part for a port core: a library id while it has no custom rows, else { core } (m and dcache only on the pipelined one, not together). */
-export function portCoreRef(o: { pipe: boolean; m?: boolean; dcache?: boolean; custom: CustomRow[] }): PartRef {
-  const m = o.pipe && !!o.m, dcache = o.pipe && !!o.dcache && !m;
+/** The part for a port core: a library id while it has no custom rows, else { core } (m, c and dcache only on the pipelined one, m and dcache not together; custom rows not with c). */
+export function portCoreRef(o: { pipe: boolean; m?: boolean; c?: boolean; dcache?: boolean; custom: CustomRow[] }): PartRef {
+  const m = o.pipe && !!o.m, dcache = o.pipe && !!o.dcache && !m, c = o.pipe && !!o.c && !o.custom.length;
   if (o.custom.length) return { core: { custom: o.custom, ...(o.pipe ? { pipe: true as const } : {}), ...(m ? { m: true as const } : {}), ...(dcache ? { dcache: true as const } : {}) } };
-  return { lib: !o.pipe ? 'rv32i_core' : `rv32i${m ? 'm' : ''}_pipe${dcache ? '_dc' : ''}_core` };
+  return { lib: !o.pipe ? 'rv32i_core' : `rv32i${m ? 'm' : ''}${c ? 'c' : ''}_pipe${dcache ? '_dc' : ''}_core` };
 }

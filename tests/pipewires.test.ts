@@ -10,7 +10,7 @@ import { wireCrossings } from '../src/view/wirefirst';
 // datapath, feedback over the top and under the hazard unit, the hazard unit flipped below the decode stage.
 describe('the pipelined CPU drawn with wires', () => {
   const words = [0x13];
-  for (const opts of [{}, { imemK: 8, dmemK: 6 }, { imemK: 5, dmemK: 4 }, { custom: [OWN_ANSWER] }]) {
+  for (const opts of [{}, { imemK: 8, dmemK: 6 }, { imemK: 5, dmemK: 4 }, { custom: [OWN_ANSWER] }, { c: true }]) {
     it(`keeps pointers to a handful and never draws two nets on one line ${JSON.stringify(opts)}`, () => {
       const d = pipelinedCpu(words, opts);
       const nl = netlistOf(d)!;

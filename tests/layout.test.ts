@@ -27,6 +27,7 @@ singleCycleCpu(words);
 singleCycleCpu(words, { adder: 'ks' });
 pipelinedCpu(words, { adder: 'ks', balanced: true, predictor: true });
 pipelinedCpu(words);
+pipelinedCpu(words, { c: true });
 systemCpu(words, { m: true });
 systemCpu(words, { vm: true });
 multicycleCpu(words, { control: 'fsm' });

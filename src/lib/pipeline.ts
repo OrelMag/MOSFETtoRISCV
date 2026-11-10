@@ -24,6 +24,7 @@ import { AND, NOT, OR, XOR } from './gates';
 import { readPort, regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
+import { C_EXPAND, cFetch, PLUS2OR4 } from './rvc';
 import { bitwise, orN } from './wide';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
@@ -617,6 +618,13 @@ export interface PipeOptions {
    * single-cycle rv32i_core's memory port serves this one. With m: the M extension inside. With dcache 'wt': cachedPort in M, the memory outside it (devices, bit 31, bypass it).
    */
   ports?: boolean;
+  /**
+   * The C extension, as on the single-cycle CPU: F fetches the 32 bits at any even address and expands a 16-bit instruction
+   * (lib/rvc.ts cFetch; with ports, the C expander behind the instr port), and the PC goes up by 2 after one (PLUS2OR4). The
+   * expanded instruction is what enters D, and PC + 2 travels on as the link value, so decode, hazards and forwarding are
+   * unchanged. Not with the predictor (its BTB indexes words).
+   */
+  c?: boolean;
 }
 
 /** Replace one end of a net (and its tag, if it had one). */
@@ -626,20 +634,21 @@ function retargetEnd(n: NetDef, from: string, to: string): void {
 }
 
 export function pipelinedCpu(program: number[], opts: PipeOptions = {}): ComponentDef {
-  const IM = rom(program, opts.imemK ?? 6);
-  const o = { dmemK: opts.dcache ? 6 : opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor, dcache: opts.dcache, m: !!opts.m, dram: opts.dram, custom: opts.custom ?? [], ports: !!opts.ports } as const;
-  return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}_${o.dcache ?? ''}_${o.m}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}${o.ports ? '_pp' : ''}`, () => buildPipe(IM, o));
+  const IM = opts.c ? cFetch(program, opts.imemK ?? 6) : rom(program, opts.imemK ?? 6);
+  const o = { dmemK: opts.dcache ? 6 : opts.dmemK ?? 5, adder: opts.adder ?? 'rca', balanced: !!opts.balanced, predictor: !!opts.predictor, dcache: opts.dcache, m: !!opts.m, dram: opts.dram, custom: opts.custom ?? [], ports: !!opts.ports, c: !!opts.c } as const;
+  return memo(`pipe_${IM.id}_${o.dmemK}_${o.adder}_${o.balanced}_${o.predictor}_${o.dcache ?? ''}_${o.m}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}${o.ports ? '_pp' : ''}${o.c ? '_c' : ''}`, () => buildPipe(IM, o));
 }
 
-function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean; dcache?: 'wt' | 'wb' | 'wb2'; m: boolean; dram?: DramConfig; custom: readonly CustomRow[]; ports: boolean }): ComponentDef {
+function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; balanced: boolean; predictor: boolean; dcache?: 'wt' | 'wb' | 'wb2'; m: boolean; dram?: DramConfig; custom: readonly CustomRow[]; ports: boolean; c: boolean }): ComponentDef {
   const { adder, balanced: bal, predictor: pred, dcache, m } = o;
   if (m && dcache) throw new Error('pipelinedCpu: m and dcache together are not supported');
+  if (o.c && pred) throw new Error('pipelinedCpu: c with the predictor is not supported (its BTB indexes words)');
   if (o.ports && dcache && dcache !== 'wt') throw new Error('pipelinedCpu: ports take the write-through data cache only');
   if (o.dram && dcache !== 'wb' && dcache !== 'wb2') throw new Error('pipelinedCpu: dram needs a write-back data cache');
   const DM = o.ports && dcache ? cachedPort(2) : dcache === 'wt' ? cachedMemory(o.dmemK) : dcache === 'wb' ? wbCache(o.dmemK, 2, 1, o.dram) : dcache === 'wb2' ? wbCache(o.dmemK, 1, 2, o.dram) : dataMemory(o.dmemK);
   const PC = register(32), RF = regfile(5, 32), ALU = alu(32, adder);
   const M2 = busMux2(32), M4 = muxTree(2, 32), ADD = adder === 'ks' || bal ? koggeStone(32) : rca(32);
-  const P4 = adder === 'ks' ? PLUS4_FAST : PLUS4, SI = splitter([7, 5, 3, 5, 5, 7]);
+  const P4 = o.c ? PLUS2OR4 : adder === 'ks' ? PLUS4_FAST : PLUS4, SI = splitter([7, 5, 3, 5, 5, 7]);
   const FD = REG_FD(pred), DE = REG_DE(bal, pred), EM = REG_EM(), MW = REG_MW();
   const HZ = hazardUnit(bal);
   // The plain pipeline is drawn with wires, its bands readable as stages (see the wired block below); variants keep their pointers.
@@ -661,7 +670,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
   // F
   alignY('pcmux', M4, 2, 'y', row('pc') + 10);
   alignY('pc', PC, 12, 'd', row('pc') + 10);
-  alignY('imem', IM, 24, 'addr', row('instr'));
+  if (o.c) place('imem', IM, [24, row('instr') + 1]); else alignY('imem', IM, 24, 'addr', row('instr'));
   alignY('plus4', P4, 26, 'a', row('pcPlus4'));
   place('vF', TIE1, [xFD - 6, row('valid') - 1]);
   if (pred) {
@@ -725,6 +734,7 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     { name: 'enPC', ends: ['hz.enPC', 'pc.en'], tags: true },
     { name: 'PCF', ends: ['pc.q', 'imem.addr', 'plus4.a', 'FD.pcF', 'pcF', ...(pred ? ['btb.pcF'] : [])], trunk: P('pc', 'q')[0] + 3, tags: ['pcF', ...(pred ? ['btb.pcF'] : [])] },
     { name: 'InstrF', ends: ['imem.data', 'FD.instrF'] },
+    ...(o.c ? [{ name: 'C', ends: ['imem.c', 'plus4.c'], tags: true as const }] : []),
     { name: 'vF', ends: ['vF.y', 'FD.validF'] },
     { name: 'enFD', ends: ['hz.enFD', 'FD.en'], tags: true },
     { name: 'flushFD', ends: ['hz.flushFD', 'FD.clr'], tags: true },
@@ -1186,7 +1196,16 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     const swap = (name: string, from: string, to: string) => { retargetEnd(net(name), from, to); };
     swap('PCF', 'pcF', 'pcOut');
     net('PCF').ends = net('PCF').ends.filter((e) => e !== 'imem.addr');
-    swap('InstrF', 'imem.data', 'instr');
+    if (o.c) {
+      // C: the port carries the 32-bit window at pcOut (a window ROM, editor/parts.ts); the expander is inside the core, where the fetch unit was
+      const cxAt: [number, number] = [at.get('imem')![0], at.get('imem')![1] + 2]; // its window pointer below the PC register
+      instances.push({ name: 'cx', def: C_EXPAND, at: cxAt, label: 'C expander' });
+      defs.set('cx', C_EXPAND); at.set('cx', cxAt);
+      swap('InstrF', 'imem.data', 'cx.instr');
+      swap('C', 'imem.c', 'cx.c');
+      nets.push({ name: 'window', ends: ['instr', 'cx.w'], tags: true }, { name: 'cIllegal', ends: ['cx.illegal', 'illegal'], tags: true });
+      extraPorts.push(bit('illegal', 'out'));
+    } else swap('InstrF', 'imem.data', 'instr');
     if (dcache) {
       // the cache stays in M: its outside memory is the port (the CPU's address, or a fill's, on memAddr)
       nets.push({ name: 'memAddr', ends: ['dm.mAddr', 'memAddr'], tags: ['memAddr'] }, { name: 'memWData', ends: ['dm.mWD', 'memWData'], tags: ['memWData'] }, { name: 'memWE', ends: ['dm.mWE', 'memWE'], tags: ['memWE'] }, { name: 'memRData', ends: ['dm.mRD', 'memRData'], tags: ['memRData'] });
@@ -1204,17 +1223,31 @@ function buildPipe(IM: ComponentDef, o: { dmemK: number; adder: 'rca' | 'ks'; ba
     Object.assign(portPins, { instr: [0, yb + 4], memRData: [0, yb + 8], memAddr: [xMW + 30, yb + (dcache ? 16 : 13)], memWData: [xMW + 30, yb + (dcache ? 19 : 16)], memWE: [xMW + 30, yb + (dcache ? 22 : 19)] });
     // the pins sit where the removed memories' pins were, so the program side stays a short straight run beside the PC and the memory side beside M
     // (not on the part's far edges, which left a blank band across the drawing)
-    Object.assign(portPins, { pcOut: [P('imem', 'data')[0] + 2, P('imem', 'addr')[1] - 4], instr: P('imem', 'data') });
+    if (o.c) Object.assign(portPins, { pcOut: [P('imem', 'addr')[0] + 2, P('imem', 'addr')[1] + 8], instr: [P('imem', 'addr')[0] + 2, P('imem', 'addr')[1] + 11], illegal: [P('imem', 'addr')[0] + 2, P('imem', 'addr')[1] + 14] });
+    else Object.assign(portPins, { pcOut: [P('imem', 'data')[0] + 2, P('imem', 'addr')[1] - 4], instr: P('imem', 'data') });
     if (!dcache) Object.assign(portPins, { memAddr: P('dm', 'addr'), memWData: P('dm', 'wd'), memWE: [P('dm', 'we')[0], P('dm', 'we')[1] + 4], memRData: P('dm', 'rd') });
+  }
+  const pins: Record<string, [number, number]> = { clk: [0, yb], [o.ports ? 'pcOut' : 'pcF']: [xMW + 30, yb + 4], [o.ports ? 'retire' : 'validW']: [xMW + 30, yb + 7], pcW: [xMW + 30, yb + 10], ...(dcache ? { dstall: [xMW + 30, yb + 13] } : {}), ...portPins };
+  if (o.c) {
+    // the fetch unit is 6 units wider than the ROM and its C pointer needs room: move everything from the F/D register on to the right, so the stages
+    // keep their hand-drawn wiring (every trunk in this drawing is an x, and nothing but F lies left of the F/D register)
+    const DX = 8, X0 = xFD - 0.5, sx = (p: [number, number]): [number, number] => (p[0] > X0 ? [p[0] + DX, p[1]] : p);
+    for (const i of instances) if (i.at) i.at = sx(i.at);
+    for (const n of nets) {
+      if (n.trunk !== undefined && n.trunk > X0) n.trunk += DX;
+      if (n.via) for (const k of Object.keys(n.via)) n.via[k] = n.via[k]?.map(sx);
+      if (n.tagAt) for (const k of Object.keys(n.tagAt)) n.tagAt[k] = n.tagAt[k] && sx(n.tagAt[k]!);
+    }
+    for (const k of Object.keys(pins)) pins[k] = sx(pins[k]);
   }
   const variant = [adder === 'ks' ? 'fast adders' : '', bal ? 'balanced' : '', pred ? 'branch prediction' : '', dcache ? `${dcache === 'wt' ? 'write-through' : dcache === 'wb2' ? '2-way write-back' : 'write-back'} data cache` : ''].filter(Boolean).join(', ');
   return {
-    id: o.ports ? `rv32i${m ? 'm' : ''}_pipe${dcache ? '_dc' : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}_core` : `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}${m ? '_m' : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}${!dcache && o.dmemK !== 5 ? `_d${o.dmemK}` : ''}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}`,
-    name: o.ports ? `Pipelined RV32I${m ? 'M' : ''} core (program and memory on ports${dcache ? ', write-through data cache' : ''})` : `Pipelined RV32I${m ? 'M' : ''} CPU${variant ? ` (${variant})` : ''}`, category: 'cpu',
+    id: o.ports ? `rv32i${m ? 'm' : ''}${o.c ? 'c' : ''}_pipe${dcache ? '_dc' : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}_core` : `pipe_${IM.id}${adder === 'ks' ? '_ks' : ''}${bal ? '_bal' : ''}${pred ? '_bp' : ''}${dcache ? `_dc${dcache}` : ''}${m ? '_m' : ''}${o.custom.length ? `_cx${rowsKey(o.custom)}` : ''}${!dcache && o.dmemK !== 5 ? `_d${o.dmemK}` : ''}${o.dram ? `_dram${cfgKey(o.dram)}` : ''}`,
+    name: o.ports ? `Pipelined RV32I${m ? 'M' : ''}${o.c ? 'C' : ''} core (program and memory on ports${dcache ? ', write-through data cache' : ''})` : `Pipelined RV32I${m ? 'M' : ''}${o.c ? 'C' : ''} CPU${variant ? ` (${variant})` : ''}`, category: 'cpu',
     summary: 'Five stages, one instruction entering per cycle. Forwarding, a W→D bypass, load-use stalls and branch flushes keep it architecturally identical to the single-cycle machine.',
     ports: [bit('clk', 'in', 'left', true), bus(o.ports ? 'pcOut' : 'pcF', 32, 'out'), bit(o.ports ? 'retire' : 'validW', 'out'), bus('pcW', 32, 'out'), ...extraPorts],
     symbol: { kind: 'box', label: dcache ? 'RV32I PIPE + D$' : 'RV32I PIPE' },
-    netlist: () => ({ pins: { clk: [0, yb], [o.ports ? 'pcOut' : 'pcF']: [xMW + 30, yb + 4], [o.ports ? 'retire' : 'validW']: [xMW + 30, yb + 7], pcW: [xMW + 30, yb + 10], ...(dcache ? { dstall: [xMW + 30, yb + 13] } : {}), ...portPins }, instances, nets }),
+    netlist: () => ({ pins, instances, nets }),
     hdl: { verilog: '// Structure follows the primer\'s hdl/rv_pipe.sv (and rv_pipe_bp.sv for branch prediction), extended to all of RV32I.' },
   };
 }
