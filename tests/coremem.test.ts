@@ -259,3 +259,47 @@ describe('the read-cycle figure', () => {
     expect(f).not.toMatch(/#[0-9a-f]{3,6}\b/i); // colours from the theme only
   });
 });
+
+describe('Memory contents finds a core store', () => {
+  it('its words from the cores, the word being read and the one the next edge writes', async () => {
+    const { coreStore } = await import('../src/lib/coremem');
+    const { CORE_SAMPLE } = await import('../src/widgets/coremem');
+    const { findMemories, wordValue, memMarks } = await import('../src/view/memfind');
+    const def = coreStore(CORE_SAMPLE);
+    const s = new GateSim(flatten(def));
+    s.reset('zero');
+    const ms = findMemories(s);
+    expect(ms.map((m) => [m.path, m.words, m.width, m.src.kind])).toEqual([['', 16, 4, 'cores']]);
+    const m = ms[0];
+    expect(Array.from({ length: 16 }, (_, i) => wordValue(s, m, i))).toEqual([...CORE_SAMPLE]);
+    const eng: Engine = { set: (p, v) => s.setInput(p, v), settle: () => s.settle(), out: (p) => pack(s.getBits(s.design.root.ports[p])) };
+    const model = new CoreModel(CORE_SAMPLE);
+    clock(eng, model, { addr: 6, din: 0, we: 0, go: 1, inhOn: 1 });
+    expect(memMarks(s, m)).toEqual({ read: [6], write: [] });
+    expect(wordValue(s, m, 6)).toBe(CORE_SAMPLE[6]); // READ: the cores switch at the edge that ends it
+    clock(eng, model, { addr: 6, din: 0, we: 0, go: 0, inhOn: 1 });
+    expect(memMarks(s, m)).toEqual({ read: [], write: [6] });
+    expect(wordValue(s, m, 6)).toBe(0); // read out: only the buffer holds it
+    clock(eng, model, { addr: 6, din: 0, we: 0, go: 0, inhOn: 1 });
+    expect(wordValue(s, m, 6)).toBe(CORE_SAMPLE[6]);
+  });
+});
+
+describe('the sandbox Memory drawer after Open in Sandbox', () => {
+  it('finds the remixed store\'s words', async () => {
+    const { coreStore } = await import('../src/lib/coremem');
+    const { CORE_SAMPLE } = await import('../src/widgets/coremem');
+    const { remixDef } = await import('../src/editor/remix');
+    const { UserLibrary } = await import('../src/editor/library');
+    const { emptyWorkspace } = await import('../src/editor/model');
+    const { findMemories, wordValue } = await import('../src/view/memfind');
+    const r = remixDef(emptyWorkspace(), coreStore(CORE_SAMPLE));
+    if ('error' in r) throw new Error(r.error);
+    const def = new UserLibrary({ ...r.ws, open: [r.id] }).compiled(r.id)!.def;
+    const s = new GateSim(flatten(def));
+    s.reset('zero');
+    const ms = findMemories(s);
+    expect(ms.map((m) => m.src.kind)).toEqual(['cores']);
+    expect(Array.from({ length: 16 }, (_, i) => wordValue(s, ms[0], i))).toEqual([...CORE_SAMPLE]);
+  });
+});

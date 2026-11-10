@@ -3,6 +3,8 @@
 //  - a node with two or more w<i> registers of one width (ram, regfile, the caches' arrays): w<i> is word i;
 //  - a large RAM simulated as a lookup (lib/bigmem.ts: its words in the leaf's state);
 //  - a byte-banked memory (lsu.ts: four byte lanes b0 … b3 joined into words);
+//  - a core memory (lib/coremem.ts): planes p<k> of ferrite cores c<row><column>, bit k of word i in core i of plane k,
+//    read from the cores' leaf state;
 //  - registers of one kind under a node whose pins name a write port (a learner's RAM or register file, rv16_rf): which
 //    register sits at which address is found by writing each address on a private copy of the node's definition
 //    (probeWrites), so a decoder wired to the wrong register shows as such.
@@ -15,6 +17,7 @@ import { GateSim } from '../sim/gatesim';
 import { needsSwitchLevel } from '../sim/harness';
 import type { Sim } from '../sim/sim';
 import { SwitchSim } from '../sim/switchsim';
+import { isCoreState } from '../sim/core';
 import { B0, B1, BX, type Bit, type ComponentDef, type PortDef } from '../sim/types';
 import { pack } from '../sim/values';
 
@@ -34,7 +37,9 @@ export function wordRegs(n: HierNode): Map<number, HierNode> {
 export type MemSource =
   | { kind: 'regs'; regs: Map<number, number[]> }
   | { kind: 'big'; leaf: number }
-  | { kind: 'banked'; lanes: Map<number, number[]>[] };
+  | { kind: 'banked'; lanes: Map<number, number[]>[] }
+  /** planes[k][i]: the leaf of word i's core in plane k (bit k). */
+  | { kind: 'cores'; planes: number[][] };
 
 export interface MemInfo {
   /** Instance path from the root ('' for the root itself, 'dp.rf', 'mem.ram'). */
@@ -239,6 +244,8 @@ function memAt(sim: Sim, n: HierNode, path: string): MemInfo | null {
     // a register file's x0 has no storage but keeps its row; a RAM's words start at w0
     return { path, node: n, words: Math.max(...regs.keys()) + 1, width, prefix: prefixOf(n), src: { kind: 'regs', regs } };
   }
+  const cores = corePlanes(n);
+  if (cores) return { path, node: n, words: cores[0].length, width: cores.length, prefix: '', src: { kind: 'cores', planes: cores } };
   // a byte-banked memory (lsu.ts bankedMemory): four RAMs of bytes, b0 the low byte
   const lanes = [0, 1, 2, 3].map((i) => n.children?.get(`b${i}`));
   if (lanes.every((b) => b?.expanded)) {
@@ -262,6 +269,34 @@ function memAt(sim: Sim, n: HierNode, path: string): MemInfo | null {
   return null;
 }
 
+const CORE = /^c(\d)(\d)$/;
+/** A plane's core leaves in word order (row-major), or null when it is not a full grid of cores. */
+function planeCores(n: HierNode | undefined): number[] | null {
+  if (!n?.expanded || !n.children) return null;
+  const at: [number, number, number][] = [];
+  for (const [name, c] of n.children) {
+    const m = CORE.exec(name);
+    if (m && c.def.prim === 'core' && c.leafIndex !== undefined) at.push([Number(m[1]), Number(m[2]), c.leafIndex]);
+  }
+  if (at.length < 2) return null;
+  const cols = Math.max(...at.map((a) => a[1])) + 1, rows = Math.max(...at.map((a) => a[0])) + 1;
+  if (rows * cols !== at.length) return null;
+  const out: number[] = new Array(at.length);
+  for (const [r, c, li] of at) out[r * cols + c] = li;
+  return out;
+}
+
+/** A core memory's planes p0, p1, … (bit order), each a full grid of the same size; null when this is not one. */
+function corePlanes(n: HierNode): number[][] | null {
+  const planes: number[][] = [];
+  for (let k = 0; ; k++) {
+    const p = planeCores(n.children?.get(`p${k}`));
+    if (!p) break;
+    planes.push(p);
+  }
+  return planes.length >= 2 && planes.every((p) => p.length === planes[0].length) ? planes : null;
+}
+
 /** Every memory in the design, outermost first in instance order; nothing inside a memory is listed again. */
 export function findMemories(sim: Sim, root: HierNode = sim.design.root): MemInfo[] {
   const out: MemInfo[] = [];
@@ -283,6 +318,9 @@ export function wordBits(sim: Sim, m: MemInfo, i: number): Bit[] | null {
   if (s.kind === 'regs') {
     const q = s.regs.get(i);
     return q ? sim.getBits(q) : null;
+  }
+  if (s.kind === 'cores') {
+    return s.planes.map((p) => { const st = sim.leafState(p[i]); return isCoreState(st) ? (st.b === 1 ? B1 : st.b === 0 ? B0 : BX) : BX; });
   }
   if (s.kind === 'banked') {
     const out: Bit[] = [];
@@ -334,6 +372,14 @@ export interface MemMarks {
 export function memMarks(sim: Sim, m: MemInfo): MemMarks {
   const n = m.node;
   const read: number[] = [], write: number[] = [];
+  if (m.src.kind === 'cores') {
+    const q = (name: string) => { const c = n.children?.get(name); return c?.ports.q ? pack(sim.getBits(c.ports.q)) : -1; };
+    let a = 0;
+    for (let i = 0; (1 << i) < m.words; i++) { const b = q(`a${i}`); if (b < 0) return { read, write }; a |= b << i; }
+    if (q('rd') === 1) read.push(a);
+    if (q('wr') === 1) write.push(a);
+    return { read, write };
+  }
   if (m.src.kind === 'big') {
     const st = sim.leafState(m.src.leaf) as RamState;
     const a = portValue(sim, n, 'addr') ?? st.a;
