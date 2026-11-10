@@ -82,18 +82,11 @@ function attrXml(k: string, v: Attr): string {
   return `        <entry>\n          <string>${esc(k)}</string>\n          ${val}\n        </entry>\n`;
 }
 
-/** ROM contents in Digital's data syntax: hex words, a run of three or more as count*word. */
-function runs(words: number[]): string {
-  const out: string[] = [];
-  for (let i = 0; i < words.length;) {
-    let j = i;
-    while (j < words.length && words[j] === words[i]) j++;
-    const h = words[i].toString(16);
-    if (j - i >= 3) out.push(`${j - i}*${h}`); else for (let k = i; k < j; k++) out.push(h);
-    i = j;
-  }
-  return out.join(',');
-}
+/** ROM contents in Digital's data syntax: every word in hex, comma-separated (no run-length shorthand: plain words are what every
+ *  version of Digital reads). */
+const dataOf = (words: number[]) => words.map((x) => x.toString(16)).join(',');
+/** n one-bit fields, written out. */
+const ones = (n: number) => Array(n).fill(1).join(',');
 
 type Dir = 'right' | 'up' | 'left' | 'down';
 const STEP: Record<Dir, [number, number]> = { right: [20, 0], up: [0, -20], left: [-20, 0], down: [0, 20] };
@@ -130,6 +123,9 @@ function writeCirc(c: Circ, subs: (base: string) => { ins: string[]; outs: strin
     x += up20(w);
     rowH = Math.max(rowH, up20(h));
   }
+  // a net with one end joins nothing: no tunnel for it
+  const ends = new Map<string, number>();
+  for (const e of c.elems) for (const n of e.conns.values()) ends.set(n, (ends.get(n) ?? 0) + 1);
   const ve: string[] = [], wires: string[] = [];
   const el = (name: string, attrs: [string, Attr][], pos: [number, number]) => {
     ve.push(`    <visualElement>\n      <elementName>${esc(name)}</elementName>\n      ${attrs.length ? `<elementAttributes>\n${attrs.map(([k, v]) => attrXml(k, v)).join('')}      </elementAttributes>` : '<elementAttributes/>'}\n      <pos x="${pos[0]}" y="${pos[1]}"/>\n    </visualElement>\n`);
@@ -138,7 +134,7 @@ function writeCirc(c: Circ, subs: (base: string) => { ins: string[]; outs: strin
     el(p.e.name, p.e.attrs, p.pos);
     for (const pin of p.pins) {
       const net = p.e.conns.get(pin.name);
-      if (!net) continue;
+      if (!net || (ends.get(net) ?? 0) < 2) continue;
       const s = STEP[pin.dir], t: [number, number] = [pin.at[0] + s[0], pin.at[1] + s[1]];
       wires.push(`    <wire>\n      <p1 x="${pin.at[0]}" y="${pin.at[1]}"/>\n      <p2 x="${t[0]}" y="${t[1]}"/>\n    </wire>\n`);
       el('Tunnel', [['NetName', net], ...(ROT[pin.dir] ? [['rotation', { rot: ROT[pin.dir] }] as [string, Attr]] : [])], t);
@@ -303,14 +299,14 @@ class Exporter {
 
   private part(c: Circ, ref: PartRef | undefined, def: ComponentDef, conn: Conn, where: string, label?: string) {
     if (ref && this.sandboxPart(c, ref, def, conn, where, label)) return;
-    if (this.libPart(c, def, conn, label)) return;
-    if (def.prim === 'alias' && def.alias) return this.alias(c, def, conn);
     const stub = (why: string) => {
       this.problem(`stub:${def.id}`, where, `${def.name}: ${why}; written as an empty circuit with its pins (outputs 0)`);
       this.place(c, this.stubFile(def), def, conn, label);
     };
+    if (isExternal(def)) return stub('a device at the edge of the circuit (a console, screen, keyboard or the like), which Digital has no element for');
+    if (this.libPart(c, def, conn, label)) return;
+    if (def.prim === 'alias' && def.alias) return this.alias(c, def, conn);
     if (ref && 'chip' in ref) return this.place(c, this.chipFile(ref.chip), def, conn, label);
-    if (isExternal(def)) return stub('an input from outside the circuit, which Digital has no element for');
     if (def.prim) return stub(`a ${def.prim} primitive, which Digital has no element for`);
     const nl = def.netlist && !def.preferBehavior ? netlistOf(def) : undefined;
     if (!nl) return stub(def.preferBehavior ? 'a behavioural memory or core, not written as gates' : 'a behaviour with no gates inside');
@@ -354,7 +350,7 @@ class Exporter {
       else if (ref.display === 'hex' && w === 4) c.add('Seven-Seg-Hex', L, { d: a });
       else if (ref.display === 'seg7' && w === 8) {
         const segs = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'dp'], nets = segs.map(() => c.net());
-        c.add('Splitter', [['Input Splitting', '8'], ['Output Splitting', '1*8']], { in0: a, ...Object.fromEntries(nets.map((n, i) => [`out${i}`, n])) });
+        c.add('Splitter', [['Input Splitting', '8'], ['Output Splitting', ones(8)]], { in0: a, ...Object.fromEntries(nets.map((n, i) => [`out${i}`, n])) });
         c.add('Seven-Seg', L, Object.fromEntries(segs.map((s, i) => [s, nets[i]])));
       } else {
         c.add('Probe', [['Label', label ?? ref.display], ['Bits', w]], { in: a });
@@ -367,7 +363,7 @@ class Exporter {
       const n = ref.switches, nets = Array.from({ length: n }, () => c.net());
       nets.forEach((net, i) => c.add('DipSwitch', [['Label', `${label ?? 'sw'}${i}`]], { out: net }));
       if (n === 1) c.add('Splitter', [['Input Splitting', '1'], ['Output Splitting', '1']], { in0: nets[0], out0: conn('q') });
-      else c.add('Splitter', [['Input Splitting', `1*${n}`], ['Output Splitting', String(n)]], { ...Object.fromEntries(nets.map((x, i) => [`in${i}`, x])), out0: conn('q') });
+      else c.add('Splitter', [['Input Splitting', ones(n)], ['Output Splitting', String(n)]], { ...Object.fromEntries(nets.map((x, i) => [`in${i}`, x])), out0: conn('q') });
       return true;
     }
     if ('rom' in ref) {
@@ -390,7 +386,7 @@ class Exporter {
         c.add('Splitter', [['Input Splitting', String(a.width)], ['Output Splitting', parts]], { in0: addr, out0: lo, out1: word, out2: hi });
         addr = word;
       }
-      c.add('ROM', [['AddrBits', r.k], ['Bits', r.w], ['Data', { data: runs(words) }], ...L], { A: addr, sel: one, D: conn(d.name) });
+      c.add('ROM', [['AddrBits', r.k], ['Bits', r.w], ['Data', { data: dataOf(words) }], ...L], { A: addr, sel: one, D: conn(d.name) });
       return true;
     }
     if ('ram' in ref) {
@@ -480,7 +476,7 @@ class Exporter {
     };
     for (const p of def.ports) {
       const bits = Array.from({ length: p.width }, (_, b) => net(p.name, b));
-      const many = p.width === 1 ? '1' : `1*${p.width}`;
+      const many = ones(p.width);
       if (p.dir === 'in') c.add('Splitter', [['Input Splitting', String(p.width)], ['Output Splitting', many]], { in0: conn(p.name), ...Object.fromEntries(bits.map((n, i) => [`out${i}`, n])) });
       else if (p.dir === 'out') c.add('Splitter', [['Input Splitting', many], ['Output Splitting', String(p.width)]], { ...Object.fromEntries(bits.map((n, i) => [`in${i}`, n])), out0: conn(p.name) });
     }

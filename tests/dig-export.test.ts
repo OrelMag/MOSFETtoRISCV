@@ -10,6 +10,7 @@ import { EXAMPLES, addExample } from '../src/editor/examples';
 import { UserLibrary } from '../src/editor/library';
 import { emptyWorkspace, SCHEMA, type ChipDoc, type Workspace } from '../src/editor/model';
 import { importDigital } from '../src/import/digital';
+import { parseXml } from '../src/import/xml';
 import { estimateInstances } from '../src/sim/flatten';
 import { simulate } from '../src/sim/harness';
 import type { ComponentDef } from '../src/sim/types';
@@ -91,6 +92,13 @@ describe('.dig export', () => {
         chips++;
         const out = digExport(ws, id);
         expect(out.files.length, `${ex.id} ${id}`).toBeLessThanOrEqual(MAX_FILES + 1);
+        // every file is XML, and every circuit a file places is one of the files (Digital finds them by name)
+        const names = new Set(out.files.map((f) => f.name));
+        for (const f of out.files) {
+          expect(() => parseXml(f.text), `${ex.id} ${id} ${f.name}`).not.toThrow();
+          for (const m of f.text.matchAll(/<elementName>([^<]+\.dig)<\/elementName>/g)) expect(names.has(m[1]), `${f.name} places ${m[1]}`).toBe(true);
+          expect(f.text, f.name).not.toMatch(/<data>[^<]*\*|Splitting<\/string>\s*<string>[^<]*\*/);
+        }
         if (!out.exact) { expect(out.problems.length, `${ex.id} ${id}: inexact with no problem line`).toBeGreaterThan(0); continue; }
         exact++;
         const a = new UserLibrary(ws).defOf(id)!;
