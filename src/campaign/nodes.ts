@@ -18,6 +18,7 @@ import { BUILDM } from './buildm';
 import { BUILDPOW } from './buildpow';
 import { BUILDVM } from './buildvm';
 import { BUILDR } from './buildr';
+import { BUILDT } from './buildt';
 import { lzc, ROUND_DECIDE } from '../lib/fpu';
 import { arrayMul, seqDivider } from '../lib/muldiv';
 import { seqMul } from '../lib/multiply';
@@ -273,6 +274,13 @@ export const NODES: CampaignNode[] = withBugHunts([
     chapters: [{ chapter: 'adders', step: 3, label: 'Chaining: the ripple-carry adder' }],
   },
   {
+    id: 't_tests', act: 2, title: 'Catch every fault', kind: 'drill', optional: true, requires: ['a_add4'], drill: 'testset', par: { mistakes: 2 },
+    why: 'A die can come back from the fab with a net shorted to ground or to the supply. The tester only sees the pins, and every vector it applies costs tester time on every die. Your 4-bit adder has 90 such faults, and 3 of its 512 input vectors catch them all. Find the smallest sets for small blocks.',
+    tips: ['To catch a net stuck at 0, a vector must drive it to 1 (and the reverse), and every gate between it and an output must let the change through: a NAND passes a change only when its other inputs are 1.', 'Start from the vector that catches the most faults, then ask which faults are left and what each needs. Greedy is not always smallest: the full adder needs 3, greedy takes 4.', 'A fault no vector catches sits on logic the circuit did not need (the consensus circuit\'s b·c term): leave it.'],
+    codex: ['stuckat', 'faultcov', 'atpg'],
+    chapters: [{ chapter: 'verify', step: 7, label: 'A chip comes back from the fab' }, { chapter: 'verify', step: 8, label: 'Fault coverage' }],
+  },
+  {
     id: 'a_add16', act: 2, title: '16-bit adder', kind: 'build', requires: ['a_add4'],
     why: 'RV16 adds 16-bit words in four places: the ALU, the branch comparator and the next-PC logic\'s pc + imm and rs1 + imm. Each is this chain: 144 NANDs, depth 36. The ALU is 50 of the single-cycle core\'s 98-delay period: Core IV, at the end of Act 5, shortens it with Fast adders.',
     tips: ['Hierarchy: four 4-bit adders, not sixteen full adders.', 'Each adder\'s cout is the next one\'s cin; the last cout is the word\'s.', 'The low nibble\'s adder takes cin: check the splitter\'s order before blaming the adders.'],
@@ -337,6 +345,13 @@ export const NODES: CampaignNode[] = withBugHunts([
     why: 'A flip-flop takes d at every edge, but most state must hold until written: x[rd] only when an instruction names it. A mux in front of each flip-flop feeds q back while en = 0: 13 NANDs a bit, 52 for four at par. Do not gate the clock with a plain AND instead; the 16-bit register next is four of these.',
     tips: ['Build a 1-bit flip-flop with enable first, then use it four times.', 'The mux: en = 1 selects d, en = 0 selects the flip-flop\'s own q: 9 + 4 = 13 NANDs a bit.', 'Do not AND en into clk: a change of en while clk is high makes an edge of its own, and the AND delays this clock against every other.'],
     chapters: [{ chapter: 'latches', step: 7, label: 'Load enable' }], codex: ['register', 'clockgating'], unlocks: ['rv16_dffe', 'rv16_reg4'], par: { nand: 52 },
+  },
+  {
+    id: 't_scan', act: 3, title: '4-bit scan register', kind: 'build', optional: true, requires: ['s_reg4'], base: BUILDT.t_scan,
+    why: 'A tester can reach a counter\'s inner states only by counting to them. A scan register gives every flip-flop a second input: with se = 1 the flip-flops form a shift register from a scan-in pin to a scan-out pin, so a tester shifts any state in, clocks once, and shifts the answer out. 13 NANDs a bit, the price of your enable register; a CPU pays it on every flip-flop.',
+    tips: ['Like the enable register: a mux in front of each flip-flop. The mux chooses between d and the bit below instead of d and q.', 'Bit 0\'s mux takes si; bit k\'s takes q[k − 1]; so is q[3]. se drives every mux\'s select.', 'Shift the other way (q[k + 1] into bit k) and the first bit in lands in bit 0, not bit 3: the test shifts 0, 0, 1, 1 in and expects 0011 (3), not 1100.'],
+    codex: ['scan'], par: { nand: 52 },
+    chapters: [{ chapter: 'verify', step: 10, label: 'Scan chains' }],
   },
   {
     id: 's_reg16', act: 3, title: '16-bit register', kind: 'build', requires: ['s_reg4'],

@@ -5,6 +5,7 @@
 // chart, Show answer and Do it for me. The puzzle chip's PUZZLE IN holds the selected test's words whenever
 // the circuit powers on, so Run and the CPU drawer show it too.
 
+import { lookOf } from './chipfaults';
 import { groupDigits } from '../sim/numfmt';
 import '../styles/sbchallenges.css';
 import '../styles/sbpuzzles.css';
@@ -245,7 +246,7 @@ class PuzzleUi {
     setTimeout(() => {
       try {
         const c = ed.compiled;
-        const r = runPuzzle(p, c, ed.doc.pins);
+        const r = runPuzzle(p, c, ed.doc.pins, { doc: ed.doc, look: lookOf(ed.ws, ed.lib), deps: ed.lib.deps(ed.chipId) });
         const score: PuzzleScore | null = r.ok ? { cycles: r.cycles, nands: hardwareNands(c.def), words: programWords(ed.doc, ed.ws.chips) } : null;
         // the reference program as loaded earns nothing: it matches itself
         const roms = programRoms(ed.doc, ed.ws.chips);

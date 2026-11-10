@@ -15,6 +15,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadElf as loadElfAt, pool } from './elf.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../..');
@@ -33,6 +34,7 @@ const ENVS = {
 const ARCH = { 32: ['-march=rv32g_zicsr_zifencei', '-mabi=ilp32'], 64: ['-march=rv64g_zicsr_zifencei', '-mabi=lp64'] };
 // The data section starts here (link.ld): word 0 of the data memory is tohost.
 const DATA_BASE = 0x10000;
+const loadElf = (buf) => loadElfAt(buf, DATA_BASE);
 
 const git = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' }).trim();
 const revision = { 'riscv-tests': git(src, 'rev-parse', 'HEAD'), env: git(join(src, 'env'), 'rev-parse', 'HEAD') };
@@ -44,60 +46,6 @@ function compile(env, file, out) {
   const a = [...ARCH[e.xlen ?? 32], '-mcmodel=medany', '-fvisibility=hidden', '-nostartfiles', '-mno-relax', '-nostdlib', '-static', ...e.defs, '-I', e.inc, '-I', join(src, 'env'), '-I', join(src, 'isa/macros/scalar'),
     '-T', join(here, 'link.ld'), file, '-o', out];
   return new Promise((ok, fail) => execFile(cc, a, (err, _o, se) => (err ? fail(new Error(`${basename(file)} (${env}): ${se || err.message}`)) : ok())));
-}
-
-/** The loadable bytes of an ELF32 or ELF64 little-endian file: code from address 0, data from DATA_BASE. */
-function loadElf(buf) {
-  if (buf.readUInt32BE(0) !== 0x7f454c46 || (buf[4] !== 1 && buf[4] !== 2) || buf[5] !== 1) throw new Error('not a little-endian ELF');
-  const is64 = buf[4] === 2;
-  // the fields that differ between the classes: an address or offset is 4 or 8 bytes, and moves the rest
-  const addr = (o) => (is64 ? Number(buf.readBigUInt64LE(o)) : buf.readUInt32LE(o));
-  const E = is64 ? { phoff: 32, shoff: 40, phentsize: 54, phnum: 56, shentsize: 58, shnum: 60 } : { phoff: 28, shoff: 32, phentsize: 42, phnum: 44, shentsize: 46, shnum: 48 };
-  const P = is64 ? { off: 8, vaddr: 16, filesz: 32, memsz: 40 } : { off: 4, vaddr: 8, filesz: 16, memsz: 20 };
-  const S = is64 ? { off: 24, size: 32, link: 40 } : { off: 16, size: 20, link: 24 };
-  const SYM = is64 ? { size: 24, value: 8 } : { size: 16, value: 4 };
-  const phoff = addr(E.phoff), phentsize = buf.readUInt16LE(E.phentsize), phnum = buf.readUInt16LE(E.phnum);
-  const shoff = addr(E.shoff), shentsize = buf.readUInt16LE(E.shentsize), shnum = buf.readUInt16LE(E.shnum);
-  const text = [], data = [];
-  for (let i = 0; i < phnum; i++) {
-    const o = phoff + i * phentsize;
-    if (buf.readUInt32LE(o) !== 1) continue; // PT_LOAD
-    const off = addr(o + P.off), vaddr = addr(o + P.vaddr), filesz = addr(o + P.filesz), memsz = addr(o + P.memsz);
-    const bytes = Buffer.alloc(memsz);
-    buf.copy(bytes, 0, off, off + filesz);
-    (vaddr >= DATA_BASE ? data : text).push({ vaddr, bytes });
-  }
-  const flat = (segs, base) => {
-    const end = Math.max(base, ...segs.map((s) => s.vaddr + s.bytes.length));
-    const out = Buffer.alloc((end - base + 3) & ~3);
-    for (const s of segs) s.bytes.copy(out, s.vaddr - base);
-    return out;
-  };
-  // symbols, for the failure messages: test_<n> labels and tohost
-  const syms = {};
-  for (let i = 0; i < shnum; i++) {
-    const o = shoff + i * shentsize;
-    if (buf.readUInt32LE(o + 4) !== 2) continue; // SHT_SYMTAB
-    const so = addr(o + S.off), size = addr(o + S.size), link = buf.readUInt32LE(o + S.link);
-    const stro = addr(shoff + link * shentsize + S.off);
-    for (let s = so; s < so + size; s += SYM.size) {
-      const n = buf.readUInt32LE(s);
-      let e = stro + n;
-      while (buf[e]) e++;
-      const name = buf.toString('latin1', stro + n, e);
-      if (name === 'tohost' || name === 'fail' || name === 'pass') syms[name] = addr(s + SYM.value);
-    }
-  }
-  if (text.length === 0 || text[0].vaddr !== 0) throw new Error('code must start at address 0');
-  if (syms.tohost !== DATA_BASE) throw new Error(`tohost at 0x${(syms.tohost ?? 0).toString(16)}, expected 0x${DATA_BASE.toString(16)}`);
-  return { text: flat(text, 0), data: flat(data, DATA_BASE), syms };
-}
-
-async function pool(jobs, n) {
-  const out = [];
-  let next = 0;
-  await Promise.all(Array.from({ length: n }, async () => { while (next < jobs.length) { const j = next++; out[j] = await jobs[j](); } }));
-  return out;
 }
 
 const tmp = mkdtempSync(join(tmpdir(), 'rvtests-'));

@@ -10,6 +10,7 @@ import { evalBool, parseBool } from '../lib/boolexpr';
 import { literals as lits, minimumCover, primes, type Term } from '../lib/sop';
 import { assemble16 } from '../riscv/rv16/asm16';
 import { decode16, disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
+import { testset } from './drilltest';
 
 /** A seeded generator (mulberry32): the same seed gives the same questions. */
 export function rng(seed: number): () => number {
@@ -982,4 +983,4 @@ const lut: Drill = {
   },
 };
 
-export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16, float, relay, hollerith, lut };
+export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16, float, relay, hollerith, lut, testset };
