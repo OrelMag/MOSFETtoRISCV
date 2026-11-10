@@ -1410,8 +1410,9 @@ src/campaign/  the campaign (#/campaign, its own chunk; plan and status in docs/
                  their own); a side quest gives its reference's parts (givesOf); buildfp: the FP ladder (unpack, rounding
                  decision, sticky shifter, leading-zero counter, normalize & round, compare, int → float), whose blocks
                  (FP_BLOCK) are never given, only unlocked by the rung that built them (fpGives)
-  bench.ts       addBench: a failing core test as a computer chip around the learner's core (RV16 ROM, 64-word
-                 RAM, LEDs, IRQ line, a power-on reset for the first cycle), opened with the CPU drawer; failingTest names
+  bench.ts       addBench: a failing core test as a computer chip around the learner's core (RV16 ROM, 512-word
+                 RAM never written at the I/O words, LEDs, IRQ line, a power-on reset for the first cycle; a test reading IN: a hex ROM
+                 of its words addressed by a switch bank inidx that editor/cpu16.ts Rv16Monitor sets after every edge, as corecheck serves IN), opened with the CPU drawer; failingTest names
                  it from a failure line; benchChip(…, { io }): plus a 32 × 32 RGB565 screen at 0xF000 (daddr[15:10] =
                  111100, write-only) and eight switches at SWITCHES (0xFFFA); addPongBench (Pong around a
                  learner's core: the challenge strip's "Play Pong on your core" on a passing CoreSpec.rv16i level),

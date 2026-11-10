@@ -533,8 +533,9 @@ Each phase lands as commits on the campaign branch, with tests, and updates this
     pipelined cores all work. It shows the listing, the registers as the core wrote them, the next expected
     write and the first mismatch. (The RV32 drawer keeps its own monitor: it reads register files by name.)
   - ✅ **Debug this test in the sandbox** (`src/campaign/bench.ts`): a failing core level offers a button that
-    builds the failing program into a computer around the learner's core (ROM, a 64-word RAM decoded on its
-    low bits with the golden model wrapping the same way, LEDs, the IRQ line, the core held in reset for its first
+    builds the failing program into a computer around the learner's core (ROM, a 512-word RAM decoded on its
+    low bits with the golden model wrapping the same way and never written at the I/O words, LEDs, IN from a ROM of the
+    test's words at the word number the drawer's golden model sets (a core has no read strobe), the IRQ line, the core held in reset for its first
     cycle as on the level's bench, so the multicycle core starts) and opens it with the drawer.
   - ✅ **Play Pong on your core**: a passing core level that runs all of RV16I (CoreSpec.rv16i: Core III, the fast
     core, Pipeline IV, branch prediction, the trap / interrupt / finale cores, multiply, divide, multicycle) offers Pong

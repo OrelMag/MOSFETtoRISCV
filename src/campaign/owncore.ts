@@ -11,9 +11,9 @@ import type { Workspace } from '../editor/model';
 import { UserLibrary } from '../editor/library';
 import { assemble16 } from '../riscv/rv16/asm16';
 import { Iss16 } from '../riscv/rv16/iss16';
-import { disasm16 } from '../riscv/rv16/isa16';
+import { disasm16, MMIO_BASE } from '../riscv/rv16/isa16';
 import type { ComponentDef } from '../sim/types';
-import { addBench, type Bench } from './bench';
+import { addBench, type Bench, BENCH_RAM_K } from './bench';
 import { type CoreDisagree, corePeriod, type CoreTest, drained, runCoreSteps, type RunOptions } from './corecheck';
 import { modelOnly, specOf, unfit } from './owncorefit';
 import { stats } from '../sim/stats';
@@ -148,14 +148,14 @@ export function registersAt(p: ProgramPuzzle, src: string, testIndex: number, t:
   return { model: [...mc.x], core, pc, text, after: true };
 }
 
-/** A test's program on the core's debug bench, in the sandbox (scalar tests that read no IN, with data in the bench's 64 words). */
-/** Why a test cannot go on the core's debug bench (no IN device, 64 words of RAM), or null. */
+/** Why a test cannot go on the core's debug bench (its data beyond the bench's RAM), or null. IN has a device there. */
 export function benchRefusal(t: CoreTest): string | null {
-  if (t.input?.length) return 'this test reads IN, which the bench has no device for';
-  if ([...(t.data?.keys() ?? [])].some((k) => k >= 64)) return 'this test’s data lies beyond the bench’s 64 words of RAM';
+  const words = 2 ** BENCH_RAM_K;
+  if ([...(t.data?.keys() ?? [])].some((k) => k >= words && k < MMIO_BASE)) return `this test’s data lies beyond the bench’s ${words} words of RAM`;
   return null;
 }
 
+/** A test's program on the core's debug bench, in the sandbox (scalar tests). */
 export function ownBench(ws: Workspace, core: string, t: CoreTest): Bench | { error: string } {
   const no = benchRefusal(t);
   if (no) return { error: no };

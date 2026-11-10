@@ -1,13 +1,16 @@
-// "Debug this test in the sandbox": a failing core-level program as a computer chip around the
-// learner's own core: an RV16 ROM holding the program, a 64-word RAM holding its data (decoded on
-// the low address bits, as the sandbox's RAM is the size it is), an LED register at LEDS and the
-// interrupt line set by stores to IRQ, as the core bench does. The sandbox's CPU drawer then runs it
-// against the golden model (editor/cpu16.ts, wrapping its memory the same way) and stops at the
+// "Debug this test in the sandbox": a core-level or program-level test as a computer chip around the
+// learner's own core: an RV16 ROM holding the program, a 512-word RAM holding its data (decoded on
+// the low address bits, as the golden model's memory wraps), an LED register at LEDS and the
+// interrupt line set by stores to IRQ, as the core bench does; stores to the I/O words (0xFFF7 up)
+// never reach the RAM. A test that reads IN gets a ROM of its words and a switch bank holding the
+// number of the next one, which the CPU drawer's golden model sets (a core has no read strobe). The
+// sandbox's CPU drawer runs the program against the golden model (editor/cpu16.ts) and stops at the
 // first wrong register write or store, with probes and the timing panel at hand. The core is held in
 // reset for its first cycle, as on the level's bench. The io bench adds a 32 × 32 RGB565 screen at
-// SCREEN16_IO (0xF000 + 32·y + x, write-only) and eight switches at SWITCHES: Pong (riscv/rv16/pong16.ts) on a passing core, or on the reference core from
-// Examples ▸. No DOM.
+// SCREEN16_IO (0xF000 + 32·y + x, write-only) and eight switches at SWITCHES: Pong (riscv/rv16/pong16.ts)
+// on a passing core, or on the reference core from Examples ▸. No DOM.
 
+import { RV16_IN_PARTS as BENCH_IN } from '../editor/cpu16';
 import { docFromDef } from '../editor/fromdef';
 import type { ChipDoc, PartRef, Workspace } from '../editor/model';
 import { uniqueName } from '../editor/model';
@@ -15,15 +18,16 @@ import { isError, MAX_ROM_K, partDef } from '../editor/parts';
 import { openChip } from '../editor/session';
 import { constWord, isZero } from '../lib/alu';
 import { Builder } from '../lib/builder';
+import { magComparator } from '../lib/coding';
 import { andN, busMux2 } from '../lib/combinational';
 import { merger, ones, splitter } from '../lib/define';
-import { AND, NOT, OR } from '../lib/gates';
+import { AND, NOR, NOT, OR } from '../lib/gates';
 import { RV16_CORE } from '../lib/rv16/cpu';
 import { EQ16, RV16_DREG16 } from '../lib/rv16/logic';
 import { DFF, register } from '../lib/sequential';
 import { TIE1 } from '../lib/transistors';
 import { assemble16 } from '../riscv/rv16/asm16';
-import { MMIO16, SCREEN16_IO } from '../riscv/rv16/isa16';
+import { MMIO16, MMIO_BASE, SCREEN16_IO } from '../riscv/rv16/isa16';
 import { PONG16 } from '../riscv/rv16/pong16';
 import type { ComponentDef } from '../sim/types';
 import type { CoreSpec, CoreTest } from './corecheck';
@@ -47,8 +51,12 @@ function sourceOf(t: CoreTest): { src: string; words: number[]; data: Map<number
 
 export interface Bench { ws: Workspace; id: string }
 
-/** The bench's RAM: 64 words at gate level (the address decoding around it takes daddr[5:0]). */
-const BENCH_RAM_K = 6;
+/**
+ * The bench's RAM: 512 words, decoded on daddr[8:0] (a stack anywhere wraps into it, as the golden model's memory
+ * does); every program level's data fits (they use words 0–281). Written by any store below the I/O words (0xFFF7 up)
+ * and, on the io bench, outside the screen: where the golden model's wrapped memory is written too.
+ */
+export const BENCH_RAM_K = 9;
 
 /**
  * Where the bench's parts sit (grid units, top-left corners), every variant's: the top row is reset → core → address
@@ -60,12 +68,16 @@ export const BENCH_AT: Record<string, [number, number]> = {
   tie: [4, 3], por: [8, 2], porn: [19, 4], rsto: [25, 6],
   core: [34, 2],
   ds: [62, 2], dw: [94, 26], kleds: [60, 14], isleds: [70, 12], kirq: [60, 24], isirq: [70, 22],
-  nhi: [82, 2], ramwe: [88, 2], ledwe: [88, 12], irqwe: [88, 22],
+  kmmio: [44, 28], cmmio: [52, 24], nmm: [79, 29], ramwe: [88, 2], ledwe: [88, 12], irqwe: [88, 22],
   mem: [98, 2], ledr: [98, 14], irqr: [98, 24],
   pcs: [12, 16], rom: [16, 16],
   ksw: [4, 38], issw: [12, 36], sw: [4, 48], kz: [8, 54], swz: [24, 48], rdmux: [30, 38],
   xy: [44, 36], top: [48, 44], n10: [54, 44], n11: [54, 50], isscr: [60, 44], scrwe: [68, 44], scr: [78, 34],
+  // IN (a test that reads it): below the program ROM; on the io bench (never with IN in the campaign) under the screen
+  inidx: [4, 40], inrom: [12, 40], kin: [24, 50], isin: [34, 46], inmux: [50, 38],
 };
+/** How far the IN parts move down on the io bench. */
+const IN_IO_DY = 38;
 /** The leds pin's x: right of the RAM and the screen. */
 const BENCH_RIGHT = 124;
 
@@ -111,6 +123,16 @@ export function benchChip(core: ComponentDef, coreId: string, coreName: string, 
   if (isError(ramDef)) return ramDef;
   if (isError(swDef)) return swDef;
   if (isError(scrDef)) return scrDef;
+  // IN (a test that reads it): a ROM of the test's words, addressed by a switch bank holding the number of the word a
+  // load from 0xFFFC reads now. A core has no read strobe, so nothing in it says when a word is taken: the CPU panel's
+  // golden model sets the bank, the way the level's bench serves IN (editor/cpu16.ts). One more ROM word, 0: past the end.
+  const input = (t.input ?? []).map((v) => v & 0xffff);
+  const inK = input.length ? Math.max(2, Math.ceil(Math.log2(input.length + 1))) : 0;
+  const inRef: PartRef | null = inK ? { rom: { k: inK, w: 16, addr: 'word', lang: 'hex', src: `# IN (0xFFFC): the test's words, read in order\n${input.map((v) => v.toString(16).padStart(4, '0')).join('\n')}\n` } } : null;
+  const idxRef: PartRef | null = inK ? { switches: inK } : null;
+  const inDef = inRef && partDef(inRef, () => undefined), idxDef = idxRef && partDef(idxRef, () => undefined);
+  if (inDef && isError(inDef)) return inDef;
+  if (idxDef && isError(idxDef)) return idxDef;
   const irq = core.ports.some((p) => p.name === 'irq' && p.dir === 'in');
   const io = !!opts.io;
 
@@ -123,48 +145,62 @@ export function benchChip(core: ComponentDef, coreId: string, coreName: string, 
   const rst = b.op1(OR, ['rst', b.op1(NOT, [b.op1(DFF, [b.op1(TIE1, [], undefined, 'tie'), 'clk'], 'powered on', 'por')], undefined, 'porn')], 'reset, first cycle', 'rsto');
   const c = b.op(core, ['clk', rst, '', '', ...(irq ? [''] : [])], 'your core', 'core');
   const pcs = b.op(splitter([k, 16 - k], 4), [`${c}.pc`], undefined, 'pcs');
-  const ds = b.op(splitter([ramK, 15 - ramK, 1], 4), [`${c}.daddr`], 'address', 'ds');
+  const ds = b.op(splitter([ramK, 16 - ramK], 4), [`${c}.daddr`], 'address', 'ds');
   const dw = irq ? b.op(splitter([1, 15], 4), [`${c}.dwdata`], undefined, 'dw') : '';
   const rom = b.op(romDef, [`${pcs}.o0`], 'program', 'rom');
-  const hi = b.name(`${ds}.o2`, 'io', true);
+  // the I/O words, 0xFFF7 up (MMIO_BASE): the golden model's memory is not written there, so the RAM is not either
+  const mmio = b.op(magComparator(16), [`${c}.daddr`, b.op1(constWord(16, MMIO_BASE - 1), [], undefined, 'kmmio')], '≥ 0xFFF7: I/O', 'cmmio');
   const isLeds = b.op(EQ16, [`${c}.daddr`, b.op1(constWord(16, MMIO16.LEDS), [], undefined, 'kleds')], '= LEDS', 'isleds');
   const isIrq = irq ? b.op(EQ16, [`${c}.daddr`, b.op1(constWord(16, MMIO16.IRQ), [], undefined, 'kirq')], '= IRQ', 'isirq') : '';
-  const ramWe = b.op1(AND, [`${c}.dwe`, b.op1(NOT, [hi], undefined, 'nhi')], 'RAM write', 'ramwe');
+  // the screen: daddr[15:10] = 111100 (0xF000 … 0xF3FF), x = daddr[4:0], y = daddr[9:5]
+  const xy = io ? b.op(splitter([5, 5, 6], 4), [`${c}.daddr`], 'screen address', 'xy') : '';
+  const top = io ? b.op(splitter(ones(6), 2), [`${xy}.o2`], undefined, 'top') : '';
+  const isScr = io ? b.op1(andN(6), [b.op1(NOT, [`${top}.o0`], undefined, 'n10'), b.op1(NOT, [`${top}.o1`], undefined, 'n11'), `${top}.o2`, `${top}.o3`, `${top}.o4`, `${top}.o5`], 'screen words', 'isscr') : '';
+  // a RAM word: below the I/O words and (io) outside the screen
+  const ramWord = io ? b.op1(NOR, [`${mmio}.gt`, isScr], 'RAM word', 'nmm') : b.op1(NOT, [`${mmio}.gt`], 'RAM word', 'nmm');
+  const ramWe = b.op1(AND, [`${c}.dwe`, ramWord], 'RAM write', 'ramwe');
   const ledWe = b.op1(AND, [`${c}.dwe`, `${isLeds}.eq`], 'LED write', 'ledwe');
   const irqWe = irq ? b.op1(AND, [`${c}.dwe`, `${isIrq}.eq`], 'IRQ write', 'irqwe') : '';
-  const mem = b.op(ramDef, [`${ds}.o0`, `${c}.dwdata`, ramWe, 'clk'], 'data (64 words)', 'mem');
+  const mem = b.op(ramDef, [`${ds}.o0`, `${c}.dwdata`, ramWe, 'clk'], `data (${2 ** ramK} words)`, 'mem');
   const leds = b.op(register(16), [`${c}.dwdata`, ledWe, 'clk'], 'LEDs', 'ledr');
   if (irq) b.wire(`${b.op(register(1), [`${dw}.o0`, irqWe, 'clk'], 'IRQ line', 'irqr')}.q`, `${c}.irq`);
   b.wire(`${rom}.data`, `${c}.instr`);
+  let rd = `${mem}.dout`;
   if (io) {
-    // the screen: daddr[15:10] = 111100 (0xF000 … 0xF3FF), x = daddr[4:0], y = daddr[9:5]
-    const xy = b.op(splitter([5, 5, 6], 4), [`${c}.daddr`], 'screen address', 'xy');
-    const top = b.op(splitter(ones(6), 2), [`${xy}.o2`], undefined, 'top');
     const isSw = b.op(EQ16, [`${c}.daddr`, b.op1(constWord(16, MMIO16.SWITCHES), [], undefined, 'ksw')], '= SWITCHES', 'issw');
     const sw = b.op1(swDef, [], 'switches', 'sw');
-    const isScr = b.op1(andN(6), [b.op1(NOT, [`${top}.o0`], undefined, 'n10'), b.op1(NOT, [`${top}.o1`], undefined, 'n11'), `${top}.o2`, `${top}.o3`, `${top}.o4`, `${top}.o5`], 'screen words', 'isscr');
     const swz = b.op1(merger([BENCH_SWITCHES, 16 - BENCH_SWITCHES], 4), [sw, b.op1(constWord(16 - BENCH_SWITCHES, 0), [], undefined, 'kz')], 'switches, 16 bits', 'swz');
     const scrWe = b.op1(AND, [`${c}.dwe`, isScr], 'screen write', 'scrwe');
-    b.wire(b.op1(busMux2(16), [`${mem}.dout`, swz, `${isSw}.eq`], 'RAM or switches', 'rdmux'), `${c}.drdata`);
+    rd = b.op1(busMux2(16), [rd, swz, `${isSw}.eq`], 'RAM or switches', 'rdmux');
     b.op(scrDef, [`${xy}.o0`, `${xy}.o1`, `${c}.dwdata`, scrWe, 'clk'], 'screen (0xF000)', 'scr');
-  } else b.wire(`${mem}.dout`, `${c}.drdata`);
+  }
+  if (inDef && idxDef) {
+    const isIn = b.op(EQ16, [`${c}.daddr`, b.op1(constWord(16, MMIO16.IN), [], undefined, 'kin')], '= IN', 'isin');
+    const idx = b.op1(idxDef, [], 'IN word number (set by the CPU panel)', BENCH_IN.idx);
+    const word = b.op(inDef, [idx], 'IN words', BENCH_IN.rom);
+    rd = b.op1(busMux2(16), [rd, `${word}.data`, `${isIn}.eq`], io ? 'RAM, switches or IN' : 'RAM or IN', 'inmux');
+  }
+  b.wire(rd, `${c}.drdata`);
   b.wire(`${leds}.q`, 'leds');
-  for (const i of b.instances) i.at = BENCH_AT[i.name] ?? i.at;
+  for (const i of b.instances) {
+    const at = BENCH_AT[i.name];
+    if (at) i.at = io && ['inidx', 'inrom', 'kin', 'isin', 'inmux'].includes(i.name) ? [at[0], at[1] + IN_IO_DY] : at;
+  }
   const def: ComponentDef = {
-    id: io ? 'rv16_io_bench' : 'rv16_bench', name: 'bench', category: 'cpu', symbol: { kind: 'box', label: 'BENCH' },
+    id: `rv16${io ? '_io' : ''}${inDef ? '_in' : ''}_bench`, name: 'bench', category: 'cpu', symbol: { kind: 'box', label: 'BENCH' },
     ports: [{ name: 'clk', width: 1, dir: 'in', clock: true }, { name: 'rst', width: 1, dir: 'in' }, { name: 'leds', width: 16, dir: 'out' }],
     netlist: () => ({ pins: { clk: [0, 4], rst: [0, 8], leds: [BENCH_RIGHT, 17] }, instances: b.instances, nets: b.nets() }),
   };
   const id = opts.id ?? uniqueName(`u_bench_${coreId.replace(/^u_/, '')}`, taken.ids);
   const name = opts.name ?? uniqueName(`Debug: ${t.name}`, taken.names);
   const coreRef = opts.coreRef ?? { chip: coreId };
-  const refs = new Map<ComponentDef, PartRef>([[core, coreRef], [romDef, romRef], [ramDef, ramRef], [swDef, swRef], [scrDef, scrRef]]);
+  const refs = new Map<ComponentDef, PartRef>([[core, coreRef], [romDef, romRef], [ramDef, ramRef], [swDef, swRef], [scrDef, scrRef], ...(inDef && inRef && idxDef && idxRef ? [[inDef, inRef], [idxDef, idxRef]] as [ComponentDef, PartRef][] : [])]);
   const doc = docFromDef(def, { id, name, refOf: (d) => refs.get(d) });
   if ('error' in doc) return doc;
   return {
     ...doc,
     ...(opts.hz ? { hz: opts.hz } : {}),
-    notes: opts.notes ?? `The test “${t.name}” around your core “${coreName}”. The CPU panel runs it against the golden model and stops at the first wrong register write or store; probe the wires that lead to it (P), step a cycle at a time. The data memory is 64 words decoded on daddr[5:0] (the golden model wraps the same way); the LEDs are at 0xFFFB${irq ? ', the interrupt line is set by stores to 0xFFF9' : ''}${io ? '; the screen (32 × 32, RGB565) at 0xF000 + 32·y + x, the switches at 0xFFFA' : ''}. Edit your core in its own tab: this bench follows.`,
+    notes: opts.notes ?? `The test “${t.name}” around your core “${coreName}”. The CPU panel runs it against the golden model and stops at the first wrong register write or store; probe the wires that lead to it (P), step a cycle at a time. The data memory is ${2 ** ramK} words decoded on daddr[${ramK - 1}:0] (the golden model wraps the same way)${inDef ? '; IN (0xFFFC) reads the test’s words in order: the switch bank under them holds the number of the next one, set by the CPU panel as the golden model reads them (a core has no read strobe), so keep the panel’s golden model running' : ''}; the LEDs are at 0xFFFB${irq ? ', the interrupt line is set by stores to 0xFFF9' : ''}${io ? '; the screen (32 × 32, RGB565) at 0xF000 + 32·y + x, the switches at 0xFFFA' : ''}. Edit your core in its own tab: this bench follows.`,
   };
 }
 
@@ -178,7 +214,7 @@ export function addBench(ws: Workspace, core: ComponentDef, coreId: string, t: C
 /** The Pong program as a core test (the bench's ROM). */
 export const PONG16_TEST: CoreTest = { name: 'Pong', src: PONG16 };
 
-const PONG_NOTES = (core: string) => `Pong (RV16 assembly in the ROM: Edit program…) on ${core}, with the golden model in lock step in the CPU panel. Run (or set the clock rate high): your paddle is the left one, switch 7 up and switch 6 down; the computer plays the right one, or a second player with switch 4 on (switch 1 up, switch 0 down). The LEDs keep the score, yours in bits 7–4; five points win a game. The screen is 32 × 32 RGB565 at 0xF000 + 32·y + x (a store paints a pixel), the switches are read at 0xFFFA, the data memory is 64 words.`;
+const PONG_NOTES = (core: string) => `Pong (RV16 assembly in the ROM: Edit program…) on ${core}, with the golden model in lock step in the CPU panel. Run (or set the clock rate high): your paddle is the left one, switch 7 up and switch 6 down; the computer plays the right one, or a second player with switch 4 on (switch 1 up, switch 0 down). The LEDs keep the score, yours in bits 7–4; five points win a game. The screen is 32 × 32 RGB565 at 0xF000 + 32·y + x (a store paints a pixel), the switches are read at 0xFFFA, the data memory is ${2 ** BENCH_RAM_K} words.`;
 
 /** The Pong bench's clock: a frame is about 240 cycles. */
 export const PONG_HZ = 5000;
