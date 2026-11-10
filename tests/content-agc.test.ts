@@ -35,11 +35,11 @@ describe('Appendix F: the Apollo Guidance Computer', () => {
     const t = text('agc');
     for (const s of ['23.4 µs', '35.1 µs', '46.8 µs']) expect(t).toContain(s);
   });
-  it('the rope\'s figures: 12 words of 16 bits is 192 wires; 36,864 words in 6 modules is 512 cores a module', () => {
+  it('the rope\'s figures: 12 words of 16 bits is 192 wires; 36 864 words in 6 modules is 512 cores a module', () => {
     expect(BLOCK2_ROPE.wordsPerCore * BLOCK2_ROPE.bitsRead).toBe(BLOCK2_ROPE.senseLines);
     expect(BLOCK2_ROPE.coresPerModule).toBe(512);
     const t = text('corerope');
-    for (const s of ['192 sense wires', '36,864 words', '512 cores a module', 'permalloy']) expect(t).toContain(s);
+    for (const s of ['192 sense wires', '36 864 words', '512 cores a module', 'permalloy']) expect(t).toContain(s);
     expect(prose).toContain('permalloy');
     expect(prose).toContain('removal of carry propagations'); // R-700 p. 69, the carry-clear's source
   });

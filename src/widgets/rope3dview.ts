@@ -2,6 +2,7 @@
 // pass them by, and the module they come from. What moves is rope3dparts.ts's rule: the inhibit wires leave one core free,
 // the set current switches it, the reset switches it back, and the sense wires that thread it pulse.
 
+import { groupNum } from '../sim/numfmt';
 import '../styles/rope3d.css';
 import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
@@ -52,7 +53,7 @@ export function ropeView(): Widget {
       ['Phase', PH[st.phase]],
       ['Inhibit current', st.phase === 'set' ? inh.join('; ') : 'off'],
       ['Read', read === null ? 'not yet' : `${bits4(read)}: the wires that thread core ${st.addr}`],
-      ['A module', `${MODULE_CORES} cores × ${SENSE_LINES} sense wires = ${(MODULE_CORES * WORDS_PER_CORE).toLocaleString('en-US')} words of ${WORD_BITS} bits; ${MODULES} modules = ${FIXED_WORDS.toLocaleString('en-US')} words`],
+      ['A module', `${MODULE_CORES} cores × ${SENSE_LINES} sense wires = ${groupNum(MODULE_CORES * WORDS_PER_CORE)} words of ${WORD_BITS} bits; ${MODULES} modules = ${groupNum(FIXED_WORDS)} words`],
     ];
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
     chip.textContent = st.phase === 'idle' ? 'Idle' : st.phase === 'set' ? 'Set' : 'Reset';

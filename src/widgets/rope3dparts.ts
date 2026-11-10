@@ -3,7 +3,7 @@
 //
 //   R-700 vol. III (E. C. Hall, MIT Instrumentation Laboratory, 1972), sec. 3.5.2, printed pp. 92-93:
 //     "A stored bit is a 1 whenever a sense wire threads a core, and is a 0 whenever it fails to thread a core."
-//     "Each module contains 512 cores and 192 sense lines and hence contains 192 x 512, or 98,304 bits of information."
+//     "Each module contains 512 cores and 192 sense lines and hence contains 192 x 512, or 98 304 bits of information."
 //     "Each core stores 12 words" (12 x 16 = 192), and a switching network passes "no more than 1 of the 12" to the
 //     module's output, then a second stage picks "one of the six module outputs".
 //     Addressing inside the rope: "A switching current is applied that attempts to set 128 cores (set/reset line)";
@@ -12,8 +12,8 @@
 //     pairs correspond to the seven low order address bits" (the eighth is redundant); "One member of each inhibit pair
 //     carries current at a time". Then "a reset current is passed through all cores. Only the core that was just set
 //     will change state", and the sense amplifiers are gated during the set or the reset.
-//     Block II fixed memory: 36,864 words (p. 35 and the text on the Block II change), six rope modules of
-//     "approximately 6K words" (36,864 / 6 = 6,144 = 512 x 12).
+//     Block II fixed memory: 36 864 words (p. 35 and the text on the Block II change), six rope modules of
+//     "approximately 6K words" (36 864 / 6 = 6144 = 512 x 12).
 //   Ken Shirriff, "Software woven into wire: Core rope and the Apollo Guidance Computer" (righto.com, July 2019):
 //     the cores "were not regular ferrite cores, but permalloy ribbon wound around a non-magnetic steel bobbin", ".249" in
 //     diameter"; the 512 cores "arranged physically as two layers of 256 cores" (32 x 8 a layer), "electrically as four
@@ -39,8 +39,8 @@ export const OD = (CORE_IN * 25.4) / UNIT_MM;
 export const ID = 0.55 * OD, LEN = 2.5 / UNIT_MM;
 /** R-700: per module. */
 export const MODULE_CORES = 512, SENSE_LINES = 192, WORDS_PER_CORE = 12, WORD_BITS = 16, INHIBIT_PAIRS = 8, MODULES = 6;
-export const MODULE_WORDS = MODULE_CORES * WORDS_PER_CORE; // 6,144
-export const FIXED_WORDS = MODULES * MODULE_WORDS; // 36,864
+export const MODULE_WORDS = MODULE_CORES * WORDS_PER_CORE; // 6144
+export const FIXED_WORDS = MODULES * MODULE_WORDS; // 36 864
 /** Shirriff 2019: two layers of 32 x 8. */
 export const LAYERS = 2, LAYER_COLS = 32, LAYER_ROWS = 8;
 

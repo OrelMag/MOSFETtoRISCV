@@ -3,6 +3,7 @@
 // it pulse, and the strand switch pass one word's lines to the sense amplifiers. Click a crossing to thread a sense
 // line through its core or take it out: the only way to change what a rope holds.
 
+import { groupNum } from '../sim/numfmt';
 import { BLOCK2_ROPE, coresOf, readRope, rethread, weave, wordsIn, wordsOf, type ToyRope } from '../agc/rope';
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
@@ -85,7 +86,7 @@ export function ropeWeaveWidget(): Widget {
 
   const facts = h('p', { class: 'sub' },
     `The AGC's rope: each core stores ${BLOCK2_ROPE.wordsPerCore} words, so ${BLOCK2_ROPE.senseLines} sense lines run through or past it and ${BLOCK2_ROPE.bitsRead} reach the sense amplifiers; `
-    + `${BLOCK2_ROPE.modules} modules hold ${BLOCK2_ROPE.words.toLocaleString('en-US')} words, ${BLOCK2_ROPE.wordsPerModule.toLocaleString('en-US')} a module, which makes ${BLOCK2_ROPE.coresPerModule} cores a module (R-700 vol. III, 3.5.2). `
+    + `${BLOCK2_ROPE.modules} modules hold ${groupNum(BLOCK2_ROPE.words)} words, ${groupNum(BLOCK2_ROPE.wordsPerModule)} a module, which makes ${BLOCK2_ROPE.coresPerModule} cores a module (R-700 vol. III, 3.5.2). `
     + `This toy: ${coresOf(rope)} cores, ${rope.strands} words a core, ${wordsOf(rope)} words.`);
   const el = h('div', { class: 'widget rope-weave' },
     h('div', { class: 'panel' }, h('h3', null, 'A rope of four cores: pick a word, or click a crossing to rethread it'), svg, readout),

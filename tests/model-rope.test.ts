@@ -1,6 +1,6 @@
 // Core rope in 3D, held to the rope's rules (R-700 vol. III sec. 3.5.2; Shirriff 2019): a wire through a core is a 1 and
 // one round it a 0, never through the ring itself; the inhibit pairs leave exactly the addressed core free; the set and
-// reset switch only that core and the sense wires that thread it pulse; the module's counts multiply out to 36,864 words.
+// reset switch only that core and the sense wires that thread it pulse; the module's counts multiply out to 36 864 words.
 import { describe, expect, it } from 'vitest';
 import {
   BITS, CORES, CORE_R, FIXED_WORDS, HOLE_R, LAYERS, LAYER_COLS, LAYER_ROWS, MODULE_CORES, MODULE_WORDS, OD, PAIRS, SENSE_LINES, STRANDS,
@@ -12,7 +12,7 @@ const G: [number, number, number] = [0.5, 0.5, 0.5];
 const P: RopePalette = { ribbon: G, bobbin: G, copper: G, inhibit: G, set: G, reset: G, live: [1, 0.8, 0], board: G, res: G, diode: G, lamp: G, lampOff: G, sel: G };
 
 describe('core rope in 3D', () => {
-  it('the sourced numbers: 512 cores, 192 sense lines, 12 words of 16 bits a core, six modules of 6,144 words, 0.249 in cores', () => {
+  it('the sourced numbers: 512 cores, 192 sense lines, 12 words of 16 bits a core, six modules of 6144 words, 0.249 in cores', () => {
     expect(WORDS_PER_CORE * WORD_BITS).toBe(SENSE_LINES);
     expect(MODULE_WORDS).toBe(6144);
     expect(FIXED_WORDS).toBe(36864);

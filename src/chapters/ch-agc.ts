@@ -10,6 +10,7 @@ import { AgcISS } from '../agc/iss';
 import { BLOCK2_ROPE } from '../agc/rope';
 import { NOR3_RTL, NOR_ADD4, NOR_BASIC, NOR_FA, NOR_REG, NOR_REG4 } from '../lib/agcnor';
 import { FULL_ADDER } from '../lib/combinational';
+import { groupNum } from '../sim/numfmt';
 import { stats } from '../sim/stats';
 import { AGC_SUM_SOURCE, MCT_US, agcRunWidget } from '../widgets/agcrun';
 import { rope3d } from '../widgets/rope3d';
@@ -43,7 +44,7 @@ export const chAppendixAgc: Chapter = {
   builds: ['tubes', 'gates', 'adders', 'registers', 'memory', 'multicycle'],
   recap: {
     keep: [
-      'The AGC\'s logic is one circuit, a three-input NOR in resistor-transistor logic, two to a package in Block II: about 5,600 gates (R-700 Table 2-1). Everything else, adder and registers included, is built from it.',
+      'The AGC\'s logic is one circuit, a three-input NOR in resistor-transistor logic, two to a package in Block II: about 5600 gates (R-700 Table 2-1). Everything else, adder and registers included, is built from it.',
       'Words are 15 bits in one\'s complement, so there are two zeros; the adder adds the carry out of the top bit back into the bottom one. A ring of carries can hold a carry nothing generates, so it has to be cleared.',
       `Core rope stores a 1 where a sense wire threads a core and a 0 where it passes by: each core holds ${BLOCK2_ROPE.wordsPerCore} words, and changing the program means weaving a new rope.`,
       `A memory cycle (MCT) is ${MCT_US} µs; most instructions take two, a multiply three after its EXTEND.`,
@@ -78,8 +79,8 @@ export const chAppendixAgc: Chapter = {
       title: 'Meet the AGC',
       body: `
         <p>The Apollo Guidance Computer flew in the command module and the lunar module. Block II, the version
-        that landed, has 15-bit words in one's complement, ${BLOCK2_ROPE.words.toLocaleString('en-US')} words of read-only
-        memory and 2,048 of erasable, a memory cycle of ${MCT_US} µs, about 5,600 gates in 2,800 packages, 70 pounds and
+        that landed, has 15-bit words in one's complement, ${groupNum(BLOCK2_ROPE.words)} words of read-only
+        memory and 2048 of erasable, a memory cycle of ${MCT_US} µs, about 5600 gates in 2800 packages, 70 pounds and
         55 watts (Table 2-1 of R-700, E. C. Hall's 1972 history of the computer for MIT, the source of every number here).</p>
         <p>All of its logic is one circuit. In R-700's words it is "three NPN bipolar transistors and four resistors
         connected as a modified direct-coupled transistor logic or DCTL NOR gate", also called <strong>resistor-transistor
@@ -209,12 +210,12 @@ export const chAppendixAgc: Chapter = {
         each Block II core stores ${BLOCK2_ROPE.wordsPerCore} words, so ${BLOCK2_ROPE.senseLines} sense lines run through or
         past it, and a diode switch passes the ${BLOCK2_ROPE.bitsRead} of the addressed word to the sense amplifiers. The
         address picks the core by the <strong>inhibit</strong> lines: every core but one has a current through it that
-        cancels the switching current. ${BLOCK2_ROPE.modules} modules held the ${BLOCK2_ROPE.words.toLocaleString('en-US')}
-        words, ${BLOCK2_ROPE.wordsPerModule.toLocaleString('en-US')} each, which makes ${BLOCK2_ROPE.coresPerModule} cores a
+        cancels the switching current. ${BLOCK2_ROPE.modules} modules held the ${groupNum(BLOCK2_ROPE.words)}
+        words, ${groupNum(BLOCK2_ROPE.wordsPerModule)} each, which makes ${BLOCK2_ROPE.coresPerModule} cores a
         module.</p>
         <p>The cores are not the ferrite rings of chapter ${numOf('memory')}'s core memory. R-700's parts count (Table
-        7-VIII, p. 266) lists 32,768 ferrite cores, 2,048 erasable words of 16 bits, and 3,072 tape-wound ones, six modules
-        of 512: a rope core is a winding of permalloy ribbon on a steel bobbin (Shirriff 2019). Rope is dense, about 1,500
+        7-VIII, p. 266) lists 32 768 ferrite cores, 2048 erasable words of 16 bits, and 3072 tape-wound ones, six modules
+        of 512: a rope core is a winding of permalloy ribbon on a steel bobbin (Shirriff 2019). Rope is dense, about 1500
         bits per cubic inch with its electronics (R-700), and it cannot be changed by a program: a new program is a new rope,
         woven by machine from a punched tape (R-700 p. 165) and plugged in from outside the sealed case.</p>
         <div class="try">Read a few words, then click a crossing to thread or unthread it and read the word again.</div>`,
