@@ -326,6 +326,8 @@ export const andN = memo((n: number): ComponentDef => {
   let col = 0, k = 0;
   // Leaves are pins at y = 2 + 2i.
   const ypos = new Map<string, number>(level.map((s, i) => [s, 2 + 2 * i]));
+  // the column each signal comes out of (pins: -1)
+  const carried = new Map<string, number>(level.map((s) => [s, -1]));
   while (level.length > 1) {
     const next: string[] = [];
     for (let i = 0; i + 1 < level.length; i += 2) {
@@ -333,8 +335,16 @@ export const andN = memo((n: number): ComponentDef => {
       const ya = ypos.get(level[i])!, yb = ypos.get(level[i + 1])!;
       const yc = (ya + yb) / 2;
       instances.push({ name, def: AND, at: [5 + col * 8, yc - 2] });
-      nets.push({ ends: [level[i], `${name}.a`] });
-      nets.push({ ends: [level[i + 1], `${name}.b`] });
+      // a signal carried past a column (the odd one out of a level) runs level to just before this gate, then turns:
+      // left to the router it can cut through a gate of the columns it skips (and9, and17)
+      const via = (src: string, port: 'a' | 'b'): NetDef['via'] =>
+        carried.get(src) !== undefined && carried.get(src)! < col - 1
+          ? { [`${name}.${port}`]: [[3 + col * 8, ypos.get(src)!], [3 + col * 8, yc + (port === 'a' ? -1 : 1)]] } : undefined;
+      for (const [src, port] of [[level[i], 'a'], [level[i + 1], 'b']] as const) {
+        const v = via(src, port);
+        nets.push({ ends: [src, `${name}.${port}`], ...(v ? { via: v } : {}) });
+      }
+      carried.set(`${name}.y`, col);
       next.push(`${name}.y`);
       ypos.set(`${name}.y`, yc);
     }

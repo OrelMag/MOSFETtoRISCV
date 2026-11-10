@@ -196,6 +196,14 @@ export const chMulticycle: Chapter = {
       more: {
         derive: `<p>Counting cycles by walking the table: Fetch and Decode are common (2). Then ${MC_DISPATCH.map(([c, t]) => `${c} → ${MC_STATES[t].name}`).join(', ')}. Following the next column from each: branch, lui and auipc end after one more state (${CYC.branch}); R, I, store and jal after two (${CYC.alu}); load and jalr after three (${CYC.load}).</p>`,
         pitfall: `<p>Reading Decode as idle. It computes the branch target before it knows the instruction is a branch. If the instruction turns out to be a load, that value goes unused; spending the ALU in a cycle that would otherwise wait is what saves a cycle on branches.</p>`,
+        real: `<p><strong>A machine built on its memory's cycle.</strong> DEC's PDP-8 (1965) ran every instruction as one to three <strong>major
+          states</strong>, each one cycle of its core memory, 1.5 µs: Fetch reads the instruction; Defer, only when the instruction names a word
+          that holds the real address (an indirect reference), reads that word; Execute reads or writes the operand. A jump needs no Execute, and
+          an operate instruction (clear, complement, rotate, or skip on a test of the accumulator) is Fetch alone. Its 12-bit words and handful of
+          registers (PC, the accumulator and its link bit, the memory's address and data registers) make the cycle count the whole timing
+          model: the memory, not the logic, sets the pace. The sandbox has it twice, Examples ▸ PDP-8 front panel (a model behind lamps and
+          switches) and Examples ▸ PDP-8 in gates (one clock edge per major state); the codex's <a href="#/campaign/codex/pdp8">PDP-8</a> entry
+          has what they assume: octal, pages, auto-index, the operate bits and the front panel's keys.</p>`,
       },
     },
     {

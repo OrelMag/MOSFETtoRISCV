@@ -120,7 +120,8 @@ export function openPdp8Panel(ed: Editor, partId: string): void {
   const dlg = dialog(ed, 'PDP-8 front panel', [
     h('p', { class: 'sb-sum' }, 'This ROM is the core of a PDP-8, run by a model of the machine (not by the circuit): set the switches, ',
       h('b', null, 'LOAD ADD'), ', then ', h('b', null, 'START'), '. ', h('b', null, 'DEP'), ' and ', h('b', null, 'EXAM'),
-      ' write and read core a word at a time, as programs went in before there was an assembler. Deposits change this panel\'s core, not the ROM\'s program.'),
+      ' write and read core a word at a time, as programs went in before there was an assembler. Deposits change this panel\'s core, not the ROM\'s program. Octal, pages, the operate bits and these keys: ',
+      h('a', { href: '#/campaign/codex/pdp8', target: '_blank', rel: 'noopener' }, 'the PDP-8 in the codex'), '.'),
     h('div', { class: 'p8-panel' }, h('div', { class: 'p8-regs' }, Object.values(rows).map((r) => r.el), state), now),
     h('h4', { class: 'p8-h' }, 'Switch register'),
     sr.el,

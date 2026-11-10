@@ -111,6 +111,7 @@ export const TAUGHT: Record<string, string> = {
   cache: 'cache',
   microcode: 'multicycle',
   multicycle: 'multicycle',
+  pdp8: 'multicycle',
   signedmul: 'muldiv',
   throughput: 'pipeline',
   simd: 'vectors',
