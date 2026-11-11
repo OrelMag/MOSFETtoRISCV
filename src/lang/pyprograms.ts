@@ -1,3 +1,4 @@
+import { numOf } from '../chapters/order';
 // Python programs for the chapter "From Python to gates". Each one compiles to RV32I and runs on the gate-level
 // CPU; `expect` is what it prints (tests check it against the interpreter and the golden model).
 
@@ -635,7 +636,7 @@ for k in range(6):
     id: 'divide',
     name: 'Divide, by hand',
     group: 'Multiply & divide',
-    blurb: 'Shift and subtract, one quotient bit a pass: what rt.divmod and chapter 21\'s divider do.',
+    blurb: 'Shift and subtract, one quotient bit a pass: what rt.divmod and chapter ' + numOf('muldiv') + '\'s divider do.',
     expect: [14, 2, 30, 10],
     source: `def divide(n, d):
     q = 0

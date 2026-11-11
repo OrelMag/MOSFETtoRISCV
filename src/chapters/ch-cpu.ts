@@ -901,7 +901,7 @@ export const chSingleCycle: Chapter = {
       challenge: {
         kind: 'quiz', question: 'With realistic memories (SRAM slower than the logic around it), which instruction class sets the clock period of a single-cycle CPU?',
         options: ['R-type (two register reads)', 'lw (ALU, then memory, then write-back)', 'beq (subtract and compare)', 'jal (no register read)'], answer: 1,
-        why: ['Both register reads happen in parallel, and an R-type skips the data memory entirely.', '', 'With a realistic memory, a branch ends at the next-PC logic and never waits for a data-memory read. (This site\'s memories are fast mux trees, so chapter 16\'s static timing finds a branch path on top: a surprise only cheap memory allows.)', 'jal reads no register, and its path through an adder to the result mux is shorter still.'],
+        why: ['Both register reads happen in parallel, and an R-type skips the data memory entirely.', '', 'With a realistic memory, a branch ends at the next-PC logic and never waits for a data-memory read. (This site\'s memories are fast mux trees, so chapter ' + numOf('fastadd') + '\'s static timing finds a branch path on top: a surprise only cheap memory allows.)', 'jal reads no register, and its path through an adder to the result mux is shorter still.'],
         explain: 'Every cycle must be long enough for the slowest instruction, and lw chains the ALU and the memory read. The other instructions waste the slack. That is the motivation for splitting an instruction over several cycles and for overlapping instructions.',
       },
     },
@@ -955,7 +955,7 @@ export const chSingleCycle: Chapter = {
         pitfall: `<p>Reading <code>ret</code> as a special instruction. It is <code>jalr zero, 0(ra)</code>: rd = x0 (the link is discarded), target = ra + 0 with bit 0 cleared. If a function never
           saves ra and calls another, its own <code>ret</code> returns to the wrong place: look at ra after the second <code>jal</code>.</p>`,
         real: `<p>This is the part pipelines spend the most hardware on. A taken branch redirects the PC late in the cycle, and in a pipeline that is several instructions already fetched: predictors, target buffers and
-          return stacks (chapters 17 and 18) all exist to avoid waiting for this decision.</p>`,
+          return stacks (chapters ${numOf('pipeline')} and ${numOf('pipepay')}) all exist to avoid waiting for this decision.</p>`,
       },
     },
     {

@@ -12,6 +12,7 @@ import { pipeSchedule, type Cycle } from '../riscv/pipetrace';
 import { frameLoop } from './mosfet';
 import { modelStage } from './modelstage';
 import { STATIONS, assemblyAnchors, assemblyParts, kindOfWord, lampsOf, palletsAt, flushText, outcomeOf, type Outcome, type AssemblyPalette } from './assembly3dparts';
+import { numOf } from '../chapters/order';
 
 export interface AssemblyProgram { id: string; name: string; source: string }
 
@@ -177,7 +178,7 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
         h('div', { class: 'as-legend', 'aria-label': 'Colours' }, swatch('--as-alu', 'arithmetic'), swatch('--as-load', 'load'), swatch('--as-store', 'store'), swatch('--as-ctl', 'branch / jump'),
           swatch('--as-wrong', '✗ wrong path, pulled'), swatch('--as-bubble', 'empty pallet: bubble'), swatch('--as-hold', 'lamp: Fetch / Decode hold'), swatch('--as-wrong', 'lamp: flush')),
         h('details', { class: 'deeper as-note' }, h('summary', null, 'What is drawn and what is modelled'),
-          h('p', null, 'The timing is the five-stage pipeline’s own, item for item: which instruction, or bubble, is in each station every clock, and when the hazard unit stalls or flushes, are held by test to the gate-level CPU’s pipeline registers on these programs (tests/model-assembly.test.ts, including jal and jalr). The rules are those of lib/pipeline.ts’s hazard unit as chapter 17 describes them. What is simplified:'),
+          h('p', null, 'The timing is the five-stage pipeline’s own, item for item: which instruction, or bubble, is in each station every clock, and when the hazard unit stalls or flushes, are held by test to the gate-level CPU’s pipeline registers on these programs (tests/model-assembly.test.ts, including jal and jalr). The rules are those of lib/pipeline.ts’s hazard unit as chapter ' + numOf('pipeline') + ' describes them. What is simplified:'),
           h('ul', null,
             h('li', null, 'The stations, belt and pallets are a drawing. The slide between two clocks is animation: in the circuit, everything changes at the clock edge.'),
             h('li', null, 'A laundromat’s machines each run at their own pace. Here one clock moves every station together, so the slowest stage sets the beat for all of them (the next step measures what that costs).'),

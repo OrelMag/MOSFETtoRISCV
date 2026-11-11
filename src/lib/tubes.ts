@@ -14,6 +14,7 @@ import { FULL_ADDER } from './combinational';
 import { define } from './define';
 import { RES } from './switchparts';
 import { GND, NAND } from './transistors';
+import { numOf } from '../chapters/order';
 
 const bit = (name: string, dir: 'in' | 'out' | 'inout', side?: PortDef['side']): PortDef => ({ name, width: 1, dir, side });
 
@@ -311,7 +312,7 @@ export const ECCLES_JORDAN: ComponentDef = define({
 /** The nine-NAND full adder (chapter 6) with every NAND a tube NAND: the brick principle, in tubes. */
 export const TUBE_FA: ComponentDef = define({
   id: 'tube_fa', name: 'Tube full adder', category: 'arithmetic',
-  summary: 'Chapter 6\'s nine-NAND full adder with every NAND built from tubes: 9 triode sections and 18 diodes.',
+  summary: 'Chapter ' + numOf('adders') + '\'s nine-NAND full adder with every NAND built from tubes: 9 triode sections and 18 diodes.',
   ports: FULL_ADDER.ports,
   symbol: { kind: 'box', label: 'FA (tubes)' },
   spec: FULL_ADDER.spec,

@@ -64,7 +64,7 @@ export const chBasics: Chapter = {
         1011 are 8 + 0 + 2 + 1 = 11. This is <strong>positional notation</strong>, and every number in a computer is written
         this way.</p>
         <p>Count past 15 and four lamps run out: 15 + 1 needs a fifth lamp. With four, the count wraps round to 0, as a car's
-        odometer does at 99 999. Chapter 5 turns this into arithmetic, negative numbers included.</p>
+        odometer does at 99 999. Chapter ${numOf('binary')} turns this into arithmetic, negative numbers included.</p>
         <div class="try">Set the lamps to 6. Then count up and watch the place worth 1 flip on every step.</div>`,
       widget: () => lampCountWidget(),
     },
@@ -105,7 +105,7 @@ export const chBasics: Chapter = {
         (${TOY.src.match(/\.byte (\d+)/g)?.map((x) => x.slice(6)).join(' and ')}) sit in words 4 and 5. Each step is one
         8-bit word: its first four bits say what to do, the last four usually say where.</p>
         <p>An arrow marks the next step to do. The machine keeps it in a
-        <span data-ahead="pc">program counter (a small register holding the address of the next instruction; chapter 9 builds
+        <span data-ahead="pc">program counter (a small register holding the address of the next instruction; chapter ${numOf('registers')} builds
         one)</span>. After each step the arrow moves on by one, unless the step says to jump elsewhere.</p>
         <div class="try">Do one step at a time until OUT shows ${TOY.outs[0]}. How many steps did it take?</div>
         <p>Everything that follows builds such a machine from the bottom: switches that remember, switches that add, switches
@@ -123,7 +123,7 @@ export const chBasics: Chapter = {
         <p><strong>Inputs are yours.</strong> Click an input pin, or use the bar under the circuit, to change it; the outputs
         follow at once.</p>
         <p><strong>Every box opens.</strong> Double-click a block to look inside. The adder is made of four
-        <span data-ahead="fulladder">full adders (each adds two bits and a carry; chapter 6 builds one)</span>, and
+        <span data-ahead="fulladder">full adders (each adds two bits and a carry; chapter ${numOf('adders')} builds one)</span>, and
         each of those of <span data-ahead="nand">NAND gates (two-input gates whose output is 0 only when both inputs are 1;
         chapter 3 builds one from four transistors)</span>. The breadcrumbs above the circuit, or <kbd>Esc</kbd>, take you back
         up. A single click selects a part and shows what it costs.</p>
