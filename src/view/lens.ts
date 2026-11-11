@@ -13,7 +13,7 @@ import { reducedMotion } from '../ui/motion';
 import { TAP_SLOP } from './camera';
 import type { ViewCtx } from './context';
 import { decide, fitInside, FADE_MS, handOffView, handsOff, insideExtent, openAtPx, smallestNamed, type Rect } from './lensplan';
-import { ZoomOutGate } from './zoomout';
+import { cueWords, ZoomOutGate } from './zoomout';
 import { installPinch } from './pinch';
 import type { OverlayResult } from './overlays';
 import { SchematicView, type SchematicEvents } from './schematic';
@@ -48,7 +48,7 @@ export interface LensHost {
   /** An inner part selected (null: none): the inspector follows. */
   selected(): void;
   /** The cue after a hand-off ("Keep zooming out to go up to cpu"); null removes it. */
-  cue(parent: { label: string; path: string[] } | null): void;
+  cue(parent: { label: string; path: string[]; words?: string } | null): void;
   say(text: string): void;
   /** More of an inside view's events for its level (Why? clicks, the menu's Why this value? and Explain); its open / select /
    *  up stay the lens's. */
@@ -104,7 +104,7 @@ export class Lens {
     host.canvas.append(this.layer);
     this.off.push(() => this.layer.remove());
     const wheel = (e: WheelEvent) => {
-      if (this.gate.wheel(e.timeStamp, e.deltaY)) return this.goUp();
+      if (this.gate.wheel(e.timeStamp, e.deltaY) === 'up') return this.goUp();
       this.zoomed(e.clientX, e.clientY);
     };
     v.el.addEventListener('wheel', wheel, { passive: true });
@@ -123,6 +123,7 @@ export class Lens {
     v.el.addEventListener('pointerleave', leave);
     this.off.push(() => { v.el.removeEventListener('pointermove', move); v.el.removeEventListener('pointerleave', leave); });
     this.levelChanged(host.ctx()?.path ?? []);
+    this.started = true;
   }
 
   /** Torn down (the setting turned off, the stage gone). */
@@ -151,7 +152,7 @@ export class Lens {
     } else {
       const start = !this.pinchLive;
       this.pinchLive = true;
-      if (this.gate.pinchStep(performance.now(), k, start)) this.goUp();
+      if (this.gate.pinch(performance.now(), k, start) === 'up') this.goUp();
     }
     this.focus = mid;
     this.schedule();
@@ -210,11 +211,18 @@ export class Lens {
   levelChanged(path: string[]): void {
     this.dropAll();
     this.hideHint();
+    const was = this.levelKey;
     this.levelKey = path.join('.');
     if (this.handed && path.join('.') !== this.handed.path.join('.')) {
       this.handed = null;
+      this.cueFits = null;
       this.host.cue(null);
       this.gate.clear();
+    }
+    // one step in from the level before, however it came (a hand-off, a double-click, the crumb): the way up is shown
+    const now = this.host.ctx(), up = now?.parent;
+    if (!this.handed && now && up && now.path.join('.') === this.levelKey && up.path.join('.') === was && this.started) {
+      this.handed = { path: now.path, parent: { label: up.path[up.path.length - 1] ?? up.def.name, path: up.path }, px: this.unitPx() };
     }
     this.measure();
     this.schedule();
@@ -400,7 +408,7 @@ export class Lens {
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (this.gate.wheel(e.timeStamp, e.deltaY)) return this.goUp();
+      if (this.gate.wheel(e.timeStamp, e.deltaY) === 'up') return this.goUp();
       this.host.view.wheelAt(e.deltaY, e.clientX, e.clientY);
       this.zoomed(e.clientX, e.clientY);
     }, { capture: true, passive: false });
@@ -616,18 +624,34 @@ export class Lens {
     if (parent) this.handed = { path, parent, px: this.unitPx() };
   }
 
-  /** After a hand-off, once the zoom-out shows the whole level again: "Keep zooming out to go up to cpu"; a fresh zoom-out then does (goUp). */
+  /**
+   * After a hand-off or a step in, the rule up is on screen the whole time (Smith's zoomout.ts words): "Zoom out to see all
+   * of alu, then once more to go up to cpu" while the level does not fit, "Zoom out once more to go up to cpu" once it does,
+   * and from then a fresh zoom-out goes up (goUp).
+   */
   private handedCue(): void {
     const hd = this.handed, ctx = this.host.ctx();
-    if (!hd || !ctx || ctx.path.join('.') !== hd.path.join('.') || this.gate.cued) return;
-    if (this.unitPx() > hd.px * 0.9) return;
+    if (!hd || !ctx || ctx.path.join('.') !== hd.path.join('.')) return;
     const b = this.host.view.contentBox();
     const p = this.host.view.toClient([b.x, b.y]), q = this.host.view.toClient([b.x + b.w, b.y + b.h]);
     const c = this.canvasRect();
-    if (p && q && p[0] >= c.left - 1 && p[1] >= c.top - 1 && q[0] <= c.right + 1 && q[1] <= c.bottom + 1) {
-      this.host.cue(hd.parent);
-      this.gate.cue(performance.now());
-    }
+    const fits = !!p && !!q && p[0] >= c.left - 1 && p[1] >= c.top - 1 && q[0] <= c.right + 1 && q[1] <= c.bottom + 1;
+    if (fits && !this.gate.cued) this.gate.cue(performance.now());
+    else if (!fits && this.gate.cued) this.gate.clear();
+    if (this.cueFits === fits) return;
+    this.cueFits = fits;
+    const level = hd.path[hd.path.length - 1] ?? '';
+    this.host.cue({ ...hd.parent, words: cueWords(level, hd.parent.label, fits) });
+  }
+  private cueFits: boolean | null = null;
+  private started = false;
+
+  /** The `−` key or the zoom-out button, before it zooms: true when it went up a level instead (so the press does not
+   *  also zoom the parent). */
+  zoomOutKey(): boolean {
+    if (this.gate.key(performance.now()) !== 'up') return false;
+    this.goUp();
+    return true;
   }
 
   /** A fresh zoom-out after the cue: one level up, the level left drawn open in its box exactly where its drawing was (the
@@ -641,6 +665,7 @@ export class Lens {
     const e = this.host.view.contentBox();
     const p = this.host.view.toClient([e.x, e.y]), q = this.host.view.toClient([e.x + e.w, e.y + e.h]);
     this.handed = null;
+    this.cueFits = null;
     this.gate.clear();
     this.host.cue(null);
     this.host.drill(hd.parent.path);

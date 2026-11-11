@@ -1232,11 +1232,14 @@ export class Stage {
   }
 
   /** After a hand-off: "Keep zooming out to go up to cpu" under the breadcrumb (null removes it). */
-  private showCue(parent: { label: string; path: string[] } | null): void {
+  private showCue(parent: { label: string; path: string[]; words?: string } | null): void {
     this.cueEl?.remove();
     this.cueEl = null;
     if (!parent) return;
-    this.cueEl = h('div', { class: 'lens-cue', role: 'status' }, 'Keep zooming out to go up to ',
+    // the lens's words (view/zoomout.ts cueWords) end with the parent's name: that name is the link
+    const words = parent.words ?? `Keep zooming out to go up to ${parent.label}`;
+    const lead = words.endsWith(parent.label) ? words.slice(0, words.length - parent.label.length) : `${words} `;
+    this.cueEl = h('div', { class: 'lens-cue', role: 'status' }, lead,
       h('button', { class: 'linkish', onclick: () => this.goTo(parent.path) }, parent.label));
     this.canvas.append(this.cueEl);
   }
@@ -1255,6 +1258,8 @@ export class Stage {
   /** The bar's zoom buttons: on the boards while they are shown, else on the schematic. */
   private zoomBy(f: number): void {
     if (this.boardOn) this.board.zoom(f);
+    // zooming out after stepping in: the press that goes up does not also zoom the parent (view/zoomout.ts key)
+    else if (f > 1 && this.lens?.zoomOutKey()) return;
     else this.view.zoom(f);
   }
 
@@ -1652,7 +1657,7 @@ export class Stage {
     if (matches(e, 'cursor.step')) { if (this.sim?.kind === 'gate' || this.relayTime) { this.stepOnce(); again(); } return true; }
     if (matches(e, 'cursor.back')) { if (this.back()) again(); else this.say('Nothing to go back to'); return true; }
     if (matches(e, 'cursor.zoomin')) { this.zoomToCursor(); return true; }
-    if (matches(e, 'cursor.zoomout')) { v.zoom(1.25); return true; }
+    if (matches(e, 'cursor.zoomout')) { if (!this.lens?.zoomOutKey()) v.zoom(1.25); return true; }
     if (matches(e, 'cursor.fit')) { v.fit(); return true; }
     return false;
   }
