@@ -33,6 +33,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "cache": () => import('./ch-cache').then((m) => m.chCache),
   "vmem": () => import('./ch-vmem').then((m) => m.chVmem),
   "os": () => import('./ch-os').then((m) => m.chOs),
+  "threads": () => import('./ch-threads').then((m) => m.chThreads),
   "multicycle": () => import('./ch-multicycle').then((m) => m.chMulticycle),
   "float": () => import('./ch-float').then((m) => m.chFloat),
   "widths": () => import('./ch-widths').then((m) => m.chWidths),

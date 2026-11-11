@@ -87,7 +87,8 @@ ${epilogue}
  * Shared: the ring at SHARED + 16, `put` at SHARED + 4 and `got` at SHARED + 8 (counts of words put and taken). Both wait on a condition
  * under lock 0: condition 0 "not full", condition 1 "not empty", re-tested in a while loop when they wake.
  */
-export function prodCons(n: number, work = 20): string {
+/** `work`: the producer's instructions between two words; `takeWork`: the consumer's after each (slower than the producer, the ring fills). */
+export function prodCons(n: number, work = 20, takeWork = work): string {
   return `${prologue}
   li s0, ${SHARED}
   li s1, ${n}
@@ -112,7 +113,7 @@ a_take:
   sw t1, 8(s0)
 ${sys('signal', 0)}
 ${sys('unlock', 0)}
-${spin(work, 'a_work')}
+${spin(takeWork, 'a_work')}
   addi s1, s1, -1
   bnez s1, a_next
   mv a0, s3
@@ -155,7 +156,7 @@ ${epilogue}
  * The same ring with two semaphores and no lock: semaphore 0 counts the free slots (RING at the start), semaphore 1 the full ones (0).
  * One producer and one consumer touch different indices, so no lock is needed.
  */
-export function semRing(n: number, work = 20): string {
+export function semRing(n: number, work = 20, takeWork = work): string {
   return `  li sp, ${SP_A}
 ${sys('seminit', 0, RING)}
 ${sys('seminit', 1, 0)}
@@ -176,7 +177,7 @@ ${sys('down', 1)}
   add s3, s3, t3
   addi s4, s4, 1
 ${sys('up', 0)}
-${spin(work, 'a_work')}
+${spin(takeWork, 'a_work')}
   addi s1, s1, -1
   bnez s1, a_next
   mv a0, s3
