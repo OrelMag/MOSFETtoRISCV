@@ -982,13 +982,12 @@ const lensMarksDrive = (part: string, line: string, inner: string[], first: 'sel
 })()`;
 
 /**
- * The zoom lens on a touch screen (DESIGN.md item 6, view/lens.ts): pinches spreading over `part` (two touch pointers)
- * open one lens once the fingers lift, within 16 px gutters of the canvas and clear of the stage bar, the run bar, the
- * docked panels and the notes; its tag says "tap to step in"; a tap on a part under 40 px steps into the ALU
- * (#/…/<part>). `refused`: a box whose inside is not legible in a phone's lens shows the "double-tap to step in" hint
- * instead; `off`: the setting left at its default (null), and a pinch only zooms.
+ * Open blocks as you zoom on a touch screen (DESIGN.md item 6, Revision 3): pinches spreading over `part` (two touch
+ * pointers) open its inside in its outline once past its opening zoom, as the wheel does; the stage bar keeps its height;
+ * a tap on an inner part under 40 px steps into `part` (#/…/<part>). `off`: the setting left at its default (null), and a
+ * pinch only zooms.
  */
-const lensPinchDrive = (mode: 'open' | 'refused' | 'off', part: string) => `(async () => {
+const lensPinchDrive = (mode: 'open' | 'off', part: string) => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
   const svg = document.querySelector('.canvas > svg.schematic');
@@ -1018,45 +1017,37 @@ const lensPinchDrive = (mode: 'open' | 'refused' | 'off', part: string) => `(asy
     ptr(f1, 'pointerup', 91, cx - d, cy, true);
     await wait(120);
   };
-  const lenses = () => document.querySelectorAll('.lens-layer .inside').length;
+  const lenses = () => document.querySelectorAll('.lens-layer .inside.on').length;
+  const g = () => document.querySelector('.canvas > svg.schematic g.inst[data-inst="${part}"]');
+  const mine = () => document.querySelector('.lens-layer .inside.on[data-inst="${part}"]');
   const log = [], t0 = performance.now();
   addEventListener('hashchange', () => log.push(location.hash + '@' + Math.round(performance.now() - t0)));
   const before = box().width, canvasH = canvas.getBoundingClientRect().height;
-  for (let k = 0; k < 14 && box() && !lenses() && Math.min(box().width, box().height) < 160; k++) await pinch(1.3);
+  for (let k = 0; k < 20 && box() && !('${mode}' === 'open' ? mine() : lenses()) && Math.min(box().width, box().height) < 600; k++) { await pinch(1.3); await wait(150); }
   if (!box()) return [...bad, 'the pinches left the level: ' + location.hash + ', ' + lenses() + ' lenses; ' + log.join(' ')];
   await wait(300);
   if (box() && box().width <= before * 1.2) bad.push('the pinches did not zoom');
   // the first finger of a pinch is not a press and hold: no menu once the hold's time has passed
   await wait(500);
   if (document.querySelector('.ctx-menu')) bad.push('a pinch opened the press-and-hold menu');
-  if ('${mode}' === 'off') return lenses() ? [...bad, 'an inside opened on a touch screen (Revision 3: not on a coarse pointer)'] : bad;
-  if ('${mode}' === 'refused') {
-    if (lenses()) bad.push('${part} opened although its inside is not legible in a phone lens');
-    if (!/double-tap to step in/.test(document.querySelector('.lens-hint')?.textContent ?? '')) bad.push('no "double-tap to step in" hint on ${part}');
-    return bad;
-  }
-  // the peek crumb must not restack the stage bar and take the canvas's height away (it did at 360 px)
+  if ('${mode}' === 'off') return lenses() ? [...bad, 'an inside opened on a touch screen with the setting at its default'] : bad;
+  // the inside crumb must not restack the stage bar and take the canvas's height away (it did at 360 px)
   if (canvas.getBoundingClientRect().height < canvasH - 1) bad.push('the canvas shrank from ' + Math.round(canvasH) + ' to ' + Math.round(canvas.getBoundingClientRect().height) + ' px');
-  if (lenses() !== 1) return [...bad, 'pinched onto ${part}: ' + lenses() + ' lenses (expected 1); ${part} ' + Math.round(box().width) + ' x ' + Math.round(box().height) + ' px' + (document.querySelector('.lens-hint') ? ', hint: ' + document.querySelector('.lens-hint').textContent : '') + '; ' + log.join(' ')];
-  const L = document.querySelector('.lens').getBoundingClientRect(), c = canvas.getBoundingClientRect();
-  if (L.left < c.left + 15 || L.right > c.right - 15 || L.top < c.top + 15 || L.bottom > c.bottom - 15) bad.push('the lens is not within 16 px gutters: ' + [L.left - c.left, c.right - L.right, L.top - c.top, c.bottom - L.bottom].map(Math.round).join(' / '));
-  const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-  for (const p of document.querySelectorAll('.stage-bar, .stage .controls, .canvas [data-dock], .level-badge, .stage-notes > *')) {
-    const r = p.getBoundingClientRect();
-    if (r.width && r.height && hit(L, r)) bad.push('the lens covers ' + (p.className || p.tagName).toString().slice(0, 40));
-  }
-  if (!/tap to step in/.test(document.querySelector('.lens-tag')?.textContent ?? '')) bad.push('the tag does not say "tap to step in"');
+  const el = mine();
+  if (!el) return [...bad, 'pinched onto ${part}: no inside (opens at ' + g()?.dataset.openAt + ' px a unit, now ' + (svg.getScreenCTM()?.a ?? 0).toFixed(1) + '); ' + log.join(' ')];
+  const B = box(), L = el.getBoundingClientRect();
+  if (L.left < B.left - 1 || L.top < B.top - 1 || L.right > B.right + 1 || L.bottom > B.bottom + 1) bad.push('the inside leaves the outline of ${part}');
   // a tap on a part under 40 px steps into the box
-  const small = [...document.querySelectorAll('.lens svg.schematic [data-inst]')].map((g) => [g, g.getBoundingClientRect()])
-    .find(([, r]) => r.width > 2 && Math.min(r.width, r.height) < 40 && r.top > L.top + 24 && r.bottom < L.bottom && r.left > L.left && r.right < L.right);
-  if (!small) return [...bad, 'no part under 40 px inside the lens to tap'];
-  const [g, r] = small;
-  ptr(g, 'pointerdown', 93, r.x + r.width / 2, r.y + r.height / 2, true);
+  const small = [...el.querySelectorAll('svg.schematic [data-inst]')].map((x) => [x, x.getBoundingClientRect()])
+    .find(([, r]) => r.width > 2 && Math.min(r.width, r.height) < 40 && r.top > L.top && r.bottom < L.bottom && r.left > L.left && r.right < L.right);
+  if (!small) return [...bad, 'no part under 40 px inside ${part} to tap'];
+  const [x, r] = small;
+  ptr(x, 'pointerdown', 93, r.x + r.width / 2, r.y + r.height / 2, true);
   await wait(60);
-  ptr(g, 'pointerup', 93, r.x + r.width / 2, r.y + r.height / 2, true);
+  ptr(x, 'pointerup', 93, r.x + r.width / 2, r.y + r.height / 2, true);
   await wait(400);
   if (!location.hash.endsWith('/${part}')) bad.push('a tap on a small part did not step into ${part}: ' + location.hash);
-  if (lenses()) bad.push('a lens left after the tap stepped in');
+  if (document.querySelector('.lens-layer .inside.on[data-inst="${part}"]')) bad.push('the inside of ${part} left after the tap stepped in');
   return bad;
 })()`;
 
@@ -1284,8 +1275,9 @@ function routes(): Route[] {
     add(comp, { ...lensOn('dark'), [SANDBOX_KEY]: ex.json }, ' (zoom lens in look inside, dark)', undefined, lensInsideDrive('cpu', 'alu', true));
     add(comp, { ...lensOff, [SANDBOX_KEY]: ex.json }, ' (look inside, zoom lens off)', undefined, lensInsideDrive('cpu', 'alu', false));
   }
-  // a touch screen: nothing opens on a coarse pointer (Revision 3), with the setting on or at its default; a pinch only zooms
-  add('#/c/cpu/0', lensOn('dark'), ` (zoom lens on, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('off', 'ctl'));
+  // a touch screen (DESIGN.md item 6): pinches onto the control unit open its inside like the wheel and a tap on a small inner
+  // part steps in, at both phone widths in both themes; at its default (null) nothing opens
+  for (const vp of TOUCH_VIEWPORTS) for (const theme of ['light', 'dark'] as const) add('#/c/cpu/0', lensOn(theme), ` (zoom lens, ${vp.name}, ${theme})`, vp, lensPinchDrive('open', 'ctl'));
   add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens at its default, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('off', 'ctl'));
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
   // The layout lock: locked by default on a touch screen, unlocked with a mouse; an arrangement of an older drawing set aside.

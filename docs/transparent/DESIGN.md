@@ -62,7 +62,7 @@ median 655 px tall. The ALU: symbol 8 × 12, inside 78 × 146 (12×), labels leg
 The author tried phases 1–2 and decided: the inside is drawn **within the box's own outline**, never over its neighbours;
 zooming out mirrors zooming in; the rule must be predictable. This section replaces items 1, 3, 4 and the lens parts of
 5, 6 and 9 above. The approved mockup's floating lens, rim connectors and dim are **superseded**; screenshots of the
-first build are in the tip for the author to check on return. Kept: the setting (off by default, off on touch), the
+first build are in the tip for the author to check on return. Kept: the setting (off by default, and at first on touch), the
 route cache, Why? / Break a part / CPU marks / look inside / overlays inside, closed boxes in print and image export,
 reduced motion.
 
@@ -95,8 +95,9 @@ drawn). Both reduce to one number per box, `openAtPx` (the view's px per unit at
 its inside alone (`smallestNamed(def)`: from the netlist, memoized per definition). It closes below **¾** of that
 (`CLOSE_SHARE`): outside that band the answer is the geometry's alone, inside it the previous answer's alone
 (`decide(prev, px, openAt)`); nothing else is state. Every box on screen that meets the rule opens (R3.6), so nothing
-depends on where the pointer was. Not on a coarse pointer (the author's decision: the setting stays, nothing opens), not in
-an NMOS scene. Measured opening zooms (px per unit, fib): single-cycle `pc` 70.3, `alu` 27.5, `rf` 38.9, `imm` 16.0, `ctl`
+depends on where the pointer was. On a touch screen as with a mouse (item 6: the setting starts off there): a pinch opens a box
+past its opening zoom like the wheel; a tap on an inner part at least 40 px selects it, anywhere else in the inside steps
+into the box; a double tap on a part drills. Not in an NMOS scene. Measured opening zooms (px per unit, fib): single-cycle `pc` 70.3, `alu` 27.5, `rf` 38.9, `imm` 16.0, `ctl`
 3.6, `npc` 21.5; pipeline `FD` / `DE` 43.9, `hz` 16.3 (tests/lens-hone.test.ts pins them from the functions).
 
 **R3.3 Shown to the learner.** Hovering a closed box that can open shows "zoom in to see inside (×2.4)": the zoom factor
