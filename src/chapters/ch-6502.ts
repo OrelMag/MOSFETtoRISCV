@@ -107,7 +107,7 @@ export const chAppendix6502: Chapter = {
       body: `
         <p>Almost every block of the journey was built from one brick, the static CMOS NAND, at whatever width the job asked. The 6502 (MOS Technology, 1975, sold
         for $25) is the other end: 8 bits, the CPU of the Apple II and, in variants, of the Commodore 64 and the NES, and small enough to simulate whole at transistor
-        level (our rebuild has about ${k(LEDGER.m6502)} transistors). It is built from ratioed NMOS gates, the idea <a href="#/c/inverter/0">chapter ${numOf('inverter')}</a> priced as
+        level (our rebuild has about ${k(LEDGER.m6502)} transistors). It is built from ratioed NMOS gates, the idea <a href="#/c/inverter/0">chapter 2</a> priced as
         pseudo-NMOS, and from tricks a NAND-only design never needs. This appendix rebuilds it from its own kind of gate up, runs programs on the transistors cycle
         by cycle, and accounts for why our RV32I costs some ${Math.round(LEDGER.rv32i / LEDGER.m6502)} times as many transistors.</p>
         <p>In 1975 CMOS existed (RCA's CD4000 logic from 1968, its 1802 CPU in 1976) but was slower and less dense; a dense, fast,

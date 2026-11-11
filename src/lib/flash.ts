@@ -5,7 +5,6 @@
 // (one contact per string: density), and reads a cell by passing the others. Program pulls a bit
 // line low for each 0 to write (a 1 inhibits), one pulse at a time; erase empties a whole block.
 
-import { numOf } from '../chapters/order';
 import { symbolGeom } from '../sim/geometry';
 import { FG_READ, FG_STEP } from '../sim/switchsim';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
@@ -33,7 +32,7 @@ export const FG_CELL: ComponentDef = define({
     the floating gate (here a rising pgm with g = 1 and the drain at 0 adds ${FG_STEP} of charge, ${Math.ceil(FG_READ / FG_STEP)} pulses to
     program; real devices program in steps and verify after each). Erase: a high voltage on the substrate pulls them all off
     again, for a whole block at once (a rising ers). vp is the pass voltage of a NAND string: above any threshold, the cell
-    conducts whatever it holds. Mask ROM (chapter ${numOf('memory')}) is the same idea fixed at manufacture: a transistor there or not.`,
+    conducts whatever it holds. Mask ROM (chapter 10) is the same idea fixed at manufacture: a transistor there or not.`,
   hdl: { verilog: '// a floating-gate transistor: its threshold is stored charge (not Verilog)' },
 });
 

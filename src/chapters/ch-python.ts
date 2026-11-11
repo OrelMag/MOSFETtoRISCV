@@ -38,7 +38,7 @@ export const chPython: Chapter = {
   recap: {
     keep: [
       'A compiler maps a program onto the machine: each variable gets a home (a register while it can, data memory when a function shares it, the stack across calls), each expression a stack of temporaries, each test a branch.',
-      `Nothing new runs on the CPU: the compiled words are the same RV32I chapter ${numOf('cpu')} decodes, so the golden model checks a Python program cycle by cycle as it checked hand-written assembly.`,
+      'Nothing new runs on the CPU: the compiled words are the same RV32I chapter 14 decodes, so the golden model checks a Python program cycle by cycle as it checked hand-written assembly.',
       'Cost is visible per line. On the single-cycle CPU a line costs one cycle per instruction it executes: <code>total += i</code> is one <code>add</code>; <code>a % b</code> with b unknown is a call to a 32-step shift-and-subtract routine, about 240 cycles.',
       'Calls cost frames: the return address and every saved register go to the stack and come back, and a value computed before a call waits there across it.',
       `A string is a block in data memory, a length word and then its bytes, and a str variable holds the block's address: <code>len</code> is one load, <code>==</code> compares bytes, <code>+</code> makes a new block. New blocks come from a heap of ${HEAP_BYTES} bytes that only grows (tp moves forward, nothing is freed), so a loop that joins strings runs out of it.`,

@@ -72,7 +72,7 @@ export const chTubes: Chapter = {
         options: [`About ${thin(Math.round(RELAY_STEP_MS * 1e3 / TUBE_STEP_US / 100) * 100)}`, `About ${VS_CMOS}`, 'About 10'],
         answer: 0,
         explain: `${RELAY_STEP_MS} ms against about ${TUBE_STEP_US.toFixed(2)} µs: a relay waits for iron to move, a tube for a resistor to charge the next grid.`,
-        why: ['', `That is how much slower a tube step is than a ${PS_PER_NAND} ps NAND in <span data-ahead="cmos">CMOS (the transistor logic of chapters ${numOf('mosfet')} to ${numOf('nand')})</span>.`, 'A relay step is milliseconds and a tube step about a microsecond: nearly four orders of magnitude apart.'],
+        why: ['', `That is how much slower a tube step is than a ${PS_PER_NAND} ps NAND in <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span>.`, 'A relay step is milliseconds and a tube step about a microsecond: nearly four orders of magnitude apart.'],
       },
     ],
   },
@@ -119,7 +119,7 @@ export const chTubes: Chapter = {
           'It makes the gate faster the longer it runs',
         ],
         answer: 0,
-        explain: `Of a section's ${w2(SEC.average)} W (average, conducting half the time), ${w2(HEATER_W)} W is the heater. <span data-ahead="cmos">CMOS (the transistor logic of chapters ${numOf('mosfet')} to ${numOf('nand')})</span> pays when it switches; a tube pays for being ready to.`,
+        explain: `Of a section's ${w2(SEC.average)} W (average, conducting half the time), ${w2(HEATER_W)} W is the heater. <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span> pays when it switches; a tube pays for being ready to.`,
         why: ['', 'The heater keeps the cathode at about 1000 K all the time. Switch it off and emission stops: the tube no longer conducts at all.', 'Once the cathode is hot the emission is steady: a warm tube switches no faster the longer it runs.'],
       },
     },
@@ -132,7 +132,7 @@ export const chTubes: Chapter = {
         over the resistor, and while it conducts, current flows from B+ (the +${B_PLUS} V plate supply) to ground for nothing.</p>
         <p>Electrons only leave the hot cathode, so current crosses the tube one way only. A triode can pull its
         plate down or push its cathode up, but it never passes a signal back the way a contact does (or, from
-        chapter ${numOf('mosfet')} on, <span data-ahead="mosfet">a MOSFET channel, the transistor's conducting path</span>). There is no transmission gate in tubes, and no carry that runs through switches as in the relay adder.
+        chapter 1 on, <span data-ahead="mosfet">a MOSFET channel, the transistor's conducting path</span>). There is no transmission gate in tubes, and no carry that runs through switches as in the relay adder.
         The orange line is the beam: it shows while the tube conducts.</p>
         <p>The plate resistor is the price of the output: while the tube conducts, ${w2(SEC.resistor)} W goes into it and ${w2(SEC.plate)} W into the tube, from the supply
         to ground, on top of the heater. A <span data-ahead="cmos inverter">CMOS inverter (a pair of complementary transistors)</span> has no such standing path; the tube circuit is the pseudo-NMOS inverter of
@@ -172,7 +172,7 @@ export const chTubes: Chapter = {
     {
       title: 'Levels that do not line up',
       body: `
-        <p>A <span data-ahead="cmos">CMOS (the transistor logic of chapters ${numOf('mosfet')} to ${numOf('nand')})</span> output can drive the next input directly: both live between 0 V and VDD. A tube cannot. Its plate
+        <p>A <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span> output can drive the next input directly: both live between 0 V and VDD. A tube cannot. Its plate
         swings between ${v(V_LOW)} V and ${B_PLUS} V, but the next grid needs about 0 V to conduct and less than
         ${V_CUTOFF} V to be cut off. Wired straight across, the next tube would conduct for ever.</p>
         <p>So every input goes through a <strong>divider</strong> from the plate to a negative bias rail. To put a
@@ -275,7 +275,7 @@ export const chTubes: Chapter = {
         ${w2(BRICK.heaters)} W of heaters, ${w2(BRICK.plate)} W through the plate resistor, ${w2(BRICK.divider)} W in the
         divider. ENIAC already carried 7200 crystal diodes; later machines used them for gates like this one, which saved the heaters.</p>
         <p>The diodes do the logic and the triode restores the level: a diode AND alone has no gain, and every stage through it would lose a diode drop of swing. The
-        triode after it makes the output a full ${v(V_LOW)} V to ${B_PLUS} V again. That is the same split as in <span data-ahead="cmos">CMOS (the transistor logic of chapters ${numOf('mosfet')} to ${numOf('nand')})</span> between the gate and its restoring stage, paid in
+        triode after it makes the output a full ${v(V_LOW)} V to ${B_PLUS} V again. That is the same split as in <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span> between the gate and its restoring stage, paid in
         two tube envelopes (${stats(TUBE_NAND).triodes} triode section and ${stats(TUBE_NAND).diodes} diode sections per NAND).</p>
         <div class="try">Set both inputs to 1: both diodes let go, the junction rises, the triode conducts.</div>`,
       scene: () => ({ root: TUBE_NAND, inputs: { a: 1, b: 0 } }),
@@ -385,7 +385,7 @@ export const chTubes: Chapter = {
         sections, ${stats(TUBE_FA).diodes} diode sections, about ${v(9 * BRICK.total)} W. A tube gate switches in about
         ${TUBE_STEP_US.toFixed(2)} µs (the plate resistor charging the next grid, an estimate), about
         ${thin(Math.round(RELAY_STEP_MS * 1e3 / TUBE_STEP_US / 100) * 100)} times faster than a relay's ${RELAY_STEP_MS} ms and still some
-        ${VS_CMOS} times slower than a ${PS_PER_NAND} ps NAND in <span data-ahead="cmos">CMOS (the transistor logic of chapters ${numOf('mosfet')} to ${numOf('nand')})</span>.</p>
+        ${VS_CMOS} times slower than a ${PS_PER_NAND} ps NAND in <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span>.</p>
         <p><strong>ENIAC</strong> (1945): ${thin(ENIAC.tubes)} tubes, ${thin(ENIAC.diodes)} crystal diodes,
         ${thin(ENIAC.relays)} relays, ${thin(ENIAC.resistors)} resistors, ${ENIAC.power / 1e3} kW, ${ENIAC.mass / 1e3} t,
         ${thin(ENIAC.adds)} additions a second. Heaters age fastest while warming up, so it was left on: then a tube
@@ -423,7 +423,7 @@ export const chTubes: Chapter = {
         options: [`${v(CPU4_NANDS * BRICK.total / 1e3)} kW`, `${(CPU4_NANDS * BRICK.total / 1e4).toFixed(1)} kW`, `${v(CPU4_NANDS * BRICK.total / 1e2)} kW`],
         answer: 0,
         why: ['', 'That is a tenth of the bill: about 0.5 W per NAND, less than a single 6SN7 section\'s heater.', 'That is ten times the bill: about 49 W per NAND, ten times a brick.'],
-        explain: `${thin(CPU4_NANDS)} × ${w2(BRICK.total)} W ≈ ${v(CPU4_NANDS * BRICK.total / 1e3)} kW from ${thin(CPU4_NANDS / 2)} 6SN7s and ${thin(CPU4_NANDS)} 6AL5s, most of it heaters: a tenth of ENIAC for a 4-bit CPU. In <span data-ahead="cmos">CMOS, the transistor logic of chapters ${numOf('mosfet')} to ${numOf('nand')},</span> it draws milliwatts.`,
+        explain: `${thin(CPU4_NANDS)} × ${w2(BRICK.total)} W ≈ ${v(CPU4_NANDS * BRICK.total / 1e3)} kW from ${thin(CPU4_NANDS / 2)} 6SN7s and ${thin(CPU4_NANDS)} 6AL5s, most of it heaters: a tenth of ENIAC for a 4-bit CPU. In <span data-ahead="cmos">CMOS, the transistor logic of chapters 1 to 3,</span> it draws milliwatts.`,
       },
     },
   ],

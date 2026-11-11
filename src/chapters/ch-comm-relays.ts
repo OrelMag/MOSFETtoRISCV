@@ -105,7 +105,7 @@ export const chTelegraph: Chapter = {
       title: 'Moving a bit',
       body: `
         <p>The last chapter gave the vocabulary: a rate, the two parts of a delay, packets, decibels. This one builds the simplest link that uses it, and finds the two limits every later link lives under.</p>
-        <p>Chapters ${numOf('mosfet')} to ${numOf('bus')} move a bit a few hundred micrometres, in a few gate delays. A NAND output that flips
+        <p>Chapters 1 to ${numOf('bus')} move a bit a few hundred micrometres, in a few gate delays. A NAND output that flips
         its fan-out charges about ${NAND_C.toFixed(1)} fF to ${VDD} V (the power model's 28 nm-class core supply; the transistor-level circuits, the next chapters' pads among them, use 1.8 V): ½ C V² = ${NAND_FJ.toFixed(2)} fJ, in ${PS_PER_NAND} ps. The same bit as one ${f0(TG_MS)} ms dot on a
         ${TG.km} km telegraph line, with the key closed for the whole dot, takes ${TG.V} V × ${mA(TG_I)} mA × ${f0(TG_MS)} ms = ${f0(TG_J * 1e3)} mJ: some
         10<sup>${TG_EXP}</sup> times the energy, and ${thin(TG_SLOW / 1e6)} million times as long. The comparison is unfair to the telegraph, which has no

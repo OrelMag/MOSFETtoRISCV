@@ -661,7 +661,7 @@ export const chOoo: Chapter = {
         <p>The model behind this chapter is the specification the gate-level core follows cycle for cycle. Here it takes
         any shape: fetch and commit widths, issue ports and the units on each, the window, the predictor, where a
         misprediction is recovered, the latencies. Run it on the benchmark set, one program, your own assembly or a
-        chapter ${numOf('python')} Python program (the same workbench page is the Lab tab).</p>
+        chapter 15 Python program (the same workbench page is the Lab tab).</p>
         <p>Every commit slot is accounted for. Two a cycle make 2n slots in n cycles; each one either commits an
         instruction or is charged to what the oldest instruction in flight waits for, since everything younger waits
         behind it. On our core 50.2 % commit and 32.0 % go to mispredictions: the wait for a mispredicted branch to

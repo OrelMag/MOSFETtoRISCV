@@ -101,7 +101,7 @@ export const chFlash: Chapter = {
         put on this <strong>floating gate</strong> stay there for years, and their charge raises the transistor's threshold. Erased,
         the cell has Vt = ${vtOf(0)} V and conducts at the read voltage of ${V_READ} V: it reads 1. Programmed, Vt ≥ ${V_READ} V and it stays
         off: it reads 0. One transistor a bit, no capacitor to refresh, and nothing lost without power.</p>
-        <p>Its ancestor is <a href="#/c/memory/0">chapter ${numOf('memory')}</a>'s ROM, where a bit is a connection that is there or not: in a mask ROM, a
+        <p>Its ancestor is <a href="#/c/memory/0">chapter 10</a>'s ROM, where a bit is a connection that is there or not: in a mask ROM, a
         transistor at the crossing of word and bit line, placed or left out at manufacture. EPROM (Intel, 1971) made that transistor a
         floating gate, programmed electrically and erased by ultraviolet light through a quartz window; EEPROM erased electrically, a byte
         at a time, at the price of a second transistor per cell. Masuoka's flash (Toshiba, 1984) went back to one transistor and erased a
@@ -341,7 +341,7 @@ export const chFlash: Chapter = {
       body: `
         <p>Everything so far read back exactly what was programmed. Real cells do not: the threshold is analog, it drifts with retention, read disturb, neighbours and wear, and some bits read wrong. The measure is the
         <strong>raw bit error rate</strong> (RBER), the fraction of bits that read wrong before correction: around 10<sup>-6</sup> for fresh SLC, 10<sup>-4</sup> to 10<sup>-3</sup> for worn TLC. The drive must
-        still show an <strong>uncorrectable bit error rate</strong> (UBER) below about 10<sup>-15</sup>, so every page carries a code. <a href="#/c/cache/0">Chapter ${numOf('cache')}</a>'s SEC-DED word is the idea, on a
+        still show an <strong>uncorrectable bit error rate</strong> (UBER) below about 10<sup>-15</sup>, so every page carries a code. <a href="#/c/cache/0">Chapter 22</a>'s SEC-DED word is the idea, on a
         small word: the <span data-show="enc">encoder</span> adds check bits on write, flips between write and read corrupt the stored word, the <span data-show="dec">decoder</span> finds one flipped bit and fixes it, or flags two it cannot fix.</p>
         <p>A page needs a stronger code over a longer word. A <strong>BCH</strong> code on a 1 KiB codeword (${fmtN(8192)} data bits) that corrects <em>t</em> bit errors costs m · <em>t</em> parity bits with m = 14: ${bchParity(8192, 1)} for t = 1, ${bchParity(8192, 8)} for t = 8, ${bchParity(8192, 40)} for t = 40. A 4 KiB page is four codewords, so t = 40 needs ${4 * bchParity(8192, 40) / 8} bytes of the page's spare area. Take raw errors as independent (real ones cluster by block, word line and age, so this is the optimistic case):
         the codeword fails when more than <em>t</em> of its ${fmtN(8192)}-plus bits flip, a binomial tail, computed here exactly:</p>

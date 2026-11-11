@@ -4,7 +4,6 @@
 //
 // Implemented: all of RV32I except byte/halfword loads & stores, FENCE, ECALL, EBREAK.
 
-import { numOf } from '../chapters/order';
 import { symbolGeom } from '../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { IMM_SRC } from '../riscv/isa';
@@ -91,7 +90,7 @@ export function dataMemory(k = 5, gated = false): ComponentDef {
     const rg = symbolGeom(R);
     return define({
       id: `dmem${k}${gated ? '_cg' : ''}`, name: `Data memory${gated ? ', clock-gated' : ''}`, category: 'memory',
-      summary: `${2 ** k} words (${4 * 2 ** k} bytes). The memory array from Chapter ${numOf('memory')} at 32 bits wide; address bits [${k + 1}:2] select the word.`,
+      summary: `${2 ** k} words (${4 * 2 ** k} bytes). The memory array from Chapter 10 at 32 bits wide; address bits [${k + 1}:2] select the word.`,
       ports: [bus('addr', 32, 'in'), bus('wd', 32, 'in'), bit('we', 'in'), bit('clk', 'in', 'bottom', true), bus('rd', 32, 'out')],
       symbol: { kind: 'box', label: 'DATA MEM' },
       netlist: () => ({

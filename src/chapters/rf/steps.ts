@@ -93,10 +93,10 @@ export const rfSteps: Step[] = [
       ],
     },
     more: {
-      derive: `<p>Storage per bit: ${RF_NUMBERS().latch} NANDs (a D latch, chapter ${numOf('latches')}) against ${RF_NUMBERS().dff} (flip-flop with enable). 31 words × 32 bits × ${RF_NUMBERS().dff - RF_NUMBERS().latch} = ${g(31 * 32 * (RF_NUMBERS().dff - RF_NUMBERS().latch))}, less the 31 AND gates that merge the clock into each enable.
+      derive: `<p>Storage per bit: ${RF_NUMBERS().latch} NANDs (a D latch, chapter 8) against ${RF_NUMBERS().dff} (flip-flop with enable). 31 words × 32 bits × ${RF_NUMBERS().dff - RF_NUMBERS().latch} = ${g(31 * 32 * (RF_NUMBERS().dff - RF_NUMBERS().latch))}, less the 31 AND gates that merge the clock into each enable.
         The file saves ${g(RF_NUMBERS().rf - RF_NUMBERS().lf)} NANDs, ${pct(RF_NUMBERS().rf - RF_NUMBERS().lf, RF_NUMBERS().rf)} %.</p>`,
-      real: `<p>Latch-based register files exist in fast cores for exactly this: half the storage devices and the write happens in a defined phase. The cost moves to timing: time borrowing across the phase, a clock gated per word, and verification of the loop through the transparent phase. The SRAM cell of chapter ${numOf('memory')} goes further, six transistors holding a bit with no clock at all.</p>`,
-      pitfall: `<p>Using the latch file in the single-cycle CPU of chapter ${numOf('cpu')} unchanged. <code>addi x1, x1, 1</code> then reads x1, adds, and writes it back while the word is open: a combinational loop through a transparent latch. Whatever stops that (a write-data latch, a pulse shorter than the loop) is part of the design, and the saving above does not include it.</p>`,
+      real: `<p>Latch-based register files exist in fast cores for exactly this: half the storage devices and the write happens in a defined phase. The cost moves to timing: time borrowing across the phase, a clock gated per word, and verification of the loop through the transparent phase. The SRAM cell of chapter 10 goes further, six transistors holding a bit with no clock at all.</p>`,
+      pitfall: `<p>Using the latch file in the single-cycle CPU of chapter 14 unchanged. <code>addi x1, x1, 1</code> then reads x1, adds, and writes it back while the word is open: a combinational loop through a transparent latch. Whatever stops that (a write-data latch, a pulse shorter than the loop) is part of the design, and the saving above does not include it.</p>`,
     },
     challenge: {
       kind: 'reach',

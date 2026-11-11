@@ -1,7 +1,6 @@
 // Chapter widths's explorers for the C extension: code size measured on our own programs, a 16-bit parcel taken apart
 // bit by bit next to the instruction it stands for, and what the C core costs.
 
-import { numOf } from '../chapters/order';
 import { groupDigits } from '../sim/numfmt';
 import { assemble } from '../riscv/asm';
 import { BENCHMARKS } from '../riscv/benchprograms';
@@ -22,7 +21,7 @@ function programs(): Prog[] {
   const py = PY_PROGRAMS.map((p) => ({ id: `py-${p.id}`, name: `Python: ${p.name}`, source: compilePy(p.source).asm })).filter((p) => p.source);
   return [
     ...BENCHMARKS.filter((b) => !b.needs?.f).map((b) => ({ id: `b-${b.id}`, name: `Benchmark: ${b.name}`, source: b.source })),
-    ...PROGRAMS.map((p) => ({ id: `s-${p.id}`, name: `Chapter ${numOf('cpu')}: ${p.name}`, source: p.source })),
+    ...PROGRAMS.map((p) => ({ id: `s-${p.id}`, name: `Chapter 14: ${p.name}`, source: p.source })),
     ...py,
   ];
 }
@@ -162,7 +161,7 @@ export function cExplorer(): Widget {
   return {
     el: h('div', { class: 'widget' }, h('div', { class: 'panel rvc-explore' },
       h('h3', null, '16 bits, and the 32 they stand for'),
-      h('p', { class: 'sub' }, `Click a bit of the parcel to flip it. Colours as in chapter ${numOf('isa')}: the opcode and function bits pick the form; registers, immediates. A bit of the instruction that no parcel bit feeds is a constant (outlined).`),
+      h('p', { class: 'sub' }, 'Click a bit of the parcel to flip it. Colours as in chapter 13: the opcode and function bits pick the form; registers, immediates. A bit of the instruction that no parcel bit feeds is a constant (outlined).'),
       h('div', { class: 'param-row' }, pick),
       h('div', { class: 'rvc-k' }, 'parcel (16 bits)'), top,
       h('div', { class: 'rvc-k' }, 'instruction (32 bits)'), bottom,

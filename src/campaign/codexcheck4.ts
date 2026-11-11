@@ -81,7 +81,7 @@ export const CHECK4: Record<string, Quiz[]> = {
       question: 'A single-cycle CPU runs 188 instructions with 32 loads; 4 loads miss and each miss stalls 8 cycles. What is its CPI?',
       options: ['About 1.17', '1.0', 'About 2.36', '2.0'],
       answer: 0,
-      explain: `4 × 8 = 32 stall cycles: (188 + 32) / 188 = 1.17, chapter ${numOf('cache')}'s "Sum an array twice". Stall cycles per instruction = loads per instruction × miss rate × penalty = (32/188) × (4/32) × 8.`,
+      explain: '4 × 8 = 32 stall cycles: (188 + 32) / 188 = 1.17, chapter 22\'s "Sum an array twice". Stall cycles per instruction = loads per instruction × miss rate × penalty = (32/188) × (4/32) × 8.',
       why: ['', 'Misses stall the CPU: the stall cycles add to one cycle per instruction.', 'That charges 8 cycles to all 32 loads: (188 + 256) / 188. Only 4 of them miss.', 'That would be one stall cycle per instruction; there are 32 in 188.'],
     },
   ],
@@ -158,7 +158,7 @@ export const CHECK4: Record<string, Quiz[]> = {
       why: ['', 'A write works through the access transistor overpowering the weak pull-up; the pull-down ratio protects reads.', 'Stronger transistors are wider, so it costs area.', 'Precharge is what makes the read work; sizing does not remove it.'],
     },
     {
-      question: `In chapter ${numOf('cache')} a 4 × 4 SRAM array is 320 transistors, of which 96 are cells. Why do real 32 KB arrays reach over 90 % cells?`,
+      question: 'In chapter 22 a 4 × 4 SRAM array is 320 transistors, of which 96 are cells. Why do real 32 KB arrays reach over 90 % cells?',
       options: ['Decoders, precharge, write drivers and sense amplifiers are shared per row or column, so they grow far slower than the cells', 'Real cells are larger', 'Real arrays have no periphery', 'Larger arrays use 4T cells'],
       answer: 0,
       explain: 'Cells grow with rows × columns, the periphery with rows + columns. At 8 × 8 the cells are already 43 % (384 of 892).',

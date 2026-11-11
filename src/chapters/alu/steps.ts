@@ -75,7 +75,7 @@ export const aluSteps: Step[] = [
     title: 'Six branches from one subtraction',
     get body() {
       return `
-      <p>Chapter ${numOf('binary')} gave the flags and the previous steps used two of them for <code>slt</code> and <code>sltu</code>. A conditional branch (an instruction that jumps only when a comparison of two numbers holds) needs no result at all, only a verdict, and the same subtraction serves all six: the branch unit (<span data-show="nz lt ge nc">three inverters and one XOR</span>) turns
+      <p>Chapter 5 gave the flags and the previous steps used two of them for <code>slt</code> and <code>sltu</code>. A conditional branch (an instruction that jumps only when a comparison of two numbers holds) needs no result at all, only a verdict, and the same subtraction serves all six: the branch unit (<span data-show="nz lt ge nc">three inverters and one XOR</span>) turns
       Z, N, V and C into one bit per <code>funct3</code>, and an <span data-show="cond">8:1 multiplexer</span> selects it.</p>
       <table class="mini"><tr><th>funct3</th><th>branch</th><th>taken when</th></tr>${BRANCHES.map((b) => `<tr><td>${b.f3.toString(2).padStart(3, '0')}</td><td><code>${b.name}</code></td><td>${b.expr}</td></tr>`).join('')}</table>
       <p>The condition logic costs ${NPC_COND.flags} NANDs plus ${NPC_COND.mux} for the select; with the jump and jalr muxing the whole next-PC decision is ${NPC_COND.all}. Which shortcut is tempting and wrong? Over all 65 536 pairs of 8-bit operands, N alone gives the wrong signed order for ${g(WRONG.nAlone)} of them (every
@@ -136,7 +136,7 @@ export const aluSteps: Step[] = [
       ],
     },
     more: {
-      derive: `<p>The R-type column of chapter ${numOf('alu')}'s recap is "ctl = {funct7[5], funct3}" and that is exactly what <code>a0 a1 a2</code> and <code>alt1</code> produce for OP: aluOp = 1, funct3 = 101 or R-type. The extra gates exist for the other instruction groups. The cost
+      derive: `<p>The R-type column of chapter 11's recap is "ctl = {funct7[5], funct3}" and that is exactly what <code>a0 a1 a2</code> and <code>alt1</code> produce for OP: aluOp = 1, funct3 = 101 or R-type. The extra gates exist for the other instruction groups. The cost
         is small beside the datapath: ${g(CTL_PARTS)} NANDs against the ALU's thousands.</p>`,
       pitfall: `<p>Decoding on funct7 alone. <code>addi x1, x1, 1024</code> has imm[10] = 1, which is bit 30 of the instruction word, and an ALU that read that bit unconditionally would subtract. Only R-type and the shift-immediates define that bit.</p>`,
     },
