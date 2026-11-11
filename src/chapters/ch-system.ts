@@ -309,7 +309,7 @@ export const chIO: Chapter = {
           'Nothing prints until a store reaches 0x8000_0000, so the clock has to run.',
           'Each character costs a store, and a new letter also a load-immediate: count the characters in the greeting.',
         ],
-        answer: 'Press "Run to halt" (or Pulse ~31 times): 15 characters, 15 stores and 15 load-immediates in all (the second l reuses its register), with the halt loop.',
+        answer: `Press "Run to halt" (or Pulse ~31 times): ${(sys('hello').match(/\bsb\b/g) ?? []).length} characters, as many stores, and ${(sys('hello').match(/\bli\b/g) ?? []).length} load-immediates (one is the console address; the second l reuses its register), then the halt loop.`,
         solve: (st) => { st.runCycles(40); },
       },
     },

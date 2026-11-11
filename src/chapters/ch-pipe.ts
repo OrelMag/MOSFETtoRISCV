@@ -211,6 +211,9 @@ const fmt = groupDigits;
 const pySrc = (id: string) => PY_PROGRAMS.find((p) => p.id === id)!.source;
 /** The pipelined CPU's runs of chapter 15's samples that the last step quotes (tests/pypipe.test.ts checks every number against the gates). */
 const PIPE = { nands: 113438 }, SINGLE = { nands: 100979 };
+/** Both CPUs' memories on that run: the 256-word program ROM and the 64-word data memory (tests/pypipe.test.ts). */
+const MEMS = { rom: 32640, dm: 39558 };
+const core = (n: number) => n - MEMS.rom - MEMS.dm;
 export const PREFIX = { cycles: 219, instr: 166, stall: 15, flush: 36, fill: 2 };
 export const GCD_I = { cycles: 2409, instr: 1545, flush: 860 };
 
@@ -549,7 +552,7 @@ export const chPipeline: Chapter = {
       body: `
         <p>Chapter ${numOf('python')}'s compiler and Python panel, on this chapter's CPU: the compiled words are the same RV32I, only the machine changes. The five-stage pipeline (F, D, E, M, W) runs them
         on ${fmt(PIPE.nands)} NANDs against the single-cycle CPU's ${fmt(SINGLE.nands)} (+${(100 * (PIPE.nands - SINGLE.nands) / SINGLE.nands).toFixed(1)} %: four stage registers, forwarding, the
-        <span data-show="hz">hazard unit</span>). A cycle is no longer an instruction, so the panel reads the pipeline's own signals at every edge and charges
+        <span data-show="hz">hazard unit</span>). Both totals include the same ${fmt(MEMS.rom)}-NAND program ROM and ${fmt(MEMS.dm)}-NAND data memory; the processors alone are ${fmt(core(SINGLE.nands))} against ${fmt(core(PIPE.nands))}, +${(100 * (core(PIPE.nands) - core(SINGLE.nands)) / core(SINGLE.nands)).toFixed(1)} %. A cycle is no longer an instruction, so the panel reads the pipeline's own signals at every edge and charges
         <em>each clock to exactly one Python line</em>.</p>
         <p>An instruction in Execute is an <em>issue</em> cycle of its line. An empty Execute is charged to the instruction that left it empty:
         a <em>stall</em> behind a load (its result arrives from Memory, one stage later than the next instruction's Execute wants it;

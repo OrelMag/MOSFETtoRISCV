@@ -374,7 +374,7 @@ export const chAdders: Chapter = {
         the high field decides, unless it is equal, in which case the low field decides. <span data-show="lt">lt</span> is neither greater nor equal.</p>
         <p>That is how you compare two numbers by eye: start at the most significant digit and stop at the first one that differs. The tree does
         all those "first difference" questions at once, in pairs, then pairs of pairs.</p>
-        <p>At 32 bits that is ${CMP32} gate delays against ${BORROW32} for the subtractor's carry out, for a similar cost (${stats(magComparator(32, false)).nands} NANDs against ${stats(addSub(32)).nands}). The depth grows
+        <p>At 32 bits that is ${CMP32} gate delays against ${BORROW32} for the subtractor's carry out (the ripple adder's ${portDepth(rca(32), 'cout')} plus the XOR in front of b), for a similar cost (${stats(magComparator(32, false)).nands} NANDs against ${stats(addSub(32)).nands}). The depth grows
         with log n instead of n.</p>
         <div class="try">Open a <code>combine</code> cell: it is the same "the higher one decides" rule as the carry cells of the fast adders in
         <a href="#/c/fastadd/0">chapter 16</a>.</div>`,
@@ -481,7 +481,7 @@ export const chRouting: Chapter = {
   recap: {
     keep: [
       'A decoder raises exactly one of 2ⁿ outputs (one-hot): each output is an AND of true and inverted address rails. An enable is one more input on every AND.',
-      'A 2ᵏ:1 multiplexer is a tree of 2ᵏ − 1 two-input muxes, k levels deep. A w-bit bus mux is w of them sharing one select. Eight 4-bit words to one: 7 bus muxes, 112 NANDs, 7 NAND delays.',
+      'A 2ᵏ:1 multiplexer is a tree of 2ᵏ − 1 two-input muxes, k levels deep. A w-bit bus mux is w of them sharing one select. Eight 4-bit words to one: 7 bus muxes, 112 NANDs, 7 NAND delays from the select (6 from the data).',
       'An encoder ORs the inputs whose index has bit j set (8 inputs: 27 NANDs). It cannot tell input 0 from no input, nor make sense of two at once.',
       `A priority encoder reports the highest request plus a valid bit v, built recursively from half-size encoders: ${logicDepth(priorityEncoder(8))} NAND delays for 8 inputs, ${logicDepth(priorityEncoder(32))} for 32.`,
       'A demultiplexer sends one word to one of 2ᵏ outputs: a decoder gating rows of ANDs. A memory writes through a decoder and reads through a mux tree.',
@@ -622,7 +622,7 @@ export const chRouting: Chapter = {
           register file read in a CPU is exactly this choice.</p>`,
         pitfall: `<p>Wiring the select bits in the wrong order. The least significant bit selects at the first level (nearest the data), the most significant at the last; swapping them reads input 1 as input 2. On the circuit: s0 should feed the
           muxes closest to the d inputs.</p>`,
-        numbers: `<table class="mini"><tr><th>inputs</th><th>2:1 muxes</th><th>NANDs (1 bit)</th><th>delays</th></tr>
+        numbers: `<table class="mini"><tr><th>inputs</th><th>2:1 muxes</th><th>NANDs (1 bit)</th><th>delays (from s, the longest path)</th></tr>
           ${[1, 2, 3, 4, 5].map((k) => `<tr><td>${2 ** k}</td><td>${2 ** k - 1}</td><td>${stats(muxTree(k, 1)).nands}</td><td>${logicDepth(muxTree(k, 1))}</td></tr>`).join('')}</table>`,
       },
       scene: () => ({ root: muxTree(2, 1), inputs: { d0: 0, d1: 1, d2: 0, d3: 1, s: 1 } }),
@@ -689,7 +689,7 @@ export const chRouting: Chapter = {
           (a decoder drives AND-OR gates) because that makes the select-to-data delay shorter than a tree of 2:1 cells.</p>`,
         pitfall: `<p>Forgetting that the select path is the slow one. The data inputs pass through one multiplexer per level, but s0 fans out to the whole first level and each select goes through an inverter first. In a deep tree the select
           arrives late; the data should not be assumed to be the critical input.</p>`,
-        numbers: `<table class="mini"><tr><th>words (4 bits)</th><th>bus muxes</th><th>NANDs</th><th>delays</th></tr>
+        numbers: `<table class="mini"><tr><th>words (4 bits)</th><th>bus muxes</th><th>NANDs</th><th>delays (from s, the longest path)</th></tr>
           ${[1, 2, 3, 4, 5].map((k) => `<tr><td>${2 ** k}</td><td>${2 ** k - 1}</td><td>${stats(muxTree(k, 4)).nands}</td><td>${logicDepth(muxTree(k, 4))}</td></tr>`).join('')}</table>`,
       },
       scene: () => ({ root: muxTree(3, 4), inputs: { d0: 0x0, d1: 0x1, d2: 0x2, d3: 0x3, d4: 0x4, d5: 0x5, d6: 0x6, d7: 0x7, s: 3 } }),

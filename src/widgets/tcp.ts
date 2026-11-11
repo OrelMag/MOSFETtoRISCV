@@ -322,7 +322,7 @@ export function tcpWindowScene(): Scene {
 }
 
 /** How far the chapter's window has come, and the button its "Do it for me" presses. */
-export const windowApi = new WeakMap<Stage, { state(): { open: boolean; clocks: number; retired: number; mismatch: string | null; frames: number }; open(): void }>();
+export const windowApi = new WeakMap<Stage, { state(): { open: boolean; clocks: number; retired: number; mismatch: string | null; frames: number }; open(): void; runTo(retired: number): void; close(): void }>();
 
 function windowPanel(stage: Stage): Widget {
   let t = windowBench(), w: GateWindow | null = null, raf = 0, last = { clocks: 0, retired: 0 }, framesAt = 0, rate = 0, running = false;
@@ -377,7 +377,10 @@ function windowPanel(stage: Stage): Widget {
     if (running) raf = requestAnimationFrame(frame);
   };
   const start = () => { running = true; paint(); raf = requestAnimationFrame(frame); };
-  windowApi.set(stage, { state: () => ({ open: !!w, clocks: w?.clocks ?? last.clocks, retired: w?.retired ?? last.retired, mismatch: w?.mismatch ?? null, frames: (t.router.log?.length ?? 0) - framesAt }), open: () => { if (!w) openWindow(); } });
+  windowApi.set(stage, { state: () => ({ open: !!w, clocks: w?.clocks ?? last.clocks, retired: w?.retired ?? last.retired, mismatch: w?.mismatch ?? null, frames: (t.router.log?.length ?? 0) - framesAt }), open: () => { if (!w) openWindow(); },
+    // Do it for me: clock the open window until it has retired `n` instructions (or disagrees), then hand back with Back to the models.
+    runTo: (n) => { if (!w) return; stop(); let g = 0; while (w.retired < n && !w.mismatch && g++ < 2_000_000) t.bench.clock(); stage.refresh(); paint(); },
+    close: () => closeWindow() });
   paint();
   const title = h('h4', null, 'TCP · models and gates', h('span', { class: 'fold-hint' }));
   const el = h('div', { class: 'mem-panel cpu-panel tcp-panel', 'data-dock': 'right', 'data-phone': 'flow' }, title, h('div', { class: 'cpu-body' }, row, status, where, result,

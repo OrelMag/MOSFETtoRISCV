@@ -332,8 +332,8 @@ export const chSimt: Chapter = {
         <p>Odd lanes should compute 3·lane, even lanes lane / 2. Written as a plain <code>if</code>, the lanes disagree at <code>beqz</code>: lanes 0 and 2 want to
         branch, lanes 1 and 3 do not. One PC cannot go both ways, so the warp follows its <span data-show="lead">leader</span> (lane 0) to the even path, and the
         odd lanes compute the even result. The instruction-set simulator counts the divergent branch; the hardware simply follows the leader.</p>
-        <p>This is the failure the rest of the chapter exists to prevent, and it is silent: no flag is raised, no lane stops, the program finishes and stores four values, three of
-        them plausible. A divergent branch needs the hardware to run <em>both</em> sides, one after the other, each with the lanes that want it, and to put the warp back together
+        <p>This is the failure the rest of the chapter exists to prevent, and it is silent: no flag is raised, no lane stops, the program finishes and stores four values, and
+        two of them are wrong with nothing to say so. A divergent branch needs the hardware to run <em>both</em> sides, one after the other, each with the lanes that want it, and to put the warp back together
         afterwards. That takes a mask (already here), a place to remember the lanes that are waiting and where to resume (a stack), and two instructions to drive them.</p>`,
       scene: () => laneCoreScene('nosplit'),
       tour: {

@@ -90,7 +90,7 @@ export const PATH_MINUTES: Record<string, number[]> = {
   "iir": [7,6,6,6,6,6,7,6],
   "multirate": [3,5,5,5,5,5,5,5,5],
   "cordic": [3,5,5,5,5,5,5],
-  "mac": [5,5,5,6,5,5,5,5],
+  "mac": [6,5,5,6,5,5,5,5],
   "dspcore": [5,5,5,5,5,5,5,5,6],
   "converters": [3,5,5,5,7,5,5],
   "adaptive": [3,3,5,6,5,6],

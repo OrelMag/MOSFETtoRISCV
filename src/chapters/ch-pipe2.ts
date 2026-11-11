@@ -159,7 +159,7 @@ export const chPipePay: Chapter = {
           operation in the pipeline.</p>`,
       },
       challenge: {
-        kind: 'quiz', question: 'With the ripple-carry ALU, the balanced pipeline\'s critical path is EX/MEM → forwarding → ALU → EX/MEM. What does that tell you?',
+        kind: 'quiz', question: 'Built with a ripple-carry ALU instead (this scene\'s is Kogge–Stone), the balanced pipeline\'s critical path would be EX/MEM → forwarding → ALU → EX/MEM. What does that tell you?',
         options: ['The branch logic is still the bottleneck', 'The stages are now limited by the ALU itself: a faster adder is the next step', 'Forwarding should be removed'], answer: 1,
         why: ['Branches now resolve in their own comparator, off this path: the path named runs from forwarding into the ALU and back.', '', 'Forwarding is one mux in front of the ALU; without it every dependent pair of instructions would stall.'],
         explain: 'Once forwarding and branches are off the path, the E stage is "just" the ALU (plus one forwarding mux). With the Kogge–Stone ALU the period drops to 59 NAND delays, and the critical path moves again: forwarded operand → branch comparator → flush of ID/EX. The ALU path into EX/MEM is now 51, the M and W stages at most 21.',
@@ -252,7 +252,7 @@ export const chPipePay: Chapter = {
         rs1 + imm) and pick the right comparison with the jalr bit. The decision and the check then overlap: 70 NAND delays.</p>
         <p>And area: this BTB is ${fmt(nands(BTB))} NANDs (16 entries × 62 bits of flip-flops, a decoder and two read ports),
         as much as the register file. With its checking logic the core grows by 38 %, from 64 881 to 89 712 NANDs without the
-        program ROM: a large price for a period 19 % longer and a CPI 14 % lower.</p>
+        program ROM (with a 32-word data memory): a large price for a period 19 % longer and a CPI 14 % lower.</p>
         <p>The period is the more instructive cost. A predictor is not on the critical path by itself: the BTB read happens in Fetch beside the instruction memory. The path that grew is the check, in Execute, that the guess
         was right, because it needs the branch's own outcome and target. Doing the two comparisons in parallel instead of in sequence is the general method: when a decision gates a check, compute the check for each possible decision
         and select afterwards.</p>`,

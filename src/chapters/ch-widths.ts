@@ -281,7 +281,7 @@ export const chWidths: Chapter = {
         <table class="rvc-table">
           <thead><tr><th>Single-cycle core</th><th class="num">NANDs (no ROM)</th><th class="num">Period</th></tr></thead>
           <tbody>
-            <tr><td>RV32I (chapter 14)</td><td class="num">${groupDigits(K.plain.nands)}</td><td class="num">${K.plain.period}</td></tr>
+            <tr><td>RV32I (chapter 14, ripple adders)</td><td class="num">${groupDigits(K.plain.nands)}</td><td class="num">${K.plain.period}</td></tr>
             <tr><td>RV32IC</td><td class="num">${groupDigits(K.c.nands)}</td><td class="num">${K.c.period}</td></tr>
             <tr><td>… expander</td><td class="num">${groupDigits(K.expander.nands)}</td><td class="num">${K.expander.depth} deep</td></tr>
             <tr><td>… bank index and swaps</td><td class="num">${K.fetch}</td><td class="num"></td></tr>
@@ -446,6 +446,7 @@ export const chWidths: Chapter = {
             <tr><td>A divide</td><td class="num">34 cycles</td><td class="num">66 cycles</td></tr>
           </tbody>
         </table>
+        <p>Both columns are one drawing built at two widths, with Kogge–Stone adders and a 32-word data memory, so the 32-bit column is not chapter ${numOf('cpu')}'s ripple core (${fmt(RVC_COSTS.plain.nands)} NANDs, ${RVC_COSTS.plain.period} delays) that the C extension was measured against.</p>
         <p>×${(X.rv64im.nands / X.rv32im.nands).toFixed(2)} the gates, the largest share in the multiplier (×${(X.mUnit[64] / X.mUnit[32]).toFixed(1)}) and in storage
         that simply doubles. The period grows by ${pct(X.rv64im.period, X.rv32im.period)} %. The Timing panel shows the critical path running through the
         multiplier, whose tree gained levels and whose final adder doubled; without M the core goes from ${X.rv32i.period} to ${X.rv64i.period} delays,

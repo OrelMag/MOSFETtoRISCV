@@ -87,7 +87,7 @@ export const chSensors: Chapter = {
         return `
         <p>A charge-coupled device keeps each pixel's electrons in a potential well under a gate and moves them all to one amplifier. Three gates per pixel, clocked in phases: the packet sits under the gate held high; raise the next one, lower the first, and the packet slides over. Six steps of the three clocks move every packet in the array one pixel at once, like a bucket brigade (Boyle and Smith, Bell Labs, 1969).</p>
         <p>The numbers here are the Teledyne e2v CCD42-40, a scientific full-frame sensor: ${g(CCD42_40.cols)} × ${g(CCD42_40.rows)} pixels of ${CCD42_40.pitch} µm, three-phase image and register clocks, ${g(CCD42_40.fullWell)} e⁻ per pixel, ${CCD42_40.cg} µV per electron at the output. The rows shift down into a serial register, which shifts along to the output amplifier, the only place a charge becomes a voltage. Each gate is about ${n1(CCD42_40.gateLength, 1)} µm long: that is the pixel over three, as the datasheet gives no gate length.</p>
-        <p>Every transfer leaves a little behind. The charge-transfer efficiency (CTE) is 99.9999 % per transfer in the image area and 99.9993 % in the register, and the far corner's charge makes ${g(4096)} transfers: ${n1(ccdRetained(2047, 2047) * 100, 1)} % of it arrives. At 99 % it would be gone. Reading the frame through one amplifier takes ${n1(ccdReadTime(3e6), 1)} s at 3 MHz, or ${n1(ccdReadTime(20e3) / 60, 1)} minutes at the 20 kHz where the noise is lowest (${CCD42_40.readNoise} e⁻). Consumer interline CCDs such as the Sony ICX285 (${ICX285.pitch} µm) clock their vertical registers in four phases instead, two gates high at a time: try both.</p>`;
+        <p>Every transfer leaves a little behind. The charge-transfer efficiency (CTE) is 99.9999 % per transfer in the image area and 99.9993 % in the register, and the far corner's charge makes ${g(4096)} transfers: ${n1(ccdRetained(2047, 2047) * 100, 1)} % of it arrives, the loss mostly in the register (${n1((1 - CCD42_40.cteSerial ** 2048) * 100, 1)} % over its ${g(2048)} transfers against ${n1((1 - CCD42_40.cteParallel ** 2048) * 100, 1)} % in the image area). At 99 % it would be gone. Reading the frame through one amplifier takes ${n1(ccdReadTime(3e6), 1)} s at 3 MHz, or ${n1(ccdReadTime(20e3) / 60, 1)} minutes at the 20 kHz where the noise is lowest (${CCD42_40.readNoise} e⁻). Consumer interline CCDs such as the Sony ICX285 (${ICX285.pitch} µm) clock their vertical registers in four phases instead, two gates high at a time: try both.</p>`;
       },
       widget: () => withModel(ccdWidget(), ccd3d()),
       challenge: {
@@ -186,16 +186,16 @@ export const chSensors: Chapter = {
       title: 'What limits a pixel',
       get body() {
         return `
-        <p>Three noises decide what a pixel can see. <strong>Shot noise</strong>: photons arrive at random, so N electrons vary by √N, and the SNR can never beat √N. <strong>Read noise</strong>: the amplifier and the ADC add a few electrons whatever the light, ${IMX183.readNoise} e⁻ for the IMX183 and ${CCD42_40.readNoise} e⁻ for the CCD42-40 read slowly. <strong>Dark current</strong>: heat lifts electrons too, ${g(CCD42_40.darkAt293)} e⁻ a pixel a second in the CCD42-40 at 20 °C, halving about every 8 K as it cools (its datasheet's law): ${n1(darkCurrent(173) * 3600, 1)} e⁻ an hour at −100 °C, which is why astronomers cool their cameras.</p>
+        <p>Three noises decide what a pixel can see. <strong>Shot noise</strong>: photons arrive at random, so N electrons vary by √N, and the SNR can never beat √N. <strong>Read noise</strong>: the amplifier and the ADC add a few electrons whatever the light, ${IMX183.readNoise} e⁻ for the IMX183 and ${CCD42_40.readNoise} e⁻ for the CCD42-40 read slowly. <strong>Dark current</strong>: heat lifts electrons too, ${g(CCD42_40.darkAt293)} e⁻ a pixel a second in the CCD42-40 at 20 °C, halving about every 8 K near room temperature and every 3 K by −100 °C (its datasheet's law, steeper as it cools): ${n1(darkCurrent(173) * 3600, 1)} e⁻ an hour at −100 °C, which is why astronomers cool their cameras.</p>
         <p>In the dark the read noise rules; above a few tens of electrons the photons' own randomness does; at the top the <strong>full well</strong> stops the count. Full well over read noise is the dynamic range: ${n1(dynamicRangeDb(IMX183), 1)} dB for the IMX183 (${g(IMX183.fullWell)} e⁻ over ${IMX183.readNoise}), ${n1(dynamicRangeDb(CCD42_40), 1)} dB for the CCD42-40, whose ${CCD42_40.pitch} µm pixels hold ten times the charge. Smaller pixels hold less charge and catch less light, which is why phone sensors combine several pixels in the dark.</p>
         <p>QE at 525 nm is ${Math.round(qe(525, STACK_BSI) * 100)} % back-illuminated against about ${Math.round(qe(525, STACK_FSI) * 100)} % front-illuminated in the model: the one number a design can still raise when the noise is down to the photons.</p>`;
       },
       widget: () => noiseWidget(),
       challenge: {
         kind: 'quiz', question: 'A pixel collects 25 e⁻ with 3.3 e⁻ of read noise and no dark current. What is its SNR?',
-        options: ['About 4.4', '25', '5', '7.6'],
+        options: ['About 4.2', '25', '5', '7.6'],
         answer: 0,
-        explain: '25 / √(25 + 3.3²) = 25 / 5.7 ≈ 4.4. Shot noise alone would allow 5.',
+        explain: '25 / √(25 + 3.3²) = 25 / √35.9 = 25 / 6.0 ≈ 4.2. Shot noise alone would allow 5.',
         why: ['', 'That forgets the noise entirely.', 'That is the shot-noise limit alone, √25.', 'That is 25 over the read noise alone.'],
       },
     },
