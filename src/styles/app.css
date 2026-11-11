@@ -412,6 +412,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .step-title { font-size: 18px; font-weight: 700; margin: 0 0 8px; letter-spacing: -0.01em; }
 .prose p { margin: 0 0 0.85em; color: var(--text-2); }
 .prose strong { color: var(--text); }
+/* a number too long for a line (a float's exact decimal expansion): it breaks anywhere rather than widening the pane */
+.prose .longnum { overflow-wrap: anywhere; word-break: break-all; }
 .prose ul, .prose ol { padding-left: 1.2em; color: var(--text-2); margin: 0 0 0.9em; }
 .prose li { margin: 0.2em 0; }
 .prose .note {
