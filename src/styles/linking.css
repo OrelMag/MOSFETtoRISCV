@@ -1,5 +1,7 @@
 /* Chapter 'linking' (widgets/linking.ts): source and object files side by side, the bit strip of a relocation, the link tables. */
 .ln-widget { --ln-imm: light-dark(#7a3fb0, #c79bf0); --ln-rd: light-dark(#1f7a4f, #6fd6a2); --ln-op: light-dark(#2563c9, #7fb0ff); --ln-rel: light-dark(#b3264a, #ff8fa3); --ln-sym: light-dark(#9a6200, #ffc46b); }
+/* on the stage, clear of the challenge card at the top right (as .asm-practice) */
+.canvas .widget.ln-reloc { padding-top: 64px; }
 .ln-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
 .ln-file { border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); padding: 8px 10px; min-width: 0; overflow-x: auto; }
 .ln-file h5 { margin: 0 0 4px; font-size: 13px; }

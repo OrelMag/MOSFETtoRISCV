@@ -101,9 +101,9 @@ export const chLinking: Chapter = {
       },
       {
         question: `la a0, msg with msg ${hex(0xf80)} bytes ahead of the auipc: what are the auipc and addi immediates?`,
-        options: [`auipc ${F.laHi}, addi ${F.laLo}`, 'auipc 0, addi 0xf80', 'auipc 1, addi 0xf80', `auipc 0, addi ${F.laLo}`],
+        options: [`auipc ${F.laHi}, addi −${-F.laLo}`, 'auipc 0, addi 0xf80', 'auipc 1, addi 0xf80', `auipc 0, addi −${-F.laLo}`],
         answer: 0,
-        explain: `The addi's immediate is 12 bits signed: −2048 … 2047. 0xf80 = 3968 does not fit, so it is 4096 − 128: the high part rounds up to 1 (4096) and the low part is ${F.laLo}.`,
+        explain: `The addi's immediate is 12 bits signed: −2048 … 2047. 0xf80 = 3968 does not fit, so it is 4096 − 128: the high part rounds up to 1 (4096) and the low part is −${-F.laLo}.`,
         why: ['', '0xf80 = 3968 is outside the addi\'s −2048 … 2047.', 'That adds to 4096 + 3968: too far.', 'That reaches −128, behind the auipc.'],
       },
       {
@@ -152,7 +152,7 @@ export const chLinking: Chapter = {
       title: 'Relocations: the bits a linker writes',
       body: `
         <p>A relocation is a promise about bits. Take a <code>jal ra, print</code> at offset ${hex(F.jal.site)} of a text section, with <code>print</code> in another file. The assembler wrote the opcode and <code>rd = ra</code>, and left the 20 offset bits empty: an <code>R_RISCV_JAL</code> to <code>print</code>. The linker later puts <code>print</code> at ${hex(F.jal.target)}. The offset is ${hex(F.jal.target)} − ${hex(F.jal.site)} = ${hex(F.jal.offset)}, and its bits go where chapter ${numOf('isa')}'s J-type keeps them: bit 20 first, then bits 10 to 1, bit 11, bits 19 to 12. The order is the hardware's, chosen so that bits land in the same place across formats; the linker just follows it.</p>
-        <p>The other kinds work the same way, each with its own field: a branch (<code>R_RISCV_BRANCH</code>) has 12 bits and reaches ±4 KiB; a call (<code>R_RISCV_CALL</code>) is an <code>auipc</code> and a <code>jalr</code>, 32 bits split 20 + 12; <code>la</code> is <code>R_RISCV_PCREL_HI20</code> on its auipc and <code>R_RISCV_PCREL_LO12_I</code> on its addi. The split has one trap: the low 12 bits are <em>signed</em>. For a distance of ${hex(0xf80)} the addi cannot hold +3968, so the high part rounds up to ${F.laHi} (4096) and the low part is ${F.laLo}. That is the <code>+0x800</code> in every linker: high = (value + 0x800) &gt;&gt; 12.</p>
+        <p>The other kinds work the same way, each with its own field: a branch (<code>R_RISCV_BRANCH</code>) has 12 bits and reaches ±4 KiB; a call (<code>R_RISCV_CALL</code>) is an <code>auipc</code> and a <code>jalr</code>, 32 bits split 20 + 12; <code>la</code> is <code>R_RISCV_PCREL_HI20</code> on its auipc and <code>R_RISCV_PCREL_LO12_I</code> on its addi. The split has one trap: the low 12 bits are <em>signed</em>. For a distance of ${hex(0xf80)} the addi cannot hold +3968, so the high part rounds up to ${F.laHi} (4096) and the low part is −${-F.laLo}. That is the <code>+0x800</code> in every linker: high = (value + 0x800) &gt;&gt; 12.</p>
         <p>The strip is the jal's 32 bits. The dashed ones are the hole. Fill them so the jal reaches <code>print</code>; the disassembly underneath follows each click.</p>
         <div class="try">Fill the hole: the disassembly reads <code>jal ra</code> to print's address.</div>`,
       widget: relocWidget,

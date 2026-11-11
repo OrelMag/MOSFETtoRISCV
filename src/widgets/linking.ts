@@ -121,7 +121,7 @@ export function relocWidget(): Widget {
   };
   fillReloc = () => { relocWord = c.word; draw(); };
   draw();
-  const el = h('div', { class: 'widget ln-widget' },
+  const el = h('div', { class: 'widget ln-widget ln-reloc' },
     h('div', { class: 'ln-labels' }, h('span', { style: 'flex:12' }, 'imm[20 | 10:1 | 11 | 19:12]'), h('span', { style: 'flex:5' }, 'rd'), h('span', { style: 'flex:7' }, 'opcode')),
     strip, asm, status,
     h('div', { class: 'param-row' }, h('button', { type: 'button', class: 'btn sm', onclick: () => { relocWord = c.hole; draw(); } }, 'Clear the hole')));
@@ -233,7 +233,7 @@ main:
   li s0, ${n}
   li a0, 0
 loop:
-${through ? '  la t0, got_inc     # the table entry: this process\'s own copy, in its data\n  lw t0, 0(t0)       # the routine\'s address, wherever the library was mapped\n  jalr ra, 0(t0)' : '  call inc'}
+${through ? '  la t0, got_inc   # this process\'s entry\n  lw t0, 0(t0)     # where inc is mapped\n  jalr ra, 0(t0)' : '  call inc'}
   addi s0, s0, -1
   bnez s0, loop
 done:
@@ -261,7 +261,7 @@ export function picCost(calls = 100): PicCost {
 export function picWidget(): Widget {
   const c = picCost();
   const el = h('div', { class: 'widget ln-widget' },
-    h('div', { class: 'ln-cols' }, ...[false, true].map((t) => h('div', { class: 'ln-file' }, h('h5', null, t ? 'through a table (position independent)' : 'direct (the address patched into the code)'), h('pre', null, picProgram(3, t)[0].text.split('\n').slice(4, t ? 7 : 5).join('\n'))))),
+    h('div', { class: 'ln-cols' }, ...[false, true].map((t) => h('div', { class: 'ln-file' }, h('h5', null, t ? 'through a table (position independent)' : 'direct (the address patched into the code)'), h('pre', null, picProgram(3, t)[0].text.split('\n').slice(4, t ? 10 : 8).join('\n'))))),
     h('table', { class: 'data ln-table' },
       h('tr', null, ...['', `instructions, ${c.calls} calls`, 'per call', 'loads per call'].map((x) => h('th', null, x))),
       h('tr', null, h('td', null, 'direct'), h('td', null, groupDigits(c.direct)), h('td', null, ''), h('td', null, '')),
