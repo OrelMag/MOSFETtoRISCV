@@ -774,7 +774,7 @@ export const chRegisters: Chapter = {
         diagram (add the Moore S3, say) and it rebuilds the circuit, each encoding priced, the next-state logic a truth-table chip with its
         Karnaugh map one double-click down.</p>
         <p>The diagram is drawn from the same table as the circuit, and a test reads the circuit back into it state by state. Hover an arc to light
-        the gates that make that transition.</p>
+        the gates that make that transition. <a href="#/c/fsm/0">Chapter ${numOf('fsm')}</a> takes the method apart: Moore or Mealy, the cost of each state code, unused states, a controller steering registers and an adder.</p>
         <div class="try">Set x and pulse: 1, 0, 1. Watch the dashed arc move when you flip x before the edge.</div>`,
       tour: {
         label: 'Walk me through it (a 1, 0, 1 and an overlap)',

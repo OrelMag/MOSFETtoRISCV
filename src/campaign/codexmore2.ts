@@ -440,6 +440,7 @@ two flip-flops, ~0.95 ns:         e^47.5 / 2e5 ≈ 2 × 10^15 s, about 67 millio
       { chapter: 'registers', step: 3, label: 'Asynchronous reset' },
       { chapter: 'clocks', step: 4, label: 'Metastability' },
       { chapter: 'clocks', step: 5, label: 'The two-flop synchronizer' },
+      { chapter: 'fsm', step: 7, label: 'Inputs from outside: synchronize and debounce' },
     ],
   },
 

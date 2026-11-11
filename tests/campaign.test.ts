@@ -17,6 +17,7 @@ import { VM_AWAITING_LEVELS } from '../src/campaign/codexvm';
 import { VERIFY_AWAITING_LEVELS } from '../src/campaign/codexverify';
 import { BABY_AWAITING_LEVELS } from '../src/campaign/codexbaby';
 import { PDP8_AWAITING_LEVELS } from '../src/campaign/codexpdp8';
+import { FSM_AWAITING_LEVELS } from '../src/campaign/codexfsm';
 import { AGC_AWAITING_LEVELS } from '../src/campaign/codexagc';
 import { measured, stars } from '../src/campaign/grade';
 import { ancestors, nextAvailable, ruleFor, statusOf, topo } from '../src/campaign/graph';
@@ -79,7 +80,7 @@ describe('the campaign graph', () => {
     }
     // Every codex entry is taught somewhere.
     const taught = new Set(NODES.flatMap((n) => n.codex));
-    for (const e of CODEX) if (!COMM_AWAITING_LEVELS.has(e.id) && !DSP_AWAITING_LEVELS.has(e.id) && !FPGA_AWAITING_LEVELS.has(e.id) && !SIDE_AWAITING_LEVELS.has(e.id) && !POWER_AWAITING_LEVELS.has(e.id) && !VEC_AWAITING_LEVELS.has(e.id) && !VM_AWAITING_LEVELS.has(e.id) && !VERIFY_AWAITING_LEVELS.has(e.id) && !BABY_AWAITING_LEVELS.has(e.id) && !AGC_AWAITING_LEVELS.has(e.id) && !PDP8_AWAITING_LEVELS.has(e.id)) expect(taught.has(e.id), `codex ${e.id} is in no level`).toBe(true);
+    for (const e of CODEX) if (!COMM_AWAITING_LEVELS.has(e.id) && !DSP_AWAITING_LEVELS.has(e.id) && !FPGA_AWAITING_LEVELS.has(e.id) && !SIDE_AWAITING_LEVELS.has(e.id) && !POWER_AWAITING_LEVELS.has(e.id) && !VEC_AWAITING_LEVELS.has(e.id) && !VM_AWAITING_LEVELS.has(e.id) && !VERIFY_AWAITING_LEVELS.has(e.id) && !BABY_AWAITING_LEVELS.has(e.id) && !AGC_AWAITING_LEVELS.has(e.id) && !PDP8_AWAITING_LEVELS.has(e.id) && !FSM_AWAITING_LEVELS.has(e.id)) expect(taught.has(e.id), `codex ${e.id} is in no level`).toBe(true);
   });
 
   it('a level\'s rule is NAND plus what its requirements unlock, never its own parts', () => {

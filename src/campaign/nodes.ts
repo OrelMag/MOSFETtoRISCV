@@ -394,7 +394,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 's_fsm', act: 3, title: 'A state machine', kind: 'build', optional: true, requires: ['s_dff', 'd_kmap'],
     why: 'Some units take several cycles and must remember which one they are in: a divider counts its steps, a multicycle core walks fetch → execute → memory → write back. A state register plus next-state logic read off a table does it: this one spots 1, 0, 1 in a bit stream, 28 NANDs at par. Act 8\'s divider runs on one.',
     tips: ['Three states: S0 nothing useful seen, S1 the last bit was 1, S2 a 1 then a 0.', 'Encode S0 = 00, S1 = 01, S2 = 10, write the next-state table and minimise each bit; the unused code 11 is a don\'t-care, and rst clears it.', 'From S2, x = 1 gives y = 1 and goes to S1, not S0: patterns overlap (10101 gives two).'],
-    unlocks: ['rv16_det101'], chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }], codex: ['fsm'], base: BUILD1.s_fsm, par: { nand: 28, period: 8 } },
+    unlocks: ['rv16_det101'], chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'fsm', step: 0, label: 'From a sentence to a diagram' }], codex: ['fsm'], base: BUILD1.s_fsm, par: { nand: 28, period: 8 } },
   {
     id: 'm_ram', act: 3, title: '4 × 4 RAM', kind: 'build', optional: true, requires: ['s_reg4', 'g_dec', 'g_mux8'], base: sandbox('m_ram'),
     why: 'Memory is registers plus addressing: a decoder on the address picks the one word to write, a mux picks the one word to read. Par is 274 NANDs for 16 bits, about 17 NANDs a bit; an SRAM cell is 6 transistors. The register file is the same circuit with a second read port.',
@@ -697,7 +697,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'o_div', act: 8, title: 'Divider', kind: 'build', optional: true, requires: ['a_addsub16', 's_fsm'], base: BUILD8.o_div, givesOf: partsOf(() => seqDivider(16, RV16_MUX2)), par: { nand: 1445, period: 31 }, unlocks: ['sdiv16_rv16'],
     why: 'RV16I has no divide, and in one pass it is expensive: unrolled, the 16 subtract-and-compare steps are 4464 NANDs on a 613-deep path. The iterative divider does one step per clock under a counter: 1445 NANDs, period 31, 18 cycles a quotient. Divide in the core puts it in your core and makes the core wait for it.',
     tips: ['Shift the remainder left, bring in the next dividend bit, subtract the divisor: if the result is not negative keep it and set the quotient bit.', 'b = 0 needs no special case: every subtraction succeeds, so q = 0xFFFF and r = a, as RISC-V wants.', 'Subtracting before the shift is the classic miss: the next dividend bit must be in the remainder before it is compared.'],
-    codex: ['division'], chapters: [{ chapter: 'muldiv', step: 15, label: 'The iterative divider' }],
+    codex: ['division'], chapters: [{ chapter: 'muldiv', step: 15, label: 'The iterative divider' }, { chapter: 'fsm', step: 6, label: 'A controller and a datapath' }],
   },
   {
     id: 'o_dcore', act: 8, title: 'Divide in the core', kind: 'core', optional: true, requires: ['o_mcore', 'o_div'], base: BUILD9.o_dcore, par: { nand: 10546, period: 193, cycles: 1859 },
