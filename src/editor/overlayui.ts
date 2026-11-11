@@ -1,7 +1,7 @@
-// The overlay bar in the sandbox (view/overlays.ts, view/overlaybar.ts): the four buttons at the end of the run row, O /
+// The overlay bar in the sandbox (view/overlays.ts, view/overlaybar.ts): the overlay buttons at the end of the run row, O /
 // Shift O, the legend over the canvas's bottom left (the minimap holds the bottom right). Marks go on the chip's own
 // drawing: parts by id, wires and pointers through the compiled chip's net maps, set again after every repaint (the view
-// redraws elements in place). Activity puts the simulation on the gate-level engine while it is on (the cycle engine
+// redraws elements in place). Activity and Energy put the simulation on the gate-level engine while it is on (the cycle engine
 // keeps no toggle counts), and gives it back after.
 
 import type { DelayModel } from '../sim/delay';
@@ -13,10 +13,12 @@ import { matches, shortcutAllowed, typing } from '../ui/keys';
 import { s } from '../ui/dom';
 import { settings } from '../ui/settings';
 import { OverlayBar, nextOverlay, overlayLegend } from '../view/overlaybar';
-import { type OverlayKind, type OverlayResult, activityOverlay, loadOverlay, overlayRefusal, slackOverlay, unknownOverlay } from '../view/overlays';
+import { OVERLAY_KINDS, type OverlayKind, type OverlayResult, activityOverlay, costOverlay, depthOverlay, energyOverlay, loadOverlay, overlayRefusal, slackOverlay, unknownOverlay } from '../view/overlays';
 import { type Editor, registerEditorPlugin } from './editor';
 
 const LIVE_MS = 100;
+/** The overlays that count toggles while they are on (on the gate-level engine). */
+const counts = (k: OverlayKind | null) => k === 'activity' || k === 'energy';
 
 class SandboxOverlay {
   kind: OverlayKind | null = null;
@@ -66,7 +68,7 @@ class SandboxOverlay {
     const sim = this.sim();
     if (!sim) return {};
     const out: Partial<Record<OverlayKind, string>> = {};
-    for (const k of ['slack', 'activity', 'load', 'unknown'] as const) {
+    for (const k of OVERLAY_KINDS) {
       const why = overlayRefusal(k, { level: sim.kind });
       if (why) out[k] = why;
     }
@@ -76,7 +78,7 @@ class SandboxOverlay {
   set(kind: OverlayKind | null, model?: DelayModel): void {
     if (model) this.model = model;
     if (kind && this.refusals()[kind]) kind = null;
-    if (kind === 'activity' && this.kind !== 'activity') this.win = null;
+    if (counts(kind) && kind !== this.kind) this.win = null;
     this.kind = kind;
     if (kind && settings.overlay !== kind) settings.set('overlay', kind);
     this.engine();
@@ -87,7 +89,7 @@ class SandboxOverlay {
   /** Activity on: GateSim, which counts toggles; off: the run mode's engine again. */
   private engine(): void {
     const sim = this.sim();
-    if (sim instanceof DualSim) sim.preferFast = this.kind === 'activity' ? false : this.ed.sim.mode === 'cycle';
+    if (sim instanceof DualSim) sim.preferFast = counts(this.kind) ? false : this.ed.sim.mode === 'cycle';
   }
 
   private gate(): GateSim | null {
@@ -99,8 +101,8 @@ class SandboxOverlay {
     if (!this.kind) return;
     const docChanged = this.ed.doc !== this.lastDoc;
     // a switch to cycle mode meanwhile set the engine back: Activity keeps GateSim
-    if (this.kind === 'activity') { this.engine(); this.count(); }
-    if (docChanged || ((this.kind === 'activity' || this.kind === 'unknown') && performance.now() - this.last >= LIVE_MS)) this.paint();
+    if (counts(this.kind)) { this.engine(); this.count(); }
+    if (docChanged || ((counts(this.kind) || this.kind === 'unknown') && performance.now() - this.last >= LIVE_MS)) this.paint();
     else this.mark(this.result);
   }
 
@@ -130,18 +132,20 @@ class SandboxOverlay {
     let r: OverlayResult | null = null;
     if (kind && sim && !this.refusals()[kind]) {
       const design = sim.design;
-      if (kind === 'slack' || kind === 'load') {
+      if (kind === 'slack' || kind === 'load' || kind === 'cost' || kind === 'depth') {
         const model = this.model ?? (settings.loadDelay ? 'load' : 'unit');
         const key = `${kind}|${model}`, hit = this.cache.get(key);
         if (hit && hit.design === design) r = hit.r;
         else {
-          r = kind === 'slack' ? slackOverlay(design, [], model) : loadOverlay(design, design.root);
+          r = kind === 'slack' ? slackOverlay(design, [], model) : kind === 'depth' ? depthOverlay(design, design.root, model)
+            : kind === 'cost' ? costOverlay(design.root, sim.kind) : loadOverlay(design, design.root);
           this.cache.set(key, { design, r });
         }
       } else if (kind === 'unknown') r = unknownOverlay(sim, design.root);
       else {
         const w = this.count();
-        if (w && this.win) r = activityOverlay(design.root, this.win.sim.toggles!, this.win.base, w.units, w.clocked);
+        if (w && this.win) r = kind === 'energy' ? energyOverlay(design, design.root, this.win.sim.toggles!, this.win.base, w.units, w.clocked)
+          : activityOverlay(design.root, this.win.sim.toggles!, this.win.base, w.units, w.clocked);
       }
     }
     this.result = r;

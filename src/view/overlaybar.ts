@@ -1,4 +1,4 @@
-// The overlay bar's controls, shared by the stage's bar and the sandbox's run row: a segmented group of the four
+// The overlay bar's controls, shared by the stage's bar and the sandbox's run row: a segmented group of the
 // overlays (a click on the pressed one turns it off), the same as one select on a phone (CSS swaps them), and the legend
 // drawn from an OverlayResult. The state lives with the host; O / Shift O go through nextOverlay.
 
@@ -12,6 +12,9 @@ const GLYPH: Record<OverlayKind, string[]> = {
   activity: ['M2 12h3l2-6 4 12 4-12 4 12 2-6h1'],
   load: ['M3 12h6', 'M9 12l11-7M9 12h11M9 12l11 7'],
   unknown: ['M6 6l12 12M18 6L6 18'],
+  cost: ['M12 3v18', 'M17 7H9.5a2.5 2.5 0 0 0 0 5h5a2.5 2.5 0 0 1 0 5H7'],
+  energy: ['M13 2L4 14h7l-1 8 9-12h-7l1-8z'],
+  depth: ['M4 4v16h16', 'M8 16h3v-4h3V8h3'],
 };
 const glyph = (k: OverlayKind) => svgEl('svg', { class: 'icon ov-ic', viewBox: '0 0 24 24', width: 14, height: 14, 'aria-hidden': 'true', fill: 'none', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' },
   ...GLYPH[k].map((d) => svgEl('path', { d })));
