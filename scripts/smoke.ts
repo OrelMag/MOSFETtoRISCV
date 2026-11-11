@@ -703,6 +703,50 @@ const OVERLAY_DRIVE = `(async () => {
 })()`;
 
 /**
+ * The inspector's HDL tab linked to the drawing (view/inspector.ts linkedSource): a click on a line a part wrote lights that
+ * part on the stage (class hl, the schematic in focus), in Verilog and in VHDL; a second click puts the scene back; selecting a
+ * part marks its lines (.ln.sel).
+ */
+const HDL_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (let i = 0; i < 40 && !document.querySelector('svg.schematic [data-inst]'); i++) await wait(250);
+  const insp = document.querySelector('.inspector');
+  if (!insp) return ['no inspector'];
+  if (insp.classList.contains('folded')) insp.querySelector('.insp-rail')?.click();
+  const tab = [...insp.querySelectorAll('[role=tab]')].find((b) => b.textContent.trim() === 'HDL');
+  if (!tab) return ['no HDL tab'];
+  tab.click();
+  await wait(300);
+  const bad = [];
+  for (const lang of ['Verilog', 'VHDL']) {
+    [...insp.querySelectorAll('.hdl-lang .btn')].find((b) => b.textContent === lang)?.click();
+    await wait(200);
+    const line = insp.querySelector('pre.code.linked .ln.own');
+    if (!line) { bad.push(lang + ': no linked line'); continue; }
+    const inst = line.dataset.inst;
+    line.click();
+    await wait(300);
+    const g = document.querySelector('svg.schematic [data-inst="' + inst + '"]');
+    if (!g || !g.classList.contains('hl')) bad.push(lang + ': a click on ' + inst + "'s line lit nothing");
+    if (!line.classList.contains('lit')) bad.push(lang + ': the clicked line is not marked');
+    line.click();
+    await wait(300);
+    if (line.classList.contains('lit')) bad.push(lang + ': a second click left the line marked');
+  }
+  // a part selected on the stage: its lines in the level's source are marked
+  const owned = new Set([...insp.querySelectorAll('pre.code.linked .ln.own')].map((l) => l.dataset.inst));
+  const g = [...document.querySelectorAll('svg.schematic [data-inst]')].find((e) => owned.has(e.getAttribute('data-inst')));
+  if (!g) bad.push('no part on the stage owns a line');
+  else {
+    const inst = g.getAttribute('data-inst');
+    g.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await wait(500);
+    if (!document.querySelector('.inspector pre.code.linked .ln.sel[data-inst="' + inst + '"]')) bad.push('selecting ' + inst + ' marked none of its lines');
+  }
+  return bad;
+})()`;
+
+/**
  * A level opened under the scene's panels is drawn at a readable size: the stage decides the folds again for the level it now
  * shows (Stage.refold). Chapter ooo's reorder buffer, opened under the CPU and Out of order panels at 1440 × 900, was fitted
  * about 45 px tall. With `dbl` the drive opens it by double-click from the top level; else the route opened it.
@@ -914,6 +958,9 @@ function routes(): Route[] {
   // A level opened under the panels: the folds decided again for it, the reorder buffer readable (drillReadable)
   const laptop: Viewport = { width: 1440, height: 900, mobile: false, name: '1440px' };
   add('#/c/ooo/8', light, ' (reorder buffer opened, 1440px)', laptop, drillReadable('rob', true));
+  // the HDL tab linked to the drawing, both ways (HDL_DRIVE)
+  add('#/c/adders/2', light, ' (HDL linked)', laptop, HDL_DRIVE);
+  add('#/c/alu/1', themed('dark'), ' (HDL linked, dark)', laptop, HDL_DRIVE);
   add('#/c/ooo/8/rob', light, ' (reorder buffer linked, 1440px)', laptop, drillReadable('rob', false));
   // Chapter 50: the field tables and the cost table on a phone, and the two-computer scene running with a capture listed.
   const net = chapters.find((c) => c.id === 'network');

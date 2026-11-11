@@ -86,7 +86,10 @@ class InspectDrawer {
     if (def !== this.def) {
       this.def = def;
       this.title.textContent = this.part ? `${this.part} · ${def.name}` : def.name;
-      this.inspector.show({ def, portBits: this.portBits, ...(this.part ? { instance: this.part } : {}), ...(this.noUsage ? { noUsage: true } : {}) });
+      const chip = ed.compiled?.def;
+      // the HDL tab's source is the chip's, linked to the canvas: a line selects the part that wrote it
+      const level = chip ? { def: chip, light: (names: string[]) => ed.select(names.length ? { parts: names } : {}) } : undefined;
+      this.inspector.show({ def, portBits: this.portBits, ...(this.part ? { instance: this.part } : {}), ...(this.noUsage ? { noUsage: true } : {}), ...(level ? { level } : {}) });
       return;
     }
     const now = performance.now();
