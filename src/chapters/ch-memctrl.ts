@@ -91,17 +91,14 @@ export const chMemCtrl: Chapter = {
         to serve first) decide what each miss costs, so the chapter measures them on the benchmarks.</p>
         <p>Six commands do the work. <strong>ACT</strong> opens a row in a bank, <strong>RD</strong> / <strong>WR</strong>
         move a burst from or to the open row, <strong>PRE</strong> closes it (<strong>PREA</strong>: every bank), <strong>REF</strong>
-        refreshes. A DDR4 device also takes MRS (set the mode registers: CL, burst length), ZQ (calibrate the output drivers),
-        self-refresh entry / exit and power-down, which this model leaves out. Each working command has a rule about when it may come (<a href="#/c/dram/0">chapter ${numOf('dram')}</a>): tRCD after an ACT before a column command, tRP after a PRE
+        refreshes. Each working command has a rule about when it may come (<a href="#/c/dram/0">chapter ${numOf('dram')}</a>): tRCD after an ACT before a column command, tRP after a PRE
         before the next ACT, tRAS before a row may close, tRFC of silence after a REF. <span data-show="dev">The device</span> here checks every one: a broken rule raises its error flag and names the rule, and a
         column command that breaks one reads X.</p>
         <p><span data-show="ctrl">The controller</span> turns "read line 5" into the right commands at the right cycles. In gates it is small: <span data-show="ctrl.st">seven state
         flip-flops</span> (idle when none is set), <span data-show="ctrl.cnt">one wait counter</span> that every command loads with its delay, an open-row table (a valid bit and
         a row register per bank) and a refresh counter. ${fmt(stats(dramCtrl(CFG)).nands)} NANDs. It serves one request at a time,
         as the cache asks: the cache holds <span data-show="pin:req"><code>req</code></span> until <code>done</code>.</p>
-        <p>The controller's whole job is to know, for every bank, what is open and how long until the next command is legal. Hence the shape:
-        the open-row table answers "hit, miss or conflict?", the wait counter answers "may I issue yet?", and the state flip-flops pick the next command.
-        A request's cost is not a property of its address: line 0 is a miss on a closed bank and a hit one request later. The same
+        <p>A request's cost is not a property of its address: line 0 is a miss on a closed bank and a hit one request later. The same
         address costs ${accessCycles('miss', TIMING)} or ${accessCycles('hit', TIMING)} cycles depending on what came before.</p>
         <div class="try">Read line 0, then line 1, then line 8, and compare the three timelines. Lines 0–3 share row 0 of bank 0;
         lines 4–7 are row 0 of bank 1; line 8 is row 1 of bank 0.</div>`,
@@ -115,10 +112,13 @@ export const chMemCtrl: Chapter = {
         ],
       },
       more: {
-        derive: `<p>Cycle accounting at our clock: a hit is tCAS + burst = ${TIMING.tCAS} + ${TIMING.burst} = ${accessCycles('hit', TIMING)}. A miss adds the activate, tRCD: ${accessCycles('miss', TIMING)}.
+        derive: `<p>The controller's whole job is to know, for every bank, what is open and how long until the next command is legal. Hence the shape:
+          the open-row table answers "hit, miss or conflict?", the wait counter answers "may I issue yet?", and the state flip-flops pick the next command.</p>
+          <p>Cycle accounting at our clock: a hit is tCAS + burst = ${TIMING.tCAS} + ${TIMING.burst} = ${accessCycles('hit', TIMING)}. A miss adds the activate, tRCD: ${accessCycles('miss', TIMING)}.
           A conflict adds the precharge first, tRP: ${accessCycles('conflict', TIMING)}. The wait counter is loaded with the next rule's delay after each command and the state machine moves on
           when it reaches zero, so one counter serves every rule.</p>`,
-        real: `<p>One request at a time needs only the four rules above. A controller that overlaps requests across banks (bank-level
+        real: `<p>A DDR4 device also takes MRS (set the mode registers: CL, burst length), ZQ (calibrate the output drivers), self-refresh entry / exit and power-down, which this model leaves out.</p>
+          <p>One request at a time needs only the four rules above. A controller that overlaps requests across banks (bank-level
           parallelism: activate bank 1 while bank 0 bursts) meets the rules between banks too. DDR4-3200, an 8 Gb ×8 device, roughly:
           <strong>tRRD</strong> between two ACTs to different banks (2.5 ns, 4.9 ns within one bank group); <strong>tFAW</strong>, at most
           four ACTs in any 21 ns window (the activate current the supply can deliver); <strong>tCCD_S / tCCD_L</strong> between column
