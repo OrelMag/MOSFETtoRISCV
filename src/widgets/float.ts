@@ -2,6 +2,7 @@
 // value of a tiny format (where the spacing of floats becomes visible).
 
 import { F16, F32, fpValue, parts, roundTo, type FpFormat } from '../sim/fpref';
+import { digitsSurviving, digitsToRoundTrip, exactDecimal, parseDecimal, printSig, shortestDigits, sigDigits } from '../sim/decimal';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
 
@@ -33,7 +34,26 @@ export function floatExplorer(): Widget {
   const info = h('div', { class: 'fx-info' });
   const input = h('input', { type: 'text', value: '0.1', class: 'fx-in', 'aria-label': 'decimal value' }) as HTMLInputElement;
   const N = () => 1 + f.E + f.M;
+  let typed = '0.1';   // the decimal text last typed: the round-trip line reads it
   const note = h('div', { class: 'sub fx-note', role: 'status' });
+  /** The exact decimal value held, the digits that bring the float back, and the typed text through the format and out again. */
+  const decimalRows = (kind: string, v: number) => {
+    if (kind === 'nan' || kind === 'inf') return [];
+    const pb = f.M + 1, rt = digitsToRoundTrip(pb), sv = digitsSurviving(pb);
+    const rows = [
+      h('div', null, h('span', { class: 'fx-k' }, 'exact'), h('code', { class: 'fx-exact' }, exactDecimal(v))),
+      h('div', null, h('span', { class: 'fx-k' }, 'digits'), h('span', null, `the shortest text that reads back as this float has ${shortestDigits(bits, f)} significant digit(s); ${rt} always do. Decimal text of up to ${sv} digit(s) survives the format.`)),
+    ];
+    const n = sigDigits(typed), b = n ? parseDecimal(typed, f) : null;
+    if (b !== null && n) {
+      const w = fpValue(b, f), shown = Number.isFinite(w) ? printSig(Math.abs(w), n) : '∞';
+      const same = Number.isFinite(w) && Number(shown) === Math.abs(Number(typed));
+      rows.push(h('div', { class: 'fx-rt' }, h('span', { class: 'fx-k' }, 'text → float → text'),
+        h('span', null, `${typed} (${n} digit${n === 1 ? '' : 's'}) → ${fmtVal(w)} → ${n} digit${n === 1 ? '' : 's'}: ${shown}  `), h('strong', null, same ? 'comes back unchanged' : 'comes back different'),
+        h('span', { class: 'sub' }, n <= sv ? `  (up to ${sv} digits always survive)` : `  (past ${sv} digits it can fail)`)));
+    }
+    return rows;
+  };
   const render = () => {
     const n = N(), p = parts(bits, f), v = fpValue(bits, f);
     grid.replaceChildren(...Array.from({ length: n }, (_, k) => {
@@ -54,6 +74,7 @@ export function floatExplorer(): Widget {
       h('div', null, h('span', { class: 'fx-k' }, 'meaning'), h('code', null, formula)),
       h('div', null, h('span', { class: 'fx-k' }, 'spacing'), h('span', null, Number.isFinite(ulp) ? `the next float is ${fmtVal(next)}, ${fmtVal(ulp)} away (1 ulp)`
         : Number.isFinite(v) && v !== 0 && !Number.isFinite(next) && !Number.isNaN(next) ? `the next encoding is ${fmtVal(next)}: the largest finite ${v < 0 ? 'magnitude' : 'value'} of the format` : '–')),
+      ...decimalRows(p.kind, v),
       h('div', { class: 'sub' }, `sign 1 bit · exponent ${f.E} bits (bias ${b}) · fraction ${f.M} bits · ${n} bits in all · largest ${fmtVal(fpValue((2 ** f.E - 2) * 2 ** f.M + 2 ** f.M - 1, f))}, smallest normal ${fmtVal(2 ** (1 - b))}, smallest subnormal ${fmtVal(2 ** (1 - b - f.M))}`));
   };
   input.addEventListener('change', () => {
@@ -69,12 +90,14 @@ export function floatExplorer(): Widget {
     }
     const x = /^[+-]?nan$/i.test(t) ? NaN : Number(t.replace(/^\+?inf(inity)?$/i,'Infinity').replace(/^-inf(inity)?$/i, '-Infinity'));
     if (Number.isNaN(x) && !/^[+-]?nan$/i.test(t)) { note.textContent = `"${t}" is not a number: type a decimal such as 0.1, -2.5e3, inf or nan, or 0x… for a bit pattern.`; return; }
-    bits = encodeNumber(x, f);
+    const exact = parseDecimal(t, f);
+    typed = exact === null ? '' : t;
+    bits = exact ?? encodeNumber(x, f);
     render();
   });
   const sel = h('select', { 'aria-label': 'format' }) as HTMLSelectElement;
   FORMATS.forEach(([n], i) => sel.append(h('option', { value: String(i) }, n)));
-  sel.addEventListener('change', () => { f = FORMATS[Number(sel.value)][1]; bits = encodeNumber(Number(input.value) || 0, f); render(); });
+  sel.addEventListener('change', () => { f = FORMATS[Number(sel.value)][1]; bits = parseDecimal(input.value, f) ?? encodeNumber(Number(input.value) || 0, f); render(); });
   const step = (d: number) => { bits = Math.min(2 ** N() - 1, Math.max(0, bits + d)); render(); };
   render();
   return {

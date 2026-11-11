@@ -281,7 +281,7 @@ export const chWidths: Chapter = {
         <table class="rvc-table">
           <thead><tr><th>Single-cycle core</th><th class="num">NANDs (no ROM)</th><th class="num">Period</th></tr></thead>
           <tbody>
-            <tr><td>RV32I (chapter ${numOf('cpu')})</td><td class="num">${groupDigits(K.plain.nands)}</td><td class="num">${K.plain.period}</td></tr>
+            <tr><td>RV32I (chapter ${numOf('cpu')}, ripple adders)</td><td class="num">${groupDigits(K.plain.nands)}</td><td class="num">${K.plain.period}</td></tr>
             <tr><td>RV32IC</td><td class="num">${groupDigits(K.c.nands)}</td><td class="num">${K.c.period}</td></tr>
             <tr><td>… expander</td><td class="num">${groupDigits(K.expander.nands)}</td><td class="num">${K.expander.depth} deep</td></tr>
             <tr><td>… bank index and swaps</td><td class="num">${K.fetch}</td><td class="num"></td></tr>

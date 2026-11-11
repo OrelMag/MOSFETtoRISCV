@@ -412,6 +412,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .step-title { font-size: 18px; font-weight: 700; margin: 0 0 8px; letter-spacing: -0.01em; }
 .prose p { margin: 0 0 0.85em; color: var(--text-2); }
 .prose strong { color: var(--text); }
+/* a number too long for a line (a float's exact decimal expansion): it breaks anywhere rather than widening the pane */
+.prose .longnum { overflow-wrap: anywhere; word-break: break-all; }
 .prose ul, .prose ol { padding-left: 1.2em; color: var(--text-2); margin: 0 0 0.9em; }
 .prose li { margin: 0.2em 0; }
 .prose .note {
@@ -1245,7 +1247,9 @@ svg.schematic.ov :is(.wire-flow, .flow-tokens) { display: none; }
 .ov-seg .ov-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
 .ov-seg .ov-btn.on { color: var(--text); box-shadow: var(--shadow), inset 0 0 0 1px var(--accent); }
 .ov-sel { display: none; font: 600 12px var(--font-ui); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 3px 6px; max-width: 150px; }
-.stage-bar.compact.tight .ov-btn .lbl { display: none; }
+/* a bar too tight for words: the overlays as the phone's select, which names the one on ("Overlay: Slack"), not four bare swatches */
+.stage-bar.compact.tight .ov-seg { display: none; }
+.stage-bar.compact.tight .ov-sel { display: inline-block; }
 @media (max-width: 760px) { .ov-seg { display: none; } .ov-sel { display: inline-block; } }
 .ov-sw { display: inline-block; flex: none; width: 14px; height: 10px; border-radius: 3px; background: var(--ov-c); border: 1px solid color-mix(in srgb, var(--ov-c) 60%, var(--text)); box-sizing: border-box; }
 .ov-btn .ov-sw { width: 9px; height: 9px; border-radius: 2px; }
@@ -1944,6 +1948,10 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .asm-table td.a { color: var(--muted); }
 .asm-table td.w { color: var(--bus-label-text); }
 .asm-table tr.err td { color: var(--wx); }
+/* chapter 13's assembly practice (widgets/asmlab.ts): the stage's goal note sits at the canvas's top right, over a widget, so the widget
+   leaves it a band; the wanted / got cells keep "a0 = -5" on one line */
+.canvas .widget.asm-practice { padding-top: 52px; }
+.widget.asm-practice td code { white-space: nowrap; }
 /* chapter 13's fetch–decode–execute stepper (widgets/riscv.ts fetchLoop) */
 .fl-list tr.cur td { background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 700; }
 .fl-list tr.cur td.a { color: var(--text); }
@@ -3270,3 +3278,35 @@ pre.code.vsrc .vl.crit { box-shadow: inset 3px 0 0 var(--accent); background: co
 .pw-total b { color: var(--text); }
 @media (pointer: coarse) { .pw-seg .btn, .power-panel .btn { min-height: 40px; } }
 @media (pointer: coarse) { .core-bit, .core-panel .btn { min-height: 40px; } .core-bit { min-width: 40px; } .core-inh input { width: 22px; height: 22px; } }
+
+/* The layout pill (stage.ts syncLayoutPill): the level shows the learner's arrangement, or a redraw set one aside. Under the
+   LEVEL tag, clear of the hint (bottom) and the challenge notes (top right). */
+.layout-pill {
+  position: absolute; left: 12px; top: 38px; z-index: 3; max-width: calc(100% - 24px);
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  font-size: 12px; color: var(--muted); padding: 2px 4px 2px 10px; border-radius: 14px;
+  border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 90%, transparent);
+}
+.layout-pill[hidden] { display: none; }
+.layout-pill .lp-text { display: inline-flex; align-items: center; gap: 5px; color: var(--text); }
+.layout-pill .btn.sm { padding: 1px 8px; min-height: 0; }
+.layout-pill.warn { border-color: var(--warn); }
+.level-badge:empty ~ .layout-pill { top: 10px; }
+@media (max-width: 760px) { .canvas:has(> [data-dock='right']) > .layout-pill { top: 56px; } }
+@media (pointer: coarse) { .layout-pill .btn.sm { min-height: 40px; } }
+
+/* the inspector's HDL tab, linked to the drawing: a line an instance wrote lights it on the stage; the selected part's lines are marked */
+pre.code.linked { max-height: 380px; padding: 8px 0; }
+pre.code.linked .ln { display: block; white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 12px 0 calc(11px + 4ch); text-indent: -4ch; min-height: 1.55em; border-left: 3px solid transparent; }
+pre.code.linked .ln.own { cursor: pointer; }
+pre.code.linked .ln.own:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+pre.code.linked .ln.own:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+pre.code.linked .ln.sel { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
+pre.code.linked .ln.lit { border-left-color: var(--hl); background: color-mix(in srgb, var(--hl) 20%, transparent); }
+.hdl-linked .code-head { gap: 6px; flex-wrap: wrap; justify-content: flex-start; }
+.hdl-linked .hdl-title { flex: 1 1 auto; min-width: 0; }
+.hdl-lang { display: inline-flex; gap: 2px; }
+.hdl-lang .btn.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.hdl-hint { margin: -8px 0 14px; font-size: 12px; color: var(--muted); }
+.hdl-own { margin-top: 4px; }
+@media (pointer: coarse) { pre.code.linked .ln.own { padding-block: 4px; } .hdl-lang .btn { min-height: 40px; } }

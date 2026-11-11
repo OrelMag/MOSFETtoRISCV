@@ -120,7 +120,7 @@ registerSearchSource({
 });
 
 const act = (id: string, title: string, sub: string, run: () => void, keys?: string[]): NavItem => ({ kind: 'action', id, title, sub, run, keys });
-const toggle = (k: 'animate' | 'wireFlow' | 'netColors' | 'glossary' | 'autoClock' | 'loadDelay' | 'simpleWires' | 'singleKeys' | 'wide') => () => {
+const toggle = (k: 'animate' | 'wireFlow' | 'netColors' | 'glossary' | 'autoClock' | 'loadDelay' | 'simpleWires' | 'singleKeys' | 'wide' | 'moveParts') => () => {
   settings.set(k, !settings[k]);
   applyTheme();
 };
@@ -209,6 +209,7 @@ registerActions((ctx) => {
     act('gloss', 'Hover definitions', `codex terms underlined in the chapters (${onOff(settings.glossary)})`, toggle('glossary')),
     act('clock', 'Automatic clock', `a circuit with a clock starts running (${onOff(settings.autoClock)})`, toggle('autoClock')),
     act('delay', 'Load-dependent delay', `timing panels, the inspector and sandbox / workbench gate-level simulation time each NAND by its load (${onOff(settings.loadDelay)})`, toggle('loadDelay')),
+    act('moveParts', 'Move parts by dragging', `stage and look inside: a drag moves a part or a wire; off, it pans (${onOff(settings.moveParts)})`, toggle('moveParts'), ['lock', 'layout']),
     act('simple', 'Simple connections', `sandbox: straight wires at any angle (${onOff(settings.simpleWires)})`, toggle('simpleWires')),
     act('text.bigger', 'Larger text', `chapter prose ${Math.min(130, settings.textSize + 10)}% (now ${settings.textSize}%)`, () => { settings.set('textSize', Math.min(130, settings.textSize + 10)); applyTheme(); }),
     act('text.smaller', 'Smaller text', `chapter prose ${Math.max(90, settings.textSize - 10)}% (now ${settings.textSize}%)`, () => { settings.set('textSize', Math.max(90, settings.textSize - 10)); applyTheme(); }),

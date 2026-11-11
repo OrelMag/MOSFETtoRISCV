@@ -45,6 +45,7 @@ export const chMap: Chapter = {
         are 1) but never its insides, so a designer working on an adder thinks in gates and needs no transistor in mind. The price of the rule is
         that every level adds overhead the one above cannot see; the benefit is that the descriptions stay small enough to hold in a head. Each chapter
         here ends by pricing what it built in the level below, so you can see both sides.</p>
+        <p>The three <strong>prologue</strong> chapters (<a href="#/c/relays/0">relays</a>, <a href="#/c/tubes/0">vacuum tubes</a> and <a href="#/c/cards/0">punch cards</a>: how computing was done before the transistor) are optional. The main path starts at <a href="#/c/mosfet/0">chapter ${numOf('mosfet')}</a>, with the transistor itself.</p>
         <div class="note">The map below is the whole journey, in reading order, by section. Each row
         lists what its chapter builds with; a click opens the chapter.</div>`,
       more: {
@@ -678,7 +679,7 @@ export const chInverter: Chapter = {
         <p>Try F = 64 below. One stage costs ${chainDelay(64, 1).toFixed(0)} τ. Two take ${chainDelay(64, 2).toFixed(0)}. Three, each 4× the one before, take ${chainDelay(64, 3).toFixed(0)}, the best. Four is already slower (${chainDelay(64, 4).toFixed(1)}), because every extra stage pays another p.
         Whatever the load, the best ratio stays between 3 and 6: the stage count grows with the logarithm of F.</p>
         <p>The yardstick is the <strong>FO4</strong> delay, an inverter driving four copies of itself: ${FO4_TAU} τ, an illustrative ${FO4_TAU * PS_PER_TAU} ps here. Process generations are compared in FO4s, and a processor core fits roughly 15 to 20 of them in one clock cycle.
-        <a href="#/c/fastadd/0">Chapter ${numOf('fastadd')}</a> applies the same arithmetic to the <span data-ahead="nand">NAND (a gate whose output is 0 only when every input is 1)</span>, whose effort is 4/3 and not 1.</p>`,
+        <a href="#/c/nand/1">Chapter ${numOf('nand')}</a> applies the same arithmetic to the <span data-ahead="nand">NAND (a gate whose output is 0 only when every input is 1)</span>, whose effort is 4/3 and not 1, and <a href="#/c/fastadd/0">chapter ${numOf('fastadd')}</a> to whole adders.</p>`,
       widget: () => sizingWidget(),
       more: {
         derive: `<p>Minimising D over N for fixed F: dD/dN = 0 gives ρ(ln ρ − 1) = p with ρ = F<sup>1/N</sup>. For p = ${P_INV} that is ρ ≈ 3.6, and the discrete optimum for F = 64 happens to be exactly 4. The delay at the optimum is N·(ρ + p), ${chainDelay(64, 3).toFixed(0)} τ for F = 64, against ${chainDelay(64, 1).toFixed(0)} τ for a single stage: a ${(chainDelay(64, 1) / chainDelay(64, 3)).toFixed(1)}× saving from two extra inverters.</p>`,

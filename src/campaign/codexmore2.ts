@@ -440,6 +440,7 @@ two flip-flops, ~0.95 ns:         e^47.5 / 2e5 ≈ 2 × 10^15 s, about 67 millio
       { chapter: 'registers', step: 3, label: 'Asynchronous reset' },
       { chapter: 'clocks', step: 4, label: 'Metastability' },
       { chapter: 'clocks', step: 5, label: 'The two-flop synchronizer' },
+      { chapter: 'fsm', step: 7, label: 'Inputs from outside: synchronize and debounce' },
     ],
   },
 
@@ -490,6 +491,28 @@ eight compressor levels, then one fast adder</pre>csa8: 72 NANDs and 6 NAND dela
       { chapter: 'muldiv', step: 3, label: 'Carry-save: add three, keep two' },
       { chapter: 'muldiv', step: 5, label: 'The Wallace tree' },
       { chapter: 'muldiv', step: 17, label: 'SRT: a redundant quotient' },
+    ],
+  },
+  multiword: {
+    idea: `School arithmetic on numbers longer than a times table: work one digit at a time, lowest first, and carry. Here the digit is a 32-bit word. With A = a1·2<sup>32</sup> + a0, A + B is a0 + b0 in the low word and a1 + b1 + carry in the high word, where the carry is 1 exactly when the low sum wrapped, that is, when it is smaller than an operand: <code>sltu c, s, a0</code>. A subtraction takes the borrow from the comparison B.lo &lt; A.lo made <em>before</em> the low subtraction. A product is four 32 × 32 → 64 products (<code>mul</code> for the low word, <code>mulhu</code> for the high; <code>mulh</code> and <code>mulhsu</code> for signed operands) added at weights 2<sup>0</sup>, 2<sup>32</sup> (twice) and 2<sup>64</sup>, with the carries kept as above. Machines with a carry flag add the flag in and out of every word (<code>ADC</code>); RISC-V drops the flag and pays an <code>sltu</code> per carry.`,
+    example: {
+      title: 'A = 0x1_FFFFFFFF, B = 0x2_00000003 on RV32IM (chapter muldiv)',
+      body: `<pre>add  s4, a0, a2     sum, low word      0xFFFFFFFF + 3 = 0x1_00000002 → 2
+sltu t1, s4, a0     carry: 2 &lt; 0xFFFFFFFF → 1
+add  s5, a1, a3     high words         1 + 2 = 3
+add  s5, s5, t1     + carry            4        A + B = 0x4_00000002
+
+A × B = 0x4_00000003_FFFFFFFD   (2⁶⁶ + 2³⁴ − 3)
+ 64-bit add 4 instructions, subtract 4,
+ product 22 (8 mul / mulhu + 14 adds and carry tests), signed 26</pre>`,
+    },
+    mistakes: [
+      'Testing the carry once: a1 + a3 + carry is two additions and either one can wrap (0xFFFFFFFF + 0 + 1 wraps on the second only).',
+      'Finding a borrow after the subtraction: compare the operands before it.',
+      'Using mulhu for signed operands: the high words of a signed product need mulh (signed × signed) or mulhsu (signed × unsigned), and the cross products\' signs fill the top word.',
+    ],
+    chapters: [
+      { chapter: 'muldiv', step: 26, label: 'Words wider than the word' },
     ],
   },
   booth: {

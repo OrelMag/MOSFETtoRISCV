@@ -19,6 +19,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "routing": () => import('./ch-arith').then((m) => m.chRouting),
   "latches": () => import('./ch-memory').then((m) => m.chLatches),
   "registers": () => import('./ch-memory').then((m) => m.chRegisters),
+  "fsm": () => import('./ch-fsm').then((m) => m.chFsm),
   "memory": () => import('./ch-memory').then((m) => m.chMemory),
   "alu": () => import('./ch-cpu').then((m) => m.chAlu),
   "regfile": () => import('./ch-cpu').then((m) => m.chRegfile),

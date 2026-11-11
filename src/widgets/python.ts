@@ -321,7 +321,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
         h('button', { class: 'btn sm', onclick: () => { editWrap.hidden = true; } }, 'Close')));
     recheck();
 
-    const stepBtn = h('button', { class: 'btn sm', title: 'Clock the CPU until the next Python line starts (Back undoes it)' }, 'Step line');
+    const stepBtn = h('button', { class: 'btn sm', title: 'Clock the CPU until the next Python line starts (Step back undoes it)' }, 'Step line');
     const playBtn = h('button', { class: 'btn sm', title: 'Step one Python line about every second' }, 'Run line by line');
     const editBtn = h('button', { class: 'btn sm', onclick: () => { editWrap.hidden = !editWrap.hidden; } }, 'Edit');
     const targetBtn = (m: boolean) => h('button', {

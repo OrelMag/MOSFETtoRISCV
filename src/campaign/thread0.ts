@@ -288,11 +288,31 @@ export const THREAD0: Record<string, NodeThread> = {
       a_shift16: 'sra fills with the sign bit, so a negative number stays negative',
       i_isa: 'immediates are two\'s complement, sign-extended to 16 bits',
       n_float: 'floats use a sign bit and a biased exponent instead',
+      n_fixed: 'the same words read as a fraction: the integer over 2^f',
+      n_divrem: 'division rounds toward zero, so the remainder takes the sign of the dividend',
     },
     pitfalls: [
       '−x is ¬x + 1, not ¬x (that is one\'s complement).',
       '0x8000 (−32 768) has no positive twin: negating it gives 0x8000 again.',
       'Overflow is about signs, not the carry out: 0xFFFF + 1 carries out and is right as −1 + 1 = 0.',
+    ],
+  },
+  n_fixed: { // optional: a drill on reading words with a point, for the signal-processing level
+    uses: ['alu'],
+    usedFor: {},
+    pitfalls: [
+      'A product of two Q1.15 words is Q2.30: shift by 15, not 16 (one fewer than the bits of an operand).',
+      'Adding words with different points needs the points aligned first; the adder cannot know.',
+      'A shift rounds toward −∞ and C division toward zero: they differ on negative values.',
+    ],
+  },
+  n_divrem: { // optional: a drill on the M extension's division results
+    uses: ['alu'],
+    usedFor: {},
+    pitfalls: [
+      'Division by zero does not trap: the quotient is all ones and the remainder is the dividend.',
+      'The remainder has the sign of the dividend, not of the divisor.',
+      'Only −2^31 / −1 overflows, and it wraps to −2^31 with remainder 0.',
     ],
   },
   a_ha: {
