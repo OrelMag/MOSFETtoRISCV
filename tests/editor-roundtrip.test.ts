@@ -43,7 +43,7 @@ cachedMemory(6, 2);
  * - A port wider than a sandbox pin (1024 bits): the 64-bit register file's read port takes all 32 words at once (2048).
  */
 const cannot = (def: ComponentDef): RegExp | undefined =>
-  (/_core$/.test(def.id) && def.id !== 'm6502_core' && def.id !== 'dsp24_core' && def.id !== 'pdp8_core') || /^rom2_/.test(def.id) ? /unknown library part 'rom_/ // the 6502 and the PDP-8 have no program ROM inside
+  (/_core$/.test(def.id) && def.id !== 'm6502_core' && def.id !== 'dsp24_core' && def.id !== 'pdp8_core' && def.id !== 'acc8_core') || /^rom2_/.test(def.id) ? /unknown library part 'rom_/ // the 6502, the PDP-8 and the first computer's core have no program ROM inside
     : def.ports.some((p) => p.width > 1024) ? /at most 1024/ : undefined;
 
 // Top-level CPUs are not registered (only their parts), so walk their parts in explicitly. The
