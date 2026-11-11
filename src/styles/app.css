@@ -1239,7 +1239,9 @@ svg.schematic.ov :is(.wire-flow, .flow-tokens) { display: none; }
 .ov-seg .ov-btn[disabled] { opacity: 0.45; cursor: not-allowed; }
 .ov-seg .ov-btn.on { color: var(--text); box-shadow: var(--shadow), inset 0 0 0 1px var(--accent); }
 .ov-sel { display: none; font: 600 12px var(--font-ui); color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 3px 6px; max-width: 150px; }
-.stage-bar.compact.tight .ov-btn .lbl { display: none; }
+/* a bar too tight for words: the overlays as the phone's select, which names the one on ("Overlay: Slack"), not four bare swatches */
+.stage-bar.compact.tight .ov-seg { display: none; }
+.stage-bar.compact.tight .ov-sel { display: inline-block; }
 @media (max-width: 760px) { .ov-seg { display: none; } .ov-sel { display: inline-block; } }
 .ov-sw { display: inline-block; flex: none; width: 14px; height: 10px; border-radius: 3px; background: var(--ov-c); border: 1px solid color-mix(in srgb, var(--ov-c) 60%, var(--text)); box-sizing: border-box; }
 .ov-btn .ov-sw { width: 9px; height: 9px; border-radius: 2px; }
@@ -3264,3 +3266,19 @@ pre.code.vsrc .vl.crit { box-shadow: inset 3px 0 0 var(--accent); background: co
 .pw-total b { color: var(--text); }
 @media (pointer: coarse) { .pw-seg .btn, .power-panel .btn { min-height: 40px; } }
 @media (pointer: coarse) { .core-bit, .core-panel .btn { min-height: 40px; } .core-bit { min-width: 40px; } .core-inh input { width: 22px; height: 22px; } }
+
+/* The layout pill (stage.ts syncLayoutPill): the level shows the learner's arrangement, or a redraw set one aside. Under the
+   LEVEL tag, clear of the hint (bottom) and the challenge notes (top right). */
+.layout-pill {
+  position: absolute; left: 12px; top: 38px; z-index: 3; max-width: calc(100% - 24px);
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  font-size: 12px; color: var(--muted); padding: 2px 4px 2px 10px; border-radius: 14px;
+  border: 1px solid var(--border); background: color-mix(in srgb, var(--surface) 90%, transparent);
+}
+.layout-pill[hidden] { display: none; }
+.layout-pill .lp-text { display: inline-flex; align-items: center; gap: 5px; color: var(--text); }
+.layout-pill .btn.sm { padding: 1px 8px; min-height: 0; }
+.layout-pill.warn { border-color: var(--warn); }
+.level-badge:empty ~ .layout-pill { top: 10px; }
+@media (max-width: 760px) { .canvas:has(> [data-dock='right']) > .layout-pill { top: 56px; } }
+@media (pointer: coarse) { .layout-pill .btn.sm { min-height: 40px; } }

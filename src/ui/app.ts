@@ -53,8 +53,8 @@ export function startApp(root: HTMLElement): void {
     toggleChapterMenu(chLink);
   });
   // "My path" (the tiers, what next) in place of "Journey": the logo still goes home.
-  nav.append(navLink('#/path', 'layers', 'My path', 'path', 'Path'), chLink, navLink('#/campaign', 'flag', 'Campaign', 'campaign', 'Campaign'),
-    navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench', 'Bench'), navLink('#/sandbox', 'chip', 'Sandbox', 'sandbox', 'Sandbox'));
+  nav.append(navLink('#/path', 'layers', 'My path', 'path', 'My path'), chLink, navLink('#/campaign', 'flag', 'Campaign', 'campaign', 'Campaign'),
+    navLink('#/workbench/rca4', 'bench', 'Workbench', 'workbench', 'Workbench'), navLink('#/sandbox', 'chip', 'Sandbox', 'sandbox', 'Sandbox'));
   // "My notes · n" shows once there is a note or a bookmark (ui/notes.ts)
   const notesLink = navLink('#/notes', 'note', 'My notes', 'notes');
   const syncNotes = () => {
@@ -240,6 +240,21 @@ export function startApp(root: HTMLElement): void {
   ];
   // Zoomed out, a block's name is drawn at a fixed size over it (view/legible.ts): how large, or not at all.
   const namesRow = choiceRow<ZoomNames>('Names when zoomed out', () => settings.zoomNames, (v) => settings.set('zoomNames', v), [['off', 'Off'], ['normal', 'Normal'], ['large', 'Large']]);
+  // the stage bar's lock is the same switch
+  const moveItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('moveParts', !settings.moveParts) },
+    h('span', { class: 'pal-flow-sw' }, h('i')),
+    h('span', null, h('b', null, 'Move parts by dragging'), h('small', null, 'Drag a part or a wire to move it; off (the lock on the stage bar), a drag pans. Off on a touch screen')));
+  // layout.ts is not first-load code
+  const layoutsItem = h('button', { class: 'pal-reset', onclick: () => {
+    void import('../view/layout').then((m) => {
+      const n = m.arrangedLevels().length;
+      if (!n) return void (layoutsItem.textContent = 'No level carries your layout');
+      const levels = `${n} level${n > 1 ? 's' : ''}`;
+      if (!confirm(`Reset ${levels} as drawn? Colours stay.`)) return;
+      m.resetAllLayouts();
+      layoutsItem.textContent = `${levels} back as drawn`;
+    });
+  } }, 'Reset every level’s layout…');
   // Both live elsewhere too: M and the minimap's own button, the switch on the key sheet.
   const minimapItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('minimap', !settings.minimap) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
@@ -255,7 +270,7 @@ export function startApp(root: HTMLElement): void {
     syncTools();
     undoItem.focus();
   } }, 'Reset view options to defaults');
-  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, gatesItem, modItem, netItem, flowItem, wiresRow.row, gridRow.row, motionItem, palHead('Labels'), ...labelItems, namesRow.row, palHead('Behaviour'), simpleItem, clockItem, delayItem, minimapItem, singleItem, resetItem);
+  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, gatesItem, modItem, netItem, flowItem, wiresRow.row, gridRow.row, motionItem, palHead('Labels'), ...labelItems, namesRow.row, palHead('Behaviour'), moveItem, layoutsItem, simpleItem, clockItem, delayItem, minimapItem, singleItem, resetItem);
   const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: presets, text size, wire colours and thickness, the look of parts, grid, motion, labels, and how the circuits behave', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
   const palOpen = (on: boolean) => {
     palMenu.classList.toggle('open', on);
@@ -311,6 +326,7 @@ export function startApp(root: HTMLElement): void {
     motionItem.disabled = sysMotion;
     motionWhy.textContent = sysMotion ? 'On: your system asks for it' : 'No flowing bits, pulses or smooth scrolling; Slow motion still plays when you ask';
     minimapItem.setAttribute('aria-checked', String(settings.minimap));
+    moveItem.setAttribute('aria-checked', String(settings.moveParts));
     singleItem.setAttribute('aria-checked', String(settings.singleKeys));
     const preset = settings.preset();
     for (const b of presetBtns) { const on = b.dataset.preset === preset; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }
