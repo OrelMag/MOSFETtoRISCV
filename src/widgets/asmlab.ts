@@ -241,8 +241,8 @@ f:      # your code here
         for (const r of CALLER_SAVED) iss.x[r] = 0xbad0000 + r;
       },
       // short, so the table fits beside the editor: the note says what else is checked, a miss is named
-      want: `a0 = ${want}, g(${x}) g(${x + 1})`,
-      got: (iss) => `a0 = ${signed(iss.x[10])}, ${calledRight() ? `g(${x}) g(${x + 1})` : calls.length ? calls.map((c) => `g(${c})`).join(' ') : 'g not called'}${kept(iss) ? '' : iss.x[2] !== FRAME_SP ? ', sp changed' : `, ${REG_NAME[S_REGS[S_REGS.findIndex((r, i) => iss.x[r] !== SENTINEL(i))]]} changed`}`,
+      want: `a0 = ${want}`,
+      got: (iss) => `a0 = ${signed(iss.x[10])}${calledRight() ? '' : calls.length ? `, ${calls.map((c) => `g(${c})`).join(' ')}` : ', g not called'}${kept(iss) ? '' : iss.x[2] !== FRAME_SP ? ', sp changed' : `, ${REG_NAME[S_REGS[S_REGS.findIndex((r, i) => iss.x[r] !== SENTINEL(i))]]} changed`}`,
       ok: (iss) => signed(iss.x[10]) === want && calledRight() && kept(iss),
     };
   }),
