@@ -185,7 +185,7 @@ export function spectreWidget(opts: SpectreOpts = {}): Widget {
     for (const g of segs) g.sync();
     const a = attack(secret, guard, train);
     const got = a.recovered.map((v) => (v === NOTHING ? '·' : hex(v))).join('');
-    const lw = a.window.find((u) => u.wrong && u.cls === 'load' && u.addr !== undefined && u.addr >= MAP.probe && u.addr < MAP.probe + 256);
+    const lw = a.window.find((u) => u.wrong && u.cls === 'load' && u.s >= 0 && u.addr !== undefined && u.addr >= MAP.probe && u.addr < MAP.probe + 256);
     const parts: (HTMLElement | SVGSVGElement)[] = [h('div', { class: 'sc-row' },
       chip(secret.map(hex).join(''), secret.length > 1 ? 'the secret, past the array' : 'the secret nibble, past the array'),
       chip(got, 'what the attacker program printed'),
@@ -229,7 +229,7 @@ export function defenceTable(): Widget {
   });
   const el = h('div', { class: 'widget sc-widget' },
     h('div', { class: 'scroll' }, h('table', { class: 'data num sc-table' },
-      h('tr', null, ...['Defence', 'Leaks', 'Cycles per call', 'The ooo benchmarks', 'Sum a 4 KB array'].map((t) => h('th', null, t))), ...rows)),
+      h('tr', null, ...['Defence', 'Leaks', 'Cycles per call', 'Benchmarks (out of order)', 'Sum a 4 KB array'].map((t) => h('th', null, t))), ...rows)),
     h('p', { class: 'sub' }, `"Leaks": whether the attacker program printed any of the secret `, h('code', null, secret.map(hex).join('')), `. Cycles per call: the victim called in bounds, cache warm. The last two columns: cycles against no defence, the benchmarks as their geometric mean.`));
   return { el };
 }

@@ -124,7 +124,7 @@ export function dataflowWidget(): Widget {
 
 export function timeline(uops: Uop[], c0: number, c1: number): HTMLElement {
   const n = c1 - c0 + 1;
-  const head = h('tr', null, h('th', null, ''), ...Array.from({ length: n }, (_, i) => h('th', { class: 'c' }, String(c0 + i))));
+  const head = h('tr', null, h('th', null, ''), ...Array.from({ length: n }, (_, i) => h('th', { class: i % 2 ? 'c odd' : 'c' }, String(c0 + i))));
   const rows = uops.map((u) => {
     const cells: HTMLElement[] = [];
     for (let cy = c0; cy <= c1; cy++) {

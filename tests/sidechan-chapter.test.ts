@@ -140,3 +140,13 @@ describe('side channels: the codex quotes the same numbers', () => {
     expect(all).toContain(`a 20-cycle miss`);
   });
 });
+
+describe('side channels: the widget\'s probe-line card', () => {
+  it('names a wrong-path probe load only when it issued (the mask leaves one fetched, never issued)', async () => {
+    const { attack } = await import('../src/widgets/sidechan');
+    const probes = (g: 'none' | 'mask') => attack([0xa], g).window.filter((u) => u.wrong && u.cls === 'load' && u.addr !== undefined && u.addr >= MAP.probe && u.addr < MAP.probe + 256);
+    expect(probes('none').some((u) => u.s >= 0)).toBe(true);
+    expect(probes('mask').length).toBeGreaterThan(0);
+    expect(probes('mask').every((u) => u.s < 0)).toBe(true);
+  });
+});
