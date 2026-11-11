@@ -97,13 +97,14 @@ export function williamsColumn(N: number): ComponentDef {
     nets.push({ name: `sel${r}`, ends: [`sel${r}`, `s${r}.sel`] });
     pl.push(`s${r}.pl`);
   }
-  nets.push({ name: 'plate', cap: PLATE_C, ends: pl, trunk: 10 }, { name: 'ref', cap: PLATE_C, ends: rf, trunk: 22 });
+  // the reference line leaves the equalizer to the right, round the spots (they sit under it), to its trunk
+  nets.push({ name: 'plate', cap: PLATE_C, ends: pl, trunk: 10 }, { name: 'ref', cap: PLATE_C, ends: rf, trunk: 22, via: { 'eq.s': [[22, 10]] } });
   const ports: PortDef[] = [bit('pre', 'in'), ...Array.from({ length: N }, (_, r) => bit(`sel${r}`, 'in')), bit('cs', 'in'), bit('sae', 'in'),
     bit('dl', 'inout', 'bottom'), bit('dlb', 'inout', 'bottom')];
   d = define({
     id: key, name: `Tube line (${N} spots)`, category: 'memory',
     summary: `${N} spots on a line of the screen, the pick-up plate and its reference, precharge to half the supply, a pick-up select and the plate amplifier.`,
-    ports, symbol: { kind: 'box', label: 'TUBE LINE', w: 8, portPos: { dl: 2, dlb: 6 } },
+    ports, symbol: { kind: 'box', label: 'TUBE LINE', w: 12, portPos: { dl: 2, dlb: 10 } },
     netlist: () => ({ level: 'switch', pins, instances, nets }),
   });
   memo.set(key, d);
@@ -148,7 +149,8 @@ export function williamsScan(k: number): ComponentDef {
     ports: [bit('clk', 'in', 'bottom', true), bit('rst_n', 'in'), bit('pre', 'out'), bit('act', 'out'), bit('sae', 'out'), bit('cs', 'out'), bit('we', 'out'),
       { name: 'a', width: k, dir: 'out' }],
     symbol: { kind: 'box', label: 'SCAN' },
-    netlist: laid(b, { keepOrder: true, wires: Object.fromEntries(Array.from({ length: m }, (_, i) => [`ff${i}.q`, true])) }),
+    // the last carry gate moved down off spot bit 1's wire (tests/redrawclear-baby.test.ts)
+    netlist: laid(b, { keepOrder: true, wires: Object.fromEntries(Array.from({ length: m }, (_, i) => [`ff${i}.q`, true])), nudge: { t4: 2 } }),
   });
   memo.set(key, d);
   return d;
@@ -188,7 +190,10 @@ export function williamsTube(k: number): ComponentDef {
   b.wire(`${hold}.q`, `${mux}.a`); b.wire('d', `${mux}.b`); b.wire(`${wsel}.y`, `${mux}.s`);
   b.wire(`${mux}.y`, `${wd}.d`); b.wire(`${scan}.we`, `${wd}.we`);
   b.wire(`${scan}.a`, 'a'); b.wire(`${scan}.we`, 'rewrite');
-  const netlist = laid(b, { keepOrder: true, wires: { "pick.y": true } });
+  b.name(`${scan}.pre`, 'pre'); b.name(`${scan}.cs`, 'cs'); b.name(`${scan}.sae`, 'sae'); b.name(`${col}.dl`, 'dl'); b.name(`${col}.dlb`, 'dl̄');
+  // the scanner's three control lines ran under the beam decoder: pointers; the write driver and hold flip-flop moved off the
+  // pick-up's wire (tests/redrawclear-baby.test.ts)
+  const netlist = laid(b, { keepOrder: true, wires: { 'pick.y': true, 'scan.pre': false, 'scan.cs': false, 'scan.sae': false }, nudge: { wd: 4, hold: 4, beam: 2 } });
   d = define({
     id: key, name: `Williams tube line (${N} spots)`, category: 'memory',
     summary: `${N} spots of leaking charge on a tube face with its pick-up plate, and the regenerator that visits each spot every ${VISIT_BEATS} clocks, reads it and writes it back. Without it a dash is lost after ${SPOT_HALFLIFE} beats.`,

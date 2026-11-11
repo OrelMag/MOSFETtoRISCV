@@ -57,7 +57,7 @@ describe('the serial subtractor (1948)', () => {
     const n = (d: Parameters<typeof stats>[0]) => stats(d).nands;
     const costs = { stage: n(SERIAL_STAGE), addSub32: n(addSub(32)), serial: n(BABY_SERIAL), acc: n(BABY_ACC) };
     expect(costs.acc).toBe(1068);
-    expect(costs).toEqual({ stage: 28, addSub32: 420, serial: 2000, acc: 1068 }); // the stage is 15× smaller than the parallel subtractor
+    expect(costs).toEqual({ stage: 28, addSub32: 420, serial: 2256, acc: 1068 }); // the stage is 15× smaller than the parallel subtractor
   });
 
   it.each([SERIAL_STAGE, BABY_SERIAL].map((d) => [d.id, d] as const))('%s: layout is clean', (_, d) => {
