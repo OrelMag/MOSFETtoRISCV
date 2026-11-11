@@ -3,7 +3,7 @@
 // lib/goertzel.ts. Every number in the text is computed from them; what the text claims is tests/dsp-spectrum-chapter.test.ts.
 
 import { binsBreakEven, bestBlock, bestBlockFor, crossoverTaps, DTMF_FS, dtmfFreqs, fftRealMults, goertzelCoef, olsMults, resolvingSep, resolvingSepAt, skirtAt, stateBits, stateGain, weakestSeen, windowFigures, type WinKind } from '../dsp/spectrum';
-import { FFT_SW_STEPS } from './spectrum/fftsw';
+import { FFT_SW_STEPS, fftCost } from './spectrum/fftsw';
 import { goertzelCell } from '../lib/goertzel';
 import { fftStream } from '../lib/fft';
 import { treeMul } from '../lib/muldiv';
@@ -40,7 +40,7 @@ export function spectrumFacts() {
 
 export const chSpectrum: Chapter = {
   id: 'spectrum', num: numOf('spectrum'), title: 'Measuring a spectrum', level: DSP_LEVEL,
-  blurb: 'Why a pure tone shows a skirt: leakage, windows and what they trade, resolution against the number of samples, spectrograms, fast convolution by overlap-save, and a Goertzel cell in gates decoding a keypad.',
+  blurb: 'Why a pure tone shows a skirt: leakage, windows and what they trade, resolution against the number of samples, spectrograms, fast convolution by overlap-save, a Goertzel cell in gates decoding a keypad, and the FFT as a program, made fast step by step.',
   goals: [
     'say where a tone\'s skirt comes from, and why it vanishes when the block holds a whole number of cycles',
     'choose a window by its main lobe, its sidelobes and its noise bandwidth, and say what each costs',
@@ -48,6 +48,7 @@ export const chSpectrum: Chapter = {
     'trade time detail against frequency detail in a spectrogram, and compute the cost of overlap',
     'filter with a long FIR by blocks (overlap-save), and say how many taps make that cheaper',
     'build one frequency detector from a recurrence in gates, size its state word, and decide when it beats an FFT',
+    'write the FFT as a program, and say what each change buys: the recursion unrolled, radix 4, trivial twiddles skipped, half the work for a real input',
   ],
   builds: ['signals', 'carriers', 'fixed', 'zplane', 'python', 'pipeline', 'muldiv'],
   get recap() {
@@ -60,6 +61,7 @@ export const chSpectrum: Chapter = {
         'A spectrogram is a column of windowed spectra a hop apart. The frame length sets both details at once: frequency detail goes as fs / N, time detail as N / fs. A signal that moves during a frame is smeared, and overlap costs one more transform per hop.',
         `Overlap-save filters by blocks of N with M taps: the last M − 1 inputs are repeated, the first M − 1 outputs of a block are circular wrap-around and are thrown away, and L = N − M + 1 come out. With the best power-of-two block it costs fewer real multiplications a sample than the direct form from ${f.cross} taps.`,
         `Goertzel is one bin as a second-order recurrence: one multiplication a sample, three at the end, any frequency. An FFT beats K Goertzels from about 2 log₂ N bins. Its state grows like the filter's impulse response sums: ${nf(f.gain, 0)} at the worst DTMF tone, ${f.bits} bits for 8-bit inputs.`,
+        `As a program on the pipelined RV32IM, a 64-point transform takes ${groupNum(fftCost('dft', 64).kernel)} clocks as a direct DFT, ${groupNum(fftCost('rec', 64).kernel)} as a recursive FFT, ${groupNum(fftCost('iter', 64).kernel)} in place by loops after a bit reversal, ${groupNum(fftCost('fast', 64).kernel)} in radix 4 with trivial twiddles skipped, and ${groupNum(fftCost('real', 64).kernel)} for a real input through a 32-point FFT. Clocks fall less than products: indices, loads and loops are the rest of the work.`,
       ],
       check: [
         {

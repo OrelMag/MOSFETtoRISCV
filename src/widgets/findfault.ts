@@ -122,7 +122,7 @@ export function findPanel(spec: FindSpec): ScenePanel {
       body.replaceChildren(
         st.found
           ? h('div', null, h('p', { class: 'good' }, st.helped ? 'The fault, shown for you:' : 'Found it.'), h('p', { html: spec.fault }))
-          : h('p', { class: 'sub' }, 'Run until the golden model stops at a mismatch. Then right-click the wire you suspect: “It is stuck at 0 here” or “… at 1”.'),
+          : h('p', { class: 'sub' }, 'Run until the golden model stops at a mismatch (on a phone, open the CPU panel first). Then right-click the wire you suspect, or press and hold it: “It is stuck at 0 here” or “… at 1”.'),
         ...(rows.length ? [h('ul', { class: 'find-tries' }, ...rows)] : []));
     };
     paint();

@@ -23,6 +23,19 @@ export function partClocks(v: FftVariant, N: number, from: string, to: string): 
   return fftCost(v, N).perLine.filter(([l]) => l > a && l < b).reduce((s, [, c]) => s + c, 0);
 }
 
+/** Clocks of the kernel lines whose text (indent dropped) starts with a prefix. */
+export function lineClocks(v: FftVariant, N: number, prefix: string): number {
+  const L = fftCase(v, N, FFT_DATA).program.source.split('\n');
+  return fftCost(v, N).perLine.filter(([l]) => L[l - 1]?.trim().startsWith(prefix)).reduce((s, [, c]) => s + c, 0);
+}
+
+/** The radix-4 program's butterflies, and those at k = 0 (every twiddle 1), for N points. */
+export function radix4Butterflies(N: number): { all: number; trivial: number } {
+  let all = 0, trivial = 0;
+  for (let q = 1; q < N; q *= 4) { all += N / 4; trivial += N / (4 * q); }
+  return { all, trivial };
+}
+
 /** Real multiplications each variant makes (the products the compiler turns into mul). */
 export function fftMults(v: FftVariant, N: number): number {
   const lg = Math.log2(N);
@@ -50,9 +63,9 @@ export const FFT_SW_STEPS: Step[] = [
       return `
         <p>Every spectrum so far was computed for you. Here the transform runs as a program: Python in the subset of chapter ${numOf('python')}, compiled for RV32IM and run on the gate-level pipelined CPU of chapter ${numOf('pipeline')} with the multiplier of chapter ${numOf('muldiv')}. The butterfly is the one <a href="#/c/carriers/2">chapter ${numOf('carriers')}</a> built in gates; here it is four multiplications, six additions and two roundings of code.</p>
         <p>Cooley and Tukey's step splits N samples into the even ones and the odd ones, transforms each half, and joins them: X[k] = E[k] + W<sup>k</sup>·O[k] and X[k + N/2] = E[k] − W<sup>k</sup>·O[k], with W = e<sup>−2πj/N</sup>. A function that calls itself on each half does it in log₂ N levels. The subset's lists are global, so the function is given places instead of new lists: <code>fft(o, i, n, s)</code> transforms n samples of x, starting at i and taking every s-th, into y from o. The even half is every 2s-th sample from i, the odd half the same from i + s.</p>
-        <p>The arithmetic is fixed point, as on a DSP: whole-number samples, twiddles in Q15 (cos and −sin times 32 767, kept to 32 766 so that cos 0 fits), and each product pair rounded once, <code>(… + 16384) &gt;&gt; 15</code>. Nothing is scaled between stages: these inputs stay within ±${n0(Math.max(...FFT_DATA.re.map(Math.abs), ...FFT_DATA.im.map(Math.abs)))}, so the largest bin fits easily.</p>
+        <p>The arithmetic is fixed point, as on a DSP: whole-number samples, twiddles (the constants W<sup>k</sup> a butterfly multiplies by) in Q15 (cos and −sin times 32 767 and clamped to 32 766, as the DSP core's table is, so cos 0 is 32 766, a hair under 1), and each product pair rounded once, <code>(… + 16384) &gt;&gt; 15</code>. Nothing is scaled between stages: these inputs stay within ±${n0(Math.max(...FFT_DATA.re.map(Math.abs), ...FFT_DATA.im.map(Math.abs)))}, so the largest bin fits easily.</p>
         <p>The direct DFT is N² complex products: ${n0(d16.kernel)} clocks for 16 points on this CPU, ${n0(d64.kernel)} for 64. The recursive FFT takes ${n0(r16.kernel)} and ${n0(r64.kernel)}: ${x1(d16.kernel, r16.kernel)} times faster at 16 points, ${x1(d64.kernel, r64.kernel)} times at 64, and the gap keeps growing as N / log₂ N. Its 64-point result is the DSP core's FFT of chapter ${numOf('dspcore')} word for word, the same inputs and the same roundings, and it stays within ${r64.maxErr.toFixed(2)} of the exact transform computed in floating point.</p>
-        <div class="try">Press <b>Run to end</b> in the Python panel. The lines computing <code>tr</code> and <code>ti</code> cost the most clocks, and the line of each call adds the frames: return address and saved registers pushed and popped at every level.</div>`;
+        <div class="try">Press <b>Run to end</b> in the Python panel. The lines computing <code>tr</code> and <code>ti</code> cost the most clocks, with the calls and the function's entry: the line of each call adds the frames, return address and saved registers pushed and popped at every level.</div>`;
     },
     scene: scene('rec'),
     lit: '',
@@ -96,19 +109,20 @@ export const FFT_SW_STEPS: Step[] = [
     title: 'Making it fast',
     get body() {
       const i16 = fftCost('iter', 16), f16 = fftCost('fast', 16), i64 = fftCost('iter', 64), f64 = fftCost('fast', 64);
+      const b16 = radix4Butterflies(16), k0 = lineClocks('fast', 16, 'if k == 0');
       return `
         <p>Three changes, each removing work the loops did for nothing.</p>
-        <p><strong>Radix 4.</strong> Join four quarters at once instead of two halves. The four outputs need W<sup>k</sup>, W<sup>2k</sup> and W<sup>3k</sup> times three of the inputs, and the rest is multiplication by ±1 and ±j, which only swaps and negates the parts. Three complex products for four points, where two radix-2 stages spend four: ${n0(fftMults('fast', 64))} real multiplications for 64 points against ${n0(fftMults('iter', 64))}. The input is reordered by reversing its base-4 digits.</p>
+        <p><strong>Radix 4.</strong> Join four quarters at once instead of two halves (the radix is how many parts each step joins). The four outputs need W<sup>k</sup>, W<sup>2k</sup> and W<sup>3k</sup> times three of the inputs, and the rest is multiplication by ±1 and ±j, which only swaps and negates the parts. Three complex products for four points, where two radix-2 stages spend four: ${n0(fftMults('fast', 64))} real multiplications for 64 points against ${n0(fftMults('iter', 64))}. The input is reordered by reversing its base-4 digits.</p>
         <p><strong>Twiddles once per k.</strong> The loops are swapped so that the twiddle index is the outer one: the six table reads happen once per k instead of once per butterfly.</p>
         <p><strong>Trivial twiddles skipped.</strong> At k = 0 every twiddle is 1, and those butterflies multiply nothing.</p>
         <p>Together: ${n0(f16.kernel)} clocks for 16 points against ${n0(i16.kernel)}, and ${n0(f64.kernel)} against ${n0(i64.kernel)} for 64, ${x1(i64.kernel, f64.kernel)} times faster. The result is no longer the DSP core's word for word: skipping k = 0 multiplies by an exact 1 where the table holds 32 766 / 32 768, and the rounding happens at other places. Against the exact transform the largest error is ${f64.maxErr.toFixed(2)}, against ${i64.maxErr.toFixed(2)}.</p>
-        <div class="try">Run it and find the line <code>if k == 0:</code> in the panel: its branch costs a clock or two per butterfly and saves four multiplications on every butterfly of the first stage.</div>`;
+        <div class="try">Run it and find the line <code>if k == 0:</code> in the panel: at 16 points it costs ${n0(k0)} clocks over ${b16.all} butterflies, about ${(k0 / b16.all).toFixed(0)} each, and saves twelve real multiplications on each of the ${b16.trivial} with k = 0: every butterfly of the first stage and the first of each group after it.</div>`;
     },
     scene: scene('fast'),
     lit: '',
     more: {
       derive: `<p>The radix-4 butterfly: with B<sub>m</sub> = W<sup>mk</sup>·A<sub>m</sub>, u = A<sub>0</sub> + B<sub>2</sub>, v = A<sub>0</sub> − B<sub>2</sub>, f = B<sub>1</sub> + B<sub>3</sub> and g = B<sub>1</sub> − B<sub>3</sub>, the four outputs are u + f, v − j·g, u − f and v + j·g. Multiplying by −j takes (g<sub>r</sub>, g<sub>i</sub>) to (g<sub>i</sub>, −g<sub>r</sub>): no product. Split radix mixes the two (radix 2 for the even outputs, radix 4 for the odd) and needs the fewest multiplications of the power-of-two FFTs, at the price of irregular code.</p>`,
-      pitfall: `<p>Counting only multiplications. On this CPU a multiply is one clock in the pipeline like an add, so the radix-4 version gains as much from fewer loads, stores and index sums as from fewer products. On a machine without a multiplier, the products would dominate and the gain would be larger.</p>`,
+      pitfall: `<p>Counting only multiplications. On this CPU a multiply is one clock in the pipeline like an add, so the radix-4 version gains as much from fewer loads, stores and index sums as from fewer products. The in-place radix-2 kernel's ${n0(fftMults('iter', 64))} multiplications are ${Math.round((100 * fftMults('iter', 64)) / fftCost('iter', 64).kernelInstrs)} % of its ${n0(fftCost('iter', 64).kernelInstrs)} instructions at 64 points, so cutting ${n0(fftMults('iter', 64) - fftMults('fast', 64))} of them moves the total far less than the product count suggests. On a machine without a multiplier, the products would dominate and the gain would be larger.</p>`,
     },
     challenge: {
       kind: 'quiz', question: 'A radix-4 butterfly takes four points. How many complex multiplications does it need, and why not four?',
@@ -140,7 +154,7 @@ export const FFT_SW_STEPS: Step[] = [
       why: ['', 'The other 31 bins carry no new information for a real input.', 'Bin 32, half the sample rate, is real but not zero in general: here it is Z[0]\'s real part minus its imaginary part.', 'Both halves come out of the one 32-point FFT by symmetry.'],
     },
     more: {
-      real: `<p>Every FFT library has a real-input entry (FFTW's r2c, numpy's rfft) built this way or with a dedicated real-input algorithm. Audio codecs go further: the transform the codec of chapter ${numOf('music')} runs on every block is computed with an N/4-point complex FFT and a twist before and after.</p>`,
+      real: `<p>Every FFT library has a real-input entry (FFTW's r2c, numpy's rfft) built this way or with a dedicated real-input algorithm. Audio codecs go further: a codec's transform on every block (the MDCT) is usually computed with an N/4-point complex FFT and a twist before and after. The codec of chapter ${numOf('music')} computes it directly, for clarity.</p>`,
     },
   },
 ];

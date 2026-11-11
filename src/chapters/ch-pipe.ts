@@ -123,7 +123,7 @@ function hazardWorked(): string {
   return `<details class="deeper"><summary>Worked example: every hazard, cycle by cycle</summary>
     <p>The hazard program of the last two steps, run on this pipeline's gates from power-on. A row is an instruction, a column a clock
     cycle, a cell the stage the instruction is in during that cycle (* = held where it was by a stall).</p>
-    <div class="worked-wrap"><table class="pipe-trace"><thead><tr><th>cycle</th>${T.map((_, c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="worked-wrap" tabindex="0" role="region" aria-label="Table, scrolls sideways"><table class="pipe-trace"><thead><tr><th>cycle</th>${T.map((_, c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
     <ul>${ev.map((x) => `<li>${x}.</li>`).join('')}</ul>
     <p>The sum: ${S.retired} instructions retire (the ${S.flushed} flushed ones never do) in ${S.cycles} cycles = ${S.fill} to fill the line +
     ${S.retired} + ${S.stalls} bubble + ${S.flushed} flushed. Past the fill that is (${S.retired} + ${S.stalls} + ${S.flushed}) / ${S.retired} =
@@ -587,7 +587,7 @@ export const chPipeline: Chapter = {
         or 1, which nothing on the drawing shows. Find it.</p>
         <p>Press <strong>Run to halt</strong> (or <strong>Step</strong>) in the CPU panel. After every cycle it compares the registers with the
         golden model, so it stops at the first instruction the hardware got wrong, and names the register, both values and the instruction.
-        Read that line as a clue: which instruction, which register, which value instead of which. Then right-click the wire you suspect and
+        Read that line as a clue: which instruction, which register, which value instead of which. Then right-click the wire you suspect (on a touch screen, press and hold it) and
         choose <strong>It is stuck at 0 here</strong> or <strong>… at 1</strong> (a bus asks for the bit). A wrong guess costs nothing: the
         panel runs the same program with the fault you named instead and says where that one would first show, which is a clue too.</p>
         <p>In a pipeline the panel compares the registers when an instruction leaves Write-back, so the cycle it names is when the wrong

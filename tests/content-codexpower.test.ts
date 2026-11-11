@@ -14,6 +14,7 @@ import { AND } from '../src/lib/gates';
 import { NAND2_UM2, UTILIZATION } from '../src/lib/tech';
 import { stats } from '../src/sim/stats';
 import { atSpeed, FRONT_CPUS, POWER } from '../src/widgets/power';
+import { benchOf } from '../src/bench/powercosts';
 import { PS_PER_NAND } from '../src/sim/timing';
 
 const text = (id: string) => `${codexById(id)!.body} ${JSON.stringify(moreOf(id) ?? {})}`;
@@ -49,6 +50,10 @@ describe('Power codex numbers', () => {
     has('darksilicon', `${Math.round((w / area) * 100)} W`);
     has('darksilicon', `${Math.round((100 * 15) / ((w / area) * 100))} %`);
   });
+  it('glitches: the benchmarks\' shares', () => {
+    has('glitch', `single-cycle      ${Math.round(100 * benchOf('sc').glitch)} %`);
+    has('glitch', `pipelined         ${Math.round(100 * benchOf('pipe').glitch)} %`);
+  });
   it('clock gating', () => {
     for (const id of ['clockgating']) {
       has(id, `${plain.pj.toFixed(2)}`);
@@ -57,7 +62,8 @@ describe('Power codex numbers', () => {
   });
   it('entries are taught in Power, have two questions, and await a level', () => {
     for (const e of CODEX_POWER) {
-      expect(TAUGHT_POWER[e.id]).toBe('power');
+      // glitch is taught where the adders chapter first shows one; the rest in Power
+      expect(TAUGHT_POWER[e.id]).toBe(e.id === 'glitch' ? 'adders' : 'power');
       expect(CHECKS[e.id]?.length).toBe(2);
       expect(POWER_AWAITING_LEVELS.has(e.id)).toBe(true);
       expect(NODES.some((n) => n.codex?.includes(e.id)), `${e.id} is in a level now: drop it from POWER_AWAITING_LEVELS`).toBe(false);
