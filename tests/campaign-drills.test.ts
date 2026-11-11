@@ -73,6 +73,14 @@ describe('drills', () => {
     }
   });
 
+  it.each(['fixed', 'divrem'])('%s: the placeholder never gives the answer away', (id) => {
+    const r = rng(9);
+    for (let i = 0; i < 400; i++) {
+      const q = DRILLS[id].make(r);
+      if (q.placeholder !== undefined) expect(q.check(q.placeholder).ok, `${q.prompt} (placeholder ${q.placeholder})`).toBe(false);
+    }
+  });
+
   it('binary16: rounding questions agree with the reference float model, kinds with the encoding', () => {
     const r = rng(7);
     let rounds = 0, kinds = 0;

@@ -156,7 +156,7 @@ const steps: Step[] = [
     body: `
       <p>The detector above is a <strong>Mealy</strong> machine: its output is a function of the state <em>and the input</em>. y rises as soon as x is 1 in S2, before the edge, the same cycle the last 1 arrives.</p>
       <p>A <strong>Moore</strong> machine's output is a function of the state alone. To report the pattern it needs a state that means "just saw 1, 0, 1": <strong>S3</strong>, entered on the edge that takes in the last 1, where y = 1. The detection comes
-      <em>one cycle later</em>, and it costs a state (and a flip-flop's worth of code: both versions fit two flip-flops here, ${MBIN.nands} NANDs against ${BIN.nands}).</p>
+      <em>one cycle later</em>, and it costs a state. Four states still fit in two flip-flops, so here the price is logic: ${MBIN.nands} NANDs against ${BIN.nands}.</p>
       <p>Both circuits are on the stage, on one x. Feed them 1, 0, 1: Mealy's y is 1 in the cycle that ends with the third bit; Moore's is 1 in the next cycle, whatever x does then. In a run of 1, 0, 1, 0, 1, 1, 0 the Mealy y is 1 at inputs ${PAIR.map((p, i) => (p.mealy ? i + 1 : 0)).filter(Boolean).join(' and ')},
       the Moore y at ${PAIR.map((p, i) => (p.moore ? i + 1 : 0)).filter(Boolean).join(' and ')}.</p>
       <p>So the choice is timing against robustness. A Mealy output reacts the same cycle but is a combinational path from x to y: it moves whenever x moves, glitches included, and whatever reads it must sample it at the edge. A Moore output changes only just after a
@@ -337,7 +337,7 @@ const steps: Step[] = [
   {
     title: 'Read it back: is it the machine you drew?',
     body: `
-      <p>A circuit that passes the test you thought of is not yet the machine you drew. Three circuits are on offer, all built as the 101 detector; all report the plain 1, 0, 1. Which one <em>is</em> the diagram?</p>
+      <p>A circuit that passes the test you thought of is not yet the machine you drew. Three circuits are on offer, each built from a diagram of the 101 detector, and each raises y once when fed a plain 1, 0, 1, so a test that only counts detections passes all three. Which one <em>is</em> the diagram?</p>
       <p>A test cannot answer that for every sequence, but a <strong>read-back</strong> can: start the circuit from reset, apply every input combination for one cycle, and note the state it reaches and the outputs, breadth first, until no new state turns up. A state is the settled value of every net, so no flip-flop has to be named. Each state found is paired with the diagram state the same inputs reach,
       and every arc is compared: its target and its output. A wrong arc is drawn <span style="color:var(--bad,#d63b3b)">red</span> with the arc the diagram wanted dashed beside it.</p>
       <p>On 1, 0, 1, 0, 1 the right machine gives y = ${CAND('b')}; circuit A gives ${CAND('a')} (${CANDIDATES[0].fault}); circuit C gives ${CAND('c')} (${CANDIDATES[2].fault}). The read-back finds both without being given the input: the same procedure grades the campaign's state-machine level, and it is how the sandbox's builder says "reads back as drawn".</p>
@@ -412,7 +412,7 @@ const steps: Step[] = [
     more: {
       derive: `<p>The synchronizer's reliability: the chance the first flip-flop is still undecided after a time t falls as e^(−t/τ); with a full clock period to resolve, the mean time between failures grows exponentially with the period. A debouncer's counter width follows from the longest bounce b in samples: the smallest n with 2^n > b, here ${N_DEB} for b = ${BOUNCE_SAMPLES}.</p>`,
       real: `<p>A keyboard controller scans a matrix and debounces each key for 5 to 20 ms; a rotary encoder is debounced with its own tiny state machine (the old and new two-bit states give the direction). Many chips put a Schmitt-trigger input in front of the synchronizer for slow, noisy edges.</p>`,
-      pitfall: `<p>Debouncing before synchronizing, or not at all: the counter's own flip-flops then see an asynchronous input and can go metastable. Order matters: synchronize first, then count. The other slip is to debounce the <em>release</em> as well as the press: both edges bounce, which is why this debouncer's rule is symmetric.</p>`,
+      pitfall: `<p>Debouncing before synchronizing, or not at all: the counter's own flip-flops then see an asynchronous input and can go metastable. Order matters: synchronize first, then count. The other slip is to debounce only the press: the release bounces too, which is why this debouncer's rule is symmetric (it waits out a run of disagreeing samples in either direction).</p>`,
     },
     scene: buttonScene,
     challenge: {
@@ -441,7 +441,7 @@ const steps: Step[] = [
       <div class="try">Set car = 1 and Pulse twice: MG → MY → SG. Set car = 0 and Pulse: SG → SY, then MG.</div>`,
     more: {
       derive: `<p>Counting what the machine remembers: the main/side road (2 values) and the lamp colour of the road that has the light (green, yellow): four states. A pedestrian phase adds one state per road crossing, a minimum-green timer adds a counter, and each addition is a question of the step 1 kind: what must the machine remember now?</p>`,
-      real: `<p>Real controllers are Moore machines with timers (minimum green, clearance interval, all-red), conflict monitors that force flashing red on a forbidden combination of lamps (a unused-code recovery, step 5), and a datapath of timer counters. Controllers for a junction are written as state tables, exactly as here.</p>`,
+      real: `<p>Real controllers are Moore machines with timers (minimum green, clearance interval, all-red), conflict monitors that force flashing red on a forbidden combination of lamps (an unused-code recovery, step 5), and a datapath of timer counters. Controllers for a junction are written as state tables, exactly as here.</p>`,
       pitfall: `<p>Moving the lamps off the state: a Mealy output (a lamp that depends on car) flickers when the sensor does. For anything a person or a motor sees, the output should come from flip-flops.</p>`,
     },
     scene: trafficScene,
@@ -506,7 +506,7 @@ export const chFsm: Chapter = {
           '',
           'Binary has the fewest flip-flops, but its logic grows with the number of states, so it is not the least logic.',
           'Gray reduces the bits that change at a transition; the logic still decodes all the bits.',
-          'It does: in this chapter the same machine costs from 32 to 51 NANDs, and the logic alone from 10 to 18.',
+          `It does: in this chapter the same machine costs from ${Math.min(...COST.mealy.map((c) => c.nands))} to ${Math.max(...COST.mealy.map((c) => c.nands))} NANDs, and the logic alone from ${Math.min(...COST.mealy.map((c) => c.logic))} to ${Math.max(...COST.mealy.map((c) => c.logic))}.`,
         ],
       },
       {
