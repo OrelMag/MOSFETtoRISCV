@@ -4,6 +4,7 @@
 // a mapped netlist ties them): an FPGA loads them from its bitstream at power-on.
 
 import { Builder } from './builder';
+import { symbolGeom } from '../sim/geometry';
 import { muxTree } from './combinational';
 import { define, ones, splitter } from './define';
 import { MUX2, XOR } from './gates';
@@ -72,10 +73,30 @@ export const SLICE: ComponentDef = (() => {
     summary: 'A LUT4 with a carry chain and a flip-flop beside it: in arithmetic mode the LUT makes the propagate signal and the chain the carry, one cell per bit; a registered output costs no second cell.',
     ports: [bus('i', 4, 'in'), bus('cfg', 16, 'in'), bus('cin', 1, 'in'), bus('arith', 1, 'in'), bus('reg', 1, 'in'), bus('clk', 1, 'in', true), bus('y', 1, 'out'), bus('cout', 1, 'out')],
     symbol: { kind: 'box', label: 'SLICE' },
-    netlist: () => ({
-      pins: { i: [0, 4], cfg: [0, 8], cin: [0, 12], arith: [0, 16], reg: [0, 20], clk: [0, 24], y: [R, 6], cout: [R, 12] },
-      instances: b.instances, nets: b.nets(),
-    }),
+    // The three mode and clock pins run as wires along the empty band under the cell, each rising straight into its part
+    // (Builder would leave them labels, the cell has room): arith into the arith? select, clk into the flip-flop, reg into
+    // the registered? select; lowest first so none crosses another (tests/redrawclear-audit2.test.ts).
+    netlist: () => {
+      const at = (end: string): [number, number] => {
+        const [n, p] = end.split('.'), inst = b.instances.find((x) => x.name === n)!, g = symbolGeom(inst.def).ports[p].pos;
+        return [inst.at![0] + g[0], inst.at![1] + g[1]];
+      };
+      const wired: Record<string, (sink: string) => [number, number][]> = {
+        arith: (s) => [[at(s)[0], 20]],
+        clk: (s) => [[at(s)[0] - 4, 22], [at(s)[0] - 4, at(s)[1]]],
+        reg: (s) => [[at(s)[0], 24]],
+      };
+      // f also reaches the registered? select's a input past the flip-flop: over its top
+      const over = (s: string): [number, number][] => [[at(s)[0] - 28, at(s)[1] + 1], [at(s)[0] - 28, 0], [at(s)[0] - 2, 0], [at(s)[0] - 2, at(s)[1]]];
+      const nets = b.nets().map((n) => {
+        if (n.name === 'f') { const { tags: _t, ...rest } = n, s6 = n.ends[2]; return { ...rest, via: { [s6]: over(s6) } }; }
+        const w = n.name ? wired[n.name] : undefined;
+        if (!w) return n;
+        const { tags: _tags, ...rest } = n, sink = n.ends.find((e) => e.includes('.'))!;
+        return { ...rest, via: { [sink]: w(sink) } };
+      });
+      return { pins: { i: [0, 4], cfg: [0, 8], cin: [0, 12], arith: [0, 20], clk: [0, 22], reg: [0, 24], y: [R, 6], cout: [R, 12] }, instances: b.instances, nets };
+    },
   });
 })();
 

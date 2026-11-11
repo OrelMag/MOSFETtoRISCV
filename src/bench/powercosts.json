@@ -94,7 +94,19 @@
   "glitchPj": 5.873,
   "settledPj": 15.18,
   "rfGlitchPj": 0.3653,
-  "rfRegGlitchPj": 0.08801
+  "rfRegGlitchPj": 0.08801,
+  "writeData": {
+   "rf": {
+    "toggles": 37.12,
+    "settled": 9.55,
+    "ffPerBit": 25.3
+   },
+   "dm": {
+    "toggles": 3.433,
+    "settled": 1.267,
+    "ffPerBit": 26.9
+   }
+  }
  },
  "gated": {
   "nands": 48938,
@@ -188,7 +200,19 @@
   "glitchPj": 9.693,
   "settledPj": 4.22,
   "rfGlitchPj": 3.553,
-  "rfRegGlitchPj": 3.292
+  "rfRegGlitchPj": 3.292,
+  "writeData": {
+   "rf": {
+    "toggles": 37.02,
+    "settled": 9.55,
+    "ffPerBit": 74.9
+   },
+   "dm": {
+    "toggles": 3.433,
+    "settled": 1.267,
+    "ffPerBit": 78.1
+   }
+  }
  },
  "device": {
   "hp": {

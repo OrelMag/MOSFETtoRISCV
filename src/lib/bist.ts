@@ -81,7 +81,7 @@ export const BIST_PATTERNS = 32;
 export function bistAdder(n: number): ComponentDef {
   const W = 2 * n + 1;
   return memo(`bistadd${n}`, () => {
-    const b = new Builder(16);
+    const b = new Builder(12, 8);
     b.pins('rst', 'clk');
     const gen = b.op(lfsr(W), ['rst', '', 'clk'], 'patterns', 'gen');
     b.wire(b.op1(constWord(W, 1), [], undefined, 'seed'), `${gen}.seed`);
