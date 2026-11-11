@@ -635,7 +635,7 @@ for k in range(6):
     id: 'divide',
     name: 'Divide, by hand',
     group: 'Multiply & divide',
-    blurb: 'Shift and subtract, one quotient bit a pass: what rt.divmod and chapter 21\'s divider do.',
+    blurb: 'Shift and subtract, one quotient bit a pass: what rt.divmod and the hardware divider do.',
     expect: [14, 2, 30, 10],
     source: `def divide(n, d):
     q = 0

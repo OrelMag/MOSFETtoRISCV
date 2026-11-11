@@ -17,6 +17,7 @@
 // Anything outside the subset, and every illegal instruction, does nothing for one cycle, as the golden model does in
 // user mode (riscv/rvv.ts execV with gates: e8 / e16 set vill; vmul, strided and narrow accesses are illegal).
 
+import { numOf } from '../chapters/order';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { VILL, vlmaxOf, vtypeOf } from '../riscv/rvv';
 import { alu, aluSpec, constWord, isZero } from './alu';
@@ -430,7 +431,7 @@ export const VEC_ALU: ComponentDef = (() => {
   b.wire(cmp, 'cmp');
   return define({
     id: 'valu', name: 'Lane ALU', category: 'cpu',
-    summary: 'One lane\'s arithmetic for one element: the 32-bit ALU of chapter 11 with operand B from the other register, x[rs1] or the immediate, the operands swapped for vrsub, the flags of a subtraction turned into the eight compares (eq, ne, ltu, lt, leu, le, gtu, gt) and into min / max, a pick between vs2\'s element and operand B (min / max, or vmerge by the mask bit), and the result: ALU, pick, element index (vid) or the loaded word.',
+    summary: `One lane's arithmetic for one element: the 32-bit ALU of chapter ${numOf('alu')} with operand B from the other register, x[rs1] or the immediate, the operands swapped for vrsub, the flags of a subtraction turned into the eight compares (eq, ne, ltu, lt, leu, le, gtu, gt) and into min / max, a pick between vs2's element and operand B (min / max, or vmerge by the mask bit), and the result: ALU, pick, element index (vid) or the loaded word.`,
     ports: [bus('rdA', 32, 'in'), bus('rdB', 32, 'in'), bus('scalar', 32, 'in'), bit('vv', 'in'), bit('swap', 'in'), bus('aluCtl', 4, 'in'), bit('mergeLike', 'in'), bit('take', 'in'), bit('minS', 'in'), bit('isMax', 'in'), bus('cmpSel', 3, 'in'), bus('resSel', 2, 'in'), bus('idx', 5, 'in'), bus('memRd', 32, 'in'),
       bus('res', 32, 'out'), bit('cmp', 'out')],
     symbol: { kind: 'box', label: 'LANE ALU' },

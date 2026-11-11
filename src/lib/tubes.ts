@@ -8,6 +8,7 @@
 // the losing pull-up's 1 and make the grid X); its bottom leg (a bias resistor, 0) only holds a grid nothing else
 // reaches. Values are logic levels; the voltages are in the labels.
 
+import { numOf } from '../chapters/order';
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { netlistOf } from '../sim/types';
 import { FULL_ADDER } from './combinational';
@@ -311,7 +312,7 @@ export const ECCLES_JORDAN: ComponentDef = define({
 /** The nine-NAND full adder (chapter 6) with every NAND a tube NAND: the brick principle, in tubes. */
 export const TUBE_FA: ComponentDef = define({
   id: 'tube_fa', name: 'Tube full adder', category: 'arithmetic',
-  summary: 'Chapter 6\'s nine-NAND full adder with every NAND built from tubes: 9 triode sections and 18 diodes.',
+  summary: `Chapter ${numOf('adders')}'s nine-NAND full adder with every NAND built from tubes: 9 triode sections and 18 diodes.`,
   ports: FULL_ADDER.ports,
   symbol: { kind: 'box', label: 'FA (tubes)' },
   spec: FULL_ADDER.spec,

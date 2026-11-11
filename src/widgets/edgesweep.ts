@@ -2,6 +2,7 @@
 // delays before (t < 0) or after the rising edge and q settles to the old value, the new one, or never decides. The
 // strip's boundaries are the setup and hold times of the circuit; a click shows that run as a waveform.
 
+import { numOf } from '../chapters/order';
 import { DFF_EDGE6 } from '../lib/seqdeep';
 import { DFF } from '../lib/sequential';
 import { qTrace, sweepEdge, type Capture, type EdgeSweep } from '../sim/edgetiming';
@@ -14,7 +15,7 @@ import type { Widget } from '../view/stage';
 
 const LO = -8, HI = 8;
 const PARTS: { id: string; label: string; def: ComponentDef }[] = [
-  { id: 'ms', label: 'Master–slave (chapter 8)', def: DFF },
+  { id: 'ms', label: `Master–slave (chapter ${numOf('latches')})`, def: DFF },
   { id: 'e6', label: 'Six-gate (7474)', def: DFF_EDGE6 },
 ];
 type Model = 'unit' | 'load';

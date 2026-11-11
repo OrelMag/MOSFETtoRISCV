@@ -4,6 +4,7 @@
 import { control, NEXT_PC } from '../../lib/cpu';
 import { XOR } from '../../lib/gates';
 import { aluSpec } from '../../lib/alu';
+import { numOf } from '../order';
 import { evalOnce, simulate } from '../../sim/harness';
 import { groupDigits } from '../../sim/numfmt';
 import { stats } from '../../sim/stats';
@@ -74,7 +75,7 @@ export const aluSteps: Step[] = [
     title: 'Six branches from one subtraction',
     get body() {
       return `
-      <p>Chapter 5 gave the flags and the previous steps used two of them for <code>slt</code> and <code>sltu</code>. A conditional branch (an instruction that jumps only when a comparison of two numbers holds) needs no result at all, only a verdict, and the same subtraction serves all six: the branch unit (<span data-show="nz lt ge nc">three inverters and one XOR</span>) turns
+      <p>Chapter ${numOf('binary')} gave the flags and the previous steps used two of them for <code>slt</code> and <code>sltu</code>. A conditional branch (an instruction that jumps only when a comparison of two numbers holds) needs no result at all, only a verdict, and the same subtraction serves all six: the branch unit (<span data-show="nz lt ge nc">three inverters and one XOR</span>) turns
       Z, N, V and C into one bit per <code>funct3</code>, and an <span data-show="cond">8:1 multiplexer</span> selects it.</p>
       <table class="mini"><tr><th>funct3</th><th>branch</th><th>taken when</th></tr>${BRANCHES.map((b) => `<tr><td>${b.f3.toString(2).padStart(3, '0')}</td><td><code>${b.name}</code></td><td>${b.expr}</td></tr>`).join('')}</table>
       <p>The condition logic costs ${NPC_COND.flags} NANDs plus ${NPC_COND.mux} for the select; with the jump and jalr muxing the whole next-PC decision is ${NPC_COND.all}. Which shortcut is tempting and wrong? Over all 65 536 pairs of 8-bit operands, N alone gives the wrong signed order for ${g(WRONG.nAlone)} of them (every
@@ -96,7 +97,7 @@ export const aluSteps: Step[] = [
       derive: `<p>With d = a − b computed as a + ¬b + 1: Z = (d = 0); C = 1 iff a ≥ b unsigned; the true sign of the difference is N ⊕ V. So for the six conditions, in the order of the table: Z, ¬Z, N ⊕ V, ¬(N ⊕ V), ¬C, C. bge is one inverter after the XOR
         that blt already has, as the netlist draws it (<code>ge</code>), and bgeu needs none: C itself.</p>`,
       pitfall: `<p>Branching on <code>a - b &lt; 0</code> in software instead of <code>blt</code>. The subtraction wraps: for values of opposite sign it can have the wrong sign, which is exactly the V flag you did not read. Compilers use <code>blt</code> and the hardware reads N ⊕ V.</p>`,
-      real: `<p>Fast cores do not wait for the ALU: chapter 18's branch comparator is an equality tree and its own fast subtractor beside the ALU, so the decision comes earlier in the cycle, without the ALU's result mux and zero detector. The conditions above are unchanged.</p>`,
+      real: `<p>Fast cores do not wait for the ALU: chapter ${numOf('pipepay')}'s branch comparator is an equality tree and its own fast subtractor beside the ALU, so the decision comes earlier in the cycle, without the ALU's result mux and zero detector. The conditions above are unchanged.</p>`,
       numbers: `<p>Cost of the condition logic: the XOR is ${stats(XOR).nands} NANDs, each of the three inverters 1, and the 8:1 select ${NPC_COND.mux}; ${NPC_COND.all} NANDs for the whole next-PC decision.</p>`,
     },
     challenge: {
@@ -135,7 +136,7 @@ export const aluSteps: Step[] = [
       ],
     },
     more: {
-      derive: `<p>The R-type column of chapter 11's recap is "ctl = {funct7[5], funct3}" and that is exactly what <code>a0 a1 a2</code> and <code>alt1</code> produce for OP: aluOp = 1, funct3 = 101 or R-type. The extra gates exist for the other instruction groups. The cost
+      derive: `<p>The R-type column of chapter ${numOf('alu')}'s recap is "ctl = {funct7[5], funct3}" and that is exactly what <code>a0 a1 a2</code> and <code>alt1</code> produce for OP: aluOp = 1, funct3 = 101 or R-type. The extra gates exist for the other instruction groups. The cost
         is small beside the datapath: ${g(CTL_PARTS)} NANDs against the ALU's thousands.</p>`,
       pitfall: `<p>Decoding on funct7 alone. <code>addi x1, x1, 1024</code> has imm[10] = 1, which is bit 30 of the instruction word, and an ALU that read that bit unconditionally would subtract. Only R-type and the shift-immediates define that bit.</p>`,
     },
@@ -156,7 +157,7 @@ export const aluSteps: Step[] = [
       <p>"The complete ALU" counted depth: the longest path from any input to any output, ${R.depth} delays for the ripple ALU (87 to the result y, the rest to the zero flag behind it). But the control code is fixed for a whole instruction, and a path only matters if a change can travel it. <strong>Measured</strong> with the code held and the operands moving
       (the widget below runs the 32-bit ALU on a set of carry-chain, shifter and alternating-bit transitions), the result y settles in <strong>${R.ops.and}</strong> delays for <code>and</code> / <code>or</code> and ${R.ops.xor} for <code>xor</code>, ${R.ops.sll} / ${R.ops.srl} / ${R.ops.sra} for the shifts,
       and ${R.ops.add} for <code>add</code>, ${R.ops.sub} for <code>sub</code>, ${R.ops.sltu} for <code>sltu</code>, <strong>${R.ops.slt}</strong> for <code>slt</code>. The ripple carry decides everything the adder touches; the logic operations never see it, although it is in the same circuit.</p>
-      <p>That is also the case against a <em>fixed</em> clock period for all instructions: the slowest op sets it (${R.ops.slt} here against ${R.ops.and} for <code>and</code>), unless the slow ones get more cycles. With <span data-ahead="prefix">a Kogge–Stone adder (a parallel-prefix carry network, chapter 16)</span> the same measurement gives <code>add</code> ${K.ops.add}, <code>slt</code> ${K.ops.slt}: the gap to the shifter (${K.ops.sll}) closes from ${R.ops.add - R.ops.sll} delays to ${K.ops.add - K.ops.sll}, and <code>slt</code> (${K.ops.slt}), which still pays the flag logic after the adder, becomes the slowest. The flags (zero, neg, ovf, carry) follow the adder: measured, they settle in ${R.flags} delays here and ${K.flags} with Kogge–Stone (the ${R.depth} above is the static count, every path whether a change can travel it or not): that is what a branch waits for, which is why a <span data-ahead="pipeline">pipelined core (instructions overlapped in stages)</span> gives branches their own comparator.</p>`;
+      <p>That is also the case against a <em>fixed</em> clock period for all instructions: the slowest op sets it (${R.ops.slt} here against ${R.ops.and} for <code>and</code>), unless the slow ones get more cycles. With <span data-ahead="prefix">a Kogge–Stone adder (a parallel-prefix carry network, chapter ${numOf('fastadd')})</span> the same measurement gives <code>add</code> ${K.ops.add}, <code>slt</code> ${K.ops.slt}: the gap to the shifter (${K.ops.sll}) closes from ${R.ops.add - R.ops.sll} delays to ${K.ops.add - K.ops.sll}, and <code>slt</code> (${K.ops.slt}), which still pays the flag logic after the adder, becomes the slowest. The flags (zero, neg, ovf, carry) follow the adder: measured, they settle in ${R.flags} delays here and ${K.flags} with Kogge–Stone (the ${R.depth} above is the static count, every path whether a change can travel it or not): that is what a branch waits for, which is why a <span data-ahead="pipeline">pipelined core (instructions overlapped in stages)</span> gives branches their own comparator.</p>`;
     },
     widget: opDelayWidget,
     more: {

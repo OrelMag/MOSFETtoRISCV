@@ -1,6 +1,6 @@
 // The five-stage pipeline's stage occupancy, cycle by cycle, from the golden model and the hazard unit's rules (DOM-free).
 // Sources: lib/pipeline.ts hazardUnit's Verilog (lwStall, taken, enPC / enFD, flushFD / flushDE) and buildPipe (pc, FD, DE,
-// EM, MW, validF tied to 1); chapter 17's "The load-use stall" and "Control hazards" steps. tests/model-assembly.test.ts
+// EM, MW, validF tied to 1); chapter 18's "The load-use stall" and "Control hazards" steps. tests/model-assembly.test.ts
 // compares every cycle with the gate-level pipelinedCpu through riscv/cosim.ts pipeSnap, so this is the hardware's
 // schedule, not a textbook's.
 //

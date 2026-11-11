@@ -145,7 +145,7 @@ export function clockNetDelays(n: number): Depths {
   return r;
 }
 
-/** Chapter 16's last step: the prefix family (and a wide select) under unit delay, under load, and as drawn. */
+/** Chapter 17's last step: the prefix family (and a wide select) under unit delay, under load, and as drawn. */
 export function prefixDelays(): Widget {
   const body = h('div');
   const pick = h('div', { class: 'seg', role: 'group', 'aria-label': 'Width' });

@@ -86,7 +86,7 @@ export function receiverWidget(): Widget {
       h('div', { class: 'panel' }, h('h3', null, 'The receiver is an amplifier'), f.svg),
       h('div', { class: 'panel' }, h('h3', null, 'Levels and margins'), lad.svg)),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, vSl.el, nSl.el),
-      h('p', { class: 'sub mos-note' }, `Matched inverter of chapter 2 (Wp/Wn = ${MOBILITY_RATIO}, VDD ${VDD} V). VIL ${nf(m.vil)} V and VIH ${nf(m.vih)} V are where the slope is −1; the driver's levels are the outputs there (VOL ${nf(m.vol)} V, VOH ${nf(m.voh)} V). Noise is the worst-case offset added at the receiver by supply bounce, crosstalk and reflections, chapter ${numOf('wire')}.`)),
+      h('p', { class: 'sub mos-note' }, `Matched inverter of chapter ${numOf('inverter')} (Wp/Wn = ${MOBILITY_RATIO}, VDD ${VDD} V). VIL ${nf(m.vil)} V and VIH ${nf(m.vih)} V are where the slope is −1; the driver's levels are the outputs there (VOL ${nf(m.vol)} V, VOH ${nf(m.voh)} V). Noise is the worst-case offset added at the receiver by supply bounce, crosstalk and reflections, chapter ${numOf('wire')}.`)),
     h('div', { class: 'mos-chips' }, ...chips), verdict);
   paint();
   return { el };
@@ -117,7 +117,7 @@ export const schmittPanel: ScenePanel = (): Widget => {
   };
   const kSl = slider('Keeper', 0, 1.2, 0.01, kappa, (v) => `${nf(v)}×`, (v) => { kappa = v; paint(); });
   const el = h('div', { class: 'mem-panel cpu-panel mc-panel clk-panel', 'data-dock': 'right' }, h('h4', null, 'Thresholds from the current balance', h('span', { class: 'fold-hint' })),
-    f.svg, kSl.el, read, note, h('p', { class: 'sub' }, 'Square-law model of chapter 1 (phys/schmitt.ts). The switch-level circuit beside it shows who wins by strength; this shows at what voltage.'));
+    f.svg, kSl.el, read, note, h('p', { class: 'sub' }, `Square-law model of chapter ${numOf('mosfet')} (phys/schmitt.ts). The switch-level circuit beside it shows who wins by strength; this shows at what voltage.`));
   paint();
   return { el };
 };
@@ -191,7 +191,7 @@ export function windowWidget(): Widget {
   const oSl = slider('Phase', 0, 1, 0.01, offset, (v) => nf(v), (v) => { offset = v; paint(); });
   const el = h('div', { class: 'widget mos clk-w' }, h('div', { class: 'panel' }, h('h3', null, 'Where A\'s data changes, seen from B\'s clock'), f.svg),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, rSl.el, oSl.el), out, note,
-      h('p', { class: 'sub mos-note' }, `Shaded: the window around B's rising edge, ${MS_TIMING().setup} NAND delays before it (setup) and ${MS_TIMING().hold} after (hold), as measured on the flip-flop in chapter 8, at a B clock of ${fb / 1e6} MHz and ${PS_PER_NAND} ps per NAND delay. Try 1.00 (the same clock), 1.50 (3 : 2), then 1.37.`)));
+      h('p', { class: 'sub mos-note' }, `Shaded: the window around B's rising edge, ${MS_TIMING().setup} NAND delays before it (setup) and ${MS_TIMING().hold} after (hold), as measured on the flip-flop in chapter ${numOf('latches')}, at a B clock of ${fb / 1e6} MHz and ${PS_PER_NAND} ps per NAND delay. Try 1.00 (the same clock), 1.50 (3 : 2), then 1.37.`)));
   paint();
   return { el };
 }

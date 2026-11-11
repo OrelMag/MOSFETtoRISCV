@@ -1,4 +1,4 @@
-// Chapter 21 widgets: multiplier cost/speed comparison and a radix-4 Booth recoding explorer.
+// Chapter 25 widgets: multiplier cost/speed comparison and a radix-4 Booth recoding explorer.
 
 import { arrayDiv, arrayMul, seqDivider, treeMul } from '../lib/muldiv';
 import { logicDepth, stats } from '../sim/stats';

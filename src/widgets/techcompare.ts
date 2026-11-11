@@ -3,6 +3,7 @@
 // CPUs are counted without their program ROM (in relays or tubes the program comes off cards or tape) and clocked at
 // the whole CPU's period.
 
+import { numOf } from '../chapters/order';
 import { cpu4 } from '../lib/cpu4';
 import { singleCycleCpu } from '../lib/cpu';
 import { FULL_ADDER, rca } from '../lib/combinational';
@@ -61,7 +62,7 @@ const DESIGNS: Design[] = [
     name: 'RV32I single-cycle', op: 'instruction',
     make: () => {
       const full = singleCycleCpu(assemble(PROGRAMS[0].source).words);
-      return { def: withoutParts(full, ['imem']), steps: designSteps(full), note: 'Chapter 14\'s CPU without its program ROM, one instruction per clock period. No native version.' };
+      return { def: withoutParts(full, ['imem']), steps: designSteps(full), note: `Chapter ${numOf('cpu')}'s CPU without its program ROM, one instruction per clock period. No native version.` };
     },
   },
 ];

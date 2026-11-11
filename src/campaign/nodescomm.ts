@@ -63,7 +63,7 @@ export const NODES_COMM: CampaignNode[] = [
   },
   {
     id: 'l_i2c', act: 12, title: 'I²C controller', kind: 'build', optional: true, requires: ['l_sync'], base: BUILDCOMM.l_i2c, givesOf: leafGives(i2cController, i2cBlocks), par: { nand: 659, period: 32 },
-    why: 'Two wires shared by any number of chips, each of which can pull a line down and none of which can push it up: the wired AND of chapter 2, with a pull-up resistor. Two controllers may start together; each reads back what it sends, and the one that sent a 1 and read a 0 steps aside without corrupting the other\'s frame.',
+    why: `Two wires shared by any number of chips, each of which can pull a line down and none of which can push it up: the wired AND of chapter ${numOf('inverter')}, with a pull-up resistor. Two controllers may start together; each reads back what it sends, and the one that sent a 1 and read a 0 steps aside without corrupting the other's frame.`,
     tips: ['Per bit cell: a phase counter of 0 to 3 (two clocks each, so a half-phase flag too) and a bit counter of 0 to 8. START, STOP, WRITE and READ differ only in what the lines do in each phase.', 'sda_o and scl_o are flip-flops, set as a phase begins, so the lines never glitch. Phase 1 holds until scl_i (through two samplers) reads 1.', 'Arbitration: in phase 2 of a WRITE data cell, if the bit you sent was 1 (you let go) and sda_i reads 0, set lost, clear busy and release both lines in that clock.', 'A WRITE shifts its byte left one place after each cell; a READ shifts sda_i in at the end of phase 2.'],
     codex: ['i2c', 'arbitration'], chapters: [{ chapter: 'spi', step: 6, label: 'The I²C frame' }, { chapter: 'spi', step: 7, label: 'Arbitration: two controllers at once' }],
   },

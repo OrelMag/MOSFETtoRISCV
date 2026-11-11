@@ -990,7 +990,7 @@ export function fpMul(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
     fmulExp(f); fmulSpecial(f, mux); normRound(f, 2 * M + 2); treeMul(M + 1); // the parts, made now: they register as soon as the unit is
     return define({
       id: `fpmul${E}_${M}${mux.tag}`, name: `${fmtName(f)} multiplier${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
-      summary: `Sign = XOR, exponent = ea + eb − bias, significand = a ${M + 1}×${M + 1} tree multiplier (chapter 21), then the shared normalize & round unit. ∞ × 0 is NaN (NV).`,
+      summary: `Sign = XOR, exponent = ea + eb − bias, significand = a ${M + 1}×${M + 1} tree multiplier (the multiply chapter), then the shared normalize & round unit. ∞ × 0 is NaN (NV).`,
       ports: [bus('a', N, 'in'), bus('b', N, 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'FMUL' },
       spec: ([a, bb, rm]) => { const r = fpMulX(a, bb, f, rm); return [r.y, r.fl]; },
@@ -1607,7 +1607,7 @@ function fdivTop(f: FpFormat): { instances: InstanceDef[]; nets: NetDef[]; pins:
 
 /**
  * a / b, iteratively: prenormalize both significands, then one restoring division step per
- * clock (the integer divider's step, chapter 21) produces M + 4 quotient bits, most significant
+ * clock (the integer divider's step, the divide chapter) produces M + 4 quotient bits, most significant
  * first, and the final remainder is the sticky bit. Normalize & round finishes in the done cycle;
  * with round = false the unit stops before it (the pipelined FPU rounds in its X stage) and
  * outputs the quotient, its exponent and sign, the sticky bit and the special cases instead.

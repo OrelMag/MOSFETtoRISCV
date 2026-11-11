@@ -248,7 +248,7 @@ export const chMemCtrl: Chapter = {
       more: {
         derive: `<p>The stall for one miss is the controller's cycles for the request or requests behind it. A clean victim: one fill, ${accessCycles('hit', TIMING)} to ${accessCycles('conflict', TIMING)} cycles
           by the row state. A dirty victim: a write-back first, then the fill, so up to ${2 * accessCycles('miss', TIMING)} cycles with both banks closed and ${accessCycles('miss', TIMING) + accessCycles('conflict', TIMING)} when they share a bank.
-          The fixed-cost caches of chapter 22 charged ${WB_MISS_CLEAN} and ${WB_MISS_DIRTY}; the controller replaces those constants with the open-row table's answer.</p>`,
+          The fixed-cost caches of chapter ${numOf('cache')} charged ${WB_MISS_CLEAN} and ${WB_MISS_DIRTY}; the controller replaces those constants with the open-row table's answer.</p>`,
         real: `<p>A real CPU does not freeze on a miss. Out-of-order cores keep issuing past it, non-blocking caches track several outstanding misses (miss-status registers),
           the critical word comes first and the rest of the line fills behind it, and a hardware prefetcher opens rows before the load asks. All of them aim at the same
           thing: more requests in flight, so that a controller has something to reorder.</p>`,

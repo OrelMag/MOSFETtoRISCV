@@ -82,7 +82,7 @@ export const chAdders: Chapter = {
         options: ['It roughly doubles', 'It grows by a constant', 'It stays the same', 'It roughly quadruples'],
         answer: 0,
         explain: 'The carry crosses each full adder in turn, two NAND delays per bit: delay grows linearly with the width.',
-        why: ['', 'That is a tree, like the magnitude comparator, or the fast adders of chapter 16. Here each column waits for the carry from the one to its right.', 'The columns sit side by side, but they do not work in parallel: each needs its neighbour\'s carry first.', 'The carry crosses each full adder once: the delay grows with n, not n².'],
+        why: ['', `That is a tree, like the magnitude comparator, or the fast adders of chapter ${numOf('fastadd')}. Here each column waits for the carry from the one to its right.`, 'The columns sit side by side, but they do not work in parallel: each needs its neighbour\'s carry first.', 'The carry crosses each full adder once: the delay grows with n, not n².'],
       },
       {
         question: 'In the adder/subtractor, why is <code>sub</code> wired to the carry-in as well as to the XORs?',
@@ -109,7 +109,7 @@ export const chAdders: Chapter = {
         the two outputs are gates you already have:</p>
         <ul><li><span data-show="g1 g2 g3 g4"><code>s = a XOR b</code></span>: the sum bit is 1 when exactly one input is 1;</li>
         <li><span data-show="g1 g5"><code>c = a AND b</code></span>: there is a carry only when both are 1.</li></ul>
-        <p>This is a <strong>half adder</strong>. It is the XOR circuit from <a href="#/c/gates/4">chapter 4</a> plus one extra NAND.
+        <p>This is a <strong>half adder</strong>. It is the XOR circuit from <a href="#/c/gates/4">chapter ${numOf('gates')}</a> plus one extra NAND.
         The XOR's first gate, <span data-show="g1"><code>g1</code></span>, already computes NAND(a, b); the carry is its inverse, so a single
         NAND wired as an inverter, <span data-show="g5"><code>g5</code></span>, gives a AND b. Sharing that gate is the whole design:
         ${stats(HALF_ADDER).nands} NANDs, ${stats(HALF_ADDER).transistors} transistors, ${logicDepth(HALF_ADDER)} gate delays deep.</p>
@@ -377,7 +377,7 @@ export const chAdders: Chapter = {
         <p>At 32 bits that is ${CMP32} gate delays against ${BORROW32} for the subtractor's carry out (the ripple adder's ${portDepth(rca(32), 'cout')} plus the XOR in front of b), for a similar cost (${stats(magComparator(32, false)).nands} NANDs against ${stats(addSub(32)).nands}). The depth grows
         with log n instead of n.</p>
         <div class="try">Open a <code>combine</code> cell: it is the same "the higher one decides" rule as the carry cells of the fast adders in
-        <a href="#/c/fastadd/0">chapter 16</a>.</div>`,
+        <a href="#/c/fastadd/0">chapter ${numOf('fastadd')}</a>.</div>`,
       scene: () => ({ root: magComparator(4), inputs: { a: 9, b: 6 } }),
       tour: {
         beats: [
@@ -517,7 +517,7 @@ export const chRouting: Chapter = {
       body: `
         <p>A computer is full of choices made by a number: which of 32 registers to write, which word of memory to read, which of several results to keep.
         Two blocks make every one of them. A <em>decoder</em> turns a number into one raised wire among 2ⁿ, a choice to act on (write this row); a
-        <em>multiplexer</em> uses a number to pass one of 2ⁿ inputs to its output, a choice to read (this word). <a href="#/c/gates/6">Chapter 4</a> built the 2:1
+        <em>multiplexer</em> uses a number to pass one of 2ⁿ inputs to its output, a choice to read (this word). <a href="#/c/gates/6">Chapter ${numOf('gates')}</a> built the 2:1
         multiplexer; this chapter widens both and prices them, and every memory after it is built on the pair.</p>
         <p>A <strong>decoder</strong> takes an n-bit number and raises exactly one of its 2ⁿ outputs. For input 2,
         output <span data-show="g2"><code>y2</code></span> is 1 and all others are 0. This is called "one-hot".</p>

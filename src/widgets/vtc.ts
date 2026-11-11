@@ -2,6 +2,7 @@
 // output and the region of each device, and the noise margins at a movable PMOS width. The model is the chapter-1
 // square-law device; the simulator below it is switch level (0 / 1 / X) and does not change.
 
+import { numOf } from '../chapters/order';
 import { h, s } from '../ui/dom';
 import { curve, metrics, MOBILITY_RATIO, point, strength } from '../phys/inverter';
 import type { Widget } from '../view/stage';
@@ -70,7 +71,7 @@ export function vtcWidget(): Widget {
   const el = h('div', { class: 'widget mos' },
     h('div', { class: 'panel' }, h('h3', null, 'Voltage transfer characteristic'), svg),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, vSl.el, wSl.el),
-      h('p', { class: 'sub mos-note' }, `Square-law model of chapter 1 (Vt 0.45 V, VDD ${VDD} V, channel-length factor), a PMOS ${MOBILITY_RATIO}× wider than the NMOS matches it. `
+      h('p', { class: 'sub mos-note' }, `Square-law model of chapter ${numOf('mosfet')} (Vt 0.45 V, VDD ${VDD} V, channel-length factor), a PMOS ${MOBILITY_RATIO}× wider than the NMOS matches it. `
         + 'Dashed: the matched curve, for comparison.')),
     h('div', { class: 'mos-chips' }, ...c.map((x) => x.el)),
     h('div', { class: 'panel' }, tab));

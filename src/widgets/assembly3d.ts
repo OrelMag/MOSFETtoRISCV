@@ -1,4 +1,4 @@
-// Chapter 17's pipeline as an assembly line in 3D: this entry stays tiny; the model (widgets/assembly3dview.ts, the
+// Chapter 18's pipeline as an assembly line in 3D: this entry stays tiny; the model (widgets/assembly3dview.ts, the
 // renderer) loads as its own chunks when the step opens.
 
 import { lazyModel } from './modelhost';
