@@ -6,7 +6,13 @@
 
 Design and mockup only: nothing here is in the product (mockup-first rule). Mockup: `mockup.html` (open it beside the
 SVGs in this folder). Measurements: the scripts in `docs/transparent/` on branch `docs/transparent-boxes`, numbers below
-and in `route-levels.json`, `draw-levels.json`, `shape-ratios.txt`.
+and in `route-levels.json`, `draw-levels.json`, `shape-ratios.txt`, `cache-size.txt`.
+
+*Revision 2 (after the coordinator's review):* a lens opens only from a zoom gesture (item 4); zooming out to go up is
+phase 2, behind a cue and a fresh gesture (item 9); the route cache is measured, capped and ships first for drill as
+phase 0 (item 2); overlays are painted inside in phase 1 (item 5); a touch screen gets the row disabled in phase 1
+(item 6); one dim layer (item 5); the lens keeps out of covers and bars (item 1); no Shift+Enter, `+` and Esc instead
+(item 8).
 
 **The idea.** On the stage (chapters, workbench) and the sandbox's look inside, zooming toward a library box (ALU,
 adder, register file…) opens it where it is: its own netlist with live values, the surrounding circuit kept. Drill
@@ -40,6 +46,10 @@ three top levels that opens, and (for routing) one level further down: 199 disti
 `control_signals` takes 192 ms, a 5-part `btblookup` 123 ms (the cost is wires-first's crossing checks and the
 untangle search, not the part count).
 
+Route cache (`cache-size.ts`, phase 0): routing all 1 507 levels (the registry and the three CPU tops two deep)
+takes 61 s on one thread; the 540 over 4 ms make 540 files, 3.2 MB raw, 681 KB gzipped, the largest 92 KB. The worst
+first routes, which drill pays today: 5.5 s (`srt4terms32_36`), 4.3 s (`rvc_funct7`), 2.5 s (`rb_digits`), 2.2 s (`vseq`).
+
 Shape (`shape-ratios.ts`, 66 distinct boxes on the three tops): the inside's extent over the symbol's is a median 7.5×,
 p90 54×, max 250× (a 187-bit pipeline register: 25 × 1501 units behind a 10 × 6 symbol). Aspect differs by a median 3×,
 p90 28×. A box's own labels, its inside fitted into the symbol, reach legible.ts's 7 px only when the box is drawn a
@@ -52,7 +62,15 @@ median 655 px tall. The ALU: symbol 8 × 12, inside 78 × 146 (12×), labels leg
 **Decision: (b) a lens.** A rounded window anchored on the box (centred on it, pushed inside the stage's edges), drawing
 the box's inside at its own scale, over the level, which stays drawn and dimmed around it. The lens opens from the box's
 rectangle (the transition: the box's outline grows into the lens while the inside fades in). Its size is capped at
-**60 % of the stage's width and 85 % of its height**, so a band of the circuit always shows on both sides. The lens's
+**60 % of the free stage's width and 85 % of its height**, so a band of the circuit always shows on both sides.
+
+**The free stage**, not the stage's rectangle: the canvas less everything the camera already keeps clear (camera.ts
+covers, `Stage.covers()`: right-docked panels through `--dock-space`, the Why? card, the challenge notes, the LEVEL tag
+and the layout pill), less the stage bar above and the run bar below. The lens is placed centred on its box, then
+pushed into the largest free rectangle that holds it; **it never sits under a docked panel, the run bar or the stage
+bar.** If that free rectangle cannot hold the lens at its opening scale (item 4), the box does not open and its hint
+says "double-click to step in". The placement is recomputed when a cover changes (a panel docked or folded, the Why?
+card opened), as `setCover` refits the camera today. The lens's
 scale follows the zoom: chosen at opening so the inside fills the cap, it then grows with every zoom step until the lens
 reaches the whole stage, where the hand-off to a drill happens (item 9). A tall bit-sliced inside (a 32-bit register)
 is drawn at the same rule, so it is cut by the cap: the lens then shows the part of the inside nearest the zoom point
@@ -80,10 +98,23 @@ reading stays where it was, and the outer wires still visibly reach the box (ite
 - **Nothing is built during a gesture:** while a zoom or pan runs, the lens only moves, scales and fades (a CSS
   transform on an existing element: ≤ 2 ms a frame). Building starts when the gesture settles (the stage already plans
   legible names at that moment).
-- **Routes from a build-time cache:** `scripts/lens-routes.ts` (run by `npm run build`, like `hwstats.ts`) routes every
-  registered library level that a stage can show and whose first route takes over 4 ms, and writes its routed paths,
-  tags and hops to `public/lens/<id>.json`, keyed by the netlist fingerprint layout.ts already computes for "redrawn
-  since you arranged it". The lens fetches it lazily; a stale or missing key routes on the main thread instead.
+- **Routes from a build-time cache:** `scripts/route-cache.ts` (run by `npm run build`, like `hwstats.ts`) routes every
+  registered library level and every level the chapters' CPU tops reach, and writes those whose first route takes over
+  4 ms to `public/routes/<id>.json` (routed paths, dots, bus-label spots), keyed by the netlist fingerprint layout.ts
+  already computes (`drawingKey(nl)`) for "redrawn since you arranged it" plus a version of the router's rules (route.ts, wirefirst.ts). A
+  level's view fetches its file lazily; a stale or missing key routes on the main thread as today. Not precached by the
+  service worker (only `assets/` is); the desktop build ships it as part of `dist/`.
+  - **Measured** (`cache-size.ts`, 1 507 levels: the registry and the three CPU tops two deep): **540 files, 3.2 MB raw,
+    681 KB gzipped**, the largest 92 KB. Routing them all takes **61 s on one thread**; spread over the build machine's
+    cores with `worker_threads` (the script, unlike the page, can build the defs itself in each worker), about 15–20 s on
+    four, beside `hwstats.ts`'s 20 s.
+  - **Ceilings**, checked by the script (the build fails, with the levels to blame, past them): **≤ 1.5 MB gzipped in
+    all, ≤ 200 KB per file, ≤ 60 s of build time on CI**. Past the size ceiling the 4 ms threshold rises (8 ms keeps
+    the 44 worst CPU levels and most of the registry's tail) rather than the cache being dropped.
+  - **It serves drill too.** The same first routes are paid today by every double-click: the worst measured are 5.5 s
+    (`srt4terms32_36`), 4.3 s (`rvc_funct7`), 2.5 s (`rb_digits`), 2.2 s (`vseq`), 1.4 s (the issue queue's entry). **It
+    ships first, as its own change (phase 0), independent of the setting**: SchematicView.show() takes a cached route
+    when its key matches, for any level, drilled or not.
 - **DOM built off screen:** a second `SchematicView` on a detached host (as `image.ts` `exportInside` already draws a
   part's inside with live values), in one task, then moved into the lens. Budget: **≤ 50 ms for that task** (the
   single-cycle CPU's worst level is 32 ms with routing, the pipeline's 23 ms), **≤ 2 ms per frame** for the lens while
@@ -94,7 +125,7 @@ reading stays where it was, and the outer wires still visibly reach the box (ite
 - **Out-of-order core levels** (DOM 100–270 ms) are out of the first phase: the lens shows "too large to open here:
   double-click to step in" instead.
 
-**Why.** First routes have a tail no frame budget survives (861 ms), and part counts cannot tell which levels are slow,
+**Why.** First routes have a tail no frame budget survives (861 ms among the CPU levels, 5.5 s in the registry), and part counts cannot tell which levels are slow,
 so a guard on size would be wrong both ways. Routes are deterministic per level and rules (the registry-wide route tests
 already route every registered netlist), so they can be made once at build time. DOM time is what remains, and it is
 within one acceptable task for the CPUs a learner zooms around in the first chapters.
@@ -130,6 +161,16 @@ crowd. **Leader lines from the box to the lens across the circuit**: they cross 
 which the drilled level's own boxes can open. **The live breadcrumb** shows the peek as a last crumb in italics,
 "cpu ▸ *alu (peek)*", with crumbvals' live value as for any crumb; a click on it drills.
 
+**What opens a lens: a zoom gesture, and nothing else.** A lens opens only when a zoom gesture (wheel, pinch, the `+`
+key on the keyboard cursor's part) settles with the focused box past the opening threshold. **Never on load, a fit, a
+resize, a scene change, a step change, a drill or going back up**, even where a box is already 96 px or more at fit (the
+gates and adder chapters' small scenes): those views stay as they are today until the learner zooms.
+- **Panning the box off screen closes the lens** (the box's rectangle leaves the free stage by more than half); panning
+  back does not reopen it: the next zoom does.
+- **The next zoom settling over another box moves the lens to it**: the old lens closes (no transition) as the new one
+  opens; there are never two. A zoom that settles over no box past the threshold closes the lens.
+- A lens is never restored from an address, a share link or a note's pin: they name drill paths (item 9).
+
 **Thresholds** (in on-screen pixels of the focused box, tied to legible.ts):
 - **opens** when the box's shorter side reaches **96 px** (8 × `NAME_PX` 12): by then the box's own label (1.05 units) is past
   `MIN_TEXT_PX` 7 for any box up to 14 units tall (96 / 14 × 1.05 = 7.2 px), the box is plainly the target, **and** the lens, at its cap, can draw the inside with every block at least
@@ -154,7 +195,8 @@ issue queue would open at the same zoom.
 | Why? | works on lens wires (whyNet on the lens's ViewCtx); a trace that reaches the rim continues on the outer level | same Sim, so the trace is honest across the rim |
 | Break a part | in the lens's right-click menu, as on a drilled level (`ablate(def, path)` per level) | it is per level already |
 | probes, Timing panel | only where `ctx.sim === stage.sim` (expanded children: yes; a sub-simulation such as the ROM: no, as today) | the existing rule; no new engine path |
-| overlays (Slack, Cost / Energy / Depth, Activity, Load, Unknown) | the open overlay also paints the lens's parts for its level (`slackAt(s, path)` per level; the others per node); the legend stays the outer level's, with a line "inside alu: the same scale" | one overlay, one legend; per-level computation already exists |
+| overlays (Slack, Cost / Energy / Depth, Activity, Load, Unknown) | **painted inside the lens in phase 1.** Every overlay is already computed per level from a HierNode (`costOverlay(node)`, `loadOverlay(design, node)`, depth from the timing graph, `slackAt(s, path)`, Activity / Energy from the stage's toggle counts per node): the lens computes its own with its ViewCtx's node and paints its parts with the same bands. The legend keeps the outer level's counts and gains one line: "Inside alu: its parts' own shares". The one case with no data, a sub-simulation (the ROM: its toggles are another Sim's), says so in the lens's tag: "Activity not drawn inside". | an unpainted lens under a painted legend would read as "nothing here"; the data costs one more call per overlay, cached with the lens |
+| the focus dim (the CPU panel's `highlight(names, true)`, Slow mode's instruction marks) | **one dim layer.** The lens draws no shade of its own: opening it puts the outer view in the same focus mode (`svg.schematic.focus .faded`, opacity 0.18) with the lit set = what was lit ∪ the box, so the box's wires stay bright up to the rim. A highlight arriving while the lens is open adds to the lit set; closing the lens restores the highlight as it stood (`lastHl`). Inside the lens nothing fades unless the highlight names inner parts (phase 2) | two dims multiply to near black, and they would disagree about what is lit |
 | layout lock, dragging | the lens is read-only for arranging; a drag in it pans the outer view (the lens follows its box); the inside is drawn with the learner's saved layout of that level | arranging two levels at once would need two undo stacks |
 | highlights, data-show, tours | unchanged: they name drill paths and drill, as today; a highlight that names the box lights the lens's rim; a tour closes any lens before its first beat | tours are tested on drill paths; a lens must not change them |
 | flowing bits | run on lens wires (flow.ts, flowtokens.ts over its polylines), only while the lens is open; off with reduced motion as everywhere | live values are the point |
@@ -168,8 +210,15 @@ at least 40 × 40 px (the coarse-pointer target size) selects it; on anything sm
 the lens's tag says "tap to step in"). Double-tap drills, as today. The setting starts **off on a touch screen** even
 after it becomes the default with a mouse (see the setting).
 
+**Phase 1 on a touch screen.** The setting is global, but phase 1 does not build or test the touch rules above. So on a
+coarse pointer the View options row is shown **disabled, with "Not yet on touch screens"** in place of its description
+(and the `>` action says the same), and a stored "on" has no effect there: a pinch zooms exactly as today. Phase 2
+enables it with the rules above.
+
 **Why.** At 390 px the lens is nearly the whole stage, so it is close to a drill anyway; most inner parts are under
-40 px there, and a tap that misses is worse than a drill that lands.
+40 px there, and a tap that misses is worse than a drill that lands. Phase 1 disables it rather than letting a pinch
+open a lens with the desktop's rules: a pinch that also pans would open and close lenses as the fingers move, and the
+tap-to-drill rule is what keeps the lens usable at that size.
 
 **Alternatives rejected.** **Opening on a tap** (no zoom): collides with selecting. **Lens below the box as a sheet**:
 covers the run bar and the panels.
@@ -199,9 +248,16 @@ covers the run bar and the panels.
 - **Reduced motion** (`reducedMotion()`): no grow and fade; the lens appears and goes at once.
 - **Screen readers**: the lens is `role="group"` with `aria-label="Inside alu (alu32): 17 parts, live"`; its opening is
   announced once on the breadcrumb's live region ("alu opened in place; Enter steps in").
-- **Keyboard**: the keyboard cursor (kcursor.ts) on a box: **Shift+Enter** opens its lens (the keyboard's zoom), Esc
-  closes it and gives the focus back to the box, **Enter drills** as today. Focus does **not** move into the lens: its
-  parts are reached by drilling. (A peek is for looking; tabbing into it would need a second cursor.)
+- **Keyboard: no new key.** With the keyboard cursor (kcursor.ts) on a box, **`+`** (stagekeys.ts `cursor.zoomin`)
+  zooms toward that part instead of the view's centre; that is a zoom gesture, so the lens follows the trigger rule of
+  item 4 like the wheel. **Enter drills** as today (`cursor.act`). **Esc** (`stage.up`) closes an open lens first and
+  goes up a level only when none is open. Focus does **not** move into the lens: its parts are reached by drilling.
+  (A peek is for looking; tabbing into it would need a second cursor.) The KEYS entries change their words, so the ?
+  sheet says it: `cursor.zoomin` "zoom in (toward the cursor's part; with Open blocks as you zoom, its inside opens)",
+  `stage.up` "close the open block, else up a level".
+  - *Shift+Enter, proposed in the first draft, is dropped:* it is in neither ui/keys.ts nor stagekeys.ts, and
+    `Stage.cursorKey` takes any Enter without Ctrl, so Shift+Enter drills today. Giving it a second meaning would make
+    the same key do two things depending on a setting.
 
 **Why.** Exports and print are documents of a level; a lens is a transient view. Keyboard users get the same peek
 without a second focus model.
@@ -213,9 +269,16 @@ without a second focus model.
   entry per level, ui/drillpath.ts) and look inside are unchanged.
 - **Zooming in past the lens's full size hands off to a drill**: when the lens would exceed the stage, the view becomes
   that level at the same on-screen scale and position (no jump), and a history entry is pushed as for a double-click.
-- **Zooming out past fit on a drilled level goes back up**, but only with the setting on: a zoom-out continuing for
-  300 ms after the level is at fit pops one level (as the breadcrumb's parent does), reopening the parent with the lens
-  at its full size, which then shrinks as the zoom-out continues. Without it a learner could zoom in but never back out.
+- **Zooming out to go back up is phase 2, with a cue.** In phase 1, a level entered by the hand-off shows, once the
+  zoom-out reaches fit, a cue under the breadcrumb: "Esc or cpu goes back up" (the crumb is a link; the browser's Back
+  works too, as the hand-off pushed a history entry). Nothing pops by itself. In phase 2 the cue becomes "Keep zooming
+  out to go up to cpu", and **only a fresh gesture after the cue** pops one level: a new pinch, or wheel events after a
+  pause of at least 400 ms with the cue shown; the parent then opens with the lens at full size, shrinking as the zoom
+  continues.
+  - *The 300 ms rule of the first draft is dropped:* trackpad momentum keeps sending wheel events for a second or more
+    after the fingers leave, so a time rule would pop a level the learner never asked to leave. Phase 1 still has three
+    ways up, so it loses nothing by waiting; phase 2 needs the gesture-boundary detection (and its tests on real
+    trackpad traces) that the pop requires.
 - **Look inside (sandbox)**: the same lens over look inside's schematic (it is a SchematicView), phase 2.
 
 **Why.** Drill is the tested, addressable navigation (links, tours, notes' pins use its paths); the lens is a way to it,
@@ -236,8 +299,11 @@ stops growing): the learner then has to find double-click at the very moment zoo
   first phase** (opt-in while it is new: it changes what a zoom does, and the out-of-order levels cannot open yet).
   When phase 3 makes it the default, null means **on with a mouse, off on a touch screen** (at 390 px a lens is nearly a
   drill, item 6).
-- **Off restores today exactly:** no lens element is ever created, no route cache is fetched, the zoom never hands off
-  and zooming out never goes up a level, the stage hint is today's text, double-click and the breadcrumb drill as now.
+- **Off restores today exactly:** no lens element is ever created, the zoom never hands off and zooming out never goes
+  up a level, the stage hint is today's text, double-click and the breadcrumb drill as now. **The one difference from
+  today is the route cache (phase 0), which is not part of the setting:** drill uses it whatever the setting, so a
+  first drill into a slow level is faster than today with the setting off too. Its pictures are identical (a test
+  holds the cached routes equal to live ones).
   (The tests of item 10 run the existing stage tests with it off and on.)
 - **Reset and presets:** it joins **VIEW_KEYS** (Reset view sets it back to null), not LOOK_KEYS or PRESETS (it is
   behaviour, not looks).
@@ -250,13 +316,19 @@ to today's stage.
 
 ## 10. Rollout, tests and what is cut
 
-**Phase 1 (MVP).** The stage only (chapters, workbench): the setting (off), the lens on the focused box with the
-thresholds of item 4, rim jogs, live values and flowing bits, select inside, double-click to drill, the hand-off and the
-zoom-out back up, the build-time route cache, reduced motion, the breadcrumb's peek crumb, Esc / Shift+Enter. Single-cycle
-and pipeline CPUs and every smaller scene; out-of-order levels say "double-click to step in".
+**Phase 0, on its own (no setting).** The build-time route cache (item 2), used by every SchematicView.show(): drill,
+look inside, the workbench. It removes today's multi-second first drills (5.5 s at worst) whatever comes after, and it
+is the lens's prerequisite. Its own tests (cached equal to live, a changed netlist misses, the size and time ceilings).
 
-**Phase 2.** The sandbox's look inside; overlays inside the lens; Why? across the rim; Break a part inside; the CPU
-panel's marks inside (insthw naming inner units); the phone.
+**Phase 1 (MVP).** The stage only (chapters, workbench), mouse and keyboard: the setting (off; disabled on a touch
+screen), the lens on the focused box opened only by a zoom gesture (item 4), placed in the free stage (item 1), rim
+jogs, live values and flowing bits, **overlays painted inside**, **one dim layer**, select inside, double-click to drill,
+the hand-off, the "Esc or cpu goes back up" cue, reduced motion, the breadcrumb's peek crumb, `+` toward the cursor and
+Esc closing first. Single-cycle and pipeline CPUs and every smaller scene; out-of-order levels say "double-click to step
+in".
+
+**Phase 2.** The sandbox's look inside; zooming out to go back up (fresh gesture after the cue); Why? across the rim;
+Break a part inside; the CPU panel's marks inside (insthw naming inner units); the phone (pinch, tap to step in).
 
 **Phase 3.** The default becomes on with a mouse (null), after the author tries it; the out-of-order core's levels, if
 the DOM can be built in slices (a SchematicView refactor) or turns out under budget on a quieter machine.
@@ -269,6 +341,16 @@ the DOM can be built in slices (a SchematicView refactor) or turns out under bud
 - The route cache: every cached level equals a live `routeNetlist` (same paths), and a changed netlist misses (the
   fingerprint), as tests/route.test.ts routes every netlist today.
 - Thresholds: open at 96, close under 72, no flicker over a scripted zoom wobble.
+- Trigger: no lens after load, fit, resize, a scene or step change, a drill or going up, even on scenes whose boxes are
+  ≥ 96 px at fit (the gates and adders chapters); panning the box off closes it; a zoom over another box moves it (never
+  two `.lens` elements).
+- Placement: with each right-docked panel, the Why? card and the challenge notes open, the lens's rectangle never meets
+  a cover, the stage bar or the run bar (`lensPlan` takes the covers).
+- Dims: with a CPU-panel highlight on, opening and closing a lens leaves one `focus` class and the highlight's lit set
+  restored.
+- Overlays: with each overlay on, the lens's parts carry its bands; a sub-simulation's lens carries the "not drawn
+  inside" tag.
+- Keys: the ? sheet's `cursor.zoomin` and `stage.up` lines; Esc closes the lens before going up.
 - Off restores today: the stage's existing tests and the smoke's stage routes run with the setting on and off; with it
   off no `.lens` element exists after zooming every box.
 - Smoke: a route per CPU scene that zooms onto the ALU (desktop and 390 px, both themes, both boards), checks the lens

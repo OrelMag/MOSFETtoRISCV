@@ -68,7 +68,7 @@ th, td { border: 1px solid var(--border); padding: 4px 8px; text-align: right; }
 <h2>3. On a phone (390 px)</h2>
 <div class="grid">
 <figure><div class="phone"><div class="topbar"><b>Workbench</b><span class="muted">· single-cycle CPU</span></div><div class="scr" id="phone"></div></div>
-<figcaption>Pinch toward the ALU. The lens takes the width less 16 px gutters, centred on the box, never under the stage bar. A tap inside the lens on a part smaller than 40 px opens that level (a drill) rather than trying to hit the part; larger parts select.</figcaption></figure>
+<figcaption><b>Phase 2.</b> In phase 1 the View options row is disabled on a touch screen ("Not yet on touch screens") and a pinch zooms as today. Then: pinch toward the ALU. The lens takes the width less 16 px gutters, centred on the box, never under the stage bar. A tap inside the lens on a part smaller than 40 px opens that level (a drill) rather than trying to hit the part; larger parts select.</figcaption></figure>
 <figure><div class="menu" role="presentation">
 <div class="head">Behaviour</div>
 <div class="row"><span class="sw on"><i></i></span><span><b>Move parts by dragging</b><small>On: dragging a part or a wire moves it. Off: dragging moves the view and the drawing stays put (the lock on the stage bar is the same switch). Starts off on a touch screen</small></span></div>
@@ -88,9 +88,10 @@ th, td { border: 1px solid var(--border); padding: 4px 8px; text-align: right; }
 <tr><td>show() in Chrome, pipeline (19)</td><td>5.7 ms</td><td>19 ms</td><td>23 ms</td><td class="verdict">same</td></tr>
 <tr><td>show() in Chrome, out-of-order core (53)</td><td>12 ms</td><td>140 ms</td><td>269 ms</td><td class="verdict bad">not in the first phase</td></tr>
 <tr><td>update() after a clock edge (median of 8 edges)</td><td>0.1 ms</td><td>0.3 ms</td><td>0.6 ms</td><td class="verdict good">cheap while it runs (one 34 ms GC pause on the ooo store queue)</td></tr>
+<tr><td><b>route cache</b>, built once (1 507 levels; 540 over 4 ms)</td><td colspan="3">540 files · 3.2 MB · <b>681 KB gzipped</b> · 61 s on one thread</td><td class="verdict good">phase 0, on its own: drill's first opens today reach 5.5 s</td></tr>
 <tr><td>a sub-simulation (the ROM opened)</td><td colspan="3">38–68 ms, once</td><td class="verdict">when the zoom settles, cached</td></tr>
 </table>
-<p class="muted">Budget: while a zoom gesture runs, nothing is built: the lens only moves and fades (≤ 2 ms a frame). When the gesture settles, the level's wires come from a route cache made at build time (like hwstats.json); a level not in it is routed then. Its DOM is built off screen in its own SchematicView, as image.ts's exportInside already draws a part's inside, in one task under 50 ms, and swapped in. No worker: routeNetlist takes ComponentDefs, which carry functions. Measured on a desktop shared with other sessions' builds; headless Chrome with --disable-gpu; Node v22.13.1.</p>
+<p class="muted">Budget: the route cache ships first (phase 0), for drill as much as for the lens. While a zoom gesture runs, nothing is built: the lens only moves and fades (≤ 2 ms a frame). When the gesture settles, the level's wires come from a route cache made at build time (like hwstats.json); a level not in it is routed then. Its DOM is built off screen in its own SchematicView, as image.ts's exportInside already draws a part's inside, in one task under 50 ms, and swapped in. No worker: routeNetlist takes ComponentDefs, which carry functions. Measured on a desktop shared with other sessions' builds; headless Chrome with --disable-gpu; Node v22.13.1.</p>
 </main>
 <script>
 const ALU = { x: 1053.5, y: 119.8, w: 93.2, h: 134.2 };      // the alu box in top-*.svg pixels (2082 × 830)
@@ -142,8 +143,8 @@ function fig(caption, html, h = FH) {
 function draw() {
   document.getElementById('stages').innerHTML = [
     fig('<b>Closed.</b> The CPU at fit: the ALU is 40 px tall, a symbol like today. Nothing is built.', frame({ s: FW / 2082, cx: FW / 2 - (2082 / 2 - ALU.x - ALU.w / 2) * FW / 2082, cy: FH / 2 })),
-    fig('<b>Opening.</b> Zoomed so the ALU is 130 px tall (past 96 px). The lens grows from the box, fading in (instant with reduced motion); the breadcrumb shows the level it peeks at, in italics.', frame({ s: 0.97, shade: true, lens: (b) => { const L = lensAt(0.15)(b); return L; }, fade: 0.55, ring: true, crumb: 'cpu ▸ <i>alu (peek)</i>' })),
-    fig('<b>Open, live.</b> The lens at its legible size (block names at 12 px, legible.ts), the wires with their values after six cycles. Outer wires meet the rim; a short jog along the rim reaches each inner pin, named there.', frame({ s: 0.97, shade: true, lens: lensAt(0.29), tag: 'alu · alu32 · 17 parts', wires: rim, crumb: 'cpu ▸ <i>alu (peek)</i> · zoom on to step in' })),
+    fig('<b>Opening.</b> A zoom gesture settled with the ALU 130 px tall (past 96 px): only a zoom opens a lens, never a load, fit or resize. The lens grows from the box, fading in (instant with reduced motion); the breadcrumb shows the level it peeks at, in italics.', frame({ s: 0.97, shade: true, lens: (b) => { const L = lensAt(0.15)(b); return L; }, fade: 0.55, ring: true, crumb: 'cpu ▸ <i>alu (peek)</i>' })),
+    fig('<b>Open, live.</b> The lens at its legible size (block names at 12 px, legible.ts), the wires with their values after six cycles. The dimming is the stage’s own focus fade (one layer, shared with the CPU panel’s highlight), drawn here as a veil. Outer wires meet the rim; a short jog along the rim reaches each inner pin, named there.', frame({ s: 0.97, shade: true, lens: lensAt(0.29), tag: 'alu · alu32 · 17 parts', wires: rim, crumb: 'cpu ▸ <i>alu (peek)</i> · zoom on to step in' })),
   ].join('');
   document.getElementById('options').innerHTML = [
     fig('<span class="verdict bad">(a) The box grows, neighbours move.</span> Simulated by sliding the right half of the level over (the vertical push is not even drawn). For the ALU it must grow 12×; for a 32-bit register 43×. The whole level re-routes at every threshold (70–400 ms here), and the circuit the learner was reading jumps away.', frame({ s: 0.97, grow: (tx, ty, b) => {
