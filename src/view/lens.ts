@@ -73,8 +73,19 @@ export class Lens {
   /** Ports whose inner pin is deep inside the drawing this paint (their connector ends on the rim). */
   private deep = new Set<string>();
 
+  /**
+   * Where the lens, its rim and its hints go: one layer over the canvas, added once. A child added to or taken from the
+   * canvas itself re-checks its :has() rules (app.css) over the whole stage, and on the out-of-order core that restyle
+   * was ~100 ms per opening.
+   */
+  private layer: HTMLElement;
+
   constructor(private host: LensHost) {
     const v = host.view;
+    this.layer = document.createElement('div');
+    this.layer.className = 'lens-layer';
+    host.canvas.append(this.layer);
+    this.off.push(() => this.layer.remove());
     const wheel = (e: WheelEvent) => this.zoomed(e.clientX, e.clientY);
     v.el.addEventListener('wheel', wheel, { passive: true });
     this.off.push(() => v.el.removeEventListener('wheel', wheel));
@@ -225,6 +236,7 @@ export class Lens {
   }
 
   private build(outer: ViewCtx, name: string, box: Rect, key: string): void {
+    const t0 = performance.now();
     const child = outer.child(name);
     if (!child) return;
     const def = child.def;
@@ -236,9 +248,8 @@ export class Lens {
     const tag = document.createElement('span');
     tag.className = 'lens-tag';
     el.append(body, tag);
-    // drawn while hidden so its extent is known before it is placed
-    el.style.visibility = 'hidden';
-    this.host.canvas.append(el);
+    // drawn off the page: its extent is known before it is placed, and the page is laid out once, after every change
+    // (on the out-of-order core each layout of the stage costs ~50 ms: DESIGN.md item 2's budget is one task)
     const events: SchematicEvents = {
       open: (c) => this.host.drill([...child.path, c]),
       select: (c) => {
@@ -289,14 +300,22 @@ export class Lens {
     const rim = document.createElementNS(SVG, 'svg') as SVGSVGElement;
     rim.setAttribute('class', 'lens-rim');
     rim.setAttribute('aria-hidden', 'true');
-    this.host.canvas.append(rim);
+    this.layer.append(rim);
     this.open = { name, ctx: child, view, el, body, tag, rim, extent, opened: { plan, boxH: box.h }, plan, label };
     this.place(plan);
-    el.style.visibility = '';
-    this.host.view.setLensBox(name);
-    this.host.peek(child);
+    this.layer.insertBefore(el, rim);
     this.paintOverlay();
     this.paintRim();
+    // the dim in the next frame and the peek crumb in a task after it: on a level of thousands of parts (the out-of-order
+    // core) restyling them and laying the stage out again are ~60-80 ms each, so each gets a task of its own and the
+    // opening itself stays under DESIGN.md's 50 ms (scripts/lens-ooo-measure.mjs)
+    const opened = this.open;
+    requestAnimationFrame(() => {
+      if (this.open !== opened) return;
+      this.host.view.setLensBox(name);
+      // the crumb after that frame has painted, as a task of its own
+      setTimeout(() => { if (this.open === opened) this.host.peek(child); }, 0);
+    });
     // the box's outline grows into the lens while the inside fades in
     if (!reducedMotion()) {
       const r = plan.rect;
@@ -306,6 +325,9 @@ export class Lens {
       ], { duration: OPEN_MS, easing: 'ease-out' });
       rim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: OPEN_MS, easing: 'ease-in' });
     }
+    // what opening took on the main thread (the sub-simulation, the inside's drawing, its placement): the smoke and
+    // the out-of-order measurement read it (DESIGN.md item 2's 50 ms budget)
+    el.dataset.buildMs = (performance.now() - t0).toFixed(1);
     this.host.say(`${name} opened in place; Enter steps in`);
   }
 
@@ -434,7 +456,7 @@ export class Lens {
     el.textContent = text;
     el.style.left = `${box.x + box.w / 2}px`;
     el.style.top = `${box.y + box.h / 2}px`;
-    this.host.canvas.append(el);
+    this.layer.append(el);
     this.hint = el;
     this.host.say(text);
   }

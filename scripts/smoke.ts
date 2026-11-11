@@ -870,6 +870,9 @@ const lensDrive = (part: string) => `(async () => {
   if (lenses() !== 1) return [...bad, 'zoomed onto ${part}: ' + lenses() + ' lenses (expected 1)'];
   const worst = Math.max(0, ...long);
   if (worst > 250) bad.push('a long task of ' + Math.round(worst) + ' ms after the zoom settled');
+  // the opening itself (lens.ts data-build-ms; DESIGN.md: 50 ms on a quiet machine, the parallel tabs here get twice that)
+  const built = Number(document.querySelector('.lens').dataset.buildMs);
+  if (!(built <= 100)) bad.push('the lens took ' + built + ' ms to open');
   if (!svg.classList.contains('focus')) bad.push('the level is not dimmed around the lens');
   if (!document.querySelector('.crumbs button.peek')) bad.push('no peek crumb');
   const L = document.querySelector('.lens').getBoundingClientRect(), c = canvas.getBoundingClientRect();
@@ -1071,6 +1074,8 @@ function routes(): Route[] {
   add('#/c/cpu/0', lensOn('dark'), ' (zoom lens, dark)', undefined, lensDrive('alu'));
   add('#/c/cpu/0', lensOn('light', false), ' (zoom lens, light canvas)', undefined, lensDrive('alu'));
   add('#/c/pipeline/1', lensOn('dark'), ' (zoom lens, pipeline, dark)', undefined, lensDrive('alu'));
+  // the out-of-order core (phase 2f): its divider opens like any part since the guard was lifted
+  add('#/c/ooo/11', lensOn('dark'), ' (zoom lens, out of order, dark)', undefined, lensDrive('div'));
   add('#/c/cpu/0', lensOn('dark'), ` (zoom lens, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], LENS_TOUCH_DRIVE);
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
   // The layout lock: locked by default on a touch screen, unlocked with a mouse; an arrangement of an older drawing set aside.

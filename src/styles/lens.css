@@ -13,6 +13,9 @@
 /* the dark board is the canvas's, not the page's: the bar above it keeps the theme's colours */
 :root[data-look='vivid'][data-board='dark'] .canvas { --lens-rim: #8fb3ff; --rim-text: #dfe7ff; }
 
+.lens-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; contain: layout style; }
+.lens-layer > .lens { pointer-events: auto; }
+
 .lens {
   position: absolute;
   z-index: 3;
@@ -66,6 +69,8 @@ svg.lens-rim { position: absolute; inset: 0; width: 100%; height: 100%; overflow
 
 /* The breadcrumb's peek crumb, in italics, and the cue after a hand-off. */
 .crumbs button.peek i { color: var(--accent); font-style: italic; }
+/* added without refitting the bar (stage.ts peekCrumb): it gives way rather than pushing the bar's buttons */
+.crumbs button.peek { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lens-cue {
   position: absolute;
   z-index: 3;
