@@ -893,7 +893,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Inside the circle", challenge: "quiz", stage: "widget" },
     { title: "Same gain, different delay", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "spectrum", num: 76, title: "Measuring a spectrum", blurb: "Why a pure tone shows a skirt: leakage, windows and what they trade, resolution against the number of samples, spectrograms, fast convolution by overlap-save, and a Goertzel cell in gates decoding a keypad.", level: "Signal processing", builds: ["signals","carriers","fixed","zplane","python","pipeline","muldiv"], recap: {"checks":3}, steps: [
+  { id: "spectrum", num: 76, title: "Measuring a spectrum", blurb: "Why a pure tone shows a skirt: leakage, windows and what they trade, resolution against the number of samples, spectrograms, fast convolution by overlap-save, a Goertzel cell in gates decoding a keypad, and the FFT as a program, made fast step by step.", level: "Signal processing", builds: ["signals","carriers","fixed","zplane","python","pipeline","muldiv"], recap: {"checks":3}, steps: [
     { title: "A tone that is not a line", challenge: "quiz", stage: "widget" },
     { title: "A window is a choice of skirt", challenge: "quiz", stage: "widget" },
     { title: "What the skirt hides", challenge: "quiz", stage: "widget" },

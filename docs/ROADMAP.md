@@ -440,7 +440,7 @@ flowing bits still say its *value* (0 / 1 / X / Z must stay readable in every co
   is both cheaper and faster, ★★★ cycles × NANDs below all. A chart plots the references, their front and your point.
   A click on a test plays it on the circuit, a cycle at a time, back and forth. Show answer gives the pseudocode and the
   references; Do it for me loads the reference program
-- ✅ Puzzle devices (c9f40bfd): Crossing, Maze robot and Vending machine, a world behind named pins as a third part kind (the sandbox's Devices group), its rules checked every clock, stars on NANDs against a reference circuit. Left: a CPU route (a program driving the device through en) and grading by cycles × NANDs as the stream puzzles are
+- ✅ Puzzle devices (c9f40bfd): Crossing, Maze robot and Vending machine, a world behind named pins as a third part kind (the sandbox's Devices group), its rules checked every clock, stars on NANDs against a reference circuit.. The CPU route (audit 2, 2026-11-10): a ready-wired RV32I computer with the device on its memory map (lw reads it, sw steps it), a reference program per device equal to the reference controller step for step, graded on cycles × NANDs as the stream puzzles are, its best kept apart from the circuit's
 - ✅ The campaign's RV16 program levels run on your own core (mockup approved 2026-11-10; campaign/owncore.ts): Run the
   tests on Golden model | Your core, the core levels passed with their NANDs and period; agrees (cycles, CPI, time in NAND
   delays beside the other cores, best per core kept, no star) or disagrees (the instruction lit, model vs core, Step to
@@ -1099,7 +1099,7 @@ animated schematic). The site exports Verilog and already runs Yosys in CI, so i
 - ✅ Examples ▸ The same adder in Verilog: ADD4 beside `assign {co, s} = a + b + ci;` on the same inputs (36 against
   44 NANDs with the default gates)
 - ✅ A chapter step with the Verilog adder (Faster adders); the analysis of a Verilog chip's critical path mapped back to its source lines (5a732c2a)
-- ✅ VHDL out: the HDL tab and Export VHDL (.vhd), every export analysed and simulated by GHDL in CI (52167910). Left: VHDL in, through GHDL's Yosys plugin, once a WebAssembly build exists
+- ✅ VHDL out: the HDL tab and Export VHDL (.vhd), a set of designs (gates, adders, ALUs, latches and flip-flops, registers, memories, the register file, the single-cycle RV32I) analysed and elaborated by GHDL in CI (scripts/vhdl-check.ts), the combinational ones also simulated against ours (52167910). Left: VHDL in, through GHDL's Yosys plugin, once a WebAssembly build exists
 
 **Delay that depends on load** (Circuit Artist models wire delay from length and fan-out; here every NAND costs one
 unit, wires nothing). The fan-out capacitance per net is already computed for the power estimate (sim/power.ts).
@@ -1150,7 +1150,7 @@ and Digital are what courses already use, and Digital lets a student write tests
   to a pin or pointer no longer doubles back through Digital's pin point. tests/dig-export.test.ts reads the cores back
 - ✅ Placing an imported circuit again by logic depth (editor/placedepth.ts: the Verilog import's placer, shared; relayout.ts):
   the canvas menu's "Lay out by logic depth" and a toast after an import, offered only where it measures better (crossings +
-  wires through parts); elsewhere off, with the numbers. On the importers' fixtures it helps 3 chips of 27: hand-drawn sheets
+  wires through parts + half a point per pointer, so wires turned into pointers win nothing); elsewhere off, with the numbers. On the importers' fixtures it helps 13 chips of 27, mostly small ones whose tunnels become wires: larger hand-drawn sheets
   reach 0 crossings with tunnels where we wire first (tests/relayout.test.ts pins each verdict)
 
 **ISA breadth** (Ripes: RV64, the C extension): RV64I / RV64M and C in Phase 9, each checked by riscv-tests and Spike

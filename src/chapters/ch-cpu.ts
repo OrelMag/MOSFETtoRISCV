@@ -1067,7 +1067,7 @@ export const chSingleCycle: Chapter = {
         whose right answer you know and look at the first place the machine disagrees.</p>
         <p>Press <strong>Run to halt</strong> (or <strong>Step</strong>) in the CPU panel. After every cycle it compares the registers with the
         golden model, so it stops at the first instruction the hardware got wrong, and names the register, both values and the instruction.
-        Read that line as a clue: which instruction, which register, which value instead of which. Then right-click the wire you suspect and
+        Read that line as a clue: which instruction, which register, which value instead of which. Then right-click the wire you suspect (on a touch screen, press and hold it) and
         choose <strong>It is stuck at 0 here</strong> or <strong>… at 1</strong> (a bus asks for the bit). A wrong guess costs nothing: the
         panel runs the same program with the fault you named instead and says where that one would first show, which is a clue too.</p>
         <p>The program is the sum loop of 1 to 10. The fault is not in the register file or the ALU: they compute what they are told.</p>`,

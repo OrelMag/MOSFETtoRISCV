@@ -57,10 +57,10 @@ export const chSidechan: Chapter = {
     {
       title: 'Time tells',
       body: `
-        <p>This chapter is about programs that are correct and still leak. Since ${ch('cpu')} every CPU here has been checked against the golden model, instruction by instruction, and nothing in this chapter breaks that. The leak is through something no specification mentions: how long the program takes, which lines it left in the cache.</p>
+        <p>This chapter is about programs that are correct and still leak. Every CPU here is checked against the golden model instruction by instruction, the way ${ch('verify')} showed, and nothing in this chapter breaks that. The leak is through something no specification mentions: how long the program takes, which lines it left in the cache.</p>
         <p>Start with a password check written the obvious way: compare the guess with the password byte by byte, and return as soon as two bytes differ. It answers only yes or no. On the single-cycle CPU of ${ch('cpu')}, one instruction a cycle, a guess whose first letter is wrong takes 8 cycles in the check. Each letter that matches takes the loop round once more: 7 cycles more. The right password takes 33.</p>
         <p>That time is a second output, one nobody meant the check to have: a <b>side channel</b>. Try every first letter, keep the one that took longer, then do the same for the second. At most 16 tries a letter, 64 in all, where guessing the whole password blind could take ${groupDigits(65536)}.</p>
-        <p>The fix is to make the time independent of the guess: compare every byte, OR the differences together, and answer once at the end. That check takes 38 cycles for every guess. It is slower than the early exit almost always, and that is its price: <b>constant-time code</b> spends the worst case every time.</p>
+        <p>The fix is to make the time independent of the guess: compare every byte, OR the differences together, and answer once at the end. That check takes 38 cycles for every guess. It is slower than the early exit every time here, and that is its price: <b>constant-time code</b> spends the worst case every time.</p>
         <div class="try">Find the password from the bars alone. Then switch to the constant-time check and try again.</div>`,
       widget: pwWidget,
       more: {
@@ -113,7 +113,7 @@ export const chSidechan: Chapter = {
     {
       title: 'What the flush forgets',
       body: `
-        <p>Our gates have no data cache, so from here on the steps run on the cycle-level model of ${ch('ooo')} in a mode built for this chapter. It has the same core, a 2-wide, 16-entry reorder buffer and the same predictor, plus three things a real core has: wrong-path instructions compute real values, loads go through the cache of the last step (2 cycles for a hit, 20 for a miss), and <code>csrr cycle</code> reads its cycle counter. Its timing on everything else is the model's, cycle for cycle.</p>
+        <p>Our gates have no data cache, so from here on the steps run on the cycle-level model of ${ch('ooo')} in a mode built for this chapter. It has the same core, a 2-wide, 16-entry reorder buffer and the same predictor, plus three things a real core has: wrong-path instructions compute real values, loads go through the cache of the step “The cache remembers” (2 cycles for a hit, 20 for a miss), and <code>csrr cycle</code> reads its cycle counter. Its timing on everything else is the model's, cycle for cycle.</p>
         <p>The victim is now <code>if (x &lt; len) y = probe[array1[x] · 16]</code>, and the attacker has evicted <code>len</code>, so the check waits 20 cycles for memory. In the timeline the branch is fetched, then waits. Behind it, on the wrong path, the load of <code>array1[x]</code> reads the secret, a shift turns it into a probe line's address, and the second load starts 8 cycles after the branch was fetched: a miss, so a line is requested.</p>
         <p>The branch resolves, commits and the core flushes 24 cycles after it was fetched. The flush takes back every register the wrong path wrote. The request for the probe line is already out, and the line arrives in the cache anyway: nothing in a cache records which path asked for a line.</p>
         <div class="try">Find the wrong-path load of the probe line in the timeline, and the cycle the flush removes it.</div>`,

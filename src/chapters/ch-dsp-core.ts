@@ -6,11 +6,15 @@ import { INSTRS24 } from '../dsp/isa24';
 import { aguWidget, benchWidget, dspApi, dspPerProduct, dspScene, FIG, fftWidget, instrTable, loopWidget, rvFigure, rvPerProduct, rvWithoutDm } from '../widgets/dspcore';
 import { numOf } from './order';
 import { FFT_BOTH_STEP } from './dspcore/fftboth';
+import { fftCost } from './spectrum/fftsw';
 import type { Chapter } from './types';
 import { groupNum } from '../sim/numfmt';
 
 const n0 = (x: number) => groupNum(x);
 const f2 = (x: number) => x.toFixed(2);
+
+/** The last step's 64-point FFT (dspcore/fftboth.ts fftBoth, without compiling the programs): clocks here and on the single-cycle RV32IM. */
+const FFT_DSP = FIG.cycles.fft.cycles, FFT_RV = fftCost('iter', 64).kernelInstrs;
 
 export const chDspCore: Chapter = {
   id: 'dspcore', num: numOf('dspcore'), title: 'A DSP core', level: 'Signal processing',
@@ -19,7 +23,7 @@ export const chDspCore: Chapter = {
     'say what a load-store machine spends on each tap, and what a DSP core takes out of the loop',
     'read an address generator: post-increment, a circular window, bit-reversed order, and what each costs in gates',
     'follow a hardware loop: start, end and count, and why it adds no instruction',
-    'compare the core with the RV32 machines per product, in clocks and in time, and say what a real DSP pipelines that this one does not',
+    'compare the core with the RV32 machines per product and on a whole 64-point FFT, in clocks and in time, and say what a real DSP pipelines that this one does not',
   ],
   builds: ['mac', 'cpu', 'carriers', 'fixed', 'firdesign', 'spectrum'],
   recap: {
@@ -29,6 +33,7 @@ export const chDspCore: Chapter = {
       'An address generator is a few registers and an adder beside the memory. Circular mode compares the next address with the end of the window, so a delay line needs no shifting. Bit-reversed mode adds in reverse, so an FFT\'s shuffle needs no loop of its own.',
       'The hardware loop holds a start, an end and a count. At the end address the PC goes back to the start without a fetch or a branch. It nests no deeper than one level, because each deeper level needs three more registers and a stack.',
       'The measured clocks a product are 1.05 to 1.52 on this core, not 1: the loop\'s set-up, the rounding and the output each cost a clock per output. And the core is slower to clock than the RV32, because a clock covers the ROM, the decode, the address, the memory, the multiplier and the adder in one go. A real DSP pipelines that path, and pays in branch and load delay slots.',
+      `The same 64-point FFT, word for word, takes ${groupNum(FFT_DSP)} clocks here and ${groupNum(FFT_RV)} on the single-cycle RV32IM: ${(FFT_RV / FFT_DSP).toFixed(1)} times the clocks, ${((FFT_RV * rvFigure('rv32im').period) / (FFT_DSP * FIG.period)).toFixed(1)} times the time with each machine's own period. Most of the RV32IM's instructions are indices, loads and loop counting, which this core's address generators and loop register do for free.`,
     ],
     check: [
       {

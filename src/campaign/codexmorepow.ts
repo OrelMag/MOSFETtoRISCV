@@ -90,4 +90,22 @@ within a 15 W budget           31 % of it at once</pre>`,
     ],
     chapters: [{ chapter: 'power', step: 13, label: 'Power density and dark silicon' }],
   },
+  glitch: {
+    idea: `Every gate has a delay, so the inputs of a gate deep in a circuit do not change at the same moment. A sum bit of a ripple-carry adder sees its own
+      inputs first and the carry later; in between it can flip and flip back. That passing change is a <b>glitch</b>: the settled value is right, but the wire was charged and
+      discharged for nothing, and the supply paid ½ C V² for each change like any other. The deeper the logic, the more waves of changes arrive at different times, so glitches grow
+      with logic depth; a register ends them, because it passes on only the settled value at its edge.`,
+    example: {
+      title: 'Measured on the benchmarks (the Power chapter)',
+      body: `<pre>CPU               glitch share of the energy
+single-cycle      48 %
+pipelined         10 %</pre>The same instructions, the same kind of logic: the pipeline's registers cut every path into stages, and each wave stops at the end of its stage.`,
+    },
+    mistakes: [
+      'Counting energy from the settled values cycle by cycle. That misses every glitch, which on a deep circuit is a large share.',
+      'Thinking a glitch is harmless because the output settles. It costs energy every time, and on a clock or an asynchronous reset it is a false edge.',
+    ],
+    lib: 'rca4',
+    chapters: [{ chapter: 'adders', step: 4, label: 'Watch the carry ripple' }, { chapter: 'power', step: 3, label: 'Glitches: toggles that change nothing' }],
+  },
 };

@@ -21,6 +21,8 @@ import { PROGRAMS } from '../riscv/programs';
 import type { ComponentDef } from '../sim/types';
 import type { HallDesign, HallTech } from './hall';
 import { ram } from './memory';
+import { groupDigits } from '../sim/numfmt';
+import { fmtTime } from './tech';
 
 /**
  * One card read: 0.4 s. "all at the regular card reading speed of 150 cards per minute, or 0.4 seconds per card", the IBM 701
@@ -140,3 +142,47 @@ export class HallFeed {
     this.iss.step();
   }
 }
+
+/** What the reader's panel shows: the cards in the hopper / stacker and the one moving, the card on show, the status line,
+ * three counts and the time ledger. DOM-free, so the panel (widgets/hallview.ts) only draws it. `loading`: load mode's
+ * progress before the deck is in, in cards (fractional: the card on its way); `period`: one instruction's seconds. */
+export interface ReaderView {
+  cards: { hopper: number; stacker: number; moving: number | null };
+  /** The card shown (0-based). */
+  shown: number;
+  status: string;
+  /** Read as it runs with a reader slower than the machine: every instruction waits. */
+  waiting: boolean;
+  stats: { value: string; label: string }[];
+  ledger: Ledger;
+}
+
+const fmtS = (x: number) => (x === 0 ? '0 s' : x < 1 ? fmtTime(x) : `${x.toFixed(1)} s`);
+const num = (n: number) => groupDigits(Math.round(n));
+
+export function readerView(feed: HallFeed, loading: number, period: number): ReaderView {
+  const n = feed.cards, load = feed.mode === 'load', done = Math.min(n, Math.floor(loading));
+  const cards = load
+    ? (() => { const moving = feed.loaded || done >= n ? null : loading - done; return { hopper: n - done - (moving !== null ? 1 : 0), stacker: feed.loaded ? n : done, moving }; })()
+    // read as it runs: the loop deck. The cards before the station have gone through; the rest wait.
+    : { hopper: n - (feed.at + 1), stacker: Math.max(0, feed.at), moving: feed.at >= 0 ? 0.5 : null };
+  const shown = load && !feed.loaded ? Math.min(n - 1, done) : Math.max(0, feed.at);
+  const waiting = !load && CARD_S > period;
+  const status = feed.outOfCards ? 'Out of cards: the program ran past the end of the deck.'
+    : load && !feed.loaded ? `Loading the deck into the program store: card ${Math.min(n, done + 1)} of ${n}, ${fmtTime(CARD_S)} a card. The machine starts when the last card is in.`
+    : load ? `The deck is in the store (read once, ${fmtS(feed.ledger.load)}). The machine fetches from the store at its own speed, ${fmtTime(period)} an instruction.`
+    : waiting ? `Card ${shown + 1}: each instruction waits for its card. A card takes ${fmtTime(CARD_S)}, the instruction ${fmtTime(period)}: the reader is ${num(CARD_S / period)} times slower.`
+    : `Card ${shown + 1}: the next card arrives in ${fmtTime(CARD_S)}, the instruction takes ${fmtTime(period)}, so the reader is never late.`;
+  const stats = [
+    { value: `${feed.at < 0 ? '–' : feed.at + 1} / ${n}`, label: `card at the PC (pc / ${feed.program.pcStep})` },
+    load ? { value: `${num(feed.loaded ? n : done)} / ${n}`, label: 'cards in the store' } : { value: num(feed.passes), label: 'times round the loop deck' },
+    { value: num(feed.loaded || !load ? feed.read : done), label: 'cards read' },
+  ];
+  return { cards, shown, status, waiting, stats, ledger: { ...feed.ledger, load: feed.loaded ? feed.ledger.load : done * CARD_S } };
+}
+
+/** The ledger's three parts as seconds and a share of the whole (a part that is 0 is left out of the bar). */
+export const ledgerParts = (l: Ledger) => {
+  const all = l.compute + l.wait + l.load || 1;
+  return ([['cpu', l.compute], ['wait', l.wait], ['load', l.load]] as const).map(([k, s]) => ({ k, s, share: s / all, text: fmtS(s) }));
+};

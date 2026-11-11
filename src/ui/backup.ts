@@ -122,7 +122,8 @@ export function summarize(kv: ListKV): Summary {
     else if (n.status === 'started') out.campaignStarted++;
   }
   const pz = parse(kv.getItem(PUZZLES_KEY));
-  if (isObj(pz)) out.puzzles = Object.keys(pz).length;
+  // a device puzzle solved on a CPU keeps a second record, <id>:cpu (puzzles/devpuzzles.ts cpuRecordId): one puzzle
+  if (isObj(pz)) out.puzzles = new Set(Object.keys(pz).map((k) => k.replace(/:cpu$/, ''))).size;
   for (const it of Object.values(sanitizeNotes(parse(kv.getItem(NOTES_KEY))).items)) if (!it.gone) out[it.type === 'bookmark' ? 'bookmarks' : 'notes']++;
   out.reviewed = Object.keys(sanitizeReview(parse(kv.getItem(REVIEW_KEY))).memos).length;
   out.testedOut = Object.keys(sanitizeLearn(parse(kv.getItem(LEARN_KEY))).tested).length;

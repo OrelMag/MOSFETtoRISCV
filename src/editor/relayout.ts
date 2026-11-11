@@ -7,7 +7,8 @@
 import { compileChip } from './compile';
 import { docFromDef } from './fromdef';
 import { partBox } from './geom';
-import { type ChipDoc, type DefOf, type PartRef, polyline } from './model';
+import { type ChipDoc, type DefOf, type NetHue, type PartRef, polyline } from './model';
+import { userHues } from './wirehue';
 import type { PartResult } from './parts';
 import { type Inst, type NetB, placeByDepth } from './placedepth';
 import { parseEnd, type ComponentDef, netlistOf } from '../sim/types';
@@ -95,6 +96,19 @@ export function relayoutChip(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResul
   const end = <E extends ChipDoc['wires'][number]['a']>(e: E): E => ('pin' in e ? { ...e, pin: pinId.get(e.pin) ?? e.pin } : e);
   const wires = fresh.wires.map((w) => ({ ...w, a: end(w.a), b: end(w.b) }));
   const out: ChipDoc = { ...doc, pins, parts, wires, labels: fresh.labels };
+  // A net the learner coloured keeps its colour: found again by one of its ends (pin and part ids are kept).
+  if (doc.wires.some((w) => w.hue !== undefined) || doc.labels.some((l) => l.hue !== undefined)) {
+    const hues = userHues(doc, built, nl.nets.length);
+    const after = compileChip(out, defOfRef);
+    const hueOf = new Map<number, NetHue>();
+    for (const [key, n] of built.netOfEnd) {
+      const hue = n >= 0 ? hues[n] : undefined;
+      const m = after.netOfEnd.get(key);
+      if (hue !== undefined && m !== undefined && m >= 0 && !hueOf.has(m)) hueOf.set(m, hue);
+    }
+    out.wires = out.wires.map((w) => { const hue = hueOf.get(after.netOfWire.get(w.id) ?? -1); return hue === undefined ? w : { ...w, hue }; });
+    out.labels = out.labels.map((l) => { const hue = hueOf.get(after.netOfLabel.get(l.id) ?? -1); return hue === undefined ? l : { ...l, hue }; });
+  }
   const dropped: string[] = [];
   delete out.sections;
   if (doc.sections?.length) dropped.push(`${doc.sections.length} section${doc.sections.length > 1 ? 's' : ''} (frames around places that moved)`);
@@ -173,16 +187,19 @@ export type RelayoutOffer =
   | { kind: 'worse'; before: LayoutMetrics; after: LayoutMetrics }
   | { kind: 'refused'; why: string };
 
-/** "a → b" for the reading that decides: crossings, then wires through parts when there are any. */
+/** "a → b" for the readings that decide: crossings, then wires through parts and pointers when there are any. */
 export function offerText(before: LayoutMetrics, after: LayoutMetrics): string {
   const parts = [`crossings ${before.crossings} → ${after.crossings}`];
   if (before.throughParts || after.throughParts) parts.push(`through parts ${before.throughParts} → ${after.throughParts}`);
+  if (before.pointers !== after.pointers) parts.push(`pointers ${before.pointers} → ${after.pointers}`);
   return parts.join(', ');
 }
 
 /**
- * Lay the chip out again and measure both drawings: offered only when it reads better (fewer crossings plus wires through
- * parts). Hand-drawn sheets often read better as drawn: their authors used tunnels where we would wire.
+ * Lay the chip out again and measure both drawings: offered only when it reads better: fewer crossings plus wires through
+ * parts plus half a point per pointer (a pair of pointers stands for a wire, so it costs what one crossing does: a layout
+ * may not win by turning wires into pointers). Hand-drawn sheets often read better as drawn: their authors used tunnels
+ * where we would wire.
  */
 export function relayoutOffer(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResult, generated = false): RelayoutOffer {
   const res = relayoutChip(doc, defOfRef, generated);
@@ -190,6 +207,6 @@ export function relayoutOffer(doc: ChipDoc, defOfRef: (ref: PartRef) => PartResu
   const defOf: DefOf = (p) => { const d = defOfRef(p.ref); return 'error' in d ? undefined : d; };
   const before = layoutMetrics(doc, defOf, compileChip(doc, defOfRef).netOfWire);
   const after = layoutMetrics(res.doc, defOf, compileChip(res.doc, defOfRef).netOfWire);
-  const score = (m: LayoutMetrics) => m.crossings + m.throughParts;
+  const score = (m: LayoutMetrics) => m.crossings + m.throughParts + m.pointers / 2;
   return score(after) < score(before) ? { kind: 'better', ...res, before, after } : { kind: 'worse', before, after };
 }

@@ -83,4 +83,20 @@ export const CHECKPOW: Record<string, Quiz[]> = {
       why: ['', 'Empty silicon would waste the area; dark blocks are used, only not all together.', 'That is exactly what the power budget forbids.', 'A higher supply makes every toggle dearer.'],
     },
   ],
+  glitch: [
+    {
+      question: 'A circuit\'s outputs are right after every cycle. Can it still waste energy on glitches?',
+      options: ['Yes: nets inside can change and change back before they settle, and each change costs ½ C V²', 'No: if the settled values are right nothing was wasted', 'Only if the clock is too fast', 'Only in circuits with flip-flops'],
+      answer: 0,
+      explain: 'A glitch ends where it started, so the settled values never show it; the supply paid for both changes anyway.',
+      why: ['', 'Right values say nothing about how many times a wire changed on the way.', 'A slow clock lets the glitches finish; it does not stop them happening.', 'A purely combinational adder glitches as its carries arrive.'],
+    },
+    {
+      question: 'Why does the pipelined CPU lose a smaller share of its energy to glitches than the single-cycle one?',
+      options: ['Its registers cut the logic into shallow stages, and each wave of changes stops at the end of its stage', 'Its gates are faster', 'It runs fewer instructions', 'It has no adders'],
+      answer: 0,
+      explain: 'Glitches grow with logic depth. A register passes on only the settled value at its edge, so a stage\'s glitches never reach the next stage.',
+      why: ['', 'Every NAND has the same delay in both.', 'The share is per unit of energy, not a total.', 'It has the same ALU, with its adder.'],
+    },
+  ],
 };

@@ -230,7 +230,7 @@ export function defenceTable(): Widget {
   const el = h('div', { class: 'widget sc-widget' },
     h('div', { class: 'scroll' }, h('table', { class: 'data num sc-table' },
       h('tr', null, ...['Defence', 'Leaks', 'Cycles per call', 'The ooo benchmarks', 'Sum a 4 KB array'].map((t) => h('th', null, t))), ...rows)),
-    h('p', { class: 'sub' }, `"Leaks": whether the attacker program printed any of the secret ${secret.map(hex).join('')}. Cycles per call: the victim called in bounds, cache warm. The last two columns: cycles against no defence, the benchmarks as their geometric mean.`));
+    h('p', { class: 'sub' }, `"Leaks": whether the attacker program printed any of the secret `, h('code', null, secret.map(hex).join('')), `. Cycles per call: the victim called in bounds, cache warm. The last two columns: cycles against no defence, the benchmarks as their geometric mean.`));
   return { el };
 }
 
