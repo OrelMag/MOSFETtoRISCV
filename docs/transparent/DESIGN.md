@@ -78,10 +78,13 @@ that the learner cannot see (the floor per definition is a constant of the netli
 (h − 2·INSET)/E.h)` and centred, so the empty bands are on the long sides (`lensplan.ts fitInside`, INSET 0.6 units for
 the box's ports). It grows on screen only through the view's zoom, with the box; neighbours and their wires never move
 and are never covered. The box's ports stay on its edge as today; a short stub inside the outline joins each to its
-inner pin (it never leaves the outline). The box's own fixed-size name is hidden while its inside shows (the crumb and
-the inside's tag carry it). **Tall bit-sliced parts** (a 32-bit register: its inside 16 × 257 units in an 8 × 6 box)
-read as a narrow centred column of bit cells and open late (the single-cycle CPU's `pc`: when the box is ~535 × 402 px);
-a pipeline register (3 × 74 units, its inside 35 wide) opens only at ~64 × 1 580 px. That is the honest cost of drawing
+inner pin (it never leaves the outline). The box's name and port names fade while its inside shows (the crumb carries
+the name); its tinted body stays as the inside's background. The extent `E` is what the view draws, computed from the
+netlist (`insideExtent`: parts, the level's pins with their knobs and names, the view's 3-unit margin), so the scale the
+rule reads is the drawing's. **Tall bit-sliced parts** (a 32-bit register: its inside 60 × 270 units in an 8 × 6 box)
+read as a narrow centred column of bit cells and open late (the single-cycle CPU's `pc`: when the box is ~563 × 422 px);
+a pipeline register (3 × 74 units, its inside drawn 95 × 30) opens only at ~132 × 3 252 px, where the view's zoom limit
+leaves it a strip: double-click is the way in. That is the honest cost of drawing
 inside the outline: their insides are the wrong shape for their symbols. Drill (double-click) stays the quick way in,
 and the hint (R3.3) says how far away the opening is.
 
@@ -92,16 +95,23 @@ drawn). Both reduce to one number per box, `openAtPx` (the view's px per unit at
 its inside alone (`smallestNamed(def)`: from the netlist, memoized per definition). It closes below **¾** of that
 (`CLOSE_SHARE`): outside that band the answer is the geometry's alone, inside it the previous answer's alone
 (`decide(prev, px, openAt)`); nothing else is state. Every box on screen that meets the rule opens (R3.6), so nothing
-depends on where the pointer was. Not on a touch screen (unchanged), not in an NMOS scene.
+depends on where the pointer was. Not on a coarse pointer (the author's decision: the setting stays, nothing opens), not in
+an NMOS scene. Measured opening zooms (px per unit, fib): single-cycle `pc` 70.3, `alu` 27.5, `rf` 38.9, `imm` 16.0, `ctl`
+3.6, `npc` 21.5; pipeline `FD` / `DE` 43.9, `hz` 16.3 (tests/lens-hone.test.ts pins them from the functions).
 
 **R3.3 Shown to the learner.** Hovering a closed box that can open shows "zoom in to see inside (×2.4)": the zoom factor
-still needed, from `openAtPx`. Open, its crumb reads "cpu ▸ *alu (inside)*" while the pointer is over it, and Enter /
+still needed, from `openAtPx`; past ×4, "zoom in ×7.5 to see inside, or double-click to step in". Each box carries
+`data-open-at` (tests, smoke). Open, its crumb reads "cpu ▸ *alu (inside)*" while the pointer is over it, and Enter /
 double-click step in. The `?` sheet and View options say the rule in one line: "A block opens in place once it is big
 enough for the names inside it to read."
 
 **R3.4 Zooming out.** (a) The inside shrinks with its box and crossfades back to the symbol when the rule closes it: the
 mirror of opening (FADE_MS 160 both ways, a CSS opacity transition; none with reduced motion). Never a sudden close.
-(b) Going up after stepping in (a hand-off or a double-click): agreed with Smith (zoomout.ts), stated in the crumb. (c)
+(b) Going up after stepping in (a hand-off, a double-click, the crumb): a line under the breadcrumb says the rule the
+whole time, "Zoom out to see all of alu, then once more to go up to cpu", then "Zoom out once more to go up to cpu" once
+the level fits; from then a fresh gesture (zoomout.ts: 400 ms without a wheel event, a new pinch closing to 0.9, the `−`
+key or the zoom-out button; never the event that raised the cue) goes up, and the level left is drawn open in its box
+exactly where its drawing was, shrinking with the zoom until the rule closes it. (c)
 The wheel zooms the whole view, insides included; nothing is caught by the inside.
 
 **R3.5 The hand-off.** When the drawn inside (the fit, on screen) covers the canvas in width or in height
@@ -109,9 +119,13 @@ The wheel zooms the whole view, insides included; nothing is caught by the insid
 drawing *is* the drilled level's drawing, so nothing jumps), with a history entry as for a double-click.
 
 **R3.6 Many boxes.** Every box that meets the rule opens, built one per animation frame, nearest the pointer first, each
-under DESIGN.md's 50 ms (the route cache, the inside drawn off the page). Measured on the single-cycle and out-of-order
-tops in the tip; if a level ever has more qualifying boxes than frames allow, the farthest wait their turn (they show
-their symbol until then), which is visible and harmless.
+under DESIGN.md's 50 ms (the route cache). A build is two tasks: the level (`ctx.child`) in one frame, the drawing in the
+next; a behavioural leaf's level (the program ROM: a lock-step sub-simulation, ~42 ms) waits until the zoom has settled
+(160 ms), so its task never lands in a moving gesture. Measured (1400 × 900, headless Chrome, quiet machine): single-cycle
+top, every build ≤ 7.4 ms but the ROM's 41.9 + 6.6, no long task in a zoom from fit to ×12; out-of-order top, every
+build ≤ 8.1 ms (div 6.6, ex0 / ex1 7–8, mule 5.1), and its zoom and pan long tasks (50–166 ms) are the level's own,
+the same with the setting off. A level with more qualifying boxes than frames allow builds the nearest first; the rest
+show their symbol until their turn.
 
 **R3.7 Print, export, interaction.** Each inside is its own SchematicView in an overlay positioned exactly on the box's
 outline (clipped to it) and moved with the view's camera: so the level's own svg never contains an inside, and print and
@@ -120,8 +134,9 @@ part (the inspector shows `alu.add`), a wire click traces it (Why?), the wheel a
 marks (per box, by prefix), Why?, Break a part and look inside work per inside as they did per lens.
 
 **R3.8 Removed.** The free-stage placement and cap, rim connectors and deep-pin rings, the stage dim on opening, the
-focus target, `refused`, the 96 / 72 px thresholds, `closesAt`, `growPlan`, `openPlan`, `rimJogs` (kept in lensplan.ts
-only until lens.ts stops using them, then deleted with their tests).
+focus target, `refused`, the 96 / 72 px thresholds, `closesAt`, `growPlan`, `openPlan`, `rimJogs` and their tests (deleted
+with the floating lens; tests/lens-hone.test.ts keeps the old open / close rule as the regression's fixture). Esc no
+longer closes anything (nothing is modal): it goes up as without the setting.
 
 
 ## 1. Shape mismatch
