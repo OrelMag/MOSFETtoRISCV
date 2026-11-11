@@ -124,13 +124,23 @@ export function paletteGroups(): readonly PaletteGroup[] {
   return groups;
 }
 
-/** The items a group shows in a context, purist filter applied. */
+/** Why an item cannot be placed under the open challenge's rule (challengeui.ts: a library NAND where only transistors
+ *  count), shown greyed out like any other refusal; null: no rule. */
+let gate: ((it: PaletteItem) => string | undefined) | null = null;
+export function setPaletteGate(f: typeof gate): void {
+  gate = f;
+}
+
+/** The items a group shows in a context, purist filter and the challenge's rule applied. */
 export function visibleItems(g: PaletteGroup, ctx: PaletteCtx, purist: boolean, filter = ''): PaletteItem[] {
   if (purist && !g.purist) return [];
   const f = filter.trim();
   return g.items(ctx).filter((it) =>
     (!purist || g.purist === true || (typeof g.purist === 'function' && g.purist(it)))
-    && (!f || partMatches(itemText(it), f)));
+    && (!f || partMatches(itemText(it), f))).map((it) => {
+    const why = !it.disabled && gate?.(it);
+    return why ? { ...it, disabled: why } : it;
+  });
 }
 
 // ---- search ---------------------------------------------------------------------------------

@@ -313,6 +313,96 @@ const TOUCH_DRIVE = `(async () => {
 })()`;
 
 /**
+ * The layout lock on a stage (view/layout.ts, settings.moveParts). `touch`: locked by default, a finger on a part pans
+ * and moves nothing; unlocked, a finger on a part not selected still pans, and on a selected one moves it. A mouse:
+ * unlocked by default, a press that wiggles under 4 px moves nothing, a real drag moves the part. Either way the moved
+ * part brings the "Your layout" pill, whose Original shows the chapter's drawing and Reset puts it back; the lock on the
+ * bar then stops the next drag. `redrawn`: a stored arrangement made on another drawing is set aside, the pill says so,
+ * and Dismiss lets it go.
+ */
+const layoutDrive = (mode: 'touch' | 'mouse' | 'redrawn') => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const mode = ${JSON.stringify(mode)};
+  const svg = document.querySelector('svg.schematic');
+  if (!svg) return ['no stage'];
+  svg.setPointerCapture = () => {}; svg.releasePointerCapture = () => {}; svg.hasPointerCapture = () => false; // synthetic pointers are not active ones
+  const lock = document.querySelector('.stage-bar .lock-btn');
+  const pill = () => document.querySelector('.canvas > .layout-pill');
+  const pillText = () => (pill() && !pill().hidden ? pill().textContent : '');
+  const stored = () => JSON.parse(localStorage.getItem('mosfet2riscv:layouts:v1') || '{}').xor;
+  if (mode === 'redrawn') {
+    await wait(300);
+    if (!/Redrawn since you arranged it/.test(pillText())) return ['an arrangement of another drawing: no "Redrawn" pill (' + pillText() + ')'];
+    if (!stored()?.aside) bad.push('the stale arrangement was not set aside');
+    const dismiss = [...pill().querySelectorAll('button')].find((b) => b.textContent === 'Dismiss');
+    dismiss?.click(); await wait(200);
+    if (pillText()) bad.push('Dismiss left the pill: ' + pillText());
+    if (stored()?.aside) bad.push('Dismiss kept the set-aside arrangement');
+    return bad;
+  }
+  if (!lock) return ['no lock on the stage bar'];
+  const locked = () => lock.getAttribute('aria-pressed') === 'true';
+  if (mode === 'touch' && !locked()) bad.push('a touch screen: the layout is not locked by default');
+  if (mode === 'mouse' && locked()) bad.push('a mouse: the layout is locked by default');
+  const type = mode === 'touch' ? 'touch' : 'mouse';
+  const inst = () => svg.querySelector('g.inst[data-inst]');
+  const first = inst();
+  if (!first) return [...bad, 'no part on the stage'];
+  const name = first.getAttribute('data-inst');
+  const part = () => svg.querySelector('g.inst[data-inst="' + name + '"]');
+  const ptr = (el, kind, x, y) => el.dispatchEvent(new PointerEvent(kind, { pointerType: type, pointerId: 91, isPrimary: true, button: 0, buttons: kind === 'pointerup' ? 0 : 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+  const drag = async (dx, steps = 6) => {
+    const r = part().getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    ptr(part(), 'pointerdown', x, y);
+    for (let i = 1; i <= steps; i++) { ptr(svg, 'pointermove', x + (dx * i) / steps, y); await wait(30); }
+    ptr(svg, 'pointerup', x + dx, y); await wait(400);
+  };
+  const where = () => part().getAttribute('transform');
+  const vb = () => svg.getAttribute('viewBox');
+  // locked (touch) or a finger on a part not selected: the drag pans, nothing moves
+  if (mode === 'touch') {
+    const t0 = where(), v0 = vb();
+    await drag(60);
+    if (where() !== t0 || stored()) bad.push('locked: a finger on a part moved it');
+    if (vb() === v0) bad.push('locked: a finger on a part did not pan');
+    if (!document.querySelector('.canvas.noting')) bad.push('locked: the first blocked drag said nothing');
+    lock.click(); await wait(100);
+    if (locked()) return [...bad, 'the lock did not unlock'];
+    const t1 = where();
+    await drag(60);
+    if (where() !== t1 || stored()) bad.push('unlocked: a finger on a part not selected moved it (it should pan)');
+    // tap to select, then the drag moves it
+    const r = part().getBoundingClientRect();
+    ptr(part(), 'pointerdown', r.left + r.width / 2, r.top + r.height / 2); ptr(svg, 'pointerup', r.left + r.width / 2, r.top + r.height / 2);
+    part().dispatchEvent(new MouseEvent('click', { bubbles: true })); await wait(150);
+  } else {
+    const t0 = where();
+    await drag(2, 2);
+    if (where() !== t0 || stored()) bad.push('a 2 px wiggle moved the part (the slop is 4 px)');
+  }
+  await drag(80);
+  if (!stored()?.at?.[name]) bad.push('a drag did not move ' + name);
+  if (!/Your layout: 1 part moved/.test(pillText())) bad.push('no "Your layout" pill after a move: "' + pillText() + '"');
+  const btn = (t) => [...(pill()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === t);
+  btn('Original')?.click(); await wait(400);
+  if (!/The chapter’s drawing/.test(pillText())) bad.push('Original did not show the chapter’s drawing: "' + pillText() + '"');
+  btn('Back to mine')?.click(); await wait(400);
+  btn('Reset')?.click(); await wait(500);
+  if (pillText()) bad.push('Reset left the pill: "' + pillText() + '"');
+  if (stored()?.at?.[name]) bad.push('Reset kept the move');
+  // locked again: a drag pans
+  if (!locked()) { lock.click(); await wait(100); }
+  if (!locked()) return [...bad, 'the lock did not lock'];
+  const t2 = where();
+  await drag(80);
+  if (where() !== t2 || stored()?.at?.[name]) bad.push('locked: a drag on a part moved it');
+  // the note comes once a visit: on a touch screen it came with the first drag
+  if (mode === 'mouse' && !document.querySelector('.canvas.noting')) bad.push('locked: the first blocked drag said nothing');
+  return bad;
+})()`;
+
+/**
  * The stage on a touch screen: a tap on an input pin flips it, a press and hold on a wire opens the layout menu
  * (the stage's right-click), a tap does not.
  */
@@ -863,6 +953,10 @@ function routes(): Route[] {
   add('#/sandbox', light, ' (menu by key)', undefined, MENU_DRIVE);
   add('#/sandbox', light, ` (${TOUCH_VIEWPORTS[0].name}: hold, cancel, tap a pin)`, TOUCH_VIEWPORTS[0], TOUCH_DRIVE);
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
+  // The layout lock: locked by default on a touch screen, unlocked with a mouse; an arrangement of an older drawing set aside.
+  add('#/workbench/xor', light, ` (layout lock, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], layoutDrive('touch'));
+  for (const theme of ['light', 'dark'] as const) add('#/workbench/xor', themed(theme), ` (layout lock, mouse, ${theme})`, undefined, layoutDrive('mouse'));
+  add('#/workbench/xor', { ...light, 'mosfet2riscv:layouts:v1': JSON.stringify({ xor: { at: { gone: [3, 3] }, wired: [], tagged: [], fp: 'stale.0' } }) }, ' (layout redrawn)', undefined, layoutDrive('redrawn'));
   // The PDP-8 examples driven: the front panel on the model, the CPU drawer on the gates; both themes and a phone.
   for (const [theme, viewport] of [['light', undefined], ['dark', undefined], ['light', phoneVp]] as const) {
     const tag = `${theme}${viewport ? ', phone' : ''}`;

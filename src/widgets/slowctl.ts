@@ -100,11 +100,11 @@ export function slowControls(stage: Stage, opts: SlowOptions): SlowControls {
     stage.stopClock();
     if (!opts.finished() || (level === 'gate' && stage.inEdge)) tick();
   } }, icon('step', 14), 'Step');
-  const backBtn = h('button', { class: 'btn sm ghost', title: 'Back (panel): undo the last step at the panel’s level; the golden model and the panel go back too', onclick: () => {
+  const backBtn = h('button', { class: 'btn sm ghost', title: 'Step back (panel): undo the last step at the panel’s level; the golden model and the panel go back too', onclick: () => {
     ctl.stop();
     opts.onStart?.();
     stage.back();
-  } }, icon('stepBack', 14), 'Back') as HTMLButtonElement;
+  } }, icon('stepBack', 14), 'Step back') as HTMLButtonElement;
   // Reset: the stage's power cycle (the same as the stage bar's), reached from where the learner is looking.
   const resetBtn = h('button', { class: 'btn sm ghost', title: 'Restart the program: power-cycle the circuit and restart the golden model', 'aria-label': 'Reset', onclick: () => stage.powerCycle() }, icon('reset', 14), 'Reset');
   // whoever resets (this button or the stage bar): Slow and the panel's own Run end with the run they belonged to
