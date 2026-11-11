@@ -19,7 +19,7 @@ const n = groupDigits;
 /** The numbers the prose quotes, all counted or measured here (tests/content-vmem.test.ts pins them). */
 export interface VmFigures {
   tlbI: number; tlbD: number; walker: number; mmu: number; permitI: number; permitD: number;
-  /** The system CPU of chapters 19–20 and its virtual-memory variant, program ROM left out. */
+  /** The system CPU of chapters 20–21 and its virtual-memory variant, program ROM left out. */
   base: number; vm: number;
   basePeriod: number; vmPeriod: number;
   /** The virtual-memory CPU as the scenes build it (256-word program ROM, 4 096-word data memory): its clock period. */

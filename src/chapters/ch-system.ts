@@ -611,7 +611,7 @@ export const chTraps: Chapter = {
         ],
       },
       more: {
-        derive: `<p>Interrupt latency is the time to the next instruction boundary. At one instruction a cycle that is one edge: the instruction that was about to run (mepc) is held back, the trap takes its place, and after <code>mret</code> it runs. Nothing in the main loop is lost or repeated. With a multi-cycle or pipelined core the boundary can be tens of cycles away; with a divide in progress, as in chapter ${numOf('muldiv')}, it waits for the divide.</p>`,
+        derive: `<p>Interrupt latency is the time to the next instruction boundary. At one instruction a cycle that is one edge: the instruction that was about to run (mepc) is held back, the trap takes its place, and after <code>mret</code> it runs. Nothing in the main loop is lost or repeated. With a multi-cycle or pipelined core the boundary can be tens of cycles away; with a divide in progress (the divider of chapter ${numOf('muldiv')} takes tens of cycles) it waits for the divide.</p>`,
         pitfall: `<p>Holding the IRQ button across the handler. The line is checked at every boundary and the handler clears nothing at the source, so if irq stayed high the CPU would take the interrupt again at the first boundary after <code>mret</code>. The scene\'s button is a one-cycle pulse for that reason; a real device holds its line until software acknowledges it.</p>`,
       },
       challenge: {

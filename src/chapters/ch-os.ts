@@ -182,7 +182,7 @@ export const chOs: Chapter = {
         swap <code>t0</code> with <code>mscratch</code>: the CSR holds the address of the running process's control block, and after the swap <code>t0</code> points to it and the process's <code>t0</code> sits in <code>mscratch</code>, safe. Then ${NREGS - 1} stores, one for each other register, and the kernel is free.
         Returning is the same in reverse. Every register of the process comes back as it was, except the one the call answers in.</p>
         <p>What a call costs is the number of instructions between the trap and the return, because the CPU retires one each cycle: <strong>${F.putchar} cycles</strong> for putchar, ${F.yieldTrip} for yield, and ${F.exitTrip} for exit, all dominated by saving and restoring. Writing a number costs <strong>${F.write1}</strong> cycles for a
-        single digit, ${F.write5} for five, ${F.writeMax} for −2 147 483 648: the CPU has no divide here (chapter ${numOf('muldiv')} is not in this variant), so the kernel peels off each power of ten by repeated subtraction.</p>
+        single digit, ${F.write5} for five, ${F.writeMax} for −2 147 483 648: the CPU has no divide instruction (chapter ${numOf('muldiv')} adds one, but not to this variant), so the kernel peels off each power of ten by repeated subtraction.</p>
         <div class="try">Step through the first ecall (the CPU panel lists the kernel): watch the console, mepc and mcause in the translation panel.</div>`,
       scene: scenes.calls,
       lit: 'The trap logic and the CSR unit',

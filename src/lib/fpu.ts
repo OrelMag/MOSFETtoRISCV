@@ -1608,7 +1608,7 @@ function fdivTop(f: FpFormat): { instances: InstanceDef[]; nets: NetDef[]; pins:
 
 /**
  * a / b, iteratively: prenormalize both significands, then one restoring division step per
- * clock (the integer divider's step, chapter 21) produces M + 4 quotient bits, most significant
+ * clock (the integer divider's step, the divide chapter) produces M + 4 quotient bits, most significant
  * first, and the final remainder is the sticky bit. Normalize & round finishes in the done cycle;
  * with round = false the unit stops before it (the pipelined FPU rounds in its X stage) and
  * outputs the quotient, its exponent and sign, the sticky bit and the special cases instead.

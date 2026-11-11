@@ -1,6 +1,7 @@
 // Chapter 8's timing steps, placed after "The flip-flop": the setup / hold window measured on the circuit, the skew that
 // breaks a shift register, and the six-gate flip-flop of the 7474. Every number comes from the circuits (tests/deepseq.test.ts).
 
+import { numOf } from '../order';
 import { DFF_EDGE6, skewPair } from '../../lib/seqdeep';
 import { DFF } from '../../lib/sequential';
 import { stats } from '../../sim/stats';
@@ -9,7 +10,6 @@ import { edgeSweepWidget, sweepOf } from '../../widgets/edgesweep';
 import { FINE } from '../../widgets/finedelay';
 import { skewPanel } from '../../widgets/skewpanel';
 import type { Step } from '../types';
-import { numOf } from '../order';
 
 const m = (id: 'ms' | 'e6') => {
   const r = sweepOf(id, 'rise'), f = sweepOf(id, 'fall');

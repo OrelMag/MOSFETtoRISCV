@@ -10,7 +10,7 @@ export const SECTIONS: readonly { name: string; first: string }[] = [
   { name: 'Transistors to gates', first: 'mosfet' },
   { name: 'Numbers and choices', first: 'binary' },
   { name: 'Memory from gates', first: 'latches' },
-  { name: 'A single-cycle CPU', first: 'alu' },
+  { name: 'A first CPU', first: 'firstcomputer' },
   { name: 'Making it fast', first: 'fastadd' },
   { name: 'A complete processor', first: 'io' },
   { name: 'Beyond one core', first: 'ooo' },

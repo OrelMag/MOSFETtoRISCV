@@ -1,4 +1,4 @@
-// Chapters 19 and 20, deepened: what an I/O register is (and the clock as one), polling against interrupts measured on
+// Chapters 20 and 21, deepened: what an I/O register is (and the clock as one), polling against interrupts measured on
 // the golden model, nested interrupts, the vectored trap target, and an interrupt controller that latches a request.
 // Stand-alone circuits (lib/intc.ts) sit beside the system CPU, which is unchanged.
 
@@ -53,7 +53,7 @@ const SB_LED_OFF = ioProbe('sb', 0xab, 5);
 const NAND_VEC = nd(VECTOR_TARGET), NAND_INTC = nd(INTC4), DEPTH_VEC = logicDepth(VECTOR_TARGET);
 const LP = latchedPulse();
 
-// ---- chapter 19 ---------------------------------------------------------------------------------------------
+// ---- chapter 20 ---------------------------------------------------------------------------------------------
 
 export const IO_MORE: Step[] = [
   {
@@ -124,7 +124,7 @@ export const IO_MORE: Step[] = [
   },
 ];
 
-// ---- chapter 20 ---------------------------------------------------------------------------------------------
+// ---- chapter 21 ---------------------------------------------------------------------------------------------
 
 const X6 = crossover(6), X2 = crossover(2), X14 = crossover(14), X30 = crossover(30);
 const P40 = runPollIrq('poll', 40, 6, 6000), I40 = runPollIrq('irq', 40, 6, 6000);

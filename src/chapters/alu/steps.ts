@@ -4,13 +4,13 @@
 import { control, NEXT_PC } from '../../lib/cpu';
 import { XOR } from '../../lib/gates';
 import { aluSpec } from '../../lib/alu';
+import { numOf } from '../order';
 import { evalOnce, simulate } from '../../sim/harness';
 import { groupDigits } from '../../sim/numfmt';
 import { stats } from '../../sim/stats';
 import { netlistOf } from '../../sim/types';
 import { opDelays, opDelayWidget } from '../../widgets/opdelay';
 import type { Step } from '../types';
-import { numOf } from '../order';
 
 const g = groupDigits;
 

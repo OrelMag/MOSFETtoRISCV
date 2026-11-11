@@ -228,11 +228,11 @@ export function pyCost(ids: string[]): Widget {
 export interface PyOpts {
   edit?: boolean;
   highlight?: string[];
-  /** The five-stage pipelined CPU (chapter 16's) instead of the single-cycle one: cycles per line with stalls and flushes. */
+  /** The five-stage pipelined CPU (the pipelining chapter's) instead of the single-cycle one: cycles per line with stalls and flushes. */
   pipeline?: boolean;
   /** With pipeline: compile for RV32IM and add the M unit (mul / div / rem instead of the runtime routines). */
   m?: boolean;
-  /** With pipeline: show the RV32I | RV32IM switch and the M unit's cost (default). Chapter 17 hides them: M is taught in chapter 21. */
+  /** With pipeline: show the RV32I | RV32IM switch and the M unit's cost (default). The pipelining chapter hides them: M is taught later (muldiv). */
   switch?: boolean;
   /** Larger memories than the chapter's (the FFT steps); such a scene runs on the cycle engine. */
   mem?: PyMem;

@@ -1,4 +1,4 @@
-// Chapter 20's "Polling or interrupting": two programs run on the golden model at the chosen event period and work
+// Chapter 21's "Polling or interrupting": two programs run on the golden model at the chosen event period and work
 // chunk (riscv/pollirq.ts). The strips are the first 240 cycles; the table is the whole run.
 
 import { crossover, runPollIrq, STRIP, type PollIrqRun } from '../riscv/pollirq';

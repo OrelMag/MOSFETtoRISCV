@@ -117,7 +117,7 @@ review queue; one backup file carries all progress; the site installs as an app 
 </tr>
 <tr>
 <td><img src="docs/images/python.png" alt="A Python loop running on the gate-level CPU, line by line"><br><sub><b>Ch. <!--n:ch.python-->18<!--/n--></b>: Python on the gates: the line running, its instructions, cycles and wire toggles, the variables read from the registers.</sub></td>
-<td><img src="docs/images/pipeline.gif" alt="A five-stage pipeline stepping cycle by cycle"><br><sub><b>Ch. <!--n:ch.pipeline-->20<!--/n--></b>: a gate-level five-stage pipeline, its diagram marking forwarding, stalls and flushes.</sub></td>
+<td><img src="docs/images/pipeline.gif" alt="A five-stage pipeline stepping cycle by cycle"><br><sub><b>Ch. <!--n:ch.pipeline-->21<!--/n--></b>: a gate-level five-stage pipeline, its diagram marking forwarding, stalls and flushes.</sub></td>
 </tr>
 <tr>
 <td><img src="docs/images/cache.png" alt="The cache explorer on a column-major matrix sum"><br><sub><b>Ch. <!--n:ch.cache-->25<!--/n--></b>: caches on real address traces: size, line, ways, replacement, write policy, 3C misses.</sub></td>

@@ -1,4 +1,4 @@
-// Chapter 21 widget: five ways to multiply, measured (area, clock period, latency, throughput).
+// Chapter 25 widget: five ways to multiply, measured (area, clock period, latency, throughput).
 
 import { treeMul } from '../lib/muldiv';
 import { boothMul, pipeMul, seqMul } from '../lib/multiply';

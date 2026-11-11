@@ -1,4 +1,4 @@
-// Chapter 20's "Polling or interrupting": the same job both ways on the golden model. Every `period` cycles an event
+// Chapter 21's "Polling or interrupting": the same job both ways on the golden model. Every `period` cycles an event
 // is due (mtime ≥ a deadline); the program meanwhile counts work in chunks of `chunk` instructions. Polling reads the
 // clock after each chunk; the interrupt version takes a timer interrupt. Cycles, work and latency are measured by
 // running the programs (system-mode ISS: one cycle per instruction), not computed from a formula.
