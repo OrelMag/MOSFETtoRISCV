@@ -69,6 +69,11 @@ svg.schematic g.inst.lens-lit { filter: drop-shadow(0 0 0.5px var(--lens-rim)) d
   border-radius: 12px;
   padding: 2px 9px;
 }
+/* how much more to zoom out before the level fits (view/zoomout.ts progress) */
+.lens-cue-bar { display: block; height: 3px; margin: 3px 0 1px; border-radius: 2px; background: var(--border); overflow: hidden; }
+.lens-cue-bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.12s linear; }
+:root[data-reduce-motion] .lens-cue-bar i { transition: none; }
+@media (prefers-reduced-motion: reduce) { .lens-cue-bar i { transition: none; } }
 .lens-cue .linkish { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
 .ov-inside { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
 

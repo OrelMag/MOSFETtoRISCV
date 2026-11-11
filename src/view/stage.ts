@@ -1232,16 +1232,33 @@ export class Stage {
   }
 
   /** After a hand-off: "Keep zooming out to go up to cpu" under the breadcrumb (null removes it). */
-  private showCue(parent: { label: string; path: string[]; words?: string } | null): void {
+  private showCue(parent: { label: string; path: string[]; words?: string; progress?: number } | null): void {
+    const words = parent && (parent.words ?? `Keep zooming out to go up to ${parent.label}`);
+    // the same words: only the bar moves (a new status element would be announced again at every wheel notch)
+    if (parent && this.cueEl && this.cueEl.dataset.words === words) return this.cueBar(parent.progress);
     this.cueEl?.remove();
     this.cueEl = null;
-    if (!parent) return;
+    if (!parent || !words) return;
     // the lens's words (view/zoomout.ts cueWords) end with the parent's name: that name is the link
-    const words = parent.words ?? `Keep zooming out to go up to ${parent.label}`;
     const lead = words.endsWith(parent.label) ? words.slice(0, words.length - parent.label.length) : `${words} `;
     this.cueEl = h('div', { class: 'lens-cue', role: 'status' }, lead,
       h('button', { class: 'linkish', onclick: () => this.goTo(parent.path) }, parent.label));
+    this.cueEl.dataset.words = words;
     this.canvas.append(this.cueEl);
+    this.cueBar(parent.progress);
+  }
+
+  /** The cue's bar: how much of the zoom-out to fit is done (view/zoomout.ts progress); none once the level fits. */
+  private cueBar(p: number | undefined): void {
+    const el = this.cueEl;
+    if (!el) return;
+    let bar = el.querySelector<HTMLElement>('.lens-cue-bar');
+    if (p === undefined) return void bar?.remove();
+    if (!bar) {
+      bar = h('span', { class: 'lens-cue-bar', 'aria-hidden': 'true' }, h('i'));
+      el.append(bar);
+    }
+    (bar.firstElementChild as HTMLElement).style.width = `${Math.round(p * 100)}%`;
   }
 
   // ---- the breadboard view ----------------------------------------------------------------
