@@ -270,7 +270,7 @@ export const chFirstComputer: Chapter = {
         decoder, one line per instruction, and each control line is the OR of the instruction lines that need it:</p>
         ${ctlTable()}
         <p>Open the control block (double-click it): the decoder's eight lines go into four OR gates and one AND, and that table
-        is the whole of what the machine "understands": ${ACC_COST.ctl} NANDs, against ${k(ACC_LOGIC)} for the rest of
+        is the whole of what the machine "understands": ${ACC_COST.ctl} NANDs, against ${k(ACC_LOGIC - ACC_COST.ctl)} for the rest of
         the logic and ${k(ACC_COST.ram)} for the RAM. Chapter ${numOf('cpu')}'s <span data-ahead="control">control unit (the decoder that drives every control line of a processor)</span> is the same idea with more
         rows and wider columns. Appendix C's SAP-1 spreads each instruction over several clocks and keeps its table in a
         ROM instead.</p>
