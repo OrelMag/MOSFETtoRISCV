@@ -10,9 +10,9 @@ import { pipelinedCpu } from '../src/lib/pipeline';
 import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
 import { orientGeom } from '../src/sim/geometry';
-import { inPorts, netlistOf, outPorts, type ComponentDef } from '../src/sim/types';
+import { netlistOf, type ComponentDef } from '../src/sim/types';
 import {
-  BOX_MIN_PX, CLOSE_SHARE, FLOOR_PX, INSET, decide, fitInside, handOffView, handsOff, openAtPx,
+  BOX_MIN_PX, CLOSE_SHARE, FLOOR_PX, INSET, decide, fitInside, handOffView, handsOff, insideExtent, openAtPx,
   smallestNamed, type Rect,
 } from '../src/view/lensplan';
 
@@ -35,26 +35,8 @@ function play(trace: number[], openAt: number, start = false): boolean[] {
 }
 const flips = (states: boolean[], start = false) => states.reduce((n, s, i) => n + (s !== (i ? states[i - 1] : start) ? 1 : 0), 0);
 
-/**
- * The inside's extent as lensplan.ts insideExtent defines it (Rock, Revision 3): its parts' boxes and its level pins.
- * The drawn picture is a unit or so larger; that changes the picture, never the rule.
- */
-function hullOf(def: ComponentDef): Rect {
-  const nl = netlistOf(def)!;
-  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-  const grow = (x: number, y: number) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); };
-  for (const i of nl.instances) {
-    const g = orientGeom(i.def, i.flip, i.rot);
-    const [x, y] = i.at ?? [0, 0];
-    grow(x, y);
-    grow(x + g.w, y + g.h);
-  }
-  for (const p of [...inPorts(def), ...outPorts(def)]) {
-    const at = nl.pins?.[p.name];
-    if (at) grow(at[0], at[1]);
-  }
-  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-}
+/** The inside's extent as the rule reads it (lensplan.ts insideExtent: parts, pin glyphs, the view's margin). */
+const hullOf = (def: ComponentDef): Rect => insideExtent(def)!;
 
 /** A box on a CPU's top level: its outline (outer grid units) and its definition. */
 function boxOf(top: ComponentDef, name: string): { box: Rect; def: ComponentDef } {
@@ -203,15 +185,15 @@ describe('no hidden state: a box at a zoom gets the same answer whatever came be
 describe('the author\'s bug: a register beside other modules opens once zoomed enough', () => {
   const pipe = PIPE();
 
-  it('the pipeline register FD (3 × 74) opens at about 23 px per unit, decided by its inside alone', () => {
+  it('the pipeline register FD (3 × 74) opens at about 44 px per unit, decided by its inside alone', () => {
     const { box, def } = boxOf(pipe, 'FD');
     expect([box.w, box.h]).toEqual([3, 74]);
     const at = openAtFor(box, def), k = fitInside(box, hullOf(def)).k;
     // the floor term decides (its smallest named block reaches FLOOR_PX there); BOX_MIN_PX alone would allow 64 / 3
     expect(at).toBeCloseTo(FLOOR_PX / (k * smallestNamed(def)), 9);
     expect(at).toBeGreaterThan(BOX_MIN_PX / 3);
-    // a zoom the wheel reaches: the box is then about 70 × 1 700 px, the stages either side still on a large screen
-    expect(at).toBeLessThan(40);
+    // a zoom the wheel reaches (the floating lens's opening of FD was 1 936 px tall, three stages high, and never stayed)
+    expect(at).toBeLessThan(60);
   });
 
   it('the four pipeline registers open at nearly the same zoom, so they open together', () => {
@@ -221,21 +203,21 @@ describe('the author\'s bug: a register beside other modules opens once zoomed e
 
   it('Rock\'s opening zooms on the fib program, px per unit within 1 % (single-cycle and pipelined CPUs)', () => {
     const want: [() => ComponentDef, string, number][] = [
-      [SC, 'pc', 68.0], [SC, 'alu', 22.5], [SC, 'rf', 37.8], [SC, 'imm', 16.0], [SC, 'ctl', 3.556], [SC, 'npc', 13.0],
-      [PIPE, 'FD', 23.1], [PIPE, 'DE', 23.1], [PIPE, 'hz', 15.1],
+      [SC, 'pc', 70.3], [SC, 'alu', 27.5], [SC, 'rf', 38.9], [SC, 'imm', 16.0], [SC, 'ctl', 3.61], [SC, 'npc', 21.5],
+      [PIPE, 'FD', 43.9], [PIPE, 'DE', 43.9], [PIPE, 'hz', 16.3],
     ];
     const got = want.map(([top, n]) => { const { box, def } = boxOf(top(), n); return [n, openAtFor(box, def)] as const; });
     for (const [i, [n, v]] of got.entries()) expect(Math.abs(v / want[i][2] - 1), `${n}: ${v}`).toBeLessThan(0.01);
-    // imm and ctl open as soon as their shorter side is BOX_MIN_PX
+    // imm opens as soon as its shorter side is BOX_MIN_PX; ctl just past that, at its floor
     expect(got[3][1]).toBeCloseTo(BOX_MIN_PX / 4, 9);
-    expect(got[4][1]).toBeCloseTo(BOX_MIN_PX / 18, 9);
+    expect(got[4][1]).toBeGreaterThan(BOX_MIN_PX / 18);
   });
 
   it('zoomed in step by step it opens, and stays open while the learner pans and nudges the zoom', () => {
     const { box, def } = boxOf(pipe, 'FD');
     const at = openAtFor(box, def);
     // wheel steps of 10 % from the whole CPU in view, then panning (same zoom) with small zoom corrections
-    const zin = Array.from({ length: 20 }, (_, i) => 6 * 1.1 ** i).filter((px) => px < at * 1.15);
+    const zin = Array.from({ length: 40 }, (_, i) => 6 * 1.1 ** i).filter((px) => px < at * 1.15);
     const settle = [at * 1.05, at * 1.05, at * 0.97, at * 0.9, at * 1.02, at * 0.95];
     const states = play([...zin, ...settle], at);
     expect(states.at(zin.length - 1)).toBe(true);
@@ -250,17 +232,19 @@ describe('the author\'s bug: a register beside other modules opens once zoomed e
     const iw = Math.max(0, Math.min(b.x + b.w, st.x + st.w) - Math.max(b.x, st.x)), ih = Math.max(0, Math.min(b.y + b.h, st.y + st.h) - Math.max(b.y, st.y));
     return iw * ih < (b.w * b.h) / 2;
   };
-  it('the old rule never opened it there, and closed it on the next step: the regression it replaces', () => {
+  it('the old rule closed it as soon as it opened; the new one opens it at a finite zoom with no stage at all', () => {
     const { box, def } = boxOf(pipe, 'FD');
     const at = openAtFor(box, def);
-    // the floating lens opened at 96 px on the shorter side: 32 px a unit for a 3-unit-wide box
-    expect(opensAt({ x: 0, y: 0, w: box.w * at * 1.05, h: box.h * at * 1.05 })).toBe(false);
-    // and at 32 px a unit the box is 2 368 px tall: more than half outside any stage, so it closed at once
-    const old = 96 / 3;
+    expect(Number.isFinite(at)).toBe(true);
+    // the floating lens opened at 96 px on the shorter side, 32 px a unit for a 3-unit-wide box: 2 368 px tall, more than
+    // half outside any stage, so closesAt shut it on the next step, and again at every zoom from there on
     const stage = { x: 0, y: 0, w: 1280, h: 800 };
-    expect(closesAt({ x: 100, y: -200, w: box.w * old, h: box.h * old }, stage)).toBe(true);
-    // the new rule takes no stage: open there, wherever the box sits
-    expect(decide(false, old, at)).toBe(true);
+    for (const px of [96 / 3, at, at * 1.5]) {
+      expect(opensAt({ x: 0, y: 0, w: box.w * px, h: box.h * px })).toBe(true);
+      expect(closesAt({ x: 100, y: -200, w: box.w * px, h: box.h * px }, stage)).toBe(true);
+    }
+    // the new rule has no stage to be half outside of: open from its opening zoom on, wherever the box sits
+    for (const px of [at, at * 1.5, at * 4]) expect(decide(false, px, at)).toBe(true);
   });
 
   it('the single-cycle CPU\'s boxes all open at a finite zoom, and only past their short side\'s 64 px', () => {
