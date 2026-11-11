@@ -4,7 +4,7 @@
 // findings on the tree: `isStr` on an expression whose value is a str, `strCmp` on a comparison of two strs, `isStr` on
 // an `s += t`. The interpreter and the compiler both read those marks, so they cannot disagree about a type.
 
-import { MEMORY_BUILTINS, PyError } from './ast';
+import { MEMORY_BUILTINS, PyError, THREAD_BUILTINS } from './ast';
 import type { Expr, Stmt } from './ast';
 import type { FuncInfo, Scope } from './scope';
 
@@ -104,6 +104,7 @@ export function typePass(body: Stmt[], scope: Scope): void {
         return vt === 'str' ? 'str' : null;
       }
       case 'call': {
+        if (e.fn === 'spawn') return 'int';
         const args = e.fn === 'len' && e.args[0]?.kind === 'name' && isListName(e.args[0].id, fn) ? [null] : e.args.map((a) => ty(a, fn));
         switch (e.fn) {
           case 'print': return 'int';
@@ -112,6 +113,7 @@ export function typePass(body: Stmt[], scope: Scope): void {
           case 'chr': expect(args[0], 'int', 'the argument of chr()', e.line); return 'str';
           case 'abs': case 'min': case 'max': args.forEach((t) => expect(t, 'int', `the arguments of ${e.fn}()`, e.line)); return 'int';
         }
+        if (Object.hasOwn(THREAD_BUILTINS, e.fn)) { args.forEach((t) => expect(t, 'int', `the arguments of ${e.fn}()`, e.line)); return 'int'; }
         if (Object.hasOwn(MEMORY_BUILTINS, e.fn)) { args.forEach((t) => expect(t, 'int', `the arguments of ${e.fn}()`, e.line)); return 'int'; }
         const f = scope.funcs.get(e.fn)!;
         args.forEach((t, i) => {

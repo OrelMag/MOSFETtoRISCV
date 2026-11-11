@@ -8,6 +8,10 @@
 // (print stores there); sp is the stack. Globals that a function reads or writes live in data memory.
 
 import { HEAP_BYTES, PyError } from './ast';
+
+/** The user target's thread calls (riscv/osprograms.ts THREAD_SYS; kept here so the compiler does not import the kernel) and a second thread's stack. */
+export const THREAD_CALLS: Record<string, number> = { spawn: 10, join: 11, lock: 12, unlock: 13, wait: 15, signal: 16 };
+export const THREAD_STACK = 0x800;
 import type { BinOpName, CmpOpName, Expr, Module, Stmt, Target } from './ast';
 import { binop, cmpop } from './interp';
 import { walkExpr, walkStmts, stmtExprs } from './scope';
@@ -222,6 +226,8 @@ export class CodeGen {
   private readonly runtime = new Set<string>();
   private readonly pool = new Map<string, number>();
   private haltLabel = 'halt';
+  /** A thread was spawned: the runtime gets rt.texit. */
+  private threads = false;
   private heapEnd = 0;
 
   constructor(private readonly mod: Module, private readonly scope: Scope, private readonly dmemWords: number, private readonly m = false, private readonly heapBytes = HEAP_BYTES, private readonly user = false) {
@@ -907,6 +913,8 @@ export class CodeGen {
         this.emit(`${e.fn === 'store8' ? 'sb  ' : 'sw  '} ${v}, ${off}(${base})`);
         return dest ? (this.emit(`li   ${dest}, 0`), dest) : 'zero';
       }
+      case 'spawn': case 'join': case 'lock': case 'unlock': case 'wait': case 'signal':
+        return this.threadCall(e, d, dest);
       case 'min': case 'max': {
         const r = this.tmp(d);
         this.genTo(e.args[0], d, r);
@@ -946,6 +954,33 @@ export class CodeGen {
     this.emit(`jal  ra, rt.${name}`);
   }
 
+  /**
+   * The user target's thread builtins (chapter 'threads'): a system call of the threads kernel, its arguments in a0 / a1 (spawn: the function's
+   * address, the new thread's stack, where it returns to: an exit), a0 .. a2 and a7 kept on the stack around it for the code that lives in them.
+   */
+  private threadCall(e: Expr & { kind: 'call' }, d: number, dest?: string): string {
+    if (!this.user) this.err(`${e.fn}() needs an operating system: it is a system call of the threads kernel`, e.line);
+    // each argument in a temporary first: one in a0 .. a2 may be another's local (a leaf keeps its variables there)
+    const regs = e.fn === 'spawn' ? [] : e.args.map((a, i) => { const t = this.tmp(d + i); this.genTo(a, d + i, t); return t; });
+    this.emit('addi sp, sp, -16');
+    ['a0', 'a1', 'a2', 'a7'].forEach((r, i) => this.emit(`sw   ${r}, ${4 * i}(sp)`));
+    if (e.fn === 'spawn') {
+      const f = (e.args[0] as { id: string }).id, sp = this.layout.stackTop - THREAD_STACK;
+      if (this.layout.outBase > sp - THREAD_STACK) this.err(`the data reaches ${this.layout.outBase}: a second thread's stack needs ${THREAD_STACK} bytes below ${sp}`, e.line);
+      this.threads = true;
+      this.emit(`la   a0, ${f}`);
+      this.emit(`li   a1, ${sp}`);
+      this.emit('la   a2, rt.texit');
+    } else regs.forEach((r, i) => this.emit(`mv   a${i}, ${r}`));
+    this.emit(`li   a7, ${THREAD_CALLS[e.fn]}`);
+    this.emit('ecall');
+    const r = dest ?? this.tmp(d);
+    this.emit(`mv   ${r}, a0`);
+    ['a0', 'a1', 'a2', 'a7'].forEach((x, i) => this.emit(`lw   ${x}, ${4 * i}(sp)`));
+    this.emit('addi sp, sp, 16');
+    return r;
+  }
+
   private fromA0(d: number, dest?: string): string {
     const r = dest ?? this.tmp(d);
     this.emit(`mv   ${r}, a0`);
@@ -973,6 +1008,10 @@ export class CodeGen {
   private emitRuntime(): void {
     this.line = null;
     const R = (lines: string[]) => lines.forEach((l) => (l.endsWith(':') ? this.label(l.slice(0, -1)) : l.startsWith('#') ? this.comment(l.slice(2)) : this.emit(l)));
+    if (this.threads) {
+      this.out.push({ text: '', py: null });
+      R(['# a thread started by spawn returns here: its end is the exit system call', 'rt.texit:', 'li   a7, 93', 'ecall']);
+    }
     if (this.runtime.has('mul')) {
       this.out.push({ text: '', py: null });
       R([

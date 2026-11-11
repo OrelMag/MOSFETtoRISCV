@@ -8,6 +8,7 @@ import { chMulDiv } from './ch-muldiv';
 import { chCache } from './ch-cache';
 import { chVmem } from './ch-vmem';
 import { chOs } from './ch-os';
+import { chThreads } from './ch-threads';
 import { chMulticycle } from './ch-multicycle';
 import { chFloat } from './ch-float';
 import { chWidths } from './ch-widths';
@@ -25,6 +26,7 @@ import { chGfxPipeline, chPixels } from './ch-gfx';
 import { chBinary, chGates } from './ch-gates';
 import { chLogic } from './ch-logic';
 import { chLatches, chMemory, chRegisters } from './ch-memory';
+import { chFirstComputer } from './ch-firstcomputer';
 import { chFsm } from './ch-fsm';
 import { chInverter, chMap, chMosfet, chNand } from './ch-transistors';
 import { chBasics } from './ch-basics';
@@ -91,8 +93,8 @@ export const chapters: Chapter[] = [
   chBasics, chMap,
   // the prologue: before the transistor, labelled P1 …
   chRelays, chTubes, chCards,
-  chMosfet, chInverter, chNand, chGates, chLogic, chBinary, chAdders, chRouting, chLatches, chRegisters, chFsm, chMemory,
-  chAlu, chRegfile, chIsa, chSingleCycle, chPython, chMulticycle, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chCache, chVmem, chOs, chMulDiv, chFloat, chWidths, chOoo, chMulticore, chSilicon, chFpga, chVerify, chSidechan, chPower, chVectors, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
+  chMosfet, chInverter, chNand, chGates, chLogic, chBinary, chAdders, chRouting, chLatches, chRegisters, chFsm, chMemory, chFirstComputer,
+  chAlu, chRegfile, chIsa, chSingleCycle, chPython, chMulticycle, chFastAdders, chPipeline, chPipePay, chIO, chTraps, chCache, chVmem, chOs, chThreads, chMulDiv, chFloat, chWidths, chOoo, chMulticore, chSilicon, chFpga, chVerify, chSidechan, chPower, chVectors, chLanes, chSimt, chWarps, chFeed, chPixels, chGfxPipeline,
   chDram, chMemCtrl, chFlash, chBus,
   chMessage, chTelegraph, chExchange, chWire, chClocks, chUart, chSpi, chSignals, chNoise, chModem, chCarriers, chSerial, chGlass, chErrors, chCodes, chPcie, chEthernet, chSwitch, chNetwork, chRouter, chTcp, chQueues, chSecret, chPath, chRadio, chWifi, chCellular, chDatacentre, chBench, chFixed, chZplane, chSpectrum, chFirDesign, chIir, chMultirate, chCordic, chMac, chDspCore, chConverters, chAdaptive, chSpeech, chMusic, chSensors, chPictures, chSdr,
   // the appendix: after the journey, lettered

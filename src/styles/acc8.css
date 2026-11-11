@@ -1,0 +1,25 @@
+/* The first computer's panel (widgets/acc8.ts): theme tokens only, so both themes follow. */
+.acc-panel { width: 330px; }
+.acc-alarm { font: 600 12.5px var(--font-mono); color: var(--bad); background: var(--bad-soft); border: 1px solid var(--bad); border-radius: 6px; padding: 6px 8px; margin: 0 0 6px; }
+.acc-alarm[hidden] { display: none; }
+.acc-verdict { font: 600 11.5px var(--font-mono); margin-left: 4px; }
+.acc-verdict.good { color: var(--good); }
+.acc-verdict.bad { color: var(--bad); }
+.acc-lines { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.acc-lines .ln { font: 600 10.5px var(--font-mono); text-align: center; padding: 2px 0; border-radius: 4px; border: 1px solid var(--border); color: var(--muted); }
+.acc-lines .ln.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.acc-regs { grid-template-columns: repeat(4, 1fr); }
+.acc-listing { max-height: 230px; }
+.acc-listing .m { width: 1em; color: var(--accent); flex: none; }
+.acc-listing .d { margin-left: auto; color: var(--muted); flex: none; }
+.acc-ram { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; font: 11px var(--font-mono); }
+.acc-ram span { text-align: center; padding: 1px 0; border-radius: 3px; background: var(--surface-2); color: var(--muted); }
+.acc-ram span.nz { color: var(--text); font-weight: 600; }
+.acc-ram span.at { outline: 1.5px solid var(--accent); outline-offset: -1.5px; }
+.acc-outs { font: 12px var(--font-mono); color: var(--text); overflow-wrap: anywhere; }
+.acc-errors { font: 12px var(--font-mono); color: var(--bad); white-space: pre-wrap; }
+.acc-table { border-collapse: collapse; font-size: 12.5px; margin: 6px 0; }
+.acc-table th, .acc-table td { padding: 2px 8px; text-align: center; border-top: 1px solid var(--border); }
+.acc-table th { font: 600 11px var(--font-mono); color: var(--muted); }
+.acc-table td:first-child, .acc-table th:first-child { text-align: left; font-family: var(--font-mono); }
+.acc-table td.on { color: var(--accent); font-weight: 700; }

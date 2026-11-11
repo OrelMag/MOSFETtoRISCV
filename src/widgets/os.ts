@@ -9,7 +9,7 @@ import type { HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
 import { pack } from '../sim/values';
 import { groupDigits } from '../sim/numfmt';
-import { counter, osImage, OS_DMEM_K, OS_IMEM_K, OS_SLICE, PCB, PCB0, PCB_SIZE, spinner2, type OsImage } from '../riscv/osprograms';
+import { counter, LOCKS, osImage, OS_DMEM_K, OS_IMEM_K, OS_SLICE, PCB, PCB0, PCB_SIZE, PCB_T, SEMS, spinner2, WAIT, type OsImage } from '../riscv/osprograms';
 import { captureSwitch, overheadAt, planOf, type Overhead, type SwitchFrame } from '../riscv/osrun';
 import { cpuScene } from './cpupanel';
 import { frameRun } from './slowctl';
@@ -26,11 +26,11 @@ const REGS = ['zero', 'ra', 'sp', 'gp', 'tp', 't0', 't1', 't2', 's0', 's1', 'a0'
 export const sharePair = (): string[] => [counter(1, 6), counter(10, 6)];
 
 /** A scene: the kernel with these processes on the virtual-memory CPU, the cycle engine, the CPU panel, the translation panel and the strip. */
-export function osScene(o: { procs: string[]; slice?: number; highlight?: string[]; keep?: 'open' | 'folded' }): Scene {
-  const img = osImage(o.procs, { slice: o.slice });
+export function osScene(o: { procs: string[]; slice?: number; highlight?: string[]; keep?: 'open' | 'folded'; threads?: boolean }): Scene {
+  const img = osImage(o.procs, { slice: o.slice, threads: o.threads });
   const reload = (slice: number) => osScene({ ...o, slice });
   return {
-    ...cpuScene({ vm: true, source: img.source, highlight: o.highlight, imemK: OS_IMEM_K, dmemK: OS_DMEM_K, hideFiller: true, extraPanels: [osPanel({ slice: o.slice ?? OS_SLICE, reload, keep: o.keep })] }),
+    ...cpuScene({ vm: true, source: img.source, highlight: o.highlight, imemK: OS_IMEM_K, dmemK: OS_DMEM_K, hideFiller: true, extraPanels: [osPanel({ slice: o.slice ?? OS_SLICE, reload, keep: o.keep, threads: o.threads })] }),
     engine: 'cycle', autoClock: false, noRemix: true,
   };
 }
@@ -42,6 +42,13 @@ type Kind = 0 | 1 | 2 | 3; // process A, process B, the kernel (machine mode), a
 const KIND_NAME = ['process A', 'process B', 'kernel', 'page-table walk'];
 const WINDOW = 2400;
 
+/** What a waiting thread waits for, from its PCB (threads kernel). */
+export function waitText(on: number, state: number): string {
+  if (state !== 3) return '-';
+  const id = on & 0xff, k = on & ~0xff;
+  return k === WAIT.lock ? `lock ${id}` : k === WAIT.cond ? `a signal on ${id}` : k === WAIT.sem ? `semaphore ${id}` : k === WAIT.join ? 'the other to end' : '?';
+}
+
 /** The data memory's words, from the RAM leaf of the vm CPU. */
 function dmemOf(sim: Sim, root: HierNode): ArrayLike<number> | undefined {
   const dm = root.children?.get('dm');
@@ -49,19 +56,20 @@ function dmemOf(sim: Sim, root: HierNode): ArrayLike<number> | undefined {
   return (sim.leafState(dm.leafIndex) as { mem: ArrayLike<number> } | undefined)?.mem;
 }
 
-export function osPanel(o: { slice: number; reload: (slice: number) => Scene; keep?: 'open' | 'folded' }): ScenePanel {
+export function osPanel(o: { slice: number; reload: (slice: number) => Scene; keep?: 'open' | 'folded'; threads?: boolean }): ScenePanel {
   return (stage: Stage): Widget => {
+    const kindName = o.threads ? KIND_NAME.map((k) => k.replace('process', 'thread')) : KIND_NAME, unit = o.threads ? 'thread' : 'process';
     let segs: { k: Kind; n: number }[] = [];
     let win = 0;
     const total = [0, 0, 0, 0];
     let con: { who: number; ch: string }[] = [];
     let switches = 0, lastRun = -1;
-    const strip = h('div', { class: 'os-strip', role: 'img', 'aria-label': 'who had the CPU in each recent cycle: process A, process B, the kernel, a page-table walk' });
+    const strip = h('div', { class: 'os-strip', role: 'img', 'aria-label': `who had the CPU in each recent cycle: ${unit} A, ${unit} B, the kernel, a page-table walk` });
     const legend = h('div', { class: 'os-legend' });
     const consoleEl = h('pre', { class: 'console os-console' });
     const blocks = h('div', { class: 'os-blocks' });
     let stopRun: (() => void) | null = null;
-    const nextBtn = h('button', { type: 'button', class: 'btn sm', title: 'Run until the kernel gives the CPU to the other process' }, 'Next switch');
+    const nextBtn = h('button', { type: 'button', class: 'btn sm', title: `Run until the kernel gives the CPU to the other ${unit}` }, 'Next switch');
     nextBtn.addEventListener('click', () => {
       if (stopRun) { stopRun(); return; }
       const target = switches + 1;
@@ -112,15 +120,15 @@ export function osPanel(o: { slice: number; reload: (slice: number) => Scene; ke
       h('h4', null, 'Who has the CPU', h('span', { class: 'fold-hint' })),
       h('div', { class: 'param-row' }, h('label', { class: 'os-slice' }, 'Time slice ', sel), nextBtn),
       strip, legend,
-      h('div', { class: 'cpu-sec' }, 'Console, by process'), consoleEl,
-      h('div', { class: 'cpu-sec' }, 'Process control blocks'), blocks);
+      h('div', { class: 'cpu-sec' }, `Console, by ${unit}`), consoleEl,
+      h('div', { class: 'cpu-sec' }, o.threads ? 'Thread control blocks and locks' : 'Process control blocks'), blocks);
     const update = () => {
       const sim = stage.sim, root = stage.rootCtx?.node;
       if (stage.cycles === 0) { segs = []; win = 0; total.fill(0); con = []; switches = 0; lastRun = -1; }
-      strip.replaceChildren(...segs.map((s) => h('div', { class: `os-seg k${s.k}`, style: `flex:${s.n}`, title: `${KIND_NAME[s.k]}: ${s.n} cycles` }, s.n >= WINDOW / 28 && s.k < 2 ? PROC_NAMES[s.k] : '')));
+      strip.replaceChildren(...segs.map((s) => h('div', { class: `os-seg k${s.k}`, style: `flex:${s.n}`, title: `${kindName[s.k]}: ${s.n} cycles` }, s.n >= WINDOW / 28 && s.k < 2 ? PROC_NAMES[s.k] : '')));
       const all = total[0] + total[1] + total[2] + total[3];
       legend.replaceChildren(
-        ...[0, 1, 2, 3].map((k) => h('span', null, h('i', { class: `os-seg k${k}` }), `${KIND_NAME[k]} ${total[k]}`)),
+        ...[0, 1, 2, 3].map((k) => h('span', null, h('i', { class: `os-seg k${k}` }), `${kindName[k]} ${total[k]}`)),
         h('span', { class: 'os-sum' }, `${switches} switch${switches === 1 ? "" : "es"} · the kernel and the walks took ${all ? Math.round((100 * (total[2] + total[3])) / all) : 0} % of ${all} cycles (the last ${WINDOW} drawn)`));
       // the console, one colour per process
       const parts: (string | HTMLElement)[] = [];
@@ -135,7 +143,7 @@ export function osPanel(o: { slice: number; reload: (slice: number) => Scene; ke
       const csr = root.children?.get('csr')?.children;
       const priv = csr ? (~pack(sim.getBits(csr.get('privN')!.ports.q))) & 3 : 3;
       const cur = mem[0] >>> 0;
-      const names = ['free', 'ready', 'gone'];
+      const names = ['free', 'ready', 'gone', 'waiting'];
       blocks.replaceChildren(h('table', { class: 'data os-pcb' },
         h('tr', null, h('th', null, ''), ...PROC_NAMES.map((n) => h('th', null, n))),
         h('tr', null, h('td', null, 'state'), ...PROC_NAMES.map((_, p) => { const a = PCB0 + p * PCB_SIZE, st = mem[(a + PCB.state) / 4]; return h('td', null, st === 1 && cur === a && priv === 0 ? 'running' : names[st] ?? '?'); })),
@@ -143,7 +151,12 @@ export function osPanel(o: { slice: number; reload: (slice: number) => Scene; ke
         h('tr', null, h('td', null, 'sp'), ...PROC_NAMES.map((_, p) => h('td', null, mem[(PCB0 + p * PCB_SIZE + 8) / 4] ? hex(mem[(PCB0 + p * PCB_SIZE + 8) / 4], 4) : '-'))),
         h('tr', null, h('td', null, 'satp'), ...PROC_NAMES.map((_, p) => h('td', null, mem[(PCB0 + p * PCB_SIZE + PCB.satp) / 4] ? hex(mem[(PCB0 + p * PCB_SIZE + PCB.satp) / 4], 8) : '-'))),
         h('tr', null, h('td', null, 'slices'), ...PROC_NAMES.map((_, p) => h('td', null, String(mem[(PCB0 + p * PCB_SIZE + PCB.slices) / 4] >>> 0)))),
-        h('tr', null, h('td', null, 'user cycles'), ...PROC_NAMES.map((_, p) => h('td', null, String(total[p]))))));
+        ...(o.threads ? [h('tr', null, h('td', null, 'waits for'), ...PROC_NAMES.map((_, p) => h('td', null, waitText(mem[(PCB0 + p * PCB_SIZE + PCB_T.waitOn) / 4] >>> 0, mem[(PCB0 + p * PCB_SIZE + PCB.state) / 4]))))] : []),
+        h('tr', null, h('td', null, 'user cycles'), ...PROC_NAMES.map((_, p) => h('td', null, String(total[p]))))),
+        ...(o.threads ? [h('table', { class: 'data os-pcb os-locks' },
+          h('tr', null, h('th', null, ''), ...[0, 1, 2, 3].map((i) => h('th', null, String(i)))),
+          h('tr', null, h('td', null, 'lock held by'), ...[0, 1, 2, 3].map((i) => { const w = mem[LOCKS / 4 + i] >>> 0; return h('td', null, w ? PROC_NAMES[(w - PCB0) / PCB_SIZE] ?? '?' : '-'); })),
+          h('tr', null, h('td', null, 'semaphore'), ...[0, 1, 2, 3].map((i) => h('td', null, String(mem[SEMS / 4 + i] | 0)))))] : []));
     };
     update();
     return { el, update };

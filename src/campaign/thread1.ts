@@ -91,7 +91,7 @@ export const THREAD1: Record<string, NodeThread> = {
   },
   s_pc: {
     uses: ['pc', 'plus1'],
-    usedFor: { c_core1: 'its output addresses the instruction memory; Core III loads it from next PC instead of counting' },
+    usedFor: { c_core1: 'its output addresses the instruction memory; Core III loads it from next PC instead of counting', m_acc: 'five bits of it read the 32-word program of the first computer' },
     pitfalls: [
       'Reset must win over load: an AND with ¬rst before the load mux lets a jump escape the reset.',
       'pc + 1 comes from the register\'s output: from its input, the incrementer is inside a combinational loop.',
@@ -142,9 +142,17 @@ export const THREAD1: Record<string, NodeThread> = {
       'Two read ports means two independent muxes: ra1 and ra2 may name the same register, or x0.',
     ],
   },
+  m_acc: { // optional: the whole machine in miniature, before RV16's blocks are built one by one
+    uses: ['pc', 'ctl', 'dmem'],
+    usedFor: {},
+    pitfalls: [
+      'A loaded on every edge: STA, JMP, JZ and OUT then overwrite it with whatever the multiplexers show. Only LDA, ADD, SUB and LDI load A.',
+      'JZ tested on the RAM byte, or on the next value of A: Z must read A as it is before the edge, the value the program just computed.',
+    ],
+  },
   m_mem: {
     uses: ['imem', 'dmem'],
-    usedFor: { c_core2: 'the data RAM, on the ALU\'s result: daddr, dwdata, dwe, drdata' },
+    usedFor: { c_core2: 'the data RAM, on the ALU\'s result: daddr, dwdata, dwe, drdata', m_acc: 'a 32-byte RAM read and written at the address field of the instruction' },
     pitfalls: [
       'Reads are combinational, writes happen at the edge: during the store’s own cycle a read of that word still sees the old value; the next instruction’s load sees the new one.',
       'Fetch and load share one cycle: a single memory with one port cannot serve both, hence a ROM and a RAM (Harvard).',

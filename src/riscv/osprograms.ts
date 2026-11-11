@@ -60,11 +60,212 @@ function decimal(tag: string): string {
 export interface KernelOptions {
   /** Time slice in retired instructions. */
   slice?: number;
+  /**
+   * Chapter 'threads': only process A is made at boot; it may start a second thread in its own address space (spawn), and the kernel
+   * offers locks, condition variables, semaphores and join (THREAD_SYS). A thread that must wait is parked (state 3) and the scheduler
+   * skips it; a switch between two threads of one address space keeps satp and the TLBs. When no thread is ready and one waits for ever,
+   * the kernel says "deadlock" and stops. Off, the kernel is the os chapter's, instruction for instruction.
+   */
+  threads?: boolean;
 }
+
+/** Chapter 'threads': the system calls added to SYS (a7), their arguments in a0, a1, a2; the answer, if any, in a0. */
+export const THREAD_SYS = {
+  /** spawn: a0 = the new thread's first instruction, a1 = its stack pointer, a2 = where it returns to (an exit). a0 = 0, or -1 if the slot is taken. */
+  spawn: 10,
+  /** join: wait until the other thread has exited. */
+  join: 11,
+  /** lock / unlock / trylock: a0 = lock 0..3. trylock answers 1 (taken) or 0 (held by someone, not waited for). */
+  lock: 12, unlock: 13, trylock: 14,
+  /** wait: a0 = condition 0..3, a1 = the lock held: let the lock go and wait for a signal; the lock is held again on return. signal: a0 = condition. */
+  wait: 15, signal: 16,
+  /** Semaphores 0..3: down (wait while 0, then take one), up (give one back, or wake the thread that waits), init (a1 = the count). */
+  down: 17, up: 18, seminit: 19,
+} as const;
+/** Kernel variables of the threads kernel (frame 0): the lock owners (a PCB address, 0 = free) and the semaphores' counts, four of each. */
+export const LOCKS = 0x40, SEMS = 0x50;
+/** PCB fields of the threads kernel: what a waiting thread waits for (WAIT_* | id) and, for a condition, the lock it holds again after the signal. */
+export const PCB_T = { waitOn: 144, relock: 148 } as const;
+export const WAIT = { lock: 0x100, cond: 0x200, sem: 0x300, join: 0x400 } as const;
+/** States in a PCB: free, ready, gone, and (threads) waiting. */
+export const STATE = { free: 0, ready: 1, gone: 2, waiting: 3 } as const;
+
+// ---- the threads kernel's pieces (chapter 'threads'). In each, t0 is the caller's PCB; `other` puts the other thread's PCB in t1.
+const OTHER = 2 * PCB0 + PCB_SIZE;
+const other = `  li t2, ${OTHER}\n  sub t1, t2, t0`;
+/** a0 & 3, times 4, in t3: the offset of lock / semaphore a0 in its table. */
+const slot = (reg = 'a0') => `  andi t3, ${reg}, 3\n  slli t3, t3, 2`;
+/** Make the PCB at t1 ready again (it waits for nothing any more). */
+const wake = `  sw zero, ${PCB_T.waitOn}(t1)\n  li t2, ${STATE.ready}\n  sw t2, ${PCB.state}(t1)`;
+/** Let lock t3 / 4 go: straight to the other thread if it waits for it (the lock is handed over, it wakes), else free. */
+const release = (tag: string) => `  lw t2, ${PCB_T.waitOn}(t1)
+  srli t4, t3, 2
+  ori t4, t4, ${WAIT.lock}
+  bne t2, t4, ${tag}_free
+  sw t1, ${LOCKS}(t3)
+${wake}
+  j ${tag}_done
+${tag}_free:
+  sw zero, ${LOCKS}(t3)
+${tag}_done:`;
+
+const threadBoot = () => `  li t1, ${'B'.charCodeAt(0)}
+  li t2, ${PCB0 + PCB_SIZE}
+  sw t1, ${PCB.tag}(t2)`;
+
+const threadDispatch = () => Object.entries(THREAD_SYS).map(([name, n]) => `  li t2, ${n}\n  beq a7, t2, sys_${name}`).join('\n') + '\n';
+
+/** In sys_exit, before the scheduler runs: a thread that joins this one wakes. */
+const threadExit = () => `${other}
+  lw t2, ${PCB_T.waitOn}(t1)
+  li t3, ${WAIT.join}
+  bne t2, t3, ex_done
+${wake}
+ex_done:
+`;
+
+const threadCalls = () => `# ---- the threads calls
+sys_spawn:
+${other}
+  lw t2, ${PCB.state}(t1)
+  beqz t2, sp_free
+  li t3, ${STATE.gone}
+  beq t2, t3, sp_free
+  li t2, -1
+  sw t2, 40(t0)
+  j go_same
+sp_free:
+  li t3, 4
+sp_copy:
+  add t4, t0, t3
+  lw t2, 0(t4)
+  add t4, t1, t3
+  sw t2, 0(t4)
+  addi t3, t3, 4
+  li t5, ${4 * (NREGS + 1)}
+  bltu t3, t5, sp_copy
+  lw t2, ${PCB.satp}(t0)
+  sw t2, ${PCB.satp}(t1)
+  sw a0, 0(t1)
+  sw a2, 4(t1)
+  sw a1, 8(t1)
+  sw zero, 40(t1)
+  sw zero, ${PCB.slices}(t1)
+${wake}
+  sw zero, 40(t0)
+  j go_same
+sys_join:
+${other}
+  lw t2, ${PCB.state}(t1)
+  li t3, ${STATE.ready}
+  beq t2, t3, jn_wait
+  li t3, ${STATE.waiting}
+  bne t2, t3, go_same
+jn_wait:
+  li t2, ${WAIT.join}
+# park: wait for t2 (WAIT_* | id); the scheduler skips this PCB until someone wakes it
+park:
+  sw t2, ${PCB_T.waitOn}(t0)
+  li t2, ${STATE.waiting}
+  sw t2, ${PCB.state}(t0)
+  j schedule
+sys_lock:
+${slot()}
+  lw t2, ${LOCKS}(t3)
+  beqz t2, lk_take
+  andi t2, a0, 3
+  ori t2, t2, ${WAIT.lock}
+  j park
+lk_take:
+  sw t0, ${LOCKS}(t3)
+  j go_same
+sys_trylock:
+${slot()}
+  lw t2, ${LOCKS}(t3)
+  li t4, 0
+  bnez t2, tl_answer
+  sw t0, ${LOCKS}(t3)
+  li t4, 1
+tl_answer:
+  sw t4, 40(t0)
+  j go_same
+sys_unlock:
+${other}
+${slot()}
+${release('ul')}
+  j go_same
+sys_wait:
+${other}
+${slot('a1')}
+${release('wt')}
+  andi t2, a1, 3
+  sw t2, ${PCB_T.relock}(t0)
+  andi t2, a0, 3
+  ori t2, t2, ${WAIT.cond}
+  j park
+sys_signal:
+${other}
+  lw t2, ${PCB_T.waitOn}(t1)
+  andi t4, a0, 3
+  ori t4, t4, ${WAIT.cond}
+  bne t2, t4, go_same
+  lw t3, ${PCB_T.relock}(t1)
+  slli t3, t3, 2
+  lw t2, ${LOCKS}(t3)
+  beqz t2, sg_give
+  srli t4, t3, 2
+  ori t4, t4, ${WAIT.lock}
+  sw t4, ${PCB_T.waitOn}(t1)
+  j go_same
+sg_give:
+  sw t1, ${LOCKS}(t3)
+${wake}
+  j go_same
+sys_down:
+${slot()}
+  lw t2, ${SEMS}(t3)
+  beqz t2, dn_wait
+  addi t2, t2, -1
+  sw t2, ${SEMS}(t3)
+  j go_same
+dn_wait:
+  andi t2, a0, 3
+  ori t2, t2, ${WAIT.sem}
+  j park
+sys_up:
+${other}
+  andi t3, a0, 3
+  ori t4, t3, ${WAIT.sem}
+  lw t2, ${PCB_T.waitOn}(t1)
+  bne t2, t4, up_count
+${wake}
+  j go_same
+up_count:
+  slli t3, t3, 2
+  lw t2, ${SEMS}(t3)
+  addi t2, t2, 1
+  sw t2, ${SEMS}(t3)
+  j go_same
+sys_seminit:
+${slot()}
+  sw a1, ${SEMS}(t3)
+  j go_same
+`;
+
+/** At all_done (nobody ready): a thread still waiting will never run again. */
+const threadStuck = () => `  li t1, ${PCB0}
+  li t3, ${STATE.waiting}
+dl_look:
+  lw t2, ${PCB.state}(t1)
+  beq t2, t3, deadlock
+  addi t1, t1, ${PCB_SIZE}
+  li t2, ${PCB0 + NPROC * PCB_SIZE}
+  bltu t1, t2, dl_look
+`;
 
 /** The kernel's assembly. Its sections are labelled: the chapter's widgets and the tests count instructions between labels. */
 export function kernelSource(o: KernelOptions = {}): string {
-  const slice = o.slice ?? OS_SLICE;
+  const slice = o.slice ?? OS_SLICE, T = !!o.threads;
   const saveRegs = ABI.map((r, i) => [r, i] as const).filter(([r, i]) => i > 0 && r !== 't0');
   const save = saveRegs.map(([r, i]) => `  sw ${r}, ${4 * i}(t0)`).join('\n');
   const load = saveRegs.map(([r, i]) => `  lw ${r}, ${4 * i}(t0)`).join('\n');
@@ -110,11 +311,11 @@ boot:
   li a2, ${PCB0}
   li a3, ${'A'.charCodeAt(0)}
   jal ra, mkproc
-  li a0, ${ROOT_OF[1]}
+${T ? threadBoot() : `  li a0, ${ROOT_OF[1]}
   li a1, ${CODE_PA[1]}
   li a2, ${PCB0 + PCB_SIZE}
   li a3, ${'B'.charCodeAt(0)}
-  jal ra, mkproc
+  jal ra, mkproc`}
   li t0, ${PCB0}
   sw t0, 0(zero)
   li t6, ${CONSOLE}
@@ -152,7 +353,7 @@ trap_saved:
   beq a7, t2, schedule
   li t2, ${SYS.exit}
   beq a7, t2, sys_exit
-  li t2, -1
+${T ? threadDispatch() : ''}  li t2, -1
   sw t2, 40(t0)
   j go_same
 sys_putchar:
@@ -162,8 +363,8 @@ sys_putchar:
 sys_exit:
   li t2, 2
   sw t2, ${PCB.state}(t0)
-  j schedule
-sys_write:
+${T ? threadExit() : ''}  j schedule
+${T ? threadCalls() : ''}sys_write:
   li t6, ${CONSOLE}
   lw t2, ${PCB.tag}(t0)
   sb t2, 0(t6)
@@ -222,7 +423,11 @@ sc_found:
   sw t2, 12(zero)
   mv t0, t1
   sw t0, 0(zero)
-# ---- go_switch: another address space; go_same: back into the registers in the PCB at t0
+${T ? `# a thread of the same address space: satp and the TLBs stay
+  csrr t2, satp
+  lw t1, ${PCB.satp}(t0)
+  beq t1, t2, go_same
+` : ''}# ---- go_switch: another address space; go_same: back into the registers in the PCB at t0
 go_switch:
   lw t1, ${PCB.satp}(t0)
   csrw satp, t1
@@ -235,10 +440,10 @@ ${load}
   lw t0, 20(t0)
   mret
 all_done:
-${say('all done\n')}
+${T ? threadStuck() : ''}${say('all done\n')}
 halt:
   j halt
-`;
+${T ? `deadlock:\n${say('deadlock\n')}\n  j halt\n` : ''}`;
 }
 
 /** Rename every label defined in an assembly text (and its uses) with a prefix, so several programs share one source. */

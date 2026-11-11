@@ -34,9 +34,6 @@ function build(): Step[] {
         core (retire = 0) and asks <span data-show="bus">the bus</span>. One transaction at a time, granted by the arbiter of this chapter's third step (ARBITER2, kept quiet while the bus is busy):
         the grant cycle, then counts 0 to 3 write a Modified victim back to <span data-show="dm">memory</span>, a word a cycle, and 4 to 7 bring the new line in. A clean miss holds the bus for 5 cycles, a
         miss over a dirty line for 9; the access then hits.</p>
-        <p>The price, counted from the gates: one cache is <strong>${groupDigits(C.privateCache)} NAND</strong>, of which the data array is ${groupDigits(C.data)} (${pct(C.data, C.privateCache)}); the tag array is
-        ${groupDigits(C.tags)} and the access decode ${groupDigits(C.access)}. The bus is ${groupDigits(C.bus)}. Two cores, two caches and the bus come to ${groupDigits(C.coherent)} NAND against ${groupDigits(C.dual)}
-        for the shared-memory dual-core: the caches and the bus add ${pct(C.coherent - C.dual, C.dual)}, almost all of it storage.</p>
         <p>What this cache cannot do is hear the other core. Run <em>A stale copy</em>. Core 1 reads <code>x</code> and caches it (0). Core 0 stores 7: a write miss, its cache
         takes the line and writes 7 into it. Forty loops later core 1 reads <code>x</code> again: a hit on its own copy, which still says 0. The verdict line in the panel catches it against a plain
         one-memory replay of the same retirements: core 1's cache holds the line Shared with 0 while core 0's holds it Modified with 7, two valid copies with two values.
@@ -45,6 +42,10 @@ function build(): Step[] {
       scene: () => coherentScene(src('stale'), { coherent: false, programs: ['stale', 'race'], highlight: ['cache0', 'cache1'] }),
       tries: [halted],
       more: {
+        numbers: `
+          <p>The price, counted from the gates: one cache is <strong>${groupDigits(C.privateCache)} NAND</strong>, of which the data array is ${groupDigits(C.data)} (${pct(C.data, C.privateCache)}); the tag array is
+          ${groupDigits(C.tags)} and the access decode ${groupDigits(C.access)}. The bus is ${groupDigits(C.bus)}. Two cores, two caches and the bus come to ${groupDigits(C.coherent)} NAND against ${groupDigits(C.dual)}
+          for the shared-memory dual-core: the caches and the bus add ${pct(C.coherent - C.dual, C.dual)}, almost all of it storage.</p>`,
         derive: `<p>Hit and miss cost. A hit: one tag compare, one data read, no stall. A miss with a clean victim: the grant cycle, then 4 cycles for the 4 words: ${1 + 4} bus cycles, after which the access is a hit
           (one more cycle). With a Modified victim the 4 write-back cycles come first: ${1 + 4 + 4}. The bus is held for the whole transaction, so the other core's misses wait behind it.</p>`,
         real: `<p>A real L1 line is 64 bytes and the fill is one beat of a wide bus or a burst of a few; here it is 16 bytes at a word per cycle so every cycle of a fill can be read on the panel.
@@ -70,10 +71,7 @@ function build(): Step[] {
         <span data-show="cache0.stags">a second copy of the tag array</span> read at the bus's index, written together with <span data-show="cache0.ctags">the core's copy</span>: a snoop and a core access never meet.
         The snoop port costs <strong>${groupDigits(C.snoop)} NAND</strong> per cache (the second array, its comparator, the logic that writes it): ${pct(C.snoop, C.cache)} of the cache. The control that makes it coherent is cheap;
         the storage is what costs.</p>
-        <p>Timing, in the order it happens. In the <em>grant cycle</em> <span data-show="bus.arb">the arbiter</span> picks the winner, and at that edge the <em>other</em> cache's copy changes: BusRd turns its M into S, BusRdX and
-        BusUpgr turn a hit into I, and a <em>flush</em> flip-flop notes that it held the line Modified. The next four cycles move the line a word at a time: after a flush the words come from the other cache's data array, through its
-        second read port, and are written to memory in the same cycle they enter the requester's cache; otherwise they come from memory. The last cycle writes the requester's state (M for a write, S for a read) and tag.
-        A BusUpgr is the grant cycle plus one. Changing the other copy at the grant edge, not at the end, is what makes the flush safe: from then on the other core cannot store into that line, so no write slips in behind words already sent.</p>
+        <p>A transaction is a <em>grant cycle</em>, in which the other cache's copy changes state, then four cycles that move the line a word at a time; the Derivation layer gives the timing cycle by cycle.</p>
         <p>Run <em>A stale copy</em> again: the 7 arrives. Core 0's store is a BusRdX that invalidates core 1's copy at its grant edge; core 1's second read is a BusRd that finds the line in core 0 as M, takes it as a Flush
         and leaves both copies S, with memory updated on the way.</p>
         <div class="try">Pick <em>Four accesses to x</em> and step it with the clock buttons. Before the last read, what state does each cache hold, and what does the trace say?</div>`,
@@ -97,7 +95,11 @@ function build(): Step[] {
         ],
       },
       more: {
-        derive: `<p>Transactions for the chapter's race, counted by the model and equal to the gates': ${run('race').bus} bus transactions (${run('race').rd} BusRd, ${run('race').rdx} BusRdX, ${run('race').upgr} BusUpgr) for 40 increments,
+        derive: `<p>Timing, in the order it happens. In the <em>grant cycle</em> <span data-show="bus.arb">the arbiter</span> picks the winner, and at that edge the <em>other</em> cache's copy changes: BusRd turns its M into S, BusRdX and
+          BusUpgr turn a hit into I, and a <em>flush</em> flip-flop notes that it held the line Modified. The next four cycles move the line a word at a time: after a flush the words come from the other cache's data array, through its
+          second read port, and are written to memory in the same cycle they enter the requester's cache; otherwise they come from memory. The last cycle writes the requester's state (M for a write, S for a read) and tag.
+          A BusUpgr is the grant cycle plus one. Changing the other copy at the grant edge, not at the end, is what makes the flush safe: from then on the other core cannot store into that line, so no write slips in behind words already sent.</p>
+          <p>Transactions for the chapter's race, counted by the model and equal to the gates': ${run('race').bus} bus transactions (${run('race').rd} BusRd, ${run('race').rdx} BusRdX, ${run('race').upgr} BusUpgr) for 40 increments,
           of which ${run('race').flushes} were Flushes. In turn: one core's <code>lw</code> misses and its <code>sw</code> upgrades, invalidating the other's copy; the other core's <code>sw</code> then needs a BusRdX. Three transactions for each two increments.
           Lost updates remain: coherence keeps the caches agreeing, it does not make a load, add and store atomic.</p>`,
         real: `<p>This is MSI. MESI adds an Exclusive state and a "shared" wire so that a read nobody else holds can later be written with no transaction; MOESI and MESIF let a cache answer from its copy instead of memory.

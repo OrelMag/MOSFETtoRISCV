@@ -56,6 +56,7 @@ export const NUDGES: Record<string, string> = {
   s_reg4: 'Holding is a choice made at every edge, keep the old value or take the new one, never made by stopping the clock.',
   s_reg16: 'Reuse what you just built.',
   s_icg: 'The enable may change at any moment; the clock that leaves must not. Something has to hold en still while the clock is high.',
+  m_acc: 'The top three bits of the word say what to do; the low five say where. Who needs to be told something?',
   t_scan: 'Each flip-flop chooses at every edge: what the circuit says, or what its neighbour held.',
   t_tests: 'A vector earns its place by the faults no other vector in your set catches.',
   s_cnt4: 'Something has to remember the count between edges, and something has to work out the next one.',
@@ -102,6 +103,7 @@ export const NUDGES: Record<string, string> = {
   y_final: 'An interrupt belongs to no instruction: ask which instruction it should look as if it came before, and whether the stage holds one at all.',
   y_tlb: 'Each entry answers the same question at once: is this my page? Then one of them is chosen, and the others are ignored.',
   y_walk: 'It is the same read done twice with different inputs. Decide what changes between the first and the second, and let the state choose.',
+  p_critical: 'Run the given program once and find where an interrupt would have to land to lose an increment. That window is what must be closed.',
   p_switch: 'The first instruction of the handler is the hardest: you have no free register. Find the instruction that gives you one.',
   // act 8: side quests
   n_float: 'Write the value as a power of two times a number between 1 and 2, then find where each part goes.',

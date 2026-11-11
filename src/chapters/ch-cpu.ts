@@ -3,6 +3,7 @@ import { alu, bitwise, shifter } from '../lib/alu';
 import { addSub } from '../lib/combinational';
 import { CONTROL } from '../lib/cpu';
 import { regfile } from '../lib/regfile';
+import { assemble } from '../riscv/asm';
 import { cpuState } from '../riscv/cosim';
 import { PROGRAMS } from '../riscv/programs';
 import { logicDepth, stats } from '../sim/stats';
@@ -431,6 +432,9 @@ export const chRegfile: Chapter = {
   ],
 };
 
+/** The assembler step's worked check: label addresses from pass 1, by the real assembler. */
+const TWO_PASS_SRC = ['start: li a0, 0x12845', '       addi a1, a0, 1', 'done:  j done'].join(String.fromCharCode(10));
+const TP = (() => { const r = assemble(TWO_PASS_SRC); return { done: r.labels.get('done')!, liWords: r.lines.filter((l) => l.srcLine === 1).length }; })();
 export const chIsa: Chapter = {
   id: 'isa', num: numOf('isa'), title: 'Instructions & assembly', level: 'ISA',
   blurb: 'RV32I encodings, an in-browser assembler, and an instruction-set simulator to run programs on.',
@@ -589,6 +593,14 @@ export const chIsa: Chapter = {
         the definition of what the hardware must do, and a disagreement on any register after any instruction is a hardware bug.</p>
         <div class="try">Edit the program: errors show up with their line numbers, and the machine code updates as you type.</div>`,
       widget: () => assemblerWorkspace(src('sum')),
+      challenge: {
+        kind: 'quiz',
+        question: 'In this program, what address does the assembler give the label <code>done</code>?<br><code>' + TWO_PASS_SRC.split(String.fromCharCode(10)).join('<br>') + "</code><br>(0x12845 does not fit addi's 12-bit constant.)",
+        options: ['0x' + TP.done.toString(16).toUpperCase().padStart(2, '0'), '0x' + (TP.done - 4).toString(16).toUpperCase().padStart(2, '0') + ', counting li as one word', '0x' + (TP.done + 4).toString(16).toUpperCase().padStart(2, '0'), '0x00, labels start at zero'],
+        answer: 0,
+        explain: 'Pass 1 only counts: li 0x12845 expands to lui + addi (2 words, ' + TP.liWords + ' counted), the addi is 1, so done is after ' + TP.done / 4 + ' words, at 0x' + TP.done.toString(16).toUpperCase().padStart(2, '0') + '. Only then can pass 2 encode the j, whose offset is 0.',
+        why: ['', 'li is a pseudo-instruction here with a constant too big for addi alone, so it is two words: the size is known before the encoding is.', 'Labels name the next instruction, not the one after it.', '0 is the address of start, the first label; done comes after the other instructions.'],
+      },
       more: {
         derive: `<p><strong>lui + addi rounds.</strong> addi adds a signed 12-bit value, so the upper part is (v + 0x800) &gt;&gt; 12: <code>li a0, 0x12845</code> becomes <code>lui a0, 0x13</code>;
           <code>addi a0, a0, -1979</code> (0x13000 − 0x7BB = 0x12845). <strong>auipc for addresses.</strong> <code>la a0, sym</code> is <code>auipc a0, hi</code>; <code>addi a0, a0, lo</code> and

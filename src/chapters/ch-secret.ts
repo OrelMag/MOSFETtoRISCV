@@ -27,6 +27,13 @@ const GATES = stats(m4Gates(U264.settings)).nands;
 const WHEEL = stats(wheelStage('I_f', 'Wheel I', [...ROTORS.I.wiring].map(idx))).nands;
 const P3 = periodOf(['I', 'II', 'III']), P2 = periodOf(['I', 'II', 'VI']), P8 = periodOf(['VI', 'VII', 'VIII']);
 
+/** Step 3's worked check: a crib slid along a ciphertext; a start is out wherever a crib letter lands on the same cipher letter. */
+const CRIB = 'WETTER', CIPHER = 'RWIVTYRESXBF';
+const CRIB_STARTS = CIPHER.length - CRIB.length + 1;
+const CRIB_OUT = Array.from({ length: CRIB_STARTS }, (_, i) => [...CRIB].some((c, j) => CIPHER[i + j] === c)).filter(Boolean).length;
+/** Clocks a byte, AES core against SHA-256 core (step 14). */
+const AES_CPB = COSTS.cores.aes_core.cycles / 16, SHA_CPB = COSTS.cores.sha_core.cycles / 64;
+
 const m4Scene = () => ({
   root: m4Gates(U264.settings),
   inputs: { key: idx('N'), load: 1, set_l: idx('J'), set_m: idx('N'), set_r: idx('A') },
@@ -122,6 +129,14 @@ export const chSecret: Chapter = {
         <p>So there are at most ${n0(involutions26())} permutations it could be at one position, and the wheels walk through them, one per key press. Compare this with what you have built: a gate computes its output from levels; here the logic is a single closed path, and the "computation" is which contacts are touching.</p>
         <p class="try"><b>Try:</b> click letters and press the step button. Whatever you do, the count of letters that light themselves stays 0 and every partner lights its letter back.</p>`,
       widget: () => withModel(permutationWidget(), enigma3d({ view: 'path' })),
+      challenge: {
+        kind: 'quiz',
+        question: 'At one wheel position the machine turns the letter A into X. At that same position, what does it turn X into?',
+        options: ['A', 'Some other letter, found by running the wheels on', 'X, because no letter is excluded for X', 'It depends on the plugboard, which can break the pairing'],
+        answer: 0,
+        explain: 'One position is P⁻¹ W⁻¹ U W P with U made of 13 swaps, and a swap seen through anything is still a swap. So each position is its own inverse, and ' + n0(involutions26()) + ' such permutations are possible in all. This is why the same setting deciphers what it enciphered.',
+        why: ['', 'The wheels stand still between a press and its partner: one position is one fixed permutation, applied both ways.', 'Nothing maps to itself at any position: the pressed key has cut off its own lamp.', 'The plugboard is a set of swaps too, and a swap seen through swaps is a swap: the pairing holds with or without plugs.'],
+      },
     },
     {
       title: 'The same machine in gates',
@@ -141,6 +156,14 @@ export const chSecret: Chapter = {
         <p class="try"><b>Try:</b> drag the crib along U-264's message. About three places in ten fail at once: a ten-letter crib prunes, and a longer one prunes more. Then go to where it really was.</p>
         <details class="deeper"><summary>Where this comes from</summary><p><a href="https://en.wikipedia.org/wiki/Cryptanalysis_of_the_Enigma" target="_blank" rel="noopener">Cryptanalysis of the Enigma</a> (Wikipedia, with its citations to Rejewski, Welchman and Hinsley): the Poles' work from 1 September 1932, the repeated indicator, operators' "cillies". The key-space product agrees with <a href="https://www.cryptomuseum.com/crypto/enigma/working.htm" target="_blank" rel="noopener">Crypto Museum</a>. The three-wheel period is computed here as ${n0(P3)} (26 × 25 × 26, with the middle wheel's double step), and the test suite checks the computation.</p></details>`,
       widget: cribWidget,
+      challenge: {
+        kind: 'quiz',
+        question: 'The ciphertext is ' + CIPHER + '. You guess the plaintext holds ' + CRIB + ' somewhere inside it. At how many of the ' + CRIB_STARTS + ' possible places can you rule the guess out, with no key at all?',
+        options: [String(CRIB_OUT), '0: with the key unknown, any place is possible', String(CRIB_STARTS), '1'],
+        answer: 0,
+        explain: 'No letter enciphers to itself, so the crib cannot stand where one of its letters sits above the same cipher letter. Sliding ' + CRIB + ' along ' + CIPHER + ' that happens at ' + CRIB_OUT + ' of the ' + CRIB_STARTS + ' places, leaving ' + (CRIB_STARTS - CRIB_OUT) + '.',
+        why: ['', 'The test needs no key: it uses only the fact that a letter never maps to itself.', 'That would rule out every place; the crib survives wherever no letter coincides.', 'Count every place where a crib letter lies directly over the same cipher letter, not just the first.'],
+      },
     },
     {
       title: 'The Bombe: going round the plugboard',
@@ -195,6 +218,14 @@ export const chSecret: Chapter = {
         <p>The whole core uses that one round again and again: a state register, a round-key register, a key-schedule step of ${n0(COSTS.parts.aes_key_step.nands)} NANDs and a counter. That is <b>${n0(COSTS.cores.aes_core.nands)} NANDs</b> and ${COSTS.cores.aes_core.cycles} clocks a block, at a period of ${COSTS.cores.aes_core.period} gate delays. The Enigma in gates took ${n0(GATES)}. For under three times the gates you get a key you can change by writing a register, and a key space no search will finish.</p>
         <p class="try"><b>Try:</b> toggle <em>last</em> and watch the round's output <em>y</em> change. The next step runs the whole core.</p>`,
       scene: () => ({ ...aesRoundScene(), path: ['round'] }),
+      challenge: {
+        kind: 'quiz',
+        question: 'Of the four steps of an AES round, which one costs no gates at all?',
+        options: ['ShiftRows', 'AddRoundKey', 'MixColumns', 'SubBytes'],
+        answer: 0,
+        explain: 'ShiftRows only moves bytes to other columns: wires going elsewhere. AddRoundKey is XORs, MixColumns is ' + n0(COSTS.parts.aes_mixcolumn.nands) + " NANDs a column, and SubBytes is " + n0(COSTS.parts.aes_subbytes.nands) + " of the round's " + n0(COSTS.parts.aes_round.nands) + ' NANDs.',
+        why: ['', 'Mixing in the key takes an XOR for each of the 128 bits.', 'It is built from XORs, four blocks per round.', 'Sixteen S-boxes: the non-linear step is where most of the cost goes.'],
+      },
     },
     {
       title: 'The core runs the standard',
@@ -220,6 +251,14 @@ export const chSecret: Chapter = {
         <p class="try"><b>Try:</b> look at ECB, then CTR, then what the same nonce twice gives. No key was used in that last picture.</p>
         <details class="deeper"><summary>Where this comes from</summary><p><a href="https://csrc.nist.gov/pubs/sp/800/38/a/final" target="_blank" rel="noopener">SP 800-38A</a> for ECB and CTR, <a href="https://csrc.nist.gov/pubs/sp/800/38/d/final" target="_blank" rel="noopener">SP 800-38D</a> for GCM. CTR and GCM here are checked against Node's crypto and GCM's published test cases.</p></details>`,
       widget: modesWidget,
+      challenge: {
+        kind: 'quiz',
+        question: 'A message is enciphered in CTR mode. An attacker flips one bit of the ciphertext in transit. What does the receiver get?',
+        options: ['The same bit flipped in the plaintext, and nothing notices', 'Garbage in that whole 16-byte block', 'The message is refused, because the counter no longer matches', 'The original plaintext: CTR corrects single-bit errors'],
+        answer: 0,
+        explain: 'CTR XORs a keystream into the message, so a flipped ciphertext bit flips exactly that plaintext bit. Under GCM the same flip changes the tag computed over the ciphertext, and the message is refused.',
+        why: ['', 'That is what a flipped bit does in a chained mode; CTR has no chaining and the damage stays in one bit.', 'The counter is not in the ciphertext. Nothing in CTR checks anything; the tag of GCM is what refuses.', 'CTR has no redundancy to correct anything.'],
+      },
     },
     {
       title: 'A fingerprint: SHA-256',
@@ -237,6 +276,14 @@ export const chSecret: Chapter = {
         <p>The core adds a message schedule of ${n0(COSTS.parts.sha_schedule.nands)} NANDs, because it stores 16 words, and a table of constants of ${n0(COSTS.parts.sha_k_rom.nands)}. In all <b>${n0(COSTS.cores.sha_core.nands)} NANDs</b> and ${COSTS.cores.sha_core.cycles} clocks per 64 bytes, against AES's ${COSTS.cores.aes_core.cycles} clocks per 16. Per byte that is ${(COSTS.cores.sha_core.cycles / 64).toFixed(2)} clocks against AES's ${(COSTS.cores.aes_core.cycles / 16).toFixed(2)}, at a period of ${COSTS.cores.sha_core.period} gate delays against ${COSTS.cores.aes_core.period}.</p>
         <p class="try"><b>Try:</b> open the block to see the round on the first round of "abc", as NIST's worked example has it. Open Σ0 and find that its rotations cost nothing.</p>`,
       scene: shaRoundScene,
+      challenge: {
+        kind: 'quiz',
+        question: 'The AES core takes ' + COSTS.cores.aes_core.cycles + ' clocks for a 16-byte block, the SHA-256 core ' + COSTS.cores.sha_core.cycles + ' for a 64-byte block. Which needs fewer clocks per byte of data?',
+        options: ['AES, ' + AES_CPB.toFixed(2) + ' against ' + SHA_CPB.toFixed(2), 'AES, by a factor of ' + (COSTS.cores.sha_core.cycles / COSTS.cores.aes_core.cycles).toFixed(1) + ', since ' + COSTS.cores.aes_core.cycles + ' is far less than ' + COSTS.cores.sha_core.cycles, 'SHA-256, since it takes a bigger block', 'They are the same: both do one round a clock'],
+        answer: 0,
+        explain: 'Divide by the block size: ' + COSTS.cores.aes_core.cycles + ' / 16 = ' + AES_CPB.toFixed(2) + ' clocks a byte, ' + COSTS.cores.sha_core.cycles + ' / 64 = ' + SHA_CPB.toFixed(2) + '. A block of SHA-256 is four times as long, so comparing clocks a block is misleading.',
+        why: ['', 'That compares clocks a block; the SHA block holds four times the data.', 'It does hold more, but the ' + COSTS.cores.sha_core.cycles + ' clocks are for all of it: ' + SHA_CPB.toFixed(2) + ' a byte is still more than AES.', 'Both do a round a clock, but 64 rounds for 64 bytes against ' + (COSTS.cores.aes_core.cycles - 1) + ' for 16 are not the same rate.'],
+      },
     },
     {
       title: 'The SHA-256 core runs "abc"',
@@ -273,6 +320,14 @@ export const chSecret: Chapter = {
         <p>One more thing the Enigma never had: the session's keys come only from the X25519 exchange, and are thrown away. Steal the server's signing key tomorrow and yesterday's recordings still stay shut. This is <b>forward secrecy</b>. A captured key list opened everything sent under it.</p>
         <p>The next step runs this for real. The check is at <em>A key you do not trust</em> and <em>Trust no one</em>.</p>`,
       widget: mitmWidget,
+      challenge: {
+        kind: 'quiz',
+        question: "A man in the middle swaps the server's key share for one of his own. Why does the server's signature in the handshake expose him?",
+        options: ['It signs a hash of the whole conversation, including both key shares, so the share the client saw is not the one that was signed', 'The signature encrypts the key share, so he cannot read it', "The signature proves the server's name, which he cannot copy", "He cannot copy the client's random number"],
+        answer: 0,
+        explain: "Only the server's private key can sign, and what it signed covers the shares it sent. A substituted share changes the transcript, so the signature fails; replaying an old signature fails too, as the transcript holds the client's fresh random.",
+        why: ['', 'A signature protects nothing from being read: the shares are public anyway.', 'A name only means something through a certificate, and this client checks no names. The signature over the transcript does the work.', 'It is the signed transcript, not any single field, that he cannot forge.'],
+      },
     },
     {
       title: 'A TLS 1.3 handshake',

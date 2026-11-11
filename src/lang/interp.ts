@@ -258,6 +258,11 @@ class Interp {
       if (s.length !== 1) throw new PyError(`TypeError: ord() expected a str of length 1, got ${s.length}`, e.line);
       return s.charCodeAt(0);
     }
+    // Chapter 'threads''s builtins: one thread here. spawn runs the function to its end at once (so the output is the program's with the
+    // second thread run first and whole), lock / unlock / join / signal have nothing to wait for; wait would wait for ever.
+    if (e.fn === 'spawn') { this.call({ kind: 'call', fn: (e.args[0] as { id: string }).id, args: [], line: e.line }, null); return 0; }
+    if (e.fn === 'wait') throw new PyError('wait() would wait for ever: the interpreter runs one thread, so no other thread can signal', e.line);
+    if (e.fn === 'join' || e.fn === 'lock' || e.fn === 'unlock' || e.fn === 'signal') { e.args.forEach((a) => this.expr(a, fr)); return 0; }
     const args = e.args.map((a) => this.expr(a, fr));
     switch (e.fn) {
       case 'print':

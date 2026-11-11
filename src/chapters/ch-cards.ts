@@ -177,29 +177,29 @@ export const chCards: Chapter = {
       },
     },
     {
-      title: 'A program on cards',
+      title: 'A program on cards, and the sorter',
       body: `
         <p>A program was punched one statement a card (a <em>source deck</em>), and an <span data-ahead="assembly">assembler (a program that turns mnemonics into machine words)</span> or compiler punched out the
         result as an <strong>object deck</strong> of machine words in binary. Here each object card holds one RISC-V
         instruction: the 32-bit word along row 9 from column 1, most significant bit first, its source line and the word in
-        hex printed along the top. Real machines packed more: the IBM 704 read each of a card's 12 rows as two 36-bit words.
-        One word a card wastes 928 of 960 positions, and is readable at a glance.</p>
-        <p>Columns 73–80 hold a <strong>sequence number</strong>, counted in tens so a card can be slipped in later (the IBM 704's card reader read only 72 columns, so FORTRAN never saw these eight, which left them free for this). A dropped deck goes back on a <strong>card sorter</strong>: an IBM 082 drops
+        hex printed along the top. One word a card wastes 928 of 960 positions, and is readable at a glance.</p>
+        <p>Columns 73–80 hold a <strong>sequence number</strong>, counted in tens so a card can be slipped in later. A dropped deck goes back on a <strong>card sorter</strong>: an IBM 082 drops
         each card into the pocket of the digit in one column, 650 cards a minute. Stack the pockets 0 to 9 and sort on the
         next column to the left: after the last pass the deck is in order. That is the radix sort, least significant digit
-        first, a pass per digit, each pass stable.</p>
-        <p>Why the sorter needs no comparison: it never asks which of two cards is larger. It looks at one column of one card and drops the card in a pocket, and
-        <em>stability</em> does the rest. Because each pass keeps the order of cards that fall in the same pocket, a later pass on a more significant digit cannot disturb the order
-        the earlier passes made among equal digits. The deck is guaranteed sorted only after the pass on the most significant column, which also tells the operator when to stop.</p>
+        first, a pass per digit. The sorter never asks which of two cards is larger: each pass is <em>stable</em> (cards in one pocket keep their order), and that does the rest.</p>
         <div class="try">The deck is the bubble-sort sample, ${SORT_CARDS} cards. Drop it, then sort it on the sorter and count the passes.</div>`,
       more: {
-        derive: `<p>Claim: after the pass on digit k (counting from the right), the deck is sorted on its last k digits. For k = 1 it is true by construction. Suppose it holds for k − 1 and the pass on digit k
+        derive: `<p>Why the sorter needs no comparison: it never asks which of two cards is larger. It looks at one column of one card and drops the card in a pocket, and
+          stability does the rest. Because each pass keeps the order of cards that fall in the same pocket, a later pass on a more significant digit cannot disturb the order
+          the earlier passes made among equal digits. The deck is guaranteed sorted only after the pass on the most significant column, which also tells the operator when to stop.</p>
+          <p>Claim: after the pass on digit k (counting from the right), the deck is sorted on its last k digits. For k = 1 it is true by construction. Suppose it holds for k − 1 and the pass on digit k
           drops each card in the pocket of that digit. Two cards in different pockets are in the order of digit k, whatever the lower digits. Two cards in the same pocket keep the order they had, which is the order on the lower k − 1
           digits. So the deck is sorted on k digits. A key of d digits takes d passes, independent of the number of cards: the deck of N cards takes d × N / ${SORTER_CPM} minutes at the 082's ${SORTER_CPM} cards a minute.</p>`,
         numbers: `<table class="mini"><tr><th>key digits</th><th>passes</th><th>1000 cards</th><th>10 000 cards</th></tr>${[1, 2, 3, 4, 6].map((d) => `<tr><td>${d}</td><td>${d}</td><td>${(d * 1000 / SORTER_CPM).toFixed(1)} min</td><td>${(d * 10000 / SORTER_CPM / 60).toFixed(1)} h</td></tr>`).join('')}</table>`,
         pitfall: `<p>Sorting from the most significant column "to save passes". The first pass gives ten pockets; each pocket would then need sorting alone on the next column, ten sub-piles of ten sub-piles, and the operator
           has to keep track of all of them by hand. Least significant first needs only the one stack and one rule.</p>`,
-        real: `<p>This is the least-significant-digit radix sort, the same algorithm as in a modern library, with the card sorter's pockets as the buckets. Knuth's sorting-by-distribution section describes this card method.
+        real: `<p>Real machines packed more than one word a card: the IBM 704 read each of a card's 12 rows as two 36-bit words. Its card reader read only 72 columns, so FORTRAN never saw columns 73 to 80, which left them free for sequence numbers.</p>
+          <p>This is the least-significant-digit radix sort, the same algorithm as in a modern library, with the card sorter's pockets as the buckets. Knuth's sorting-by-distribution section describes this card method.
           Merging two sorted decks was the job of another machine, the collator.</p>`,
       },
       widget: () => deckWidget(),
@@ -277,13 +277,13 @@ export const chCards: Chapter = {
         <p>The part in the step before is a machine. A <strong>picker knife</strong> slides the bottom card out of the
         hopper, <strong>feed rolls</strong> carry it past the read station, and more rolls drop it in the
         <strong>stacker</strong>, in the order it came. What differs between readers is how the station senses the holes.</p>
-        <p>The IBM 711, the reader of the 701 and 704 (150 to 250 cards a minute), takes the card crosswise, 9 edge first, under
-        a row of wire <strong>brushes</strong>, one over each column, with a brass contact roll below. Where a brush finds a hole it
+        <p>Readers sense the holes in one of two ways. A <strong>brush</strong> reader takes the card crosswise, 9 edge first, under
+        a row of wire brushes, one over each column, with a brass contact roll below. Where a brush finds a hole it
         touches the roll and a circuit closes, as Hollerith's pins did in mercury. Row 9 comes under the brushes first, so the
         row this chapter's object cards keep their word in is the first one read: row 9 of columns 1–32 is the word on
-        <code>data</code>. The 704 read every row this way, 12 rows of 72 columns as 24 words of 36 bits.</p>
-        <p>The IBM 2501 of the System/360 years (600 or 1000 cards a minute) takes the card lengthwise, column 1 first, between a lamp and twelve
-        <strong>photocells</strong>, one per row: it reads a column at a time, 12 bits, which is the reader part's column mode.
+        <code>data</code>.</p>
+        <p>A <strong>photocell</strong> reader takes the card lengthwise, column 1 first, between a lamp and twelve
+        photocells, one per row: it reads a column at a time, 12 bits, which is the reader part's column mode.
         Light needs no contact, so nothing wears and the card can move faster. Either way the bits leave on wires: ${N} cards
         take ${EDGES_ALL} edges row by row and ${EDGES_COLS} column by column, with next held at 1.</p>
         <div class="try">Run the deck row by row and watch the lamps behind: data, then ready, empty and next. Then turn
@@ -297,7 +297,8 @@ export const chCards: Chapter = {
           Row by row the 32 bits come on 32 wires at once; column by column they come one a column, and a column's 12 rows on 12 wires.</p>`,
         pitfall: `<p>Thinking the brushes read the whole card at once. They read one row at a time as the card passes, and a machine that needs more than one row (the 704 needed all
           twelve) has to catch each row as it goes by, timed by a wheel turning with the rolls. The reader part here reads row 9 only, and holds the card still until it is taken.</p>`,
-        real: `<p>Brushes wear, gather card dust, and can touch through a thin spot that is not a hole. The IBM 1402 read every card at two brush stations and compared the
+        real: `<p>The machines: the IBM 711, the reader of the 701 and 704 (150 to 250 cards a minute), was a brush reader; the 704 read every row this way, 12 rows of 72 columns as 24 words of 36 bits. The IBM 2501 of the System/360 years (600 or 1000 cards a minute) was a photocell reader.</p>
+          <p>Brushes wear, gather card dust, and can touch through a thin spot that is not a hole. The IBM 1402 read every card at two brush stations and compared the
           readings; photocell readers such as the 2501 had no brushes to wear, and reading a column at a time needs twelve sensors instead of eighty.</p>`,
       },
       widget: () => cardReader3d(SUM_DECK, FEED, SUM.lines.map((l) => l.text.trim())),

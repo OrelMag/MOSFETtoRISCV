@@ -2,7 +2,7 @@
 // global lists, global scalars and each function's locals (Python's rule: a name assigned in a function is
 // local unless declared global), with the errors Python would raise, found before anything runs.
 
-import { BUILTINS, MEMORY_BUILTINS, PyError } from './ast';
+import { BUILTINS, MEMORY_BUILTINS, PyError, THREAD_BUILTINS } from './ast';
 import type { Expr, Module, Stmt } from './ast';
 import { constValue } from './parse';
 import { typePass } from './types';
@@ -52,7 +52,7 @@ export function walkExpr(e: Expr, f: (e: Expr) => void): void {
     case 'unary': walkExpr(e.arg, f); break;
     case 'cmp': e.args.forEach((a) => walkExpr(a, f)); break;
     // len(xs) is a constant: its argument names a list (or a str variable, which the caller checks), it is not read as a value
-    case 'call': if (e.fn !== 'len' || e.args[0]?.kind !== 'name') e.args.forEach((a) => walkExpr(a, f)); break;
+    case 'call': if ((e.fn !== 'len' && e.fn !== 'spawn') || e.args[0]?.kind !== 'name') e.args.forEach((a) => walkExpr(a, f)); break;
     case 'index': walkExpr(e.index, f); break;
     case 'ifexp': walkExpr(e.test, f); walkExpr(e.yes, f); walkExpr(e.no, f); break;
     case 'list': e.items.forEach((a) => walkExpr(a, f)); if (e.repeat) walkExpr(e.repeat, f); break;
@@ -201,6 +201,13 @@ export function analyze(mod: Module): Scope {
           if (e.fn === 'abs') { if (n !== 1) throw new PyError('abs() takes one argument', e.line); return; }
           if (e.fn === 'min' || e.fn === 'max') { if (n < 2) throw new PyError(`${e.fn}() takes two or more arguments`, e.line); return; }
           if (Object.hasOwn(MEMORY_BUILTINS, e.fn)) { if (n !== MEMORY_BUILTINS[e.fn]) throw new PyError(`${e.fn}() takes ${MEMORY_BUILTINS[e.fn]} argument${MEMORY_BUILTINS[e.fn] === 1 ? '' : 's'}, got ${n}`, e.line); return; }
+          if (e.fn === 'spawn') {
+            const a = e.args[0], g = n === 1 && a.kind === 'name' ? funcs.get(a.id) : undefined;
+            if (!g) throw new PyError('spawn() takes the name of a function: spawn(worker)', e.line);
+            if (g.params.length) throw new PyError(`a thread starts with no arguments: ${g.name}() takes ${g.params.length}`, e.line);
+            return;
+          }
+          if (Object.hasOwn(THREAD_BUILTINS, e.fn)) { const k = THREAD_BUILTINS[e.fn]; if (n !== k) throw new PyError(`${e.fn}() takes ${k === 0 ? 'no' : k} argument${k === 1 ? '' : 's'}, got ${n}`, e.line); return; }
           if (e.fn === 'range') throw new PyError('range() only appears in a for loop', e.line);
           const f = funcs.get(e.fn);
           if (!f) throw new PyError(lists.has(e.fn) || globals.includes(e.fn) || isLocal(e.fn) ? `"${e.fn}" is not a function` : `function "${e.fn}" is not defined`, e.line);

@@ -2,6 +2,7 @@ import type { ComponentDef } from '../sim/types';
 import { bcdAdder } from '../lib/adders';
 import { demux, encoder, magComparator, priorityEncoder } from '../lib/coding';
 import { addSub, decoder, FULL_ADDER, FULL_ADDER_HA, HALF_ADDER, busMux2, muxTree, rca } from '../lib/combinational';
+import { evalOnce, simulate } from '../sim/harness';
 import { flatten } from '../sim/flatten';
 import { logicDepth, stats } from '../sim/stats';
 import { AND, MUX2 } from '../lib/gates';
@@ -501,6 +502,8 @@ export const chAdders: Chapter = {
   ],
 };
 
+const ENC_TWO = evalOnce(simulate(encoder(8)), [0b00011000])[0];
+
 export const chRouting: Chapter = {
   id: 'routing', num: numOf('routing'), title: 'Choosing & routing', level: 'Combinational blocks',
   blurb: 'Decoders turn numbers into choices; multiplexers make the choice.',
@@ -770,6 +773,14 @@ export const chRouting: Chapter = {
           ${[4, 8, 16, 32].map((n) => `<tr><td>${n}</td><td>${stats(encoder(n)).nands}</td><td>${logicDepth(encoder(n))}</td></tr>`).join('')}</table>`,
       },
       scene: () => ({ root: encoder(8), inputs: { x: 0b00100000 } }),
+      challenge: {
+        kind: 'quiz',
+        question: 'The 8-input encoder is given x3 = 1 and x4 = 1 at the same time. What does y read?',
+        options: [String(ENC_TWO) + ': the OR of the indices 3 and 4, neither of the two', '3, the lower request', '4, the higher request', '0: two requests cancel'],
+        answer: 0,
+        explain: 'Output bit j is the OR of every input whose index has bit j set. Indices 0b011 and 0b100 together light all three bits: y = ' + ENC_TWO + '. Nothing in an encoder checks that exactly one input is high; the priority encoder is for that.',
+        why: ['', 'Choosing the lower one would take a comparison, and the encoder has none: only ORs.', 'Choosing the higher one is what the priority encoder does; this circuit does not.', 'There is no subtraction anywhere: only ORs, which cannot cancel.'],
+      },
     },
     {
       title: 'Priority: the highest request wins',
