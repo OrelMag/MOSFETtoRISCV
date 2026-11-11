@@ -22,6 +22,9 @@ const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
 const M = metrics(1);
 const TH = thresholds(KEEPER);
 const years = (stages: number, fclk: number, fdata = 100e6, logic = 8) => fmtLog10(log10Mtbf({ stages, fclk, fdata, logic }));
+const m1 = () => years(1, 1e9), m2 = () => years(2, 1e9), m3 = () => years(3, 1e9), h2 = () => years(2, 2e9);
+const lone = () => ({ logic: 30, m: years(1, 1e9, 100e6, 30) });
+const slow = () => fmtLog10(log10Mtbf({ stages: 2, fclk: 1e9, fdata: 100e6, pair: { tau: 2 * TAU_PS, t0: T0_PS } }));
 
 export const chClocks: Chapter = {
   id: 'clocks', num: numOf('clocks'), title: 'Crossing clocks', level: 'Communication',
@@ -165,9 +168,6 @@ export const chClocks: Chapter = {
     {
       title: 'Metastability',
       get body() {
-        const m1 = years(1, 1e9), m2 = years(2, 1e9), m3 = years(3, 1e9), h2 = years(2, 2e9);
-        const lone = { logic: 30, m: years(1, 1e9, 100e6, 30) };
-        const slow = fmtLog10(log10Mtbf({ stages: 2, fclk: 1e9, fdata: 100e6, pair: { tau: 2 * TAU_PS, t0: T0_PS } }));
         const tau = (dv: number) => nf(Math.log(0.9 / dv), 1);
         return `
         <p>Sample a signal in the window and the latch's two nodes start almost balanced, apart by some Δ that depends on exactly when the data moved. A cross-coupled pair amplifies a difference exponentially, V(t) = Δ·e<sup>t/τ</sup>,
@@ -175,18 +175,25 @@ export const chClocks: Chapter = {
         sits between the levels, where the next gate can read it either way.</p>
         <p>As a failure rate: the pair is undecided after t<sub>r</sub> with probability e<sup>−t<sub>r</sub>/τ</sup>, and a change lands in the window T0 wide at a rate of T0 · fclk · fdata, so</p>
         <p style="text-align:center"><strong>MTBF = e<sup>t<sub>r</sub>/τ</sup> / (T0 · f<sub>clk</sub> · f<sub>data</sub>)</strong>.</p>
-        <p>Take τ = ${nf(TAU_PS / PS_PER_NAND, 1)} NAND delays (${nf(TAU_PS, 0)} ps), T0 = 1 delay (${T0_PS} ps), a 1 GHz receiver and data at 100 MHz. The window is hit ${windowRate(1e9, 1e8).toExponential(1)} times a second. (The budget here charges clock-to-q and setup ${CLK_TO_Q} and ${SETUP} delays, as static timing does; the window measured in chapter 8 was smaller, so these figures err on the safe side.) A single flop followed by 8 NANDs of logic has t<sub>r</sub> = ${nf(resolutionTime(1, 1000, 8 * PS_PER_NAND), 0)} ps and an MTBF of ${m1}, already safe in this model. What a lone flop lacks is margin: its budget is the period less clock-to-q, setup and the logic behind it. Let the logic fill most of the period (${lone.logic} NANDs, ${lone.logic * PS_PER_NAND} ps) and t<sub>r</sub> falls to ${nf(resolutionTime(1, 1000, lone.logic * PS_PER_NAND), 0)} ps, MTBF ${lone.m}. A second flop with nothing between them fixes t<sub>r</sub> at a period less clock-to-q and setup whatever the logic is: ${nf(resolutionTime(2, 1000), 0)} ps, MTBF ${m2}. A third: ${m3}. Doubling the clock to 2 GHz takes the two-flop version to ${h2}, and the lone flop with 8 NANDs of logic to ${years(1, 2e9)}. So two flops are the default because they take the logic out of the budget, and a third is added where the clock rate eats the period.</p>
-        <p>Notice what dominates: the exponent. With τ doubled to ${nf((2 * TAU_PS) / PS_PER_NAND, 1)} NAND delays the two-flop figure at 1 GHz falls from ${m2} to ${slow}. The constants here are illustrative, so the sensitivity is the lesson: MTBF is exponential in t<sub>r</sub>/τ, and a factor of two in τ moves the answer by tens of orders of magnitude.</p>
-        <p><strong>What these figures are.</strong> The gate simulator resolves a balanced pair in zero time (<code>relax()</code> in gatesim.ts, Gauss–Seidel until one side wins) and cannot time a real race, so every number on this page is the
-        model's. The constants are illustrative, tied to the book's delay per NAND; a library cell has its own τ and T0, measured. The gates in the next steps show the structure and the latency of a synchronizer, and those are exact.</p>
-        <p>T0 is narrower than the setup + hold window of the previous step (1 delay against ${MS_TIMING().setup + MS_TIMING().hold}). The window is where the captured value is uncertain; T0 is the part of it where the decision takes unboundedly long, the sliver around the exact balance point, and it is what enters the MTBF.</p>`;
+        <p>Take τ = ${nf(TAU_PS / PS_PER_NAND, 1)} NAND delays (${nf(TAU_PS, 0)} ps), T0 = 1 delay (${T0_PS} ps), a 1 GHz receiver and data at 100 MHz. The window is hit ${windowRate(1e9, 1e8).toExponential(1)} times a second. A single flop followed by 8 NANDs of logic has t<sub>r</sub> = ${nf(resolutionTime(1, 1000, 8 * PS_PER_NAND), 0)} ps and an MTBF of ${m1()}, already safe in this model. What a lone flop lacks is margin: its budget is the period less clock-to-q, setup and the logic behind it. Let the logic fill most of the period (${lone().logic} NANDs, ${lone().logic * PS_PER_NAND} ps) and t<sub>r</sub> falls to ${nf(resolutionTime(1, 1000, lone().logic * PS_PER_NAND), 0)} ps, MTBF ${lone().m}. A second flop with nothing between them fixes t<sub>r</sub> at a period less clock-to-q and setup whatever the logic is: ${nf(resolutionTime(2, 1000), 0)} ps, MTBF ${m2()}. A third: ${m3()}. So two flops are the default because they take the logic out of the budget, and a third is added where the clock rate eats the period.</p>
+        <p>Notice what dominates: the exponent. With τ doubled to ${nf((2 * TAU_PS) / PS_PER_NAND, 1)} NAND delays the two-flop figure at 1 GHz falls from ${m2()} to ${slow()}. The constants here are illustrative, so the sensitivity is the lesson: MTBF is exponential in t<sub>r</sub>/τ, and a factor of two in τ moves the answer by tens of orders of magnitude.</p>`;
       },
       widget: metastableWidget,
       more: {
         derive: `<p>Let a change land uniformly in the period, so the pair starts with a difference proportional to the distance of the change from the edge, within the window of width T0. The chance that the pair is still undecided after t<sub>r</sub> is the chance that Δ &lt; V·e<sup>−t<sub>r</sub>/τ</sup>, which for a uniform Δ over the window scales as e<sup>−t<sub>r</sub>/τ</sup>.
           Multiply by the rate of events in the window, fclk · fdata · T0, for the failure rate. Its inverse is the MTBF.</p>`,
+        numbers: `<p>Resolution time and MTBF for the configurations above (data at 100 MHz). The budget charges clock-to-q and setup ${CLK_TO_Q} and ${SETUP} delays, as static timing does; the window measured in chapter 8 was smaller, so these figures err on the safe side.</p>
+          <table class="mini"><tr><th>synchronizer</th><th>t<sub>r</sub></th><th>MTBF at 1 GHz</th><th>MTBF at 2 GHz</th></tr>
+          <tr><td>one flop, 8 NANDs behind</td><td>${nf(resolutionTime(1, 1000, 8 * PS_PER_NAND), 0)} ps</td><td>${m1()}</td><td>${years(1, 2e9)}</td></tr>
+          <tr><td>one flop, ${lone().logic} NANDs behind</td><td>${nf(resolutionTime(1, 1000, lone().logic * PS_PER_NAND), 0)} ps</td><td>${lone().m}</td><td></td></tr>
+          <tr><td>two flops</td><td>${nf(resolutionTime(2, 1000), 0)} ps</td><td>${m2()}</td><td>${h2()}</td></tr>
+          <tr><td>three flops</td><td></td><td>${m3()}</td><td></td></tr></table>
+          <p>With τ doubled the two-flop figure at 1 GHz is ${slow()}.</p>`,
         real: `<p>τ and T0 are characterized per flip-flop cell by sweeping the data arrival against the edge and fitting the growth of clk-to-q. τ shrinks with the technology (about 10 to 30 ps in 28 nm, a few ps for the fastest cells), which is why the same two-flop synchronizer is safe at 1 GHz and marginal at 4 GHz.</p>`,
-        pitfall: `<p>Reading 1 − e<sup>−t/τ</sup> as "mostly resolved". The tail is the whole story: a probability of 10<sup>−20</sup> per event is still a failure within the life of a product at these rates. A metastable output also does not pause the chip. It can reach the next flop as a runt, and be read as 0 by one gate and as 1 by another.</p>`,
+        pitfall: `<p>Reading 1 − e<sup>−t/τ</sup> as "mostly resolved". The tail is the whole story: a probability of 10<sup>−20</sup> per event is still a failure within the life of a product at these rates. A metastable output also does not pause the chip. It can reach the next flop as a runt, and be read as 0 by one gate and as 1 by another.</p>
+          <p><strong>What these figures are.</strong> The gate simulator resolves a balanced pair in zero time (<code>relax()</code> in gatesim.ts, Gauss–Seidel until one side wins) and cannot time a real race, so every number on this page is the
+          model's. The constants are illustrative, tied to the book's delay per NAND; a library cell has its own τ and T0, measured. The gates in the next steps show the structure and the latency of a synchronizer, and those are exact.</p>
+          <p>T0 is narrower than the setup + hold window of the previous step (1 delay against ${MS_TIMING().setup + MS_TIMING().hold}). The window is where the captured value is uncertain; T0 is the part of it where the decision takes unboundedly long, the sliver around the exact balance point, and it is what enters the MTBF.</p>`,
       },
       challenge: {
         kind: 'quiz',
