@@ -370,6 +370,18 @@ export const chBinary: Chapter = {
         <p>Long binary numbers are hard to read, so we write them in <strong>hexadecimal</strong>, one digit (0–9,
         A–F) for every four bits. <code>0b1010_1111</code> is <code>0xAF</code> is ${parseInt('10101111', 2)}. The grouping costs nothing in hardware:
         a hex digit is four wires read together.</p>
+        <p><strong>Converting.</strong> To decimal, work from the left and, for each digit, <em>double the total so far and add the digit</em> (for hex, multiply by 16).
+        The method needs no table of powers: <code>0b1011_0110</code> goes 1, then 1·2 + 0 = 2, then 2·2 + 1 = 5, then 11, then 22, then 45, then 91 and
+        91·2 + 0 = ${parseInt('10110110', 2)}; in hex, <code>0x2F5</code> is (2·16 + 15)·16 + 5 = ${0x2f5}. To binary from decimal, halve and keep the remainders (the widget below shows the halving
+        for any number you set), or go straight to hex by dividing by 16.</p>
+        <p><strong>Fractions</strong> continue the pattern to the right of the point, with weights ½, ¼, ⅛…, and convert the other way by <em>doubling and taking the integer bit</em>. For 0.3125:
+        ×2 = 0.625 gives bit 0; 0.625 × 2 = 1.25 gives 1, keep 0.25; 0.25 × 2 = 0.5 gives 0; 0.5 × 2 = 1.0 gives 1 and nothing is left. So 0.3125 = <code>0.0101</code>₂
+        (¼ + 1⁄16). Most decimal fractions never finish: 0.1 × 2 gives 0.2, 0.4, 0.8, 1.6 (bit 1, keep 0.6), 1.2 (bit 1, keep 0.2), and 0.2 has come back, so the bits
+        repeat: 0.1 = <code>0.0001100110011…</code>₂. A computer storing 0.1 in n bits stores a rounded neighbour, which is why 0.1 + 0.2 is not quite 0.3 in most programs.</p>
+        <details class="deeper"><summary>Octal, the base between</summary>
+        <p>Base 8 packs <em>three</em> bits into a digit (0–7), so <code>0o755</code> is 111 101 101. Hex won because bytes are eight bits and four divides eight; octal
+        survives where words come in multiples of three: Unix file permissions (read, write, execute is one octal digit, so 755 is rwx r-x r-x), and a 12-bit machine
+        such as <span data-ahead="pdp8">the PDP-8 (a 1965 minicomputer)</span>, whose words are four octal digits.</p></details>
         <div class="try">Flip the bits. Try making 255, then add 1.</div>`,
       widget: () => numberWidget(8, false, { halve: true }),
       challenge: {
@@ -442,7 +454,13 @@ export const chBinary: Chapter = {
           can simply be dropped.</p>`,
         real: `<p>The IBM 704 and 7090 used sign-magnitude integers; the UNIVAC 1100 series and the CDC 6600 used one's complement, and
           their programs had to allow for a −0. Every mainstream processor designed since the 1970s uses two's
-          complement, and C made it mandatory in C23.</p>`,
+          complement, and C made it mandatory in C23.</p>
+          <p><strong>Gray code</strong> is a form of unsigned number built for a different weakness of plain binary: counting 0111 → 1000 flips four bits at once, and a reader that
+          samples mid-change can see any mixture. The Gray code of b is <code>g = b ⊕ (b ≫ 1)</code> (each bit XOR the bit above it), and consecutive values, the wrap-around included, differ in
+          exactly one bit. Three bits count ${Array.from({ length: 8 }, (_, i) => (i ^ (i >> 1)).toString(2).padStart(3, '0')).join(', ')}.
+          A sample taken while one bit flips is the old value or the new one, never a third. To go back, XOR every bit with all the bits above it: b₂ = g₂, b₁ = b₂ ⊕ g₁, b₀ = b₁ ⊕ g₀.
+          It is used where a value is read while it moves: shaft encoders, the axes of the maps used to simplify Boolean functions, and the pointers of a FIFO between two unrelated
+          clocks (<a href="#/c/clocks/7">chapter ${numOf('clocks')}</a>).</p>`,
         pitfall: `<p>Reading a bias-encoded field as two's complement. A float32 exponent field of 127 means 2⁰, not 2¹²⁷, and the
           sign bit of a float is not the sign bit of an integer: −0.0 and +0.0 differ in their bits.</p>`,
       },

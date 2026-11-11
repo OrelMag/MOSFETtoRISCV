@@ -298,6 +298,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What it costs a program", challenge: "quiz" },
     { title: "M in the pipeline", challenge: "quiz", stage: "scene" },
     { title: "Multiply and divide in hardware", challenge: "quiz", stage: "scene" },
+    { title: "Words wider than the word", challenge: "reach", stage: "scene" },
   ] },
   { id: "cache", num: 24, title: "Caches & the memory hierarchy", blurb: "SRAM and DRAM at transistor level, direct-mapped and set-associative caches, the three Cs, and a CPU that stalls on a miss.", level: "Memory", builds: ["memory","cpu","pipeline"], recap: {"checks":3}, steps: [
     { title: "Six transistors per bit", challenge: "reach", stage: "scene" },
@@ -380,6 +381,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Measuring error: ulps and relative error", challenge: "quiz", stage: "widget" },
     { title: "Summing many numbers", challenge: "quiz", stage: "widget" },
     { title: "Kahan on the CPU", challenge: "reach", stage: "scene" },
+    { title: "Decimal in, decimal out", challenge: "quiz", stage: "widget" },
   ] },
   { id: "widths", num: 29, title: "Sixteen bits and sixty-four", blurb: "The C extension: two thirds of real instructions in 16 bits, an expander in gates in front of the decoder, fetching at any halfword, and what that costs. Then the other way: the same core at 64 bits, the W instructions RV64 kept, and what width costs.", level: "Processor", builds: ["cpu","python","fastadd","muldiv","cache","float"], recap: {"checks":3}, steps: [
     { title: "Two thirds fit in 16 bits", challenge: "quiz", stage: "widget" },

@@ -6,6 +6,9 @@ import { BOOTH_ENC, MDU, arrayDiv, arrayMul, csa, divStep, seqDivider, treeMul }
 import { boothMul, pipeMul, seqMul } from '../lib/multiply';
 import { srt4Divider } from '../lib/srt4';
 import { cpuState } from '../riscv/cosim';
+import { assemble } from '../riscv/asm';
+import { ISS } from '../riscv/iss';
+import { MULTIWORD_BODY, MULTIWORD_SIGNED_BODY, MULTIWORD_SOURCE } from '../riscv/multiword';
 import { flatten } from '../sim/flatten';
 import { CLK_TO_Q, SETUP, analyzeTiming } from '../sim/timing';
 import { netlistOf, type ComponentDef } from '../sim/types';
@@ -42,6 +45,20 @@ const mduPart = (name: string) => nd(netlistOf(MDU)!.instances.find((i) => i.nam
 const sp = groupDigits;
 
 const fmt = groupDigits;
+/** 32-bit words, high first, as one hex number with a _ between words: leading zero words dropped, the top word unpadded (0x4_00000002). */
+export const wordsHex = (ws: number[]): string => {
+  const s = ws.map((x) => (x >>> 0).toString(16).toUpperCase().padStart(8, '0'));
+  while (s.length > 1 && /^0+$/.test(s[0])) s.shift();
+  s[0] = s[0].replace(/^0+(?=.)/, '');
+  return '0x' + s.join('_');
+};
+/** The multi-word program (riscv/multiword.ts) run once on the golden model: what the last step quotes (tests/multiword.test.ts pins it against BigInt). */
+const MW = (() => {
+  const iss = new ISS(assemble(MULTIWORD_SOURCE).words, { m: true });
+  iss.run(1000);
+  const n = (b: string) => b.split('\n').filter((l) => l.trim()).slice(8).length;
+  return { total: iss.steps - 1, product: n(MULTIWORD_BODY), signed: n(MULTIWORD_SIGNED_BODY), hex: wordsHex([19, 18, 9, 8].map((r) => iss.x[r])), sum: wordsHex([21, 20].map((r) => iss.x[r])) };
+})();
 const pySrc = (id: string) => PY_PROGRAMS.find((p) => p.id === id)!.source;
 /** chapter 15's samples compiled for RV32IM on the gate-level pipeline (tests/pypipe.test.ts checks every number against the gates). */
 const M_COST = { base: 113438, withM: 145476 };
@@ -105,7 +122,7 @@ export const chMulDiv: Chapter = {
       },
     ],
   },
-  parts: [['Shift and add', 3], ['Carry-save and trees', 5], ['Booth and pipelining', 5], ['Dividing', 4], ['Faster dividers', 4], ['In the CPU', 5]],
+  parts: [['Shift and add', 3], ['Carry-save and trees', 5], ['Booth and pipelining', 5], ['Dividing', 4], ['Faster dividers', 4], ['In the CPU', 6]],
   steps: [
     {
       title: 'Long multiplication is AND and add',
@@ -420,7 +437,18 @@ export const chMulDiv: Chapter = {
       },
       more: {
         derive: `<p>For multiplier b = Σ b<sub>i</sub>2<sup>i</sup> (two's complement), b = Σ<sub>j</sub> d<sub>j</sub>4<sup>j</sup> with d<sub>j</sub> = −2b<sub>2j+1</sub> + b<sub>2j</sub> + b<sub>2j−1</sub> (b<sub>−1</sub> = 0). Each d<sub>j</sub> is in {−2, …, +2}.
-          Check: bit b<sub>2j</sub> appears once, at weight 4<sup>j</sup> = 2<sup>2j</sup>. Bit b<sub>2j+1</sub> appears in group j as −2·4<sup>j</sup> and again, as the overlap bit, in group j + 1 as +4<sup>j+1</sup>: together (−1 + 2)·2<sup>2j+1</sup> = 2<sup>2j+1</sup>. So every bit has its binary weight, except the top bit, which has no group above it and keeps −2<sup>n−1</sup>: the two's complement sign.</p>`,
+          Check: bit b<sub>2j</sub> appears once, at weight 4<sup>j</sup> = 2<sup>2j</sup>. Bit b<sub>2j+1</sub> appears in group j as −2·4<sup>j</sup> and again, as the overlap bit, in group j + 1 as +4<sup>j+1</sup>: together (−1 + 2)·2<sup>2j+1</sup> = 2<sup>2j+1</sup>. So every bit has its binary weight, except the top bit, which has no group above it and keeps −2<sup>n−1</sup>: the two's complement sign.</p>
+          <table class="mini"><tr><th>b<sub>2j+1</sub></th><th>b<sub>2j</sub></th><th>b<sub>2j−1</sub></th><th>digit</th><th>partial product</th></tr>
+          <tr><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+          <tr><td>0</td><td>0</td><td>1</td><td>+1</td><td>+a</td></tr>
+          <tr><td>0</td><td>1</td><td>0</td><td>+1</td><td>+a</td></tr>
+          <tr><td>0</td><td>1</td><td>1</td><td>+2</td><td>+2a</td></tr>
+          <tr><td>1</td><td>0</td><td>0</td><td>−2</td><td>−2a</td></tr>
+          <tr><td>1</td><td>0</td><td>1</td><td>−1</td><td>−a</td></tr>
+          <tr><td>1</td><td>1</td><td>0</td><td>−1</td><td>−a</td></tr>
+          <tr><td>1</td><td>1</td><td>1</td><td>0</td><td>0</td></tr></table>
+          <p>A signed n-bit multiplier (n even) needs n/2 digits. An <em>unsigned</em> one is the same number with a 0 above its top bit, an (n + 1)-bit signed value, so it needs ⌈(n + 1)/2⌉ digits. For n = 32 the 16 groups over bits 0 to 31 are followed by a 17th, (0, 0, b<sub>31</sub>), whose digit is 0 or +1: one more row than a signed 32-bit multiplier has.
+          This is why the pipelined M unit's <code>mule</code> extends both operands to 34 bits (sign or zero, as the instruction says) before recoding: 34 bits is 17 groups, and the extension covers <code>mul</code>, <code>mulh</code>, <code>mulhsu</code> and <code>mulhu</code> with one tree.</p>`,
         pitfall: `<p>Forgetting the overlap bit. Each group reads the top bit of the group below it (b<sub>−1</sub> = 0 for the lowest). Without it, 010 and 011 would be indistinguishable (both read as the pair 01), although they are +1 and +2.</p>`,
       },
     },
@@ -1012,6 +1040,45 @@ export const chMulDiv: Chapter = {
         answer: 0,
         explain: `Time = instructions × CPI × period. Instructions fell ${(GCD_I.instr / GCD_M.instr).toFixed(0)}×, CPI rose ${((GCD_M.cycles / GCD_M.instr) / (GCD_I.cycles / GCD_I.instr)).toFixed(1)}×, the period is the pipeline\'s either way. A divide spends its cycles in one instruction instead of spreading them over a loop that also flushes the pipeline on every taken branch.`,
         why: ['', 'The clock is set by the slowest stage; the divider is iterative precisely so that it does not lengthen it.', 'It still stalls and flushes; the divide waits are new.', 'CPI is total cycles over instructions: every bubble and every divide cycle is in it.'],
+      },
+    },
+    {
+      title: 'Words wider than the word',
+      body: `
+        <p>Everything so far multiplies and divides 32-bit words, but programs ask for 64-bit integers (<code>long long</code>, timestamps, file sizes) and cryptography for 128, 256 or 2048 bits.
+        An RV32 core meets them the way school arithmetic meets numbers longer than a times table: it works one <strong>word</strong> at a time, lowest first, and passes the carry along.
+        RISC-V has no carry flag, so the carry is recomputed with <code>sltu</code> (set if less than, unsigned): after <code>s = a + b</code> the sum wrapped round exactly when it is smaller than an operand.</p>
+        <p>A 64-bit add of A = a1:a0 and B = a3:a2 (high word first, low word in the lower register) is four instructions: <code>add</code> the low words, <code>sltu</code> for the carry, <code>add</code> the high words, <code>add</code> the carry.
+        A 64-bit subtract has the same shape, with the <em>borrow</em> found <em>before</em> the low subtraction, <code>sltu t, b0, a0</code> (B.lo &lt; A.lo), and taken off the high difference. The program below runs on the system CPU of this chapter with A = 0x1_FFFFFFFF and B = 0x2_00000003:
+        <span data-show="md">the multiplier</span> gives the product. The sum is ${MW.sum}: the low words wrap past 2<sup>32</sup>, the <code>sltu</code> sees it, and the 1 lands in the high word.</p>
+        <p>The product of two 64-bit numbers is 128 bits, and the M extension's pair does the building block: <code>mul</code> gives the low 32 bits of a 32 × 32 product and <code>mulhu</code> the high 32 (<code>mulh</code> and <code>mulhsu</code> do the same for signed × signed and signed × unsigned operands). Write A = a1·2<sup>32</sup> + a0 and B likewise:
+        the product is four 64-bit products, a0·b0, a0·b1, a1·b0 and a1·b1, at weights 2<sup>0</sup>, 2<sup>32</sup>, 2<sup>32</sup> and 2<sup>64</sup>, so eight M instructions, and the words are added column by column with the carries kept as above. The program does it in ${MW.product} instructions, ${MW.total} in all with the set-up
+        and the sum and difference; on this CPU that is ${MW.total} cycles, since a multiply takes one cycle like an add. A and B here give ${MW.hex}, checked against BigInt arithmetic on random operands.</p>
+        <p>The 6502 of <a href="#/c/appendix-6502/3">appendix A</a> does the same job with a flag: <code>ADC</code> adds the carry <em>in</em> and leaves the carry <em>out</em>, so an eight-byte add is a clear-carry and eight chained <code>ADC</code>s. RISC-V drops the flag
+        (it would be one more piece of state to rename, forward and save in a pipeline) and pays instructions: two for the first word's sum and carry, and each further word needs its two additions with a carry test for each.</p>
+        <div class="try">Run to halt and read s5 (the sum's high word): it is 4, not 3.</div>`,
+      scene: () => cpuScene({ source: MULTIWORD_SOURCE, system: true, m: true, highlight: ['md'] }),
+      more: {
+        derive: `<p>With A = a1·2<sup>32</sup> + a0 and B = b1·2<sup>32</sup> + b0:
+          A·B = a1b1·2<sup>64</sup> + (a1b0 + a0b1)·2<sup>32</sup> + a0b0. Each product is a pair (mulhu, mul). Word 0 is the low half of a0b0. Word 1 adds the high half of a0b0 and the low halves of the two cross products: three terms, two additions, so up to two carries.
+          Word 2 adds the high halves of the cross products, the low half of a1b1 and those carries; word 3 is the high half of a1b1 plus the carries out of word 2, and never overflows, because the whole product fits in 128 bits.
+          The signed product uses <code>mulh</code> for a1b1 and <code>mulhsu</code> for the two cross products (one operand signed, the other the unsigned low word), and each cross product's high word is signed, so its sign (<code>srai</code> by 31) is added into word 3: ${MW.signed} instructions. The low 64 bits of the product need no carries at all: <code>mul</code> and <code>mulhu</code> of the low words, plus the two cross products' low halves added into the high word.</p>
+          <pre>${MULTIWORD_BODY.split('\n').slice(8).join('\n').replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>`,
+        pitfall: `<p>Testing the carry once. The high word of a sum with a carry coming in is two additions, <code>a1 + a3</code> and then <code>+ carry</code>, and either one can wrap (0xFFFFFFFF + 0 + 1 wraps on the second only). A third word needs a carry test after each addition, and the two carries are added: at most one of them is 1, so a plain <code>or</code> also works.
+          A borrow is not a carry: it is B.lo &lt; A.lo <em>before</em> the subtraction. Comparing the difference with an operand afterwards gives the wrong answer when the operands are equal.</p>`,
+        real: `<p>Big-number libraries (GMP, OpenSSL: public-key cryptography adds and multiplies numbers of 256 to 4096 bits) are loops of exactly this: add-with-carry, and multiply-accumulate of word × word into a double word. Architectures with a carry flag (x86 <code>adc</code>, Arm <code>adcs</code>) do a word per instruction;
+          RISC-V compilers lower <code>__int128</code> to the sequences above, and the M extension's <code>mulh</code> family is there for this.</p>`,
+        numbers: `<table class="mini"><tr><th>operation on 64-bit operands</th><th>RV32IM instructions</th></tr><tr><td>add</td><td>4</td></tr><tr><td>subtract</td><td>4</td></tr><tr><td>unsigned product, 128-bit result</td><td>${MW.product}</td></tr><tr><td>signed product, 128-bit result</td><td>${MW.signed}</td></tr></table>`,
+      },
+      challenge: {
+        kind: 'reach', goal: 'Run the program until the sum\'s high word, register s5, is 4: A\'s 1 plus B\'s 2, plus the carry.',
+        check: (st) => { try { return st.sim ? cpuState(st.sim).x[21] === 4 : false; } catch { return false; } },
+        hints: [
+          'The carry is made by the second instruction of the program\'s sum, <code>sltu</code>. Step to it and read t1.',
+          'The CPU panel runs the program to its end with "Run to halt"; the sum is finished after the fourth instruction of the first block.',
+        ],
+        answer: 'Press "Run to halt", or Step past the add, sltu, add, add of the sum. The low words add to 0x1_00000002 and wrap to 2, so sltu sets t1 = 1; the high words add to 1 + 2 = 3 and the carry makes 4. Without the carry the sum would be 3:00000002, wrong by 2³².',
+        solve: () => { [...document.querySelectorAll<HTMLButtonElement>('.cpu-panel button')].find((b) => b.textContent === 'Run to halt')?.click(); },
       },
     },
   ],

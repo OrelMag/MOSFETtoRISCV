@@ -10,8 +10,10 @@ import { CODEX_COMM2 } from './codexcomm2';
 import { CODEX_DSP } from './codexdsp';
 import { CODEX_FPGA } from './codexfpga';
 import { CODEX_SIDE } from './codexside';
+import { CODEX_NUM } from './codexnum';
 import { CODEX_POWER } from './codexpower';
 import { CODEX_VEC } from './codexvec';
+import { CODEX_FLOAT } from './codexfloat';
 import { CODEX_VM } from './codexvm';
 import { CODEX_LOGIC } from './codexlogic';
 import { CODEX_VERIFY } from './codexverify';
@@ -215,10 +217,14 @@ export const CODEX: CodexEntry[] = [
   ...CODEX_FPGA,
   // the side-channels chapter (codexside.ts)
   ...CODEX_SIDE,
+  // number forms: signed forms, Gray, BCD, byte order (codexnum.ts)
+  ...CODEX_NUM,
   // the Power chapter (codexpower.ts)
   ...CODEX_POWER,
   // the Vectors chapter (codexvec.ts)
   ...CODEX_VEC,
+  // the Floating point chapter's later steps (codexfloat.ts)
+  ...CODEX_FLOAT,
   // virtual memory and the tiny operating system (codexvm.ts)
   ...CODEX_VM,
   // the logic chapter (codexlogic.ts)

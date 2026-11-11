@@ -11,6 +11,7 @@ import { literals as lits, minimumCover, primes, type Term } from '../lib/sop';
 import { assemble16 } from '../riscv/rv16/asm16';
 import { decode16, disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { testset } from './drilltest';
+import { F32, flagNames, fpAddX, fpCmpX, fpDivX, fpMinMaxX, fpMulX, fpSqrtX, fpValue, parts, type FpResult } from '../sim/fpref';
 
 /** A seeded generator (mulberry32): the same seed gives the same questions. */
 export function rng(seed: number): () => number {
@@ -87,11 +88,98 @@ function numAnswer(want: number, base: 2 | 10 | 16): Question['check'] {
   };
 }
 
+// -- octal, binary fractions, flags, shifts and the other signed forms (the last kinds of the 'binary' and 'twos' drills) --
+
+const oct = (v: number, digits: number) => v.toString(8).padStart(digits, '0');
+
+/** A text answer must be this number written in octal (the prefix 0o is optional). */
+function octAnswer(want: number): Question['check'] {
+  return (a) => {
+    const m = a.trim().toLowerCase().replace(/[_\s]/g, '').match(/^(?:0o)?([0-7]+)$/);
+    if (!m) return { ok: false, why: 'write an octal number (digits 0 to 7)' };
+    const v = parseInt(m[1], 8);
+    return { ok: v === want, why: v === want ? undefined : 'not that value' };
+  };
+}
+
+/** A fraction (dyadic, so exact in a double) written in decimal (0.8125) or in binary (0.1101, prefix 0b optional). */
+function fracAnswer(want: number, base: 2 | 10): Question['check'] {
+  return (a) => {
+    const t = a.trim().toLowerCase().replace(/[_\s]/g, '');
+    let v: number | null = null;
+    if (base === 2) { const m = t.match(/^(?:0b)?0?\.([01]+)$/); v = m ? parseInt(m[1], 2) / 2 ** m[1].length : null; }
+    else v = /^\d*\.?\d+$/.test(t) ? parseFloat(t) : null;
+    if (v === null) return { ok: false, why: base === 2 ? 'write a binary fraction such as 0.101' : 'write a decimal fraction such as 0.625' };
+    return { ok: v === want, why: v === want ? undefined : 'not that value' };
+  };
+}
+
+/** C and V as two digits, C first (10, 0 1, 1,1). */
+function flagsAnswer(c: boolean, v: boolean): Question['check'] {
+  return (a) => {
+    const m = a.trim().match(/^([01])\s*[,;]?\s*([01])$/);
+    if (!m) return { ok: false, why: 'two digits: C then V, such as 10' };
+    const ok = m[1] === (c ? '1' : '0') && m[2] === (v ? '1' : '0');
+    return { ok, why: ok ? undefined : 'not those flags' };
+  };
+}
+
+/** The 'binary' drill's kinds 7 to 10: octal both ways, a binary fraction both ways. */
+function binaryExtra(r: () => number, k: number): Question {
+  const g3 = (n: number) => bin(n, 9).replace(/(...)(?=.)/g, '$1 ');
+  if (k === 7) {
+    const n = int(r, 64, 511);
+    return { prompt: `Write the octal number <b>${oct(n, 3)}</b> in binary (9 bits).`, placeholder: '000 000 000', check: numAnswer(n, 2), answer: g3(n), explain: `One octal digit per three bits: ${[...oct(n, 3)].map((c) => `${c} = ${bin(parseInt(c, 8), 3)}`).join(', ')}.` };
+  }
+  if (k === 8) {
+    const n = int(r, 64, 511);
+    return { prompt: `Write <code>${g3(n)}</code> in octal.`, placeholder: '0o...', check: octAnswer(n), answer: oct(n, 3), explain: `Three bits per octal digit, from the right: ${g3(n).split(' ').map((g) => `${g} = ${parseInt(g, 2)}`).join(', ')}.` };
+  }
+  const len = int(r, 3, 5), n = int(r, 1, 2 ** len - 1), v = n / 2 ** len;
+  if (k === 9) {
+    return { prompt: `What is the binary fraction <code>0.${bin(n, len)}</code> in decimal?`, placeholder: '0.625', check: fracAnswer(v, 10), answer: String(v), explain: `The bits after the point weigh 1/2, 1/4, 1/8 …: ${[...bin(n, len)].map((b, i) => (b === '1' ? `1/${2 ** (i + 1)}` : '')).filter(Boolean).join(' + ')} = ${n}/${2 ** len} = ${v}.` };
+  }
+  let x = v;
+  const steps: string[] = [];
+  for (let i = 0; i < len; i++) { x *= 2; steps.push(`${x} → ${x >= 1 ? 1 : 0}`); if (x >= 1) x -= 1; }
+  return { prompt: `Write <b>${v}</b> as a binary fraction (it is exact).`, placeholder: '0.101', check: fracAnswer(v, 2), answer: `0.${bin(n, len)}`, explain: `Double it and keep the integer bit, again and again: ${steps.join(', ')}.` };
+}
+
+/** The 'twos' drill's kinds 8 to 11: C and V of an 8-bit add, sra against div, the other signed readings. */
+function twosExtra(r: () => number, k: number): Question {
+  if (k === 8) {
+    const a = int(r, 0, 255), b = r() < 0.5 ? int(r, 0, 255) : (a & 0x80 ? int(r, 0x80, 0xff) : int(r, 0, 0x7f));
+    const s = (a + b) & 0xff, c = a + b > 255, v = ((a ^ s) & (b ^ s) & 0x80) !== 0;
+    return {
+      prompt: `An 8-bit add: <code>0x${hex(a, 8)}</code> + <code>0x${hex(b, 8)}</code>. What are the flags C and V (two digits, C first)?`, placeholder: 'CV, e.g. 10', check: flagsAnswer(c, v), answer: `${c ? 1 : 0}${v ? 1 : 0}`,
+      explain: `The sum is ${a + b} = 0x${hex(s, 8)} after dropping the carry. C = ${c ? 1 : 0}: ${a} + ${b} ${c ? 'does not fit' : 'fits'} in 8 bits unsigned. V = ${v ? 1 : 0}: as signed, ${s8(a)} + ${s8(b)} = ${s8(a) + s8(b)} ${v ? 'is outside' : 'is inside'} −128 … 127.`,
+    };
+  }
+  if (k === 9 || k === 10) {
+    const sh = int(r, 1, 3);
+    let x = -int(r, 3, 127);
+    if (x % 2 ** sh === 0) x -= 1;
+    const want = k === 9 ? Math.floor(x / 2 ** sh) : Math.trunc(x / 2 ** sh);
+    return {
+      prompt: k === 9 ? `<code>srai</code> (arithmetic shift right) of ${x} by <b>${sh}</b>: the result in decimal?` : `<code>div</code> (signed division) of ${x} by <b>${2 ** sh}</b>: the result in decimal?`,
+      check: numAnswer(want, 10), answer: String(want),
+      explain: k === 9 ? `A right shift copies the sign bit in and drops the low bits, which rounds toward −∞: floor(${x} / ${2 ** sh}) = ${want}.` : `div rounds toward zero: ${x} / ${2 ** sh} = ${x / 2 ** sh}, cut to ${want}. (srai by ${sh} would give ${Math.floor(x / 2 ** sh)}.)`,
+    };
+  }
+  const v = int(r, 0x81, 0xfe), sm = r() < 0.5;
+  const want = sm ? -(v & 0x7f) : -(~v & 0xff);
+  return {
+    prompt: `The 8-bit pattern <code>${grp(bin(v, 8))}</code> read as <b>${sm ? 'sign-magnitude' : "one's complement"}</b>: the number in decimal?`, check: numAnswer(want, 10), answer: String(want),
+    explain: sm ? `The top bit is the sign (negative), the other seven bits the size: ${v & 0x7f}, so ${want}. (Two's complement would say ${s8(v)}.)` : `The top bit is set, so it is negative: invert every bit to get the size, ${grp(bin(~v & 0xff, 8))} = ${-want}, so ${want}. (Two's complement would say ${s8(v)}.)`,
+  };
+}
+
 const binary: Drill = {
   id: 'binary', title: 'Binary and hex', goal: 8,
-  how: 'Type the number in the base asked for (a bit as 0 or 1). Prefixes (0x, 0b) are optional; spaces are ignored. 8-bit and 16-bit words, unsigned.',
+  how: 'Type the number in the base asked for (a bit as 0 or 1). Prefixes (0x, 0b, 0o) are optional; spaces are ignored. 8-bit and 16-bit words, unsigned; octal and binary fractions too.',
   make(r) {
-    const k = int(r, 0, 6);
+    const k = int(r, 0, 10);
+    if (k >= 7) return binaryExtra(r, k);
     const v = int(r, 0, 255);
     if (k >= 4) {
       const w = int(r, 0, 0xffff);
@@ -127,9 +215,10 @@ const s16 = (v: number) => (v & 0x8000 ? v - 0x10000 : v);
 
 const twos: Drill = {
   id: 'twos', title: "Two's complement", goal: 8,
-  how: 'Answer in decimal (signed), as a pattern, or yes / no, as asked. 8-bit two\'s complement: −128 … 127; 16-bit: −32 768 … 32 767.',
+  how: 'Answer in decimal (signed), as a pattern, as the two flags (C then V), or yes / no, as asked. 8-bit two\'s complement: −128 … 127; 16-bit: −32 768 … 32 767.',
   make(r) {
-    const k = int(r, 0, 7);
+    const k = int(r, 0, 11);
+    if (k >= 8) return twosExtra(r, k);
     const v = int(r, 0, 255);
     if (k >= 5) {
       const w = int(r, 0, 0xffff);
@@ -496,9 +585,107 @@ function roundQuestion(r: () => number): Question {
   };
 }
 
+// ---- floating point, beyond encoding: modes, spacing, special values, subnormal arithmetic ----------
+
+const MODE_NAMES = ['RNE', 'RTZ', 'RDN', 'RUP', 'RMM'] as const;
+const MODE_WORDS = ['to nearest, ties to even', 'towards zero', 'towards −∞', 'towards +∞', 'to nearest, ties away from zero (max magnitude)'];
+
+/** x rounded to an integer in RISC-V mode rm (0 RNE, 1 RTZ, 2 RDN, 3 RUP, 4 RMM), x a multiple of ¼. */
+export function roundMode(x: number, rm: number): number {
+  const lo = Math.floor(x), hi = Math.ceil(x), f = x - lo;
+  const nearest = f < 0.5 ? lo : f > 0.5 ? hi : rm === 0 ? (lo % 2 === 0 ? lo : hi) : (x < 0 ? lo : hi);
+  const r = rm === 0 || rm === 4 ? nearest : rm === 1 ? Math.trunc(x) : rm === 2 ? lo : hi;
+  return r === 0 ? 0 : r;   // no −0
+}
+
+/** Round a tie (or a quarter) to an integer under one of the five rounding modes. */
+function modeQuestion(r: () => number): Question {
+  const rm = int(r, 0, 4), k = int(r, -9, 9), tie = r() < 0.7;
+  const x = tie ? k + 0.5 : k + [0.25, 0.75][int(r, 0, 1)];
+  const want = roundMode(x, rm);
+  const f = x - Math.floor(x);
+  return {
+    prompt: `RISC-V rounding mode <b>${MODE_NAMES[rm]}</b> (${MODE_WORDS[rm]}): convert <b>${x < 0 ? '−' : ''}${Math.abs(x)}</b> to an integer (fcvt.w.s).`,
+    placeholder: '3', check: numAnswer(want, 10), answer: String(want),
+    explain: `${x} lies between ${Math.floor(x)} and ${Math.ceil(x)}${f === 0.5 ? ', exactly halfway (G = 1, S = 0): a tie' : f < 0.5 ? ', nearer the lower one' : ', nearer the upper one'}. ${MODE_NAMES[rm]}: ${
+      rm === 0 ? (f === 0.5 ? 'a tie goes to the even neighbour' : 'the nearer one') : rm === 1 ? 'drop the fraction, towards zero' : rm === 2 ? 'the lower one, whatever the sign' : rm === 3 ? 'the upper one, whatever the sign' : (f === 0.5 ? 'a tie goes away from zero' : 'the nearer one')} → ${want}.`,
+  };
+}
+
+/** The gap between adjacent floats near x: 2^(e − M). */
+function ulpQuestion(r: () => number): Question {
+  const h = r() < 0.5, M = h ? 10 : 23, name = h ? 'binary16' : 'float32';
+  const e0 = h ? int(r, -8, 14) : int(r, -10, 30);
+  const x = +((1 + r() * 0.99) * 2 ** e0).toPrecision(3);
+  const e = Math.floor(Math.log2(x)), k = e - M;
+  return {
+    prompt: `The gap between adjacent ${name} values near <b>${x}</b> is 2<sup>k</sup>. What is k?`, placeholder: '−13', check: numAnswer(k, 10), answer: String(k),
+    explain: `${x} lies in [2^${e}, 2^${e + 1}), where ${name} has ${M} fraction bits: the gap is 2^${e} / 2^${M} = 2^${k}.`,
+  };
+}
+
+/** Special results on RISC-V (float32): what is asked, the operation's result, and whether the answer is a yes / no. */
+export const FLOAT_SPECIALS: [string, () => FpResult, boolean][] = (() => {
+  const one = 0x3f800000, pz = 0, nz = 0x80000000, inf = 0x7f800000, qnan = 0x7fc00000;
+  return [
+    ['∞ − ∞', () => fpAddX(inf, inf, true, F32), false], ['0 × ∞', () => fpMulX(pz, inf, F32), false], ['0 / 0', () => fpDivX(pz, pz, F32), false],
+    ['1 / −0', () => fpDivX(one, nz, F32), false], ['1 / +0', () => fpDivX(one, pz, F32), false], ['1 / ∞', () => fpDivX(one, inf, F32), false],
+    ['−1 / ∞', () => fpDivX(one | 0x80000000, inf, F32), false], ['∞ + 1', () => fpAddX(inf, one, false, F32), false], ['√(−0)', () => fpSqrtX(nz, F32), false],
+    ['√(−1)', () => fpSqrtX(one | 0x80000000, F32), false], ['fmin(NaN, 1)', () => fpMinMaxX(qnan, one, false, F32), false],
+    ['fmax(1, NaN)', () => fpMinMaxX(one, qnan, true, F32), false], ['fmin(−0, +0)', () => fpMinMaxX(nz, pz, false, F32), false],
+    ['fmax(−0, +0)', () => fpMinMaxX(nz, pz, true, F32), false], ['NaN == NaN (feq.s)', () => fpCmpX(qnan, qnan, 'eq', F32), true],
+    ['NaN &lt; 1 (flt.s)', () => fpCmpX(qnan, one, 'lt', F32), true], ['+0 == −0 (feq.s)', () => fpCmpX(pz, nz, 'eq', F32), true],
+  ];
+})();
+
+/** A special result as the word a learner types: NaN, ∞, −∞, +0, −0, a number, true / false. */
+export function specialAnswer(res: FpResult, yesNo: boolean): string {
+  if (yesNo) return res.y ? 'true' : 'false';
+  const p = parts(res.y, F32);
+  return p.kind === 'nan' ? 'NaN' : p.kind === 'inf' ? (p.sign ? '−∞' : '∞') : p.kind === 'zero' ? (p.sign ? '−0' : '+0') : String(fpValue(res.y, F32));
+}
+const canonSpecial = (t: string) => {
+  const s = t.trim().toLowerCase().replace(/\s/g, '').replace(/[−–]/g, '-').replace(/infinity|inf/g, '∞').replace(/^\+∞$/, '∞');
+  return s === '0' || s === '+0' ? '+0' : s === 'yes' ? 'true' : s === 'no' ? 'false' : s;
+};
+
+function specialQuestion(r: () => number): Question {
+  const [what, run, yn] = FLOAT_SPECIALS[int(r, 0, FLOAT_SPECIALS.length - 1)];
+  const res = run(), want = specialAnswer(res, yn);
+  const fl = flagNames(res.fl);
+  return {
+    prompt: `On RISC-V (float32), what is <b>${what}</b>? ${yn ? 'Answer true or false.' : 'Answer NaN, ∞, −∞, +0, −0 or a number.'}`,
+    placeholder: yn ? 'true' : 'NaN',
+    check: (t) => { const ok = canonSpecial(t) === canonSpecial(want); return { ok, why: ok ? undefined : 'not that result' }; },
+    answer: want, explain: `${what.replace('&lt;', '<')} = ${want}${fl !== '–' ? `, raising ${fl}` : ''}${want === 'NaN' ? '; every NaN an operation produces is the canonical 0x7FC00000' : ''}.`,
+  };
+}
+
+/** Arithmetic on binary16 subnormals: sums of patterns (the spacing is uniform, so the patterns add), and a halving that is a tie. */
+function subnormalQuestion(r: () => number): Question {
+  if (r() < 0.5) {
+    const a = int(r, 1, 1023), b = int(r, 1, 1023), s = a + b;
+    return {
+      prompt: `binary16: <code>0x${hex(a, 16)}</code> + <code>0x${hex(b, 16)}</code> (both subnormal). Give the sum's pattern (hex).`, placeholder: '0x....', check: numAnswer(s, 16), answer: `0x${hex(s, 16)}`,
+      explain: `Below 2^−14 the spacing is the constant 2^−24, and so is the spacing of the first normal binade: the patterns add as integers, exactly (no rounding). ${a} + ${b} = ${s}${s >= 1024 ? ': 1024 is 0x0400, the smallest normal, so the sum carried from the fraction into the exponent field' : ''}.`,
+    };
+  }
+  const k = int(r, 1, 1023), half = k / 2, w = Number.isInteger(half) ? half : (Math.floor(half) % 2 === 0 ? Math.floor(half) : Math.ceil(half));
+  return {
+    prompt: `binary16, round to nearest even: <code>0x${hex(k, 16)}</code> × 0.5 (a subnormal). Give the result's pattern (hex).`, placeholder: '0x....', check: numAnswer(w, 16), answer: `0x${hex(w, 16)}`,
+    explain: `Halving shifts the fraction right by one place: ${k} / 2 = ${half}${Number.isInteger(half) ? ', exact' : `, a tie between ${Math.floor(half)} and ${Math.ceil(half)}: the even one is ${w}${w === 0 ? ' (so the smallest subnormal times 0.5 underflows to zero)' : ''}`}.`,
+  };
+}
+
+/** The exercises beyond encoding (the last quarter of the drill's stream). */
+function floatExtra(r: () => number): Question {
+  const k = int(r, 0, 3);
+  return k === 0 ? modeQuestion(r) : k === 1 ? ulpQuestion(r) : k === 2 ? specialQuestion(r) : subnormalQuestion(r);
+}
+
 const float: Drill = {
   id: 'float', title: 'binary16', goal: 6,
-  how: 'binary16: 1 sign bit, 5 exponent bits (bias 15), 10 fraction bits with a hidden leading 1. Exponent field 0: zero or a subnormal (no hidden bit); all 1s: infinity (fraction 0) or NaN. Give values in decimal (fractions like 0.375 are fine), patterns in hex, kinds in words.',
+  how: 'binary16: 1 sign bit, 5 exponent bits (bias 15), 10 fraction bits with a hidden leading 1. Exponent field 0: zero or a subnormal (no hidden bit); all 1s: infinity (fraction 0) or NaN. Give values in decimal (fractions like 0.375 are fine), patterns in hex, kinds in words. Later questions ask for a rounding mode applied to a tie, the exponent k of the gap 2^k between floats near a value, a special result (NaN, ∞, −0, true or false) as RISC-V gives it, and sums or halvings of subnormal patterns.',
   make(r) {
     const q = r();
     if (q < 0.2) {
@@ -516,6 +703,7 @@ const float: Drill = {
       };
     }
     if (q < 0.45) return roundQuestion(r);
+    if (q >= 0.75) return floatExtra(r);
     const e = int(r, -4, 6), m = int(r, 0, 7) * 128, s = r() < 0.3 ? -1 : 1;
     const v = s * (1 + m / 1024) * 2 ** e;
     const w = f16bits(v);
@@ -983,4 +1171,117 @@ const lut: Drill = {
   },
 };
 
-export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16, float, relay, hollerith, lut, testset };
+// ---- fixed point and RISC-V division (the numbers chapters) ---------------------------------------------
+
+/** A value as the chapters write it: the signed integer over 2^f, in decimal with no trailing zeros. */
+export const fixedText = (raw: number, f: number): string => {
+  const v = raw / 2 ** f;
+  return Number.isInteger(v) ? String(v) : v.toFixed(f).replace(/0+$/, '');
+};
+/** The value of a word read as Qm.f with w = m + f bits: the signed integer / 2^f. */
+export const qValue = (word: number, w: number, f: number): number => {
+  const u = word & (2 ** w - 1);
+  return (u >= 2 ** (w - 1) ? u - 2 ** w : u) / 2 ** f;
+};
+
+/** A number written in decimal ("-0.375"), as a fraction ("-3/8") or in hex / binary: its value. */
+export function parseQty2(t: string): number | null {
+  const x = t.trim().replace(/−/g, '-').replace(/\s/g, '');
+  const m = x.match(/^(-?\d+)\/(\d+)$/);
+  if (m) return Number(m[2]) === 0 ? null : Number(m[1]) / Number(m[2]);
+  if (/^-?(\d+\.?\d*|\.\d+)$/.test(x)) return Number(x);
+  return parseNum(x);
+}
+
+const qName = (m: number, f: number) => `Q${m}.${f}`;
+
+const fixed: Drill = {
+  id: 'fixed', title: 'Fixed point', goal: 6,
+  how: 'Qm.f is a two\'s complement word of m + f bits (the m includes the sign) read as the integer divided by 2^f. Give values in decimal (0.375) or as a fraction (3/8), a format as Qm.f, a shift as a number of places.',
+  make(r) {
+    const k = int(r, 0, 4);
+    if (k === 0 || k === 1) {
+      const w = k === 0 ? 8 : 16, f = w - 1;
+      const word = int(r, 0, 2 ** w - 1);
+      const raw = word >= 2 ** (w - 1) ? word - 2 ** w : word;
+      const v = qValue(word, w, f);
+      return {
+        prompt: `What value does the ${w}-bit word <code>0x${hex(word, w)}</code> hold, read as <b>${qName(1, f)}</b>?`, placeholder: '-0.375',
+        check: (t) => { const x = parseQty2(t); return x === null ? { ok: false, why: 'write a decimal number or a fraction' } : { ok: x === v, why: x === v ? undefined : 'not that value' }; },
+        answer: fixedText(raw, f),
+        explain: `As a signed integer the word is ${raw}; divided by 2^${f} = ${2 ** f} that is ${fixedText(raw, f)}. (The top bit weighs −1, the next ½, then ¼ …)`,
+      };
+    }
+    if (k === 2) {
+      const a = int(r, 1, 4), b = int(r, 3, 15), c = int(r, 1, 4), d = int(r, 3, 15);
+      const want = qName(a + c, b + d);
+      return {
+        prompt: `Multiplying a <b>${qName(a, b)}</b> word by a <b>${qName(c, d)}</b> word gives a full-width product in which format?`, placeholder: 'Q2.30',
+        check: (t) => { const m = t.trim().toUpperCase().match(/^Q(\d+)\.(\d+)$/); return m ? { ok: Number(m[1]) === a + c && Number(m[2]) === b + d, why: 'not that format' } : { ok: false, why: 'write it as Qm.f' }; },
+        answer: want,
+        explain: `Qa.b × Qc.d = Q(a+c).(b+d): the integer parts add (${a} + ${c}), so do the places after the point (${b} + ${d}). The product is ${a + b + c + d} bits long.`,
+      };
+    }
+    if (k === 3) {
+      const f = [7, 15][int(r, 0, 1)], other = int(r, 1, 3), g = int(r, 5, 12);
+      return {
+        prompt: `A Q1.${f} word times a ${qName(other, g)} word is a ${qName(1 + other, f + g)} product. By how many places is it shifted right to give a <b>${qName(1, f)}</b> result?`, placeholder: String(f),
+        check: numAnswer(g, 10), answer: String(g),
+        explain: `The product has ${f + g} places after the point and the result keeps ${f}: drop ${g}. (Two Q1.${f} words: the shift is ${f}, one fewer than the ${f + 1} bits of an operand.)`,
+      };
+    }
+    const s2 = int(r, 2, 4), x = int(r, -120, 120), mode = ['floor', 'zero', 'half-up'][int(r, 0, 2)];
+    const q = 2 ** s2;
+    const want = mode === 'floor' ? Math.floor(x / q) : mode === 'zero' ? Math.trunc(x / q) : Math.floor((x + q / 2) / q);
+    const how = mode === 'floor' ? `an arithmetic shift right by ${s2} (rounds down, toward −∞)` : mode === 'zero' ? `C division by ${q} (rounds toward zero)` : `rounding to nearest, ties up (add ${q / 2}, then shift right by ${s2})`;
+    return {
+      prompt: `Drop ${s2} bits from the signed integer <b>${x}</b> by ${how}. The result?`, placeholder: String(want),
+      check: numAnswer(want, 10), answer: String(want),
+      explain: `${x} / ${q} = ${x / q}. ` + (mode === 'floor' ? `Its floor is ${want}: a shift never rounds up, so a negative value moves further from zero.` : mode === 'zero' ? `Toward zero drops the fraction: ${want}. It differs from the shift only for a negative value with a nonzero remainder.` : `(${x} + ${q / 2}) >> ${s2} = ${want}.`),
+    };
+  },
+};
+
+/** RISC-V's four division results on 32-bit words (the spec: division by zero and the one overflow do not trap). */
+export function divRem32(op: 'div' | 'divu' | 'rem' | 'remu', a: number, b: number): number {
+  const au = a >>> 0, bu = b >>> 0, as = a | 0, bs = b | 0;
+  switch (op) {
+    case 'div': return bs === 0 ? -1 : as === -(2 ** 31) && bs === -1 ? as : Math.trunc(as / bs);
+    case 'rem': return bs === 0 ? as : as === -(2 ** 31) && bs === -1 ? 0 : as % bs;
+    case 'divu': return bu === 0 ? 0xffffffff : Math.floor(au / bu);
+    default: return bu === 0 ? au : au % bu;
+  }
+}
+
+const divrem: Drill = {
+  id: 'divrem', title: 'RISC-V division', goal: 6,
+  how: 'Operands are 32-bit words. div and rem are signed, divu and remu unsigned. Division never traps. Answer in decimal (signed for div / rem) or as a 0x pattern.',
+  make(r) {
+    const op = (['div', 'rem', 'divu', 'remu'] as const)[int(r, 0, 3)], signed = op === 'div' || op === 'rem';
+    const kind = int(r, 0, 5);
+    let a = signed ? int(r, -200, 200) : int(r, 0, 400), b = signed ? int(r, -12, 12) : int(r, 1, 12);
+    if (signed && b === 0) b = 3;
+    if (kind === 0) b = 0;
+    else if (kind === 1 && signed) { a = -(2 ** 31); b = -1; }
+    else if (kind === 2 && !signed) { a = 0xfffffff0 + int(r, 0, 15); b = int(r, 2, 9); }
+    const want = divRem32(op, a, b) >>> 0;
+    const shown = (v: number) => (signed ? (v | 0) < -9999 ? `0x${hex(v >>> 0, 32)}` : String(v | 0) : (v >>> 0) > 9999 ? `0x${hex(v >>> 0, 32)}` : String(v >>> 0));
+    return {
+      prompt: `<code>${op}</code> with rs1 = <b>${shown(a)}</b> and rs2 = <b>${shown(b)}</b>: what does rd get?`, placeholder: 'decimal or 0x…',
+      answer: String(signed ? want | 0 : want),
+      check: (t) => {
+        const x = parseNum(t);
+        if (x === null) return { ok: false, why: 'write a decimal number or a 0x pattern' };
+        if (x < -(2 ** 31) || x >= 2 ** 32) return { ok: false, why: 'rd is a 32-bit word' };
+        return (x >>> 0) === want ? { ok: true } : { ok: false, why: 'not that value' };
+      },
+      explain: b === 0
+        ? `Division by zero: ${op.startsWith('div') ? `the quotient is all ones (${signed ? '−1' : '0xFFFFFFFF'})` : 'the remainder is the dividend'}, and nothing traps.`
+        : signed && (a | 0) === -(2 ** 31) && (b | 0) === -1 ? 'The one overflow: +2³¹ does not fit, so div gives −2³¹ again and rem gives 0.'
+          : signed ? `Division truncates toward zero, so the remainder takes the sign of the dividend: ${a} = ${Math.trunc(a / b)} × ${b} + ${a % b}.`
+            : `Unsigned: ${a >>> 0} = ${Math.floor((a >>> 0) / b)} × ${b} + ${(a >>> 0) % b}.`,
+    };
+  },
+};
+
+export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16, float, relay, hollerith, lut, testset, fixed, divrem };

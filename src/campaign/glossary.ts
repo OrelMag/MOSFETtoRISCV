@@ -12,6 +12,7 @@ import { ALIASES_DSP } from './codexdsp';
 import { ALIASES_FPGA } from './codexfpga';
 import { ALIASES_POWER } from './codexpower';
 import { ALIASES_VEC } from './codexvec';
+import { ALIASES_FLOAT } from './codexfloat';
 import { ALIASES_VERIFY } from './codexverify';
 import { ALIASES_BABY } from './codexbaby';
 import { ALIASES_LOGIC } from './codexlogic';
@@ -53,6 +54,7 @@ export const ALIASES: Record<string, string[]> = {
   booth: ['Booth'], zbuffer: ['z-buffer', 'depth test'], rowhammer: ['Rowhammer'], coremem: ['core memory', 'ferrite core', 'ferrite cores', 'coincident-current'],
   clock: ['clock period'], reset: ['power-on state', 'synchronous reset', 'asynchronous reset'], fpadder: ['floating-point adder'],
   tristate: ['tri-state', 'tri-state buffer', 'tri-state driver', 'tristate'], bin2dec: ['double dabble'],
+  signforms: ['sign-magnitude', 'one’s complement', 'excess-127', 'excess-128'], gray: ['Gray code', 'Gray-coded', 'Gray pointer'], bcd: ['binary-coded decimal', 'BCD'], endian: ['little-endian', 'big-endian', 'byte order'],
   // Communication (codexcomm.ts)
   shannon: ['Shannon', 'Nyquist'], reflection: ['reflection', 'series termination', 'parallel termination'], cdc: ['clock-domain crossing', 'clock domain crossing'],
   asyncfifo: ['asynchronous FIFO'], qam: ['QAM', '16-QAM', 'QPSK'], ofdm: ['OFDM'], linecode: ['8b/10b', '64b/66b', 'Manchester', 'line code'],
@@ -69,6 +71,8 @@ export const ALIASES: Record<string, string[]> = {
   ...ALIASES_POWER,
   // the Vectors chapter (codexvec.ts)
   ...ALIASES_VEC,
+  // the Floating point chapter's later steps (codexfloat.ts)
+  ...ALIASES_FLOAT,
   ...ALIASES_VERIFY,
   // Appendix E (codexbaby.ts)
   ...ALIASES_BABY,
