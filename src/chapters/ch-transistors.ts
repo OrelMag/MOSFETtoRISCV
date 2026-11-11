@@ -530,18 +530,22 @@ export const chInverter: Chapter = {
       body: `
         <p>The simulator knows a wire as 0, 1 or X. In silicon an input is a voltage, and the inverter maps it to an output voltage along its <strong>transfer curve</strong>. Move Vin below.
         Near either rail the curve is flat: a slightly wrong input gives an output on the rail. In the middle it is steep, and for a stretch both transistors conduct.</p>
-        <p>Two numbers describe it. The <strong>switching threshold</strong> V<sub>M</sub> is where Vin = Vout: ${VTC_M.vm.toFixed(2)} V for a matched pair, ${VTC_LO.vm.toFixed(2)} V when the PMOS is as wide as the NMOS (a hole is
-        ${MOBILITY_RATIO}× less mobile, so the PMOS is the weaker device, and the output falls early), ${VTC_HI.vm.toFixed(2)} V at 4×. The <strong>noise margins</strong> are measured where the slope is −1: V<sub>IL</sub> = ${VTC_M.vil.toFixed(2)} V
-        and V<sub>IH</sub> = ${VTC_M.vih.toFixed(2)} V, where the outputs are V<sub>OH</sub> = ${VTC_M.voh.toFixed(2)} V and V<sub>OL</sub> = ${VTC_M.vol.toFixed(2)} V. So NM<sub>L</sub> = V<sub>IL</sub> − V<sub>OL</sub> = ${VTC_M.nmL.toFixed(2)} V,
-        ${((100 * VTC_M.nmL) / VDD).toFixed(0)}% of the ${VDD} V supply, and the same on the high side. Make the PMOS narrower and one margin grows at the other's expense.</p>
-        <p>This is what <em>restoring</em> means in volts. Between V<sub>IL</sub> and V<sub>IH</sub> the gain reaches ${VTC_M.gain.toFixed(0)} here (a simple model; real inverters sit at 5 to 20), and outside it the slope is below 1. A 0 that arrives at 0.45 V,
+        <p>This is what <em>restoring</em> means in volts. A 0 that arrives at 0.45 V,
         a quarter of the swing too high, leaves as ${vout(0.45, 1).toFixed(2)} V; the next gate sees that and outputs ${vout(vout(0.45, 1), 1).toFixed(2)} V. One stage already restores a full level, and a second is as clean. The shaded band is what the 0 / 1 / X simulator calls X: an input that
         lands there has no defined output.</p>
+        <p>The numbers that describe the curve, for a matched pair (the PMOS wider, so the two are equally strong):</p>
+        <table class="mini"><tr><th>symbol</th><th>meaning</th><th>value</th></tr>
+        <tr><td>V<sub>M</sub></td><td>switching threshold, where Vin = Vout</td><td>${VTC_M.vm.toFixed(2)} V</td></tr>
+        <tr><td>V<sub>IL</sub>, V<sub>IH</sub></td><td>highest input still read as 0, lowest read as 1 (where the slope is −1)</td><td>${VTC_M.vil.toFixed(2)} V, ${VTC_M.vih.toFixed(2)} V</td></tr>
+        <tr><td>V<sub>OH</sub>, V<sub>OL</sub></td><td>the outputs there</td><td>${VTC_M.voh.toFixed(2)} V, ${VTC_M.vol.toFixed(2)} V</td></tr>
+        <tr><td>NM<sub>L</sub></td><td>noise margin V<sub>IL</sub> − V<sub>OL</sub> (the high side is the same)</td><td>${VTC_M.nmL.toFixed(2)} V, ${((100 * VTC_M.nmL) / VDD).toFixed(0)}% of ${VDD} V</td></tr>
+        <tr><td>gain</td><td>steepest slope, between V<sub>IL</sub> and V<sub>IH</sub> (a simple model; real inverters sit at 5 to 20)</td><td>${VTC_M.gain.toFixed(0)}</td></tr></table>
         <p>The price is in the middle. At V<sub>M</sub> both devices are saturated and a <strong>short-circuit current</strong> of ${VTC_SC.toFixed(0)} µA flows from VDD to ground. It lasts only while the input crosses the band, which is why slow edges burn power.</p>
         <div class="try">Set Vin to V<sub>M</sub> and read both regions, then make Wp / Wn 1 and watch the shaded band slide.</div>`,
       widget: () => vtcWidget(),
       more: {
-        derive: `<p>Each point solves I<sub>n</sub>(Vin, Vout) = I<sub>p</sub>(VDD − Vin, VDD − Vout) with chapter 1's device (k = ${K} µA/V², V<sub>t</sub> = ${VT} V, channel-length factor 0.05 /V) by bisection on Vout, which is monotone. Matched means
+        derive: `<p>Wider or narrower PMOS: V<sub>M</sub> is ${VTC_M.vm.toFixed(2)} V for a matched pair, ${VTC_LO.vm.toFixed(2)} V when the PMOS is as wide as the NMOS (a hole is ${MOBILITY_RATIO}× less mobile, so the PMOS is the weaker device, and the output falls early) and ${VTC_HI.vm.toFixed(2)} V at 4×. Make the PMOS narrower and one noise margin grows at the other's expense; the table below gives all three.</p>
+          <p>Each point solves I<sub>n</sub>(Vin, Vout) = I<sub>p</sub>(VDD − Vin, VDD − Vout) with chapter 1's device (k = ${K} µA/V², V<sub>t</sub> = ${VT} V, channel-length factor 0.05 /V) by bisection on Vout, which is monotone. Matched means
           the PMOS carries ${MOBILITY_RATIO}× the width. By symmetry V<sub>M</sub> = VDD / 2, and with both in saturation at V<sub>M</sub> the current is (k / 2)·(V<sub>M</sub> − V<sub>t</sub>)² · (1 + λ V<sub>M</sub>) = ${VTC_SC.toFixed(0)} µA. The test pins V<sub>M</sub> to VDD / 2 for the matched pair and
           to the solver's own fixed point elsewhere.</p>`,
         numbers: `<table class="mini"><tr><th>Wp / Wn</th><th>V<sub>M</sub></th><th>NM<sub>L</sub></th><th>NM<sub>H</sub></th></tr>${[1, MOBILITY_RATIO, 4].map((w) => { const m = metrics(strength(w)); return `<tr><td>${w}</td><td>${m.vm.toFixed(2)} V</td><td>${m.nmL.toFixed(2)} V</td><td>${m.nmH.toFixed(2)} V</td></tr>`; }).join('')}</table>`,

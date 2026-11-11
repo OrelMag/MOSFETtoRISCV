@@ -120,34 +120,30 @@ function hazardWorked(): string {
     if (r[7]) ev.push(`cycle ${c}: a load in E, <code>${text[r[1]]}</code> in D reads its result: stall, D held a cycle and a bubble sent into E`);
     if (r[8] && r[2] < S.last) ev.push(`cycle ${c}: <code>${text[r[2]]}</code> in E is taken: the ${r.slice(0, 2).filter((x) => x >= 0).length} instructions in F and D are flushed and Fetch goes to the target`);
   });
-  return `<details class="deeper"><summary>Worked example: every hazard, cycle by cycle</summary>
-    <p>The hazard program of the last two steps, run on this pipeline's gates from power-on. A row is an instruction, a column a clock
+  return `<p><strong>Worked example: every hazard, cycle by cycle.</strong> The hazard program of the last two steps, run on this pipeline's gates from power-on. A row is an instruction, a column a clock
     cycle, a cell the stage the instruction is in during that cycle (* = held where it was by a stall).</p>
     <div class="worked-wrap" tabindex="0" role="region" aria-label="Table, scrolls sideways"><table class="pipe-trace"><thead><tr><th>cycle</th>${T.map((_, c) => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
     <ul>${ev.map((x) => `<li>${x}.</li>`).join('')}</ul>
     <p>The sum: ${S.retired} instructions retire (the ${S.flushed} flushed ones never do) in ${S.cycles} cycles = ${S.fill} to fill the line +
     ${S.retired} + ${S.stalls} bubble + ${S.flushed} flushed. Past the fill that is (${S.retired} + ${S.stalls} + ${S.flushed}) / ${S.retired} =
-    ${((S.retired + S.stalls + S.flushed) / S.retired).toFixed(2)} cycles per instruction, against 1 for a program without hazards.</p></details>`;
+    ${((S.retired + S.stalls + S.flushed) / S.retired).toFixed(2)} cycles per instruction, against 1 for a program without hazards.</p>`;
 }
 
 /** The chapter's common mistakes, each with this pipeline's own numbers. */
 function pipeMistakes(): string {
   const S = hazardSums(), T5 = cut(5);
-  return `<details class="deeper"><summary>Common mistakes with pipelines</summary><ul>
-    <li><strong>"Five stages, five times faster."</strong> Each stage adds a register (${CLK_TO_Q + SETUP} NAND delays of clock-to-Q and setup), and
-    the clock waits for the slowest stage. Even five perfectly even stages of this CPU's logic give a period of ${T5}, not 155 / 5 = ${155 / 5}: at
-    best ${(155 / T5).toFixed(2)}× faster, and only if the CPI stays 1.</li>
+  return `<p><strong>Common mistakes with pipelines</strong> (the first, "five stages, five times faster", is the pitfall of the first step).</p><ul>
     <li><strong>"Pipelining makes an instruction faster."</strong> One instruction now spends five clocks in the machine: 5 × ${T5} = ${5 * T5} NAND
     delays even with even stages, against 155 on the single-cycle CPU. What improves is the rate: one instruction finishes per clock.</li>
     <li><strong>"The CPI is 1."</strong> Only without hazards. The worked example in Control hazards runs ${S.retired} instructions in
-    ${S.cycles} cycles, ${((S.retired + S.stalls + S.flushed) / S.retired).toFixed(2)} per instruction past the fill; the table above measures Fibonacci.</li>
+    ${S.cycles} cycles, ${((S.retired + S.stalls + S.flushed) / S.retired).toFixed(2)} per instruction past the fill; the table in that step measures Fibonacci.</li>
     <li><strong>"Forwarding removes every stall."</strong> Not after a load: its word exists only at the end of M, when the next instruction's E has
     already begun. One bubble each time, unless the compiler puts an independent instruction in between.</li>
     <li><strong>"A flush has to undo the wrong-path instructions."</strong> There is nothing to undo: they are flushed from F and D, before any
     stage that writes a register or memory. Resolving branches later than that would need real undo.</li>
     <li><strong>Forwarding from the wrong writer.</strong> When M and W both write the register, the newer one (M) wins; and x0 is never forwarded,
     since its writes are discarded.</li>
-  </ul></details>`;
+  </ul>`;
 }
 
 /** The assembly line's programs (the step's and the codex model page's, so both show the same three). */
@@ -439,8 +435,7 @@ export const chPipeline: Chapter = {
         <p>The flush is safe because nothing the two wrong-path instructions did is visible yet: they have not reached M (no store) or W (no
         register write). A design that resolved branches later than the first stage that changes state would need much more care.
         The same flush is how a pipeline keeps a faulting instruction from leaving younger ones half done (see In real silicon, below).</p>
-        <div class="try">Pulse until the loop branch is taken: two instructions turn into bubbles.</div>
-        ${hazardWorked()}`,
+        <div class="try">Pulse until the loop branch is taken: two instructions turn into bubbles.</div>`,
       scene: () => ({ ...cpuScene({ source: src('sum'), pipeline: true, highlight: ['npc', 'hz', 'pcmux'] }), autoClock: false }),
       tries: [(st) => !!snap(st)?.flush],
       tour: {
@@ -454,6 +449,7 @@ export const chPipeline: Chapter = {
         ],
       },
       more: {
+        numbers: hazardWorked(),
         real: `<p>The same flush serves exceptions. An illegal instruction found in D, a misaligned load in M, a page fault: the handler must see the
           machine as if instructions ran one at a time, with every older instruction finished and no younger one having written a register or
           memory. That is a <strong>precise</strong> exception. A pipeline gets it by recording the exception in the pipeline register beside the
@@ -504,7 +500,8 @@ export const chPipeline: Chapter = {
       title: 'Does it pay? Measured',
       body: `
         <p>Time per instruction = CPI × clock period. The table measures both for our designs, and the result is not what
-        the textbook diagram promises: <strong>this pipeline is barely faster per cycle and slower per instruction</strong>.</p>
+        the textbook diagram promises: the period only falls from 155 to about 145 NAND delays, while hazards push the CPI above 1, so
+        <strong>each instruction takes longer than on the single-cycle CPU</strong>.</p>
         <p>The static timing shows why. The E stage contains the forwarding comparators, the forwarding muxes, the whole 32-bit
         ALU, the branch decision and the flush logic: almost the entire single-cycle critical path. Meanwhile F, M and W need
         only ~20 NAND delays, because our memories are tiny multiplexer trees, much faster than real SRAM. A pipeline's clock is its
@@ -512,14 +509,14 @@ export const chPipeline: Chapter = {
         <p>Pipelining pays when stages are balanced. Real designs: precompute forwarding selects a stage early, compute branch
         conditions with a dedicated comparator, predict branches, and split the slowest stage. Here the clock must fit
         the slowest stage, and in a real chip memory access, not the ALU, dominates the single-cycle path.</p>
-        <p><a href="#/c/pipepay/0">The next chapter</a> does exactly that, one measured step at a time.</p>
-        ${pipeMistakes()}`,
+        <p><a href="#/c/pipepay/0">The next chapter</a> does exactly that, one measured step at a time.</p>`,
       widget: () => payWidget(),
       more: {
         derive: `<p>Speed-up over the single-cycle CPU = (CPI₁ × T₁) / (CPI_pipe × T_pipe). With CPI₁ = 1, a pipeline gains only if its period
           shrinks by more than its CPI grows. Five even stages of the ${LOGIC}-delay logic would give a period of ${cut(5)}: that pays while the CPI stays below
           155 / ${cut(5)} = ${(155 / cut(5)).toFixed(2)}. The unbalanced cut here gives the E stage almost all of it.</p>`,
-        pitfall: `<p>Measuring a pipeline by its cycles per instruction alone, or by its clock alone, misleads: only the product is time.</p>`,
+        pitfall: `<p>Measuring a pipeline by its cycles per instruction alone, or by its clock alone, misleads: only the product is time.</p>
+          ${pipeMistakes()}`,
       },
       challenge: {
         kind: 'quiz', question: 'Which change would most directly shorten this pipeline\'s clock period?',
