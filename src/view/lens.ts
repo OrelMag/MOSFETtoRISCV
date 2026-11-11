@@ -225,7 +225,13 @@ export class Lens {
   }
 
   private build(outer: ViewCtx, name: string, box: Rect, key: string): void {
-    const child = outer.child(name);
+    // a part whose inside cannot be simulated on its own (the sandbox's flatten throws): it does not open, and a drill stops there too
+    let child: ViewCtx | null;
+    try {
+      child = outer.child(name);
+    } catch {
+      return this.showHint(box, 'its inside cannot be simulated on its own');
+    }
     if (!child) return;
     const def = child.def;
     const el = document.createElement('div');
