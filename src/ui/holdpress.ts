@@ -84,7 +84,7 @@ export interface HoldOptions {
  * same hold (Android), so the menu opens once (a view with its own contextmenu listener, registered before this, asks
  * `quiet()` first). `off` removes it.
  */
-export function installHold(el: Element, o: HoldOptions): { off(): void; quiet(): boolean } {
+export function installHold(el: Element, o: HoldOptions): { off(): void; quiet(): boolean; cancel(): void } {
   let down: PointerEvent | null = null;
   let ring: HTMLElement | null = null;
   let ringTimer: ReturnType<typeof setTimeout> | null = null;
@@ -146,5 +146,6 @@ export function installHold(el: Element, o: HoldOptions): { off(): void; quiet()
     unring();
     for (const [k, f, c] of [['pointerdown', onDown], ['pointermove', onMove], ['pointerup', onEnd], ['pointercancel', onEnd], ['click', onClick, true], ['contextmenu', onContext, true]] as const) el.removeEventListener(k, f, c);
   };
-  return { off, quiet: () => performance.now() < quietUntil };
+  // a pinch (view/pinch.ts) swallows its fingers' moves and lifts before this sees them: it calls this, or the hold would fire
+  return { off, quiet: () => performance.now() < quietUntil, cancel: () => { hold.cancel(); unring(); } };
 }

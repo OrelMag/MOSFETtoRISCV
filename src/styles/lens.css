@@ -82,3 +82,9 @@ svg.lens-rim { position: absolute; inset: 0; width: 100%; height: 100%; overflow
 .ov-inside { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
 
 @media (prefers-reduced-motion: reduce) { .lens, svg.lens-rim { animation: none; } }
+
+/* A touch screen: the cue's link is a 40 px target, as every small control there (app.css's coarse-pointer blocks). */
+@media (pointer: coarse) {
+  .lens-cue { padding: 0 4px 0 9px; }
+  .lens-cue button { min-height: 40px; padding: 0 6px; }
+}

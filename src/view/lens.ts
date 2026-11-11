@@ -4,9 +4,11 @@
 // becomes that level (a drill, no jump). Esc, zooming out under the close size, or panning the box away closes it.
 // The stage imports this module only while the setting is on, so off costs nothing.
 import '../styles/lens.css';
+import { coarsePointer } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { ViewCtx } from './context';
-import { closesAt, freeStage, growPlan, LENS_CLOSE_PX, openPlan, opensAt, rimJogs, type LensPlan, type Rect, type RimPort, type Size } from './lensplan';
+import { closesAt, EDGE_PX, freeStage, growPlan, LENS_CLOSE_PX, LENS_W, openPlan, opensAt, PHONE_EDGE_PX, PHONE_LENS_W, rimJogs, type LensPlan, type Rect, type RimPort, type Size } from './lensplan';
+import { installPinch } from './pinch';
 import type { OverlayResult } from './overlays';
 import { SchematicView, type SchematicEvents } from './schematic';
 
@@ -17,6 +19,11 @@ export const SETTLE_MS = 160;
 const OPEN_MS = 180;
 /** A pin further than this (px) inside the rim gets its connector ended on the rim (the author's choice, 2026-11-11). */
 export const DEEP_PX = 30;
+/** On a touch screen a tap inside the lens selects a part at least this big on screen (px, the coarse-pointer target);
+ *  anywhere else it steps into the box (DESIGN.md item 6). */
+export const TAP_SELECT_PX = 40;
+/** A touch is a tap while it moves less than this (px) and lifts within TAP_MS (a longer press is the held-finger menu). */
+const TAP_SLOP_PX = 8, TAP_MS = 450;
 
 export interface LensHost {
   /** The level on screen and its view. */
@@ -79,6 +86,9 @@ export class Lens {
     v.el.addEventListener('wheel', wheel, { passive: true });
     this.off.push(() => v.el.removeEventListener('wheel', wheel));
     v.onCamera(() => this.cameraMoved());
+    // a pinch on the board: its midpoint is the focus, and it settles when the fingers lift (not while they move: a pinch
+    // that also pans would open and close lenses on the way)
+    this.off.push(v.onPinch((mid, done) => this.pinched(mid, done)));
     // a wheel does not focus the stage, so its own Esc would not reach it: while a lens is open, Esc on the page closes it
     const esc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || !this.open || e.defaultPrevented) return;
@@ -106,6 +116,24 @@ export class Lens {
     this.hideHint();
     clearTimeout(this.timer);
     this.timer = window.setTimeout(() => this.settle(), SETTLE_MS);
+  }
+
+  /** A pinch step (or its end) around a client point. */
+  pinched(mid: [number, number], done: boolean): void {
+    this.focus = mid;
+    this.hideHint();
+    clearTimeout(this.timer);
+    if (done) this.timer = window.setTimeout(() => this.settle(), 0);
+  }
+
+  /** A touch screen: phone gutters, the whole free width, taps by size, "tap" wording. */
+  private get touch(): boolean {
+    return coarsePointer();
+  }
+
+  /** The free stage for an inside of this extent, with the gutters of this device. */
+  private free(extent: Size): Rect {
+    return freeStage(this.canvasSize(), this.host.covers(), extent, undefined, this.touch ? PHONE_EDGE_PX : EDGE_PX);
   }
 
   get isOpen(): boolean {
@@ -217,11 +245,15 @@ export class Lens {
     const box = this.boxPx(name);
     if (!box || !opensAt(box)) return void (o && this.close());
     this.close();
-    if (this.host.tooLarge(ctx, name)) return this.showHint(box, 'too large to open here: double-click to step in');
+    if (this.host.tooLarge(ctx, name)) return this.showHint(box, `too large to open here: ${this.stepIn}`);
     const def = ctx.node.children?.get(name)?.def;
-    const key = `${def?.id}|${Math.round(this.canvasSize().w)}x${Math.round(this.canvasSize().h)}`;
+    const key = `${def?.id}|${Math.round(this.canvasSize().w)}x${Math.round(this.canvasSize().h)}|${this.touch}`;
     if (this.refused.has(key)) return this.showHint(box, this.refused.get(key)!);
     this.build(ctx, name, box, key);
+  }
+
+  private get stepIn(): string {
+    return this.touch ? 'double-tap to step in' : 'double-click to step in';
   }
 
   private build(outer: ViewCtx, name: string, box: Rect, key: string): void {
@@ -257,14 +289,51 @@ export class Lens {
       this.host.view.wheelAt(e.deltaY, e.clientX, e.clientY);
       this.zoomed(e.clientX, e.clientY);
     }, { capture: true, passive: false });
+    // two fingers on the lens pinch the level outside, as on the board (registered first: it swallows the second finger
+    // before the pan below or the inside's own pinch sees it)
+    let endPan: (() => void) | null = null, pinched = false;
+    installPinch(el, {
+      start: () => { endPan?.(); view.cancelHold(); pinched = true; },
+      move: (k, mid, prev) => this.host.view.pinchAt(k, mid, prev),
+      end: (mid) => this.pinched(mid, true),
+    });
     el.addEventListener('pointerdown', (e) => {
       if (e.button !== 0 || (e.target as Element).closest('.inst')) return;
       e.stopPropagation();
       let x = e.clientX, y = e.clientY;
       const move = (m: PointerEvent) => { this.host.view.panBy(m.clientX - x, m.clientY - y); x = m.clientX; y = m.clientY; };
-      const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+      const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); endPan = null; };
+      endPan = up;
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
+    }, { capture: true });
+    // a finger's tap (DESIGN.md item 6): on a part at least TAP_SELECT_PX on screen it selects (the inside's own click),
+    // anywhere else but a wire it steps into the box: most inner parts are under a fingertip at this size, and a drill that lands
+    // beats a tap that misses. A double tap on a large part still steps into that part (the inside's DoubleTap).
+    let down: { x: number; y: number; t: number; id: number } | null = null;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      if (!e.isPrimary) return void (down = null);
+      pinched = false;
+      down = { x: e.clientX, y: e.clientY, t: e.timeStamp, id: e.pointerId };
+    }, { capture: true });
+    el.addEventListener('pointerup', (e) => {
+      const d = down;
+      down = null;
+      if (e.pointerType !== 'touch' || !d || d.id !== e.pointerId || pinched || !this.open) return;
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > TAP_SLOP_PX || e.timeStamp - d.t > TAP_MS) return;
+      // a tap on a wire is the inside's (it selects it; Why? traces it)
+      if ((e.target as Element).closest?.('[data-net]')) return;
+      const g = (e.target as Element).closest?.('.inst');
+      const r = g?.getBoundingClientRect();
+      if (r && Math.min(r.width, r.height) >= TAP_SELECT_PX) return;
+      e.stopPropagation();
+      e.preventDefault();
+      // the click the browser sends after this tap must not select what the next level draws there
+      const eat = (c: Event) => { c.stopPropagation(); c.preventDefault(); };
+      window.addEventListener('click', eat, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener('click', eat, { capture: true }), 600);
+      this.host.drill(child.path);
     }, { capture: true });
     const view = new SchematicView(body, events);
     view.show(child, false);
@@ -274,17 +343,17 @@ export class Lens {
     const named = new Set([...body.querySelectorAll<SVGGElement>('g.lg-named')].map((g) => g.dataset.inst));
     const parts = view.partBoxes().filter(([n]) => named.has(n));
     const smallest = parts.length ? Math.min(...parts.map(([, b]) => Math.max(b.w, b.h))) : 4;
-    const free = freeStage(this.canvasSize(), this.host.covers(), extent);
-    const plan = openPlan(box, extent, smallest, free);
+    const free = this.free(extent);
+    const plan = openPlan(box, extent, smallest, free, this.touch ? PHONE_LENS_W : LENS_W);
     if (!plan) {
       view.clear();
       el.remove();
-      const why = 'double-click to step in';
+      const why = this.stepIn;
       this.refused.set(key, why);
       return this.showHint(box, why);
     }
     const n = child.node.children?.size ?? 0;
-    const label = `${name} · ${def.name} · ${n} part${n === 1 ? '' : 's'} · live`;
+    const label = `${name} · ${def.name} · ${n} part${n === 1 ? '' : 's'} · live${this.touch ? ' · tap to step in' : ''}`;
     el.setAttribute('aria-label', `Inside ${name} (${def.name}): ${n} parts, live`);
     const rim = document.createElementNS(SVG, 'svg') as SVGSVGElement;
     rim.setAttribute('class', 'lens-rim');
@@ -328,7 +397,7 @@ export class Lens {
     const o = this.open;
     if (!o) return;
     const box = this.boxPx(o.name);
-    const free = freeStage(this.canvasSize(), this.host.covers(), o.extent);
+    const free = this.free(o.extent);
     if (!box || closesAt(box, free)) return void this.close();
     const { plan, handoff } = growPlan(o.opened, box, o.extent, free);
     if (handoff) return this.handOff();

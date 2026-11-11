@@ -305,7 +305,7 @@ const TOUCH_DRIVE = `(async () => {
   if (!knob || !tog()) return [...bad, 'tapping the canvas with an armed pin placed none'];
   const k = knob.getBoundingClientRect(), v0 = tog();
   ptr(svg, 'pointerdown', k.left + k.width / 2, k.top + k.height / 2); ptr(svg, 'pointerup', k.left + k.width / 2, k.top + k.height / 2); await wait(300);
-  if (tog() === v0) bad.push('a tap on a pin's knob did not flip the input');
+  if (tog() === v0) bad.push('a tap on the knob of a pin did not flip the input');
   const v1 = tog();
   document.querySelector('.in-toggle').click(); await wait(200);
   if (tog() === v1) bad.push('the switch under the canvas did not flip the input');
@@ -900,15 +900,84 @@ const lensDrive = (part: string) => `(async () => {
   return bad;
 })()`;
 
-/** A touch screen: the lens is not built for it yet (DESIGN.md item 6), so with the setting stored on, nothing opens. */
-const LENS_TOUCH_DRIVE = `(async () => {
+/**
+ * The zoom lens on a touch screen (DESIGN.md item 6, view/lens.ts): pinches spreading over `part` (two touch pointers)
+ * open one lens once the fingers lift, within 16 px gutters of the canvas and clear of the stage bar, the run bar, the
+ * docked panels and the notes; its tag says "tap to step in"; a tap on a part under 40 px steps into the ALU
+ * (#/…/<part>). `refused`: a box whose inside is not legible in a phone's lens shows the "double-tap to step in" hint
+ * instead; `off`: the setting left at its default (null), and a pinch only zooms.
+ */
+const lensPinchDrive = (mode: 'open' | 'refused' | 'off', part: string) => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
   const svg = document.querySelector('.canvas > svg.schematic');
-  const g = svg?.querySelector('[data-inst="alu"]');
-  if (!g) return ['no alu on the stage'];
-  for (let k = 0; k < 30; k++) { const r = g.getBoundingClientRect(); svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); await wait(20); }
-  await wait(600);
-  return document.querySelector('.lens') ? ['a lens opened on a touch screen'] : [];
+  const canvas = svg?.closest('.canvas');
+  const box = () => document.querySelector('.canvas > svg.schematic [data-inst="${part}"]')?.getBoundingClientRect();
+  if (!svg || !box()) return ['no ${part} on the stage: ' + [...document.querySelectorAll('.canvas > svg.schematic [data-inst]')].map((g) => g.dataset.inst).join(' ')];
+  svg.setPointerCapture = () => {}; svg.releasePointerCapture = () => {}; svg.hasPointerCapture = () => false; // synthetic pointers are not active ones
+  const ptr = (el, type, id, x, y, primary) => el.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', pointerId: id, isPrimary: primary, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+  // one pinch spreading the fingers by k around the ALU's middle, then both lifted
+  const pinch = async (k) => {
+    const r = box();
+    if (!r) return;
+    const cx = r.x + r.width / 2, cy = r.y + r.height / 2, d0 = 30;
+    // each finger on what is under it (a part, as a real finger would be), its events kept there
+    const at = (x) => { const e = document.elementFromPoint(x, cy); return e && svg.contains(e) ? e : svg; };
+    const f1 = at(cx - d0), f2 = at(cx + d0);
+    ptr(f1, 'pointerdown', 91, cx - d0, cy, true);
+    ptr(f2, 'pointerdown', 92, cx + d0, cy, false);
+    for (let i = 1; i <= 6; i++) {
+      const d = d0 * Math.pow(k, i / 6);
+      ptr(f1, 'pointermove', 91, cx - d, cy, true);
+      ptr(f2, 'pointermove', 92, cx + d, cy, false);
+      await wait(16);
+    }
+    const d = d0 * k;
+    ptr(f2, 'pointerup', 92, cx + d, cy, false);
+    ptr(f1, 'pointerup', 91, cx - d, cy, true);
+    await wait(120);
+  };
+  const lenses = () => document.querySelectorAll('.lens').length;
+  const log = [], t0 = performance.now();
+  new MutationObserver((m) => { for (const x of m) for (const n of [...x.addedNodes, ...x.removedNodes]) if (n.classList?.contains('lens')) log.push((x.addedNodes.length ? '+' : '-') + 'lens@' + Math.round(performance.now() - t0)); }).observe(canvas, { childList: true });
+  addEventListener('hashchange', () => log.push(location.hash + '@' + Math.round(performance.now() - t0)));
+  const before = box().width, canvasH = canvas.getBoundingClientRect().height;
+  for (let k = 0; k < 14 && box() && !lenses() && Math.min(box().width, box().height) < 160; k++) await pinch(1.3);
+  if (!box()) return [...bad, 'the pinches left the level: ' + location.hash + ', ' + lenses() + ' lenses; ' + log.join(' ')];
+  await wait(300);
+  if (box() && box().width <= before * 1.2) bad.push('the pinches did not zoom');
+  // the first finger of a pinch is not a press and hold: no menu once the hold's time has passed
+  await wait(500);
+  if (document.querySelector('.ctx-menu')) bad.push('a pinch opened the press-and-hold menu');
+  if ('${mode}' === 'off') return lenses() ? [...bad, 'a lens opened on a touch screen with the setting at its default'] : bad;
+  if ('${mode}' === 'refused') {
+    if (lenses()) bad.push('${part} opened although its inside is not legible in a phone lens');
+    if (!/double-tap to step in/.test(document.querySelector('.lens-hint')?.textContent ?? '')) bad.push('no "double-tap to step in" hint on ${part}');
+    return bad;
+  }
+  // the peek crumb must not restack the stage bar and take the canvas's height away (it did at 360 px)
+  if (canvas.getBoundingClientRect().height < canvasH - 1) bad.push('the canvas shrank from ' + Math.round(canvasH) + ' to ' + Math.round(canvas.getBoundingClientRect().height) + ' px');
+  if (lenses() !== 1) return [...bad, 'pinched onto ${part}: ' + lenses() + ' lenses (expected 1); ${part} ' + Math.round(box().width) + ' x ' + Math.round(box().height) + ' px' + (document.querySelector('.lens-hint') ? ', hint: ' + document.querySelector('.lens-hint').textContent : '') + '; ' + log.join(' ')];
+  const L = document.querySelector('.lens').getBoundingClientRect(), c = canvas.getBoundingClientRect();
+  if (L.left < c.left + 15 || L.right > c.right - 15 || L.top < c.top + 15 || L.bottom > c.bottom - 15) bad.push('the lens is not within 16 px gutters: ' + [L.left - c.left, c.right - L.right, L.top - c.top, c.bottom - L.bottom].map(Math.round).join(' / '));
+  const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  for (const p of document.querySelectorAll('.stage-bar, .stage .controls, .canvas [data-dock], .level-badge, .stage-notes > *')) {
+    const r = p.getBoundingClientRect();
+    if (r.width && r.height && hit(L, r)) bad.push('the lens covers ' + (p.className || p.tagName).toString().slice(0, 40));
+  }
+  if (!/tap to step in/.test(document.querySelector('.lens-tag')?.textContent ?? '')) bad.push('the tag does not say "tap to step in"');
+  // a tap on a part under 40 px steps into the box
+  const small = [...document.querySelectorAll('.lens svg.schematic [data-inst]')].map((g) => [g, g.getBoundingClientRect()])
+    .find(([, r]) => r.width > 2 && Math.min(r.width, r.height) < 40 && r.top > L.top + 24 && r.bottom < L.bottom && r.left > L.left && r.right < L.right);
+  if (!small) return [...bad, 'no part under 40 px inside the lens to tap'];
+  const [g, r] = small;
+  ptr(g, 'pointerdown', 93, r.x + r.width / 2, r.y + r.height / 2, true);
+  await wait(60);
+  ptr(g, 'pointerup', 93, r.x + r.width / 2, r.y + r.height / 2, true);
+  await wait(400);
+  if (!location.hash.endsWith('/${part}')) bad.push('a tap on a small part did not step into ${part}: ' + location.hash);
+  if (lenses()) bad.push('a lens left after the tap stepped in');
+  return bad;
 })()`;
 
 function routes(): Route[] {
@@ -1071,7 +1140,13 @@ function routes(): Route[] {
   add('#/c/cpu/0', lensOn('dark'), ' (zoom lens, dark)', undefined, lensDrive('alu'));
   add('#/c/cpu/0', lensOn('light', false), ' (zoom lens, light canvas)', undefined, lensDrive('alu'));
   add('#/c/pipeline/1', lensOn('dark'), ' (zoom lens, pipeline, dark)', undefined, lensDrive('alu'));
-  add('#/c/cpu/0', lensOn('dark'), ` (zoom lens, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], LENS_TOUCH_DRIVE);
+  // a touch screen (DESIGN.md item 6): a pinch onto the control unit opens it and a tap steps in, at both phone widths and
+  // in both themes; the ALU's inside cannot be drawn legibly in a phone's lens (6.4 px blocks at 390 px), so it says
+  // "double-tap to step in"; at its default (null) nothing opens
+  for (const vp of TOUCH_VIEWPORTS) add('#/c/cpu/0', lensOn('dark'), ` (zoom lens, ${vp.name})`, vp, lensPinchDrive('open', 'ctl'));
+  add('#/c/cpu/0', lensOn('light'), ` (zoom lens, ${TOUCH_VIEWPORTS[1].name}, light)`, TOUCH_VIEWPORTS[1], lensPinchDrive('open', 'npc'));
+  add('#/c/cpu/0', lensOn('dark'), ` (zoom lens, the ALU on a ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('refused', 'alu'));
+  add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens at its default, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('off', 'ctl'));
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
   // The layout lock: locked by default on a touch screen, unlocked with a mouse; an arrangement of an older drawing set aside.
   add('#/workbench/xor', light, ` (layout lock, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], layoutDrive('touch'));
@@ -1505,8 +1580,11 @@ class Tab {
       if (nav.errorText) throw new Error(`navigation failed: ${nav.errorText}`);
       await this.settle(t0);
       if (route.drive) {
-        const found = (await this.send('Runtime.evaluate', { expression: route.drive, awaitPromise: true, returnByValue: true })).result.value as string[] | undefined;
-        for (const p of found ?? []) this.errors.push(`drive: ${p}`);
+        const ev = await this.send('Runtime.evaluate', { expression: route.drive, awaitPromise: true, returnByValue: true });
+        const found = ev.result.value as string[] | undefined;
+        // a drive that throws comes back as an exception, not a list
+        if (ev.exceptionDetails) this.errors.push(`drive threw: ${ev.exceptionDetails.exception?.description ?? ev.exceptionDetails.text}`.slice(0, 400));
+        else for (const p of Array.isArray(found) ? found : []) this.errors.push(`drive: ${p}`);
         await this.settle(t0);
       }
       const seen = (await this.send('Runtime.evaluate', { expression: INSPECT, returnByValue: true })).result.value as string[];
