@@ -273,6 +273,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What it costs a program", challenge: "quiz" },
     { title: "M in the pipeline", challenge: "quiz", stage: "scene" },
     { title: "Multiply and divide in hardware", challenge: "quiz", stage: "scene" },
+    { title: "Words wider than the word", challenge: "reach", stage: "scene" },
   ] },
   { id: "cache", num: 22, title: "Caches & the memory hierarchy", blurb: "SRAM and DRAM at transistor level, direct-mapped and set-associative caches, the three Cs, and a CPU that stalls on a miss.", level: "Memory", builds: ["memory","cpu","pipeline"], recap: {"checks":3}, steps: [
     { title: "Six transistors per bit", challenge: "reach", stage: "scene" },

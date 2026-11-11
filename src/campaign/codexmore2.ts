@@ -492,6 +492,28 @@ eight compressor levels, then one fast adder</pre>csa8: 72 NANDs and 6 NAND dela
       { chapter: 'muldiv', step: 17, label: 'SRT: a redundant quotient' },
     ],
   },
+  multiword: {
+    idea: `School arithmetic on numbers longer than a times table: work one digit at a time, lowest first, and carry. Here the digit is a 32-bit word. With A = a1·2<sup>32</sup> + a0, A + B is a0 + b0 in the low word and a1 + b1 + carry in the high word, where the carry is 1 exactly when the low sum wrapped, that is, when it is smaller than an operand: <code>sltu c, s, a0</code>. A subtraction takes the borrow from the comparison B.lo &lt; A.lo made <em>before</em> the low subtraction. A product is four 32 × 32 → 64 products (<code>mul</code> for the low word, <code>mulhu</code> for the high; <code>mulh</code> and <code>mulhsu</code> for signed operands) added at weights 2<sup>0</sup>, 2<sup>32</sup> (twice) and 2<sup>64</sup>, with the carries kept as above. Machines with a carry flag add the flag in and out of every word (<code>ADC</code>); RISC-V drops the flag and pays an <code>sltu</code> per carry.`,
+    example: {
+      title: 'A = 0x1_FFFFFFFF, B = 0x2_00000003 on RV32IM (chapter muldiv)',
+      body: `<pre>add  s4, a0, a2     sum, low word      0xFFFFFFFF + 3 = 0x1_00000002 → 2
+sltu t1, s4, a0     carry: 2 &lt; 0xFFFFFFFF → 1
+add  s5, a1, a3     high words         1 + 2 = 3
+add  s5, s5, t1     + carry            4        A + B = 0x4_00000002
+
+A × B = 0x4_00000003_FFFFFFFD   (2⁶⁶ + 2³⁴ − 3)
+ 64-bit add 4 instructions, subtract 4,
+ product 22 (8 mul / mulhu + 14 adds and carry tests), signed 26</pre>`,
+    },
+    mistakes: [
+      'Testing the carry once: a1 + a3 + carry is two additions and either one can wrap (0xFFFFFFFF + 0 + 1 wraps on the second only).',
+      'Finding a borrow after the subtraction: compare the operands before it.',
+      'Using mulhu for signed operands: the high words of a signed product need mulh (signed × signed) or mulhsu (signed × unsigned), and the cross products\' signs fill the top word.',
+    ],
+    chapters: [
+      { chapter: 'muldiv', step: 26, label: 'Words wider than the word' },
+    ],
+  },
   booth: {
     idea: `A multiplier's cost is mostly its partial-product rows, one per multiplier bit. <b>Radix-4 Booth recoding</b> halves them: read the multiplier b two bits at a time with one bit of overlap, (b<sub>2i+1</sub>, b<sub>2i</sub>, b<sub>2i−1</sub>) with b<sub>−1</sub> = 0, and turn each group into a digit d<sub>i</sub> = −2·b<sub>2i+1</sub> + b<sub>2i</sub> + b<sub>2i−1</sub> in {−2, −1, 0, +1, +2}, so that b = Σ d<sub>i</sub>·4<sup>i</sup>. Every digit selects an easy row: 0, a, 2a (a one-bit shift), or their negation (invert, and add the 1 as a separate bit in the tree). Two's-complement multipliers need no correction, because the top group already carries the sign's negative weight.<br>The rows still have to be sign-extended; instead, each row's sign bit is inverted and one constant row, computed in advance, corrects them all. The encoder per digit is small (14 NANDs here), but every row bit becomes a select and an XOR instead of one AND, so Booth pays only when halving the rows saves more than that: from about 18 bits in NANDs here (at 24: 7436 against 7706), always a few delays deeper, and it also means less wiring and power.`,
     example: {
