@@ -487,6 +487,48 @@ const MENU_DRIVE = `(async () => {
   return bad;
 })()`;
 
+/**
+ * The campaign map on a phone: every act unfolded, then each card in this share (index % of === k) pressed where a finger would
+ * press it (whatever lies at its centre gets the click: an unfilled locked card once let the band under it take the tap), and its
+ * level's panel heading must then be on screen, above the sticky action bar, with the page no wider than the screen (a long
+ * button or a lesson table once widened it, and every later tap landed on the wrong card). Pressing the open card again shows its
+ * panel too. Reduced motion is on (the route's settings), so the page jumps instead of gliding.
+ */
+const mapDrive = (k: number, of: number) => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  for (let i = 0; i < 12; i++) { const f = document.querySelector('.cp-fold.folded'); if (!f) break; f.dispatchEvent(new MouseEvent('click', { bubbles: true })); await wait(300); }
+  const ids = [...document.querySelectorAll('.cp-node')].map((g) => g.getAttribute('data-node')).filter((_, i) => i % ${of} === ${k});
+  if (!ids.length) return ['no cards on the map'];
+  const view = () => { const head = document.querySelector('.cp-node-panel h2'); if (!head) return 'no panel';
+    const r = head.getBoundingClientRect(), bar = document.querySelector('.cp-node-actions.sticky')?.offsetHeight ?? 0;
+    return r.top >= 0 && r.bottom <= innerHeight - bar ? '' : 'its heading is off screen (top ' + Math.round(r.top) + ')'; };
+  const press = async (id) => {
+    scrollTo(0, 0);
+    const g = document.querySelector('.cp-node[data-node="' + id + '"]');
+    if (!g) return 'no card';
+    g.scrollIntoView({ block: 'center' }); await wait(50);
+    const b = g.getBoundingClientRect(), hit = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    if (!hit || hit.closest('.cp-node') !== g) return 'a press at its centre does not reach it (' + (hit?.getAttribute('class') || hit?.tagName) + ')';
+    hit.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    for (let t = 0; t < 30 && !location.hash.endsWith('/' + id); t++) await wait(50);
+    if (!location.hash.endsWith('/' + id)) return 'pressing it did not open it';
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); await wait(60);
+    return '';
+  };
+  for (const id of ids) {
+    const p = await press(id) || view();
+    if (p) bad.push(id + ': ' + p);
+    if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) { bad.push(id + ': its panel makes the page ' + document.documentElement.scrollWidth + ' px wide'); break; }
+  }
+  // the open card pressed again: the panel comes back into view
+  const last = ids[ids.length - 1];
+  scrollTo(0, 0); const g = document.querySelector('.cp-node[data-node="' + last + '"]'); g.scrollIntoView({ block: 'center' }); await wait(50);
+  const b = g.getBoundingClientRect(); document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await wait(200); const again = view(); if (again) bad.push(last + ' pressed again: ' + again);
+  return bad;
+})()`;
+
 const GALLERY_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
@@ -761,6 +803,11 @@ function routes(): Route[] {
     for (const v of [undefined, phone]) add(`#/c/network/${stepOf('Ping across the wire')}`, light, ` (running${v ? ', ' + v.name : ''})`, v, NET_DRIVE);
   }
   add(`#/campaign/play/${NODES.find((n) => n.kind === 'core')!.id}`, unlocked, ` (${phone.name})`, phone);
+  // The campaign map on a phone: every card pressed, its panel in view and the page no wider (mapDrive), in both themes, in four shares.
+  for (const theme of ['light', 'dark'] as const) {
+    const st = { [SETTINGS_KEY]: JSON.stringify({ theme, reduceMotion: true, coachDone: { stage: true, sandbox: true } }) };
+    for (let k = 0; k < 4; k++) add('#/campaign', st, ` (every card pressed ${k + 1}/4, ${phone.name}, ${theme})`, phone, mapDrive(k, 4));
+  }
   // A drill deep enough that the levels above the open one shrink to a few letters, with values in their pills (crumbvals.ts):
   // an opened ferrite core of the core plane, dark (where a clipped pill showed as an empty coloured blob) and at 1280 px.
   const mem = chapters.find((c) => c.id === 'memory');
