@@ -9,7 +9,7 @@ import { DualSim } from '../sim/dualsim';
 import { h, icon } from '../ui/dom';
 import { settings, type TraceLevel } from '../ui/settings';
 import type { Stage } from '../view/stage';
-import { instrMarks, type InstrUse } from './insthw';
+import { instrMarks, litOf, type InstrUse } from './insthw';
 
 export interface SlowOptions {
   /** Instructions can take several cycles: offer the cycle level (else instr is one cycle). */
@@ -164,7 +164,8 @@ export function markInstr(stage: Stage, word: number | null, units: string[], fo
   const atRoot = stage.path.length === 0;
   const light = (names: string[]) => {
     const have = stage.rootCtx?.node.children;
-    if (atRoot) stage.highlight(names.filter((n) => have?.has(n)), true);
+    // `box.part` names stay when the box is here: an open zoom lens on it lights the part
+    if (atRoot) stage.highlight(names.filter((n) => have?.has(n.split('.')[0])), true);
   };
   const def = stage.ctx?.def;
   const m = def && word !== null ? instrMarks(def, word, focus) : null;
@@ -192,7 +193,7 @@ export function showInstrUse(stage: Stage, box: HTMLElement, at: { pc: number; w
     clearInstr(stage);
     return;
   }
-  const note = markInstr(stage, at.word, at.use.units);
+  const note = markInstr(stage, at.word, litOf(at.use));
   box.replaceChildren(h('code', null, disasm(at.word, at.pc)), at.where ? h('span', null, ` · ${at.where}`) : '',
     h('div', null, at.use.path), note ? h('div', { class: 'ibd-note' }, note) : '');
 }

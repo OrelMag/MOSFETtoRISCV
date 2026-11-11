@@ -15,6 +15,8 @@ export interface InstrUse {
   units: string[];
   /** The data flow in one line, for the panel. */
   path: string;
+  /** Parts inside the boxes, `box.part` (innerUse): what an open zoom lens on a box lights. */
+  inner?: string[];
 }
 
 const FETCH = ['pc', 'pcmux', 'npc', 'imem', 'plus4', 'si', 'ctl', 'ir', 'adr', 'memsel', 'ctrl'];
@@ -65,7 +67,8 @@ export function instrUse(word: number, custom?: readonly CustomRow[], mac = fals
   const v = decodeV(word);
   if (v) return vectorUse(v);
   const op = word & 0x7f, funct7 = word >>> 25;
-  const u = (extra: string[], path: string): InstrUse => ({ units: [...FETCH, ...extra], path });
+  const inner = innerUse(word);
+  const u = (extra: string[], path: string): InstrUse => ({ units: [...FETCH, ...extra], path, ...(inner.length ? { inner } : {}) });
   switch (op) {
     case OPCODES.OP:
       // pipelined RV32IM: a multiply is split across E (mule) and M (mulm); a divide stays in E (dive)
@@ -101,7 +104,15 @@ export const STAGE_UNITS: Record<'F' | 'D' | 'E' | 'M' | 'W', string[]> = {
 export function stageUse(stage: keyof typeof STAGE_UNITS, use: InstrUse): string[] {
   const reg = { F: 'pc', D: 'FD', E: 'DE', M: 'EM', W: 'MW' }[stage];
   const own = STAGE_UNITS[stage].filter((n) => stage === 'F' || use.units.includes(n));
-  return own.includes(reg) ? own : [reg, ...own];
+  // the parts inside this stage's boxes (rf is in D and W: its read ports in D, its write in W)
+  // innerUse lists the register file's reads before rf.dec and the write after it (a register both read and written: twice)
+  const all = use.inner ?? [], dec = all.indexOf('rf.dec');
+  const inner = all.filter((n, i) => {
+    if (!own.includes(n.slice(0, n.indexOf('.')))) return false;
+    if (!n.startsWith('rf.') || dec < 0) return true;
+    return stage === 'W' ? i >= dec : i < dec;
+  });
+  return [...(own.includes(reg) ? own : [reg, ...own]), ...inner];
 }
 
 export interface InstrMarks {
@@ -315,4 +326,66 @@ export function coreUnitNames(units: readonly string[], inner: readonly string[]
   const have = new Set(inner), out = new Set<string>();
   for (const u of units) for (const n of u === 'dm' ? ['dm', 'amux', 'wmux', 'EM'] : [u]) if (have.has(n)) out.add(n);
   return [...out];
+}
+
+// ---- inside the boxes (the zoom lens, docs/transparent/DESIGN.md track 2c) -------------------------------------------
+
+/** The ALU's parts that make each result (lib/alu.ts alu(n), by funct3: the result mux's input). */
+const ALU_OP: Record<number, string[]> = {
+  0: ['add'], 1: ['sb', 'shift'], 2: ['add', 'slt', 'zslt'], 3: ['add', 'sltu', 'zsltu'],
+  4: ['xor'], 5: ['sb', 'shift'], 6: ['or'], 7: ['and'],
+};
+/** Each branch's condition in NEXT_PC (lib/cpu.ts): the flag it reads, through an inverter or the N ⊕ V gate. */
+const BRANCH_COND: Record<number, string[]> = { 0: [], 1: ['nz'], 4: ['lt'], 5: ['lt', 'ge'], 6: ['nc'], 7: [] };
+const IMM_BOX: Record<string, string> = { I: 'i', S: 's', B: 'b', U: 'u', J: 'j' };
+
+/**
+ * The parts an RV32I instruction uses inside the data path's boxes, as paths `box.part` (alu.add, rf.w5, imm.i, ctl.aludec,
+ * npc.take, dm.ram): what an open zoom lens on that box lights. Only the base classes; anything else names no inner part
+ * (the lens then lights the box's rim alone). A CPU without a box, or a box drawn otherwise, simply has no such part.
+ */
+export function innerUse(word: number): string[] {
+  const op = word & 0x7f, f3 = (word >>> 12) & 7, f7 = word >>> 25;
+  const rd = (word >>> 7) & 31, rs1 = (word >>> 15) & 31, rs2 = (word >>> 20) & 31;
+  const cls5 = (word & 3) === 3 ? (op >> 2) : -1;
+  const klass = CLASSES.find(([, c]) => c === cls5)?.[0];
+  if (!klass || (op === OPCODES.OP && f7 === 1)) return [];
+  const out: string[] = ['ctl.dec', 'ctl.mcls', 'ctl.sig'];
+  const reg = (r: number) => (r ? `rf.w${r}` : 'rf.x0');
+  const reads1 = ['R', 'I', 'LOAD', 'STORE', 'BRANCH', 'JALR'].includes(klass);
+  const reads2 = ['R', 'STORE', 'BRANCH'].includes(klass);
+  const writes = !['STORE', 'BRANCH'].includes(klass);
+  if (reads1) out.push('rf.rp1', reg(rs1));
+  if (reads2) out.push('rf.rp2', reg(rs2));
+  if (writes && rd) out.push('rf.dec', `rf.w${rd}`);
+  const fmt = decode(word).fmt;
+  if (IMM_BOX[fmt]) out.push(`imm.${IMM_BOX[fmt]}`, 'imm.mux');
+  if (['R', 'I', 'BRANCH'].includes(klass)) out.push('ctl.aludec');
+  // the ALU: R and I by funct3; loads, stores, jalr and auipc add; a branch subtracts and reads the flags
+  const alu = klass === 'R' || klass === 'I' ? ALU_OP[f3] : klass === 'BRANCH' ? ['add', ...(f3 < 2 ? ['zero'] : [])]
+    : ['LOAD', 'STORE', 'JALR', 'AUIPC'].includes(klass) ? ['add'] : [];
+  if (alu.length) out.push(...alu.map((p) => `alu.${p}`), 'alu.mux');
+  if (klass === 'BRANCH') out.push(...(BRANCH_COND[f3] ?? []).map((p) => `npc.${p}`), 'npc.cond', 'npc.take', 'npc.src0', 'npc.mp');
+  if (klass === 'JAL') out.push('npc.src0', 'npc.mp');
+  if (klass === 'JALR') out.push('npc.mp');
+  if (klass === 'LOAD' || klass === 'STORE') out.push('dm.sa', 'dm.ram');
+  // not deduplicated: a register read and written appears on both sides of rf.dec (stageUse splits them by stage)
+  return out;
+}
+
+/** What a click on an instruction lights: its boxes and, for an open lens, the parts inside them. */
+export function litOf(use: InstrUse): string[] {
+  return use.inner?.length ? [...use.units, ...use.inner] : use.units;
+}
+
+/** `names` (top-level and `box.part`) that exist in `def`: every dotted segment an instance of the level above it. */
+export function namesIn(def: ComponentDef, names: readonly string[]): string[] {
+  return names.filter((n) => {
+    let d: ComponentDef | undefined = def;
+    for (const seg of n.split('.')) {
+      d = d && netlistOf(d)?.instances.find((i) => i.name === seg)?.def;
+      if (!d) return false;
+    }
+    return true;
+  });
 }

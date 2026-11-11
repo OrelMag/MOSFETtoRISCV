@@ -264,6 +264,8 @@ export class Stage {
   /** The zoom lens (view/lens.ts), loaded only while settings.zoomOpen is on. */
   private lens: Lens | null = null;
   private lensLoading = false;
+  /** What highlight() lit last (names of this level, `box.part` inside a box): an open zoom lens shows its own share. */
+  private litNames: string[] = [];
   /** The cue under the breadcrumb after the lens handed off to a drill. */
   private cueEl: HTMLElement | null = null;
   private ovKind: OverlayKind | null = null;
@@ -934,6 +936,8 @@ export class Stage {
     this.remixBtn.hidden = !!scene.noRemix;
     this.view.highlight(scene.highlight ?? []);
     this.board.highlight(scene.highlight ?? [], true);
+    this.litNames = scene.highlight ?? [];
+    this.lens?.lit(this.litNames);
     this.panels = this.panelsOf(scene).map((f) => f(this));
     for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);
     for (const p of this.panels) if (p.el.dataset.dock === 'right' || p.el.dataset.fold) this.foldable(p.el);
@@ -1180,6 +1184,7 @@ export class Stage {
         cue: (p) => this.showCue(p),
         say: (t) => this.say(t),
       });
+      this.lens.lit(this.litNames);
     });
   }
 
@@ -2632,6 +2637,9 @@ export class Stage {
   /** Highlight instances in the current view (empty list clears). */
   highlight(names: string[], focus = false): void {
     this.view.highlight(names, focus);
+    // parts inside a box (alu.add) light in an open zoom lens on it; the box alone, its rim (DESIGN.md track 2c)
+    this.litNames = names;
+    this.lens?.lit(names);
     // the boards light what the schematic would (names of the root's instances: a module's board, a chip)
     if (this.ctx === this.rootCtx) this.board.highlight(names);
   }

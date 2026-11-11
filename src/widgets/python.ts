@@ -22,7 +22,7 @@ import { h } from '../ui/dom';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import { codeEditor } from './codeedit';
 import { cpuScene } from './cpupanel';
-import { instrUse } from './insthw';
+import { instrUse, litOf } from './insthw';
 import { instrBreakdown } from './instrfields';
 import { clearInstr, markInstr } from './slowctl';
 import { fmtCount } from '../sim/loadplan';
@@ -539,7 +539,7 @@ function pyPanel(c: Compiled, source: string, editOpen: boolean, target: { pipel
         ...(!pipe && sim instanceof GateSim ? [h('span', { title: 'Nets that changed value during its last clock cycle on the gates (glitches included)' }, 'wire toggles, its last cycle'), h('span', null, fmtCount((lineToggles.get(focus) ?? 0)))] : []),
       ] : [h('span', { class: 'py-hint' }, done ? 'The program has halted: click a line to see its instructions.' : 'No Python line yet.'), h('span')]));
       if (selLine !== null) {
-        const units = [...new Set(pcs.flatMap((p) => instrUse(c.words[p >>> 2]).units))];
+        const units = [...new Set(pcs.flatMap((p) => litOf(instrUse(c.words[p >>> 2]))))];
         markInstr(stage, c.words[pcs[0] >>> 2] ?? null, units);
       }
 

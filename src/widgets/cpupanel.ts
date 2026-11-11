@@ -49,7 +49,7 @@ import { DECK_EXT, deckFromJson, deckToJson } from '../cards/card';
 import { deckProgram, programCards } from '../cards/program';
 import type { Scene, ScenePanel, Stage, Widget } from '../view/stage';
 import type { FieldKey } from '../riscv/fields';
-import { instrUse, oooUse, stageUse, STAGE_UNITS } from './insthw';
+import { instrUse, litOf, oooUse, stageUse, STAGE_UNITS } from './insthw';
 import { isOooCore, oooSnap } from '../riscv/ooosnap';
 import { oooPanel, type OooLink } from './ooopanel';
 import { clearInstr, markInstr, slowControls } from './slowctl';
@@ -671,7 +671,7 @@ function cpuPanel(opts: CpuSceneOptions & { asm: AsmResult; link?: OooLink; vmLi
       const stages = inFlight.get(pc) ?? [];
       // the out-of-order core decodes in two slots: no single set of field wires to colour
       const carried = !opts.ooo && (!opts.pipeline || !stages.length || stages.includes('D'));
-      const note = markFields(carried ? w : null, stages.length && !opts.ooo ? stages.flatMap((s) => stageUse(s as keyof typeof STAGE_UNITS, use)) : use.units);
+      const note = markFields(carried ? w : null, stages.length && !opts.ooo ? stages.flatMap((s) => stageUse(s as keyof typeof STAGE_UNITS, use)) : litOf(use));
       usePath.replaceChildren(h('code', null, dis(pc)), h('span', null,
         opts.ooo ? (stages.length ? ` · now ${stages.join(' + ')} (F fetched, IQ waiting, EX executing, ROB done); highlighted: all the hardware it uses.` : ' · not in flight now; highlighted: all the hardware it uses.')
           : opts.pipeline ? (stages.length ? ` · now in ${stages.join(' + ')}; highlighted: that stage's part of the work.` : ' · not in the pipeline now; highlighted: all the hardware it uses.') : ''),

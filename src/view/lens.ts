@@ -72,6 +72,8 @@ export class Lens {
   private off: (() => void)[] = [];
   /** Ports whose inner pin is deep inside the drawing this paint (their connector ends on the rim). */
   private deep = new Set<string>();
+  /** What the stage lights now (its own level's names, `box.part` for parts inside a box): kept across opening and closing. */
+  private litNames: string[] = [];
 
   constructor(private host: LensHost) {
     const v = host.view;
@@ -120,6 +122,25 @@ export class Lens {
   /** The level the lens shows (the breadcrumb's peek crumb). */
   get peekCtx(): ViewCtx | null {
     return this.open?.ctx ?? null;
+  }
+
+  /**
+   * The stage lit these (the CPU panel's instruction, a data-show): parts named `<box>.<part>` light inside an open lens on
+   * that box; naming only the box makes its rim glow (DESIGN.md track 2c). The outer view's own dim is the stage's: not
+   * touched here. Kept, so a lens opened later shows them at once.
+   */
+  lit(names: readonly string[]): void {
+    this.litNames = [...names];
+    this.applyLit();
+  }
+
+  private applyLit(): void {
+    const o = this.open;
+    if (!o) return;
+    const pre = `${o.name}.`;
+    const inner = [...new Set(this.litNames.filter((n) => n.startsWith(pre)).map((n) => n.slice(pre.length).split('.')[0]))];
+    o.view.highlight(inner, inner.length > 0);
+    o.el.classList.toggle('lit', !inner.length && this.litNames.includes(o.name));
   }
 
   /** Close it (Esc, a scene or level change). True when one was open. */
@@ -297,6 +318,7 @@ export class Lens {
     this.host.peek(child);
     this.paintOverlay();
     this.paintRim();
+    this.applyLit();
     // the box's outline grows into the lens while the inside fades in
     if (!reducedMotion()) {
       const r = plan.rect;
