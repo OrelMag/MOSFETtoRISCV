@@ -24,6 +24,8 @@ const SVG = 'http://www.w3.org/2000/svg';
 export const HINT_MAX_ZOOM = 4;
 /** An inside built more than this far (px) outside the canvas is dropped: it would only cost repaints. */
 const KEEP_PX = 200;
+/** The view has settled when the camera has not moved for this long (ms). */
+export const SETTLE_MS = 160;
 
 export interface LensHost {
   /** The level on screen and its view. */
@@ -63,6 +65,9 @@ interface Box {
   openAt: number;
   /** What the rule said last (decide's hysteresis). */
   want: boolean;
+  /** Its level once prepared (the first half of a build). */
+  child?: ViewCtx;
+  childMs?: number;
   ctx?: ViewCtx;
   view?: SchematicView;
   el?: HTMLElement;
@@ -94,6 +99,9 @@ export class Lens {
   private lastPx = 0;
   private frame = 0;
   private buildFrame = 0;
+  private settleTimer = 0;
+  /** When the camera last moved (a sub-simulation waits for it to settle). */
+  private moved = 0;
   /** One layer over the canvas for every inside and the hint (a child added to the canvas itself re-checks its :has() rules). */
   private layer: HTMLElement;
 
@@ -135,6 +143,7 @@ export class Lens {
     this.off = [];
     cancelAnimationFrame(this.frame);
     cancelAnimationFrame(this.buildFrame);
+    clearTimeout(this.settleTimer);
   }
 
   /** A zoom step toward a client point (the wheel's pointer, the keyboard cursor's part). */
@@ -270,6 +279,7 @@ export class Lens {
   }
 
   private schedule(): void {
+    this.moved = performance.now();
     if (this.frame) return;
     this.frame = requestAnimationFrame(() => {
       this.frame = 0;
@@ -318,7 +328,8 @@ export class Lens {
       b.want = ok && near && decide(b.want, px, b.openAt);
       if (b.want && !b.view) wantBuild = true;
       else if (b.want) this.show(b);
-      else if (b.view && !near) this.drop(b);
+      else if ((b.view || b.child) && !near) this.drop(b);
+      else if (!b.view && b.child) b.child = undefined;
       else this.hide(b);
       if (b.view && r) this.place(b, r);
     }
@@ -343,7 +354,19 @@ export class Lens {
         if (d < bd) { bd = d; best = b; }
       }
       if (!best) return;
-      this.build(best);
+      if (!best.child) {
+        // a sub-simulation starts only once the zoom has settled, so its one long task never lands in a moving gesture
+        const quiet = performance.now() - this.moved;
+        if (best.def.preferBehavior && quiet < SETTLE_MS) {
+          clearTimeout(this.settleTimer);
+          this.settleTimer = window.setTimeout(() => this.queueBuild(), SETTLE_MS - quiet + 10);
+          return;
+        }
+        // the level in this frame, its drawing in the next: two tasks, each under DESIGN.md's 50 ms
+        if (this.prepare(best)) this.queueBuild();
+        return;
+      }
+      this.draw(best);
       const r = this.boxPx(best.name, c);
       if (best.view && r) {
         this.place(best, r);
@@ -355,20 +378,35 @@ export class Lens {
 
   // ---- an inside ------------------------------------------------------------------------------
 
+  /** Build an inside at once (going up, where it must be there in the same frame). */
   private build(b: Box, instant = false): void {
-    const t0 = performance.now();
+    if (this.prepare(b)) this.draw(b, instant);
+  }
+
+  /** The first half of a build: the inside's level (for a behavioural leaf such as a ROM, a lock-step sub-simulation of its
+   *  structure starts here: ~50 ms for the single-cycle CPU's program ROM). False when it has none. */
+  private prepare(b: Box): boolean {
+    if (b.child) return true;
     const outer = this.host.ctx();
-    if (!outer) return;
-    let child: ViewCtx | null;
+    if (!outer) return false;
+    const t0 = performance.now();
     try {
-      child = outer.child(b.name);
+      b.child = outer.child(b.name) ?? undefined;
     } catch {
       // its inside cannot be simulated on its own (the sandbox's flatten throws): it stays closed, as a drill stops there
       this.boxes.delete(b.name);
       this.groupOf(b.name)?.removeAttribute('data-open-at');
-      return;
+      return false;
     }
+    b.childMs = performance.now() - t0;
+    return !!b.child;
+  }
+
+  /** The second half: its drawing. */
+  private draw(b: Box, instant = false): void {
+    const child = b.child;
     if (!child) return;
+    const t0 = performance.now();
     const el = document.createElement('div');
     el.className = 'inside';
     el.dataset.inst = b.name;
@@ -394,13 +432,17 @@ export class Lens {
     b.ctx = child;
     b.view = view;
     b.el = el;
-    b.extent = view.contentBox();
+    // the rule's extent (lensplan.ts insideExtent: what the view draws, from the netlist), so the scale it read is the drawing's
+    b.extent = insideExtent(b.def) ?? view.contentBox();
     b.sel = null;
     b.stubs = undefined;
     this.layer.append(el);
     view.overlay(this.host.overlay(child));
-    // what building took on the main thread (the sub-simulation, the drawing): the smoke reads it (DESIGN.md's 50 ms)
-    el.dataset.buildMs = (performance.now() - t0).toFixed(1);
+    // what each half took on the main thread, each a task of its own: the smoke reads the larger (DESIGN.md's 50 ms)
+    const ms = performance.now() - t0;
+    el.dataset.buildMs = Math.max(ms, b.childMs ?? 0).toFixed(1);
+    el.dataset.drawMs = ms.toFixed(1);
+    el.dataset.childMs = (b.childMs ?? 0).toFixed(1);
   }
 
   /** The inside is read-only for arranging: the wheel and drags go to the view; a click selects; a double-click steps in. */
@@ -521,7 +563,7 @@ export class Lens {
     if (this.over === b.name) this.setOver(null);
     b.view?.clear();
     b.el?.remove();
-    b.view = b.el = b.ctx = b.extent = b.stubs = undefined;
+    b.view = b.el = b.ctx = b.child = b.extent = b.stubs = undefined;
     b.shown = false;
     b.gone = undefined;
     b.sel = null;

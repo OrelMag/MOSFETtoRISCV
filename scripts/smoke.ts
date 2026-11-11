@@ -851,14 +851,6 @@ const NET_DRIVE = `(async () => {
 })()`;
 
 /**
- * The zoom lens (view/lens.ts, settings.zoomOpen on): wheel steps onto `part` open its inside over it once they settle (one
- * .lens, the view in focus, the breadcrumb's peek crumb), placed clear of the canvas's edges, its docked panels and the stage
- * bar; it follows a clock pulse; Esc closes it; zooming on hands off to the level (#/…/part); zooming out shows the cue. Long
- * tasks after the gesture settles are measured (DESIGN.md: 50 ms on a quiet machine; the parallel tabs here get 250 ms), and
- * the opening's own task (data-build-ms, 100 ms here). `longMax`: null skips the long-task check, for a level whose dim and
- * breadcrumb are long tasks of the stage's own (the out-of-order core's top: 60–96 ms locally, 271 ms seen on CI).
- */
-/**
  * The lens honed (DESIGN.md "Revision 3: inside the box", view/lens.ts): wheel steps onto `part`, settling after each, check
  * the one rule against the box's own `data-open-at` (px per grid unit): open at or past it, closed below CLOSE_SHARE of it,
  * the band keeping the last answer; the drawn inside (`.lens-layer .inside[data-inst]`) within the box's outline; every other
@@ -876,8 +868,8 @@ const honeDrive = (part: string) => `(async () => {
   const hash = location.hash;
   const openAt = Number(g().dataset.openAt);
   if (!(openAt > 0 && Number.isFinite(openAt))) return ['${part} has no data-open-at: ' + g().dataset.openAt];
-  // px per grid unit: the schematic's user space is 10 px a unit
-  const px = () => svg.getScreenCTM().a * 10;
+  // px per grid unit: the schematic's user space is the grid (view/lens.ts unitPx, data-open-at's unit)
+  const px = () => svg.getScreenCTM().a;
   const isOpen = () => g().classList.contains('inside-on');
   const inside = () => document.querySelector('.lens-layer .inside[data-inst="${part}"]');
   const box = () => g().getBoundingClientRect();
@@ -940,166 +932,47 @@ const honeDrive = (part: string) => `(async () => {
   return bad;
 })()`;
 
-const lensDrive = (part: string, table = false, longMax: number | null = 250) => `(async () => {
-  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  const bad = [];
-  const svg = document.querySelector('.canvas > svg.schematic');
-  const canvas = svg?.closest('.canvas');
-  const box = () => document.querySelector('.canvas > svg.schematic [data-inst="${part}"]')?.getBoundingClientRect();
-  if (!svg || !box()) return ['no ${part} on the stage'];
-  const wheel = (dy, r = box()) => svg.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true }));
-  const lenses = () => document.querySelectorAll('.lens').length;
-  if (lenses()) bad.push('a lens before any zoom');
-  for (let k = 0; k < 40 && Math.min(box().width, box().height) < 110; k++) { wheel(-120); await wait(20); }
-  const long = [];
-  const po = new PerformanceObserver((l) => { for (const e of l.getEntries()) long.push(e.duration); });
-  try { po.observe({ type: 'longtask', buffered: false }); } catch {}
-  await wait(700);
-  po.disconnect();
-  if (lenses() !== 1) return [...bad, 'zoomed onto ${part}: ' + lenses() + ' lenses (expected 1)'];
-  const worst = Math.max(0, ...long);
-  if (${longMax ?? 'Infinity'} < worst) bad.push('a long task of ' + Math.round(worst) + ' ms after the zoom settled');
-  // the opening itself (lens.ts data-build-ms; DESIGN.md: 50 ms on a quiet machine, the parallel tabs here get twice that)
-  const built = Number(document.querySelector('.lens').dataset.buildMs);
-  if (!(built <= 100)) bad.push('the lens took ' + built + ' ms to open');
-  if (!svg.classList.contains('focus')) bad.push('the level is not dimmed around the lens');
-  if (!document.querySelector('.crumbs button.peek')) bad.push('no peek crumb');
-  const L = document.querySelector('.lens').getBoundingClientRect(), c = canvas.getBoundingClientRect();
-  if (L.left < c.left || L.right > c.right || L.top < c.top || L.bottom > c.bottom) bad.push('the lens leaves the canvas');
-  const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-  for (const p of canvas.querySelectorAll('[data-dock], .level-badge, .stage-notes > *')) {
-    const r = p.getBoundingClientRect();
-    if (r.width && r.height && hit(L, r)) bad.push('the lens covers ' + (p.className || p.tagName).toString().slice(0, 40));
-  }
-  // (a box of bare gates, a full adder, has no block to name)
-  ${table ? '' : `if (!document.querySelector('.lens svg.schematic .lg-name, .lens svg.schematic .sym-label')) bad.push('nothing named inside the lens');`}
-  // a pulse: the inside follows (its wires repaint; no error is the check, the console is watched)
-  [...document.querySelectorAll('.stage button')].find((b) => /^pulse$/i.test(b.textContent.trim()))?.click();
-  await wait(400);
-  // Why? across the rim (track 2b): a click on a wire inside traces it; some wire's trace reaches the rim and goes on outside
-  const whyBtn = document.querySelector('.stage .why-btn');
-  whyBtn?.click();
-  await wait(100);
-  let rim = false, traced = false;
-  const lensR = document.querySelector('.lens')?.getBoundingClientRect() ?? new DOMRect();
-  const wires = [...document.querySelectorAll('.lens svg.schematic [data-net]')].filter((w) => { const r = w.getBoundingClientRect(); return r.width + r.height > 4 && hit(r, lensR); });
-  for (const w of wires.slice(0, 24)) {
-    const r = w.getBoundingClientRect();
-    const at = { clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true, button: 0, pointerId: 1 };
-    w.dispatchEvent(new PointerEvent('pointerdown', at));
-    window.dispatchEvent(new PointerEvent('pointerup', at));
-    await wait(60);
-    traced ||= document.querySelectorAll('.why-chain li[data-kind]').length > 0 && /${part}:/.test(document.querySelector('.why-q')?.textContent ?? '');
-    if (document.querySelector('.why-chain li.why-rim') && document.querySelector('.why-chain li[data-across]')) { rim = true; break; }
-  }
-  if (!traced) bad.push('Why? on a wire inside the lens traced nothing');
-  else if (!rim) bad.push('no trace inside the lens went on across its rim');
-  if (lenses() !== 1) bad.push('the Why? card closed the lens');
-  // Break a part from the lens's right-click menu: Explain ▸ Break a part shows its level's table (or says why not)
-  const inner = document.querySelector('.lens svg.schematic [data-inst]');
-  if (inner) {
-    const r = inner.getBoundingClientRect();
-    inner.dispatchEvent(new MouseEvent('contextmenu', { clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true, button: 2 }));
-    await wait(400);
-    const item = (t) => [...document.querySelectorAll('[role^="menuitem"]')].find((e) => e.textContent.trim().startsWith(t));
-    item('Explain')?.click();
-    for (let k = 0; k < 20 && !item('Break a part'); k++) await wait(100);
-    const br = item('Break a part');
-    if (!br) bad.push('no Break a part in the lens menu');
-    else if (br.getAttribute('aria-disabled') === 'true') {
-      // a level too wide for its truth table: the row is off and says why
-      if (!/input bits/.test(br.textContent)) bad.push('Break a part is off without its reason: ' + br.textContent.trim().slice(0, 80));
-      ${table ? `bad.push('Break a part is off inside ${part}');` : ''}
-      for (let k = 0; k < 4 && document.querySelector('.ctx-menu'); k++) {
-        (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-        await wait(120);
-      }
-      if (document.querySelector('.ctx-menu')) bad.push('the menu did not close on Esc');
-    } else {
-      br.click();
-      await wait(300);
-      const said = document.querySelector('.why-body')?.textContent ?? '';
-      if (!/Inside ${part}|inside of ${part}/.test(said)) bad.push('Break a part in the lens did not show its level: ' + said.slice(0, 80));
-      ${table ? `if (!document.querySelector('.why-table tr.why-mark')) bad.push('no table with the part marked for Break a part inside ${part}');` : ''}
-    }
-  } else bad.push('no part inside the lens');
-  whyBtn?.click();
-  await wait(100);
-  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-  await wait(150);
-  if (lenses()) bad.push('Esc left the lens open');
-  if (location.hash.split('/').length !== 4) bad.push('Esc went up a level: ' + location.hash);
-  wheel(-60);
-  await wait(500);
-  if (lenses() !== 1) bad.push('a zoom after Esc did not open it again');
-  for (let k = 0; k < 60 && !location.hash.endsWith('/${part}'); k++) { const r = box(); if (!r) break; wheel(-120, r); await wait(40); }
-  await wait(400);
-  if (!location.hash.endsWith('/${part}')) bad.push('zooming on did not step into ${part}: ' + location.hash);
-  if (lenses()) bad.push('a lens left after the hand-off');
-  const s2 = document.querySelector('.canvas > svg.schematic');
-  for (let k = 0; k < 30 && !document.querySelector('.lens-cue'); k++) { const r = s2.getBoundingClientRect(); s2.dispatchEvent(new WheelEvent('wheel', { deltaY: 200, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); await wait(30); }
-  if (!document.querySelector('.lens-cue')) return [...bad, 'no cue after zooming out of the level the lens handed off to: ' + location.hash + ', ' + lenses() + ' lenses'];
-  if (!/Keep zooming out to go up to/.test(document.querySelector('.lens-cue').textContent)) bad.push('the cue reads: ' + document.querySelector('.lens-cue').textContent);
-  // phase 2e: the gesture that brought the cue up coasting on (a trackpad's momentum, every frame) never goes up
-  const out = (dy) => { const r = s2.getBoundingClientRect(); s2.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); };
-  for (let k = 0, d = 30; k < 40; k++, d *= 0.95) { out(d); await wait(16); }
-  if (!location.hash.endsWith('/${part}')) bad.push('momentum after the cue went up: ' + location.hash);
-  // a fresh gesture after a pause goes up one level, the level left open in its lens at full size
-  await wait(500);
-  out(60);
-  await wait(400);
-  if (location.hash.split('/').length !== 4) return [...bad, 'a fresh zoom-out after the cue did not go up: ' + location.hash];
-  if (lenses() !== 1) bad.push('going up opened ' + lenses() + ' lenses on ${part} (expected 1)');
-  if (document.querySelector('.lens-cue')) bad.push('the cue stayed after going up');
-  // zooming on out shrinks it until it closes
-  for (let k = 0; k < 40 && lenses(); k++) { out(120); await wait(30); }
-  await wait(300);
-  if (lenses()) bad.push('zooming out after going up left the lens open');
-  if (location.hash.split('/').length !== 4) bad.push('zooming out went further up: ' + location.hash);
-  // fitted again for the route's own checks (the LEVEL tag over the drawing is judged on a fitted view)
-  document.querySelector('.stage [aria-label="Fit to screen"]')?.click();
-  await wait(300);
-  return bad;
-})()`;
-
 /**
- * The CPU panel's marks inside a lens (DESIGN.md track 2c): `first` 'select' clicks the listing's `line` before the lens on
- * `part` opens (the lens shows marks already standing), 'open' after. `inner` names parts that must be lit inside it; none:
- * the rim must glow (the instruction uses the box but names nothing in it).
+ * The CPU panel's marks inside an open box (DESIGN.md track 2c, Revision 3): `first` 'select' clicks the listing's `line`
+ * before `part` opens (the inside shows marks already standing), 'open' after. `inner` names parts that must be lit in its
+ * inside; none: the box's outline must glow (the instruction uses the box but names nothing in it).
  */
 const lensMarksDrive = (part: string, line: string, inner: string[], first: 'select' | 'open') => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
   const svg = document.querySelector('.canvas > svg.schematic');
-  const box = () => document.querySelector('.canvas > svg.schematic [data-inst="${part}"]')?.getBoundingClientRect();
+  const g = () => document.querySelector('.canvas > svg.schematic g.inst[data-inst="${part}"]');
+  const box = () => g()?.getBoundingClientRect();
   if (!svg || !box()) return ['no ${part} on the stage'];
   const pick = () => [...document.querySelectorAll('.cpu-listing .ln')].find((l) => /^\\s*${line}\\b/.test(l.querySelector('.t')?.textContent ?? ''));
   const select = async () => { const l = pick(); if (!l) return bad.push('no "${line}" line in the listing'); l.click(); await wait(250); };
+  const inside = () => document.querySelector('.lens-layer .inside.on[data-inst="${part}"]');
   const open = async () => {
-    for (let k = 0; k < 40 && Math.min(box().width, box().height) < 110; k++) {
+    for (let k = 0; k < 60 && !inside(); k++) {
       const r = box();
       svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true }));
-      await wait(20);
+      await wait(60);
     }
-    await wait(700);
+    await wait(500);
   };
   if ('${first}' === 'select') { await select(); await open(); } else { await open(); await select(); }
-  const lens = document.querySelector('.lens');
-  if (!lens) return [...bad, 'no lens on ${part}'];
-  const inner = ${JSON.stringify(inner)};
-  const lit = [...lens.querySelectorAll('svg.schematic g.hl[data-inst]')].map((g) => g.dataset.inst);
-  if (inner.length) {
-    for (const n of inner) if (!lit.includes(n)) bad.push('${line}: ${part}.' + n + ' not lit in the lens (lit: ' + lit.join(' ') + ')');
-    if (!lens.querySelector('svg.schematic.focus')) bad.push('${line}: the lens is not dimmed around its marks');
-    if (lens.classList.contains('lit')) bad.push('${line}: the rim glows although parts inside are named');
+  const el = inside();
+  if (!el) return [...bad, 'no inside on ${part} (opens at ' + g()?.dataset.openAt + ' px a unit)'];
+  const want = ${JSON.stringify(inner)};
+  const lit = [...el.querySelectorAll('svg.schematic g.hl[data-inst]')].map((x) => x.dataset.inst);
+  const glows = () => g().classList.contains('lens-lit');
+  if (want.length) {
+    for (const n of want) if (!lit.includes(n)) bad.push('${line}: ${part}.' + n + ' not lit inside (lit: ' + lit.join(' ') + ')');
+    if (!el.querySelector('svg.schematic.focus')) bad.push('${line}: the inside is not dimmed around its marks');
+    if (glows()) bad.push('${line}: the outline glows although parts inside are named');
   } else {
-    if (!lens.classList.contains('lit')) bad.push('${line}: the rim of ${part} does not glow');
+    if (!glows()) bad.push('${line}: the outline of ${part} does not glow');
     if (lit.length) bad.push('${line}: parts lit inside ${part}: ' + lit.join(' '));
   }
   // deselected: the marks go
   pick()?.click();
   await wait(250);
-  if (lens.querySelector('svg.schematic g.hl[data-inst]') || lens.classList.contains('lit')) bad.push('marks left in the lens after deselecting ${line}');
+  if (el.querySelector('svg.schematic g.hl[data-inst]') || glows()) bad.push('marks left inside after deselecting ${line}');
   return bad;
 })()`;
 
@@ -1140,9 +1013,8 @@ const lensPinchDrive = (mode: 'open' | 'refused' | 'off', part: string) => `(asy
     ptr(f1, 'pointerup', 91, cx - d, cy, true);
     await wait(120);
   };
-  const lenses = () => document.querySelectorAll('.lens').length;
+  const lenses = () => document.querySelectorAll('.lens-layer .inside').length;
   const log = [], t0 = performance.now();
-  new MutationObserver((m) => { for (const x of m) for (const n of [...x.addedNodes, ...x.removedNodes]) if (n.classList?.contains('lens')) log.push((x.addedNodes.length ? '+' : '-') + 'lens@' + Math.round(performance.now() - t0)); }).observe(canvas, { childList: true });
   addEventListener('hashchange', () => log.push(location.hash + '@' + Math.round(performance.now() - t0)));
   const before = box().width, canvasH = canvas.getBoundingClientRect().height;
   for (let k = 0; k < 14 && box() && !lenses() && Math.min(box().width, box().height) < 160; k++) await pinch(1.3);
@@ -1152,7 +1024,7 @@ const lensPinchDrive = (mode: 'open' | 'refused' | 'off', part: string) => `(asy
   // the first finger of a pinch is not a press and hold: no menu once the hold's time has passed
   await wait(500);
   if (document.querySelector('.ctx-menu')) bad.push('a pinch opened the press-and-hold menu');
-  if ('${mode}' === 'off') return lenses() ? [...bad, 'a lens opened on a touch screen with the setting at its default'] : bad;
+  if ('${mode}' === 'off') return lenses() ? [...bad, 'an inside opened on a touch screen (Revision 3: not on a coarse pointer)'] : bad;
   if ('${mode}' === 'refused') {
     if (lenses()) bad.push('${part} opened although its inside is not legible in a phone lens');
     if (!/double-tap to step in/.test(document.querySelector('.lens-hint')?.textContent ?? '')) bad.push('no "double-tap to step in" hint on ${part}');
@@ -1184,11 +1056,9 @@ const lensPinchDrive = (mode: 'open' | 'refused' | 'off', part: string) => `(asy
 })()`;
 
 /**
- * The lens over the sandbox's look inside (DESIGN.md track 2a): the computer's core opened by double-click, wheel steps onto
- * `inner` there. With the setting on: one .lens in the inside's canvas, clear of its edges, the level tag and the hint, a
- * peek crumb; Esc closes it and leaves look inside open; zooming on steps into `inner`. Off: no lens after the same zoom.
- * Beside the circuit (look inside's default pane) a box whose inside would be illegible there shows its hint instead; the
- * drive then widens the pane.
+ * Open blocks as you zoom over the sandbox's look inside (DESIGN.md track 2a, Revision 3): the computer's core opened by
+ * double-click, wheel steps onto `inner` there. On: its inside opens within its box in look inside's canvas, the crumb names
+ * it while the pointer is over it, a clock step keeps it live, and zooming on hands off to the level. Off: nothing opens.
  */
 const lensInsideDrive = (part: string, inner: string, on: boolean) => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1203,50 +1073,30 @@ const lensInsideDrive = (part: string, inner: string, on: boolean) => `(async ()
   if (!svg?.querySelector('[data-inst="${inner}"]')) return ['look inside ${part} shows no ${inner}'];
   await wait(300);
   const canvas = svg.closest('.sb-inside-canvas');
-  const box = () => svg.querySelector('[data-inst="${inner}"]')?.getBoundingClientRect();
+  const g = () => svg.querySelector('g.inst[data-inst="${inner}"]');
+  const box = () => g()?.getBoundingClientRect();
   const wheel = (dy, r = box()) => svg.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true }));
-  const lenses = () => document.querySelectorAll('.lens').length;
-  if (lenses()) bad.push('a lens before any zoom');
-  for (let k = 0; k < 40 && Math.min(box().width, box().height) < 110; k++) { wheel(-120); await wait(20); }
-  await wait(700);
-  if (!${on}) return lenses() ? [...bad, 'a lens with Open blocks as you zoom off'] : bad;
-  // beside the circuit the pane may be too narrow to show the inside legibly: then the box says so, and the wide pane opens it
-  if (!lenses()) {
-    if (!document.querySelector('.lens-hint')) return [...bad, 'zoomed onto ${inner} beside the circuit: no lens and no hint'];
-    document.querySelector('.sb-inside-bar button[title^="Wide"]')?.click();
-    await wait(600);
-    for (let k = 0; k < 40 && Math.min(box().width, box().height) < 110; k++) { wheel(-120); await wait(20); }
-    wheel(-30);
-    await wait(700);
-  }
-  if (lenses() !== 1) return [...bad, 'zoomed onto ${inner}: ' + lenses() + ' lenses (expected 1)' + (document.querySelector('.lens-hint') ? ', hint: ' + document.querySelector('.lens-hint').textContent : '') + ', box ' + Math.round(box().width) + ' x ' + Math.round(box().height) + ', canvas ' + Math.round(canvas.getBoundingClientRect().width) + ' x ' + Math.round(canvas.getBoundingClientRect().height)];
-  const lens = document.querySelector('.lens');
-  if (lens.parentElement !== canvas) bad.push('the lens is not in look inside');
-  if (!svg.classList.contains('focus')) bad.push('the level is not dimmed around the lens');
-  if (!document.querySelector('.sb-inside .crumbs button.peek')) bad.push('no peek crumb');
-  const L = lens.getBoundingClientRect(), c = canvas.getBoundingClientRect();
-  if (L.left < c.left || L.right > c.right || L.top < c.top || L.bottom > c.bottom) bad.push('the lens leaves the canvas');
-  const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-  for (const p of canvas.querySelectorAll(':scope > .level-badge, :scope > .hint-badge')) {
-    const r = p.getBoundingClientRect();
-    if (r.width && r.height && hit(L, r)) bad.push('the lens covers ' + p.className.toString().slice(0, 40));
-  }
-  if (!lens.querySelector('svg.schematic .lg-name, svg.schematic .sym-label')) bad.push('nothing named inside the lens');
-  // a clock step: the inside follows (no error is the check, the console is watched)
-  [...document.querySelectorAll('.sb-controls button')].find((b) => b.textContent.trim() === 'Step')?.click();
-  await wait(400);
-  document.querySelector('.sb-inside').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-  await wait(150);
-  if (lenses()) bad.push('Esc left the lens open');
-  if (!document.querySelector('.sb-inside')) bad.push('Esc closed look inside instead of the lens');
-  wheel(-60);
+  const inside = () => canvas.querySelector('.lens-layer .inside.on[data-inst="${inner}"]');
+  if (document.querySelector('.lens-layer .inside')) bad.push('an inside before any zoom');
+  for (let k = 0; k < 60 && box() && !inside() && Math.min(box().width, box().height) < 900; k++) { wheel(-120); await wait(60); }
   await wait(500);
-  if (lenses() !== 1) bad.push('a zoom after Esc did not open it again');
+  if (!${on}) return document.querySelector('.lens-layer .inside') ? [...bad, 'an inside with Open blocks as you zoom off'] : bad;
+  const el = inside();
+  if (!el) return [...bad, 'zoomed onto ${inner}: no inside (opens at ' + g()?.dataset.openAt + ' px a unit, now ' + (svg.getScreenCTM()?.a ?? 0).toFixed(1) + ')'];
+  const b = box(), i = el.getBoundingClientRect();
+  if (i.left < b.left - 1 || i.top < b.top - 1 || i.right > b.right + 1 || i.bottom > b.bottom + 1) bad.push('the inside leaves its box');
+  if (!el.querySelector('svg.schematic [data-inst]')) bad.push('nothing drawn inside ${inner}');
+  el.dispatchEvent(new PointerEvent('pointerenter', { clientX: i.x + i.width / 2, clientY: i.y + i.height / 2 }));
+  await wait(150);
+  if (!/[(]inside[)]/.test(document.querySelector('.sb-inside .crumbs button.peek')?.textContent ?? '')) bad.push('no "(inside)" crumb while the pointer is over it');
+  // a clock step: the inside follows (no error is the check, the console is watched)
+  [...document.querySelectorAll('.sb-controls button')].find((x) => x.textContent.trim() === 'Step')?.click();
+  await wait(400);
   const cur = () => document.querySelector('.sb-inside .crumbs button.cur')?.firstChild?.textContent;
-  for (let k = 0; k < 60 && cur() !== '${inner}'; k++) { const r = box(); if (!r) break; wheel(-120, r); await wait(40); }
+  for (let k = 0; k < 80 && cur() !== '${inner}'; k++) { const r = box(); if (!r) break; wheel(-120, r); await wait(40); }
   await wait(400);
   if (cur() !== '${inner}') bad.push('zooming on did not step into ${inner}: at ' + cur());
-  if (lenses()) bad.push('a lens left after the hand-off');
+  if (canvas.querySelector('.lens-layer .inside.on')) bad.push('an inside left after the hand-off');
   return bad;
 })()`;
 
@@ -1410,22 +1260,14 @@ function routes(): Route[] {
   add('#/sandbox', light, ` (${TOUCH_VIEWPORTS[0].name}: hold, cancel, tap a pin)`, TOUCH_VIEWPORTS[0], TOUCH_DRIVE);
   // the zoom lens with Open blocks as you zoom on: both themes, the light canvas (board off), the pipeline; a touch phone opens none
   const lensOn = (theme: 'light' | 'dark', board = true) => ({ [SETTINGS_KEY]: JSON.stringify({ theme, board, autoClock: false, zoomOpen: true, coachDone: { stage: true, sandbox: true } }) });
-  add('#/c/cpu/0', lensOn('light'), ' (zoom lens)', undefined, lensDrive('alu'));
-  add('#/c/cpu/0', lensOn('dark'), ' (zoom lens, dark)', undefined, lensDrive('alu'));
-  add('#/c/cpu/0', lensOn('light', false), ' (zoom lens, light canvas)', undefined, lensDrive('alu'));
-  add('#/c/pipeline/1', lensOn('dark'), ' (zoom lens, pipeline, dark)', undefined, lensDrive('alu'));
-  // a box small enough for its truth table: Break a part in the lens draws the table, the part right-clicked marked
-  add('#/c/adders/3', lensOn('light'), ' (zoom lens, adder)', undefined, lensDrive('fa1', true));
-  add('#/c/adders/3', lensOn('dark'), ' (zoom lens, adder, dark)', undefined, lensDrive('fa1', true));
-  // the CPU panel's marks inside it (track 2c): add lights the adder; on a box it uses with nothing named inside, the rim glows
+  // the CPU panel's marks inside an open box (track 2c): add lights the adder; on a box it uses with nothing named inside,
+  // the box's outline glows
   add('#/c/cpu/0', lensOn('light'), ' (zoom lens, CPU marks inside)', undefined, lensMarksDrive('alu', 'add', ['add', 'mux'], 'open'));
-  add('#/c/cpu/0', lensOn('dark'), ' (zoom lens, CPU marks, rim, dark)', undefined, lensMarksDrive('res', 'add', [], 'select'));
-  // the out-of-order core (phase 2f): its divider opens like any part since the guard was lifted; the opening's own task is
-  // checked, not the dim and breadcrumb that follow it as tasks of their own on that level
-  add('#/c/ooo/11', lensOn('dark'), ' (zoom lens, out of order, dark)', undefined, lensDrive('div', false, null));
-  // the lens honed (Revision 3): the single-cycle CPU's pc, register file and alu in both themes; the pipeline register FD
-  // (the author's bug); the out-of-order core
+  add('#/c/cpu/0', lensOn('dark'), ' (zoom lens, CPU marks, outline, dark)', undefined, lensMarksDrive('res', 'add', [], 'select'));
+  // the lens honed (Revision 3): the single-cycle CPU's pc, register file and alu in both themes and on the light canvas
+  // (board off); the pipeline register FD (the author's bug); the out-of-order core
   for (const theme of ['light', 'dark'] as const) for (const part of ['pc', 'rf', 'alu']) add('#/c/cpu/0', lensOn(theme), ` (lens hone, ${part}, ${theme})`, undefined, honeDrive(part));
+  add('#/c/cpu/0', lensOn('light', false), ' (lens hone, alu, light canvas)', undefined, honeDrive('alu'));
   add('#/c/pipeline/1', lensOn('light'), ' (lens hone, pipeline register FD)', undefined, honeDrive('FD'));
   add('#/c/pipeline/1', lensOn('dark'), ' (lens hone, pipeline register FD, dark)', undefined, honeDrive('FD'));
   add('#/c/ooo/11', lensOn('dark'), ' (lens hone, out of order, dark)', undefined, honeDrive('div'));
@@ -1437,12 +1279,8 @@ function routes(): Route[] {
     add(comp, { ...lensOn('dark'), [SANDBOX_KEY]: ex.json }, ' (zoom lens in look inside, dark)', undefined, lensInsideDrive('cpu', 'alu', true));
     add(comp, { ...lensOff, [SANDBOX_KEY]: ex.json }, ' (look inside, zoom lens off)', undefined, lensInsideDrive('cpu', 'alu', false));
   }
-  // a touch screen (DESIGN.md item 6): a pinch onto the control unit opens it and a tap steps in, at both phone widths and
-  // in both themes; the ALU's inside cannot be drawn legibly in a phone's lens (6.4 px blocks at 390 px), so it says
-  // "double-tap to step in"; at its default (null) nothing opens
-  for (const vp of TOUCH_VIEWPORTS) add('#/c/cpu/0', lensOn('dark'), ` (zoom lens, ${vp.name})`, vp, lensPinchDrive('open', 'ctl'));
-  add('#/c/cpu/0', lensOn('light'), ` (zoom lens, ${TOUCH_VIEWPORTS[1].name}, light)`, TOUCH_VIEWPORTS[1], lensPinchDrive('open', 'npc'));
-  add('#/c/cpu/0', lensOn('dark'), ` (zoom lens, the ALU on a ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('refused', 'alu'));
+  // a touch screen: nothing opens on a coarse pointer (Revision 3), with the setting on or at its default; a pinch only zooms
+  add('#/c/cpu/0', lensOn('dark'), ` (zoom lens on, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('off', 'ctl'));
   add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens at its default, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('off', 'ctl'));
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
   // The layout lock: locked by default on a touch screen, unlocked with a mouse; an arrangement of an older drawing set aside.

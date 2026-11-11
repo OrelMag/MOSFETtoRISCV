@@ -104,19 +104,3 @@ describe('Break a part in the lens', () => {
   });
 });
 
-describe('a cover growing beside an open lens', () => {
-  it('shrinks it into the free stage instead of stepping in', async () => {
-    const { freeStage, growPlan, openPlan } = await import('../src/view/lensplan');
-    const canvas = { w: 962, h: 611 }, extent = { w: 78, h: 146 }, box = { x: 264, y: 140, w: 115, h: 168 };
-    const opened = openPlan(box, extent, 4, freeStage(canvas, [], extent))!;
-    // the Why? card grows down the left with a long trace: the free stage is the strip beside it
-    const free = freeStage(canvas, [{ x: 12, y: 12, w: 380, h: 560 }], extent);
-    // zoomed on since it opened: the lens has grown to nearly the whole canvas
-    const g = growPlan({ plan: opened, boxH: box.h / 1.6 }, box, extent, free);
-    expect(g.handoff).toBe(true);
-    const shrunk = openPlan(box, extent, Infinity, free)!;
-    expect(shrunk).toBeTruthy();
-    const r = shrunk.rect;
-    expect(r.x >= free.x && r.y >= free.y && r.x + r.w <= free.x + free.w + 1e-6 && r.y + r.h <= free.y + free.h + 1e-6).toBe(true);
-  });
-});

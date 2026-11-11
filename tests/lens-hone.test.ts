@@ -12,7 +12,7 @@ import { PROGRAMS } from '../src/riscv/programs';
 import { orientGeom } from '../src/sim/geometry';
 import { inPorts, netlistOf, outPorts, type ComponentDef } from '../src/sim/types';
 import {
-  BOX_MIN_PX, CLOSE_SHARE, FLOOR_PX, INSET, closesAt, decide, fitInside, handOffView, handsOff, opensAt, openAtPx,
+  BOX_MIN_PX, CLOSE_SHARE, FLOOR_PX, INSET, decide, fitInside, handOffView, handsOff, openAtPx,
   smallestNamed, type Rect,
 } from '../src/view/lensplan';
 
@@ -243,6 +243,13 @@ describe('the author\'s bug: a register beside other modules opens once zoomed e
     expect(flips(states)).toBe(1);
   });
 
+  // the floating lens's rule (removed with it, DESIGN.md R3.8), kept here as the regression's fixture: open at 96 px on the
+  // shorter side, close when more than half of the box is outside the stage
+  const opensAt = (b: { x: number; y: number; w: number; h: number }) => Math.min(b.w, b.h) >= 96;
+  const closesAt = (b: { x: number; y: number; w: number; h: number }, st: { x: number; y: number; w: number; h: number }) => {
+    const iw = Math.max(0, Math.min(b.x + b.w, st.x + st.w) - Math.max(b.x, st.x)), ih = Math.max(0, Math.min(b.y + b.h, st.y + st.h) - Math.max(b.y, st.y));
+    return iw * ih < (b.w * b.h) / 2;
+  };
   it('the old rule never opened it there, and closed it on the next step: the regression it replaces', () => {
     const { box, def } = boxOf(pipe, 'FD');
     const at = openAtFor(box, def);
