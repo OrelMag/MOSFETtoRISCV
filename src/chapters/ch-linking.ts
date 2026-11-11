@@ -64,6 +64,8 @@ export function linkFigures(): LinkFigures {
 }
 const F = linkFigures();
 const exe = buildExecutable([MAIN_S, UTIL_S]);
+/** The executable's header and its two program headers, as a loader reads them (the ELF step's questions). */
+const SEG = { entry: exe.info.entry, phoff: exe.info.phoff, text: exe.info.segments[0], data: exe.info.segments[1] };
 
 const ROGUE: SourceFile = { name: 'rogue.s', text: `.globl main\nmain:\n  la t0, main\n  li t1, 0x13\n  sw t1, 0(t0)       # a store into its own code\n  li a7, 93\n  ecall\n` };
 const scenes = {
@@ -205,6 +207,36 @@ export const chLinking: Chapter = {
         <p>The linker's output is a file the loader can read without knowing anything about the program: an <strong>executable</strong>. RISC-V systems use <strong>ELF</strong>. A ${ELF32_EHSIZE}-byte header says what it is (a 32-bit little-endian RISC-V executable), where execution starts (the entry, <code>main</code> at ${hex(F.entry)}) and where the program headers are. Each <strong>program header</strong> of ${ELF32_PHSIZE} bytes is a segment to load: where its bytes are in the file, its virtual address, how many bytes are in the file and how many in memory (more in memory: the rest is .bss, zeroed), and its permissions.</p>
         <p>Ours has ${F.phnum}: text, read and execute; data and .bss, read and write. The text's <em>physical</em> address differs from its virtual one: ${hex(EXEC_ROM)}, the ROM frame its bytes are put in, for a reason the next step gives. The whole file is ${n(F.elfBytes)} bytes. It is written by the same code that writes the files the site's verification hands to Spike, the RISC-V reference simulator (chapter ${numOf('verify')}).</p>`,
       widget: elfWidget,
+      reading: {
+        source: 'Executable and Linking Format (ELF) Specification, version 1.2 (Tool Interface Standard)', section: 'ELF Header; Program Header',
+        quote: [
+          'e_entry This member gives the virtual address to which the system first transfers control, thus starting the process.',
+          'PT_LOAD The array element specifies a loadable segment, described by p_filesz and p_memsz. The bytes from the file are mapped to the beginning of the memory segment. If the segment\'s memory size (p_memsz) is larger than the file size (p_filesz), the "extra" bytes are defined to hold the value 0 and to follow the segment\'s initialized area.'],
+        note: `The widget's header and program-header rows are these fields of this chapter's file: e_entry ${hex(SEG.entry)}, ${exe.info.phnum} PT_LOAD entries from e_phoff ${SEG.phoff}. p_flags is R = 4, W = 2, X = 1 added up.`,
+        quizzes: [
+          {
+            question: `This chapter's executable has e_entry = ${hex(SEG.entry)}. What is that number?`,
+            options: [`The virtual address of main: the first instruction the process runs`, `The text's physical address in the ROM`, `The file offset where the text's bytes start`, `Where the program headers start in the file`],
+            answer: 0,
+            explain: `The loader puts ${hex(SEG.entry)} in the saved PC; main is the first thing in the text, at ${hex(VA.code)}. The other numbers in the header are offsets into the file (e_phoff = ${SEG.phoff}) or, in a program header, physical addresses.`,
+            why: ['', `That is p_paddr of the text, ${hex(SEG.text.paddr)}: where its bytes sit, not the address the program runs at.`, `That is the text header's p_offset, ${SEG.text.offset}: a place in the file, not in memory.`, `That is e_phoff, ${SEG.phoff}, a separate field.`],
+          },
+          {
+            question: `Which program header carries the code, and why are its flags ${SEG.text.flags} (R + X)?`,
+            options: [`The one at ${hex(SEG.text.vaddr)}: code is fetched (X) and may be read (R), but a store into it is a bug, so no W`, `The one at ${hex(SEG.data.vaddr)}, because code must be writable to be loaded`, `Both: each segment holds part of the code`, `The one at ${hex(SEG.text.vaddr)}, with R + X because the ROM cannot be read`],
+            answer: 0,
+            explain: `p_flags ${SEG.text.flags} = R (4) + X (1). The data header at ${hex(SEG.data.vaddr)} has ${SEG.data.flags} = R (4) + W (2): written, never executed. The loader copies these bits into the page table, which is how a store into the code faults.`,
+            why: ['', `That header's flags are ${SEG.data.flags}, R + W with no X: data. The loader writes a segment whatever its flags; the flags are for the program afterwards.`, 'The data header has no X: nothing in it may be run.', 'R is there so the code may be read; X is what lets it be fetched.'],
+          },
+          {
+            question: `The data header has p_filesz ${SEG.data.filesz} and p_memsz ${SEG.data.memsz}. What is in the last ${SEG.data.memsz - SEG.data.filesz} bytes of the segment?`,
+            options: [`Zeros: .bss, the variables that start at zero (count)`, `The first bytes of the next segment in the file`, `Whatever the frame held before`, `A copy of the last ${SEG.data.memsz - SEG.data.filesz} bytes from the file`],
+            answer: 0,
+            explain: `${SEG.data.filesz} bytes come from the file (.data: the table of three words) and the other ${SEG.data.memsz - SEG.data.filesz} are defined to be 0, as the quote says: main.s's count, a .space ${SEG.data.memsz - SEG.data.filesz} in .bss.`,
+            why: ['', 'Each segment says where its own bytes are (p_offset); nothing runs over from the next.', 'The specification defines them as 0, and leaving old memory would leak another program\'s data.', 'Only p_filesz bytes are read from the file.'],
+          },
+        ],
+      },
       challenge: {
         kind: 'quiz',
         question: 'A program header says 16 bytes in memory, 12 in the file. What does the loader do with the other 4?',
