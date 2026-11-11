@@ -115,10 +115,28 @@ export interface SegState { fill: string[]; nands: number; budget: number; ok: b
 
 export const SEG_BUDGET = (): number => sevenSegCost(sevenSegRows(Array(7).fill('------'))).nands;
 
+/**
+ * A horizontal scroller in a frame that shows which way more of it lies: a fade and a chevron on an edge with columns past it
+ * (a phone shows the seven-segment table's last columns only after a swipe). Returns the frame and a cleanup.
+ */
+export function scrollEdges(scroller: HTMLElement): { el: HTMLElement; update(): void; destroy(): void } {
+  const el = h('div', { class: 'lg-edges' }, scroller);
+  const update = () => {
+    const max = scroller.scrollWidth - scroller.clientWidth;
+    el.classList.toggle('more-l', max > 1 && scroller.scrollLeft > 1);
+    el.classList.toggle('more-r', max > 1 && scroller.scrollLeft < max - 1);
+  };
+  scroller.addEventListener('scroll', update, { passive: true });
+  const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+  ro?.observe(scroller);
+  return { el, update, destroy: () => ro?.disconnect() };
+}
+
 export function segmentLab(stage?: Stage): Widget & { state(): SegState; set(fill: string[]): void } {
   let fill: string[] = Array(7).fill('000000');
   const budget = SEG_BUDGET();
   const grid = h('div', { class: 'lg-seg-scroll' });
+  const edges = scrollEdges(grid);
   const sum = h('div', { class: 'lg-segsum', 'aria-live': 'polite' });
   const eqs = h('details', { class: 'lg-eqs' });
 
@@ -148,13 +166,15 @@ export function segmentLab(stage?: Stage): Widget & { state(): SegState; set(fil
         }));
     });
     grid.replaceChildren(h('table', { class: 'lg-t lg-seg' }, head, ...trs));
+    edges.update();
     sum.replaceChildren('NANDs for all seven segments: ', h('b', { class: st.ok ? 'ok' : st.nands > budget ? 'warn' : '' }, String(st.nands)), `. Budget: ${budget}. `, st.terms ? `${st.terms} shared terms.` : '');
     eqs.replaceChildren(h('summary', null, 'The minimal equations'), h('div', { class: 'lg-eqlist' }, ...st.text.map((t) => h('code', null, t))));
   }
   draw();
   return {
     el: h('div', { class: 'widget lg' }, h('div', { class: 'km-title' }, 'A BCD digit to seven segments'),
-      h('p', { class: 'lg-sub' }, 'Rows 0 to 9 are the font. Rows 10 to 15 never reach the decoder: click their cells to choose 0, 1 or a don’t care.'), grid, sum, eqs),
+      h('p', { class: 'lg-sub' }, 'Rows 0 to 9 are the font. Rows 10 to 15 never reach the decoder: click their cells to choose 0, 1 or a don’t care.'), edges.el, sum, eqs),
+    destroy: () => edges.destroy(),
     state,
     set: (f) => { fill = f; draw(); stage?.refresh(); },
   };

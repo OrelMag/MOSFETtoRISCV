@@ -99,6 +99,17 @@
 .lg-seg-scroll, .lg-scroll { overflow-x: auto; max-width: 100%; }
 /* a phone: the sharing table's headers wrap instead of pushing the table past the screen */
 @media (max-width: 560px) { .lg-scroll .lg-t th { white-space: normal; } .lg-scroll .lg-t td, .lg-scroll .lg-t th { padding: 4px 5px; } }
+/* scrollEdges: a fade and a chevron on the side a narrow table continues past (a phone) */
+.lg-edges { position: relative; }
+.lg-edges::before, .lg-edges::after {
+  content: '‹'; position: absolute; top: 0; bottom: 0; width: 28px; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 0.15s;
+  display: flex; align-items: center; font: 600 20px var(--font-ui); color: var(--accent);
+}
+.lg-edges::before { left: 0; justify-content: flex-start; padding-left: 2px; background: linear-gradient(to right, var(--bg) 35%, transparent); }
+.lg-edges::after { content: '›'; right: 0; justify-content: flex-end; padding-right: 2px; background: linear-gradient(to left, var(--bg) 35%, transparent); }
+.lg-edges.more-l::before, .lg-edges.more-r::after { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .lg-edges::before, .lg-edges::after { transition: none; } }
+:root[data-reduce-motion] .lg-edges::before, :root[data-reduce-motion] .lg-edges::after { transition: none; }
 .lg-seg td, .lg-seg th { padding: 2px 5px; text-align: center; }
 .lg-seg .in { color: var(--muted); font: 12px var(--font-mono); }
 .lg-seg .dg { font: 600 12px var(--font-mono); color: var(--text); }

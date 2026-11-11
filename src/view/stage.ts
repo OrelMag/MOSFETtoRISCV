@@ -426,7 +426,7 @@ export class Stage {
       }
     });
     const pressed = (b: HTMLElement) => b.classList.contains('on');
-    // the order they go in: the least used first (a wheel or a pinch zooms; Up, Fit and the panes stay)
+    // the order they go in: the least used first (a wheel or a pinch zooms; Up, Fit and the panes stay), the lock last
     this.shedGroups = [
       { els: [readBtn], items: [{ label: 'Zoom to readable', hint: 'About 3 px per grid unit, from the inputs; drag to pan', icon: 'zoomin', run: () => this.zoomReadable() }] },
       { els: [zoomOut, zoomIn], items: [{ label: 'Zoom out', icon: 'minus', run: () => this.zoomBy(1.25) }, { label: 'Zoom in', icon: 'plus', run: () => this.zoomBy(0.8) }] },
@@ -438,12 +438,13 @@ export class Stage {
         const r = more.getBoundingClientRect();
         this.view.layoutMenu(r.left, r.bottom + 6);
       } }] },
-      { els: [lockBtn], items: [{ label: 'Move parts by dragging', hint: 'Off: a drag on a part pans', icon: 'unlock', on: () => settings.moveParts, run: () => settings.set('moveParts', !settings.moveParts) }] },
       { els: [remix], items: [{ label: 'Open in Sandbox', hint: 'An editable copy of the circuit on screen', icon: 'chip', run: () => this.remix() }] },
       { els: [this.timingBtn], items: [{ label: 'Timing diagram', icon: 'wave', on: () => pressed(this.timingBtn), run: () => this.timingBtn.click() }] },
       { els: [this.probeBtn], items: [{ label: 'Probe mode (P)', icon: 'probe', on: () => pressed(this.probeBtn), run: () => this.probeBtn.click() }] },
       { els: [this.whyBtn], items: [{ label: 'Why? (W)', icon: 'why', on: () => pressed(this.whyBtn), run: () => this.whyBtn.click() }] },
       { els: [this.ovBar.el], items: OVERLAY_KINDS.map((k) => ({ label: `Overlay: ${OVERLAY_LABEL[k]}`, hint: this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
+      // the lock last: its state (a phone starts locked) has to stay in sight, as a bare icon once the labels go
+      { els: [lockBtn], items: [{ label: 'Move parts by dragging', hint: 'Off: a drag on a part pans', icon: 'unlock', on: () => settings.moveParts, run: () => settings.set('moveParts', !settings.moveParts) }] },
     ];
     // Schematic | Breadboard (a scene with Scene.breadboard), and the jumpers' look while the boards are shown
     const segBtn = (label: string, title: string, fn: () => void) => h('button', { title, 'aria-pressed': 'false', onclick: fn }, label);
@@ -484,7 +485,7 @@ export class Stage {
     this.dock = h('div', { class: 'panel-dock' });
     // Touch: dblclick comes from a double tap; the Layout button stands in for the right-click menu.
     this.hint = hintBadge('double-click a part to open it · drag a part or a wire to move it (shift: pick several; the lock on the bar stops it) · right-click for layout · drag to pan · wheel or pinch to zoom',
-      'double-tap a part: open · drag: pan (unlocked: tap a part or wire, then drag it) · pinch: zoom', 'stage', '', HINT_AUTO_MS);
+      'double-tap a part: open · drag: pan · pinch: zoom', 'stage', '', HINT_AUTO_MS);
     this.canvas.append(this.levelBadge, this.layoutPill, this.hint, this.dock, this.board.el, this.why.el);
     this.controls = h('div', { class: 'controls unfit' });
     this.status = h('div', { class: 'status' });
@@ -2451,7 +2452,7 @@ export class Stage {
 
   /** Drop the bar's button labels (all but Probe and Why?, then those too; icons and tooltips remain) when the open level's name would otherwise be
    *  cut; measured with the labels shown, so they come back once there is room. Still cut, the least used
-   *  buttons move into a More menu a group at a time (shedGroups: zoom, image, layout, sandbox, timing, probe),
+   *  buttons move into a More menu a group at a time (shedGroups: zoom, image, layout, sandbox, timing, probe, why, overlays, lock),
    *  and only then (a phone: the buttons take the whole bar, the name read "4…") the hierarchy gets a row of
    *  its own above the buttons (.stacked), every button back in the bar. The levels above the open one shrink
    *  first (app.css): cut with an ellipsis, their names in their tooltips. */
@@ -2903,18 +2904,18 @@ export class Stage {
       // nothing
     } else if (asideOf(id)) {
       p.classList.add('warn');
-      p.append(h('span', { class: 'lp-text' }, 'Redrawn since you arranged it: the new drawing'),
+      p.append(h('span', { class: 'lp-text' }, 'This level was redrawn after you arranged it; here is the new drawing'),
         act('Bring mine back', 'Your arrangement of the earlier drawing, over this one (Ctrl+Z undoes it)', 'restore'),
         act('Dismiss', 'Keep the new drawing and forget your earlier arrangement', 'dismiss'));
     } else if (v.original) {
-      p.append(h('span', { class: 'lp-text' }, 'The chapter’s drawing'), act('Back to mine', 'Your arrangement of this level again', 'mine'));
+      p.append(h('span', { class: 'lp-text' }, 'The original drawing'), act('Back to mine', 'Your arrangement of this level again', 'mine'));
     } else if (arranged(lay)) {
       const c = arrangedCount(lay);
       const what = [c.parts && `${c.parts} part${c.parts > 1 ? 's' : ''} moved`, c.wires && `${c.wires} wire${c.wires > 1 ? 's' : ''} reshaped`,
         c.pointers && `${c.pointers} pointer${c.pointers > 1 ? 's' : ''} changed`].filter(Boolean).join(', ');
       p.append(h('span', { class: 'lp-text' }, icon('move', 13), `Your layout: ${what}`),
-        act('Original', 'Show the chapter’s drawing of this level (yours stays saved)', 'original'),
-        act('Reset', 'This level as the chapter drew it; your colours stay (Ctrl+Z undoes it)', 'reset'));
+        act('Original', 'Show this level as it was first drawn (your layout stays saved)', 'original'),
+        act('Reset', 'Put this level back as it was first drawn; wire colours you picked stay (Ctrl+Z undoes it)', 'reset'));
     }
     p.hidden = !p.childElementCount;
   }
