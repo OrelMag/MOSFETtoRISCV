@@ -115,7 +115,6 @@ export interface Step {
   /** Derivation / In real silicon / Common mistake / Numbers, under the body. */
   more?: Layers;
   scene?: () => Scene;
-  /** A widget in the canvas's place; it gets the stage so that a change can call `stage.refresh()` and the step's challenge is checked. */
   widget?: (stage: Stage) => Widget;
   challenge?: Challenge;
   actions?: StepAction[];
