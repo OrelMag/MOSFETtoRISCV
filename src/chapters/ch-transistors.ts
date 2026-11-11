@@ -499,7 +499,7 @@ export const chInverter: Chapter = {
         network for every input.</p>
         <p>Restoring is what lets a design be deep. Every output is rebuilt from a rail, so after each gate the error budget is reset: a signal that crosses a thousand gates is as clean as one that crosses
         one. Without it (a chain of resistors, or of pass switches) every stage subtracts a little swing, and past a few stages 0 and 1 meet. The price is that each stage inverts,
-        which is why a CMOS stage is always an inverting gate and why a non-inverting gate costs more than an inverting one (<a href="#/c/nand/0">chapter 3</a>).</p>`,
+        which is why a CMOS stage is always an inverting gate and why a non-inverting gate costs more than an inverting one (<a href="#/c/nand/0">chapter ${numOf('nand')}</a>).</p>`,
       scene: () => ({ root: INV_CMOS, inputs: { a: 1 } }),
       more: {
         derive: `<p>Here a wire is 0, 1, X or Z; in silicon it is a voltage, and an inverter maps input voltage to output voltage

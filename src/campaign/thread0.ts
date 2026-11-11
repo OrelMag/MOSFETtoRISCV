@@ -378,6 +378,7 @@ export const THREAD0: Record<string, NodeThread> = {
       a_slt: 'the same a + ¬b + 1 with NOTs in place of the XORs: only its carry is read',
       a_alu16: 'add and sub; slt and sltu read its flags (N ⊕ V, ¬cout)',
       o_div: 'subtracts the divisor at every step',
+      m_acc: 'eight bits of it add or subtract M[x] into the accumulator',
     },
     pitfalls: [
       'sub must also feed cin: ¬b alone gives a − b − 1.',

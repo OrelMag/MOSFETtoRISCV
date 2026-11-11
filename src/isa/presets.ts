@@ -2,6 +2,7 @@
 // first preset, read-only in the editor and copied to start one's own. tests/isa-table.test.ts holds
 // it to the 4-bit assembler and disassembler on every word.
 
+import { ACC8_PRESET } from '../acc8/acc8';
 import { INSTRS4, JCN_NAMES, type Shape4 } from '../isa4/isa4';
 import { FN, MEANING } from '../ssem/isa';
 import type { InstrDef, IsaDoc } from './table';
@@ -127,4 +128,4 @@ export const BABY_PRESET: IsaDoc = {
 };
 
 /** The presets, by id. */
-export const ISA_PRESETS: Record<string, IsaDoc> = { [ISA4_PRESET.id]: ISA4_PRESET, [PDP8_PRESET.id]: PDP8_PRESET, [BABY_PRESET.id]: BABY_PRESET };
+export const ISA_PRESETS: Record<string, IsaDoc> = { [ISA4_PRESET.id]: ISA4_PRESET, [PDP8_PRESET.id]: PDP8_PRESET, [BABY_PRESET.id]: BABY_PRESET, [ACC8_PRESET.id]: ACC8_PRESET };

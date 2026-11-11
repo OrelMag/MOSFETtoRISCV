@@ -357,6 +357,23 @@ RV16: separate imem and dmem, so neither happens</pre>`,
     chapters: [{ chapter: 'cpu', step: 0, label: 'The datapath' }, { chapter: 'cache', step: 13, label: 'Caching instructions too' }],
   },
 
+  accumulator: {
+    idea: `An accumulator machine has a single data register, the accumulator A. Arithmetic takes A and one memory operand and leaves the result in A (${'<code>ADD a</code>: A ← A + M[a]'}); loads and stores move A to and from memory. One operand per instruction keeps a word short (the chapter's machine: 3 bits of op, 5 of address) and the hardware small: one register, one adder input from memory, a decoder.<br>The price is traffic. Every value that is not being worked on right now lives in memory, so a loop with two variables loads and stores each of them every round: the chapter's 6 × 7 takes 8 instructions a round where RV32I, with registers, takes 4. Early machines (EDSAC, the PDP-8, the 6502 with its A register) were accumulator machines because registers were expensive; once they were cheap, register files won.`,
+    example: {
+      title: 'One addition, two ways',
+      body: `<pre>accumulator:   LDA x      A ← M[x]
+                ADD y      A ← A + M[y]
+                STA z      M[z] ← A
+registers:      add a2, a0, a1    (x, y, z already in a0, a1, a2)</pre>`,
+    },
+    mistakes: [
+      'Testing a value that is not in A: the zero flag looks at A only, so a count in memory must be loaded before JZ.',
+      'Forgetting to store A before loading the next variable: the accumulator holds one value, and LDA overwrites it.',
+      'Counting the short instructions as a win: three accumulator instructions do what one register instruction does.',
+    ],
+    chapters: [{ chapter: 'firstcomputer', step: 1, label: 'Splitting the word: LDA and STA' }],
+  },
+
   // ---- ISA and software
   isa: {
     idea: `The ISA is everything a program can observe: the registers and memory, what each instruction does to them, how instructions are encoded, what traps and when. Anything a program cannot see (pipelining, caches, the adder type, the cycles a divide takes) is the implementation's choice. One RV16 binary therefore runs unchanged on the single-cycle core, the pipeline and the multicycle core, and each is checked by comparing its register writes and stores, in order, with the golden model (iss16).<br>ISA decisions are cost decisions. Fixed field positions make decoding wiring; x0 = 0 turns mv, nop, neg and j into pseudo-instructions for free; load / store keeps memory off the ALU path; having no flags register removes a piece of state that every instruction would otherwise update and the pipeline would have to forward.`,
