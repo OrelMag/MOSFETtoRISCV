@@ -45,13 +45,19 @@ const mduPart = (name: string) => nd(netlistOf(MDU)!.instances.find((i) => i.nam
 const sp = groupDigits;
 
 const fmt = groupDigits;
+/** 32-bit words, high first, as one hex number with a _ between words: leading zero words dropped, the top word unpadded (0x4_00000002). */
+export const wordsHex = (ws: number[]): string => {
+  const s = ws.map((x) => (x >>> 0).toString(16).toUpperCase().padStart(8, '0'));
+  while (s.length > 1 && /^0+$/.test(s[0])) s.shift();
+  s[0] = s[0].replace(/^0+(?=.)/, '');
+  return '0x' + s.join('_');
+};
 /** The multi-word program (riscv/multiword.ts) run once on the golden model: what the last step quotes (tests/multiword.test.ts pins it against BigInt). */
 const MW = (() => {
   const iss = new ISS(assemble(MULTIWORD_SOURCE).words, { m: true });
   iss.run(1000);
-  const w = (i: number) => (iss.x[i] >>> 0).toString(16).toUpperCase().padStart(8, '0');
   const n = (b: string) => b.split('\n').filter((l) => l.trim()).slice(8).length;
-  return { total: iss.steps - 1, product: n(MULTIWORD_BODY), signed: n(MULTIWORD_SIGNED_BODY), hex: '0x' + w(19) + '_' + w(18) + '_' + w(9) + '_' + w(8) };
+  return { total: iss.steps - 1, product: n(MULTIWORD_BODY), signed: n(MULTIWORD_SIGNED_BODY), hex: wordsHex([19, 18, 9, 8].map((r) => iss.x[r])), sum: wordsHex([21, 20].map((r) => iss.x[r])) };
 })();
 const pySrc = (id: string) => PY_PROGRAMS.find((p) => p.id === id)!.source;
 /** chapter 15's samples compiled for RV32IM on the gate-level pipeline (tests/pypipe.test.ts checks every number against the gates). */
@@ -1044,10 +1050,10 @@ export const chMulDiv: Chapter = {
         RISC-V has no carry flag, so the carry is recomputed with <code>sltu</code> (set if less than, unsigned): after <code>s = a + b</code> the sum wrapped round exactly when it is smaller than an operand.</p>
         <p>A 64-bit add of A = a1:a0 and B = a3:a2 (high word first, low word in the lower register) is four instructions: <code>add</code> the low words, <code>sltu</code> for the carry, <code>add</code> the high words, <code>add</code> the carry.
         A 64-bit subtract has the same shape, with the <em>borrow</em> found <em>before</em> the low subtraction, <code>sltu t, b0, a0</code> (B.lo &lt; A.lo), and taken off the high difference. The program below runs on the system CPU of this chapter with A = 0x1_FFFFFFFF and B = 0x2_00000003:
-        <span data-show="md">the multiplier</span> gives the product. The sum is 0x4_00000002: the low words wrap past 2<sup>32</sup>, the <code>sltu</code> sees it, and the 1 lands in the high word.</p>
+        <span data-show="md">the multiplier</span> gives the product. The sum is ${MW.sum}: the low words wrap past 2<sup>32</sup>, the <code>sltu</code> sees it, and the 1 lands in the high word.</p>
         <p>The product of two 64-bit numbers is 128 bits, and the M extension's pair does the building block: <code>mul</code> gives the low 32 bits of a 32 × 32 product and <code>mulhu</code> the high 32 (<code>mulh</code> and <code>mulhsu</code> do the same for signed × signed and signed × unsigned operands). Write A = a1·2<sup>32</sup> + a0 and B likewise:
         the product is four 64-bit products, a0·b0, a0·b1, a1·b0 and a1·b1, at weights 2<sup>0</sup>, 2<sup>32</sup>, 2<sup>32</sup> and 2<sup>64</sup>, so eight M instructions, and the words are added column by column with the carries kept as above. The program does it in ${MW.product} instructions, ${MW.total} in all with the set-up
-        and the sum and difference; on this CPU that is ${MW.total} cycles, since a multiply takes one cycle like an add. A and B here give 0x4_00000003_FFFFFFFD (${MW.hex}), checked against BigInt arithmetic on random operands.</p>
+        and the sum and difference; on this CPU that is ${MW.total} cycles, since a multiply takes one cycle like an add. A and B here give ${MW.hex}, checked against BigInt arithmetic on random operands.</p>
         <p>The 6502 of <a href="#/c/appendix-6502/3">appendix A</a> does the same job with a flag: <code>ADC</code> adds the carry <em>in</em> and leaves the carry <em>out</em>, so an eight-byte add is a clear-carry and eight chained <code>ADC</code>s. RISC-V drops the flag
         (it would be one more piece of state to rename, forward and save in a pipeline) and pays instructions: two for the first word's sum and carry, and each further word needs its two additions with a carry test for each.</p>
         <div class="try">Run to halt and read s5 (the sum's high word): it is 4, not 3.</div>`,

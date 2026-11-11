@@ -1,4 +1,4 @@
-// Chapter 21's multi-word arithmetic on the golden model, against BigInt.
+// The muldiv chapter's multi-word arithmetic on the golden model, against BigInt.
 
 import { describe, expect, it } from 'vitest';
 import { assemble } from '../src/riscv/asm';
@@ -69,5 +69,19 @@ describe('the codex entry quotes what the program measures', async () => {
     expect(t).toContain('4 instructions');
     expect(t).toContain('22 in all, 26 signed');
     expect(t).toContain('eight <code>mul</code>');
+  });
+});
+
+describe('the step quotes the program\'s own sum and product', () => {
+  it('A = 0x1_FFFFFFFF, B = 0x2_00000003: the text\'s sum and product are the BigInt ones', async () => {
+    const { chMulDiv, wordsHex } = await import('../src/chapters/ch-muldiv');
+    const A = 0x1ffffffffn, B = 0x200000003n;
+    const hex = (v: bigint) => { const ws: number[] = []; for (let i = 3; i >= 0; i--) ws.push(Number((v >> BigInt(32 * i)) & 0xffffffffn)); return wordsHex(ws); };
+    expect(hex(A + B)).toBe('0x4_00000002');
+    expect(hex(A * B)).toBe('0x4_00000003_FFFFFFFD');
+    const body = chMulDiv.steps.find((s) => s.title === 'Words wider than the word')!.body;
+    expect(body).toContain(`The sum is ${hex(A + B)}:`);
+    expect(body).toContain(`A and B here give ${hex(A * B)},`);
+    expect(MULTIWORD_SOURCE).toContain('0x1_FFFFFFFF');
   });
 });

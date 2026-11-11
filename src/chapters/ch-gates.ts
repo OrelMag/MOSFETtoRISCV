@@ -459,7 +459,7 @@ export const chBinary: Chapter = {
           samples mid-change can see any mixture. The Gray code of b is <code>g = b ⊕ (b ≫ 1)</code> (each bit XOR the bit above it), and consecutive values, the wrap-around included, differ in
           exactly one bit. Three bits count ${Array.from({ length: 8 }, (_, i) => (i ^ (i >> 1)).toString(2).padStart(3, '0')).join(', ')}.
           A sample taken while one bit flips is the old value or the new one, never a third. To go back, XOR every bit with all the bits above it: b₂ = g₂, b₁ = b₂ ⊕ g₁, b₀ = b₁ ⊕ g₀.
-          It is used where a value is read while it moves: shaft encoders, the axes of the Boolean-minimization maps of a later chapter, and the pointers of a FIFO between two unrelated
+          It is used where a value is read while it moves: shaft encoders, the axes of the maps used to simplify Boolean functions, and the pointers of a FIFO between two unrelated
           clocks (<a href="#/c/clocks/7">chapter ${numOf('clocks')}</a>).</p>`,
         pitfall: `<p>Reading a bias-encoded field as two's complement. A float32 exponent field of 127 means 2⁰, not 2¹²⁷, and the
           sign bit of a float is not the sign bit of an integer: −0.0 and +0.0 differ in their bits.</p>`,
