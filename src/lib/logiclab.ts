@@ -80,14 +80,16 @@ export function mintermDef(ones: number[], id: string, name: string, ins = ABCD)
   b.pins(...ins);
   const neg = ins.map((x) => b.name(b.op1(NOT, [x], `¬${x}`, `n${x}`), `${x}_n`, true));
   b.next();
-  const and = (ds: string[], label?: string, nm?: string): string => (ds.length === 1 ? ds[0] : b.op1(ds.length === 2 ? AND : andN(ds.length), ds, label, nm));
-  const nandOf = (ds: string[], label: string, nm: string): string => {
-    const half = ds.length >> 1;
-    return b.op1(NAND, [and(ds.slice(0, half)), and(ds.slice(half))], label, nm);
-  };
-  const terms = ones.map((m) => nandOf(ins.map((x, i) => ((m >> (n - 1 - i)) & 1 ? x : neg[i])), `¬m${m}`, `m${m}`));
+  const and = (ds: string[], nm?: string): string => (ds.length === 1 ? ds[0] : b.op1(ds.length === 2 ? AND : andN(ds.length), ds, undefined, nm));
+  // columns: the halves of every term, the term NANDs, the halves of the output's inputs, the output NAND
+  const halves = (ds: string[], nm?: string): [string, string] => { const h = ds.length >> 1; return [and(ds.slice(0, h), nm && `${nm}l`), and(ds.slice(h), nm && `${nm}r`)]; };
+  const hs = ones.map((m) => halves(ins.map((x, i) => ((m >> (n - 1 - i)) & 1 ? x : neg[i])), `m${m}`));
   b.next();
-  const y = nandOf(terms, 'y', 'or');
+  const terms = ones.map((m, k) => b.op1(NAND, hs[k], `¬m${m}`, `m${m}`));
+  b.next();
+  const oh = halves(terms);
+  b.next();
+  const y = b.op1(NAND, oh, 'y', 'or');
   b.next();
   b.wire(y, 'y');
   const R = Math.max(b.right, 30);

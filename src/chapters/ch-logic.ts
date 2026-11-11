@@ -254,7 +254,7 @@ export const chLogic: Chapter = {
       widget: (stage) => kmapWidget({ ins: ABCD, out: 'y', rows: PRIME_ROWS, edit: '01', posToggle: true, circuitToggle: true, greedyToggle: true, stage, title: 'Both forms of the prime detector' }),
       challenge: {
         kind: 'quiz', question: 'A sum of products is built as two levels of NAND. How many inverters sit between the two levels?',
-        options: ['None: each AND is a NAND, the OR is a NAND, and the double inversions cancel', 'One per product term', 'One, after the OR', 'As many as the inputs'],
+        options: ['None, because each AND is a NAND, the OR is a NAND, and the double inversions cancel', 'One per product term', 'One, after the OR', 'As many as the inputs'],
         answer: 0,
         why: ['',
           'That is the AND–OR drawing (a NAND is an AND followed by a NOT). De Morgan removes them: ¬¬ cancels.',

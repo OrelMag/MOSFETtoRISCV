@@ -84,7 +84,7 @@ export function kmapState(ins: string[], out: string, rows: string, greedy: bool
 }
 
 const LOOPS = 6;
-const CW = 46, CH = 38, HW = 58, HH = 28;
+const CW = 58, CH = 48, HW = 66, HH = 30;
 
 export interface KmapWidget extends Widget {
   state(): KmapState;
