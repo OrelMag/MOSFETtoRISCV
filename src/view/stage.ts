@@ -667,6 +667,11 @@ export class Stage {
     this.panesBtn.setAttribute('aria-pressed', String(settings.wide));
   }
 
+  /** A widget on the stage changed what a challenge checks (widgets/asmlab.ts): run the listeners, as a refresh would. */
+  notify(): void {
+    this.listeners.forEach((f) => f());
+  }
+
   onChange(f: () => void): () => void {
     this.listeners.add(f);
     return () => this.listeners.delete(f);

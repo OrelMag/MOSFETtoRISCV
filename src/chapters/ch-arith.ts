@@ -9,6 +9,8 @@ import type { Chapter } from './types';
 import { delayPanel } from '../widgets/delaypanel';
 import { FINE, rippleVectors } from '../widgets/finedelay';
 import { numOf } from './order';
+import { adderProofWidget, CATCH, cornerVectors, exhaustiveCount, yearsAt } from '../widgets/adderproof';
+import { groupDigits } from '../sim/numfmt';
 
 const RG = { ...FINE.ripple, n: rippleVectors().length - 1 };
 const f2 = (x: number) => x.toFixed(2);
@@ -463,6 +465,37 @@ export const chAdders: Chapter = {
         ],
         answer: 'Any pair that sums to exactly 100, for example a = 0x99, b = 0x01 (99 + 1), or 0x50 + 0x50.',
         solve: (st) => st.setInputs({ a: 0x99, b: 0x01, cin: 0 }),
+      },
+    },
+    {
+      title: 'How do you know an adder is right?',
+      body: `
+        <p>Every adder in this chapter was checked before it was drawn into the text, and the question is how. The direct answer is to try every input. An <em>n</em>-bit adder has two operands and a carry-in, 2<sup>2<em>n</em>+1</sup> cases: <strong>${groupDigits(exhaustiveCount(4))}</strong> at 4 bits, ${groupDigits(exhaustiveCount(8))} at 8, ${groupDigits(exhaustiveCount(16))} at 16. At 32 bits it is 2<sup>65</sup>, about ${(exhaustiveCount(32) / 1e18).toFixed(1)} × 10<sup>19</sup>. A machine that checked a billion cases a second would need ${groupDigits(Math.round(yearsAt(32)))} years. An exhaustive check is a proof, and it is out of reach one width above the toy.</p>
+        <p>What replaces it is a handful of kinds of vector, each aimed at something that goes wrong:</p>
+        <ul>
+        <li><strong>Corner cases</strong>, chosen because they are where carries behave unusually: all zeros, all ones, the sign bit alone, one below it, the two alternating patterns <code>0101…</code> and <code>1010…</code>, in every pairing with both carry-ins (${cornerVectors(32).length} vectors at 32 bits). Two of them are the cases of the earlier steps: a carry that ripples through <em>every</em> column (<code>0101…</code> + <code>1010…</code> + 1, one in ${groupDigits(2 ** 33)} random vectors would have it) and a signed overflow (<code>0111…</code> + 1).</li>
+        <li><strong>Random vectors</strong>, which need no idea of where the bugs are and catch anything that goes wrong often enough.</li>
+        <li><strong>A reference</strong> to compare with: the language's own <code>+</code>, wrapped to <em>n</em> bits, two lines of code that are plain to read. The circuit is run on the vector and its sum and carry-out are compared with the reference's, every time, so that nobody has to work out an expected answer by hand.</li>
+        </ul>
+        <p>The reference is the idea the site calls a <span data-ahead="golden">golden model (a simple program that defines what a design must do, run beside it and compared after every step)</span>; <a href="#/c/verify/0">chapter ${numOf('verify')}</a> returns to it, and to how much of a design a test set has really exercised. A passing test shows no bug in the vectors it tried, which is all it shows.</p>
+        <div class="try">Plant a fault: choose "carry into the top column stuck at 0" on the 32-bit adder. The corner cases catch it at their ${CATCH.corner}th vector and the random run at its ${CATCH.random}th; with the fault in column 2 the first random vector is enough. Then run the 8-bit adder on every case.</div>`,
+      widget: adderProofWidget,
+      challenge: {
+        kind: 'quiz',
+        question: 'A 32-bit adder passes a million random vectors against the reference. What follows?',
+        options: [
+          'Nothing about the vectors it did not try: a fault that shows only on a rare pattern, such as a carry through every column, would be missed',
+          'It is correct: a million is far more than the adder has gates',
+          'It is correct for all inputs, since 32-bit adders are all built the same way',
+          'It is wrong, since a million of 2<sup>65</sup> is too small a sample to mean anything',
+        ],
+        answer: 0,
+        explain: `A million is ${(1e6 / exhaustiveCount(32)).toExponential(0).replace('e-', ' × 10^−')} of the 2^65 cases. A common fault shows at once, and a stuck carry usually does, but a fault that needs one particular pattern can sit unseen. That is why random vectors are paired with corner cases chosen for the patterns that matter, and why what a check covers is measured later in the journey.`,
+        why: ['', 'Gates and cases are different counts: a gate can behave wrongly only for a few of its 2^65 context patterns.', 'The same recipe can be drawn wrongly in one place, which is what a planted fault is.', 'A sample can show a bug and does not have to be large for that; it cannot show the absence of one.'],
+      },
+      more: {
+        derive: `<p>A ripple-carry adder is <em>n</em> copies of one full adder, so its behaviour follows from the cell's 8 cases and from how the carries are joined. Checking all 8 cases of the cell is a proof about the cell; the joints are not covered by it. A carry stuck between two columns breaks neither cell, which is why the interesting faults are on the wires between them and why the corner cases are chosen to push a carry through every one.</p>`,
+        real: `<p>Production designs mix the kinds: formal tools prove the small blocks for every input, random and directed tests with a reference model run the large ones, and the corners are written by hand from the specification. A processor's floating-point divider famously shipped with a few missing table entries that random testing had not reached.</p>`,
       },
     },
   ],

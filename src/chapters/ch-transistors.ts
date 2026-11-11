@@ -45,6 +45,7 @@ export const chMap: Chapter = {
         are 1) but never its insides, so a designer working on an adder thinks in gates and needs no transistor in mind. The price of the rule is
         that every level adds overhead the one above cannot see; the benefit is that the descriptions stay small enough to hold in a head. Each chapter
         here ends by pricing what it built in the level below, so you can see both sides.</p>
+        <p>The three <strong>prologue</strong> chapters (<a href="#/c/relays/0">relays</a>, <a href="#/c/tubes/0">vacuum tubes</a> and <a href="#/c/cards/0">punch cards</a>: how computing was done before the transistor) are optional. The main path starts at <a href="#/c/mosfet/0">chapter ${numOf('mosfet')}</a>, with the transistor itself.</p>
         <div class="note">The map below is the whole journey, in reading order, by section. Each row
         lists what its chapter builds with; a click opens the chapter.</div>`,
       more: {

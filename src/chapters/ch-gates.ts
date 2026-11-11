@@ -58,7 +58,7 @@ export const chGates: Chapter = {
       'XOR is 1 when its inputs differ: the sum bit of binary addition. XNORs on every bit pair, ANDed together, test two words for equality.',
       'The multiplexer <code>y = s ? b : a</code> is the processor\'s switch: next instruction address, register or constant, what gets written back.',
     ],
-    practise: ['l_bool', 'g_not', 'g_and', 'g_or', 'g_xor', 'g_mux'],
+    practise: ['l_bool', 'g_not', 'g_and', 'g_or', 'g_xor', 'g_mux', 'd_kmap', 'g_sop'],
     check: [
       {
         question: 'Built from this chapter\'s boxes, how many NANDs does NOT(a OR b) take?',

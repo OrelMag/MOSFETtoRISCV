@@ -1938,6 +1938,10 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .asm-table td.a { color: var(--muted); }
 .asm-table td.w { color: var(--bus-label-text); }
 .asm-table tr.err td { color: var(--wx); }
+/* chapter 13's assembly practice (widgets/asmlab.ts): the stage's goal note sits at the canvas's top right, over a widget, so the widget
+   leaves it a band; the wanted / got cells keep "a0 = -5" on one line */
+.canvas .widget.asm-practice { padding-top: 52px; }
+.widget.asm-practice td code { white-space: nowrap; }
 /* chapter 13's fetch–decode–execute stepper (widgets/riscv.ts fetchLoop) */
 .fl-list tr.cur td { background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 700; }
 .fl-list tr.cur td.a { color: var(--text); }
