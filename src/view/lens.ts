@@ -138,7 +138,9 @@ export class Lens {
     const o = this.open;
     if (!o) return;
     const pre = `${o.name}.`;
-    const inner = [...new Set(this.litNames.filter((n) => n.startsWith(pre)).map((n) => n.slice(pre.length).split('.')[0]))];
+    // only parts this box has: a CPU whose box is built otherwise (the system CPU's data memory) gets the rim, not a dim with nothing lit
+    const have = o.ctx.node.children;
+    const inner = [...new Set(this.litNames.filter((n) => n.startsWith(pre)).map((n) => n.slice(pre.length).split('.')[0]))].filter((n) => have?.has(n));
     o.view.highlight(inner, inner.length > 0);
     o.el.classList.toggle('lit', !inner.length && this.litNames.includes(o.name));
   }

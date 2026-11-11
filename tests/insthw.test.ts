@@ -122,6 +122,21 @@ describe('instruction → the parts inside the boxes (the zoom lens, track 2c)',
     }
   });
 
+  it('on the other variants a name either exists or is one the lens drops (it lights only parts its box has)', () => {
+    const variants = [systemCpu(prog), multicycleCpu(prog, {}), pipelinedCpu(prog, { adder: 'ks', m: true })];
+    for (const cpu of variants) {
+      const have = names(cpu);
+      const miss = new Set<string>();
+      for (const w of ALL) {
+        const here = innerUse(w).filter((n) => have.has(top(n)));
+        const ok = new Set(namesIn(cpu, here));
+        here.filter((n) => !ok.has(n)).forEach((n) => miss.add(n));
+      }
+      // the system CPU's data memory is the MMIO unit, no `ram` inside: its loads and stores glow the rim
+      expect([...miss], cpu.id).toEqual(cpu === variants[0] ? ['dm.ram'] : []);
+    }
+  });
+
   it('picks the ALU part, the branch condition, the immediate box and the registers by the instruction', () => {
     const at = (src: string) => innerUse(assemble(src).words[0]);
     expect(at('add x5, x6, x7')).toEqual(expect.arrayContaining(['alu.add', 'alu.mux', 'rf.rp1', 'rf.w6', 'rf.rp2', 'rf.w7', 'rf.dec', 'rf.w5', 'ctl.aludec']));
