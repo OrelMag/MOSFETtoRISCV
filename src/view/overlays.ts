@@ -281,11 +281,11 @@ export function energyOverlay(design: FlatDesign, node: HierNode, toggles: Array
     by.set(p[k], (by.get(p[k]) ?? 0) + sw);
     level += sw;
   }
-  const per = clocked ? 'clock cycle' : 'input change';
+  const per = clocked ? 'clock cycle' : 'input change', aPer = clocked ? 'a clock cycle' : 'an input change';
   const inst = new Map<string, OvMark>();
   if (level > 0) for (const [name, sw] of by) {
     const f = sw / level;
-    inst.set(name, { band: shareBand(f), tip: `${name}: ${pctOf(f)} % of the wire charged and emptied on this level over ${plural(units, per)} (${(sw / Math.max(1, units)).toFixed(1)} fF a ${per})` });
+    inst.set(name, { band: shareBand(f), tip: `${name}: ${pctOf(f)} % of the wire charged and emptied on this level over ${plural(units, per)} (${(sw / Math.max(1, units)).toFixed(1)} fF ${aPer})` });
   }
   return {
     kind: 'energy', inst, net: new Map(),
@@ -293,7 +293,7 @@ export function energyOverlay(design: FlatDesign, node: HierNode, toggles: Array
       title: 'Energy', unit: 'share of the wire charged and emptied',
       rows: SHARE_LABELS.map((l, b) => ({ band: b, label: l, count: plural(hist(inst, b), 'part') })),
       note: units > 0 && level > 0
-        ? `Each wire a part drives, times how often it flipped between 0 and 1 (brief glitches too), over the last ${plural(units, per)}: on this level about ${groupDigits(Math.round(level / units))} fF (femtofarads, how much charge a wire holds) is charged or emptied a ${per}. Each flip costs ½ C V², so energy follows this share. Counted on the gate-level engine while this overlay is on.`
+        ? `Each wire a part drives, times how often it flipped between 0 and 1 (brief glitches too), over the last ${plural(units, per)}: on this level about ${groupDigits(Math.round(level / units))} fF (femtofarads: the charge a wire holds per volt) is charged or emptied ${aPer}. Each flip costs half that capacitance times the supply voltage squared, so energy follows this share. Counted on the gate-level engine while this overlay is on.`
         : `Nothing has switched since the overlay came on: ${clocked ? 'Step, Pulse or Run the clock' : 'change an input'} and the parts take their colours.`,
     },
   };
