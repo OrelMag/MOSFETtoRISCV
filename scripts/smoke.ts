@@ -953,6 +953,47 @@ const lensDrive = (part: string, table = false) => `(async () => {
   return bad;
 })()`;
 
+/**
+ * The CPU panel's marks inside a lens (DESIGN.md track 2c): `first` 'select' clicks the listing's `line` before the lens on
+ * `part` opens (the lens shows marks already standing), 'open' after. `inner` names parts that must be lit inside it; none:
+ * the rim must glow (the instruction uses the box but names nothing in it).
+ */
+const lensMarksDrive = (part: string, line: string, inner: string[], first: 'select' | 'open') => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const svg = document.querySelector('.canvas > svg.schematic');
+  const box = () => document.querySelector('.canvas > svg.schematic [data-inst="${part}"]')?.getBoundingClientRect();
+  if (!svg || !box()) return ['no ${part} on the stage'];
+  const pick = () => [...document.querySelectorAll('.cpu-listing .ln')].find((l) => /^\\s*${line}\\b/.test(l.querySelector('.t')?.textContent ?? ''));
+  const select = async () => { const l = pick(); if (!l) return bad.push('no "${line}" line in the listing'); l.click(); await wait(250); };
+  const open = async () => {
+    for (let k = 0; k < 40 && Math.min(box().width, box().height) < 110; k++) {
+      const r = box();
+      svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true }));
+      await wait(20);
+    }
+    await wait(700);
+  };
+  if ('${first}' === 'select') { await select(); await open(); } else { await open(); await select(); }
+  const lens = document.querySelector('.lens');
+  if (!lens) return [...bad, 'no lens on ${part}'];
+  const inner = ${JSON.stringify(inner)};
+  const lit = [...lens.querySelectorAll('svg.schematic g.hl[data-inst]')].map((g) => g.dataset.inst);
+  if (inner.length) {
+    for (const n of inner) if (!lit.includes(n)) bad.push('${line}: ${part}.' + n + ' not lit in the lens (lit: ' + lit.join(' ') + ')');
+    if (!lens.querySelector('svg.schematic.focus')) bad.push('${line}: the lens is not dimmed around its marks');
+    if (lens.classList.contains('lit')) bad.push('${line}: the rim glows although parts inside are named');
+  } else {
+    if (!lens.classList.contains('lit')) bad.push('${line}: the rim of ${part} does not glow');
+    if (lit.length) bad.push('${line}: parts lit inside ${part}: ' + lit.join(' '));
+  }
+  // deselected: the marks go
+  pick()?.click();
+  await wait(250);
+  if (lens.querySelector('svg.schematic g.hl[data-inst]') || lens.classList.contains('lit')) bad.push('marks left in the lens after deselecting ${line}');
+  return bad;
+})()`;
+
 /** A touch screen: the lens is not built for it yet (DESIGN.md item 6), so with the setting stored on, nothing opens. */
 const LENS_TOUCH_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1198,6 +1239,9 @@ function routes(): Route[] {
   // a box small enough for its truth table: Break a part in the lens draws the table, the part right-clicked marked
   add('#/c/adders/3', lensOn('light'), ' (zoom lens, adder)', undefined, lensDrive('fa1', true));
   add('#/c/adders/3', lensOn('dark'), ' (zoom lens, adder, dark)', undefined, lensDrive('fa1', true));
+  // the CPU panel's marks inside it (track 2c): add lights the adder; on a box it uses with nothing named inside, the rim glows
+  add('#/c/cpu/0', lensOn('light'), ' (zoom lens, CPU marks inside)', undefined, lensMarksDrive('alu', 'add', ['add', 'mux'], 'open'));
+  add('#/c/cpu/0', lensOn('dark'), ' (zoom lens, CPU marks, rim, dark)', undefined, lensMarksDrive('res', 'add', [], 'select'));
   add('#/c/cpu/0', lensOn('dark'), ` (zoom lens, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], LENS_TOUCH_DRIVE);
   // the same lens over the sandbox's look inside (track 2a): the computer's core, both themes, and with the setting off
   {

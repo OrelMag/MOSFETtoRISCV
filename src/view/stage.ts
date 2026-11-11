@@ -265,6 +265,8 @@ export class Stage {
   /** The zoom lens (view/lens.ts), loaded only while settings.zoomOpen is on. */
   private lens: Lens | null = null;
   private lensLoading = false;
+  /** What highlight() lit last (names of the level at `at`, `box.part` inside a box): an open zoom lens shows its own share. */
+  private litNames: { names: string[]; at: string[] } = { names: [], at: [] };
   /** The cue under the breadcrumb after the lens handed off to a drill. */
   private cueEl: HTMLElement | null = null;
   private ovKind: OverlayKind | null = null;
@@ -350,7 +352,7 @@ export class Stage {
       // the open zoom lens: a trace crosses its rim (DESIGN.md track 2b)
       lens: () => {
         const v = this.lens?.innerView, c = this.lens?.peekCtx;
-        return v && c ? { ctx: c, box: c.path[c.path.length - 1], light: (names) => v.highlight(names, names.length > 0), selectNet: (i) => v.selectNet(i) } : null;
+        return v && c ? { ctx: c, box: c.path[c.path.length - 1], light: (names) => (names.length ? v.highlight(names, true) : this.lens?.lit(this.litFor(this.path))), selectNet: (i) => v.selectNet(i) } : null;
       },
       toggled: (on) => {
         this.whyBtn.classList.toggle('on', on);
@@ -940,6 +942,8 @@ export class Stage {
     this.remixBtn.hidden = !!scene.noRemix;
     this.view.highlight(scene.highlight ?? []);
     this.board.highlight(scene.highlight ?? [], true);
+    this.litNames = { names: scene.highlight ?? [], at: [] };
+    this.lens?.lit(this.litFor(this.path));
     this.panels = this.panelsOf(scene).map((f) => f(this));
     for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);
     for (const p of this.panels) if (p.el.dataset.dock === 'right' || p.el.dataset.fold) this.foldable(p.el);
@@ -1006,6 +1010,7 @@ export class Stage {
     // another level: a path lit on this one is gone with it, and so is an open lens
     this.pathLit = false;
     this.lens?.levelChanged(path);
+    this.lens?.lit(this.litFor(path));
     if (!this.rootCtx) return;
     this.closeLeaf();
     let ctx = this.rootCtx;
@@ -1198,6 +1203,7 @@ export class Stage {
         cue: (p) => this.showCue(p),
         say: (t) => this.say(t),
       });
+      this.lens.lit(this.litFor(this.path));
     });
   }
 
@@ -2656,9 +2662,20 @@ export class Stage {
     this.view.frameInsts(names);
   }
 
+  /** The names last lit, as seen from the level at `path`: a drill below where they were lit strips its prefix (rf.w5 at rf is w5). */
+  private litFor(path: readonly string[]): string[] {
+    const { names, at } = this.litNames;
+    if (path.length < at.length || at.some((n, i) => path[i] !== n)) return [];
+    const pre = path.slice(at.length).join('.');
+    return pre ? names.filter((n) => n.startsWith(`${pre}.`)).map((n) => n.slice(pre.length + 1)) : names;
+  }
+
   /** Highlight instances in the current view (empty list clears). */
   highlight(names: string[], focus = false): void {
     this.view.highlight(names, focus);
+    // parts inside a box (alu.add) light in an open zoom lens on it; the box alone, its rim (DESIGN.md track 2c)
+    this.litNames = { names, at: [...this.path] };
+    this.lens?.lit(names);
     // the boards light what the schematic would (names of the root's instances: a module's board, a chip)
     if (this.ctx === this.rootCtx) this.board.highlight(names);
   }
