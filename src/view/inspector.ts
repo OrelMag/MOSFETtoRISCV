@@ -164,7 +164,9 @@ export class Inspector {
     if (d.summary) b.append(h('p', { class: 'insp-summary' }, d.summary));
     const actions = h('div', { class: 'insp-actions' });
     if (t.canOpen && t.onOpen) actions.append(h('button', { class: 'btn primary sm', onclick: t.onOpen }, icon('zoomin', 14), 'Look inside'));
-    if (d.prim !== 'alias') actions.append(h('a', { class: 'btn sm', href: `#/workbench/${d.id}` }, icon('bench', 14), 'Workbench'));
+    // not to the page it is on: the workbench showing this very component
+    const here = location.hash.split('/').slice(0, 3).join('/') === `#/workbench/${d.id}`;
+    if (d.prim !== 'alias' && !here) actions.append(h('a', { class: 'btn sm', href: `#/workbench/${d.id}`, title: `${d.name} on the workbench: its own page, with truth table, timing and statistics` }, icon('bench', 14), 'Open on workbench'));
     if (actions.childElementCount) b.append(actions);
 
     const cells: [string, string, string?][] = [];

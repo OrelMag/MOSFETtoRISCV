@@ -16,10 +16,10 @@ export function bookmarkButton(place: Place, title: () => string, cls = 'btn sm 
     const on = store.isBookmarked(place);
     b.classList.toggle('on', on);
     b.setAttribute('aria-pressed', String(on));
-    b.title = on ? 'Saved in My notes: click to remove' : 'Save this place in My notes';
-    // the accessible name starts with the visible label (WCAG 2.5.3)
-    b.setAttribute('aria-label', on ? 'Saved in My notes: remove' : 'Save this place in My notes');
-    b.replaceChildren(bookmarkIcon(on), h('span', { class: 'lbl' }, on ? 'Saved' : 'Save'));
+    b.title = on ? 'Bookmarked in My notes: click to remove' : 'Bookmark this place in My notes';
+    // the accessible name starts with the visible label (WCAG 2.5.3); Bookmark, not Save: it keeps the place, not the circuit
+    b.setAttribute('aria-label', on ? 'Bookmarked in My notes: remove' : 'Bookmark this place in My notes');
+    b.replaceChildren(bookmarkIcon(on), h('span', { class: 'lbl' }, on ? 'Bookmarked' : 'Bookmark'));
   };
   b.addEventListener('click', () => { store.toggleBookmark(place, title()); });
   const off = store.onChange(() => {
