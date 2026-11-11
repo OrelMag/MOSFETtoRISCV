@@ -10,6 +10,11 @@
 // cycles before it reports the write). A screen part keeps the model's stores to SCREEN16_IO out of
 // its data memory; `screen` is the picture the matched stores painted. An edge with the core's rst
 // high counts nothing (the io bench holds it for the first cycle, as the level's bench does).
+// IN on a bench (campaign/bench.ts): a ROM of the test's words and a switch bank holding the number of the word a
+// load from IN reads now. A core has no read strobe, so the model sets the bank after every edge as the level's
+// bench serves IN (campaign/corecheck.ts): the IN words the model had read before the oldest write the core still
+// owes, one more while the core writes an IN load's result and reads IN again (a pipeline's next load), unless that
+// moves the write itself (a single-cycle core, whose write is that read).
 
 import { decode16, disasm16, MMIO16, REG_NAMES16, SCREEN16_IO } from '../riscv/rv16/isa16';
 import { PUZZLE_NO_GOLDEN, simHasPuzzlePorts } from './puzzleparts';
@@ -40,6 +45,22 @@ export interface Rv16Desc {
   screen?: true;
   /** The core's own instructions (a { core16 } part: riscv/rv16/custom16.ts): the golden model runs them. */
   custom?: Custom16Row[];
+  /** IN: the bench's switch bank of the next word's number and its ROM of the test's words (RV16_IN_PARTS). */
+  input?: { idx: string; rom: string; words: number[] };
+}
+
+/** The bench's IN device, by part id: a switch bank (the word number) addressing a hex ROM (the words). */
+export const RV16_IN_PARTS = { idx: 'inidx', rom: 'inrom' } as const;
+
+/** The IN device's words: a hex ROM and a switch bank with the bench's ids, or null. */
+function inputOf(doc: ChipDoc): Rv16Desc['input'] | null {
+  const idx = doc.parts.find((q) => q.id === RV16_IN_PARTS.idx && 'switches' in q.ref);
+  const rom = doc.parts.find((q) => q.id === RV16_IN_PARTS.rom);
+  if (!idx || !rom || !('rom' in rom.ref) || rom.ref.rom.lang !== 'hex') return null;
+  const img = romImage(rom.ref.rom);
+  if (img.error) return null;
+  // the words the source gives (the ROM's padding reads 0, as the model's IN does past the end)
+  return { idx: idx.id, rom: rom.id, words: img.words.map((w) => w & 0xffff) };
 }
 
 /** The pins that make a part a core (CORE_PORTS of lib/rv16/cpu.ts). */
@@ -73,10 +94,12 @@ export function detectRv16(doc: ChipDoc, chips?: Chips): Rv16Desc | null {
         const m = 'lib' in q.ref ? /^ram(\d+)x16$/.exec(q.ref.lib) : null;
         return m ? [{ id: q.id, k: Math.round(Math.log2(Number(m[1]))) }] : [];
       });
+      const input = inputOf(doc);
       return {
+        ...(input ? { input } : {}),
         ...(rv16CoreOf(p.ref)?.custom.length ? { custom: rv16CoreOf(p.ref)!.custom } : {}),
         rom: rom.id, core: p.id, system: ports.some((q) => q.name === 'irq' && q.dir === 'in'), ...(rams.length === 1 ? { ram: rams[0] } : {}),
-        ...(doc.parts.some((q) => 'switches' in q.ref) ? { switches: true as const } : {}), ...(doc.parts.some((q) => 'screen' in q.ref) ? { screen: true as const } : {}),
+        ...(doc.parts.some((q) => 'switches' in q.ref && q.id !== RV16_IN_PARTS.idx) ? { switches: true as const } : {}), ...(doc.parts.some((q) => 'screen' in q.ref) ? { screen: true as const } : {}),
       };
     }
   }
@@ -106,7 +129,11 @@ export function rv16Program(doc: ChipDoc, rom: string): { words: number[]; k: nu
 }
 
 /** A write the model made: n orders register writes and stores (the model's step count). */
-interface Expect { n: number; pc: number; instr: number; rd?: number; addr?: number; value: number; sw?: true }
+interface Expect {
+  n: number; pc: number; instr: number; rd?: number; addr?: number; value: number; sw?: true;
+  /** IN words the model had read before this instruction, and whether it read one. */
+  inBefore: number; inLoad?: true;
+}
 
 const hex4 = (v: number) => `0x${(v & 0xffff).toString(16).padStart(4, '0')}`;
 const regName = (r: number) => `${REG_NAMES16[r]} (x${r})`;
@@ -143,6 +170,8 @@ export class Rv16Monitor {
   /** The switch bank's positions at the last few edges, newest last. */
   private swSeen: number[] = [];
   private swNode: { sim: unknown; node: HierNode | null } | null = null;
+  /** The IN word-number bank's leaf in the current simulation. */
+  private inLeaf: { sim: unknown; li: number } | null = null;
   private static readonly SW_SEEN = 16;
   private hook = { before: () => this.before(), after: () => this.after() };
   private static readonly LOG = 64;
@@ -198,7 +227,10 @@ export class Rv16Monitor {
     // A RAM decoded on its low bits: the model's memory wraps the same way and starts with its contents.
     const data = new Map((d?.ram?.init ?? []).map((v, i) => [i, v] as [number, number]));
     this.iss = d && this.prog && !this.problem ? new Iss16(this.prog.words, { m: true, system: d.system, screen: !!d.screen, ...(d.custom ? { custom: d.custom } : {}), ...(d.ram ? { dmemWords: 2 ** d.ram.k, wrap: true } : {}) }, data) : null;
+    if (this.iss && d?.input) this.iss.input = d.input.words.slice();
+    this.inLeaf = null;
     this.fill(this.regQ);
+    this.serveIn();
   }
 
   get checking(): boolean {
@@ -242,7 +274,7 @@ export class Rv16Monitor {
   private switchesNow(): number | null {
     const sim = this.es.sim;
     if (!sim || !this.desc?.switches) return null;
-    if (this.swNode?.sim !== sim) this.swNode = { sim, node: ioNodes(sim.design.root).find((n) => n.info.kind === 'switches')?.node ?? null };
+    if (this.swNode?.sim !== sim) this.swNode = { sim, node: ioNodes(sim.design.root).find((n) => n.info.kind === 'switches' && n.node.path.join('.') !== this.desc?.input?.idx)?.node ?? null };
     const st = this.swNode.node ? ioState(sim, this.swNode.node) as SwitchState | undefined : undefined;
     return st ? st.v : null;
   }
@@ -255,7 +287,7 @@ export class Rv16Monitor {
         const rd = decode16(iss.imem[iss.pc] ?? 0, this.desc?.custom).rd;
         if (rd && !this.swWait && q === this.regQ) {
           // wait here for the hardware's write: it says what the switches read when the core loaded them
-          this.swWait = { n: iss.steps + 1, pc: iss.pc, instr: iss.imem[iss.pc], rd, value: -1, sw: true };
+          this.swWait = { n: iss.steps + 1, pc: iss.pc, instr: iss.imem[iss.pc], rd, value: -1, sw: true, inBefore: this.inTaken() };
           this.regQ.push(this.swWait);
           return;
         }
@@ -266,8 +298,15 @@ export class Rv16Monitor {
           continue;
         }
       }
-      this.push(iss.step());
+      const inBefore = this.inTaken();
+      this.push(iss.step(), inBefore);
     }
+  }
+
+  /** IN words the model has read so far. */
+  private inTaken(): number {
+    const w = this.desc?.input?.words, iss = this.iss;
+    return w && iss ? w.length - iss.input.length : 0;
   }
 
   /** Run the load the model waits at with the switches at `v`. */
@@ -279,10 +318,41 @@ export class Rv16Monitor {
     e.value = s.reg?.value ?? 0;
   }
 
-  private push(s: Step16): void {
-    const n = this.iss!.steps;
-    if (s.reg) this.regQ.push({ n, pc: s.pc, instr: s.instr, rd: s.reg.rd, value: s.reg.value });
-    if (s.store) this.storeQ.push({ n, pc: s.pc, instr: s.instr, addr: s.store.addr, value: s.store.value });
+  private push(s: Step16, inBefore: number): void {
+    const n = this.iss!.steps, inLoad = this.inTaken() > inBefore ? { inLoad: true as const } : {};
+    if (s.reg) this.regQ.push({ n, pc: s.pc, instr: s.instr, rd: s.reg.rd, value: s.reg.value, inBefore, ...inLoad });
+    if (s.store) this.storeQ.push({ n, pc: s.pc, instr: s.instr, addr: s.store.addr, value: s.store.value, inBefore, ...inLoad });
+  }
+
+  /**
+   * Set the IN bank to the word a load from IN should read now (after an edge, the logic settled): as the level's bench's
+   * serve() does, the IN words the model read before the oldest write the core still owes; one more while the core writes
+   * that IN load's result and reads IN again, unless that moves the write (then the read is the write's own).
+   */
+  private serveIn(): void {
+    const d = this.desc?.input, iss = this.iss, sim = this.es.sim;
+    if (!d || !iss || !sim || !this.synced || this.mismatch) return;
+    if (this.inLeaf?.sim !== sim) {
+      const li = sim.design.leaves.findIndex((l) => l.node.path.length === 1 && l.node.path[0] === d.idx);
+      this.inLeaf = { sim, li };
+    }
+    const li = this.inLeaf.li;
+    if (li < 0) return;
+    const set = (v: number) => {
+      if ((sim.leafState(li) as SwitchState | undefined)?.v === v) return;
+      sim.poke(li, { v } satisfies SwitchState);
+      sim.settle();
+    };
+    if (!this.regQ.length) this.fill(this.regQ);
+    const r = this.regQ[0], st = this.storeQ[0];
+    const head = r && st ? (r.n <= st.n ? r : st) : r ?? st;
+    const base = head ? head.inBefore : this.inTaken();
+    set(base);
+    if (!head || head !== r || !r.inLoad || r === this.swWait || this.port('rst') === 1) return;
+    const rwd = this.port('rwd');
+    if (this.port('daddr') !== MMIO16.IN || this.port('rwe') !== 1 || this.port('rwa') !== r.rd || rwd !== r.value) return;
+    set(base + 1);
+    if (this.port('rwd') !== rwd) set(base);
   }
 
   private before(): void {
@@ -299,6 +369,11 @@ export class Rv16Monitor {
   }
 
   private after(): void {
+    this.check();
+    this.serveIn();
+  }
+
+  private check(): void {
     const s = this.sample;
     this.lastWrite = -1;
     if (!this.iss || !this.synced || this.mismatch || !('rwe' in s)) return;

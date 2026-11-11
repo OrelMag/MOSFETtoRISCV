@@ -28,7 +28,6 @@ core's top level below ~60 % pointers (parked).
 - FPGA: ROMs of ≤ 256 words and RAMs of ≤ 64 words into block RAM, not LUTs (Phase 20)
 - Static timing: a constant's arrival (tie cells) and wire length where a design is placed: two causes of the spread against OpenSTA (Phase 19)
 - VHDL in, through GHDL, once GHDL runs in WebAssembly (Phase 19; VHDL out is done)
-- The core bench's IN device, so "Open on a bench" works for the RV16 program levels that read input (Phase 12)
 - The puzzle devices: a CPU route (a program driving the device through en) and grading by cycles × NANDs as the stream puzzles are (Phase 12)
 
 ---

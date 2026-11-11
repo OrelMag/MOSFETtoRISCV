@@ -68,6 +68,23 @@ export function faultsKeyOf(id: string, deps: readonly string[], look: ChipLooku
 }
 
 /**
+ * The chips (this one, `self`, and every chip it places) with faults switched on, by name. Check, the Tests pane and the
+ * puzzles run with them, as the canvas does; but a pass with a fault on is the drawing plus the fault (a stuck-at can stand in
+ * for gates at no cost), so a challenge, level or puzzle does not count it (faultsNote).
+ */
+export function faultyChips(id: string, deps: readonly string[], look: ChipLookup, self = true): string[] {
+  return (self ? [id, ...deps] : deps).filter((d) => faultsOn(look.doc(d)).length).map((d) => look.doc(d)?.name ?? d);
+}
+
+/** What a check with faults on says: why a pass does not count, or that a failure may be theirs. */
+export function faultsNote(names: string[], passed: boolean): string {
+  const where = names.length === 1 ? `“${names[0]}”` : `${names.slice(0, -1).map((n) => `“${n}”`).join(', ')} and “${names.at(-1)}”`;
+  return passed
+    ? `It passes only with faults switched on in ${where}: switch them off (the chip's properties, Faults) for it to count`
+    : `Checked with faults switched on in ${where}: they may be what fails`;
+}
+
+/**
  * The chip with its faults and its placed chips' planted where it is flattened (Check, the Tests pane): the same def
  * otherwise, the planted faults it may carry already (a break-it level's) kept. Itself when there are none.
  */

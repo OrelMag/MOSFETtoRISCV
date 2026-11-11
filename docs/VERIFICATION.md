@@ -8,7 +8,7 @@ lock-step test. The checks below do not rely on that model alone.
 | Layer | Oracle | Where | In `npm test` |
 |---|---|---|---|
 | Lock-step co-simulation of the chapters' programs | our golden model | `tests/cpu.test.ts`, `pipeline`, `system`, … | yes |
-| **Official riscv-tests** (rv32ui, rv32um, rv32uf, rv32ua, rv32mi) | the tests themselves (self-checking) | `tests/verify-*.test.ts`, `scripts/rvtests.ts` | all of them, every CPU |
+| **Official riscv-tests** (rv32ui, rv32um, rv32uf, rv32ua, rv32mi, rv32uc) | the tests themselves (self-checking) | `tests/verify-*.test.ts`, `scripts/rvtests.ts` | all of them, every CPU |
 | **Official riscv-tests for RV64** (rv64ui, rv64um) | the tests themselves | `tests/verify-rv64-iss.test.ts` | all of them, on the RV64 golden model |
 | **Random programs** | our golden model, final state | `tests/verify-*.test.ts`, `scripts/fuzz32.ts` | seeds 1–32 per CPU |
 | **Spike**, the reference simulator, on random programs (RV32 variants, M / S / U with Sv32 page tables, and RV64IM) | Spike, commit by commit | `scripts/spike-oracle.ts`, `.github/workflows/spike.yml` | its plumbing only (no Spike); CI on every ISA change |
@@ -35,7 +35,7 @@ environment, with the source revision and toolchain), so `npm test` needs no RIS
   for rv32uc (the C extension; built `rv32g`, the test turns on `.option rvc` itself), built in CI by
   `.github/workflows/rvc-tests.yml` with the pinned xPack. Its one test, `rvc`, keeps a doubleword in its code and
   loads and stores it, so the image records those words (`mirror`) and the loader also stores them into the data
-  memory at their address. The RV32IC core (`sc-c`) runs it at gate level (`tests/verify-c.test.ts`).
+  memory at their address. Both RV32IC cores run it at gate level: the single-cycle `sc-c` (`tests/verify-c.test.ts`) and the five-stage `pipe-c` (`tests/verify-pipe-c.test.ts`).
 - **Harvard memory.** Code is linked at 0 (the ROM), data at `0x10000`, which is word 0 of any data
   memory up to 16 K words (it wraps), with `tohost` first. Our CPUs have no loader, so the image gets a
   few instructions appended (`lui` / `addi` / `sw` per non-zero data word, encoded by hand rather than by

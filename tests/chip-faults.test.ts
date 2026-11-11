@@ -3,7 +3,7 @@
 // circuit was visibly broken: only the open tab's simulation had the faults.
 import { describe, expect, it } from 'vitest';
 import { checkChallenge } from '../src/editor/challenges';
-import { lookOf, withChipFaults } from '../src/editor/chipfaults';
+import { faultsNote, faultyChips, lookOf, withChipFaults } from '../src/editor/chipfaults';
 import { UserLibrary } from '../src/editor/library';
 import type { ChipDoc } from '../src/editor/model';
 import { EditorSim } from '../src/editor/runtime';
@@ -60,6 +60,15 @@ describe('a chip\'s faults in Check and the Tests pane', () => {
     const bad = table('u_buf', STUCK);
     expect(bad.tests).toBeGreaterThan(0);
     expect(bad.check).toBe(false);
+  });
+
+  it('a pass with faults on does not count: the chips that hold them are named', () => {
+    const { lib, look } = setup(STUCK);
+    expect(faultyChips('u_buf', lib.deps('u_buf'), look)).toEqual(['INV']);
+    expect(faultyChips('u_buf', lib.deps('u_buf'), look, false)).toEqual(['INV']);
+    expect(faultyChips('u_buf', lib.deps('u_buf'), setup([{ ...STUCK[0], off: true }]).look)).toEqual([]);
+    expect(faultsNote(['INV'], true)).toMatch(/passes only with faults switched on in “INV”.*for it to count/);
+    expect(faultsNote(['A', 'B', 'C'], false)).toContain('“A”, “B” and “C”');
   });
 
   it('without the lookup, a chip with no faults of its own is the same def', () => {
