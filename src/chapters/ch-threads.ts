@@ -203,7 +203,7 @@ export const chThreads: Chapter = {
       title: 'Spinning wastes the slice',
       body: `
         <p>A lock that is held makes a thread wait. There are two ways to wait. A thread can <strong>spin</strong>: ask again and again until the answer changes. Here that is <code>trylock(i)</code> (${THREAD_SYS.trylock}), which takes the lock if it is free and answers 1, or answers 0 and does not wait, in a loop. Or it can <strong>sleep</strong>: tell the kernel what it is waiting for and let the kernel run it again when that has happened.</p>
-        <p>On one core, spinning is the wrong choice, and the widget measures why. Thread B takes lock 0 and works for about ${n(HOLD)} instructions; thread A then wants it. While A spins, B cannot be running, since there is one core: every one of A's tries is wasted, and so is the rest of each slice it spends trying. A asked ${F.spinTries.join(', ')} times at the five slices, and at a ${F.spinWasteAt}-instruction slice spinning took <strong>${F.spinWaste} % more cycles</strong> than sleeping. Sleeping costs one call.</p>
+        <p>On one core, spinning is the wrong choice, and the widget measures why. Thread B takes lock 0 and works for about ${n(HOLD)} instructions; thread A then wants it. While A spins, B cannot be running, since there is one core: every one of A's tries is wasted, and so is the rest of each slice it spends trying. A asked ${F.spinTries.join(', ')} times at the five slices, and at a ${F.spinWasteAt}-instruction slice <strong>${F.spinWaste} % of the cycles</strong> the spinning run took were wasted: the sleeping run did the same work without them. Sleeping costs one call.</p>
         <p>Spinning is not always wrong. On several cores, the holder runs <em>while</em> the waiter spins, and a short wait is cheaper spun than slept, because sleeping costs two trips through the kernel. That is the subject of chapter ${numOf('multicore')}'s locks.</p>`,
       widget: waitWidget,
       challenge: {
@@ -273,12 +273,12 @@ export const chThreads: Chapter = {
       body: `
         <p>Locks fix races and bring a failure of their own. Thread A takes lock 0, does some work, takes lock 1; thread B takes lock 1, then lock 0. If a switch falls between A's two calls, B gets lock 1 and waits for lock 0; A wakes up and waits for lock 1. Each waits for the other, for ever: a <strong>deadlock</strong>. Here the kernel notices that no thread is ready and some still wait, prints <code>deadlock</code> and stops; most systems do not notice, and the program simply hangs.</p>
         <p>A deadlock needs four things at once (Coffman, 1971): <em>mutual exclusion</em> (a lock has one owner), <em>hold and wait</em> (a thread holds one lock while it asks for another), <em>no preemption</em> (nobody takes a lock away) and a <em>cycle</em> of threads each waiting for the next. Remove any one and it cannot happen. The cheapest to remove is the cycle: give the locks an order and take them only in that order. Then whoever holds the higher lock never waits for a lower one, and the chain of waiting cannot close.</p>
-        <p>The widget runs ${ROUNDS} rounds of each thread at every slice. As written, it deadlocked at ${F.deadAll} of ${THREAD_SLICES.length}. Change one line of B so that both threads finish at every slice.</p>
+        <p>The widget runs ${ROUNDS} rounds of each thread at every slice. As written, it deadlocked at ${F.deadAll} of ${THREAD_SLICES.length}. Change the order in which B takes its locks so that both threads finish at every slice.</p>
         <div class="try">Pick B's lock numbers so that every row of the table finishes.</div>`,
       widget: deadlockWidget,
       challenge: {
         kind: 'reach',
-        goal: `Change one of B's lock calls so that both threads finish at every slice (${slices}).`,
+        goal: `Change the order of B's lock calls so that both threads finish at every slice (${slices}).`,
         check: () => deadlockFixed(),
         hints: ['Look at the order: A takes 0 then 1. What order does B use?', 'Make B take its locks in A\'s order: one global order means no cycle.'],
         answer: `B's first call becomes lock(0) and its second lock(1): both take lock 0 first. Whoever holds lock 1 then already holds lock 0, so it never waits for it, and every run finishes (${F.fixedAll} of ${THREAD_SLICES.length}).`,

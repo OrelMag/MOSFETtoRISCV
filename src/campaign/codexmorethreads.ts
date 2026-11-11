@@ -53,7 +53,7 @@ cost: about 239 cycles per increment, two system calls</pre>Both at a 1600-instr
       title: 'Spinning against sleeping, B holding the lock for about 2000 instructions',
       body: `<pre>slice          100   200   400   800   1600
 trylock tries   48    27    25    15    16
-spinning cost 44 % more cycles than sleeping at a 200-instruction slice</pre>`,
+spinning wasted 44 % of its cycles at a 200-instruction slice (against the sleeping run)</pre>`,
     },
     mistakes: [
       'Locking a lock twice in one thread: it is not recursive, so the thread waits for itself (the chapter\'s kernel reports a deadlock).',

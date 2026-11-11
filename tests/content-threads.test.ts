@@ -2,12 +2,12 @@
 // what it claims: the race is wrong at every slice the chapter sweeps, the lock right at all of them, the deadlock happens as written and
 // never with the fix, the Python program races too. The kernel itself is checked against the gates in tests/threads-kernel.test.ts.
 import { describe, expect, it } from 'vitest';
-import { PY_N, pyRace, RING_N, SCENE_SLICE, threadFigures } from '../src/chapters/ch-threads';
+import { PY_N, pyRace, pyThreads, RING_N, SCENE_SLICE, threadFigures } from '../src/chapters/ch-threads';
 import { chapters } from '../src/chapters';
 import { CODEX } from '../src/campaign/codex';
 import { moreOf } from '../src/campaign/codexmore';
 import { runPy } from '../src/lang/interp';
-import { RACE_N, THREAD_SLICES } from '../src/widgets/threads';
+import { printed, RACE_N, THREAD_SLICES } from '../src/widgets/threads';
 import { osImage, spinner2 } from '../src/riscv/osprograms';
 import { runOs, tripsOf } from '../src/riscv/osrun';
 import { groupDigits } from '../src/sim/numfmt';
@@ -33,7 +33,8 @@ describe('the chapter\'s claims', () => {
     expect(THREAD_SLICES[0]).toBeGreaterThan(F.tax);
   });
 
-  it('a thread switch pays no walks after it, a process switch does', () => {
+  it('a thread switch pays no walks after it, a process switch does; the kernel part is the same', () => {
+    expect(F.threadSwitch).toBe(F.procSwitch);
     expect(F.threadWalks).toBe(0);
     expect(F.procWalks).toBeGreaterThan(0);
   });
@@ -60,6 +61,8 @@ describe('the chapter\'s claims', () => {
     expect(F.py.race.filter((v) => v < 2 * PY_N).length).toBeGreaterThanOrEqual(THREAD_SLICES.length - 1);
     for (const v of F.py.race) expect(v).toBeLessThanOrEqual(2 * PY_N);
     expect(F.py.locked).toBeGreaterThan(F.py.plain);
+    // the locked program, compiled, on the kernel: right at every slice
+    for (const s of THREAD_SLICES) expect(printed(runOs(osImage([pyThreads(true)], { threads: true, slice: s }), 2000000)), `slice ${s}`).toBe(2 * PY_N);
   });
 
   it('the scenes run at the chapter\'s slice, one of the panel\'s', () => {
@@ -82,7 +85,7 @@ describe('the codex quotes the chapter', () => {
     expect(more('critsec')).toContain(`${n(F.lockedCycles)} cycles, count ${2 * RACE_N}`);
     expect(more('critsec')).toContain(`about ${F.perIncrement} cycles per increment`);
     expect(more('lock').replace(/\s+/g, ' ')).toContain(`trylock tries ${F.spinTries.join(' ')}`);
-    expect(more('lock')).toContain(`${F.spinWaste} % more cycles than sleeping at a ${F.spinWasteAt}-instruction slice`);
+    expect(more('lock')).toContain(`spinning wasted ${F.spinWaste} % of its cycles at a ${F.spinWasteAt}-instruction slice`);
     expect(more('condvar')).toContain(`sum ${F.ringSum}, the producer waited ${F.condWaits} times, ${n(F.condCycles)} cycles`);
     expect(more('semaphore')).toContain(`sum ${F.ringSum} in ${n(F.semCycles)} cycles, against ${n(F.condCycles)}`);
     expect(more('deadlock')).toContain(`deadlock at ${F.deadAll} of ${THREAD_SLICES.length}`);
