@@ -120,7 +120,7 @@ export const chThreads: Chapter = {
       `A condition variable lets a thread wait for a state of shared data: wait(c, l) lets the lock go and sleeps in one step, and the woken thread holds the lock again and tests the condition again (while, not if). Semaphores count instead: the ring of ${RING} words needs one for its free slots and one for its full ones.`,
       `A deadlock is a cycle of threads each waiting for a lock the next holds. It needs mutual exclusion, hold and wait, no preemption and the cycle; taking locks in one global order breaks the cycle: as written it deadlocked at ${F.deadAll} of ${THREAD_SLICES.length} slices, with the order fixed it finished at ${F.fixedAll} of ${THREAD_SLICES.length}.`,
     ],
-    practise: ['p_switch'],
+    practise: ['p_critical', 'p_switch'],
     check: [
       {
         question: 'Two threads on one core each run count = count + 1 a hundred times. How can an update be lost when only one thread runs at a time?',
