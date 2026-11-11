@@ -2902,18 +2902,18 @@ export class Stage {
       // nothing
     } else if (asideOf(id)) {
       p.classList.add('warn');
-      p.append(h('span', { class: 'lp-text' }, 'Redrawn since you arranged it: the new drawing'),
+      p.append(h('span', { class: 'lp-text' }, 'This level was redrawn after you arranged it; here is the new drawing'),
         act('Bring mine back', 'Your arrangement of the earlier drawing, over this one (Ctrl+Z undoes it)', 'restore'),
         act('Dismiss', 'Keep the new drawing and forget your earlier arrangement', 'dismiss'));
     } else if (v.original) {
-      p.append(h('span', { class: 'lp-text' }, 'The chapter’s drawing'), act('Back to mine', 'Your arrangement of this level again', 'mine'));
+      p.append(h('span', { class: 'lp-text' }, 'The original drawing'), act('Back to mine', 'Your arrangement of this level again', 'mine'));
     } else if (arranged(lay)) {
       const c = arrangedCount(lay);
       const what = [c.parts && `${c.parts} part${c.parts > 1 ? 's' : ''} moved`, c.wires && `${c.wires} wire${c.wires > 1 ? 's' : ''} reshaped`,
         c.pointers && `${c.pointers} pointer${c.pointers > 1 ? 's' : ''} changed`].filter(Boolean).join(', ');
       p.append(h('span', { class: 'lp-text' }, icon('move', 13), `Your layout: ${what}`),
-        act('Original', 'Show the chapter’s drawing of this level (yours stays saved)', 'original'),
-        act('Reset', 'This level as the chapter drew it; your colours stay (Ctrl+Z undoes it)', 'reset'));
+        act('Original', 'Show this level as it was first drawn (your layout stays saved)', 'original'),
+        act('Reset', 'Put this level back as it was first drawn; wire colours you picked stay (Ctrl+Z undoes it)', 'reset'));
     }
     p.hidden = !p.childElementCount;
   }

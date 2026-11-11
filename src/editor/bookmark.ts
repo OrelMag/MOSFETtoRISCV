@@ -6,7 +6,7 @@ import { type Editor, registerToolbarAction } from './editor';
 const placeOf = (ed: Editor): Place => ({ kind: 'chip', id: ed.chipId });
 
 registerToolbarAction({
-  id: 'bookmark', title: 'Save this chip in My notes (a bookmark)', icon: 'bookmark', menu: 'Bookmark this chip', order: 95,
+  id: 'bookmark', title: 'Bookmark this chip in My notes', icon: 'bookmark', menu: 'Bookmark this chip', order: 95,
   run: (ed) => {
     notes().toggleBookmark(placeOf(ed), `Sandbox · ${ed.doc.name}`);
     ed.renderActions();
