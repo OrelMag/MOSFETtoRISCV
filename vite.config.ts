@@ -4,6 +4,7 @@ import { execSync } from 'node:child_process';
 import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
+import { routeRules } from './scripts/routerules';
 
 // Version X.YYY.ZZZ: major and minor from package.json, the build number is the git commit count
 // (it grows with every merge; CI checks out the full history for it).
@@ -67,6 +68,8 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(version),
     __APP_COMMIT__: JSON.stringify(git('rev-parse --short HEAD', 'dev')),
     __APP_DATE__: JSON.stringify(new Date().toISOString().slice(0, 10)),
+    // the route cache's rules (src/view/routecache.ts): files made by another build of the router are never used
+    __ROUTE_RULES__: JSON.stringify(routeRules(fileURLToPath(new URL('.', import.meta.url)))),
   },
   test: {
     include: ['tests/**/*.test.ts'], environment: 'node', setupFiles: ['tests/setup.ts'],

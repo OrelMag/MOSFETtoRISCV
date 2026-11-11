@@ -36,6 +36,7 @@ import { closePopover, editNumber, syncPopover } from './popover';
 import { chooseFolds, KEEP_SCALE_OPENED, COVER_GAP, fitBox, fitMinW, freeArea, KEEP_SCALE, roomBeside, showReadable, startFolded, type Rect } from './camera';
 import { pinGeoms, symbolRects } from './route';
 import { applyLayout, arranged, arrangedCount, asideOf, layoutOf } from './layout';
+import { levelsBelow, prefetchRoutes } from './routecache';
 import { drawnNetlist } from './wirefirst';
 import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
@@ -126,6 +127,8 @@ const HUG_MIN_PX = 260, HUG_TOP_PX = 48, HUG_COVER_PX = 90;
 const PHONE_TOPBAR_PX = 70;
 /** The stage's touch hint hides itself after this long untouched (it sits over the circuit's room). */
 const HINT_AUTO_MS = 8000;
+/** How long a big scene's load waits for its first levels' cached routes (routecache.ts) before routing them itself. */
+const ROUTE_WAIT_MS = 400;
 const HISTORY_MAX = 100;
 /** A link's clock cycles are replayed for at most this long (ms); a note says how many ran. */
 const REPLAY_MS = 1500;
@@ -825,6 +828,15 @@ export class Stage {
     plan.enter('draw');
     await slice();
     if (!alive()) return;
+    // a big scene's first levels may be in the route cache (routecache.ts): wait for them a little, so the first
+    // drawing is a lookup rather than a route; a slow network only costs that wait
+    const onPath = [design.root.def];
+    for (let n: HierNode | undefined = design.root, i = 0; n && i < (at ?? scene.path ?? []).length; i++) {
+      n = n.children?.get((at ?? scene.path ?? [])[i]);
+      if (n) onPath.push(n.def);
+    }
+    await Promise.race([prefetchRoutes(onPath), new Promise((r) => setTimeout(r, ROUTE_WAIT_MS))]);
+    if (!alive()) return;
     this.drawScene(scene, at, design);
     plan.finish();
   }
@@ -1003,6 +1015,8 @@ export class Stage {
     this.syncPins();
     this.view.cover = this.covers();
     this.view.show(ctx, ctx === this.rootCtx);
+    // what the learner may open next: its routes fetched in the background, so a first drill is a lookup when it can be
+    void prefetchRoutes(levelsBelow(ctx.node));
     this.syncLayoutPill();
     this.paintOverlay();
     // another level, another shape: which panels stay open is decided again for it (autoFold), the learner's own folds held
