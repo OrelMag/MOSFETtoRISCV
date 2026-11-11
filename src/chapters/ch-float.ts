@@ -214,16 +214,11 @@ export const chFloat: Chapter = {
         <p>A float is a sign, an exponent and a fraction: (−1)<sup>s</sup> × 1.f × 2<sup>e − bias</sup>. The leading 1 is not stored
         (the <em>hidden bit</em>). The exponent is biased, so that comparing two positive floats as integers orders them correctly.
         Exponent 0 marks zero and the <strong>subnormals</strong> (no hidden bit, gradual underflow). Exponent all ones marks
-        <strong>infinity</strong> (fraction 0) and <strong>NaN</strong> (fraction ≠ 0).</p>
-        <p>The top fraction bit of a NaN is the <em>quiet</em> bit. A quiet NaN (1) passes through arithmetic without complaint; a
-        <em>signaling</em> NaN (0, with some lower fraction bit set so that it is not ∞) raises the invalid flag when an operation consumes it. IEEE 754
-        lets a NaN carry a payload through a computation; RISC-V does not: every NaN an operation produces is the <strong>canonical NaN</strong>
-        0x7FC00000 (positive, quiet, payload 0), whatever the operands were. Only loads, stores, moves and sign injection copy a NaN's bits unchanged.
-        In the 8-bit format the circuits below use, the canonical NaN is 0 1111 100 = 0x7C.</p>
+        <strong>infinity</strong> (fraction 0) and <strong>NaN</strong> (not a number, fraction ≠ 0: the result of 0 / 0 or ∞ − ∞).</p>
         <p>0.1 has no finite binary expansion, so the float called 0.1 is really 0.100000001490116…: the nearest of the
         2<sup>32</sup> patterns.</p>
         <p>Why this layout and not a fixed point: a fixed-point word spends the same resolution everywhere, so it either covers a small range finely or a large range coarsely. A float spends
-        its bits on a ratio: the exponent chooses a binade [2<sup>k</sup>, 2<sup>k+1</sup>), the fraction chooses one of 2<sup>M</sup> equally spaced values in it. Relative error is therefore
+        its bits on a ratio: the exponent chooses a <em>binade</em> (the range [2<sup>k</sup>, 2<sup>k+1</sup>), from one power of two to the next), the fraction chooses one of 2<sup>M</sup> equally spaced values in it. Relative error is therefore
         bounded by 2<sup>−M</sup> over the whole range, from ${sci(minNormal(F32))} to ${sci(maxFinite(F32))} in float32, which is what scientific computation needs. The cost is that the spacing
         between neighbours grows with the magnitude, so addition is no longer exact and no longer associative.</p>`,
       widget: floatExplorer,
@@ -236,7 +231,12 @@ export const chFloat: Chapter = {
           ${FORMATS.map(([n, f]) => `<tr><td>${n}</td><td>${2 ** (f.E - 1) - 1}</td><td>${sci(maxFinite(f))}</td><td>${sci(minNormal(f))}</td><td>${sci(minNormal(f) * 2 ** -f.M)}</td><td>${sci(2 ** -f.M)}</td></tr>`).join('')}</table>`,
         pitfall: `<p>Testing floats for equality, or summing them and expecting the order not to matter. Both fail for the same reason: each operation rounds to the nearest neighbour. 0.1 above is stored as
           0.100000001490116…, and ten additions of it do not give exactly 1 (a later step of this chapter runs that sum on the CPU). Compare with a tolerance, and sum small values before large ones.</p>`,
-        real: `<p>IEEE 754 float32 and float64 are universal in CPUs and GPUs. Machine-learning hardware pushes the other way: bfloat16 keeps float32's 8 exponent bits and cuts the fraction to 7, trading precision
+        real: `<p>The top fraction bit of a NaN is the <em>quiet</em> bit. A quiet NaN (1) passes through arithmetic without complaint; a
+        <em>signaling</em> NaN (0, with some lower fraction bit set so that it is not ∞) raises the invalid flag when an operation consumes it. IEEE 754
+        lets a NaN carry a payload through a computation; RISC-V does not: every NaN an operation produces is the <strong>canonical NaN</strong>
+        0x7FC00000 (positive, quiet, payload 0), whatever the operands were. Only loads, stores, moves and sign injection copy a NaN's bits unchanged.
+        In the 8-bit format the circuits below use, the canonical NaN is 0 1111 100 = 0x7C.</p>
+          <p>IEEE 754 float32 and float64 are universal in CPUs and GPUs. Machine-learning hardware pushes the other way: bfloat16 keeps float32's 8 exponent bits and cuts the fraction to 7, trading precision
           for range with a multiplier a small fraction of float32's; 8-bit formats with 4 or 5 exponent bits, like the one these circuits use, are in common use for inference.</p>`,
       },
       challenge: {
