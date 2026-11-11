@@ -1161,7 +1161,7 @@ export class SchematicView {
         this.tooltip.style.opacity = '0';
         if (locked && !lockSaid) {
           lockSaid = true;
-          this.note('Layout locked: the lock on the bar (or View options, Move parts by dragging) lets you move parts');
+          this.note('The layout is locked, so dragging moves the view. To move parts, open the lock on the stage bar');
         }
       }
       this.cam.vb.x = vx - (ev.clientX - e.clientX) * k;
@@ -1506,11 +1506,11 @@ export class SchematicView {
       if (isTagged(net)) {
         const name = net.name ?? `n${ni}`;
         if (shown) items.push({ label: `Unravel ${name}`, hint: 'Draw this pointer as wires from its driver', run: () => this.setWired([key], true) });
-        else items.push({ label: `${name} back to pointers`, hint: 'Its labels again, as the chapter drew it', run: () => this.setWired([key], false) });
+        else items.push({ label: `${name} back to pointers`, hint: 'Its labels again, as first drawn', run: () => this.setWired([key], false) });
       } else {
         const name = net.name ?? net.ends[0];
         if (!shown) items.push({ label: `Draw ${name} as pointers`, hint: 'A label at each end instead of the wire', run: () => this.toPointers(Number(ni), name) });
-        else items.push({ label: `${name} back to a wire`, hint: 'As the chapter drew it', run: () => this.setTagged([key], false) });
+        else items.push({ label: `${name} back to a wire`, hint: 'As first drawn', run: () => this.setTagged([key], false) });
       }
       if (!shown && lay?.via?.[key]) {
         items.push({ label: `Reroute ${net.name ?? net.ends[0]}`, hint: 'Let go of your bends: drawn as the router would', run: () => this.edit((l) => delete l.via?.[key]) });
@@ -1519,7 +1519,7 @@ export class SchematicView {
     const inst = target?.closest('[data-inst]')?.getAttribute('data-inst');
     const back = this.arrange !== true ? [] : inst && this.group.has(inst) ? [...this.group].filter((n) => lay?.at[n]) : inst && lay?.at[inst] ? [inst] : [];
     if (back.length) {
-      items.push({ label: back.length > 1 ? `Put the ${back.length} picked parts back` : `Put ${back[0]} back`, hint: 'Where the chapter drew it',
+      items.push({ label: back.length > 1 ? `Put the ${back.length} picked parts back` : `Put ${back[0]} back`, hint: 'Where it was first drawn',
         run: () => this.edit((l) => {
           back.forEach((n) => delete l.at[n]);
           dropCorners(l, base, back);
@@ -1538,7 +1538,7 @@ export class SchematicView {
     const hs = lay?.hues && this.hueSite();
     // (netcolours.ts resetColours, inline: an import here would put that module back in the stage's chunk)
     if (hs) items.push({ label: 'Reset colours', hint: 'Your wire colours on this level', run: () => { editLayout(id, (e) => void delete e.hues); hs.done(); } });
-    if (lay && (Object.keys(lay.at).length || lay.wired.length || lay.tagged.length || lay.via)) items.push({ label: 'Reset layout', hint: 'This level as the chapter drew it (your colours stay)', run: () => this.edit((l) => {
+    if (lay && (Object.keys(lay.at).length || lay.wired.length || lay.tagged.length || lay.via)) items.push({ label: 'Reset layout', hint: 'This level as first drawn (wire colours you picked stay)', run: () => this.edit((l) => {
       l.at = {};
       l.wired = [];
       l.tagged = [];

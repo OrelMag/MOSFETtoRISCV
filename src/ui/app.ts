@@ -243,16 +243,16 @@ export function startApp(root: HTMLElement): void {
   // the stage bar's lock is the same switch
   const moveItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('moveParts', !settings.moveParts) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
-    h('span', null, h('b', null, 'Move parts by dragging'), h('small', null, 'Drag a part or a wire to move it; off (the lock on the stage bar), a drag pans. Off on a touch screen')));
+    h('span', null, h('b', null, 'Move parts by dragging'), h('small', null, 'On: dragging a part or a wire moves it. Off: dragging moves the view and the drawing stays put (the lock on the stage bar is the same switch). Starts off on a touch screen')));
   // layout.ts is not first-load code
   const layoutsItem = h('button', { class: 'pal-reset', onclick: () => {
     void import('../view/layout').then((m) => {
       const n = m.arrangedLevels().length;
-      if (!n) return void (layoutsItem.textContent = 'No level carries your layout');
+      if (!n) return void (layoutsItem.textContent = 'No level has a layout of yours');
       const levels = `${n} level${n > 1 ? 's' : ''}`;
-      if (!confirm(`Reset ${levels} as drawn? Colours stay.`)) return;
+      if (!confirm(`Put ${levels} back as first drawn? Wire colours you picked stay.`)) return;
       m.resetAllLayouts();
-      layoutsItem.textContent = `${levels} back as drawn`;
+      layoutsItem.textContent = `${levels} back as first drawn`;
     });
   } }, 'Reset every level’s layout…');
   // Both live elsewhere too: M and the minimap's own button, the switch on the key sheet.

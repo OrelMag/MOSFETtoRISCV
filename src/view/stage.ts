@@ -484,7 +484,7 @@ export class Stage {
     this.dock = h('div', { class: 'panel-dock' });
     // Touch: dblclick comes from a double tap; the Layout button stands in for the right-click menu.
     this.hint = hintBadge('double-click a part to open it · drag a part or a wire to move it (shift: pick several; the lock on the bar stops it) · right-click for layout · drag to pan · wheel or pinch to zoom',
-      'double-tap a part: open · drag: pan (unlocked: tap a part or wire, then drag it) · pinch: zoom', 'stage', '', HINT_AUTO_MS);
+      'double-tap a part: open · drag: pan · pinch: zoom', 'stage', '', HINT_AUTO_MS);
     this.canvas.append(this.levelBadge, this.layoutPill, this.hint, this.dock, this.board.el, this.why.el);
     this.controls = h('div', { class: 'controls unfit' });
     this.status = h('div', { class: 'status' });
@@ -2902,18 +2902,18 @@ export class Stage {
       // nothing
     } else if (asideOf(id)) {
       p.classList.add('warn');
-      p.append(h('span', { class: 'lp-text' }, 'Redrawn since you arranged it: the new drawing'),
+      p.append(h('span', { class: 'lp-text' }, 'This level was redrawn after you arranged it; here is the new drawing'),
         act('Bring mine back', 'Your arrangement of the earlier drawing, over this one (Ctrl+Z undoes it)', 'restore'),
         act('Dismiss', 'Keep the new drawing and forget your earlier arrangement', 'dismiss'));
     } else if (v.original) {
-      p.append(h('span', { class: 'lp-text' }, 'The chapter’s drawing'), act('Back to mine', 'Your arrangement of this level again', 'mine'));
+      p.append(h('span', { class: 'lp-text' }, 'The original drawing'), act('Back to mine', 'Your arrangement of this level again', 'mine'));
     } else if (arranged(lay)) {
       const c = arrangedCount(lay);
       const what = [c.parts && `${c.parts} part${c.parts > 1 ? 's' : ''} moved`, c.wires && `${c.wires} wire${c.wires > 1 ? 's' : ''} reshaped`,
         c.pointers && `${c.pointers} pointer${c.pointers > 1 ? 's' : ''} changed`].filter(Boolean).join(', ');
       p.append(h('span', { class: 'lp-text' }, icon('move', 13), `Your layout: ${what}`),
-        act('Original', 'Show the chapter’s drawing of this level (yours stays saved)', 'original'),
-        act('Reset', 'This level as the chapter drew it; your colours stay (Ctrl+Z undoes it)', 'reset'));
+        act('Original', 'Show this level as it was first drawn (your layout stays saved)', 'original'),
+        act('Reset', 'Put this level back as it was first drawn; wire colours you picked stay (Ctrl+Z undoes it)', 'reset'));
     }
     p.hidden = !p.childElementCount;
   }

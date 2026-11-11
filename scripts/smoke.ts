@@ -333,7 +333,7 @@ const layoutDrive = (mode: 'touch' | 'mouse' | 'redrawn') => `(async () => {
   const stored = () => JSON.parse(localStorage.getItem('mosfet2riscv:layouts:v1') || '{}').xor;
   if (mode === 'redrawn') {
     await wait(300);
-    if (!/Redrawn since you arranged it/.test(pillText())) return ['an arrangement of another drawing: no "Redrawn" pill (' + pillText() + ')'];
+    if (!/redrawn after you arranged it/.test(pillText())) return ['an arrangement of another drawing: no "Redrawn" pill (' + pillText() + ')'];
     if (!stored()?.aside) bad.push('the stale arrangement was not set aside');
     const dismiss = [...pill().querySelectorAll('button')].find((b) => b.textContent === 'Dismiss');
     dismiss?.click(); await wait(200);
@@ -386,7 +386,7 @@ const layoutDrive = (mode: 'touch' | 'mouse' | 'redrawn') => `(async () => {
   if (!/Your layout: 1 part moved/.test(pillText())) bad.push('no "Your layout" pill after a move: "' + pillText() + '"');
   const btn = (t) => [...(pill()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === t);
   btn('Original')?.click(); await wait(400);
-  if (!/The chapter’s drawing/.test(pillText())) bad.push('Original did not show the chapter’s drawing: "' + pillText() + '"');
+  if (!/The original drawing/.test(pillText())) bad.push('Original did not show the chapter’s drawing: "' + pillText() + '"');
   btn('Back to mine')?.click(); await wait(400);
   btn('Reset')?.click(); await wait(500);
   if (pillText()) bad.push('Reset left the pill: "' + pillText() + '"');
