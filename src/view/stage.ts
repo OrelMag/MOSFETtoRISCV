@@ -1231,13 +1231,13 @@ export class Stage {
     this.lens?.zoomed(x, y);
   }
 
-  /** After a hand-off: "Esc or cpu goes back up" under the breadcrumb (null removes it). */
+  /** After a hand-off: "Keep zooming out to go up to cpu" under the breadcrumb (null removes it). */
   private showCue(parent: { label: string; path: string[] } | null): void {
     this.cueEl?.remove();
     this.cueEl = null;
     if (!parent) return;
-    this.cueEl = h('div', { class: 'lens-cue', role: 'status' }, 'Esc or ',
-      h('button', { class: 'linkish', onclick: () => this.goTo(parent.path) }, parent.label), ' goes back up');
+    this.cueEl = h('div', { class: 'lens-cue', role: 'status' }, 'Keep zooming out to go up to ',
+      h('button', { class: 'linkish', onclick: () => this.goTo(parent.path) }, parent.label));
     this.canvas.append(this.cueEl);
   }
 
@@ -2502,6 +2502,17 @@ export class Stage {
   }
 
   private renderCrumbs(): void {
+    const peek = this.leaf ? null : this.lens?.peekCtx ?? null;
+    this.drawCrumbs(null);
+    if (!peek) return;
+    // the zoom lens's peek crumb only where it fits: it must not restack the bar (on a phone that took half the canvas
+    // away, and the lens closed for want of room); the lens's own tag names the level anyway
+    const bare = this.bar.getBoundingClientRect().height;
+    this.drawCrumbs(peek);
+    if (this.bar.getBoundingClientRect().height > bare + 1) this.drawCrumbs(null);
+  }
+
+  private drawCrumbs(peek: ViewCtx | null): void {
     const c = this.crumbs;
     c.replaceChildren();
     if (!this.rootCtx) return;
@@ -2518,7 +2529,6 @@ export class Stage {
       const def = this.ctx!.node.children!.get(this.leaf.name)!.def;
       chain.push({ label: this.leaf.name, kind: def.name, path: this.path });
     }
-    const peek = this.leaf ? null : this.lens?.peekCtx ?? null;
     if (peek) {
       levels.push(peek);
       chain.push({ label: peek.path[peek.path.length - 1], kind: '', path: peek.path, peek: true });

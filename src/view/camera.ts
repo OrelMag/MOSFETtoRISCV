@@ -326,6 +326,9 @@ export interface PanZoomHooks {
   onLeave?(): void;
   /** A two-finger pinch began: abandon what its first finger started. */
   onPinch?(): void;
+  /** A pinch step (after the camera moved) and its end, with the fingers' midpoint (client px): the zoom lens's focus. */
+  onPinchMove?(mid: [number, number], k: number): void;
+  onPinchEnd?(mid: [number, number]): void;
 }
 
 /**
@@ -339,7 +342,8 @@ export function installPanZoom(svg: SVGSVGElement, cam: Camera, hooks: PanZoomHo
   let drag: { x: number; y: number; vx: number; vy: number; moved: boolean; target: Element } | null = null;
   installPinch(svg, {
     start: () => { drag = null; hooks.onPinch?.(); },
-    move: (k, mid, prev) => cam.pinch(k, mid, prev),
+    move: (k, mid, prev) => { cam.pinch(k, mid, prev); hooks.onPinchMove?.(mid, k); },
+    end: (mid) => hooks.onPinchEnd?.(mid),
   });
   svg.addEventListener('wheel', (e) => {
     e.preventDefault();

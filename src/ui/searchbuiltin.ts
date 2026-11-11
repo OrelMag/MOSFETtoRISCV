@@ -14,7 +14,7 @@ import { keyDef } from './keys';
 import { allActions, here, registerActions, registerSearchSource, type SearchCtx } from './searchsources';
 import { notes, placeHref, snippet } from './notes';
 import { placeLabel } from './notelabel';
-import { applyTheme, coarsePointer, settings, type Theme } from './settings';
+import { applyTheme, settings, type Theme } from './settings';
 import { markJump } from './returnto';
 
 const route = (ctx: SearchCtx) => ctx.hash.replace(/^#\/?/, '').split('/');
@@ -210,7 +210,7 @@ registerActions((ctx) => {
     act('clock', 'Automatic clock', `a circuit with a clock starts running (${onOff(settings.autoClock)})`, toggle('autoClock')),
     act('delay', 'Load-dependent delay', `timing panels, the inspector and sandbox / workbench gate-level simulation time each NAND by its load (${onOff(settings.loadDelay)})`, toggle('loadDelay')),
     act('moveParts', 'Move parts by dragging', `stage and look inside: a drag moves a part or a wire; off, it pans (${onOff(settings.moveParts)})`, toggle('moveParts'), ['lock', 'layout']),
-    act('zoomOpen', 'Open blocks as you zoom', coarsePointer() ? 'Not yet on touch screens' : `zoom into a block and its inside opens over it, live (${onOff(settings.zoomOpen)})`, coarsePointer() ? () => {} : toggle('zoomOpen'), ['zoom', 'inside', 'peek', 'transparent', 'lens', 'open']),
+    act('zoomOpen', 'Open blocks as you zoom', `zoom or pinch into a block and its inside opens over it, live (${onOff(settings.zoomOpen)})`, toggle('zoomOpen'), ['zoom', 'inside', 'peek', 'transparent', 'lens', 'open']),
     act('simple', 'Simple connections', `sandbox: straight wires at any angle (${onOff(settings.simpleWires)})`, toggle('simpleWires')),
     act('text.bigger', 'Larger text', `chapter prose ${Math.min(130, settings.textSize + 10)}% (now ${settings.textSize}%)`, () => { settings.set('textSize', Math.min(130, settings.textSize + 10)); applyTheme(); }),
     act('text.smaller', 'Smaller text', `chapter prose ${Math.max(90, settings.textSize - 10)}% (now ${settings.textSize}%)`, () => { settings.set('textSize', Math.max(90, settings.textSize - 10)); applyTheme(); }),

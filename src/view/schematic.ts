@@ -200,6 +200,7 @@ export class SchematicView {
   private dragged = false;
   /** A double tap opens a part like a double-click (iOS Safari may send no dblclick for it). */
   private taps = new DoubleTap();
+  private pinchers = new Set<(mid: [number, number], done: boolean, k: number) => void>();
   /** Parts picked to move together; the parts being dragged; their places while a live drag goes on. */
   private group = new Set<string>();
   private dragging = new Set<string>();
@@ -251,17 +252,23 @@ export class SchematicView {
       },
       onHover: (e) => this.hoverTip(e),
       onLeave: () => (this.tooltip.style.opacity = '0'),
+      // the first finger's hold must not open the menu: the pinch keeps its moves and lift from the hold's listeners
+      onPinch: () => this.holdCancel(),
+      onPinchMove: (mid, k) => this.pinchers.forEach((f) => f(mid, false, k)),
+      onPinchEnd: (mid) => this.pinchers.forEach((f) => f(mid, true, 1)),
     });
     this.el.addEventListener('contextmenu', (e) => this.contextMenu(e));
     // A held finger is the right-click (the browser's own contextmenu for it is not reliable): the same menu.
-    this.holdQuiet = installHold(this.el, {
+    const held = installHold(this.el, {
       onHold: (x, y, e) => {
         if (this.traceMenu(e.target as Element, x, y)) return;
         const items = this.menuItems(e.target as Element);
         if (!items.length) return false;
         this.openMenu(items, x, y);
       },
-    }).quiet;
+    });
+    this.holdQuiet = held.quiet;
+    this.holdCancel = held.cancel;
     this.el.addEventListener('pointerdown', (e) => {
       if (this.arrange === true && e.shiftKey && e.button === 0 && !(e.target as Element).closest('.inst, .pin, .bus-label')) this.bandSelect(e);
       const net = this.grabbedNet(e);
@@ -977,6 +984,18 @@ export class SchematicView {
     this.cam.apply();
   }
 
+  /** A pinch step (client px), as two fingers on the board do (the zoom lens hands its pinches here). */
+  pinchAt(k: number, mid: [number, number], prev: [number, number]): void {
+    this.cam.pinch(k, mid, prev);
+    this.pinchers.forEach((f) => f(mid, false, k));
+  }
+
+  /** Pinches on the board (and handed in by pinchAt): each step with its scale `k` (> 1 spreads), then its end (`done`), with the fingers' midpoint. */
+  onPinch(f: (mid: [number, number], done: boolean, k: number) => void): () => void {
+    this.pinchers.add(f);
+    return () => this.pinchers.delete(f);
+  }
+
   /** A wheel step at a client point, as the board's own wheel (the zoom lens hands its wheel here). */
   wheelAt(deltaY: number, clientX: number, clientY: number): void {
     const [wx, wy] = this.cam.toWorld(clientX, clientY);
@@ -1665,6 +1684,12 @@ export class SchematicView {
   }
 
   private holdQuiet: () => boolean = () => false;
+  private holdCancel: () => void = () => {};
+
+  /** A press and hold under way is not one: a pinch over this view that it does not see (the zoom lens's). */
+  cancelHold(): void {
+    this.holdCancel();
+  }
 
   private contextMenu(e: MouseEvent): void {
     if (this.holdQuiet()) return void e.preventDefault();

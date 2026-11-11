@@ -31,11 +31,14 @@ export const opensAt = (box: Rect): boolean => short(box) >= LENS_OPEN_PX;
 /** Kept clear of the canvas's own edges (px), as the mockup's lens. */
 export const EDGE_PX = 8;
 
-/** The lens's free stage: camera.ts freeArea for the inside's aspect (as Fit picks its room), the canvas when none, less EDGE_PX. */
-export function freeStage(canvas: Size, covers: Rect[], extent: Size, gap = COVER_GAP): Rect {
+/** A touch screen (DESIGN.md item 6): 16 px gutters, and the cap is the whole free width (at 390 px a lens is nearly a drill). */
+export const PHONE_EDGE_PX = 16, PHONE_LENS_W = 1;
+
+/** The lens's free stage: camera.ts freeArea for the inside's aspect (as Fit picks its room), the canvas when none, less `edge`. */
+export function freeStage(canvas: Size, covers: Rect[], extent: Size, gap = COVER_GAP, edge = EDGE_PX): Rect {
   const r = freeArea(canvas.w, canvas.h, covers, extent.w, extent.h, gap) ?? { x: 0, y: 0, w: canvas.w, h: canvas.h };
-  const x0 = Math.max(r.x, EDGE_PX), y0 = Math.max(r.y, EDGE_PX);
-  const x1 = Math.min(r.x + r.w, canvas.w - EDGE_PX), y1 = Math.min(r.y + r.h, canvas.h - EDGE_PX);
+  const x0 = Math.max(r.x, edge), y0 = Math.max(r.y, edge);
+  const x1 = Math.min(r.x + r.w, canvas.w - edge), y1 = Math.min(r.y + r.h, canvas.h - edge);
   return { x: x0, y: y0, w: Math.max(0, x1 - x0), h: Math.max(0, y1 - y0) };
 }
 
@@ -58,12 +61,12 @@ function placed(box: Rect, extent: Size, scale: number, free: Rect): LensPlan {
 }
 
 /**
- * The lens as it opens: the inside fitted to the cap (LENS_W × LENS_H of the free stage). Null when it would not be
- * legible there (its smallest block under MIN_BLOCK_PX) or the free stage is too small to hold it.
+ * The lens as it opens: the inside fitted to the cap (`capW` × LENS_H of the free stage; PHONE_LENS_W on a touch
+ * screen). Null when it would not be legible there (its smallest block under MIN_BLOCK_PX) or the free stage is too small.
  */
-export function openPlan(box: Rect, extent: Size, smallestBlock: number, free: Rect): LensPlan | null {
+export function openPlan(box: Rect, extent: Size, smallestBlock: number, free: Rect, capFrac = LENS_W): LensPlan | null {
   if (!(extent.w > 0 && extent.h > 0) || free.w <= 2 * RIM_PX || free.h <= TAG_PX + RIM_PX) return null;
-  const capW = free.w * LENS_W - 2 * RIM_PX, capH = free.h * LENS_H - TAG_PX - RIM_PX;
+  const capW = free.w * capFrac - 2 * RIM_PX, capH = free.h * LENS_H - TAG_PX - RIM_PX;
   const scale = Math.min(capW / extent.w, capH / extent.h);
   if (!(scale > 0) || smallestBlock * scale < MIN_BLOCK_PX) return null;
   return placed(box, extent, scale, free);
@@ -71,12 +74,16 @@ export function openPlan(box: Rect, extent: Size, smallestBlock: number, free: R
 
 /**
  * The lens after the zoom moved on: its scale follows the box's on-screen size since it opened (`opened`: the plan and
- * the box's height then). `handoff`: it would no longer fit the free stage, so the view becomes that level.
+ * the box's height then). `handoff`: the zoom grew it past the free stage, so the view becomes that level. Only a zoom
+ * hands off: when the free stage shrinks under an unzoomed lens (a panel docks, the phone's bar rewraps for the peek
+ * crumb) it shrinks to fit. A phone's lens opens at the whole free width, so without this any reflow would drill.
  */
 export function growPlan(opened: { plan: LensPlan; boxH: number }, box: Rect, extent: Size, free: Rect): { plan: LensPlan; handoff: boolean } {
-  const scale = opened.plan.scale * (box.h / opened.boxH);
-  const w = extent.w * scale + 2 * RIM_PX, h = extent.h * scale + TAG_PX + RIM_PX;
-  return { plan: placed(box, extent, scale, free), handoff: w > free.w || h > free.h };
+  let scale = opened.plan.scale * (box.h / opened.boxH);
+  const over = (s: number) => extent.w * s + 2 * RIM_PX > free.w + 0.5 || extent.h * s + TAG_PX + RIM_PX > free.h + 0.5;
+  if (over(scale) && box.h > opened.boxH * 1.001) return { plan: placed(box, extent, scale, free), handoff: true };
+  if (over(scale)) scale = Math.max(0, Math.min((free.w - 2 * RIM_PX) / extent.w, (free.h - TAG_PX - RIM_PX) / extent.h));
+  return { plan: placed(box, extent, scale, free), handoff: false };
 }
 
 /** Should an open lens close? Its box under LENS_CLOSE_PX, or more than half of it outside the free stage. */
