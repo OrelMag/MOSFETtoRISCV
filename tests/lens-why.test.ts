@@ -87,7 +87,20 @@ describe('Break a part in the lens', () => {
     // drilled: the stage's own level on screen is that child
     expect(a).toEqual(ablate(lens.node.def));
     expect(a).toEqual(levelAblation(top.child('fa2')!));
-    if (typeof a !== 'string') expect(a.parts.map((p) => p.inst).sort()).toEqual([...lens.node.children!.keys()].filter((n) => lens.node.children!.get(n)!.def.prim !== 'alias').sort());
+    if (typeof a !== 'string') {
+      expect(a.parts.map((p) => p.inst).sort()).toEqual([...lens.node.children!.keys()].filter((n) => lens.node.children!.get(n)!.def.prim !== 'alias').sort());
+      // the 9-NAND full adder's own table: 8 rows, two outputs; its last gate serves cout alone, the three before it s alone
+      expect(a.rows).toBe(8);
+      expect(a.outputs).toEqual(['s', 'cout']);
+      expect(a.parts.find((p) => p.inst === 'g9')!.serves).toEqual(['cout']);
+      for (const g of ['g6', 'g7', 'g8']) expect(a.parts.find((p) => p.inst === g)!.serves).toEqual(['s']);
+    }
+  });
+
+  it('is off, with the reason, on a level too wide for a truth table (the CPU\'s ALU)', async () => {
+    const { ablationRefusal } = await import('../src/sim/ablate');
+    const { alu } = await import('../src/lib');
+    expect(ablationRefusal(alu(32))).toBe('68 input bits: the table would have 2^68 rows (at most 12 bits)');
   });
 });
 

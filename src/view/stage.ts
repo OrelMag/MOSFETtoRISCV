@@ -49,6 +49,7 @@ import { isMenuKey, type MenuEntry } from '../ui/menu';
 import type { ElsewhereHost, ExplainHost, MeasureHost } from './tracemenu';
 import { powerOff } from './truthrule';
 import { WhyPanel } from './whypanel';
+import { ablationRefusal } from '../sim/ablate';
 import { memGridPanel } from '../widgets/memgrid';
 import { modelLeaf } from '../widgets/modelleaf';
 import { findMemories } from './memfind';
@@ -1444,7 +1445,8 @@ export class Stage {
     return { def, host: {
       openCodex: (id) => go(`#/campaign/codex/${id}`),
       openChapter: go,
-      breakPart: { run: () => this.why.showParts(at, c), part: !!c },
+      // the table is of the level the menu is on (not the part clicked): disabled, with the reason, where it cannot be made
+      breakPart: { run: () => this.why.showParts(at, c), part: !!c, why: ablationRefusal(ctx.def) },
     } };
   }
 

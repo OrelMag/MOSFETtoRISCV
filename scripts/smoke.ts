@@ -851,7 +851,7 @@ const NET_DRIVE = `(async () => {
  * bar; it follows a clock pulse; Esc closes it; zooming on hands off to the level (#/…/part); zooming out shows the cue. Long
  * tasks after the gesture settles are measured (DESIGN.md: 50 ms on a quiet machine; the parallel tabs here get 250 ms).
  */
-const lensDrive = (part: string) => `(async () => {
+const lensDrive = (part: string, table = false) => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
   const svg = document.querySelector('.canvas > svg.schematic');
@@ -879,7 +879,8 @@ const lensDrive = (part: string) => `(async () => {
     const r = p.getBoundingClientRect();
     if (r.width && r.height && hit(L, r)) bad.push('the lens covers ' + (p.className || p.tagName).toString().slice(0, 40));
   }
-  if (!document.querySelector('.lens svg.schematic .lg-name, .lens svg.schematic .sym-label')) bad.push('nothing named inside the lens');
+  // (a box of bare gates, a full adder, has no block to name)
+  ${table ? '' : `if (!document.querySelector('.lens svg.schematic .lg-name, .lens svg.schematic .sym-label')) bad.push('nothing named inside the lens');`}
   // a pulse: the inside follows (its wires repaint; no error is the check, the console is watched)
   [...document.querySelectorAll('.stage button')].find((b) => /^pulse$/i.test(b.textContent.trim()))?.click();
   await wait(400);
@@ -913,11 +914,21 @@ const lensDrive = (part: string) => `(async () => {
     for (let k = 0; k < 20 && !item('Break a part'); k++) await wait(100);
     const br = item('Break a part');
     if (!br) bad.push('no Break a part in the lens menu');
-    else {
+    else if (br.getAttribute('aria-disabled') === 'true') {
+      // a level too wide for its truth table: the row is off and says why
+      if (!/input bits/.test(br.textContent)) bad.push('Break a part is off without its reason: ' + br.textContent.trim().slice(0, 80));
+      ${table ? `bad.push('Break a part is off inside ${part}');` : ''}
+      for (let k = 0; k < 4 && document.querySelector('.ctx-menu'); k++) {
+        (document.activeElement ?? document.body).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        await wait(120);
+      }
+      if (document.querySelector('.ctx-menu')) bad.push('the menu did not close on Esc');
+    } else {
       br.click();
       await wait(300);
       const said = document.querySelector('.why-body')?.textContent ?? '';
       if (!/Inside ${part}|inside of ${part}/.test(said)) bad.push('Break a part in the lens did not show its level: ' + said.slice(0, 80));
+      ${table ? `if (!document.querySelector('.why-table tr.why-mark')) bad.push('no table with the part marked for Break a part inside ${part}');` : ''}
     }
   } else bad.push('no part inside the lens');
   whyBtn?.click();
@@ -1110,6 +1121,9 @@ function routes(): Route[] {
   add('#/c/cpu/0', lensOn('dark'), ' (zoom lens, dark)', undefined, lensDrive('alu'));
   add('#/c/cpu/0', lensOn('light', false), ' (zoom lens, light canvas)', undefined, lensDrive('alu'));
   add('#/c/pipeline/1', lensOn('dark'), ' (zoom lens, pipeline, dark)', undefined, lensDrive('alu'));
+  // a box small enough for its truth table: Break a part in the lens draws the table, the part right-clicked marked
+  add('#/c/adders/3', lensOn('light'), ' (zoom lens, adder)', undefined, lensDrive('fa1', true));
+  add('#/c/adders/3', lensOn('dark'), ' (zoom lens, adder, dark)', undefined, lensDrive('fa1', true));
   add('#/c/cpu/0', lensOn('dark'), ` (zoom lens, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], LENS_TOUCH_DRIVE);
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
   // The layout lock: locked by default on a touch screen, unlocked with a mouse; an arrangement of an older drawing set aside.
