@@ -613,6 +613,32 @@ const OVERLAY_DRIVE = `(async () => {
 })()`;
 
 /**
+ * A level opened under the scene's panels is drawn at a readable size: the stage decides the folds again for the level it now
+ * shows (Stage.refold). Chapter ooo's reorder buffer, opened under the CPU and Out of order panels at 1440 × 900, was fitted
+ * about 45 px tall. With `dbl` the drive opens it by double-click from the top level; else the route opened it.
+ */
+const drillReadable = (inst: string, dbl: boolean): string => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (let i = 0; i < 40 && !document.querySelector('svg.schematic [data-inst]'); i++) await wait(250);
+  if (${dbl}) {
+    const g = document.querySelector('svg.schematic [data-inst="${inst}"]');
+    if (!g) return ['no ${inst} on the top level'];
+    g.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    await wait(1500);
+  }
+  // the core runs on the automatic clock: its panels fill, and the folds settle (Stage.growFold); measured until then
+  let w = 0, h = 0;
+  for (let i = 0; i < 16; i++) {
+    await wait(500);
+    const syms = [...document.querySelectorAll('svg.schematic [data-inst]')].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0);
+    if (!syms.length) continue;
+    h = Math.max(...syms.map((r) => r.bottom)) - Math.min(...syms.map((r) => r.top));
+    w = Math.max(...syms.map((r) => r.right)) - Math.min(...syms.map((r) => r.left));
+    if (i >= 8 && h >= 250) break;
+  }
+  return h < 250 ? ['${inst} drawn ' + Math.round(w) + ' x ' + Math.round(h) + ' px: too small to read under the panels'] : [];
+})()`;
+/**
  * Opens every Analogy aside on the step (a figure loads and mounts when its aside opens), turns on the Water | Cross-section
  * views of the step's widget, and waits for the figures to draw; a figure that stays empty or says it could not load is a problem.
  */
@@ -795,6 +821,10 @@ function routes(): Route[] {
   // Pages whose panels a phone once lost: the GPU screen and drawing pad, the Out of order panel, the level bar.
   const phone = VIEWPORTS.find((v) => v.mobile)!;
   for (const hash of ['#/c/pixels/5', '#/c/graphics/1', '#/c/ooo/8']) add(hash, light, ` (${phone.name})`, phone);
+  // A level opened under the panels: the folds decided again for it, the reorder buffer readable (drillReadable)
+  const laptop: Viewport = { width: 1440, height: 900, mobile: false, name: '1440px' };
+  add('#/c/ooo/8', light, ' (reorder buffer opened, 1440px)', laptop, drillReadable('rob', true));
+  add('#/c/ooo/8/rob', light, ' (reorder buffer linked, 1440px)', laptop, drillReadable('rob', false));
   // Chapter 50: the field tables and the cost table on a phone, and the two-computer scene running with a capture listed.
   const net = chapters.find((c) => c.id === 'network');
   if (net) {
