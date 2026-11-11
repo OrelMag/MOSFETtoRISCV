@@ -120,7 +120,7 @@ export const chMap: Chapter = {
           2n + 4, which is ${logicDepth(rca(4))} at 4 bits, ${logicDepth(rca(8))} at 8 and ${logicDepth(rca(32))} at 32. The count, ${stats(rca(4)).nands / 4} NANDs a stage, grows as 9n.</p>`,
         numbers: `<table class="mini"><tr><th>bits</th><th>NANDs</th><th>transistors</th><th>gate delays</th></tr>${[4, 8, 16, 32].map((n) => `<tr><td>${n}</td><td>${stats(rca(n)).nands}</td><td>${stats(rca(n)).transistors}</td><td>${logicDepth(rca(n))}</td></tr>`).join('')}</table>`,
         pitfall: `<p>Assuming delay is proportional to size. The 32-bit adder has eight times the gates of the 4-bit one but only ${(logicDepth(rca(32))! / logicDepth(rca(4))!).toFixed(1)} times the delay, and a faster adder
-          (<a href="#/c/fastadd/0">chapter 16</a>) can do the same add in far less depth by spending more gates. Cost and depth are separate axes.</p>`,
+          (<a href="#/c/fastadd/0">chapter ${numOf('fastadd')}</a>) can do the same add in far less depth by spending more gates. Cost and depth are separate axes.</p>`,
       },
     },
   ],
