@@ -75,6 +75,7 @@ export * from './spi';
 export * from './i2c';
 export * from './ttl';
 export * from './sap';
+export * from './acc8';
 export * from './bitrunner';
 export * from './baby';
 export * from './numbers';
