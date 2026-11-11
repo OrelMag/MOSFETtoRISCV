@@ -1,63 +1,47 @@
-/* The zoom lens (view/lens.ts): loaded with it, so nothing here costs a page with Open blocks as you zoom off.
-   Drawn as the approved mockup (docs/transparent/mockup.html): a rounded window with a 2 px rim and a deep shadow,
-   a pill tag top left, dashed connectors in the rim colour from each outer port's height to the inner pin. */
-:root {
-  --lens-rim: #2b5bd7;
-  --rim-text: #16336f;
-  --lens-tag: #2b4aa0;
-}
+/* Open blocks as you zoom (view/lens.ts, DESIGN.md Revision 3): loaded with it, so nothing here costs a page with the
+   setting off. An inside is drawn in its box's outline, over the box's own tinted body, and crossfades with the box's
+   name and port labels. */
+:root { --lens-rim: #2b5bd7; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) { --lens-rim: #8fb3ff; --rim-text: #dfe7ff; }
+  :root:not([data-theme='light']) { --lens-rim: #8fb3ff; }
 }
 :root[data-theme='dark'],
-/* the dark board is the canvas's, not the page's: the bar above it keeps the theme's colours */
-:root[data-look='vivid'][data-board='dark'] .canvas { --lens-rim: #8fb3ff; --rim-text: #dfe7ff; }
+/* the dark board is the canvas's, not the page's */
+:root[data-look='vivid'][data-board='dark'] .canvas { --lens-rim: #8fb3ff; }
 
-.lens-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; contain: layout style; }
-.lens-layer > .lens { pointer-events: auto; }
+.lens-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; contain: layout style; overflow: hidden; }
 
-.lens {
+/* One inside: exactly the box's outline, clipped to it, transparent until shown (the fade both ways: FADE_MS 160). */
+.inside {
   position: absolute;
-  z-index: 3;
-  border-radius: 12px;
   overflow: hidden;
-  background: var(--canvas);
-  box-shadow: 0 0 0 2px var(--lens-rim), 0 10px 40px rgb(0 0 0 / 0.6);
-  transform-origin: 0 0;
-}
-:root[data-look='vivid'][data-board='dark'] .lens { background: #1b1f2a; }
-/* the stage lit the box but names nothing inside it (DESIGN.md track 2c): the rim glows */
-.lens.lit { box-shadow: 0 0 0 2px var(--lens-rim), 0 0 14px var(--lens-rim), 0 10px 40px rgb(0 0 0 / 0.6); }
-.lens-body { position: absolute; }
-.lens-body > svg.schematic { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; user-select: none; }
-.lens-tag {
-  position: absolute;
-  left: 8px;
-  top: 6px;
-  font: 600 11px var(--font-ui);
-  color: #fff;
-  background: var(--lens-tag);
-  padding: 1px 7px;
-  border-radius: 9px;
   pointer-events: none;
-  white-space: nowrap;
-  max-width: calc(100% - 16px);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 160ms ease;
 }
-svg.lens-rim { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 3; }
-.lens-jog { fill: none; stroke: var(--lens-rim); stroke-width: 2; stroke-dasharray: 4 3; }
-.lens-dot { fill: var(--lens-rim); }
-/* a pin deep inside: the dot on the rim stands for it, a hollow ring that lights the pin when pointed at */
-.lens-dot.deep { fill: var(--canvas); stroke: var(--lens-rim); stroke-width: 2; pointer-events: auto; cursor: help; }
-.lens-port { fill: var(--rim-text); font: 11px var(--font-ui); }
-.lens-port.left { text-anchor: end; }
+.inside.on { opacity: 1; pointer-events: auto; }
+.inside.instant { transition: none; }
+.inside > svg.schematic { position: absolute; inset: 0; width: 100%; height: 100%; background: none; cursor: grab; touch-action: none; user-select: none; }
+/* the inside's own grid would not line up with the level's: it keeps taking clicks (a press there pans the view) */
+.inside .grid-bg { fill: none; }
+.inside-stub { fill: none; stroke-dasharray: none; }
 
-/* A box that does not open says why, over its middle, until the next zoom. */
-.lens-hint {
+/* The box under an inside keeps its tinted body; its name, port names and icons give way to the inside. */
+svg.schematic g.inst text,
+svg.schematic g.inst .lg-name,
+svg.schematic g.inst .sym-icon,
+svg.schematic g.inst .sym-gloss { transition: opacity 160ms ease; }
+svg.schematic g.inst.inside-on text,
+svg.schematic g.inst.inside-on .lg-name,
+svg.schematic g.inst.inside-on .sym-icon,
+svg.schematic g.inst.inside-on .sym-gloss { opacity: 0; }
+/* the stage lit the box but names nothing inside it (DESIGN.md track 2c): its outline glows */
+svg.schematic g.inst.lens-lit { filter: drop-shadow(0 0 0.5px var(--lens-rim)) drop-shadow(0 0 4px var(--lens-rim)); }
+
+/* Hovering a closed block that can open: how much more zoom it needs, over its top edge. */
+.inside-hint {
   position: absolute;
-  z-index: 3;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, calc(-100% - 4px));
   font: 12px var(--font-ui);
   color: var(--text);
   background: var(--surface);
@@ -69,7 +53,7 @@ svg.lens-rim { position: absolute; inset: 0; width: 100%; height: 100%; overflow
   box-shadow: 0 2px 10px rgb(0 0 0 / 0.25);
 }
 
-/* The breadcrumb's peek crumb, in italics, and the cue after a hand-off. */
+/* The breadcrumb's inside crumb, in italics, and the cue after a hand-off. */
 .crumbs button.peek i { color: var(--accent); font-style: italic; }
 /* added without refitting the bar (stage.ts peekCrumb): it gives way rather than pushing the bar's buttons */
 .crumbs button.peek { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -88,7 +72,10 @@ svg.lens-rim { position: absolute; inset: 0; width: 100%; height: 100%; overflow
 .lens-cue .linkish { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; }
 .ov-inside { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
 
-@media (prefers-reduced-motion: reduce) { .lens, svg.lens-rim { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .inside, svg.schematic g.inst text, svg.schematic g.inst .lg-name { transition: none; }
+}
+:root[data-reduce-motion] .inside, :root[data-reduce-motion] svg.schematic g.inst text { transition: none; }
 
 /* A touch screen: the cue's link is a 40 px target, as every small control there (app.css's coarse-pointer blocks). */
 @media (pointer: coarse) {

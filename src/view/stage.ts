@@ -2541,8 +2541,8 @@ export class Stage {
       const v = vals[i];
       const el = v ? h('span', { class: 'val' }) : null;
       if (el && v) this.crumbVals.push({ el, v });
-      // the lens's level (DESIGN.md item 4): "alu (peek)" in italics, a click steps in
-      if (item.peek) c.append(h('button', { class: 'peek', title: 'Step in', onclick: () => this.goTo(item.path) }, h('i', null, `${item.label} (peek)`), el));
+      // the lens's level (DESIGN.md item 4): "alu (inside)" in italics, a click steps in
+      if (item.peek) c.append(h('button', { class: 'peek', title: 'Step in', onclick: () => this.goTo(item.path) }, h('i', null, `${item.label} (inside)`), el));
       else c.append(h('button', { class: last || chain[i + 1]?.peek ? 'cur' : '', onclick: () => (last || chain[i + 1]?.peek ? null : this.goTo(item.path)) },
         item.label, item.kind ? h('span', { class: 'kind' }, item.kind) : null, el));
       // The name may be cut with an ellipsis (app.css): the tooltip keeps it whole.
@@ -2555,7 +2555,7 @@ export class Stage {
   }
 
   /**
-   * The lens's level as the breadcrumb's last item, "alu (peek)", added or removed in place. Not renderCrumbs: a crumb
+   * The lens's level as the breadcrumb's last item, "alu (inside)", added or removed in place. Not renderCrumbs: a crumb
    * more can make the bar overflow, and fitBar's ladder then lays the whole stage out once per step, the circuit included
    * (280 ms on the out-of-order core, 50 ms on the single-cycle CPU, measured by scripts/lens-ooo-measure.mjs). The
    * peek crumb shrinks instead (lens.css), so the bar keeps its layout while a lens comes and goes.
@@ -2572,7 +2572,7 @@ export class Stage {
     if (el && v) this.crumbVals.push({ el, v });
     const label = peek.path[peek.path.length - 1];
     c.append(h('span', { class: 'sep peek-sep' }, '›'),
-      h('button', { class: 'peek', title: `${label} (${peek.def.name}): step in`, onclick: () => this.goTo(peek.path) }, h('i', null, `${label} (peek)`), el));
+      h('button', { class: 'peek', title: `${label} (${peek.def.name}): step in`, onclick: () => this.goTo(peek.path) }, h('i', null, `${label} (inside)`), el));
     this.syncCrumbVals();
   }
 

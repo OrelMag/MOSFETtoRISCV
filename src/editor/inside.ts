@@ -478,7 +478,7 @@ class InsideView {
     const p = this.path;
     const levels: ViewCtx[] = [];
     for (let l: ViewCtx | null = this.ctx; l; l = l.parent) levels.unshift(l);
-    // the lens's level (DESIGN.md item 4): "alu (peek)" in italics, a click steps in
+    // the lens's level (DESIGN.md item 4): "alu (inside)" in italics, a click steps in
     const peek = this.leaf ? null : this.lens?.peekCtx ?? null;
     if (peek) levels.push(peek);
     const vals = crumbValues(levels);
@@ -504,7 +504,7 @@ class InsideView {
     });
     if (peek) {
       const name = peek.path[peek.path.length - 1];
-      const btn = h('button', { class: 'peek', title: 'Step in', onclick: () => this.goTo(peek.path) }, h('i', null, name + ' (peek)'));
+      const btn = h('button', { class: 'peek', title: 'Step in', onclick: () => this.goTo(peek.path) }, h('i', null, name + ' (inside)'));
       c.append(h('span', { class: 'sep' }, '›'), btn);
       valEl(p.length + 1, name, p[p.length - 1] ?? ed.doc.name, btn);
     }
