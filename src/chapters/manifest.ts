@@ -97,6 +97,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Comparing without subtracting", stage: "scene" },
     { title: "Signed comparison", challenge: "reach", stage: "scene" },
     { title: "Decimal: the BCD adder", challenge: "reach", stage: "scene" },
+    { title: "How do you know an adder is right?", challenge: "quiz", stage: "widget" },
   ] },
   { id: "routing", num: 7, title: "Choosing & routing", blurb: "Decoders turn numbers into choices; multiplexers make the choice.", level: "Combinational blocks", builds: ["gates"], recap: {"checks":3}, steps: [
     { title: "The decoder: a number becomes one wire", stage: "scene" },
@@ -167,6 +168,9 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The assembler", stage: "widget" },
     { title: "Pseudo-instructions", challenge: "quiz", stage: "widget" },
     { title: "Register names and the calling convention", challenge: "quiz", stage: "widget" },
+    { title: "If and else are branches", challenge: "reach", stage: "widget" },
+    { title: "A loop over an array", challenge: "reach", stage: "widget" },
+    { title: "A function and its stack frame", challenge: "reach", stage: "widget" },
   ] },
   { id: "cpu", num: 14, title: "A single-cycle CPU", blurb: "Every block from the previous chapters, wired into a complete RV32I processor.", level: "Processor", builds: ["alu","regfile","isa"], recap: {"checks":5}, steps: [
     { title: "The datapath", stage: "scene" },
