@@ -715,13 +715,13 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'o_fpunpack', act: 8, title: 'Float unpack', kind: 'build', optional: true, requires: ['n_float'], base: BUILDFP.o_fpunpack, givesOf: fpGives(FP_REF.unpack), par: { nand: 63, depth: 14 }, unlocks: ['fpun5_10'],
     why: 'Every FP unit needs a sign, an exponent and an 11-bit significand, but the hidden bit is not stored and the exponent field also encodes zero, subnormals, infinity and NaN. Unpack decodes that once: 63 NANDs, depth 14. The adder, the multiplier and the comparator each place two.',
     tips: ['The hidden bit is NOT (exponent field = 0).', 'A subnormal\'s exponent is 1, not 0: OR the field\'s low bit with "field = 0".', 'inf and nan share "field all 1s"; the fraction tells them apart.'],
-    codex: ['ieee754', 'subnormal'], chapters: [{ chapter: 'float', step: 2, label: 'Unpack' }],
+    codex: ['ieee754', 'subnormal', 'fpspecial'], chapters: [{ chapter: 'float', step: 2, label: 'Unpack' }],
   },
   {
     id: 'o_fpround', act: 8, title: 'Rounding decision', kind: 'build', optional: true, requires: ['n_float'], base: BUILDFP.o_fpround, givesOf: fpGives(() => ROUND_DECIDE), par: { nand: 62, depth: 13 }, unlocks: ['fpround'],
     why: 'An exact sum or product has more bits than the 11 the format keeps, and three of them decide its rounding in all five modes: the last kept bit, the first dropped one (guard) and whether anything below was 1 (sticky). 62 NANDs, depth 13. Normalize & round places it, so every FP result passes through it once.',
     tips: ['Decode rm into one wire per mode first; each mode is then a small AND.', 'Ties to even: a tie is g = 1 and s = 0; then round up only if lsb = 1.', 'The directed modes read the sign: rounding "down" a negative result moves it away from zero.'],
-    codex: ['rounding'], chapters: [{ chapter: 'float', step: 5, label: 'Five rounding modes' }],
+    codex: ['rounding', 'fpflags'], chapters: [{ chapter: 'float', step: 5, label: 'Five rounding modes' }],
   },
   {
     id: 'o_fpsticky', act: 8, title: 'Sticky shifter', kind: 'build', optional: true, requires: ['n_float', 'a_shift16'], base: BUILDFP.o_fpsticky, givesOf: fpGives(FP_REF.sticky), par: { nand: 264, depth: 21 }, unlocks: ['shrs13_4', 'shrs15_4'],
@@ -739,7 +739,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'o_fpnorm', act: 8, title: 'Normalize & round', kind: 'build', optional: true, requires: ['o_fpround', 'o_fpsticky', 'o_fplzc'], base: BUILDFP.o_fpnorm, givesOf: fpGives(FP_REF.norm, normSubs), par: { nand: 2058, depth: 86 }, unlocks: ['fpnr5_10_15', 'fpnr5_10_16_rv16', 'fpnr5_10_22'],
     why: 'Add, multiply and int → float all end the same way: a raw significand and exponent must become a correctly rounded word, subnormals and overflow included. Built from the three blocks below it: 2058 NANDs, depth 86, more than half the FP adder. The adder and Integer to float place it.',
     tips: ['Left shift by min(leading zeros, exp − 1): never below exponent 1. If exp < 1, shift right by 1 − exp instead (sticky shifter).', 'After the shift the kept bits are the top 11; then the guard bit; everything below it, and stin, is the sticky bit.', 'Rounding up 1.111…1 carries into a new top bit: the exponent goes up by one and the fraction is 0.', 'Overflow: a final field of 31 or more. Then toInf picks ∞ or 0x7BFF.'],
-    codex: ['normalize', 'rounding', 'subnormal'], chapters: [{ chapter: 'float', step: 3, label: 'Addition: align, add, normalize, round' }],
+    codex: ['normalize', 'rounding', 'subnormal', 'ulp', 'kahan'], chapters: [{ chapter: 'float', step: 3, label: 'Addition: align, add, normalize, round' }],
   },
   {
     id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['o_fpunpack', 'o_fpnorm'], base: BUILD8.o_fpadd, givesOf: fpGives(() => fpAdd16Ref().top, () => fpAdd16Ref().blocks), par: { nand: 3732, depth: 163 },
@@ -751,7 +751,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'o_fpmul', act: 8, title: 'FP multiplier', kind: 'build', optional: true, requires: ['o_fpadd', 'o_mularr'], base: BUILD8.o_fpmul, givesOf: fpGives(() => fpMul16Ref().top, () => fpMul16Ref().blocks), par: { nand: 4912, depth: 150 },
     why: 'Multiplying floats needs no alignment: XOR the signs, add the exponents less one bias, multiply the 11-bit significands, normalize & round. 4912 NANDs at depth 150, against the adder\'s 163; the significand product grows with the square of the width, and the binary32 multiplier is 14 913 NANDs.',
     tips: ['Signs, exponents and significands are three separate datapaths: s = sa XOR sb, e = ea + eb − 15, and the given 11 × 11 multiplier for the significands.', '11 × 11 bits gives a 22-bit product; its top bit decides whether to shift by one (and add one to the exponent).', 'Special cases before the arithmetic: 0 × ∞ is NaN, NaN in gives the canonical NaN, and a subnormal input has exponent 1 and no hidden bit, as unpack says.'],
-    codex: ['ieee754', 'fma'], chapters: [{ chapter: 'float', step: 7, label: 'Multiplication' }, { chapter: 'float', step: 17, label: 'An FPU in the CPU' }],
+    codex: ['ieee754', 'fma', 'fpformats', 'newtondiv'], chapters: [{ chapter: 'float', step: 7, label: 'Multiplication' }, { chapter: 'float', step: 17, label: 'An FPU in the CPU' }],
   },
   {
     id: 'o_fpcmp', act: 8, title: 'FP comparator', kind: 'build', optional: true, requires: ['o_fpunpack'], base: BUILDFP.o_fpcmp, givesOf: fpGives(FP_REF.cmp), par: { nand: 682, depth: 25 },

@@ -12,6 +12,7 @@ import { CODEX_FPGA } from './codexfpga';
 import { CODEX_SIDE } from './codexside';
 import { CODEX_POWER } from './codexpower';
 import { CODEX_VEC } from './codexvec';
+import { CODEX_FLOAT } from './codexfloat';
 import { CODEX_VM } from './codexvm';
 import { CODEX_VERIFY } from './codexverify';
 import { CODEX_BABY } from './codexbaby';
@@ -217,6 +218,8 @@ export const CODEX: CodexEntry[] = [
   ...CODEX_POWER,
   // the Vectors chapter (codexvec.ts)
   ...CODEX_VEC,
+  // the Floating point chapter's later steps (codexfloat.ts)
+  ...CODEX_FLOAT,
   // virtual memory and the tiny operating system (codexvm.ts)
   ...CODEX_VM,
   // verification and test (codexverify.ts)

@@ -728,6 +728,7 @@ export const chFloat: Chapter = {
         see every 8-bit input. Well over a million cases in all; every pair of 8-bit operands is an opt-in run (FPU_EXHAUSTIVE=1), not part of the
         regular test suite. float32 is tested on random and special operands (subnormals, infinities, NaNs, cancellation), and against the host CPU in
         round to nearest even.</p>
+        <p>The same generators also take the formats machine learning uses (bfloat16, and FP8 in its E4M3 and E5M2 shapes), which the next steps price, and the units around them can be changed: a near and far adder, and a divider replaced by Newton–Raphson division on the fma.</p>
         <div class="try">1.5 (0x3FC00000) + 2.25 (0x40100000) = 3.75 (0x40700000). Follow <span data-show="align add">the significands</span> through the aligner and the adder.</div>`; },
       scene: () => ({ root: fpAdd(F32), inputs: { a: 0x3fc00000, b: 0x40100000, sub: 0 } }),
       more: lazy(() => ({
@@ -957,7 +958,7 @@ export const chFloat: Chapter = {
         <p>Load "Rounding surprises" in the program menu: 10⁸ + 1 = 10⁸, 2²⁴ + 1 becomes 2²⁴, +0 equals −0 although their bits differ, ∞ − ∞ is NaN,
         NaN is not equal to itself, and 10⁶⁴ overflows to infinity. Each of these is the specified, correctly rounded answer.</p>
         <p>Every one follows from the three facts of the chapter: a result is the nearest representable value, the spacing grows with the magnitude, and a few encodings stand for things that are not numbers. Once the gap between neighbours
-        exceeds the operand you add, that operand vanishes; once a result has no meaning, a NaN says so and propagates. Reading these as bugs is the common mistake; reading them as the arithmetic is the habit to build.</p>
+        exceeds the operand you add, that operand vanishes; once a result has no meaning, a NaN says so and propagates. Reading these as bugs is the common mistake; reading them as the arithmetic is the habit to build. The steps after this one measure the error in ulps and sum a long list with Kahan summation, which keeps it from growing.</p>
         ${floatMistakes()}`,
       scene: () => cpuScene({ source: fsrc('absorb'), fpu: true, adder: 'ks' }),
       more: {

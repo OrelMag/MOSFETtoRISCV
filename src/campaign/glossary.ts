@@ -12,6 +12,7 @@ import { ALIASES_DSP } from './codexdsp';
 import { ALIASES_FPGA } from './codexfpga';
 import { ALIASES_POWER } from './codexpower';
 import { ALIASES_VEC } from './codexvec';
+import { ALIASES_FLOAT } from './codexfloat';
 import { ALIASES_VERIFY } from './codexverify';
 import { ALIASES_BABY } from './codexbaby';
 import { ALIASES_AGC } from './codexagc';
@@ -67,6 +68,8 @@ export const ALIASES: Record<string, string[]> = {
   ...ALIASES_POWER,
   // the Vectors chapter (codexvec.ts)
   ...ALIASES_VEC,
+  // the Floating point chapter's later steps (codexfloat.ts)
+  ...ALIASES_FLOAT,
   ...ALIASES_VERIFY,
   // Appendix E (codexbaby.ts)
   ...ALIASES_BABY,
