@@ -99,7 +99,7 @@ let relocWord = 0, relocTarget = -1;
 /** The challenge: the strip holds the linker's word. */
 export const relocSolved = (): boolean => relocTarget >= 0 && relocWord === relocTarget;
 let fillReloc: (() => void) | null = null;
-export const solveReloc = (): void => fillReloc?.();
+export const solveReloc = (): void => { relocTarget = relocWord = jalCase().word; fillReloc?.(); };
 
 export function relocWidget(): Widget {
   const c = jalCase();

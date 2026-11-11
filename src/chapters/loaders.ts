@@ -38,6 +38,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "threads": () => import('./ch-threads').then((m) => m.chThreads),
   "multicycle": () => import('./ch-multicycle').then((m) => m.chMulticycle),
   "float": () => import('./ch-float').then((m) => m.chFloat),
+  "linking": () => import('./ch-linking').then((m) => m.chLinking),
   "widths": () => import('./ch-widths').then((m) => m.chWidths),
   "ooo": () => import('./ch-ooo').then((m) => m.chOoo),
   "multicore": () => import('./ch-multicore').then((m) => m.chMulticore),

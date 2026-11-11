@@ -37,6 +37,7 @@ const BOOK = [
   'threads',
   'multicycle',
   'float',
+  'linking',
   'widths',
   'ooo',
   'multicore',
