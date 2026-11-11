@@ -10,6 +10,7 @@ import { oooCpu } from '../src/lib/ooocore';
 import { assemble } from '../src/riscv/asm';
 import { PROGRAMS } from '../src/riscv/programs';
 import { orientGeom } from '../src/sim/geometry';
+import { isConstantDef } from '../src/sim/constant';
 import { netlistOf, type ComponentDef } from '../src/sim/types';
 import { MIN_VIEW_UNITS } from '../src/view/camera';
 import { CAP_SHARE, capOpenAt, fitInside, insideExtent, openAtPx, smallestNamed } from '../src/view/lensplan';
@@ -22,7 +23,7 @@ const CANVASES = [{ w: 888, h: 606 }, { w: 620, h: 520 }];
 /** Every box of a top that can open: its size and its own opening zoom. */
 function boxes(top: ComponentDef) {
   return netlistOf(top)!.instances.flatMap((i) => {
-    const e = netlistOf(i.def) ? insideExtent(i.def) : null;
+    const e = netlistOf(i.def) && !isConstantDef(i.def) ? insideExtent(i.def) : null;
     if (!e) return [];
     const g = orientGeom(i.def, i.flip, i.rot), box = { x: 0, y: 0, w: g.w, h: g.h };
     const base = openAtPx(box, fitInside(box, e).k, smallestNamed(i.def));

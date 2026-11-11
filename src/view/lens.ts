@@ -12,6 +12,7 @@ import { reducedMotion } from '../ui/motion';
 import { ICON } from './boxtext';
 import { TAP_SLOP } from './camera';
 import type { ViewCtx } from './context';
+import { isConstantDef } from '../sim/constant';
 import { capOpenAt, decide, fitInside, FADE_MS, FLOOR_PX, runsOf, handOffView, handsOff, insideExtent, openAtPx, smallestNamed, type Rect } from './lensplan';
 import { cueWords, progress, ZoomOutGate } from './zoomout';
 import { installPinch } from './pinch';
@@ -24,6 +25,7 @@ const SVG = 'http://www.w3.org/2000/svg';
 export const HINT_MAX_ZOOM = 4;
 /** An inside built more than this far (px) outside the canvas is dropped: it would only cost repaints. */
 const KEEP_PX = 200;
+const nearCanvas = (r: Rect | null, c: DOMRect): boolean => !!r && r.x + r.w > -KEEP_PX && r.y + r.h > -KEEP_PX && r.x < c.width + KEEP_PX && r.y < c.height + KEEP_PX;
 /** The size (px) a run's end names are drawn at (legible.ts draws block names at about this size). */
 const RUN_NAME_PX = 11;
 /** The hint's height with its gap (px): it goes where it has that much room. */
@@ -282,7 +284,8 @@ export class Lens {
     for (const [name, r] of v.partBoxes()) {
       if (!ctx.canOpen(name)) continue;
       const def = ctx.node.children?.get(name)?.def;
-      const e = def && insideExtent(def);
+      // a constant (a tie cell: a rail and a stub) has nothing to show in place
+      const e = def && !isConstantDef(def) && insideExtent(def);
       if (!def || !e) continue;
       const base = openAtPx(r, fitInside(r, e).k, smallestNamed(def));
       if (!Number.isFinite(base)) continue;
@@ -353,15 +356,19 @@ export class Lens {
     this.cap(c);
     this.host.view.el.classList.toggle('lens-bigicons', px * ICON > ICON_MAX_PX);
     const zoomingIn = this.lastPx > 0 && px > this.lastPx * 1.0001;
+    // only a zoom out closes a box (R3.4): a panel docking or folding, a resize or a pan moves the cap or the box, not the zoom
+    const zoomingOut = this.lastPx > 0 && px < this.lastPx * 0.9999;
     this.lastPx = px;
     let wantBuild = false;
     for (const b of this.boxes.values()) {
       const r = this.boxPx(b.name, c);
-      const near = !!r && r.x + r.w > -KEEP_PX && r.y + r.h > -KEEP_PX && r.x < c.width + KEEP_PX && r.y < c.height + KEEP_PX;
-      b.want = ok && near && decide(b.want, px, b.openAt);
-      if (b.want && !b.view) wantBuild = true;
+      const near = nearCanvas(r, c);
+      // the answer is kept for a box panned out of reach (only its drawing goes), so it comes back as it left
+      const open = decide(b.want, px, b.openAt);
+      b.want = ok && (open || (b.want && !zoomingOut));
+      if (!near) { if (b.view || b.child) this.drop(b); }
+      else if (b.want && !b.view) wantBuild = true;
       else if (b.want) this.show(b);
-      else if ((b.view || b.child) && !near) this.drop(b);
       else if (!b.view && b.child) b.child = undefined;
       else this.hide(b);
       if (b.view && r) this.place(b, r);
@@ -382,7 +389,7 @@ export class Lens {
       for (const b of this.boxes.values()) {
         if (!b.want || b.view) continue;
         const r = this.boxPx(b.name, c);
-        if (!r) continue;
+        if (!r || !nearCanvas(r, c)) continue;
         const d = Math.hypot(c.left + r.x + r.w / 2 - fx, c.top + r.y + r.h / 2 - fy);
         if (d < bd) { bd = d; best = b; }
       }
@@ -405,7 +412,7 @@ export class Lens {
         this.place(best, r);
         this.show(best);
       }
-      if ([...this.boxes.values()].some((b) => b.want && !b.view)) this.queueBuild();
+      if ([...this.boxes.values()].some((b) => b.want && !b.view && nearCanvas(this.boxPx(b.name, c), c))) this.queueBuild();
     });
   }
 
@@ -649,7 +656,8 @@ export class Lens {
     if (!g || !g.isConnected) {
       g = document.createElementNS(SVG, 'g') as SVGGElement;
       g.setAttribute('class', 'inside-runs');
-      view.el.append(g);
+      // under the view's names layer, which stays last (its names win every overlap)
+      view.el.insertBefore(g, view.el.querySelector(':scope > .lg-names'));
       b.runs = g;
     }
     const size = RUN_NAME_PX / innerPx;
