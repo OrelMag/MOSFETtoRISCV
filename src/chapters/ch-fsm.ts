@@ -3,6 +3,7 @@
 // datapath, inputs from outside the clock, and a machine of your own. The machines are lib/fsmbook.ts's, built the way
 // the sandbox's state-machine chip builds them (editor/fsmchip.ts), so every count and every picture is computed.
 
+import '../lib';
 import {
   candidateCircuit, CANDIDATES, codeCosts, debounceBits, ENCODING_NAMES, flipState, fsmCircuit, fsmSpecOf, fsmTableChip, gcdCircuit, gcdCosts, gcdRun, gcdSpec, kmapHtml, MEALY101, MOORE101,
   mooreMealy, circuitNands, RING3, ringCircuit, runFsm, runPair, TRAFFIC, upset,
@@ -268,7 +269,7 @@ const steps: Step[] = [
     scene: tableScene,
     challenge: {
       kind: 'reach',
-      goal: 'Find the next state the minimized logic picks for the unused code 11 (s1 s0 = 1 1) when x = 0: make n1 n0 = 1 0, which is S2.',
+      goal: 'Where does the unused code 11 go when x = 0? Set s1 s0 = 1 1, x = 0 and make n1 n0 = 1 0 (S2).',
       check: (st) => st.value('s1') === 1 && st.value('s0') === 1 && st.value('x') === 0 && st.value('n1') === 1 && st.value('n0') === 0,
       hints: [
         'Set s1 and s0 to 1 and x to 0. Then read n1 and n0.',
