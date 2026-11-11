@@ -55,7 +55,15 @@ export class PyError extends Error {
 }
 
 /** Built-in functions the compiler and the interpreter both know. */
-export const BUILTINS = ['print', 'len', 'abs', 'min', 'max', 'range', 'load8', 'store8', 'load32', 'store32', 'ord', 'chr'] as const;
+export const BUILTINS = ['print', 'len', 'abs', 'min', 'max', 'range', 'load8', 'store8', 'load32', 'store32', 'ord', 'chr', 'spawn', 'join', 'lock', 'unlock', 'wait', 'signal'] as const;
+
+/**
+ * Chapter 'threads''s builtins, for the user target only (each a system call of the threads kernel, riscv/osprograms.ts THREAD_SYS): spawn(f) starts
+ * the function f (no parameters) as a second thread and answers 0 (or -1 when one already runs); join() waits for it to end; lock(i) / unlock(i)
+ * take and give back lock i (0..3); wait(c, i) lets lock i go and waits for a signal on condition c (0..3), holding the lock again on return;
+ * signal(c) wakes the thread waiting on c, if any. The number of arguments of each.
+ */
+export const THREAD_BUILTINS: Record<string, number> = { spawn: 1, join: 0, lock: 1, unlock: 1, wait: 2, signal: 1 };
 
 /** The bump heap's size in bytes (strings made at run time: concatenation, indexing, chr). It never grows and nothing frees it. */
 export const HEAP_BYTES = 96;
