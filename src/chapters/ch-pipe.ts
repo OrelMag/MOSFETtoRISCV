@@ -1,3 +1,4 @@
+import RESULTS from '../bench/results.json';
 import { singleCycleCpu } from '../lib/cpu';
 import { pipelinedCpu } from '../lib/pipeline';
 import { assemble } from '../riscv/asm';
@@ -26,6 +27,8 @@ const src = (id: string) => PROGRAMS.find((p) => p.id === id)!.source;
 /** The single-cycle CPU's logic between registers (period 155), cut into n even stages with a register each. */
 const LOGIC = 155 - CLK_TO_Q - SETUP;
 const cut = (n: number) => Math.round(LOGIC / n) + CLK_TO_Q + SETUP;
+/** The plain pipeline's measured period (src/bench/results.json, ripple adders). */
+const PIPE_PERIOD = RESULTS.cpus.find((c) => c.id === 'pipe')!.period;
 
 export const INDEP = `# independent instructions: no hazards
         li   a0, 1
@@ -500,7 +503,7 @@ export const chPipeline: Chapter = {
       title: 'Does it pay? Measured',
       body: `
         <p>Time per instruction = CPI × clock period. The table measures both for our designs, and the result is not what
-        the textbook diagram promises: the period only falls from 155 to about 145 NAND delays, while hazards push the CPI above 1, so
+        the textbook diagram promises: the period only falls from 155 to about ${PIPE_PERIOD} NAND delays, while hazards push the CPI above 1, so
         <strong>each instruction takes longer than on the single-cycle CPU</strong>.</p>
         <p>The static timing shows why. The E stage contains the forwarding comparators, the forwarding muxes, the whole 32-bit
         ALU, the branch decision and the flush logic: almost the entire single-cycle critical path. Meanwhile F, M and W need

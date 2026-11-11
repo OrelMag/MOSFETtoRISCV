@@ -31,8 +31,8 @@ export const OVERLAY_TITLE: Record<OverlayKind, string> = {
   load: 'Load: how many NAND inputs each wire drives',
   unknown: 'Unknown: wires holding an X, and the parts it starts from',
   cost: 'Cost: each part\'s share of this level\'s NANDs (transistors at switch level)',
-  energy: 'Energy: the switched capacitance of the wires each part drives, counted while this overlay is on (runs the gate-level engine)',
-  depth: 'Depth: when each part\'s slowest output settles, in delays after the clock edge (or the inputs)',
+  energy: 'Energy: how much wire each part has charged and emptied (each wire\'s capacitance × its flips between 0 and 1) since this overlay came on; runs the gate-level engine',
+  depth: 'Depth: how late each part\'s slowest output settles, in gate delays after the clock edge (or after the inputs change)',
 };
 
 /** A band (0 … 4, or 'x' for Unknown) and its value in words. `src`: where an X starts. */
@@ -281,19 +281,19 @@ export function energyOverlay(design: FlatDesign, node: HierNode, toggles: Array
     by.set(p[k], (by.get(p[k]) ?? 0) + sw);
     level += sw;
   }
-  const per = clocked ? 'clock cycle' : 'input change';
+  const per = clocked ? 'clock cycle' : 'input change', aPer = clocked ? 'a clock cycle' : 'an input change';
   const inst = new Map<string, OvMark>();
   if (level > 0) for (const [name, sw] of by) {
     const f = sw / level;
-    inst.set(name, { band: shareBand(f), tip: `${name}: ${pctOf(f)} % of this level's switched capacitance over ${plural(units, per)} (${(sw / Math.max(1, units)).toFixed(1)} fF a ${per})` });
+    inst.set(name, { band: shareBand(f), tip: `${name}: ${pctOf(f)} % of the wire charged and emptied on this level over ${plural(units, per)} (${(sw / Math.max(1, units)).toFixed(1)} fF ${aPer})` });
   }
   return {
     kind: 'energy', inst, net: new Map(),
     legend: {
-      title: 'Energy', unit: 'share of the switched capacitance',
+      title: 'Energy', unit: 'share of the wire charged and emptied',
       rows: SHARE_LABELS.map((l, b) => ({ band: b, label: l, count: plural(hist(inst, b), 'part') })),
       note: units > 0 && level > 0
-        ? `C × toggles of the wires each part drives, glitches included, over the last ${plural(units, per)}: ${groupDigits(Math.round(level / units))} fF a ${per} on this level (the energy is ½ C V² of it). Counted on the gate-level engine while this overlay is on.`
+        ? `Each wire a part drives, times how often it flipped between 0 and 1 (brief glitches too), over the last ${plural(units, per)}: on this level about ${groupDigits(Math.round(level / units))} fF (femtofarads: the charge a wire holds per volt) is charged or emptied ${aPer}. Each flip costs half that capacitance times the supply voltage squared, so energy follows this share. Counted on the gate-level engine while this overlay is on.`
         : `Nothing has switched since the overlay came on: ${clocked ? 'Step, Pulse or Run the clock' : 'change an input'} and the parts take their colours.`,
     },
   };
@@ -314,7 +314,7 @@ const graphCache = { unit: new WeakMap<FlatDesign, TimingGraph>(), load: new Wea
 /** The latest arrival at any output of each part on the level, from the graph Slack times (nothing timed: an empty legend that says so). */
 export function depthOverlay(design: FlatDesign, node: HierNode, model: DelayModel): OverlayResult {
   const s = slackOf(design, model);
-  if (!s) return { kind: 'depth', inst: new Map(), net: new Map(), legend: { title: 'Depth', unit: 'latest output', rows: [], note: 'Nothing here is timed: no path runs from an input or a register to an output or a register.' } };
+  if (!s) return { kind: 'depth', inst: new Map(), net: new Map(), legend: { title: 'Depth', unit: 'slowest output', rows: [], note: 'Nothing here is timed: no path runs from an input or a register to an output or a register.' } };
   let g = graphCache[model].get(design);
   if (!g) graphCache[model].set(design, (g = timingGraph(design, { delay: model, outputs: !s.clocked })));
   const inst = new Map<string, OvMark>();
@@ -332,9 +332,9 @@ export function depthOverlay(design: FlatDesign, node: HierNode, model: DelayMod
   return {
     kind: 'depth', inst, net: new Map(),
     legend: {
-      title: 'Depth', unit: `latest output · share of ${s.clocked ? 'the period' : 'the longest path'}`,
+      title: 'Depth', unit: `slowest output · share of ${s.clocked ? 'the clock period' : 'the longest path'}`,
       rows: DEPTH_LABELS.map((l, b) => ({ band: b, label: l, count: plural(hist(inst, b), 'part') })),
-      note: `When each part's slowest output settles, ${from}; ${s.clocked ? 'clock period' : 'longest input → output path'} ${f(s.period)} ${word}. Static timing: no simulation. Late is not the same as critical: Slack says whether the path goes on.`,
+      note: `How long each part's slowest output takes to settle ${from}, in ${word}${model === 'unit' ? '' : ' (one unit: a NAND driving one NAND input)'}. ${s.clocked ? 'The clock period' : 'The longest input → output path'} is ${f(s.period)}. Worked out from the structure, no simulation. A late part is not always the one that limits the speed: the Slack overlay says whether its path goes on.`,
     },
   };
 }

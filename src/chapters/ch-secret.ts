@@ -323,7 +323,7 @@ export const chSecret: Chapter = {
       challenge: {
         kind: 'quiz',
         question: "A man in the middle swaps the server's key share for one of his own. Why does the server's signature in the handshake expose him?",
-        options: ['It signs a hash of the whole conversation, including both key shares, so the share the client saw is not the one that was signed', 'The signature encrypts the key share, so he cannot read it', "The signature proves the server's name, which he cannot copy", "He cannot copy the client's random number"],
+        options: ['It signs the whole conversation so far, both key shares included', 'The signature encrypts the key share, so he cannot read it', "The signature proves the server's name, which he cannot copy", "He cannot copy the client's random number"],
         answer: 0,
         explain: "Only the server's private key can sign, and what it signed covers the shares it sent. A substituted share changes the transcript, so the signature fails; replaying an old signature fails too, as the transcript holds the client's fresh random.",
         why: ['', 'A signature protects nothing from being read: the shares are public anyway.', 'A name only means something through a certificate, and this client checks no names. The signature over the transcript does the work.', 'It is the signed transcript, not any single field, that he cannot forge.'],

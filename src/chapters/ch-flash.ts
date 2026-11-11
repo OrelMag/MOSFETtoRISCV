@@ -347,7 +347,7 @@ export const chFlash: Chapter = {
         <table class="mini"><tr><th>code</th><th>parity bits</th><th>fails at RBER 10<sup>-5</sup></th><th>fails at 10<sup>-3</sup></th><th>keeps UBER &lt; 10<sup>-15</sup> up to RBER</th></tr>
           ${ECC_ROWS.map((r) => `<tr><td>t = ${r.t}</td><td>${r.parity}</td><td>${sci(r.f5)}</td><td>${sci(r.f3)}</td><td>${sci(r.max)}</td></tr>`).join('')}</table>
         <p>The strength is a wear budget. Fresh flash at RBER 10<sup>-5</sup> needs t = 6 (t = 8 leaves a margin) for a 10<sup>-15</sup> UBER; worn TLC at 10<sup>-3</sup> needs t ≈ 40, five times the parity, and past that the controller
-        retires the block. When the corrected-bit count of a read approaches t, the controller rewrites the data elsewhere before the next read can exceed it. TLC and QLC go further, with soft reads and a stronger code (the previous step's aside).</p>
+        retires the block. When the corrected-bit count of a read approaches t, the controller rewrites the data elsewhere before the next read can exceed it. TLC and QLC go further, with soft reads and a stronger code (the previous step).</p>
         <div class="try">Set the data, then flip one stored bit (flip = 1), then two (flip = 3): single, then double.</div>`,
       scene: () => ({ root: eccChannel(8), inputs: { d: 0x5a, flip: 0 }, highlight: ['enc', 'dec'] }),
       more: {

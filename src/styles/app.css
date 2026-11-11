@@ -1278,6 +1278,10 @@ svg.schematic.ov :is(.wire-flow, .flow-tokens) { display: none; }
   .ov-rows { grid-template-columns: 1fr 1fr; column-gap: 10px; }
   .ov-rows b { min-width: 0; }
   .ov-note { font-size: 11.5px; }
+  /* the legend lies across a short circuit pane: the note waits for a tap (overlaybar.ts toggles .open) */
+  .ov-legend { cursor: pointer; }
+  .ov-legend:not(.open) .ov-note { display: none; }
+  .ov-legend:not(.open) .ov-lh b::after { content: ' ▸'; color: var(--muted); font-weight: 400; }
 }
 .open-badge { opacity: 0; transition: opacity 0.15s; cursor: pointer; }
 .open-badge circle { fill: var(--accent); }

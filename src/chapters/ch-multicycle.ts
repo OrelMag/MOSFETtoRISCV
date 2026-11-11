@@ -387,7 +387,7 @@ export const chMulticycle: Chapter = {
         scaled copies of one design. They differed in <strong>data-path width</strong>: 8, 16, 32 and 64 bits on the Models 30, 40, 50 and 65 (the 65 came a year later, in place of two of the six announced), as David Patterson's history of the family tabulates them, and in price: a year's Model 65 rental was ${(IBM_RENT.m65 / IBM_RENT.m30).toFixed(1)} times as much as a Model 30's. The instruction set was a contract, and microcode was the translation from it to each machine.
         The In real silicon layer has the Model 30's 8-bit ALU, its control store and the rentals in dollars.</p>
         <p>The table runs the same experiment with our own hardware: RV32I built four ways, the same programs on each, every result checked against the golden model. All four
-        have fast adders, so the periods compare.
+        have fast adders, so the periods compare. (The single-cycle period here differs from the earlier steps'; the Numbers layer says why.)
         <strong>Cost</strong> is NANDs without the program ROM; <strong>time</strong> is <span data-ahead="cpi">CPI (cycles per instruction)</span> × period.</p>
         <p>Read it for what it says about microcode. Making the controller microcoded adds ${sp(MICRO_NANDS - FSM_NANDS)} NANDs (the ROMs here are mux trees, as the previous steps said) and changes
         neither CPI nor period: ${sp(FAM[2].nands)} NANDs against ${sp(FAM[1].nands)} for the same speed. The whole family spans only ${SPREAD.cost.toFixed(2)}× in cost, but ${SPREAD.time.toFixed(1)}× in time per instruction, and

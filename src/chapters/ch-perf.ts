@@ -425,8 +425,8 @@ export const chFastAdders: Chapter = {
         <p>Under unit delay, Sklansky ties Kogge–Stone with fewer cells. Its last level has one cell driving n/2 others.
         Count the loads and, drawn with minimum-size gates, the 64-bit Sklansky falls behind even Brent–Kung. With buffer
         trees it comes back to within a few units of Kogge–Stone, and the buffers are not in its NAND count. Brent–Kung pays
-        in levels in every model. Kogge–Stone's own price is wiring, which this model does not see (<a href="#/c/silicon/0">chapter ${numOf('silicon')}</a>).</p>
-        <p>The Timing panels have the same <b>Unit / Load</b> switch, here and in the sandbox. The other chapters quote unit delay.</p>
+        in levels in every model. Kogge–Stone's own price, n·log n cells and diagonals 2<sup>j</sup> rows long, is wiring, which this model does not see (<a href="#/c/silicon/0">chapter ${numOf('silicon')}</a>).</p>
+        <p>The Timing panels have the same <b>Unit / Load</b> switch, here and in the sandbox; the view menu's <b>Load-dependent delay</b> makes them open on Load. The other chapters quote unit delay.</p>
         <p>The lesson is about the model, not the adders: unit delay is a good first approximation where gates all drive about the same load, and a poor one wherever fan-out varies (a decoder's address lines, a clock, a reset), and those are where real timing differs from the unit-delay count.</p>`,
       widget: () => prefixDelays(),
       more: {

@@ -598,7 +598,7 @@ export const chIsa: Chapter = {
         question: 'In this program, what address does the assembler give the label <code>done</code>?<br><code>' + TWO_PASS_SRC.split(String.fromCharCode(10)).join('<br>') + "</code><br>(0x12845 does not fit addi's 12-bit constant.)",
         options: ['0x' + TP.done.toString(16).toUpperCase().padStart(2, '0'), '0x' + (TP.done - 4).toString(16).toUpperCase().padStart(2, '0') + ', counting li as one word', '0x' + (TP.done + 4).toString(16).toUpperCase().padStart(2, '0'), '0x00, labels start at zero'],
         answer: 0,
-        explain: 'Pass 1 only counts: li 0x12845 expands to lui + addi (2 words, ' + TP.liWords + ' counted), the addi is 1, so done is after ' + TP.done / 4 + ' words, at 0x' + TP.done.toString(16).toUpperCase().padStart(2, '0') + '. Only then can pass 2 encode the j, whose offset is 0.',
+        explain: 'Pass 1 only counts: li 0x12845 expands to lui + addi (' + TP.liWords + ' words), the addi is 1, so done is after ' + TP.done / 4 + ' words, at 0x' + TP.done.toString(16).toUpperCase().padStart(2, '0') + '. Only then can pass 2 encode the j, whose offset is 0.',
         why: ['', 'li is a pseudo-instruction here with a constant too big for addi alone, so it is two words: the size is known before the encoding is.', 'Labels name the next instruction, not the one after it.', '0 is the address of start, the first label; done comes after the other instructions.'],
       },
       more: {

@@ -56,7 +56,7 @@ function hallStep(): Step {
       <p>A relay machine of this size is a building. The cost is not in the logic's cleverness but in counting: every NAND is a device, every bit of
       storage is several, and a relay cannot drive many inputs, so the fan-out adds coils.</p>
       <p>The program comes off punched cards, which the relay machine can read as it runs and the tube machine must load first; the
-      Real chips layer works out why.</p>
+      In real silicon layer works out why.</p>
       <div class="try">Run the program and watch the relays switch (or the plates glow): each cycle's settled values from the
       gate-level simulation, one relay or tube per NAND output of its block (a real relay machine would ripple through
       ${f.steps} steps to get there). Click a rack to open its block. Then switch to tubes, and between <em>Read as it runs</em> and
