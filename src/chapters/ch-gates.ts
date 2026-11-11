@@ -286,7 +286,7 @@ export const chGates: Chapter = {
           two, since x·b + x·¬b = x. A <strong>Karnaugh map</strong> lays the table out on a grid in Gray-code order, so rows that
           differ in one input sit side by side (edges wrapping); circling the largest power-of-two blocks of 1s, don't-cares
           included where they help, reads off a minimal sum of products by eye, up to four or five inputs. Past that, programs
-          do it: Quine–McCluskey (exact, run for <a href="#/c/memory/5">chapter 10's PLA</a>) and the heuristics inside synthesis
+          do it: Quine–McCluskey (exact, run for <a href="#/c/memory/5">chapter ${numOf('memory')}'s PLA</a>) and the heuristics inside synthesis
           tools. Nor is a minimal sum the cheapest circuit: the XOR above shares m and takes ${nd(XOR)} NANDs, against 5 for its sum of products a·¬b + ¬a·b (two inverters, three NANDs).</p>`,
         real: `<p>Library mux cells are not four NANDs: a transmission-gate mux is two pass gates and an inverter, 6 transistors (8 with an output buffer), against ${tr(MUX2)}
           here. Wide muxes (8:1, 16:1) are built as trees of these or as one-hot AND-OR structures, and the choice of structure decides the delay of the register-file read
@@ -495,7 +495,7 @@ export const chBinary: Chapter = {
         down the staircase, and <span data-show="x1 x2 x3">x1, x2, x3</span> invert where it says so. Bit 0 is never inverted; it goes
         straight across to the <span data-show="my">merger</span>.</p>
         <p>Cost: n − 1 XORs and n − 2 ORs, ${nd(NEGATE4)} NANDs at 4 bits, ${logicDepth(NEGATE4)} NAND delays from a[0] to y[3]. The chain grows
-        with the width like the carry of the next chapter's adders. That is no accident: it is <span data-ahead="incrementer">an incrementer (a chain that adds 1; chapter 9 builds one for its counters)</span>, with the inversion folded in.</p>
+        with the width like the carry of the next chapter's adders. That is no accident: it is <span data-ahead="incrementer">an incrementer (a chain that adds 1; chapter ${numOf('registers')} builds one for its counters)</span>, with the inversion folded in.</p>
         <div class="try">Set a = 5 (0101). y should read 11 = 1011, which is −5.</div>`,
       scene: () => ({ root: NEGATE4, inputs: { a: 3 } }),
       tries: [(st) => st.getInput('a') === 5 && st.value('y') === 11],

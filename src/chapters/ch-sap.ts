@@ -622,7 +622,7 @@ export const chAppendixSap: Chapter = {
         from the top on what it left (144 and 233): it shows 144, the sum carries at once, and it halts. Power cycle puts
         0 and 1 back.</p>
         <p>What it costs: ${SAP_COST.chips} chips, ${k(SAP_COST.logic)} NANDs of logic (${SAP_COST.bus} of them the
-        bus's OR stand-in) and the five EEPROMs counted among the chips. Our single-cycle RV32I (<a href="#/c/cpu/0">chapter 14</a>) is
+        bus's OR stand-in) and the five EEPROMs counted among the chips. Our single-cycle RV32I (<a href="#/c/cpu/0">chapter ${numOf('cpu')}</a>) is
         ${k(RV32I.nands)} NANDs without its program ROM, about ${Math.round(RV32I.nands / SAP_COST.logic)} times as many,
         and runs one 32-bit instruction a clock where SAP-1 needs five for an 8-bit one, from a memory of 16 bytes with
         no stack, no indexing, no interrupts. Most of its cost is storage built from gates: a 64-word data memory (58 %) and the register file (34 %).</p>

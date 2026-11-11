@@ -27,6 +27,7 @@ import { constWord } from './alu';
 import { nonZero } from './pipeline';
 import { DFF } from './sequential';
 import { NAND, TIE0, TIE1 } from './transistors';
+import { numOf } from '../chapters/order';
 
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
@@ -86,7 +87,7 @@ export function tlb(kind: 'i' | 'd', k = 2): ComponentDef {
     b.wire(b.op1(muxTree(k, nf), [...parts.map((p) => `${p}.o2`), `${pe}.y`], 'flags'), 'flags');
     return define({
       id: k === 2 ? `tlb_${kind}` : `tlb_${kind}_${n}`, name: `${kind === 'i' ? 'Instruction' : 'Data'} TLB (${n} entries)`, category: 'memory',
-      summary: `${n} translations kept at once, searched by virtual page number (a comparator per entry, like chapter 10's CAM): an entry holds the 22-bit physical page number and the page's flags (${TLB_FLAGS[kind].join(', ')}). A fill replaces entries in turn; flush forgets them all. Superpages are filled one 4 KiB page at a time.`,
+      summary: `${n} translations kept at once, searched by virtual page number (a comparator per entry, like chapter ${numOf('memory')}'s CAM): an entry holds the 22-bit physical page number and the page's flags (${TLB_FLAGS[kind].join(', ')}). A fill replaces entries in turn; flush forgets them all. Superpages are filled one 4 KiB page at a time.`,
       ports: [bus('key', 20, 'in'), bit('fill', 'in'), bus('fppn', 22, 'in'), bus('fflags', nf, 'in'), bit('flush', 'in'), clk(), bit('hit', 'out'), bus('ppn', 22, 'out'), bus('flags', nf, 'out')],
       symbol: { kind: 'box', label: kind === 'i' ? 'I-TLB' : 'D-TLB' },
       // tuned on the 4-entry drawing (the scenes'): two parts moved off the valid bits' and entry 3's wires, the two nets that still

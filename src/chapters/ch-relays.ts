@@ -246,7 +246,7 @@ export const chRelays: Chapter = {
         <p><span data-show="fa0 fa1 fa2 fa3">Four of them</span> make this ${stats(ADD4).relays}-relay adder. When <code>a</code> and <code>b</code> change, the
         relays move once, together, and the carry crosses all four bits through closed contacts at the speed of the
         current. The status line says it: <strong>settled in 1 relay step</strong>, for any width. The <span data-ahead="ripple cmos">ripple-carry adder (each column waits for the carry of the one before; CMOS transistor gates)</span>
-        of <a href="#/c/adders/0">chapter 6</a> is ${logicDepth(rca(4))} gate delays deep at 4 bits and ${logicDepth(rca(32))} at 32.</p>
+        of <a href="#/c/adders/0">chapter ${numOf('adders')}</a> is ${logicDepth(rca(4))} gate delays deep at 4 bits and ${logicDepth(rca(32))} at 32.</p>
         <p>Why it works: in a conventional adder a carry is a <em>value</em> that each column computes and passes on, and computing takes a
         gate delay. Here a carry is a <em>connection</em>. Each column's contacts decide, from its own two bits, whether the carry lines pass
         through (propagate), start fresh (generate) or are cut (kill); once those relays have moved, the lines through all columns are one
@@ -314,7 +314,7 @@ export const chRelays: Chapter = {
       },
       more: {
         derive: `<p>The next state is q⁺ = set + q·¬reset: set feeds the coil, or q does, unless reset cuts the holding line. That is the SR latch of
-          <a href="#/c/latches/0">chapter 8</a> (set dominant here), in three relays (set, reset and the holding relay k) where the NAND version takes ${stats(SR_LATCH).nands} gates, though those relays also supply the set and reset inputs.
+          <a href="#/c/latches/0">chapter ${numOf('latches')}</a> (set dominant here), in three relays (set, reset and the holding relay k) where the NAND version takes ${stats(SR_LATCH).nands} gates, though those relays also supply the set and reset inputs.
           Holding works because of the feedback: k's own contact keeps the full supply on its coil. Hysteresis adds margin: the bit survives a supply sagging to ${ms(PULL.drop ?? 0)} V, well below the pull-in (${ms(PULL.pull ?? 0)} V).</p>`,
         pitfall: `<p>Looking for a clock. There is none: the latch is level-sensitive, a set pulse shorter than a relay step does nothing (the armature never arrives),
           and a safe one lasts about two steps, since set's own relay must pull in before k's coil is fed. Note too that "both inputs at 0" does not say what q is: the state lives in k, not in the inputs.</p>`,

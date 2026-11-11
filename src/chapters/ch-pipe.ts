@@ -226,7 +226,7 @@ export const chPipeline: Chapter = {
   builds: ['registers', 'cpu', 'python'],
   recap: {
     keep: [
-      'Measured per Python line (chapter 15\'s compiler): every clock is charged to one line, as an issue, a stall behind a load or a flush behind a taken branch, so cycles = instructions + stalls + flushes + fill.',
+      'Measured per Python line (chapter ' + numOf('python') + '\'s compiler): every clock is charged to one line, as an issue, a stall behind a load or a flush behind a taken branch, so cycles = instructions + stalls + flushes + fill.',
       'Five stages, one instruction in each: up to one instruction per cycle, at the period of the <em>slowest</em> stage. One instruction takes no less time than before.',
       'Pipeline registers carry each instruction\'s operands, destination and control bits (and a valid bit), so it acts on the right data cycles later.',
       'Structural hazards (two instructions wanting one unit in one cycle) do not occur here: separate instruction and data memories, two read ports and a write port, adders of its own for PC + 4 and the branch target.',
