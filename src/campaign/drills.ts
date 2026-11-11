@@ -87,11 +87,98 @@ function numAnswer(want: number, base: 2 | 10 | 16): Question['check'] {
   };
 }
 
+// -- octal, binary fractions, flags, shifts and the other signed forms (the last kinds of the 'binary' and 'twos' drills) --
+
+const oct = (v: number, digits: number) => v.toString(8).padStart(digits, '0');
+
+/** A text answer must be this number written in octal (the prefix 0o is optional). */
+function octAnswer(want: number): Question['check'] {
+  return (a) => {
+    const m = a.trim().toLowerCase().replace(/[_\s]/g, '').match(/^(?:0o)?([0-7]+)$/);
+    if (!m) return { ok: false, why: 'write an octal number (digits 0 to 7)' };
+    const v = parseInt(m[1], 8);
+    return { ok: v === want, why: v === want ? undefined : 'not that value' };
+  };
+}
+
+/** A fraction (dyadic, so exact in a double) written in decimal (0.8125) or in binary (0.1101, prefix 0b optional). */
+function fracAnswer(want: number, base: 2 | 10): Question['check'] {
+  return (a) => {
+    const t = a.trim().toLowerCase().replace(/[_\s]/g, '');
+    let v: number | null = null;
+    if (base === 2) { const m = t.match(/^(?:0b)?0?\.([01]+)$/); v = m ? parseInt(m[1], 2) / 2 ** m[1].length : null; }
+    else v = /^\d*\.?\d+$/.test(t) ? parseFloat(t) : null;
+    if (v === null) return { ok: false, why: base === 2 ? 'write a binary fraction such as 0.101' : 'write a decimal fraction such as 0.625' };
+    return { ok: v === want, why: v === want ? undefined : 'not that value' };
+  };
+}
+
+/** C and V as two digits, C first (10, 0 1, 1,1). */
+function flagsAnswer(c: boolean, v: boolean): Question['check'] {
+  return (a) => {
+    const m = a.trim().match(/^([01])\s*[,;]?\s*([01])$/);
+    if (!m) return { ok: false, why: 'two digits: C then V, such as 10' };
+    const ok = m[1] === (c ? '1' : '0') && m[2] === (v ? '1' : '0');
+    return { ok, why: ok ? undefined : 'not those flags' };
+  };
+}
+
+/** The 'binary' drill's kinds 7 to 10: octal both ways, a binary fraction both ways. */
+function binaryExtra(r: () => number, k: number): Question {
+  const g3 = (n: number) => bin(n, 9).replace(/(...)(?=.)/g, '$1 ');
+  if (k === 7) {
+    const n = int(r, 64, 511);
+    return { prompt: `Write the octal number <b>${oct(n, 3)}</b> in binary (9 bits).`, placeholder: '000 000 000', check: numAnswer(n, 2), answer: g3(n), explain: `One octal digit per three bits: ${[...oct(n, 3)].map((c) => `${c} = ${bin(parseInt(c, 8), 3)}`).join(', ')}.` };
+  }
+  if (k === 8) {
+    const n = int(r, 64, 511);
+    return { prompt: `Write <code>${g3(n)}</code> in octal.`, placeholder: '0o...', check: octAnswer(n), answer: oct(n, 3), explain: `Three bits per octal digit, from the right: ${g3(n).split(' ').map((g) => `${g} = ${parseInt(g, 2)}`).join(', ')}.` };
+  }
+  const len = int(r, 3, 5), n = int(r, 1, 2 ** len - 1), v = n / 2 ** len;
+  if (k === 9) {
+    return { prompt: `What is the binary fraction <code>0.${bin(n, len)}</code> in decimal?`, placeholder: '0.625', check: fracAnswer(v, 10), answer: String(v), explain: `The bits after the point weigh 1/2, 1/4, 1/8 …: ${[...bin(n, len)].map((b, i) => (b === '1' ? `1/${2 ** (i + 1)}` : '')).filter(Boolean).join(' + ')} = ${n}/${2 ** len} = ${v}.` };
+  }
+  let x = v;
+  const steps: string[] = [];
+  for (let i = 0; i < len; i++) { x *= 2; steps.push(`${x} → ${x >= 1 ? 1 : 0}`); if (x >= 1) x -= 1; }
+  return { prompt: `Write <b>${v}</b> as a binary fraction (it is exact).`, placeholder: '0.101', check: fracAnswer(v, 2), answer: `0.${bin(n, len)}`, explain: `Double it and keep the integer bit, again and again: ${steps.join(', ')}.` };
+}
+
+/** The 'twos' drill's kinds 8 to 11: C and V of an 8-bit add, sra against div, the other signed readings. */
+function twosExtra(r: () => number, k: number): Question {
+  if (k === 8) {
+    const a = int(r, 0, 255), b = r() < 0.5 ? int(r, 0, 255) : (a & 0x80 ? int(r, 0x80, 0xff) : int(r, 0, 0x7f));
+    const s = (a + b) & 0xff, c = a + b > 255, v = ((a ^ s) & (b ^ s) & 0x80) !== 0;
+    return {
+      prompt: `An 8-bit add: <code>0x${hex(a, 8)}</code> + <code>0x${hex(b, 8)}</code>. What are the flags C and V (two digits, C first)?`, placeholder: 'CV, e.g. 10', check: flagsAnswer(c, v), answer: `${c ? 1 : 0}${v ? 1 : 0}`,
+      explain: `The sum is ${a + b} = 0x${hex(s, 8)} after dropping the carry. C = ${c ? 1 : 0}: ${a} + ${b} ${c ? 'does not fit' : 'fits'} in 8 bits unsigned. V = ${v ? 1 : 0}: as signed, ${s8(a)} + ${s8(b)} = ${s8(a) + s8(b)} ${v ? 'is outside' : 'is inside'} −128 … 127.`,
+    };
+  }
+  if (k === 9 || k === 10) {
+    const sh = int(r, 1, 3);
+    let x = -int(r, 3, 127);
+    if (x % 2 ** sh === 0) x -= 1;
+    const want = k === 9 ? Math.floor(x / 2 ** sh) : Math.trunc(x / 2 ** sh);
+    return {
+      prompt: k === 9 ? `<code>srai</code> (arithmetic shift right) of ${x} by <b>${sh}</b>: the result in decimal?` : `<code>div</code> (signed division) of ${x} by <b>${2 ** sh}</b>: the result in decimal?`,
+      check: numAnswer(want, 10), answer: String(want),
+      explain: k === 9 ? `A right shift copies the sign bit in and drops the low bits, which rounds toward −∞: floor(${x} / ${2 ** sh}) = ${want}.` : `div rounds toward zero: ${x} / ${2 ** sh} = ${x / 2 ** sh}, cut to ${want}. (srai by ${sh} would give ${Math.floor(x / 2 ** sh)}.)`,
+    };
+  }
+  const v = int(r, 0x81, 0xfe), sm = r() < 0.5;
+  const want = sm ? -(v & 0x7f) : -(~v & 0xff);
+  return {
+    prompt: `The 8-bit pattern <code>${grp(bin(v, 8))}</code> read as <b>${sm ? 'sign-magnitude' : "one's complement"}</b>: the number in decimal?`, check: numAnswer(want, 10), answer: String(want),
+    explain: sm ? `The top bit is the sign (negative), the other seven bits the size: ${v & 0x7f}, so ${want}. (Two's complement would say ${s8(v)}.)` : `The top bit is set, so it is negative: invert every bit to get the size, ${grp(bin(~v & 0xff, 8))} = ${-want}, so ${want}. (Two's complement would say ${s8(v)}.)`,
+  };
+}
+
 const binary: Drill = {
   id: 'binary', title: 'Binary and hex', goal: 8,
-  how: 'Type the number in the base asked for (a bit as 0 or 1). Prefixes (0x, 0b) are optional; spaces are ignored. 8-bit and 16-bit words, unsigned.',
+  how: 'Type the number in the base asked for (a bit as 0 or 1). Prefixes (0x, 0b, 0o) are optional; spaces are ignored. 8-bit and 16-bit words, unsigned; octal and binary fractions too.',
   make(r) {
-    const k = int(r, 0, 6);
+    const k = int(r, 0, 10);
+    if (k >= 7) return binaryExtra(r, k);
     const v = int(r, 0, 255);
     if (k >= 4) {
       const w = int(r, 0, 0xffff);
@@ -127,9 +214,10 @@ const s16 = (v: number) => (v & 0x8000 ? v - 0x10000 : v);
 
 const twos: Drill = {
   id: 'twos', title: "Two's complement", goal: 8,
-  how: 'Answer in decimal (signed), as a pattern, or yes / no, as asked. 8-bit two\'s complement: −128 … 127; 16-bit: −32 768 … 32 767.',
+  how: 'Answer in decimal (signed), as a pattern, as the two flags (C then V), or yes / no, as asked. 8-bit two\'s complement: −128 … 127; 16-bit: −32 768 … 32 767.',
   make(r) {
-    const k = int(r, 0, 7);
+    const k = int(r, 0, 11);
+    if (k >= 8) return twosExtra(r, k);
     const v = int(r, 0, 255);
     if (k >= 5) {
       const w = int(r, 0, 0xffff);
