@@ -189,6 +189,8 @@ export const TAUGHT: Record<string, string> = {
   fpadder: 'float',
   tristate: 'routing',
   bin2dec: 'adders',
+  // number forms (campaign/codexnum.ts)
+  signforms: 'binary', gray: 'binary', bcd: 'adders', endian: 'io',
   // Communication (campaign/codexcomm.ts)
   shannon: 'telegraph',
   reflection: 'wire',
