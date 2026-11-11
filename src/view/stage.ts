@@ -1179,13 +1179,16 @@ export class Stage {
         },
         allowed: () => settings.zoomOpen && !this.boardOn && !this.leaf && this.scene?.engine !== 'nmos',
         // the out-of-order core's levels are too large for one task yet (DESIGN.md phase 2f)
-        tooLarge: () => !!this.rootCtx?.def.id.startsWith('ooo_'),
+        // nothing is too large since phase 2f: the lens's own task is 8-24 ms on every part of the out-of-order core
+        // (scripts/lens-ooo-measure.mjs; the dim and the crumb follow as tasks of their own). Parts whose inside cannot
+        // be drawn legibly at the cap (the issue queue, the reorder buffer…) still say "double-click to step in"
+        tooLarge: () => false,
         drill: (path, vb) => {
           this.goTo(path);
           if (vb) this.view.setView(vb);
         },
-        peek: () => {
-          this.renderCrumbs();
+        peek: (ctx) => {
+          this.peekCrumb(ctx);
           this.why.lensChanged();
         },
         // Why? on the lens's wires, and its menu's Why this value? and Explain with Break a part (DESIGN.md track 2b)
@@ -2539,6 +2542,28 @@ export class Stage {
     this.syncCrumbVals();
     this.fitBar();
     this.syncScope();
+  }
+
+  /**
+   * The lens's level as the breadcrumb's last item, "alu (peek)", added or removed in place. Not renderCrumbs: a crumb
+   * more can make the bar overflow, and fitBar's ladder then lays the whole stage out once per step, the circuit included
+   * (280 ms on the out-of-order core, 50 ms on the single-cycle CPU, measured by scripts/lens-ooo-measure.mjs). The
+   * peek crumb shrinks instead (lens.css), so the bar keeps its layout while a lens comes and goes.
+   */
+  private peekCrumb(peek: ViewCtx | null): void {
+    const c = this.crumbs;
+    c.querySelectorAll(':scope > .peek, :scope > .peek-sep').forEach((e) => e.remove());
+    this.crumbVals = this.crumbVals.filter((x) => c.contains(x.el));
+    if (!peek || this.leaf) return;
+    const levels: ViewCtx[] = [];
+    for (let x: ViewCtx | null = peek; x; x = x.parent) levels.unshift(x);
+    const v = crumbValues(levels).at(-1) ?? null;
+    const el = v ? h('span', { class: 'val' }) : null;
+    if (el && v) this.crumbVals.push({ el, v });
+    const label = peek.path[peek.path.length - 1];
+    c.append(h('span', { class: 'sep peek-sep' }, '›'),
+      h('button', { class: 'peek', title: `${label} (${peek.def.name}): step in`, onclick: () => this.goTo(peek.path) }, h('i', null, `${label} (peek)`), el));
+    this.syncCrumbVals();
   }
 
   /** The breadcrumb's values follow the simulation (crumbvals.ts). */
