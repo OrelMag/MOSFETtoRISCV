@@ -254,7 +254,7 @@ export const chNetwork: Chapter = {
           <tr><td>of which B's polling loop noticing the commit</td><td>${RT.bNotice}</td></tr>
           <tr><td>of which B's work up to the doorbell</td><td>${n0(RT.bWork)}</td></tr>
           <tr><td>A: from the last bit of the reply to the timestamp</td><td>${n0(RT.aReceive)}</td></tr>
-          <tr><td>the switch's store-and-forward turnaround, half in each direction</td><td>${RT.turnaround}</td></tr>
+          <tr><td>the switch's store-and-forward turnaround (it adds ${RT.turnaround} clocks, half in each direction)</td><td>${RT.turnaround}</td></tr>
           <tr><td>the three software windows added up</td><td>${n0(RT.tails)}</td></tr></table>
         <p>The windows add up to more than the software's share, because each window's tail runs while a frame is already on the cable or after the timestamp is taken; nothing in the round trip is left unexplained.</p>
         <p><strong>Where this stops.</strong> Two computers on one switch can ping each other because the switch knows each MAC address and floods what it does not. Everything here lives inside one network: a switch moves frames within it and cannot place an address on another. Chapter ${N_ROUTER} takes the next step: an address with structure, a table that holds one line for millions of machines, and a router that moves this same IPv4 packet from one network to another.</p>`;
