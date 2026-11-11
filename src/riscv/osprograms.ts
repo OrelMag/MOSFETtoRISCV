@@ -67,7 +67,21 @@ export interface KernelOptions {
    * the kernel says "deadlock" and stops. Off, the kernel is the os chapter's, instruction for instruction.
    */
   threads?: boolean;
+  /**
+   * Chapter 'linking': the words of an ELF executable on the "disk", a data frame (DISK_PA) the boot fills with stores before any process
+   * runs (it stands in for a disk: this CPU's data side cannot read the ROM). A process may then call exec (EXEC_SYS in a7): the kernel
+   * reads the program headers off the disk and replaces the caller's program with the file's. A segment with X runs in place: its page is
+   * mapped (R X U) onto the ROM frame its p_paddr names, since instruction fetch reaches only the ROM; any other segment's bytes are copied
+   * from the disk into the frame the caller's table maps at its p_vaddr, and the rest up to p_memsz zeroed (.bss). Then the entry point,
+   * a fresh stack (sp = EXEC_SP) and sfence.vma, and the caller returns into the new program. Off, the kernel is unchanged.
+   */
+  disk?: number[];
+  /** With disk: ROM words placed at EXEC_ROM by osImage (the executable's text, where its p_paddr says). */
+  rom?: number[];
 }
+
+/** Chapter 'linking': exec's number (Linux's execve on RISC-V), the disk frame, the ROM frame text runs from, the new program's stack top. */
+export const EXEC_SYS = 221, DISK_PA = 0x9000, EXEC_ROM = 0x3000, EXEC_SP = 0x1000;
 
 /** Chapter 'threads': the system calls added to SYS (a7), their arguments in a0, a1, a2; the answer, if any, in a0. */
 export const THREAD_SYS = {
@@ -253,6 +267,103 @@ ${slot()}
 `;
 
 /** At all_done (nobody ready): a thread still waiting will never run again. */
+// ---- chapter 'linking''s exec: the disk filled at boot, and the system call that loads an ELF file from it
+
+/** Boot: the file's words into the disk frame, a store per word that is not zero (the frame starts at zero). */
+const diskFill = (words: number[]): string => {
+  if (4 * words.length > 0x1000) throw new Error(`the disk is one frame: the file is ${4 * words.length} bytes`);
+  const out = [`# ---- the disk: ${words.length} words of an ELF file (a stand-in for a disk; the data side cannot read the ROM)`, `  li t2, ${DISK_PA}`];
+  words.forEach((w, i) => {
+    if (!w) return;
+    if (i === 512) out.push(`  li t2, ${DISK_PA + 2048}`);
+    out.push(`  li t1, ${w | 0}`, `  sw t1, ${4 * i - (i >= 512 ? 2048 : 0)}(t2)`);
+  });
+  return out.join('\n');
+};
+
+/** The entry of the caller's leaf table for the virtual address in s4 (t3 = its address). The leaf table is the frame after the root (mkproc). */
+const leafEntry = `  srli t3, s4, 12
+  andi t3, t3, 0x3ff
+  slli t3, t3, 2
+  add t3, t3, s3`;
+
+const execCall = (): string => `# ---- exec: load the ELF file on the disk into the calling process (a0 = 0 on success; -1: not an ELF file)
+sys_exec:
+  li s0, ${DISK_PA}
+  lw t1, 0(s0)
+  li t2, 0x464c457f
+  bne t1, t2, ex_bad
+  lw s1, 28(s0)
+  add s1, s1, s0
+  lhu s2, 44(s0)
+  lw t1, ${PCB.satp}(t0)
+  slli t1, t1, 12
+  li t2, 0x1000
+  add s3, t1, t2
+ex_seg:
+  beqz s2, ex_go
+  lw t1, 0(s1)
+  li t2, 1
+  bne t1, t2, ex_next
+  lw s4, 8(s1)
+  lw t1, 24(s1)
+  andi t2, t1, 1
+  beqz t2, ex_data
+# text runs in place: its page maps onto the ROM frame at p_paddr, readable and executable, never writable
+  lw t2, 12(s1)
+  srli t2, t2, 12
+  slli t2, t2, 10
+  ori t2, t2, ${PTE_USER_RX}
+${leafEntry}
+  sw t2, 0(t3)
+  j ex_next
+# data: copied from the disk into the frame the caller's table maps at p_vaddr, then zeros up to p_memsz (.bss)
+ex_data:
+${leafEntry}
+  lw t2, 0(t3)
+  srli t2, t2, 10
+  slli t2, t2, 12
+  slli t3, s4, 20
+  srli t3, t3, 20
+  add t2, t2, t3
+  lw t3, 4(s1)
+  add t3, t3, s0
+  lw t4, 16(s1)
+  lw t5, 20(s1)
+  li t6, 0
+ex_copy:
+  bgeu t6, t4, ex_zero
+  lw a0, 0(t3)
+  sw a0, 0(t2)
+  addi t3, t3, 4
+  addi t2, t2, 4
+  addi t6, t6, 4
+  j ex_copy
+ex_zero:
+  bgeu t6, t5, ex_next
+  sw zero, 0(t2)
+  addi t2, t2, 4
+  addi t6, t6, 4
+  j ex_zero
+ex_next:
+  addi s1, s1, 32
+  addi s2, s2, -1
+  j ex_seg
+# the new program: its entry, a fresh stack, a0 = 0; the old translations are gone
+ex_go:
+  lw t1, 24(s0)
+  sw t1, 0(t0)
+  li t1, ${EXEC_SP}
+  sw t1, 8(t0)
+  sw zero, 40(t0)
+  sfence.vma zero, zero
+  j go_same
+ex_bad:
+  li t2, -1
+  sw t2, 40(t0)
+  j go_same
+`;
+
 const threadStuck = () => `  li t1, ${PCB0}
   li t3, ${STATE.waiting}
 dl_look:
@@ -265,7 +376,7 @@ dl_look:
 
 /** The kernel's assembly. Its sections are labelled: the chapter's widgets and the tests count instructions between labels. */
 export function kernelSource(o: KernelOptions = {}): string {
-  const slice = o.slice ?? OS_SLICE, T = !!o.threads;
+  const slice = o.slice ?? OS_SLICE, T = !!o.threads, D = !!o.disk;
   const saveRegs = ABI.map((r, i) => [r, i] as const).filter(([r, i]) => i > 0 && r !== 't0');
   const save = saveRegs.map(([r, i]) => `  sw ${r}, ${4 * i}(t0)`).join('\n');
   const load = saveRegs.map(([r, i]) => `  lw ${r}, ${4 * i}(t0)`).join('\n');
@@ -306,7 +417,7 @@ mkproc:
 boot:
   la t0, trap
   csrw mtvec, t0
-  li a0, ${ROOT_OF[0]}
+${D ? `${diskFill(o.disk!)}\n` : ''}  li a0, ${ROOT_OF[0]}
   li a1, ${CODE_PA[0]}
   li a2, ${PCB0}
   li a3, ${'A'.charCodeAt(0)}
@@ -353,7 +464,9 @@ trap_saved:
   beq a7, t2, schedule
   li t2, ${SYS.exit}
   beq a7, t2, sys_exit
-${T ? threadDispatch() : ''}  li t2, -1
+${T ? threadDispatch() : ''}${D ? `  li t2, ${EXEC_SYS}
+  beq a7, t2, sys_exec
+` : ''}  li t2, -1
   sw t2, 40(t0)
   j go_same
 sys_putchar:
@@ -364,7 +477,7 @@ sys_exit:
   li t2, 2
   sw t2, ${PCB.state}(t0)
 ${T ? threadExit() : ''}  j schedule
-${T ? threadCalls() : ''}sys_write:
+${T ? threadCalls() : ''}${D ? execCall() : ''}sys_write:
   li t6, ${CONSOLE}
   lw t2, ${PCB.tag}(t0)
   sb t2, 0(t6)
@@ -491,6 +604,13 @@ export function osImage(procs: string[], o: KernelOptions = {}): OsImage {
   // an absent process gets a program that exits at once, so its slot is never a hole
   for (let i = procs.length; i < NPROC; i++) {
     source += `\n${padWords(CODE_PA[i] / 4 - assemble(source).words.length)}\n  li a7, ${SYS.exit}\n  ecall\n`;
+  }
+  // chapter 'linking': the executable's text, in the ROM frame its p_paddr names (exec maps it there; it is never copied)
+  if (o.rom?.length) {
+    const have = assemble(source).words.length;
+    if (have > EXEC_ROM / 4) throw new Error(`the processes reach ROM word ${have}: the executable's frame starts at ${EXEC_ROM / 4}`);
+    if (EXEC_ROM / 4 + o.rom.length > 2 ** OS_IMEM_K) throw new Error(`the executable's text is ${o.rom.length} words: the ROM ends at ${2 ** OS_IMEM_K}`);
+    source += `\n${padWords(EXEC_ROM / 4 - have)}\n# ---- the executable's text, ROM ${EXEC_ROM.toString(16)}\n${o.rom.map((w) => `  .word ${w >>> 0}`).join('\n')}\n`;
   }
   const a = assemble(source);
   if (a.errors.length) throw new Error(`os image: line ${a.errors[0].line}: ${a.errors[0].message}`);
