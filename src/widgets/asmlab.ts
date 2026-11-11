@@ -183,6 +183,8 @@ export function loopSteps(n: number): number {
 
 const SENTINEL = (i: number) => 0xc0de0000 + i;
 const S_REGS = [8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27];
+/** s register names by number, for "s1 changed". */
+const REG_NAME: Record<number, string> = { 8: 's0', 9: 's1', 18: 's2', 19: 's3', 20: 's4', 21: 's5', 22: 's6', 23: 's7', 24: 's8', 25: 's9', 26: 's10', 27: 's11' };
 /** t1–t6 and a1–a7: a callee may change them, so f must not keep anything there across a call (t0 g uses itself). */
 const CALLER_SAVED = [6, 7, 28, 29, 30, 31, 11, 12, 13, 14, 15, 16, 17];
 export const FRAME_SP = 128;
@@ -207,8 +209,9 @@ const FRAME_MAIN = `        li   sp, ${FRAME_SP}       # the stack starts at the
         call f             # a0 = f(a0)
 halt:   j    halt
 
-# g(x) = 3x.  Like any function it may change t0-t6 and a1-a7:
-# the cases make it leave junk there on every call.
+# g(x) = 3x.  Like any function, it may change
+# t0-t6 and a1-a7: the cases make it leave junk
+# there on every call.
 g:      slli t0, a0, 1
         add  a0, a0, t0
         ret
@@ -237,8 +240,9 @@ f:      # your code here
         calls.push(signed(iss.x[10]));
         for (const r of CALLER_SAVED) iss.x[r] = 0xbad0000 + r;
       },
-      want: `a0 = ${want}, g(${x}) and g(${x + 1}) called, s regs and sp kept`,
-      got: (iss) => `a0 = ${signed(iss.x[10])}${!calledRight() ? `, g called with ${calls.length ? calls.join(', ') : 'nothing'}` : ''}${kept(iss) ? ', s regs and sp kept' : `, ${iss.x[2] === FRAME_SP ? 'an s register' : 'sp'} changed`}`,
+      // short, so the table fits beside the editor: the note says what else is checked, a miss is named
+      want: `a0 = ${want}, g(${x}) g(${x + 1})`,
+      got: (iss) => `a0 = ${signed(iss.x[10])}, ${calledRight() ? `g(${x}) g(${x + 1})` : calls.length ? calls.map((c) => `g(${c})`).join(' ') : 'g not called'}${kept(iss) ? '' : iss.x[2] !== FRAME_SP ? ', sp changed' : `, ${REG_NAME[S_REGS[S_REGS.findIndex((r, i) => iss.x[r] !== SENTINEL(i))]]} changed`}`,
       ok: (iss) => signed(iss.x[10]) === want && calledRight() && kept(iss),
     };
   }),

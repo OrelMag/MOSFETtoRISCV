@@ -44,3 +44,11 @@ it('the try-it box quotes these', () => {
   expect(CATCH).toEqual({ corner: 6, random: 7, lowRandom: 2 });
   expect([1, 2, 3, 4, 6, 7, 11, 12, 13, 21, 22, 101].map(ordinal)).toEqual(['1st', '2nd', '3rd', '4th', '6th', '7th', '11th', '12th', '13th', '21st', '22nd', '101st']);
 });
+
+it('the step quotes 2^65 with the right power of ten', async () => {
+  const { chAdders } = await import('../src/chapters/ch-arith');
+  const step = chAdders.steps.find((s) => /How do you know an adder is right/.test(s.title))!;
+  // the site's numbers carry narrow no-break spaces: compare with every space made plain
+  expect(step.body.replace(/\s+/g, ' ')).toContain(`about ${(2 ** 65 / 1e19).toFixed(1)} × 10<sup>19</sup>`);
+  expect((2 ** 65 / 1e19).toFixed(1)).toBe('3.7');
+});
