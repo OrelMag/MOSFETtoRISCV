@@ -346,6 +346,11 @@ export class Stage {
       ctx: () => this.ctx,
       light: (names) => (names.length ? this.view.highlight(names, true) : this.view.highlight(this.ctx === this.rootCtx ? this.scene?.highlight ?? [] : [])),
       selectNet: (i) => this.view.selectNet(i),
+      // the open zoom lens: a trace crosses its rim (DESIGN.md track 2b)
+      lens: () => {
+        const v = this.lens?.innerView, c = this.lens?.peekCtx;
+        return v && c ? { ctx: c, box: c.path[c.path.length - 1], light: (names) => v.highlight(names, names.length > 0), selectNet: (i) => v.selectNet(i) } : null;
+      },
       toggled: (on) => {
         this.whyBtn.classList.toggle('on', on);
         this.canvas.classList.toggle('probing', on || this.probeMode);
@@ -1173,7 +1178,19 @@ export class Stage {
           this.goTo(path);
           if (vb) this.view.setView(vb);
         },
-        peek: () => this.renderCrumbs(),
+        peek: () => {
+          this.renderCrumbs();
+          this.why.lensChanged();
+        },
+        // Why? on the lens's wires, and its menu's Why this value? and Explain with Break a part (DESIGN.md track 2b)
+        events: (ctx) => ({
+          netClick: (i) => this.why.netClick(i, 'lens'),
+          why: (i) => {
+            this.why.setOn(true);
+            this.why.netClick(i, 'lens');
+          },
+          explain: (c) => this.explainIn(ctx, c, 'lens'),
+        }),
         overlay: (ctx) => (this.ovKind && !this.boardOn && !this.leaf && !this.ovRefusals()[this.ovKind] && !this.lensOverlayGap(ctx) ? this.overlayFor(ctx) : null),
         overlayGap: (ctx) => this.lensOverlayGap(ctx),
         selected: () => this.showInspector(),
@@ -1407,19 +1424,27 @@ export class Stage {
   private explain(c: string | null): { def: ComponentDef; host: ExplainHost } | null {
     const def = c ? this.ctx?.node.children?.get(c)?.def : this.ctx?.def;
     if (!def) return null;
+    const x = this.explainIn(this.ctx!, c, 'stage')!;
     const at = (section: 'truth' | 'used') => () => {
       this.select(c);
       this.showInspector();
       this.inspector.openAt(section);
     };
+    return { def, host: { ...x.host, truth: at('truth'), used: at('used') } };
+  }
+
+  /** Explain on a level (the one on screen, or an open lens's): the codex, the chapter, Break a part. */
+  private explainIn(ctx: ViewCtx, c: string | null, at: 'stage' | 'lens'): { def: ComponentDef; host: ExplainHost } | null {
+    const def = c ? ctx.node.children?.get(c)?.def : ctx.def;
+    if (!def) return null;
     const go = (href: string) => {
       markJump();
       location.hash = href;
     };
     return { def, host: {
-      truth: at('truth'), used: at('used'),
       openCodex: (id) => go(`#/campaign/codex/${id}`),
       openChapter: go,
+      breakPart: { run: () => this.why.showParts(at, c), part: !!c },
     } };
   }
 

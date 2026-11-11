@@ -883,6 +883,45 @@ const lensDrive = (part: string) => `(async () => {
   // a pulse: the inside follows (its wires repaint; no error is the check, the console is watched)
   [...document.querySelectorAll('.stage button')].find((b) => /^pulse$/i.test(b.textContent.trim()))?.click();
   await wait(400);
+  // Why? across the rim (track 2b): a click on a wire inside traces it; some wire's trace reaches the rim and goes on outside
+  const whyBtn = document.querySelector('.stage .why-btn');
+  whyBtn?.click();
+  await wait(100);
+  let rim = false, traced = false;
+  const lensR = document.querySelector('.lens')?.getBoundingClientRect() ?? new DOMRect();
+  const wires = [...document.querySelectorAll('.lens svg.schematic [data-net]')].filter((w) => { const r = w.getBoundingClientRect(); return r.width + r.height > 4 && hit(r, lensR); });
+  for (const w of wires.slice(0, 24)) {
+    const r = w.getBoundingClientRect();
+    const at = { clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true, button: 0, pointerId: 1 };
+    w.dispatchEvent(new PointerEvent('pointerdown', at));
+    window.dispatchEvent(new PointerEvent('pointerup', at));
+    await wait(60);
+    traced ||= document.querySelectorAll('.why-chain li[data-kind]').length > 0 && /${part}:/.test(document.querySelector('.why-q')?.textContent ?? '');
+    if (document.querySelector('.why-chain li.why-rim') && document.querySelector('.why-chain li[data-across]')) { rim = true; break; }
+  }
+  if (!traced) bad.push('Why? on a wire inside the lens traced nothing');
+  else if (!rim) bad.push('no trace inside the lens went on across its rim');
+  if (lenses() !== 1) bad.push('the Why? card closed the lens');
+  // Break a part from the lens's right-click menu: Explain ▸ Break a part shows its level's table (or says why not)
+  const inner = document.querySelector('.lens svg.schematic [data-inst]');
+  if (inner) {
+    const r = inner.getBoundingClientRect();
+    inner.dispatchEvent(new MouseEvent('contextmenu', { clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true, button: 2 }));
+    await wait(400);
+    const item = (t) => [...document.querySelectorAll('[role^="menuitem"]')].find((e) => e.textContent.trim().startsWith(t));
+    item('Explain')?.click();
+    for (let k = 0; k < 20 && !item('Break a part'); k++) await wait(100);
+    const br = item('Break a part');
+    if (!br) bad.push('no Break a part in the lens menu');
+    else {
+      br.click();
+      await wait(300);
+      const said = document.querySelector('.why-body')?.textContent ?? '';
+      if (!/Inside ${part}|inside of ${part}/.test(said)) bad.push('Break a part in the lens did not show its level: ' + said.slice(0, 80));
+    }
+  } else bad.push('no part inside the lens');
+  whyBtn?.click();
+  await wait(100);
   document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   await wait(150);
   if (lenses()) bad.push('Esc left the lens open');

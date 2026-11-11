@@ -6,6 +6,7 @@
 // No DOM.
 
 import { findNode, flatten, type FlatDesign, type HierNode } from './flatten';
+import { groupDigits } from './numfmt';
 import { inPorts, outPorts, type ComponentDef } from './types';
 
 export const MAX_BITS = 12;
@@ -39,7 +40,8 @@ interface Plan {
 /** Why a component cannot be ablated, or null. */
 export function ablationRefusal(def: ComponentDef): string | null {
   const bits = inPorts(def).reduce((a, p) => a + p.width, 0);
-  if (bits > MAX_BITS) return `${bits} input bits: the table would have ${2 ** bits} rows (at most ${MAX_BITS} bits)`;
+  // a wide block's count as a power: 2 ** 68 printed in full is 21 digits nobody reads
+  if (bits > MAX_BITS) return `${bits} input bits: the table would have ${bits <= 30 ? groupDigits(2 ** bits) : `2^${bits}`} rows (at most ${MAX_BITS} bits)`;
   return null;
 }
 

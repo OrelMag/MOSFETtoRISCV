@@ -338,3 +338,45 @@ export function explainNets(sim: Sim, nets: readonly number[], level: HierNode =
 }
 
 export const explainNet = (sim: Sim, net: number, level?: HierNode) => explainNets(sim, [net], level);
+
+// ---- Across the rim of an opened box (the zoom lens, docs/transparent/DESIGN.md item 5) ----
+
+/** A level a trace is folded at: its simulation and its hierarchy node. */
+export interface TraceLevel { sim: Sim; node: HierNode }
+
+/** Where a trace reaches the rim of an opened box, and what it is on the other side. */
+export interface Crossing {
+  /** The step on the explained side that reaches the rim (an input of the inner level, or the box's output). */
+  from: WhyStep;
+  /** The box's port it crosses, and its bits used. */
+  port: string;
+  bits: number[];
+  /** The trace on the other side, folded at that level, as a click on that wire there would explain it. */
+  steps: WhyStep[];
+  lines: string[];
+}
+
+/**
+ * A trace that reaches the rim continues on the other level. `inner`: the box's own level (the same simulation as
+ * `outer`, or a sub-simulation of the box); `box`: its instance at `outer`. From the inside, each input of the level the
+ * steps rest on is explained on the outer level, on the nets that feed that port; from the outside, each step that is
+ * one of the box's outputs is explained inside, on the port's nets there. One crossing: what is found across the rim
+ * is not followed back again.
+ */
+export function acrossRim(steps: readonly WhyStep[], explained: 'inner' | 'outer', inner: TraceLevel, outer: TraceLevel, box: string): Crossing[] {
+  const node = outer.node.children?.get(box);
+  if (!node) return [];
+  const out: Crossing[] = [];
+  for (const s of steps) {
+    const ins = explained === 'inner' && s.inst === null;
+    const outs = explained === 'outer' && s.inst === box;
+    const p = node.def.ports.find((q) => q.name === s.port);
+    if (!(ins || outs) || !p || p.dir !== (ins ? 'in' : 'out') || !s.bits.length) continue;
+    const there = ins ? { lv: outer, nets: node.ports[p.name] } : { lv: inner, nets: inner.node.ports[p.name] };
+    if (!there.nets) continue;
+    const bits = [...s.bits].sort((a, b) => a - b);
+    const { steps: st, lines } = explainNets(there.lv.sim, bits.map((b) => there.nets[b]), there.lv.node);
+    out.push({ from: s, port: p.name, bits, steps: st, lines });
+  }
+  return out;
+}
