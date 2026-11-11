@@ -327,7 +327,7 @@ export const chRegisters: Chapter = {
     `build a register from enable flip-flops, and price a stored bit (${nands(DFFE)} NANDs, ${stats(DFFE).transistors} transistors)`,
     'close a register → logic → register loop into a counter, a shift register, an LFSR or a ring counter',
     'say why an asynchronous reset is released through a synchronizer, and why a ripple divider\'s bits glitch',
-    'design a state machine from its transition table: state encoding, next-state logic, Mealy or Moore output',
+    'meet the state machine: a state register, next-state logic and an output, the shape the next chapter designs by method',
   ],
   builds: ['latches', 'adders'],
   recap: {
@@ -338,7 +338,7 @@ export const chRegisters: Chapter = {
       'A ripple divider (each toggle flip-flop clocked by the one before) halves the frequency per flip-flop, but its bits change one after another: a poor counter, and no clock for logic that also sees the original.',
       `A state machine is a state register plus next-state and output logic. The 101 detector: two flip-flops, n0 = x, n1 = ¬x·s0, Mealy output y = x·s1, ${nands(DET101)} NANDs in all. One-hot encoding spends a flip-flop per state to make that logic trivial.`,
     ],
-    practise: ['s_reg4', 's_reg16', 's_cnt4', 's_pc', 's_fsm'],
+    practise: ['s_reg4', 's_reg16', 's_cnt4', 's_pc'],
     check: [
       {
         question: 'An 8-bit LFSR with maximal taps steps through how many states before it repeats?',
@@ -1064,7 +1064,7 @@ export const chMemory: Chapter = {
         <span data-show="u33">an output's OR gate</span>.</div>`,
       more: {
         derive: `<p>A ROM spends one AND of all the address bits per word, ${2 ** 4} here. The PLA spends one AND per <em>product term</em>, ${plaTerms(PLA_PRESETS.seg7).terms.length}, each over only the inputs the term depends on, found by merging adjacent minterms
-          (Quine–McCluskey, chapter 4's Karnaugh idea mechanized). The saving is the wide ANDs: ${nands(romArray('seg7'))} → ${nands(pla('seg7'))} NANDs.</p>`,
+          (Quine–McCluskey, chapter ${numOf('logic')}'s Karnaugh idea mechanized). The saving is the wide ANDs: ${nands(romArray('seg7'))} → ${nands(pla('seg7'))} NANDs.</p>`,
         real: `<p>Early CPUs decoded instructions through PLAs (the 6502's decode ROM is one); modern designs let synthesis tools do the same minimization on any logic. In an FPGA the same function sits in lookup tables:
           a k-input LUT is a 2ᵏ-bit ROM read by a tree of multiplexers, which is why 4- and 6-input LUTs are the standard sizes.</p>`,
         pitfall: `<p>A PLA wins for functions that need few, small terms. A function whose every minterm is a separate term, like a random truth table, makes the AND plane a full decoder and the PLA no cheaper than a ROM, plus
@@ -1216,7 +1216,7 @@ export const chMemory: Chapter = {
         instructions per cycle needs four reads and two writes. Each read port is another multiplexer tree over every register; each write port
         another decoder, plus a multiplexer in front of every register to choose which port wins.</p>
         <p>Each port adds its own plumbing over the same storage: ${groupDigits(nands(regfileMP(5, 32, 4, 2)))} NANDs for 4 reads and 2 writes of 32 × 32 bits, against ${groupDigits(nands(regfileMP(5, 32, 2, 1)))} for 2 reads and 1 write
-        (${(nands(regfileMP(5, 32, 4, 2)) / nands(regfileMP(5, 32, 2, 1))).toFixed(1)} times for twice the ports). These general files store all 32 registers; chapter 12's keeps x0 at 0 with no flip-flops, so its 2-read, 1-write file is ${groupDigits(nands(regfile(5, 32)))}. In silicon each port also lengthens every bit's wires, so the real cost grows faster.</p>`,
+        (${(nands(regfileMP(5, 32, 4, 2)) / nands(regfileMP(5, 32, 2, 1))).toFixed(1)} times for twice the ports). These general files store all 32 registers; chapter ${numOf('regfile')}'s keeps x0 at 0 with no flip-flops, so its 2-read, 1-write file is ${groupDigits(nands(regfile(5, 32)))}. In silicon each port also lengthens every bit's wires, so the real cost grows faster.</p>`,
       more: {
         derive: `<p>With R read and W write ports on N registers of w bits: storage N·w·${nands(DFFE)} NANDs (fixed), read side R·w·(N − 1) multiplexers, write side W decoders plus a W:1 choice per register. The ports grow the plumbing with R and W,
           not the storage.</p>`,

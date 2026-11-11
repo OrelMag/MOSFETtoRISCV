@@ -58,7 +58,7 @@ export const chGates: Chapter = {
       'XOR is 1 when its inputs differ: the sum bit of binary addition. XNORs on every bit pair, ANDed together, test two words for equality.',
       'The multiplexer <code>y = s ? b : a</code> is the processor\'s switch: next instruction address, register or constant, what gets written back.',
     ],
-    practise: ['l_bool', 'g_not', 'g_and', 'g_or', 'g_xor', 'g_mux', 'd_kmap', 'g_sop'],
+    practise: ['g_not', 'g_and', 'g_or', 'g_xor', 'g_mux'],
     check: [
       {
         question: 'Built from this chapter\'s boxes, how many NANDs does NOT(a OR b) take?',
@@ -282,12 +282,9 @@ export const chGates: Chapter = {
           then OR, and De Morgan turns it into two levels of NAND: x·y + z·w = ¬(¬(x·y)·¬(z·w)), an OR of ANDs is a NAND of NANDs.
           The multiplexer is exactly this: y = ¬s·a + s·b = NAND(NAND(¬s, a), NAND(s, b)), plus one NAND for ¬s, which is
           <span data-show="g1 g2 g3 g4">the four gates on the stage</span>.</p>
-          <p>The raw minterms are rarely the cheapest sum: its table has four (s a b = 010, 011, 101, 111), merged in pairs into
-          two, since x·b + x·¬b = x. A <strong>Karnaugh map</strong> lays the table out on a grid in Gray-code order, so rows that
-          differ in one input sit side by side (edges wrapping); circling the largest power-of-two blocks of 1s, don't-cares
-          included where they help, reads off a minimal sum of products by eye, up to four or five inputs. Past that, programs
-          do it: Quine–McCluskey (exact, run for <a href="#/c/memory/5">chapter ${numOf('memory')}'s PLA</a>) and the heuristics inside synthesis
-          tools. Nor is a minimal sum the cheapest circuit: the XOR above shares m and takes ${nd(XOR)} NANDs, against 5 for its sum of products a·¬b + ¬a·b (two inverters, three NANDs).</p>`,
+          <p>The raw minterms are rarely the cheapest sum: the mux's table has four (s a b = 010, 011, 101, 111), merged in pairs into
+          two, since x·b + x·¬b = x. <a href="#/c/logic/0">Chapter ${numOf('logic')}</a> makes that merging a method, with Boolean algebra
+          and Karnaugh maps. Nor is a minimal sum the cheapest circuit: the XOR above shares m and takes ${nd(XOR)} NANDs, against 5 for its sum of products a·¬b + ¬a·b (two inverters, three NANDs).</p>`,
         real: `<p>Library mux cells are not four NANDs: a transmission-gate mux is two pass gates and an inverter, 6 transistors (8 with an output buffer), against ${tr(MUX2)}
           here. Wide muxes (8:1, 16:1) are built as trees of these or as one-hot AND-OR structures, and the choice of structure decides the delay of the register-file read
           and of a CPU's operand select.</p>`,
