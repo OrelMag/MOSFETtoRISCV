@@ -82,7 +82,7 @@ export const chAdders: Chapter = {
         options: ['It roughly doubles', 'It grows by a constant', 'It stays the same', 'It roughly quadruples'],
         answer: 0,
         explain: 'The carry crosses each full adder in turn, two NAND delays per bit: delay grows linearly with the width.',
-        why: ['', `That is a tree, like the magnitude comparator, or the fast adders of chapter ${numOf('fastadd')}. Here each column waits for the carry from the one to its right.`, 'The columns sit side by side, but they do not work in parallel: each needs its neighbour\'s carry first.', 'The carry crosses each full adder once: the delay grows with n, not n².'],
+        why: ['', 'That is a tree, like the magnitude comparator, or the fast adders of chapter ' + numOf('fastadd') + '. Here each column waits for the carry from the one to its right.', 'The columns sit side by side, but they do not work in parallel: each needs its neighbour\'s carry first.', 'The carry crosses each full adder once: the delay grows with n, not n².'],
       },
       {
         question: 'In the adder/subtractor, why is <code>sub</code> wired to the carry-in as well as to the XORs?',

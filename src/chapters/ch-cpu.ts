@@ -901,7 +901,7 @@ export const chSingleCycle: Chapter = {
       challenge: {
         kind: 'quiz', question: 'With realistic memories (SRAM slower than the logic around it), which instruction class sets the clock period of a single-cycle CPU?',
         options: ['R-type (two register reads)', 'lw (ALU, then memory, then write-back)', 'beq (subtract and compare)', 'jal (no register read)'], answer: 1,
-        why: ['Both register reads happen in parallel, and an R-type skips the data memory entirely.', '', `With a realistic memory, a branch ends at the next-PC logic and never waits for a data-memory read. (This site's memories are fast mux trees, so chapter ${numOf('fastadd')}'s static timing finds a branch path on top: a surprise only cheap memory allows.)`, 'jal reads no register, and its path through an adder to the result mux is shorter still.'],
+        why: ['Both register reads happen in parallel, and an R-type skips the data memory entirely.', '', 'With a realistic memory, a branch ends at the next-PC logic and never waits for a data-memory read. (This site\'s memories are fast mux trees, so chapter ' + numOf('fastadd') + '\'s static timing finds a branch path on top: a surprise only cheap memory allows.)', 'jal reads no register, and its path through an adder to the result mux is shorter still.'],
         explain: 'Every cycle must be long enough for the slowest instruction, and lw chains the ALU and the memory read. The other instructions waste the slack. That is the motivation for splitting an instruction over several cycles and for overlapping instructions.',
       },
     },

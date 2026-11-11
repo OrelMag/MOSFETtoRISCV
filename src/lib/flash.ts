@@ -14,6 +14,7 @@ import { define } from './define';
 import { NOT, OR } from './gates';
 import { PULLUP } from './switchparts';
 import { GND, INV_CMOS, NMOS, NOR_CMOS, VDD } from './transistors';
+import { numOf } from '../chapters/order';
 
 const bit = (name: string, dir: 'in' | 'out' | 'inout', side?: PortDef['side']): PortDef => ({ name, width: 1, dir, side });
 const bus = (name: string, width: number, dir: 'in' | 'out'): PortDef => ({ name, width, dir });
@@ -32,7 +33,7 @@ export const FG_CELL: ComponentDef = define({
     the floating gate (here a rising pgm with g = 1 and the drain at 0 adds ${FG_STEP} of charge, ${Math.ceil(FG_READ / FG_STEP)} pulses to
     program; real devices program in steps and verify after each). Erase: a high voltage on the substrate pulls them all off
     again, for a whole block at once (a rising ers). vp is the pass voltage of a NAND string: above any threshold, the cell
-    conducts whatever it holds. Mask ROM (chapter 10) is the same idea fixed at manufacture: a transistor there or not.`,
+    conducts whatever it holds. Mask ROM (chapter ${numOf('memory')}) is the same idea fixed at manufacture: a transistor there or not.`,
   hdl: { verilog: '// a floating-gate transistor: its threshold is stored charge (not Verilog)' },
 });
 

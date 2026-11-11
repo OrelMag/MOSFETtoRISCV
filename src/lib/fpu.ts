@@ -21,6 +21,7 @@ import {
 } from '../sim/fpref';
 import { Builder } from './builder';
 import { laid, layered } from './layered';
+import { numOf } from '../chapters/order';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -990,7 +991,7 @@ export function fpMul(f: FpFormat, mux: Mux2Kind = LIB_MUX2): ComponentDef {
     fmulExp(f); fmulSpecial(f, mux); normRound(f, 2 * M + 2); treeMul(M + 1); // the parts, made now: they register as soon as the unit is
     return define({
       id: `fpmul${E}_${M}${mux.tag}`, name: `${fmtName(f)} multiplier${mux.tag ? ' (RV16)' : ''}`, category: 'arithmetic',
-      summary: `Sign = XOR, exponent = ea + eb − bias, significand = a ${M + 1}×${M + 1} tree multiplier (the multiply chapter), then the shared normalize & round unit. ∞ × 0 is NaN (NV).`,
+      summary: `Sign = XOR, exponent = ea + eb − bias, significand = a ${M + 1}×${M + 1} tree multiplier (chapter ${numOf('muldiv')}), then the shared normalize & round unit. ∞ × 0 is NaN (NV).`,
       ports: [bus('a', N, 'in'), bus('b', N, 'in'), bus('rm', 3, 'in'), bus('y', N, 'out'), bus('flags', 5, 'out')],
       symbol: { kind: 'box', label: 'FMUL' },
       spec: ([a, bb, rm]) => { const r = fpMulX(a, bb, f, rm); return [r.y, r.fl]; },

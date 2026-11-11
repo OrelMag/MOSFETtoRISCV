@@ -13,6 +13,7 @@ import { CODEX_SIDE } from './codexside';
 import { CODEX_POWER } from './codexpower';
 import { CODEX_VEC } from './codexvec';
 import { CODEX_VM } from './codexvm';
+import { CODEX_LOGIC } from './codexlogic';
 import { CODEX_VERIFY } from './codexverify';
 import { CODEX_BABY } from './codexbaby';
 import { CODEX_AGC } from './codexagc';
@@ -219,6 +220,8 @@ export const CODEX: CodexEntry[] = [
   ...CODEX_VEC,
   // virtual memory and the tiny operating system (codexvm.ts)
   ...CODEX_VM,
+  // the logic chapter (codexlogic.ts)
+  ...CODEX_LOGIC,
   // verification and test (codexverify.ts)
   ...CODEX_VERIFY,
   // Appendix E: the Manchester Baby (codexbaby.ts)

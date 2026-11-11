@@ -64,7 +64,7 @@ export const chMap: Chapter = {
         <p>Here is a 4-bit adder. It adds two numbers <code>a</code> and <code>b</code>. Change them in the
         bar at the bottom (or click the pins) and watch the sum <code>s</code>.</p>
         <p>Now the important part: <strong>double-click any block to look inside it</strong>.
-        An adder is made of <span data-ahead="fulladder">full adders (<code>FA</code>: circuits that add one bit position: two input bits plus a carry in, giving a sum bit and a carry out; chapter 6 builds one)</span>.
+        An adder is made of <span data-ahead="fulladder">full adders (<code>FA</code>: circuits that add one bit position: two input bits plus a carry in, giving a sum bit and a carry out; chapter ${numOf('adders')} builds one)</span>.
         A full adder is made of <span data-ahead="nand">NAND gates (gates whose output is 0 only when both inputs are 1; chapter 3 builds one)</span>.
         A NAND gate is made of four transistors. Open one of those and you reach a single transistor.</p>
         <div class="try">Open <code>fa0</code>, then one of its gates, then a transistor. Use the breadcrumbs above
@@ -659,7 +659,7 @@ export const chInverter: Chapter = {
       tries: [(st) => st.value('en') === 1],
       more: {
         derive: `<p>With stage delay t<sub>d</sub> the period is 2·N·t<sub>d</sub>, so t<sub>d</sub> = T / 2N. Seven stages at ${PS_PER_NAND} ps: T = ${14 * PS_PER_NAND} ps. The test <code>tests/cmosgates.test.ts</code> runs 3, 5 and 7 stages on the gate simulator and finds 6, 10 and 14 delays between rising edges.</p>`,
-        pitfall: `<p>Using an even number of stages. The loop then has two consistent states (a latch, chapter 8) and sits in one of them. Odd is what makes it unable to settle.</p>`,
+        pitfall: `<p>Using an even number of stages. The loop then has two consistent states (a latch, chapter ${numOf('latches')}) and sits in one of them. Odd is what makes it unable to settle.</p>`,
         real: `<p>The simulator settles every circuit it can; an oscillator is the one it cannot, and the stage animates it instead of settling (the Timing panel shows the square wave). In silicon the frequency also drifts with temperature and supply: a ring is a thermometer as much as a clock.</p>`,
       },
       challenge: {
@@ -678,7 +678,7 @@ export const chInverter: Chapter = {
         <p>Try F = 64 below. One stage costs ${chainDelay(64, 1).toFixed(0)} τ. Two take ${chainDelay(64, 2).toFixed(0)}. Three, each 4× the one before, take ${chainDelay(64, 3).toFixed(0)}, the best. Four is already slower (${chainDelay(64, 4).toFixed(1)}), because every extra stage pays another p.
         Whatever the load, the best ratio stays between 3 and 6: the stage count grows with the logarithm of F.</p>
         <p>The yardstick is the <strong>FO4</strong> delay, an inverter driving four copies of itself: ${FO4_TAU} τ, an illustrative ${FO4_TAU * PS_PER_TAU} ps here. Process generations are compared in FO4s, and a processor core fits roughly 15 to 20 of them in one clock cycle.
-        <a href="#/c/nand/1">Chapter ${numOf('nand')}</a> applies the same arithmetic to the <span data-ahead="nand">NAND (a gate whose output is 0 only when every input is 1)</span>, whose effort is 4/3 and not 1, and <a href="#/c/fastadd/0">chapter ${numOf('fastadd')}</a> to whole adders.</p>`,
+        <a href="#/c/fastadd/0">Chapter ${numOf('fastadd')}</a> applies the same arithmetic to the <span data-ahead="nand">NAND (a gate whose output is 0 only when every input is 1)</span>, whose effort is 4/3 and not 1.</p>`,
       widget: () => sizingWidget(),
       more: {
         derive: `<p>Minimising D over N for fixed F: dD/dN = 0 gives ρ(ln ρ − 1) = p with ρ = F<sup>1/N</sup>. For p = ${P_INV} that is ρ ≈ 3.6, and the discrete optimum for F = 64 happens to be exactly 4. The delay at the optimum is N·(ρ + p), ${chainDelay(64, 3).toFixed(0)} τ for F = 64, against ${chainDelay(64, 1).toFixed(0)} τ for a single stage: a ${(chainDelay(64, 1) / chainDelay(64, 3)).toFixed(1)}× saving from two extra inverters.</p>`,

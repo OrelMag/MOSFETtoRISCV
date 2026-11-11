@@ -286,7 +286,7 @@ export const chGates: Chapter = {
           two, since x·b + x·¬b = x. A <strong>Karnaugh map</strong> lays the table out on a grid in Gray-code order, so rows that
           differ in one input sit side by side (edges wrapping); circling the largest power-of-two blocks of 1s, don't-cares
           included where they help, reads off a minimal sum of products by eye, up to four or five inputs. Past that, programs
-          do it: Quine–McCluskey (exact, run for <a href="#/c/memory/5">chapter 10's PLA</a>) and the heuristics inside synthesis
+          do it: Quine–McCluskey (exact, run for <a href="#/c/memory/5">chapter ${numOf('memory')}'s PLA</a>) and the heuristics inside synthesis
           tools. Nor is a minimal sum the cheapest circuit: the XOR above shares m and takes ${nd(XOR)} NANDs, against 5 for its sum of products a·¬b + ¬a·b (two inverters, three NANDs).</p>`,
         real: `<p>Library mux cells are not four NANDs: a transmission-gate mux is two pass gates and an inverter, 6 transistors (8 with an output buffer), against ${tr(MUX2)}
           here. Wide muxes (8:1, 16:1) are built as trees of these or as one-hot AND-OR structures, and the choice of structure decides the delay of the register-file read
