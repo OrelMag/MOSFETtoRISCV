@@ -64,6 +64,8 @@ export function linkFigures(): LinkFigures {
 }
 const F = linkFigures();
 const exe = buildExecutable([MAIN_S, UTIL_S]);
+/** The executable's header and its two program headers, as a loader reads them (the ELF step's questions). */
+const SEG = { entry: exe.info.entry, phoff: exe.info.phoff, text: exe.info.segments[0], data: exe.info.segments[1] };
 
 const ROGUE: SourceFile = { name: 'rogue.s', text: `.globl main\nmain:\n  la t0, main\n  li t1, 0x13\n  sw t1, 0(t0)       # a store into its own code\n  li a7, 93\n  ecall\n` };
 const scenes = {
@@ -156,6 +158,9 @@ export const chLinking: Chapter = {
         <p>The strip is the jal's 32 bits. The dashed ones are the hole. Fill them so the jal reaches <code>print</code>; the disassembly underneath follows each click.</p>
         <div class="try">Fill the hole: the disassembly reads <code>jal ra</code> to print's address.</div>`,
       widget: relocWidget,
+      more: {
+        real: `<p>GNU's assembler and linker follow the same kinds with three differences. A call is now marked <code>R_RISCV_CALL_PLT</code> (plain <code>R_RISCV_CALL</code> is deprecated; the bits written are the same). An offset added to a symbol, as in <code>la a0, table+8</code>, is kept in the relocation entry itself (ELF's RELA form), so a hole in the file is zero, as here. And the linker <em>relaxes</em>: an auipc and jalr whose target turns out to be near becomes one jal, and code after it moves up. Each such pair carries an extra <code>R_RISCV_RELAX</code>, and because code may move, the assembler leaves relocations even on branches and jumps within one file, which this chapter's assembler resolves itself.</p>`,
+      },
       challenge: {
         kind: 'reach',
         goal: `Fill the jal's immediate bits so it jumps from ${hex(F.jal.site)} to print at ${hex(F.jal.target)}.`,
@@ -202,6 +207,36 @@ export const chLinking: Chapter = {
         <p>The linker's output is a file the loader can read without knowing anything about the program: an <strong>executable</strong>. RISC-V systems use <strong>ELF</strong>. A ${ELF32_EHSIZE}-byte header says what it is (a 32-bit little-endian RISC-V executable), where execution starts (the entry, <code>main</code> at ${hex(F.entry)}) and where the program headers are. Each <strong>program header</strong> of ${ELF32_PHSIZE} bytes is a segment to load: where its bytes are in the file, its virtual address, how many bytes are in the file and how many in memory (more in memory: the rest is .bss, zeroed), and its permissions.</p>
         <p>Ours has ${F.phnum}: text, read and execute; data and .bss, read and write. The text's <em>physical</em> address differs from its virtual one: ${hex(EXEC_ROM)}, the ROM frame its bytes are put in, for a reason the next step gives. The whole file is ${n(F.elfBytes)} bytes. It is written by the same code that writes the files the site's verification hands to Spike, the RISC-V reference simulator (chapter ${numOf('verify')}).</p>`,
       widget: elfWidget,
+      reading: {
+        source: 'Executable and Linking Format (ELF) Specification, version 1.2 (Tool Interface Standard)', section: 'ELF Header; Program Header',
+        quote: [
+          'e_entry This member gives the virtual address to which the system first transfers control, thus starting the process.',
+          'PT_LOAD The array element specifies a loadable segment, described by p_filesz and p_memsz. The bytes from the file are mapped to the beginning of the memory segment. If the segment\'s memory size (p_memsz) is larger than the file size (p_filesz), the "extra" bytes are defined to hold the value 0 and to follow the segment\'s initialized area.'],
+        note: `The widget's header and program-header rows are these fields of this chapter's file: e_entry ${hex(SEG.entry)}, ${exe.info.phnum} PT_LOAD entries from e_phoff ${SEG.phoff}. p_flags is R = 4, W = 2, X = 1 added up.`,
+        quizzes: [
+          {
+            question: `This chapter's executable has e_entry = ${hex(SEG.entry)}. What is that number?`,
+            options: [`The virtual address of main: the first instruction the process runs`, `The text's physical address in the ROM`, `The file offset where the text's bytes start`, `Where the program headers start in the file`],
+            answer: 0,
+            explain: `The loader puts ${hex(SEG.entry)} in the saved PC; main is the first thing in the text, at ${hex(VA.code)}. The other numbers in the header are offsets into the file (e_phoff = ${SEG.phoff}) or, in a program header, physical addresses.`,
+            why: ['', `That is p_paddr of the text, ${hex(SEG.text.paddr)}: where its bytes sit, not the address the program runs at.`, `That is the text header's p_offset, ${SEG.text.offset}: a place in the file, not in memory.`, `That is e_phoff, ${SEG.phoff}, a separate field.`],
+          },
+          {
+            question: `Which program header carries the code, and why are its flags ${SEG.text.flags} (R + X)?`,
+            options: [`The one at ${hex(SEG.text.vaddr)}: code is fetched (X) and may be read (R), but a store into it is a bug, so no W`, `The one at ${hex(SEG.data.vaddr)}, because code must be writable to be loaded`, `Both: each segment holds part of the code`, `The one at ${hex(SEG.text.vaddr)}, with R + X because the ROM cannot be read`],
+            answer: 0,
+            explain: `p_flags ${SEG.text.flags} = R (4) + X (1). The data header at ${hex(SEG.data.vaddr)} has ${SEG.data.flags} = R (4) + W (2): written, never executed. The loader copies these bits into the page table, which is how a store into the code faults.`,
+            why: ['', `That header's flags are ${SEG.data.flags}, R + W with no X: data. The loader writes a segment whatever its flags; the flags are for the program afterwards.`, 'The data header has no X: nothing in it may be run.', 'R is there so the code may be read; X is what lets it be fetched.'],
+          },
+          {
+            question: `The data header has p_filesz ${SEG.data.filesz} and p_memsz ${SEG.data.memsz}. What is in the last ${SEG.data.memsz - SEG.data.filesz} bytes of the segment?`,
+            options: [`Zeros: .bss, the variables that start at zero (count)`, `The first bytes of the next segment in the file`, `Whatever the frame held before`, `A copy of the last ${SEG.data.memsz - SEG.data.filesz} bytes from the file`],
+            answer: 0,
+            explain: `${SEG.data.filesz} bytes come from the file (.data: the table of three words) and the other ${SEG.data.memsz - SEG.data.filesz} are defined to be 0, as the quote says: main.s's count, a .space ${SEG.data.memsz - SEG.data.filesz} in .bss.`,
+            why: ['', 'Each segment says where its own bytes are (p_offset); nothing runs over from the next.', 'The specification defines them as 0, and leaving old memory would leak another program\'s data.', 'Only p_filesz bytes are read from the file.'],
+          },
+        ],
+      },
       challenge: {
         kind: 'quiz',
         question: 'A program header says 16 bytes in memory, 12 in the file. What does the loader do with the other 4?',
@@ -215,7 +250,7 @@ export const chLinking: Chapter = {
       title: 'The loader: exec on the gates',
       body: `
         <p>Chapter ${numOf('os')}'s kernel could only run the programs it was built with. With one more system call a process can ask for a new program: <code>exec</code>, ${EXEC_SYS} in a7 (Linux's number for execve). The file is on a <strong>disk</strong>. This machine has none, so a data frame at ${hex(DISK_PA)} stands in for one: the kernel's boot fills it with the file's ${F.diskWords} words, one store each. The fill is part of the boot, not of exec, and is not counted below.</p>
-        <p>Exec reads the header and the program headers off the disk, as the widget of the last step did. For the data segment it copies the bytes into the frame the process's page table maps at its address and zeroes the rest (.bss). For the text segment it copies nothing. This CPU is <strong>Harvard</strong>: instruction fetch reaches only the ROM, so text copied into data memory could never be run. The text was put in the ROM frame its physical address names, and exec maps its page there, read and execute and <em>not</em> write: the program runs in place, as a microcontroller runs from its flash. Then the entry into the saved PC, a fresh stack (sp = ${hex(EXEC_SP)}), <code>sfence.vma</code>, and the return: the process that called exec is now running the new program.</p>
+        <p>Exec reads the header and the program headers off the disk, as the widget of the last step did. For the data segment it copies the bytes into the frame the process's page table maps at its address and zeroes the rest (.bss). For the text segment it copies nothing. This CPU is <strong>Harvard</strong>: instruction fetch reaches only the ROM, so text copied into data memory could never be run. The text was put in the ROM frame its physical address names, and exec maps its page there, read and execute and <em>not</em> write: the program runs in place, as a microcontroller runs from its flash. Then the entry into the saved PC, a fresh stack (sp = ${hex(EXEC_SP)}), <code>sfence.vma</code> (which drops the translations the MMU has cached, so the new mappings take effect), and the return: the process that called exec is now running the new program.</p>
         <p>On the gates exec takes <strong>${n(F.execCycles)} cycles</strong>, each word of .data ${F.perDataWord} more and each word of .bss ${F.perBssWord}. Run the scene: the shell calls exec, and the console prints what the two linked files compute.</p>
         <div class="try">Run to halt and read the console: the numbers come from main.s and util.s, loaded by exec.</div>`,
       scene: scenes.exec,
@@ -250,7 +285,7 @@ export const chLinking: Chapter = {
       title: 'One library, two processes',
       body: `
         <p>Every program on a computer calls the same printing, string and memory routines. Linked statically, each carries its own copy. A <strong>shared library</strong> is loaded once, its text mapped into every process that uses it, saving memory and letting one update fix everyone. The text cannot be patched per process, since it is shared, and it may be mapped at a different address in each. So shared code is <strong>position independent</strong>: it reaches its own code by pc-relative jumps (which work anywhere), and everything outside through a <strong>table</strong> in its data, which each process has its own copy of and the loader fills with that process's addresses.</p>
-        <p>The price is the table. The widget runs the same loop calling a library routine ${F.pic.calls} times, once with the address patched into the call and once loaded from a table entry: ${F.pic.perCall} more instructions per call, ${F.pic.loads} of them a load. Real systems keep it to one (the address folded into the load), add lazy binding (a table entry starts pointing at the dynamic linker, which fills it on the first call) and pay a load per call or global. The saving is memory: one copy of the library's text for every process that maps it.</p>`,
+        <p>The price is the table. The widget runs the same loop calling a library routine ${F.pic.calls} times, once with the address patched into the call and once loaded from a table entry: ${F.pic.perCall} more instructions per call, ${F.pic.loads} of them a load. Real systems pay about the same. A call compiled to go through the table directly (GCC's <code>-fno-plt</code>) is auipc, a load and jalr where a direct call is auipc and jalr: one more instruction, the load. The usual route jumps first to a small stub, the <em>procedure linkage table</em>, which loads the address and jumps on: four more instructions, one a load. The stub is what allows lazy binding: a table entry starts pointing at the dynamic linker, which fills it on the first call. The saving is memory: one copy of the library's text for every process that maps it.</p>`,
       widget: picWidget,
       challenge: {
         kind: 'quiz',
