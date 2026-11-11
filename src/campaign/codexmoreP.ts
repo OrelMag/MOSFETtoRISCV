@@ -80,6 +80,6 @@ export const MOREP: Record<string, CodexMore> = {
       'Letting the processor run while memory is still filling: it executes whatever is there.',
       'Taking run on the rising edge: it rises while clk is high, and clk AND run hands the CPU half a pulse before its first word is through the address mux.',
     ],
-    chapters: [{ chapter: 'cards', step: 4, label: 'A machine that reads them' }],
+    chapters: [{ chapter: 'cards', step: 4, label: 'A machine that reads them' }, { chapter: 'linking', step: 6, label: 'The loader: exec on the gates' }],
   },
 };

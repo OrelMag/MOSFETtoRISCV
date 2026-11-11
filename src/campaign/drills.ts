@@ -1284,4 +1284,56 @@ const divrem: Drill = {
   },
 };
 
-export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16, float, relay, hollerith, lut, testset, fixed, divrem };
+/** jal rd, offset as a word: the offset's bits in J-type order (bit 20, 10:1, 11, 19:12). tests/content-linking.test.ts holds it to the assembler. */
+export function jalWord(rd: number, offset: number): number {
+  const o = offset >>> 0, b = (k: number) => (o >>> k) & 1;
+  let imm = b(20) << 31;
+  for (let k = 1; k <= 10; k++) imm |= b(k) << (20 + k);
+  imm |= b(11) << 20;
+  for (let k = 12; k <= 19; k++) imm |= b(k) << k;
+  return (imm | (rd << 7) | 0x6f) >>> 0;
+}
+/** An auipc / addi split of a pc-relative distance: the addi's 12 bits are signed, so the high part is rounded (+0x800). */
+export const splitHiLo = (v: number): { hi: number; lo: number } => { const hi = (v + 0x800) >> 12; return { hi, lo: v - hi * 4096 }; };
+
+/** The linker's two jobs at a relocation: a jal's word, or an la's split (chapter 'linking'). */
+const reloc: Drill = {
+  id: 'reloc', title: 'Patch the jump', goal: 6,
+  how: 'Be the linker. For a jal, give the 32-bit word (0x…) with the offset filled in. For an la, give the auipc and addi immediates as two decimal numbers, "hi, lo".',
+  make(r) {
+    if (int(r, 0, 1) === 0) {
+      const site = int(r, 0, 0x3ff) * 4, back = int(r, 0, 2) === 0, dist = int(r, 1, 0x7ff) * 2;
+      const target = back ? Math.max(0, site - dist) : site + dist;
+      const rd = int(r, 0, 1), off = target - site, want = jalWord(rd, off);
+      return {
+        prompt: `<code>jal ${rd ? 'ra' : 'x0'}, f</code> sits at <b>0x${hex(site, 16)}</b>; the linker put <code>f</code> at <b>0x${hex(target, 16)}</b>. What word does it write?`, placeholder: '0x…',
+        answer: `0x${hex(want, 32)}`,
+        check: (t) => {
+          const x = parseNum(t);
+          if (x === null) return { ok: false, why: 'write the word as 0x followed by 8 hex digits' };
+          if ((x >>> 0) === want) return { ok: true };
+          if ((x & 0xfff) !== (want & 0xfff)) return { ok: false, why: `the low 12 bits are rd and the opcode: 0x${hex(want & 0xfff, 12)}` };
+          return { ok: false, why: 'the offset bits are not in J-type order, or the offset is off' };
+        },
+        explain: `offset = 0x${hex(target, 16)} − 0x${hex(site, 16)} = ${off}. Bit 20 goes to bit 31, bits 10..1 to 30..21, bit 11 to 20, bits 19..12 stay at 19..12; rd = ${rd} and opcode 0x6F fill the rest.`,
+      };
+    }
+    const lo12 = int(r, 0, 3) === 0 ? int(r, 0x800, 0xfff) : int(r, 0, 0xfff);
+    const v = (int(r, 0, 15) << 12) | lo12, { hi, lo } = splitHiLo(v);
+    return {
+      prompt: `<code>la a0, msg</code> with <code>msg</code> <b>0x${hex(v, 16)}</b> bytes past the auipc. What are the auipc and addi immediates?`, placeholder: 'hi, lo',
+      answer: `${hi}, ${lo}`,
+      check: (t) => {
+        const m = t.replace(/−/g, '-').split(/[,\s]+/).filter(Boolean).map(parseNum);
+        if (m.length !== 2 || m.some((x) => x === null)) return { ok: false, why: 'two numbers: the auipc immediate, then the addi immediate' };
+        const [a, b] = m as number[];
+        if (a === hi && b === lo) return { ok: true };
+        if (a * 4096 + b === v && (b < -2048 || b > 2047)) return { ok: false, why: 'they add up, but the addi takes −2048 … 2047 only' };
+        return { ok: false, why: `auipc imm × 4096 + addi imm must be ${v}` };
+      },
+      explain: lo < 0 ? `Bit 11 of 0x${hex(v, 16)} is 1, so the low 12 bits would read as negative: round the high part up to ${hi} and take ${lo} (${hi} × 4096 − ${-lo} = ${v}).` : `Bit 11 is 0: the high part is ${hi}, the low part ${lo} (${hi} × 4096 + ${lo} = ${v}).`,
+    };
+  },
+};
+
+export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16, float, relay, hollerith, lut, testset, fixed, divrem, reloc };

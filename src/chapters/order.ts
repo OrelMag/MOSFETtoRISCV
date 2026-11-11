@@ -38,6 +38,7 @@ const BOOK = [
   'threads',
   'muldiv',
   'float',
+  'linking',
   'widths',
   'ooo',
   'multicore',

@@ -72,6 +72,7 @@ export const NUDGES: Record<string, string> = {
   p_loop: 'Put the test where n = 0 does no work, then count what each iteration pays.',
   p_mem: 'The array is further away than any offset reaches: let a register walk it.',
   p_call: 'Caller and function only have to agree on where the numbers are and where to come back to.',
+  p_link: 'Work out the distance first, then put each group of its bits where the format keeps it; the low 12 bits of the word never change.',
   p_mul: 'Long multiplication in base 2: each row is nothing or a shifted copy of a.',
   p_sort: 'Fixing neighbours that are out of order is enough; work out how many passes guarantee it.',
   p_print: 'Without a divider, a digit is how many times its power of ten fits.',

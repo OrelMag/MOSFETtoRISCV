@@ -492,6 +492,12 @@ export const NODES: CampaignNode[] = withBugHunts([
     codex: ['callconv', 'stack'],
   },
   {
+    id: 'p_link', act: 4, title: 'Patch the jump', kind: 'drill', optional: true, requires: ['p_call'], drill: 'reloc', par: { mistakes: 2 },
+    why: 'A call into another file cannot be encoded until a linker has placed both files: the assembler leaves the jal\'s 20 offset bits empty, with a relocation naming the target. Filling them by hand, in J-type\'s scattered order, and splitting a distance into auipc and addi with the high part rounded, is what a linker does at every call.',
+    tips: ['jal offset = target − the jal\'s own address; bit 20 goes to bit 31, bits 10..1 to 30..21, bit 11 to 20, bits 19..12 stay put.', 'For la: if bit 11 of the distance is 1, the addi\'s part is negative, so add 1 to the auipc\'s part.', 'Check: auipc imm × 4096 + addi imm must give the distance back, with the addi in −2048 … 2047.'],
+    codex: ['reloc', 'linker'], chapters: [{ chapter: 'linking', step: 2, label: 'Relocations: the bits a linker writes' }],
+  },
+  {
     id: 'p_mul', act: 4, title: 'Multiply in software', kind: 'program', requires: ['p_loop'], par: { size: 13, cycles: 74 },
     why: 'RV16I has no multiply: a product is a loop of shifts and adds, one bit of b per iteration, 28 to 134 instructions (74 on average at par). Act 8\'s sequential multiplier runs the same loop in hardware at one bit a clock, and the MD opcode makes it one instruction.',
     tips: ['Test the low bit of b with <code>and</code> (put 1 in a register first: there is no andi).', 'Each iteration: a ← a &lt;&lt; 1, b ← b &gt;&gt; 1; stop when b = 0.', 'Shift b with <code>srli</code>, not <code>srai</code>: an arithmetic shift of a b with bit 15 set never reaches 0.'],
