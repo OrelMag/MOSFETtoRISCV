@@ -92,6 +92,14 @@ export function threadFigures(): ThreadFigures {
 const F = threadFigures();
 const slices = THREAD_SLICES.map((s) => n(s)).join(', ');
 
+/** Step 3's table: step 2's race run again with lock 0 around the update, and what the lock costs (golden model). */
+const lockTable = (): string => {
+  const plain = raceRows(), locked = lockedRows();
+  const head = ['slice', 'count, no lock', 'count, with lock 0', 'cycles, no lock', 'cycles, with lock'].map((t) => `<th>${t}</th>`).join('');
+  const rows = plain.map((r, i) => `<tr><td>${n(r.slice)} instr.</td><td>${r.count}</td><td>${locked[i].count}</td><td>${n(r.cycles)}</td><td>${n(locked[i].cycles)}</td></tr>`).join('');
+  return `<table class="data os-cost"><tr>${head}</tr>${rows}</table>`;
+};
+
 const scenes = {
   two: (): Scene => osScene({ procs: [twoThreads(6)], threads: true, slice: SCENE_SLICE, highlight: ['csr', 'mmu'], keep: 'open' }),
   locked: (): Scene => osScene({ procs: [counting(20, { lock: true })], threads: true, slice: SCENE_SLICE, highlight: ['csr'], keep: 'open' }),
@@ -153,8 +161,8 @@ export const chThreads: Chapter = {
         both want two flows of control over one set of data. That is a <strong>thread</strong>: a set of registers, a PC and a stack, running in an address space it shares with the process's other threads.</p>
         <p>The kernel of this chapter is the last chapter's with ${THREAD_SYS.seminit - THREAD_SYS.spawn + 1} more system calls. It starts only process A. A's program asks for a second thread with <code>spawn</code> (${THREAD_SYS.spawn} in a7): a0 the address of the code it should run, a1 its stack pointer, a2 where it should return to when its code ends. The kernel fills the second control block from A's own: the same ${NREGS} registers, the same <code>satp</code>, then the new PC, stack and
         return address. That costs <strong>${F.spawn} cycles</strong>, mostly the copy. From then on the scheduler has two ready blocks, as before, and the timer takes turns between them, as before. The difference is in the switch: the kernel compares the next block's <code>satp</code> with the one in the CSR and, when they are equal, skips the write and the TLB flush.</p>
-        <p>The scene runs thread A counting 1, 2, 3 … and thread B counting 10, 20, 30 …, the two counters of chapter ${numOf('os')} as two threads. The switch is the same ${F.threadSwitch} kernel cycles (against ${F.procSwitch} for two processes); what it saves comes after: <strong>${F.threadWalks} page walks</strong> on return where a process switch pays ${F.procWalks}, ${WALK_CYCLES} cycles each, because the TLB still holds the right translations. Thread B's stack is at 0x${SP_B.toString(16)} in A's page 0; both see the same word at 0x${SHARED.toString(16)}.</p>
-        <div class="try">Run to halt and read the panel: both control blocks hold the same satp, and B's sp is 0x${SP_B.toString(16)}.</div>`,
+        <p>The scene runs thread A counting 1, 2, 3 … and thread B counting 10, 20, 30 …, the two counters of chapter ${numOf('os')} as two threads. The switch itself takes the kernel ${F.threadSwitch} cycles, ${F.threadSwitch === F.procSwitch ? 'exactly as many as a switch between two processes' : `against ${F.procSwitch} for two processes`}; what it saves comes after: <strong>${F.threadWalks} page walks</strong> on return where a process switch pays ${F.procWalks}, ${WALK_CYCLES} cycles each, because the TLB still holds the right translations. Thread B's stack is at 0x${SP_B.toString(16)} in A's page 0; both see the same word at 0x${SHARED.toString(16)}.</p>
+        <div class="try">Run to halt and open the panel <em>Who has the CPU</em> (a click on its title): both control blocks hold the same satp, and B's sp is 0x${SP_B.toString(16)}.</div>`,
       scene: scenes.two,
       lit: 'The CSR unit and the MMU',
       challenge: {
@@ -187,7 +195,9 @@ export const chThreads: Chapter = {
       body: `
         <p>The three instructions must be a <strong>critical section</strong>: code that one thread at a time may be in. On one core there is a simple way to make anything indivisible: run it with interrupts off. A user thread may not turn them off (it would keep the CPU for ever), but the kernel runs that way: a trap clears <code>MIE</code>, and nothing interrupts the kernel until its <code>mret</code>.</p>
         <p>So the kernel offers a <strong>lock</strong>. Four of them, words at 0x${LOCKS.toString(16)} in its frame, each holding the control block of the thread that owns it, or 0. <code>lock(i)</code> (${THREAD_SYS.lock} in a7) takes a free lock and returns; <code>unlock(i)</code> (${THREAD_SYS.unlock}) gives it back. Between the two, the other thread may be switched in, but if it asks for the lock it cannot get it. The test and the take are one system call, so no switch can fall between them.</p>
-        <p>The scene runs the count with <code>lock(0)</code> and <code>unlock(0)</code> around the update, and the panel shows the lock table under the control blocks. The widget adds the lock to every row: <strong>${2 * RACE_N}</strong> at every slice. The price is in the right-hand columns. The count took ${n(F.plainCycles)} cycles without the lock and ${n(F.lockedCycles)} with it, at the longest slice: two system calls per update, ${F.lock} and ${F.unlock} cycles uncontended, <strong>about ${F.perIncrement} cycles per increment</strong> for a section of a few instructions. Keep critical sections few and short.</p>`,
+        <p>The scene runs the count with <code>lock(0)</code> and <code>unlock(0)</code> around the update, and the panel <em>Who has the CPU</em> shows the lock table under the control blocks. The table below runs the last step's count again with the lock, at the same slices: <strong>${2 * RACE_N}</strong> at every slice. The price is in the right-hand columns.</p>
+        ${lockTable()}
+        <p>The count took ${n(F.plainCycles)} cycles without the lock and ${n(F.lockedCycles)} with it, at the longest slice: two system calls per update, ${F.lock} and ${F.unlock} cycles uncontended, <strong>about ${F.perIncrement} cycles per increment</strong> for a section of a few instructions. Keep critical sections few and short.</p>`,
       scene: scenes.locked,
       lit: 'The CSR unit: the trap that keeps interrupts off',
       challenge: {
@@ -292,7 +302,7 @@ export const chThreads: Chapter = {
         <p>The compiler of chapter ${numOf('python')} knows the kernel's thread calls when it targets user mode: <code>spawn(f)</code> starts the function <code>f</code> as the second thread (its stack ${n(THREAD_STACK)} bytes below A's, at 0x${F.py.sp.toString(16)}; returning from <code>f</code> ends the thread), <code>join()</code> waits for it to end, and <code>lock(i)</code>, <code>unlock(i)</code>, <code>wait(c, i)</code>, <code>signal(c)</code> are the calls of this chapter, each an <code>ecall</code>. A global variable that a function touches lives in memory, so both threads see one <code>count</code>.</p>
         <pre class="os-code">${pyRace(true).replace(/</g, '&lt;')}</pre>
         <p>Without the two lock lines the program prints ${F.py.race.join(', ')} at the five slices, where ${2 * PY_N} is right. ${F.py.race.filter((v) => v === 2 * PY_N).length ? `The ${F.py.race.filter((v) => v === 2 * PY_N).length === 1 ? 'one right answer is' : 'right answers are'} luck: the switches happened to miss every window, and a run that comes out right proves nothing. ` : ''}It is the same race, now hidden inside <code>count = count + 1</code>, which compiles to a load, an add and a store like the assembly before. With them it prints ${2 * PY_N} every time, in ${n(F.py.locked)} cycles against ${n(F.py.plain)} at a ${SCENE_SLICE}-instruction slice. The scene runs the locked program on the gates, the golden model in lock step.</p>
-        <p>Python's own threads are the same idea with more machinery: CPython's global interpreter lock is one lock around the whole interpreter, taken and given back between bytecodes, which is why its threads take turns on one core much as these do.</p>`,
+        <p>Python's own threads are the same idea with more machinery: CPython's global interpreter lock is one lock around the whole interpreter, taken and given back between bytecodes, which is why its threads take turns, even on a machine with many cores, much as these do on one. A switch can still fall between the bytecodes of <code>count = count + 1</code>, so a Python program needs its own lock there all the same.</p>`,
       scene: scenes.python,
       lit: 'The CSR unit and the MMU',
       challenge: {

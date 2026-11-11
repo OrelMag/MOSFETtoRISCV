@@ -139,8 +139,9 @@ export const chFirstComputer: Chapter = {
         <span data-show="inc">incrementer</span>, whose PC + 1 goes back through a
         <span data-show="jmux">multiplexer</span> into the PC. So at every rising edge the PC steps on, and a new word
         comes out of the ROM. Nothing more is needed to <em>fetch</em>: a counter reading a memory.</p>
-        <p>The program on the stage only shows numbers: each word that reaches the end of the line says either "put this
-        number in A" or "show A". Run it and watch 1, 2, 3 appear on OUT, then the PC jump back to 0 and start again.</p>
+        <p>The program on the stage only shows numbers: its words say in turn "put this number in A" and "show A", and
+        the last one sends the PC back to 0. Run it and watch 1, 2, 3 appear on OUT, then the PC jump back to 0 and start
+        again. How each word is read is the next step's subject.</p>
         <p>Cost of fetching: the PC is ${ACC_COST.pc} NANDs, the incrementer ${ACC_COST.inc}, the multiplexer
         ${ACC_COST.jmux}; the ROM, simulated as a lookup, is a tree of ${k(ACC_COST.rom)} NANDs of multiplexers whose
         inputs are tied to the program's bits.</p>
@@ -269,7 +270,8 @@ export const chFirstComputer: Chapter = {
         depends on the three op bits, and on Z for JZ. So the <span data-show="ctl">control block</span> is a 3 → 8
         decoder, one line per instruction, and each control line is the OR of the instruction lines that need it:</p>
         ${ctlTable()}
-        <p>Open the control block (double-click it): the decoder's eight lines go into four OR gates and one AND, and that table
+        <p>Each 1 is a line the instruction raises; the <strong>Z</strong> in JZ's jump column means the line is Z itself,
+        1 only while A is 0. Open the control block (double-click it): the decoder's eight lines go into four OR gates and one AND, and that table
         is the whole of what the machine "understands": ${ACC_COST.ctl} NANDs, against ${k(ACC_LOGIC - ACC_COST.ctl)} for the rest of
         the logic and ${k(ACC_COST.ram)} for the RAM. Chapter ${numOf('cpu')}'s <span data-ahead="control">control unit (the decoder that drives every control line of a processor)</span> is the same idea with more
         rows and wider columns. Appendix C's SAP-1 spreads each instruction over several clocks and keeps its table in a
@@ -290,13 +292,13 @@ export const chFirstComputer: Chapter = {
       title: 'Program it',
       body: `
         <p>The program text becomes ROM words through the machine's <span data-ahead="assembly">assembler (the program that turns each line, like <code>LDA 29</code>, into its word)</span>, here a table: each instruction a mnemonic, its operand and its bit
-        pattern (<code>LDA</code> is <code>000aaaaa</code>), the same tables the sandbox's table editor makes. Labels
+        pattern (<code>LDA</code> is <code>000aaaaa</code>), the same kind of table the sandbox lets you write for a machine of your own. Labels
         (<code>loop:</code>) stand for addresses, <code>#</code> starts a comment. Open <em>Edit</em> in the panel,
         change a program, and <em>Assemble &amp; load</em> builds a new ROM and puts the machine on the stage, with the
         <span data-ahead="golden">golden model (a plain program that does what each instruction should, run beside the gates to check them)</span> in step beside it.</p>
         <p>Three things to keep in mind: the RAM starts at 0, so a program sets up its own data (LDI, then STA); LDI
         reaches only 0 … 31, so a larger number is built by adding; and the program ends with a jump to itself.</p>
-        <p>The other programs: 1 + 2 + … + 10 shows ${SUM.outs[0].value} after ${SUM.steps} clocks; the countdown shows
+        <p>The other programs: 1 + 2 + … + 10 shows ${SUM.outs[0].value} at clock ${SUM.outs[0].clock}; the countdown shows
         ${COUNT.outs.map((o) => o.value).join(', ')}.</p>`,
       scene: () => accScene({ program: 'mul', highlight: [] }),
       challenge: {
