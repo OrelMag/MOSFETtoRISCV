@@ -6,7 +6,11 @@ import type { Widget } from '../view/stage';
 import { groupDigits } from '../sim/numfmt';
 import { osImage, spinner2 } from '../riscv/osprograms';
 import { runOs, tripsOf, type OsRun } from '../riscv/osrun';
-import { counting, twoLocks, waiting, B_FIRST } from '../riscv/threadprograms';
+import { counting, twoLocks, waiting } from '../riscv/threadprograms';
+import { MultiISS } from '../riscv/multi';
+import { MC_PROGRAMS } from '../riscv/mcprograms';
+import { assemble } from '../riscv/asm';
+import { numOf } from '../chapters/order';
 import '../styles/os.css';
 
 /** The slices the chapter sweeps: from 100 up, well above sliceTax(), the part of a slice the kernel spends. */
@@ -98,7 +102,7 @@ export function deadlockWidget(): Widget {
   const sel = [pick(0), pick(1)];
   const code = (who: 'A' | 'B') => h('pre', { class: 'os-code' },
     `thread ${who}, ${ROUNDS} times:\n`,
-    who === 'A' ? '  lock(0)\n  ...30 instructions...\n  lock(1)\n  unlock(1)\n  unlock(0)' : h('span', null, '  lock(', sel[0], `)      # ${B_FIRST}\n  ...30 instructions...\n  lock(`, sel[1], ')\n  unlock(second)\n  unlock(first)'));
+    who === 'A' ? '  lock(0)\n  ...30 instructions...\n  lock(1)\n  unlock(1)\n  unlock(0)' : h('span', null, '  lock(', sel[0], ')\n  ...30 instructions...\n  lock(', sel[1], ')\n  unlock(second)\n  unlock(first)'));
   const result = h('div', null);
   const draw = () => {
     sel[0].value = String(order[0]); sel[1].value = String(order[1]);
@@ -114,4 +118,42 @@ export function deadlockWidget(): Widget {
   draw();
   const el = h('div', { class: 'widget vm-widget os-widget' }, h('div', { class: 'os-maps' }, code('A'), code('B')), result);
   return { el, destroy: () => { setOrder = null; } };
+}
+
+// ---- chapter 'multicore', last step: the threads chapter's locks against an amoswap.w spin lock ------------------------------------
+
+export interface LockCost {
+  /** Cycles of the dual-core programs on the golden model (MultiISS): the racy count and the spin-locked one, on one core and on two. */
+  race1: number; lock1: number; lock2: number; perCore: number;
+  /** What the lock adds per increment: the spin lock alone on a core, and the threads kernel's lock and unlock (two system calls). */
+  spinAdds: number; kernelAdds: number;
+  /** Increments each core makes in the dual-core programs. */
+  each: number;
+}
+let lockCost: LockCost | undefined;
+export function lockCosts(): LockCost {
+  if (lockCost) return lockCost;
+  const run = (id: string, n: number) => {
+    const m = new MultiISS(assemble(MC_PROGRAMS.find((p) => p.id === id)!.source).words, n);
+    for (let k = 0; !m.halted && k < 100000; k++) m.step();
+    return { cycles: m.cycles, count: m.dmem[16] };
+  };
+  const race1 = run('race', 1), lock1 = run('lock', 1), lock2 = run('lock', 2);
+  const plain = raceRows()[THREAD_SLICES.length - 1].cycles, locked = lockedRows()[THREAD_SLICES.length - 1].cycles;
+  return (lockCost = {
+    race1: race1.cycles, lock1: lock1.cycles, lock2: lock2.cycles, perCore: lock1.count,
+    spinAdds: Math.round((10 * (lock1.cycles - race1.cycles)) / lock1.count) / 10, kernelAdds: Math.round((locked - plain) / (2 * RACE_N)), each: lock1.count,
+  });
+}
+
+export function lockCostWidget(): Widget {
+  const c = lockCosts();
+  const row = (what: string, adds: number, how: string) => h('tr', null, h('td', null, what), h('td', null, bar(adds, c.kernelAdds), ` ${adds}`), h('td', null, how));
+  const el = h('div', { class: 'widget vm-widget os-widget' },
+    h('table', { class: 'data os-cost' },
+      h('tr', null, ...['lock', 'cycles it adds per increment', 'how it is made indivisible'].map((t) => h('th', null, t))),
+      row('amoswap.w spin lock, one core', c.spinAdds, 'one arbitrated memory access swaps and returns the old value'),
+      row(`threads kernel's lock(0) / unlock(0)`, c.kernelAdds, 'two system calls; the kernel runs with interrupts off')),
+    h('p', { class: 'sub' }, `The spin lock: this chapter's lock program alone on one core (${c.lock1} cycles for ${c.each} increments) against the racy count (${c.race1}). On two cores, contended, ${c.lock2} cycles for ${2 * c.each}. The kernel's lock: chapter ${numOf('threads')}'s count of ${2 * RACE_N} increments with and without lock 0 at a ${groupDigits(THREAD_SLICES[THREAD_SLICES.length - 1])}-instruction slice. All on the golden models.`));
+  return { el };
 }

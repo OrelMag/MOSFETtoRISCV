@@ -407,6 +407,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The spin lock, measured", challenge: "quiz", stage: "scene" },
     { title: "lr.w and sc.w", challenge: "quiz", stage: "scene" },
     { title: "Memory ordering", challenge: "quiz" },
+    { title: "Your locks on two cores", challenge: "quiz", stage: "widget" },
   ] },
   { id: "silicon", num: 31, title: "From netlist to silicon", blurb: "Standard cells in layout, how they are made, technology mapping, place and route, the clock tree, a floorplan of our dual-core, the real flow on two of our CPUs against our own estimates, and wafer economics.", level: "Physical design", builds: ["nand","fastadd","multicore"], recap: {"checks":3}, steps: [
     { title: "Gates become geometry", stage: "widget" },

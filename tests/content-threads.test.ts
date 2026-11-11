@@ -96,3 +96,15 @@ describe('the codex quotes the chapter', () => {
     }
   });
 });
+
+describe('Many cores, last step: the kernel lock against an amoswap.w spin lock', () => {
+  it('the spin lock adds a few cycles per increment, the kernel lock the chapter\'s figure; both count right', async () => {
+    const { lockCosts } = await import('../src/widgets/threads');
+    const c = lockCosts();
+    expect(c.kernelAdds).toBe(F.perIncrement);
+    expect(c.spinAdds).toBeGreaterThan(0);
+    expect(c.spinAdds).toBeLessThan(10);
+    expect(c.kernelAdds / c.spinAdds).toBeGreaterThan(20);
+    expect(c.lock2).toBeGreaterThan(c.lock1);
+  });
+});
