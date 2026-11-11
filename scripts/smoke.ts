@@ -929,6 +929,9 @@ const honeDrive = (part: string) => `(async () => {
   // in again to the zoom it opened at: the same answer (nothing remembered)
   for (let k = 0; k < 60 && px() < openPx * 0.999; k++) { wheel(-100); await wait(SETTLE); open = check(open, 'zooming in again'); }
   if (!isOpen()) bad.push('${part} did not open again at ' + fmt(px()) + ' px a unit');
+  // the whole level again, as every drive leaves it (the run's checks look at the fitted view)
+  document.querySelector('.stage [aria-label="Fit to screen"]')?.click();
+  await wait(300);
   return bad;
 })()`;
 
@@ -973,6 +976,8 @@ const lensMarksDrive = (part: string, line: string, inner: string[], first: 'sel
   pick()?.click();
   await wait(250);
   if (el.querySelector('svg.schematic g.hl[data-inst]') || glows()) bad.push('marks left inside after deselecting ${line}');
+  document.querySelector('.stage [aria-label="Fit to screen"]')?.click();
+  await wait(300);
   return bad;
 })()`;
 

@@ -20,7 +20,7 @@ import { SchematicView, type SchematicEvents } from './schematic';
 import type { ComponentDef } from '../sim/types';
 
 const SVG = 'http://www.w3.org/2000/svg';
-/** Past this factor still to zoom the hint says to step in instead (zooming that far is a chore). */
+/** Past this factor still to zoom the hint also offers the double-click (zooming that far is a chore). */
 export const HINT_MAX_ZOOM = 4;
 /** An inside built more than this far (px) outside the canvas is dropped: it would only cost repaints. */
 const KEEP_PX = 200;
@@ -122,7 +122,7 @@ export class Lens {
     // the hint: hovering a closed block that can open says how much more zoom it needs
     const move = (e: PointerEvent) => {
       this.focus = [e.clientX, e.clientY];
-      if (e.pointerType !== 'mouse') return;
+      if (e.pointerType === 'touch') return;
       const g = (e.target as Element).closest?.('g.inst') as SVGGElement | null;
       this.hover(g?.dataset.inst ?? null);
     };
@@ -625,7 +625,8 @@ export class Lens {
     const r = this.boxPx(b.name);
     if (!r) return this.hideHint();
     const need = b.openAt / (this.unitPx() || 1);
-    const text = need > HINT_MAX_ZOOM ? 'double-click to step in' : `zoom in to see inside (×${Math.max(1.1, need).toFixed(1)})`;
+    const x = `×${Math.max(1.1, need).toFixed(1)}`;
+    const text = need > HINT_MAX_ZOOM ? `zoom in ${x} to see inside, or double-click to step in` : `zoom in to see inside (${x})`;
     let el = this.hint?.el;
     if (!el) {
       el = document.createElement('div');
