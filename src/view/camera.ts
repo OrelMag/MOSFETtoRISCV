@@ -32,6 +32,9 @@ export function startFolded(canvasW: number, panelW: number): boolean {
  *  them all folded (chooseFolds): a CPU panel beside a wide datapath stays open, an I/O panel that would squeeze
  *  the circuit into a corner of a laptop's stage starts folded. */
 export const KEEP_SCALE = 0.6;
+/** The same below the top level: a part the learner opened is what they came to read, so the panels may cost it a fifth of
+ *  its size, not two (chapter ooo's reorder buffer kept 65 % beside the CPU and Out of order panels: its names unreadable). */
+export const KEEP_SCALE_OPENED = 0.8;
 
 /**
  * Which of `n` foldable panels start folded, as a bit mask (bit i: panel i folded). `scaleOf(mask)` is the circuit's
@@ -40,7 +43,7 @@ export const KEEP_SCALE = 0.6;
  * allowed choices whose scale is at least KEEP_SCALE of the best one, the one keeping the most panels open; on a tie
  * the larger circuit. With none allowed, every free panel folds.
  */
-export function chooseFolds(n: number, scaleOf: (mask: number) => number | null, fixed: (boolean | null)[] = []): number {
+export function chooseFolds(n: number, scaleOf: (mask: number) => number | null, fixed: (boolean | null)[] = [], keep = KEEP_SCALE): number {
   const bits = (m: number) => { let c = 0; for (; m; m &= m - 1) c++; return c; };
   let open = 0, shut = 0;
   fixed.forEach((f, i) => { if (f === true) shut |= 1 << i; else if (f === false) open |= 1 << i; });
@@ -54,8 +57,8 @@ export function chooseFolds(n: number, scaleOf: (mask: number) => number | null,
   const best = Math.max(...masks.map(([, s]) => s));
   let pick = masks[0];
   for (const c of masks) {
-    if (c[1] < KEEP_SCALE * best - 1e-9) continue;
-    if (pick[1] < KEEP_SCALE * best - 1e-9 || bits(c[0]) < bits(pick[0]) || (bits(c[0]) === bits(pick[0]) && c[1] > pick[1] * (1 + 1e-9))) pick = c;
+    if (c[1] < keep * best - 1e-9) continue;
+    if (pick[1] < keep * best - 1e-9 || bits(c[0]) < bits(pick[0]) || (bits(c[0]) === bits(pick[0]) && c[1] > pick[1] * (1 + 1e-9))) pick = c;
   }
   return pick[0];
 }

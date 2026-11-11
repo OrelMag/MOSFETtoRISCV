@@ -312,7 +312,9 @@ export class CampaignPage implements Page {
       this.render();
       this.main.querySelector<SVGElement>(`.cp-fold[data-act="${act}"]`)?.focus();
     };
-    const draw = (cols: number) => mapSvg(p.view, p.unlockAll, sel?.id, (id) => { location.hash = `#/campaign/n/${id}`; }, cols, folded, fold);
+    // the selected card pressed again changes no address: on a phone, where its panel sits below the map, show the panel
+    const go = (id: string) => { if (id === sel?.id) this.reveal(); else location.hash = `#/campaign/n/${id}`; };
+    const draw = (cols: number) => mapSvg(p.view, p.unlockAll, sel?.id, go, cols, folded, fold);
     const legend = h('div', { class: 'cp-legend' },
       h('span', { class: 'l available' }, 'available'), h('span', { class: 'l solved' }, 'solved'), h('span', { class: 'l skipped' }, 'skipped'),
       h('span', { class: 'l locked' }, 'locked'), h('span', { class: 'l opt' }, 'optional'), NODES.some((n) => n.soon) ? h('span', { class: 'l soon' }, 'coming soon') : null,

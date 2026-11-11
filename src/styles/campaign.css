@@ -61,7 +61,7 @@
 .cp-legend .blk::before { content: 'ALU'; width: auto; height: auto; padding: 1px 4px; border-radius: 6px; font: 600 9px/1.2 var(--mono, monospace); color: var(--muted); }
 .cp-legend .port::before { border-radius: 50%; border-color: var(--accent); width: 7px; height: 7px; }
 .cp-node { cursor: pointer; outline: none; }
-.cp-node .cp-card { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.4; transition: stroke 0.12s, fill 0.12s; }
+.cp-node .cp-card { pointer-events: all; /* a locked card is unfilled: its whole body still takes the tap */ fill: var(--surface); stroke: var(--border-strong); stroke-width: 1.4; transition: stroke 0.12s, fill 0.12s; }
 .cp-node.available .cp-card, .cp-node.started .cp-card { stroke: var(--accent); stroke-width: 2; }
 .cp-node.started .cp-card { fill: var(--accent-soft); }
 .cp-node.solved .cp-card { stroke: var(--good); fill: var(--good-soft); }
@@ -106,6 +106,8 @@
 .cp-lesson h3 { margin-top: 16px; }
 .cp-lesson li { margin: 3px 0; }
 .cp-laws { border-collapse: collapse; font: 13px var(--font-mono); margin: 8px 0; }
+/* a wide lesson table scrolls inside the panel, never the page (on a phone the panel does not clip) */
+.cp-laws { display: block; max-width: 100%; overflow-x: auto; }
 .cp-laws th { text-align: left; font: 600 12px var(--font-ui); color: var(--text-2); padding: 3px 10px 3px 0; }
 .cp-laws td { padding: 3px 12px; border-left: 1px solid var(--border); }
 .cp-brief p { margin: 0; }
@@ -115,7 +117,7 @@
 .cp-grade th { color: var(--muted); font-weight: 600; font-size: 12px; }
 .cp-grade td.par { color: var(--good); font-weight: 600; }
 .cp-grade td.over { color: var(--warn); font-weight: 600; }
-.cp-deps p { margin: 4px 0; font-size: 13.5px; }
+.cp-deps p { margin: 4px 0; font-size: 13.5px; overflow-wrap: anywhere; }
 .cp-deps a { color: var(--accent); }
 .cp-deps a.done { color: var(--good); }
 .cp-tips ol { margin: 0 0 6px; padding-left: 20px; }
@@ -135,6 +137,9 @@ a.cp-chip:hover { border-color: var(--accent); color: var(--accent); }
 /* the side quest shares the row beside the other extra and gives way to it (the title is on hover) */
 .cp-node-actions .cp-side { flex: 1 1 140px; min-width: 0; max-width: max-content; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; text-align: left; }
 .cp-node-actions .sub { flex-basis: 100%; margin: 0; }
+/* a long level title (Open the prerequisite: …, Next: …) wraps rather than widening the page on a phone */
+.cp-node-actions .btn:not(.cp-side) { white-space: normal; max-width: 100%; text-align: left; }
+.cp-node-actions .btn:not(.cp-side) > svg { flex: none; }
 .cp-done { display: inline-flex; align-items: center; gap: 5px; color: var(--good); font-weight: 600; }
 .cp-mini-anatomy { display: block; margin-top: 10px; }
 .cp-welcome h2 { margin-top: 0; }

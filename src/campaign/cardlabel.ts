@@ -27,7 +27,8 @@ const FAMILY: Record<string, string> = {
 
 /** Library ids (exact or `prefix*`) as the names a level lists: "CMOS inverter", "decoders (any size)"; duplicates once. */
 export function partNames(ids: readonly string[], nameOf: (id: string) => string | undefined): string[] {
-  const names = ids.map((u) => (u.endsWith('*') ? FAMILY[u] ?? `${u.slice(0, -1)}… (any size)` : nameOf(u) ?? u));
+  // a reference answer's splitters and mergers (split_1_1_…: generated ids, no name of their own) are wiring, listed once
+  const names = ids.map((u) => (u.endsWith('*') ? FAMILY[u] ?? `${u.slice(0, -1)}… (any size)` : /^(split|merge)_[\d_p]+$/.test(u) ? 'splitters and mergers (wiring)' : nameOf(u) ?? u));
   return [...new Set(names)];
 }
 
