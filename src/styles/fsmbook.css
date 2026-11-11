@@ -1,0 +1,23 @@
+/* chapter "Designing state machines": code costs, the register's raw code, the read-back */
+.fsm-enc-panel { width: 420px; }
+.fsm-tog { display: flex; gap: 4px; margin: 6px 0 2px; }
+.fsm-tog .btn.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.fsm-codes { margin: 4px 0; font: 11.5px var(--font-mono); color: var(--text-2); }
+table.fsm-enc { margin-top: 4px; font-size: 12px; }
+table.fsm-enc tr.pick td { background: var(--accent-soft); color: var(--accent); }
+.fsm-note { margin-top: 4px; font-size: 11px; color: var(--muted); }
+.fsm-code { display: flex; align-items: center; gap: 6px; margin-top: 4px; font: 12px var(--font-mono); color: var(--text-2); }
+.fsm-code .k { color: var(--muted); }
+.fsm-code code { padding: 0 6px; border-radius: 4px; background: var(--accent-soft); color: var(--accent); }
+.fsm-code.unused code { background: color-mix(in srgb, var(--bad, #d63b3b) 18%, transparent); color: light-dark(#b42323, #ff8a8a); }
+.fsm-code.unused span:last-child { color: light-dark(#b42323, #ff8a8a); font-weight: 700; }
+.fsm-rb-panel { width: 420px; }
+.fsm-verdict { margin-top: 4px; font-size: 12px; font-weight: 600; }
+.fsm-verdict.ok { color: var(--good); }
+.fsm-verdict.bad { color: light-dark(#b42323, #ff8a8a); }
+.fsm-rb-list { margin: 4px 0 0 16px; padding: 0; font-size: 11.5px; color: var(--text-2); }
+table.kmap { width: auto; margin: 6px 12px 6px 0; display: inline-table; text-align: center; font-size: 12px; }
+table.kmap caption { caption-side: top; text-align: left; color: var(--muted); font-size: 11px; padding-bottom: 2px; }
+table.kmap th, table.kmap td { text-align: center; min-width: 30px; }
+table.kmap td.one { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+@media (pointer: coarse) { .fsm-tog .btn { min-height: 40px; } }

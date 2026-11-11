@@ -345,6 +345,9 @@ src/lib/       the component library (registered in `registry` via define())
                  (instance pctl: redirect, stalls, shift, every enable / clear), UPDATE_2W, COMMIT_RAS; lane 0 keeps the
                  single pipeline's instance names (ctl, byA, clr0, …), lane 1 adds a 1 (FD1, DE1, alu1, …); retire = the
                  count, pcW0 the oldest; tests/pipe2w.test.ts (lock step), verify-wide.test.ts
+                 The top level is drawn like the plain pipeline (dualDrawing: lane 1 under lane 0 on the same grid, the shared
+                 units in a band below, trunks per fan, DUAL_LABELLED: wires that ran under a part or crossed > 10 others);
+                 tests/redrawclear-pipe2w.test.ts pins it
   ras.ts         the return-address stack: ras(n, w) (speculative + committed copies of {valid, address} entries,
                  restore from the committed copy's next state; the model's rules: rasNext), rasStack(n, w); ras2(n, w) (two
                  operations a cycle per copy, in order: rasOp chained; top1 / any1 after slot 0's: the out-of-order core's)

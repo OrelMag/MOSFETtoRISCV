@@ -18,6 +18,7 @@ const BOOK = [
   'routing',
   'latches',
   'registers',
+  'fsm',
   'memory',
   'alu',
   'regfile',

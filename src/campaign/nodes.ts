@@ -263,6 +263,18 @@ export const NODES: CampaignNode[] = withBugHunts([
     codex: ['twos', 'overflow', 'signext'], chapters: [{ chapter: 'binary', step: 1, label: "Negative numbers: two's complement" }, { chapter: 'binary', step: 3, label: 'Overflow: two flags from one addition' }, { chapter: 'binary', step: 5, label: 'Wider words: sign and zero extension' }],
   },
   {
+    id: 'n_fixed', act: 2, title: 'Fixed point', kind: 'drill', optional: true, requires: ['n_twos'], drill: 'fixed', par: { mistakes: 2 },
+    why: 'A signal processor keeps fractions in plain integers: Q1.15 is a 16-bit two\'s complement word read as the integer over 2^15. Reading a word, naming the format of a product, knowing how far to shift it back and how a dropped bit rounds are the whole craft, and the adder never knows.',
+    tips: ['Value = signed integer / 2^f; the top bit weighs −1.', 'Qa.b × Qc.d = Q(a+c).(b+d); to get back to the operand format, shift right by the extra places.', 'A shift rounds down (toward −∞); division in C rounds toward zero. They differ only for negative values.'],
+    codex: ['qformat'], chapters: [{ chapter: 'fixed', step: 0, label: 'A word and its point' }, { chapter: 'fixed', step: 3, label: 'Multiplying fractions' }],
+  },
+  {
+    id: 'n_divrem', act: 2, title: 'RISC-V division', kind: 'drill', optional: true, requires: ['n_twos'], drill: 'divrem', par: { mistakes: 2 },
+    why: 'RISC-V division never traps: divide by zero gives all ones (and the dividend as the remainder), and the one overflow, the most negative word over −1, wraps. Quotients round toward zero, so a remainder takes the sign of the dividend. Knowing the four results by heart is how you read compiled code.',
+    tips: ['q = trunc(a / b), r = a − q·b: the remainder has the sign of the dividend.', 'Division by zero: quotient all ones, remainder = dividend.', '−2³¹ / −1 would be +2³¹, which does not fit: the quotient is −2³¹ again and the remainder 0.'],
+    codex: ['mext', 'multiword'], chapters: [{ chapter: 'muldiv', step: 21, label: 'The M unit' }, { chapter: 'muldiv', step: 26, label: 'Words wider than the word' }],
+  },
+  {
     id: 'a_ha', act: 2, title: 'Half adder', kind: 'build', requires: ['g_xor', 'n_bin'], base: sandbox('a_ha'),
     why: 'Bits are numbers now, and nothing adds them yet. One column is two bits in, a sum and a carry out: XOR and AND, and the XOR\'s first NAND already holds the carry\'s complement, so 5 NANDs. The full adder is two of them; the PC\'s incrementer fifteen in a row.',
     tips: ['The XOR\'s first NAND is ¬(a·b): invert it for the carry.', 'The carry is a·b, not a + b; a separate AND beside the XOR is 6 NANDs and misses par.'],
@@ -396,7 +408,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 's_fsm', act: 3, title: 'A state machine', kind: 'build', optional: true, requires: ['s_dff', 'd_kmap'],
     why: 'Some units take several cycles and must remember which one they are in: a divider counts its steps, a multicycle core walks fetch → execute → memory → write back. A state register plus next-state logic read off a table does it: this one spots 1, 0, 1 in a bit stream, 28 NANDs at par. Act 8\'s divider runs on one.',
     tips: ['Three states: S0 nothing useful seen, S1 the last bit was 1, S2 a 1 then a 0.', 'Encode S0 = 00, S1 = 01, S2 = 10, write the next-state table and minimise each bit; the unused code 11 is a don\'t-care, and rst clears it.', 'From S2, x = 1 gives y = 1 and goes to S1, not S0: patterns overlap (10101 gives two).'],
-    unlocks: ['rv16_det101'], chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }], codex: ['fsm'], base: BUILD1.s_fsm, par: { nand: 28, period: 8 } },
+    unlocks: ['rv16_det101'], chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'fsm', step: 0, label: 'From a sentence to a diagram' }], codex: ['fsm'], base: BUILD1.s_fsm, par: { nand: 28, period: 8 } },
   {
     id: 'm_ram', act: 3, title: '4 × 4 RAM', kind: 'build', optional: true, requires: ['s_reg4', 'g_dec', 'g_mux8'], base: sandbox('m_ram'),
     why: 'Memory is registers plus addressing: a decoder on the address picks the one word to write, a mux picks the one word to read. Par is 274 NANDs for 16 bits, about 17 NANDs a bit; an SRAM cell is 6 transistors. The register file is the same circuit with a second read port.',
@@ -705,7 +717,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'o_div', act: 8, title: 'Divider', kind: 'build', optional: true, requires: ['a_addsub16', 's_fsm'], base: BUILD8.o_div, givesOf: partsOf(() => seqDivider(16, RV16_MUX2)), par: { nand: 1445, period: 31 }, unlocks: ['sdiv16_rv16'],
     why: 'RV16I has no divide, and in one pass it is expensive: unrolled, the 16 subtract-and-compare steps are 4464 NANDs on a 613-deep path. The iterative divider does one step per clock under a counter: 1445 NANDs, period 31, 18 cycles a quotient. Divide in the core puts it in your core and makes the core wait for it.',
     tips: ['Shift the remainder left, bring in the next dividend bit, subtract the divisor: if the result is not negative keep it and set the quotient bit.', 'b = 0 needs no special case: every subtraction succeeds, so q = 0xFFFF and r = a, as RISC-V wants.', 'Subtracting before the shift is the classic miss: the next dividend bit must be in the remainder before it is compared.'],
-    codex: ['division'], chapters: [{ chapter: 'muldiv', step: 15, label: 'The iterative divider' }],
+    codex: ['division'], chapters: [{ chapter: 'muldiv', step: 15, label: 'The iterative divider' }, { chapter: 'fsm', step: 6, label: 'A controller and a datapath' }],
   },
   {
     id: 'o_dcore', act: 8, title: 'Divide in the core', kind: 'core', optional: true, requires: ['o_mcore', 'o_div'], base: BUILD9.o_dcore, par: { nand: 10546, period: 193, cycles: 1859 },
@@ -723,13 +735,13 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'o_fpunpack', act: 8, title: 'Float unpack', kind: 'build', optional: true, requires: ['n_float'], base: BUILDFP.o_fpunpack, givesOf: fpGives(FP_REF.unpack), par: { nand: 63, depth: 14 }, unlocks: ['fpun5_10'],
     why: 'Every FP unit needs a sign, an exponent and an 11-bit significand, but the hidden bit is not stored and the exponent field also encodes zero, subnormals, infinity and NaN. Unpack decodes that once: 63 NANDs, depth 14. The adder, the multiplier and the comparator each place two.',
     tips: ['The hidden bit is NOT (exponent field = 0).', 'A subnormal\'s exponent is 1, not 0: OR the field\'s low bit with "field = 0".', 'inf and nan share "field all 1s"; the fraction tells them apart.'],
-    codex: ['ieee754', 'subnormal'], chapters: [{ chapter: 'float', step: 2, label: 'Unpack' }],
+    codex: ['ieee754', 'subnormal', 'fpspecial'], chapters: [{ chapter: 'float', step: 2, label: 'Unpack' }],
   },
   {
     id: 'o_fpround', act: 8, title: 'Rounding decision', kind: 'build', optional: true, requires: ['n_float'], base: BUILDFP.o_fpround, givesOf: fpGives(() => ROUND_DECIDE), par: { nand: 62, depth: 13 }, unlocks: ['fpround'],
     why: 'An exact sum or product has more bits than the 11 the format keeps, and three of them decide its rounding in all five modes: the last kept bit, the first dropped one (guard) and whether anything below was 1 (sticky). 62 NANDs, depth 13. Normalize & round places it, so every FP result passes through it once.',
     tips: ['Decode rm into one wire per mode first; each mode is then a small AND.', 'Ties to even: a tie is g = 1 and s = 0; then round up only if lsb = 1.', 'The directed modes read the sign: rounding "down" a negative result moves it away from zero.'],
-    codex: ['rounding'], chapters: [{ chapter: 'float', step: 5, label: 'Five rounding modes' }],
+    codex: ['rounding', 'fpflags'], chapters: [{ chapter: 'float', step: 5, label: 'Five rounding modes' }],
   },
   {
     id: 'o_fpsticky', act: 8, title: 'Sticky shifter', kind: 'build', optional: true, requires: ['n_float', 'a_shift16'], base: BUILDFP.o_fpsticky, givesOf: fpGives(FP_REF.sticky), par: { nand: 264, depth: 21 }, unlocks: ['shrs13_4', 'shrs15_4'],
@@ -747,7 +759,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'o_fpnorm', act: 8, title: 'Normalize & round', kind: 'build', optional: true, requires: ['o_fpround', 'o_fpsticky', 'o_fplzc'], base: BUILDFP.o_fpnorm, givesOf: fpGives(FP_REF.norm, normSubs), par: { nand: 2058, depth: 86 }, unlocks: ['fpnr5_10_15', 'fpnr5_10_16_rv16', 'fpnr5_10_22'],
     why: 'Add, multiply and int → float all end the same way: a raw significand and exponent must become a correctly rounded word, subnormals and overflow included. Built from the three blocks below it: 2058 NANDs, depth 86, more than half the FP adder. The adder and Integer to float place it.',
     tips: ['Left shift by min(leading zeros, exp − 1): never below exponent 1. If exp < 1, shift right by 1 − exp instead (sticky shifter).', 'After the shift the kept bits are the top 11; then the guard bit; everything below it, and stin, is the sticky bit.', 'Rounding up 1.111…1 carries into a new top bit: the exponent goes up by one and the fraction is 0.', 'Overflow: a final field of 31 or more. Then toInf picks ∞ or 0x7BFF.'],
-    codex: ['normalize', 'rounding', 'subnormal'], chapters: [{ chapter: 'float', step: 3, label: 'Addition: align, add, normalize, round' }],
+    codex: ['normalize', 'rounding', 'subnormal', 'ulp', 'kahan'], chapters: [{ chapter: 'float', step: 3, label: 'Addition: align, add, normalize, round' }],
   },
   {
     id: 'o_fpadd', act: 8, title: 'FP adder', kind: 'build', optional: true, requires: ['o_fpunpack', 'o_fpnorm'], base: BUILD8.o_fpadd, givesOf: fpGives(() => fpAdd16Ref().top, () => fpAdd16Ref().blocks), par: { nand: 3732, depth: 163 },
@@ -759,7 +771,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'o_fpmul', act: 8, title: 'FP multiplier', kind: 'build', optional: true, requires: ['o_fpadd', 'o_mularr'], base: BUILD8.o_fpmul, givesOf: fpGives(() => fpMul16Ref().top, () => fpMul16Ref().blocks), par: { nand: 4912, depth: 150 },
     why: 'Multiplying floats needs no alignment: XOR the signs, add the exponents less one bias, multiply the 11-bit significands, normalize & round. 4912 NANDs at depth 150, against the adder\'s 163; the significand product grows with the square of the width, and the binary32 multiplier is 14 913 NANDs.',
     tips: ['Signs, exponents and significands are three separate datapaths: s = sa XOR sb, e = ea + eb − 15, and the given 11 × 11 multiplier for the significands.', '11 × 11 bits gives a 22-bit product; its top bit decides whether to shift by one (and add one to the exponent).', 'Special cases before the arithmetic: 0 × ∞ is NaN, NaN in gives the canonical NaN, and a subnormal input has exponent 1 and no hidden bit, as unpack says.'],
-    codex: ['ieee754', 'fma'], chapters: [{ chapter: 'float', step: 7, label: 'Multiplication' }, { chapter: 'float', step: 17, label: 'An FPU in the CPU' }],
+    codex: ['ieee754', 'fma', 'fpformats', 'newtondiv'], chapters: [{ chapter: 'float', step: 7, label: 'Multiplication' }, { chapter: 'float', step: 17, label: 'An FPU in the CPU' }],
   },
   {
     id: 'o_fpcmp', act: 8, title: 'FP comparator', kind: 'build', optional: true, requires: ['o_fpunpack'], base: BUILDFP.o_fpcmp, givesOf: fpGives(FP_REF.cmp), par: { nand: 682, depth: 25 },

@@ -96,7 +96,7 @@ export const chDspCore: Chapter = {
         kind: 'reach', goal: 'Run the dot product to its halt with the gates agreeing with the model at every clock.',
         check: (st) => { const a = dspApi.get(st); return !!a && a.halted() && a.agrees(); },
         hints: ['The Run to halt button is at the top of the panel.'],
-        answer: `The program is a clear, a loop of 128 mac instructions, two reads of the accumulator and a halt: ${FIG.cycles.dot.cycles} clocks.`,
+        answer: `The program is a clear, the loop instruction, 128 mac instructions, two rounded reads of the accumulator each sent out (four instructions) and a halt, one clock each: ${FIG.cycles.dot.cycles} clocks.`,
         solve: (st) => { dspApi.get(st)?.run(); },
       },
       tries: [(st) => { const a = dspApi.get(st); return !!a && a.halted() && a.agrees(); }],
@@ -188,7 +188,7 @@ export const chDspCore: Chapter = {
       get body() {
         return `
         <p>A 64-point <a href="#/c/carriers/1">FFT</a> (chapter ${numOf('carriers')}) touches both of the address generator's special ideas: bit-reversed order and the modifier. The input is copied into bit-reversed order by the address generator, one loop of 64 iterations. Then six stages of butterflies, each a loop of <code>mac</code> pairs that use the twiddle table in Y (the roots of unity a butterfly multiplies by), with the modifier set to the stage's stride.</p>
-        <p>The whole transform takes <strong>${n0(FIG.cycles.fft.cycles)} clocks</strong>: ${FIG.cycles.fft.macs} multiply-accumulates, and the rest is loads, stores and adds. A butterfly is 16 clocks here, because the core has one memory write port and one ALU. Real DSPs do a butterfly in a handful of clocks. The result below is the model's, which the gates equal, and the tones sit where they were put.</p>`;
+        <p>The whole transform takes <strong>${n0(FIG.cycles.fft.cycles)} clocks</strong>: ${FIG.cycles.fft.macs} multiply-accumulates, and the rest is loads, stores and adds. A butterfly's inner loop is 16 clocks here (${(FIG.cycles.fft.cycles / 192).toFixed(1)} a butterfly with the bit-reversed copy and each stage's set-up shared out over the 192), because the core has one memory write port and one ALU. Real DSPs do a butterfly in a handful of clocks. The result below is the model's, which the gates equal, and the tones sit where they were put.</p>`;
       },
       widget: fftWidget,
       challenge: {

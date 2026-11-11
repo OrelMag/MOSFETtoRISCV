@@ -351,7 +351,7 @@ export const chDram: Chapter = {
           'A write to the open row is a row hit like a read. It needs a precharge only when another row is open in its bank.',
           'The burst sets how long an access takes once the row is open, not whether it hits.',
         ],
-        explain: '1024 / (16 × 2) = 32 rows: the destination is the same bank, 32 rows down. The XOR hash folds the row\'s parity into the bank number, so the two streams land in different banks and both rows stay open.',
+        explain: '1024 words is 1024 / 16 = 64 rows on. Rows alternate between the 2 banks, so that is the same bank, 32 of its rows down. The XOR hash folds the row\'s parity into the bank number, so the two streams land in different banks and both rows stay open.',
       },
     },
     {

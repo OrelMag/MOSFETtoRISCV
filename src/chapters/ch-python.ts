@@ -155,11 +155,11 @@ export const chPython: Chapter = {
       title: 'Run it on the gates',
       body: `
         <p>The CPU is chapter ${numOf('cpu')}'s, gate for gate, with a 256-word ROM and 64 words of data memory: 100 979 NANDs,
-        403 916 transistors. The <em>Python</em> panel beside the CPU panel reads it: the PC through the compiler's map
+        403 916 transistors. The two memories are 72 198 of them (32 640 the ROM, 39 558 the data memory); the processor is the other 28 781, and chapter ${numOf('cpu')}'s 48 434 is that processor with a 32-word data memory and no ROM. The <em>Python</em> panel beside the CPU panel reads it: the PC through the compiler's map
         gives the line running, the registers and data memory give the variables, the words from the output's start to
         gp give what was printed.</p>
         <p><em>Step line</em> clocks <span data-show="pc imem rf alu">the CPU</span> until the next Python line starts
-        (Back undoes it). The panel counts each line's cycles, and the wire toggles of its last cycle: one
+        (Step back undoes it). The panel counts each line's cycles, and the wire toggles of its last cycle: one
         <code>total += i</code> is a single <code>add</code>, one clock cycle and about 25 000 nets changing value
         through <span data-show="rf alu">the register file and the ALU</span>. Click a line to light the hardware its
         instructions use. The CPU panel still checks every register against the golden model after every cycle.</p>

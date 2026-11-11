@@ -25,16 +25,19 @@ import { CHECK11E } from './codexcheck11e';
 import { CHECK11F } from './codexcheck11f';
 import { CHECKFPGA } from './codexcheckfpga';
 import { CHECKSIDE } from './codexcheckside';
+import { CHECKNUM } from './codexchecknum';
 import { CHECKBABY } from './codexcheckbaby';
 import { CHECKLOGIC } from './codexchecklogic';
 import { CHECKAGC } from './codexcheckagc';
 import { CHECKPDP8 } from './codexcheckpdp8';
+import { CHECKFSM } from './codexcheckfsm';
 import { CHECKPOW } from './codexcheckpow';
 import { CHECKVEC } from './codexcheckvec';
+import { CHECKFLOAT } from './codexcheckfloat';
 import { CHECKVM } from './codexcheckvm';
 import { CHECKTHREADS } from './codexcheckthreads';
 import { CHECK12 } from './codexcheck12';
 
-export const CHECKS: Record<string, Quiz[]> = { ...CHECKFPGA, ...CHECKSIDE, ...CHECK0, ...CHECK1, ...CHECK2, ...CHECK3, ...CHECK4, ...CHECK5, ...CHECK6, ...CHECK7, ...CHECK8, ...CHECK9, ...CHECK10A, ...CHECK10B, ...CHECK10C, ...CHECK10D, ...CHECK11A, ...CHECK11B, ...CHECK11C, ...CHECK11D, ...CHECK11E, ...CHECK11F, ...CHECKPOW, ...CHECKVEC, ...CHECKVM, ...CHECKTHREADS, ...CHECK12, ...CHECKBABY, ...CHECKLOGIC, ...CHECKAGC, ...CHECKPDP8 };
+export const CHECKS: Record<string, Quiz[]> = { ...CHECKFSM, ...CHECKLOGIC, ...CHECKFPGA, ...CHECKFLOAT, ...CHECKSIDE, ...CHECKNUM, ...CHECK0, ...CHECK1, ...CHECK2, ...CHECK3, ...CHECK4, ...CHECK5, ...CHECK6, ...CHECK7, ...CHECK8, ...CHECK9, ...CHECK10A, ...CHECK10B, ...CHECK10C, ...CHECK10D, ...CHECK11A, ...CHECK11B, ...CHECK11C, ...CHECK11D, ...CHECK11E, ...CHECK11F, ...CHECKPOW, ...CHECKVEC, ...CHECKVM, ...CHECKTHREADS, ...CHECK12, ...CHECKBABY, ...CHECKAGC, ...CHECKPDP8 };
 
 export const checkOf = (id: string): Quiz[] => CHECKS[id] ?? [];

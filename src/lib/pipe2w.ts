@@ -18,7 +18,7 @@
 // `pcW0` the oldest's PC.
 
 import { symbolGeom } from '../sim/geometry';
-import type { ComponentDef, PortDef } from '../sim/types';
+import type { ComponentDef, NetDef, PortDef } from '../sim/types';
 import { alu, constWord, isZero } from './alu';
 import { Builder } from './builder';
 import { busMux2, equal, muxTree } from './combinational';
@@ -35,6 +35,7 @@ import { TIE0, TIE1 } from './transistors';
 import { andN } from './combinational';
 import { orN } from './wide';
 import { laid } from './layered';
+import { type At, Placer } from './placer';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -504,16 +505,124 @@ function buildDual(IM: ComponentDef, dmemK: number): ComponentDef {
     'corr.y': 'CorrectPC0', 'corr1.y': 'CorrectPC1', 'fctl.next': 'PredictedPC', 'fctl.valid1': 'slot1Valid',
   };
   for (const [d, n] of Object.entries(nm)) b.name(d, n, true);
-  const R = b.right, H = b.height;
+  const drawing = dualDrawing(b);
   return {
     id: `pipe2w_${IM.id.replace(/^rom2_/, '')}_d${dmemK}`, name: 'Dual-issue pipelined RV32IM CPU (balanced, branch prediction, return stack)', category: 'cpu',
     summary: 'Two five-stage lanes in step: fetch reads two instructions a cycle, decode issues them together when they are independent (else the first goes alone and the second waits a cycle), forwarding comes from both lanes, and up to two instructions retire a cycle.',
     ports: [bit('clk', 'in', 'left', true), bus('pcF', 32, 'out'), bus('retire', 2, 'out'), bus('pcW0', 32, 'out')],
     symbol: { kind: 'box', label: 'RV32IM ×2 PIPE' },
-    netlist: () => ({ pins: { clk: [0, H + 6], pcF: [R, H + 6], retire: [R, H + 9], pcW0: [R, H + 12] }, instances: b.instances, nets: b.nets() }),
+    netlist: () => ({ pins: drawing.pins, instances: b.instances, nets: drawing.nets }),
     hdl: { verilog: '// Two lanes of the balanced pipeline (hdl/rv_pipe.sv), with a pair check in D and a 4-read 2-write register file.' },
   };
 }
+
+/**
+ * The top level drawn as the plain pipeline is (lib/pipeline.ts): the pipeline registers as columns, the stages between
+ * them, lane 0 on top and lane 1 below it with the same layout, the shared units (register file, pair check, hazards,
+ * pipeline control, the predictor's updates) in a band at the bottom. Each lane's registers line up so the fields that
+ * only ride along run straight across a stage, and each stage's fans of wires turn on trunks in the order that keeps them
+ * from crossing. A net is a wire to a sink that lies ahead of its driver within DUAL_REACH, labels otherwise (feedback,
+ * the shared band's control), and for the driver > sink pairs in DUAL_LABELLED: the wires the router could only draw
+ * under another part's body, then those that crossed more than ten others (tests/redrawclear-pipe2w.test.ts pins the result).
+ */
+function dualDrawing(b: Builder): { pins: Record<string, At>; nets: NetDef[] } {
+  const P = new Placer(b.instances), raw = b.nets();
+  const put = (nm: string, x: number, y: number) => P.put('top', nm, x, y);
+  const row = (nm: string, port: string | number, x: number, y: number) => P.row('top', nm, port, x, y);
+  const X = { FD: 70, DE: 134, EM: 242, MW: 302 };
+  const Y0 = 12, Y1 = DUAL_LANE1;
+  /** Vertical trunks of a fan of nets (driver ends), from x by half units: in the order they must take not to cross. */
+  const trunks = new Map<string, number>();
+  const fan = (x: number, drivers: string[]) => drivers.filter((d) => P.has(d.slice(0, d.indexOf('.')))).forEach((d, k) => trunks.set(d, x + k / 2));
+  for (const l of [0, 1]) {
+    const x = l ? '1' : '', Y = l ? Y1 : Y0, c = l ? 'ctl1' : 'ctl', A = l ? 'A1' : 'A', B = l ? 'B1' : 'B';
+    // the registers: each lane's fields that ride along line up from one register to the next (ID/EX's that ride on
+    // through E jog up once, to the rows of EX/MEM above the E datapath)
+    put(`FD${x}`, X.FD, Y - 2); put(`DE${x}`, X.DE, Y); put(`EM${x}`, X.EM, Y - 6); put(`MW${x}`, X.MW, Y - 4);
+    // D: the bypassed register reads and the immediate stacked against ID/EX, decode below them
+    put(`by${A}`, 120, Y + 12); put(`by${B}`, 120, Y + 26); put(`imm${x}`, 114, Y + 40);
+    put(`si${x}`, 96, Y + 50); put(c, 106, Y + 50); put(`cls${l}`, 106, Y + 76);
+    fan(125, [`FD${x}.predTargetD`, `by${A}.y`, `by${B}.y`, `imm${x}.imm`, `${c}.regWrite`, `${c}.aluSrcA`, `${c}.aluSrcB`, ...(l ? [`${c}.resultSrc`] : []),
+      `${c}.branch`, `${c}.jump`, `${c}.jalr`, `${c}.aluCtl`, `${c}.memWrite`, `cls${l}.mul`, `cls${l}.div`]);
+    // E: forward, operand, ALU under the rows that ride on; the branch side below them, the misprediction check under it
+    put(`fwdA${x}`, 170, Y + 18); put(`fwdB${x}`, 170, Y + 40);
+    row(`srcA${x}`, 'a', 182, P.pin(`fwdA${x}`, 'y')[1]); row(`srcB${x}`, 'a', 182, P.pin(`fwdB${x}`, 'y')[1]);
+    row(`alu${x}`, 'a', 192, P.pin(`srcA${x}`, 'y')[1]);
+    put(`bcmp${x}`, 182, Y + 62); put(`target${x}`, 206, Y + 40); put(`jtgt${x}`, 206, Y + 52); row(`clr0${x}`, 'in', 222, P.pin(`jtgt${x}`, 's')[1]);
+    put(`corr${x}`, 234, Y + 40); put(`vE${x}`, 202, Y + 83); put(`mis${x}`, 210, Y + 66);
+    const DE = `DE${x}`;
+    fan(158, [`${DE}.validE`, `${DE}.pcE`, `${DE}.pcPlus4E`, `${DE}.immE`, `${DE}.rdE`, `${DE}.regWriteE`, `${DE}.resultSrcE`, `${DE}.memWriteE`, `${DE}.mulE`]);
+    fan(163, [`${DE}.rd1E`, `${DE}.rd2E`]);
+    // M: the result forwarded from M under EX/MEM's rows (lane 0's under its data memory)
+    put(`fwdM${x}`, l ? 270 : 286, l ? Y + 20 : Y + 38);
+    // W: the result multiplexer on MEM/WB's rows
+    row(`res${x}`, 'd0', 330, P.pin(`MW${x}`, 'aluResultW')[1]);
+    const MW = `MW${x}`;
+    fan(324, [`${MW}.pcPlus4W`, `${MW}.immW`]);
+  }
+  // the ties on the adders' carry-ins and the jalr target's bit 0, just left of them (below, for a pin underneath)
+  const ties = b.instances.filter((i) => i.def === TIE0).map((i) => i.name);
+  for (const t of ties) {
+    const nt = raw.find((n) => n.ends[0] === `${t}.y`)!, [inst, port] = nt.ends[1].split('.');
+    if (!P.at.has(inst)) continue;
+    const [px, py] = P.pin(inst, port);
+    if (port === 'zero') put(t, px - 6, py + 1); else if (port === 'clr') put(t, px - 8, py - 1); else put(t, px - 4, py + 1);
+  }
+  // lane 0's extras: the multiply / divide path in E, the data memory and the product in M
+  row('mdE', 'a', 206, P.pin('alu', 'y')[1]);
+  put('f3E', 170, Y0 + 94); put('goDiv', 176, Y0 + 98); put('mule', 188, Y0 + 94); put('dive', 218, Y0 + 94);
+  put('rsm', 122, Y0 + 92); put('kLd', 114, Y0 + 95);
+  put('dm', 268, Y0 + 20); row('rdm', 'a', 286, P.pin('dm', 'rd')[1]); put('mulm', 268, Y0 + 32);
+  fan(263, ['EM.aluResultM', 'EM.writeDataM', 'EM.memWriteM', 'EM.mulM', 'EM.mfM', 'EM.msM', 'EM.mcM']);
+  // F, lane 0 on top: the next PC, the PC and its adder, the instruction memory; the shift multiplexers in a column by IF/ID
+  put('pcmux', 2, 7); row('pc', 'd', 12, P.pin('pcmux', 'y')[1]); row('plus4', 'a', 24, 16); row('imem', 'addr0', 32, 24);
+  ['sh_valid', 'sh_pc', 'sh_pcPlus4', 'sh_instr', 'sh_predTarget', 'sh_predTaken', 'sh_call', 'sh_ret'].forEach((n, k) => put(n, 60, 2 + 9 * k + (k > 2 ? 4 : 0))); // clear of IF/ID's en and clr labels
+  fan(65, ['sh_valid.y', 'sh_pc.y', 'sh_pcPlus4.y', 'sh_instr.y', 'sh_predTarget.y', 'sh_predTaken.y', 'sh_call.y', 'sh_ret.y']);
+  put('vF', 54, 3); put('pd0', 30, 44);
+  // F, lane 1: the predictor, the return stack and the pair's prediction against IF/ID 1
+  put('plus8', 26, Y1 - 16); put('btb', 2, Y1 - 4); put('ras', 2, Y1 + 26); put('pd1', 2, Y1 + 48); put('fctl', 26, Y1 - 6);
+  put('v1D', 120, Y1 - 4);
+  // the shared band: register file, issue, hazards, control; the predictor's and the return stack's updates; the retire count
+  const S = Y1 + 104;
+  put('rf', 14, S); put('isCtl0', 52, S); put('isCtl1', 52, S + 10); put('u1v0', 68, S); put('u2v0', 68, S + 8); put('u1v1', 68, S + 16); put('u2v1', 68, S + 24);
+  put('pair', 86, S); put('hz', 118, S); put('rsE', 158, S + 30); put('nrs1E', 162, S + 32); put('ldE', 168, S + 30);
+  put('pctl', 158, S); put('upd', 198, S); put('cmt', 238, S); put('both', 312, S); put('oneW', 312, S + 8); put('count', 322, S + 3);
+  for (const i of b.instances) {
+    const p = P.at.get(i.name);
+    if (!p || p.some(Number.isNaN)) throw new Error(`dualPipeCpu: no place for ${i.name}`);
+    i.at = p;
+  }
+  const right = Math.max(...b.instances.map((i) => P.right(i.name))) + 8;
+  const pins: Record<string, At> = { clk: [0, S + 40], pcF: [right, S + 40], retire: [right, S + 43], pcW0: [right, S + 46] };
+  const instOf = (e: string) => (e.includes('.') ? e.slice(0, e.indexOf('.')) : '');
+  const nets = raw.map((nt): NetDef => {
+    const drv = nt.ends[0], sinks = nt.ends.slice(1), di = instOf(drv);
+    const wire = (s: string) => {
+      const si = instOf(s);
+      if (!di || !si || DUAL_LABELLED.has(drv) || DUAL_LABELLED.has(`${drv}>${s}`)) return false;
+      const [dx, dy] = P.pin(di, drv.slice(di.length + 1)), [sx, sy] = P.pin(si, s.slice(si.length + 1));
+      return sx > dx && Math.abs(sy - dy) <= DUAL_REACH;
+    };
+    const tags = sinks.filter((s) => !wire(s)), trunk = trunks.get(drv);
+    return { name: nt.name, ends: nt.ends, ...(tags.length === sinks.length ? { tags: true as const } : tags.length ? { tags } : {}), ...(trunk !== undefined && tags.length < sinks.length ? { trunk } : {}) };
+  });
+  return { pins, nets };
+}
+/** ID/EX 1's top: lane 1 below lane 0 (ID/EX at 12) with the same layout; the shared band 104 units below it. */
+const DUAL_LANE1 = 124;
+/** A wire runs at most this far up or down to its sink (a longer one would cross a lane). */
+const DUAL_REACH = 40;
+/** driver > sink pairs drawn as labels although ahead and within reach (see dualDrawing). */
+const DUAL_LABELLED = new Set<string>([
+  'si.o2>DE.funct3D', 'si1.o2>DE1.funct3D', 'isCtl0.y>pair.ctrl0', 'u1v0.y>hz.uA0', 'u1v1.y>hz.uA1',
+  'u2v1.y>hz.uB1', 'pair.ok>pctl.pairOk', 'si1.o1>DE1.rdD', 'DE.pcE>srcA.b', 'DE.immE>srcB.b',
+  'DE.immE>target.b', 'DE.branchE>mis.branch', 'DE1.pcE>srcA1.b', 'DE1.immE>srcB1.b', 'DE1.immE>target1.b',
+  'DE1.branchE>mis1.branch', 'vE1.y>cmt.v1', 'vF.y>MW.en', 'DE.rd2E>fwdB.d0', 'DE.rd2E>fwdB.d5',
+  'DE.aluSrcBE>srcB.s', 'vF.y>EM.en', 'si.o1>DE.rdD', 'DE.memWriteE>EM.memWriteE', 'DE.mulE>EM.mulE',
+  'DE1.rd2E>fwdB1.d0', 'DE1.rd2E>fwdB1.d5', 'DE.jalrE>mis.jalr', 'DE1.aluSrcBE>srcB1.s', 'DE.jumpE>mis.jump',
+  'fwdB.y>EM.writeDataE', 'DE.aluSrcAE>srcA.s', 'DE1.jalrE>mis1.jalr', 'EM.mulM>rdm.s', 'FD1.predTakenD>DE1.predTakenD',
+  'FD1.callD>DE1.callD', 'DE1.aluSrcAE>srcA1.s', 'DE1.jumpE>mis1.jump', 'FD.callD>DE.callD', 'FD.predTakenD>DE.predTakenD',
+]);
 
 // ---- control blocks ---------------------------------------------------------------------------------------------------
 

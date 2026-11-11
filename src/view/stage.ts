@@ -10,7 +10,7 @@ import { nextTask } from '../sim/tasks';
 import { LoadCard } from './loadcard';
 import { GateSim, LOAD_TICKS } from '../sim/gatesim';
 import { OverlayBar, nextOverlay, overlayLegend } from './overlaybar';
-import { type OverlayKind, type OverlayResult, activityOverlay, loadOverlay, overlayRefusal, slackOverlay, unknownOverlay } from './overlays';
+import { OVERLAY_KINDS, OVERLAY_LABEL, type OverlayKind, type OverlayResult, activityOverlay, costOverlay, depthOverlay, energyOverlay, loadOverlay, overlayRefusal, slackOverlay, unknownOverlay } from './overlays';
 import type { DelayModel } from '../sim/delay';
 import { SwitchSim } from '../sim/switchsim';
 import { needsSwitchLevel } from '../sim/harness';
@@ -35,7 +35,7 @@ import type { LivePower } from './powerpanel';
 import { closePopover, editNumber, syncPopover } from './popover';
 import { chooseFolds, KEEP_SCALE_OPENED, COVER_GAP, fitBox, fitMinW, freeArea, KEEP_SCALE, roomBeside, showReadable, startFolded, type Rect } from './camera';
 import { pinGeoms, symbolRects } from './route';
-import { applyLayout, layoutOf } from './layout';
+import { applyLayout, arranged, arrangedCount, asideOf, layoutOf } from './layout';
 import { drawnNetlist } from './wirefirst';
 import { type NotePin, SchematicView } from './schematic';
 import { BB_MARGIN, BB_READ_PX, type BbChip, type BbDrill, type BreadboardLayout, drillCrumbs, drillOf, drillPane, layoutBounds } from './bblayout';
@@ -205,6 +205,9 @@ export class Stage {
   /** Bottom-left stack for panels with `data-dock="left"` (see layoutDock). */
   private dock: HTMLElement;
   private levelBadge: HTMLElement;
+  /** Over the canvas while the level shows the learner's arrangement (Original, Reset), or one a redraw set aside. */
+  private layoutPill: HTMLElement;
+  private lockBtn!: HTMLButtonElement;
   /** The how-to line at the canvas's bottom left, kept clear of the panels (placeHint). */
   private hint: HTMLElement;
   /** The challenge note's size when the cover was last synced (a note that comes or grows refits a fitted view). */
@@ -378,6 +381,12 @@ export class Stage {
         this.view.layoutMenu(r.left, r.bottom + 6, b);
       },
     }, icon('move', 15), h('span', { class: 'lbl' }, 'Layout'));
+    // The layout lock (settings.moveParts): one switch for every stage and look inside, also in View options; locked, a
+    // drag on a part pans. On by default with a mouse, off on a touch screen.
+    const lockBtn = this.lockBtn = h('button', { class: 'btn ghost sm toggle lock-btn', 'aria-pressed': 'false', onclick: () => settings.set('moveParts', !settings.moveParts) }) as HTMLButtonElement;
+    this.syncLock();
+    const offLock = settings.onChange(() => this.syncLock());
+    this.life.signal.addEventListener('abort', () => offLock());
     // The side panes (narrative or library, inspector) fold away for a full-width circuit; the
     // choice is a setting (data-wide on <html>), so it holds across steps and pages.
     this.panesBtn = h('button', { class: 'btn ghost icon-only toggle panes-btn', onclick: () => {
@@ -429,11 +438,12 @@ export class Stage {
         const r = more.getBoundingClientRect();
         this.view.layoutMenu(r.left, r.bottom + 6);
       } }] },
+      { els: [lockBtn], items: [{ label: 'Move parts by dragging', hint: 'Off: a drag on a part pans', icon: 'unlock', on: () => settings.moveParts, run: () => settings.set('moveParts', !settings.moveParts) }] },
       { els: [remix], items: [{ label: 'Open in Sandbox', hint: 'An editable copy of the circuit on screen', icon: 'chip', run: () => this.remix() }] },
       { els: [this.timingBtn], items: [{ label: 'Timing diagram', icon: 'wave', on: () => pressed(this.timingBtn), run: () => this.timingBtn.click() }] },
       { els: [this.probeBtn], items: [{ label: 'Probe mode (P)', icon: 'probe', on: () => pressed(this.probeBtn), run: () => this.probeBtn.click() }] },
       { els: [this.whyBtn], items: [{ label: 'Why? (W)', icon: 'why', on: () => pressed(this.whyBtn), run: () => this.whyBtn.click() }] },
-      { els: [this.ovBar.el], items: (['slack', 'activity', 'load', 'unknown'] as const).map((k) => ({ label: `Overlay: ${k[0].toUpperCase() + k.slice(1)}`, hint: this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
+      { els: [this.ovBar.el], items: OVERLAY_KINDS.map((k) => ({ label: `Overlay: ${OVERLAY_LABEL[k]}`, hint: this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
     ];
     // Schematic | Breadboard (a scene with Scene.breadboard), and the jumpers' look while the boards are shown
     const segBtn = (label: string, title: string, fn: () => void) => h('button', { title, 'aria-pressed': 'false', onclick: fn }, label);
@@ -460,21 +470,22 @@ export class Stage {
         ...[...this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')].map((n) => n.getBoundingClientRect()),
       ],
     });
-    for (const b of [imgWrap, layoutBtn, this.probeBtn, this.whyBtn, this.ovBar.el]) b.classList.add('sch-only');
+    for (const b of [imgWrap, layoutBtn, lockBtn, this.probeBtn, this.whyBtn, this.ovBar.el]) b.classList.add('sch-only');
     // zoom and Fit work on the boards too (their own camera)
     const upBtn = btn('up', 'Up one level (Esc)', () => this.up()), fitBtn = btn('fit', 'Fit to screen', () => (this.boardOn ? this.board.fitAll() : this.view.fit()));
     upBtn.classList.add('sch-only');
     const bar = this.bar = h('div', { class: 'stage-bar unfit' },
-      this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, this.probeBtn, this.whyBtn, this.ovBar.el, this.timingBtn, moreWrap,
+      this.viewSeg, this.crumbs, this.wireSeg, remix, imgWrap, layoutBtn, lockBtn, this.probeBtn, this.whyBtn, this.ovBar.el, this.timingBtn, moreWrap,
       upBtn, readBtn, zoomOut, zoomIn, fitBtn,
       this.panesBtn);
     this.canvas = h('div', { class: 'canvas' });
     this.levelBadge = h('div', { class: 'level-badge' });
+    this.layoutPill = h('div', { class: 'layout-pill sch-only', hidden: true, role: 'status' });
     this.dock = h('div', { class: 'panel-dock' });
     // Touch: dblclick comes from a double tap; the Layout button stands in for the right-click menu.
-    this.hint = hintBadge('double-click a part to open it · drag a part or a wire to move it (shift: pick several) · right-click for layout · drag to pan · wheel or pinch to zoom',
-      'double-tap a part: open · drag: move / pan (a wire: tap it first) · pinch: zoom', 'stage', '', HINT_AUTO_MS);
-    this.canvas.append(this.levelBadge, this.hint, this.dock, this.board.el, this.why.el);
+    this.hint = hintBadge('double-click a part to open it · drag a part or a wire to move it (shift: pick several; the lock on the bar stops it) · right-click for layout · drag to pan · wheel or pinch to zoom',
+      'double-tap a part: open · drag: pan (unlocked: tap a part or wire, then drag it) · pinch: zoom', 'stage', '', HINT_AUTO_MS);
+    this.canvas.append(this.levelBadge, this.layoutPill, this.hint, this.dock, this.board.el, this.why.el);
     this.controls = h('div', { class: 'controls unfit' });
     this.status = h('div', { class: 'status' });
     this.el = h('section', { class: 'stage' }, bar, this.canvas, this.analyzer.el, this.controls);
@@ -501,14 +512,20 @@ export class Stage {
       up: () => this.up(),
       elsewhere: (t) => this.elsewhere(t),
       accuse: (flat, name) => this.accuser?.(flat, name) ?? [],
+      layoutChanged: () => this.syncLayoutPill(),
     });
     this.view.onCamera(() => this.syncReadable());
     this.view.arrange = true;
     this.view.pickable = true;
     this.view.trace = true;
     this.view.badge = () => {
-      const r = this.levelBadge.getBoundingClientRect(), c = this.canvas.getBoundingClientRect();
-      return r.width > 0 && !this.levelBadge.classList.contains('yield') ? { x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height } : null;
+      const c = this.canvas.getBoundingClientRect();
+      // the LEVEL tag and, under it, the layout pill: one corner the fit keeps clear when the circuit would reach it
+      const rs = [!this.levelBadge.classList.contains('yield') && this.levelBadge.getBoundingClientRect(), !this.layoutPill.hidden && this.layoutPill.getBoundingClientRect()]
+        .filter((r): r is DOMRect => !!r && r.width > 0);
+      if (!rs.length) return null;
+      const x0 = Math.min(...rs.map((r) => r.left)), y0 = Math.min(...rs.map((r) => r.top));
+      return { x: x0 - c.left, y: y0 - c.top, w: Math.max(...rs.map((r) => r.right)) - x0, h: Math.max(...rs.map((r) => r.bottom)) - y0 };
     };
     // Tab-reachable (and S or the skip link focus it, ui/quicknav.ts): its keys work while it has focus
     this.el.tabIndex = 0;
@@ -665,6 +682,11 @@ export class Stage {
     this.panesBtn.title = t;
     this.panesBtn.setAttribute('aria-label', t);
     this.panesBtn.setAttribute('aria-pressed', String(settings.wide));
+  }
+
+  /** A widget on the stage changed what a challenge checks (widgets/asmlab.ts): run the listeners, as a refresh would. */
+  notify(): void {
+    this.listeners.forEach((f) => f());
   }
 
   onChange(f: () => void): () => void {
@@ -980,6 +1002,7 @@ export class Stage {
     this.syncPins();
     this.view.cover = this.covers();
     this.view.show(ctx, ctx === this.rootCtx);
+    this.syncLayoutPill();
     this.paintOverlay();
     // another level, another shape: which panels stay open is decided again for it (autoFold), the learner's own folds held
     // (foldChoice). A wide reorder buffer opened under the CPU and Out of order panels was fitted ~45 px tall.
@@ -2064,7 +2087,7 @@ export class Stage {
         acts.append(h('label', { class: 'period', title: 'Clock period in gate delays. Empty: each edge waits until the logic has settled. A number: edges come on time, settled or not.' }, 'period', per));
       }
     }
-    this.backBtn = labelled('ghost', 'Back (stage): undo the last clock cycle, gate step or input change. A panel’s own Back undoes one of its steps', 'stepBack', 'Back', () => this.back()) as HTMLButtonElement;
+    this.backBtn = labelled('ghost', 'Step back (stage): undo the last clock cycle, gate step or input change. A panel’s own Step back undoes one of its steps', 'stepBack', 'Step back', () => this.back()) as HTMLButtonElement;
     acts.append(this.backBtn);
     if (this.sim?.kind === 'gate' || this.relayTime) {
       acts.append(labelled('ghost', this.relayTime ? 'Advance one relay step (every armature follows its coil)' : 'Advance one gate delay', 'step', 'Step', () => this.stepOnce()));
@@ -2282,10 +2305,24 @@ export class Stage {
         canOpen: !this.leaf && (ctx.canOpen(sel!) || child.def.prim === 'nmos' || child.def.prim === 'pmos'),
         onOpen: () => this.open(sel!),
         power: () => this.livePower(ctx, child),
+        level: this.hdlLevel(ctx.def),
       });
     } else {
-      this.inspector.show({ def: ctx.def, portBits: (p) => ctx.portBits(p), instance: ctx.path[ctx.path.length - 1], power: () => this.livePower(ctx, ctx.node) });
+      this.inspector.show({ def: ctx.def, portBits: (p) => ctx.portBits(p), instance: ctx.path[ctx.path.length - 1], power: () => this.livePower(ctx, ctx.node), level: this.hdlLevel(ctx.def) });
     }
+  }
+
+  /** The inspector's HDL tab links the level's source to this drawing: a line lights its instance in focus, as the prose's
+   *  named parts do; cleared, the scene's own highlight comes back. */
+  private hdlLevel(def: ComponentDef): { def: ComponentDef; light: (names: string[]) => void } {
+    return {
+      def,
+      light: (names) => {
+        if (this.ctx?.def !== def) return;
+        if (names.length) this.highlight(names, true);
+        else this.highlight(this.ctx === this.rootCtx ? this.scene?.highlight ?? [] : []);
+      },
+    };
   }
 
   /** The whole scene's switching activity since it loaded (or a Reset, a step back, Restart): the Power panel's. Null off GateSim. */
@@ -2495,7 +2532,7 @@ export class Stage {
     if (!sim || !ctx) return {};
     const c = { level: sim.kind, engine: this.scene?.engine, sub: ctx.sim !== sim } as const;
     const out: Partial<Record<OverlayKind, string>> = {};
-    for (const k of ['slack', 'activity', 'load', 'unknown'] as const) {
+    for (const k of OVERLAY_KINDS) {
       const why = overlayRefusal(k, c);
       if (why) out[k] = why;
     }
@@ -2509,7 +2546,7 @@ export class Stage {
   setOverlay(kind: OverlayKind | null, model?: DelayModel): void {
     if (model) this.ovModel = model;
     if (kind && this.ovRefusals()[kind]) kind = null;
-    if (kind === 'activity' && this.ovKind !== 'activity') this.ovWin = null;
+    if ((kind === 'activity' || kind === 'energy') && kind !== this.ovKind) this.ovWin = null;
     this.ovKind = kind;
     if (kind && settings.overlay !== kind) settings.set('overlay', kind);
     this.paintOverlay();
@@ -2559,9 +2596,10 @@ export class Stage {
   /** Live overlays (Activity, Unknown) follow the simulation, at most every 100 ms; a level redrawn without its marks gets them back. */
   private tickOverlay(): void {
     if (!this.ovKind) return;
-    if (this.ovKind === 'activity') this.countActivity();
+    const live = this.ovKind === 'activity' || this.ovKind === 'energy';
+    if (live) this.countActivity();
     const stale = !this.view.el.classList.contains('ov');
-    if (!stale && this.ovKind !== 'activity' && this.ovKind !== 'unknown') return;
+    if (!stale && !live && this.ovKind !== 'unknown') return;
     const wait = 100 - (performance.now() - this.ovLast);
     if (stale || wait <= 0) return this.paintOverlay();
     if (!this.ovTimer) this.ovTimer = window.setTimeout(() => { this.ovTimer = 0; this.paintOverlay(); }, wait);
@@ -2593,17 +2631,20 @@ export class Stage {
     let r: OverlayResult | null = null;
     if (kind && ctx && sim && !this.boardOn && !this.leaf && !this.ovRefusals()[kind]) {
       const design = ctx.sim.design, key = `${kind}|${this.ovModel ?? (settings.loadDelay ? 'load' : 'unit')}|${ctx.path.join('.')}`;
-      if (kind === 'slack' || kind === 'load') {
+      if (kind === 'slack' || kind === 'load' || kind === 'cost' || kind === 'depth') {
         const hit = this.ovCache.get(key);
         if (hit && hit.design === design) r = hit.r;
         else {
-          r = kind === 'slack' ? slackOverlay(design, ctx.path, this.ovModel ?? (settings.loadDelay ? 'load' : 'unit')) : loadOverlay(design, ctx.node);
+          const model = this.ovModel ?? (settings.loadDelay ? 'load' : 'unit');
+          r = kind === 'slack' ? slackOverlay(design, ctx.path, model) : kind === 'depth' ? depthOverlay(design, ctx.node, model)
+            : kind === 'cost' ? costOverlay(ctx.node, ctx.sim.kind) : loadOverlay(design, ctx.node);
           this.ovCache.set(key, { design, r });
         }
       } else if (kind === 'unknown') r = unknownOverlay(ctx.sim, ctx.node);
       else {
         const w = this.countActivity();
-        if (w && this.ovWin) r = activityOverlay(ctx.node, this.ovWin.sim.toggles!, this.ovWin.base, w.units, w.clocked);
+        if (w && this.ovWin) r = kind === 'energy' ? energyOverlay(design, ctx.node, this.ovWin.sim.toggles!, this.ovWin.base, w.units, w.clocked)
+          : activityOverlay(ctx.node, this.ovWin.sim.toggles!, this.ovWin.base, w.units, w.clocked);
       }
     }
     this.view.overlay(r);
@@ -2833,6 +2874,48 @@ export class Stage {
     if (this.readBtn.hidden !== on) return;
     this.readBtn.hidden = !on;
     this.fitBar();
+  }
+
+  /** The lock on the bar shows settings.moveParts: pressed (and "Locked") when a drag on a part pans. */
+  private syncLock(): void {
+    const b = this.lockBtn, locked = !settings.moveParts;
+    b.classList.toggle('on', locked);
+    b.setAttribute('aria-pressed', String(locked));
+    b.setAttribute('aria-label', 'Lock the layout');
+    b.title = locked ? 'Layout locked: a drag on a part pans and nothing moves. Click to move parts and wires by dragging (also in View options)'
+      : 'Parts and wires move when dragged. Click to lock the layout: a drag then pans (also in View options)';
+    b.replaceChildren(icon(locked ? 'lock' : 'unlock', 15), h('span', { class: 'lbl' }, locked ? 'Locked' : 'Lock'));
+  }
+
+  /**
+   * The layout pill over the canvas: the level shows the learner's arrangement (what it changed, the chapter's drawing on
+   * request, a reset), or a redraw of the level set one aside (bring it back or let it go). Hidden otherwise.
+   */
+  private syncLayoutPill(): void {
+    const p = this.layoutPill, v = this.view, id = this.ctx?.def.id;
+    const lay = id ? layoutOf(id) : undefined;
+    const act = (label: string, title: string, a: Parameters<SchematicView['layoutAction']>[0]) =>
+      h('button', { type: 'button', class: 'btn sm ghost', title, onclick: () => v.layoutAction(a) }, label);
+    p.replaceChildren();
+    p.classList.remove('warn');
+    if (!id || this.leaf) {
+      // nothing
+    } else if (asideOf(id)) {
+      p.classList.add('warn');
+      p.append(h('span', { class: 'lp-text' }, 'Redrawn since you arranged it: the new drawing'),
+        act('Bring mine back', 'Your arrangement of the earlier drawing, over this one (Ctrl+Z undoes it)', 'restore'),
+        act('Dismiss', 'Keep the new drawing and forget your earlier arrangement', 'dismiss'));
+    } else if (v.original) {
+      p.append(h('span', { class: 'lp-text' }, 'The chapter’s drawing'), act('Back to mine', 'Your arrangement of this level again', 'mine'));
+    } else if (arranged(lay)) {
+      const c = arrangedCount(lay);
+      const what = [c.parts && `${c.parts} part${c.parts > 1 ? 's' : ''} moved`, c.wires && `${c.wires} wire${c.wires > 1 ? 's' : ''} reshaped`,
+        c.pointers && `${c.pointers} pointer${c.pointers > 1 ? 's' : ''} changed`].filter(Boolean).join(', ');
+      p.append(h('span', { class: 'lp-text' }, icon('move', 13), `Your layout: ${what}`),
+        act('Original', 'Show the chapter’s drawing of this level (yours stays saved)', 'original'),
+        act('Reset', 'This level as the chapter drew it; your colours stay (Ctrl+Z undoes it)', 'reset'));
+    }
+    p.hidden = !p.childElementCount;
   }
 
   /** The LEVEL tag gives way to a panel (a folded right-docked strip too) that would sit over it: half a tag is worse than none.

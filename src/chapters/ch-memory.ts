@@ -19,6 +19,7 @@ import { CORE_PLANES, CORE_STORE, CORE_WORDS } from '../lib/coremem';
 import { coreActions, coreScene, coreTaken, coreView } from '../widgets/coremem';
 import { R221, readCycleFigure } from '../widgets/corefig';
 import { portCost } from '../widgets/storage';
+import { regfile } from '../lib/regfile';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -774,7 +775,7 @@ export const chRegisters: Chapter = {
         diagram (add the Moore S3, say) and it rebuilds the circuit, each encoding priced, the next-state logic a truth-table chip with its
         Karnaugh map one double-click down.</p>
         <p>The diagram is drawn from the same table as the circuit, and a test reads the circuit back into it state by state. Hover an arc to light
-        the gates that make that transition.</p>
+        the gates that make that transition. <a href="#/c/fsm/0">Chapter ${numOf('fsm')}</a> takes the method apart: Moore or Mealy, the cost of each state code, unused states, a controller steering registers and an adder.</p>
         <div class="try">Set x and pulse: 1, 0, 1. Watch the dashed arc move when you flip x before the edge.</div>`,
       tour: {
         label: 'Walk me through it (a 1, 0, 1 and an overlap)',
@@ -1212,7 +1213,7 @@ export const chMemory: Chapter = {
         instructions per cycle needs four reads and two writes. Each read port is another multiplexer tree over every register; each write port
         another decoder, plus a multiplexer in front of every register to choose which port wins.</p>
         <p>Each port adds its own plumbing over the same storage: ${groupDigits(nands(regfileMP(5, 32, 4, 2)))} NANDs for 4 reads and 2 writes of 32 × 32 bits, against ${groupDigits(nands(regfileMP(5, 32, 2, 1)))} for 2 reads and 1 write
-        (${(nands(regfileMP(5, 32, 4, 2)) / nands(regfileMP(5, 32, 2, 1))).toFixed(1)} times for twice the ports). In silicon each port also lengthens every bit's wires, so the real cost grows faster.</p>`,
+        (${(nands(regfileMP(5, 32, 4, 2)) / nands(regfileMP(5, 32, 2, 1))).toFixed(1)} times for twice the ports). These general files store all 32 registers; chapter 12's keeps x0 at 0 with no flip-flops, so its 2-read, 1-write file is ${groupDigits(nands(regfile(5, 32)))}. In silicon each port also lengthens every bit's wires, so the real cost grows faster.</p>`,
       more: {
         derive: `<p>With R read and W write ports on N registers of w bits: storage N·w·${nands(DFFE)} NANDs (fixed), read side R·w·(N − 1) multiplexers, write side W decoders plus a W:1 choice per register. The ports grow the plumbing with R and W,
           not the storage.</p>`,

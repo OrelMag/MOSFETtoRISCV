@@ -14,11 +14,13 @@ const id = (s: string) => ident(s, 'n');
 
 const range = (w: number) => (w > 1 ? `[${w - 1}:0] ` : '');
 
-export function structuralVerilog(def: ComponentDef): string | null {
+export function verilogLines(def: ComponentDef): HdlLines | null {
   const nl = netlistOf(def);
   if (!nl) return null;
   const sw = nl.level === 'switch';
-  const lines: string[] = [];
+  const lines: Ln[] = [];
+  let cur: string | null = null;
+  const at = (s: string): Ln => ({ s, o: cur });
   // Switch level: nets, not variables (several switches drive one node, a bus has several
   // drivers); a net with a capacitor or marked `cap` is a trireg (it keeps its charge).
   const capNets = new Set<number>();
@@ -32,10 +34,10 @@ export function structuralVerilog(def: ComponentDef): string | null {
   capNets.forEach((i) => nl.nets[i].ends.forEach((e) => { const pe = parseEnd(e); if (pe.inst === null) portCap.add(pe.port); }));
   const kind = sw ? 'wire' : 'logic';
   const portDecl = (p: PortDef) => `  ${p.dir === 'in' ? 'input ' : p.dir === 'out' ? 'output' : 'inout '} ${portCap.has(p.name) && p.dir !== 'in' ? 'trireg' : kind} ${range(p.width)}${id(p.name)}`;
-  lines.push(`// ${def.name}: generated from the schematic`);
-  lines.push(`module ${moduleName(def)} (`);
-  lines.push(def.ports.map(portDecl).join(',\n'));
-  lines.push(');');
+  lines.push(at(`// ${def.name}: generated from the schematic`));
+  lines.push(at(`module ${moduleName(def)} (`));
+  lines.push(at(def.ports.map(portDecl).join(',\n')));
+  lines.push(at(');'));
 
   const portNames = new Set(def.ports.map((p) => id(p.name)));
   const widthOf = (end: string): number => {
@@ -46,28 +48,28 @@ export function structuralVerilog(def: ComponentDef): string | null {
   // Name each net: its own port if it touches one, else its declared name, else n<i>.
   const used = new Set(portNames);
   const netName: string[] = [];
-  const decls: string[] = [];
-  const assigns: string[] = [];
+  const decls: Ln[] = [];
+  const assigns: Ln[] = [];
   nl.nets.forEach((net, i) => {
     const own = net.ends.map(parseEnd).filter((e) => e.inst === null).map((e) => id(e.port));
     let name: string;
     if (own.length) {
       name = own[0];
-      for (const extra of own.slice(1)) assigns.push(`  assign ${extra} = ${name};`);
+      for (const extra of own.slice(1)) assigns.push(at(`  assign ${extra} = ${name};`));
     } else {
       name = net.name && !used.has(id(net.name)) ? id(net.name) : `n${i}`;
       while (used.has(name)) name += '_';
       used.add(name);
-      decls.push(`  ${capNets.has(i) ? 'trireg' : kind} ${range(widthOf(net.ends[0]))}${name};`);
+      decls.push(at(`  ${capNets.has(i) ? 'trireg' : kind} ${range(widthOf(net.ends[0]))}${name};`));
     }
     netName.push(name);
   });
   const endNet = new Map<string, string>();
   nl.nets.forEach((net, i) => net.ends.forEach((e) => endNet.set(e, netName[i])));
 
-  if (sw) lines.push('  supply1 vdd_rail;  supply0 gnd_rail;');
+  if (sw) lines.push(at('  supply1 vdd_rail;  supply0 gnd_rail;'));
   lines.push(...decls);
-  if (decls.length) lines.push('');
+  if (decls.length) lines.push(at(''));
 
   // Instances share the namespace with nets: rename an instance that clashes (e.g. 'zero').
   const instName = (n: string) => {
@@ -77,6 +79,7 @@ export function structuralVerilog(def: ComponentDef): string | null {
     return t;
   };
   for (const inst of nl.instances) {
+    cur = inst.name;
     const c = inst.def;
     const conn = (port: string) => endNet.get(`${inst.name}.${port}`) ?? '';
     if (c.prim === 'alias') {
@@ -95,73 +98,92 @@ export function structuralVerilog(def: ComponentDef): string | null {
         while (k + n < pairs.length && pairs[k + n].dst === p0.dst && pairs[k + n].src === p0.src
           && pairs[k + n].db === p0.db + n && pairs[k + n].sb === p0.sb + n) n++;
         const a = conn(p0.dst), b = conn(p0.src);
-        if (a && b) assigns.push(`  assign ${sel(a, p0.dst, p0.db + n - 1, p0.db)} = ${sel(b, p0.src, p0.sb + n - 1, p0.sb)};`);
+        if (a && b) assigns.push(at(`  assign ${sel(a, p0.dst, p0.db + n - 1, p0.db)} = ${sel(b, p0.src, p0.sb + n - 1, p0.sb)};`));
         k += n;
       }
       continue;
     }
     if (c.prim === 'vdd' || c.prim === 'gnd') {
       const n = conn('p');
-      if (n) assigns.push(`  assign ${n} = ${c.prim === 'vdd' ? 'vdd_rail' : 'gnd_rail'};`);
+      if (n) assigns.push(at(`  assign ${n} = ${c.prim === 'vdd' ? 'vdd_rail' : 'gnd_rail'};`));
       continue;
     }
     if (c.prim === 'vhalf') {
       const n = conn('p');
-      if (n) assigns.push(`  assign ${n} = 1'bx;  // VDD/2: half the supply, no logic level`);
+      if (n) assigns.push(at(`  assign ${n} = 1'bx;  // VDD/2: half the supply, no logic level`));
       continue;
     }
     if (c.prim === 'fgmos') {
-      lines.push(`  // ${inst.name}: floating-gate transistor ${conn('d') || '(nc)'} / ${conn('s') || '(nc)'}, gate ${conn('g') || '(nc)'} (its threshold is stored charge: not Verilog)`);
+      lines.push(at(`  // ${inst.name}: floating-gate transistor ${conn('d') || '(nc)'} / ${conn('s') || '(nc)'}, gate ${conn('g') || '(nc)'} (its threshold is stored charge: not Verilog)`));
       continue;
     }
     if (c.prim === 'relay') {
-      lines.push(`  // ${inst.name}: relay, coil ${conn(c.ports[0].name) || '(nc)'} / ${conn(c.ports[1].name) || '(nc)'}, contacts ${c.ports.slice(2).map((p) => conn(p.name) || '(nc)').join(' ')} (electromechanical: not Verilog)`);
+      lines.push(at(`  // ${inst.name}: relay, coil ${conn(c.ports[0].name) || '(nc)'} / ${conn(c.ports[1].name) || '(nc)'}, contacts ${c.ports.slice(2).map((p) => conn(p.name) || '(nc)').join(' ')} (electromechanical: not Verilog)`));
       continue;
     }
     if (c.prim === 'triode') {
-      lines.push(`  // ${inst.name}: triode, grid ${conn('g') || '(nc)'}, plate ${conn('p') || '(nc)'}, cathode ${conn('k') || '(nc)'} (a vacuum tube: not Verilog)`);
+      lines.push(at(`  // ${inst.name}: triode, grid ${conn('g') || '(nc)'}, plate ${conn('p') || '(nc)'}, cathode ${conn('k') || '(nc)'} (a vacuum tube: not Verilog)`));
       continue;
     }
     if (c.prim === 'diode') {
-      lines.push(`  // ${inst.name}: vacuum diode, anode ${conn('a') || '(nc)'}, cathode ${conn('k') || '(nc)'} (conducts one way: not Verilog)`);
+      lines.push(at(`  // ${inst.name}: vacuum diode, anode ${conn('a') || '(nc)'}, cathode ${conn('k') || '(nc)'} (conducts one way: not Verilog)`));
       continue;
     }
     if (c.prim === 'sense') {
-      lines.push(`  // ${inst.name}: sense amplifier on ${c.ports.slice(1).map((p) => conn(p.name) || '(unconnected)').join(' / ')} (compares charge levels: analog, not Verilog)`);
+      lines.push(at(`  // ${inst.name}: sense amplifier on ${c.ports.slice(1).map((p) => conn(p.name) || '(unconnected)').join(' / ')} (compares charge levels: analog, not Verilog)`));
       continue;
     }
     if (c.prim === 'nmos' || c.prim === 'pmos') {
-      lines.push(`  ${c.prim} ${instName(inst.name)} (${conn('d') || '/*nc*/'}, ${conn('s') || '/*nc*/'}, ${conn('g') || '/*nc*/'});`);
+      lines.push(at(`  ${c.prim} ${instName(inst.name)} (${conn('d') || '/*nc*/'}, ${conn('s') || '/*nc*/'}, ${conn('g') || '/*nc*/'});`));
       continue;
     }
     if (c.prim === 'dep') {
       // a depletion load: always on and weak, so the same resistive switch as a resistor
-      lines.push(`  rtran ${instName(inst.name)} (${c.ports.map((p) => conn(p.name) || '/*nc*/').join(', ')});  // depletion load`);
+      lines.push(at(`  rtran ${instName(inst.name)} (${c.ports.map((p) => conn(p.name) || '/*nc*/').join(', ')});  // depletion load`));
       continue;
     }
     if (c.prim === 'res') {
       // a resistive bidirectional switch: what passes through it is reduced to a pull strength,
       // so any transistor (strong) overrides it, like the solver's weaker-than-any-transistor rule
-      lines.push(`  rtran ${instName(inst.name)} (${c.ports.map((p) => conn(p.name) || '/*nc*/').join(', ')});`);
+      lines.push(at(`  rtran ${instName(inst.name)} (${c.ports.map((p) => conn(p.name) || '/*nc*/').join(', ')});`));
       continue;
     }
     if (c.prim === 'cap') {
-      lines.push(`  // ${inst.name}: capacitor on ${conn(c.ports[0].name) || '(unconnected)'} (declared trireg: it keeps its charge)`);
+      lines.push(at(`  // ${inst.name}: capacitor on ${conn(c.ports[0].name) || '(unconnected)'} (declared trireg: it keeps its charge)`));
       continue;
     }
     if (isExternal(c)) {
       // a key, keyboard, switch bank, console or screen: the world outside the circuit, so no module; its outputs are left undriven
       const outs = c.ports.filter((p) => p.dir === 'out').map((p) => conn(p.name)).filter(Boolean);
-      lines.push(`  // ${inst.name}: ${c.name} (${c.modelPanel ? 'a model of a cable or other medium, not transistors and not synthesizable: on hardware it is a wire' : 'a sandbox part outside the circuit, not hardware'})${outs.length ? `: ${outs.join(', ')} left undriven` : ''}`);
+      lines.push(at(`  // ${inst.name}: ${c.name} (${c.modelPanel ? 'a model of a cable or other medium, not transistors and not synthesizable: on hardware it is a wire' : 'a sandbox part outside the circuit, not hardware'})${outs.length ? `: ${outs.join(', ')} left undriven` : ''}`));
       continue;
     }
     const args = c.ports.map((p) => `.${id(p.name)}(${conn(p.name)})`);
-    lines.push(`  ${moduleName(c)} ${instName(inst.name)} (${args.join(', ')});`);
+    lines.push(at(`  ${moduleName(c)} ${instName(inst.name)} (${args.join(', ')});`));
   }
+  cur = null;
   if (assigns.length) {
-    lines.push('');
+    lines.push(at(''));
     lines.push(...assigns);
   }
-  lines.push('endmodule');
-  return lines.join('\n');
+  lines.push(at('endmodule'));
+  return expandLines(lines);
+}
+
+/** One pushed piece of generated text and the instance that produced it (null: ports, declarations, the module frame). */
+type Ln = { s: string; o: string | null };
+
+/** Generated HDL with, for every output line, the instance it declares or wires (null: not an instance's). */
+export interface HdlLines { text: string; owners: (string | null)[] }
+
+/** Pieces may hold several lines (a port list): split them, each line keeping its piece's owner. */
+export function expandLines(pieces: Ln[]): HdlLines {
+  const out: string[] = [], owners: (string | null)[] = [];
+  for (const { s, o } of pieces) for (const part of s.split('\n')) { out.push(part); owners.push(o); }
+  return { text: out.join('\n'), owners };
+}
+
+/** Structural Verilog of one level (the text the inspector shows and the tests compare). */
+export function structuralVerilog(def: ComponentDef): string | null {
+  return verilogLines(def)?.text ?? null;
 }

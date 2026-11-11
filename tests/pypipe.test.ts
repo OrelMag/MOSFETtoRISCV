@@ -102,6 +102,11 @@ describe('chapter 15 on the pipeline: the numbers in the text', () => {
     expect(mUnitCost(c.words)).toEqual({ base: 113438, withM: 145476 });
     quoted('113438 → 145476, +28.2 %');
     quoted('+12.3 %');
+    // The memories both totals include, and the processors alone (ch 15 and 17 quote them).
+    const parts = (d: ReturnType<typeof singleCycleCpu>) => Object.fromEntries(d.netlist!().instances.filter((i) => i.name === 'imem' || i.name === 'dm').map((i) => [i.name, stats(i.def).nands]));
+    expect(parts(singleCycleCpu(c.words, { imemK: PY_IMEM_K, dmemK: PY_DMEM_K }))).toEqual({ imem: 32640, dm: 39558 });
+    expect(parts(pipelinedCpu(c.words, { imemK: PY_IMEM_K, dmemK: PY_DMEM_K }))).toEqual({ imem: 32640, dm: 39558 });
+    quoted('+43.3 %');
   });
 
   it('a floor division compiles to nine instructions, a modulo to nine', () => {

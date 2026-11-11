@@ -83,7 +83,7 @@ export const chLogic: Chapter = {
         why: ['', 'Complemented means "0 in every cell of the loop". This input is 0 in only two of them.', 'Uncomplemented means "1 in every cell of the loop". This input is 1 in only two of them.', 'A loop is one AND term. Two terms come from two loops.'],
       },
       {
-        question: 'Segment e of a BCD digit is lit for 0, 2, 6 and 8, and the six unused codes (10 to 15) are marked don\'t care. How do the don\'t cares change the minimal sum?',
+        question: 'Segment e of a decimal digit (codes 0 to 9) is lit for 0, 2, 6 and 8, and the six unused codes (10 to 15) are marked don\'t care. How do the don\'t cares change the minimal sum?',
         options: [
           `They let the loops grow: ${E_PLAIN.cost.text} becomes ${E_DC.cost.text}`,
           'They add a term for each unused code',
@@ -215,7 +215,7 @@ export const chLogic: Chapter = {
     {
       title: 'Don\'t cares: inputs that never happen',
       body: `
-        <p>A circuit that drives a seven-segment display shows a digit from its 4-bit code. The code is a BCD digit, 0 to 9 (one decimal digit in four bits), so the six codes 10 to 15 <em>never occur</em>. For those rows the table does not say 0 or 1; it says <strong>don't care</strong>, and the designer may
+        <p>A circuit that drives a seven-segment display shows a digit from its 4-bit code. The code is a <span data-ahead="bcd">BCD digit, 0 to 9 (binary-coded decimal: one decimal digit in four bits)</span>, so the six codes 10 to 15 <em>never occur</em>. For those rows the table does not say 0 or 1; it says <strong>don't care</strong>, and the designer may
         choose whichever value makes the circuit smaller, group by group.</p>
         <p>Take segment e, lit for the digits 0, 2, 6 and 8. With rows 10 to 15 held at 0 the minimal sum is <code>${E_PLAIN.cost.text}</code>: ${E_PLAIN.cost.literals} literals, <strong>${E_PLAIN.cost.nands} NANDs</strong>.
         Let the six unused rows be don't cares and the loops can grow into them: <code>${E_DC.cost.text}</code>, ${E_DC.cost.literals} literals, <strong>${E_DC.cost.nands} NANDs</strong>. Nothing the display must show has changed.</p>
@@ -342,7 +342,7 @@ export const chLogic: Chapter = {
     {
       title: 'Your own: a 7-segment digit',
       body: `
-        <p>The pieces so far make the display driver of a digital clock or a pocket calculator: a 4-bit BCD digit in, seven lamp lines out (<code>a</code> the top bar, <code>b</code> top right, round to <code>g</code> in the middle).
+        <p>The pieces so far make the display driver of a digital clock or a pocket calculator: a 4-bit <span data-ahead="bcd">BCD digit (binary-coded decimal: one decimal digit, 0 to 9, in four bits)</span> in, seven lamp lines out (<code>a</code> the top bar, <code>b</code> top right, round to <code>g</code> in the middle).
         The font is fixed for the digits 0 to 9 (6 with its top bar, 7 without the upper left, 9 with its bottom bar). The codes 10 to 15 never occur.</p>
         <p>Left alone (dark in all six unused rows) the seven segments cost <strong>${SEG_ZERO.nands} NANDs</strong> with equal terms shared between segments. Marking the unused rows as don't cares costs <strong>${SEG_DC.nands}</strong> (${SEG_DC.terms} distinct product terms, ${SEG_DC.literals} literals). Your decisions about rows 10 to 15, segment by segment, are the design.</p>
         <p>The table below is the sandbox's truth-table chip in small. To take a design further, build the same table there with <a href="#/sandbox/new/table">New chip, Truth table</a>: it draws the circuit, shares the terms and shows each output's map.</p>`,

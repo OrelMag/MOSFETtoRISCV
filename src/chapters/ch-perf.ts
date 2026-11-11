@@ -11,6 +11,7 @@ import { logicDepth, stats } from '../sim/stats';
 import { CLK_TO_Q, PS_PER_NAND, SETUP } from '../sim/timing';
 import type { ComponentDef } from '../sim/types';
 import { PROGRAMS } from '../riscv/programs';
+import { PERIOD } from '../widgets/cpucost';
 import { cpuScene } from '../widgets/cpupanel';
 import { adderVariants } from '../widgets/adders';
 import { babbage3d } from '../widgets/babbage3d';
@@ -26,7 +27,10 @@ const D = (d: ComponentDef) => logicDepth(d) ?? 0;
 /** NANDs and depth of each adder at each width: a table of the family. */
 const FAMILY = (rows: [string, (n: number) => ComponentDef][], widths: number[]) =>
   `<table class="mini"><tr><th>adder</th>${widths.map((n) => `<th>${n} bits</th>`).join('')}</tr>${rows.map(([name, make]) => `<tr><td>${name}</td>${widths.map((n) => `<td>${N(make(n))} NANDs, depth ${D(make(n))}</td>`).join('')}</tr>`).join('')}</table>`;
-const CPU_PERIOD = 155, ALU_RIPPLE = D(alu(32)), ALU_KS = D(alu(32, 'ks'));
+/** The ALU's stretch of the critical path (widgets/cpucost.ts PERIOD, the static path block by block): the path leaves the ALU before its
+ * deepest output, so this is less than the ALU's own depth (ALU_DEPTH). Chapter 14 quotes the same figures. */
+const onPath = (p: typeof PERIOD.rca) => p.stages.find(([k]) => k === 'alu')![1];
+const CPU_PERIOD = PERIOD.rca.pc, ALU_RIPPLE = onPath(PERIOD.rca), ALU_KS = onPath(PERIOD.ks), ALU_DEPTH = D(alu(32)), ALU_KS_DEPTH = D(alu(32, 'ks'));
 const PS = PS_PER_NAND; // illustrative ps per NAND delay (the timing panel's conversion)
 const fo16 = { drawn: fmt(nandDelay(16 * (FF_INPUT + FF_WIRE), false)), buffered: fmt(nandDelay(16 * (FF_INPUT + FF_WIRE))) };
 
@@ -272,7 +276,7 @@ export const chFastAdders: Chapter = {
     {
       title: 'Measured, not quoted',
       body: `
-        <p>The table is computed from the netlists: NAND count and worst-case depth for both adders. Kogge–Stone buys
+        <p>The table is computed from the netlists: NAND count and worst-case depth for each adder. Kogge–Stone buys
         logarithmic depth with n·log n cells and, on silicon, long wires: level j's diagonal spans 2<sup>j</sup> rows.</p>
         <p>Other members of the family trade those three costs differently: Brent–Kung (fewer cells, about 2·log n prefix levels),
         Sklansky (minimum depth, high fan-out), Han–Carlson (a hybrid). Synthesis tools pick per timing constraint.</p>
@@ -340,7 +344,7 @@ export const chFastAdders: Chapter = {
       },
       more: {
         derive: `<p>Period = clock-to-q (${CLK_TO_Q}) + the longest combinational path + setup (${SETUP}) = ${CPU_PERIOD}, so the logic is ${CPU_PERIOD - CLK_TO_Q - SETUP} NAND delays. The ALU is ${ALU_RIPPLE} of the ${CPU_PERIOD}: ${Math.round(100 * ALU_RIPPLE / CPU_PERIOD)} %,
-          which is the 60 % above. Inside it a 32-bit ripple adder is ${D(rca(32))} delays, the bulk of the ALU's ${ALU_RIPPLE}.</p>`,
+          which is the 60 % above. (The whole ALU is ${ALU_DEPTH} deep, to its zero flag; this path leaves it ${ALU_DEPTH - ALU_RIPPLE} delays sooner.) Inside it a 32-bit ripple adder is ${D(rca(32))} delays, the bulk of the ALU's ${ALU_RIPPLE}.</p>`,
         pitfall: `<p>Assuming the instruction you think is slowest (a load) sets the clock. The longest path is the one that passes through the most logic, not the one that sounds heaviest, and in this design
           the branch beats the load because the memory is a mux tree, as fast as logic. Let the tool name it.</p>`,
         real: `<p>Sign-off timing runs the same algorithm on a characterized cell library at several process corners (slow, typical, fast) and supply and temperature points, with wire RC extracted from layout, and a margin for clock
@@ -383,7 +387,7 @@ export const chFastAdders: Chapter = {
         <p>Look at the new critical path: <span data-show="ctl">decode</span> (opcode AND gates, OR trees), the
         <span data-show="imm">immediate multiplexer</span> and the ALU's result mux and 32-input zero detector now dominate. That is the usual story of optimization: fix the worst
         path and the next one appears. Overlapping instructions, next, attacks the problem differently: it cuts the path into pieces.</p>
-        <p>The accounting is simple because the adder is on the critical path once: the period falls by exactly the ALU's saving, ${ALU_RIPPLE} to ${ALU_KS} delays, from ${CPU_PERIOD} to ${CPU_PERIOD - ALU_RIPPLE + ALU_KS}. The cost is in area, not time: the ALU grows
+        <p>The accounting is simple because the adder is on the critical path once: the period falls by exactly the ALU's saving on the path, ${ALU_RIPPLE} to ${ALU_KS} delays (the whole ALU, to its zero flag: ${ALU_DEPTH} to ${ALU_KS_DEPTH}), from ${CPU_PERIOD} to ${CPU_PERIOD - ALU_RIPPLE + ALU_KS}. The cost is in area, not time: the ALU grows
         from ${N(alu(32))} to ${N(alu(32, 'ks'))} NANDs, and the two other adders grow with it. The remaining path is decode, the immediate mux, the result mux and the zero detector, none of which has an obvious faster form.</p>`,
       scene: () => cpuScene({ source: src('sum'), timing: true, adder: 'ks' }),
       tour: {
@@ -406,7 +410,7 @@ export const chFastAdders: Chapter = {
         kind: 'quiz', question: `After the adder swap, roughly how much of the ALU's ${logicDepth(alu(32, 'ks'))} NAND delays is the adder itself?`,
         options: ['Almost all of it', 'Less than half: the 8:1 result mux and the zero detector are the rest', 'None: the ALU is no longer on the path'], answer: 1,
         why: ['That was true of the ripple adder. A Kogge–Stone grows with log₂ n and is now a minority of the ALU\'s path.', '', 'The branch path still subtracts in the ALU and reads its zero flag.'],
-        explain: `A 32-bit Kogge–Stone is ${logicDepth(koggeStone(32))} NAND delays (${logicDepth(addSubFast(32))} with the inversion for subtraction). The result multiplexer (3 levels of MUX2, ${logicDepth(muxTree(3, 32, 16))}) and the zero detector (a 5-level OR tree plus an inverter, ${logicDepth(isZero(32))}) add as much again. Real designs compute "zero" in parallel with the sum for exactly this reason.`,
+        explain: `A 32-bit Kogge–Stone is ${logicDepth(koggeStone(32))} NAND delays (${logicDepth(addSubFast(32))} with the inversion for subtraction). The result multiplexer (3 levels of MUX2, ${logicDepth(muxTree(3, 32, 16))}) and the zero detector (a 5-level OR tree plus an inverter, ${logicDepth(isZero(32))}) add about as much again, and the other ${D(alu(32, 'ks')) - D(addSubFast(32)) - D(muxTree(3, 32, 16)) - D(isZero(32))} sit between these blocks (the operand and flag logic). Real designs compute "zero" in parallel with the sum for exactly this reason.`,
       },
     },
     {
