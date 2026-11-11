@@ -138,6 +138,17 @@ function wiredClear(def: ComponentDef, nl: Netlist, wire: (n: NetDef) => boolean
 const caches = new Map<number, WeakMap<Netlist, Netlist>>();
 
 /**
+ * Take a drawing made earlier (the route cache, routecache.ts: at build time, by this same code) as this netlist's
+ * wires-first drawing at the stage's limit, with its routing, so every later drawnNetlist / routedOnce of it is a lookup.
+ */
+export function seedDrawn(nl: Netlist, drawn: Netlist, routed: ReturnType<typeof routeNetlist>): void {
+  let cache = caches.get(LOCAL_NETS);
+  if (!cache) caches.set(LOCAL_NETS, (cache = new WeakMap()));
+  if (!cache.has(nl)) cache.set(nl, drawn);
+  if (!routeMemo.has(drawn)) routeMemo.set(drawn, routed);
+}
+
+/**
  * The level as first drawn: `nl` with the nets wires can carry readably drawn as wires. `limit`: past this many nets the level keeps
  * its author's drawing (LOCAL_NETS on a stage, where it is redone on every open; a drawing made once, like a sandbox copy, can afford more).
  */

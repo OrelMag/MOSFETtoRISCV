@@ -14,9 +14,10 @@ import { Camera, fitBox, offerReadable, readableBox, installPanZoom, underCover,
 import { applyFlow, flowDash, flowKey, flowText, laneTails } from './flow';
 import { FlowTokens, type Lane } from './flowtokens';
 import type { ViewCtx } from './context';
-import { hopPathData, overlaps, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type Rect, type RoutedNet, type TapLabel } from './route';
+import { hopPathData, overlaps, pinGeoms, routeNetlist, splitterBars, tagGeom, tapLabels, textWidth, type PinGeom, type Rect, type RoutedNet, type TapLabel } from './route';
 import { partnerLines } from './partners';
-import { drawnNetlist } from './wirefirst';
+import { cachedLevel } from './routecache';
+import { drawnNetlist, seedDrawn } from './wirefirst';
 import type { OverlayMarks } from './overlays';
 import { applyLayout, canRedo, canUndo, checkDrawing, dragSegment, dropAside, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, pastSlop, restoreAside, showsTags, undoLayout, type LayoutEdit } from './layout';
 import { settings } from '../ui/settings';
@@ -313,6 +314,9 @@ export class SchematicView {
     this.closeMenu();
     if (!keepView) { this.group = new Set(); this.ov = null; this.original = false; }
     const authored = netlistOf(ctx.def);
+    // a level the build routed (routecache.ts): its drawing and wires seeded, so drawnNetlist and the route below are lookups
+    const hit = authored ? cachedLevel(ctx.def, authored) : null;
+    if (hit && authored) seedDrawn(authored, hit.drawn, { nets: structuredClone(hit.nets), pins: pinGeoms(ctx.def, hit.drawn) });
     const base = this.base = authored ? drawnNetlist(ctx.def, authored) : null;
     this.el.replaceChildren();
     this.wires = [];
@@ -338,7 +342,8 @@ export class SchematicView {
     const nl = !this.arrange ? base : applyLayout(base, lay);
     this.el.classList.toggle('arrange', this.arrange === true);
     const t0 = performance.now();
-    const { nets, pins } = routeNetlist(ctx.def, nl);
+    // the author's drawing as the build routed it (a copy: the drawing below may adjust what it is given), else live
+    const { nets, pins } = hit && nl === base ? { nets: structuredClone(hit.nets), pins: pinGeoms(ctx.def, nl) } : routeNetlist(ctx.def, nl);
     this.routeMs = performance.now() - t0;
     const pathData = hopPathData(nets, splitterBars(nl));
     const tapsOf = new Map<number, TapLabel[]>();
