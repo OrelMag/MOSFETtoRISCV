@@ -457,7 +457,7 @@ export class Inspector {
           ? h('span', { class: 'ln', html })
           : h('span', {
             class: `ln own${inst === sel ? ' sel' : ''}`, html, 'data-inst': inst, role: 'button', tabindex: '0',
-            title: `${inst}: light it on the circuit`, 'aria-label': `Light ${inst} on the circuit`,
+            title: `${inst}: light it on the circuit (click again to put it out)`, 'aria-label': `Light ${inst} on the circuit`,
             onclick: () => light(inst),
             onkeydown: (e: Event) => { const k = (e as KeyboardEvent).key; if (k === 'Enter' || k === ' ') { e.preventDefault(); light(inst); } },
           });

@@ -2650,6 +2650,7 @@ export class Stage {
     this.view.overlay(r);
     const old = this.ovLegend;
     this.ovLegend = r ? overlayLegend(r, () => this.setOverlay(null)) : null;
+    if (old?.classList.contains('open')) this.ovLegend?.classList.add('open');
     if (old && this.ovLegend) old.replaceWith(this.ovLegend);
     else if (old) old.remove();
     else if (this.ovLegend) this.canvas.append(this.ovLegend);

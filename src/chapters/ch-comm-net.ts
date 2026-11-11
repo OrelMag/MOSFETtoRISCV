@@ -6,7 +6,7 @@ import { NIC_COSTS, nicPollSource } from '../riscv/nicprograms';
 import { checksumWidget, costWidget, frameWidget, lanApi, lanScene, nicApi, nicScene, pathWidget, ringWidget } from '../widgets/net';
 import type { Chapter } from './types';
 import { numOf } from './order';
-import { checksum, onesSum } from '../comm/netframes';
+import { arpFrame, checksum, onesSum } from '../comm/netframes';
 import { groupNum } from '../sim/numfmt';
 
 /** Step 'Bytes in the subset': the checksum of three words by the chapter's own RFC 1071 functions, and the usual wrong answers. */
@@ -17,11 +17,12 @@ const CK = (() => {
   const folded = onesSum(bytes);
   return { plain, noInvert: folded, good: checksum(bytes), noFold: ~(plain & 0xffff) & 0xffff, noFoldNoInv: plain & 0xffff };
 })();
-const ARP_REQ_LEN = 42, ARP_PAD = 60;
-/** Step 'ICMP: echo': the first word of an echo message (type, code) before and after, with the message's checksum. */
+const ARP_REQ_LEN = arpFrame({ op: 1, sha: [2, 0, 0, 0, 0, 1], spa: 0, tha: [0, 0, 0, 0, 0, 0], tpa: 0 }).bytes.length, ARP_PAD = 60;
+/** Step 'ICMP: echo': the first word of an echo message (type, code) before and after, with the message's checksum: the frame
+ *  widget's echo at sequence 1 (identifier 0x1234, 32 data bytes from 16), so the quiz quotes what the widget shows. */
 const ECHO = (() => {
   const data = Array.from({ length: 32 }, (_, i) => 16 + i);
-  const msg = (type: number) => [type, 0, 0, 0, 0, 1, 0, 1, ...data];
+  const msg = (type: number) => [type, 0, 0, 0, 0x12, 0x34, 0, 1, ...data];
   const ck = (type: number) => checksum(msg(type));
   return { req: 0x0800, rep: 0x0000, ckReq: ck(8), ckRep: ck(0) };
 })();
@@ -216,7 +217,7 @@ export const chNetwork: Chapter = {
         question: 'A host turns an ICMP echo request into its reply by changing the type from 8 to 0. Why must it also recompute the checksum?',
         options: ['The checksum covers the whole ICMP message, and the type is in it: the sum changes by 0x0800', 'The reply travels the other way, so the old checksum is for the wrong direction', 'The IP header checksum is the one that covers the type', 'It need not: the receiver ignores the checksum on a reply'],
         answer: 0,
-        explain: 'The 16-bit word holding type and code goes from 0x' + ECHO.req.toString(16).padStart(4, '0') + ' to 0x' + ECHO.rep.toString(16).padStart(4, '0') + ', so the checksum of the message (0x' + ECHO.ckReq.toString(16).padStart(4, '0') + ' before) becomes 0x' + ECHO.ckRep.toString(16).padStart(4, '0') + ' for the same identifier, sequence and data. A receiver verifies it, as this stack does.',
+        explain: 'The 16-bit word holding type and code goes from 0x' + ECHO.req.toString(16).padStart(4, '0') + ' to 0x' + ECHO.rep.toString(16).padStart(4, '0') + ', so the checksum of the message (0x' + ECHO.ckReq.toString(16).padStart(4, '0') + ' before) becomes 0x' + ECHO.ckRep.toString(16).padStart(4, '0') + ' for the same identifier, sequence and data (the echo the frame widget shows at sequence 1). A receiver verifies it, as this stack does.',
         why: ['', 'A checksum has no direction; it is a sum of the message\'s words.', 'The IP header checksum covers the IP header only; the ICMP checksum covers the type.', 'This stack checks the checksum on every reply it receives.'],
       },
     },
@@ -226,7 +227,7 @@ export const chNetwork: Chapter = {
         return `
         <p>Two computers, each the system CPU of ${busLink} with a RAM, a DMA engine and now a NIC, joined through the four-port switch of chapter ${numOf('switch')} with a MAC pair on each switch port (the switch's ports are byte streams; the MACs turn them to bits). Computer A runs the ping program, B only <code>net_poll()</code>. Both run <em>the same compiled stack</em>: ${n0(NET.words.a)} instructions in A, ${n0(NET.words.b)} in B, from Python text you can read in <code>src/comm/stack/</code>. All of it is gates: ${n0(N.lan)} NANDs, ${n0(N.switch)} of them the switch (cells of 128 bytes, two a port; a frame longer than that would not fit its cell, so the applications keep every frame within 128 bytes: ${CELL_BYTES - UDP_HEADERS} bytes of data in an echo or a datagram).</p>
         <p>Run it. A looks for 10.0.0.2 in its ARP table, finds nothing, and sends the request: broadcast, flooded by the switch to every port, received by B. B learns A, answers; A learns B. A sends the echo request; B answers; A's console prints the round trip. Click a frame in the list to see its bytes, coloured by layer. <strong>Save capture</strong> writes what the switch saw as a <code>.pcap</code> file that Wireshark or <code>tcpdump -r</code> reads: the same bytes, a timestamp from the clock counter at ${CLOCK_NS} ns a clock.</p>
-        <p>The numbers: the first reply is at clock ${n0(NET.clocksToFirstReply)} (${us(NET.clocksToFirstReply)} µs; the clock at which A's console has printed <code>time=</code>, before the number), most of it the ARP exchange and the software's patience around it; the ping itself, request to reply, is <strong>${n0(NET.rtt)} clocks</strong> (${us(NET.rtt)} µs). The cable accounts for ${n0(RT.cable)} of them: four serializations of ${n0(PING_SERIAL)} clocks, since each ${PING_FRAME}-byte frame is sent twice (computer to switch, switch to computer) and the switch is store-and-forward; the software and its polling are the other ${n0(RT.software)} (the next step takes them apart). The cycle engine runs this at a few thousand clocks a second, so the first reply arrives after ten seconds or more and all three pings after about twice that, depending on the machine, with the page staying responsive; the clock counter in the panel tells you how far it has got.</p>`;
+        <p>The numbers: the first reply is at clock ${n0(NET.clocksToFirstReply)} (${us(NET.clocksToFirstReply)} µs; the clock at which A's console has printed <code>time=</code>, before the number), most of it the ARP exchange and the software's patience around it; the ping itself, request to reply, is <strong>${n0(NET.rtt)} clocks</strong> (${us(NET.rtt)} µs). The cable accounts for ${n0(RT.cable)} of them: four serializations of ${n0(PING_SERIAL)} clocks, since each ${PING_FRAME}-byte frame is sent twice (computer to switch, switch to computer) and the switch is store-and-forward; the software and its polling are ${n0(RT.software)} and the switch's turnaround the last ${RT.turnaround} (the next step takes them apart). The cycle engine runs this at a few thousand clocks a second, so the first reply arrives after ten seconds or more and all three pings after about twice that, depending on the machine, with the page staying responsive; the clock counter in the panel tells you how far it has got.</p>`;
       },
       scene: lanScene,
       challenge: {
@@ -246,7 +247,7 @@ export const chNetwork: Chapter = {
         <p><strong>The software is small next to the cable.</strong> Receiving and answering an echo request is ${n0(B_ECHO.total.clocks)} clocks of work against the ${n0(PING_FRAME_TIME)} that a ${PING_FRAME}-byte frame holds the cable (the gap included): ${B_BUSY_PERCENT} % of a frame time, so at this link speed the CPU keeps up with a stream of such frames, with ${100 - B_BUSY_PERCENT} % to spare. Make the link ten times faster and it would not; that is why real NICs offload checksums and segmentation.</p>
         <p><strong>The byte helpers dominate.</strong> ${BYTES_PERCENT} % of the echo request's clocks, nearly half, are in <code>get16</code>, <code>put16</code>, <code>get32</code>, <code>put32</code> and <code>ones_sum</code>: every byte is a separate bus transaction (a load or a store of one byte, two clocks or more), and the checksum touches each one. A word-oriented checksum, or a NIC that sums as it moves the bytes, would remove most of it. The IP and ICMP logic proper is a few hundred clocks.</p>
         <p><strong>The bus is shared.</strong> The NIC's DMA makes 3 + ⌈len/4⌉ reads and 1 write to send a frame and 2 reads and ⌈len/4⌉ + 1 writes to receive one: ${dmaTotal(PING_DMA.send)} transactions to send a ${PING_FRAME}-byte frame, ${dmaTotal(PING_DMA.receive)} to receive it, against ${n0(B_ECHO.total.loads + B_ECHO.total.stores)} loads and stores by the CPU for the work of one echo. The CPU's polling loop is a load a pass.</p>
-        <p><strong>Latency is mostly the cable.</strong> The ${n0(NET.rtt)}-clock round trip is ${n0(RT.cable)} clocks of frames on the cable and ${n0(RT.software)} of software, measured on the gates' own transmit and carrier pins:</p>
+        <p><strong>Latency is mostly the cable.</strong> The ${n0(NET.rtt)}-clock round trip is ${n0(RT.cable)} clocks of frames on the cable, ${n0(RT.software)} of software and ${RT.turnaround} of the switch turning a frame round, measured on the gates' own transmit and carrier pins:</p>
         <table class="mini"><tr><th>part of the round trip</th><th>clocks</th></tr>
           <tr><td>frames on the cable: four serializations of ${n0(PING_SERIAL)}, without the gap, which only separates one frame from the next</td><td>${n0(RT.cable)}</td></tr>
           <tr><td>A: from the start of <code>icmp_echo</code> to the first bit of the request on its link</td><td>${n0(RT.aSend)}</td></tr>
@@ -255,7 +256,8 @@ export const chNetwork: Chapter = {
           <tr><td>of which B's work up to the doorbell</td><td>${n0(RT.bWork)}</td></tr>
           <tr><td>A: from the last bit of the reply to the timestamp</td><td>${n0(RT.aReceive)}</td></tr>
           <tr><td>the switch's store-and-forward turnaround (it adds ${RT.turnaround} clocks, half in each direction)</td><td>${RT.turnaround}</td></tr>
-          <tr><td>the three software windows added up</td><td>${n0(RT.tails)}</td></tr></table>
+          <tr><td><b>the round trip: the cable, A, B, A again and the turnaround</b></td><td><b>${n0(NET.rtt)}</b></td></tr>
+          <tr><td>not in that sum: the three pieces of software's own clocks (sending, answering, receiving) added up</td><td>${n0(RT.tails)}</td></tr></table>
         <p>The windows add up to more than the software's share, because each window's tail runs while a frame is already on the cable or after the timestamp is taken; nothing in the round trip is left unexplained.</p>
         <p><strong>Where this stops.</strong> Two computers on one switch can ping each other because the switch knows each MAC address and floods what it does not. Everything here lives inside one network: a switch moves frames within it and cannot place an address on another. Chapter ${N_ROUTER} takes the next step: an address with structure, a table that holds one line for millions of machines, and a router that moves this same IPv4 packet from one network to another.</p>`;
       },

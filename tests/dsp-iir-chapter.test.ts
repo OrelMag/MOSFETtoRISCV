@@ -35,6 +35,8 @@ describe('the numbers in the text', () => {
     expect([by('butter').folded, by('cheby1').folded, by('ellip').folded]).toEqual([74, 28, 16]);
     for (const f of ['butter', 'cheby1', 'ellip'] as const) { const sec = zpkToSos(maskDesign(f).zpk); expect(sosMultsFolded(sec)).toBeLessThan(sosMults(sec)); }
     expect(by('ellip').mults * mulNands()).toBe(71440);
+    // the body quotes the three orders read off those size strings (a lost backslash once made it "an order of d")
+    expect(chIir.steps[0].body).toContain(`need an order of ${by('butter').size.split(/[ ,]/)[1]} (Butterworth), ${by('cheby1').size.split(/[ ,]/)[1]} (Chebyshev I) and 8 (elliptic)`);
     // step 2's Try: an elliptic order 5 has one of its five zeros at z = −1
     const z5 = lowpass('ellip', 5, 0.1, 0.1, 60).z;
     expect(z5.length).toBe(5); expect(z5.filter((q) => Math.abs(q.re + 1) < 1e-9 && Math.abs(q.im) < 1e-9).length).toBe(1);

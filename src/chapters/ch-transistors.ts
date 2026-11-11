@@ -544,7 +544,7 @@ export const chInverter: Chapter = {
         <div class="try">Set Vin to V<sub>M</sub> and read both regions, then make Wp / Wn 1 and watch the shaded band slide.</div>`,
       widget: () => vtcWidget(),
       more: {
-        derive: `<p>Wider or narrower PMOS: V<sub>M</sub> is ${VTC_M.vm.toFixed(2)} V for a matched pair, ${VTC_LO.vm.toFixed(2)} V when the PMOS is as wide as the NMOS (a hole is ${MOBILITY_RATIO}× less mobile, so the PMOS is the weaker device, and the output falls early) and ${VTC_HI.vm.toFixed(2)} V at 4×. Make the PMOS narrower and one noise margin grows at the other's expense; the table below gives all three.</p>
+        derive: `<p>Wider or narrower PMOS: V<sub>M</sub> is ${VTC_M.vm.toFixed(2)} V for a matched pair, ${VTC_LO.vm.toFixed(2)} V when the PMOS is as wide as the NMOS (a hole is ${MOBILITY_RATIO}× less mobile, so the PMOS is the weaker device, and the output falls early) and ${VTC_HI.vm.toFixed(2)} V at 4×. Make the PMOS narrower and one noise margin grows at the other's expense.</p>
           <p>Each point solves I<sub>n</sub>(Vin, Vout) = I<sub>p</sub>(VDD − Vin, VDD − Vout) with chapter 1's device (k = ${K} µA/V², V<sub>t</sub> = ${VT} V, channel-length factor 0.05 /V) by bisection on Vout, which is monotone. Matched means
           the PMOS carries ${MOBILITY_RATIO}× the width. By symmetry V<sub>M</sub> = VDD / 2, and with both in saturation at V<sub>M</sub> the current is (k / 2)·(V<sub>M</sub> − V<sub>t</sub>)² · (1 + λ V<sub>M</sub>) = ${VTC_SC.toFixed(0)} µA. The test pins V<sub>M</sub> to VDD / 2 for the matched pair and
           to the solver's own fixed point elsewhere.</p>`,

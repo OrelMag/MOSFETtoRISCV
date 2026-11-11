@@ -153,6 +153,7 @@ class SandboxOverlay {
     const old = this.legend;
     this.legend = r ? overlayLegend(r, () => this.set(null)) : null;
     this.legend?.classList.add('sb-ov-legend');
+    if (old?.classList.contains('open')) this.legend?.classList.add('open');
     if (old && this.legend) old.replaceWith(this.legend);
     else if (old) old.remove();
     else if (this.legend) this.ed.slots.overlay.append(this.legend);
