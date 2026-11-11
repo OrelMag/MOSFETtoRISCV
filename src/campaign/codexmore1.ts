@@ -1014,7 +1014,7 @@ don't-cares taken as 1:         op[3] + op[2]        one OR, 3 NANDs</pre>`,
       'Testing a minimised circuit against a table that filled the don\'t-cares with 0: a correct circuit then fails.',
     ],
     anatomy: ['ctl'],
-    chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'gates', step: 6, label: 'The multiplexer: a digital switch' }],
+    chapters: [{ chapter: 'logic', step: 3, label: "Don't cares: inputs that never happen" }, { chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'gates', step: 6, label: 'The multiplexer: a digital switch' }],
   },
 
   subtract: {

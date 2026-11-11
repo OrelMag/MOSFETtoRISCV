@@ -77,8 +77,15 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "XNOR: are they equal?", stage: "scene" },
     { title: "The multiplexer: a digital switch", challenge: "reach", stage: "scene" },
   ] },
-  { id: "logic", num: 5, title: "From a table to a circuit", blurb: "Truth table to sum of products, algebra, Karnaugh maps, don't cares, and the glitch.", level: "Gates", steps: [
-
+  { id: "logic", num: 5, title: "From a table to a circuit", blurb: "Truth table to sum of products, Boolean algebra, Karnaugh maps, don't cares, and the glitch that a two-level circuit can make.", level: "Gates", builds: ["gates","nand"], recap: {"checks":3}, steps: [
+    { title: "Any rule is a circuit: minterms", stage: "scene" },
+    { title: "Algebra that removes gates", challenge: "quiz", stage: "widget" },
+    { title: "The Karnaugh map", challenge: "quiz", stage: "widget" },
+    { title: "Don't cares: inputs that never happen", challenge: "reach", stage: "widget" },
+    { title: "Products of sums, and NAND–NAND", challenge: "quiz", stage: "widget" },
+    { title: "Minimal is not cheapest", stage: "widget" },
+    { title: "A glitch in two-level logic", challenge: "reach", stage: "scene" },
+    { title: "Your own: a 7-segment digit", challenge: "reach", stage: "widget" },
   ] },
   { id: "binary", num: 6, title: "Binary numbers", blurb: "Bits as numbers: unsigned, hex, two's complement, overflow, extension, shifts and fixed point.", level: "Numbers", builds: ["gates"], recap: {"checks":3}, steps: [
     { title: "Counting with two digits", challenge: "quiz", stage: "widget" },
