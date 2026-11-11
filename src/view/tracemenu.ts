@@ -125,6 +125,8 @@ export interface ExplainHost {
   openChapter(href: string): void;
   /** A level's chip: its id, for the gate (absent: no level). */
   chip?: { id: string; level: boolean };
+  /** Break a part (sim/ablate.ts): the level's parts removed in turn, in the Why? card; `part`: the menu is on one of them. */
+  breakPart?: { run(): void; part: boolean; why?: string | null };
 }
 
 /** Explain for a part or a level: the codex, its progress and the library's usage load when the group opens. */
@@ -142,6 +144,9 @@ export function explainGroup(def: ComponentDef, host: ExplainHost): MenuEntry[] 
       rows.push(c.locked && !host.readsLocked ? { label: `Codex: ${c.title}`, why: when } : { label: `Codex: ${c.title}`, ...(c.locked ? { hint: when } : {}), run: () => host.openCodex(c.id) });
     }
     if (x.chapter) rows.push({ label: `Chapter: ${x.chapter.label}`, run: () => host.openChapter(x.chapter!.href) });
+    const bp = host.breakPart;
+    if (bp?.why) rows.push({ label: 'Break a part', why: `Not for this level: ${bp.why}` });
+    else if (host.breakPart) rows.push({ label: 'Break a part', hint: host.breakPart.part ? 'What goes wrong without it: its row in the table of this level' : 'What each part of this level is for, removed in turn', run: host.breakPart.run });
     if (x.used && host.used && hasUsage(def)) rows.push({ label: 'Where it is used', hint: 'The first time reads the whole library', run: () => host.used!() });
     return rows.length ? rows : [{ label: 'Nothing more on this one', why: 'It has no truth table or codex entry to show.' }];
   } }];

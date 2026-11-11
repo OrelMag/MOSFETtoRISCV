@@ -5,6 +5,7 @@
 // The stage imports this module only while the setting is on, so off costs nothing.
 import '../styles/lens.css';
 import { reducedMotion } from '../ui/motion';
+import { TAP_SLOP } from './camera';
 import type { ViewCtx } from './context';
 import { closesAt, freeStage, growPlan, LENS_CLOSE_PX, openPlan, opensAt, rimJogs, type LensPlan, type Rect, type RimPort, type Size } from './lensplan';
 import type { OverlayResult } from './overlays';
@@ -43,6 +44,9 @@ export interface LensHost {
   /** The cue after a hand-off ("Esc or cpu goes back up"); null removes it. */
   cue(parent: { label: string; path: string[] } | null): void;
   say(text: string): void;
+  /** More of the lens view's events for this level (Why? clicks, the right-click menu's Why this value? and Explain:
+   *  track 2b); with them a right-click inside the lens opens the wire and part menus. Its open / select / up stay the lens's. */
+  events?(ctx: ViewCtx): Partial<SchematicEvents>;
 }
 
 interface Open {
@@ -117,6 +121,11 @@ export class Lens {
     return this.open && this.sel ? { ctx: this.open.ctx, name: this.sel } : null;
   }
 
+  /** The open lens's view (null once closed): Why? lights and selects inside it. */
+  get innerView(): SchematicView | null {
+    return this.open?.view ?? null;
+  }
+
   /** The level the lens shows (the breadcrumb's peek crumb). */
   get peekCtx(): ViewCtx | null {
     return this.open?.ctx ?? null;
@@ -165,9 +174,25 @@ export class Lens {
     o.tag.textContent = gap ? `${o.label} · ${gap}` : o.label;
   }
 
-  /** The stage's covers moved (a panel docked or folded, the Why? card): placed again. */
+  /** The stage's covers moved (a panel docked or folded, the Why? card growing with a trace): placed again in the free
+   *  stage, shrunk to it if it no longer fits. A cover is not a zoom or a pan: it never closes the lens nor hands off. */
   coversChanged(): void {
-    if (this.open) this.cameraMoved();
+    const o = this.open;
+    if (!o) return;
+    const box = this.boxPx(o.name);
+    if (!box) return void this.close();
+    const free = freeStage(this.canvasSize(), this.host.covers(), o.extent);
+    const g = growPlan(o.opened, box, o.extent, free);
+    let plan: LensPlan | null = g.plan;
+    if (g.handoff) {
+      // Infinity skips openPlan's legibility floor on purpose: while a cover is up the lens may briefly draw blocks under
+      // MIN_BLOCK_PX rather than close. `opened` restarts here so the next zoom step grows from this scale, not the old one.
+      plan = openPlan(box, o.extent, Infinity, free);
+      if (plan) o.opened = { plan, boxH: box.h };
+    }
+    if (!plan) return void this.close();
+    this.place(plan);
+    this.paintRim();
   }
 
   // ---- opening ----------------------------------------------------------------------------
@@ -246,6 +271,7 @@ export class Lens {
     el.style.visibility = 'hidden';
     this.host.canvas.append(el);
     const events: SchematicEvents = {
+      ...this.host.events?.(child),
       open: (c) => this.host.drill([...child.path, c]),
       select: (c) => {
         this.sel = c;
@@ -267,12 +293,19 @@ export class Lens {
       if (e.button !== 0 || (e.target as Element).closest('.inst')) return;
       e.stopPropagation();
       let x = e.clientX, y = e.clientY;
+      const x0 = x, y0 = y, wire = (e.target as Element).closest('[data-net]');
       const move = (m: PointerEvent) => { this.host.view.panBy(m.clientX - x, m.clientY - y); x = m.clientX; y = m.clientY; };
-      const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        // a press on a wire that did not pan is a click on it (Why? traces it, else it is selected)
+        if (wire && (Math.abs(x - x0) + Math.abs(y - y0)) / (this.unitPx() || 1) <= TAP_SLOP) this.wireTap(Number(wire.getAttribute('data-net')));
+      };
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
     }, { capture: true });
     const view = new SchematicView(body, events);
+    view.trace = !!this.host.events;
     view.show(child, false);
     const extent = view.contentBox();
     // the blocks whose names the lens must show (gate glyphs carry none): legible.ts planNames names a block once its
@@ -313,6 +346,14 @@ export class Lens {
       rim.animate([{ opacity: 0 }, { opacity: 1 }], { duration: OPEN_MS, easing: 'ease-in' });
     }
     this.host.say(`${name} opened in place; Enter steps in`);
+  }
+
+  /** A click on a wire inside the lens. */
+  private wireTap(idx: number): void {
+    const o = this.open;
+    if (!o || this.host.events?.(o.ctx).netClick?.(idx)) return;
+    o.view.select(null);
+    o.view.selectNet(idx);
   }
 
   /** Position the lens and set its inside's view box for this plan. */

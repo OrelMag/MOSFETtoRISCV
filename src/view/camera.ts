@@ -332,6 +332,9 @@ export interface PanZoomHooks {
  * Wheel zooms around the cursor; a drag on the background pans; a press without drag is a tap;
  * two fingers pinch-zoom and pan, wherever they land.
  */
+/** Below this (grid units, |dx| + |dy|) a press is still a click: hands shake. The lens's wire tap uses it too. */
+export const TAP_SLOP = 0.2;
+
 export function installPanZoom(svg: SVGSVGElement, cam: Camera, hooks: PanZoomHooks): void {
   let drag: { x: number; y: number; vx: number; vy: number; moved: boolean; target: Element } | null = null;
   installPinch(svg, {
@@ -352,8 +355,7 @@ export function installPanZoom(svg: SVGSVGElement, cam: Camera, hooks: PanZoomHo
     if (drag) {
       const k = cam.scale();
       const dx = (e.clientX - drag.x) * k, dy = (e.clientY - drag.y) * k;
-      // Below this (grid units) a press is still a click: hands shake.
-      if (Math.abs(dx) + Math.abs(dy) > 0.2) drag.moved = true;
+      if (Math.abs(dx) + Math.abs(dy) > TAP_SLOP) drag.moved = true;
       cam.vb.x = drag.vx - dx;
       cam.vb.y = drag.vy - dy;
       if (drag.moved) cam.fitted = false;
