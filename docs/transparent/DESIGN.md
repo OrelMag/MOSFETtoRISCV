@@ -78,13 +78,13 @@ that the learner cannot see (the floor per definition is a constant of the netli
 (h − 2·INSET)/E.h)` and centred, so the empty bands are on the long sides (`lensplan.ts fitInside`, INSET 0.6 units for
 the box's ports). It grows on screen only through the view's zoom, with the box; neighbours and their wires never move
 and are never covered. The box's ports stay on its edge as today; a short stub inside the outline joins each to its
-inner pin (it never leaves the outline). The box's name and port names fade while its inside shows (the crumb carries
-the name); its tinted body stays as the inside's background. The extent `E` is what the view draws, computed from the
+inner pin (it never leaves the outline). The box's name and icon fade while its inside shows (the crumb carries the
+name); its port names stay on its edge, so which pin is which still reads; its tinted body is the inside's background. The extent `E` is what the view draws, computed from the
 netlist (`insideExtent`: parts, the level's pins with their knobs and names, the view's 3-unit margin), so the scale the
 rule reads is the drawing's. **Tall bit-sliced parts** (a 32-bit register: its inside 60 × 270 units in an 8 × 6 box)
-read as a narrow centred column of bit cells and open late (the single-cycle CPU's `pc`: when the box is ~563 × 422 px);
-a pipeline register (3 × 74 units, its inside drawn 95 × 30) opens only at ~132 × 3 252 px, where the view's zoom limit
-leaves it a strip: double-click is the way in. That is the honest cost of drawing
+read as a narrow centred column of bit cells, its first and last named ("ff0", "ff31": the run rule, R3.2); the
+single-cycle CPU's `pc` opens when the box is ~211 × 158 px. A pipeline register (3 × 74 units, its inside drawn 95 × 30)
+opens at ~132 px wide (3 252 tall): a strip, so double-click stays the quick way in. That is the honest cost of drawing
 inside the outline: their insides are the wrong shape for their symbols. Drill (double-click) stays the quick way in,
 and the hint (R3.3) says how far away the opening is.
 
@@ -97,12 +97,24 @@ its inside alone (`smallestNamed(def)`: from the netlist, memoized per definitio
 (`decide(prev, px, openAt)`); nothing else is state. Every box on screen that meets the rule opens (R3.6), so nothing
 depends on where the pointer was. On a touch screen as with a mouse (item 6: the setting starts off there): a pinch opens a box
 past its opening zoom like the wheel; a tap on an inner part at least 40 px selects it, anywhere else in the inside steps
-into the box; a double tap on a part drills. Not in an NMOS scene. Measured opening zooms (px per unit, fib): single-cycle `pc` 70.3, `alu` 27.5, `rf` 38.9, `imm` 16.0, `ctl`
-3.6, `npc` 21.5; pipeline `FD` / `DE` 43.9, `hz` 16.3 (tests/lens-hone.test.ts pins them from the functions).
+into the box; a double tap on a part drills. Not in an NMOS scene. **Runs.** RUN_MIN (4) or more identical parts (one definition and orientation: a register's flip-flops, a register file's
+registers, a mux array's gates) count as one block, the run's extent, as long as each cell is at least CELL_PX (5) on
+screen; while the cells are too small for their own names the lens names the run's first and last (`runsOf`).
+**The canvas cap** (`capOpenAt`, the author's target, 2026-11-12): no box opens later than when its shorter side is
+CAP_SHARE (40 %) of the canvas's shorter side, nor past the view's deepest zoom (camera.ts MIN_VIEW_UNITS: no dead end,
+the hint never asks for a zoom the view cannot reach). The one place the canvas enters the rule (never its free area: a
+panel docking opens or closes nothing); it decides the big insides on the out-of-order core (the issue queue, the reorder
+buffer, the store queue, the instruction classifiers, the operand units, `rf` on the pipelined and single-cycle CPUs), which
+then open before every inner name is drawn; those names appear as the zoom goes on. `data-open-at` is the capped value.
+Measured opening zooms before the cap (px per unit, fib): single-cycle `pc` 35.2, `alu` 27.5, `rf` 31.1, `imm` 16.0, `ctl`
+3.6, `npc` 21.5; pipeline `FD` / `DE` 43.9, `hz` 12.2 (tests/lens-hone.test.ts); tests/lens-target.test.ts holds every box
+of the three CPUs' tops to the cap at two canvas sizes.
 
 **R3.3 Shown to the learner.** Hovering a closed box that can open shows "zoom in to see inside (×2.4)": the zoom factor
-still needed, from `openAtPx`; past ×4, "zoom in ×7.5 to see inside, or double-click to step in". Each box carries
-`data-open-at` (tests, smoke). Open, its crumb reads "cpu ▸ *alu (inside)*" while the pointer is over it, and Enter /
+still needed, from the box's `data-open-at`; past ×4, "zoom in ×7.5 to see inside, or double-click to step in". It sits
+below the box (above it, or inside its top edge, when there is no room), never over its name or under the bar. The level
+badges stay above the insides; a category icon is hidden once it would pass 36 px. A hand-off takes only the box under
+the pointer: zooming on a small part never steps into a big neighbour. Open, its crumb reads "cpu ▸ *alu (inside)*" while the pointer is over it, and Enter /
 double-click step in. The `?` sheet and View options say the rule in one line: "A block opens in place once it is big
 enough for the names inside it to read."
 
