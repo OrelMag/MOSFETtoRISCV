@@ -66,7 +66,7 @@ export const chMap: Chapter = {
         bar at the bottom (or click the pins) and watch the sum <code>s</code>.</p>
         <p>Now the important part: <strong>double-click any block to look inside it</strong>.
         An adder is made of <span data-ahead="fulladder">full adders (<code>FA</code>: circuits that add one bit position: two input bits plus a carry in, giving a sum bit and a carry out; chapter ${numOf('adders')} builds one)</span>.
-        A full adder is made of <span data-ahead="nand">NAND gates (gates whose output is 0 only when both inputs are 1; chapter 3 builds one)</span>.
+        A full adder is made of <span data-ahead="nand">NAND gates (gates whose output is 0 only when both inputs are 1; chapter ${numOf('nand')} builds one)</span>.
         A NAND gate is made of four transistors. Open one of those and you reach a single transistor.</p>
         <div class="try">Open <code>fa0</code>, then one of its gates, then a transistor. Use the breadcrumbs above
         the circuit, or press <kbd>Esc</kbd>, to climb back up.</div>
@@ -86,7 +86,7 @@ export const chMap: Chapter = {
           { title: 'One bit stage', at: ['fa0'], show: ['g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'g7', 'g8', 'g9'],
             say: `<p>Inside fa0: ${stats(rca(4)).nands / 4} gates, all <span data-ahead="nand">NANDs (gates whose output is 0 only when both inputs are 1)</span>. This is the level you get by opening a box one step.</p>` },
           { title: 'One gate', at: ['fa0', 'g1'], show: ['p1', 'p2', 'n1', 'n2'],
-            say: '<p>Inside g1: four transistors, two PMOS and two NMOS. This is the bottom of the stack: the next three chapters build up to why these four make a gate (chapter 3).</p>' },
+            say: `<p>Inside g1: four transistors, two PMOS and two NMOS. This is the bottom of the stack: the next three chapters build up to why these four make a gate (chapter ${numOf('nand')}).</p>` },
         ],
       },
       more: {
@@ -258,9 +258,9 @@ export const chMosfet: Chapter = {
         <table><tr><th></th><th>gate = 0</th><th>gate = 1</th></tr>
         <tr><th>NMOS</th><td>off</td><td>on</td></tr><tr><th>PMOS</th><td>on</td><td>off</td></tr></table>
         <p>NMOS is good at pulling a wire down to 0 (ground). PMOS is good at pulling it up to 1 (VDD).
-        That complementary pair is the C in <span data-ahead="cmos"><strong>CMOS</strong> (complementary MOS: NMOS and PMOS used together, each pulling to its own rail; chapter 2 builds the simplest CMOS gate)</span>.</p>
+        That complementary pair is the C in <span data-ahead="cmos"><strong>CMOS</strong> (complementary MOS: NMOS and PMOS used together, each pulling to its own rail; chapter ${numOf('inverter')} builds the simplest CMOS gate)</span>.</p>
         <p>The reason for the asymmetry is the sign of the carriers and of the source. An NMOS source is its lower terminal, so the gate must rise above it by Vt; if
-        the output it drives rises towards VDD, its V<sub>gs</sub> shrinks and it stops short (the weak-levels step of <a href="#/c/inverter/3">chapter 2</a> shows the weak 1). A PMOS source is its upper
+        the output it drives rises towards VDD, its V<sub>gs</sub> shrinks and it stops short (the weak-levels step of <a href="#/c/inverter/3">chapter ${numOf('inverter')}</a> shows the weak 1). A PMOS source is its upper
         terminal, and its V<sub>sg</sub> grows as the output rises, so it carries a 1 whole. Each type is strong on the rail it is tied to and weak on the other one.</p>`,
       more: {
         derive: `<p>The PMOS equations are the NMOS ones with every voltage measured from the source and its sign reversed: it conducts when V<sub>sg</sub> = V<sub>s</sub> − V<sub>g</sub> > |V<sub>tp</sub>|, and the current
@@ -519,7 +519,7 @@ export const chInverter: Chapter = {
           and VDD − |Vt| (the PMOS turns off), both conduct, and a <strong>short-circuit current</strong> flows straight
           from VDD to ground. With sharp input edges it costs about a tenth of the switching energy; a slow edge keeps both
           on longer, one reason designers bound transition times. Add the subthreshold leak of
-          <a href="#/c/mosfet/1">chapter 1</a>'s off transistor, and "almost no static power" is milliwatts to watts on a
+          <a href="#/c/mosfet/1">chapter ${numOf('mosfet')}</a>'s off transistor, and "almost no static power" is milliwatts to watts on a
           large chip, not zero.</p>`,
         pitfall: `<p>Taking "no static power" literally when estimating a battery life. The statement holds for the dynamic term, which is zero while nothing switches; the leakage term never is, and on a chip with
           billions of transistors it is the idle power. A clock that is stopped saves the dynamic term only; powering a block down saves the leak too.</p>`,
@@ -545,7 +545,7 @@ export const chInverter: Chapter = {
       widget: () => vtcWidget(),
       more: {
         derive: `<p>Wider or narrower PMOS: V<sub>M</sub> is ${VTC_M.vm.toFixed(2)} V for a matched pair, ${VTC_LO.vm.toFixed(2)} V when the PMOS is as wide as the NMOS (a hole is ${MOBILITY_RATIO}× less mobile, so the PMOS is the weaker device, and the output falls early) and ${VTC_HI.vm.toFixed(2)} V at 4×. Make the PMOS narrower and one noise margin grows at the other's expense; the table below gives all three.</p>
-          <p>Each point solves I<sub>n</sub>(Vin, Vout) = I<sub>p</sub>(VDD − Vin, VDD − Vout) with chapter 1's device (k = ${K} µA/V², V<sub>t</sub> = ${VT} V, channel-length factor 0.05 /V) by bisection on Vout, which is monotone. Matched means
+          <p>Each point solves I<sub>n</sub>(Vin, Vout) = I<sub>p</sub>(VDD − Vin, VDD − Vout) with chapter ${numOf('mosfet')}'s device (k = ${K} µA/V², V<sub>t</sub> = ${VT} V, channel-length factor 0.05 /V) by bisection on Vout, which is monotone. Matched means
           the PMOS carries ${MOBILITY_RATIO}× the width. By symmetry V<sub>M</sub> = VDD / 2, and with both in saturation at V<sub>M</sub> the current is (k / 2)·(V<sub>M</sub> − V<sub>t</sub>)² · (1 + λ V<sub>M</sub>) = ${VTC_SC.toFixed(0)} µA. The test pins V<sub>M</sub> to VDD / 2 for the matched pair and
           to the solver's own fixed point elsewhere.</p>`,
         numbers: `<table class="mini"><tr><th>Wp / Wn</th><th>V<sub>M</sub></th><th>NM<sub>L</sub></th><th>NM<sub>H</sub></th></tr>${[1, MOBILITY_RATIO, 4].map((w) => { const m = metrics(strength(w)); return `<tr><td>${w}</td><td>${m.vm.toFixed(2)} V</td><td>${m.nmL.toFixed(2)} V</td><td>${m.nmH.toFixed(2)} V</td></tr>`; }).join('')}</table>`,
@@ -566,7 +566,7 @@ export const chInverter: Chapter = {
         <code>a = 1</code> the NMOS conducts, but only while its gate is a threshold above its source: <code>y</code>
         rises to VDD − V<sub>t</sub> = ${VDD_VOLTS} − ${VT_VOLTS} = <strong>${(VDD_VOLTS - VT_VOLTS).toFixed(1)} V</strong> and the channel pinches off. That is a
         <strong>weak 1</strong>, drawn between the 0 and 1 colours and tagged <strong>H</strong>. With <code>a = 0</code>
-        the PMOS stops at V<sub>t</sub>: a weak 0, <strong>L</strong> at ${VT_VOLTS} V. The bits are right; the levels are not. (The switch-level model uses an illustrative ${VDD_VOLTS} V supply and V<sub>t</sub> = ${VT_VOLTS} V, not chapter 1's 1.8 V / 0.45 V device, so its levels are ${(VDD_VOLTS - VT_VOLTS).toFixed(2)} V and ${VT_VOLTS.toFixed(2)} V; the ratios are what carry over.)</p>
+        the PMOS stops at V<sub>t</sub>: a weak 0, <strong>L</strong> at ${VT_VOLTS} V. The bits are right; the levels are not. (The switch-level model uses an illustrative ${VDD_VOLTS} V supply and V<sub>t</sub> = ${VT_VOLTS} V, not chapter ${numOf('mosfet')}'s 1.8 V / 0.45 V device, so its levels are ${(VDD_VOLTS - VT_VOLTS).toFixed(2)} V and ${VT_VOLTS.toFixed(2)} V; the ratios are what carry over.)</p>
         <p>A CMOS gate reading H still reads 1 and drives a full 0 from its rails, so the level is restored one gate
         later. The price is in that gate: its PMOS sees ${(VDD_VOLTS - VT_VOLTS).toFixed(1)} V against ${VDD_VOLTS} V, right at threshold, partly on, and a
         current flows from VDD to ground all the time. A 1 passed by an NMOS whose own gate is H is worse: ${(VDD_VOLTS - VT_VOLTS).toFixed(1)} − ${VT_VOLTS} =
@@ -802,7 +802,7 @@ export const chNand: Chapter = {
         <p>Nothing limits a NAND to two inputs: three parallel PMOS, three NMOS in series. Here is the three-input gate, ${stats(cmosNand(3)).transistors} transistors. The pull-down is a stack of
         <span data-show="n1 n2 n3">three NMOS</span>, so it conducts only when all three inputs are 1; any one input at 0 turns on its PMOS in the <span data-show="p1 p2 p3">parallel pull-up</span>.</p>
         <p>What it costs is speed. A series stack of n devices passes about 1/n of the current of one, so to pull down as fast as an inverter each NMOS must be n times wider, and the gate's input capacitance grows with it. In
-        logical effort (a gate's input capacitance relative to an inverter delivering the same current, so its delay per unit of load in τ, as in chapter 2's last step) a NAND with n inputs has <strong>g = (n + 2) / 3</strong> and a parasitic delay p = n:
+        logical effort (a gate's input capacitance relative to an inverter delivering the same current, so its delay per unit of load in τ, as in chapter ${numOf('inverter')}'s last step) a NAND with n inputs has <strong>g = (n + 2) / 3</strong> and a parasitic delay p = n:
         ${[2, 3, 4].map((n) => `NAND${n} g = ${fmtFrac(gNand(n))}, p = ${n}`).join('; ')}. Every extra input loads every gate that drives it and slows the gate itself.</p>
         <p>That is why libraries stop at four inputs and why the brick of this site has two. Wider gates are not forbidden, but a tree of two-input gates is usually as fast and no larger: the NOR step below compares them.</p>
         <div class="try">Make the output 0, then lift any single input and find the PMOS that takes y back up.</div>`,

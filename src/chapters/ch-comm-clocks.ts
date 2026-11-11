@@ -75,7 +75,7 @@ export const chClocks: Chapter = {
     {
       title: 'What a receiver decides',
       body: `
-        <p>Every input pin ends in an amplifier and a threshold. The inverter of chapter 2 is the model: the matched pair has its switching threshold at VM = ${nf(M.vm)} V,
+        <p>Every input pin ends in an amplifier and a threshold. The inverter of chapter ${numOf('inverter')} is the model: the matched pair has its switching threshold at VM = ${nf(M.vm)} V,
         and its transfer curve falls through VM with a peak gain of ${nf(M.gain, 0)}. The curve defines the receiver's contract. An input below <strong>VIL</strong> = ${nf(M.vil)} V is read as 0, above
         <strong>VIH</strong> = ${nf(M.vih)} V as 1, and in between the output is neither: a level that the next gate may read either way, or as a runt.</p>
         <p>The curve's outputs at those two points are VOL = ${nf(M.vol)} V and VOH = ${nf(M.voh)} V, the conservative figures a datasheet would quote for a driver (one that swings to the rails has more), so the margin before the receiver's zone is <strong>NML</strong> = VIL − VOL = ${mv(M.nmL)} and
@@ -101,7 +101,7 @@ export const chClocks: Chapter = {
         an input inverter A (<span data-show="p1 n1">p1, n1</span>) drives a node m, an output inverter B (<span data-show="p2 n2">p2, n2</span>) turns m into y, and a
         <span data-show="pk nk">keeper</span>, a weak inverter from y back onto m. The keeper restates whatever y is, so m is held where it was. It is built with a narrow PMOS and NMOS
         (strength 2 in the switch-level solver, the input devices 3) the way an SRAM cell's pull-ups are: strong enough to hold, weak enough to lose a fight.</p>
-        <p>At switch level the part is a buffer: y follows a. The analogue story is in the panel, computed from the current balance of chapter 1's square-law devices.
+        <p>At switch level the part is a buffer: y follows a. The analogue story is in the panel, computed from the current balance of chapter ${numOf('mosfet')}'s square-law devices.
         With y = 0 the keeper's PMOS pulls m up with a current proportional to its width κ (in units of the input devices). The input rises, A's NMOS pulls m down, and m crosses B's
         threshold only when A's NMOS current exceeds A's PMOS plus the keeper: <strong>VT+ = ${nf(TH.up!, 3)} V</strong> for κ = ${KEEPER}. Going down the keeper is on the other side:
         <strong>VT− = ${nf(TH.down!, 3)} V</strong>. The pair is symmetric, so both sit ${mv(TH.width! / 2)} from VM, a hysteresis of ${mv(TH.width!)}, and it grows in step with κ. At κ = ${nf(keeperLimit())} the
