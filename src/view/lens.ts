@@ -9,9 +9,10 @@
 // export draw closed boxes. The stage imports this module only while the setting is on, so off costs nothing.
 import '../styles/lens.css';
 import { reducedMotion } from '../ui/motion';
+import { ICON } from './boxtext';
 import { TAP_SLOP } from './camera';
 import type { ViewCtx } from './context';
-import { capOpenAt, decide, fitInside, FADE_MS, handOffView, handsOff, insideExtent, openAtPx, smallestNamed, type Rect } from './lensplan';
+import { capOpenAt, decide, fitInside, FADE_MS, FLOOR_PX, runsOf, handOffView, handsOff, insideExtent, openAtPx, smallestNamed, type Rect } from './lensplan';
 import { cueWords, progress, ZoomOutGate } from './zoomout';
 import { installPinch } from './pinch';
 import type { OverlayResult } from './overlays';
@@ -23,6 +24,12 @@ const SVG = 'http://www.w3.org/2000/svg';
 export const HINT_MAX_ZOOM = 4;
 /** An inside built more than this far (px) outside the canvas is dropped: it would only cost repaints. */
 const KEEP_PX = 200;
+/** The size (px) a run's end names are drawn at (legible.ts draws block names at about this size). */
+const RUN_NAME_PX = 11;
+/** The hint's height with its gap (px): it goes where it has that much room. */
+const HINT_ROOM_PX = 30;
+/** A category icon (boxtext.ts ICON units) is hidden past this size on screen (px). */
+const ICON_MAX_PX = 36;
 /** On a touch screen a tap inside an open box selects a part at least this big on screen (px, the coarse-pointer target);
  *  anywhere else it steps into the box (DESIGN.md item 6). */
 export const TAP_SELECT_PX = 40;
@@ -82,6 +89,7 @@ interface Box {
   /** The drawn inside's extent (inner units). */
   extent?: Rect;
   stubs?: SVGGElement;
+  runs?: SVGGElement;
   shown?: boolean;
   /** Its fade-out's start (a show in between cancels the drop). */
   gone?: number;
@@ -146,6 +154,7 @@ export class Lens {
   dispose(): void {
     this.dropAll();
     for (const b of this.boxes.keys()) this.groupOf(b)?.removeAttribute('data-open-at');
+    this.host.view.el.classList.remove('lens-bigicons');
     this.hideHint();
     this.off.forEach((f) => f());
     this.off = [];
@@ -342,6 +351,7 @@ export class Lens {
     const px = this.unitPx();
     const c = this.canvasRect();
     this.cap(c);
+    this.host.view.el.classList.toggle('lens-bigicons', px * ICON > ICON_MAX_PX);
     const zoomingIn = this.lastPx > 0 && px > this.lastPx * 1.0001;
     this.lastPx = px;
     let wantBuild = false;
@@ -582,6 +592,7 @@ export class Lens {
     if (!(f.k > 0) || !(r.w > 0)) return;
     // the inner point e.x sits at the fit's left edge: (f.x − box.x) outer units into the box, f.k outer units per inner unit
     view.setView({ x: e.x - (f.x - box.x) / f.k, y: e.y - (f.y - box.y) / f.k, w: box.w / f.k, h: box.h / f.k }, { w: r.w, h: r.h });
+    this.paintRuns(b, (r.w / box.w) * f.k);
   }
 
   private show(b: Box): void {
@@ -614,7 +625,7 @@ export class Lens {
     if (this.over === b.name) this.setOver(null);
     b.view?.clear();
     b.el?.remove();
-    b.view = b.el = b.ctx = b.child = b.extent = b.stubs = undefined;
+    b.view = b.el = b.ctx = b.child = b.extent = b.stubs = b.runs = undefined;
     b.shown = false;
     b.gone = undefined;
     b.sel = null;
@@ -627,6 +638,32 @@ export class Lens {
   }
 
   // ---- stubs: the box's ports to the inner pins, inside the outline ---------------------------
+
+  /** A run's first and last parts named ("ff0", "ff31") while its cells are too small for their own names (lensplan.ts
+   *  runsOf): fixed-size text in the inside's own units, so it stays readable as the zoom changes. `innerPx`: screen px per
+   *  inner unit. */
+  private paintRuns(b: Box, innerPx: number): void {
+    const view = b.view;
+    if (!view || !(innerPx > 0)) return;
+    let g = b.runs;
+    if (!g || !g.isConnected) {
+      g = document.createElementNS(SVG, 'g') as SVGGElement;
+      g.setAttribute('class', 'inside-runs');
+      view.el.append(g);
+      b.runs = g;
+    }
+    const size = RUN_NAME_PX / innerPx;
+    const want = runsOf(b.def).filter((run) => run.cellLong * innerPx < FLOOR_PX).flatMap((run) => [[run.first, run.firstRect], [run.last, run.lastRect]] as const);
+    while (g.children.length > want.length) g.lastChild!.remove();
+    want.forEach(([name, rc], i) => {
+      let t = g.children[i] as SVGTextElement | undefined;
+      if (!t) { t = document.createElementNS(SVG, 'text') as SVGTextElement; g.append(t); }
+      if (t.textContent !== name) t.textContent = name;
+      t.setAttribute('x', String(rc.x + rc.w / 2));
+      t.setAttribute('y', String(rc.y + rc.h / 2));
+      t.setAttribute('font-size', size.toFixed(4));
+    });
+  }
 
   /** A stub per port with an inner pin of the same name: from the port on the box edge to the pin, in the inside's own
    *  units (so it scales with it), coloured as the pin's wire. */
@@ -685,8 +722,12 @@ export class Lens {
       this.layer.append(el);
     }
     if (el.textContent !== text) el.textContent = text;
-    el.style.left = `${r.x + r.w / 2}px`;
-    el.style.top = `${r.y}px`;
+    // below the box (its name sits on or above it), else above it, else just inside its top edge: never under the bar
+    const ch = this.canvasRect().height, room = HINT_ROOM_PX;
+    const below = r.y + r.h + room <= ch, above = r.y >= room;
+    el.style.left = `${Math.min(Math.max(r.x + r.w / 2, 0), this.canvasRect().width)}px`;
+    el.style.top = `${below ? r.y + r.h : above ? r.y : Math.max(r.y, 0) + 4}px`;
+    el.style.transform = below ? 'translate(-50%, 4px)' : above ? 'translate(-50%, calc(-100% - 4px))' : 'translate(-50%, 0)';
     this.hint = { el, name: b.name };
   }
 

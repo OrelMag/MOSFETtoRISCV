@@ -165,3 +165,32 @@ export function insideExtent(def: ComponentDef): Rect | null {
   extentMemo.set(def, r);
   return r;
 }
+
+/** A run inside a box (RUN_MIN or more identical parts): its first and last part, by position along the run. */
+export interface Run { first: string; last: string; n: number; firstRect: Rect; lastRect: Rect; cellLong: number }
+const runsMemo = new WeakMap<ComponentDef, Run[]>();
+/** The runs of a definition's inside (inner grid units): while their cells are too small for their own names, the lens names
+ *  the first and last (view/lens.ts), as R3.2's run rule reads them. From the netlist, memoized per definition. */
+export function runsOf(def: ComponentDef): Run[] {
+  const hit = runsMemo.get(def);
+  if (hit) return hit;
+  const groups = new Map<string, { name: string; r: Rect }[]>();
+  for (const inst of netlistOf(def)?.instances ?? []) {
+    const d = inst.def;
+    if (d.prim === 'alias' || isConstantDef(d)) continue;
+    const g = orientGeom(d, inst.flip, inst.rot), [x, y] = inst.at ?? [0, 0];
+    const key = `${d.id}|${inst.flip ? 1 : 0}|${inst.rot ?? 0}`;
+    groups.set(key, [...(groups.get(key) ?? []), { name: inst.name, r: { x, y, w: g.w, h: g.h } }]);
+  }
+  const out: Run[] = [];
+  for (const parts of groups.values()) {
+    if (parts.length < RUN_MIN) continue;
+    const xs = parts.map((p) => p.r.x), ys = parts.map((p) => p.r.y);
+    const vertical = Math.max(...ys) - Math.min(...ys) >= Math.max(...xs) - Math.min(...xs);
+    const sorted = [...parts].sort((a, b) => (vertical ? a.r.y - b.r.y || a.r.x - b.r.x : a.r.x - b.r.x || a.r.y - b.r.y));
+    const a = sorted[0], z = sorted[sorted.length - 1];
+    out.push({ first: a.name, last: z.name, n: parts.length, firstRect: a.r, lastRect: z.r, cellLong: Math.max(a.r.w, a.r.h) });
+  }
+  runsMemo.set(def, out);
+  return out;
+}

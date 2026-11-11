@@ -10,6 +10,8 @@
 :root[data-look='vivid'][data-board='dark'] .canvas { --lens-rim: #8fb3ff; }
 
 .lens-layer { position: absolute; inset: 0; pointer-events: none; z-index: 3; contain: layout style; overflow: hidden; }
+/* the level's badges stay above the insides */
+.canvas > .level-badge, .canvas > .hint-badge { z-index: 4; }
 
 /* One inside: exactly the box's outline, clipped to it, transparent until shown (the fade both ways: FADE_MS 160). */
 .inside {
@@ -21,27 +23,36 @@
 }
 .inside.on { opacity: 1; pointer-events: auto; }
 .inside.instant { transition: none; }
-.inside > svg.schematic { position: absolute; inset: 0; width: 100%; height: 100%; background: none; cursor: grab; touch-action: none; user-select: none; }
+.inside > svg.schematic { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; touch-action: none; user-select: none; }
+/* transparent over the box's own body, whatever board the look paints (vivid's dark board rule is more specific than any
+   class here): a neighbour's value pill reaching over the box edge stays whole */
+.canvas .inside > svg.schematic { background: none !important; }
+/* a run's end names (lens.ts paintRuns): fixed size, readable over the cells */
+.inside-runs text { fill: var(--text); font-family: var(--font-ui); font-weight: 600; text-anchor: middle; dominant-baseline: central; paint-order: stroke; stroke: var(--canvas); stroke-width: 0.25em; pointer-events: none; }
+:root[data-look='vivid'][data-board='dark'] .inside-runs text { fill: #e8ecf5; stroke: #1b1f2a; }
 /* the inside's own grid would not line up with the level's: it keeps taking clicks (a press there pans the view) */
 .inside .grid-bg { fill: none; }
 .inside-stub { fill: none; stroke-dasharray: none; }
 
-/* The box under an inside keeps its tinted body; its name, port names and icons give way to the inside. */
-svg.schematic g.inst text,
+/* The box under an inside keeps its tinted body and its port names on the edge (which pin is which); its name and icon give
+   way to the inside (the crumb names it). */
+svg.schematic g.inst .sym-label,
 svg.schematic g.inst .lg-name,
 svg.schematic g.inst .sym-icon,
 svg.schematic g.inst .sym-gloss { transition: opacity 160ms ease; }
-svg.schematic g.inst.inside-on text,
+svg.schematic g.inst.inside-on .sym-label,
 svg.schematic g.inst.inside-on .lg-name,
 svg.schematic g.inst.inside-on .sym-icon,
 svg.schematic g.inst.inside-on .sym-gloss { opacity: 0; }
+/* a category icon never grows past ~36 px on screen (lens.ts sets lens-bigicons on the view past that zoom) */
+svg.schematic.lens-bigicons .sym-icon { opacity: 0; }
 /* the stage lit the box but names nothing inside it (DESIGN.md track 2c): its outline glows */
 svg.schematic g.inst.lens-lit { filter: drop-shadow(0 0 0.5px var(--lens-rim)) drop-shadow(0 0 4px var(--lens-rim)); }
 
-/* Hovering a closed block that can open: how much more zoom it needs, over its top edge. */
+/* Hovering a closed block that can open: how much more zoom it needs, below the box (lens.ts places it). */
 .inside-hint {
   position: absolute;
-  transform: translate(-50%, calc(-100% - 4px));
+  transform: translate(-50%, 4px);
   font: 12px var(--font-ui);
   color: var(--text);
   background: var(--surface);
