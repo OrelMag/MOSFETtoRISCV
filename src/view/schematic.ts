@@ -906,6 +906,11 @@ export class SchematicView {
     this.highlight(this.lastHl.names, this.lastHl.focus);
   }
 
+  /** A class on a drawn part's group (the zoom lens: its inside shown, its outline lit by the CPU panel). */
+  boxClass(name: string, cls: string, on: boolean): void {
+    this.insts.get(name)?.classList.toggle(cls, on);
+  }
+
   /** A drawn part's box, grid units. */
   boxOf(name: string): Rect | undefined {
     return this.boxes.get(name);

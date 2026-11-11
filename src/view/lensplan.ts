@@ -241,3 +241,24 @@ export function smallestNamed(def: ComponentDef): number {
   smallestMemo.set(def, v);
   return v;
 }
+
+const extentMemo = new WeakMap<ComponentDef, Rect>();
+/** The inside's extent (inner grid units) from its netlist: every part and the level's pins. What the rule scales into the
+ *  box; the drawing (its wires, its tags) may reach a unit or so further, and the inside is fitted on the drawing. */
+export function insideExtent(def: ComponentDef): Rect | null {
+  const hit = extentMemo.get(def);
+  if (hit) return hit;
+  const nl = netlistOf(def);
+  if (!nl?.instances.length) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const grow = (x: number, y: number) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); };
+  for (const i of nl.instances) {
+    const g = orientGeom(i.def, i.flip, i.rot), [x, y] = i.at ?? [0, 0];
+    grow(x, y);
+    grow(x + g.w, y + g.h);
+  }
+  for (const p of Object.values(nl.pins ?? {})) grow(p[0], p[1]);
+  const r = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  extentMemo.set(def, r);
+  return r;
+}
