@@ -10,6 +10,8 @@ export interface ElfSegment {
   flags?: number;
   /** Bytes in memory, ≥ the file's (the rest zeroed by the loader: .bss). Default the file's. */
   memsz?: number;
+  /** Where its bytes sit in physical memory, when not at vaddr (p_paddr: the load address; chapter linking: text in the ROM frame it runs from). */
+  paddr?: number;
 }
 
 export const PF_X = 1, PF_W = 2, PF_R = 4;
@@ -69,9 +71,9 @@ function writeElf(cls: 32 | 64, entry: number, segments: ElfSegment[], symbols: 
     if (w) {
       // p_type, p_flags, then p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align
       u32(o, PT_LOAD); u32(o + 4, s.flags ?? PF_RWX);
-      [segOffs[i], s.vaddr, s.vaddr, s.bytes.length, s.memsz ?? s.bytes.length, 8].forEach((v, k) => ua(o + 8 + 8 * k, v));
+      [segOffs[i], s.vaddr, s.paddr ?? s.vaddr, s.bytes.length, s.memsz ?? s.bytes.length, 8].forEach((v, k) => ua(o + 8 + 8 * k, v));
     } else {
-      u32(o, PT_LOAD); u32(o + 4, segOffs[i]); u32(o + 8, s.vaddr); u32(o + 12, s.vaddr);
+      u32(o, PT_LOAD); u32(o + 4, segOffs[i]); u32(o + 8, s.vaddr); u32(o + 12, s.paddr ?? s.vaddr);
       u32(o + 16, s.bytes.length); u32(o + 20, s.memsz ?? s.bytes.length); u32(o + 24, s.flags ?? PF_RWX); u32(o + 28, 4);
     }
     buf.set(s.bytes, segOffs[i]);
@@ -105,7 +107,7 @@ export function wordBytes(words: number[]): Uint8Array {
   return b;
 }
 
-export interface ElfProgramHeader { type: number; offset: number; vaddr: number; filesz: number; memsz: number; flags: number }
+export interface ElfProgramHeader { type: number; offset: number; vaddr: number; paddr: number; filesz: number; memsz: number; flags: number }
 export interface ElfInfo { entry: number; phoff: number; phnum: number; segments: ElfProgramHeader[]; symbols: Record<string, number> }
 
 /** Read a 32-bit little-endian RISC-V executable: what a loader needs (entry, the program headers) and the symbol table. Throws on anything else. */
@@ -119,7 +121,7 @@ export function readElf32(buf: Uint8Array): ElfInfo {
   const segments: ElfProgramHeader[] = [];
   for (let i = 0; i < phnum; i++) {
     const o = phoff + phentsize * i;
-    segments.push({ type: u32(o), offset: u32(o + 4), vaddr: u32(o + 8), filesz: u32(o + 16), memsz: u32(o + 20), flags: u32(o + 24) });
+    segments.push({ type: u32(o), offset: u32(o + 4), vaddr: u32(o + 8), paddr: u32(o + 12), filesz: u32(o + 16), memsz: u32(o + 20), flags: u32(o + 24) });
   }
   const symbols: Record<string, number> = {};
   for (let i = 0; i < shnum; i++) {
