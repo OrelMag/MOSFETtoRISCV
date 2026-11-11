@@ -53,6 +53,18 @@ export function nameEligible(label: string | null | undefined, w: number, h: num
   return t.length >= 2 && !/^[01]$/.test(t) && !/:=|=\s*(0x[\da-f]+|[\d.]+)$|^0x|^[\d.]+$/i.test(t) && /[A-Za-z].*[A-Za-z]/.test(t) && (w >= 6 || h >= 20);
 }
 
+/**
+ * The fixed-size name a block gets, or null: an instance marked `named` its label; a constant its value; else its own
+ * label when worth one; a one-glyph symbol (a comparator's "=") its instance label.
+ */
+export function blockName(inst: { label?: string; named?: boolean }, own: string | null, isConst: boolean, w: number, h: number): string | null {
+  const o = own?.trim() ?? '';
+  if (inst.named && inst.label?.trim()) return inst.label.trim();
+  if (isConst) return o;
+  if (nameEligible(own, w, h)) return o;
+  return own && o.length === 1 && inst.label && nameEligible(inst.label, w, h) ? inst.label.trim() : null;
+}
+
 /** A tall narrow block (a pipeline register) gets its name turned. */
 export const nameRotated = (w: number, h: number): boolean => h > w * 3;
 

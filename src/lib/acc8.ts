@@ -160,8 +160,10 @@ function accDrawing(R0: ComponentDef | null) {
   const instances: InstanceDef[] = [];
   const geo = new Map<string, ReturnType<typeof symbolGeom>>();
   const at = new Map<string, [number, number]>();
+  /** Boxes whose library label is generic (REG8 twice, REG5, an unlabelled incrementer and zero test): their label names them at any zoom. */
+  const NAMED = new Set(['pc', 'inc', 'acc', 'outr', 'zero']);
   const place = (name: string, def: ComponentDef, xy: [number, number], label?: string) => {
-    instances.push({ name, def, at: xy, ...(label ? { label } : {}) });
+    instances.push({ name, def, at: xy, ...(label ? { label } : {}), ...(label && NAMED.has(name) ? { named: true } : {}) });
     geo.set(name, symbolGeom(def));
     at.set(name, xy);
   };
