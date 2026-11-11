@@ -607,6 +607,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .model-leaf h3 { margin: 0 0 6px; }
 .model-leaf > .btn { margin: 0 0 12px; }
 .canvas:has(> .widget-host > .model-leaf) > .stage-notes { display: none; }
+/* a widget under the challenge chip starts below it (--goal-h: ui/stagenotes.ts), so the chip never covers its first line */
+.canvas:has(> .stage-notes > .stage-goal) > .widget-host:not(:has(> .model-leaf)) { padding-top: max(0px, calc(var(--goal-h, 0px) - 14px)); }
 .level-badge {
   position: absolute; left: 12px; top: 10px; z-index: 2; pointer-events: none;
   font: 600 11px var(--font-mono); letter-spacing: 0.05em; text-transform: uppercase;
@@ -1948,9 +1950,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .asm-table td.a { color: var(--muted); }
 .asm-table td.w { color: var(--bus-label-text); }
 .asm-table tr.err td { color: var(--wx); }
-/* chapter 13's assembly practice (widgets/asmlab.ts): the stage's goal note sits at the canvas's top right, over a widget, so the widget
-   leaves it a band; the wanted / got cells keep "a0 = -5" on one line */
-.canvas .widget.asm-practice { padding-top: 52px; }
+/* chapter 13's assembly practice (widgets/asmlab.ts): the wanted / got cells keep "a0 = -5" on one line (the band for the goal chip is
+   every widget's now: .widget-host's --goal-h) */
 .widget.asm-practice td code { white-space: nowrap; }
 /* chapter 13's fetch–decode–execute stepper (widgets/riscv.ts fetchLoop) */
 .fl-list tr.cur td { background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 700; }

@@ -22,6 +22,8 @@ export class StageNotes {
   private chip: HTMLElement | null = null;
   private goalText = '';
   private timers = new Set<number>();
+  /** The goal chip's bottom edge in the canvas, as --goal-h on it: a widget under the chip starts below it (app.css). */
+  private sizer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => this.reserve());
 
   /** Show a step's challenge goal; a click on it shows the challenge card (`show`). */
   goal(text: string, solved: boolean, show: () => void): void {
@@ -30,6 +32,15 @@ export class StageNotes {
     this.chip = h('button', { class: 'stage-goal', type: 'button', onclick: show });
     this.paint(solved);
     this.el.prepend(this.chip);
+    this.sizer?.observe(this.chip);
+    this.reserve();
+  }
+
+  private reserve(): void {
+    const canvas = this.el.parentElement, c = this.chip;
+    if (!canvas) return;
+    if (!c || !c.isConnected || !c.offsetHeight) { canvas.style.removeProperty('--goal-h'); return; }
+    canvas.style.setProperty('--goal-h', `${Math.ceil(this.el.offsetTop + c.offsetTop + c.offsetHeight + 8)}px`);
   }
 
   /** The goal chip turns green and the solve is announced. */
@@ -63,7 +74,9 @@ export class StageNotes {
     for (const id of this.timers) clearTimeout(id);
     this.timers.clear();
     this.el.replaceChildren();
+    this.sizer?.disconnect();
     this.chip = null;
+    this.el.parentElement?.style.removeProperty('--goal-h');
     this.goalText = '';
   }
 

@@ -189,6 +189,8 @@ function placed(chip: ChipDoc): ComponentDef | { error: string } {
   return err ? { error: `${chip.name}: ${err.msg}` } : c.def;
 }
 
+const TOP_ROOM = 3;
+
 /** The top level: inputs, rst, clk; the next-state chip, the reset gating, the flip-flops, the output chip. */
 function topDef(doc: FsmDoc, next: ComponentDef, out: ComponentDef, enc: Encoding): ComponentDef {
   const k = stateBits(doc.states.length, enc), resetCode = codesOf(doc, enc)[doc.reset];
@@ -211,9 +213,13 @@ function topDef(doc: FsmDoc, next: ComponentDef, out: ComponentDef, enc: Encodin
   b.next();
   b.add(out, 'outputs', 'out');
   for (let i = 0; i < k; i++) b.wire(`s${i}.q`, `out.s${i}`);
-  if (out.ports.some((p) => p.dir === 'in' && doc.ins.includes(p.name))) for (const x of doc.ins) b.wire(x, `out.${x}`);
+  const mealy = out.ports.some((p) => p.dir === 'in' && doc.ins.includes(p.name));
+  if (mealy) for (const x of doc.ins) b.wire(x, `out.${x}`);
   b.next();
   for (const o of doc.outs) b.wire(`out.${o}`, o);
+  // Mealy outputs read the inputs: those wires cross the whole level over the top, so the parts sit TOP_ROOM units below the
+  // first pin and the wires get a channel above the parts' names instead of running through them
+  if (mealy) for (const inst of b.instances) inst.at = [inst.at![0], inst.at![1] + TOP_ROOM];
   const R = b.right, ins = [...doc.ins, 'rst', 'clk'];
   return {
     id: 'fsm', name: 'State machine', category: 'sequential',
@@ -221,7 +227,7 @@ function topDef(doc: FsmDoc, next: ComponentDef, out: ComponentDef, enc: Encodin
     ports: [...ins.map((p) => ({ name: p, width: 1, dir: 'in' as const, ...(p === 'clk' ? { clock: true } : {}) })), ...doc.outs.map((p) => ({ name: p, width: 1, dir: 'out' as const }))],
     symbol: { kind: 'box', label: 'FSM' },
     netlist: () => ({
-      pins: Object.fromEntries([...ins.map((p, i) => [p, [0, 2 + 4 * i]]), ...doc.outs.map((p, j) => [p, [R, 2 + 4 * j]])]),
+      pins: Object.fromEntries([...ins.map((p, i) => [p, [0, 2 + 4 * i]]), ...doc.outs.map((p, j) => [p, [R, 2 + (mealy ? TOP_ROOM : 0) + 4 * j]])]),
       instances: b.instances, nets: b.nets(),
     }),
   };
