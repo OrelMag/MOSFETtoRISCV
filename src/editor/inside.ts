@@ -92,7 +92,7 @@ class InsideView {
   /** The zoom lens (view/lens.ts, docs/transparent/DESIGN.md track 2a), loaded only while settings.zoomOpen is on. */
   private lens: Lens | null = null;
   private lensLoading = false;
-  /** The cue after the lens handed off to a level ("Esc or alu goes back up"). */
+  /** The cue after the lens handed off to a level ("Zoom out once more to go up to cpu (or Esc)"). */
   private cueEl: HTMLElement | null = null;
   private unsub: () => void;
 
@@ -268,15 +268,18 @@ class InsideView {
     return out;
   }
 
-  /** After a hand-off: "Esc or alu goes back up" (null removes it). */
-  private showCue(parent: { label: string; path: string[] } | null): void {
+  /** After a hand-off or a step in: the stage's words ("Zoom out once more to go up to cpu", view/zoomout.ts cueWords), the
+   *  parent's name a link, and Esc, look inside's own way up (null removes it). */
+  private showCue(parent: { label: string; path: string[]; words?: string } | null): void {
     this.cueEl?.remove();
     this.cueEl = null;
     if (!parent) return;
     // above the inside's first level is the chip itself: going there closes the view
     const top = !parent.path.length;
-    this.cueEl = h('div', { class: 'lens-cue', role: 'status' }, 'Esc or ',
-      h('button', { class: 'linkish', onclick: () => (top ? this.close() : this.goTo(parent.path)) }, top ? this.ed.doc.name : parent.label), ' goes back up');
+    const words = parent.words ?? `Keep zooming out to go up to ${parent.label}`;
+    const lead = words.endsWith(parent.label) ? words.slice(0, words.length - parent.label.length) : `${words} `;
+    this.cueEl = h('div', { class: 'lens-cue', role: 'status' }, lead,
+      h('button', { class: 'linkish', onclick: () => (top ? this.close() : this.goTo(parent.path)) }, top ? this.ed.doc.name : parent.label), ' (or Esc)');
     this.canvas.append(this.cueEl);
   }
 
