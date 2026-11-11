@@ -484,7 +484,7 @@ export class Stage {
     this.dock = h('div', { class: 'panel-dock' });
     // Touch: dblclick comes from a double tap; the Layout button stands in for the right-click menu.
     this.hint = hintBadge('double-click a part to open it · drag a part or a wire to move it (shift: pick several; the lock on the bar stops it) · right-click for layout · drag to pan · wheel or pinch to zoom',
-      'double-tap a part: open · drag: pan (unlocked: tap a part or wire, then drag it) · pinch: zoom', 'stage', '', HINT_AUTO_MS);
+      'double-tap a part: open · drag: pan · pinch: zoom', 'stage', '', HINT_AUTO_MS);
     this.canvas.append(this.levelBadge, this.layoutPill, this.hint, this.dock, this.board.el, this.why.el);
     this.controls = h('div', { class: 'controls unfit' });
     this.status = h('div', { class: 'status' });
