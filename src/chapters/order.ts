@@ -12,6 +12,7 @@ const BOOK = [
   'inverter',
   'nand',
   'gates',
+  'logic',
   'binary',
   'adders',
   'routing',

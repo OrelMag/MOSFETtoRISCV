@@ -81,7 +81,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Using a table for a circuit with state: the same inputs can give different outputs, so it needs a sequence.',
     ],
     lib: 'full_adder',
-    chapters: [{ chapter: 'basics', step: 3, label: 'A rule as a table' }, { chapter: 'adders', step: 1, label: 'Adding three bits' }],
+    chapters: [{ chapter: 'logic', step: 0, label: 'Any rule is a circuit: minterms' }, { chapter: 'basics', step: 3, label: 'A rule as a table' }, { chapter: 'adders', step: 1, label: 'Adding three bits' }],
   },
   identities: {
     idea: 'The identities are the rewrite rules that turn an expression into a cheaper one with the same truth table. Four do most of the work. <b>Complement</b> merges two terms that differ in one variable (a·b + a·¬b = a), which is all a K-map rectangle does. <b>Absorption</b> drops a term covered by a smaller one (a + a·b = a). <b>Distributivity</b> factors a shared literal out (a·b + a·c = a·(b + c): fewer gates, one level deeper). <b>Consensus</b> drops the redundant b·c from a·b + ¬a·c + b·c. Each has a dual.<br>Rewriting trades area against depth: factoring saves gates and adds levels, flattening to a sum of products does the reverse. A redundant term is not always waste: the consensus term is what keeps a mux from glitching.',
@@ -102,7 +102,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Applying it to part of an expression only: ¬(a·b + c) needs both rewrites, giving (¬a + ¬b)·¬c.',
     ],
     lib: 'or',
-    chapters: [{ chapter: 'gates', step: 2, label: "OR: De Morgan's trick" }, { chapter: 'gates', step: 3, label: 'NOR: a box of boxes' }],
+    chapters: [{ chapter: 'logic', step: 1, label: 'Algebra that removes gates' }, { chapter: 'gates', step: 2, label: "OR: De Morgan's trick" }, { chapter: 'gates', step: 3, label: 'NOR: a box of boxes' }],
   },
   not: {
     idea: 'NOT from a NAND ties both inputs together: ¬(a·a) = ¬a. 1 NAND, 1 delay. Every complemented literal in a sum of products, the select inversion of a mux and the "no carry" of an unsigned compare cost one. NOTs are also the easiest gates to remove: two in a row cancel, and De Morgan moves an inversion to where a NAND absorbs it, which is where most NAND-count savings come from.<br>Built from a NAND it is 4 transistors; the CMOS inverter does the same with 2, which is why real cell libraries have both.',
@@ -445,7 +445,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Assuming two levels is always best: wide ORs become trees of 2-input gates, and a factored form can be smaller at the same depth.',
     ],
     lib: 'pla_fa', anatomy: ['ctl'],
-    chapters: [{ chapter: 'gates', step: 6, label: 'The multiplexer: a digital switch' }, { chapter: 'memory', step: 5, label: 'The PLA' }],
+    chapters: [{ chapter: 'logic', step: 0, label: 'Any rule is a circuit: minterms' }, { chapter: 'logic', step: 4, label: 'Products of sums, and NAND–NAND' }, { chapter: 'gates', step: 6, label: 'The multiplexer: a digital switch' }, { chapter: 'memory', step: 5, label: 'The PLA' }],
   },
   kmap: {
     idea: 'A Karnaugh map is the truth table drawn so that algebra becomes geometry. Rows and columns are labelled in Gray code (00, 01, 11, 10), so touching cells, including across the edges, differ in exactly one variable. A rectangle of 2ᵏ cells that are all 1 is one product term with k variables gone: the ones that change inside it. Minimize by covering every 1 with the largest rectangles, as few as possible; a 1 that only one rectangle can cover makes that rectangle essential. Don\'t-cares join a rectangle when they make it larger and are left out otherwise.<br>It is exact and quick by eye up to 4 variables, workable at 5–6 with paired maps, and useless beyond, where Quine–McCluskey takes over. It also shows hazards: two adjacent rectangles with no third bridging them mark a possible glitch, which a consensus rectangle removes.',
@@ -456,7 +456,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Circling groups of 3 or 6 cells: only rectangles of 1, 2, 4, 8… cells are product terms.',
     ],
     lib: 'rv16_prime4_sop',
-    chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'fsm', step: 3, label: 'From the table to the logic' }],
+    chapters: [{ chapter: 'logic', step: 2, label: 'The Karnaugh map' }, { chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'fsm', step: 3, label: 'From the table to the logic' }],
   },
   qm: {
     idea: 'Quine–McCluskey is the K-map as an algorithm, so it works for any number of variables and a program can run it. Write the minterms (and don\'t-cares) in binary, grouped by their number of 1s. Merge every pair from neighbouring groups that differs in one bit, writing a dash there; repeat on the merged terms until nothing merges. Terms never merged are the prime implicants. Then choose a minimum set of primes covering every minterm (don\'t-cares need no cover): the essential primes first, then the rest, a set-cover problem that is exponential in the worst case (Petrick\'s method, or a heuristic).<br>The site\'s PLA generator runs it on every output when a PLA is built: the 7-segment decoder comes out as 28 terms, 164 NANDs, against 313 for the same function as a ROM.',
@@ -467,7 +467,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Requiring don\'t-cares to be covered: they help merges but need no prime of their own.',
     ],
     lib: 'pla_seg7', compare: ['rom_seg7'],
-    chapters: [{ chapter: 'memory', step: 5, label: 'The PLA' }],
+    chapters: [{ chapter: 'logic', step: 2, label: 'The Karnaugh map' }, { chapter: 'memory', step: 5, label: 'The PLA' }],
   },
   cla: {
     idea: 'Carry lookahead removes the chain by computing every carry from the inputs directly. Per bit: generate g<sub>i</sub> = a<sub>i</sub>·b<sub>i</sub> (this bit makes a carry whatever arrives) and propagate p<sub>i</sub> = a<sub>i</sub> ⊕ b<sub>i</sub> (it passes an incoming carry on). Then c<sub>i+1</sub> = g<sub>i</sub> + p<sub>i</sub>·c<sub>i</sub>, and unrolling gives each carry as a two-level sum of products: c<sub>4</sub> = g<sub>3</sub> + p<sub>3</sub>g<sub>2</sub> + p<sub>3</sub>p<sub>2</sub>g<sub>1</sub> + p<sub>3</sub>p<sub>2</sub>p<sub>1</sub>g<sub>0</sub> + p<sub>3</sub>p<sub>2</sub>p<sub>1</sub>p<sub>0</sub>c<sub>0</sub>. The terms grow with the bit position, so lookahead is done in 4-bit groups, each producing a group G and P, with a second level of lookahead over the groups.<br>Two levels assume wide gates. From 2-input NANDs every wide AND and OR becomes a tree, and the flat 4-bit CLA here is 106 NANDs and 15 delays against ripple\'s 36 and 12. Lookahead pays once the expansion is organized as a tree: the prefix adders.',

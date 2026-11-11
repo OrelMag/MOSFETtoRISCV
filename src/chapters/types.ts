@@ -115,7 +115,7 @@ export interface Step {
   /** Derivation / In real silicon / Common mistake / Numbers, under the body. */
   more?: Layers;
   scene?: () => Scene;
-  widget?: () => Widget;
+  widget?: (stage: Stage) => Widget;
   challenge?: Challenge;
   actions?: StepAction[];
   /**

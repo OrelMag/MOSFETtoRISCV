@@ -131,7 +131,7 @@ export function timingWidget(): Widget {
       ...(['hit', 'miss', 'conflict'] as const).map((o) => h('div', { class: 'rb-line' },
         h('span', { class: `rb-kind ${o}` }, `row ${o}`), gantt(o, t, scale), h('span', { class: 'rb-cyc' }, `${accessCycles(o, t)} cycles`))),
       h('p', { class: 'sub' }, mhz === CLOCKS[0]
-        ? `At our clock (${CLOCK_NS.toFixed(2)} ns) a row hit costs ${accessCycles('hit', t)} cycles: exactly the fixed miss penalty chapter 22's caches assume. They have been assuming a DRAM that always hits.`
+        ? `At our clock (${CLOCK_NS.toFixed(2)} ns) a row hit costs ${accessCycles('hit', t)} cycles: exactly the fixed miss penalty chapter ${numOf('cache')}'s caches assume. They have been assuming a DRAM that always hits.`
         : `The nanoseconds are the same; only the clock got faster. A row conflict now costs ${accessCycles('conflict', t)} cycles: the memory wall. Caches, row-buffer hits and reordering (chapter ${numOf('memctrl')}) are how a fast CPU lives with it.`));
   };
   const segs = [seg(CLOCKS.map((c, i) => [c, i ? `${c >= 1000 ? c / 1000 + ' GHz' : c + ' MHz'}` : `ours, ${Math.round(c)} MHz`] as [number, string]), () => mhz, (v) => { mhz = v; update(); }, 'CPU clock')];

@@ -13,6 +13,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "inverter": () => import('./ch-transistors').then((m) => m.chInverter),
   "nand": () => import('./ch-transistors').then((m) => m.chNand),
   "gates": () => import('./ch-gates').then((m) => m.chGates),
+  "logic": () => import('./ch-logic').then((m) => m.chLogic),
   "binary": () => import('./ch-gates').then((m) => m.chBinary),
   "adders": () => import('./ch-arith').then((m) => m.chAdders),
   "routing": () => import('./ch-arith').then((m) => m.chRouting),

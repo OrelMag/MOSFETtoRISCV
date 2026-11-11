@@ -65,7 +65,7 @@ export const IO_MORE: Step[] = [
       <p>The deadline is the previous deadline plus 40, not "now plus 40", so the dots do not drift. The loop is <code>lw</code> and <code>bltu</code>, two cycles, so the
       clock is looked at every second cycle: the read that first sees <code>mtime ≥ deadline</code> is 0 or 1 cycles late, and the dot reaches the console 3 or 4 cycles after the
       deadline (3 here: the compare falls through, <code>li</code>, then the store). Polling quantises time to the length of the loop that does it, and during
-      the 40 cycles the core can do nothing else. <a href="#/c/traps/0">Chapter 20</a> measures what that costs against <span data-ahead="interrupts">an interrupt (the hardware jumps to a software handler when a device asks)</span>.</p>
+      the 40 cycles the core can do nothing else. <a href="#/c/traps/0">Chapter ${numOf('traps')}</a> measures what that costs against <span data-ahead="interrupts">an interrupt (the hardware jumps to a software handler when a device asks)</span>.</p>
       <div class="try">Run the clock and watch mtime in the I/O panel, the loop at pc 12 and 16, and the dot.</div>`,
     scene: () => cpuScene({ source: sys('poll'), system: true, highlight: ['io'] }),
     tour: {
@@ -106,8 +106,8 @@ export const IO_MORE: Step[] = [
         <tr><td>mtimecmp 0x14</td><td>last value</td><td>32 bits kept</td><td>a store can end the timer request (mtip falls)</td></tr></table>
       <p>Memory promises that a load returns the last store and that doing either twice is the same as once. A device register promises neither: a store to the console prints every time, so
       repeating it is not idempotent; a status register changes between two loads; and some registers act on a <em>read</em>: a UART's receive register pops the byte, a keyboard queue
-      drops its oldest key (the sandbox's keyboard part and chapter ${numOf('bus')}'s key slave work this way), and a request controller's <em>claim</em> register (chapter 20) returns the
-      pending source and clears it. So I/O cannot sit behind <span data-ahead="cache">a cache (a small fast copy of recent memory, chapter 22)</span>, loads and stores to it must not be reordered or merged, and a compiler is told so with <code>volatile</code>.
+      drops its oldest key (the sandbox's keyboard part and chapter ${numOf('bus')}'s key slave work this way), and a request controller's <em>claim</em> register (chapter ${numOf('traps')}) returns the
+      pending source and clears it. So I/O cannot sit behind <span data-ahead="cache">a cache (a small fast copy of recent memory, chapter ${numOf('cache')})</span>, loads and stores to it must not be reordered or merged, and a compiler is told so with <code>volatile</code>.
       A pipeline that speculates must not issue such a load early: real cores hold device accesses until the instruction can no longer be cancelled. (The system CPU here has no pipeline, so the question does not arise.)</p>`,
     scene: () => cpuScene({ source: sys('bytes'), system: true, highlight: ['io'] }),
     more: {
@@ -210,7 +210,7 @@ export const TRAPS_MORE: Step[] = [
       <p>The <span data-show="vec">vector logic</span> is small because BASE is aligned: for 16 causes the table is 64 bytes, so BASE[5:2] is zero and the offset is ORed in, not added. It is an AND of mtvec[0]
       and mcause[31] (an interrupt in vectored mode), four ANDs that gate mcause[3:0] with it, four ORs into BASE[5:2], and the rest of BASE passes through: ${NAND_VEC} NANDs, ${DEPTH_VEC} NAND delays from mcause to the target. For the timer
       (mcause 0x8000_0007, code 7) with mtvec = 0x1001 the target is ${hex(vectorTargetOf(0x1001, 0x80000007), 4)}; for the external interrupt (code 11) ${hex(vectorTargetOf(0x1001, 0x8000000b), 4)}; an ecall (cause 11, no interrupt bit) goes to ${hex(vectorTargetOf(0x1001, 11), 4)}.</p>
-      <p>The system CPU of chapters 19 and 20 keeps MODE wired to 0 and its trap unit is unchanged; this block is what a vectored core adds in front of the PC multiplexer, and it is checked against the formula for random mtvec and mcause.</p>
+      <p>The system CPU of chapters ${numOf('io')} and ${numOf('traps')} keeps MODE wired to 0 and its trap unit is unchanged; this block is what a vectored core adds in front of the PC multiplexer, and it is checked against the formula for random mtvec and mcause.</p>
       <div class="try">Set mtvec = 0x1001 and mcause = 0x8000000B: the target reads 0x102C. Clear mtvec bit 0 and it falls back to 0x1000.</div>`,
     scene: () => ({ root: VECTOR_TARGET, inputs: { mtvec: 0x1001, cause: 0x80000007 } }),
     tries: [(st) => st.getInput('cause') === 0x8000000b && st.getInput('mtvec') === 0x1001],
@@ -233,7 +233,7 @@ export const TRAPS_MORE: Step[] = [
       software clears it, and for sources that only pulse (an edge from a pin, a one-cycle strobe) the controller must remember. That is the job of an <strong>interrupt controller</strong> (RISC-V's PLIC is the
       model): one <span data-show="pend0 pend1 pend2 pend3">pending flip-flop per source</span>, set when its request is seen at a clock edge and held; an <span data-show="req0 req1 req2 req3">enable mask</span>;
       a <span data-show="pri">priority encoder</span> that offers the highest enabled pending source on <code>irq</code> and <code>id</code>; and a <strong>claim</strong> that clears the bit it names, so a source is
-      served once per request (the PLIC returns the id from a load of its claim register, which is exactly the side-effect read of chapter 19).</p>
+      served once per request (the PLIC returns the id from a load of its claim register, which is exactly the side-effect read of chapter ${numOf('io')}).</p>
       <p>${NAND_INTC} NANDs for 4 sources, against ${nd(TRAP_UNIT)} for the whole trap unit. One pulse on source 1 at cycle 3 while a handler runs with interrupts masked until cycle 9: the bare line loses it; here the pending bit
       is set at cycle ${LP.pendingFrom} and the request is claimed at cycle ${LP.servedAt}, ${LP.servedAt - 3} cycles after the pulse, exactly once. Two sources pending at once are served highest index first here; a real PLIC orders them by programmable priority and breaks ties toward the lowest ID. A source still high when its bit is claimed
       sets it again at the next edge: level sources must be cleared at the device first, as with any interrupt.</p>

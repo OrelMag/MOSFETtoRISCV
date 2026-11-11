@@ -86,7 +86,7 @@ describe('the map', () => {
   it('gives each section the tone of its chapters and the range of their numbers', () => {
     for (const s of sectionsOf(chapters)) for (const c of s.chapters) expect(c.appendix ? 'appendix' : c.prologue ? 'prologue' : 'journey', c.id).toBe(s.tone);
     const of = (name: string) => sectionsOf(chapters).find((s) => s.name === name)!;
-    expect(of('Transistors to gates').range).toBe('01–04');
+    expect(of('Transistors to gates').range).toBe('01–05');
     expect(of('Prologue: before the transistor').range).toBe('P1–P3');
     expect(of('Start').range).toBe('');
   });
