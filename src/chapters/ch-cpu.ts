@@ -486,9 +486,9 @@ export const chIsa: Chapter = {
     {
       title: 'A program is words in memory',
       body: `
-        <p>Every circuit so far computes one fixed thing. A processor computes whatever its <strong>program</strong> says, and a program
-        is only numbers: 32-bit words in a memory, one per <strong>instruction</strong>. Each word is a small order: add two registers,
-        load a word, jump if equal.</p>
+        <p>The computer of <a href="#/c/firstcomputer/0">chapter ${numOf('firstcomputer')}</a> already did what a processor does: it computed whatever its
+        <strong>program</strong> said, and the program was only numbers, 8-bit words in a ROM. RISC-V is that idea at full size: 32-bit words
+        in a memory, one per <strong>instruction</strong>. Each word is a small order: add two registers, load a word, jump if equal.</p>
         <p>The state a program can see is three things: the <strong>program counter</strong> (PC, the byte address of the next
         instruction), 32 <strong>registers</strong> x0–x31 of 32 bits (chapter ${numOf('regfile')}'s register file; x0 always reads 0), and memory.
         The processor runs one loop forever:</p>
