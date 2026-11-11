@@ -1953,6 +1953,9 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 /* chapter 13's assembly practice (widgets/asmlab.ts): the wanted / got cells keep "a0 = -5" on one line (the band for the goal chip is
    every widget's now: .widget-host's --goal-h) */
 .widget.asm-practice td code { white-space: nowrap; }
+/* those one-line cells ("a0 = 27, s regs and sp kept") made the grid column as wide as the table, pushing both cards past the
+   stage (1280) and the screen (a phone): the panels may shrink, and the table scrolls inside its card */
+.widget.asm-practice .wgrid > .panel { min-width: 0; overflow-x: auto; }
 /* chapter 13's fetch–decode–execute stepper (widgets/riscv.ts fetchLoop) */
 .fl-list tr.cur td { background: color-mix(in srgb, var(--accent) 16%, transparent); font-weight: 700; }
 .fl-list tr.cur td.a { color: var(--text); }
