@@ -4,6 +4,7 @@
 // one). OPTIONAL: the prologue and appendix chapters that also explain an entry, for readers who took that path.
 
 import { TAUGHT_COMM2 } from '../campaign/codexcomm2';
+import { TAUGHT_LOGIC } from '../campaign/codexlogic';
 import { TAUGHT_DSP } from '../campaign/codexdsp';
 import { TAUGHT_POWER } from '../campaign/codexpower';
 import { TAUGHT_VEC } from '../campaign/codexvec';
@@ -25,10 +26,11 @@ export const TAUGHT: Record<string, string> = {
   identities: 'gates',
   demorgan: 'gates',
   bubble: 'gates',
-  sop: 'memory',
+  sop: 'logic',
   nandnand: 'gates',
-  qm: 'memory',
-  dontcare: 'gates',
+  qm: 'logic',
+  dontcare: 'logic',
+  kmap: 'logic',
   not: 'gates',
   and: 'gates',
   or: 'gates',
@@ -238,6 +240,8 @@ export const TAUGHT: Record<string, string> = {
   // the Vectors chapter's (campaign/codexvec.ts)
   ...TAUGHT_VEC,
   ...TAUGHT_VERIFY,
+  // the logic chapter's (campaign/codexlogic.ts)
+  ...TAUGHT_LOGIC,
 };
 
 /** Codex id → prologue / appendix chapters that explain it too (they read only what came before them). */

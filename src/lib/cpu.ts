@@ -26,6 +26,7 @@ import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { C_EXPAND, cFetch, PLUS2OR4 } from './rvc';
 import { macParts } from './macslot';
+import { numOf } from '../chapters/order';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -90,7 +91,7 @@ export function dataMemory(k = 5, gated = false): ComponentDef {
     const rg = symbolGeom(R);
     return define({
       id: `dmem${k}${gated ? '_cg' : ''}`, name: `Data memory${gated ? ', clock-gated' : ''}`, category: 'memory',
-      summary: `${2 ** k} words (${4 * 2 ** k} bytes). The memory array from Chapter 10 at 32 bits wide; address bits [${k + 1}:2] select the word.`,
+      summary: `${2 ** k} words (${4 * 2 ** k} bytes). The memory array from Chapter ${numOf('memory')} at 32 bits wide; address bits [${k + 1}:2] select the word.`,
       ports: [bus('addr', 32, 'in'), bus('wd', 32, 'in'), bit('we', 'in'), bit('clk', 'in', 'bottom', true), bus('rd', 32, 'out')],
       symbol: { kind: 'box', label: 'DATA MEM' },
       netlist: () => ({

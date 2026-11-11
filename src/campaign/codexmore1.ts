@@ -517,7 +517,7 @@ x6–x7   t0–t1   temporaries           no</pre>`,
   },
 
   stack: {
-    idea: `The stack is the region of data memory below sp, used last-in first-out: a function claims words on entry by decrementing sp and returns them before it returns, so nested and recursive calls each get their own frame. RV16 has no stack instructions: <code>push r</code> expands to <code>addi sp, sp, -1</code>; <code>sw r, 0(sp)</code> and <code>pop r</code> to <code>lw r, 0(sp)</code>; <code>addi sp, sp, 1</code>, so sp always points at the last word pushed. A frame holds what must survive a call: ra in any function that calls, and values the caller needs afterwards.<br>Each push or pop is two instructions, so a larger frame is better allocated once (addi sp, sp, −k) and addressed as 0(sp) … (k − 1)(sp).<br>Direction and pointer are conventions, as long as push and pop agree. RISC-V's call stack grows down with sp on the last word pushed (a full descending stack); chapter 10's hardware stack grows up with sp on the next free slot (empty ascending: push writes slot sp and increments it, the top is sp − 1).`,
+    idea: `The stack is the region of data memory below sp, used last-in first-out: a function claims words on entry by decrementing sp and returns them before it returns, so nested and recursive calls each get their own frame. RV16 has no stack instructions: <code>push r</code> expands to <code>addi sp, sp, -1</code>; <code>sw r, 0(sp)</code> and <code>pop r</code> to <code>lw r, 0(sp)</code>; <code>addi sp, sp, 1</code>, so sp always points at the last word pushed. A frame holds what must survive a call: ra in any function that calls, and values the caller needs afterwards.<br>Each push or pop is two instructions, so a larger frame is better allocated once (addi sp, sp, −k) and addressed as 0(sp) … (k − 1)(sp).<br>Direction and pointer are conventions, as long as push and pop agree. RISC-V's call stack grows down with sp on the last word pushed (a full descending stack); chapter ${numOf('memory')}'s hardware stack grows up with sp on the next free slot (empty ascending: push writes slot sp and increments it, the top is sp − 1).`,
     example: {
       title: 'Recursive sum(4)',
       body: `<pre>        li   sp, 0x100
@@ -1031,7 +1031,7 @@ don't-cares taken as 1:         op[3] + op[2]        one OR, 3 NANDs</pre>`,
       'Testing a minimised circuit against a table that filled the don\'t-cares with 0: a correct circuit then fails.',
     ],
     anatomy: ['ctl'],
-    chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'gates', step: 6, label: 'The multiplexer: a digital switch' }],
+    chapters: [{ chapter: 'logic', step: 3, label: "Don't cares: inputs that never happen" }, { chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'gates', step: 6, label: 'The multiplexer: a digital switch' }],
   },
 
   subtract: {

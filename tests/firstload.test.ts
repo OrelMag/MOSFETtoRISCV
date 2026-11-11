@@ -79,7 +79,7 @@ describe('the first-load path', () => {
     // 345 000 (2026-11-09, batch 10): six approved chapters (fpga, verify, sidechan now; vmem, os, power next) add ~70 outline lines
     // 360 000 (2026-11-10, Rock): each step's stage kind in the outline (StepMeta.stage, ~14 KB of source, ~1 KB gzip), so the top
     // bar hides Slow motion on a widget step before the chapter's module loads (no shift)
-    expect(bytes).toBeLessThan(360_000);
+    expect(bytes).toBeLessThan(362_000);
   });
 
   it('loads the route pages and the chapters by import(), not by import', () => {

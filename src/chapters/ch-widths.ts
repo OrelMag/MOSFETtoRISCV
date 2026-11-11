@@ -275,13 +275,13 @@ export const chWidths: Chapter = {
     {
       title: 'Does it pay?',
       body: `
-        <p>Here is the whole RV32IC single-cycle core running chapter 14's programs compressed, in lock-step with the golden model (which now fetches
+        <p>Here is the whole RV32IC single-cycle core running chapter ${numOf('cpu')}'s programs compressed, in lock-step with the golden model (which now fetches
         16-bit parcels too). It runs the riscv-tests and random programs with every C form, like every other core, and Spike checks the golden model's
         RV32IMC.</p>
         <table class="rvc-table">
           <thead><tr><th>Single-cycle core</th><th class="num">NANDs (no ROM)</th><th class="num">Period</th></tr></thead>
           <tbody>
-            <tr><td>RV32I (chapter 14)</td><td class="num">${groupDigits(K.plain.nands)}</td><td class="num">${K.plain.period}</td></tr>
+            <tr><td>RV32I (chapter ${numOf('cpu')})</td><td class="num">${groupDigits(K.plain.nands)}</td><td class="num">${K.plain.period}</td></tr>
             <tr><td>RV32IC</td><td class="num">${groupDigits(K.c.nands)}</td><td class="num">${K.c.period}</td></tr>
             <tr><td>… expander</td><td class="num">${groupDigits(K.expander.nands)}</td><td class="num">${K.expander.depth} deep</td></tr>
             <tr><td>… bank index and swaps</td><td class="num">${K.fetch}</td><td class="num"></td></tr>

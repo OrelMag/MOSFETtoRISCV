@@ -249,7 +249,7 @@ export class ChapterPage implements Page {
       const sc = st.scene();
       this.stage.load(sc, path, performance.now() - t0);
     }
-    else this.stage.showWidget(st.widget!());
+    else this.stage.showWidget(st.widget!(this.stage));
     this.shownStep = k;
     this.sceneShown = !!st.scene;
     this.el.classList.toggle('no-inspector', !st.scene);

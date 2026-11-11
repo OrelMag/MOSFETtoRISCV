@@ -9,6 +9,7 @@ import { edgeSweepWidget, sweepOf } from '../../widgets/edgesweep';
 import { FINE } from '../../widgets/finedelay';
 import { skewPanel } from '../../widgets/skewpanel';
 import type { Step } from '../types';
+import { numOf } from '../order';
 
 const m = (id: 'ms' | 'e6') => {
   const r = sweepOf(id, 'rise'), f = sweepOf(id, 'fall');
@@ -30,11 +31,11 @@ export const timingSteps: Step[] = [
       <p>The previous step quoted three numbers; here they are <em>measured</em>. Each cell below is one run of the flip-flop's real netlist: d flips <em>t</em> gate delays from the rising edge, and q is read once the
       circuit has settled. For a <strong>rising d</strong> the edge captures the new value if d moved at least <strong>${a.r.setup}</strong> delay${a.r.setup === 1 ? '' : 's'} earlier and still sees the old one when d
       moves ${a.r.hold} or more delays later; a <strong>falling d</strong> needs <strong>${a.f.setup}</strong> before and is ignored from ${a.f.hold} after. The two directions differ because a falling d reaches the master
-      through its inverter and a NAND, a rising one through one NAND. Worst case over both: <strong>setup ${a.setup}, hold ${a.hold}, clock-to-q ${a.cq}</strong> delays. That is the table the static timing of chapters 14 and 17 reads: it
+      through its inverter and a NAND, a rising one through one NAND. Worst case over both: <strong>setup ${a.setup}, hold ${a.hold}, clock-to-q ${a.cq}</strong> delays. That is the table the static timing of chapters ${numOf('cpu')} and ${numOf('pipeline')} reads: it
       budgets setup ${SETUP} and clock-to-q ${CLK_TO_Q}, the measured worst cases with ${SETUP - a.setup} delay${SETUP - a.setup === 1 ? '' : 's'} of margin on setup.</p>
       <p>Between "new captured" and "old kept" sits the <strong>aperture</strong>: the one cell marked <code>?</code> (d moving exactly at the edge for a rising d). There the master's SR pair is released from both sides
       at once, the race of step 2: with unit delays it oscillates for ever, and the simulator stops it after a fixed budget and picks a side. Silicon does not oscillate; it hangs half way and resolves with probability
-      growing as 1 − e<sup>−t/τ</sup> (metastability). The window is not a wall either: the nearer d moves to the edge, the longer the resolution takes, which is why a synchronizer (chapter 9) gives it a whole cycle.</p>
+      growing as 1 − e<sup>−t/τ</sup> (metastability). The window is not a wall either: the nearer d moves to the edge, the longer the resolution takes, which is why a synchronizer (chapter ${numOf('registers')}) gives it a whole cycle.</p>
       <div class="try">Switch to <strong>d falls</strong>: the window moves. Click the <code>?</code> cell and read q's waveform: it toggles every delay. Then compare the two flip-flops (the second is the next-but-one step).</div>`;
     },
     widget: edgeSweepWidget,
@@ -67,7 +68,7 @@ export const timingSteps: Step[] = [
       <em>new</em> value, and one edge moves the bit through both stages. The condition is the second inequality of the previous step, with the skew on the other side: <strong>t<sub>cq,min</sub> + t<sub>logic,min</sub> &ge; t<sub>h</sub> + skew</strong>. With ${a.r.cqRise} + 0 and
       hold ${a.r.hold}, one buffer (skew 2) lands in the window and the pair hangs undecided; two buffers (skew 4) is a clean race-through. Lengthening the period changes none of it: hold has no T in it.</p>
       <p>Skew is not exotic: a clock reaches thousands of flip-flops through a buffer tree, and unequal wire lengths, loads and a gated branch (the load-enable step's pitfall) all show up as skew. Fixes: pad the short data path with delay buffers (hold fixing, which
-      costs area), balance the clock tree, or build a stage that cannot race (latches on opposite clock phases: chapter 12's "Latches instead of flip-flops").</p>
+      costs area), balance the clock tree, or build a stage that cannot race (latches on opposite clock phases: chapter ${numOf('regfile')}'s "Latches instead of flip-flops").</p>
       <div class="try">Press <strong>Pulse</strong> at 0 buffers: d = 1 moves to q1 only. Choose 2 buffers and pulse once: q2 follows at the same edge.</div>`;
     },
     scene: () => ({ root: skewPair(0), inputs: { d: 1, clk: 0 }, autoClock: false, panels: [skewPanel] }),

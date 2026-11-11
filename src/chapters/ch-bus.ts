@@ -296,7 +296,7 @@ export const chBus: Chapter = {
         <p>At power-up the boot ROM programs <span data-show="dma">the DMA</span> to copy ${LOAD_WORDS} words from <span data-show="flash">the flash</span> to <span data-show="ram">RAM</span> at 0x${LOAD_AT.toString(16)}, waits for it, and
         jumps there. Most larger computers boot like this: a small ROM that knows how to fetch the real program from storage. (A microcontroller often skips the copy and runs straight from NOR flash.)</p>
         <pre class="code">${BOOT_SOURCE.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>
-        <p>The design choice worth noticing is that the CPU did not change. Its decode, registers and ALU are chapter 19's; only the place the words come from moved, and the
+        <p>The design choice worth noticing is that the CPU did not change. Its decode, registers and ALU are chapter ${numOf('io')}'s; only the place the words come from moved, and the
         memory unit absorbs the difference by stalling the CPU (<code>retire</code> low, no state written) until the bus answers. That is the general trick of a system on a chip: keep the core unaware of
         what is behind its port, and put every piece of timing in the port.</p>
         <div class="try">Run, and watch the PC move from the boot ROM into RAM, the console print, and the LEDs count.</div>`,

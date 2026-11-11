@@ -31,6 +31,7 @@ import { regfile } from './regfile';
 import { register } from './sequential';
 import { TIE0, TIE1 } from './transistors';
 import { bitwise, orN } from './wide';
+import { numOf } from '../chapters/order';
 
 const bit = (name: string, dir: 'in' | 'out', side?: PortDef['side'], clock?: boolean): PortDef => ({ name, width: 1, dir, side, clock });
 const bus = (name: string, width: number, dir: 'in' | 'out', side?: PortDef['side']): PortDef => ({ name, width, dir, side });
@@ -430,7 +431,7 @@ export const VEC_ALU: ComponentDef = (() => {
   b.wire(cmp, 'cmp');
   return define({
     id: 'valu', name: 'Lane ALU', category: 'cpu',
-    summary: 'One lane\'s arithmetic for one element: the 32-bit ALU of chapter 11 with operand B from the other register, x[rs1] or the immediate, the operands swapped for vrsub, the flags of a subtraction turned into the eight compares (eq, ne, ltu, lt, leu, le, gtu, gt) and into min / max, a pick between vs2\'s element and operand B (min / max, or vmerge by the mask bit), and the result: ALU, pick, element index (vid) or the loaded word.',
+    summary: 'One lane\'s arithmetic for one element: the 32-bit ALU of chapter ' + numOf('alu') + ' with operand B from the other register, x[rs1] or the immediate, the operands swapped for vrsub, the flags of a subtraction turned into the eight compares (eq, ne, ltu, lt, leu, le, gtu, gt) and into min / max, a pick between vs2\'s element and operand B (min / max, or vmerge by the mask bit), and the result: ALU, pick, element index (vid) or the loaded word.',
     ports: [bus('rdA', 32, 'in'), bus('rdB', 32, 'in'), bus('scalar', 32, 'in'), bit('vv', 'in'), bit('swap', 'in'), bus('aluCtl', 4, 'in'), bit('mergeLike', 'in'), bit('take', 'in'), bit('minS', 'in'), bit('isMax', 'in'), bus('cmpSel', 3, 'in'), bus('resSel', 2, 'in'), bus('idx', 5, 'in'), bus('memRd', 32, 'in'),
       bus('res', 32, 'out'), bit('cmp', 'out')],
     symbol: { kind: 'box', label: 'LANE ALU' },
