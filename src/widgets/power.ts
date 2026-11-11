@@ -140,7 +140,7 @@ export const GLITCH_CPUS: [string, string][] = [['sc', 'Single-cycle'], ['pipe',
 export function glitchWidget(): Widget {
   const out = h('div', null, h('p', { class: 'sub' }, 'Simulating…'));
   const cpus = GLITCH_CPUS.map(([id, name]) => ({ name, g: benchOf(id).glitch }));
-  const el = panel('Glitches: toggles that end where they started', 'Two adders on 200 random additions, then every CPU over the four benchmarks (bench/results.json). The glitch share is the energy of toggles that do not change a net\'s settled value.', out);
+  const el = panel('Glitches: toggles that end where they started', 'Two adders on 200 random additions, then every CPU over the four benchmarks, as measured on its gates. The glitch share is the energy of toggles that do not change a net\'s settled value.', out);
   setTimeout(() => {
     const m = glitchMeasure();
     out.replaceChildren(
@@ -327,7 +327,7 @@ export function frontWidget(): Widget {
   };
   render();
   return {
-    el: panel('Which CPU for the job', 'Every CPU over the four benchmarks (bench/results.json): time and energy per instruction at 0.9 V, then each slid along its own voltage curve to a common speed. A fast design can spend its spare speed on a lower supply.',
+    el: panel('Which CPU for the job', 'Every CPU over the four benchmarks, measured on its gates: time and energy per instruction at 0.9 V, then each slid along its own voltage curve to a common speed. A fast design can spend its spare speed on a lower supply.',
       h('div', { class: 'cx-controls' }, slider('time per instruction', 1.5, 12, 0.1, ns, (v) => `${v.toFixed(1)} ns`, (v) => { ns = v; render(); })), out),
   };
 }

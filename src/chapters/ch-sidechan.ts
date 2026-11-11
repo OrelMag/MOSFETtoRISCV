@@ -45,7 +45,7 @@ export const chSidechan: Chapter = {
         why: ['', 'The branch is still predicted, and still mispredicted; it just has nothing to leak through.', 'Nothing is flushed: the probe lines are simply never touched.', 'The load is not slower; it cannot start until its address is known.'],
       },
       {
-        question: 'Fill-at-commit cost the ooo chapter\'s benchmarks nothing on our model. Why is that not proof it is free?',
+        question: 'Fill-at-commit cost the out-of-order chapter\'s benchmarks nothing on our model. Why is that not proof it is free?',
         options: ['Their data was written before it was read, so their loads hit anyway; a program whose loads miss pays', 'The benchmarks have no branches', 'The benchmarks run on the in-order core', 'Fill-at-commit only applies to stores'],
         answer: 0,
         explain: 'Each benchmark writes its data and then reads it, and a store fills its line, so no load misses. Summing a 4 KB array, four times the cache, does miss, and there fill-at-commit costs cycles.',
@@ -215,7 +215,7 @@ export const chSidechan: Chapter = {
       title: 'Fix it in hardware',
       body: `
         <p>The third defence changes the core, not the program: a load fills its line only when it <b>commits</b>. A wrong-path load still gets its value, so the core runs as fast as before, but its line never enters the cache, because it never commits. The real thing needs a buffer to hold such lines until then.</p>
-        <p>The attack, unchanged, prints nothing. The victim's cycles a call do not move: 8.5. Every program pays instead, wherever a load that missed is followed, before it commits, by another load to the same line: that one misses too, where it would have hit. On the ooo chapter's benchmarks that never happens, and they run in exactly as many cycles: each writes its data before reading it, so its loads hit. Summing a 4 KB array, four times the cache, does miss, and takes 7981 cycles against 7972. The extra misses overlap with the first one, so they cost little here.</p>
+        <p>The attack, unchanged, prints nothing. The victim's cycles a call do not move: 8.5. Every program pays instead, wherever a load that missed is followed, before it commits, by another load to the same line: that one misses too, where it would have hit. On the benchmarks of ${ch('ooo')} that never happens, and they run in exactly as many cycles: each writes its data before reading it, so its loads hit. Summing a 4 KB array, four times the cache, does miss, and takes 7981 cycles against 7972. The extra misses overlap with the first one, so they cost little here.</p>
         <div class="try">Switch fill-at-commit on and off; the program and the victim are the same in both.</div>`,
       widget: () => spectreWidget({ guards: ['fill', 'none'], show: 'both' }),
       more: { real: 'Research designs of this kind (InvisiSpec, 2018, and those after it) hold speculative fills apart until they are safe. Others partition the cache between security domains, or flush it when switching between them; those need the domains of an operating system to mean anything, and protect against attackers outside, not a victim tricked from inside.' },

@@ -25,10 +25,10 @@ const n0 = (n: number) => groupDigits(n);
 export function verifyMap(): Widget {
   const rows = LAYERS.map((l, i) => h('tr', null,
     h('th', null, h('span', { class: 'vf-rung' }, String(i + 1)), l.name),
-    h('td', null, l.oracle), h('td', null, l.finds), h('td', { class: 'vf-miss' }, l.misses), h('td', { class: 'vf-where' }, l.where)));
+    h('td', { 'data-k': 'Oracle' }, l.oracle), h('td', { 'data-k': 'Finds' }, l.finds), h('td', { class: 'vf-miss', 'data-k': 'Cannot find' }, l.misses), h('td', { class: 'vf-where', 'data-k': 'Runs' }, l.where)));
   return {
     el: panel('The ladder of checks', 'Each rung answers "is it right?" with a different oracle: something other than the circuit that says what the right answer is.',
-      h('div', { class: 'vf-wrap' }, h('table', { class: 'vf-table' },
+      h('div', { class: 'vf-wrap' }, h('table', { class: 'vf-table vf-cards' },
         h('thead', null, h('tr', null, h('th', null, 'Check'), h('th', null, 'Oracle'), h('th', null, 'Finds'), h('th', null, 'Cannot find'), h('th', null, 'Runs'))),
         h('tbody', null, ...rows)))),
   };
@@ -38,7 +38,7 @@ export function verifyMap(): Widget {
 export function riscvTestsWidget(): Widget {
   let fault = false, running: { aborted: boolean } | null = null;
   const grid = h('div', { class: 'vf-grid' });
-  const status = h('div', { class: 'vf-status', role: 'status' }, 'Press Run: about 30 tests, each a program that checks one instruction against hand-picked values.');
+  const status = h('div', { class: 'vf-status', role: 'status' }, 'Press Run: the rv32ui tests, each a program that checks one instruction against hand-picked values.');
   const detail = h('div', { class: 'vf-detail' });
   const build = (w: number[], i: number, d: number) => (fault ? withFault(pipelinedCpu(w, { imemK: i, dmemK: d }), SLT_FAULT) : pipelinedCpu(w, { imemK: i, dmemK: d }));
   const show = async (r: RvTestResult) => {
@@ -151,7 +151,7 @@ export function coverageWidget(): Widget {
     const k = reached(r);
     status.textContent = `${what}: ${k.instrs} of ${RV32I_WORD.length} instructions executed, ${k.events} of ${EVENTS.length} pipeline events seen${r.programs > 1 ? ` (${r.programs} programs)` : ''}.`;
     grid.replaceChildren(...RV32I_WORD.map((n) => h('span', { class: `vf-op ${r.instrs[n] ? 'hit' : 'miss'}`, title: `${n}: executed ${n0(r.instrs[n])} times` }, n)));
-    ev.replaceChildren(...EVENTS.map((e) => h('div', { class: `vf-evrow ${r.events[e.key] ? 'hit' : 'miss'}` }, h('span', null, e.label), h('b', null, r.events[e.key] ? `${n0(r.events[e.key])} cycles` : 'never'))));
+    ev.replaceChildren(...EVENTS.map((e) => h('div', { class: `vf-evrow ${r.events[e.key] ? 'hit' : 'miss'}` }, h('span', null, e.label), h('b', null, r.events[e.key] ? `${n0(r.events[e.key])} cycle${r.events[e.key] === 1 ? '' : 's'}` : 'never'))));
   };
   const pick = async (v: string) => {
     running && (running.aborted = true);
@@ -180,8 +180,8 @@ export function coverageWidget(): Widget {
 export function foundWidget(): Widget {
   return {
     el: panel('What the checks found here', 'Every bug below was in this site\'s code, and every fix came with a failing test first.',
-      h('div', { class: 'vf-wrap' }, h('table', { class: 'vf-table' },
+      h('div', { class: 'vf-wrap' }, h('table', { class: 'vf-table vf-cards' },
         h('thead', null, h('tr', null, h('th', null, 'Where'), h('th', null, 'Bug'), h('th', null, 'Found by'), h('th', null, 'Fix'))),
-        h('tbody', null, ...FOUND.map((f) => h('tr', null, h('th', null, f.where), h('td', null, f.bug), h('td', { class: 'vf-by' }, f.foundBy), h('td', null, f.fix))))))),
+        h('tbody', null, ...FOUND.map((f) => h('tr', null, h('th', null, f.where), h('td', { 'data-k': 'Bug' }, f.bug), h('td', { class: 'vf-by', 'data-k': 'Found by' }, f.foundBy), h('td', { 'data-k': 'Fix' }, f.fix))))))),
   };
 }

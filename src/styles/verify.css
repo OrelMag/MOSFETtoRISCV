@@ -7,6 +7,14 @@
 .vf-table tbody th { font-weight: 600; white-space: nowrap; }
 .vf-table .vf-miss { color: var(--text-2); }
 .vf-table .vf-where, .vf-table .vf-by { color: var(--text-2); font-size: 12.5px; }
+/* a phone: each row a card, every cell under its column's name (five columns do not fit 390 px) */
+@media (max-width: 560px) {
+  .vf-cards thead { display: none; }
+  .vf-cards, .vf-cards tbody, .vf-cards tr, .vf-cards th, .vf-cards td { display: block; width: auto; }
+  .vf-cards tr { padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .vf-cards th, .vf-cards td { border: 0; padding: 2px 0; white-space: normal; }
+  .vf-cards td[data-k]::before { content: attr(data-k) ": "; font-weight: 600; color: var(--text-2); }
+}
 .vf-rung { display: inline-grid; place-items: center; width: 20px; height: 20px; margin-right: 6px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 12px; }
 
 .vf-status { margin: 8px 0; font-size: 14px; }

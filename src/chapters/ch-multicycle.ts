@@ -26,7 +26,7 @@ const FIND_MC = findIt({
     'Between Fetch and Write-back the CPU decodes the instruction from one register, held across the steps. When should that register load?',
     'The instruction register should load in Fetch only. Its enable, <code>IRWrite</code>, is stuck at 1.',
   ],
-  fault: 'The instruction register\'s enable, <code>IRWrite</code>, was stuck at 1: the IR loaded a word from memory at every clock edge, not only in Fetch. By the time the state machine reached Execute and Write-back, the IR held another word than the one fetched, so the first instruction to write a register already wrote a wrong value. The state machine itself was right: it was decoding the wrong word.',
+  fault: 'The instruction register\'s enable, <code>IRWrite</code>, was stuck at 1: the IR loaded a word from memory at every clock edge, not only in Fetch. Measured on the gates: across the first instruction\'s steps the IR held <code>li a0, 0</code> in Decode, <code>li t0, 1</code> (the word at PC + 4) in the next step, and <code>li a0, 0</code> again in the step that wrote a0; OldPC, which shares the enable, reloaded with it. The value written, 0xc, is what the result bus carried at that edge; exactly which path through the datapath made it is not traced here, since the wrong words also steered the state machine\'s dispatch. The state machine itself was right: it was decoding the wrong words.',
 });
 
 /** Cycles an instruction takes: Fetch and Decode, then the states from its dispatch target until the table returns to Fetch

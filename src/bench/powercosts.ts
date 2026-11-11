@@ -42,6 +42,9 @@ export interface CpuPower {
   settledPj: number;
   rfGlitchPj: number;
   rfRegGlitchPj: number;
+  /** The register file's and the data memory's write-data buses: changes a cycle (glitches included), changes that last, and the bus's C
+   *  per bit (fF). With the clock gated every unwritten register's master follows its bus (the Power chapter's "What gating saved"). */
+  writeData: Record<'rf' | 'dm', { toggles: number; settled: number; ffPerBit: number }>;
 }
 
 /** Four significant digits: the numbers span from µW of leakage to pF of clock. */
@@ -81,6 +84,10 @@ export function measureCpu(gated: boolean): CpuPower {
     if (p[0] === 'rf') { rfGlitch += g; if (/^w\d+$/.test(p[1] ?? '')) rfReg += g; }
   }
   const pjOf = (ff: number) => r3(energyFj(ff) / POWER_CYCLES / 1e3);
+  const busOf = (nets: number[]) => ({
+    toggles: r3(nets.reduce((a, n) => a + m.toggles(n), 0) / POWER_CYCLES), settled: r3(nets.reduce((a, n) => a + m.settled(n), 0) / POWER_CYCLES),
+    ffPerBit: r3(nets.reduce((a, n) => a + m.caps[n], 0) / nets.length),
+  });
   return {
     nands: stats(def).nands,
     period: analyzeTiming(d)!.period,
@@ -94,6 +101,7 @@ export function measureCpu(gated: boolean): CpuPower {
     totalFf: r3(totalFf),
     wakePj: r3(oneFf * VDD * VDD / 1e3),
     glitchPj: pjOf(glitch), settledPj: pjOf(settled), rfGlitchPj: pjOf(rfGlitch), rfRegGlitchPj: pjOf(rfReg),
+    writeData: { rf: busOf(d.root.children!.get('rf')!.ports.wd), dm: busOf(d.root.children!.get('dm')!.ports.wd) },
   };
 }
 

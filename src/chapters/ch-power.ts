@@ -205,6 +205,13 @@ export const chPower: Chapter = {
         ${pj(gated.rfRegGlitchPj)} of them inside the registers themselves. A flip-flop whose clock is held at 0 keeps its master latch open, so the master of every register that is not written
         follows the write-data bus, every change and every glitch of it, cycle after cycle. In the plain register file the enable multiplexer fed each flip-flop its own q, and an
         unwritten master saw nothing move. Gating the clock moved that cost from the clock to the data.</p>
+        <p>The data memory is gated the same way and still falls, because what its masters follow hardly moves. Its write data is the
+        second register read, which changes only when another register is named or that one is written: ${gated.writeData.dm.toggles.toFixed(1)} bit changes a cycle,
+        against ${gated.writeData.rf.toggles.toFixed(1)} on the register file's write data, the result bus, every glitch of the ALU and the
+        result multiplexer included (only ${gated.writeData.rf.settled.toFixed(1)} of them last). The result multiplexer's own bar
+        (res, ${pj(blk('res'))} → ${pj(blk('res', gated))}) rises for the same reason from the other side: the bus changes
+        as often as before, but it now drives every register's master directly, ${gated.writeData.rf.ffPerBit.toFixed(0)} fF a bit against
+        ${plain.writeData.rf.ffPerBit.toFixed(0)} through the enable multiplexers.</p>
         <p>The share of glitches rises from ${pct(plain.glitch)} to ${pct(gated.glitch)} for two reasons, then: those new glitches (${pj(plain.glitchPj)} → ${pj(gated.glitchPj)} a cycle in all), and the
         settled toggles that vanished with the clock's (${pj(plain.settledPj)} → ${pj(gated.settledPj)}). Real designs answer the first with flip-flops whose master closes too, or by holding the
         write data still when nothing is written.</p>`,
