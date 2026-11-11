@@ -98,7 +98,7 @@ and Check yourself questions; challenges are optional, each with a revealable an
 **Why?** on any wire traces where its value came from and what each part is for, **Break a part**
 shows what fails without it, guided tours, cost ledgers and layers (the short version, then deeper),
 narration, <!--n:analogies-->26<!--/n--> analogies (each folded under its step with a figure from the chapter's own model and
-where it breaks down), <!--n:readings-->6<!--/n--> passages of the RISC-V manual to read with questions, and a live
+where it breaks down), <!--n:readings-->7<!--/n--> passages of the RISC-V manual to read with questions, and a live
 **memory view** of every RAM and register file in a scene. Notes and bookmarks on any step feed a
 review queue; one backup file carries all progress; the site installs as an app and works offline.
 
