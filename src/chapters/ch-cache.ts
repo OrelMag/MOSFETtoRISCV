@@ -162,20 +162,20 @@ function pairWorked(): string {
 /** The chapter's common mistakes, each with this chapter's own numbers. */
 function cacheMistakes(): string {
   const sp = split(64, 16, 1, 8), R = pairRun();
-  return `<details class="deeper"><summary>Common mistakes with caches</summary><ul>
+  return `<p><strong>Common mistakes with caches</strong></p><ul>
     <li><strong>Counting the offset in words.</strong> Addresses count bytes, so a 16-byte line needs ${sp.off} offset bits (2 for the byte, 2 for the
     word), not 2. Get it wrong and the index and the tag shift with it.</li>
     <li><strong>"Every miss means the cache is too small."</strong> Only capacity misses do. The worked example in "The three Cs" misses
     ${R.dmMiss} times although it needs only two lines at a time and the cache has four; 2 ways of the same size bring it to ${R.w2Miss}.</li>
     <li><strong>Adding the latencies.</strong> AMAT = hit time + miss rate × miss penalty, applied level by level: 4 + 0.05 × (12 + 0.2 × 250) =
-    ${amat([[4, 0.05], [12, 0.2]], 250).toFixed(1)} cycles in the example above, not 4 + 12 + 250 = ${4 + 12 + 250}.</li>
+    ${amat([[4, 0.05], [12, 0.2]], 250).toFixed(1)} cycles in this step's example, not 4 + 12 + 250 = ${4 + 12 + 250}.</li>
     <li><strong>Mixing local and global miss rates.</strong> 20 % of L2's own accesses is ${pct(0.05 * 0.2)} of all accesses behind a 5 % L1. The formula takes
     the local rate at each level.</li>
     <li><strong>Assuming a store miss fetches the line.</strong> It depends on the policy: the write-through cache of this chapter does not allocate (the
     store only goes to memory); a write-back cache allocates, then writes the dirty line back when it is evicted.</li>
     <li><strong>Forgetting the valid bit.</strong> After Reset the tag arrays hold whatever they hold; without the valid bit an address whose tag happens to
     match would hit on garbage.</li>
-  </ul></details>`;
+  </ul>`;
 }
 
 export const chCache: Chapter = {
@@ -892,18 +892,10 @@ export const chCache: Chapter = {
       body: `
         <p>AMAT = hit time + miss rate × miss penalty. A modern core: an L1 hit in 4 cycles, 5 % misses, and an L2 behind it that hits in 12
         cycles but itself misses 20 % of the time to DRAM at 250.</p>
-        <p>Latency is one cost; bandwidth is the other. A write-through cache sends every store down a level, a write-back cache only each dirty
-        line once, when it is evicted. That is why write-back dominates from L2 outward (and in most L1s): with several cores sharing one
-        memory bus, bandwidth is the scarce resource.</p>
-        <p>Two more choices shape a real hierarchy. <strong>Inclusive</strong> levels keep a copy of everything above them in the level below
-        (a request from another core that misses in L3 need not ask this core's L1), at the price of duplicated capacity; <strong>exclusive</strong> levels hold each line in one
-        place only, so L2 + L3 capacity adds up, at the price of moving lines both ways on every miss. And <strong>prefetching</strong> fetches
-        lines before they are asked for: a next-line or stride prefetcher spots a sequential sweep (the row-major sum, "Vector add") and turns
-        its compulsory misses into hits, at the cost of bandwidth and, when it guesses wrong, of lines it evicts for nothing.</p>
         <p>Weigh the terms of the example: of its ${amat([[4, 0.05], [12, 0.2]], 250).toFixed(1)} cycles on average, the L1 hit accounts for 4, the L2 for ${(0.05 * 12).toFixed(1)}
         and DRAM for ${(0.05 * 0.2 * 250).toFixed(1)}. The slowest level adds only that much although it costs 250 cycles per access, because two caches stand between it and the processor; it is still the term that
         grows fastest when a miss rate worsens.</p>
-        ${cacheMistakes()}`,
+        <p>AMAT counts latency only. Bandwidth, <em>inclusive</em> and <em>exclusive</em> levels and prefetching shape a real hierarchy too: the In real silicon layer explains them.</p>`,
       more: {
         derive: `<p>Local miss rates multiply on the way down. The fraction of all accesses that reach DRAM is 0.05 × 0.2 = ${pct(0.05 * 0.2)}, and each costs 250 cycles: 2.5 cycles an access
           on average. AMAT = L1 hit + m<sub>1</sub> (L2 hit + m<sub>2</sub> × DRAM) = 4 + 0.05 × (12 + 0.2 × 250) = ${amat([[4, 0.05], [12, 0.2]], 250).toFixed(1)}. Leave out L2 and it is
@@ -911,8 +903,17 @@ export const chCache: Chapter = {
         numbers: `<table class="mini"><tr><th>L1 miss rate</th><th>L2 local miss rate</th><th>AMAT, cycles</th></tr>
           ${[[0.05, 0.2], [0.025, 0.2], [0.05, 0.1], [0.1, 0.2]].map(([m1, m2]) => `<tr><td>${+(m1 * 100).toFixed(1)} %</td><td>${+(m2 * 100).toFixed(1)} %</td><td>${amat([[4, m1], [12, m2]], 250).toFixed(1)}</td></tr>`).join('')}</table>`,
         pitfall: `<p>Using a global miss rate where a local one is meant. "L2 misses 1 % of all accesses" and "L2 misses 20 % of the accesses it sees" describe the same cache; plug the wrong one into the
-          formula and the answer is off by the L1 miss rate. The quiz's 20 % is local, and 5 % × 20 % = 1 % is the global rate to DRAM.</p>`,
-        real: `<p>One more term hides in the L1 hit time: address translation. The site's CPUs use physical addresses only. An operating system gives every program its own <strong>virtual</strong> address space:
+          formula and the answer is off by the L1 miss rate. The quiz's 20 % is local, and 5 % × 20 % = 1 % is the global rate to DRAM.</p>
+          ${cacheMistakes()}`,
+        real: `<p>AMAT is latency; <strong>bandwidth</strong> is the other cost. A write-through cache sends every store down a level, a write-back cache only each dirty
+          line once, when it is evicted. That is why write-back dominates from L2 outward (and in most L1s): with several cores sharing one
+          memory bus, bandwidth is the scarce resource.</p>
+          <p>Two more choices shape a real hierarchy. <strong>Inclusive</strong> levels keep a copy of everything above them in the level below
+          (a request from another core that misses in L3 need not ask this core's L1), at the price of duplicated capacity; <strong>exclusive</strong> levels hold each line in one
+          place only, so L2 + L3 capacity adds up, at the price of moving lines both ways on every miss. And <strong>prefetching</strong> fetches
+          lines before they are asked for: a next-line or stride prefetcher spots a sequential sweep (the row-major sum, "Vector add") and turns
+          its compulsory misses into hits, at the cost of bandwidth and, when it guesses wrong, of lines it evicts for nothing.</p>
+        <p>One more term hides in the L1 hit time: address translation. The site's CPUs use physical addresses only. An operating system gives every program its own <strong>virtual</strong> address space:
         memory is split into <strong>pages</strong> (4 KB), and a <strong>page table</strong> in memory maps each virtual page to a physical one,
         with permission bits (read, write, execute, user). RISC-V's Sv32 walks a two-level table; a missing or forbidden page traps (a page fault)
         and the OS fixes it, possibly loading the page from disk. Walking the table on every access would multiply memory traffic, so a
