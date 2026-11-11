@@ -248,6 +248,9 @@ describe('the campaign rule in a check', () => {
     expect(names).toContain('zero detect (any width)');
     expect(names.join()).not.toMatch(/…|\*/);
     expect(partNames(['rv16_mux*', 'mux2'], (u) => resolveComponent(u)?.name)).toEqual(['RV16 bus multiplexers', '2:1 Multiplexer']);
+    // generated wiring ids are named in words, once (a 48-bit splitter's id once widened a phone's page)
+    expect(partNames(['split_1_1', 'merge_1_1_1', 'split_8_8_p4'], (u) => resolveComponent(u)?.name)).toEqual(['splitters and mergers (wiring)']);
+    for (const n of NODES) expect(partNames(ruleFor(n.id).lib, (u) => resolveComponent(u)?.name).join(', '), n.id).not.toMatch(/\b(split|merge)_\d/);
     for (const [c, why] of [[cell, /CMOS inverter: transistor level/], [fets, /transistor: transistor level/]] as const) {
       const r = checkChallenge(levelChallenge(nodeById('g_not')!)!, new UserLibrary(workspace(c)).compiled(c.id));
       expect(r.ok, c.id).toBe(false);
