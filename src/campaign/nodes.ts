@@ -261,6 +261,18 @@ export const NODES: CampaignNode[] = withBugHunts([
     codex: ['twos', 'overflow', 'signext'], chapters: [{ chapter: 'binary', step: 1, label: "Negative numbers: two's complement" }, { chapter: 'binary', step: 3, label: 'Overflow: two flags from one addition' }, { chapter: 'binary', step: 5, label: 'Wider words: sign and zero extension' }],
   },
   {
+    id: 'n_fixed', act: 2, title: 'Fixed point', kind: 'drill', optional: true, requires: ['n_twos'], drill: 'fixed', par: { mistakes: 2 },
+    why: 'A signal processor keeps fractions in plain integers: Q1.15 is a 16-bit two\'s complement word read as the integer over 2^15. Reading a word, naming the format of a product, knowing how far to shift it back and how a dropped bit rounds are the whole craft, and the adder never knows.',
+    tips: ['Value = signed integer / 2^f; the top bit weighs −1.', 'Qa.b × Qc.d = Q(a+c).(b+d); to get back to the operand format, shift right by the extra places.', 'A shift rounds down (toward −∞); division in C rounds toward zero. They differ only for negative values.'],
+    codex: ['qformat'], chapters: [{ chapter: 'fixed', step: 0, label: 'A word and its point' }, { chapter: 'fixed', step: 3, label: 'Multiplying fractions' }],
+  },
+  {
+    id: 'n_divrem', act: 2, title: 'RISC-V division', kind: 'drill', optional: true, requires: ['n_twos'], drill: 'divrem', par: { mistakes: 2 },
+    why: 'RISC-V division never traps: divide by zero gives all ones (and the dividend as the remainder), and the one overflow, the most negative word over −1, wraps. Quotients round toward zero, so a remainder takes the sign of the dividend. Knowing the four results by heart is how you read compiled code.',
+    tips: ['q = trunc(a / b), r = a − q·b: the remainder has the sign of the dividend.', 'Division by zero: quotient all ones, remainder = dividend.', '−2³¹ / −1 would be +2³¹, which does not fit: the quotient is −2³¹ again and the remainder 0.'],
+    codex: ['mext', 'multiword'], chapters: [{ chapter: 'muldiv', step: 21, label: 'The M unit' }, { chapter: 'muldiv', step: 26, label: 'Words wider than the word' }],
+  },
+  {
     id: 'a_ha', act: 2, title: 'Half adder', kind: 'build', requires: ['g_xor', 'n_bin'], base: sandbox('a_ha'),
     why: 'Bits are numbers now, and nothing adds them yet. One column is two bits in, a sum and a carry out: XOR and AND, and the XOR\'s first NAND already holds the carry\'s complement, so 5 NANDs. The full adder is two of them; the PC\'s incrementer fifteen in a row.',
     tips: ['The XOR\'s first NAND is ¬(a·b): invert it for the carry.', 'The carry is a·b, not a + b; a separate AND beside the XOR is 6 NANDs and misses par.'],

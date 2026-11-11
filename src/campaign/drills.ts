@@ -1071,4 +1071,117 @@ const lut: Drill = {
   },
 };
 
-export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16, float, relay, hollerith, lut, testset };
+// ---- fixed point and RISC-V division (the numbers chapters) ---------------------------------------------
+
+/** A value as the chapters write it: the signed integer over 2^f, in decimal with no trailing zeros. */
+export const fixedText = (raw: number, f: number): string => {
+  const v = raw / 2 ** f;
+  return Number.isInteger(v) ? String(v) : v.toFixed(f).replace(/0+$/, '');
+};
+/** The value of a word read as Qm.f with w = m + f bits: the signed integer / 2^f. */
+export const qValue = (word: number, w: number, f: number): number => {
+  const u = word & (2 ** w - 1);
+  return (u >= 2 ** (w - 1) ? u - 2 ** w : u) / 2 ** f;
+};
+
+/** A number written in decimal ("-0.375"), as a fraction ("-3/8") or in hex / binary: its value. */
+export function parseQty2(t: string): number | null {
+  const x = t.trim().replace(/−/g, '-').replace(/\s/g, '');
+  const m = x.match(/^(-?\d+)\/(\d+)$/);
+  if (m) return Number(m[2]) === 0 ? null : Number(m[1]) / Number(m[2]);
+  if (/^-?(\d+\.?\d*|\.\d+)$/.test(x)) return Number(x);
+  return parseNum(x);
+}
+
+const qName = (m: number, f: number) => `Q${m}.${f}`;
+
+const fixed: Drill = {
+  id: 'fixed', title: 'Fixed point', goal: 6,
+  how: 'Qm.f is a two\'s complement word of m + f bits (the m includes the sign) read as the integer divided by 2^f. Give values in decimal (0.375) or as a fraction (3/8), a format as Qm.f, a shift as a number of places.',
+  make(r) {
+    const k = int(r, 0, 4);
+    if (k === 0 || k === 1) {
+      const w = k === 0 ? 8 : 16, f = w - 1;
+      const word = int(r, 0, 2 ** w - 1);
+      const raw = word >= 2 ** (w - 1) ? word - 2 ** w : word;
+      const v = qValue(word, w, f);
+      return {
+        prompt: `What value does the ${w}-bit word <code>0x${hex(word, w)}</code> hold, read as <b>${qName(1, f)}</b>?`, placeholder: '-0.375',
+        check: (t) => { const x = parseQty2(t); return x === null ? { ok: false, why: 'write a decimal number or a fraction' } : { ok: x === v, why: x === v ? undefined : 'not that value' }; },
+        answer: fixedText(raw, f),
+        explain: `As a signed integer the word is ${raw}; divided by 2^${f} = ${2 ** f} that is ${fixedText(raw, f)}. (The top bit weighs −1, the next ½, then ¼ …)`,
+      };
+    }
+    if (k === 2) {
+      const a = int(r, 1, 4), b = int(r, 3, 15), c = int(r, 1, 4), d = int(r, 3, 15);
+      const want = qName(a + c, b + d);
+      return {
+        prompt: `Multiplying a <b>${qName(a, b)}</b> word by a <b>${qName(c, d)}</b> word gives a full-width product in which format?`, placeholder: 'Q2.30',
+        check: (t) => { const m = t.trim().toUpperCase().match(/^Q(\d+)\.(\d+)$/); return m ? { ok: Number(m[1]) === a + c && Number(m[2]) === b + d, why: 'not that format' } : { ok: false, why: 'write it as Qm.f' }; },
+        answer: want,
+        explain: `Qa.b × Qc.d = Q(a+c).(b+d): the integer parts add (${a} + ${c}), so do the places after the point (${b} + ${d}). The product is ${a + b + c + d} bits long.`,
+      };
+    }
+    if (k === 3) {
+      const f = [7, 15][int(r, 0, 1)], other = int(r, 1, 3), g = int(r, 5, 12);
+      return {
+        prompt: `A Q1.${f} word times a ${qName(other, g)} word is a ${qName(1 + other, f + g)} product. By how many places is it shifted right to give a <b>${qName(1, f)}</b> result?`, placeholder: String(f),
+        check: numAnswer(g, 10), answer: String(g),
+        explain: `The product has ${f + g} places after the point and the result keeps ${f}: drop ${g}. (Two Q1.${f} words: the shift is ${f}, one fewer than the ${f + 1} bits of an operand.)`,
+      };
+    }
+    const s2 = int(r, 2, 4), x = int(r, -120, 120), mode = ['floor', 'zero', 'half-up'][int(r, 0, 2)];
+    const q = 2 ** s2;
+    const want = mode === 'floor' ? Math.floor(x / q) : mode === 'zero' ? Math.trunc(x / q) : Math.floor((x + q / 2) / q);
+    const how = mode === 'floor' ? `an arithmetic shift right by ${s2} (rounds down, toward −∞)` : mode === 'zero' ? `C division by ${q} (rounds toward zero)` : `rounding to nearest, ties up (add ${q / 2}, then shift right by ${s2})`;
+    return {
+      prompt: `Drop ${s2} bits from the signed integer <b>${x}</b> by ${how}. The result?`, placeholder: String(want),
+      check: numAnswer(want, 10), answer: String(want),
+      explain: `${x} / ${q} = ${x / q}. ` + (mode === 'floor' ? `Its floor is ${want}: a shift never rounds up, so a negative value moves further from zero.` : mode === 'zero' ? `Toward zero drops the fraction: ${want}. It differs from the shift only for a negative value with a nonzero remainder.` : `(${x} + ${q / 2}) >> ${s2} = ${want}.`),
+    };
+  },
+};
+
+/** RISC-V's four division results on 32-bit words (the spec: division by zero and the one overflow do not trap). */
+export function divRem32(op: 'div' | 'divu' | 'rem' | 'remu', a: number, b: number): number {
+  const au = a >>> 0, bu = b >>> 0, as = a | 0, bs = b | 0;
+  switch (op) {
+    case 'div': return bs === 0 ? -1 : as === -(2 ** 31) && bs === -1 ? as : Math.trunc(as / bs);
+    case 'rem': return bs === 0 ? as : as === -(2 ** 31) && bs === -1 ? 0 : as % bs;
+    case 'divu': return bu === 0 ? 0xffffffff : Math.floor(au / bu);
+    default: return bu === 0 ? au : au % bu;
+  }
+}
+
+const divrem: Drill = {
+  id: 'divrem', title: 'RISC-V division', goal: 6,
+  how: 'Operands are 32-bit words. div and rem are signed, divu and remu unsigned. Division never traps. Answer in decimal (signed for div / rem) or as a 0x pattern.',
+  make(r) {
+    const op = (['div', 'rem', 'divu', 'remu'] as const)[int(r, 0, 3)], signed = op === 'div' || op === 'rem';
+    const kind = int(r, 0, 5);
+    let a = signed ? int(r, -200, 200) : int(r, 0, 400), b = signed ? int(r, -12, 12) : int(r, 1, 12);
+    if (signed && b === 0) b = 3;
+    if (kind === 0) b = 0;
+    else if (kind === 1 && signed) { a = -(2 ** 31); b = -1; }
+    else if (kind === 2 && !signed) { a = 0xfffffff0 + int(r, 0, 15); b = int(r, 2, 9); }
+    const want = divRem32(op, a, b) >>> 0;
+    const shown = (v: number) => (signed ? (v | 0) < -9999 ? `0x${hex(v >>> 0, 32)}` : String(v | 0) : (v >>> 0) > 9999 ? `0x${hex(v >>> 0, 32)}` : String(v >>> 0));
+    return {
+      prompt: `<code>${op}</code> with rs1 = <b>${shown(a)}</b> and rs2 = <b>${shown(b)}</b>: what does rd get?`, placeholder: 'decimal or 0x…',
+      answer: String(signed ? want | 0 : want),
+      check: (t) => {
+        const x = parseNum(t);
+        if (x === null) return { ok: false, why: 'write a decimal number or a 0x pattern' };
+        if (x < -(2 ** 31) || x >= 2 ** 32) return { ok: false, why: 'rd is a 32-bit word' };
+        return (x >>> 0) === want ? { ok: true } : { ok: false, why: 'not that value' };
+      },
+      explain: b === 0
+        ? `Division by zero: ${op.startsWith('div') ? `the quotient is all ones (${signed ? '−1' : '0xFFFFFFFF'})` : 'the remainder is the dividend'}, and nothing traps.`
+        : signed && (a | 0) === -(2 ** 31) && (b | 0) === -1 ? 'The one overflow: +2³¹ does not fit, so div gives −2³¹ again and rem gives 0.'
+          : signed ? `Division truncates toward zero, so the remainder takes the sign of the dividend: ${a} = ${Math.trunc(a / b)} × ${b} + ${a % b}.`
+            : `Unsigned: ${a >>> 0} = ${Math.floor((a >>> 0) / b)} × ${b} + ${(a >>> 0) % b}.`,
+    };
+  },
+};
+
+export const DRILLS: Record<string, Drill> = { binary, twos, kmap, boolean, isa16, float, relay, hollerith, lut, testset, fixed, divrem };

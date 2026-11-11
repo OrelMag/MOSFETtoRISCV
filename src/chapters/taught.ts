@@ -178,6 +178,7 @@ export const TAUGHT: Record<string, string> = {
   carryselect: 'fastadd',
   carrysave: 'muldiv',
   booth: 'muldiv',
+  multiword: 'muldiv',
   fma: 'float',
   scoreboard: 'ooo',
   occupancy: 'warps',

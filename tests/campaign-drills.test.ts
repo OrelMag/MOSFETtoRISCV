@@ -261,3 +261,51 @@ describe('the LUT drill', () => {
     expect(ands).toBeGreaterThan(10);
   });
 });
+
+describe('the fixed-point and division drills', () => {
+  it('RISC-V division: divRem32 equals the golden model on corner cases and random operands', async () => {
+    const { divRem32 } = await import('../src/campaign/drills');
+    const { assemble } = await import('../src/riscv/asm');
+    const { ISS } = await import('../src/riscv/iss');
+    const r = rng(11);
+    const cases: [number, number][] = [[7, 0], [-7, 0], [-(2 ** 31), -1], [-7, 2], [7, -2], [-7, -2], [0xfffffff0, 7], [5, 0xffffffff]];
+    for (let i = 0; i < 40; i++) cases.push([Math.floor(r() * 2 ** 32) | 0, (Math.floor(r() * 2 ** 32) | 0) >> Math.floor(r() * 31)]);
+    for (const [a, b] of cases) {
+      const iss = new ISS(assemble(`li a0, ${a | 0}\nli a1, ${b | 0}\ndiv t0, a0, a1\ndivu t1, a0, a1\nrem t2, a0, a1\nremu t3, a0, a1\nh: j h`).words, { m: true } as never);
+      iss.run(100);
+      const got = [iss.x[5], iss.x[6], iss.x[7], iss.x[28]].map((v) => v >>> 0);
+      const want = (['div', 'divu', 'rem', 'remu'] as const).map((op) => divRem32(op, a, b) >>> 0);
+      expect(want, `${a} ${b}`).toEqual(got);
+    }
+  });
+
+  it('fixed point: the Q1.7 / Q1.15 values, the product format, the shift and the rounding are right for many seeds', () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      const q = DRILLS.fixed.make(rng(seed));
+      expect(q.check(q.answer)).toMatchObject({ ok: true });
+      expect(q.check('999')).toMatchObject({ ok: false });
+    }
+    // known values: 0xC0 in Q1.7 is -0.5, 0x4000 in Q1.15 is 0.5, the largest Q1.15 word 0x7FFF
+    const hits = new Set<string>();
+    for (let seed = 1; seed <= 200; seed++) { const q = DRILLS.fixed.make(rng(seed)); hits.add(q.prompt.replace(/[^a-z]+/gi, ' ').slice(0, 14)); }
+    expect(hits.size).toBeGreaterThan(3);
+  });
+
+  it('fixed point: Q values and a fraction answer', async () => {
+    const { qValue, fixedText, parseQty2 } = await import('../src/campaign/drills');
+    expect([qValue(0xc0, 8, 7), qValue(0x4000, 16, 15), qValue(0x7fff, 16, 15), qValue(0x8000, 16, 15)]).toEqual([-0.5, 0.5, 32767 / 32768, -1]);
+    expect(fixedText(-96, 7)).toBe('-0.75');
+    expect(fixedText(1, 15)).toBe('0.000030517578125');
+    expect([parseQty2('-3/8'), parseQty2('−0.375'), parseQty2('0x10')]).toEqual([-0.375, -0.375, 16]);
+  });
+
+  it('division: every question accepts its answer as a decimal or as the 32-bit pattern', () => {
+    for (let seed = 1; seed <= 80; seed++) {
+      const q = DRILLS.divrem.make(rng(seed));
+      expect(q.check(q.answer)).toMatchObject({ ok: true });
+      const v = parseNum(q.answer)!;
+      expect(q.check('0x' + (v >>> 0).toString(16))).toMatchObject({ ok: true });
+      expect(q.check(String(v + 1))).toMatchObject({ ok: false });
+    }
+  });
+});
