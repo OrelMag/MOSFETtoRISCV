@@ -896,7 +896,27 @@ const lensDrive = (part: string) => `(async () => {
   if (lenses()) bad.push('a lens left after the hand-off');
   const s2 = document.querySelector('.canvas > svg.schematic');
   for (let k = 0; k < 30 && !document.querySelector('.lens-cue'); k++) { const r = s2.getBoundingClientRect(); s2.dispatchEvent(new WheelEvent('wheel', { deltaY: 200, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); await wait(30); }
-  if (!document.querySelector('.lens-cue')) bad.push('no cue after zooming out of the level the lens handed off to');
+  if (!document.querySelector('.lens-cue')) return [...bad, 'no cue after zooming out of the level the lens handed off to: ' + location.hash + ', ' + lenses() + ' lenses'];
+  if (!/Keep zooming out to go up to/.test(document.querySelector('.lens-cue').textContent)) bad.push('the cue reads: ' + document.querySelector('.lens-cue').textContent);
+  // phase 2e: the gesture that brought the cue up coasting on (a trackpad's momentum, every frame) never goes up
+  const out = (dy) => { const r = s2.getBoundingClientRect(); s2.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); };
+  for (let k = 0, d = 30; k < 40; k++, d *= 0.95) { out(d); await wait(16); }
+  if (!location.hash.endsWith('/${part}')) bad.push('momentum after the cue went up: ' + location.hash);
+  // a fresh gesture after a pause goes up one level, the level left open in its lens at full size
+  await wait(500);
+  out(60);
+  await wait(400);
+  if (location.hash.split('/').length !== 4) return [...bad, 'a fresh zoom-out after the cue did not go up: ' + location.hash];
+  if (lenses() !== 1) bad.push('going up opened ' + lenses() + ' lenses on ${part} (expected 1)');
+  if (document.querySelector('.lens-cue')) bad.push('the cue stayed after going up');
+  // zooming on out shrinks it until it closes
+  for (let k = 0; k < 40 && lenses(); k++) { out(120); await wait(30); }
+  await wait(300);
+  if (lenses()) bad.push('zooming out after going up left the lens open');
+  if (location.hash.split('/').length !== 4) bad.push('zooming out went further up: ' + location.hash);
+  // fitted again for the route's own checks (the LEVEL tag over the drawing is judged on a fitted view)
+  document.querySelector('.stage [aria-label="Fit to screen"]')?.click();
+  await wait(300);
   return bad;
 })()`;
 

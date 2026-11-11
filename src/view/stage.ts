@@ -1204,13 +1204,13 @@ export class Stage {
     this.lens?.zoomed(x, y);
   }
 
-  /** After a hand-off: "Esc or cpu goes back up" under the breadcrumb (null removes it). */
+  /** After a hand-off: "Keep zooming out to go up to cpu" under the breadcrumb (null removes it). */
   private showCue(parent: { label: string; path: string[] } | null): void {
     this.cueEl?.remove();
     this.cueEl = null;
     if (!parent) return;
-    this.cueEl = h('div', { class: 'lens-cue', role: 'status' }, 'Esc or ',
-      h('button', { class: 'linkish', onclick: () => this.goTo(parent.path) }, parent.label), ' goes back up');
+    this.cueEl = h('div', { class: 'lens-cue', role: 'status' }, 'Keep zooming out to go up to ',
+      h('button', { class: 'linkish', onclick: () => this.goTo(parent.path) }, parent.label));
     this.canvas.append(this.cueEl);
   }
 

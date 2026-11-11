@@ -200,7 +200,7 @@ export class SchematicView {
   private dragged = false;
   /** A double tap opens a part like a double-click (iOS Safari may send no dblclick for it). */
   private taps = new DoubleTap();
-  private pinchers = new Set<(mid: [number, number], done: boolean) => void>();
+  private pinchers = new Set<(mid: [number, number], done: boolean, k: number) => void>();
   /** Parts picked to move together; the parts being dragged; their places while a live drag goes on. */
   private group = new Set<string>();
   private dragging = new Set<string>();
@@ -254,8 +254,8 @@ export class SchematicView {
       onLeave: () => (this.tooltip.style.opacity = '0'),
       // the first finger's hold must not open the menu: the pinch keeps its moves and lift from the hold's listeners
       onPinch: () => this.holdCancel(),
-      onPinchMove: (mid) => this.pinchers.forEach((f) => f(mid, false)),
-      onPinchEnd: (mid) => this.pinchers.forEach((f) => f(mid, true)),
+      onPinchMove: (mid, k) => this.pinchers.forEach((f) => f(mid, false, k)),
+      onPinchEnd: (mid) => this.pinchers.forEach((f) => f(mid, true, 1)),
     });
     this.el.addEventListener('contextmenu', (e) => this.contextMenu(e));
     // A held finger is the right-click (the browser's own contextmenu for it is not reliable): the same menu.
@@ -987,11 +987,11 @@ export class SchematicView {
   /** A pinch step (client px), as two fingers on the board do (the zoom lens hands its pinches here). */
   pinchAt(k: number, mid: [number, number], prev: [number, number]): void {
     this.cam.pinch(k, mid, prev);
-    this.pinchers.forEach((f) => f(mid, false));
+    this.pinchers.forEach((f) => f(mid, false, k));
   }
 
-  /** Pinches on the board (and handed in by pinchAt): each step, then its end (`done`), with the fingers' midpoint. */
-  onPinch(f: (mid: [number, number], done: boolean) => void): () => void {
+  /** Pinches on the board (and handed in by pinchAt): each step with its scale `k` (> 1 spreads), then its end (`done`), with the fingers' midpoint. */
+  onPinch(f: (mid: [number, number], done: boolean, k: number) => void): () => void {
     this.pinchers.add(f);
     return () => this.pinchers.delete(f);
   }

@@ -2,12 +2,15 @@
 // that settles on a block opens its inside over it, live, in a rounded window anchored on the box; the level around it
 // stays drawn and dims (the view's own focus layer). Zooming on grows it; once it would not fit the free stage the view
 // becomes that level (a drill, no jump). Esc, zooming out under the close size, or panning the box away closes it.
+// After a hand-off, zooming back out to fit shows "Keep zooming out to go up to cpu"; a fresh gesture then goes up, the
+// level left shown in its lens at full size, shrinking as the zoom goes on (phase 2e, view/zoomout.ts).
 // The stage imports this module only while the setting is on, so off costs nothing.
 import '../styles/lens.css';
 import { coarsePointer } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { ViewCtx } from './context';
-import { closesAt, EDGE_PX, freeStage, growPlan, LENS_CLOSE_PX, LENS_W, openPlan, opensAt, PHONE_EDGE_PX, PHONE_LENS_W, rimJogs, type LensPlan, type Rect, type RimPort, type Size } from './lensplan';
+import { closesAt, EDGE_PX, freeStage, growPlan, LENS_CLOSE_PX, LENS_OPEN_PX, LENS_W, openPlan, opensAt, PHONE_EDGE_PX, PHONE_LENS_W, RIM_PX, rimJogs, TAG_PX, type LensPlan, type Rect, type RimPort, type Size } from './lensplan';
+import { ZoomOutGate } from './zoomout';
 import { installPinch } from './pinch';
 import type { OverlayResult } from './overlays';
 import { SchematicView, type SchematicEvents } from './schematic';
@@ -47,7 +50,7 @@ export interface LensHost {
   overlayGap(ctx: ViewCtx): string | null;
   /** An inner part selected (null: none): the inspector follows. */
   selected(): void;
-  /** The cue after a hand-off ("Esc or cpu goes back up"); null removes it. */
+  /** The cue after a hand-off ("Keep zooming out to go up to cpu"); null removes it. */
   cue(parent: { label: string; path: string[] } | null): void;
   say(text: string): void;
 }
@@ -77,18 +80,24 @@ export class Lens {
   /** The level the last hand-off entered, for the cue once the zoom-out reaches fit. */
   private handed: { path: string[]; parent: { label: string; path: string[] }; px: number } | null = null;
   private off: (() => void)[] = [];
+  /** After a hand-off and its cue: is this zoom-out a fresh gesture that goes up a level (view/zoomout.ts)? */
+  private gate = new ZoomOutGate();
+  private pinchLive = false;
   /** Ports whose inner pin is deep inside the drawing this paint (their connector ends on the rim). */
   private deep = new Set<string>();
 
   constructor(private host: LensHost) {
     const v = host.view;
-    const wheel = (e: WheelEvent) => this.zoomed(e.clientX, e.clientY);
+    const wheel = (e: WheelEvent) => {
+      if (this.gate.wheel(e.timeStamp, e.deltaY)) return this.goUp();
+      this.zoomed(e.clientX, e.clientY);
+    };
     v.el.addEventListener('wheel', wheel, { passive: true });
     this.off.push(() => v.el.removeEventListener('wheel', wheel));
     v.onCamera(() => this.cameraMoved());
     // a pinch on the board: its midpoint is the focus, and it settles when the fingers lift (not while they move: a pinch
     // that also pans would open and close lenses on the way)
-    this.off.push(v.onPinch((mid, done) => this.pinched(mid, done)));
+    this.off.push(v.onPinch((mid, done, k) => this.pinched(mid, done, k)));
     // a wheel does not focus the stage, so its own Esc would not reach it: while a lens is open, Esc on the page closes it
     const esc = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || !this.open || e.defaultPrevented) return;
@@ -118,8 +127,17 @@ export class Lens {
     this.timer = window.setTimeout(() => this.settle(), SETTLE_MS);
   }
 
-  /** A pinch step (or its end) around a client point. */
-  pinched(mid: [number, number], done: boolean): void {
+  /** A pinch step (scale `k`) or its end around a client point. */
+  pinched(mid: [number, number], done: boolean, k = 1): void {
+    if (done) {
+      this.pinchLive = false;
+      this.gate.pinchEnd();
+    } else {
+      const start = !this.pinchLive;
+      this.pinchLive = true;
+      // the parent takes the rest of the pinch: it zooms out there, and the lens it opens shrinks with it
+      if (this.gate.pinchStep(performance.now(), k, start)) this.goUp();
+    }
     this.focus = mid;
     this.hideHint();
     clearTimeout(this.timer);
@@ -173,6 +191,7 @@ export class Lens {
     if (this.handed && path.join('.') !== this.handed.path.join('.')) {
       this.handed = null;
       this.host.cue(null);
+      this.gate.clear();
     }
   }
 
@@ -256,7 +275,7 @@ export class Lens {
     return this.touch ? 'double-tap to step in' : 'double-click to step in';
   }
 
-  private build(outer: ViewCtx, name: string, box: Rect, key: string): void {
+  private build(outer: ViewCtx, name: string, box: Rect, key: string, full = false): void {
     const child = outer.child(name);
     if (!child) return;
     const def = child.def;
@@ -286,6 +305,7 @@ export class Lens {
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      this.gate.wheel(e.timeStamp, e.deltaY);
       this.host.view.wheelAt(e.deltaY, e.clientX, e.clientY);
       this.zoomed(e.clientX, e.clientY);
     }, { capture: true, passive: false });
@@ -344,13 +364,33 @@ export class Lens {
     const parts = view.partBoxes().filter(([n]) => named.has(n));
     const smallest = parts.length ? Math.min(...parts.map(([, b]) => Math.max(b.w, b.h))) : 4;
     const free = this.free(extent);
-    const plan = openPlan(box, extent, smallest, free, this.touch ? PHONE_LENS_W : LENS_W);
+    let plan = openPlan(box, extent, smallest, free, this.touch ? PHONE_LENS_W : LENS_W);
     if (!plan) {
       view.clear();
       el.remove();
+      if (full) return;
       const why = this.stepIn;
       this.refused.set(key, why);
       return this.showHint(box, why);
+    }
+    let opened = { plan, boxH: box.h };
+    if (full) {
+      // as if it had opened at the opening size and grown to just under the free stage: the box is zoomed to the size it
+      // has at the hand-off, so the zoom-out that follows shrinks the lens and closes it where it would have opened
+      const sFull = 0.995 * Math.min((free.w - 2 * RIM_PX) / extent.w, (free.h - TAG_PX - RIM_PX) / extent.h);
+      const bOpen = box.h * Math.max(1, LENS_OPEN_PX / Math.min(box.w, box.h));
+      opened = { plan, boxH: bOpen };
+      const k = (bOpen * sFull) / plan.scale / box.h;
+      const c = this.host.canvas.getBoundingClientRect();
+      if (k > 1) this.host.view.wheelAt(-Math.log(k) / 0.0015, c.left + box.x + box.w / 2, c.top + box.y + box.h / 2);
+      const b1 = this.boxPx(name);
+      if (!b1) {
+        view.clear();
+        el.remove();
+        return;
+      }
+      box = b1;
+      plan = growPlan(opened, box, extent, free).plan;
     }
     const n = child.node.children?.size ?? 0;
     const label = `${name} · ${def.name} · ${n} part${n === 1 ? '' : 's'} · live${this.touch ? ' · tap to step in' : ''}`;
@@ -359,7 +399,7 @@ export class Lens {
     rim.setAttribute('class', 'lens-rim');
     rim.setAttribute('aria-hidden', 'true');
     this.host.canvas.append(rim);
-    this.open = { name, ctx: child, view, el, body, tag, rim, extent, opened: { plan, boxH: box.h }, plan, label };
+    this.open = { name, ctx: child, view, el, body, tag, rim, extent, opened, plan, label };
     this.place(plan);
     el.style.visibility = '';
     this.host.view.setLensBox(name);
@@ -367,7 +407,7 @@ export class Lens {
     this.paintOverlay();
     this.paintRim();
     // the box's outline grows into the lens while the inside fades in
-    if (!reducedMotion()) {
+    if (!reducedMotion() && !full) {
       const r = plan.rect;
       el.animate([
         { transform: `translate(${box.x - r.x}px, ${box.y - r.y}px) scale(${box.w / r.w}, ${box.h / r.h})`, opacity: 0.55 },
@@ -421,7 +461,7 @@ export class Lens {
     if (parent) this.handed = { path, parent, px: this.unitPx() };
   }
 
-  /** After a hand-off, once the zoom-out shows the whole level again: "Esc or cpu goes back up". */
+  /** After a hand-off, once the zoom-out shows the whole level again: "Keep zooming out to go up to cpu"; a fresh zoom-out then does (goUp). */
   private handedCue(): void {
     const hd = this.handed, ctx = this.host.ctx();
     if (!hd || !ctx || ctx.path.join('.') !== hd.path.join('.')) return;
@@ -430,7 +470,35 @@ export class Lens {
     const b = this.host.view.contentBox();
     const p = this.host.view.toClient([b.x, b.y]), q = this.host.view.toClient([b.x + b.w, b.y + b.h]);
     const c = this.host.canvas.getBoundingClientRect();
-    if (p && q && p[0] >= c.left - 1 && p[1] >= c.top - 1 && q[0] <= c.right + 1 && q[1] <= c.bottom + 1) this.host.cue(hd.parent);
+    if (p && q && p[0] >= c.left - 1 && p[1] >= c.top - 1 && q[0] <= c.right + 1 && q[1] <= c.bottom + 1) {
+      this.host.cue(hd.parent);
+      this.gate.cue(performance.now());
+    }
+  }
+
+  /** A fresh zoom-out after the cue: one level up, the level we left opened in its lens at full size, shrinking as the
+   *  zoom goes on (the hand-off in reverse). Up the way Esc and the crumb go, so history is the same. */
+  private goUp(): void {
+    const hd = this.handed;
+    if (!hd) return;
+    this.handed = null;
+    this.gate.clear();
+    this.host.cue(null);
+    this.host.drill(hd.parent.path);
+    const name = hd.path[hd.path.length - 1];
+    if (name !== undefined) this.openFull(name);
+  }
+
+  /** Open the lens on `name` of the level on screen at the size it hands off at: the view zooms onto the box so the lens's
+   *  scale law (growPlan) holds, and zooming out shrinks it until it closes under LENS_CLOSE_PX. */
+  openFull(name: string): void {
+    const ctx = this.host.ctx();
+    if (!ctx || !this.host.allowed() || !ctx.canOpen(name) || this.host.tooLarge(ctx, name)) return;
+    const box = this.boxPx(name);
+    if (!box) return;
+    this.close();
+    this.hideHint();
+    this.build(ctx, name, box, '', true);
   }
 
   /** Screen px per grid unit of the level on screen. */
