@@ -3,7 +3,7 @@
 // display's frame rate (8–17 ms apart) with an exponentially decaying delta for one to two seconds after the fingers
 // leave; a mouse wheel sends one event per notch (±100 or ±120), 50–300 ms apart while turned briskly.
 import { describe, expect, it } from 'vitest';
-import { FRESH_MS, PINCH_OUT, ZoomOutGate } from '../src/view/zoomout';
+import { cueWords, FRESH_MS, PINCH_OUT, progress, ZoomOutGate } from '../src/view/zoomout';
 
 type Ev = [t: number, dy: number];
 
@@ -25,7 +25,7 @@ function run(trace: Ev[], cueAt: number | null, g = new ZoomOutGate()): number[]
   let cued = false;
   for (const [t, dy] of [...trace].sort((a, b) => a[0] - b[0])) {
     if (cueAt !== null && !cued && t >= cueAt) { g.cue(cueAt); cued = true; }
-    if (g.wheel(t, dy)) pops.push(t);
+    if (g.wheel(t, dy) === 'up') pops.push(t);
   }
   return pops;
 }
@@ -75,11 +75,11 @@ describe('the wheel', () => {
 
   it('the event that raises the cue is not fresh, even after a pause (the cue comes up while it is handled)', () => {
     const g = new ZoomOutGate();
-    expect(g.wheel(1000, 120)).toBe(false);
+    expect(g.wheel(1000, 120)).toBe(null);
     g.cue(1600.4); // the stage zoomed out to fit on the event of t = 1600 and showed the cue
-    expect(g.wheel(1600, 120)).toBe(false);
-    expect(g.wheel(1630, 120)).toBe(false);
-    expect(g.wheel(2100, 120)).toBe(true);
+    expect(g.wheel(1600, 120)).toBe(null);
+    expect(g.wheel(1630, 120)).toBe(null);
+    expect(g.wheel(2100, 120)).toBe('up');
   });
 
   it('a cue cleared (another level, the setting off) ends it', () => {
@@ -87,7 +87,7 @@ describe('the wheel', () => {
     g.cue(1000);
     g.clear();
     expect(g.cued).toBe(false);
-    expect(g.wheel(3000, 120)).toBe(false);
+    expect(g.wheel(3000, 120)).toBe(null);
   });
 });
 
@@ -95,7 +95,7 @@ describe('the pinch', () => {
   /** Steps of a pinch from t0 closing to `total` over n steps 16 ms apart; returns the times that popped. */
   const pinch = (g: ZoomOutGate, t0: number, total: number, n = 12): number[] => {
     const k = Math.pow(total, 1 / n), pops: number[] = [];
-    for (let i = 0; i < n; i++) if (g.pinchStep(t0 + i * 16, k, i === 0)) pops.push(t0 + i * 16);
+    for (let i = 0; i < n; i++) if (g.pinch(t0 + i * 16, k, i === 0) === 'up') pops.push(t0 + i * 16);
     g.pinchEnd();
     return pops;
   };
@@ -105,7 +105,7 @@ describe('the pinch', () => {
     const k = Math.pow(0.3, 1 / 30);
     for (let i = 0; i < 30; i++) {
       if (i === 10) g.cue(1000 + i * 16);
-      expect(g.pinchStep(1000 + i * 16, k, i === 0)).toBe(false);
+      expect(g.pinch(1000 + i * 16, k, i === 0)).toBe(null);
     }
     g.pinchEnd();
   });
@@ -127,5 +127,33 @@ describe('the pinch', () => {
     expect(pinch(g, 2000, 1.6)).toEqual([]);
     expect(pinch(g, 3000, 0.95)).toEqual([]);
     expect(g.cued).toBe(true);
+  });
+});
+
+describe('the − key and the zoom-out button', () => {
+  it('a press after the cue goes up once; before the cue, or the press that raised it, does not', () => {
+    const g = new ZoomOutGate();
+    expect(g.key(500)).toBe(null);
+    g.cue(1000);
+    expect(g.key(1000)).toBe(null);
+    expect(g.key(1200)).toBe('up');
+    expect(g.key(1300)).toBe(null);
+  });
+});
+
+describe('state 1: how much more to zoom out', () => {
+  it('the bar runs from the scale the level was entered at to the fit, on a log scale', () => {
+    expect(progress(8, 2, 8)).toBe(0);
+    expect(progress(4, 2, 8)).toBeCloseTo(0.5);
+    expect(progress(2, 2, 8)).toBe(1);
+    expect(progress(1, 2, 8)).toBe(1);
+    // zoomed in past where it was entered: empty, never negative
+    expect(progress(16, 2, 8)).toBe(0);
+    // entered at fit or below: nothing to show
+    expect(progress(3, 2, 2)).toBe(0);
+  });
+  it('the line says what happens next', () => {
+    expect(cueWords('alu', 'cpu', false)).toBe('Zoom out to see all of alu, then once more to go up to cpu');
+    expect(cueWords('alu', 'cpu', true)).toBe('Zoom out once more to go up to cpu');
   });
 });

@@ -106,7 +106,7 @@ export class Lens {
     host.canvas.append(this.layer);
     this.off.push(() => this.layer.remove());
     const wheel = (e: WheelEvent) => {
-      if (this.gate.wheel(e.timeStamp, e.deltaY)) return this.goUp();
+      if (this.gate.wheel(e.timeStamp, e.deltaY) === 'up') return this.goUp();
       this.zoomed(e.clientX, e.clientY);
     };
     v.el.addEventListener('wheel', wheel, { passive: true });
@@ -153,7 +153,7 @@ export class Lens {
       const start = !this.pinchLive;
       this.pinchLive = true;
       // the parent takes the rest of the pinch: it zooms out there, and the lens it opens shrinks with it
-      if (this.gate.pinchStep(performance.now(), k, start)) this.goUp();
+      if (this.gate.pinch(performance.now(), k, start) === 'up') this.goUp();
     }
     this.focus = mid;
     this.hideHint();
