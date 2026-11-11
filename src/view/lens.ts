@@ -12,7 +12,7 @@ import { reducedMotion } from '../ui/motion';
 import { TAP_SLOP } from './camera';
 import type { ViewCtx } from './context';
 import { decide, fitInside, FADE_MS, handOffView, handsOff, insideExtent, openAtPx, smallestNamed, type Rect } from './lensplan';
-import { cueWords, ZoomOutGate } from './zoomout';
+import { cueWords, progress, ZoomOutGate } from './zoomout';
 import { installPinch } from './pinch';
 import type { OverlayResult } from './overlays';
 import { SchematicView, type SchematicEvents } from './schematic';
@@ -54,7 +54,7 @@ export interface LensHost {
   /** An inner part selected (null: none): the inspector follows. */
   selected(): void;
   /** The cue after a hand-off ("Keep zooming out to go up to cpu"); null removes it. */
-  cue(parent: { label: string; path: string[]; words?: string } | null): void;
+  cue(parent: { label: string; path: string[]; words?: string; progress?: number } | null): void;
   say(text: string): void;
   /** More of an inside view's events for its level (Why? clicks, the menu's Why this value? and Explain); its open / select /
    *  up stay the lens's. */
@@ -713,12 +713,20 @@ export class Lens {
     const fits = !!p && !!q && p[0] >= c.left - 1 && p[1] >= c.top - 1 && q[0] <= c.right + 1 && q[1] <= c.bottom + 1;
     if (fits && !this.gate.cued) this.gate.cue(performance.now());
     else if (!fits && this.gate.cued) this.gate.clear();
-    if (this.cueFits === fits) return;
+    // the bar: from the scale the level was entered at (hd.px) to the scale it would fit at (the canvas over its drawing now)
+    const px = this.unitPx();
+    // zoomed in further than it was entered: the bar starts from the deepest zoom since
+    if (!fits && px > hd.px) hd.px = px;
+    const fitPx = p && q && q[0] > p[0] && q[1] > p[1] ? px * Math.min(c.width / (q[0] - p[0]), c.height / (q[1] - p[1])) : px;
+    const prog = fits ? 1 : Math.round(progress(px, fitPx, hd.px) * 50) / 50;
+    if (this.cueFits === fits && this.cueProg === prog) return;
     this.cueFits = fits;
+    this.cueProg = prog;
     const level = hd.path[hd.path.length - 1] ?? '';
-    this.host.cue({ ...hd.parent, words: cueWords(level, hd.parent.label, fits) });
+    this.host.cue({ ...hd.parent, words: cueWords(level, hd.parent.label, fits), progress: fits ? undefined : prog });
   }
   private cueFits: boolean | null = null;
+  private cueProg = -1;
   private started = false;
 
   /** The `−` key or the zoom-out button, before it zooms: true when it went up a level instead (so the press does not
