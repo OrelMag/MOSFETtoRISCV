@@ -43,6 +43,8 @@
 svg.lens-rim { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 3; }
 .lens-jog { fill: none; stroke: var(--lens-rim); stroke-width: 2; stroke-dasharray: 4 3; }
 .lens-dot { fill: var(--lens-rim); }
+/* a pin deep inside: the dot on the rim stands for it, a hollow ring that lights the pin when pointed at */
+.lens-dot.deep { fill: var(--canvas); stroke: var(--lens-rim); stroke-width: 2; pointer-events: auto; cursor: help; }
 .lens-port { fill: var(--rim-text); font: 11px var(--font-ui); }
 .lens-port.left { text-anchor: end; }
 

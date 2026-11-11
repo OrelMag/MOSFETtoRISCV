@@ -15,6 +15,8 @@ const SVG = 'http://www.w3.org/2000/svg';
 export const SETTLE_MS = 160;
 /** The grow and fade as it opens (ms); none with reduced motion. */
 const OPEN_MS = 180;
+/** A pin further than this (px) inside the rim gets its connector ended on the rim (the author's choice, 2026-11-11). */
+export const DEEP_PX = 30;
 
 export interface LensHost {
   /** The level on screen and its view. */
@@ -68,6 +70,8 @@ export class Lens {
   /** The level the last hand-off entered, for the cue once the zoom-out reaches fit. */
   private handed: { path: string[]; parent: { label: string; path: string[] }; px: number } | null = null;
   private off: (() => void)[] = [];
+  /** Ports whose inner pin is deep inside the drawing this paint (their connector ends on the rim). */
+  private deep = new Set<string>();
 
   constructor(private host: LensHost) {
     const v = host.view;
@@ -385,9 +389,17 @@ export class Lens {
       // the pin as drawn inside, kept within the lens when a cut inside leaves it out of view
       const py = Math.min(Math.max(ip[1] - c.top, L.y + 6), L.y + L.h - 6);
       const px = Math.min(Math.max(ip[0] - c.left, L.x + 2), L.x + L.w - 2);
-      ports.push({ name: p.name, side: p.dir === 'out' ? 'right' : 'left', outer: x && { x: x.x - c.left, y: x.y - c.top, edge: x.edge }, pin: [px, py] });
+      const side = p.dir === 'out' ? 'right' : 'left';
+      // a pin drawn deep inside (the ALU's flags): the connector stops at the rim, so it never crosses the drawing; its dot
+      // lights the pin on hover
+      const rimX = side === 'left' ? L.x + 2 : L.x + L.w - 2;
+      const deep = Math.abs(px - rimX) > DEEP_PX;
+      ports.push({ name: p.name, side, outer: x && { x: x.x - c.left, y: x.y - c.top, edge: x.edge }, pin: [deep ? rimX : px, py] });
+      if (deep) this.deep.add(p.name);
     }
     const jogs = rimJogs(L, ports);
+    const deep = this.deep;
+    this.deep = new Set();
     o.rim.replaceChildren(...jogs.flatMap((j) => {
       const path = document.createElementNS(SVG, 'path');
       path.setAttribute('d', j.d);
@@ -396,7 +408,14 @@ export class Lens {
       dot.setAttribute('cx', String(j.pin[0]));
       dot.setAttribute('cy', String(j.pin[1]));
       dot.setAttribute('r', '3.5');
-      dot.setAttribute('class', 'lens-dot');
+      dot.setAttribute('class', deep.has(j.name) ? 'lens-dot deep' : 'lens-dot');
+      if (deep.has(j.name)) {
+        const t = document.createElementNS(SVG, 'title');
+        t.textContent = `${j.name}: its pin is inside, lit while you point here`;
+        dot.append(t);
+        dot.addEventListener('pointerenter', () => o.view.highlight([`pin:${j.name}`], true));
+        dot.addEventListener('pointerleave', () => o.view.highlight([]));
+      }
       const t = document.createElementNS(SVG, 'text');
       t.setAttribute('x', String(j.label[0]));
       t.setAttribute('y', String(j.label[1]));

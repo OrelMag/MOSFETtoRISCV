@@ -1182,6 +1182,11 @@ export class Stage {
     });
   }
 
+  /** Close an open zoom lens (a tour starting). True when one was open. */
+  closeLens(): boolean {
+    return this.lens?.close() ?? false;
+  }
+
   /** The panels' covers changed: the view refits if it must, an open lens is placed again. */
   private coverChanged(cover: Rect[], refit = false): void {
     this.view.setCover(cover, refit);
