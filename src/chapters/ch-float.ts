@@ -159,8 +159,8 @@ export const chFloat: Chapter = {
   goals: [
     'decode a float from its sign, biased exponent and fraction, subnormals, infinities and NaNs included',
     'round a result in any of the five RISC-V modes from its last kept bit, guard and sticky bits, and say which flags it raises',
-    'trace an addition through align, add, normalize and round, say why a fused multiply-add rounds only once, and price the same units in f16, bf16, FP8 and f64',
-    'weigh the single-cycle FPU against the pipelined one, and the FPU against Newton–Raphson division and soft-float, by period, cycles and NAND count',
+    'trace an addition through align, add, normalize and round, and say why a fused multiply-add rounds only once (a deep dive prices the same units in f16, bf16, FP8 and f64)',
+    'weigh the single-cycle FPU against the pipelined one, and the FPU against soft-float, by period, cycles and NAND count (a deep dive adds Newton–Raphson division)',
     'measure a result\'s error in ulps, spot catastrophic cancellation, and say why Kahan summation stays at one rounding error while a plain loop grows with n',
   ],
   builds: ['muldiv', 'pipeline'],

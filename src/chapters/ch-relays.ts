@@ -395,9 +395,9 @@ export const chRelays: Chapter = {
           <tr><td>Relay</td><td>${ms(RELAY_STEP_MS)} ms</td><td>1 coil and its contacts</td><td>${RELAY_POWER.toFixed(2)} W</td></tr></table>`,
       },
       challenge: {
-        kind: 'quiz', question: 'A NAND-mapped relay machine needs about one relay per NAND. The 4-bit CPU of the examples is about 3400 NANDs without its program memory. With 1.44 W per coil and about half the coils on, it draws about:',
+        kind: 'quiz', question: 'A NAND-mapped relay machine needs about one relay per NAND. The 4-bit CPU of the examples is about 3357 NANDs without its program memory. With 1.44 W per coil and about half the coils on, it draws about:',
         options: ['2.4 kW', '240 W', '24 kW'], answer: 0,
-        explain: 'About 3400 relays (shared signals add a little) × 0.72 W ≈ 2.4 kW: a Z3. In <span data-ahead="cmos">CMOS, the transistor logic of chapters 1 to 3,</span> the same CPU draws milliwatts.',
+        explain: 'About 3357 relays (shared signals add a little) × 0.72 W ≈ 2.4 kW: a Z3. In <span data-ahead="cmos">CMOS, the transistor logic of chapters 1 to 3,</span> the same CPU draws milliwatts.',
         why: ['', 'That would be 0.07 W per relay. A telephone coil draws 1.44 W while on, 0.72 W on average.', 'That would be 7 W per relay, five times a coil\'s full 1.44 W.'],
       },
     },

@@ -203,7 +203,7 @@ export const chOoo: Chapter = {
         Returns are predicted by a <span data-show="ras">4-entry return-address stack</span>. Up to two instructions
         retire a cycle: the golden model steps once for each, and the diagram shows each stage's second lane under
         it.</p>
-        <p>Measured on the benchmark set: 193 768 NANDs against 141 655 for one lane (+37 %), a clock period of 80 NAND
+        <p>Measured on the benchmark set: 193 768 NANDs against 141 655 for one lane, the balanced RV32IM pipeline with its predictor (+37 %; both without the program ROM, with the benchmarks' 64-word data memory), a clock period of 80 NAND
         delays against 79, and CPI fib 1.13, sort 1.01, matmul 1.05, matmul-m 1.09, crc 0.97 against 1.35, 1.18,
         1.30, 1.25, 1.23. Only 29 to 53 % of the instructions go in pairs; the others wait for a result, the one memory
         lane or a branch. About a sixth less time for a third more gates.</p>
@@ -594,7 +594,7 @@ export const chOoo: Chapter = {
     {
       title: 'The whole core',
       body: `
-        <p>All together: 359 262 NANDs without the program ROM, against 193 768 for the dual-issue pipeline and 141 655
+        <p>All together: 359 262 NANDs without the program ROM (with the 64-word data memory, like the others here), against 193 768 for the dual-issue pipeline and 141 655
         for one pipeline. The reorder buffer takes 70 541, the issue queue 56 888, the BTB 35 662, the register file
         (four reads, two writes) 35 463, the divider 16 742, the rename table 12 443, the return stack 10 824 and the
         store queue 8544.</p>

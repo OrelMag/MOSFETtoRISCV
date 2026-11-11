@@ -97,6 +97,7 @@ export const chMap: Chapter = {
       challenge: {
         kind: 'reach', goal: 'Make the adder output s = 15 (0xF) with the carry-out at 0.',
         check: (st) => st.value('s') === 15 && st.value('cout') === 0,
+        hints: ['s is the 4-bit sum a + b + cin; the carry-out is 1 only when that sum passes 15.', 'So you need a + b + cin to equal exactly 15: pick any a, then b = 15 − a, with cin at 0.'],
         answer: 'Any pair with a + b = 15 and cin = 0, for example a = 7, b = 8.',
         solve: (st) => st.setInputs({ a: 7, b: 8, cin: 0 }),
       },
@@ -263,7 +264,7 @@ export const chMosfet: Chapter = {
       more: {
         derive: `<p>The PMOS equations are the NMOS ones with every voltage measured from the source and its sign reversed: it conducts when V<sub>sg</sub> = V<sub>s</sub> − V<sub>g</sub> > |V<sub>tp</sub>|, and the current
           is (k<sub>p</sub> / 2)·(V<sub>sg</sub> − |V<sub>tp</sub>|)² in saturation. With the source at VDD = ${VDD} V and the gate at 0 V, V<sub>sg</sub> = ${VDD} V, the overdrive is ${(VDD - VT).toFixed(2)} V if
-          |V<sub>tp</sub>| = ${VT} V, as for the NMOS here. Holes move about two to three times slower than electrons, so for the same size k<sub>p</sub> is a half to a third of k<sub>n</sub>; chapter 3 uses this.</p>`,
+          |V<sub>tp</sub>| = ${VT} V, as for the NMOS here. Holes move about two to three times slower than electrons, so for the same size k<sub>p</sub> is a half to a third of k<sub>n</sub>; chapter ${numOf('nand')} uses this to size its gates.</p>`,
         pitfall: `<p>Reading "PMOS is on at 0" as "PMOS is on whenever its gate is 0". What matters is the gate against the <em>source</em>. A PMOS with its source at 0 V and gate at 0 V has
           V<sub>sg</sub> = 0 and stays off. In a CMOS gate the PMOS sources are on VDD, so the shorthand holds; in a pass transistor it does not.</p>`,
         real: `<p>Both types sit on one die: the NMOS in a p-type substrate, the PMOS in an n-well diffused into it. That well is the extra mask step that makes CMOS dearer than NMOS-only
@@ -300,7 +301,7 @@ export const chMosfet: Chapter = {
           for C·V² = ${loadOf(2)} fF · ${VDD}² = ${(loadOf(2) * VDD * VDD).toFixed(0)} fJ; half is dissipated in each network.</p>`,
         numbers: `<table class="mini"><tr><th>width</th><th>fan-out</th><th>load</th><th>delay to VDD / 2</th><th>energy per swing</th></tr>${[[1, 2], [1, 4], [2, 4], [4, 4]].map(([w, f]) => `<tr><td>${w}×</td><td>${f}</td><td>${loadOf(f)} fF</td><td>${discharge(w, loadOf(f)).t50.toFixed(0)} ps</td><td>${(loadOf(f) * VDD * VDD).toFixed(0)} fJ</td></tr>`).join('')}</table>`,
         pitfall: `<p>Sizing a transistor up to speed up a stage without counting what it does to the stage before. The wider device doubles its current and also doubles its own gate load, which the driving stage now charges: a
-          bigger load for the previous gate costs the delay you saved. Past the point where its own load dominates, widening only costs energy; chains of growing sizes (logical effort: chapters 2 and 3; the Timing panel's Load setting uses it) are how this is balanced.</p>`,
+          bigger load for the previous gate costs the delay you saved. Past the point where its own load dominates, widening only costs energy; chains of growing sizes (logical effort: chapters ${numOf('inverter')} and ${numOf('nand')}; the Timing panel's Load setting uses it) are how this is balanced.</p>`,
       },
       widget: () => mosCostWidget(),
       challenge: {
@@ -677,7 +678,7 @@ export const chInverter: Chapter = {
         <p>Try F = 64 below. One stage costs ${chainDelay(64, 1).toFixed(0)} τ. Two take ${chainDelay(64, 2).toFixed(0)}. Three, each 4× the one before, take ${chainDelay(64, 3).toFixed(0)}, the best. Four is already slower (${chainDelay(64, 4).toFixed(1)}), because every extra stage pays another p.
         Whatever the load, the best ratio stays between 3 and 6: the stage count grows with the logarithm of F.</p>
         <p>The yardstick is the <strong>FO4</strong> delay, an inverter driving four copies of itself: ${FO4_TAU} τ, an illustrative ${FO4_TAU * PS_PER_TAU} ps here. Process generations are compared in FO4s, and a processor core fits roughly 15 to 20 of them in one clock cycle.
-        <a href="#/c/fastadd/0">Chapter 16</a> applies the same arithmetic to the <span data-ahead="nand">NAND (a gate whose output is 0 only when every input is 1)</span>, whose effort is 4/3 and not 1.</p>`,
+        <a href="#/c/nand/1">Chapter ${numOf('nand')}</a> applies the same arithmetic to the <span data-ahead="nand">NAND (a gate whose output is 0 only when every input is 1)</span>, whose effort is 4/3 and not 1, and <a href="#/c/fastadd/0">chapter ${numOf('fastadd')}</a> to whole adders.</p>`,
       widget: () => sizingWidget(),
       more: {
         derive: `<p>Minimising D over N for fixed F: dD/dN = 0 gives ρ(ln ρ − 1) = p with ρ = F<sup>1/N</sup>. For p = ${P_INV} that is ρ ≈ 3.6, and the discrete optimum for F = 64 happens to be exactly 4. The delay at the optimum is N·(ρ + p), ${chainDelay(64, 3).toFixed(0)} τ for F = 64, against ${chainDelay(64, 1).toFixed(0)} τ for a single stage: a ${(chainDelay(64, 1) / chainDelay(64, 3)).toFixed(1)}× saving from two extra inverters.</p>`,
@@ -837,7 +838,7 @@ export const chNand: Chapter = {
         pull-up slow. NAND puts them in parallel. At the same speed, a NAND is smaller.</p>
         <p>The same transistor count and the same duality; the only difference is which network is in series. The pull-up in a NOR stacks two weak devices, so to pull up as fast as an inverter
         each must be twice as wide, and the gate takes more silicon than the NAND's at the same speed. The sizing table below puts numbers on it.</p>
-        <div class="try">Find the one input that makes the NOR output 1.</div>`,
+        <div class="try">Find the input combination that makes the NOR output 1.</div>`,
       scene: () => ({ root: NOR_CMOS, inputs: { a: 1, b: 0 } }),
       tries: [(st) => st.value('y') === 1],
       tour: {
@@ -941,7 +942,7 @@ export const chNand: Chapter = {
           ${RELAY_CONTACTS} more. ${RELAY_STEP_MS} ms per step (P1's model: the armature closing, plus bounce), ${RELAY_POWER.toFixed(2)} W
           on average, about ${fmtVolume(RELAY_VOLUME)} and ${fmtMass(RELAY_MASS)}.</li>
           <li><strong>Tubes</strong>: half a 6SN7 with a 6AL5 diode pair in front and a divider into the grid.
-          ${TUBE_STEP_US.toFixed(1)} µs per step (an R·C estimate) and ${TUBE_BRICK_POWER.toFixed(2)} W, most of it heater,
+          ${TUBE_STEP_US.toFixed(2)} µs per step (an R·C estimate) and ${TUBE_BRICK_POWER.toFixed(2)} W, most of it heater,
           drawn whether the gate switches or not. A plate drives at most ${PLATE_FANOUT} dividers, so a wider net gets a
           cathode follower.</li>
         </ul>

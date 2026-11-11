@@ -40,7 +40,6 @@ const eps = sci(EPSILON), u = sci(UNIT_ROUNDOFF);
 export const errorSteps: Step[] = [
   {
     title: 'Measuring error: ulps and relative error',
-    deep: true,
     body: `
       <p>Three ways to say how wrong a float result is. The <strong>absolute error</strong> |computed − exact| depends on the scale. The <strong>relative error</strong> |computed − exact| / |exact| does not, and is what a
       float is built to bound. The <strong>error in ulps</strong> divides by the spacing of floats at the exact value: 2<sup>⌊log<sub>2</sub>|x|⌋ − 23</sup> in float32, so a correctly rounded result is
@@ -88,7 +87,6 @@ export const errorSteps: Step[] = [
   },
   {
     title: 'Summing many numbers',
-    deep: true,
     body: `
       <p>A sum of n terms is n − 1 roundings. <strong>Naive</strong> summation, s ← s + x<sub>i</sub>, rounds the running total each time, so as the total grows each addition may lose up to u·|s|: the worst-case relative error
       is (n − 1)u. The bound is attained on data built for it ("1.0, then n − 1 × 2<sup>−24</sup>": every tiny term falls below half an ulp of the total and vanishes; at n = 4096 the naive sum is off by
