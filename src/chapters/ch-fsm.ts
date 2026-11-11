@@ -5,7 +5,7 @@
 
 import {
   candidateCircuit, CANDIDATES, codeCosts, debounceBits, ENCODING_NAMES, flipState, fsmCircuit, fsmSpecOf, fsmTableChip, gcdCircuit, gcdCosts, gcdRun, gcdSpec, kmapHtml, MEALY101, MOORE101,
-  mooreMealy, RING3, ringCircuit, runFsm, runPair, TRAFFIC, upset,
+  mooreMealy, circuitNands, RING3, ringCircuit, runFsm, runPair, TRAFFIC, upset,
 } from '../lib/fsmbook';
 import { BUTTON3, debouncer, debounceSamples } from '../lib/debounce';
 import { equation } from '../editor/ttable';
@@ -210,7 +210,7 @@ const steps: Step[] = [
         <li><strong>Gray</strong>: 00, 01, 11, so that stepping to the next state flips one bit. That matters when something outside this clock reads the state; here it does not.</li>
         <li><strong>One-hot</strong>: a flip-flop per state, 001, 010, 100 (${HOT.dffs} flip-flops). A state is tested by reading one flip-flop, and each next-state bit is the OR of the arcs that enter its state.</li>
       </ul>
-      <p>The table on the stage is the builder's own count for this machine, computed from its truth tables: binary wins at ${BIN.nands} NANDs, Gray costs ${GRAY.nands}, one-hot ${HOT.nands}. Switch the encoding: the diagram's codes and the circuit change together, and
+      <p>The table on the stage is the builder's own count for this machine, computed from its truth tables: binary wins at ${BIN.nands} NANDs, Gray costs ${GRAY.nands}, one-hot ${HOT.nands} (the one-hot circuit as finally drawn shares two gates and has ${circuitNands('mealy', { ...MEALY101, encoding: 'onehot' })}). Switch the encoding: the diagram's codes and the circuit change together, and
       the circuit still reads back as the same machine. The next-state logic of the binary version is <code>${eqs(MEALY101, 'binary', 'next').join('</code>, <code>')}</code>; the one-hot version's is <code>${eqs(MEALY101, 'onehot', 'next').join('</code>, <code>')}</code>: one short term per bit.</p>
       <p>One-hot pays when a machine has many states and few arcs into each: its logic per bit stays small, while a binary code's logic grows with every state it must decode. For three states it loses, ${HOT.nands} NANDs against ${BIN.nands}; the four-state Moore detector costs
       ${MBIN.nands} / ${MGRAY.nands} / ${MHOT.nands} NANDs in binary / Gray / one-hot. The controller of <a href="#/c/multicycle/0">a processor that spends several cycles on each instruction</a> (chapter ${numOf('multicycle')}), with a dozen states each entered from one or two others, is the machine one-hot is made for.</p>
@@ -431,7 +431,7 @@ const steps: Step[] = [
       <p>Follow the steps. <strong>States</strong>: four things to remember, MG, MY, SG, SY, one lamp state each: a Moore machine, because lamps should not flicker with the sensor. <strong>Arcs</strong>: MG stays on car = 0, goes to MY on car = 1; MY goes to SG whatever car does; SG stays while car = 1, goes to SY on car = 0; SY goes to MG. <strong>Codes</strong>: four states are two binary
       flip-flops, ${nands(fsmCircuit('traffic', TRAFFIC))} NANDs here. <strong>Unused codes</strong>: none, all four codes are states. <strong>Read-back</strong>: the builder does it for you.</p>
       <p>The stage has that machine. Serve the side road: set car = 1 and Pulse until sg lights, then release the car and watch it return. Then <a href="#/sandbox/new/traffic">open the empty diagram in the sandbox</a> (four states with their lamps, no arcs), draw the six arcs, and compare. Then improve it: what happens when cars never stop coming on the side road? Main waits for ever. A minimum green time for the side road needs
-      a counter, which is a datapath, and that makes it a machine like step 7's. A pedestrian button is one more input; an all-red cycle between yellow and green is one more state.</p>
+      a counter, which makes it a controller with data, like step 7's. A pedestrian button is one more input; an all-red cycle between yellow and green is one more state.</p>
       <div class="try">Set car = 1 and Pulse twice: MG → MY → SG. Set car = 0 and Pulse: SG → SY, then MG.</div>`,
     more: {
       derive: `<p>Counting what the machine remembers: the main/side road (2 values) and the lamp colour of the road that has the light (green, yellow): four states. A pedestrian phase adds one state per road crossing, a minimum-green timer adds a counter, and each addition is a question of the step 1 kind: what must the machine remember now?</p>`,

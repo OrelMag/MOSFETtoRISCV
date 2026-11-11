@@ -21,7 +21,7 @@ one-hot          3     18     51    74</pre>For three states binary wins. One-ho
       'Forgetting the codes nobody uses: a binary machine with 5 states has 3 unused codes, a one-hot one with 5 has 27. Each needs an arc back to a real state, or a glitch can strand the machine.',
     ],
     lib: 'rv16_det101',
-    chapters: [at(2, 'Three ways to number the states'), at(4, 'Reset, and the codes nobody uses')],
+    chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }, at(2, 'Three ways to number the states'), at(4, 'Reset, and the codes nobody uses')],
   },
   fsmd: {
     idea: `A state machine alone remembers where it is, not a number. Real control splits the work: the <b>controller</b> is a small state machine; the <b>datapath</b> is registers, an arithmetic unit, comparators and the multiplexers between them. A state's action is a register transfer (a := a − b), which the controller turns into control lines (load a, select the subtractor); an arc may test the datapath (a &lt; b), whose comparator feeds a status bit back to the controller's next-state logic. The controller's table is therefore an ordinary one with status bits among its inputs and control lines among its outputs. Euclid's GCD by subtraction is the classic: five states (IDLE, TEST, SUBA, SUBB, DONE) over two 8-bit registers, one subtractor shared by both subtractions and a comparator.`,

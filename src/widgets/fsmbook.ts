@@ -4,7 +4,7 @@
 
 import '../styles/fsmbook.css';
 import { type EncodingCost } from '../editor/fsmchip';
-import { circuitNands, codeCosts, ENCODING_NAMES, fsmCircuit, fsmSpecOf, MEALY101, MOORE101 } from '../lib/fsmbook';
+import { codeCosts, ENCODING_NAMES, fsmCircuit, fsmSpecOf } from '../lib/fsmbook';
 import type { FsmSpec } from '../lib/fsm';
 import { fsmStateOf, pathBits, readbackOk, readbackSpec, readFsm } from '../sim/fsmread';
 import { simulate } from '../sim/harness';
@@ -47,7 +47,7 @@ export function encodingPanel(doc: FsmDoc, enc: Encoding, pick: (stage: Stage, e
     codes.textContent = `${spec.states.map((s) => s.name).join(' ')} = ${spec.states.map((s) => s.code.toString(2).padStart(enc === 'onehot' ? spec.states.length : bits, '0')).join(' ')}`;
     const head = h('h4', null, 'Codes and cost', h('span', { class: 'fold-hint' }));
     const el = h('div', { class: 'mem-panel fsm-panel fsm-enc-panel' }, head, view.el, legend(spec), toggle, codes, table,
-      h('div', { class: 'fsm-note' }, `This circuit: ${circuitNands('mealy', { ...MEALY101, encoding: enc })} NANDs. Moore column: the four-state version (y on S3), ${circuitNands('moore', { ...MOORE101, encoding: enc })} here.`));
+      h('div', { class: 'fsm-note' }, 'NANDs as the builder counts them: flip-flops plus the minimized tables and the reset gates. Moore column: the four-state version (y on S3).'));
     head.addEventListener('click', () => el.classList.toggle('collapsed'));
     return { el, update: view.update, destroy: view.destroy };
   };
