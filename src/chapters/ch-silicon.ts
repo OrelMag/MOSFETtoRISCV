@@ -29,7 +29,7 @@ const costRatio = (a: number, b: number) => (a / b) * (yieldOf(b) / yieldOf(a));
 /** "The same CPU in relays and tubes": every number from lib/hall.ts (pricing, layout, static timing), computed the
  *  first time the step is shown or searched (it flattens the RV32I once), not when the chapter loads. */
 function hallStep(): Step {
-  let text: string | null = null, explain: string | null = null, racks: string | null = null, counts: string | null = null;
+  let text: string | null = null, explain: string | null = null, racks: string | null = null, counts: string | null = null, power: string | null = null, cards: string | null = null;
   const facts = () => {
     const f = hallFacts('rv32i'), c4 = hallFacts('cpu4'), r = f.relay, t = f.tube;
     const rc = cabinetCounts(r), tc = cabinetCounts(t);
@@ -45,21 +45,30 @@ function hallStep(): Step {
       cards) become <strong>${num(r.total.devices)} relays</strong>, ${num(r.total.fanout)} of them extra coils, because a
       relay has ${RELAY_CONTACTS} contacts and many nets feed more inputs than that. At ${RELAY_RACK.relays} to a rack that is
       ${rc.used} racks (${rc.packed} if blocks shared them) and ${fmtMass(r.total.mass!)}:
-      ${times(r.total.devices / Z3.relays)} times the Z3's ${num(Z3.relays)} relays. Its coils draw ${fmtWatts(r.total.power!)}; at the Z3's
-      ${RELAY_PLANT_W.toFixed(1)} W a relay at the wall (about ${fmtWatts(Z3.power)} for ${num(Z3.relays)}) the machine would draw about ${fmtWatts(r.total.plant!)}.
+      ${times(r.total.devices / Z3.relays)} times the Z3's ${num(Z3.relays)} relays.
       In tubes it is <strong>${num(t.total.devices)} tubes</strong> in ${tc.used} panels the size of ENIAC's (${ENIAC_PANEL.tubes} tubes is its average
-      panel) and ${fmtMass(t.total.mass!)}: ${times(t.total.devices / ENIAC.tubes)} ENIACs. Their heaters and plates draw ${fmtWatts(t.total.power!)};
-      ENIAC drew ${fmtWatts(ENIAC.power)} for ${num(ENIAC.tubes)} tubes, ${TUBE_PLANT_W.toFixed(1)} W a tube with its power supplies and blowers,
-      which puts this machine near ${fmtWatts(t.total.plant!)}. At ENIAC's failure rate (one of its tubes every two days) a tube here would
-      fail every ${num(tubeFailEvery(t.total.devices))} hours. The 4-bit CPU fits in ${num(c4.relay.total.devices)} relays
-      (${cabinetCounts(c4.relay).used} racks).</p>
+      panel) and ${fmtMass(t.total.mass!)}: ${times(t.total.devices / ENIAC.tubes)} ENIACs. At ENIAC's failure rate (one of its tubes every two days) a tube here would
+      fail every ${num(tubeFailEvery(t.total.devices))} hours.</p>
       <p>The clock period is the same ${f.steps} gate delays as in CMOS, each now a <span data-ahead="relay relaystep">${TECH.relay.stepName} (the time for every relay to settle after an input changes)</span> of ${fmtTime(TECH.relay.step)}
       or a ${TECH.tube.stepName} of ${fmtTime(TECH.tube.step)}: one instruction takes <strong>${fmtTime(pr)}</strong> in relays
       (${(1 / pr).toFixed(2)} instructions a second) and ${fmtTime(pt)} in tubes (${fmtRate(pt)}), against ${fmtTime(pc)} (${fmtRate(pc)}) for the same netlist on
-      ${fmtArea(f.cmos.area!)} of silicon (28 nm-class NANDs, ${Math.round(TECH.cmos.step * 1e12)} ps each, faster than the sky130 cells measured earlier),
-      the speck on the table by the person. An instruction costs ${fmtJoules(r.total.power! * pr)}
-      in relays and ${fmtJoules(t.total.power! * pt)} in tubes, counting the devices alone.</p>
-      <p>The program comes off cards: a deck of ${deck} object cards, one instruction each, its source line printed along the top, in an
+      ${fmtArea(f.cmos.area!)} of silicon, the speck on the table by the person.</p>
+      <p>A relay machine of this size is a building. The cost is not in the logic's cleverness but in counting: every NAND is a device, every bit of
+      storage is several, and a relay cannot drive many inputs, so the fan-out adds coils.</p>
+      <p>The program comes off punched cards, which the relay machine can read as it runs and the tube machine must load first; the
+      Real chips layer works out why.</p>
+      <div class="try">Run the program and watch the relays switch (or the plates glow): each cycle's settled values from the
+      gate-level simulation, one relay or tube per NAND output of its block (a real relay machine would ripple through
+      ${f.steps} steps to get there). Click a rack to open its block. Then switch to tubes, and between <em>Read as it runs</em> and
+      <em>Load, then run</em>: the reader's panel shows the card at the station and where the time went.</div>`;
+    power = `<p>The silicon figures use 28 nm-class NANDs of ${Math.round(TECH.cmos.step * 1e12)} ps each, faster than the sky130 cells measured earlier. The 4-bit CPU fits in ${num(c4.relay.total.devices)} relays
+      (${cabinetCounts(c4.relay).used} racks).</p>
+      <p>Its relay coils draw ${fmtWatts(r.total.power!)}; at the Z3's
+      ${RELAY_PLANT_W.toFixed(1)} W a relay at the wall (about ${fmtWatts(Z3.power)} for ${num(Z3.relays)}) the machine would draw about ${fmtWatts(r.total.plant!)}.
+      The tubes' heaters and plates draw ${fmtWatts(t.total.power!)}; ENIAC drew ${fmtWatts(ENIAC.power)} for ${num(ENIAC.tubes)} tubes,
+      ${TUBE_PLANT_W.toFixed(1)} W a tube with its power supplies and blowers, which puts this machine near ${fmtWatts(t.total.plant!)}.
+      An instruction costs ${fmtJoules(r.total.power! * pr)} in relays and ${fmtJoules(t.total.power! * pt)} in tubes, counting the devices alone.</p>`;
+    cards = `<p>The program comes off cards: a deck of ${deck} object cards, one instruction each, its source line printed along the top, in an
       IBM 711 reader at the front of the hall (${Math.round(READER_711.w * 100)} × ${Math.round(READER_711.d * 100)} cm, ${Math.round(READER_711.h * 100)} cm high,
       ${Math.round(READER_711.kg)} kg, as IBM lists its frame). It reads a card in ${fmtTime(CARD_S)} (150 cards a minute, IBM's figure for the reader of the 701, IBM's first stored-program computer, 1953), so the relay
       machine, at ${fmtTime(pr)} an instruction, can <strong>read as it runs</strong>: the next card is always there in time, and a loop is the
@@ -67,13 +76,7 @@ function hallStep(): Step {
       ${num(CARD_S / pt)} of its instructions, so it would spend ${(100 * (1 - pt / CARD_S)).toFixed(2)} % of its time waiting. It <strong>loads,
       then runs</strong>, as the 701 did: the deck read once into a program store (here the site's ${num(storeWords)}-word RAM, ${num(storeTubes)} more
       tubes; ${num(storeRelays)} in relays, which the relay machine does not need). Once the instructions sit in a memory, the machine fetches them
-      at its own speed: the stored program.</p>
-      <p>A relay machine of this size is a building. The cost is not in the logic's cleverness but in counting: every NAND is a device, every bit of
-      storage is several, and a relay cannot drive many inputs, so the fan-out adds coils.</p>
-      <div class="try">Run the program and watch the relays switch (or the plates glow): each cycle's settled values from the
-      gate-level simulation, one relay or tube per NAND output of its block (a real relay machine would ripple through
-      ${f.steps} steps to get there). Click a rack to open its block. Then switch to tubes, and between <em>Read as it runs</em> and
-      <em>Load, then run</em>: the reader's panel shows the card at the station and where the time went.</div>`;
+      at its own speed: the stored program.</p>`;
     racks = `<p>Two blocks fill most of the floor: the register file (${rf.cabinets} racks) and the data memory (${dm.cabinets}), both
       flip-flops of NANDs, ${perBit.toFixed(1)} NANDs per bit of data memory. Racks are not shared between blocks, so every small
       block gets one of its own, and the packed count (${rc.packed} racks) is what a floor plan that shared racks would need.
@@ -98,7 +101,8 @@ function hallStep(): Step {
       if (racks === null) facts();
       return {
         derive: racks!,
-        real: counts!,
+        numbers: power!,
+        real: counts! + cards!,
         pitfall: `<p>Treating the relay count as a design choice. It follows from the NAND count and the fan-out; a cleverer relay circuit exists (the Z3 stored a bit in one relay) but it is a different design, with a
           different netlist. The price here is the price of this netlist, built brick by brick from NANDs.</p>`,
       };
