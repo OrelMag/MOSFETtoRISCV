@@ -1,0 +1,23 @@
+/* Chapter 'linking' (widgets/linking.ts): source and object files side by side, the bit strip of a relocation, the link tables. */
+.ln-widget { --ln-imm: light-dark(#7a3fb0, #c79bf0); --ln-rd: light-dark(#1f7a4f, #6fd6a2); --ln-op: light-dark(#2563c9, #7fb0ff); --ln-rel: light-dark(#b3264a, #ff8fa3); --ln-sym: light-dark(#9a6200, #ffc46b); }
+.ln-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.ln-file { border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); padding: 8px 10px; min-width: 0; overflow-x: auto; }
+.ln-file h5 { margin: 0 0 4px; font-size: 13px; }
+.ln-file pre { margin: 0; font: 12px/1.5 var(--font-mono); white-space: pre; }
+.ln-sec { margin: 8px 0 2px; font: 600 11px var(--font-mono); color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }
+.ln-row { display: flex; gap: 10px; font: 12px/1.6 var(--font-mono); white-space: nowrap; }
+.ln-row.hole .ln-word { outline: 1px dashed var(--ln-imm); outline-offset: 1px; }
+.ln-off { color: var(--text-2); } .ln-src { color: var(--text-2); } .ln-rel { color: var(--ln-rel); } .ln-sym { color: var(--ln-sym); }
+.ln-bits { display: grid; grid-template-columns: repeat(32, minmax(0, 1fr)); gap: 2px; margin: 6px 0; }
+.ln-bit { height: 30px; min-width: 0; padding: 0; border: 1px solid transparent; border-radius: 4px; font: 600 12px var(--font-mono); color: #fff; cursor: pointer; }
+.ln-bit.imm { background: var(--ln-imm); } .ln-bit.rd { background: var(--ln-rd); cursor: default; } .ln-bit.op { background: var(--ln-op); cursor: default; }
+.ln-bit.imm.hole { background: transparent; color: var(--ln-imm); border: 1px dashed var(--ln-imm); }
+.ln-labels { display: flex; gap: 2px; font-size: 11px; color: var(--text-2); text-align: center; }
+.ln-asm { font: 13px var(--font-mono); margin: 4px 0; }
+.ln-table td, .ln-table th { padding: 2px 8px; text-align: left; font-size: 12px; }
+.ln-table td code { font-size: 12px; }
+.ln-table tr.on td { color: var(--text); font-weight: 600; }
+.ln-table { margin: 6px 0; }
+.ln-errors { font: 12.5px/1.6 var(--font-mono); color: var(--bad); margin: 6px 0; }
+@media (pointer: coarse) { .ln-bit { height: 40px; } }
+@media (max-width: 600px) { .ln-bits { grid-template-columns: repeat(16, minmax(0, 1fr)); } }

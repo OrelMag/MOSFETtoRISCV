@@ -26,8 +26,8 @@ const REGS = ['zero', 'ra', 'sp', 'gp', 'tp', 't0', 't1', 't2', 's0', 's1', 'a0'
 export const sharePair = (): string[] => [counter(1, 6), counter(10, 6)];
 
 /** A scene: the kernel with these processes on the virtual-memory CPU, the cycle engine, the CPU panel, the translation panel and the strip. */
-export function osScene(o: { procs: string[]; slice?: number; highlight?: string[]; keep?: 'open' | 'folded'; threads?: boolean }): Scene {
-  const img = osImage(o.procs, { slice: o.slice, threads: o.threads });
+export function osScene(o: { procs: string[]; slice?: number; highlight?: string[]; keep?: 'open' | 'folded'; threads?: boolean; disk?: number[]; rom?: number[] }): Scene {
+  const img = osImage(o.procs, { slice: o.slice, threads: o.threads, disk: o.disk, rom: o.rom });
   const reload = (slice: number) => osScene({ ...o, slice });
   return {
     ...cpuScene({ vm: true, source: img.source, highlight: o.highlight, imemK: OS_IMEM_K, dmemK: OS_DMEM_K, hideFiller: true, extraPanels: [osPanel({ slice: o.slice ?? OS_SLICE, reload, keep: o.keep, threads: o.threads })] }),

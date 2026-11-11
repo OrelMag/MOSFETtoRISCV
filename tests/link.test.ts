@@ -129,13 +129,18 @@ describe('the linker\'s errors', () => {
 });
 
 describe('libraries', () => {
-  it('only the members the program needs are pulled in; one pass misses a member needed by one pulled later', () => {
+  it('only the members the program needs are pulled in; an archive is rescanned, an earlier archive is not', () => {
     const main = assembleObject('  call f\n  j .\n', 'main.s');
     const f = assembleObject('.globl f\nf:\n  call g\n  ret\n', 'f.s');
     const g = assembleObject('.globl g\ng:\n  ret\n', 'g.s');
     const h = assembleObject('.globl h\nh:\n  ret\n', 'h.s');
-    expect(pullMembers([main], [f, g, h]).map((o) => o.name)).toEqual(['main.s', 'f.s', 'g.s']);
-    expect(pullMembers([main], [g, f, h]).map((o) => o.name)).toEqual(['main.s', 'f.s']);
-    expect(pullMembers([main], [g, f, h], false).map((o) => o.name)).toEqual(['main.s', 'f.s', 'g.s']);
+    const names = (r: { objs: { name: string }[] }) => r.objs.map((o) => o.name);
+    // one archive, g before f: the rescan finds g once f needs it
+    expect(names(pullMembers([main], [[g, f, h]]))).toEqual(['main.s', 'f.s', 'g.s']);
+    // g in an archive named before f's: never looked at again
+    const r = pullMembers([main], [[g, h], [f]]);
+    expect(names(r)).toEqual(['main.s', 'f.s']);
+    expect(r.missing).toEqual(['g']);
+    expect(pullMembers([main], [[f], [g, h]]).missing).toEqual([]);
   });
 });

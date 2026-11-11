@@ -277,23 +277,26 @@ export function link(objs: ObjFile[], o: LinkOptions = {}): LinkResult {
 export const imageOf = (r: LinkResult): number[] => [...r.text, ...r.data];
 
 /**
- * A library linked the way a static linker does: an archive's member is pulled in only when an object already in the link needs a
- * symbol it defines (the program first, then whatever the pulled members need, until nothing new is needed). Members are visited in
- * order, each scan repeated while it pulls something in: the order still matters, since a member scanned past is not looked at again
- * once the scan ends (`once`: one pass, as the classic Unix ld; otherwise until nothing changes, as with --start-group).
+ * Libraries linked the way a static linker does (GNU ld, without --start-group): the archives in command-line order, each scanned
+ * until it pulls in nothing more. A member is pulled in only when the link already needs a symbol it defines, so a program carries
+ * only what it calls. An archive is not looked at again once the scan has moved past it: a member pulled from a later archive that
+ * needs one from an earlier archive leaves that symbol undefined (`missing`), which is why the order on the command line matters.
  */
-export function pullMembers(program: ObjFile[], archive: ObjFile[], once = true): ObjFile[] {
+export function pullMembers(program: ObjFile[], archives: ObjFile[][]): { objs: ObjFile[]; missing: string[] } {
   const inLink = [...program];
-  const defined = () => new Set(inLink.flatMap((o) => o.symbols.filter((s) => s.global).map((s) => s.name)));
-  const needed = () => { const d = defined(); return new Set(inLink.flatMap((o) => o.needs).filter((s) => !d.has(s))); };
-  for (let pass = 0; ; pass++) {
-    let pulled = false;
-    for (const m of archive) {
-      if (inLink.includes(m)) continue;
-      const need = needed();
-      if (m.symbols.some((s) => s.global && need.has(s.name))) { inLink.push(m); pulled = true; }
+  const needed = () => {
+    const d = new Set(inLink.flatMap((o) => o.symbols.filter((s) => s.global).map((s) => s.name)));
+    return new Set(inLink.flatMap((o) => o.needs).filter((s) => !d.has(s)));
+  };
+  for (const archive of archives) {
+    for (let pulled = true; pulled;) {
+      pulled = false;
+      for (const m of archive) {
+        if (inLink.includes(m)) continue;
+        const need = needed();
+        if (m.symbols.some((s) => s.global && need.has(s.name))) { inLink.push(m); pulled = true; }
+      }
     }
-    if (once || !pulled) break;
   }
-  return inLink;
+  return { objs: inLink, missing: [...needed()] };
 }
