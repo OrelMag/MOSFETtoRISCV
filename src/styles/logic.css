@@ -96,7 +96,9 @@
 .lg-sub { font-size: 13px; color: var(--text-2); margin: 8px 0; }
 .lg .km { margin-top: 12px; }
 
-.lg-seg-scroll { overflow-x: auto; max-width: 100%; }
+.lg-seg-scroll, .lg-scroll { overflow-x: auto; max-width: 100%; }
+/* a phone: the sharing table's headers wrap instead of pushing the table past the screen */
+@media (max-width: 560px) { .lg-scroll .lg-t th { white-space: normal; } .lg-scroll .lg-t td, .lg-scroll .lg-t th { padding: 4px 5px; } }
 .lg-seg td, .lg-seg th { padding: 2px 5px; text-align: center; }
 .lg-seg .in { color: var(--muted); font: 12px var(--font-mono); }
 .lg-seg .dg { font: 600 12px var(--font-mono); color: var(--text); }

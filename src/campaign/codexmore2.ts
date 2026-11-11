@@ -508,7 +508,7 @@ A × B = 0x4_00000003_FFFFFFFD   (2⁶⁶ + 2³⁴ − 3)
     },
     mistakes: [
       'Testing the carry once: a1 + a3 + carry is two additions and either one can wrap (0xFFFFFFFF + 0 + 1 wraps on the second only).',
-      'Finding a borrow after the subtraction: compare the operands before it.',
+      'Testing a borrow like a carry: the difference below an operand does not mean a borrow (5 − 3 = 2 is below 3). The borrow is B.lo < A.lo, the operands compared, before the subtraction if the difference overwrites one of them.',
       'Using mulhu for signed operands: the high words of a signed product need mulh (signed × signed) or mulhsu (signed × unsigned), and the cross products\' signs fill the top word.',
     ],
     chapters: [

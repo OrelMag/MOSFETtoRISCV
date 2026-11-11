@@ -63,7 +63,7 @@ export const CANDIDATES: { key: string; name: string; doc: FsmDoc; right: boolea
   return [
     { key: 'a', name: 'Circuit A', doc: { ...MEALY101, arcs: noOverlap }, right: false, fault: 'restarts after a match: the last 1 does not count as the first 1 of the next pattern' },
     { key: 'b', name: 'Circuit B', doc: MEALY101, right: true, fault: '' },
-    { key: 'c', name: 'Circuit C', doc: { ...MEALY101, arcs: early }, right: false, fault: 'raises y one input early, on the 0 after 1, 0' },
+    { key: 'c', name: 'Circuit C', doc: { ...MEALY101, arcs: early }, right: false, fault: 'raises y one input early: on the 0 of 1, 0, before the last 1 has arrived' },
   ];
 })();
 

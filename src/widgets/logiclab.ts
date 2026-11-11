@@ -97,7 +97,7 @@ export function sharingWidget(stage?: Stage): Widget {
     ...rows.map((r) => h('tr', null, h('td', null, r.name), h('td', { class: 'num' }, `${r.two} NANDs`), h('td', { class: 'num' }, h('b', null, `${r.better}`)), h('td', null, r.how))));
   const gt = tableOf(['a', 'b', 'c', 'd'], GREEDY_ONES);
   const km = kmapWidget({ ins: gt.ins, out: 'y', rows: gt.rows[0], edit: '01', greedyToggle: true, circuitToggle: true, greedy: true, title: 'Exact against greedy on one table', stage });
-  return { el: h('div', { class: 'widget lg' }, h('div', { class: 'km-title' }, 'A minimal sum is not the cheapest circuit'), t, h('p', { class: 'lg-sub' }, 'Two-level means one layer of ANDs and one OR. Sharing a gate between outputs, or factoring, goes outside that family. Inside it, the cover is still a search:'), km.el), destroy: () => km.destroy?.() };
+  return { el: h('div', { class: 'widget lg' }, h('div', { class: 'km-title' }, 'A minimal sum is not the cheapest circuit'), h('div', { class: 'lg-scroll' }, t), h('p', { class: 'lg-sub' }, 'Two-level means one layer of ANDs and one OR. Sharing a gate between outputs, or factoring, goes outside that family. Inside it, the cover is still a search:'), km.el), destroy: () => km.destroy?.() };
 }
 
 // ---- step 8: the seven-segment digit -------------------------------------------------------------------

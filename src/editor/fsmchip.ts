@@ -200,9 +200,11 @@ function topDef(doc: FsmDoc, next: ComponentDef, out: ComponentDef, enc: Encodin
   for (let i = 0; i < k; i++) b.wire(`s${i}.q`, `next.s${i}`);
   for (const x of doc.ins) b.wire(x, `next.${x}`);
   b.next();
-  const gated = Array.from({ length: k }, (_, i) => (resetCode >> i) & 1
+  // the high bit first, in the order of the next-state chip's outputs and of the flip-flops, so each bit runs straight across
+  const gated: string[] = [];
+  for (let i = k - 1; i >= 0; i--) gated[i] = (resetCode >> i) & 1
     ? b.op1(OR, [`next.n${i}`, 'rst'], `n${i} + rst`, `g${i}`)
-    : b.op1(AND, [`next.n${i}`, nrst], `n${i}·¬rst`, `g${i}`));
+    : b.op1(AND, [`next.n${i}`, nrst], `n${i}·¬rst`, `g${i}`);
   b.next();
   for (let i = k - 1; i >= 0; i--) b.op(DFF, [gated[i], 'clk'], `s${i}`, `s${i}`);
   for (let i = 0; i < k; i++) b.name(`s${i}.q`, `s${i}`, true);

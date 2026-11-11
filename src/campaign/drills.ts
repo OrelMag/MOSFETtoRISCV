@@ -1206,7 +1206,7 @@ const fixed: Drill = {
       const raw = word >= 2 ** (w - 1) ? word - 2 ** w : word;
       const v = qValue(word, w, f);
       return {
-        prompt: `What value does the ${w}-bit word <code>0x${hex(word, w)}</code> hold, read as <b>${qName(1, f)}</b>?`, placeholder: '-0.375',
+        prompt: `What value does the ${w}-bit word <code>0x${hex(word, w)}</code> hold, read as <b>${qName(1, f)}</b>?`, placeholder: 'decimal or fraction',
         check: (t) => { const x = parseQty2(t); return x === null ? { ok: false, why: 'write a decimal number or a fraction' } : { ok: x === v, why: x === v ? undefined : 'not that value' }; },
         answer: fixedText(raw, f),
         explain: `As a signed integer the word is ${raw}; divided by 2^${f} = ${2 ** f} that is ${fixedText(raw, f)}. (The top bit weighs −1, the next ½, then ¼ …)`,
@@ -1216,7 +1216,7 @@ const fixed: Drill = {
       const a = int(r, 1, 4), b = int(r, 3, 15), c = int(r, 1, 4), d = int(r, 3, 15);
       const want = qName(a + c, b + d);
       return {
-        prompt: `Multiplying a <b>${qName(a, b)}</b> word by a <b>${qName(c, d)}</b> word gives a full-width product in which format?`, placeholder: 'Q2.30',
+        prompt: `Multiplying a <b>${qName(a, b)}</b> word by a <b>${qName(c, d)}</b> word gives a full-width product in which format?`, placeholder: 'Qm.f',
         check: (t) => { const m = t.trim().toUpperCase().match(/^Q(\d+)\.(\d+)$/); return m ? { ok: Number(m[1]) === a + c && Number(m[2]) === b + d, why: 'not that format' } : { ok: false, why: 'write it as Qm.f' }; },
         answer: want,
         explain: `Qa.b × Qc.d = Q(a+c).(b+d): the integer parts add (${a} + ${c}), so do the places after the point (${b} + ${d}). The product is ${a + b + c + d} bits long.`,
@@ -1225,7 +1225,7 @@ const fixed: Drill = {
     if (k === 3) {
       const f = [7, 15][int(r, 0, 1)], other = int(r, 1, 3), g = int(r, 5, 12);
       return {
-        prompt: `A Q1.${f} word times a ${qName(other, g)} word is a ${qName(1 + other, f + g)} product. By how many places is it shifted right to give a <b>${qName(1, f)}</b> result?`, placeholder: String(f),
+        prompt: `A Q1.${f} word times a ${qName(other, g)} word is a ${qName(1 + other, f + g)} product. By how many places is it shifted right to give a <b>${qName(1, f)}</b> result?`, placeholder: 'places',
         check: numAnswer(g, 10), answer: String(g),
         explain: `The product has ${f + g} places after the point and the result keeps ${f}: drop ${g}. (Two Q1.${f} words: the shift is ${f}, one fewer than the ${f + 1} bits of an operand.)`,
       };
@@ -1235,7 +1235,7 @@ const fixed: Drill = {
     const want = mode === 'floor' ? Math.floor(x / q) : mode === 'zero' ? Math.trunc(x / q) : Math.floor((x + q / 2) / q);
     const how = mode === 'floor' ? `an arithmetic shift right by ${s2} (rounds down, toward −∞)` : mode === 'zero' ? `C division by ${q} (rounds toward zero)` : `rounding to nearest, ties up (add ${q / 2}, then shift right by ${s2})`;
     return {
-      prompt: `Drop ${s2} bits from the signed integer <b>${x}</b> by ${how}. The result?`, placeholder: String(want),
+      prompt: `Drop ${s2} bits from the signed integer <b>${x}</b> by ${how}. The result?`, placeholder: 'an integer',
       check: numAnswer(want, 10), answer: String(want),
       explain: `${x} / ${q} = ${x / q}. ` + (mode === 'floor' ? `Its floor is ${want}: a shift never rounds up, so a negative value moves further from zero.` : mode === 'zero' ? `Toward zero drops the fraction: ${want}. It differs from the shift only for a negative value with a nonzero remainder.` : `(${x} + ${q / 2}) >> ${s2} = ${want}.`),
     };
