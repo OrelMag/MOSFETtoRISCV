@@ -5,6 +5,7 @@
 // The stage imports this module only while the setting is on, so off costs nothing.
 import '../styles/lens.css';
 import { reducedMotion } from '../ui/motion';
+import { TAP_SLOP } from './camera';
 import type { ViewCtx } from './context';
 import { closesAt, freeStage, growPlan, LENS_CLOSE_PX, openPlan, opensAt, rimJogs, type LensPlan, type Rect, type RimPort, type Size } from './lensplan';
 import type { OverlayResult } from './overlays';
@@ -292,7 +293,7 @@ export class Lens {
         window.removeEventListener('pointermove', move);
         window.removeEventListener('pointerup', up);
         // a press on a wire that did not pan is a click on it (Why? traces it, else it is selected)
-        if (wire && Math.hypot(x - x0, y - y0) < 4) this.wireTap(Number(wire.getAttribute('data-net')));
+        if (wire && (Math.abs(x - x0) + Math.abs(y - y0)) / (this.unitPx() || 1) <= TAP_SLOP) this.wireTap(Number(wire.getAttribute('data-net')));
       };
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
