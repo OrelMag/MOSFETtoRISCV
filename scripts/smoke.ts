@@ -38,6 +38,7 @@ import { LEARN_KEY } from '../src/learn/store';
 import { REVIEW_KEY } from '../src/ui/review';
 import { DEVICE_PUZZLES, devicePuzzleChipId } from '../src/puzzles/devpuzzles';
 import { emptyDeviceChip, referenceChip } from '../src/puzzles/devrefs';
+import { deviceComputerChip } from '../src/puzzles/devcpu';
 
 // ---- options ---------------------------------------------------------------------------------
 
@@ -121,12 +122,12 @@ function examplesWorkspace(): { json: string; ids: string[] } {
 
 /**
  * The device puzzles' chips (the reference circuit of each), or with `failing` an empty crossing chip whose lamps nobody drives
- * (every test fails at step 0 on an X pin).
+ * (every test fails at step 0 on an X pin), or with `cpu` the RV32I computer with each reference program.
  */
-function devicesWorkspace(failing = false): string {
+function devicesWorkspace(failing = false, cpu = false): string {
   const chips = Object.fromEntries(DEVICE_PUZZLES.map((p) => {
     const id = devicePuzzleChipId(p);
-    return [id, failing && p.dev === 'crossing' ? emptyDeviceChip(p.dev, id, p.title) : referenceChip(p.dev, id, p.title)];
+    return [id, cpu ? deviceComputerChip(p.dev, id, p.title) : failing && p.dev === 'crossing' ? emptyDeviceChip(p.dev, id, p.title) : referenceChip(p.dev, id, p.title)];
   }));
   return JSON.stringify({ ...emptyWorkspace(), chips, open: Object.keys(chips) });
 }
@@ -135,12 +136,13 @@ function devicesWorkspace(failing = false): string {
  * A device puzzle chip open: Check (every test passes, or with `fail` the first one fails with its reason), a test played a few
  * steps (the player, the large face, the timeline), Done gives the circuit back.
  */
-const deviceDrive = (fail: boolean) => `(async () => {
+const deviceDrive = (fail: boolean, cpu = false) => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
   const strip = document.querySelector('.sb-dev');
   if (!strip || strip.hidden) return ['no device puzzle strip'];
   if (!document.querySelector('svg.ed-svg .dev-face')) bad.push('no device face on the canvas');
+  if (${cpu} && !strip.querySelector('.sb-pz-io')) bad.push('no I/O line for the computer');
   strip.querySelector('[data-pz=check]').click();
   for (let i = 0; i < 100 && !strip.querySelector('tbody tr td.st')?.textContent; i++) await wait(100);
   const marks = [...strip.querySelectorAll('tbody tr td.st')].map((t) => t.textContent).join('');
@@ -776,6 +778,10 @@ function routes(): Route[] {
   for (const theme of ['light', 'dark'] as const) for (const p of DEVICE_PUZZLES) add(`#/sandbox/${devicePuzzleChipId(p)}`, { ...themed(theme), [SANDBOX_KEY]: devWs }, ` (device puzzle, ${theme})`, undefined, deviceDrive(false));
   add(`#/sandbox/${devicePuzzleChipId(DEVICE_PUZZLES[1])}`, { ...light, [SANDBOX_KEY]: devWs }, ` (device puzzle, ${phoneVp.name})`, phoneVp, deviceDrive(false));
   add(`#/sandbox/${devicePuzzleChipId(DEVICE_PUZZLES[0])}`, { ...light, [SANDBOX_KEY]: devicesWorkspace(true) }, ' (device puzzle, failing)', undefined, deviceDrive(true));
+  // on the RV32I computer, each reference program: in both themes, and the vending machine on a phone
+  const cpuWs = devicesWorkspace(false, true);
+  for (const theme of ['light', 'dark'] as const) for (const p of DEVICE_PUZZLES) add(`#/sandbox/${devicePuzzleChipId(p)}`, { ...themed(theme), [SANDBOX_KEY]: cpuWs }, ` (device puzzle on a CPU, ${theme})`, undefined, deviceDrive(false, true));
+  add(`#/sandbox/${devicePuzzleChipId(DEVICE_PUZZLES[2])}`, { ...light, [SANDBOX_KEY]: cpuWs }, ` (device puzzle on a CPU, ${phoneVp.name})`, phoneVp, deviceDrive(false, true));
   add('#/workbench/xor', light, ' (menu by key)', undefined, MENU_DRIVE);
   add('#/sandbox', light, ' (menu by key)', undefined, MENU_DRIVE);
   add('#/sandbox', light, ` (${TOUCH_VIEWPORTS[0].name}: hold, cancel, tap a pin)`, TOUCH_VIEWPORTS[0], TOUCH_DRIVE);

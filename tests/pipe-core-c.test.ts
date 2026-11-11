@@ -42,7 +42,11 @@ describe('rv32ic_pipe_core: the library part', () => {
 
   it('reads and writes its ref: C kept through a variant change, never with custom rows', () => {
     expect(portCoreOf({ lib: 'rv32ic_pipe_core' })).toMatchObject({ pipe: true, m: false, c: true, dcache: false });
-    expect(portCoreOf({ lib: 'rv32imc_pipe_dc_core' })).toMatchObject({ pipe: true, m: true, c: true, dcache: true });
+    expect(portCoreOf({ lib: 'rv32ic_pipe_dc_core' })).toMatchObject({ pipe: true, m: false, c: true, dcache: true });
+    // M and the data cache never together (pipelinedCpu refuses the pair): neither id is a part
+    expect(portCoreOf({ lib: 'rv32imc_pipe_dc_core' })).toBeNull();
+    expect(resolveComponent('rv32imc_pipe_dc_core')).toBeUndefined();
+    expect(resolveComponent('rv32im_pipe_dc_core')).toBeUndefined();
     expect(portCoreOf({ lib: 'rv32i_pipe_core' })).toMatchObject({ c: false });
     expect(portCoreRef({ pipe: true, m: true, c: true, custom: [] })).toEqual({ lib: 'rv32imc_pipe_core' });
     expect(portCoreRef({ pipe: false, c: true, custom: [] })).toEqual({ lib: 'rv32i_core' }); // the single-cycle C core is rv32ic_core, not a port-core variant
@@ -58,11 +62,12 @@ describe('rv32ic_pipe_core: the library part', () => {
 });
 
 describe('rv32ic_pipe_core with a window ROM and a data memory on its ports', () => {
-  const harness = (words: number[], imemK: number, dmemK: number): ComponentDef => ({
-    id: `t_pipe_c_${words.length}_${dmemK}`, name: 'harness', category: 'custom', symbol: { kind: 'box' },
+  type Variant = { m?: boolean; dcache?: boolean };
+  const harness = (words: number[], imemK: number, dmemK: number, v: Variant = {}): ComponentDef => ({
+    id: `t_pipe_c_${words.length}_${dmemK}${v.m ? '_m' : ''}${v.dcache ? '_dc' : ''}`, name: 'harness', category: 'custom', symbol: { kind: 'box' },
     ports: [bit('clk', 'in')],
     netlist: () => ({
-      instances: [{ name: 'core', def: pipelinedCpu([], { adder: 'ks', ports: true, c: true }) }, { name: 'imem', def: cWindowRom(words, imemK) }, { name: 'dm', def: dataMemory(dmemK) }],
+      instances: [{ name: 'core', def: pipelinedCpu([], { adder: 'ks', ports: true, c: true, ...(v.m ? { m: true } : {}), ...(v.dcache ? { dcache: 'wt' as const } : {}) }) }, { name: 'imem', def: cWindowRom(words, imemK) }, { name: 'dm', def: dataMemory(dmemK) }],
       nets: [
         { ends: ['clk', 'core.clk', 'dm.clk'] }, { ends: ['core.pcOut', 'imem.addr'] }, { ends: ['imem.data', 'core.instr'] },
         { ends: ['core.memAddr', 'dm.addr'] }, { ends: ['core.memWData', 'dm.wd'] }, { ends: ['core.memWE', 'dm.we'] }, { ends: ['dm.rd', 'core.memRData'] },
@@ -70,15 +75,15 @@ describe('rv32ic_pipe_core with a window ROM and a data memory on its ports', ()
     }),
   });
 
-  async function lockStep(src: string, dmemK = 5, cap = 4000) {
+  async function lockStep(src: string, dmemK = 5, cap = 4000, v: Variant = {}) {
     const asm = assemble(src);
     expect(asm.errors).toEqual([]);
     const imemK = Math.max(6, Math.ceil(Math.log2(asm.words.length)));
-    const sim = new GateSim(flatten(harness(asm.words, imemK, dmemK)));
+    const sim = new GateSim(flatten(harness(asm.words, imemK, dmemK, v)));
     sim.setInput('clk', 0);
     sim.settle();
     const core = sim.design.root.children!.get('core')!;
-    const iss = new ISS(asm.words, { c: true, dmemWords: 2 ** dmemK, imemWords: 2 ** imemK });
+    const iss = new ISS(asm.words, { c: true, ...(v.m ? { m: true } : {}), dmemWords: 2 ** dmemK, imemWords: 2 ** imemK });
     let cyc = 0, half = 0;
     for (; cyc < cap && !iss.halted; cyc++) {
       const ret = retireCount(sim, core);
@@ -132,6 +137,19 @@ f:      addi a3, a3, 1
   it.each([1, 2, 3, 4].map((s) => [s] as const))('random program %i with .option rvc ends in the golden model\'s state', async (seed) => {
     await lockStep(randomProgram32(seed + 40, { n: 50, c: true }));
   }, 120_000);
+
+  // the variants the sandbox's Variant select offers with C: a divide stalls F / D / E, a multiply is a load to the hazard unit,
+  // and a data-cache miss freezes every stage, each with 2-byte PC steps
+  it('rv32imc_pipe_core: the directed program and random RV32IMC programs in lock step', async () => {
+    await lockStep(DIRECTED, 5, 4000, { m: true });
+    for (const seed of [1, 2]) await lockStep(randomProgram32(seed + 60, { n: 50, c: true, m: true }), 5, 4000, { m: true });
+  }, 240_000);
+
+  it('rv32ic_pipe_dc_core: the directed program and random programs in lock step through the data cache', async () => {
+    const r = await lockStep(DIRECTED, 5, 4000, { dcache: true });
+    expect(r.half).toBeGreaterThan(5);
+    for (const seed of [1, 2]) await lockStep(randomProgram32(seed + 80, { n: 50, c: true }), 5, 4000, { dcache: true });
+  }, 240_000);
 });
 
 describe('in the sandbox: the C computer on the pipelined core', () => {

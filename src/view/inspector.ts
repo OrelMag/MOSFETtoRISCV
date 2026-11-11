@@ -371,7 +371,7 @@ export class Inspector {
         h('button', { class: 'btn sm', title: 'Every module exactly as drawn: NAND gates, flip-flops as NAND loops (.sv)', onclick: () => go('structure') }, icon('code', 14), 'Exact structure'),
         h('button', { class: 'btn sm', title: 'Synthesizable Verilog-2005 for Yosys / Verilator / FPGA tools: flip-flops as clocked processes (.v)', onclick: () => go('synth') }, icon('chip', 14), 'Synthesizable'),
         h('button', { class: 'btn sm', title: 'Every entity exactly as drawn, in structural VHDL-93: NAND gates as entity nand2 (.vhd; not checked by a VHDL tool here)', onclick: () => { const f = vhdlHierarchy(d); download(f.filename, f.text); note.textContent = `${f.filename}: ${f.entities} entit${f.entities > 1 ? 'ies' : 'y'}.`; } }, icon('code', 14), 'VHDL'),
-        h('label', { class: 'dl-tb', title: tbOk ? 'Append a self-checking testbench with vectors from this site’s simulation' : 'Testbenches are generated for loop-free (combinational) logic only' }, tb, 'testbench')),
+        h('label', { class: 'dl-tb', title: tbOk ? 'Append a self-checking testbench with vectors from this site’s simulation (the Verilog downloads only)' : 'Testbenches are generated for loop-free (combinational) logic only' }, tb, 'testbench')),
       note);
   }
 

@@ -5,7 +5,7 @@
 
 export const VADDER_TOP = 'add4';
 
-export const VADDER_SOURCE = `// A 4-bit adder, one line per step of the lookahead recipe.
+export const VADDER_SOURCE = `// A 4-bit adder, one line per step of the generate / propagate recipe.
 module add4(
   input  [3:0] a, b,
   input        ci,

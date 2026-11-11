@@ -608,8 +608,8 @@ export function chipDeps(doc: ChipDoc): string[] {
   return [...new Set(doc.parts.flatMap((p) => ('chip' in p.ref ? [p.ref.chip] : [])))];
 }
 
-/** The pipelined port cores by library id: rv32i_pipe_core, rv32im_pipe_core (M), rv32ic_pipe_core (C), rv32i_pipe_dc_core (a data cache), and their combinations. */
-export const PIPE_CORE_LIB = /^rv32i(m)?(c)?_pipe(_dc)?_core$/;
+/** The pipelined port cores by library id: rv32i_pipe_core, rv32im_pipe_core (M), rv32ic_pipe_core (C), rv32i_pipe_dc_core (a data cache), and their combinations, never M with the data cache (pipelinedCpu refuses the pair). */
+export const PIPE_CORE_LIB = /^rv32i(?!mc?_pipe_dc_)(m)?(c)?_pipe(_dc)?_core$/;
 
 /** What a placed RV32I port core is (null: not the single-cycle or pipelined RV32I port core): pipelined or not, M, C (pipelined only), data cache, custom rows. */
 export function portCoreOf(ref: PartRef): { pipe: boolean; m: boolean; c: boolean; dcache: boolean; custom: CustomRow[] } | null {

@@ -294,7 +294,7 @@ and the ISS options.
 - Right-click the empty canvas ▸ **Lay out by logic depth**: the parts placed left to right by logic depth (the Verilog
   import's placer), each column ordered to cut crossings, short forward nets as wires and the rest as pointers. One undo step;
   pins keep their order, so the chip looks the same where it is placed. It is measured first and offered only when it reads
-  better (fewer crossings plus wires through parts); otherwise the row is off and says by how much. An imported Digital or
+  better (fewer crossings plus wires through parts, a pair of pointers counting as one crossing); otherwise the row is off and says by how much. An imported Digital or
   Logisim file offers it in a toast for the chips it improves.
 
 ## Verilog chips
@@ -314,7 +314,7 @@ and the ISS options.
   them under it and on their lines; the canvas keeps the last good build, dimmed.
 - A Yosys JSON netlist (`write_json` after `synth`, any of Yosys's gate-level cells) imports as drawn
   chips. Not drawable: inout ports, word-level cells (synthesize first), vendor primitives (`LUT6`, …),
-  flip-flops with both an asynchronous set and reset. VHDL is not supported.
+  flip-flops with both an asynchronous set and reset. VHDL cannot be imported (VHDL out is in the inspector's HDL tab).
 - **Examples ▸ The same adder in Verilog**: the library's ADD4 and one line of Verilog side by side.
 
 ## Challenges
@@ -389,6 +389,35 @@ pseudocode and the reference programs. **Do it for me** puts the reference progr
 computer's ROM; that marks the puzzle shown, not starred. A puzzle chip's CPU drawer shows the
 program and registers, but its golden model sits out, because the program reads PUZZLE IN, which
 the golden model doesn't have.
+
+### Device puzzles
+
+The drawer's **Devices** group holds three puzzles where the circuit drives a small world behind named pins
+instead of turning words into words: **Crossing** (car lamps and WALK, a button), **Maze runner** (walls in,
+motors out) and **Vending machine** (coins in, an item and change out). The device takes one step at each rising
+clock edge, reading the pins on its left as they were just before it. Its pins on the right follow the world alone,
+so a controller wired straight back into it makes no loop. Every step the world's rules judge the pins, and the
+first broken rule is a fault. **Start** offers:
+
+| Start from | You get |
+|---|---|
+| A circuit | an empty chip with the device and a clock: draw the controller |
+| RV32I single-cycle | the ready-wired computer: the device on its memory map, a starter program in its 256-word ROM, 64 words of RAM |
+| One of your chips | a copy with the device beside it, unwired; with a program ROM the device gets an `en` pin and steps only at an edge where en = 1 |
+
+On the computer, `lui s0, 0x80000` and then `lw rd, 0(s0)` reads the sense pins, packed from bit 0 in pin order (a
+2-bit pin takes two bits, low first). `sw rs, 4(s0)` drives the device with the stored word's bits, packed the same way,
+and that store is the world's step. The drive pins hang straight off the store data, with no register in between,
+so the next load already sees the step's result. The strip names each device's bits.
+
+**Check** plays every test from power-on until the world is done, breaks a rule or reaches the test's step limit. A
+CPU gets 400 clock cycles a step on average (the test's steps × 400 in all). A click on a test plays it a world step at a time, with the device's face
+large and every step's pins on a timeline. A circuit is graded on NANDs against the reference circuit:
+★ pass, ★★ within 1.5 × its NANDs, ★★★ at or below them. A CPU is graded as the program puzzles are, on cycles ×
+NANDs against the reference program on the RV32I computer. Its best is kept apart from the circuit's, and the drawer
+shows both. **Do it for me** puts the reference circuit on the chip, or, on a CPU, the reference program into the computer's ROM
+(a CPU of your own is replaced by the computer with it: its ISA and memory map are its own). The CPU drawer's golden model sits out on a device
+chip, because it has no device.
 
 ## Open in Sandbox
 

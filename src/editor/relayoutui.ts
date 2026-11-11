@@ -14,15 +14,20 @@ import { MEASURE_MAX_PARTS, offerText, type RelayoutOffer, relayoutOffer } from 
 const asDrawn = (o: Extract<RelayoutOffer, { kind: 'worse' }>) =>
   o.after.crossings + o.after.throughParts > o.before.crossings + o.before.throughParts ? 'Already reads better as drawn' : 'Reads as well as drawn';
 
-const cache = new WeakMap<ChipDoc, RelayoutOffer>();
+/** By document and its compiled definition: the library recompiles a chip when a chip it places changes, so a sub-chip's new pins
+ * make a new offer although this document is the same object. */
+const cache = new WeakMap<ChipDoc, { def: unknown; o: RelayoutOffer }>();
 
 const resolver = (ed: Editor) => (ref: PartRef): PartResult => ed.defOfRef(ref) ?? { error: 'a part that does not resolve' };
 
-/** The offer for a chip of the workspace (cached per document object: an edit makes a new one). */
+/** The offer for a chip of the workspace (cached per document object and compiled definition: an edit makes a new one). */
 export function offerFor(ed: Editor, ws: Workspace, id: string): RelayoutOffer {
   const doc = ws.chips[id];
-  let o = cache.get(doc);
-  if (!o) cache.set(doc, (o = relayoutOffer(doc, resolver(ed), isGenerated(ws, id))));
+  const def = ws === ed.ws ? ed.lib.compiled(id)?.def : ws;
+  const hit = cache.get(doc);
+  if (hit && hit.def === def) return hit.o;
+  const o = relayoutOffer(doc, resolver(ed), isGenerated(ws, id));
+  cache.set(doc, { def, o });
   return o;
 }
 

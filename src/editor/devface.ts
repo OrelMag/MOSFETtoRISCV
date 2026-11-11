@@ -26,7 +26,8 @@ function packed(sim: Sim, nets: readonly number[]): number {
   return v;
 }
 
-/** What a face shows: the leaf's state and the drive pins now (null: not simulated). */
+/** What a face shows: the leaf's state and the drive pins (null: not simulated): now, or for a device paced by en (a CPU) as
+ * the last step took them, since between two steps its pins carry whatever the CPU's store data does. */
 export interface FaceInput { st: DeviceState | null; drive: number[] | null }
 
 export function faceInput(sim: Sim | null, node: HierNode | null): FaceInput {
@@ -35,6 +36,7 @@ export function faceInput(sim: Sim | null, node: HierNode | null): FaceInput {
   const leaf = sim.design.leaves[li];
   const st = sim.leafState(li) as DeviceState | undefined;
   if (!st || !st.dev) return { st: null, drive: null };
+  if (deviceOf(leaf.def)?.en) return { st, drive: st.frames.at(-1)?.drive ?? null };
   return { st, drive: DEVICES[st.dev].drive.map((_, i) => packed(sim, leaf.inputs[i])) };
 }
 

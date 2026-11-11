@@ -1,8 +1,10 @@
 // Device puzzles (the Puzzles drawer's Devices group): a device part on a chip of its own, and a circuit (or a CPU) that
 // drives it. Check plays every test on the chip's own gates (the sandbox's simulation, its cycle engine), from power-on:
 // the device holds the test's world, the clock runs until the world is done, breaks a rule or reaches the test's step
-// limit. Graded on NANDs against the reference circuit (devrefs.ts): ★ every test passes, ★★ within 1.5 × its NANDs,
-// ★★★ at or below them. No DOM.
+// limit. A circuit is graded on NANDs against the reference circuit (devrefs.ts): ★ every test passes, ★★ within 1.5 × its
+// NANDs, ★★★ at or below them. A CPU (the device paced by en: devcpu.ts's computer, or a chip of the learner's own with a
+// program ROM) is graded like the stream puzzles, on cycles × NANDs against the reference program on the RV32I computer,
+// and keeps its best under a record of its own (cpuRecordId), so a small circuit never hides a CPU's score. No DOM.
 
 import type { Compiled } from '../editor/compile';
 import type { ChipDoc, PinDoc } from '../editor/model';
@@ -11,6 +13,8 @@ import { deviceLeaves, deviceState, type DeviceState } from '../editor/devparts'
 import { EditorSim } from '../editor/runtime';
 import { DEVICE_TESTS, DEVICES, type DeviceId, type DeviceTest } from './devices';
 import { referenceDef } from './devrefs';
+import { DEVICE_CPU_REFS } from './devcpu';
+import { puzzleStars, type PuzzleScore, type Stars } from './grade';
 import { hardwareNands } from './run';
 
 export interface DevicePuzzle {
@@ -71,7 +75,8 @@ export interface DeviceTestRun {
   status: string;
 }
 
-export interface DeviceRun { ok: boolean; problems: string[]; results: DeviceTestRun[]; cycles: number }
+/** `en`: the device is paced by en (a CPU): graded on cycles × NANDs against the reference program (devcpu.ts). */
+export interface DeviceRun { ok: boolean; problems: string[]; results: DeviceTestRun[]; cycles: number; en: boolean }
 
 /** A CPU (the device's `en` pin) gets this many clock cycles per world step at most before a test is declared stuck. */
 export const CYCLES_PER_STEP = 400;
@@ -112,7 +117,7 @@ export function judgeDevice(st: DeviceState, t: DeviceTest, cycles: number): Dev
   const base = { name: t.name, steps: st.n, cycles, status: m.status(st.w) };
   if (st.fault) return { ...base, ok: false, why: `step ${st.n - 1}: ${st.fault}`, at: st.n - 1 };
   if (m.done(st.w)) return { ...base, ok: true };
-  if (st.n < t.steps) return { ...base, ok: false, why: `the world took only ${st.n} of ${t.steps} steps in ${cycles} cycles: does en pulse once a step?`, at: st.n };
+  if (st.n < t.steps) return { ...base, ok: false, why: `the world took only ${st.n} of ${t.steps} steps in ${cycles} cycles: does en pulse once a step (on the RV32I computer: a store to 4(s0))?`, at: st.n };
   const why = m.end(st.w);
   return why ? { ...base, ok: false, why, at: st.n } : { ...base, ok: true };
 }
@@ -133,10 +138,10 @@ export function runDevicePuzzle(p: DevicePuzzle, compiled: Compiled, pins: PinDo
     es.setMode('cycle');
     es.update({ ...compiled, def: compiled.def }, pins, faults?.doc, faults && { look: faults.look, deps: faults.deps });
     const found = findDevice(es, p);
-    if (Array.isArray(found)) return { ok: false, problems: found, results: [], cycles: 0 };
+    if (Array.isArray(found)) return { ok: false, problems: found, results: [], cycles: 0, en: false };
     const results = deviceTests(p).map((_, k) => playDeviceTest(es, found, p, k));
     const cycles = Math.round((10 * results.reduce((s, r) => s + r.cycles, 0)) / Math.max(1, results.length)) / 10;
-    return { ok: results.every((r) => r.ok), problems: [], results, cycles };
+    return { ok: results.every((r) => r.ok), problems: [], results, cycles, en: found.en };
   } finally {
     es.destroy();
   }
@@ -153,3 +158,9 @@ export const parNands = (dev: DeviceId): number => hardwareNands(referenceDef(de
 export function deviceStars(nands: number, par: number): DeviceStars {
   return nands <= par ? 3 : nands <= 1.5 * par ? 2 : 1;
 }
+
+/** The record a CPU's pass is kept under (the circuit's is the puzzle's own id). */
+export const cpuRecordId = (p: DevicePuzzle): string => `${p.id}:cpu`;
+
+/** A CPU's grade: the stream puzzles' rule against the reference program on the RV32I computer. */
+export const deviceCpuStars = (p: DevicePuzzle, s: PuzzleScore): Stars => puzzleStars(s, [DEVICE_CPU_REFS[p.dev]]);

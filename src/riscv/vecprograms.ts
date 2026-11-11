@@ -118,7 +118,7 @@ halt:   j     halt`,
     id: 'vmask', name: 'Vector: a mask you can see',
     blurb: 'A compare writes v0; a masked add changes only the elements whose bit is 1; vmerge clamps at a threshold. Leaves 6 in a0.',
     result: { reg: 'a0', value: 6 },
-    source: `# x = 0 … 7; add 100 where x < 3; then clamp x at 6
+    source: `# x = 0 … 7; add 10 where x < 3; then clamp x at 6
         li    t0, 8
         vsetvli zero, t0, e32, m2, tu, mu
         vid.v   v8              # 0 … 7

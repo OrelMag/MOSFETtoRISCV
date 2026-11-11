@@ -61,9 +61,9 @@ function hallStep(): Step {
       in relays and ${fmtJoules(t.total.power! * pt)} in tubes, counting the devices alone.</p>
       <p>The program comes off cards: a deck of ${deck} object cards, one instruction each, its source line printed along the top, in an
       IBM 711 reader at the front of the hall (${Math.round(READER_711.w * 100)} × ${Math.round(READER_711.d * 100)} cm, ${Math.round(READER_711.h * 100)} cm high,
-      ${Math.round(READER_711.kg)} kg). It reads a card in ${fmtTime(CARD_S)} (150 cards a minute, IBM's figure for the 701's reader), so the relay
+      ${Math.round(READER_711.kg)} kg, as IBM lists its frame). It reads a card in ${fmtTime(CARD_S)} (150 cards a minute, IBM's figure for the reader of the 701, IBM's first stored-program computer, 1953), so the relay
       machine, at ${fmtTime(pr)} an instruction, can <strong>read as it runs</strong>: the next card is always there in time, and a loop is the
-      loop's cards going round again, as Harvard Mark I glued its program tape into loops. The tube machine cannot: one card takes as long as
+      loop's cards fed round again, as Harvard Mark I (1944), which read its program from punched paper tape, glued that tape into loops. The tube machine cannot: one card takes as long as
       ${num(CARD_S / pt)} of its instructions, so it would spend ${(100 * (1 - pt / CARD_S)).toFixed(2)} % of its time waiting. It <strong>loads,
       then runs</strong>, as the 701 did: the deck read once into a program store (here the site's ${num(storeWords)}-word RAM, ${num(storeTubes)} more
       tubes; ${num(storeRelays)} in relays, which the relay machine does not need). Once the instructions sit in a memory, the machine fetches them
