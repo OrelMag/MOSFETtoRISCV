@@ -845,6 +845,72 @@ const NET_DRIVE = `(async () => {
   return bad;
 })()`;
 
+/**
+ * The zoom lens (view/lens.ts, settings.zoomOpen on): wheel steps onto `part` open its inside over it once they settle (one
+ * .lens, the view in focus, the breadcrumb's peek crumb), placed clear of the canvas's edges, its docked panels and the stage
+ * bar; it follows a clock pulse; Esc closes it; zooming on hands off to the level (#/…/part); zooming out shows the cue. Long
+ * tasks after the gesture settles are measured (DESIGN.md: 50 ms on a quiet machine; the parallel tabs here get 250 ms).
+ */
+const lensDrive = (part: string) => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const svg = document.querySelector('.canvas > svg.schematic');
+  const canvas = svg?.closest('.canvas');
+  const box = () => document.querySelector('.canvas > svg.schematic [data-inst="${part}"]')?.getBoundingClientRect();
+  if (!svg || !box()) return ['no ${part} on the stage'];
+  const wheel = (dy, r = box()) => svg.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true }));
+  const lenses = () => document.querySelectorAll('.lens').length;
+  if (lenses()) bad.push('a lens before any zoom');
+  for (let k = 0; k < 40 && Math.min(box().width, box().height) < 110; k++) { wheel(-120); await wait(20); }
+  const long = [];
+  const po = new PerformanceObserver((l) => { for (const e of l.getEntries()) long.push(e.duration); });
+  try { po.observe({ type: 'longtask', buffered: false }); } catch {}
+  await wait(700);
+  po.disconnect();
+  if (lenses() !== 1) return [...bad, 'zoomed onto ${part}: ' + lenses() + ' lenses (expected 1)'];
+  const worst = Math.max(0, ...long);
+  if (worst > 250) bad.push('a long task of ' + Math.round(worst) + ' ms after the zoom settled');
+  if (!svg.classList.contains('focus')) bad.push('the level is not dimmed around the lens');
+  if (!document.querySelector('.crumbs button.peek')) bad.push('no peek crumb');
+  const L = document.querySelector('.lens').getBoundingClientRect(), c = canvas.getBoundingClientRect();
+  if (L.left < c.left || L.right > c.right || L.top < c.top || L.bottom > c.bottom) bad.push('the lens leaves the canvas');
+  const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  for (const p of canvas.querySelectorAll('[data-dock], .level-badge, .stage-notes > *')) {
+    const r = p.getBoundingClientRect();
+    if (r.width && r.height && hit(L, r)) bad.push('the lens covers ' + (p.className || p.tagName).toString().slice(0, 40));
+  }
+  if (!document.querySelector('.lens svg.schematic .lg-name, .lens svg.schematic .sym-label')) bad.push('nothing named inside the lens');
+  // a pulse: the inside follows (its wires repaint; no error is the check, the console is watched)
+  [...document.querySelectorAll('.stage button')].find((b) => /^pulse$/i.test(b.textContent.trim()))?.click();
+  await wait(400);
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  await wait(150);
+  if (lenses()) bad.push('Esc left the lens open');
+  if (location.hash.split('/').length !== 4) bad.push('Esc went up a level: ' + location.hash);
+  wheel(-60);
+  await wait(500);
+  if (lenses() !== 1) bad.push('a zoom after Esc did not open it again');
+  for (let k = 0; k < 60 && !location.hash.endsWith('/${part}'); k++) { const r = box(); if (!r) break; wheel(-120, r); await wait(40); }
+  await wait(400);
+  if (!location.hash.endsWith('/${part}')) bad.push('zooming on did not step into ${part}: ' + location.hash);
+  if (lenses()) bad.push('a lens left after the hand-off');
+  const s2 = document.querySelector('.canvas > svg.schematic');
+  for (let k = 0; k < 30 && !document.querySelector('.lens-cue'); k++) { const r = s2.getBoundingClientRect(); s2.dispatchEvent(new WheelEvent('wheel', { deltaY: 200, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); await wait(30); }
+  if (!document.querySelector('.lens-cue')) bad.push('no cue after zooming out of the level the lens handed off to');
+  return bad;
+})()`;
+
+/** A touch screen: the lens is not built for it yet (DESIGN.md item 6), so with the setting stored on, nothing opens. */
+const LENS_TOUCH_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const svg = document.querySelector('.canvas > svg.schematic');
+  const g = svg?.querySelector('[data-inst="alu"]');
+  if (!g) return ['no alu on the stage'];
+  for (let k = 0; k < 30; k++) { const r = g.getBoundingClientRect(); svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); await wait(20); }
+  await wait(600);
+  return document.querySelector('.lens') ? ['a lens opened on a touch screen'] : [];
+})()`;
+
 function routes(): Route[] {
   const out: Route[] = [];
   const add = (hash: string, storage: Record<string, string>, note = '', viewport?: Viewport, drive?: string) => out.push({ hash, storage, label: hash + note, viewport, drive });
@@ -999,6 +1065,13 @@ function routes(): Route[] {
   add('#/workbench/xor', light, ' (menu by key)', undefined, MENU_DRIVE);
   add('#/sandbox', light, ' (menu by key)', undefined, MENU_DRIVE);
   add('#/sandbox', light, ` (${TOUCH_VIEWPORTS[0].name}: hold, cancel, tap a pin)`, TOUCH_VIEWPORTS[0], TOUCH_DRIVE);
+  // the zoom lens with Open blocks as you zoom on: both themes, the light canvas (board off), the pipeline; a touch phone opens none
+  const lensOn = (theme: 'light' | 'dark', board = true) => ({ [SETTINGS_KEY]: JSON.stringify({ theme, board, autoClock: false, zoomOpen: true, coachDone: { stage: true, sandbox: true } }) });
+  add('#/c/cpu/0', lensOn('light'), ' (zoom lens)', undefined, lensDrive('alu'));
+  add('#/c/cpu/0', lensOn('dark'), ' (zoom lens, dark)', undefined, lensDrive('alu'));
+  add('#/c/cpu/0', lensOn('light', false), ' (zoom lens, light canvas)', undefined, lensDrive('alu'));
+  add('#/c/pipeline/1', lensOn('dark'), ' (zoom lens, pipeline, dark)', undefined, lensDrive('alu'));
+  add('#/c/cpu/0', lensOn('dark'), ` (zoom lens, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], LENS_TOUCH_DRIVE);
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
   // The layout lock: locked by default on a touch screen, unlocked with a mouse; an arrangement of an older drawing set aside.
   add('#/workbench/xor', light, ` (layout lock, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], layoutDrive('touch'));

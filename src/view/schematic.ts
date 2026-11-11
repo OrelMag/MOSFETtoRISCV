@@ -28,7 +28,7 @@ import type { ViewFocus } from '../ui/viewlink';
 import type { NetEnd } from './netfacts';
 import type { ElsewhereHost, ExplainHost, MeasureHost } from './tracemenu';
 import type { HueSite, MenuSite } from './circuitmenu';
-import type { ComponentDef } from '../sim/types';
+import type { ComponentDef, InstanceDef } from '../sim/types';
 import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showMenu } from '../ui/menu';
 import { installHold } from '../ui/holdpress';
 import { isConstantDef } from '../sim/constant';
@@ -208,6 +208,10 @@ export class SchematicView {
   private reshaping = false;
   /** Where each part is drawn now, and its box (grid units); how long the last routing took. */
   private atOf = new Map<string, Vec>();
+  /** Each drawn part (the learner's layout applied): the zoom lens reads its ports. */
+  private instOf = new Map<string, InstanceDef>();
+  /** The part an open zoom lens shows (view/lens.ts): it joins the lit set, the rest dims (one focus layer). */
+  private lensBox: string | null = null;
   private boxes = new Map<string, Rect>();
   /** The keyboard part cursor (Stage's arrows): the item under it and its ring, cleared when a level is shown. */
   private kcur: CursorItem | null = null;
@@ -325,6 +329,7 @@ export class SchematicView {
     this.cmos = [];
     this.cores = [];
     this.atOf.clear();
+    this.instOf.clear();
     this.boxes.clear();
     this.kcur = null;
     this.kring = null;
@@ -469,6 +474,7 @@ export class SchematicView {
         transform: `translate(${at[0]},${at[1]})`, 'data-inst': inst.name,
       });
       this.atOf.set(inst.name, at);
+      this.instOf.set(inst.name, inst);
       this.boxes.set(inst.name, { x: at[0], y: at[1], w: geo.w, h: geo.h });
       if (isConstantDef(inst.def) || inst.def.prim === 'alias') this.quiet.add(inst.name);
       g.append(s('rect', { class: 'hit', x: -0.4, y: -0.4, width: geo.w + 0.8, height: geo.h + 0.8, rx: 0.6 }));
@@ -857,6 +863,11 @@ export class SchematicView {
 
   highlight(names: string[], focus = false): void {
     this.lastHl = { names, focus };
+    // an open lens keeps its box lit and the rest dimmed; what was asked for is kept as asked (lastHl) for when it closes
+    if (this.lensBox) {
+      names = [...names, this.lensBox];
+      focus = true;
+    }
     const on = new Set(names);
     for (const [name, g] of this.insts) g.classList.toggle('hl', on.has(name));
     for (const [name, t] of this.nameOf) t.classList.toggle('hl', on.has(name));
@@ -879,6 +890,107 @@ export class SchematicView {
       for (const t of w.taps) t.classList.toggle('faded', !live);
       w.label?.classList.toggle('faded', !live);
     }
+  }
+
+  /** The zoom lens opened on a part (null: closed): one dim layer with whatever highlight stands (DESIGN.md item 5). */
+  setLensBox(name: string | null): void {
+    if (this.lensBox === name) return;
+    this.lensBox = name;
+    this.highlight(this.lastHl.names, this.lastHl.focus);
+  }
+
+  /** A drawn part's box, grid units. */
+  boxOf(name: string): Rect | undefined {
+    return this.boxes.get(name);
+  }
+
+  /** The drawn parts' boxes, grid units. */
+  partBoxes(): [string, Rect][] {
+    return [...this.boxes];
+  }
+
+  /** A grid point → client px (null before the view is laid out). */
+  toClient(p: Vec): [number, number] | null {
+    const m = this.el.getScreenCTM();
+    if (!m) return null;
+    const q = new DOMPoint(p[0], p[1]).matrixTransform(m);
+    return [q.x, q.y];
+  }
+
+  /** Client px → grid point. */
+  toGrid(x: number, y: number): Vec {
+    return this.cam.toWorld(x, y);
+  }
+
+  /** A drawn part's ports at their grid positions (its flip and turn applied), with their direction. */
+  portsOf(name: string): { name: string; dir: 'in' | 'out' | 'inout'; pos: Vec; exit: string }[] {
+    const inst = this.instOf.get(name);
+    if (!inst) return [];
+    const g = orientGeom(inst.def, inst.flip, inst.rot), at = inst.at ?? [0, 0];
+    return inst.def.ports.filter((p) => g.ports[p.name]).map((p) => ({ name: p.name, dir: p.dir, pos: [at[0] + g.ports[p.name].pos[0], at[1] + g.ports[p.name].pos[1]] as Vec, exit: g.ports[p.name].exit }));
+  }
+
+  /**
+   * Where the wire on a part's port, followed outward from the port, first leaves a client rectangle (the zoom lens over the
+   * part): the point (client px) and the edge it crosses. Null when no drawn wire leaves it (a pointer, a wire wholly under it).
+   */
+  wireExit(name: string, port: string, r: { left: number; top: number; right: number; bottom: number }): { x: number; y: number; edge: 'left' | 'right' | 'top' | 'bottom' } | null {
+    const p = this.portsOf(name).find((q) => q.name === port);
+    const m = this.el.getScreenCTM();
+    if (!p || !m) return null;
+    const scr = (v: Vec) => { const q = new DOMPoint(v[0], v[1]).matrixTransform(m); return [q.x, q.y] as const; };
+    const inside = (x: number, y: number) => x > r.left && x < r.right && y > r.top && y < r.bottom;
+    let best: { x: number; y: number; edge: 'left' | 'right' | 'top' | 'bottom'; d: number } | null = null;
+    for (const w of this.wires) for (const path of w.net.paths) {
+      if (path.length < 2) continue;
+      const near = (v: Vec) => Math.abs(v[0] - p.pos[0]) + Math.abs(v[1] - p.pos[1]) < 0.6;
+      const pts = near(path[path.length - 1]) ? [...path].reverse() : near(path[0]) ? path : null;
+      if (!pts) continue;
+      // walk from the port: the first segment that ends outside crosses the rim
+      let d = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const [ax, ay] = scr(pts[i - 1]), [bx, by] = scr(pts[i]);
+        if (inside(bx, by)) { d += Math.abs(bx - ax) + Math.abs(by - ay); continue; }
+        const hit = (t: number) => ({ x: ax + (bx - ax) * t, y: ay + (by - ay) * t });
+        const cands: { t: number; edge: 'left' | 'right' | 'top' | 'bottom' }[] = [];
+        if (bx !== ax) for (const [ex, edge] of [[r.left, 'left'], [r.right, 'right']] as const) { const t = (ex - ax) / (bx - ax); if (t >= 0 && t <= 1) cands.push({ t, edge }); }
+        if (by !== ay) for (const [ey, edge] of [[r.top, 'top'], [r.bottom, 'bottom']] as const) { const t = (ey - ay) / (by - ay); if (t >= 0 && t <= 1) cands.push({ t, edge }); }
+        const c = cands.filter((k) => { const h = hit(k.t); return h.x >= r.left - 0.5 && h.x <= r.right + 0.5 && h.y >= r.top - 0.5 && h.y <= r.bottom + 0.5; }).sort((a, b) => a.t - b.t)[0];
+        if (c) { const h = hit(c.t); if (!best || d < best.d) best = { ...h, edge: c.edge, d }; }
+        break;
+      }
+    }
+    return best && { x: best.x, y: best.y, edge: best.edge };
+  }
+
+  /** The level's own pins (grid) and the first drawn path of the wire on each, for a rim jog to copy its live value. */
+  levelPins(): { pin: PinGeom; path: SVGPathElement | undefined }[] {
+    return this.pins.map((p) => ({ pin: p.pin, path: p.wire?.paths[0] }));
+  }
+
+  /** Pan by a drag of (dx, dy) screen px, as a drag on the board does (the zoom lens hands its drags here). */
+  panBy(dx: number, dy: number): void {
+    const k = this.cam.scale();
+    this.cam.vb.x -= dx * k;
+    this.cam.vb.y -= dy * k;
+    this.cam.fitted = false;
+    this.cam.apply();
+  }
+
+  /** A wheel step at a client point, as the board's own wheel (the zoom lens hands its wheel here). */
+  wheelAt(deltaY: number, clientX: number, clientY: number): void {
+    const [wx, wy] = this.cam.toWorld(clientX, clientY);
+    this.cam.zoom(Math.exp(deltaY * 0.0015), wx, wy);
+  }
+
+  /** Show exactly this box (grid units): the zoom lens sets its own scale. */
+  setView(vb: ViewBox, host?: { w: number; h: number }): void {
+    this.cam.setView(vb, host);
+  }
+
+  /** The level on screen. */
+  get context(): ViewCtx | null {
+    return this.ctx;
   }
 
   /** Tint instances by slack (sim/slack.ts slackHeat; null clears): the Slack overlay. */

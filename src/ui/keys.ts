@@ -84,7 +84,7 @@ export const KEYS: readonly KeyDef[] = [
   { id: 'stage.why', group: 'stage', caps: ['W'], does: 'Why? mode: click a wire to trace its value to its causes', match: [letter('w')] },
   { id: 'stage.overlay', group: 'stage', caps: ['O', '·', 'Shift O'], does: 'next overlay (slack, activity, load, unknown, cost, energy, depth) · overlay off', match: [letter('o')] },
   { id: 'stage.menu', group: 'stage', caps: ['Menu', '·', 'Shift F10'], does: 'the menu of the selected wire or part, else of this level, with a list to pick any of them' },
-  { id: 'stage.up', group: 'stage', caps: ['Esc', '·', 'Backspace'], does: 'leave probe or Why? mode, else up one level' },
+  { id: 'stage.up', group: 'stage', caps: ['Esc', '·', 'Backspace'], does: 'leave probe or Why? mode, close the open block, else up one level' },
   { id: 'stage.undo', group: 'stage', caps: [`${MOD} Z`, '·', `${MOD} Y`], does: 'undo · redo moving parts' },
   // ---- a 3D model's canvas (gl/orbit.ts handles them; listed only)
   { id: 'model.orbit', group: 'model', caps: ['←', '→', '↑', '↓'], does: 'turn the model (or drag it)' },

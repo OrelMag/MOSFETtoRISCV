@@ -26,6 +26,7 @@ import { LogicAnalyzer, netKey } from './analyzer';
 import { h, hintBadge, icon } from '../ui/dom';
 import { menuKeys } from '../ui/menukeys';
 import { applyTheme, settings } from '../ui/settings';
+import type { Lens } from './lens';
 import { copyText, emptyView, encodeView, isEmptyView, linkTo, setViewTarget, splitView, takePendingView, type ViewFocus, type ViewState } from '../ui/viewlink';
 import { switchSim, ViewCtx } from './context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from './crumbvals';
@@ -260,6 +261,11 @@ export class Stage {
   private life = new AbortController();
   /** The overlay bar (view/overlays.ts): the kind on, its legend over the canvas, the delay model Slack uses, Activity's window. */
   private ovBar: OverlayBar;
+  /** The zoom lens (view/lens.ts), loaded only while settings.zoomOpen is on. */
+  private lens: Lens | null = null;
+  private lensLoading = false;
+  /** The cue under the breadcrumb after the lens handed off to a drill. */
+  private cueEl: HTMLElement | null = null;
   private ovKind: OverlayKind | null = null;
   private ovLegend: HTMLElement | null = null;
   private ovModel: DelayModel | null = null;
@@ -346,10 +352,10 @@ export class Stage {
         if (on && this.probeMode) this.setProbeMode(false);
         // the card covers the canvas's top-left corner: a fitted circuit moves clear of it, and back when it closes
         if (on) this.placeWhy();
-        else this.view.setCover(this.covers(), true);
+        else this.coverChanged(this.covers(), true);
       },
     });
-    new ResizeObserver(() => this.why.on && (this.placeWhy(), this.view.setCover(this.covers()))).observe(this.why.el);
+    new ResizeObserver(() => this.why.on && (this.placeWhy(), this.coverChanged(this.covers()))).observe(this.why.el);
     this.whyBtn = h('button', { class: 'btn ghost sm toggle why-btn keep', title: 'Why? (W): click any wire to trace its value back to the inputs that decide it, or see what each part is for', onclick: () => this.why.setOn(!this.why.on) },
       icon('why', 15), h('span', { class: 'lbl' }, 'Why?')) as HTMLButtonElement;
     this.timingBtn = h('button', { class: 'btn ghost sm toggle', title: 'Timing diagram: probed nets and ports over time', onclick: () => this.showAnalyzer(!this.el.classList.contains('with-analyzer')) },
@@ -518,6 +524,7 @@ export class Stage {
       layoutChanged: () => this.syncLayoutPill(),
     });
     this.view.onCamera(() => this.syncReadable());
+    this.syncLens();
     this.view.arrange = true;
     this.view.pickable = true;
     this.view.trace = true;
@@ -568,6 +575,8 @@ export class Stage {
         this.setProbeMode(false);
         return;
       }
+      // an open lens closes before the level goes up (DESIGN.md item 8)
+      if (e.key === 'Escape' && this.lens?.close()) return;
       // Alt+Backspace is the top bar's way back (ui/returnto.ts)
       if (e.key === 'Escape' || (e.key === 'Backspace' && !e.altKey)) {
         e.preventDefault();
@@ -576,6 +585,7 @@ export class Stage {
     });
     settings.onChange(() => {
       this.syncPanesBtn();
+      this.syncLens();
       this.analyzer.radix = settings.radix;
       this.view.radix = settings.radix;
       this.inspector.radix = settings.radix;
@@ -986,8 +996,9 @@ export class Stage {
 
   /** Navigate to a path of instance names from the root. */
   goTo(path: string[], notify = true, gates = false): void {
-    // another level: a path lit on this one is gone with it
+    // another level: a path lit on this one is gone with it, and so is an open lens
     this.pathLit = false;
+    this.lens?.levelChanged(path);
     if (!this.rootCtx) return;
     this.closeLeaf();
     let ctx = this.rootCtx;
@@ -1033,7 +1044,7 @@ export class Stage {
         this.inset = this.rightInset();
       }
       this.drillLayout();
-      this.view.setCover(this.covers(), true);
+      this.coverChanged(this.covers(), true);
     }
     // Another level, another shape: the how-to line may fit beside it now, or no longer.
     if (this.placeHint()) {
@@ -1128,6 +1139,75 @@ export class Stage {
     if (this.ctx?.parent) this.goTo(this.ctx.parent.path);
   }
 
+  // ---- the zoom lens (view/lens.ts, docs/transparent/DESIGN.md) ----------------------------
+
+  /** Load the lens while Open blocks as you zoom is on; off, it is torn down and nothing of it runs. */
+  private syncLens(): void {
+    if (!settings.zoomOpen) {
+      this.lens?.dispose();
+      this.lens = null;
+      this.showCue(null);
+      return;
+    }
+    if (this.lens || this.lensLoading) return;
+    this.lensLoading = true;
+    void import('./lens').then(({ Lens }) => {
+      this.lensLoading = false;
+      if (!settings.zoomOpen || this.lens) return;
+      this.lens = new Lens({
+        view: this.view,
+        canvas: this.canvas,
+        ctx: () => this.ctx,
+        // the stage's covers and the LEVEL tag and layout pill (DESIGN.md item 1: the lens never sits under them)
+        covers: () => {
+          const c = this.canvas.getBoundingClientRect();
+          const tags = [this.levelBadge, this.layoutPill].map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0)
+            .map((r) => ({ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height }));
+          return [...this.covers(), ...tags];
+        },
+        allowed: () => settings.zoomOpen && !this.boardOn && !this.leaf && this.scene?.engine !== 'nmos',
+        // the out-of-order core's levels are too large for one task yet (DESIGN.md phase 2f)
+        tooLarge: () => !!this.rootCtx?.def.id.startsWith('ooo_'),
+        drill: (path, vb) => {
+          this.goTo(path);
+          if (vb) this.view.setView(vb);
+        },
+        peek: () => this.renderCrumbs(),
+        overlay: (ctx) => (this.ovKind && !this.boardOn && !this.leaf && !this.ovRefusals()[this.ovKind] && !this.lensOverlayGap(ctx) ? this.overlayFor(ctx) : null),
+        overlayGap: (ctx) => this.lensOverlayGap(ctx),
+        selected: () => this.showInspector(),
+        cue: (p) => this.showCue(p),
+        say: (t) => this.say(t),
+      });
+    });
+  }
+
+  /** The panels' covers changed: the view refits if it must, an open lens is placed again. */
+  private coverChanged(cover: Rect[], refit = false): void {
+    this.view.setCover(cover, refit);
+    this.lens?.coversChanged();
+  }
+
+  /** `+`: zoom toward the keyboard cursor's part (the view's centre without one); a zoom gesture for the lens too. */
+  private zoomToCursor(): void {
+    const v = this.view, it = v.cursor;
+    const r = it?.kind === 'inst' ? v.instRect([it.name]) : null;
+    if (!r) return v.zoom(0.8);
+    const [x, y] = [r.left + r.width / 2, r.top + r.height / 2];
+    v.wheelAt(Math.log(0.8) / 0.0015, x, y);
+    this.lens?.zoomed(x, y);
+  }
+
+  /** After a hand-off: "Esc or cpu goes back up" under the breadcrumb (null removes it). */
+  private showCue(parent: { label: string; path: string[] } | null): void {
+    this.cueEl?.remove();
+    this.cueEl = null;
+    if (!parent) return;
+    this.cueEl = h('div', { class: 'lens-cue', role: 'status' }, 'Esc or ',
+      h('button', { class: 'linkish', onclick: () => this.goTo(parent.path) }, parent.label), ' goes back up');
+    this.canvas.append(this.cueEl);
+  }
+
   // ---- the breadboard view ----------------------------------------------------------------
 
   /** Schematic | Breadboard, by the learner: remembered for the next scene that has boards. */
@@ -1154,7 +1234,7 @@ export class Stage {
     this.boardOn = on;
     this.el.classList.toggle('bb-mode', on);
     this.syncReadable();
-    if (this.syncDrill()) this.view.setCover(this.covers(), true);
+    if (this.syncDrill()) this.coverChanged(this.covers(), true);
     const [sch, bb] = [...this.viewSeg.querySelectorAll('button')];
     sch.classList.toggle('on', !on);
     sch.setAttribute('aria-pressed', String(!on));
@@ -1529,7 +1609,7 @@ export class Stage {
     if (matches(e, 'cursor.pulse')) { if (this.runBtn) { this.pulse(); again(); } else this.say('No clock on this circuit'); return true; }
     if (matches(e, 'cursor.step')) { if (this.sim?.kind === 'gate' || this.relayTime) { this.stepOnce(); again(); } return true; }
     if (matches(e, 'cursor.back')) { if (this.back()) again(); else this.say('Nothing to go back to'); return true; }
-    if (matches(e, 'cursor.zoomin')) { v.zoom(0.8); return true; }
+    if (matches(e, 'cursor.zoomin')) { this.zoomToCursor(); return true; }
     if (matches(e, 'cursor.zoomout')) { v.zoom(1.25); return true; }
     if (matches(e, 'cursor.fit')) { v.fit(); return true; }
     return false;
@@ -2263,6 +2343,7 @@ export class Stage {
       this.board.update(this.sim);
     } else {
       this.view.update();
+      this.lens?.update();
       // the drilled board beside the schematic stays live
       if (this.drill) {
         this.board.sim = this.sim;
@@ -2307,6 +2388,19 @@ export class Stage {
         portBits: (p) => sim.getBits(node.ports[p]),
         canOpen: true, onOpen: () => this.openFromBoard(path),
         power: () => this.livePower(this.rootCtx!, node),
+      });
+      return;
+    }
+    // a part selected inside the lens: shown with its path from this level (alu.add)
+    const inner = this.lens?.selection();
+    const ic = inner && inner.ctx.node.children?.get(inner.name);
+    if (inner && ic) {
+      const lc = inner.ctx;
+      this.inspector.show({
+        def: ic.def, instance: [...lc.path.slice(ctx.path.length), inner.name].join('.'),
+        portBits: (p) => lc.sim.getBits(ic.ports[p]),
+        canOpen: lc.canOpen(inner.name), onOpen: () => this.goTo([...lc.path, inner.name]),
+        power: () => this.livePower(lc, ic),
       });
       return;
     }
@@ -2369,7 +2463,7 @@ export class Stage {
     const c = this.crumbs;
     c.replaceChildren();
     if (!this.rootCtx) return;
-    const chain: { label: string; kind: string; path: string[] }[] = [];
+    const chain: { label: string; kind: string; path: string[]; peek?: boolean }[] = [];
     const levels: ViewCtx[] = [];
     let ctx: ViewCtx | null = this.ctx;
     while (ctx) {
@@ -2382,6 +2476,11 @@ export class Stage {
       const def = this.ctx!.node.children!.get(this.leaf.name)!.def;
       chain.push({ label: this.leaf.name, kind: def.name, path: this.path });
     }
+    const peek = this.leaf ? null : this.lens?.peekCtx ?? null;
+    if (peek) {
+      levels.push(peek);
+      chain.push({ label: peek.path[peek.path.length - 1], kind: '', path: peek.path, peek: true });
+    }
     const vals = crumbValues(levels);
     this.crumbVals = [];
     chain.forEach((item, i) => {
@@ -2390,7 +2489,9 @@ export class Stage {
       const v = vals[i];
       const el = v ? h('span', { class: 'val' }) : null;
       if (el && v) this.crumbVals.push({ el, v });
-      c.append(h('button', { class: last ? 'cur' : '', onclick: () => (last ? null : this.goTo(item.path)) },
+      // the lens's level (DESIGN.md item 4): "alu (peek)" in italics, a click steps in
+      if (item.peek) c.append(h('button', { class: 'peek', title: 'Step in', onclick: () => this.goTo(item.path) }, h('i', null, `${item.label} (peek)`), el));
+      else c.append(h('button', { class: last || chain[i + 1]?.peek ? 'cur' : '', onclick: () => (last || chain[i + 1]?.peek ? null : this.goTo(item.path)) },
         item.label, item.kind ? h('span', { class: 'kind' }, item.kind) : null, el));
       // The name may be cut with an ellipsis (app.css): the tooltip keeps it whole.
       const title = item.kind ? `${item.label} (${item.kind})` : item.label;
@@ -2636,14 +2737,12 @@ export class Stage {
     return { units: clocked ? this.cycles - this.ovWin.cycles : this.ovWin.changes, clocked };
   }
 
-  /** Compute the overlay for the level on screen and draw it with its legend (static ones are cached per level). */
-  private paintOverlay(): void {
-    if (this.ovTimer) { clearTimeout(this.ovTimer); this.ovTimer = 0; }
-    this.ovLast = performance.now();
-    const ctx = this.ctx, sim = this.sim, kind = this.ovKind;
-    this.ovBar.set(kind, this.ovRefusals());
+  /** The overlay on for a level (static ones cached per level): the stage's own and an open lens's. */
+  private overlayFor(ctx: ViewCtx): OverlayResult | null {
+    const kind = this.ovKind;
+    if (!kind) return null;
     let r: OverlayResult | null = null;
-    if (kind && ctx && sim && !this.boardOn && !this.leaf && !this.ovRefusals()[kind]) {
+    {
       const design = ctx.sim.design, key = `${kind}|${this.ovModel ?? (settings.loadDelay ? 'load' : 'unit')}|${ctx.path.join('.')}`;
       if (kind === 'slack' || kind === 'load' || kind === 'cost' || kind === 'depth') {
         const hit = this.ovCache.get(key);
@@ -2661,10 +2760,31 @@ export class Stage {
           : activityOverlay(ctx.node, this.ovWin.sim.toggles!, this.ovWin.base, w.units, w.clocked);
       }
     }
+    return r;
+  }
+
+  /** Why the overlay is not drawn inside a lens's level (a sub-simulation: its values are another Sim's), or null. */
+  private lensOverlayGap(ctx: ViewCtx): string | null {
+    return this.ovKind && ctx.sim !== this.sim ? `${OVERLAY_LABEL[this.ovKind]} not drawn inside` : null;
+  }
+
+  /** Compute the overlay for the level on screen and draw it with its legend (static ones are cached per level). */
+  private paintOverlay(): void {
+    if (this.ovTimer) { clearTimeout(this.ovTimer); this.ovTimer = 0; }
+    this.ovLast = performance.now();
+    const ctx = this.ctx, sim = this.sim, kind = this.ovKind;
+    this.ovBar.set(kind, this.ovRefusals());
+    const r = kind && ctx && sim && !this.boardOn && !this.leaf && !this.ovRefusals()[kind] ? this.overlayFor(ctx) : null;
     this.view.overlay(r);
     const old = this.ovLegend;
     this.ovLegend = r ? overlayLegend(r, () => this.setOverlay(null)) : null;
-    if (old && this.ovLegend) old.replaceWith(this.ovLegend);
+    // an open lens paints its level's own (DESIGN.md item 5): the legend says whose shares it shows
+    if (this.ovLegend && this.lens?.peekCtx && !this.lensOverlayGap(this.lens.peekCtx)) {
+      const lc = this.lens.peekCtx;
+      this.ovLegend.append(h('p', { class: 'ov-inside' }, `Inside ${lc.path[lc.path.length - 1]}: its parts’ own shares`));
+    }
+    this.lens?.paintOverlay();
+        if (old && this.ovLegend) old.replaceWith(this.ovLegend);
     else if (old) old.remove();
     else if (this.ovLegend) this.canvas.append(this.ovLegend);
     this.placeLegend();
@@ -2676,7 +2796,7 @@ export class Stage {
       for (const el of [...this.panels.map((p) => p.el), this.why.el, ...this.canvas.querySelectorAll<HTMLElement>(':scope > .stage-notes > *')]) this.ovRO.observe(el);
     }
     // the legend came or went: a fitted circuit moves clear of it
-    if (!!old !== !!this.ovLegend) this.view.setCover(this.covers(), true);
+    if (!!old !== !!this.ovLegend) this.coverChanged(this.covers(), true);
   }
 
   /** Draw instances of the current view as removed (a tour's "before"); [] restores them. */
@@ -2961,7 +3081,7 @@ export class Stage {
     this.drillLayout();
     this.dockOut();
     this.placeHint();
-    this.view.setCover(this.covers(), refit);
+    this.coverChanged(this.covers(), refit);
   }
 
   /** A challenge note drawn at the canvas's top left (app.css .stage-notes with a right-docked panel) must not sit on a
@@ -3145,7 +3265,7 @@ export class Stage {
   layoutDock(refit = true): void {
     this.dockOut();
     this.placeHint();
-    if (refit) this.view.setCover(this.covers());
+    if (refit) this.coverChanged(this.covers());
     else this.view.cover = this.covers();
   }
 
