@@ -11,6 +11,7 @@ import { literals as lits, minimumCover, primes, type Term } from '../lib/sop';
 import { assemble16 } from '../riscv/rv16/asm16';
 import { decode16, disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { testset } from './drilltest';
+import { F32, flagNames, fpAddX, fpCmpX, fpDivX, fpMinMaxX, fpMulX, fpSqrtX, fpValue, parts, type FpResult } from '../sim/fpref';
 
 /** A seeded generator (mulberry32): the same seed gives the same questions. */
 export function rng(seed: number): () => number {
@@ -496,9 +497,107 @@ function roundQuestion(r: () => number): Question {
   };
 }
 
+// ---- floating point, beyond encoding: modes, spacing, special values, subnormal arithmetic ----------
+
+const MODE_NAMES = ['RNE', 'RTZ', 'RDN', 'RUP', 'RMM'] as const;
+const MODE_WORDS = ['to nearest, ties to even', 'towards zero', 'towards −∞', 'towards +∞', 'to nearest, ties away from zero (max magnitude)'];
+
+/** x rounded to an integer in RISC-V mode rm (0 RNE, 1 RTZ, 2 RDN, 3 RUP, 4 RMM), x a multiple of ¼. */
+export function roundMode(x: number, rm: number): number {
+  const lo = Math.floor(x), hi = Math.ceil(x), f = x - lo;
+  const nearest = f < 0.5 ? lo : f > 0.5 ? hi : rm === 0 ? (lo % 2 === 0 ? lo : hi) : (x < 0 ? lo : hi);
+  const r = rm === 0 || rm === 4 ? nearest : rm === 1 ? Math.trunc(x) : rm === 2 ? lo : hi;
+  return r === 0 ? 0 : r;   // no −0
+}
+
+/** Round a tie (or a quarter) to an integer under one of the five rounding modes. */
+function modeQuestion(r: () => number): Question {
+  const rm = int(r, 0, 4), k = int(r, -9, 9), tie = r() < 0.7;
+  const x = tie ? k + 0.5 : k + [0.25, 0.75][int(r, 0, 1)];
+  const want = roundMode(x, rm);
+  const f = x - Math.floor(x);
+  return {
+    prompt: `RISC-V rounding mode <b>${MODE_NAMES[rm]}</b> (${MODE_WORDS[rm]}): convert <b>${x < 0 ? '−' : ''}${Math.abs(x)}</b> to an integer (fcvt.w.s).`,
+    placeholder: '3', check: numAnswer(want, 10), answer: String(want),
+    explain: `${x} lies between ${Math.floor(x)} and ${Math.ceil(x)}${f === 0.5 ? ', exactly halfway (G = 1, S = 0): a tie' : f < 0.5 ? ', nearer the lower one' : ', nearer the upper one'}. ${MODE_NAMES[rm]}: ${
+      rm === 0 ? (f === 0.5 ? 'a tie goes to the even neighbour' : 'the nearer one') : rm === 1 ? 'drop the fraction, towards zero' : rm === 2 ? 'the lower one, whatever the sign' : rm === 3 ? 'the upper one, whatever the sign' : (f === 0.5 ? 'a tie goes away from zero' : 'the nearer one')} → ${want}.`,
+  };
+}
+
+/** The gap between adjacent floats near x: 2^(e − M). */
+function ulpQuestion(r: () => number): Question {
+  const h = r() < 0.5, M = h ? 10 : 23, name = h ? 'binary16' : 'float32';
+  const e0 = h ? int(r, -8, 14) : int(r, -10, 30);
+  const x = +((1 + r() * 0.99) * 2 ** e0).toPrecision(3);
+  const e = Math.floor(Math.log2(x)), k = e - M;
+  return {
+    prompt: `The gap between adjacent ${name} values near <b>${x}</b> is 2<sup>k</sup>. What is k?`, placeholder: '−13', check: numAnswer(k, 10), answer: String(k),
+    explain: `${x} lies in [2^${e}, 2^${e + 1}), where ${name} has ${M} fraction bits: the gap is 2^${e} / 2^${M} = 2^${k}.`,
+  };
+}
+
+/** Special results on RISC-V (float32): what is asked, the operation's result, and whether the answer is a yes / no. */
+export const FLOAT_SPECIALS: [string, () => FpResult, boolean][] = (() => {
+  const one = 0x3f800000, pz = 0, nz = 0x80000000, inf = 0x7f800000, qnan = 0x7fc00000;
+  return [
+    ['∞ − ∞', () => fpAddX(inf, inf, true, F32), false], ['0 × ∞', () => fpMulX(pz, inf, F32), false], ['0 / 0', () => fpDivX(pz, pz, F32), false],
+    ['1 / −0', () => fpDivX(one, nz, F32), false], ['1 / +0', () => fpDivX(one, pz, F32), false], ['1 / ∞', () => fpDivX(one, inf, F32), false],
+    ['−1 / ∞', () => fpDivX(one | 0x80000000, inf, F32), false], ['∞ + 1', () => fpAddX(inf, one, false, F32), false], ['√(−0)', () => fpSqrtX(nz, F32), false],
+    ['√(−1)', () => fpSqrtX(one | 0x80000000, F32), false], ['fmin(NaN, 1)', () => fpMinMaxX(qnan, one, false, F32), false],
+    ['fmax(1, NaN)', () => fpMinMaxX(one, qnan, true, F32), false], ['fmin(−0, +0)', () => fpMinMaxX(nz, pz, false, F32), false],
+    ['fmax(−0, +0)', () => fpMinMaxX(nz, pz, true, F32), false], ['NaN == NaN (feq.s)', () => fpCmpX(qnan, qnan, 'eq', F32), true],
+    ['NaN &lt; 1 (flt.s)', () => fpCmpX(qnan, one, 'lt', F32), true], ['+0 == −0 (feq.s)', () => fpCmpX(pz, nz, 'eq', F32), true],
+  ];
+})();
+
+/** A special result as the word a learner types: NaN, ∞, −∞, +0, −0, a number, true / false. */
+export function specialAnswer(res: FpResult, yesNo: boolean): string {
+  if (yesNo) return res.y ? 'true' : 'false';
+  const p = parts(res.y, F32);
+  return p.kind === 'nan' ? 'NaN' : p.kind === 'inf' ? (p.sign ? '−∞' : '∞') : p.kind === 'zero' ? (p.sign ? '−0' : '+0') : String(fpValue(res.y, F32));
+}
+const canonSpecial = (t: string) => {
+  const s = t.trim().toLowerCase().replace(/\s/g, '').replace(/[−–]/g, '-').replace(/infinity|inf/g, '∞').replace(/^\+∞$/, '∞');
+  return s === '0' || s === '+0' ? '+0' : s === 'yes' ? 'true' : s === 'no' ? 'false' : s;
+};
+
+function specialQuestion(r: () => number): Question {
+  const [what, run, yn] = FLOAT_SPECIALS[int(r, 0, FLOAT_SPECIALS.length - 1)];
+  const res = run(), want = specialAnswer(res, yn);
+  const fl = flagNames(res.fl);
+  return {
+    prompt: `On RISC-V (float32), what is <b>${what}</b>? ${yn ? 'Answer true or false.' : 'Answer NaN, ∞, −∞, +0, −0 or a number.'}`,
+    placeholder: yn ? 'true' : 'NaN',
+    check: (t) => { const ok = canonSpecial(t) === canonSpecial(want); return { ok, why: ok ? undefined : 'not that result' }; },
+    answer: want, explain: `${what.replace('&lt;', '<')} = ${want}${fl !== '–' ? `, raising ${fl}` : ''}${want === 'NaN' ? '; every NaN an operation produces is the canonical 0x7FC00000' : ''}.`,
+  };
+}
+
+/** Arithmetic on binary16 subnormals: sums of patterns (the spacing is uniform, so the patterns add), and a halving that is a tie. */
+function subnormalQuestion(r: () => number): Question {
+  if (r() < 0.5) {
+    const a = int(r, 1, 1023), b = int(r, 1, 1023), s = a + b;
+    return {
+      prompt: `binary16: <code>0x${hex(a, 16)}</code> + <code>0x${hex(b, 16)}</code> (both subnormal). Give the sum's pattern (hex).`, placeholder: '0x....', check: numAnswer(s, 16), answer: `0x${hex(s, 16)}`,
+      explain: `Below 2^−14 the spacing is the constant 2^−24, and so is the spacing of the first normal binade: the patterns add as integers, exactly (no rounding). ${a} + ${b} = ${s}${s >= 1024 ? ': 1024 is 0x0400, the smallest normal, so the sum carried from the fraction into the exponent field' : ''}.`,
+    };
+  }
+  const k = int(r, 1, 1023), half = k / 2, w = Number.isInteger(half) ? half : (Math.floor(half) % 2 === 0 ? Math.floor(half) : Math.ceil(half));
+  return {
+    prompt: `binary16, round to nearest even: <code>0x${hex(k, 16)}</code> × 0.5 (a subnormal). Give the result's pattern (hex).`, placeholder: '0x....', check: numAnswer(w, 16), answer: `0x${hex(w, 16)}`,
+    explain: `Halving shifts the fraction right by one place: ${k} / 2 = ${half}${Number.isInteger(half) ? ', exact' : `, a tie between ${Math.floor(half)} and ${Math.ceil(half)}: the even one is ${w}${w === 0 ? ' (so the smallest subnormal times 0.5 underflows to zero)' : ''}`}.`,
+  };
+}
+
+/** The exercises beyond encoding (the last quarter of the drill's stream). */
+function floatExtra(r: () => number): Question {
+  const k = int(r, 0, 3);
+  return k === 0 ? modeQuestion(r) : k === 1 ? ulpQuestion(r) : k === 2 ? specialQuestion(r) : subnormalQuestion(r);
+}
+
 const float: Drill = {
   id: 'float', title: 'binary16', goal: 6,
-  how: 'binary16: 1 sign bit, 5 exponent bits (bias 15), 10 fraction bits with a hidden leading 1. Exponent field 0: zero or a subnormal (no hidden bit); all 1s: infinity (fraction 0) or NaN. Give values in decimal (fractions like 0.375 are fine), patterns in hex, kinds in words.',
+  how: 'binary16: 1 sign bit, 5 exponent bits (bias 15), 10 fraction bits with a hidden leading 1. Exponent field 0: zero or a subnormal (no hidden bit); all 1s: infinity (fraction 0) or NaN. Give values in decimal (fractions like 0.375 are fine), patterns in hex, kinds in words. Later questions ask for a rounding mode applied to a tie, the exponent k of the gap 2^k between floats near a value, a special result (NaN, ∞, −0, true or false) as RISC-V gives it, and sums or halvings of subnormal patterns.',
   make(r) {
     const q = r();
     if (q < 0.2) {
@@ -516,6 +615,7 @@ const float: Drill = {
       };
     }
     if (q < 0.45) return roundQuestion(r);
+    if (q >= 0.75) return floatExtra(r);
     const e = int(r, -4, 6), m = int(r, 0, 7) * 128, s = r() < 0.3 ? -1 : 1;
     const v = s * (1 + m / 1024) * 2 ** e;
     const w = f16bits(v);
