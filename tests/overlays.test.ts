@@ -108,7 +108,7 @@ describe('overlays', () => {
   }, 60000);
 
   it('Depth: each part\'s latest output arrival, the timing graph\'s; the last full adder ends the longest path', () => {
-    const def = rca(4), d = flatten(def), o = depthOverlay(d, d.root, 'unit')!;
+    const def = rca(4), d = flatten(def), o = depthOverlay(d, d.root, 'unit');
     const g = timingGraph(d, { delay: 'unit', outputs: true }), s = slackOf(d)!;
     for (const [name, ch] of d.root.children!) {
       const outs = ch.def.ports.filter((p) => p.dir === 'out').flatMap((p) => ch.ports[p.name]);
@@ -119,7 +119,7 @@ describe('overlays', () => {
     expect(o.inst.get('fa3')!.band).toBe(0);
     expect(o.inst.get('fa0')!.band).toBeGreaterThan(0);
     // a counter is clocked: arrivals count from the edge
-    const cd = flatten(counter(4)), co = depthOverlay(cd, cd.root, 'unit')!;
+    const cd = flatten(counter(4)), co = depthOverlay(cd, cd.root, 'unit');
     expect([...co.inst.values()].every((m) => m.tip.includes('after the clock edge'))).toBe(true);
   });
 

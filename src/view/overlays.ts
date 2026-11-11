@@ -311,10 +311,10 @@ export function depthBand(f: number): number {
 
 const graphCache = { unit: new WeakMap<FlatDesign, TimingGraph>(), load: new WeakMap<FlatDesign, TimingGraph>(), drawn: new WeakMap<FlatDesign, TimingGraph>() };
 
-/** The latest arrival at any output of each part on the level, from the graph Slack times; null when nothing is timed. */
-export function depthOverlay(design: FlatDesign, node: HierNode, model: DelayModel): OverlayResult | null {
+/** The latest arrival at any output of each part on the level, from the graph Slack times (nothing timed: an empty legend that says so). */
+export function depthOverlay(design: FlatDesign, node: HierNode, model: DelayModel): OverlayResult {
   const s = slackOf(design, model);
-  if (!s) return null;
+  if (!s) return { kind: 'depth', inst: new Map(), net: new Map(), legend: { title: 'Depth', unit: 'latest output', rows: [], note: 'Nothing here is timed: no path runs from an input or a register to an output or a register.' } };
   let g = graphCache[model].get(design);
   if (!g) graphCache[model].set(design, (g = timingGraph(design, { delay: model, outputs: !s.clocked })));
   const inst = new Map<string, OvMark>();
