@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Camera, chooseFolds, COVER_GAP, fitMinW, NARROW_MIN_W, FOLD_BESIDE_PX, KEEP_SCALE, fitBox, freeArea, freeRect, MIN_FIT_H, MIN_FIT_PX, type Rect, roomBeside, startFolded, TOUCH_PX, touchZoom, underCover, type ViewBox } from '../src/view/camera';
+import { Camera, chooseFolds, COVER_GAP, fitMinW, NARROW_MIN_W, FOLD_BESIDE_PX, KEEP_SCALE, KEEP_SCALE_OPENED, fitBox, freeArea, freeRect, MIN_FIT_H, MIN_FIT_PX, type Rect, roomBeside, startFolded, TOUCH_PX, touchZoom, underCover, type ViewBox } from '../src/view/camera';
 
 /** A host of a settable size and an svg that only records its view box: enough for Camera. */
 function rig(w: number, h: number) {
@@ -96,6 +96,10 @@ describe('fitting beside an overlay panel', () => {
     // Chapter 19 at 1920 px: both stay open; at 1440 px one folds, the one leaving the larger circuit (the CPU panel).
     expect(chooseFolds(2, (m) => [2.97, 2.97, 3.14, 3.43][m])).toBe(0);
     expect(chooseFolds(2, (m) => [1.44, 1.72, 1.69, 2.46][m])).toBe(1);
+    // A level opened below the top (KEEP_SCALE_OPENED): chapter ooo's reorder buffer at 1440 px, measured with both panels
+    // open 1.19 px per unit against 1.84 with the CPU panel folded (65 %): the top-level rule keeps both, the opened one folds it.
+    expect(chooseFolds(2, (m) => [1.19, 1.84, 1.19, 1.84][m])).toBe(0);
+    expect(chooseFolds(2, (m) => [1.19, 1.84, 1.19, 1.84][m], [], KEEP_SCALE_OPENED)).toBe(1);
     // A choice not allowed (the CPU panel open beside a narrow circuit) is never taken.
     expect(chooseFolds(2, (m) => [null, 1.09, null, 1.62][m])).toBe(1);
     expect(chooseFolds(2, (m) => [null, 0.9, null, 1.62][m])).toBe(3);

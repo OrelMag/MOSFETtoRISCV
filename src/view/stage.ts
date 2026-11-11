@@ -33,7 +33,7 @@ import { Inspector, inspectorChoice } from './inspector';
 import { LABEL_UNITS, MIN_TEXT_PX } from './legible';
 import type { LivePower } from './powerpanel';
 import { closePopover, editNumber, syncPopover } from './popover';
-import { chooseFolds, COVER_GAP, fitBox, fitMinW, freeArea, KEEP_SCALE, roomBeside, showReadable, startFolded, type Rect } from './camera';
+import { chooseFolds, KEEP_SCALE_OPENED, COVER_GAP, fitBox, fitMinW, freeArea, KEEP_SCALE, roomBeside, showReadable, startFolded, type Rect } from './camera';
 import { pinGeoms, symbolRects } from './route';
 import { applyLayout, layoutOf } from './layout';
 import { drawnNetlist } from './wirefirst';
@@ -218,9 +218,13 @@ export class Stage {
   private widget: { w: Widget; host: HTMLElement } | null = null;
   private panels: Widget[] = [];
   /** Watches the scene's panels: folded, unfolded or resized, the fit makes room (syncCover). */
-  private panelSize = new ResizeObserver(() => this.syncCover());
+  private panelSize = new ResizeObserver(() => { this.growFold(); this.syncCover(); });
   /** The scene's foldable panels still wait for their first layout to decide whether they start folded. */
   private foldPending = false;
+  /** The canvas width the folds were last decided at (0: not laid out yet). */
+  private foldWidth = 0;
+  /** Each open foldable panel's height when the folds were last decided (growFold). */
+  private foldHeights = new WeakMap<HTMLElement, number>();
   /** The inspector's fold waits for the first layout of the scene (autoInspector). */
   private inspPending = false;
   /** A scene being loaded whose inspector fold is still to be guessed once the stage has a size (guessInspector). */
@@ -570,6 +574,11 @@ export class Stage {
     new ResizeObserver(() => {
       this.guessInspector();
       this.autoInspector();
+      // a new width (a window resized, a side pane shown or hidden) decides the folds again; a height-only change (the
+      // bottom bar rewrapping during a run) does not, or panels would fold and unfold as values change
+      const w = this.canvas.clientWidth;
+      if (w !== this.foldWidth && this.foldWidth > 0 && this.view.fitted) this.foldPending = true;
+      this.foldWidth = w;
       this.autoFold();
       this.inset = this.rightInset();
       this.drillLayout();
@@ -972,6 +981,9 @@ export class Stage {
     this.view.cover = this.covers();
     this.view.show(ctx, ctx === this.rootCtx);
     this.paintOverlay();
+    // another level, another shape: which panels stay open is decided again for it (autoFold), the learner's own folds held
+    // (foldChoice). A wide reorder buffer opened under the CPU and Out of order panels was fitted ~45 px tall.
+    if (notify && this.panels.some((p) => p.el.dataset.fold === 'narrow')) this.refold();
     // a drill folds the right-docked panels (the board and the schematic want the room, at any width), and the top level
     // gets them back as they were, unless the learner folded or unfolded one by hand meanwhile (foldChoice)
     if (this.drillFold) {
@@ -2739,11 +2751,33 @@ export class Stage {
     this.view.fit();
   }
 
+  /**
+   * A level below the top is shown and an open foldable panel grew since the folds were decided (the Out of order panel fills
+   * its table as the core runs: decided at load with it a third as tall): decide again, folding only (a panel never reopens by
+   * itself, so nothing flaps). The top level keeps today's behaviour: its panels were sized for it.
+   */
+  private growFold(): void {
+    if (!this.ctx || this.ctx === this.rootCtx || !this.view.fitted || this.foldPending) return;
+    const grown = this.panels.some((p) => p.el.dataset.fold === 'narrow' && !p.el.classList.contains('collapsed') && p.el.offsetHeight > (this.foldHeights.get(p.el) ?? Infinity) + 24);
+    if (grown) this.refold(true);
+  }
+
+  /** Decide the folds again (a drill: the level now shown has its own shape), and fit a fitted view to what is left. */
+  private refold(onlyMore = false): void {
+    if (!this.view.fitted) return;
+    this.foldPending = true;
+    this.autoFold(onlyMore);
+    this.inset = this.rightInset();
+    this.layoutDock(false);
+    this.view.cover = this.covers();
+    this.view.fit();
+  }
+
   /** Decide, once the canvas and the scene's panels have a size, which foldable panels start folded: as many
    *  open as leave the circuit at least KEEP_SCALE of its size with them all folded (chooseFolds), and none on the
    *  right leaving it less than FOLD_BESIDE_PX (a laptop between the side panes, a phone). Each choice is laid out
    *  and measured (a bottom-left panel's shape follows the room beside the right dock). */
-  private autoFold(): void {
+  private autoFold(onlyMore = false): void {
     if (!this.foldPending) return;
     const W = this.canvas.clientWidth, H = this.canvas.clientHeight;
     const fold = this.panels.filter((p) => p.el.dataset.fold === 'narrow').slice(0, 4);
@@ -2768,14 +2802,18 @@ export class Stage {
       // the boards are fine print: a panel stays open only beside boards that still read whole (a laptop folds it)
       return lay && mask !== all && s < (lay.readPx ?? BB_READ_PX) ? null : s;
     };
-    const mine = (keep: boolean) => fold.map((p) => foldChoice.get(p.el.dataset.dock ?? '') ?? (keep && p.el.dataset.keep === 'open' ? false : keep && p.el.dataset.keep === 'folded' ? true : null));
-    let pick = chooseFolds(fold.length, scaleOf, mine(true));
+    const shut = fold.map((p) => p.el.classList.contains('collapsed'));
+    const mine = (keep: boolean) => fold.map((p, i) => (onlyMore && shut[i] ? true : null) ?? foldChoice.get(p.el.dataset.dock ?? '') ?? (keep && p.el.dataset.keep === 'open' ? false : keep && p.el.dataset.keep === 'folded' ? true : null));
+    // a level below the top (opened, or linked to): the panels may cost it less (KEEP_SCALE_OPENED)
+    const keep = this.ctx && this.ctx !== this.rootCtx ? KEEP_SCALE_OPENED : KEEP_SCALE;
+    let pick = chooseFolds(fold.length, scaleOf, mine(true), keep);
     // data-keep is a preference: where no layout with those panels open is allowed (a phone), the usual rules decide
     // ... and where they would leave the circuit under KEEP_SCALE of its size with every panel folded (three panels over a
     // pipeline left ~230 px of it): the usual rule decides, a panel the step's text is about included
     const kept = scaleOf(pick);
-    if (kept === null || (fold.length > 2 && kept < KEEP_SCALE * (scaleOf(all) ?? 0))) pick = chooseFolds(fold.length, scaleOf, mine(false));
+    if (kept === null || (fold.length > 2 && kept < keep * (scaleOf(all) ?? 0))) pick = chooseFolds(fold.length, scaleOf, mine(false), keep);
     apply(pick);
+    for (const p of fold) if (!p.el.classList.contains('collapsed')) this.foldHeights.set(p.el, p.el.offsetHeight);
   }
 
   /** A panel changed size (folded, unfolded, grew): make room for it, refitting a still-fitted view when the

@@ -164,8 +164,9 @@ export function oooPanel(words: number[], mem: { imemWords: number; dmemWords: n
     const status = holdHeight(h('div', { class: 'cpu-status' }));
     const view = oooView((pc, port) => link.select?.(link.selected?.() === pc ? null : pc, port));
     const title = h('h4', null, 'Out of order', h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel ooo-panel', 'data-dock': 'left', 'data-phone': 'flow' }, title, status, view.el);
-    title.addEventListener('click', () => el.classList.toggle('collapsed'));
+    // folded by the stage (data-fold): it may start folded, or fold on a drill, where it would squeeze the circuit (a reorder
+    // buffer opened under it was fitted ~45 px tall at 1440 × 900); the stage's title listener folds it, so none here
+    const el = h('div', { class: 'mem-panel ooo-panel', 'data-dock': 'left', 'data-fold': 'narrow', 'data-phone': 'flow' }, title, status, view.el);
     stage.edgeHooks.add({
       before: () => { if (stage.sim && stage.rootCtx) f.before(stage.sim, stage.rootCtx.node); },
       after: () => f.after(),
