@@ -112,7 +112,7 @@ export const chAdders: Chapter = {
         the two outputs are gates you already have:</p>
         <ul><li><span data-show="g1 g2 g3 g4"><code>s = a XOR b</code></span>: the sum bit is 1 when exactly one input is 1;</li>
         <li><span data-show="g1 g5"><code>c = a AND b</code></span>: there is a carry only when both are 1.</li></ul>
-        <p>This is a <strong>half adder</strong>. It is the XOR circuit from <a href="#/c/gates/4">chapter 4</a> plus one extra NAND.
+        <p>This is a <strong>half adder</strong>. It is the XOR circuit from <a href="#/c/gates/4">chapter ${numOf('gates')}</a> plus one extra NAND.
         The XOR's first gate, <span data-show="g1"><code>g1</code></span>, already computes NAND(a, b); the carry is its inverse, so a single
         NAND wired as an inverter, <span data-show="g5"><code>g5</code></span>, gives a AND b. Sharing that gate is the whole design:
         ${stats(HALF_ADDER).nands} NANDs, ${stats(HALF_ADDER).transistors} transistors, ${logicDepth(HALF_ADDER)} gate delays deep.</p>
@@ -553,7 +553,7 @@ export const chRouting: Chapter = {
       body: `
         <p>A computer is full of choices made by a number: which of 32 registers to write, which word of memory to read, which of several results to keep.
         Two blocks make every one of them. A <em>decoder</em> turns a number into one raised wire among 2ⁿ, a choice to act on (write this row); a
-        <em>multiplexer</em> uses a number to pass one of 2ⁿ inputs to its output, a choice to read (this word). <a href="#/c/gates/6">Chapter 4</a> built the 2:1
+        <em>multiplexer</em> uses a number to pass one of 2ⁿ inputs to its output, a choice to read (this word). <a href="#/c/gates/6">Chapter ${numOf('gates')}</a> built the 2:1
         multiplexer; this chapter widens both and prices them, and every memory after it is built on the pair.</p>
         <p>A <strong>decoder</strong> takes an n-bit number and raises exactly one of its 2ⁿ outputs. For input 2,
         output <span data-show="g2"><code>y2</code></span> is 1 and all others are 0. This is called "one-hot".</p>

@@ -35,7 +35,7 @@ export const chBasics: Chapter = {
         <p>The return side of every loop is called <strong>ground</strong>: the 0 V that every other voltage on the site is
         measured from.</p>
         <div class="try">Close the switch. Then cut the return wire instead: the lamp goes out just the same.</div>
-        <p>Every circuit on this site is loops like this one. What changes is the switch: in chapter 1 it becomes a switch
+        <p>Every circuit on this site is loops like this one. What changes is the switch: in chapter ${numOf('mosfet')} it becomes a switch
         that a voltage opens and closes, instead of a finger.</p>`,
       widget: () => loopWidget(),
     },
@@ -125,7 +125,7 @@ export const chBasics: Chapter = {
         <p><strong>Every box opens.</strong> Double-click a block to look inside. The adder is made of four
         <span data-ahead="fulladder">full adders (each adds two bits and a carry; chapter ${numOf('adders')} builds one)</span>, and
         each of those of <span data-ahead="nand">NAND gates (two-input gates whose output is 0 only when both inputs are 1;
-        chapter 3 builds one from four transistors)</span>. The breadcrumbs above the circuit, or <kbd>Esc</kbd>, take you back
+        chapter ${numOf('nand')} builds one from four transistors)</span>. The breadcrumbs above the circuit, or <kbd>Esc</kbd>, take you back
         up. A single click selects a part and shows what it costs.</p>
         <div class="try">Open <span data-show="fa0">the first block</span>, then one of its gates, then climb back with Esc.</div>`,
       scene: () => ({ root: rca(4), inputs: { a: 5, b: 3 } }),

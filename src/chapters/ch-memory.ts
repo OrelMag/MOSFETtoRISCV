@@ -306,7 +306,7 @@ export const chLatches: Chapter = {
       },
       more: {
         derive: `<p>The flip-flop loads d' = en ? d : q = en·d + ¬en·q. In the steady state en = 0 gives q' = q: the characteristic equation of a register that holds. The multiplexer on the stage
-          is the one from chapter 4 (${nands(MUX2)} NANDs), so the enable costs exactly one of them per bit.</p>`,
+          is the one from chapter ${numOf('gates')} (${nands(MUX2)} NANDs), so the enable costs exactly one of them per bit.</p>`,
         real: `<p>Real chips do gate clocks, because the clock net and the flip-flops it toggles are a large share of dynamic power, and a register that is not loading need not be clocked. They use an
           <strong>integrated clock-gating cell</strong> (ICG): a latch, transparent while clk is low, holds en steady through the high phase, and an AND passes clk only when the latched en is 1, so the
           gated clock has whole pulses only. One ICG serves a whole register, and synthesis inserts it where it finds exactly this mux-and-feedback pattern. Every load enable on this site is the mux.</p>`,
