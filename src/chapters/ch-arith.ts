@@ -523,7 +523,9 @@ export const chRouting: Chapter = {
         output <span data-show="g2"><code>y2</code></span> is 1 and all others are 0. This is called "one-hot".</p>
         <p>Each address bit runs down two vertical rails: itself and <span data-show="inv0 inv1">its inverse</span>.
         <span data-show="g0 g1 g2 g3">Each output's AND gate</span> taps the combination of rails that spells its own number: for output 2 = 0b10, the true rail of a₁ and the inverted rail of a₀.
-        A gate that spells a number can fire for no other, so exactly one output is high.</p>
+        A gate that spells a number can fire for no other, so exactly one output is high.
+        Each gate reaches one rail of every bit, so its input wires cross the rails in between: a wider decoder's drawing is a mesh of
+        crossings however the rails are ordered, and the hops you see are the circuit's shape, not a poor layout.</p>
         <p>Cost: 2ⁿ AND gates of n inputs, plus n inverters. For n = 2 that is ${stats(decoder(2)).nands} NANDs (two inverters and four 2-input ANDs) and ${logicDepth(decoder(2))} gate delays; the
         table below shows how the cost grows.</p>`,
       tour: {
