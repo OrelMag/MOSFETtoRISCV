@@ -44,7 +44,7 @@ export const lockedRows = (): RaceRow[] => (locked ??= THREAD_SLICES.map((s) => 
 
 const bar = (v: number, max: number) => h('span', { class: 'os-bar' }, h('i', { style: `width:${Math.min(100, Math.round((100 * v) / max))}%` }));
 
-/** Step 2 (and 3): the final count at each slice, without a lock and with one. */
+/** Step 2: the final count at each slice without a lock (withLock adds the locked runs; step 3, which has a scene, prints them as a table in its body). */
 export function raceWidget(o: { withLock?: boolean } = {}): Widget {
   const rows = raceRows(), lrows = o.withLock ? lockedRows() : undefined;
   const want = 2 * RACE_N;

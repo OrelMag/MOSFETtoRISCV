@@ -165,13 +165,13 @@ const CRIT_BOOT = `        li   sp, 0x1000
         li   t0, 8
         csrs mstatus, t0     # MIE: interrupts on
         li   a0, 40          # increments to make
-        li   a1, ${CRIT_COUNT}         # &count
+        li   a1, 0x${CRIT_COUNT.toString(16)}       # &count
 `;
 const CRIT_HANDLER = `
 handler:                     # given: the device's increment
         push t0
         push t1
-        li   t0, ${CRIT_COUNT}
+        li   t0, 0x${CRIT_COUNT.toString(16)}
         lw   t1, 0(t0)
         addi t1, t1, 1
         sw   t1, 0(t0)
