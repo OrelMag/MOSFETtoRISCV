@@ -11,6 +11,7 @@
 // deploy gate.
 
 import { type ComponentDef, isExternal, netlistOf, parseEnd, type PortDef } from './types';
+import { expandLines, type HdlLines } from './verilog';
 
 /** VHDL's reserved words (VHDL-93), which an identifier must not be. */
 const RESERVED = new Set(('abs access after alias all and architecture array assert attribute begin block body buffer bus case component '
@@ -109,7 +110,12 @@ export const NAND2_VHDL = [
 
 /** This component's entity and its structural architecture (null: it has no netlist to show). */
 export function structuralVhdl(def: ComponentDef): string | null {
-  if (def.prim === 'nand') return NAND2_VHDL;
+  return vhdlLines(def)?.text ?? null;
+}
+
+/** structuralVhdl with, for every line, the instance it declares or wires (null: not an instance's). */
+export function vhdlLines(def: ComponentDef): HdlLines | null {
+  if (def.prim === 'nand') return { text: NAND2_VHDL, owners: NAND2_VHDL.split('\n').map(() => null) };
   const nl = netlistOf(def);
   if (!nl) return null;
   const names = new Names();
@@ -125,7 +131,9 @@ export function structuralVhdl(def: ComponentDef): string | null {
   // A signal per net, named after the net (or s<i>); the ports connect to it below.
   const sig: string[] = [];
   const decls: string[] = [];
-  const body: string[] = [];
+  const body: { s: string; o: string | null }[] = [];
+  let cur: string | null = null;
+  const at = (t: string) => ({ s: t, o: cur });
   nl.nets.forEach((net, i) => {
     const s = names.take(net.name ? `s_${vhdlIdent(net.name)}` : `s${i}`);
     sig.push(s);
@@ -133,9 +141,9 @@ export function structuralVhdl(def: ComponentDef): string | null {
     for (const e of net.ends.map(parseEnd)) {
       if (e.inst !== null) continue;
       const p = def.ports.find((q) => q.name === e.port)!;
-      if (p.dir === 'in') body.push(`  ${s} <= ${pn(p)};`);
-      else if (p.dir === 'out') body.push(`  ${pn(p)} <= ${s};`);
-      else body.push(`  -- ${pn(p)} is bidirectional: joined to ${s} (several drivers resolve on std_logic)`);
+      if (p.dir === 'in') body.push(at(`  ${s} <= ${pn(p)};`));
+      else if (p.dir === 'out') body.push(at(`  ${pn(p)} <= ${s};`));
+      else body.push(at(`  -- ${pn(p)} is bidirectional: joined to ${s} (several drivers resolve on std_logic)`));
     }
   });
   const endSig = new Map<string, string>();
@@ -148,6 +156,7 @@ export function structuralVhdl(def: ComponentDef): string | null {
     return s;
   };
   for (const inst of nl.instances) {
+    cur = inst.name;
     const c = inst.def;
     const conn = (port: string) => endSig.get(`${inst.name}.${port}`) ?? '';
     const w = (port: string) => c.ports.find((p) => p.name === port)!.width;
@@ -164,7 +173,7 @@ export function structuralVhdl(def: ComponentDef): string | null {
         while (k + n < pairs.length && pairs[k + n].dst === p0.dst && pairs[k + n].src === p0.src
           && pairs[k + n].db === p0.db + n && pairs[k + n].sb === p0.sb + n) n++;
         const a = conn(p0.dst), b = conn(p0.src);
-        if (a && b) body.push(`  ${sel(a, p0.dst, p0.db + n - 1, p0.db)} <= ${sel(b, p0.src, p0.sb + n - 1, p0.sb)};`);
+        if (a && b) body.push(at(`  ${sel(a, p0.dst, p0.db + n - 1, p0.db)} <= ${sel(b, p0.src, p0.sb + n - 1, p0.sb)};`));
         k += n;
       }
       continue;
@@ -172,7 +181,7 @@ export function structuralVhdl(def: ComponentDef): string | null {
     const nets = () => c.ports.map((p) => conn(p.name) || '(open)').join(', ');
     if (c.prim === 'vdd' || c.prim === 'gnd') {
       const n = conn('p');
-      if (n) body.push(`  ${n} <= '${c.prim === 'vdd' ? '1' : '0'}';  -- ${c.prim === 'vdd' ? 'VDD' : 'GND'}`);
+      if (n) body.push(at(`  ${n} <= '${c.prim === 'vdd' ? '1' : '0'}';  -- ${c.prim === 'vdd' ? 'VDD' : 'GND'}`));
       continue;
     }
     // every other primitive is below the gate level (switches, analog parts, a magnetic core): a comment, never an entity
@@ -181,27 +190,26 @@ export function structuralVhdl(def: ComponentDef): string | null {
         nmos: 'NMOS transistor', pmos: 'PMOS transistor', dep: 'depletion load', res: 'resistor', cap: 'capacitor', fgmos: 'floating-gate transistor',
         relay: 'relay', triode: 'triode', diode: 'vacuum diode', sense: 'sense amplifier', vhalf: 'VDD/2 source', core: 'ferrite core',
       };
-      body.push(`  -- ${inst.name}: ${what[c.prim] ?? c.name} on ${nets()} (below the gate level: VHDL has no switches)`);
+      body.push(at(`  -- ${inst.name}: ${what[c.prim] ?? c.name} on ${nets()} (below the gate level: VHDL has no switches)`));
       continue;
     }
     if (isExternal(c)) {
-      body.push(`  -- ${inst.name}: ${c.name} (${c.modelPanel ? 'a model of a cable or other medium' : 'a sandbox part outside the circuit'}, not hardware): ${nets()}`);
+      body.push(at(`  -- ${inst.name}: ${c.name} (${c.modelPanel ? 'a model of a cable or other medium' : 'a sandbox part outside the circuit'}, not hardware): ${nets()}`));
       continue;
     }
     const formal = portsOf(c);
     // an input left unconnected gets a signal nothing drives ('U', our X): VHDL-93 refuses `open` on an input without a default
     const map = c.ports.map((p) => `${formal.get(p.name)} => ${conn(p.name) || (p.dir === 'in' ? undriven(p.width) : 'open')}`);
-    body.push(`  ${instName(inst.name)} : entity work.${entityName(c)} port map (${map.join(', ')});`);
+    body.push(at(`  ${instName(inst.name)} : entity work.${entityName(c)} port map (${map.join(', ')});`));
   }
 
-  const lines = [`-- ${def.name}: generated from the schematic`, 'library ieee;', 'use ieee.std_logic_1164.all;', ''];
-  lines.push(...entityDecl(def, pn), '');
-  lines.push(`architecture structure of ${entityName(def)} is`);
-  lines.push(...decls);
-  lines.push('begin');
-  lines.push(...body);
-  lines.push('end architecture structure;');
-  return vhdlText(lines.join('\n'));
+  const head = [`-- ${def.name}: generated from the schematic`, 'library ieee;', 'use ieee.std_logic_1164.all;', ''];
+  head.push(...entityDecl(def, pn), '');
+  head.push(`architecture structure of ${entityName(def)} is`);
+  head.push(...decls);
+  head.push('begin');
+  const out = expandLines([...head.map((t) => ({ s: t, o: null })), ...body, { s: 'end architecture structure;', o: null }]);
+  return { text: vhdlText(out.text), owners: out.owners };
 }
 
 /**

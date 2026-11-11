@@ -2282,10 +2282,24 @@ export class Stage {
         canOpen: !this.leaf && (ctx.canOpen(sel!) || child.def.prim === 'nmos' || child.def.prim === 'pmos'),
         onOpen: () => this.open(sel!),
         power: () => this.livePower(ctx, child),
+        level: this.hdlLevel(ctx.def),
       });
     } else {
-      this.inspector.show({ def: ctx.def, portBits: (p) => ctx.portBits(p), instance: ctx.path[ctx.path.length - 1], power: () => this.livePower(ctx, ctx.node) });
+      this.inspector.show({ def: ctx.def, portBits: (p) => ctx.portBits(p), instance: ctx.path[ctx.path.length - 1], power: () => this.livePower(ctx, ctx.node), level: this.hdlLevel(ctx.def) });
     }
+  }
+
+  /** The inspector's HDL tab links the level's source to this drawing: a line lights its instance in focus, as the prose's
+   *  named parts do; cleared, the scene's own highlight comes back. */
+  private hdlLevel(def: ComponentDef): { def: ComponentDef; light: (names: string[]) => void } {
+    return {
+      def,
+      light: (names) => {
+        if (this.ctx?.def !== def) return;
+        if (names.length) this.highlight(names, true);
+        else this.highlight(this.ctx === this.rootCtx ? this.scene?.highlight ?? [] : []);
+      },
+    };
   }
 
   /** The whole scene's switching activity since it loaded (or a Reset, a step back, Restart): the Power panel's. Null off GateSim. */

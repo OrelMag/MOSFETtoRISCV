@@ -9,8 +9,9 @@ import { hasFeedback, logicDepth, romSize, stats } from '../sim/stats';
 import { type Bit, BZ, type Category, type ComponentDef, inPorts, netlistOf, outPorts } from '../sim/types';
 import { formatBits, formatNumber, pack, type Radix } from '../sim/values';
 import { exportHdl, testableComb, type HdlFlavor } from '../sim/svexport';
-import { structuralVerilog } from '../sim/verilog';
-import { structuralVhdl, vhdlHierarchy } from '../sim/vhdl';
+import { structuralVerilog, verilogLines, type HdlLines } from '../sim/verilog';
+import { structuralVhdl, vhdlHierarchy, vhdlLines } from '../sim/vhdl';
+import { firstLineOf, instanceAt } from './hdllines';
 import { h, icon } from '../ui/dom';
 import type { Parent } from '../lib/usage';
 import { powerBody, type LivePower } from './powerpanel';
@@ -29,6 +30,9 @@ export interface InspectTarget {
   power?: () => LivePower | null;
   /** Leave "Where it is used" out (a campaign level's parts). */
   noUsage?: boolean;
+  /** The level drawn on the stage (the target itself, or the level a selected part sits on): the HDL tab shows its source
+   *  linked to the drawing, a line lighting its instance through `light` (empty: back to the scene's own highlight). */
+  level?: { def: ComponentDef; light: (names: string[]) => void };
 }
 
 type Tab = 'info' | 'truth' | 'hdl';
@@ -70,6 +74,9 @@ export class Inspector {
   auto = false;
   private rail: HTMLButtonElement;
   private usage = new WeakMap<ComponentDef, { parents: Parent[]; cpus: { label: string; n: number }[] }>();
+  /** The HDL tab's language for the linked source, and the instance a line click lit (with the function that clears it). */
+  private hdlLang: 'verilog' | 'vhdl' = 'verilog';
+  private hdlLit: { inst: string; clear: () => void } | null = null;
 
   constructor() {
     this.body = h('div', { class: 'tab-body' });
@@ -117,18 +124,21 @@ export class Inspector {
   }
 
   setTab(t: Tab): void {
+    this.unlight();
     this.tab = t;
     for (const [k, b] of this.tabBtns) b.classList.toggle('on', k === t);
     this.render();
   }
 
   show(target: InspectTarget): void {
+    this.unlight();
     this.target = target;
     this.render();
   }
 
   /** Forget the target (its closures hold a simulation), without redrawing. */
   clear(): void {
+    this.unlight();
     this.target = null;
   }
 
@@ -375,23 +385,96 @@ export class Inspector {
       note);
   }
 
+  /** Clear what a click on a source line lit on the stage. */
+  private unlight(): void {
+    const l = this.hdlLit;
+    this.hdlLit = null;
+    l?.clear();
+  }
+
   private renderHdl(t: InspectTarget): void {
     const d = t.def;
+    // the level on the stage, linked to its own source: the target itself, or the level a selected part sits on
+    const L = t.level && netlistOf(t.level.def) ? t.level : null;
+    const sel = L && L.def !== d ? t.instance ?? null : null;
+    if (L && sel) this.body.append(this.linkedSource(L, sel, `Where ${sel} sits: ${L.def.name}`));
     const gen = structuralVerilog(d);
     const vhd = structuralVhdl(d);
     const blocks: [string, string, boolean][] = [];
     if (d.hdl?.verilog) blocks.push(['SystemVerilog', d.hdl.verilog, false]);
-    if (gen) blocks.push(['Structural Verilog (generated from this schematic)', gen, false]);
-    if (vhd) blocks.push(['Structural VHDL (generated from this schematic)', vhd, true]);
-    if (!blocks.length) {
-      this.body.append(h('p', { class: 'empty' }, 'No HDL for this element.'));
+    // the level itself: its generated source is the linked block, not two plain ones
+    const linkedHere = !!L && L.def === d;
+    if (!linkedHere && gen) blocks.push(['Structural Verilog (generated from this schematic)', gen, false]);
+    if (!linkedHere && vhd) blocks.push(['Structural VHDL (generated from this schematic)', vhd, true]);
+    if (!blocks.length && !linkedHere) {
+      if (!sel) this.body.append(h('p', { class: 'empty' }, 'No HDL for this element.'));
       return;
     }
+    if (sel && blocks.length) this.body.append(h('div', { class: 'code-head hdl-own' }, `Inside ${sel}: ${d.name}`));
     if (gen) this.body.append(this.downloadRow(d));
+    if (linkedHere) this.body.append(this.linkedSource(L!, null, 'Structural source (generated from this schematic)'));
     for (const [title, code, isVhdl] of blocks) {
       const copy = h('button', { class: 'btn ghost sm', onclick: () => navigator.clipboard?.writeText(code) }, 'Copy');
       this.body.append(h('div', { class: 'code-head' }, title, copy), h('pre', { class: 'code', html: isVhdl ? highlightVhdl(code) : highlight(code) }));
     }
+  }
+
+  /**
+   * The level's generated source, Verilog or VHDL, linked to the drawing: a line an instance wrote is a button that lights
+   * that instance on the stage (again: off), and the selected part's lines are marked and scrolled into view.
+   */
+  private linkedSource(L: NonNullable<InspectTarget['level']>, sel: string | null, title: string): HTMLElement {
+    const wrap = h('div', { class: 'hdl-linked' });
+    const draw = (): void => {
+      const src: HdlLines | null = this.hdlLang === 'vhdl' ? vhdlLines(L.def) : verilogLines(L.def);
+      const lang = (k: 'verilog' | 'vhdl', label: string) => h('button', {
+        class: `btn sm${this.hdlLang === k ? ' on' : ''}`, 'aria-pressed': String(this.hdlLang === k),
+        onclick: () => { if (this.hdlLang !== k) { this.unlight(); this.hdlLang = k; draw(); } },
+      }, label);
+      const copy = h('button', { class: 'btn ghost sm', onclick: () => navigator.clipboard?.writeText(src?.text ?? '') }, 'Copy');
+      const head = h('div', { class: 'code-head' }, h('span', { class: 'hdl-title' }, title),
+        h('span', { class: 'hdl-lang', role: 'group', 'aria-label': 'Language' }, lang('verilog', 'Verilog'), lang('vhdl', 'VHDL')), copy);
+      if (!src) { wrap.replaceChildren(head, h('p', { class: 'empty' }, 'No HDL for this level.')); return; }
+      const pre = h('pre', { class: 'code linked' });
+      const mark = () => {
+        for (const el of pre.querySelectorAll<HTMLElement>('.ln[data-inst]')) el.classList.toggle('lit', el.dataset.inst === this.hdlLit?.inst);
+      };
+      const light = (inst: string) => {
+        if (this.hdlLit?.inst === inst) this.unlight();
+        else {
+          this.unlight();
+          L.light([inst]);
+          this.hdlLit = { inst, clear: () => { L.light([]); mark(); } };
+        }
+        mark();
+      };
+      src.text.split('\n').forEach((line, i) => {
+        const inst = instanceAt(src, i);
+        const html = this.hdlLang === 'vhdl' ? highlightVhdl(line) : highlight(line);
+        const el = inst === null
+          ? h('span', { class: 'ln', html })
+          : h('span', {
+            class: `ln own${inst === sel ? ' sel' : ''}`, html, 'data-inst': inst, role: 'button', tabindex: '0',
+            title: `${inst}: light it on the circuit`, 'aria-label': `Light ${inst} on the circuit`,
+            onclick: () => light(inst),
+            onkeydown: (e: Event) => { const k = (e as KeyboardEvent).key; if (k === 'Enter' || k === ' ') { e.preventDefault(); light(inst); } },
+          });
+        pre.append(el, '\n');
+      });
+      wrap.replaceChildren(head, pre, h('p', { class: 'hdl-hint' }, sel
+        ? `The lines that place ${sel} are marked. Click any part's line to light it on the circuit.`
+        : 'Click a line to light its part on the circuit; select a part to find its lines.'));
+      mark();
+      if (sel) {
+        const at = firstLineOf(src, sel);
+        if (at !== null) requestAnimationFrame(() => {
+          const el = pre.querySelectorAll<HTMLElement>('.ln')[at];
+          if (el) pre.scrollTop = Math.max(0, el.offsetTop - pre.offsetTop - pre.clientHeight / 3);
+        });
+      }
+    };
+    draw();
+    return wrap;
   }
 }
 

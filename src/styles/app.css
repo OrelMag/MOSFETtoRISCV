@@ -3264,3 +3264,18 @@ pre.code.vsrc .vl.crit { box-shadow: inset 3px 0 0 var(--accent); background: co
 .pw-total b { color: var(--text); }
 @media (pointer: coarse) { .pw-seg .btn, .power-panel .btn { min-height: 40px; } }
 @media (pointer: coarse) { .core-bit, .core-panel .btn { min-height: 40px; } .core-bit { min-width: 40px; } .core-inh input { width: 22px; height: 22px; } }
+/* the inspector's HDL tab, linked to the drawing: a line an instance wrote lights it on the stage; the selected part's lines are marked */
+pre.code.linked { max-height: 380px; padding: 8px 0; }
+pre.code.linked .ln { display: block; white-space: pre-wrap; overflow-wrap: anywhere; padding: 0 12px 0 calc(11px + 4ch); text-indent: -4ch; min-height: 1.55em; border-left: 3px solid transparent; }
+pre.code.linked .ln.own { cursor: pointer; }
+pre.code.linked .ln.own:hover { background: color-mix(in srgb, var(--accent-soft) 55%, transparent); }
+pre.code.linked .ln.own:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+pre.code.linked .ln.sel { border-left-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 70%, transparent); }
+pre.code.linked .ln.lit { border-left-color: var(--hl); background: color-mix(in srgb, var(--hl) 20%, transparent); }
+.hdl-linked .code-head { gap: 6px; flex-wrap: wrap; justify-content: flex-start; }
+.hdl-linked .hdl-title { flex: 1 1 auto; min-width: 0; }
+.hdl-lang { display: inline-flex; gap: 2px; }
+.hdl-lang .btn.on { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.hdl-hint { margin: -8px 0 14px; font-size: 12px; color: var(--muted); }
+.hdl-own { margin-top: 4px; }
+@media (pointer: coarse) { pre.code.linked .ln.own { padding-block: 4px; } .hdl-lang .btn { min-height: 40px; } }
