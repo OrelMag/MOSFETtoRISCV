@@ -88,7 +88,7 @@ export const ALIASES: Record<string, string[]> = {
 /** Entries never marked automatically: their names are everyday words in the prose. */
 const SKIP = new Set(['abstraction', 'feedback', 'flags', 'identities', 'rounding', 'edge', 'stack', 'bus', 'counter', 'register', 'subtract',
   // everyday words: a page of text, a process in general
-  'page', 'process',
+  'page', 'process', 'thread', 'lock',
   // acronyms the CPU chapters name as examples long before the Communication chapters teach them (registers, memory, io, widths, ooo)
   'uart', 'spi', 'crc']);
 

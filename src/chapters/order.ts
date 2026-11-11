@@ -34,6 +34,7 @@ const BOOK = [
   'cache',
   'vmem',
   'os',
+  'threads',
   'multicycle',
   'float',
   'widths',

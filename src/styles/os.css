@@ -48,3 +48,9 @@
 .os-bar { display: inline-block; width: 90px; height: 8px; background: var(--surface-3); border-radius: 4px; overflow: hidden; vertical-align: middle; }
 .os-bar i { display: block; height: 100%; background: var(--os-k); }
 @media (pointer: coarse) { .os-cost td { padding: 8px; } }
+
+/* chapter 'threads' (widgets/threads.ts, ch-threads.ts): code shown beside a widget or in the prose, the lock table, a run that deadlocked */
+.os-code { font: 12.5px/1.5 var(--font-mono); background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin: 6px 0; white-space: pre; overflow-x: auto; }
+.os-code select { font: inherit; padding: 0 2px; }
+.os-locks { margin-top: 6px; }
+.os-cost tr.bad td { color: var(--bad); }

@@ -3,6 +3,7 @@ import { MC_PROGRAMS } from '../riscv/mcprograms';
 import { pack } from '../sim/values';
 import type { Stage } from '../view/stage';
 import { coherenceWidget, dualCoreScene } from '../widgets/multicore';
+import { lockCosts, lockCostWidget } from '../widgets/threads';
 import { COH_STEPS } from './ch-multicore-coh';
 import type { Chapter } from './types';
 import { numOf } from './order';
@@ -36,6 +37,8 @@ function sbSc(): { runs: number; outcomes: string[] } {
   return { runs, outcomes: [...seen].sort() };
 }
 const SB = sbSc();
+/** The last step's numbers: the spin lock against the threads chapter's kernel lock (widgets/threads.ts, pinned by tests/content-threads.test.ts). */
+const LC = lockCosts();
 
 export const chMulticore: Chapter = {
   id: 'multicore', num: numOf('multicore'), title: 'Many cores', level: 'Systems',
@@ -393,6 +396,22 @@ export const chMulticore: Chapter = {
         answer: 1,
         why: ['If anything a release costs time: the store must wait until the earlier accesses are visible.', '', 'sw zero, lock stores x0, which always reads 0; the value is not the problem.', 'It does not matter on this sequentially consistent dual-core, which is why the bug hides; on a weakly ordered core the lock store can overtake the counter store.'],
         explain: 'Without ordering, the lock store could become visible before the counter store, and another core could enter the critical section and read the old counter. A fence rw,w before the release store (or amoswap.w.rl) prevents that. On our sequentially consistent machine the bug cannot happen, which is exactly why such bugs hide in testing.',
+      },
+    },
+    {
+      title: 'Your locks on two cores',
+      body: `
+        <p>Chapter ${numOf('threads')} built locks on one core with no atomic instruction at all: the kernel runs with interrupts off, so its lock call tests and takes the lock with nothing in between. Here two cores run at once, and interrupts off on one does nothing to the other: the test and the take have to be one memory access, which is what <code>amoswap.w</code> is.</p>
+        <p>The two locks cost very different amounts. The kernel's lock and unlock are two system calls, a trap, a few dozen instructions and a return each: <strong>${LC.kernelAdds} cycles</strong> added to every increment. The spin lock of this chapter, alone on a core with nobody to wait for, adds <strong>${LC.spinAdds} cycles</strong>: a swap, a branch and a store. That is why real systems take a lock in user space first, with an atomic instruction, and call the kernel only when the lock is held and the thread has to sleep (Linux's futex does exactly this).</p>
+        <p>The kernel's half still matters on many cores. A spinning core does no work and, here, takes turns at the memory port from the core that holds the lock: on two cores the lock program took ${LC.lock2} cycles for ${2 * LC.each} increments. When the wait is long, sleeping is cheaper, and only the kernel can put a thread to sleep and wake it.</p>`,
+      widget: lockCostWidget,
+      challenge: {
+        kind: 'quiz',
+        question: 'Why can the threads chapter\'s kernel lock not protect a critical section shared by two cores?',
+        options: ['Interrupts off on one core do not stop the other, which can test the lock between the first core\'s test and its store', 'System calls are illegal on two cores', 'The kernel\'s lock word is not in shared memory', 'It can: interrupts off works on any number of cores'],
+        answer: 0,
+        explain: 'On one core, interrupts off means nothing else runs. On two, the other core keeps running and can read the lock word in the gap; only an access that reads and writes in one step (an AMO) closes it.',
+        why: ['', 'Each core can trap into a kernel; the problem is what the kernel can rule out.', 'Where the word lives does not help if two cores can read it at once.', 'Interrupts are per core.'],
       },
     },
   ],

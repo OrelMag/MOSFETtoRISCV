@@ -102,6 +102,7 @@ export const NUDGES: Record<string, string> = {
   y_final: 'An interrupt belongs to no instruction: ask which instruction it should look as if it came before, and whether the stage holds one at all.',
   y_tlb: 'Each entry answers the same question at once: is this my page? Then one of them is chosen, and the others are ignored.',
   y_walk: 'It is the same read done twice with different inputs. Decide what changes between the first and the second, and let the state choose.',
+  p_critical: 'Run the given program once and find where an interrupt would have to land to lose an increment. That window is what must be closed.',
   p_switch: 'The first instruction of the handler is the hardest: you have no free register. Find the instruction that gives you one.',
   // act 8: side quests
   n_float: 'Write the value as a power of two times a number between 1 and 2, then find where each part goes.',

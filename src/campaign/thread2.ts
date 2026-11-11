@@ -144,7 +144,10 @@ export const THREAD2: Record<string, NodeThread> = {
   },
   p_handler: {
     uses: ['mmio', 'csr'],
-    usedFor: { y_final: 'is the shape of the finale\'s interrupt-driven test: push, serve, acknowledge, pop, mret' },
+    usedFor: {
+      y_final: 'is the shape of the finale\'s interrupt-driven test: push, serve, acknowledge, pop, mret',
+      p_critical: 'is the handler given there: it shares a word with main, and an interrupt between main\'s load and store loses its increment',
+    },
     pitfalls: [
       'No acknowledge before mret: irq is still high when MIE comes back, and the interrupt is taken again at once.',
       'Setting MIE before mtvec and mie: the first interrupt jumps to an address that holds no handler.',
@@ -188,6 +191,14 @@ export const THREAD2: Record<string, NodeThread> = {
       'Taking a leaf at level 1 or a pointer at level 0: this walker has no superpages, and a pointer at the last level would walk through data.',
       'Staying in the fault state for more than one cycle: the CPU takes the trap in that cycle and the next walk must be able to start.',
       'Reading the second table at {root, vpn0}: the table is the one the first entry pointed to, which has to be remembered across the cycle.',
+    ],
+  },
+  p_critical: {
+    uses: ['csr', 'mmio'],
+    pitfalls: [
+      'Turning interrupts off around the store alone: the interrupt can still fall between the load and the add, and the stale value is stored.',
+      'Clearing MIE with csrw: it writes the whole of mstatus, and every other bit with it. csrc clears only the bits set in its register.',
+      'Forgetting to set MIE again after the store: the interrupts wait for ever, and the count misses all of them.',
     ],
   },
   p_switch: {
