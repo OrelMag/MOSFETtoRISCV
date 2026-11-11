@@ -12,6 +12,21 @@ export interface NumberOptions {
   halve?: boolean;
 }
 
+export type NumOp = 'inc' | 'dec' | 'neg' | 'shl';
+
+/**
+ * One of the explorer's operations on a width-bit word, done as the adder does it: +1 is v + 1, −1 is v + all ones, negate is
+ * ¬v + 1 (0 − v), shift left is v + v. C is the adder's carry out: after an add, the unsigned result wrapped; after a subtract
+ * (b's inverse plus 1, as the ALU subtracts) it is "no borrow", the convention bltu reads as ¬C. V: both operands one sign, the
+ * sum the other. Plain arithmetic, never JS bit operators (signed 32-bit, wrong at width 32).
+ */
+export function numOp(k: NumOp, v: number, width: number): { v: number; C: 0 | 1; V: 0 | 1 } {
+  const max = 2 ** width, top = (x: number) => x >= max / 2;
+  const [a, b, cin] = k === 'inc' ? [v, 1, 0] : k === 'dec' ? [v, max - 1, 0] : k === 'neg' ? [max - 1 - v, 0, 1] : [v, v, 0];
+  const sum = a + b + cin, out = sum % max;
+  return { v: out, C: sum >= max ? 1 : 0, V: top(a) === top(b) && top(out) !== top(a) ? 1 : 0 };
+}
+
 export function numberWidget(initialWidth: NumWidth = 8, showWheel = true, opts: NumberOptions = {}): Widget {
   let width: number = initialWidth;
   let v = initialWidth === 4 ? 0b0101 : 0b00101010;
@@ -29,40 +44,32 @@ export function numberWidget(initialWidth: NumWidth = 8, showWheel = true, opts:
   const max = () => 2 ** width;
   const half = () => max() / 2;
   const signed = (x: number) => (x >= half() ? x - max() : x);
-  const neg = (x: number) => x >= half();
 
   const op = (label: string, fn: () => void) => h('button', { class: 'btn sm', onclick: () => { fn(); render(); } }, label);
+  // Each operation goes through numOp: the adder's carry out and overflow, as the ALU makes them.
+  const apply = (k: NumOp) => { const r = numOp(k, v, width); C = r.C; V = r.V; v = r.v; };
   const ops = h('div', { style: 'display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:12px' },
     op('+1', () => {
       const before = signed(v);
-      C = v === max() - 1 ? 1 : 0;
-      V = v === half() - 1 ? 1 : 0;
-      v = (v + 1) % max();
+      apply('inc');
       message = C ? `C: ${max() - 1} + 1 wrapped around to 0 (the carry out of the top bit is lost).`
         : V ? `V: ${before} + 1 became ${signed(v)}: the signed reading passed the top and wrapped.` : '';
     }),
     op('−1', () => {
-      const before = signed(v);
-      // a − 1 is a + (all ones): it carries out unless a is 0
-      C = v === 0 ? 0 : 1;
-      V = v === half() ? 1 : 0;
-      v = (v - 1 + max()) % max();
-      message = v === max() - 1 ? `0 − 1 wrapped around to ${max() - 1} unsigned, which is −1 signed.`
-        : V ? `V: ${before} − 1 became ${signed(v)}.` : '';
+      const before = signed(v), u = v;
+      apply('dec');
+      message = !C ? `0 − 1 borrowed: it wrapped around to ${max() - 1} unsigned, which is −1 signed. C = 0: no carry out, so a borrow.`
+        : `The adder does − 1 as + ${max() - 1} (all ones): ${u} + ${max() - 1} carries out, and after a subtraction C = 1 means no borrow.${V ? ` V: ${before} − 1 became ${signed(v)}.` : ''}`;
     }),
     op('NOT (invert bits)', () => { v = max() - 1 - v; C = V = 0; message = 'Inverting every bit gives −x − 1 in two\'s complement.'; }),
     op('negate (NOT, +1)', () => {
       const before = signed(v);
-      C = v === 0 ? 1 : 0;
-      V = v === half() ? 1 : 0;
-      v = (max() - v) % max();
-      message = V ? `V: ${before} has no positive partner in ${width} bits: negating it gives itself.` : `−(${before}) = ${signed(v)}. Invert all bits, then add 1.`;
+      apply('neg');
+      message = V ? `V: ${before} has no positive partner in ${width} bits: negating it gives itself.`
+        : `−(${before}) = ${signed(v)}: invert all bits, then add 1. That is 0 − x, so C = 1 (no borrow) only for 0, whose inverse, all ones, carries out.`;
     }),
     op('shift left (×2)', () => {
-      const out = (v * 2) % max();
-      C = neg(v) ? 1 : 0;
-      V = neg(v) !== neg(out) ? 1 : 0;
-      v = out;
+      apply('shl');
       message = `Every bit moves one place up: ×2. The top bit falls into C${V ? '; the sign changed, so V' : ''}.`;
     }),
     op('clear', () => { v = 0; C = V = 0; message = ''; }),
@@ -100,7 +107,7 @@ export function numberWidget(initialWidth: NumWidth = 8, showWheel = true, opts:
       h('div', null, h('b', null, String(signed(v))), h('span', null, 'signed (two\'s complement)')),
     );
     flags.replaceChildren(
-      h('span', { class: `ns-flag${C ? ' lit' : ''}`, title: 'Carry out of the top bit: the unsigned result wrapped' }, h('i'), 'C carry out'),
+      h('span', { class: `ns-flag${C ? ' lit' : ''}`, title: 'Carry out of the adder\'s top column. After an add (+1, ×2): 1 = the unsigned result wrapped. After a subtract (−1, negate), done as adding ¬b + 1 as the ALU does: 1 = no borrow, 0 = it wrapped below zero.' }, h('i'), 'C carry out'),
       h('span', { class: `ns-flag${V ? ' lit' : ''}`, title: 'Signed overflow: the signed result wrapped' }, h('i'), 'V signed overflow'),
     );
     msg.textContent = message;
