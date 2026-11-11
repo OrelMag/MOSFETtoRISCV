@@ -9,6 +9,8 @@ import { readElf32 } from '../src/riscv/elf';
 import { buildExecutable, MAIN_S, UTIL_S } from '../src/riscv/execprograms';
 import { relocSolved, solveReloc } from '../src/widgets/linking';
 import { groupDigits as n } from '../src/sim/numfmt';
+import { assemble } from '../src/riscv/asm';
+import { DRILLS, jalWord, rng, splitHiLo } from '../src/campaign/drills';
 
 const F = linkFigures();
 const plain = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&gt;/g, '>').replace(/\s+/g, ' ');
@@ -59,6 +61,25 @@ describe('the figures', () => {
     expect(F.lib.wrongMissing).toEqual(['clamp']);
     expect(F.pic.through - F.pic.direct).toBe(F.pic.perCall * F.pic.calls);
     expect(F.pic.loads).toBe(1);
+  });
+});
+
+describe('the campaign drill "Patch the jump"', () => {
+  it('jalWord is the assembler\'s word, splitHiLo the linker\'s split', () => {
+    for (const off of [0, 2, -2, 24, -4096, 0x7fe, 0x800, 0xffffe, -0x100000, 1234 * 2]) {
+      for (const rd of [0, 1]) expect(jalWord(rd, off), `${rd} ${off}`).toBe(assemble(`jal x${rd}, ${off}`).words[0] >>> 0);
+    }
+    for (const v of [0, 0x7ff, 0x800, 0xf80, 0xfff, 0x1000, 0xabcde, 0xffff]) expect(splitHiLo(v)).toEqual(hiLo(v));
+  });
+
+  it('every question accepts its own answer and refuses another', () => {
+    const r = rng(7);
+    for (let i = 0; i < 400; i++) {
+      const q = DRILLS.reloc.make(r);
+      expect(q.check(q.answer).ok, q.prompt).toBe(true);
+      expect(q.check('0x0').ok).toBe(false);
+      if (q.answer.includes(',')) expect(q.check(q.answer.replace('-', '−')).ok).toBe(true);
+    }
   });
 });
 

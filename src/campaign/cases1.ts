@@ -38,6 +38,11 @@ export const CASES1: Record<string, LevelCase> = {
     without: 'The function body is copied at every call site, and recursion is impossible.',
     cost: '15 words. Euclid by subtraction runs one round per subtraction: gcd(1000, 1) takes 999, so the test set containing it runs 4036 instructions and the mean is 1388. Euclid with remainders needs a divider (Act 8). Each <code>call</code> and <code>ret</code> is a jump: two flushed cycles apiece on Pipeline IV.',
   },
+  p_link: {
+    problem: 'A program in several files is assembled one file at a time, and a call into another file needs a distance no single file knows. The assembler encodes everything else, leaves the offset bits zero and records a relocation; the linker places every file, then writes those bits.',
+    without: 'Every program is one file assembled at once, so a change anywhere means assembling everything again, and no library can be shipped ready-made.',
+    cost: 'No gates: it is work at build time. A jal reaches ±1 MiB; past that a call (auipc + jalr, two words, two patches) reaches ±2 GiB.',
+  },
   p_mul: {
     problem: 'RV16I has no multiply instruction. Shift and add does it one bit of b at a time: when b\'s low bit is 1, add a to the product; shift a left and b right; stop when b = 0. There is no <code>andi</code>, so the bit test needs a 1 in a register and an <code>and</code>. The shift-and-add multiplier of Act 8 runs the same loop in hardware, one bit per clock.',
     cost: '13 words, 28 to 134 instructions per product (mean 74): up to 8 per bit of b, and the loop stops as soon as b\'s remaining bits are 0. The reference reloads the 1 every iteration; hoisting <code>li t1, 1</code> out of the loop saves an instruction per bit. The MD opcode (Act 8) does it in one instruction, at the price of nearly doubling the core\'s clock period.',

@@ -90,7 +90,7 @@ export const chLinking: Chapter = {
       `A loader maps each segment with its permissions: text R X (a store into it faults), data R W (a jump into it faults), .bss zeroed, a stack, the entry. On this Harvard CPU text runs in place from the ROM. exec took ${n(F.execCycles)} cycles, ${F.perDataWord} more per word of .data.`,
       `Shared code is mapped once and reached through a table each process owns: ${F.pic.perCall} more instructions per call here, ${F.pic.loads} of them a load.`,
     ],
-    practise: ['p_call'],
+    practise: ['p_call', 'p_link'],
     check: [
       {
         question: 'Why can the assembler encode jal ra, loop to a label in the same file, but not jal ra, print to a label in another file?',

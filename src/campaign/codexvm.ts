@@ -37,4 +37,4 @@ export const CODEX_VM: CodexEntry[] = [
 ];
 
 /** No campaign level teaches these (the levels are RV16 and run in machine mode only): the test that wants every entry in a level skips them (tests/campaign.test.ts). */
-export const VM_AWAITING_LEVELS: ReadonlySet<string> = new Set(['privmode', 'syscall', 'thread', 'race', 'lock', 'condvar', 'semaphore', 'deadlock', 'objfile', 'symtab', 'reloc', 'linker', 'elf', 'pic', 'shlib']);
+export const VM_AWAITING_LEVELS: ReadonlySet<string> = new Set(['privmode', 'syscall', 'thread', 'race', 'lock', 'condvar', 'semaphore', 'deadlock', 'objfile', 'symtab', 'elf', 'pic', 'shlib']);

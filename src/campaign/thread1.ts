@@ -212,11 +212,20 @@ export const THREAD1: Record<string, NodeThread> = {
   },
   p_call: {
     uses: ['npc', 'wb'],
-    usedFor: { p_handler: 'a function nobody calls: it saves what it touches and returns with mret' },
+    usedFor: { p_handler: 'a function nobody calls: it saves what it touches and returns with mret', p_link: 'a call into another file: its offset is filled in by the linker' },
     pitfalls: [
       'A function that calls another overwrites ra: save it first (<code>push ra</code>), restore it before <code>ret</code>.',
       'sp starts nowhere: set it (<code>li sp, 0x1000</code>) before the first push.',
       'Arguments and the result live in a0 and a1 by agreement only: the hardware checks nothing.',
+    ],
+  },
+  p_link: { // optional: a drill on the bits a linker writes (RV32, chapter 'linking')
+    uses: ['npc'],
+    usedFor: {},
+    pitfalls: [
+      'The offset is from the jal itself, not from the instruction after it.',
+      'J-type keeps the offset\'s bits out of order: bit 20, then 10..1, then 11, then 19..12. Bit 0 is not stored (always 0).',
+      'Splitting a distance as value >> 12 and value & 0xfff fails whenever bit 11 is 1: the addi sign-extends and lands 4 KiB short.',
     ],
   },
   p_mul: {
