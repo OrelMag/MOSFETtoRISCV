@@ -8,7 +8,6 @@
 // Each inside is its own SchematicView in an overlay on the box, so the level's own svg never holds one: print and image
 // export draw closed boxes. The stage imports this module only while the setting is on, so off costs nothing.
 import '../styles/lens.css';
-import { coarsePointer } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import { TAP_SLOP } from './camera';
 import type { ViewCtx } from './context';
@@ -24,6 +23,11 @@ const SVG = 'http://www.w3.org/2000/svg';
 export const HINT_MAX_ZOOM = 4;
 /** An inside built more than this far (px) outside the canvas is dropped: it would only cost repaints. */
 const KEEP_PX = 200;
+/** On a touch screen a tap inside an open box selects a part at least this big on screen (px, the coarse-pointer target);
+ *  anywhere else it steps into the box (DESIGN.md item 6). */
+export const TAP_SELECT_PX = 40;
+/** A touch is a tap while it moves less than this (px) and lifts within TAP_MS (a longer press is the held-finger menu). */
+const TAP_SLOP_PX = 8, TAP_MS = 450;
 /** The view has settled when the camera has not moved for this long (ms). */
 export const SETTLE_MS = 160;
 
@@ -316,7 +320,7 @@ export class Lens {
     if (!ctx || ctx.path.join('.') !== this.levelKey) return;
     // the level drawn after the lens heard of it (a drill draws, then tells): measured now
     if (!this.boxes.size) this.measure();
-    const ok = this.host.allowed() && !coarsePointer();
+    const ok = this.host.allowed();
     const px = this.unitPx();
     const c = this.canvasRect();
     const zoomingIn = this.lastPx > 0 && px > this.lastPx * 1.0001;
@@ -454,9 +458,9 @@ export class Lens {
       this.host.view.wheelAt(e.deltaY, e.clientX, e.clientY);
       this.zoomed(e.clientX, e.clientY);
     }, { capture: true, passive: false });
-    let endPan: (() => void) | null = null;
+    let endPan: (() => void) | null = null, pinched = false;
     installPinch(el, {
-      start: () => { endPan?.(); b.view?.cancelHold(); },
+      start: () => { endPan?.(); b.view?.cancelHold(); pinched = true; },
       move: (k, mid, prev) => this.host.view.pinchAt(k, mid, prev),
       end: (mid) => this.pinched(mid, true),
     });
@@ -483,8 +487,36 @@ export class Lens {
       e.stopPropagation();
       this.stepIn(b, child);
     });
-    el.addEventListener('pointerenter', () => this.setOver(b.name));
-    el.addEventListener('pointerleave', () => { if (this.over === b.name) this.setOver(null); });
+    el.addEventListener('pointerenter', (e) => { if (e.pointerType !== 'touch') this.setOver(b.name); });
+    el.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch' && this.over === b.name) this.setOver(null); });
+    // A finger's tap (DESIGN.md item 6): on an inner part at least TAP_SELECT_PX on screen it selects (the inside's own
+    // click, the crumb names the box); anywhere else but a wire it steps into the box: most inner parts are under a
+    // fingertip, and a drill that lands beats a tap that misses. A double tap on a large part steps into that part.
+    let down: { x: number; y: number; t: number; id: number } | null = null;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'touch') return;
+      if (!e.isPrimary) return void (down = null);
+      pinched = false;
+      down = { x: e.clientX, y: e.clientY, t: e.timeStamp, id: e.pointerId };
+    }, { capture: true });
+    el.addEventListener('pointerup', (e) => {
+      const d = down;
+      down = null;
+      if (e.pointerType !== 'touch' || !d || d.id !== e.pointerId || pinched || !b.shown) return;
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > TAP_SLOP_PX || e.timeStamp - d.t > TAP_MS) return;
+      // a tap on a wire is the inside's (it selects it; Why? traces it)
+      if ((e.target as Element).closest?.('[data-net]')) return;
+      const g = (e.target as Element).closest?.('.inst');
+      const r = g?.getBoundingClientRect();
+      if (r && Math.min(r.width, r.height) >= TAP_SELECT_PX) return this.setOver(b.name);
+      e.stopPropagation();
+      e.preventDefault();
+      // the click the browser sends after this tap must not select what the next level draws there
+      const eat = (c: Event) => { c.stopPropagation(); c.preventDefault(); };
+      window.addEventListener('click', eat, { capture: true, once: true });
+      setTimeout(() => window.removeEventListener('click', eat, { capture: true }), 600);
+      this.stepIn(b, child);
+    }, { capture: true });
   }
 
   /** Step into a box from its inside: the drill shows its level where the inside was drawn, nothing jumps. */
@@ -621,7 +653,7 @@ export class Lens {
   /** Hovering a closed block that can open: "zoom in to see inside (×2.4)", or past ×4 "double-click to step in". */
   private hover(name: string | null): void {
     const b = name ? this.boxes.get(name) : null;
-    if (!b || b.shown || !this.host.allowed() || coarsePointer()) return this.hideHint();
+    if (!b || b.shown || !this.host.allowed()) return this.hideHint();
     const r = this.boxPx(b.name);
     if (!r) return this.hideHint();
     const need = b.openAt / (this.unitPx() || 1);
@@ -738,7 +770,7 @@ export class Lens {
     if (!this.boxes.size) this.measure();
     // drawn at once, without a fade: it is the drawing the learner was just looking at
     const b = this.boxes.get(name);
-    if (b && !b.view && decide(false, this.lastPx, b.openAt) && this.host.allowed() && !coarsePointer()) {
+    if (b && !b.view && decide(false, this.lastPx, b.openAt) && this.host.allowed()) {
       b.want = true;
       this.build(b, true);
       const r = this.boxPx(name, c);

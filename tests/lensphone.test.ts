@@ -1,5 +1,5 @@
-// Open blocks as you zoom on a touch screen: the setting keeps its stored value there and starts off; the lens itself does
-// not open on a coarse pointer (DESIGN.md Revision 3, view/lens.ts evaluate).
+// Open blocks as you zoom on a touch screen (DESIGN.md item 6): the setting works there and starts off; a pinch opens a box
+// as the wheel does (smoke: the touch routes).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { settings } from '../src/ui/settings';
