@@ -11,6 +11,8 @@ import { floatExplorer, floatLine } from '../widgets/float';
 import type { Chapter, Layers } from './types';
 import { newtonSteps } from './float/newton';
 import { errorSteps } from './float/error';
+import { decimalSteps } from './float/decimal';
+import { exactDecimal } from '../sim/decimal';
 import { nearFarSteps } from './float/nearfar';
 import { numOf } from './order';
 
@@ -201,7 +203,7 @@ export const chFloat: Chapter = {
       },
     ],
   },
-  parts: [['The format', 3], ['Add and round', 4], ['More operations', 5], ['Other sizes, faster units', 5], ['In the CPU', 6], ['Pipelined', 2], ['When floats surprise', 4]],
+  parts: [['The format', 3], ['Add and round', 4], ['More operations', 5], ['Other sizes, faster units', 5], ['In the CPU', 6], ['Pipelined', 2], ['When floats surprise', 5]],
   steps: [
     {
       title: 'Scientific notation in binary',
@@ -214,12 +216,7 @@ export const chFloat: Chapter = {
         <p>A float is a sign, an exponent and a fraction: (−1)<sup>s</sup> × 1.f × 2<sup>e − bias</sup>. The leading 1 is not stored
         (the <em>hidden bit</em>). The exponent is biased, so that comparing two positive floats as integers orders them correctly.
         Exponent 0 marks zero and the <strong>subnormals</strong> (no hidden bit, gradual underflow). Exponent all ones marks
-        <strong>infinity</strong> (fraction 0) and <strong>NaN</strong> (fraction ≠ 0).</p>
-        <p>The top fraction bit of a NaN is the <em>quiet</em> bit. A quiet NaN (1) passes through arithmetic without complaint; a
-        <em>signaling</em> NaN (0, with some lower fraction bit set so that it is not ∞) raises the invalid flag when an operation consumes it. IEEE 754
-        lets a NaN carry a payload through a computation; RISC-V does not: every NaN an operation produces is the <strong>canonical NaN</strong>
-        0x7FC00000 (positive, quiet, payload 0), whatever the operands were. Only loads, stores, moves and sign injection copy a NaN's bits unchanged.
-        In the 8-bit format the circuits below use, the canonical NaN is 0 1111 100 = 0x7C.</p>
+        <strong>infinity</strong> (fraction 0) and <strong>NaN</strong> (fraction ≠ 0), "not a number": the result of ∞ − ∞ or 0 × ∞. The next steps take these patterns apart.</p>
         <p>0.1 has no finite binary expansion, so the float called 0.1 is really 0.100000001490116…: the nearest of the
         2<sup>32</sup> patterns.</p>
         <p>Why this layout and not a fixed point: a fixed-point word spends the same resolution everywhere, so it either covers a small range finely or a large range coarsely. A float spends
@@ -275,6 +272,11 @@ export const chFloat: Chapter = {
         <p>These steps use an 8-bit format (4 exponent bits, 3 fraction bits) so you can see every wire. The same generators build float32,
         and the small versions are tested against exact arithmetic: a 6-bit format on every operand pair, the 8-bit ones on every special and boundary
         operand against every other, plus a random sample (details in "float32: the same circuit, bigger").</p>
+        <p>The top fraction bit of a NaN is the <em>quiet</em> bit. A quiet NaN (1) passes through arithmetic without complaint; a
+        <em>signaling</em> NaN (0, with some lower fraction bit set so that it is not ∞) raises the invalid flag when an operation consumes it. IEEE 754
+        lets a NaN carry a payload through a computation; RISC-V does not: every NaN an operation produces is the <strong>canonical NaN</strong>
+        0x7FC00000 (positive, quiet, payload 0), whatever the operands were. Only loads, stores, moves and sign injection copy a NaN's bits unchanged.
+        In the 8-bit format the circuits below use, the canonical NaN is 0 1111 100 = 0x7C.</p>
         <p>Why a unit just for this: every later stage wants the same few facts about each operand, and computing them once keeps the others simple. The hidden bit is the OR of the exponent
         bits; zero, infinity and NaN are three comparisons of the exponent and fraction fields. A NaN is told apart as signaling by one more bit, the top of the fraction. Treating a subnormal as
         exponent 1 with no hidden bit makes its value follow the same formula as a normal number's, so the aligner and the multiplier need no special case for it.</p>
@@ -388,8 +390,7 @@ export const chFloat: Chapter = {
           the exponent bump. The rounding error is at most ½ ulp, so the relative error is at most 2<sup>−M−1</sup>, the unit roundoff u = 2<sup>−${E4M3.M + 1}</sup> = ${2 ** -(E4M3.M + 1)} here and 2<sup>−24</sup> in float32.</p>`,
         pitfall: `<p>Rounding twice. Rounding a value to a wider intermediate format and then to the final one can move a result that the single rounding would have put elsewhere (double rounding). The unit
           therefore keeps all the bits and rounds once; it is also why the fused multiply-add of a later step rounds only at its end.</p>`,
-        real: `<p>Round to nearest even is the default of every IEEE 754 system and of RISC-V's frm register. Code that must match decimal rounding (money) uses decimal formats or integers instead: a binary
-          tie is an exact binary half, and most decimal fractions, 0.1 and 0.05 among them, are not exactly representable, so they are never ties at all.</p>`,
+        real: `<p>Round to nearest even is the default of every IEEE 754 system and of RISC-V's frm register. Code that must match decimal rounding (money) uses decimal formats or integers instead. Decimal ties such as 2.5 or 0.125 are exact in binary and do occur: RNE sends them to 2 and 0.12. The surprise is the half that only <em>looks</em> like a tie: rounding 0.05 to one place is not a tie, because the float64 called 0.05 holds ${exactDecimal(0.05)}, slightly above 0.05, so the right answer is 0.1; 0.35 is stored as ${exactDecimal(0.35)}, slightly below, and rounds to 0.3 although a human halves up to 0.4.</p>`,
       })),
       challenge: {
         kind: 'quiz', question: 'Keeping 3 fraction bits, how does 1.0101₂ round? And 1.0111₂? (Round to nearest, ties to even.)',
@@ -727,6 +728,7 @@ export const chFloat: Chapter = {
         see every 8-bit input. Well over a million cases in all; every pair of 8-bit operands is an opt-in run (FPU_EXHAUSTIVE=1), not part of the
         regular test suite. float32 is tested on random and special operands (subnormals, infinities, NaNs, cancellation), and against the host CPU in
         round to nearest even.</p>
+        <p>The same generators also take the formats machine learning uses (bfloat16, and FP8 in its E4M3 and E5M2 shapes), which the next steps price, and the units around them can be changed: a near and far adder, and a divider replaced by Newton–Raphson division on the fma.</p>
         <div class="try">1.5 (0x3FC00000) + 2.25 (0x40100000) = 3.75 (0x40700000). Follow <span data-show="align add">the significands</span> through the aligner and the adder.</div>`; },
       scene: () => ({ root: fpAdd(F32), inputs: { a: 0x3fc00000, b: 0x40100000, sub: 0 } }),
       more: lazy(() => ({
@@ -956,7 +958,7 @@ export const chFloat: Chapter = {
         <p>Load "Rounding surprises" in the program menu: 10⁸ + 1 = 10⁸, 2²⁴ + 1 becomes 2²⁴, +0 equals −0 although their bits differ, ∞ − ∞ is NaN,
         NaN is not equal to itself, and 10⁶⁴ overflows to infinity. Each of these is the specified, correctly rounded answer.</p>
         <p>Every one follows from the three facts of the chapter: a result is the nearest representable value, the spacing grows with the magnitude, and a few encodings stand for things that are not numbers. Once the gap between neighbours
-        exceeds the operand you add, that operand vanishes; once a result has no meaning, a NaN says so and propagates. Reading these as bugs is the common mistake; reading them as the arithmetic is the habit to build.</p>
+        exceeds the operand you add, that operand vanishes; once a result has no meaning, a NaN says so and propagates. Reading these as bugs is the common mistake; reading them as the arithmetic is the habit to build. The steps after this one measure the error in ulps and sum a long list with Kahan summation, which keeps it from growing.</p>
         ${floatMistakes()}`,
       scene: () => cpuScene({ source: fsrc('absorb'), fpu: true, adder: 'ks' }),
       more: {
@@ -980,6 +982,7 @@ export const chFloat: Chapter = {
       },
     },
     ...errorSteps,
+    ...decimalSteps,
   ],
 };
 

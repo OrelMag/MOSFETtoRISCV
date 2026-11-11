@@ -3,11 +3,12 @@
 // physical model's and its card answers round-trip through the Hollerith code.
 
 import { describe, expect, it } from 'vitest';
-import { CARD_WORDS, checkExpr, DRILLS, evalBool, minimumCover, parseBool, parseNum, parseQty, relayThresholds, rng, sopLiterals, sopText } from '../src/campaign/drills';
+import { CARD_WORDS, checkExpr, DRILLS, evalBool, FLOAT_SPECIALS, minimumCover, parseBool, parseNum, parseQty, relayThresholds, rng, roundMode, sopLiterals, sopText, specialAnswer } from '../src/campaign/drills';
+import { encodeNumber } from '../src/widgets/float';
 import { objectCard, seqText, wordOf } from '../src/cards/card';
 import { charOf, punchOf, ROW9, rowsOfChar } from '../src/cards/hollerith';
 import { RELAY, RELAY_COIL_POWER, RELAY_STEP_MS, RELAY_SUPPLY, relaySim, relayStatic, relaySummary } from '../src/phys/relay';
-import { F16, parts, RM, roundToX } from '../src/sim/fpref';
+import { bitsToF32, F16, F32, f32ToBits, fpAddX, fpMulX, fpToIntX, fpValue, parts, RM, roundToX } from '../src/sim/fpref';
 
 describe('the Boolean parser', () => {
   const V = ['a', 'b', 'c', 'd'];
@@ -307,5 +308,77 @@ describe('the fixed-point and division drills', () => {
       expect(q.check('0x' + (v >>> 0).toString(16))).toMatchObject({ ok: true });
       expect(q.check(String(v + 1))).toMatchObject({ ok: false });
     }
+  });
+});
+
+describe('binary16 / float drill: modes, spacing, special values, subnormals', () => {
+  const sp = (a: string) => FLOAT_SPECIALS.find(([w]) => w === a)!;
+  it('every extra question accepts its own answer and rejects a wrong one', () => {
+    const r = rng(11);
+    let extra = 0;
+    for (let i = 0; i < 600; i++) {
+      const q = DRILLS.float.make(r);
+      expect(q.check(q.answer), `${q.prompt} → ${q.answer}`).toMatchObject({ ok: true });
+      if (/RISC-V|gap between|subnormal/.test(q.prompt)) { extra++; expect(q.check('zz').ok, q.prompt).toBe(false); }
+    }
+    expect(extra).toBeGreaterThan(100);
+  });
+  it('rounding a tie under each mode agrees with fcvt.w.s on the reference model', () => {
+    const r = rng(3);
+    const seen = new Set<string>();
+    for (let i = 0; i < 1500; i++) {
+      const q = DRILLS.float.make(r);
+      const m = q.prompt.match(/mode <b>(R[A-Z]+)<\/b> .*convert <b>(−?)([\d.]+)<\/b>/);
+      if (!m) continue;
+      const rm = { RNE: RM.RNE, RTZ: RM.RTZ, RDN: RM.RDN, RUP: RM.RUP, RMM: RM.RMM }[m[1] as 'RNE'];
+      const x = (m[2] ? -1 : 1) * Number(m[3]);
+      seen.add(m[1]);
+      expect(q.answer, q.prompt).toBe(String(fpToIntX(f32ToBits(x), true, F32, rm).y | 0));
+    }
+    expect([...seen].sort()).toEqual(['RDN', 'RMM', 'RNE', 'RTZ', 'RUP']);
+    expect([roundMode(2.5, 0), roundMode(3.5, 0), roundMode(-2.5, 4), roundMode(-2.5, 2), roundMode(-2.5, 3), roundMode(-0.25, 3)]).toEqual([2, 4, -3, -3, -2, 0]);
+  });
+  it('the gap between neighbours is the reference model\'s', () => {
+    const r = rng(5);
+    let n = 0;
+    for (let i = 0; i < 1500; i++) {
+      const q = DRILLS.float.make(r);
+      const m = q.prompt.match(/between adjacent (float32|binary16) values near <b>([\d.e+-]+)<\/b>/);
+      if (!m) continue;
+      n++;
+      const x = Number(m[2]);
+      if (m[1] === 'float32') expect(Math.log2(bitsToF32(f32ToBits(x) + 1) - bitsToF32(f32ToBits(x))), q.prompt).toBe(Number(q.answer));
+      else {
+        const b = encodeNumber(x, F16);
+        expect(Math.log2(fpValue(b + 1, F16) - fpValue(b, F16)), q.prompt).toBe(Number(q.answer));
+      }
+    }
+    expect(n).toBeGreaterThan(30);
+  });
+  it('special results are the RISC-V ones', () => {
+    const want: Record<string, string> = {
+      '∞ − ∞': 'NaN', '0 × ∞': 'NaN', '0 / 0': 'NaN', '1 / −0': '−∞', '1 / +0': '∞', '1 / ∞': '+0', '−1 / ∞': '−0', '∞ + 1': '∞', '√(−0)': '−0', '√(−1)': 'NaN',
+      'fmin(NaN, 1)': '1', 'fmax(1, NaN)': '1', 'fmin(−0, +0)': '−0', 'fmax(−0, +0)': '+0', 'NaN == NaN (feq.s)': 'false', 'NaN &lt; 1 (flt.s)': 'false', '+0 == −0 (feq.s)': 'true',
+    };
+    expect(FLOAT_SPECIALS.length).toBe(Object.keys(want).length);
+    for (const [what, run, yn] of FLOAT_SPECIALS) expect(specialAnswer(run(), yn), what).toBe(want[what]);
+    expect(sp('fmin(NaN, 1)')[1]().fl).toBe(0);
+    // typed variants
+    const q = (() => { const r = rng(2); for (let i = 0; i < 500; i++) { const x = DRILLS.float.make(r); if (x.prompt.includes('1 / −0')) return x; } throw new Error('none'); })();
+    for (const a of ['-inf', '−∞', '-Infinity']) expect(q.check(a).ok, a).toBe(true);
+    expect(q.check('inf').ok).toBe(false);
+  });
+  it('subnormal sums and halvings match the reference arithmetic', () => {
+    const r = rng(9);
+    let sums = 0, halves = 0;
+    for (let i = 0; i < 1500; i++) {
+      const q = DRILLS.float.make(r);
+      let m = q.prompt.match(/binary16: <code>0x([0-9A-F]{4})<\/code> \+ <code>0x([0-9A-F]{4})<\/code>/);
+      if (m) { sums++; expect(q.answer, q.prompt).toBe(`0x${fpAddX(parseInt(m[1], 16), parseInt(m[2], 16), false, F16).y.toString(16).toUpperCase().padStart(4, '0')}`); }
+      m = q.prompt.match(/<code>0x([0-9A-F]{4})<\/code> × 0\.5/);
+      if (m) { halves++; expect(q.answer, q.prompt).toBe(`0x${fpMulX(parseInt(m[1], 16), 0x3800, F16).y.toString(16).toUpperCase().padStart(4, '0')}`); }
+    }
+    expect(sums).toBeGreaterThan(20);
+    expect(halves).toBeGreaterThan(20);
   });
 });

@@ -356,6 +356,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Measuring error: ulps and relative error", challenge: "quiz", stage: "widget" },
     { title: "Summing many numbers", challenge: "quiz", stage: "widget" },
     { title: "Kahan on the CPU", challenge: "reach", stage: "scene" },
+    { title: "Decimal in, decimal out", challenge: "quiz", stage: "widget" },
   ] },
   { id: "widths", num: 27, title: "Sixteen bits and sixty-four", blurb: "The C extension: two thirds of real instructions in 16 bits, an expander in gates in front of the decoder, fetching at any halfword, and what that costs. Then the other way: the same core at 64 bits, the W instructions RV64 kept, and what width costs.", level: "Processor", builds: ["cpu","python","fastadd","muldiv","cache","float"], recap: {"checks":3}, steps: [
     { title: "Two thirds fit in 16 bits", challenge: "quiz", stage: "widget" },
