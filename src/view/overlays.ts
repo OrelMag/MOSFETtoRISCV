@@ -5,26 +5,34 @@
 // Slack: static timing through every part (sim/slack.ts, the old heatmap). Activity: 0 ↔ 1 changes per bit since the
 // overlay was turned on (GateSim's toggle counts, glitches included). Load: the NAND inputs each wire drives (the
 // load model's fan-out). Unknown: wires with an X bit, and the parts the X starts from (an X out, no X in).
+// Cost: each part's NANDs (transistors, relays or tube sections at switch level) as a share of the level. Energy: the
+// switched capacitance of the wires each part drives since the overlay was turned on (Activity weighted by load, as
+// power.ts's breakdown). Depth: when each part's slowest output settles after the clock edge (timing.ts's arrival).
 
-import { type DelayModel, fanoutOf, nandDelay, netLoads } from '../sim/delay';
+import { type DelayModel, fanoutOf, fmtDelay, nandDelay, netLoads } from '../sim/delay';
 import type { FlatDesign, HierNode } from '../sim/flatten';
 import type { Sim } from '../sim/sim';
 import { SLACK_BAND_LABELS, slackHeat, slackOf } from '../sim/slack';
-import { hasFeedback } from '../sim/stats';
-import { BX, netlistOf } from '../sim/types';
+import { hasFeedback, type Stats, stats } from '../sim/stats';
+import { driverOf, netCaps } from '../sim/netcap';
+import { type TimingGraph, timingGraph } from '../sim/timing';
+import { BX, type ComponentDef, netlistOf } from '../sim/types';
 import { groupDigits } from '../sim/numfmt';
 import { FF_INPUT, FF_WIRE } from '../sim/netcap';
 
 const ONE_INPUT = FF_INPUT + FF_WIRE;
 
-export type OverlayKind = 'slack' | 'activity' | 'load' | 'unknown';
-export const OVERLAY_KINDS: readonly OverlayKind[] = ['slack', 'activity', 'load', 'unknown'];
-export const OVERLAY_LABEL: Record<OverlayKind, string> = { slack: 'Slack', activity: 'Activity', load: 'Load', unknown: 'Unknown' };
+export type OverlayKind = 'slack' | 'activity' | 'load' | 'unknown' | 'cost' | 'energy' | 'depth';
+export const OVERLAY_KINDS: readonly OverlayKind[] = ['slack', 'activity', 'load', 'unknown', 'cost', 'energy', 'depth'];
+export const OVERLAY_LABEL: Record<OverlayKind, string> = { slack: 'Slack', activity: 'Activity', load: 'Load', unknown: 'Unknown', cost: 'Cost', energy: 'Energy', depth: 'Depth' };
 export const OVERLAY_TITLE: Record<OverlayKind, string> = {
   slack: 'Slack: how much later each part\'s slowest signal could arrive before the clock period (or the longest path) grew',
   activity: 'Activity: how often each wire changes, counted while this overlay is on (runs the gate-level engine)',
   load: 'Load: how many NAND inputs each wire drives',
   unknown: 'Unknown: wires holding an X, and the parts it starts from',
+  cost: 'Cost: each part\'s share of this level\'s NANDs (transistors at switch level)',
+  energy: 'Energy: the switched capacitance of the wires each part drives, counted while this overlay is on (runs the gate-level engine)',
+  depth: 'Depth: when each part\'s slowest output settles, in delays after the clock edge (or the inputs)',
 };
 
 /** A band (0 … 4, or 'x' for Unknown) and its value in words. `src`: where an X starts. */
@@ -53,10 +61,10 @@ export interface OvContext {
 /** Why an overlay cannot be shown here ('' if it can). */
 export function overlayRefusal(kind: OverlayKind, c: OvContext): string {
   if (c.engine === 'nmos') return 'This chip runs on the NMOS engine: two values, no gate delays, so none of the overlays apply.';
-  if (c.level === 'switch' && (kind === 'slack' || kind === 'activity'))
-    return 'A transistor-level circuit: the switch-level solver has no gate delays, so only Load and Unknown apply.';
-  if (kind === 'activity' && c.engine === 'cycle') return 'This scene runs on the cycle engine, which keeps no toggle counts (it is too large for the gate-level engine).';
-  if (kind === 'activity' && c.sub) return 'This level has a simulation of its own (opened from a leaf): its toggles are not counted.';
+  if (c.level === 'switch' && (kind === 'slack' || kind === 'activity' || kind === 'energy' || kind === 'depth'))
+    return 'A transistor-level circuit: the switch-level solver has no gate delays, so only Load, Unknown and Cost apply.';
+  if ((kind === 'activity' || kind === 'energy') && c.engine === 'cycle') return 'This scene runs on the cycle engine, which keeps no toggle counts (it is too large for the gate-level engine).';
+  if ((kind === 'activity' || kind === 'energy') && c.sub) return 'This level has a simulation of its own (opened from a leaf): its toggles are not counted.';
   return '';
 }
 
@@ -198,6 +206,135 @@ export function unknownOverlay(sim: Sim, node: HierNode): OverlayResult {
         ...(pins.length ? [{ band: 'src' as const, label: pins.join(', '), count: pins.length === 1 ? 'an input left X' : 'inputs left X' }] : []),
       ],
       note: net.size ? 'An X spreads through every gate whose output it can change. It starts at storage nobody wrote and at inputs nobody set.' : 'Every wire on this level is a 0 or a 1.',
+    },
+  };
+}
+
+// ---- Cost -----------------------------------------------------------------------------------------------------
+
+/** A share of the level, banded: 0 the largest (≥ 25 %), … 4 the smallest (< 1 %). */
+export const SHARE_BANDS = [0.25, 0.1, 0.04, 0.01] as const;
+export const SHARE_LABELS = ['≥ 25 %', '10–25 %', '4–10 %', '1–4 %', '< 1 %'] as const;
+export function shareBand(f: number): number {
+  for (let b = 0; b < SHARE_BANDS.length; b++) if (f >= SHARE_BANDS[b]) return b;
+  return SHARE_BANDS.length;
+}
+const pctOf = (f: number) => (f >= 0.1 ? Math.round(f * 100).toString() : f >= 0.01 ? (f * 100).toFixed(1) : (f * 100).toFixed(2));
+
+/** The level's parts (its netlist's instances), by name, with their definitions. */
+function partsOf(node: HierNode): [string, ComponentDef][] {
+  if (node.children?.size) return [...node.children].map(([n, c]) => [n, c.def]);
+  return (netlistOf(node.def)?.instances ?? []).map((i) => [i.name, i.def]);
+}
+
+/**
+ * Each part's share of the level's cost: NANDs at gate level; at switch level transistors, or relays, or tube sections
+ * (triodes and diodes), whichever the level is made of. Pure wiring (splitters, constants) costs nothing and is left out.
+ */
+export function costOverlay(node: HierNode, level: 'gate' | 'switch'): OverlayResult {
+  const parts = partsOf(node).map(([n, d]) => [n, stats(d)] as const);
+  const sum = (f: (s: Stats) => number) => parts.reduce((a, [, st]) => a + f(st), 0);
+  const [word, of]: [string, (s: Stats) => number] =
+    level === 'gate' ? ['NAND', (st) => st.nands]
+      : sum((st) => st.transistors) > 0 ? ['transistor', (st) => st.transistors]
+        : sum((st) => st.relays) > 0 ? ['relay', (st) => st.relays]
+          : ['tube section', (st) => st.triodes + st.diodes];
+  const total = sum(of);
+  const inst = new Map<string, OvMark>();
+  if (total > 0) for (const [name, st] of parts) {
+    const n = of(st);
+    if (!n) continue;
+    const f = n / total;
+    inst.set(name, { band: shareBand(f), tip: `${name}: ${plural(n, word)}, ${pctOf(f)} % of this level` });
+  }
+  return {
+    kind: 'cost', inst, net: new Map(),
+    legend: {
+      title: 'Cost', unit: `share of this level's ${plural(total, word)}`,
+      rows: SHARE_LABELS.map((l, b) => ({ band: b, label: l, count: plural(hist(inst, b), 'part') })),
+      note: `Each part's ${word}s, everything inside it counted, as a share of the level. Counted from the structure: no simulation. Untinted: pure wiring, which costs nothing.`,
+    },
+  };
+}
+
+// ---- Energy ---------------------------------------------------------------------------------------------------
+
+const capCache = new WeakMap<FlatDesign, Float64Array>();
+const capsOf = (d: FlatDesign) => { let c = capCache.get(d); if (!c) capCache.set(d, (c = netCaps(d))); return c; };
+
+/**
+ * The switched capacitance (fF · toggles) of the nets each part of the level drives, from `toggles` minus `base`
+ * (GateSim.toggles snapshots) over `units` clock cycles or input changes: power.ts's breakdown, as a share of the level's.
+ */
+export function energyOverlay(design: FlatDesign, node: HierNode, toggles: ArrayLike<number>, base: ArrayLike<number>, units: number, clocked: boolean): OverlayResult {
+  const caps = capsOf(design), dr = driverOf(design), k = node.path.length;
+  const by = new Map<string, number>();
+  let level = 0;
+  for (let i = 0; i < caps.length; i++) {
+    const t = toggles[i] - base[i];
+    if (t <= 0) continue;
+    const li = dr[i];
+    if (li < 0) continue;
+    const p = design.leaves[li].node.path;
+    if (p.length <= k || node.path.some((x, j) => p[j] !== x)) continue;
+    const sw = t * caps[i];
+    by.set(p[k], (by.get(p[k]) ?? 0) + sw);
+    level += sw;
+  }
+  const per = clocked ? 'clock cycle' : 'input change';
+  const inst = new Map<string, OvMark>();
+  if (level > 0) for (const [name, sw] of by) {
+    const f = sw / level;
+    inst.set(name, { band: shareBand(f), tip: `${name}: ${pctOf(f)} % of this level's switched capacitance over ${plural(units, per)} (${(sw / Math.max(1, units)).toFixed(1)} fF a ${per})` });
+  }
+  return {
+    kind: 'energy', inst, net: new Map(),
+    legend: {
+      title: 'Energy', unit: 'share of the switched capacitance',
+      rows: SHARE_LABELS.map((l, b) => ({ band: b, label: l, count: plural(hist(inst, b), 'part') })),
+      note: units > 0 && level > 0
+        ? `C × toggles of the wires each part drives, glitches included, over the last ${plural(units, per)}: ${groupDigits(Math.round(level / units))} fF a ${per} on this level (the energy is ½ C V² of it). Counted on the gate-level engine while this overlay is on.`
+        : `Nothing has switched since the overlay came on: ${clocked ? 'Step, Pulse or Run the clock' : 'change an input'} and the parts take their colours.`,
+    },
+  };
+}
+
+// ---- Depth ----------------------------------------------------------------------------------------------------
+
+/** Arrival as a fraction of the longest path, banded: 0 late (≥ 90 %), … 4 early (< 25 %). */
+export const DEPTH_BANDS = [0.9, 0.75, 0.5, 0.25] as const;
+export const DEPTH_LABELS = ['≥ 90 %', '75–90 %', '50–75 %', '25–50 %', '< 25 %'] as const;
+export function depthBand(f: number): number {
+  for (let b = 0; b < DEPTH_BANDS.length; b++) if (f >= DEPTH_BANDS[b] - 1e-9) return b;
+  return DEPTH_BANDS.length;
+}
+
+const graphCache = { unit: new WeakMap<FlatDesign, TimingGraph>(), load: new WeakMap<FlatDesign, TimingGraph>(), drawn: new WeakMap<FlatDesign, TimingGraph>() };
+
+/** The latest arrival at any output of each part on the level, from the graph Slack times (nothing timed: an empty legend that says so). */
+export function depthOverlay(design: FlatDesign, node: HierNode, model: DelayModel): OverlayResult {
+  const s = slackOf(design, model);
+  if (!s) return { kind: 'depth', inst: new Map(), net: new Map(), legend: { title: 'Depth', unit: 'latest output', rows: [], note: 'Nothing here is timed: no path runs from an input or a register to an output or a register.' } };
+  let g = graphCache[model].get(design);
+  if (!g) graphCache[model].set(design, (g = timingGraph(design, { delay: model, outputs: !s.clocked })));
+  const inst = new Map<string, OvMark>();
+  const word = model === 'unit' ? 'NAND delays' : 'units', f = (x: number) => fmtDelay(x, model);
+  const from = s.clocked ? 'after the clock edge' : 'after the inputs change';
+  for (const [name, ch] of node.children ?? []) {
+    let worst = -Infinity;
+    for (const p of ch.def.ports) if (p.dir === 'out') for (const n of ch.ports[p.name] ?? []) {
+      const a = g.arr(n);
+      if (Number.isFinite(a) && a > worst) worst = a;
+    }
+    if (!(worst >= 0)) continue;
+    inst.set(name, { band: depthBand(worst / s.period), tip: `${name}: settles ${f(worst)} ${word} ${from} (${Math.round((100 * worst) / s.period)} % of ${s.clocked ? 'the clock period' : 'the longest path'}, ${f(s.period)})` });
+  }
+  return {
+    kind: 'depth', inst, net: new Map(),
+    legend: {
+      title: 'Depth', unit: `latest output · share of ${s.clocked ? 'the period' : 'the longest path'}`,
+      rows: DEPTH_LABELS.map((l, b) => ({ band: b, label: l, count: plural(hist(inst, b), 'part') })),
+      note: `When each part's slowest output settles, ${from}; ${s.clocked ? 'clock period' : 'longest input → output path'} ${f(s.period)} ${word}. Static timing: no simulation. Late is not the same as critical: Slack says whether the path goes on.`,
     },
   };
 }

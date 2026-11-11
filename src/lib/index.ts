@@ -84,6 +84,7 @@ export * from './seqdeep';
 export * from './rfdeep';
 export * from './fpga';
 export * from './sync';
+export * from './debounce';
 export * from './uart';
 export * from './uartlink';
 export * from './modem';

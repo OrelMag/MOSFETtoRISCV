@@ -278,6 +278,16 @@ export const CASES0: Record<string, LevelCase> = {
   },
 
   // ---- Lessons and drills whose case adds to the why --------------------------------------------
+  n_fixed: {
+    problem: 'A signal processor has no floating-point unit to spare: its samples and coefficients are fractions held in integer words, Q1.15 for 16 bits. Which bits of a product to keep, how a dropped bit rounds and whether two words have their points aligned are decisions the adder never makes for you.',
+    without: 'Every value would need an exponent and a unit to align and normalize it: a float32 adder costs many times the gates of a saturating fixed-point adder of the same precision (the chapter Numbers that fit counts both).',
+    cost: 'None in gates: the point is a promise in the designer\'s head. The price is in bits: each bit buys 6.02 dB of range, and a product of two Q1.15 words is Q2.30 and shifts back by 15.',
+  },
+  n_divrem: {
+    problem: 'Division is the one operation that can fail (by zero) or overflow (the most negative word over −1). RISC-V specifies a result for both, so the hardware never traps and compiled code needs no special case; the signs of quotient and remainder follow from rounding toward zero.',
+    without: 'A trapping divide needs an exception path through the pipeline for a rare event; x86\'s divide error is one.',
+    cost: 'No extra gates: the divider of the M unit divides magnitudes and corrects the signs, and the two special cases fall out of that datapath.',
+  },
   n_twos: {
     problem: 'RV16 is two\'s complement throughout. The 6-bit immediates of addi, lw, sw and the branches are sign-extended by wiring alone: instr[15] fans out to every upper bit, so the immediate generator has no gates. The same adder adds signed and unsigned words; only the comparisons differ (signed less-than looks at the signs or N ⊕ V, unsigned at the carry out), and sra fills with the sign bit.',
     without: 'Sign and magnitude has a +0 and a −0, and adding numbers of different signs means comparing magnitudes and subtracting the smaller from the larger: a comparator and a second subtractor beside the adder. One\'s complement also has two zeros, and its carry out must be added back in (end-around carry).',

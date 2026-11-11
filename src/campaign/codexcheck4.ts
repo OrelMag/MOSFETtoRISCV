@@ -341,6 +341,22 @@ export const CHECK4: Record<string, Quiz[]> = {
       why: ['', 'Same full adders as the array; only the arrangement differs.', 'That is Booth recoding; a Wallace tree sums all n rows.', 'A fast carry-propagate adder still adds the last two words.'],
     },
   ],
+  multiword: [
+    {
+      question: 'On RV32, s = a + b has been computed in a 32-bit register (low words of a 64-bit add). Which instruction gives the carry into the high word?',
+      options: ['sltu c, s, a: the sum is smaller than an operand exactly when it wrapped', 'slt c, s, a: the same, signed', 'sltu c, a, s: a is smaller than the sum', 'There is no way: RISC-V has no carry flag'],
+      answer: 0,
+      explain: 'Modulo 2³², a + b wraps exactly when the result is below either operand, so the unsigned comparison of the sum with a (or with b) is the carry. The signed comparison gives the wrong answer for sums that cross 2³¹.',
+      why: ['', 'A signed compare treats 0x80000000 and up as negative, so it misses carries and invents others.', 'That asks whether a is below the sum, which is true whenever b is nonzero and nothing wrapped.', 'The flag is absent, but the carry is one sltu away.'],
+    },
+    {
+      question: 'How many 32 × 32 → 64 products make a 64 × 64 → 128 product, and which instructions give each?',
+      options: ['Four, each a mul (low word) and a mulhu (high word)', 'One: mulhu gives all 128 bits', 'Two: one for each operand word', 'Eight, each a single mul'],
+      answer: 0,
+      explain: '(a1·2³² + a0)(b1·2³² + b0) = a1b1·2⁶⁴ + (a1b0 + a0b1)·2³² + a0b0: four products of two words, each 64 bits wide and so two instructions, eight in all, then the columns are added with their carries.',
+      why: ['', 'mulhu gives only the high 32 bits of one 32 × 32 product.', 'Each operand has two words and every pair multiplies.', 'mul gives the low word only; the high word is another instruction.'],
+    },
+  ],
   booth: [
     {
       question: 'Radix-4 Booth: the bit group (b<sub>2i+1</sub>, b<sub>2i</sub>, b<sub>2i−1</sub>) = (1, 0, 0). Which digit, and which row?',

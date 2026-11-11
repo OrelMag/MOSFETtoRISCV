@@ -18,7 +18,8 @@ import { hopPathData, overlaps, routeNetlist, splitterBars, tagGeom, tapLabels, 
 import { partnerLines } from './partners';
 import { drawnNetlist } from './wirefirst';
 import type { OverlayMarks } from './overlays';
-import { applyLayout, canRedo, canUndo, dragSegment, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, showsTags, undoLayout, type LayoutEdit } from './layout';
+import { applyLayout, canRedo, canUndo, checkDrawing, dragSegment, dropAside, dropCorners, dropLastEdit, editLayout, isTagged, layoutOf, nearestSegment, pastSlop, restoreAside, showsTags, undoLayout, type LayoutEdit } from './layout';
+import { settings } from '../ui/settings';
 import { drawnHue, netKey, setNetHue, spreadHues } from './nethue';
 import { drawPinGlyph, drawSymbol, instNameAt, placePinValue } from './symbols';
 import { cmosLod, cmosShown, paintCmos } from './cmosdraw';
@@ -40,6 +41,9 @@ export interface NotePin {
   title: string;
   open(): void;
 }
+
+/** The first drag on a part with the layout locked says where the lock is; once a visit. */
+let lockSaid = false;
 
 export interface SchematicEvents {
   open(child: string): void;
@@ -187,6 +191,8 @@ export class SchematicView {
    * 'wires', only wires and pointers, the parts stay put (the sandbox's look inside, the codex); false, as authored.
    */
   arrange: boolean | 'wires' = false;
+  /** Show the author's drawing whatever the learner arranged (the stage's Original peek): nothing moves while it is on. */
+  original = false;
   /** The level's netlist as authored (before the learner's layout). */
   private base: Netlist | null = null;
   /** A part drag just ended: the click it ends with does not select. */
@@ -305,7 +311,7 @@ export class SchematicView {
     this.faded.clear();
     this.netMarks = new Map();
     this.closeMenu();
-    if (!keepView) { this.group = new Set(); this.ov = null; }
+    if (!keepView) { this.group = new Set(); this.ov = null; this.original = false; }
     const authored = netlistOf(ctx.def);
     const base = this.base = authored ? drawnNetlist(ctx.def, authored) : null;
     this.el.replaceChildren();
@@ -320,7 +326,10 @@ export class SchematicView {
     this.kring = null;
     this.quiet.clear();
     if (!base) return;
-    let lay = this.arrange ? layoutOf(ctx.def.id) : undefined;
+    // an arrangement made on an earlier drawing of this level is set aside (asideOf), not laid over this one: keyed on the
+    // author's netlist, so a change to the wires-first rules (wirefirst.ts) is not taken for a redraw
+    if (this.arrange && !this.preview && authored) checkDrawing(ctx.def.id, authored);
+    let lay = this.arrange && !this.original ? layoutOf(ctx.def.id) : undefined;
     if (this.arrange && this.preview) {
       // a live part drag: drawn as it will be on drop, without the corners it leaves behind
       const p: LayoutEdit = lay = { wired: [], tagged: [], ...lay, at: { ...lay?.at, ...this.preview } };
@@ -508,7 +517,7 @@ export class SchematicView {
         this.select(inst.name);
         this.events.select(inst.name);
       });
-      if (this.arrange === true) g.addEventListener('pointerdown', (e) => this.dragInst(e, inst.name));
+      g.addEventListener('pointerdown', (e) => this.pressInst(e, inst.name));
       g.addEventListener('pointerup', (e) => {
         if (this.taps.upEvent(e, inst.name) && openable && !this.dragged) this.events.open(inst.name);
       });
@@ -1118,6 +1127,67 @@ export class SchematicView {
     this.el.addEventListener('pointercancel', up);
   }
 
+  /** Parts and wires move when dragged: a level the learner may arrange, layout not locked (settings.moveParts), not the Original peek. */
+  get movable(): boolean {
+    return !!this.arrange && !this.original && settings.moveParts;
+  }
+
+  /**
+   * A press on a part: a drag moves it (and the parts picked with it) where parts move: with a mouse or a pen, or a
+   * finger on a part already selected (tap it first: a finger otherwise pans, as on wires). Anywhere else the drag
+   * pans the view, and on a locked layout the first such drag says where the lock is.
+   */
+  private pressInst(e: PointerEvent, name: string): void {
+    if (e.button !== 0 || (e.target as Element).closest('.open-badge')) return;
+    if (this.arrange === true && this.movable && (e.pointerType !== 'touch' || this.selected === name || this.group.has(name))) {
+      this.dragInst(e, name);
+      return;
+    }
+    if (e.shiftKey && this.arrange === true) return;
+    this.panFrom(e, this.arrange === true && !settings.moveParts && !this.original);
+  }
+
+  /** Pan the view from a press on a part (installPanZoom pans only from the board): past the slop, the part's click is
+   *  swallowed. `locked`: the drag would have moved the part had the layout not been locked. */
+  private panFrom(e: PointerEvent, locked: boolean): void {
+    const vx = this.cam.vb.x, vy = this.cam.vb.y, k = this.cam.scale();
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return;
+      if (!moved) {
+        if (!pastSlop(e, ev)) return;
+        moved = true;
+        this.el.setPointerCapture(e.pointerId);
+        this.tooltip.style.opacity = '0';
+        if (locked && !lockSaid) {
+          lockSaid = true;
+          this.note('Layout locked: the lock on the bar (or View options, Move parts by dragging) lets you move parts');
+        }
+      }
+      this.cam.vb.x = vx - (ev.clientX - e.clientX) * k;
+      this.cam.vb.y = vy - (ev.clientY - e.clientY) * k;
+      this.cam.fitted = false;
+      this.cam.apply();
+    };
+    const stop = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId && ev.type !== 'pointerdown') return;
+      this.el.removeEventListener('pointermove', move);
+      this.el.removeEventListener('pointerup', stop);
+      this.el.removeEventListener('pointercancel', stop);
+      this.el.removeEventListener('pointerdown', other);
+      if (!moved) return;
+      if (this.el.hasPointerCapture(e.pointerId)) this.el.releasePointerCapture(e.pointerId);
+      this.dragged = true;
+      setTimeout(() => (this.dragged = false));
+    };
+    // a second finger: the pinch takes over
+    const other = (ev: PointerEvent) => { if (ev.pointerId !== e.pointerId) stop(ev); };
+    this.el.addEventListener('pointermove', move);
+    this.el.addEventListener('pointerup', stop);
+    this.el.addEventListener('pointercancel', stop);
+    this.el.addEventListener('pointerdown', other);
+  }
+
   /**
    * Drag a part (and the parts picked with it) to a new place, in whole grid units. On a level that routes quickly
    * the wires follow while it moves; on a big one the symbols move alone, their wires faded, and the wires are routed
@@ -1155,8 +1225,7 @@ export class SchematicView {
       if (ev.pointerId !== e.pointerId) return;
       const [x, y] = this.cam.toWorld(ev.clientX, ev.clientY);
       if (!moved) {
-        // below this (grid units) a press is still a click
-        if (Math.abs(x - x0) + Math.abs(y - y0) < 0.6) return;
+        if (!pastSlop(e, ev)) return;
         moved = true;
         // on the svg, which outlives the redraws of a live drag
         this.el.setPointerCapture(e.pointerId);
@@ -1224,7 +1293,7 @@ export class SchematicView {
    * selected (tap it first).
    */
   private grabbedNet(e: PointerEvent): number {
-    if (!this.arrange || e.button !== 0 || e.shiftKey) return -1;
+    if (!this.movable || e.button !== 0 || e.shiftKey) return -1;
     const t = (e.target as Element).closest('.wire-hit, .wires [data-net]');
     const idx = t ? Number(t.getAttribute('data-net')) : -1;
     return idx >= 0 && (e.pointerType !== 'touch' || idx === this.selectedNet) ? idx : -1;
@@ -1261,8 +1330,7 @@ export class SchematicView {
       if (ev.pointerId !== e.pointerId || !grab) return;
       const [x, y] = this.cam.toWorld(ev.clientX, ev.clientY);
       if (!moved) {
-        // below this (grid units) a press is still a click
-        if (Math.abs(x - x0) + Math.abs(y - y0) < 0.6) return;
+        if (!pastSlop(e, ev)) return;
         moved = true;
         this.el.setPointerCapture(e.pointerId);
         this.reshaping = true;
@@ -1663,6 +1731,32 @@ export class SchematicView {
   }
 
   /** The level's layout actions as a menu at a point on the screen (the stage's Layout button, `toggle`). */
+  /** The stage's layout pill: the author's drawing shown or the learner's again, the learner's reset, an arrangement set
+   *  aside by a redraw brought back or let go. */
+  layoutAction(a: 'original' | 'mine' | 'reset' | 'restore' | 'dismiss'): void {
+    const id = this.ctx?.def.id;
+    if (!id || !this.arrange) return;
+    if (a === 'original' || a === 'mine') {
+      this.original = a === 'original';
+      this.relayout();
+    } else if (a === 'reset') {
+      this.original = false;
+      this.edit((l) => {
+        l.at = {};
+        l.wired = [];
+        l.tagged = [];
+        delete l.via;
+      });
+    } else if (a === 'restore') {
+      this.original = false;
+      restoreAside(id);
+      this.redraw();
+    } else {
+      dropAside(id);
+      this.events.layoutChanged?.();
+    }
+  }
+
   layoutMenu(x: number, y: number, toggle?: Element): void {
     this.openMenu(this.layoutItems(), x, y, toggle);
   }

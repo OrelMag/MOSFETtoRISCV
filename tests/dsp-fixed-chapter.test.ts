@@ -100,3 +100,23 @@ describe('the text', () => {
     for (const s of chFixed.steps) { expect(s.body.length, s.title).toBeGreaterThan(300); expect(!!s.widget || !!s.scene, s.title).toBe(true); expect(s.challenge, s.title).toBeTruthy(); }
   });
 });
+
+describe('dynamic range and the two truncations (steps "A word and its point" and "Rounding")', () => {
+  it('6.02 dB a bit; 16 bits: 96.3 dB over the span, 90.3 dB from one step to full scale; a full-scale sine 98.1 dB', () => {
+    expect((20 * Math.log10(2)).toFixed(2)).toBe('6.02');
+    expect((20 * Math.log10(2 ** 16)).toFixed(1)).toBe('96.3');
+    expect((20 * Math.log10(2 ** 15)).toFixed(1)).toBe('90.3');
+    expect((6.02 * 16 + 1.76).toFixed(1)).toBe('98.1');
+    // the 1.76: a full-scale sine's power over step^2 / 12 is (3/2) 2^(2b); measured on 16 bits
+    expect(10 * Math.log10(1.5)).toBeCloseTo(1.76, 2);
+  });
+  it('an arithmetic shift floors, C division truncates toward zero', () => {
+    expect([-3 >> 1, Math.trunc(-3 / 2), 3 >> 1, Math.trunc(3 / 2)]).toEqual([-2, -1, 1, 1]);
+    // the shift-and-add C compilers use for x / 2^s: add 2^s - 1 to negative x first
+    for (let x = -64; x <= 64; x++) expect((x + (x < 0 ? 3 : 0)) >> 2).toBe(Math.trunc(x / 4) + 0);
+  });
+  it('Qa.b x Qc.d = Q(a+c).(b+d): Q1.7 x Q1.7 is 16 bits with 14 after the point', () => {
+    const p = 96 * 64; // 0.75 x 0.5 in Q1.7
+    expect(p / 2 ** 14).toBe(0.375);
+  });
+});

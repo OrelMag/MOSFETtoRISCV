@@ -159,7 +159,7 @@ export const chPython: Chapter = {
         gives the line running, the registers and data memory give the variables, the words from the output's start to
         gp give what was printed.</p>
         <p><em>Step line</em> clocks <span data-show="pc imem rf alu">the CPU</span> until the next Python line starts
-        (Back undoes it). The panel counts each line's cycles, and the wire toggles of its last cycle: one
+        (Step back undoes it). The panel counts each line's cycles, and the wire toggles of its last cycle: one
         <code>total += i</code> is a single <code>add</code>, one clock cycle and about 25 000 nets changing value
         through <span data-show="rf alu">the register file and the ALU</span>. Click a line to light the hardware its
         instructions use. The CPU panel still checks every register against the golden model after every cycle.</p>

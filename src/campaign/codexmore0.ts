@@ -456,7 +456,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Circling groups of 3 or 6 cells: only rectangles of 1, 2, 4, 8… cells are product terms.',
     ],
     lib: 'rv16_prime4_sop',
-    chapters: [{ chapter: 'logic', step: 2, label: 'The Karnaugh map' }],
+    chapters: [{ chapter: 'logic', step: 2, label: 'The Karnaugh map' }, { chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'fsm', step: 3, label: 'From the table to the logic' }],
   },
   qm: {
     idea: 'Quine–McCluskey is the K-map as an algorithm, so it works for any number of variables and a program can run it. Write the minterms (and don\'t-cares) in binary, grouped by their number of 1s. Merge every pair from neighbouring groups that differs in one bit, writing a dash there; repeat on the merged terms until nothing merges. Terms never merged are the prime implicants. Then choose a minimum set of primes covering every minterm (don\'t-cares need no cover): the essential primes first, then the rest, a set-cover problem that is exponential in the worst case (Petrick\'s method, or a heuristic).<br>The site\'s PLA generator runs it on every output when a PLA is built: the 7-segment decoder comes out as 28 terms, 164 NANDs, against 313 for the same function as a ROM.',
@@ -500,7 +500,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Choosing the encoding before writing the transitions: one-hot, or adjacent codes for frequent transitions, falls out of the table.',
     ],
     lib: 'rv16_det101',
-    chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'multicycle', step: 1, label: 'The state table' }, { chapter: 'multicycle', step: 2, label: 'Hardwired control' }],
+    chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'fsm', step: 0, label: 'From a sentence to a diagram' }, { chapter: 'fsm', step: 1, label: 'Moore or Mealy: one cycle apart' }, { chapter: 'fsm', step: 5, label: 'Read it back: is it the machine you drew?' }, { chapter: 'multicycle', step: 1, label: 'The state table' }, { chapter: 'multicycle', step: 2, label: 'Hardwired control' }],
   },
   assembly: {
     idea: 'Assembly is machine code with names: one line per instruction, mnemonics for opcodes, ABI names for registers (a0, sp, ra), labels for addresses, and pseudo-instructions that expand to real ones (li, mv, j, call, ret, beqz). The assembler needs two passes because a branch may name a label further down. Pass 1 walks the source counting words to give every label an address, so each pseudo-instruction\'s size must be decided before its operands are known: li is one word when the value fits a 6-bit immediate or has its low 6 bits zero, else two. Pass 2 encodes each instruction, computing branch and jump offsets as target − pc and checking that they fit.<br>RV16 branch offsets are 6 bits (−32…31 words) and jal\'s 9 bits (−256…255): a loop longer than that closes with an inverted branch around a jump.',
