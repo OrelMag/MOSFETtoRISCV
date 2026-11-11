@@ -39,6 +39,13 @@ const READS_200 = walkTrie(buildTrie(CH_ROUTES), ipOf('10.200.0.1')).reads;
 
 const dvNet = (() => { const d = new DistVec(NET7); d.settle(); return { rounds: d.rounds, msgs: d.messages }; })();
 const dvChain = (() => { const d = new DistVec(CHAIN3); d.settle(); d.fail(1, 2); const r = d.settle(); return r; })();
+/** Step 'Distance vector': the chain A - B - C settled, B - C fails, one round: what B and A now say about C. */
+const dvFail = (() => {
+  const d = new DistVec(CHAIN3); d.settle();
+  const before = { b: d.dist[1][2], a: d.dist[0][2] };
+  d.fail(1, 2); d.round();
+  return { before, bAfter: d.dist[1][2], bVia: CHAIN3.names[d.via[1][2]], aAfter: d.dist[0][2] };
+})();
 const dvPoison = (() => { const d = new DistVec(CHAIN3, true); d.settle(); d.fail(1, 2); return d.settle(); })();
 const FLOOD = floodAll(NET7);
 const HC_EXAMPLE = ttlChecksum(0xb861);
@@ -173,6 +180,14 @@ export const chRouter: Chapter = {
         <p>The trouble is in what a number does not say. On the chain A - B - C, fail B - C. B has lost C, but A still says "2 to C", and A's path runs through B, which A does not say and B cannot know. So B takes it, 3 via A. A then hears 3 and goes to 4, and so on: <strong>counting to infinity</strong>, ${dvChain} rounds until both reach RIP's infinity of 16. Sixteen is a compromise: small enough to stop soon, and it limits the network to 15 hops across.</p>
         <p>Poison reverse helps: tell a neighbour "infinity" for routes that go through it. The chain now settles in ${dvPoison} rounds. It cures loops of two routers; loops of three and more can still count, given the right timing. <span class="try">Choose the chain, fail B - C, and run rounds.</span> <span class="try">Do it again with poison reverse.</span></p>`,
       widget: distVecWidget,
+      challenge: {
+        kind: 'quiz',
+        question: 'The chain A - B - C has settled, every link costing 1. Then the link B - C fails, and every router sends its table once. What does B now say its cost to C is, and through whom?',
+        options: [dvFail.bAfter + ' via ' + dvFail.bVia, 'Unreachable (16): B lost its only link to C', dvFail.before.b + ' via C, until a timer expires', dvFail.before.a + ' via ' + dvFail.bVia + ', A\'s old figure unchanged'],
+        answer: 0,
+        explain: 'Before the failure A told B "' + dvFail.before.a + ' to C". B has just lost its own route, and believes A: ' + dvFail.before.a + ' + 1 = ' + dvFail.bAfter + ', via A. But A\'s route to C runs through B. Next round A hears ' + dvFail.bAfter + ' and says ' + (dvFail.bAfter + 1) + ', and so on up to 16: ' + dvChain + ' rounds in all.',
+        why: ['', 'B cannot know that A\'s path to C goes through B itself, and a number does not say. It takes the cheapest offer it hears.', 'The link is down at once: B sees it fail and drops the route in the same round.', 'B adds its link to A: ' + dvFail.before.a + ' + 1, not A\'s figure alone.'],
+      },
       more: {
         real: `<p>Rounds here are synchronous, all routers at once, which is the simplest case and the kindest. BGP, which runs between the internet's networks, is a path-vector protocol: like distance vector it tells its neighbours its routes, but with the whole path, not only the number, exactly so a router can see itself in it and refuse: that removes counting to infinity at the price of longer messages. It also chooses by policy rather than cost, because networks are companies.</p>`,
       },
