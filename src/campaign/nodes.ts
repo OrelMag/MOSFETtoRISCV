@@ -682,6 +682,12 @@ export const NODES: CampaignNode[] = withBugHunts([
     tips: ['The handler has no register to start with. <code>csrrw sp, mscratch, sp</code> swaps sp with mscratch: sp becomes the address of the running process\'s block, and the process\'s sp waits in mscratch.', 'Save the other six registers relative to sp first, then fetch the parked sp and mepc through a scratch register you have already saved.', 'To load: point sp at the other block, restore mepc and the parked sp through t0, then the six registers, and last another <code>csrrw sp, mscratch, sp</code> to give the process its own sp back. Acknowledge the device before mret.'],
     codex: ['ctxswitch', 'process', 'scheduler'], chapters: [{ chapter: 'os', step: 3, label: 'The process control block and the context switch' }, { chapter: 'os', step: 4, label: 'Two programs, one CPU: the timer decides' }],
   },
+  {
+    id: 'p_critical', act: 7, title: 'A critical section', kind: 'program', optional: true, requires: ['p_handler'], par: { size: 34, cycles: 353 },
+    why: 'Main and an interrupt handler add to one word. An interrupt between main\'s load and its store loses the handler\'s increment, on one core. Turning MIE off around the three instructions makes them a critical section: 3 words more than the given program, which loses an increment in every test.',
+    tips: ['Find the window: which two instructions of main may an interrupt not fall between?', 'mstatus bit 3 is MIE: <code>csrc mstatus, rs</code> clears the bits set in rs, <code>csrs mstatus, rs</code> sets them. Keep 8 in a register you do not otherwise use.', 'An interrupt raised while MIE is off is not lost: the device holds its line until the handler acknowledges, and the trap is taken as soon as MIE is set again.'],
+    codex: ['critsec', 'interrupts'], chapters: [{ chapter: 'threads', step: 2, label: 'A critical section, made indivisible by the kernel' }],
+  },
 
   // ---- Act 8 --------------------------------------------------------------------------------
   {

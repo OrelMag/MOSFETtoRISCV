@@ -155,6 +155,34 @@ const s16 = (v: number) => ((v & 0xffff) ^ 0x8000) - 0x8000;
 const KERNEL_HELP = 'Four lanes run your program in lock-step, one shared memory: <code>csrr rd, tid</code> gives each its number (0 … 3); lane <i>t</i> takes elements <i>t</i>, <i>t</i> + 4, <i>t</i> + 8, …. Graded on cycles (warp instructions) and lane-ops (each instruction times the lanes switched on for it: the work done).';
 const IO_HELP = 'Read a word with <code>lw rd, -4(x0)</code> (IN), write one with <code>sw rs, -3(x0)</code> (OUT), stop with <code>halt</code>.';
 
+// p_critical (chapter 'threads''s critical section on the RV16 core): main and an interrupt handler add to one word.
+const CRIT_COUNT = 0x100;
+const CRIT_BOOT = `        li   sp, 0x1000
+        la   t0, handler
+        csrw mtvec, t0
+        li   t0, 0x800
+        csrw mie, t0         # MEIE
+        li   t0, 8
+        csrs mstatus, t0     # MIE: interrupts on
+        li   a0, 40          # increments to make
+        li   a1, ${CRIT_COUNT}         # &count
+`;
+const CRIT_HANDLER = `
+handler:                     # given: the device's increment
+        push t0
+        push t1
+        li   t0, ${CRIT_COUNT}
+        lw   t1, 0(t0)
+        addi t1, t1, 1
+        sw   t1, 0(t0)
+        sw   x0, -7(x0)      # acknowledge the device
+        pop  t1
+        pop  t0
+        mret
+`;
+/** Interrupt schedules: several land between a load and a store of the given main, whatever the phase. */
+const CRIT_IRQS = [[21, 63, 105, 147], [24, 70, 116, 162], [32, 77, 125], [45, 98, 151, 199], [27, 55, 83, 111, 139]];
+
 // p_switch: two processes (given) and the boot that starts them; the learner writes the handler.
 const PROC_BOOT = `        la   t1, procB
         sw   t1, 15(x0)      # B's block: it starts at procB
@@ -373,6 +401,29 @@ handler:
       expect: { mem: procExpect() },
     })),
     maxSteps: 8000, system: true,
+  },
+  p_critical: {
+    brief: 'Main adds 1 to the count at 0x100 forty times; a device interrupts now and then, and its handler (given) adds 1 to the same count and acknowledges. Every increment must land: the count must end at 40 plus the number of interrupts. '
+      + 'As given it does not: an interrupt that falls between main\'s load and its store has its increment written over. Make main\'s load, add and store a <b>critical section</b>: one core has nothing else to fear, so keep the interrupt out of it (clear mstatus bit 3, MIE, before the load; set it again after the store). An interrupt raised meanwhile waits, and is taken the moment MIE is back.',
+    starter: CRIT_BOOT + `loop:   lw   t1, 0(a1)
+        addi t1, t1, 1
+        sw   t1, 0(a1)
+        addi a0, a0, -1
+        bnez a0, loop
+        halt
+` + CRIT_HANDLER,
+    ref: CRIT_BOOT + `        li   a2, 8           # mstatus.MIE
+loop:   csrc mstatus, a2     # interrupts off: the critical section begins
+        lw   t1, 0(a1)
+        addi t1, t1, 1
+        sw   t1, 0(a1)
+        csrs mstatus, a2     # and ends: a waiting interrupt is taken here
+        addi a0, a0, -1
+        bnez a0, loop
+        halt
+` + CRIT_HANDLER,
+    tests: () => CRIT_IRQS.map((at) => ({ name: `interrupts at ${at.join(', ')}`, irqAt: at, expect: { mem: { [CRIT_COUNT]: 40 + at.length } } })),
+    maxSteps: 3000, system: true,
   },
 
 
