@@ -39,7 +39,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A chain of cards", challenge: "quiz", stage: "widget" },
     { title: "Counting a nation", challenge: "quiz", stage: "widget" },
     { title: "Eighty columns", challenge: "quiz", stage: "widget" },
-    { title: "A program on cards", challenge: "quiz", stage: "widget" },
+    { title: "A program on cards, and the sorter", challenge: "quiz", stage: "widget" },
     { title: "A machine that reads them", challenge: "reach", stage: "scene" },
     { title: "Inside the reader", challenge: "quiz", stage: "widget" },
   ] },

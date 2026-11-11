@@ -236,21 +236,13 @@ export const chLatches: Chapter = {
     {
       title: 'The flip-flop: act only on the edge',
       get body() {
-        const T = MS_TIMING();
         return `
         <p>A transparent latch is awkward in a big circuit: while it is open, changes race straight through. We want
         a memory that samples its input at one precise instant.</p>
         <p>Chain two D latches with <span data-show="inv">opposite enables</span>: the <strong><span data-show="master">master</span></strong> is open while the clock is low; the
         <strong><span data-show="slave">slave</span></strong> while it is high. At the moment the clock rises, the master closes (capturing d)
         and the slave opens (showing it). This is the <strong>edge-triggered D flip-flop</strong>. The two are open on opposite phases, so a change on d cannot run through to q. The inverter leaves them both open for one gate delay after the rising edge, too short for d to cross the master (that delay is the hold time below). That is the whole trick. Cost: two latches and an inverter, ${nands(DFF)} NANDs, ${stats(DFF).transistors} transistors.</p>
-        <p>"At the edge" is a contract with three numbers, all visible here. <strong>Setup</strong> (${T.setup} delays here): d must have crossed
-        <span data-show="master">the master</span> before clk rises (the larger of the rising and falling d's setup is quoted); a falling d goes through the master's inverter and a NAND.
-        <strong>Hold</strong> (${T.hold} delay here): d must then stay put until the master has closed, and clk reaches the master's enable through
-        <span data-show="inv">an inverter</span>. <strong>Clock-to-q</strong> (${T.r.cqRise} delays here for a rising q, ${T.r.cqFall} for a falling one): the time the
-        <span data-show="slave">slave</span> takes to show the captured value. Between two flip-flops the period must cover clk-to-q + the
-        slowest logic + setup, and clk-to-q plus the fastest path must outlast the hold time. Here the numbers fall out of unit NAND delays; in
-        silicon they come from characterizing the cell, tens of picoseconds each, and a d that changes inside the window can leave
-        the master balanced half way: metastable. The next steps measure all three on this circuit.</p>
+        <p>"At the edge" is a contract with three numbers: <strong>setup</strong>, <strong>hold</strong> and <strong>clock-to-q</strong>. The next steps measure all three on this circuit.</p>
         <div class="try">Change d while the clock is low: q does not move. Press <strong>Pulse</strong>: q
         takes d's value at the rising edge. Open the <strong>Timing</strong> panel to see it over time.</div>`;
       },
@@ -266,14 +258,25 @@ export const chLatches: Chapter = {
             say: '<p>The next rising edge carries d = 0 across: q = {v:q}. One value per edge, taken at the edge.</p>' },
         ],
       },
-      more: {
-        derive: `<p>With t_cq the clock-to-q delay, t_logic the slowest path between two flip-flops, t_su the setup time and t_h the hold time, the constraints between a launching and a capturing flip-flop are
+      get more() {
+        const T = MS_TIMING();
+        return {
+        derive: `<p>"At the edge" is a contract with three numbers, all visible here. <strong>Setup</strong> (${T.setup} delays here): d must have crossed
+        <span data-show="master">the master</span> before clk rises (the larger of the rising and falling d's setup is quoted); a falling d goes through the master's inverter and a NAND.
+        <strong>Hold</strong> (${T.hold} delay here): d must then stay put until the master has closed, and clk reaches the master's enable through
+        <span data-show="inv">an inverter</span>. <strong>Clock-to-q</strong> (${T.r.cqRise} delays here for a rising q, ${T.r.cqFall} for a falling one): the time the
+        <span data-show="slave">slave</span> takes to show the captured value. Between two flip-flops the period must cover clk-to-q + the
+        slowest logic + setup, and clk-to-q plus the fastest path must outlast the hold time. Here the numbers fall out of unit NAND delays; in
+        silicon they come from characterizing the cell, tens of picoseconds each, and a d that changes inside the window can leave
+        the master balanced half way: metastable.</p>
+          <p>With t_cq the clock-to-q delay, t_logic the slowest path between two flip-flops, t_su the setup time and t_h the hold time, the constraints between a launching and a capturing flip-flop are
           T ≥ t_cq + t_logic + t_su and t_cq + t_logic,min ≥ t_h. With the timing model's budget for this flip-flop (clk-to-q ${CLK_TO_Q}, setup ${SETUP}: a little above what the next step measures) a stage of 20 NAND delays needs T ≥ ${CLK_TO_Q} + 20 + ${SETUP} = ${CLK_TO_Q + 20 + SETUP} delays. The first
           inequality is about the slow path, so a slower clock fixes it; the second is about the fast path and does not contain T at all.</p>`,
         real: `<p>A library flip-flop is a master–slave pair like this one, in 20 to 30 transistors with tuned sizes, against ${stats(DFF).transistors} here. Its datasheet lists setup, hold and clk-to-q as tables
           over the input slew and the output load, which is why real timing analysis is a calculation over a graph of such tables.</p>`,
         pitfall: `<p>Hold violations. A flip-flop that feeds another one directly (a shift register) has no logic between them, only clk-to-q, and if the capturing flip-flop's clock arrives late (skew),
           its master may still be open when the new value shows up: the data runs through two stages in one edge. Slowing the clock does not help; the fix is delay in the data path, or less skew.</p>`,
+        };
       },
       scene: () => ({ root: DFF, inputs: { d: 1, clk: 0 }, autoClock: false }),
       tries: [(st) => st.cycles > 0 && st.value('q') === st.getInput('d')],
@@ -1239,12 +1242,12 @@ export const chMemory: Chapter = {
     {
       title: 'A core plane, wired',
       body: `
-        <p>The plane of the last step, as a circuit you can run. The store holds ${CORE_WORDS} words of ${CORE_PLANES} bits in ${CORE_PLANES} planes of 4 × 4 cores, one plane per bit, as Whirlwind stacked 17 planes of 32 × 32. Plane 0 is open: an X line along each row and a Y line down each column, each line two wires (one driven only during a read, one only during a write: <span data-show="sx sy">split out per line here</span>), and one inhibit wire and one sense wire through all sixteen cores. A word is one core per plane, at the same row and column of each.</p>
-        <p>Each core follows the square loop of the last step, counted in half-selects: a write half +1, a read half −1, the inhibit −1. At ±2 it switches; anything less, it holds. Click <b>Read</b> in the panel: the store takes the address and goes to READ. Word 6 is row 1, column 2, so those two lines carry read halves, and <span data-show="c12">the core where they cross</span> sees −2 and switches to 0. The six other cores on the two lines see −1 and keep their bits. A plane where the word held a 1 gets a pulse on <span data-show="pin:s">its sense wire</span>; the edge that ends READ is the strobe that loads the buffer register from the four sense wires. Whirlwind's strobe fell inside the read current too: in the core test of MIT Report R-221 it was a ${R221.strobeUs} µs pulse about ${R221.strobeAtUs} µs into the sense pulse, well within the ${R221.readUs} µs read.</p>
-        <p>The word is now gone from the cores and sits only in the buffer, so WRITE has to put it back: write halves on the same two lines, with <span data-show="pin:inh">the inhibit</span> carrying a half the other way in every plane whose buffer bit is 0, so that core sees +1 and stays 0. A write of new data is the same two phases, with the data loaded into the buffer in place of what was read. Every access is read, then write: two clocks here; about ${R221.cycleUs} µs in Whirlwind.</p>
+        <p>The plane of the last step, as a circuit you can run. The store holds ${CORE_WORDS} words of ${CORE_PLANES} bits in ${CORE_PLANES} planes of 4 × 4 cores, one plane per bit. Plane 0 is open: an X line along each row, a Y line down each column (<span data-show="sx sy">each two wires, one for reads and one for writes</span>), and one inhibit wire and one sense wire through all sixteen cores. A word is one core per plane, at the same row and column.</p>
+        <p>Each core follows the square loop of the last step, counted in half-selects: a write half +1, a read half −1, the inhibit −1. At ±2 it switches; anything less, it holds. Click <b>Read</b> in the panel. Word 6 is row 1, column 2, so those two lines carry read halves, and <span data-show="c12">the core where they cross</span> sees −2 and switches to 0; the six other cores on the two lines see −1 and keep their bits. A plane where the word held a 1 gets a pulse on <span data-show="pin:s">its sense wire</span>; the edge that ends READ is the strobe that loads the buffer register from the four sense wires.</p>
+        <p>The word now sits only in the buffer, so WRITE puts it back: write halves on the same two lines, with <span data-show="pin:inh">the inhibit</span> carrying a half the other way in every plane whose buffer bit is 0, so that core sees +1 and stays 0. A write of new data is the same two phases, with the new data in the buffer. Every access is read, then write: two clocks here.</p>
         ${readCycleFigure()}
         <div class="try">Switch the inhibit drivers off in the panel, write 0000 into word 1 and read it back: what does every write become without the inhibit?</div>
-        <p>The cores cost nothing in gates: ${groupDigits(stats(CORE_STORE).cores ?? 0)} rings, no transistor. The drivers, decoders, registers and phase control around them are ${groupDigits(nands(CORE_STORE))} NANDs, against ${groupDigits(nands(ram(4, 4)))} for a 16 × 4 flip-flop RAM built like the one at the start of this chapter, where every bit is a flip-flop. The periphery is shared: double the words and the cores double, while the decoders grow by a few gates per address bit. That is why core memory held its place into the 1970s.</p>`,
+        <p>The cores cost nothing in gates: ${groupDigits(stats(CORE_STORE).cores ?? 0)} rings, no transistor. The drivers, decoders, registers and phase control around them are ${groupDigits(nands(CORE_STORE))} NANDs, against ${groupDigits(nands(ram(4, 4)))} for a 16 × 4 flip-flop RAM built like the one at the start of this chapter, where every bit is a flip-flop. The periphery is shared: double the words and the cores double, while the decoders grow by a few gates per address bit.</p>`,
       lit: '',
       tour: {
         label: 'Walk me through a read cycle',
@@ -1272,7 +1275,8 @@ export const chMemory: Chapter = {
           ${2 * (4 - 1)} others on its two lines see half. With n × n cores, 2n lines with a read and a write driver each, 4n drivers, select any of n² bits, and every plane of the stack shares them.
           The inhibit works the same way in reverse: one more wire through every core of a plane, carrying a half against the write, chosen per plane, so one word's bits are written
           by one X line, one Y line and a set of inhibit wires.</p>`,
-        real: `<p>Whirlwind's two banks were 32 × 32 × 17, with ${R221.readA} A on each selected X and Y line (R-221 calls each a selection plane: the line runs through every digit plane;
+        real: `<p>Whirlwind stacked 17 planes of 32 × 32; the strobe fell inside the read current too: in the core test of MIT Report R-221 it was a ${R221.strobeUs} µs pulse about ${R221.strobeAtUs} µs into the sense pulse, well within the ${R221.readUs} µs read, and its whole read-and-rewrite access took about ${R221.cycleUs} µs. Core memory held its place into the 1970s because the periphery is shared.</p>
+          <p>Whirlwind's two banks were 32 × 32 × 17, with ${R221.readA} A on each selected X and Y line (R-221 calls each a selection plane: the line runs through every digit plane;
           MIT Report R-221, 1954, section 5). The first bank was installed on 8 August 1953, with an access time of 9 µs against about 25 µs for the electrostatic storage tubes it replaced
           (Project Whirlwind Summary Report 35). The sense signal was about ${R221.senseV} V and ${R221.senseUs} µs long, and Whirlwind's sense wire already ran on the diagonals so that
           half-selected cores' small pulses cancelled. Later planes shared one wire for sense and inhibit, and the cycle fell to about 1 µs by the mid-1960s.</p>`,
