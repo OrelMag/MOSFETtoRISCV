@@ -13,10 +13,12 @@ import { CODEX_SIDE } from './codexside';
 import { CODEX_POWER } from './codexpower';
 import { CODEX_VEC } from './codexvec';
 import { CODEX_VM } from './codexvm';
+import { CODEX_LOGIC } from './codexlogic';
 import { CODEX_VERIFY } from './codexverify';
 import { CODEX_BABY } from './codexbaby';
 import { CODEX_AGC } from './codexagc';
 import { CODEX_PDP8 } from './codexpdp8';
+import { CODEX_FSM } from './codexfsm';
 
 import { numOf } from '../chapters/order';
 export type CodexKind = 'component' | 'law' | 'tool' | 'concept' | 'trick';
@@ -219,6 +221,8 @@ export const CODEX: CodexEntry[] = [
   ...CODEX_VEC,
   // virtual memory and the tiny operating system (codexvm.ts)
   ...CODEX_VM,
+  // the logic chapter (codexlogic.ts)
+  ...CODEX_LOGIC,
   // verification and test (codexverify.ts)
   ...CODEX_VERIFY,
   // Appendix E: the Manchester Baby (codexbaby.ts)
@@ -227,6 +231,8 @@ export const CODEX: CodexEntry[] = [
   ...CODEX_AGC,
   // the PDP-8 (the sandbox's examples, the multicycle chapter's state table: codexpdp8.ts)
   ...CODEX_PDP8,
+  // the chapter Designing state machines (codexfsm.ts)
+  ...CODEX_FSM,
 ];
 
 export const codexById = (id: string): CodexEntry | undefined => CODEX.find((e) => e.id === id);

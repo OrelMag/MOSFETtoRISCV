@@ -14,8 +14,10 @@ import { ALIASES_POWER } from './codexpower';
 import { ALIASES_VEC } from './codexvec';
 import { ALIASES_VERIFY } from './codexverify';
 import { ALIASES_BABY } from './codexbaby';
+import { ALIASES_LOGIC } from './codexlogic';
 import { ALIASES_AGC } from './codexagc';
 import { ALIASES_PDP8 } from './codexpdp8';
+import { ALIASES_FSM } from './codexfsm';
 
 /** Other names an entry goes by in the chapters' prose. */
 export const ALIASES: Record<string, string[]> = {
@@ -70,9 +72,13 @@ export const ALIASES: Record<string, string[]> = {
   ...ALIASES_VERIFY,
   // Appendix E (codexbaby.ts)
   ...ALIASES_BABY,
+  // the logic chapter (codexlogic.ts)
+  ...ALIASES_LOGIC,
   // Appendix F (codexagc.ts)
   ...ALIASES_AGC,
   ...ALIASES_PDP8,
+  // the chapter Designing state machines (codexfsm.ts)
+  ...ALIASES_FSM,
 };
 
 /** Entries never marked automatically: their names are everyday words in the prose. */

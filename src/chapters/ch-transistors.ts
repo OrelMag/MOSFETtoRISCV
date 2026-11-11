@@ -65,7 +65,7 @@ export const chMap: Chapter = {
         <p>Here is a 4-bit adder. It adds two numbers <code>a</code> and <code>b</code>. Change them in the
         bar at the bottom (or click the pins) and watch the sum <code>s</code>.</p>
         <p>Now the important part: <strong>double-click any block to look inside it</strong>.
-        An adder is made of <span data-ahead="fulladder">full adders (<code>FA</code>: circuits that add one bit position: two input bits plus a carry in, giving a sum bit and a carry out; chapter 6 builds one)</span>.
+        An adder is made of <span data-ahead="fulladder">full adders (<code>FA</code>: circuits that add one bit position: two input bits plus a carry in, giving a sum bit and a carry out; chapter ${numOf('adders')} builds one)</span>.
         A full adder is made of <span data-ahead="nand">NAND gates (gates whose output is 0 only when both inputs are 1; chapter 3 builds one)</span>.
         A NAND gate is made of four transistors. Open one of those and you reach a single transistor.</p>
         <div class="try">Open <code>fa0</code>, then one of its gates, then a transistor. Use the breadcrumbs above
@@ -122,7 +122,7 @@ export const chMap: Chapter = {
           2n + 4, which is ${logicDepth(rca(4))} at 4 bits, ${logicDepth(rca(8))} at 8 and ${logicDepth(rca(32))} at 32. The count, ${stats(rca(4)).nands / 4} NANDs a stage, grows as 9n.</p>`,
         numbers: `<table class="mini"><tr><th>bits</th><th>NANDs</th><th>transistors</th><th>gate delays</th></tr>${[4, 8, 16, 32].map((n) => `<tr><td>${n}</td><td>${stats(rca(n)).nands}</td><td>${stats(rca(n)).transistors}</td><td>${logicDepth(rca(n))}</td></tr>`).join('')}</table>`,
         pitfall: `<p>Assuming delay is proportional to size. The 32-bit adder has eight times the gates of the 4-bit one but only ${(logicDepth(rca(32))! / logicDepth(rca(4))!).toFixed(1)} times the delay, and a faster adder
-          (<a href="#/c/fastadd/0">chapter 16</a>) can do the same add in far less depth by spending more gates. Cost and depth are separate axes.</p>`,
+          (<a href="#/c/fastadd/0">chapter ${numOf('fastadd')}</a>) can do the same add in far less depth by spending more gates. Cost and depth are separate axes.</p>`,
       },
     },
   ],
@@ -660,7 +660,7 @@ export const chInverter: Chapter = {
       tries: [(st) => st.value('en') === 1],
       more: {
         derive: `<p>With stage delay t<sub>d</sub> the period is 2·N·t<sub>d</sub>, so t<sub>d</sub> = T / 2N. Seven stages at ${PS_PER_NAND} ps: T = ${14 * PS_PER_NAND} ps. The test <code>tests/cmosgates.test.ts</code> runs 3, 5 and 7 stages on the gate simulator and finds 6, 10 and 14 delays between rising edges.</p>`,
-        pitfall: `<p>Using an even number of stages. The loop then has two consistent states (a latch, chapter 8) and sits in one of them. Odd is what makes it unable to settle.</p>`,
+        pitfall: `<p>Using an even number of stages. The loop then has two consistent states (a latch, chapter ${numOf('latches')}) and sits in one of them. Odd is what makes it unable to settle.</p>`,
         real: `<p>The simulator settles every circuit it can; an oscillator is the one it cannot, and the stage animates it instead of settling (the Timing panel shows the square wave). In silicon the frequency also drifts with temperature and supply: a ring is a thermometer as much as a clock.</p>`,
       },
       challenge: {

@@ -881,6 +881,12 @@ html[data-widget-step] .slow-btn { display: none; }
 .la-head .spacer { flex: 1; }
 .la-readout { font: 600 12px var(--font-mono); color: var(--text-2); white-space: nowrap; }
 .la-head .btn.on { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+/* a phone: the header wraps instead of pushing the page wider (VCD and Close went past the edge), as the sandbox's does */
+@media (max-width: 600px) {
+  .la-head { flex-wrap: wrap; row-gap: 2px; }
+  .la-head .la-hint, .la-head .spacer { display: none; }
+  .analyzer .la-names { width: 110px; }
+}
 .la-body { flex: 1; display: flex; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 .la-names { flex: none; width: 200px; border-right: 1px solid var(--border); }
 .la-name { height: 24px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 10px; font: 600 12px var(--font-mono); }

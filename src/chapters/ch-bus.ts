@@ -289,14 +289,14 @@ export const chBus: Chapter = {
     {
       title: 'A computer on one bus',
       body: `
-        <p>The system <span data-show="cpu">CPU</span> of chapters <a href="#/c/io/0">19</a> and <a href="#/c/traps/0">20</a>, its memory moved onto the bus. In place of its data memory sits a
+        <p>The system <span data-show="cpu">CPU</span> of chapters <a href="#/c/io/0">${numOf('io')}</a> and <a href="#/c/traps/0">${numOf('traps')}</a>, its memory moved onto the bus. In place of its data memory sits a
         <span data-show="cpu.dm">memory unit</span> (${nands(busMemUnit(7))} NANDs): instructions below 0x200 come from a boot ROM inside the CPU, any other address is fetched over the
         bus into an instruction register, and loads and stores go over the bus. The CPU waits (retire = 0) until both are done, and
         the decoder sees a NOP while an instruction is on its way. Console, LEDs and timer stay inside.</p>
         <p>At power-up the boot ROM programs <span data-show="dma">the DMA</span> to copy ${LOAD_WORDS} words from <span data-show="flash">the flash</span> to <span data-show="ram">RAM</span> at 0x${LOAD_AT.toString(16)}, waits for it, and
         jumps there. Most larger computers boot like this: a small ROM that knows how to fetch the real program from storage. (A microcontroller often skips the copy and runs straight from NOR flash.)</p>
         <pre class="code">${BOOT_SOURCE.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>
-        <p>The design choice worth noticing is that the CPU did not change. Its decode, registers and ALU are chapter 19's; only the place the words come from moved, and the
+        <p>The design choice worth noticing is that the CPU did not change. Its decode, registers and ALU are chapter ${numOf('io')}'s; only the place the words come from moved, and the
         memory unit absorbs the difference by stalling the CPU (<code>retire</code> low, no state written) until the bus answers. That is the general trick of a system on a chip: keep the core unaware of
         what is behind its port, and put every piece of timing in the port.</p>
         <div class="try">Run, and watch the PC move from the boot ROM into RAM, the console print, and the LEDs count.</div>`,

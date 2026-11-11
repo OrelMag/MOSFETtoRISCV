@@ -149,7 +149,7 @@ export const chLatches: Chapter = {
         falls; nothing bounds <em>when</em>: the chance of still being undecided after a time t falls as e^(−t/τ), never to zero,
         and a gate reading the half-way voltage meanwhile may see 0 or 1. This is <strong>metastability</strong>. Designers keep the
         forbidden input away, and give any flip-flop that may sample a changing input time to settle before anything reads it
-        (chapter 9's synchronizer). Here the simulator detects the oscillation and settles the pair arbitrarily, in no time; in silicon
+        (chapter ${numOf('registers')}'s synchronizer). Here the simulator detects the oscillation and settles the pair arbitrarily, in no time; in silicon
         the resolution takes time, usually little, occasionally a lot.</p>
         <p>Releasing the inputs one after the other is not a race: the input that is still low decides. Try both orders below, and the tour.</p>`,
       tour: {
@@ -170,7 +170,7 @@ export const chLatches: Chapter = {
           From a 1 mV imbalance on a 1 V swing that takes τ·ln(1000) = ${Math.log(1 / 0.001).toFixed(1)} τ; from 1 µV, ${Math.log(1 / 1e-6).toFixed(1)} τ. Each extra factor of 1000 in how closely
           the release was balanced adds only ${Math.log(1000).toFixed(1)} τ: unbounded in principle, but the tail dies off exponentially.</p>`,
         real: `<p>Every flip-flop that samples an asynchronous signal (a button, a bus from another clock) can enter this state when the input changes inside its setup window. Chips
-          quote a metastability constant τ and a window T₀ for each cell, and the mean time between failures follows from them. Chapter 9 builds the standard remedy, two flip-flops
+          quote a metastability constant τ and a window T₀ for each cell, and the mean time between failures follows from them. Chapter ${numOf('registers')} builds the standard remedy, two flip-flops
           in series.</p>`,
         pitfall: `<p>Believing the simulation's answer. Here the oscillation is detected and settled arbitrarily; in silicon the output can sit between 0 and 1, and two gates reading it
           can disagree about its value. No simulation at gate level can show this, so designs avoid the situation instead of testing for it.</p>`,
@@ -213,7 +213,7 @@ export const chLatches: Chapter = {
           place of the inverter, g2), so nothing gets slower: ${nands(RV16_DLATCH)} NANDs in place of ${nands(D_LATCH)}.</p>
           <p>Two of these latches and the clock inverter make a ${nands(RV16_DFF)}-NAND flip-flop (the library's is ${nands(DFF)}), and its
           enable version is ${nands(RV16_DFFE)} (against ${nands(DFFE)}). The campaign's levels build these, so their pars count
-          ${nands(RV16_DLATCH)} and ${nands(RV16_DFF)}, and the state machine in chapter 9 is made of them. The chapters keep the
+          ${nands(RV16_DLATCH)} and ${nands(RV16_DFF)}, and the state machine in chapter ${numOf('registers')} is made of them. The chapters keep the
           ${nands(D_LATCH)}-NAND latch on stage because its set and reset sides read more plainly.</p>`,
         real: `<p>Latches are real building blocks, not only a stepping stone: a level-sensitive latch is half the area of a flip-flop, and high-speed designs use latch pairs on
           the two phases of the clock on purpose, so that a slow stage can borrow time from the next (time borrowing). Standard-cell latches are about 8 to 12 transistors, against
@@ -498,7 +498,7 @@ export const chRegisters: Chapter = {
         ],
       },
       more: {
-        derive: `<p>A flip-flop caught metastable is still undecided after a time t with probability ∝ e^(−t/τ) (chapter 8). The rate of failures
+        derive: `<p>A flip-flop caught metastable is still undecided after a time t with probability ∝ e^(−t/τ) (chapter ${numOf('latches')}). The rate of failures
           is about f_clk · f_data · T₀ · e^(−t_r/τ), where f_data is how often the input changes, T₀ the window the cell is sensitive in, and
           t_r the time allowed to resolve: one clock period minus clk-to-q and setup. Every extra period multiplies the mean time between
           failures by e^(T/τ): with τ = 10 ps and a 1 ns clock, e^100 ≈ 10⁴³. So two flip-flops are the norm, three at high clock rates.
@@ -605,7 +605,7 @@ export const chRegisters: Chapter = {
         chooses: hold, shift right, shift left, or load in parallel (mode 0–3). Fed one bit at a time at <code>sr</code> (the serial input of a
         right shift; <code>sl</code> serves a left shift), it turns a serial
         stream into a parallel word; loaded in parallel and shifted, it does the reverse. That is the heart of every serial link: UART, SPI,
-        PCIe lanes, the iterative multiplier and divider of <a href="#/c/muldiv/0">chapter 21</a>.</p>
+        PCIe lanes, the iterative multiplier and divider of <a href="#/c/muldiv/0">chapter ${numOf('muldiv')}</a>.</p>
         <p>Without the multiplexers a shift register is only flip-flops in a row, no logic at all: n stages delay a signal by exactly n clock cycles, and the only limit on the clock is clk-to-q
         plus setup. The four modes cost ${nands(shiftRegister(4))} NANDs for 4 bits against ${nands(register(4))} for the plain register: ${nands(shiftRegister(4)) - nands(register(4))} more for the four-way choice.</p>
         <div class="try">mode = 1 (shift right) with sr = 1: pulse four times and watch the ones march in from the top.</div>`,
@@ -768,14 +768,14 @@ export const chRegisters: Chapter = {
         <p>Code 11 never occurs, so it is a don't care: <span data-show="g0 n0"><code>n0 = x</code></span>,
         <span data-show="g1 h1 k1 n1"><code>n1 = ¬x·s0</code></span>, and the output <span data-show="yn yg"><code>y = x·s1</code></span>, each next
         bit ANDed with ¬rst for a synchronous reset. <span data-show="s0 s1">Two ${nands(RV16_DFF)}-NAND flip-flops</span>
-        (the ${nands(RV16_DLATCH)}-NAND latch from <a href="#/c/latches/2">chapter 8's aside</a>, as the campaign builds them) and ${nands(DET101) - 2 * nands(RV16_DFF)} NANDs of logic.</p>
+        (the ${nands(RV16_DLATCH)}-NAND latch from <a href="#/c/latches/2">chapter ${numOf('latches')}'s aside</a>, as the campaign builds them) and ${nands(DET101) - 2 * nands(RV16_DFF)} NANDs of logic.</p>
         <p>y reads x directly: a <strong>Mealy</strong> output. It rises in the same cycle as the last 1 of the pattern, before the edge that takes the machine on, which is one cycle
         earlier than a state-only output could manage.</p>
         <p>The sandbox does all of this for you: <a href="#/sandbox/new/fsm">open the detector as a state-machine chip</a>, draw on its
         diagram (add the Moore S3, say) and it rebuilds the circuit, each encoding priced, the next-state logic a truth-table chip with its
         Karnaugh map one double-click down.</p>
         <p>The diagram is drawn from the same table as the circuit, and a test reads the circuit back into it state by state. Hover an arc to light
-        the gates that make that transition.</p>
+        the gates that make that transition. <a href="#/c/fsm/0">Chapter ${numOf('fsm')}</a> takes the method apart: Moore or Mealy, the cost of each state code, unused states, a controller steering registers and an adder.</p>
         <div class="try">Set x and pulse: 1, 0, 1. Watch the dashed arc move when you flip x before the edge.</div>`,
       tour: {
         label: 'Walk me through it (a 1, 0, 1 and an overlap)',
@@ -1013,7 +1013,7 @@ export const chMemory: Chapter = {
         <span data-show="u1 u3 u4 u5 u6 u7 u8">the OR of the word lines</span>
         of every word whose bit j is 1. The data is in the wiring. Mask ROMs were made exactly like this, the pattern set by one metal layer;
         a fuse PROM blows the unwanted connections once; flash keeps the same array but stores each connection as charge, so it can be rewritten.</p>
-        <p>This one holds the squares of 0–15. The CPU's instruction memory in <a href="#/c/cpu/0">chapter 14</a> is a ROM too (built there from constants and a
+        <p>This one holds the squares of 0–15. The CPU's instruction memory in <a href="#/c/cpu/0">chapter ${numOf('cpu')}</a> is a ROM too (built there from constants and a
         multiplexer tree, the read port's view of the same thing).</p>
         <p>Compare the cost with a RAM of the same size: ${nands(romArray('squares'))} NANDs for 16 words of 8 bits, against ${nands(ram(4, 8))} for a RAM of that shape. A ROM has no flip-flops, no write path and no clock; what remains is the decoder and a few
         OR gates, and its read is purely combinational.</p>
@@ -1166,7 +1166,7 @@ export const chMemory: Chapter = {
       body: `
         <p>An ordinary memory answers "what is at this address?". A <strong>CAM</strong> answers "where is this value?". Each entry gets
         <span data-show="u10 u11 u12 u13">its own comparator</span>, all comparing with the key at the same time, and
-        <span data-show="u19">a priority encoder</span> (<a href="#/c/routing/6">chapter 7</a>) turns the matches into hit and index.
+        <span data-show="u19">a priority encoder</span> (<a href="#/c/routing/6">chapter ${numOf('routing')}</a>) turns the matches into hit and index.
         A valid bit per entry keeps never-written entries from matching.</p>
         <p>One comparator per entry is why CAMs stay small: an address-translation table has tens of entries and a fast buffer that may keep any line in any slot a few
         hundred lines at most. A network router's lookup table is the big exception, and burns power accordingly.</p>
@@ -1209,7 +1209,7 @@ export const chMemory: Chapter = {
     {
       title: 'Ports cost area',
       body: `
-        <p>The register bank of <a href="#/c/regfile/0">chapter 12</a> has two read ports and one write port: enough for one instruction per cycle. A core that issues two
+        <p>The register bank of <a href="#/c/regfile/0">chapter ${numOf('regfile')}</a> has two read ports and one write port: enough for one instruction per cycle. A core that issues two
         instructions per cycle needs four reads and two writes. Each read port is another multiplexer tree over every register; each write port
         another decoder, plus a multiplexer in front of every register to choose which port wins.</p>
         <p>Each port adds its own plumbing over the same storage: ${groupDigits(nands(regfileMP(5, 32, 4, 2)))} NANDs for 4 reads and 2 writes of 32 × 32 bits, against ${groupDigits(nands(regfileMP(5, 32, 2, 1)))} for 2 reads and 1 write

@@ -169,7 +169,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     why: 'A circuit is an equation, and a cheaper circuit is the same equation rewritten. The 2:1 multiplexer read straight off its table is 8 NANDs; rewritten into NAND–NAND it is 4. OR from NAND, the multiplexer and the K-map level all start from these laws.',
     body: 'bool', tips: ['Absorption first: a + a·b = a and a + ¬a·b = a + b remove most redundant terms.', 'De Morgan flips the operator and complements every term: ¬(a·b) = ¬a + ¬b.', 'When the algebra stalls, list the truth table: the minimal sum is read off it, not guessed.'],
     codex: ['identities', 'demorgan', 'bubble', 'sop', 'truthtable'],
-    chapters: [{ chapter: 'gates', label: 'Gates from NAND' }], drill: 'boolean', par: { mistakes: 2 } },
+    chapters: [{ chapter: 'gates', label: 'Gates from NAND' }, { chapter: 'logic', step: 1, label: 'Algebra that removes gates' }], drill: 'boolean', par: { mistakes: 2 } },
   {
     id: 'n_bin', act: 1, title: 'Binary and hex', kind: 'drill', requires: ['intro'], drill: 'binary', par: { mistakes: 2 },
     why: 'A wire carries a bit; a number is a convention about many. Unsigned: bit k weighs 2^k, a 16-bit word holds 0 to 65 535, and four bits make one hex digit. The decoder and the prime detector read their inputs as numbers; two\'s complement reuses the patterns.',
@@ -216,12 +216,14 @@ export const NODES: CampaignNode[] = withBugHunts([
     why: 'Algebra does not say when a sum of products is minimal, yet the control unit is 14 output bits, each a sum to minimise. A K-map draws the table so that neighbours differ in one bit: each doubling of a group drops a literal. The prime detector is built this way next.',
     tips: ['Groups are rectangles of 1, 2, 4 or 8 cells; edges wrap around.', 'Every 1 must be covered; overlapping groups are fine.', 'Rows and columns run in Gray order, 00 01 11 10: cells next to each other in binary order are not neighbours.'],
     codex: ['kmap', 'qm', 'dontcare'],
+    chapters: [{ chapter: 'logic', step: 2, label: 'The Karnaugh map' }, { chapter: 'logic', step: 3, label: "Don't cares: inputs that never happen" }],
   },
   {
     id: 'g_sop', act: 1, title: 'Prime detector', kind: 'build', requires: ['d_kmap', 'g_and', 'g_or', 'n_bin'],
     why: 'The control unit (Act 5) is a table, opcode and f3 to 14 signals, that must become gates. Practise on one 4-input function: K-map, minimal sum, NAND–NAND, 20 NANDs; par is 8, from what the terms share. The control unit applies it to each of its 14 outputs.',
     tips: ['Minimise first: every literal saved is a gate input saved.', 'An SoP maps one-to-one onto NAND–NAND: 20 NANDs here, depth 7 (the 3-literal products and the 4-input OR are built from 2-input gates). Par is less than half that.', 'Compare the map\'s two halves (a3 = 0, a3 = 1): one is a function you have built, the other almost the same.'],
-    unlocks: ['rv16_prime4'], codex: ['sop', 'nandnand'], base: BUILD1.g_sop, par: { nand: 8, depth: 5 } },
+    unlocks: ['rv16_prime4'], codex: ['sop', 'nandnand'], base: BUILD1.g_sop, par: { nand: 8, depth: 5 },
+    chapters: [{ chapter: 'logic', step: 0, label: 'Any rule is a circuit: minterms' }] },
   {
     id: 'g_wide', act: 1, title: 'Zero detect', kind: 'build', requires: ['g_and', 'g_or'],
     why: 'Is a word zero? Fifteen 2-input ORs answer it however they are arranged, 46 NANDs with the NOT, but a chain is 31 NAND delays deep and a balanced tree 9. Depth, not gate count, sets the clock: the equality test and the ALU\'s zero output end in this tree.',
@@ -394,7 +396,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 's_fsm', act: 3, title: 'A state machine', kind: 'build', optional: true, requires: ['s_dff', 'd_kmap'],
     why: 'Some units take several cycles and must remember which one they are in: a divider counts its steps, a multicycle core walks fetch → execute → memory → write back. A state register plus next-state logic read off a table does it: this one spots 1, 0, 1 in a bit stream, 28 NANDs at par. Act 8\'s divider runs on one.',
     tips: ['Three states: S0 nothing useful seen, S1 the last bit was 1, S2 a 1 then a 0.', 'Encode S0 = 00, S1 = 01, S2 = 10, write the next-state table and minimise each bit; the unused code 11 is a don\'t-care, and rst clears it.', 'From S2, x = 1 gives y = 1 and goes to S1, not S0: patterns overlap (10101 gives two).'],
-    unlocks: ['rv16_det101'], chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }], codex: ['fsm'], base: BUILD1.s_fsm, par: { nand: 28, period: 8 } },
+    unlocks: ['rv16_det101'], chapters: [{ chapter: 'registers', step: 10, label: 'State machines' }, { chapter: 'fsm', step: 0, label: 'From a sentence to a diagram' }], codex: ['fsm'], base: BUILD1.s_fsm, par: { nand: 28, period: 8 } },
   {
     id: 'm_ram', act: 3, title: '4 × 4 RAM', kind: 'build', optional: true, requires: ['s_reg4', 'g_dec', 'g_mux8'], base: sandbox('m_ram'),
     why: 'Memory is registers plus addressing: a decoder on the address picks the one word to write, a mux picks the one word to read. Par is 274 NANDs for 16 bits, about 17 NANDs a bit; an SRAM cell is 6 transistors. The register file is the same circuit with a second read port.',
@@ -697,7 +699,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'o_div', act: 8, title: 'Divider', kind: 'build', optional: true, requires: ['a_addsub16', 's_fsm'], base: BUILD8.o_div, givesOf: partsOf(() => seqDivider(16, RV16_MUX2)), par: { nand: 1445, period: 31 }, unlocks: ['sdiv16_rv16'],
     why: 'RV16I has no divide, and in one pass it is expensive: unrolled, the 16 subtract-and-compare steps are 4464 NANDs on a 613-deep path. The iterative divider does one step per clock under a counter: 1445 NANDs, period 31, 18 cycles a quotient. Divide in the core puts it in your core and makes the core wait for it.',
     tips: ['Shift the remainder left, bring in the next dividend bit, subtract the divisor: if the result is not negative keep it and set the quotient bit.', 'b = 0 needs no special case: every subtraction succeeds, so q = 0xFFFF and r = a, as RISC-V wants.', 'Subtracting before the shift is the classic miss: the next dividend bit must be in the remainder before it is compared.'],
-    codex: ['division'], chapters: [{ chapter: 'muldiv', step: 15, label: 'The iterative divider' }],
+    codex: ['division'], chapters: [{ chapter: 'muldiv', step: 15, label: 'The iterative divider' }, { chapter: 'fsm', step: 6, label: 'A controller and a datapath' }],
   },
   {
     id: 'o_dcore', act: 8, title: 'Divide in the core', kind: 'core', optional: true, requires: ['o_mcore', 'o_div'], base: BUILD9.o_dcore, par: { nand: 10546, period: 193, cycles: 1859 },

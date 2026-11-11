@@ -19,7 +19,7 @@ describe('chapter 42 typed numbers', () => {
     expect(chClocks.steps).toHaveLength(9);
     expect(chapterById('clocks')).toBe(chClocks);
     for (const id of chClocks.builds ?? []) expect(chapterById(id)!.num).toBeLessThan(chClocks.num);
-    expect(chapterById('latches')!.num).toBe(8);
+    expect(chapterById('latches')!.num).toBe(numOf('latches'));
     expect(chapterById('wire')!.num).toBe(numOf('clocks') - 1);
   });
   it('step 1: the 0.5 V spike is inside the noise margin', () => {

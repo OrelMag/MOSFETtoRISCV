@@ -408,7 +408,7 @@ chips kept it inside (CAS-before-RAS refresh, then SDRAM's and DDR's auto refres
 a <b>REF</b> command every 7.8 µs (tREFI), with every bank closed.</p>
 <h4>What it costs a processor</h4>
 <p>Behind a cache, DRAM's latency is paid on misses only. The RV32I single-cycle core with chapter
-22's 2-way write-back cache misses 73 times on matmul whatever is behind it. With a fixed line fill
+${numOf('cache')}'s 2-way write-back cache misses 73 times on matmul whatever is behind it. With a fixed line fill
 (8 cycles, 12 when a dirty line goes back first) those misses stall it 676 cycles, 3029 in all; over
 chapter ${numOf('memctrl')}'s DRAM controller with open pages 1022 (3375); with closed pages 1341 (3694). The cache
 decides how often the core goes to DRAM; the controller, how long each trip takes.</p>

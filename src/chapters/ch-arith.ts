@@ -84,7 +84,7 @@ export const chAdders: Chapter = {
         options: ['It roughly doubles', 'It grows by a constant', 'It stays the same', 'It roughly quadruples'],
         answer: 0,
         explain: 'The carry crosses each full adder in turn, two NAND delays per bit: delay grows linearly with the width.',
-        why: ['', 'That is a tree, like the magnitude comparator, or the fast adders of chapter 16. Here each column waits for the carry from the one to its right.', 'The columns sit side by side, but they do not work in parallel: each needs its neighbour\'s carry first.', 'The carry crosses each full adder once: the delay grows with n, not n².'],
+        why: ['', 'That is a tree, like the magnitude comparator, or the fast adders of chapter ' + numOf('fastadd') + '. Here each column waits for the carry from the one to its right.', 'The columns sit side by side, but they do not work in parallel: each needs its neighbour\'s carry first.', 'The carry crosses each full adder once: the delay grows with n, not n².'],
       },
       {
         question: 'In the adder/subtractor, why is <code>sub</code> wired to the carry-in as well as to the XORs?',
@@ -379,7 +379,7 @@ export const chAdders: Chapter = {
         <p>At 32 bits that is ${CMP32} gate delays against ${BORROW32} for the subtractor's carry out (the ripple adder's ${portDepth(rca(32), 'cout')} plus the XOR in front of b), for a similar cost (${stats(magComparator(32, false)).nands} NANDs against ${stats(addSub(32)).nands}). The depth grows
         with log n instead of n.</p>
         <div class="try">Open a <code>combine</code> cell: it is the same "the higher one decides" rule as the carry cells of the fast adders in
-        <a href="#/c/fastadd/0">chapter 16</a>.</div>`,
+        <a href="#/c/fastadd/0">chapter ${numOf('fastadd')}</a>.</div>`,
       scene: () => ({ root: magComparator(4), inputs: { a: 9, b: 6 } }),
       tour: {
         beats: [

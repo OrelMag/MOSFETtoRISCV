@@ -259,6 +259,15 @@ src/lib/       the component library (registered in `registry` via define())
                  regfileMP(k, w, reads, writes)
   sop.ts         two-level minimization with don't-cares: primes (Quine–McCluskey), cover (essential primes, then an
                  exact search within EXACT_BUDGET steps, else greedy: `exact` says which), minimumCover (exact: drills)
+  tablelogic.ts  a truth table as logic, no editor imports (editor/ttable.ts re-exports it): TableSpec, tableLogic (each output's cover, equal terms shared),
+                 tableDef (the NAND–NAND / AND–OR / PLA circuit), termText, equation; the logic chapter and the sandbox's truth-table chips draw from the same code
+  kmap.ts        the Karnaugh map's geometry (DOM-free): Gray orders, kLayout, loopRects (a wrapping loop is two rectangles); editor/tableui.ts and widgets/kmap.ts
+                 draw from it (tests/kmap-geometry.test.ts: the old inline algorithm, every term of 2–4 inputs)
+  logiclab.ts    the logic chapter's models (ch 'logic'): PRIME_MINTERMS (the sum of minterms, named instances), coverLogic (exact / greedy), costOf, LAWS with
+                 gate counts (gateNands), the seven-segment table (FONT, sevenSegCost), MUX_HAZARD (the multiplexer with a consensus term behind `cons`), muxRun /
+                 dipWidth (the glitch on GateSim); widgets/kmap.ts (the map, Exact | Greedy, Map | Circuit, Sum | Product), widgets/logiclab.ts (laws, sharing,
+                 the seven-segment lab); a widget step's factory gets the stage (Step.widget(stage)) so a change can stage.refresh() and the step's challenge is checked;
+                 tests/content-tablecircuit.test.ts pins every number
   isadecoder.ts  isaDecoder(doc): a Custom ISA table's decoder in gates (not registered: built per table, opened by the
                  Design tab through remixDef): complement rails where a pattern needs a 0, one AND per instruction over its
                  fixed bits, the NOT of each more specific overlapping pattern, valid = OR; matchNames; its NANDs equal
