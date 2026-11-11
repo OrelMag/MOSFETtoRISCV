@@ -100,7 +100,7 @@ export function* exhaustiveVectors(n: number): Generator<Vec> {
 
 const hex = (v: number, n: number) => '0x' + v.toString(16).toUpperCase().padStart(Math.ceil(n / 4), '0');
 const sci = (x: number) => (x >= 1e6 ? x.toExponential(1).replace('e+', ' × 10^') : x.toLocaleString('en-US'));
-const span = (years: number) => (years >= 1 ? `${sci(Math.round(years))} years` : years * 365.25 >= 1 ? `${Math.round(years * 365.25)} days` : years * 86400 >= 1 ? `${Math.round(years * 86400)} s` : `${(years * 86400000).toFixed(1)} ms`);
+const span = (years: number) => (years >= 1 ? `${sci(Math.round(years))} years` : years * 365.25 >= 1 ? `${Math.round(years * 365.25)} days` : years * 86400 >= 1 ? `${Math.round(years * 86400)} s` : years * 86400000 >= 1 ? `${Math.round(years * 86400000)} ms` : "under a millisecond");
 
 export function adderProofWidget(): Widget {
   const widthSel = h('select', { 'aria-label': 'adder width' }, [4, 8, 16, 32].map((n) => h('option', { value: String(n), selected: n === 8 }, `${n}-bit adder`))) as HTMLSelectElement;

@@ -487,7 +487,7 @@ export const chAdders: Chapter = {
           'Nothing about the vectors it did not try: a fault that shows only on a rare pattern, such as a carry through every column, would be missed',
           'It is correct: a million is far more than the adder has gates',
           'It is correct for all inputs, since 32-bit adders are all built the same way',
-          'It is wrong, since a million of 2^65 is too small a sample to mean anything',
+          'It is wrong, since a million of 2<sup>65</sup> is too small a sample to mean anything',
         ],
         answer: 0,
         explain: `A million is ${(1e6 / exhaustiveCount(32)).toExponential(0).replace('e-', ' × 10^−')} of the 2^65 cases. A common fault shows at once, and a stuck carry usually does, but a fault that needs one particular pattern can sit unseen. That is why random vectors are paired with corner cases chosen for the patterns that matter, and why what a check covers is measured later in the journey.`,
