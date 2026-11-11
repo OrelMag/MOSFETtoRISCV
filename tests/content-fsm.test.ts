@@ -169,10 +169,10 @@ describe('a controller and a datapath (step 7)', () => {
     }
     expect(port('gcd')).toBe(6);
   });
-  it('the controller is 76 of 678 NANDs, 11 %', () => {
-    expect(gcdCosts()).toEqual({ total: 678, controller: 76 });
-    expect(Math.round((100 * 76) / 678)).toBe(11);
-    expect(text('fsmd')).toContain('76 NANDs steering a datapath of 602 (678 NANDs in all)');
+  it('the controller is 76 of 674 NANDs, 11 %', () => {
+    expect(gcdCosts()).toEqual({ total: 674, controller: 76 });
+    expect(Math.round((100 * 76) / 674)).toBe(11);
+    expect(text('fsmd')).toContain('76 NANDs steering a datapath of 598 (674 NANDs in all)');
   });
 });
 

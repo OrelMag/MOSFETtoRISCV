@@ -18,7 +18,8 @@ import { register } from '../lib/sequential';
 import { TIE0, TIE1 } from '../lib/transistors';
 import { bitwise } from '../lib/wide';
 import type { Sim } from '../sim/sim';
-import type { ComponentDef } from '../sim/types';
+import { symbolGeom } from '../sim/geometry';
+import type { ComponentDef, NetDef, Netlist, PortDef } from '../sim/types';
 import { pack } from '../sim/values';
 import { type FsmDataDoc, type FsmDoc, isIdent } from './model';
 
@@ -271,6 +272,109 @@ export function controllerOf(doc: FsmDoc, of: string, plan = planOf(doc)): FsmDo
 
 // ---- the datapath, drawn --------------------------------------------------------------------------------
 
+/** A row of the drawing: its parts in the order they were made (a part is made before the one it feeds). */
+export interface FsmdRow { kind: 'ctl' | 'unit' | 'reg' | 'test'; names: string[] }
+
+/**
+ * The datapath machine's drawing: the pins on the left, the controller, then two columns: the operator units (operand
+ * multiplexers into the unit; shifts) with the comparators and status bits under them, and the registers (source
+ * multiplexer into the register, the enable's AND beside it). In a row every part sits left of the part it feeds, its output level with that input;
+ * a select bus comes up from below. A net is a wire where it runs forward to a few sinks; the feedback (register outputs
+ * back into the units, status bits back into the controller) and the clock are named, as on a real schematic.
+ */
+function fsmdDrawing(ports: PortDef[], b: Builder, rows: FsmdRow[]): Netlist {
+  const insts = new Map(b.instances.map((i) => [i.name, i]));
+  const geo = (n: string) => symbolGeom(insts.get(n)!.def);
+  const nets = b.nets();
+  const instOf = (end: string) => (end.includes('.') ? end.slice(0, end.indexOf('.')) : '');
+  const portOf = (end: string) => end.slice(end.indexOf('.') + 1);
+  const outPort = (n: string) => Object.entries(geo(n).ports).find(([p]) => insts.get(n)!.def.ports.find((q) => q.name === p)?.dir === 'out');
+  // in local coordinates of its row: each part's top-left
+  const local = new Map<string, [number, number]>();
+  const box = (n: string) => { const [x, y] = local.get(n)!, g = geo(n); return { x, y, w: g.w, h: g.h }; };
+  const hits = (n: string, names: string[]) => { const a = box(n); return names.some((m) => { if (m === n || !local.has(m)) return false; const c = box(m); return a.x < c.x + c.w + 1 && c.x < a.x + a.w + 1 && a.y < c.y + c.h + 1 && c.y < a.y + a.h + 1; }); };
+  const layRow = (r: FsmdRow) => {
+    const names = r.names;
+    if (r.kind === 'ctl') { local.set('ctl', [0, 0]); if (insts.has('rst_n')) local.set('rst_n', [0, geo('ctl').h + 4]); return; }
+    const anchor = names[names.length - 1];
+    local.set(anchor, [0, 0]);
+    for (const n of [...names].reverse().slice(1)) {
+      const o = outPort(n);
+      const net = o && nets.find((x) => x.ends[0] === `${n}.${o[0]}`);
+      const sink = net?.ends.slice(1).find((e) => local.has(instOf(e)) && names.includes(instOf(e)));
+      const g = geo(n);
+      if (!o || !sink) { const lo = Math.max(...names.filter((m) => local.has(m)).map((m) => box(m).y + box(m).h)); local.set(n, [0, lo + 3]); continue; }
+      const sb = box(instOf(sink)), sp = geo(instOf(sink)).ports[portOf(sink)];
+      const px = sb.x + sp.pos[0], py = sb.y + sp.pos[1];
+      // a select or enable from below: the part under its sink, its output a little left of the pin
+      if (sp.exit === 'down') local.set(n, [px - g.w - 2, py + 3 - o[1].pos[1]]);
+      else if (sp.exit === 'up') local.set(n, [px - g.w - 2, py - 3 - o[1].pos[1]]);
+      else local.set(n, [px - g.w - 3, py - o[1].pos[1]]);
+      // two parts feeding one sink side by side: the later one moves up or down, out of the way
+      for (let k = 1; hits(n, names) && k < 40; k++) {
+        const [x, y] = local.get(n)!;
+        local.set(n, [x, y + (py < sb.y + sb.h / 2 ? -1 : 1)]);
+      }
+    }
+  };
+  rows.forEach(layRow);
+  // the rows' extents, then the columns
+  const extent = (r: FsmdRow) => {
+    const bs = r.names.filter((n) => local.has(n)).map(box);
+    const x0 = Math.min(...bs.map((q) => q.x)), y0 = Math.min(...bs.map((q) => q.y));
+    return { x0, y0, w: Math.max(...bs.map((q) => q.x + q.w)) - x0, h: Math.max(...bs.map((q) => q.y + q.h)) - y0 };
+  };
+  // the comparators under the units: both are read back by name (status bits, register values), and a column fewer keeps the
+  // drawing narrow enough that its pin names stay readable at fit
+  const cols: FsmdRow['kind'][][] = [['ctl'], ['unit', 'test'], ['reg']];
+  const at = new Map<string, [number, number]>();
+  let x = 8;
+  for (const kinds of cols) {
+    const rs = kinds.flatMap((k) => rows.filter((r) => r.kind === k && r.names.length));
+    if (!rs.length) continue;
+    let y = 2, cw = 0;
+    for (const r of rs) {
+      const e = extent(r);
+      for (const n of r.names) { const [lx, ly] = local.get(n)!; at.set(n, [x + lx - e.x0, y + ly - e.y0]); }
+      y += e.h + 5;
+      cw = Math.max(cw, e.w);
+    }
+    // the controller's outputs fan out to the whole datapath: a wider channel after it
+    x += cw + (kinds[0] === 'ctl' ? 12 : 9);
+  }
+  const instances = b.instances.map((i) => ({ ...i, at: at.get(i.name) ?? i.at }));
+  const pins: Record<string, [number, number]> = {};
+  const posOf = (end: string): [number, number] => {
+    const n = instOf(end);
+    if (!n) return pins[end] ?? [0, 0];
+    const p = geo(n).ports[portOf(end)].pos, a = at.get(n)!;
+    return [a[0] + p[0], a[1] + p[1]];
+  };
+  // pins level with the first thing each feeds (inputs) or is fed by (outputs), in that order, two units apart at least
+  const stackPins = (ps: PortDef[], px: number, want: (p: PortDef) => number) => {
+    let y = 0;
+    for (const p of [...ps].sort((a, c) => want(a) - want(c))) { const t = p.clock ? y : Math.max(y, Math.round(want(p))); pins[p.name] = [px, t]; y = t + 2; }
+  };
+  stackPins(ports.filter((p) => p.dir === 'in'), 0, (p) => {
+    // the clock is named at every register: its pin need not reach down past the drawing
+    if (p.clock) return Infinity;
+    const net = nets.find((n) => n.ends[0] === p.name);
+    return net ? Math.min(...net.ends.slice(1).map((e) => posOf(e)[1])) : 0;
+  });
+  stackPins(ports.filter((p) => p.dir === 'out'), x, (p) => {
+    const net = nets.find((n) => n.ends.includes(p.name));
+    return net ? posOf(net.ends[0])[1] : 0;
+  });
+  // a wire where the net runs forward to a few sinks; the clock and the feedback named
+  const drawnNets: NetDef[] = nets.map((n) => {
+    const d = posOf(n.ends[0])[0];
+    const forward = n.name !== 'clk' && n.ends.length - 1 <= 4 && n.ends.slice(1).every((e) => posOf(e)[0] > d);
+    const { tags: _t, ...rest } = n;
+    return forward ? rest : { ...rest, tags: true as const };
+  });
+  return { pins, instances, nets: drawnNets };
+}
+
 /**
  * The top level of a datapath machine: the pins, the controller (its compiled chip `ctl`), the registers and their
  * source multiplexers, the operator units with their operand multiplexers, constants, shifts, the comparators and
@@ -279,21 +383,28 @@ export function controllerOf(doc: FsmDoc, of: string, plan = planOf(doc)): FsmDo
 export function fsmdTopDef(doc: FsmDoc, ctl: ComponentDef, plan = planOf(doc)): ComponentDef {
   const d = doc.data!, w = d.width;
   const b = new Builder(8, 12, 3);
+  // the parts of each row as they are made (fsmdDrawing places them): the controller, a row per operator unit, per shift,
+  // per register, per comparator or bit test
+  const rows: FsmdRow[] = [];
+  const row = (kind: FsmdRow['kind'], f: () => void) => { const n0 = b.instances.length; f(); rows.push({ kind, names: b.instances.slice(n0).map((i) => i.name) }); };
   const ins = [...doc.ins, ...d.ins, 'rst', 'clk'];
   b.pins(...ins);
   const consts = new Map<number, string>();
   const drive = (o: Operand): string => {
     if (o.kind !== 'k') return o.kind === 'reg' ? `r_${o.name}.q` : o.name;
     let c = consts.get(o.v);
-    if (!c) consts.set(o.v, (c = b.name(b.op1(constWord(w, o.v), [], String(o.v)), `k${o.v}`, true)));
+    if (!c) consts.set(o.v, (c = b.name(b.op1(constWord(w, o.v), [], String(o.v)), `k${o.v}`)));
     return c;
   };
   // controller first: its status inputs come from the comparators further right (wired by name)
   const st = plan.tests.map((_, i) => `st${i}`);
-  const nrst = b.name(b.op1(NOT, ['rst'], '¬rst'), 'rst_n', true);
-  b.add(ctl, 'controller', 'ctl');
+  // ¬rst gates every register's load; its inverter is drawn in the first loaded register's row, beside that row's AND
+  const nrst = 'rst_n.y';
+  let nrstMade = false;
+  row('ctl', () => b.add(ctl, 'controller', 'ctl'));
+  // the controller's lines are named as its outputs are (ld_a, sel_a0, u0s0, done): what the wires carry
+  for (const o of ctl.ports) if (o.dir === 'out') b.name(`ctl.${o.name}`, o.name);
   for (const x of doc.ins) b.wire(x, `ctl.${x}`);
-  st.forEach((s) => b.wire(`${s}.y`, `ctl.${s}`));
   b.wire('rst', 'ctl.rst');
   b.wire('clk', 'ctl.clk');
   const ctlBus = (bits: number, prefix: string): string => {
@@ -309,7 +420,7 @@ export function fsmdTopDef(doc: FsmDoc, ctl: ComponentDef, plan = planOf(doc)): 
     return b.op1(muxTree(k, w), [...padded, sel], label);
   };
   const unitOut = new Map<string, string>();
-  plan.units.forEach((u, k) => {
+  plan.units.forEach((u, k) => row('unit', () => {
     const sel = ctlBus(bitsFor(u.exprs.length), `u${k}s`);
     const A = mux(u.exprs.map((e) => drive(e.a)), sel, `${u.op} left`), B = mux(u.exprs.map((e) => drive(e.b)), sel, `${u.op} right`);
     const label = u.exprs.map(exprText).join(', ');
@@ -317,34 +428,43 @@ export function fsmdTopDef(doc: FsmDoc, ctl: ComponentDef, plan = planOf(doc)): 
       : u.op === '-' ? `${b.op(addSub(w), [A, B, b.op1(TIE1, [])], label, `op${k}`)}.s`
         : b.op1(bitwise(u.op === '&' ? 'and' : u.op === '|' ? 'or' : 'xor', w), [A, B], label, `op${k}`);
     for (const key of u.keys) unitOut.set(key, out);
-  });
+  }));
   const shifted = (e: Shift): string => {
-    const sp = b.op(splitter(ones(w)), [drive(e.a)]);
-    const z = b.op1(TIE0, []);
-    const bits = Array.from({ length: w }, (_, i) => { const j = e.op === '<<' ? i - e.k : i + e.k; return j >= 0 && j < w ? `${sp}.o${j}` : z; });
-    return b.op1(merger(ones(w)), bits, exprText(e));
+    let out = '';
+    row('unit', () => {
+      const sp = b.op(splitter(ones(w)), [drive(e.a)]);
+      const z = b.op1(TIE0, []);
+      const bits = Array.from({ length: w }, (_, i) => { const j = e.op === '<<' ? i - e.k : i + e.k; return j >= 0 && j < w ? `${sp}.o${j}` : z; });
+      out = b.op1(merger(ones(w)), bits, exprText(e));
+    });
+    return out;
   };
   const exprOut = (e: Expr): string => (isShift(e) ? shifted(e) : isBin(e) ? unitOut.get(exprKey(e))! : drive(e.a));
   b.next();
   // registers, their sources through a multiplexer
-  for (const r of d.regs) {
+  // the shifts first: their parts go in the units' column, not in a register's row
+  const shiftOut = new Map<string, string>();
+  for (const r of d.regs) for (const e of plan.sources[r]) if (isShift(e) && !shiftOut.has(exprKey(e))) shiftOut.set(exprKey(e), shifted(e));
+  const exprIn = (e: Expr): string => (isShift(e) ? shiftOut.get(exprKey(e))! : exprOut(e));
+  for (const r of d.regs) row('reg', () => {
     const srcs = plan.sources[r];
-    const dIn = srcs.length ? mux(srcs.map(exprOut), ctlBus(bitsFor(srcs.length), `sel_${r}`), `${r} from`) : `r_${r}.q`;
+    const dIn = srcs.length ? mux(srcs.map(exprIn), ctlBus(bitsFor(srcs.length), `sel_${r}`), `${r} from`) : `r_${r}.q`;
     // rst holds every register: a controller just out of power-on (one-hot: no state at all) loads nothing
+    if (srcs.length && !nrstMade) { b.name(b.op1(NOT, ['rst'], '¬rst', 'rst_n'), 'rst_n'); nrstMade = true; }
     const en = srcs.length ? b.op1(AND, [`ctl.ld_${r}`, nrst], `ld_${r}·¬rst`) : b.op1(TIE0, []);
     b.op(register(w), [dIn, en, 'clk'], r, `r_${r}`);
-    b.name(`r_${r}.q`, r, true);
-  }
+    b.name(`r_${r}.q`, r);
+  });
   b.next();
   // comparators and status bits
   const cmpOf = new Map<string, { inst: string; swap: boolean }>();
-  plan.pairs.forEach(([x, y], i) => {
+  plan.pairs.forEach(([x, y], i) => row('test', () => {
     const inst = b.op(magComparator(w, false), [drive(x), drive(y)], `${operandText(x)} vs ${operandText(y)}`, `cmp${i}`);
     cmpOf.set(`${opKey(x)}|${opKey(y)}`, { inst, swap: false });
     cmpOf.set(`${opKey(y)}|${opKey(x)}`, { inst, swap: true });
-  });
+  }));
   b.next();
-  plan.tests.forEach((t, i) => {
+  plan.tests.forEach((t, i) => row('test', () => {
     let src: string, invert = false;
     if ('bit' in t) {
       const sp = b.op(splitter(ones(w)), [drive(t.bit)]);
@@ -356,23 +476,20 @@ export function fsmdTopDef(doc: FsmDoc, ctl: ComponentDef, plan = planOf(doc)): 
       src = `${c.inst}.${m[t.cmp][0]}`;
       invert = m[t.cmp][1];
     }
-    // every status bit leaves through a gate named st<i>: an inverter, or two in a row (a buffer)
-    if (invert) b.op(NOT, [src], testText(t), `st${i}`);
-    else b.op(NOT, [b.op1(NOT, [src])], testText(t), `st${i}`);
-  });
+    // the status bit goes straight to the controller; a test that is the comparator's output inverted gets an inverter st<i>
+    // named as the controller's input it feeds, st<i>: the diagram's tests read the same
+    b.wire(b.name(invert ? b.op1(NOT, [src], testText(t), `st${i}`) : src, st[i]), `ctl.${st[i]}`);
+  }));
   b.next();
   for (const o of doc.outs) b.wire(`ctl.${o}`, o);
   for (const o of d.outs) b.wire(drive(d.regs.includes(o.src) ? { kind: 'reg', name: o.src } : { kind: 'in', name: o.src }), o.name);
-  const R = b.right, outs = [...doc.outs, ...d.outs.map((o) => o.name)];
+  const outs = [...doc.outs, ...d.outs.map((o) => o.name)];
   const width = (p: string) => (d.ins.includes(p) || d.outs.some((o) => o.name === p) ? w : 1);
   return {
     id: 'fsmd', name: 'State machine with a datapath', category: 'sequential', summary: 'A controller and a datapath drawn from a state machine with registers.',
     ports: [...ins.map((p) => ({ name: p, width: width(p), dir: 'in' as const, ...(p === 'clk' ? { clock: true } : {}) })), ...outs.map((p) => ({ name: p, width: width(p), dir: 'out' as const }))],
     symbol: { kind: 'box', label: 'FSMD' },
-    netlist: () => ({
-      pins: Object.fromEntries([...ins.map((p, i) => [p, [0, 2 + 4 * i]]), ...outs.map((p, j) => [p, [R, 2 + 4 * j]])]),
-      instances: b.instances, nets: b.nets(),
-    }),
+    netlist(this: ComponentDef) { return fsmdDrawing(this.ports, b, rows); },
   };
 }
 
