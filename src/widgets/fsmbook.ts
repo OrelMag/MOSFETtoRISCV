@@ -46,7 +46,7 @@ export function encodingPanel(doc: FsmDoc, enc: Encoding, pick: (stage: Stage, e
     const bits = spec.codeBits ?? 1;
     codes.textContent = `${spec.states.map((s) => s.name).join(' ')} = ${spec.states.map((s) => s.code.toString(2).padStart(enc === 'onehot' ? spec.states.length : bits, '0')).join(' ')}`;
     const head = h('h4', null, 'Codes and cost', h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel fsm-panel fsm-enc-panel' }, head, view.el, legend(spec), toggle, codes, table,
+    const el = h('div', { class: 'mem-panel fsm-panel fsm-enc-panel', 'data-phone': 'flow' }, head, view.el, legend(spec), toggle, codes, table,
       h('div', { class: 'fsm-note' }, 'NANDs as the builder counts them: flip-flops plus the minimized tables and the reset gates. Moore column: the four-state version (y on S3).'));
     head.addEventListener('click', () => el.classList.toggle('collapsed'));
     return { el, update: view.update, destroy: view.destroy };
@@ -61,7 +61,7 @@ export function codePanel(spec: FsmSpec, bind: FsmBind = {}, title = 'State mach
     const view = fsmView(stage, spec, bind);
     const line = h('div', { class: 'fsm-code' });
     const head = h('h4', null, title, h('span', { class: 'fold-hint' }));
-    const el = h('div', { class: 'mem-panel fsm-panel' }, head, view.el, line, legend(spec));
+    const el = h('div', { class: 'mem-panel fsm-panel', 'data-phone': 'flow' }, head, view.el, line, legend(spec));
     head.addEventListener('click', () => el.classList.toggle('collapsed'));
     const update = () => {
       view.update?.();
@@ -89,7 +89,7 @@ export function readbackPanel(target: FsmSpec, title = 'Read back'): ScenePanel 
   return (stage: Stage): Widget => {
     const head = h('h4', null, title, h('span', { class: 'fold-hint' }));
     const body = h('div', { class: 'fsm-rb' });
-    const el = h('div', { class: 'mem-panel fsm-panel fsm-rb-panel' }, head, body);
+    const el = h('div', { class: 'mem-panel fsm-panel fsm-rb-panel', 'data-phone': 'flow' }, head, body);
     head.addEventListener('click', () => el.classList.toggle('collapsed'));
     let shown: unknown = null;
     const update = () => {

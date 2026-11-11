@@ -15,7 +15,7 @@ import type { FsmDoc } from '../editor/model';
 import { stats } from '../sim/stats';
 import { fsmPanel } from '../widgets/fsmpanel';
 import { codePanel, encodingPanel, readbackPanel } from '../widgets/fsmbook';
-import type { Scene, Stage } from '../view/stage';
+import type { Scene, ScenePanel, Stage } from '../view/stage';
 import type { Chapter, Step } from './types';
 import { numOf } from './order';
 
@@ -49,14 +49,19 @@ const RIB = [{ label: 'x', path: 'x' }, { label: 'state', path: 'state' }, { lab
 
 const detectorScene = (): Scene => ({
   root: fsmCircuit('mealy', MEALY101, 'Mealy'), inputs: { x: 1, rst: 0, clk: 0 }, autoClock: false,
-  panels: [fsmPanel(SPEC_MEALY, { ribbon: RIB })],
+  panels: [flow(fsmPanel(SPEC_MEALY, { ribbon: RIB }))],
 });
+
+/** A phone: the diagram goes under a strip of circuit (data-phone="flow") instead of over all of it. */
+const flow = (p: ScenePanel): ScenePanel => (stage: Stage) => { const w = p(stage); w.el.dataset.phone = 'flow'; return w; };
+/** Two diagrams on one scene: undocked panels sit on the same canvas corner, so both go in the stage's bottom-left stack. */
+const stacked = (p: ScenePanel): ScenePanel => (stage: Stage) => { const w = flow(p)(stage); w.el.dataset.dock = 'left'; return w; };
 
 const pairScene = (): Scene => ({
   root: mooreMealy(), inputs: { x: 1, rst: 0, clk: 0 }, autoClock: false,
   panels: [
-    fsmPanel(SPEC_MEALY, { state: SPEC_MEALY.stateBits.map((p) => `mealy.${p}`), ribbon: [{ label: 'x', path: 'x' }, { label: 'Mealy y', path: 'ymealy' }, { label: 'Moore y', path: 'ymoore' }] }, 'Mealy: three states'),
-    fsmPanel(SPEC_MOORE, { state: SPEC_MOORE.stateBits.map((p) => `moore.${p}`), ribbon: [{ label: 'state', path: 'state' }, { label: 'Moore y', path: 'ymoore' }] }, 'Moore: four states'),
+    stacked(fsmPanel(SPEC_MEALY, { state: SPEC_MEALY.stateBits.map((p) => `mealy.${p}`), ribbon: [{ label: 'x', path: 'x' }, { label: 'Mealy y', path: 'ymealy' }, { label: 'Moore y', path: 'ymoore' }] }, 'Mealy: three states')),
+    stacked(fsmPanel(SPEC_MOORE, { state: SPEC_MOORE.stateBits.map((p) => `moore.${p}`), ribbon: [{ label: 'state', path: 'state' }, { label: 'Moore y', path: 'ymoore' }] }, 'Moore: four states')),
   ],
 });
 
@@ -91,7 +96,7 @@ const GCD_BIND = {
 };
 const gcdScene = (): Scene => ({
   root: gcdCircuit(), inputs: { start: 0, x: 48, y: 18, rst: 0, clk: 0 }, autoClock: false,
-  panels: [fsmPanel(gcdSpec(), GCD_BIND, 'Controller')],
+  panels: [flow(fsmPanel(gcdSpec(), GCD_BIND, 'Controller'))],
 });
 
 const buttonScene = (): Scene => ({ root: BUTTON3, inputs: { raw: 0, clk: 0 }, analyzer: true, autoClock: false });
@@ -104,7 +109,7 @@ function press(raws: number[]) {
 
 const trafficScene = (): Scene => ({
   root: fsmCircuit('traffic', TRAFFIC, 'Traffic'), inputs: { car: 0, rst: 0, clk: 0 }, autoClock: false,
-  panels: [fsmPanel(fsmSpecOf(TRAFFIC), { ribbon: [{ label: 'car', path: 'car' }, { label: 'state', path: 'state' }] }, 'Traffic light')],
+  panels: [flow(fsmPanel(fsmSpecOf(TRAFFIC), { ribbon: [{ label: 'car', path: 'car' }, { label: 'state', path: 'state' }] }, 'Traffic light'))],
 });
 
 const nextT = nextTable(MEALY101), outT = outTable(MEALY101);
@@ -364,7 +369,7 @@ const steps: Step[] = [
       <p>A state machine alone remembers <em>where</em> it is; it cannot hold a number such as 48, let alone subtract two of them. Real control splits the work: a small <strong>controller</strong> (the state machine) decides, and a <span data-ahead="datapath"><strong>datapath</strong> (the registers, subtractor and comparator that hold and compute the data)</span> does the arithmetic. The controller reads the datapath's flags and drives its enables and selects.</p>
       <p>Euclid's GCD by subtraction is the classic: while a ≠ b, subtract the smaller from the larger. The datapath has <span data-show="r_a r_b">two registers</span>, <span data-show="op0">a subtractor</span> and <span data-show="cmp0">a comparator</span>, their selects and enables driven by
       <span data-show="ctl">the controller</span>. The controller has five states: IDLE (load a and b when start is 1), TEST (look at the comparator: a = b → DONE, a &lt; b → SUBB, else SUBA), SUBA (a := a − b), SUBB (b := b − a) and DONE (done = 1 until start falls). Each pass through TEST and a subtract state is two cycles.</p>
-      <p>For gcd(48, 18) the diagram is ${GCD.cycles} edges from start to DONE: ${GCD.states.map((s, i) => `${s} (a ${GCD.a[i]}, b ${GCD.b[i]})`).join(', ')}. The reference model (editor/fsmd.ts) steps the same machine and this count is its; the gates agree with it every cycle.</p>
+      <p>For gcd(48, 18) the diagram is ${GCD.cycles} edges from start to DONE: ${GCD.states.map((s, i) => `${s} (a ${GCD.a[i]}, b ${GCD.b[i]})`).join(', ')}. The count comes from the sandbox's reference model, the machine written as a program, and the gates agree with it every cycle.</p>
       <p>The controller is ${GCD_COST.controller} NANDs of the machine's ${GCD_COST.total}: the rest is the datapath's two 8-bit registers, the subtractor, comparator and the multiplexers that steer them. That is the proportion of every processor: a few hundred gates of sequencing around thousands of gates of data. This is the shape of every sequencing unit later in the book:
       chapter ${numOf('multicycle')}'s controller is this one with a dozen states, steering a far bigger data path.</p>
       <div class="try">Set start = 1 and Pulse until done lights: the diagram's current state and the registers move together, and a ends at 6.</div>`,
