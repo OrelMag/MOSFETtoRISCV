@@ -426,7 +426,7 @@ export class Stage {
       }
     });
     const pressed = (b: HTMLElement) => b.classList.contains('on');
-    // the order they go in: the least used first (a wheel or a pinch zooms; Up, Fit and the panes stay)
+    // the order they go in: the least used first (a wheel or a pinch zooms; Up, Fit and the panes stay), the lock last
     this.shedGroups = [
       { els: [readBtn], items: [{ label: 'Zoom to readable', hint: 'About 3 px per grid unit, from the inputs; drag to pan', icon: 'zoomin', run: () => this.zoomReadable() }] },
       { els: [zoomOut, zoomIn], items: [{ label: 'Zoom out', icon: 'minus', run: () => this.zoomBy(1.25) }, { label: 'Zoom in', icon: 'plus', run: () => this.zoomBy(0.8) }] },
@@ -438,12 +438,13 @@ export class Stage {
         const r = more.getBoundingClientRect();
         this.view.layoutMenu(r.left, r.bottom + 6);
       } }] },
-      { els: [lockBtn], items: [{ label: 'Move parts by dragging', hint: 'Off: a drag on a part pans', icon: 'unlock', on: () => settings.moveParts, run: () => settings.set('moveParts', !settings.moveParts) }] },
       { els: [remix], items: [{ label: 'Open in Sandbox', hint: 'An editable copy of the circuit on screen', icon: 'chip', run: () => this.remix() }] },
       { els: [this.timingBtn], items: [{ label: 'Timing diagram', icon: 'wave', on: () => pressed(this.timingBtn), run: () => this.timingBtn.click() }] },
       { els: [this.probeBtn], items: [{ label: 'Probe mode (P)', icon: 'probe', on: () => pressed(this.probeBtn), run: () => this.probeBtn.click() }] },
       { els: [this.whyBtn], items: [{ label: 'Why? (W)', icon: 'why', on: () => pressed(this.whyBtn), run: () => this.whyBtn.click() }] },
       { els: [this.ovBar.el], items: OVERLAY_KINDS.map((k) => ({ label: `Overlay: ${OVERLAY_LABEL[k]}`, hint: this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
+      // the lock last: its state (a phone starts locked) has to stay in sight, as a bare icon once the labels go
+      { els: [lockBtn], items: [{ label: 'Move parts by dragging', hint: 'Off: a drag on a part pans', icon: 'unlock', on: () => settings.moveParts, run: () => settings.set('moveParts', !settings.moveParts) }] },
     ];
     // Schematic | Breadboard (a scene with Scene.breadboard), and the jumpers' look while the boards are shown
     const segBtn = (label: string, title: string, fn: () => void) => h('button', { title, 'aria-pressed': 'false', onclick: fn }, label);
@@ -2451,7 +2452,7 @@ export class Stage {
 
   /** Drop the bar's button labels (all but Probe and Why?, then those too; icons and tooltips remain) when the open level's name would otherwise be
    *  cut; measured with the labels shown, so they come back once there is room. Still cut, the least used
-   *  buttons move into a More menu a group at a time (shedGroups: zoom, image, layout, sandbox, timing, probe),
+   *  buttons move into a More menu a group at a time (shedGroups: zoom, image, layout, sandbox, timing, probe, why, overlays, lock),
    *  and only then (a phone: the buttons take the whole bar, the name read "4…") the hierarchy gets a row of
    *  its own above the buttons (.stacked), every button back in the bar. The levels above the open one shrink
    *  first (app.css): cut with an ellipsis, their names in their tooltips. */
