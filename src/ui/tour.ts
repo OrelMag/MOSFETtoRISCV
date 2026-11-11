@@ -55,6 +55,8 @@ export class TourPlayer {
   }
 
   start(): void {
+    // a tour names drill paths: an open zoom lens closes before its first beat (docs/transparent/DESIGN.md item 5)
+    this.stage.closeLens();
     this.stage.stopClock();
     this.stage.overlay(this.el);
     this.k = -1;

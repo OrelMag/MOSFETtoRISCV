@@ -251,7 +251,12 @@ export class Camera {
   }
 
   /** Show `vb` as a view of the learner's own: not fitted, so a resize keeps its scale (resized()); Fit undoes it. */
-  setView(vb: ViewBox): void {
+  setView(vb: ViewBox, host?: { w: number; h: number }): void {
+    // a host just sized (the zoom lens's body): the scale reads from it at once, without a layout read
+    if (host && host.w > 0 && host.h > 0) {
+      this.size = { ...host };
+      this.hostPx = host.w;
+    }
     this.vb = vb;
     this.fitted = false;
     this.apply();

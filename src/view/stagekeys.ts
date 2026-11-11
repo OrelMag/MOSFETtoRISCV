@@ -13,7 +13,7 @@ addKeys([
   { id: 'cursor.pulse', group: 'stage', caps: ['.'], does: 'one clock cycle (Pulse)', match: [{ key: '.', code: 'Period', shift: false }] },
   { id: 'cursor.step', group: 'stage', caps: ['>'], does: 'one gate delay (Step)', match: [{ key: '>' }] },
   { id: 'cursor.back', group: 'stage', caps: [','], does: 'back one step', match: [{ key: ',', code: 'Comma', shift: false }] },
-  { id: 'cursor.zoomin', group: 'stage', caps: ['+'], does: 'zoom in', match: [{ key: '+' }, { key: '=', code: 'Equal', shift: false }] },
+  { id: 'cursor.zoomin', group: 'stage', caps: ['+'], does: 'zoom in (toward the cursor’s part; with Open blocks as you zoom, its inside opens)', match: [{ key: '+' }, { key: '=', code: 'Equal', shift: false }] },
   { id: 'cursor.zoomout', group: 'stage', caps: ['−'], does: 'zoom out', match: [{ key: '-', code: 'Minus', shift: false }] },
   { id: 'cursor.fit', group: 'stage', caps: ['0'], does: 'fit the circuit to the view', match: [{ key: '0', code: 'Digit0', shift: false }] },
 ]);
