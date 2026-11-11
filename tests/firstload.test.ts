@@ -80,7 +80,9 @@ describe('the first-load path', () => {
     // 360 000 (2026-11-10, Rock): each step's stage kind in the outline (StepMeta.stage, ~14 KB of source, ~1 KB gzip), so the top
     // bar hides Slow motion on a widget step before the chapter's module loads (no shift)
     // 368 000 (2026-11-11): logic (9 steps), fsm (10) and firstcomputer (8) add their outline lines
-    expect(bytes).toBeLessThan(368_000);
+    // 372 000 (2026-11-11, batch 33): threads (8) and linking (11) outline lines, and the "Open blocks as you zoom" View options row
+    //   (the lens itself, view/lens.ts, is imported only when the setting is on)
+    expect(bytes).toBeLessThan(372_000);
   });
 
   it('loads the route pages and the chapters by import(), not by import', () => {
