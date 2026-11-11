@@ -203,8 +203,8 @@ describe('the author\'s bug: a register beside other modules opens once zoomed e
 
   it('Rock\'s opening zooms on the fib program, px per unit within 1 % (single-cycle and pipelined CPUs)', () => {
     const want: [() => ComponentDef, string, number][] = [
-      [SC, 'pc', 70.3], [SC, 'alu', 27.5], [SC, 'rf', 38.9], [SC, 'imm', 16.0], [SC, 'ctl', 3.61], [SC, 'npc', 21.5],
-      [PIPE, 'FD', 43.9], [PIPE, 'DE', 43.9], [PIPE, 'hz', 16.3],
+      [SC, 'pc', 35.16], [SC, 'alu', 27.5], [SC, 'rf', 31.11], [SC, 'imm', 16.0], [SC, 'ctl', 3.61], [SC, 'npc', 21.5],
+      [PIPE, 'FD', 43.9], [PIPE, 'DE', 43.9], [PIPE, 'hz', 12.2],
     ];
     const got = want.map(([top, n]) => { const { box, def } = boxOf(top(), n); return [n, openAtFor(box, def)] as const; });
     for (const [i, [n, v]] of got.entries()) expect(Math.abs(v / want[i][2] - 1), `${n}: ${v}`).toBeLessThan(0.01);

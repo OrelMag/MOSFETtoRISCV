@@ -16,6 +16,8 @@ export type { Rect };
 export const MIN_FIT_PX = 120;
 export const MIN_FIT_H = 80;
 
+/** The deepest zoom: the view is never narrower than this many grid units (so at most hostWidth / MIN_VIEW_UNITS px a unit). */
+export const MIN_VIEW_UNITS = 8;
 /** Pixels kept clear between the drawing and an overlay panel. */
 export const COVER_GAP = 12;
 
@@ -266,7 +268,7 @@ export class Camera {
   zoom(factor: number, cx?: number, cy?: number): void {
     const v = this.vb;
     const px = cx ?? v.x + v.w / 2, py = cy ?? v.y + v.h / 2;
-    const nw = Math.min(Math.max(v.w * factor, 8), 4000);
+    const nw = Math.min(Math.max(v.w * factor, MIN_VIEW_UNITS), 4000);
     const k = nw / v.w;
     this.vb = { x: px - (px - v.x) * k, y: py - (py - v.y) * k, w: v.w * k, h: v.h * k };
     this.fitted = false;

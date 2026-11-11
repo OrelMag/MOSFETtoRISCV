@@ -5,6 +5,7 @@
 // One rule opens it: the inside's smallest named block, scaled into the box, reaches the legibility floor at the current
 // zoom. That makes a box's opening zoom a property of the box alone (its size, its inside): no stage, no neighbours, no
 // covers, nothing remembered.
+import { MIN_VIEW_UNITS } from './camera';
 import { orientGeom } from '../sim/geometry';
 import { isConstantDef } from '../sim/constant';
 import { netlistOf, type ComponentDef } from '../sim/types';
@@ -54,6 +55,22 @@ export function openAtPx(box: Size, k: number, smallestNamed: number): number {
   return Math.max(FLOOR_PX / (k * smallestNamed), BOX_MIN_PX / Math.min(box.w, box.h));
 }
 
+/** A box opens at the latest once its shorter side is this share of the canvas's shorter side (the author's target). */
+export const CAP_SHARE = 0.4;
+
+/**
+ * The zoom a box opens at on this canvas: its own (openAtPx), but no later than when its shorter side is CAP_SHARE of the
+ * canvas's, and never past the view's deepest zoom (canvas.w / MIN_VIEW_UNITS px a unit), so no box is a dead end. The one
+ * place the canvas enters the rule: a big inside (the issue queue, a register file) then opens before every inner name is
+ * drawn, and those names appear as the zoom goes on. The canvas the view draws in, never its free area: a panel docking
+ * must not open or close a box.
+ */
+export function capOpenAt(openAt: number, box: Size, canvas: Size): number {
+  const short = Math.min(box.w, box.h), cs = Math.min(canvas.w, canvas.h);
+  if (!(short > 0 && cs > 0)) return openAt;
+  return Math.min(openAt, (CAP_SHARE * cs) / short, (0.999 * canvas.w) / MIN_VIEW_UNITS);
+}
+
 /**
  * Open or closed at this zoom (`px`: the view's px per outer unit). Outside the band [CLOSE_SHARE·open, open) the answer
  * depends on the geometry alone; inside it, on `prev` alone. Nothing else is state.
@@ -81,28 +98,43 @@ export function handOffView(fitPx: Rect, extent: Rect, canvas: Size): { x: numbe
   return { x: extent.x - fitPx.x / s, y: extent.y - fitPx.y / s, w: canvas.w / s, h: canvas.h / s };
 }
 
+/** A run: at least this many identical named blocks (one definition, one orientation) read as one block, an array. */
+export const RUN_MIN = 4;
+/** A run's cells must each be at least this big on screen (px, the longer side) for the array to read as cells. */
+export const CELL_PX = 5;
+
 const smallestMemo = new WeakMap<ComponentDef, number>();
 /**
  * The inside's smallest named block (inner grid units, its longer side): the blocks legible.ts would name (a box whose label
  * is worth a name). An inside of gate glyphs only names none: then its smallest part, so the gates read. 0: nothing to draw.
- * From the netlist, not the drawing (it never changes with the zoom), memoized per definition.
+ * A run of RUN_MIN or more identical named blocks (a register's 32 flip-flops, a register file's 31 registers) counts as one
+ * block, the run's extent (legible.ts names its first and last), as long as each cell is at least CELL_PX: so its share is
+ * min(the run's longer side, the cell's · FLOOR_PX / CELL_PX). From the netlist, not the drawing (it never changes with the
+ * zoom), memoized per definition.
  */
 export function smallestNamed(def: ComponentDef): number {
   const hit = smallestMemo.get(def);
   if (hit !== undefined) return hit;
   const nl = netlistOf(def);
-  let named = Infinity, any = Infinity;
+  // per definition and orientation: its parts' extent, size and count, and whether legible.ts would name it
+  const groups = new Map<string, { long: number; named: boolean; x0: number; y0: number; x1: number; y1: number; n: number }>();
   for (const inst of nl?.instances ?? []) {
     const d = inst.def;
     if (d.prim === 'alias' || isConstantDef(d)) continue;
     const g = orientGeom(d, inst.flip, inst.rot);
-    const long = Math.max(g.w, g.h);
-    any = Math.min(any, long);
-    if (d.symbol.kind === 'box' && nameEligible(d.symbol.label ?? d.name, g.w, g.h)) named = Math.min(named, long);
+    const key = `${d.id}|${inst.flip ? 1 : 0}|${inst.rot ?? 0}`, [x, y] = inst.at ?? [0, 0];
+    const r = groups.get(key);
+    if (r) Object.assign(r, { x0: Math.min(r.x0, x), y0: Math.min(r.y0, y), x1: Math.max(r.x1, x + g.w), y1: Math.max(r.y1, y + g.h), n: r.n + 1 });
+    else groups.set(key, { long: Math.max(g.w, g.h), named: d.symbol.kind === 'box' && nameEligible(d.symbol.label ?? d.name, g.w, g.h), x0: x, y0: y, x1: x + g.w, y1: y + g.h, n: 1 });
   }
-  const v = Number.isFinite(named) ? named : Number.isFinite(any) ? any : 0;
-  smallestMemo.set(def, v);
-  return v;
+  // a run reads as one block: its extent, while each cell keeps CELL_PX
+  const share = (r: { long: number; x0: number; y0: number; x1: number; y1: number; n: number }) =>
+    r.n >= RUN_MIN ? Math.min(Math.max(r.x1 - r.x0, r.y1 - r.y0), (r.long * FLOOR_PX) / CELL_PX) : r.long;
+  const all = [...groups.values()], named = all.filter((r) => r.named);
+  const v = Math.min(...(named.length ? named : all).map(share));
+  const out = Number.isFinite(v) ? v : 0;
+  smallestMemo.set(def, out);
+  return out;
 }
 
 const extentMemo = new WeakMap<ComponentDef, Rect>();

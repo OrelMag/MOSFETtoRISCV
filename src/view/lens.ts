@@ -11,7 +11,7 @@ import '../styles/lens.css';
 import { reducedMotion } from '../ui/motion';
 import { TAP_SLOP } from './camera';
 import type { ViewCtx } from './context';
-import { decide, fitInside, FADE_MS, handOffView, handsOff, insideExtent, openAtPx, smallestNamed, type Rect } from './lensplan';
+import { capOpenAt, decide, fitInside, FADE_MS, handOffView, handsOff, insideExtent, openAtPx, smallestNamed, type Rect } from './lensplan';
 import { cueWords, progress, ZoomOutGate } from './zoomout';
 import { installPinch } from './pinch';
 import type { OverlayResult } from './overlays';
@@ -67,6 +67,10 @@ interface Box {
   def: ComponentDef;
   /** View px per unit at which it opens (lensplan.ts openAtPx), from the box and its inside alone. */
   openAt: number;
+  /** Its own opening zoom (openAtPx, from the box and its inside), before the canvas's cap (capOpenAt). */
+  base: number;
+  /** Its size, outer grid units. */
+  size: { w: number; h: number };
   /** What the rule said last (decide's hysteresis). */
   want: boolean;
   /** Its level once prepared (the first half of a build). */
@@ -271,11 +275,12 @@ export class Lens {
       const def = ctx.node.children?.get(name)?.def;
       const e = def && insideExtent(def);
       if (!def || !e) continue;
-      const openAt = openAtPx(r, fitInside(r, e).k, smallestNamed(def));
-      if (!Number.isFinite(openAt)) continue;
-      this.boxes.set(name, { name, def, openAt, want: false });
-      this.groupOf(name)?.setAttribute('data-open-at', openAt.toFixed(2));
+      const base = openAtPx(r, fitInside(r, e).k, smallestNamed(def));
+      if (!Number.isFinite(base)) continue;
+      this.boxes.set(name, { name, def, base, openAt: base, size: { w: r.w, h: r.h }, want: false });
     }
+    this.capFor = '';
+    this.cap(this.canvasRect());
   }
 
   private groupOf(name: string): SVGGElement | null {
@@ -313,6 +318,19 @@ export class Lens {
     return r ? this.toPx(r, c) : null;
   }
 
+  private capFor = '';
+  /** The canvas's cap on every box's opening zoom (lensplan.ts capOpenAt), again when the canvas changes size; data-open-at
+   *  is the capped value, the one the rule uses. */
+  private cap(c: DOMRect): void {
+    const key = `${Math.round(c.width)}x${Math.round(c.height)}|${this.boxes.size}`;
+    if (key === this.capFor) return;
+    this.capFor = key;
+    for (const b of this.boxes.values()) {
+      b.openAt = capOpenAt(b.base, b.size, { w: c.width, h: c.height });
+      this.groupOf(b.name)?.setAttribute('data-open-at', b.openAt.toFixed(2));
+    }
+  }
+
   /** Apply the rule to every block at the current zoom: show, hide, place, queue builds, hand off. */
   private evaluate(): void {
     this.handedCue();
@@ -323,6 +341,7 @@ export class Lens {
     const ok = this.host.allowed();
     const px = this.unitPx();
     const c = this.canvasRect();
+    this.cap(c);
     const zoomingIn = this.lastPx > 0 && px > this.lastPx * 1.0001;
     this.lastPx = px;
     let wantBuild = false;
@@ -688,8 +707,8 @@ export class Lens {
       const fit = this.fitPx(b, c);
       if (!fit || !handsOff(fit, canvas)) continue;
       const under = fx >= c.left + fit.x && fx <= c.left + fit.x + fit.w && fy >= c.top + fit.y && fy <= c.top + fit.y + fit.h;
-      if (!pick || under) pick = { b, fit };
-      if (under) break;
+      // only the box under the pointer: zooming on a small part must never step into a big neighbour
+      if (under) { pick = { b, fit }; break; }
     }
     if (!pick) return;
     const { b, fit } = pick;
