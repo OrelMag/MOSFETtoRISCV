@@ -10,7 +10,7 @@ import type { Chapter } from './types';
 import { delayPanel } from '../widgets/delaypanel';
 import { FINE, rippleVectors } from '../widgets/finedelay';
 import { numOf } from './order';
-import { adderProofWidget, CATCH, cornerVectors, exhaustiveCount, yearsAt } from '../widgets/adderproof';
+import { adderProofWidget, CATCH, cornerVectors, exhaustiveCount, ordinal, yearsAt } from '../widgets/adderproof';
 import { groupDigits } from '../sim/numfmt';
 
 const RG = { ...FINE.ripple, n: rippleVectors().length - 1 };
@@ -479,7 +479,7 @@ export const chAdders: Chapter = {
         <li><strong>A reference</strong> to compare with: the language's own <code>+</code>, wrapped to <em>n</em> bits, two lines of code that are plain to read. The circuit is run on the vector and its sum and carry-out are compared with the reference's, every time, so that nobody has to work out an expected answer by hand.</li>
         </ul>
         <p>The reference is the idea the site calls a <span data-ahead="golden">golden model (a simple program that defines what a design must do, run beside it and compared after every step)</span>; <a href="#/c/verify/0">chapter ${numOf('verify')}</a> returns to it, and to how much of a design a test set has really exercised. A passing test shows no bug in the vectors it tried, which is all it shows.</p>
-        <div class="try">Plant a fault: choose "carry into the top column stuck at 0" on the 32-bit adder. The corner cases catch it at their ${CATCH.corner}th vector and the random run at its ${CATCH.random}th; with the fault in column 2 the first random vector is enough. Then run the 8-bit adder on every case.</div>`,
+        <div class="try">Plant a fault: choose "carry into the top column stuck at 0" on the 32-bit adder. The corner cases catch it at their ${ordinal(CATCH.corner)} vector and the random run at its ${ordinal(CATCH.random)}; with the fault in column 2 the random run needs only ${CATCH.lowRandom === 1 ? 'its first vector' : `${CATCH.lowRandom} vectors`}. Then run the 8-bit adder on every case.</div>`,
       widget: adderProofWidget,
       challenge: {
         kind: 'quiz',

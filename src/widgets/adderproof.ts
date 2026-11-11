@@ -1,4 +1,4 @@
-// Chapter 6's last step: how do you know an adder is right? A ripple-carry adder checked against the language's own +
+// The adders chapter's last step: how do you know an adder is right? A ripple-carry adder checked against the language's own +
 // (exhaustively, on corner cases, on random vectors), with a stuck carry planted to see which kind of check catches it.
 // The checking core is DOM-free (tests/adder-proof.test.ts); the widget measures this machine's rate on BitSim, 32 vectors
 // per word op.
@@ -7,8 +7,12 @@ import { rca } from '../lib/combinational';
 import { BitSim, LANES } from '../sim/bitsim';
 import { findNode, flatten } from '../sim/flatten';
 import { applyFaults } from '../sim/faults';
+import { groupDigits } from '../sim/numfmt';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
+
+/** 1st, 2nd, 3rd, 4th … 11th, 12th, 13th, 21st (the try box quotes which vector catches a fault). */
+export const ordinal = (n: number): string => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10 > 3 ? 0 : n % 10]}`;
 
 export type Vec = readonly [a: number, b: number, cin: number];
 
@@ -99,7 +103,7 @@ export function* exhaustiveVectors(n: number): Generator<Vec> {
 }
 
 const hex = (v: number, n: number) => '0x' + v.toString(16).toUpperCase().padStart(Math.ceil(n / 4), '0');
-const sci = (x: number) => (x >= 1e6 ? x.toExponential(1).replace('e+', ' × 10^') : x.toLocaleString('en-US'));
+const sci = (x: number) => (x >= 1e6 ? x.toExponential(1).replace('e+', ' × 10^') : groupDigits(x));
 const span = (years: number) => (years >= 1 ? `${sci(Math.round(years))} years` : years * 365.25 >= 1 ? `${Math.round(years * 365.25)} days` : years * 86400 >= 1 ? `${Math.round(years * 86400)} s` : years * 86400000 >= 1 ? `${Math.round(years * 86400000)} ms` : "under a millisecond");
 
 export function adderProofWidget(): Widget {
@@ -132,9 +136,9 @@ export function adderProofWidget(): Widget {
     const ms = Math.max(performance.now() - t0, 0.01);
     const rate = r.checked / (ms / 1000);
     out.replaceChildren(h('div', { class: 'panel' },
-      h('p', null, h('b', null, name), `: ${r.checked.toLocaleString('en-US')} vectors in ${ms.toFixed(1)} ms (${sci(Math.round(rate))} a second on this machine).`),
+      h('p', null, h('b', null, name), `: ${groupDigits(r.checked)} vectors in ${ms.toFixed(1)} ms (${sci(Math.round(rate))} a second on this machine).`),
       r.bad
-        ? h('p', { class: 'asm-errors', style: 'color:var(--bad)' }, `Mismatch: a = ${hex(r.bad.v[0], b.n)}, b = ${hex(r.bad.v[1], b.n)}, cin = ${r.bad.v[2]}. The circuit gives s = ${hex(r.bad.got.s, b.n)}, cout = ${r.bad.got.cout}; the reference + gives s = ${hex(r.bad.want.s, b.n)}, cout = ${r.bad.want.cout}. Caught after ${r.checked.toLocaleString('en-US')} good vectors.`)
+        ? h('p', { class: 'asm-errors', style: 'color:var(--bad)' }, `Mismatch: a = ${hex(r.bad.v[0], b.n)}, b = ${hex(r.bad.v[1], b.n)}, cin = ${r.bad.v[2]}. The circuit gives s = ${hex(r.bad.got.s, b.n)}, cout = ${r.bad.got.cout}; the reference + gives s = ${hex(r.bad.want.s, b.n)}, cout = ${r.bad.want.cout}. Caught after ${groupDigits(r.checked)} good vectors.`)
         : h('p', { style: 'color:var(--good)' }, 'No mismatch. That proves the adder right for exactly these vectors, and for no others unless they are all of them.'),
       h('p', { class: 'sub' }, `Exhaustive at ${b.n} bits would take ${span(exhaustiveCount(b.n) / rate / SECONDS_PER_YEAR)} at that rate.`)));
   };
@@ -154,8 +158,12 @@ export function adderProofWidget(): Widget {
   };
 }
 
-/** The step's 'try it' numbers: which vector (1-based) first exposes the top column's stuck carry, on the 32-bit adder, in the corner list and in the seeded random run. */
+/** The step's 'try it' numbers: which vector (1-based) first exposes a stuck carry on the 32-bit adder, in the corner list and in the
+ *  seeded random run, for the top column and for column 2 (the widget's two faults). */
 export const CATCH = (() => {
-  const b = adderBench(32, 31);
-  return { corner: b.run(cornerVectors(32)).checked + 1, random: b.run(randomVectors(32, 100000)).checked + 1 };
+  const top = adderBench(32, 31), low = adderBench(32, 2);
+  return {
+    corner: top.run(cornerVectors(32)).checked + 1, random: top.run(randomVectors(32, 100000)).checked + 1,
+    lowRandom: low.run(randomVectors(32, 100000)).checked + 1,
+  };
 })();

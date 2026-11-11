@@ -39,5 +39,8 @@ describe('chapter 6: how do you know an adder is right', () => {
   });
 });
 
-import { CATCH } from '../src/widgets/adderproof';
-it('the try-it box quotes these', () => { expect(CATCH).toEqual({ corner: 6, random: 7 }); });
+import { CATCH, ordinal } from '../src/widgets/adderproof';
+it('the try-it box quotes these', () => {
+  expect(CATCH).toEqual({ corner: 6, random: 7, lowRandom: 2 });
+  expect([1, 2, 3, 4, 6, 7, 11, 12, 13, 21, 22, 101].map(ordinal)).toEqual(['1st', '2nd', '3rd', '4th', '6th', '7th', '11th', '12th', '13th', '21st', '22nd', '101st']);
+});

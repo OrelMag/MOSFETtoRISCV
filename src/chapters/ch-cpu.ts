@@ -667,7 +667,7 @@ export const chIsa: Chapter = {
       title: 'If and else are branches',
       body: `
         <p>The machine has no <code>if</code>. It has six conditional branches (<code>beq</code>, <code>bne</code>, <code>blt</code>, <code>bge</code>, <code>bltu</code>, <code>bgeu</code>): compare two registers, and when the test holds add the offset to PC, otherwise carry on to the next instruction. Everything a language calls a condition is built from those, so the rule for writing one by hand is short: <strong>branch on the opposite condition, over the part to skip</strong>.</p>
-        <pre class="code">${IF_TEMPLATE}</pre>
+        <pre class="code">${IF_TEMPLATE.replace(/</g, '&lt;')}</pre>
         <p>That is <code>if (a0 &lt; a1) a2 = 1; else a2 = 2;</code>. The test is false when <code>bge</code> is true, so <code>bge</code> jumps to <code>else</code>; the then-part ends with a <code>j</code> over the else-part, which a plain fall-through would otherwise run next. With no else-part the <code>j</code> disappears and so does the label: <code>if (a0 &lt; a1) a0 = a1</code> is a single <code>bge a0, a1, skip</code> in front of one <code>mv</code>.</p>
         <p>Only <code>&lt;</code>, <code>≥</code>, <code>=</code> and <code>≠</code> exist. <code>&gt;</code> and <code>≤</code> are the same two with the operands swapped, which is the whole of <code>bgt</code> and <code>ble</code>. And <code>blt</code> and <code>bltu</code> are different instructions because the same 32 bits are two different numbers: <code>-4</code> is the bit pattern of ${groupNum(NEG4_UNSIGNED)} read unsigned, so <code>bltu</code> thinks it larger than 2, and a signed maximum written with it gets the negative cases wrong. The editor below is graded on negative inputs for that reason.</p>
         <p>Written this way <code>max</code> takes ${MAX_STEPS.keep} instructions when <code>a0</code> already wins and ${MAX_STEPS.take} when the <code>mv</code> runs (the final <code>j halt</code> counts as the last): the branch costs one instruction either way, and a taken branch is no slower here than a skipped one.</p>
@@ -710,7 +710,7 @@ export const chIsa: Chapter = {
     {
       title: 'A function and its stack frame',
       body: `
-        <p>The calling convention of the last step is a set of rules; here they are used. Below, <code>g</code> is given (it triples <code>a0</code>, a <strong>leaf</strong> that touches only <code>a0</code> and <code>t0</code>) and you write <code>f(x) = g(x) + g(x + 1)</code>. Three things make it more than two calls:</p>
+        <p>The calling convention of <a href="#/c/isa/4">Register names and the calling convention</a> is a set of rules; here they are used. Below, <code>g</code> is given: it triples <code>a0</code>, and like any function it may change the <code>t</code> and <code>a</code> registers, which the cases make it do with junk at every call. You write <code>f(x) = g(x) + g(x + 1)</code>. Three things make it more than two calls:</p>
         <ul>
         <li><code>call g</code> overwrites <code>ra</code> with the way back into <code>f</code>, so <code>f</code>'s own return address must be saved first, or <code>ret</code> returns to the wrong place.</li>
         <li><code>x</code> and the first result must outlive a call, and <code>t</code> and <code>a</code> registers do not. They go in <code>s0</code> and <code>s1</code>.</li>
