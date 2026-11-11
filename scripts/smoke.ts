@@ -858,6 +858,88 @@ const NET_DRIVE = `(async () => {
  * the opening's own task (data-build-ms, 100 ms here). `longMax`: null skips the long-task check, for a level whose dim and
  * breadcrumb are long tasks of the stage's own (the out-of-order core's top: 60–96 ms locally, 271 ms seen on CI).
  */
+/**
+ * The lens honed (DESIGN.md "Revision 3: inside the box", view/lens.ts): wheel steps onto `part`, settling after each, check
+ * the one rule against the box's own `data-open-at` (px per grid unit): open at or past it, closed below CLOSE_SHARE of it,
+ * the band keeping the last answer; the drawn inside (`.lens-layer .inside[data-inst]`) within the box's outline; every other
+ * box in view whose opening zoom is passed open too; the hover hint on a closed box; zooming out crossfades back to the symbol;
+ * zooming in again to the same zoom opens it again (no refusal remembered); no hand-off before the inside fills the canvas.
+ */
+const honeDrive = (part: string) => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const CLOSE_SHARE = 0.75, SETTLE = 450;
+  const bad = [];
+  const svg = document.querySelector('.canvas > svg.schematic');
+  const canvas = svg?.closest('.canvas');
+  const g = () => document.querySelector('.canvas > svg.schematic [data-inst="${part}"]');
+  if (!svg || !g()) return ['no ${part} on the stage'];
+  const hash = location.hash;
+  const openAt = Number(g().dataset.openAt);
+  if (!(openAt > 0 && Number.isFinite(openAt))) return ['${part} has no data-open-at: ' + g().dataset.openAt];
+  // px per grid unit: the schematic's user space is 10 px a unit
+  const px = () => svg.getScreenCTM().a * 10;
+  const isOpen = () => g().classList.contains('inside-on');
+  const inside = () => document.querySelector('.lens-layer .inside[data-inst="${part}"]');
+  const box = () => g().getBoundingClientRect();
+  const wheel = (dy) => { const r = box(); svg.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); };
+  const fmt = (v) => v.toFixed(1);
+  // the rule at a settled zoom; prev: the answer before this step
+  const check = (prev, where) => {
+    const p = px(), o = isOpen();
+    if (p >= openAt && !o) bad.push(where + ': closed at ' + fmt(p) + ' px a unit, past its opening ' + fmt(openAt));
+    else if (p < CLOSE_SHARE * openAt && o) bad.push(where + ': open at ' + fmt(p) + ' px a unit, below ¾ of ' + fmt(openAt));
+    else if (p < openAt && p >= CLOSE_SHARE * openAt && o !== prev) bad.push(where + ': flipped inside the band at ' + fmt(p));
+    return o;
+  };
+  if (px() >= CLOSE_SHARE * openAt) return ['${part} starts within its band (' + fmt(px()) + ' of ' + fmt(openAt) + '): pick another part'];
+  if (document.querySelector('.lens-layer .inside')) bad.push('an inside before any zoom');
+  // the hint on a closed box that can open, with the zoom still needed
+  const r0 = box();
+  for (const t of ['pointerover', 'pointermove']) g().dispatchEvent(new PointerEvent(t, { clientX: r0.x + r0.width / 2, clientY: r0.y + r0.height / 2, bubbles: true }));
+  await wait(300);
+  const hint = document.querySelector('.inside-hint');
+  if (!hint || !/zoom in/i.test(hint.textContent)) bad.push('no "zoom in" hint over the closed ${part}: ' + (hint?.textContent ?? 'none'));
+  // in, a step at a time, each settled, until open and two steps past
+  let open = false, past = 0;
+  for (let k = 0; k < 60 && past < 2 && location.hash === hash; k++) {
+    wheel(-100); await wait(SETTLE);
+    open = check(open, 'zooming in');
+    if (open) past++;
+  }
+  if (location.hash !== hash) bad.push('handed off to ' + location.hash + ' at its opening zoom');
+  if (!open) return [...bad, '${part} never opened (' + fmt(px()) + ' px a unit, opens at ' + fmt(openAt) + ')'];
+  const el = inside();
+  if (!el) bad.push('${part} is inside-on but no .lens-layer .inside for it');
+  else {
+    // within the outline (a pixel's rounding allowed), so no neighbour is covered
+    const b = box(), i = el.getBoundingClientRect();
+    if (i.left < b.left - 1 || i.top < b.top - 1 || i.right > b.right + 1 || i.bottom > b.bottom + 1) {
+      bad.push('the inside leaves the outline: ' + [i.left, i.top, i.right, i.bottom].map(Math.round) + ' in ' + [b.left, b.top, b.right, b.bottom].map(Math.round));
+    }
+    if (!el.querySelector('svg.schematic [data-inst]')) bad.push('nothing drawn inside ${part}');
+  }
+  // every other box fully in view whose opening zoom is passed is open too (R3.6: nothing depends on the pointer)
+  const c = canvas.getBoundingClientRect();
+  for (const o of document.querySelectorAll('.canvas > svg.schematic [data-open-at]')) {
+    const r = o.getBoundingClientRect(), at = Number(o.dataset.openAt);
+    const inView = r.left >= c.left && r.top >= c.top && r.right <= c.right && r.bottom <= c.bottom;
+    if (inView && px() >= at && !o.classList.contains('inside-on')) bad.push(o.dataset.inst + ' is past its opening (' + fmt(at) + ') but closed');
+    if (px() < CLOSE_SHARE * at && o.classList.contains('inside-on')) bad.push(o.dataset.inst + ' is open below ¾ of its opening');
+  }
+  const openPx = px();
+  // out, a step at a time: open through the band, closed below it, crossfading back to the symbol
+  for (let k = 0; k < 60 && open; k++) { wheel(100); await wait(SETTLE); open = check(open, 'zooming out'); }
+  if (open) return [...bad, 'zooming out never closed ${part}'];
+  await wait(400);
+  if (inside()) bad.push('the inside stayed after ${part} closed');
+  const label = g().querySelector('.sym-label');
+  if (label && getComputedStyle(label).display === 'none') bad.push('the name of ${part} is still hidden after it closed');
+  // in again to the zoom it opened at: the same answer (nothing remembered)
+  for (let k = 0; k < 60 && px() < openPx * 0.999; k++) { wheel(-100); await wait(SETTLE); open = check(open, 'zooming in again'); }
+  if (!isOpen()) bad.push('${part} did not open again at ' + fmt(px()) + ' px a unit');
+  return bad;
+})()`;
+
 const lensDrive = (part: string, table = false, longMax: number | null = 250) => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
@@ -1341,6 +1423,12 @@ function routes(): Route[] {
   // the out-of-order core (phase 2f): its divider opens like any part since the guard was lifted; the opening's own task is
   // checked, not the dim and breadcrumb that follow it as tasks of their own on that level
   add('#/c/ooo/11', lensOn('dark'), ' (zoom lens, out of order, dark)', undefined, lensDrive('div', false, null));
+  // the lens honed (Revision 3): the single-cycle CPU's pc, register file and alu in both themes; the pipeline register FD
+  // (the author's bug); the out-of-order core
+  for (const theme of ['light', 'dark'] as const) for (const part of ['pc', 'rf', 'alu']) add('#/c/cpu/0', lensOn(theme), ` (lens hone, ${part}, ${theme})`, undefined, honeDrive(part));
+  add('#/c/pipeline/1', lensOn('light'), ' (lens hone, pipeline register FD)', undefined, honeDrive('FD'));
+  add('#/c/pipeline/1', lensOn('dark'), ' (lens hone, pipeline register FD, dark)', undefined, honeDrive('FD'));
+  add('#/c/ooo/11', lensOn('dark'), ' (lens hone, out of order, dark)', undefined, honeDrive('div'));
   // the same lens over the sandbox's look inside (track 2a): the computer's core, both themes, and with the setting off
   {
     const ex = examplesWorkspace(), comp = `#/sandbox/${ex.ids[EXAMPLES.findIndex((e) => e.id === 'computer')]}`;
