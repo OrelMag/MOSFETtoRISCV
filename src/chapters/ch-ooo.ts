@@ -203,7 +203,7 @@ export const chOoo: Chapter = {
         Returns are predicted by a <span data-show="ras">4-entry return-address stack</span>. Up to two instructions
         retire a cycle: the golden model steps once for each, and the diagram shows each stage's second lane under
         it.</p>
-        <p>Measured on the benchmark set: 193 768 NANDs against 141 655 for one lane (+37 %), a clock period of 80 NAND
+        <p>Measured on the benchmark set: 193 768 NANDs against 141 655 for one lane, the balanced RV32IM pipeline with its predictor (+37 %; both without the program ROM, with the benchmarks' 64-word data memory), a clock period of 80 NAND
         delays against 79, and CPI fib 1.13, sort 1.01, matmul 1.05, matmul-m 1.09, crc 0.97 against 1.35, 1.18,
         1.30, 1.25, 1.23. Only 29 to 53 % of the instructions go in pairs; the others wait for a result, the one memory
         lane or a branch. About a sixth less time for a third more gates.</p>
@@ -594,7 +594,7 @@ export const chOoo: Chapter = {
     {
       title: 'The whole core',
       body: `
-        <p>All together: 359 262 NANDs without the program ROM, against 193 768 for the dual-issue pipeline and 141 655
+        <p>All together: 359 262 NANDs without the program ROM (with the 64-word data memory, like the others here), against 193 768 for the dual-issue pipeline and 141 655
         for one pipeline. The reorder buffer takes 70 541, the issue queue 56 888, the BTB 35 662, the register file
         (four reads, two writes) 35 463, the divider 16 742, the rename table 12 443, the return stack 10 824 and the
         store queue 8544.</p>
@@ -661,7 +661,7 @@ export const chOoo: Chapter = {
         <p>The model behind this chapter is the specification the gate-level core follows cycle for cycle. Here it takes
         any shape: fetch and commit widths, issue ports and the units on each, the window, the predictor, where a
         misprediction is recovered, the latencies. Run it on the benchmark set, one program, your own assembly or a
-        chapter 15 Python program (the same workbench page is the Lab tab).</p>
+        chapter ${numOf('python')} Python program (the same workbench page is the Lab tab).</p>
         <p>Every commit slot is accounted for. Two a cycle make 2n slots in n cycles; each one either commits an
         instruction or is charged to what the oldest instruction in flight waits for, since everything younger waits
         behind it. On our core 50.2 % commit and 32.0 % go to mispredictions: the wait for a mispredicted branch to

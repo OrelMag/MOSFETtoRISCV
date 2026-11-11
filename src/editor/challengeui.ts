@@ -37,7 +37,7 @@ import { fsmOf } from '../lib/fsms';
 import { readbackEl } from './fsmui';
 import { noteChecked } from './analysis';
 import { type Editor, registerToolbarAction } from './editor';
-import { type PaletteItem, registerPaletteGroup } from './palette';
+import { type PaletteItem, registerPaletteGroup, setPaletteGate } from './palette';
 import { TestPlayer } from './testplayer';
 import { testSet } from './testrun';
 import { brushOn, setAccuser, toggleBrush } from './faultui';
@@ -118,6 +118,10 @@ function deviceItems(r: CheckResult, lim: Limits, item: (v: number, unit: string
 
 /** The campaign rule of the chip being edited (set by the strip), listed by the palette group. */
 let activeRule: LibRule | null = null;
+/** A transistors-only challenge is open: the palette greys out the library NAND (Purist and Basics still list it). */
+let nandBarred = false;
+const barNand = (it: PaletteItem): string | undefined =>
+  (it.place as { part?: { lib?: string } } | undefined)?.part?.lib === 'nand' ? 'Transistors only here: a library NAND would not count. Build one from transistors (or place your own NAND chip)' : undefined;
 
 /** A part's NAND count as a short tag ('9 NAND', '1.2k NAND'); memoized: the palette re-lists on every render. */
 const nandTags = new Map<string, string | undefined>();
@@ -216,6 +220,8 @@ class ChallengeUi {
 
   destroy(): void {
     activeRule = null;
+    nandBarred = false;
+    setPaletteGate(null);
     setAccuser(this.ed, null);
     this.ed.sim.setHidden(null);
     this.ed.bodyLock = null;
@@ -273,6 +279,12 @@ class ChallengeUi {
         ed.refresh();
         ed.palette.render();
       }
+      const bar = !!ch && ch.allowed === 'transistors';
+      if (bar !== nandBarred) {
+        nandBarred = bar;
+        setPaletteGate(bar ? barNand : null);
+        ed.palette.render();
+      }
       if (this.level) C().progress().open(this.level.id, true);
       // The level screen's palette is locked to the rule already.
       const restricted = !!ch && ch.allowed !== 'any' && !this.screen;
@@ -298,7 +310,8 @@ class ChallengeUi {
   private paletteNote(ch: BuildChallenge | undefined): void {
     const head = this.ed.palette.el.querySelector('.sb-pal-head');
     if (!head) return;
-    const on = !!ch && ch.allowed !== 'any' && !this.screen && !this.level;
+    // a campaign level with an unlock list has its own palette group; a fixed rule (transistors / NAND only) gets the note too
+    const on = !!ch && ch.allowed !== 'any' && !this.screen && (!this.level || typeof ch.allowed === 'string');
     if (!on) { this.noteEl?.remove(); return; }
     const [name, tip] = rule(ch.allowed);
     this.noteEl ??= h('p', { class: 'sb-pal-note', role: 'note' });

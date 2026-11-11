@@ -160,7 +160,7 @@ export const chBus: Chapter = {
         transactions in flight; ours keeps one.</p>
         <p>The <span data-show="bus.dec"><strong>address decoder</strong></span> looks at the top four address bits: 0x0… is RAM, 0x1… the flash, 0x4… the DMA engine's
         registers. Any other address goes to a <span data-show="def">default slave</span> that answers 0, so a stray pointer never hangs the bus (AXI would
-        answer with an error and the CPU would trap). A slow slave just holds back valid: <span data-show="ram">this RAM</span> has 3 <strong>wait states</strong>.</p>
+        answer with an error and the CPU would trap). A slow slave just holds back valid: on this step's bench <span data-show="ram">the RAM</span> is set to 3 <strong>wait states</strong>, so it answers 3 cycles late (the other steps' RAM has none: 2 cycles an access).</p>
         <p>Splitting the channels is what lets a bus be both simple and general. The address can be accepted while the data is still being found, a write's response is
         its own message (so the master learns that the store has landed, not just left), and each channel can be pipelined separately in a larger design. The cost is five
         handshakes' worth of wires and state per port; AXI-lite keeps them but drops bursts and IDs, which is why a register file hangs off it for a few gates.</p>`,
@@ -289,14 +289,14 @@ export const chBus: Chapter = {
     {
       title: 'A computer on one bus',
       body: `
-        <p>The system <span data-show="cpu">CPU</span> of chapters <a href="#/c/io/0">19</a> and <a href="#/c/traps/0">20</a>, its memory moved onto the bus. In place of its data memory sits a
+        <p>The system <span data-show="cpu">CPU</span> of chapters <a href="#/c/io/0">${numOf('io')}</a> and <a href="#/c/traps/0">${numOf('traps')}</a>, its memory moved onto the bus. In place of its data memory sits a
         <span data-show="cpu.dm">memory unit</span> (${nands(busMemUnit(7))} NANDs): instructions below 0x200 come from a boot ROM inside the CPU, any other address is fetched over the
         bus into an instruction register, and loads and stores go over the bus. The CPU waits (retire = 0) until both are done, and
         the decoder sees a NOP while an instruction is on its way. Console, LEDs and timer stay inside.</p>
         <p>At power-up the boot ROM programs <span data-show="dma">the DMA</span> to copy ${LOAD_WORDS} words from <span data-show="flash">the flash</span> to <span data-show="ram">RAM</span> at 0x${LOAD_AT.toString(16)}, waits for it, and
         jumps there. Most larger computers boot like this: a small ROM that knows how to fetch the real program from storage. (A microcontroller often skips the copy and runs straight from NOR flash.)</p>
         <pre class="code">${BOOT_SOURCE.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>
-        <p>The design choice worth noticing is that the CPU did not change. Its decode, registers and ALU are chapter 19's; only the place the words come from moved, and the
+        <p>The design choice worth noticing is that the CPU did not change. Its decode, registers and ALU are chapter ${numOf('io')}'s; only the place the words come from moved, and the
         memory unit absorbs the difference by stalling the CPU (<code>retire</code> low, no state written) until the bus answers. That is the general trick of a system on a chip: keep the core unaware of
         what is behind its port, and put every piece of timing in the port.</p>
         <div class="try">Run, and watch the PC move from the boot ROM into RAM, the console print, and the LEDs count.</div>`,

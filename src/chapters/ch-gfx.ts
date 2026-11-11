@@ -18,6 +18,10 @@ const nd = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const MIP_BYTES = Array.from({ length: 9 }, (_, k) => (256 >> k) ** 2).reduce((a, b) => a + b, 0);
 /** The rasterizer's clear, from go: the cycles before the walk's first test, then every 4 × 4 tile of the screen (a test and 16 pixels). */
 const CLEAR = CLEAR_CYCLES + 1;
+/** Set-up, counted as the cycles after go before the first tile test: the edges' 8 (the products, S1 … S8), with depth Z_WALK_START − 1. */
+const EDGE_SETUP = 8;
+const SETUP = Z_WALK_START - 1;
+const DEPTH_EXTRA = SETUP - EDGE_SETUP;
 /** The screen of chapters pixels-graphics: 64 x 64 pixels, one byte each, four to a word. */
 const SCREEN = { w: 64, bytesPerPixel: 1, perWord: 4 };
 const FRAME_BYTES = SCREEN.w * SCREEN.w * SCREEN.bytesPerPixel;
@@ -216,7 +220,7 @@ export const chPixels: Chapter = {
         derive: `<p>z has 12 fraction bits and the arithmetic is 32 bits that wrap: a thin sliver has a huge slope, and its z overflows far outside the triangle, but
           it is right at every pixel inside, to about a tenth of a z unit.</p>
           <p>Clear cost: ${Z_WALK_START - 1} cycles to the walk's start, 16 × 16 = 256 tiles of 17 cycles (a test and 16 pixels): ${Z_WALK_START - 1} + 256 × 17 = ${Z_WALK_START - 1 + 256 * 17}, and ${CLEAR} counted from go with the cycle that starts it.
-          Per triangle the depth set-up adds two 32-cycle divisions plus the products and the shift-and-add steps: ${Z_WALK_START} cycles before the first tile, of which 8 are the edge products.</p>`,
+          Per triangle the depth set-up adds two 32-cycle divisions plus the products and the shift-and-add steps. Set-up is then ${SETUP} cycles after go before the first tile test: ${EDGE_SETUP} of them the edge products, ${DEPTH_EXTRA} added by depth. With go's own cycle a triangle spends ${Z_WALK_START} before its first tile, which is how a draw is charged below.</p>`,
         pitfall: `<p>Depth is compared as stored, 16 bits, so two surfaces closer than one step collide (z-fighting): which one wins depends on draw order and rounding, and flickers as they move. It
           is not a bug in the test but a precision limit; the cure is more bits or a larger gap between the surfaces.</p>`,
         real: `<p>GPUs test depth per pixel in hardware before or after shading (early-z lets the test skip shading hidden pixels), keep it compressed per tile and clear it with a flag (fast clear), and use 24 or 32 bits with a
@@ -268,8 +272,8 @@ export const chPixels: Chapter = {
         <p>Each shape gets a depth of its own, nearer than every shape before it, and the <span data-show="rop">depth test</span> is on. Shapes cover each other in the order they were
         drawn. Where two triangles of one shape overlap (a stroke crossing itself, a fanned outline), the second fails "nearer", so the pixel is blended
         once: a translucent stroke has no darker knots where it crosses itself.</p>
-        <p>Cost: the house is 7 shapes, 25 triangles and 2136 pixel writes, 6453 cycles after the ${fmt(CLEAR)}-cycle clear. Every triangle spends ${Z_WALK_START} cycles before
-        its first tile, mostly on depth's division: 2125 of the 6453 here. A scribble of short segments is almost all set-up. That is why a GPU has
+        <p>Cost: the house is 7 shapes, 25 triangles and 2136 pixel writes, 6453 cycles after the ${fmt(CLEAR)}-cycle clear. Every triangle spends ${Z_WALK_START} cycles from go to
+        its first tile (${SETUP} of set-up after the go cycle), mostly on depth's division: 2125 of the 6453 here. A scribble of short segments is almost all set-up. That is why a GPU has
         several set-up units, and why meshes are not cut finer than the pixels need. The scene runs on the cycle engine, and the screen is compared
         pixel for pixel with the reference rasterizer's picture of the same triangles.</p>
         <div class="try">Draw something, then Send to the GPU; click the BACK frame under the screen to watch the clear sweep it and the triangles land. Tick "show triangles"
@@ -285,15 +289,15 @@ export const chPixels: Chapter = {
           <li><strong>Triangle</strong>: sent as it is. Clicked counter-clockwise it is a back face, so the pad turns it round, unless you tick "keep my
           winding".</li>
           </ul>
-          <p>For a polygon of n corners the rasterizer receives n − 2 triangles, each with ${Z_WALK_START} cycles of set-up before its first tile: 12 corners give 10 triangles and ${10 * Z_WALK_START} set-up cycles, against the ${fmt(CLEAR)}-cycle clear that precedes them. A brush stroke of m segments is 2m triangles, so a scribble of 100 short segments is ${2 * 100 * Z_WALK_START} cycles of set-up alone.</p>`,
+          <p>For a polygon of n corners the rasterizer receives n − 2 triangles, each spending ${Z_WALK_START} cycles from go to its first tile (go and ${SETUP} of set-up): 12 corners give 10 triangles and ${10 * Z_WALK_START} set-up cycles, against the ${fmt(CLEAR)}-cycle clear that precedes them. A brush stroke of m segments is 2m triangles, so a scribble of 100 short segments is ${2 * 100 * Z_WALK_START} cycles of set-up alone.</p>`,
         pitfall: `<p>Drawing a concave outline with a fan from one corner (the easy method) covers the wrong pixels where the outline turns back on itself. Ear clipping avoids it by never cutting across the polygon's outside; only
           a self-crossing outline falls back to a fan, and there the result depends on overlaps.</p>`,
       },
       challenge: {
         kind: 'quiz', question: 'You draw a polygon with 12 corners. How many triangles does the rasterizer receive, and what does each one cost before its first pixel?',
         options: ['12 triangles, nothing: set-up is shared', '10 triangles, 85 cycles each', '10 triangles, 8 cycles each', '1 polygon, 85 cycles'], answer: 1,
-        explain: 'Ear clipping turns n corners into n − 2 triangles, and each is a separate draw for the rasterizer: its own set-up, here 85 cycles with the depth division, before the first tile test.',
-        why: ['Ear clipping gives n − 2 triangles, and each one is a separate draw with its own set-up.', '', 'Eight cycles is the edge set-up\'s products alone; with depth\'s division, set-up takes 85.', 'The rasterizer draws triangles and nothing else: the polygon is cut before it arrives.'],
+        explain: `Ear clipping turns n corners into n − 2 triangles, and each is a separate draw for the rasterizer: its own set-up, here ${Z_WALK_START} cycles from go to the first tile test (go and ${SETUP} of set-up, ${DEPTH_EXTRA} of them for depth).`,
+        why: ['Ear clipping gives n − 2 triangles, and each one is a separate draw with its own set-up.', '', `Eight cycles is the edge set-up's products alone; with depth's division a triangle spends ${Z_WALK_START} from go to its first tile.`, 'The rasterizer draws triangles and nothing else: the polygon is cut before it arrives.'],
       },
     },
     {
@@ -353,7 +357,7 @@ export const chGfxPipeline: Chapter = {
       },
       {
         question: 'How long does the rasterizer spend on a cube face that points away?',
-        options: ['Three set-up cycles: twice its area is negative', 'Nothing: the command unit skips it', 'Its whole 85-cycle set-up', 'One cycle per pixel it would have covered'],
+        options: ['Three set-up cycles: twice its area is negative', 'Nothing: the command unit skips it', `Its whole ${SETUP}-cycle set-up`, 'One cycle per pixel it would have covered'],
         answer: 0,
         explain: 'Set-up computes twice the area first; a negative sign culls the triangle after three cycles, before the depth division and before any tile.',
         why: ['', 'The command unit sends every triangle; the rasterizer\'s set-up decides to cull.', 'Set-up stops at the area\'s sign, before the depth division.', 'Culling happens before any tile is walked: no pixel is visited.'],
@@ -469,7 +473,7 @@ export const chGfxPipeline: Chapter = {
         the reference rasterizer's picture of the same vertices.</p>
         <p>Then the cube: twelve triangles, a colour a face. Half of them or more face away (six or eight, with the angle), so the <span data-show="rast">rasterizer's set-up</span> culls them after
         three cycles (twice their area is negative).
-        For a single convex solid that alone hides everything behind; depth is on all the same, and earns its 76 set-up cycles per triangle only where
+        For a single convex solid that alone hides everything behind; depth is on all the same, and earns its ${DEPTH_EXTRA} extra set-up cycles per triangle only where
         solids overlap. Its frames take 7168 to 8192 cycles: two or three faces, 2300 to 3200 cycles of drawing.</p>
         <p>What the scene proves is agreement, not speed. A gate-level bug anywhere in 413 501 leaves would show up as a pixel that differs from the reference in some frame, which is why the pipeline can be trusted at this size.</p>
         <div class="try">Run for a few frames, then pick the cube. Pause and open the rasterizer: its tile walk is wherever the timeline says.</div>`,
@@ -504,7 +508,7 @@ export const chGfxPipeline: Chapter = {
       widget: costWidget,
       more: {
         derive: `<p>Utilization of each block over a ${fmt(6144)}-cycle frame: the warp core runs its kernel 60 cycles, ${pct(60, 6144)} busy; the clear takes 4438, ${pct(4438, 6144)}; the rasterizer spends its triangle's 1268 plus the clear it performs, almost the whole frame.
-          Area against use: the core is 182 121 NANDs and the rasterizer a seventh of that (about ${fmt(Math.round(182121 / 7))}), so the biggest block is the idlest. At 1920 × 1080 the clear alone, one pixel a cycle, is ${fmt(1920 * 1080)} cycles, ${(1920 * 1080 / FRAME_WORDS).toFixed(0)} of this screen's scan-outs.</p>`,
+          Area against use: the core is 182 121 NANDs and the rasterizer about a seventh of that (${fmt(26708)}: ${fmt(182121)} / ${fmt(26708)} = ${(182121 / 26708).toFixed(1)}), so the biggest block is the idlest. At 1920 × 1080 the clear alone, one pixel a cycle, is ${fmt(1920 * 1080)} cycles, ${(1920 * 1080 / FRAME_WORDS).toFixed(0)} of this screen's scan-outs.</p>`,
         pitfall: `<p>Gate counts and cycle counts answer different questions. The warp core is large because it is general, not because it is slow; a review that only looks at area would shrink it and make vertex work the bottleneck at a larger mesh.
           Compare gates <em>and</em> busy time, per block.</p>`,
         real: `<p>Here a triangle has one flat colour and the ROP does the only per-pixel work. On a real GPU the rasterizer hands each covered pixel to a

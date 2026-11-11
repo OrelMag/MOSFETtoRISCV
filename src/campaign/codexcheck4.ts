@@ -81,7 +81,7 @@ export const CHECK4: Record<string, Quiz[]> = {
       question: 'A single-cycle CPU runs 188 instructions with 32 loads; 4 loads miss and each miss stalls 8 cycles. What is its CPI?',
       options: ['About 1.17', '1.0', 'About 2.36', '2.0'],
       answer: 0,
-      explain: '4 × 8 = 32 stall cycles: (188 + 32) / 188 = 1.17, chapter 22\'s "Sum an array twice". Stall cycles per instruction = loads per instruction × miss rate × penalty = (32/188) × (4/32) × 8.',
+      explain: '4 × 8 = 32 stall cycles: (188 + 32) / 188 = 1.17, chapter ' + numOf('cache') + '\'s "Sum an array twice". Stall cycles per instruction = loads per instruction × miss rate × penalty = (32/188) × (4/32) × 8.',
       why: ['', 'Misses stall the CPU: the stall cycles add to one cycle per instruction.', 'That charges 8 cycles to all 32 loads: (188 + 256) / 188. Only 4 of them miss.', 'That would be one stall cycle per instruction; there are 32 in 188.'],
     },
   ],
@@ -158,7 +158,7 @@ export const CHECK4: Record<string, Quiz[]> = {
       why: ['', 'A write works through the access transistor overpowering the weak pull-up; the pull-down ratio protects reads.', 'Stronger transistors are wider, so it costs area.', 'Precharge is what makes the read work; sizing does not remove it.'],
     },
     {
-      question: 'In chapter 22 a 4 × 4 SRAM array is 320 transistors, of which 96 are cells. Why do real 32 KB arrays reach over 90 % cells?',
+      question: 'In chapter ' + numOf('cache') + ' a 4 × 4 SRAM array is 320 transistors, of which 96 are cells. Why do real 32 KB arrays reach over 90 % cells?',
       options: ['Decoders, precharge, write drivers and sense amplifiers are shared per row or column, so they grow far slower than the cells', 'Real cells are larger', 'Real arrays have no periphery', 'Larger arrays use 4T cells'],
       answer: 0,
       explain: 'Cells grow with rows × columns, the periphery with rows + columns. At 8 × 8 the cells are already 43 % (384 of 892).',
@@ -339,6 +339,22 @@ export const CHECK4: Record<string, Quiz[]> = {
       answer: 0,
       explain: 'n rows become 2 after about log₁.₅(n / 2) + 1 layers, as leftover rows pass through (32 rows: 8 layers), each one full-adder delay because nothing ripples sideways. One carry-propagate adder finishes.',
       why: ['', 'Same full adders as the array; only the arrangement differs.', 'That is Booth recoding; a Wallace tree sums all n rows.', 'A fast carry-propagate adder still adds the last two words.'],
+    },
+  ],
+  multiword: [
+    {
+      question: 'On RV32, s = a + b has been computed in a 32-bit register (low words of a 64-bit add). Which instruction gives the carry into the high word?',
+      options: ['sltu c, s, a: the sum is smaller than an operand exactly when it wrapped', 'slt c, s, a: the same, signed', 'sltu c, a, s: a is smaller than the sum', 'There is no way: RISC-V has no carry flag'],
+      answer: 0,
+      explain: 'Modulo 2³², a + b wraps exactly when the result is below either operand, so the unsigned comparison of the sum with a (or with b) is the carry. The signed comparison gives the wrong answer for sums that cross 2³¹.',
+      why: ['', 'A signed compare treats 0x80000000 and up as negative, so it misses carries and invents others.', 'That asks whether a is below the sum, which is true whenever b is nonzero and nothing wrapped.', 'The flag is absent, but the carry is one sltu away.'],
+    },
+    {
+      question: 'How many 32 × 32 → 64 products make a 64 × 64 → 128 product, and which instructions give each?',
+      options: ['Four, each a mul (low word) and a mulhu (high word)', 'One: mulhu gives all 128 bits', 'Two: one for each operand word', 'Eight, each a single mul'],
+      answer: 0,
+      explain: '(a1·2³² + a0)(b1·2³² + b0) = a1b1·2⁶⁴ + (a1b0 + a0b1)·2³² + a0b0: four products of two words, each 64 bits wide and so two instructions, eight in all, then the columns are added with their carries.',
+      why: ['', 'mulhu gives only the high 32 bits of one 32 × 32 product.', 'Each operand has two words and every pair multiplies.', 'mul gives the low word only; the high word is another instruction.'],
     },
   ],
   booth: [

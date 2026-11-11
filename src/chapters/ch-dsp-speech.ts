@@ -87,7 +87,7 @@ export const chSpeech: Chapter = {
         kind: 'quiz', question: 'A uniform 8-bit coder loses about how much SNR when the signal drops by 20 dB?',
         options: ['About 20 dB', 'About 6 dB', 'Nothing at all', 'About 3 dB'],
         answer: 0,
-        explain: 'Its noise stays where it was, so the ratio falls by exactly as much as the signal does.',
+        explain: 'Its noise stays where it was, so the ratio falls by almost as much as the signal does.',
         why: ['', 'That is one bit, and the signal fell by more than three.', 'That is what logarithmic steps try for, and uniform ones do not.', 'That would be half the power, and 20 dB is a hundredth.'],
       },
     },

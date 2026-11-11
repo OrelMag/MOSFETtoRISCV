@@ -59,11 +59,11 @@ export const chCards: Chapter = {
         why: ['', '11-3 is L: zone 11 holds J to R.', '12-3 is C: zone 12 holds A to I.', '0-2 is S. The 0 zone starts at digit 2, so T is one further.'],
       },
       {
-        question: 'A dropped deck carries three-digit sequence numbers. How many passes through the sorter put it back in order?',
-        options: ['3', '1', '10'],
+        question: 'A dropped deck carries sequence numbers counted in tens, 10 to 9990. How many passes through the sorter put it back in order?',
+        options: ['3', '1', '4', '10'],
         answer: 0,
-        explain: 'One pass per digit of the key, rightmost first: units, tens, hundreds.',
-        why: ['', 'One pass sorts on one column only: cards with the same last digit stay mixed on the others.', 'Ten is the number of digit pockets, not of passes. The passes follow the number of digits in the key.'],
+        explain: 'One pass per digit that varies, rightmost first: tens, hundreds, thousands. The units digit is 0 on every card, so a pass on it would move nothing.',
+        why: ['', 'One pass sorts on one column only: cards with the same digit there stay mixed on the others.', 'Four is the digits in 9990, but the units digit is 0 on every card: a pass on it leaves the deck as it was.', 'Ten is the number of digit pockets, not of passes. The passes follow the number of digits that vary in the key.'],
       },
       {
         question: `The reader holds next at 1 and needs ${FEED} edges to feed each card. How many rising edges take a 10-card deck?`,

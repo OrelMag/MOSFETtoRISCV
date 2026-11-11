@@ -191,7 +191,7 @@ export function windowWidget(): Widget {
   const oSl = slider('Phase', 0, 1, 0.01, offset, (v) => nf(v), (v) => { offset = v; paint(); });
   const el = h('div', { class: 'widget mos clk-w' }, h('div', { class: 'panel' }, h('h3', null, 'Where A\'s data changes, seen from B\'s clock'), f.svg),
     h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' }, rSl.el, oSl.el), out, note,
-      h('p', { class: 'sub mos-note' }, `Shaded: the window around B's rising edge, ${MS_TIMING().setup} NAND delays before it (setup) and ${MS_TIMING().hold} after (hold), as measured on the flip-flop in chapter 8, at a B clock of ${fb / 1e6} MHz and ${PS_PER_NAND} ps per NAND delay. Try 1.00 (the same clock), 1.50 (3 : 2), then 1.37.`)));
+      h('p', { class: 'sub mos-note' }, `Shaded: the window around B's rising edge, ${MS_TIMING().setup} NAND delays before it (setup) and ${MS_TIMING().hold} after (hold), as measured on the flip-flop in chapter ${numOf('latches')}, at a B clock of ${fb / 1e6} MHz and ${PS_PER_NAND} ps per NAND delay. Try 1.00 (the same clock), 1.50 (3 : 2), then 1.37.`)));
   paint();
   return { el };
 }

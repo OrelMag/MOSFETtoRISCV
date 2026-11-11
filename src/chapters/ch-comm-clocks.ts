@@ -40,7 +40,7 @@ export const chClocks: Chapter = {
   recap: {
     keep: [
       `A receiver is an amplifier with a threshold. The matched inverter has VIL ${nf(M.vil)} V and VIH ${nf(M.vih)} V, drives ${nf(M.vol)} V and ${nf(M.voh)} V, and so has ${mv(M.nmL)} of noise margin each way and a peak gain of ${nf(M.gain, 0)}. Between VIL and VIH the receiver does not decide.`,
-      `A Schmitt trigger is two inverters and a weak feedback inverter (${stats(SCHMITT).transistors} transistors). The keeper holds the internal node in its old state, so the input must travel further to flip it: ${nf(TH.down!)} V going down and ${nf(TH.up!)} V going up for a keeper ${KEEPER}× the input devices. The hysteresis grows with the keeper, and the output sticks for good past ${nf(keeperLimit())}×.`,
+      `A Schmitt trigger is two inverters and a weak feedback inverter (${stats(SCHMITT).transistors} transistors). The keeper holds the internal node in its old state, so the input must travel further to flip it: ${nf(TH.down!, 3)} V going down and ${nf(TH.up!, 3)} V going up for a keeper ${KEEPER}× the input devices. The hysteresis grows with the keeper, and the output sticks for good past ${nf(keeperLimit())}×.`,
       'Two clocks with no fixed phase relation put data changes at every phase of the receiver\'s period. Static timing can check a fixed phase; it cannot check all of them, so some change lands in the setup / hold window and the first flip-flop can go metastable.',
       `A cross-coupled pair resolves as V(t) = Δ·e^(t/τ). The chance of still being undecided after t_r is e^(−t_r/τ), so MTBF = e^(t_r/τ) / (T0 · fclk · fdata): each extra flop adds a period to t_r and multiplies the MTBF by e^(T/τ) (τ is ${nf(TAU_PS, 0)} ps in the model). The gate simulator cannot time a real race, so those figures are the model's.`,
       `A two-flop synchronizer (${nands(SYNC2)} NANDs) carries a level that the receiver sees for a full period, after two receiving edges. A pulse shorter than the receiving period can fall between edges and vanish. A toggle synchronizer (${nands(PULSE_SYNC)} NANDs) turns each pulse into a level change that cannot, provided pulses are spaced by its latency.`,
@@ -49,7 +49,7 @@ export const chClocks: Chapter = {
     ],
     check: [
       {
-        question: `A Schmitt trigger has thresholds ${nf(TH.down!)} V and ${nf(TH.up!)} V. A slow edge crosses ${nf(M.vm)} V with 0.05 V of noise on it. How many times does the output switch?`,
+        question: `A Schmitt trigger has thresholds ${nf(TH.down!, 3)} V and ${nf(TH.up!, 3)} V. A slow edge crosses ${nf(M.vm)} V with 0.05 V of noise on it. How many times does the output switch?`,
         options: [`Once: the noise never gets across the ${mv(TH.width!)} between the thresholds`, 'Several times, like a plain inverter', 'Zero: hysteresis blocks slow edges', 'Twice: once at each threshold'],
         answer: 0,
         explain: `After the output has risen at the upper threshold the input would have to fall back below the lower one to switch it again. Noise of 0.05 V cannot move a signal ${mv(TH.width!)}.`,
@@ -103,8 +103,8 @@ export const chClocks: Chapter = {
         (strength 2 in the switch-level solver, the input devices 3) the way an SRAM cell's pull-ups are: strong enough to hold, weak enough to lose a fight.</p>
         <p>At switch level the part is a buffer: y follows a. The analogue story is in the panel, computed from the current balance of chapter 1's square-law devices.
         With y = 0 the keeper's PMOS pulls m up with a current proportional to its width κ (in units of the input devices). The input rises, A's NMOS pulls m down, and m crosses B's
-        threshold only when A's NMOS current exceeds A's PMOS plus the keeper: <strong>VT+ = ${nf(TH.up!)} V</strong> for κ = ${KEEPER}. Going down the keeper is on the other side:
-        <strong>VT− = ${nf(TH.down!)} V</strong>. The pair is symmetric, so both sit ${mv(TH.width! / 2)} from VM, a hysteresis of ${mv(TH.width!)}, and it grows in step with κ. At κ = ${nf(keeperLimit())} the
+        threshold only when A's NMOS current exceeds A's PMOS plus the keeper: <strong>VT+ = ${nf(TH.up!, 3)} V</strong> for κ = ${KEEPER}. Going down the keeper is on the other side:
+        <strong>VT− = ${nf(TH.down!, 3)} V</strong>. The pair is symmetric, so both sit ${mv(TH.width! / 2)} from VM, a hysteresis of ${mv(TH.width!)}, and it grows in step with κ. At κ = ${nf(keeperLimit())} the
         input inverter no longer wins at any voltage up to VDD and the output sticks.</p>
         <p>The price is area (two more transistors than a buffer of two inverters), a slower edge (the keeper fights every transition) and a hysteresis that moves with process and temperature.</p>`,
       scene: () => ({ root: SCHMITT, inputs: { a: 0 }, panels: [schmittPanel] }),
@@ -146,12 +146,12 @@ export const chClocks: Chapter = {
       get body() {
         const ms = MS_TIMING(), win = (ms.setup + ms.hold) * PS_PER_NAND, frac = win / 1e3;
         return `
-        <p>Inside one clock domain the contract of chapter 8 holds by construction. A flip-flop launches a change clk-to-q (${CLK_TO_Q} delays) after an edge, the logic adds its delay, and the next edge of the <em>same</em> clock
+        <p>Inside one clock domain the contract of chapter ${numOf('latches')} holds by construction. A flip-flop launches a change clk-to-q (${CLK_TO_Q} delays) after an edge, the logic adds its delay, and the next edge of the <em>same</em> clock
         captures it, provided the change is there a setup time earlier and stays a hold time after. Static timing walks every path and checks both. It can, because the phase between the launching and the capturing edge is a number it knows.</p>
         <p>Across two clocks that phase is whatever it is. A sender at fA changes data at its own edges, a receiver at fB samples at its edges, and the position of a change inside the receiver's period is
         (n · fB / fA) mod 1. For fA / fB = 1.37 = 137 / 100 that visits 137 values, and with oscillators that drift by parts per million it visits every value in between. The window around the receiver's edge in which a change is neither safely captured nor safely missed is setup + hold = ${ms.setup} + ${ms.hold} delays
-        as measured in chapter 8, ${win} ps at ${PS_PER_NAND} ps per NAND delay. At a 1 GHz receiver that is ${nf(frac * 100, 1)} % of the period, so one change in ${Math.round(1 / frac)} lands in it: at a data rate of 100 MHz, about ${nf(1e8 * frac / 1e6, 1)} per microsecond. That is not a rare event.</p>
-        <p>What happens inside the window is the aperture of chapter 8: the master latch is released with its two cross-coupled NANDs balanced, an SR pair freed from both sides at once. The gate simulator
+        as measured in chapter ${numOf('latches')}, ${win} ps at ${PS_PER_NAND} ps per NAND delay. At a 1 GHz receiver that is ${nf(frac * 100, 1)} % of the period, so one change in ${Math.round(1 / frac)} lands in it: at a data rate of 100 MHz, about ${nf(1e8 * frac / 1e6, 1)} per microsecond. That is not a rare event.</p>
+        <p>What happens inside the window is the aperture of chapter ${numOf('latches')}: the master latch is released with its two cross-coupled NANDs balanced, an SR pair freed from both sides at once. The gate simulator
         settles that race by relaxation, in zero time, and picks a side. Silicon does not, as the next step shows.</p>
         <div class="try">Set fA / fB to 1.00 and slide the phase: the edge is in the window at a few phases and nowhere else. Then 1.50, then 1.37.</div>`;
       },
@@ -182,7 +182,7 @@ export const chClocks: Chapter = {
       more: {
         derive: `<p>Let a change land uniformly in the period, so the pair starts with a difference proportional to the distance of the change from the edge, within the window of width T0. The chance that the pair is still undecided after t<sub>r</sub> is the chance that Δ &lt; V·e<sup>−t<sub>r</sub>/τ</sup>, which for a uniform Δ over the window scales as e<sup>−t<sub>r</sub>/τ</sup>.
           Multiply by the rate of events in the window, fclk · fdata · T0, for the failure rate. Its inverse is the MTBF.</p>`,
-        numbers: `<p>Resolution time and MTBF for the configurations above (data at 100 MHz). The budget charges clock-to-q and setup ${CLK_TO_Q} and ${SETUP} delays, as static timing does; the window measured in chapter 8 was smaller, so these figures err on the safe side.</p>
+        numbers: `<p>Resolution time and MTBF for the configurations above (data at 100 MHz). The budget charges clock-to-q and setup ${CLK_TO_Q} and ${SETUP} delays, as static timing does; the window measured in chapter ${numOf('latches')} was smaller, so these figures err on the safe side.</p>
           <table class="mini"><tr><th>synchronizer</th><th>t<sub>r</sub></th><th>MTBF at 1 GHz</th><th>MTBF at 2 GHz</th></tr>
           <tr><td>one flop, 8 NANDs behind</td><td>${nf(resolutionTime(1, 1000, 8 * PS_PER_NAND), 0)} ps</td><td>${m1()}</td><td>${years(1, 2e9)}</td></tr>
           <tr><td>one flop, ${lone().logic} NANDs behind</td><td>${nf(resolutionTime(1, 1000, lone().logic * PS_PER_NAND), 0)} ps</td><td>${lone().m}</td><td></td></tr>
@@ -197,7 +197,7 @@ export const chClocks: Chapter = {
       },
       challenge: {
         kind: 'quiz',
-        question: 'A synchronizer\'s MTBF is 10 years. A third flop is added at the same clock. How does the MTBF change?',
+        question: 'A synchronizer clocked at 1 GHz has an MTBF of 10 years. A third flop is added at the same 1 GHz clock. How does the MTBF change?',
         options: [`It is multiplied by e^(T/τ), about 10^${Math.round(1e3 / TAU_PS / Math.LN10)} at 1 GHz`, 'It is multiplied by 1.5', 'It doubles', 'It is unchanged: only the first flop can fail'],
         answer: 0,
         explain: `Each flop adds a whole period to the resolution time, and the period is ${Math.round(1000 / TAU_PS)} time constants at 1 GHz. The MTBF is exponential in t_r, so each period multiplies it by e^(T/τ).`,

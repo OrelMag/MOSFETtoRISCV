@@ -13,13 +13,12 @@ import {
 } from './ttable';
 import { ownerOf } from './fsmchip';
 import { evalBool, parseBool } from '../lib/boolexpr';
+import { grayLabel, kLayout, loopRects } from '../lib/kmap';
 
 const HIDDEN_KEY = 'mosfet2riscv:table-hidden';
 const load = (k: string): string | null => { try { return localStorage.getItem(k); } catch { return null; } };
 const save = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private window */ } };
 
-/** Gray-code order of 1 or 2 bits: K-map rows and columns. */
-const GRAY: Record<number, number[]> = { 0: [0], 1: [0, 1], 2: [0, 1, 3, 2] };
 /** Loop colours (classes tt-l0…tt-l5, both themes in editor-table.css). */
 const LOOPS = 6;
 
@@ -268,11 +267,9 @@ class TableUi {
 
   /** Output j's Karnaugh map: the first half of the inputs down the side, the rest across, both in Gray order. */
   private kmap(t: TableDoc, j: number, logic: TableLogic): HTMLElement {
-    const n = t.ins.length, rb = n >> 1, cb = n - rb;
-    const rowsG = GRAY[rb], colsG = GRAY[cb];
-    const rowOf = (ri: number, ci: number) => (rowsG[ri] << cb) | colsG[ci];
+    const lay = kLayout(t.ins.length), { rb, cb, rowsG, colsG, rowOf } = lay;
     const CW = 40, CH = 32, HW = 52, HH = 26;
-    const bits = (v: number, w: number) => (w ? v.toString(2).padStart(w, '0') : '');
+    const bits = grayLabel;
     const o = logic.outs[j];
     const cells: HTMLElement[] = [];
     cells.push(h('div', { class: 'tt-kh corner', style: `left:0;top:0;width:${HW}px;height:${HH}px` },
@@ -292,19 +289,8 @@ class TableUi {
     // Loops: a term's cells form runs along each axis (two when it wraps); one rectangle per pair of runs.
     if (o.kind === 'terms') o.uses.forEach((k, li) => {
       const p = logic.terms[k];
-      const runs = (count: number, inTerm: (i: number) => boolean) => {
-        const out: [number, number][] = [];
-        for (let i = 0; i < count; i++) if (inTerm(i) && (i === 0 || !inTerm(i - 1))) {
-          let e = i;
-          while (e + 1 < count && inTerm(e + 1)) e++;
-          out.push([i, e]);
-        }
-        return out;
-      };
-      const rr = runs(rowsG.length, (ri) => colsG.some((_, ci) => termCovers(p, rowOf(ri, ci))));
-      const cr = runs(colsG.length, (ci) => rowsG.some((_, ri) => termCovers(p, rowOf(ri, ci))));
       const inset = 3 + (li % 3) * 3;
-      for (const [r0, r1] of rr) for (const [c0, c1] of cr) {
+      for (const { r0, r1, c0, c1 } of loopRects(lay, p)) {
         cells.push(h('span', {
           class: `tt-loop tt-l${li % LOOPS}${this.hot === k ? ' hot' : ''}`, 'aria-hidden': 'true',
           style: `left:${HW + c0 * CW + inset}px;top:${HH + r0 * CH + inset}px;width:${(c1 - c0 + 1) * CW - 2 * inset}px;height:${(r1 - r0 + 1) * CH - 2 * inset}px`,

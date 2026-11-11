@@ -25,4 +25,6 @@ export const DRILL_REVIEW: { drill: string; chapter: string; level: string; code
   { drill: 'kmap', chapter: 'memory', level: 'd_kmap', codex: ['sop'] },
   { drill: 'isa16', chapter: 'isa', level: 'i_enc', codex: ['formats', 'immediates'] },
   { drill: 'float', chapter: 'float', level: 'n_float', codex: ['ieee754', 'rounding'] },
+  { drill: 'fixed', chapter: 'fixed', level: 'n_fixed', codex: ['qformat'] },
+  { drill: 'divrem', chapter: 'muldiv', level: 'n_divrem', codex: ['mext'] },
 ];

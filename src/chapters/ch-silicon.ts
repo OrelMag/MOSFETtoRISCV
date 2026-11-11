@@ -380,16 +380,16 @@ export const chSilicon: Chapter = {
     {
       title: 'The journey',
       body: `
-        <p>That is the whole path: a voltage-controlled switch, a NAND, gates, adders, latches, memories, an ALU, a single-cycle RISC-V, a pipeline, interrupts,
-        multiplication, caches, microcode, floating point, several instructions a cycle out of order, two cores, and geometry on a wafer. Every value on every wire along the way was computed, not drawn, and every box can still be opened all the way down to
+        <p>That is the processor's path: a voltage-controlled switch, a NAND, gates, adders, latches, memories, an ALU, a single-cycle RISC-V, a pipeline, interrupts,
+        multiplication, caches, virtual memory and a small operating system, microcode, floating point, several instructions a cycle out of order, two cores, and geometry on a wafer. Every value on every wire along the way was computed, not drawn, and every box can still be opened all the way down to
         the four transistors of a NAND.</p>
         <p>Four chapters stay with this machine: <a href="#/c/fpga/0">chapter ${numOf('fpga')}</a> puts the same design on a chip that is configured rather than made for it, <a href="#/c/verify/0">chapter ${numOf('verify')}</a> asks how anyone knows it works,
         <a href="#/c/sidechan/0">chapter ${numOf('sidechan')}</a> finds what it leaks while working, and <a href="#/c/power/0">chapter ${numOf('power')}</a> measures what all of this costs in energy, toggle by toggle, and how a chip spends less.
-        The journey goes on with the same bricks arranged for throughput: <a href="#/c/lanes/0">chapters ${numOf('lanes')}</a>–${numOf('graphics')} build a GPU, from lanes sharing
+        The journey goes on with the same bricks arranged for throughput: <a href="#/c/vectors/0">chapters ${numOf('vectors')}</a>–${numOf('graphics')} build a vector unit and then a GPU, from lanes sharing
         one instruction stream to a rasterizer drawing into a frame buffer. <a href="#/c/dram/0">Chapters ${numOf('dram')}</a>–${numOf('bus')} go below the caches: a DRAM
         cell by cell, its controller, flash, and a bus with <span data-ahead="dma">DMA (a device that copies memory blocks without the CPU)</span> that boots a computer from flash. Chapters <a href="#/c/telegraph/0">${numOf('telegraph')}</a>–<a href="#/c/datacentre/0">${numOf('datacentre')}</a> take the machine out of the box (wires and clocks, UARTs, modems, error codes, Ethernet, networks, radio) and chapters <a href="#/c/fixed/0">${numOf('fixed')}</a>–<a href="#/c/sdr/0">${numOf('sdr')}</a> process the signals in fixed-point arithmetic, down to a DSP core. The appendices rebuild a real chip, the
-        <a href="#/c/appendix-6502/0">6502</a>, in NMOS transistors, and run <a href="#/c/appendix-doom/0">Doom</a> on the RV32IM system, a window of it
-        on the gates.</p>
+        <a href="#/c/appendix-6502/0">6502</a>, in NMOS transistors, run <a href="#/c/appendix-doom/0">Doom</a> on the RV32IM system, a window of it
+        on the gates, and build four more machines: a <a href="#/c/appendix-sap/0">breadboard computer</a>, a <a href="#/c/appendix-runner/0">game with no program</a>, the <a href="#/c/appendix-baby/0">Manchester Baby</a> and the <a href="#/c/appendix-agc/0">Apollo Guidance Computer</a>.</p>
         <p>Or go further on your own: build it for real on an <a href="#/c/fpga/0">FPGA (chapter ${numOf('fpga')})</a> from the HDL tabs; read Harris &amp; Harris, Patterson &amp; Hennessy, or Weste &amp; Harris for CMOS VLSI; or tape out
         a design on an open-source shuttle.</p>
         <p>What carried through was one discipline: a block is described by its ports and its behaviour, built from smaller blocks, and checked against that description at every level. The abstraction

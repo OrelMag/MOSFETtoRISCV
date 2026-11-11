@@ -10,6 +10,8 @@ import type { Chapter } from './types';
 import { delayPanel } from '../widgets/delaypanel';
 import { FINE, rippleVectors } from '../widgets/finedelay';
 import { numOf } from './order';
+import { adderProofWidget, CATCH, cornerVectors, exhaustiveCount, yearsAt } from '../widgets/adderproof';
+import { groupDigits } from '../sim/numfmt';
 
 const RG = { ...FINE.ripple, n: rippleVectors().length - 1 };
 const f2 = (x: number) => x.toFixed(2);
@@ -83,7 +85,7 @@ export const chAdders: Chapter = {
         options: ['It roughly doubles', 'It grows by a constant', 'It stays the same', 'It roughly quadruples'],
         answer: 0,
         explain: 'The carry crosses each full adder in turn, two NAND delays per bit: delay grows linearly with the width.',
-        why: ['', 'That is a tree, like the magnitude comparator, or the fast adders of chapter 16. Here each column waits for the carry from the one to its right.', 'The columns sit side by side, but they do not work in parallel: each needs its neighbour\'s carry first.', 'The carry crosses each full adder once: the delay grows with n, not n².'],
+        why: ['', 'That is a tree, like the magnitude comparator, or the fast adders of chapter ' + numOf('fastadd') + '. Here each column waits for the carry from the one to its right.', 'The columns sit side by side, but they do not work in parallel: each needs its neighbour\'s carry first.', 'The carry crosses each full adder once: the delay grows with n, not n².'],
       },
       {
         question: 'In the adder/subtractor, why is <code>sub</code> wired to the carry-in as well as to the XORs?',
@@ -375,10 +377,10 @@ export const chAdders: Chapter = {
         the high field decides, unless it is equal, in which case the low field decides. <span data-show="lt">lt</span> is neither greater nor equal.</p>
         <p>That is how you compare two numbers by eye: start at the most significant digit and stop at the first one that differs. The tree does
         all those "first difference" questions at once, in pairs, then pairs of pairs.</p>
-        <p>At 32 bits that is ${CMP32} gate delays against ${BORROW32} for the subtractor's carry out, for a similar cost (${stats(magComparator(32, false)).nands} NANDs against ${stats(addSub(32)).nands}). The depth grows
+        <p>At 32 bits that is ${CMP32} gate delays against ${BORROW32} for the subtractor's carry out (the ripple adder's ${portDepth(rca(32), 'cout')} plus the XOR in front of b), for a similar cost (${stats(magComparator(32, false)).nands} NANDs against ${stats(addSub(32)).nands}). The depth grows
         with log n instead of n.</p>
         <div class="try">Open a <code>combine</code> cell: it is the same "the higher one decides" rule as the carry cells of the fast adders in
-        <a href="#/c/fastadd/0">chapter 16</a>.</div>`,
+        <a href="#/c/fastadd/0">chapter ${numOf('fastadd')}</a>.</div>`,
       scene: () => ({ root: magComparator(4), inputs: { a: 9, b: 6 } }),
       tour: {
         beats: [
@@ -466,6 +468,37 @@ export const chAdders: Chapter = {
         solve: (st) => st.setInputs({ a: 0x99, b: 0x01, cin: 0 }),
       },
     },
+    {
+      title: 'How do you know an adder is right?',
+      body: `
+        <p>Every adder in this chapter was checked before it was drawn into the text, and the question is how. The direct answer is to try every input. An <em>n</em>-bit adder has two operands and a carry-in, 2<sup>2<em>n</em>+1</sup> cases: <strong>${groupDigits(exhaustiveCount(4))}</strong> at 4 bits, ${groupDigits(exhaustiveCount(8))} at 8, ${groupDigits(exhaustiveCount(16))} at 16. At 32 bits it is 2<sup>65</sup>, about ${(exhaustiveCount(32) / 1e18).toFixed(1)} × 10<sup>19</sup>. A machine that checked a billion cases a second would need ${groupDigits(Math.round(yearsAt(32)))} years. An exhaustive check is a proof, and it is out of reach one width above the toy.</p>
+        <p>What replaces it is a handful of kinds of vector, each aimed at something that goes wrong:</p>
+        <ul>
+        <li><strong>Corner cases</strong>, chosen because they are where carries behave unusually: all zeros, all ones, the sign bit alone, one below it, the two alternating patterns <code>0101…</code> and <code>1010…</code>, in every pairing with both carry-ins (${cornerVectors(32).length} vectors at 32 bits). Two of them are the cases of the earlier steps: a carry that ripples through <em>every</em> column (<code>0101…</code> + <code>1010…</code> + 1, one in ${groupDigits(2 ** 33)} random vectors would have it) and a signed overflow (<code>0111…</code> + 1).</li>
+        <li><strong>Random vectors</strong>, which need no idea of where the bugs are and catch anything that goes wrong often enough.</li>
+        <li><strong>A reference</strong> to compare with: the language's own <code>+</code>, wrapped to <em>n</em> bits, two lines of code that are plain to read. The circuit is run on the vector and its sum and carry-out are compared with the reference's, every time, so that nobody has to work out an expected answer by hand.</li>
+        </ul>
+        <p>The reference is the idea the site calls a <span data-ahead="golden">golden model (a simple program that defines what a design must do, run beside it and compared after every step)</span>; <a href="#/c/verify/0">chapter ${numOf('verify')}</a> returns to it, and to how much of a design a test set has really exercised. A passing test shows no bug in the vectors it tried, which is all it shows.</p>
+        <div class="try">Plant a fault: choose "carry into the top column stuck at 0" on the 32-bit adder. The corner cases catch it at their ${CATCH.corner}th vector and the random run at its ${CATCH.random}th; with the fault in column 2 the first random vector is enough. Then run the 8-bit adder on every case.</div>`,
+      widget: adderProofWidget,
+      challenge: {
+        kind: 'quiz',
+        question: 'A 32-bit adder passes a million random vectors against the reference. What follows?',
+        options: [
+          'Nothing about the vectors it did not try: a fault that shows only on a rare pattern, such as a carry through every column, would be missed',
+          'It is correct: a million is far more than the adder has gates',
+          'It is correct for all inputs, since 32-bit adders are all built the same way',
+          'It is wrong, since a million of 2<sup>65</sup> is too small a sample to mean anything',
+        ],
+        answer: 0,
+        explain: `A million is ${(1e6 / exhaustiveCount(32)).toExponential(0).replace('e-', ' × 10^−')} of the 2^65 cases. A common fault shows at once, and a stuck carry usually does, but a fault that needs one particular pattern can sit unseen. That is why random vectors are paired with corner cases chosen for the patterns that matter, and why what a check covers is measured later in the journey.`,
+        why: ['', 'Gates and cases are different counts: a gate can behave wrongly only for a few of its 2^65 context patterns.', 'The same recipe can be drawn wrongly in one place, which is what a planted fault is.', 'A sample can show a bug and does not have to be large for that; it cannot show the absence of one.'],
+      },
+      more: {
+        derive: `<p>A ripple-carry adder is <em>n</em> copies of one full adder, so its behaviour follows from the cell's 8 cases and from how the carries are joined. Checking all 8 cases of the cell is a proof about the cell; the joints are not covered by it. A carry stuck between two columns breaks neither cell, which is why the interesting faults are on the wires between them and why the corner cases are chosen to push a carry through every one.</p>`,
+        real: `<p>Production designs mix the kinds: formal tools prove the small blocks for every input, random and directed tests with a reference model run the large ones, and the corners are written by hand from the specification. A processor's floating-point divider famously shipped with a few missing table entries that random testing had not reached.</p>`,
+      },
+    },
   ],
 };
 
@@ -484,7 +517,7 @@ export const chRouting: Chapter = {
   recap: {
     keep: [
       'A decoder raises exactly one of 2ⁿ outputs (one-hot): each output is an AND of true and inverted address rails. An enable is one more input on every AND.',
-      'A 2ᵏ:1 multiplexer is a tree of 2ᵏ − 1 two-input muxes, k levels deep. A w-bit bus mux is w of them sharing one select. Eight 4-bit words to one: 7 bus muxes, 112 NANDs, 7 NAND delays.',
+      'A 2ᵏ:1 multiplexer is a tree of 2ᵏ − 1 two-input muxes, k levels deep. A w-bit bus mux is w of them sharing one select. Eight 4-bit words to one: 7 bus muxes, 112 NANDs, 7 NAND delays from the select (6 from the data).',
       'An encoder ORs the inputs whose index has bit j set (8 inputs: 27 NANDs). It cannot tell input 0 from no input, nor make sense of two at once.',
       `A priority encoder reports the highest request plus a valid bit v, built recursively from half-size encoders: ${logicDepth(priorityEncoder(8))} NAND delays for 8 inputs, ${logicDepth(priorityEncoder(32))} for 32.`,
       'A demultiplexer sends one word to one of 2ᵏ outputs: a decoder gating rows of ANDs. A memory writes through a decoder and reads through a mux tree.',
@@ -625,7 +658,7 @@ export const chRouting: Chapter = {
           register file read in a CPU is exactly this choice.</p>`,
         pitfall: `<p>Wiring the select bits in the wrong order. The least significant bit selects at the first level (nearest the data), the most significant at the last; swapping them reads input 1 as input 2. On the circuit: s0 should feed the
           muxes closest to the d inputs.</p>`,
-        numbers: `<table class="mini"><tr><th>inputs</th><th>2:1 muxes</th><th>NANDs (1 bit)</th><th>delays</th></tr>
+        numbers: `<table class="mini"><tr><th>inputs</th><th>2:1 muxes</th><th>NANDs (1 bit)</th><th>delays (from s, the longest path)</th></tr>
           ${[1, 2, 3, 4, 5].map((k) => `<tr><td>${2 ** k}</td><td>${2 ** k - 1}</td><td>${stats(muxTree(k, 1)).nands}</td><td>${logicDepth(muxTree(k, 1))}</td></tr>`).join('')}</table>`,
       },
       scene: () => ({ root: muxTree(2, 1), inputs: { d0: 0, d1: 1, d2: 0, d3: 1, s: 1 } }),
@@ -692,7 +725,7 @@ export const chRouting: Chapter = {
           (a decoder drives AND-OR gates) because that makes the select-to-data delay shorter than a tree of 2:1 cells.</p>`,
         pitfall: `<p>Forgetting that the select path is the slow one. The data inputs pass through one multiplexer per level, but s0 fans out to the whole first level and each select goes through an inverter first. In a deep tree the select
           arrives late; the data should not be assumed to be the critical input.</p>`,
-        numbers: `<table class="mini"><tr><th>words (4 bits)</th><th>bus muxes</th><th>NANDs</th><th>delays</th></tr>
+        numbers: `<table class="mini"><tr><th>words (4 bits)</th><th>bus muxes</th><th>NANDs</th><th>delays (from s, the longest path)</th></tr>
           ${[1, 2, 3, 4, 5].map((k) => `<tr><td>${2 ** k}</td><td>${2 ** k - 1}</td><td>${stats(muxTree(k, 4)).nands}</td><td>${logicDepth(muxTree(k, 4))}</td></tr>`).join('')}</table>`,
       },
       scene: () => ({ root: muxTree(3, 4), inputs: { d0: 0x0, d1: 0x1, d2: 0x2, d3: 0x3, d4: 0x4, d5: 0x5, d6: 0x6, d7: 0x7, s: 3 } }),

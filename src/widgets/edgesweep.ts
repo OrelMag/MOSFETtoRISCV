@@ -11,10 +11,11 @@ import { h, s } from '../ui/dom';
 import '../styles/edgesweep.css';
 import { delaySwitch } from '../view/delayui';
 import type { Widget } from '../view/stage';
+import { numOf } from '../chapters/order';
 
 const LO = -8, HI = 8;
 const PARTS: { id: string; label: string; def: ComponentDef }[] = [
-  { id: 'ms', label: 'Master–slave (chapter 8)', def: DFF },
+  { id: 'ms', label: 'Master–slave (chapter ' + numOf('latches') + ')', def: DFF },
   { id: 'e6', label: 'Six-gate (7474)', def: DFF_EDGE6 },
 ];
 type Model = 'unit' | 'load';

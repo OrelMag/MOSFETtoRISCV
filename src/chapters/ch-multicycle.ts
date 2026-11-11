@@ -153,7 +153,7 @@ export const chMulticycle: Chapter = {
         <strong>B</strong> (the source registers), <strong>Data</strong> (a loaded word) and <strong>ALUOut</strong>. The datapath now does whatever the
         <span data-show="ctrl">controller</span> says, one step at a time.</p>
         <p>(The memory port selects the program ROM or the data RAM by phase, so the sample programs keep their data at address 0.)</p>
-        <p>The aim of sharing is area: one ALU instead of three adders, one memory port instead of two (the last step counts whether it paid here: the registers that carry values across steps cost more than the adders saved). Registers hold what crosses a clock edge, and the controller must now remember which step it is in, so it becomes a state machine. What this costs is time. An
+        <p>The aim of sharing is area: one ALU instead of three adders, one memory port instead of two (the step <em>Was it worth it?</em> counts whether it paid here: the registers that carry values across steps cost more than the adders saved). Registers hold what crosses a clock edge, and the controller must now remember which step it is in, so it becomes a state machine. What this costs is time. An
         instruction takes ${CYC.branch} to ${CYC.load} cycles instead of one, and the clock period only shrinks to the longest single step.</p>
         <div class="try">Pulse the clock and follow the controller panel: the first instruction, <code>li a0, 0</code>, takes Fetch, Decode, ExecuteI, ALUWB (four cycles).</div>`,
       scene: () => cpuScene({ source: src('sum'), multicycle: 'fsm', highlight: ['ctrl'] }),

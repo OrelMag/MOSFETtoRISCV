@@ -4,9 +4,11 @@
 // one). OPTIONAL: the prologue and appendix chapters that also explain an entry, for readers who took that path.
 
 import { TAUGHT_COMM2 } from '../campaign/codexcomm2';
+import { TAUGHT_LOGIC } from '../campaign/codexlogic';
 import { TAUGHT_DSP } from '../campaign/codexdsp';
 import { TAUGHT_POWER } from '../campaign/codexpower';
 import { TAUGHT_VEC } from '../campaign/codexvec';
+import { TAUGHT_FLOAT } from '../campaign/codexfloat';
 import { TAUGHT_VERIFY } from '../campaign/codexverify';
 
 /** Codex id → the journey chapter that teaches it. */
@@ -25,10 +27,11 @@ export const TAUGHT: Record<string, string> = {
   identities: 'gates',
   demorgan: 'gates',
   bubble: 'gates',
-  sop: 'memory',
+  sop: 'logic',
   nandnand: 'gates',
-  qm: 'memory',
-  dontcare: 'gates',
+  qm: 'logic',
+  dontcare: 'logic',
+  kmap: 'logic',
   not: 'gates',
   and: 'gates',
   or: 'gates',
@@ -66,6 +69,9 @@ export const TAUGHT: Record<string, string> = {
   counter: 'registers',
   pc: 'registers',
   fsm: 'registers',
+  stateenc: 'registers',
+  fsmd: 'fsm',
+  debounce: 'fsm',
   ram: 'memory',
   regfile: 'regfile',
   rom: 'memory',
@@ -178,6 +184,7 @@ export const TAUGHT: Record<string, string> = {
   carryselect: 'fastadd',
   carrysave: 'muldiv',
   booth: 'muldiv',
+  multiword: 'muldiv',
   fma: 'float',
   scoreboard: 'ooo',
   occupancy: 'warps',
@@ -189,6 +196,8 @@ export const TAUGHT: Record<string, string> = {
   fpadder: 'float',
   tristate: 'routing',
   bin2dec: 'adders',
+  // number forms (campaign/codexnum.ts)
+  signforms: 'binary', gray: 'binary', bcd: 'adders', endian: 'io',
   // Communication (campaign/codexcomm.ts)
   shannon: 'telegraph',
   reflection: 'wire',
@@ -236,7 +245,11 @@ export const TAUGHT: Record<string, string> = {
   ...TAUGHT_POWER,
   // the Vectors chapter's (campaign/codexvec.ts)
   ...TAUGHT_VEC,
+  // the Floating point chapter's later steps (campaign/codexfloat.ts)
+  ...TAUGHT_FLOAT,
   ...TAUGHT_VERIFY,
+  // the logic chapter's (campaign/codexlogic.ts)
+  ...TAUGHT_LOGIC,
 };
 
 /** Codex id → prologue / appendix chapters that explain it too (they read only what came before them). */

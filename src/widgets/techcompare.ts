@@ -17,6 +17,7 @@ import type { ComponentDef } from '../sim/types';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { type TechTableOptions, techTable } from '../view/techtable';
+import { numOf } from '../chapters/order';
 
 interface Design {
   name: string;
@@ -61,7 +62,7 @@ const DESIGNS: Design[] = [
     name: 'RV32I single-cycle', op: 'instruction',
     make: () => {
       const full = singleCycleCpu(assemble(PROGRAMS[0].source).words);
-      return { def: withoutParts(full, ['imem']), steps: designSteps(full), note: 'Chapter 14\'s CPU without its program ROM, one instruction per clock period. No native version.' };
+      return { def: withoutParts(full, ['imem']), steps: designSteps(full), note: 'Chapter ' + numOf('cpu') + '\'s CPU without its program ROM, one instruction per clock period. No native version.' };
     },
   },
 ];

@@ -111,7 +111,7 @@ hart 0:  sw 1 → x      hart 1:  sw 1 → y
   amat: {
     idea: `The average time an access takes is the hit time, paid always, plus the miss rate times what a miss costs: AMAT = t<sub>hit</sub> + m × t<sub>miss</sub>. For a hierarchy the miss penalty of one level is the AMAT of the next, so the formula nests: AMAT = t<sub>L1</sub> + m<sub>L1</sub> × (t<sub>L2</sub> + m<sub>L2</sub> × t<sub>mem</sub>), with m<sub>L2</sub> the <em>local</em> miss rate (misses per L2 access, not per CPU access).<br>It says what to optimize: a lower miss rate, a cheaper miss, or a faster hit, whichever term is largest. It also shows why the hit time must stay tiny (it is paid on every access, so an L1 rarely exceeds 4–5 cycles) and why a second level pays even with a poor hit rate: it divides the DRAM latency by the fraction that gets through. For a CPU, stall cycles per instruction = memory accesses per instruction × miss rate × penalty, and they add to the base CPI.`,
     example: {
-      title: 'Two levels, then chapter 22\'s CPU',
+      title: 'Two levels, then chapter ' + numOf('cache') + '\'s CPU',
       body: `<pre>L2:  12 + 0.20 × 250 = 62 cycles
 L1:   4 + 0.05 × 62  = 7.1 cycles
 "Sum an array twice", single-cycle CPU with the direct-mapped cache:
@@ -133,7 +133,7 @@ L1:   4 + 0.05 × 62  = 7.1 cycles
   threecs: {
     idea: `Mark Hill's classification sorts every miss by what would have prevented it. <b>Compulsory</b> (cold): the first access to a line; it would miss in an infinite cache. <b>Capacity</b>: it would miss even in a fully associative cache of the same size, because the working set does not fit. <b>Conflict</b>: it hits in that fully associative cache but misses here, because too many lines map to one set. Measure them that way: count misses in an infinite cache, then in a fully associative one of the same size, and the rest are conflicts. (Coherence misses, from another core's invalidation, are the fourth C.)<br>Each has its own cure. Larger lines and prefetching cut compulsory misses (until lines get so few that conflicts rise); a larger cache cuts capacity misses at the price of hit time; more ways cut conflict misses. Software helps all three: loop interchange, blocking (tiling) and padding change which lines a loop touches and when.`,
     example: {
-      title: 'Column by column (chapter 22\'s explorer)',
+      title: 'Column by column (chapter ' + numOf('cache') + '\'s explorer)',
       body: `A 1 KB matrix (16 rows of 64 bytes) summed column by column through a 256-byte direct-mapped cache with 16-byte lines: every access misses. Rows i and i + 4 share a set, so each line is evicted before its next word is used: conflict misses.<br>4-way does not help (4 sets, all 16 rows of a column in one). A 1 KB cache does: 64 sets, every row its own, leaving the 64 compulsory misses of 256 accesses, 25 %. So does a fully associative 256-byte cache (one column's 16 lines fit), or swapping the loops.`,
     },
     mistakes: [
@@ -169,7 +169,7 @@ L1:   4 + 0.05 × 62  = 7.1 cycles
   writepolicy: {
     idea: `A store that hits has two choices. <b>Write-through</b>: update the line and the next level, so memory is always current and an eviction costs nothing; every store uses memory bandwidth. <b>Write-back</b>: update the line only and set its dirty bit; memory sees the line when it is evicted, once, however often it was written. A miss on a store has two choices too: <b>write-allocate</b> fetches the line and then writes it (natural with write-back), <b>no-write-allocate</b> sends the store on and fetches nothing (natural with write-through).<br>A <b>write buffer</b> sits between the cache and memory: stores go into a small FIFO and the CPU carries on while it drains, which hides write-through's cost until a burst fills it. A later load must then check the buffer (or wait for it to drain), or it reads a stale word from memory. Write-back caches dominate because memory bandwidth is the scarce resource; their price is a dirty bit per line, a slower miss when the victim is dirty, and memory that is not the up-to-date copy, the seed of the coherence problem.`,
     example: {
-      title: '48 stores to 16 words (chapter 22)',
+      title: '48 stores to 16 words (chapter ' + numOf('cache') + ')',
       body: `<pre>                 write-through          write-back
 words to memory  48 (every store)       0 during the run (16 at eviction)
 store miss       no fetch               fetch the line (write-allocate)
@@ -214,7 +214,7 @@ offset = bits 11:0  = 0xA10
   sram: {
     idea: `The six-transistor cell is an SR latch made of two CMOS inverters, each driving the other, plus two NMOS access transistors whose gates are the <b>word line</b>; they connect the two storage nodes q and q̄ to the <b>bit lines</b> bl and bl̄ that every cell of the column shares. There is no clock, no enable gate and no multiplexer: transistor <b>sizing</b> does the work, pull-down (strong) &gt; access (normal) &gt; pull-up (weak).<br>A read precharges both bit lines high, releases them and raises one word line: the side storing 0 pulls its bit line down through access and pull-down, and since the pull-down is stronger than the access transistor, the node rises too little to flip the cell. A write drives one bit line hard to 0: the access transistor overpowers the weak pull-up, the node falls, and the loop flips. In silicon the cell swings a long bit line only by about 100 mV before a sense amplifier decides; here the swing is full. The periphery (decoders, precharge, write drivers, sense amplifiers) is shared per row and column, so it amortizes as the array grows.`,
     example: {
-      title: 'Bits per transistor (chapter 22)',
+      title: 'Bits per transistor (chapter ' + numOf('cache') + ')',
       body: `<pre>enable flip-flop (DFFE)   15 NANDs = 60 transistors a bit
 6T cell                   6 transistors a bit
 4 × 4 SRAM array          320 transistors, cells 96 (30 %)
@@ -236,7 +236,7 @@ real 32 KB array          cells over 90 %</pre>16 bits of flip-flop registers wo
   mats: {
     idea: `One array does not scale. A word line is a distributed RC line: its resistance and its capacitance both grow with its length, so its delay grows with the square of the cells it crosses. A bit line is discharged by one small cell with a roughly constant current, so the time to the ~100 mV a sense amplifier needs grows with the cells on it. A megabyte as one square array would be 2896 cells a side: about 128 times the word-line delay of a 256-cell row and 11 times the bit-line time.<br>So a large SRAM is cut into <b>mats</b> (sub-arrays) of a few hundred rows and columns, each a complete array with its own row decoder, precharge, column multiplexer and sense amplifiers. Decoding happens in two levels: a global decoder enables one mat, and only that mat raises a local word line and swings its bit lines (the <b>divided word line</b>, Mitsubishi 1983). The mat's bits reach the pins on <b>global data lines</b>, often an H-tree so every mat is about the same wire away. Spare rows and columns in each mat, steered by fuses set at test, repair most faulty dies.`,
     example: {
-      title: 'A megabyte in mats of 256 × 256 (chapter 22)',
+      title: 'A megabyte in mats of 256 × 256 (chapter ' + numOf('cache') + ')',
       body: `<pre>bits                 8 388 608
 mats                 128 of 65 536 bits
 address (20 bits)    7 mat | 8 row | 5 column (8 of 256)
@@ -330,7 +330,7 @@ double-sided: two aggressors take turns, 0.7 million each</pre>An attacker has a
 
   // ---- the real ISA
   rv32i: {
-    idea: `RV32I is the base integer instruction set of RISC-V, frozen in 2019 (version 2.1), and what every journey CPU from chapter 13 on runs: 32 registers x0–x31 of 32 bits with x0 wired to 0, a 32-bit PC, and 40 instructions (lui, auipc, jal, jalr, six branches, five loads, three stores, nine immediate and ten register ALU operations, fence, ecall, ebreak). Every instruction is 32 bits in one of six formats (R, I, S, B, U, J) with rs1, rs2 and rd always in the same bits, so register reads start before decoding ends. Extensions add the rest: M (multiply, divide), A (atomics), F / D (floating point), C (16-bit encodings), Zicsr (CSRs).<br>Memory is <b>byte-addressed</b>, little-endian: the PC steps by 4, and loads and stores come in bytes (lb, lbu, sb), halfwords (lh, lhu, sh) and words. In a word-wide memory a store replicates the byte into every lane and raises one byte enable; a load picks the lane with a multiplexer and sign- or zero-extends by wiring. Branch and jump offsets count halfwords, so 16-bit C instructions can be targets. <code>lui</code> sets the upper 20 bits of a register, <code>auipc</code> adds them to the PC: with a following addi, jalr or load they reach any 32-bit address, PC-relative, so code runs wherever it is loaded.<br>RV16, the campaign's ISA, keeps the formats' spirit at 16 bits: 8 registers, word-addressed memory, the PC stepping by 1.`,
+    idea: `RV32I is the base integer instruction set of RISC-V, frozen in 2019 (version 2.1), and what every journey CPU from chapter ${numOf('isa')} on runs: 32 registers x0–x31 of 32 bits with x0 wired to 0, a 32-bit PC, and 40 instructions (lui, auipc, jal, jalr, six branches, five loads, three stores, nine immediate and ten register ALU operations, fence, ecall, ebreak). Every instruction is 32 bits in one of six formats (R, I, S, B, U, J) with rs1, rs2 and rd always in the same bits, so register reads start before decoding ends. Extensions add the rest: M (multiply, divide), A (atomics), F / D (floating point), C (16-bit encodings), Zicsr (CSRs).<br>Memory is <b>byte-addressed</b>, little-endian: the PC steps by 4, and loads and stores come in bytes (lb, lbu, sb), halfwords (lh, lhu, sh) and words. In a word-wide memory a store replicates the byte into every lane and raises one byte enable; a load picks the lane with a multiplexer and sign- or zero-extends by wiring. Branch and jump offsets count halfwords, so 16-bit C instructions can be targets. <code>lui</code> sets the upper 20 bits of a register, <code>auipc</code> adds them to the PC: with a following addi, jalr or load they reach any 32-bit address, PC-relative, so code runs wherever it is loaded.<br>RV16, the campaign's ISA, keeps the formats' spirit at 16 bits: 8 registers, word-addressed memory, the PC stepping by 1.`,
     example: {
       title: 'Bytes and upper immediates',
       body: `<pre>memory word at 0: 0x12AB5678   (byte 0 = 0x78 … byte 3 = 0x12)
@@ -440,6 +440,7 @@ two flip-flops, ~0.95 ns:         e^47.5 / 2e5 ≈ 2 × 10^15 s, about 67 millio
       { chapter: 'registers', step: 3, label: 'Asynchronous reset' },
       { chapter: 'clocks', step: 4, label: 'Metastability' },
       { chapter: 'clocks', step: 5, label: 'The two-flop synchronizer' },
+      { chapter: 'fsm', step: 7, label: 'Inputs from outside: synchronize and debounce' },
     ],
   },
 
@@ -490,6 +491,28 @@ eight compressor levels, then one fast adder</pre>csa8: 72 NANDs and 6 NAND dela
       { chapter: 'muldiv', step: 3, label: 'Carry-save: add three, keep two' },
       { chapter: 'muldiv', step: 5, label: 'The Wallace tree' },
       { chapter: 'muldiv', step: 17, label: 'SRT: a redundant quotient' },
+    ],
+  },
+  multiword: {
+    idea: `School arithmetic on numbers longer than a times table: work one digit at a time, lowest first, and carry. Here the digit is a 32-bit word. With A = a1·2<sup>32</sup> + a0, A + B is a0 + b0 in the low word and a1 + b1 + carry in the high word, where the carry is 1 exactly when the low sum wrapped, that is, when it is smaller than an operand: <code>sltu c, s, a0</code>. A subtraction takes the borrow from the comparison B.lo &lt; A.lo made <em>before</em> the low subtraction. A product is four 32 × 32 → 64 products (<code>mul</code> for the low word, <code>mulhu</code> for the high; <code>mulh</code> and <code>mulhsu</code> for signed operands) added at weights 2<sup>0</sup>, 2<sup>32</sup> (twice) and 2<sup>64</sup>, with the carries kept as above. Machines with a carry flag add the flag in and out of every word (<code>ADC</code>); RISC-V drops the flag and pays an <code>sltu</code> per carry.`,
+    example: {
+      title: 'A = 0x1_FFFFFFFF, B = 0x2_00000003 on RV32IM (chapter muldiv)',
+      body: `<pre>add  s4, a0, a2     sum, low word      0xFFFFFFFF + 3 = 0x1_00000002 → 2
+sltu t1, s4, a0     carry: 2 &lt; 0xFFFFFFFF → 1
+add  s5, a1, a3     high words         1 + 2 = 3
+add  s5, s5, t1     + carry            4        A + B = 0x4_00000002
+
+A × B = 0x4_00000003_FFFFFFFD   (2⁶⁶ + 2³⁴ − 3)
+ 64-bit add 4 instructions, subtract 4,
+ product 22 (8 mul / mulhu + 14 adds and carry tests), signed 26</pre>`,
+    },
+    mistakes: [
+      'Testing the carry once: a1 + a3 + carry is two additions and either one can wrap (0xFFFFFFFF + 0 + 1 wraps on the second only).',
+      'Finding a borrow after the subtraction: compare the operands before it.',
+      'Using mulhu for signed operands: the high words of a signed product need mulh (signed × signed) or mulhsu (signed × unsigned), and the cross products\' signs fill the top word.',
+    ],
+    chapters: [
+      { chapter: 'muldiv', step: 26, label: 'Words wider than the word' },
     ],
   },
   booth: {

@@ -16,6 +16,7 @@ import { OWN_COST, ownInstrScene, ownInstrSolved, solveOwnInstr } from '../widge
 import { controlPanel, CONTROL_SOURCE, CPU_NANDS, cpuPeriodWidget, MEASURED, PERIOD, PERIOD_LOAD } from '../widgets/cpucost';
 import { abiTable, expand, pseudoWidget, SUM_CALLS, SUM_RUN, sumRun } from '../widgets/abi';
 import { assemblerWorkspace, fetchLoop, instructionExplorer } from '../widgets/riscv';
+import { ASM_FRAME, ASM_IF, ASM_LOOP, FRAME_COST, FRAME_EXAMPLE, FRAME_SOLUTION, IF_SOLUTION, IF_TEMPLATE, LOOP_EXAMPLE, LOOP_SOLUTION, MAX_STEPS, NEG4_UNSIGNED, loopSteps } from '../widgets/asmlab';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 import { aluSteps, BRANCH_WRONG, CTL_PARTS } from './alu/steps';
@@ -573,7 +574,7 @@ export const chIsa: Chapter = {
         real: `<p>RISC-V chose this layout after the MIPS and Alpha experience: the immediate generator is a small part of the decode path. The compressed (C) extension adds 16-bit forms of its own; an expander turns each into its 32-bit twin, so the decoder behind it sees one set of formats. ARM's A32 spends its bits differently, on conditional execution of every instruction, and its decode is correspondingly heavier.</p>`,
       },
       challenge: {
-        kind: 'quiz', question: 'Why is the branch offset stored in units of 2 bytes, not 4, even though RV32I instructions are 4 bytes?',
+        kind: 'quiz', question: `RISC-V has an optional extension of 16-bit instructions, the C extension (chapter ${numOf('widths')}), which may then sit on any 2-byte boundary. Why is the branch offset stored in units of 2 bytes, not 4, even though RV32I instructions are 4 bytes?`,
         options: ['To reach farther than word units would', 'To support the 16-bit compressed (C) extension without a new encoding', 'Because bit 0 is used for the condition'], answer: 1,
         why: ['The reverse: word units would reach twice as far as halfword units. Range is not why the unit stops at 2 bytes.', '', 'The condition is in funct3. Bit 0 of the offset is simply not stored, since it is always 0.'],
         explain: 'With the C extension instructions can sit on 2-byte boundaries. Encoding offsets in halfwords keeps the 32-bit branch format unchanged when C is present.',
@@ -662,6 +663,78 @@ export const chIsa: Chapter = {
         explain: 'a0–a7, t0–t6 and ra are caller-saved; a value that must survive a call goes in s0–s11 (which the callee then saves and restores) or is stored in the caller\'s own frame.',
       },
     },
+    {
+      title: 'If and else are branches',
+      body: `
+        <p>The machine has no <code>if</code>. It has six conditional branches (<code>beq</code>, <code>bne</code>, <code>blt</code>, <code>bge</code>, <code>bltu</code>, <code>bgeu</code>): compare two registers, and when the test holds add the offset to PC, otherwise carry on to the next instruction. Everything a language calls a condition is built from those, so the rule for writing one by hand is short: <strong>branch on the opposite condition, over the part to skip</strong>.</p>
+        <pre class="code">${IF_TEMPLATE}</pre>
+        <p>That is <code>if (a0 &lt; a1) a2 = 1; else a2 = 2;</code>. The test is false when <code>bge</code> is true, so <code>bge</code> jumps to <code>else</code>; the then-part ends with a <code>j</code> over the else-part, which a plain fall-through would otherwise run next. With no else-part the <code>j</code> disappears and so does the label: <code>if (a0 &lt; a1) a0 = a1</code> is a single <code>bge a0, a1, skip</code> in front of one <code>mv</code>.</p>
+        <p>Only <code>&lt;</code>, <code>≥</code>, <code>=</code> and <code>≠</code> exist. <code>&gt;</code> and <code>≤</code> are the same two with the operands swapped, which is the whole of <code>bgt</code> and <code>ble</code>. And <code>blt</code> and <code>bltu</code> are different instructions because the same 32 bits are two different numbers: <code>-4</code> is the bit pattern of ${groupNum(NEG4_UNSIGNED)} read unsigned, so <code>bltu</code> thinks it larger than 2, and a signed maximum written with it gets the negative cases wrong. The editor below is graded on negative inputs for that reason.</p>
+        <p>Written this way <code>max</code> takes ${MAX_STEPS.keep} instructions when <code>a0</code> already wins and ${MAX_STEPS.take} when the <code>mv</code> runs (the final <code>j halt</code> counts as the last): the branch costs one instruction either way, and a taken branch is no slower here than a skipped one.</p>
+        <div class="try">Write <code>max</code>: leave the larger of <code>a0</code> and <code>a1</code> in <code>a0</code>. Every case that fails shows what it wanted and what the simulator got.</div>`,
+      widget: (st) => ASM_IF.widget(st),
+      challenge: {
+        kind: 'reach',
+        goal: 'Make the program leave the larger signed number in a0 for all five cases, negatives included.',
+        check: (st) => ASM_IF.check(st),
+        hints: [
+          'Decide what has to happen when a0 is already the larger. Nothing: so branch past the copy on exactly that condition.',
+          'The condition is "a0 is greater than or equal to a1": <code>bge</code> (signed) with a label in front of <code>halt</code>.',
+        ],
+        answer: `<p>One branch over one copy:</p><pre class="code">${IF_SOLUTION}</pre><p>If a0 ≥ a1 the branch skips <code>mv</code> and a0 is the answer; otherwise a1 is copied in. <code>bgeu</code> would pass the positive cases and fail <code>max(-4, 2)</code>.</p>`,
+        solve: (st) => ASM_IF.solve(st),
+      },
+    },
+    {
+      title: 'A loop over an array',
+      body: `
+        <p>A loop is a branch that goes backward. The only other thing a loop over memory needs is an address that moves. Words are 4 bytes, so word <em>i</em> of an array that starts at address <em>b</em> lives at <em>b</em> + 4<em>i</em>, and <code>lw rd, off(rs1)</code> reads the word at <code>rs1 + off</code>. Keep a <strong>pointer</strong> in a register, read through it, add 4, and stop when it reaches the address just past the last word. That end address is computed once, before the loop: <em>b</em> + 4<em>N</em>, a shift left by 2 and an add. Here is the shape on a different job, adding 1 to every word where it lies:</p>
+        <pre class="code">${LOOP_EXAMPLE}</pre>
+        <p>Two details are the usual bugs. The test sits at the bottom of the loop, so one backward branch does both the test and the jump, but the body then runs once before anything is tested: an array of <em>N</em> = 0 needs the guard in front (<code>bgeu</code> before the loop), or the loop reads a word that is not in the array. And the pointer is compared with <code>bltu</code>: addresses are unsigned.</p>
+        <div class="try">Now the sum, which keeps a running total in a0 instead of writing back: the cases put the array in data memory and a junk word just past its end, so a loop that runs one time too many gives a wrong sum.</div>`,
+      more: { derive: `<p>The answer runs on the simulator in ${loopSteps(0)} instructions for an empty array, ${loopSteps(1)} for one word, ${loopSteps(8)} for eight: ${loopSteps(2) - loopSteps(1)} instructions a word, plus ${loopSteps(0)} to set up and stop. Only one of the ${loopSteps(2) - loopSteps(1)}, the <code>add</code>, is the sum; the load, the pointer step and the branch are the price of walking memory with a loop. Reading <code>4(t0)</code> as well as <code>0(t0)</code> in one trip would halve the pointer steps and branches, and is what a compiler does when it unrolls a loop.</p>` },
+      widget: (st) => ASM_LOOP.widget(st),
+      challenge: {
+        kind: 'reach',
+        goal: 'Make the program leave the sum of the array in a0 for all four cases, including an array of no words.',
+        check: (st) => ASM_LOOP.check(st),
+        hints: [
+          'Copy a0 into a pointer register before you overwrite a0 with the sum. The end address is a0 + 4 × a1: <code>slli</code> by 2 turns a count into bytes.',
+          'Body: <code>lw t1, 0(t0)</code>, <code>add a0, a0, t1</code>, <code>addi t0, t0, 4</code>, then branch back while t0 is below the end (<code>bltu</code>).',
+          'For zero words the first test must happen before the first load: a <code>bgeu t0, end, halt</code> in front of the loop.',
+        ],
+        answer: `<p>A pointer, an end address and a guard:</p><pre class="code">${LOOP_SOLUTION}</pre><p>Each trip is <code>lw</code>, <code>add</code>, <code>addi</code>, <code>bltu</code>.</p>`,
+        solve: (st) => ASM_LOOP.solve(st),
+      },
+    },
+    {
+      title: 'A function and its stack frame',
+      body: `
+        <p>The calling convention of the last step is a set of rules; here they are used. Below, <code>g</code> is given (it triples <code>a0</code>, a <strong>leaf</strong> that touches only <code>a0</code> and <code>t0</code>) and you write <code>f(x) = g(x) + g(x + 1)</code>. Three things make it more than two calls:</p>
+        <ul>
+        <li><code>call g</code> overwrites <code>ra</code> with the way back into <code>f</code>, so <code>f</code>'s own return address must be saved first, or <code>ret</code> returns to the wrong place.</li>
+        <li><code>x</code> and the first result must outlive a call, and <code>t</code> and <code>a</code> registers do not. They go in <code>s0</code> and <code>s1</code>.</li>
+        <li>An <code>s</code> register belongs to <code>f</code>'s caller. Using one means saving its old value on entry (the <strong>prologue</strong>) and putting it back before <code>ret</code> (the <strong>epilogue</strong>), with <code>sp</code> moved down and back up by the same 16 bytes.</li>
+        </ul>
+        <p>The shape, on a smaller function, <code>h(x) = x + g(x)</code>: one value to keep across one call, so a frame for <code>ra</code> and <code>s0</code>.</p>
+        <pre class="code">${FRAME_EXAMPLE}</pre>
+        <p><code>f</code> needs one more register, for the first result, and a second call.</p>
+        <div class="try">Write <code>f</code>. First try it without saving <code>ra</code> and read what the simulator does.</div>`,
+      more: { derive: `<p>The answer is ${FRAME_COST.ownLines} lines, of which ${FRAME_COST.frame} only open and close the frame (<code>addi sp</code> twice, three <code>sw</code>, three <code>lw</code>) and the rest are the two calls and the addition. A whole run, <code>f(4)</code> from the <code>call</code> in main to the halt, is ${FRAME_COST.steps} instructions. The cases below fill <code>s0</code> to <code>s11</code> with marker values before the call and check them, and <code>sp</code>, after: a version that forgets to restore one gets the right sum and fails anyway, which is what a bug in this convention looks like to the code that called you, at some later place.</p>` },
+      widget: (st) => ASM_FRAME.widget(st),
+      challenge: {
+        kind: 'reach',
+        goal: 'Make f(x) = g(x) + g(x + 1) right for all four cases, leaving sp and s0 to s11 as they were.',
+        check: (st) => ASM_FRAME.check(st),
+        hints: [
+          'Open a frame first: <code>addi sp, sp, -16</code>, then store <code>ra</code>, <code>s0</code> and <code>s1</code> at 12, 8 and 4 from sp.',
+          'Put x in s0 before the first <code>call g</code>, and the first result in s1 right after it; the second call needs <code>a0 = x + 1</code>.',
+          'End by loading the three registers back and <code>addi sp, sp, 16</code> before <code>ret</code>. The result is already in a0: add s1 to it first.',
+        ],
+        answer: `<p>Prologue, the two calls, epilogue:</p><pre class="code">${FRAME_SOLUTION}</pre>`,
+        solve: (st) => ASM_FRAME.solve(st),
+      },
+    },
   ],
 };
 
@@ -734,7 +807,7 @@ export const chSingleCycle: Chapter = {
         why: ['', 'RegWrite is the OR of the classes that write a register: opcode alone.', 'MemWrite is the store class and nothing else.'],
       },
       {
-        question: 'Replacing the ripple adder by a <span data-ahead="prefix">Kogge–Stone adder (a parallel-prefix adder: its carry takes about log₂ n levels)</span> cuts the ALU from 93 to 41 delays. By how much does the clock period fall?',
+        question: 'Replacing the ripple adder by a <span data-ahead="prefix">Kogge–Stone adder (a parallel-prefix adder: its carry takes about log₂ n levels)</span> cuts the ALU’s share of the longest path from 93 to 41 delays. By how much does the clock period fall?',
         options: ['From 155 to 103: the same 52 delays, since the path crosses the ALU once', 'To a third, since the ALU is 93 of 155', 'Not at all: the load path is the longest'],
         answer: 0,
         explain: 'The longest path crosses the ALU once, so its length falls by exactly what the ALU saves. What remains (fetch, decode, next-PC select: 62 delays) is now 60% of the period.',
@@ -913,7 +986,7 @@ export const chSingleCycle: Chapter = {
       challenge: {
         kind: 'quiz', question: 'With realistic memories (SRAM slower than the logic around it), which instruction class sets the clock period of a single-cycle CPU?',
         options: ['R-type (two register reads)', 'lw (ALU, then memory, then write-back)', 'beq (subtract and compare)', 'jal (no register read)'], answer: 1,
-        why: ['Both register reads happen in parallel, and an R-type skips the data memory entirely.', '', 'With a realistic memory, a branch ends at the next-PC logic and never waits for a data-memory read. (This site\'s memories are fast mux trees, so chapter 16\'s static timing finds a branch path on top: a surprise only cheap memory allows.)', 'jal reads no register, and its path through an adder to the result mux is shorter still.'],
+        why: ['Both register reads happen in parallel, and an R-type skips the data memory entirely.', '', 'With a realistic memory, a branch ends at the next-PC logic and never waits for a data-memory read. (This site\'s memories are fast mux trees, so chapter ' + numOf('fastadd') + '\'s static timing finds a branch path on top: a surprise only cheap memory allows.)', 'jal reads no register, and its path through an adder to the result mux is shorter still.'],
         explain: 'Every cycle must be long enough for the slowest instruction, and lw chains the ALU and the memory read. The other instructions waste the slack. That is the motivation for splitting an instruction over several cycles and for overlapping instructions.',
       },
     },
@@ -967,7 +1040,7 @@ export const chSingleCycle: Chapter = {
         pitfall: `<p>Reading <code>ret</code> as a special instruction. It is <code>jalr zero, 0(ra)</code>: rd = x0 (the link is discarded), target = ra + 0 with bit 0 cleared. If a function never
           saves ra and calls another, its own <code>ret</code> returns to the wrong place: look at ra after the second <code>jal</code>.</p>`,
         real: `<p>This is the part pipelines spend the most hardware on. A taken branch redirects the PC late in the cycle, and in a pipeline that is several instructions already fetched: predictors, target buffers and
-          return stacks (chapters 17 and 18) all exist to avoid waiting for this decision.</p>`,
+          return stacks (chapters ${numOf('pipeline')} and ${numOf('pipepay')}) all exist to avoid waiting for this decision.</p>`,
       },
     },
     {
@@ -999,7 +1072,7 @@ export const chSingleCycle: Chapter = {
           4 ns and the whole run about 0.3 µs.</p>`,
         pitfall: `<p>A program that "works" on the simulator and not on the gates, or the reverse, almost always uses an instruction the hardware leaves out: byte and halfword accesses, <code>fence</code>,
           <code>ecall</code>. The panel stops at the first mismatch and names the register: start there, not at the end of the run.</p>`,
-        real: `<p>Hardware designers verify this way: a golden model, random and directed programs, and a comparison after every retirement. The same method scales to full cores: this site\'s CPUs are also run through the official riscv-tests suite, and the golden model itself is
+        real: `<p>Hardware designers verify this way: a golden model, random and directed programs, and a comparison after every retirement. The same method scales to full cores: this site\'s CPUs are also run through the official riscv-tests suite, and the simulator itself is
           checked against Spike, the RISC-V reference simulator.</p>`,
       },
       challenge: {

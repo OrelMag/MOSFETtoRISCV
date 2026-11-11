@@ -38,7 +38,7 @@ export const chPython: Chapter = {
   recap: {
     keep: [
       'A compiler maps a program onto the machine: each variable gets a home (a register while it can, data memory when a function shares it, the stack across calls), each expression a stack of temporaries, each test a branch.',
-      'Nothing new runs on the CPU: the compiled words are the same RV32I chapter 14 decodes, so the golden model checks a Python program cycle by cycle as it checked hand-written assembly.',
+      'Nothing new runs on the CPU: the compiled words are the same RV32I chapter ' + numOf('cpu') + ' decodes, so the golden model checks a Python program cycle by cycle as it checked hand-written assembly.',
       'Cost is visible per line. On the single-cycle CPU a line costs one cycle per instruction it executes: <code>total += i</code> is one <code>add</code>; <code>a % b</code> with b unknown is a call to a 32-step shift-and-subtract routine, about 240 cycles.',
       'Calls cost frames: the return address and every saved register go to the stack and come back, and a value computed before a call waits there across it.',
       `A string is a block in data memory, a length word and then its bytes, and a str variable holds the block's address: <code>len</code> is one load, <code>==</code> compares bytes, <code>+</code> makes a new block. New blocks come from a heap of ${HEAP_BYTES} bytes that only grows (tp moves forward, nothing is freed), so a loop that joins strings runs out of it.`,
@@ -155,11 +155,11 @@ export const chPython: Chapter = {
       title: 'Run it on the gates',
       body: `
         <p>The CPU is chapter ${numOf('cpu')}'s, gate for gate, with a 256-word ROM and 64 words of data memory: 100 979 NANDs,
-        403 916 transistors. The <em>Python</em> panel beside the CPU panel reads it: the PC through the compiler's map
+        403 916 transistors. The two memories are 72 198 of them (32 640 the ROM, 39 558 the data memory); the processor is the other 28 781, and chapter ${numOf('cpu')}'s 48 434 is that processor with a 32-word data memory and no ROM. The <em>Python</em> panel beside the CPU panel reads it: the PC through the compiler's map
         gives the line running, the registers and data memory give the variables, the words from the output's start to
         gp give what was printed.</p>
         <p><em>Step line</em> clocks <span data-show="pc imem rf alu">the CPU</span> until the next Python line starts
-        (Back undoes it). The panel counts each line's cycles, and the wire toggles of its last cycle: one
+        (Step back undoes it). The panel counts each line's cycles, and the wire toggles of its last cycle: one
         <code>total += i</code> is a single <code>add</code>, one clock cycle and about 25 000 nets changing value
         through <span data-show="rf alu">the register file and the ALU</span>. Click a line to light the hardware its
         instructions use. The CPU panel still checks every register against the golden model after every cycle.</p>

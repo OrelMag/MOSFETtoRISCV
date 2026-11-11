@@ -21,7 +21,15 @@ export interface LayoutEdit {
   /** netKey → the colour the learner picked for that net: an OKLCH hue (the sandbox's swatches, editor/wirehue.ts) or
    *  'auto' (its own colour-per-net hue, shown with that switch off too). Drawn as a user hue (nethue.ts USER_HUE). */
   hues?: Record<string, NetColour>;
+  /** drawingKey of the drawing the moves and corners were made on: when the author redraws the level it no longer
+   *  matches, and they are set aside (aside) rather than laid over a drawing they were not made for. */
+  fp?: string;
+  /** The learner's arrangement of an earlier drawing of this level, kept for one "Bring mine back". */
+  aside?: Arrangement;
 }
+
+/** The part of a layout that belongs to one drawing: moved parts, reshaped wires, pointers unravelled or drawn. */
+export type Arrangement = Pick<LayoutEdit, 'at' | 'wired' | 'tagged' | 'via' | 'fp'>;
 
 /** A learner's net colour: a hue in degrees, or 'auto'. */
 export type NetColour = number | 'auto';
@@ -32,23 +40,52 @@ export const netColour = (v: unknown): NetColour | undefined =>
 const KEY = 'mosfet2riscv:layouts:v1';
 let all: Record<string, LayoutEdit> | null = null;
 
-const empty = (e: LayoutEdit) => !Object.keys(e.at).length && !e.wired.length && !e.tagged.length && !e.via && !e.hues;
+/** Moves, corners or pointers: what a redraw of the level sets aside (colours belong to nets and carry over). */
+export const arranged = (e: Arrangement | undefined): boolean => !!e && (Object.keys(e.at).length > 0 || e.wired.length > 0 || e.tagged.length > 0 || !!e.via);
+const empty = (e: LayoutEdit) => !arranged(e) && !e.hues && !e.aside;
+const copyArr = (e: Arrangement): Arrangement => {
+  const out: Arrangement = { at: { ...e.at }, wired: [...e.wired], tagged: [...e.tagged] };
+  if (e.via) out.via = Object.fromEntries(Object.entries(e.via).map(([k, ends]) => [k, { ...ends }]));
+  if (e.fp) out.fp = e.fp;
+  return out;
+};
 const copy = (e: LayoutEdit | undefined): LayoutEdit => {
   const out: LayoutEdit = { at: { ...e?.at }, wired: [...e?.wired ?? []], tagged: [...e?.tagged ?? []] };
   if (e?.via) out.via = Object.fromEntries(Object.entries(e.via).map(([k, ends]) => [k, { ...ends }]));
   if (e?.hues) out.hues = { ...e.hues };
+  if (e?.fp) out.fp = e.fp;
+  if (e?.aside) out.aside = copyArr(e.aside);
   return out;
 };
 const keys = (v: unknown): string[] => Array.isArray(v) ? v.filter((k): k is string => typeof k === 'string') : [];
 const isVec = (p: unknown): p is Vec => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite);
 
 /** A net's sinks with corners left; none: no `via` at all. */
-function tidyVia(e: LayoutEdit): void {
+function tidyVia(e: Arrangement): void {
   for (const [k, ends] of Object.entries(e.via ?? {})) {
     for (const [end, pts] of Object.entries(ends)) if (!pts.length) delete ends[end];
     if (!Object.keys(ends).length) delete e.via![k];
   }
   if (e.via && !Object.keys(e.via).length) delete e.via;
+}
+
+/** An arrangement as stored, every field checked. */
+function readArrangement(e: Partial<Arrangement> | undefined): Arrangement {
+  const at: Record<string, Vec> = {};
+  for (const [n, p] of Object.entries(e?.at ?? {})) {
+    if (isVec(p)) at[n] = [p[0], p[1]];
+  }
+  const ed: Arrangement = { at, wired: keys(e?.wired), tagged: keys(e?.tagged) };
+  if (e?.via && typeof e.via === 'object') {
+    ed.via = {};
+    for (const [k, ends] of Object.entries(e.via)) {
+      ed.via[k] = {};
+      for (const [end, pts] of Object.entries(ends ?? {})) if (Array.isArray(pts) && pts.every(isVec)) ed.via[k][end] = pts.map(([x, y]) => [x, y]);
+    }
+    tidyVia(ed);
+  }
+  if (typeof e?.fp === 'string') ed.fp = e.fp;
+  return ed;
 }
 
 function store(): Record<string, LayoutEdit> {
@@ -59,18 +96,10 @@ function store(): Record<string, LayoutEdit> {
     const v: unknown = raw ? JSON.parse(raw) : null;
     if (v && typeof v === 'object') {
       for (const [id, e] of Object.entries(v as Record<string, Partial<LayoutEdit>>)) {
-        const at: Record<string, Vec> = {};
-        for (const [n, p] of Object.entries(e?.at ?? {})) {
-          if (isVec(p)) at[n] = [p[0], p[1]];
-        }
-        const ed: LayoutEdit = { at, wired: keys(e?.wired), tagged: keys(e?.tagged) };
-        if (e?.via && typeof e.via === 'object') {
-          ed.via = {};
-          for (const [k, ends] of Object.entries(e.via)) {
-            ed.via[k] = {};
-            for (const [end, pts] of Object.entries(ends ?? {})) if (Array.isArray(pts) && pts.every(isVec)) ed.via[k][end] = pts.map(([x, y]) => [x, y]);
-          }
-          tidyVia(ed);
+        const ed: LayoutEdit = readArrangement(e);
+        if (e?.aside && typeof e.aside === 'object') {
+          const a = readArrangement(e.aside);
+          if (arranged(a)) ed.aside = a;
         }
         if (e?.hues && typeof e.hues === 'object') {
           const hues: Record<string, NetColour> = {};
@@ -104,6 +133,10 @@ function put(id: string, e: LayoutEdit): void {
   e.tagged = [...new Set(e.tagged)];
   tidyVia(e);
   if (e.hues && !Object.keys(e.hues).length) delete e.hues;
+  // an arrangement belongs to the drawing it was made on (the one on screen: checkDrawing saw it)
+  const fp = drawn.get(id);
+  if (!arranged(e)) delete e.fp;
+  else if (fp) e.fp = fp;
   if (empty(e)) delete store()[id];
   else store()[id] = e;
   save();
@@ -153,6 +186,121 @@ export function dropLastEdit(id: string): void {
   const e = history.get(id)?.past.pop();
   if (e) put(id, e);
 }
+
+/** The drawing of each level shown this visit (drawingKey), set by checkDrawing: an edit is stamped with it. */
+const drawn = new Map<string, string>();
+
+/**
+ * A short key of a level's drawing as its author placed it: instance names, places and turns, and each net's ends,
+ * pointers and routing hints. Two drawings with the same key take the same arrangement; a redraw changes it.
+ */
+export function drawingKey(nl: Netlist): string {
+  const parts = nl.instances.map((i) => [i.name, i.at ?? [0, 0], i.rot ?? 0, i.flip ? 1 : 0]);
+  const nets = nl.nets.map((n) => [n.ends, isTagged(n) ? 1 : 0, n.trunk ?? null, n.via ?? null]);
+  const text = JSON.stringify([parts, nets]);
+  // FNV-1a twice with different primes: 64 bits tell one drawing of a level from the next
+  let a = 0x811c9dc5, b = (0x01000193 ^ text.length) >>> 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193) >>> 0;
+    b = Math.imul(b ^ c, 0x01000197) >>> 0;
+  }
+  return a.toString(36) + '.' + b.toString(36);
+}
+
+/**
+ * The level is about to be drawn from `nl` (its author's drawing): an arrangement made on another drawing of it is
+ * set aside (kept in `aside` for one restore) and the new drawing shown. Pointers unravelled or drawn on nets the new
+ * drawing still has stay, and so do colours. An arrangement saved before keys existed is taken as made on this
+ * drawing. True when it set one aside just now.
+ */
+export function checkDrawing(id: string, nl: Netlist): boolean {
+  const fp = drawingKey(nl);
+  drawn.set(id, fp);
+  const e = store()[id];
+  if (!e || !arranged(e)) return false;
+  if (!e.fp) {
+    e.fp = fp;
+    save();
+    return false;
+  }
+  if (e.fp === fp) return false;
+  const nets = new Set(nl.nets.map((n) => netKey(n)));
+  e.aside = copyArr(e);
+  e.at = {};
+  delete e.via;
+  e.wired = e.wired.filter((k) => nets.has(k));
+  e.tagged = e.tagged.filter((k) => nets.has(k));
+  if (arranged(e)) e.fp = fp;
+  else delete e.fp;
+  // the undo steps were made on the old drawing
+  history.delete(id);
+  save();
+  return true;
+}
+
+/** An arrangement set aside by a redraw, if any. */
+export const asideOf = (id: string): Arrangement | undefined => store()[id]?.aside;
+
+/** The set-aside arrangement over the new drawing (one undo step); a part the redraw renamed is skipped by applyLayout. */
+export function restoreAside(id: string): void {
+  const a = asideOf(id);
+  if (!a) return;
+  editLayout(id, (e) => {
+    const b = copyArr(a);
+    e.at = b.at;
+    e.wired = b.wired;
+    e.tagged = b.tagged;
+    if (b.via) e.via = b.via;
+    else delete e.via;
+    delete e.aside;
+  });
+}
+
+/** Forget the set-aside arrangement. */
+export function dropAside(id: string): void {
+  const e = store()[id];
+  if (!e?.aside) return;
+  delete e.aside;
+  put(id, e);
+}
+
+/** How much of the learner's arrangement a level shows: parts moved, wires reshaped, pointers changed. */
+export function arrangedCount(e: LayoutEdit | undefined): { parts: number; wires: number; pointers: number } {
+  return { parts: Object.keys(e?.at ?? {}).length, wires: Object.keys(e?.via ?? {}).length, pointers: (e?.wired.length ?? 0) + (e?.tagged.length ?? 0) };
+}
+
+/** Levels that carry an arrangement of the learner's or one set aside (colours alone do not count). */
+export function arrangedLevels(): string[] {
+  return Object.entries(store()).filter(([, e]) => arranged(e) || !!e.aside).map(([id]) => id);
+}
+
+/** Every level back to its author's drawing (colours stay); not undone. */
+export function resetAllLayouts(): void {
+  for (const id of arrangedLevels()) {
+    const e = store()[id];
+    e.at = {};
+    e.wired = [];
+    e.tagged = [];
+    delete e.via;
+    delete e.aside;
+    history.delete(id);
+    put(id, e);
+  }
+}
+
+/** For tests: forget what was loaded, so the next read comes from storage again. */
+export function reloadLayouts(): void {
+  all = null;
+  drawn.clear();
+  history.clear();
+}
+
+/** Below this many screen pixels a press is still a click: a mouse as the sandbox's (editor/tools.ts DRAG_PX), a finger
+ *  more, since it shakes. In pixels, not grid units: at fit on a big circuit a unit is a pixel or two. */
+export const SLOP_PX = 4, SLOP_TOUCH_PX = 10;
+export const pastSlop = (a: { clientX: number; clientY: number; pointerType: string }, b: { clientX: number; clientY: number }): boolean =>
+  Math.abs(b.clientX - a.clientX) + Math.abs(b.clientY - a.clientY) >= (a.pointerType === 'touch' ? SLOP_TOUCH_PX : SLOP_PX);
 
 /** A net drawn with tags (pointers) by its author. */
 export const isTagged = (n: NetDef): boolean => n.tags === true || (n.tags?.length ?? 0) > 0;
