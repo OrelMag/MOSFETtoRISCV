@@ -86,11 +86,11 @@ export const chWidths: Chapter = {
         copy a register (<code>mv</code>), load a small constant (<code>li</code>), add a small number in place (<code>addi a0, a0, 1</code>),
         or save and restore registers on the stack. The <strong>C extension</strong> gives exactly these a 16-bit form, chosen from statistics of
         compiled code.</p>
-        <p>The widget assembles each program twice. Our Python compiler's output (<a href="#/c/python">chapter 15</a>) is the best case:
+        <p>The widget assembles each program twice. Our Python compiler's output (<a href="#/c/python">chapter ${numOf('python')}</a>) is the best case:
         it moves values between registers and the stack all the time, and two thirds of its instructions compress. Hand-written loops full of
         three-register arithmetic compress less.</p>
         <p>What the saving buys is <em>instruction bytes</em>: a smaller ROM or flash, more of the program in each cache line
-        (<a href="#/c/cache">chapter 22</a>), fewer bytes fetched per instruction. It does not make an instruction do more.</p>
+        (<a href="#/c/cache">chapter ${numOf('cache')}</a>), fewer bytes fetched per instruction. It does not make an instruction do more.</p>
         <p>The saving is linear in the share of short instructions. If a fraction f of them have a 16-bit form, the program keeps
         1 − f / 2 of its size: f = 2 / 3 leaves ${pctLeft(2 / 3)} %, and even a program with every instruction compressible would still leave ${pctLeft(1)} %. Nothing else
         changes: the same instructions execute in the same order, so a core that fetches a word a cycle takes as many cycles as before. Size is the whole benefit.</p>
@@ -176,7 +176,7 @@ export const chWidths: Chapter = {
       },
       body: `
         <p>Each 16-bit instruction is exactly one 32-bit instruction, so the C core rewrites it in front of the decoder from
-        <a href="#/c/cpu">chapter 14</a>, which never learns that compressed code exists. On the input, 32 bits: the parcel at the PC in bits 15:0
+        <a href="#/c/cpu">chapter ${numOf('cpu')}</a>, which never learns that compressed code exists. On the input, 32 bits: the parcel at the PC in bits 15:0
         (and, when it is a 32-bit instruction, its second half above).</p>
         <p>The rewrite only moves bits and adds constants: rd′ becomes <code>01</code> and three wires, an immediate bit lands in its 32-bit place.
         The gates are elsewhere. <span data-show="form">FORM</span> decodes the quadrant and funct3 and ANDs in the few extra bits a form looks at

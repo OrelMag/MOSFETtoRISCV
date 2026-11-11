@@ -65,7 +65,7 @@ export const IO_MORE: Step[] = [
       <p>The deadline is the previous deadline plus 40, not "now plus 40", so the dots do not drift. The loop is <code>lw</code> and <code>bltu</code>, two cycles, so the
       clock is looked at every second cycle: the read that first sees <code>mtime ≥ deadline</code> is 0 or 1 cycles late, and the dot reaches the console 3 or 4 cycles after the
       deadline (3 here: the compare falls through, <code>li</code>, then the store). Polling quantises time to the length of the loop that does it, and during
-      the 40 cycles the core can do nothing else. <a href="#/c/traps/0">Chapter 20</a> measures what that costs against <span data-ahead="interrupts">an interrupt (the hardware jumps to a software handler when a device asks)</span>.</p>
+      the 40 cycles the core can do nothing else. <a href="#/c/traps/0">Chapter ${numOf('traps')}</a> measures what that costs against <span data-ahead="interrupts">an interrupt (the hardware jumps to a software handler when a device asks)</span>.</p>
       <div class="try">Run the clock and watch mtime in the I/O panel, the loop at pc 12 and 16, and the dot.</div>`,
     scene: () => cpuScene({ source: sys('poll'), system: true, highlight: ['io'] }),
     tour: {

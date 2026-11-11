@@ -133,6 +133,30 @@ export function accMachine(words: ArrayLike<number>): ComponentDef {
   const R0 = accRom(words);
   const hit = machines.get(R0.id);
   if (hit) return hit;
+  const d = define({
+    id: `acc8_${R0.id.slice('acc8_rom_'.length)}`, name: 'First computer (8-bit accumulator)', category: 'cpu',
+    summary: 'Eight instructions, one per clock: a 5-bit PC reads a 32 × 8 ROM; the word\'s top 3 bits pick the instruction, its low 5 bits the RAM address, jump target or constant. A holds the one number being worked on; the adder adds or subtracts M[x]; OUT shows A when told to. halt = 1 on a jump to itself.',
+    ports: ACC_PORTS,
+    symbol: { kind: 'box', label: 'COMPUTER' },
+    netlist: () => accDrawing(R0),
+  });
+  machines.set(R0.id, d);
+  return d;
+}
+
+export const ACC_CORE_PORTS: PortDef[] = [bit('clk', 'in', true), bus('instr', 8, 'in'), bus('pc', 5, 'out'), bus('out', 8, 'out'), bit('halt', 'out')];
+
+/** The machine without its ROM (the campaign's level m_acc): the word comes in on instr, the PC goes out on pc. */
+export const ACC8_CORE: ComponentDef = define({
+  id: 'acc8_core', name: 'First computer without ROM', category: 'cpu',
+  summary: 'The first computer with an instruction port instead of its ROM: it shows its PC on pc and executes the 8-bit word on instr at every rising clk edge. The data RAM, A, the adder and OUT are inside; halt = 1 while instr is a JMP to its own address.',
+  ports: ACC_CORE_PORTS,
+  symbol: { kind: 'box', label: 'ACC 8' },
+  netlist: () => accDrawing(null),
+});
+
+/** The machine's drawing, with its ROM, or with instr and pc as pins in its place. */
+function accDrawing(R0: ComponentDef | null) {
   const instances: InstanceDef[] = [];
   const geo = new Map<string, ReturnType<typeof symbolGeom>>();
   const at = new Map<string, [number, number]>();
@@ -155,8 +179,8 @@ export function accMachine(words: ArrayLike<number>): ComponentDef {
   alignY('pc', register(5), 12, 'd', Y, 'PC');
   place('one', TIE1, [9, P('pc', 'en')[1] - 1]);
   place('inc', incrementer(5), [22, Y - 10], '+1');
-  alignY('rom', R0, 26, 'addr', P('pc', 'q')[1], 'program');
-  alignY('f', splitter([5, 3]), 40, 'in', P('rom', 'data')[1], 'fields');
+  if (R0) alignY('rom', R0, 26, 'addr', P('pc', 'q')[1], 'program');
+  alignY('f', splitter([5, 3]), 40, 'in', P('pc', 'q')[1], 'fields');
   alignY('ram', ram(5, 8), 52, 'addr', P('f', 'o0')[1], 'RAM');
   alignY('alu', addSub(8), 72, 'b', P('ram', 'dout')[1], 'A ± M');
   alignY('mux1', busMux2(8), 92, 'a', P('alu', 's')[1], 'sum | M');
@@ -177,9 +201,9 @@ export function accMachine(words: ArrayLike<number>): ComponentDef {
     { name: 'clk', ends: ['clk', 'pc.clk', 'ram.clk', 'acc.clk', 'outr.clk'], tags: true },
     { name: 'next', ends: ['jmux.y', 'pc.d'] },
     { name: 'one', ends: ['one.y', 'pc.en'] },
-    { name: 'pc', ends: ['pc.q', 'rom.addr', 'inc.a', 'self.b'] },
+    R0 ? { name: 'pc', ends: ['pc.q', 'rom.addr', 'inc.a', 'self.b'] } : { name: 'pc', ends: ['pc.q', 'pc', 'inc.a', 'self.b'], tags: ['pc'] },
     { name: 'pc+1', ends: ['inc.y', 'jmux.a'] },
-    { name: 'instr', ends: ['rom.data', 'f.in'] },
+    { name: 'instr', ends: [R0 ? 'rom.data' : 'instr', 'f.in'] },
     { name: 'x', ends: ['f.o0', 'ram.addr', 'jmux.b', 'kx.i0', 'self.a'], tags: ['jmux.b', 'kx.i0', 'self.a'] },
     { name: 'op', ends: ['f.o1', 'ctl.op'] },
     { name: 'M', ends: ['ram.dout', 'alu.b', 'mux1.b'] },
@@ -196,15 +220,9 @@ export function accMachine(words: ArrayLike<number>): ComponentDef {
     ctlNet('la', 'acc.en'), ctlNet('am', 'mux1.s'), ctlNet('ak', 'mux2.s'), ctlNet('sub', 'alu.sub'),
     ctlNet('we', 'ram.we'), ctlNet('jump', 'jmux.s'), ctlNet('out', 'outr.en'), ctlNet('jmp', 'hlt.b'),
   ];
-  const d = define({
-    id: `acc8_${R0.id.slice('acc8_rom_'.length)}`, name: 'First computer (8-bit accumulator)', category: 'cpu',
-    summary: 'Eight instructions, one per clock: a 5-bit PC reads a 32 × 8 ROM; the word\'s top 3 bits pick the instruction, its low 5 bits the RAM address, jump target or constant. A holds the one number being worked on; the adder adds or subtracts M[x]; OUT shows A when told to. halt = 1 on a jump to itself.',
-    ports: ACC_PORTS,
-    symbol: { kind: 'box', label: 'COMPUTER' },
-    netlist: () => ({ pins: { clk: [0, Y + 24], out: [R, P('outr', 'q')[1]], halt: [R, Y + 24] }, instances, nets }),
-  });
-  machines.set(R0.id, d);
-  return d;
+  const pins: Record<string, [number, number]> = { clk: [0, Y + 24], out: [R, P('outr', 'q')[1]], halt: [R, Y + 24] };
+  if (!R0) { pins.instr = [30, P('f', 'in')[1]]; pins.pc = [R, Y + 28]; }
+  return { pins, instances, nets };
 }
 
 // Built at load (the chapter's multiplication), so the layout and routing checks cover the whole computer.

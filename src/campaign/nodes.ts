@@ -16,6 +16,7 @@ import { BUILD_LUT } from './buildlut';
 import { BUILDK } from './buildk';
 import { BUILDM } from './buildm';
 import { BUILDPOW } from './buildpow';
+import { accGives, BUILDACC } from './buildacc';
 import { BUILDVM } from './buildvm';
 import { BUILDR } from './buildr';
 import { BUILDT } from './buildt';
@@ -422,6 +423,16 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 'm_mem', act: 3, title: 'ROM and RAM', kind: 'lesson', requires: ['m_rf'],
     why: 'Built like the register file, memory costs about 20 NANDs a bit: the 64-word RAM a small program needs would be 20 166 NANDs, over four times Core III. Real memories are arrays of 6-transistor or 1-transistor cells, so from here on ROM and RAM are given parts. Core II hangs the data RAM on the ALU\'s output.',
     body: 'mem', tips: [], chapters: [{ chapter: 'memory', step: 4, label: 'Read-only memory' }], codex: ['rom', 'harvard'], anatomy: ['imem', 'dmem'], unlocks: ['sb_rom*', 'ram*'],
+  },
+  {
+    id: 'm_acc', act: 3, title: 'A first computer', kind: 'build', optional: true, requires: ['m_mem', 's_pc', 'a_addsub16'], base: BUILDACC.m_acc, givesOf: accGives,
+    why: 'Everything a computer needs is now on the shelf: a counter to read the program, a RAM, a register, the adder. Joined with a decoder they run programs: eight instructions, one a clock, the accumulator A the only register. Par 5795 NANDs at period 45, the 32-byte RAM 5157 of them; the control is 49. Act 5\'s core is the same plan, wider.',
+    tips: [
+      'Split instr: bits 7–5 into a 3 → 8 decoder (one line per instruction), bits 4–0 to the RAM\'s address. A is always on the RAM\'s data input; STA only raises we.',
+      'A\'s next value is M[x] (LDA), A ± M[x] (ADD, SUB) or x itself (LDI): two bus muxes in a row, and A loads only on those four instructions.',
+      'The PC takes PC + 1, or x when the instruction is JMP, or JZ while A = 0 (an 8-input zero test into an AND). halt: instr is JMP and x equals the PC.',
+    ],
+    codex: ['accumulator'], chapters: [{ chapter: 'firstcomputer', step: 0, label: 'A counter reads a ROM' }], par: { nand: 5795, period: 45 },
   },
 
   {

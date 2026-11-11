@@ -145,7 +145,17 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Memory in rings of iron", stage: "widget" },
     { title: "A core plane, wired", challenge: "reach", stage: "scene" },
   ] },
-  { id: "alu", num: 11, title: "The ALU", blurb: "Every RV32I integer operation in one block, selected by the instruction's own bits.", level: "Computing", builds: ["adders","routing"], recap: {"checks":3}, steps: [
+  { id: "firstcomputer", num: 11, title: "A first computer", blurb: "Eight instructions, one register, one clock each: a counter reads a ROM, a decoder tells the rest what to do, and a computer runs.", level: "Processor", builds: ["adders","registers","memory"], recap: {"checks":3}, steps: [
+    { title: "A counter reads a ROM", challenge: "quiz", stage: "scene" },
+    { title: "Splitting the word: LDA and STA", challenge: "quiz", stage: "scene" },
+    { title: "Add and subtract", challenge: "quiz", stage: "scene" },
+    { title: "A jump is a load into the counter", challenge: "quiz", stage: "scene" },
+    { title: "A flag, and the first loop that ends", challenge: "quiz", stage: "scene" },
+    { title: "The control is a decoder", challenge: "quiz", stage: "scene" },
+    { title: "Program it", challenge: "reach", stage: "scene" },
+    { title: "What a real instruction set changes", challenge: "quiz", stage: "scene" },
+  ] },
+  { id: "alu", num: 12, title: "The ALU", blurb: "Every RV32I integer operation in one block, selected by the instruction's own bits.", level: "Computing", builds: ["adders","routing"], recap: {"checks":3}, steps: [
     { title: "Bitwise operations are free parallelism", stage: "scene" },
     { title: "The barrel shifter", stage: "scene" },
     { title: "Comparison is subtraction", challenge: "quiz", stage: "scene" },
@@ -154,21 +164,21 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The ALU control decode", challenge: "quiz", stage: "scene" },
     { title: "What each operation waits for", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "regfile", num: 12, title: "The register file", blurb: "32 registers, two read ports, one write port, and x0 wired to zero.", level: "Computing", builds: ["registers","memory"], recap: {"checks":3}, steps: [
+  { id: "regfile", num: 13, title: "The register file", blurb: "32 registers, two read ports, one write port, and x0 wired to zero.", level: "Computing", builds: ["registers","memory"], recap: {"checks":3}, steps: [
     { title: "A memory with two read ports", challenge: "reach", stage: "scene" },
     { title: "The real thing: 32 × 32", stage: "scene" },
     { title: "Reading what is being written", challenge: "reach", stage: "scene" },
     { title: "Latches instead of flip-flops", challenge: "reach", stage: "scene" },
     { title: "Two writes, four reads", challenge: "reach", stage: "scene" },
   ] },
-  { id: "isa", num: 13, title: "Instructions & assembly", blurb: "RV32I encodings, an in-browser assembler, and an instruction-set simulator to run programs on.", level: "ISA", builds: ["binary","alu","regfile"], recap: {"checks":3}, steps: [
+  { id: "isa", num: 14, title: "Instructions & assembly", blurb: "RV32I encodings, an in-browser assembler, and an instruction-set simulator to run programs on.", level: "ISA", builds: ["binary","alu","regfile"], recap: {"checks":3}, steps: [
     { title: "A program is words in memory", stage: "widget" },
     { title: "Six formats, fixed register fields", challenge: "quiz", stage: "widget" },
     { title: "The assembler", stage: "widget" },
     { title: "Pseudo-instructions", challenge: "quiz", stage: "widget" },
     { title: "Register names and the calling convention", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "cpu", num: 14, title: "A single-cycle CPU", blurb: "Every block from the previous chapters, wired into a complete RV32I processor.", level: "Processor", builds: ["alu","regfile","isa"], recap: {"checks":5}, steps: [
+  { id: "cpu", num: 15, title: "A single-cycle CPU", blurb: "Every block from the previous chapters, wired into a complete RV32I processor.", level: "Processor", builds: ["alu","regfile","isa"], recap: {"checks":5}, steps: [
     { title: "The datapath", stage: "scene" },
     { title: "The control table", challenge: "quiz", stage: "scene" },
     { title: "ALU instructions", stage: "scene" },
@@ -179,7 +189,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Your own instruction", challenge: "reach", stage: "scene" },
     { title: "Find it: a stuck wire", challenge: "reach", stage: "scene" },
   ] },
-  { id: "python", num: 15, title: "From Python to gates", blurb: "A Python program compiled to RV32I by the site's own compiler and run on the gate-level CPU, line by line down to the toggles.", level: "Software", builds: ["isa","cpu"], recap: {"checks":3}, steps: [
+  { id: "python", num: 16, title: "From Python to gates", blurb: "A Python program compiled to RV32I by the site's own compiler and run on the gate-level CPU, line by line down to the toggles.", level: "Software", builds: ["isa","cpu"], recap: {"checks":3}, steps: [
     { title: "One program, three languages", stage: "widget" },
     { title: "Expressions and registers", stage: "widget" },
     { title: "What * // % cost", stage: "widget" },
@@ -189,7 +199,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Strings", challenge: "quiz", stage: "scene" },
     { title: "A heap that never gives back", stage: "scene" },
   ] },
-  { id: "fastadd", num: 16, title: "Faster adders", blurb: "Carry-lookahead, Kogge–Stone, carry-select and carry-skip: trading gates for speed, measured on the CPU's critical path.", level: "Optimization", builds: ["adders","cpu"], recap: {"checks":3}, steps: [
+  { id: "fastadd", num: 17, title: "Faster adders", blurb: "Carry-lookahead, Kogge–Stone, carry-select and carry-skip: trading gates for speed, measured on the CPU's critical path.", level: "Optimization", builds: ["adders","cpu"], recap: {"checks":3}, steps: [
     { title: "The ripple problem", stage: "scene" },
     { title: "Generate, propagate, look ahead", stage: "scene" },
     { title: "Parallel prefix: Kogge–Stone", stage: "scene" },
@@ -203,7 +213,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "When fan-out costs", challenge: "quiz", stage: "widget" },
     { title: "A Verilog adder, and its critical path", challenge: "quiz", stage: "scene" },
   ] },
-  { id: "pipeline", num: 17, title: "Pipelining", blurb: "Five stages working on five instructions at once, and the hazards that come with it.", level: "Processor", builds: ["registers","cpu","python"], recap: {"checks":3}, steps: [
+  { id: "pipeline", num: 18, title: "Pipelining", blurb: "Five stages working on five instructions at once, and the hazards that come with it.", level: "Processor", builds: ["registers","cpu","python"], recap: {"checks":3}, steps: [
     { title: "Overlap the work", stage: "scene" },
     { title: "Pipeline registers", stage: "scene" },
     { title: "Data hazards and forwarding", stage: "scene" },
@@ -215,7 +225,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A compiled program on the pipeline", challenge: "quiz", stage: "scene" },
     { title: "Find it: a pipeline that cannot wait", challenge: "reach", stage: "scene" },
   ] },
-  { id: "pipepay", num: 18, title: "Making the pipeline pay", blurb: "Balance the stages, then predict branches: measured, step by step.", level: "Processor", builds: ["pipeline","fastadd"], recap: {"checks":3}, steps: [
+  { id: "pipepay", num: 19, title: "Making the pipeline pay", blurb: "Balance the stages, then predict branches: measured, step by step.", level: "Processor", builds: ["pipeline","fastadd"], recap: {"checks":3}, steps: [
     { title: "Look-ahead forwarding", stage: "scene" },
     { title: "A comparator for branches", challenge: "quiz", stage: "scene" },
     { title: "Predicting branches", stage: "scene" },
@@ -223,7 +233,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The price of prediction", stage: "scene" },
     { title: "Measured, all together", stage: "widget" },
   ] },
-  { id: "io", num: 19, title: "Bytes and the outside world", blurb: "Byte and halfword memory access, and memory-mapped I/O: a console, LEDs, switches and a timer.", level: "System", builds: ["memory","cpu"], recap: {"checks":3}, steps: [
+  { id: "io", num: 20, title: "Bytes and the outside world", blurb: "Byte and halfword memory access, and memory-mapped I/O: a console, LEDs, switches and a timer.", level: "System", builds: ["memory","cpu"], recap: {"checks":3}, steps: [
     { title: "Storing a byte", stage: "scene" },
     { title: "Four byte-wide banks", stage: "scene" },
     { title: "Loading a byte", challenge: "quiz", stage: "scene" },
@@ -232,7 +242,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Reading the clock", challenge: "quiz", stage: "scene" },
     { title: "Registers with side effects", challenge: "quiz", stage: "scene" },
   ] },
-  { id: "traps", num: 20, title: "Traps and interrupts", blurb: "CSRs, exceptions, ecall, timer and external interrupts: how hardware hands control to software.", level: "Privileged ISA", builds: ["cpu","io"], recap: {"checks":4}, steps: [
+  { id: "traps", num: 21, title: "Traps and interrupts", blurb: "CSRs, exceptions, ecall, timer and external interrupts: how hardware hands control to software.", level: "Privileged ISA", builds: ["cpu","io"], recap: {"checks":4}, steps: [
     { title: "Control and status registers", stage: "scene" },
     { title: "ecall: asking the operating system", stage: "scene" },
     { title: "Exceptions", challenge: "reach", stage: "scene" },
@@ -246,7 +256,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Precise traps in a pipeline", challenge: "quiz" },
     { title: "Find it: a handler that returns to the wrong place", challenge: "reach", stage: "scene" },
   ] },
-  { id: "muldiv", num: 21, title: "Multiply & divide", blurb: "Array and Wallace-tree multipliers, Baugh–Wooley and Booth, restoring, non-restoring and SRT division, and the M extension in the single-cycle and pipelined CPUs.", level: "Arithmetic", builds: ["adders","fastadd","pipeline","python","io"], recap: {"checks":4}, steps: [
+  { id: "muldiv", num: 22, title: "Multiply & divide", blurb: "Array and Wallace-tree multipliers, Baugh–Wooley and Booth, restoring, non-restoring and SRT division, and the M extension in the single-cycle and pipelined CPUs.", level: "Arithmetic", builds: ["adders","fastadd","pipeline","python","io"], recap: {"checks":4}, steps: [
     { title: "Long multiplication is AND and add", challenge: "reach", stage: "scene" },
     { title: "Or reuse one adder", challenge: "reach", stage: "scene" },
     { title: "The array is slow", stage: "scene" },
@@ -274,7 +284,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "M in the pipeline", challenge: "quiz", stage: "scene" },
     { title: "Multiply and divide in hardware", challenge: "quiz", stage: "scene" },
   ] },
-  { id: "cache", num: 22, title: "Caches & the memory hierarchy", blurb: "SRAM and DRAM at transistor level, direct-mapped and set-associative caches, the three Cs, and a CPU that stalls on a miss.", level: "Memory", builds: ["memory","cpu","pipeline"], recap: {"checks":3}, steps: [
+  { id: "cache", num: 23, title: "Caches & the memory hierarchy", blurb: "SRAM and DRAM at transistor level, direct-mapped and set-associative caches, the three Cs, and a CPU that stalls on a miss.", level: "Memory", builds: ["memory","cpu","pipeline"], recap: {"checks":3}, steps: [
     { title: "Six transistors per bit", challenge: "reach", stage: "scene" },
     { title: "From a column to an array", challenge: "reach", stage: "scene" },
     { title: "From an array to a megabyte", challenge: "reach", stage: "scene" },
@@ -293,7 +303,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Average memory access time", challenge: "quiz" },
     { title: "Find it: a cache that does not wait", challenge: "reach", stage: "scene" },
   ] },
-  { id: "vmem", num: 23, title: "Virtual memory", blurb: "Every program gets addresses of its own: Sv32 page tables, a walker in gates, TLBs, and the page fault that maps a page on demand.", level: "System", builds: ["traps","cache"], recap: {"checks":3}, steps: [
+  { id: "vmem", num: 24, title: "Virtual memory", blurb: "Every program gets addresses of its own: Sv32 page tables, a walker in gates, TLBs, and the page fault that maps a page on demand.", level: "System", builds: ["traps","cache"], recap: {"checks":3}, steps: [
     { title: "Two programs, one memory", challenge: "quiz", stage: "widget" },
     { title: "Pages: a number and an offset", challenge: "quiz", stage: "widget" },
     { title: "The page-table entry", challenge: "quiz", stage: "widget" },
@@ -304,7 +314,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Protection: U, R, W and X", challenge: "quiz", stage: "scene" },
     { title: "What it costs", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "os", num: 24, title: "A tiny operating system", blurb: "Two programs on one CPU: user mode, system calls, the timer, a context switch and a round-robin scheduler, in assembly on the gates of the last chapter.", level: "System", builds: ["vmem","traps","python"], recap: {"checks":3}, steps: [
+  { id: "os", num: 25, title: "A tiny operating system", blurb: "Two programs on one CPU: user mode, system calls, the timer, a context switch and a round-robin scheduler, in assembly on the gates of the last chapter.", level: "System", builds: ["vmem","traps","python"], recap: {"checks":3}, steps: [
     { title: "One CPU, two programs: what the kernel is for", challenge: "quiz", stage: "widget" },
     { title: "User mode: what a program may not do", challenge: "quiz", stage: "scene" },
     { title: "System calls: ecall with a number in a7", challenge: "quiz", stage: "scene" },
@@ -314,7 +324,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What sharing costs", challenge: "quiz", stage: "widget" },
     { title: "Two Python programs as processes", challenge: "quiz", stage: "scene" },
   ] },
-  { id: "multicycle", num: 25, title: "Multicycle & microcode", blurb: "One ALU and one memory port reused over several short cycles, sequenced by a hardwired state machine or by microcode.", level: "Processor", builds: ["registers","cpu"], recap: {"checks":3}, steps: [
+  { id: "multicycle", num: 26, title: "Multicycle & microcode", blurb: "One ALU and one memory port reused over several short cycles, sequenced by a hardwired state machine or by microcode.", level: "Processor", builds: ["registers","cpu"], recap: {"checks":3}, steps: [
     { title: "Several short cycles", stage: "scene" },
     { title: "The state table", stage: "widget" },
     { title: "Hardwired control", challenge: "reach", stage: "scene" },
@@ -325,7 +335,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "One instruction set, many machines: System/360", challenge: "quiz", stage: "widget" },
     { title: "Find it: a register that never holds", challenge: "reach", stage: "scene" },
   ] },
-  { id: "float", num: 26, title: "Floating point", blurb: "IEEE 754 from the bits up: unpack, align, add or multiply, normalize, round in five modes with exception flags, and an FPU in the CPU.", level: "Arithmetic", builds: ["muldiv","pipeline"], recap: {"checks":3}, steps: [
+  { id: "float", num: 27, title: "Floating point", blurb: "IEEE 754 from the bits up: unpack, align, add or multiply, normalize, round in five modes with exception flags, and an FPU in the CPU.", level: "Arithmetic", builds: ["muldiv","pipeline"], recap: {"checks":3}, steps: [
     { title: "Scientific notation in binary", challenge: "quiz", stage: "widget" },
     { title: "Where the floats are", stage: "widget" },
     { title: "Unpack", stage: "scene" },
@@ -356,7 +366,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Summing many numbers", challenge: "quiz", stage: "widget" },
     { title: "Kahan on the CPU", challenge: "reach", stage: "scene" },
   ] },
-  { id: "widths", num: 27, title: "Sixteen bits and sixty-four", blurb: "The C extension: two thirds of real instructions in 16 bits, an expander in gates in front of the decoder, fetching at any halfword, and what that costs. Then the other way: the same core at 64 bits, the W instructions RV64 kept, and what width costs.", level: "Processor", builds: ["cpu","python","fastadd","muldiv","cache","float"], recap: {"checks":3}, steps: [
+  { id: "widths", num: 28, title: "Sixteen bits and sixty-four", blurb: "The C extension: two thirds of real instructions in 16 bits, an expander in gates in front of the decoder, fetching at any halfword, and what that costs. Then the other way: the same core at 64 bits, the W instructions RV64 kept, and what width costs.", level: "Processor", builds: ["cpu","python","fastadd","muldiv","cache","float"], recap: {"checks":3}, steps: [
     { title: "Two thirds fit in 16 bits", challenge: "quiz", stage: "widget" },
     { title: "What 16 bits give up", challenge: "quiz", stage: "widget" },
     { title: "The expander", challenge: "reach", stage: "scene" },
@@ -366,7 +376,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The W instructions", challenge: "reach", stage: "scene" },
     { title: "The cost of width", challenge: "quiz", stage: "scene" },
   ] },
-  { id: "ooo", num: 28, title: "Out of order", blurb: "More than one instruction per cycle: dependences, renaming, a reorder buffer and speculation, priced on real programs.", level: "Processor", builds: ["pipepay","muldiv"], recap: {"checks":3}, steps: [
+  { id: "ooo", num: 29, title: "Out of order", blurb: "More than one instruction per cycle: dependences, renaming, a reorder buffer and speculation, priced on real programs.", level: "Processor", builds: ["pipepay","muldiv"], recap: {"checks":3}, steps: [
     { title: "How much parallelism is there?", stage: "widget" },
     { title: "Two at a time, in order", stage: "scene" },
     { title: "Where in-order stops", stage: "widget" },
@@ -383,7 +393,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Your own core", stage: "widget" },
     { title: "Code that helps the hardware", challenge: "reach", stage: "scene" },
   ] },
-  { id: "multicore", num: 29, title: "Many cores", blurb: "Two cores sharing one memory: arbitration, a race, atomic operations, a spin lock, and private caches kept coherent by snooping, in gates.", level: "Systems", builds: ["cpu","cache"], recap: {"checks":4}, steps: [
+  { id: "multicore", num: 30, title: "Many cores", blurb: "Two cores sharing one memory: arbitration, a race, atomic operations, a spin lock, and private caches kept coherent by snooping, in gates.", level: "Systems", builds: ["cpu","cache"], recap: {"checks":4}, steps: [
     { title: "Why more cores?", challenge: "quiz" },
     { title: "Two cores, one memory", stage: "scene" },
     { title: "The arbiter", stage: "scene" },
@@ -397,7 +407,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "lr.w and sc.w", challenge: "quiz", stage: "scene" },
     { title: "Memory ordering", challenge: "quiz" },
   ] },
-  { id: "silicon", num: 30, title: "From netlist to silicon", blurb: "Standard cells in layout, how they are made, technology mapping, place and route, the clock tree, a floorplan of our dual-core, the real flow on two of our CPUs against our own estimates, and wafer economics.", level: "Physical design", builds: ["nand","fastadd","multicore"], recap: {"checks":3}, steps: [
+  { id: "silicon", num: 31, title: "From netlist to silicon", blurb: "Standard cells in layout, how they are made, technology mapping, place and route, the clock tree, a floorplan of our dual-core, the real flow on two of our CPUs against our own estimates, and wafer economics.", level: "Physical design", builds: ["nand","fastadd","multicore"], recap: {"checks":3}, steps: [
     { title: "Gates become geometry", stage: "widget" },
     { title: "How chips are made", challenge: "quiz", stage: "widget" },
     { title: "A real cell library", stage: "widget" },
@@ -409,7 +419,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The same CPU in relays and tubes", challenge: "quiz", stage: "widget" },
     { title: "The journey", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "fpga", num: 31, title: "From netlist to FPGA", blurb: "Look-up tables, covering a netlist with them, the logic cell and its carry chain, routing switches, block RAM, and our RISC-V computer placed and routed on a Tang Nano 9K, measured against our own estimates.", level: "Physical design", builds: ["routing","memory","adders","silicon"], recap: {"checks":3}, steps: [
+  { id: "fpga", num: 32, title: "From netlist to FPGA", blurb: "Look-up tables, covering a netlist with them, the logic cell and its carry chain, routing switches, block RAM, and our RISC-V computer placed and routed on a Tang Nano 9K, measured against our own estimates.", level: "Physical design", builds: ["routing","memory","adders","silicon"], recap: {"checks":3}, steps: [
     { title: "Hardware you can rewrite", stage: "widget" },
     { title: "A look-up table is a memory", challenge: "reach", stage: "scene" },
     { title: "Any function of four inputs", challenge: "quiz", stage: "widget" },
@@ -420,7 +430,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Timing: the estimate against the tool", challenge: "quiz", stage: "widget" },
     { title: "FPGA, custom chip or processor?", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "verify", num: 32, title: "How do you know it works?", blurb: "Two questions every chip must answer: is the design right (the golden model in lock step, the official riscv-tests, random programs, coverage, a second oracle), and was this chip made right (stuck-at faults, fault coverage, test generation, scan chains, self-test).", level: "Verification and test", builds: ["pipeline","traps","cache","float","registers","silicon"], recap: {"checks":3}, steps: [
+  { id: "verify", num: 33, title: "How do you know it works?", blurb: "Two questions every chip must answer: is the design right (the golden model in lock step, the official riscv-tests, random programs, coverage, a second oracle), and was this chip made right (stuck-at faults, fault coverage, test generation, scan chains, self-test).", level: "Verification and test", builds: ["pipeline","traps","cache","float","registers","silicon"], recap: {"checks":3}, steps: [
     { title: "Two questions", stage: "widget" },
     { title: "The golden model in lock step", stage: "scene" },
     { title: "Who checks the checker? riscv-tests", stage: "widget" },
@@ -435,7 +445,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The chip tests itself", stage: "scene" },
     { title: "What a CPU costs to test", stage: "widget" },
   ] },
-  { id: "sidechan", num: 33, title: "Side channels", blurb: "A program can be correct and still leak. Time a password check, read the cache without reading it, and watch our out-of-order core load a secret on a path it throws away. Then three defences and what each costs.", level: "Processor", builds: ["cpu","cache","ooo"], recap: {"checks":3}, steps: [
+  { id: "sidechan", num: 34, title: "Side channels", blurb: "A program can be correct and still leak. Time a password check, read the cache without reading it, and watch our out-of-order core load a secret on a path it throws away. Then three defences and what each costs.", level: "Processor", builds: ["cpu","cache","ooo"], recap: {"checks":3}, steps: [
     { title: "Time tells", challenge: "quiz", stage: "widget" },
     { title: "The cache remembers", challenge: "quiz", stage: "widget" },
     { title: "The path the core throws away", challenge: "quiz", stage: "scene" },
@@ -448,7 +458,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Fix it in hardware", challenge: "quiz", stage: "widget" },
     { title: "What it costs, side by side", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "power", num: 34, title: "Power", blurb: "Where a CPU's energy goes, measured toggle by toggle: ½ C V², activity and glitches, the clock net, a clock gate that cannot glitch, leakage from the circuit's own state, power gating, voltage and frequency down to the minimum-energy point, and which of our CPUs spends least.", level: "Physical design", builds: ["inverter","latches","cpu","pipeline","silicon"], recap: {"checks":3}, steps: [
+  { id: "power", num: 35, title: "Power", blurb: "Where a CPU's energy goes, measured toggle by toggle: ½ C V², activity and glitches, the clock net, a clock gate that cannot glitch, leakage from the circuit's own state, power gating, voltage and frequency down to the minimum-energy point, and which of our CPUs spends least.", level: "Physical design", builds: ["inverter","latches","cpu","pipeline","silicon"], recap: {"checks":3}, steps: [
     { title: "Where the energy goes", stage: "scene" },
     { title: "One toggle: ½ C V²", challenge: "quiz", stage: "widget" },
     { title: "Activity: the data decide", challenge: "quiz", stage: "widget" },
@@ -464,7 +474,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Which CPU for the job", challenge: "quiz", stage: "widget" },
     { title: "Power density and dark silicon", stage: "widget" },
   ] },
-  { id: "vectors", num: 35, title: "Vectors", blurb: "One instruction for many numbers, with the length in a register: vsetvli and strip-mining, SEW and LMUL, a four-lane vector unit in gates that takes a long vector in beats, a line of memory a beat, masks, reductions, chaining, and the same kernel on four machines.", level: "Throughput", builds: ["regfile","cpu","multicore"], recap: {"checks":3}, steps: [
+  { id: "vectors", num: 36, title: "Vectors", blurb: "One instruction for many numbers, with the length in a register: vsetvli and strip-mining, SEW and LMUL, a four-lane vector unit in gates that takes a long vector in beats, a line of memory a beat, masks, reductions, chaining, and the same kernel on four machines.", level: "Throughput", builds: ["regfile","cpu","multicore"], recap: {"checks":3}, steps: [
     { title: "Same operation, many numbers", challenge: "quiz", stage: "widget" },
     { title: "Fixed width and its tail", stage: "widget" },
     { title: "The length in a register", challenge: "quiz", stage: "widget" },
@@ -477,14 +487,14 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Vectors, lanes, cores", challenge: "quiz", stage: "widget" },
     { title: "Real vector machines" },
   ] },
-  { id: "lanes", num: 36, title: "Lanes", blurb: "One fetch and decode feeding four ALUs, each with its own registers: a lane core, measured against four cores.", level: "Throughput", builds: ["cpu","multicore","vectors"], recap: {"checks":3}, steps: [
+  { id: "lanes", num: 37, title: "Lanes", blurb: "One fetch and decode feeding four ALUs, each with its own registers: a lane core, measured against four cores.", level: "Throughput", builds: ["cpu","multicore","vectors"], recap: {"checks":3}, steps: [
     { title: "Latency or throughput", challenge: "quiz" },
     { title: "One decoder, four ALUs", stage: "scene" },
     { title: "The leader", stage: "scene" },
     { title: "One memory port", challenge: "quiz", stage: "scene" },
     { title: "Lanes against cores", stage: "widget" },
   ] },
-  { id: "simt", num: 37, title: "Threads in lock-step", blurb: "The active mask, divergent branches, split / join and the reconvergence stack, predication, and what divergence costs.", level: "Throughput", builds: ["lanes"], recap: {"checks":3}, steps: [
+  { id: "simt", num: 38, title: "Threads in lock-step", blurb: "The active mask, divergent branches, split / join and the reconvergence stack, predication, and what divergence costs.", level: "Throughput", builds: ["lanes"], recap: {"checks":3}, steps: [
     { title: "The active mask", stage: "scene" },
     { title: "When lanes disagree", challenge: "quiz", stage: "scene" },
     { title: "split and join", stage: "scene" },
@@ -492,14 +502,14 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Loops of different lengths", stage: "scene" },
     { title: "What divergence costs", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "warps", num: 38, title: "Hiding latency", blurb: "A memory that answers 8 cycles later: a scoreboard, several warps resident, a scheduler picking a ready one each cycle, and what each warp costs.", level: "Throughput", builds: ["simt","multicore"], recap: {"checks":3}, steps: [
+  { id: "warps", num: 39, title: "Hiding latency", blurb: "A memory that answers 8 cycles later: a scoreboard, several warps resident, a scheduler picking a ready one each cycle, and what each warp costs.", level: "Throughput", builds: ["simt","multicore"], recap: {"checks":3}, steps: [
     { title: "A memory that makes you wait", stage: "scene" },
     { title: "A scoreboard", challenge: "quiz", stage: "scene" },
     { title: "Many warps resident", stage: "scene" },
     { title: "Picking a ready warp", challenge: "quiz", stage: "scene" },
     { title: "Occupancy", stage: "widget" },
   ] },
-  { id: "feed", num: 39, title: "Feeding the lanes", blurb: "One memory port a line wide: coalescing, a banked shared memory and bank conflicts, a barrier, atomics; a reduction, a histogram and a tiled matrix multiply.", level: "Throughput", builds: ["warps","cache"], recap: {"checks":3}, steps: [
+  { id: "feed", num: 40, title: "Feeding the lanes", blurb: "One memory port a line wide: coalescing, a banked shared memory and bank conflicts, a barrier, atomics; a reduction, a histogram and a tiled matrix multiply.", level: "Throughput", builds: ["warps","cache"], recap: {"checks":3}, steps: [
     { title: "One port, a line wide", challenge: "quiz", stage: "widget" },
     { title: "Coalescing", stage: "scene" },
     { title: "Banks", challenge: "quiz", stage: "widget" },
@@ -507,7 +517,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Atomics", challenge: "quiz", stage: "scene" },
     { title: "Tiles", stage: "widget" },
   ] },
-  { id: "pixels", num: 40, title: "Pixels and triangles", blurb: "A framebuffer scanned out to the screen, double buffering and vsync; edge functions in fixed point, a rasterizer that walks a triangle in tiles, one pixel a cycle; a depth buffer and blending; your own drawing, cut into triangles.", level: "Throughput", builds: ["memory","muldiv"], recap: {"checks":3}, steps: [
+  { id: "pixels", num: 41, title: "Pixels and triangles", blurb: "A framebuffer scanned out to the screen, double buffering and vsync; edge functions in fixed point, a rasterizer that walks a triangle in tiles, one pixel a cycle; a depth buffer and blending; your own drawing, cut into triangles.", level: "Throughput", builds: ["memory","muldiv"], recap: {"checks":3}, steps: [
     { title: "A frame in memory", stage: "scene" },
     { title: "Inside a triangle", challenge: "quiz", stage: "widget" },
     { title: "Walking tiles", challenge: "quiz", stage: "scene" },
@@ -516,7 +526,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Your own picture", challenge: "quiz", stage: "scene" },
     { title: "The beam on a tube", stage: "widget" },
   ] },
-  { id: "graphics", num: 41, title: "The graphics pipeline", blurb: "A vertex kernel on the warp core, a command unit feeding the rasterizer, the frames double-buffered: a spinning triangle and a cube at gate level, and where the gates and cycles go.", level: "Throughput", builds: ["warps","feed","pixels"], recap: {"checks":3}, steps: [
+  { id: "graphics", num: 42, title: "The graphics pipeline", blurb: "A vertex kernel on the warp core, a command unit feeding the rasterizer, the frames double-buffered: a spinning triangle and a cube at gate level, and where the gates and cycles go.", level: "Throughput", builds: ["warps","feed","pixels"], recap: {"checks":3}, steps: [
     { title: "Vertices are a kernel", challenge: "quiz", stage: "scene" },
     { title: "The pipeline", challenge: "quiz", stage: "scene" },
     { title: "A spinning triangle", challenge: "quiz", stage: "scene" },
@@ -524,7 +534,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Texturing", challenge: "reach", stage: "scene" },
     { title: "A faster clear", challenge: "quiz", stage: "scene" },
   ] },
-  { id: "dram", num: 42, title: "Inside a DRAM", blurb: "A 1T1C array at transistor level: bit lines at VDD/2, charge sharing measured in millivolts, the sense amplifier that restores a destroyed row, leakage and refresh, the row buffer and DDR4 timings in cycles.", level: "Memory in depth", builds: ["latches","memory","cache"], recap: {"checks":3}, steps: [
+  { id: "dram", num: 43, title: "Inside a DRAM", blurb: "A 1T1C array at transistor level: bit lines at VDD/2, charge sharing measured in millivolts, the sense amplifier that restores a destroyed row, leakage and refresh, the row buffer and DDR4 timings in cycles.", level: "Memory in depth", builds: ["latches","memory","cache"], recap: {"checks":3}, steps: [
     { title: "An array of capacitors", challenge: "reach", stage: "scene" },
     { title: "The read, in slow motion", challenge: "reach", stage: "scene" },
     { title: "The sense amplifier", challenge: "quiz", stage: "scene" },
@@ -533,7 +543,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Rows, columns, banks", challenge: "quiz", stage: "widget" },
     { title: "Bursts and timings", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "memctrl", num: 43, title: "A memory controller", blurb: "Commands and their timing rules in gates: a controller that opens and closes rows, refreshes on time and serves the cache; open against closed page, address mapping and FR-FCFS, measured on the benchmarks.", level: "Memory in depth", builds: ["cache","dram"], recap: {"checks":3}, steps: [
+  { id: "memctrl", num: 44, title: "A memory controller", blurb: "Commands and their timing rules in gates: a controller that opens and closes rows, refreshes on time and serves the cache; open against closed page, address mapping and FR-FCFS, measured on the benchmarks.", level: "Memory in depth", builds: ["cache","dram"], recap: {"checks":3}, steps: [
     { title: "Commands", challenge: "reach", stage: "scene" },
     { title: "Open page or closed page", challenge: "quiz", stage: "widget" },
     { title: "Refresh", challenge: "quiz", stage: "scene" },
@@ -541,7 +551,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Banks and address mapping", challenge: "quiz", stage: "widget" },
     { title: "Reordering: FR-FCFS", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "flash", num: 44, title: "Flash", blurb: "The floating-gate transistor at switch level, programmed pulse by pulse and erased by the block; NOR against NAND arrays; and the translation layer that never overwrites: mapping, garbage collection, wear levelling, bad blocks.", level: "Memory in depth", builds: ["mosfet","memory"], recap: {"checks":3}, steps: [
+  { id: "flash", num: 45, title: "Flash", blurb: "The floating-gate transistor at switch level, programmed pulse by pulse and erased by the block; NOR against NAND arrays; and the translation layer that never overwrites: mapping, garbage collection, wear levelling, bad blocks.", level: "Memory in depth", builds: ["mosfet","memory"], recap: {"checks":3}, steps: [
     { title: "A gate that remembers", challenge: "quiz", stage: "scene" },
     { title: "The floating gate, up close", stage: "widget" },
     { title: "Program and erase", challenge: "reach", stage: "scene" },
@@ -550,7 +560,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Garbage, wear and bad blocks", challenge: "quiz", stage: "widget" },
     { title: "Bit errors and ECC", challenge: "reach", stage: "scene" },
   ] },
-  { id: "bus", num: 45, title: "Buses and DMA", blurb: "A valid / ready handshake, five channels and an address decoder, two masters and an arbiter, a DMA engine that copies while the CPU runs, a computer that boots from flash into RAM, or from a deck of punched cards, and one with a DRAM, a screen and a keyboard on the same bus: every part in gates.", level: "Memory in depth", builds: ["io","cache","multicore","memctrl","flash"], recap: {"checks":4}, steps: [
+  { id: "bus", num: 46, title: "Buses and DMA", blurb: "A valid / ready handshake, five channels and an address decoder, two masters and an arbiter, a DMA engine that copies while the CPU runs, a computer that boots from flash into RAM, or from a deck of punched cards, and one with a DRAM, a screen and a keyboard on the same bus: every part in gates.", level: "Memory in depth", builds: ["io","cache","multicore","memctrl","flash"], recap: {"checks":4}, steps: [
     { title: "A handshake", challenge: "reach", stage: "scene" },
     { title: "Five channels", challenge: "quiz", stage: "scene" },
     { title: "Two masters", challenge: "reach", stage: "scene" },
@@ -568,7 +578,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Decibels", challenge: "quiz", stage: "widget" },
     { title: "An estimate on one page", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "telegraph", num: 46, title: "Two machines, one wire", blurb: "Why moving a bit is harder than computing one: a telegraph line, the relay that repeats it, and the limits Nyquist and Shannon set.", level: "Communication", builds: ["message","relays","inverter"], recap: {"checks":3}, steps: [
+  { id: "telegraph", num: 47, title: "Two machines, one wire", blurb: "Why moving a bit is harder than computing one: a telegraph line, the relay that repeats it, and the limits Nyquist and Shannon set.", level: "Communication", builds: ["message","relays","inverter"], recap: {"checks":3}, steps: [
     { title: "Moving a bit", challenge: "quiz" },
     { title: "A line that fades", challenge: "quiz", stage: "widget" },
     { title: "The relay as a repeater", challenge: "quiz", stage: "scene" },
@@ -577,7 +587,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Shannon: what noise leaves", challenge: "quiz", stage: "widget" },
     { title: "The rest of the track", challenge: "quiz" },
   ] },
-  { id: "exchange", num: 47, title: "The telephone exchange", blurb: "How many people reach each other: a dial exchange from relays, circuit switching and what it costs in contacts.", level: "Communication", builds: ["relays","telegraph","latches"], recap: {"checks":3}, steps: [
+  { id: "exchange", num: 48, title: "The telephone exchange", blurb: "How many people reach each other: a dial exchange from relays, circuit switching and what it costs in contacts.", level: "Communication", builds: ["relays","telegraph","latches"], recap: {"checks":3}, steps: [
     { title: "Everyone to everyone", challenge: "quiz", stage: "widget" },
     { title: "Counting dial pulses", challenge: "reach", stage: "scene" },
     { title: "A stepping selector", challenge: "reach", stage: "scene" },
@@ -587,7 +597,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The busy tone", challenge: "quiz", stage: "widget" },
     { title: "Start-stop", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "wire", num: 48, title: "A wire is not a wire", blurb: "Between the driver's drain and the far pin: on-chip RC, repeaters, transmission lines, reflections, termination, differential pairs and an I/O pad.", level: "Communication", builds: ["inverter","telegraph","mosfet"], recap: {"checks":3}, steps: [
+  { id: "wire", num: 49, title: "A wire is not a wire", blurb: "Between the driver's drain and the far pin: on-chip RC, repeaters, transmission lines, reflections, termination, differential pairs and an I/O pad.", level: "Communication", builds: ["inverter","telegraph","mosfet"], recap: {"checks":3}, steps: [
     { title: "The driver and its load", challenge: "quiz", stage: "widget" },
     { title: "A long wire on a chip", challenge: "quiz", stage: "widget" },
     { title: "Repeaters", challenge: "quiz", stage: "widget" },
@@ -598,7 +608,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "An I/O pad, and where the transistors stop", challenge: "reach", stage: "scene" },
     { title: "From the pad to the pin", stage: "widget" },
   ] },
-  { id: "clocks", num: 49, title: "Crossing clocks", blurb: "When the receiver may look: noise margins, a Schmitt trigger, metastability, a two-flop synchronizer and an asynchronous FIFO.", level: "Communication", builds: ["inverter","latches","wire"], recap: {"checks":3}, steps: [
+  { id: "clocks", num: 50, title: "Crossing clocks", blurb: "When the receiver may look: noise margins, a Schmitt trigger, metastability, a two-flop synchronizer and an asynchronous FIFO.", level: "Communication", builds: ["inverter","latches","wire"], recap: {"checks":3}, steps: [
     { title: "What a receiver decides", challenge: "quiz", stage: "widget" },
     { title: "A Schmitt trigger", challenge: "quiz", stage: "scene" },
     { title: "Noise on a slow edge", challenge: "quiz", stage: "widget" },
@@ -609,7 +619,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A bus is not synchronized bit by bit", challenge: "quiz", stage: "widget" },
     { title: "An asynchronous FIFO", challenge: "reach", stage: "scene" },
   ] },
-  { id: "uart", num: 50, title: "A UART", blurb: "How two clocks agree for one byte: a baud divider, shift registers, 16× oversampling, framing errors, FIFOs, and two computers chatting over a wire.", level: "Communication", builds: ["telegraph","exchange","clocks","bus","wire"], recap: {"checks":3}, steps: [
+  { id: "uart", num: 51, title: "A UART", blurb: "How two clocks agree for one byte: a baud divider, shift registers, 16× oversampling, framing errors, FIFOs, and two computers chatting over a wire.", level: "Communication", builds: ["telegraph","exchange","clocks","bus","wire"], recap: {"checks":3}, steps: [
     { title: "One byte, no clock", challenge: "quiz", stage: "widget" },
     { title: "The transmitter", challenge: "quiz", stage: "scene" },
     { title: "The baud generator", challenge: "quiz", stage: "widget" },
@@ -619,7 +629,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A UART on the bus", challenge: "reach", stage: "scene" },
     { title: "Two computers chat", challenge: "reach", stage: "scene" },
   ] },
-  { id: "spi", num: 51, title: "SPI and I²C", blurb: "A shared clock, or many devices on two wires: SPI's modes, I²C at switch level with open drain, arbitration and clock stretching.", level: "Communication", builds: ["uart","clocks","wire","inverter"], recap: {"checks":3}, steps: [
+  { id: "spi", num: 52, title: "SPI and I²C", blurb: "A shared clock, or many devices on two wires: SPI's modes, I²C at switch level with open drain, arbitration and clock stretching.", level: "Communication", builds: ["uart","clocks","wire","inverter"], recap: {"checks":3}, steps: [
     { title: "Send the clock too", challenge: "quiz", stage: "widget" },
     { title: "SPI: a ring of shift registers", challenge: "quiz", stage: "scene" },
     { title: "Four modes", challenge: "quiz", stage: "widget" },
@@ -630,7 +640,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Arbitration: two controllers at once", challenge: "quiz", stage: "scene" },
     { title: "Three ways to move a byte", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "signals", num: 52, title: "Signals and spectrum", blurb: "What a signal is made of: Fourier from a square wave up, band against pulse width, FIR filters with one in gates, sampling and aliasing, rounding, and the mixer that moves a band.", level: "Communication", builds: ["message","wire","telegraph","adders","registers"], recap: {"checks":3}, steps: [
+  { id: "signals", num: 53, title: "Signals and spectrum", blurb: "What a signal is made of: Fourier from a square wave up, band against pulse width, FIR filters with one in gates, sampling and aliasing, rounding, and the mixer that moves a band.", level: "Communication", builds: ["message","wire","telegraph","adders","registers"], recap: {"checks":3}, steps: [
     { title: "A wave is a sum of sines", challenge: "quiz", stage: "widget" },
     { title: "The same numbers in frequency", challenge: "quiz", stage: "widget" },
     { title: "Narrow in time, wide in frequency", challenge: "quiz", stage: "widget" },
@@ -640,7 +650,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Rounding to a number", challenge: "quiz", stage: "widget" },
     { title: "A mixer moves a band", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "noise", num: 53, title: "Noise and detection", blurb: "How faint a signal can be: thermal noise, a decision against it, the matched filter, Eb/N0, what more band buys, and Shannon's limit derived and then met by real random codes.", level: "Communication", builds: ["message","signals","telegraph"], recap: {"checks":3}, steps: [
+  { id: "noise", num: 54, title: "Noise and detection", blurb: "How faint a signal can be: thermal noise, a decision against it, the matched filter, Eb/N0, what more band buys, and Shannon's limit derived and then met by real random codes.", level: "Communication", builds: ["message","signals","telegraph"], recap: {"checks":3}, steps: [
     { title: "The floor", challenge: "quiz", stage: "widget" },
     { title: "A chain: who pays", challenge: "quiz", stage: "widget" },
     { title: "A decision", challenge: "quiz", stage: "widget" },
@@ -649,7 +659,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Power or band", challenge: "quiz", stage: "widget" },
     { title: "Shannon's argument, and his code", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "modem", num: 54, title: "Modems", blurb: "How bits cross a line built for voices: FSK from an oscillator in gates, then phase and amplitude, the constellation, and how 300 b/s became 56 kb/s against Shannon's limit.", level: "Communication", builds: ["telegraph","adders","registers","wire","signals","noise"], recap: {"checks":3}, steps: [
+  { id: "modem", num: 55, title: "Modems", blurb: "How bits cross a line built for voices: FSK from an oscillator in gates, then phase and amplitude, the constellation, and how 300 b/s became 56 kb/s against Shannon's limit.", level: "Communication", builds: ["telegraph","adders","registers","wire","signals","noise"], recap: {"checks":3}, steps: [
     { title: "A channel built for voices", challenge: "quiz", stage: "widget" },
     { title: "Tones: FSK", challenge: "quiz", stage: "widget" },
     { title: "An oscillator from an adder", challenge: "quiz", stage: "scene" },
@@ -658,7 +668,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Noise decides how many points", challenge: "quiz", stage: "widget" },
     { title: "300 b/s to 56 kb/s", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "carriers", num: 55, title: "Many carriers", blurb: "Why split a channel into thousands of tones: FFT butterflies and a streaming pipeline in gates, the cyclic prefix, water-filling, and what ADSL, Wi-Fi and 5G each chose.", level: "Communication", builds: ["modem","signals","noise","adders","registers","fastadd"], recap: {"checks":3}, steps: [
+  { id: "carriers", num: 56, title: "Many carriers", blurb: "Why split a channel into thousands of tones: FFT butterflies and a streaming pipeline in gates, the cyclic prefix, water-filling, and what ADSL, Wi-Fi and 5G each chose.", level: "Communication", builds: ["modem","signals","noise","adders","registers","fastadd"], recap: {"checks":3}, steps: [
     { title: "Many tones, one FFT", challenge: "quiz", stage: "widget" },
     { title: "The butterfly", challenge: "reach", stage: "scene" },
     { title: "Eight points, in gates", challenge: "reach", stage: "scene" },
@@ -669,7 +679,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What breaks a block of tones", challenge: "quiz", stage: "widget" },
     { title: "The same idea, everywhere", challenge: "quiz" },
   ] },
-  { id: "serial", num: 56, title: "Fast serial links", blurb: "No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then the eye, equalization, PAM4 and fibre.", level: "Communication", builds: ["clocks","uart","wire","signals","noise","carriers"], recap: {"checks":3}, steps: [
+  { id: "serial", num: 57, title: "Fast serial links", blurb: "No clock travels with the data: Manchester, 8b/10b and running disparity, a scrambler, a SerDes and bang-bang clock recovery in gates, then the eye, equalization, PAM4 and fibre.", level: "Communication", builds: ["clocks","uart","wire","signals","noise","carriers"], recap: {"checks":3}, steps: [
     { title: "No clock on the wire", challenge: "quiz", stage: "widget" },
     { title: "8b/10b and running disparity", challenge: "quiz", stage: "widget" },
     { title: "Scrambling instead", challenge: "quiz", stage: "widget" },
@@ -680,7 +690,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "PAM4", challenge: "quiz", stage: "widget" },
     { title: "Fibre", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "glass", num: 57, title: "Light in glass", blurb: "How bits cross an ocean: why glass, what keeps light in it, modes, chromatic dispersion, wavelength multiplexing, amplifiers, coherent detection and the Kerr limit. Models, labelled as models.", level: "Communication", builds: ["serial","modem","carriers"], recap: {"checks":3}, steps: [
+  { id: "glass", num: 58, title: "Light in glass", blurb: "How bits cross an ocean: why glass, what keeps light in it, modes, chromatic dispersion, wavelength multiplexing, amplifiers, coherent detection and the Kerr limit. Models, labelled as models.", level: "Communication", builds: ["serial","modem","carriers"], recap: {"checks":3}, steps: [
     { title: "Why glass", challenge: "quiz", stage: "widget" },
     { title: "What keeps the light in", challenge: "quiz", stage: "widget" },
     { title: "Modes", challenge: "quiz", stage: "widget" },
@@ -690,7 +700,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A receiver that sees the field", challenge: "quiz", stage: "widget" },
     { title: "Budgeting an ocean", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "errors", num: 58, title: "When bits go wrong", blurb: "Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, and forward error correction as a trade against retransmission.", level: "Communication", builds: ["cache","registers","noise","serial"], recap: {"checks":3}, steps: [
+  { id: "errors", num: 59, title: "When bits go wrong", blurb: "Parity and Hamming, CRC-32 in gates a bit and a byte a clock, framing, stop-and-wait and sliding windows, and forward error correction as a trade against retransmission.", level: "Communication", builds: ["cache","registers","noise","serial"], recap: {"checks":3}, steps: [
     { title: "One extra bit", challenge: "quiz", stage: "widget" },
     { title: "Locating the error", challenge: "reach", stage: "scene" },
     { title: "A remainder as a check", challenge: "quiz", stage: "widget" },
@@ -701,7 +711,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Asking again", challenge: "quiz", stage: "widget" },
     { title: "Correcting instead of asking", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "codes", num: 59, title: "Codes near the limit", blurb: "How close to Shannon can we get: Viterbi and a whole Reed-Solomon decoder in gates, interleaving, two codes together, and LDPC decoded in the page against its computed threshold.", level: "Communication", builds: ["noise","errors","modem","carriers"], recap: {"checks":3}, steps: [
+  { id: "codes", num: 60, title: "Codes near the limit", blurb: "How close to Shannon can we get: Viterbi and a whole Reed-Solomon decoder in gates, interleaving, two codes together, and LDPC decoded in the page against its computed threshold.", level: "Communication", builds: ["noise","errors","modem","carriers"], recap: {"checks":3}, steps: [
     { title: "A code with memory", challenge: "reach", stage: "scene" },
     { title: "The Viterbi decoder", challenge: "reach", stage: "scene" },
     { title: "Reed-Solomon: errors in bytes", challenge: "reach", stage: "scene" },
@@ -715,7 +725,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The waterfall", challenge: "quiz", stage: "widget" },
     { title: "What near the limit costs", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "pcie", num: 60, title: "PCIe and USB", blurb: "The packet buses inside the box: PCIe's TLPs, credits, Ack, Nak and a replay buffer, and link training in gates; USB's tokens, CRCs and enumeration.", level: "Communication", builds: ["serial","clocks","errors","codes","bus","uart"], recap: {"checks":3}, steps: [
+  { id: "pcie", num: 61, title: "PCIe and USB", blurb: "The packet buses inside the box: PCIe's TLPs, credits, Ack, Nak and a replay buffer, and link training in gates; USB's tokens, CRCs and enumeration.", level: "Communication", builds: ["serial","clocks","errors","codes","bus","uart"], recap: {"checks":3}, steps: [
     { title: "From a bus to a lane", challenge: "quiz", stage: "widget" },
     { title: "A packet, byte by byte", challenge: "quiz", stage: "widget" },
     { title: "Credits: never send what will not fit", challenge: "reach", stage: "scene" },
@@ -727,7 +737,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Enumeration: a stranger introduces itself", challenge: "reach", stage: "scene" },
     { title: "Two answers to one question", challenge: "quiz" },
   ] },
-  { id: "ethernet", num: 61, title: "Ethernet", blurb: "Who talks now, and to whom: addresses and the FCS, a MAC in gates, collisions, binary exponential backoff, and why a minimum frame exists.", level: "Communication", builds: ["pcie","uart","wire","errors","serial"], recap: {"checks":3}, steps: [
+  { id: "ethernet", num: 62, title: "Ethernet", blurb: "Who talks now, and to whom: addresses and the FCS, a MAC in gates, collisions, binary exponential backoff, and why a minimum frame exists.", level: "Communication", builds: ["pcie","uart","wire","errors","serial"], recap: {"checks":3}, steps: [
     { title: "Many machines, one wire", challenge: "quiz", stage: "widget" },
     { title: "The transmitter", challenge: "quiz", stage: "scene" },
     { title: "The receiver", challenge: "quiz", stage: "scene" },
@@ -738,7 +748,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A segment", challenge: "reach", stage: "scene" },
     { title: "Where this went" },
   ] },
-  { id: "switch", num: 62, title: "A switch", blurb: "Can everyone talk at once: address learning, a crossbar and its arbiter, store-and-forward against cut-through, and head-of-line blocking.", level: "Communication", builds: ["ethernet","exchange","multicore"], recap: {"checks":3}, steps: [
+  { id: "switch", num: 63, title: "A switch", blurb: "Can everyone talk at once: address learning, a crossbar and its arbiter, store-and-forward against cut-through, and head-of-line blocking.", level: "Communication", builds: ["ethernet","exchange","multicore"], recap: {"checks":3}, steps: [
     { title: "Everyone at once", challenge: "quiz", stage: "widget" },
     { title: "Learning", challenge: "reach", stage: "scene" },
     { title: "The table's price", challenge: "quiz", stage: "widget" },
@@ -748,7 +758,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A switch on a bench", challenge: "quiz", stage: "scene" },
     { title: "What full duplex changed", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "network", num: 63, title: "Computers on a network", blurb: "A NIC with descriptor rings and DMA, a driver in assembly, and ARP, IPv4, ICMP and UDP written in Python and compiled live: two computers and a switch, and a ping across them on the gates.", level: "Communication", builds: ["pcie","ethernet","switch","bus","python"], recap: {"checks":3}, steps: [
+  { id: "network", num: 64, title: "Computers on a network", blurb: "A NIC with descriptor rings and DMA, a driver in assembly, and ARP, IPv4, ICMP and UDP written in Python and compiled live: two computers and a switch, and a ping across them on the gates.", level: "Communication", builds: ["pcie","ethernet","switch","bus","python"], recap: {"checks":3}, steps: [
     { title: "How software reaches the wire", stage: "widget" },
     { title: "Registers and rings", challenge: "quiz", stage: "widget" },
     { title: "The NIC in gates", challenge: "reach", stage: "scene" },
@@ -760,7 +770,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Ping across the wire", challenge: "reach", stage: "scene" },
     { title: "The cost of a packet", stage: "widget" },
   ] },
-  { id: "router", num: 64, title: "A router", blurb: "Past one Ethernet: IPv4's bytes, longest-prefix match as a trie in RAM, a fast path in gates that rewrites four fields, a slow path for the rest, and how routers fill their tables.", level: "Communication", builds: ["ethernet","switch","network"], recap: {"checks":3}, steps: [
+  { id: "router", num: 65, title: "A router", blurb: "Past one Ethernet: IPv4's bytes, longest-prefix match as a trie in RAM, a fast path in gates that rewrites four fields, a slow path for the rest, and how routers fill their tables.", level: "Communication", builds: ["ethernet","switch","network"], recap: {"checks":3}, steps: [
     { title: "An address with a shape", stage: "widget" },
     { title: "Longest prefix wins", challenge: "quiz", stage: "widget" },
     { title: "The fast path in gates", challenge: "reach", stage: "scene" },
@@ -770,7 +780,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Link state: everyone holds the map", stage: "widget" },
     { title: "What one engine can carry", stage: "widget" },
   ] },
-  { id: "tcp", num: 65, title: "TCP", blurb: "A reliable stream over a network that loses, repeats and reorders: the handshake, sequence numbers, the window, a timer that learns, AIMD's sawtooth, and queues that fill, in Python compiled for our CPU.", level: "Communication", builds: ["errors","network","router","ethernet"], recap: {"checks":3}, steps: [
+  { id: "tcp", num: 66, title: "TCP", blurb: "A reliable stream over a network that loses, repeats and reorders: the handshake, sequence numbers, the window, a timer that learns, AIMD's sawtooth, and queues that fill, in Python compiled for our CPU.", level: "Communication", builds: ["errors","network","router","ethernet"], recap: {"checks":3}, steps: [
     { title: "A stream over datagrams", stage: "widget" },
     { title: "Three segments to begin", challenge: "quiz", stage: "widget" },
     { title: "Numbers that count bytes", challenge: "quiz", stage: "widget" },
@@ -781,7 +791,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The same rules, on our CPU", stage: "widget" },
     { title: "A window into the gates", challenge: "reach", stage: "scene" },
   ] },
-  { id: "queues", num: 66, title: "Queues and congestion", blurb: "Why a fast network feels slow: delay from load alone, bufferbloat, why TCP halves, CUBIC and its curve, RED, CoDel and fair queueing, ECN, and BBR against CUBIC on one link, on a labelled model of a bottleneck.", level: "Communication", builds: ["tcp","switch","router"], recap: {"checks":3}, steps: [
+  { id: "queues", num: 67, title: "Queues and congestion", blurb: "Why a fast network feels slow: delay from load alone, bufferbloat, why TCP halves, CUBIC and its curve, RED, CoDel and fair queueing, ECN, and BBR against CUBIC on one link, on a labelled model of a bottleneck.", level: "Communication", builds: ["tcp","switch","router"], recap: {"checks":3}, steps: [
     { title: "Delay from load alone", challenge: "quiz", stage: "widget" },
     { title: "Bufferbloat, measured", challenge: "quiz", stage: "widget" },
     { title: "Why halve", challenge: "quiz", stage: "widget" },
@@ -793,7 +803,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "CUBIC meets BBR", challenge: "quiz", stage: "widget" },
     { title: "Choosing for a link", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "secret", num: 67, title: "Keeping it secret", blurb: "The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Then AES and SHA-256 in gates, and how strangers share a secret in public: key exchange and a TLS 1.3 handshake, run by our CPU against RFC 8448's recorded server.", level: "Communication", builds: ["python","cpu"], recap: {"checks":6}, steps: [
+  { id: "secret", num: 68, title: "Keeping it secret", blurb: "The Enigma M4 in brass and in gates, why it broke, and what that taught modern ciphers. Then AES and SHA-256 in gates, and how strangers share a secret in public: key exchange and a TLS 1.3 handshake, run by our CPU against RFC 8448's recorded server.", level: "Communication", builds: ["python","cpu"], recap: {"checks":6}, steps: [
     { title: "A secret kept in wires", stage: "widget" },
     { title: "A permutation you can read", stage: "widget" },
     { title: "The same machine in gates", stage: "scene" },
@@ -816,7 +826,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A TLS 1.3 handshake", stage: "widget" },
     { title: "What it all costs", stage: "widget" },
   ] },
-  { id: "path", num: 68, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","queues","secret","router","network","ethernet"], recap: {"checks":4}, steps: [
+  { id: "path", num: 69, title: "The internet path", blurb: "What really happens when you fetch a page: BGP between networks that pay each other, DNS, traceroute, every delay computed, and one frame carried through the gates, router by router, on an invented network.", level: "Communication", builds: ["tcp","queues","secret","router","network","ethernet"], recap: {"checks":4}, steps: [
     { title: "A network of networks", stage: "widget" },
     { title: "BGP: the whole path, and who pays", challenge: "quiz", stage: "widget" },
     { title: "A name, then an address", challenge: "quiz", stage: "widget" },
@@ -826,7 +836,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A page", stage: "widget" },
     { title: "Many objects: HTTP/2 and QUIC", stage: "widget" },
   ] },
-  { id: "radio", num: 69, title: "Radio", blurb: "How a bit crosses empty air: antennas, path loss and the link budget, mixers and software radio, multipath and fading, and what more antennas buy. Models, labelled as models.", level: "Communication", builds: ["noise","modem","carriers","serial","errors","codes"], recap: {"checks":3}, steps: [
+  { id: "radio", num: 70, title: "Radio", blurb: "How a bit crosses empty air: antennas, path loss and the link budget, mixers and software radio, multipath and fading, and what more antennas buy. Models, labelled as models.", level: "Communication", builds: ["noise","modem","carriers","serial","errors","codes"], recap: {"checks":3}, steps: [
     { title: "An antenna", challenge: "quiz", stage: "widget" },
     { title: "Path loss", challenge: "quiz", stage: "widget" },
     { title: "The link budget", challenge: "quiz", stage: "widget" },
@@ -836,7 +846,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Fading", challenge: "quiz", stage: "widget" },
     { title: "What more antennas buy", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "wifi", num: 70, title: "Wi-Fi", blurb: "Who talks when nobody can hear everybody? CSMA/CA with its timing in gates, the contention window and Bianchi's formula, the hidden terminal and RTS / CTS, rate adaptation, airtime, MIMO.", level: "Communication", builds: ["radio","ethernet","modem","pcie"], recap: {"checks":3}, steps: [
+  { id: "wifi", num: 71, title: "Wi-Fi", blurb: "Who talks when nobody can hear everybody? CSMA/CA with its timing in gates, the contention window and Bianchi's formula, the hidden terminal and RTS / CTS, rate adaptation, airtime, MIMO.", level: "Communication", builds: ["radio","ethernet","modem","pcie"], recap: {"checks":3}, steps: [
     { title: "A channel you cannot listen to", challenge: "quiz", stage: "scene" },
     { title: "The rules, in microseconds", challenge: "reach", stage: "scene" },
     { title: "How many can share", challenge: "quiz", stage: "widget" },
@@ -845,7 +855,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Where the airtime goes", challenge: "quiz", stage: "widget" },
     { title: "More antennas, more streams", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "cellular", num: 71, title: "Cellular", blurb: "How thousands share one mast: cells and reuse, the resource grid, schedulers that exploit fading, handover, beamforming, and what 5G changed. Models, labelled as models.", level: "Communication", builds: ["radio","wifi","carriers","path"], recap: {"checks":3}, steps: [
+  { id: "cellular", num: 72, title: "Cellular", blurb: "How thousands share one mast: cells and reuse, the resource grid, schedulers that exploit fading, handover, beamforming, and what 5G changed. Models, labelled as models.", level: "Communication", builds: ["radio","wifi","carriers","path"], recap: {"checks":3}, steps: [
     { title: "Cells and reuse", challenge: "quiz", stage: "widget" },
     { title: "A grid in time and frequency", challenge: "quiz", stage: "widget" },
     { title: "Who gets the next millisecond", challenge: "quiz", stage: "widget" },
@@ -853,7 +863,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Many antennas", challenge: "quiz", stage: "widget" },
     { title: "What 5G changed", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "datacentre", num: 72, title: "Inside the data centre", blurb: "How a hundred thousand machines talk: the exchange's Clos network folded in Ethernet, ECMP, incast, DCTCP, RDMA, lossless Ethernet and its deadlock, and the tail at scale, on labelled models with closed forms.", level: "Communication", builds: ["exchange","switch","ethernet","tcp","queues"], recap: {"checks":3}, steps: [
+  { id: "datacentre", num: 73, title: "Inside the data centre", blurb: "How a hundred thousand machines talk: the exchange's Clos network folded in Ethernet, ECMP, incast, DCTCP, RDMA, lossless Ethernet and its deadlock, and the tail at scale, on labelled models with closed forms.", level: "Communication", builds: ["exchange","switch","ethernet","tcp","queues"], recap: {"checks":3}, steps: [
     { title: "The exchange, folded", challenge: "quiz", stage: "widget" },
     { title: "A hash for a route", challenge: "quiz", stage: "widget" },
     { title: "Incast", challenge: "quiz", stage: "widget" },
@@ -863,7 +873,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "When lossless stops", challenge: "quiz", stage: "widget" },
     { title: "The tail at scale", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "bench", num: 73, title: "The expert's bench", blurb: "Given a symptom, find the cause: a method, then real faults injected into the book's own models, read from captures, eyes, counters and traces.", level: "Communication", builds: ["tcp","path","ethernet","switch","serial","uart","noise","radio","wifi","cellular","datacentre"], recap: {"checks":3}, steps: [
+  { id: "bench", num: 74, title: "The expert's bench", blurb: "Given a symptom, find the cause: a method, then real faults injected into the book's own models, read from captures, eyes, counters and traces.", level: "Communication", builds: ["tcp","path","ethernet","switch","serial","uart","noise","radio","wifi","cellular","datacentre"], recap: {"checks":3}, steps: [
     { title: "A method", challenge: "quiz", stage: "widget" },
     { title: "Four transfers that crawl", challenge: "quiz", stage: "widget" },
     { title: "Reading an eye", challenge: "quiz", stage: "widget" },
@@ -874,7 +884,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Reading a specification", challenge: "quiz", stage: "widget" },
     { title: "On your own", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "fixed", num: 74, title: "Numbers that fit", blurb: "What a signal processor does when a sum will not fit: Q formats, wrap against saturate with one in gates, rounding and its bias, guard bits, and where to put a gain.", level: "Signal processing", builds: ["binary","muldiv","signals","noise","carriers","float"], recap: {"checks":3}, steps: [
+  { id: "fixed", num: 75, title: "Numbers that fit", blurb: "What a signal processor does when a sum will not fit: Q formats, wrap against saturate with one in gates, rounding and its bias, guard bits, and where to put a gain.", level: "Signal processing", builds: ["binary","muldiv","signals","noise","carriers","float"], recap: {"checks":3}, steps: [
     { title: "A word and its point", challenge: "quiz", stage: "widget" },
     { title: "Wrap or saturate", challenge: "quiz", stage: "widget" },
     { title: "A saturating adder", challenge: "reach", stage: "scene" },
@@ -884,7 +894,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Where the gain goes", challenge: "quiz", stage: "widget" },
     { title: "Fixed or floating", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "zplane", num: 75, title: "The z-plane", blurb: "One picture that holds a filter: difference equations and convolution, the z-transform, zeros that remove a frequency, poles that ring, stability, and why two filters with the same gain can sound different.", level: "Signal processing", builds: ["signals","fixed"], recap: {"checks":3}, steps: [
+  { id: "zplane", num: 76, title: "The z-plane", blurb: "One picture that holds a filter: difference equations and convolution, the z-transform, zeros that remove a frequency, poles that ring, stability, and why two filters with the same gain can sound different.", level: "Signal processing", builds: ["signals","fixed"], recap: {"checks":3}, steps: [
     { title: "An equation with a memory", challenge: "quiz", stage: "widget" },
     { title: "Slide, multiply, add", challenge: "quiz", stage: "widget" },
     { title: "A delay is z⁻¹", challenge: "quiz", stage: "widget" },
@@ -893,7 +903,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Inside the circle", challenge: "quiz", stage: "widget" },
     { title: "Same gain, different delay", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "spectrum", num: 76, title: "Measuring a spectrum", blurb: "Why a pure tone shows a skirt: leakage, windows and what they trade, resolution against the number of samples, spectrograms, fast convolution by overlap-save, a Goertzel cell in gates decoding a keypad, and the FFT as a program, made fast step by step.", level: "Signal processing", builds: ["signals","carriers","fixed","zplane","python","pipeline","muldiv"], recap: {"checks":3}, steps: [
+  { id: "spectrum", num: 77, title: "Measuring a spectrum", blurb: "Why a pure tone shows a skirt: leakage, windows and what they trade, resolution against the number of samples, spectrograms, fast convolution by overlap-save, a Goertzel cell in gates decoding a keypad, and the FFT as a program, made fast step by step.", level: "Signal processing", builds: ["signals","carriers","fixed","zplane","python","pipeline","muldiv"], recap: {"checks":3}, steps: [
     { title: "A tone that is not a line", challenge: "quiz", stage: "widget" },
     { title: "A window is a choice of skirt", challenge: "quiz", stage: "widget" },
     { title: "What the skirt hides", challenge: "quiz", stage: "widget" },
@@ -907,7 +917,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Making it fast", challenge: "quiz", stage: "scene" },
     { title: "Real input, half the work", challenge: "quiz", stage: "scene" },
   ] },
-  { id: "firdesign", num: 77, title: "FIR design", blurb: "How few taps meet a mask: linear phase, windows, Parks–McClellan, taps as words, folding, constants in signed digits, and one multiplier shared over the taps in gates.", level: "Signal processing", builds: ["signals","zplane","fixed","spectrum","muldiv"], recap: {"checks":3}, steps: [
+  { id: "firdesign", num: 78, title: "FIR design", blurb: "How few taps meet a mask: linear phase, windows, Parks–McClellan, taps as words, folding, constants in signed digits, and one multiplier shared over the taps in gates.", level: "Signal processing", builds: ["signals","zplane","fixed","spectrum","muldiv"], recap: {"checks":3}, steps: [
     { title: "A mask, and mirror-image taps", challenge: "quiz", stage: "widget" },
     { title: "The window method", challenge: "quiz", stage: "widget" },
     { title: "Parks–McClellan", challenge: "quiz", stage: "widget" },
@@ -917,7 +927,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "One multiplier, N clocks", challenge: "reach", stage: "scene" },
     { title: "One mask, four ways to build it", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "iir", num: 78, title: "IIR and stability", blurb: "What feedback buys and what it can break: the bilinear transform, poles that can only sit on a lattice, direct form against sections, a biquad in gates and a limit cycle it will not stop making, and how to order and scale sections.", level: "Signal processing", builds: ["zplane","firdesign","fixed","muldiv"], recap: {"checks":3}, steps: [
+  { id: "iir", num: 79, title: "IIR and stability", blurb: "What feedback buys and what it can break: the bilinear transform, poles that can only sit on a lattice, direct form against sections, a biquad in gates and a limit cycle it will not stop making, and how to order and scale sections.", level: "Signal processing", builds: ["zplane","firdesign","fixed","muldiv"], recap: {"checks":3}, steps: [
     { title: "What feedback buys", challenge: "quiz", stage: "widget" },
     { title: "From an analog filter to a digital one", challenge: "quiz", stage: "widget" },
     { title: "Where a pole is allowed to sit", challenge: "quiz", stage: "widget" },
@@ -927,7 +937,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What removes a limit cycle", challenge: "quiz", stage: "widget" },
     { title: "Sections in a cascade", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "multirate", num: 79, title: "Changing the rate", blurb: "How do you filter at a thousandth of the price? Decimation, interpolation, polyphase, half-band and CIC filters, with a CIC and a polyphase decimator in gates and their register growth measured.", level: "Signal processing", builds: ["signals","fixed","firdesign","muldiv","radio"], recap: {"checks":3}, steps: [
+  { id: "multirate", num: 80, title: "Changing the rate", blurb: "How do you filter at a thousandth of the price? Decimation, interpolation, polyphase, half-band and CIC filters, with a CIC and a polyphase decimator in gates and their register growth measured.", level: "Signal processing", builds: ["signals","fixed","firdesign","muldiv","radio"], recap: {"checks":3}, steps: [
     { title: "Most of the samples are not needed", challenge: "quiz" },
     { title: "Throwing samples away", challenge: "quiz", stage: "widget" },
     { title: "Why compute what you throw away?", challenge: "quiz", stage: "widget" },
@@ -938,7 +948,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A CIC in gates", challenge: "reach", stage: "scene" },
     { title: "The whole job, priced", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "cordic", num: 80, title: "Turning by shifting", blurb: "Can you rotate with no multiplier? CORDIC: a vector turned by adding shifted copies of itself, iterative and pipelined in gates, with sine, arctangent and magnitude, against a ROM of sines.", level: "Signal processing", builds: ["muldiv","modem","signals","adders"], recap: {"checks":3}, steps: [
+  { id: "cordic", num: 81, title: "Turning by shifting", blurb: "Can you rotate with no multiplier? CORDIC: a vector turned by adding shifted copies of itself, iterative and pipelined in gates, with sine, arctangent and magnitude, against a ROM of sines.", level: "Signal processing", builds: ["muldiv","modem","signals","adders"], recap: {"checks":3}, steps: [
     { title: "A rotation is four multiplications", challenge: "quiz" },
     { title: "One way or the other", challenge: "quiz", stage: "widget" },
     { title: "The gain nobody can avoid", challenge: "quiz", stage: "widget" },
@@ -947,7 +957,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What the words buy", challenge: "quiz", stage: "widget" },
     { title: "Against a table", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "mac", num: 81, title: "A MAC on the RV32", blurb: "What is one instruction worth? A multiply-accumulate unit in gates, four instructions on custom-2 and a 40-bit accumulator, then four filters measured on five machines: software multiply, RV32IM, mac, mac2 and mac2 unrolled.", level: "Signal processing", builds: ["fixed","firdesign","muldiv","cpu","widths"], recap: {"checks":3}, steps: [
+  { id: "mac", num: 82, title: "A MAC on the RV32", blurb: "What is one instruction worth? A multiply-accumulate unit in gates, four instructions on custom-2 and a 40-bit accumulator, then four filters measured on five machines: software multiply, RV32IM, mac, mac2 and mac2 unrolled.", level: "Signal processing", builds: ["fixed","firdesign","muldiv","cpu","widths"], recap: {"checks":3}, steps: [
     { title: "What a multiply costs a filter", challenge: "quiz", stage: "widget" },
     { title: "The MAC unit, in gates", challenge: "reach", stage: "scene" },
     { title: "Four instructions on custom-2", challenge: "quiz", stage: "scene" },
@@ -957,7 +967,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Pairs, unrolling, and the alignment trap", challenge: "quiz", stage: "widget" },
     { title: "The measured table", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "dspcore", num: 82, title: "A DSP core", blurb: "What does a processor look like when the loop is the point? A small core of our own in gates: two memories read in one clock, address generators that step as they are read, a loop with no branch, and the MAC. Its filters, an FFT, and a measured comparison with the RV32 machines.", level: "Signal processing", builds: ["mac","cpu","carriers","fixed","firdesign","spectrum"], recap: {"checks":3}, steps: [
+  { id: "dspcore", num: 83, title: "A DSP core", blurb: "What does a processor look like when the loop is the point? A small core of our own in gates: two memories read in one clock, address generators that step as they are read, a loop with no branch, and the MAC. Its filters, an FFT, and a measured comparison with the RV32 machines.", level: "Signal processing", builds: ["mac","cpu","carriers","fixed","firdesign","spectrum"], recap: {"checks":3}, steps: [
     { title: "What a loop costs", challenge: "quiz", stage: "widget" },
     { title: "Two memories, two buses", challenge: "reach", stage: "scene" },
     { title: "Address generators", challenge: "quiz", stage: "widget" },
@@ -968,7 +978,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Against the RV32 machines", challenge: "quiz", stage: "widget" },
     { title: "The same FFT on both", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "converters", num: 83, title: "Converters", blurb: "How does one bit make 16? Flash, SAR and R-2R as models, what a shaky clock costs, and sigma-delta in gates with a CIC decimating its bits, effective bits measured.", level: "Signal processing", builds: ["signals","noise","zplane","multirate","fixed"], recap: {"checks":3}, steps: [
+  { id: "converters", num: 84, title: "Converters", blurb: "How does one bit make 16? Flash, SAR and R-2R as models, what a shaky clock costs, and sigma-delta in gates with a CIC decimating its bits, effective bits measured.", level: "Signal processing", builds: ["signals","noise","zplane","multirate","fixed"], recap: {"checks":3}, steps: [
     { title: "What a converter is judged by", challenge: "quiz" },
     { title: "Compare, and compare again", challenge: "quiz", stage: "widget" },
     { title: "The way back: a ladder", challenge: "quiz", stage: "widget" },
@@ -977,7 +987,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The loop in gates, and its CIC", challenge: "reach", stage: "scene" },
     { title: "Many bits from one", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "adaptive", num: 84, title: "Filters that learn", blurb: "How do you cancel an echo you cannot measure? The Wiener solution, LMS and NLMS, an echo canceller and an equalizer you can hear and see converge, and an LMS tap in gates.", level: "Signal processing", builds: ["noise","serial","zplane","muldiv","converters"], recap: {"checks":3}, steps: [
+  { id: "adaptive", num: 85, title: "Filters that learn", blurb: "How do you cancel an echo you cannot measure? The Wiener solution, LMS and NLMS, an echo canceller and an equalizer you can hear and see converge, and an LMS tap in gates.", level: "Signal processing", builds: ["noise","serial","zplane","muldiv","converters"], recap: {"checks":3}, steps: [
     { title: "An echo nobody can measure", challenge: "quiz" },
     { title: "The best a filter can do", challenge: "quiz" },
     { title: "One step downhill, per sample", challenge: "quiz", stage: "widget" },
@@ -985,7 +995,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "An equalizer", challenge: "quiz", stage: "widget" },
     { title: "A tap in gates", challenge: "reach", stage: "scene" },
   ] },
-  { id: "speech", num: 85, title: "Speech", blurb: "How does a voice fit in 2.4 kb/s? G.711 μ-law in gates, IMA ADPCM as an RV32 program, linear prediction and a vocoder, all heard side by side on a real reading.", level: "Signal processing", builds: ["signals","multirate","adaptive","fixed","cpu"], recap: {"checks":3}, steps: [
+  { id: "speech", num: 86, title: "Speech", blurb: "How does a voice fit in 2.4 kb/s? G.711 μ-law in gates, IMA ADPCM as an RV32 program, linear prediction and a vocoder, all heard side by side on a real reading.", level: "Signal processing", builds: ["signals","multirate","adaptive","fixed","cpu"], recap: {"checks":3}, steps: [
     { title: "A voice on a wire", challenge: "quiz", stage: "widget" },
     { title: "Why logarithms", challenge: "quiz", stage: "widget" },
     { title: "μ-law, from G.711's table", challenge: "quiz", stage: "widget" },
@@ -995,13 +1005,13 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Predict the next sample", challenge: "quiz", stage: "widget" },
     { title: "A vocoder at 2.4 kb/s", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "music", num: 86, title: "Music", blurb: "What can a codec safely throw away? The MDCT and its perfect reconstruction, a simplified model of what the ear misses, and a codec of ours that spends its bits only where noise would be heard.", level: "Signal processing", builds: ["signals","spectrum","multirate","speech"], recap: {"checks":3}, steps: [
+  { id: "music", num: 87, title: "Music", blurb: "What can a codec safely throw away? The MDCT and its perfect reconstruction, a simplified model of what the ear misses, and a codec of ours that spends its bits only where noise would be heard.", level: "Signal processing", builds: ["signals","spectrum","multirate","speech"], recap: {"checks":3}, steps: [
     { title: "What a codec may throw away", challenge: "quiz", stage: "widget" },
     { title: "Overlap without loss", challenge: "quiz", stage: "widget" },
     { title: "What the ear misses", challenge: "quiz", stage: "widget" },
     { title: "Bits where they are heard", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "sensors", num: 87, title: "Image sensors", blurb: "Where a picture comes from: light into charge in silicon, the CCD's bucket brigade, the CMOS pixel and its correlated double sampling, column ADCs, rolling shutters, the Bayer mosaic, and the noise that limits a pixel.", level: "Signal processing", builds: ["mosfet","dram","noise","converters"], recap: {"checks":3}, steps: [
+  { id: "sensors", num: 88, title: "Image sensors", blurb: "Where a picture comes from: light into charge in silicon, the CCD's bucket brigade, the CMOS pixel and its correlated double sampling, column ADCs, rolling shutters, the Bayer mosaic, and the noise that limits a pixel.", level: "Signal processing", builds: ["mosfet","dram","noise","converters"], recap: {"checks":3}, steps: [
     { title: "Light into charge", challenge: "quiz", stage: "widget" },
     { title: "The CCD bucket brigade", challenge: "quiz", stage: "widget" },
     { title: "The CMOS active pixel", challenge: "quiz", stage: "widget" },
@@ -1011,7 +1021,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Colour", challenge: "quiz", stage: "widget" },
     { title: "What limits a pixel", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "pictures", num: 88, title: "Pictures", blurb: "Why does a JPEG look blocky? Filters and resizing in two dimensions, the 8 × 8 DCT with a stage in gates, quantization, zig-zag and Huffman, and a real file your browser opens.", level: "Signal processing", builds: ["signals","fixed","firdesign","multirate","music"], recap: {"checks":3}, steps: [
+  { id: "pictures", num: 89, title: "Pictures", blurb: "Why does a JPEG look blocky? Filters and resizing in two dimensions, the 8 × 8 DCT with a stage in gates, quantization, zig-zag and Huffman, and a real file your browser opens.", level: "Signal processing", builds: ["signals","fixed","firdesign","multirate","music"], recap: {"checks":3}, steps: [
     { title: "A picture is a signal", challenge: "quiz", stage: "widget" },
     { title: "Filters in two dimensions", challenge: "quiz", stage: "widget" },
     { title: "Smaller and larger", challenge: "quiz", stage: "widget" },
@@ -1021,7 +1031,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Zig-zag, runs and codes", challenge: "quiz", stage: "widget" },
     { title: "A file another program opens", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "sdr", num: 89, title: "A software radio", blurb: "Can you receive a station with what you have built? A band of four FM stations, a mixer and a CIC in gates, the filters and the discriminator after them, and sound out.", level: "Signal processing", builds: ["signals","radio","modem","fixed","spectrum","firdesign","multirate","cordic","dspcore","converters"], recap: {"checks":3}, steps: [
+  { id: "sdr", num: 90, title: "A software radio", blurb: "Can you receive a station with what you have built? A band of four FM stations, a mixer and a CIC in gates, the filters and the discriminator after them, and sound out.", level: "Signal processing", builds: ["signals","radio","modem","fixed","spectrum","firdesign","multirate","cordic","dspcore","converters"], recap: {"checks":3}, steps: [
     { title: "Four stations in one band", challenge: "quiz", stage: "widget" },
     { title: "How wide is a station?", challenge: "quiz", stage: "widget" },
     { title: "Moving a station to zero", challenge: "quiz", stage: "widget" },
@@ -1032,7 +1042,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Audio, and the treble that was boosted", challenge: "quiz", stage: "widget" },
     { title: "Turn the dial", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "appendix-6502", num: 90, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
+  { id: "appendix-6502", num: 91, title: "1975: the 6502", blurb: "NMOS, two clock phases, precharged buses, a decode PLA: the 6502 at transistor level, its ISA, and why our RV32I is 50 times bigger.", level: "NMOS", appendix: "A", builds: ["nand","latches","cpu"], recap: {"checks":3}, steps: [
     { title: "One transistor less: NMOS", challenge: "quiz", stage: "scene" },
     { title: "Two phases, no flip-flops", challenge: "reach", stage: "scene" },
     { title: "Precharged buses", challenge: "reach", stage: "scene" },
@@ -1042,14 +1052,14 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "The 6502 running", stage: "scene" },
     { title: "The transistor ledger", stage: "widget" },
   ] },
-  { id: "appendix-doom", num: 91, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
+  { id: "appendix-doom", num: 92, title: "Doom on our RISC-V", blurb: "A real C program, Doom, compiled for the RV32IM our system CPU implements: playable, profiled live, and stepped one instruction at a time.", level: "Software", appendix: "B", builds: ["io","traps","muldiv"], recap: {"checks":3}, steps: [
     { title: "What a game asks of a computer", stage: "widget" },
     { title: "From C to our ROM", stage: "widget" },
     { title: "The machine", stage: "widget" },
     { title: "Play", stage: "widget" },
     { title: "Hand it to the gates", stage: "scene" },
   ] },
-  { id: "appendix-sap", num: 92, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
+  { id: "appendix-sap", num: 93, title: "The breadboard computer (SAP-1)", blurb: "Ben Eater's 8-bit computer on breadboards: 16 bytes, one bus, microcode in two EEPROMs, every chip opened down to its NANDs.", level: "74xx TTL", appendix: "C", builds: ["registers","alu","cpu","multicycle"], recap: {"checks":3}, steps: [
     { title: "The machine and its bus", challenge: "quiz", stage: "scene" },
     { title: "The clock", challenge: "quiz", stage: "scene" },
     { title: "Registers and the bus", challenge: "reach", stage: "scene" },
@@ -1062,7 +1072,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Flags and conditional jumps", challenge: "quiz", stage: "scene" },
     { title: "Programs", challenge: "reach", stage: "scene" },
   ] },
-  { id: "appendix-runner", num: 93, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
+  { id: "appendix-runner", num: 94, title: "A game with no program", blurb: "Bit Runner: a video game of counters and gates, with no CPU and no ROM. You steer one bit through walls of gates that pass only their own colour.", level: "74xx TTL", appendix: "D", builds: ["registers","routing","adders"], recap: {"checks":3}, steps: [
     { title: "Play it", challenge: "quiz", stage: "scene" },
     { title: "The beam is two counters", challenge: "quiz", stage: "scene" },
     { title: "A thing on screen is a comparison", challenge: "quiz", stage: "scene" },
@@ -1073,7 +1083,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Score: from digit to pixels", challenge: "quiz", stage: "scene" },
     { title: "What a CPU buys", challenge: "quiz", stage: "scene" },
   ] },
-  { id: "appendix-baby", num: 94, title: "The Manchester Baby, 1948", blurb: "The first machine to run a program from read-write electronic memory, in gates: 32 words on a cathode-ray tube that forgets within a fifth of a second unless it is rewritten, seven instructions, and Kilburn's first program run to the end.", level: "Valves, 1948", appendix: "E", builds: ["registers","memory","cpu","multicycle","dram"], recap: {"checks":3}, steps: [
+  { id: "appendix-baby", num: 95, title: "The Manchester Baby, 1948", blurb: "The first machine to run a program from read-write electronic memory, in gates: 32 words on a cathode-ray tube that forgets within a fifth of a second unless it is rewritten, seven instructions, and Kilburn's first program run to the end.", level: "Valves, 1948", appendix: "E", builds: ["registers","memory","cpu","multicycle","dram"], recap: {"checks":3}, steps: [
     { title: "Meet the Baby", stage: "scene" },
     { title: "A bit is a charge", stage: "widget" },
     { title: "Regeneration", stage: "scene" },
@@ -1087,7 +1097,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "Your own program", challenge: "reach", stage: "scene" },
     { title: "What 1948 bought", stage: "scene" },
   ] },
-  { id: "appendix-agc", num: 95, title: "The Apollo Guidance Computer", blurb: "The computer that flew to the Moon, from its one gate up: a three-input NOR in resistor-transistor logic, an adder and a register built of nothing else, one's complement with its end-around carry, a program woven into wire, and the instruction set on a model checked against Virtual AGC.", level: "NOR gates, Apollo", appendix: "F", builds: ["tubes","binary","gates","adders","registers","memory","multicycle"], recap: {"checks":3}, steps: [
+  { id: "appendix-agc", num: 96, title: "The Apollo Guidance Computer", blurb: "The computer that flew to the Moon, from its one gate up: a three-input NOR in resistor-transistor logic, an adder and a register built of nothing else, one's complement with its end-around carry, a program woven into wire, and the instruction set on a model checked against Virtual AGC.", level: "NOR gates, Apollo", appendix: "F", builds: ["tubes","binary","gates","adders","registers","memory","multicycle"], recap: {"checks":3}, steps: [
     { title: "Meet the AGC", stage: "scene" },
     { title: "One kind of gate", challenge: "quiz", stage: "scene" },
     { title: "A full adder in NOR", stage: "scene" },

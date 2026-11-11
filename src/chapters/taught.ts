@@ -70,6 +70,7 @@ export const TAUGHT: Record<string, string> = {
   regfile: 'regfile',
   rom: 'memory',
   harvard: 'cpu',
+  accumulator: 'firstcomputer',
   isa: 'isa',
   rv16: 'isa',
   formats: 'isa',

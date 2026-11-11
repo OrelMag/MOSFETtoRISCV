@@ -30,7 +30,7 @@ export interface Skill {
 export const TIERS: { tier: Tier; title: string; blurb: string }[] = [
   { tier: 0, title: 'Zero', blurb: 'Voltage, bits, binary, a truth table, a program, and how to read a circuit here' },
   { tier: 1, title: 'Foundations', blurb: 'Transistors, gates, binary arithmetic, adders, latches, registers, memory' },
-  { tier: 2, title: 'Builder', blurb: 'ALU, register file, the instruction set, a single-cycle CPU, Python down to gates' },
+  { tier: 2, title: 'Builder', blurb: 'A first computer, the ALU, register file, the instruction set, a single-cycle CPU, Python down to gates' },
   { tier: 3, title: 'Architect', blurb: 'Fast adders, pipelines, I/O and traps, multiply and divide, caches, microcode, floating point' },
   { tier: 4, title: 'Master', blurb: 'Out of order, multicore, silicon, the GPU, memory systems, communication and signal processing' },
 ];

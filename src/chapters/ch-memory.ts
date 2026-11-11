@@ -604,7 +604,7 @@ export const chRegisters: Chapter = {
         chooses: hold, shift right, shift left, or load in parallel (mode 0–3). Fed one bit at a time at <code>sr</code> (the serial input of a
         right shift; <code>sl</code> serves a left shift), it turns a serial
         stream into a parallel word; loaded in parallel and shifted, it does the reverse. That is the heart of every serial link: UART, SPI,
-        PCIe lanes, the iterative multiplier and divider of <a href="#/c/muldiv/0">chapter 21</a>.</p>
+        PCIe lanes, the iterative multiplier and divider of <a href="#/c/muldiv/0">chapter ${numOf('muldiv')}</a>.</p>
         <p>Without the multiplexers a shift register is only flip-flops in a row, no logic at all: n stages delay a signal by exactly n clock cycles, and the only limit on the clock is clk-to-q
         plus setup. The four modes cost ${nands(shiftRegister(4))} NANDs for 4 bits against ${nands(register(4))} for the plain register: ${nands(shiftRegister(4)) - nands(register(4))} more for the four-way choice.</p>
         <div class="try">mode = 1 (shift right) with sr = 1: pulse four times and watch the ones march in from the top.</div>`,
@@ -1012,7 +1012,7 @@ export const chMemory: Chapter = {
         <span data-show="u1 u3 u4 u5 u6 u7 u8">the OR of the word lines</span>
         of every word whose bit j is 1. The data is in the wiring. Mask ROMs were made exactly like this, the pattern set by one metal layer;
         a fuse PROM blows the unwanted connections once; flash keeps the same array but stores each connection as charge, so it can be rewritten.</p>
-        <p>This one holds the squares of 0–15. The CPU's instruction memory in <a href="#/c/cpu/0">chapter 14</a> is a ROM too (built there from constants and a
+        <p>This one holds the squares of 0–15. The CPU's instruction memory in <a href="#/c/cpu/0">chapter ${numOf('cpu')}</a> is a ROM too (built there from constants and a
         multiplexer tree, the read port's view of the same thing).</p>
         <p>Compare the cost with a RAM of the same size: ${nands(romArray('squares'))} NANDs for 16 words of 8 bits, against ${nands(ram(4, 8))} for a RAM of that shape. A ROM has no flip-flops, no write path and no clock; what remains is the decoder and a few
         OR gates, and its read is purely combinational.</p>
@@ -1208,7 +1208,7 @@ export const chMemory: Chapter = {
     {
       title: 'Ports cost area',
       body: `
-        <p>The register bank of <a href="#/c/regfile/0">chapter 12</a> has two read ports and one write port: enough for one instruction per cycle. A core that issues two
+        <p>The register bank of <a href="#/c/regfile/0">chapter ${numOf('regfile')}</a> has two read ports and one write port: enough for one instruction per cycle. A core that issues two
         instructions per cycle needs four reads and two writes. Each read port is another multiplexer tree over every register; each write port
         another decoder, plus a multiplexer in front of every register to choose which port wins.</p>
         <p>Each port adds its own plumbing over the same storage: ${groupDigits(nands(regfileMP(5, 32, 4, 2)))} NANDs for 4 reads and 2 writes of 32 × 32 bits, against ${groupDigits(nands(regfileMP(5, 32, 2, 1)))} for 2 reads and 1 write

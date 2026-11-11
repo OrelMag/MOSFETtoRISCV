@@ -120,7 +120,7 @@ export const chMap: Chapter = {
           2n + 4, which is ${logicDepth(rca(4))} at 4 bits, ${logicDepth(rca(8))} at 8 and ${logicDepth(rca(32))} at 32. The count, ${stats(rca(4)).nands / 4} NANDs a stage, grows as 9n.</p>`,
         numbers: `<table class="mini"><tr><th>bits</th><th>NANDs</th><th>transistors</th><th>gate delays</th></tr>${[4, 8, 16, 32].map((n) => `<tr><td>${n}</td><td>${stats(rca(n)).nands}</td><td>${stats(rca(n)).transistors}</td><td>${logicDepth(rca(n))}</td></tr>`).join('')}</table>`,
         pitfall: `<p>Assuming delay is proportional to size. The 32-bit adder has eight times the gates of the 4-bit one but only ${(logicDepth(rca(32))! / logicDepth(rca(4))!).toFixed(1)} times the delay, and a faster adder
-          (<a href="#/c/fastadd/0">chapter 16</a>) can do the same add in far less depth by spending more gates. Cost and depth are separate axes.</p>`,
+          (<a href="#/c/fastadd/0">chapter ${numOf('fastadd')}</a>) can do the same add in far less depth by spending more gates. Cost and depth are separate axes.</p>`,
       },
     },
   ],
@@ -497,7 +497,7 @@ export const chInverter: Chapter = {
         network for every input.</p>
         <p>Restoring is what lets a design be deep. Every output is rebuilt from a rail, so after each gate the error budget is reset: a signal that crosses a thousand gates is as clean as one that crosses
         one. Without it (a chain of resistors, or of pass switches) every stage subtracts a little swing, and past a few stages 0 and 1 meet. The price is that each stage inverts,
-        which is why a CMOS stage is always an inverting gate and why a non-inverting gate costs more than an inverting one (<a href="#/c/nand/0">chapter 3</a>).</p>`,
+        which is why a CMOS stage is always an inverting gate and why a non-inverting gate costs more than an inverting one (<a href="#/c/nand/0">chapter ${numOf('nand')}</a>).</p>`,
       scene: () => ({ root: INV_CMOS, inputs: { a: 1 } }),
       more: {
         derive: `<p>Here a wire is 0, 1, X or Z; in silicon it is a voltage, and an inverter maps input voltage to output voltage
@@ -677,7 +677,7 @@ export const chInverter: Chapter = {
         <p>Try F = 64 below. One stage costs ${chainDelay(64, 1).toFixed(0)} τ. Two take ${chainDelay(64, 2).toFixed(0)}. Three, each 4× the one before, take ${chainDelay(64, 3).toFixed(0)}, the best. Four is already slower (${chainDelay(64, 4).toFixed(1)}), because every extra stage pays another p.
         Whatever the load, the best ratio stays between 3 and 6: the stage count grows with the logarithm of F.</p>
         <p>The yardstick is the <strong>FO4</strong> delay, an inverter driving four copies of itself: ${FO4_TAU} τ, an illustrative ${FO4_TAU * PS_PER_TAU} ps here. Process generations are compared in FO4s, and a processor core fits roughly 15 to 20 of them in one clock cycle.
-        <a href="#/c/fastadd/0">Chapter 16</a> applies the same arithmetic to the <span data-ahead="nand">NAND (a gate whose output is 0 only when every input is 1)</span>, whose effort is 4/3 and not 1.</p>`,
+        <a href="#/c/fastadd/0">Chapter ${numOf('fastadd')}</a> applies the same arithmetic to the <span data-ahead="nand">NAND (a gate whose output is 0 only when every input is 1)</span>, whose effort is 4/3 and not 1.</p>`,
       widget: () => sizingWidget(),
       more: {
         derive: `<p>Minimising D over N for fixed F: dD/dN = 0 gives ρ(ln ρ − 1) = p with ρ = F<sup>1/N</sup>. For p = ${P_INV} that is ρ ≈ 3.6, and the discrete optimum for F = 64 happens to be exactly 4. The delay at the optimum is N·(ρ + p), ${chainDelay(64, 3).toFixed(0)} τ for F = 64, against ${chainDelay(64, 1).toFixed(0)} τ for a single stage: a ${(chainDelay(64, 1) / chainDelay(64, 3)).toFixed(1)}× saving from two extra inverters.</p>`,

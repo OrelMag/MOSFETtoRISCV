@@ -18,6 +18,7 @@ const BOOK = [
   'latches',
   'registers',
   'memory',
+  'firstcomputer',
   'alu',
   'regfile',
   'isa',

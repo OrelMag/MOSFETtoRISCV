@@ -137,7 +137,7 @@ describe('next up', () => {
   it('questions due come first; a start tier skips the tiers below', () => {
     const n = nextUp(ctx({ reviewDue: 3 }), 2);
     expect(n[0].kind).toBe('review');
-    expect(n[1].href).toMatch(/^#\/c\/alu\//);
+    expect(n[1].href).toMatch(/^#\/c\/firstcomputer\//);
   });
   it('a tested-out chapter is skipped, and tiers count their skills', () => {
     expect(nextUp(ctx({ testedOut: (c) => c === 'basics' }))[0].href).toBe('#/c/map/0');

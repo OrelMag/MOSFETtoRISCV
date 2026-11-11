@@ -4,7 +4,7 @@
 // builds it: PC ← next, A ← its new value, M[a] ← A, OUT ← A. Z (A = 0) is read before the edge. JMP to itself is a halt.
 // DOM-free; the assembler is the Custom ISA table ACC8_PRESET (isa/presets.ts).
 
-import { tableOf, type IsaDoc } from '../isa/table';
+import { tableOf, type IsaDoc, type TableAsm } from '../isa/table';
 
 export const ACC_OPS = ['LDA', 'ADD', 'SUB', 'STA', 'LDI', 'JMP', 'JZ', 'OUT'] as const;
 export type AccOp = (typeof ACC_OPS)[number];
@@ -29,6 +29,9 @@ export const ACC8_PRESET: IsaDoc = {
 };
 
 const TABLE = tableOf(ACC8_PRESET);
+
+/** Assemble with the listing, labels and every error (the panel's editor). */
+export const accAssembleFull = (src: string): TableAsm => TABLE.assemble(src);
 
 /** Assemble a program; throws on the first error (the chapter's programs are fixed text). */
 export function accAssemble(src: string): number[] {
