@@ -327,8 +327,18 @@ the hand-off, the "Esc or cpu goes back up" cue, reduced motion, the breadcrumb'
 Esc closing first. Single-cycle and pipeline CPUs and every smaller scene; out-of-order levels say "double-click to step
 in".
 
-**Phase 2.** The sandbox's look inside; zooming out to go back up (fresh gesture after the cue); Why? across the rim;
-Break a part inside; the CPU panel's marks inside (insthw naming inner units); the phone (pinch, tap to step in).
+**Phase 2**, after phase 1 lands, split into tracks that can run in parallel (each its own branch from main, each
+gated on its own; the lens module from phase 1 is the shared surface, so a track that needs a change to it says so to
+the others before making it):
+
+| track | scope | touches | depends on | done when |
+|---|---|---|---|---|
+| **2a. Look inside** | the lens over the sandbox's look inside (editor/inside.ts, a SchematicView): its covers are the dock (`--dock-space`), the canvas toolbar and the run bar; the setting is the same one | editor/inside.ts, the lens's placement inputs | phase 1 | zooming onto a library part inside look inside opens a lens; the sandbox's own smoke routes pass with it on and off |
+| **2b. Why? and Break a part across the rim** | a Why? trace that reaches the rim continues on the outer level and the other way (whyNet on the lens's ViewCtx, foldAt per level); Break a part in the lens's right-click menu (`ablate(def, path)`) | view/whypanel.ts, sim/explain.ts's fold, the lens's menu | phase 1 | tests: a trace from an inner net to an outer pin names the same causes as on the drilled level; the ablation table equals the drilled level's |
+| **2c. CPU panel marks inside** | insthw names the units an instruction uses inside a box (alu.add, rf.w5…); the lens shows them, the rim glows as in phase 1 when only the box is known | widgets/insthw.ts (`coreUnitNames`-style inner names), the lens's highlight | phase 1 | tests/insthw.test.ts covers the inner names for every RV32I instruction class; the CPU panel's click lights them in an open lens |
+| **2d. The phone** | the row enabled on a touch screen with the rules of item 6: pinch opens, the cap within 16 px gutters below the stage bar, a tap selects a part ≥ 40 px else steps in, double-tap drills; "Starts off on a touch screen" (null = off on coarse pointers) | the lens's gesture input (view/pinch.ts), its tap rule, app.css's coarse-pointer block | phase 1 | smoke at 390 and 360 px with touch emulation: pinch onto the ALU opens a lens, a tap steps in, nothing lands under the stage or run bar |
+| **2e. Zoom out to go up** | the cue becomes "Keep zooming out to go up to cpu"; a fresh gesture after it (a new pinch, or wheel events after a ≥ 400 ms pause) pops one level, the parent's lens at full size shrinking with the zoom; momentum never pops | the stage's zoom handling, ui/drillpath.ts's history | phase 1 (2d for the pinch half) | tests on recorded wheel traces (a trackpad fling with momentum, a mouse wheel, a second deliberate gesture): only the deliberate one pops |
+| **2f. Out-of-order levels** | measure the lens's DOM build on the ooo core's levels on a quiet machine; if they fit 50 ms (with the route cache, the DOM alone), lift the "too large to open here" guard for those that fit, level by level; if not, leave them to phase 3's sliced DOM | the guard's list, a measurement script beside docs/transparent/ | phase 1 | each ooo level either opens under budget (a long-task check in the smoke) or keeps its "double-click to step in" |
 
 **Phase 3.** The default becomes on with a mouse (null), after the author tries it; the out-of-order core's levels, if
 the DOM can be built in slices (a SchematicView refactor) or turns out under budget on a quieter machine.
