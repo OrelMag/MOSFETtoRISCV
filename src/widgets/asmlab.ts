@@ -18,6 +18,8 @@ export interface AsmCase {
   /** What this run left (shown), and whether it is right. */
   got(iss: ISS): string;
   ok(iss: ISS): boolean;
+  /** Called before every instruction with the program's labels (the frame practice: what a real callee may do at g). */
+  watch?(iss: ISS, labels: Map<string, number>): void;
 }
 
 export interface AsmRun { halted: boolean; steps: number; iss: ISS }
@@ -32,7 +34,9 @@ export function gradeProgram(src: string, cases: AsmCase[]): { errors: { line: n
   const verdicts = cases.map((c) => {
     const iss = new ISS(r.words);
     c.setup(iss);
-    const steps = iss.run(STEP_LIMIT);
+    let steps = 0;
+    if (c.watch) while (!iss.halted && steps < STEP_LIMIT) { c.watch(iss, r.labels); iss.step(); steps++; }
+    else steps = iss.run(STEP_LIMIT);
     const run = { halted: iss.halted, steps, iss };
     return { case: c, run, pass: run.halted && c.ok(iss), got: run.halted ? c.got(iss) : `no halt in ${STEP_LIMIT} instructions` };
   });
@@ -179,6 +183,10 @@ export function loopSteps(n: number): number {
 
 const SENTINEL = (i: number) => 0xc0de0000 + i;
 const S_REGS = [8, 9, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27];
+/** s register names by number, for "s1 changed". */
+const REG_NAME: Record<number, string> = { 8: 's0', 9: 's1', 18: 's2', 19: 's3', 20: 's4', 21: 's5', 22: 's6', 23: 's7', 24: 's8', 25: 's9', 26: 's10', 27: 's11' };
+/** t1–t6 and a1–a7: a callee may change them, so f must not keep anything there across a call (t0 g uses itself). */
+const CALLER_SAVED = [6, 7, 28, 29, 30, 31, 11, 12, 13, 14, 15, 16, 17];
 export const FRAME_SP = 128;
 
 export const FRAME_SOLUTION = `f:      addi sp, sp, -16    # open a frame
@@ -201,7 +209,9 @@ const FRAME_MAIN = `        li   sp, ${FRAME_SP}       # the stack starts at the
         call f             # a0 = f(a0)
 halt:   j    halt
 
-# g(x) = 3x: a leaf, it uses only a0 and t0
+# g(x) = 3x.  Like any function, it may change
+# t0-t6 and a1-a7: the cases make it leave junk
+# there on every call.
 g:      slli t0, a0, 1
         add  a0, a0, t0
         ret
@@ -209,7 +219,7 @@ g:      slli t0, a0, 1
 
 export const ASM_FRAME = asmPractice({
   heading: 'Write f',
-  note: 'Write <code>f(x) = g(x) + g(x + 1)</code>, argument and result in <code>a0</code>. The cases fill <code>s0</code>–<code>s11</code> with marker values and check they come back, along with <code>sp</code>.',
+  note: 'Write <code>f(x) = g(x) + g(x + 1)</code>, argument and result in <code>a0</code>, by calling <code>g</code> twice. The cases fill <code>s0</code>–<code>s11</code> with marker values and check they come back, along with <code>sp</code>; at every call <code>g</code> leaves junk in <code>t0</code>–<code>t6</code> and <code>a1</code>–<code>a7</code>, as any callee may.',
   initial: `# f(x) = g(x) + g(x + 1).  Give back sp and s0-s11 as you found them.
 ${FRAME_MAIN}
 f:      # your code here
@@ -218,12 +228,22 @@ f:      # your code here
   cases: [4, 0, -2, 10].map((x) => {
     const want = 3 * x + 3 * (x + 1);
     const kept = (iss: ISS) => S_REGS.every((r, i) => iss.x[r] === SENTINEL(i)) && iss.x[2] === FRAME_SP;
+    // what g was called with, this run: f must call it, with x and with x + 1
+    let calls: number[] = [];
+    const calledRight = () => calls.length === 2 && calls.includes(x) && calls.includes(x + 1);
     return {
       label: `f(${x})`,
-      setup: (iss) => { iss.x[10] = x >>> 0; S_REGS.forEach((r, i) => { iss.x[r] = SENTINEL(i); }); },
-      want: `a0 = ${want}, s regs and sp kept`,
-      got: (iss) => `a0 = ${signed(iss.x[10])}${kept(iss) ? ', s regs and sp kept' : `, ${iss.x[2] === FRAME_SP ? 'an s register' : 'sp'} changed`}`,
-      ok: (iss) => signed(iss.x[10]) === want && kept(iss),
+      setup: (iss) => { calls = []; iss.x[10] = x >>> 0; S_REGS.forEach((r, i) => { iss.x[r] = SENTINEL(i); }); },
+      // at g's entry, do what any callee may: leave junk in the temporaries and the other argument registers
+      watch: (iss, labels) => {
+        if (iss.pc !== labels.get('g')) return;
+        calls.push(signed(iss.x[10]));
+        for (const r of CALLER_SAVED) iss.x[r] = 0xbad0000 + r;
+      },
+      // short, so the table fits beside the editor: the note says what else is checked, a miss is named
+      want: `a0 = ${want}`,
+      got: (iss) => `a0 = ${signed(iss.x[10])}${calledRight() ? '' : calls.length ? `, ${calls.map((c) => `g(${c})`).join(' ')}` : ', g not called'}${kept(iss) ? '' : iss.x[2] !== FRAME_SP ? ', sp changed' : `, ${REG_NAME[S_REGS[S_REGS.findIndex((r, i) => iss.x[r] !== SENTINEL(i))]]} changed`}`,
+      ok: (iss) => signed(iss.x[10]) === want && calledRight() && kept(iss),
     };
   }),
 });

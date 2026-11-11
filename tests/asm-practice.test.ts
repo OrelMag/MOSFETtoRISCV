@@ -29,6 +29,16 @@ describe('chapter 13 programming practice', () => {
     expect(allPass(bad(/lw\s+s0/), ASM_FRAME)).toBe(false);
     expect(allPass(bad(/addi sp, sp, 16/), ASM_FRAME)).toBe(false);
   });
+  it('function: keeping x or ra in a register a callee may change, or not calling g at all, is caught', () => {
+    const main = ASM_FRAME.initial.split('\nf:')[0];
+    const f = (body: string) => `${main}\nf:${body}`;
+    // x in t1 and ra in t3 across the calls: right only while g happens to leave them alone
+    expect(allPass(f(`      mv t3, ra\n        mv t1, a0\n        call g\n        mv t2, a0\n        addi a0, t1, 1\n        call g\n        add a0, a0, t2\n        mv ra, t3\n        ret`), ASM_FRAME)).toBe(false);
+    // x in a1 across a call, the rest of the frame right
+    expect(allPass(f(`      addi sp, sp, -16\n        sw ra, 12(sp)\n        sw s0, 8(sp)\n        mv a1, a0\n        call g\n        mv s0, a0\n        addi a0, a1, 1\n        call g\n        add a0, a0, s0\n        lw s0, 8(sp)\n        lw ra, 12(sp)\n        addi sp, sp, 16\n        ret`), ASM_FRAME)).toBe(false);
+    // 6x + 3 computed directly: the right value, but g is never called
+    expect(allPass(f(`      slli t0, a0, 2\n        slli t1, a0, 1\n        add a0, t0, t1\n        addi a0, a0, 3\n        ret`), ASM_FRAME)).toBe(false);
+  });
   it('the numbers the steps quote', () => {
     expect(MAX_STEPS).toEqual({ keep: 2, take: 3 });
     expect([0, 1, 2, 8].map(loopSteps)).toEqual([6, 10, 14, 38]);
