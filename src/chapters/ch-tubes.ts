@@ -330,7 +330,7 @@ export const chTubes: Chapter = {
         stronger tube prefers.</p>
         <p>In NAND bricks the same set–reset latch is ${stats(SR_LATCH).nands} NANDs: ${stats(SR_LATCH).nands} triode
         sections and ${2 * stats(SR_LATCH).nands} diodes; a clocked D flip-flop is ${stats(DFF).nands}. ENIAC kept each
-        decimal digit of its accumulators in a ring of ten of these pairs.</p>
+        decimal digit of its <span data-ahead="accumulator">accumulators (its adding registers: each kept a running total and added numbers into it)</span> in a ring of ten of these pairs.</p>
         <p>Why it holds: each stage inverts its input, and two such stages in a loop have two stable states and one unstable in between. A small
         disturbance at the middle grows round the loop (the loop gain is above 1) until one tube is fully on and the other fully off. That is the same
         regenerative loop as the cross-coupled NANDs of <a href="#/c/latches/0">chapter ${numOf('latches')}</a>, with a plate resistor and a divider in place of the gate.

@@ -20,6 +20,7 @@ const BOOK = [
   'registers',
   'fsm',
   'memory',
+  'firstcomputer',
   'alu',
   'regfile',
   'isa',

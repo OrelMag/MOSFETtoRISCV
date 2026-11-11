@@ -338,17 +338,15 @@ export const chBus: Chapter = {
         row 9). +0 is STATUS (bit 0: a card waits at the read station, bit 1: the hopper is empty), +4 is DATA, and reading DATA
         <em>takes</em> the card, as reading the keyboard takes a key: <span data-show="cardport">the slave</span> pulses <code>next</code> (feed the next card) in the cycle after the read's
         handshake. ${nands(AXI_CARDS)} NANDs, nearly all of them its 32-bit read register and the status / data multiplexer. The reader brings
-        the next card to the station ${CARD_FEED} edges later. A real reader took about 75 ms a card (800 a minute): millions of cycles of this
-        CPU, which would simply poll longer.</p>
+        the next card to the station ${CARD_FEED} edges later.</p>
         <p>The boot ROM is ${CARD_BOOT_WORDS} instructions: poll STATUS, and while the hopper is not empty take each word and store it from
         0x${LOAD_AT.toString(16)} upward; when the deck is done, jump there.</p>
         <pre class="code">${CARD_BOOT_SOURCE.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</pre>
         <p>The deck is ${CARD_DECK.cards.length} cards; the jump to 0x${LOAD_AT.toString(16)} comes at cycle ${CARD_BOOT.cycles},
-        ${(CARD_BOOT.cycles / CARD_DECK.cards.length).toFixed(1)} a card. With no feed delay the loop alone would take
-        ${(CARD_BOOT_0.cycles / CARD_DECK.cards.length).toFixed(1)} (three of its nine instructions go over the bus); the rest is
-        ${CARD_BOOT.idlePolls} polls that found the station empty.</p>
-        <p>The point of the exercise is the dependency chain: the loader must be in a memory that needs no loading, so the first thing a machine runs is always something
-        built into it. Here that is the boot ROM; on the 1401 it was the Load key's hard-wired sequence. What changes between the two machines is only how much the first stage can do before it hands over.</p>
+        ${(CARD_BOOT.cycles / CARD_DECK.cards.length).toFixed(1)} a card, against ${(CARD_BOOT_0.cycles / CARD_DECK.cards.length).toFixed(1)} with no feed delay: the rest is
+        ${CARD_BOOT.idlePolls} polls that found the station empty. A real reader took about 75 ms a card (800 a minute), millions of cycles of this CPU, which would simply poll longer.</p>
+        <p>The point is the dependency chain: the loader must be in a memory that needs no loading, so the first thing a machine runs is always something
+        built into it. Here that is the boot ROM; on the 1401 it was the Load key's hard-wired sequence.</p>
         <div class="try">Run, and watch the reader work through the deck while the PC stays in the boot ROM; then the PC jumps into RAM
         and the program from the cards prints and counts.</div>`,
       more: {

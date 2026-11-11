@@ -478,4 +478,48 @@ export const WALKS4: Record<string, WalkScript> = {
       whyNot: { text: 'A separate pc + 1 adder would let the PC update early, but costs the adder and a second copy of the address.' },
     },
   ],
+  m_acc: [
+    {
+      title: 'The PC loop',
+      text: 'pc is a 5-bit register that loads every edge (one holds its enable at 1). inc makes PC + 1 and jmux picks it, or the jump target, as the next PC. 120 NANDs: the register 75, the incrementer 25, the mux 20.',
+      parts: ['pc', 'one', 'inc', 'jmux'], codex: ['pc'],
+      why: 'A program is read in order unless told otherwise: a counter in front of the ROM, with a mux for the exceptions.',
+      whyNot: { text: 'A plain counter with no load cannot jump: the loop and the halt both need the mux.' },
+    },
+    {
+      title: 'Split the word',
+      text: 'f cuts instr into x (bits 4–0) and op (bits 7–5). ctl is the control: a 3 → 8 decoder on op, four ORs and an AND for JZ · Z. 49 NANDs decide everything the machine does.',
+      parts: ['f', 'ctl'], codex: ['accumulator'],
+      why: 'Every other part waits for a line from ctl: load A, its source, subtract, write, jump, show.',
+      whyNot: { text: 'Decoding each signal straight from op with its own gates works too, but the decoder shares the work: each line is an OR of instruction lines.' },
+      ask: {
+        question: 'Which instructions must raise la, the line that loads A?',
+        options: ['LDA, ADD, SUB and LDI', 'Every instruction', 'LDA and STA', 'Only ADD and SUB'],
+        answer: 0,
+        explain: 'A changes when it takes M[x], the sum or the constant: those four. STA, JMP, JZ and OUT leave it as it is.',
+        why: ['', 'A loaded on STA or OUT would take whatever its mux shows and lose its value.', 'STA writes A out; it does not load A.', 'LDA and LDI load A too, from the RAM and from x.'],
+      },
+    },
+    {
+      title: 'Memory and the adder',
+      text: 'ram is a 32 × 8 RAM at address x, with A always on its data input and we from ctl (STA). alu adds M[x] to A, or subtracts it on SUB. 5157 + 108 NANDs: the memory is most of the machine.',
+      parts: ['ram', 'alu'], codex: ['ram'],
+      why: 'Every instruction with an address uses M[x]: LDA and ADD read it, STA writes it.',
+      whyNot: { text: 'A register per variable instead of a RAM would be fast, but a program could not choose which one by an address.' },
+    },
+    {
+      title: 'A and its sources',
+      text: 'mux1 picks the sum or M[x] (am: LDA), mux2 that or k = x with three zero bits on top (kx, k0; ak: LDI). acc is A, loading on la. 32 + 32 + 120 NANDs.',
+      parts: ['mux1', 'mux2', 'kx', 'k0', 'acc'],
+      why: 'A has three possible next values, so two 2-input muxes in a row.',
+      whyNot: { text: 'Routing LDA through the adder (A = 0 + M[x]) would save mux1 but needs a way to zero the other adder input: a mux again.' },
+    },
+    {
+      title: 'Flag, output, halt',
+      text: 'zero raises Z while A is 0 (22 NANDs); ctl turns JZ into a jump only then. outr is OUT, loading A on the out line. self compares x with the PC and hlt ANDs it with the JMP line: halt. 5795 NANDs: par.',
+      parts: ['zero', 'outr', 'self', 'hlt'],
+      why: 'Without a flag a program cannot decide, so it cannot stop a loop.',
+      whyNot: { text: 'Testing the RAM byte instead of A would need a zero test on the RAM output, and still a load to choose which byte.' },
+    },
+  ],
 };

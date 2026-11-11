@@ -21,6 +21,7 @@ export const LOADERS: Record<string, () => Promise<Chapter>> = {
   "registers": () => import('./ch-memory').then((m) => m.chRegisters),
   "fsm": () => import('./ch-fsm').then((m) => m.chFsm),
   "memory": () => import('./ch-memory').then((m) => m.chMemory),
+  "firstcomputer": () => import('./ch-firstcomputer').then((m) => m.chFirstComputer),
   "alu": () => import('./ch-cpu').then((m) => m.chAlu),
   "regfile": () => import('./ch-cpu').then((m) => m.chRegfile),
   "isa": () => import('./ch-cpu').then((m) => m.chIsa),

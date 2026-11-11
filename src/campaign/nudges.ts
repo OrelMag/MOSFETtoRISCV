@@ -56,6 +56,7 @@ export const NUDGES: Record<string, string> = {
   s_reg4: 'Holding is a choice made at every edge, keep the old value or take the new one, never made by stopping the clock.',
   s_reg16: 'Reuse what you just built.',
   s_icg: 'The enable may change at any moment; the clock that leaves must not. Something has to hold en still while the clock is high.',
+  m_acc: 'The top three bits of the word say what to do; the low five say where. Who needs to be told something?',
   t_scan: 'Each flip-flop chooses at every edge: what the circuit says, or what its neighbour held.',
   t_tests: 'A vector earns its place by the faults no other vector in your set catches.',
   s_cnt4: 'Something has to remember the count between edges, and something has to work out the next one.',

@@ -124,7 +124,7 @@ export const chConverters: Chapter = {
     {
       title: 'One bit, and feedback',
       get body() {
-        const a = sdMeasuredDb(2, 64, 0.5), m = sdLinearModelDb(2, 64, 0.5), pw = sdErrorPower(2, 0.5), m2 = sdLinearModelDb(2, 64, 0.5, pw);
+        const a = sdMeasuredDb(2, 64, 0.5);
         return `
         <p>So far every bit has been paid for in matching. <strong>Sigma-delta</strong> takes another way: one bit, whose two levels cannot be out of line with each other, sampled far faster than the signal needs. Rate is cheap, and it can be traded for bits.</p>
         <p>Feed the error back through an integrator. The loop adds up input minus output, and decides from the sign of that sum, so that over time the bits' average follows the input. That is order 1. This chapter's loop has two integrators in a row, order 2: with u the input and v the output (+ or − full scale),</p>
@@ -134,11 +134,18 @@ v  = + full scale if y₂ ≥ 0, else − full scale</pre>
         <p>In symbols, with the quantizer's error E:</p>
         <pre>V = z⁻¹ U + (1 − z⁻¹)² E</pre>
         <p>The signal comes through with a delay. The error comes through a filter, (1 − z⁻¹)², that is nearly zero at low frequencies and largest at half the rate. The tests check this as an identity, to the bit, on the error the loop recorded. Nothing has been removed, only moved, and filtering it out is a job from an earlier chapter. Here oversampling alone buys 3 dB a doubling, and shaping adds 6 dB for each order: in theory <strong>9 dB at order 1, 15 at order 2</strong>. Order 2 measures about 13 to 16 at half of full scale, from 16 to 256 times the rate, and less near the top. Order 1 wanders between 6 and 11, since its noise is less like noise: it falls into patterns tied to the input.</p>
-        <p>The textbook's sum treats the quantizer as added white noise. That gets the slope right and the level close: at 64 times the rate and half of full scale it predicts ${m.toFixed(1)} dB, and the loop measures ${a.toFixed(1)}. Most of the gap is one assumption you can measure. A step of 2 should give an error power of 1/3, and this loop's error has ${pw.toFixed(2)}: with that figure the sum gives ${m2.toFixed(1)}. What is left is an error that is neither white nor independent of its input.</p>
-        <p>Now the top of the range. This loop goes on following while the input is under full scale, but its integrators grow as it nears it: their peak is about ${sdPeak(2, 0.5).toFixed(0)} full scales at half of full scale, ${sdPeak(2, 0.8).toFixed(0)} at 0.8 and ${sdPeak(2, SD_LIMIT).toFixed(0)} at ${SD_LIMIT}, and on a steady full-scale input it has no bound. The error grows too, so the measured figure falls well before the words run out: ${sdMeasuredDb(2, 64, 0.8).toFixed(0)} dB at 0.8 and ${sdMeasuredDb(2, 64, SD_LIMIT).toFixed(0)} dB at ${SD_LIMIT}. ${SD_GUARD} bits above the input hold ${2 ** SD_GUARD} full scales, so for a tone or a steady input ${SD_LIMIT} is where this design's slider stops. That is not a promise for every input: a hard step is worse, and a square wave of ±0.85 can already reach the wrap. An analogue integrator clips at its supply far sooner, which makes a real part's usable range a design question of its own.</p>
+        <p>This loop goes on following while the input is under full scale, but its integrators grow as it nears it, and the measured figure falls well before the words run out: ${sdMeasuredDb(2, 64, 0.8).toFixed(0)} dB at 0.8 and ${sdMeasuredDb(2, 64, SD_LIMIT).toFixed(0)} dB at ${SD_LIMIT}, against ${a.toFixed(1)} at half of full scale. ${SD_GUARD} bits above the input hold ${2 ** SD_GUARD} full scales, so for a tone or a steady input ${SD_LIMIT} is where this design's slider stops.</p>
         <div class="try">At order 2, step the oversampling from 16 to 128 and read the gain each time. Then raise the input level towards ${SD_LIMIT}, and watch the noise come up.</div>`;
       },
       widget: sdWidget,
+      get more() {
+        const a = sdMeasuredDb(2, 64, 0.5), m = sdLinearModelDb(2, 64, 0.5), pw = sdErrorPower(2, 0.5), m2 = sdLinearModelDb(2, 64, 0.5, pw);
+        return {
+          derive: `<p>The textbook's sum treats the quantizer as added white noise. That gets the slope right and the level close: at 64 times the rate and half of full scale it predicts ${m.toFixed(1)} dB, and the loop measures ${a.toFixed(1)}. Most of the gap is one assumption you can measure. A step of 2 should give an error power of 1/3, and this loop's error has ${pw.toFixed(2)}: with that figure the sum gives ${m2.toFixed(1)}. What is left is an error that is neither white nor independent of its input.</p>
+          <p>Integrator headroom: their peak is about ${sdPeak(2, 0.5).toFixed(0)} full scales at half of full scale, ${sdPeak(2, 0.8).toFixed(0)} at 0.8 and ${sdPeak(2, SD_LIMIT).toFixed(0)} at ${SD_LIMIT}, and on a steady full-scale input it has no bound. The error grows too, which is why the measured figure falls early.</p>`,
+          pitfall: `<p>${SD_LIMIT} is not a promise for every input: a hard step is worse, and a square wave of ±0.85 can already reach the wrap. An analogue integrator clips at its supply far sooner, which makes a real part's usable range a design question of its own.</p>`,
+        };
+      },
       challenge: {
         kind: 'quiz', question: 'A second-order loop reaches 70 dB at some rate. What does doubling the rate buy?',
         options: ['About 15 dB', 'About 3 dB', 'About 6 dB', 'About 9 dB'],

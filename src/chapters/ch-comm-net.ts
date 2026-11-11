@@ -6,8 +6,25 @@ import { NIC_COSTS, nicPollSource } from '../riscv/nicprograms';
 import { checksumWidget, costWidget, frameWidget, lanApi, lanScene, nicApi, nicScene, pathWidget, ringWidget } from '../widgets/net';
 import type { Chapter } from './types';
 import { numOf } from './order';
+import { checksum, onesSum } from '../comm/netframes';
 import { groupNum } from '../sim/numfmt';
 
+/** Step 'Bytes in the subset': the checksum of three words by the chapter's own RFC 1071 functions, and the usual wrong answers. */
+const CK_WORDS = [0xf0f0, 0x1234, 0x9abc];
+const CK = (() => {
+  const bytes = CK_WORDS.flatMap((w) => [w >> 8, w & 255]);
+  const plain = CK_WORDS.reduce((a, b) => a + b, 0);
+  const folded = onesSum(bytes);
+  return { plain, noInvert: folded, good: checksum(bytes), noFold: ~(plain & 0xffff) & 0xffff, noFoldNoInv: plain & 0xffff };
+})();
+const ARP_REQ_LEN = 42, ARP_PAD = 60;
+/** Step 'ICMP: echo': the first word of an echo message (type, code) before and after, with the message's checksum. */
+const ECHO = (() => {
+  const data = Array.from({ length: 32 }, (_, i) => 16 + i);
+  const msg = (type: number) => [type, 0, 0, 0, 0, 1, 0, 1, ...data];
+  const ck = (type: number) => checksum(msg(type));
+  return { req: 0x0800, rep: 0x0000, ckReq: ck(8), ckRep: ck(0) };
+})();
 const n0 = (x: number) => groupNum(Math.round(x));
 const us = (clocks: number) => (clocks * CLOCK_NS / 1000).toFixed(1);
 const N = NET.nands;
@@ -155,6 +172,14 @@ export const chNetwork: Chapter = {
         <p><strong>The checksum.</strong> RFC 1071: add the 16-bit words as unsigned numbers, fold the carries above bit 15 back into the sum, invert. <code>ones_sum(a, n, start)</code> returns the folded sum; a checksum field holds <code>~sum &amp; 0xFFFF</code>. The loop adds two bytes a pass and has no multiplier in it, which matters because this CPU has none. The widget runs the same sum three ways: in TypeScript, step by step, in the stack's own Python on the reference interpreter, and (in the tests) compiled on the golden model; each agrees with the examples of RFC 1071 and with a published IPv4 header whose checksum is 0xB861.</p>
         <p>One trap: <code>&gt;&gt;</code> in the subset is an arithmetic shift, as the hardware's <code>srai</code> is. A value with bit 31 set stays negative as it shifts, so every shift of an address or a 32-bit field is followed by a mask (<code>(v &gt;&gt; 8) &amp; 255</code>).</p>`,
       widget: checksumWidget,
+      challenge: {
+        kind: 'quiz',
+        question: 'The checksum of the three 16-bit words ' + CK_WORDS.map((w) => '0x' + w.toString(16).toUpperCase().padStart(4, '0')).join(', ') + ' (RFC 1071). Which value goes in the field?',
+        options: ['0x' + CK.good.toString(16).toUpperCase().padStart(4, '0'), '0x' + CK.noInvert.toString(16).toUpperCase().padStart(4, '0') + ' (the folded sum, not inverted)', '0x' + CK.noFold.toString(16).toUpperCase().padStart(4, '0') + ' (the carry dropped, then inverted)', '0x' + CK.noFoldNoInv.toString(16).toUpperCase().padStart(4, '0') + ' (the plain sum, low 16 bits)'],
+        answer: 0,
+        explain: 'Add the words: 0x' + CK.plain.toString(16).toUpperCase() + '. Fold the carry above bit 15 back in: 0x' + CK.noInvert.toString(16).toUpperCase().padStart(4, '0') + '. Invert: 0x' + CK.good.toString(16).toUpperCase().padStart(4, '0') + '. A receiver adds everything including the checksum and gets 0xFFFF.',
+        why: ['', 'That is the folded sum; the field holds its complement.', 'The carry out of bit 15 is not lost: it is added back in before inverting.', 'Neither the fold nor the inversion has been done.'],
+      },
     },
     {
       title: 'ARP: IP address to MAC address',
@@ -164,6 +189,14 @@ export const chNetwork: Chapter = {
         <p>The table here is four entries, replaced round robin. There is no timeout, no retry timer and no gratuitous ARP; a stack that wants a timeout stores <code>now()</code> beside each entry, and a mapping that changes (a replaced NIC) would be learned again from the next ARP packet addressed to us. When <code>ip_send</code> finds no entry it sends the request, drops the frame it was about to send, and returns 0: the application tries again after a while. That is the real behaviour of a stack with no queue for packets awaiting resolution, and it is why the first ping of a session is slow.</p>
         <p>On the gates, sending the request is ${A_ARP_TX.total.instr} instructions and ${A_ARP_TX.total.clocks} clocks; answering a request, with the learning, ${B_ARP.total.instr} instructions and ${B_ARP.total.clocks} clocks. The frame is on the cable for ${n0(ARP_FRAME)} clocks each way.</p>`,
       widget: () => frameWidget(['arp-req', 'arp-rep']),
+      challenge: {
+        kind: 'quiz',
+        question: 'A host\'s ARP table has no entry for 10.0.0.2, and its application sends a datagram there. What does this stack do with that datagram?',
+        options: ['Sends an ARP request, drops the datagram and returns 0; the application tries again later', 'Queues the datagram until the ARP reply arrives, then sends it', 'Broadcasts the datagram itself, since the MAC is unknown', 'Waits in a loop for the reply, then sends it'],
+        answer: 0,
+        explain: 'ip_send finds no entry, sends the request (' + ARP_REQ_LEN + ' bytes, padded by the MAC to ' + ARP_PAD + ') and gives up on the frame it was building. A stack with no queue for packets awaiting resolution does this, which is why the first ping of a session is slow.',
+        why: ['', 'This stack has no queue; the datagram is lost and the application resends.', 'The frame would go to the broadcast MAC but the IP layer does not do that: it asks first.', 'The stack is a single loop with no waiting; it returns and lets the caller retry.'],
+      },
     },
     {
       title: 'IPv4 and UDP',
@@ -178,6 +211,14 @@ export const chNetwork: Chapter = {
         <p>The sender's 32 data bytes are 16, 17, 18 … like the Linux ping's; the receiver does not look at them. A real ping adds a timestamp and the sequence number to the data; here the time is kept in a variable.</p>
         <p>The stack's cost for one echo request received and answered, on the gates: ${B_ECHO.total.instr} instructions in ${B_ECHO.total.clocks} clocks (${B_ECHO.total.loads} loads, ${B_ECHO.total.stores} stores), and sending one ${A_ECHO_TX.total.instr} instructions in ${A_ECHO_TX.total.clocks}. Handling the reply is ${A_ECHO_RX.total.instr} instructions: it checks the checksum and does not build a frame.</p>`,
       widget: () => frameWidget(['echo-req', 'echo-rep']),
+      challenge: {
+        kind: 'quiz',
+        question: 'A host turns an ICMP echo request into its reply by changing the type from 8 to 0. Why must it also recompute the checksum?',
+        options: ['The checksum covers the whole ICMP message, and the type is in it: the sum changes by 0x0800', 'The reply travels the other way, so the old checksum is for the wrong direction', 'The IP header checksum is the one that covers the type', 'It need not: the receiver ignores the checksum on a reply'],
+        answer: 0,
+        explain: 'The 16-bit word holding type and code goes from 0x' + ECHO.req.toString(16).padStart(4, '0') + ' to 0x' + ECHO.rep.toString(16).padStart(4, '0') + ', so the checksum of the message (0x' + ECHO.ckReq.toString(16).padStart(4, '0') + ' before) becomes 0x' + ECHO.ckRep.toString(16).padStart(4, '0') + ' for the same identifier, sequence and data. A receiver verifies it, as this stack does.',
+        why: ['', 'A checksum has no direction; it is a sum of the message\'s words.', 'The IP header checksum covers the IP header only; the ICMP checksum covers the type.', 'This stack checks the checksum on every reply it receives.'],
+      },
     },
     {
       title: 'Ping across the wire',
@@ -205,7 +246,17 @@ export const chNetwork: Chapter = {
         <p><strong>The software is small next to the cable.</strong> Receiving and answering an echo request is ${n0(B_ECHO.total.clocks)} clocks of work against the ${n0(PING_FRAME_TIME)} that a ${PING_FRAME}-byte frame holds the cable (the gap included): ${B_BUSY_PERCENT} % of a frame time, so at this link speed the CPU keeps up with a stream of such frames, with ${100 - B_BUSY_PERCENT} % to spare. Make the link ten times faster and it would not; that is why real NICs offload checksums and segmentation.</p>
         <p><strong>The byte helpers dominate.</strong> ${BYTES_PERCENT} % of the echo request's clocks, nearly half, are in <code>get16</code>, <code>put16</code>, <code>get32</code>, <code>put32</code> and <code>ones_sum</code>: every byte is a separate bus transaction (a load or a store of one byte, two clocks or more), and the checksum touches each one. A word-oriented checksum, or a NIC that sums as it moves the bytes, would remove most of it. The IP and ICMP logic proper is a few hundred clocks.</p>
         <p><strong>The bus is shared.</strong> The NIC's DMA makes 3 + ⌈len/4⌉ reads and 1 write to send a frame and 2 reads and ⌈len/4⌉ + 1 writes to receive one: ${dmaTotal(PING_DMA.send)} transactions to send a ${PING_FRAME}-byte frame, ${dmaTotal(PING_DMA.receive)} to receive it, against ${n0(B_ECHO.total.loads + B_ECHO.total.stores)} loads and stores by the CPU for the work of one echo. The CPU's polling loop is a load a pass.</p>
-        <p><strong>Latency is mostly the cable.</strong> The ${n0(NET.rtt)}-clock round trip is ${n0(RT.cable)} clocks of frames on the cable (four serializations of ${n0(PING_SERIAL)}, without the gap, which only separates one frame from the next) and ${n0(RT.software)} of software, measured on the gates' own transmit and carrier pins: ${n0(RT.aSend)} for A from the start of <code>icmp_echo</code> to the first bit of the request on its link, ${n0(RT.bReply)} for B from the last bit of the request to the first bit of its reply (${RT.bNotice} clocks for the polling loop to notice the commit, then ${n0(RT.bWork)} clocks of work up to the doorbell), and ${n0(RT.aReceive)} for A from the last bit of the reply to the timestamp. The switch's store-and-forward turnaround adds ${RT.turnaround} clocks, half in each direction. The three windows of the table add up to ${n0(RT.tails)}, more than the software's share, because each window's tail runs while a frame is already on the cable or after the timestamp is taken; nothing in the round trip is left unexplained.</p>
+        <p><strong>Latency is mostly the cable.</strong> The ${n0(NET.rtt)}-clock round trip is ${n0(RT.cable)} clocks of frames on the cable and ${n0(RT.software)} of software, measured on the gates' own transmit and carrier pins:</p>
+        <table class="mini"><tr><th>part of the round trip</th><th>clocks</th></tr>
+          <tr><td>frames on the cable: four serializations of ${n0(PING_SERIAL)}, without the gap, which only separates one frame from the next</td><td>${n0(RT.cable)}</td></tr>
+          <tr><td>A: from the start of <code>icmp_echo</code> to the first bit of the request on its link</td><td>${n0(RT.aSend)}</td></tr>
+          <tr><td>B: from the last bit of the request to the first bit of its reply</td><td>${n0(RT.bReply)}</td></tr>
+          <tr><td>of which B's polling loop noticing the commit</td><td>${RT.bNotice}</td></tr>
+          <tr><td>of which B's work up to the doorbell</td><td>${n0(RT.bWork)}</td></tr>
+          <tr><td>A: from the last bit of the reply to the timestamp</td><td>${n0(RT.aReceive)}</td></tr>
+          <tr><td>the switch's store-and-forward turnaround (it adds ${RT.turnaround} clocks, half in each direction)</td><td>${RT.turnaround}</td></tr>
+          <tr><td>the three software windows added up</td><td>${n0(RT.tails)}</td></tr></table>
+        <p>The windows add up to more than the software's share, because each window's tail runs while a frame is already on the cable or after the timestamp is taken; nothing in the round trip is left unexplained.</p>
         <p><strong>Where this stops.</strong> Two computers on one switch can ping each other because the switch knows each MAC address and floods what it does not. Everything here lives inside one network: a switch moves frames within it and cannot place an address on another. Chapter ${N_ROUTER} takes the next step: an address with structure, a table that holds one line for millions of machines, and a router that moves this same IPv4 packet from one network to another.</p>`;
       },
       widget: costWidget,

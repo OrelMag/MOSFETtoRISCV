@@ -284,6 +284,23 @@ export const CHECK2: Record<string, Quiz[]> = {
     },
   ],
 
+  accumulator: [
+    {
+      question: 'On an accumulator machine, how many instructions does z = x + y take, with x, y and z in memory?',
+      options: ['Three: LDA x, ADD y, STA z', 'One: ADD z, x, y', 'Two: ADD x, STA z'],
+      answer: 0,
+      explain: 'One operand per instruction: load the first, add the second, store the result. Every value passes through A.',
+      why: ['', 'Naming three operands is what a register machine does; an accumulator instruction names one.', 'ADD adds to A; x must be loaded into A first.'],
+    },
+    {
+      question: 'A loop keeps a count and a sum. Why does it run more instructions on an accumulator machine than with two registers?',
+      options: ['Both live in memory and take turns in A: each is loaded and stored every round', 'The accumulator adds more slowly', 'Its jumps take two clocks'],
+      answer: 0,
+      explain: 'With one register, switching from one variable to the other means storing A and loading the other one. Two registers keep both in place.',
+      why: ['', 'The adder is the same; the extra instructions are loads and stores.', 'A jump is one instruction like any other.'],
+    },
+  ],
+
   // ---- ISA and software
   isa: [
     {

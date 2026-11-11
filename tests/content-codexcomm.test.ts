@@ -235,7 +235,8 @@ describe('the Communication codex entries', () => {
     says('serial', 2, '10.3125'); says('serial', 2, '113 NANDs'); says('serial', 0, '5 NANDs');
     quotes('cdr', '487 NANDs', '1.25 %', '3.7 %', '5.8 %', '2.0 %', '3.1 %', '±3.0 %', '100 ppm');
     says('serial', 4, '487 NANDs'); says('serial', 4, '1.25 %'); says('serial', 4, 'ρ ⁄ (4 × 4)');
-    for (const s of ['59 % edges, ceiling 3.7 %', '93 % edges, ceiling 5.8 %', '33 % edges, ceiling 2.0 %', '50 % edges, ceiling 3.1 %']) says('serial', 4, s);
+    // the chapter prints them as a table (pattern, edges, ceiling, measured): each figure in it
+    for (const s of ['59 %', '3.7 %', '93 %', '5.8 %', '33 %', '2.0 %', '50 %', '3.1 %']) says('serial', 4, s);
     expect([0.2 / 16, 0.59 / 16, 0.93 / 16, 0.33 / 16, 0.5 / 16].map((x) => (x * 100).toFixed(2))).toEqual(['1.25', '3.69', '5.81', '2.06', '3.13']);
   });
 
@@ -328,7 +329,7 @@ describe('the Communication codex entries', () => {
     const SHARE = sharedCapacity(20, 0.1, 1e-6);
     expect([SHARE, binomialTail(20, 0.1, SHARE) < 1e-6]).toEqual([10, true]);
     quotes('learnsw', '28,876 NANDs', '26,008', '21,229', '17,357', '213,699', '139,748', '59 bits', '64 ahead', 'one in a million', '10 units', '20 reserved', '7 ⊕ F = 8', '8 ⊕ 0 = 8');
-    says('switch', 2, '28 876 NANDs'); says('switch', 2, '26 008'); says('switch', 2, '21 229'); says('switch', 2, '17 357'); says('switch', 2, '213 699'); says('switch', 2, '139 748');
+    says('switch', 2, '28 876'); says('switch', 2, '26 008'); says('switch', 2, '21 229'); says('switch', 2, '17 357'); says('switch', 2, '213 699'); says('switch', 2, '139 748');
     says('switch', 2, '59 bits'); says('switch', 0, `takes ${SHARE} units`);
     const XB = n(crossbar()), ARB = n(arbiterN(4)), OUT = n(outputPort()), TP = n(tablePort());
     const IN7 = n(inputBuffer({ cellK: 7 })), IN11 = n(inputBuffer({ cellK: 11 }));

@@ -416,30 +416,28 @@ export const chFastAdders: Chapter = {
     {
       title: 'When fan-out costs',
       body: `
-        <p>Every delay so far counted one unit per NAND, whatever it drives. A real gate charges its load. By logical
-        effort a NAND2 takes d = p + g·h: parasitic delay p = 2τ, logical effort g = 4/3, and h its load over one input's
-        capacitance (the same per-net capacitance the power estimate uses). One unit below is a NAND driving one NAND input.
+        <p>Every delay so far counted one unit per NAND, whatever it drives. A real gate charges its load, and a bigger load takes longer.
+        <strong>Logical effort</strong> puts a number on it: a NAND2 takes d = p + g·h, where τ is the basic delay unit, p = 2τ is the gate's own (parasitic) delay,
+        g = 4/3 says a NAND is harder to drive than an inverter, and h is its load over one input's
+        capacitance. One unit below is a NAND driving one NAND input.
         A NAND driving sixteen takes ${fo16.drawn} units with minimum-size gates. A pair of inverters sized up in front of
         the load, which synthesis inserts, brings that to ${fo16.buffered}.</p>
         <p>Under unit delay, Sklansky ties Kogge–Stone with fewer cells. Its last level has one cell driving n/2 others.
         Count the loads and, drawn with minimum-size gates, the 64-bit Sklansky falls behind even Brent–Kung. With buffer
         trees it comes back to within a few units of Kogge–Stone, and the buffers are not in its NAND count. Brent–Kung pays
-        in levels in every model. Kogge–Stone's own price, n·log n cells and diagonals 2<sup>j</sup> rows long, is wiring.
-        This model does not see wire length: a drawing's wires are not a layout's, and length is only real once a design is
-        placed (<a href="#/c/silicon/0">chapter ${numOf('silicon')}</a>).</p>
-        <p>The last two rows are loads every design has. A memory's row decoder is 7 NAND delays by unit delay and nearly
-        three times that under load: each address inverter feeds half the rows, and each word line three inputs per bit of
-        its word (the enable muxes). The clock is worse. Unit delay counts the NAND driving a 64-bit register's clock as one
-        delay; its 256 inputs make it, drawn with minimum-size gates, over three times slower than the whole 64-bit
-        Kogge–Stone. Real chips drive the clock through a buffer tree (about 6 units here) and balance its branches so
-        every flip-flop sees the edge at once.</p>
-        <p>The Timing panels have the same <b>Unit / Load</b> switch, here and in the sandbox. The view menu's
-        <b>Load-dependent delay</b> makes them open on Load. The other chapters quote unit delay.</p>
-        <p>The lesson is about the model, not the adders: unit delay is a good first approximation of a circuit whose gates all drive about the same load, and a poor one wherever fan-out varies. Every design has a few places
-        where it varies a lot (a decoder's address lines, a clock, a reset, a register file's write enable), and those are where the real timing differs from the unit-delay count.</p>`,
+        in levels in every model. Kogge–Stone's own price is wiring, which this model does not see (<a href="#/c/silicon/0">chapter ${numOf('silicon')}</a>).</p>
+        <p>The Timing panels have the same <b>Unit / Load</b> switch, here and in the sandbox. The other chapters quote unit delay.</p>
+        <p>The lesson is about the model, not the adders: unit delay is a good first approximation where gates all drive about the same load, and a poor one wherever fan-out varies (a decoder's address lines, a clock, a reset), and those are where real timing differs from the unit-delay count.</p>`,
       widget: () => prefixDelays(),
       more: {
-        derive: `<p>Logical effort: d = p + g·h, with p = 2 and g = 4/3 for a NAND2 and h the load over one input\'s capacitance. The delay rises linearly with the load: a fan-out of 16 takes ${fo16.drawn} units drawn with minimum-size gates, against 1 for a fan-out of 1.
+        derive: `<p>The load model: each sink adds ${FF_INPUT} fF for the gate it feeds and ${FF_WIRE} fF of wire for its branch, the same per-net capacitance the power estimate uses, and h is the net's load over one input's ${FF_INPUT} fF. Wire length is not modelled: a drawing's wires are not a layout's, and length is only real once a design is placed.</p>
+          <p>Two loads every design has: a memory's row decoder is 7 NAND delays by unit delay and nearly
+          three times that under load: each address inverter feeds half the rows, and each word line three inputs per bit of
+          its word (the enable muxes). The clock is worse. Unit delay counts the NAND driving a 64-bit register's clock as one
+          delay; its 256 inputs make it, drawn with minimum-size gates, over three times slower than the whole 64-bit
+          Kogge–Stone. Real chips drive the clock through a buffer tree (about 6 units here) and balance its branches so
+          every flip-flop sees the edge at once.</p>
+          <p>Logical effort: d = p + g·h, with p = 2 and g = 4/3 for a NAND2 and h the load over one input\'s capacitance. The delay rises linearly with the load: a fan-out of 16 takes ${fo16.drawn} units drawn with minimum-size gates, against 1 for a fan-out of 1.
           Buffering splits one big step into stages of about the same effort: two inverters, each a fan-out of about 4, take it down to ${fo16.buffered}.</p>`,
         numbers: `<table class="mini"><tr><th>64 bits</th><th>unit</th><th>drawn</th><th>buffered</th></tr>${([['Kogge–Stone', koggeStone], ['Sklansky', sklansky], ['Brent–Kung', brentKung]] as const)
           .map(([name, make]) => `<tr><td>${name}</td><td>${D(make(64))}</td><td>${fmt(logicDepth(make(64), 'drawn'))}</td><td>${fmt(logicDepth(make(64), 'load'))}</td></tr>`).join('')}</table>`,
@@ -462,18 +460,15 @@ export const chFastAdders: Chapter = {
         and a program turns the text into gates: <span data-ahead="synthesis">synthesis, which picks gates that compute what the text says and wires them up</span>. This is the generate-and-propagate recipe of this chapter with a carry per bit, written as ${VADDER_SOURCE.split('\n').filter((l) => l.includes('wire')).length} lines of Verilog. Each carry here is written from the one before it, so it is still a ripple; writing every carry straight from <code>g</code>, <code>p</code> and <code>ci</code> would make it the lookahead.
         Yosys, an open-source synthesizer, mapped it onto NANDs and inverters once; the circuit on the stage is its result, held equal to a fresh Yosys run by this site's tests, so nothing is fetched when the page opens.</p>
         <pre class="code vsrc">${VADDER_HTML}</pre>
-        <p>In Verilog <code>^</code> is XOR, <code>&amp;</code> AND and <code>|</code> OR; <code>[3:0]</code> makes a 4-bit bus and <code>g[0]</code> picks its lowest bit; <code>{c3, c2, c1, ci}</code> glues bits side by side into one bus.
-        Each line declares a wire and what drives it: <code>p</code> and <code>g</code> are the propagate and generate of the previous steps, <code>c1</code>–<code>c4</code> the carries,
-        <code>sum</code> the result. Hover a line to light the <span data-show="${VADDER_PATH.cells.join(' ')}">gates it became</span>. After synthesis a gate has no name of its own, so the
-        <code>(* keep *)</code> marks do the tracing: synthesis must leave each marked wire as a net, and a gate is blamed on the line of the marked wire it feeds. A gate shared by two lines shows under both.</p>
+        <p>In Verilog <code>^</code> is XOR, <code>&amp;</code> AND and <code>|</code> OR; <code>[3:0]</code> makes a 4-bit bus. Each line declares a wire and what drives it: <code>p</code> and <code>g</code> are the propagate and generate of the previous steps, <code>c1</code>–<code>c4</code> the carries,
+        <code>sum</code> the result. Hover a line to light the <span data-show="${VADDER_PATH.cells.join(' ')}">gates it became</span>.</p>
         <p>The critical path is the longest chain of gates from an input to an output: ${VADDER_PATH.depth} NAND delays, from <code>${VADDER_PATH.from}</code> to <code>${VADDER_PATH.to}</code>
         (${VADDER_PATH.cells.length} of the ${VERILOG_ADD4_NANDS} gates, lit on the circuit). The bar beside a source line marks the lines it came from: ${PATH_LINES}.
         It enters through the propagate, crosses the carries <code>c1</code>, <code>c2</code>, <code>c3</code> in turn, and leaves through the sum. The same ripple as the hand-drawn adder, found by the tool in the text.
         It ends at <code>s[3]</code>, not at the carry-out: <code>c4</code> settles after ${ARR_C4} delays, the last sum bit, which needs <code>c3</code> and one more XOR, after ${VADDER_PATH.depth}.</p>
         <p>The price of writing it this way: ${VERILOG_ADD4_NANDS} NANDs and depth ${VADDER_PATH.depth}, against ${N(rca(4))} and ${D(rca(4))} for the hand-drawn ripple adder of the first step.
-        The recipe is the same. The hand-drawn full adder was found by hand to share its first NAND between sum and carry; the text asks for <code>p</code> and <code>g</code> as wires of their own, and the gates came out larger.</p>
-        <div class="try">Toggle <code>ci</code>: with a = 7 and b = 0 the carry crosses <code>c1</code>, <code>c2</code> and <code>c3</code> one after another, the lit path.</div>
-        <p>To try it yourself, open <em>Examples ▸ The same adder in Verilog</em> in the sandbox: a Verilog chip that synthesizes as you type. It starts from the one-line form, <code>assign {co, s} = a + b + ci;</code>; paste the listing above into its Verilog pane to get this adder, and compare the two NAND counts.</p>`,
+        The recipe is the same; the text asks for <code>p</code> and <code>g</code> as wires of their own, and the gates came out larger.</p>
+        <div class="try">Toggle <code>ci</code>: with a = 7 and b = 0 the carry crosses <code>c1</code>, <code>c2</code> and <code>c3</code> one after another, the lit path.</div>`,
       scene: () => ({ root: VERILOG_ADD4, inputs: { a: 7, b: 0, ci: 0 }, highlight: VADDER_PATH.cells, animate: true }),
       actions: [{ label: 'Toggle ci', run: (st) => st.toggleInput('ci') }],
       tries: [(st) => st.getInput('ci') === 1],
@@ -481,7 +476,9 @@ export const chFastAdders: Chapter = {
       more: {
         derive: `<p>Each cell's arrival is one more than its latest input, with every input at 0. The outputs, in NAND delays:
           ${VERILOG_ADD4_ARRIVALS}</p>`,
-        real: `<p>Static timing tools in a real flow report the same thing, a chain of cells from a start point to an end point, but name the nets and cells, not the source lines: ABC rebuilds the logic, so source locations are lost on the way (here too: the gates carry none). That is why designers name the wires they want to find again, and why a timing report is read against the netlist.</p>`,
+        real: `<p>To try it yourself, open <em>Examples ▸ The same adder in Verilog</em> in the sandbox: a Verilog chip that synthesizes as you type. It starts from the one-line form, <code>assign {co, s} = a + b + ci;</code>; paste the listing above into its Verilog pane to get this adder, and compare the two NAND counts.</p>
+          <p>Reading the listing: <code>g[0]</code> picks the lowest bit of a bus; <code>{c3, c2, c1, ci}</code> glues bits side by side into one bus. After synthesis a gate has no name of its own, so the <code>(* keep *)</code> marks do the tracing: synthesis must leave each marked wire as a net, and a gate is blamed on the line of the marked wire it feeds. A gate shared by two lines shows under both.</p>
+          <p>Static timing tools in a real flow report the same thing, a chain of cells from a start point to an end point, but name the nets and cells, not the source lines: ABC rebuilds the logic, so source locations are lost on the way (here too: the gates carry none). That is why designers name the wires they want to find again, and why a timing report is read against the netlist.</p>`,
         pitfall: `<p>Reading the blame as exact. A gate with no marked wire after it has no line, and a gate that feeds two marked wires is listed under both. With fewer <code>keep</code> marks synthesis would be freer to merge gates, and a path could no longer be pointed at a line.</p>`,
       },
       challenge: {

@@ -212,6 +212,12 @@ export const CASES0: Record<string, LevelCase> = {
       { name: 'Gated clock (clk AND en)', nand: 38, note: 'Four 9-NAND flip-flops and one AND on the clock; it fails on silicon (glitches on en, skew).' },
     ],
   },
+  m_acc: {
+    problem: 'Every part of a computer has been built on its own: a counter, a memory, a register, an adder. A computer is those parts joined by a decoder, so that a list of numbers in a ROM decides, one word per clock, which of them acts.',
+    without: 'Without the decoder each part needs a hand on a switch: that is what the levels so far have been, every input set by the learner.',
+    cost: 'The reference is 5795 NANDs at a period of 45: the 32-byte RAM 5157 of them, A and OUT 120 each, the adder 108, the PC with its incrementer and multiplexer 120, and the control 49. Act 5 builds the same plan with 16-bit words and eight registers.',
+    alts: [{ name: 'The reference machine', lib: 'acc8_core' }],
+  },
   s_icg: {
     problem: 'A register that is not written still sees every clock edge: each flip-flop\'s latches switch and the clock net is charged and discharged, cycle after cycle. Stopping its clock saves that energy, and the enable muxes too, if the stopped clock can never glitch.',
     without: 'A bare clk AND en cuts a pulse short, or makes an extra one, whenever en changes while clk is high: a flip-flop that sees a runt edge may load, or go metastable.',

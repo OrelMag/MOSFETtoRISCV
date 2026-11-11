@@ -29,9 +29,9 @@ describe('pipelining: every hazard, cycle by cycle', () => {
     expect(S).toMatchObject({ cycles: 16, retired: 9, stalls: 1, flushed: 2 });
     expect(S.fill + S.retired + S.stalls + S.flushed).toBe(S.cycles);
     const step = chPipeline.steps.find((s) => s.title === 'Control hazards')!;
-    expect(step.body).toContain('Worked example: every hazard, cycle by cycle');
-    expect(step.body).toContain(`in ${S.cycles} cycles`);
-    expect(chPipeline.steps.find((s) => s.title === 'Does it pay? Measured')!.body).toContain('Common mistakes with pipelines');
+    expect(step.more!.numbers).toContain('Worked example: every hazard, cycle by cycle');
+    expect(step.more!.numbers).toContain(`in ${S.cycles} cycles`);
+    expect(chPipeline.steps.find((s) => s.title === 'Does it pay? Measured')!.more!.pitfall).toContain('Common mistakes with pipelines');
   });
 });
 
@@ -67,7 +67,7 @@ describe('caches: two arrays one cache apart', () => {
     const dm = chCache.steps.find((s) => s.title === 'A direct-mapped cache')!;
     expect(dm.tour!.beats.slice(1, 3).reduce((n, b) => n + (b.cycles ?? 0), 0)).toBe(R.MISS);
     expect(chCache.steps.find((s) => s.title === 'The three Cs and associativity')!.body).toContain('Worked example: two arrays one cache apart');
-    expect(chCache.steps.find((s) => s.title === 'Average memory access time')!.body).toContain('Common mistakes with caches');
+    expect(chCache.steps.find((s) => s.title === 'Average memory access time')!.more!.pitfall).toContain('Common mistakes with caches');
   });
 });
 
