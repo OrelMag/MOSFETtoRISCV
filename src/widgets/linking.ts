@@ -151,7 +151,7 @@ export function linkWidget(): Widget {
         : h('table', { class: 'data ln-table' },
           h('tr', null, ...['at', 'kind', 'symbol', 'value', 'before', 'after'].map((t) => h('th', null, t))),
           ...r.patches.map((p) => h('tr', null, h('td', null, hex(p.at)), h('td', null, p.kind.replace('R_RISCV_', '')), h('td', null, `${p.symbol} = ${hex(p.target)}`),
-            h('td', null, p.kind === 'R_RISCV_32' ? hex(p.value, 8) : String(p.value)), h('td', null, h('code', null, p.section === 'text' ? disasm(p.before, p.at) : hex(p.before, 8))), h('td', null, h('code', null, p.section === 'text' ? disasm(p.after, p.at) : hex(p.after, 8)))))));
+            h('td', null, p.kind === 'R_RISCV_32' ? hex(p.value, 8) : p.kind === 'R_RISCV_PCREL_HI20' ? `${((p.value << 12) >> 12)} (${hex(p.value)})` : String(p.value)), h('td', null, h('code', null, p.section === 'text' ? disasm(p.before, p.at) : hex(p.before, 8))), h('td', null, h('code', null, p.section === 'text' ? disasm(p.after, p.at) : hex(p.after, 8)))))));
   };
   draw();
   const el = h('div', { class: 'widget ln-widget' }, h('div', { class: 'param-row' }, h('label', null, 'Link ', sel)), out,
@@ -288,7 +288,7 @@ export function doomWidget(): Widget {
         h('tr', null, h('td', null, '.text (ROM, R X)'), h('td', null, hex(img.textBase, 8)), h('td', null, hex(img.textBase + 4 * img.text.length, 8)), h('td', null, `${groupDigits(4 * img.text.length)} bytes`), h('td', null, 'the image\'s ROM words')),
         h('tr', null, h('td', null, '.rodata, .data (RAM, R W)'), h('td', null, hex(img.dataBase, 8)), h('td', null, hex(dataEnd, 8)), h('td', null, `${groupDigits(4 * img.data.length)} bytes`), h('td', null, 'the image\'s RAM words, placed before the CPU starts')),
         h('tr', null, h('td', null, '.bss (RAM, R W)'), h('td', null, hex(dataEnd, 8)), h('td', null, hex(img.bssEnd, 8)), h('td', null, `${groupDigits(img.bssEnd - dataEnd)} bytes`), h('td', null, 'zeroed by crt0.S before main'))),
-        h('p', { class: 'sub' }, `Read from Appendix B's doom.img when this step opened: entry ${hex(img.entry, 8)}, the ROM from ${hex(img.textBase, 8)}, the RAM's first word at ${hex(img.dataBase, 8)} (the page below is left unmapped to catch null pointers).`));
+        h('p', { class: 'sub' }, `Read from Appendix B's doom.img when this step opened: entry ${hex(img.entry, 8)}, the ROM from ${hex(img.textBase, 8)}, the RAM's first word at ${hex(img.dataBase, 8)} (the page below is left empty: the machine has no MMU, so nothing traps, but a stray null pointer finds nothing the program put there).`));
     } catch (e) {
       if (alive) out.replaceChildren(h('p', { class: 'sub' }, `doom.img could not load: ${e instanceof Error ? e.message : String(e)}`));
     }
