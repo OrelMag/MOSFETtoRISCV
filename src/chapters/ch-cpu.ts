@@ -15,7 +15,7 @@ import { OWN_COST, ownInstrScene, ownInstrSolved, solveOwnInstr } from '../widge
 import { controlPanel, CONTROL_SOURCE, CPU_NANDS, cpuPeriodWidget, MEASURED, PERIOD, PERIOD_LOAD } from '../widgets/cpucost';
 import { abiTable, expand, pseudoWidget, SUM_CALLS, SUM_RUN, sumRun } from '../widgets/abi';
 import { assemblerWorkspace, fetchLoop, instructionExplorer } from '../widgets/riscv';
-import { ASM_FRAME, ASM_IF, ASM_LOOP, FRAME_COST, FRAME_SOLUTION, IF_SOLUTION, IF_TEMPLATE, LOOP_SOLUTION, MAX_STEPS, NEG4_UNSIGNED, loopSteps } from '../widgets/asmlab';
+import { ASM_FRAME, ASM_IF, ASM_LOOP, FRAME_COST, FRAME_EXAMPLE, FRAME_SOLUTION, IF_SOLUTION, IF_TEMPLATE, LOOP_EXAMPLE, LOOP_SOLUTION, MAX_STEPS, NEG4_UNSIGNED, loopSteps } from '../widgets/asmlab';
 import type { Stage } from '../view/stage';
 import type { Chapter } from './types';
 import { aluSteps, BRANCH_WRONG, CTL_PARTS } from './alu/steps';
@@ -676,11 +676,11 @@ export const chIsa: Chapter = {
     {
       title: 'A loop over an array',
       body: `
-        <p>A loop is a branch that goes backward. The only other thing a loop over memory needs is an address that moves. Words are 4 bytes, so word <em>i</em> of an array that starts at address <em>b</em> lives at <em>b</em> + 4<em>i</em>, and <code>lw rd, off(rs1)</code> reads the word at <code>rs1 + off</code>. Keep a <strong>pointer</strong> in a register, read through it, add 4, and stop when it reaches the address just past the last word. That end address is computed once, before the loop: <em>b</em> + 4<em>N</em>, a shift left by 2 and an add.</p>
-        <pre class="code">${LOOP_SOLUTION}</pre>
+        <p>A loop is a branch that goes backward. The only other thing a loop over memory needs is an address that moves. Words are 4 bytes, so word <em>i</em> of an array that starts at address <em>b</em> lives at <em>b</em> + 4<em>i</em>, and <code>lw rd, off(rs1)</code> reads the word at <code>rs1 + off</code>. Keep a <strong>pointer</strong> in a register, read through it, add 4, and stop when it reaches the address just past the last word. That end address is computed once, before the loop: <em>b</em> + 4<em>N</em>, a shift left by 2 and an add. Here is the shape on a different job, adding 1 to every word where it lies:</p>
+        <pre class="code">${LOOP_EXAMPLE}</pre>
         <p>Two details are the usual bugs. The test sits at the bottom of the loop, so one backward branch does both the test and the jump, but the body then runs once before anything is tested: an array of <em>N</em> = 0 needs the guard in front (<code>bgeu</code> before the loop), or the loop reads a word that is not in the array. And the pointer is compared with <code>bltu</code>: addresses are unsigned.</p>
-        <p>It runs on the simulator in ${loopSteps(0)} instructions for an empty array, ${loopSteps(1)} for one word, ${loopSteps(8)} for eight: ${loopSteps(2) - loopSteps(1)} instructions a word, plus ${loopSteps(0)} to set up and stop. Only one of the ${loopSteps(2) - loopSteps(1)}, the <code>add</code>, is the sum; the load, the pointer step and the branch are the price of walking memory with a loop. Reading <code>4(t0)</code> as well as <code>0(t0)</code> in one trip would halve the pointer steps and branches, and is what a compiler does when it unrolls a loop.</p>
-        <div class="try">Write it: the cases put the array in data memory and a junk word just past its end, so a loop that runs one time too many gives a wrong sum.</div>`,
+        <div class="try">Now the sum, which keeps a running total in a0 instead of writing back: the cases put the array in data memory and a junk word just past its end, so a loop that runs one time too many gives a wrong sum.</div>`,
+      more: { derive: `<p>The answer runs on the simulator in ${loopSteps(0)} instructions for an empty array, ${loopSteps(1)} for one word, ${loopSteps(8)} for eight: ${loopSteps(2) - loopSteps(1)} instructions a word, plus ${loopSteps(0)} to set up and stop. Only one of the ${loopSteps(2) - loopSteps(1)}, the <code>add</code>, is the sum; the load, the pointer step and the branch are the price of walking memory with a loop. Reading <code>4(t0)</code> as well as <code>0(t0)</code> in one trip would halve the pointer steps and branches, and is what a compiler does when it unrolls a loop.</p>` },
       widget: (st) => ASM_LOOP.widget(st),
       challenge: {
         kind: 'reach',
@@ -704,9 +704,11 @@ export const chIsa: Chapter = {
         <li><code>x</code> and the first result must outlive a call, and <code>t</code> and <code>a</code> registers do not. They go in <code>s0</code> and <code>s1</code>.</li>
         <li>An <code>s</code> register belongs to <code>f</code>'s caller. Using one means saving its old value on entry (the <strong>prologue</strong>) and putting it back before <code>ret</code> (the <strong>epilogue</strong>), with <code>sp</code> moved down and back up by the same 16 bytes.</li>
         </ul>
-        <pre class="code">${FRAME_SOLUTION}</pre>
-        <p>${FRAME_COST.ownLines} lines, of which ${FRAME_COST.frame} only open and close the frame (<code>addi sp</code> twice, three <code>sw</code>, three <code>lw</code>) and the rest are the two calls and the addition. A whole run, <code>f(4)</code> from the <code>call</code> in main to the halt, is ${FRAME_COST.steps} instructions. The cases below fill <code>s0</code> to <code>s11</code> with marker values before the call and check them, and <code>sp</code>, after: a version that forgets to restore one gets the right sum and fails anyway, which is what a bug in this convention looks like to the code that called you, at some later place.</p>
+        <p>The shape, on a smaller function, <code>h(x) = x + g(x)</code>: one value to keep across one call, so a frame for <code>ra</code> and <code>s0</code>.</p>
+        <pre class="code">${FRAME_EXAMPLE}</pre>
+        <p><code>f</code> needs one more register, for the first result, and a second call.</p>
         <div class="try">Write <code>f</code>. First try it without saving <code>ra</code> and read what the simulator does.</div>`,
+      more: { derive: `<p>The answer is ${FRAME_COST.ownLines} lines, of which ${FRAME_COST.frame} only open and close the frame (<code>addi sp</code> twice, three <code>sw</code>, three <code>lw</code>) and the rest are the two calls and the addition. A whole run, <code>f(4)</code> from the <code>call</code> in main to the halt, is ${FRAME_COST.steps} instructions. The cases below fill <code>s0</code> to <code>s11</code> with marker values before the call and check them, and <code>sp</code>, after: a version that forgets to restore one gets the right sum and fails anyway, which is what a bug in this convention looks like to the code that called you, at some later place.</p>` },
       widget: (st) => ASM_FRAME.widget(st),
       challenge: {
         kind: 'reach',

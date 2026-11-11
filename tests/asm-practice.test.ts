@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ASM_FRAME, ASM_IF, ASM_LOOP, FRAME_COST, FRAME_SOLUTION, IF_SOLUTION, LOOP_SOLUTION, MAX_STEPS, gradeProgram, loopSteps } from '../src/widgets/asmlab';
+import { ASM_FRAME, ASM_IF, ASM_LOOP, FRAME_COST, FRAME_EXAMPLE, FRAME_SOLUTION, IF_SOLUTION, LOOP_EXAMPLE, LOOP_SOLUTION, MAX_STEPS, examplesWork, gradeProgram, loopSteps } from '../src/widgets/asmlab';
 
 const allPass = (src: string, p: { cases: Parameters<typeof gradeProgram>[1] }) => {
   const g = gradeProgram(src, p.cases);
@@ -47,5 +47,16 @@ describe('step 1 template', () => {
     const run = (a: number, b: number) => { const iss = new ISS(assemble(IF_TEMPLATE).words); iss.x[10] = a >>> 0; iss.x[11] = b >>> 0; iss.run(100); return iss.x[12]; };
     expect([run(1, 2), run(2, 1), run(2, 2), run(-1, 0)]).toEqual([1, 2, 2, 1]);
     expect(NEG4_UNSIGNED).toBe(4294967292);
+  });
+});
+
+describe('the worked examples the step bodies print', () => {
+  it('run correctly on the simulator, and are not the challenges\' answers', () => {
+    expect(examplesWork()).toBe(true);
+    expect(LOOP_EXAMPLE).not.toBe(LOOP_SOLUTION);
+    expect(FRAME_EXAMPLE).not.toBe(FRAME_SOLUTION);
+    // the array example does not pass the sum challenge, nor the h example the f challenge
+    expect(allPass(LOOP_EXAMPLE, ASM_LOOP)).toBe(false);
+    expect(allPass(ASM_FRAME.initial.replace(/f:\s+# your code here\n\s+ret/, FRAME_EXAMPLE.replace(/^h:/, 'f:')), ASM_FRAME)).toBe(false);
   });
 });

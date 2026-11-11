@@ -74,7 +74,7 @@ export function asmPractice(o: AsmPracticeOpts): AsmPractice {
       } else {
         const n = g.verdicts.filter((v) => v.pass).length;
         out.replaceChildren(
-          h('p', { class: 'sub', 'aria-live': 'polite' }, `${n} of ${g.verdicts.length} cases right on the golden model.`),
+          h('p', { class: 'sub', 'aria-live': 'polite' }, `${n} of ${g.verdicts.length} cases right on the simulator.`),
           h('table', { class: 'mini abi-tab' },
             h('thead', null, h('tr', null, h('th', null, 'case'), h('th', null, 'wanted'), h('th', null, 'got'), h('th', { class: 'r' }, 'instrs'), h('th', null, ''))),
             h('tbody', null, g.verdicts.map((v) => h('tr', null,
@@ -88,9 +88,9 @@ export function asmPractice(o: AsmPracticeOpts): AsmPractice {
     setText = (t) => { editor.value = t; render(); };
     render();
     return {
-      el: h('div', { class: 'widget' }, h('div', { class: 'wgrid' },
+      el: h('div', { class: 'widget asm-practice' }, h('div', { class: 'wgrid' },
         h('div', { class: 'panel' }, h('h3', null, o.heading), h('p', { class: 'sub', html: o.note }), editor.el),
-        h('div', { class: 'panel' }, h('h3', null, 'Run on the golden model'), out))),
+        h('div', { class: 'panel' }, h('h3', null, 'Run on the simulator'), out))),
       destroy: () => { setText = null; editor.destroy(); },
     };
   };
@@ -235,6 +235,47 @@ export const FRAME_COST = (() => {
   const frame = FRAME_SOLUTION.split('\n').filter((l) => /^\s*(f:\s+)?(addi sp|sw\s+(ra|s\d)|lw\s+(ra|s\d))/.test(l)).length;
   return { steps, frame, ownLines: FRAME_SOLUTION.split('\n').length };
 })();
+
+// ---- the worked examples the step bodies print (not the challenges' answers, which only Show answer gives) ----------
+
+/** Step 2's example: add 1 to every word of an array, in place (the same pointer, end address and guard as the sum). */
+export const LOOP_EXAMPLE = `        slli a1, a1, 2      # N words are 4 N bytes
+        add  a1, a0, a1     # a1 = the address just past the array
+        bgeu a0, a1, halt   # an empty array: nothing to do
+loop:   lw   t1, 0(a0)      # the word a0 points at
+        addi t1, t1, 1
+        sw   t1, 0(a0)      # written back where it came from
+        addi a0, a0, 4      # next word: 4 bytes on
+        bltu a0, a1, loop
+halt:   j    halt`;
+
+/** Step 3's example: h(x) = x + g(x), a frame for ra and one s register. */
+export const FRAME_EXAMPLE = `h:      addi sp, sp, -16    # open a frame
+        sw   ra, 12(sp)     # call g overwrites ra
+        sw   s0, 8(sp)      # the caller's s0, kept for it
+        mv   s0, a0         # x outlives the call in s0
+        call g              # a0 = g(x)
+        add  a0, a0, s0     # x + g(x)
+        lw   s0, 8(sp)      # the caller's s0 back
+        lw   ra, 12(sp)
+        addi sp, sp, 16     # close the frame
+        ret`;
+
+/** The examples run: LOOP_EXAMPLE on each practice array, FRAME_EXAMPLE as h(x) = x + 3x with g and the markers (tests). */
+export function examplesWork(): boolean {
+  const loopOk = ARRAYS.every((a) => {
+    const iss = new ISS(assemble(LOOP_EXAMPLE).words);
+    iss.x[10] = a.base; iss.x[11] = a.vals.length; a.vals.forEach((v, i) => { iss.dmem[(a.base >> 2) + i] = v >>> 0; }); iss.dmem[(a.base >> 2) + a.vals.length] = 1000;
+    iss.run(STEP_LIMIT);
+    return iss.halted && wordsAt(iss, a.base, a.vals.length + 1).every((v, i) => (i < a.vals.length ? v === a.vals[i] + 1 : v === 1000));
+  });
+  const frame = gradeProgram(`${FRAME_MAIN.replace('call f', 'call h')}\n${FRAME_EXAMPLE}`, [4, 0, -2, 10].map((x) => ({
+    label: `h(${x})`, want: '', got: () => '',
+    setup: (iss: ISS) => { iss.x[10] = x >>> 0; S_REGS.forEach((r, i) => { iss.x[r] = SENTINEL(i); }); },
+    ok: (iss: ISS) => signed(iss.x[10]) === 4 * x && S_REGS.every((r, i) => iss.x[r] === SENTINEL(i)) && iss.x[2] === FRAME_SP,
+  })));
+  return loopOk && !frame.errors.length && frame.verdicts.every((v) => v.pass);
+}
 
 /** Instructions the reference max takes when a0 is already the larger, and when a1 is. */
 export const MAX_STEPS = (() => {
