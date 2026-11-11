@@ -34,7 +34,7 @@ TC, TCF             1 MCT = 11.7 µs</pre>The chapter's table sum, five words: 4
     mistakes: [
       'Reading its numbers as two\'s complement: 77777 (octal) is −0, not −1.',
       'Expecting a register as wide as a word: A, L and Q have 16 bits, one more than memory, to hold an overflow.',
-      'Thinking of it as one chip: about 5600 NOR gates, two to a flatpack, welded onto boards in 24 logic modules.',
+      'Thinking of it as one chip: about 5600 NOR gates, two to a flatpack, welded into logic modules.',
     ],
     chapters: [at(0, 'Meet the AGC'), at(7, 'Thirty-four instructions')],
   },

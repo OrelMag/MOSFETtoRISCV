@@ -14,7 +14,7 @@ export function pdp8Chip(id: string, name: string): ChipDoc {
     id, name,
     notes: 'The ROM holds a PDP-8 program in the PDP-8\'s own instruction table: 12-bit words, octal, PAL-style operands. Select the ROM and press Front panel…: '
       + 'the PDP-8 runs it on its model (not on this circuit), with lamps for PC, MA, MB, AC and L, the switch register, LOAD ADD, DEP, EXAM, START and a teletype. '
-      + 'On the canvas the ROM is the core image: set addr to an address and read the word on data.',
+      + 'On the canvas the ROM is the core image: set addr to an address and read the word on data. Octal, pages, the operate bits and the keys: Codex ▸ PDP-8.',
     pins: [
       { id: 'addr', name: 'addr', dir: 'in', width: 12, at: [2, 8], value: PDP8_HELLO.start },
       { id: 'data', name: 'data', dir: 'out', width: 12, at: [40, 8] },
@@ -79,7 +79,7 @@ export function pdp8GatesChip(id: string, name: string): ChipDoc {
     notes: 'The PDP-8 built from gates: double-click the processor for its control unit, MA & MB, PC, AC & link (both operate groups, the MQ) and the teletype\'s IOTs. '
       + 'One clock edge is one memory cycle (Fetch, Defer, Execute); DEC split each into four time pulses, which a RAM read at once does not need. '
       + 'The RAM stands in for the core memory (whose reads were destructive, rewritten in the same cycle) and holds Hello, world from 0200. '
-      + 'SR is the switch register; a key pin acts once when it goes to 1. Run, then LOAD_ADD (PC ← SR), then START: the teleprinter prints.',
+      + 'SR is the switch register; a key pin acts once when it goes to 1. Run, then LOAD_ADD (PC ← SR), then START: the teleprinter prints. What the machine assumes: Codex ▸ PDP-8.',
     comments: [{ id: 'how', at: [4, 50], text: 'Run the clock, set LOAD_ADD to 1 (PC ← SR = 0200), then START: HELLO, WORLD! on the teleprinter.' }],
   });
 }

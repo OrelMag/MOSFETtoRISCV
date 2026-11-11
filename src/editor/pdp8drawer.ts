@@ -74,7 +74,9 @@ export class Pdp8DrawerPanel {
     }));
     this.el = h('div', { class: 'p8-drawer' },
       h('div', { class: 'p8-panel', role: 'group', 'aria-label': 'Front panel lamps: the processor\'s registers' }, h('div', { class: 'p8-regs' }, Object.values(rows).map((r) => r.el)), state),
-      h('div', { class: 'p8-panel p8-srpanel' }, this.srBox, keys));
+      h('div', { class: 'p8-panel p8-srpanel' }, this.srBox, keys),
+      h('p', { class: 'sb-sum' }, 'What the machine assumes (octal, pages, the operate bits, the keys): ',
+        h('a', { href: '#/campaign/codex/pdp8', target: '_blank', rel: 'noopener' }, 'the PDP-8 in the codex'), '.'));
   }
 
   update(r: Pdp8Read | null, sr: number | null, wired: Partial<Record<Pdp8Key, string>>, srWired: boolean): void {

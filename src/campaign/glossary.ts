@@ -15,6 +15,7 @@ import { ALIASES_VEC } from './codexvec';
 import { ALIASES_VERIFY } from './codexverify';
 import { ALIASES_BABY } from './codexbaby';
 import { ALIASES_AGC } from './codexagc';
+import { ALIASES_PDP8 } from './codexpdp8';
 
 /** Other names an entry goes by in the chapters' prose. */
 export const ALIASES: Record<string, string[]> = {
@@ -71,6 +72,7 @@ export const ALIASES: Record<string, string[]> = {
   ...ALIASES_BABY,
   // Appendix F (codexagc.ts)
   ...ALIASES_AGC,
+  ...ALIASES_PDP8,
 };
 
 /** Entries never marked automatically: their names are everyday words in the prose. */

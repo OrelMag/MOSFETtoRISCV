@@ -16,6 +16,7 @@ import { CODEX_VM } from './codexvm';
 import { CODEX_VERIFY } from './codexverify';
 import { CODEX_BABY } from './codexbaby';
 import { CODEX_AGC } from './codexagc';
+import { CODEX_PDP8 } from './codexpdp8';
 
 import { numOf } from '../chapters/order';
 export type CodexKind = 'component' | 'law' | 'tool' | 'concept' | 'trick';
@@ -224,6 +225,8 @@ export const CODEX: CodexEntry[] = [
   ...CODEX_BABY,
   // Appendix F: the Apollo Guidance Computer (codexagc.ts)
   ...CODEX_AGC,
+  // the PDP-8 (the sandbox's examples, the multicycle chapter's state table: codexpdp8.ts)
+  ...CODEX_PDP8,
 ];
 
 export const codexById = (id: string): CodexEntry | undefined => CODEX.find((e) => e.id === id);
