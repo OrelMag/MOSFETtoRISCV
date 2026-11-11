@@ -142,3 +142,21 @@ describe('box symbol text', () => {
     expect(boxText(registry.get('tie1')!).ports).toEqual([]);
   });
 });
+
+describe('named instances', () => {
+  it('the first computer names its generic boxes by their labels at any zoom; nothing else opts in', async () => {
+    const { ACC8_MUL, ACC8_CORE } = await import('../src/lib/acc8');
+    const { blockName } = await import('../src/view/legible');
+    for (const def of [ACC8_MUL, ACC8_CORE]) {
+      const by = Object.fromEntries(netlistOf(def)!.instances.map((i) => [i.name, i]));
+      const names = Object.fromEntries(['pc', 'inc', 'acc', 'outr', 'zero'].map((n) => [n, blockName(by[n], 'REG8', false, 8, 6)]));
+      expect(names).toEqual({ pc: 'PC', inc: '+1', acc: 'A', outr: 'OUT', zero: 'A = 0?' });
+    }
+    // without the flag the rule is unchanged: a generic label stays, a one-glyph symbol takes its instance label
+    expect(blockName({ label: 'A' }, 'REG8', false, 8, 6)).toBe('REG8');
+    expect(blockName({ label: 'wa = ra1' }, '=', false, 8, 6)).toBe('wa = ra1');
+    // only the first computer opts in
+    const owners = [...registry.values()].filter((d) => d.netlist && netlistOf(d)!.instances.some((i) => i.named)).map((d) => d.id);
+    expect(owners.every((id) => id.startsWith('acc8_'))).toBe(true);
+  });
+});

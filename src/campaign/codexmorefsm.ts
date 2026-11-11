@@ -37,7 +37,7 @@ one-hot          3     18     51    74</pre>For three states binary wins. One-ho
   7    TEST  12   6
   8    SUBA  12   6
   9    TEST   6   6
- 10    DONE   6   6</pre>10 edges from start = 1. The controller is 76 of the machine's 678 NANDs, 11 %; the rest is the datapath.`,
+ 10    DONE   6   6</pre>10 edges from start = 1. The controller is 76 of the machine's 674 NANDs, 11 %; the rest is the datapath.`,
     },
     mistakes: [
       'Giving every value of the data its own state: 256 states for an 8-bit register. The datapath holds the number, the controller the phase.',

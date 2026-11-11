@@ -86,6 +86,11 @@ export interface InstanceDef {
   rot?: 1 | 2 | 3;
   /** Short caption drawn near the symbol (defaults to the instance name). */
   label?: string;
+  /**
+   * The label is this instance's name: when the box is drawn too small to read (view/legible.ts), its fixed-size name is
+   * `label`, not the symbol's generic one (a REG8 that is the accumulator reads "A"). Opt-in: nothing else changes.
+   */
+  named?: boolean;
 }
 
 /**

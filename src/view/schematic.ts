@@ -31,7 +31,7 @@ import type { ComponentDef } from '../sim/types';
 import { anchorPoint, closeMenu, closePicker, menuOpenFor, type MenuEntry, showMenu } from '../ui/menu';
 import { installHold } from '../ui/holdpress';
 import { isConstantDef } from '../sim/constant';
-import { isGeneratedNetName, Legibility, nameEligible, nameRotated, type NameEl, type Seg, type TagEl } from './legible';
+import { blockName, isGeneratedNetName, Legibility, nameRotated, type NameEl, type Seg, type TagEl } from './legible';
 import type { CursorItem } from './kcursor';
 
 /** A note's marker on a part of the level shown. */
@@ -481,7 +481,7 @@ export class SchematicView {
       const isConst = !!own && isConstantDef(inst.def) && (own.textContent?.trim().length ?? 0) >= 2;
       // (also a one-character constant, which is not drawn larger: the title is for all of them)
       if (own && isConstantDef(inst.def)) g.append(s('title', {}, `${inst.label ?? inst.name} = ${own.textContent!.trim()}`));
-      const nm = isConst ? own!.textContent!.trim() : nameEligible(own?.textContent, geo.w, geo.h) ? own!.textContent!.trim() : own && own.textContent!.trim().length === 1 && inst.label && nameEligible(inst.label, geo.w, geo.h) ? inst.label.trim() : null;
+      const nm = blockName(inst, own?.textContent ?? null, isConst, geo.w, geo.h);
       if (nm) {
         const rot = nameRotated(geo.w, geo.h), cx = geo.w / 2, cy = geo.h / 2;
         const ax = at[0] + cx, ay = at[1] + cy;
