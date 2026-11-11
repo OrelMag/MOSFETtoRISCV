@@ -9,8 +9,9 @@ import { readElf32 } from '../src/riscv/elf';
 import { buildExecutable, MAIN_S, UTIL_S } from '../src/riscv/execprograms';
 import { relocSolved, solveReloc } from '../src/widgets/linking';
 import { groupDigits as n } from '../src/sim/numfmt';
-import { assemble } from '../src/riscv/asm';
-import { DRILLS, jalWord, rng, splitHiLo } from '../src/campaign/drills';
+import { DRILLS, rng } from '../src/campaign/drills';
+import { assemble16 } from '../src/riscv/rv16/asm16';
+import { decode16 } from '../src/riscv/rv16/isa16';
 
 const F = linkFigures();
 const plain = (s: string) => s.replace(/<[^>]+>/g, '').replace(/&gt;/g, '>').replace(/\s+/g, ' ');
@@ -65,11 +66,24 @@ describe('the figures', () => {
 });
 
 describe('the campaign drill "Patch the jump"', () => {
-  it('jalWord is the assembler\'s word, splitHiLo the linker\'s split', () => {
-    for (const off of [0, 2, -2, 24, -4096, 0x7fe, 0x800, 0xffffe, -0x100000, 1234 * 2]) {
-      for (const rd of [0, 1]) expect(jalWord(rd, off), `${rd} ${off}`).toBe(assemble(`jal x${rd}, ${off}`).words[0] >>> 0);
+  it('is RV16 (the campaign\'s machine): each answer is what the RV16 assembler writes for the prompt', () => {
+    const r = rng(11), seen = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      const q = DRILLS.reloc.make(r);
+      const nums = [...q.prompt.matchAll(/<b>0x([0-9A-F]+)<\/b>/g)].map((m) => parseInt(m[1], 16));
+      if (q.prompt.includes('<code>call f</code>')) {
+        seen.add('call');
+        expect(Number(q.answer), q.prompt).toBe(assemble16(`jal ra, ${nums[1] - nums[0]}`).words[0]);
+      } else if (q.prompt.includes('<code>beqz a0, done</code>')) {
+        seen.add('branch');
+        expect(Number(q.answer), q.prompt).toBe(assemble16(`beq a0, zero, ${nums[1] - nums[0]}`).words[0]);
+      } else {
+        seen.add('la');
+        const [lui, addi] = assemble16(`la a0, ${nums[0]}`).words.map((w) => decode16(w));
+        expect(q.answer, q.prompt).toBe(`${lui.imm >> 6}, ${addi.imm}`);
+      }
     }
-    for (const v of [0, 0x7ff, 0x800, 0xf80, 0xfff, 0x1000, 0xabcde, 0xffff]) expect(splitHiLo(v)).toEqual(hiLo(v));
+    expect([...seen].sort()).toEqual(['branch', 'call', 'la']);
   });
 
   it('every question accepts its own answer and refuses another', () => {

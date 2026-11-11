@@ -493,8 +493,8 @@ export const NODES: CampaignNode[] = withBugHunts([
   },
   {
     id: 'p_link', act: 4, title: 'Patch the jump', kind: 'drill', optional: true, requires: ['p_call'], drill: 'reloc', par: { mistakes: 2 },
-    why: 'A call into another file cannot be encoded until a linker has placed both files: the assembler leaves the jal\'s 20 offset bits empty, with a relocation naming the target. Filling them by hand, in J-type\'s scattered order, and splitting a distance into auipc and addi with the high part rounded, is what a linker does at every call.',
-    tips: ['jal offset = target − the jal\'s own address; bit 20 goes to bit 31, bits 10..1 to 30..21, bit 11 to 20, bits 19..12 stay put.', 'For la: if bit 11 of the distance is 1, the addi\'s part is negative, so add 1 to the auipc\'s part.', 'Check: auipc imm × 4096 + addi imm must give the distance back, with the addi in −2048 … 2047.'],
+    why: 'A call into another file cannot be encoded until a linker has placed both files: the assembler leaves the jal\'s 9 offset bits empty, with a relocation naming the target. Filling them by hand in RV16, a branch\'s 6 bits split across two fields, and an la split into lui and addi with the high part rounded, is what a linker does at every call.',
+    tips: ['An offset is target − the instruction\'s own address, in words. jal keeps its 9 bits whole in bits 15..7; a branch splits its 6 into bits 15..13 (the top 3) and 6..4 (the low 3).', 'For la: lui loads hi × 64 and addi adds lo in −32 … 31. If bit 5 of the address is 1, lo is negative, so hi is one more than the address over 64.', 'Check: hi × 64 + lo must give the address back.'],
     codex: ['reloc', 'linker'], chapters: [{ chapter: 'linking', step: 2, label: 'Relocations: the bits a linker writes' }],
   },
   {

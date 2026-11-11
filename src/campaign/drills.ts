@@ -9,7 +9,7 @@ import { RELAY, RELAY_STEP_MS, RELAY_SUPPLY, type RelayParams, relayPull, type R
 import { evalBool, parseBool } from '../lib/boolexpr';
 import { literals as lits, minimumCover, primes, type Term } from '../lib/sop';
 import { assemble16 } from '../riscv/rv16/asm16';
-import { decode16, disasm16, REG_NAMES16 } from '../riscv/rv16/isa16';
+import { decode16, disasm16, encJ, encSB, hiLo as hiLo16, OP16, REG_NAMES16 } from '../riscv/rv16/isa16';
 import { testset } from './drilltest';
 import { F32, flagNames, fpAddX, fpCmpX, fpDivX, fpMinMaxX, fpMulX, fpSqrtX, fpValue, parts, type FpResult } from '../sim/fpref';
 
@@ -1284,54 +1284,64 @@ const divrem: Drill = {
   },
 };
 
-/** jal rd, offset as a word: the offset's bits in J-type order (bit 20, 10:1, 11, 19:12). tests/content-linking.test.ts holds it to the assembler. */
-export function jalWord(rd: number, offset: number): number {
-  const o = offset >>> 0, b = (k: number) => (o >>> k) & 1;
-  let imm = b(20) << 31;
-  for (let k = 1; k <= 10; k++) imm |= b(k) << (20 + k);
-  imm |= b(11) << 20;
-  for (let k = 12; k <= 19; k++) imm |= b(k) << k;
-  return (imm | (rd << 7) | 0x6f) >>> 0;
-}
-/** An auipc / addi split of a pc-relative distance: the addi's 12 bits are signed, so the high part is rounded (+0x800). */
-export const splitHiLo = (v: number): { hi: number; lo: number } => { const hi = (v + 0x800) >> 12; return { hi, lo: v - hi * 4096 }; };
-
-/** The linker's two jobs at a relocation: a jal's word, or an la's split (chapter 'linking'). */
+/** The linker's jobs at a relocation, in RV16 (the campaign's machine; chapter 'linking' does the same in RV32): a call's word, a
+ *  branch's word with its split offset, an la's lui / addi split. Encoded by isa16's own encJ / encSB / hiLo, so the drill and the
+ *  assembler cannot disagree (tests/content-linking.test.ts assembles each answer). */
 const reloc: Drill = {
   id: 'reloc', title: 'Patch the jump', goal: 6,
-  how: 'Be the linker. For a jal, give the 32-bit word (0x…) with the offset filled in. For an la, give the auipc and addi immediates as two decimal numbers, "hi, lo".',
+  how: 'Be the linker, in RV16. For a <code>call</code> or a branch, give the 16-bit word (0x…) with the offset filled in: offsets count words, from the instruction itself. For an <code>la</code>, give the <code>lui</code> and <code>addi</code> immediates as two decimal numbers, "hi, lo".',
   make(r) {
-    if (int(r, 0, 1) === 0) {
-      const site = int(r, 0, 0x3ff) * 4, back = int(r, 0, 2) === 0, dist = int(r, 1, 0x7ff) * 2;
-      const target = back ? Math.max(0, site - dist) : site + dist;
-      const rd = int(r, 0, 1), off = target - site, want = jalWord(rd, off);
+    const kind = int(r, 0, 2);
+    if (kind === 0) {
+      const site = int(r, 0, 0x3ff), off = int(r, 0, 2) === 0 ? -Math.min(site, int(r, 1, 255)) : int(r, 1, 255);
+      const target = site + off, want = encJ(1, off);
       return {
-        prompt: `<code>jal ${rd ? 'ra' : 'x0'}, f</code> sits at <b>0x${hex(site, 16)}</b>; the linker put <code>f</code> at <b>0x${hex(target, 16)}</b>. What word does it write?`, placeholder: '0x…',
-        answer: `0x${hex(want, 32)}`,
+        prompt: `<code>call f</code> (<code>jal ra, f</code>) sits at word <b>0x${hex(site, 16)}</b>; the linker put <code>f</code> at <b>0x${hex(target, 16)}</b>. What word does it write?`, placeholder: '0x…',
+        answer: `0x${hex(want, 16)}`,
         check: (t) => {
           const x = parseNum(t);
-          if (x === null) return { ok: false, why: 'write the word as 0x followed by 8 hex digits' };
-          if ((x >>> 0) === want) return { ok: true };
-          if ((x & 0xfff) !== (want & 0xfff)) return { ok: false, why: `the low 12 bits are rd and the opcode: 0x${hex(want & 0xfff, 12)}` };
-          return { ok: false, why: 'the offset bits are not in J-type order, or the offset is off' };
+          if (x === null) return { ok: false, why: 'write the word as 0x followed by 4 hex digits' };
+          if ((x & 0xffff) === want && x >= 0 && x <= 0xffff) return { ok: true };
+          if ((x & 0x7f) !== (want & 0x7f)) return { ok: false, why: `the low 7 bits are rd (ra = 1) and the opcode (jal = 12): 0x${hex(want & 0x7f, 8)}` };
+          return { ok: false, why: `the offset ${off} goes in bits 15..7, as 9 bits (two's complement when negative)` };
         },
-        explain: `offset = 0x${hex(target, 16)} − 0x${hex(site, 16)} = ${off}. Bit 20 goes to bit 31, bits 10..1 to 30..21, bit 11 to 20, bits 19..12 stay at 19..12; rd = ${rd} and opcode 0x6F fill the rest.`,
+        explain: `offset = 0x${hex(target, 16)} − 0x${hex(site, 16)} = ${off} words. Its 9 bits${off < 0 ? ` (${off} + 512 = ${off + 512})` : ''} go in bits 15..7 in one piece; rd = ra (1) in bits 6..4 and the jal opcode 12 in bits 3..0.`,
       };
     }
-    const lo12 = int(r, 0, 3) === 0 ? int(r, 0x800, 0xfff) : int(r, 0, 0xfff);
-    const v = (int(r, 0, 15) << 12) | lo12, { hi, lo } = splitHiLo(v);
+    if (kind === 1) {
+      const site = int(r, 0x20, 0x3ff);
+      let off = int(r, -32, 31);
+      if (off === 0) off = 5;
+      const target = site + off, want = encSB(OP16.BEQ, 3, 0, off), o6 = off & 63;
+      return {
+        prompt: `<code>beqz a0, done</code> (<code>beq a0, zero, done</code>) sits at word <b>0x${hex(site, 16)}</b>; <code>done</code> ended up at <b>0x${hex(target, 16)}</b>. What word does the linker write?`, placeholder: '0x…',
+        answer: `0x${hex(want, 16)}`,
+        check: (t) => {
+          const x = parseNum(t);
+          if (x === null) return { ok: false, why: 'write the word as 0x followed by 4 hex digits' };
+          if ((x & 0xffff) === want && x >= 0 && x <= 0xffff) return { ok: true };
+          if ((x & 0x1f8f) !== (want & 0x1f8f)) return { ok: false, why: 'the registers and the opcode are fixed: rs1 = a0 (3) in bits 9..7, rs2 = zero in 12..10, beq = 8 in 3..0' };
+          return { ok: false, why: `the offset ${off} is 6 bits split in two: its top 3 in bits 15..13, its low 3 in bits 6..4 (the rd field a branch does not use)` };
+        },
+        explain: `offset = ${off} words, 6 bits ${bin(o6, 6)}. Bits 5..3 (${bin(o6 >> 3, 3)}) go to 15..13 and bits 2..0 (${bin(o6 & 7, 3)}) to 6..4, where a branch has no rd; rs1 = 3, rs2 = 0 and opcode 8 fill the rest.`,
+      };
+    }
+    const v = int(r, 0, 3) === 0 ? (int(r, 0, 1022) << 6) | int(r, 32, 63) : int(r, 0, 0xffbf); // below 0xffe0, where hi would wrap to 0
+    const { hi, lo } = hiLo16(v);
     return {
-      prompt: `<code>la a0, msg</code> with <code>msg</code> <b>0x${hex(v, 16)}</b> bytes past the auipc. What are the auipc and addi immediates?`, placeholder: 'hi, lo',
+      prompt: `<code>la a0, msg</code> with <code>msg</code> placed at <b>0x${hex(v, 16)}</b>. It becomes <code>lui a0, hi</code> (a0 = hi × 64) and <code>addi a0, a0, lo</code>. What are hi and lo?`, placeholder: 'hi, lo',
       answer: `${hi}, ${lo}`,
       check: (t) => {
         const m = t.replace(/−/g, '-').split(/[,\s]+/).filter(Boolean).map(parseNum);
-        if (m.length !== 2 || m.some((x) => x === null)) return { ok: false, why: 'two numbers: the auipc immediate, then the addi immediate' };
+        if (m.length !== 2 || m.some((x) => x === null)) return { ok: false, why: 'two numbers: the lui immediate, then the addi immediate' };
         const [a, b] = m as number[];
         if (a === hi && b === lo) return { ok: true };
-        if (a * 4096 + b === v && (b < -2048 || b > 2047)) return { ok: false, why: 'they add up, but the addi takes −2048 … 2047 only' };
-        return { ok: false, why: `auipc imm × 4096 + addi imm must be ${v}` };
+        if (((a * 64 + b) & 0xffff) === v && (b < -32 || b > 31)) return { ok: false, why: 'they add up, but the addi takes −32 … 31 only' };
+        return { ok: false, why: `hi × 64 + lo must be 0x${hex(v, 16)} (${v})` };
       },
-      explain: lo < 0 ? `Bit 11 of 0x${hex(v, 16)} is 1, so the low 12 bits would read as negative: round the high part up to ${hi} and take ${lo} (${hi} × 4096 − ${-lo} = ${v}).` : `Bit 11 is 0: the high part is ${hi}, the low part ${lo} (${hi} × 4096 + ${lo} = ${v}).`,
+      explain: lo < 0
+        ? `Bit 5 of 0x${hex(v, 16)} is 1, so its low 6 bits (${v & 63}) would read as ${lo} in the addi: round hi up to ${hi} and take lo = ${lo} (${hi} × 64 − ${-lo} = ${(hi * 64 + lo) & 0xffff}).`
+        : `Bit 5 is 0: hi = ${hi}, the address over 64, and lo = ${lo}, its low 6 bits (${hi} × 64 + ${lo} = ${v}).`,
     };
   },
 };

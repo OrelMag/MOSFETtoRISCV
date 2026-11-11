@@ -227,13 +227,13 @@ export const THREAD1: Record<string, NodeThread> = {
       'Arguments and the result live in a0 and a1 by agreement only: the hardware checks nothing.',
     ],
   },
-  p_link: { // optional: a drill on the bits a linker writes (RV32, chapter 'linking')
+  p_link: { // optional: a drill on the bits a linker writes (RV16; chapter 'linking' does it in RV32)
     uses: ['npc'],
     usedFor: {},
     pitfalls: [
-      'The offset is from the jal itself, not from the instruction after it.',
-      'J-type keeps the offset\'s bits out of order: bit 20, then 10..1, then 11, then 19..12. Bit 0 is not stored (always 0).',
-      'Splitting a distance as value >> 12 and value & 0xfff fails whenever bit 11 is 1: the addi sign-extends and lands 4 KiB short.',
+      'The offset is from the instruction itself, not the one after it, and it counts words: RV16 addresses words.',
+      'A branch\'s 6 offset bits are split: the top 3 in bits 15..13, the low 3 in bits 6..4, where a branch has no rd.',
+      'Splitting an address as v >> 6 and v & 63 fails whenever bit 5 is 1: the addi sign-extends its 6 bits and lands 64 short.',
     ],
   },
   p_mul: {
