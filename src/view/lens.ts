@@ -479,9 +479,8 @@ export class Lens {
     this.paintOverlay();
     this.paintRim();
     this.applyLit();
-    // the dim in the next frame and the peek crumb in a task after it: on a level of thousands of parts (the out-of-order
-    // core) restyling them and laying the stage out again are ~60-80 ms each, so each gets a task of its own and the
-    // opening itself stays under DESIGN.md's 50 ms (scripts/lens-ooo-measure.mjs)
+    // the dim in the next frame and the peek crumb in a task after it, so the opening itself is one short task (DESIGN.md's
+    // 50 ms; scripts/lens-ooo-measure.mjs)
     const openNow = this.open;
     requestAnimationFrame(() => {
       if (this.open !== openNow) return;
@@ -645,7 +644,7 @@ export class Lens {
         t.textContent = `${j.name}: its pin is inside, lit while you point here`;
         dot.append(t);
         dot.addEventListener('pointerenter', () => o.view.highlight([`pin:${j.name}`], true));
-        dot.addEventListener('pointerleave', () => o.view.highlight([]));
+        dot.addEventListener('pointerleave', () => this.applyLit());
       }
       const t = document.createElementNS(SVG, 'text');
       t.setAttribute('x', String(j.label[0]));
