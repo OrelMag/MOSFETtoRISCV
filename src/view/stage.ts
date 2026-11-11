@@ -10,7 +10,7 @@ import { nextTask } from '../sim/tasks';
 import { LoadCard } from './loadcard';
 import { GateSim, LOAD_TICKS } from '../sim/gatesim';
 import { OverlayBar, nextOverlay, overlayLegend } from './overlaybar';
-import { type OverlayKind, type OverlayResult, activityOverlay, loadOverlay, overlayRefusal, slackOverlay, unknownOverlay } from './overlays';
+import { OVERLAY_KINDS, OVERLAY_LABEL, type OverlayKind, type OverlayResult, activityOverlay, costOverlay, depthOverlay, energyOverlay, loadOverlay, overlayRefusal, slackOverlay, unknownOverlay } from './overlays';
 import type { DelayModel } from '../sim/delay';
 import { SwitchSim } from '../sim/switchsim';
 import { needsSwitchLevel } from '../sim/harness';
@@ -443,7 +443,7 @@ export class Stage {
       { els: [this.timingBtn], items: [{ label: 'Timing diagram', icon: 'wave', on: () => pressed(this.timingBtn), run: () => this.timingBtn.click() }] },
       { els: [this.probeBtn], items: [{ label: 'Probe mode (P)', icon: 'probe', on: () => pressed(this.probeBtn), run: () => this.probeBtn.click() }] },
       { els: [this.whyBtn], items: [{ label: 'Why? (W)', icon: 'why', on: () => pressed(this.whyBtn), run: () => this.whyBtn.click() }] },
-      { els: [this.ovBar.el], items: (['slack', 'activity', 'load', 'unknown'] as const).map((k) => ({ label: `Overlay: ${k[0].toUpperCase() + k.slice(1)}`, hint: this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
+      { els: [this.ovBar.el], items: OVERLAY_KINDS.map((k) => ({ label: `Overlay: ${OVERLAY_LABEL[k]}`, hint: this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
     ];
     // Schematic | Breadboard (a scene with Scene.breadboard), and the jumpers' look while the boards are shown
     const segBtn = (label: string, title: string, fn: () => void) => h('button', { title, 'aria-pressed': 'false', onclick: fn }, label);
@@ -2518,7 +2518,7 @@ export class Stage {
     if (!sim || !ctx) return {};
     const c = { level: sim.kind, engine: this.scene?.engine, sub: ctx.sim !== sim } as const;
     const out: Partial<Record<OverlayKind, string>> = {};
-    for (const k of ['slack', 'activity', 'load', 'unknown'] as const) {
+    for (const k of OVERLAY_KINDS) {
       const why = overlayRefusal(k, c);
       if (why) out[k] = why;
     }
@@ -2532,7 +2532,7 @@ export class Stage {
   setOverlay(kind: OverlayKind | null, model?: DelayModel): void {
     if (model) this.ovModel = model;
     if (kind && this.ovRefusals()[kind]) kind = null;
-    if (kind === 'activity' && this.ovKind !== 'activity') this.ovWin = null;
+    if ((kind === 'activity' || kind === 'energy') && kind !== this.ovKind) this.ovWin = null;
     this.ovKind = kind;
     if (kind && settings.overlay !== kind) settings.set('overlay', kind);
     this.paintOverlay();
@@ -2582,9 +2582,10 @@ export class Stage {
   /** Live overlays (Activity, Unknown) follow the simulation, at most every 100 ms; a level redrawn without its marks gets them back. */
   private tickOverlay(): void {
     if (!this.ovKind) return;
-    if (this.ovKind === 'activity') this.countActivity();
+    const live = this.ovKind === 'activity' || this.ovKind === 'energy';
+    if (live) this.countActivity();
     const stale = !this.view.el.classList.contains('ov');
-    if (!stale && this.ovKind !== 'activity' && this.ovKind !== 'unknown') return;
+    if (!stale && !live && this.ovKind !== 'unknown') return;
     const wait = 100 - (performance.now() - this.ovLast);
     if (stale || wait <= 0) return this.paintOverlay();
     if (!this.ovTimer) this.ovTimer = window.setTimeout(() => { this.ovTimer = 0; this.paintOverlay(); }, wait);
@@ -2616,17 +2617,20 @@ export class Stage {
     let r: OverlayResult | null = null;
     if (kind && ctx && sim && !this.boardOn && !this.leaf && !this.ovRefusals()[kind]) {
       const design = ctx.sim.design, key = `${kind}|${this.ovModel ?? (settings.loadDelay ? 'load' : 'unit')}|${ctx.path.join('.')}`;
-      if (kind === 'slack' || kind === 'load') {
+      if (kind === 'slack' || kind === 'load' || kind === 'cost' || kind === 'depth') {
         const hit = this.ovCache.get(key);
         if (hit && hit.design === design) r = hit.r;
         else {
-          r = kind === 'slack' ? slackOverlay(design, ctx.path, this.ovModel ?? (settings.loadDelay ? 'load' : 'unit')) : loadOverlay(design, ctx.node);
+          const model = this.ovModel ?? (settings.loadDelay ? 'load' : 'unit');
+          r = kind === 'slack' ? slackOverlay(design, ctx.path, model) : kind === 'depth' ? depthOverlay(design, ctx.node, model)
+            : kind === 'cost' ? costOverlay(ctx.node, ctx.sim.kind) : loadOverlay(design, ctx.node);
           this.ovCache.set(key, { design, r });
         }
       } else if (kind === 'unknown') r = unknownOverlay(ctx.sim, ctx.node);
       else {
         const w = this.countActivity();
-        if (w && this.ovWin) r = activityOverlay(ctx.node, this.ovWin.sim.toggles!, this.ovWin.base, w.units, w.clocked);
+        if (w && this.ovWin) r = kind === 'energy' ? energyOverlay(design, ctx.node, this.ovWin.sim.toggles!, this.ovWin.base, w.units, w.clocked)
+          : activityOverlay(ctx.node, this.ovWin.sim.toggles!, this.ovWin.base, w.units, w.clocked);
       }
     }
     this.view.overlay(r);
