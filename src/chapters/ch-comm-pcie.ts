@@ -280,11 +280,11 @@ export const chPcie: Chapter = {
       scene: usbScene,
       challenge: {
         kind: 'reach',
-        goal: 'Take the device from reset to Configured, at the new address, with gates and model agreeing.',
-        check: (st) => { const a = usbApi.get(st)?.status(); return !!a && a.configured && a.stateName === 'Configured' && a.mismatches === 0; },
-        hints: ['Run enumeration does it all; Step transaction shows it one at a time.', 'Watch the address change only after the status stage of SET_ADDRESS.'],
-        answer: `Run enumeration: about ${n0(USB_CLOCKS)} clocks. The log shows the two resets, the address change and the descriptors.`,
-        solve: (st) => usbApi.get(st)?.run(),
+        goal: 'Take the device from reset to Configured at its new address through a corrupted packet: the host sees the error and retries.',
+        check: (st) => { const a = usbApi.get(st)?.status(); return !!a && a.configured && a.stateName === 'Configured' && a.mismatches === 0 && a.corrupted > 0 && a.errors > 0; },
+        hints: ['Corrupt next packet flips a bit in the host\'s next packet; the device ignores it and the host times out and sends it again.', 'Arm it before or during enumeration (Replug starts over), then Run enumeration or Step transaction. Watch the address change only after the status stage of SET_ADDRESS.'],
+        answer: `Press Corrupt next packet, then Run enumeration: about ${n0(USB_CLOCKS)} clocks and one retry. The log shows the two resets, the error and its retry, the address change and the descriptors.`,
+        solve: (st) => { const a = usbApi.get(st); if (!a) return; if (a.status().done) a.replug(); a.corrupt(); a.run(); },
       },
       more: {
         numbers: `<p>Device ${n0(UC().total)} NANDs: ${Object.entries(UC().blocks).filter(([k]) => !k.includes('.')).map(([k, v]) => `${k} ${n0(v)}`).join(', ')}. The vendor and product ids are pid.codes' test id, 0x1209 and 0x0001.</p>`,

@@ -945,7 +945,7 @@ export const chMulDiv: Chapter = {
         <p>A <strong>divide</strong> runs on <span data-show="dive">the radix-4 SRT divider in E</span>. While it works, <code>divStall</code> (the divider's
         busy signal) holds PC, IF/ID and ID/EX, and
         sends bubbles into M; the result leaves through the ALU's place in E/M on the 19th cycle and is forwarded like any ALU result.</p>
-        <p>Cost: 70 900 → 102 900 NANDs (+45 %, the 64-bit tree and adder dominate). Speed, with fast adders: 93 → 93 gate delays, because the
+        <p>Cost, for the Kogge–Stone pipeline with its 64-word program ROM and 32-word data memory: 70 900 → 102 900 NANDs (+45 %, the 64-bit tree and adder dominate). Speed, with fast adders: 93 → 93 gate delays, because the
         branch-resolution path in E is longer than both units.</p>
         <p>The design choice to note is where the multiplier is cut. A product is ready at the end of M, like a load, so the hazard unit needs no new case. The alternative, a one-stage multiplier, would put the 64-bit tree and adder in E on top of the forwarding mux and set the clock; a deeper split would add bubbles for dependent uses.</p>
         <details class="deeper"><summary>Deeper: the balanced pipeline's clock, 59 → 79</summary>

@@ -45,7 +45,7 @@ export const chTubes: Chapter = {
       `Under its plate resistor a triode inverts, and its plate swings between ${v(V_LOW)} V and ${B_PLUS} V: ratioed logic. A ${R_DIV_TOP / 1e3} kΩ / ${R_DIV_BOTTOM / 1e3} kΩ divider to ${V_BIAS} V brings a plate to grid levels; it loads the plate, and at four dividers the chain stops working. Wide fan-outs get a cathode follower.`,
       'One-way conduction means no transmission gate and no carry through switches: every tube gate regenerates its output, and every stage adds a step.',
       `NOR is the natural triode gate: triodes in parallel under one plate resistor (real machines also gated with multi-grid tubes and diodes). The NAND brick is a 6AL5 diode AND, a divider and half a 6SN7: ${w2(BRICK.total)} W, ${w2(BRICK.heaters)} W of it heaters. Eccles–Jordan holds a bit in one 6SN7.`,
-      `A tube step is about ${TUBE_STEP_US.toFixed(1)} µs (an R·C estimate): about ${thin(Math.round(RELAY_STEP_MS * 1e3 / TUBE_STEP_US / 100) * 100)} times a relay's speed. ENIAC: ${thin(ENIAC.tubes)} tubes, ${ENIAC.power / 1e3} kW, a tube failure about every two days.`,
+      `A tube step is about ${TUBE_STEP_US.toFixed(2)} µs (an R·C estimate): about ${thin(Math.round(RELAY_STEP_MS * 1e3 / TUBE_STEP_US / 100) * 100)} times a relay's speed. ENIAC: ${thin(ENIAC.tubes)} tubes, ${ENIAC.power / 1e3} kW, a tube failure about every two days.`,
     ],
     practise: ['v_inv', 'v_ff'],
     check: [
@@ -71,7 +71,7 @@ export const chTubes: Chapter = {
         question: 'About how many tube steps fit in one relay step?',
         options: [`About ${thin(Math.round(RELAY_STEP_MS * 1e3 / TUBE_STEP_US / 100) * 100)}`, `About ${VS_CMOS}`, 'About 10'],
         answer: 0,
-        explain: `${RELAY_STEP_MS} ms against about ${TUBE_STEP_US.toFixed(1)} µs: a relay waits for iron to move, a tube for a resistor to charge the next grid.`,
+        explain: `${RELAY_STEP_MS} ms against about ${TUBE_STEP_US.toFixed(2)} µs: a relay waits for iron to move, a tube for a resistor to charge the next grid.`,
         why: ['', `That is how much slower a tube step is than a ${PS_PER_NAND} ps NAND in <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span>.`, 'A relay step is milliseconds and a tube step about a microsecond: nearly four orders of magnitude apart.'],
       },
     ],
@@ -147,7 +147,7 @@ export const chTubes: Chapter = {
           { title: 'Grid high: conducting', set: { g: 1 }, show: ['v1', 'rl'], expect: { y: 0 },
             say: `<p>g = 1: the grid is near 0 V, electrons stream to the plate and the resistor drops the voltage: the plate falls to ${v(V_LOW)} V, a 0. y = {v:y}. The beam is drawn while this lasts.</p>` },
           { title: 'Grid low again', set: { g: 0 }, show: ['v1'], expect: { y: 1 },
-            say: `<p>g = 0: the tube cuts off, the resistor pulls the plate back to ${B_PLUS} V, y = {v:y}. The inversion needs no moving part, but the plate recharges through ${R_PLATE / 1e3} kΩ: that RC is the tube step, about ${TUBE_STEP_US.toFixed(1)} µs.</p>` },
+            say: `<p>g = 0: the tube cuts off, the resistor pulls the plate back to ${B_PLUS} V, y = {v:y}. The inversion needs no moving part, but the plate recharges through ${R_PLATE / 1e3} kΩ: that RC is the tube step, about ${TUBE_STEP_US.toFixed(2)} µs.</p>` },
         ],
       },
       more: {
@@ -200,7 +200,7 @@ export const chTubes: Chapter = {
           stops working: a high plate gives a grid at or below cutoff, so the next tube never turns on. Check both margins, as the table does.</p>`,
         real: `<p>Direct-coupled amplifiers use the same trick: a resistor network from a plate to a negative rail. A small speed-up capacitor across the top resistor passes
           fast edges around the divider's own time constant; the model's node capacitance (${(45).toFixed(0)} pF, the next grid with its Miller multiplication, wiring and those capacitors)
-          is what sets the ${TUBE_STEP_US.toFixed(1)} µs step with the ${R_PLATE / 1e3} kΩ plate resistor.</p>`,
+          is what sets the ${TUBE_STEP_US.toFixed(2)} µs step with the ${R_PLATE / 1e3} kΩ plate resistor.</p>`,
       },
       widget: () => tubeDividerWidget(),
       challenge: {
@@ -383,7 +383,7 @@ export const chTubes: Chapter = {
       body: `
         <p>Here is <a href="#/c/adders/0">chapter ${numOf('adders')}</a>'s nine-NAND full adder with <span data-show="g1 g2 g3 g4 g5 g6 g7 g8 g9">every NAND a tube NAND</span>: ${stats(TUBE_FA).triodes} triode
         sections, ${stats(TUBE_FA).diodes} diode sections, about ${v(9 * BRICK.total)} W. A tube gate switches in about
-        ${TUBE_STEP_US.toFixed(0)} µs (the plate resistor charging the next grid, an estimate), about
+        ${TUBE_STEP_US.toFixed(2)} µs (the plate resistor charging the next grid, an estimate), about
         ${thin(Math.round(RELAY_STEP_MS * 1e3 / TUBE_STEP_US / 100) * 100)} times faster than a relay's ${RELAY_STEP_MS} ms and still some
         ${VS_CMOS} times slower than a ${PS_PER_NAND} ps NAND in <span data-ahead="cmos">CMOS (the transistor logic of chapters 1 to 3)</span>.</p>
         <p><strong>ENIAC</strong> (1945): ${thin(ENIAC.tubes)} tubes, ${thin(ENIAC.diodes)} crystal diodes,
@@ -410,13 +410,13 @@ export const chTubes: Chapter = {
       },
       more: {
         derive: `<p>The adder is the nine-NAND full adder of <a href="#/c/adders/0">chapter ${numOf('adders')}</a> with each NAND a brick: ${stats(TUBE_FA).triodes} triode sections, ${stats(TUBE_FA).diodes} diode sections and
-          ${stats(TUBE_FA).resistors} resistors. Power: 9 × ${w2(BRICK.total)} W = ${w2(9 * BRICK.total)} W. A 32-bit ripple adder is ${logicDepth(rca(32))} steps deep, about ${(logicDepth(rca(32))! * TUBE_STEP_US).toFixed(0)} µs per
+          ${stats(TUBE_FA).resistors} resistors. Power: 9 × ${BRICK.total.toFixed(3)} W = ${w2(9 * BRICK.total)} W. A 32-bit ripple adder is ${logicDepth(rca(32))} steps deep, about ${(logicDepth(rca(32))! * TUBE_STEP_US).toFixed(0)} µs per
           sum in tubes, against ${(logicDepth(rca(32))! * RELAY_STEP_MS).toFixed(0)} ms through relay-per-NAND bricks.</p>`,
         pitfall: `<p>Quoting a tube machine's power as its switching power. The heaters burn ${(100 * BRICK.heaters / BRICK.total).toFixed(0)} % of a brick's ${w2(BRICK.total)} W whether the gate switches or not, so a
           mostly idle tube machine costs nearly the same as a busy one. The only saving is to switch it off, and then it takes seconds to warm up.</p>`,
         numbers: `<table class="mini"><tr><th>full adder</th><th>NANDs</th><th>devices</th><th>average power</th><th>longest path</th></tr>
           <tr><td>CMOS</td><td>${stats(FULL_ADDER).nands}</td><td>${stats(FULL_ADDER).transistors} transistors</td><td>femtojoules per switch</td><td>${logicDepth(FULL_ADDER)} × ${PS_PER_NAND} ps</td></tr>
-          <tr><td>Tubes</td><td>${stats(FULL_ADDER).nands}</td><td>${stats(TUBE_FA).triodes} triodes + ${stats(TUBE_FA).diodes} diodes</td><td>${w2(9 * BRICK.total)} W</td><td>${logicDepth(FULL_ADDER)} × ${TUBE_STEP_US.toFixed(1)} µs</td></tr></table>`,
+          <tr><td>Tubes</td><td>${stats(FULL_ADDER).nands}</td><td>${stats(TUBE_FA).triodes} triodes + ${stats(TUBE_FA).diodes} diodes</td><td>${w2(9 * BRICK.total)} W</td><td>${logicDepth(FULL_ADDER)} × ${TUBE_STEP_US.toFixed(2)} µs</td></tr></table>`,
       },
       challenge: {
         kind: 'quiz', question: `The 4-bit CPU of the examples is about ${thin(CPU4_NANDS)} NANDs without its program memory. Built from tube NAND bricks at ${w2(BRICK.total)} W each, it draws about:`,

@@ -569,7 +569,7 @@ export const chIsa: Chapter = {
         real: `<p>RISC-V chose this layout after the MIPS and Alpha experience: the immediate generator is a small part of the decode path. The compressed (C) extension adds 16-bit forms of its own; an expander turns each into its 32-bit twin, so the decoder behind it sees one set of formats. ARM's A32 spends its bits differently, on conditional execution of every instruction, and its decode is correspondingly heavier.</p>`,
       },
       challenge: {
-        kind: 'quiz', question: 'Why is the branch offset stored in units of 2 bytes, not 4, even though RV32I instructions are 4 bytes?',
+        kind: 'quiz', question: `RISC-V has an optional extension of 16-bit instructions, the C extension (chapter ${numOf('widths')}), which may then sit on any 2-byte boundary. Why is the branch offset stored in units of 2 bytes, not 4, even though RV32I instructions are 4 bytes?`,
         options: ['To reach farther than word units would', 'To support the 16-bit compressed (C) extension without a new encoding', 'Because bit 0 is used for the condition'], answer: 1,
         why: ['The reverse: word units would reach twice as far as halfword units. Range is not why the unit stops at 2 bytes.', '', 'The condition is in funct3. Bit 0 of the offset is simply not stored, since it is always 0.'],
         explain: 'With the C extension instructions can sit on 2-byte boundaries. Encoding offsets in halfwords keeps the 32-bit branch format unchanged when C is present.',
@@ -722,7 +722,7 @@ export const chSingleCycle: Chapter = {
         why: ['', 'RegWrite is the OR of the classes that write a register: opcode alone.', 'MemWrite is the store class and nothing else.'],
       },
       {
-        question: 'Replacing the ripple adder by a <span data-ahead="prefix">Kogge–Stone adder (a parallel-prefix adder: its carry takes about log₂ n levels)</span> cuts the ALU from 93 to 41 delays. By how much does the clock period fall?',
+        question: 'Replacing the ripple adder by a <span data-ahead="prefix">Kogge–Stone adder (a parallel-prefix adder: its carry takes about log₂ n levels)</span> cuts the ALU’s share of the longest path from 93 to 41 delays. By how much does the clock period fall?',
         options: ['From 155 to 103: the same 52 delays, since the path crosses the ALU once', 'To a third, since the ALU is 93 of 155', 'Not at all: the load path is the longest'],
         answer: 0,
         explain: 'The longest path crosses the ALU once, so its length falls by exactly what the ALU saves. What remains (fetch, decode, next-PC select: 62 delays) is now 60% of the period.',

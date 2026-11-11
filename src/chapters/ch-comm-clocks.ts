@@ -37,7 +37,7 @@ export const chClocks: Chapter = {
   recap: {
     keep: [
       `A receiver is an amplifier with a threshold. The matched inverter has VIL ${nf(M.vil)} V and VIH ${nf(M.vih)} V, drives ${nf(M.vol)} V and ${nf(M.voh)} V, and so has ${mv(M.nmL)} of noise margin each way and a peak gain of ${nf(M.gain, 0)}. Between VIL and VIH the receiver does not decide.`,
-      `A Schmitt trigger is two inverters and a weak feedback inverter (${stats(SCHMITT).transistors} transistors). The keeper holds the internal node in its old state, so the input must travel further to flip it: ${nf(TH.down!)} V going down and ${nf(TH.up!)} V going up for a keeper ${KEEPER}× the input devices. The hysteresis grows with the keeper, and the output sticks for good past ${nf(keeperLimit())}×.`,
+      `A Schmitt trigger is two inverters and a weak feedback inverter (${stats(SCHMITT).transistors} transistors). The keeper holds the internal node in its old state, so the input must travel further to flip it: ${nf(TH.down!, 3)} V going down and ${nf(TH.up!, 3)} V going up for a keeper ${KEEPER}× the input devices. The hysteresis grows with the keeper, and the output sticks for good past ${nf(keeperLimit())}×.`,
       'Two clocks with no fixed phase relation put data changes at every phase of the receiver\'s period. Static timing can check a fixed phase; it cannot check all of them, so some change lands in the setup / hold window and the first flip-flop can go metastable.',
       `A cross-coupled pair resolves as V(t) = Δ·e^(t/τ). The chance of still being undecided after t_r is e^(−t_r/τ), so MTBF = e^(t_r/τ) / (T0 · fclk · fdata): each extra flop adds a period to t_r and multiplies the MTBF by e^(T/τ) (τ is ${nf(TAU_PS, 0)} ps in the model). The gate simulator cannot time a real race, so those figures are the model's.`,
       `A two-flop synchronizer (${nands(SYNC2)} NANDs) carries a level that the receiver sees for a full period, after two receiving edges. A pulse shorter than the receiving period can fall between edges and vanish. A toggle synchronizer (${nands(PULSE_SYNC)} NANDs) turns each pulse into a level change that cannot, provided pulses are spaced by its latency.`,
@@ -46,7 +46,7 @@ export const chClocks: Chapter = {
     ],
     check: [
       {
-        question: `A Schmitt trigger has thresholds ${nf(TH.down!)} V and ${nf(TH.up!)} V. A slow edge crosses ${nf(M.vm)} V with 0.05 V of noise on it. How many times does the output switch?`,
+        question: `A Schmitt trigger has thresholds ${nf(TH.down!, 3)} V and ${nf(TH.up!, 3)} V. A slow edge crosses ${nf(M.vm)} V with 0.05 V of noise on it. How many times does the output switch?`,
         options: [`Once: the noise never gets across the ${mv(TH.width!)} between the thresholds`, 'Several times, like a plain inverter', 'Zero: hysteresis blocks slow edges', 'Twice: once at each threshold'],
         answer: 0,
         explain: `After the output has risen at the upper threshold the input would have to fall back below the lower one to switch it again. Noise of 0.05 V cannot move a signal ${mv(TH.width!)}.`,
@@ -100,8 +100,8 @@ export const chClocks: Chapter = {
         (strength 2 in the switch-level solver, the input devices 3) the way an SRAM cell's pull-ups are: strong enough to hold, weak enough to lose a fight.</p>
         <p>At switch level the part is a buffer: y follows a. The analogue story is in the panel, computed from the current balance of chapter 1's square-law devices.
         With y = 0 the keeper's PMOS pulls m up with a current proportional to its width κ (in units of the input devices). The input rises, A's NMOS pulls m down, and m crosses B's
-        threshold only when A's NMOS current exceeds A's PMOS plus the keeper: <strong>VT+ = ${nf(TH.up!)} V</strong> for κ = ${KEEPER}. Going down the keeper is on the other side:
-        <strong>VT− = ${nf(TH.down!)} V</strong>. The pair is symmetric, so both sit ${mv(TH.width! / 2)} from VM, a hysteresis of ${mv(TH.width!)}, and it grows in step with κ. At κ = ${nf(keeperLimit())} the
+        threshold only when A's NMOS current exceeds A's PMOS plus the keeper: <strong>VT+ = ${nf(TH.up!, 3)} V</strong> for κ = ${KEEPER}. Going down the keeper is on the other side:
+        <strong>VT− = ${nf(TH.down!, 3)} V</strong>. The pair is symmetric, so both sit ${mv(TH.width! / 2)} from VM, a hysteresis of ${mv(TH.width!)}, and it grows in step with κ. At κ = ${nf(keeperLimit())} the
         input inverter no longer wins at any voltage up to VDD and the output sticks.</p>
         <p>The price is area (two more transistors than a buffer of two inverters), a slower edge (the keeper fights every transition) and a hysteresis that moves with process and temperature.</p>`,
       scene: () => ({ root: SCHMITT, inputs: { a: 0 }, panels: [schmittPanel] }),
@@ -190,7 +190,7 @@ export const chClocks: Chapter = {
       },
       challenge: {
         kind: 'quiz',
-        question: 'A synchronizer\'s MTBF is 10 years. A third flop is added at the same clock. How does the MTBF change?',
+        question: 'A synchronizer clocked at 1 GHz has an MTBF of 10 years. A third flop is added at the same 1 GHz clock. How does the MTBF change?',
         options: [`It is multiplied by e^(T/τ), about 10^${Math.round(1e3 / TAU_PS / Math.LN10)} at 1 GHz`, 'It is multiplied by 1.5', 'It doubles', 'It is unchanged: only the first flop can fail'],
         answer: 0,
         explain: `Each flop adds a whole period to the resolution time, and the period is ${Math.round(1000 / TAU_PS)} time constants at 1 GHz. The MTBF is exponential in t_r, so each period multiplies it by e^(T/τ).`,

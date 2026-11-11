@@ -160,7 +160,7 @@ export const chBus: Chapter = {
         transactions in flight; ours keeps one.</p>
         <p>The <span data-show="bus.dec"><strong>address decoder</strong></span> looks at the top four address bits: 0x0… is RAM, 0x1… the flash, 0x4… the DMA engine's
         registers. Any other address goes to a <span data-show="def">default slave</span> that answers 0, so a stray pointer never hangs the bus (AXI would
-        answer with an error and the CPU would trap). A slow slave just holds back valid: <span data-show="ram">this RAM</span> has 3 <strong>wait states</strong>.</p>
+        answer with an error and the CPU would trap). A slow slave just holds back valid: on this step's bench <span data-show="ram">the RAM</span> is set to 3 <strong>wait states</strong>, so it answers 3 cycles late (the other steps' RAM has none: 2 cycles an access).</p>
         <p>Splitting the channels is what lets a bus be both simple and general. The address can be accepted while the data is still being found, a write's response is
         its own message (so the master learns that the store has landed, not just left), and each channel can be pipelined separately in a larger design. The cost is five
         handshakes' worth of wires and state per port; AXI-lite keeps them but drops bursts and IDs, which is why a register file hangs off it for a few gates.</p>`,

@@ -237,7 +237,7 @@ export const chMemCtrl: Chapter = {
         raises <code>req</code> with the line address; if the victim is dirty it first asks for a write (<code>wr</code>) with the victim's
         address, and the controller says which word it wants each cycle; then it asks for the fill and writes each word as
         <code>dv</code> (data valid: the device is delivering a read word) says. The tag is written with the last word. The stall lasts exactly as long as the DRAM takes.</p>
-        <p>Main memory is no longer 64 words of flip-flops in the CPU (${fmt(stats(dataMemory(6)).nands)} NANDs, ${fmt(nands('sc-wb2') - nands('sc-wb2-dram'))} saved after paying for the controller) but a
+        <p>Main memory is no longer 64 words of flip-flops in the CPU (${fmt(stats(dataMemory(6)).nands)} NANDs; the CPU shrinks by ${fmt(nands('sc-wb2') - nands('sc-wb2-dram'))} in all: the controller and the request logic around it, net of what the cache no longer needs, take back ${fmt(stats(dataMemory(6)).nands - (nands('sc-wb2') - nands('sc-wb2-dram')))}) but a
         DRAM device on another chip, so the CPU with its cache and controller is ${fmt(nands('sc-wb2-dram'))} NANDs. Sort over open page
         takes ${fmt(run('sc-wb2-dram', 'sort'))} cycles against ${fmt(run('sc-wb2', 'sort'))} with the fixed cost
         (${slower('sc-wb2-dram', 'sc-wb2', 'sort')} slower). The pipelined CPU loses ${slower('pipe-wb2-dram', 'pipe-wb2', 'matmul')} on matmul.
@@ -319,7 +319,7 @@ export const chMemCtrl: Chapter = {
         oldest of all only when nothing hits. With a CPU and a write buffer working on two rows of one bank, FCFS turns every request
         into a conflict; FR-FCFS batches each row's requests, as deep as the queue lets it.</p>
         <p>It needs requests to choose from. This chapter's controller has one: the cache asks for a line and waits. A queue comes with a
-        write buffer, several cores (<a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>) or <span data-ahead="dma">a DMA engine (hardware that copies memory blocks without the CPU)</span> (<a href="#/c/bus/0">chapter ${numOf('bus')}</a>). Its cost is the queue itself, address and data
+        write buffer, several cores (<a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>) or <span data-ahead="dma">a DMA engine, hardware that copies memory blocks without the CPU</span> (<a href="#/c/bus/0">chapter ${numOf('bus')}</a>). Its cost is the queue itself, address and data
         registers per entry, and a row-hit comparator per entry feeding a priority encoder. FR-FCFS is also unfair: a stream of hits can
         hold an old request back, so real controllers cap how long a request may wait.</p>
         <p>The idea generalizes: the DRAM is a device whose cost depends on state, so the controller's schedule is an optimization over that state, the way a compiler

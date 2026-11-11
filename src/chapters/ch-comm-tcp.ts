@@ -213,11 +213,11 @@ export const chTcp: Chapter = {
       scene: tcpWindowScene,
       challenge: {
         kind: 'reach',
-        goal: 'Open a gate window and run two thousand instructions on the gates, with no disagreement.',
-        check: (st) => { const x = windowApi.get(st)?.state(); return !!x && x.retired >= 2000 && !x.mismatch; },
-        hints: ['Press "Open a gate window": it runs the transfer to the data phase, then to a quiet moment, and starts the gates.', 'The panel counts the instructions compared. Two thousand take about a second.'],
-        answer: 'Open a gate window and let it run. Every register after every instruction and every NIC output every clock is compared, and the panel reports the first difference if one ever appears.',
-        solve: (st) => windowApi.get(st)?.open(),
+        goal: 'Run two thousand instructions of the stack on the gates with no disagreement, then hand the computer back to the models at a quiet moment.',
+        check: (st) => { const x = windowApi.get(st)?.state(); return !!x && !x.open && x.retired >= 2000 && !x.mismatch; },
+        hints: ['Press "Open a gate window": it runs the transfer to the data phase, then to a quiet moment, and starts the gates.', 'The panel counts the instructions compared. Two thousand take about a second. Then press "Back to the models": it clocks on until the next quiet moment, so nothing is mid-frame when the models take over.'],
+        answer: 'Open a gate window, let it pass two thousand instructions, then press Back to the models. Every register after every instruction and every NIC output every clock is compared, the panel reports the first difference if one ever appears, and the models carry on from the state the gates reached.',
+        solve: (st) => { const a = windowApi.get(st); if (!a) return; a.open(); a.runTo(2000); a.close(); },
       },
       more: {
         numbers: `<p>One computer is about 6 million NANDs, nearly all of them RAM, in a flat design of some seventy thousand simulated leaves, since the large memories stay as behavioural leaves. It flattens in under a second.</p>`,
