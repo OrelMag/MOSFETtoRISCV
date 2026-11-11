@@ -51,6 +51,8 @@ const headful = argv.includes('--headful');
 const only = opt('only');
 const tabs = Number(opt('tabs') ?? Math.max(2, Math.min(6, cpus().length - 1)));
 const routeTimeout = Number(opt('timeout') ?? 60) * 1000;
+/** The longest a route's drive may take (the longest take about 20 s). */
+const DRIVE_MS = 2 * routeTimeout;
 // CPU slowdown factor (Emulation.setCPUThrottlingRate): a slow phone's load takes long enough for the service worker to install mid-route.
 const throttle = Number(opt('throttle') ?? 1);
 // After the load and two frames: long enough for a 2 Hz automatic clock (settings.autoClock) to tick once.
@@ -1600,7 +1602,18 @@ class Tab {
       if (nav.errorText) throw new Error(`navigation failed: ${nav.errorText}`);
       await this.settle(t0);
       if (route.drive) {
-        const ev = await this.send('Runtime.evaluate', { expression: route.drive, awaitPromise: true, returnByValue: true });
+        // a drive that never resolves (a page stuck in a loop, a promise never settled) fails its route, instead of holding the
+        // tab, and with it the whole run, forever; a synchronous loop is stopped so the tab can go on to the next route
+        let stuck = false;
+        const ev = await Promise.race([
+          this.send('Runtime.evaluate', { expression: route.drive, awaitPromise: true, returnByValue: true }),
+          sleep(DRIVE_MS).then(() => { stuck = true; return null; }),
+        ]);
+        if (stuck || !ev) {
+          const alive = await Promise.race([this.send('Runtime.evaluate', { expression: '1', returnByValue: true }).then(() => true), sleep(3000).then(() => false)]);
+          if (!alive) await this.send('Runtime.terminateExecution').catch(() => {});
+          throw new Error(`drive never finished in ${DRIVE_MS / 1000} s (${alive ? 'the page answers: a promise never settled' : 'the page is frozen: stopped'})`);
+        }
         const found = ev.result.value as string[] | undefined;
         // a drive that throws comes back as an exception, not a list
         if (ev.exceptionDetails) this.errors.push(`drive threw: ${ev.exceptionDetails.exception?.description ?? ev.exceptionDetails.text}`.slice(0, 400));
