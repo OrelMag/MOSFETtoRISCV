@@ -8,6 +8,7 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { FIELDS, STACK, censusPeople, newCounts, relayDial, tallyCard, type Wiring } from '../cards/census';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { N, POSITIONS, closedOf, holesOf, pressAnchors, pressParts, type PressPalette, type PressPose } from './press3dparts';
 
@@ -25,6 +26,7 @@ export function pressView(): Widget {
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.machine,
     aria: 'Hollerith’s pin press in 3D: a head of spring pins above a census card, mercury cups below it and a row of counting dials',
     camera: { target: [12, 28, 6], yaw: 0.5, pitch: 0.3, dist: 172 },
     limits: { minDist: 60, maxDist: 360 },

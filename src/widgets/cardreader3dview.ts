@@ -10,6 +10,7 @@ import type { Widget } from '../view/stage';
 import { COLUMNS, type Deck } from '../cards/card';
 import { readerProgress, type ReaderMode } from '../cards/reader';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { ORIENTS, ORIENT_NAMES, ReaderRun, orientIndex, readerAnchors, readerLayout, readerParts, type Orient, type ReaderPalette } from './cardreader3dparts';
 import type { OrbitView } from '../gl/camera';
@@ -42,6 +43,7 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.machine,
     aria: 'A card reader in 3D feeding a computer: a hopper of punched cards, a picker knife, feed rolls, the read station and a stacker, and the computer’s panel of lamps',
     camera: { ...VIEWS.word },
     limits: { minDist: 70, maxDist: 800 },

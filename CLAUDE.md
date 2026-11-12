@@ -1358,9 +1358,25 @@ src/widgets/   (3D models, also) modelhost.ts lazyModel / withModel: what a chap
 src/gl/        the hand-written WebGL2 renderer (its own lazy chunk, no library): instanced meshes (boxMesh, cylinderMesh; 18
                floats per instance: position, scale, quaternion, RGBA, emissive + specular), transparent batches, frames
                on demand, OrbitCamera + orbit controls, context loss recovery; createRenderer returns null without WebGL2.
-               widgets/relay3d.ts (relayCloseup: a placeholder, then imports relay3dview.ts: the relay in 3D on
-               phys/relay.ts, sliders, plots, an SVG fallback without WebGL2); widgets/triode3d.ts (triodeCloseup, the same
-               way: triode3dview.ts on phys/triode.ts); widgets/tubedivider.ts (P2's divider explorer: ratio, bias, fan-out)
+               studio.ts: the studio renderer every model moves to (API frozen: docs/STUDIO3D.md): GGX + clear coat
+               in a procedural studio, one key light (env.dir), PCF shadow map redrawn only when dirty, glass over a frame copy,
+               translucent layers sorted far to near, MSAA with a glow target, bloom (half / quarter resolution), ACES, up to 4
+               glow lights, one data texture per material (emit / albedo / mask), per-vertex colour, live deform (Geo.rev →
+               bufferSubData), move() (rigid motion by name or group), adaptive tiers (MSAA 4→2, PCF 9→4, MSAA off, refraction
+               off, bloom off: never back up). kit/ (DOM-free, tested in Node): geo.ts (lathe, sweep, tube, helix, extrude,
+               bentSheet, roundedBox, surface, ribbon, refresh, paint, along), materials.ts (M presets, heatColour / heatGlow,
+               oxideColour), scene.ts (Item / Model3 / Beat / Moves; pick: a CPU ray, fitView / aspectOf, anchorAt follows
+               moves), text.ts (strokeGeo: the stroke font as tubes or flat ink on a Surface), fromparts.ts + looks.ts (phase 0:
+               today's box / cyl parts on the studio, each model's look as data: LOOKS.machine | silicon | lab | field in its
+               modelStage call, under ?studio3d). widgets/studiostage.ts studioStage({ build }): canvas at the model's aspect,
+               home refitted, names in gutters or numbered badges + list (by measured width / height), hover cards, tour beats
+               (frame / show / hide), Cutaway / Explode, corner tools, flat SVG fallback (?flat3d), ?stats overlay.
+               widgets/relay3d.ts (relayCloseup: a placeholder, then relay3dview.ts relayView({ studio: true }): the controls,
+               plots and sweep around relay3dkit.ts's relay (true geometry, posed per sample by relayPose(): the armature
+               turned about the hinge, the spring stretched, the blade bent with refresh(), contacts lit when closed;
+               relay3dgeom.ts the lever arithmetic both drawings share; tests/relay3dkit.test.ts)); widgets/triode3d.ts
+               (triodeCloseup: triode3dnext.ts on triode3dkit.ts, physics and plots from triode3dview.ts on phys/triode.ts);
+               widgets/tubedivider.ts (P2's divider explorer: ratio, bias, fan-out)
 src/gfx/       raster16.ts: the campaign's (7-bit vertices, 32 × 32, RGB565; Edge16 / Walk16 models, rasterize16 with the
                19-cycle set-up, draw16, rgb565); raster.ts: the rasterizer's reference model (setup, rasterize: pixel writes
                with their cycles, zPlane / zAt / zStore, blend332, RefFrame: a framebuffer and depth buffer drawn as the

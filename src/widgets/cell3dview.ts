@@ -6,6 +6,7 @@ import '../styles/masks3d.css';
 import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { CELL_LAYER_NAME, CELL_LAYERS, cellAnchors, cellParts, defaultCut, LAMBDA_NM, ROW_UM, sectionText, type CellLayer, type CellPalette, type CellState } from './cell3dparts';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { CELLS } from './silicon';
 
@@ -19,6 +20,7 @@ export function cellView(): Widget {
   const panel = h('div', { class: 'panel' });
   const iso = { target: [0, 3, 0] as [number, number, number], yaw: -0.7, pitch: 0.7, dist: 62 };
   const stage = modelStage(panel, {
+    look: LOOKS.silicon,
     aria: 'A standard cell in 3D, layer by layer, with a section plane through a transistor gate',
     camera: iso,
     limits: { minDist: 18, maxDist: 160 },

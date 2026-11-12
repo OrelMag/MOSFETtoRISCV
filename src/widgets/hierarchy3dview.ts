@@ -9,6 +9,7 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import type { OrbitView } from '../gl/camera';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { CORE_GHZ, DEFAULT_HITS, LEVELS, amatCycles, amatShares, type HitRates } from './hierarchy3ddata';
 import {
@@ -28,6 +29,7 @@ export function hierarchyView(): Widget {
 
   const panel = h('div', { class: 'panel hy3d' });
   const stage = modelStage(panel, {
+    look: LOOKS.field,
     aria: 'The memory hierarchy as distances in 3D: a core, then along a road a desk, a shelf, a library, a warehouse across town and another city, each at a distance that is its latency on a log scale, and a courier that fetches data from the level you pick',
     camera: overview(false),
     limits: { minDist: 25, maxDist: 500 },

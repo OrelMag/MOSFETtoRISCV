@@ -7,6 +7,7 @@ import { h } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import { VIH, VIL, VIO } from '../phys/line';
 import { padSwing } from './line';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { bondL, bonds, bounceOf, drawnLenMm, pkAnchors, pkParts, verdictOf, GROUNDS, LEN_DEFAULT, LEN_MAX, LEN_MIN, SIGNALS, type PkPalette, type PkState } from './package3dparts';
 
@@ -21,6 +22,7 @@ export function packageView(): Widget {
     gold: stage.rgb('--pk-gold'), ground: stage.rgb('--pk-ground'), vdd: stage.rgb('--pk-vdd'), attach: stage.rgb('--pk-attach'), mould: stage.rgb('--pk-mould'), lit: stage.rgb('--pk-lit'), bad: stage.rgb('--pk-bad'),
   });
   const stage = modelStage(panel, {
+    look: LOOKS.silicon,
     aria: 'A chip package opened up in 3D: a die on a paddle, bond wires from its pads to the lead frame, the board below',
     camera: { target: [0, 0, 0], yaw: -0.45, pitch: 0.7, dist: 128 },
     limits: { minDist: 50, maxDist: 320 },

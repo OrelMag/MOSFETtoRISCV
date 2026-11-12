@@ -14,39 +14,12 @@ import { h, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { declutterLabels } from './labelfit';
+import { RELAY_HOME, bendBlade, relayModel, relayPose } from './relay3dkit';
+import { studioStage } from './studiostage';
 import { ORBIT_ARIA, ORBIT_HINT, modelFrame } from './modelframe';
 
-// ---------------------------------------------------------------- geometry (mm; x right, y up, z towards the viewer)
-
-/** Gaps and travel drawn this many times their size at the pole (0.85 mm would not show); the contacts' gap is drawn
- *  at about ×4.6, because the stud moves 1.57× the pole's travel along a shorter lever. */
-export const EXAG = 6;
-const HINGE: Vec3 = [28, 25, 0]; // the armature turns about the yoke's top corner
-const POLE_X = 0, LEVER = HINGE[0] - POLE_X; // hinge to the pole's centre
-const ARM_X0 = -47, ARM_X1 = 5, ARM_T = 2.5, ARM_W = 12; // armature, along x from the hinge
-const SPRING_LX = 3.5; // the return spring, from the hinge (behind it: pulls the armature open)
-// The spring stack, along x: solder tails, pile face (the blades' root), contacts, blade tip under the stud; blade
-// rest height.
-const XTAIL = -46, XR = -34, XC = -25, XT = -16, YB = 16;
-const STUD_LX = XT - HINGE[0]; // the lifting stud, from the hinge
-const BT = 0.6, BUT = 0.9, BUT_R = 1.15, TWIN_Z = 1.7; // twin dome contacts: two buttons side by side on each spring
-export const POLE_R = 5.65; // a 100 mm² pole face (RELAY.A), drawn at its model area
-const POLE_AX = POLE_X - HINGE[0]; // the pole's place along the armature, from the hinge
- // blade thickness, contact button height and radius
-const STACK = 2 * (BT / 2 + BUT); // blade centre to fixed spring centre with the buttons touching
-
-/** Armature angle (rad, opening up) for armature travel u (m): the gap at the pole, drawn ×EXAG, over the lever. */
-const theta = (u: number) => Math.atan(((RELAY.gOpen - u + RELAY.gRes) * 1e3 * EXAG) / LEVER);
-/** A point given in the armature's frame (from the hinge, at angle 0), in the world. */
-const armAt = (lx: number, ly: number, th: number): [number, number] =>
-  [HINGE[0] + lx * Math.cos(th) + ly * Math.sin(th), HINGE[1] - lx * Math.sin(th) + ly * Math.cos(th)];
-/** How far the stud has pushed the blade's tip down for armature travel u. */
-const push = (u: number) => armAt(STUD_LX, 0, theta(0))[1] - armAt(STUD_LX, 0, theta(u))[1];
-/** The contact sits part-way along the cantilever, so it moves that fraction of the tip. */
-const AT_CONTACT = (XC - XR) / (XT - XR);
-const YNC = YB + STACK, YNO = YB - STACK - push(RELAY.yc) * AT_CONTACT;
-/** The NC contact opens once the blade has left it (the mockup's 0.03 mm). */
-const ncClosed = (q: RelaySample) => q.y < 0.03e-3;
+import { ARM_T, ARM_W, ARM_X0, ARM_X1, AT_CONTACT, BT, BUT, BUT_R, EXAG, HINGE, POLE_AX, POLE_R, POLE_X, SPRING_LX, STUD_LX, TWIN_Z, XC, XR, XT, XTAIL, YB, YNC, YNO, armAt, ncClosed, push, theta } from './relay3dgeom';
+export { EXAG, POLE_R };
 
 type Kind = 'box' | 'cyl';
 interface Part extends Instance { kind: Kind; id?: string }
@@ -264,8 +237,10 @@ function drawHyst(svg: SVGSVGElement, at: number | null): void {
 // ---------------------------------------------------------------- the widget
 
 const fmt = (x: number, d = 1) => x.toFixed(d);
-export function relayView(): Widget {
+export function relayView(opts: { studio?: boolean } = {}): Widget {
+  const studio = !!opts.studio;
   let run = relaySim(24), idx = 100; // 10 ms: closed and settled
+  let shown: RelaySample = run.s[idx];
   // 'wait' until the renderer chunk answers; 'flat' without WebGL2 or while the context is lost.
   let mode: 'wait' | 'gl' | 'flat' = 'wait';
   let playing = 0, renderer: Renderer | null = null, dead = false, pending = 0, cursor: SVGLineElement | null = null;
@@ -315,8 +290,18 @@ export function relayView(): Widget {
   const diff = h('details', { class: 'deeper' }, h('summary', null, 'How this model differs from a real 3000-type'),
     h('p', null, `Illustrative values: ${groupDigits(RELAY.N)} turns on ${RELAY.Rc} Ω (a real 500 Ω coil has about 10 700 turns of finer wire; Smith, Telephony and Telegraphy). The gap at the pole is ${(RELAY.gOpen * 1e3).toFixed(2)} mm open and, closed, ${(RELAY.gRes * 1e3).toFixed(2)} mm of residual shim plus ${(RELAY.gIron * 1e3).toFixed(2)} mm for the iron path; real relays set a non-magnetic residual stud at 0.1, 0.3 or 0.5 mm (4, 12 or 20 mils, BPO 3000-type), which raises the drop-out voltage and speeds release. The armature's ${(RELAY.m * 1e3).toFixed(0)} g is its effective mass at the pole, not the drawn steel's. The return is one lumped spring; on the real relay the tension of the contact springs, set by the buffer block, brings the armature back.`));
 
+  // The studio close-up (gl/studio.ts, widgets/relay3dkit.ts): the same controls and panel, the relay in true geometry
+  // with its armature, spring, blade and contacts moved by the model each frame.
+  const sstage = studio ? studioStage({
+    aria: 'A telephone relay in 3D',
+    home: RELAY_HOME,
+    limits: { minDist: 25, maxDist: 400, minPitch: -1.3, maxPan: 120 },
+    note: HINT.trim(),
+    build: (detail) => relayModel({ detail, i: shown.i, nc: ncClosed(shown), no: shown.closed }),
+  }) : null;
+  if (sstage) { resetBtn.style.display = 'none'; sstage.slot.append(ctl); sstage.chips.append(state, gap, spike); sstage.el.append(live); }
   const el = h('div', { class: 'r3' },
-    h('div', { class: 'r3-main' }, ctl, stage, hint),
+    sstage ? h('div', { class: 'r3-main' }, sstage.el) : h('div', { class: 'r3-main' }, ctl, stage, hint),
     h('div', { class: 'r3-side' }, plot, legend, hyst, hystLegend, h('h4', null, 'This relay ', h('span', { class: 'r3-badge' }, 'model')), kv, diff));
 
   const colors = new CssColors(el);
@@ -385,6 +370,14 @@ export function relayView(): Widget {
     spike.textContent = q.vTerm < -40 ? `coil ${Math.round(q.vTerm)} V` : '';
     spike.style.display = q.vTerm < -40 ? '' : 'none';
     if (cursor) { const x = String(tX(q.t)); cursor.setAttribute('x1', x); cursor.setAttribute('x2', x); }
+    if (sstage) {
+      shown = q;
+      bendBlade('full', q);
+      if (sstage.isFlat()) bendBlade('flat', q);
+      sstage.move(relayPose(q));
+      sstage.refresh();
+      return;
+    }
     if (mode === 'wait') return;
     const parts = relayParts(q, pal());
     anchorsNow = anchors(q);
@@ -487,9 +480,9 @@ export function relayView(): Widget {
   idleLabels();
   // A narrow stage (a phone, a codex column) drops the minor labels: they would sit on each other.
   const ro = new ResizeObserver(() => stage.classList.toggle('narrow', stage.clientWidth < 300));
-  ro.observe(stage);
+  if (!studio) ro.observe(stage);
   rerun();
-  void import('../gl/renderer').then(({ createRenderer, OrbitCamera, boxMesh, cylinderMesh }) => {
+  if (!studio) void import('../gl/renderer').then(({ createRenderer, OrbitCamera, boxMesh, cylinderMesh }) => {
     if (dead) return;
     const cam = new OrbitCamera({ target: [-10, 13, 0], yaw: -0.42, pitch: 0.34, dist: 118 }, { minDist: 40, maxDist: 400 });
     try {
@@ -514,6 +507,7 @@ export function relayView(): Widget {
       unwatch();
       ro.disconnect();
       frame.destroy();
+      sstage?.destroy();
       renderer?.destroy();
       renderer = null;
       colors.destroy();

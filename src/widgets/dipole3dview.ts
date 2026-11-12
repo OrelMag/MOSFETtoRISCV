@@ -6,6 +6,7 @@ import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { ANTENNA_GHZ } from './radio';
 import {
@@ -27,6 +28,7 @@ export function dipoleView(): Widget {
   let running = false, showPattern = true, target: number | null = null, lastRead = 0;
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.field,
     aria: 'A dipole antenna in 3D: two copper rods with an insulated feed gap in the middle, the standing-wave current and voltage along them, electric field loops leaving it, magnetic circles round the arms and the doughnut-shaped radiation pattern around it, which a length slider reshapes',
     camera: { target: [0, 0, 0], yaw: 0.5, pitch: 0.38, dist: 36 },
     limits: { minDist: 14, maxDist: 200 },

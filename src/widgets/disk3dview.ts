@@ -9,6 +9,7 @@ import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import {
   CYLINDERS, DATASHEET_MEDIA_MBIT, PITCH_EXAGGERATION, PITCH_NM, SECTORS, TRACKS, TURN_MS, trackBytes, diskAnchors, diskParts, driveRows, fmtMs, guessLine, phaseAt, planRead, queueLine, radiusAt, readoutRows, rewriteLine, trackRadius,
@@ -28,6 +29,7 @@ export function diskView(): Widget {
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.machine,
     aria: 'A 3.5 inch hard disk in 3D: two spinning platters on a spindle, an actuator arm with heads on a pivot, and the voice-coil motor between two magnets',
     camera: { target: [24, 8, 2], yaw: 0.45, pitch: 1.0, dist: 190 },
     limits: { minDist: 70, maxDist: 520 },

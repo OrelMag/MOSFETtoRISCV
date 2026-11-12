@@ -38,7 +38,7 @@ const PIN_C = 17.5 / 2, PIN_D = 2.36, PIN_L = 9.2, KEY_D = 7.9, KEY_L = 12.5;
 const HEATER_LEAD = 150;
 
 /** The full current: grid at 0 V, cathode hot. The electrons drawn are scaled to it. */
-const I_FULL = plateCurrent(0, V_LOW);
+export const I_FULL = plateCurrent(0, V_LOW);
 /** The datasheet's plate rating (Tung-Sol 6SN7GTB: 2.5 W per plate; 450 V; 20 mA of cathode current per section). */
 export const PLATE_RATING_W = 2.5;
 /** The most positive grid the slider reaches: above it a real grid collects electrons, which the model has no term for. */
@@ -57,7 +57,7 @@ export const stateAt = (vg: number, th: number): TubeState => ({ vg, th, ...trio
  *  plate current; the cloud round it is drawn at one density). flow: the plate current as a fraction of the full
  *  current, which sets the electrons that cross the grid. Of every electron the cathode emits, 1 - ip / sat fall back
  *  into the space-charge cloud: above 99 % of them at the full current. */
-function stream(st: TubeState): { e: number; flow: number } {
+export function stream(st: TubeState): { e: number; flow: number } {
   const e = Math.min(1, st.sat / I_FULL);
   return e < 1e-3 ? { e: 0, flow: 0 } : { e, flow: Math.min(1, st.ip / I_FULL) };
 }
@@ -157,12 +157,12 @@ export function tubeParts(st: TubeState, P: Palette, opts: { charge: boolean } =
 
 /** An electron: direction round the cathode, height, progress through its flight, flight time, whether it
  *  reaches the plate or turns back (and how far out). */
-interface Electron { th: number; y: number; ph: number; dur: number; pass: boolean; turn: number }
+export interface Electron { th: number; y: number; ph: number; dur: number; pass: boolean; turn: number }
 /** An electron's drawn diameter (mm): symbolic, for visibility (real ones are points; the grid wire is 0.14 mm). */
-const E_D = 0.3;
+export const E_D = 0.3;
 
 /** Where an electron is at `rho` (0 the cathode's surface, 1 the grid, 2 the plate) in direction th. */
-function electronAt(th: number, y: number, rho: number): Vec3 {
+export function electronAt(th: number, y: number, rho: number): Vec3 {
   const c = Math.cos(th), sn = Math.sin(th);
   const gx = GX * c, gz = GZ * sn, k = Math.min(PX / Math.max(1e-6, Math.abs(gx)), PZ / Math.max(1e-6, Math.abs(gz)));
   const [ax, az, bx, bz, t] = rho <= 1 ? [CX * c, CZ * sn, gx, gz, rho] : [gx, gz, gx * k, gz * k, rho - 1];
@@ -170,9 +170,9 @@ function electronAt(th: number, y: number, rho: number): Vec3 {
 }
 
 /** Progress → rho: an electron bound for the plate speeds up all the way; one turned back slows, stops, returns. */
-const rhoOf = (q: Electron) => (q.pass ? 2 * q.ph ** 1.6 : q.turn * Math.sin(Math.PI * q.ph));
+export const rhoOf = (q: Electron) => (q.pass ? 2 * q.ph ** 1.6 : q.turn * Math.sin(Math.PI * q.ph));
 
-function newElectron(pass: boolean, rnd: () => number, ph = 0): Electron {
+export function newElectron(pass: boolean, rnd: () => number, ph = 0): Electron {
   return {
     th: rnd() * 2 * Math.PI, y: EMIT0 + rnd() * (EMIT1 - EMIT0), ph, pass,
     // one that returns rises only a fraction of the gap (the space-charge cloud), slowly; one for the plate crosses it
@@ -180,10 +180,10 @@ function newElectron(pass: boolean, rnd: () => number, ph = 0): Electron {
   };
 }
 /** Electrons drawn per second at the full stream: the cloud's, and those that cross the grid at the full plate current. */
-const CLOUD_RATE = 150, FLOW_RATE = 60, MAX_ELECTRONS = 330;
+export const CLOUD_RATE = 150, FLOW_RATE = 60, MAX_ELECTRONS = 330;
 
 /** A fixed spread of electrons for reduced motion: the cloud and the stream across, in the same proportion. */
-function staticElectrons(e: number, flow: number, charge: boolean): Electron[] {
+export function staticElectrons(e: number, flow: number, charge: boolean): Electron[] {
   let seed = 7;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
   const nc = charge ? Math.round(e * 90) : 0, np = Math.round(flow * 40);
@@ -253,17 +253,19 @@ function drawFlat(svg: SVGSVGElement, parts: Part[], marks: Anchor[]): SVGGEleme
 
 // ---------------------------------------------------------------- plots
 
-const PW = 360, PX0 = 40, PX1 = 336;
+export const PW = 360, PX0 = 40, PX1 = 336;
 const minus = (t: string) => t.replace(/^-/, '−');
 const fmt = (x: number, d = 1) => minus(x.toFixed(d));
 // (1) plate voltage against grid voltage, hot
-const H1 = 172, gX = (vg: number) => PX0 + ((vg + 20) / 22) * (PX1 - PX0), vY = (vp: number) => 150 - (vp / 260) * 132;
+export const H1 = 172;
+const gX = (vg: number) => PX0 + ((vg + 20) / 22) * (PX1 - PX0), vY = (vp: number) => 150 - (vp / 260) * 132;
 // (2) plate current against time since switch-on
-const H2 = 160, tX = (t: number) => PX0 + (t / 20) * (PX1 - PX0), iY = (mA: number) => 134 - (mA / 10) * 114;
+export const H2 = 160;
+const tX = (t: number) => PX0 + (t / 20) * (PX1 - PX0), iY = (mA: number) => 134 - (mA / 10) * 114;
 /** The hot transfer curve (it does not change). */
 const XFER = Array.from({ length: 89 }, (_, k) => { const vg = -20 + k * 0.25; return [vg, plateVoltage(vg)] as const; });
 
-function drawXfer(svg: SVGSVGElement, st: TubeState): void {
+export function drawXfer(svg: SVGSVGElement, st: TubeState): void {
   const els: SVGElement[] = [];
   const text = (x: number, y: number, t: string, cls = 'tick', anchor = 'end') => els.push(s('text', { x, y, class: cls, 'text-anchor': anchor }, t));
   for (const vp of [0, V_LOW, V_HIGH]) { els.push(s('line', { x1: PX0, x2: PX1, y1: vY(vp), y2: vY(vp), class: 'grid' })); text(PX0 - 4, vY(vp) + 3, String(Math.round(vp))); }
@@ -278,7 +280,7 @@ function drawXfer(svg: SVGSVGElement, st: TubeState): void {
   svg.replaceChildren(...els);
 }
 
-function drawWarm(svg: SVGSVGElement, curve: WarmSample[], st: TubeState): void {
+export function drawWarm(svg: SVGSVGElement, curve: WarmSample[], st: TubeState): void {
   const els: SVGElement[] = [];
   const text = (x: number, y: number, t: string, cls = 'tick', anchor = 'end') => els.push(s('text', { x, y, class: cls, 'text-anchor': anchor }, t));
   for (const mA of [0, 5, 10]) { els.push(s('line', { x1: PX0, x2: PX1, y1: iY(mA), y2: iY(mA), class: 'grid' })); text(PX0 - 4, iY(mA) + 3, String(mA)); }
@@ -294,7 +296,7 @@ function drawWarm(svg: SVGSVGElement, curve: WarmSample[], st: TubeState): void 
 // ---------------------------------------------------------------- the widget
 
 /** Amps with a unit that keeps three figures readable. */
-function amps(a: number): string {
+export function amps(a: number): string {
   if (a >= 1) return `${a.toFixed(2)} A`;
   if (a >= 1e-3) return `${(a * 1e3).toFixed(a >= 0.1 ? 0 : 2)} mA`;
   if (a >= 1e-6) return `${(a * 1e6).toFixed(2)} µA`;
