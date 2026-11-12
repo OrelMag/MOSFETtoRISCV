@@ -243,7 +243,7 @@ export function irBlock(): ComponentDef {
     id: 'm65_ir', name: '6502 instruction register',
     summary: 'The opcode, loaded at the end of the fetch cycle (φ2 of T1), stored inverted and refreshed in φ1. A reset forces NOP, an interrupt BRK.',
     ports: [bus('din', 8, 'in'), bit('irld'), bit('nintg'), bit('reslow'), bit('p1'), bus('ir', 8, 'out'), bus('nir', 8, 'out')],
-    symbol: { kind: 'box', label: 'IR' }, rows: 8,
+    symbol: { kind: 'box', label: 'IR' }, rows: 8, place: 'layered',
   });
 }
 

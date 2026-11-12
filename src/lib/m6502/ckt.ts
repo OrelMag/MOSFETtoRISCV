@@ -7,6 +7,8 @@ import { symbolGeom } from '../../sim/geometry';
 import type { ComponentDef, InstanceDef, NetDef, PortDef, SymbolSpec } from '../../sim/types';
 import { define, merger, splitter } from '../define';
 import { GND, VDD } from '../transistors';
+import { layered } from '../layered';
+import type { Builder } from '../builder';
 
 /** Width of a label as the router draws it (route.ts tagGeom), plus its stub. */
 const tagLen = (name: string) => 1.4 + name.length * 0.48 + 0.9;
@@ -22,6 +24,13 @@ export interface BlockSpec {
   rows?: number;
   /** Names of the bits of a bus pin (default name[i]): a bundle of named lines, drawn as one bus outside. */
   bits?: Record<string, string[]>;
+  /**
+   * 'layered': columns by logic depth and rows by what they connect to (lib/layered.ts), short forward nets as wires; the
+   * grid in insertion order with every net a label otherwise (the eyes pass's C5: a level of nothing but pointers).
+   */
+  place?: 'grid' | 'layered';
+  /** With place 'layered': nets (by name) drawn as wires although they run back a column (a loop's short return). */
+  wires?: string[];
 }
 
 export class Ckt {
@@ -151,6 +160,19 @@ function layout(spec: BlockSpec, insts: { name: string; def: ComponentDef; conns
   let yl = 2, yr = 2;
   for (const p of spec.ports) {
     if (p.dir === 'out') { pins[p.name] = [Math.ceil(x + rightW + 2), yr]; yr += 2; } else { pins[p.name] = [-Math.ceil(leftW + 2), yl]; yl += 2; }
+  }
+  if (spec.place === 'layered') {
+    // layered() reads a net's driver as its first end: a block input pin, else an instance's output, else what there is
+    const dirOf = (e: string): number => {
+      const dot = e.indexOf('.');
+      if (dot < 0) return spec.ports.find((p) => p.name === e)?.dir === 'out' ? 3 : 0;
+      const i = placed.find((x) => x.name === e.slice(0, dot));
+      return i?.def.ports.find((p) => p.name === e.slice(dot + 1))?.dir === 'out' ? 1 : 2;
+    };
+    const ordered = nets.map((n) => ({ ...n, ends: [...n.ends].sort((a, b) => dirOf(a) - dirOf(b)) }));
+    const nl = layered(spec.ports, { nets: () => ordered, instances } as unknown as Builder,
+      { room: true, wires: Object.fromEntries(ordered.filter((n) => spec.wires?.includes(n.name ?? '')).map((n) => [n.ends[0], true])) });
+    return { level: 'switch' as const, ...nl, nets: nl.nets.map((n) => { const c = caps.get(n.name ?? ''); return c === undefined ? n : { ...n, cap: c }; }) };
   }
   return { level: 'switch' as const, instances, nets, pins };
 }
