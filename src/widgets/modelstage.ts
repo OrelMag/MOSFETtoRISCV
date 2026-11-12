@@ -73,6 +73,9 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
 
   // 'wait' until the renderer chunk answers; 'flat' without WebGL2 or while the context is lost.
   let mode: 'wait' | 'gl' | 'flat' = 'wait', renderer: Renderer | null = null, dead = false;
+  // PROTOTYPE (proto/3d-rock): ?studio3d draws the same parts on gl/studio.ts (phase 0: no change to any model)
+  const studioMode = /studio3d/.test(location.search + location.hash);
+  let paintParts: ((parts: readonly Part[]) => void) | null = null;
   let last: readonly Anchor[] = [], lblEls: HTMLElement[] = [];
   // The flat view's extent only grows, so a part that moves does not rescale the drawing.
   let fit: [number, number, number, number] | null = null;
@@ -116,6 +119,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
     if (mode === 'wait') return;
     if (mode === 'flat') { drawFlat(parts, anchors); return; }
     if (!renderer) return;
+    if (paintParts) { paintParts(parts); last = anchors; if (anchors.length !== lblEls.length || anchors.some((a, i) => a.text !== lblEls[i]?.textContent)) { lblEls = anchors.map((a) => h('span', { class: `r3-lbl ${a.side}${a.minor ? ' minor' : ''}` }, h('i'), h('b', null, a.text))); labels.replaceChildren(...lblEls); } placeLabels(); return; }
     const clear = (p: Part) => ((p.color as RGBA)[3] ?? 1) < 1;
     const of = (kind: Part['kind'], glass: boolean) => packInstances(parts.filter((p) => p.kind === kind && clear(p) === glass));
     renderer.updateBatch(0, of('box', false));
@@ -171,7 +175,25 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
   const unwatch = watchTheme(() => { colors.invalidate(); applyLights(); o.draw(); });
   resetBtn.addEventListener('click', () => { renderer?.camera.reset(); renderer?.invalidate(); });
 
-  void import('../gl/renderer').then(({ createRenderer, OrbitCamera, boxMesh, cylinderMesh }) => {
+  if (studioMode) void Promise.all([import('../gl/studio'), import('../gl/kit/fromparts')]).then(([{ createStudio, OrbitCamera }, { fromParts }]) => {
+    if (dead) return;
+    const st = createStudio(canvas, new OrbitCamera(o.camera, o.limits), { onRender: placeLabels, onLost: () => setMode('flat'), onRestored: () => setMode('gl') });
+    if (!st) { setMode('flat'); return; }
+    const rgbOf = (c: string | [number, number, number]) => (typeof c === 'string' ? colors.rgb(c) : c);
+    // the frame and the label code only need these of a Renderer
+    renderer = {
+      camera: st.camera, canvas, render: st.render, invalidate: st.invalidate, project: st.project, destroy: st.destroy,
+      setScene: () => {}, updateBatch: () => {},
+      setLights: (l) => st.setEnv({ ...(l.sky ? { sky: l.sky } : {}), ...(l.ground ? { ground: l.ground } : {}), ...(l.key ? { key: l.key } : {}) }),
+    };
+    (window as unknown as { __studio?: unknown }).__studio = st;
+    paintParts = (parts) => st.showParts(fromParts(parts), rgbOf);
+    // today's palettes were tuned under half-Lambert light: a lower exposure keeps their colours from washing out
+    st.setEnv({ exposure: 0.9 });
+    applyLights();
+    setMode('gl');
+  }).catch(() => { if (!dead) setMode('flat'); });
+  else void import('../gl/renderer').then(({ createRenderer, OrbitCamera, boxMesh, cylinderMesh }) => {
     if (dead) return;
     const cam = new OrbitCamera(o.camera, o.limits);
     try {

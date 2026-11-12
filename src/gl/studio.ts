@@ -16,6 +16,7 @@ import { attachOrbit } from './orbit';
 import { lathe, normalMatrix, type Geo } from './kit/geo';
 import type { Colour, Material } from './kit/materials';
 import { boundsOf, cutsAt, itemMatrix, type Item, type Knobs, type Model3 } from './kit/scene';
+import type { PartScene } from './kit/fromparts';
 
 export interface StudioFlags {
   shadows: boolean; msaa: boolean; refraction: boolean; env: boolean; floor: boolean;
@@ -52,7 +53,9 @@ export interface Studio {
   setKnobs(k: Partial<Knobs>): void;
   knobs(): Knobs;
   /** A set of instances (particles): the 18-float records of gl/instances.ts on a geometry, in a material. */
-  setInstances(key: string, geo: Geo, mat: Material, data: Float32Array, count?: number): void;
+  setInstances(key: string, geo: Geo, mat: Material, data: Float32Array, count?: number, casts?: boolean): void;
+  /** Today's box / cyl parts (gl/kit/fromparts.ts): phase 0, a model unchanged on this renderer. */
+  showParts(scene: PartScene, resolve: (c: Colour) => RGB): void;
   /** Names / groups lit (the rest dimmed), or null for all. */
   setFocus(names: ReadonlySet<string> | null): void;
   /** The part under the pointer: drawn with a rim. */
@@ -263,7 +266,7 @@ void main() { if (uCutOn == 1 && removed(vW)) discard; }`;
 interface GpuGeo { vbo: WebGLBuffer; ibo: WebGLBuffer; vao: WebGLVertexArrayObject; count: number }
 interface Draw { item: Item; geo: GpuGeo; mat: ResolvedMat; glass: boolean; key: string[] }
 interface ResolvedMat { base: RGB; emit: RGB; tint: RGB; metal: number; rough: number; coat: number; transmit: number; glow: number }
-interface InstSet { geo: Geo; mat: ResolvedMat; vao: WebGLVertexArrayObject | null; buf: WebGLBuffer | null; data: Float32Array; count: number; gpu: GpuGeo | null }
+interface InstSet { casts: boolean; geo: Geo; mat: ResolvedMat; vao: WebGLVertexArrayObject | null; buf: WebGLBuffer | null; data: Float32Array; count: number; gpu: GpuGeo | null }
 
 const SHADOW_SIZE_HI = 2048, SHADOW_SIZE_LO = 1024;
 
@@ -472,10 +475,22 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
     return on;
   };
 
+  /** The model's items and every instance set that casts (centre ± half its largest size). */
+  const sceneBounds = (k0: number): { min: Vec3; max: Vec3 } => {
+    const b = model && model.items.length ? boundsOf(model, k0) : { min: [Infinity, Infinity, Infinity] as Vec3, max: [-Infinity, -Infinity, -Infinity] as Vec3 };
+    for (const s of inst.values()) {
+      if (!s.casts) continue;
+      for (let i = 0; i < s.count; i++) {
+        const o = i * INSTANCE_FLOATS, r = Math.hypot(s.data[o + 3], s.data[o + 4], s.data[o + 5]) / 2;
+        for (let a = 0; a < 3; a++) { b.min[a] = Math.min(b.min[a], s.data[o + a] - r); b.max[a] = Math.max(b.max[a], s.data[o + a] + r); }
+      }
+    }
+    return b;
+  };
   const drawShadow = () => {
     if (!model || !sprog) return;
     ensureShadow();
-    const { min, max } = boundsOf(model, k.explode), c: Vec3 = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
+    const { min, max } = sceneBounds(k.explode), c: Vec3 = [(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2];
     const R = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2]) / 2 * 1.05, L = norm3(env.dir);
     const eye: Vec3 = [c[0] + L[0] * 2 * R, c[1] + L[1] * 2 * R, c[2] + L[2] * 2 * R];
     lightVP = mat4Mul(ortho(-R, R, -R, R, 0.01, 4 * R), mat4LookAt(eye, c, Math.abs(L[1]) > 0.99 ? [0, 0, 1] : [0, 1, 0]));
@@ -497,7 +512,7 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
     }
     gl.uniformMatrix4fv(SU.uModel, false, ID); gl.uniform1i(SU.uCutOn, 0);
     for (const s of inst.values()) {
-      if (!s.count) continue;
+      if (!s.count || !s.casts) continue;
       gl.bindVertexArray(instVao(s));
       gl.drawElementsInstanced(gl.TRIANGLES, s.gpu!.count, gl.UNSIGNED_INT, 0, s.count);
     }
@@ -566,12 +581,13 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
     }
     // 2. the floor's shadow, over the page
     gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
-    const fb = boundsOf(model, 0), fy = model.floor ?? fb.min[1];
+    const fb = sceneBounds(0), fy = model.floor ?? fb.min[1];
     // seen from below the floor there is nothing for a shadow to fall on
     if (flags.floor && floorGeo && camera.eye()[1] > fy) {
       const { min, max } = fb, y = fy, R = Math.max(max[0] - min[0], max[2] - min[2]) * 1.15;
       const cx = (min[0] + max[0]) / 2, cz = (min[2] + max[2]) / 2;
-      const fm = new Float32Array([R, 0, 0, 0, 0, 1, 0, 0, 0, 0, R, 0, cx, y - 0.05, cz, 1]);
+      // a little below the model's foot, so the foot's own depth in the shadow map does not fight the floor (acne)
+      const fm = new Float32Array([R, 0, 0, 0, 0, 1, 0, 0, 0, 0, R, 0, cx, y - R * 0.006, cz, 1]);
       gl.bindVertexArray(floorGeo.vao); staticAttrs();
       gl.uniformMatrix4fv(U.uModel, false, fm); gl.uniformMatrix3fv(U.uNorm, false, ID3);
       gl.uniform1i(U.uMode, 3); gl.uniform4f(U.uFloor, cx, y, cz, R);
@@ -638,13 +654,21 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
       invalidate();
     },
     knobs: () => k,
-    setInstances(key, geo, mat, data, count) {
+    setInstances(key, geo, mat, data, count, casts = false) {
       let s = inst.get(key);
       const rm = resolveMat(mat);
-      if (!s || s.geo !== geo) { s = { geo, mat: rm, vao: null, buf: null, data, count: count ?? data.length / INSTANCE_FLOATS, gpu: null }; inst.set(key, s); }
-      s.mat = rm; s.data = data; s.count = count ?? data.length / INSTANCE_FLOATS;
+      if (!s || s.geo !== geo) { s = { casts, geo, mat: rm, vao: null, buf: null, data, count: count ?? data.length / INSTANCE_FLOATS, gpu: null }; inst.set(key, s); }
+      s.mat = rm; s.data = data; s.count = count ?? data.length / INSTANCE_FLOATS; s.casts = casts;
+      if (casts) shadowDirty = true;
       if (!lost && s.vao && s.buf) { gl.bindBuffer(gl.ARRAY_BUFFER, s.buf); gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW); }
       // particles do not move the shadow enough to redraw it every frame
+      invalidate();
+    },
+    showParts(scene, r) {
+      resolve = r;
+      model = { items: scene.items };
+      if (!lost) build();
+      for (const x of scene.sets) this.setInstances(x.key, x.geo, x.mat, x.data, undefined, true);
       invalidate();
     },
     setFocus(f) { focus = f; invalidate(); },
