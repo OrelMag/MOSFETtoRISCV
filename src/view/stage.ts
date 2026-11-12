@@ -2541,6 +2541,9 @@ export class Stage {
   }
 
   private restartMeter(): void {
+    // Activity's and Energy's window starts again too: Reset sets the cycle count to 0 and Back restores an older one, while
+    // the toggle counts only grow, so the old window would divide one run's toggles by another's cycles
+    this.ovWin = null;
     if (!this.meter) return;
     this.meter.reset();
     this.meterFrom = this.cycles;
@@ -2775,7 +2778,8 @@ export class Stage {
   private ovRefusals(): Partial<Record<OverlayKind, string>> {
     const sim = this.sim, ctx = this.ctx;
     if (!sim || !ctx) return {};
-    const c = { level: sim.kind, engine: this.scene?.engine, sub: ctx.sim !== sim } as const;
+    // the level's own engine: an opened NAND is transistors inside a gate-level scene
+    const c = { level: ctx.sim.kind, engine: this.scene?.engine, sub: ctx.sim !== sim } as const;
     const out: Partial<Record<OverlayKind, string>> = {};
     for (const k of OVERLAY_KINDS) {
       const why = overlayRefusal(k, c);
@@ -2856,7 +2860,7 @@ export class Stage {
     if (!(sim instanceof GateSim)) return null;
     const ins = this.scene?.root.ports.filter((p) => p.dir === 'in') ?? [];
     const sig = ins.map((p) => sim.getInputBits(p.name).join('')).join('|');
-    if (!this.ovWin || this.ovWin.sim !== sim) {
+    if (!this.ovWin || this.ovWin.sim !== sim || this.cycles < this.ovWin.cycles) {
       if (!sim.toggles) sim.countToggles();
       this.ovWin = { sim, base: new Uint32Array(sim.toggles!), cycles: this.cycles, changes: 0, sig };
     } else if (sig !== this.ovWin.sig) {
