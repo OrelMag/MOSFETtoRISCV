@@ -54,3 +54,49 @@ describe('service worker install', () => {
     expect(w.added.at(-1)).toBe('<skipWaiting>');
   });
 });
+
+// The fetch handler with a fake network: what it asks the network for (release review R5: a page load must revalidate).
+function fetchScope(source = src) {
+  const listeners: Record<string, (e: any) => void> = {};
+  const calls: { url: string; init?: RequestInit; viaRequest: boolean }[] = [];
+  let redirected = false;
+  const scope: any = {
+    addEventListener: (t: string, f: (e: any) => void) => { listeners[t] = f; },
+    caches: { open: async () => ({ put: async () => {} }), match: async () => undefined },
+    location: { origin: 'http://x' },
+    fetch: async (r: string | { url: string }, init?: RequestInit) => {
+      calls.push({ url: typeof r === 'string' ? r : r.url, init, viaRequest: typeof r !== 'string' });
+      return { ok: true, redirected: typeof r === 'string' && redirected, clone() { return this; } };
+    },
+    URL, Response, Promise, Set, Array,
+  };
+  scope.self = scope;
+  vm.runInNewContext(source.replace('__VERSION__', 't').replace('__PRECACHE__', '[]'), scope);
+  const get = async (url: string, mode = 'navigate') => {
+    let out: Promise<unknown> = Promise.resolve();
+    listeners.fetch({ request: { url, mode, method: 'GET', headers: new Headers() }, respondWith: (p: Promise<unknown>) => { out = p; } });
+    return out;
+  };
+  return { get, calls, redirect: (on: boolean) => { redirected = on; } };
+}
+
+describe('service worker fetch', () => {
+  it('a page load revalidates the page (no stale index.html from the HTTP cache after a deploy)', async () => {
+    const w = fetchScope();
+    await w.get('http://x/');
+    expect(w.calls).toEqual([{ url: 'http://x/', init: { cache: 'no-cache' }, viaRequest: false }]);
+  });
+
+  it('a redirected page load is fetched again the plain way (a navigation cannot take a redirected response)', async () => {
+    const w = fetchScope();
+    w.redirect(true);
+    await w.get('http://x/');
+    expect(w.calls.map((c) => c.viaRequest)).toEqual([false, true]);
+  });
+
+  it('other same-origin files go through as they are', async () => {
+    const w = fetchScope();
+    await w.get('http://x/hwstats.json', 'cors');
+    expect(w.calls).toEqual([{ url: 'http://x/hwstats.json', init: undefined, viaRequest: true }]);
+  });
+});

@@ -32,6 +32,8 @@ export class WorkbenchPage implements Page {
   private libName: HTMLElement;
   /** Save this component in My notes (ui/notes.ts). */
   private mark = h('div', { class: 'bench-mark' });
+  /** The mark's bookmark button follows the notes store until the next part or the page's end. */
+  private markLife = new AbortController();
   /** Following the address bar (a route): the stage's moves are not new history entries. */
   private routing = false;
   private search!: HTMLInputElement;
@@ -111,6 +113,7 @@ export class WorkbenchPage implements Page {
       // nothing to describe: the Info / Table / HDL pane would be three empty tabs
       this.el.classList.add('no-part');
       this.libName.textContent = '';
+      this.markLife.abort();
       this.mark.replaceChildren();
       this.stage.showWidget({ el: h('div', { class: 'widget' }, h('div', { class: 'panel' },
         h('h3', null, 'Unknown component'),
@@ -126,7 +129,9 @@ export class WorkbenchPage implements Page {
     this.el.classList.remove('no-part');
     this.current = def.id;
     this.libName.textContent = def.name;
-    this.mark.replaceChildren(bookmarkButton({ kind: 'bench', id: def.id }, () => `Workbench · ${def.name}`));
+    this.markLife.abort();
+    this.markLife = new AbortController();
+    this.mark.replaceChildren(bookmarkButton({ kind: 'bench', id: def.id }, () => `Workbench · ${def.name}`, this.markLife.signal));
     benchOpened(def.id, this.el);
     // Primitives and transistor-level parts are shown inside a test bench so they can be opened.
     const root: ComponentDef = def.prim === 'nand' || def.prim === 'nmos' || def.prim === 'pmos' || (!netlistOf(def) && !needsSwitchLevel(def))
@@ -185,6 +190,7 @@ export class WorkbenchPage implements Page {
   }
 
   destroy(): void {
+    this.markLife.abort();
     this.stage.destroy();
   }
 }

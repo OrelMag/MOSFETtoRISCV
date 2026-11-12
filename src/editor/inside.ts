@@ -107,6 +107,11 @@ class InsideView {
       ctx: () => this.ctx,
       light: (names) => this.view.highlight(names, names.length > 0),
       selectNet: (i) => this.view.selectNet(i),
+      // a trace crosses an opened box's rim, as on the stage (DESIGN.md track 2b)
+      lens: () => {
+        const v = this.lens?.innerView, c = this.lens?.peekCtx;
+        return v && c ? { ctx: c, box: c.path[c.path.length - 1], light: (names) => v.highlight(names, names.length > 0), selectNet: (i) => v.selectNet(i) } : null;
+      },
       toggled: (on) => {
         this.whyBtn.classList.toggle('on', on);
         this.canvas.classList.toggle('probing', on);
@@ -233,7 +238,23 @@ class InsideView {
         drill: (path, vb) => {
           this.goTo(path, false, vb);
         },
-        peek: () => this.renderCrumbs(),
+        peek: () => {
+          this.renderCrumbs();
+          this.why.lensChanged();
+        },
+        // Why? on the wires of a box the lens opened, and its menu's Why this value?, as on the stage
+        events: (ctx) => ({
+          netClick: (i) => this.why.netClick(i, 'lens'),
+          why: (i) => {
+            this.why.setOn(true);
+            this.why.netClick(i, 'lens');
+          },
+          // Explain names a part of the lens's level (the inspector shows the level on screen, so no jump to it from here)
+          explain: (c) => {
+            const def = c ? ctx.node.children?.get(c)?.def : ctx.def;
+            return def ? { def, host: explainHostOn(this.ed, null) } : null;
+          },
+        }),
         overlay: () => null,
         overlayGap: () => null,
         selected: () => {},

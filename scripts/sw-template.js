@@ -57,7 +57,11 @@ self.addEventListener('fetch', (e) => {
       return res;
     }
     try {
-      const res = await fetch(req);
+      // A page load revalidates (an ETag: a 304 when nothing changed): through the HTTP cache, Firefox showed a deploy one reload late,
+      // index.html being max-age=600 on GitHub Pages. A navigation cannot take a redirected response, so a redirect goes the plain way.
+      const res = req.mode === 'navigate'
+        ? await fetch(req.url, { cache: 'no-cache' }).then((r) => (r.redirected ? fetch(req) : r))
+        : await fetch(req);
       if (res.ok) (await caches.open(CACHE)).put(req, res.clone());
       return res;
     } catch (err) {

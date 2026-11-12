@@ -8,8 +8,9 @@ import { type NoteItem, notes, type NotePin as Pin, type Place, takeOpenNote } f
 
 const bookmarkIcon = (on: boolean) => icon(on ? 'bookmarkOn' : 'bookmark', 15);
 
-/** A toggle for saving `place`; `title` words it for the notes page. Follows the store while it is on the page. */
-export function bookmarkButton(place: Place, title: () => string, cls = 'btn sm toggle note-save'): HTMLButtonElement {
+/** A toggle for saving `place`; `title` words it for the notes page. Follows the store until `life` aborts: its owner aborts it when
+ *  the button is replaced or the page goes (waiting for the next notes change to notice kept every page alive). */
+export function bookmarkButton(place: Place, title: () => string, life: AbortSignal, cls = 'btn sm toggle note-save'): HTMLButtonElement {
   const store = notes();
   const b = h('button', { class: cls, type: 'button' }) as HTMLButtonElement;
   const sync = () => {
@@ -22,10 +23,8 @@ export function bookmarkButton(place: Place, title: () => string, cls = 'btn sm 
     b.replaceChildren(bookmarkIcon(on), h('span', { class: 'lbl' }, on ? 'Bookmarked' : 'Bookmark'));
   };
   b.addEventListener('click', () => { store.toggleBookmark(place, title()); });
-  const off = store.onChange(() => {
-    if (!b.isConnected) return off();
-    sync();
-  });
+  const off = store.onChange(sync);
+  life.addEventListener('abort', off);
   sync();
   return b;
 }

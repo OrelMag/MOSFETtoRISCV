@@ -115,7 +115,8 @@ export function dipoleView(): Widget {
   const lenIn = h('input', { type: 'range', min: Math.round(L_MIN * 100), max: Math.round(L_MAX * 100), step: 5, value: Math.round(L_HALF * 100), 'aria-label': 'Electrical length of the dipole in wavelengths' }) as HTMLInputElement;
   const lenOut = h('output', null, '');
   lenIn.addEventListener('input', () => { run.lwl = Number(lenIn.value) / 100; kick(); });
-  window.matchMedia?.('(prefers-reduced-motion: reduce)')?.addEventListener?.('change', () => { syncMotion(); kick(); });
+  const mq = window.matchMedia?.('(prefers-reduced-motion: reduce)'), onMq = () => { syncMotion(); kick(); };
+  mq?.addEventListener?.('change', onMq);
   syncMotion();
 
   panel.append(
@@ -130,5 +131,5 @@ export function dipoleView(): Widget {
   panel.addEventListener('keydown', (e) => { if (e.key === 'Escape' && running) { running = false; readout(true); kick(); } });
   readout(true);
   paint();
-  return { el: panel, destroy() { loop.stop(); stage.destroy(); } };
+  return { el: panel, destroy() { mq?.removeEventListener?.('change', onMq); loop.stop(); stage.destroy(); } };
 }

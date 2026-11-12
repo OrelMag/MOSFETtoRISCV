@@ -73,6 +73,8 @@ export class ChapterPage implements Page {
   private routing = false;
   private unlisten: (() => void)[] = [];
   private pillOff: (() => void) | null = null;
+  /** The tool row's bookmark button follows the notes store until the row is drawn again or the page goes. */
+  private toolsLife = new AbortController();
   private cueOff: (() => void) | null = null;
   private circuitBtn: HTMLElement | null = null;
   /** The step's challenge goal and "done" toasts over the canvas: the text panel's cards are often out of sight. */
@@ -267,13 +269,14 @@ export class ChapterPage implements Page {
         class: [i === this.step ? 'cur' : visited.includes(i) ? 'done' : '', solved ? 'solved' : ''].filter(Boolean).join(' '),
         title: `Step ${i + 1}: ${s.title}${s.challenge ? (solved ? ' (check solved)' : ' (has a check)') : ''}`,
         'aria-label': `Step ${i + 1}: ${s.title}${solved ? ', check solved' : ''}`,
+        'aria-current': i === this.step ? 'step' : undefined,
         onclick: () => this.goStep(i),
       });
     });
     for (const t of c.soon ?? []) dots.push(h('span', { class: 'soon', role: 'img', title: `Coming: ${t}`, 'aria-label': `Coming later: ${t}` }));
     if (this.recap >= 0) {
       dots.push(h('button', {
-        class: `recap${this.step === this.recap ? ' cur' : ''}`, title: 'Recap', 'aria-label': 'Recap', onclick: () => this.goStep(this.recap),
+        class: `recap${this.step === this.recap ? ' cur' : ''}`, title: 'Recap', 'aria-label': 'Recap', 'aria-current': this.step === this.recap ? 'step' : undefined, onclick: () => this.goStep(this.recap),
       }));
     }
     const { done, total } = checksDone(c, (k) => settings.isSolved(k));
@@ -287,7 +290,7 @@ export class ChapterPage implements Page {
         onclick: (e: Event) => toggleChapterMenu(e.currentTarget as HTMLElement),
       }, h('span', null, c.title), icon('chevD', 18))),
       parts ?? h('div', { class: 'steps-row' },
-        h('div', { class: 'steps-dots', role: 'tablist' }, dots),
+        h('nav', { class: 'steps-dots', 'aria-label': 'Steps' }, dots),
         total ? h('span', { class: 'checks-count', title: 'Questions and challenges solved in this chapter' }, `${done} / ${total} checks`) : null),
       this.tools,
     );
@@ -297,11 +300,13 @@ export class ChapterPage implements Page {
 
   /** Save (bookmark) and Add note, for the step shown; nothing on the recap. */
   private renderTools(): void {
+    this.toolsLife.abort();
+    this.toolsLife = new AbortController();
     const place = this.place();
     if (!place) return void this.tools.replaceChildren(...(this.circuitBtn ? [this.circuitBtn] : []));
     const n = notes().notesAt(place).length;
     this.tools.replaceChildren(
-      bookmarkButton(place, () => this.placeTitle()),
+      bookmarkButton(place, () => this.placeTitle(), this.toolsLife.signal),
       h('button', { class: 'btn sm note-add', type: 'button', title: 'A note on this step, pinned to the part selected on the stage', onclick: () => this.stepNotes?.add() },
         icon('note', 15), h('span', { class: 'lbl' }, 'Add note'), n ? h('small', null, ` · ${n}`) : null),
       ...(this.circuitBtn ? [this.circuitBtn] : []));
@@ -639,6 +644,7 @@ export class ChapterPage implements Page {
     // (the next page may already have set it: the old one is destroyed after the new one is built)
     if (widgetStepOwner === this) document.documentElement.removeAttribute('data-widget-step');
     this.offNotes();
+    this.toolsLife.abort();
     this.stepNotes?.destroy();
     this.notes.clear();
     this.unbindKeys();

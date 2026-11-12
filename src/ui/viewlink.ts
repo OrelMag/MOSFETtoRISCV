@@ -133,6 +133,11 @@ export function setViewTarget(t: ViewTarget): void {
   active = t;
 }
 
+/** A stage going away lets go (else the last destroyed stage, its simulator and DOM, stayed until the next one took over). */
+export function releaseViewTarget(t: ViewTarget): void {
+  if (active === t) active = null;
+}
+
 /** A route to the step already on screen: the stage is not rebuilt, so apply the view to it now. */
 export function applyPendingView(): void {
   if (pending && active?.isLive()) active.restoreView(takePendingView() ?? emptyView());
