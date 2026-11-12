@@ -11,5 +11,19 @@
   --dp-volt: light-dark(#0e8a9a, #3ec9db);
   --dp-h: light-dark(#c2185b, #ff6fa8);
   --dp-ghost: light-dark(#7b8296, #aab2c6);
+  /* the isotropic sphere (a neutral glass), the half-power rings (a measuring white / ink), the aperture disk (gold) */
+  --dp-iso: light-dark(#8d97ab, #c9d1e2);
+  --dp-hp: light-dark(#3a3f4b, #f4f1e8);
+  --dp-ap: light-dark(#b58a00, #f2c548);
 }
 .m3d .dp-btns .btn.on[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+/* the feed current against time, under the stage: where the loops are born */
+.dipole3d .dp-strip { display: block; width: 100%; max-width: 420px; height: auto; margin: 6px 0 2px; }
+.dipole3d .dp-axis { stroke: var(--border); stroke-width: 1; }
+.dipole3d .dp-i { fill: none; stroke: var(--dp-pos); stroke-width: 2; }
+.dipole3d .dp-birth { stroke-width: 1.5; stroke-dasharray: 3 3; }
+.dipole3d .dp-birth.a { stroke: var(--dp-e1); }
+.dipole3d .dp-birth.b { stroke: var(--dp-e2); }
+.dipole3d .dp-now { fill: var(--text); }
+.dipole3d .dp-lbl { font-size: 10px; fill: var(--muted); }

@@ -142,7 +142,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'dipole', title: 'The half-wave dipole', category: 'comms', chapter: 'radio', step: 0,
     summary: 'A 6.2 cm dipole at 2.4 GHz: the standing-wave current, field loops leaving at c, and the doughnut pattern.',
-    files: ['dipole3d', 'dipole3dview', 'dipole3dparts'], factory: 'dipole3d',
+    files: ['dipole3d', 'dipole3dview', 'dipole3dkit', 'dipole3dparts'], factory: 'dipole3d',
     open: () => import('./dipole3d').then((m) => m.dipole3d()),
   },
   {

@@ -1,7 +1,7 @@
 // A centre-fed dipole as parts (DOM-free, tested). Length, frequency and pattern are the radio chapter's own: the frequency is
 // widgets/radio.ts ANTENNA_GHZ, the wavelength phys/radio.ts wavelengthM, the pattern phys/radio.ts dipoleField at the half wave.
 // 1 unit = 1 cm; the dipole lies along y, the near-field loops are drawn in the x-y plane, the current curve in the y-z plane and
-// the voltage curve in the x-y plane.
+// the voltage curve in the x-y plane. The drawing itself is dipole3dkit.ts (the studio model).
 //
 // Drawn, not solved: the current is the sinusoidal standing wave I(z) = sin(k(L/2 - |z|)) cos(wt) of a thin centre-fed dipole of
 // electrical length L (Balanis, Antenna Theory, ch. 4; at L = lambda/2 it is cos(kz): zero at the electrical tips, maximal at the
@@ -12,9 +12,7 @@
 // width describe). It is drawn at a nearby radius for convenience; the far field of a half-wave dipole starts about a wavelength
 // out (Fraunhofer distance 2 L^2 / lambda = lambda / 2).
 
-import type { RGB, RGBA } from '../gl/instances';
 import type { Vec3 } from '../gl/math';
-import { box, rod, type Anchor, type Part } from '../gl/parts';
 import { C_M_S, directivityOf, wavelengthM } from '../phys/radio';
 import { ANTENNA_GHZ } from './radio';
 
@@ -28,7 +26,6 @@ export const PATTERN_R = 0.85 * LAMBDA;
 export const LOOP_LIFE = 1.0;
 /** The conductor: a real 2.4 GHz dipole is a ~2 mm copper wire or rod (REAL_DIAMETER, cm); it is drawn 3x thicker so the current colouring shows. */
 export const REAL_DIAMETER = 0.2, DRAWN_SCALE = 3;
-const ROD_R = (REAL_DIAMETER * DRAWN_SCALE) / 2;
 /** The feed gap (cm) bridged by an insulator block; the arms start at its edges. The amplitude (cm) of the current and voltage curves is arbitrary. */
 export const GAP = 0.3, CURVE_A = 2.4;
 /** A wire cut for resonance is shorter than the electrical half wave by the end effect, about 0.95 (ARRL Antenna Book; Balanis ch. 4). The rods are drawn at the CUT length; the standing wave is mapped onto the cut wire so that its node is at the drawn tip. */
@@ -148,30 +145,6 @@ export function loopOutline(l: Loop, side: 1 | -1, steps = 28): Vec3[] {
   });
 }
 
-type Surface = (theta: number) => number;
-/** Points of the pattern surface in the meridian plane at azimuth `az` (about the y axis, from +z): radius R f(theta). */
-export function patternRing(az: number, R = PATTERN_R, n = 36, f: Surface = (t) => patternAt(t)): Vec3[] {
-  return Array.from({ length: n + 1 }, (_, i) => {
-    const th = (Math.PI * i) / n, r = R * f(th);
-    return [r * Math.sin(th) * Math.sin(az), r * Math.cos(th), r * Math.sin(th) * Math.cos(az)] as Vec3;
-  });
-}
-/** The parallel at polar angle theta from azimuth a0 to a1. */
-export function patternParallel(th: number, a0: number, a1: number, R = PATTERN_R, n = 40, f: Surface = (t) => patternAt(t)): Vec3[] {
-  const r = R * f(th);
-  return Array.from({ length: n + 1 }, (_, i) => {
-    const az = a0 + ((a1 - a0) * i) / n;
-    return [r * Math.sin(th) * Math.sin(az), r * Math.cos(th), r * Math.sin(th) * Math.cos(az)] as Vec3;
-  });
-}
-/** A circle of the magnetic field round the arm at height y (x-z plane), radius r. */
-export function hRing(y: number, r: number, steps = 18): Vec3[] {
-  return Array.from({ length: steps + 1 }, (_, i) => {
-    const s = (2 * Math.PI * i) / steps;
-    return [r * Math.cos(s), y, r * Math.sin(s)] as Vec3;
-  });
-}
-
 // ---------------------------------------------------------------- the driving state
 
 /** Time in periods. Step advances a phase (1/8 of a period). `lwl`: the electrical length in wavelengths. */
@@ -189,113 +162,9 @@ export class DipoleRun {
   get tip(): number { return currentAt(cutHalf(this.lwl), this.phase, this.lwl); }
 }
 
-// ---------------------------------------------------------------- the drawing
+// ---------------------------------------------------------------- what the 3D draws (dipole3dkit.ts)
 
-export interface DipolePalette { rod: RGB; ins: RGB; pos: RGB; neg: RGB; e1: RGB; e2: RGB; pat: RGB; src: RGB; ghost: RGBA; volt: RGB; hfield: RGB }
-/** How the dipole is fed: balanced leads (as drawn since the start), a bare coax (current on the braid), a coax with a quarter-wave sleeve. */
+/** How the dipole is fed: balanced leads, a bare coax (current on the braid), a coax with a quarter-wave sleeve. */
 export type Feed = 'balanced' | 'coax' | 'balun';
-export interface DipoleView { mode: PatternMode; feed: Feed }
-const DEFAULT_VIEW: DipoleView = { mode: 'field', feed: 'balanced' };
-const mix = (a: RGB, b: RGB, k: number): RGB => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k];
-const alpha = (c: RGB, a: number): RGBA => [c[0], c[1], c[2], a];
-const SEG = 12;
-/** The pattern's cut-away: the wedge toward the viewer (azimuth within CUT of +z) is left out. */
-export const CUT = (75 * Math.PI) / 180;
-const MERIDIANS = [75, 105, 135, 165, 195, 225, 255, 285].map((d) => (d * Math.PI) / 180);
-/** Coax (semi-rigid .086 in, 2.2 mm over the dielectric), the sleeve (quarter wave in air, shorted at its far end). */
+/** Coax (semi-rigid .086 in, 2.2 mm over the jacket), the sleeve (a quarter wave in air, shorted at its far end; its radius illustrative), where the coax leaves the feed and how far it runs (cm). */
 export const COAX_R = 0.11, SLEEVE_R = 0.5, SLEEVE_LEN = LAMBDA / 4, COAX_X0 = -0.7, COAX_LEN = 8;
-const H_R = 1.5;
-
-const poly = (pts: Vec3[], c: RGB | RGBA, r: number, spec = 0): Part[] => pts.slice(1).map((p, i) => rod(c, pts[i], p, r, spec));
-
-export function dipoleParts(run: DipoleRun, showPattern: boolean, P: DipolePalette, view: DipoleView = DEFAULT_VIEW): Part[] {
-  const out: Part[] = [], ph = run.phase, L = run.lwl, hc = cutHalf(L);
-  // The rods: each short piece coloured by its instantaneous current (red one way, blue the other, grey at zero).
-  for (const side of [1, -1]) for (let i = 0; i < SEG; i++) {
-    const g = GAP / 2, z0 = side * (g + ((hc - g) * i) / SEG), z1 = side * (g + ((hc - g) * (i + 1)) / SEG), v = currentAt((z0 + z1) / 2, ph, L);
-    out.push(rod(mix(P.rod, v >= 0 ? P.pos : P.neg, Math.min(1, Math.abs(v) * 1.1)), [0, z0, 0], [0, z1, 0], ROD_R));
-  }
-  // The charge at the tips: the voltage is largest there, in quadrature with the current (sin wt against cos wt).
-  for (const side of [1, -1]) {
-    const v = voltageAt(side * hc, ph, L), c = mix(P.rod, v >= 0 ? P.pos : P.neg, Math.min(1, Math.abs(v) * 1.2));
-    const y0 = side > 0 ? hc : -hc - 0.8;
-    out.push(box(c, -0.4, 0.4, y0, y0 + 0.8, -0.4, 0.4));
-  }
-  // The centre insulator (PTFE) holding the two arms.
-  out.push(box(P.ins, -0.45, 0.45, -GAP / 2 - 0.5, GAP / 2 + 0.5, -0.45, 0.45));
-  feedParts(out, run, P, view);
-  // The current: the envelope as thin ghosts on both sides, and the instantaneous curve sin(k(L/2 - |z|)) cos(wt).
-  const N = 16, zs = Array.from({ length: N + 1 }, (_, i) => -hc + (2 * hc * i) / N);
-  for (const sg of [1, -1]) out.push(...poly(zs.map((z) => [0, z, sg * CURVE_A * envelope(z, L)] as Vec3), P.ghost, 0.05));
-  const v0 = Math.cos(ph);
-  out.push(...poly(zs.map((z) => [0, z, CURVE_A * currentAt(z, ph, L)] as Vec3), mix(P.rod, v0 >= 0 ? P.pos : P.neg, Math.min(1, 0.35 + Math.abs(v0))), 0.1));
-  // The voltage: sign(z) cos(k(L/2 - |z|)) sin(wt), drawn sideways (x): zero at the feed of the half wave, largest at the tips.
-  out.push(...poly(zs.map((z) => [CURVE_A * voltageAt(z, ph, L), z, 0] as Vec3), alpha(P.volt, 0.55 + 0.45 * Math.abs(Math.sin(ph))), 0.1));
-  // The magnetic field: circles round the arms, strength those of the local current (sense by the right-hand rule).
-  for (const f of [0.18, 0.5, 0.82]) for (const side of [1, -1]) {
-    const y = side * f * hc, i = currentAt(y, ph, L);
-    if (Math.abs(i) > 0.08) out.push(...poly(hRing(y, H_R), alpha(P.hfield, Math.min(0.9, 0.15 + 0.8 * Math.abs(i))), 0.05));
-  }
-  // The near field: loops in the x-y plane, both sides.
-  for (const l of loopsAt(run.t)) for (const side of [1, -1] as const) {
-    out.push(...poly(loopOutline(l, side), alpha(l.sign > 0 ? P.e1 : P.e2, 0.85 * l.alpha), 0.12));
-  }
-  // The far-field pattern, cut open toward the viewer: the field E(theta) or its square, the power.
-  if (showPattern) {
-    const f: Surface = (t) => surfaceAt(t, L, view.mode);
-    for (const az of MERIDIANS) out.push(...poly(patternRing(az, PATTERN_R, 36, f), alpha(P.pat, 0.5), 0.08));
-    for (const th of [0.28, 0.6, 0.95, Math.PI / 2, Math.PI - 0.95, Math.PI - 0.6, Math.PI - 0.28]) out.push(...poly(patternParallel(th, CUT, 2 * Math.PI - CUT, PATTERN_R, 40, f), alpha(P.pat, 0.4), 0.07));
-    for (const az of [CUT, -CUT]) out.push(...poly(patternRing(az, PATTERN_R, 36, f), alpha(P.pat, 0.95), 0.16));
-    // The half-power (-3 dB) cone round the largest lobe: the power is 1/2 (the field 0.707) on these two parallels.
-    const hp = halfPower(L);
-    for (const th of [hp.lo, hp.hi]) if (th > 0.02 && th < Math.PI - 0.02) out.push(...poly(patternParallel(th, CUT, 2 * Math.PI - CUT, PATTERN_R, 40, f), alpha(P.e1, 0.95), 0.14));
-  }
-  return out;
-}
-
-/** The leads / coax at the feed, on the -x side. */
-function feedParts(out: Part[], run: DipoleRun, P: DipolePalette, view: DipoleView): void {
-  if (view.feed === 'balanced') {
-    for (const sg of [1, -1]) out.push(rod(P.rod, [0, sg * GAP / 2, 0], [-3.5, sg * GAP / 2, 0], 0.05));
-    out.push(box(P.src, -5.5, -3.5, -GAP / 2 - 0.5, GAP / 2 + 0.5, -0.6, 0.6));
-    return;
-  }
-  // Coax straight onto the arms: the shield to the lower arm, the centre conductor to the upper one.
-  const x1 = COAX_X0 - COAX_LEN;
-  out.push(rod(mix(P.src, P.ins, 0.55), [COAX_X0, 0, 0], [x1, 0, 0], COAX_R));
-  out.push(rod(P.rod, [COAX_X0, 0, 0], [-0.1, -GAP / 2, 0], 0.05), rod(P.rod, [COAX_X0, 0, 0], [-0.1, GAP / 2, 0], 0.05));
-  out.push(box(P.src, x1 - 2, x1, -0.7, 0.7, -0.6, 0.6));
-  if (view.feed === 'balun') {
-    // Sleeve: open toward the feed, shorted to the braid a quarter wave away, so the braid's outside sees a high impedance.
-    const xe = COAX_X0 - SLEEVE_LEN;
-    out.push(rod(alpha(P.rod, 0.4), [COAX_X0 - 0.1, 0, 0], [xe, 0, 0], SLEEVE_R));
-    out.push(box(P.rod, xe - 0.1, xe + 0.1, -SLEEVE_R, SLEEVE_R, -SLEEVE_R, SLEEVE_R));
-  } else {
-    // No sleeve: the antenna's current also flows on the outside of the braid, in step with the lower arm's.
-    const v = currentAt(-GAP, run.phase, run.lwl), c = mix(P.rod, v >= 0 ? P.pos : P.neg, Math.min(1, 0.3 + Math.abs(v)));
-    for (const x of [-1.5, -3.5, -5.5]) out.push(rod(c, [x, 0.35, 0], [x - 1.2, 0.35, 0], 0.08));
-  }
-}
-
-export function dipoleAnchors(run: DipoleRun, showPattern: boolean, view: DipoleView = DEFAULT_VIEW): Anchor[] {
-  const front: Vec3 = [0, 0.2, 1], up: Vec3 = [0, 1, 0], hc = cutHalf(run.lwl);
-  const half = Math.abs(run.lwl - L_HALF) < 1e-9;
-  const a: Anchor[] = [
-    { text: half ? 'tip: I = 0, V max' : 'tip', p: [0, hc + 0.9, 0], side: 't', n: up },
-    { text: half ? 'feed: I max, 73 Ω' : 'feed', p: [0.45, 0, 0.45], side: 'r', n: front },
-    view.feed === 'balanced'
-      ? { text: 'source (leads)', p: [-5.5, 0, 0], side: 'l', n: front, minor: true }
-      : { text: view.feed === 'balun' ? 'coax + λ/4 sleeve' : 'coax, no balun', p: [COAX_X0 - COAX_LEN - 2, 0, 0], side: 'l', n: front, minor: true },
-    { text: 'I(z)', p: [0, hc * 0.8, CURVE_A * 0.45], side: 'r', n: front, minor: true },
-    { text: 'V(z)', p: [CURVE_A * 0.8, hc * 0.8, 0], side: 'r', n: front, minor: true },
-  ];
-  // Named only on a loop that has left the rod (its inner edge a quarter wave out), so the label never crowds the rod's own.
-  const l = loopsAt(run.t).filter((q) => q.alpha > 0.4 && q.xIn > LAMBDA / 4).sort((p, q) => q.xOut - p.xOut)[0];
-  if (l) a.push({ text: 'E loops, out at c', p: [(l.xIn + l.xOut) / 2, 0.5 * ((l.xOut - l.xIn) / 2) + 0.5, 0], side: 't', n: front });
-  if (showPattern) {
-    const hp = halfPower(run.lwl), r = surfaceAt(hp.peak, run.lwl, view.mode) * PATTERN_R;
-    a.push({ text: 'null on the axis', p: [0, hc + 4.2, 0], side: 't', n: up, minor: true });
-    a.push({ text: `maximum, ${gainDbi(run.lwl).toFixed(2)} dBi`, p: [r * Math.sin(hp.peak) * Math.sin(CUT), r * Math.cos(hp.peak), r * Math.sin(hp.peak) * Math.cos(CUT)], side: 'b', n: front, minor: true });
-  }
-  return a;
-}
