@@ -193,11 +193,13 @@ export class CampaignPage implements Page {
     const panel = this.main.querySelector<HTMLElement>('.cp-panel');
     if (panel && panelTop) panel.scrollTop = panelTop;
     refocus();
-    if (this.mxFocus) {
-      const f = this.mxFocus;
-      this.mxFocus = null;
-      (f === 'open' ? this.main.querySelector<HTMLElement>('#mx-open-t') : this.main.querySelector<HTMLElement>(`.mx-card[data-id="${f}"] [data-mx]`))?.focus();
-    }
+    const f = this.mxFocus;
+    this.mxFocus = null;
+    if (f) (f === 'open' ? this.main.querySelector<HTMLElement>('#mx-open-t') : this.main.querySelector<HTMLElement>(`.mx-card[data-id="${f}"] [data-mx]`))?.focus({ preventScroll: true });
+    // a model opened (Open here, or its address): the viewer to the top of the page, its canvas in view (it sat under
+    // the index's introduction, on a phone entirely below the fold)
+    const mx = f === 'open' || (changed && a === 'codex' && b === MODELS_INDEX_ID) ? this.main.querySelector<HTMLElement>('.mx-open') : null;
+    mx?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
     // chosen from the keyboard: the level's details are next, not 90 more cards (Esc there goes back to its card)
     if (changed && a === 'n' && b && document.activeElement?.matches('.cp-node:focus-visible')) this.main.querySelector<HTMLElement>('.cp-node-panel h2')?.focus({ preventScroll: true });
     if (changed && b) {
