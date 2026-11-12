@@ -92,6 +92,6 @@ export const NODES_DSP: CampaignNode[] = [
       'v is wiring: the word for +full scale and the word for −full scale differ only in their top bits, and those are the bit and its inverse. Subtract it with the adders you have.',
       'The decision is the sign of y2, read before the edge and stored in a flip-flop; the sums are 5 bits wider than the input, enough for a steady input or tone up to 0.95 of full scale; past that they wrap like the model. Check names the first clock at which your bit, y1 or y2 leaves the model.',
     ],
-    codex: ['sigmadelta', 'noiseshaping'], chapters: [{ chapter: 'converters', step: 4, label: 'One bit, and feedback' }, { chapter: 'converters', step: 5, label: 'The loop in gates, and its CIC' }],
+    codex: ['sigmadelta', 'noiseshaping'], chapters: [{ chapter: 'converters', step: 5, label: 'One bit, and feedback' }, { chapter: 'converters', step: 6, label: 'The loop in gates, and its CIC' }],
   },
 ];

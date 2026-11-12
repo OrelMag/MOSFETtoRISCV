@@ -70,10 +70,10 @@ describe('group D: converters', () => {
     quotes('enob', '49.9', '74.0', '98.1', '12.0', '10.0', '17.0', '10.3', '104.0', '64.0', ...ch, '55.9', '62.0', '54.2', '6.02');
     says('converters', 0, '(SNDR − 1.76) / 6.02');
     says('converters', 0, `${f1(idealSqnrDb(12))} dB`);
-    says('converters', 3, `${jitterLimitDb(1e6, 1e-12).toFixed(0)} dB`);
-    says('converters', 6, `${f1(chainEnob())} effective bits`);
-    says('converters', 6, `${f1(chainEnob(128))}`);
-    says('converters', 6, `${f1(chainEnob(256))}`);
+    says('converters', 4, `${jitterLimitDb(1e6, 1e-12).toFixed(0)} dB`);
+    says('converters', 7, `${f1(chainEnob())} effective bits`);
+    says('converters', 7, `${f1(chainEnob(128))}`);
+    says('converters', 7, `${f1(chainEnob(256))}`);
     says('signals', 6, 'effective number of bits');
     says('signals', 6, `${f1(sqnrDb(8))} dB at 8 bits and ${f1(sqnrDb(16))} dB at 16`);
   });
@@ -141,8 +141,8 @@ describe('group D: converters', () => {
     expect(2 * Math.PI * 1e7 * 1e-12).toBeCloseTo(6.28e-5, 7);
     expect(f1(20 * Math.log10(2))).toBe('6.0');
     quotes('jitter', '104.0', '64.0', '84.0', '44.0', ...m, '20.0', '10.3', '17.0', '6.3 × 10⁻⁵');
-    says('converters', 3, '−20 log₁₀(2π f σ)');
-    says('converters', 3, `${jitterLimitDb(1e8, 1e-12).toFixed(0)} dB`);
+    says('converters', 4, '−20 log₁₀(2π f σ)');
+    says('converters', 4, `${jitterLimitDb(1e8, 1e-12).toFixed(0)} dB`);
   });
 
   it('sigma-delta: the model against the loop, the gates, the peak', () => {
@@ -166,14 +166,14 @@ describe('group D: converters', () => {
     expect([n12, n16, whole]).toEqual([1283, 1579, 5181]);
     expect(SD_GUARD).toBe(5);
     quotes('sigmadelta', '69.9', '73.2', '71.0', '0.55', '3.2', '1.76', ...o2.map(f1), ...o1.map(f1), '4.2', '8.3', '20.2', '65.5', '50.0', c(n12), c(n16), c(whole), '12.1', '14.7', '17.2');
-    says('converters', 4, `${f1(mdl)} dB`);
-    says('converters', 4, `loop measures ${f1(a)}`);
-    says('converters', 4, `${pw.toFixed(2)}`);
-    says('converters', 4, `the sum gives ${f1(m2)}`);
-    says('converters', 4, '9 dB at order 1, 15 at order 2');
-    says('converters', 5, `is ${n12} NANDs`);
-    says('converters', 5, `it is ${n16}`);
-    says('converters', 4, 'V = z⁻¹ U + (1 − z⁻¹)² E');
+    says('converters', 5, `${f1(mdl)} dB`);
+    says('converters', 5, `loop measures ${f1(a)}`);
+    says('converters', 5, `${pw.toFixed(2)}`);
+    says('converters', 5, `the sum gives ${f1(m2)}`);
+    says('converters', 5, '9 dB at order 1, 15 at order 2');
+    says('converters', 6, `is ${n12} NANDs`);
+    says('converters', 6, `it is ${n16}`);
+    says('converters', 5, 'V = z⁻¹ U + (1 − z⁻¹)² E');
   });
 
   it('noise shaping: the filter, the power, the gain a doubling', () => {
@@ -192,9 +192,9 @@ describe('group D: converters', () => {
     for (const d of d1) { expect(d).toBeGreaterThan(6); expect(d).toBeLessThan(11); }
     expect(f1(sdLinearModelDb(2, 128, 1) - sdLinearModelDb(2, 64, 1))).toBe('15.1');
     quotes('noiseshaping', '−52.4', '+12.0', '12.0', '7.8', '3.0', '9.0', '15.1', ...d2.map(f1), '13 to 16', '6 and 11', 'six-fold');
-    says('converters', 4, '13 to 16');
-    says('converters', 4, 'between 6 and 11');
-    says('converters', 4, '(1 − z⁻¹)²');
+    says('converters', 5, '13 to 16');
+    says('converters', 5, 'between 6 and 11');
+    says('converters', 5, '(1 − z⁻¹)²');
   });
 });
 
@@ -263,7 +263,7 @@ describe('group D: filters that learn', () => {
     expect(CHECKS.echocancel[1].options).toContain(`About ${Math.round(on)} dB`);
     says('adaptive', 3, `${full.toFixed(0)} dB`);
     says('adaptive', 3, `${short.toFixed(0)} dB with 32 taps`);
-    says('adaptive', 3, `${on.toFixed(0)} dB with learning left on, against ${frozen.toFixed(0)} when it stopped`);
+    says('adaptive', 3, `${on.toFixed(0)} dB with learning left on, against ${frozen.toFixed(0)} dB when learning was stopped`);
     says('adaptive', 3, 'Over the last second of the run');
     says('adaptive', 3, 'G.168');
     says('adaptive', 3, `${ECHO_TAPS * 2} multiplications a sample`);

@@ -24,8 +24,8 @@ chain at ÷64 / ÷128 / ÷256: 12.1 / 14.7 / 17.2 bits (half-scale tone)</pre>Th
     chapters: [
       { chapter: 'signals', step: 6, label: 'Rounding to a number' },
       { chapter: 'converters', step: 0, label: 'What a converter is judged by' },
-      { chapter: 'converters', step: 3, label: 'A shaky clock' },
-      { chapter: 'converters', step: 6, label: 'Many bits from one' },
+      { chapter: 'converters', step: 4, label: 'A shaky clock' },
+      { chapter: 'converters', step: 7, label: 'Many bits from one' },
     ],
   },
   sar: {
@@ -48,7 +48,7 @@ SAR: one comparator, 8 clocks, then 12</pre>The code 166 is the right one, the i
     chapters: [
       { chapter: 'converters', step: 1, label: 'Compare, and compare again' },
       { chapter: 'converters', step: 2, label: 'The way back: a ladder' },
-      { chapter: 'converters', step: 6, label: 'Many bits from one' },
+      { chapter: 'converters', step: 7, label: 'Many bits from one' },
     ],
   },
   r2r: {
@@ -90,7 +90,7 @@ one clock, 70 MHz against 7 MHz: 20.0 dB apart</pre>Each ten times the frequency
       'Using the formula at large jitter. It is a small-error sum; it stops holding when the limit it gives falls to about 10 dB, where the error is a big share of the signal.',
     ],
     chapters: [
-      { chapter: 'converters', step: 3, label: 'A shaky clock' },
+      { chapter: 'converters', step: 4, label: 'A shaky clock' },
       { chapter: 'converters', step: 0, label: 'What a converter is judged by' },
     ],
   },
@@ -113,9 +113,9 @@ chain's effective bits, ÷64 / ÷128 / ÷256: 12.1 / 14.7 / 17.2</pre>The one-bi
       'Driving it to full scale. The integrators grow as the input nears it, and past 0.95 the words of this design wrap; the usable range of a real part is a design question of its own.',
     ],
     chapters: [
-      { chapter: 'converters', step: 4, label: 'One bit, and feedback' },
-      { chapter: 'converters', step: 5, label: 'The loop in gates, and its CIC' },
-      { chapter: 'converters', step: 6, label: 'Many bits from one' },
+      { chapter: 'converters', step: 5, label: 'One bit, and feedback' },
+      { chapter: 'converters', step: 6, label: 'The loop in gates, and its CIC' },
+      { chapter: 'converters', step: 7, label: 'Many bits from one' },
     ],
   },
   noiseshaping: {
@@ -135,8 +135,8 @@ measured, order 2, rate 16 → 256:  15.8, 14.2, 13.9, 12.7 dB</pre>The gain per
       'Expecting the gain to hold at every level. The integrators grow as the input nears full scale and the measured figure falls well before the words run out.',
     ],
     chapters: [
-      { chapter: 'converters', step: 4, label: 'One bit, and feedback' },
-      { chapter: 'converters', step: 6, label: 'Many bits from one' },
+      { chapter: 'converters', step: 5, label: 'One bit, and feedback' },
+      { chapter: 'converters', step: 7, label: 'Many bits from one' },
     ],
   },
   wiener: {

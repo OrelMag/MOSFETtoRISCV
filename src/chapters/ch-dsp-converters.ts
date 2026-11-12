@@ -2,15 +2,17 @@
 // Changing the rate decimating its bits (lib/sigmadelta.ts, dsp/converters.ts, compared every clock). The identity V = z⁻¹U + (1 − z⁻¹)²E is checked exactly on the loop's own error (tests/dsp-converters.test.ts).
 
 import { enob, idealSqnrDb, jitterLimitDb, SD_GUARD, SD_LIMIT, sdErrorPower, sdLinearModelDb, sdMeasuredDb, sdPeak } from '../dsp/converters';
+import { CD, dacRow, holdDb } from '../dsp/dachold';
 import { cicWidth } from '../dsp/multirate';
 import { sdConverter, sdModulator } from '../lib/sigmadelta';
 import { stats } from '../sim/stats';
-import { adcApi, adcScene, CHAIN, chainEnob, clipWidget, jitterWidget, ladderWidget, sarWidget, SCENE_CHAIN, sdWidget } from '../widgets/dspconverters';
+import { adcApi, adcScene, CHAIN, chainEnob, clipWidget, dacHoldWidget, jitterWidget, ladderWidget, sarWidget, SCENE_CHAIN, sdWidget } from '../widgets/dspconverters';
 import { numOf } from './order';
 import type { Chapter } from './types';
 import { groupNum } from '../sim/numfmt';
 
 const n0 = (x: number) => groupNum(Math.round(x));
+const minus = (t: string) => t.replace(/^-/, '−');
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const MOD = (w = CHAIN.w) => nands(sdModulator(2, w));
 const WHOLE = () => nands(sdConverter(CHAIN.order, CHAIN.w, CHAIN.N, CHAIN.R));
@@ -30,6 +32,7 @@ export const chConverters: Chapter = {
       'Effective bits are (SNDR − 1.76) / 6.02: what an ideal converter would need to do as well. The bits on the datasheet\'s front page are only an upper limit.',
       'Flash decides in a clock with 2^b − 1 comparators. SAR takes b clocks on one comparator, and a DAC that has to be as good as the result.',
       'A ladder\'s worst step is usually at the middle, where every bit changes at once and the MSB\'s error shows. Linearity is matching, and matching is area.',
+      'A DAC holds each sample, so its output droops as sin x / x and carries images around every multiple of its rate; an analogue filter removes them, and oversampling first makes that filter gentle.',
       'Jitter sets a limit of −20 log₁₀(2π f σ), whatever the bits. It gets worse with signal frequency, not sample rate.',
       'Sigma-delta trades rate for bits: a one-bit loop pushes its noise up in frequency, and a filter removes it and lowers the rate. In theory order 2 gains 15 dB for each doubling and order 1 gains 9. Order 2 measures close to that, and order 1 wanders.',
     ],
@@ -53,7 +56,7 @@ export const chConverters: Chapter = {
         options: ['Moves most of it above the band', 'Removes it altogether, given time', 'Lowers the total of it', 'Adds it to the input'],
         answer: 0,
         explain: 'The output is z⁻¹U + (1 − z⁻¹)²E. The error is all still there, and (1 − z⁻¹)² is small at low frequencies and large at high ones.',
-        why: ['', 'It is still there: the identity holds to the bit.', 'A shaped error has more total power, not less. It is just in a place a filter can reach.', 'That is the one thing it does not do to the band that is kept.'],
+        why: ['', 'It is still there: the identity holds to the bit.', 'A shaped error has more total power, not less. It is just in a place a filter can reach.', 'The error is the quantizer\'s own and is not fed into the input; the loop only decides where in frequency it shows at the output.'],
       },
     ],
   },
@@ -75,8 +78,8 @@ export const chConverters: Chapter = {
     {
       title: 'Compare, and compare again',
       body: `
-        <p>A <strong>flash</strong> converter is the direct way: a comparator at every step of the ladder, all deciding at once. It takes one clock and 2^b − 1 comparators, and each added bit doubles the input's load and the power. Eight bits is 255 comparators. Past that it is rarely worth it.</p>
-        <p>A <strong>SAR</strong> converter is a binary search: one comparator, and a <strong>DAC</strong>, a digital-to-analog converter, which turns a code back into a level. Try the top bit, ask whether the input is above that level, keep or clear it, and go on. So b clocks, one comparator, and a DAC to build, usually from binary-weighted capacitors whose charge is the sum of those it holds.</p>
+        <p>A <strong>flash</strong> converter is the direct way: a comparator at every step of the ladder, all deciding at once. It takes one clock and 2^b − 1 comparators, and each added bit doubles the comparators, and with them the input's load and the power. Eight bits is 255 comparators. Past that it is rarely worth it.</p>
+        <p>A <strong>SAR</strong> converter is a binary search: one comparator, and a <strong>DAC</strong>, a digital-to-analog converter, which turns a code back into a level. Try the top bit, ask whether the input is above that level, keep or clear it, and go on. So b clocks, one comparator, and a DAC to build, usually from binary-weighted capacitors: each bit of the trial code switches one in, and the level is the sum of the ones switched in.</p>
         <p>The catch is that the DAC has to be as accurate as the result. Its largest capacitor is half of the total, and an error of 1 % in it is 1.3 codes at 8 bits. Past about 12 bits, trimming or calibration starts to matter.</p>
         <div class="try">Step the input and read the search. Then add capacitor error, and watch the code move away from the right one.</div>`,
       widget: sarWidget,
@@ -85,14 +88,14 @@ export const chConverters: Chapter = {
         options: ['The number of comparators', 'The number of clocks it takes', 'The noise', 'The sample rate'],
         answer: 0,
         explain: '255 becomes 4 095 comparators. The SAR keeps its one, and adds four clocks.',
-        why: ['', 'It is the SAR whose clocks grow, and only from 8 to 12.', 'Noise has to fall, by 24 dB, for those bits to mean anything, in both of them.', 'Sample rate is a choice, and it is not set by the bit count alone.'],
+        why: ['', 'It is the SAR whose clocks grow, from 8 to 12; the flash decides in one clock either way.', 'Noise has to fall, by 24 dB, for those bits to mean anything, in both of them.', 'Sample rate is a choice, and it is not set by the bit count alone.'],
       },
     },
     {
       title: 'The way back: a ladder',
       body: `
         <p>Going from a word to a voltage has an elegant answer in the <strong>R-2R ladder</strong>. Each bit switches a 2R resistor between 0 and the reference, and series R's join them. Looking back from any node, the rest of the ladder looks like 2R, so each bit's contribution halves on its way along, and only two values of resistor are needed.</p>
-        <p>The widget solves the ladder node by node with each resistor seeded off by its σ. Judge a staircase by two figures. <strong>DNL</strong> is how far each step is from one LSB, and a step of less than zero means it went backwards. <strong>INL</strong> is how far each output is from the straight line between the ends.</p>
+        <p>The widget solves the ladder node by node with each resistor seeded off by its σ. Judge a staircase by two figures. <strong>DNL</strong> is how far each step is from one LSB, the step the lowest bit makes, and a step of less than zero means it went backwards. <strong>INL</strong> is how far each output is from the straight line between the ends.</p>
         <p>The worst step usually comes at the middle of the range: going from 0111 1111 to 1000 0000, every bit changes at once and all the errors meet. With every resistor about 1 % out, that step is typically 1 to 2 LSBs off at 8 bits: the median over 200 such ladders is 1.2 LSBs, and the one drawn first here, at 1.9, is worse than most. Matching is a matter of area, and that is the real price of a converter's bits.</p>
         <div class="try">Raise σ to 3 % and try other ladders. Find one that goes backwards, then bring σ down until none does.</div>`,
       widget: ladderWidget,
@@ -101,14 +104,41 @@ export const chConverters: Chapter = {
         options: ['Every bit changes there at once', 'The reference is noisiest at half', 'The switches are slowest at half', 'It is not: every step is alike'],
         answer: 0,
         explain: 'Going from 0111… to 1000… turns the MSB on and all the others off, and that step is the difference of their errors. Everywhere else fewer bits change.',
-        why: ['', 'The reference is the same at every code in this model.', 'This is a static figure, so speed has no part in it.', 'Move σ up and read which code the worst one is before.'],
+        why: ['', 'The reference is the same at every code in this model.', 'This is a static figure, so speed has no part in it.', 'Raise σ, try other ladders, and read the chip "the code before the worst step".'],
+      },
+    },
+    {
+      title: 'The way out: hold and smooth',
+      get body() {
+        const r1 = dacRow(1), r4 = dacRow(4), d2 = (x: number) => minus(x.toFixed(2)), d1 = (x: number) => minus(x.toFixed(1)), k = (f: number) => (f / 1e3).toFixed(1);
+        return `
+        <p>The ladder makes a voltage from a word, and it keeps making it until the next word arrives. So what leaves a DAC is not a smooth curve through the samples but a <strong>staircase</strong>: each value held for one sample period. This is called a <strong>zero-order hold</strong>, and it is the cheapest way back, since doing nothing between samples costs nothing. It has three consequences, and the hold's shape decides all three.</p>
+        <p>First, the staircase is late. Its steps sit, on average, half a period after the samples they hold: a delay of T / 2, the same at every frequency, which is harmless.</p>
+        <p>Second, it is quieter at high frequencies. Holding a value for a period has the same effect on each frequency as averaging the signal over a period, and an average over one period T weights a frequency f by sin(πf / fs) / (πf / fs). That is 1 at zero frequency and 0 at fs, 2 fs, and so on, where a whole number of cycles fits in the period and averages out; it is <a href="#/c/signals/3">the narrow pulse's wide spectrum</a> again, for a pulse one period wide. Every frequency in the output is weighted by that curve, so the top of the band comes out lower than the bottom: the <strong>droop</strong>. At a quarter of the sample rate it is ${d2(holdDb(0.25, 1))} dB, at half the rate ${d2(holdDb(0.5, 1))} dB. For CD audio (fs = 44.1 kHz) a 20 kHz tone comes out ${d2(r1.droopDb)} dB. Since the curve is known exactly, it is usually undone before the DAC, by a small digital filter that lifts the top of the band by the same amount.</p>
+        <p>Third, the steps' edges are sound too. Samples at rate fs <a href="#/c/signals/6">cannot tell f from fs − f</a>, fs + f, 2 fs − f and so on, the <a href="#/c/multirate/4">images</a> that interpolating made in chapter ${numOf('multirate')}, and the staircase contains all of them, each weighted by the same sin x / x curve. The curve is no filter: at fs − f it has hardly fallen. For CD audio the first image of a 20 kHz tone sits at ${k(r1.image)} kHz, only ${d1(-r1.imageRelDb)} dB below the tone. Nobody may hear 24 kHz, but an amplifier has to carry it, and anything that samples the output again folds it back into the band. So a DAC is followed by an analogue low-pass, the <strong>reconstruction filter</strong>, which passes the band and removes the images: the mirror of the filter that chapter ${numOf('signals')} put in front of every ADC. Removing them is what turns the staircase into the smooth curve.</p>
+        <p>That filter is where the cost is. To leave the first image ${CD.keepDb} dB under the tone, 16 bits' worth, it must fall by ${d1(r1.needDb)} dB between 20.0 and ${k(r1.image)} kHz. <a href="#/c/iir/0">A Butterworth</a> would need order ${r1.order}; an elliptic filter does it in far fewer, at the price of ripple, ringing and a phase that bends near the edge. The way out is the one chapter ${numOf('multirate')} taught: raise the rate digitally first. Interpolate by 4 and run the DAC at ${k(r4.fs)} kHz, and the first image moves to ${k(r4.image)} kHz, where the hold itself has already taken ${d1(-r4.imageRelDb)} dB off it; the analogue filter needs order ${r4.order}, and the droop at 20 kHz is down to ${d2(r4.droopDb)} dB. Digital filtering is exact and cheap; analogue steepness is neither. This is why audio DACs oversample, and the sigma-delta DAC carries the idea to its end: one bit at a very high rate, and a gentle filter.</p>
+        <div style="overflow-x: auto; max-width: 100%"><table class="mini"><tr><th>DAC rate</th><th>droop at 20 kHz</th><th>first image</th><th>the hold's own loss there</th><th>the filter must still take</th><th>Butterworth order</th></tr>
+        ${[1, 2, 4, 8].map((L) => { const r = dacRow(L); return `<tr><td>${L === 1 ? '' : `${L} × `}${k(r.fs)} kHz</td><td>${d2(r.droopDb)} dB</td><td>${k(r.image)} kHz</td><td>${d1(r.imageRelDb)} dB</td><td>${d1(r.needDb)} dB</td><td>${r.order}</td></tr>`; }).join('')}</table></div>
+        <div class="try">Set the DAC rate to ${CD.fs / 1000} kHz, no oversampling, and raise the filter order until the first image is ${CD.keepDb} dB under. Then oversample by 4, to ${(4 * CD.fs) / 1000} kHz, and see how few orders it takes. Move the tone to the top of the band and switch the droop correction on and off.</div>`;
+      },
+      more: {
+        derive: '<p>The staircase is the samples, each a single point, convolved with a rectangle one period wide, so its spectrum is theirs multiplied by the rectangle\'s: sin(πf / fs) / (πf / fs), the curve the step uses. The filtering is free and cannot be avoided. A DAC that returns to zero between samples is a narrower rectangle: it droops less, and gives up level for it.</p>',
+        real: '<p>The table\'s Butterworth has its −3 dB corner at 20 kHz, so the band\'s top edge itself loses 3 dB: it shows the steepness each rate asks for, not a finished design. A real one puts the corner higher, or uses an elliptic filter, at the price of ripple and phase. The droop correction is an FIR filter whose response is 1 / (sin x / x) up to the band\'s edge, designed as in chapter ' + numOf('firdesign') + '.</p>',
+      },
+      widget: dacHoldWidget,
+      challenge: {
+        kind: 'quiz', question: 'A DAC is changed to run at 4 times the rate, fed by a digital interpolator. What does the analogue filter after it gain?',
+        options: ['The images start much further above the band, so a gentle filter is enough', 'Nothing: the images are at the same frequencies', 'It can be left out: oversampling removes the images', 'It must be steeper, since there is more noise at the higher rate'],
+        answer: 0,
+        explain: 'The images sit around multiples of the DAC\'s rate. Four times the rate puts the first one far above the band, already lowered by the hold, so a few orders of filter finish the job.',
+        why: ['', 'They sit around multiples of the DAC\'s rate, and that rate moved.', 'They are still there, further out and lower; an amplifier still carries them and a later sampler still folds them in.', 'The interpolator adds nothing in the band. What grows is the gap to the first image.'],
       },
     },
     {
       title: 'A shaky clock',
       get body() {
         return `
-        <p>Every sample is taken at a moment, and no clock is perfectly on time. A sample taken σ seconds off on a slope reads wrong by that slope times σ. A sine's slope at full scale is 2π f, so the error goes with the <em>signal's</em> frequency, and the limit is −20 log₁₀(2π f σ) dB, whatever the converter's bits and whatever its sample rate.</p>
+        <p>Every sample is taken at a moment, and no clock is perfectly on time. A sample taken σ seconds off (σ is the clock's RMS jitter) on a slope reads wrong by that slope times σ. A sine's slope at full scale is 2π f, so the error goes with the <em>signal's</em> frequency, and the limit is −20 log₁₀(2π f σ) dB, whatever the converter's bits and whatever its sample rate.</p>
         <p>The figure is unforgiving. At 1 ps of jitter a 1 MHz input is limited to ${jitterLimitDb(1e6, 1e-12).toFixed(0)} dB, about ${enob(jitterLimitDb(1e6, 1e-12)).toFixed(0)} effective bits, about what the best chain in this chapter measures. A 100 MHz input gets ${jitterLimitDb(1e8, 1e-12).toFixed(0)} dB: about ${((jitterLimitDb(1e8, 1e-12) - 1.76) / 6.02).toFixed(0)} bits, however many are delivered. That is why a converter sampling a radio's band directly costs far more in its clock than its arithmetic.</p>
         <div class="try">Hold jitter at 10 ps, and raise the frequency. The measured figure follows the formula, on a sine sampled with seeded errors.</div>`;
       },
@@ -126,14 +156,14 @@ export const chConverters: Chapter = {
       get body() {
         const a = sdMeasuredDb(2, 64, 0.5);
         return `
-        <p>So far every bit has been paid for in matching. <strong>Sigma-delta</strong> takes another way: one bit, whose two levels cannot be out of line with each other, sampled far faster than the signal needs. Rate is cheap, and it can be traded for bits.</p>
-        <p>Feed the error back through an integrator. The loop adds up input minus output, and decides from the sign of that sum, so that over time the bits' average follows the input. That is order 1. This chapter's loop has two integrators in a row, order 2: with u the input and v the output (+ or − full scale),</p>
+        <p>So far every bit has been paid for in matching. <strong>Sigma-delta</strong> takes another way: one bit, whose two levels cannot be out of line with each other (two points always lie on a straight line), sampled far faster than the signal needs. Rate is cheap, and it can be traded for bits.</p>
+        <p>Feed the error back through an integrator, a running sum. The loop adds up input minus output, and decides from the sign of that sum, so that over time the bits' average follows the input. That is order 1. This chapter's loop has two integrators in a row, order 2: with u the input and v the output (+ or − full scale),</p>
         <pre>y₁ ← y₁ + u − v
 y₂ ← y₂ + y₁ − v
 v  = + full scale if y₂ ≥ 0, else − full scale</pre>
-        <p>In symbols, with the quantizer's error E:</p>
+        <p>In symbols, with E the error of the quantizer (the one-bit decision) at each clock:</p>
         <pre>V = z⁻¹ U + (1 − z⁻¹)² E</pre>
-        <p>The signal comes through with a delay. The error comes through a filter, (1 − z⁻¹)², that is nearly zero at low frequencies and largest at half the rate. The tests check this as an identity, to the bit, on the error the loop recorded. Nothing has been removed, only moved, and filtering it out is a job from an earlier chapter. Here oversampling alone buys 3 dB a doubling, and shaping adds 6 dB for each order: in theory <strong>9 dB at order 1, 15 at order 2</strong>. Order 2 measures about 13 to 16 at half of full scale, from 16 to 256 times the rate, and less near the top. Order 1 wanders between 6 and 11, since its noise is less like noise: it falls into patterns tied to the input.</p>
+        <p>The signal comes through with a delay. The error comes through a filter, (1 − z⁻¹)², that is nearly zero at low frequencies and largest at half the rate. The tests check this as an identity, to the bit, on the error the loop recorded. Nothing has been removed, only moved, and filtering it out is the job of <a href="#/c/multirate/0">chapter ${numOf('multirate')}</a>. Here oversampling alone buys 3 dB a doubling, and shaping adds 6 dB for each order: in theory <strong>9 dB at order 1, 15 at order 2</strong>, for each doubling of the rate. Order 2 measures about 13 to 16 at half of full scale, from 16 to 256 times the rate, and less near 256. Order 1 wanders between 6 and 11, since its noise is less like noise: it falls into patterns tied to the input.</p>
         <p>This loop goes on following while the input is under full scale, but its integrators grow as it nears it, and the measured figure falls well before the words run out: ${sdMeasuredDb(2, 64, 0.8).toFixed(0)} dB at 0.8 and ${sdMeasuredDb(2, 64, SD_LIMIT).toFixed(0)} dB at ${SD_LIMIT}, against ${a.toFixed(1)} at half of full scale. ${SD_GUARD} bits above the input hold ${2 ** SD_GUARD} full scales, so for a tone or a steady input ${SD_LIMIT} is where this design's slider stops.</p>
         <div class="try">At order 2, step the oversampling from 16 to 128 and read the gain each time. Then raise the input level towards ${SD_LIMIT}, and watch the noise come up.</div>`;
       },
@@ -141,8 +171,8 @@ v  = + full scale if y₂ ≥ 0, else − full scale</pre>
       get more() {
         const a = sdMeasuredDb(2, 64, 0.5), m = sdLinearModelDb(2, 64, 0.5), pw = sdErrorPower(2, 0.5), m2 = sdLinearModelDb(2, 64, 0.5, pw);
         return {
-          derive: `<p>The textbook's sum treats the quantizer as added white noise. That gets the slope right and the level close: at 64 times the rate and half of full scale it predicts ${m.toFixed(1)} dB, and the loop measures ${a.toFixed(1)}. Most of the gap is one assumption you can measure. A step of 2 should give an error power of 1/3, and this loop's error has ${pw.toFixed(2)}: with that figure the sum gives ${m2.toFixed(1)}. What is left is an error that is neither white nor independent of its input.</p>
-          <p>Integrator headroom: their peak is about ${sdPeak(2, 0.5).toFixed(0)} full scales at half of full scale, ${sdPeak(2, 0.8).toFixed(0)} at 0.8 and ${sdPeak(2, SD_LIMIT).toFixed(0)} at ${SD_LIMIT}, and on a steady full-scale input it has no bound. The error grows too, which is why the measured figure falls early.</p>`,
+          derive: `<p>The textbook's sum treats the quantizer as added white noise. That gets the slope right and the level close: at 64 times the rate and half of full scale it predicts ${m.toFixed(1)} dB, and the loop measures ${a.toFixed(1)}. Most of the gap is one assumption you can measure. A quantizer whose levels are at ±1 (a step of 2) should give an error power of 1/3, as a uniform error would, and this loop's error has ${pw.toFixed(2)}: with that figure the sum gives ${m2.toFixed(1)}. What is left is an error that is neither white nor independent of its input.</p>
+          <p>Integrator headroom: their peak is about ${sdPeak(2, 0.5).toFixed(0)} full scales at half of full scale, ${sdPeak(2, 0.8).toFixed(0)} at 0.8 and ${sdPeak(2, SD_LIMIT).toFixed(0)} at ${SD_LIMIT}, and on a steady full-scale input they have no bound. The error grows too, which is why the measured figure falls early.</p>`,
           pitfall: `<p>${SD_LIMIT} is not a promise for every input: a hard step is worse, and a square wave of ±0.85 can already reach the wrap. An analogue integrator clips at its supply far sooner, which makes a real part's usable range a design question of its own.</p>`,
         };
       },
@@ -160,7 +190,7 @@ v  = + full scale if y₂ ≥ 0, else − full scale</pre>
         const { N, R } = SCENE_CHAIN;
         return `
         <p>In a real converter the integrators are analogue, and that is where its noise and its limit come from. Here they are words, so that the arithmetic can be compared exactly. The one-bit DAC costs nothing: the words for + and − full scale differ only in their top bits, so it is the decision's inverse on some wires. The loop drawn here, at ${SCENE_CHAIN.w} bits, is ${n0(MOD(SCENE_CHAIN.w))} NANDs, and at ${CHAIN.w} bits it is ${n0(MOD())}. Its integrators have the ${SD_GUARD} extra bits the last step worked out, and the tests hold the model to a tone or a steady input of ${SD_LIMIT}, and these gates to the model.</p>
-        <p>What leaves is a bit at the high rate. <a href="#/c/multirate/7">The CIC from the rate chapter</a> takes it from there, unchanged. Each bit goes in as +1 or −1, a two-bit word, and its registers grow to ${cicWidth(N, R, 2)} bits by N log₂ R (order ${N}, ÷ ${R} in the gates here). A CIC of one order more than the loop is the usual choice, since the noise rises at the loop's order, and it needs to fall faster than that.</p>
+        <p>What leaves is a bit at the high rate. <a href="#/c/multirate/7">The CIC from the rate chapter</a> takes it from there, unchanged. Each bit goes in as +1 or −1, a two-bit word, and its registers grow to ${cicWidth(N, R, 2)} bits: the input's 2 plus N log₂ R (order ${N}, ÷ ${R} in the gates here). A CIC of one order more than the loop is the usual choice, since the noise rises at the loop's order, and it needs to fall faster than that.</p>
         <div class="try">Run a tone. Look at the strip of bits at the bottom: they do not look like a sine, and yet their running average follows it.</div>`;
       },
       scene: adcScene,
@@ -177,9 +207,9 @@ v  = + full scale if y₂ ≥ 0, else − full scale</pre>
       title: 'Many bits from one',
       get body() {
         return `
-        <p>Now measure the chain. At ${CHAIN.R} times the rate, order ${CHAIN.order} and a CIC of order ${CHAIN.N}, a tone at half of full scale gives ${chainEnob().toFixed(1)} effective bits, read from words at the low rate. At ÷ 128 it is ${chainEnob(128).toFixed(1)}, and at ÷ 256 it is ${chainEnob(256).toFixed(1)}, past the 16 bits the chapter set out for, at about ${(((chainEnob(256) - chainEnob()) / 2) * 6.02).toFixed(0)} dB a doubling. Being judged on a half-scale tone, these read about a bit lower than the same noise would against full scale. Those are figures for this chain, this input and this digital arithmetic. A real part has analogue noise in its integrators that this one lacks, and that is usually what stops it. The ${n0(WHOLE())} NANDs at ÷ ${CHAIN.R} take the place of a matched array of 2^b elements.</p>
-        <p>You can hear what the filter does. Both clips below come from the same bits. Keeping every ${CHAIN.R}th bit and nothing else folds all that high-frequency noise down over the tone. Through the CIC, the noise goes and the tone stays. Those are model clips, and the gates above have been shown equal to that model.</p>
-        <p>Audio converters do this because high rates are cheap and matching is not, and it has the same price as any other trade here: this design only reaches a low frequency, and takes its time.</p>`;
+        <p>Now measure the chain. At ${CHAIN.R} times the rate, order ${CHAIN.order} and a CIC of order ${CHAIN.N}, a tone at half of full scale gives ${chainEnob().toFixed(1)} effective bits, read from words at the low rate. At ÷ 128 it is ${chainEnob(128).toFixed(1)}, and at ÷ 256 it is ${chainEnob(256).toFixed(1)}, past the 16 bits of this chapter's opening question, at about ${(((chainEnob(256) - chainEnob()) / 2) * 6.02).toFixed(0)} dB a doubling. Being judged on a half-scale tone, these read about a bit lower than the same noise would against full scale. Those are figures for this chain, this input and this digital arithmetic. A real part has analogue noise in its integrators that this one lacks, and that is usually what stops it. The ${n0(WHOLE())} NANDs at ÷ ${CHAIN.R} take the place of the 2^b − 1 matched comparators a b-bit flash would need.</p>
+        <p>You can hear what the filter does. Both clips below come from the same bits. Keeping every ${CHAIN.R}th bit and nothing else folds all that high-frequency noise down over the tone. Through the CIC, the noise goes and the tone stays. Those are model clips. The gates two steps back are the same design at ${SCENE_CHAIN.w} bits and ÷ ${SCENE_CHAIN.R}, and were checked equal to the same model.</p>
+        <p>Audio converters do this because high rates are cheap and matching is not, and, like any trade here, it has a price: this design only reaches low frequencies, and its answers come at a fraction of the sample rate.</p>`;
       },
       widget: clipWidget,
       challenge: {
