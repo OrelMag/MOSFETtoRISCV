@@ -278,15 +278,16 @@ export const RAST_SETUP: ComponentDef = (() => {
     ...vIn, ...E3.flatMap((i) => [bus(`A${i}`, DB, 'in'), bus(`B${i}`, DB, 'in'), bit(`bias${i}`, 'in')]), bus('tx0', 4, 'in'), bus('ty0', 4, 'in'), bus('s', 4, 'in'), bit('clk', 'in', 'bottom', true),
     bus('e0', N, 'out'), bit('front', 'out'), bus('area', N, 'out'),
   ], (b) => {
-    const z2 = b.op1(constWord(DB - CB, 0), []);
+    // one constant, 0010: the pixel centre's offset 2, and from its bits the subtractor's 1 and the zeros that extend a coordinate
+    const c2 = b.op1(constWord(4, 2), []);
+    const cb = b.op(splitter([1, 1, 2]), [c2]);
+    const one = `${cb}.o1`, z2 = b.op1(merger([1, 1]), [`${cb}.o0`, `${cb}.o0`]);
     const ss = b.op(splitter([3, 1]), ['s'], 'phase');
     const s3 = `${ss}.o0`;
     const sb = b.op(splitter(ones(3)), [s3], 'phase bits');
     const V = VERTEX_PINS.map((p) => z10(b, p, z2));
-    const one = b.op1(constWord(1, 1), []);
     b.next();
     // the first tile's top-left pixel centre: (16·tx0 + 2, 16·ty0 + 2)
-    const c2 = b.op1(constWord(4, 2), []);
     const ox = z10(b, b.op1(merger([4, 4]), [c2, 'tx0'], 'ox'), z2), oy = z10(b, b.op1(merger([4, 4]), [c2, 'ty0'], 'oy'), z2);
     // operands by phase (s mod 8): 1 A0·(v2x − v0x), 2 B0·(v2y − v0y), 3/4 edge 0 at the origin, 5/6 edge 1, 7/0 edge 2
     const mA = b.op1(muxTree(3, DB), ['B2', 'A0', 'B0', 'A0', 'B0', 'A1', 'B1', 'A2', s3], 'A or B of the edge');
@@ -449,100 +450,144 @@ const ZW = 32, QW = 30;
  * READY. Everything wraps at 32 bits: only z at pixels inside the triangle has to come out right.
  */
 export const Z_SETUP: ComponentDef = (() => {
+  // Five blocks a reader opens one at a time: the sequencer (state, cycle in state), the differences, the products, the
+  // divider and the accumulator (the registers, Horner's bits, the one adder). The one-hot state and cycle lines travel as
+  // buses (wiring, free): each gate is the one the flat drawing had, moved into the block that uses it.
+  const block = (id: string, label: string, summary: string, ports: PortDef[], build: (b: Builder) => void, opts: LayeredOptions = {}) => {
+    const b = new Builder(14, 12, 4);
+    b.pins(...ports.filter((p) => p.dir === 'in').map((p) => p.name));
+    build(b);
+    return define({ id, name: `Depth set-up: ${label}`, category: 'arithmetic', summary, ports, symbol: { kind: 'box', label: label.toUpperCase() }, netlist: laid(b, { aspect: 1.6, room: true, keepOrder: true, ...opts }) });
+  };
+  // the state's and the cycle's one-hot lines, from their buses
+  const lines = (b: Builder, bus8: string, n: number) => { const s = b.op(splitter(ones(n)), [bus8]); return (i: number) => `${s}.o${i}`; };
+
+  const SEQ = block('z_setup_seq', 'sequencer', 'The state (idle, MUL, DIVX, DIVY, SUM, HORN, FINAL, ready) and the cycle within it: every transition is to the next state, on the cycle count or the divider\'s done.', [
+    bit('start', 'in'), bit('done', 'in'), bit('clk', 'in', 'bottom', true),
+    bus('ph', 8, 'out'), bus('kk', 16, 'out'), bus('k', 4, 'out'), bit('ready', 'out'),
+  ], (b) => {
+    const stR = b.op(register(3), ['', '', 'clk'], 'state', 'state');
+    const kR = b.op(register(4), ['', '', 'clk'], 'cycle in state', 'kreg');
+    const st = b.name(`${stR}.q`, 'st', true), k = b.name(`${kR}.q`, 'k', true);
+    b.next();
+    const p = b.op(decoder(3), [st], 'state');
+    const ph = (i: number) => `${p}.y${i}`;
+    const kd = b.op(decoder(4), [k], 'k');
+    const kk = (i: number) => `${kd}.y${i}`;
+    b.next();
+    const adv = b.op1(orN(6), [b.op1(AND, [ph(1), kk(3)]), b.op1(AND, [ph(2), 'done']), b.op1(AND, [ph(3), 'done']), ph(4), b.op1(AND, [ph(5), kk(9)]), ph(6)], 'next state');
+    const change = b.op1(OR, ['start', adv], 'state changes', 'chg');
+    b.wire(change, `${stR}.en`);
+    const sinc = b.op(incrementer(3), [st]);
+    b.wire(b.op1(busMux2(3), [`${sinc}.y`, b.op1(constWord(3, 1), []), 'start'], 'start: MUL'), `${stR}.d`);
+    const kinc = b.op(incrementer(4), [k]);
+    b.wire(b.op1(AND4W, [`${kinc}.y`, b.op1(fanout(4), [b.op1(NOT, [change])])], 'k + 1, or 0'), `${kR}.d`);
+    // idle and ready, k stands still: nothing downstream of it switches between triangles
+    b.wire(b.op1(OR, [change, b.op1(NOT, [b.op1(OR, [ph(0), ph(7)])])], 'counting'), `${kR}.en`);
+    b.wire(b.op1(merger(ones(8)), Array.from({ length: 8 }, (_, i) => ph(i)), 'states'), 'ph');
+    b.wire(b.op1(merger(ones(16)), Array.from({ length: 16 }, (_, i) => kk(i)), 'cycles'), 'kk');
+    b.wire(k, 'k'); b.wire(ph(7), 'ready');
+  }, { wires: { 'chg.y': true } });
+
+  const DIFF = block('z_setup_diff', 'differences', 'Δz1 = z1 − z0, Δz2 = z2 − z0, and Δx, Δy: the first tile\'s top-left pixel centre minus vertex 0 (four subtractors).', [
+    bus('v0x', CB, 'in'), bus('v0y', CB, 'in'), bus('z0', CB, 'in'), bus('z1', CB, 'in'), bus('z2', CB, 'in'), bus('tx0', 4, 'in'), bus('ty0', 4, 'in'),
+    bus('dz1', DB, 'out'), bus('dz2', DB, 'out'), bus('dx', DB, 'out'), bus('dy', DB, 'out'),
+  ], (b) => {
+    const z2b = b.op1(constWord(DB - CB, 0), []), one = b.op1(constWord(1, 1), []);
+    const z0e = z10(b, 'z0', z2b);
+    b.wire(`${b.op(addSub(DB), [z10(b, 'z1', z2b), z0e, one], 'Δz1')}.s`, 'dz1');
+    b.wire(`${b.op(addSub(DB), [z10(b, 'z2', z2b), z0e, one], 'Δz2')}.s`, 'dz2');
+    const c2 = b.op1(constWord(4, 2), []);
+    b.wire(`${b.op(addSub(DB), [z10(b, b.op1(merger([4, 4]), [c2, 'tx0']), z2b), z10(b, 'v0x', z2b), one], 'Δx = ox − x0')}.s`, 'dx');
+    b.wire(`${b.op(addSub(DB), [z10(b, b.op1(merger([4, 4]), [c2, 'ty0']), z2b), z10(b, 'v0y', z2b), one], 'Δy = oy − y0')}.s`, 'dy');
+  });
+
+  const MUL = block('z_setup_mul', 'products', 'The four products (A0, Δz2), (A2, Δz1), (B0, Δz2), (B2, Δz1), one a cycle on a Booth multiplier, sign-extended to 32 bits.', [
+    bus('a0', DB, 'in'), bus('a2', DB, 'in'), bus('b0', DB, 'in'), bus('b2', DB, 'in'), bus('dz1', DB, 'in'), bus('dz2', DB, 'in'), bus('k', 4, 'in'), bus('p', ZW, 'out'),
+  ], (b) => {
+    const ks = b.op(splitter(ones(4)), ['k']);
+    const mX = b.op1(muxTree(2, DB), ['a0', 'a2', 'b0', 'b2', b.op1(merger([1, 1]), [`${ks}.o0`, `${ks}.o1`])], 'A or B');
+    const mY = b.op1(busMux2(DB), ['dz2', 'dz1', `${ks}.o0`], 'Δz');
+    b.next();
+    const prod = b.op1(boothMul(DB), [mX, mY], 'product');
+    const ps = b.op(splitter([2 * DB - 1, 1]), [prod]);
+    b.wire(b.op1(merger([2 * DB - 1, ZW - 2 * DB + 1]), [`${ps}.o0`, b.op1(fanout(ZW - 2 * DB + 1), [`${ps}.o1`])], 'product, 32-bit'), 'p');
+  });
+
+  const DIV = block('z_setup_div', 'divider', '|N|·2^12 / area for N = Nx in DIVX and Ny in DIVY, on an iterative divider started in each one\'s first cycle; the quotient takes N\'s sign.', [
+    bus('nx', N, 'in'), bus('ny', N, 'in'), bus('area', N, 'in'), bus('ph', 8, 'in'), bus('kk', 16, 'in'), bit('clk', 'in', 'bottom', true), bus('q', ZW, 'out'), bit('done', 'out'),
+  ], (b) => {
+    const ph = lines(b, 'ph', 8), kk = lines(b, 'kk', 16);
+    const div = b.op(nrSeqDivider(QW), ['clk', '', '', ''], 'divider', 'div');
+    const nSel = b.op1(busMux2(N), ['nx', 'ny', ph(3)], 'Nx or Ny');
+    const nSign = topBit(b, nSel, N, 'its sign');
+    const mag = b.op1(absValue(N), [nSel], '|N|');
+    b.wire(b.op1(merger([Z_FRAC, N]), [b.op1(constWord(Z_FRAC, 0), []), mag], '|N|·2^12'), `${div}.a`);
+    b.wire(b.op1(merger([N, QW - N]), ['area', b.op1(constWord(QW - N, 0), [])], 'area'), `${div}.b`);
+    b.wire(b.op1(AND, [b.op1(OR, [ph(2), ph(3)]), kk(0)], 'start a division'), `${div}.start`);
+    b.next();
+    b.wire(b.op1(condNegate(ZW), [b.op1(merger([QW, ZW - QW]), [`${div}.q`, b.op1(constWord(ZW - QW, 0), [])]), nSign], 'signed quotient'), 'q');
+    b.wire(`${div}.done`, 'done');
+  });
+
+  const ACC = block('z_setup_acc', 'accumulator', 'The registers (acc, Nx, Ny, Zx, Zy, Zx + Zy) around one adder: MUL sums the products, SUM adds Zx and Zy, HORN shifts and adds ten bits of Δx and Δy, FINAL adds z0.', [
+    bus('ph', 8, 'in'), bus('kk', 16, 'in'), bus('k', 4, 'in'), bit('done', 'in'), bus('p', ZW, 'in'), bus('q', ZW, 'in'), bus('dx', DB, 'in'), bus('dy', DB, 'in'), bus('z0', CB, 'in'), bit('clk', 'in', 'bottom', true),
+    bus('nx', N, 'out'), bus('ny', N, 'out'), bus('zdx', ZW, 'out'), bus('zdy', ZW, 'out'), bus('ze0', ZW, 'out'),
+  ], (b) => {
+    const ph = lines(b, 'ph', 8), kk = lines(b, 'kk', 16);
+    const ks = b.op(splitter(ones(4)), ['k']);
+    const acc = b.op(register(ZW), ['', b.op1(orN(3), [ph(1), ph(5), ph(6)]), 'clk'], 'acc', 'acc');
+    const nx = b.op(register(N), ['', b.op1(AND, [ph(1), kk(1)]), 'clk'], 'Nx', 'nx');
+    const ny = b.op(register(N), ['', b.op1(AND, [ph(1), kk(3)]), 'clk'], 'Ny', 'ny');
+    const zx = b.op(register(ZW), ['q', b.op1(AND, [ph(2), 'done']), 'clk'], 'Zx', 'zx');
+    const zy = b.op(register(ZW), ['q', b.op1(AND, [ph(3), 'done']), 'clk'], 'Zy', 'zy');
+    const sR = b.op(register(ZW), ['', ph(4), 'clk'], 'Zx + Zy', 'sxy');
+    b.name(`${acc}.q`, 'acc', true); b.name(`${zx}.q`, 'Zx', true); b.name(`${zy}.q`, 'Zy', true);
+    b.next();
+    // Horner: bit j = 9 − k of Δx and Δy picks 0, Zx, Zy or Zx + Zy
+    const bitOf = (w: string, l: string) => {
+      const sp = b.op(splitter(ones(DB)), [w]);
+      const z = b.op1(TIE0, []);
+      return b.op1(muxTree(4, 1), [...Array.from({ length: 16 }, (_, i) => (i < DB ? `${sp}.o${DB - 1 - i}` : z)), 'k'], l);
+    };
+    const bx = bitOf('dx', 'bit of Δx'), by = bitOf('dy', 'bit of Δy');
+    const op = b.op1(muxTree(2, ZW), [b.op1(constWord(ZW, 0), []), `${zx}.q`, `${zy}.q`, `${sR}.q`, b.op1(merger([1, 1]), [bx, by])], 'Horner operand');
+    b.next();
+    // the adder's operands by state: MUL (k odd ? acc : 0) + P; SUM Zx + Zy; HORN (k = 0 ? 0 : 2·acc) ± op; FINAL acc + z0·2^12
+    const acc2 = b.op1(merger([1, ZW - 1]), [b.op1(TIE0, []), `${b.op(splitter([ZW - 1, 1]), [`${acc}.q`])}.o0`], '2·acc');
+    const horn = b.op1(AND, [ph(5), b.op1(NOT, [kk(0)])], 'Horner, not first');
+    const x0 = b.op1(orN(3), [b.op1(AND, [ph(1), `${ks}.o0`]), ph(6), horn], 'acc or 2·acc');
+    const x1 = b.op1(OR, [ph(4), horn], 'Zx or 2·acc');
+    const xop = b.op1(muxTree(2, ZW), [b.op1(constWord(ZW, 0), []), `${acc}.q`, `${zx}.q`, acc2, b.op1(merger([1, 1]), [x0, x1])], 'first operand');
+    const zs = b.op1(merger([Z_FRAC, CB, ZW - Z_FRAC - CB]), [b.op1(constWord(Z_FRAC, 0), []), 'z0', b.op1(constWord(ZW - Z_FRAC - CB, 0), [])], 'z0·2^12');
+    const ysel = b.op1(merger([1, 1]), [b.op1(OR, [ph(4), ph(6)]), b.op1(OR, [ph(5), ph(6)])]);
+    const yop = b.op1(muxTree(2, ZW), ['p', `${zy}.q`, op, zs, ysel], 'second operand');
+    b.next();
+    const sum = b.op(addSub(ZW), [xop, yop, b.op1(AND, [ph(5), kk(0)], 'sign bit: subtract')], 'the adder');
+    b.name(`${sum}.s`, 'sum', true);
+    for (const r of [acc, sR]) b.wire(`${sum}.s`, `${r}.d`);
+    const s18 = `${b.op(splitter([N, ZW - N]), [`${sum}.s`])}.o0`;
+    b.wire(s18, `${nx}.d`); b.wire(s18, `${ny}.d`);
+    b.next();
+    const x4 = (r: string, l: string) => b.op1(merger([2, ZW - 2]), [b.op1(constWord(2, 0), []), `${b.op(splitter([ZW - 2, 2]), [r])}.o0`], l);
+    b.wire(x4(`${zx}.q`, '4·Zx'), 'zdx');
+    b.wire(x4(`${zy}.q`, '4·Zy'), 'zdy');
+    b.wire(`${acc}.q`, 'ze0');
+    b.wire(`${nx}.q`, 'nx'); b.wire(`${ny}.q`, 'ny');
+  });
+
+  // the top level: the depth set-up's block diagram
   const b = new Builder(14, 12, 4);
   b.pins('start', 'v0x', 'v0y', 'z0', 'z1', 'z2', 'a0', 'a2', 'b0', 'b2', 'area', 'tx0', 'ty0', 'clk');
-  const stR = b.op(register(3), ['', '', 'clk'], 'state', 'state');
-  const kR = b.op(register(4), ['', '', 'clk'], 'cycle in state', 'kreg');
-  const st = b.name(`${stR}.q`, 'st', true), k = b.name(`${kR}.q`, 'k', true);
-  const z2b = b.op1(constWord(DB - CB, 0), []), one = b.op1(constWord(1, 1), []);
+  b.op(SEQ, ['start', 'div.done', 'clk'], 'sequencer', 'seq');
+  b.op(DIFF, ['v0x', 'v0y', 'z0', 'z1', 'z2', 'tx0', 'ty0'], 'differences', 'diff');
   b.next();
-  const p = b.op(decoder(3), [st], 'state');
-  const ph = (i: number) => `${p}.y${i}`;
-  const kd = b.op(decoder(4), [k], 'k');
-  const kk = (i: number) => `${kd}.y${i}`;
-  const ks = b.op(splitter(ones(4)), [k]);
-  // Δz1 = z1 − z0, Δz2 = z2 − z0; Δx, Δy: the first tile's top-left pixel centre minus vertex 0
-  const z0e = z10(b, 'z0', z2b);
-  const dz1 = b.op(addSub(DB), [z10(b, 'z1', z2b), z0e, one], 'Δz1');
-  const dz2 = b.op(addSub(DB), [z10(b, 'z2', z2b), z0e, one], 'Δz2');
-  const c2 = b.op1(constWord(4, 2), []);
-  const dX = b.op(addSub(DB), [z10(b, b.op1(merger([4, 4]), [c2, 'tx0']), z2b), z10(b, 'v0x', z2b), one], 'Δx = ox − x0');
-  const dY = b.op(addSub(DB), [z10(b, b.op1(merger([4, 4]), [c2, 'ty0']), z2b), z10(b, 'v0y', z2b), one], 'Δy = oy − y0');
+  b.op(MUL, ['a0', 'a2', 'b0', 'b2', 'diff.dz1', 'diff.dz2', 'seq.k'], 'products', 'mul');
+  b.op(DIV, ['acc.nx', 'acc.ny', 'area', 'seq.ph', 'seq.kk', 'clk'], 'divider', 'div');
   b.next();
-  // the state machine: every transition is to the next state; k counts cycles within a state
-  const div = b.op(nrSeqDivider(QW), ['clk', '', '', ''], 'divider', 'div');
-  const done = `${div}.done`;
-  const adv = b.op1(orN(6), [b.op1(AND, [ph(1), kk(3)]), b.op1(AND, [ph(2), done]), b.op1(AND, [ph(3), done]), ph(4), b.op1(AND, [ph(5), kk(9)]), ph(6)], 'next state');
-  const change = b.op1(OR, ['start', adv], 'state changes');
-  b.wire(change, `${stR}.en`);
-  const sinc = b.op(incrementer(3), [st]);
-  b.wire(b.op1(busMux2(3), [`${sinc}.y`, b.op1(constWord(3, 1), []), 'start'], 'start: MUL'), `${stR}.d`);
-  const kinc = b.op(incrementer(4), [k]);
-  b.wire(b.op1(AND4W, [`${kinc}.y`, b.op1(fanout(4), [b.op1(NOT, [change])])], 'k + 1, or 0'), `${kR}.d`);
-  // idle and ready, k stands still: nothing downstream of it switches between triangles
-  b.wire(b.op1(OR, [change, b.op1(NOT, [b.op1(OR, [ph(0), ph(7)])])], 'counting'), `${kR}.en`);
+  b.op(ACC, ['seq.ph', 'seq.kk', 'seq.k', 'div.done', 'mul.p', 'div.q', 'diff.dx', 'diff.dy', 'z0', 'clk'], 'accumulator', 'acc');
   b.next();
-  // products: (A0, Δz2), (A2, Δz1), (B0, Δz2), (B2, Δz1)
-  const mX = b.op1(muxTree(2, DB), ['a0', 'a2', 'b0', 'b2', b.op1(merger([1, 1]), [`${ks}.o0`, `${ks}.o1`])], 'A or B');
-  const mY = b.op1(busMux2(DB), [`${dz2}.s`, `${dz1}.s`, `${ks}.o0`], 'Δz');
-  b.next();
-  const prod = b.op1(boothMul(DB), [mX, mY], 'product');
-  const ps = b.op(splitter([2 * DB - 1, 1]), [prod]);
-  const p32 = b.op1(merger([2 * DB - 1, ZW - 2 * DB + 1]), [`${ps}.o0`, b.op1(fanout(ZW - 2 * DB + 1), [`${ps}.o1`])], 'product, 32-bit');
-  b.next();
-  // the registers: acc, Nx, Ny (18-bit), Zx, Zy, S
-  const acc = b.op(register(ZW), ['', b.op1(orN(3), [ph(1), ph(5), ph(6)]), 'clk'], 'acc', 'acc');
-  const nx = b.op(register(N), ['', b.op1(AND, [ph(1), kk(1)]), 'clk'], 'Nx', 'nx');
-  const ny = b.op(register(N), ['', b.op1(AND, [ph(1), kk(3)]), 'clk'], 'Ny', 'ny');
-  const zx = b.op(register(ZW), ['', b.op1(AND, [ph(2), done]), 'clk'], 'Zx', 'zx');
-  const zy = b.op(register(ZW), ['', b.op1(AND, [ph(3), done]), 'clk'], 'Zy', 'zy');
-  const sR = b.op(register(ZW), ['', ph(4), 'clk'], 'Zx + Zy', 'sxy');
-  b.name(`${acc}.q`, 'acc', true); b.name(`${zx}.q`, 'Zx', true); b.name(`${zy}.q`, 'Zy', true);
-  b.next();
-  // the divider: |N|·2^12 / area, N = Nx in DIVX, Ny in DIVY; started in each one's first cycle
-  const nSel = b.op1(busMux2(N), [`${nx}.q`, `${ny}.q`, ph(3)], 'Nx or Ny');
-  const nSign = topBit(b, nSel, N, 'its sign');
-  const mag = b.op1(absValue(N), [nSel], '|N|');
-  b.wire(b.op1(merger([Z_FRAC, N]), [b.op1(constWord(Z_FRAC, 0), []), mag], '|N|·2^12'), `${div}.a`);
-  b.wire(b.op1(merger([N, QW - N]), ['area', b.op1(constWord(QW - N, 0), [])], 'area'), `${div}.b`);
-  b.wire(b.op1(AND, [b.op1(OR, [ph(2), ph(3)]), kk(0)], 'start a division'), `${div}.start`);
-  const q = b.op1(condNegate(ZW), [b.op1(merger([QW, ZW - QW]), [`${div}.q`, b.op1(constWord(ZW - QW, 0), [])]), nSign], 'signed quotient');
-  b.wire(q, `${zx}.d`); b.wire(q, `${zy}.d`);
-  b.next();
-  // Horner: bit j = 9 − k of Δx and Δy picks 0, Zx, Zy or Zx + Zy
-  const bitOf = (w: string, l: string) => {
-    const sp = b.op(splitter(ones(DB)), [w]);
-    const z = b.op1(TIE0, []);
-    return b.op1(muxTree(4, 1), [...Array.from({ length: 16 }, (_, i) => (i < DB ? `${sp}.o${DB - 1 - i}` : z)), k], l);
-  };
-  const bx = bitOf(`${dX}.s`, 'bit of Δx'), by = bitOf(`${dY}.s`, 'bit of Δy');
-  const op = b.op1(muxTree(2, ZW), [b.op1(constWord(ZW, 0), []), `${zx}.q`, `${zy}.q`, `${sR}.q`, b.op1(merger([1, 1]), [bx, by])], 'Horner operand');
-  b.next();
-  // the adder's operands by state: MUL (k odd ? acc : 0) + P; SUM Zx + Zy; HORN (k = 0 ? 0 : 2·acc) ± op; FINAL acc + z0·2^12
-  const acc2 = b.op1(merger([1, ZW - 1]), [b.op1(TIE0, []), `${b.op(splitter([ZW - 1, 1]), [`${acc}.q`])}.o0`], '2·acc');
-  const horn = b.op1(AND, [ph(5), b.op1(NOT, [kk(0)])], 'Horner, not first');
-  // first operand select: 0: 0, 1: acc, 2: Zx, 3: 2·acc
-  const x0 = b.op1(orN(3), [b.op1(AND, [ph(1), `${ks}.o0`]), ph(6), horn], 'acc or 2·acc');
-  const x1 = b.op1(OR, [ph(4), horn], 'Zx or 2·acc');
-  const xop = b.op1(muxTree(2, ZW), [b.op1(constWord(ZW, 0), []), `${acc}.q`, `${zx}.q`, acc2, b.op1(merger([1, 1]), [x0, x1])], 'first operand');
-  const zs = b.op1(merger([Z_FRAC, CB, ZW - Z_FRAC - CB]), [b.op1(constWord(Z_FRAC, 0), []), 'z0', b.op1(constWord(ZW - Z_FRAC - CB, 0), [])], 'z0·2^12');
-  // second operand select: 0: P (MUL), 1: Zy (SUM), 2: op (HORN), 3: z0·2^12 (FINAL)
-  const ysel = b.op1(merger([1, 1]), [b.op1(OR, [ph(4), ph(6)]), b.op1(OR, [ph(5), ph(6)])]);
-  const yop = b.op1(muxTree(2, ZW), [p32, `${zy}.q`, op, zs, ysel], 'second operand');
-  b.next();
-  const sum = b.op(addSub(ZW), [xop, yop, b.op1(AND, [ph(5), kk(0)], 'sign bit: subtract')], 'the adder');
-  b.name(`${sum}.s`, 'sum', true);
-  for (const r of [acc, sR]) b.wire(`${sum}.s`, `${r}.d`);
-  const s18 = `${b.op(splitter([N, ZW - N]), [`${sum}.s`])}.o0`;
-  b.wire(s18, `${nx}.d`); b.wire(s18, `${ny}.d`);
-  b.next();
-  const x4 = (r: string, l: string) => b.op1(merger([2, ZW - 2]), [b.op1(constWord(2, 0), []), `${b.op(splitter([ZW - 2, 2]), [r])}.o0`], l);
-  b.wire(x4(`${zx}.q`, '4·Zx'), 'zdx');
-  b.wire(x4(`${zy}.q`, '4·Zy'), 'zdy');
-  b.wire(`${acc}.q`, 'ze0');
-  b.wire(ph(7), 'ready');
-  const R = b.right;
-  const ins = ['start', 'v0x', 'v0y', 'z0', 'z1', 'z2', 'a0', 'a2', 'b0', 'b2', 'area', 'tx0', 'ty0', 'clk'];
+  b.wire('acc.zdx', 'zdx'); b.wire('acc.zdy', 'zdy'); b.wire('acc.ze0', 'ze0'); b.wire('seq.ready', 'ready');
   return define({
     id: 'z_setup', name: 'Depth set-up', category: 'arithmetic',
     summary: 'The slopes of z across the triangle and its value at the first tile: four products (its own Booth multiplier), two divisions by twice the area '
@@ -551,7 +596,7 @@ export const Z_SETUP: ComponentDef = (() => {
       bus('a0', DB, 'in'), bus('a2', DB, 'in'), bus('b0', DB, 'in'), bus('b2', DB, 'in'), bus('area', N, 'in'), bus('tx0', 4, 'in'), bus('ty0', 4, 'in'),
       bit('clk', 'in', 'bottom', true), bus('zdx', ZW, 'out'), bus('zdy', ZW, 'out'), bus('ze0', ZW, 'out'), bit('ready', 'out')],
     symbol: { kind: 'box', label: 'DEPTH SET-UP' },
-    netlist: () => ({ pins: { ...pinsAt(ins, 0, 6), ...pinsAt(['zdx', 'zdy', 'ze0', 'ready'], R, 6) }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { room: true }),
   });
 })();
 
