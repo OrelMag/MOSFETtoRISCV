@@ -88,7 +88,7 @@ export const chSpeech: Chapter = {
         options: ['About 20 dB', 'About 6 dB', 'Nothing at all', 'About 3 dB'],
         answer: 0,
         explain: 'Its noise stays where it was, so the ratio falls by almost as much as the signal does.',
-        why: ['', 'That is one bit's worth, and the signal fell by more than three bits' worth.', 'That is what logarithmic steps try for, and uniform ones do not.', 'That would be half the power, and 20 dB is a hundredth.'],
+        why: ['', 'That is one bit\'s worth, and the signal fell by more than three bits\' worth.', 'That is what logarithmic steps try for, and uniform ones do not.', 'That would be half the power, and 20 dB is a hundredth.'],
       },
     },
     {
