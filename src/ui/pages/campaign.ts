@@ -274,8 +274,11 @@ export class CampaignPage implements Page {
         file, this.note));
   }
 
-  private say(msg: string): void {
+  private say(msg: string, bad = false): void {
     this.note.textContent = msg;
+    // a failure in the error colour and announced at once; it was the success's green and polite
+    this.note.classList.toggle('bad', bad);
+    this.note.setAttribute('role', bad ? 'alert' : 'status');
     setTimeout(() => { if (this.note.textContent === msg) this.note.textContent = ''; }, 6000);
   }
 
@@ -291,9 +294,9 @@ export class CampaignPage implements Page {
 
   private importText(text: string): void {
     const r = importCampaign(text, progress().state, loadWorkspace());
-    if ('error' in r) return this.say(`Import failed: ${r.error}`);
+    if ('error' in r) return this.say(`Import failed: ${r.error}`, true);
     const saved = saveWorkspace(r.ws);
-    if (!saved.ok) return this.say(`Import failed: ${saved.reason}`);
+    if (!saved.ok) return this.say(`Import failed: ${saved.reason}`, true);
     progress().replace(r.state);
     this.say(`Imported: progress merged, ${r.chips.added.length} chip${r.chips.added.length === 1 ? '' : 's'} added`);
   }
@@ -673,7 +676,8 @@ export class CampaignPage implements Page {
         const hits = searchCodex(q).filter((e) => !this.cxKind || e.kind === this.cxKind);
         ranked.replaceChildren(...hits.map((e) => {
           const li = item(e), why = matchNote(e, q);
-          if (why) li.append(h('span', { class: 'cx-why' }, why));
+          // matchNote marks the hit between « »: drawn as a highlight, not as the marks
+          if (why) li.append(h('span', { class: 'cx-why' }, ...why.split(/[«»]/).map((s, i) => (i % 2 ? h('mark', null, s) : s))));
           return li;
         }));
         // 3D models by title, after the entries (they open in the model index)
