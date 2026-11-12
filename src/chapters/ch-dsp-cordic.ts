@@ -158,7 +158,7 @@ z′ = z − d · atan 2^−i          d = +1 if z ≥ 0, else −1</pre>
       get body() { return `
         <p>Three lengths have to be chosen together, and all three can be measured. The test below runs every angle the word can hold, so this is not a sample. It takes the worst of sine and cosine against Math's.</p>
         <p><strong>Stages</strong> set how much angle is left: about atan 2^−(n−1) at the end, so a bit each. <strong>Angle bits</strong> set how well that angle can be held, and how well the table's constants can: each of n constants is off by up to half a step. <strong>Word bits</strong> set how much truncation hurts: each stage throws away up to one LSB, and later stages stretch it. That is why a 14-bit word with 12 stages keeps only about ${cordicBits(S).toFixed(0)} good bits.</p>
-        <p>So stages beyond the word's length buy nothing, and a word longer than the stages can use costs adders for nothing. You can hold a few guard bits below the result you want, and check here how many it takes. The worst case the chips add up is a bound, and the real figure comes well inside it.</p>
+        <p>So stages beyond the word's length buy nothing, and a word longer than the stages can use costs adders for nothing. You can hold a few guard bits below the result you want, and check here how many it takes. The worst case, with every source of error at its largest at once, is only a bound, and the measured error comes well inside it.</p>
         <div class="try">Hold word and angle at 14 and step the stages from 6 to 16. Then hold stages at 12 and take the word from 10 up. Find where each stops helping.</div>`; },
       widget: wordsWidget,
       challenge: {
