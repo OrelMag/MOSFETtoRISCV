@@ -5,7 +5,7 @@
 // D flip-flop and tie cells: the result is an ordinary netlist, simulated, counted, drawn and opened like any other.
 
 import { symbolGeom } from '../sim/geometry';
-import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
+import type { ComponentDef, InstanceDef, NetDef, Netlist, PortDef } from '../sim/types';
 import { constWord } from './alu';
 import { Builder } from './builder';
 import { layered } from './layered';
@@ -39,6 +39,17 @@ const PLAIN = new Set<ComponentDef>([NAND, NOT, AND, OR, NOR, XOR, XNOR, MUX2, T
 
 /** A block with at least this many gates of its own, flip-flops among them, is drawn as next state, state register and outputs. */
 export const SPLIT_MIN = 40;
+/** A state register of at most this many flip-flops is drawn as one column wired to its pins; a larger one in wrapped columns. */
+const STATE_COLUMN = 16;
+/** A split block is laid out by depth only when that keeps this share of its columns' scale at fit (the stage's canvas, ~1.1 : 1). */
+const FIT_KEEP = 0.5;
+/** The scale a drawing fits a 620 × 560 canvas at, from its parts and pins (relative: only compared). */
+const fitScale = (n: Netlist): number => {
+  let w = 1, h = 1;
+  for (const i of n.instances) { const g = symbolGeom(i.def); w = Math.max(w, i.at![0] + g.w); h = Math.max(h, i.at![1] + g.h); }
+  for (const p of Object.values(n.pins ?? {})) { w = Math.max(w, p[0]); h = Math.max(h, p[1]); }
+  return Math.min(620 / w, 560 / h);
+};
 
 const OUT_PORTS = (d: ComponentDef) => d.ports.filter((p) => p.dir === 'out').map((p) => p.name);
 const IN_PORTS = (d: ComponentDef) => d.ports.filter((p) => p.dir === 'in').map((p) => p.name);
@@ -492,10 +503,19 @@ export class Rtl {
       // a pin used as a driver is named after itself; a pass-through (in → out) is a net of two pins
       const nets: NetDef[] = b.nets();
       const instances: InstanceDef[] = b.instances;
-      // a small block of gates is laid out by logic depth, rows level with what they talk to, its short nets drawn as wires
-      // (lib/layered.ts); not one of boxes or wide buses, whose pointer names need wider channels than layered leaves
-      const small = !sc.role && !sc.kids.length && instances.length <= SPLIT_MIN && instances.every((i) => i.def.ports.length <= 8);
-      const lay = small ? layered(ports, b, { gap: 14, x0: gapW }) : null; // x0: room for a pin's pointer
+      // a block of gates is laid out by logic depth, rows level with what they talk to, its short nets drawn as wires where
+      // no other part stands between their ends (lib/layered.ts, avoid): a block of gates of any size, a split block's next state / outputs
+      // (drawn in columns with every net a label they read as nothing but pointers: 51 890 of 61 736 nets over the book's
+      // 521 blocks, 46 759 with this, none below half its scale at fit); not one of boxes or wide buses, whose pointer names
+      // need wider channels than layered leaves; nor a state register of more than STATE_COLUMN flip-flops, which share one
+      // logic depth and would stand in one column too tall to read at fit (Builder's wrapped columns hold them). Laid out when
+      // the level is first opened, not when the design is built. room: a split block's labels need it.
+      const small = !sc.kids.length && (sc.role !== 'state' || instances.length <= STATE_COLUMN) && instances.every((i) => i.def.ports.length <= 8);
+      const cols: Netlist = { pins, instances, nets };
+      let lay: Netlist | null = null;
+      // a split block, or one of more than SPLIT_MIN gates, keeps its columns when laying it out would shrink it at fit below
+      // FIT_KEEP of their scale: hundreds of gates laid out by depth run to a thousand units or more, every part a dot
+      const laid = () => (lay ??= ((l) => ((!sc.role && instances.length <= SPLIT_MIN) || fitScale(l) >= FIT_KEEP * fitScale(cols) ? l : cols))(layered(ports, b, { gap: 14, x0: gapW, avoid: true, ...(sc.role ? { room: true } : {}) }))); // x0: room for a pin's pointer
       return define({
         id,
         name: isRoot ? this.opt.name : sc.role ? `${this.opt.name}: ${this.scopes[sc.parent].label || this.opt.name}, ${sc.label}` : `${this.opt.name}: ${sc.label}`,
@@ -503,7 +523,7 @@ export class Rtl {
         summary: isRoot ? this.opt.summary : `${sc.label} (a block of ${this.opt.name}).`,
         ports,
         symbol: { kind: 'box', label: isRoot ? (this.opt.label ?? this.opt.name) : sc.label, ...(isRoot && this.opt.boxW ? { w: this.opt.boxW } : {}) },
-        netlist: () => lay ?? { pins, instances, nets },
+        netlist: () => (small ? laid() : cols),
         ...(isRoot && this.opt.notes ? { notes: this.opt.notes } : {}),
       });
     };
