@@ -101,14 +101,16 @@ export function dacHoldWidget(): Widget {
     chips.set(3, after1 <= -CD.keepDb ? 'yes' : 'no', `${CD.keepDb} dB under the tone, 16 bits' worth?`);
   };
   const sf = slider('Tone', 1000, 20000, 100, fTone, kHz, (x) => { fTone = x; paint(); });
-  const so = slider('Oversampling', 0, 3, 1, oi, (x) => `${OVERS[x]} × (DAC at ${kHz(CD.fs * OVERS[x])})`, (x) => { oi = x; paint(); });
-  const sn = slider('Filter order', 1, 10, 1, order, (x) => `${x} (Butterworth, corner at 20 kHz)`, (x) => { order = x; paint(); });
+  // Short readouts: a long one wraps down the narrow output column; what they mean is in the note below.
+  const so = slider('DAC rate', 0, 3, 1, oi, (x) => kHz(CD.fs * OVERS[x]), (x) => { oi = x; paint(); });
+  const sn = slider('Filter order', 1, 10, 1, order, (x) => String(x), (x) => { order = x; paint(); });
   const cb = h('input', { type: 'checkbox' }) as HTMLInputElement;
   cb.addEventListener('change', () => { correct = cb.checked; paint(); });
   paint();
   return { el: h('div', { class: 'widget mos sr-w' },
     h('div', { class: 'panel' }, h('h3', null, 'CD audio, held and smoothed'), time.el, spec.el, chips.el),
-    h('div', { class: 'panel mos-ctl' }, sf.el, so.el, sn.el, h('label', { class: 'mos-row' }, cb, ' Lift the droop before the DAC'))) };
+    h('div', { class: 'panel mos-ctl' }, sf.el, so.el, sn.el, h('label', { class: 'mos-row' }, cb, ' Lift the droop before the DAC'),
+      h('p', { class: 'sub mos-note' }, `DAC rate: the CD's ${kHz(CD.fs)} oversampled 1, 2, 4 or 8 times. The smoothing filter is a Butterworth with its corner at ${kHz(CD.band)}.`))) };
 }
 
 // ---- jitter --------------------------------------------------------------------------------------------------------------------------------------------
