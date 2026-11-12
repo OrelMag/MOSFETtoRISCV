@@ -374,7 +374,7 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
     ...(o.custom?.length ? { name: `${name}, with ${o.custom.map((r) => r.name).join(', ')}` } : {}),
     symbol: { kind: 'box', label: 'RV16 PIPE' },
     // a core is too wide to read at fit in one strip: two bands (lib/fold.ts)
-    netlist: function (this: ComponentDef) { return coreNetlist(this.ports, b, { ...pinsAt(['clk', 'rst', 'instr', 'drdata', ...(o.sys ? ['irq'] : [])], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) }, o.custom?.length ? undefined : o.sys ? { ...CORE_LAY, wires: labelledWires(b, ['bubble into E', 'redirect'], ['drdata']) } : { ...CORE_LAY, wires: labelledWires(b, ['imm'], [], false) }); },
+    netlist: function (this: ComponentDef) { return coreNetlist(this.ports, b, { ...pinsAt(['clk', 'rst', 'instr', 'drdata', ...(o.sys ? ['irq'] : [])], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) }, o.custom?.length ? undefined : o.sys ? { ...CORE_LAY, wires: labelledWires(b, ['bubble into E', 'redirect'], ['drdata']) } : { ...CORE_LAY, wires: { ...labelledWires(b, ['imm'], [], false), drdata: true } }); },
   });
   pipes.set(key, d);
   return d;
