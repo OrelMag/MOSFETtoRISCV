@@ -371,7 +371,8 @@ export function installPanZoom(svg: SVGSVGElement, cam: Camera, hooks: PanZoomHo
     hooks.onHover?.(e);
   });
   const end = (e: PointerEvent) => {
-    if (drag && !drag.moved) hooks.onTap(drag.target, e);
+    // a cancelled press (the browser's, or the zoom lens taking the finger into a pinch) is not a tap
+    if (drag && !drag.moved && e.type !== 'pointercancel') hooks.onTap(drag.target, e);
     drag = null;
     if (svg.hasPointerCapture(e.pointerId)) svg.releasePointerCapture(e.pointerId);
   };
