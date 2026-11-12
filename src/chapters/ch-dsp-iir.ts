@@ -1,16 +1,17 @@
-// IIR and stability: what feedback buys on one specification, the bilinear transform, a pole held in a register, direct form against sections, a biquad in gates,
-// a limit cycle on those gates, what removes it, and the order and scaling of sections. The gates are lib/biquad.ts, equal to dsp/iir.ts at every clock
+// IIR and stability: what feedback buys on one specification, the s-plane, the bilinear transform, a pole held in a register, direct form against sections, a biquad
+// in gates, a limit cycle on those gates, what removes it, and the order and scaling of sections. The gates are lib/biquad.ts, equal to dsp/iir.ts at every clock
 // (tests/dsp-iir-gates.test.ts); the design half is held to scipy (tests/dsp-iir.test.ts); what the text claims is tests/dsp-iir-chapter.test.ts.
 
 import {
-  BQ, burstThenSilence, coefWord, cycleSweep, deadBand, deltaPass, findCycle, LIMIT_CYCLE, MASK, runBiquad, SWEEP_RUNS, SWEEP_VARIANTS, warpedAt, prewarp, zeroSweep,
+  analogGain, analogPrototype, BQ, burstThenSilence, coefWord, cycleSweep, deadBand, deltaPass, findCycle, LIMIT_CYCLE, MASK, pairPeak, runBiquad, sampledPole, SWEEP_RUNS, SWEEP_VARIANTS,
+  warpedAt, prewarp, zeroSweep,
 } from '../dsp/iir';
 import { biquad } from '../lib/biquad';
 import { stats } from '../sim/stats';
 import { treeMul } from '../lib/muldiv';
 import {
   biquadCost, NEAR_CIRCLE, NEAR_INPUT, biquadScene, cycleScene, dbfs, designRows, bilinearWidget, firstStableWidth, limitCycleWidget, maskWidget, mulNands, narrowFilter, NARROW, orderData, orderWidget,
-  sensitivityWidget,
+  sensitivityWidget, SPLANE, sPlaneWidget,
 } from '../widgets/dspiir';
 import { heldPair, planeWidget } from '../widgets/dspzplane';
 import { directStable } from '../dsp/iir';
@@ -33,7 +34,7 @@ export const sweepOnce = once(() => cycleSweep());
 export const zeroSweepOnce = once(() => zeroSweep());
 const sig = (v: number) => v.toExponential(0).replace(/e\+?(-?\d+)/, ' × 10<sup>$1</sup>');
 
-/** The pole of step 3's centre: radius 0.97 at 0.04 cycles a sample, and a narrow one. */
+/** The pole of step 4's centre: radius 0.97 at 0.04 cycles a sample, and a narrow one. */
 export const RES = { r: 0.97, f: 0.04 };
 export const NARROW_POLE = { r: 0.99, f: 0.02 };
 export const held = (p: { r: number; f: number }, bits: number) => heldPair({ r: p.r, t: p.f * TAU }, bits);
@@ -53,12 +54,25 @@ export function sensitivity(): { direct: number; sections: number } {
 
 export { NEAR_CIRCLE, NEAR_INPUT };
 
+/** The s-plane step's numbers: the RC of its figure read at a tenth of, at and at ten times its corner; a pole pair's decay and growth; the figure's
+ * starting pair's peak; the Butterworth pair; one pole sampled once a second. */
+export function sNumbers() {
+  const RC = SPLANE.R * SPLANE.C, fc = 1 / (TAU * RC), rc = [{ re: -1 / RC, im: 0 }], at = (f: number) => 20 * Math.log10(analogGain(rc, [], TAU * f));
+  const bp = analogPrototype('butter', 2).p, pk = pairPeak(SPLANE.sigma, SPLANE.omega)!;
+  return {
+    RC, fc, pole: 1 / RC, low: at(fc / 10), corner: at(fc), high: at(fc * 10),
+    decay: Math.exp(-0.3 * 10), grow: Math.exp(0.1 * 10), quizGrow: Math.exp(0.2),
+    butter: bp[0], butterCorner: 20 * Math.log10(analogGain(bp, [], 1)),
+    peakAt: pk.at, peakDb: 20 * Math.log10(pk.gain), sampled: sampledPole({ re: -0.5, im: 0.5 }),
+  };
+}
+
 export const chIir: Chapter = {
   id: 'iir', num: numOf('iir'), title: 'IIR and stability', level: DSP_LEVEL,
-  blurb: 'What feedback buys and what it can break: the bilinear transform, poles that can only sit on a lattice, direct form against sections, a biquad in gates and a limit cycle it will not stop making, and how to order and scale sections.',
+  blurb: 'What feedback buys and what it can break: the s-plane and the bilinear transform, poles that can only sit on a lattice, direct form against sections, a biquad in gates and a limit cycle it will not stop making, and how to order and scale sections.',
   goals: [
     'say what a mask costs in multiplications as an FIR and as an IIR filter, and what the IIR gives up',
-    'design a low-pass from an analog prototype with the bilinear transform, and prewarp its edge',
+    'read an analog filter\'s poles in the s-plane, and carry a design over with the bilinear transform, prewarping its edge',
     'read the lattice of poles a coefficient word can hold, and tell when rounding puts a pole on the circle',
     'say why a high-order filter is built from second-order sections, with the numbers for one narrow filter',
     'find a limit cycle on a biquad in gates, and say what does and does not remove one',
@@ -83,7 +97,7 @@ export const chIir: Chapter = {
         why: ['', 'Butterworth is flat in both bands, and flatness is paid for in order: 37 against 8 here.', 'A window FIR needs a length inversely proportional to the transition width.', 'The multiplications follow from the order or length that the family needs, and families differ greatly.'],
       },
       {
-        question: 'A pole asked for at radius 0.97 is held in a 5-bit coefficient word, as in step 3. What does the register hold?',
+        question: 'A pole asked for at radius 0.97 is held in a 5-bit coefficient word, as in step 4. What does the register hold?',
         options: ['A pole pair exactly on the unit circle', 'A pole pair at radius 0.97, slightly off in angle', 'A double pole at z = 1', 'A pole pair outside the circle'],
         answer: 0,
         explain: 'a₂ = r² = 0.941 rounds to 1.0 at a step of 0.125, and a pair on the circle never decays. At 4 bits a₁ also reaches −2 and both roots are at z = 1.',
@@ -107,7 +121,7 @@ export const chIir: Chapter = {
         return `
         <p><a href="#/c/zplane/4">Poles make it ring</a>, a step of the z-plane chapter, showed what a pole pair buys: two multiplications for a sharpness that an FIR filter needs many taps for. Here it is worked on one specification: the mask that <a href="#/c/firdesign/0">chapter ${numOf('firdesign')}</a> met with symmetric taps, met again with feedback.</p>
         <p>The mask: pass to <strong>${MASK.fp}</strong> cycles a sample with ${MASK.rp} dB of ripple (peak to peak), stop from <strong>${MASK.fs}</strong> with at least ${MASK.rs} dB; the transition band is ${nf(MASK.fs - MASK.fp)} of the sample rate wide. The result first: the best IIR design, an elliptic one, needs <strong>${el.mults}</strong> multiplications a sample, ${nf(pm.mults / el.mults, 1)} times fewer than the shortest symmetric FIR filter that meets it, which needs ${pm.size} taps (${ka.size} by the window estimate), folded to ${pm.mults} and ${ka.mults} multiplications.</p>
-        <p>Three classical families of IIR design trade the shape of the ripple against the number of poles, the filter's <strong>order</strong>. <strong>Butterworth</strong> is flat in both bands, with no ripple at all, and needs the most; <strong>Chebyshev I</strong> ripples in the passband only; <strong>elliptic</strong> ripples in both bands and needs the fewest. A <strong>section</strong> is one biquad, two poles and two zeros, so an order-n filter takes about n / 2 of them. The three need an order of ${bu.size.match(/\d+/)![0]} (Butterworth), ${ch.size.match(/\d+/)![0]} (Chebyshev I) and ${el.size.match(/\d+/)![0]} (elliptic), built as ${bu.size.split(', ')[1]}, ${ch.size.split(', ')[1]} and ${el.size.split(', ')[1]}, at five multiplications each, as the biquad of step 5 is built. With a 16 × 16 signed multiplier at ${g(mul)} NANDs for each multiplication, that is ${g(el.mults * mul)} against ${g(pm.mults * mul)}.</p>
+        <p>Three classical families of IIR design trade the shape of the ripple against the number of poles, the filter's <strong>order</strong>. <strong>Butterworth</strong> is flat in both bands, with no ripple at all, and needs the most; <strong>Chebyshev I</strong> ripples in the passband only; <strong>elliptic</strong> ripples in both bands and needs the fewest. A <strong>section</strong> is one biquad, two poles and two zeros, so an order-n filter takes about n / 2 of them. The three need an order of ${bu.size.match(/\d+/)![0]} (Butterworth), ${ch.size.match(/\d+/)![0]} (Chebyshev I) and ${el.size.match(/\d+/)![0]} (elliptic), built as ${bu.size.split(', ')[1]}, ${ch.size.split(', ')[1]} and ${el.size.split(', ')[1]}, at five multiplications each, as the biquad of step 6 is built. With a 16 × 16 signed multiplier at ${g(mul)} NANDs for each multiplication, that is ${g(el.mults * mul)} against ${g(pm.mults * mul)}.</p>
         <p>The price is three-fold. The phase is not linear, which the z-plane chapter explained. The filter has a state that feeds back, so the word that is stored changes the answer. And the poles must stay inside the unit circle with only the coefficients a word can hold. The next steps take the last two in turn, after a way of finding the coefficients.</p>
         <div class="try">Click each IIR row. The Butterworth design touches the pass-band floor exactly; the other two spend their ripple. Compare the number of sections, then the NANDs column.</div>`;
       },
@@ -127,6 +141,43 @@ export const chIir: Chapter = {
         answer: 0,
         explain: 'Order 14 is seven sections, and a section has three numerator and two feedback coefficients: 7 × 5.',
         why: ['', 'That is the order, the number of poles. A section holds two poles and multiplies five times.', 'That would give each section ten multiplications.', 'That counts the 35 once more by five.'],
+      },
+    },
+    {
+      title: 'The analog picture: the s-plane',
+      get body() {
+        const n = sNumbers(), db = (v: number, d = 2) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(d), pc = Math.round(Math.exp(-1) * 100);
+        return `
+        <p>An analog filter has no samples to delay: it is a circuit. The plainest is a resistor into a capacitor, with the input x at the free end of the resistor and the output y taken across the capacitor. <a href="#/c/basics/1">A bucket of charge</a> showed how such a capacitor fills: fast at first, then slower as the voltage left to push it shrinks, ${Math.round((1 - Math.exp(-1)) * 100)} % of the way to a step in the time <strong>R · C</strong>; <a href="#/c/wire/0">the wire chapter</a> builds a wire's delay from the same pair. In symbols, <strong>RC · dy/dt + y = x</strong>, where dy/dt means how fast y is changing, in volts a second: the further y is from x, the more current flows and the faster y moves.</p>
+        <p>What does the circuit do to a signal? Try one signal and see. The one to try is <strong>e<sup>st</sup></strong>, with s = σ + jω a complex number: the turning arrow e<sup>jωt</sup> that <a href="#/c/zplane/2">A delay is z⁻¹</a> read frequencies with, made longer or shorter as time goes on by the factor e<sup>σt</sup>. e<sup>st</sup> has the property that its rate of change is s times itself, which is why it is the signal to try: put it in for x, and the output can only be e<sup>st</sup> again, multiplied by one number, <strong>H(s) = 1 / (1 + sRC)</strong>. That number is the analog filter's transfer function, and the plane of all values of s, the <strong>s-plane</strong>, does for an analog filter what the z-plane does for a digital one.</p>
+        <p><strong>The imaginary axis is the frequency response.</strong> A sine of frequency f is made of e<sup>j2πft</sup> and its mirror image, so putting <strong>s = j2πf</strong> into H(s) gives the gain and phase at f. With R = 10 kΩ and C = 10 nF, RC = ${Math.round(n.RC * 1e6)} µs, and the gain is ${db(n.low, 3)} dB at ${Math.round(n.fc / 10)} Hz, <strong>${db(n.corner)} dB at the corner f = 1 / 2πRC = ${g(Number(n.fc.toFixed(1)))} Hz</strong>, and ${db(n.high)} dB at ten times the corner. In the z-plane the frequencies walk round the unit circle; in the s-plane they climb the imaginary axis, from 0 to infinity.</p>
+        <p><strong>A pole's position is its decay.</strong> H(s) is infinite at s = −1 / RC = −${g(Math.round(n.pole))} s⁻¹: that is the circuit's pole, and its impulse response is e<sup>−t/RC</sup> (scaled by 1 / RC), down to ${pc} % of its start after each RC. In general a pole at s = σ + jω puts into the impulse response a term that rings as cos(ωt) inside the envelope e<sup>σt</sup>. Its distance from the axis, σ, is the decay: at σ = −0.3 s⁻¹ the envelope is down to ${n.decay.toFixed(3)} after 10 s, at σ = 0 it rings for ever, and at σ = +0.1 it has grown to ${n.grow.toFixed(3)}. Its height, ω, is how fast it rings. So <strong>an analog filter is stable when every pole is in the left half of the s-plane</strong>, as a digital one is when every pole is <a href="#/c/zplane/5">inside the unit circle</a>.</p>
+        <div class="dsp-scroll"><table class="dsp-table">
+          <tr><th></th><th>z-plane (digital)</th><th>s-plane (analog)</th></tr>
+          <tr><td>frequency response</td><td>on the unit circle, z = e<sup>j2πf</sup></td><td>on the imaginary axis, s = j2πf</td></tr>
+          <tr><td>a pole's term</td><td>rⁿ cos(θn)</td><td>e<sup>σt</sup> cos(ωt)</td></tr>
+          <tr><td>stable</td><td>inside the circle, r &lt; 1</td><td>left half-plane, σ &lt; 0</td></tr>
+          <tr><td>rings for ever</td><td>on the circle</td><td>on the axis</td></tr>
+        </table></div>
+        <p>The families of step 1 are designed here. A second-order Butterworth low-pass with its corner at 1 rad/s has its pole pair at ${db(n.butter.re, 4)} ± j${n.butter.im.toFixed(4)}: on a circle of radius 1, 45° either side of the negative axis, ${db(n.butterCorner)} dB at the corner. Chebyshev poles lie on an ellipse instead. The tables of analog design are tables of such positions, and the next step carries them over. Sampled every T seconds, e<sup>st</sup> becomes (e<sup>sT</sup>)ⁿ, so a pole at s becomes one at z = e<sup>sT</sup>: <strong>σ becomes a radius and ω an angle</strong>. A pole at −0.5 + j0.5 with T = 1 s lands at radius ${n.sampled.r.toFixed(3)} and ${n.sampled.f.toFixed(4)} cycles a sample. Moving each pole that way is called impulse invariance; the bilinear transform of the next step is another way of making the move, for a whole filter at once.</p>
+        <div class="try">Drag the upper pole from left to right across the axis (or move σ): the impulse response goes from a fading ring to a steady one to a growing one, and the cross turns red as it crosses. Then press <em>Butterworth 2</em> and raise the corner: the gain's −3 dB point moves up with it.</div>
+        <div class="try">Press <em>RC</em>: one real pole at −1 / RC, −1 in the plane's units of 10 000 s⁻¹. Set C from 10 to 5 nF and it moves twice as far left: twice the corner, half the time constant.</div>`;
+      },
+      widget: sPlaneWidget,
+      get more() {
+        const n = sNumbers();
+        return {
+          derive: `<p>Put x = e<sup>st</sup> and try y = H · e<sup>st</sup>. The rate of change of e<sup>at</sup> is a · e<sup>at</sup> for any constant a, complex ones included, so dy/dt = s · H · e<sup>st</sup> and the equation reads RC · s · H · e<sup>st</sup> + H · e<sup>st</sup> = e<sup>st</sup>: H = 1 / (1 + sRC). On the axis, |H(j2πf)| = 1 / √(1 + (2πf · RC)²); at the corner 2πf · RC = 1 and |H| = 1 / √2, which is ${(20 * Math.log10(Math.SQRT1_2)).toFixed(2).replace('-', '−')} dB. A circuit with more capacitors gives a ratio of polynomials in s, and its poles are the roots of the one below the line.</p>
+            <p>For a pole pair σ ± jω, scaled to a gain of 1 at s = 0, the impulse response is (|p|² / ω) · e<sup>σt</sup> sin(ωt); the figure computes any set of poles as Σ rᵢ e<sup>pᵢt</sup>, with rᵢ = ∏(−p) / ∏<sub>j≠i</sub>(pᵢ − pⱼ). The pair's gain peaks at √(ω² − σ²) when ω &gt; |σ|, by |p|² / (2|σ|ω): +${n.peakDb.toFixed(2)} dB at ${n.peakAt.toFixed(3)} rad/s for the figure's −0.3 ± j2.</p>
+            <p>Sampled every T, e<sup>s·nT</sup> = (e<sup>sT</sup>)ⁿ, so the term is zⁿ with z = e<sup>sT</sup>: |z| = e<sup>σT</sup>, and the angle is ωT radians, ωT / 2π cycles a sample. The bilinear transform replaces e<sup>sT</sup> by (1 + sT/2) / (1 − sT/2), which at T = 1 is (2 + s) / (2 − s): it keeps the axis on the circle and the left half inside, but spaces the frequencies differently, which is the squeeze the next step corrects.</p>`,
+        };
+      },
+      challenge: {
+        kind: 'quiz', question: 'An analog filter has a pole pair at +0.2 ± j3 s⁻¹. What does its impulse response do?',
+        get options() { return [`It rings at 3 rad/s, growing ${sNumbers().quizGrow.toFixed(2)} times each second: unstable`, 'It rings at 3 rad/s and fades, since the pole is close to the axis', 'It fades without ringing', 'It rings for ever at a constant size']; },
+        answer: 0,
+        explain: 'The real part σ = +0.2 sets the envelope e<sup>0.2t</sup>, which grows by e<sup>0.2</sup> = 1.22 a second; the height 3 is the ringing rate in rad/s. A pole right of the axis means an unstable filter.',
+        why: ['', 'Close to the axis is slow decay only on the left side; at σ = +0.2 the envelope grows.', 'A pair off the real axis always rings, at its height ω.', 'That is a pair on the axis, σ = 0.'],
       },
     },
     {
@@ -157,7 +208,7 @@ export const chIir: Chapter = {
         <p>A second-order section is y[n] = b₀x[n] + b₁x[n−1] + b₂x[n−2] − a₁y[n−1] − a₂y[n−2]. A pole pair at radius r and angle θ means a₁ = −2r cos θ and a₂ = r². In a register those two are not real numbers: they are multiples of a step. The coefficient format used from here on is <strong>Q2.(b−2)</strong>, a word of b bits whose step is 2<sup>−(b−2)</sup> and whose range is −2 up to 2 minus a step. So <strong>the poles a section can have are the roots for the coefficient pairs on this lattice</strong>, and nothing else. The dots in the picture are those poles, for words of up to 6 bits.</p>
         <p>Look at where they thin out. A step in a₂ moves the radius by about step / 2r, wherever the pole is. A step in a₁ moves the angle by about step / (2r sin θ), which grows as θ falls: the lattice is sparsest near z = 1, which is exactly where a narrow low-pass filter needs its poles. For the pole asked for below, r = ${r} at ${RES.f} cycles a sample, a 6-bit word has neighbouring poles ${nf(S / (2 * r), 3)} apart in radius and ${nf(S / (2 * r * Math.sin(th)) / TAU, 3)} cycles in angle: half of the angle asked for.</p>
         <p>The register takes the nearest values of a₁ and a₂, not the nearest pole. At 6 bits that holds radius ${nf(k6.radius, 3)} for the ${r} asked. At 5 bits, a₂ = ${nf(k6.asked.a2)} rounds to ${nf(k5.a2)}: the pole is <strong>on the circle</strong>, radius ${nf(k5.radius)}, and never stops ringing. At 4 bits, a₁ rounds to ${nf(k4.a1)} too and both roots sit at z = 1${k4.state === 'unstable' ? ', a double pole whose response grows' : ''}. The filter whose designer asked for a fast decay now has an oscillator.</p>
-        <p>The test for a section is exact and needs no root finder: it is stable when |a₂| < 1 and |a₁| < 1 + a₂, a triangle in the coefficient plane, and a pair of words is inside it or not, checked exactly on the integers. Both inequalities are strict: a₂ = 1 is a pair on the circle, which is not stable. The gates of step 5 are one such section, with its coefficients on pins, so any pair of words from this lattice can be loaded into it.</p>
+        <p>The test for a section is exact and needs no root finder: it is stable when |a₂| < 1 and |a₁| < 1 + a₂, a triangle in the coefficient plane, and a pair of words is inside it or not, checked exactly on the integers. Both inequalities are strict: a₂ = 1 is a pair on the circle, which is not stable. The gates of step 6 are one such section, with its coefficients on pins, so any pair of words from this lattice can be loaded into it.</p>
         <div class="try">Press <em>Resonator</em> and take the word down: radius ${k6.radius.toFixed(3)} at 6 bits, then ${nf(k5.radius)} at 5, and a double root at z = 1 at 4. Then press <em>Narrow</em> (r = ${NARROW_POLE.r} at ${NARROW_POLE.f}) and find the shortest word that keeps it stable: ${nar} bits. At ${nar - 1} bits the words land exactly on the triangle's other edge, a₁ = −(1 + a₂): a root at z = 1, still not stable.</div>`;
       },
       widget: () => planeWidget({
@@ -188,7 +239,7 @@ export const chIir: Chapter = {
         <p>A sixth-order filter has six poles, and you may build it as one polynomial of degree six, 13 coefficients in all, or as three biquads. They compute the same function in exact arithmetic. This one is a narrow elliptic low-pass: pass edge ${NARROW.f} cycles a sample, ${NARROW.rp} dB, ${NARROW.rs} dB, so its poles crowd close to z = 1, at radii ${nf(Math.min(...radii), 2)} to ${nf(Math.max(...radii), 3)}.</p>
         <p>Round each coefficient to a word of b bits (the largest of them sets how many bits go before the point) and look at the poles. As one polynomial the filter is <strong>unstable at every width from ${un[0]} to ${un[un.length - 1]} bits</strong> and stable from ${first} up to 32. As three sections it is stable at every width from 8 bits up. The responses are in the plot: where the direct form (one polynomial, the coefficients as written) is stable at all, it takes many bits to look like the ideal.</p>
         <p>The reason is the geometry of roots. To first order, a change δ in one coefficient moves a pole by δ × 1 / ∏|pᵢ − pⱼ|, the distances to the other poles. Poles in a tight cluster have small distances and the product is tiny. For the worst pole of this filter the factor is about ${sig(sen.direct)}, so one unit in the last place moves it by as much as that many units. In a section, each pair depends on two coefficients and on its own spacing alone, 1 / (2 Im p): about ${about(sen.sections)} at worst, about ${about(sen.direct / sen.sections)} times smaller.</p>
-        <p>Sections cost two multiplications more than the polynomial (${3 * 5} against 13), and in exchange the design can be checked one pair at a time, as step 3 did. A cascade of second-order sections is a common way to build a high-order IIR filter (lattice and wave-digital structures are others, left out here). It is also why step 1 counted every design of the mask in sections.</p>
+        <p>Sections cost two multiplications more than the polynomial (${3 * 5} against 13), and in exchange the design can be checked one pair at a time, as step 4 did. A cascade of second-order sections is a common way to build a high-order IIR filter (lattice and wave-digital structures are others, left out here). It is also why step 1 counted every design of the mask in sections.</p>
         <div class="try">Slide the word from 8 to 32 bits. Find the first width at which the direct form is stable, and look at its response there: it is stable, and is it right? Then look at the sections at 8 bits.</div>`;
       },
       widget: sensitivityWidget,
@@ -205,7 +256,7 @@ export const chIir: Chapter = {
       get body() {
         const c = biquadCost(), mul = c.mul;
         return `
-        <p>Here is one section, built to the format of step 3. It is <strong>direct form I</strong>: the four REG16 delay registers hold the last two inputs x[n−1] and x[n−2] and the last two <em>outputs</em> y[n−1] and y[n−2] (the multipliers are named by their products, b₀ x[n] and so on, when the drawing is large enough to show names). The data are Q1.15 words and the coefficients, which are input pins here, Q2.14.</p>
+        <p>Here is one section, built to the format of step 4. It is <strong>direct form I</strong>: the four REG16 delay registers hold the last two inputs x[n−1] and x[n−2] and the last two <em>outputs</em> y[n−1] and y[n−2] (the multipliers are named by their products, b₀ x[n] and so on, when the drawing is large enough to show names). The data are Q1.15 words and the coefficients, which are input pins here, Q2.14.</p>
         <p>The sum of products goes through <span data-show="mb0 mb1 mb2 ma1 ma2">five signed multipliers</span> (the MUL16 boxes), ${g(mul)} NANDs each, the 16 × 16 tree multiplier of the multiplication chapter, giving 32-bit Q3.29 products. Five of them are summed in <span data-show="sum01 sumA sum012 acc">four 35-bit ripple adders</span> (ADD35): the 32 bits of a product and ${BQ.accW - BQ.prod} guard bits, the log₂ 5 of <a href="#/c/fixed/5">the guard-bit rule</a>. The feedback terms are subtracted by inverting their sum (the NOT box) and adding one, rather than by negating a₁: −2 is a legal a₁, and Q2.14 has no +2 to negate it to. Every bit of every product is kept.</p>
         <p>There is one rounding, <span data-show="round">after the sum</span> (the ROUND box): the fourteen low bits come off and the first one dropped is added back, round half up. And there is one clamp, <span data-show="clamp">the saturating clamp</span> (CLAMP) of <a href="#/c/fixed/2">Numbers that fit</a>, widened to look at the top six bits instead of two. A filter whose poles are on the circle can drive the sum off the end, so the clamp stays, and its <code>sat</code> output says when it has acted.</p>
         <p>The whole block is ${g(c.nands)} NANDs, of which ${g(5 * mul)} are multipliers. Static timing gives ${c.depth} NAND delays from one clock edge to the next: a multiplier, then the sum of five products, three of the four adders in a row (with an inverter on the feedback side), then the rounder and the clamp. Below, an input goes into the gates and into the model, and every output of the gates is compared with the model's at every clock.</p>
@@ -251,7 +302,7 @@ export const chIir: Chapter = {
         return `
         <p>Not the accumulator. It is already exact: every bit of every product is added, and the one rounding comes after the sum. A wider accumulator would hold a longer number and then round it just the same. What sustains the cycle is that the <em>rounded</em> output is what the filter feeds back.</p>
         <p>The model can try the alternatives, run for run on the same inputs. The search below has ${SWEEP_RUNS} cases: pole radius 0.90, 0.93, 0.95 and 0.97 as asked (the words round them), eleven angles from 0.02 to 0.45 cycles a sample, input words of 8000 and 30000, bursts of 1 and 3 samples, then silence for 800 clocks. How many end in a repeating non-zero output, with ${SWEEP_VARIANTS.map((v, i) => `${v.name}: <strong>${row(i)}</strong>`).join('; ')}.</p>
-        <p>Rounding toward zero ends with no cycle in any of these. That is a proof only for a₁ = 0 (step 6); for a₁ ≠ 0 it is what this sweep found, and a finer sweep (in the layer below) shows where it stops holding. Up to 0.975, ${zlowCyc} of ${zlowRuns} ended in a cycle; from 0.98 a few did. Floor, the cheapest rounding there is, removes about two thirds of the cycles (${sw.cycling[0]} to ${sw.cycling[1]} of ${sw.runs}) and leaves the rest.</p>
+        <p>Rounding toward zero ends with no cycle in any of these. That is a proof only for a₁ = 0 (step 7); for a₁ ≠ 0 it is what this sweep found, and a finer sweep (in the layer below) shows where it stops holding. Up to 0.975, ${zlowCyc} of ${zlowRuns} ended in a cycle; from 0.98 a few did. Floor, the cheapest rounding there is, removes about two thirds of the cycles (${sw.cycling[0]} to ${sw.cycling[1]} of ${sw.runs}) and leaves the rest.</p>
         <p>Listen for it. The button plays the cycle alone, from the model, scaled up to the player's level, so what you hear is far louder than ${nf(dbfs(deadBand(LIMIT_CYCLE.words.a2) | 0), 0)} dBFS. The level is on the screen beside it.</p>
         <div class="try">With the defaults (radius 0.95, angle 0.25, half up) read the cycle. Switch to Toward zero: it dies. Switch back, raise the extra bits to 4: it dies, and at 2 it lives, at 1 LSB. Then press <em>Near the circle</em>, which selects toward zero: it sustains. The dead-band chip reads a number only for a₁ = 0 (angle 0.25), and says so otherwise.</div>`;
       },

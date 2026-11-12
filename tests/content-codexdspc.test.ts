@@ -82,7 +82,7 @@ describe('group C: iir', () => {
     expect(z(0, 0)).toEqual([1, 0]);
     expect(z(0, 2)).toEqual([0, 1]);
     quotes('bilinear', '0.0969', '0.286', '1.453', '1.257', '0.179', '0.628', '2.513', '0.2π', 'z = (2 + s) / (2 − s)');
-    says('iir', 1, `${warpedAt(TAU * 0.4).toFixed(3)}`);
+    says('iir', 2, `${warpedAt(TAU * 0.4).toFixed(3)}`);
   });
   it('biquad: the section in gates', () => {
     const n = nands(biquad()), m = mul16(), c0 = biquadCost();
@@ -98,7 +98,7 @@ describe('group C: iir', () => {
     expect(coefWord(0.95 ** 2)).toBe(14787);
     expect(LIMIT_CYCLE.words.a2).toBe(14787);
     quotes('biquad', c(n), c(m), '17,860', '2,453', c(c0.depth), '35 bits', '88 %', '14,787', '0.9025', '0.95');
-    says('iir', 4, c(n).replace(/,/g, ' '));
+    says('iir', 5, c(n).replace(/,/g, ' '));
   });
   it('coefficient sensitivity: the lattice and the narrow filter', () => {
     const k6 = held(RES, 6), k5 = held(RES, 5), k4 = held(RES, 4);
@@ -120,8 +120,8 @@ describe('group C: iir', () => {
     expect(Math.round(s.direct / s.sections / 10) * 10).toBe(470);
     expect(3 * 5 - 13).toBe(2);
     quotes('coefsens', '0.057', '0.968', '−1.875', '0.9375', '0.9409', '3,021', '6.5', '470', '8 … 19', 'from 20', '0.97', '0.04', '1/16', '1/8', '1/4');
-    says('iir', 2, `radius ${k5.radius.toFixed(3)}`);
-    says('iir', 3, `${un[0]} to ${un[un.length - 1]} bits`);
+    says('iir', 3, `radius ${k5.radius.toFixed(3)}`);
+    says('iir', 4, `${un[0]} to ${un[un.length - 1]} bits`);
   });
   it('limit cycle: the cycle and the sweeps', () => {
     const w = LIMIT_CYCLE.words, ys = runBiquad(w, burstThenSilence(LIMIT_CYCLE.amp, LIMIT_CYCLE.burst, 800)), cy = findCycle(ys, 16)!;
@@ -146,8 +146,8 @@ describe('group C: iir', () => {
     expect([at(0.98).cycling, at(0.99).cycling, at(0.995).cycling]).toEqual([2, 1, 1]);
     for (const r of [0.9, 0.93, 0.95, 0.97, 0.975]) expect(at(r).cycling).toBe(0);
     quotes('limitcycle', '14,787', '5, 0, −5, 0', '5.13', '8,000', '4.51', '0.9025', '176', '59', '22', '294', '87', '−76 dBFS', '0.975', '0.98', '0.995', '3.61', '5.4');
-    says('iir', 5, '5, 0, -5, 0');
-    says('iir', 6, '0.975');
+    says('iir', 6, '5, 0, -5, 0');
+    says('iir', 7, '0.975');
   });
 });
 

@@ -26,7 +26,7 @@ y[n] = x[n] + 1.5 y[n−1] − 0.7 y[n−2]:  z² − 1.5z + 0.7 = 0
       { chapter: 'zplane', step: 4, label: 'Poles make it ring' },
       { chapter: 'zplane', step: 5, label: 'Inside the circle' },
       { chapter: 'iir', step: 0, label: 'What feedback buys' },
-      { chapter: 'iir', step: 3, label: 'One polynomial or small sections' },
+      { chapter: 'iir', step: 4, label: 'One polynomial or small sections' },
     ],
   },
   bilinear: {
@@ -46,7 +46,7 @@ edge asked 0.2, prewarped: 2 tan(0.2π) = 1.453 → lands at 0.2
       'Expecting the digital filter to have the analog filter\'s shape out to Nyquist. The shape is compressed: all of frequency to infinity fits into half a turn.',
       'Using the map with the wrong constant. z = (2 + s) / (2 − s) is for one sample a second; for a rate fs the prototype is scaled by 2 fs tan(π f / fs).',
     ],
-    chapters: [{ chapter: 'iir', step: 1, label: 'From an analog filter to a digital one' }],
+    chapters: [{ chapter: 'iir', step: 2, label: 'From an analog filter to a digital one' }],
   },
   biquad: {
     idea: `A <b>biquad</b> is the second-order IIR section, y[n] = b₀x[n] + b₁x[n − 1] + b₂x[n − 2] − a₁y[n − 1] − a₂y[n − 2]: two zeros, two poles, five multiplications. Any filter of higher order factors into such sections, and a pole pair is exactly what two coefficients hold: a₁ = −2r cos θ and a₂ = r². The section is stable inside a triangle of the coefficient plane, |a₂| &lt; 1 and |a₁| &lt; 1 + a₂, which can be checked exactly on the integers.<br><br>In gates the chapter builds direct form I: four delay registers hold the last two inputs and the last two outputs, five signed multipliers form the products, and four adders sum them into an accumulator that keeps every product bit and adds log₂ 5 → 3 guard bits to the 32 of a product, 35 in all. There is one rounding, after the sum, and one saturating clamp, because a filter with poles on the circle can drive the sum off the end. Data are Q1.15 and the coefficients Q2.14, so the word −2 is a legal a₁.`,
@@ -65,9 +65,9 @@ radius 0.95 at a quarter rate: a₁ = 0, a₂ = round(0.9025 × 2¹⁴) = 14 7
       'Counting the section as two coefficients. It has five multiplications; the numerator is symmetric in many designs (b₀ = b₂), which a folded structure could use to spend four.',
     ],
     chapters: [
-      { chapter: 'iir', step: 3, label: 'One polynomial or small sections' },
-      { chapter: 'iir', step: 4, label: 'A biquad in gates' },
-      { chapter: 'iir', step: 7, label: 'Sections in a cascade' },
+      { chapter: 'iir', step: 4, label: 'One polynomial or small sections' },
+      { chapter: 'iir', step: 5, label: 'A biquad in gates' },
+      { chapter: 'iir', step: 8, label: 'Sections in a cascade' },
     ],
   },
   coefsens: {
@@ -92,8 +92,8 @@ narrow elliptic filter (order 6), coefficients rounded:
       'Adding bits to the data to cure it. The feedback coefficients\' step sets the pole lattice; a wider data path leaves the lattice as sparse as it was.',
     ],
     chapters: [
-      { chapter: 'iir', step: 2, label: 'Where a pole is allowed to sit' },
-      { chapter: 'iir', step: 3, label: 'One polynomial or small sections' },
+      { chapter: 'iir', step: 3, label: 'Where a pole is allowed to sit' },
+      { chapter: 'iir', step: 4, label: 'One polynomial or small sections' },
     ],
   },
   limitcycle: {
@@ -118,8 +118,8 @@ sweep, 176 runs (radius 0.90 … 0.97, 11 angles, 2 inputs, 2 bursts):
       'Confusing it with overflow. The cycle is a few LSB (5, 0, −5, 0); overflow is the clamp acting, a different failure with its own flag.',
     ],
     chapters: [
-      { chapter: 'iir', step: 5, label: 'A limit cycle on the gates' },
-      { chapter: 'iir', step: 6, label: 'What removes a limit cycle' },
+      { chapter: 'iir', step: 6, label: 'A limit cycle on the gates' },
+      { chapter: 'iir', step: 7, label: 'What removes a limit cycle' },
     ],
   },
   decimation: {
