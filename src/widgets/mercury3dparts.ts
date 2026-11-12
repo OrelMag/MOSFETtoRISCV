@@ -21,7 +21,8 @@ export const OD_M = 1 * INCH_M;
  */
 export const SOUND_20C = 1451, SOUND_DT = -0.46;
 export const soundAt = (celsius: number): number => SOUND_20C + SOUND_DT * (celsius - 20);
-/** EDSAC's tanks were held at 40 °C (TNMOC, "Delay line storage in EDSAC"), so this is the operating point. */
+/** The operating point: 40 °C is the figure secondary sources give for heated mercury lines in general (Wikipedia, "Delay-line memory",
+ *  uncited); no primary EDSAC source we could read states the temperature (the 1948 report only says all tanks must be at one temperature). */
 export const TANK_C = 40;
 export const SOUND_M_S = soundAt(TANK_C);
 /** The carrier a pulse modulates: 13.5 Mc/s (report, 3.1). */
