@@ -228,14 +228,17 @@ export function regfile(k: number, w: number, zero = true, reads: 2 | 3 = 2, gat
     );
     if (reads === 3) nets.push({ name: 'ra3', ends: ['ra3', 'rp3.sel'], via: { 'rp3.sel': [[sel3x, bottom + 8]] } }, { name: 'rd3', ends: ['rp3.y', 'rd3'] });
     const outX = xP + rpg.w + 6;
+    // Without a hard-wired zero it is the f registers only when it has the FMA's third read port: the other callers (a data
+    // memory, a vector lane's slice) hold integers.
+    const fp = !zero && reads === 3;
     return define({
-      id: `regfile${N}x${w}${zero ? '' : '_f'}${reads === 3 ? '_3r' : ''}${gated ? '_g' : ''}`, name: `${zero ? 'Register file' : 'Floating-point register file'} (${N} × ${w}${reads === 3 ? ', 3 read ports' : ''}${gated ? ', clock-gated' : ''})`, category: 'memory',
-      summary: `${N} registers of ${w} bits${zero ? '; x0 always reads 0' : ' (f0 is an ordinary register)'}. ${reads === 3 ? 'Three read ports (fused multiply-add reads three operands)' : 'Two read ports (two operands per instruction)'} and one write port, all in one cycle.`,
+      id: `regfile${N}x${w}${zero ? '' : '_f'}${reads === 3 ? '_3r' : ''}${gated ? '_g' : ''}`, name: `${zero ? 'Register file' : fp ? 'Floating-point register file' : 'Register file without a hard-wired zero'} (${N} × ${w}${reads === 3 ? ', 3 read ports' : ''}${gated ? ', clock-gated' : ''})`, category: 'memory',
+      summary: `${N} registers of ${w} bits${zero ? '; x0 always reads 0' : fp ? ' (f0 is an ordinary register)' : ' (register 0 is an ordinary register)'}. ${reads === 3 ? 'Three read ports (fused multiply-add reads three operands)' : 'Two read ports (two operands per instruction)'} and one write port, all in one cycle.`,
       ports: [
         bus('wa', k, 'in'), bus('ra1', k, 'in'), bus('ra2', k, 'in'), ...(reads === 3 ? [bus('ra3', k, 'in')] : []), bus('wd', w, 'in'), bit('we', 'in'),
         bit('clk', 'in', 'bottom', true), bus('rd1', w, 'out'), bus('rd2', w, 'out'), ...(reads === 3 ? [bus('rd3', w, 'out')] : []),
       ],
-      symbol: { kind: 'box', label: zero ? 'REGISTERS' : 'FP REGISTERS' },
+      symbol: { kind: 'box', label: fp ? 'FP REGISTERS' : 'REGISTERS' },
       netlist: () => ({
         pins: {
           wa: [0, dAt[1] + dg.ports.a.pos[1]], we: [0, dAt[1] + dg.ports.en.pos[1]],
