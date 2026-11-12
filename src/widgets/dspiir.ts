@@ -178,6 +178,7 @@ export function sPlaneWidget(): Widget {
     gain = plotOf({ W: 320, H: 190, x: [0, rc ? 20 : 5], y: rc ? [-30, 3] : [-40, 30], yTicks: rc ? [-30, -20, -10, -3, 0] : [-40, -20, 0, 20], xLabel: rc ? 'frequency, kHz' : 'ω, rad/s', yLabel: 'gain, dB', aria: 'The gain along the imaginary axis' });
     plotBox.replaceChildren(h('figure', null, imp.el, h('figcaption', null, 'impulse response')), h('figure', null, gain.el, h('figcaption', null, 'gain along the axis, s = jω')));
   };
+  const mn = (v: number, d = 1) => num(v, d).replace(/^-/, "−");
   const paint = () => {
     const P = poles(), rc = mode === 'rc', u = rc ? 1e4 : 1, w = win();
     planeBox.replaceChildren(planeSvg(P.map((q) => ({ re: q.re / u, im: q.im / u })), [], w, false, 'The s-plane with the poles: stable left of the vertical axis', 260, 260, true),
@@ -193,21 +194,21 @@ export function sPlaneWidget(): Widget {
     }
     if (mode === 'pair') {
       const left = Math.exp(10 * sigma), pk = pairPeak(sigma, omega);
-      chips.set(0, `${num(sigma, 2)} ± j${num(omega, 2)}`, 'the pole pair, in s⁻¹: σ ± jω');
-      chips.set(1, sigma < 0 ? `${num(left * 100, 1)} %` : sigma === 0 ? '100 %' : `× ${num(left, 2)}`, sigma < 0 ? 'of its size left after 10 s, e^(10σ)' : sigma === 0 ? 'left after 10 s: on the axis it rings for ever' : 'grown in 10 s, e^(10σ)');
+      chips.set(0, `${mn(sigma, 2)} ± j${mn(omega, 2)}`, 'the pole pair, in s⁻¹: σ ± jω');
+      chips.set(1, sigma < 0 ? `${mn(left * 100, 1)} %` : sigma === 0 ? '100 %' : `× ${mn(left, 2)}`, sigma < 0 ? 'of its size left after 10 s, e^(10σ)' : sigma === 0 ? 'left after 10 s: on the axis it rings for ever' : 'grown in 10 s, e^(10σ)');
       chips.set(2, sigma < 0 ? 'stable' : sigma === 0 ? 'on the axis' : 'unstable', sigma < 0 ? 'left of the axis' : sigma === 0 ? 'never decays' : 'right of the axis: it grows', sigma < 0 ? '' : 'bad');
-      chips.set(3, unstable ? 'none' : pk ? `+${num(dB(pk.gain), 2)} dB` : 'no peak', unstable ? 'no steady gain: the response grows without bound' : pk ? `peak gain, at ${num(pk.at, 3)} rad/s (1 at ω = 0)` : 'the gain only falls: σ is too far left for ω');
+      chips.set(3, unstable ? 'none' : pk ? `+${mn(dB(pk.gain), 2)} dB` : 'no peak', unstable ? 'no steady gain: the response grows without bound' : pk ? `peak gain, at ${mn(pk.at, 3)} rad/s (1 at ω = 0)` : 'the gain only falls: σ is too far left for ω');
     } else if (rc) {
       const fc = 1 / (TAU * R * C), at = (f: number) => dB(analogGain(P, [], TAU * f));
       chips.set(0, `−${grouped(Math.round(1 / (R * C)))} s⁻¹`, 'the pole, at −1 / RC');
-      chips.set(1, `${num(R * C * 1e6, 1)} µs`, 'RC, the time constant: 63 % after it');
-      chips.set(2, `${num(fc, 1)} Hz`, `the corner, 1 / 2πRC: ${num(at(fc), 2)} dB`);
-      chips.set(3, `${num(at(fc / 10), 3)} / ${num(at(fc * 10), 2)} dB`, 'at a tenth of the corner and at ten times it');
+      chips.set(1, `${mn(R * C * 1e6, 1)} µs`, 'RC, the time constant: 63 % after it');
+      chips.set(2, `${mn(fc, 1)} Hz`, `the corner, 1 / 2πRC: ${mn(at(fc), 2)} dB`);
+      chips.set(3, `${mn(at(fc / 10), 3)} / ${mn(at(fc * 10), 2)} dB`, 'at a tenth of the corner and at ten times it');
     } else {
       const q = P[0];
-      chips.set(0, `${num(q.re, 4)} ± j${num(Math.abs(q.im), 4)}`, 'the Butterworth pair, in s⁻¹');
-      chips.set(1, `${num(cabs(q), 3)}`, 'its distance from 0, the corner in rad/s, at 45° either side of the negative axis');
-      chips.set(2, `${num(dB(analogGain(P, [], wc)), 2)} dB`, 'the gain at the corner');
+      chips.set(0, `${mn(q.re, 4)} ± j${mn(Math.abs(q.im), 4)}`, 'the Butterworth pair, in s⁻¹');
+      chips.set(1, `${mn(cabs(q), 3)}`, 'its distance from 0, the corner in rad/s, at 45° either side of the negative axis');
+      chips.set(2, `${mn(dB(analogGain(P, [], wc)), 2)} dB`, 'the gain at the corner');
       chips.set(3, 'stable', 'left of the axis, for any corner');
     }
     for (const [k, b] of Object.entries(btns)) b.setAttribute('aria-pressed', String(k === mode));
