@@ -122,3 +122,65 @@ export function randomCodeError(n: number, k: number, ebn0Db: number, trials: nu
 export const capacityAt = (pn0: number, hz: number): number => hz * Math.log2(1 + pn0 / hz);
 /** Its limit with bandwidth unbounded: more band does not help past this. */
 export const capacityCeiling = (pn0: number): number => pn0 / Math.LN2;
+
+// ---- the bell curve and its tail (chapter noise, "The bell curve and its tail") -------------------------------------------------------
+
+/** Unit normal samples from one seeded stream: a prefix of it is a smaller run, so a histogram settles as the count grows. */
+export const BELL_SAMPLES = 20000;
+export const TAIL_SAMPLES = 200000;
+const BELL_SEED = 5;
+let bell: Float64Array | null = null, tail: Float64Array | null = null;
+const draw = (n: number): Float64Array => { const u = rng(BELL_SEED), z = new Float64Array(n); for (let i = 0; i < n; i++) z[i] = gaussian(u); return z; };
+/** The first BELL_SAMPLES draws (the histogram's), and the first TAIL_SAMPLES (the tail count's; the first 20 000 are the same numbers). */
+export const bellSamples = (): Float64Array => (bell ??= draw(BELL_SAMPLES));
+export const tailSamples = (): Float64Array => (tail ??= draw(TAIL_SAMPLES));
+
+/** Counts per bin of σ·z over the first `n` samples, `bins` bins across ±span (samples outside are left out). */
+export function bellHistogram(n: number, sigma: number, bins: number, span: number): number[] {
+  const z = bellSamples(), c = new Array<number>(bins).fill(0);
+  for (let i = 0; i < n; i++) { const b = Math.floor(((sigma * z[i] + span) / (2 * span)) * bins); if (b >= 0 && b < bins) c[b]++; }
+  return c;
+}
+/** Root mean square of σ·z over the first n samples: the σ the histogram measures. */
+export function bellRms(n: number, sigma: number): number {
+  const z = bellSamples(); let m = 0;
+  for (let i = 0; i < n; i++) m += z[i] * z[i];
+  return sigma * Math.sqrt(m / n);
+}
+/** The share of the first n samples within ±k σ, and the closed form 1 − 2 Q(k). */
+export function withinShare(n: number, k: number): number {
+  const z = bellSamples(); let w = 0;
+  for (let i = 0; i < n; i++) if (Math.abs(z[i]) <= k) w++;
+  return w / n;
+}
+export const withinSigmas = (k: number): number => 1 - 2 * qFunc(k);
+/** How many of the first `n` unit samples lie beyond `d` (one tail). */
+export function tailHits(n: number, d: number): number {
+  const z = tailSamples(); let h = 0;
+  for (let i = 0; i < n; i++) if (z[i] > d) h++;
+  return h;
+}
+/** The unit Gaussian density at x. */
+export const bellDensity = (x: number): number => Math.exp(-x * x / 2) / Math.sqrt(2 * Math.PI);
+
+/** One row of the tail table: k σ of margin, its Q, "one in 1/Q", and the seconds between errors at `rate` decisions a second. */
+export interface QRow { k: number; q: number; oneIn: number; every: number }
+export const qRow = (k: number, rate = 1e9): QRow => { const q = qFunc(k); return { k, q, oneIn: 1 / q, every: 1 / q / rate }; };
+export const Q_ROWS: readonly QRow[] = [1, 2, 3, 4, 5, 6, 7].map((k) => qRow(k));
+/** A time in seconds in the unit that reads best: ns, µs, ms, s, minutes. */
+export function everyText(sec: number): string {
+  const g = (v: number) => (v >= 100 ? v.toFixed(0) : v.toPrecision(2)).replace(/\.0$/, '');
+  if (sec < 1e-6) return `${g(sec * 1e9)} ns`;
+  if (sec < 1e-3) return `${g(sec * 1e6)} µs`;
+  if (sec < 1) return `${g(sec * 1e3)} ms`;
+  if (sec < 60) return `${g(sec)} s`;
+  return `${g(sec / 60)} minutes`;
+}
+/** "one in N", spelled the way the table prints it: plain below 10 000, thousands separated, millions and billions in words. */
+export function oneInText(x: number): string {
+  if (x < 100) return x.toPrecision(2).replace(/\.0$/, '');
+  if (x < 1e6) return Math.round(x).toLocaleString('en-US').replace(/,/g, ' ');
+  if (x < 1e9) return `${(x / 1e6).toFixed(1)} million`;
+  if (x < 1e11) return `${(x / 1e9).toFixed(1)} billion`;
+  return `${(x / 1e11).toFixed(1)} × 10¹¹`;
+}

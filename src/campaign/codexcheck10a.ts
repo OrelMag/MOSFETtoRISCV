@@ -67,6 +67,22 @@ export const CHECK10A: Record<string, Quiz[]> = {
       why: ['', 'Resonance is one way to build such a response; the description holds for any linear channel.', 'Any signal can be sent; it is simply described as a sum of sines.', 'A channel carries signals in time; frequency is the most convenient way to describe what it does to them.'],
     },
   ],
+  complex: [
+    {
+      question: 'An arrow of length 2 at 30° is multiplied by an arrow of length 3 at 40°. What is the product?',
+      options: ['An arrow of length 6 at 70°: the lengths multiply and the angles add', 'An arrow of length 5 at 70°: both add', 'An arrow of length 6 at 1200°: both multiply', 'An arrow of length 6 at −10°: the angles subtract'],
+      answer: 0,
+      explain: 'A complex product turns and scales: 2 × 3 = 6 for the length, 30° + 40° = 70° for the angle.',
+      why: ['', 'Lengths multiply. Adding them is what happens when the arrows are laid head to tail, which is a sum, not a product.', 'Angles add. Multiplying them has no meaning for a turn: turning by 30° and then by 40° is a turn of 70°.', 'Subtracting angles is dividing by the second arrow, not multiplying.'],
+    },
+    {
+      question: 'A bin of a 64-sample block reads an arrow of length 16 pointing along the real axis. What cosine is in the block?',
+      options: ['Amplitude 0.5, phase 0: the bin\'s length over N / 2 = 32 is the amplitude', 'Amplitude 16: the length is the amplitude', 'Amplitude 0.25: the length over N', 'Amplitude 0.5, phase 90°: a pure cosine sits on the imaginary axis'],
+      answer: 0,
+      explain: 'A cosine of amplitude A at bin k gives a bin of length (N / 2) A, so A = 16 / 32 = 0.5, and the bin\'s angle is the cosine\'s phase, 0.',
+      why: ['', 'The bin adds N terms, so its length is N / 2 times the amplitude, not the amplitude.', 'The cosine\'s two arrows each carry half of it, but only one lines up at bin k: the divisor is N / 2, not N.', 'A phase of 0 is a cosine and puts the bin on the real axis; a sine (phase −90°) points straight down.'],
+    },
+  ],
   firfilter: [
     {
       question: 'The filter 1 4 6 4 1 is fed the fastest possible tone, + − + − + at half the sample rate. What comes out once its registers are full?',
@@ -129,6 +145,22 @@ export const CHECK10A: Record<string, Quiz[]> = {
       answer: 0,
       explain: 'Friis\'s formula: F = F₁ + (F₂ − 1) / G₁ + (F₃ − 1) / (G₁ G₂) + …. A good first amplifier makes everything after it matter less; a loss in front counts in full.',
       why: ['', 'Nothing guarantees that; the first stage matters because later noise is divided by its gain.', 'Every stage adds noise. What differs is how large it is compared with the signal at that point.', 'Cooling is not part of the argument; it is the gain that divides the later noise.'],
+    },
+  ],
+  gaussian: [
+    {
+      question: 'Noise has σ = 0.2 V and a signal level sits 0.6 V from the threshold. About how often is a sample read wrong?',
+      options: ['About one in 741: 0.6 V is 3 σ, and Q(3) is 1.35 × 10⁻³', 'About one in three: 0.2 / 0.6', 'About one in 370: that is 2 Q(3)', 'Never: 0.6 V is beyond any noise sample'],
+      answer: 0,
+      explain: '0.6 V over 0.2 V is 3 σ, and the tail beyond it is 1.35 × 10⁻³, one in 741.',
+      why: ['', 'That divides the wrong way round and treats the chance as proportional to the ratio.', 'That counts both sides. A decision reads one side, so it is Q(3), not 2 Q(3).', 'A Gaussian tail has no end: the chance is tiny and not zero.'],
+    },
+    {
+      question: 'The margin goes from 3 σ to 6 σ. What happens to the chance of an error?',
+      options: ['It falls by a factor of about a million, from 1.35 × 10⁻³ to 9.87 × 10⁻¹⁰', 'It halves, as the margin doubles', 'It falls by a factor of four', 'It stays the same: σ is unchanged'],
+      answer: 0,
+      explain: 'Q(3) over Q(6) is about 1.4 × 10⁶. The tail falls like e<sup>−x²/2</sup>, so each extra σ cuts it by more than the last.',
+      why: ['', 'The chance is a tail area, not proportional to the margin.', 'A factor of four is what doubling a power would do; the Gaussian tail falls far faster.', 'σ is the noise; the margin d grew, and the chance depends on d / σ.'],
     },
   ],
   matchedfilter: [

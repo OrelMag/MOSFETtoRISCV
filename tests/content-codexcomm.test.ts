@@ -78,7 +78,7 @@ const says = (ch: string, step: number, s: string) => {
 
 describe('the Communication codex entries', () => {
   it('are complete: summary, fuller text, chapters, answer-first questions, a TAUGHT row, no level yet', () => {
-    expect(IDS.length).toBe(36);
+    expect(IDS.length).toBe(37);
     for (const e of CODEX_COMM) {
       const m = moreOf(e.id)!;
       expect(m?.idea, `${e.id}: idea`).toBeTruthy();
@@ -374,7 +374,7 @@ describe('the Communication codex entries', () => {
     expect([TCP_K.MSS, TCP_K.RCV / TCP_K.MSS, COSTS.lines, COSTS.words.a, COSTS.fast.clocks, Math.floor(COSTS.fast.clocks / COSTS.fast.bytes)]).toEqual([64, 8, 570, 3241, 1027057, 128]);
     expect([WIRE_DATA_MBPS.toFixed(1), MEASURED_MBPS.toFixed(1), LINK_MBPS.toFixed(1)]).toEqual(['28.5', '15.8', '63.3']);
     quotes('tcp', '570 lines', '3,241 words', '142 bytes', '28.5', '63.3 Mb/s', '1,027,057 cycles', '128 a byte', '15.8 Mb/s', '3.4 s');
-    says('tcp', 7, '15.8 Mb/s'); says('tcp', 7, '28.5 Mb/s');
+    says('tcp', 8, '15.8 Mb/s'); says('tcp', 8, '28.5 Mb/s');
     const { saw, small, fast } = COSTS;
     expect([saw.bytes, saw.o.byteClocks, saw.o.queue, saw.drops, saw.fast, saw.timeouts]).toEqual([6000, 200, 4, 7, 5, 1]);
     expect([small.bytes, small.o.byteClocks, small.o.queue, small.drops, small.fast, small.timeouts]).toEqual([3000, 400, 3, 8, 0, 5]);

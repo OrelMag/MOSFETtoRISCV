@@ -4,7 +4,7 @@
 import { shannonBinaryDb, uncodedBer } from '../comm/ber';
 import { EBN0_MIN, ratioToDb } from '../comm/limits';
 import {
-  capacityAt, capacityCeiling, cascadeNfDb, decisionError, errorAfter, johnsonVolts, measuredBer, measuredDecision, measuredReceiver, noiseDensityDbm, noiseFloorDbm, PULSES, receiverFloorDbm, randomCodeError, RECEIVERS, snrAfter, type ChainStage,
+  bellDensity, bellHistogram, bellRms, BELL_SAMPLES, capacityAt, capacityCeiling, cascadeNfDb, decisionError, errorAfter, johnsonVolts, measuredBer, measuredDecision, measuredReceiver, noiseDensityDbm, noiseFloorDbm, PULSES, receiverFloorDbm, randomCodeError, RECEIVERS, snrAfter, TAIL_SAMPLES, tailHits, withinSigmas, withinShare, type ChainStage,
 } from '../comm/noise';
 import { gaussian, rng } from '../phys/line';
 import { groupDigits } from '../sim/numfmt';
@@ -79,6 +79,42 @@ export function decisionWidget(): Widget {
     el: h('div', { class: 'widget mos sr-w' },
       h('div', { class: 'panel' }, h('h3', null, 'Two levels and a threshold'), plot.el, chips.el),
       h('div', { class: 'panel mos-ctl' }, slider('Noise σ', 0.1, 1.5, 0.02, sigma, (v) => num(v, 2), (v) => { sigma = v; paint(); }).el)),
+  };
+}
+
+/** The bell curve and its tail: a histogram of seeded samples settling on the curve, the share beyond d shaded. */
+export function gaussianWidget(): Widget {
+  let sigma = 0.5, n = 100, d = 1.6;
+  const BINS = 60, SPAN = 3;
+  const plot = plotOf({ W: 640, H: 230, x: [0, 2 * SPAN], y: [0, 1], yTicks: [], xLabel: 'noise voltage, V', yLabel: 'how often', aria: 'Histogram of noise samples with the bell curve drawn over it and the tail beyond d shaded', xFmt: (v) => num(v - SPAN, 1) });
+  const chips = mkChips(4);
+  const binW = (2 * SPAN) / BINS;
+  function paint() {
+    const counts = bellHistogram(n, sigma, BINS, SPAN), top = bellDensity(0) / sigma * 1.15;
+    const dens = (c: number) => c / (n * binW) / top, at = SPAN + d * sigma, w = plot.X(binW) - plot.X(0);
+    plot.clear();
+    counts.forEach((c, i) => {
+      if (!c) return;
+      const x0 = -SPAN + i * binW, y = Math.min(1, dens(c));
+      plot.layer.append(s('rect', { x: plot.X(x0 + SPAN), width: w, y: plot.Y(y), height: plot.Y(0) - plot.Y(y), class: `sg-hist ${x0 >= d * sigma - 1e-9 ? 'tail' : 'a'}` }));
+    });
+    const xs = Array.from({ length: 121 }, (_, i) => (i / 120) * 2 * SPAN);
+    line(plot, xs, xs.map((x) => (bellDensity((x - SPAN) / sigma) / sigma) / top), 'near');
+    if (at < 2 * SPAN) plot.layer.append(s('line', { x1: plot.X(at), x2: plot.X(at), y1: plot.Y(1), y2: plot.Y(0), class: 'sg-th' }));
+    const z = bellRms(n, sigma), within = withinShare(n, 1), q = decisionError(d, 1), hits = tailHits(TAIL_SAMPLES, d);
+    chips.set(0, `${num(z, 3)} V`, `RMS of the ${groupDigits(n)} samples, for σ = ${num(sigma, 2)} V`);
+    chips.set(1, `${(within * 100).toFixed(1)} %`, `within ±σ, against ${(withinSigmas(1) * 100).toFixed(1)} % for the curve`);
+    chips.set(2, sci(q), `Q(${num(d, 1)}): the curve's area beyond d = ${num(d, 1)} σ = ${num(d * sigma, 2)} V`);
+    chips.set(3, q < 1e-5 ? 'too few to count' : counted(hits / TAIL_SAMPLES, TAIL_SAMPLES), `beyond d, counted in ${groupDigits(TAIL_SAMPLES)}`);
+  }
+  paint();
+  return {
+    el: h('div', { class: 'widget mos sr-w' },
+      h('div', { class: 'panel' }, h('h3', null, 'Samples, the curve and the tail'), plot.el, chips.el),
+      h('div', { class: 'panel mos-ctl' }, h('div', { class: 'mos-row' },
+        slider('Samples', 1, Math.log10(BELL_SAMPLES), 0.01, Math.log10(n), (v) => groupDigits(Math.round(10 ** v)), (v) => { n = Math.round(10 ** v); paint(); }).el,
+        slider('Noise σ', 0.1, 1.5, 0.02, sigma, (v) => `${num(v, 2)} V`, (v) => { sigma = v; paint(); }).el,
+        slider('Distance d', 0, 4, 0.1, d, (v) => `${num(v, 1)} σ`, (v) => { d = v; paint(); }).el))),
   };
 }
 

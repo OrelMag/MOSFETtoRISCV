@@ -68,6 +68,22 @@ export const CHECK9: Record<string, Quiz[]> = {
       why: ['', 'A connection keeps its state as long as it is open.', 'Probes give no useful sample.', 'Routers keep no per-connection state.'],
     },
   ],
+  ports: [
+    {
+      question: 'Two tabs on one laptop open connections to the same server, port 443. What tells the server their segments apart?',
+      options: ['The laptop\'s source port, which differs per connection', 'The server\'s port, which differs per tab', 'The laptop\'s address, which differs per tab', 'The checksum, which differs per tab'],
+      answer: 0,
+      explain: 'Source address, source port, destination address and destination port make the key. The tabs share three of the four, so the fourth must differ.',
+      why: ['', 'Both segments name port 443; one listener serves all of them.', 'A laptop has one address for both tabs.', 'A checksum covers the segment\'s contents; it is not a key and says nothing of which connection owns the segment.'],
+    },
+    {
+      question: 'A server with one ESTABLISHED connection receives a segment for its port from the right address but a different source port. What does ours do?',
+      options: ['Answers with a RST: the four numbers match no connection', 'Hands it to the connection: the addresses match', 'Opens a second connection', 'Drops it without a reply'],
+      answer: 0,
+      explain: 'The only test is on the four numbers. Ours holds one connection, so a different source port is no connection at all and gets a reset; a real system would send a RST too, unless a listener took it as a new SYN.',
+      why: ['', 'Matching addresses are half of the key; the ports are the other half.', 'Ours keeps one connection; a real system opens one only for a SYN to a listening port.', 'A segment with no connection is answered with a RST, so the sender learns at once.'],
+    },
+  ],
   aimd: [
     {
       question: 'cwnd is 16 segments and the receiver announces 8 segments. How much may be unacknowledged?',

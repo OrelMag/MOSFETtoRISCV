@@ -8,6 +8,8 @@ import { TCP_MEM } from './tcp';
 
 /** The bench's port. Not 5000: Wireshark gives that port to GSM's IPA, and a learner who opens a capture would see good frames called malformed. */
 export const TCP_PORT = 12000;
+/** The port the sender program connects from (chapter tcp: one connection, so a fixed one). */
+export const TCP_CLIENT_PORT = 40000;
 
 export interface TcpHost { ip: number; mac: readonly number[]; gw: number; gwMac: readonly number[] }
 
@@ -52,7 +54,7 @@ arp_learn(${hx(h.gw)}, ${SCRATCH})
 export function tcpSender(h: TcpHost, to: number, bytes: number, o: { port?: number; isn?: number } = {}): string {
   const s = strings({ up: 'connected\n', done: 'sent ', c: ' bytes in ', cy: ' cycles\n', fail: 'failed\n' });
   return `${s.py}
-${COMMON}${hostInit(h, o.isn)}tcp_connect(${hx(to)}, 40000, ${o.port ?? TCP_PORT})
+${COMMON}${hostInit(h, o.isn)}tcp_connect(${hx(to)}, ${TCP_CLIENT_PORT}, ${o.port ?? TCP_PORT})
 while tcp_st != 4 and tcp_err == 0:
     net_poll()
     tcp_tick()

@@ -3,7 +3,8 @@
 // the modem chapter needs next. Computed here, or pinned in tests/comm-signals.test.ts.
 
 import { gibbsOvershoot, PATTERNS, poleGain, powerShare, smallestSample, swing1010, tauOf, toDb } from '../comm/fourier';
-import { aliasOf, binomialGain, firGain, FIR_TAPS, movingAverage, sqnrDb, windowedSinc } from '../comm/signals';
+import { arrow, binChain, product } from '../comm/arrows';
+import { aliasOf, binomialGain, BLOCK, firGain, FIR_TAPS, movingAverage, samplesOf, SIGNALS, sqnrDb, windowedSinc } from '../comm/signals';
 import { FIR5, FIR_SETTLE } from '../lib/fir';
 import { arrayMul } from '../lib/muldiv';
 import { register } from '../lib/sequential';
@@ -13,7 +14,7 @@ import { analyzeTiming } from '../sim/timing';
 import { harmonicsWidget } from '../widgets/fourier';
 import { withModel } from '../widgets/modelhost';
 import { tide3d } from '../widgets/tide3d';
-import { aliasWidget, bandwidthWidget, filterWidget, firApi, firScene, FIR_FASTEST, mixerWidget, quantizeWidget, spectrumWidget } from '../widgets/signals';
+import { aliasWidget, arrowWidget, bandwidthWidget, filterWidget, firApi, firScene, FIR_FASTEST, mixerWidget, quantizeWidget, spectrumWidget } from '../widgets/signals';
 import { numOf } from './order';
 import type { Chapter } from './types';
 
@@ -30,7 +31,7 @@ export const chSignals: Chapter = {
   id: 'signals', num: numOf('signals'), title: 'Signals and spectrum', level: 'Communication',
   blurb: 'What a signal is made of: Fourier from a square wave up, band against pulse width, FIR filters with one in gates, sampling and aliasing, rounding, and the mixer that moves a band.',
   goals: [
-    'read the same block of samples in time and in frequency, and say why a channel is specified by a gain against frequency',
+    'read the same block of samples in time and in frequency, see a sine as an arrow and a bin as one, and say why a channel is specified by a gain against frequency',
     'trade a pulse\'s width against its band, and say what a filter of a given length can and cannot do',
     'build an FIR filter from registers and adders, and price it against general multipliers',
     'predict where a tone lands when it is sampled too slowly, and what each bit of a converter buys',
@@ -103,9 +104,41 @@ export const chSignals: Chapter = {
       },
     },
     {
+      title: 'Arrows that turn: complex numbers',
+      get body() {
+        const r = product(arrow(2, 1), arrow(1, 1)), sq = samplesOf(SIGNALS.find((x) => x.id === 'square')!), b8 = binChain(sq, 8), b24 = binChain(sq, 24);
+        const tone = samplesOf(SIGNALS[0]), t8 = binChain(tone, 8), t9 = binChain(tone, 9);
+        return `
+        <p>The last step split a signal into sines, and each sine took two numbers: how big it is, and how far along its cycle it has got (its <strong>phase</strong>). The next step's transform hands those two numbers back as <em>one</em> object, and so does every radio and filter chapter after it. The object is a <strong>complex number</strong>: school algebra with one new symbol, and a picture.</p>
+        <p><strong>A quarter turn.</strong> Multiplying a number by −1 turns it half way round zero on the number line. Is there a multiplication that turns it a quarter? Do it twice and you must get −1, so call it <strong>j</strong>, with j × j = −1. (Mathematics books write i; engineers write j because i is already current.) No point on the line is j: it is a step at right angles to the line. A <strong>complex number</strong> a + jb is the arrow from zero to the point a along and b up; a is its <strong>real part</strong>, b its <strong>imaginary part</strong>. Its length is |z| = √(a² + b²) and its angle is atan2(b, a). Multiplying by j turns any arrow a quarter turn anticlockwise: 1, j, −1, −j, 1.</p>
+        <p><strong>Multiplying is turning and scaling.</strong> Multiply two arrows and <em>the lengths multiply and the angles add</em>. The algebra, (a + jb)(c + jd) = (ac − bd) + j(ad + bc), is four multiplications and two additions (<a href="#/c/carriers/0">chapter ${numOf('carriers')}</a> prices it in gates); the picture is the quick way to think. In the figure, 2 + j (length ${nf(r.lengths[0])}, angle ${nf(r.angles[0], 1)}°) times 1 + j (${nf(r.lengths[1])}, ${nf(r.angles[1], 1)}°) is 1 + 3j (${nf(r.lengths[2])}, ${nf(r.angles[2], 1)}°): the lengths multiplied and the angles added. An arrow of length 1 only turns whatever it multiplies; a real number only stretches it.</p>
+        <p><strong>An arrow that turns at a steady rate.</strong> The arrow of length 1 at angle θ is cos θ + j sin θ, written <strong>e<sup>jθ</sup></strong>. (The name comes from calculus, where it is the exponential function with an imaginary argument; all this book uses is the picture and the rule that follows from "angles add": e<sup>jα</sup> e<sup>jβ</sup> = e<sup>j(α+β)</sup>.) e<sup>j0</sup> = 1, e<sup>jπ/2</sup> = j, e<sup>jπ</sup> = −1. Now let the angle grow steadily, θ = 2πft: the arrow turns f times a second, and its shadow on the real axis is cos 2πft, on the imaginary axis sin 2πft. A <em>sampled</em> tone at f cycles a sample is the same arrow stepped by e<sup>j2πf</sup> each sample. So a tap k samples late sees the tone turned back by k steps, e<sup>−j2πfk</sup>: that is the factor in the response of <a href="#/c/signals/4">A filter is a sum of delayed samples</a>, whose answer is the sum of the tap-weighted, turned arrows.</p>
+        <p><strong>A cosine is two arrows.</strong> cos θ = (e<sup>jθ</sup> + e<sup>−jθ</sup>) / 2: two arrows of length ½ turning opposite ways. Their upward parts cancel at every instant and their sideways parts add, so the sum never leaves the real axis. A real cosine of amplitude A is therefore two arrows of length A / 2, one at +f and one at −f. That is why the spectrum of a real signal mirrors itself, and why the next step needs only N / 2 + 1 of its N numbers.</p>
+        <p><strong>A bin is one arrow.</strong> The transform's definition is X[k] = Σ x[n] e<sup>−j2πkn/N</sup>: multiply each sample by an arrow that turns <em>backwards</em> at k cycles a block, and add the arrows head to tail. Take a signal A cos(2πkn/N + φ). Its forward-turning arrow is turned back by exactly as much as it advances, so every one of its terms points the same way, e<sup>jφ</sup>, and N terms of length A / 2 add in a straight line to (N / 2) A e<sup>jφ</sup>. Its other arrow, and any tone at another frequency, keeps turning against the reference, and its terms go round and close up. So <strong>the length of a bin over N / 2 is the amplitude, and its angle is the phase</strong> of the cosine. In the widget, the one tone sin(2π · 8t) over ${BLOCK} samples is a cosine with φ = −90°: bin 8 is an arrow of length ${nf(t8.length, 0)} = N / 2 pointing straight down (${nf(t8.phase, 0).replace('-', '−')}°), and bin 9 closes to ${nf(t9.length, 0)}.</p>
+        <div class="try">On <strong>Multiply</strong> set z = 2 + j and w = 1 + j, and read the product's length and angle.</div>
+        <div class="try">On <strong>Turn</strong> drag θ to 180° and read −1; run it and watch the shadow trace a cosine.</div>
+        <div class="try">On <strong>Two arrows</strong> switch the mirror arrow on and watch the sum stay on the real axis.</div>
+        <div class="try">On <strong>A bin</strong> pick <em>One tone</em>, bin 8: the chain runs nearly straight; step to bin 9: it closes. Then <em>Square wave</em>, bin 8 (length about ${nf(b8.length, 0)}) and bin 24 (about ${nf(b24.length, 0)}, a third of the first, as 1 / k says).</div>`;
+      },
+      widget: () => arrowWidget(),
+      more: {
+        derive: `<p>Bin of a cosine. Write A cos(2πkn/N + φ) = (A/2)(e<sup>j(2πkn/N+φ)</sup> + e<sup>−j(2πkn/N+φ)</sup>). Multiplying by e<sup>−j2πkn/N</sup> leaves (A/2)e<sup>jφ</sup> + (A/2)e<sup>−jφ</sup> e<sup>−j4πkn/N</sup>. The first term is constant in n and sums to N (A/2) e<sup>jφ</sup>. The second turns 2k times round in N samples: a sum of equal steps taken a whole number of times round the circle is a geometric series with ratio e<sup>−j4πk/N</sup> ≠ 1 and (1 − ratio<sup>N</sup>) = 0, so it is 0 (for 0 &lt; k &lt; N / 2). Euler's e<sup>jθ</sup> = 1 + jθ − θ²/2 − jθ³/6 + … has real terms that are cos θ's series and imaginary terms that are sin θ's.</p>`,
+        real: `<p><strong>The same point as I and Q.</strong> <a href="#/c/modem/4">Phase and amplitude</a>, two chapters on, writes a carrier as I cos 2πft − Q sin 2πft and plots a symbol as the point (I, Q). That point is the arrow I + jQ, and the carrier is the real part of that arrow turning at f: Re[(I + jQ) e<sup>j2πft</sup>] = I cos 2πft − Q sin 2πft. Its length is the amplitude and its angle the phase, as for a bin. A receiver that multiplies by e<sup>−j2πft</sup> stops the turning and reads the arrow off; chapters ${numOf('radio')} and ${numOf('sdr')} call that a complex mixer, and chapter ${numOf('zplane')} walks the arrow e<sup>j2πf</sup> round the unit circle to read a filter. A software radio's samples <em>are</em> arrows: each is two numbers, I and Q.</p>
+          <p>Engineers took the arrow from Steinmetz (1893), who used it to treat alternating-current circuits as sums of turning arrows he called phasors; that is why they write j. Wessel (1797) and Argand (1806) drew the plane.</p>`,
+        pitfall: `<p>Reading the −f arrow as "time running backwards". It is only the mirror arrow a real signal needs so that its imaginary parts cancel. A signal that is really complex, as in a radio after I/Q mixing, can have one without the other, and that is how an image is rejected (chapter ${numOf('radio')}).</p>`,
+      },
+      challenge: {
+        kind: 'quiz', question: '(1 + j) multiplied by (1 − j) is:',
+        options: ['2', '2j', '0', '√2'],
+        answer: 0,
+        explain: `Lengths multiply: √2 × √2 = ${nf(product(arrow(1, 1), arrow(1, -1)).lengths[2], 0)}. Angles add: +45° and −45° make 0°, so the product points along the real axis: (1 + j)(1 − j) = 1 − j + j − j² = 2.`,
+        why: ['', 'That would need the angles to add to 90°; (1 − j) points 45° below the axis, so it takes 45° off.', 'Lengths multiply, they do not cancel: two arrows of length √2 give a product of length 2.', 'Both lengths count: they multiply, √2 × √2 = 2.'],
+      },
+    },
+    {
       title: 'The same numbers in frequency',
       body: `
-        <p>Take N samples of a signal. The discrete Fourier transform turns them into N complex numbers, of which a real signal needs N / 2 + 1: one amplitude and phase for each frequency that fits a whole number of times in the block. Nothing is lost or gained. It is the same information, in a different basis, and either form can be turned back into the other.</p>
+        <p>Take N samples of a signal. The discrete Fourier transform turns them into N complex numbers, the arrows of the last step, of which a real signal needs N / 2 + 1: one amplitude and phase for each frequency that fits a whole number of times in the block. Nothing is lost or gained. It is the same information, in a different basis, and either form can be turned back into the other.</p>
         <p>What changes is what is easy to see. Two tones are a tangle in time and two lines in frequency. A filter is an awkward sum in time and a plain multiplication in frequency. A short pulse, simple in time, spreads across the whole spectrum.</p>
         <p>A tone switched on and off has a peak at its frequency with skirts around it: the switching is itself a signal. Those skirts are why a transmitter must switch gently, and why tones in a shared band need guard space unless, as in <a href="#/c/carriers/0">Many carriers</a>, they are spaced so that each has a null at the others.</p>
         <div class="try">Compare the square wave with the one tone. Then pick the short pulse, and the tone switched on and off: read how much band each needs for 90 % of its power and for 99 %.</div>`,
@@ -173,7 +206,7 @@ export const chSignals: Chapter = {
       title: 'Sampling, and what folds',
       body: `
         <p>A converter reads a signal at fs samples a second. The <strong>sampling theorem</strong>, published by Whittaker, Kotelnikov and Shannon, says that a signal with nothing at or above fs / 2 is fixed entirely by its samples. Below that line nothing is lost.</p>
-        <p>Above it, the samples still exist and they are wrong. A tone at f and one at fs − f give exactly the same numbers, since cos(2π(fs − f) k / fs) = cos(2π f k / fs) for every whole k. So every frequency folds into 0 … fs / 2, and no later processing can tell the difference: this is <strong>aliasing</strong>, and the only cure is an analog filter <em>before</em> the converter.</p>
+        <p>Above it, the samples still exist and they are wrong. A tone at f and one at fs − f give exactly the same numbers, since cos(2π(fs − f) k / fs) = cos(2π f k / fs) for every whole k. So every frequency folds into 0 … fs / 2, and no later processing can tell the difference: this is <strong>aliasing</strong>, and the only cure is an analog filter <em>before</em> the converter, an <strong>anti-aliasing filter</strong>.</p>
         <p>That filter needs room to fall, so real rates leave a margin. Telephone speech is cut off near 3.4 kHz and sampled at 8 kHz, which is where <a href="#/c/modem/0">the modem chapter</a>'s voice channel gets its edge. A CD holds up to about 20 kHz at 44.1 kHz.</p>
         <p>This is related to Nyquist's limit on symbols, and it is a different claim. Nyquist counts how many independent values a band can carry; sampling says how many readings capture a band. Both come to 2B a second.</p>
         <div class="try">With a 10 Hz sample rate, sweep the tone from 0 to 30 Hz and watch what the samples say: up, down, up. Find a tone that reads as 0 Hz.</div>`,

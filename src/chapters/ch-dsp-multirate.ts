@@ -63,7 +63,7 @@ export const chMultirate: Chapter = {
       get body() {
         const r = cascade();
         return `
-        <p>Chapters ${numOf('firdesign')} and ${numOf('iir')} priced a filter at one fixed rate. This one changes the rate. A radio's front end samples at a high rate because the whole band has to fit through it. After <a href="#/c/signals/7">the mixer</a> has moved one station to zero, that station is a sliver of what was sampled, and every sample of the rest is a waste of everything downstream.</p>
+        <p>Chapters ${numOf('firdesign')} and ${numOf('iir')} priced a filter at one fixed rate. This one changes the rate. A radio's front end samples at a high rate because the whole band has to fit through it. After <a href="#/c/signals/8">the mixer</a> has moved one station to zero, that station is a sliver of what was sampled, and every sample of the rest is a waste of everything downstream.</p>
         <p>Filtering is multiplications a second, so the price is taps × rate. Lower the rate by R, and everything after it costs R times less. The chapter's goal is one job: drop the rate by ${CASCADE_R}, keep 40 % of the new rate and hold back what would fold by 50 dB. Done as a single filter at the input's rate, that takes ${n0(r[0].mults)} multiplications for each input sample. By the end it will take ${r[3].mults.toFixed(2)}, about a thousandth of that, with the same mask.</p>`;
       },
       challenge: {
@@ -77,7 +77,7 @@ export const chMultirate: Chapter = {
     {
       title: 'Throwing samples away',
       body: `
-        <p>Keep every R-th sample and discard the rest. That is <strong>decimation</strong> at its simplest, and it is cheap. It also has the problem <a href="#/c/signals/5">sampling</a> always has: the new rate has a new half-rate, and whatever lay above it folds down into the band. It cannot be told apart from what belonged there, and nothing later can remove it.</p>
+        <p>Keep every R-th sample and discard the rest. That is <strong>decimation</strong> at its simplest, and it is cheap. It also has the problem <a href="#/c/signals/6">sampling</a> always has: the new rate has a new half-rate, and whatever lay above it folds down into the band. It cannot be told apart from what belonged there, and nothing later can remove it.</p>
         <p>So the filter has to come first, and it has to run at the old rate, where it is at its most expensive. Everything in this chapter is about paying less for that one filter.</p>
         <div class="try">Move the tone past the line at ${256 / 2 / ALIAS_R} and watch it land somewhere new. Then listen to a sweep both ways. Without the filter it rises, falls, rises and falls again, and those tones are not in the input.</div>`,
       widget: dropWidget,

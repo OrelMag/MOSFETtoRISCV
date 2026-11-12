@@ -94,10 +94,32 @@ measured: 8000 bytes in 1 027 057 cycles, 128 a byte, 15.8 Mb/s: here the CP
     chapters: [
       { chapter: 'tcp', step: 0, label: 'A stream over datagrams' },
       { chapter: 'tcp', step: 1, label: 'Three segments to begin' },
-      { chapter: 'tcp', step: 2, label: 'Numbers that count bytes' },
-      { chapter: 'tcp', step: 3, label: 'The window: room at the far end' },
-      { chapter: 'tcp', step: 4, label: 'How long to wait' },
-      { chapter: 'tcp', step: 7, label: 'The same rules, on our CPU' },
+      { chapter: 'tcp', step: 2, label: 'Ports: which connection is this?' },
+      { chapter: 'tcp', step: 3, label: 'Numbers that count bytes' },
+      { chapter: 'tcp', step: 4, label: 'The window: room at the far end' },
+      { chapter: 'tcp', step: 5, label: 'How long to wait' },
+      { chapter: 'tcp', step: 8, label: 'The same rules, on our CPU' },
+    ],
+  },
+  ports: {
+    idea: `An IP address names a machine, and a machine runs many programs, so each end of a connection is an address <i>and</i> a <b>port</b>: 16 bits, 0 to 65 535. Servers listen on well-known ports (443, 25); a program that starts a connection takes a free <b>ephemeral</b> port, 49 152 and up by RFC 6335's convention.<br><br>A connection is found by <b>four numbers</b>, source address, source port, destination address, destination port: 32 + 16 + 32 + 16 = 96 bits. <b>Demultiplexing</b> is a lookup of those four among the connections the machine holds; a hit goes to that connection's state machine, a miss is answered with a <b>RST</b>. <code>listen</code> puts a state machine in LISTEN on a port, matching any remote (the one key with holes); <code>connect</code> takes an ephemeral port and sends the SYN; <code>accept</code> hands over a connection that reached ESTABLISHED. A <b>socket</b> is the operating system's handle for one of them. A real system gives each arriving SYN a new connection and keeps listening; ours holds a single connection, so the listener becomes it and a second client gets a RST.`,
+    example: {
+      title: 'Four segments to a server with one connection',
+      body: `<pre>server 10.0.2.2:12000, connected to 10.0.1.2:40000
+from 10.0.1.2:40000 to :12000       same four numbers: taken, ACK back
+from 10.0.1.2:40001 to :12000       source port differs: RST back
+from 10.0.1.2:40000 to :80          nobody listens on 80: RST back
+SYN from 10.0.3.2:40000 to :12000   another client: RST (a real OS would open a second connection)</pre>`,
+    },
+    mistakes: [
+      'Thinking an address is enough to find a connection: two tabs on one laptop share it, and only the port tells them apart.',
+      'Thinking sequence numbers find the connection: they are read after the segment has found it, and two connections may use the same ones.',
+      'Treating a port as a secret or as proof of what runs behind it: it is a number in the header, and the operating system alone keeps two programs off one.',
+      'Picturing accept as a second listener: the listening socket stays in LISTEN, and accept hands over a new connection with all four numbers filled in.',
+    ],
+    chapters: [
+      { chapter: 'tcp', step: 1, label: 'Three segments to begin' },
+      { chapter: 'tcp', step: 2, label: 'Ports: which connection is this?' },
     ],
   },
   aimd: {
@@ -117,8 +139,8 @@ measured: 8000 bytes in 1 027 057 cycles, 128 a byte, 15.8 Mb/s: here the CP
       'Confusing the two windows: cwnd is the sender\'s guess and is announced by nobody; the receive window is in every segment. The sender obeys the smaller.',
     ],
     chapters: [
-      { chapter: 'tcp', step: 5, label: 'How fast: the sawtooth' },
-      { chapter: 'tcp', step: 7, label: 'The same rules, on our CPU' },
+      { chapter: 'tcp', step: 6, label: 'How fast: the sawtooth' },
+      { chapter: 'tcp', step: 8, label: 'The same rules, on our CPU' },
     ],
   },
   bufferbloat: {
@@ -140,8 +162,8 @@ a home router: 1 MB of queue on a 10 Mb/s uplink = 0.8 s on every packet going o
       'Tuning the sender: nothing there can see the queue, so the cure belongs where the queue is.',
     ],
     chapters: [
-      { chapter: 'tcp', step: 5, label: 'How fast: the sawtooth' },
-      { chapter: 'tcp', step: 6, label: 'Queues that fill' },
+      { chapter: 'tcp', step: 6, label: 'How fast: the sawtooth' },
+      { chapter: 'tcp', step: 7, label: 'Queues that fill' },
     ],
   },
   bgp: {

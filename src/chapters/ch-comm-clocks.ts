@@ -125,7 +125,7 @@ export const chClocks: Chapter = {
     {
       title: 'Noise on a slow edge',
       body: `
-        <p>Count the transitions. The input here is a slow ramp from 0 to ${VDD} V with Gaussian noise on every sample. A plain receiver with one threshold at VM follows every crossing of that threshold, and
+        <p>Count the transitions. The input here is a slow ramp from 0 to ${VDD} V with <span data-ahead="gaussian">Gaussian noise (bell-shaped: most samples near zero, few far out; σ, its width, is the noise's RMS value)</span> on every sample. A plain receiver with one threshold at VM follows every crossing of that threshold, and
         a clocked circuit behind it sees each as an edge: a counter counts them, a flip-flop clocked by it is clocked several times. The Schmitt trigger switches once, when the ramp has gone ${mv(TH.width! / 2)} past VM,
         and stays there until the input has fallen back by the full hysteresis.</p>
         <p>The rule of thumb is a hysteresis at least as wide as the noise peak to peak (about 6 σ for Gaussian noise) and no more than would hide a real signal. The keeper's width is the knob;

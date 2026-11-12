@@ -1,6 +1,7 @@
 // The signals chapter's explorers: a block and its spectrum, a pulse's width against its band, FIR filters and the filter in gates, a tone
 // folding when sampled, quantizing, and a mixer. Every number is comm/signals.ts's or comm/fourier.ts's.
 
+import { type Arrow, arrow, binChain, cosinePair, expj, product } from '../comm/arrows';
 import { fft, cx } from '../comm/fourier';
 import {
   aliasOf, amplitudes, bandHolding, BLOCK, FIR_TAPS, firGain, FirModel, measuredSqnrDb, mixed, movingAverage, quantize, samplesOf, signedOf, SIGNALS, sqnrDb, windowedSinc, wordOf,
@@ -249,5 +250,191 @@ export function mixerWidget(): Widget {
         slider('Tone', 1, 16, 1, tone, (v) => String(v), (v) => { tone = v; paint(); }).el,
         slider('Carrier', 24, 56, 1, carrier, (v) => String(v), (v) => { carrier = v; paint(); }).el),
         h('label', { class: 'mos-sl' }, box, h('span', null, 'Multiply by the carrier again (a receiver)')))),
+  };
+}
+
+// ---- arrows that turn: complex numbers --------------------------------------------------------------------------------------------------------
+
+export type ArrowTab = 'multiply' | 'turn' | 'two' | 'bin';
+const TAB_NAMES: Record<ArrowTab, string> = { multiply: 'Multiply', turn: 'Turn', two: 'Two arrows', bin: 'A bin' };
+export const ARROW_TABS: readonly ArrowTab[] = ['multiply', 'turn', 'two', 'bin'];
+
+/** a + jb as text: 2 + j, 1 + 3j, −1, 0.5 − 0.5j. */
+export function fmtArrow(a: Arrow, d = 2): string {
+  const r = num(a.re, d), i = num(Math.abs(a.im), d), neg = a.im < -1e-9;
+  if (Math.abs(a.im) < 1e-9) return r.replace('-', '−');
+  const im = `${i === '1' ? '' : i}j`;
+  return Math.abs(a.re) < 1e-9 ? `${neg ? '−' : ''}${im}` : `${r.replace('-', '−')} ${neg ? '−' : '+'} ${im}`;
+}
+const wrapDeg = (x: number) => ((((x + 180) % 360) + 360) % 360) - 180;
+const deg1 = (x: number) => `${num(x === 0 ? 0 : x, 1).replace('-', '−')}°`;
+
+/**
+ * Chapter signals' arrows: four tabs on one plane (Multiply, Turn, Two arrows, A bin), arithmetic only, every number from comm/arrows.ts.
+ * `tabs` and `start` let a later chapter mount a subset.
+ */
+export function arrowWidget(opts: { tabs?: readonly ArrowTab[]; start?: ArrowTab } = {}): Widget {
+  const tabs = opts.tabs ?? ARROW_TABS;
+  let tab: ArrowTab = opts.start && tabs.includes(opts.start) ? opts.start : tabs[0];
+  let z = arrow(2, 1), w = arrow(1, 1), theta = 30, mirror = false, pick = 0, k = 8, timer: ReturnType<typeof setInterval> | null = null;
+  const WIDE = 640, NARROW = 340, H = 300, CX = 170, CY = 150, RPX = 125;
+  const svg = s('svg', { class: 'sg-plane', role: 'group' }) as SVGSVGElement;
+  const chips = mkChips(3), live = h('div', { 'aria-live': 'polite' }, chips.el), note = h('p', { class: 'sub mos-note' });
+  const controls = h('div', { class: 'panel mos-ctl' });
+  const tabRow = h('div', { class: 'fb-tabs', role: 'group', 'aria-label': 'Which picture' });
+  const runBtn = h('button', { type: 'button', class: 'btn sm', onclick: () => toggleRun() }, 'Run');
+
+  const el_ = (tag: 'line' | 'path' | 'circle' | 'text' | 'polygon', a: Record<string, string | number>, text?: string) => svg.appendChild(s(tag, a, ...(text === undefined ? [] : [text])));
+  let labels: { l: number; r: number; t: number; b: number }[] = [];
+  /** An arrow from the centre (or `from`) to a point, in plane units; `px` = pixels a unit. */
+  const draw = (a: Arrow, px: number, cls: string, label?: string, from: Arrow = arrow(0), cx0 = CX, cy0 = CY, width = 2.5) => {
+    const x0 = cx0 + from.re * px, y0 = cy0 - from.im * px, x1 = cx0 + (from.re + a.re) * px, y1 = cy0 - (from.im + a.im) * px;
+    const L = Math.hypot(x1 - x0, y1 - y0);
+    if (L < 1) return;
+    const ux = (x1 - x0) / L, uy = (y1 - y0) / L, hl = Math.min(10, L * 0.6);
+    el_('line', { x1: x0, y1: y0, x2: x1 - ux * hl * 0.8, y2: y1 - uy * hl * 0.8, class: `sg-arrow ${cls}`, 'stroke-width': width });
+    el_('polygon', { points: `${x1},${y1} ${x1 - ux * hl - uy * hl * 0.45},${y1 - uy * hl + ux * hl * 0.45} ${x1 - ux * hl + uy * hl * 0.45},${y1 - uy * hl - ux * hl * 0.45}`, class: `sg-head ${cls}` });
+    if (!label) return;
+    // two tips close together (2 + j beside 1 + j) would print their names over each other: step the later one a line away
+    const x = x1 + (ux >= 0 ? 6 : -6), wd = label.length * 7, left = ux >= 0 ? x : x - wd;
+    let y = y1 + (uy > 0 ? 14 : -6);
+    for (let k = 0; k < 6 && labels.some((b) => left < b.r && b.l < left + wd && y - 12 < b.b && b.t < y + 2); k++) y += uy > 0 ? 14 : -14;
+    labels.push({ l: left, r: left + wd, t: y - 12, b: y + 2 });
+    el_('text', { x, y, 'text-anchor': ux >= 0 ? 'start' : 'end', class: `sg-lab ${cls}` }, label);
+  };
+  const axes = (px: number, R: number, cx0 = CX, cy0 = CY) => {
+    el_('line', { x1: cx0 - R * px, y1: cy0, x2: cx0 + R * px, y2: cy0, class: 'sg-ax' });
+    el_('line', { x1: cx0, y1: cy0 - R * px, x2: cx0, y2: cy0 + R * px, class: 'sg-ax' });
+    el_('text', { x: cx0 + R * px, y: cy0 + 14, 'text-anchor': 'end', class: 'sg-tick' }, 'real');
+    el_('text', { x: cx0 + 6, y: cy0 - R * px + 10, class: 'sg-tick' }, 'imaginary');
+    for (let u = 1; u <= R; u++) for (const sgn of [-1, 1]) { el_('line', { x1: cx0 + sgn * u * px, y1: cy0 - 3, x2: cx0 + sgn * u * px, y2: cy0 + 3, class: 'sg-ax' }); el_('line', { x1: cx0 - 3, y1: cy0 - sgn * u * px, x2: cx0 + 3, y2: cy0 - sgn * u * px, class: 'sg-ax' }); }
+  };
+  const arc = (deg: number, r: number, cls: string, cx0 = CX, cy0 = CY) => {
+    if (Math.abs(deg) < 0.5) return;
+    const t = (deg * Math.PI) / 180;
+    el_('path', { d: `M${cx0 + r},${cy0} A${r},${r} 0 ${Math.abs(deg) > 180 ? 1 : 0} ${deg > 0 ? 0 : 1} ${cx0 + r * Math.cos(t)},${cy0 - r * Math.sin(t)}`, class: `sg-arc ${cls}` });
+  };
+  const cosTrace = (X0: number, X1: number, px: number) => `M${range(73).map((i) => `${X0 + (i / 72) * (X1 - X0)},${CY - Math.cos((i * 5 * Math.PI) / 180) * px}`).join(' L')}`;
+
+  function paintMultiply() {
+    const r = product(z, w), R = Math.max(3, Math.ceil(Math.max(...r.lengths))), px = RPX / R;
+    svg.setAttribute('viewBox', `0 0 ${NARROW} ${H}`);
+    axes(px, R);
+    arc(r.angles[0], 30, 'za'); arc(r.angles[1], 42, 'wa'); arc(r.angles[2], 54, 'pa');
+    draw(r.z, px, 'za', `z = ${fmtArrow(z)}`); draw(r.w, px, 'wa', `w = ${fmtArrow(w)}`); draw(r.p, px, 'pa', `zw = ${fmtArrow(r.p)}`, arrow(0), CX, CY, 3);
+    const sum = wrapDeg(r.angles[0] + r.angles[1]);
+    chips.set(0, `${num(r.lengths[0], 2)} × ${num(r.lengths[1], 2)} = ${num(r.lengths[2], 2)}`, 'the lengths multiply');
+    chips.set(1, `${deg1(r.angles[0])} + ${deg1(r.angles[1])} = ${deg1(r.lengths[2] < 1e-9 ? 0 : sum)}`, 'the angles add');
+    chips.set(2, fmtArrow(r.p), '(a + jb)(c + jd) = (ac − bd) + j(ad + bc)');
+    note.textContent = 'z is blue, w orange, and their product green. An arrow of length 1 only turns what it multiplies; a real number only stretches it.';
+    svg.setAttribute('aria-label', `z = ${fmtArrow(z)}, w = ${fmtArrow(w)}, their product ${fmtArrow(r.p)}: length ${num(r.lengths[2], 2)}, angle ${deg1(r.angles[2])}`);
+  }
+
+  function paintTurn() {
+    const t = (theta * Math.PI) / 180, e = expj(t), px = 100, cx0 = 130, X0 = 300, X1 = 610;
+    svg.setAttribute('viewBox', `0 0 ${WIDE} ${H}`);
+    axes(px, 1.3, cx0, CY);
+    el_('circle', { cx: cx0, cy: CY, r: px, class: 'sg-unit' });
+    arc(theta, 24, 'za', cx0, CY);
+    // the trace: cos of every angle, with the arrow's shadow on the real axis carried across to it
+    const xs = (a: number) => X0 + (a / 360) * (X1 - X0), ys = (v: number) => CY - v * px;
+    el_('line', { x1: X0, y1: CY, x2: X1, y2: CY, class: 'sg-ax' }); el_('line', { x1: X0, y1: CY - px, x2: X0, y2: CY + px, class: 'sg-ax' });
+    el_('text', { x: X1, y: CY + 16, 'text-anchor': 'end', class: 'sg-tick' }, 'angle θ, 0° to 360°');
+    el_('text', { x: X0 + 6, y: CY - px + 4, class: 'sg-tick' }, 'cos θ');
+    el_('path', { d: cosTrace(X0, X1, px), class: 'sg-trace' });
+    el_('line', { x1: cx0 + e.re * px, y1: CY - e.im * px, x2: xs(theta), y2: ys(e.re), class: 'sg-shadow' });
+    el_('line', { x1: cx0 + e.re * px, y1: CY - e.im * px, x2: cx0 + e.re * px, y2: CY, class: 'sg-shadow' });
+    el_('circle', { cx: xs(theta), cy: ys(e.re), r: 4, class: 'sg-pt' });
+    draw(e, px, 'za', undefined, arrow(0), cx0, CY);
+    chips.set(0, `cos ${theta}° + j sin ${theta}° = ${fmtArrow(e)}`, 'the arrow of length 1 at θ, written e^(jθ)');
+    chips.set(1, num(e.re, 3).replace('-', '−'), 'its shadow on the real axis: cos θ');
+    chips.set(2, num(e.im, 3).replace('-', '−'), 'its shadow on the imaginary axis: sin θ');
+    note.textContent = 'At 0° the arrow is 1, at 90° it is j, at 180° it is −1. Run it, and the shadow draws a cosine.';
+    svg.setAttribute('aria-label', `The arrow e^jθ at θ = ${theta} degrees, ${fmtArrow(e)}, and the cosine its shadow draws`);
+  }
+
+  function paintTwo() {
+    const t = (theta * Math.PI) / 180, c = cosinePair(t), px = 200, cx0 = 130, X0 = 300, X1 = 610;
+    svg.setAttribute('viewBox', `0 0 ${WIDE} ${H}`);
+    axes(px, 0.65, cx0, CY);
+    draw(c.plus, px, 'za', '+f', arrow(0), cx0, CY);
+    if (mirror) { draw(c.minus, px, 'wa', '−f', arrow(0), cx0, CY); draw(c.sum, px, 'pa', 'sum', arrow(0), cx0, CY, 4); }
+    el_('line', { x1: X0, y1: CY, x2: X1, y2: CY, class: 'sg-ax' });
+    el_('text', { x: X0 + 6, y: CY - 104, class: 'sg-tick' }, 'cos θ, the real part of the sum');
+    el_('path', { d: cosTrace(X0, X1, 100), class: 'sg-trace' });
+    if (mirror) el_('circle', { cx: X0 + (theta / 360) * (X1 - X0), cy: CY - c.sum.re * 100, r: 4, class: 'sg-pt' });
+    chips.set(0, '½ + ½', 'two arrows of length ½, turning opposite ways');
+    chips.set(1, mirror ? num(c.sum.im, 3).replace(/^-0$/, '0') : '—', 'imaginary part of their sum: the upward parts cancel', mirror ? '' : 'bad');
+    chips.set(2, mirror ? num(c.sum.re, 3).replace('-', '−') : '—', 'real part: the sideways parts add, cos θ');
+    note.textContent = mirror ? 'Their upward parts cancel at every instant and the sideways parts add, so the sum never leaves the real axis. A real cosine needs both.' : 'One arrow alone leaves the real axis. Switch the mirror arrow on.';
+    svg.setAttribute('aria-label', `The arrows e^jθ/2 and e^−jθ/2 at θ = ${theta} degrees${mirror ? `; their sum is ${num(c.sum.re, 3)}, on the real axis` : ''}`);
+  }
+
+  function paintBin() {
+    const sigDef = SIGNALS[pick], b = binChain(samplesOf(sigDef), k), half = b.N / 2;
+    svg.setAttribute('viewBox', `0 0 ${NARROW} ${H}`);
+    const pts = b.partial;
+    let x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+    for (const p of pts) { x0 = Math.min(x0, p.re); x1 = Math.max(x1, p.re); y0 = Math.min(y0, p.im); y1 = Math.max(y1, p.im); }
+    const span = Math.max(x1 - x0, y1 - y0, 1e-9), px = 240 / span, cx0 = 170 - ((x0 + x1) / 2) * px, cy0 = 150 + ((y0 + y1) / 2) * px;
+    el_('line', { x1: 10, y1: cy0, x2: NARROW - 10, y2: cy0, class: 'sg-ax' }); el_('line', { x1: cx0, y1: 10, x2: cx0, y2: H - 10, class: 'sg-ax' });
+    el_('path', { d: `M${pts.map((p) => `${(cx0 + p.re * px).toFixed(1)},${(cy0 - p.im * px).toFixed(1)}`).join(' L')}`, class: 'sg-chain' });
+    const closed = b.length < 1e-6 * Math.max(1, half);
+    if (!closed) draw(b.total, px, 'ra', undefined, arrow(0), cx0, cy0, 3);
+    el_('circle', { cx: cx0, cy: cy0, r: 3.5, class: 'sg-pt' });
+    chips.set(0, num(b.length, 1), `|X[${k}]|: ${closed ? 'the chain closes' : 'the arrow from start to end'}`, closed ? 'bad' : '');
+    chips.set(1, closed ? '0' : num(b.amplitude, 3), `÷ ${half}: the amplitude the spectrum reads`);
+    chips.set(2, closed ? '—' : deg1(b.phase), 'its angle: the phase');
+    note.textContent = closed ? `${sigDef.name} has nothing at bin ${k}: the products go round and close up.` : `The ${b.N} products x[n]·e^(−j2π${k}n/${b.N}), added head to tail. Where the signal has a tone the turning cancels and they pile up; elsewhere they curl round.`;
+    svg.setAttribute('aria-label', `${sigDef.name}, bin ${k}: ${closed ? 'the chain of products closes to zero' : `an arrow of length ${num(b.length, 1)} at ${deg1(b.phase)}`}`);
+  }
+
+  let syncSlider: () => void = () => {};
+  function stop() { if (timer) { clearInterval(timer); timer = null; } runBtn.textContent = 'Run'; }
+  function toggleRun() {
+    if (timer) { stop(); return; }
+    runBtn.textContent = 'Stop';
+    timer = setInterval(() => { theta = (theta + 3) % 360; syncSlider(); paint(); }, 40);
+  }
+
+  function buildControls() {
+    stop();
+    controls.replaceChildren();
+    const row = (...kids: HTMLElement[]) => controls.append(h('div', { class: 'mos-row' }, ...kids));
+    const reim = (label: string, get: () => Arrow, set: (a: Arrow) => void) => [
+      slider(`${label} real`, -3, 3, 0.5, get().re, (v) => num(v, 1).replace('-', '−'), (v) => { set(arrow(v, get().im)); paint(); }).el,
+      slider(`${label} imaginary`, -3, 3, 0.5, get().im, (v) => num(v, 1).replace('-', '−'), (v) => { set(arrow(get().re, v)); paint(); }).el,
+    ];
+    if (tab === 'multiply') { row(...reim('z', () => z, (a) => { z = a; })); row(...reim('w', () => w, (a) => { w = a; })); return; }
+    if (tab === 'turn' || tab === 'two') {
+      const sl = slider('θ', 0, 360, 5, theta, (v) => `${v}°`, (v) => { theta = v; paint(); });
+      syncSlider = () => sl.set(theta);
+      row(sl.el, runBtn);
+      if (tab === 'two') {
+        const box = h('input', { type: 'checkbox', 'aria-label': 'Show the mirror arrow at −f' }) as HTMLInputElement;
+        box.checked = mirror;
+        box.addEventListener('change', () => { mirror = box.checked; paint(); });
+        controls.append(h('label', { class: 'mos-sl' }, box, h('span', null, 'The mirror arrow, turning the other way (−f)')));
+      }
+      return;
+    }
+    const sel = h('select', { 'aria-label': 'Signal' }, ...SIGNALS.map((x, i) => h('option', { value: String(i), selected: i === pick }, x.name))) as HTMLSelectElement;
+    sel.addEventListener('change', () => { pick = Number(sel.value); paint(); });
+    row(h('label', { class: 'mos-sl ln-sel' }, h('span', null, 'Signal'), sel), slider('Bin k', 0, BLOCK / 2, 1, k, (v) => String(v), (v) => { k = v; paint(); }).el);
+  }
+
+  function paint() {
+    svg.replaceChildren();
+    labels = [];
+    ({ multiply: paintMultiply, turn: paintTurn, two: paintTwo, bin: paintBin })[tab]();
+  }
+  const mark = () => tabBtns.forEach((b, i) => { b.classList.toggle('on', tabs[i] === tab); b.setAttribute('aria-pressed', String(tabs[i] === tab)); });
+  const tabBtns: HTMLButtonElement[] = tabs.map((t) => h('button', { type: 'button', class: 'btn sm', onclick: () => { tab = t; mark(); buildControls(); paint(); } }, TAB_NAMES[t]));
+  mark();
+  if (tabs.length > 1) tabRow.append(...tabBtns);
+  buildControls(); paint();
+  return {
+    el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, tabs.length > 1 ? tabRow : '', h('div', { class: 'sg-planebox' }, svg), live, note), controls),
+    destroy: stop,
   };
 }

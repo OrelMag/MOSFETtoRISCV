@@ -22,7 +22,7 @@ chain at ÷64 / ÷128 / ÷256: 12.1 / 14.7 / 17.2 bits (half-scale tone)</pre>Th
       'Mixing SNR and SNDR. Noise alone leaves out the harmonics; effective bits are defined from signal over noise <em>and distortion</em>.',
     ],
     chapters: [
-      { chapter: 'signals', step: 6, label: 'Rounding to a number' },
+      { chapter: 'signals', step: 7, label: 'Rounding to a number' },
       { chapter: 'converters', step: 0, label: 'What a converter is judged by' },
       { chapter: 'converters', step: 3, label: 'A shaky clock' },
       { chapter: 'converters', step: 6, label: 'Many bits from one' },
