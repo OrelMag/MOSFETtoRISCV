@@ -305,7 +305,7 @@ function sanitizeComment(c: unknown): CommentDoc | null {
 function sanitizeSection(s: unknown): SectionDoc | null {
   const at = isObj(s) ? vec(s.at) : null, size = isObj(s) ? vec(s.size) : null;
   if (!isObj(s) || !str(s.id) || !at || !size) return null;
-  const title = str(s.title) ? s.title.replace(/s+/g, ' ').trim().slice(0, MAX_SECTION_TITLE) : '';
+  const title = str(s.title) ? s.title.replace(/\s+/g, ' ').trim().slice(0, MAX_SECTION_TITLE) : '';
   const big = (v: number) => Math.min(MAX_SECTION_SIZE, Math.max(SECTION_MIN, Math.round(v)));
   return compact<SectionDoc>({ id: s.id, at, size: [big(size[0]), big(size[1])], title, hue: num(s.hue) ? ((Math.round(s.hue) % 360) + 360) % 360 : undefined });
 }
