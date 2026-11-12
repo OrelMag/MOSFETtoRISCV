@@ -711,7 +711,7 @@ export function isLogisimFile(name: string, text: string): boolean {
   return /<project[\s>]/.test(head) && /<lib\s[^>]*desc="#/.test(head);
 }
 
-/** The numeric attributes that size a part: a width or a count the importer loops over. */
+/** The numeric attributes that size a part: a width or a count the importer loops over (Logisim stops at 32 bits; our parts at MAX_WIDTH). */
 const SIZE_ATTR = /^(width|dataWidth|addrWidth|fanout|incoming|inputs|select|group|number|spacing)$/;
 
 export function importLogisim(files: SourceFile[], opts: ImportOptions): ImportResult | ImportFailure {

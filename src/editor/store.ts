@@ -14,7 +14,7 @@ import type { ProbeTarget } from './probes';
 import { MAX_SLOW } from '../sim/faults';
 import { mergeFolders, sanitizeFolders } from './folders';
 import { same } from './history';
-import { MAX_KEY_LENGTH, MAX_WIDTH } from './parts';
+import { MAX_KEY_LENGTH } from './parts';
 import { sanitizeIoRef } from './ioparts';
 import { sanitizeReaderRef } from './cardparts';
 import { sanitizeBabyRef } from './babypart';
@@ -127,8 +127,15 @@ function sanitizeEnd(e: unknown): EndRef | null {
   return str(e.wire) && at ? { wire: e.wire, at } : null;
 }
 
+/**
+ * The widest pin a stored, shared or imported chip may have. Above the pin editor's MAX_WIDTH (1024): a generated part opened in
+ * the sandbox brings its ports as pins (the RV64 core's register-file read port is 2048 bits). Far below what breaks the page
+ * (a 1e9-bit pin: no array that long, and the sandbox drew nothing on every visit).
+ */
+export const MAX_PIN_BITS = 1 << 16;
+
 function sanitizePin(p: unknown): PinDoc | null {
-  if (!isObj(p) || !str(p.id) || !str(p.name) || !isIdent(p.name) || (p.dir !== 'in' && p.dir !== 'out' && p.dir !== 'inout') || !int(p.width, 1) || p.width > MAX_WIDTH) return null;
+  if (!isObj(p) || !str(p.id) || !str(p.name) || !isIdent(p.name) || (p.dir !== 'in' && p.dir !== 'out' && p.dir !== 'inout') || !int(p.width, 1) || p.width > MAX_PIN_BITS) return null;
   const at = vec(p.at);
   if (!at) return null;
   const kind = p.kind === 'toggle' || p.kind === 'button' || p.kind === 'clock' ? p.kind : undefined;

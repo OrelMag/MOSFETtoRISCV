@@ -59,7 +59,7 @@ export class MappingTally {
 }
 
 /**
- * The first pin wider than the sandbox takes (editor/parts.ts MAX_WIDTH), as the file's error: such a pin cannot be
+ * The first pin wider than the sandbox takes (editor/store.ts MAX_PIN_BITS), as the file's error: such a pin cannot be
  * simulated or drawn, and passed on it would be stored and opened at once. Digital stops at 64 bits, Logisim at 32.
  */
 export function tooWide(chips: ChipDoc[], max: number): ImportFailure | null {

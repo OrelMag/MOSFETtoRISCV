@@ -275,12 +275,12 @@ describe('a part wider than the sandbox takes', () => {
   it('refuses a wide pin, naming it', () => {
     const r = wide(file('half-adder.dig').text.replace(/<elementAttributes>\s*<entry>\s*<string>Label<\/string>\s*<string>A<\/string>\s*<\/entry>/,
       '<elementAttributes><entry><string>Label</string><string>A</string></entry><entry><string>Bits</string><int>2000000000</int></entry>'));
-    expect('error' in r && r.error).toMatch(/In: Bits is 2000000000; .* 1024/);
+    expect('error' in r && r.error).toMatch(/In: Bits is 2000000000; .* 65536/);
   });
-  it('refuses a wide gate before building anything, and takes one 1024 bits wide', () => {
+  it('refuses a wide gate before building anything, and takes one 2048 bits wide (our own .dig export writes such)', () => {
     const gate = (w: number) => wide(file('half-adder.dig').text.replace('<elementName>And</elementName>\n      <elementAttributes/>',
       `<elementName>And</elementName>\n      <elementAttributes><entry><string>Bits</string><int>${w}</int></entry></elementAttributes>`));
     expect('error' in gate(2000000000) && (gate(2000000000) as { error: string }).error).toMatch(/And: Bits is 2000000000/);
-    expect('error' in gate(1024)).toBe(false);
+    expect('error' in gate(2048)).toBe(false);
   });
 });
