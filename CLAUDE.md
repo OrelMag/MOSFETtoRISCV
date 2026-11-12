@@ -32,10 +32,10 @@ npm install          # once
 npm run dev          # Vite dev server
 npm test             # Vitest (simulation + library correctness), must stay green
 npm run typecheck    # tsc --noEmit (strict)
-npm run build        # typecheck + hwstats.json (npm run stats, ~20 s) + the Examples gallery's thumbnails (npm run thumbs, ~1 s) + production build into dist/ (relative base)
+npm run build        # typecheck + hwstats.json (npm run stats, ~35 s) + the lens route cache (npm run routes, ~30 s) + the Examples gallery's thumbnails (npm run thumbs, ~1 s) + the search's chapter index (chapter-manifest.ts --index) + production build into dist/ (relative base)
 npm run preview      # serve dist/
 npm run manifest     # rewrite src/chapters/manifest.ts + loaders.ts after adding / renaming / reordering a chapter or step (a test fails when stale)
-npm run smoke        # every route of dist/ in headless Chrome, fails on any runtime error (~3 min)
+npm run smoke        # every route of dist/ in headless Chrome, fails on any runtime error (~3 250 routes, ~67 min on a CI runner: use --only locally)
 npm run desktop      # build + desktop/ (Electron, own package): portable Windows .exe in desktop/release/
 ```
 
@@ -43,7 +43,15 @@ npm run desktop      # build + desktop/ (Electron, own package): portable Window
 src/styles/fonts.css: Latin, Latin Extended and Greek subsets, OFL, the two first-screen faces preloaded by index.html) on a private `app://mosfet` origin; data next to the .exe (PORTABLE_EXECUTABLE_DIR);
 fuses off (runAsNode: VS Code sets ELECTRON_RUN_AS_NODE, so run `electron .` there with it unset). Share links
 made in the program point at the public site (editor/files.ts `SITE_URL`). `.github/workflows/desktop.yml`
-(after every successful deploy of main, from the deployed commit; manual; or a `v*` tag) publishes the release `desktop-latest`.
+(after every successful deploy of main, from the deployed commit, or manual) publishes the rolling prerelease `desktop-latest`;
+a pushed `v*` tag publishes a permanent release of that name (Latest) with the .exe built from the tag and leaves `desktop-latest`
+alone. Release assets are replaced by scripts/ci/release-replace.sh (new in, tag moved, old out: never a release with none).
+Version: scripts/version.mjs, one string X.YYY.ZZZ (package.json's major.minor, the commit count as the build) for the site's footer
+and the .exe's file name (its Windows file version is X.Y.ZZZ of the same numbers: semver has no leading zeros).
+
+Releasing a version (the maintainer, with push rights): bump `version` in package.json and desktop/package.json (and their lockfiles'
+top level) on a branch, land it as any change, wait for its deploy, then tag exactly the commit the deploy built
+(`git tag -a vX.Y.0 <sha> -m "…"`, `git push origin vX.Y.0`); desktop.yml makes the release from the tag, about 15 min later.
 
 `scripts/smoke.ts` (no dependency: launches Chrome itself, `CHROME` env else the usual paths, and speaks the DevTools
 Protocol over Node's WebSocket) serves dist/ with `vite preview` (or `--url <site>`) and opens every route generated
@@ -55,15 +63,15 @@ a 390 px phone (a few pages), and a sandbox toolbar label cut or scrolled out of
 route a stage bar's button past its edge, the open level's name cut on a one-row stage bar (view/stage.ts fitBar: labels off, then
 buttons into More, then a row for the hierarchy) or the run row cut (fitControls: icons only, then wrapped within its row). Every analogy with a figure or a Water view (chapters/analogies.ts) is also a route "(analogy open)" (30 with the phone ones; `--only analogy`): its `.analogy` asides opened and the step's Water toggles clicked (ANALOGY_DRIVE), failing on a figure that stays empty or says it could not load. `--only <substring>`, `--zoom-open on | off` (Open blocks as you zoom for every route that does not set it), `--headful`, `--dwell <ms>` (wait after settling, default 600).
 
-CI (`.github/workflows/deploy.yml`) runs tests beside build + smoke (one job) and deploys `dist/` to GitHub Pages
+CI (`.github/workflows/deploy.yml`) runs tests (45-80 min on a runner) beside build + smoke (one job, ~75 min) and deploys `dist/` to GitHub Pages
 on every push to `main` (https://switchtocpu.com/, a Pages custom domain). The unit tests are skipped when the pushed tree already
 passed `gate.yml` (a batch merged onto an unmoved main) or when only docs / licence / CNAME changed; build + smoke always run. The deploy also waits on `verify-hdl`: `scripts/verify-export.ts <design>`, one parallel job per design (multi, sys, sys-m, core-m: the system core with ports on tests/syscorebench.ts, the layout flow's design)
 (Yosys synthesizes the exported dual-core and the RV32I / RV32IM system CPUs, each netlist is simulated against ours,
-every output every cycle, on their programs with irq pulses and switch changes). Run it locally (`npx vite-node scripts/verify-export.ts all`, needs `pip install yowasp-yosys`)
+every output every cycle, on their programs with irq pulses and switch changes). Run it locally (`npx vite-node scripts/verify-export.ts all`, needs `pip install yowasp-yosys`; CI pins the version, deploy.yml)
 before merging a change to the exporters, the dual-core or the system CPU (one design: `verify-export.ts sys-m`).
 It also waits on `fpga`: `scripts/fpga-export.ts counter7 computer` (the sandbox's FPGA export of those examples, through
 editor/fpga.ts as the File menu runs it, then Yosys `synth_gowin` on the design with its Tang Nano 9K board top; files in layout/fpga/; fails above the GW1NR-9's 8640 LUTs / 26 BSRAM), then `scripts/fpga-memcheck.ts`: the exported block-RAM memories (memClock) against asynchronous ones, a ROM → RAM chain, every clk edge.
-`.github/workflows/spike.yml` (every push touching `src/riscv/`, fpref.ts or the oracle; nightly on new seeds) runs
+`.github/workflows/spike.yml` (every push touching `src/riscv/`, fpref.ts or the oracle; by hand on any seed range) runs
 the golden model against Spike, commit by commit (`scripts/spike-oracle.ts`, docs/VERIFICATION.md); a change to the
 ISS should leave it green before merging (its failure artifact keeps the program, ELF and Spike's log).
 `.github/workflows/tshark.yml` (pushes touching comm/pcap.ts, the frames, the stack, the capturing widgets or itself; not a deploy gate) has tshark read each chapter's capture, from the gates and the chapters' own frames (`scripts/tshark-oracle.ts`, `--dump` only writes the files, no tshark on Windows; tshark-lib.ts holds each frame to what its bytes claim: fields, protocols, checksums verified good, nothing malformed, no warnings); captures broken on purpose must be caught, and the .pcap files and tshark's output are kept as an artifact.
@@ -76,7 +84,18 @@ them); widgets/fpga.ts its widgets (LUT programmer, the LUTs panel lighting each
 `.github/workflows/layout.yml` (pushes touching scripts/layout/, export-layout.ts, vexport.ts) runs OpenROAD-flow-scripts on sky130
 per design (`export-layout.ts dual | sys`: Verilog, config, source.json with our NAND counts per block and static timing), ~35 min
 each; main and manual runs publish the release layout-latest (dual-core at its root, system core under sys/), which the deploy unpacks
-into dist/layout/ (widgets/chiplayout.ts).
+into dist/layout/ (widgets/chiplayout.ts; scripts/ci/fetch-layout.sh: skipped only when no layout was ever published, any other
+failure stops the deploy).
+Also, none of them deploy gates: `gate.yml` (by hand on a branch: tests + build + smoke, the full deck on a runner), `verify.yml`
+(long RV32 fuzzing of every gate-level CPU, by hand on a seed range), `agc-oracle.yml` (the AGC golden model against yaAGC, pushes
+touching src/agc/ or by hand), `dsp-oracle.yml` (the DSP level's checked-in vectors regenerated by scipy at pinned versions),
+`vhdl.yml` (the VHDL export through GHDL), `rvc-tests.yml` / `rvv-tests.yml` (by hand: rebuild the checked-in riscv-tests rv32uc and
+riscv-vector-tests images with pinned toolchains; docs/VERIFICATION.md). The nightly / weekly schedules (spike, verify, agc) were
+removed at the development stop (2026-11-12): unattended, a failure would reach nobody. Every workflow pins its tools (pip
+`==`, toolchain revisions and sha256), except apt packages (tshark, ghdl, dtc, boost) and the runner image itself.
+No Content-Security-Policy: GitHub Pages sets no headers, `frame-ancestors` is ignored in a `<meta>`, and the simulators compile
+with `new Function` and index.html has an inline script, so a meta CSP would need 'unsafe-eval' and 'unsafe-inline' and protect
+little while risking any source it forgot (workers, wasm, blob: downloads, the Yosys CDN fallback).
 
 ## Stack and conventions
 
