@@ -672,7 +672,9 @@ class ChallengeUi {
       return r.ws;
     });
     const names = added.map((id) => ed.ws.chips[id]?.name).filter(Boolean);
-    ed.toast(names.length ? `Answer imported: ${names.join(', ')} (${undoKey()} removes it)` : 'The answer is already among your chips: opened it');
+    // a long list covered the canvas (30 sub-chip names): the first few, then a count
+    const said = names.length > 3 ? `${names.slice(0, 2).join(', ')} and ${names.length - 2} more chips` : names.join(', ');
+    ed.toast(names.length ? `Answer imported: ${said} (${undoKey()} removes it)` : 'The answer is already among your chips: opened it');
   }
 
   // ---- break-it levels (campaign/breakit.ts) ---------------------------------------------------
