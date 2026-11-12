@@ -8,6 +8,7 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { BREAK_MS, call, HOME, LEVELS, LINES, PULSE_MS, pulsesOf, release, stateAt, verticalPulling, type Frame, type State } from '../phys/strowger';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { swAnchors, swParts, type SwPalette, type SwPose } from './strowger3dparts';
 
@@ -27,6 +28,7 @@ export function strowgerView(): Widget {
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.machine,
     aria: 'A Strowger selector in 3D: a vertical shaft with a wiper that turns over a bank of ten levels of ten contacts',
     camera: { target: [0, 25, -2], yaw: 0.5, pitch: 0.3, dist: 158 },
     limits: { minDist: 50, maxDist: 320 },

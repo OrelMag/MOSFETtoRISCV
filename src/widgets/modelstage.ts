@@ -6,7 +6,8 @@ import '../styles/relay3d.css';
 import '../styles/model3d.css';
 import { CssColors, watchTheme } from '../gl/color';
 import { packInstances, type RGBA } from '../gl/instances';
-import { dot3, sub3 } from '../gl/math';
+import { dot3, norm3, sub3 } from '../gl/math';
+import type { PartLook } from '../gl/kit/looks';
 import type { OrbitLimits, OrbitView } from '../gl/camera';
 import { flatFaces, flatView, type Anchor, type Part } from '../gl/parts';
 import type { Renderer } from '../gl/renderer';
@@ -25,6 +26,8 @@ export interface ModelStageOptions {
   draw: () => void;
   /** Named camera views (front, top, side, iso …) for viewBar(); the first is usually the starting one. */
   views?: readonly ModelView[];
+  /** The model's look on the studio renderer (gl/kit/looks.ts): exposure, key light, what its finishes become. */
+  look?: PartLook;
 }
 
 /** A preset view: picked from the stage's view bar (setView), Reset view then comes back to it. `view` may be computed at
@@ -187,9 +190,10 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
       setLights: (l) => st.setEnv({ ...(l.sky ? { sky: l.sky } : {}), ...(l.ground ? { ground: l.ground } : {}), ...(l.key ? { key: l.key } : {}) }),
     };
     (window as unknown as { __studio?: unknown }).__studio = st;
-    paintParts = (parts) => st.showParts(fromParts(parts), rgbOf);
-    // today's palettes were tuned under half-Lambert light: a lower exposure keeps their colours from washing out
-    st.setEnv({ exposure: 0.9 });
+    paintParts = (parts) => st.showParts(fromParts(parts, o.look), rgbOf);
+    // today's palettes were tuned under half-Lambert light: a little under neutral keeps their colours from washing out
+    const k = o.look?.keyDir;
+    st.setEnv({ exposure: o.look?.exposure ?? 0.9, ...(k ? { dir: norm3([k[0], k[1], k[2]]) } : {}) });
     applyLights();
     setMode('gl');
   }).catch(() => { if (!dead) setMode('flat'); });

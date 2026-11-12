@@ -8,6 +8,7 @@ import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import {
   ADD_UNITS, ARMS, CASES, DIGITS, carryUnits, predictVerdict, runCase, columnReads, digitGroups, PER_COLUMN, TURN_MAX, advanceTo, anticipate, finishCarry, babbageAnchors, babbageParts, begin, finished, fromValue, gateRows, giveOff,
@@ -20,6 +21,7 @@ export function babbageView(): Widget {
 
   const panel = h('div', { class: 'panel bb3d' });
   const stage = modelStage(panel, {
+    look: LOOKS.machine,
     aria: 'One column of Difference Engine No. 2 in 3D: thirty-one figure wheels, a warning lever on each, and a carry axis with a helix of thirty carry arms',
     camera: { target: [-4, 52, 0], yaw: -0.6, pitch: 0.28, dist: 215 },
     limits: { minDist: 60, maxDist: 500 },

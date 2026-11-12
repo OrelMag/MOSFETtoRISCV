@@ -9,6 +9,7 @@ import { groupNum } from '../sim/numfmt';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage, type ModelStage } from './modelstage';
 import { loadClip } from './dspaudio';
 import type { OrbitView } from '../gl/camera';
@@ -38,6 +39,7 @@ export function speakerView(): Widget {
     const draw = () => paint();
     const probeHost = h('span', { class: 'sp-host', 'aria-hidden': 'true' }); // the colour probe lives here: it must outlast replaceChildren below
     const st = modelStage(probeHost, {
+      look: LOOKS.machine,
       aria: 'A cut-away moving-coil loudspeaker in 3D with a plot of the held samples behind it: cone, surround, spider, voice coil in the magnet gap, pole piece, ferrite ring, top plate and frame',
       camera: { ...VIEW },
       limits: { minDist: 120, maxDist: 1200 },

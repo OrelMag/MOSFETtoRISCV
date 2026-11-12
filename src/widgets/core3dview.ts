@@ -7,6 +7,7 @@ import { h, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { FULL, HALF, HALF_MAX, HALF_MIN, IC, N, coreAnchors, coreParts, halfSelected, idle, idx, colOf, rowOf, planOp, marginOf, marginWindow, cycleFault, type CorePalette, type CorePose, type Op, type Phase } from './core3dparts';
 
@@ -23,6 +24,7 @@ export function coreView(): Widget {
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.machine,
     aria: 'A plane of sixteen ferrite cores in 3D, threaded by X and Y select wires, a sense wire and an inhibit wire; a bright wire carries current and a circulating arrow on each core shows its magnetisation',
     camera: { target: [0, -4, 4], yaw: 0.62, pitch: 0.62, dist: phone() ? 340 : 250 },
     limits: { minDist: 90, maxDist: 520 },

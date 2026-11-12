@@ -6,22 +6,27 @@ import { packInstances, type RGBA } from '../instances';
 import type { Part } from '../parts';
 import { lathe, roundedBox, type Geo } from './geo';
 import type { Material } from './materials';
+import type { PartLook } from './looks';
 import type { Item } from './scene';
 
 export const UNIT_BOX: Geo = roundedBox(1, 1, 1, 0);
 export const UNIT_CYL: Geo = lathe([[0, -0.5], [0.5, -0.5], [0.5, 0.5], [0, 0.5]], { seg: 28, crease: 60 });
 
-/** spec 0..1 (today's "polished metal ≈ 0.4") → a material: metal, satin, or matte. The colour comes per instance. */
-const TIERS: { below: number; key: string; mat: Material }[] = [
-  { below: 0.12, key: 'matte', mat: { base: [1, 1, 1], metal: 0, rough: 0.7, label: 'matte' } },
-  { below: 0.3, key: 'satin', mat: { base: [1, 1, 1], metal: 0, rough: 0.38, coat: 0.25, label: 'satin' } },
-  { below: Infinity, key: 'metal', mat: { base: [1, 1, 1], metal: 0.85, rough: 0.32, label: 'metal' } },
+interface Tier { below: number; key: string; mat: Material }
+/** spec 0..1 (today's "polished metal ≈ 0.4") → a material: metal, satin, or matte, as the model's look says. The colour
+ *  comes per instance. */
+const tiersOf = (l: PartLook = {}): Tier[] => [
+  { below: l.satinFrom ?? 0.12, key: 'matte', mat: { base: [1, 1, 1], metal: 0, rough: l.matte?.rough ?? 0.7, label: 'matte' } },
+  { below: l.metalFrom ?? 0.3, key: 'satin', mat: { base: [1, 1, 1], metal: 0, rough: l.satin?.rough ?? 0.38, coat: l.satin?.coat ?? 0.25, label: 'satin' } },
+  { below: Infinity, key: 'metal', mat: { base: [1, 1, 1], metal: l.metal?.metal ?? 0.85, rough: l.metal?.rough ?? 0.32, label: 'metal' } },
 ];
+const tierMemo = new WeakMap<PartLook, Tier[]>(), DEFAULT_TIERS = tiersOf();
+const tiersFor = (l?: PartLook) => { if (!l) return DEFAULT_TIERS; let t = tierMemo.get(l); if (!t) tierMemo.set(l, (t = tiersOf(l))); return t; };
 
 export interface PartScene { items: Item[]; sets: { key: string; geo: Geo; mat: Material; data: Float32Array }[] }
 
-export function fromParts(parts: readonly Part[]): PartScene {
-  const items: Item[] = [], groups = new Map<string, { geo: Geo; mat: Material; list: Part[] }>();
+export function fromParts(parts: readonly Part[], look?: PartLook): PartScene {
+  const TIERS = tiersFor(look), items: Item[] = [], groups = new Map<string, { geo: Geo; mat: Material; list: Part[] }>();
   for (const p of parts) {
     const a = (p.color as RGBA)[3] ?? 1, geo = p.kind === 'box' ? UNIT_BOX : UNIT_CYL;
     if (a < 1) {

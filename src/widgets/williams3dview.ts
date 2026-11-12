@@ -7,6 +7,7 @@ import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { cellOf, deflectionOf, DIGITS, LINES, poseParts, staticParts, WGEOM, williamsAnchors, type WilliamsDetail } from './williams3dparts';
 import type { CrtPalette } from './crt3dparts';
@@ -27,6 +28,7 @@ export function williamsView(words: number[] = Array.from({ length: LINES }, (_,
   let t = 0, visited = -1, running = false, rate = 64, detail: WilliamsDetail = 'overview';
   const panel = h('div', { class: 'panel crt3d' });
   const stage = modelStage(panel, {
+    look: LOOKS.lab,
     aria: 'A Williams-Kilburn storage tube in 3D: an electron gun, electrostatic deflection plates, a face carrying 32 by 32 dots and dashes, and a wire-mesh pick-up plate in front of it with its lead to an amplifier',
     camera: isNarrow() ? { ...VIEWS.side, dist: VIEWS.side.dist * 1.25 } : VIEWS.three,
     limits: { minDist: 100, maxDist: 2000 },

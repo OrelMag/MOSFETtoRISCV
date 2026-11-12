@@ -8,6 +8,7 @@ import { h, s } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { endTau, facts, fibreAnchors, fibreParts, FIBRES, LENGTH_KM, profileOf, pulseView, rayDelayOf, SIGMA_NS, X0, type FibrePalette, type FibreState, type Kind, type Profile } from './fibre3dparts';
 import { bandwidthMHzKm, gradedDelayPsKm, stepDelayPsKm } from '../phys/fibre';
@@ -32,6 +33,7 @@ export function fibreView(initial: Kind = 'multi'): Widget {
     leak: stage.rgb('--fb-leak'), pulse: stage.rgb('--fb-pulse'), glow: stage.rgba('--fb-glow', 0.55), air: stage.rgb('--fb-air'), cut: stage.rgb('--fb-cut'),
   });
   const stage = modelStage(panel, {
+    look: LOOKS.lab,
     aria: 'An optical fibre cut away in 3D: the core, the cladding and the coating, with a ray launched at a chosen angle that is guided by total internal reflection or leaks into the cladding, and a pulse travelling down it',
     camera: { ...VIEW },
     limits: { minDist: 7, maxDist: 400 },

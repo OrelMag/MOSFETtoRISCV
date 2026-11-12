@@ -9,6 +9,7 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import type { OrbitView } from '../gl/camera';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import {
   CARRIER_HZ, CUT_LENGTH_M, LENGTH_M, OD_M, ROW_HIT_S, SLOTS, SLOTS_PER_WORD, SOUND_M_S, TANKS, TANK_C, Tank, WINDOW_TOL, WORDS, bitsInTank,
@@ -45,6 +46,7 @@ export function mercuryView(): Widget {
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.lab,
     aria: 'EDSAC’s mercury delay line in 3D: a steel tube of mercury with a quartz crystal at each end, a train of pulses travelling along it, the amplifier, reshaper and gate that feed the pulses back, and fifteen more tanks in the same housing',
     camera: startView(),
     limits: { minDist: 40, maxDist: 700 },

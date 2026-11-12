@@ -8,6 +8,7 @@ import { groupNum } from '../sim/numfmt';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { CCD42_40, ccdRetained } from '../phys/imagesensor';
 import { ccdAnchors, ccdParts, CcdRun, CG_UV, COLS, CTE_DATASHEET, FULL_WELL, GATE, PITCH, ROWS, scene, SI_DEPTH, STEPS, type CcdPalette, type Cte, type Phase } from './ccd3dparts';
@@ -28,6 +29,7 @@ export function ccdView(): Widget {
   run.expose(level);
   const panel = h('div', { class: 'panel ccd3d' });
   const stage = modelStage(panel, {
+    look: LOOKS.silicon,
     aria: `A three-phase back-illuminated CCD in 3D: ${COLS} columns of ${ROWS} pixels with three polysilicon gates each, the horizontal register below them with an output amplifier at each end and a dump drain, light entering through the back of the silicon, and charge packets in potential wells under the gates`,
     camera: innerWidth < 600 ? { target: [8, -10, 0], yaw: 2.05, pitch: 0.8, dist: 105 } : { target: [12, -12, 2], yaw: 2.05, pitch: 0.8, dist: 125 },
     limits: { minDist: 30, maxDist: 360 },

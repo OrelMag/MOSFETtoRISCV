@@ -9,6 +9,7 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { barsPicture, ringsPicture } from '../gfx/scenepics';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import {
   beamAt, crtAnchors, CrtRun, decayTicks, fieldTicks, frameTicks, GEOM, hTotal, levelsOf, maskParts, NTSC, NTSC_SCALED, poseParts, ROW_WORDS, staticParts, timingFor,
@@ -44,6 +45,7 @@ export function crtView(): Widget {
 
   const panel = h('div', { class: 'panel crt3d' });
   const stage = modelStage(panel, {
+    look: LOOKS.lab,
     aria: 'A colour picture tube in 3D: an electron gun with three beams, the deflection yoke at the neck, the funnel and the phosphor screen, with the beam painting the picture the scan-out sends',
     camera: viewOf(isNarrow() ? 'side' : 'three'),
     limits: TUBE_LIMITS,

@@ -9,6 +9,7 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { gibbsPeak, PATTERNS } from '../comm/fourier';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import {
   N_CRANKS, PEN_SCALE, TIDE_PRESET, angleOf, beatHours, levelOf, offsetsAt, penTip, ratioOf, throwMm, tideAnchors, tideOf, tideParts, type TidePalette,
@@ -29,6 +30,7 @@ export function tideView(): Widget {
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.field,
     aria: 'Kelvin’s tide predictor in 3D: ten slotted cranks driven by one hand crank through a gear each, every crank moving a pulley up and down on a slider, one cord running under every movable pulley and over a fixed pulley between them, and a pen at its end drawing on a moving band of paper between two rollers',
     camera: { ...VIEW },
     limits: { minDist: 60, maxDist: 700 },

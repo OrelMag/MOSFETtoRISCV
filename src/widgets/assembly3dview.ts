@@ -10,6 +10,7 @@ import { assemble } from '../riscv/asm';
 import { disasm } from '../riscv/isa';
 import { pipeSchedule, type Cycle } from '../riscv/pipetrace';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { STATIONS, assemblyAnchors, assemblyParts, kindOfWord, lampsOf, palletsAt, flushText, outcomeOf, type Outcome, type AssemblyPalette } from './assembly3dparts';
 import { numOf } from '../chapters/order';
@@ -45,6 +46,7 @@ export function assemblyView(programs: readonly AssemblyProgram[]): Widget {
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.field,
     aria: 'The five-stage pipeline as an assembly line in 3D: Fetch, Decode, Execute, Memory and Writeback stations on a belt, a pallet for every instruction in flight, an empty pallet for a bubble',
     // the stage is as wide as the model needs: a phone's narrow one sits further back
     camera: { target: [2, 8, 4], yaw: 0.35, pitch: 0.42, dist: typeof innerWidth === 'number' && innerWidth < 640 ? 190 : 178 },

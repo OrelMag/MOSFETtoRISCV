@@ -8,6 +8,7 @@ import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import {
   BITS, CORES, CY, FIXED_WORDS, MODULE_CORES, MOD_X, MOD_Z, MODULES, SENSE_LINES, STRANDS, WORDS, WORDS_PER_CORE, WORD_BITS,
@@ -26,6 +27,7 @@ export function ropeView(): Widget {
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.machine,
     aria: 'Eight cores of an Apollo core rope module in 3D: sense wires run straight through a core for a 1 or loop round it for a 0, inhibit wires pick one core, set and reset wires switch it; and the whole module of 512 cores beside them',
     camera: { ...CLOSE },
     limits: { minDist: 120, maxDist: 2600 },
