@@ -43,6 +43,8 @@ export const SPLIT_MIN = 40;
 const STATE_COLUMN = 16;
 /** A split block is laid out by depth only when that keeps this share of its columns' scale at fit (the stage's canvas, ~1.1 : 1). */
 const FIT_KEEP = 0.5;
+/** A next-state block of more than UNIT_MAX gates opens to one block per register (splitNext); a group under UNIT_MIN joins the shared terms. */
+const UNIT_MAX = 80, UNIT_MIN = 6;
 /** The scale a drawing fits a 620 × 560 canvas at, from its parts and pins (relative: only compared). */
 const fitScale = (n: Netlist): number => {
   let w = 1, h = 1;
@@ -297,24 +299,69 @@ export class Rtl {
       g.ins.forEach(walk);
     };
     for (const r of regs) walk(r.ins[0]);
-    const make = (role: 'next' | 'state' | 'out', name: string, label: string, gates: Gate[]) => {
-      if (!gates.length) return;
+    const make = (role: 'next' | 'state' | 'out', name: string, label: string, gates: Gate[], parent: Scope = sc): Scope | null => {
+      if (!gates.length) return null;
       // a name its parent does not use yet (a block may already have a 'state' of its own)
-      const taken = new Set(sc.kids.map((k) => this.scopes[k].name));
+      const taken = new Set(parent.kids.map((k) => this.scopes[k].name));
       let nm = name;
       for (let i = 2; taken.has(nm); i++) nm = `${name}${i}`;
-      const k: Scope = { id: this.scopes.length, name: nm, label, parent: sc.id, kids: [], idName: sc.id === 0 ? nm : `${sc.idName ?? sc.name}_${nm}`, role };
+      const k: Scope = { id: this.scopes.length, name: nm, label, parent: parent.id, kids: [], idName: parent.id === 0 ? nm : `${parent.idName ?? parent.name}_${nm}`, role };
       this.scopes.push(k);
-      sc.kids.push(k.id);
+      parent.kids.push(k.id);
       for (const g of gates) { g.scope = k.id; for (const o of g.out) this.drivers[this.root(o)].scope = k.id; }
+      return k;
     };
     // one or two output gates are not worth a box of their own (its label would not fit it): they join the logic
     const outs = mine.filter((g) => plain(g) && !next.has(g)), few = outs.length > 0 && outs.length <= 2;
-    make('next', 'next', few ? 'next state, outputs' : 'next state', mine.filter((g) => next.has(g) || (few && outs.includes(g))));
+    const nextGates = mine.filter((g) => next.has(g) || (few && outs.includes(g)));
+    const nx = make('next', 'next', few ? 'next state, outputs' : 'next state', nextGates);
+    if (nx && nextGates.length > UNIT_MAX) this.splitNext(nx, regs, next, make);
     make('state', 'state', 'state', regs);
     if (!few) make('out', 'out', 'outputs', outs);
     sc.split = true;
     regs.forEach((r, i) => { this.regRank.set(this.root(r.ins[0]), i); this.regRank.set(this.root(r.out[0]), i); });
+  }
+
+  /**
+   * A next-state block of more than UNIT_MAX gates as blocks a reader opens one at a time: the logic of each register (its
+   * bits together: cnt0 … cnt7 are one register, cnt), and the terms several registers share. A gate is in a register's
+   * block when only that register's next state reads it. Groups of fewer than UNIT_MIN gates join the shared block. Every
+   * gate keeps its inputs and name; only its box changes (as split() itself), so the leaves and nets are the flat ones.
+   */
+  private splitNext(nx: Scope, regs: Gate[], next: Set<Gate>, make: (role: 'next', name: string, label: string, gates: Gate[], parent: Scope) => Scope | null): void {
+    const byOut = new Map<Sig, Gate>();
+    for (const g of next) for (const o of g.out) byOut.set(this.root(o), g);
+    const stem = (r: Gate) => {
+      const s = this.names[this.root(r.out[0])].replace(/(\[\d+\]|_?\d+)$/, '').replace(/[^A-Za-z0-9_]/g, '_');
+      return !s || /^n$/.test(s) ? '' : s;
+    };
+    const owners = new Map<Gate, Set<string>>();
+    for (const r of regs) {
+      const st = stem(r), seen = new Set<Gate>();
+      const walk = (sig: Sig) => {
+        const g = byOut.get(this.root(sig));
+        if (!g || seen.has(g)) return;
+        seen.add(g);
+        if (!owners.has(g)) owners.set(g, new Set());
+        owners.get(g)!.add(st);
+        g.ins.forEach(walk);
+      };
+      walk(r.ins[0]);
+    }
+    const groups = new Map<string, Gate[]>();
+    const mine = this.gates.filter((g) => g.scope === nx.id);
+    for (const g of mine) {
+      const o = owners.get(g), key = o && o.size === 1 ? [...o][0] : '';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(g);
+    }
+    // small groups join the shared terms; a split into one block is no split
+    for (const [k, gs] of [...groups]) if (k && gs.length < UNIT_MIN) { groups.delete(k); groups.set('', [...(groups.get('') ?? []), ...gs]); }
+    if ([...groups.keys()].filter((k) => k).length < 2) return;
+    for (const [k, gs] of [...groups].sort(([a], [b]) => (a ? (b ? a.localeCompare(b) : -1) : 1))) {
+      if (k) make('next', `n_${k}`, `next ${k}`, gs, nx);
+      else make('next', 'shared', 'shared terms', gs, nx);
+    }
   }
 
   /**
@@ -506,7 +553,8 @@ export class Rtl {
       // a block of gates is laid out by logic depth, rows level with what they talk to, its short nets drawn as wires where
       // no other part stands between their ends (lib/layered.ts, avoid): a block of gates of any size, a split block's next state / outputs
       // (drawn in columns with every net a label they read as nothing but pointers: 51 890 of 61 736 nets over the book's
-      // 521 blocks, 45 048 with this, folded to the canvas shape (aspect), none below half its scale at fit); not one of boxes or wide buses, whose pointer names
+      // 521 blocks, 45 048 with this, folded to the canvas shape (aspect), none below half its scale at fit; with a large next
+      // state opened into per-register blocks, splitNext, 47 919 of 74 054 nets over 977 levels, 65 % against 84 %); not one of boxes or wide buses, whose pointer names
       // need wider channels than layered leaves; nor a state register of more than STATE_COLUMN flip-flops, which share one
       // logic depth and would stand in one column too tall to read at fit (Builder's wrapped columns hold them). Laid out when
       // the level is first opened, not when the design is built. room: a split block's labels need it.
