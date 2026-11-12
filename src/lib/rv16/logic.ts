@@ -232,7 +232,8 @@ export const MUX16: ComponentDef = (() => {
     ports: [bus('a', 16, 'in'), bus('b', 16, 'in'), { name: 's', width: 1, dir: 'in', side: 'bottom' }, bus('y', 16, 'out')],
     symbol: { kind: 'mux' },
     spec: ([a, b, s]) => [s ? b : a],
-    netlist: () => ({ pins: { a: [0, pa[1]], b: [0, pb[1]], s: [0, ps[1]], y: [R_, port('my', 'out')[1]] }, instances: b.instances, nets }),
+    // pin a two units up: b's line runs one unit under a's, and two pin boxes one unit apart sat on each other (PW-16)
+    netlist: () => ({ pins: { a: [0, pa[1] - 2], b: [0, pb[1]], s: [0, ps[1]], y: [R_, port('my', 'out')[1]] }, instances: b.instances, nets }),
   });
 })();
 

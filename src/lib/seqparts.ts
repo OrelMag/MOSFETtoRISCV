@@ -139,7 +139,7 @@ export const JKFF: ComponentDef = define({
   netlist: () => {
     const g = symbolGeom(DFF_R), xf = 30;
     return {
-      pins: { j: [0, 2], k: [0, 9], clk: [0, 6 + g.ports.clk.pos[1]], rst_n: [0, 6 + g.ports.rst_n.pos[1]], q: [xf + g.w + 8, 6 + g.ports.q.pos[1]] },
+      pins: { j: [0, 2], k: [0, 7], clk: [0, 6 + g.ports.clk.pos[1]], rst_n: [0, 6 + g.ports.rst_n.pos[1]], q: [xf + g.w + 8, 6 + g.ports.q.pos[1]] },
       instances: [
         { name: 'nq', def: NOT, at: [6, 4] },
         { name: 'nk', def: NOT, at: [6, 8] },
