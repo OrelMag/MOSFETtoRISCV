@@ -1,5 +1,6 @@
 // The opened package (widgets/package3dparts.ts) held to phys/line.ts's groundBounce and the noise panel's limits.
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import type { RGB } from '../src/gl/instances';
 import { groundBounce, VIH, VIL, VIO } from '../src/phys/line';
 import { padSwing } from '../src/widgets/line';
@@ -65,5 +66,16 @@ describe('the package', () => {
     for (const len of [1.5, 5]) for (const b of bonds(st(8, 4, 3, 1, { len }))) for (const q of b.pts) expect(Math.abs(q[0])).toBeLessThan(37);
     const count = (mould: boolean) => pkParts(st(8, 1, 3, 1, { mould }), P).length;
     expect(count(true)).toBe(count(false) + 1);
+  });
+});
+
+describe('the package note states the drawn scale', () => {
+  // Release review (models): the note said the die was about 8 mm and the pads "2 to 3 times closer" than real; at
+  // UNITS_PER_MM the 21-unit die is 7.35 mm and the 1.8-unit pad pitch 0.63 mm, 6 to 12 times the real 50-100 µm.
+  const note = readFileSync(new URL('../src/widgets/package3dview.ts', import.meta.url), 'utf8');
+  it('die and pad pitch as drawn', () => {
+    expect(21 / UNITS_PER_MM).toBeCloseTo(7.35, 2);
+    expect(note).toContain(`die about ${Math.round(21 / UNITS_PER_MM)} mm across`);
+    expect(note).toContain(`pads about ${(1.8 / UNITS_PER_MM).toFixed(1)} mm apart`);
   });
 });
