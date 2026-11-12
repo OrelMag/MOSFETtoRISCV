@@ -182,7 +182,7 @@ function layout(spec: BlockSpec, insts: Inst[],
   if (spec.place === 'layered') {
     const ordered = nets.map((n) => ({ ...n, ends: [...n.ends].sort((a, b) => dirOf(a) - dirOf(b)) }));
     const nl = layered(spec.ports, { nets: () => ordered, instances } as unknown as Builder,
-      { room: true, wires: Object.fromEntries(ordered.filter((n) => spec.wires?.includes(n.name ?? '')).map((n) => [n.ends[0], true])) });
+      { room: true, pinPitch: 4, x0: Math.ceil(2 * leftW + 4), wires: Object.fromEntries(ordered.filter((n) => spec.wires?.includes(n.name ?? '')).map((n) => [n.ends[0], true])) });
     return { level: 'switch' as const, ...nl, nets: nl.nets.map((n) => { const c = caps.get(n.name ?? ''); return c === undefined ? n : { ...n, cap: c }; }) };
   }
   return { level: 'switch' as const, instances, nets, pins };

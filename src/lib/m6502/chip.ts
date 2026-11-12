@@ -382,6 +382,7 @@ export function pcBlock(): ComponentDef {
   const L = new Logic();
   let cy = 'h_PC_INC';
   for (let i = 0; i < 16; i++) {
+    L.slice(i);
     const lo = i < 8, j = i & 7, busName = lo ? 'adl' : 'adh';
     // PC select (φ1): the address bus when jumping, else the PC itself; held through φ2
     const pcs = `pcs${i}`, pc = `pc${i}`;
@@ -405,7 +406,7 @@ export function pcBlock(): ComponentDef {
     summary: 'PC select (from ADL / ADH in φ1 on a jump, else the PC), a 16-bit incrementer, the PC loaded in φ2; it drives ADL / ADH (an address) and DB (a push).',
     ports: [...['c_ADL_PCL', 'c_ADH_PCH', 'hold_pcl', 'hold_pch', 'h_PC_INC', 'c_PCL_ADL', 'c_PCH_ADH', 'c_PCL_DB', 'c_PCH_DB', 'p2'].map((x) => bit(x)),
       ...busPorts('adl', 'adh', 'db')],
-    symbol: { kind: 'box', label: 'PC' }, rows: 24,
+    symbol: { kind: 'box', label: 'PC' }, rows: 24, place: 'slices',
   });
 }
 
@@ -415,6 +416,7 @@ export function addrBlock(): ComponentDef {
   const L = new Logic();
   for (let i = 0; i < 16; i++) {
     const lo = i < 8, j = i & 7;
+    L.slice(i);
     L.pass(lo ? 'c_ADL_ABL' : 'c_ADH_ABH', `${lo ? 'adl' : 'adh'}[${j}]`, `q${i}`);
     L.cell(`q${i}`, 'p2', L.net(), `a[${i}]`);
   }
@@ -422,7 +424,7 @@ export function addrBlock(): ComponentDef {
     id: 'm65_addr', name: '6502 address register',
     summary: 'ABL / ABH: loaded from ADL / ADH in φ1, refreshed in φ2, driving the address pins A0 … A15 for the whole cycle.',
     ports: [bit('c_ADL_ABL'), bit('c_ADH_ABH'), bit('p2'), ...busPorts('adl', 'adh'), bus('a', 16, 'out')],
-    symbol: { kind: 'box', label: 'ABH / ABL' }, rows: 16,
+    symbol: { kind: 'box', label: 'ABH / ABL' }, rows: 16, place: 'slices',
   });
 }
 
@@ -432,6 +434,7 @@ export function dataBlock(): ComponentDef {
   const dlq = L.nor(['np2', 'h_WRITE', 'h_DL_HOLD']);
   const nwq = L.nand(['p2', 'h_WRITE']);
   for (const i of R8) {
+    L.slice(i);
     const din = L.inv(L.inv(`d[${i}]`), `din[${i}]`);
     L.pass(dlq, din, `dl${i}`);
     const { nq } = L.cell(`dl${i}`, 'p1');
@@ -450,7 +453,7 @@ export function dataBlock(): ComponentDef {
     summary: 'DL (the byte read, latched in φ2 and driven onto DB, ADL or ADH) and DOR (the byte to write, from DB in φ1, onto the pins in φ2 of a write cycle, push–pull).',
     ports: [bit('c_DL_DB'), bit('c_DL_ADL'), bit('c_DL_ADH'), bit('c_DB_DOR'), bit('h_WRITE'), bit('h_DL_HOLD'), bit('p1'), bit('p2'), bit('np2'),
       ...busPorts('db', 'adl', 'adh', 'd'), bus('din', 8, 'out')],
-    symbol: { kind: 'box', label: 'DL / DOR' }, rows: 16,
+    symbol: { kind: 'box', label: 'DL / DOR' }, rows: 16, place: 'slices',
   });
 }
 
@@ -482,7 +485,7 @@ export function flagsBlock(): ComponentDef {
     summary: 'N V D I Z C, each a master–slave pair whose next value is chosen in φ1: from DB (a load, PLP / RTI), from the ALU, set or cleared, else kept. P is pushed onto DB with B = 0 in an interrupt.',
     ports: [...RAW.slice(0, 15).map((s) => bit(r(s))), bit('c_P_DB'), bit('intg'), bit('out7'), bit('zout'), bit('vout'), bit('carry'), bit('dbz'), bit('p1'), bit('p2'),
       bus('db'), ...flags.map((f) => bit(`f${f}`, 'out')), bit('ni', 'out')],
-    symbol: { kind: 'box', label: 'P' }, rows: 16,
+    symbol: { kind: 'box', label: 'P' }, rows: 16, place: 'layered',
   });
 }
 
@@ -491,14 +494,17 @@ export function flagsBlock(): ComponentDef {
 export function busesBlock(): ComponentDef {
   const L = new Logic();
   for (const b of ['db', 'sb', 'adl', 'adh']) for (const i of R8) {
+    L.slice(i);
     L.pullup('p2', `${b}[${i}]`);
     L.cap([`${b}[${i}]`], 20);
   }
   for (const i of R8) {
+    L.slice(i);
     L.pass('c_SB_DB', `sb[${i}]`, `db[${i}]`);
     L.pass('c_SB_ADH', `sb[${i}]`, `adh[${i}]`);
     L.pulldown(i ? 'c_ZO_ADH' : 'c_ZERO_ADH', `adh[${i}]`);
   }
+  L.slice(-1);
   // vectors on ADL: $FA / $FC / $FE (+1 for the high byte): bit 0 low for the low byte, bit 1 for RESET, bit 2 for NMI
   // DB = 0? (for N Z after a load: Z), read where the bus lives
   L.nor(R8.map((i) => `db[${i}]`), 'dbz');

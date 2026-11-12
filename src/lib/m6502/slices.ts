@@ -28,6 +28,7 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
   const idx = new Map(placed.map((p, i) => [p.name, i]));
   const rot = new Map<string, 1 | 2 | 3>(), flip = new Map<string, boolean>();
   const geo = (n: string) => orientGeom(byName.get(n)!.def, flip.get(n), rot.get(n));
+  const exits = (n: string) => new Set(Object.values(geo(n).ports).map((p) => p.exit));
   const portY = (n: string, p: string) => geo(n).ports[p].pos[1];
   // a pass transistor reads left to right: drain on the left, source on the right, the gate on a side
   for (const p of placed) {
@@ -60,14 +61,15 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
   for (const s of sliceIds) {
     const ms = members.get(s)!;
     for (let c = 0; c < D; c++) {
-      let free = 0;
+      let free = 0, prev: string | null = null;
       for (const n of ms) {
         if (depth.get(n) !== c) continue;
         const ps = preds.get(n)!;
         const aim = ps.length ? Math.round(ps.reduce((a, e) => a + local.get(e.from)! + portY(e.from, e.fp) - portY(n, e.tp), 0) / ps.length) : free;
-        const top = Math.max(aim, free);
+        const top = Math.max(aim, prev ? free + (exits(n).has('up') ? 3 : 0) : 0);
         local.set(n, top);
-        free = top + geo(n).h + VGAP;
+        free = top + geo(n).h + VGAP + (exits(n).has('down') ? 3 : 0);
+        prev = n;
       }
     }
     const lo = Math.min(0, ...ms.map((n) => local.get(n)!));
@@ -170,7 +172,7 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
       if (at.has(p.name) || sliceOf.has(p.name)) continue;
       const g = geo(p.name);
       const right = spec.ports.some((q) => `${q.name}_bits` === p.name && q.dir === 'out');
-      if (right) { at.set(p.name, [xs[D + 1], yr]); yr += g.h + 4; } else { at.set(p.name, [xs[0], yl]); yl += g.h + 4; }
+      if (right) { at.set(p.name, [xs[D + 1], yr]); yr += g.h + 8; } else { at.set(p.name, [xs[0], yl]); yl += g.h + 8; }
       const q = spec.ports.find((r) => `${r.name}_bits` === p.name);
       if (q) {
         const main = g.ports[q.dir === 'in' ? 'in' : 'out'];
