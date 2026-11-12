@@ -24,8 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
       - name: The pinned xPack toolchain
@@ -46,7 +46,7 @@ jobs:
       - name: Same as the checked-in file?
         run: |
           git diff --stat --exit-code -- tests/verify/riscv-tests/bare-c.json || echo "::notice::bare-c.json differs from the checked-in file (toolchain line or code), take the artifact"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: riscv-tests-bare-c
           path: tests/verify/riscv-tests/bare-c.json

@@ -23,6 +23,8 @@ permissions:
   contents: read
 
 env:
+  # the dispatch input reaches the shell only through the environment, checked to be a number (never pasted into a script)
+  SPLIT: ${{ inputs.split || '1500' }}
   RVT_REV: f76bff121dce91b6b23e1d37be77a5e44af914c3
   SPIKE_REV: 20feb9c2bf2a7deab964d8190b0cbd4b4131bec3
   TOOLCHAIN: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2025.07.16/riscv64-elf-ubuntu-22.04-gcc-nightly-2025.07.16-nightly.tar.xz
@@ -39,14 +41,14 @@ jobs:
         run: |
           git clone https://github.com/chipsalliance/riscv-vector-tests rvt
           cd rvt && git checkout "$RVT_REV" && git submodule update --init --recursive
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.25.1'
       - name: Spike's run-time dependency (it compiles its device tree with dtc)
         run: sudo apt-get update && sudo apt-get install -y device-tree-compiler
       - name: Cache the toolchain and Spike
         id: cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/riscv
           key: rvt-${{ env.SPIKE_REV }}-2025.07.16
@@ -61,9 +63,10 @@ jobs:
       - name: Generate, patch on Spike, merge, compile and run stage 2 on Spike
         working-directory: rvt
         run: |
+          [[ "$SPLIT" =~ ^[0-9]+$ ]] || { echo "split must be a number: $SPLIT" >&2; exit 1; }
           export PATH="$HOME/riscv/bin:$PATH" RISCV="$HOME/riscv"
-          make generate-stage1 --environment-overrides VLEN=128 XLEN=32 MODE=machine INTEGER=1 SPLIT=${{ inputs.split || '1500' }} PATTERN="$PATTERN"
-          make all -j"$(nproc)" --environment-overrides VLEN=128 XLEN=32 MODE=machine INTEGER=1 SPLIT=${{ inputs.split || '1500' }} PATTERN="$PATTERN"
+          make generate-stage1 --environment-overrides VLEN=128 XLEN=32 MODE=machine INTEGER=1 SPLIT="$SPLIT" PATTERN="$PATTERN"
+          make all -j"$(nproc)" --environment-overrides VLEN=128 XLEN=32 MODE=machine INTEGER=1 SPLIT="$SPLIT" PATTERN="$PATTERN"
           ls out/v128x32machine/tests/stage2 | wc -l
       - name: What the artifact was made with
         working-directory: rvt
@@ -73,11 +76,11 @@ jobs:
             echo "spike $SPIKE_REV"
             echo "toolchain $TOOLCHAIN"
             echo "go $(go version)"
-            echo "split ${{ inputs.split || '1500' }}"
+            echo "split $SPLIT"
             echo "pattern $PATTERN"
           } > out/v128x32machine/tests/PROVENANCE.txt
           cp -r macros out/v128x32machine/tests/macros
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: rvv-tests-stage2
           path: |

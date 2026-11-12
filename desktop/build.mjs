@@ -1,16 +1,13 @@
 // Builds the portable Windows program: stages ../dist (stage.mjs), then packs it with electron-builder
-// into release/MOSFET-to-RISCV-<version>-portable.exe, one file that runs without installing anything.
-import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+// into release/MOSFET-to-RISCV-<site version>-portable.exe, one file that runs without installing anything.
 import { build, Platform } from 'electron-builder';
+import { versionOf } from '../scripts/version.mjs';
 import './stage.mjs';
 
-// The site's version (vite.config.ts): major.minor from the root package.json, the commit count as the build.
-const root = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-const [major, minor] = root.version.split('.').map(Number);
-let count = 0;
-try { count = Number(execSync('git rev-list --count HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()); } catch { /* no git */ }
-const version = `${major}.${minor}.${count}`;
+// The site's version (scripts/version.mjs): the file name carries the very string the site's footer shows (X.YYY.ZZZ);
+// Windows' file properties need a semver without leading zeros, so the program's own version is X.Y.ZZZ of the same numbers.
+const v = versionOf(new URL('../', import.meta.url));
+const version = v.semver;
 
 await build({
   targets: Platform.WINDOWS.createTarget(['portable'], 1 /* x64 */),
@@ -27,7 +24,7 @@ await build({
     // NODE_OPTIONS and --inspect, and load only the packed app.
     electronFuses: { runAsNode: false, enableNodeOptionsEnvironmentVariable: false, enableNodeCliInspectArguments: false, onlyLoadAppFromAsar: true },
     win: { icon: 'icon.png' },
-    portable: { artifactName: 'MOSFET-to-RISCV-${version}-portable.exe' },
+    portable: { artifactName: `MOSFET-to-RISCV-${v.site}-portable.exe` },
     publish: null, // the desktop workflow publishes the release itself
   },
 });

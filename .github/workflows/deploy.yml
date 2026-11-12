@@ -26,7 +26,7 @@ jobs:
       fpga: ${{ steps.diff.outputs.fpga }}
       tests: ${{ steps.tested.outputs.tests }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - id: diff
@@ -63,20 +63,20 @@ jobs:
             fi
           fi
           echo "tests=$tests" >> "$GITHUB_OUTPUT"
-  # The unit tests (~8 min) run beside the build and its smoke test (~1 + ~8 min), not before them.
+  # The unit tests (45-80 min on a runner, 2026-11) run beside the build and its smoke test (~5 + ~67 min), not before them.
   test:
     needs: changes
     if: needs.changes.outputs.tests == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - name: "Cache Freedoom (scripts/doom/fetch-wad.mjs, pinned sha256)"
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .cache/doom
           key: freedoom-0.13.0
@@ -85,37 +85,32 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # the full history: the build number in the version is the commit count
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - name: "Cache Freedoom (scripts/doom/fetch-wad.mjs, pinned sha256)"
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .cache/doom
           key: freedoom-0.13.0
       - name: Add Freedoom (Appendix B's game data, BSD licence; public/doom/, never checked in)
         run: node scripts/doom/fetch-wad.mjs --public
       - run: npm run build
-      - name: Add the chip layout (published by the layout workflow, if any)
+      # skipped only when no layout was ever published; any other failure stops the deploy (scripts/ci/fetch-layout.sh)
+      - name: Add the chip layout (published by the layout workflow)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p dist/layout
-          if gh release download layout-latest -p layout.tar.gz -D /tmp --repo "$GITHUB_REPOSITORY"; then
-            tar -xzf /tmp/layout.tar.gz -C dist/layout && ls dist/layout
-          else
-            echo "no layout published yet"
-          fi
+        run: bash scripts/ci/fetch-layout.sh dist/layout
       # Every route of the built site in headless Chrome (preinstalled on the runner): a runtime error,
       # a failed request or a page wider than the window does not deploy.
       - name: Smoke test
         run: npm run smoke
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
   # The exported Verilog, synthesized by Yosys and simulated, must match our own simulation of the
@@ -129,16 +124,16 @@ jobs:
       matrix:
         design: [multi, sys, sys-m, core-m]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - run: npm ci
-      - run: pip install yowasp-yosys
+      - run: pip install yowasp-yosys==0.70.0.0.post1259 yowasp-runtime==1.96 # pinned (the last green version): a new release must not block a deploy
       - run: npx vite-node scripts/verify-export.ts ${{ matrix.design }}
   # the sandbox's File > Export Verilog for FPGA on its examples, through Yosys's Gowin synthesis (Tang Nano 9K)
   fpga:
@@ -146,16 +141,16 @@ jobs:
     if: needs.changes.outputs.fpga == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - run: npm ci
-      - run: pip install yowasp-yosys
+      - run: pip install yowasp-yosys==0.70.0.0.post1259 yowasp-runtime==1.96 # pinned (the last green version): a new release must not block a deploy
       - run: npx vite-node scripts/fpga-export.ts counter7 computer
       # the block-RAM memories read through mem_clk against asynchronous ones, a ROM -> RAM chain, at every clk edge
       - run: CYCLES=200 npx vite-node scripts/fpga-memcheck.ts
@@ -172,7 +167,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
         with:
           # wait up to 30 min for Pages (the default 10 min times out on a busy day: the deploy then reports a failure)
           timeout: 1800000
