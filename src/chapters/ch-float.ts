@@ -168,7 +168,7 @@ export const chFloat: Chapter = {
   builds: ['muldiv', 'pipeline'],
   recap: {
     keep: [
-      'A float is (−1)<sup>s</sup> × 1.f × 2<sup>e − bias</sup>, the leading 1 hidden. Exponent 0 holds zero and the subnormals, all ones ∞ and NaN. Every binade holds the same 2<sup>M</sup> values (2<sup>23</sup> in float32), so precision is relative. A NaN\'s top fraction bit is its quiet bit (0: signaling, NV when used); every NaN RISC-V computes is the canonical 0x7FC00000.',
+      'A float is (−1)<sup>s</sup> × 1.f × 2<sup>e − bias</sup>, the leading 1 hidden. Exponent 0 holds zero and the subnormals, all ones ∞ and NaN. Every binade (the range from one power of two to the next) holds the same 2<sup>M</sup> values (2<sup>23</sup> in float32), so precision is relative. A NaN\'s top fraction bit is its quiet bit (0: signaling, NV when used); every NaN RISC-V computes is the canonical 0x7FC00000.',
       'Guard, round and sticky bits are enough to round exactly. RNE rounds up when G = 1 and (S = 1 or the last kept bit is 1); the five modes differ in that one decision, a 62-NAND block.',
       'RISC-V never traps on a float exception: NV, DZ, OF, UF and NX accumulate in fflags. UF needs a result that is tiny (judged after rounding) <em>and</em> inexact.',
       'float32: the adder is about 8200 NANDs and 181 deep, the multiplier 14 900 and 176, the fma 26 300 and 270, with one rounding, against 357 deep and two roundings for fmul then fadd.',
@@ -176,7 +176,7 @@ export const chFloat: Chapter = {
       'Cost follows the significand: the multiplier tree grows as M², so a bf16 multiplier (float32\'s exponent, 8-bit significand) costs 38 % of float32\'s NANDs and an FP8 one 14–16 %; float64\'s costs 3.2 times as much. The ML E4M3 is not IEEE: no infinities, max 448.',
       'A near / far adder splits by case: a far path (long alignment, at most a 2-place normalize) and a near path (exponents within 1: no aligner, long normalize). The split alone takes the float32 adder from 181 to 129 NAND delays for 6 % more NANDs; leading-zero anticipation takes it to 114 for 39 % more in all.',
       'Division without a divider: three Newton–Raphson steps on the fma (e = 1 − b·x, x += x·e) from an integer-subtract seed, then one Markstein correction, give the correctly rounded quotient in every normal-range case measured. A partial soft-float fmul.s (normal numbers, RNE only) costs about 233 RV32I instructions.',
-      'Error is measured in ulps (u = 2<sup>−24</sup> relative under RNE). Subtraction of nearby numbers is exact (Sterbenz) but exposes earlier rounding: catastrophic cancellation. A plain sum\'s error grows like n·u, pairwise like log n·u, Kahan\'s stays near 2u.',
+      'Error is measured in ulps (u = 2<sup>−24</sup> relative under RNE). Subtraction of nearby numbers (within a factor of 2 of each other) is exact (Sterbenz\'s lemma) but exposes earlier rounding: catastrophic cancellation. A plain sum\'s error grows like n·u, pairwise like log n·u, Kahan\'s stays near 2u.',
     ],
     practise: ['n_float', 'o_fpunpack', 'o_fpround', 'o_fpsticky', 'o_fplzc', 'o_fpnorm', 'o_fpadd', 'o_fpmul', 'o_fpcmp', 'o_fpcvt'],
     check: [
@@ -219,7 +219,7 @@ export const chFloat: Chapter = {
         <strong>infinity</strong> (fraction 0) and <strong>NaN</strong> (fraction ≠ 0), "not a number": the result of ∞ − ∞ or 0 × ∞. The next steps take these patterns apart.</p>
         <p>0.1 has no finite binary expansion, so the float called 0.1 is really 0.100000001490116…: the nearest of the
         2<sup>32</sup> patterns.</p>
-        <p>Why this layout and not a fixed point: a fixed-point word spends the same resolution everywhere, so it either covers a small range finely or a large range coarsely. A float spends
+        <p>Why this layout and not fixed point: a fixed-point word spends the same resolution everywhere, so it either covers a small range finely or a large range coarsely. A float spends
         its bits on a ratio: the exponent chooses a <em>binade</em> (the range [2<sup>k</sup>, 2<sup>k+1</sup>), from one power of two to the next), the fraction chooses one of 2<sup>M</sup> equally spaced values in it. Relative error is therefore
         bounded by 2<sup>−M</sup> over the whole range, from ${sci(minNormal(F32))} to ${sci(maxFinite(F32))} in float32, which is what scientific computation needs. The cost is that the spacing
         between neighbours grows with the magnitude, so addition is no longer exact and no longer associative.</p>`,
@@ -233,11 +233,7 @@ export const chFloat: Chapter = {
           ${FORMATS.map(([n, f]) => `<tr><td>${n}</td><td>${2 ** (f.E - 1) - 1}</td><td>${sci(maxFinite(f))}</td><td>${sci(minNormal(f))}</td><td>${sci(minNormal(f) * 2 ** -f.M)}</td><td>${sci(2 ** -f.M)}</td></tr>`).join('')}</table>`,
         pitfall: `<p>Testing floats for equality, or summing them and expecting the order not to matter. Both fail for the same reason: each operation rounds to the nearest neighbour. 0.1 above is stored as
           0.100000001490116…, and ten additions of it do not give exactly 1 (a later step of this chapter runs that sum on the CPU). Compare with a tolerance, and sum small values before large ones.</p>`,
-        real: `<p>The top fraction bit of a NaN is the <em>quiet</em> bit. A quiet NaN (1) passes through arithmetic without complaint; a
-        <em>signaling</em> NaN (0, with some lower fraction bit set so that it is not ∞) raises the invalid flag when an operation consumes it. IEEE 754
-        lets a NaN carry a payload through a computation; RISC-V does not: every NaN an operation produces is the <strong>canonical NaN</strong>
-        0x7FC00000 (positive, quiet, payload 0), whatever the operands were. Only loads, stores, moves and sign injection copy a NaN's bits unchanged.
-        In the 8-bit format the circuits below use, the canonical NaN is 0 1111 100 = 0x7C.</p>
+        real: `<p>A NaN's top fraction bit is its <em>quiet</em> bit, and RISC-V returns one fixed NaN from every operation, the canonical NaN 0x7FC00000: the step "Unpack" takes both apart on the circuit.</p>
           <p>IEEE 754 float32 and float64 are universal in CPUs and GPUs. Machine-learning hardware pushes the other way: bfloat16 keeps float32's 8 exponent bits and cuts the fraction to 7, trading precision
           for range with a multiplier a small fraction of float32's; 8-bit formats with 4 or 5 exponent bits, like the one these circuits use, are in common use for inference.</p>`,
       },
@@ -409,9 +405,9 @@ export const chFloat: Chapter = {
       body: `
         <p>RISC-V has five: <span data-show="u6"><strong>RNE</strong></span> (nearest, ties to even, the default), <strong>RTZ</strong> (towards zero: truncate),
         <span data-show="u7"><strong>RDN</strong></span> (towards −∞), <span data-show="u8"><strong>RUP</strong></span> (towards +∞) and <span data-show="u9"><strong>RMM</strong></span> (nearest, ties away from zero).
-        Every instruction that rounds (add, subtract, multiply, divide, square root, the fused multiply-adds, the conversions) carries a 3-bit rm field; rm = 7 (<em>dyn</em>) means "use frm", the mode held in the fcsr register.
+        Every instruction that rounds (add, subtract, multiply, divide, square root, the fused multiply-adds, the conversions) carries a 3-bit rm field; rm = 7 (<em>dyn</em>) means "use frm", the mode held in the floating-point control register (fcsr; a later step builds it).
         RDN and RUP give interval arithmetic: computing a bound twice, once in each mode, brackets the exact result.</p>
-        <p>The modes only change one decision: <span data-show="u17">whether to add one unit in the last place</span> to the truncated magnitude, from the sign, the
+        <p>The modes only change one decision: <span data-show="u17">whether to add one unit in the last place (one ulp)</span> to the truncated magnitude, from the sign, the
         last kept bit, G and S. That is this block: 62 NANDs, 13 deep, sitting beside the incrementer of normalize &amp; round. It also says
         <span data-show="u18">where an overflow goes</span>: to ∞ in RNE and RMM and in the direction being rounded towards, otherwise to the largest finite number (RTZ never
         produces ∞ from finite operands). The reserved encodings 5 and 6 are illegal instructions in RISC-V; this CPU has no traps, so here they
@@ -459,15 +455,15 @@ export const chFloat: Chapter = {
     {
       title: 'Exception flags',
       body: `
-        <p>IEEE 754 defines five exceptions; RISC-V does not trap on them but ORs them into <strong>fflags</strong>, where they stay until software
+        <p>IEEE 754 defines five exceptions; RISC-V does not trap on them but ORs them into <strong>fflags</strong>, a five-bit field of the floating-point control register, where they stay until software
         clears them, so one check after a long loop finds any exception inside it. <strong>NV</strong> invalid (∞ − ∞, 0 × ∞, a signaling NaN
         operand, an out-of-range float → int), <strong>DZ</strong> divide by zero, <strong>OF</strong> overflow, <span data-show="pack"><strong>UF</strong> underflow</span>,
         <span data-show="pack"><strong>NX</strong> inexact</span> (G or S was 1, or overflow).</p>
         <p>Underflow is subtle. A result is <span data-show="rnd"><em>tiny</em></span> if it lies below 2<sup>emin</sup>; RISC-V checks tininess <em>after rounding</em>,
         as if the exponent were unbounded. And UF is raised only if the tiny result is also inexact: a subnormal computed exactly raises nothing. Detecting
         "after rounding" costs <span data-show="rnd">a second rounding decision</span>: with G as the last bit and the bit below it (R) as the new guard, would the M + 1 kept
-        bits carry into 2<sup>emin</sup>? Its last two stages, the rounding (every mode, the increment, tininess) and the packing (overflow to ∞ or the largest finite, the flags), are ${groupDigits(nrShare().part)} of the float32 adder's ${groupDigits(nrShare().all)} normalize &amp; round NANDs. With its incrementers
-        and overflow test made parallel (see the pipelined FPU at the end of the chapter), the multiplier's instance (48-bit significand) is 6120 NANDs and
+        bits carry into 2<sup>emin</sup>? In the normalize &amp; round unit the last two stages, the rounding (every mode, the increment, tininess) and the packing (overflow to ∞ or the largest finite, the flags), are ${groupDigits(nrShare().part)} of the float32 adder's ${groupDigits(nrShare().all)} normalize &amp; round NANDs. With its incrementers
+        and overflow test made parallel (see the pipelined FPU later in the chapter), the multiplier's instance (48-bit significand) is 6120 NANDs and
         102 NAND delays deep.</p>
         <div class="try">exp = 0, mant = 1111 0000: 1.111 × 2<sup>−7</sup>. It rounds to 0x08 = 2<sup>−6</sup>, the smallest normal, yet flags = UF NX (0x03): with an unbounded exponent it is exact at 1.111 × 2<sup>−7</sup>, below 2<sup>−6</sup>. Now mant = 1111 1100: the same result, but only NX. In RTZ (rm = 1) the first stays subnormal, 0x07.</div>`,
       scene: () => ({ root: normRound(E4M3, 8), inputs: { sign: 0, exp: 0, mant: 0b11110000, stin: 0, rm: 0 } }),
@@ -726,13 +722,7 @@ export const chFloat: Chapter = {
         <p>What changes with the format is how the cost grows. The adder's shifters and incrementers grow with the width times the logarithm of it; the multiplier's tree with the square of the significand
         width; the exponent logic hardly at all. Going from the 8-bit format to float32 multiplies the adder by ${(u32('add').n / nands(fpAdd(E4M3))).toFixed(0)} and the multiplier by ${(u32('mul').n / nands(fpMul(E4M3))).toFixed(0)}, for 7.7 times
         the fraction bits. Nothing in the design is specific to the small format: the same generator builds each, which is why the small ones can stand in for it in tests and in the drawings.</p>
-        <p>The small formats are tested in every rounding mode, flags included, against exact rational arithmetic, simulated 32 cases at a time. The 6-bit
-        format (3 exponent bits, 2 fraction bits) is exhaustive: every operand pair for add, subtract, multiply and divide, every triple and sign variant
-        for the fma (one rounding mode per case, rotating). The 8-bit formats are sampled: every special or boundary operand (zeros, subnormals, the smallest and largest normals, infinities,
-        NaNs) against every operand, plus 3000 random pairs; the fma on random triples biased towards cancellation. Square root and the conversions
-        see every 8-bit input. Well over a million cases in all; every pair of 8-bit operands is an opt-in run (FPU_EXHAUSTIVE=1), not part of the
-        regular test suite. float32 is tested on random and special operands (subnormals, infinities, NaNs, cancellation), and against the host CPU in
-        round to nearest even.</p>
+        <p>So the small formats can be tested completely, against exact arithmetic in every rounding mode, and float32 by sampling; the Numbers layer says how.</p>
         <p>The same generators also take the formats machine learning uses (bfloat16, and FP8 in its E4M3 and E5M2 shapes), which the next steps price, and the units around them can be changed: a near and far adder, and a divider replaced by Newton–Raphson division on the fma.</p>
         <div class="try">1.5 (0x3FC00000) + 2.25 (0x40100000) = 3.75 (0x40700000). Follow <span data-show="align add">the significands</span> through the aligner and the adder.</div>`; },
       scene: () => ({ root: fpAdd(F32), inputs: { a: 0x3fc00000, b: 0x40100000, sub: 0 } }),
@@ -740,7 +730,13 @@ export const chFloat: Chapter = {
         numbers: costTable(
           costRow('Unpack', fpUnpack) + costRow('Adder', (f) => fpAdd(f)) + costRow('Multiplier', (f) => fpMul(f)) + costRow('Fused multiply-add', (f) => fpFma(f)) + costRow('float → int32', (f) => fpToInt(f, 32)) +
           costRow('Divider (sequential)', (f) => fpDiv(f), false) + costRow('Square root (sequential)', (f) => fpSqrt(f), false),
-        ),
+        ) + `<p>How the units are tested. The small formats in every rounding mode, flags included, against exact rational arithmetic, simulated 32 cases at a time. The 6-bit
+          format (3 exponent bits, 2 fraction bits) is exhaustive: every operand pair for add, subtract, multiply and divide, every triple and sign variant
+          for the fma (one rounding mode per case, rotating). The 8-bit formats are sampled: every special or boundary operand (zeros, subnormals, the smallest and largest normals, infinities,
+          NaNs) against every operand, plus 3000 random pairs; the fma on random triples biased towards cancellation. Square root and the conversions
+          see every 8-bit input. Well over a million cases in all; every pair of 8-bit operands is an opt-in run (FPU_EXHAUSTIVE=1), not part of the
+          regular test suite. float32 is tested on random and special operands (subnormals, infinities, NaNs, cancellation), and against the host CPU in
+          round to nearest even.</p>`,
         derive: `<p>Why the cost splits as it does. A right shifter by up to w positions is w·log<sub>2</sub> w multiplexers; the adder needs one to align and one to normalize, plus an incrementer for rounding, so it grows like w log w with
           a small constant. A w × w multiplier has w² partial-product bits compressed by a tree of about w² full adders. From 8-bit (significand ${E4M3.M + 1} bits) to float32 (${F32.M + 1} bits): the width ratio is
           ${((F32.M + 1) / (E4M3.M + 1)).toFixed(1)}, the multiplier's expected cost ratio the square of it, ${(((F32.M + 1) / (E4M3.M + 1)) ** 2).toFixed(0)}, against ${(u32('mul').n / nands(fpMul(E4M3))).toFixed(0)} measured (the exponent logic and the rounder do not grow with the square).</p>`,
@@ -775,7 +771,7 @@ export const chFloat: Chapter = {
           <tr><td>multiplier</td><td>${grp(u32('mul').n)}</td></tr><tr><td>fused multiply-add</td><td>${grp(u32('fma').n)}</td></tr></table>`,
         pitfall: `<p>Comparing a float sum with feq.s against the number it should be. After ten additions of 0.1 the program's a1 holds ${hex32(tenth()[9])}, not 0x3F800000, and the comparison is false. A test for "close enough" uses a tolerance
           relative to the operands, not an exact comparison.</p>`,
-        real: `<p>Cores pipeline the FPU: an add or multiply takes 3 to 5 cycles, issued one a cycle, and the fused multiply-add is the same unit, so a dependent chain runs at one operation per latency. Two steps further on, "A pipelined FPU"
+        real: `<p>Cores pipeline the FPU: an add or multiply takes 3 to 5 cycles, issued one a cycle, and the fused multiply-add is the same unit, so a dependent chain runs at one operation per latency. Later, "A pipelined FPU"
           builds the pipelined version and "Pipelined vs single-cycle" measures what the chain costs. Cores with double precision keep 64-bit f registers; a single there is NaN-boxed, its upper 32 bits all ones.</p>`,
       })),
       challenge: {

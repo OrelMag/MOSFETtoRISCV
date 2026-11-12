@@ -139,7 +139,7 @@ export const chLinking: Chapter = {
       body: `
         <p>An object file is what the assembler can produce on its own. Its code and data are in <strong>sections</strong>, each assembled as if it started at 0: <code>.text</code> for instructions, <code>.data</code> for initial values, <code>.bss</code> for variables that start at zero (only their size is stored, since zeros need not be). <code>main.o</code> has ${F.mainText} words of text, ${F.mainData} of data and ${F.mainBss} bytes of .bss.</p>
         <p>Two lists make it more than a fragment. The <strong>symbol table</strong> lists what the file defines (a name, its section and offset, global if other files may use it) and what it needs. The <strong>relocation list</strong> names every hole: where it is, what kind of instruction it is in, and which symbol fills it. <code>main.o</code> has ${F.mainRelocs}: ${Object.entries(F.kinds).map(([k, v]) => `${v} × ${k}`).join(', ')}. Even <code>la s0, table</code> needs one: <code>table</code> is in this file, but in another section, and where .data goes relative to .text is the linker's choice.</p>
-        <p>The holes are zeros. The assembler did write <em>something</em> there when it put each unknown name at the end of the section, but that value means nothing, so it is cleared: what a hole holds is not a guess, it is written later. ${F.utilRelocs ? '' : '<code>util.o</code> has no relocations at all: it needs nothing from anyone.'}</p>`,
+        <p>The holes are zeros: the assembler does not guess a value for a name it cannot place, it leaves the bits empty, and the linker writes them later. ${F.utilRelocs ? '' : '<code>util.o</code> has no relocations at all: it needs nothing from anyone.'}</p>`,
       widget: objectWidget,
       challenge: {
         kind: 'quiz',
@@ -300,7 +300,7 @@ export const chLinking: Chapter = {
       title: 'Doom, linked',
       body: `
         <p>Appendix B's Doom was built by GNU's linker with a linker script, <code>ports/doom/platform/link.ld</code>, and nothing in it is new now. Its machine is Harvard too, so the script makes two regions: <code>ROM (rx)</code> at 0 for every <code>.text</code>, and <code>RAM (rw)</code> from 0x1000 for <code>.rodata</code>, <code>.data</code> and <code>.bss</code>. Its comment says why constants go to RAM: "no constant may land in the instruction ROM", because loads cannot reach it. The first page of data addresses, 0 to 0xfff, is left empty, so a stray null pointer reads nothing the program put there.</p>
-        <p>The script also names symbols the program reads: <code>__bss_start</code> and <code>__bss_end</code>, which the start-up code <code>crt0.S</code> zeroes between before <code>main</code>, and <code>__stack_top</code>, where the stack starts. The site's image of Doom is our own format, simpler than ELF: the ROM's words, the RAM's initial words and where .bss ends. The widget reads it.</p>`,
+        <p>The script also names symbols the program reads: <code>__bss_start</code> and <code>__bss_end</code>, between which the start-up code <code>crt0.S</code> zeroes memory before <code>main</code> runs, and <code>__stack_top</code>, where the stack starts. The site's image of Doom is our own format, simpler than ELF: the ROM's words, the RAM's initial words and where .bss ends. The widget reads it.</p>`,
       widget: doomWidget,
       challenge: {
         kind: 'quiz',

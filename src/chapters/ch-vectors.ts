@@ -110,7 +110,7 @@ export const chVectors: Chapter = {
         reads. VLEN, the length of a vector register in bits, is the machine's choice; the program never names it.</p>
         <p>The loop takes t0 elements, moves its pointers on by t0 words and goes round until nothing is left. The last pass is simply shorter: there is no tail loop. With
         n = 37 and VLEN = 128 it makes ${n37} passes. And because VLEN appears nowhere in the instruction words, the same binary runs on a machine with longer registers in
-        fewer passes: the widget runs the same words on the golden model at three VLENs.</p>
+        fewer passes: the widget runs the same words on the golden model at three VLENs. (<code>tu, mu</code> says that elements past vl, and elements a mask switches off, keep their old values; the mask step returns to it.)</p>
         <pre class="code">${'loop:   vsetvli t0, a0, e32, m1, tu, mu   # t0 = vl = min(a0, VLMAX)\n        vle32.v  v8, (a1)                  # x\n        vle32.v  v16, (a2)                 # y\n        vsll.vi  v24, v8, 1                # 2·x\n        vadd.vv  v24, v24, v8              # 3·x\n        vadd.vv  v16, v16, v24             # 3·x + y\n        vse32.v  v16, (a2)\n        sub   a0, a0, t0\n        slli  t1, t0, 2\n        add   a1, a1, t1\n        add   a2, a2, t1\n        bnez  a0, loop'}</pre>`,
       widget: stripMineWidget,
       challenge: {

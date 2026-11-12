@@ -109,7 +109,7 @@ export const chMulticore: Chapter = {
         <p>Cores speed up only the part of the work that runs in parallel. With a fraction p of it parallel, n cores give a speed-up of
         1 / ((1 − p) + p / n) (<strong>Amdahl's law</strong>): at p = 90 %, 8 cores give 1 / (0.1 + 0.1125) = 4.7×, and no number of cores beats
         1 / (1 − p) = 10×. The serial tenth, plus the time the cores spend waiting for each other (the lock below), sets the ceiling. What saves
-        many-core machines is that bigger problems usually grow the parallel part, not the serial one (Gustafson).</p>
+        many-core machines is that bigger problems usually grow the parallel part, not the serial one (Gustafson's law).</p>
         <p>The rest of the chapter is about the price of sharing. Two cores that never touch the same data need nothing but a second copy of the core. The moment they share a
         memory they need a rule for who goes first (an arbiter), a way to make a read-modify-write indivisible (atomic instructions), a way to keep each core's copies of shared data
         agreeing (coherence), and a statement of the order in which one core's writes are seen by another (the memory model).</p>`,
@@ -119,7 +119,7 @@ export const chMulticore: Chapter = {
           1 / ((1 − p) + p / n) is ${amdahl(0.9, 2).toFixed(2)} for n = 2 and ${amdahl(0.9, 8).toFixed(2)} for n = 8 at p = 0.9, and tends to ${(1 / (1 - 0.9)).toFixed(0)}.</p>`,
         real: `<p>Dennard scaling stopped around 2005: voltage could no longer fall with feature size because leakage grew as the threshold fell, and Intel cancelled its
           next single-core Pentium 4 line in 2004 for power. Mainstream clocks have stayed at 3 to 5 GHz since, and the extra transistors became cores, wider vectors and bigger caches.</p>`,
-        pitfall: `<p>Reading the speed-up as the core count. With 10 % serial, 64 cores give ${amdahl(0.9, 64).toFixed(1)}×, not 64: the serial tenth and the synchronization between cores (the lock step below)
+        pitfall: `<p>Reading the speed-up as the core count. With 10 % serial, 64 cores give ${amdahl(0.9, 64).toFixed(1)}×, not 64: the serial tenth and the synchronization between cores (the spin lock below)
           set the ceiling, not the number of cores.</p>`,
         numbers: `<table class="mini"><thead><tr><th>Cores</th>${[1, 2, 4, 8, 16, 64].map((n) => `<th>${n}</th>`).join('')}</tr></thead><tbody>${[0.5, 0.9, 0.99].map((p) => `<tr><td>p = ${p}</td>${[1, 2, 4, 8, 16, 64].map((n) => `<td>${amdahl(p, n).toFixed(1)}×</td>`).join('')}</tr>`).join('')}</tbody></table>`,
       },
@@ -248,7 +248,7 @@ export const chMulticore: Chapter = {
           { title: 'Both reach the atomic', reset: true, cycles: 3, show: ['arb', 'core0', 'core1'], expect: { pc0: 12, pc1: 12, grant0: 1, retire1: 0 },
             say: '<p>Both cores are at the <code>amoadd.w</code> (pc = {v:pc0}). Core 0 is granted the port; core 1 waits (retire1 = {v:retire1}).</p>' },
           { title: 'One access each', cycles: 1, show: ['arb', 'dm'], expect: { pc0: 16, pc1: 12, grant1: 1, retire1: 1 },
-            say: '<p>The read, add and write of core 0 took that one grant. Now the <code>amoadd.w</code> of core 1 is granted: it reads the value core 0 left, not the old one. There is no cycle between a core read and its write for the other to slip into.</p>' },
+            say: '<p>The read, add and write of core 0 took that one grant. Now the <code>amoadd.w</code> of core 1 is granted: it reads the value core 0 left, not the old one. There is no cycle between a core\'s read and its write for the other core to slip into.</p>' },
           { title: 'Another round', cycles: 2, show: ['arb'], expect: { pc0: 12, pc1: 20, grant0: 1 },
             say: '<p>Core 0 is back at the <code>amoadd.w</code> (pc0 = {v:pc0}) for its next increment while core 1 finishes its loop body (pc1 = {v:pc1}). Each increment is one grant.</p>' },
         ],
@@ -322,8 +322,9 @@ export const chMulticore: Chapter = {
       body: `
         <p>Our cores share one memory, so they can never see different values. Real cores each have private caches, and the moment two caches hold the same block,
         a write in one must reach the other. The standard answer is a <strong>write-invalidate snooping protocol</strong>. Before writing, a core broadcasts on the bus and every other
-        copy is invalidated. A read of a block that someone holds Modified gets the data from that cache.</p>
-        <p>MESI adds an <em>Exclusive</em> state: a block read by only one core can later be written without any bus traffic. That covers the common case of private data.</p>
+        copy is invalidated. Each cached block is in one of three states (MSI): <em>Invalid</em> (no usable copy), <em>Shared</em> (an unchanged copy; others may have one too) or
+        <em>Modified</em> (the only copy, changed, memory out of date). A read of a block that someone holds Modified gets the data from that cache.</p>
+        <p>MESI adds an <em>Exclusive</em> state (the only copy, unchanged): a block read by only one core can later be written without any bus traffic. That covers the common case of private data.</p>
         <p>Snooping needs every cache to see every request, a broadcast that stops scaling past a few dozen cores. Large machines keep a
         <strong>directory</strong> instead: per memory block, a record of which caches hold it, so invalidations go point to point to the sharers alone.</p>
         <p>The unit of coherence is the line, not the variable. That is what makes the protocol affordable (one state per line, not per byte) and what makes false sharing possible. Every write to a
@@ -370,7 +371,7 @@ export const chMulticore: Chapter = {
       body: `
         <p>Our dual-core is <strong>sequentially consistent</strong>: there is one memory port, so all accesses happen in one global order consistent with each program.
         Real cores reorder: a store waits in a store buffer while later loads go ahead, and that is invisible to one thread but not to another. RISC-V specifies a
-        weak model (RVWMO) and gives the programmer <code>fence</code> instructions, plus <em>acquire</em> and <em>release</em> bits on atomics (the aq and rl bits this
+        weak model (RVWMO, RISC-V weak memory ordering) and gives the programmer <code>fence</code> instructions, plus <em>acquire</em> and <em>release</em> bits on atomics (the aq and rl bits this
         implementation ignores), to restore order exactly where it matters.</p>
         <p>The classic litmus test is <em>store buffering</em>. From x = y = 0, core 0 stores x = 1 and then loads y, core 1 stores y = 1 and
         then loads x. Sequentially consistent, some store comes first in the one global order, so at least one load sees a 1. With store buffers each

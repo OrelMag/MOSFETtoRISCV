@@ -108,8 +108,7 @@ export const chDram: Chapter = {
         <p>Each row of cells shares a <strong>word line</strong> (the access transistors' gates, raised by the
         <span data-show="rdec">row decoder</span>), each <span data-show="col0 col1 col2 col3">column</span> a <strong>bit line</strong>.
         Next to every bit line runs a <strong>reference</strong> line of the same capacitance (${BITLINE_C} fF): here a line with no cells;
-        in a real array it is another bit line, its folded twin in the same mat (whose cells hang on other word lines) or, in an
-        open-bit-line array, a bit line of the neighbouring mat. Three transistors per column precharge both to <strong>VDD/2</strong>
+        in a real array it is another bit line (the "In real silicon" layer says which). Three transistors per column precharge both to <strong>VDD/2</strong>
         and equalize them.</p>
         <p>Cost of this 4 × 4: the cells are 16 transistors and 16 capacitors. Each column then adds 3 precharge transistors,
         2 for the column select and an 8-transistor <span data-show="col0.sa">sense amplifier</span>: 13 per column, more than its cells. Real arrays hang 512 to
@@ -138,7 +137,9 @@ export const chDram: Chapter = {
           amplifier (8). With R cells on a bit line the column costs 1 + ${3 + 2 + 8}/R per bit, against 6 for SRAM. The periphery
           falls away as R grows, but a longer bit line has more capacitance, which shrinks the read signal (the next step); that
           trade-off sets how many cells a real bit line carries.</p>`,
-        real: `<p>A shipping DRAM cell does not use a planar capacitor: it is a deep trench or a tall stacked cylinder, tens of fF in a footprint of a few
+        real: `<p>The reference line is another bit line: its folded twin in the same mat (a block of cells with its own amplifiers; the twin's cells hang on
+          other word lines) or, in an open-bit-line array, a bit line of the neighbouring mat.</p>
+          <p>A shipping DRAM cell does not use a planar capacitor: it is a deep trench or a tall stacked cylinder, tens of fF in a footprint of a few
           F², where F is the minimum feature size. An SRAM cell is of the order of a hundred F². The access transistor is built with a
           buried or recessed gate so that its leakage stays low. That is why DRAM and logic need different processes, and why a CPU's last
           cache is SRAM, or embedded DRAM on a DRAM-like flow, not ordinary DRAM.</p>`,
@@ -281,8 +282,8 @@ export const chDram: Chapter = {
           rows around a victim flips bits it may not write; Project Zero turned that into a privilege escalation in 2015. Defences count
           activations and refresh the neighbours (DDR4's target row refresh, DDR5's refresh management), refresh more often, or add ECC.
           Here cells do not couple: each leaks alone.</p>`,
-        pitfall: `<p>Thinking an idle row is safe because nothing touches it: it is the idle rows that leak. And the opposite error: assuming a refresh costs an
-          activate and a read. It does cost a row cycle (tRAS + tRP), but it moves no data over the pins; the controller only has to leave the device
+        pitfall: `<p>Thinking an idle row is safe because nothing touches it: it is the idle rows that leak. And the opposite error: assuming a refresh is a full read.
+          It does cost a row cycle (tRAS + tRP), but it moves no data over the pins; the controller only has to leave the device
           alone for tRFC. In the panel, a row's age resets on Refresh and keeps climbing under Wait, whatever else you do to the other rows.</p>`,
       },
       scene: () => dramScene({ pattern: PATTERN }),
@@ -351,7 +352,7 @@ export const chDram: Chapter = {
           'A write to the open row is a row hit like a read. It needs a precharge only when another row is open in its bank.',
           'The burst sets how long an access takes once the row is open, not whether it hits.',
         ],
-        explain: '1024 words is 1024 / 16 = 64 rows on. Rows alternate between the 2 banks, so that is the same bank, 32 of its rows down. The XOR hash folds the row\'s parity into the bank number, so the two streams land in different banks and both rows stay open.',
+        explain: '1024 words is 1024 / 16 = 64 rows on. Rows alternate between the 2 banks, so that is the same bank, 32 of its rows down. The widget\'s XOR bank hash folds the row\'s parity into the bank number, so the two streams land in different banks and both rows stay open.',
       },
     },
     {
@@ -363,7 +364,7 @@ export const chDram: Chapter = {
         <strong>burst</strong>: here a 4-word cache line, one word a cycle.</p>
         <p>A row hit is then ${accessCycles('hit', TIMING)} cycles, a miss ${accessCycles('miss', TIMING)}, a conflict ${accessCycles('conflict', TIMING)}.
         <a href="#/c/cache/0">Chapter ${numOf('cache')}</a>'s caches charge a fixed ${WB_MISS_CLEAN} for a miss (${WB_MISS_DIRTY} with a dirty victim to write back first);
-        ${WB_MISS_CLEAN} is a row hit. <a href="#/c/memctrl/0">Chapter ${numOf('memctrl')}</a> builds the controller that issues these
+        ${WB_MISS_CLEAN} is what a row hit costs here. <a href="#/c/memctrl/0">Chapter ${numOf('memctrl')}</a> builds the controller that issues these
         commands, and lets the caches pay what the row buffer says.</p>
         <p>Latency is older than DRAM. EDSAC (1949) kept its words as sound pulses circulating in tubes of mercury, with no address at all: a word could be
         read only as it came round, so the wait was up to a whole circulation, about a millisecond. Re-amplifying and re-launching every pulse each trip is

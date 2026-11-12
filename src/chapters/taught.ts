@@ -91,7 +91,7 @@ export const TAUGHT: Record<string, string> = {
   datapath: 'cpu',
   control: 'cpu',
   singlecycle: 'cpu',
-  cpi: 'pipeline',
+  cpi: 'multicycle',
   criticalpath: 'fastadd',
   pipeline: 'pipeline',
   hazards: 'pipeline',

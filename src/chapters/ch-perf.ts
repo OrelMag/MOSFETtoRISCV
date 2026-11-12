@@ -288,7 +288,7 @@ export const chFastAdders: Chapter = {
         derive: `<p>Cell counts: Kogge–Stone puts a cell at nearly every (bit, level) pair, about n·log₂ n; Brent–Kung builds a tree up and a tree down for about 2n; Sklansky halves the work at each level by sharing, about (n/2)·log₂ n cells, at
           the price of one cell driving up to n/2 others on the last level.</p>
           ${FAMILY([['Ripple', rca], ['Kogge–Stone', koggeStone], ['Sklansky', sklansky], ['Brent–Kung', brentKung]], [8, 16, 32, 64])}`,
-        pitfall: `<p>Reading depth as speed. Depth counts gate levels at unit load; a gate that drives many inputs is slower, and a long wire slower still. The last step of this chapter puts the loads back and the ordering of
+        pitfall: `<p>Reading depth as speed. Depth counts gate levels at unit load; a gate that drives many inputs is slower, and a long wire slower still. A later step of this chapter, on fan-out, puts the loads back and the ordering of
           the three prefix adders changes.</p>`,
         real: `<p>Adders in shipping cores are sparse, hybrid or Ling-modified prefix trees chosen by a synthesis tool or tuned by hand for the critical path; Kogge–Stone is the textbook limit that the practical designs approach
           from the cheaper side.</p>`,
@@ -330,7 +330,7 @@ export const chFastAdders: Chapter = {
         <p>The ALU is about 60% of the path, and most of that is the ripple carry.</p>
         <p>Why the analysis never needs a program: a flip-flop can only change at a clock edge, so every signal in the machine is a function of flip-flop outputs after a bounded delay, and the worst such delay is a property of
         the wiring. If the period covers it, every cycle of every program is safe, whatever it executes. That is also why the answer is conservative: it covers the slowest path even when no program makes it matter.</p>
-        <p>Converted at ${PS} ps a delay, ${CPU_PERIOD} NAND delays is ${(CPU_PERIOD * PS / 1000).toFixed(2)} ns, a clock of about ${Math.round(1e6 / (CPU_PERIOD * PS))} MHz: at 28 nm, only what a late-1990s processor reached on a far older process, because of a textbook ALU.</p>`,
+        <p>Converted at ${PS} ps a delay, ${CPU_PERIOD} NAND delays is ${(CPU_PERIOD * PS / 1000).toFixed(2)} ns, a clock of about ${Math.round(1e6 / (CPU_PERIOD * PS))} MHz: at 28 nm that is only what a late-1990s processor reached on a far older process, and the textbook ripple-carry ALU is the reason.</p>`,
       scene: () => cpuScene({ source: src('sum'), timing: true }),
       tour: {
         beats: [
@@ -361,7 +361,7 @@ export const chFastAdders: Chapter = {
         early, yet the sum is still right, because the path being exercised that cycle was shorter than the worst case;
         at 130 the last <code>bne</code> (11 − 11, a carry through all 32 bits) is captured half-rippled in the
         <span data-show="alu">ALU</span>: its zero flag still says "different", the loop adds an eleventh time, and Run to
-        halt stops at the first mismatch with a0 = 66 instead of 55. Past i = 11 the hardware never leaves the loop. The gap
+        halt stops at the first mismatch with a0 = 66 instead of 55. With the counter now past 11, the comparison can never succeed and the hardware never leaves the loop. The gap
         between the worst case and the typical case is where overclockers find headroom, and why vendors keep a guard band.</p>
         <div class="try">Set the period to the critical path, run to halt; then halve it, reset and run again. Probe
         (<kbd>P</kbd>) the ALU result to watch it arrive late.</div>
@@ -437,7 +437,7 @@ export const chFastAdders: Chapter = {
           delay; its 256 inputs make it, drawn with minimum-size gates, over three times slower than the whole 64-bit
           Kogge–Stone. Real chips drive the clock through a buffer tree (about 6 units here) and balance its branches so
           every flip-flop sees the edge at once.</p>
-          <p>Logical effort: d = p + g·h, with p = 2 and g = 4/3 for a NAND2 and h the load over one input\'s capacitance. The delay rises linearly with the load: a fan-out of 16 takes ${fo16.drawn} units drawn with minimum-size gates, against 1 for a fan-out of 1.
+          <p>The delay rises linearly with the load (p = 2, g = 4/3): a fan-out of 16 takes ${fo16.drawn} units drawn with minimum-size gates, against 1 for a fan-out of 1.
           Buffering splits one big step into stages of about the same effort: two inverters, each a fan-out of about 4, take it down to ${fo16.buffered}.</p>`,
         numbers: `<table class="mini"><tr><th>64 bits</th><th>unit</th><th>drawn</th><th>buffered</th></tr>${([['Kogge–Stone', koggeStone], ['Sklansky', sklansky], ['Brent–Kung', brentKung]] as const)
           .map(([name, make]) => `<tr><td>${name}</td><td>${D(make(64))}</td><td>${fmt(logicDepth(make(64), 'drawn'))}</td><td>${fmt(logicDepth(make(64), 'load'))}</td></tr>`).join('')}</table>`,
@@ -465,7 +465,7 @@ export const chFastAdders: Chapter = {
         <p>The critical path is the longest chain of gates from an input to an output: ${VADDER_PATH.depth} NAND delays, from <code>${VADDER_PATH.from}</code> to <code>${VADDER_PATH.to}</code>
         (${VADDER_PATH.cells.length} of the ${VERILOG_ADD4_NANDS} gates, lit on the circuit). The bar beside a source line marks the lines it came from: ${PATH_LINES}.
         It enters through the propagate, crosses the carries <code>c1</code>, <code>c2</code>, <code>c3</code> in turn, and leaves through the sum. The same ripple as the hand-drawn adder, found by the tool in the text.
-        It ends at <code>s[3]</code>, not at the carry-out: <code>c4</code> settles after ${ARR_C4} delays, the last sum bit, which needs <code>c3</code> and one more XOR, after ${VADDER_PATH.depth}.</p>
+        It ends at <code>s[3]</code>, not at the carry-out: <code>c4</code> settles after ${ARR_C4} delays, while the last sum bit needs <code>c3</code> and one more XOR, so it settles after ${VADDER_PATH.depth}.</p>
         <p>The price of writing it this way: ${VERILOG_ADD4_NANDS} NANDs and depth ${VADDER_PATH.depth}, against ${N(rca(4))} and ${D(rca(4))} for the hand-drawn ripple adder of the first step.
         The recipe is the same; the text asks for <code>p</code> and <code>g</code> as wires of their own, and the gates came out larger.</p>
         <div class="try">Toggle <code>ci</code>: with a = 7 and b = 0 the carry crosses <code>c1</code>, <code>c2</code> and <code>c3</code> one after another, the lit path.</div>`,

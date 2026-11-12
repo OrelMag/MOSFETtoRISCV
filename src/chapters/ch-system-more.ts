@@ -112,7 +112,7 @@ export const IO_MORE: Step[] = [
     scene: () => cpuScene({ source: sys('bytes'), system: true, highlight: ['io'] }),
     more: {
       derive: `<p>Why replication: the memory side has four byte lanes and a store of size s at offset o raises the byte enables of the lanes it covers; the I/O unit is one 32-bit word behind a decoder, so it takes lane 0 of the replicated word for an 8-bit register and the whole word otherwise. A byte store to LEDs (8 bits) and to mtimecmp (32) therefore differ in what is kept: ${hex(SB_CMP.cmp)} against ${hex(SB_LED_OFF.leds, 2)}.</p>`,
-      real: `<p>RISC-V platforms specify access widths per device in the memory map and mark the region <em>strongly ordered, non-idempotent</em> (PMAs), fixed by the platform; with Svpbmt a page-table entry can override them (PBMT = IO). PMP only grants read, write and execute. A device that needs a byte write declares it, or its register is wider and the driver does read-modify-write.</p>`,
+      real: `<p>RISC-V platforms specify access widths per device in the memory map and mark the region <em>strongly ordered, non-idempotent</em> (physical memory attributes, PMAs), fixed by the platform; with Svpbmt a page-table entry can override them (PBMT = IO). PMP only grants read, write and execute. A device that needs a byte write declares it, or its register is wider and the driver does read-modify-write.</p>`,
       pitfall: `<p>A debugger that "shows memory" by reading every word of the I/O range changes the machine: it pops the keyboard queue and claims interrupts. Probes of device registers are explicit.</p>`,
     },
     challenge: {
@@ -168,7 +168,7 @@ export const TRAPS_MORE: Step[] = [
         <li><code>csrr s2, mepc</code>: a nested trap writes mepc (and mcause); without the copy the outer handler could never return.</li>
         <li><code>csrw mie</code> with the external bit only: priority is whatever the handler leaves enabled in <span data-show="csr">mie</span>. Timer ticks cannot nest in themselves.</li>
         <li><code>csrsi mstatus, 8</code>: MIE = 1. From here the IRQ button is taken inside the handler (the nested handler adds the press to s4, and to s5 when it arrived inside the slow handler).</li>
-        <li>Before leaving: <code>csrci mstatus, 8</code>, restore mie and mepc, <code>mret</code>. With MIE set during the restore, an interrupt between restoring mepc and mret would overwrite it.</li>
+        <li>Before leaving: <code>csrci mstatus, 8</code>, restore mie and mepc, <code>mret</code>. MIE goes off first because, with it still set, an interrupt between restoring mepc and <code>mret</code> would overwrite mepc.</li>
       </ol>
       <p>The hardware saves nothing for the inner trap: its MPIE ← MIE puts the outer handler's "interrupts on" into the one MPIE bit, and the inner <code>mret</code> restores it, so two levels work and the stack of
       saved states is the handler's job. The nested handler uses t1, t3, t4 only; the outer finished with them. A deeper nest has to save more. Arm's NVIC does this stacking and the priority comparison in hardware; RISC-V's CLIC does the priority comparison and preemption, and software still saves mepc and mcause.</p>
@@ -191,7 +191,7 @@ export const TRAPS_MORE: Step[] = [
       ],
     },
     more: {
-      derive: `<p>Depth 2 costs the outer handler about 6 instructions of ceremony before the slow work and 8 after (save mepc, load mie, write mie, set a flag, set MIE; clear MIE, restore mie, restore mepc, count, mret), and an urgent interrupt waits at most ~13 instructions (dispatch, the tick, reaching <code>csrsi</code>) or ~8 at the end of the handler, instead of the whole handler. A press that lands while MIE is 0 is not lost if the line is held; the one-cycle button here must land in the window, which is why the next step adds a request latch.</p>`,
+      derive: `<p>Depth 2 costs the outer handler about 8 instructions of ceremony before the slow work and 7 after (save mepc, move mtimecmp, write mie, set a flag, set MIE; clear MIE, clear the flag, restore mie, restore mepc, count, mret), and an urgent interrupt waits at most ~12 instructions (dispatch, the tick, reaching <code>csrsi</code>) or ~7 at the end of the handler, instead of the whole handler. A press that lands while MIE is 0 is not lost if the line is held; the one-cycle button here must land in the window, which is why the next step adds a request latch.</p>`,
       pitfall: `<p>Forgetting to save mepc: the nested trap overwrites it and the outer <code>mret</code> returns into the inner handler's interrupted instruction, so the main loop is skipped or repeated, silently. The same for mcause if the outer handler reads it after the window opens.</p>`,
     },
     challenge: {

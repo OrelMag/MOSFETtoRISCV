@@ -208,7 +208,7 @@ export const chBus: Chapter = {
     {
       title: 'Two masters',
       body: `
-        <p>A <span data-show="dma">DMA engine</span> is a second <strong>master</strong>: it starts transactions of its own. Two masters, one bus: the interconnect's
+        <p>A <span data-show="dma">DMA engine</span> (direct memory access: hardware that copies blocks of memory without the CPU, built in the next step) is a second <strong>master</strong>: it starts transactions of its own. Two masters, one bus: the interconnect's
         <span data-show="bus.grant"><strong>arbiter</strong></span> (<a href="#/c/multicore/0">chapter ${numOf('multicore')}</a>'s round-robin arbiter) grants the bus to one requester, and the grant is held until
         that transaction's response: one transaction at a time. The other master's valid stays up meanwhile; it simply waits.</p>
         <p><span data-show="bus">The interconnect</span> is the arbiter, the multiplexers that route the granted master's signals to the addressed slave and the
@@ -331,7 +331,7 @@ export const chBus: Chapter = {
     {
       title: 'Booting from cards',
       body: `
-        <p>Before flash, the program came on <strong>punched cards</strong>. The IBM 1401's <strong>Load</strong> key was <span data-ahead="loader">a loader (a first program whose only job is to read the real program into memory)</span> in
+        <p>Before flash, the program came on <strong>punched cards</strong>. The IBM 1401's <strong>Load</strong> key was a loader in
         hardware: it read one card into memory locations 1–80 and branched to location 1. That first card held a few instructions that
         read the next cards, which read the rest: the program pulled itself up by its bootstraps, hence <em>booting</em>.</p>
         <p>Here a <span data-show="cards">card reader</span> stands in for the flash, at 0x7000_0000, the deck in its hopper (one word a card, punched in binary along
@@ -396,7 +396,7 @@ export const chBus: Chapter = {
         derive: `<p>The DRAM figures are the controller's cycles plus the bus's two: a hit ${accessCycles('hit', TIMING)} + 2 = ${accessCycles('hit', TIMING) + 2}, a miss ${accessCycles('miss', TIMING)} + 2 = ${accessCycles('miss', TIMING) + 2}, a conflict
           ${accessCycles('conflict', TIMING)} + 2 = ${accessCycles('conflict', TIMING) + 2}. On-chip RAM costs 2. The screen is the RAM's own structure (four byte lanes) with a different meaning for the addresses: a store to the frame
           buffer is an ordinary store whose side effect is a pixel. The keyboard is a read port: a handshake and a read register in front of the key queue.</p>`,
-        real: `<p>The bus moves a word with byte strobes; the controller moves 4-word lines. An adapter
+        real: `<p>The bus moves a word with byte strobes (one write-enable bit per byte); the controller moves 4-word lines. An adapter
           joins them: a load reads its word's line and keeps one word; a store writes the line with the DRAM's <strong>data mask</strong>
           (DDR's DM pins) set on every byte except its own strobed ones, so the DRAM leaves the rest of the line alone and even a byte
           store needs no read first. Real SoCs add the same kinds of slave and more (interrupt controllers, UARTs, SPI, a display engine), each behind a register block like these.</p>`,

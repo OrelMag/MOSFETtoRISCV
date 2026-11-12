@@ -129,7 +129,7 @@ export const chOoo: Chapter = {
       'The dataflow limit: start each instruction the cycle its operands are ready, with unlimited width, window and prediction. The longest chain bounds every machine. On the benchmark set the ceiling runs from IPC 3.8 (crc) to 87 (matmul).',
       'In order, the first stalled instruction stops everything behind it. Reordering hides latency (the dot product, 2-wide: CPI 1.14 → 0.91 at load and multiply latency 2, 1.60 → 1.10 at 4) but adds no units: one divider still finishes one division at a time.',
       'RAW is a true dependence. WAR and WAW are clashes of names. The CDC 6600\'s scoreboard stalls on all three; renaming removes the last two.',
-      'P6 style: an instruction\'s tag is its reorder-buffer entry. Dispatch renames in order, each port issues the oldest ready instruction, result buses wake the waiting ones, and commit leaves the head in order, so the register file always holds a precise state.',
+      'P6 style: an instruction\'s tag is its reorder-buffer entry. Dispatch renames in order, each port issues the oldest ready instruction, result buses wake the waiting ones, and commit leaves the head in order, so the register file always holds the state of a prefix of the program (a precise state).',
       'Measured on the gates, the out-of-order core has the lowest CPI (0.99) but not the shortest time: its clock is 93 NAND delays against the dual-issue pipeline\'s 80, so 92.3 delays an instruction against 83.1, for 1.85× the NANDs and 1.9× the energy. Wider and deeper helps less and less (Pollack\'s rule), and code without unpredictable branches helps every core.',
       'Speculation fills the window. Our core finds a misprediction when the branch executes and recovers when it commits. On fib a 4-entry return-address stack takes CPI from 1.29 to 0.99, recovering at execute would give 0.92, and perfect prediction 0.63: on these programs the front end limits more than the window.',
     ],
@@ -367,7 +367,7 @@ export const chOoo: Chapter = {
           { title: 'Same-cycle dependence', show: ['by2', 'by3'], expect: { a1v: 1, a1t: 3 },
             say: '<p>The second instruction reads x5, which the first writes in this very cycle (<code>tag0</code> = 3). The table cannot know yet, but the bypass comparators can: <code>a1v</code> = {v:a1v}, <code>a1t</code> = {v:a1t}.</p>' },
           { title: 'The edge', cycles: 1, show: ['rows'], expect: { a1v: 1, a1t: 3 },
-            say: '<p>One clock edge writes both mappings into the table: x5 → entry 3, x6 → entry 4. The answer for the second instruction does not change, and the row behind the bypass now holds the same tag: with <code>we0</code> still high the bypass goes on answering; once dispatch moves on (next beat) the row does.</p>' },
+            say: '<p>One clock edge writes both mappings into the table: x5 → entry 3, x6 → entry 4. The answer for the second instruction does not change: the row now holds the same tag, and while <code>we0</code> is high the bypass goes on giving it too. Once dispatch stops (next beat), the row alone answers.</p>' },
           { title: 'A later lookup', set: { we0: 0, we1: 0, rs1_0: 5, rs2_0: 6 }, show: ['rows', 'rd0', 'rd1'], expect: { a0v: 1, a0t: 3, b0v: 1, b0t: 4 },
             say: '<p>With nothing being dispatched, a lookup of x5 and x6 reads the rows: x5 waits for entry {v:a0t}, x6 for entry {v:b0t}.</p>' },
         ],
@@ -630,7 +630,7 @@ export const chOoo: Chapter = {
     {
       title: 'Measured, all together',
       body: `
-        <p>Four machines, the same four programs, every number from the gate-level CPUs' benchmark runs: the fastest
+        <p>Four machines, the same benchmark programs, every number from the gate-level CPUs' benchmark runs: the fastest
         single-cycle CPU, the best RV32IM pipeline, the dual-issue pipeline and the out-of-order core. The time of an
         instruction is the clock period times the CPI: NAND delays per instruction.</p>
         <p>The out-of-order core has the lowest CPI, 0.99, but not the shortest time: its period is 93 NAND delays

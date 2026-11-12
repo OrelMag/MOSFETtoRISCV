@@ -91,7 +91,7 @@ export const chMemCtrl: Chapter = {
         to serve first) decide what each miss costs, so the chapter measures them on the benchmarks.</p>
         <p>Six commands do the work. <strong>ACT</strong> opens a row in a bank, <strong>RD</strong> / <strong>WR</strong>
         move a burst from or to the open row, <strong>PRE</strong> closes it (<strong>PREA</strong>: every bank), <strong>REF</strong>
-        refreshes. Each working command has a rule about when it may come (<a href="#/c/dram/0">chapter ${numOf('dram')}</a>): tRCD after an ACT before a column command, tRP after a PRE
+        refreshes. Each command has a rule about when it may come (<a href="#/c/dram/0">chapter ${numOf('dram')}</a>): tRCD after an ACT before a column command, tRP after a PRE
         before the next ACT, tRAS before a row may close, tRFC of silence after a REF. <span data-show="dev">The device</span> here checks every one: a broken rule raises its error flag and names the rule, and a
         column command that breaks one reads X.</p>
         <p><span data-show="ctrl">The controller</span> turns "read line 5" into the right commands at the right cycles. In gates it is small: <span data-show="ctrl.st">seven state
@@ -278,9 +278,9 @@ export const chMemCtrl: Chapter = {
       body: `
         <p>Which address bits pick the bank decides which requests fight. Here a line's address is {row, bank, column}: four lines fill
         a row, the next four go to the next bank. The copy reads word i and writes word i + 1024, and with 2 banks of 16-word rows
-        1024 words is 32 rows of both banks. Source and destination always land in the same bank, a different row, so each
+        1024 words is 64 rows, 32 in each bank. Source and destination always land in the same bank, a different row, so each
         stream keeps closing the other's row.</p>
-        <p>A controller can fold row bits into the bank number. With an XOR of the row's parity, rows 32 apart land in different banks:
+        <p>A controller can fold row bits into the bank number. If the bank number is XORed with the row's parity, rows 32 apart land in different banks:
         on the copy, row hits go from ${COPY.plain} % to ${COPY.hash} % of the requests and the program takes ${COPY.faster} % fewer cycles.
         The cost is a parity tree and an XOR gate in the controller; the program and the cache do not change. Real controllers hash
         more bits and choose the mapping to suit the workload.</p>
