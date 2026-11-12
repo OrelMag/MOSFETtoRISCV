@@ -2,7 +2,8 @@
 // sees the sum of the currents of the wires through it and flips only when that sum reaches the switching current Ic. One
 // X and one Y wire at half the full drive put 2 x half = 0.9 A on the crossing core and 0.45 A on every other core of that
 // row or column: below Ic, so those stay. A four-wire plane: X and Y select, a sense wire and an inhibit wire through every
-// core. The sense wire runs diagonally through all sixteen, as in real planes (Ken Shirriff on IBM S/360 core memory,
+// core. The sense wire runs diagonally through all sixteen, as Whirlwind's did (MIT Report R-221, 1954, section 5.24: "the
+// sense winding runs along the diagonals"; IBM's S/360 planes shifted it two columns mid-plane instead, Ken Shirriff,
 // https://www.righto.com/2019/04/a-look-at-ibm-s360-core-memory-in-1960s.html); the inhibit parallels the X wires. A
 // three-wire plane merges sense and inhibit into that one diagonal wire.
 //
@@ -114,11 +115,16 @@ export const halfSelected = (addr: number): number[] =>
 
 /** 1 unit = 5 mil (0.127 mm). A mid-1950s Lincoln Laboratory core: 80 mil (2 mm) outside, 50 mil inside, 20 mil high (the
  *  size documented for its 1955 memory, https://ub.fnwi.uva.nl/computermuseum/CoreMemory.html; not claimed for the 1953
- *  Whirlwind array). The pitch and the wire gauge are assumptions (a plane's cores were tilted and close together). */
+ *  Whirlwind array). The pitch is an assumption (a plane's cores were tilted and close together); the wire is Whirlwind's
+ *  32-gauge magnet wire with quadruple Formex insulation (R-221 section 5.24), drawn at its bare copper diameter, 0.00795 in
+ *  (the AWG series: 0.005 in x 92^((36 - n) / 39)), as no source gives the insulated one. */
 export const UNIT_MIL = 5;
 export const OD = 80 / UNIT_MIL, ID = 50 / UNIT_MIL, HEIGHT = 20 / UNIT_MIL;
 export const PITCH_MIL = 120, PITCH = PITCH_MIL / UNIT_MIL;
-export const WIRE_R = 0.5; // a ~5 mil (about 36 AWG) enamelled wire
+export const AWG = 32;
+/** Bare diameter of an AWG gauge, inches. */
+export const awgInch = (n: number): number => 0.005 * 92 ** ((36 - n) / 39);
+export const WIRE_R = (awgInch(AWG) * 1000) / 2 / UNIT_MIL; // radius in units: 32 AWG, 7.95 mil across
 /** The tube of the ring is drawn round, of the mean of its width (15 mil) and height (20 mil). */
 export const TUBE_R = 1.75;
 const RING_SIDES = 14;
