@@ -186,7 +186,8 @@ export class WorkbenchPage implements Page {
     }
     if (!any) l.append(h('div', { class: 'lib-empty' }, `No component matches “${this.filter}”. `, h('button', { class: 'btn sm', onclick: () => { this.search.value = ''; this.filter = ''; this.renderList(); this.search.focus(); } }, 'Clear the search')));
     // the open part in view (a long list opens at the top otherwise)
-    if (!this.filter) l.querySelector<HTMLElement>('.lib-item.on')?.scrollIntoView({ block: 'nearest' });
+    // (after the frame: the list may not be in the page yet, and scrolling a detached row does nothing)
+    if (!this.filter) requestAnimationFrame(() => l.querySelector<HTMLElement>('.lib-item.on')?.scrollIntoView({ block: 'center' }));
   }
 
   /** The top bar's way back (ui/returnto.ts): the part on the bench. */
