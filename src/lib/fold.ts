@@ -4,7 +4,9 @@
 // drawn as pointers at the ends away from its driver's band (a long run back across the drawing would cross everything).
 
 import { symbolGeom } from '../sim/geometry';
-import type { NetDef, Netlist } from '../sim/types';
+import type { NetDef, Netlist, PortDef } from '../sim/types';
+import type { Builder } from './builder';
+import { layered, type LayeredOptions } from './layered';
 
 export interface FoldOptions {
   /** Rows between the bands (default 16). */
@@ -74,4 +76,25 @@ export function foldCut(nl: Netlist): { cut: number; first: number; cols: number
   const window = cols.filter((x) => x > cols[0] && Math.abs(x - right / 2) <= 0.15 * right);
   const cut = window.length ? window.reduce((best, x) => (crossing(x) < crossing(best) ? x : best)) : first;
   return { cut, first, cols, crossing };
+}
+
+
+/**
+ * A core's drawing: laid out by logic depth (lib/layered.ts, `lay` its options: `aspect` folds it into bands at its seams, each
+ * net across a seam a label pair) where that measured better than foldBands' two halves (PC-3 of the eyes pass: fewer pointers and
+ * crossings, no more wires through parts), else foldBands as before. `pins` are foldBands' own (layered places its pins).
+ */
+export function coreNetlist(ports: PortDef[], b: Builder, pins: Record<string, [number, number]>, lay?: LayeredOptions): Netlist {
+  // pins in the order foldBands drew them (by side, top to bottom): a campaign reference is drawn as a chip whose face keeps that order
+  return lay ? layered(ports, b, { pinOrder: Object.keys(pins).sort((a, c) => pins[a][0] - pins[c][0] || pins[a][1] - pins[c][1]), ...lay }) : foldBands({ pins, instances: b.instances, nets: b.nets() });
+}
+
+/** The options the long cores measured best with (two to four bands, room for their labels). */
+export const CORE_LAY: LayeredOptions = { aspect: 1.6, room: true, gap: 10, vgap: 4, pinPitch: 4 };
+
+/** Nets forced to wires (`on`: a label pair there would collide) or to labels (a wire would run through a part): the outputs of the
+ *  instances with these labels, and these pins. */
+export function labelledWires(b: Builder, labels: string[], pins: string[] = [], on = true): Record<string, boolean> {
+  const ends = b.instances.filter((i) => labels.includes(i.label ?? '')).map((i) => `${i.name}.${i.def.ports.find((p) => p.dir === 'out')!.name}`);
+  return Object.fromEntries([...ends, ...pins].map((e) => [e, on]));
 }

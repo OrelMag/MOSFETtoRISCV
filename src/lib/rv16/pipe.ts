@@ -15,7 +15,7 @@ import { TIE0, TIE1 } from '../transistors';
 import { rowsKey16, type Custom16Row } from '../../riscv/rv16/custom16';
 import { BRANCH16, branch16, control16, IMM16, NEXTPC16, NEXTPC16F } from './cpu';
 import { ADD16, choose4, INC16, MUX16, RF8, RV16_ALU16, RV16_ALU16KS, RV16_DFF, RV16_DREG16, RV16_REG16 } from './logic';
-import { foldBands } from '../fold';
+import { CORE_LAY, coreNetlist, labelledWires } from '../fold';
 import { CSR16F, ILL16, SYSDEC16, trapCause } from './system';
 
 const bit = (name: string, dir: 'in' | 'out'): PortDef => ({ name, width: 1, dir });
@@ -374,10 +374,7 @@ export function rv16Pipe(o: Rv16PipeOptions): ComponentDef {
     ...(o.custom?.length ? { name: `${name}, with ${o.custom.map((r) => r.name).join(', ')}` } : {}),
     symbol: { kind: 'box', label: 'RV16 PIPE' },
     // a core is too wide to read at fit in one strip: two bands (lib/fold.ts)
-    netlist: () => foldBands({
-      pins: { ...pinsAt(['clk', 'rst', 'instr', 'drdata', ...(o.sys ? ['irq'] : [])], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) },
-      instances: b.instances, nets: b.nets(),
-    }),
+    netlist: function (this: ComponentDef) { return coreNetlist(this.ports, b, { ...pinsAt(['clk', 'rst', 'instr', 'drdata', ...(o.sys ? ['irq'] : [])], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) }, o.custom?.length ? undefined : o.sys ? { ...CORE_LAY, wires: labelledWires(b, ['bubble into E', 'redirect'], ['drdata']) } : { ...CORE_LAY, wires: labelledWires(b, ['imm'], [], false) }); },
   });
   pipes.set(key, d);
   return d;
