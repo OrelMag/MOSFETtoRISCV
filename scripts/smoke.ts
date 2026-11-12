@@ -931,6 +931,11 @@ const honeDrive = (part: string) => `(async () => {
     else if (p < openAt && p >= CLOSE_SHARE * openAt && o !== prev) bad.push(where + ': flipped inside the band at ' + fmt(p));
     return o;
   };
+  // A box past its opening shows once the lens has built its inside: a queued build, one box per frame, its neighbours too
+  // (view/lens.ts queueBuild), which on a loaded runner outlasts SETTLE (ooo/11's div: 0.5 to 0.9 s at an 8× CPU throttle).
+  // Wait for that build before the rule is read, with the same threshold: a box that never opens still fails, after BUILD_MAX.
+  const BUILD_MAX = 10000;
+  const built = async () => { const until = performance.now() + BUILD_MAX; while (px() >= openAt && !isOpen() && performance.now() < until) await wait(50); };
   if (px() >= CLOSE_SHARE * openAt) return ['${part} starts within its band (' + fmt(px()) + ' of ' + fmt(openAt) + '): pick another part'];
   if (document.querySelector('.lens-layer .inside')) bad.push('an inside before any zoom');
   // the hint on a closed box that can open, with the zoom still needed
@@ -942,7 +947,7 @@ const honeDrive = (part: string) => `(async () => {
   // in, a step at a time, each settled, until open and two steps past
   let open = false, past = 0;
   for (let k = 0; k < 60 && past < 2 && location.hash === hash; k++) {
-    wheel(-100); await wait(SETTLE);
+    wheel(-100); await wait(SETTLE); await built();
     open = check(open, 'zooming in');
     if (open) past++;
   }
@@ -998,7 +1003,7 @@ const honeDrive = (part: string) => `(async () => {
   const label = g().querySelector('.sym-label');
   if (label && getComputedStyle(label).display === 'none') bad.push('the name of ${part} is still hidden after it closed');
   // in again to the zoom it opened at: the same answer (nothing remembered)
-  for (let k = 0; k < 60 && px() < openPx * 0.999; k++) { wheel(-100); await wait(SETTLE); open = check(open, 'zooming in again'); }
+  for (let k = 0; k < 60 && px() < openPx * 0.999; k++) { wheel(-100); await wait(SETTLE); await built(); open = check(open, 'zooming in again'); }
   if (!isOpen()) bad.push('${part} did not open again at ' + fmt(px()) + ' px a unit');
   // the whole level again, as every drive leaves it (the run's checks look at the fitted view)
   document.querySelector('.stage [aria-label="Fit to screen"]')?.click();
