@@ -203,7 +203,8 @@ export function itemWordScore(it: NavItem, w: string): number {
   if (l.t === w) return 70;
   if (l.t.startsWith(w)) return 60;
   if (wordStart(l.t, w)) return 50;
-  if (l.a && (l.a === w || l.a.split(/[\s·,/]+/).includes(w))) return 45;
+  if (l.a && l.a === w) return 70; // a page by its own name
+  if (l.a && l.a.split(/[\s·,/]+/).includes(w)) return 45;
   if (l.t.includes(w)) return 35;
   if (l.a && wordStart(l.a, w)) return 25;
   if (l.a.includes(w)) return 12;
