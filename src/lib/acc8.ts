@@ -8,6 +8,7 @@ import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { symbolGeom } from '../sim/geometry';
 import { constWord, isZero } from './alu';
 import { Builder } from './builder';
+import { laid } from './layered';
 import { addSub, busMux2, decoder, equal, incrementer, muxTree } from './combinational';
 import { define, merger, splitter } from './define';
 import { AND, NOT, OR } from './gates';
@@ -63,7 +64,6 @@ export const ACC_CTL: ComponentDef = (() => {
   b.wire(jump, 'jump');
   b.wire(y(7), 'out');
   b.wire(y(5), 'jmp');
-  const R = b.right;
   const ports: PortDef[] = [bus('op', 3, 'in'), bit('z', 'in'), ...ACC_CTL_OUTS.map((n) => bit(n, 'out'))];
   return define({
     id: 'acc8_ctl', name: 'Control (first computer)', category: 'cpu',
@@ -71,10 +71,7 @@ export const ACC_CTL: ComponentDef = (() => {
     ports,
     symbol: { kind: 'box', label: 'CONTROL' },
     spec: ([op, z]) => { const c = accControl(op, z); return ACC_CTL_OUTS.map((n) => c[n]); },
-    netlist: () => ({
-      pins: { op: [0, 10], z: [0, 22], ...Object.fromEntries(ACC_CTL_OUTS.map((n, i) => [n, [R, 4 + 3 * i]])) },
-      instances: b.instances, nets: b.nets(),
-    }),
+    netlist: laid(b, { pinOrder: ports.map((p) => p.name) }), // by logic depth, pins in port order (the campaign's reference draws it as a chip: its face keeps its pin order),
   });
 })();
 
