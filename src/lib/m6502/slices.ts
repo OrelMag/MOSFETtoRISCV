@@ -151,7 +151,7 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
     for (const [n, d] of depth) colW[d + 1] = Math.max(colW[d + 1], geo(n).w);
     const trunksInto = (c: number) => [...trunkNets.values()].filter((x) => x === c).length;
     const xs = [8];
-    for (let c = 0; c <= D; c++) xs.push(xs[c] + colW[c] + Math.max(5, Math.ceil(rightRoom[c] + leftRoom[c + 1] + 1) + (trunksInto(c + 1) ? trunksInto(c + 1) + 2 : 0)));
+    for (let c = 0; c <= D; c++) xs.push(xs[c] + colW[c] + Math.max(spec.gap ?? 5, Math.ceil(rightRoom[c] + leftRoom[c + 1] + 1) + (trunksInto(c + 1) ? trunksInto(c + 1) + 2 : 0)));
     const at = new Map<string, [number, number]>();
     for (const s of sliceIds) for (const n of members.get(s)!) at.set(n, [xs[colOf(n)], sliceTop(s) + (shift.get(s) ?? 0) + local.get(n)!]);
     const xRight = xs[D + 1] + colW[D + 1] + 6;

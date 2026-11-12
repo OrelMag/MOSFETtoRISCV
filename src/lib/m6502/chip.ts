@@ -52,19 +52,21 @@ const r = (s: Sig) => `r_${s}`;
 
 export function clockBlock(): ComponentDef {
   const L = new Logic();
+  // two rows, one per phase: its delay chain, the NOR and the two buffers (place 'slices': row 0 makes φ1, row 1 φ2)
+  L.slice(1);
   const nphi0 = L.inv('phi0');
   // each raw phase waits for the other's buffered line, delayed: the non-overlap gap
   const delay = (x: string, k: number) => { let y = x; for (let i = 0; i < k; i++) y = L.inv(y); return y; };
   const a = L.net('a'), b = L.net('b');
-  L.nor(['phi0', delay('p2', 6)], a);
-  L.nor([nphi0, delay('p1', 6)], b);
-  L.inv(a, 'np1'); L.inv('np1', 'p1');
-  L.inv(b, 'np2'); L.inv('np2', 'p2');
+  L.slice(0); L.nor(['phi0', delay('p2', 6)], a);
+  L.slice(1); L.nor([nphi0, delay('p1', 6)], b);
+  L.slice(0); L.inv(a, 'np1'); L.inv('np1', 'p1');
+  L.slice(1); L.inv(b, 'np2'); L.inv('np2', 'p2');
   return L.build({
     id: 'm65_clock', name: '6502 clock generator',
     summary: 'φ0 in, two non-overlapping phases out: φ1 while φ0 = 0, φ2 while φ0 = 1, each starting only after the other has been low for six gate delays.',
     ports: [bit('phi0'), bit('p1', 'out'), bit('p2', 'out'), bit('np1', 'out'), bit('np2', 'out')],
-    symbol: { kind: 'box', label: 'CLOCK' }, rows: 6,
+    symbol: { kind: 'box', label: 'CLOCK' }, rows: 6, place: 'slices', gap: 3,
   });
 }
 

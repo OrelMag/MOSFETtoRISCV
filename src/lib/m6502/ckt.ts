@@ -32,6 +32,8 @@ export interface BlockSpec {
   place?: 'grid' | 'layered' | 'slices';
   /** With place 'layered': nets (by name) drawn as wires although they run back a column (a loop's short return). */
   wires?: string[];
+  /** With place 'slices': the least gap between columns (default 5). */
+  gap?: number;
 }
 
 export interface Inst { name: string; def: ComponentDef; conns: Record<string, string | string[]>; label?: string; slice: number }
