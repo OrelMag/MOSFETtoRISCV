@@ -919,6 +919,29 @@ const honeDrive = (part: string) => `(async () => {
     if (px() < CLOSE_SHARE * at && o.classList.contains('inside-on')) bad.push(o.dataset.inst + ' is open below ¾ of its opening');
   }
   const openPx = px();
+  // only a zoom out closes (R3.4): a docked panel folding and unfolding moves the canvas's cap, never the answer
+  const dockTitle = [...document.querySelectorAll('[data-dock="right"] > h4')].find((h) => h.getBoundingClientRect().width > 0);
+  if (dockTitle) for (const how of ['folded', 'unfolded']) {
+    dockTitle.click(); await wait(SETTLE);
+    if (!isOpen()) bad.push('${part} closed when a docked panel ' + how);
+  }
+  // a pan that takes the box out of reach and back, zoomed out into its band in small steps: the same answer as before
+  for (let k = 0; k < 12 && px() >= openAt; k++) { wheel(30); await wait(SETTLE); open = check(open, 'stepping out into the band'); }
+  if (!(px() < openAt && px() >= CLOSE_SHARE * openAt)) bad.push('could not stop inside the band of ${part} (' + fmt(px()) + ' of ' + fmt(openAt) + ')');
+  else if (open) {
+    const cv = canvas.getBoundingClientRect(), x0 = cv.left + 20, y0 = cv.top + cv.height / 2;
+    const span = box().right - cv.left + 2 * cv.width;
+    const move = (x) => svg.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: x, clientY: y0, bubbles: true }));
+    svg.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, button: 0, clientX: x0, clientY: y0, bubbles: true }));
+    for (let k = 1; k <= 6; k++) { move(x0 - (k * span) / 6); await wait(16); }
+    await wait(SETTLE);
+    const away = box();
+    for (let k = 5; k >= 0; k--) { move(x0 - (k * span) / 6); await wait(16); }
+    svg.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientX: x0, clientY: y0, bubbles: true }));
+    await wait(SETTLE);
+    if (away.right > cv.left) bad.push('the pan did not take ${part} out of view');
+    else if (!isOpen()) bad.push('${part} came back closed after a pan away and back at ' + fmt(px()) + ' (inside its band)');
+  }
   // out, a step at a time: open through the band, closed below it, crossfading back to the symbol
   for (let k = 0; k < 60 && open; k++) { wheel(100); await wait(SETTLE); open = check(open, 'zooming out'); }
   if (open) return [...bad, 'zooming out never closed ${part}'];

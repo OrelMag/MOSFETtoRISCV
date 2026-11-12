@@ -13,7 +13,7 @@ import { orientGeom } from '../src/sim/geometry';
 import { isConstantDef } from '../src/sim/constant';
 import { netlistOf, type ComponentDef } from '../src/sim/types';
 import { MIN_VIEW_UNITS } from '../src/view/camera';
-import { CAP_SHARE, capOpenAt, fitInside, insideExtent, openAtPx, smallestNamed } from '../src/view/lensplan';
+import { CAP_SHARE, capOpenAt, decide, fitInside, handsOff, insideExtent, openAtPx, smallestNamed } from '../src/view/lensplan';
 
 const FIB = assemble(PROGRAMS.find((p) => p.name === 'Fibonacci')!.source).words;
 const TOPS: [string, () => ComponentDef][] = [['single-cycle', () => singleCycleCpu(FIB)], ['pipeline', () => pipelinedCpu(FIB)], ['out of order', () => oooCpu(FIB)]];
@@ -62,5 +62,60 @@ describe('a register opens on its own rule', () => {
     const def = netlistOf(singleCycleCpu(FIB))!.instances.find((i) => i.name === 'rf')!.def;
     // the read ports (10 units, two of them) are the smallest named blocks now: the 31 REG32s count as one run
     expect(smallestNamed(def)).toBe(10);
+  });
+});
+
+// Ross's review cases: the cap made the opening zoom depend on the canvas, so the canvas's changes and extremes are tested here.
+describe('the cap and the canvas', () => {
+  // docked / folded pairs (a panel folding widens the canvas), and the phone canvases touch now opens on
+  const PAIRS: [{ w: number; h: number }, { w: number; h: number }][] = [
+    [{ w: 888, h: 606 }, { w: 1248, h: 606 }], [{ w: 620, h: 520 }, { w: 888, h: 606 }],
+    // not a window resize (1248 x 606 to 1880 x 900): its short side grows 1.49 times, more than the band's 1 / CLOSE_SHARE
+  ];
+  const PHONES = [{ w: 390, h: 560 }, { w: 360, h: 480 }, { w: 844, h: 300 }];
+
+  for (const [label, make] of TOPS) {
+    const all = boxes(make());
+
+    it(`${label}: no box hands off on the step it opens (its inside on screen is smaller than the canvas there)`, () => {
+      for (const c of [...CANVASES, ...PHONES]) {
+        for (const b of all) {
+          const def = netlistOf(make())!.instances.find((i) => i.name === b.name)!.def;
+          const box = { x: 0, y: 0, ...b.size }, f = fitInside(box, insideExtent(def)!);
+          const at = capOpenAt(b.base, b.size, c);
+          const fitPx = { x: 0, y: 0, w: f.w * at, h: f.h * at };
+          expect(handsOff(fitPx, c), `${label} ${b.name} on ${c.w} x ${c.h}: inside ${fitPx.w.toFixed(0)} x ${fitPx.h.toFixed(0)} px at ${at.toFixed(1)}`).toBe(false);
+        }
+      }
+    });
+
+    it(`${label}: a panel docking or folding never closes an open box (the cap moves less than the band)`, () => {
+      for (const [a, b2] of PAIRS) for (const [from, to] of [[a, b2], [b2, a]]) {
+        for (const b of all) {
+          const px = capOpenAt(b.base, b.size, from);
+          expect(decide(true, px, capOpenAt(b.base, b.size, to)), `${label} ${b.name}: open at ${px.toFixed(1)} on ${from.w} x ${from.h}, then ${to.w} x ${to.h}`).toBe(true);
+        }
+      }
+    });
+
+    it(`${label}: on a phone every box still opens within the view's zoom and by 40 % of the short side`, () => {
+      for (const c of PHONES) {
+        const cs = Math.min(c.w, c.h);
+        for (const b of all) {
+          const at = capOpenAt(b.base, b.size, c);
+          expect(at, `${label} ${b.name} on ${c.w} x ${c.h}`).toBeLessThan(c.w / MIN_VIEW_UNITS);
+          expect(Math.min(b.size.w, b.size.h) * at).toBeLessThanOrEqual(CAP_SHARE * cs + 1e-6);
+        }
+      }
+    });
+  }
+
+  it('the cap is a function of the box and the canvas alone: any order, any number of times', () => {
+    const all = boxes(singleCycleCpu(FIB));
+    const first = all.map((b) => CANVASES.map((c) => capOpenAt(b.base, b.size, c)));
+    for (let run = 0; run < 3; run++) [...all].reverse().forEach((b) => {
+      const i = all.indexOf(b);
+      CANVASES.forEach((c, j) => expect(capOpenAt(b.base, b.size, c)).toBe(first[i][j]));
+    });
   });
 });
