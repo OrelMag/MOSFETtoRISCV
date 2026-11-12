@@ -35,6 +35,12 @@ export interface LayeredOptions {
    * bit-sliced block may come out of order).
    */
   keepOrder?: boolean;
+  /**
+   * Draw a short forward net as a wire only when no other part stands in the rectangle between its driver and each sink (a
+   * wire the router would have to take through or round a part reads worse than its label). Off: as before, for the sites that
+   * were measured that way.
+   */
+  avoid?: boolean;
   /** Minimum row-to-row spacing of pins. */
   pinPitch?: number | [number, number];
 }
@@ -205,11 +211,22 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
       const p = geom.get(n)!.ports[portOf(end)]?.pos ?? [0, 0];
       return [at.get(n)![0] + p[0], at.get(n)![1] + p[1]];
     };
+    // avoid: no part but the two ends overlaps the rectangle spanned by the two port positions (a little inside each edge)
+    const clear = (de: string, se: string, d: [number, number], q: [number, number]): boolean => {
+      if (!opts.avoid) return true;
+      if (q[0] <= d[0]) return false; // a wire back or straight down goes round a part
+      const x0 = Math.min(d[0], q[0]), x1 = Math.max(d[0], q[0]), y0 = Math.min(d[1], q[1]) - 0.5, y1 = Math.max(d[1], q[1]) + 0.5, own = new Set([inst(de), inst(se)]);
+      return instances.every((i) => {
+        if (own.has(i.name)) return true;
+        const g = geom.get(i.name)!, [ix, iy] = i.at!;
+        return ix + g.w <= x0 || ix >= x1 || iy + g.h <= y0 || iy >= y1;
+      });
+    };
     const outNets = nets.map((n) => {
       const o = opts.wires?.[n.ends[0]];
       const local = n.tags === true && n.ends.length - 1 < 5 && !CLOCK.test(n.name ?? '') && (() => {
         const d = endPos(n.ends[0]);
-        return n.ends.slice(1).every((e) => { const q = endPos(e); return q[0] >= d[0] - 2 && Math.abs(q[0] - d[0]) + Math.abs(q[1] - d[1]) <= 45; });
+        return n.ends.slice(1).every((e) => { const q = endPos(e); return q[0] >= d[0] - 2 && Math.abs(q[0] - d[0]) + Math.abs(q[1] - d[1]) <= 45 && clear(n.ends[0], e, d, q); });
       })();
       if (o === undefined && !local) return n;
       if (o === false) return { ...n, tags: true as const };

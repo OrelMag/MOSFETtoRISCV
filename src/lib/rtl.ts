@@ -492,10 +492,14 @@ export class Rtl {
       // a pin used as a driver is named after itself; a pass-through (in → out) is a net of two pins
       const nets: NetDef[] = b.nets();
       const instances: InstanceDef[] = b.instances;
-      // a small block of gates is laid out by logic depth, rows level with what they talk to, its short nets drawn as wires
-      // (lib/layered.ts); not one of boxes or wide buses, whose pointer names need wider channels than layered leaves
-      const small = !sc.role && !sc.kids.length && instances.length <= SPLIT_MIN && instances.every((i) => i.def.ports.length <= 8);
-      const lay = small ? layered(ports, b, { gap: 14, x0: gapW }) : null; // x0: room for a pin's pointer
+      // a block of gates is laid out by logic depth, rows level with what they talk to, its short nets drawn as wires where
+      // no other part stands between their ends (lib/layered.ts, avoid): a small block, and a split block's next state / outputs
+      // of any size (drawn in columns with every net a label they read as nothing but pointers: 31 276 of 32 244 nets over the
+      // book's blocks, 16 274 laid out); not one of boxes or wide buses, whose pointer names need wider channels than layered
+      // leaves. Laid out when the level is first opened, not when the design is built. room: a split block's labels need it.
+      const small = !sc.kids.length && (!!sc.role || instances.length <= SPLIT_MIN) && instances.every((i) => i.def.ports.length <= 8);
+      let lay: ReturnType<typeof layered> | null = null;
+      const laid = () => (lay ??= layered(ports, b, { gap: 14, x0: gapW, avoid: true, ...(sc.role ? { room: true } : {}) })); // x0: room for a pin's pointer
       return define({
         id,
         name: isRoot ? this.opt.name : sc.role ? `${this.opt.name}: ${this.scopes[sc.parent].label || this.opt.name}, ${sc.label}` : `${this.opt.name}: ${sc.label}`,
@@ -503,7 +507,7 @@ export class Rtl {
         summary: isRoot ? this.opt.summary : `${sc.label} (a block of ${this.opt.name}).`,
         ports,
         symbol: { kind: 'box', label: isRoot ? (this.opt.label ?? this.opt.name) : sc.label, ...(isRoot && this.opt.boxW ? { w: this.opt.boxW } : {}) },
-        netlist: () => lay ?? { pins, instances, nets },
+        netlist: () => (small ? laid() : { pins, instances, nets }),
         ...(isRoot && this.opt.notes ? { notes: this.opt.notes } : {}),
       });
     };
