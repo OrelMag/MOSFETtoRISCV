@@ -45,7 +45,7 @@ export function readerView(deck: Deck, feed: number, sources: readonly string[])
     aria: 'A card reader in 3D feeding a computer: a hopper of punched cards, a picker knife, feed rolls, the read station and a stacker, and the computer’s panel of lamps',
     camera: { ...VIEWS.word },
     limits: { minDist: 70, maxDist: 800 },
-    note: 'The card is 7⅜ × 3¼ in with its corner clipped, columns 0.087 in apart, rows ¼ in; it is drawn 7 times too thick (1.25 mm for 0.18 mm) so a stack can be seen, and the throat is wider for the same reason. The brushes, rolls, the 56 mm between the two stations (the audit’s figure for the IBM 711) and the timing are drawn, not modelled. The reader part holds a card at the first station until it is taken; a real reader reads on the move, a row or column at a time against a timing wheel. The second station and the checks are drawn here: the part itself has none.',
+    note: 'The card is 7⅜ × 3¼ in with its corner clipped, columns 0.087 in apart, rows ¼ in; it is drawn 7 times too thick (1.25 mm for 0.18 mm) so a stack can be seen, and the throat is wider for the same reason. The brushes, rolls, the 56 mm between the two stations (illustrative: no source gives the spacing) and the timing are drawn, not modelled. The reader part holds a card at the first station until it is taken; a real reader reads on the move, a row or column at a time against a timing wheel. The second station and the checks are drawn here: the part itself has none.',
     draw: () => paint(),
   });
   const palette = (): ReaderPalette => ({
