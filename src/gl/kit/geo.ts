@@ -13,6 +13,31 @@ export interface Geo {
   readonly indices: Uint32Array;
   readonly min: Vec3;
   readonly max: Vec3;
+  /** Optional per-vertex colour (sRGB, 3 per vertex), multiplied into the material's base: a strain map, a potential. */
+  colors?: Float32Array;
+  /** Optional texture coordinates (2 per vertex), for a data surface (Material.data). */
+  uvs?: Float32Array;
+  /** Bumped by refresh(): the renderer re-uploads a geometry whose revision moved (live deform). */
+  rev?: number;
+}
+
+/** Live deform: copy next's positions, normals (and colours) into g, which keeps its identity (and its GPU buffers),
+ *  so a bending blade, a cord or a membrane is rebuilt each frame without a new mesh. Same vertex count required. */
+export function refresh(g: Geo, next: Geo): Geo {
+  if (next.positions.length !== g.positions.length || next.indices.length !== g.indices.length) throw new Error(`refresh: ${g.name} changed size`);
+  g.positions.set(next.positions); g.normals.set(next.normals);
+  if (next.colors && g.colors) g.colors.set(next.colors);
+  g.rev = (g.rev ?? 0) + 1;
+  return g;
+}
+
+/** Colour each vertex from a function of its position (a scalar field through a ramp: heatRamp, divergingRamp). */
+export function paint(g: Geo, fn: (p: Vec3) => [number, number, number]): Geo {
+  const c = g.colors ?? new Float32Array(g.positions.length);
+  for (let k = 0; k < g.positions.length; k += 3) c.set(fn([g.positions[k], g.positions[k + 1], g.positions[k + 2]]), k);
+  g.colors = c;
+  g.rev = (g.rev ?? 0) + 1;
+  return g;
 }
 
 class Builder {
@@ -354,6 +379,44 @@ export function normalMatrix(m: Mat4): Float32Array {
     -(b * i - c * h) / det, (a * i - c * g) / det, -(a * h - b * g) / det,
     (b * f - c * e) / det, -(a * f - c * d) / det, (a * e - b * d) / det,
   ]);
+}
+
+/** A flat w × d rectangle in the x, z plane facing +y, with texture coordinates (u along x, v along z): a screen,
+ *  a picture, a card, a mask plate. */
+export function plane(w: number, d: number): Geo {
+  const b = new Builder();
+  const v = [[-w / 2, -d / 2, 0, 0], [w / 2, -d / 2, 1, 0], [w / 2, d / 2, 1, 1], [-w / 2, d / 2, 0, 1]].map(([x, z]) => b.v([x, 0, z], [0, 1, 0]));
+  b.oquad(v[0], v[1], v[2], v[3], [0, 1, 0]);
+  const g = b.done('plane');
+  g.uvs = new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]);
+  return g;
+}
+
+/** A parametric surface p(u, v), u and v in 0..1, nu × nv quads; normals from the cross product of the partial
+ *  derivatives (an antenna lobe r(θ, φ), a membrane, a square microlens as a height field). */
+export function surface(fn: (u: number, v: number) => Vec3, nu = 32, nv = 32): Geo {
+  const b = new Builder(), e = 1e-4;
+  for (let j = 0; j <= nv; j++) for (let i = 0; i <= nu; i++) {
+    const u = i / nu, v = j / nv, p = fn(u, v);
+    const du = sub3(fn(Math.min(1, u + e), v), fn(Math.max(0, u - e), v)), dv = sub3(fn(u, Math.min(1, v + e)), fn(u, Math.max(0, v - e)));
+    const n = cross3(du, dv), l = len3(n);
+    b.v(p, l > 1e-12 ? scale3(n, 1 / l) : [0, 1, 0]);
+  }
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) { const a = j * (nu + 1) + i; b.vquad(a, a + 1, a + nu + 2, a + nu + 1); }
+  const g = b.done(`surface${nu}x${nv}`);
+  g.uvs = new Float32Array(Array.from({ length: (nu + 1) * (nv + 1) }, (_, k) => [(k % (nu + 1)) / nu, Math.floor(k / (nu + 1)) / nv]).flat());
+  return g;
+}
+
+/** The point at fraction s (0..1, by length) along a polyline: particles riding a wire, a pulse along a path. */
+export function along(path: readonly Vec3[], s: number): Vec3 {
+  const L: number[] = [0];
+  for (let k = 1; k < path.length; k++) L.push(L[k - 1] + len3(sub3(path[k], path[k - 1])));
+  const t = Math.max(0, Math.min(1, s)) * L[L.length - 1];
+  let k = 1;
+  while (k < path.length - 1 && L[k] < t) k++;
+  const f = (t - L[k - 1]) / ((L[k] - L[k - 1]) || 1);
+  return add3(path[k - 1], scale3(sub3(path[k], path[k - 1]), f));
 }
 
 /** Triangle count (for the budget and the fallback's choice of detail). */

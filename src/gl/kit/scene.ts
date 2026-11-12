@@ -2,11 +2,11 @@
 // The stage (widgets/studiostage.ts) draws it on gl/studio.ts, or flat in SVG; picking is a ray against the items'
 // triangles here, so what a hover names can be tested in Node.
 
-import { cross3, dot3, quatRotate, sub3, type Mat4, type Quat, type Vec3 } from '../math';
+import { cross3, dot3, mat4Mul, quatRotate, sub3, type Mat4, type Quat, type Vec3 } from '../math';
 import type { Anchor } from '../parts';
 import type { OrbitView } from '../camera';
 import type { Geo } from './geo';
-import type { Material } from './materials';
+import type { Colour, Material } from './materials';
 
 export interface ItemInfo { dim?: string; source?: string; note?: string }
 
@@ -25,6 +25,19 @@ export interface Item {
   cut?: 'section' | 'open' | 'none';
   /** Casts a shadow (default: unless it is glass). */
   shadow?: boolean;
+  /** See-through items are drawn far to near; a lower order draws first whatever the distance (nested layers). */
+  order?: number;
+}
+
+/** A light a hot or lit part gives off onto its neighbours: no shadow, falling off over `range`. */
+export interface GlowLight {
+  p: Vec3;
+  colour: Colour;
+  /** Linear intensity at the source (heatGlow of the part's temperature, say). */
+  power: number;
+  range: number;
+  /** Rides with this item or group when the model explodes. */
+  on?: string;
 }
 
 /** A cut: the side where n·p > d is removed; with two, only where both say so (a quarter section). */
@@ -32,9 +45,14 @@ export interface Cut { n: Vec3; d: number }
 
 export interface Beat {
   title: string; text: string;
+  /** The view's direction (yaw, pitch); its target and distance too unless `frame` is given. */
   view: OrbitView;
+  /** Fit these groups or names to the canvas (a small margin), from the view's direction. */
+  frame?: string[];
   /** Groups or names lit; the rest dimmed. Absent: everything. */
   show?: string[];
+  /** Groups or names hidden in this beat (a level of detail, a second variant). */
+  hide?: string[];
   explode?: number;
   /** The cut's position 0 (none) … 1 (fully open). */
   cut?: number;
@@ -55,9 +73,17 @@ export interface Model3 {
   beats?: Beat[];
   /** A floor that catches the shadow at this height (absent: below the lowest point). */
   floor?: number;
+  lights?: GlowLight[];
+  /** The model's look on the studio (phase 0's per-model data, and any model's): exposure, key-light direction. */
+  look?: { exposure?: number; keyDir?: Vec3 };
 }
 
 export interface Knobs { explode: number; cut: number }
+
+/** Parts moved by the physics this frame (an armature's swing, a rotor's step), by name or group: applied after the
+ *  item's own placement, so a part pivots about where it is drawn. */
+export type Moves = ReadonlyMap<string, Mat4>;
+const moveOf = (it: Item, moves?: Moves): Mat4 | undefined => moves && ((it.name && moves.get(it.name)) || (it.group && moves.get(it.group)) || undefined);
 
 /** An item's offset at explode k (eased, so parts start and stop gently). */
 export function explodeOffset(it: Item, k: number): Vec3 {
@@ -68,7 +94,9 @@ export function explodeOffset(it: Item, k: number): Vec3 {
 }
 
 /** The item's model matrix (column-major) at explode k. */
-export function itemMatrix(it: Item, k: number, out: Mat4 = new Float32Array(16)): Mat4 {
+export function itemMatrix(it: Item, k: number, out: Mat4 = new Float32Array(16), moves?: Moves): Mat4 {
+  const mv = moveOf(it, moves);
+  if (mv) { const m = itemMatrix(it, k); out.set(mat4Mul(mv, m)); return out; }
   const [qx, qy, qz, qw] = it.rot ?? [0, 0, 0, 1], [sx, sy, sz] = it.scale ?? [1, 1, 1], o = explodeOffset(it, k), a = it.at ?? [0, 0, 0];
   const xx = qx * qx, yy = qy * qy, zz = qz * qz, xy = qx * qy, xz = qx * qz, yz = qy * qz, wx = qw * qx, wy = qw * qy, wz = qw * qz;
   out[0] = (1 - 2 * (yy + zz)) * sx; out[1] = 2 * (xy + wz) * sx; out[2] = 2 * (xz - wy) * sx; out[3] = 0;
@@ -106,13 +134,14 @@ export function boundsOf(m: Model3, k = 0): { min: Vec3; max: Vec3 } {
 export interface Hit { item: Item; index: number; t: number; p: Vec3 }
 
 /** The nearest item a ray meets (origin o, direction d), cut parts skipped where cut, glass skipped unless `glass`. */
-export function pick(m: Model3, o: Vec3, d: Vec3, k: Knobs, opts: { glass?: boolean } = {}): Hit | null {
+export function pick(m: Model3, o: Vec3, d: Vec3, k: Knobs, opts: { glass?: boolean; moves?: Moves; hidden?: ReadonlySet<string> } = {}): Hit | null {
   const cuts = cutsAt(m, k.cut), M = new Float32Array(16);
   let best: Hit | null = null;
   m.items.forEach((it, index) => {
     if (!it.name) return;
     if (!opts.glass && (it.mat.transmit ?? 0) > 0.5) return;
-    itemMatrix(it, k.explode, M);
+    if (opts.hidden && ((it.name && opts.hidden.has(it.name)) || (it.group && opts.hidden.has(it.group)))) return;
+    itemMatrix(it, k.explode, M, opts.moves);
     // the ray in the item's world box first
     const { min, max } = worldBox(it, M);
     if (!rayBox(o, d, min, max, best?.t ?? Infinity)) return;
@@ -174,3 +203,37 @@ export function anchorAt(m: Model3, a: StudioAnchor, k: number): Vec3 {
 }
 
 export { quatRotate };
+
+/** The bounds of the items named (by name or group) at explode k, or of all of them. */
+export function boundsOfNamed(m: Model3, names: readonly string[] | undefined, k = 0): { min: Vec3; max: Vec3 } {
+  if (!names?.length) return boundsOf(m, k);
+  const set = new Set(names);
+  return boundsOf({ items: m.items.filter((i) => (i.name && set.has(i.name)) || (i.group && set.has(i.group))) }, k);
+}
+
+/** The target and distance that fit a box to a view from (yaw, pitch) with vertical field of view fov and aspect w / h,
+ *  leaving `margin` (a fraction of the half-size) on every side. */
+export function fitView(box: { min: Vec3; max: Vec3 }, yaw: number, pitch: number, fov: number, aspect: number, margin = 0.08): { target: Vec3; dist: number } {
+  const c: Vec3 = [(box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2];
+  const sy = Math.sin(yaw), cy = Math.cos(yaw), sp = Math.sin(pitch), cp = Math.cos(pitch);
+  const r: Vec3 = [cy, 0, -sy], u: Vec3 = [-sp * sy, cp, -sp * cy], f: Vec3 = [cp * sy, sp, cp * cy]; // f: towards the eye
+  const ty = Math.tan(fov / 2) * (1 - margin), tx = ty * aspect;
+  let dist = 0;
+  for (const x of [box.min[0], box.max[0]]) for (const y of [box.min[1], box.max[1]]) for (const z of [box.min[2], box.max[2]]) {
+    const q = sub3([x, y, z], c), a = dot3(q, r), b = dot3(q, u), z0 = dot3(q, f);
+    dist = Math.max(dist, z0 + Math.abs(a) / tx, z0 + Math.abs(b) / ty);
+  }
+  return { target: c, dist };
+}
+
+/** How wide the model looks from (yaw, pitch): its projected width over height (the stage picks its aspect from it). */
+export function aspectOf(box: { min: Vec3; max: Vec3 }, yaw: number, pitch: number): number {
+  const sy = Math.sin(yaw), cy = Math.cos(yaw), sp = Math.sin(pitch), cp = Math.cos(pitch);
+  const r: Vec3 = [cy, 0, -sy], u: Vec3 = [-sp * sy, cp, -sp * cy];
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const x of [box.min[0], box.max[0]]) for (const y of [box.min[1], box.max[1]]) for (const z of [box.min[2], box.max[2]]) {
+    const a = dot3([x, y, z], r), b = dot3([x, y, z], u);
+    x0 = Math.min(x0, a); x1 = Math.max(x1, a); y0 = Math.min(y0, b); y1 = Math.max(y1, b);
+  }
+  return (x1 - x0) / Math.max(1e-9, y1 - y0);
+}

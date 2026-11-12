@@ -253,17 +253,19 @@ function drawFlat(svg: SVGSVGElement, parts: Part[], marks: Anchor[]): SVGGEleme
 
 // ---------------------------------------------------------------- plots
 
-const PW = 360, PX0 = 40, PX1 = 336;
+export const PW = 360, PX0 = 40, PX1 = 336;
 const minus = (t: string) => t.replace(/^-/, '−');
 const fmt = (x: number, d = 1) => minus(x.toFixed(d));
 // (1) plate voltage against grid voltage, hot
-const H1 = 172, gX = (vg: number) => PX0 + ((vg + 20) / 22) * (PX1 - PX0), vY = (vp: number) => 150 - (vp / 260) * 132;
+export const H1 = 172;
+const gX = (vg: number) => PX0 + ((vg + 20) / 22) * (PX1 - PX0), vY = (vp: number) => 150 - (vp / 260) * 132;
 // (2) plate current against time since switch-on
-const H2 = 160, tX = (t: number) => PX0 + (t / 20) * (PX1 - PX0), iY = (mA: number) => 134 - (mA / 10) * 114;
+export const H2 = 160;
+const tX = (t: number) => PX0 + (t / 20) * (PX1 - PX0), iY = (mA: number) => 134 - (mA / 10) * 114;
 /** The hot transfer curve (it does not change). */
 const XFER = Array.from({ length: 89 }, (_, k) => { const vg = -20 + k * 0.25; return [vg, plateVoltage(vg)] as const; });
 
-function drawXfer(svg: SVGSVGElement, st: TubeState): void {
+export function drawXfer(svg: SVGSVGElement, st: TubeState): void {
   const els: SVGElement[] = [];
   const text = (x: number, y: number, t: string, cls = 'tick', anchor = 'end') => els.push(s('text', { x, y, class: cls, 'text-anchor': anchor }, t));
   for (const vp of [0, V_LOW, V_HIGH]) { els.push(s('line', { x1: PX0, x2: PX1, y1: vY(vp), y2: vY(vp), class: 'grid' })); text(PX0 - 4, vY(vp) + 3, String(Math.round(vp))); }
@@ -278,7 +280,7 @@ function drawXfer(svg: SVGSVGElement, st: TubeState): void {
   svg.replaceChildren(...els);
 }
 
-function drawWarm(svg: SVGSVGElement, curve: WarmSample[], st: TubeState): void {
+export function drawWarm(svg: SVGSVGElement, curve: WarmSample[], st: TubeState): void {
   const els: SVGElement[] = [];
   const text = (x: number, y: number, t: string, cls = 'tick', anchor = 'end') => els.push(s('text', { x, y, class: cls, 'text-anchor': anchor }, t));
   for (const mA of [0, 5, 10]) { els.push(s('line', { x1: PX0, x2: PX1, y1: iY(mA), y2: iY(mA), class: 'grid' })); text(PX0 - 4, iY(mA) + 3, String(mA)); }
@@ -294,7 +296,7 @@ function drawWarm(svg: SVGSVGElement, curve: WarmSample[], st: TubeState): void 
 // ---------------------------------------------------------------- the widget
 
 /** Amps with a unit that keeps three figures readable. */
-function amps(a: number): string {
+export function amps(a: number): string {
   if (a >= 1) return `${a.toFixed(2)} A`;
   if (a >= 1e-3) return `${(a * 1e3).toFixed(a >= 0.1 ? 0 : 2)} mA`;
   if (a >= 1e-6) return `${(a * 1e6).toFixed(2)} µA`;

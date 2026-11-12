@@ -8,6 +8,7 @@
 
 import { bentSheet, extrude, helix, lathe, roundedBox, sphere, tube, type Geo } from '../gl/kit/geo';
 import { M, heatColour, heatGlow, type Material } from '../gl/kit/materials';
+import { onCylinder, strokeGeo } from '../gl/kit/text';
 import type { Beat, Item, Model3, StudioAnchor } from '../gl/kit/scene';
 import type { Vec3 } from '../gl/math';
 import { B_PLUS, R_PLATE } from '../phys/triode';
@@ -42,7 +43,7 @@ interface Geos {
   base: Geo; cement: Geo; key: Geo; keyRib: Geo; pin: Geo; glass: Geo; getterFlash: Geo; flare: Geo; press: Geo;
   leads: Geo[]; mica: Geo; plateBack: (xs: number) => Geo; plateFront: (xs: number) => Geo; rib: Geo;
   rod: (y0: number, y1: number, r: number) => Geo; grid: (xs: number) => Geo; sleeve: Geo; heater: (xs: number) => Geo;
-  getterCup: Geo; electron: Geo; cloud: Geo;
+  getterCup: Geo; electron: Geo; cloud: Geo; print: Geo;
 }
 
 const memo = new Map<Detail, Geos>();
@@ -113,6 +114,8 @@ function geos(d: Detail): Geos {
     sleeve: lathe(sleeveProf, { seg: full ? 40 : 10, crease: 60 }),
     heater: memoFn(heater),
     getterCup: lathe([[0, 58], [2.2, 58], [2.8, 58.6], [2.9, 59.4], [2.6, 59.4], [2.4, 58.5], [0, 58.4]], { seg: small * 2 }),
+    // the type number printed on the glass (silk-screened white), facing the home view
+    print: strokeGeo('6SN7GT', onCylinder(GLASS_R, -0.5), 0, 20.5, 2.4, 0.3, 0.05),
     electron: sphere(0.15, 8, 5), cloud: lathe([[0, 30.6], [0.85, 30.6], [0.95, 31.4], [0.95, 44], [0.85, 44.6], [0, 44.6]], { seg: full ? 32 : 8 }),
   };
   memo.set(d, g);
@@ -128,9 +131,15 @@ const T = (x: number) => x.toFixed(x < 10 ? 2 : 1).replace(/\.?0+$/, '');
 /** The tube at state st: every item, the cut, the labels and the tour. */
 export function tubeModel(st: TubeState, look: TubeLook): Model3 {
   const G = geos(look.detail), items: Item[] = [];
-  const hot = (T0: number, m: Material) => M.glow(m, heatColour(T0), heatGlow(T0));
+  // A hot part: its emission is the black body at its temperature; what light it reflects fades as it outshines it.
+  const hot = (T0: number, m: Material): Material => {
+    const g = heatGlow(T0), k = 1 / (1 + 1.2 * g), b = m.base as [number, number, number];
+    return { ...M.glow(m, heatColour(T0), g), base: [b[0] * k, b[1] * k, b[2] * k] };
+  };
   const brass = M.tint(M.nickel, [0.78, 0.72, 0.6], 'nickel-plated brass');
-  const moly = M.tint(M.tungsten, [0.6, 0.6, 0.62], 'molybdenum wire');
+  const moly = M.make({ base: [0.8, 0.8, 0.82], metal: 1, rough: 0.28, label: 'molybdenum wire' });
+  const plateMat = M.make({ base: [0.46, 0.46, 0.47], metal: 0.6, rough: 0.42, label: 'nickel, carbonized (dark satin grey)' });
+  const mica = { ...M.mica, base: [0.92, 0.9, 0.84] as [number, number, number], transmit: 0.62, tint: [0.96, 0.94, 0.88] as [number, number, number] };
 
   // Base, key, pins, leads.
   items.push({ geo: G.base, mat: M.bakelite, name: 'octal base', group: 'base', info: { dim: `${T(2 * BASE_R)} mm across, ${BASE_H} mm high`, source: SRC.octal } });
@@ -146,15 +155,17 @@ export function tubeModel(st: TubeState, look: TubeLook): Model3 {
   items.push({ geo: G.flare, mat: M.glass, name: 'glass stem', group: 'stem', info: { source: SRC.photo, note: 'the stem is sealed to the bulb, the air pumped out through it, and the tube tipped off' } });
   items.push({ geo: G.press, mat: { ...M.glass, transmit: 0.75, tint: [0.85, 0.95, 0.9] }, at: [0, 18.6, 0], name: 'glass press', group: 'stem', info: { dim: '15 × 3.6 mm', source: SRC.photo, note: 'the leads are pinched into it while the glass is soft' } });
   // Micas.
-  items.push({ geo: G.mica, mat: M.mica, at: [0, MICA_LO - 0.15, 0], name: 'mica spacer', group: 'mica-lo', info: { dim: '0.3 mm sheet', source: SRC.photo, note: 'holds every electrode at a fixed spacing; its edge springs against the glass' } });
-  items.push({ geo: G.mica, mat: M.mica, at: [0, MICA_HI - 0.15, 0], name: 'mica spacer', group: 'mica-hi', explode: [0, 38, 0] });
+  items.push({ geo: G.mica, mat: mica, at: [0, MICA_LO - 0.15, 0], name: 'mica spacer', group: 'mica-lo', info: { dim: '0.3 mm sheet', source: SRC.photo, note: 'holds every electrode at a fixed spacing; its edge springs against the glass' } });
+  items.push({ geo: G.mica, mat: mica, at: [0, MICA_HI - 0.15, 0], name: 'mica spacer', group: 'mica-hi', explode: [0, 38, 0] });
 
   const { e } = stream(st);
   const Th = st.Tc + HEATER_LEAD;
+  // The heaters light the inside of their sleeves, the grids and the plates a little: a glow light per section.
+  const lights = heatGlow(Th) > 0.02 ? [XA, XB].map((xs) => ({ p: [xs, 41, 0] as Vec3, colour: heatColour(Th), power: 1.6 * heatGlow(Th), range: 3.5, on: 'cathode' })) : [];
   for (const [xs, near] of [[XA, true], [XB, false]] as const) {
     const sec = near ? 'section 1' : 'section 2';
     // Plate: two bent sheets crimped together, two ribs pressed into each, the rods they hang on.
-    const plate = hot(300 + 250 * Math.min(1, (st.vp * st.ip) / 2.5), M.nickelCarbonized);
+    const plate = plateMat; // at 2.5 W a plate stays far below a visible glow
     const pInfo = { dim: `${2 * PX} × ${2 * PZ} × ${Y1 - Y0} mm, ${PT} mm sheet`, source: SRC.photo, note: `${sec}: at ${st.vp.toFixed(0)} V, ${(st.vp * st.ip).toFixed(2)} W (${B_PLUS} V through ${R_PLATE / 1e3} kΩ)` };
     items.push({ geo: G.plateBack(xs), mat: plate, at: [0, Y0, 0], name: 'plate', group: 'plate', explode: [0, 0, -12], info: pInfo });
     items.push({ geo: G.plateFront(xs), mat: plate, at: [0, Y0, 0], name: 'plate', group: 'plate', explode: [0, 0, 12], info: pInfo });
@@ -180,9 +191,10 @@ export function tubeModel(st: TubeState, look: TubeLook): Model3 {
   // Getter: the cup on its wire above the top mica, and the barium mirror it flashed onto the dome.
   items.push({ geo: G.rod(MICA_HI, 58.2, 0.25), mat: M.nickel, name: 'getter', group: 'getter', explode: [0, 52, 0] });
   items.push({ geo: G.getterCup, mat: M.nickel, name: 'getter', group: 'getter', explode: [0, 52, 0], info: { dim: '5.5 mm cup', source: SRC.photo, note: 'barium, flashed by induction heating after pumping: it soaks up the gas the pump left' } });
-  items.push({ geo: G.getterFlash, mat: { ...M.getterFlash, transmit: 0.45, tint: [0.4, 0.38, 0.35] }, name: 'getter mirror', group: 'glass', explode: [0, 90, 0], cut: 'open', shadow: false, info: { source: SRC.photo, note: 'the silvery film inside the dome: still silver means the vacuum is good; white means air got in' } });
+  items.push({ geo: G.print, mat: M.make({ base: [0.94, 0.94, 0.92], metal: 0, rough: 0.6, label: 'silk-screened print' }), name: 'type number', group: 'glass', explode: [0, 90, 0], shadow: false, info: { note: 'the tube type, printed on the glass' } });
+  items.push({ geo: G.getterFlash, mat: { ...M.getterFlash, base: [0.8, 0.79, 0.76], rough: 0.06, transmit: 0.32, tint: [0.45, 0.43, 0.4], label: 'barium getter film (a mirror)' }, name: 'getter mirror', group: 'glass', explode: [0, 90, 0], cut: 'open', shadow: false, info: { source: SRC.photo, note: 'the silvery film inside the dome: still silver means the vacuum is good; white means air got in' } });
   items.push({ geo: G.glass, mat: M.glass, name: 'glass bulb', group: 'glass', explode: [0, 90, 0], info: { dim: `${T(2 * GLASS_R)} mm (T-9), wall ${GLASS_T} mm`, source: SRC.sheet } });
-  return { items, cuts: CUT, anchors: ANCHORS, beats: beats(st), floor: -KEY_L };
+  return { items, cuts: CUT, anchors: ANCHORS, beats: beats(st), floor: -KEY_L, lights };
 }
 
 function amps(a: number): string {
@@ -218,12 +230,12 @@ export const HOME = { target: [-1.5, 28, 0] as Vec3, yaw: -0.5, pitch: 0.26, dis
 
 function beats(st: TubeState): Beat[] {
   return [
-    { title: 'Life size', text: `A 6SN7GT twin triode: a T-9 bulb ${T(2 * GLASS_R)} mm across on an octal base, two triodes in one envelope. ENIAC used more of these than of any other tube.`, view: HOME, cut: 0, explode: 0 },
-    { title: 'Cut away', text: 'A quarter of the bulb and the front of the near section are cut away. Inside: a cathode sleeve, a grid of fine wire wound round it, and the plate round both: three electrodes, one inside the next.', view: { target: [-4, 40, 0], yaw: -0.45, pitch: 0.18, dist: 72 }, cut: 1, explode: 0 },
+    { title: 'Life size', text: `A 6SN7GT twin triode: a T-9 bulb ${T(2 * GLASS_R)} mm across on an octal base, two triodes in one envelope. ENIAC used more of these than of any other tube.`, view: HOME, frame: [], cut: 0, explode: 0 },
+    { title: 'Cut away', text: 'A quarter of the bulb and the front of the near section are cut away. Inside: a cathode sleeve, a grid of fine wire wound round it, and the plate round both: three electrodes, one inside the next.', view: { target: [-4, 40, 0], yaw: -0.45, pitch: 0.18, dist: 72 }, frame: ['plate', 'mica-hi', 'getter'], cut: 1, explode: 0 },
     { title: 'Heater and cathode', text: `The heater (6.3 V, 0.3 A) keeps the oxide-coated sleeve at ${Math.round(st.Tc)} K. Hot oxide gives off electrons; most fall straight back: ${(100 * returned(st)).toFixed(1)} % here. They wait as a cloud around the sleeve.`, view: { target: [XA, 42, 0], yaw: -0.25, pitch: 0.1, dist: 34 }, show: ['cathode', 'heater'], cut: 1, explode: 0 },
     { title: 'The grid', text: `A helix of wire ${PITCH} mm a turn, a millimetre from the cathode. Being so close, a few volts on it decide whether electrons cross: at ${st.vg.toFixed(1)} V the plate sits at ${st.vp.toFixed(0)} V.`, view: { target: [XA, 42, 0], yaw: -0.6, pitch: 0.2, dist: 30 }, show: ['grid'], cut: 1, explode: 0 },
     { title: 'The plate', text: `Two blackened nickel sheets crimped at their flanges. At ${B_PLUS} V through ${R_PLATE / 1e3} kΩ it collects the electrons the grid lets through; ${(st.vp * st.ip).toFixed(2)} W heats it now.`, view: { target: [XA, 41, -1], yaw: -0.7, pitch: 0.25, dist: 48 }, show: ['plate'], cut: 1, explode: 0 },
-    { title: 'How it is built', text: 'The mount pulled apart: bulb, getter, top mica, cathodes, grids, plate halves. Micas top and bottom hold every electrode at its spacing; the stem leads carry them out through the glass press to the pins.', view: { target: [0, 74, 0], yaw: -0.55, pitch: 0.18, dist: 310 }, cut: 0, explode: 1 },
-    { title: 'Underneath', text: 'Eight pins round a keyed post: the key fits one way, so pin 1 is always in the same place. Pins 4-6 are section 1, pins 1-3 section 2, 7 and 8 the heater.', view: { target: [0, 2, 0], yaw: 0, pitch: -1.05, dist: 70 }, cut: 0, explode: 0 },
+    { title: 'How it is built', text: 'The mount pulled apart: bulb, getter, top mica, cathodes, grids, plate halves. Micas top and bottom hold every electrode at its spacing; the stem leads carry them out through the glass press to the pins.', view: { target: [0, 74, 0], yaw: -0.55, pitch: 0.18, dist: 310 }, frame: [], cut: 0, explode: 1 },
+    { title: 'Underneath', text: 'Eight pins round a keyed post: the key fits one way, so pin 1 is always in the same place. Pins 4-6 are section 1, pins 1-3 section 2, 7 and 8 the heater.', view: { target: [0, 2, 0], yaw: 0, pitch: -1.05, dist: 70 }, frame: ['base', 'pins'], cut: 0, explode: 0 },
   ];
 }

@@ -6,6 +6,19 @@ import type { RGB } from '../instances';
 
 export type Colour = RGB | `--${string}`;
 
+/** A data surface: pixels the model writes each tick (a CRT's phosphor, a sensor's picture, a Williams tube's dots, a
+ *  card's holes). The one texture the renderer takes: data, never imagery. Bump rev after writing pixels. */
+export interface DataTex {
+  w: number; h: number;
+  /** RGBA, w × h × 4. */
+  pixels: Uint8Array;
+  rev: number;
+  /** emit: the pixels glow (a screen); albedo: they colour the surface; mask: alpha < 128 is a hole (discarded). */
+  mode: 'emit' | 'albedo' | 'mask';
+  /** Sharp pixels (default) or smoothed. */
+  smooth?: boolean;
+}
+
 export interface Material {
   /** Albedo (sRGB) or, for a metal, its reflectance colour. */
   base: Colour;
@@ -21,6 +34,10 @@ export interface Material {
   emit?: Colour; glow?: number;
   /** A clear lacquer over the base (bakelite's shine, enamel): its strength 0..1. */
   coat?: number;
+  /** Additive light that writes no depth: a ray of light, a beam of UV, a current's path, a lamp's glow. */
+  beam?: boolean;
+  /** A data surface on the geometry's texture coordinates (Geo.uvs). */
+  data?: DataTex;
   /** A name for the hover card ("nickel, carbonized"). */
   label?: string;
 }
@@ -71,13 +88,42 @@ export const M = {
   cathodeOxide: make({ base: [0.86, 0.84, 0.8], metal: 0, rough: 0.9, label: 'barium-strontium oxide coating' }),
 
   paint: (base: Colour, rough = 0.5): Material => make({ base, metal: 0, rough, label: 'paint' }),
+  /** Light as a material: additive, soft, no depth write (glow k). */
+  beam: (colour: Colour, k = 1, label = 'light'): Material => make({ base: [0, 0, 0], metal: 0, rough: 1, emit: colour, glow: k, beam: true, label }),
+
+  silver: make({ base: [0.97, 0.96, 0.91], metal: 1, rough: 0.18, label: 'silver' }),
+  nickelSilver: make({ base: [0.78, 0.76, 0.7], metal: 1, rough: 0.3, label: 'nickel silver' }),
+  permalloy: make({ base: [0.62, 0.6, 0.57], metal: 1, rough: 0.35, label: 'permalloy' }),
+  mercury: make({ base: [0.78, 0.78, 0.78], metal: 1, rough: 0.04, label: 'mercury' }),
+  oak: make({ base: [0.56, 0.4, 0.24], metal: 0, rough: 0.6, coat: 0.3, label: 'oak (untextured)' }),
+  card: make({ base: [0.9, 0.85, 0.72], metal: 0, rough: 0.85, label: 'card stock' }),
+  silicide: make({ base: [0.5, 0.48, 0.5], metal: 0.8, rough: 0.4, label: 'silicide' }),
+  silverEpoxy: make({ base: [0.7, 0.7, 0.68], metal: 0.5, rough: 0.55, label: 'silver-filled epoxy' }),
+  /** Silicon dioxide on silicon, coloured by thin-film interference at its thickness (nm): the colours of a wafer. */
+  oxideFilm: (nm: number): Material => make({ base: oxideColour(nm), metal: 0, rough: 0.12, coat: 0.6, label: `silicon dioxide, ${nm} nm` }),
 } as const;
 
-/** A glowing body's colour at temperature T (K): dull red from ~700 K, orange by 1100 K, a near-white past 2000 K
- *  (a blackbody, eye-weighted and normalized; enough for a cathode, a filament, a heater). */
+/** A black body's colour at temperature T (K), normalized to its brightest channel (Tanner Helland's fit to the
+ *  CIE blackbody locus, extended below 1000 K towards deep red): a cathode at 1023 K is orange-red, a lamp at 2700 K warm
+ *  white. */
 export function heatColour(T: number): RGB {
-  const t = Math.max(0, Math.min(1, (T - 700) / 1600));
-  return [1, 0.18 + 0.72 * t ** 0.8, 0.02 + 0.75 * t ** 1.6];
+  const t = Math.max(6, T / 100);
+  const g = t <= 66 ? 99.4708025861 * Math.log(t) - 161.1195681661 : 288.1221695283 * Math.pow(t - 60, -0.0755148492);
+  const b = t >= 66 ? 255 : t <= 19 ? 0 : 138.5177312231 * Math.log(t - 10) - 305.0447927307;
+  const r = t <= 66 ? 255 : 329.698727446 * Math.pow(t - 60, -0.1332047592);
+  const c = (v: number) => Math.max(0, Math.min(255, v)) / 255;
+  return [c(r), c(g), c(b)];
 }
-/** How bright a body at T glows, relative to one at 1300 K (Stefan–Boltzmann in the visible: very steep). */
-export const heatGlow = (T: number) => (T < 650 ? 0 : Math.min(6, ((T - 650) / 650) ** 4 * 1.6));
+/** How bright (emission, linear) a body at T glows: nothing a reader sees below ~700 K, a dull glow at 900 K, bright by
+ *  1200 K (the visible part of the black-body spectrum rises steeply). */
+export const heatGlow = (T: number) => (T < 700 ? 0 : Math.min(6, ((T - 700) / 400) ** 3 * 1.1));
+
+/** The interference colour of a SiO₂ film of d nm on silicon (n 1.46; three wavelengths, idealized reflectance). */
+export function oxideColour(d: number): RGB {
+  const at = (lambda: number) => 0.5 - 0.42 * Math.cos((4 * Math.PI * 1.46 * d) / lambda);
+  return [at(640), at(540), at(450)];
+}
+
+/** Colour ramps for a scalar 0..1 painted per vertex (Geo.colors): cold blue to hot yellow, and blue–white–red. */
+export const heatRamp = (x: number): RGB => { const t = Math.max(0, Math.min(1, x)); return [Math.min(1, 0.2 + 1.6 * t), Math.max(0, Math.min(1, 1.8 * t - 0.5)), Math.max(0, 0.6 - 1.2 * t + Math.max(0, 2 * t - 1.6))]; };
+export const divergingRamp = (x: number): RGB => { const t = Math.max(-1, Math.min(1, x)); return t < 0 ? [1 + t * 0.8, 1 + t * 0.6, 1] : [1, 1 - t * 0.7, 1 - t * 0.8]; };
