@@ -65,123 +65,183 @@ export function dramCtrl(c: DramConfig): ComponentDef {
     const t = c.t ?? TIMING, { cb, bb, rb } = fieldWidths(c), B = c.banks, la = c.k - 2;
     if (bb < 1) throw new Error('dramCtrl: at least 2 banks');
     const cw = bitsFor(Math.max(t.tRFC, t.tCAS + 3)), rw = bitsFor(t.tREFI);
-    const b = new Builder(18, 14);
-    const g = kit(b);
-    b.pins('req', 'wr', 'la', 'clk');
+    const key = cfgKey(c);
+    // Six blocks a reader opens one at a time (the chapter names them): the request, the state machine, the commands, the
+    // wait counter, the refresh counter and the open-row table. Each gate is the one the flat drawing had, moved into the
+    // block that owns it, so the NANDs, the depth and the behaviour are the same (tests/dramctrl.test.ts pins them).
+    const block = (name: string, label: string, summary: string, ports: PortDef[], build: (b: Builder, g: ReturnType<typeof kit>) => Record<string, boolean> | void, wires?: Record<string, boolean>) =>
+      memo(`dramctrl_${name}${key}`, () => {
+        const b = new Builder(18, 14);
+        b.pins(...ports.filter((p) => p.dir === 'in').map((p) => p.name));
+        const own = build(b, kit(b)) ?? {};
+        return define({ id: `dramctrl_${name}${key}`, name: `DRAM controller: ${label}`, category: 'memory', summary, ports, symbol: { kind: 'box', label: label.toUpperCase() }, netlist: laid(b, { aspect: 1.6, room: true, keepOrder: true, wires: { ...wires, ...own } }) });
+      });
 
-    // the request's fields, as the device sees them (with the XOR hash, the row's parity flips the bank)
-    const [lcol, lbank0, lrow] = g.split('la', [cb, bb, rb]);
-    let lbank = lbank0;
-    if (c.hash) {
-      const p = rb === 1 ? lrow : b.op1(parity(rb), [lrow], 'row parity');
-      const bs = g.split(lbank0, bb === 1 ? [1] : [1, bb - 1]);
-      const x = b.op1(XOR, [bs[0], p], 'bank hash');
-      lbank = bb === 1 ? x : g.merge([x, bs[1]], [1, bb - 1]);
-    }
-    b.name(lcol, 'col', true); b.name(lbank, 'bank', true); b.name(lrow, 'row', true);
-    b.next();
+    // the request: its fields as the device sees them (with the XOR hash, the row's parity flips the bank), latched when it is
+    // accepted (later commands use it: the cache may move on); while idle the new request's fields go out, else the latched ones
+    const REQ = block('req', 'request', 'The request\'s fields (column, bank, row), latched when it is accepted; while idle the new request\'s go out, else the latched one\'s.', [
+      bit('wr', 'in'), bus('la', la, 'in'), bit('en', 'in'), bit('idle', 'in'), bit('clk', 'in', 'bottom', true),
+      bus('lbank', bb, 'out'), bus('lrow', rb, 'out'), bit('cwr', 'out'), bus('cbank', bb, 'out'), bus('crow', rb, 'out'), bit('isWr', 'out'),
+      bus('ba', bb, 'out'), bus('ra', rb, 'out'), bus('ca', cb, 'out'),
+    ], (b, g) => {
+      const [lcol, lbank0, lrow] = g.split('la', [cb, bb, rb]);
+      let lbank = lbank0;
+      if (c.hash) {
+        const p = rb === 1 ? lrow : b.op1(parity(rb), [lrow], 'row parity');
+        const bs = g.split(lbank0, bb === 1 ? [1] : [1, bb - 1]);
+        const x = b.op1(XOR, [bs[0], p], 'bank hash');
+        lbank = bb === 1 ? x : g.merge([x, bs[1]], [1, bb - 1]);
+      }
+      b.name(lcol, 'col'); b.name(lbank, 'bank'); b.name(lrow, 'row');
+      b.next();
+      const cur = b.op(register(1 + cb + bb + rb), [g.merge(['wr', lcol, lbank, lrow], [1, cb, bb, rb]), 'en', 'clk'], 'request', 'cur');
+      const [cwr, ccol, cbank, crow] = g.split(`${cur}.q`, [1, cb, bb, rb]);
+      b.next();
+      b.wire(g.mux(1, cwr, 'wr', 'idle'), 'isWr');
+      b.wire(g.mux(bb, cbank, lbank, 'idle', 'ba'), 'ba');
+      b.wire(g.mux(rb, crow, lrow, 'idle', 'ra'), 'ra');
+      b.wire(g.mux(cb, ccol, lcol, 'idle', 'ca'), 'ca');
+      b.wire(lbank, 'lbank'); b.wire(lrow, 'lrow'); b.wire(cwr, 'cwr'); b.wire(cbank, 'cbank'); b.wire(crow, 'crow');
+      // the address's fields run as wires to the latch and the muxes beside them
+      return Object.fromEntries([lcol, lbank, lrow].map((x) => [x, true]));
+    });
 
-    // state: seven flip-flops, IDLE when none is set
+    // the state machine: seven flip-flops, IDLE when none is set
     const NAMES = ['WPRE', 'WACT', 'BURST', 'CLOSE', 'WCLOSE', 'WREF1', 'WREF2'];
-    const one = b.op1(TIE1, []);
-    const st = b.op(register(7), ['', one, 'clk'], 'state', 'st');
-    const sq = g.split(`${st}.q`, ones(7));
-    const S: Record<string, string> = {};
-    NAMES.forEach((n, i) => (S[n] = b.name(sq[i], n, true)));
-    const idle = b.name(b.op1(NOT, [b.op1(orN(7), sq)], 'IDLE = none'), 'IDLE', true);
-    const cnt = b.op(register(cw), ['', one, 'clk'], 'wait counter', 'cnt');
-    const cq = b.name(`${cnt}.q`, 'count', true);
-    const z = b.name(b.op1(isZero(cw), [cq], '= 0'), 'z', true);
-    const refCnt = b.op(register(rw), ['', one, 'clk'], 'refresh counter', 'rc');
-    const pend = b.op(DFF, ['', 'clk'], 'refresh pending', 'pend');
-    const refPend = b.name(`${pend}.q`, 'refPend', true);
-    // the request latched when it starts (later commands use it: the cache may move on)
-    const cur = b.op(register(1 + cb + bb + rb), [g.merge(['wr', lcol, lbank, lrow], [1, cb, bb, rb]), '', 'clk'], 'request', 'cur');
-    const [cwr, ccol, cbank, crow] = g.split(`${cur}.q`, [1, cb, bb, rb]);
-    b.next();
+    const FSM = block('fsm', 'state machine', 'Seven state flip-flops, one set at a time (IDLE when none is): waiting after PRE, after ACT, the burst, closing (closed page), waiting after PREA and after REF.', [
+      bit('conflict', 'in'), bit('cACT', 'in'), bit('cRW', 'in'), bit('done', 'in'), bit('cPREA', 'in'), bit('cREF', 'in'), bit('z', 'in'), bit('one', 'in'), bit('clk', 'in', 'bottom', true),
+      bit('idle', 'out'), bit('WPRE', 'out'), bit('WACT', 'out'), bit('BURST', 'out'), bit('CLOSE', 'out'), bit('WREF1', 'out'),
+    ], (b, g) => {
+      const st = b.op(register(7), ['', 'one', 'clk'], 'state', 'st');
+      const sq = g.split(`${st}.q`, ones(7));
+      const S: Record<string, string> = {};
+      NAMES.forEach((n, i) => (S[n] = b.name(sq[i], n, true)));
+      b.wire(b.name(b.op1(NOT, [b.op1(orN(7), sq)], 'IDLE = none'), 'IDLE', true), 'idle');
+      b.next();
+      const stay = (n: string) => g.and(S[n], g.not('z'));
+      const nx: Record<string, string> = {
+        WPRE: g.or('conflict', stay('WPRE')),
+        WACT: g.or('cACT', stay('WACT')),
+        BURST: g.or('cRW', stay('BURST')),
+        CLOSE: c.policy === 'closed' ? 'done' : b.op1(TIE0, []),
+        WCLOSE: g.or(S.CLOSE, stay('WCLOSE')),
+        WREF1: g.or('cPREA', stay('WREF1')),
+        WREF2: g.or('cREF', stay('WREF2')),
+      };
+      b.wire(g.merge(NAMES.map((n) => nx[n]), ones(7)), `${st}.d`);
+      for (const n of ['WPRE', 'WACT', 'BURST', 'CLOSE', 'WREF1']) b.wire(S[n], n);
+    });
 
-    // the open-row table: per bank a valid bit and the open row
-    const valid: string[] = [], rows: string[] = [];
-    for (let k = 0; k < B; k++) {
-      valid.push(b.name(`${b.op(DFF, ['', 'clk'], `bank ${k} open`, `v${k}`)}.q`, `open${k}`, true));
-      rows.push(`${b.op(register(rb), ['', '', 'clk'], `bank ${k} row`, `r${k}`)}.q`);
-    }
-    b.next();
-    const vSel = bb === 1 ? g.mux(1, valid[0], valid[1], lbank) : b.op1(muxTree(bb, 1), [...valid, lbank]);
-    const rSel = bb === 1 ? g.mux(rb, rows[0], rows[1], lbank, 'open row') : b.op1(muxTree(bb, rb), [...rows, lbank], 'open row');
-    const same = g.eq(rb, rSel, lrow, 'same row');
-    const anyOpen = b.name(g.or(...valid), 'anyOpen', true);
-    b.next();
-    const accept = b.name(g.and(idle, g.not(refPend), 'req'), 'accept', true);
-    const hit = b.name(g.and(accept, vSel, same), 'hit', true);
-    const conflict = b.name(g.and(accept, vSel, g.not(same)), 'conflict', true);
-    const miss = b.name(g.and(accept, g.not(vSel)), 'miss', true);
-    // the command, from the state and the request
-    const isWr = g.mux(1, cwr, 'wr', idle);
-    const cPREA = b.name(g.and(idle, refPend, anyOpen), 'PREA', true);
-    const cREF = b.name(g.or(g.and(idle, refPend, g.not(anyOpen)), g.and(S.WREF1, z)), 'REF', true);
-    const cRW = b.name(g.or(hit, g.and(S.WACT, z)), 'RW', true);
-    const cACT = b.name(g.or(miss, g.and(S.WPRE, z)), 'ACT', true);
-    const cPRE = b.name(g.or(conflict, S.CLOSE), 'PRE', true);
-    const cRD = g.and(cRW, g.not(isWr)), cWR = g.and(cRW, isWr);
-    b.next();
-    b.wire(g.merge([g.or(cACT, cWR, cPREA), g.or(cRD, cWR, cREF), g.or(cPRE, cPREA, cREF)], [1, 1, 1]), 'cmd');
-    b.wire(g.mux(bb, cbank, lbank, idle, 'ba'), 'ba');
-    b.wire(g.mux(rb, crow, lrow, idle, 'ra'), 'ra');
-    b.wire(g.mux(cb, ccol, lcol, idle, 'ca'), 'ca');
-    // the burst: data in the last four counts, word = 3 − count
-    const high = g.split(cq, [2, cw - 2]);
-    const inData = b.name(g.and(S.BURST, b.op1(isZero(cw - 2), [high[1]])), 'data', true);
-    const lo = g.split(high[0], [1, 1]);
-    b.wire(g.merge([g.not(lo[0]), g.not(lo[1])], [1, 1]), 'word');
-    b.wire(g.and(inData, g.not(cwr)), 'dv');
-    b.wire(g.and(inData, cwr), 'wv');
-    const done = b.name(g.and(S.BURST, z), 'done', true);
-    b.wire(done, 'done');
-    b.wire(hit, 'hit'); b.wire(miss, 'miss'); b.wire(conflict, 'conflict');
-    b.next();
+    // the commands, from the state and the request: accept, the row lookup's verdict, the command, the burst's handshake
+    const CMD = block('cmd', 'commands', 'The command this cycle (PREA, REF, ACT, PRE, RD, WR) from the state and the request; hit / miss / conflict when a request is accepted; the burst\'s word count and data valid.', [
+      bit('req', 'in'), bit('idle', 'in'), bit('refPend', 'in'), bit('open', 'in'), bit('same', 'in'), bit('anyOpen', 'in'),
+      bit('WPRE', 'in'), bit('WACT', 'in'), bit('BURST', 'in'), bit('CLOSE', 'in'), bit('WREF1', 'in'), bit('z', 'in'), bit('isWr', 'in'), bit('cwr', 'in'), bus('count', cw, 'in'),
+      bit('accept', 'out'), bit('hit', 'out'), bit('miss', 'out'), bit('conflict', 'out'), bit('cPREA', 'out'), bit('cREF', 'out'), bit('cRW', 'out'), bit('cACT', 'out'), bit('cPRE', 'out'),
+      bus('cmd', 3, 'out'), bus('word', 2, 'out'), bit('dv', 'out'), bit('wv', 'out'), bit('done', 'out'),
+    ], (b, g) => {
+      const accept = b.name(g.and('idle', g.not('refPend'), 'req'), 'accept', true);
+      const hit = b.name(g.and(accept, 'open', 'same'), 'hit', true);
+      const conflict = b.name(g.and(accept, 'open', g.not('same')), 'conflict', true);
+      const miss = b.name(g.and(accept, g.not('open')), 'miss', true);
+      const cPREA = b.name(g.and('idle', 'refPend', 'anyOpen'), 'PREA', true);
+      const cREF = b.name(g.or(g.and('idle', 'refPend', g.not('anyOpen')), g.and('WREF1', 'z')), 'REF', true);
+      const cRW = b.name(g.or(hit, g.and('WACT', 'z')), 'RW', true);
+      const cACT = b.name(g.or(miss, g.and('WPRE', 'z')), 'ACT', true);
+      const cPRE = b.name(g.or(conflict, 'CLOSE'), 'PRE', true);
+      const cRD = g.and(cRW, g.not('isWr')), cWR = g.and(cRW, 'isWr');
+      b.next();
+      b.wire(g.merge([g.or(cACT, cWR, cPREA), g.or(cRD, cWR, cREF), g.or(cPRE, cPREA, cREF)], [1, 1, 1]), 'cmd');
+      // the burst: data in the last four counts, word = 3 − count
+      const high = g.split('count', [2, cw - 2]);
+      const inData = b.name(g.and('BURST', b.op1(isZero(cw - 2), [high[1]])), 'data', true);
+      const lo = g.split(high[0], [1, 1]);
+      b.wire(g.merge([g.not(lo[0]), g.not(lo[1])], [1, 1]), 'word');
+      b.wire(g.and(inData, g.not('cwr')), 'dv');
+      b.wire(g.and(inData, 'cwr'), 'wv');
+      b.wire(b.name(g.and('BURST', 'z'), 'done', true), 'done');
+      for (const [s, o] of [[accept, 'accept'], [hit, 'hit'], [miss, 'miss'], [conflict, 'conflict'], [cPREA, 'cPREA'], [cREF, 'cREF'], [cRW, 'cRW'], [cACT, 'cACT'], [cPRE, 'cPRE']]) b.wire(s, o);
+    });
 
-    // next state
-    const stay = (n: string) => g.and(S[n], g.not(z));
-    const nx: Record<string, string> = {
-      WPRE: g.or(conflict, stay('WPRE')),
-      WACT: g.or(cACT, stay('WACT')),
-      BURST: g.or(cRW, stay('BURST')),
-      CLOSE: c.policy === 'closed' ? done : b.op1(TIE0, []),
-      WCLOSE: g.or(S.CLOSE, stay('WCLOSE')),
-      WREF1: g.or(cPREA, stay('WREF1')),
-      WREF2: g.or(cREF, stay('WREF2')),
-    };
-    b.wire(g.merge(NAMES.map((n) => nx[n]), ones(7)), `${st}.d`);
-    // the counter: every command loads its wait, else down to 0
-    const preIdle = conflict, preClose = S.CLOSE;
-    const loads: [string, number][] = [[cPREA, t.tRP - 1], [cREF, t.tRFC - 2], [cRW, t.tCAS + 2], [cACT, t.tRCD - 1], [preIdle, t.tRP - 1], [preClose, t.tRP - 2]];
-    const L = g.merge(Array.from({ length: cw }, (_, j) => {
-      const on = loads.filter(([, v]) => (v >> j) & 1).map(([s]) => s);
-      return on.length ? g.or(...on) : b.op1(TIE0, []);
-    }), ones(cw));
-    const load = b.name(g.or(cPREA, cREF, cRW, cACT, cPRE), 'load', true);
-    const allOnes = g.konst(cw, 2 ** cw - 1);
-    const dec = b.op1(bitwise('xor', cw), [b.op1(incrementer(cw), [b.op1(bitwise('xor', cw), [cq, allOnes])]), allOnes], '− 1');
-    const nz = g.not(z);
-    const held = b.op1(bitwise('and', cw), [dec, g.merge(Array.from({ length: cw }, () => nz), ones(cw))]);
-    b.wire(g.mux(cw, held, L, load, 'next count'), `${cnt}.d`);
-    // the open-row table follows ACT / PRE / PREA on the selected bank
-    const ba = g.mux(bb, cbank, lbank, idle);
-    const dsel = b.op(decoder(bb, false), [ba]);
-    for (let k = 0; k < B; k++) {
-      const selK = `${dsel}.y${k}`;
-      const set = g.and(cACT, selK), clr = g.or(g.and(cPRE, selK), cPREA);
-      b.wire(g.and(g.or(valid[k], set), g.not(clr)), `v${k}.d`);
-      b.wire(g.mux(rb, crow, lrow, idle), `r${k}.d`);
-      b.wire(set, `r${k}.en`);
-    }
-    b.wire(accept, `${cur}.en`);
-    // refresh: every tREFI cycles
-    const wrap = b.name(g.eq(rw, `${refCnt}.q`, g.konst(rw, t.tREFI - 1), 'tREFI − 1'), 'refDue', true);
-    const rinc = b.op1(incrementer(rw), [`${refCnt}.q`]);
-    b.wire(b.op1(bitwise('and', rw), [rinc, g.merge(Array.from({ length: rw }, () => g.not(wrap)), ones(rw))]), `${refCnt}.d`);
-    b.wire(g.or(g.and(refPend, g.not(cREF)), wrap), `${pend}.d`);
+    // the wait counter: every command loads its wait, else down to 0
+    const WAIT = block('wait', 'wait counter', 'The cycles left before the next command may go: every command loads its timing (tRP, tRFC, tCAS, tRCD), else it counts down to 0.', [
+      bit('cPREA', 'in'), bit('cREF', 'in'), bit('cRW', 'in'), bit('cACT', 'in'), bit('cPRE', 'in'), bit('conflict', 'in'), bit('CLOSE', 'in'), bit('one', 'in'), bit('clk', 'in', 'bottom', true),
+      bus('count', cw, 'out'), bit('z', 'out'),
+    ], (b, g) => {
+      const cnt = b.op(register(cw), ['', 'one', 'clk'], 'wait counter', 'cnt');
+      const cq = b.name(`${cnt}.q`, 'count', true);
+      const z = b.name(b.op1(isZero(cw), [cq], '= 0'), 'z', true);
+      b.next();
+      const loads: [string, number][] = [['cPREA', t.tRP - 1], ['cREF', t.tRFC - 2], ['cRW', t.tCAS + 2], ['cACT', t.tRCD - 1], ['conflict', t.tRP - 1], ['CLOSE', t.tRP - 2]];
+      const L = g.merge(Array.from({ length: cw }, (_, j) => {
+        const on = loads.filter(([, v]) => (v >> j) & 1).map(([s]) => s);
+        return on.length ? g.or(...on) : b.op1(TIE0, []);
+      }), ones(cw));
+      const load = b.name(g.or('cPREA', 'cREF', 'cRW', 'cACT', 'cPRE'), 'load', true);
+      const allOnes = g.konst(cw, 2 ** cw - 1);
+      const dec = b.op1(bitwise('xor', cw), [b.op1(incrementer(cw), [b.op1(bitwise('xor', cw), [cq, allOnes])]), allOnes], '− 1');
+      const nz = g.not(z);
+      const held = b.op1(bitwise('and', cw), [dec, g.merge(Array.from({ length: cw }, () => nz), ones(cw))]);
+      b.wire(g.mux(cw, held, L, load, 'next count'), `${cnt}.d`);
+      b.wire(cq, 'count'); b.wire(z, 'z');
+    });
+
+    // refresh: every tREFI cycles a refresh is due, and stays due until REF goes out
+    const REF = block('refresh', 'refresh counter', `Counts to tREFI (${t.tREFI} cycles) and sets "refresh due", which REF clears.`, [
+      bit('cREF', 'in'), bit('one', 'in'), bit('clk', 'in', 'bottom', true), bit('refPend', 'out'),
+    ], (b, g) => {
+      const refCnt = b.op(register(rw), ['', 'one', 'clk'], 'refresh counter', 'rc');
+      const pend = b.op(DFF, ['', 'clk'], 'refresh pending', 'pend');
+      const refPend = b.name(`${pend}.q`, 'refPend', true);
+      b.next();
+      const wrap = b.name(g.eq(rw, `${refCnt}.q`, g.konst(rw, t.tREFI - 1), 'tREFI − 1'), 'refDue', true);
+      const rinc = b.op1(incrementer(rw), [`${refCnt}.q`]);
+      b.wire(b.op1(bitwise('and', rw), [rinc, g.merge(Array.from({ length: rw }, () => g.not(wrap)), ones(rw))]), `${refCnt}.d`);
+      b.wire(g.or(g.and(refPend, g.not('cREF')), wrap), `${pend}.d`);
+      b.wire(refPend, 'refPend');
+    }, { 'rc.q': true });
+
+    // the open-row table: per bank a valid bit and the open row, following ACT / PRE / PREA on the selected bank
+    const ROWS = block('rows', 'open-row table', 'Per bank whether a row is open and which: looked up for the new request (open, same row), set by ACT, cleared by PRE and PREA.', [
+      bus('lbank', bb, 'in'), bus('lrow', rb, 'in'), bus('cbank', bb, 'in'), bus('crow', rb, 'in'), bit('idle', 'in'), bit('cACT', 'in'), bit('cPRE', 'in'), bit('cPREA', 'in'), bit('clk', 'in', 'bottom', true),
+      bit('open', 'out'), bit('same', 'out'), bit('anyOpen', 'out'),
+    ], (b, g) => {
+      const valid: string[] = [], rows: string[] = [];
+      for (let k = 0; k < B; k++) {
+        valid.push(b.name(`${b.op(DFF, ['', 'clk'], `bank ${k} open`, `v${k}`)}.q`, `open${k}`, true));
+        rows.push(`${b.op(register(rb), ['', '', 'clk'], `bank ${k} row`, `r${k}`)}.q`);
+      }
+      b.next();
+      const vSel = bb === 1 ? g.mux(1, valid[0], valid[1], 'lbank') : b.op1(muxTree(bb, 1), [...valid, 'lbank']);
+      const rSel = bb === 1 ? g.mux(rb, rows[0], rows[1], 'lbank', 'open row') : b.op1(muxTree(bb, rb), [...rows, 'lbank'], 'open row');
+      b.wire(g.eq(rb, rSel, 'lrow', 'same row'), 'same');
+      b.wire(b.name(g.or(...valid), 'anyOpen', true), 'anyOpen');
+      b.wire(vSel, 'open');
+      b.next();
+      const ba = g.mux(bb, 'cbank', 'lbank', 'idle');
+      const dsel = b.op(decoder(bb, false), [ba]);
+      for (let k = 0; k < B; k++) {
+        const selK = `${dsel}.y${k}`;
+        const set = g.and('cACT', selK), clr = g.or(g.and('cPRE', selK), 'cPREA');
+        b.wire(g.and(g.or(valid[k], set), g.not(clr)), `v${k}.d`);
+        b.wire(g.mux(rb, 'crow', 'lrow', 'idle'), `r${k}.d`);
+        b.wire(set, `r${k}.en`);
+      }
+    });
+
+    // the top level: the controller's block diagram
+    const b = new Builder(18, 14);
+    b.pins('req', 'wr', 'la', 'clk');
+    const one = b.op1(TIE1, [], undefined, 'one');
+    b.op(REQ, ['wr', 'la', 'cmd.accept', 'fsm.idle', 'clk'], 'request', 'rq');
+    b.op(ROWS, ['rq.lbank', 'rq.lrow', 'rq.cbank', 'rq.crow', 'fsm.idle', 'cmd.cACT', 'cmd.cPRE', 'cmd.cPREA', 'clk'], 'open-row table', 'rows');
+    b.next();
+    b.op(CMD, ['req', 'fsm.idle', 'refresh.refPend', 'rows.open', 'rows.same', 'rows.anyOpen', 'fsm.WPRE', 'fsm.WACT', 'fsm.BURST', 'fsm.CLOSE', 'fsm.WREF1', 'wait.z', 'rq.isWr', 'rq.cwr', 'wait.count'], 'commands', 'cmd');
+    b.next();
+    b.op(FSM, ['cmd.conflict', 'cmd.cACT', 'cmd.cRW', 'cmd.done', 'cmd.cPREA', 'cmd.cREF', 'wait.z', one, 'clk'], 'state machine', 'fsm');
+    b.op(WAIT, ['cmd.cPREA', 'cmd.cREF', 'cmd.cRW', 'cmd.cACT', 'cmd.cPRE', 'cmd.conflict', 'fsm.CLOSE', one, 'clk'], 'wait counter', 'wait');
+    b.op(REF, ['cmd.cREF', one, 'clk'], 'refresh counter', 'refresh');
+    for (const o of ['cmd', 'word', 'dv', 'wv', 'done', 'hit', 'miss', 'conflict']) b.wire(`cmd.${o}`, o);
+    for (const o of ['ba', 'ra', 'ca']) b.wire(`rq.${o}`, o);
 
     return define({
       id, name: `DRAM controller (${B} banks, ${c.rowWords}-word rows, ${c.policy} page${c.hash ? ', XOR hash' : ''})`, category: 'memory',
@@ -190,10 +250,8 @@ export function dramCtrl(c: DramConfig): ComponentDef {
         bus('cmd', 3, 'out'), bus('ba', bb, 'out'), bus('ra', rb, 'out'), bus('ca', cb, 'out'), bus('word', 2, 'out'),
         bit('dv', 'out'), bit('wv', 'out'), bit('done', 'out'), bit('hit', 'out'), bit('miss', 'out'), bit('conflict', 'out')],
       symbol: { kind: 'box', label: 'DRAM CTRL' },
-      // laid out by logic depth (layered.ts): the Builder's columns put the next-state and counter logic in one column 590
-      // units tall, 137 of 148 nets pointers; by depth it reads left to right, request → state → command → next state, folded
-      // into bands at its seams to the canvas's shape
-      netlist: laid(b, { aspect: 1.6 }),
+      // a block diagram: request → open-row table → commands → the counters and the state machine, which loop back as labels
+      netlist: laid(b, { room: true }),
     });
   });
 }

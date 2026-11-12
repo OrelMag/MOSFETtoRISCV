@@ -119,16 +119,16 @@ function memCtrlPanel(c: DramConfig): ScenePanel {
       const s = sim();
       const lo = sel.la & ((1 << cb) - 1), bank = (sel.la >> cb) & ((1 << bb) - 1), row = sel.la >> (cb + bb);
       where.textContent = `${c.hash ? 'before the hash: ' : ''}bank ${bank}, row ${row}, column ${lo}`;
-      const stBits = reg(['ctrl', 'st']), state = stBits <= 0 ? 0 : 1 + Math.log2(stBits & -stBits);
-      const rc = reg(['ctrl', 'rc']), dev = deviceIn(s.leafState(findNode(root(), ['dev'])!.leafIndex!));
+      const stBits = reg(['ctrl', 'fsm', 'st']), state = stBits <= 0 ? 0 : 1 + Math.log2(stBits & -stBits);
+      const rc = reg(['ctrl', 'refresh', 'rc']), dev = deviceIn(s.leafState(findNode(root(), ['dev'])!.leafIndex!));
       status.replaceChildren(
         h('span', null, 'state ', h('b', null, ST_NAMES[state] ?? '?')),
-        h('span', null, 'refresh in ', h('b', null, `${Math.max(0, t.tREFI - 1 - rc)}`), ' cycles', reg(['ctrl', 'pend']) === 1 ? ' (due)' : ''),
+        h('span', null, 'refresh in ', h('b', null, `${Math.max(0, t.tREFI - 1 - rc)}`), ' cycles', reg(['ctrl', 'refresh', 'pend']) === 1 ? ' (due)' : ''),
         h('span', null, `${st.refreshes} refreshes · ${st.cycles} cycles`),
         dev?.err ? h('span', { class: 'bad' }, `device: ${dev.why}`) : h('span', { class: 'good' }, 'no rule broken'));
       banks.replaceChildren(...Array.from({ length: c.banks }, (_, k) => {
-        const open = reg(['ctrl', `v${k}`]) === 1;
-        return h('span', { class: `mc-bank${open ? ' open' : ''}` }, `bank ${k}: ${open ? `row ${reg(['ctrl', `r${k}`])} open` : 'closed'}`);
+        const open = reg(['ctrl', 'rows', `v${k}`]) === 1;
+        return h('span', { class: `mc-bank${open ? ' open' : ''}` }, `bank ${k}: ${open ? `row ${reg(['ctrl', 'rows', `r${k}`])} open` : 'closed'}`);
       }));
       timeline.replaceChildren(...st.trace.map((x) => h('span', { class: `mc-c c${x.cmd}${x.data ? ' data' : ''}${x.done ? ' done' : ''}${x.req ? ' req' : ''}`, title: `cycle ${x.n}: ${CMD_NAMES[x.cmd]}${x.data ? ', a word' : ''}${x.done ? ', done' : ''}` },
         x.cmd ? CMD_NAMES[x.cmd].replace('PREA', 'PA') : x.data ? 'd' : '·')));
