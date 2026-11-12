@@ -104,7 +104,7 @@ export const chMulticycle: Chapter = {
     'split instructions into steps that share one ALU and one memory port, with registers across the step boundaries',
     'read the state table and count each instruction class\'s cycles (3, 4 or 5)',
     'build the controller as a hardwired state machine or as microcode, and price both',
-    'decide from <span data-ahead="cpi">CPI (cycles per instruction)</span> × period whether the multicycle CPU beats the single-cycle one',
+    'decide from CPI (cycles per instruction) × period whether the multicycle CPU beats the single-cycle one',
   ],
   builds: ['registers', 'cpu'],
   recap: {
@@ -114,7 +114,7 @@ export const chMulticycle: Chapter = {
       'Hardwired control: a 4-bit state register, a 4→16 decoder, an AND gate per opcode-dependent transition and OR gates per signal: 412 NANDs.',
       'Microcode: a µPC addresses a ROM of microwords (14 control bits, a 4-bit next address, a 2-bit sequencing mode), with dispatch ROMs indexed by the opcode: 6124 NANDs here, because these ROMs are mux trees of constants.',
       'The microcode is a grid of cells you can paint: an I-type instruction written back in ExecuteI takes 3 cycles instead of 4, and the painter checks any edit against the golden model.',
-      `Period ${MC_P} NAND delays against the single-cycle CPU's ${SC_P} (both with <span data-ahead="prefix">Kogge–Stone adders, the fast adders of chapter ${numOf('fastadd')}</span>), but more cycles for each instruction (<span data-ahead="cpi">its CPI, cycles per instruction</span>): CPI 3.6 to 4.0 on the sample programs: about 300 to 340 delays per instruction.`,
+      `Period ${MC_P} NAND delays against the single-cycle CPU's ${SC_P} (both with <span data-ahead="prefix">Kogge–Stone adders, the fast adders of chapter ${numOf('fastadd')}</span>), but more cycles for each instruction (its CPI, cycles per instruction): CPI 3.6 to 4.0 on the sample programs: about 300 to 340 delays per instruction.`,
     ],
     practise: ['s_fsm', 'o_mc'],
     check: [
@@ -321,7 +321,7 @@ export const chMulticycle: Chapter = {
       title: 'Was it worth it?',
       body: `
         <p>Measured with the timing panel: the clock period drops from ${SC_P} to <strong>${MC_P}</strong> NAND delays. The longest step is still a full
-        <span data-show="alu">ALU</span> operation followed by the <span data-show="npc">branch decision</span>. But the <span data-ahead="cpi">CPI (cycles per instruction)</span> is now <strong>3.6 to 4.0</strong> on the sample programs (this gcd: 51 instructions in 182 cycles, 3.57),
+        <span data-show="alu">ALU</span> operation followed by the <span data-show="npc">branch decision</span>. But the CPI (cycles per instruction) is now <strong>3.6 to 4.0</strong> on the sample programs (this gcd: 51 instructions in 182 cycles, 3.57),
         so each instruction takes 300 to 340 delays instead of ${SC_P}.
         The gate count does not even go down: <span data-show="ir oldpc ra rb data aluout">six 32-bit registers</span> (about 2900 NANDs) cost more than the two adders they replace.</p>
         <p>Multicycle machines made sense when memory was the expensive, slow part and logic was scarce. Their lasting legacy is the controller,
@@ -339,8 +339,8 @@ export const chMulticycle: Chapter = {
         kind: 'quiz', question: `The steps are unbalanced: the ALU step needs ${MC_P} delays, the others much less. What would make the multicycle CPU competitive?`,
         options: ['A faster controller', 'Balancing the steps (e.g. splitting the ALU step) and overlapping consecutive instructions', 'More microcode', 'A bigger register file'],
         answer: 1,
-        why: ['The longest step is the ALU operation and the branch decision, and <span data-ahead="cpi">CPI (cycles per instruction)</span> stays near 4 with any controller.', '', 'Microcode changes how the table is stored, not how long a step takes or how many steps there are.', 'A bigger register file sets neither the longest step nor the number of steps.'],
-        explain: 'Time per instruction = <span data-ahead="cpi">CPI (cycles per instruction)</span> × period. With CPI near 4, only a much shorter period helps, which needs balanced steps. Overlapping the steps of consecutive instructions brings CPI back toward 1: that is <span data-ahead="pipeline">pipelining (one instruction in each step at once)</span>.',
+        why: ['The longest step is the ALU operation and the branch decision, and CPI (cycles per instruction) stays near 4 with any controller.', '', 'Microcode changes how the table is stored, not how long a step takes or how many steps there are.', 'A bigger register file sets neither the longest step nor the number of steps.'],
+        explain: 'Time per instruction = CPI (cycles per instruction) × period. With CPI near 4, only a much shorter period helps, which needs balanced steps. Overlapping the steps of consecutive instructions brings CPI back toward 1: that is <span data-ahead="pipeline">pipelining (one instruction in each step at once)</span>.',
       },
     },
     {
@@ -370,7 +370,7 @@ export const chMulticycle: Chapter = {
           'Paint word 8 (ExecuteI): rg wr, ret, result = ALUResult, and point its next at word 0 (Fetch). Run the check, then Apply.',
         ],
         answer: `In ExecuteI (word 8) set <code>rg wr</code> and <code>ret</code>, set <code>result</code> to ALUResult (the ALU output before the ALUOut register) and point <code>next</code> at word 0, Fetch.
-          An I-type instruction is now Fetch, Decode, ExecuteI: ${facts.solvedCycles.I} cycles. All ${facts.tests} riscv-tests pass, the <span data-ahead="cpi">CPI (cycles per instruction)</span> goes from ${facts.bookCpi.toFixed(2)} to ${facts.solvedCpi.toFixed(2)}, and the controller is the same size.`,
+          An I-type instruction is now Fetch, Decode, ExecuteI: ${facts.solvedCycles.I} cycles. All ${facts.tests} riscv-tests pass, the CPI goes from ${facts.bookCpi.toFixed(2)} to ${facts.solvedCpi.toFixed(2)}, and the controller is the same size.`,
         solve: (st) => {
           painted = iTypeInThree();
           const sc = ucodeScene();
@@ -388,7 +388,7 @@ export const chMulticycle: Chapter = {
         The In real silicon layer has the Model 30's 8-bit ALU, its control store and the rentals in dollars.</p>
         <p>The table runs the same experiment with our own hardware: RV32I built four ways, the same programs on each, every result checked against the golden model. All four
         have fast adders, so the periods compare. (The single-cycle period here differs from the earlier steps'; the Numbers layer says why.)
-        <strong>Cost</strong> is NANDs without the program ROM; <strong>time</strong> is <span data-ahead="cpi">CPI (cycles per instruction)</span> × period.</p>
+        <strong>Cost</strong> is NANDs without the program ROM; <strong>time</strong> is CPI × period.</p>
         <p>Read it for what it says about microcode. Making the controller microcoded adds ${sp(MICRO_NANDS - FSM_NANDS)} NANDs (the ROMs here are mux trees, as the previous steps said) and changes
         neither CPI nor period: ${sp(FAM[2].nands)} NANDs against ${sp(FAM[1].nands)} for the same speed. The whole family spans only ${SPREAD.cost.toFixed(2)}× in cost, but ${SPREAD.time.toFixed(1)}× in time per instruction, and
         the cheapest, the single-cycle CPU, is also the fastest. That is the opposite of System/360's trade, for two reasons. All four of ours keep the 32-bit register file, ALU and memory,
@@ -408,7 +408,7 @@ export const chMulticycle: Chapter = {
       },
       challenge: {
         kind: 'quiz', question: 'In our four RV32I machines, what does making the controller microcoded change?',
-        options: ['Its cost in NANDs and nothing about <span data-ahead="cpi">CPI (cycles per instruction)</span> or period', 'The clock period, since a ROM is faster than logic', 'The CPI, since microcode can skip states', 'Nothing: the NAND count is the same'],
+        options: ['Its cost in NANDs and nothing about CPI (cycles per instruction) or period', 'The clock period, since a ROM is faster than logic', 'The CPI, since microcode can skip states', 'Nothing: the NAND count is the same'],
         answer: 0,
         why: ['', 'Both multicycle rows have the same period: the longest step is an ALU operation, whichever way the controller is built.', 'The book microprogram has exactly the state table\'s states, so every class takes the same cycles; only an edit such as the painter\'s changes that.', 'The microcoded CPU is larger by the difference in the two controllers\' gates, as the table shows.'],
         explain: 'The microcoded and hardwired machines run the same states in the same cycles at the same period. Only the NAND count differs. The benefit of microcode is that the table is data, so one data path can serve a different instruction set or an extended one, which is what System/360 relied on.',
