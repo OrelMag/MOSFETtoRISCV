@@ -26,6 +26,9 @@ export const PAWL_PHI = WINDOW_PHI - NOTCH_OFFSET * PITCH;
 /** Rim centres, left to right: the Greek wheel, then the left, middle and right wheels. */
 export const RIM_X = [-82, -56, -29, -2] as const;
 export const THUMB_DX = 13, RATCHET_DX = 16.5;
+/** Wheel radii, measured from photographs. The written sources give a whole rotor only as "about 10 cm" / "approximately 4 inch"
+ *  (Wikipedia, "Enigma rotor details"; Rijmenants, enigmatech; Crypto Museum, Enigma G), without saying which part: probably the
+ *  thumbwheel, the widest, drawn 94 mm across. No dimensioned drawing found, so 94 mm stands as measured. */
 export const RIM_R = 37.5, THUMB_R = 47, RATCHET_R = 35.5, CORE_R = 30, CONTACT_R = 24, LIP_R = 38.6, NOTCH_R = 35.6;
 export const UKW_FACE = -92, ETW_FACE = 19;
 
