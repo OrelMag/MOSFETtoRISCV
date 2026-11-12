@@ -34,3 +34,26 @@
 .bx-line .n { color: var(--muted); text-align: right; }
 .bx-line.pc { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 @media (pointer: coarse) { .bx-lampb i { width: 52px; height: 52px; } }
+
+/* Step 2, a bucket of charge (widgets/basics.ts bucketWidget): the voltage curve and the three energy bars. */
+.bx-dim { opacity: 0.3; }
+.bx-axis { stroke: var(--border-strong); stroke-width: 1.5; fill: none; }
+.bx-grid { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 4 4; }
+.bx-mark { stroke: var(--warn); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.bx-markt { fill: var(--warn); }
+.bx-curve { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+.bx-now { fill: var(--accent); stroke: var(--canvas); stroke-width: 2; }
+.bx-pos { fill: var(--warn); }
+.bx-neg { fill: var(--accent); }
+.bx-bars { display: grid; gap: 6px; margin-top: 12px; }
+.bx-bars .bx-cap { margin: 0; }
+.bx-bar { display: grid; grid-template-columns: 96px minmax(0, 1fr) 76px; gap: 8px; align-items: center; font: 12px var(--font-mono); color: var(--text-2); }
+.bx-bar i { display: block; height: 12px; border-radius: 6px; background: var(--surface-3); overflow: hidden; }
+.bx-bar b { display: block; height: 100%; border-radius: 6px; transition: width 0.1s linear; }
+.bx-bar.bat b { background: var(--accent); }
+.bx-bar.sto b { background: var(--good); }
+.bx-bar.heat b { background: var(--warn); }
+.bx-bar .v { text-align: right; color: var(--text); font-weight: 600; }
+.bx-row .btn[aria-pressed='true'] { box-shadow: inset 0 0 0 1px var(--accent); }
+[data-reduce-motion] .bx-bar b { transition: none; }
+@media (pointer: coarse) { .bx-row .btn.sm { min-height: 40px; } .slider input[type='range'] { min-height: 40px; } }

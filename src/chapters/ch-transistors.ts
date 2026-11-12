@@ -70,7 +70,7 @@ export const chMap: Chapter = {
         A NAND gate is made of four transistors. Open one of those and you reach a single transistor.</p>
         <div class="try">Open <code>fa0</code>, then one of its gates, then a transistor. Use the breadcrumbs above
         the circuit, or press <kbd>Esc</kbd>, to climb back up.</div>
-        <p>How wires, buses and the HEX / BIN / DEC switch read on this site is in <a href="#/c/basics/5">Basics, step 6</a>.</p>
+        <p>How wires, buses and the HEX / BIN / DEC switch read on this site is in <a href="#/c/basics/6">Basics, step 7</a>.</p>
         <p>The adder is four identical one-bit stages in a row, each passing its carry to the next. Opening <code>fa0</code> shows
         the same nine gates that every later stage repeats; opening one gate shows four transistors. The shape of every level is a handful of
         parts, wired by names, and that is the whole trick.</p>`,
@@ -184,7 +184,7 @@ export const chMosfet: Chapter = {
         extra gate charge pulls electrons up into a thin <em>channel</em> instead, and current can flow from
         drain to source. Lower the gate and the channel disappears.</p>
         <p>Everything in the panel is computed from the classic square-law model: once the channel exists,
-        the drain current Id = k·(Vgs − Vt)²/2 in saturation (Vgs: the gate-to-source voltage), with k = 220 µA/V² and Vt = 0.45 V, a plausible small device at
+        the drain current Id = k·(Vgs − Vt)²/2 in saturation (the next step; Vgs is the gate-to-source voltage), with k = 220 µA/V² and Vt = 0.45 V, a plausible small device at
         1.8 V. The channel's thickness is its charge, and each carrier moves at the local field.</p>
         <div class="try">Press <strong>Sweep</strong>, or drag the gate past 0.45 V: the depletion layer grows
         then stops, electrons (filled dots; holes are rings) rise into a channel, and the current leaves zero.
@@ -204,7 +204,7 @@ export const chMosfet: Chapter = {
     {
       title: 'Three regions',
       body: `
-        <p>The channel holds Vgs − Vt of charge at the source but only Vgs − Vt − Vds at the drain, so it
+        <p>The channel's charge is proportional to Vgs − Vt at the source but only to Vgs − Vt − Vds at the drain, so it
         tapers. Hold the gate and raise the drain:</p>
         <ul><li><strong>Linear</strong> (Vds, the drain-to-source voltage, &lt; Vgs − Vt): the current grows with Vds, Id = k·((Vgs − Vt)·Vds − Vds²/2).
         The channel is a resistor.</li>
@@ -259,7 +259,7 @@ export const chMosfet: Chapter = {
         <tr><th>NMOS</th><td>off</td><td>on</td></tr><tr><th>PMOS</th><td>on</td><td>off</td></tr></table>
         <p>NMOS is good at pulling a wire down to 0 (ground). PMOS is good at pulling it up to 1 (VDD).
         That complementary pair is the C in <span data-ahead="cmos"><strong>CMOS</strong> (complementary MOS: NMOS and PMOS used together, each pulling to its own rail; chapter ${numOf('inverter')} builds the simplest CMOS gate)</span>.</p>
-        <p>The reason for the asymmetry is the sign of the carriers and of the source. An NMOS source is its lower terminal, so the gate must rise above it by Vt; if
+        <p>The asymmetry comes from where each type's source sits. An NMOS source is its lower terminal, so the gate must rise above it by Vt; if
         the output it drives rises towards VDD, its V<sub>gs</sub> shrinks and it stops short (the weak-levels step of <a href="#/c/inverter/3">chapter ${numOf('inverter')}</a> shows the weak 1). A PMOS source is its upper
         terminal, and its V<sub>sg</sub> grows as the output rises, so it carries a 1 whole. Each type is strong on the rail it is tied to and weak on the other one.</p>`,
       more: {
@@ -283,7 +283,7 @@ export const chMosfet: Chapter = {
       title: 'What one switch costs',
       body: `
         <p>A transistor never drives a bare wire. Its output carries the gates of the next transistors, each a
-        small capacitor (gate over oxide over channel). Switching means moving that charge: the output falls at
+        small capacitor, the bucket of charge of Basics (gate over oxide over channel). Switching means moving that charge: the output falls at
         <strong>dV/dt = −I / C</strong>.</p>
         <p>So the delay is about <strong>C·ΔV / I</strong>, and every full swing, 0 → 1 → 0, draws
         <strong>C·V²</strong> from the supply: half of it lost in the pull-up, half in the pull-down. A wider
@@ -564,7 +564,7 @@ export const chInverter: Chapter = {
       body: `
         <p>Swap the two: <span data-show="n1">an NMOS</span> to VDD, <span data-show="p1">a PMOS</span> to ground. With
         <code>a = 1</code> the NMOS conducts, but only while its gate is a threshold above its source: <code>y</code>
-        rises to VDD − V<sub>t</sub> = ${VDD_VOLTS} − ${VT_VOLTS} = <strong>${(VDD_VOLTS - VT_VOLTS).toFixed(1)} V</strong> and the channel pinches off. That is a
+        rises to VDD − V<sub>t</sub> = ${VDD_VOLTS} − ${VT_VOLTS} = <strong>${(VDD_VOLTS - VT_VOLTS).toFixed(1)} V</strong> and the channel closes. That is a
         <strong>weak 1</strong>, drawn between the 0 and 1 colours and tagged <strong>H</strong>. With <code>a = 0</code>
         the PMOS stops at V<sub>t</sub>: a weak 0, <strong>L</strong> at ${VT_VOLTS} V. The bits are right; the levels are not. (The switch-level model uses an illustrative ${VDD_VOLTS} V supply and V<sub>t</sub> = ${VT_VOLTS} V, not chapter ${numOf('mosfet')}'s 1.8 V / 0.45 V device, so its levels are ${(VDD_VOLTS - VT_VOLTS).toFixed(2)} V and ${VT_VOLTS.toFixed(2)} V; the ratios are what carry over.)</p>
         <p>A CMOS gate reading H still reads 1 and drives a full 0 from its rails, so the level is restored one gate
@@ -573,7 +573,7 @@ export const chInverter: Chapter = {
         ${(VDD_VOLTS - 2 * VT_VOLTS).toFixed(1)} V, which no gate reads as anything: X.</p>
         <p><span data-show="tg">A transmission gate</span> puts a PMOS beside the NMOS, gated by the complement
         (<span data-show="inv">an inverter</span> makes <code>en_n</code>): the NMOS carries a 0 whole, the PMOS the
-        last 0.3 V of a 1, so <code>q</code> follows <code>d</code> at full swing. Two transistors and an inverted
+        last ${VT_VOLTS} V of a 1, so <code>q</code> follows <code>d</code> at full swing. Two transistors and an inverted
         enable instead of one transistor; muxes and latches built from them still come out smaller than the same circuits built from plain gates.</p>
         <div class="try">Toggle <code>a</code> and read y's tag; set <code>en = 1</code> and toggle <code>d</code>:
         <code>q</code> has no tag.</div>`,
@@ -618,8 +618,8 @@ export const chInverter: Chapter = {
         <p>What it costs: while <code>y = 0</code> a current flows from VDD through the resistor and the NMOS
         to ground, all the time, not just while switching. The low level is only as good as the ratio, and the
         rising edge is as slow as the pull-up. What it saves: the pull-up network. An n-input <span data-ahead="nor">NOR (a gate whose output is 1 only when every input is 0)</span> is n NMOS and one
-        pull-up, n + 1 devices instead of 2n, which is why wide NORs (the row lines of a stored table) and open-drain buses still
-        pull up.</p>
+        pull-up, n + 1 devices instead of 2n, which is why wide NORs (the row lines of a stored table) and wires shared by many outputs still
+        use a pull-up.</p>
         <div class="try">Toggle <code>a</code> and watch the NMOS override the pull-up. The <span data-ahead="truthtable">truth table (the output listed for every input combination)</span> is the
         CMOS inverter's: same function and the same two devices, none of the standby savings.</div>`,
       scene: () => ({ root: INV_PSEUDO, inputs: { a: 1 } }),
@@ -657,7 +657,7 @@ export const chInverter: Chapter = {
         <p>Chain an odd number of inverting stages into a loop and no assignment of 0s and 1s is consistent: every stage's output is the inverse of its input, so the loop contradicts itself, and the
         change goes round and round. That is a <strong>ring oscillator</strong>. Here five stages, one of them a <span data-ahead="nand">NAND (a gate whose output is 0 only when every input is 1)</span> so that <code>en</code> can hold the ring still.</p>
         <p>Set <code>en</code> to 1 and watch <code>y</code>. A change leaves a stage one gate delay after it arrives, so it takes ${RING_N} delays to go once round, and the loop is then inverted: it needs a second lap to return to
-        where it began. The period is therefore 2 × ${RING_N} = ${2 * RING_N} gate delays whatever drives it. At an illustrative ${PS_PER_NAND} ps a stage that is ${((1e3 / (2 * RING_N * PS_PER_NAND))).toFixed(1)} GHz.</p>
+        where it began. The period is therefore 2 × ${RING_N} = ${2 * RING_N} gate delays whatever drives it. At an illustrative ${PS_PER_NAND} ps a stage, that is a ring running at ${((1e3 / (2 * RING_N * PS_PER_NAND))).toFixed(1)} GHz.</p>
         <p>This is how a fabrication line measures its transistors: a ring of a few hundred inverters on a test chip, its frequency read from outside, divided by 2N. It is the delay of the real gates with their real wires, with no clock and no probe loading a node.</p>
         <div class="try">Enable the ring, then use <strong>Step</strong> to advance one gate delay at a time and count the steps between two rising edges of y.</div>`,
       scene: () => ({ root: ringOsc(RING_N), inputs: { en: 0 }, analyzer: true, animate: true }),
@@ -802,7 +802,7 @@ export const chNand: Chapter = {
         <p>Nothing limits a NAND to two inputs: three parallel PMOS, three NMOS in series. Here is the three-input gate, ${stats(cmosNand(3)).transistors} transistors. The pull-down is a stack of
         <span data-show="n1 n2 n3">three NMOS</span>, so it conducts only when all three inputs are 1; any one input at 0 turns on its PMOS in the <span data-show="p1 p2 p3">parallel pull-up</span>.</p>
         <p>What it costs is speed. A series stack of n devices passes about 1/n of the current of one, so to pull down as fast as an inverter each NMOS must be n times wider, and the gate's input capacitance grows with it. In
-        logical effort (a gate's input capacitance relative to an inverter delivering the same current, so its delay per unit of load in τ, as in chapter ${numOf('inverter')}'s last step) a NAND with n inputs has <strong>g = (n + 2) / 3</strong> and a parasitic delay p = n:
+        logical effort (how much more input capacitance the gate needs than an inverter to deliver the same current, so how much slower it drives a given load; τ as in chapter ${numOf('inverter')}'s last step) a NAND with n inputs has <strong>g = (n + 2) / 3</strong> and a parasitic delay p = n:
         ${[2, 3, 4].map((n) => `NAND${n} g = ${fmtFrac(gNand(n))}, p = ${n}`).join('; ')}. Every extra input loads every gate that drives it and slows the gate itself.</p>
         <p>That is why libraries stop at four inputs and why the brick of this site has two. Wider gates are not forbidden, but a tree of two-input gates is usually as fast and no larger: the NOR step below compares them.</p>
         <div class="try">Make the output 0, then lift any single input and find the PMOS that takes y back up.</div>`,

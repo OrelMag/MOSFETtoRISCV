@@ -79,7 +79,7 @@ export const chAppendixAgc: Chapter = {
       title: 'Meet the AGC',
       body: `
         <p>The Apollo Guidance Computer flew in the command module and the lunar module. Block II, the version
-        that landed, has 15-bit words in one's complement (a number is negated by inverting every bit; step 4 shows what that
+        that landed, has 15-bit words (16 in memory, with a parity bit) in one's complement (a number is negated by inverting every bit; step 4 shows what that
         costs the adder), ${groupNum(BLOCK2_ROPE.words)} words of read-only <strong>fixed</strong> memory and 2048 of
         <strong>erasable</strong> (read-write) memory, a memory cycle time (<strong>MCT</strong>) of ${MCT_US} µs, about 5600 gates in 2800 packages, 70 pounds and
         55 watts (Table 2-1 of R-700, E. C. Hall's 1972 history of the computer for MIT, the source of every number here).</p>
@@ -160,7 +160,7 @@ export const chAppendixAgc: Chapter = {
         <p>R-700 records a related need in the real adder (p. 69): "One of the requirements for the control pulse sequence
         for Block II division is for the removal of carry propagations in the adder", and "logic is therefore furnished to
         suppress every fourth existing carry at the appropriate time".</p>
-        <div class="try">The adder starts at 0111 + 0001 = 1000, every carry a 1. Turn on b1 and b3, turn off a1, and last
+        <div class="try">The adder starts at 0111 + 0001 = 1000, every carry between the bits a 1. Turn on b1 and b3, turn off a1, and last
         turn off b0 (in that order: the last change is the one that leaves a carry circling): a is now 0101 and b 1010, and s shows 0000, the +0 the ring held on to. Pulse cc to 1 and back: s
         becomes 1111.</div>`,
       scene: () => ({ root: NOR_ADD4, inputs: { a0: 1, a1: 1, a2: 1, a3: 0, b0: 1, b1: 0, b2: 0, b3: 0, cc: 0 } }),
@@ -209,7 +209,7 @@ export const chAppendixAgc: Chapter = {
         thereby inducing a voltage in every sense line that threads the core", and "a stored bit is a 1 whenever a sense
         wire threads a core, and is a 0 whenever it fails to thread a core" (R-700 sec. 3.5.2). One core serves many words:
         each Block II core stores ${BLOCK2_ROPE.wordsPerCore} words, so ${BLOCK2_ROPE.senseLines} sense lines run through or
-        past it, and a diode switch passes the ${BLOCK2_ROPE.bitsRead} of the addressed word to the sense amplifiers. The
+        past it, and a diode switch passes the ${BLOCK2_ROPE.bitsRead} of the addressed word (15 data bits and a parity bit) to the sense amplifiers. The
         address picks the core by the <strong>inhibit</strong> lines: every core but one has a current through it that
         cancels the switching current. ${BLOCK2_ROPE.modules} modules held the ${groupNum(BLOCK2_ROPE.words)}
         words, ${groupNum(BLOCK2_ROPE.wordsPerModule)} each, which makes ${BLOCK2_ROPE.coresPerModule} cores a

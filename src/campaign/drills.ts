@@ -38,9 +38,9 @@ export interface Question {
   /** HTML. */
   prompt: string;
   placeholder?: string;
-  /** Accepts the learner's text answer. */
+  /** Accepts the learner's text answer. Its why is plain text (every page shows it as text): never escape what it echoes. */
   check(answer: string): { ok: boolean; why?: string };
-  /** A correct answer, shown on request. */
+  /** A correct answer, shown on request (plain text). */
   answer: string;
   /** HTML: why. */
   explain?: string;
@@ -1042,7 +1042,7 @@ const hollerith: Drill = {
           const a = t.trim().toUpperCase();
           if (a.length !== 1) return { ok: false, why: 'one character' };
           const rows = rowsOfChar(a);
-          return { ok: a === ch, why: rows === null ? 'not a character the 029 punches' : `${esc(a)} is ${rows || 'a blank column'}` };
+          return { ok: a === ch, why: rows === null ? 'not a character the 029 punches' : `${a} is ${rows || 'a blank column'}` };
         },
       };
     }
@@ -1056,11 +1056,11 @@ const hollerith: Drill = {
           let a = 0;
           for (const x of toks) {
             const i = (ROWS as readonly string[]).indexOf(x);
-            if (i < 0) return { ok: false, why: `there is no row ${esc(x)} (rows: 12, 11, 0–9)` };
+            if (i < 0) return { ok: false, why: `there is no row ${x} (rows: 12, 11, 0–9)` };
             a |= 1 << i;
           }
           const c = charOf(a);
-          return { ok: a === m, why: c === null ? 'no character has those holes' : `those holes are ${c === ' ' ? 'a blank' : esc(c)}` };
+          return { ok: a === m, why: c === null ? 'no character has those holes' : `those holes are ${c === ' ' ? 'a blank' : c}` };
         },
       };
     }
@@ -1075,7 +1075,7 @@ const hollerith: Drill = {
           if (a === word) return { ok: true };
           if (a.length !== word.length) return { ok: false, why: `${word.length} columns, ${word.length} characters (a blank column is a space)` };
           const i = [...a].findIndex((c, j) => c !== word[j]);
-          return { ok: false, why: `column ${i + 1} is not ${esc(a[i])}` };
+          return { ok: false, why: `column ${i + 1} is not ${a[i]}` };
         },
       };
     }
@@ -1293,7 +1293,8 @@ const reloc: Drill = {
   make(r) {
     const kind = int(r, 0, 2);
     if (kind === 0) {
-      const site = int(r, 0, 0x3ff), off = int(r, 0, 2) === 0 ? -Math.min(site, int(r, 1, 255)) : int(r, 1, 255);
+      // a backward call needs room behind it: at word 0 it goes forward (else f would sit at the call itself)
+      const site = int(r, 0, 0x3ff), off = int(r, 0, 2) === 0 && site > 0 ? -Math.min(site, int(r, 1, 255)) : int(r, 1, 255);
       const target = site + off, want = encJ(1, off);
       return {
         prompt: `<code>call f</code> (<code>jal ra, f</code>) sits at word <b>0x${hex(site, 16)}</b>; the linker put <code>f</code> at <b>0x${hex(target, 16)}</b>. What word does it write?`, placeholder: '0x…',

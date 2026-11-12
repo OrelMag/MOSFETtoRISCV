@@ -79,6 +79,7 @@ export const CODEX: CodexEntry[] = [
 
   // ---- numbers and arithmetic
   E('positional', 'Positional notation', 'concept', 'Bits b(n−1)…b0 mean Σ bk·2^k. n bits: 0 … 2^n − 1. Converting: repeated division by 2 (or subtract the largest power). Doubling is a left shift.', ['hex']),
+  E('capacitance', 'Capacitance', 'concept', 'How much charge a pair of conductors holds per volt: Q = C·V, in farads. Filled through a resistance R it reaches 63 % of the supply after R·C and is full after about five, and a full charge from the supply costs C·V², half stored and half heat in R whatever R is. Every wire and every transistor gate is a small capacitor, so a switch takes time (C·ΔV / I) and energy (C·V² a swing).', ['cmos', 'mosfet']),
   E('hex', 'Hexadecimal', 'concept', 'Base 16, one digit per 4 bits: 0x3C = 0011 1100. Used for addresses and machine words because it maps exactly onto bits.', ['positional']),
   E('twos', "Two's complement", 'concept', 'The top bit weighs −2^(n−1): range −2^(n−1) … 2^(n−1) − 1 (−32768 … 32767 at 16 bits). −x = ¬x + 1. The same adder adds signed and unsigned numbers; only comparison and overflow differ.', ['overflow', 'signext', 'subtract']),
   E('overflow', 'Overflow', 'concept', 'Unsigned: a carry out of the top bit. Signed: both operands have the same sign and the sum has the other (V = carry into the top bit ⊕ carry out). RISC-V does not trap on overflow: software checks if it cares.', ['twos', 'flags']),

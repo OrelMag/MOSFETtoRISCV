@@ -179,7 +179,7 @@ export const chMulDiv: Chapter = {
         <p>The cheapest multiplier has one adder and does the rows one per clock. A 2n-bit <span data-show="rh rl">product register</span> starts as {0, b}. Each cycle, if its
         lowest bit is 1 <span data-show="add">the adder</span> adds <span data-show="ra">a</span> to the upper half, and the whole register shifts right one place, the adder's carry entering at the top.
         The multiplier bits leave at the bottom as product bits come in. After n cycles the register holds a·b.</p>
-        <p>8 bits: ${nd(seqMul(8))} NANDs and 10 cycles (load, 8 steps, done), against 1 cycle for an array of about the same size (${nd(arrayMul(8))} NANDs) at 8 bits; the array grows as n², the sequential unit as n. It is the multiply of
+        <p>8 bits: ${nd(seqMul(8))} NANDs and 10 cycles (load, 8 steps, done), against 1 cycle (but ${nd(arrayMul(8))} NANDs) for the array at 8 bits; the array grows as n², the sequential unit as n. It is the multiply of
         microcontrollers without a hardware multiplier, done in software with the same loop.</p>
         <p>Why it works: the register holds 2n bits, and every cycle trades one multiplier bit for one product bit. The low half starts as b; shifting right moves the bit just
         used out of the way and makes room at the top for the adder's result. Nothing is stored twice, so no separate multiplier register is needed. What it costs is time: the
@@ -254,7 +254,7 @@ export const chMulDiv: Chapter = {
         <p>Only the very last addition needs a real carry-propagate adder.</p>
         <p>Why it is exact: a full adder computes x + y + z = s + 2c for one column, with s the bit that stays and c the bit that belongs one column up. Wire n of them side by side and
         feed each one's c, unadded, to the next column as part of a second word. No carry ever goes through another adder in the same level, so the delay is one full adder,
-        ${dp(csa(4))} NAND delays, at 4 bits and at ${dp(csa(32))} at 32. The price is that the answer is now two words, and someone has to add them.</p>`,
+        ${dp(csa(4))} NAND delays at 4 bits and ${dp(csa(32))} at 32. The price is that the answer is now two words, and someone has to add them.</p>`,
       scene: () => ({ root: csa(4), inputs: { x: 5, y: 6, z: 7 } }),
       tour: {
         beats: [
@@ -1055,7 +1055,7 @@ export const chMulDiv: Chapter = {
         the product is four 64-bit products, a0·b0, a0·b1, a1·b0 and a1·b1, at weights 2<sup>0</sup>, 2<sup>32</sup>, 2<sup>32</sup> and 2<sup>64</sup>, so eight M instructions, and the words are added column by column with the carries kept as above. The program does it in ${MW.product} instructions, ${MW.total} in all with the set-up
         and the sum and difference; on this CPU that is ${MW.total} cycles, since a multiply takes one cycle like an add. A and B here give ${MW.hex}, checked against BigInt arithmetic on random operands.</p>
         <p>The 6502 of <a href="#/c/appendix-6502/3">appendix A</a> does the same job with a flag: <code>ADC</code> adds the carry <em>in</em> and leaves the carry <em>out</em>, so an eight-byte add is a clear-carry and eight chained <code>ADC</code>s (each between a load and a store of its byte). RISC-V drops the flag
-        (it would be one more piece of state to rename, forward and save in a pipeline) and pays instructions: two for the first word's sum and carry, and each further word needs its two additions with a carry test for each.</p>
+        (it would be one more piece of state to forward and save in a pipeline) and pays instructions: two for the first word's sum and carry, and each further word needs its two additions with a carry test for each.</p>
         <div class="try">Run to halt and read s5 (the sum's high word): it is 4, not 3.</div>`,
       scene: () => cpuScene({ source: MULTIWORD_SOURCE, system: true, m: true, highlight: ['md'] }),
       more: {

@@ -1,16 +1,20 @@
 // Builds the portable Windows program: stages ../dist (stage.mjs), then packs it with electron-builder
-// into release/MOSFET-to-RISCV-<version>-portable.exe, one file that runs without installing anything.
-import { execSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+// into release/MOSFET-to-RISCV-<site version>-portable.exe, one file that runs without installing anything.
+import { existsSync, readFileSync } from 'node:fs';
 import { build, Platform } from 'electron-builder';
+import { versionOf } from '../scripts/version.mjs';
 import './stage.mjs';
 
-// The site's version (vite.config.ts): major.minor from the root package.json, the commit count as the build.
-const root = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
-const [major, minor] = root.version.split('.').map(Number);
-let count = 0;
-try { count = Number(execSync('git rev-list --count HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim()); } catch { /* no git */ }
-const version = `${major}.${minor}.${count}`;
+// The version of the site this program carries, read from its own build (dist/sw.js: VERSION = '<X.YYY.ZZZ>-<commit>'), so
+// the file name shows exactly what the footer inside shows even when dist/ was built at another commit; without it, the
+// same formula here (scripts/version.mjs). Windows' file properties need a semver without leading zeros: X.Y.ZZZ of the
+// same numbers.
+const sw = new URL('../dist/sw.js', import.meta.url);
+const stamped = existsSync(sw) ? /const VERSION = '(\d+)\.(\d+)\.(\d+)-[^']*'/.exec(readFileSync(sw, 'utf8')) : null;
+const v = stamped
+  ? { site: `${stamped[1]}.${stamped[2]}.${stamped[3]}`, semver: `${Number(stamped[1])}.${Number(stamped[2])}.${Number(stamped[3])}` }
+  : versionOf(new URL('../', import.meta.url));
+const version = v.semver;
 
 await build({
   targets: Platform.WINDOWS.createTarget(['portable'], 1 /* x64 */),
@@ -27,7 +31,7 @@ await build({
     // NODE_OPTIONS and --inspect, and load only the packed app.
     electronFuses: { runAsNode: false, enableNodeOptionsEnvironmentVariable: false, enableNodeCliInspectArguments: false, onlyLoadAppFromAsar: true },
     win: { icon: 'icon.png' },
-    portable: { artifactName: 'MOSFET-to-RISCV-${version}-portable.exe' },
+    portable: { artifactName: `MOSFET-to-RISCV-${v.site}-portable.exe` },
     publish: null, // the desktop workflow publishes the release itself
   },
 });

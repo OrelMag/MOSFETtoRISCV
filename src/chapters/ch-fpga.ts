@@ -70,7 +70,7 @@ export const chFpga: Chapter = {
         block, count what it costs, and then measure the whole computer.</p>`,
       widget: flowWidget,
       more: {
-        real: `<p>An FPGA of the ${CHIP}'s class holds about ${num(D.lut4.available / 1000)} thousand logic blocks; the largest parts hold millions, plus multipliers, memories and fast serial links.
+        real: `<p>An FPGA of the ${CHIP}'s class holds about ${(D.lut4.available / 1000).toFixed(1)} thousand logic blocks; the largest parts hold millions, plus multipliers, memories and fast serial links.
           Most products that ship in thousands rather than millions use FPGAs: the mask set for a modern process costs more than all the FPGAs they would ever buy.</p>`,
         pitfall: `<p>Calling Verilog a program the FPGA runs. Nothing is executed: the bitstream sets switches and table entries once, and from then on it is a circuit, every part working at once, like the
           ones drawn in this course.</p>`,
@@ -177,8 +177,8 @@ export const chFpga: Chapter = {
     {
       title: 'The wires are switches',
       body: `
-        <p>Between the cells run tracks of metal, and where tracks meet sits a <strong>switch box</strong>: a pass switch between each pair, each one a transmission gate (an NMOS and a PMOS side by side,
-        on together or off together) held by one configuration bit. A connection across the chip is a path of tracks joined by switches the bitstream closed.</p>
+        <p>Between the cells run tracks of metal, and where tracks meet sits a <strong>switch box</strong>: a pass switch between each pair, each one here a transmission gate (an NMOS and a PMOS side by side,
+        on together or off together) held by one configuration bit. Commercial parts more often use a single NMOS with its gate driven above VDD, or a buffered multiplexer, for the same reason: a plain NMOS passes a weak 1. A connection across the chip is a path of tracks joined by switches the bitstream closed.</p>
         <p>Each closed switch adds resistance, and every open one still loads the track with its capacitance. That is the FPGA's real cost. On our computer's slowest path the signal spent
         ${pathShares().routing.toFixed(1)} ns in routing against ${pathShares().logic.toFixed(1)} ns in the cells. The tools also add LUTs that do no logic: a Gowin flip-flop takes its input only from the LUT
         beside it, so a flip-flop fed from elsewhere gets a pass-through LUT. Our computer has ${num(ST.passthrough)} of them, ${pct(ST.passthrough, ST.routed)} % of its LUTs.</p>
@@ -190,7 +190,7 @@ export const chFpga: Chapter = {
         pitfall: `<p>Reading the logic levels as the delay. On an FPGA a LUT level is quick; the trip to the next LUT is not, and a long net or a crowded region can cost more than several LUTs.</p>`,
       },
       challenge: {
-        kind: 'quiz', question: 'Why are the routing\'s switches transmission gates rather than a single NMOS?',
+        kind: 'quiz', question: 'Why is this switch box\'s switch a transmission gate rather than a single NMOS?',
         options: ['An NMOS passes a weak 1, a threshold below VDD; the PMOS beside it passes the 1 fully', 'A single NMOS cannot be turned off', 'Transmission gates need no configuration bit'],
         answer: 0,
         explain: 'An NMOS stops conducting as its source rises to within a threshold of its gate, so a 1 arrives weak. The PMOS conducts best exactly there; together they pass both levels.',
@@ -205,12 +205,12 @@ export const chFpga: Chapter = {
         Our NAND netlist has ${num(C.ours.nands)} NANDs; Yosys made ${num(ST.synth)} LUTs, ${nandsPerLut().toFixed(1)} NANDs a LUT, and after placement and routing it fills ${pct(D.lut4.used, D.lut4.available)} % of the
         chip's ${num(D.lut4.available)} LUTs. Our own mapping of the same netlist gives ${num(C.ours.lutMapLuts)}.</p>
         <p><strong>Memories</strong>: the RAM is ${num(RAM_WORDS * RAM_BITS)} bits. As flip-flops that would be ${rff.times.toFixed(0)} times all the chip has. The ${CHIP} holds ${D.bsram.available} <strong>block RAMs</strong>
-        of 16 Kbit each, real memory arrays beside the logic: the RAM takes ${bsramFor(RAM_WORDS, RAM_BITS)} and the ROM ${bsramFor(ROM_WORDS, 32)}, the ${D.bsram.used} the report shows. A block RAM reads through a register
+        of 18 Kbit each (16 Kbit of data in the widths without parity bits), real memory arrays beside the logic: the RAM takes ${bsramFor(RAM_WORDS, RAM_BITS)} and the ROM ${bsramFor(ROM_WORDS, 32)}, the ${D.bsram.used} the report shows. A block RAM reads through a register
         on a clock edge, which is why the export adds the memory clock (the board's ${BOARD.clockMHz} MHz) beside the design's.</p>
         <p>The register file did not go into block RAM: it is read on two ports and written on a third in the same cycle, and its register x0 is a constant. It stays as ${num(rf.ffs)} flip-flops
         (31 × 32) and ${num(rf.luts)} LUTs of read multiplexers and write decoding, the largest block by name. Read the other names with care: Yosys names a LUT after the net it drives, and ${num(ram.luts)} LUTs
         under <code>mem.ram</code> are the logic that feeds the RAM's sampled address and data: mostly the register file's read port for the store data, named after the register where its result ends.</p>
-        <p>The <strong>configuration</strong>: Apycula's packer writes the bitstream as frames of ${num(COUNTER.bitstream.frameBits)} bits. The counter's, with no memory contents, is ${num(COUNTER.bitstream.frames)} frames,
+        <p>The <strong>configuration</strong>: Apycula, the open-source Gowin packer, writes the bitstream as frames of ${num(COUNTER.bitstream.frameBits)} bits. The counter's, with no memory contents, is ${num(COUNTER.bitstream.frames)} frames,
         ${num(fabricBits())} bits for the fabric; the LUTs' tables are ${num(lutConfigBits())} of them (${num(D.lut4.available)} × 16), ${pct(lutConfigBits(), fabricBits())} %. The rest
         sets the routing switches, the cells' modes and the clocks. The computer's bitstream adds ${num(C.bitstream.frames - COUNTER.bitstream.frames)} frames for its block RAMs' contents, the program among them.</p>`;
       },
@@ -221,11 +221,11 @@ export const chFpga: Chapter = {
           ${num(ST.routed)} LUTs after routing, counted without the carry cells: the ${num(ST.synth)} plus ${num(ST.passthrough)} pass-through LUTs in front of flip-flops. ${num(D.dff.used)} flip-flops of ${num(D.dff.available)}. The small example, Examples ▸ Counter
           (${num(COUNTER.ours.nands)} NANDs), takes ${COUNTER.device.lut4.used} LUTs and runs its clock at up to ${COUNTER.fmax.clk.toFixed(0)} MHz.</p>`,
         pitfall: `<p>Reading a block's LUT count from the names in a report. After synthesis flattens and optimizes the design, a name only says which net a cell drives, and logic is often named after the
-          register it feeds. Here the RAM's name carries a third of the CPU's logic.</p>`,
+          register it feeds. Here the RAM's name carries ${num(ram.luts)} of the design's ${num(ST.synth)} LUTs (${pct(ram.luts, ST.synth)} %).</p>`,
       },
       challenge: {
         kind: 'quiz', question: 'Why does the 4K × 32 RAM take eight block RAMs?',
-        options: [`${num(RAM_WORDS * RAM_BITS)} bits over 16 Kbit per block is 8`, 'One block per 512 words is a fixed rule', 'Each block holds four bits of every word'],
+        options: [`${num(RAM_WORDS * RAM_BITS)} bits over 16 Kbit of data per block is 8`, 'One block per 512 words is a fixed rule', 'Each block holds four bits of every word'],
         answer: 0,
         explain: `4096 × 32 = ${num(RAM_WORDS * RAM_BITS)} bits, and each block holds 16 384 data bits: 8 blocks. How they are arranged (eight blocks of 4K × 4, or another shape) is the tool's choice.`,
         why: ['', 'A block can be shaped as 16K × 1 up to 512 × 32; the count follows from the bits.', 'That is one possible arrangement, not the reason for the count.'],

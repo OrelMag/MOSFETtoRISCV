@@ -48,12 +48,13 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const kb = (n: number) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`);
 
 /** A modal dialog over the editor (Esc or a click outside closes it). */
-export function dialog(ed: Editor, title: string, body: (Node | string | null)[], foot: HTMLElement[] = [], cls = ''): { el: HTMLElement; body: HTMLElement; close: () => void } {
+export function dialog(ed: Editor, title: string, body: (Node | string | null)[], foot: HTMLElement[] = [], cls = '', onClose?: () => void): { el: HTMLElement; body: HTMLElement; close: () => void } {
   closeMenu();
   // Esc gives the focus back to what opened it: the File menu's button when the menu item went with its menu
   const back = rememberFocus(() => (menuBack && performance.now() - menuBack.t < 5000 ? menuBack.el : null) ?? ed.view.svg);
   const close = () => {
     ov.remove();
+    onClose?.();
     back();
   };
   const content = h('div', { class: 'sb-dlg-body' }, body);
@@ -205,11 +206,16 @@ async function importFiles(ed: Editor, fs: File[]): Promise<void> {
   for (const imp of importers) {
     if (!imp.runMany) continue;
     const mine = read.filter((r) => imp.takes(r.name, r.text));
-    if (mine.length) return imp.runMany(ed, mine);
+    if (mine.length) return failSoft(ed, mine.map((m) => m.name).join(', '), () => imp.runMany!(ed, mine));
   }
   const f = fs.find((x) => importable(x.name) || x.type === 'application/json') ?? fs[0];
   ed.toast(`One file at a time: importing ${f.name}`);
   return importFile(ed, f);
+}
+
+/** A reader that throws on a malformed file says so in a toast instead of failing without a word. */
+function failSoft(ed: Editor, name: string, run: () => void): void {
+  try { run(); } catch (e) { ed.toast(`${name}: could not be read (${e instanceof Error ? e.message : String(e)})`, 'err'); }
 }
 
 async function importFile(ed: Editor, f: File): Promise<void> {
@@ -221,7 +227,7 @@ async function importFile(ed: Editor, f: File): Promise<void> {
     return void ed.toast(`${f.name}: could not be read`, 'err');
   }
   const other = importers.find((i) => i.takes(f.name, text));
-  if (other) return other.run(ed, f.name, text);
+  if (other) return failSoft(ed, f.name, () => other.run(ed, f.name, text));
   const r = importJson(text, ed.ws);
   if ('error' in r) return void ed.toast(`${f.name}: ${r.error}`, 'err');
   if (r.added.length) ed.editWs(() => r.ws);
@@ -518,10 +524,9 @@ function manageDialog(ed: Editor): void {
     } }, icon('folderPlus', 14), 'New folder'),
     h('button', { class: 'btn ghost sm', onclick: () => exportAll(ed) }, glyph('download', 14), 'Export all'),
     h('button', { class: 'btn primary sm', onclick: () => d.close() }, 'Done'),
-  ], 'sb-manage');
+  ], 'sb-manage', () => off());
   const head = d.el.querySelector('h3')!;
   const off = ed.onChange(() => {
-    if (!d.el.isConnected) return void off();
     head.textContent = `My chips (${Object.keys(ed.ws.chips).length})`;
     render();
   });

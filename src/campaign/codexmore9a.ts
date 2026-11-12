@@ -113,7 +113,7 @@ cost: 2 multiplications, 1 addition, 1 word of memory</pre>Each output is 0.9 of
     ],
     chapters: [
       { chapter: 'zplane', step: 0, label: 'An equation with a memory' },
-      { chapter: 'signals', step: 3, label: 'A filter is a sum of delayed samples' },
+      { chapter: 'signals', step: 4, label: 'A filter is a sum of delayed samples' },
     ],
   },
   convolution: {
@@ -135,7 +135,7 @@ cost: 6 × 3 = 18 multiplications
     ],
     chapters: [
       { chapter: 'zplane', step: 1, label: 'Slide, multiply, add' },
-      { chapter: 'signals', step: 3, label: 'A filter is a sum of delayed samples' },
+      { chapter: 'signals', step: 4, label: 'A filter is a sum of delayed samples' },
       { chapter: 'zplane', step: 2, label: 'A delay is z⁻¹' },
     ],
   },

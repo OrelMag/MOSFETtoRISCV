@@ -20,7 +20,7 @@ export const COMM_AWAITING_LEVELS: ReadonlySet<string> = new Set([
   // chapters carriers-glass: ethframe, ethmac, learnsw and nicring are listed by l_mac, l_switch and l_driver
   'csmacd', 'crossbar', 'hol',
   // chapters errors-codes: lpm and fastpath are listed by l_fwd, ipv4, arp and inetcksum by l_host
-  'routing', 'tcp', 'aimd', 'bufferbloat',
+  'routing', 'tcp', 'ports', 'aimd', 'bufferbloat',
   // chapter pcie
   'bgp', 'internetpath',
   // the extension's entries: no new levels (codexcomm2.ts)
@@ -73,6 +73,7 @@ export const CODEX_COMM: CodexEntry[] = [
   E('routing', 'Routing protocols', 'concept', 'What fills a router\'s table. Distance vector tells its neighbours its table and believes them, and bad news counts to infinity: 15 rounds on a three-router chain, 2 with poison reverse. Link state floods every router\'s own links, so each holds the map and runs Dijkstra alone: a failure is one flood away, at the price of memory and CPU.', ['lpm', 'fastpath']),
   // ---- chapter codes: TCP
   E('tcp', 'TCP', 'concept', 'A stream of bytes over packets that may not arrive, built at the two ends alone. Every byte has a sequence number; an ACK names the next byte expected. Three segments open a connection; the receive window keeps a buffer from overflowing; RTO = SRTT + 4 · RTTVAR follows the path, and three duplicate ACKs catch a loss sooner. Ours is 570 lines of Python, 128 clock cycles a byte.', ['aimd', 'bufferbloat', 'arq', 'ipv4']),
+  E('ports', 'Ports and the four numbers', 'concept', 'An address names a machine; a 16-bit port picks the program on it. A TCP connection is found by four numbers, source address and port and destination address and port, 96 bits, so two tabs differ in the laptop\'s port and two laptops behind one NAT in their addresses. A listener matches any remote; a segment that matches no connection is answered with a RST. Our TCP holds one connection, so it has no accept and no table.', ['tcp', 'ipv4', 'aimd']),
   E('aimd', 'AIMD and the congestion window', 'concept', 'Nothing announces what the network can hold, so a sender guesses: it may have min(cwnd, rwnd) unacknowledged. Slow start doubles every round trip, then one segment more per round trip; three duplicate ACKs halve it, a timeout falls to one segment. Additive increase and multiplicative decrease make competing flows converge on equal shares. The sawtooth is what finding an unknown limit looks like.', ['tcp', 'bufferbloat']),
   E('bufferbloat', 'Queues and bufferbloat', 'concept', 'The bottleneck\'s queue sets what a sawtooth costs. Too short, and a loss leaves too few segments for three duplicate ACKs, so the timer does the work. Too long, and it just sits full: no more throughput, and every packet of every flow waits behind it, 0.8 s for 1 MB on a 10 Mb/s uplink. The cure is in the router: drop or mark before the queue fills, and queue each flow fairly.', ['aimd', 'tcp', 'hol']),
   // ---- chapter pcie: the internet path

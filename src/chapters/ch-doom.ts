@@ -84,7 +84,7 @@ export const chAppendixDoom: Chapter = {
         real: `<p>Doom has run on nearly everything with a CPU and a frame buffer: calculators, printers, cameras, oscilloscopes. What it needs is not performance (it ran on a 386 at 33 MHz) but a few megabytes,
           a way to draw 320 × 200 pixels and some input. The porting layer, six functions in doomgeneric, is the real interface between a game and a machine.</p>`,
         pitfall: `<p>Reading "runs Doom" as a statement about the CPU's speed or features. The ISA decides whether the code can execute at all; the memory map decides whether it can start; the clock decides how fast it plays.
-          The mistakes this chapter avoids are all of the second kind: forgetting that the WAD must be mapped somewhere, or that a key read must remove the key.</p>`,
+          The mistakes this appendix avoids are all of the second kind: forgetting that the WAD must be mapped somewhere, or that a key read must remove the key.</p>`,
         numbers: `<table class="mini"><tr><th>what Doom needs</th><th>size</th></tr>
           <tr><td>screen (palette indices)</td><td>${groupDigits(320 * 200)} bytes (320 × 200)</td></tr>
           <tr><td>RAM</td><td>${2 ** 23 / 2 ** 20} MiB</td></tr>
@@ -96,7 +96,7 @@ export const chAppendixDoom: Chapter = {
       title: 'From C to our ROM',
       body: `
         <p>The compiler is GNU GCC with <code>-march=rv32im -mabi=ilp32 -O2</code>: no compressed instructions (our
-        decoder reads 32-bit words), no floating point, no atomics. The C library is newlib; the dozen and more functions it asks
+        decoder reads 32-bit words), no floating point, no atomics. The C library is newlib; the dozen or so functions it asks
         of the machine (<code>_write</code>, <code>_sbrk</code>, <code>_open</code> …) are written for this one: a write
         is stores to the console, the heap grows up from the end of the data, and the only file that opens is the WAD
         (Doom's data file: levels, graphics, sounds).</p>
@@ -134,7 +134,7 @@ export const chAppendixDoom: Chapter = {
         <p>Three device registers are new. <code>KEY</code> is a queue: a load returns the oldest key event and removes
         it, so the CPU's data port gains a read strobe. <code>FLIP</code> marks a finished frame (the screen shows the
         frame buffer as it was then). <code>WADLEN</code> tells the program how much of the WAD region is file.</p>
-        <p>The timer stays inside the core: mtime counts every clock cycle (34 for a divide), and the program reads it
+        <p>The timer stays inside the core: mtime counts every clock cycle (a divide stalls the CPU and counts 34), and the program reads it
         for its 35 game tics a second at a nominal 40 MHz. A slower machine plays slower, never differently.</p>
         <p>The design rule behind all of it is memory-mapped I/O: a device is an address, and the CPU needs no instruction beyond load and store to use it. That is also what makes the machine
         testable. Every register can be read from a program, every effect of a store is a change in one named memory, and the same map describes the interpreter and the gates.</p>`,
@@ -161,6 +161,10 @@ export const chAppendixDoom: Chapter = {
         registers next to the system CPU's: <code>KEY</code> (a read takes one key event), <code>FLIP</code> (a frame is
         done) and <code>WADLEN</code>. Doom's renderer stores its columns and spans straight into the frame buffer.</p>
         <p>It runs on a fast interpreter of our ISA, not on the gates.</p>
+        <p><strong>Licence.</strong> The program image is under the GNU GPL, version 2 (<a href="doom/COPYING.txt" target="_blank" rel="noopener">its text</a>),
+        like Doom's source. Its exact source, doomgeneric with our platform layer and the five patches, is
+        <a href="https://github.com/OrelMag/MOSFETtoRISCV/tree/main/ports/doom" target="_blank" rel="noopener">ports/doom</a> in this site's repository.
+        Freedoom's game data is under a BSD licence (<a href="THIRD-PARTY-NOTICES.txt" target="_blank" rel="noopener">every third-party licence</a>).</p>
         <p><strong>Cost.</strong> A frame of the demo takes 1.0–3.0 M cycles (median 1.9 M): 48 ms at 40 MHz. The
         interpreter manages about 90 M instructions a second. The gate-level system CPU in this page manages about
         2400 cycles a second: one frame would take about 13 minutes. The same gates on silicon, at their static-timing

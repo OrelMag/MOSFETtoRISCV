@@ -19,7 +19,7 @@ refresh = every 64 beats = 19.6 ms (a line a scan beat, 32 lines, two scan beats
     },
     mistakes: [
       'Thinking the screen is a display of the memory: the tube is the memory, and a second tube beside it shows what the first holds.',
-      'Forgetting that a read destroys what it reads: the read is always followed by a rewrite, so a read is always followed by a rewrite.',
+      'Forgetting that a read destroys what it reads: every read must be followed by a rewrite of the same line, or the data is gone.',
       'Comparing it with a flip-flop: a flip-flop holds its bit as long as the power is on; a spot holds it for a fraction of a second.',
     ],
     chapters: [at(1, 'A bit is a charge'), at(2, 'Regeneration'), at(3, 'Inside the tube')],

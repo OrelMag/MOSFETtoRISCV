@@ -154,10 +154,14 @@ export class DualSim implements Sim {
     if (this.onFast) {
       const f = this.fast!;
       if (f.settle()) {
-        // exact, but a flip-flop is now where its table cannot follow: GateSim from here
+        // a flip-flop is now where its table cannot follow: GateSim from here. What this settle wrote is not to be
+        // trusted (gates folded into that cluster can be left contradicting their inputs, with no event pending), so
+        // GateSim evaluates every driver again and settles from there.
         if (f.tainted) {
           this.whyNot = f.refusal;
           this.toGate();
+          this.gate.recheck(Array.from({ length: this.design.netCount }, (_, i) => i));
+          this.gate.settle();
           this.retryAt = this.settles + 64;
         }
         return;

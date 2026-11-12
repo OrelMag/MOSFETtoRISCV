@@ -31,7 +31,9 @@ window.addEventListener('vite:preloadError', () => {
 // Offline / installable: the service worker (scripts/sw-template.js, written into dist/ by vite.config.ts). Production builds on
 // http(s) only: not the dev server, and not the desktop program's app:// origin or a file: page, which are offline already.
 // Registered a few seconds after load: installing it downloads every chunk, and that must not compete with the first page's own.
-if (import.meta.env.PROD && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+// Not with Data Saver on: the install downloads the whole site (about 6 MB), which a reader on a metered connection did not ask for.
+const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData === true;
+if (import.meta.env.PROD && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !saveData) {
   window.addEventListener('load', () => {
     setTimeout(() => { navigator.serviceWorker.register('sw.js').catch(() => { /* private mode, blocked: the site works without */ }); }, 5000);
   });

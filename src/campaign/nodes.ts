@@ -75,7 +75,7 @@ export const NODES: CampaignNode[] = withBugHunts([
     id: 't_inv', act: 0, title: 'CMOS inverter', kind: 'build', requires: ['intro'], base: sandbox('t_inv'),
     why: 'The first circuit is a switch whose output can drive the next switch\'s gate. Two complementary MOSFETs do it with 2 transistors: one pulls y up, the other down, never both, so no static current flows. The NAND of the next level is the same rule with two inputs.',
     tips: ['A PMOS conducts when its gate is 0, an NMOS when it is 1.', 'PMOS from VDD to y, NMOS from y to GND, both gates on a.', 'Swapped (NMOS on top), each transistor passes only a weak level, H or L, and Check fails a weak output.'],
-    codex: ['mosfet', 'cmos', 'inverter', 'power'], unlocks: ['inv_cmos'], par: { transistors: 2 },
+    codex: ['mosfet', 'cmos', 'inverter', 'power', 'capacitance'], unlocks: ['inv_cmos'], par: { transistors: 2 },
     chapters: [{ chapter: 'mosfet', label: 'The MOSFET' }, { chapter: 'inverter', label: 'The CMOS inverter' }, { chapter: 'inverter', step: 3, label: 'The wrong way round: weak levels' }],
   },
   {
@@ -446,7 +446,7 @@ export const NODES: CampaignNode[] = withBugHunts([
       'A\'s next value is M[x] (LDA), A ± M[x] (ADD, SUB) or x itself (LDI): two bus muxes in a row, and A loads only on those four instructions.',
       'The PC takes PC + 1, or x when the instruction is JMP, or JZ while A = 0 (an 8-input zero test into an AND). halt: instr is JMP and x equals the PC.',
     ],
-    codex: ['accumulator'], chapters: [{ chapter: 'firstcomputer', step: 0, label: 'A counter reads a ROM' }], par: { nand: 5795, period: 45 },
+    codex: ['accumulator'], chapters: [{ chapter: 'firstcomputer', step: 1, label: 'A counter reads a ROM' }], par: { nand: 5795, period: 45 },
   },
 
   {

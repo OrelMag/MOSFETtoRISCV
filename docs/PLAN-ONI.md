@@ -1,5 +1,8 @@
 # Plan: four features borrowed from Oxygen Not Included
 
+> **Historical (2026-11-12).** Built: see docs/ROADMAP.md, Phase 23. Kept as the record of the decisions; its future tense is
+> as of the plan, and any mockup link in it is the author's private draft.
+
 Status: all four built (2026-11-09): A the Cut tool, B breakpoints, D the fault brush (batch 5), C the overlay bar (batch 6). Source: a review of what *Oxygen Not Included* (ONI) does
 well that fits this site. Four features were picked:
 

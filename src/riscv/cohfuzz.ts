@@ -15,7 +15,7 @@ export function randomCoherentProgram(seed: number, opts: { size?: number; itera
   out.push('csrr a0, mhartid', 'li s0, 0', `li s1, ${opts.iterations ?? 3 + rnd(4)}`, `li t6, ${rnd(5)}`);
   out.push('mv t4, a0', 'beqz t4, go', 'dl: addi t6, t6, -1', 'bgtz t6, dl', 'go:');
   out.push('li t0, 1', 'li t1, 2', 'li t2, 3', 'li a1, 5', 'li a2, 7', 'loop:');
-  const size = () => out.filter((l) => !/^w+:$/.test(l)).length;
+  const size = () => out.filter((l) => !/^\w+:$/.test(l)).length;
   for (let i = 0; i < n && size() < 40; i++) { // the ROM holds 64 words
     const k = rnd(14), r = reg(), q = reg();
     if (k < 3) out.push(`lw ${r}, ${addr()}(s0)`);

@@ -139,7 +139,7 @@ export const chLinking: Chapter = {
       body: `
         <p>An object file is what the assembler can produce on its own. Its code and data are in <strong>sections</strong>, each assembled as if it started at 0: <code>.text</code> for instructions, <code>.data</code> for initial values, <code>.bss</code> for variables that start at zero (only their size is stored, since zeros need not be). <code>main.o</code> has ${F.mainText} words of text, ${F.mainData} of data and ${F.mainBss} bytes of .bss.</p>
         <p>Two lists make it more than a fragment. The <strong>symbol table</strong> lists what the file defines (a name, its section and offset, global if other files may use it) and what it needs. The <strong>relocation list</strong> names every hole: where it is, what kind of instruction it is in, and which symbol fills it. <code>main.o</code> has ${F.mainRelocs}: ${Object.entries(F.kinds).map(([k, v]) => `${v} × ${k}`).join(', ')}. Even <code>la s0, table</code> needs one: <code>table</code> is in this file, but in another section, and where .data goes relative to .text is the linker's choice.</p>
-        <p>The holes are zeros. The assembler did write <em>something</em> there when it put each unknown name at the end of the section, but that value means nothing, so it is cleared: what a hole holds is not a guess, it is written later. ${F.utilRelocs ? '' : '<code>util.o</code> has no relocations at all: it needs nothing from anyone.'}</p>`,
+        <p>The holes are zeros: the assembler does not guess a value for a name it cannot place, it leaves the bits empty, and the linker writes them later. ${F.utilRelocs ? '' : '<code>util.o</code> has no relocations at all: it needs nothing from anyone.'}</p>`,
       widget: objectWidget,
       challenge: {
         kind: 'quiz',
@@ -190,7 +190,7 @@ export const chLinking: Chapter = {
       title: 'Libraries: take only what is used',
       body: `
         <p>A library is a collection of object files, an <strong>archive</strong>, each member usually one routine. Linking one does not copy all of it. The linker pulls a member in only when something already in the link needs a symbol it defines, then looks again, since that member may need others. Here two archives hold ${F.lib.members} routines; the program calls one of them and ends up with ${F.lib.pulled.length}: ${F.lib.used} of ${F.lib.all} words, ${F.lib.saved} words of ROM not spent.</p>
-        <p>The order on the command line matters, and catches everyone once. A linker reads the archives in order and does not go back: one it has passed is not scanned again. <code>pclamp</code> in libio needs <code>clamp</code> in libmath; with libmath named first, nothing needed it yet when it was scanned, and <code>${F.lib.wrongMissing.join(', ')}</code> stays undefined. The fix is to name the library that needs after the one that provides it (or to ask the linker to loop over a group).</p>`,
+        <p>The order on the command line matters, and catches everyone once. A linker reads the archives in order and does not go back: one it has passed is not scanned again. <code>pclamp</code> in libio needs <code>clamp</code> in libmath; with libmath named first, nothing needed it yet when it was scanned, and <code>${F.lib.wrongMissing.join(', ')}</code> stays undefined. The fix is to name the library that provides after the one that needs it (or to ask the linker to loop over a group).</p>`,
       widget: libraryWidget,
       challenge: {
         kind: 'quiz',
@@ -205,7 +205,7 @@ export const chLinking: Chapter = {
       title: 'The executable',
       body: `
         <p>The linker's output is a file the loader can read without knowing anything about the program: an <strong>executable</strong>. RISC-V systems use <strong>ELF</strong>. A ${ELF32_EHSIZE}-byte header says what it is (a 32-bit little-endian RISC-V executable), where execution starts (the entry, <code>main</code> at ${hex(F.entry)}) and where the program headers are. Each <strong>program header</strong> of ${ELF32_PHSIZE} bytes is a segment to load: where its bytes are in the file, its virtual address, how many bytes are in the file and how many in memory (more in memory: the rest is .bss, zeroed), and its permissions.</p>
-        <p>Ours has ${F.phnum}: text, read and execute; data and .bss, read and write. The text's <em>physical</em> address differs from its virtual one: ${hex(EXEC_ROM)}, the ROM frame its bytes are put in, for a reason the next step gives. The whole file is ${n(F.elfBytes)} bytes. It is written by the same code that writes the files the site's verification hands to Spike, the RISC-V reference simulator (chapter ${numOf('verify')}).</p>`,
+        <p>Ours has ${F.phnum}: text, read and execute; data and .bss, read and write. The text's <em>physical</em> address differs from its virtual one: ${hex(EXEC_ROM)}, the ROM frame its bytes are put in, for a reason the next step gives. The whole file is ${n(F.elfBytes)} bytes: after the segments come a symbol table, string tables and section headers, which the loader ignores. It is written by the same code that writes the files the site's verification hands to Spike, the RISC-V reference simulator (chapter ${numOf('verify')}).</p>`,
       widget: elfWidget,
       reading: {
         source: 'Executable and Linking Format (ELF) Specification, version 1.2 (Tool Interface Standard)', section: 'ELF Header; Program Header',
@@ -300,7 +300,7 @@ export const chLinking: Chapter = {
       title: 'Doom, linked',
       body: `
         <p>Appendix B's Doom was built by GNU's linker with a linker script, <code>ports/doom/platform/link.ld</code>, and nothing in it is new now. Its machine is Harvard too, so the script makes two regions: <code>ROM (rx)</code> at 0 for every <code>.text</code>, and <code>RAM (rw)</code> from 0x1000 for <code>.rodata</code>, <code>.data</code> and <code>.bss</code>. Its comment says why constants go to RAM: "no constant may land in the instruction ROM", because loads cannot reach it. The first page of data addresses, 0 to 0xfff, is left empty, so a stray null pointer reads nothing the program put there.</p>
-        <p>The script also names symbols the program reads: <code>__bss_start</code> and <code>__bss_end</code>, which the start-up code <code>crt0.S</code> zeroes between before <code>main</code>, and <code>__stack_top</code>, where the stack starts. The site's image of Doom is our own format, simpler than ELF: the ROM's words, the RAM's initial words and where .bss ends. The widget reads it.</p>`,
+        <p>The script also names symbols the program reads: <code>__bss_start</code> and <code>__bss_end</code>, between which the start-up code <code>crt0.S</code> zeroes memory before <code>main</code> runs, and <code>__stack_top</code>, where the stack starts. The site's image of Doom is our own format, simpler than ELF: the ROM's words, the RAM's initial words and where .bss ends. The widget reads it.</p>`,
       widget: doomWidget,
       challenge: {
         kind: 'quiz',

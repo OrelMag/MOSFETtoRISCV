@@ -63,7 +63,7 @@ export const chMultirate: Chapter = {
       get body() {
         const r = cascade();
         return `
-        <p>Chapters ${numOf('firdesign')} and ${numOf('iir')} priced a filter at one fixed rate. This one changes the rate. A radio's front end samples at a high rate because the whole band has to fit through it. After <a href="#/c/signals/7">the mixer</a> has moved one station to zero, that station is a sliver of what was sampled, and every sample of the rest is a waste of everything downstream.</p>
+        <p>Chapters ${numOf('firdesign')} and ${numOf('iir')} priced a filter at one fixed rate. This one changes the rate. A radio's front end samples at a high rate because the whole band has to fit through it. After <a href="#/c/signals/8">the mixer</a> has moved one station to zero, that station is a sliver of what was sampled, and every sample of the rest is wasted work for everything downstream.</p>
         <p>Filtering is multiplications a second, so the price is taps × rate. Lower the rate by R, and everything after it costs R times less. The chapter's goal is one job: drop the rate by ${CASCADE_R}, keep 40 % of the new rate and hold back what would fold by 50 dB. Done as a single filter at the input's rate, that takes ${n0(r[0].mults)} multiplications for each input sample. By the end it will take ${r[3].mults.toFixed(2)}, about a thousandth of that, with the same mask.</p>`;
       },
       challenge: {
@@ -77,7 +77,7 @@ export const chMultirate: Chapter = {
     {
       title: 'Throwing samples away',
       body: `
-        <p>Keep every R-th sample and discard the rest. That is <strong>decimation</strong> at its simplest, and it is cheap. It also has the problem <a href="#/c/signals/5">sampling</a> always has: the new rate has a new half-rate, and whatever lay above it folds down into the band. It cannot be told apart from what belonged there, and nothing later can remove it.</p>
+        <p>Keep every R-th sample and discard the rest. That is <strong>decimation</strong> at its simplest, and it is cheap. It also has the problem <a href="#/c/signals/6">sampling</a> always has: the new rate has a new half-rate, and whatever lay above it folds down into the band. It cannot be told apart from what belonged there, and nothing later can remove it.</p>
         <p>So the filter has to come first, and it has to run at the old rate, where it is at its most expensive. Everything in this chapter is about paying less for that one filter.</p>
         <div class="try">Move the tone past the line at ${256 / 2 / ALIAS_R} and watch it land somewhere new. Then listen to a sweep both ways. Without the filter it rises, falls, rises and falls again, and those tones are not in the input.</div>`,
       widget: dropWidget,
@@ -110,7 +110,7 @@ export const chMultirate: Chapter = {
       get body() {
         const { R, M, w } = POLY_SPEC;
         return `
-        <p>Here is one: ${w}-bit samples, ${w}-bit taps, ÷ ${R} over ${RM} taps. A count of ${R} says which branch the next sample goes to. There are ${R} rows of ${M} registers, and each only loads on its own turn. ${M} multipliers read whichever branch loaded last, through multiplexers, and small ROMs give them that branch's taps. The ${R}-branch sum builds up in one register and becomes an output.</p>
+        <p>Here is a polyphase decimator: ${w}-bit samples, ${w}-bit taps, ÷ ${R} over ${RM} taps. A count of ${R} says which branch the next sample goes to. There are ${R} rows of ${M} registers, and each only loads on its own turn. ${M} multipliers read whichever branch loaded last, through multiplexers, and small ROMs give them that branch's taps. The ${R}-branch sum builds up in one register and becomes an output.</p>
         <p>It is ${n0(nands(polyDecimator(POLY_SPEC)))} NANDs. The multipliers are ${n0(M * MUL8())} of that, against ${n0(RM * MUL8())} for the ${RM} a direct filter on this clock would need. Sample storage is the same either way, since every sample still has to be held somewhere. So the saving is all in the multipliers, and it grows with R.</p>
         <p>Nothing here rounds or saturates: the sum is held in full, ${2 * w + Math.round(Math.log2(RM))} bits. Where the word should come down is a choice for whatever reads it.</p>
         <div class="try">Run the tone in the band, then the one past the new half-rate. The first passes at about full size. The second is what the filter exists to stop.</div>`;
@@ -130,7 +130,7 @@ export const chMultirate: Chapter = {
       get body() {
         const hb = halfBand(23);
         return `
-        <p>Going up by L is the mirror image. Put L − 1 zeros between samples, and the spectrum stays the same but now repeats: the zeros made <strong>images</strong>. A low-pass filter at the new rate removes them, and in doing so fills in the zeros. Most of its inputs are zeros, and multiplying by those is a waste, so again the taps split into branches, and each output needs only every L-th tap. Any rational rate change works this way: up by L, filter, down by M, with one filter doing both jobs. Compared with scipy's <code>resample_poly</code> at 3 / 2, 2 / 3 and 5, the model here agrees to rounding.</p>
+        <p>Going up by L is the mirror image. Put L − 1 zeros between samples, and the spectrum stays the same but now repeats: the zeros made <strong>images</strong>. A low-pass filter at the new rate removes them, and in doing so fills in the zeros. Most of its inputs are zeros, and multiplying by those is a waste, so again the taps split into branches, and each output needs only every L-th tap. Any rational rate change works this way: up by L, filter, down by R, with one filter doing both jobs. Compared with scipy's <code>resample_poly</code> at 3 / 2, 2 / 3 and 5, the model here agrees to rounding.</p>
         <p>Dropping by exactly two has a special filter. Put the cut-off at a quarter of the rate, and a windowed sinc has a zero at every even distance from its middle. So a ${hb.length}-tap <strong>half-band</strong> filter has only ${nonZero(hb)} that are not zero, and the symmetric ones share a multiplier, so its price is ${(nonZero(hb) - 1) / 2} multipliers and a shift for the middle tap, which is exactly ½: under a third of its length. Its edge is broad, centred on a quarter of the rate, which is why it suits a stage with plenty of room left. It takes several in a row to go far.</p>
         <div class="try">Move the tone and watch its images. Then see how little of them gets past the filter.</div>`;
       },
@@ -165,7 +165,7 @@ export const chMultirate: Chapter = {
         const g = cicGrowth(4, 16), w = cicWidth(CIC_N, CIC_R, CIC_IN);
         return `
         <p>A running sum of a constant grows for ever, so it overflows, and it will. That seems fatal, and it does no harm at all. The output is only ever a difference of those sums, and two's complement differences are right modulo the word, as <a href="#/c/fixed/5">Wrapping can be right</a> showed. If the true result fits, every wrap on the way cancels exactly. It would be wrong to saturate here, since a clamped register has lost the very number that the comb needs.</p>
-        <p>So the only sizing that matters is the output's. Hogenauer's paper gives the gain as (RM)^N, where M is the comb's delay, 1 here, so the registers grow by <strong>N log₂ R</strong> bits: ${g} bits at order 4 and ÷ 16. It also shows that every stage needs that top bit, integrators and combs alike. Here the gain is a power of two, so the output word is exactly full at the worst input, and the widget runs that input: the most negative word, held. The paper goes on to work out how many low bits each later stage can drop, and this design does not attempt it. All ${w} bits run all the way through.</p>
+        <p>So the only sizing that matters is the output's. Hogenauer's paper gives the gain as (RD)^N, where D is the comb's delay, 1 here, so the registers grow by <strong>N log₂ R</strong> bits: ${g} bits at order 4 and ÷ 16. It also shows that every stage needs that top bit, integrators and combs alike. Here the gain is a power of two, so the output word is exactly full at the worst input, and the widget runs that input: the most negative word, held. The paper goes on to work out how many low bits each later stage can drop, and this design does not attempt it. All ${w} bits run all the way through.</p>
         <div class="try">Take a bit off and watch the output go wrong, while the integrator wraps just the same at the right width.</div>`;
       },
       widget: growthWidget,

@@ -56,7 +56,7 @@ function hallStep(): Step {
       <p>A relay machine of this size is a building. The cost is not in the logic's cleverness but in counting: every NAND is a device, every bit of
       storage is several, and a relay cannot drive many inputs, so the fan-out adds coils.</p>
       <p>The program comes off punched cards, which the relay machine can read as it runs and the tube machine must load first; the
-      In real silicon layer works out why.</p>
+      "In real silicon" layer below works out why.</p>
       <div class="try">Run the program and watch the relays switch (or the plates glow): each cycle's settled values from the
       gate-level simulation, one relay or tube per NAND output of its block (a real relay machine would ripple through
       ${f.steps} steps to get there). Click a rack to open its block. Then switch to tubes, and between <em>Read as it runs</em> and
@@ -182,7 +182,7 @@ export const chSilicon: Chapter = {
         <p>Compare NAND2 and NOR2: in the NAND the NMOS are in series (no contact between the two gates) and the PMOS in parallel; the NOR is the mirror image.
         Since holes are slower than electrons, series PMOS (the NOR) must be drawn wider to be as fast, which is one reason NAND is the preferred universal gate.</p>
         <p>The cell is a rectangle of fixed height so that cells abut in rows: the rails line up and the tools can place any cell next to any other. Width is what varies, set by
-        how many polysilicon strips the cell needs. Area is therefore counted in tracks: a NAND2 is a few polysilicon pitches wide, the inverter drawn here one pitch fewer, a flip-flop a dozen or more.</p>
+        how many polysilicon strips the cell needs. Area is therefore counted in tracks: a NAND2 is a few polysilicon pitches wide, a flip-flop a dozen or more. Widths come in whole placement sites, so a smaller cell can round up: the inverter drawn here is one pitch narrower than the NAND2, but in SkyWater's library the smallest inverter and NAND2 take the same 1.38 µm.</p>
         <div class="try">Toggle A and B and watch which channels conduct. Press Section, drag the plane through a gate and read the stack off the cut face: n+, gate oxide, polysilicon, n+. Orbit the cell, hide layers, pull them apart; the Top view is the flat layout.</div>`,
       widget: () => cell3d(),
       more: {
@@ -357,7 +357,7 @@ export const chSilicon: Chapter = {
       body: `
         <p>The finished design is stepped across a 300 mm wafer hundreds of times. After fabrication every die is tested; random defects kill some. The expected fraction
         of good dies falls exponentially with die area, so cost per good die rises faster than area.</p>
-        <p>Two effects stack. A bigger die yields fewer to the wafer, because the circle's edge wastes more of it, and a smaller share of those work. Designers answer both ways: smaller dies where
+        <p>Two effects stack. A bigger die means fewer dies per wafer, because the circle's edge wastes more of it, and a smaller share of those work. Designers answer both ways: smaller dies where
         possible, redundancy (spare rows and columns in memories, disabled cores sold as a cheaper part), and splitting a design into chiplets that are tested before they are joined.</p>`,
       widget: waferWidget,
       more: {

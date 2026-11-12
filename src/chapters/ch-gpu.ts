@@ -108,7 +108,7 @@ export const chLanes: Chapter = {
         <span data-show="lane0 lane1 lane2 lane3"><strong>LANE</strong> boxes</span>. Open one: a 31 × 32-bit register file, the SrcA / SrcB multiplexers, an ALU and the result multiplexer, exactly the single-cycle datapath. Every lane
         receives the same rs1, rs2 and rd fields, the same control signals and the same immediate; only its registers differ.</p>
         <p>A lane learns which thread it is with <code>csrr t0, tid</code>: a constant wired into each lane (0, 1, 2, 3) answers. Here every lane takes the elements
-        i = tid, tid + 4, tid + 8, tid + 12 of y = 3·x + y. <code>nlanes</code> reads 4, <code>lane</code> the lane number, <code>tmask</code> one enable bit per lane.</p>
+        i = tid, tid + 4, tid + 8, tid + 12 of y = 3·x + y. Other lane CSRs: <code>nlanes</code> reads 4, <code>lane</code> the lane number, <code>tmask</code> one enable bit per lane.</p>
         <p>The Warp panel runs an instruction-set simulator of the SIMT machine (a reference model in software) in lock-step and compares the PC, the mask and every lane's registers after each instruction. Click a line of its listing to light the hardware that instruction
         uses; <strong>Slow</strong> runs the kernel at a pace you set (a gate delay, a cycle or an instruction at a time), the highlight following each
         instruction onto the lanes it runs on.</p>
@@ -201,7 +201,7 @@ export const chLanes: Chapter = {
           ${(SAXPY.instrs * SAXPY.lanes / SAXPY_CYCLES).toFixed(2)} lane-instructions per cycle against the ${SAXPY.lanes} the ALUs could do. The memory share is
           ${pct(SAXPY.mem * SAXPY.lanes, SAXPY_CYCLES)} of the cycles for ${pct(SAXPY.mem, SAXPY.instrs)} of the instructions.</p>`,
         pitfall: `<p>A masked-off lane is skipped, not served: with lanes 0, 1 and 3 active a store takes 3 cycles, not 4. The cost scales with the active lanes, which is the
-          opposite of a uniform branch, where it is constant. Watch <code>retire</code> in the Warp panel: it stays low until the cycle that serves the last lane, so one cycle fewer than there are lanes served.</p>`,
+          opposite of a uniform branch, where it is constant. Watch <code>retire</code> in the Warp panel: it stays low until the cycle that serves the last lane, so for one cycle fewer than the number of lanes served.</p>`,
         real: `<p>A real memory system takes a whole warp's addresses at once and merges those on one cache line into one access (coalescing, chapter ${numOf('feed')}), so a store of 32 neighbouring
           words costs one or a few accesses, not 32. One lane per cycle is the worst case, kept here as the thing to beat.</p>`,
       },
@@ -233,7 +233,7 @@ export const chLanes: Chapter = {
           the chapters that follow widen the memory and add threads instead of adding lanes to the datapath.</p>`,
         pitfall: `<p>Do not read the gate saving as a measure of the idea. Here the 18 % is mostly three ROMs; the front end that real lane designs save is orders of magnitude larger
           (out-of-order scheduling, branch predictors, caches), and their registers are SRAM, not flip-flops with multiplexers. The sign of the comparison is the same, its size is not.</p>`,
-        real: `<p>A GPU's streaming multiprocessor is the same trade made at scale: thousands of lanes behind a few dozen streaming multiprocessors, with register files among the largest blocks of each streaming multiprocessor. That is also why its programs are written in thousands of threads: the lanes only pay when they are kept busy.</p>`,
+        real: `<p>A GPU's streaming multiprocessor is the same trade made at scale: thousands of lanes behind a few dozen streaming multiprocessors, with the register file among the largest blocks of each. That is also why its programs are written in thousands of threads: the lanes only pay when they are kept busy.</p>`,
       },
     },
   ],
@@ -300,7 +300,7 @@ export const chSimt: Chapter = {
         alone to add them up, and <code>tmc</code> with −1 brings the others back. While lane 0 works alone the other three idle: 45 % of the lane-steps do work in
         this kernel.</p>
         <p>Why the mask is a register of its own and not a property of the instruction: a lane that is off must still see the stream, because it has to be able to rejoin
-        at the next <code>tmc</code>, <code>join</code> or <code>pred</code> with its registers and PC context intact. Switching a lane off therefore touches exactly two things,
+        at the next <code>tmc</code>, <code>join</code> or <code>pred</code> with its registers intact. Switching a lane off therefore touches exactly two things,
         its register write enable and its request to the memory sequencer; nothing is gated at the ALU, whose result is simply discarded. The cost of a mask is
         one flip-flop and an AND per lane, and the price of using it is paid in lane-steps that do no work.</p>`,
       scene: () => laneCoreScene('tmc'),
@@ -456,7 +456,7 @@ export const chSimt: Chapter = {
           { title: 'First pass', reset: true, show: ['simt', 'pm'], cycles: 7, expect: { pcOut: 28, maskOut: 14 },
             say: '<p>One iteration done: every lane added its t1 and decremented it. Lane 0 started at 1, so its t1 is now 0 and <code>pred</code> switched it off: mask {b:maskOut}. The branch at {v:pcOut} is uniform among the remaining lanes.</p>' },
           { title: 'Second pass', cycles: 4, show: ['simt', 'pm'], expect: { pcOut: 28, maskOut: 12 },
-            say: '<p>Lane 1 finished: mask {b:maskOut}. Lanes 2 and 3 still count; lane 0 and 1 keep their sums, because their write enables are off.</p>' },
+            say: '<p>Lane 1 finished: mask {b:maskOut}. Lanes 2 and 3 still count; lanes 0 and 1 keep their sums, because their write enables are off.</p>' },
           { title: 'Third pass', cycles: 4, show: ['simt'], expect: { pcOut: 28, maskOut: 8 },
             say: '<p>Only lane 3 is left: mask {b:maskOut}. The loop runs a fourth time for it alone.</p>' },
           { title: 'Everyone back', cycles: 4, show: ['simt', 'lB'], expect: { pcOut: 28, maskOut: 15 },
@@ -465,7 +465,7 @@ export const chSimt: Chapter = {
       },
       more: {
         derive: `<p>The loop runs max(l + 1) = ${SAXPY.lanes} iterations. Lane l is active in its first l + 1 of them, so the lane-steps that do work are 1 + 2 + 3 + 4 = ${[1, 2, 3, 4].reduce((a, b) => a + b)}
-          out of ${SAXPY.lanes} × ${SAXPY.lanes} = ${SAXPY.lanes * SAXPY.lanes} issued: ${pct(10, SAXPY.lanes * SAXPY.lanes)} utilization in the loop, the triangle-number shape that the lanes' different trip counts always make. Doubling the
+          out of ${SAXPY.lanes} × ${SAXPY.lanes} = ${SAXPY.lanes * SAXPY.lanes} issued: ${pct(10, SAXPY.lanes * SAXPY.lanes)} utilization in the loop, the triangle-number shape that the lanes' different trip counts always make. A bigger
           imbalance (trip counts 1 and 100 in two lanes) leaves a lane idle for 99 of 100 passes.</p>`,
         pitfall: `<p>Do not use <code>pred</code> where the lanes have to reconverge and run different code afterwards: it only shrinks the mask, there is no waiting group to switch to. The
           saved s0 is what brings everyone back, and a loop that forgets <code>csrr s0, tmask</code> at the start leaves the final mask undefined.</p>`,
@@ -486,8 +486,7 @@ export const chSimt: Chapter = {
           one side is skipped), and the useful lane-steps are k·t + (N − k)·e, so utilization is (k·t + (N − k)·e) / (N·(t + e)). With N = ${SAXPY.lanes}, t = e = 10 and k = 3 that is
           (30 + 10) / 80 = ${pct(40, 80)}, the quiz's answer; with k = 1 it is also ${pct(1 * 10 + 3 * 10, 80)}: at equal side lengths every split gives one half, whatever k is. What hurts more is one long side taken by one
           lane (k = 1, t = 100, e = 1 gives ${pct(1 * 100 + 3 * 1, 4 * 101)}).</p>`,
-        pitfall: `<p>Utilization says how much of the machine did work, not how long the code takes. A warp with 100 % utilization on a short path still waits for a divergent neighbour
-          warp's memory accesses to finish; and "compute both sides and select" always costs t + e, so it only wins when the sides are short or the lanes nearly always disagree.</p>`,
+        pitfall: `<p>Utilization says how much of the machine did work, not how long the code takes: a long path at 100 % takes more cycles than a short one at 50 %. And "compute both sides and select" always costs t + e, so it only wins when the sides are short or the lanes nearly always disagree.</p>`,
         real: `<p>Compilers turn short ifs into predicated code (both sides issued, results selected per lane) and keep the branch only for long sides; a warp that finds all its
           lanes on one side skips the other. Sorting or binning work so that neighbouring threads share a branch outcome is a standard optimisation for this reason.</p>`,
       },
@@ -601,7 +600,7 @@ export const chWarps: Chapter = {
           { title: 'The loads issue', cycles: 12, show: ['warp0', 'hz0'], expect: { pcOut: 48, retire: 0 },
             say: '<p>Both loads went through the check (their rs1 is ready, their rd is not pending) and set the pending bits of t5 and a1. The next instruction, at {v:pcOut}, reads t5: the check fails and <code>retire</code> is {v:retire}.</p>' },
           { title: 'Until the word lands', cycles: 6, show: ['warp0', 'hz0'], expect: { pcOut: 48, retire: 0 },
-            say: '<p>Six more cycles. the bit of t5 cleared a cycle ago and the check on slli now passes, but the word of a1 is being written back, and a warp sits out that cycle.</p>' },
+            say: '<p>Six more cycles. The bit of t5 cleared a cycle ago and the check on slli now passes, but the word of a1 is being written back, and a warp sits out that cycle.</p>' },
           { title: 'Cleared', cycles: 1, show: ['warp0', 'hz0'], expect: { pcOut: 48, retire: 1 },
             say: '<p>Both words are in; nothing holds the warp, and the instruction issues. The warp waited only for the registers it needed, not for the load instructions themselves.</p>' },
         ],
@@ -618,7 +617,7 @@ export const chWarps: Chapter = {
           that latency just as they hide memory's.</p>
           <p>Nor is it all done by a hardware scoreboard. Since Maxwell (2014), NVIDIA's compiler writes control bits beside each instruction: for fixed-latency operations
           a <em>stall count</em>, the cycles to wait before the warp's next instruction; for variable-latency ones (memory, special functions) one of six
-          dependency barriers per warp, which the instruction sets and a later one waits on. AMD's compiler inserts <code>s_waitcnt</code>, waiting until the
+          dependency barriers per warp, which the instruction sets and a later instruction waits on. AMD's compiler inserts <code>s_waitcnt</code>, waiting until the
           counter of outstanding memory operations falls far enough. And a streaming multiprocessor (SM) is four partitions, each with its own warp scheduler issuing one warp a cycle from
           its own pool: four of this chapter's scheduler side by side.</p>`,
       },
@@ -809,8 +808,8 @@ export const chFeed: Chapter = {
     {
       title: 'Coalescing',
       body: `
-        <p>Sixteen threads each add up four values and store the sum. Stored <strong>by rows</strong>, thread g's values are words 4g … 4g + 3, so at each load the
-        four lanes' addresses are 16 bytes apart: a line each, four <span data-show="acc mem">accesses</span>. Stored <strong>by columns</strong>, value j of thread g is word 16 j + g, the lanes'
+        <p>Sixteen threads each add up four values and store the sum. Laid out <strong>by rows</strong>, thread g's values are words 4g … 4g + 3, so at each load the
+        four lanes' addresses are 16 bytes apart: a line each, four <span data-show="acc mem">accesses</span>. Laid out <strong>by columns</strong>, value j of thread g is word 16 j + g, the lanes'
         addresses are neighbours, and every load is one access. The program is the same 76 instructions either way.</p>
         <p>By rows: 68 accesses, 48 cycles holding the issue port, 124 cycles. By columns: 20 accesses and 76 cycles, every issue slot used. The data layout alone
         decides it. GPU programmers call the good case <em>coalesced</em> and arrange arrays so that neighbouring threads touch neighbouring words: a structure of
@@ -888,8 +887,8 @@ export const chFeed: Chapter = {
         The hardware is <span data-show="atBar">a waiting bit per warp</span> (a waiting warp is not <span data-show="rdy0 rdy1 rdy2 rdy3">ready</span>) and,
         when a bar issues, a population count of those bits plus one, <span data-show="barCmp">compared with rs2</span>. Enough: every bit clears. This core has one barrier, so the warps must agree on rs1.</p>
         <p>With a bar between levels, a warp never reads shared data that another wrote without a barrier in between: the programming model. The
-        instruction-set simulator then gives the same memory whatever order the warps run in, and the tests check every kernel under two orders. 298 cycles, many of them spent waiting at
-        the barriers (barred cells): at the last levels one thread works and fifteen wait.</p>
+        instruction-set simulator then gives the same memory whatever order the warps run in, and the tests check every kernel under two orders. The kernel takes 298 cycles, many of them spent waiting at
+        the barriers (the barred cells in the timeline): at the last levels one thread works and fifteen wait.</p>
         <div class="try">Switch to the strided version (s[2 s t] += s[2 s t + s]): the lanes' words are 2 s apart, so they fall into the same banks. 38 shared accesses
         instead of 20, 18 cycles holding the port, 330 cycles.</div>`,
       scene: () => warpCoreScene('reduceSeq', { warps: 4, programs: ['reduceSeq', 'reduceInt'], highlight: ['atBar', 'sched'] }),

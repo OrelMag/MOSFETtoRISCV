@@ -78,7 +78,7 @@ vmerge.vxm v24, v8, a2, v0   v24 = 0 1 2 3 4 5 6 6</pre>In the gates a masked-of
     mistakes: [
       'Expecting a masked instruction to be faster: in our unit, and in most, a masked-off element still takes its place in its beat.',
       'Using v0 as a data register in a loop that also needs it as the mask.',
-      'Confusing mask-undisturbed with mask-agnostic: with <code>ma</code> the hardware may write anything into masked-off elements.',
+      'Confusing mask-undisturbed with mask-agnostic: with <code>ma</code> the hardware may overwrite masked-off elements with all 1s instead of leaving them.',
     ],
     lib: 'vmasknib',
     chapters: [{ chapter: 'vectors', step: 6, label: 'A mask you can see' }, { chapter: 'vectors', step: 7, label: 'Adding up a vector' }],

@@ -7,10 +7,11 @@ import { ACC_PROGRAMS, accAssemble } from '../src/acc8/acc8';
 import { accBench, accGives } from '../src/campaign/buildacc';
 import { nodeById } from '../src/campaign/nodes';
 import { ACC_COST, ACC_LOGIC, MUL_RV } from '../src/chapters/ch-firstcomputer';
-import { ACC8_CORE, ACC8_MUL, ACC_CTL, accMachine } from '../src/lib/acc8';
+import { ACC8_CORE, ACC8_MUL, ACC_CTL, ACC_FIXED_COUNTDOWN, accMachine } from '../src/lib/acc8';
 import { flatten } from '../src/sim/flatten';
 import { GateSim } from '../src/sim/gatesim';
 import { stats } from '../src/sim/stats';
+import { pack } from '../src/sim/values';
 import { analyzeTiming } from '../src/sim/timing';
 import type { ComponentDef } from '../src/sim/types';
 import { AccFollower } from '../src/widgets/acc8';
@@ -86,5 +87,29 @@ describe('first computer: the panel and the level', () => {
       nl.nets.find((x) => x.name === 'one')!.ends.push('alu.sub');
     }, 'acc8_core_allsub');
     expect(accBench(noSub).failures.length).toBeGreaterThan(0);
+  });
+});
+
+describe('first computer: the fixed countdown circuit that opens the chapter', () => {
+  const NANDS = 287; // upDownCounter(8) 264 + isZero(8) 22 + one NOT; the chapter quotes stats() of it, this pins that
+  it('costs what the chapter says', () => {
+    expect(stats(ACC_FIXED_COUNTDOWN).nands).toBe(NANDS);
+  });
+  it('after load shows 5, 4, 3, 2, 1, 0 and then holds', () => {
+    const sim = new GateSim(flatten(ACC_FIXED_COUNTDOWN));
+    const out = () => pack(sim.getBits(sim.design.root.ports.out));
+    sim.setInput('clk', 0); sim.setInput('load', 0); sim.settle();
+    sim.reset('zero'); sim.settle();
+    const pulse = () => { sim.setInput('clk', 1); sim.settle(); sim.setInput('clk', 0); sim.settle(); };
+    pulse(); pulse();
+    expect(out()).toBe(0); // not loaded: it sits at 0
+    sim.setInput('load', 1); sim.settle(); pulse();
+    expect(out()).toBe(5);
+    sim.setInput('load', 0); sim.settle();
+    const seen: number[] = [];
+    for (let i = 0; i < 8; i++) { pulse(); seen.push(out()); }
+    expect(seen).toEqual([4, 3, 2, 1, 0, 0, 0, 0]);
+    sim.setInput('load', 1); sim.settle(); pulse(); // and it can be loaded again
+    expect(out()).toBe(5);
   });
 });

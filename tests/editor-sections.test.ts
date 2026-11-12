@@ -150,6 +150,12 @@ describe('canvas sections', () => {
     expect(sanitizeChip({ ...doc, sections: [] })?.sections).toBeUndefined();
   });
 
+  it('keep their title through a save and load, only runs of white space folded', () => {
+    // Release review M1: the sanitizer once matched /s+/ (a lost backslash) and cut every "s" from a title.
+    const dirty = sanitizeChip({ ...framed().doc, sections: [{ id: 's', at: [0, 0], size: [8, 6], title: '  Bus status\t\nregisters ' }] });
+    expect(dirty?.sections?.[0].title).toBe('Bus status registers');
+  });
+
   it('never reach the compiler: adding, moving or renaming one recompiles nothing', () => {
     const doc = halfAdder();
     const lib = new UserLibrary(workspace(doc));

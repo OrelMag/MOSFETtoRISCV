@@ -314,10 +314,12 @@ class HdlUi {
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       save(WIDTH_KEY, String(this.pane.offsetWidth));
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   // ---- the highlighted text ------------------------------------------------------------------

@@ -176,7 +176,7 @@ export const chWidths: Chapter = {
       },
       body: `
         <p>Each 16-bit instruction is exactly one 32-bit instruction, so the C core rewrites it in front of the decoder from
-        <a href="#/c/cpu">chapter ${numOf('cpu')}</a>, which never learns that compressed code exists. On the input, 32 bits: the parcel at the PC in bits 15:0
+        <a href="#/c/cpu">chapter ${numOf('cpu')}</a>, which never learns that compressed code exists. The input is 32 bits: the parcel at the PC in bits 15:0
         (and, when it is a 32-bit instruction, its second half above).</p>
         <p>The rewrite only moves bits and adds constants: rd′ becomes <code>01</code> and three wires, an immediate bit lands in its 32-bit place.
         The gates are elsewhere. <span data-show="form">FORM</span> decodes the quadrant and funct3 and ANDs in the few extra bits a form looks at
@@ -409,7 +409,7 @@ export const chWidths: Chapter = {
         derive: `<p>The W unit's three multiplexers. Operand: a<sub>W</sub> = w ? ext(a[31:0]) : a, with ext the sign extension (zero for <code>srlw</code>, whose input must not
           carry bit 31 into the shift). Shift amount: bit 5 forced to 0 when w = 1, so <code>sllw</code> shifts by 0–31. Result: y = w ? sext(y64[31:0]) : y64. That is ${fmt(X.wUnit.nands)} NANDs and
           ${X.wUnit.depth} levels around an ALU of ${fmt(X.alu[64].nands)} NANDs: ${(100 * X.wUnit.nands / X.alu[64].nands).toFixed(0)} % extra.</p>`,
-        real: `<p>On RV64 Linux an <code>int</code> is 32 bits, so compilers emit W instructions all the time (<code>addw</code>, <code>addiw</code>, <code>sext.w</code> is
+        real: `<p>On RV64 Linux an <code>int</code> is 32 bits, so compilers emit W instructions all the time (<code>addw</code>, <code>addiw</code>, and <code>sext.w</code>, which is
           <code>addiw rd, rs, 0</code>). That is the price of keeping every 32-bit result a canonical sign-extended 64-bit one: code written for 32-bit machines runs as it did.</p>`,
         pitfall: `<p>Using <code>addi</code> where the C source adds <code>int</code>s. Both compile and agree until the sum crosses 2<sup>31</sup>; then <code>addi</code> leaves 0x8000_0000 as a
           positive 64-bit number and the next signed compare says it is larger than 0. In the scene, change w and watch the sign.</p>`,
@@ -452,7 +452,7 @@ export const chWidths: Chapter = {
         multiplier, whose tree gained levels and whose final adder doubled; without M the core goes from ${X.rv32i.period} to ${X.rv64i.period} delays,
         because the adders and the shifter gained a level and a W instruction's result passes the W unit. The benchmarks compute on 32-bit values, so the RV64 core runs the same loops (the generator's shifts and CRC-32's
         as W shifts), and sort and CRC-32 run two more instructions each, once: an <code>li</code> of a constant above 2³¹, which is a positive number on
-        RV64 and no longer fits lui + addiw. It is ${(X.rv64im.period / X.rv32im.period).toFixed(2)} times slower on them and buys nothing.</p>
+        RV64 and no longer fits lui + addiw. The 64-bit core is ${(X.rv64im.period / X.rv32im.period).toFixed(2)} times slower per instruction on them and buys nothing.</p>
         <p>It pays when the values are 64 bits wide: F(90) and 20! in the samples need one <code>add</code> or <code>mul</code> per step here.
         On RV32 a 64-bit add is four instructions (add, sltu for the carry, add, add), and the low 64 bits of a product take four multiplies (mul, mulhu and two cross products) and two adds.
         And it pays when memory is larger than 4 GiB, which is why desktop and phone processors went to 64 bits.</p>

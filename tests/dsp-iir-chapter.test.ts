@@ -1,12 +1,12 @@
 // What "IIR and stability" claims, on dsp/iir.ts, lib/biquad.ts and the widgets' models.
 import { describe, expect, it } from 'vitest';
 import vec from './dsp/vectors/iir.json';
-import { chIir, directUnstable, held, NARROW_POLE, NEAR_CIRCLE, NEAR_INPUT, ordinal, RES, sensitivity, stableFrom, sweepOnce, zeroSweepOnce } from '../src/chapters/ch-dsp-iir';
+import { chIir, directUnstable, held, NARROW_POLE, NEAR_CIRCLE, NEAR_INPUT, ordinal, RES, sensitivity, sNumbers, stableFrom, sweepOnce, zeroSweepOnce } from '../src/chapters/ch-dsp-iir';
 import { chFixed } from '../src/chapters/ch-dsp-fixed';
 import { chZplane } from '../src/chapters/ch-dsp-zplane';
 import { numOf } from '../src/chapters/order';
 import {
-  BQ, burstThenSilence, coefWord, deadBand, deadBandOf, deltaPass, endOf, findCycle, kaiserTaps, LIMIT_CYCLE, lowpass, MASK, maskDesign, prefixPeaks, prewarp, runBiquad, scaleSos, sectionStable, sectionWords, snrAt,
+  analogGain, analogImpulse, BQ, burstThenSilence, coefWord, deadBand, deadBandOf, deltaPass, endOf, findCycle, kaiserTaps, LIMIT_CYCLE, lowpass, MASK, maskDesign, prefixPeaks, prewarp, runBiquad, scaleSos, sectionStable, sectionWords, snrAt,
   measuredSnr, sosGain, sosMults, sosMultsFolded, sosfilt, stableExact, warpedAt, zpkToSos, ZERO_SWEEP_RADII,
 } from '../src/dsp/iir';
 import { biquadCost, BIQUAD_FILTERS, designRows, firstStableWidth, mulNands, orderData, PM_TAPS, resonatorWords, runOnGates, sectionsStableFrom } from '../src/widgets/dspiir';
@@ -14,6 +14,7 @@ import { heldPair, latticeDots } from '../src/widgets/dspzplane';
 import { stats } from '../src/sim/stats';
 import { biquad } from '../src/lib/biquad';
 import { Biquad } from '../src/dsp/iir';
+import { groupNum } from '../src/sim/numfmt';
 
 const TAU = 2 * Math.PI;
 
@@ -37,18 +38,49 @@ describe('the numbers in the text', () => {
     expect(by('ellip').mults * mulNands()).toBe(71440);
     // the body quotes the three orders read off those size strings (a lost backslash once made it "an order of d")
     expect(chIir.steps[0].body).toContain(`need an order of ${by('butter').size.split(/[ ,]/)[1]} (Butterworth), ${by('cheby1').size.split(/[ ,]/)[1]} (Chebyshev I) and 8 (elliptic)`);
-    // step 2's Try: an elliptic order 5 has one of its five zeros at z = −1
+    // step 3's Try: an elliptic order 5 has one of its five zeros at z = −1
     const z5 = lowpass('ellip', 5, 0.1, 0.1, 60).z;
     expect(z5.length).toBe(5); expect(z5.filter((q) => Math.abs(q.re + 1) < 1e-9 && Math.abs(q.im) < 1e-9).length).toBe(1);
   });
-  it('step 2: warping, and the prewarped edge', () => {
+  it('step 2: the s-plane, against the closed forms', () => {
+    const n = sNumbers(), b = chIir.steps[1].body, d = chIir.steps[1].more!.derive!;
+    expect(chIir.steps[1].title).toBe('The analog picture: the s-plane');
+    // RC = 100 µs: |H| = 1 / √(1 + (2πf·RC)²), −3.01 dB at the corner 1 / 2πRC
+    expect(n.RC).toBeCloseTo(1e-4, 12); expect(n.fc).toBeCloseTo(1 / (TAU * 1e-4), 9); expect(n.pole).toBeCloseTo(10000, 6);
+    for (const f of [n.fc / 10, n.fc, n.fc * 10]) expect(n.fc && 20 * Math.log10(analogGain([{ re: -1e4, im: 0 }], [], TAU * f))).toBeCloseTo(-10 * Math.log10(1 + (TAU * f * 1e-4) ** 2), 10);
+    expect(b).toContain('−0.043 dB at 159 Hz'); expect(b).toContain('−3.01 dB at the corner f = 1 / 2πRC = 1591.5 Hz'); expect(b).toContain('−20.04 dB at ten times');
+    expect(b).toContain(`−${groupNum(10000)} s⁻¹`); expect(b).toContain('100 µs'); expect(b).toContain('63 % of the way'); expect(b).toContain('37 % of its start');
+    // a pole's envelope e^(σt) after 10 s
+    expect(b).toContain('down to 0.050 after 10 s'); expect(b).toContain('grown to 2.718');
+    // Butterworth 2: the pair at radius 1, ±45°, −3.01 dB at its corner
+    expect(n.butter.re).toBeCloseTo(-Math.SQRT1_2, 12); expect(n.butter.im).toBeCloseTo(Math.SQRT1_2, 12); expect(n.butterCorner).toBeCloseTo(-3.0103, 4);
+    expect(b).toContain('−0.7071 ± j0.7071'); expect(b).toContain('−3.01 dB at the corner. Chebyshev');
+    // e^(sT) for s = −0.5 + j0.5, T = 1
+    expect(n.sampled.r).toBeCloseTo(Math.exp(-0.5), 12); expect(b).toContain('radius 0.607 and 0.0796 cycles a sample');
+    // the figure's starting pair −0.3 ± j2: peak at √(ω² − σ²), by |p|² / (2|σ|ω); checked against a dense scan of the gain
+    const P = [{ re: -0.3, im: 2 }, { re: -0.3, im: -2 }];
+    let best = 0, at = 0;
+    for (let i = 0; i <= 400000; i++) { const w = i * 1e-5, gg = analogGain(P, [], w); if (gg > best) { best = gg; at = w; } }
+    expect(n.peakAt).toBeCloseTo(at, 4); expect(20 * Math.log10(best)).toBeCloseTo(n.peakDb, 6); expect(d).toContain('+10.65 dB at 1.977 rad/s');
+    // the impulse response from residues equals the pair's closed form (|p|² / ω) e^(σt) sin(ωt), and the RC's e^(−t/RC) / RC
+    for (const t of [0.1, 1.3, 4, 9]) expect(analogImpulse(P, t)).toBeCloseTo((4.09 / 2) * Math.exp(-0.3 * t) * Math.sin(2 * t), 10);
+    expect(analogImpulse([{ re: -1e4, im: 0 }], 1e-4) * 1e-4).toBeCloseTo(Math.exp(-1), 12);
+    expect(d).toContain('−3.01 dB');
+    // the quiz: +0.2 ± j3 grows by e^0.2 a second
+    const q = chIir.steps[1].challenge as { options: string[]; answer: number; explain: string };
+    expect(q.options[q.answer]).toContain(Math.exp(0.2).toFixed(2)); expect(q.explain).toContain(`= ${Math.exp(0.2).toFixed(2)} a second`);
+    // its links: Basics' capacitor, the wire chapter, and the two z-plane steps it leans on
+    expect(b).toContain('#/c/wire/0'); expect(b).toContain('#/c/zplane/2'); expect(chZplane.steps[2].title).toBe('A delay is z⁻¹');
+    expect(b).toContain('#/c/zplane/5'); expect(chZplane.steps[5].title).toBe('Inside the circle');
+  });
+  it('step 3: warping, and the prewarped edge', () => {
     expect(warpedAt(TAU * 0.1)).toBeCloseTo(0.0969, 4);
     expect(warpedAt(TAU * 0.4)).toBeCloseTo(0.2860, 4);
     expect(prewarp(0.2)).toBeCloseTo(1.453, 3);
     expect(warpedAt(TAU * 0.2)).toBeCloseTo(0.18, 2);
     expect(warpedAt(prewarp(0.4))).toBeCloseTo(0.4, 12);
   });
-  it('step 3: the Try box at the slider\'s range, and the quiz', () => {
+  it('step 4: the Try box at the slider\'s range, and the quiz', () => {
     expect([4, 5, 6].map((b) => held(RES, b).state)).toEqual(['unstable', 'on the circle', 'stable']);
     expect(held(RES, 6).radius).toBeCloseTo(0.968, 3);
     expect(held(RES, 5).radius).toBe(1);
@@ -75,13 +107,13 @@ describe('the numbers in the text', () => {
     expect(latticeDots(6).length).toBeGreaterThan(500);
     expect(latticeDots(6).every((q) => q.im > 0 && Math.hypot(q.re, q.im) < 1.7)).toBe(true);
   });
-  it('step 3: rounding a section never puts a pole outside the circle (the grid swept here)', () => {
+  it('step 4: rounding a section never puts a pole outside the circle (the grid swept here)', () => {
     for (let b = 4; b <= 10; b++) for (let r = 0.8; r < 0.9995; r += 0.01) for (let f = 0.002; f < 0.5; f += 0.01) {
       const k = heldPair({ r, t: f * TAU }, b);
       expect(k.radius, `${b} bits r=${r} f=${f}`).toBeLessThanOrEqual(1 + 1e-9);
     }
   });
-  it('step 4: direct form is unstable from 8 to 19 bits and stable from 20; sections from 8; and the sensitivity', () => {
+  it('step 5: direct form is unstable from 8 to 19 bits and stable from 20; sections from 8; and the sensitivity', () => {
     expect(directUnstable()).toEqual(Array.from({ length: 12 }, (_, i) => 8 + i));
     expect(firstStableWidth()).toBe(20);
     expect(sectionsStableFrom()).toBe(true);
@@ -89,7 +121,7 @@ describe('the numbers in the text', () => {
     expect(s.direct / s.sections).toBeGreaterThan(100);
     expect(vec.narrow.sens.filter((x) => !x.direct).map((x) => x.bits)).toEqual(directUnstable());
   });
-  it('step 5: cost and timing, counted', () => {
+  it('step 6: cost and timing, counted', () => {
     const c = biquadCost();
     expect(c.nands).toBe(stats(biquad()).nands);
     expect(c.nands).toBe(20313);
@@ -97,12 +129,12 @@ describe('the numbers in the text', () => {
     expect(BQ.accW - BQ.prod).toBe(3);
     expect(5 * mulNands()).toBe(17860);
   });
-  it('step 5: the panel\'s filters fit their words and the gates agree through the panel\'s own runner', () => {
+  it('step 6: the panel\'s filters fit their words and the gates agree through the panel\'s own runner', () => {
     for (const f of BIQUAD_FILTERS) for (const v of Object.values(f.words)) { expect(v).toBeGreaterThan(-32768); expect(v).toBeLessThan(32767); }
     expect(resonatorWords(0.9, 0.1).b0).toBeGreaterThan(500);
     expect(typeof runOnGates).toBe('function');
   });
-  it('step 6: the cycle, its level and the dead band', () => {
+  it('step 7: the cycle, its level and the dead band', () => {
     const w = LIMIT_CYCLE.words, cy = findCycle(runBiquad(w, burstThenSilence(LIMIT_CYCLE.amp, LIMIT_CYCLE.burst, 800)), 16)!;
     expect(cy.seq).toEqual([5, 0, -5, 0]);
     expect(cy.start).toBeGreaterThan(80); expect(cy.start).toBeLessThan(LIMIT_CYCLE.cycles);
@@ -116,7 +148,7 @@ describe('the numbers in the text', () => {
     const m = new Biquad(w);
     burstThenSilence(LIMIT_CYCLE.amp, LIMIT_CYCLE.burst, 140).forEach((x, i) => expect(m.step(x)).toBe(g[i]));
   });
-  it('step 6: the dead band ½ / (1 − a₂) holds for a₁ = 0 and is shown for nothing else', () => {
+  it('step 7: the dead band ½ / (1 − a₂) holds for a₁ = 0 and is shown for nothing else', () => {
     for (const r of [0.5, 0.7, 0.9, 0.95, 0.97, 0.99]) for (const amp of [100, 1000, 8000, 30000]) {
       const w = { b0: 1024, b1: 0, b2: 0, a1: 0, a2: coefWord(r * r) }, cy = findCycle(runBiquad(w, burstThenSilence(amp, 1, 4000)), 32);
       if (cy) expect(cy.peak, `r=${r} amp=${amp}`).toBeLessThanOrEqual(deadBand(w.a2) + 1e-9);
@@ -127,14 +159,14 @@ describe('the numbers in the text', () => {
     expect(deadBandOf(w)).toBeNull();
     expect(deadBandOf({ ...w, a1: 0 })).not.toBeNull();
   });
-  it('step 6: toward zero has no cycle for a₁ = 0 (|y[n]| < |y[n−2]| until zero)', () => {
+  it('step 7: toward zero has no cycle for a₁ = 0 (|y[n]| < |y[n−2]| until zero)', () => {
     for (const a2 of [coefWord(0.81), coefWord(0.9025), coefWord(0.94), coefWord(0.98), coefWord(0.99)]) for (const amp of [9, 77, 8000, 30000]) {
       const ys = runBiquad({ b0: 1024, b1: 0, b2: 0, a1: 0, a2 }, burstThenSilence(amp, 1, 3000), { round: 'zero' });
       for (let n = 3; n < ys.length; n++) if (ys[n - 2] !== 0) expect(Math.abs(ys[n]), `a2=${a2} amp=${amp} n=${n}`).toBeLessThan(Math.abs(ys[n - 2]));
       expect(endOf(ys, 32)).toBe('dead');
     }
   });
-  it('step 7: the sweep, the Try boxes, and toward zero near the circle', () => {
+  it('step 8: the sweep, the Try boxes, and toward zero near the circle', () => {
     const sw = sweepOnce();
     expect(sw.runs).toBe(176); expect(sw.cycling).toEqual([176, 59, 0, 22, 0]);
     const at = (round: 'half-up' | 'trunc' | 'zero', extra: number) => findCycle(runBiquad({ b0: 1024, b1: 0, b2: 0, a1: coefWord(-0), a2: coefWord(0.95 * 0.95) }, burstThenSilence(8000, 1, 4000), { round, extra }), 32);
@@ -146,7 +178,7 @@ describe('the numbers in the text', () => {
     expect(near.period).toBe(12); expect(near.peak).toBe(17);
     expect(Math.sqrt(NEAR_CIRCLE.a2 / 16384)).toBeCloseTo(0.9983, 4);
   });
-  it('step 7: the finer sweep for toward zero: no cycle to 0.975, rare ones from 0.98, none of the runs left moving', () => {
+  it('step 8: the finer sweep for toward zero: no cycle to 0.975, rare ones from 0.98, none of the runs left moving', () => {
     const z = zeroSweepOnce();
     expect(z.map((x) => x.r)).toEqual(ZERO_SWEEP_RADII);
     expect(z.every((x) => x.runs === 294 && x.moving === 0)).toBe(true);
@@ -161,7 +193,7 @@ describe('the numbers in the text', () => {
     expect((sw.cycling[0] - sw.cycling[1]) / sw.cycling[0]).toBeGreaterThan(0.6); expect((sw.cycling[0] - sw.cycling[1]) / sw.cycling[0]).toBeLessThan(0.7);
   });
   it('ordinals', () => { expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23].map(ordinal)).toEqual(['1st', '2nd', '3rd', '4th', '11th', '12th', '13th', '21st', '22nd', '23rd']); });
-  it('step 8: scaling and order', () => {
+  it('step 9: scaling and order', () => {
     const D = orderData(), def = D.rows.find((r) => r.p.join('') === '0123')!;
     expect(D.rows.length).toBe(24);
     const raw = [...D.rows].sort((a, b) => b.snrRaw - a.snrRaw), sc = [...D.rows].sort((a, b) => b.snrScaled - a.snrScaled);
@@ -182,7 +214,7 @@ describe('the numbers in the text', () => {
     expect(prefixPeaks(def.scaled).every((v) => Math.abs(v - 1) < 1e-6)).toBe(true);
     expect(Math.max(...prefixPeaks(raw[23].raw))).toBeGreaterThan(1);
   });
-  it('step 8: the predicted noise and the measured one agree to within 2 dB on every order, scaled or not (what the text says), at the same amplitude', () => {
+  it('step 9: the predicted noise and the measured one agree to within 2 dB on every order, scaled or not (what the text says), at the same amplitude', () => {
     const D = orderData();
     let worst = 0;
     for (const r of D.rows) for (const sec of [r.raw, r.scaled]) {
@@ -202,19 +234,19 @@ describe('the text', () => {
       const c = s.challenge!;
       if (c.kind === 'quiz') { expect(new Set(c.options).size, s.title).toBe(c.options.length); expect(c.why!.length).toBe(c.options.length); }
     }
-    expect(chIir.steps.length).toBe(8);
+    expect(chIir.steps.length).toBe(9);
   });
-  it('step 1 and 3 quiz answers are what the models say', () => {
+  it('step 1 and 4 quiz answers are what the models say', () => {
     const q1 = chIir.steps[0].challenge as { options: string[]; answer: number };
     expect(q1.options[q1.answer]).toBe('35');
-    const q3 = chIir.steps[2].challenge as { options: string[]; answer: number };
+    const q3 = chIir.steps[3].challenge as { options: string[]; answer: number };
     expect(q3.options[q3.answer]).toContain('1');
   });
   it('step links land on the steps the text names', () => {
     const body = (i: number) => chIir.steps[i].body;
     expect(body(0)).toContain('#/c/zplane/4'); expect(chZplane.steps[4].title).toBe('Poles make it ring');
-    expect(body(4)).toContain('#/c/fixed/5'); expect(body(4)).toContain('#/c/fixed/2');
-    expect(body(7)).toContain('#/c/fixed/6');
+    expect(body(5)).toContain('#/c/fixed/5'); expect(body(5)).toContain('#/c/fixed/2');
+    expect(body(8)).toContain('#/c/fixed/6');
     expect(chFixed.steps.length).toBeGreaterThan(6); expect(chFixed.steps[2].title).toBe('A saturating adder'); expect(chFixed.steps[6].title).toBe('Where the gain goes');
   });
   it('the text states what it can pin: the mask reading, the counts, the thresholds', () => {
@@ -223,7 +255,7 @@ describe('the text', () => {
     expect(t).not.toContain('All real implementations'); expect(t).not.toContain('The usual rule');
     expect(t).toContain('21st of 24'); expect(t).not.toContain('21th');
     expect(t).toContain('for a₁ = 0 only');
-    expect(chIir.steps[6].body).toContain('Up to 0.975, 0 of 1470');
+    expect(chIir.steps[7].body).toContain('Up to 0.975, 0 of 1470');
   });
   it('links only to chapters in the book', () => {
     for (const s of chIir.steps) for (const m of s.body.matchAll(/#\/c\/([a-z0-9-]+)\//g)) expect(numOf(m[1] as never), m[1]).toBeDefined();

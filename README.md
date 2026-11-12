@@ -205,7 +205,7 @@ Each level plays on a screen of its own: the brief, why the CPU needs the block 
 against the alternatives and its copies in the finished CPU), the level's parts only, a hint ladder
 from a nudge to the full walkthrough, and Build along (the next step's parts as outlines, the
 learner's wiring checked against the reference). Number and Boolean drills (generated, with exact
-checkers), assembly puzzles on the golden model and a codex of <!--n:codex-->417<!--/n--> entries sit alongside: each with a
+checkers), assembly puzzles on the golden model and a codex of <!--n:codex-->422<!--/n--> entries sit alongside: each with a
 live figure, a worked example, Check yourself questions and links to what it builds on and leads to,
 searchable by alias, read beside the level without leaving it, and shown as hover definitions in the
 chapters, with an index of every analogy. Practice questions (predict, what breaks) and drills come back
@@ -370,7 +370,7 @@ also be priced in relays and tubes.
 - **The golden model itself**: [Spike](https://github.com/riscv-software-src/riscv-isa-sim) runs in CI
   on random programs for eight ISA variants (seven RV32, the C extension among them, and RV64IM), its
   commit log compared with ours instruction by instruction: 8,000 programs on every change to the ISS,
-  new seeds each night.
+  any seed range by hand (the nightly runs ended at the development stop, 2026-11-12).
 - **The 6502**: the cycle-exact model passes all 1.51 M SingleStepTests cases and Klaus Dormann's
   functional test; the transistor-level chip matches it on every bus cycle of both.
 - **The Apollo Guidance Computer**: Appendix F's golden model runs in lock step with yaAGC (Virtual
@@ -489,7 +489,7 @@ does.
 one file, nothing to install, no network (fonts included). It is the built site inside Electron
 (`desktop/`, a package of its own so the site's install stays small), served from inside the
 executable. Progress and sandbox chips live in a `MOSFET-to-RISCV-data` folder next to the `.exe`,
-so a copy on a USB stick carries them along. The *Desktop program* workflow (after every deploy, by hand, or on a `v*` tag) builds it on GitHub and publishes it as the release `desktop-latest`. The `.exe` is unsigned:
+so a copy on a USB stick carries them along. The *Desktop program* workflow builds it on GitHub: after every deploy (and by hand) it publishes the rolling prerelease `desktop-latest`, and a pushed `v*` tag publishes a permanent release of that name, marked Latest, with the `.exe`. The file name carries the site's version string (X.YYY.ZZZ, e.g. 2.000.4210). The first such release is [v2.0.0](https://github.com/OrelMag/MOSFETtoRISCV/releases/tag/v2.0.0). The `.exe` is unsigned:
 SmartScreen asks once (*More info → Run anyway*).
 
 ## How it is built
@@ -518,8 +518,10 @@ the 3D views.
 
 ## License
 
-[MIT](LICENSE). Doom's source (doomgeneric, `ports/doom/`) is GPL-2; Freedoom's data is BSD and
-fetched at build time.
+[MIT](LICENSE). Doom's source (doomgeneric, `ports/doom/`) and the image built from it are GPL-2 (the licence ships
+beside the image as `doom/COPYING.txt`); Freedoom's data is BSD and fetched at build time. Every third-party
+component the site, the desktop program or this repository carries, with its licence text, is listed in
+[THIRD-PARTY-NOTICES.txt](public/THIRD-PARTY-NOTICES.txt), which the site serves and links from its home page.
 
 Inspired by *Turing Complete*, Sebastian Lague's *Digital Logic Sim*, *nand2tetris*, and Harris &
 Harris. The structure and HDL follow the companion primer in `References/`.

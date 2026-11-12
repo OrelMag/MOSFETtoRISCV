@@ -160,7 +160,7 @@ export const chAppendixSap: Chapter = {
           { title: 'T1: the instruction', say: 'The RAM now drives the bus: RAM[0] = {v:bus} = 0x14, <code>LDA 4</code>. The instruction register loads it; the counter steps to 1.', cycles: 1, show: ['ram', 'ir', 'bus'], expect: { bus: 0x14 } },
           { title: 'T2: the operand', say: 'The instruction register drives the low nibble of itself onto the bus ({v:bus}), the address 4, and the memory address register loads it.', cycles: 1, show: ['ir', 'mar', 'bus'], expect: { bus: 4 } },
           { title: 'T3: the data', say: 'RAM[4] goes onto the bus: {v:bus}, the first number, and register A loads it. The bus carried an address, an instruction, an address and a value in four steps.', cycles: 1, show: ['ram', 'a', 'bus'], expect: { bus: 28 } },
-          { title: 'ADD: B, then the sum', say: 'Five steps of fetch and decode later, ADD has put its operand on the bus ({v:bus}, the second number) into B. One step on, the ALU drives the bus with the sum.', cycles: 5, show: ['ram', 'b', 'bus'], expect: { bus: 14 } },
+          { title: 'ADD: B, then the sum', say: 'Five steps on (the last step of LDA, then the fetch and operand address of ADD), ADD has put its operand on the bus ({v:bus}, the second number) into B. One step on, the ALU drives the bus with the sum.', cycles: 5, show: ['ram', 'b', 'bus'], expect: { bus: 14 } },
           { title: 'The sum on the bus', say: 'The ALU\'s output enable is on: {v:bus} = 28 + 14, and A loads it. Nothing else drives the bus at the same time: <code>clash</code> stays 0.', cycles: 1, show: ['alu', 'a', 'bus'], expect: { bus: 42, clash: 0 } },
           { title: 'OUT, HLT', say: `OUT puts A on the bus into the output register, then HLT stops the clock: <code>out</code> = {v:out}, <code>halt</code> = {v:halt}. ${ADD_RUN.cycles} clock cycles in all for a ${ADD_RUN.bytes}-byte program.`, cycles: 8, show: ['out', 'ctl'], expect: { out: 42, halt: 1 } },
         ],
@@ -625,7 +625,7 @@ export const chAppendixSap: Chapter = {
         bus's OR stand-in) and the five EEPROMs counted among the chips. Our single-cycle RV32I (<a href="#/c/cpu/0">chapter ${numOf('cpu')}</a>) is
         ${k(RV32I.nands)} NANDs without its program ROM, about ${Math.round(RV32I.nands / SAP_COST.logic)} times as many,
         and runs one 32-bit instruction a clock where SAP-1 needs five for an 8-bit one, from a memory of 16 bytes with
-        no stack, no indexing, no interrupts. Most of its cost is storage built from gates: a 64-word data memory (58 %) and the register file (34 %).</p>
+        no stack, no indexing, no interrupts. Most of its cost, as benchmarked with a 64-word data memory, is storage built from gates: that memory (58 %) and the register file (34 %).</p>
         <p>What a program on this machine teaches is how much a programmer normally gets for free. There are no named registers to hold temporaries, so every variable is a byte of the 16; no immediate larger than 15, so constants live in memory;
         no multiply, so it is a loop; no stack, so no recursion. Each of these is something the later machines in this site provide, and each is a place where this machine's design chose a smaller circuit over a more capable one.</p>`,
       more: {

@@ -88,8 +88,8 @@ export const chPower: Chapter = {
         of wire for each branch; illustrative values for a 28 nm-class process, like the 25 ps per NAND). From the two the
         Power panel adds up the energy, block by block, glitches included.</p>
         <p>Here is the single-cycle CPU of <a href="#/c/cpu/0">chapter ${numOf('cpu')}</a> running “sum”. Over its first ${POWER.cycles} cycles it spends
-        <strong>${pj(plain.pj)} per cycle</strong> at ${V_NOM} V: at its period of ${plain.period} NAND delays (${ns(plain.period)} ns), ${(plain.pj / Number(ns(plain.period))).toFixed(1)} mW.
-        (The benchmarks later in the chapter are longer programs: their program ROM is a level deeper, its read arrives later, and the same CPU's period there is ${sc.period}.)
+        <strong>${pj(plain.pj)} per cycle</strong> at ${V_NOM} V: with a period of ${plain.period} NAND delays (${ns(plain.period)} ns) that is ${(plain.pj / Number(ns(plain.period))).toFixed(1)} mW.
+        (The benchmarks later in the chapter are longer programs: their program ROM is a level deeper, its read arrives later, and the same CPU's period there is ${sc.period} NAND delays.)
         These figures are over the first ${POWER.cycles} cycles; the Power panel beside the circuit shows a running window, so its own figures drift a little.
         Look at which blocks spend it. The <span data-show="dm">data memory</span> takes ${share('dm')}, the clock net alone ${share('clock (clk net)')}, the
         <span data-show="rf">register file</span> ${share('rf')}, and the <span data-show="alu">ALU</span>, which does the actual work, ${share('alu')}.</p>

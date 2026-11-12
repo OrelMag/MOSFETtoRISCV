@@ -80,7 +80,7 @@ export const chBench: Chapter = {
       title: 'Four transfers that crawl',
       body: `
         <p>Here is the separation worked out for the commonest complaint. Four faults slow a transfer, and each leaves a different mark in the capture, in two plots (bytes in flight and the round-trip time) and in the counters.</p>
-        <p>The sender's <strong>bytes in flight</strong> say whether it is held back at all. The <strong>round trip</strong> says whether data is waiting anywhere. <strong>Retransmissions</strong> say whether anything went missing, and the counters say where. <strong>Win 0</strong> in an acknowledgement is a window of zero, as in <a href="#/c/tcp/3">the window</a>: the receiver has no room and is asking for time. All of this comes from <a href="#/c/tcp/0">TCP</a>'s own rules, running with the fault in place.</p>
+        <p>The sender's <strong>bytes in flight</strong> say whether it is held back at all. The <strong>round trip</strong> says whether data is waiting anywhere. <strong>Retransmissions</strong> say whether anything went missing, and the counters say where. <strong>Win 0</strong> in an acknowledgement is a window of zero, as in <a href="#/c/tcp/4">the window</a>: the receiver has no room and is asking for time. All of this comes from <a href="#/c/tcp/0">TCP</a>'s own rules, running with the fault in place.</p>
         <div class="try">For each case, say what you expect to see in the plots, the capture and the counters before you look at the options.</div>`,
       widget: benchWidget(['tcp_reader', 'tcp_bloat', 'tcp_tiny', 'tcp_loss'], ['Case A', 'Case B', 'Case C', 'Case D']),
       challenge: {
@@ -109,7 +109,7 @@ export const chBench: Chapter = {
     {
       title: 'Reading a console',
       body: `
-        <p>A <a href="#/c/uart/0">UART</a> gives itself away differently. Each character starts on a falling edge, which resets the receiver's timing, and it then samples on its own clock. A clock error therefore builds across the character: the first bits are right, and the samples at the end go first. Whether a data bit reads wrong depends on the data, since a sample that lands in a neighbouring bit is only an error if that bit differs. So some bytes read right and some do not, usually with framing errors around them.</p>
+        <p>A <a href="#/c/uart/0">UART</a> gives itself away differently. Each character starts on a falling edge, which resets the receiver's timing, and it then samples on its own clock. A clock error therefore builds across the character: the first bits are right, and the samples at the end go wrong first. Whether a data bit reads wrong depends on the data, since a sample that lands in a neighbouring bit is only an error if that bit differs. So some bytes read right and some do not, usually with framing errors around them.</p>
         <p>That is why a clock error looks odd: some characters come through with the right value. Noise would hit bits at random and spare no character on principle.</p>
         <div class="try">Find which characters survive. Compare the bits of one that did with one that did not: what do the survivors have in common?</div>`,
       widget: benchWidget(['uart_clock'], ['The console']),

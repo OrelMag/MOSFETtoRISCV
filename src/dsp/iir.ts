@@ -167,6 +167,31 @@ export const prewarp = (f: number): number => 2 * Math.tan(Math.PI * f);
 /** The digital frequency (cycles a sample) an analog ω rad/s lands on: the inverse of the prewarp, f = atan(ω / 2) / π. */
 export const warpedAt = (omega: number): number => Math.atan(omega / 2) / Math.PI;
 
+// ---- the s-plane: an analog filter read on its own, before any transform ----
+
+/** |H(jω)| of an analog filter with these poles and zeros, scaled so that its gain at ω = 0 is 1 (none may sit at s = 0). */
+export function analogGain(p: readonly Cx[], z: readonly Cx[], w: number): number {
+  const dist = (v: readonly Cx[], x: number) => v.reduce((m, q) => m * Math.hypot(q.re, x - q.im), 1);
+  return (dist(z, w) / dist(p, w)) * (dist(p, 0) / dist(z, 0));
+}
+/** The impulse response at t seconds of an all-pole analog filter with distinct poles and gain 1 at ω = 0: Σ rᵢ e^(pᵢ t), rᵢ = ∏(−p) / ∏(pᵢ − pⱼ). */
+export function analogImpulse(p: readonly Cx[], t: number): number {
+  const k = cprod(p.map(cneg));
+  let sum = 0;
+  p.forEach((pi, i) => {
+    const r = cdiv(k, cprod(p.filter((_, j) => j !== i).map((pj) => csub(pi, pj)))), e = Math.exp(pi.re * t);
+    sum += e * (r.re * Math.cos(pi.im * t) - r.im * Math.sin(pi.im * t));
+  });
+  return sum;
+}
+/** A mirrored pole pair σ ± jω (ω > 0, σ < 0) with gain 1 at ω = 0 peaks at √(ω² − σ²) when ω > |σ|, by |p|² / (2|σ|ω); else its gain only falls. */
+export function pairPeak(sigma: number, omega: number): { at: number; gain: number } | null {
+  if (sigma >= 0 || omega <= -sigma) return null;
+  return { at: Math.sqrt(omega * omega - sigma * sigma), gain: (sigma * sigma + omega * omega) / (2 * -sigma * omega) };
+}
+/** A pole at s, sampled every T seconds, as a z-plane factor e^(sT): its radius and its angle in cycles a sample. */
+export const sampledPole = (s: Cx, T = 1): { r: number; f: number } => ({ r: Math.exp(s.re * T), f: (s.im * T) / (2 * Math.PI) });
+
 /** A low-pass of this family and order with its edge at f cycles a sample (Butterworth: the −3 dB point; the others: the end of the ripple band). */
 export function lowpass(kind: Family, n: number, f: number, rp = 0.1, rs = 60): Zpk {
   const a = analogPrototype(kind, n, rp, rs), w = prewarp(f);

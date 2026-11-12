@@ -14,7 +14,7 @@ export const CHECKVM: Record<string, Quiz[]> = {
     },
     {
       question: 'Why is memory mapped in pages and not byte by byte?',
-      options: ['A table with an entry per byte would be as large as memory; one entry per 4 KiB page is a thousandth of that', 'Because bytes cannot be addressed separately', 'Because the CPU can only read 4 KiB at a time', 'Because a page is the size of a cache line'],
+      options: ['A table with an entry per byte would be as large as memory; one entry per 4 KiB page is 1/4096 of that', 'Because bytes cannot be addressed separately', 'Because the CPU can only read 4 KiB at a time', 'Because a page is the size of a cache line'],
       answer: 0,
       explain: 'Mapping costs an entry per unit. A page makes the table small enough to keep in memory and a cache of it (the TLB) small enough to be fast, and one entry still covers thousands of accesses.',
       why: ['', 'Bytes are addressed separately; paging is about the cost of the map.', 'The CPU reads words; a page is a unit of mapping, not of transfer.', 'A cache line is tens of bytes; a page is thousands.'],

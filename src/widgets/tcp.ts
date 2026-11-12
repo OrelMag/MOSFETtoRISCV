@@ -7,6 +7,7 @@ import { tcpFlagText, tcpFrame } from '../comm/netframes';
 import { pcapFile } from '../comm/pcap';
 import { GateWindow, isQuiet } from '../net/gatewindow';
 import { ACK, ESTABLISHED, STATE_NAMES, TCP_K } from '../net/tcp';
+import { ADDR_BITS, KEY_BITS, PORT_BITS, ipText, replyText, runPortProbes } from '../net/tcpports';
 import { benchDone, HOST_A, HOST_B, homeOf, tcpBench, type BenchOptions, type TcpBenchRun } from '../net/tcpbench';
 import { runTcp, type SegRec, type SimResult, type TracePoint } from '../net/tcpsim';
 import { DualSim } from '../sim/dualsim';
@@ -388,3 +389,40 @@ function windowPanel(stage: Stage): Widget {
   return { el, destroy: stop };
 }
 
+
+// ---- ports: which connection is this segment for? ---------------------------------------------------------------------------------
+
+export const portsApi = new WeakMap<Stage, { sent(): number[] }>();
+
+/** The server's one connection and four probe segments; what happens to each is what net/tcp.ts's TcpModel does with it (net/tcpports.ts). */
+export function portsWidget(stage: Stage): Widget {
+  const run = runPortProbes(), seen = new Set<number>();
+  let sel = -1;
+  const table = h('div', { class: 'tcp-ports-table' }), probes = h('div', { class: 'ln-presets' }), out = h('div', { class: 'err-verdict', 'aria-live': 'polite' }), key = h('div', { class: 'tcp-ports-key' });
+  const sv = run.server;
+  table.append(h('div', { class: 'cpu-sec' }, `Server ${ipText(sv.lip)}: its one connection`),
+    ...([['state', STATE_NAMES[sv.state]], ['local address : port', `${ipText(sv.lip)} : ${sv.lport}`], ['remote address : port', `${ipText(sv.rip)} : ${sv.rport}`]] as const)
+      .map(([k, v]) => h('div', { class: 'tcp-frow' }, h('span', null, k), h('code', null, v), h('em', null, ''))),
+    h('div', { class: 'sub' }, `Its key: ${ADDR_BITS} + ${PORT_BITS} + ${ADDR_BITS} + ${PORT_BITS} = ${KEY_BITS} bits.`));
+  const names = ['source address', 'source port', 'destination address', 'destination port'];
+  const paint = () => {
+    probes.querySelectorAll('button').forEach((b, i) => b.classList.toggle('primary', i === sel));
+    if (sel < 0) { key.replaceChildren(); out.className = 'err-verdict'; out.textContent = 'Send a segment to the server.'; return; }
+    const o = run.outcomes[sel], p = o.probe;
+    const vals = [ipText(p.src.ip), String(p.src.port), ipText(p.dst.ip), String(p.dst.port)];
+    key.replaceChildren(...names.map((n, i) => h('div', { class: `tcp-kcell ${o.match[i] ? 'eq' : 'ne'}` }, h('span', null, n), h('code', null, vals[i]), h('em', null, o.match[i] ? 'equal' : 'differs'))));
+    out.className = `err-verdict ${o.kind === 'taken' ? 'ok' : ''}`;
+    const reply = o.replies.map(replyText).join('; ');
+    out.textContent = o.kind === 'taken'
+      ? `Taken by the connection (${STATE_NAMES[o.state]}): ${o.rcvMoved} byte${o.rcvMoved === 1 ? '' : 's'} delivered; answer: ${reply}.`
+      : `No such connection: the server answers ${reply}. Its own connection is untouched (${STATE_NAMES[o.state]}).`;
+  };
+  run.outcomes.forEach((o, i) => {
+    const p = o.probe;
+    probes.append(btn(`${p.id}  ${p.syn ? 'SYN ' : ''}${ipText(p.src.ip)}:${p.src.port} to :${p.dst.port}`, 'Send this segment to the server', () => { sel = i; seen.add(p.id); paint(); stage.notify(); }));
+  });
+  portsApi.set(stage, { sent: () => [...seen] });
+  paint();
+  return { el: h('div', { class: 'widget tcp-w' }, table, probes, key, out, h('p', { class: 'sub' }, 'Each button builds the segment, with its checksum, and hands it to the same TcpModel that runs the rest of this chapter. The answer is whatever the model sent back.')),
+    destroy: () => { portsApi.delete(stage); } };
+}

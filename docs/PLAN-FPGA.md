@@ -1,5 +1,8 @@
 # Plan: From netlist to FPGA
 
+> **Historical (2026-11-12).** Built: see docs/ROADMAP.md, Phase 23. Kept as the record of the decisions; its future tense is
+> as of the plan, and any mockup link in it is the author's private draft.
+
 A chapter that explains what the sandbox's **File ▸ Export Verilog for FPGA…** already does: the same netlist that chapter
 `silicon` turns into masks goes onto a chip whose logic is a grid of look-up tables, whose wires are switches, and whose
 memories are blocks of RAM, configured in milliseconds rather than manufactured in months.

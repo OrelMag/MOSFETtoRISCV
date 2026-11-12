@@ -390,3 +390,42 @@ describe('binary16 / float drill: modes, spacing, special values, subnormals', (
     expect(halves).toBeGreaterThan(20);
   });
 });
+
+describe('a drill verdict is plain text', () => {
+  // Release review m4: placement, test-out, review and the codex's Try one set `why` as HTML, the campaign's drill page as
+  // text; the RV16 decode drill echoed the typed operand raw (markup ran), the card drill escaped it (&lt; on the map page).
+  // The rule now: `why` is text everywhere, and no checker escapes what it echoes.
+  const hostile = ['<b>x</b>', 'add <img src=x>, a1, a2', '<', '&', '12-<'];
+  for (const [id, d] of Object.entries(DRILLS)) {
+    it(id, () => {
+      const r = rng(7);
+      for (let i = 0; i < 40; i++) {
+        const q = d.make(r);
+        for (const t of hostile) {
+          const why = q.check(t).why ?? '';
+          expect(why, `${id}: ${t}`).not.toMatch(/&(lt|gt|amp|quot);/);
+        }
+      }
+    });
+  }
+  it('nor any markup on a near miss or in the answer, now that they show as text', () => {
+    const near = (a: string) => [a + 'x', a.slice(0, -1), a.replace(/\d/, (c) => String((+c + 1) % 10)), a.replace(/[a-z]/, (c) => (c === 'a' ? 'b' : 'a')), a.split('').reverse().join(''), '0', '1', '0x0', 'a+b'];
+    for (const [id, d] of Object.entries(DRILLS)) {
+      const r = rng(11);
+      for (let i = 0; i < 60; i++) {
+        const q = d.make(r);
+        expect(q.answer, `${id} answer`).not.toMatch(/<[a-z]|&[a-z#0-9]+;/i);
+        for (const t of near(q.answer)) expect(q.check(t).why ?? '', `${id}: ${t}`).not.toMatch(/<[a-z/]|&[a-z#0-9]+;/i);
+      }
+    }
+  });
+  it('the card drill echoes the character as typed', () => {
+    const r = rng(1);
+    for (let i = 0; i < 200; i++) {
+      const q = DRILLS.hollerith.make(r);
+      const why = q.check('<').why ?? '';
+      if (/ is /.test(why) && /^</.test(why)) return;
+    }
+    throw new Error('no card question took "<"');
+  });
+});

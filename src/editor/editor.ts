@@ -279,7 +279,7 @@ export class Editor {
     });
     this.props = new PropsPanel(this);
 
-    this.tabs = h('div', { class: 'sb-tabs', role: 'tablist' });
+    this.tabs = h('div', { class: 'sb-tabs', role: 'group', 'aria-label': 'Open chips' });
     this.actionsEl = h('div', { class: 'sb-actions' });
     this.moreBtn = h('button', { class: 'btn ghost sm sb-more', title: 'More tools', 'aria-label': 'More tools', 'aria-haspopup': 'menu', 'aria-expanded': 'false', hidden: true,
       onclick: () => this.toggleMore() }, icon('more', 16), h('span', null, 'More')) as HTMLButtonElement;
@@ -304,7 +304,10 @@ export class Editor {
       this.repaint();
     });
     // a phone shows one tab (the rest are in Open…): rotating or resizing across 760 px redraws the tabs
-    if (typeof matchMedia === 'function') matchMedia('(max-width: 760px)').addEventListener?.('change', () => this.renderTabs());
+    // (the document keeps a query with a listener alive: removed in destroy, or every editor ever opened stays)
+    const narrow = typeof matchMedia === 'function' ? matchMedia('(max-width: 760px)') : null, onNarrow = () => this.renderTabs();
+    narrow?.addEventListener?.('change', onNarrow);
+    this.cleanups.push(() => narrow?.removeEventListener?.('change', onNarrow));
     this.resize = new ResizeObserver(() => {
       this.refreshLean();
       if (!this.fitted && this.canvas.clientWidth > 0) {
@@ -330,6 +333,13 @@ export class Editor {
     this.topResize.observe(this.slots.top);
     document.fonts?.ready.then(() => this.fitSoon(), () => {});
     this.refresh();
+    // A save still waiting on its debounce is written when the page goes away (a reload, a closed tab or window, a phone
+    // switching apps): only destroy() saved it before, and that runs on a route change, never on an unload.
+    const flush = () => { if (this.saveTimer) this.save(); };
+    const hidden = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', hidden);
+    this.cleanups.push(() => { window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', hidden); });
     for (const p of plugins) {
       const off = p(this);
       if (off) this.cleanups.push(off);
@@ -828,8 +838,8 @@ export class Editor {
       const c = ws.chips[id];
       if (!c) continue;
       const on = id === this.chipId;
-      const tab = h('div', { class: `sb-tab${on ? ' on' : ''}`, role: 'tab', 'aria-selected': String(on), title: c.name, 'data-chip': id },
-        h('button', { class: 'sb-tab-name', title: c.name, onclick: () => this.openChip(id) }, icon('chip', 13), h('span', { class: 'sb-tab-label' }, c.name), c.hdl ? h('span', { class: 'sb-tab-hdl', title: 'Drawn from Verilog' }, '.v') : null));
+      const tab = h('div', { class: `sb-tab${on ? ' on' : ''}`, title: c.name, 'data-chip': id },
+        h('button', { class: 'sb-tab-name', title: c.name, 'aria-current': on ? 'page' : undefined, onclick: () => this.openChip(id) }, icon('chip', 13), h('span', { class: 'sb-tab-label' }, c.name), c.hdl ? h('span', { class: 'sb-tab-hdl', title: 'Drawn from Verilog' }, '.v') : null));
       if (shown.length > 1 && id !== this.level?.chipId) tab.append(h('button', { class: 'sb-tab-x', title: `Close ${c.name}`, 'aria-label': `Close ${c.name}`, onclick: () => this.closeTab(id) }, icon('close', 12)));
       this.tabs.append(tab);
     }
@@ -1485,6 +1495,8 @@ export class Editor {
     this.resize.disconnect();
     this.topResize.disconnect();
     this.closeMore();
+    this.menuClose?.();
+    this.groupClose?.();
     if (this.fitFrame) cancelAnimationFrame(this.fitFrame);
     if (this.frame) cancelAnimationFrame(this.frame);
     closePopover();

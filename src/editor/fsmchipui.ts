@@ -143,10 +143,12 @@ class FsmUi {
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       save(WIDTH_KEY, String(Math.round(this.pane.getBoundingClientRect().width)));
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   private detach(): void {

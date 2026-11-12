@@ -1,5 +1,8 @@
 # Plan: Virtual memory and A tiny operating system (roadmap Phase 23)
 
+> **Historical (2026-11-12).** Built: see docs/ROADMAP.md, Phase 23. Kept as the record of the decisions; its future tense is
+> as of the plan, and any mockup link in it is the author's private draft.
+
 Status (2026-11-10: stage 3b, the chapter `os`, its kernel (riscv/osprograms.ts) and the compiler's `user` target are built on feat/ch-os): **APPROVED by the author on 2026-11-09, as shown, with all five decisions D1–D5 as recommended below.** Mockup:
 `E:/mockups/vm-os/vm-os-mockup.html` (also https://claude.ai/artifact/YHQy2jsqAW35zjfWjUdoTh). Build order, one tip to the
 Coordinator per stage: (1) golden model + Spike oracle configs (runner gate + spike.yml before landing), (2) gates as a

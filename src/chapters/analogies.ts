@@ -98,7 +98,7 @@ export const ANALOGIES: Analogy[] = [
       and nothing about the push says which.</p>`,
     breaks: `A real ball needs an impossibly even push to stop on top. A latch only needs its release to land inside a window a
       few picoseconds wide, which happens every day where a signal from one clock is sampled by another. How long it stays has
-      no upper bound, only odds that fall by a fixed factor every gate delay.`,
+      no upper bound, only odds that fall by a fixed factor every τ, a time set by the gates' gain and load (picoseconds in a modern process).`,
   },
   {
     chapter: 'latches', step: 'The flip-flop: act only on the edge', title: 'An airlock', figure: 'airlock',

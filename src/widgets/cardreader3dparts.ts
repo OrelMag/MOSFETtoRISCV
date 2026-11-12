@@ -171,7 +171,7 @@ export const ROWS = 12;
 /** Along the long side from the card's centre: column c (0 = column 1). Along the short side: row r (0 = row 12 … 11 = row 9). */
 export const colOff = (c: number): number => (c - (COLUMNS - 1) / 2) * COL_P;
 export const rowOff = (r: number): number => (r - (ROWS - 1) / 2) * ROW_P;
-/** The bed the cards slide on, and the first station's line across it; the second station sits SEPARATION further on (56 mm, the audit's figure for the IBM 711). */
+/** The bed the cards slide on, and the first station's line across it; the second station sits SEPARATION further on (56 mm, illustrative: no source gives the spacing). */
 export const BED = 10, STATION_X = 0, SEPARATION = 22;
 export const STATION2_X = STATION_X + SEPARATION;
 const R9 = ROWS - 1;

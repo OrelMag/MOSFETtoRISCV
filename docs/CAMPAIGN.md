@@ -300,6 +300,8 @@ Show / Hide is remembered per act (`layout.ts foldedActs`, `settings.actOpen`).
 - ✅ `g_dec`: 3→8 decoder ← g_wide, n_bin
 - ✅ `g_mux8`: 2:1 × 16 bus mux (unlocks the wider muxes) ← g_mux
 - ✅ `g_eq16`: 16-bit equality ← g_xor, g_wide
+- Added 2026-11:
+  - ✅ *opt* `nor_basic`: NOT, OR, AND from NOR3 ← g_and, g_or
 
 ### Act 2 — Numbers and arithmetic
 - ✅ `n_twos`: two's complement, overflow drill ← n_bin
@@ -313,6 +315,11 @@ Show / Hide is remembered per act (`layout.ts foldedActs`, `settings.actOpen`).
 - ✅ `a_shift16`: barrel shifter ← g_mux8, g_and, n_twos
 - ✅ `a_alu16` ← a_addsub16, a_shift16, g_wide (its slt is its own; `a_slt` feeds the branch comparator)
 - ✅ `o_fastadd`: parallel-prefix adder, graded on depth (the g / p cells are given) ← a_add16 (required since 2026-10-25: Core IV uses it)
+- Added 2026-11:
+  - ✅ *opt* `n_fixed`: Fixed point (drill) ← n_twos
+  - ✅ *opt* `n_divrem`: RISC-V division (drill) ← n_twos
+  - ✅ *opt* `t_tests`: Catch every fault (drill) ← a_add4
+  - ✅ *opt* `nor_fa`: A full adder in NOR3 ← nor_basic, a_fa
 
 ### Act 3 — State and memory
 - ✅ `s_sr` (ex) ← g_not
@@ -328,6 +335,11 @@ Show / Hide is remembered per act (`layout.ts foldedActs`, `settings.actOpen`).
 - ✅ *opt* `d_lut`: Program the LUT drill (a function in words → its 16 configuration bits) ← m_lut
 - ✅ `m_rf`: 8 × 16 register file, x0 = 0, model check ← s_reg16, g_dec, g_mux8
 - ✅ `m_mem`: ROM and RAM lesson (unlocks the memory parts) ← m_rf
+- Added 2026-11:
+  - ✅ *opt* `t_scan`: 4-bit scan register ← s_reg4
+  - ✅ *opt* `s_icg`: Clock gate ← s_reg4
+  - ✅ *opt* `m_acc`: A first computer ← m_mem, s_pc, a_addsub16
+  - ✅ *opt* `nor_reg`: A register bit in NOR3 ← nor_basic, s_reg4
 
 ### Act 4 — The instruction set and assembly
 - ✅ `i_isa`: the RV16 instruction set (lesson + explorer) ← n_twos
@@ -339,6 +351,8 @@ Show / Hide is remembered per act (`layout.ts foldedActs`, `settings.actOpen`).
 - ✅ `p_mul`: multiply in software ← p_loop
 - ✅ *opt* `p_sort` ← p_mem
 - ✅ *opt* `p_print`: print a number in decimal ← p_mul
+- Added 2026-11:
+  - ✅ *opt* `p_link`: Patch the jump (drill) ← p_call
 
 ### Act 5 — A single-cycle CPU
 - ✅ `c_lesson`: the datapath ← i_isa, a_alu16, m_rf
@@ -376,6 +390,11 @@ Show / Hide is remembered per act (`layout.ts foldedActs`, `settings.actOpen`).
   (`rv16Pipe({ sys: 'exc' })`, 12 031 NANDs) ← pi_core3, y_trap
 - ✅ **`y_final`**: **Finale: interrupts**: Pipeline V plus the external interrupt (7 NANDs more); a predicting
   pipeline passes too ← y_ptrap, y_irq, p_handler
+- Added 2026-11:
+  - ✅ *opt* `y_tlb`: A TLB ← y_final
+  - ✅ *opt* `y_walk`: The page-table walker ← y_tlb
+  - ✅ *opt* `p_switch`: A context switch (program) ← y_final
+  - ✅ *opt* `p_critical`: A critical section (program) ← p_handler
 
 ### Act 9 — Throughput: a GPU (roadmap Phase 15)
 Optional as a whole (decided 2026-10-13): it goes past the campaign's goal, a pipelined RV16, like the side quests, and
@@ -479,6 +498,51 @@ Drawn as two labelled rows (layout.ts `ACT_ROWS`: Multiply & divide · Floating 
 - ✅ `o_fpadd`, `o_fpmul`: binary16 adder and multiplier, all five rounding modes, from the rungs above (only generic parts and the 11 × 11 significand multiplier given) ← o_fpunpack, o_fpnorm / o_fpadd, o_mularr
 - ✅ `o_fpcmp` (feq / flt / fle, unordered, signaling) ← o_fpunpack; `o_fpcvt` (16-bit integer → binary16) ← o_fpnorm
 - (`o_cache` moved to act 10, `o_mc` to act 6 on 2026-10-25.)
+
+### Act 14 — Debugging: find it, fix it (all optional; bug hunts placed after the level each hangs off, campaign/bughunts.ts)
+- ✅ *opt* `b_dec`: Two lines crossed ← g_dec
+- ✅ *opt* `x_dec`: Two lines at once ← g_dec
+- ✅ *opt* `b_mux`: One column of sixteen ← g_mux8
+- ✅ *opt* `b_fa`: The full adder ← a_fa
+- ✅ *opt* `b_carry`: The carry chain ← a_add4
+- ✅ *opt* `x_add4`: A carry that never comes ← a_add4
+- ✅ *opt* `b_sub`: Subtract is one off ← a_addsub16
+- ✅ *opt* `b_slt`: Less than, mostly ← a_slt
+- ✅ *opt* `b_dff`: See-through flip-flop ← s_dff
+- ✅ *opt* `b_cnt`: Never past seven ← s_cnt4
+- ✅ *opt* `x_cnt`: A bit that never rises ← s_cnt4
+- ✅ *opt* `b_x0`: x0 is not zero ← m_rf
+- ✅ *opt* `b_imm`: Branches land wrong ← c_imm
+- ✅ *opt* `b_jal`: The lost return (core level) ← c_core3
+- ✅ *opt* `x_core`: One bit of B (core level) ← c_core3
+- ✅ *opt* `b_timing`: Timing closure ← c_fast
+- ✅ *opt* `b_fwd`: Two back, read stale (core level) ← pi_core1
+
+### Act 12 — Links (all optional; Communication chapters)
+- ✅ *opt* `l_repeater`: Relay repeater ← c_computer
+- ✅ *opt* `l_dial`: Dial selector ← l_repeater
+- ✅ *opt* `l_sync`: Synchronizer ← c_computer
+- ✅ *opt* `l_uarttx`: UART transmitter ← c_computer
+- ✅ *opt* `l_uartrx`: UART receiver ← l_uarttx, l_sync
+- ✅ *opt* `l_crc`: CRC-32 ← c_computer
+- ✅ *opt* `l_8b10b`: 8b/10b encoder ← c_computer
+- ✅ *opt* `l_cdr`: Clock recovery ← l_sync, l_8b10b
+- ✅ *opt* `l_i2c`: I²C controller ← l_sync
+- ✅ *opt* `l_mac`: Ethernet MAC ← l_crc, l_uarttx
+- ✅ *opt* `l_switch`: Learning switch ← l_mac
+- ✅ *opt* `l_fwd`: Forwarding path ← l_switch
+- ✅ *opt* `l_driver`: Packet driver (program) ← l_mac
+- ✅ *opt* `l_host`: Reach the far host (program) ← l_driver, l_fwd
+
+### Act 13 — Signals (all optional; Signal processing chapters)
+- ✅ *opt* `sp_sat`: Saturating adder ← c_computer
+- ✅ *opt* `sp_mac`: MAC with guard bits ← sp_sat
+- ✅ *opt* `sp_circ`: Circular address ← c_computer
+- ✅ *opt* `sp_biquad`: A biquad ← sp_sat
+- ✅ *opt* `sp_goertzel`: Goertzel for one tone ← sp_sat
+- ✅ *opt* `sp_cic`: CIC decimator ← sp_sat
+- ✅ *opt* `sp_cordic`: A CORDIC stage ← sp_sat
+- ✅ *opt* `sp_sd`: Sigma-delta loop ← sp_sat
 
 ---
 

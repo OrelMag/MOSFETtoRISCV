@@ -64,7 +64,8 @@ libmath named first     "clamp" undefined: pclamp needed it after libmath was pa
     idea: `An executable must tell a loader everything the loader needs without the loader knowing the program: what machine it is for, where to start, and which bytes go where with which permissions. ELF does it with one fixed header and a table of program headers, one per segment.<br>Each segment has a size in the file and a size in memory. The difference is .bss: the variables that start at zero take no room in the file, only a number the loader turns into zeros.`,
     example: {
       title: 'The chapter\'s executable',
-      body: `<pre>528 bytes: a 52-byte header, 2 program headers of 32 bytes, then the segments
+      body: `<pre>528 bytes: a 52-byte header, 2 program headers of 32 bytes, the segments,
+then a symbol table, string tables and section headers (the loader ignores them)
 LOAD  text  R X   physical 0x3000 (the ROM frame it runs from)
 LOAD  data  R W   memsz larger than filesz: the .bss
 exec: 184 cycles, + 7 per word of .data, + 5 per word of .bss</pre>`,

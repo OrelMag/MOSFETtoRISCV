@@ -82,7 +82,7 @@ describe('the FPGA codex quotes the chapter\'s numbers', () => {
     has(`the LUT tables are ${pct(lb, fb)} %`);
     has(`${extra} frames longer`);
     const rff = ramAsFlipFlops(), ramBits = RAM_WORDS * RAM_BITS, block16 = 16 * 1024;
-    has(`has ${D.bsram.available} of 16 Kbit`);
+    has(`has ${D.bsram.available} of 18 Kbit (16 Kbit of data)`);
     has(`takes ${bsramFor(RAM_WORDS, RAM_BITS)} of them; in flip-flops its ${g(ramBits)} bits would be ${rff.times.toFixed(0)} times`);
     has(`stays in ${g(rf.ffs)} flip-flops and ${g(rf.luts)} LUTs`);
     has(`RAM 4K × 32 = ${g(ramBits)} bits → ${bsramFor(RAM_WORDS, RAM_BITS)} blocks`);

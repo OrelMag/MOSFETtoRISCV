@@ -55,3 +55,21 @@
 .cc-verdict { margin-top: 10px; font-weight: 500; }
 .cc-capline { margin-top: 10px; }
 @media (pointer: coarse) { .cc-row select, .cc-nav .btn, .fb-opt { min-height: 40px; } }
+.sg-hist.tail { fill: var(--bad); opacity: 0.9; }
+/* arrowWidget (chapter signals, "Arrows that turn"): the plane, its arrows and traces */
+.sg-planebox { max-width: 640px; margin: 4px auto; }
+.sg-plane { width: 100%; height: auto; max-height: 340px; display: block; }
+.sg-ax { stroke: var(--muted); stroke-width: 1; }
+.sg-unit { fill: none; stroke: var(--border-strong, var(--border)); stroke-width: 1; stroke-dasharray: 4 4; }
+text.sg-tick { fill: var(--muted); font-size: 11px; stroke: none; } /* the line rule above would outline the text */
+.sg-lab { font-size: 12px; font-weight: 600; fill: var(--text); }
+.sg-arrow { stroke: var(--text); fill: none; stroke-linecap: round; }
+.sg-head { stroke: none; fill: var(--text); }
+.sg-arrow.za, .sg-arc.za { stroke: var(--accent); } .sg-head.za, .sg-lab.za { fill: var(--accent); }
+.sg-arrow.wa, .sg-arc.wa { stroke: var(--warn); } .sg-head.wa, .sg-lab.wa { fill: var(--warn); }
+.sg-arrow.pa, .sg-arc.pa { stroke: var(--good); } .sg-head.pa, .sg-lab.pa { fill: var(--good); }
+.sg-arrow.ra { stroke: var(--bad); } .sg-head.ra { fill: var(--bad); }
+.sg-arc { fill: none; stroke-width: 1.5; }
+.sg-trace { fill: none; stroke: var(--accent); stroke-width: 2; }
+.sg-shadow { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.sg-chain { fill: none; stroke: var(--muted); stroke-width: 1; }

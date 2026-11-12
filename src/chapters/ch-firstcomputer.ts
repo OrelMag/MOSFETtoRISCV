@@ -6,10 +6,11 @@
 
 import { ACC_OPS, ACC_PROGRAMS, AccISS, accAssemble } from '../acc8/acc8';
 import { RESULTS } from '../bench/summary';
-import { accControl, ACC_CTL_OUTS } from '../lib/acc8';
+import { accControl, ACC_CTL_OUTS, ACC_FIXED_COUNTDOWN } from '../lib/acc8';
 import { assemble } from '../riscv/asm';
 import { ISS } from '../riscv/iss';
 import { groupDigits as k } from '../sim/numfmt';
+import { stats } from '../sim/stats';
 import type { Stage } from '../view/stage';
 import { accHw, accScene } from '../widgets/acc8';
 import { numOf } from './order';
@@ -37,6 +38,49 @@ const MUL = (() => {
 })();
 const SUM = run(ACC_PROGRAMS.sum);
 const COUNT = run(ACC_PROGRAMS.countdown);
+const SUM_WORDS = accAssemble(ACC_PROGRAMS.sum).length;
+const COUNT_WORDS = accAssemble(ACC_PROGRAMS.countdown).length;
+
+/**
+ * Step 1's comparison, all computed: the fixed circuit's NANDs from its gates, the machine's clocks from the golden model
+ * (the first number comes out after the load clock on the fixed circuit, so it needs one clock per number shown, the six of them).
+ */
+const FIXED = (() => {
+  const nands = stats(ACC_FIXED_COUNTDOWN).nands, outs = COUNT.outs;
+  const perNumber = outs[1].clock - outs[0].clock;
+  return {
+    nands, perNumber, clocks: outs.length, lastAt: outs[outs.length - 1].clock,
+    larger: Math.round(ACC_COST.total / nands), slower: perNumber,
+  };
+})();
+
+/** Step 1's listing: the countdown's source lines beside the words accAssemble makes of them, and what each means in plain words. */
+function countdownListing(): string {
+  const words = accAssemble(ACC_PROGRAMS.countdown);
+  const lines = ACC_PROGRAMS.countdown.split('\n').map((l) => l.replace(/#.*/, '').trim()).filter(Boolean);
+  const rows = lines.map((l) => {
+    const m = /^(?:(\w+):\s*)?(\w+)(?:\s+(\S+))?$/.exec(l)!;
+    return { label: m[1], op: m[2], arg: m[3] };
+  });
+  const at = new Map(rows.flatMap((r, i) => (r.label ? [[r.label, i] as const] : [])));
+  const to = (arg: string) => at.get(arg) ?? Number(arg);
+  const plain = (r: (typeof rows)[number], i: number) => {
+    switch (r.op) {
+      case 'LDI': return `load ${r.arg}`;
+      case 'LDA': return `load what slot ${r.arg} holds`;
+      case 'ADD': return `add what slot ${r.arg} holds`;
+      case 'SUB': return `subtract what slot ${r.arg} holds`;
+      case 'STA': return `keep it in slot ${r.arg}`;
+      case 'OUT': return 'show it';
+      case 'JZ': return `if it is zero, go to ${to(r.arg)}`;
+      default: return to(r.arg) === i ? 'stop: go to itself, forever' : `go back to ${to(r.arg)}`;
+    }
+  };
+  const bin = (w: number) => `${(w >> 5).toString(2).padStart(3, '0')} ${(w & 31).toString(2).padStart(5, '0')}`;
+  const body = rows.map((r, i) => `<tr><td>${i}</td><td><code>${esc(lines[i])}</code></td><td style="white-space:nowrap"><code>${bin(words[i])}</code></td><td style="text-align:left">${plain(r, i)}</td></tr>`).join('');
+  return `<table class="acc-table"><tr><th>word</th><th>name</th><th>number</th><th>in plain words</th></tr>${body}</table>`;
+}
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
 /** The same 6 × 7 loop in RV32I: count in a register, the sum in another; instructions retired to the result. */
 export const MUL_RV = (() => {
@@ -90,6 +134,7 @@ export const chFirstComputer: Chapter = {
   id: 'firstcomputer', num: numOf('firstcomputer'), title: 'A first computer', level: 'Processor',
   blurb: 'Eight instructions, one register, one clock each: a counter reads a ROM, a decoder tells the rest what to do, and a computer runs.',
   goals: [
+    'say why a general machine fed numbers beats a fixed circuit, and what it costs',
     'build a computer from parts already opened: a counter, a ROM, a register, the adder, multiplexers and the RAM',
     'follow one instruction through a clock: fetched, split into fields, decoded into control lines, done at the edge',
     'see how a jump and a flag let a program loop and stop, and write one',
@@ -98,6 +143,7 @@ export const chFirstComputer: Chapter = {
   builds: ['adders', 'registers', 'memory'],
   recap: {
     keep: [
+      `A fixed circuit does one job: counting 5 to 0 takes ${FIXED.nands} NANDs, and a new job is a new circuit. The ${k(ACC_COST.total)}-NAND machine takes any job as numbers, at ${FIXED.larger} times the gates and ${FIXED.slower} times the clocks here.`,
       'A computer is a counter, a memory, a register and a decoder. The counter (the PC) reads the next word; the decoder turns its op bits into control lines; at the rising edge every register takes its new value.',
       `One instruction per clock: the clock has to wait for the slowest instruction's path, here PC → ROM → RAM → adder → A, ${ACC_COST.period} NAND delays.`,
       'A jump is a load into the counter, and a flag (Z) makes it conditional: that is all a program needs to loop and to stop.',
@@ -129,6 +175,57 @@ export const chFirstComputer: Chapter = {
     ],
   },
   steps: [
+    {
+      title: 'One circuit, one job',
+      body: `
+        <p>Everything built so far does one thing. An adder adds; a counter counts. To make a circuit do something else
+        you change its wiring: a new part, a new connection, a new circuit.</p>
+        <p>Take a small task: show 5, 4, 3, 2, 1, 0 on an output, then stop. The circuit on the stage does it from parts you
+        know: an <span data-show="cnt">up/down counter</span> loaded with <span data-show="five">the constant 5</span>,
+        counting down while a <span data-show="zero">zero detector</span> says it has not reached 0. It costs
+        <strong>${k(FIXED.nands)} NANDs</strong> and shows a new number every clock.</p>
+        <p>Now change the task: count down by two, or add 1 + 2 + … + 10. This circuit cannot. The first needs another
+        adder, the second a different circuit altogether. Each new job is a new build.</p>
+        <p>The way out is to build one <strong>general</strong> machine, and let numbers kept in a memory choose what it does
+        at each clock. Each number is an <strong>instruction</strong>: "load 5", "subtract 1", "show it", "if zero, stop",
+        "go back". Here is the same countdown as the ${COUNT_WORDS} numbers this chapter's machine reads. The names on the
+        left are only a preview; the next steps explain each one.</p>
+        ${countdownListing()}
+        <table class="acc-table"><tr><th></th><th>fixed circuit</th><th>the machine</th></tr>
+        <tr><td>NANDs</td><td>${k(FIXED.nands)}</td><td>${k(ACC_COST.total)}</td></tr>
+        <tr><td>clocks per number shown</td><td>1</td><td>${FIXED.perNumber}</td></tr>
+        <tr><td>clocks to the last number</td><td>${FIXED.clocks}</td><td>${FIXED.lastAt}</td></tr>
+        <tr><td>a new job</td><td>a new circuit</td><td>new numbers</td></tr></table>
+        <p>The general machine is ${FIXED.larger} times larger and ${FIXED.slower} times slower at this one job. In return,
+        the same ${k(ACC_COST.total)} NANDs, with no wire changed, add 1 to 10 in ${SUM_WORDS} instructions
+        (${SUM.outs[0].value}, after ${SUM.outs[0].clock} clocks) and multiply 6 by 7 in ${MUL.words}
+        (${MUL.value}, after ${MUL.outAt}). Most of its size is the memories: ${k(ACC_COST.ram)} NANDs of data memory and
+        ${k(ACC_COST.rom)} of program memory around ${ACC_LOGIC} of logic. Trading speed and gates for a machine that takes
+        any job as numbers is the bargain every processor makes. The rest of this chapter builds that machine one piece at
+        a time.</p>
+        <div class="try">Switch Load on and Pulse once: 5 appears. Switch Load off, then Pulse five times: 4, 3, … 0. A sixth
+        Pulse changes nothing: it has stopped.</div>`,
+      scene: () => ({ root: ACC_FIXED_COUNTDOWN, clock: 'clk', inputs: { clk: 0, load: 0 }, autoClock: false, highlight: ['cnt', 'five', 'zero'] }),
+      tries: [(st) => st.cycles >= 6 && st.getInput('load') === 0 && st.value('out') === 0],
+      challenge: {
+        kind: 'quiz',
+        question: 'To make the machine add 1 + 2 + … + 10 instead of counting down, what has to change?',
+        options: [
+          'The numbers in its program memory, nothing else',
+          'Its adder, to add instead of subtract',
+          'A wire from the counter to the output',
+          'Nothing: it already does both at once',
+        ],
+        answer: 0,
+        explain: 'That is the point: the job is in the instructions. The same gates run either list of numbers.',
+        why: [
+          '',
+          'The same adder does both, and an instruction (ADD or SUB) picks which at each clock.',
+          'The machine shows a value with the OUT instruction. No wire changes.',
+          'It does one instruction per clock. A different job needs different instructions.',
+        ],
+      },
+    },
     {
       title: 'A counter reads a ROM',
       body: `
@@ -181,7 +278,7 @@ export const chFirstComputer: Chapter = {
         options: ['STA 4: M[4] ← A', 'LDA 4: A ← M[4]', 'ADD 12', 'LDI 4'],
         answer: 0,
         explain: 'The top three bits 011 are op 3, STA; the low five, 00100, are x = 4.',
-        why: ['', 'LDA is op 000.', 'The op field is the top three bits, not the top four.', 'LDI is op 100.'],
+        why: ['', 'LDA is op 000.', 'ADD is op 001, and 12 is the top five bits read as an operand: the op field is the top three bits, the operand the low five.', 'LDI is op 100.'],
       },
     },
     {
@@ -221,7 +318,7 @@ export const chFirstComputer: Chapter = {
         <p>A machine with no "stop" instruction stops by jumping to itself: <code>halt: JMP halt</code> loads the PC
         with its own address forever. The <span data-show="self hlt">halt test</span> (a 5-bit comparator and an AND,
         ${ACC_COST.halt} NANDs) recognizes it and raises the <code>halt</code> output, which is what the panel's Run waits
-        for. The <span data-ahead="rv32i">RV32I programs (written for the 32-bit processor this book builds next)</span> end the same way, with <code>j .</code>.</p>
+        for. The <span data-ahead="rv32i">RV32I programs (written for the 32-bit processor this book builds a few chapters on)</span> end the same way, with <code>j .</code>.</p>
         <div class="try">Load the fetch loop (the panel's program menu) and Pulse past its last word: the PC goes from 6
         back to 0, not on to 7.</div>`,
       scene: () => accScene({ program: 'fetch', highlight: ['jmux', 'pc', 'self', 'hlt'] }),
@@ -246,7 +343,7 @@ export const chFirstComputer: Chapter = {
         leaves when the count reaches 0. It is ${MUL.words} words long; a round of the loop is ${MUL_LOOP} instructions, so
         ${MUL_LOOP} clocks; OUT shows <strong>${MUL.value}</strong> at clock ${MUL.outAt}, and the halt loop is reached at
         clock ${MUL.clocks}.</p>
-        <p>Why the count goes through A: Z looks at A, the only value the adder and the registers see. So each round loads
+        <p>Why the count goes through A: Z is wired to A alone, so a value has to be in A to be tested. Each round loads
         the count, tests it, decrements it, stores it, then loads the sum, adds, stores it: one register, so the two
         numbers take turns in it, and ${MUL_MEM} of the ${MUL.clocks} instructions the program runs are loads, stores or
         RAM operands.</p>

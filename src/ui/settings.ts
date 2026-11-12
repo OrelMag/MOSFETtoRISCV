@@ -69,6 +69,8 @@ interface State {
   moveParts: boolean | null;
   /** Zooming into a block opens its inside over it (view/lens.ts); null: the device default (off while it is new; never on a touch screen yet). */
   zoomOpen: boolean | null;
+  /** View options ▸ Opened blocks without colour: a block the lens shows open (view/lens.ts inside-on) drops its module colour (lens.css). */
+  lensPlain: boolean;
   /** Coach-mark tours finished or skipped (ui/coachmarks.ts): "stage", "sandbox". */
   coachDone: Record<string, boolean>;
   /** Stop animations whatever the system says (the system's own preference is always honoured: ui/motion.ts). */
@@ -109,13 +111,50 @@ interface State {
 }
 
 const KEY = 'mosfet2riscv:v1';
-const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, workingGates: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, moveParts: null, zoomOpen: null, reduceMotion: false, wireScale: 'normal', grid: 'dots', portNames: true, partNames: true, busValues: true, tapRanges: true, zoomNames: 'normal', hideSmall: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, overlay: 'slack', visited: {}, solved: {}, openActs: {} };
+const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, workingGates: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, moveParts: null, zoomOpen: null, lensPlain: false, reduceMotion: false, wireScale: 'normal', grid: 'dots', portNames: true, partNames: true, busValues: true, tapRanges: true, zoomNames: 'normal', hideSmall: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, overlay: 'slack', visited: {}, solved: {}, openActs: {} };
+
+/**
+ * The stored fields that have the right shape, the rest left out (so they take their defaults): a damaged or hand-edited
+ * blob (a backup file) must never stop every page from loading. Records lose only their bad entries.
+ */
+function coerce(raw: unknown): Partial<State> {
+  if (typeof raw != 'object' || raw === null || Array.isArray(raw)) return {};
+  const r = raw as Record<string, unknown>, out: Record<string, unknown> = {};
+  const isRec = (v: unknown): v is Record<string, unknown> => typeof v == 'object' && v !== null && !Array.isArray(v);
+  const rec = <T>(v: unknown, ok: (x: unknown) => x is T): Record<string, T> | undefined =>
+    isRec(v) ? Object.fromEntries(Object.entries(v).filter(([k, x]) => k !== '__proto__' && ok(x))) as Record<string, T> : undefined;
+  const bool = (x: unknown): x is boolean => typeof x == 'boolean';
+  const steps = (x: unknown): x is unknown[] => Array.isArray(x);
+  const ONE_OF: Partial<Record<keyof State, readonly unknown[]>> = {
+    theme: ['auto', 'light', 'dark'], palette: PALETTES.map((p) => p.id), radix: ['hex', 'bin', 'dec', 'sdec'], wireScale: ['thin', 'normal', 'thick'],
+    grid: ['dots', 'lines', 'off'], zoomNames: ['off', 'normal', 'large'], traceLevel: ['gate', 'cycle', 'instr'], textSize: TEXT_SIZES,
+  };
+  for (const [k, d] of Object.entries(defaults) as [keyof State, unknown][]) {
+    const v = r[k], one = ONE_OF[k];
+    if (v === undefined) continue;
+    if (one) { if (one.includes(v)) out[k] = v; }
+    else if (k === 'visited') {
+      const vs = rec(v, steps);
+      if (vs) out[k] = Object.fromEntries(Object.entries(vs).map(([c, s]) => [c, s.filter((i): i is number => Number.isInteger(i) && (i as number) >= 0)]));
+    } else if (k === 'solved' || k === 'coachDone' || k === 'openActs') { const b = rec(v, bool); if (b) out[k] = b; }
+    else if (d === null) { if (v === null || typeof v == 'boolean') out[k] = v; }
+    else if (typeof d == 'number') { if (typeof v == 'number' && Number.isFinite(v) && (k === 'looks' || v > 0)) out[k] = v; }
+    else if (typeof v == typeof d) out[k] = v;
+  }
+  if (Number.isInteger(r.moved) && (r.moved as number) >= 0) out.moved = r.moved;
+  const last = r.last;
+  if (isRec(last) && typeof last.chapter == 'string' && Number.isInteger(last.step) && (last.step as number) >= 0) out.last = { chapter: last.chapter, step: last.step as number };
+  return out as Partial<State>;
+}
 
 function load(): State {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const st: State = { ...defaults, looks: 0, ...JSON.parse(raw) };
+      let parsed: unknown;
+      // Text that is not JSON is kept aside before the next save writes the defaults over it (as the sandbox keeps its own).
+      try { parsed = JSON.parse(raw); } catch { localStorage.setItem(KEY + ':unreadable', raw); throw new Error('unreadable settings'); }
+      const st: State = { ...defaults, looks: 0, ...coerce(parsed) };
       // Settings saved before the vivid look and cartoon parts became the default get them once; turned off since, they stay off.
       if (st.looks < 1) {
         if (!st.vivid && !st.netColors) st.vividNets = true;
@@ -132,7 +171,7 @@ function load(): State {
 /** A touch screen (the coarse pointer): the lens is not built for it yet (view/lens.ts). */
 export const coarsePointer = (): boolean => typeof matchMedia == 'function' && matchMedia('(pointer: coarse)').matches;
 
-const VIEW_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'workingGates', 'vividNets', 'glossary', 'simpleWires', 'autoClock', 'loadDelay', 'singleKeys', 'minimap', 'moveParts', 'zoomOpen', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'busValues', 'tapRanges', 'zoomNames', 'hideSmall', 'textSize', 'narrowText'] as const;
+const VIEW_KEYS = ['palette', 'modules', 'wireFlow', 'netColors', 'vivid', 'board', 'cartoon', 'workingGates', 'vividNets', 'glossary', 'simpleWires', 'autoClock', 'loadDelay', 'singleKeys', 'minimap', 'moveParts', 'zoomOpen', 'lensPlain', 'reduceMotion', 'wireScale', 'grid', 'portNames', 'partNames', 'busValues', 'tapRanges', 'zoomNames', 'hideSmall', 'textSize', 'narrowText'] as const;
 export type ViewState = Pick<State, (typeof VIEW_KEYS)[number]>;
 
 /** What a preset decides: how the circuits look and how large the prose reads, never how the site behaves (shortcuts, new wires, the clock). */
@@ -190,6 +229,8 @@ export const settings = {
   get moveParts(): boolean { return state.moveParts ?? !(typeof matchMedia == 'function' && matchMedia('(pointer: coarse)').matches); },
   /** Open blocks as you zoom: off by default while it is new. Null stays off on a touch screen when phase 3 turns it on with a mouse (DESIGN.md item 6). */
   get zoomOpen(): boolean { return state.zoomOpen ?? false; },
+  /** Strictly true: the saved value is merged without per-key checks (load), so anything else reads as off. */
+  get lensPlain(): boolean { return state.lensPlain === true; },
   get reduceMotion() { return state.reduceMotion; },
   get wireScale() { return state.wireScale; },
   get grid() { return state.grid; },
@@ -206,7 +247,7 @@ export const settings = {
   get traceLevel() { return state.traceLevel; },
   get overlay() { return state.overlay; },
   get traceRate() { return state.traceRate; },
-  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'workingGates' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'moveParts' | 'zoomOpen' | 'reduceMotion' | 'wireScale' | 'grid' | 'portNames' | 'partNames' | 'busValues' | 'tapRanges' | 'zoomNames' | 'hideSmall' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate' | 'overlay'>(k: K, v: State[K]): void {
+  set<K extends 'theme' | 'palette' | 'radix' | 'animate' | 'modules' | 'wide' | 'wireFlow' | 'netColors' | 'board' | 'cartoon' | 'workingGates' | 'glossary' | 'simpleWires' | 'autoClock' | 'loadDelay' | 'singleKeys' | 'minimap' | 'moveParts' | 'zoomOpen' | 'lensPlain' | 'reduceMotion' | 'wireScale' | 'grid' | 'portNames' | 'partNames' | 'busValues' | 'tapRanges' | 'zoomNames' | 'hideSmall' | 'textSize' | 'narrowText' | 'analyzer' | 'speed' | 'traceLevel' | 'traceRate' | 'overlay'>(k: K, v: State[K]): void {
     state[k] = v;
     // Colour per net set by hand: the vivid look no longer owns it.
     if (k === 'netColors') state.vividNets = false;
@@ -344,4 +385,7 @@ export function applyTheme(): void {
   else root.removeAttribute('data-parts');
   if (state.vivid && state.cartoon && state.workingGates) root.setAttribute('data-gates', 'cmos');
   else root.removeAttribute('data-gates');
+  // lens.css: only a box carrying inside-on reacts, so with the lens off this matches nothing
+  if (state.lensPlain === true) root.setAttribute('data-lens-fill', 'plain');
+  else root.removeAttribute('data-lens-fill');
 }

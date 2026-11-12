@@ -1,8 +1,10 @@
 name: Desktop program
 
-# Builds the portable Windows program (desktop/: the site inside Electron, one .exe, nothing to install)
-# and publishes it as the release "desktop-latest". Run after every successful deploy of main (so the
-# program matches the site), by hand, or by pushing a v* tag.
+# Builds the portable Windows program (desktop/: the site inside Electron, one .exe, nothing to install).
+# After every successful deploy of main (so the program matches the site) or by hand: the rolling prerelease
+# "desktop-latest", its .exe replaced with no moment where it has none (scripts/ci/release-replace.sh).
+# A pushed v* tag (e.g. v2.0.0, on a commit main deployed): a permanent release of that name, marked Latest, with the
+# .exe built from the tagged commit; desktop-latest is left alone. The .exe's name carries the site's version string.
 
 on:
   workflow_dispatch:
@@ -16,9 +18,10 @@ on:
 permissions:
   contents: write
 
+# a newer deploy cancels an older rolling build; a tag's build has a group of its own, so no deploy cancels it
 concurrency:
-  group: desktop
-  cancel-in-progress: true
+  group: desktop-${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
   windows:
@@ -31,11 +34,11 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ env.SHA }}
           fetch-depth: 0 # the build number in the version is the commit count
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -43,17 +46,11 @@ jobs:
             package-lock.json
             desktop/package-lock.json
       - run: npm ci
-      - name: Add the chip layout (published by the layout workflow, if any)
+      # skipped only when no layout was ever published; any other failure stops the build (scripts/ci/fetch-layout.sh)
+      - name: Add the chip layout (published by the layout workflow)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          mkdir -p public/layout
-          # A relative path: GNU tar takes a drive letter ("D:") for a remote host, so the runner temp folder will not do.
-          if gh release download layout-latest -p layout.tar.gz -D layout-dl --repo "$GITHUB_REPOSITORY"; then
-            tar -xzf layout-dl/layout.tar.gz -C public/layout && ls public/layout
-          else
-            echo "no layout published yet"
-          fi
+        run: bash scripts/ci/fetch-layout.sh public/layout
       - name: Add Freedoom (Appendix B's game data, BSD licence; public/doom/, never checked in)
         run: node scripts/doom/fetch-wad.mjs --public
       - run: npm run build
@@ -61,16 +58,43 @@ jobs:
         working-directory: desktop
       - run: npm run dist
         working-directory: desktop
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: desktop-windows
           path: desktop/release/*.exe
-      - name: Publish the program
+      - name: The program's version (the site's string, in its file name)
+        id: exe
+        run: |
+          set -- desktop/release/*-portable.exe
+          [ $# -eq 1 ] && [ -s "$1" ] || { echo "expected one .exe, found: $*" >&2; exit 1; }
+          v=$(basename "$1" -portable.exe)
+          v=${v#MOSFET-to-RISCV-}
+          echo "file=$1" >> "$GITHUB_OUTPUT"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "built $1 (version $v) from $SHA"
+      - name: Publish the rolling program (desktop-latest)
+        if: github.ref_type != 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
+          FILE: ${{ steps.exe.outputs.file }}
+          VERSION: ${{ steps.exe.outputs.version }}
         run: |
-          gh release delete desktop-latest --yes --cleanup-tag || true
-          gh release create desktop-latest desktop/release/*.exe --target "$SHA" \
-            --title "Desktop program (Windows, portable)" \
-            --notes "One .exe, nothing to install: the whole site offline in a window of its own. Built from $SHA ($GITHUB_REF_NAME). Progress and sandbox chips are kept in a MOSFET-to-RISCV-data folder next to the .exe. Unsigned: Windows SmartScreen asks once (More info → Run anyway)." \
-            --prerelease
+          bash scripts/ci/release-replace.sh desktop-latest "$SHA" true "Desktop program (Windows, portable)" \
+            "One .exe, nothing to install: the whole site offline in a window of its own. Version $VERSION, built from $SHA ($GITHUB_REF_NAME). Progress and sandbox chips are kept in a MOSFET-to-RISCV-data folder next to the .exe. Unsigned: Windows SmartScreen asks once (More info → Run anyway)." \
+            "$FILE"
+      - name: Publish the tagged release (permanent, Latest)
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FILE: ${{ steps.exe.outputs.file }}
+          VERSION: ${{ steps.exe.outputs.version }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          notes="From Switch to CPU $TAG: the site as published at https://switchtocpu.com/ (version $VERSION, commit $SHA), and the same site as a portable Windows program: one .exe, nothing to install, everything offline. Progress and sandbox chips are kept in a MOSFET-to-RISCV-data folder next to the .exe. Unsigned: Windows SmartScreen asks once (More info → Run anyway). GitHub attaches this version's source code below."
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            # a re-run of the same tag: the .exe replaced, the release kept
+            gh release upload "$TAG" "$FILE" --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" "$FILE" --repo "$GITHUB_REPOSITORY" --verify-tag --latest \
+              --title "From Switch to CPU $TAG" --notes "$notes"
+          fi

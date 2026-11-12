@@ -4,8 +4,8 @@
 
 import { ebn0For, shannonBinaryDb, uncodedBer } from '../comm/ber';
 import { dbToRatio, EBN0_MIN, ratioToDb } from '../comm/limits';
-import { capacityAt, capacityCeiling, cascadeNfDb, decisionError, johnsonVolts, noiseDensityDbm, noiseFloorDbm, PULSES, RECEIVERS, snrAfter, T0 } from '../comm/noise';
-import { berCurveWidget, capacityWidget, chainWidget, decisionWidget, matchedWidget, randomCodeWidget, thermalWidget } from '../widgets/noise';
+import { capacityAt, capacityCeiling, cascadeNfDb, decisionError, everyText, johnsonVolts, noiseDensityDbm, noiseFloorDbm, oneInText, PULSES, Q_ROWS, RECEIVERS, snrAfter, T0, withinSigmas } from '../comm/noise';
+import { berCurveWidget, capacityWidget, chainWidget, decisionWidget, gaussianWidget, matchedWidget, randomCodeWidget, thermalWidget } from '../widgets/noise';
 import { numOf } from './order';
 import type { Chapter } from './types';
 
@@ -14,6 +14,9 @@ const db = (x: number, d = 1) => `${x < 0 ? '−' : ''}${Math.abs(x).toFixed(d)}
 const dbm = (x: number, d = 1) => `${x < 0 ? '−' : ''}${Math.abs(x).toFixed(d)} dBm`;
 const sup = (e: string) => [...e].map((c) => '⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(c)]).join('');
 const sci = (x: number) => x.toExponential(0).replace(/e-(\d+)/, (_, e: string) => ` × 10⁻${sup(e)}`);
+/** Two decimals of mantissa: 1.59 × 10⁻¹. */
+const sci3 = (x: number) => x.toExponential(2).replace(/e-(\d+)/, (_, e: string) => ` × 10⁻${sup(e)}`);
+const pct = (x: number, d = 1) => `${(x * 100).toFixed(d)} %`;
 const NV = (v: number) => (v * 1e9).toFixed(1);
 const FLOOR = noiseDensityDbm();
 const WALL = ratioToDb(EBN0_MIN);
@@ -72,7 +75,7 @@ export const chNoise: Chapter = {
       title: 'The floor',
       body: `
         <p>The last chapter's channels were noiseless: a signal went in, a scaled and delayed one came out. A real receiver also hears a floor that no design removes, and how far a link reaches, and how many bits a hertz carries, are both fought out against it.</p>
-        <p>Electrons in a resistor move with heat, and their motion is a voltage. John Johnson measured it in 1926 and Harry Nyquist derived it in 1928: an open resistor has an RMS noise voltage of √(4 k T R B), ${NV(johnsonVolts(1000, 1))} nV in 1 kΩ over 1 Hz at room temperature. No design removes it, because it comes with being warm and being connected.</p>
+        <p>Electrons in a resistor move with heat, and their motion is a voltage. John Johnson measured it in 1926 and Harry Nyquist derived it in 1928: an open resistor has an RMS (root-mean-square, the usual size of a fluctuating voltage) noise voltage of √(4 k T R B), ${NV(johnsonVolts(1000, 1))} nV in 1 kΩ over 1 Hz at room temperature. No design removes it, because it comes with being warm and being connected.</p>
         <p>The power it can deliver does not depend on the resistor: <strong>kT per hertz</strong>, which at the reference temperature of ${T0} K is ${dbm(FLOOR)}/Hz (dBm: decibels above one milliwatt, <a href="#/c/message/5">Sending a message</a>). That is the most-used number in radio engineering. A band of B collects kTB, so the floor in dBm is ${nf(FLOOR, 0).replace('-', '−')} + 10 log₁₀ B. The density is flat far past any radio band, and noise that is flat is called <strong>white</strong>.</p>
         <p>A receiver adds its own on top, stated as its <strong>noise figure</strong>: how many dB it degrades the SNR. So a Wi-Fi receiver with 20 MHz and 6 dB of figure has a floor of ${dbm(noiseFloorDbm(20e6, 6))}, and a signal must clear that by whatever its modulation needs. A noise figure is quoted against a ${T0} K source, so that receiver adds about ${Math.round((dbToRatio(6) - 1) * T0)} K of its own, whatever it listens to. Cooling only the source then gains little. Stations that listen to deep-space probes look at a cold sky through cooled amplifiers: with everything near 4 K the floor would be up to ${db(10 * Math.log10(T0 / 4), 0)} lower.</p>
         <div class="try">Widen the band by ten and read the floor. Set the noise figure to 0 and compare halving the band with cooling the source from 290 K to 145 K: each is 3 dB. Then set the figure to 6 dB and try cooling again.</div>`,
@@ -104,9 +107,40 @@ export const chNoise: Chapter = {
       },
     },
     {
+      title: 'The bell curve and its tail',
+      get body() {
+        const rows = Q_ROWS.map((r) => `<tr><td class="num">${r.k}</td><td class="num">${sci3(r.q)}</td><td class="num">${oneInText(r.oneIn)}</td><td class="num">${everyText(r.every)}</td></tr>`).join('');
+        const q3 = Q_ROWS[2].q, q6 = Q_ROWS[5].q;
+        return `
+        <p>The first step's resistor gave a voltage that wanders: you cannot say what the next sample will be, but you can say how often each value turns up. Take 20 000 samples of it and sort them into bins by voltage, a bar for each bin whose height is how many fell in. That is a <strong>histogram</strong>. With a hundred samples it is ragged. With twenty thousand it settles into a smooth hill, tall in the middle and falling fast on both sides: the <strong>Gaussian</strong> or <strong>normal</strong> curve, proportional to e<sup>−x²/2σ²</sup>.</p>
+        <p>The shape is no accident. Thermal noise is the sum of an enormous number of tiny independent pushes, and the <em>central limit theorem</em> says that a sum of many independent small things comes out in this shape, whatever each one looks like. That is why nearly every noise in this book is taken as Gaussian: not because it is simple, but because it is what the arithmetic gives.</p>
+        <p><strong>σ</strong> (sigma) is the curve's width, and it is the same RMS that the first step defined: square every sample, average, take the root. Noise averages to zero, so the RMS is the typical distance from the middle. How much of the hill lies within a distance of the middle is fixed by σ alone: ${pct(withinSigmas(1))} within ±1 σ, ${pct(withinSigmas(2))} within ±2 σ, ${pct(withinSigmas(3), 2)} within ±3 σ. Double σ and the hill is twice as wide and half as tall, with the same shape.</p>
+        <p>Now the question a receiver asks. A level sits a distance <em>d</em> from its threshold, and the noise carries a sample across when it is more than <em>d</em> in the wrong direction. The chance of that is the area of the hill beyond <em>d</em>: its <strong>tail</strong>, written <strong>Q(d / σ)</strong>. It depends only on how many σ the margin is. Reading it for 1 to 7 σ, with the time between errors for a link that makes a decision every nanosecond (1 Gb/s):</p>
+        <table class="tbl">
+          <thead><tr><th class="num">d / σ</th><th class="num">Q(d / σ)</th><th class="num">one in</th><th class="num">at 1 Gb/s, an error every</th></tr></thead><tbody>
+          ${rows}</tbody>
+        </table>
+        <p>Each extra σ of margin cuts the chance by a larger factor: from 3 σ to 6 σ it falls by a factor of about ${sci(q3 / q6)}. There is no distance at which it reaches zero: no voltage is impossible, only rare. Two consequences recur. A link gives no warning: it looks perfect for a long time and then fails within a few dB of margin. And counting errors cannot measure a tail this thin, so the formula has to: at 7 σ you would wait ${everyText(Q_ROWS[6].every)} at a gigabit a second for one error.</p>
+        <p>The rule of thumb in chapter ${numOf('clocks')} now reads plainly. A hysteresis about 6 σ wide is ±3 σ either side of the middle, which leaves ${pct(2 * q3, 2)} of the samples outside at any one moment, small enough that a keeper that wide is crossed by noise only now and then.</p>
+        <div class="try">Start at 100 samples and add more: watch the bars settle onto the curve. Then set d to 3 σ and compare the counted share beyond it with Q(3). Double σ with d fixed and see how far the tail grows. Which of the two, d or σ, matters?</div>`;
+      },
+      widget: gaussianWidget,
+      more: {
+        derive: `<p><strong>Where Q comes from.</strong> The unit-width hill is e<sup>−x²/2</sup> / √(2π), and Q(x) is its area beyond x. That area has no closed form in simple functions, so it is named: Q(x) = ½ erfc(x / √2), where erfc is the <em>complementary error function</em>, tabulated for centuries and computed here by a rational approximation good to one part in ten million. For large x, Q(x) ≈ e<sup>−x²/2</sup> / (x √(2π)): the e<sup>−x²/2</sup> is why each step outwards cuts so much more than the last.</p>`,
+        pitfall: `<p><strong>One tail, or two.</strong> A decision looks at one side only: noise carrying a "1" down across the threshold. Q is therefore the right figure, not 2Q. The 2Q(3) used for a keeper counts both sides.</p>`,
+      },
+      challenge: {
+        kind: 'quiz', question: 'Noise has σ = 0.2 V. A signal level sits 0.6 V from the threshold. About how often is a sample read wrong?',
+        options: [`About ${sci(decisionError(0.6, 0.2))}, one in ${oneInText(1 / decisionError(0.6, 0.2))}: 0.6 V is 3 σ, and Q(3) is that`, 'About one in three: 0.2 / 0.6', `About ${sci(2 * decisionError(0.6, 0.2))}, one in ${oneInText(0.5 / decisionError(0.6, 0.2))}`, 'Never: 0.6 V is more than any noise sample reaches'],
+        answer: 0,
+        explain: `0.6 V over 0.2 V is 3 σ. Q(3) is ${sci3(decisionError(0.6, 0.2))}: about one sample in ${oneInText(1 / decisionError(0.6, 0.2))}.`,
+        why: ['', 'That divides the wrong way round and treats the chance as proportional to the ratio. The tail falls far faster than that.', 'That is 2 Q(3), the chance of passing 3 σ on either side. A decision reads one side, so it is Q(3).', 'A Gaussian tail has no end. A sample beyond 3 σ is rare but it happens, and across a billion bits it happens a great deal.'],
+      },
+    },
+    {
       title: 'A decision',
       body: `
-        <p>Noise that is the sum of many small independent motions is <strong>Gaussian</strong>, by the central limit theorem. A receiver reading two levels ±d with a threshold half way gets a bit wrong when the noise exceeds d. The chance is the tail of the Gaussian, <strong>Q(d / σ)</strong>, where σ is the noise's RMS value.</p>
+        <p>A receiver reading two levels ±d with a threshold half way gets a bit wrong when the noise exceeds d. The chance is the tail of the last step, <strong>Q(d / σ)</strong>.</p>
         <p>That tail is steep. At d / σ = 3 it is ${sci(decisionError(3, 1))}; at 6 it is ${sci(decisionError(6, 1))}. Doubling the ratio is 6 dB of SNR and moves the error rate by six orders of magnitude. This is why a link seems to work perfectly and then fails within a few dB, and why engineers talk about margin.</p>
         <p><a href="#/c/wire/0">A wire is not a wire</a> met this tail on a line. Here it is the general form, and the rest of the chapter asks how to get the largest d / σ out of a given signal.</p>
         <div class="try">Slide the noise until the two humps touch at the threshold, and compare the formula with the counted errors. Then find the noise where one bit in a thousand is wrong, and halve it.</div>`,
@@ -178,7 +212,7 @@ export const chNoise: Chapter = {
     {
       title: 'Shannon\'s argument, and his code',
       body: `
-        <p>Send a block of n values, each of power P, through noise of power N. The received vector lies, with near certainty as n grows, inside a ball of radius √(n(P + N)). Around each transmitted vector, the noise puts it on a small ball of radius √(nN). If those small balls do not overlap, the receiver can always tell which was sent. So the most codewords that can fit is the ratio of the volumes: (√(n(P + N)) / √(nN))<sup>n</sup> = (1 + P / N)<sup>n/2</sup>.</p>
+        <p>Send a block of n values, each of power P, through noise of power N. The received vector lies, with near certainty as n grows, inside a ball of radius √(n(P + N)). Around each transmitted vector, the noise leaves it within a small ball of radius √(nN). If those small balls do not overlap, the receiver can always tell which was sent. So the most codewords that can fit is the ratio of the volumes: (√(n(P + N)) / √(nN))<sup>n</sup> = (1 + P / N)<sup>n/2</sup>.</p>
         <p>That is ½ log₂(1 + P / N) bits per value. At 2B values a second it is exactly <strong>C = B log₂(1 + SNR)</strong>. The bound comes from nothing but counting and geometry. The other half of the theorem is stranger: pick the codewords <em>at random</em>, with no design at all, and as n grows the error rate falls to zero at any rate below that.</p>
         <p>The plot runs that code. Every point draws fresh random codewords at rate ½ and decodes by comparing with all of them, the best any receiver can do. Below the limit of ${db(shannonBinaryDb(0.5), 2)} for ±1 signals at this rate, a longer code does worse. Well above it, a longer code does better. The curves pivot within about a dB of the limit, and steepen as n grows, which is the theorem appearing. Twenty bits is still far from the limit's sharp edge: the curve only becomes a cliff with very large n.</p>
         <p>Nobody can use this. Decoding 20 bits tries 2¹⁰ words; a block of 1000 would try 2⁵⁰⁰. Real codes exist for one reason, to keep this performance while making decoding possible: <a href="#/c/codes/0">a code with memory</a> (chapter ${numOf('codes')}) is the first of them. The next chapter first puts this one's numbers on a telephone line.</p>

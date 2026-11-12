@@ -117,8 +117,8 @@ export const chCards: Chapter = {
         and closed it. A grid of spring pins came down; a pin that met a hole dipped into a cup of mercury beneath and closed
         a circuit, and each circuit stepped a counting dial on by one. The count of nearly 63 million people was out in months.</p>
         <p>Counting a <em>combination</em> (married women) needs AND: the circuits of both holes energize relays, and the dial
-        is driven through their contacts in series, as in <a href="#/c/relays/0">prologue P1</a>. The data had become electrical. Hollerith's company
-        merged into what was named IBM in 1924, and the card stayed the computer's input for half a century.</p>
+        is driven through their contacts in series, as in <a href="#/c/relays/0">prologue P1</a>. The data had become electrical. Hollerith's firm
+        merged into C-T-R in 1911, which took the name IBM in 1924, and the card stayed the computer's input for half a century.</p>
         <p>What was new was not the card but the <em>reading</em>: a hole becomes an electrical event, and from then on counting is wiring. A dial counts any signal that
         steps its magnet, and which holes step it is a matter of how the relays between the pins and the dial are connected. Changing the question changes the wiring, not the
         deck, so one deck answers many questions, and the same card can be fed through again for each.</p>
@@ -130,7 +130,7 @@ export const chCards: Chapter = {
         pitfall: `<p>Counting an OR by adding two dials. A person who is both married and born abroad steps both dials, so their sum counts them twice; the parallel contacts step one dial once.
           The same mistake appears in a database query that adds two group counts instead of counting the union.</p>`,
         real: `<p>Later tabulators moved the wiring to a removable plugboard, so a machine was reprogrammed by plugging wires: a program held in wires, between the fixed
-          machine and the deck of data. Hollerith's firm was merged into C-T-R in 1911, which took the name IBM in 1924.</p>`,
+          machine and the deck of data.</p>`,
       },
       widget: () => withModel(censusWidget(), press3d()),
       challenge: {
@@ -189,7 +189,7 @@ export const chCards: Chapter = {
         first, a pass per digit. The sorter never asks which of two cards is larger: each pass is <em>stable</em> (cards in one pocket keep their order), and that does the rest.</p>
         <div class="try">The deck is the bubble-sort sample, ${SORT_CARDS} cards. Drop it, then sort it on the sorter and count the passes.</div>`,
       more: {
-        derive: `<p>Why the sorter needs no comparison: it never asks which of two cards is larger. It looks at one column of one card and drops the card in a pocket, and
+        derive: `<p>Why the sorter needs no comparison: it looks at one column of one card and drops the card in a pocket, and
           stability does the rest. Because each pass keeps the order of cards that fall in the same pocket, a later pass on a more significant digit cannot disturb the order
           the earlier passes made among equal digits. The deck is guaranteed sorted only after the pass on the most significant column, which also tells the operator when to stop.</p>
           <p>Claim: after the pass on digit k (counting from the right), the deck is sorted on its last k digits. For k = 1 it is true by construction. Suppose it holds for k − 1 and the pass on digit k
@@ -228,7 +228,7 @@ export const chCards: Chapter = {
         <p>The interface is a <span data-ahead="handshake">handshake (a ready signal answered by a take signal)</span> of the oldest kind. The reader says <code>ready</code>; the computer says <code>next</code>; the transfer happens at a
         clock edge where both are 1. Neither side can force the other: a slow program leaves the card waiting at the station, a slow reader leaves the program polling <code>ready</code>, and a program that
         never raises <code>next</code> reads nothing. The same ready and take protocol returns on the bus in chapter ${numOf('bus')} and in every streaming interface since.</p>
-        <div class="try">Set <code>next</code> to 1 and Pulse: each card's word appears on <code>data</code>, with ${FEED} empty
+        <div class="try">Set <code>next</code> to 1 and Pulse: each card's word appears on <code>data</code>, with ${FEED} idle
         cycles between cards while the reader feeds.</div>`,
       scene: () => ({ root: READER, inputs: { next: 0 }, clock: 'clk', autoClock: false, panels: [readerPanel] }),
       tries: [(st) => st.getInput('next') === 1 && st.cycles > 0],
@@ -274,9 +274,9 @@ export const chCards: Chapter = {
     {
       title: 'Inside the reader',
       body: `
-        <p>The part in the step before is a machine. A <strong>picker knife</strong> slides the bottom card out of the
+        <p>The reader of the step before is a machine. A <strong>picker knife</strong> slides the bottom card out of the
         hopper, <strong>feed rolls</strong> carry it past the read station, and more rolls drop it in the
-        <strong>stacker</strong>, in the order it came. What differs between readers is how the station senses the holes.</p>
+        <strong>stacker</strong>, in the order it came.</p>
         <p>Readers sense the holes in one of two ways. A <strong>brush</strong> reader takes the card crosswise, 9 edge first, under
         a row of wire brushes, one over each column, with a brass contact roll below. Where a brush finds a hole it
         touches the roll and a circuit closes, as Hollerith's pins did in mercury. Row 9 comes under the brushes first, so the

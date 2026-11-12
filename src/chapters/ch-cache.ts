@@ -674,7 +674,7 @@ export const chCache: Chapter = {
         <p>Every miss is <strong>compulsory</strong> (the first touch of a line), <strong>capacity</strong> (the working set is bigger than the cache),
         or <strong>conflict</strong> (two lines map to the same set even though there is room elsewhere). Conflict misses are the price of a
         direct-mapped cache's simplicity. An <em>n-way set-associative</em> cache gives every set n places, and checks all n tags at once.
-        This is a 2-way tag compare: <span data-show="e0 e1">two comparators</span> and <span data-show="mx">a multiplexer</span>. A fully associative cache compares every line, which is a CAM.</p>
+        This is a 2-way tag compare: <span data-show="e0 e1">two comparators</span> and <span data-show="mx">a multiplexer</span>. A fully associative cache compares every line, which is a CAM (content-addressable memory: a memory looked up by what it holds, not by address).</p>
         <p>More ways cost more comparators, a wider multiplexer on the hit path, and replacement state. True LRU for 2 ways is one bit per set;
         for 8 ways most designs use a cheaper approximation (tree pseudo-LRU).</p>
         <p>How to tell the classes apart: compulsory misses are those an infinitely large cache would also take. Of the rest, capacity misses are those a fully associative cache of the same
@@ -852,7 +852,7 @@ export const chCache: Chapter = {
       title: 'A cache in the pipeline',
       body: `
         <p>In the pipelined CPU <span data-show="dm">the cache</span> sits in the M stage. A miss there must stop <em>everything</em>: the PC, all four pipeline
-        registers, the flushes <span data-show="hz">the hazard unit</span> may be asking for, and the branch predictor's counters (which are not idempotent). One
+        registers, the flushes <span data-show="hz">the hazard unit</span> may be asking for, and the branch predictor's counters (which would count every repeated cycle of the freeze). One
         signal, the cache's <code>stall</code>, <span data-show="gPC gFD gFl1 gFl2 gV">gates every enable</span> for the 8 or 12 cycles of the miss, and W reports a retirement only when
         the freeze is over, so the instruction-set simulator still steps once per instruction.</p>
         <p>Freezing everything is a deliberate simplification: it is easy to get right and to check. Real pipelines keep going past a miss (a non-blocking
@@ -890,12 +890,12 @@ export const chCache: Chapter = {
     {
       title: 'Average memory access time',
       body: `
-        <p>AMAT = hit time + miss rate × miss penalty. A modern core: an L1 hit in 4 cycles, 5 % misses, and an L2 behind it that hits in 12
+        <p>AMAT = hit time + miss rate × miss penalty. A modern core: a hit in the first-level cache (L1) takes 4 cycles, 5 % of accesses miss, and the second-level cache (L2) behind it hits in 12
         cycles but itself misses 20 % of the time to DRAM at 250.</p>
         <p>Weigh the terms of the example: of its ${amat([[4, 0.05], [12, 0.2]], 250).toFixed(1)} cycles on average, the L1 hit accounts for 4, the L2 for ${(0.05 * 12).toFixed(1)}
         and DRAM for ${(0.05 * 0.2 * 250).toFixed(1)}. The slowest level adds only that much although it costs 250 cycles per access, because two caches stand between it and the processor; it is still the term that
         grows fastest when a miss rate worsens.</p>
-        <p>AMAT counts latency only. Bandwidth, <em>inclusive</em> and <em>exclusive</em> levels and prefetching shape a real hierarchy too: the In real silicon layer explains them.</p>`,
+        <p>AMAT counts latency only. Bandwidth, <em>inclusive</em> and <em>exclusive</em> levels and prefetching shape a real hierarchy too: the "In real silicon" layer below explains them.</p>`,
       more: {
         derive: `<p>Local miss rates multiply on the way down. The fraction of all accesses that reach DRAM is 0.05 × 0.2 = ${pct(0.05 * 0.2)}, and each costs 250 cycles: 2.5 cycles an access
           on average. AMAT = L1 hit + m<sub>1</sub> (L2 hit + m<sub>2</sub> × DRAM) = 4 + 0.05 × (12 + 0.2 × 250) = ${amat([[4, 0.05], [12, 0.2]], 250).toFixed(1)}. Leave out L2 and it is

@@ -8,11 +8,11 @@
 // low-pass at Fs removes the staircase's edges (about −94 dB at 8 kHz): the cone never follows the held steps. The old
 // stiffness law x = Bl·i·Cms holds only below Fs; it stays as the "Massless cone" contrast. Microphone: the same machine reversed. Sound moves the cone (the voice's samples, joined), the coil moving in
 // the gap makes e = −B·l·v, and the ADC takes a sample of that voltage each period.
-// Rms is not on Dayton's page: Qms = 3 is assumed (a current-driven cone; at 130 Hz the damping hardly matters).
+// Rms is not on Dayton's page: it comes from Qms = 1.22 (QMS below, from the page) as √(Mms / Cms) / Qms.
 //
 // The driver is a Dayton Audio RS180-8 (7" Reference woofer), from Dayton's product page
 // (https://daytonaudio.com/product/101/rs180-8-7-reference-woofer-8-ohm): Sd 124.7 cm², voice coil 38 mm (aluminium former),
-// speaker: SpeakerPalettemax 6 mm, Bl 7.82 T·m, Mms 17.9 g, Fs 35.7 Hz, Cms 1.12 mm/N, black anodised aluminium cone, rubber surround,
+// Xmax 6 mm, Bl 7.82 T·m, Mms 17.9 g, Fs 35.7 Hz, Cms 1.12 mm/N, black anodised aluminium cone, rubber surround,
 // cast-aluminium 6-hole frame, ferrite magnet, 180.5 mm overall, 81 mm deep. The page does not list the coil's winding
 // height, the gap height, the magnet's size or the spider: the winding (18 mm) and gap (6 mm) are chosen so that
 // Xmax = (winding − gap) / 2 = 6 mm, and the rest are proportions drawn to look like a 7" driver.

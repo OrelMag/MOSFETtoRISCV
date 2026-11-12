@@ -54,7 +54,7 @@ const FACES: Record<string, { left: string[]; right: string[] }> = {
 /** A box whose netlist is a Builder's: pins on the faces FACES gives (else inputs left, outputs right). */
 function boxOf(id: string, name: string, label: string, summary: string, ports0: PortDef[], b: Builder): ComponentDef {
   const R = b.right, pins: Record<string, [number, number]> = {};
-  const faces = FACES[id.replace(/d+n?$/, '').replace(/^coh/, '')];
+  const faces = FACES[id.replace(/\d+n?$/, '').replace(/^coh/, '')];
   let ports = ports0;
   if (faces) {
     const by = new Map(ports0.map((p) => [p.name, p]));

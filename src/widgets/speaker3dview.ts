@@ -3,6 +3,7 @@
 // comes from speaker3dparts.ts (poseAt: the cone's second-order response to the held current); the motion is slowed down.
 
 import '../styles/speaker3d.css';
+import { numOf } from '../chapters/order';
 import { h } from '../ui/dom';
 import { groupNum } from '../sim/numfmt';
 import { reducedMotion } from '../ui/motion';
@@ -103,7 +104,7 @@ export function speakerView(): Widget {
       readout(true); kick();
     });
     const EXPLAIN: Record<Mode, string> = {
-      speaker: `The DAC holds each sample for one period and the coil current follows it. The cone is a mass on a spring: above its resonance (Fs = ${FS_HZ} Hz) it is mass-controlled, a second-order low-pass, so it answers the average of the staircase and the steps' edges (8 kHz) are lost to it (about −94 dB). The loudest sample is the rated power's peak, ${fmt(I_RATED, 1)} A (60 W RMS into 6.4 Ω), and it moves the cone only ${fmt(peakStrokeMm(d), 2)} mm at the voice's ${Math.round(f0)} Hz, drawn ×${d.mag}; a pure tone at ${Math.round(f0)} Hz would need ${fmt(currentForStroke(f0), 1)} A for Xmax. The stiffness law x = Bl · i · Cms (Cms = ${CMS_MM_N} mm/N) would give Xmax for ${fmt(I_FULL)} A but holds only below Fs: Massless cone shows it. Choose a tone to see the current for Xmax: it grows as f².`,
+      speaker: `The DAC holds each sample for one period (the zero-order hold of chapter ${numOf('converters')}) and the coil current follows it. The cone is a mass on a spring: above its resonance (Fs = ${FS_HZ} Hz) it is mass-controlled, a second-order low-pass, so it answers the average of the staircase and the steps' edges (8 kHz) are lost to it (about −94 dB). The loudest sample is the rated power's peak, ${fmt(I_RATED, 1)} A (60 W RMS into 6.4 Ω), and it moves the cone only ${fmt(peakStrokeMm(d), 2)} mm at the voice's ${Math.round(f0)} Hz, drawn ×${d.mag}; a pure tone at ${Math.round(f0)} Hz would need ${fmt(currentForStroke(f0), 1)} A for Xmax. The stiffness law x = Bl · i · Cms (Cms = ${CMS_MM_N} mm/N) would give Xmax for ${fmt(I_FULL)} A but holds only below Fs: Massless cone shows it. Choose a tone to see the current for Xmax: it grows as f².`,
       mic: `The same machine run backwards: sound moves the cone, the coil moving in the gap makes e = Bl · v with Bl = ${BL} T·m, and the ADC takes one sample of that voltage a period, held for the next. The sound is ${SPL_DB} dB SPL (1 Pa rms, 1.41 Pa peak) at the cone: F = p · Sd, and above Fs (35.7 Hz) the cone is mass-controlled, v = F / (ω · Mms), so the voice's peak moves it only ${realPeakUm(d).toFixed(1)} µm at ${Math.round(f0)} Hz. The picture draws that stroke at Xmax × ${DRAW_K}, ${groupNum(ratio)} times larger; the volts shown are for the real stroke.`,
     };
     const explain = h('p', { class: 'm3-sub' }, EXPLAIN.speaker);

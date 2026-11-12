@@ -264,9 +264,9 @@ ${PHASES}
         SB. A register bit is a storage node refreshed in φ2, loaded in φ1, driving its buses: 10 transistors, against
         about 90 for a bit of our RV32I's register file.</p>
         <p>The <span data-show="alu"><strong>ALU</strong></span> has two input latches (AI from SB or 0; BI from DB, NOT DB or ADL), a ripple adder
-        whose carry into bit 4 and out of bit 7 is forced at ten in decimal mode, AND / OR / EOR / shift right, and an
+        whose carry into bit 4 and out of bit 7 comes at ten rather than sixteen in decimal mode, AND / OR / EOR / shift right, and an
         output latch <code>ADD</code> that drives ADL directly and SB through the <strong>decimal corrector</strong>
-        (+6 per nibble after a decimal ADC, −6 after SBC). There is one adder: index arithmetic, the stack pointer's
+        (+6 per nibble after a decimal ADC, −6 after SBC). There is one adder (the PC's incrementer aside): index arithmetic, the stack pointer's
         steps, branch targets and ADC all take turns on it, one per cycle.</p>
         <p>The <span data-show="pc"><strong>PC</strong></span> has its own incrementer. The <span data-show="addr">address
         register</span> drives the pins A0–A15 for the whole cycle; <span data-show="data"><code>DL</code> (the data latch)</span>
@@ -296,7 +296,7 @@ ${PHASES}
       title: 'Timing and the decode PLA',
       body: `
         <p>Control is three things. The <span data-show="timing"><strong>timing</strong></span> block is a ring of T states (T1 … T7), one per cycle
-        of an instruction, returning to T1 at its last cycle, early when a page is not crossed or a branch not taken.
+        of an instruction, returning to T1 at its last cycle, early when an address does not cross a 256-byte page or a branch is not taken.
         <span data-show="ir"><code>IR</code></span> (the instruction register) holds the opcode, loaded at the end of the fetch.</p>
         <p>The <span data-show="decode"><strong>decode PLA</strong></span> turns IR and T into control signals: each row is a NOR over complemented
         literals (an AND of opcode bits and one T line), each signal a NOR of rows. Ours is computed: for every signal

@@ -10,9 +10,10 @@ import { constWord, isZero } from './alu';
 import { Builder } from './builder';
 import { addSub, busMux2, decoder, equal, incrementer, muxTree } from './combinational';
 import { define, merger, splitter } from './define';
-import { AND, OR } from './gates';
+import { AND, NOT, OR } from './gates';
 import { ram } from './memory';
 import { register } from './sequential';
+import { upDownCounter } from './seqparts';
 import { TIE1 } from './transistors';
 
 const bit = (name: string, dir: 'in' | 'out', clock?: boolean): PortDef => ({ name, width: 1, dir, ...(clock ? { clock, side: 'bottom' as const } : {}) });
@@ -229,3 +230,34 @@ function accDrawing(R0: ComponentDef | null) {
 
 // Built at load (the chapter's multiplication), so the layout and routing checks cover the whole computer.
 export const ACC8_MUL = accMachine(accAssemble(ACC_PROGRAMS.mul));
+
+/**
+ * The chapter's opening foil: the countdown 5, 4 … 0 as a circuit of its own. An up/down counter (counting down: its `up`
+ * input tied to 0) is loaded with the constant 5 while `load` is 1, then counts while NOT (A = 0), so it holds at 0.
+ * Whatever else you want it to do is a different circuit (tests/firstcomputer.test.ts holds it to 5, 4 … 0 and its NANDs).
+ */
+export const ACC_FIXED_COUNTDOWN: ComponentDef = define({
+  id: 'acc8_fixed_countdown', name: 'Fixed countdown 5 … 0', category: 'cpu',
+  summary: 'Shows 5, 4, 3, 2, 1, 0 and stops: an up/down counter loaded with the constant 5 while load = 1, counting down while its value is not zero. One job, wired in.',
+  ports: [bit('clk', 'in', true), bit('load', 'in'), bus('out', 8, 'out')],
+  symbol: { kind: 'box', label: 'COUNTDOWN' },
+  netlist: () => ({
+    pins: { clk: [29, 16], load: [0, 6], out: [58, 5] },
+    instances: [
+      { name: 'down', def: constWord(1, 0), at: [8, 1], label: '0' },
+      { name: 'five', def: constWord(8, 5), at: [8, 7], label: '5' },
+      { name: 'cnt', def: upDownCounter(8), at: [24, 0], label: 'count' },
+      { name: 'zero', def: isZero(8), at: [40, 9], label: 'A = 0?' },
+      { name: 'go', def: NOT, at: [50, 10], label: 'not zero' },
+    ],
+    nets: [
+      { name: 'up', ends: ['down.y', 'cnt.up'] },
+      { name: 'five', ends: ['five.y', 'cnt.d'] },
+      { name: 'load', ends: ['load', 'cnt.load'] },
+      { name: 'clk', ends: ['clk', 'cnt.clk'] },
+      { name: 'q', ends: ['cnt.q', 'zero.a', 'out'] },
+      { name: 'z', ends: ['zero.z', 'go.a'] },
+      { name: 'en', ends: ['go.y', 'cnt.en'], tags: true },
+    ],
+  }),
+});

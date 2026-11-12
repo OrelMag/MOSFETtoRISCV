@@ -137,6 +137,22 @@ export const CHECK2: Record<string, Quiz[]> = {
       why: ['Off by one: 10 bits hold 0 … 1023.', '', '9 bits reach only 511.'],
     },
   ],
+  capacitance: [
+    {
+      question: 'A node of 10 fF is swung 0 → 1.2 V → 0 once. How much energy does it draw from the supply?',
+      options: ['14.4 fJ', '7.2 fJ', '28.8 fJ'],
+      answer: 0,
+      explain: 'C · V² = 10 fF · 1.44 V² = 14.4 fJ: charging draws that much; half is stored for a moment and half is heat in the pull-up, then the stored half is lost in the pull-down.',
+      why: ['', 'That is ½ C V², what is stored at the top of the swing. The supply gives twice that.', 'That would be 2 C V², twice what a swing draws.'],
+    },
+    {
+      question: 'A capacitor charges from 0 V through R from a 5 V supply. What is its voltage after one R · C?',
+      options: ['3.16 V', '2.5 V', '5 V'],
+      answer: 0,
+      explain: 'v = V · (1 − e<sup>−1</sup>) = 0.632 · 5 V = 3.16 V; it takes about five R · C to come within 1 % of 5 V.',
+      why: ['', 'Half would be reached sooner, at 0.69 R · C; after R · C it is already higher.', 'It never quite reaches the supply; after R · C it is at 63 % of it.'],
+    },
+  ],
   hex: [
     {
       question: '<code>0x0EF1</code> is an R-type word (op 0001). Which are rd and rs1?',

@@ -5,6 +5,7 @@ import type { ChapterMeta } from './meta';
 export const MANIFEST: readonly ChapterMeta[] = [
   { id: "basics", num: 0, title: "Before the switch", blurb: "Voltage and current, two levels, binary, a truth table, a program: what the first switch needs.", level: "Basics", label: "Start", recap: {"checks":3}, steps: [
     { title: "A loop of wire", stage: "widget" },
+    { title: "A bucket of charge", challenge: "quiz", stage: "widget" },
     { title: "Two levels, not ten", stage: "widget" },
     { title: "Counting with lamps", stage: "widget" },
     { title: "A rule as a table", challenge: "quiz", stage: "widget" },
@@ -168,6 +169,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A core plane, wired", challenge: "reach", stage: "scene" },
   ] },
   { id: "firstcomputer", num: 13, title: "A first computer", blurb: "Eight instructions, one register, one clock each: a counter reads a ROM, a decoder tells the rest what to do, and a computer runs.", level: "Processor", builds: ["adders","registers","memory"], recap: {"checks":3}, steps: [
+    { title: "One circuit, one job", challenge: "quiz", stage: "scene" },
     { title: "A counter reads a ROM", challenge: "quiz", stage: "scene" },
     { title: "Splitting the word: LDA and STA", challenge: "quiz", stage: "scene" },
     { title: "Add and subtract", challenge: "quiz", stage: "scene" },
@@ -693,6 +695,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
   ] },
   { id: "signals", num: 57, title: "Signals and spectrum", blurb: "What a signal is made of: Fourier from a square wave up, band against pulse width, FIR filters with one in gates, sampling and aliasing, rounding, and the mixer that moves a band.", level: "Communication", builds: ["message","wire","telegraph","adders","registers"], recap: {"checks":3}, steps: [
     { title: "A wave is a sum of sines", challenge: "quiz", stage: "widget" },
+    { title: "Arrows that turn: complex numbers", challenge: "quiz", stage: "widget" },
     { title: "The same numbers in frequency", challenge: "quiz", stage: "widget" },
     { title: "Narrow in time, wide in frequency", challenge: "quiz", stage: "widget" },
     { title: "A filter is a sum of delayed samples", challenge: "quiz", stage: "widget" },
@@ -704,6 +707,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
   { id: "noise", num: 58, title: "Noise and detection", blurb: "How faint a signal can be: thermal noise, a decision against it, the matched filter, Eb/N0, what more band buys, and Shannon's limit derived and then met by real random codes.", level: "Communication", builds: ["message","signals","telegraph"], recap: {"checks":3}, steps: [
     { title: "The floor", challenge: "quiz", stage: "widget" },
     { title: "A chain: who pays", challenge: "quiz", stage: "widget" },
+    { title: "The bell curve and its tail", challenge: "quiz", stage: "widget" },
     { title: "A decision", challenge: "quiz", stage: "widget" },
     { title: "The matched filter", challenge: "quiz", stage: "widget" },
     { title: "One axis for every link", challenge: "quiz", stage: "widget" },
@@ -834,6 +838,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
   { id: "tcp", num: 70, title: "TCP", blurb: "A reliable stream over a network that loses, repeats and reorders: the handshake, sequence numbers, the window, a timer that learns, AIMD's sawtooth, and queues that fill, in Python compiled for our CPU.", level: "Communication", builds: ["errors","network","router","ethernet"], recap: {"checks":3}, steps: [
     { title: "A stream over datagrams", stage: "widget" },
     { title: "Three segments to begin", challenge: "quiz", stage: "widget" },
+    { title: "Ports: which connection is this?", challenge: "quiz", stage: "widget" },
     { title: "Numbers that count bytes", challenge: "quiz", stage: "widget" },
     { title: "The window: room at the far end", challenge: "quiz", stage: "widget" },
     { title: "How long to wait", challenge: "quiz", stage: "widget" },
@@ -978,8 +983,9 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "One multiplier, N clocks", challenge: "reach", stage: "scene" },
     { title: "One mask, four ways to build it", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "iir", num: 83, title: "IIR and stability", blurb: "What feedback buys and what it can break: the bilinear transform, poles that can only sit on a lattice, direct form against sections, a biquad in gates and a limit cycle it will not stop making, and how to order and scale sections.", level: "Signal processing", builds: ["zplane","firdesign","fixed","muldiv"], recap: {"checks":3}, steps: [
+  { id: "iir", num: 83, title: "IIR and stability", blurb: "What feedback buys and what it can break: the s-plane and the bilinear transform, poles that can only sit on a lattice, direct form against sections, a biquad in gates and a limit cycle it will not stop making, and how to order and scale sections.", level: "Signal processing", builds: ["zplane","firdesign","fixed","muldiv"], recap: {"checks":3}, steps: [
     { title: "What feedback buys", challenge: "quiz", stage: "widget" },
+    { title: "The analog picture: the s-plane", challenge: "quiz", stage: "widget" },
     { title: "From an analog filter to a digital one", challenge: "quiz", stage: "widget" },
     { title: "Where a pole is allowed to sit", challenge: "quiz", stage: "widget" },
     { title: "One polynomial or small sections", challenge: "quiz", stage: "widget" },
@@ -1033,6 +1039,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What a converter is judged by", challenge: "quiz" },
     { title: "Compare, and compare again", challenge: "quiz", stage: "widget" },
     { title: "The way back: a ladder", challenge: "quiz", stage: "widget" },
+    { title: "The way out: hold and smooth", challenge: "quiz", stage: "widget" },
     { title: "A shaky clock", challenge: "quiz", stage: "widget" },
     { title: "One bit, and feedback", challenge: "quiz", stage: "widget" },
     { title: "The loop in gates, and its CIC", challenge: "reach", stage: "scene" },

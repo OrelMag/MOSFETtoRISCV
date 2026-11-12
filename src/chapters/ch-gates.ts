@@ -123,7 +123,7 @@ export const chGates: Chapter = {
           { title: 'One low', set: { a: 1, b: 0 }, show: ['g1', 'g2'], expect: { y: 0 },
             say: '<p>b = 0: g1 = NAND(1, 0) = 1, g2 inverts it: y = {v:y}. One 0 on an input is enough.</p>' },
           { title: 'Without the second gate', show: ['g1'], ghost: ['g2'], expect: { y: 0 },
-            say: '<p>Take g2 away (dashed) and the output would be g1 itself: 1 here, the NAND, where AND gives {v:y}. The second NAND is the whole difference between them.</p>' },
+            say: '<p>Take g2 away (dashed) and the output would be g1 itself: 1 here (the NAND itself), where AND gives {v:y}. The second NAND is the whole difference between them.</p>' },
         ],
       },
       more: {
@@ -158,8 +158,8 @@ export const chGates: Chapter = {
       },
       more: {
         derive: `<p>Truth table of ¬(¬a·¬b): the inner AND is 1 only for a = b = 0, so the NAND is 0 only there, which is the OR. In general De Morgan swaps AND and OR when
-          every input and the output are inverted: a + b = ¬(¬a·¬b) and a·b = ¬(¬a + ¬b). Any gate network can be "pushed" this way, bubbles
-          moving from outputs to inputs.</p>`,
+          every input and the output are inverted: a + b = ¬(¬a·¬b) and a·b = ¬(¬a + ¬b). Any gate network can be "pushed" this way, the inversions
+          (the small circles on gate symbols) moving from outputs to inputs.</p>`,
         real: `<p>In CMOS an OR is a NOR followed by an inverter (6 transistors, against ${tr(OR)} here). The NOR is the slower of the two inverting gates: its
           PMOS transistors sit in series, and a PMOS conducts less current than an NMOS of the same size. That is one more reason libraries are
           NAND-heavy.</p>`,
@@ -189,7 +189,7 @@ export const chGates: Chapter = {
           (${nd(NOT)} + ${nd(NOT)} + ${nd(AND)}). The Boolean function is the same, so the counts agree here, but that is a coincidence of this brick, not a law.</p>`,
         real: `<p>A CMOS NOR is a single stage of 4 transistors, like the NAND, with the PMOS pair in series and the NMOS pair in parallel. Its drawback is the
           series PMOS: for equal speed it needs wider transistors than a NAND, so designers prefer NAND-heavy netlists, and a NOR with many inputs is rare.</p>`,
-        pitfall: `<p>Reading the box count as the gate count: the stage shows two boxes, or, not. Hierarchy shows how the design is organized, and
+        pitfall: `<p>Reading the box count as the gate count: the stage shows two boxes, an OR and a NOT. Hierarchy shows how the design is organized, and
           cost sits in the leaves. Compare the Info tab of the NOR with the sum of the boxes you see on the stage.</p>`,
       },
     },
@@ -239,15 +239,15 @@ export const chGates: Chapter = {
       body: `
         <p><span data-show="x1">XOR</span> followed by <span data-show="not1">NOT</span> gives 1 when the inputs are equal: ${nd(XNOR)} NANDs, ${logicDepth(XNOR)} delays deep.
         Put an XNOR on every bit pair of two numbers and AND
-        the results together, and you have an <span data-ahead="comparator">equality comparator (a circuit whose output is 1 when two words are equal)</span> (the processor's <code>beq</code>
-        instruction will need one).</p>
+        the results together, and you have an <span data-ahead="comparator">equality comparator (a circuit whose output is 1 when two words are equal)</span> (the processor's branch-if-equal
+        instruction, <code>beq</code>, will need one).</p>
         <p>The price of that comparator grows with the width: for 32 bits, 32 XNORs and a tree that ANDs 32 results, ${nd(equal(32))} NANDs in all and
         ${logicDepth(equal(32))} delays deep. Equality is cheap compared with <em>magnitude</em> comparison: each bit pair is judged on its own and the verdicts are ANDed, whereas "greater than" needs a rule that the highest differing bit decides.</p>`,
       scene: () => ({ root: XNOR, inputs: { a: 1, b: 1 } }),
       more: {
         derive: `<p>a XNOR b = ¬(a ⊕ b) = a·b + ¬a·¬b: both 1 or both 0. A word compare is x = y exactly when every bit pair agrees:
           eq = XNOR(x₀, y₀) · XNOR(x₁, y₁) · … · XNOR(xₙ₋₁, yₙ₋₁).</p>`,
-        real: `<p>Hardware equality compares also appear in the places that most need them: the cache tag compare, forwarding logic in a pipeline
+        real: `<p>Equality comparators also appear in the places that most need them: the cache tag compare, forwarding logic in a pipeline
           (does this source register match that destination?), and the content-addressable memories of a later chapter.</p>`,
         numbers: `<table class="mini"><tr><th>width</th><th>NANDs</th><th>delays</th></tr>
           ${[8, 16, 32, 64].map((n) => `<tr><td>${n}</td><td>${nd(equal(n))}</td><td>${logicDepth(equal(n))}</td></tr>`).join('')}</table>
@@ -283,7 +283,7 @@ export const chGates: Chapter = {
           The multiplexer is exactly this: y = ¬s·a + s·b = NAND(NAND(¬s, a), NAND(s, b)), plus one NAND for ¬s, which is
           <span data-show="g1 g2 g3 g4">the four gates on the stage</span>.</p>
           <p>The raw minterms are rarely the cheapest sum: the mux's table has four (s a b = 010, 011, 101, 111), merged in pairs into
-          two, since x·b + x·¬b = x. <a href="#/c/logic/0">Chapter ${numOf('logic')}</a> makes that merging a method, with Boolean algebra
+          two, since x·c + x·¬c = x. <a href="#/c/logic/0">Chapter ${numOf('logic')}</a> makes that merging a method, with Boolean algebra
           and Karnaugh maps. Nor is a minimal sum the cheapest circuit: the XOR above shares m and takes ${nd(XOR)} NANDs, against 5 for its sum of products a·¬b + ¬a·b (two inverters, three NANDs).</p>`,
         real: `<p>Library mux cells are not four NANDs: a transmission-gate mux is two pass gates and an inverter, 6 transistors (8 with an output buffer), against ${tr(MUX2)}
           here. Wide muxes (8:1, 16:1) are built as trees of these or as one-hot AND-OR structures, and the choice of structure decides the delay of the register-file read
@@ -371,10 +371,7 @@ export const chBinary: Chapter = {
         The method needs no table of powers: <code>0b1011_0110</code> goes 1, then 1·2 + 0 = 2, then 2·2 + 1 = 5, then 11, then 22, then 45, then 91 and
         91·2 + 0 = ${parseInt('10110110', 2)}; in hex, <code>0x2F5</code> is (2·16 + 15)·16 + 5 = ${0x2f5}. To binary from decimal, halve and keep the remainders (the widget below shows the halving
         for any number you set), or go straight to hex by dividing by 16.</p>
-        <p><strong>Fractions</strong> continue the pattern to the right of the point, with weights ½, ¼, ⅛…, and convert the other way by <em>doubling and taking the integer bit</em>. For 0.3125:
-        ×2 = 0.625 gives bit 0; 0.625 × 2 = 1.25 gives 1, keep 0.25; 0.25 × 2 = 0.5 gives 0; 0.5 × 2 = 1.0 gives 1 and nothing is left. So 0.3125 = <code>0.0101</code>₂
-        (¼ + 1⁄16). Most decimal fractions never finish: 0.1 × 2 gives 0.2, 0.4, 0.8, 1.6 (bit 1, keep 0.6), 1.2 (bit 1, keep 0.2), and 0.2 has come back, so the bits
-        repeat: 0.1 = <code>0.0001100110011…</code>₂. A computer storing 0.1 in n bits stores a rounded neighbour, which is why 0.1 + 0.2 is not quite 0.3 in most programs.</p>
+        <p><strong>Fractions</strong> continue the pattern to the right of a binary point, with weights ½, ¼, ⅛ …: <a href="#/c/binary/7">the last step</a> of this chapter converts them.</p>
         <details class="deeper"><summary>Octal, the base between</summary>
         <p>Base 8 packs <em>three</em> bits into a digit (0–7), so <code>0o755</code> is 111 101 101. Hex won because bytes are eight bits and four divides eight; octal
         survives where words come in multiples of three: Unix file permissions (read, write, execute is one octal digit, so 755 is rwx r-x r-x), and a 12-bit machine
@@ -441,8 +438,8 @@ export const chBinary: Chapter = {
         unit when the signs differ. One's complement must add the carry out back in at the bottom (an <em>end-around carry</em>, a second
         trip along the carry chain). Bias must subtract 8 after every addition. Two's complement uses the unsigned adder unchanged: it is
         arithmetic modulo 2ⁿ, with each value's representative picked from −2ⁿ⁻¹ … 2ⁿ⁻¹ − 1.</p>
-        <p>The others survive where their strengths matter. Floating point (<a href="#/c/float/0">chapter ${numOf('float')}</a>) keeps its significand
-        in sign-magnitude, which multiplies easily, and its exponent biased, so that exponents compare like unsigned integers. The Internet
+        <p>The others survive where their strengths matter. Floating point (<a href="#/c/float/0">chapter ${numOf('float')}</a>) stores a number as digits times a power of two; it keeps the digits
+        in sign-magnitude, which multiplies easily, and the exponent biased, so that exponents compare like unsigned integers. The Internet
         checksum is a one's-complement sum.</p>`,
       widget: () => encodingsWidget(),
       more: {
@@ -453,10 +450,10 @@ export const chBinary: Chapter = {
           their programs had to allow for a −0. Every mainstream processor designed since the 1970s uses two's
           complement, and C made it mandatory in C23.</p>
           <p><strong>Gray code</strong> is a form of unsigned number built for a different weakness of plain binary: counting 0111 → 1000 flips four bits at once, and a reader that
-          samples mid-change can see any mixture. The Gray code of b is <code>g = b ⊕ (b ≫ 1)</code> (each bit XOR the bit above it), and consecutive values, the wrap-around included, differ in
+          samples mid-change can see any mixture. The Gray code of b is <code>g = b ⊕ (b ≫ 1)</code> (b shifted right one place, so each bit is XORed with the bit above it), and consecutive values, the wrap-around included, differ in
           exactly one bit. Three bits count ${Array.from({ length: 8 }, (_, i) => (i ^ (i >> 1)).toString(2).padStart(3, '0')).join(', ')}.
           A sample taken while one bit flips is the old value or the new one, never a third. To go back, XOR every bit with all the bits above it: b₂ = g₂, b₁ = b₂ ⊕ g₁, b₀ = b₁ ⊕ g₀.
-          It is used where a value is read while it moves: shaft encoders, the axes of the maps used to simplify Boolean functions, and the pointers of a FIFO between two unrelated
+          It is used where a value is read while it moves: shaft encoders, the axes of the <a href="#/c/logic/2">Karnaugh maps of chapter ${numOf('logic')}</a>, and the pointers of a FIFO between two unrelated
           clocks (<a href="#/c/clocks/7">chapter ${numOf('clocks')}</a>).</p>`,
         pitfall: `<p>Reading a bias-encoded field as two's complement. A float32 exponent field of 127 means 2⁰, not 2¹²⁷, and the
           sign bit of a float is not the sign bit of an integer: −0.0 and +0.0 differ in their bits.</p>`,
@@ -577,7 +574,7 @@ export const chBinary: Chapter = {
         <span data-show="srl">Logical</span> brings in a 0 at the top, right for unsigned numbers. <span data-show="sra">Arithmetic</span>
         brings in a copy of the sign bit, so a negative number stays negative: −8 ≫ 1 = −4.</p>
         <p>The arithmetic shift rounds <em>down</em>, toward −∞: −7 ≫ 1 = −4, while −7 / 2 in C, or RISC-V's <code>div</code>, gives −3.
-        The bit shifted out is the remainder, and a set one pulls a negative result down. A compiler dividing a signed number by a
+        The bit shifted out is the remainder: when it is 1, rounding down leaves a negative result one below the C quotient. A compiler dividing a signed number by a
         power of two adds a correction first.</p>
         <p>Cost: no gates for a fixed shift. A shift by an amount held in a register needs muxes: <span data-ahead="shifter">the barrel shifter (log₂ n stages of multiplexers, each shifting by a power
         of two or passing the word on)</span> of <a href="#/c/alu/1">chapter ${numOf('alu')}</a>.</p>
@@ -609,8 +606,12 @@ export const chBinary: Chapter = {
         fraction bits is an integer that means x / 2ᶠ. Addition is the same adder, since the points line up. A product has 2f fraction bits,
         so it is shifted right by f, a constant shift as in the step before. This is <strong>fixed point</strong>, written Qm.f: m integer
         bits, f fraction bits (unsigned here; a signed Qm.f spends one of the m on the sign, so signed Q4.4 runs from −8 to 7.9375).</p>
+        <p><strong>Converting a fraction</strong> to binary goes by <em>doubling and taking the integer bit</em>. For 0.3125:
+        ×2 = 0.625 gives bit 0; 0.625 × 2 = 1.25 gives 1, keep 0.25; 0.25 × 2 = 0.5 gives 0; 0.5 × 2 = 1.0 gives 1 and nothing is left. So 0.3125 = <code>0.0101</code>₂
+        (¼ + 1⁄16). Most decimal fractions never finish: 0.1 × 2 gives 0.2, 0.4, 0.8, 1.6 (bit 1, keep 0.6), 1.2 (bit 1, keep 0.2), and 0.2 has come back, so the bits
+        repeat: 0.1 = <code>0.0001100110011…</code>₂. A computer storing 0.1 in n bits stores a rounded neighbour, which is why 0.1 + 0.2 is not quite 0.3 in most programs.</p>
         <p>The price is a fixed step and a fixed range. Q4.4 counts in sixteenths up to 15.9375, and every value in between rounds to the
-        nearest step. Some decimal fractions never fit exactly. 0.1 is 1/10, and 10 has a factor of 5 that no power of two contains, so its
+        nearest step. 0.1 never fits, as the doubling showed: it is 1/10, and 10 has a factor of 5 that no power of two contains, so its
         binary expansion repeats for ever, as 1/3 does in decimal. More bits shrink the error but never remove it.</p>
         <p>DSPs, audio codecs and texture coordinates carry fractions this way, and the vertex kernel of <a href="#/c/graphics/0">chapter ${numOf('graphics')}</a>
         rotates in 16.16 fixed point. When a range must stretch from tiny to huge the point has to move with the number: that is floating

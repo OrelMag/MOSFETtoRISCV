@@ -127,3 +127,8 @@
 /* the placeholder holds about the room the widget takes, so filling it in moves nothing below */
 .lz-host { min-height: var(--lz-h, 560px); }
 @media (max-width: 720px) { .lz-host { min-height: var(--lz-h-narrow, 700px); } }
+/* iir's s-plane step: the plane beside the impulse response and the gain, stacked; one column on a phone */
+.dsp-sgrid { display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr); gap: 12px; align-items: start; margin: 4px 0 8px; }
+.dsp-splane .dsp-plane.dsp-mini { max-width: 280px; } .dsp-splane.drag, .dsp-splane.drag .dsp-plane.dsp-mini { cursor: grab; touch-action: none; }
+.dsp-splots figure { margin: 0 0 6px; min-width: 0; } .dsp-splots figcaption { font-size: 12px; color: var(--muted); text-align: center; }
+@media (max-width: 560px) { .dsp-sgrid { grid-template-columns: minmax(0, 1fr); } }

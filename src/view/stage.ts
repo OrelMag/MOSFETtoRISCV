@@ -27,7 +27,7 @@ import { h, hintBadge, icon } from '../ui/dom';
 import { menuKeys } from '../ui/menukeys';
 import { applyTheme, settings } from '../ui/settings';
 import type { Lens } from './lens';
-import { copyText, emptyView, encodeView, isEmptyView, linkTo, setViewTarget, splitView, takePendingView, type ViewFocus, type ViewState } from '../ui/viewlink';
+import { copyText, emptyView, encodeView, isEmptyView, linkTo, releaseViewTarget, setViewTarget, splitView, takePendingView, type ViewFocus, type ViewState } from '../ui/viewlink';
 import { switchSim, ViewCtx } from './context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from './crumbvals';
 import { Inspector, inspectorChoice } from './inspector';
@@ -609,7 +609,7 @@ export class Stage {
         this.up();
       }
     });
-    settings.onChange(() => {
+    const offSettings = settings.onChange(() => {
       this.syncPanesBtn();
       this.syncLens();
       this.analyzer.radix = settings.radix;
@@ -623,6 +623,8 @@ export class Stage {
       }
       this.refresh();
     });
+    // (a dropped `off` kept every stage ever built, with its simulator, in settings' listener set: tests/listeners.test.ts)
+    this.life.signal.addEventListener('abort', () => offSettings());
     this.view.radix = settings.radix;
     this.inspector.radix = settings.radix;
     // The canvas also changes size during a run (the bottom bar rewraps as values and the status
@@ -3425,6 +3427,7 @@ export class Stage {
     this.panels.forEach((p) => p.destroy?.());
     this.leaf?.widget.destroy?.();
     closePopover();
+    releaseViewTarget(this);
     this.life.abort();
   }
 }

@@ -209,8 +209,7 @@ export const chLatches: Chapter = {
       more: {
         derive: `<p><span data-show="inv">The inverter on d</span> is not needed. <span data-show="g1">g1</span> already computes s_n = NAND(d, e),
           which is ¬d while e = 1. Feed it to <span data-show="g2">g2</span> in place of ¬d: r_n = NAND(NAND(d, e), e). While e = 1,
-          r_n = d, so d = 0 resets as before; while e = 0, s_n = r_n = 1: hold. d still reaches r_n through two gates (g1, g2 in
-          place of the inverter, g2), so nothing gets slower: ${nands(RV16_DLATCH)} NANDs in place of ${nands(D_LATCH)}.</p>
+          r_n = d, so d = 0 resets as before; while e = 0, s_n = r_n = 1: hold. d still reaches r_n through two gates (g1 where the inverter was, then g2), so nothing gets slower: ${nands(RV16_DLATCH)} NANDs in place of ${nands(D_LATCH)}.</p>
           <p>Two of these latches and the clock inverter make a ${nands(RV16_DFF)}-NAND flip-flop (the library's is ${nands(DFF)}), and its
           enable version is ${nands(RV16_DFFE)} (against ${nands(DFFE)}). The campaign's levels build these, so their pars count
           ${nands(RV16_DLATCH)} and ${nands(RV16_DFF)}, and the state machine in chapter ${numOf('registers')} is made of them. The chapters keep the
@@ -555,7 +554,7 @@ export const chRegisters: Chapter = {
           is j = d, k = ¬d.</p>`,
         real: `<p>The 7476 and 74112 were the standard JK parts of TTL logic. Modern designs, whether FPGA or ASIC, use D flip-flops almost exclusively: a JK's four-way behaviour is a multiplexer
           in front of a D, and a synthesis tool will make exactly that when it needs it.</p>`,
-        pitfall: `<p>The old level-triggered JK latch had a famous trap: with j = k = 1 and the clock high for longer than a gate delay or two, q toggles more than once per pulse (race-around). The master–slave JK cured that but kept "1s catching": a glitch on j or k during the high phase is remembered. Edge triggering, as here, fixes both: one toggle per rising edge, and you can see the one edge in the tour.</p>`,
+        pitfall: `<p>The old level-triggered JK latch had a famous trap: with j = k = 1 and the clock high for longer than a gate delay or two, q toggles more than once per pulse (race-around). The master–slave JK cured that but kept a flaw called "ones catching": a glitch on j or k during the high phase is remembered. Edge triggering, as here, fixes both: one toggle per rising edge, and you can see the one edge in the tour.</p>`,
       },
       scene: () => ({ root: JKFF, inputs: { j: 1, k: 1, clk: 0, rst_n: 1 } }),
     },
@@ -657,7 +656,7 @@ export const chRegisters: Chapter = {
         <p>Shift left, and feed back <span data-show="fb">the XOR of a few chosen bits</span> (the <em>taps</em>). With the right taps the
         <span data-show="reg">register</span> steps through every
         non-zero value, 2ⁿ − 1 of them, in an order that looks random. Here 4 bits and taps 4, 3: 15 states from one XOR gate.</p>
-        <p>Why does a XOR of two bits visit every value? The feedback is a linear map over GF(2); the taps are the exponents of a primitive polynomial (here x⁴ + x³ + 1), and a primitive polynomial makes
+        <p>Why does a XOR of two bits visit every value? The feedback is a linear map over GF(2) (arithmetic on bits where 1 + 1 = 0); the taps are the exponents of a primitive polynomial (here x⁴ + x³ + 1), and a primitive polynomial makes
         the state a power of x in a field of 2ⁿ elements, whose powers cycle through every non-zero element. Choose the wrong taps and the sequence is shorter: the maximum is a property of the polynomial.</p>
         <p>Linear-feedback shift registers generate test patterns for chips (built-in self-test), scramble serial links so the signal has
         enough transitions, compute CRCs, and make noise. They are not secure random numbers: 2n consecutive outputs reveal the taps.</p>
@@ -688,7 +687,7 @@ export const chRegisters: Chapter = {
       title: 'Ring and Johnson counters',
       body: `
         <p>Close a <span data-show="reg">shift register</span> on itself and a single 1 circulates: a <strong>ring counter</strong>, n states from n flip-flops, already
-        one-hot (no decoder). <span data-show="inv">Invert the bit on its way round</span> and you get a <strong>Johnson counter</strong>: 2n states (0000, 0001, 0011, …,
+        <em>one-hot</em> (exactly one bit is 1, so no decoder). <span data-show="inv">Invert the bit on its way round</span> and you get a <strong>Johnson counter</strong>: 2n states (0000, 0001, 0011, …,
         1111, 1110, …), only one bit changing per step, and each state is recognised by a single 2-input gate. Both trade flip-flops for
         decoding logic, which is why they show up in state machines and multiphase clocks.</p>
         <p>The Johnson trick is the single inverter: the 1s fill in from one end until the register is full, and then the inverted bit brings in zeros and empties it the same way. The state is
@@ -771,7 +770,7 @@ export const chRegisters: Chapter = {
         <p>Code 11 never occurs, so it is a don't care: <span data-show="g0 n0"><code>n0 = x</code></span>,
         <span data-show="g1 h1 k1 n1"><code>n1 = ¬x·s0</code></span>, and the output <span data-show="yn yg"><code>y = x·s1</code></span>, each next
         bit ANDed with ¬rst for a synchronous reset. <span data-show="s0 s1">Two ${nands(RV16_DFF)}-NAND flip-flops</span>
-        (the ${nands(RV16_DLATCH)}-NAND latch from <a href="#/c/latches/2">chapter ${numOf('latches')}'s aside</a>, as the campaign builds them) and ${nands(DET101) - 2 * nands(RV16_DFF)} NANDs of logic.</p>
+        (the ${nands(RV16_DLATCH)}-NAND latch from the Derivation layer of <a href="#/c/latches/2">chapter ${numOf('latches')}'s D latch step</a>, as the campaign builds them) and ${nands(DET101) - 2 * nands(RV16_DFF)} NANDs of logic make the whole machine.</p>
         <p>y reads x directly: a <strong>Mealy</strong> output. It rises in the same cycle as the last 1 of the pattern, before the edge that takes the machine on, which is one cycle
         earlier than a state-only output could manage.</p>
         <p>The sandbox does all of this for you: <a href="#/sandbox/new/fsm">open the detector as a state-machine chip</a>, draw on its
@@ -1015,7 +1014,7 @@ export const chMemory: Chapter = {
         <p>If the contents never change, the flip-flops can go. <span data-show="u0">A decoder</span> raises one word line; output bit j is
         <span data-show="u1 u3 u4 u5 u6 u7 u8">the OR of the word lines</span>
         of every word whose bit j is 1. The data is in the wiring. Mask ROMs were made exactly like this, the pattern set by one metal layer;
-        a fuse PROM blows the unwanted connections once; flash keeps the same array but stores each connection as charge, so it can be rewritten.</p>
+        a fuse PROM (programmable ROM) blows the unwanted connections once; flash keeps the same array but stores each connection as charge, so it can be rewritten.</p>
         <p>This one holds the squares of 0–15. The CPU's instruction memory in <a href="#/c/cpu/0">chapter ${numOf('cpu')}</a> is a ROM too (built there from constants and a
         multiplexer tree, the read port's view of the same thing).</p>
         <p>Compare the cost with a RAM of the same size: ${nands(romArray('squares'))} NANDs for 16 words of 8 bits, against ${nands(ram(4, 8))} for a RAM of that shape. A ROM has no flip-flops, no write path and no clock; what remains is the decoder and a few
@@ -1128,8 +1127,7 @@ export const chMemory: Chapter = {
       title: 'Stack',
       body: `
         <p>Swap the queue's discipline for <strong>last-in first-out</strong> and one pointer is enough: <span data-show="sp">the stack pointer</span> counts the words held.
-        Push writes at slot sp and increments it; pop decrements it; <span data-show="rdp">the top is slot sp − 1</span>. Return-address predictors in CPUs are small stacks
-        like this one; the program's call stack is the same idea kept in memory, with sp in a register (x2 in RISC-V).</p>
+        Push writes at slot sp and increments it; pop decrements it; <span data-show="rdp">the top is slot sp − 1</span>. Some CPUs keep a small hardware stack of return addresses, to guess where a function will return to; the program's call stack is the same idea kept in memory, with sp in a register (x2 in RISC-V).</p>
         <p>One pointer instead of two, but the read side is not free: the top is slot sp − 1, so every read passes through a decrement before the multiplexer, which makes the top slower to reach than a FIFO's head, whose read
         pointer is already the address. The stack costs ${nands(stack(2, 8))} NANDs for 4 words of 8 bits, the FIFO ${nands(fifo(2, 8))}.</p>`,
       tour: {
@@ -1147,7 +1145,7 @@ export const chMemory: Chapter = {
       more: {
         derive: `<p>Slots 0 to 2ᵏ − 1, pointer sp from 0 to 2ᵏ (k + 1 bits, as the FIFO's pointers): push writes slot sp, then sp ← sp + 1; pop does sp ← sp − 1; top = slot[sp − 1]. Empty is sp = 0, full is sp = 2ᵏ.
           An incrementer and a decrementer (an adder-subtractor with sub tied high, which also gives the top's address) take the place of the FIFO's two incrementers, with a mux to choose.</p>`,
-        real: `<p>A CPU's call stack lives in ordinary memory with sp in a register; a hardware stack is used where the depth is small and the speed matters: return-address predictors, the 4-bit CPU's three-level stack, a
+        real: `<p>A CPU's call stack lives in ordinary memory with sp in a register; a hardware stack is used where the depth is small and the speed matters: a CPU's return-address stack (its guess of where a function returns), the 4-bit CPU's three-level stack, a
           floating-point register stack (x87). The depth is fixed, so overflow has to be defined by the design.</p>`,
         pitfall: `<p>Underflow and overflow. A pop on an empty stack or a push on a full one needs a rule: ignore it, wrap, or fault. A hardware stack that wraps silently gives wrong return addresses a depth later, a bug that is hard
           to see where it happens.</p>`,
@@ -1233,7 +1231,7 @@ export const chMemory: Chapter = {
       body: `
         <p>Before the one-transistor cell, the memory of the 1950s and 60s was a plane of <strong>ferrite cores</strong>: rings of dark ceramic about two millimetres across, each holding one bit as the direction its magnetisation circulates. Whirlwind got the first core storage in August 1953: banks of 32 × 32 × 17 cores, ${groupDigits(32 * 32)} words of 16 bits and a parity bit. A core has a nearly square hysteresis loop: below its switching current <em>I</em><sub>c</sub> it does not move, at or above it it flips completely.</p>
         <p>The address needs no decoder inside the array. One X wire and one Y wire each carry half the current that flips a core, so only the core where they cross sees the whole of it: the <strong>coincident-current</strong> scheme of Forrester's patent. Every other core on those two wires sees half and holds, and that margin is the whole design.</p>
-        <p>Reading is destructive. The cycle drives the addressed core toward 0; if it held a 1 it flips, and its magnetism reversing (a change of flux) induces a pulse on the <strong>sense wire</strong> through all cores; if it held 0 nothing moves and the wire stays quiet. A second phase writes the bit back. To write or restore a 0, the <strong>inhibit wire</strong> carries half the current the other way, so the crossing core sees half and keeps its 0. Compared with the flip-flop RAM above, a bit costs no transistor at all: it is a ring, and the select drivers and the <span data-ahead="senseamp">sense amplifiers (the circuits that turn the sense wire's faint pulse into a clean bit)</span> are shared by the whole plane. The price was that every read had to be followed by a write.</p>`,
+        <p>Reading is destructive. The cycle drives the addressed core toward 0; if it held a 1 it flips, and its magnetism reversing (a change of flux) induces a pulse on the <strong>sense wire</strong> through all cores; if it held 0 nothing moves and the wire stays quiet. A second phase writes the bit back: it drives the addressed core toward 1. To write or restore a 0, the <strong>inhibit wire</strong> carries half the current the other way, so the crossing core sees half and keeps its 0. Compared with the flip-flop RAM above, a bit costs no transistor at all: it is a ring, and the select drivers and the <span data-ahead="senseamp">sense amplifiers (the circuits that turn the sense wire's faint pulse into a clean bit)</span> are shared by the whole plane. The price was that every read had to be followed by a write.</p>`,
       more: {
         real: `<p>Cores of the early planes were about 80 mil (2 mm) outside; by 1966 they were down to 13 mil (0.33 mm), and the CDC 6600 (1964) had a core cycle of 1 µs; Whirlwind's core read-and-rewrite cycle took about 9 µs. Planes were often wired with three wires (sense and inhibit sharing one) and the sense wire ran diagonally through the cores so that the noise of half-selected cores cancelled; the model here draws four wires, its sense wire on the diagonals as Whirlwind's planes ran it (MIT Report R-221, 1954).</p>`,
         pitfall: `<p>Assuming a core is a perfect switch. A half-select current still nudges a real core's flux a little, and thousands of them on one wire add up to noise on the sense wire that the signal has to be picked out of; the square loop in the model below is the idealisation.</p>`,
@@ -1276,9 +1274,8 @@ export const chMemory: Chapter = {
           ${2 * (4 - 1)} others on its two lines see half. With n × n cores, 2n lines with a read and a write driver each, 4n drivers, select any of n² bits, and every plane of the stack shares them.
           The inhibit works the same way in reverse: one more wire through every core of a plane, carrying a half against the write, chosen per plane, so one word's bits are written
           by one X line, one Y line and a set of inhibit wires.</p>`,
-        real: `<p>Whirlwind stacked 17 planes of 32 × 32; the strobe fell inside the read current too: in the core test of MIT Report R-221 it was a ${R221.strobeUs} µs pulse about ${R221.strobeAtUs} µs into the sense pulse, well within the ${R221.readUs} µs read, and its whole read-and-rewrite access took about ${R221.cycleUs} µs. Core memory held its place into the 1970s because the periphery is shared.</p>
-          <p>Whirlwind's two banks were 32 × 32 × 17, with ${R221.readA} A on each selected X and Y line (R-221 calls each a selection plane: the line runs through every digit plane;
-          MIT Report R-221, 1954, section 5). The first bank was installed on 8 August 1953, with an access time of 9 µs against about 25 µs for the electrostatic storage tubes it replaced
+        real: `<p>Whirlwind stacked 17 planes of 32 × 32; the strobe also fell inside the read current: in the core test of MIT Report R-221 it was a ${R221.strobeUs} µs pulse about ${R221.strobeAtUs} µs into the sense pulse, well within the ${R221.readUs} µs read, and its whole read-and-rewrite cycle took about ${R221.cycleUs} µs. Core memory held its place into the 1970s, helped by that sharing of the periphery.</p>
+          <p>Whirlwind's two banks were 32 × 32 × 17, with ${R221.readA} A on each selected X and Y line (R-221, section 5, calls each a selection plane: the line runs through every digit plane). The first bank was installed on 8 August 1953, with a cycle time of about 9 µs against about 25 µs for the electrostatic storage tubes it replaced
           (Project Whirlwind Summary Report 35). The sense signal was about ${R221.senseV} V and ${R221.senseUs} µs long, and Whirlwind's sense wire already ran on the diagonals so that
           half-selected cores' small pulses cancelled. Later planes shared one wire for sense and inhibit, and the cycle fell to about 1 µs by the mid-1960s.</p>`,
         pitfall: `<p>Reading the simulation as the physics. Here a half-selected core gives no pulse at all; a real one moves its flux a little and adds a small pulse to the sense wire, and
