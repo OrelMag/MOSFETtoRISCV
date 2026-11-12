@@ -108,8 +108,7 @@ export const chDram: Chapter = {
         <p>Each row of cells shares a <strong>word line</strong> (the access transistors' gates, raised by the
         <span data-show="rdec">row decoder</span>), each <span data-show="col0 col1 col2 col3">column</span> a <strong>bit line</strong>.
         Next to every bit line runs a <strong>reference</strong> line of the same capacitance (${BITLINE_C} fF): here a line with no cells;
-        in a real array it is another bit line, its folded twin in the same mat (a block of cells with its own amplifiers; the twin's cells hang on other word lines) or, in an
-        open-bit-line array, a bit line of the neighbouring mat. Three transistors per column precharge both to <strong>VDD/2</strong>
+        in a real array it is another bit line (the "In real silicon" layer says which). Three transistors per column precharge both to <strong>VDD/2</strong>
         and equalize them.</p>
         <p>Cost of this 4 × 4: the cells are 16 transistors and 16 capacitors. Each column then adds 3 precharge transistors,
         2 for the column select and an 8-transistor <span data-show="col0.sa">sense amplifier</span>: 13 per column, more than its cells. Real arrays hang 512 to
@@ -138,7 +137,9 @@ export const chDram: Chapter = {
           amplifier (8). With R cells on a bit line the column costs 1 + ${3 + 2 + 8}/R per bit, against 6 for SRAM. The periphery
           falls away as R grows, but a longer bit line has more capacitance, which shrinks the read signal (the next step); that
           trade-off sets how many cells a real bit line carries.</p>`,
-        real: `<p>A shipping DRAM cell does not use a planar capacitor: it is a deep trench or a tall stacked cylinder, tens of fF in a footprint of a few
+        real: `<p>The reference line is another bit line: its folded twin in the same mat (a block of cells with its own amplifiers; the twin's cells hang on
+          other word lines) or, in an open-bit-line array, a bit line of the neighbouring mat.</p>
+          <p>A shipping DRAM cell does not use a planar capacitor: it is a deep trench or a tall stacked cylinder, tens of fF in a footprint of a few
           F², where F is the minimum feature size. An SRAM cell is of the order of a hundred F². The access transistor is built with a
           buried or recessed gate so that its leakage stays low. That is why DRAM and logic need different processes, and why a CPU's last
           cache is SRAM, or embedded DRAM on a DRAM-like flow, not ordinary DRAM.</p>`,

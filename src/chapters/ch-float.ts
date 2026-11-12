@@ -168,7 +168,7 @@ export const chFloat: Chapter = {
   builds: ['muldiv', 'pipeline'],
   recap: {
     keep: [
-      'A float is (−1)<sup>s</sup> × 1.f × 2<sup>e − bias</sup>, the leading 1 hidden. Exponent 0 holds zero and the subnormals, all ones ∞ and NaN. Every binade holds the same 2<sup>M</sup> values (2<sup>23</sup> in float32), so precision is relative. A NaN\'s top fraction bit is its quiet bit (0: signaling, NV when used); every NaN RISC-V computes is the canonical 0x7FC00000.',
+      'A float is (−1)<sup>s</sup> × 1.f × 2<sup>e − bias</sup>, the leading 1 hidden. Exponent 0 holds zero and the subnormals, all ones ∞ and NaN. Every binade (the range from one power of two to the next) holds the same 2<sup>M</sup> values (2<sup>23</sup> in float32), so precision is relative. A NaN\'s top fraction bit is its quiet bit (0: signaling, NV when used); every NaN RISC-V computes is the canonical 0x7FC00000.',
       'Guard, round and sticky bits are enough to round exactly. RNE rounds up when G = 1 and (S = 1 or the last kept bit is 1); the five modes differ in that one decision, a 62-NAND block.',
       'RISC-V never traps on a float exception: NV, DZ, OF, UF and NX accumulate in fflags. UF needs a result that is tiny (judged after rounding) <em>and</em> inexact.',
       'float32: the adder is about 8200 NANDs and 181 deep, the multiplier 14 900 and 176, the fma 26 300 and 270, with one rounding, against 357 deep and two roundings for fmul then fadd.',
@@ -176,7 +176,7 @@ export const chFloat: Chapter = {
       'Cost follows the significand: the multiplier tree grows as M², so a bf16 multiplier (float32\'s exponent, 8-bit significand) costs 38 % of float32\'s NANDs and an FP8 one 14–16 %; float64\'s costs 3.2 times as much. The ML E4M3 is not IEEE: no infinities, max 448.',
       'A near / far adder splits by case: a far path (long alignment, at most a 2-place normalize) and a near path (exponents within 1: no aligner, long normalize). The split alone takes the float32 adder from 181 to 129 NAND delays for 6 % more NANDs; leading-zero anticipation takes it to 114 for 39 % more in all.',
       'Division without a divider: three Newton–Raphson steps on the fma (e = 1 − b·x, x += x·e) from an integer-subtract seed, then one Markstein correction, give the correctly rounded quotient in every normal-range case measured. A partial soft-float fmul.s (normal numbers, RNE only) costs about 233 RV32I instructions.',
-      'Error is measured in ulps (u = 2<sup>−24</sup> relative under RNE). Subtraction of nearby numbers is exact (Sterbenz) but exposes earlier rounding: catastrophic cancellation. A plain sum\'s error grows like n·u, pairwise like log n·u, Kahan\'s stays near 2u.',
+      'Error is measured in ulps (u = 2<sup>−24</sup> relative under RNE). Subtraction of nearby numbers (within a factor of 2 of each other) is exact (Sterbenz\'s lemma) but exposes earlier rounding: catastrophic cancellation. A plain sum\'s error grows like n·u, pairwise like log n·u, Kahan\'s stays near 2u.',
     ],
     practise: ['n_float', 'o_fpunpack', 'o_fpround', 'o_fpsticky', 'o_fplzc', 'o_fpnorm', 'o_fpadd', 'o_fpmul', 'o_fpcmp', 'o_fpcvt'],
     check: [
@@ -722,13 +722,7 @@ export const chFloat: Chapter = {
         <p>What changes with the format is how the cost grows. The adder's shifters and incrementers grow with the width times the logarithm of it; the multiplier's tree with the square of the significand
         width; the exponent logic hardly at all. Going from the 8-bit format to float32 multiplies the adder by ${(u32('add').n / nands(fpAdd(E4M3))).toFixed(0)} and the multiplier by ${(u32('mul').n / nands(fpMul(E4M3))).toFixed(0)}, for 7.7 times
         the fraction bits. Nothing in the design is specific to the small format: the same generator builds each, which is why the small ones can stand in for it in tests and in the drawings.</p>
-        <p>The small formats are tested in every rounding mode, flags included, against exact rational arithmetic, simulated 32 cases at a time. The 6-bit
-        format (3 exponent bits, 2 fraction bits) is exhaustive: every operand pair for add, subtract, multiply and divide, every triple and sign variant
-        for the fma (one rounding mode per case, rotating). The 8-bit formats are sampled: every special or boundary operand (zeros, subnormals, the smallest and largest normals, infinities,
-        NaNs) against every operand, plus 3000 random pairs; the fma on random triples biased towards cancellation. Square root and the conversions
-        see every 8-bit input. Well over a million cases in all; every pair of 8-bit operands is an opt-in run (FPU_EXHAUSTIVE=1), not part of the
-        regular test suite. float32 is tested on random and special operands (subnormals, infinities, NaNs, cancellation), and against the host CPU in
-        round to nearest even.</p>
+        <p>So the small formats can be tested completely, against exact arithmetic in every rounding mode, and float32 by sampling; the Numbers layer says how.</p>
         <p>The same generators also take the formats machine learning uses (bfloat16, and FP8 in its E4M3 and E5M2 shapes), which the next steps price, and the units around them can be changed: a near and far adder, and a divider replaced by Newton–Raphson division on the fma.</p>
         <div class="try">1.5 (0x3FC00000) + 2.25 (0x40100000) = 3.75 (0x40700000). Follow <span data-show="align add">the significands</span> through the aligner and the adder.</div>`; },
       scene: () => ({ root: fpAdd(F32), inputs: { a: 0x3fc00000, b: 0x40100000, sub: 0 } }),
@@ -736,7 +730,13 @@ export const chFloat: Chapter = {
         numbers: costTable(
           costRow('Unpack', fpUnpack) + costRow('Adder', (f) => fpAdd(f)) + costRow('Multiplier', (f) => fpMul(f)) + costRow('Fused multiply-add', (f) => fpFma(f)) + costRow('float → int32', (f) => fpToInt(f, 32)) +
           costRow('Divider (sequential)', (f) => fpDiv(f), false) + costRow('Square root (sequential)', (f) => fpSqrt(f), false),
-        ),
+        ) + `<p>How the units are tested. The small formats in every rounding mode, flags included, against exact rational arithmetic, simulated 32 cases at a time. The 6-bit
+          format (3 exponent bits, 2 fraction bits) is exhaustive: every operand pair for add, subtract, multiply and divide, every triple and sign variant
+          for the fma (one rounding mode per case, rotating). The 8-bit formats are sampled: every special or boundary operand (zeros, subnormals, the smallest and largest normals, infinities,
+          NaNs) against every operand, plus 3000 random pairs; the fma on random triples biased towards cancellation. Square root and the conversions
+          see every 8-bit input. Well over a million cases in all; every pair of 8-bit operands is an opt-in run (FPU_EXHAUSTIVE=1), not part of the
+          regular test suite. float32 is tested on random and special operands (subnormals, infinities, NaNs, cancellation), and against the host CPU in
+          round to nearest even.</p>`,
         derive: `<p>Why the cost splits as it does. A right shifter by up to w positions is w·log<sub>2</sub> w multiplexers; the adder needs one to align and one to normalize, plus an incrementer for rounding, so it grows like w log w with
           a small constant. A w × w multiplier has w² partial-product bits compressed by a tree of about w² full adders. From 8-bit (significand ${E4M3.M + 1} bits) to float32 (${F32.M + 1} bits): the width ratio is
           ${((F32.M + 1) / (E4M3.M + 1)).toFixed(1)}, the multiplier's expected cost ratio the square of it, ${(((F32.M + 1) / (E4M3.M + 1)) ** 2).toFixed(0)}, against ${(u32('mul').n / nands(fpMul(E4M3))).toFixed(0)} measured (the exponent logic and the rounder do not grow with the square).</p>`,
