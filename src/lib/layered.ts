@@ -264,9 +264,34 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
     nl = next;
   }
   if (opts.aspect) nl = fold(nl, opts.aspect);
+  // avoid was judged before the fold moved whole bands: a wire clear then may cross a part now, so it is labels after all
+  if (opts.aspect && opts.avoid) nl = reclear(nl);
   const { pins, instances, nets: outNets } = nl;
   void byName;
   return { pins, instances, nets: outNets };
+
+  /** The avoid rule again, on the drawing as it now stands: a wire (not named in opts.wires) with a part between its ends is labels. */
+  function reclear(n0: ReturnType<typeof lay>): ReturnType<typeof lay> {
+    const at = new Map(n0.instances.map((i) => [i.name, i.at!]));
+    const pos = (end: string): [number, number] => {
+      const n = inst(end);
+      if (!n) return n0.pins[end] ?? [0, 0];
+      const p = geom.get(n)!.ports[portOf(end)]?.pos ?? [0, 0];
+      return [at.get(n)![0] + p[0], at.get(n)![1] + p[1]];
+    };
+    const blocked = (de: string, se: string): boolean => {
+      const d = pos(de), q = pos(se);
+      if (q[0] <= d[0]) return true;
+      const x0 = d[0], x1 = q[0], y0 = Math.min(d[1], q[1]) - 0.5, y1 = Math.max(d[1], q[1]) + 0.5, own = new Set([inst(de), inst(se)]);
+      return n0.instances.some((i) => {
+        if (own.has(i.name)) return false;
+        const g = geom.get(i.name)!, [ix, iy] = i.at!;
+        return !(ix + g.w <= x0 || ix >= x1 || iy + g.h <= y0 || iy >= y1);
+      });
+    };
+    const nets = n0.nets.map((n) => (n.tags || opts.wires?.[n.ends[0]] !== undefined || !n.ends.slice(1).some((e) => blocked(n.ends[0], e)) ? n : { ...n, tags: true as const }));
+    return { ...n0, nets };
+  }
 
   /**
    * A drawing far wider than `target` (w / h): its columns in 2–4 bands stacked top to bottom, as many as bring the whole
