@@ -6,12 +6,12 @@ import { chRadio } from '../src/chapters/ch-comm-radio';
 import { boundsOfNamed, itemMatrix, applyMat } from '../src/gl/kit/scene';
 import { apertureM2, wavelengthM } from '../src/phys/radio';
 import { ANTENNA_GHZ } from '../src/widgets/radio';
-import { COAX, GHZ_HI, LOOP_PTS, ROD_R, SRC, apertureMm2, currentColour, dipoleModel, isoRadius, loopBeads, type DipoleLook } from '../src/widgets/dipole3dkit';
+import { BEAT_LAYERS, COAX, FRAME_GROUPS, GHZ_HI, HI_AT, HI_VIEW, LAYERS, LOOP_PTS, ROD_R, SRC, apertureMm2, currentColour, dipoleModel, isoRadius, loopBeads, type DipoleLook } from '../src/widgets/dipole3dkit';
 import { DipoleRun, LAMBDA, PATTERN_R, SLEEVE_LEN, cutHalf, directivity, gainDbi, halfPower, loopOutline, loopsAt, surfaceAt } from '../src/widgets/dipole3dparts';
 
 const MM = 10;
 const rgb = { cu: [0.8, 0.5, 0.3] as [number, number, number], pos: [1, 0, 0] as [number, number, number], neg: [0, 0, 1] as [number, number, number] };
-const look = (o: Partial<DipoleLook> = {}): DipoleLook => ({ detail: 'flat', mode: 'power', feed: 'balanced', pattern: true, hi: false, rgb, ...o });
+const look = (o: Partial<DipoleLook> = {}): DipoleLook => ({ detail: 'flat', mode: 'power', feed: 'balanced', layers: new Set(LAYERS), rgb, ...o });
 const named = (m: ReturnType<typeof dipoleModel>, n: string) => m.items.filter((it) => it.name === n);
 
 describe('sourced dimensions', () => {
@@ -82,7 +82,7 @@ describe('the aperture, at the chapter frequency and at 28 GHz', () => {
     expect(GHZ_HI).toBe(28);
   });
   it('the 28 GHz dipole beside it is the same antenna scaled by the wavelength', () => {
-    const m = dipoleModel(new DipoleRun(), look({ hi: true }));
+    const m = dipoleModel(new DipoleRun(), look());
     const arm = named(m, `${GHZ_HI} GHz dipole`)[0], hcs = cutHalf(0.5) * MM * (wavelengthM(GHZ_HI) / wavelengthM(ANTENNA_GHZ));
     expect(arm.geo.max[1]).toBeCloseTo(hcs, 6);
     expect(named(m, 'a phone, for scale').length).toBe(1);
@@ -119,5 +119,26 @@ describe('the motion follows the current', () => {
     expect(b).toBe(a);
     const M = itemMatrix(named(dipoleModel(run, look()), 'arm')[1], 0);
     expect(applyMat(M, [0, 10, 0])[1]).toBeCloseTo(-10, 9);
+  });
+});
+
+describe('the subject first, one layer at a time', () => {
+  it('home is the antenna alone: arms, tip charge, feed and line, and the frames nobody sees', () => {
+    const m = dipoleModel(new DipoleRun(), look({ layers: new Set() }));
+    const groups = new Set(m.items.map((it) => it.group));
+    for (const g of groups) expect(['arms', 'charge', 'feed', ...FRAME_GROUPS]).toContain(g);
+    expect(m.items.some((it) => (it.mat.transmit ?? 0) > 0.3 && it.group !== 'homebox')).toBe(false);
+  });
+  it('each beat lends the layers it is about, and only the gain beat shows the isotropic sphere', () => {
+    const m = dipoleModel(new DipoleRun(), look());
+    expect(BEAT_LAYERS.length).toBe(m.beats!.length);
+    BEAT_LAYERS.forEach((ls, i) => expect(ls.includes('iso')).toBe(m.beats![i].title === 'Gain is aiming'));
+    expect(named(dipoleModel(new DipoleRun(), look({ layers: new Set(['pattern'] as const) })), 'isotropic, same power').length).toBe(0);
+    expect(named(dipoleModel(new DipoleRun(), look({ layers: new Set(['aperture'] as const) })), 'a phone, for scale').length).toBe(0);
+  });
+  it('the 28 GHz view frames the small dipole, close enough to see it', () => {
+    expect(Math.hypot(HI_VIEW.target[0] - HI_AT[0], HI_VIEW.target[1] - HI_AT[1], HI_VIEW.target[2] - HI_AT[2])).toBeLessThan(6);
+    // about a 5 mm dipole in a field of view ~40 mm tall at 35 degrees
+    expect(2 * HI_VIEW.dist * Math.tan((35 * Math.PI) / 360)).toBeLessThan(45);
   });
 });

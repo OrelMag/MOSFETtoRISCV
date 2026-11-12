@@ -14,9 +14,9 @@ import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
 import { ANTENNA_GHZ } from './radio';
 import { studioStage, type StudioStage } from './studiostage';
-import { COAX, GHZ_HI, HOME, PHONE, apertureMm2, dipoleModel, loopBeads, type DipoleLook } from './dipole3dkit';
+import { BEAT_LAYERS, COAX, FRAME_GROUPS, GHZ_HI, HI_VIEW, HOME, apertureMm2, dipoleModel, loopBeads, type DipoleLook, type Layer } from './dipole3dkit';
 import {
-  DEFICIT, DRAW_RATE, PATTERN_R, DipoleRun, END_EFFECT, FEED_W, FREQ_HZ, LAMBDA, L_HALF, L_MAX, L_MIN, REAL_DIAMETER, DRAWN_SCALE, SLOWDOWN, STEP_PHASE, Z0_COAX,
+  DEFICIT, DRAW_RATE, DipoleRun, END_EFFECT, FEED_W, FREQ_HZ, LAMBDA, L_HALF, L_MAX, L_MIN, REAL_DIAMETER, DRAWN_SCALE, SLOWDOWN, STEP_PHASE, Z0_COAX,
   cutLength, feedDrive, feedResistance, gainDbi, halfPower, loopBirth, mismatch, type Feed, type PatternMode,
 } from './dipole3dparts';
 
@@ -32,49 +32,47 @@ const FALLBACK: DipoleLook['rgb'] = { cu: [0.84, 0.54, 0.29], pos: [1, 0.35, 0.2
 
 export function dipoleView(): Widget {
   const run = new DipoleRun();
-  const look: Omit<DipoleLook, 'detail' | 'rgb'> = { mode: 'power', feed: 'balanced', pattern: true, hi: false };
+  /** The reader's layers (the chips); the tour's beats lend their own while they play and give these back at its end. */
+  const mine = new Set<Layer>();
+  let shown: ReadonlySet<Layer> = mine;
+  const look: Omit<DipoleLook, 'detail' | 'rgb' | 'layers'> = { mode: 'power', feed: 'balanced' };
   let running = false, target: number | null = null, lastRead = 0, stageRef: StudioStage | null = null;
   const rgb = (): DipoleLook['rgb'] => (stageRef ? { cu: stageRef.rgb('--dp-cu'), pos: stageRef.rgb('--dp-pos'), neg: stageRef.rgb('--dp-neg') } : FALLBACK);
 
-  // The home view's distance is fitted to the pattern's radius at the canvas's shape (the stage's own fit takes the box's
-  // corners, far too wide for a round pattern); it follows a resize while the camera is still at home.
-  const home = { ...HOME, target: [...HOME.target] as [number, number, number] };
   const stage = studioStage({
-    aria: 'A half-wave dipole antenna in 3D: two copper arms with a feed gap, the current and voltage along them, field loops leaving it, magnetic rings round the arms, its doughnut-shaped radiation pattern round an isotropic sphere of the same power, and its effective aperture',
-    home,
-    fit: false,
-    limits: { minDist: 30, maxDist: 1600, maxPan: 400 },
+    aria: 'A half-wave dipole antenna in 3D: two copper arms with a feed gap, coloured by the current running along them; layers add the current and voltage curves, the field leaving it, its doughnut-shaped radiation pattern against an isotropic sphere of the same power, its effective aperture and the same dipole at 28 GHz',
+    home: HOME,
+    // home is the antenna and its feed, large (a box round them, never drawn), whatever is layered on
+    homeFrame: ['homebox'],
+    hidden: [...FRAME_GROUPS],
+    limits: { minDist: 20, maxDist: 1600, maxPan: 400 },
+    onBeat: (i) => {
+      shown = i >= 0 ? new Set(BEAT_LAYERS[i] ?? []) : mine;
+      syncChips();
+      draw();
+    },
     note: `Scaled or drawn, not solved: the ${f1(LAMBDA)} cm wavelength and the ${f1(cutLength(L_HALF))} cm cut length are to scale (the half wave is ${f1(LAMBDA / 2)} cm electrical; the end effect shortens a thin wire by about ${Math.round((1 - END_EFFECT) * 100)} %, taken as a constant ${(DEFICIT / 2).toFixed(2)} cm a tip at every length); the ${REAL_DIAMETER * 10} mm copper rod is drawn ${DRAWN_SCALE}× thicker, and the height of the current and voltage curves is arbitrary. Current and voltage are the sinusoidal standing waves of a thin centre-fed dipole (Balanis, ch. 4); the field loops and magnetic rings are a cartoon of the near field, not a solution of Maxwell's equations; the pattern is the exact far-field shape of that current, drawn close in (the far field starts about a wavelength out). The coax is to scale (UT-085C, ${COAX.jacket.toFixed(2)} mm), the sleeve a quarter wave in air. Time runs ${sci(SLOWDOWN)} times slower than real (${DRAW_RATE} periods a second at ${f1(ANTENNA_GHZ)} GHz). The impedances are the resistive part only; the reactance (+42.5 Ω at λ/2) is not computed.`,
-    build: (detail) => dipoleModel(run, { ...look, detail, rgb: rgb() }),
+    build: (detail) => dipoleModel(run, { ...look, detail, layers: shown, rgb: rgb() }),
   });
   stageRef = stage;
-  const R = PATTERN_R * 10;
-  /** The home view for the canvas's shape: the pattern alone, or (28 GHz beside it) the pattern and the phone to its right.
-   *  `force`: a toggle that changed what home shows moves the camera there even if the reader had turned it. */
-  const fitHome = (force = false) => {
-    const st = stage.studio(), cv = stage.el.querySelector('canvas');
-    if (!st || !cv || !cv.clientWidth || !cv.clientHeight) return;
-    const ty = Math.tan(st.camera.fov / 2), tx = ty * (cv.clientWidth / cv.clientHeight);
-    // half-widths seen from home: the pattern R (and its squashed height), or from its left edge to the phone's right one
-    const right = R + 60 + PHONE.w / 2, hx = look.hi ? (R + right) / 2 : R, hy = look.hi ? Math.max(0.62 * R, PHONE.h / 2) : 0.62 * R;
-    const d = Math.round(1.1 * Math.max(hx / tx, hy / ty) + 0.6 * R), cx = look.hi ? (right - R) / 2 : 0;
-    if (d === home.dist && cx === home.target[0] && !force) return;
-    const was = st.camera.atHome();
-    home.dist = d; home.target[0] = cx;
-    if (was || force) { st.camera.rehome(home); st.invalidate(); }
-  };
-  const ro = new ResizeObserver(() => fitHome());
-  // the tour moves on: the loops follow it (shown or not)
-  const capWatch = new MutationObserver(() => putLoops());
   const beadMat = M.beam([0, 0, 0], 1, 'electric field loop (a cartoon of the near field)');
-  /** The tour's beats about the pattern, the aperture and the feed are clearer without the loops (beads cannot be hidden by a beat). */
-  const QUIET = /· (Gain is aiming|Aperture|The feed)./;
-  const caption = stage.el.querySelector('.st-caption');
+  const NONE = new Float32Array(0);
+  /** The electric loops are instanced beads: drawn only with the Fields layer. */
   const putLoops = () => {
     if (stage.isFlat()) return;
-    if (QUIET.test(caption?.textContent ?? '')) { stage.instances('loops', BEAD, M.beam([0, 0, 0], 1), new Float32Array(0)); return; }
+    if (!shown.has('fields')) { stage.instances('loops', BEAD, beadMat, NONE); return; }
     const c = (t: string): RGB => stage.rgb(t);
     stage.instances('loops', BEAD, beadMat, packInstances(loopBeads(run, { e1: c('--dp-e1'), e2: c('--dp-e2') })));
+  };
+  /** The 28 GHz layer comes with its own view: the small dipole large, the 2.4 GHz arm a copper bar beside it, the phone behind. */
+  const goView = (v: { target: [number, number, number]; yaw: number; pitch: number; dist: number } | null) => {
+    const st = stage.studio();
+    if (!st) return;
+    if (!v) { st.camera.reset(); st.invalidate(); return; }
+    const c = st.camera;
+    c.limits.minDist = Math.min(c.limits.minDist, v.dist * 0.5);
+    c.target = [...v.target]; c.yaw = v.yaw; c.pitch = v.pitch; c.dist = v.dist;
+    st.invalidate();
   };
 
   // ---------------------------------------------------------------- the feed current against time, with the loops' births
@@ -169,8 +167,6 @@ export function dipoleView(): Widget {
     readout(true); kick();
   });
   const toggle = (b: HTMLButtonElement, on: boolean) => { b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); };
-  const patBtn = btn('Pattern', 'Show or hide the far-field pattern and the isotropic sphere', true);
-  patBtn.addEventListener('click', () => { look.pattern = !look.pattern; toggle(patBtn, look.pattern); kick(); });
   const modeBtn = btn('Doughnut: power', 'The pattern as the power (the field squared: what the gain describes) or as the field amplitude');
   modeBtn.addEventListener('click', () => {
     look.mode = (look.mode === 'power' ? 'field' : 'power') as PatternMode;
@@ -182,8 +178,28 @@ export function dipoleView(): Widget {
     const i = (FEEDS.findIndex(([k]) => k === look.feed) + 1) % FEEDS.length;
     look.feed = FEEDS[i][0]; feedBtn.textContent = FEEDS[i][1]; kick();
   });
-  const hiBtn = btn(`${GHZ_HI} GHz beside it`, `The same dipole at ${GHZ_HI} GHz with its aperture, and a phone for scale`, false);
-  hiBtn.addEventListener('click', () => { look.hi = !look.hi; toggle(hiBtn, look.hi); kick(); fitHome(true); });
+  // The layers, one chip each: the antenna alone to begin with, each chip adds one thing over it.
+  const CHIPS: [Layer, string, string][] = [
+    ['curves', 'Current & voltage', 'The current I(z) and the voltage V(z) along the arms, as curves beside them'],
+    ['fields', 'Fields', 'The electric loops leaving at c and the magnetic rings round the arms (a cartoon of the near field)'],
+    ['pattern', 'Pattern', 'The far-field pattern: how much is radiated each way'],
+    ['iso', 'vs isotropic', 'The isotropic sphere of the same total power, and the half-power rings: the gain as aiming'],
+    ['aperture', 'Aperture', 'The area of a passing wave this dipole collects, A = Gλ²/4π'],
+    ['hi', `${GHZ_HI} GHz beside it`, `The same dipole at ${GHZ_HI} GHz with its aperture, a phone behind for scale; the camera goes to it`],
+  ];
+  const chipBtns = CHIPS.map(([k, label, title]) => {
+    const b = btn(label, title, false);
+    b.addEventListener('click', () => {
+      // a chip is the reader's: it takes back from the tour what it shows
+      for (const l of shown) if (shown !== mine) mine.add(l);
+      if (mine.has(k)) mine.delete(k); else mine.add(k);
+      shown = mine;
+      syncChips(); kick();
+      if (k === 'hi') goView(mine.has('hi') ? HI_VIEW : null);
+    });
+    return b;
+  });
+  function syncChips(): void { chipBtns.forEach((b, i) => toggle(b, shown.has(CHIPS[i][0]))); }
   const lenIn = h('input', { type: 'range', min: Math.round(L_MIN * 100), max: Math.round(L_MAX * 100), step: 5, value: Math.round(L_HALF * 100), 'aria-label': 'Electrical length of the dipole in wavelengths' }) as HTMLInputElement;
   const lenOut = h('output', null, '');
   lenIn.addEventListener('input', () => { run.lwl = Number(lenIn.value) / 100; kick(); });
@@ -192,17 +208,17 @@ export function dipoleView(): Widget {
   syncMotion();
 
   stage.slot.append(
-    h('div', { class: 'r3-ctl' }, h('div', { class: 'r3-btns dp-btns' }, runBtn, stepBtn, patBtn, modeBtn, feedBtn, hiBtn)),
+    h('div', { class: 'r3-ctl' }, h('div', { class: 'r3-btns dp-btns' }, runBtn, stepBtn, modeBtn, feedBtn)),
+    h('div', { class: 'r3-ctl' }, h('div', { class: 'r3-btns dp-btns dp-layers', role: 'group', 'aria-label': 'Layers over the antenna' }, ...chipBtns)),
     h('div', { class: 'r3-ctl' }, h('label', { class: 'r3-sl' }, h('span', null, 'Length'), lenIn, lenOut)),
     strip, live);
   const el = h('div', { class: 'r3 dipole3d' },
     h('div', { class: 'r3-main' }, stage.el),
     h('div', { class: 'r3-side' }, h('h4', null, 'This dipole ', h('span', { class: 'r3-badge' }, 'the chapter’s numbers')), kv));
   el.addEventListener('keydown', (e) => { if (e.key === 'Escape' && running) { running = false; readout(true); kick(); } });
-  if (caption) capWatch.observe(caption, { childList: true, subtree: true, characterData: true });
   readout(true);
   draw();
   // the loops are instances, and the arms' colours come from the theme: both again once the renderer is up
-  const ready = setInterval(() => { if (stage.studio() || stage.isFlat()) { clearInterval(ready); const cv = stage.el.querySelector('canvas'); if (cv) ro.observe(cv); fitHome(); draw(); } }, 100);
-  return { el, destroy() { ro.disconnect(); capWatch.disconnect(); clearInterval(ready); mq?.removeEventListener?.('change', onMq); loop.stop(); stage.destroy(); } };
+  const ready = setInterval(() => { if (stage.studio() || stage.isFlat()) { clearInterval(ready); draw(); } }, 100);
+  return { el, destroy() { clearInterval(ready); mq?.removeEventListener?.('change', onMq); loop.stop(); stage.destroy(); } };
 }

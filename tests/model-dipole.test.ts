@@ -4,10 +4,10 @@ import { chRadio } from '../src/chapters/ch-comm-radio';
 import { C_M_S, dipoleField, wavelengthM } from '../src/phys/radio';
 import { ANTENNA_GHZ } from '../src/widgets/radio';
 import { DEFICIT, DipoleRun, GAP, HALF_LEN, cutLength, cutHalf, feedDrive, feedResistance, gainDbi, halfPower, mismatch, powerAt, radiationResistance, surfaceAt, voltageAt, LAMBDA, LOOP_LIFE, PATTERN_R, currentAt, envelope, frontAt, loopBirth, loopsAt, loopOutline, patternAt } from '../src/widgets/dipole3dparts';
-import { dipoleModel, patternProfile, type DipoleLook } from '../src/widgets/dipole3dkit';
+import { LAYERS, dipoleModel, patternProfile, type DipoleLook } from '../src/widgets/dipole3dkit';
 import { boundsOfNamed } from '../src/gl/kit/scene';
 
-const look = (o: Partial<DipoleLook> = {}): DipoleLook => ({ detail: 'flat', mode: 'power', feed: 'balanced', pattern: true, hi: false, rgb: { cu: [0.8, 0.5, 0.3], pos: [1, 0, 0], neg: [0, 0, 1] }, ...o });
+const look = (o: Partial<DipoleLook> = {}): DipoleLook => ({ detail: 'flat', mode: 'power', feed: 'balanced', layers: new Set(LAYERS), rgb: { cu: [0.8, 0.5, 0.3], pos: [1, 0, 0], neg: [0, 0, 1] }, ...o });
 /** The kit is in mm, the parts in cm. */
 const MM = 10;
 
@@ -103,7 +103,7 @@ describe('the drawing', () => {
     const names = (o: Partial<DipoleLook>) => (dipoleModel(run, look(o)).anchors ?? []).filter((a) => !a.minor).map((a) => a.text).join('|');
     const first = names({});
     for (let k = 0; k < 8; k++) {
-      expect(dipoleModel(run, look()).items.length).toBeGreaterThan(dipoleModel(run, look({ pattern: false })).items.length);
+      expect(dipoleModel(run, look()).items.length).toBeGreaterThan(dipoleModel(run, look({ layers: new Set(['dim', 'curves'] as const) })).items.length);
       for (const feed of ['balanced', 'coax', 'balun'] as const) expect(names({ feed })).toBe(first);
       run.step();
     }

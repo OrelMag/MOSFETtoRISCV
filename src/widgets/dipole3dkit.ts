@@ -90,14 +90,16 @@ const curveGeo = (key: string, path: Vec3[], r: number) => {
 
 // ---------------------------------------------------------------- the model at a state
 
+/** What is drawn besides the antenna itself, one layer at a time: the subject first, each beat or chip adds one thing. */
+export type Layer = 'dim' | 'curves' | 'fields' | 'pattern' | 'iso' | 'aperture' | 'hi';
+export const LAYERS: readonly Layer[] = ['dim', 'curves', 'fields', 'pattern', 'iso', 'aperture', 'hi'];
+
 export interface DipoleLook {
   detail: Detail;
   mode: PatternMode;
   feed: Feed;
-  /** Show the pattern (the doughnut, the isotropic sphere, the half-power rings). */
-  pattern: boolean;
-  /** Put the 28 GHz dipole, its aperture and a phone beside the 2.4 GHz one. */
-  hi: boolean;
+  /** The layers drawn over the antenna (the arms, the tip charge, the feed gap and the line are always there). */
+  layers: ReadonlySet<Layer>;
   /** Theme colours the arms are painted with (resolved by the view: the kit stays DOM-free). */
   rgb: { cu: RGB; pos: RGB; neg: RGB };
 }
@@ -109,9 +111,16 @@ export const currentColour = (z: number, run: DipoleRun, c: DipoleLook['rgb']): 
   return mix(c.cu, v >= 0 ? c.pos : c.neg, Math.min(1, Math.abs(v) * 1.1));
 };
 
+/** Never drawn (the stage's `hidden`): the box home is fitted to, the antenna and its feed with room round them (so the
+ *  canvas keeps one shape whatever is layered on), and the reach of the field loops for their beat. */
+export const HOME_BOX = { x0: -48, x1: 40, y: 34 } as const;
+export const FRAME_GROUPS = ['homebox', 'reach', 'patbox'] as const;
+/** Where the 28 GHz dipole stands: beside the upper arm, in front of it. */
+export const HI_AT: Vec3 = [14, 10, 6];
+
 export function dipoleModel(run: DipoleRun, look: DipoleLook): Model3 {
   const L = run.lwl, d = look.detail, full = d === 'full', items: Item[] = [], hc = cutHalf(L) * MM, R = PATTERN_R * MM;
-  const lam = LAMBDA * MM, D = directivity(L), half = Math.abs(L - L_HALF) < 1e-9;
+  const lam = LAMBDA * MM, D = directivity(L), half = Math.abs(L - L_HALF) < 1e-9, on = (l: Layer) => look.layers.has(l);
 
   // The arms: copper, painted along their length by the current there (the paint is the current, not a finish).
   const armMat = M.make({ base: [1, 1, 1], metal: 0.55, rough: 0.3, label: 'copper rod, coloured by its current (red up, blue down)' });
@@ -131,72 +140,93 @@ export function dipoleModel(run: DipoleRun, look: DipoleLook): Model3 {
   items.push({ geo: once('ins', () => roundedBox(9, GAP * MM + 10, 9, 1.5, full ? 3 : 1)), mat: M.make({ base: '--dp-ins', metal: 0, rough: 0.55, label: 'PTFE' }), name: 'feed gap', group: 'feed', cut: 'none',
     info: { dim: `${GAP * MM} mm gap`, source: SRC.illus, note: half ? 'the current is largest here: 73 Ω of radiation resistance (a cut half wave, its reactance trimmed out)' : 'the feed: where the line meets the arms' } });
   feedItems(items, run, look);
+  // the frames (never drawn)
+  const ghostBox = M.make({ base: [0, 0, 0], metal: 0, rough: 1, label: 'frame' });
+  items.push({ geo: once('homebox', () => roundedBox(HOME_BOX.x1 - HOME_BOX.x0, 2 * HOME_BOX.y, 4, 0, 1)), at: [(HOME_BOX.x0 + HOME_BOX.x1) / 2, 0, 0], mat: ghostBox, group: 'homebox', cut: 'none', shadow: false });
+  items.push({ geo: once('reach', () => roundedBox(2 * lam + 10, 2 * hc + 20, 4, 0, 1)), mat: ghostBox, group: 'reach', cut: 'none', shadow: false });
+  // the pattern's section in the cut plane (its polar plot and the isotropic circle), flat: what the gain beat frames
+  const py = Math.max(...patternProfile(L, look.mode, 60).map(([, y]) => Math.abs(y)), R * isoRadius(L, look.mode));
+  items.push({ geo: once(`patbox|${T(py, 1)}`, () => roundedBox(2 * R + 4, 2 * py + 4, 2, 0, 1)), mat: ghostBox, group: 'patbox', cut: 'none', shadow: false });
 
-  // The current and voltage along the arms, as curves beside them (the height arbitrary: a graph, not a part).
-  const ghost = M.make({ base: '--dp-ghost', metal: 0, rough: 0.6, transmit: 0.5, label: 'the current\'s envelope' });
-  for (const sg of [1, -1]) items.push({ geo: once(`env|${L}|${sg}`, () => tube(curvePath(L, (z) => sg * envelope(z, L), 2), 0.35, { sides: 5 })), mat: ghost, cut: 'none', shadow: false, group: 'curves' });
-  const i0 = Math.cos(run.phase);
-  items.push({ geo: curveGeo(`I|${L}`, curvePath(L, (z) => currentAt(z, run.phase, L), 2), 0.8), mat: M.make({ base: i0 >= 0 ? '--dp-pos' : '--dp-neg', metal: 0, rough: 0.4, emit: i0 >= 0 ? '--dp-pos' : '--dp-neg', glow: 0.25, label: 'the current I(z) now (a graph)' }), name: 'current I(z)', group: 'curves', cut: 'none', shadow: false,
-    info: { note: 'sin(k(L/2 − |z|)) cos ωt: a standing wave, largest at the feed of a half wave, zero at the tips', source: SRC.balanis } });
-  items.push({ geo: curveGeo(`V|${L}`, curvePath(L, (z) => voltageAt(z, run.phase, L), 0), 0.8), mat: M.make({ base: '--dp-volt', metal: 0, rough: 0.4, emit: '--dp-volt', glow: 0.2 + 0.3 * Math.abs(Math.sin(run.phase)), label: 'the voltage V(z) now (a graph)' }), name: 'voltage V(z)', group: 'curves', cut: 'none', shadow: false,
-    info: { note: 'its quadrature twin: zero at the feed of a half wave, largest at the tips', source: SRC.balanis } });
-  // The magnetic field: rings round the arms, lit by the local current.
-  for (const f of [0.18, 0.5, 0.82]) for (const side of [1, -1]) {
-    const y = side * f * cutHalf(L), i = Math.abs(currentAt(y, run.phase, L));
-    if (i > 0.08) items.push({ geo: once('hring', () => torus(15, 0.45, full ? 48 : 16, 6)), mat: M.beam('--dp-h', 0.25 + 0.9 * i, 'magnetic field (a ring of B round the current)'), at: [0, y * MM, 0], group: 'hfield', cut: 'none', shadow: false });
+  if (on('curves')) {
+    // The current and voltage along the arms, as curves beside them (the height arbitrary: a graph, not a part).
+    const ghost = M.make({ base: '--dp-ghost', metal: 0, rough: 0.6, transmit: 0.5, label: 'the current’s envelope' });
+    for (const sg of [1, -1]) items.push({ geo: once(`env|${L}|${sg}`, () => tube(curvePath(L, (z) => sg * envelope(z, L), 2), 0.35, { sides: 5 })), mat: ghost, cut: 'none', shadow: false, group: 'curves' });
+    const i0 = Math.cos(run.phase);
+    items.push({ geo: curveGeo(`I|${L}`, curvePath(L, (z) => currentAt(z, run.phase, L), 2), 0.8), mat: M.make({ base: i0 >= 0 ? '--dp-pos' : '--dp-neg', metal: 0, rough: 0.4, emit: i0 >= 0 ? '--dp-pos' : '--dp-neg', glow: 0.25, label: 'the current I(z) now (a graph)' }), name: 'current I(z)', group: 'curves', cut: 'none', shadow: false,
+      info: { note: 'sin(k(L/2 − |z|)) cos ωt: a standing wave, largest at the feed of a half wave, zero at the tips', source: SRC.balanis } });
+    items.push({ geo: curveGeo(`V|${L}`, curvePath(L, (z) => voltageAt(z, run.phase, L), 0), 0.8), mat: M.make({ base: '--dp-volt', metal: 0, rough: 0.4, emit: '--dp-volt', glow: 0.2 + 0.3 * Math.abs(Math.sin(run.phase)), label: 'the voltage V(z) now (a graph)' }), name: 'voltage V(z)', group: 'curves', cut: 'none', shadow: false,
+      info: { note: 'its quadrature twin: zero at the feed of a half wave, largest at the tips', source: SRC.balanis } });
   }
-  // The length, measured beside the upper arm's side: a dimension line, tip to tip.
-  const dimX = 13;
-  items.push({ geo: once(`dim|${L}`, () => tube([[dimX, -hc, 0], [dimX, hc, 0]], 0.25, { sides: 5 })), mat: M.paint('--dp-ghost', 0.6), name: 'cut length', group: 'dim', cut: 'none', shadow: false,
-    info: { dim: `${T(cutLength(L) * MM)} mm cut; λ/2 = ${T(lam / 2)} mm electrical at ${T(ANTENNA_GHZ)} GHz`, source: SRC.endEffect } });
-  for (const s of [1, -1]) items.push({ geo: once('tick', () => tube([[dimX - 3, 0, 0], [dimX + 3, 0, 0]], 0.25, { sides: 5 })), mat: M.paint('--dp-ghost', 0.6), at: [0, s * hc, 0], name: 'cut length', group: 'dim', cut: 'none', shadow: false });
+  if (on('fields')) {
+    // The magnetic field: rings round the arms, lit by the local current (the electric loops are the view's beads).
+    for (const f of [0.18, 0.5, 0.82]) for (const side of [1, -1]) {
+      const y = side * f * cutHalf(L), i = Math.abs(currentAt(y, run.phase, L));
+      if (i > 0.08) items.push({ geo: once('hring', () => torus(15, 0.45, full ? 48 : 16, 6)), mat: M.beam('--dp-h', 0.25 + 0.9 * i, 'magnetic field (a ring of B round the current)'), at: [0, y * MM, 0], group: 'hfield', cut: 'none', shadow: false });
+    }
+  }
+  if (on('dim')) {
+    // The length, measured beside the upper arm's side: a dimension line, tip to tip.
+    const dimX = 13;
+    items.push({ geo: once(`dim|${L}`, () => tube([[dimX, -hc, 0], [dimX, hc, 0]], 0.25, { sides: 5 })), mat: M.paint('--dp-ghost', 0.6), name: 'cut length', group: 'dim', cut: 'none', shadow: false,
+      info: { dim: `${T(cutLength(L) * MM)} mm cut; λ/2 = ${T(lam / 2)} mm electrical at ${T(ANTENNA_GHZ)} GHz`, source: SRC.endEffect } });
+    for (const s of [1, -1]) items.push({ geo: once('tick', () => tube([[dimX - 3, 0, 0], [dimX + 3, 0, 0]], 0.25, { sides: 5 })), mat: M.paint('--dp-ghost', 0.6), at: [0, s * hc, 0], name: 'cut length', group: 'dim', cut: 'none', shadow: false });
+  }
 
   // The pattern: the field E(theta) or the power, a smooth solid of revolution (its section, under the cut, is the polar plot).
-  if (look.pattern) {
-    const n = full ? 120 : 36;
+  const n = full ? 120 : 36;
+  if (on('pattern') || on('iso')) {
     items.push({ geo: once(`pat|${L}|${look.mode}|${d}`, () => lathe(patternProfile(L, look.mode, n), { seg: full ? 72 : 20, crease: 80 })),
       mat: M.make({ base: '--dp-pat', metal: 0, rough: 0.35, transmit: 0.78, coat: 0.3, label: `far-field pattern: the ${look.mode === 'power' ? 'power (the field squared)' : 'field amplitude'} each way` }),
       name: 'radiation pattern', group: 'pattern', order: 1, shadow: false,
       info: { dim: `${T(gainDbi(L), 2)} dBi at its peak; drawn at ${T(R)} mm (0.85 λ) for convenience`, source: SRC.balanis, note: 'the exact far-field shape of the sinusoidal current: most broadside, nothing along the axis' } });
-    // The isotropic antenna radiating the same total power: a sphere at the mean of the surface's quantity.
-    const ri = R * isoRadius(L, look.mode);
-    items.push({ geo: once(`iso|${d}`, () => sphere(1, full ? 48 : 16, full ? 24 : 8)), scale: [ri, ri, ri], mat: M.make({ base: '--dp-iso', metal: 0, rough: 0.1, transmit: 0.82, label: 'an isotropic antenna of the same total power (imaginary)' }),
-      name: 'isotropic, same power', group: 'pattern', order: 0, cut: 'open', shadow: false,
-      info: { note: `the same power spread evenly: the pattern pokes out of it broadside (${T(gainDbi(L), 2)} dBi = ×${T(D, 2)}) and falls inside it towards the axis`, source: SRC.chapter } });
-    // Their outlines in the x-y plane (the cut's plane): the polar plot and the isotropic circle, crisp whatever the transparency.
+    // its outline in the x-y plane (the cut's plane): the polar plot, crisp whatever the transparency
     const prof = patternProfile(L, look.mode, n), outline: Vec3[] = [...prof.map(([r, y]) => [r, y, 0] as Vec3), ...prof.slice(1, -1).reverse().map(([r, y]) => [-r, y, 0] as Vec3)];
     items.push({ geo: once(`patOut|${L}|${look.mode}|${d}`, () => tube(outline, 0.55, { sides: 6, closed: true })), mat: M.make({ base: '--dp-pat', metal: 0, rough: 0.4, emit: '--dp-pat', glow: 0.3, label: 'the pattern’s section: its polar plot' }), name: 'radiation pattern', group: 'pattern', cut: 'none', shadow: false });
-    items.push({ geo: once(`isoOut|${T(ri, 3)}|${d}`, () => tube(Array.from({ length: 96 }, (_, i) => { const a = (i / 96) * 2 * Math.PI; return [ri * Math.cos(a), ri * Math.sin(a), 0] as Vec3; }), 0.45, { sides: 6, closed: true })), mat: M.make({ base: '--dp-iso', metal: 0, rough: 0.4, emit: '--dp-iso', glow: 0.2, label: 'the isotropic sphere’s section' }), name: 'isotropic, same power', group: 'pattern', cut: 'none', shadow: false });
+  }
+  if (on('iso')) {
+    // The isotropic antenna radiating the same total power: a sphere at the mean of the surface's quantity, with its outline.
+    const ri = R * isoRadius(L, look.mode);
+    items.push({ geo: once(`iso|${d}`, () => sphere(1, full ? 48 : 16, full ? 24 : 8)), scale: [ri, ri, ri], mat: M.make({ base: '--dp-iso', metal: 0, rough: 0.1, transmit: 0.82, label: 'an isotropic antenna of the same total power (imaginary)' }),
+      name: 'isotropic, same power', group: 'iso', order: 0, cut: 'open', shadow: false,
+      info: { note: `the same power spread evenly: the pattern pokes out of it broadside (${T(gainDbi(L), 2)} dBi = ×${T(D, 2)}) and falls inside it towards the axis`, source: SRC.chapter } });
+    items.push({ geo: once(`isoOut|${T(ri, 3)}|${d}`, () => tube(Array.from({ length: 96 }, (_, i) => { const a = (i / 96) * 2 * Math.PI; return [ri * Math.cos(a), ri * Math.sin(a), 0] as Vec3; }), 0.45, { sides: 6, closed: true })), mat: M.make({ base: '--dp-iso', metal: 0, rough: 0.4, emit: '--dp-iso', glow: 0.2, label: 'the isotropic sphere’s section' }), name: 'isotropic, same power', group: 'iso', cut: 'none', shadow: false });
     // The half-power edges of the largest lobe: rings on the surface where the power is half its peak.
     const hp = halfPower(L);
     for (const th of [hp.lo, hp.hi]) if (th > 0.02 && th < Math.PI - 0.02) {
       const r = R * surfaceAt(th, L, look.mode);
       items.push({ geo: once(`hp|${T(r * Math.sin(th), 3)}|${d}`, () => torus(r * Math.sin(th), 0.6, full ? 96 : 24, 6)), at: [0, r * Math.cos(th), 0], mat: M.make({ base: '--dp-hp', metal: 0, rough: 0.4, emit: '--dp-hp', glow: 0.35, label: 'half-power (−3 dB) edge' }),
-        name: 'half-power ring', group: 'pattern', shadow: false, info: { dim: `${Math.round((hp.width * 180) / Math.PI)}° between the rings`, source: SRC.chapter } });
+        name: 'half-power ring', group: 'iso', shadow: false, info: { dim: `${Math.round((hp.width * 180) / Math.PI)}° between the rings`, source: SRC.chapter } });
     }
   }
-  // The effective aperture at the chapter's frequency: the area of passing wave this dipole collects, facing the wave.
-  const ap = apertureMm2(L, ANTENNA_GHZ), rap = Math.sqrt(ap / Math.PI);
-  items.push({ geo: once(`ap|${T(rap, 3)}|${d}`, () => extrude(Array.from({ length: full ? 72 : 24 }, (_, i) => { const a = (i / (full ? 72 : 24)) * 2 * Math.PI; return [rap * Math.cos(a), rap * Math.sin(a)] as [number, number]; }), 0.4)),
-    rot: FACE_Z, at: [0, 0, -0.2], mat: M.make({ base: '--dp-ap', metal: 0, rough: 0.5, transmit: 0.7, label: 'effective aperture (an area, not a part)' }),
-    name: 'aperture', group: 'aperture', order: 2, cut: 'none', shadow: false,
-    info: { dim: `A = Gλ²/4π = ${T(ap / 100)} cm² (${T(D, 2)} × ${T(apertureM2(0, ANTENNA_GHZ) * 1e4)} cm² of a 0 dBi antenna)`, source: SRC.chapter, note: 'the area of a passing wave whose power this antenna delivers to a matched load' } });
-  if (look.hi) hiItems(items, L, d);
-  return { items, cuts: CUTS, anchors: anchors(run, look), beats: beats(run, look), floor: -Math.max(R, hc) - 8, look: { exposure: 1.05 } };
+  if (on('aperture')) {
+    // The effective aperture at the chapter's frequency: the area of passing wave this dipole collects, facing the wave.
+    const ap = apertureMm2(L, ANTENNA_GHZ), rap = Math.sqrt(ap / Math.PI);
+    items.push({ geo: once(`ap|${T(rap, 3)}|${d}`, () => extrude(Array.from({ length: full ? 72 : 24 }, (_, i) => { const a = (i / (full ? 72 : 24)) * 2 * Math.PI; return [rap * Math.cos(a), rap * Math.sin(a)] as [number, number]; }), 0.4)),
+      rot: FACE_Z, at: [0, 0, -0.2], mat: M.make({ base: '--dp-ap', metal: 0, rough: 0.5, transmit: 0.7, label: 'effective aperture (an area, not a part)' }),
+      name: 'aperture', group: 'aperture', order: 2, cut: 'none', shadow: false,
+      info: { dim: `A = Gλ²/4π = ${T(ap / 100)} cm² (${T(D, 2)} × ${T(apertureM2(0, ANTENNA_GHZ) * 1e4)} cm² of a 0 dBi antenna)`, source: SRC.chapter, note: 'the area of a passing wave whose power this antenna delivers to a matched load' } });
+  }
+  if (on('hi')) hiItems(items, L, d);
+  return { items, cuts: CUTS, anchors: anchors(run, look), beats: beats(run, look), floor: -hc - 12, look: { exposure: 1.05 } };
 }
 
-/** The 28 GHz dipole beside it: the same shape at a twelfth of the size, its aperture, and a phone for scale. */
+/** The 28 GHz dipole beside the upper arm, at a twelfth of its size, with its aperture; a phone stands behind both for scale. */
 function hiItems(items: Item[], L: number, d: Detail): void {
-  const s = wavelengthM(GHZ_HI) / wavelengthM(ANTENNA_GHZ), x = PATTERN_R * MM + 60, hcs = cutHalf(L) * MM * s;
-  const cu = M.copper, ap = apertureMm2(L, GHZ_HI), r = Math.sqrt(ap / Math.PI);
-  for (const side of [1, -1]) items.push({ geo: once(`hiArm|${T(hcs, 3)}`, () => tube([[0, 0.15, 0], [0, hcs, 0]], 0.1, { sides: 8 })), mat: cu, at: [x, 0, 6], rot: side > 0 ? undefined : quatZ(Math.PI), name: `${GHZ_HI} GHz dipole`, group: 'hi', cut: 'none',
-    info: { dim: `${T(2 * hcs)} mm cut (λ/2 = ${T(wavelengthM(GHZ_HI) * 500)} mm)`, source: SRC.chapter, note: 'the same antenna, the same gain, at 28 GHz' } });
-  items.push({ geo: once(`hiAp|${T(r, 3)}`, () => extrude(Array.from({ length: 40 }, (_, i) => { const a = (i / 40) * 2 * Math.PI; return [r * Math.cos(a), r * Math.sin(a)] as [number, number]; }), 0.2)),
-    rot: FACE_Z, at: [x, 0, 6], mat: M.make({ base: '--dp-ap', metal: 0, rough: 0.5, transmit: 0.7, label: 'effective aperture (an area, not a part)' }), name: `${GHZ_HI} GHz aperture`, group: 'hi', order: 2, cut: 'none', shadow: false,
-    info: { dim: `${T(ap / 100, 2)} cm²: ${T(apertureMm2(L, ANTENNA_GHZ) / ap, 0)} times less`, source: SRC.chapter, note: 'the same gain collects (λ ratio)² less of a passing wave: higher bands need more antennas, or more gain' } });
-  items.push({ geo: once('phone', () => roundedBox(PHONE.w, PHONE.h, PHONE.d, 7, d === 'full' ? 4 : 1)), at: [x, 0, -2], mat: M.plasticGloss, name: 'a phone, for scale', group: 'hi', cut: 'none',
+  const s = wavelengthM(GHZ_HI) / wavelengthM(ANTENNA_GHZ), hcs = cutHalf(L) * MM * s;
+  const ap = apertureMm2(L, GHZ_HI), r = Math.sqrt(ap / Math.PI);
+  for (const side of [1, -1]) items.push({ geo: once(`hiArm|${T(hcs, 3)}|${T(s, 4)}`, () => tube([[0, (GAP / 2) * MM * s, 0], [0, hcs, 0]], ROD_R * s, { sides: 10 })), mat: M.copper, at: HI_AT, rot: side > 0 ? undefined : quatZ(Math.PI), name: `${GHZ_HI} GHz dipole`, group: 'hi', cut: 'none',
+    info: { dim: `${T(2 * hcs)} mm cut (λ/2 = ${T(wavelengthM(GHZ_HI) * 500)} mm), drawn as the 2.4 GHz one scaled by the wavelength`, source: SRC.chapter, note: 'the same antenna, the same gain, at 28 GHz' } });
+  items.push({ geo: once(`hiAp|${T(r, 3)}`, () => extrude(Array.from({ length: 40 }, (_, i) => { const a = (i / 40) * 2 * Math.PI; return [r * Math.cos(a), r * Math.sin(a)] as [number, number]; }), 0.1)),
+    rot: FACE_Z, at: [HI_AT[0], HI_AT[1], HI_AT[2] - 0.6], mat: M.make({ base: '--dp-ap', metal: 0, rough: 0.5, transmit: 0.6, label: 'effective aperture (an area, not a part)' }), name: `${GHZ_HI} GHz aperture`, group: 'hi', order: 2, cut: 'none', shadow: false,
+    info: { dim: `${T(ap / 100, 2)} cm²: ${T(apertureMm2(L, ANTENNA_GHZ) / ap, 0)} times less than at ${T(ANTENNA_GHZ)} GHz`, source: SRC.chapter, note: 'the same gain collects (λ ratio)² less of a passing wave: higher bands need more antennas, or more gain' } });
+  // the phone stands behind, its top-left corner just above and to the right of the small dipole
+  items.push({ geo: once('phone', () => roundedBox(PHONE.w, PHONE.h, PHONE.d, 7, d === 'full' ? 4 : 1)), at: [HI_AT[0] + 8 + PHONE.w / 2, HI_AT[1] + 14 - PHONE.h / 2, -16], mat: M.plasticGloss, name: 'a phone, for scale', group: 'hi', cut: 'none',
     info: { dim: `${PHONE.w} × ${PHONE.h} × ${PHONE.d} mm`, source: SRC.illus } });
 }
+
+/** The view the 28 GHz toggle goes to: the small dipole large, the 2.4 GHz arm a copper bar beside it, the phone behind. */
+export const HI_VIEW = { target: [HI_AT[0] + 3, HI_AT[1], HI_AT[2]] as Vec3, yaw: 0.45, pitch: 0.16, dist: 52 };
 
 /** The leads or the coax at the feed, along -x. */
 function feedItems(items: Item[], run: DipoleRun, look: DipoleLook): void {
@@ -204,7 +234,7 @@ function feedItems(items: Item[], run: DipoleRun, look: DipoleLook): void {
   if (look.feed === 'balanced') {
     for (const s of [1, -1]) items.push({ geo: once(`lead|${s}`, () => tube([[-4.5, s * g, 0], [-35, s * g, 0]], 0.5, { sides: 6 })), mat: M.copper, name: 'balanced leads', group: 'feed', cut: 'none',
       info: { note: 'two equal and opposite currents: nothing is left over to flow on the outside of a line', source: SRC.illus } });
-    items.push({ geo: once('src', () => roundedBox(20, 16, 12, 2, full ? 3 : 1)), at: [-45, 0, 0], mat: M.paint('--dp-src', 0.5), name: 'source', group: 'feed', cut: 'none', info: { source: SRC.illus, note: `${T(ANTENNA_GHZ)} GHz, balanced` } });
+    items.push({ geo: once('src', () => roundedBox(12, 16, 12, 2, full ? 3 : 1)), at: [-41, 0, 0], mat: M.paint('--dp-src', 0.5), name: 'source', group: 'feed', cut: 'none', info: { source: SRC.illus, note: `${T(ANTENNA_GHZ)} GHz, balanced` } });
     return;
   }
   // The coax: copper jacket, PTFE, centre conductor; each a lathe turned onto -x. Cut open, the three show their rings.
@@ -217,17 +247,17 @@ function feedItems(items: Item[], run: DipoleRun, look: DipoleLook): void {
   // where each goes: the centre conductor up to the upper arm, a strap from the jacket to the lower one
   items.push({ geo: once('toUp', () => tube([[x0 + 4, 0, 0], [-2.5, g + 1, 0]], COAX.centre / 2, { sides: 6 })), mat: M.silver, name: 'centre conductor', group: 'coax', cut: 'none' });
   items.push({ geo: once('toLo', () => tube([[x0, -COAX.jacket / 2, 0], [-2.5, -g - 1, 0]], 0.6, { sides: 6 })), mat: M.copper, name: 'shield strap', group: 'coax', cut: 'none', info: { note: 'the jacket is joined to the lower arm', source: SRC.illus } });
-  items.push({ geo: once('conn', () => roundedBox(12, 9, 9, 1.5, full ? 3 : 1)), at: [x0 - len - 6, 0, 0], mat: M.paint('--dp-src', 0.5), name: 'source', group: 'feed', cut: 'none', info: { source: SRC.illus, note: `${T(ANTENNA_GHZ)} GHz, on a 50 Ω coax` } });
+  items.push({ geo: once('conn', () => roundedBox(12, 9, 9, 1.5, full ? 3 : 1)), at: [x0 - len - 6, 0, 0], mat: M.paint('--dp-src', 0.5), name: 'source', group: 'coax', cut: 'none', info: { source: SRC.illus, note: `${T(ANTENNA_GHZ)} GHz, on a 50 Ω coax` } });
   if (look.feed === 'balun') {
     // The sleeve: open toward the feed, shorted to the jacket a quarter wave down it.
     const ro = SLEEVE_R * MM, l = SLEEVE_LEN * MM, t = 0.4;
     items.push({ geo: layer(`sleeve|${T(l, 2)}`, [[ro - t, 0], [ro, 0], [ro, l], [COAX.jacket / 2, l], [COAX.jacket / 2, l - t], [ro - t, l - t], [ro - t, 0]]), at: [x0 - 1, 0, 0], rot: ALONG_MINUS_X,
       mat: M.brass, name: 'λ/4 sleeve balun', group: 'sleeve', explode: [-40, 0, 0],
-      info: { dim: `${T(l)} mm (λ/4), ${T(2 * ro)} mm across (illustrative)`, source: SRC.sleeve, note: 'stops the antenna\'s current from running back down the outside of the coax' } });
+      info: { dim: `${T(l)} mm (λ/4), ${T(2 * ro)} mm across (illustrative)`, source: SRC.sleeve, note: 'stops the antenna’s current from running back down the outside of the coax' } });
   } else {
     // No sleeve: the lower arm's current also runs down the outside of the jacket, lighting it.
     const v = Math.abs(currentAt(-GAP, run.phase, run.lwl));
-    for (const x of [-15, -35, -55]) if (v > 0.05) items.push({ geo: once('braidRing', () => torus(COAX.jacket / 2 + 0.6, 0.35, 24, 6)), at: [x0 + x + 8, 0, 0], rot: ALONG_MINUS_X, mat: M.beam(currentAt(-GAP, run.phase, run.lwl) >= 0 ? '--dp-pos' : '--dp-neg', 0.3 + v, 'current on the outside of the braid'), cut: 'none', shadow: false });
+    for (const x of [-15, -35, -55]) if (v > 0.05) items.push({ geo: once('braidRing', () => torus(COAX.jacket / 2 + 0.6, 0.35, 24, 6)), at: [x0 + x + 8, 0, 0], rot: ALONG_MINUS_X, mat: M.beam(currentAt(-GAP, run.phase, run.lwl) >= 0 ? '--dp-pos' : '--dp-neg', 0.3 + v, 'current on the outside of the braid'), group: 'coax', cut: 'none', shadow: false });
   }
 }
 
@@ -250,42 +280,51 @@ export function loopBeads(run: DipoleRun, c: { e1: RGB; e2: RGB }): Instance[] {
 // ---------------------------------------------------------------- labels and tour
 
 function anchors(run: DipoleRun, look: DipoleLook): StudioAnchor[] {
-  const L = run.lwl, hc = cutHalf(L) * MM, R = PATTERN_R * MM, front: Vec3 = [0, 0, 1];
+  const L = run.lwl, hc = cutHalf(L) * MM, R = PATTERN_R * MM, front: Vec3 = [0, 0, 1], on = (l: Layer) => look.layers.has(l);
   const a: StudioAnchor[] = [
     { text: 'tip: I = 0, V max', p: [0, hc, ROD_R], side: 'r', n: front, on: 'arms' },
     { text: 'copper arm', p: [-ROD_R, hc * 0.55, 0], side: 'l', n: [-1, 0, 0.3], on: 'arms' },
-    { text: 'feed', p: [4.5, 0, 4.5], side: 'r', n: front, on: 'feed' },
-    { text: 'cut length', p: [13, -hc * 0.6, 0], side: 'r', n: front, on: 'dim' },
-    look.feed === 'balanced' ? { text: 'feed line', p: [-30, (GAP / 2) * MM, 0], side: 'l', n: front, on: 'feed' }
+    { text: 'feed gap', p: [4.5, 0, 4.5], side: 'r', n: front, on: 'feed' },
+    look.feed === 'balanced' ? { text: 'feed line', p: [-25, (GAP / 2) * MM, 0], side: 'l', n: front, on: 'feed' }
       : look.feed === 'balun' ? { text: 'feed line', p: [COAX_X0 * MM - 20, SLEEVE_R * MM, 0], side: 'l', n: [0, 1, 0.4], on: 'sleeve' }
       : { text: 'feed line', p: [COAX_X0 * MM - 40, COAX.jacket / 2, 0], side: 'l', n: [0, 1, 0.4], on: 'coax' },
-    { text: 'aperture', p: [-Math.sqrt(apertureMm2(L, ANTENNA_GHZ) / Math.PI) * 0.7, -Math.sqrt(apertureMm2(L, ANTENNA_GHZ) / Math.PI) * 0.7, 0], side: 'l', n: front, on: 'aperture' },
   ];
-  if (look.pattern) {
-    const hp = halfPower(L), r = surfaceAt(hp.peak, L, look.mode) * R, ri = R * isoRadius(L, look.mode);
+  if (on('dim')) a.push({ text: 'cut length', p: [13, -hc * 0.6, 0], side: 'r', n: front, on: 'dim' });
+  if (on('curves')) a.push({ text: 'current I(z)', p: [0, hc * 0.35, CURVE_A * MM * envelope(hc * 0.035, L) * 0.95], side: 'r', n: [0, 0, 1], on: 'curves' });
+  if (on('pattern') || on('iso')) {
+    const hp = halfPower(L), r = surfaceAt(hp.peak, L, look.mode) * R;
     a.push({ text: 'radiation pattern', p: [r * Math.sin(hp.peak) * 0.7, r * Math.cos(hp.peak), r * Math.sin(hp.peak) * 0.7], side: 'r', n: [0.7, 0, 0.7], on: 'pattern' });
-    a.push({ text: 'isotropic, same power', p: [-ri * 0.5, ri * 0.85, ri * 0.15], side: 'l', n: [-0.5, 0.8, 0.3], on: 'pattern' });
-    a.push({ text: 'null on the axis', p: [0, hc + 18, 0], side: 'l', n: [0, 1, 0], minor: true });
   }
-  const l = loopsAt(run.t).filter((q) => q.alpha > 0.4 && q.xIn > LAMBDA / 4).sort((p, q) => q.xOut - p.xOut)[0];
-  if (l) a.push({ text: 'E loops, out at c', p: [((l.xIn + l.xOut) / 2) * MM, (0.5 * ((l.xOut - l.xIn) / 2) + 0.5) * MM, 0], side: 'r', n: front, minor: true });
+  if (on('iso')) { const ri = R * isoRadius(L, look.mode); a.push({ text: 'isotropic, same power', p: [-ri * 0.5, ri * 0.85, 0], side: 'l', n: [-0.5, 0.8, 0.3], on: 'iso' }); }
+  if (on('aperture')) { const ra = Math.sqrt(apertureMm2(L, ANTENNA_GHZ) / Math.PI); a.push({ text: 'aperture', p: [-ra * 0.7, -ra * 0.7, 0], side: 'l', n: front, on: 'aperture' }); }
+  if (on('hi')) {
+    a.push({ text: `${GHZ_HI} GHz dipole`, p: [HI_AT[0], HI_AT[1] + 2, HI_AT[2]], side: 'r', n: front, on: 'hi' });
+    a.push({ text: 'a phone, for scale', p: [HI_AT[0] + 30, HI_AT[1] + 4, -16 + PHONE.d / 2], side: 'r', n: front, on: 'hi' });
+  }
+  if (on('fields')) {
+    const l = loopsAt(run.t).filter((q) => q.alpha > 0.4 && q.xIn > LAMBDA / 4).sort((p, q) => q.xOut - p.xOut)[0];
+    if (l) a.push({ text: 'E loops, out at c', p: [((l.xIn + l.xOut) / 2) * MM, (0.5 * ((l.xOut - l.xIn) / 2) + 0.5) * MM, 0], side: 'r', n: front, minor: true });
+  }
   return a;
 }
 
-/** Set by hand, not fitted: the fit takes the bounding box's corners, which for a round pattern is far too wide. */
-export const HOME = { target: [0, -4, 0] as Vec3, yaw: 0.55, pitch: 0.32, dist: 300 };
+/** The home direction; target and distance are fitted to the antenna and its feed (FRAME_GROUPS' homebox). */
+export const HOME = { target: [0, 0, 0] as Vec3, yaw: 0.5, pitch: 0.22, dist: 120 };
+
+/** The layers each beat shows (the view switches them on the tour's onBeat; -1, the tour's end, gives the reader's back). */
+export const BEAT_LAYERS: readonly (readonly Layer[])[] = [['dim'], ['curves'], ['fields'], ['pattern', 'iso'], ['aperture'], []];
 
 function beats(run: DipoleRun, look: DipoleLook): Beat[] {
   const L = run.lwl, half = Math.abs(L - L_HALF) < 1e-9, hp = halfPower(L), lam = LAMBDA * MM;
   const ap = apertureMm2(L, ANTENNA_GHZ), apHi = apertureMm2(L, GHZ_HI);
   return [
-    { title: 'Half a wavelength', text: `At ${T(ANTENNA_GHZ)} GHz a wave is ${T(lam / 10)} cm long, so a half-wave dipole is ${T(lam / 20)} cm electrical. The wire is cut ${half ? 'to 0.95 of that' : 'a little shorter than its electrical length'}: ${T(cutLength(L) * MM / 10)} cm, because the field fringes past a thick wire's ends.`, view: { ...HOME, yaw: 0.35, pitch: 0.15 }, frame: ['arms', 'feed', 'dim'], cut: 0, explode: 0 },
-    { title: 'Current and voltage', text: 'The current is a standing wave: largest at the feed, zero at the tips where the wire ends, reversing every half period (red up, blue down). The voltage is its quadrature twin, largest at the tips. Run it: the charge piles up at one end, then the other.', view: { ...HOME, yaw: 0.9, pitch: 0.2 }, frame: ['arms', 'curves'], show: ['arms', 'curves', 'feed'], cut: 0, explode: 0 },
-    { title: 'Fields leave', text: 'Each time the current passes through zero, the charge at the tips is at its peak and a loop of electric field forms. It detaches and travels out at c, a wavelength every period: that is the radio wave. The magnetic rings round the arms follow the current.', view: { target: [20, 0, 0], yaw: 0, pitch: 0.05, dist: 300 }, cut: 0, explode: 0 },
-    { title: 'Gain is aiming', text: `Cut through, the pattern is its own polar plot. The grey sphere is an imaginary isotropic antenna radiating the same total power. Broadside the dipole pokes out of it by ${T(gainDbi(L), 2)} dB (×${T(directivity(L), 2)}); towards its own axis it falls to nothing. Same power, aimed: ${Math.round((hp.width * 180) / Math.PI)}° between the half-power rings.`, view: { target: [0, 0, 0], yaw: 0, pitch: 0, dist: 270 }, show: ['pattern', 'arms'], cut: 1, explode: 0 },
-    { title: 'Aperture', text: `What the antenna collects is an area of the passing wave: A = Gλ²/4π, ${T(ap / 100)} cm² for this dipole at ${T(ANTENNA_GHZ)} GHz. At ${GHZ_HI} GHz the same dipole is ${T(wavelengthM(GHZ_HI) * 500)} mm and collects ${T(apHi / 100, 2)} cm². ${look.hi ? 'It is beside it, with a phone for scale.' : 'Press "28 GHz beside it" to see it, with a phone for scale.'}`, view: look.hi ? { target: [90, 0, 0], yaw: 0.15, pitch: 0.1, dist: 330 } : { target: [0, 0, 0], yaw: 0.2, pitch: 0.1, dist: 150 }, show: ['aperture', 'arms', 'hi'], cut: 0, explode: 0 },
+    { title: 'Half a wavelength', text: `At ${T(ANTENNA_GHZ)} GHz a wave is ${T(lam / 10)} cm long, so a half-wave dipole is ${T(lam / 20)} cm electrical. The wire is cut ${half ? 'to 0.95 of that' : 'a little shorter than its electrical length'}: ${T(cutLength(L) * MM / 10)} cm, because the field fringes past a thick wire’s ends.`, view: { ...HOME, yaw: 0.35, pitch: 0.12 }, frame: ['arms', 'feed', 'dim'], cut: 0, explode: 0 },
+    { title: 'Current and voltage', text: 'The current is a standing wave: largest at the feed, zero at the tips where the wire ends, reversing every half period (red up, blue down). The voltage is its quadrature twin, largest at the tips. Run it: the charge piles up at one end, then the other.', view: { ...HOME, yaw: 0.9, pitch: 0.18 }, frame: ['arms', 'curves'], cut: 0, explode: 0 },
+    { title: 'Fields leave', text: 'Each time the current passes through zero, the charge at the tips is at its peak and a loop of electric field forms. It detaches and travels out at c, a wavelength every period: that is the radio wave. The magnetic rings round the arms follow the current.', view: { ...HOME, yaw: 0, pitch: 0.04 }, frame: ['arms', 'reach'], cut: 0, explode: 0 },
+    { title: 'Gain is aiming', text: `Cut through, the pattern is its own polar plot. The grey circle is an imaginary isotropic antenna radiating the same total power. Broadside the dipole pokes out of it by ${T(gainDbi(L), 2)} dB (×${T(directivity(L), 2)}); towards its own axis it falls to nothing. Same power, aimed: ${Math.round((hp.width * 180) / Math.PI)}° between the half-power rings.`, view: { ...HOME, yaw: 0, pitch: 0 }, frame: ['patbox'], cut: 1, explode: 0 },
+    { title: 'Aperture', text: `What the antenna collects is an area of the passing wave: A = Gλ²/4π, ${T(ap / 100)} cm² for this dipole at ${T(ANTENNA_GHZ)} GHz. At ${GHZ_HI} GHz the same dipole is ${T(wavelengthM(GHZ_HI) * 500)} mm and collects ${T(apHi / 100, 2)} cm²: press “${GHZ_HI} GHz beside it” to see it, with a phone for scale.`, view: { ...HOME, yaw: 0.2, pitch: 0.1 }, frame: ['aperture', 'arms'], cut: 0, explode: 0 },
     look.feed === 'balanced'
-      ? { title: 'The feed', text: 'Two leads carry equal and opposite currents into the gap. A real 2.4 GHz antenna is usually fed by a coax: press the Feed button for the coax, cut open, and the sleeve that stops current running back down its outside.', view: { target: [-20, 0, 0], yaw: 0.6, pitch: 0.35, dist: 120 }, frame: ['feed', 'arms'], hide: ['pattern', 'aperture', 'hfield'], cut: 0, explode: 0 }
-      : { title: 'The feed', text: `Cut open, the semi-rigid coax is three layers: a ${T(COAX.centre, 2)} mm centre conductor to the upper arm, ${T(COAX.ptfe, 2)} mm of PTFE, and a ${T(COAX.jacket, 2)} mm copper jacket joined to the lower arm. ${look.feed === 'balun' ? 'The brass sleeve, a quarter wave long and shorted at its far end, looks like an open circuit to current on the jacket\'s outside: it stays on the antenna.' : 'With no sleeve, part of the lower arm\'s current runs back along the outside of the jacket (the glowing rings) and the line radiates too.'}`, view: { target: [-30, 0, 0], yaw: 0.5, pitch: 0.3, dist: 140 }, frame: ['coax', 'sleeve', 'feed'], show: ['coax', 'sleeve', 'feed', 'arms'], hide: ['pattern', 'aperture', 'curves', 'hfield', 'charge'], cut: 1, explode: 0.6 },
+      ? { title: 'The feed', text: 'Two leads carry equal and opposite currents into the gap. A real 2.4 GHz antenna is usually fed by a coax: press the Feed button for the coax, cut open, and the sleeve that stops current running back down its outside.', view: { ...HOME, yaw: 0.6, pitch: 0.35 }, frame: ['feed', 'arms'], cut: 0, explode: 0 }
+      : { title: 'The feed', text: `Cut open, the semi-rigid coax is three layers: a ${T(COAX.centre, 2)} mm centre conductor to the upper arm, ${T(COAX.ptfe, 2)} mm of PTFE, and a ${T(COAX.jacket, 2)} mm copper jacket joined to the lower arm. ${look.feed === 'balun' ? 'The brass sleeve, a quarter wave long and shorted at its far end, looks like an open circuit to current on the jacket’s outside: it stays on the antenna.' : 'With no sleeve, part of the lower arm’s current runs back along the outside of the jacket (the glowing rings) and the line radiates too.'}`, view: { ...HOME, yaw: 0.5, pitch: 0.3 }, frame: ['coax', 'sleeve', 'feed'], show: ['coax', 'sleeve', 'feed', 'arms'], cut: 1, explode: 0.6 },
   ];
 }
