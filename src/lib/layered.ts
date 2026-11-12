@@ -37,6 +37,11 @@ export interface LayeredOptions {
   keepOrder?: boolean;
   /** Minimum row-to-row spacing of pins. */
   pinPitch?: number | [number, number];
+  /**
+   * The shape to aim at (width / height, a stage's canvas is about 1.6): a drawing much wider is folded into 2–4 bands stacked
+   * top to bottom at its natural seams (the channels the fewest edges cross), so a long chain of logic fits large, not as a strip.
+   */
+  aspect?: number;
 }
 
 /** How far a net label reaches from its port (view/route.ts: TAG_STUB + TAG_H), and the height of a box's name above it. */
@@ -241,9 +246,99 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
     if (JSON.stringify(next.nets.map((n) => !!n.tags)) === JSON.stringify(nl.nets.map((n) => !!n.tags)) && pass) { nl = next; break; }
     nl = next;
   }
+  if (opts.aspect) nl = fold(nl, opts.aspect);
   const { pins, instances, nets: outNets } = nl;
   void byName;
   return { pins, instances, nets: outNets };
+
+  /**
+   * A drawing far wider than `target` (w / h): its columns in 2–4 bands stacked top to bottom, as many as bring the whole
+   * closest to the target. Each seam is the channel near an even split that the fewest edges cross (a functional group's
+   * edge, a register boundary). A net reaching across a seam becomes labels; a pin stands at the band it serves.
+   */
+  function fold(nl: ReturnType<typeof lay>, target: number): ReturnType<typeof lay> {
+    const at = new Map(nl.instances.map((i) => [i.name, i.at!]));
+    const colX = cols.map((col) => Math.min(...col.map((n) => at.get(n)![0])));
+    const colR = cols.map((col) => Math.max(...col.map((n) => at.get(n)![0] + w(n))));
+    const x0 = opts.x0 ?? 10, right = Math.max(...colR);
+    const extent = (cs: number[]) => {
+      const ns = cs.flatMap((c) => cols[c]);
+      return { y0: Math.min(...ns.map((n) => at.get(n)![1])), y1: Math.max(...ns.map((n) => at.get(n)![1] + h(n))) };
+    };
+    const all = extent([...cols.keys()]), H1 = all.y1 - all.y0;
+    if (L < 4 || right / Math.max(H1, 1) <= target * 1.35) return nl;
+    // seams for R bands: per cut, the channel within a quarter band of the even split that the fewest edges cross
+    const seamsFor = (R: number): number[] | null => {
+      const cuts: number[] = [];
+      for (let k = 1; k < R; k++) {
+        const ideal = x0 + ((right - x0) * k) / R, slack = (right - x0) / R / 4;
+        let best = -1, bestCost = Infinity;
+        for (let c = (cuts.at(-1) ?? -1) + 1; c < L - 1; c++) {
+          const gapX = (colR[c] + colX[c + 1]) / 2;
+          if (Math.abs(gapX - ideal) > slack) continue;
+          const cost = spans[c].length + Math.abs(gapX - ideal) / slack;
+          if (cost < bestCost) { bestCost = cost; best = c; }
+        }
+        if (best < 0) return null;
+        cuts.push(best);
+      }
+      return cuts;
+    };
+    const BAND_GAP = 8;
+    const plan = (cuts: number[]) => {
+      const bands: number[][] = [];
+      let s = 0;
+      for (const c of [...cuts, L - 1]) { bands.push(Array.from({ length: c - s + 1 }, (_, i) => s + i)); s = c + 1; }
+      const ext = bands.map(extent);
+      const width = Math.max(...bands.map((b) => colR[b.at(-1)!] - colX[b[0]])) + x0;
+      const height = ext.reduce((a, e) => a + (e.y1 - e.y0), 0) + BAND_GAP * (bands.length - 1);
+      return { bands, ext, width, height };
+    };
+    let best: ReturnType<typeof plan> | null = null, bestErr = Math.abs(Math.log(right / Math.max(H1, 1) / target));
+    for (let R = 2; R <= 4; R++) {
+      const cuts = seamsFor(R);
+      if (!cuts) continue;
+      const p = plan(cuts), err = Math.abs(Math.log(p.width / Math.max(p.height, 1) / target));
+      if (err < bestErr - 1e-9) { best = p; bestErr = err; }
+    }
+    if (!best) return nl;
+    const band = new Map<string, number>();
+    const moved = new Map<string, [number, number]>();
+    let y = 2;
+    best.bands.forEach((cs, k) => {
+      const e = best!.ext[k], dx = x0 - colX[cs[0]], dy = y - e.y0;
+      for (const c of cs) for (const n of cols[c]) { band.set(n, k); const p = at.get(n)!; moved.set(n, [p[0] + dx, p[1] + dy]); }
+      y += e.y1 - e.y0 + BAND_GAP;
+    });
+    const instances = nl.instances.map((i) => ({ ...i, at: moved.get(i.name)! }));
+    const portAt = (end: string): [number, number] | null => {
+      const n = inst(end); if (!n) return null;
+      const p = geom.get(n)!.ports[portOf(end)]?.pos ?? [0, 0], q = moved.get(n)!;
+      return [q[0] + p[0], q[1] + p[1]];
+    };
+    // pins: each at the height of the ends it serves, inputs at the left edge, outputs at the right, kept a pitch apart
+    const pitches: [number, number] = Array.isArray(opts.pinPitch) ? opts.pinPitch : [opts.pinPitch ?? 2, opts.pinPitch ?? 2];
+    const pins: Record<string, [number, number]> = {};
+    const outX = best.width + Math.max(6, Math.ceil(Math.max(0, ...ports.filter((p) => p.dir === 'out').map((p) => tagWidth(p.name))) + 12));
+    const place = (side: PortDef[], px: number, pitch: number) => {
+      const want = side.map((p) => {
+        const ys = nl.nets.filter((n) => n.ends.includes(p.name)).flatMap((n) => n.ends.map(portAt)).filter((q): q is [number, number] => !!q).map((q) => q[1]);
+        return { p: p.name, y: ys.length ? ys.reduce((a, v) => a + v, 0) / ys.length : 2 };
+      }).sort((a, b) => a.y - b.y);
+      let yy = 2;
+      for (const q of want) { const t = Math.max(yy, Math.round(q.y)); pins[q.p] = [px, t]; yy = t + pitch; }
+    };
+    place(ports.filter((p) => p.dir === 'in'), 0, pitches[0]);
+    place(ports.filter((p) => p.dir === 'out'), outX, pitches[1]);
+    // a net across a seam is labels; within one band it keeps layered's choice
+    const bandOf = (end: string): number | 'pin' => { const n = inst(end); return n ? band.get(n)! : 'pin'; };
+    const nets = nl.nets.map((n) => {
+      const bs = new Set(n.ends.map(bandOf).filter((b) => b !== 'pin'));
+      if (bs.size <= 1 || opts.wires?.[n.ends[0]] === true) return n;
+      return { ...n, tags: true as const };
+    });
+    return { pins, instances, nets };
+  }
 }
 
 /**
