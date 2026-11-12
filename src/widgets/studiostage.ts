@@ -54,7 +54,8 @@ export interface StudioStage {
   hint: HTMLElement;
   /** Rebuild the model (a state changed). */
   refresh(): void;
-  instances(key: string, geo: Geo, mat: Material, data: Float32Array): void;
+  /** `casts`: the set casts shadows (the shadow's fit then takes it in). */
+  instances(key: string, geo: Geo, mat: Material, data: Float32Array, casts?: boolean): void;
   /** Parts moved by the physics this frame. */
   move(moves: Moves): void;
   studio(): Studio | null;
@@ -442,7 +443,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
 
   return {
     el, slot, chips, hint, refresh,
-    instances(key, geo, mat, data) { st?.setInstances(key, geo, mat, data); },
+    instances(key, geo, mat, data, casts) { st?.setInstances(key, geo, mat, data, undefined, casts); },
     move(m) { curMoves = m; if (mode === 'flat') drawFlat(); else st?.move(m); },
     studio: () => st,
     isFlat: () => mode === 'flat',

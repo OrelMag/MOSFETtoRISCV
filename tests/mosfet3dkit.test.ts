@@ -181,4 +181,14 @@ describe('the MOSFET in true geometry', () => {
     expect(glow(0.6)).toBeLessThan(glow(1.2));
     expect(glow(1.2)).toBeLessThan(glow(VDD) + 1e-9);
   });
+
+  it('the pull-back’s look: a low raking key light, haze, a light on this device; none of it otherwise', () => {
+    const pull = mosModel(st({ pull: true })), home = mosModel(st());
+    expect(pull.look?.keyDir?.[1]).toBeLessThan(0.3);
+    expect(pull.look?.haze?.dist).toBeGreaterThan(0);
+    expect(pull.lights?.length).toBe(1);
+    expect(home.look?.keyDir).toBeUndefined();
+    expect(home.look?.haze).toBeUndefined();
+    expect(home.lights).toBeUndefined();
+  });
 });

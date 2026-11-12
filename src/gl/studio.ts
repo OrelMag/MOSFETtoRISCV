@@ -107,6 +107,7 @@ in vec3 vN; in vec3 vW; in vec4 vL; in vec4 vC; in vec3 vE; in vec3 vVC; in vec2
 uniform vec3 uEye, uKeyDir, uKeyCol, uSky, uGround, uAccent;
 uniform vec3 uBase, uEmit, uTint;
 uniform float uMetal, uRough, uCoat, uTransmit, uExposure, uDim, uRim, uBloomK;
+uniform vec4 uHaze;       // depth haze: colour (sRGB), 1 / its distance (0: none)
 uniform int uMode;        // 0 opaque, 1 thin glass (blended), 2 glass over the frame copy, 3 floor, 4 beam (additive)
 uniform int uCutOn, uNCut;
 uniform vec4 uCut[2];
@@ -251,6 +252,8 @@ void main() {
     float NoV = max(dot(n, V), 0.0);
     c += lin(uAccent) * uRim * pow(1.0 - NoV, 2.0) * 1.6;
     vec3 outc = display(c);
+    // depth haze, in display space so it fades to the page's own background colour
+    if (uHaze.w > 0.0) outc = mix(outc, uHaze.rgb, 1.0 - exp(-length(vW - uEye) * uHaze.w));
     float l = dot(outc, vec3(0.299, 0.587, 0.114));
     outc = mix(outc, vec3(l) * 0.55 + 0.2, uDim);
     o = vec4(outc * vC.a, vC.a);
@@ -344,6 +347,9 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
   const dense = Math.min(opts.maxDpr ?? 2, window.devicePixelRatio || 1) >= 2, coarse = matchMedia('(pointer: coarse)').matches;
   const flags: StudioFlags = { shadows: true, msaa: true, refraction: true, env: true, floor: true, bloom: true, samples: dense ? 2 : 4, pcf: coarse ? 4 : 9, ...opts.flags };
   let env: StudioEnv = { sky: [0.75, 0.78, 0.84], ground: [0.36, 0.34, 0.32], key: [0.95, 0.93, 0.88], dir: norm3([-0.5, 0.85, 0.45]), exposure: 1.35, accent: [0.25, 0.6, 1.0] };
+  /** The key light a model gets back when its look stops naming one (a beat lowered it); the haze its look asks for. */
+  const homeDir = env.dir;
+  let haze: [number, number, number, number] = [0, 0, 0, 0];
   let model: Model3 | null = null, resolve: (c: Colour) => RGB = () => [1, 0, 1];
   let k: Knobs = { explode: 0, cut: 0 };
   let focus: ReadonlySet<string> | null = null, hover: string | null = null, hidden: ReadonlySet<string> | null = null;
@@ -682,6 +688,7 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
     gl.uniform3fv(U.uEye, eye); gl.uniform3fv(U.uKeyDir, norm3(env.dir));
     gl.uniform3fv(U.uKeyCol, env.key); gl.uniform3fv(U.uSky, env.sky); gl.uniform3fv(U.uGround, env.ground); gl.uniform3fv(U.uAccent, env.accent);
     gl.uniform1f(U.uExposure, env.exposure);
+    gl.uniform4f(U.uHaze, haze[0], haze[1], haze[2], haze[3]);
     gl.uniform1i(U.uShadowOn, flags.shadows ? 1 : 0); gl.uniform1i(U.uEnvOn, flags.env ? 1 : 0);
     gl.uniform1f(U.uShadowTexel, 1 / shadowSize); gl.uniform1i(U.uPcf, flags.pcf);
     gl.uniform2f(U.uView, W, H);
@@ -837,7 +844,9 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
     setModel(m, r) {
       model = m; resolve = r;
       if (m.look?.exposure !== undefined) env.exposure = m.look.exposure;
-      if (m.look?.keyDir) { env.dir = norm3(m.look.keyDir); shadowDirty = true; }
+      const dir = m.look?.keyDir ? norm3(m.look.keyDir) : homeDir;
+      if (dir.some((v, i) => v !== env.dir[i])) { env.dir = dir; shadowDirty = true; }
+      haze = m.look?.haze ? [...r(m.look.haze.colour), 1 / m.look.haze.dist] : [0, 0, 0, 0];
       if (!lost) build();
       invalidate();
     },

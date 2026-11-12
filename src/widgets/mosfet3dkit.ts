@@ -50,7 +50,9 @@ const Q_MAX = VDD - VT;
 export type MosLayout = 'textbook' | 'real';
 export interface MosState { vg: number; vd: number; w: number; l: number; layout: MosLayout;
   /** The wiring in full (the tour's wiring beats); otherwise the plugs are drawn faint, so the device is seen first. */
-  wiring?: boolean }
+  wiring?: boolean;
+  /** The tour's pull-back: a low key light, haze to the horizon, a pool of light on this device. */
+  pull?: boolean }
 
 /** Plugs on one island: as many as fit at the plug pitch, at least one. */
 export const plugsFor = (w: number): number => Math.max(1, Math.floor((W0 * w) / PLUG_PITCH));
@@ -263,7 +265,8 @@ export function mosModel(s: MosState, detail: 'full' | 'flat' = 'full', rgb?: (t
   return {
     items, anchors, beats, floor: -BODY,
     cuts: { planes: [{ n: [0, 0, 1], d: 0 }], open: [Z + 50] },
-    look: { exposure: 0.95 },
+    look: s.pull ? PULL_LOOK : { exposure: 0.95 },
+    lights: s.pull ? [{ p: [0, 1100, 300], colour: [1, 0.93, 0.8], power: 1.6, range: 1300 }] : undefined,
   };
 }
 
@@ -274,6 +277,15 @@ export const MOS_HOME_FRAME = ['gate', 'spacers', 'gate oxide', 'extension (LDD)
 const SECTION_FRAME = ['source', 'drain', 'gate', 'gate oxide', 'spacers', 'extension (LDD)', 'trench isolation (STI)', 'depletion layer', 'silicide'];
 /** Outside the tour the wiring waits for its beat, so the device is seen first. */
 export const MOS_HIDDEN = ['metal'];
+/** The pull-back's light: low, raking across the view from its right (each gate's long shadow falls towards the
+ *  reader's left, in sight), haze over a few tens of µm. */
+const PULL_LOOK = { exposure: 0.9, keyDir: [0.8, 0.2, -0.25] as Vec3, haze: { colour: '--st-back-1' as const, dist: 17000 } };
+/** The field as a wafer: dark polished silicon, darker islands, the gates catching the low light. */
+const FIELD_MATS = {
+  si: M.make({ base: [0.15, 0.17, 0.22], metal: 0.45, rough: 0.38, label: 'silicon wafer' }),
+  n: M.make({ base: [0.36, 0.17, 0.24], metal: 0.25, rough: 0.4, label: 'n+ islands' }),
+  gate: M.make({ base: [0.42, 0.4, 0.58], metal: 0.05, rough: 0.45, label: 'polysilicon gates' }),
+};
 const FIELD_VIEW = { yaw: -0.55, pitch: 0.17, target: [0, 0, 0] as Vec3, dist: 9000 };
 
 const fmtCount = (n: number) => {
@@ -300,9 +312,9 @@ export function fieldParts(s: MosState): { key: string; geo: Geo; mat: Material 
   const slab = bx(-X, X, -80, 0, -Z, Z), isl = merge([bx(-xA, -isl0, -XJ_NP, 1, -hw, hw), bx(isl0, xA, -XJ_NP, 1, -hw, hw)], 'islands');
   const gate = bx(-hl, hl, OX, OX + POLY, real ? -hw - POLY_END : -hw, real ? hw + HEAD_GAP : hw);
   return [
-    { key: 'field silicon', geo: slab, mat: MATS.p },
-    { key: 'field islands', geo: isl, mat: MATS.n },
-    { key: 'field gates', geo: gate, mat: MATS.poly },
+    { key: 'field silicon', geo: slab, mat: FIELD_MATS.si },
+    { key: 'field islands', geo: isl, mat: FIELD_MATS.n },
+    { key: 'field gates', geo: gate, mat: FIELD_MATS.gate },
   ];
 }
 

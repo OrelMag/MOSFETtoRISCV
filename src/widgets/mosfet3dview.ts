@@ -21,7 +21,7 @@ import { studioStage } from './studiostage';
 
 const REGION = { cut: 'cut-off', lin: 'linear', sat: 'saturation' } as const;
 const PER_W = 5, PER_L = 7, PER_PLUG = 6;
-const CARRIER = sphere(5, 8, 5), ION = sphere(4.5, 6, 4), PLUG_E = sphere(9, 8, 5);
+const CARRIER = sphere(5, 8, 5), ION = sphere(4.5, 6, 4);
 
 interface Carrier { x: number; z: number }
 
@@ -43,7 +43,7 @@ export function mosfetView(link?: BiasLink): Widget {
     onBeat: (i) => {
       fieldOn = i >= 0 && i === beats() - 1; field();
       const wiring = i === 3 || i === 4; // what a process adds; layer by layer
-      if (wiring !== !!st.wiring) { st.wiring = wiring; stage.refresh(); }
+      if (wiring !== !!st.wiring || fieldOn !== !!st.pull) { st.wiring = wiring; st.pull = fieldOn; stage.refresh(); }
     },
     build: (detail) => mosModel(st, detail, rgb),
   });
@@ -52,10 +52,12 @@ export function mosfetView(link?: BiasLink): Widget {
   function field(): void {
     const sites = fieldOn ? fieldSites(st) : [];
     const data = packInstances(sites.map((p) => ({ pos: p, color: [1, 1, 1] as RGB })));
-    for (const part of fieldParts(st)) stage.instances(part.key, part.geo, part.mat, data);
+    for (const part of fieldParts(st)) stage.instances(part.key, part.geo, part.mat, data, part.key !== 'field silicon');
   }
 
   const eMat = M.make({ base: '--m3-carrier', metal: 0, rough: 0.4, emit: '--m3-carrier', glow: 0.6, label: 'electrons (drawn larger than life)' });
+  // the plugs' electrons: the channel's, dimmer, so they do not pull the eye off the gate
+  const plugEMat = M.make({ base: '--m3-carrier', metal: 0, rough: 0.5, emit: '--m3-carrier', glow: 0.18, label: 'electrons in the contact (drawn larger than life)' });
   const ionMat = M.make({ base: '--mf-ion', metal: 0, rough: 0.6, label: 'bare acceptor ions (boron), drawn larger' });
 
   function seed(): void {
@@ -83,7 +85,7 @@ export function mosfetView(link?: BiasLink): Widget {
       if (!kept([p.x, 0, p.z])) continue;
       for (let k = 0; k < PER_PLUG; k++) pe.push({ pos: along(path, (plugPhase + k / PER_PLUG) % 1), color: [1, 1, 1] });
     }
-    stage.instances('plug electrons', PLUG_E, eMat, packInstances(pe));
+    stage.instances('plug electrons', CARRIER, plugEMat, packInstances(pe));
   }
 
   const region = h('span', { class: 'r3-chip' }), idChip = h('span', { class: 'r3-chip' });
