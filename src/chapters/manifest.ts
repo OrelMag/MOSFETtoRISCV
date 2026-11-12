@@ -978,8 +978,9 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "One multiplier, N clocks", challenge: "reach", stage: "scene" },
     { title: "One mask, four ways to build it", challenge: "quiz", stage: "widget" },
   ] },
-  { id: "iir", num: 83, title: "IIR and stability", blurb: "What feedback buys and what it can break: the bilinear transform, poles that can only sit on a lattice, direct form against sections, a biquad in gates and a limit cycle it will not stop making, and how to order and scale sections.", level: "Signal processing", builds: ["zplane","firdesign","fixed","muldiv"], recap: {"checks":3}, steps: [
+  { id: "iir", num: 83, title: "IIR and stability", blurb: "What feedback buys and what it can break: the s-plane and the bilinear transform, poles that can only sit on a lattice, direct form against sections, a biquad in gates and a limit cycle it will not stop making, and how to order and scale sections.", level: "Signal processing", builds: ["zplane","firdesign","fixed","muldiv"], recap: {"checks":3}, steps: [
     { title: "What feedback buys", challenge: "quiz", stage: "widget" },
+    { title: "The analog picture: the s-plane", challenge: "quiz", stage: "widget" },
     { title: "From an analog filter to a digital one", challenge: "quiz", stage: "widget" },
     { title: "Where a pole is allowed to sit", challenge: "quiz", stage: "widget" },
     { title: "One polynomial or small sections", challenge: "quiz", stage: "widget" },
