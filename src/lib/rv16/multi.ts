@@ -8,6 +8,7 @@ import { constWord } from '../alu';
 import { Builder } from '../builder';
 import { equal } from '../combinational';
 import { define, merger, splitter } from '../define';
+import { laid } from '../layered';
 import { AND, NOT, OR } from '../gates';
 import { ram } from '../memory';
 import { BRANCH16, CORE_PORTS, CTL16, IMM16, NEXTPC16 } from './cpu';
@@ -76,16 +77,12 @@ export const RV16_MULTI: ComponentDef = (() => {
   b.wire(rwe, 'rwe');
   b.wire(rd, 'rwa');
   b.wire(wbv, 'rwd');
-  const R = b.right;
   return define({
     id: 'rv16_mc', name: 'RV16 multicycle core', category: 'cpu',
     summary: 'Each instruction over 3 cycles (4 for loads and stores): F loads the instruction register, E the ALU register, M reads or writes memory, W writes the register file and the PC. A one-hot state machine steps through them. Shorter clock period, more cycles.',
     ports: CORE_PORTS,
     symbol: { kind: 'box', label: 'RV16 MC' },
-    netlist: () => ({
-      pins: { ...pinsAt(['clk', 'rst', 'instr', 'drdata'], 0, 4), ...pinsAt(['pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'], R, 4) },
-      instances: b.instances, nets: b.nets(),
-    }),
+    netlist: laid(b, { aspect: 1.2, gap: 8, pinOrder: ['clk', 'rst', 'instr', 'drdata', 'pc', 'daddr', 'dwdata', 'dwe', 'rwe', 'rwa', 'rwd'] }),
   });
 })();
 

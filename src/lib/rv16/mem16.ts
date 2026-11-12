@@ -18,6 +18,7 @@ import { Builder } from '../builder';
 import { andN, busMux2, decoder, equal, incrementer, muxTree } from '../combinational';
 import { define, merger, ones, splitter } from '../define';
 import { BITLINE_CAP, DRAM_BIT, DRAM_SA, VHALF } from '../dram';
+import { laid } from '../layered';
 import { fanout } from '../fastadd';
 import { AND, NOT, OR, XOR } from '../gates';
 import { NAND, NMOS } from '../transistors';
@@ -118,17 +119,13 @@ export const bankOf = (fault?: 'norefresh'): ComponentDef => once(`bank${fault ?
   b.wire(b.op1(bitwise('and', 4), [b.op1(incrementer(4), [`${timer}.q`], '+1'), b.op1(fanout(4), [b.op1(NOT, [clear])])], '0 on restart'), `${timer}.d`);
   b.wire(b.op1(OR, [clear, b.op1(NOT, [due])], 'count'), `${timer}.en`);
   b.wire(`${a}.o0`, 'ca'); b.wire('we', 'aw'); b.wire('wd', 'ad'); b.wire('aq', 'rd');
-  const R = b.right;
   return define({
     id: `rv16_bank${fault ? `_${fault}` : ''}`, name: 'DRAM bank with refresh (RV16)', category: 'memory',
     summary: 'Requests in (a word address: row and column), array commands out: a row hit reads or writes at once; a miss closes the open row and opens the new one. A refresh timer and pointer open every row in turn: early when the port is idle, first when it is due.',
     ports: [bus('addr', 8, 'in'), bus('wd', 16, 'in'), bit('re', 'in'), bit('we', 'in'), clkIn(), bit('rst', 'in'), bus('aq', 16, 'in'),
       bus('rd', 16, 'out'), bit('busy', 'out'), bus('cmd', 2, 'out'), bus('ra', 4, 'out'), bus('ca', 4, 'out'), bit('aw', 'out'), bus('ad', 16, 'out')],
     symbol: { kind: 'box', label: 'BANK' },
-    netlist: () => ({
-      pins: { ...pinsAt(['addr', 'wd', 're', 'we', 'clk', 'rst', 'aq'], 0), ...pinsAt(['rd', 'busy', 'cmd', 'ra', 'ca', 'aw', 'ad'], R) },
-      instances: b.instances, nets: b.nets(),
-    }),
+    netlist: laid(b, { aspect: 1.6, room: true, gap: 10, vgap: 4, pinPitch: 4, pinOrder: ['addr', 'wd', 're', 'we', 'clk', 'rst', 'aq', 'rd', 'busy', 'cmd', 'ra', 'ca', 'aw', 'ad'] }),
   });
 });
 export const BANK16 = bankOf();
@@ -237,17 +234,13 @@ export const ctrlOf = (fault?: 'norefresh' | 'notrcd'): ComponentDef => once(`ct
   b.wire(b.op1(AND, [nrst, b.op1(OR, [act1, keep(open1, pre1)])]), `${open1}.d`);
   b.wire(b.op1(AND, [nrst, b.op1(OR, [doRef, keep(lastRef, pres)])]), `${lastRef}.d`);
   sh.forEach((r, i) => b.wire(b.op1(AND, [nrst, i ? `${sh[i - 1]}.q` : doRd]), `${r}.d`));
-  const R = b.right;
   return define({
     id: `rv16_dramctrl${fault ? `_${fault}` : ''}`, name: 'DRAM controller (RV16)', category: 'memory',
     summary: 'One request at a time (a word address: row, bank, column) in, DRAM commands out, open page: a row hit is a RD or WR as soon as tRCD allows; a miss precharges (after tRAS) and activates (after tRP). A read is ready tCAS = 4 cycles after its RD, a write with its WR. A refresh is pending 128 cycles after the last one and goes first: PREA, REF, then tRFC = 12 cycles of nothing.',
     ports: [bit('req', 'in'), bus('addr', 11, 'in'), bus('wd', 16, 'in'), bit('we', 'in'), clkIn(), bit('rst', 'in'), bus('dq', 16, 'in'),
       bit('ready', 'out'), bus('rd', 16, 'out'), bus('cmd', 3, 'out'), bit('ba', 'out'), bus('ra', 6, 'out'), bus('ca', 4, 'out'), bus('dd', 16, 'out')],
     symbol: { kind: 'box', label: 'DRAM CTRL' },
-    netlist: () => ({
-      pins: { ...pinsAt(['req', 'addr', 'wd', 'we', 'clk', 'rst', 'dq'], 0), ...pinsAt(['ready', 'rd', 'cmd', 'ba', 'ra', 'ca', 'dd'], R) },
-      instances: b.instances, nets: b.nets(),
-    }),
+    netlist: laid(b, { aspect: 1.6, room: true, gap: 10, vgap: 4, pinPitch: 4, pinOrder: ['req', 'addr', 'wd', 'we', 'clk', 'rst', 'dq', 'ready', 'rd', 'cmd', 'ba', 'ra', 'ca', 'dd'] }),
   });
 });
 export const CTRL16 = ctrlOf();
@@ -294,7 +287,6 @@ export const busOf = (fault?: 'nolock'): ComponentDef => once(`bus${fault ?? ''}
   b.wire(b.op1(OR, ['rst', b.op1(busMux2(1), [`${last}.q`, g, done])], 'm0 first'), `${last}.d`);
   b.wire(b.op1(andN(3), [b.op1(NOT, ['rst']), vg, b.op1(NOT, [done])], 'waiting'), `${lock}.d`);
   b.wire(g, `${own}.d`);
-  const R = b.right;
   const m = (i: number): PortDef[] => [bit(`mv${i}`, 'in'), bus(`ma${i}`, 16, 'in'), bus(`md${i}`, 16, 'in'), bit(`mw${i}`, 'in')];
   const s = (j: number): PortDef[] => [bit(`sr${j}`, 'in'), bus(`sq${j}`, 16, 'in')];
   const ins = [...m(0), ...m(1), ...s(0), ...s(1), ...s(2), clkIn(), bit('rst', 'in')];
@@ -304,7 +296,7 @@ export const busOf = (fault?: 'nolock'): ComponentDef => once(`bus${fault ?? ''}
     id: `rv16_bus${fault ? `_${fault}` : ''}`, name: 'Two-master bus (RV16)', category: 'routing',
     summary: 'valid / ready on both sides: a round-robin grant held until the transfer completes, the address decoded to three slaves (0 below 0x8000, 1 from 0x8000, 2 from 0xC000), the granted master\'s address, data and write to all of them, the chosen slave\'s ready and data back.',
     ports: [...ins, ...outs], symbol: { kind: 'box', label: 'BUS' },
-    netlist: () => ({ pins: { ...pinsAt(ins.map((p) => p.name), 0, 3), ...pinsAt(outs.map((p) => p.name), R, 3) }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { aspect: 1.2, keepOrder: true, pinOrder: [...ins, ...outs].map((p) => p.name) }),
   });
 });
 export const BUS16 = busOf();
