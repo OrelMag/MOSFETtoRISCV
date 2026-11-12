@@ -1,5 +1,8 @@
 # Plan: Appendix E, the Manchester Baby (SSEM, 1948)
 
+> **Historical (2026-11-12).** Built: see docs/ROADMAP.md, Phase 23: Appendix E. Kept as the record of the decisions; its future tense is
+> as of the plan, and any mockup link in it is the author's private draft.
+
 Status: **APPROVED by the author on 2026-11-10, with decisions E1–E7 as recommended.** Mockup:
 `E:/mockups/baby/baby-mockup.html` (https://claude.ai/artifact/2nBW9rww1zXjRqfx4dZny1). Id `appendix-baby`, after
 `appendix-runner` and before the AGC (Appendix F).

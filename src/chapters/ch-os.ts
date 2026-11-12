@@ -198,7 +198,7 @@ export const chOs: Chapter = {
     {
       title: 'The process control block and the context switch',
       body: `
-        <p>The CPU has one set of ${NREGS} registers. Two processes each believe they have it. The kernel makes it true by keeping each process's registers in memory while it waits: the <strong>process control block</strong>, ${PCB_SIZE} bytes for each, with the saved PC at offset 0, register <em>n</em> at 4<em>n</em>, then the process's <code>satp</code>,
+        <p>The CPU has one set of registers, ${NREGS} of which hold state (x0 is always 0). Two processes each believe they have it. The kernel makes it true by keeping each process's registers in memory while it waits: the <strong>process control block</strong>, ${PCB_SIZE} bytes for each, with the saved PC at offset 0, register <em>n</em> at 4<em>n</em>, then the process's <code>satp</code>,
         its state (ready or gone), the number of slices it has had and the letter it prints. Taking the CPU from one process and giving it to another is a <strong>context switch</strong>, and it is these steps:</p>
         <ol>
           <li><strong>Save</strong> (${F.saveInstr} cycles, the interrupt's own included): the trap handler stores every register and the PC into the running process's block.</li>
@@ -248,7 +248,7 @@ export const chOs: Chapter = {
         <p>The counters of the last step both keep their counts in the word at 0x1000, and neither ever sees the other's value. This step makes it the point. The two processes are built from the same source except for a number: each stores its identity (7 and 9) in the word at 0x1000, spins for a while so the other has time to run in between,
         then reads the word back and prints it. If the word were shared, one of them would print the other's number.</p>
         <p>What keeps them apart is one register. Every translation starts at <code>satp</code>, and the kernel writes a different one at each switch: A's points at the root table in frame ${ROOT_OF[0] >>> 12}, B's at the root table in frame ${ROOT_OF[1] >>> 12}. The same virtual address walks two different chains of tables and ends in two different frames. That is the whole mechanism, no copying and no checks in the program.
-        The cost is the one the last step measured: a <code>satp</code> write forgets every cached translation, so the process that has just been given the CPU walks again for its code page and its data page, ${F.refillWalks} walks of ${WALK_CYCLES} cycles each in its first slice. Real machines tag each TLB entry with an address-space number so that a switch does not have to flush; this one has none.</p>
+        The cost is the one the context-switch step measured: a <code>satp</code> write forgets every cached translation, so the process that has just been given the CPU walks again for its code page and its data page, ${F.refillWalks} walks of ${WALK_CYCLES} cycles each in its first slice. Real machines tag each TLB entry with an address-space number so that a switch does not have to flush; this one has none.</p>
         <p>The processes protect each other in the other direction too. A has no entry in its table for B's frames, so there is no virtual address, however wild, with which it can read B's data. The only shared things are the kernel's frame (which user mode may not touch) and the console, which only the kernel writes.</p>`,
       scene: scenes.spaces,
       lit: 'The translation unit',

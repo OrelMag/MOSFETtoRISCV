@@ -494,7 +494,7 @@ eight compressor levels, then one fast adder</pre>csa8: 72 NANDs and 6 NAND dela
     ],
   },
   multiword: {
-    idea: `School arithmetic on numbers longer than a times table: work one digit at a time, lowest first, and carry. Here the digit is a 32-bit word. With A = a1·2<sup>32</sup> + a0, A + B is a0 + b0 in the low word and a1 + b1 + carry in the high word, where the carry is 1 exactly when the low sum wrapped, that is, when it is smaller than an operand: <code>sltu c, s, a0</code>. A subtraction takes the borrow from the comparison B.lo &lt; A.lo made <em>before</em> the low subtraction. A product is four 32 × 32 → 64 products (<code>mul</code> for the low word, <code>mulhu</code> for the high; <code>mulh</code> and <code>mulhsu</code> for signed operands) added at weights 2<sup>0</sup>, 2<sup>32</sup> (twice) and 2<sup>64</sup>, with the carries kept as above. Machines with a carry flag add the flag in and out of every word (<code>ADC</code>); RISC-V drops the flag and pays an <code>sltu</code> per carry.`,
+    idea: `School arithmetic on numbers longer than a times table: work one digit at a time, lowest first, and carry. Here the digit is a 32-bit word. With A = a1·2<sup>32</sup> + a0, A + B is a0 + b0 in the low word and a1 + b1 + carry in the high word, where the carry is 1 exactly when the low sum wrapped, that is, when it is smaller than an operand: <code>sltu c, s, a0</code>. A subtraction B − A takes the borrow from the comparison B.lo &lt; A.lo made <em>before</em> the low subtraction. A product is four 32 × 32 → 64 products (<code>mul</code> for the low word, <code>mulhu</code> for the high; <code>mulh</code> and <code>mulhsu</code> for signed operands) added at weights 2<sup>0</sup>, 2<sup>32</sup> (twice) and 2<sup>64</sup>, with the carries kept as above. Machines with a carry flag add the flag in and out of every word (<code>ADC</code>); RISC-V drops the flag and pays an <code>sltu</code> per carry.`,
     example: {
       title: 'A = 0x1_FFFFFFFF, B = 0x2_00000003 on RV32IM (chapter muldiv)',
       body: `<pre>add  s4, a0, a2     sum, low word      0xFFFFFFFF + 3 = 0x1_00000002 → 2
@@ -508,7 +508,7 @@ A × B = 0x4_00000003_FFFFFFFD   (2⁶⁶ + 2³⁴ − 3)
     },
     mistakes: [
       'Testing the carry once: a1 + a3 + carry is two additions and either one can wrap (0xFFFFFFFF + 0 + 1 wraps on the second only).',
-      'Testing a borrow like a carry: the difference below an operand does not mean a borrow (5 − 3 = 2 is below 3). The borrow is B.lo < A.lo, the operands compared, before the subtraction if the difference overwrites one of them.',
+      'Testing a borrow like a carry: the difference below an operand does not mean a borrow (5 − 3 = 2 is below 3). For B − A the borrow is B.lo < A.lo (for A − B, A.lo < B.lo), the operands compared, before the subtraction if the difference overwrites one of them.',
       'Using mulhu for signed operands: the high words of a signed product need mulh (signed × signed) or mulhsu (signed × unsigned), and the cross products\' signs fill the top word.',
     ],
     chapters: [

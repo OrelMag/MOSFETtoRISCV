@@ -15,7 +15,11 @@ Harris *Digital Design and Computer Architecture: RISC-V Edition*, and the compa
 in `References/` (NAND → pipelined RV32I, with SystemVerilog sources). Phase 12 brought the
 sandbox level with the two games (I/O parts, chip faces, capacity, programs on your own CPU).
 
-**Status (2026-11-10).** Feature work is closed: the author stopped new roadmap work after batch 22 (ba07c60f), which
+**Status (2026-11-12): development stopped.** The release corrections are the last batch; after it the site is tagged v2.0.0
+and no further work is planned. What follows is the record. Chapter numbers in the phases below are as they were when each
+item was written: chapters have been inserted and renumbered since (src/chapters/order.ts is the order now).
+
+Feature work closed after batch 22 (ba07c60f), which
 landed the last features (Appendix F, the machine hall's card reader, Lay out by logic depth, decks for the RV16 program
 levels and runs on your own core, C on the pipeline, the puzzle devices). Every phase below is done (✅) apart from the items
 named as left, parked or dropped where they stand. Parked or dropped by the author: i18n (dropped), sound effects and badges
@@ -280,7 +284,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
 - ✅ Virtual memory (Sv32), TLBs, M / S / U privilege: the ISS (8fa894d4), the system CPU with an MMU, TLBs and a walker in gates
   (80c6c345, merged 85d6c60d), chapters vmem and os (merged d015d0d2)
 
-### Phase 10 — Multi-core ✅ (chapter 27)
+### Phase 10 — Multi-core ✅ (the multi-core chapter, `multicore`)
 - ✅ Gate-level dual-core: one core definition instantiated twice, csrr mhartid, shared memory behind a round-robin arbiter
 - ✅ amoswap.w / amoadd.w; race (20 of 40 updates survive), atomic add and spin-lock demos
 - ✅ Multi-hart golden model with identical arbitration; both cores co-simulated every cycle
@@ -293,7 +297,7 @@ Status legend: ✅ done · 🚧 in progress · ⏳ planned
   lr.w / sc.w with a reservation per cache; `coherentDualCore` beside `dualCore` (which, multiCore and the silicon flow are unchanged); chapter 27's four cache steps and the Coherence panel;
   verified cycle for cycle against `riscv/cohmodel.ts` (SWMR every cycle, a sequentially consistent replay of the retirement order, seeded fuzz with shared lines and lr/sc loops)
 
-### Phase 11 — From netlist to silicon ✅ (chapter 28)
+### Phase 11 — From netlist to silicon ✅ (the silicon chapter, `silicon`)
 - ✅ INV / NAND2 / NOR2 standard cells in layout (layers, live conduction), λ dimensions, sky130 reference
 - ✅ Fabrication cross-section, step by step (wells, STI, gate, lithography, etch, implants, contacts, metal)
 - ✅ Technology mapping measured on our designs (inverters, double inversions)
@@ -689,11 +693,11 @@ coherence explorers, delay animation, static vs simulated paths, Yosys cross-che
   machine mode with traps) linked as ELFs without a toolchain, commit logs compared instruction by instruction (pc,
   word, x / f writes, stores, load addresses, CSR writes, trap cause / epc / tval). Seeds 1–1000: 6000 programs,
   1 236 958 instructions, no difference beyond two legal ones (mtval on illegal / ebreak; mret's zero writes to
-  tcontrol, a debug CSR ours lacks); it found `mstatush` missing from the golden model and the system CPU (added). Seeds 1–1000 per variant on every ISA change, 4000 more each night
+  tcontrol, a debug CSR ours lacks); it found `mstatush` missing from the golden model and the system CPU (added). Seeds 1–1000 per variant on every ISA change, 4000 more each night (until the development stop)
 - ✅ RV32 random-program fuzzing (`src/riscv/randprog32.ts`): ALU edge values, every branch, jal / jalr, loops,
   loads / stores of every width, hazard-dense operand choice, CSRs, traps and a timer interrupt, M, F (special
   values, every rounding mode), atomics on the dual-core; final state against the golden model on every CPU, a
-  mismatch replayed in lock-step for the first difference; seeds 1–32 in `npm test`, a new 2048-seed range nightly
+  mismatch replayed in lock-step for the first difference; seeds 1–32 in `npm test`, a new 2048-seed range nightly (until the development stop)
   (`.github/workflows/verify.yml`). Found: the six-stage FPU pipeline losing a taken branch while D waited
 - ✅ Coverage of the CPU suites (`scripts/coverage.ts`, tables in `docs/VERIFICATION.md`): instructions and trap
   causes, forwarding paths, load-use / FP / divide stalls, flushes, mispredictions, cache hits / misses /
@@ -949,7 +953,7 @@ the campaign's first levels, then warps and memory (28–29), graphics last (30�
   model (riscv/rv16/simt16.ts: four Iss16 lanes over one memory), and the lane bench (campaign/lanecheck.ts: every
   lane's register writes and stores in order, four memory ports, 32 programs at once on BitSim)
 
-### Phase 17 — Out of order ✅ (chapter 26)
+### Phase 17 — Out of order ✅ (the out-of-order chapter, `ooo`)
 More than one instruction per cycle, between floating point and many cores, so the journey runs from instruction-level to
 thread-level to data-level parallelism. Mockup approved 2026-10-19 (E:/mockups/ooo/ooo-mockup.html), every recommendation:
 chapter 26 (24–35 renumbered); two gate-level CPUs, `pipe-2w` (dual issue, in order) and `ooo` (2-wide out of order);
@@ -1056,7 +1060,7 @@ on its own.
   owner in each page's spare area, garbage collection), a boot program puzzle on the golden model with a DMA engine
   and flash (16e-2); each device a model on its level's bench that names the rule broken
 
-### Phase 18 — From Python to gates ✅ (chapter 15)
+### Phase 18 — From Python to gates ✅ (the Python chapter, `python`)
 A program in a high-level language running on the gates, line by line. Mockup approved 2026-10-19
 (E:/mockups/python/python-mockup.html): chapter 15, after the single-cycle CPU (15–37 renumbered); RV32I; the core
 language and functions.
@@ -1385,7 +1389,7 @@ main (edcb6b2a, 3417d316, f6ec9cc2, 545f4398, 4e9058de, b9869531).
 
 The ship review (five fresh reviewers; plan and findings in E:/audit/ship/) checked every chapter up to Communication, the codex and campaign
 tied to them, the sandbox modes, performance, layout shift and a production pass; batches 1–3 landed (726beeb3, 8b1d4695, 3708abb5). Every
-proposal it raised was approved and is being built (E:/audit/ship/PROPOSALS.md), with the four ONI features (docs/PLAN-ONI.md).
+proposal it raised was approved and built (E:/audit/ship/PROPOSALS.md), with the four ONI features (docs/PLAN-ONI.md).
 
 Approved to build now (2026-11-09):
 - ✅ Python: strings and a heap (chapter 15; the item under Phase 18; c876ed1a)
@@ -1434,6 +1438,20 @@ Landed in batches 16–22 (2026-11-09 / 10), the last of the feature work:
 - ✅ C on the five-stage pipeline and pipelined C cores in the sandbox (80b47b17); decks for the RV16 program levels and runs on your own
   core (ee7f98d5); the puzzle devices (c9f40bfd); the machine hall's card reader (42213723)
 - ✅ Self-hosted fonts, preloaded: no shift on load (8861f0d0)
+
+Landed after feature work closed (2026-11-10 to 12): content audits and the chapters they asked for, then the last viewing aid:
+- ✅ A logic chapter after gates (`logic`: sum of products, Boolean algebra, Karnaugh maps, don't cares, glitches) and state machines a
+  chapter of their own (`fsm`: encodings and their cost, reading a circuit back, a controller driving a datapath; c645c75a)
+- ✅ A first computer (`firstcomputer`): an 8-bit accumulator machine before the RISC-V CPU, and the campaign's m_acc (0753922f)
+- ✅ Threads (`threads`: two threads on the kernel, a race, locks, sleeping and waking, semaphores, a deadlock) and Linking (`linking`:
+  object files, relocations, libraries, an ELF executable and exec in the kernel, on the gates), with the levels p_critical and p_link (5c724856, d117d3e5); the multicycle and M-extension chapters reordered (6a65e328)
+- ✅ The NOR3 levels (nor_basic, nor_fa, nor_reg), the drills n_fixed and n_divrem, the test levels t_tests and t_scan, the clock gate s_icg
+- ✅ Audits 2 and 3 and the continuity audit: corrections across the chapters, codex and campaign, circuits redrawn (batches 23–38)
+- ✅ Lock a layout, overlays for cost / energy / depth on the stage, the Verilog chip's source linked to its drawing (68ae8753, 86b95b64, b9639454)
+- ✅ Transparent boxes: a build-time route cache, then blocks that open as you zoom, drawn within their box, and the View option
+  "Opened blocks without colour" (13d52021, 55ba47e5, bf22f898, cde08840)
+- ✅ The release review (2026-11-12, E:/audit/release/) and its corrections: third-party notices (public/THIRD-PARTY-NOTICES.txt) and
+  Doom's GPL-2 text beside its image, content and docs corrections
 
 ## Open questions for the author
 - ~~Target audience depth?~~ Decided: from a technical newcomer to an engineer, chapter 0 (Basics) the floor (CLAUDE.md)

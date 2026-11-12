@@ -1293,7 +1293,8 @@ const reloc: Drill = {
   make(r) {
     const kind = int(r, 0, 2);
     if (kind === 0) {
-      const site = int(r, 0, 0x3ff), off = int(r, 0, 2) === 0 ? -Math.min(site, int(r, 1, 255)) : int(r, 1, 255);
+      // a backward call needs room behind it: at word 0 it goes forward (else f would sit at the call itself)
+      const site = int(r, 0, 0x3ff), off = int(r, 0, 2) === 0 && site > 0 ? -Math.min(site, int(r, 1, 255)) : int(r, 1, 255);
       const target = site + off, want = encJ(1, off);
       return {
         prompt: `<code>call f</code> (<code>jal ra, f</code>) sits at word <b>0x${hex(site, 16)}</b>; the linker put <code>f</code> at <b>0x${hex(target, 16)}</b>. What word does it write?`, placeholder: '0x…',

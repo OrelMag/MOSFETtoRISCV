@@ -82,7 +82,7 @@ sw runs again: walk (3 cycles of stall), fill, hit</pre>`,
     mistakes: [
       'Returning without fixing anything: the instruction faults again at once, forever.',
       'Reading the page from <code>mepc</code>: it holds the instruction, and the address is in <code>mtval</code>.',
-      'Expecting a fault to leave a TLB entry: a walk that finds a fault fills nothing.',
+      'Expecting a missing page to leave a TLB entry: a walk that finds no valid entry fills nothing (a page that exists but is forbidden is cached, and refused from there).',
     ],
     chapters: [vmem(6, 'Page faults: mapping on demand'), vmem(7, 'Protection: U, R, W and X')],
   },
@@ -134,7 +134,7 @@ switch: satp ← B's root; the TLB forgets A's translations</pre>`,
     example: {
       title: 'The chapter\'s kernel',
       body: `<pre>save 37 instructions   choose 23 instructions   restore 38 instructions
-99 instructions in all (with mret), 102 cycles from the timer interrupt to the next process's first instruction</pre>`,
+99 instructions in all (the new process's first one included), 102 cycles from the timer interrupt to the next process's first instruction</pre>`,
     },
     mistakes: [
       'Saving the registers after using one: the first register you touch holds the interrupted process\'s value, which is gone.',

@@ -172,10 +172,10 @@ export const chAppendixBaby: Chapter = {
       challenge: {
         kind: 'quiz',
         question: 'A line reads <code>11011 110</code> in the notebook\'s two fields (line digits 0–4, then function digits 13–15). What is it?',
-        options: ['STO 27', 'LDN 27', 'STO 11', 'SUB 27'],
+        options: ['STO 27', 'LDN 27', 'CMP 27', 'SUB 27'],
         answer: 0,
         explain: 'Digits 0–4 are 1, 1, 0, 1, 1: 1 + 2 + 8 + 16 = 27. The function digits 1, 1, 0 are 1 + 2 = 3, STO.',
-        why: ['', 'LDN is function 2: 0, 1, 0.', 'That reads the digits in our order; the notebook puts digit 0 first.', 'SUB is function 4: 0, 0, 1.'],
+        why: ['', 'LDN is function 2: 0, 1, 0.', 'That reads the function digits 1, 1, 0 in our order, most significant first: 6, CMP. The notebook puts digit 0 first, so they are 1 + 2 = 3. (The line digits read the same both ways.)', 'SUB is function 4: 0, 0, 1.'],
       },
     },
     {

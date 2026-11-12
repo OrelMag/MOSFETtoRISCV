@@ -38,7 +38,7 @@ export const WALKSVM: Record<string, WalkScript> = {
         question: 'Two entries hold the same page number, both valid. What does the lookup return?',
         options: ['The lower-numbered entry: the priority encoder picks the first match, which is why a TLB must never be filled with a page it already holds', 'Both, ORed together', 'Neither: two matches is a miss', 'The newer entry'],
         answer: 0,
-        explain: 'The encoder reports the lowest match line. The bench never fills a page already present, and a real walker only starts on a miss, so a duplicate cannot arise; if one did, the answer would depend on which entry the pointer had reached, not on which was newer.',
+        explain: 'The encoder reports the lowest match line. The bench never fills a page already present, and a real walker only starts on a miss, so a duplicate cannot arise; if one did, the answer would be whichever duplicate sits at the lower index, not the newer one.',
         why: ['', 'There is a single index; the outputs come from one entry.', 'Nothing in a priority encoder makes two matches a miss: it reports the first.', 'The hardware has no age; the lowest index wins.'],
       },
       why: 'Several lines could be high in a buggy design, and the multiplexers need one number. A priority encoder gives one even then, and its valid output is the hit.',

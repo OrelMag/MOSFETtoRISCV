@@ -240,7 +240,7 @@ export const chVectors: Chapter = {
       title: 'Chaining',
       body: `
         <p>Our unit runs one instruction at a time: the loop body's six vector instructions at m8 (eight element groups each) take ${chain('serial')} cycles. The Cray-1 (1976) did better in two ways.
-        It had separate units for loads, shifts, adds and stores, so independent instructions could overlap: ${chain('units')} cycles. And it <b>chained</b>: a dependent instruction starts on
+        It had separate functional units (add, shift, logic, multiply) beside its memory path, so independent instructions could overlap; with a unit each for loads, shifts, adds and stores the model takes ${chain('units')} cycles. And it <b>chained</b>: a dependent instruction starts on
         element group 0 as soon as its producer has written that group, while the producer is still on group 1. The loop body then takes ${chain('chained')} cycles.</p>
         <p>The widget is a timing model, not gates. Chaining in gates needs a ready bit per register group, a path from each unit's result straight to the next unit's input in every lane, and
         a queue of vector instructions so the scalar core can run ahead; our unit has none of these.</p>`,
@@ -288,7 +288,7 @@ export const chVectors: Chapter = {
         switching at once draw too much power, the trade the <a href="#/c/power/0">power chapter</a> measured.</p>`,
       more: {
         real: `<p>RVV's full set has fractional LMUL (a half, a quarter or an eighth of a register), widening and narrowing instructions (8-bit × 8-bit into 16-bit), segment loads for structures,
-          gathers and scatters, and agnostic tail and mask policies that let a machine write anything into those elements. Ours implements undisturbed for both, which agnostic allows.</p>`,
+          gathers and scatters, and agnostic tail and mask policies, under which a machine may overwrite those elements with all 1s instead of leaving them. Ours implements undisturbed for both, which agnostic allows.</p>`,
         pitfall: `<p>Comparing peak numbers: a 512-bit unit does sixteen 32-bit operations a cycle only on loops that keep it fed. Memory bandwidth, the tail and the scalar bookkeeping decide what a real loop gets, as <a href="#/c/vectors/9">the four machines</a> showed.</p>`,
       },
     },

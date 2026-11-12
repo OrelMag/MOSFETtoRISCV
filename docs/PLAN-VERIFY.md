@@ -1,5 +1,8 @@
 # Plan: "How do you know it works?" (Phase 23)
 
+> **Historical (2026-11-12).** Built: see docs/ROADMAP.md, Phase 23. Kept as the record of the decisions; its future tense is
+> as of the plan, and any mockup link in it is the author's private draft.
+
 A new chapter on how the book's hardware is checked. The first half covers **design verification**: is the design right? The second half covers **manufacturing test**: was this chip made right? Everything in the first half already exists in this repository (tests/verify/, docs/VERIFICATION.md, the Spike workflow). The chapter turns it into something the learner can watch and play with. The second half builds on the fault brush (sim/faults.ts, ONI D, merged 48736b0a) and on sim/ablate.ts.
 
 Status: **approved by the author on 2026-11-09, as shown, with all six decisions as recommended** (mockup published as

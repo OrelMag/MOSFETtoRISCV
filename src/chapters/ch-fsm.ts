@@ -18,6 +18,7 @@ import { codePanel, encodingPanel, readbackPanel } from '../widgets/fsmbook';
 import type { Scene, ScenePanel, Stage } from '../view/stage';
 import type { Chapter, Step } from './types';
 import { numOf } from './order';
+import { MC_STATES } from '../lib/multicycle';
 
 type Encoding = FsmDoc['encoding'];
 const nands = (d: Parameters<typeof stats>[0]): number => stats(d).nands;
@@ -219,7 +220,7 @@ const steps: Step[] = [
       <p>The table on the stage is the builder's own count for this machine, computed from its truth tables: binary wins at ${BIN.nands} NANDs, Gray costs ${GRAY.nands}, one-hot ${HOT.nands} (the one-hot circuit as finally drawn shares two gates and has ${circuitNands('mealy', { ...MEALY101, encoding: 'onehot' })}). Switch the encoding: the diagram's codes and the circuit change together, and
       the circuit still reads back as the same machine. The next-state logic of the binary version is <code>${eqs(MEALY101, 'binary', 'next').join('</code>, <code>')}</code>; the one-hot version's is <code>${eqs(MEALY101, 'onehot', 'next').join('</code>, <code>')}</code>: one short term per bit.</p>
       <p>One-hot pays when a machine has many states and few arcs into each: its logic per bit stays small, while a binary code's logic grows with every state it must decode. For three states it loses, ${HOT.nands} NANDs against ${BIN.nands}; the four-state Moore detector costs
-      ${MBIN.nands} / ${MGRAY.nands} / ${MHOT.nands} NANDs in binary / Gray / one-hot. The controller of <a href="#/c/multicycle/0">a processor that spends several cycles on each instruction</a> (chapter ${numOf('multicycle')}), with a dozen states each entered from one or two others, is the machine one-hot is made for.</p>
+      ${MBIN.nands} / ${MGRAY.nands} / ${MHOT.nands} NANDs in binary / Gray / one-hot. The controller of <a href="#/c/multicycle/0">a processor that spends several cycles on each instruction</a> (chapter ${numOf('multicycle')}), with ${MC_STATES.length} states, most of them entered from a single other, is the machine one-hot is made for.</p>
       <div class="try">Switch to One-hot, then to Gray: watch the codes under the states change, and the cost row that is highlighted.</div>`,
     more: {
       derive: `<p>Binary logic decodes: to know "am I in S2?" it ANDs both state bits (or their complements), and each next-state bit is a function of all of them. One-hot needs no decoding, so each next-state bit has only the arcs that enter that state as terms.
@@ -245,7 +246,7 @@ const steps: Step[] = [
       why: [
         '',
         'Fewer flip-flops (4 against 12) is the saving of binary, but each of its 4 next-state bits is a function of all 4 bits and the inputs: more logic per bit.',
-        'Gray changes one bit per step along a path of adjacent codes; it does not shrink the logic that decides which state comes next, and in a dozen-state controller adjacent codes cannot serve every arc.',
+        'Gray changes one bit per step along a path of adjacent codes; it does not shrink the logic that decides which state comes next, and in a ${MC_STATES.length}-state controller adjacent codes cannot serve every arc.',
         'The costs differ, and in opposite directions: flip-flops favour binary, logic per bit favours one-hot. The table above shows both for a machine that is small.',
       ],
     },
@@ -370,8 +371,8 @@ const steps: Step[] = [
       <p>Euclid's GCD by subtraction is the classic: while a ≠ b, subtract the smaller from the larger. The datapath has <span data-show="r_a r_b">two registers</span>, <span data-show="op0">a subtractor</span> and <span data-show="cmp0">a comparator</span>, their selects and enables driven by
       <span data-show="ctl">the controller</span>. The controller has five states: IDLE (load a and b when start is 1), TEST (look at the comparator: a = b → DONE, a &lt; b → SUBB, else SUBA), SUBA (a := a − b), SUBB (b := b − a) and DONE (done = 1 until start falls). Each pass through TEST and a subtract state is two cycles.</p>
       <p>For gcd(48, 18) the diagram is ${GCD.cycles} edges from start to DONE: ${GCD.states.map((s, i) => `${s} (a ${GCD.a[i]}, b ${GCD.b[i]})`).join(', ')}. The count comes from the sandbox's reference model, the machine written as a program, and the gates agree with it every cycle.</p>
-      <p>The controller is ${GCD_COST.controller} NANDs of the machine's ${GCD_COST.total}: the rest is the datapath's two 8-bit registers, the subtractor, comparator and the multiplexers that steer them. That is the proportion of every processor: a few hundred gates of sequencing around thousands of gates of data. This is the shape of every sequencing unit later in the book:
-      chapter ${numOf('multicycle')}'s controller is this one with a dozen states, steering a far bigger data path.</p>
+      <p>The controller is ${GCD_COST.controller} NANDs of the machine's ${GCD_COST.total}: the rest is the datapath's two 8-bit registers, the subtractor, comparator and the multiplexers that steer them. That is the proportion of every processor: a small block of sequencing around a datapath many times its size (here about ${Math.round((GCD_COST.total - GCD_COST.controller) / GCD_COST.controller)} to 1; in a processor with registers and memory, far more). This is the shape of every sequencing unit later in the book:
+      chapter ${numOf('multicycle')}'s controller is this one with ${MC_STATES.length} states, steering a far bigger data path.</p>
       <div class="try">Set start = 1 and Pulse until done lights: the diagram's current state and the registers move together, and a ends at 6.</div>`,
     more: {
       derive: `<p>Each state's action is a register transfer (a := a − b); the controller turns it into control lines: ld_a (load a), sel_a (which source: x or the subtractor), the subtractor's operand selects. Arcs may test the datapath (a &lt; b); the comparator's result is just another input to the next-state logic, the status bit st0 or st1.

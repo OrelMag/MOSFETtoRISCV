@@ -86,7 +86,7 @@ export const CHECKFPGA: Record<string, Quiz[]> = {
   ],
   switchbox: [
     {
-      question: 'Why is each routing switch a transmission gate and not one NMOS?',
+      question: 'Why is each routing switch in the chapter\'s model a transmission gate and not one plain NMOS?',
       options: ['An NMOS passes a weak 1; the PMOS beside it passes the 1 fully', 'An NMOS cannot be turned off', 'A transmission gate needs no configuration bit'],
       answer: 0,
       explain: 'An NMOS stops conducting as its output rises to a threshold below its gate. The PMOS conducts best exactly there.',

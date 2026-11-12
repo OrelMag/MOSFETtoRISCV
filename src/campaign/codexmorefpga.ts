@@ -56,7 +56,7 @@ our computer                 1224 frames (+512: memory contents)</pre>Most of th
     idea: `Memories built from LUTs and flip-flops run out fast: a flip-flop per bit, multiplexers to read them. So FPGAs carry <b>block RAMs</b>, real SRAM arrays beside the logic, a few dozen of them. They read through a register on a clock edge, so a design whose memories answer within the cycle needs a second, faster memory clock, as our export adds.`,
     example: {
       title: 'Our computer\'s memories',
-      body: `<pre>RAM  4K × 32 = 131 072 bits → 8 blocks of 16 Kbit
+      body: `<pre>RAM  4K × 32 = 131 072 bits → 8 blocks of 16 Kbit of data
 ROM  1K × 32 =  32 768 bits → 2 blocks
 register file 31 × 32       → 992 flip-flops, 1999 LUTs</pre>The register file is read twice and written once in a cycle: one block RAM cannot do that.`,
     },
@@ -82,7 +82,7 @@ carry  cout = p ? cin : a</pre>a = b = 1, cin = 1: p = 0, y = 1, cout = a = 1.`,
     chapters: [at(4, 'The logic cell')],
   },
   switchbox: {
-    idea: `An FPGA's wiring is made, not drawn: tracks run between the cells and a <b>switch box</b> at each crossing can join any pair through a transmission gate held by a configuration bit. The router picks which to close. Every switch on a path adds resistance and every open one adds capacitance, which is why routing, not logic, sets an FPGA's clock.`,
+    idea: `An FPGA's wiring is made, not drawn: tracks run between the cells and a <b>switch box</b> at each crossing can join any pair through a switch held by a configuration bit (in our model a transmission gate). The router picks which to close. Every switch on a path adds resistance and every open one adds capacitance, which is why routing, not logic, sets an FPGA's clock.`,
     example: {
       title: 'Our computer\'s slowest path',
       body: `<pre>routing   23.7 ns  (58 %)
@@ -91,7 +91,7 @@ skew       3.3 ns
 total     40.9 ns  → 24.4 MHz</pre>`,
     },
     mistakes: [
-      'Using a single NMOS as the switch: it passes a weak 1; the PMOS beside it passes the 1 fully.',
+      'Using a plain NMOS as the switch: it passes a weak 1. A transmission gate passes the 1 fully; parts that do use one NMOS drive its gate above VDD or restore the level after it.',
       'Reading LUT levels as the delay: the trip between LUTs often costs more than the LUTs.',
     ],
     chapters: [at(5, 'The wires are switches'), at(7, 'Timing: the estimate against the tool')],

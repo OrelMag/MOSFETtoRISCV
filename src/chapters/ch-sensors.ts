@@ -32,7 +32,7 @@ export const chSensors: Chapter = {
   builds: ['mosfet', 'dram', 'noise', 'converters'],
   recap: {
     keep: [
-      `Silicon turns each photon above 1.12 eV (below ${g(SI_CUTOFF_NM)} nm) into at most one electron. Blue is absorbed in the first tenth of a micrometre, red in a few, near infrared tens deep: QE is how much of the light is absorbed where the diode collects it.`,
+      `Silicon turns each photon above 1.12 eV (below ${g(SI_CUTOFF_NM)} nm) into at most one electron. Blue is absorbed in the first half micrometre, red in a few, near infrared tens deep: QE is how much of the light is absorbed where the diode collects it.`,
       'A CCD moves each pixel\'s charge, intact, from gate to gate under clocked phases to one output amplifier. Its weakness is the trip: every transfer leaves a little behind, and a large array needs thousands of transfers.',
       'A CMOS pixel converts its own charge to a voltage: the pinned photodiode empties onto a floating diffusion through TX, a source follower drives the column, and the column samples the reset level and the signal level. The difference cancels the reset\'s kTC noise.',
       'A rolling shutter starts each row one row time after the last, so fast motion bends and a short flash lights a band. A global shutter exposes every pixel at once and pays in area and noise.',
