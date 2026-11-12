@@ -48,7 +48,7 @@ describe('HDL export', () => {
   });
 });
 
-// Independent check with Yosys (skipped where it is not installed, e.g. CI): synthesize the
+// Independent check with Yosys (skipped where it is not installed; CI's gate and deploy install it): synthesize the
 // exported structure to Yosys's own gate cells, evaluate that netlist here, and compare it with our
 // simulation on every input combination.
 const yosys = process.env.YOSYS ?? join(process.env.APPDATA ?? '', 'Python/Python313/Scripts/yowasp-yosys.exe');
@@ -95,7 +95,7 @@ describe.skipIf(!haveYosys)('HDL export through Yosys', () => {
       const ref = simulate(def);
       const ys = yosysEval(def);
       forEachInput(def, (ins) => expect(ys(ins), `${def.id}(${ins})`).toEqual(evalOnce(ref, ins)));
-    });
+    }, 120000); // the first call starts Yosys's WebAssembly cold: 30 s and more on a busy runner
   }
 });
 
