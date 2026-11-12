@@ -196,10 +196,7 @@ export class CampaignPage implements Page {
     const f = this.mxFocus;
     this.mxFocus = null;
     if (f) (f === 'open' ? this.main.querySelector<HTMLElement>('#mx-open-t') : this.main.querySelector<HTMLElement>(`.mx-card[data-id="${f}"] [data-mx]`))?.focus({ preventScroll: true });
-    // a model opened (Open here, or its address): the viewer to the top of the page, its canvas in view (it sat under
-    // the index's introduction, on a phone entirely below the fold)
-    const mx = f === 'open' || (changed && a === 'codex' && b === MODELS_INDEX_ID) ? this.main.querySelector<HTMLElement>('.mx-open') : null;
-    mx?.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    // (an opened model scrolls into view in revealEntry)
     // chosen from the keyboard: the level's details are next, not 90 more cards (Esc there goes back to its card)
     if (changed && a === 'n' && b && document.activeElement?.matches('.cp-node:focus-visible')) this.main.querySelector<HTMLElement>('.cp-node-panel h2')?.focus({ preventScroll: true });
     if (changed && b) {
@@ -237,6 +234,10 @@ export class CampaignPage implements Page {
       const r = row.getBoundingClientRect(), v = list.getBoundingClientRect();
       if (r.top < v.top + 40 || r.bottom > v.bottom - 8) list.scrollTop += r.top - v.top - list.clientHeight / 3;
     }
+    // a 3D model opened (Open here, or its address): its viewer to the top, its canvas in view (it sat under the
+    // index's introduction, on a phone entirely below the fold)
+    const mx = this.main.querySelector<HTMLElement>('.mx-open');
+    if (mx) return void mx.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
     const top = this.main.querySelector<HTMLElement>('.cp-codex-entry')?.getBoundingClientRect().top;
     if (top !== undefined && (top < 0 || top > innerHeight * 0.6)) this.main.querySelector<HTMLElement>('.cp-codex-entry')!.scrollIntoView({ block: 'start' });
   }
