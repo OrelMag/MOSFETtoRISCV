@@ -191,8 +191,9 @@ export function dramCtrl(c: DramConfig): ComponentDef {
         bit('dv', 'out'), bit('wv', 'out'), bit('done', 'out'), bit('hit', 'out'), bit('miss', 'out'), bit('conflict', 'out')],
       symbol: { kind: 'box', label: 'DRAM CTRL' },
       // laid out by logic depth (layered.ts): the Builder's columns put the next-state and counter logic in one column 590
-      // units tall, 137 of 148 nets pointers; by depth it reads left to right, request → state → command → next state
-      netlist: laid(b),
+      // units tall, 137 of 148 nets pointers; by depth it reads left to right, request → state → command → next state, folded
+      // into bands at its seams to the canvas's shape
+      netlist: laid(b, { aspect: 1.6 }),
     });
   });
 }
