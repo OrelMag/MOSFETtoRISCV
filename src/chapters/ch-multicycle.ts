@@ -81,7 +81,7 @@ const bookCycles = cyclesByClass(bookProgram());
 const pct = (v: number) => Math.round(v * 100);
 
 function ucodeScene(): Scene {
-  return cpuScene({ source: src('sum'), multicycle: 'micro', microcode: painted, highlight: ['ctrl'], onMicrocode: openPainter });
+  return cpuScene({ source: src('sum'), multicycle: 'micro', microcode: painted, highlight: ['ctrl'], keepController: true, onMicrocode: openPainter });
 }
 
 function openPainter(stage: Stage): void {
@@ -156,7 +156,7 @@ export const chMulticycle: Chapter = {
         <p>The aim of sharing is area: one ALU instead of three adders, one memory port instead of two (the step <em>Was it worth it?</em> counts whether it paid here: the registers that carry values across steps cost more than the adders saved). Registers hold what crosses a clock edge, and the controller must now remember which step it is in, so it becomes a state machine. What this costs is time. An
         instruction takes ${CYC.branch} to ${CYC.load} cycles instead of one (its <strong>CPI</strong>, cycles per instruction, rises from 1 to about 4), and the clock period only shrinks to the longest single step.</p>
         <div class="try">Pulse the clock and follow the controller panel: the first instruction, <code>li a0, 0</code>, takes Fetch, Decode, ExecuteI, ALUWB (four cycles).</div>`,
-      scene: () => cpuScene({ source: src('sum'), multicycle: 'fsm', highlight: ['ctrl'] }),
+      scene: () => cpuScene({ source: src('sum'), multicycle: 'fsm', highlight: ['ctrl'], keepController: true }),
       tour: {
         beats: [
           { title: 'Fetch', reset: true, show: ['ctrl'], expect: { state: 0, fetch: 1, pcOut: 0 },

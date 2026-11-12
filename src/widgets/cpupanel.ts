@@ -89,6 +89,8 @@ export interface CpuSceneOptions {
   /** With multicycle 'micro': an edited microprogram (lib/ucode.ts), and the controller panel's "Microcode…" button. */
   microcode?: Microprogram;
   onMicrocode?: (stage: Stage) => void;
+  /** The controller panel stays open where it fits: the step's text is about it (data-keep). */
+  keepController?: boolean;
   /** Single-cycle CPU with the FPU and f registers (chapter float). */
   fpu?: boolean;
   /** Show the program editor. */
@@ -142,7 +144,7 @@ export function cpuScene(sceneOpts: CpuSceneOptions): Scene {
     inputs: opts.system ? { clk: 0, switches: 0, irq: 0 } : { clk: 0 },
     highlight: opts.highlight,
     panels: [cpuPanel({ ...opts, asm, link, vmLink }), ...(opts.pipeline ? [pipeDiagram(asm)] : []),
-      ...(opts.ooo ? [oooPanel(asm.words, { imemWords: 2 ** oooImemK(asm.words), dmemWords: 64 }, link)] : []), ...(opts.vm ? [vmPanel(vmLink)] : opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true, { program: opts.microcode, onEdit: opts.onMicrocode })] : []), ...(opts.timing ? [timingPanel] : []), ...(opts.extraPanels ?? [])],
+      ...(opts.ooo ? [oooPanel(asm.words, { imemWords: 2 ** oooImemK(asm.words), dmemWords: 64 }, link)] : []), ...(opts.vm ? [vmPanel(vmLink)] : opts.system ? [ioPanel] : []), ...(opts.multicycle ? [controllerPanel(opts.multicycle, true, { program: opts.microcode, onEdit: opts.onMicrocode }, opts.keepController)] : []), ...(opts.timing ? [timingPanel] : []), ...(opts.extraPanels ?? [])],
   };
 }
 
@@ -815,7 +817,7 @@ const controllerView = { full: 'diagram', compact: 'table' };
  * The controller as a state diagram (lib/fsm.ts MC_FSM_SPEC, live) or as its state table, the current state
  * highlighted (and, for microcode, the microwords).
  */
-export function controllerPanel(control: 'fsm' | 'micro', compact = false, edited?: { program?: Microprogram; onEdit?: (stage: Stage) => void }): ScenePanel {
+export function controllerPanel(control: 'fsm' | 'micro', compact = false, edited?: { program?: Microprogram; onEdit?: (stage: Stage) => void }, keep = !compact): ScenePanel {
   return (stage: Stage): Widget => {
     // an edited microprogram has no state diagram (MC_FSM_SPEC is the book's): its words are listed
     const prog = edited?.program && !isBook(edited.program) ? edited.program : undefined;
@@ -829,8 +831,10 @@ export function controllerPanel(control: 'fsm' | 'micro', compact = false, edite
     const title = h('h4', null, h('span', null, compact ? 'Controller' : control === 'fsm' ? 'Controller: state machine' : 'Controller: microcode ROM'), prog ? null : seg, editBtn, compact ? null : h('span', { class: 'fold-hint' }));
     const legend = h('div', { class: 'fsm-legend' }, h('span', null, h('i', { class: 'cur' }), 'current'), h('span', null, h('i', { class: 'last' }), 'last edge'),
       h('span', null, h('i', { class: 'next' }), 'next edge (by op)'), h('span', null, h('b', { class: 'fsm-badge-k' }, '2'), 'cycle of this instruction'));
-    const el = h('div', { class: `mem-panel mc-panel${compact ? ' compact' : ''}`, 'data-dock': 'left' }, title, body, diagram.el, legend);
-    title.addEventListener('click', () => el.classList.toggle('collapsed'));
+    // folded by the stage (data-fold): beside a CPU it starts folded, or folds on a drill, where it would squeeze the circuit
+    // (multicycle/0 drew the datapath in a quarter of the canvas); kept open where the step is about it (the controller as the
+    // scene, a step that follows its states or opens its microcode)
+    const el = h('div', { class: `mem-panel mc-panel${compact ? ' compact' : ''}`, 'data-dock': 'left', 'data-fold': 'narrow', ...(keep ? { 'data-keep': 'open' } : {}) }, title, body, diagram.el, legend);
     const show = (v: string) => {
       if (!prog) controllerView[key] = v;
       el.classList.toggle('diagram', v === 'diagram');

@@ -2445,8 +2445,14 @@ export class Stage {
     this.tickOverlay();
     this.showInspector();
     this.updateControls();
-    if (!this.leaf) this.levelBadge.textContent = `level: ${LEVEL_NAME[this.levelOf()] ?? 'blocks'}`;
+    this.syncBadge();
     this.listeners.forEach((f) => f());
+  }
+
+  /** The LEVEL tag's text, before anything is measured against it: the fit keeps clear of it (view.badge), and an empty
+   *  tag at a scene's first fold decision was 0 px wide, so the panels were judged on room the fit then gave the tag. */
+  private syncBadge(): void {
+    if (!this.leaf) this.levelBadge.textContent = `level: ${LEVEL_NAME[this.levelOf()] ?? 'blocks'}`;
   }
 
   private levelOf(): string {
@@ -3089,11 +3095,15 @@ export class Stage {
     const fold = this.panels.filter((p) => p.el.dataset.fold === 'narrow').slice(0, 4);
     if (W <= 0 || H <= 0 || fold.some((p) => p.el.offsetWidth <= 0)) return;
     this.foldPending = false;
+    this.syncBadge();
     const apply = (mask: number) => {
       fold.forEach((p, i) => p.el.classList.toggle('collapsed', ((mask >> i) & 1) === 1));
       this.inset = this.rightInset();
       this.drillLayout();
       this.dockOut();
+      // the how-to line as it will sit with these folds: lifted over the bottom-left panels it takes the strip above them,
+      // which the fit then leaves to the circuit no more (measured without it, widths/7 kept 0.61 of its size and drew at 0.47)
+      this.placeHint();
     };
     // the boards, while shown, are what has to fit (their extent in holes: only the aspect matters here)
     const lay = this.boardOn ? this.scene?.breadboard : undefined;
@@ -3103,7 +3113,7 @@ export class Stage {
     const scaleOf = (mask: number): number | null => {
       apply(mask);
       if (fold.some((p, i) => !((mask >> i) & 1) && p.el.dataset.dock === 'right' && startFolded(W, p.el.offsetWidth))) return null;
-      const r = freeArea(W, H, this.covers(false), bw, bh);
+      const r = freeArea(W, H, lay ? this.covers() : this.view.fitCovers(this.covers()), bw, bh);
       const s = r ? Math.min(r.w / bw, r.h / bh) : 0;
       // the boards are fine print: a panel stays open only beside boards that still read whole (a laptop folds it)
       return lay && mask !== all && s < (lay.readPx ?? BB_READ_PX) ? null : s;
@@ -3112,7 +3122,10 @@ export class Stage {
     const mine = (keep: boolean) => fold.map((p, i) => (onlyMore && shut[i] ? true : null) ?? foldChoice.get(p.el.dataset.dock ?? '') ?? (keep && p.el.dataset.keep === 'open' ? false : keep && p.el.dataset.keep === 'folded' ? true : null));
     // a level below the top (opened, or linked to): the panels may cost it less (KEEP_SCALE_OPENED)
     const keep = this.ctx && this.ctx !== this.rootCtx ? KEEP_SCALE_OPENED : KEEP_SCALE;
-    let pick = chooseFolds(fold.length, scaleOf, mine(true), keep);
+    // a panel held open by the step (data-keep), not by the learner: the others fold until the circuit keeps its share of the
+    // size it would have with every panel folded
+    const kept0 = fold.some((p) => p.el.dataset.keep === 'open' && foldChoice.get(p.el.dataset.dock ?? '') === undefined);
+    let pick = chooseFolds(fold.length, scaleOf, mine(true), keep, kept0 ? scaleOf(all) : null);
     // data-keep is a preference: where no layout with those panels open is allowed (a phone), the usual rules decide
     // ... and where they would leave the circuit under KEEP_SCALE of its size with every panel folded (three panels over a
     // pipeline left ~230 px of it): the usual rule decides, a panel the step's text is about included
