@@ -38,16 +38,18 @@ export function debouncer(n: number): ComponentDef {
     b.pins('d', 'clk');
     const cnt = b.op(register(n), ['', b.op1(TIE1, []), 'clk'], 'count', 'cnt');
     const q = b.op(DFF, ['', 'clk'], 'q', 'q');
+    // named nets: a pointer reads as what it carries, not a number
+    b.name(`${q}.q`, 'q'); b.name(`${cnt}.q`, 'count');
     b.next();
     const diff = b.name(b.op1(XOR, ['d', `${q}.q`], 'd ≠ q', 'diff'), 'diff', true);
-    const full = b.name(b.op1(equal(n), [`${cnt}.q`, b.op1(constWord(n, 2 ** n - 1), [])], `= ${2 ** n - 1}`, 'full'), 'full', true);
+    const full = b.name(b.op1(equal(n), [`${cnt}.q`, b.name(b.op1(constWord(n, 2 ** n - 1), []), 'last')], `= ${2 ** n - 1}`, 'full'), 'full', true);
     const inc = b.op1(incrementer(n), [`${cnt}.q`], '+ 1', 'inc');
     b.next();
     const flip = b.op1(AND, [diff, full], 'flip', 'flip');
-    const go = b.op1(AND, [diff, b.op1(NOT, [full], undefined, 'nfull')], 'count on', 'go');
+    const go = b.op1(AND, [diff, b.name(b.op1(NOT, [full], undefined, 'nfull'), '¬full')], 'count on', 'go');
     b.next();
-    b.wire(b.op1(busMux2(n), [b.op1(constWord(n, 0), [], undefined, 'zero'), inc, go], 'count or clear', 'mx'), `${cnt}.d`);
-    b.wire(b.op1(XOR, [`${q}.q`, flip], 'q or ¬q', 'nq'), `${q}.d`);
+    b.wire(b.name(b.op1(busMux2(n), [b.name(b.op1(constWord(n, 0), [], undefined, 'zero'), '0'), inc, go], 'count or clear', 'mx'), 'next count'), `${cnt}.d`);
+    b.wire(b.name(b.op1(XOR, [`${q}.q`, flip], 'q or ¬q', 'nq'), 'next q'), `${q}.d`);
     b.next();
     b.wire(`${q}.q`, 'q');
     b.wire(`${cnt}.q`, 'count');
