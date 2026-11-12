@@ -172,7 +172,7 @@
   .sb-levelmode .sb-bottom { overflow-y: visible; flex: none; }
   .sandbox.sb-levelmode > .sb-palette { max-height: 38dvh; }
   /* a core level's pins fill a screen: the I/O bar scrolls inside its own band, the canvas keeps a usable height */
-  .sb-levelmode .sb-mid { min-height: max(230px, 40dvh); }
+  .sb-levelmode .sb-mid { min-height: max(260px, 48dvh); } /* the page scrolls (C-1): room for the drawing */
   /* the strip and the run row take no more than they must: the goal line is in the Task tab and the level badge is the
      bottom bar's (the canvas gains ~50 px of a 844 px phone) */
   .sb-levelmode .sb-chal-sum.sb-chal-goal, .sb-levelmode .sb-controls .sb-level { display: none; }
