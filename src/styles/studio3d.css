@@ -69,3 +69,6 @@
 @media (pointer: coarse) { .st .btn.sm { min-height: 40px; } .st .r3-sl input { min-height: 40px; } }
 
 /* the triode prototype's before / after switch */
+/* The scale bar (studioStage scaleBar): a length that follows the zoom, bottom left over the canvas. */
+.st-scale { position: absolute; left: calc(var(--st-gw, 0px) + 10px); bottom: 10px; z-index: 3; pointer-events: none; display: flex; flex-direction: column; gap: 3px; font: 600 11px/1 var(--mono, ui-monospace, monospace); color: var(--text); text-shadow: 0 0 3px var(--surface), 0 0 3px var(--surface); }
+.st-scale i { display: block; height: 6px; border: 2px solid currentColor; border-top: 0; box-sizing: border-box; }

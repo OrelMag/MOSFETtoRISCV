@@ -28,6 +28,18 @@ export interface StudioStageOptions {
   /** The home direction (yaw, pitch); its target and distance are fitted to the model unless `fit` is false. */
   home: OrbitView;
   fit?: boolean;
+  /** Fit home to these groups or names, not the whole model (the subject first: a device under its wiring). */
+  homeFrame?: string[];
+  /** Groups or names hidden outside the tour and in beats that do not say (a beat's `hide: []` shows them). */
+  hidden?: string[];
+  /** A scale bar under the canvas following the zoom: the label for a length in model units (1-2-5 steps). */
+  scaleBar?: (len: number) => string;
+  /** Called when the tour goes to beat i (-1: the tour ended). */
+  onBeat?: (i: number) => void;
+  /** The cut and explode the stage opens at (a cutaway as the first view). */
+  knobs?: { cut?: number; explode?: number };
+  /** The cut or explode moved (a slider or the tour): parts the host draws itself (particles) can follow. */
+  onKnobs?: (k: { cut: number; explode: number }) => void;
   limits?: Partial<OrbitLimits>;
   note?: string;
   /** The model now, at a detail: 'flat' for the SVG fallback (fewer facets). */
@@ -48,6 +60,7 @@ export interface StudioStage {
   studio(): Studio | null;
   isFlat(): boolean;
   rgb(token: string): RGB;
+  knobs(): { cut: number; explode: number };
   destroy(): void;
 }
 
@@ -69,14 +82,17 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   card.style.display = 'none';
   const chips = h('div', { class: 'r3-chips' });
   const stats = h('div', { class: 'st-stats' });
+  const scaleLbl = h('span'), scaleBar = h('div', { class: 'st-scale', 'aria-hidden': 'true' }, h('i'), scaleLbl);
+  if (!o.scaleBar) scaleBar.style.display = 'none';
   stats.style.display = /stats/.test(location.hash + location.search) ? '' : 'none';
   // the gutters lie over the canvas's side bands: the canvas takes the column's width and the model is fitted between them
-  const view = h('div', { class: 'st-view r3-stage' }, canvas, flat, gutL, gutR, leaders, badges, card, chips, stats);
+  const view = h('div', { class: 'st-view r3-stage' }, canvas, flat, gutL, gutR, leaders, badges, card, chips, stats, scaleBar);
   const stage = h('div', { class: 'st-stage' }, view);
   const list = h('ol', { class: 'st-list' });
 
   const exIn = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: 0, 'aria-label': 'Exploded view' }) as HTMLInputElement;
-  const cutIn = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: 0, 'aria-label': 'Cutaway' }) as HTMLInputElement;
+  const cutIn = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: o.knobs?.cut ?? 0, 'aria-label': 'Cutaway' }) as HTMLInputElement;
+  exIn.value = String(o.knobs?.explode ?? 0);
   const prev = h('button', { type: 'button', class: 'btn sm' }, '‹ Back') as HTMLButtonElement;
   const next = h('button', { type: 'button', class: 'btn sm primary' }, 'Tour ›') as HTMLButtonElement;
   const resetBtn = h('button', { type: 'button', class: 'btn sm' }, 'Reset view') as HTMLButtonElement;
@@ -97,6 +113,9 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   /** The parts the physics moved last (kept here so the flat drawing, the labels and a rebuilt renderer follow). */
   let curMoves: Moves = new Map();
   let beat = -1, tween = 0, pinned: Item | null = null, hoverRaf = 0, hiddenNow: ReadonlySet<string> | null = null;
+  const defHidden: ReadonlySet<string> | null = o.hidden?.length ? new Set(o.hidden) : null;
+  hiddenNow = defHidden;
+  const homeBox = () => (o.homeFrame ? boundsOfNamed(model, o.homeFrame) : boundsOf(model));
   const frame = modelFrame({ stage: view, name: o.aria, renderer: () => (mode === 'gl' ? (st as unknown as Renderer) : null), root: () => el.closest<HTMLElement>('.m3d, .widget') ?? el });
 
   // ---------------------------------------------------------------- framing
@@ -108,7 +127,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
    *  keeps its portrait. */
   let aspect = 4 / 3, gutNow = 0, shownSize = '';
   const shape = () => {
-    const box = boundsOf(model);
+    const box = homeBox();
     aspect = Math.max(ASPECT_MIN, Math.min(ASPECT_MAX, aspectOf(box, o.home.yaw, o.home.pitch) * 1.15));
     layout();
   };
@@ -133,7 +152,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   const contentAspect = () => Math.max(0.2, ((canvas.clientWidth || 4) - 2 * gutNow) / (canvas.clientHeight || 3));
   const homeView = (): OrbitView => {
     if (o.fit === false || !st) return o.home;
-    const f = fitView(boundsOf(model), o.home.yaw, o.home.pitch, st.camera.fov, contentAspect(), 0.06);
+    const f = fitView(homeBox(), o.home.yaw, o.home.pitch, st.camera.fov, contentAspect(), 0.06);
     return { yaw: o.home.yaw, pitch: o.home.pitch, target: f.target, dist: f.dist };
   };
   let fitFor = '';
@@ -185,10 +204,11 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     const W = canvas.clientWidth, H = canvas.clientHeight, cam = st.camera, eye = cam.eye(), under = cam.pitch < -0.25, narrow = gutNow === 0, g = gutNow;
     const k = st.knobs().explode;
     const seen: { r: typeof rows[number]; x: number; y: number; away: boolean }[] = [];
+    const quiet = beat >= 0 && model.beats?.[beat]?.labels === false;
     for (const r of rows) {
       const hiddenPart = !!hiddenNow && !!r.a.on && hiddenNow.has(r.a.on);
       const p3 = anchorAt(model, r.a, k, curMoves), p = st.project(p3);
-      const ok = !hiddenPart && !!p && !!r.a.under === under && p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H;
+      const ok = !quiet && !hiddenPart && !!p && !!r.a.under === under && p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H;
       r.el.style.display = 'none'; r.badge.style.display = 'none';
       r.li.hidden = !!r.a.under !== under; r.li.classList.toggle('off', !ok);
       if (!ok) continue;
@@ -225,6 +245,15 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     }
     leaders.setAttribute('width', String(W)); leaders.setAttribute('height', String(H));
     leaders.replaceChildren(...lines);
+  };
+
+  /** The scale bar: the 1-2-5 length nearest 90 px at the camera's target. */
+  const placeScale = () => {
+    if (!st || !o.scaleBar) return;
+    const u = st.camera.unitsPerPx(canvas.clientHeight || 1), want = 90 * u, p = 10 ** Math.floor(Math.log10(want));
+    const len = [1, 2, 5, 10].map((m) => m * p).reduce((a, b) => (Math.abs(Math.log(b / want)) < Math.abs(Math.log(a / want)) ? b : a));
+    (scaleBar.firstChild as HTMLElement).style.width = `${(len / u).toFixed(1)}px`;
+    scaleLbl.textContent = o.scaleBar(len);
   };
 
   // ---------------------------------------------------------------- the card
@@ -273,7 +302,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   // ---------------------------------------------------------------- knobs and the tour
 
   const knobs = () => ({ explode: Number(exIn.value), cut: Number(cutIn.value) });
-  const applyKnobs = () => { st?.setKnobs(knobs()); if (mode === 'flat') drawFlat(); };
+  const applyKnobs = () => { const k = knobs(); st?.setKnobs(k); o.onKnobs?.(k); if (mode === 'flat') drawFlat(); };
   exIn.addEventListener('input', applyKnobs);
   cutIn.addEventListener('input', applyKnobs);
 
@@ -286,7 +315,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     prev.disabled = beat === 0;
     next.textContent = beat === beats.length - 1 ? 'Done' : 'Next ›';
     st?.setFocus(b.show ? new Set(b.show) : null);
-    hiddenNow = b.hide ? new Set(b.hide) : null;
+    hiddenNow = b.hide ? new Set(b.hide) : defHidden;
+    o.onBeat?.(beat);
     st?.setHidden(hiddenNow);
     const to = { explode: b.explode ?? knobs().explode, cut: b.cut ?? knobs().cut };
     // the beat's subject framed from its direction, at the knobs it ends on
@@ -316,7 +346,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     };
     tween = requestAnimationFrame(step);
   };
-  const endTour = () => { beat = -1; cap.replaceChildren(); next.textContent = 'Tour ›'; prev.disabled = true; st?.setFocus(null); hiddenNow = null; st?.setHidden(null); };
+  const endTour = () => { beat = -1; cap.replaceChildren(); next.textContent = 'Tour ›'; prev.disabled = true; st?.setFocus(null); hiddenNow = defHidden; st?.setHidden(defHidden); o.onBeat?.(-1); };
   next.addEventListener('click', () => { if (beat === (model.beats ?? []).length - 1) endTour(); else goBeat(beat + 1); });
   prev.addEventListener('click', () => goBeat(beat - 1));
   prev.disabled = true;
@@ -395,6 +425,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
       st = createStudio(canvas, cam, {
         onRender: () => {
           placeLabels();
+          if (o.scaleBar) placeScale();
           const f = st!.last();
           stats.textContent = `${f.cpuMs.toFixed(1)} ms cpu${f.gpuMs !== null ? ` · ${f.gpuMs.toFixed(1)} ms gpu` : ''} · ${f.draws} draws · ${(f.tris / 1000).toFixed(0)}k tris · ${(f.px / 1e6).toFixed(2)} Mpx · ${f.tier}${f.shadowRedrawn ? ' · shadow' : ''}`;
         },
@@ -404,6 +435,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     if (!st) { setMode('flat'); return; }
     (window as unknown as { __studio?: Studio }).__studio = st;
     if (curMoves.size) st.move(curMoves);
+    st.setHidden(defHidden);
     lights();
     setMode('gl');
   }).catch(() => { if (!dead) setMode('flat'); });
@@ -415,6 +447,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     studio: () => st,
     isFlat: () => mode === 'flat',
     rgb: (t) => colors.rgb(t),
+    knobs: () => knobs(),
     destroy() { dead = true; cancelAnimationFrame(tween); cancelAnimationFrame(hoverRaf); ro.disconnect(); frame.destroy(); unwatch(); st?.destroy(); st = null; colors.destroy(); },
   };
 }

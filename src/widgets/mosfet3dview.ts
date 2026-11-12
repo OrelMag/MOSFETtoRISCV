@@ -13,28 +13,47 @@ import { h } from '../ui/dom';
 import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { frameLoop } from './mosfet';
-import { DEPL_MAX, L0, MOS_HOME, PLUG_PITCH, W0, depletionAt, extents, ionsAt, mosModel, plugSites, plugsFor, sheetAt, type MosLayout, type MosState } from './mosfet3dkit';
+import type { RGB } from '../gl/instances';
+import { DEPL_MAX, L0, cutZ, MOS_HIDDEN, MOS_HOME, MOS_HOME_FRAME, PLUG_PITCH, fieldParts, fieldSites, W0, depletionAt, extents, ionsAt, mosModel, plugSites, plugsFor, sheetAt, type MosLayout, type MosState } from './mosfet3dkit';
 import type { BiasLink } from './mosshare';
 import { carrierVelocity, channelCharge, current, depletionDepth, gateCap, sizedCurrent, VDD, VT } from './mosphys';
 import { studioStage } from './studiostage';
 
 const REGION = { cut: 'cut-off', lin: 'linear', sat: 'saturation' } as const;
 const PER_W = 5, PER_L = 7, PER_PLUG = 6;
-const CARRIER = sphere(7, 8, 5), ION = sphere(4.5, 6, 4), PLUG_E = sphere(9, 8, 5);
+const CARRIER = sphere(5, 8, 5), ION = sphere(4.5, 6, 4), PLUG_E = sphere(9, 8, 5);
 
 interface Carrier { x: number; z: number }
 
 /** `link`: the gate and drain of the cross-section above (mosshare.ts); without it the view keeps its own. */
 export function mosfetView(link?: BiasLink): Widget {
   const st: MosState = { vg: link?.vg ?? 1.2, vd: link?.vd ?? 0.9, w: 1, l: 1, layout: 'real' };
-  let carriers: Carrier[] = [], plugPhase = 0;
+  let carriers: Carrier[] = [], plugPhase = 0, rgb: ((t: string) => RGB) | undefined, fieldOn = false;
+  const beats = () => mosModel(st).beats?.length ?? 0;
   const stage = studioStage({
     aria: 'An NMOS transistor in 3D: source and drain islands, the channel between them, oxide and gate above, contacts and metal',
     home: MOS_HOME,
     limits: { minDist: 300, maxDist: 9000, minPitch: -0.6, maxPan: 2000 },
     note: 'A 180 nm-class device, the 1.8 V, 0.45 V model\'s, to scale in nanometres: oxide 4 nm, polysilicon 200 nm, spacers 60 nm, trenches 350 nm, plugs 220 nm, at the node\'s published or typical figures (point at a part for its source). Drawn larger than life: the channel sheet (a few nm in silicon), the electrons and ions. Left out: the dielectric around the plugs (it would hide everything), wells and the body contact.',
-    build: (detail) => mosModel(st, detail),
+    homeFrame: MOS_HOME_FRAME,
+    hidden: MOS_HIDDEN,
+    scaleBar: (len) => (len >= 1000 ? `${len / 1000} µm` : `${len} nm`),
+    knobs: { cut: 1 },
+    onKnobs: () => particles(),
+    onBeat: (i) => {
+      fieldOn = i >= 0 && i === beats() - 1; field();
+      const wiring = i === 3 || i === 4; // what a process adds; layer by layer
+      if (wiring !== !!st.wiring) { st.wiring = wiring; stage.refresh(); }
+    },
+    build: (detail) => mosModel(st, detail, rgb),
   });
+  rgb = stage.rgb;
+  /** The pull-back: copies of this device to the horizon, only in the tour's last beat. */
+  function field(): void {
+    const sites = fieldOn ? fieldSites(st) : [];
+    const data = packInstances(sites.map((p) => ({ pos: p, color: [1, 1, 1] as RGB })));
+    for (const part of fieldParts(st)) stage.instances(part.key, part.geo, part.mat, data);
+  }
 
   const eMat = M.make({ base: '--m3-carrier', metal: 0, rough: 0.4, emit: '--m3-carrier', glow: 0.6, label: 'electrons (drawn larger than life)' });
   const ionMat = M.make({ base: '--mf-ion', metal: 0, rough: 0.6, label: 'bare acceptor ions (boron), drawn larger' });
@@ -48,17 +67,20 @@ export function mosfetView(link?: BiasLink): Widget {
 
   /** The particles: carriers in the sheet, ions in the depletion layer, electrons in the plugs. */
   function particles(): void {
-    const { hl, hw } = extents(st), on = flowing();
-    const list: Instance[] = on ? carriers.map((c) => {
+    const { hl, hw } = extents(st), on = flowing(), zc = cutZ(st, stage ? stage.knobs().cut : 1), kept = (p: Vec3) => p[2] <= zc;
+    const idMax = sizedCurrent(VDD - VT, VDD, st.w, st.l), id = sizedCurrent(st.vg - VT, st.vd, st.w, st.l);
+    const shown = on ? Math.max(3, Math.round(carriers.length * Math.sqrt(Math.min(1, id / idMax)))) : 0;
+    const list: Instance[] = carriers.slice(0, shown).map((c) => {
       const t = sheetAt(st, c.x);
-      return { pos: [-hl + 2 * hl * c.x, -Math.max(5, t / 2), c.z * hw * 0.9] as Vec3, color: [1, 1, 1] };
-    }) : [];
-    stage.instances('carriers', CARRIER, eMat, packInstances(list));
-    stage.instances('ions', ION, ionMat, packInstances(ionsAt(st).map((p) => ({ pos: p, color: [1, 1, 1] }))));
+      return { pos: [-hl + 2 * hl * c.x, -Math.max(4, t / 2), c.z * hw * 0.9] as Vec3, color: [1, 1, 1] };
+    });
+    stage.instances('carriers', CARRIER, eMat, packInstances(list.filter((i) => kept(i.pos))));
+    stage.instances('ions', ION, ionMat, packInstances(ionsAt(st).filter(kept).map((p) => ({ pos: p, color: [1, 1, 1] }))));
     const pe: Instance[] = [];
     if (on) for (const p of plugSites(st)) {
       if (p.kind === 'g') continue; // no current through the gate
       const path: Vec3[] = p.kind === 's' ? [[p.x, p.y1, p.z], [p.x, p.y0, p.z]] : [[p.x, p.y0, p.z], [p.x, p.y1, p.z]];
+      if (!kept([p.x, 0, p.z])) continue;
       for (let k = 0; k < PER_PLUG; k++) pe.push({ pos: along(path, (plugPhase + k / PER_PLUG) % 1), color: [1, 1, 1] });
     }
     stage.instances('plug electrons', PLUG_E, eMat, packInstances(pe));
@@ -87,7 +109,7 @@ export function mosfetView(link?: BiasLink): Widget {
     kv.replaceChildren(...rows.flatMap(([k, v]) => [h('span', null, k), h('span', { class: 'v' }, v)]));
   };
 
-  const repaint = () => { readout(); stage.refresh(); particles(); loop.kick(); };
+  const repaint = () => { readout(); stage.refresh(); particles(); if (fieldOn) field(); loop.kick(); };
   const loop = frameLoop((_now, dt) => {
     const vov = st.vg - VT, id = current(vov, st.vd).id;
     // Per unit width the current is k·(W/L)·…/W: the same through every x, so speed is that over the local charge; a

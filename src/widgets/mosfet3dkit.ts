@@ -14,7 +14,8 @@
 // "Textbook" draws the simplified device the chapter's figure is (no STI, extensions, silicide or metal, the gate contact
 // on the gate); "real layout" adds what a process has.
 
-import { lathe, merge, refresh, roundedBox, surface, transform, extrude, type Geo } from '../gl/kit/geo';
+import type { RGB } from '../gl/instances';
+import { lathe, merge, paint, refresh, roundedBox, surface, transform, extrude, type Geo } from '../gl/kit/geo';
 import { M, type Material } from '../gl/kit/materials';
 import type { Beat, Item, Model3, StudioAnchor } from '../gl/kit/scene';
 import type { Mat4, Vec3 } from '../gl/math';
@@ -47,7 +48,9 @@ export const DEPL_MAX = 90;
 const Q_MAX = VDD - VT;
 
 export type MosLayout = 'textbook' | 'real';
-export interface MosState { vg: number; vd: number; w: number; l: number; layout: MosLayout }
+export interface MosState { vg: number; vd: number; w: number; l: number; layout: MosLayout;
+  /** The wiring in full (the tour's wiring beats); otherwise the plugs are drawn faint, so the device is seen first. */
+  wiring?: boolean }
 
 /** Plugs on one island: as many as fit at the plug pitch, at least one. */
 export const plugsFor = (w: number): number => Math.max(1, Math.floor((W0 * w) / PLUG_PITCH));
@@ -113,20 +116,29 @@ function sheetGeo(s: MosState, hl: number, hw: number): Geo {
 // ---------------------------------------------------------------- materials
 
 const mat = (base: Material['base'], o: Partial<Material> & { label: string }): Material => M.make({ base, metal: 0, rough: 0.5, ...o });
+/** What each thing is, by how it looks: crystalline silicon with a sheen; polysilicon matte and grainy (not a metal);
+ *  silicide, tungsten and TiN metallic; the trench oxide a clear glass the active area shows through; the 4 nm gate
+ *  oxide lit, so the line the whole device turns on can be found. */
 const MATS = {
-  p: mat('--m3-p', { metal: 0.12, rough: 0.42, label: 'p-type silicon (boron, ~10¹⁷ cm⁻³)' }),
-  n: mat('--m3-n', { metal: 0.12, rough: 0.42, label: 'n+ silicon (arsenic, ~10²⁰ cm⁻³)' }),
-  ldd: mat('--mf-ldd', { metal: 0.1, rough: 0.45, label: 'n− extension (lightly doped drain)' }),
-  sti: mat('--m3-oxide', { rough: 0.35, coat: 0.2, label: 'trench oxide (SiO₂)' }),
-  oxide: mat('--m3-oxide', { rough: 0.2, coat: 0.4, label: 'gate oxide (SiO₂), 4 nm' }),
+  p: mat('--m3-p', { metal: 0.15, rough: 0.3, coat: 0.35, label: 'p-type silicon (boron, ~10¹⁷ cm⁻³), crystalline' }),
+  n: mat('--m3-n', { metal: 0.15, rough: 0.3, coat: 0.35, label: 'n+ silicon (arsenic, ~10²⁰ cm⁻³)' }),
+  ldd: mat('--mf-ldd', { metal: 0.12, rough: 0.32, coat: 0.3, label: 'n− extension (lightly doped drain)' }),
+  sti: mat('--m3-oxide', { rough: 0.06, transmit: 0.78, tint: [0.9, 0.95, 1.0], label: 'trench oxide (SiO₂), glass-clear' }),
+  oxide: mat('--m3-oxide', { rough: 0.15, coat: 0.5, emit: [0.72, 0.93, 1.0], glow: 0.9, bloom: 1.6, label: 'gate oxide (SiO₂), 4 nm, drawn lit' }),
   spacer: mat('--mf-spacer', { rough: 0.35, coat: 0.2, label: 'spacer (Si₃N₄ on an oxide liner)' }),
-  poly: mat('--m3-poly', { metal: 0.2, rough: 0.4, label: 'polysilicon (n+ doped)' }),
+  poly: mat('--mf-poly', { metal: 0.03, rough: 0.62, label: 'polysilicon (n+ doped), grainy' }),
   silicide: M.silicide,
-  tungsten: M.tungsten,
-  tin: M.make({ base: [0.78, 0.62, 0.32], metal: 1, rough: 0.35, label: 'TiN liner' }),
-  metal1: M.make({ base: [0.86, 0.87, 0.88], metal: 0.85, rough: 0.42, label: 'metal 1 (aluminium)' }),
-  depl: mat('--mf-depl', { transmit: 0.55, rough: 0.6, label: 'depletion layer (bare acceptor ions)' }),
+  tungsten: M.make({ base: [0.8, 0.8, 0.78], metal: 0.9, rough: 0.28, label: 'tungsten' }),
+  tin: M.make({ base: [0.9, 0.76, 0.46], metal: 0.75, rough: 0.28, label: 'TiN liner' }),
+  metal1: M.make({ base: [0.9, 0.91, 0.92], metal: 0.85, rough: 0.35, label: 'metal 1 (aluminium)' }),
+  plugGhost: M.make({ base: [0.86, 0.87, 0.9], metal: 0, rough: 0.08, transmit: 0.82, tint: [0.92, 0.93, 0.97], label: 'tungsten plug in a TiN liner (drawn faint: the tour shows the wiring)' }),
+  depl: mat('--mf-depl', { transmit: 0.42, rough: 0.6, emit: '--mf-depl', glow: 0.32, label: 'depletion layer (bare acceptor ions)' }),
 };
+/** A doped island painted per vertex: its own colour at the surface, fading towards the body's at the junction (a
+ *  profile, not a slab with a hard edge). Needs the theme's colours resolved (the stage's rgb). */
+const GRADED = { n: { ...MATS.n, base: [1, 1, 1] as RGB }, ldd: { ...MATS.ldd, base: [1, 1, 1] as RGB } };
+const grade = (g: Geo, top: RGB, body: RGB, depth: number) =>
+  paint(g, (p) => { const f = 0.88 * Math.min(1, Math.max(0, -p[1] / depth)); return [top[0] + (body[0] - top[0]) * f, top[1] + (body[1] - top[1]) * f, top[2] + (body[2] - top[2]) * f]; });
 
 // ---------------------------------------------------------------- the model
 
@@ -205,38 +217,48 @@ function staticItems(s: MosState, detail: 'full' | 'flat'): Built {
   return built;
 }
 
-export function mosModel(s: MosState, detail: 'full' | 'flat' = 'full'): Model3 {
-  const B = staticItems(s, detail), { hl, hw, X, Z, real, plugX, headZ } = extents(s), dep = depletionAt(s.vg), on = s.vg > VT;
+/** `rgb`: the theme's colours (the stage's), for the doped regions' graded profile; without it they are flat. */
+export function mosModel(s: MosState, detail: 'full' | 'flat' = 'full', rgb?: (token: string) => RGB): Model3 {
+  const B = staticItems(s, detail), { hl, hw, xA, X, Z, real, plugX, headZ } = extents(s), dep = depletionAt(s.vg), on = s.vg > VT;
   // live deform: the body under the channel stops where the depletion layer starts; the sheet takes the charge's profile
   refresh(B.live.body, bx(-hl, hl, -BODY, -Math.max(dep, 0.5), -hw, hw));
   refresh(B.live.depl, bx(-hl, hl, -Math.max(dep, 0.5), 0, -hw, hw));
   if (on) refresh(B.live.sheet, sheetGeo(s, hl, hw));
-  const items: Item[] = [...B.static, { geo: B.live.body, mat: MATS.p, name: 'p-type body', group: 'silicon' }];
-  if (dep > 1) items.push({ geo: B.live.depl, mat: MATS.depl, name: 'depletion layer', group: 'channel', cut: 'open', info: { dim: `${Math.round(dep)} nm deep (at most ${DEPL_MAX} nm)`, source: 'mosphys.ts: the depth law, √Vgs up to Vt', note: 'the gate\'s field has pushed the holes away, leaving the boron ions bare' } });
-  if (on) items.push({ geo: B.live.sheet, mat: { ...M.make({ base: '--m3-charge', metal: 0, rough: 0.5, label: 'inversion layer (electrons), drawn thicker than life' }), emit: '--m3-charge', glow: 0.35 }, name: 'channel', group: 'channel', info: { dim: `drawn up to ${SHEET_MAX} nm; a few nm in silicon`, source: 'mosphys.ts channelCharge: the gradual-channel charge', note: 'thick at the source, thinning towards the drain; pinched off in saturation' } });
+  const body = rgb?.('--m3-p');
+  const statics = !rgb || !body ? B.static : B.static.map((it) =>
+    it.mat === MATS.n ? { ...it, geo: grade(it.geo, rgb('--m3-n'), body, XJ_NP), mat: GRADED.n }
+      : it.mat === MATS.ldd ? { ...it, geo: grade(it.geo, rgb('--mf-ldd'), body, XJ_LDD), mat: GRADED.ldd } : it);
+  const items: Item[] = [...statics.map((it) => (it.group === 'plugs' && !s.wiring ? { ...it, mat: MATS.plugGhost, shadow: false } : it)), { geo: B.live.body, mat: MATS.p, name: 'p-type body', group: 'silicon' }];
+  if (dep > 1) items.push({ geo: B.live.depl, mat: MATS.depl, name: 'depletion layer', group: 'channel', info: { dim: `${Math.round(dep)} nm deep (at most ${DEPL_MAX} nm)`, source: 'mosphys.ts: the depth law, √Vgs up to Vt', note: 'the gate\'s field has pushed the holes away, leaving the boron ions bare' } });
+  // the sheet brightens with the overdrive: the more charge the gate has gathered, the more it glows
+  const lit = Math.min(1, Math.max(0, (s.vg - VT) / Q_MAX));
+  if (on) items.push({ geo: B.live.sheet, mat: { ...M.make({ base: '--m3-charge', metal: 0, rough: 0.5, label: 'inversion layer (electrons), drawn thicker than life' }), emit: '--m3-charge', glow: 0.25 + 1.3 * lit, bloom: 1.4 }, name: 'channel', group: 'channel', info: { dim: `drawn up to ${SHEET_MAX} nm; a few nm in silicon`, source: 'mosphys.ts channelCharge: the gradual-channel charge', note: 'thick at the source, thinning towards the drain; pinched off in saturation' } });
   const front: Vec3 = [0, 0.3, 1], upN: Vec3 = [0, 1, 0];
   const anchors: StudioAnchor[] = [
-    { text: 'source', p: [-plugX, real ? SILICIDE : 0, hw * 0.5], side: 't', n: upN, on: 'silicon' },
-    { text: 'drain', p: [plugX, real ? SILICIDE : 0, hw * 0.5], side: 't', n: upN, on: 'silicon' },
-    { text: 'gate', p: [0, OX + POLY * 0.6, hw], side: 'r', n: front, on: 'gate' },
-    { text: 'channel', p: [-hl * 0.5, -6, hw], side: 'l', n: front, on: 'channel' },
-    { text: 'contact plug', p: [-plugX, PMD * 0.6, -hw + hw / plugsFor(s.w)], side: 'l', n: [0, 0, 1], on: 'plugs' },
-    { text: 'p-type body', p: [-X * 0.7, -BODY * 0.6, real ? Z : hw + 45], side: 'b', n: front, on: 'silicon' },
-    { text: `L = ${Math.round(L0 * s.l)} nm`, p: [hl * 0.5, OX, hw], side: 'b', n: front, on: 'gate' },
+    { text: 'source', p: [-(hl + xA) / 2 - SPACER / 2, -XJ_NP * 0.4, 0], side: 'l', n: front, on: 'silicon' },
+    { text: 'drain', p: [(hl + xA) / 2 + SPACER / 2, -XJ_NP * 0.4, 0], side: 'r', n: front, on: 'silicon' },
+    { text: 'gate', p: [0, OX + POLY * 0.6, 0], side: 'r', n: front, on: 'gate' },
+    { text: 'gate oxide, 4 nm', p: [-hl * 0.6, OX / 2, 0], side: 'l', n: front, on: 'oxide' },
+    { text: 'channel', p: [hl * 0.4, -6, 0], side: 'r', n: front, on: 'channel' },
+    { text: 'contact plug', p: [-plugX, PMD * 0.45, -hw + hw / plugsFor(s.w)], side: 'l', n: [0, 0, 1], on: 'plugs' },
+    { text: 'p-type body', p: [-xA * 0.6, -BODY * 0.5, 0], side: 'b', n: front, on: 'silicon' },
+    { text: `L = ${Math.round(L0 * s.l)} nm`, p: [hl * 0.5, OX + POLY, 0], side: 't', n: front, on: 'gate' },
     { text: `W = ${Math.round(W0 * s.w)} nm`, p: [hl, OX + POLY, 0], side: 'r', n: [1, 0.4, 0], on: 'gate' },
   ];
   if (real) anchors.push(
-    { text: 'trench oxide', p: [X - STI_BAND / 2, -STI_DEPTH / 2, Z], side: 'r', n: front, on: 'oxide' },
+    { text: 'trench oxide', p: [X - STI_BAND / 2, -STI_DEPTH / 2, 0], side: 'r', n: front, on: 'oxide' },
     { text: 'metal 1', p: [plugX, PMD + M1_T, 0], side: 'r', n: upN, on: 'metal' },
     { text: 'gate head', p: [0, OX + POLY, headZ], side: 'r', n: upN, on: 'gate', minor: true },
   );
   const side = { yaw: 0, pitch: 0.06, target: [0, 0, 0] as Vec3, dist: 2000 };
+  const f = fieldOf(s);
   const beats: Beat[] = [
-    { title: 'One slice, and its width', text: 'The cut at the middle of the gate is the cross-section above, in the same colours. Everything the slice cannot show runs into the page: the width W, the plugs along it, the gate running on past the active area.', view: side, frame: ['silicon', 'gate', 'oxide', 'spacers'], cut: 1 },
+    { title: 'One slice, and its width', text: 'The cut at the middle of the gate is the cross-section above, in the same colours. Everything the slice cannot show runs into the page: the width W, the plugs along it, the gate running on past the active area.', view: side, frame: SECTION_FRAME, cut: 1 },
     { title: 'The channel', text: 'Under 4 nm of oxide the gate\'s field gathers electrons into a sheet a few nm thick (drawn thicker). It is thick at the source and thins towards the drain, where the drain voltage takes away from the gate\'s: past saturation it pinches off before the drain.', view: { yaw: -0.3, pitch: 0.25, target: [0, 0, 0], dist: 900 }, frame: ['channel', 'gate oxide', 'extension (LDD)'], show: ['channel', 'oxide', 'gate', 'silicon'], cut: 1 },
     { title: 'First ions, then electrons', text: 'Below Vt the gate only pushes holes away: the amber layer of bare boron ions deepens as √Vgs. At Vt it stops; every further charge on the gate is matched by electrons in the channel instead. Move the gate across 0.45 V and watch the layer stop and the sheet appear.', view: { yaw: -0.15, pitch: 0.15, target: [0, -40, 0], dist: 900 }, frame: ['channel', 'depletion layer', 'gate oxide'], show: ['channel', 'oxide', 'silicon'], cut: 1 },
-    { title: 'What a process adds', text: real ? 'The trenches of oxide that isolate it, the lighter extensions under the spacers, silicide on every contact surface, tungsten plugs up to metal 1, and the gate\'s head out on the field oxide, where its contact lands.' : 'Switch to Real layout: the trenches of oxide that isolate it, lighter extensions under the spacers, silicide, tungsten plugs up to metal 1, and the gate\'s head out on the field oxide, where its contact lands.', view: { yaw: -0.6, pitch: 0.5, target: [0, 200, 0], dist: 3000 }, frame: real ? ['metal', 'oxide', 'gate', 'plugs'] : undefined, cut: 0 },
-    { title: 'Layer by layer', text: 'Pulled apart in the order they are made, bottom up: silicon and its trenches, the gate oxide, the gate, the spacers, silicide, the plugs, metal 1. Each is one more mask (the masks chapter draws the same stack).', view: { yaw: -0.55, pitch: 0.42, target: [0, 400, 0], dist: 3600 }, frame: ['silicon', 'gate', 'plugs', ...(real ? ['metal'] : [])], explode: 1, cut: 0 },
+    { title: 'What a process adds', text: real ? 'The trenches of oxide that isolate it, the lighter extensions under the spacers, silicide on every contact surface, tungsten plugs up to metal 1, and the gate\'s head out on the field oxide, where its contact lands.' : 'Switch to Real layout: the trenches of oxide that isolate it, lighter extensions under the spacers, silicide, tungsten plugs up to metal 1, and the gate\'s head out on the field oxide, where its contact lands.', view: { yaw: -0.6, pitch: 0.5, target: [0, 200, 0], dist: 3000 }, frame: real ? ['metal', 'oxide', 'gate', 'plugs'] : undefined, cut: 0, hide: [] },
+    { title: 'Layer by layer', text: 'Pulled apart in the order they are made, bottom up: silicon and its trenches, the gate oxide, the gate, the spacers, silicide, the plugs, metal 1. Each is one more mask (the masks chapter draws the same stack).', view: { yaw: -0.55, pitch: 0.42, target: [0, 400, 0], dist: 3600 }, frame: ['silicon', 'gate', 'plugs', ...(real ? ['metal'] : [])], explode: 1, cut: 0, hide: [] },
+    { title: 'Tens of millions of them', text: `With its trenches this one takes ${f.w} × ${f.d} nm. At that pitch a square centimetre of silicon holds about ${fmtCount(f.perCm2)} of them; a processor of this generation (Intel's Pentium 4, 180 nm, 2000) held 42 million. Each is the device you just took apart, gate, oxide and all. Today's processors hold billions, each in a small fraction of this area.`, view: FIELD_VIEW, explode: 0, cut: 0, labels: false },
   ];
   return {
     items, anchors, beats, floor: -BODY,
@@ -245,7 +267,47 @@ export function mosModel(s: MosState, detail: 'full' | 'flat' = 'full'): Model3 
   };
 }
 
-export const MOS_HOME = { target: [0, 80, 0] as Vec3, yaw: -0.55, pitch: 0.48, dist: 2600 };
+/** Home: close and low, on the gate (its oxide and the channel under it are the picture); fitted to MOS_HOME_FRAME. */
+export const MOS_HOME = { target: [0, 0, 0] as Vec3, yaw: -0.32, pitch: 0.3, dist: 1400 };
+export const MOS_HOME_FRAME = ['gate', 'spacers', 'gate oxide', 'extension (LDD)', 'channel', 'depletion layer'];
+/** The cut: the section itself (the islands, trenches and what lies on them), not the body's arbitrary depth. */
+const SECTION_FRAME = ['source', 'drain', 'gate', 'gate oxide', 'spacers', 'extension (LDD)', 'trench isolation (STI)', 'depletion layer', 'silicide'];
+/** Outside the tour the wiring waits for its beat, so the device is seen first. */
+export const MOS_HIDDEN = ['metal'];
+const FIELD_VIEW = { yaw: -0.55, pitch: 0.17, target: [0, 0, 0] as Vec3, dist: 9000 };
+
+const fmtCount = (n: number) => {
+  const e = Math.floor(Math.log10(n)), m = Math.round(n / 10 ** (e - 1)) / 10;
+  return e >= 6 ? `${(n / 1e6).toFixed(0)} million` : `${m} × 10^${e}`;
+};
+
+/** The pull-back's field: this device repeated at its own footprint (trenches included), `R` rows each way around it. */
+export function fieldOf(s: Pick<MosState, 'w' | 'l' | 'layout'>) {
+  const { X, Z } = extents(s), w = Math.round(2 * X), d = Math.round(2 * Z);
+  return { w, d, perCm2: 1e14 / (w * d) };
+}
+export const FIELD_R = 40;
+/** Offsets of the field's copies: a (2R + 1)² grid less the middle, where the real device is. */
+export function fieldSites(s: Pick<MosState, 'w' | 'l' | 'layout'>, R = FIELD_R): Vec3[] {
+  const { w, d } = fieldOf(s), out: Vec3[] = [];
+  for (let i = -R; i <= R; i++) for (let j = -R; j <= R; j++) if (i || j) out.push([i * w, 0, j * d]);
+  return out;
+}
+/** One copy of the device as a few meshes (one per material, so a set of instances each): a slab of silicon the size
+ *  of its footprint, the islands, the gate. No plugs: from far, a forest of them would hide the transistors. */
+export function fieldParts(s: MosState): { key: string; geo: Geo; mat: Material }[] {
+  const { hl, hw, xA, X, Z, real } = extents(s), isl0 = real ? hl + SPACER : hl;
+  const slab = bx(-X, X, -80, 0, -Z, Z), isl = merge([bx(-xA, -isl0, -XJ_NP, 1, -hw, hw), bx(isl0, xA, -XJ_NP, 1, -hw, hw)], 'islands');
+  const gate = bx(-hl, hl, OX, OX + POLY, real ? -hw - POLY_END : -hw, real ? hw + HEAD_GAP : hw);
+  return [
+    { key: 'field silicon', geo: slab, mat: MATS.p },
+    { key: 'field islands', geo: isl, mat: MATS.n },
+    { key: 'field gates', geo: gate, mat: MATS.poly },
+  ];
+}
+
+/** Where the cut stands at opening c (the model's plane z = d; nothing cut at 0): the particles the view draws stop there. */
+export const cutZ = (s: Pick<MosState, 'w' | 'l' | 'layout'>, c: number): number => (c <= 0 ? Infinity : (extents(s).Z + 50) * (1 - c));
 
 /** Seeded positions in the depletion volume: the bare acceptor ions, shown down to the layer's depth. */
 export function ionsAt(s: MosState, seed = 7): Vec3[] {

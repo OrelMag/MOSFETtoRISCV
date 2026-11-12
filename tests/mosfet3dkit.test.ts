@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { boundsOfNamed, isCut, cutsAt, type Item } from '../src/gl/kit/scene';
 import { biasLink } from '../src/widgets/mosshare';
 import {
-  DEPL_MAX, L0, OX, PLUG_D, PLUG_PITCH, POLY, SHEET_MAX, SPACER, STI_DEPTH, W0, depletionAt, extents, ionsAt, mosModel, plugSites, plugsFor, sheetAt, type MosState,
+  DEPL_MAX, FIELD_R, L0, MOS_HIDDEN, MOS_HOME_FRAME, OX, cutZ, fieldOf, fieldParts, fieldSites, PLUG_D, PLUG_PITCH, POLY, SHEET_MAX, SPACER, STI_DEPTH, W0, depletionAt, extents, ionsAt, mosModel, plugSites, plugsFor, sheetAt, type MosState,
 } from '../src/widgets/mosfet3dkit';
 import { current, depletionDepth, gateCap, sizedCurrent, VDD, VT } from '../src/widgets/mosphys';
 
@@ -139,5 +139,46 @@ describe('the MOSFET in true geometry', () => {
     expect([link.vg, link.vd]).toEqual([1.2, 0.5]);
     link.set(1.2, 0.5, b);
     expect(seen).toHaveLength(1);
+  });
+
+  it('the pull-back: copies at the device’s own footprint, the count per cm² from it, the real one left in the middle', () => {
+    const s = st(), f = fieldOf(s), { X, Z } = extents(s);
+    expect([f.w, f.d]).toEqual([Math.round(2 * X), Math.round(2 * Z)]);
+    expect(f.perCm2).toBeCloseTo(1e14 / (f.w * f.d), 0);
+    expect(f.perCm2).toBeGreaterThan(42e6); // the Pentium 4's count fits in a square centimetre at this pitch
+    const sites = fieldSites(s);
+    expect(sites).toHaveLength((2 * FIELD_R + 1) ** 2 - 1);
+    expect(sites.some((p) => p[0] === 0 && p[2] === 0)).toBe(false);
+    expect(fieldParts(s).map((p) => p.key)).not.toContain('field plugs');
+    const beat = mosModel(s).beats!.at(-1)!;
+    expect(beat.labels).toBe(false);
+    expect(beat.text).toContain(`${f.w} × ${f.d} nm`);
+  });
+
+  it('the subject first: home frames the gate, the wiring waits for its beats, the plugs drawn faint until then', () => {
+    const m = mosModel(st()), names = new Set(m.items.flatMap((i) => [i.name, i.group]));
+    expect(MOS_HOME_FRAME.filter((n) => names.has(n)).length).toBeGreaterThanOrEqual(4);
+    expect(MOS_HIDDEN).toEqual(['metal']);
+    const plugMat = (s: MosState) => named(s, 'contact plug')[0].mat;
+    expect(plugMat(st()).transmit).toBeGreaterThan(0.5);
+    expect(plugMat(st({ wiring: true })).transmit ?? 0).toBe(0);
+    // the beats that show the wiring say so (hide: []), the others keep metal hidden
+    for (const b of m.beats!) expect(b.hide === undefined || b.hide.length === 0).toBe(true);
+    expect(m.beats!.filter((b) => b.hide?.length === 0).map((b) => b.title)).toEqual(['What a process adds', 'Layer by layer']);
+  });
+
+  it('the particles stop at the cut: none past the plane, all with the cut closed', () => {
+    const s = st();
+    expect(cutZ(s, 0)).toBe(Infinity);
+    expect(cutZ(s, 1)).toBe(0);
+    const ions = ionsAt(st({ vg: VDD })), kept = ions.filter((p) => p[2] <= cutZ(s, 1));
+    expect(kept.length).toBeGreaterThan(0);
+    expect(kept.length).toBeLessThan(ions.length);
+  });
+
+  it('the sheet glows with the overdrive', () => {
+    const glow = (vg: number) => named(st({ vg }), 'channel')[0].mat.glow!;
+    expect(glow(0.6)).toBeLessThan(glow(1.2));
+    expect(glow(1.2)).toBeLessThan(glow(VDD) + 1e-9);
   });
 });

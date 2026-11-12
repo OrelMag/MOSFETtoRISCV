@@ -56,6 +56,8 @@ export interface Beat {
   explode?: number;
   /** The cut's position 0 (none) … 1 (fully open). */
   cut?: number;
+  /** false: no names in this beat (a view where they would only clutter, a field of copies). */
+  labels?: boolean;
 }
 
 export interface StudioAnchor extends Anchor {
