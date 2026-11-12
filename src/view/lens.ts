@@ -10,15 +10,15 @@
 import '../styles/lens.css';
 import { reducedMotion } from '../ui/motion';
 import { ICON } from './boxtext';
-import { TAP_SLOP } from './camera';
+import { MIN_VIEW_UNITS, TAP_SLOP } from './camera';
 import type { ViewCtx } from './context';
 import { isConstantDef } from '../sim/constant';
-import { capOpenAt, decide, fitInside, FADE_MS, FLOOR_PX, runsOf, handOffView, handsOff, insideExtent, openAtPx, smallestNamed, type Rect } from './lensplan';
+import { bandOf, NO_BAND, type Band, capOpenAt, decide, fitInside, FADE_MS, FLOOR_PX, runsOf, handOffView, handsOff, insideExtent, openAtPx, smallestNamed, type Rect } from './lensplan';
 import { cueWords, progress, ZoomOutGate } from './zoomout';
 import { installPinch } from './pinch';
 import type { OverlayResult } from './overlays';
 import { SchematicView, type SchematicEvents } from './schematic';
-import type { ComponentDef } from '../sim/types';
+import { netlistOf, type ComponentDef } from '../sim/types';
 
 const SVG = 'http://www.w3.org/2000/svg';
 /** Past this factor still to zoom the hint also offers the double-click (zooming that far is a chore). */
@@ -105,6 +105,8 @@ interface Box {
   openAt: number;
   /** Its own opening zoom (openAtPx, from the box and its inside), before the canvas's cap (capOpenAt). */
   base: number;
+  /** Room it keeps inside its edges for its port names (lensplan.ts bandOf). */
+  band: Band;
   /** Its size, outer grid units. */
   size: { w: number; h: number };
   /** What the rule said last (decide's hysteresis). */
@@ -138,6 +140,8 @@ export class Lens {
   private off: (() => void)[] = [];
   private gate = new ZoomOutGate();
   private pinchLive = false;
+  /** A zoom-in step since the last evaluation (the wheel, `+`, a spreading pinch): at the zoom limit it steps in. */
+  private pushIn = false;
   /** What the stage lights now (its own level's names, `box.part` for parts inside a box). */
   private litNames: string[] = [];
   /** The view's px per unit at the last evaluation: a hand-off needs a zoom in. */
@@ -158,7 +162,7 @@ export class Lens {
     this.off.push(() => this.layer.remove());
     const wheel = (e: WheelEvent) => {
       if (this.gate.wheel(e.timeStamp, e.deltaY) === 'up') return this.goUp();
-      this.zoomed(e.clientX, e.clientY);
+      this.zoomed(e.clientX, e.clientY, e.deltaY < 0);
     };
     v.el.addEventListener('wheel', wheel, { passive: true });
     this.off.push(() => v.el.removeEventListener('wheel', wheel));
@@ -193,8 +197,9 @@ export class Lens {
   }
 
   /** A zoom step toward a client point (the wheel's pointer, the keyboard cursor's part). */
-  zoomed(clientX: number, clientY: number): void {
+  zoomed(clientX: number, clientY: number, inward = false): void {
     this.focus = [clientX, clientY];
+    if (inward) this.pushIn = true;
     this.hideHint();
     this.schedule();
   }
@@ -210,6 +215,7 @@ export class Lens {
       if (this.gate.pinch(performance.now(), k, start) === 'up') this.goUp();
     }
     this.focus = mid;
+    if (k > 1) this.pushIn = true;
     this.schedule();
   }
 
@@ -314,9 +320,11 @@ export class Lens {
       // a constant (a tie cell: a rail and a stub) has nothing to show in place
       const e = def && !isConstantDef(def) && insideExtent(def);
       if (!def || !e) continue;
-      const base = openAtPx(r, fitInside(r, e).k, smallestNamed(def));
+      const inst = netlistOf(ctx.def)?.instances.find((i) => i.name === name);
+      const band = bandOf(def, inst?.flip, inst?.rot);
+      const base = openAtPx(r, fitInside(r, e, band).k, smallestNamed(def));
       if (!Number.isFinite(base)) continue;
-      this.boxes.set(name, { name, def, base, openAt: base, size: { w: r.w, h: r.h }, want: false });
+      this.boxes.set(name, { name, def, base, band, openAt: base, size: { w: r.w, h: r.h }, want: false });
     }
     this.capFor = '';
     this.cap(this.canvasRect());
@@ -402,7 +410,11 @@ export class Lens {
     }
     if (this.hint) this.hover(this.hint.name);
     if (wantBuild) this.queueBuild();
-    if (zoomingIn) this.maybeHandOff(c);
+    // at the deepest zoom a further step in steps into the open box under the pointer: the view cannot zoom on, so the
+    // hand-off (R3.5) is reached however small the inside is drawn in its box
+    const push = this.pushIn, atLimit = px >= (0.995 * c.width) / MIN_VIEW_UNITS;
+    this.pushIn = false;
+    if (zoomingIn || (push && atLimit)) this.maybeHandOff(c, atLimit);
   }
 
   /** Build the waiting inside nearest the pointer, one per frame. */
@@ -519,7 +531,7 @@ export class Lens {
       e.stopPropagation();
       if (this.gate.wheel(e.timeStamp, e.deltaY) === 'up') return this.goUp();
       this.host.view.wheelAt(e.deltaY, e.clientX, e.clientY);
-      this.zoomed(e.clientX, e.clientY);
+      this.zoomed(e.clientX, e.clientY, e.deltaY < 0);
     }, { capture: true, passive: false });
     let endPan: (() => void) | null = null, pinched = false;
     installPinch(el, {
@@ -614,7 +626,7 @@ export class Lens {
   /** The drawn inside's rectangle on screen (canvas px). */
   private fitPx(b: Box, c = this.canvasRect()): Rect | null {
     const r = this.host.view.boxOf(b.name);
-    return r && b.extent ? this.toPx(fitInside(r, b.extent), c) : null;
+    return r && b.extent ? this.toPx(fitInside(r, b.extent, b.band), c) : null;
   }
 
   /** Lay the overlay on the box's outline and the inside letterboxed in it. */
@@ -622,7 +634,7 @@ export class Lens {
     const el = b.el!, view = b.view!, e = b.extent!, box = this.host.view.boxOf(b.name);
     if (!box) return;
     Object.assign(el.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
-    const f = fitInside(box, e);
+    const f = fitInside(box, e, b.band);
     if (!(f.k > 0) || !(r.w > 0)) return;
     // the inner point e.x sits at the fit's left edge: (f.x − box.x) outer units into the box, f.k outer units per inner unit
     view.setView({ x: e.x - (f.x - box.x) / f.k, y: e.y - (f.y - box.y) / f.k, w: box.w / f.k, h: box.h / f.k }, { w: r.w, h: r.h });
@@ -705,7 +717,7 @@ export class Lens {
   private paintStubs(b: Box): void {
     const view = b.view, e = b.extent, box = this.host.view.boxOf(b.name);
     if (!view || !e || !box || !b.shown) return;
-    const f = fitInside(box, e);
+    const f = fitInside(box, e, b.band);
     if (!(f.k > 0)) return;
     const vx = e.x - (f.x - box.x) / f.k, vy = e.y - (f.y - box.y) / f.k;
     const toInner = (p: readonly number[]): [number, number] => [vx + (p[0] - box.x) / f.k, vy + (p[1] - box.y) / f.k];
@@ -774,14 +786,14 @@ export class Lens {
   // ---- the hand-off and going up --------------------------------------------------------------
 
   /** A drawn inside covers the canvas in width or height (the one under the pointer first): the view becomes its level. */
-  private maybeHandOff(c: DOMRect): void {
+  private maybeHandOff(c: DOMRect, atLimit = false): void {
     const canvas = { w: c.width, h: c.height };
     const [fx, fy] = this.focus ?? [c.left + c.width / 2, c.top + c.height / 2];
     let pick: { b: Box; fit: Rect } | null = null;
     for (const b of this.boxes.values()) {
       if (!b.shown || !b.extent || !b.ctx) continue;
       const fit = this.fitPx(b, c);
-      if (!fit || !handsOff(fit, canvas)) continue;
+      if (!fit || !(handsOff(fit, canvas) || atLimit)) continue;
       const under = fx >= c.left + fit.x && fx <= c.left + fit.x + fit.w && fy >= c.top + fit.y && fy <= c.top + fit.y + fit.h;
       // only the box under the pointer: zooming on a small part must never step into a big neighbour
       if (under) { pick = { b, fit }; break; }
@@ -851,11 +863,17 @@ export class Lens {
     this.land(name, e, { x: p[0] - c.left, y: p[1] - c.top, w: q[0] - p[0], h: q[1] - p[1] }, c);
   }
 
+  /** The band a box of the level on screen keeps for its port names (lensplan.ts bandOf). */
+  private bandFor(name: string): Band {
+    const ctx = this.host.ctx(), inst = ctx ? netlistOf(ctx.def)?.instances.find((i) => i.name === name) : undefined;
+    return this.boxes.get(name)?.band ?? (inst ? bandOf(inst.def, inst.flip, inst.rot) : NO_BAND);
+  }
+
   /** Show the level on screen so `name`'s inside (drawn extent `e`) sits on `at` (canvas px), drawn at once. */
   private land(name: string, e: Rect, at: Rect, c: DOMRect): void {
     const box = this.host.view.boxOf(name);
     if (!box) return;
-    const f = fitInside(box, e);
+    const f = fitInside(box, e, this.bandFor(name));
     // px per outer unit: an inner unit is f.k outer units, drawn at.w / e.w px
     const P = at.w / e.w / f.k;
     if (!(P > 0)) return;

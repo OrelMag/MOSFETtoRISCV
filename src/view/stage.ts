@@ -1228,7 +1228,7 @@ export class Stage {
     if (!r) return v.zoom(0.8);
     const [x, y] = [r.left + r.width / 2, r.top + r.height / 2];
     v.wheelAt(Math.log(0.8) / 0.0015, x, y);
-    this.lens?.zoomed(x, y);
+    this.lens?.zoomed(x, y, true);
   }
 
   /** After a hand-off: "Keep zooming out to go up to cpu" under the breadcrumb (null removes it). */

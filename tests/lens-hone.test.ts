@@ -12,7 +12,7 @@ import { PROGRAMS } from '../src/riscv/programs';
 import { orientGeom } from '../src/sim/geometry';
 import { netlistOf, type ComponentDef } from '../src/sim/types';
 import {
-  BOX_MIN_PX, CLOSE_SHARE, FLOOR_PX, INSET, decide, fitInside, handOffView, handsOff, insideExtent, openAtPx,
+  bandOf, BOX_MIN_PX, CLOSE_SHARE, FLOOR_PX, INSET, decide, fitInside, handOffView, handsOff, insideExtent, openAtPx,
   smallestNamed, type Rect,
 } from '../src/view/lensplan';
 
@@ -47,7 +47,7 @@ function boxOf(top: ComponentDef, name: string): { box: Rect; def: ComponentDef 
 }
 
 /** openAtPx for a box with its inside's extent. */
-const openAtFor = (box: Rect, def: ComponentDef, extent = hullOf(def)) => openAtPx(box, fitInside(box, extent).k, smallestNamed(def));
+const openAtFor = (box: Rect, def: ComponentDef, extent = hullOf(def)) => openAtPx(box, fitInside(box, extent, bandOf(def)).k, smallestNamed(def));
 
 describe('the open / close rule over scripted zoom traces', () => {
   const at = 20;
@@ -188,7 +188,7 @@ describe('the author\'s bug: a register beside other modules opens once zoomed e
   it('the pipeline register FD (3 × 74) opens at about 44 px per unit, decided by its inside alone', () => {
     const { box, def } = boxOf(pipe, 'FD');
     expect([box.w, box.h]).toEqual([3, 74]);
-    const at = openAtFor(box, def), k = fitInside(box, hullOf(def)).k;
+    const at = openAtFor(box, def), k = fitInside(box, hullOf(def), bandOf(def)).k;
     // the floor term decides (its smallest named block reaches FLOOR_PX there); BOX_MIN_PX alone would allow 64 / 3
     expect(at).toBeCloseTo(FLOOR_PX / (k * smallestNamed(def)), 9);
     expect(at).toBeGreaterThan(BOX_MIN_PX / 3);
@@ -203,8 +203,8 @@ describe('the author\'s bug: a register beside other modules opens once zoomed e
 
   it('Rock\'s opening zooms on the fib program, px per unit within 1 % (single-cycle and pipelined CPUs)', () => {
     const want: [() => ComponentDef, string, number][] = [
-      [SC, 'pc', 35.16], [SC, 'alu', 27.5], [SC, 'rf', 31.11], [SC, 'imm', 16.0], [SC, 'ctl', 3.61], [SC, 'npc', 21.5],
-      [PIPE, 'FD', 43.9], [PIPE, 'DE', 43.9], [PIPE, 'hz', 12.2],
+      [SC, 'pc', 37.5], [SC, 'alu', 42.86], [SC, 'rf', 35.75], [SC, 'imm', 16.0], [SC, 'ctl', 6.52], [SC, 'npc', 38.05],
+      [PIPE, 'FD', 43.95], [PIPE, 'DE', 43.95], [PIPE, 'hz', 20.49],
     ];
     const got = want.map(([top, n]) => { const { box, def } = boxOf(top(), n); return [n, openAtFor(box, def)] as const; });
     for (const [i, [n, v]] of got.entries()) expect(Math.abs(v / want[i][2] - 1), `${n}: ${v}`).toBeLessThan(0.01);

@@ -6,7 +6,8 @@
 // zoom. That makes a box's opening zoom a property of the box alone (its size, its inside): no stage, no neighbours, no
 // covers, nothing remembered.
 import { MIN_VIEW_UNITS } from './camera';
-import { orientGeom } from '../sim/geometry';
+import { orientGeom, symbolGeom } from '../sim/geometry';
+import { boxText, portTextRect } from './boxtext';
 import { isConstantDef } from '../sim/constant';
 import { netlistOf, type ComponentDef } from '../sim/types';
 import { nameEligible } from './legible';
@@ -34,11 +35,45 @@ export interface Fit {
 }
 
 /** The inside scaled into the box's outline, keeping its aspect, centred: the empty bands are the letterbox. */
-export function fitInside(box: Rect, extent: Rect): Fit {
-  const bw = Math.max(0, box.w - 2 * INSET), bh = Math.max(0, box.h - 2 * INSET);
+export function fitInside(box: Rect, extent: Rect, band: Band = NO_BAND): Fit {
+  // each side keeps INSET, or more where the box's own port names sit (bandOf)
+  const l = Math.max(INSET, band.l), rt = Math.max(INSET, band.r), t = Math.max(INSET, band.t), b = Math.max(INSET, band.b);
+  const bw = Math.max(0, box.w - l - rt), bh = Math.max(0, box.h - t - b);
   const k = extent.w > 0 && extent.h > 0 ? Math.min(bw / extent.w, bh / extent.h) : 0;
   const w = extent.w * k, h = extent.h * k;
-  return { k, x: box.x + (box.w - w) / 2, y: box.y + (box.h - h) / 2, w, h };
+  return { k, x: box.x + l + (bw - w) / 2, y: box.y + t + (bh - h) / 2, w, h };
+}
+
+/** Room kept inside a box's edges (outer grid units, per side) for what stays drawn on it while its inside shows. */
+export interface Band { l: number; r: number; t: number; b: number }
+export const NO_BAND: Band = { l: 0, r: 0, t: 0, b: 0 };
+/** A band side never takes more than this share of the box's width or height (a small box with long names still opens). */
+const BAND_MAX = 0.3;
+const bandMemo = new Map<string, Band>();
+/**
+ * The band a box's port names need (boxtext.ts lays them out just inside its edges, and they stay drawn while its inside
+ * shows: which pin is which): per side, from the edge to past the farthest name, a clock's marker included, plus a small gap.
+ * So the inside's stubs and drawing never run through them. A box turned a quarter keeps INSET only (its names are laid out
+ * on the turned box). Memoized per definition and flip.
+ */
+export function bandOf(def: ComponentDef, flip = false, rot = 0): Band {
+  if (def.symbol.kind !== 'box' || rot % 4) return NO_BAND;
+  const key = `${def.id}|${flip ? 1 : 0}`;
+  const hit = bandMemo.get(key);
+  if (hit) return hit;
+  const { w, h } = symbolGeom(def), gap = 0.3;
+  const band = { l: 0, r: 0, t: 0, b: 0 };
+  for (const p of boxText(def, flip).ports) {
+    const q = portTextRect(p), clock = p.clock ? 0.8 : 0;
+    if (p.side === 'left' || p.side === 'right') {
+      if (q.x + q.w / 2 < w / 2) band.l = Math.max(band.l, q.x + q.w + gap, clock);
+      else band.r = Math.max(band.r, w - q.x + gap, clock);
+    } else if (q.y + q.h / 2 < h / 2) band.t = Math.max(band.t, q.y + q.h + gap, clock);
+    else band.b = Math.max(band.b, h - q.y + gap, clock);
+  }
+  const out = { l: Math.min(band.l, BAND_MAX * w), r: Math.min(band.r, BAND_MAX * w), t: Math.min(band.t, BAND_MAX * h), b: Math.min(band.b, BAND_MAX * h) };
+  bandMemo.set(key, out);
+  return out;
 }
 
 /** A box opens only once it is this big on its shorter side (px): smaller, its own name and ports are what reads. */
@@ -101,7 +136,7 @@ export function handOffView(fitPx: Rect, extent: Rect, canvas: Size): { x: numbe
 /** A run: at least this many identical named blocks (one definition, one orientation) read as one block, an array. */
 export const RUN_MIN = 4;
 /** A run's cells must each be at least this big on screen (px, the longer side) for the array to read as cells. */
-export const CELL_PX = 5;
+export const CELL_PX = 4;
 
 const smallestMemo = new WeakMap<ComponentDef, number>();
 /**

@@ -13,7 +13,7 @@ import { orientGeom } from '../src/sim/geometry';
 import { isConstantDef } from '../src/sim/constant';
 import { netlistOf, type ComponentDef } from '../src/sim/types';
 import { MIN_VIEW_UNITS } from '../src/view/camera';
-import { CAP_SHARE, capOpenAt, fitInside, insideExtent, openAtPx, smallestNamed } from '../src/view/lensplan';
+import { bandOf, CAP_SHARE, capOpenAt, fitInside, insideExtent, openAtPx, smallestNamed } from '../src/view/lensplan';
 
 const FIB = assemble(PROGRAMS.find((p) => p.name === 'Fibonacci')!.source).words;
 const TOPS: [string, () => ComponentDef][] = [['single-cycle', () => singleCycleCpu(FIB)], ['pipeline', () => pipelinedCpu(FIB)], ['out of order', () => oooCpu(FIB)]];
@@ -26,7 +26,7 @@ function boxes(top: ComponentDef) {
     const e = netlistOf(i.def) && !isConstantDef(i.def) ? insideExtent(i.def) : null;
     if (!e) return [];
     const g = orientGeom(i.def, i.flip, i.rot), box = { x: 0, y: 0, w: g.w, h: g.h };
-    const base = openAtPx(box, fitInside(box, e).k, smallestNamed(i.def));
+    const base = openAtPx(box, fitInside(box, e, bandOf(i.def, i.flip, i.rot)).k, smallestNamed(i.def));
     return Number.isFinite(base) ? [{ name: i.name, size: { w: g.w, h: g.h }, base }] : [];
   });
 }
