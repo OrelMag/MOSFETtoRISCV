@@ -8,6 +8,8 @@ import { Builder } from './builder';
 import { addSub, andN, busMux2, decoder, equal, incrementer } from './combinational';
 import { priorityEncoder } from './coding';
 import { define, merger, ones, splitter } from './define';
+import { LiteralRails } from './rails';
+import { symbolGeom } from '../sim/geometry';
 import { AND, NOT, OR, XOR } from './gates';
 import { readPort } from './regfile';
 import { register } from './sequential';
@@ -26,8 +28,6 @@ function memo(key: string, f: () => ComponentDef): ComponentDef {
 }
 const orOf = (b: Builder, drivers: string[], label?: string): string =>
   drivers.length === 0 ? b.op1(TIE0, []) : drivers.length === 1 ? drivers[0] : b.op1(drivers.length === 2 ? OR : orN(drivers.length), drivers, label);
-const andOf = (b: Builder, drivers: string[], label?: string): string =>
-  drivers.length === 0 ? b.op1(TIE1, []) : drivers.length === 1 ? drivers[0] : b.op1(drivers.length === 2 ? AND : andN(drivers.length), drivers, label);
 
 // ---- tables ---------------------------------------------------------------------------------------------
 
@@ -139,27 +139,99 @@ export function pla(preset: keyof typeof PLA_PRESETS): ComponentDef {
   const P = PLA_PRESETS[preset];
   return memo(`pla_${preset}`, () => {
     const { terms, uses } = plaTerms(P);
-    const b = new Builder(10, 14);
-    b.pins('x');
-    const sx = b.op(splitter(ones(P.n)), ['x']);
-    b.next();
-    const neg = Array.from({ length: P.n }, (_, i) => b.name(b.op1(NOT, [`${sx}.o${i}`]), `x${i}′`, true));
-    for (let i = 0; i < P.n; i++) b.name(`${sx}.o${i}`, `x${i}`, true);
-    b.next();
-    const lit = (t: Cube) => Array.from({ length: P.n }, (_, i) => i).filter((i) => !((t.mask >> i) & 1)).map((i) => ((t.val >> i) & 1 ? `${sx}.o${i}` : neg[i]));
-    const tOut = terms.map((t, k) => andOf(b, lit(t), `term ${k}`));
-    b.next();
-    const outs = uses.map((u, j) => orOf(b, u.map((k) => tOut[k]), `out ${j}`));
-    b.next();
-    b.wire(b.op1(merger(ones(P.m)), outs), 'y');
-    const R = b.right;
+    // Drawn as the textbook PLA: the input splitter and the inverters on top, the true and complement literal rails running down
+    // (lib/rails.ts), one product term per row with its AND gate at the row's right end, each input a tap from its rail; then the
+    // OR plane, an OR per output beside the rows of its terms, each term line a vertical trunk (lanes) with a tap into every OR
+    // that uses it, and the outputs into the merger.
+    const instances: InstanceDef[] = [], nets: NetDef[] = [];
+    const sx = 'sx';
+    instances.push({ name: sx, def: splitter(ones(P.n)), at: [1, 2] });
+    const yNot = 4 + 2 * P.n;
+    const rails = new LiteralRails(Array.from({ length: P.n }, (_, i) => ({ src: `${sx}.o${i}`, y: 3 + 2 * i, name: `x${i}`, not: `n${i}` })), 6, yNot);
+    instances.push(...rails.instances);
+    // the AND plane: a row per term, literals tapped in rail order (left to right, top to bottom)
+    const xA = rails.right + 4, y0 = yNot + 5;
+    const rowY: number[] = [], rowH: number[] = [], rowOut: string[] = [];
+    let y = y0;
+    terms.forEach((t, k) => {
+      const lits = Array.from({ length: P.n }, (_, i) => i).filter((i) => !((t.mask >> i) & 1)).map((i): [number, 0 | 1] => [i, ((t.val >> i) & 1) as 0 | 1]);
+      lits.sort((a, b) => rails.x(a[0], a[1]) - rails.x(b[0], b[1]));
+      const def = lits.length === 0 ? TIE1 : lits.length === 1 ? undefined : lits.length === 2 ? AND : andN(lits.length);
+      const g = def ? symbolGeom(def) : { h: 2 };
+      rowY.push(y); rowH.push(g.h);
+      if (def) {
+        const name = `t${k}`;
+        instances.push({ name, def, at: [xA, y], label: `term ${k}` });
+        const ins = def.ports.filter((p) => p.dir === 'in').map((p) => p.name);
+        lits.forEach(([i, v], p) => rails.use(i, v, `${name}.${ins[p]}`));
+        rowOut.push(`${name}.${def.ports.find((p) => p.dir === 'out')!.name}`);
+      } else rowOut.push(`${sx}.o${lits[0][0]}`);
+      y += g.h + 1;
+    });
+    // the OR plane: an OR per output at the middle of its rows, kept in output order so the merger meets them without crossings
+    const orDef = (k: number) => (k === 2 ? OR : orN(k));
+    const hOf = (j: number) => (uses[j].length < 2 ? 2 : symbolGeom(orDef(uses[j].length)).h);
+    const centre = (j: number) => (uses[j].length ? uses[j].reduce((s, k) => s + rowY[k] + rowH[k] / 2, 0) / uses[j].length : y0);
+    const oy: number[] = [];
+    let floor = y0;
+    for (let j = 0; j < P.m; j++) {
+      oy.push(Math.max(floor, Math.round(centre(j) - hOf(j) / 2)));
+      floor = oy[j] + hOf(j) + 1;
+    }
+    const sinksOf = terms.map(() => [] as { end: string; y: number }[]);
+    const lanesX0 = xA + 6;
+    const outs: string[] = [];
+    // pin order of each OR: its terms from the top row down, so the taps do not cross each other
+    const orderOf = uses.map((u) => [...u].sort((a, b) => rowY[a] - rowY[b]));
+    // lane per term line, left-edge style: a line occupies the vertical range from its row to its last tap
+    const pinY = (j: number, p: number) => oy[j] + 1 + 2 * p + (hOf(j) - 2 * uses[j].length) / 2;
+    const spans = terms.map((_, k) => {
+      let lo = rowY[k] + rowH[k] / 2, hi = lo;
+      for (let j = 0; j < P.m; j++) { const p = orderOf[j].indexOf(k); if (p >= 0) { lo = Math.min(lo, pinY(j, p)); hi = Math.max(hi, pinY(j, p)); } }
+      return [lo, hi] as const;
+    });
+    const lane: number[] = terms.map(() => -1);
+    const laneEnd: number[] = [];
+    [...terms.keys()].filter((k) => spans[k][1] > spans[k][0]).sort((a, b) => spans[a][0] - spans[b][0]).forEach((k) => {
+      let l = laneEnd.findIndex((e) => e < spans[k][0] - 0.5);
+      if (l < 0) l = laneEnd.length;
+      laneEnd[l] = spans[k][1];
+      lane[k] = l;
+    });
+    const xO = lanesX0 + 2 * laneEnd.length + 1;
+    orderOf.forEach((ord, j) => {
+      if (ord.length === 0) {
+        instances.push({ name: `z${j}`, def: TIE0, at: [xO, oy[j]] });
+        outs.push(`z${j}.y`);
+      } else if (ord.length === 1) {
+        outs.push(rowOut[ord[0]]);
+      } else {
+        const def = orDef(ord.length), name = `o${j}`;
+        instances.push({ name, def, at: [xO, oy[j]], label: `out ${j}` });
+        const ins = def.ports.filter((p) => p.dir === 'in').map((p) => p.name);
+        ord.forEach((k, p) => sinksOf[k].push({ end: `${name}.${ins[p]}`, y: pinY(j, p) }));
+        outs.push(`${name}.${def.ports.find((p) => p.dir === 'out')!.name}`);
+      }
+    });
+    terms.forEach((_, k) => {
+      if (sinksOf[k].length) nets.push({ name: `term ${k}`, ends: [rowOut[k], ...sinksOf[k].map((s) => s.end)], trunk: lane[k] >= 0 ? lanesX0 + 2 * lane[k] : undefined });
+    });
+    // the merger, level with the middle of the OR column
+    const xM = xO + 10;
+    const yM = Math.max(2, Math.round((oy[0] + oy[P.m - 1] + hOf(P.m - 1)) / 2 - P.m));
+    instances.push({ name: 'mg', def: merger(ones(P.m)), at: [xM, yM] });
+    outs.forEach((o, j) => nets.push({ ends: [o, `mg.i${j}`] }));
+    nets.push({ name: 'y', ends: ['mg.out', 'y'] });
+    nets.push({ name: 'x', ends: ['x', `${sx}.in`] });
+    nets.push(...rails.nets());
+    const R = xM + 4, yPin = yM + P.m;
     return define({
       id: `pla_${preset}`, name: `PLA: ${P.name}`, category: 'gate',
       summary: `${P.n} inputs, ${terms.length} product terms, ${P.m} outputs. The AND plane builds each term from the true and complemented input rails; the OR plane sums the terms each output needs. A ROM decodes all ${2 ** P.n} input combinations; the PLA builds only the terms the outputs use, each from just the literals it needs.`,
       ports: [bus('x', P.n, 'in'), bus('y', P.m, 'out')],
       symbol: { kind: 'box', label: 'PLA' },
       spec: ([x]) => [P.f(x)],
-      netlist: () => ({ pins: { x: [0, 6], y: [R, 6] }, instances: b.instances, nets: b.nets() }),
+      netlist: () => ({ pins: { x: [0, 2 + P.n], y: [R, yPin] }, instances, nets }),
     });
   });
 }
