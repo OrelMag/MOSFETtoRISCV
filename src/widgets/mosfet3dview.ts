@@ -25,7 +25,7 @@ export function mosfetView(link?: BiasLink): Widget {
     aria: 'An NMOS transistor in 3D: source and drain islands, the channel between them, oxide and gate above',
     camera: { target: [0, 4, 0], yaw: -0.55, pitch: 0.5, dist: 84 },
     limits: { minDist: 30, maxDist: 260 },
-    note: `A 180 nm-class device (the 1.8 V, 0.45 V model's), 1 unit = ${NM_PER_UNIT} nm along the channel and the width. Gate oxide 4 nm, polysilicon 200 nm, spacers 60 nm are to scale; the gate is lifted to show the channel, the sheet (a few nm in silicon) and the contacts are drawn larger than life, and the field oxide (STI), silicide, lightly doped drain extensions, metal and the body contact are left out.`,
+    note: `A 180 nm-class device (the 1.8 V, 0.45 V model's), 1 unit = ${NM_PER_UNIT} nm along the channel and the width. Gate oxide 4 nm, polysilicon 200 nm, spacers 60 nm are to scale; the gate is lifted to show the channel, the sheet (a few nm in silicon) and the contacts are drawn larger than life (the gate contact stands over the channel here; a layout lands it on polysilicon over the field oxide, off the transistor), and the field oxide (STI), silicide, lightly doped drain extensions, metal and the body contact are left out.`,
     draw,
   });
 

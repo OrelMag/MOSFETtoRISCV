@@ -24,7 +24,7 @@ export function packageView(): Widget {
     aria: 'A chip package opened up in 3D: a die on a paddle, bond wires from its pads to the lead frame, the board below',
     camera: { target: [0, 0, 0], yaw: -0.45, pitch: 0.7, dist: 128 },
     limits: { minDist: 50, maxDist: 320 },
-    note: 'Scaled: the wires are drawn about 8 times thicker than a 25 µm gold wire, the pads 2 to 3 times closer to the lead pitch than the 50 to 100 µm they are, the die film and ball bonds enlarged, and the die about 8 mm across. The wire length is true to the drawn loop; the mould is shown on request.',
+    note: 'Scaled: the wires are drawn about 8 times thicker than a 25 µm gold wire, the pads about 0.6 mm apart instead of the 50 to 100 µm they are, the die film and ball bonds enlarged, and the die about 7 mm across. The wire length is true to the drawn loop; the mould is shown on request.',
     draw: () => stage.paint(pkParts(st, palette()), pkAnchors(st)),
   });
   const chipV = h('span', { class: 'r3-chip', role: 'status', 'aria-live': 'polite' }), chipS = h('span', { class: 'r3-chip', role: 'status', 'aria-live': 'polite' });

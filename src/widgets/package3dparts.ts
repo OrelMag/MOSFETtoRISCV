@@ -4,8 +4,8 @@
 // the sum of those currents, so the drawing cannot show more current than the model has. The wire's inductance is
 // computed from the length that is drawn (Grover's straight-wire formula), so the longer the wire the larger the L.
 //
-// Scale, stated: the die is 21 units, so at UNITS_PER_MM a die of ~7.9 mm; the wire is drawn 0.26 units (~0.1 mm) in
-// radius against a real 12.5 µm (25 µm Au), about 8 times thick, and pads sit 1.8 units apart (real: 50-100 µm).
+// Scale, stated: the die is 21 units, so at UNITS_PER_MM a die of ~7.35 mm; the wire is drawn 0.26 units (~0.1 mm) in
+// radius against a real 12.5 µm (25 µm Au), about 8 times thick, and pads sit 1.8 units (~0.63 mm) apart (real: 50-100 µm).
 
 import type { RGB, RGBA } from '../gl/instances';
 import type { Vec3 } from '../gl/math';
