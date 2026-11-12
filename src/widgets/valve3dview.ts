@@ -10,6 +10,7 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import type { OrbitView } from '../gl/camera';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { VDD, VT } from './mosphys';
 import type { BiasLink } from './mosshare';
@@ -36,6 +37,7 @@ export function valveView(link?: BiasLink): Widget {
 
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.field,
     aria: 'A pressure-operated diaphragm valve in cutaway: a gate line feeding a diaphragm that pushes a plunger off its seat against a spring, between a tank and a basin',
     camera: { ...VIEWS.one },
     limits: { minDist: 70, maxDist: 420 },

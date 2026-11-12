@@ -6,6 +6,7 @@ import '../styles/sensorstack3d.css';
 import { h, s as svg } from '../ui/dom';
 import type { Widget } from '../view/stage';
 import type { OrbitView } from '../gl/camera';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import { angleCurve, BAYER, FATES, K, fmtUm, lensHeight, PITCHES, pctOf, siReflectance, spotSize, tenths, stackAnchors, stackHeight, stackParts, stackSpec, traceStack, type Illum, type StackOptics, type StackPalette, type StackPose, type StackSpec } from './sensorstack3dparts';
 import { STACK_OPTICS } from './sensorstackoptics';
@@ -28,6 +29,7 @@ export function sensorStackView(optics: StackOptics = STACK_OPTICS): Widget {
   const frame = () => { const sp = spec(); return viewOf(sp, traceStack(sp, optics, 550, 0, 0, 1).rc); };
   const panel = h('div', { class: 'panel' });
   const stage = modelStage(panel, {
+    look: LOOKS.silicon,
     aria: 'Four pixels of an image sensor in 3D, cut through the front row: microlenses, red, green and blue filters, metal, and the silicon photodiodes, with light rays traced through them',
     camera: frame(),
     limits: { minDist: 35, maxDist: 600 },

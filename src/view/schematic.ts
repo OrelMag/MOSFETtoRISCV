@@ -1955,12 +1955,18 @@ export class SchematicView {
 
   /** The panels' covers, and the badge's too when the circuit fitted beside the panels alone reaches under it. */
   private coverFor(): Rect[] {
+    return this.fitCovers(this.cover);
+  }
+
+  /** What fit() keeps clear of with these panel covers: them, and the badge where the circuit would reach under it.
+   *  The stage measures its fold choices with it (autoFold), so a choice is judged by the scale the fit then gives. */
+  fitCovers(cover: Rect[]): Rect[] {
     const b = this.badge?.();
-    if (!b) return this.cover;
+    if (!b) return cover;
     const r = this.host.getBoundingClientRect();
-    if (!(r.width > 0 && r.height > 0)) return this.cover;
-    const vb = fitBox(this.bbox, r.width, r.height, this.cover);
-    return underCover(vb, this.bbox, r.width, r.height, [b]) ? [...this.cover, b] : this.cover;
+    if (!(r.width > 0 && r.height > 0)) return cover;
+    const vb = fitBox(this.bbox, r.width, r.height, cover);
+    return underCover(vb, this.bbox, r.width, r.height, [b]) ? [...cover, b] : cover;
   }
 
   /** Still showing what the last fit() chose (the learner has not zoomed or panned since). */

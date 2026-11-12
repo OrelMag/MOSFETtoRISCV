@@ -10,6 +10,7 @@ import { reducedMotion } from '../ui/motion';
 import type { Widget } from '../view/stage';
 import { gibbsPeak, PATTERNS } from '../comm/fourier';
 import { frameLoop } from './mosfet';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 import {
   N_CRANKS, PEN_SCALE, TIDE_PRESET, angleOf, beatHours, levelOf, offsetsAt, penTip, ratioOf, sidewaysAt, throwMm, tideAnchors, tideOf, tideParts, type Mech, type TidePalette,
@@ -32,6 +33,7 @@ export function tideView(): Widget {
   const stage = modelStage(panel, {
     aria: 'Kelvin’s tide predictor in 3D: ten slotted cranks driven by one hand crank through a gear each, every crank carrying a pulley on its pin (or, switched, on a slotted yoke), one cord running under every movable pulley and over a fixed pulley between them, and a pen at its end drawing on a moving band of paper between two rollers',
     camera: { ...VIEW },
+    look: LOOKS.field,
     limits: { minDist: 60, maxDist: 700 },
     note: 'Sources: Science Museum Group object 1876-1129 (the 1872 machine by A. Légé & Co. for Thomson: 1820 × 1000 × 770 mm, 86 kg, ten components); W. Thomson, “The tide gauge, tidal harmonic analyser, and tide predicter”, Proc. Inst. Civil Eng. 65 (1881); Parker, Tide Analysis and Prediction (NOAA, 2007). The record gives the count of components; their list (M2, S2, N2, K2, Q1, K1, L2, P1, M4, MS4) and the mechanism are from P. L. Woodworth, An inventory of tide prediction machines (NOC Research & Consultancy Report 56, 2016), after Cartwright (1999): this machine’s pulley axles moved sideways as well as up and down, which made small errors, and all later machines moved them straight up and down. Neither gives the gear trains. Drawn, not measured: the layout, the cranks (the throw is a slot and scale here), the size of the crank pins’ error (it follows the drawn proportions), the change wheels (pitch circles sized by the speed ratio, no teeth, one pair on a 48 mm centre distance), the pulleys (44 and 56 mm across, about 50 mm on the machine) and the cord, which is much thicker than a real one; the pen scale and the paper speed are chosen to show the curve. The default cranks turn the chapter’s harmonics (integer rates, so the curve repeats); “Real tide” runs ten constituents at their IHO speeds with illustrative amplitudes and phases of no real port. A crank switched off is drawn disengaged (grey) and its pulley stays at rest. A year of tide took the real machine about four hours of hand cranking.',
     draw: () => paint(),

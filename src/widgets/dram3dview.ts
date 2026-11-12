@@ -12,6 +12,7 @@ import { SENSE_OFFSET, VDD_VOLTS } from '../sim/switchsim';
 import { CELL_HALFLIFE } from '../lib/dram';
 import { DramBench, RATIO, RATIOS, safeCyclesOf, swingOf } from './dram3dbench';
 import { dramAnchors, dramParts, LINE_Z0, lineLength, Z_OF, type DramPalette } from './dram3dparts';
+import { LOOKS } from '../gl/kit/looks';
 import { modelStage } from './modelstage';
 
 const mv = (d: number) => (Number.isFinite(d) ? `${d >= 0 ? '+' : '−'}${Math.abs(d * VDD_VOLTS * 1000).toFixed(0)} mV` : 'unknown');
@@ -37,6 +38,7 @@ export function dramView(): Widget {
   });
   const draw = () => stage.paint(dramParts(bench.snap(), palette()), dramAnchors(bench.snap()));
   const stage = modelStage(panel, {
+    look: LOOKS.silicon,
     aria: 'A 4 by 4 DRAM array in 3D: a column on every cell and a trough for every bit line, each as high as its charge',
     camera: viewFor(ratio),
     limits: { minDist: 50, maxDist: 900 },
