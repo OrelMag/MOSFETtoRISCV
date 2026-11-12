@@ -296,7 +296,7 @@ export const busOf = (fault?: 'nolock'): ComponentDef => once(`bus${fault ?? ''}
     id: `rv16_bus${fault ? `_${fault}` : ''}`, name: 'Two-master bus (RV16)', category: 'routing',
     summary: 'valid / ready on both sides: a round-robin grant held until the transfer completes, the address decoded to three slaves (0 below 0x8000, 1 from 0x8000, 2 from 0xC000), the granted master\'s address, data and write to all of them, the chosen slave\'s ready and data back.',
     ports: [...ins, ...outs], symbol: { kind: 'box', label: 'BUS' },
-    netlist: laid(b, { aspect: 1.2, keepOrder: true, pinOrder: [...ins, ...outs].map((p) => p.name) }),
+    netlist: laid(b, { aspect: 1.2, keepOrder: true, room: true, gap: 10, vgap: 4, pinPitch: 4, pinOrder: [...ins, ...outs].map((p) => p.name) }),
   });
 });
 export const BUS16 = busOf();
