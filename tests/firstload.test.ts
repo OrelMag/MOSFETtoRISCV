@@ -84,7 +84,9 @@ describe('the first-load path', () => {
     //   (the lens itself, view/lens.ts, is imported only when the setting is on)
     // 374 000 (2026-11-12, release review M2): settings.ts checks every stored field's type on load (~2.7 KB of source), so a
     //   damaged settings value can no longer stop every page loading
-    expect(bytes).toBeLessThan(374_000);
+    // 379 000 (2026-11-12, release batch 2): the six missing steps' stepmoves batch (44 rows, ~4.3 KB: saved progress is moved at
+    //   load, so stepmoves.ts is on this path) and their outline lines
+    expect(bytes).toBeLessThan(379_000);
   });
 
   it('loads the route pages and the chapters by import(), not by import', () => {
