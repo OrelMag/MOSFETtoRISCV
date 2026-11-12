@@ -165,7 +165,11 @@
   .lv-act, .lv-kind, .lv-par, .lv-bar .lbl, .lv-bar:has(.lv-stars) .lv-badge.good { display: none; }
   /* the shortcuts to the other tiers' capstones give the capstone's own name the room (My path lists them all) */
   .lv-bar .lv-tierjump { display: none; }
-  .sandbox.sb-levelmode > .sb-center { height: auto; flex: 1 1 0; min-height: 200px; }
+  /* a phone: the page scrolls and the strip under the canvas keeps its height (squeezed into a fixed-height column it was
+     a 19 px band that scrolled inside itself: Check, Show answer and the test player were out of reach) */
+  .sandbox.sb-levelmode { height: auto; }
+  .sandbox.sb-levelmode > .sb-center { height: auto; flex: none; min-height: 200px; }
+  .sb-levelmode .sb-bottom { overflow-y: visible; flex: none; }
   .sandbox.sb-levelmode > .sb-palette { max-height: 38dvh; }
   /* a core level's pins fill a screen: the I/O bar scrolls inside its own band, the canvas keeps a usable height */
   .sb-levelmode .sb-mid { min-height: max(230px, 40dvh); }
