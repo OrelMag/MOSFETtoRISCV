@@ -58,6 +58,8 @@ function harness(ws: Workspace, id: string) {
  * The round trip as phases (yield between them): a CPU's takes minutes on CI, and a test that holds its worker past
  * vitest's 60 s RPC timeout fails the run although every test passed (tests/yieldtick.ts).
  */
+const UNRAVEL_BATCH = 24;
+
 function* roundTripSteps(ws: Workspace, id: string, alone = Infinity) {
   const { doc, compile, defOf } = harness(ws, id);
   const before = compile(doc);
@@ -75,8 +77,14 @@ function* roundTripSteps(ws: Workspace, id: string, alone = Infinity) {
     expect(overlaps(r.doc, c1, defOf), `“${n}” drawn on another net`).toBeLessThanOrEqual(base);
   }
 
+  // Every name in one call held the worker 30-47 s on the largest documents (u_dec56, the out-of-order core) on a fast
+  // machine: past vitest's 60 s RPC timeout on CI. Past UNRAVEL_BATCH names they go in batches, a yield between.
   yield;
-  const u = unravelPointers(doc, names, defOf);
+  let u = unravelPointers(doc, names.slice(0, UNRAVEL_BATCH), defOf);
+  for (let k = UNRAVEL_BATCH; k < names.length && !u.reason; k += UNRAVEL_BATCH) {
+    yield;
+    u = unravelPointers(u.doc, names.slice(k, k + UNRAVEL_BATCH), defOf);
+  }
   expect(u.reason).toBeUndefined();
   if (names.length) expect(u.doc.labels.some((l) => names.includes(l.name))).toBe(false);
   const cu = compile(u.doc);
