@@ -234,6 +234,7 @@ export function intrBlock(): ComponentDef {
 export function irBlock(): ComponentDef {
   const L = new Logic();
   for (const i of R8) {
+    L.slice(i);
     // a reset holds a NOP ($EA) while RES is low; an interrupt sequence loads BRK ($00)
     const nin = (0xea >> i) & 1 ? L.aoi([[`din[${i}]`, 'nintg'], ['reslow']]) : L.nand([`din[${i}]`, 'nintg']);
     L.pass('irld', nin, `q${i}`);
@@ -243,7 +244,7 @@ export function irBlock(): ComponentDef {
     id: 'm65_ir', name: '6502 instruction register',
     summary: 'The opcode, loaded at the end of the fetch cycle (φ2 of T1), stored inverted and refreshed in φ1. A reset forces NOP, an interrupt BRK.',
     ports: [bus('din', 8, 'in'), bit('irld'), bit('nintg'), bit('reslow'), bit('p1'), bus('ir', 8, 'out'), bus('nir', 8, 'out')],
-    symbol: { kind: 'box', label: 'IR' }, rows: 8, place: 'layered',
+    symbol: { kind: 'box', label: 'IR' }, rows: 8, place: 'slices',
   });
 }
 
@@ -267,6 +268,7 @@ export function regBlock(name: string, drives: string[]): ComponentDef {
   const L = new Logic();
   const cell = regBit(drives);
   for (const i of R8) {
+    L.slice(i);
     L.add(`b${i}`, cell, { ld: 'ld', p2: 'p2', sb: `sb[${i}]`, v: `v[${i}]`,
       ...Object.fromEntries(drives.map((b) => [`rd_${b}`, `rd_${b}`])), ...Object.fromEntries(drives.filter((b) => b !== 'sb').map((b) => [b, `${b}[${i}]`])) });
   }
@@ -274,7 +276,7 @@ export function regBlock(name: string, drives: string[]): ComponentDef {
     id: `m65_reg_${name.toLowerCase()}`, name: `6502 register ${name}`,
     summary: `${name}: eight register bits sharing a load line (from SB) and ${drives.length} drive line${drives.length > 1 ? 's' : ''}.`,
     ports: [bit('ld'), ...drives.map((b) => bit(`rd_${b}`)), bit('p2'), ...[...new Set(['sb', ...drives])].map((b) => bus(b)), bus('v', 8, 'out')],
-    symbol: { kind: 'box', label: name }, rows: 4,
+    symbol: { kind: 'box', label: name }, rows: 4, place: 'slices',
   });
 }
 
