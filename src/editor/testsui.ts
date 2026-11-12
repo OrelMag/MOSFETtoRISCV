@@ -328,7 +328,7 @@ class TestsPane {
           const got = res ? fmt(res.got[j]) : 'not run';
           return [h('td', null, want === undefined ? 'X' : String(want)), h('td', { class: isBad && want !== undefined && got !== String(want) ? 'wrong' : '' }, got)];
         }),
-        h('td', { class: 'mark' }, isBad ? '✗' : res ? '✓' : '·')));
+        h('td', { class: 'mark', title: res && !isBad && !outs.some((n) => st.expect[n] !== undefined) ? 'nothing checked: every expected value is X' : undefined }, isBad ? '✗' : res ? (outs.some((n) => st.expect[n] !== undefined) ? '✓' : '–') : '·')));
     }
     grid.append(body);
     box.append(h('div', { class: 'sb-tests-scroll' }, grid));

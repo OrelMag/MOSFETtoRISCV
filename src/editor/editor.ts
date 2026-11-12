@@ -1325,7 +1325,7 @@ export class Editor {
     if (action) this.toastEl.append(' ', h('button', { type: 'button', class: 'btn sm sb-toast-act', onclick: () => { this.toastEl.className = 'sb-toast'; action.run(); } }, action.label));
     this.toastEl.className = `sb-toast show ${level}${action ? ' act' : ''}`;
     if (this.toastTimer) clearTimeout(this.toastTimer);
-    this.toastTimer = setTimeout(() => (this.toastEl.className = 'sb-toast'), action ? 7000 : 2800);
+    this.toastTimer = setTimeout(() => (this.toastEl.className = 'sb-toast'), action ? 5000 : 2800);
   }
 
   /** Take down the toast if it still says `text` (its offer was taken some other way). */
