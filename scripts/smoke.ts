@@ -931,6 +931,23 @@ const honeDrive = (part: string) => `(async () => {
     else if (p < openAt && p >= CLOSE_SHARE * openAt && o !== prev) bad.push(where + ': flipped inside the band at ' + fmt(p));
     return o;
   };
+  // A box the rule wants open shows once the lens has built its inside: a queued build, one box per frame, its neighbours too
+  // (view/lens.ts queueBuild). That is after a zoom past its opening, and again after a pan back, which keeps the answer but
+  // rebuilds the drawing (evaluate: a box out of reach keeps b.want, only its drawing goes). On a loaded runner the build
+  // outlasts SETTLE (ooo/11's div: 0.5 to 0.9 s at an 8× CPU throttle; cpu/0's alu after the pan: 0.4 to 0.7 s). So each check
+  // waits for the build first, with the same thresholds: a box that never opens still fails, after BUILD_MAX.
+  const BUILD_MAX = 10000;
+  // one wait that runs out is a failure already: the later ones do not wait again (a lens that never opens fails in seconds, not 60 × 10)
+  let stuck = false;
+  const until = async (pending) => {
+    if (stuck) return;
+    // a part gone (handed off to its own level) is not waited for: the checks after this say so
+    const still = () => { try { return !!g() && pending(); } catch { return false; } };
+    const t = performance.now() + BUILD_MAX;
+    while (still() && performance.now() < t) await wait(50);
+    if (still()) stuck = true;
+  };
+  const built = () => until(() => px() >= openAt && !isOpen());
   if (px() >= CLOSE_SHARE * openAt) return ['${part} starts within its band (' + fmt(px()) + ' of ' + fmt(openAt) + '): pick another part'];
   if (document.querySelector('.lens-layer .inside')) bad.push('an inside before any zoom');
   // the hint on a closed box that can open, with the zoom still needed
@@ -942,7 +959,7 @@ const honeDrive = (part: string) => `(async () => {
   // in, a step at a time, each settled, until open and two steps past
   let open = false, past = 0;
   for (let k = 0; k < 60 && past < 2 && location.hash === hash; k++) {
-    wheel(-100); await wait(SETTLE);
+    wheel(-100); await wait(SETTLE); await built();
     open = check(open, 'zooming in');
     if (open) past++;
   }
@@ -960,9 +977,12 @@ const honeDrive = (part: string) => `(async () => {
   }
   // every other box fully in view whose opening zoom is passed is open too (R3.6: nothing depends on the pointer)
   const c = canvas.getBoundingClientRect();
-  for (const o of document.querySelectorAll('.canvas > svg.schematic [data-open-at]')) {
+  const within = (r) => r.left >= c.left && r.top >= c.top && r.right <= c.right && r.bottom <= c.bottom;
+  const others = () => [...document.querySelectorAll('.canvas > svg.schematic [data-open-at]')];
+  await until(() => others().some((o) => within(o.getBoundingClientRect()) && px() >= Number(o.dataset.openAt) && !o.classList.contains('inside-on')));
+  for (const o of others()) {
     const r = o.getBoundingClientRect(), at = Number(o.dataset.openAt);
-    const inView = r.left >= c.left && r.top >= c.top && r.right <= c.right && r.bottom <= c.bottom;
+    const inView = within(r);
     if (inView && px() >= at && !o.classList.contains('inside-on')) bad.push(o.dataset.inst + ' is past its opening (' + fmt(at) + ') but closed');
     if (px() < CLOSE_SHARE * at && o.classList.contains('inside-on')) bad.push(o.dataset.inst + ' is open below ¾ of its opening');
   }
@@ -987,6 +1007,7 @@ const honeDrive = (part: string) => `(async () => {
     for (let k = 5; k >= 0; k--) { move(x0 - (k * span) / 6); await wait(16); }
     svg.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientX: x0, clientY: y0, bubbles: true }));
     await wait(SETTLE);
+    if (away.right <= cv.left) await until(() => !isOpen());
     if (away.right > cv.left) bad.push('the pan did not take ${part} out of view');
     else if (!isOpen()) bad.push('${part} came back closed after a pan away and back at ' + fmt(px()) + ' (inside its band)');
   }
@@ -998,7 +1019,7 @@ const honeDrive = (part: string) => `(async () => {
   const label = g().querySelector('.sym-label');
   if (label && getComputedStyle(label).display === 'none') bad.push('the name of ${part} is still hidden after it closed');
   // in again to the zoom it opened at: the same answer (nothing remembered)
-  for (let k = 0; k < 60 && px() < openPx * 0.999; k++) { wheel(-100); await wait(SETTLE); open = check(open, 'zooming in again'); }
+  for (let k = 0; k < 60 && px() < openPx * 0.999; k++) { wheel(-100); await wait(SETTLE); await built(); open = check(open, 'zooming in again'); }
   if (!isOpen()) bad.push('${part} did not open again at ' + fmt(px()) + ' px a unit');
   // the whole level again, as every drive leaves it (the run's checks look at the fitted view)
   document.querySelector('.stage [aria-label="Fit to screen"]')?.click();
