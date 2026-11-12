@@ -109,10 +109,10 @@ export function dramCtrl(c: DramConfig): ComponentDef {
     // the state machine: seven flip-flops, IDLE when none is set
     const NAMES = ['WPRE', 'WACT', 'BURST', 'CLOSE', 'WCLOSE', 'WREF1', 'WREF2'];
     const FSM = block('fsm', 'state machine', 'Seven state flip-flops, one set at a time (IDLE when none is): waiting after PRE, after ACT, the burst, closing (closed page), waiting after PREA and after REF.', [
-      bit('conflict', 'in'), bit('cACT', 'in'), bit('cRW', 'in'), bit('done', 'in'), bit('cPREA', 'in'), bit('cREF', 'in'), bit('z', 'in'), bit('one', 'in'), bit('clk', 'in', 'bottom', true),
+      bit('conflict', 'in'), bit('cACT', 'in'), bit('cRW', 'in'), bit('done', 'in'), bit('cPREA', 'in'), bit('cREF', 'in'), bit('z', 'in'), bit('clk', 'in', 'bottom', true),
       bit('idle', 'out'), bit('WPRE', 'out'), bit('WACT', 'out'), bit('BURST', 'out'), bit('CLOSE', 'out'), bit('WREF1', 'out'),
     ], (b, g) => {
-      const st = b.op(register(7), ['', 'one', 'clk'], 'state', 'st');
+      const st = b.op(register(7), ['', b.op1(TIE1, [], undefined, 'one'), 'clk'], 'state', 'st');
       const sq = g.split(`${st}.q`, ones(7));
       const S: Record<string, string> = {};
       NAMES.forEach((n, i) => (S[n] = b.name(sq[i], n, true)));
@@ -164,10 +164,10 @@ export function dramCtrl(c: DramConfig): ComponentDef {
 
     // the wait counter: every command loads its wait, else down to 0
     const WAIT = block('wait', 'wait counter', 'The cycles left before the next command may go: every command loads its timing (tRP, tRFC, tCAS, tRCD), else it counts down to 0.', [
-      bit('cPREA', 'in'), bit('cREF', 'in'), bit('cRW', 'in'), bit('cACT', 'in'), bit('cPRE', 'in'), bit('conflict', 'in'), bit('CLOSE', 'in'), bit('one', 'in'), bit('clk', 'in', 'bottom', true),
+      bit('cPREA', 'in'), bit('cREF', 'in'), bit('cRW', 'in'), bit('cACT', 'in'), bit('cPRE', 'in'), bit('conflict', 'in'), bit('CLOSE', 'in'), bit('clk', 'in', 'bottom', true),
       bus('count', cw, 'out'), bit('z', 'out'),
     ], (b, g) => {
-      const cnt = b.op(register(cw), ['', 'one', 'clk'], 'wait counter', 'cnt');
+      const cnt = b.op(register(cw), ['', b.op1(TIE1, [], undefined, 'one'), 'clk'], 'wait counter', 'cnt');
       const cq = b.name(`${cnt}.q`, 'count', true);
       const z = b.name(b.op1(isZero(cw), [cq], '= 0'), 'z', true);
       b.next();
@@ -183,13 +183,14 @@ export function dramCtrl(c: DramConfig): ComponentDef {
       const held = b.op1(bitwise('and', cw), [dec, g.merge(Array.from({ length: cw }, () => nz), ones(cw))]);
       b.wire(g.mux(cw, held, L, load, 'next count'), `${cnt}.d`);
       b.wire(cq, 'count'); b.wire(z, 'z');
+      return { cPREA: true };
     });
 
     // refresh: every tREFI cycles a refresh is due, and stays due until REF goes out
     const REF = block('refresh', 'refresh counter', `Counts to tREFI (${t.tREFI} cycles) and sets "refresh due", which REF clears.`, [
-      bit('cREF', 'in'), bit('one', 'in'), bit('clk', 'in', 'bottom', true), bit('refPend', 'out'),
+      bit('cREF', 'in'), bit('clk', 'in', 'bottom', true), bit('refPend', 'out'),
     ], (b, g) => {
-      const refCnt = b.op(register(rw), ['', 'one', 'clk'], 'refresh counter', 'rc');
+      const refCnt = b.op(register(rw), ['', b.op1(TIE1, [], undefined, 'one'), 'clk'], 'refresh counter', 'rc');
       const pend = b.op(DFF, ['', 'clk'], 'refresh pending', 'pend');
       const refPend = b.name(`${pend}.q`, 'refPend', true);
       b.next();
@@ -231,15 +232,14 @@ export function dramCtrl(c: DramConfig): ComponentDef {
     // the top level: the controller's block diagram
     const b = new Builder(18, 14);
     b.pins('req', 'wr', 'la', 'clk');
-    const one = b.op1(TIE1, [], undefined, 'one');
     b.op(REQ, ['wr', 'la', 'cmd.accept', 'fsm.idle', 'clk'], 'request', 'rq');
     b.op(ROWS, ['rq.lbank', 'rq.lrow', 'rq.cbank', 'rq.crow', 'fsm.idle', 'cmd.cACT', 'cmd.cPRE', 'cmd.cPREA', 'clk'], 'open-row table', 'rows');
     b.next();
     b.op(CMD, ['req', 'fsm.idle', 'refresh.refPend', 'rows.open', 'rows.same', 'rows.anyOpen', 'fsm.WPRE', 'fsm.WACT', 'fsm.BURST', 'fsm.CLOSE', 'fsm.WREF1', 'wait.z', 'rq.isWr', 'rq.cwr', 'wait.count'], 'commands', 'cmd');
     b.next();
-    b.op(FSM, ['cmd.conflict', 'cmd.cACT', 'cmd.cRW', 'cmd.done', 'cmd.cPREA', 'cmd.cREF', 'wait.z', one, 'clk'], 'state machine', 'fsm');
-    b.op(WAIT, ['cmd.cPREA', 'cmd.cREF', 'cmd.cRW', 'cmd.cACT', 'cmd.cPRE', 'cmd.conflict', 'fsm.CLOSE', one, 'clk'], 'wait counter', 'wait');
-    b.op(REF, ['cmd.cREF', one, 'clk'], 'refresh counter', 'refresh');
+    b.op(FSM, ['cmd.conflict', 'cmd.cACT', 'cmd.cRW', 'cmd.done', 'cmd.cPREA', 'cmd.cREF', 'wait.z', 'clk'], 'state machine', 'fsm');
+    b.op(WAIT, ['cmd.cPREA', 'cmd.cREF', 'cmd.cRW', 'cmd.cACT', 'cmd.cPRE', 'cmd.conflict', 'fsm.CLOSE', 'clk'], 'wait counter', 'wait');
+    b.op(REF, ['cmd.cREF', 'clk'], 'refresh counter', 'refresh');
     for (const o of ['cmd', 'word', 'dv', 'wv', 'done', 'hit', 'miss', 'conflict']) b.wire(`cmd.${o}`, o);
     for (const o of ['ba', 'ra', 'ca']) b.wire(`rq.${o}`, o);
 
