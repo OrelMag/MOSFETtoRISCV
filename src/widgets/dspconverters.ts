@@ -50,7 +50,7 @@ export function ladderWidget(): Widget {
   const paint = () => {
     const levels = range(2 ** BITS).map((c) => ladderOutput(c, BITS, ladderErrors(BITS, sigma, seed))), q = linearity(levels);
     plot.clear(); line(plot, range(levels.length), q.inl.map((v) => Math.max(-8, Math.min(8, v))), 'ln-s real');
-    chips.set(0, `${num(q.worstDnl, 2)} LSB`, 'worst single step, against 1 LSB');
+    chips.set(0, `${num(q.worstDnl, 2)} LSB`, 'worst step: how far from 1 LSB (DNL)');
     chips.set(1, `${num(q.worstInl, 2)} LSB`, 'worst distance from the line');
     chips.set(2, q.monotonic ? 'yes' : 'no', 'monotonic: does it only ever go up?');
     chips.set(3, String(q.dnl.reduce((m, v, i, a) => (Math.abs(v) > Math.abs(a[m]) ? i : m), 0)), 'the code before the worst step');
@@ -211,7 +211,7 @@ const adcPanel: ScenePanel = (stage: Stage): Widget => {
     if (ys.length) line(plot, range(ys.length), ys, 'ln-s real');
     if (bits.length) line(strip, range(bits.length), bits, 'ln-s lump');
     read.replaceChildren(h('span', null, 'clocks ', h('b', null, String(ran))), h('span', null, 'words ', h('b', null, String(ys.length))));
-    note.textContent = ran ? (ok ? 'At every clock the gates matched the loop\'s model feeding the CIC\'s.' : 'The gates and the models disagreed.') : `A tone at half of full scale goes in as ${w}-bit words. Bits leave the loop, and words leave the CIC at a ${R}nd of the rate.`;
+    note.textContent = ran ? (ok ? 'At every clock the gates matched the loop\'s model feeding the CIC\'s.' : 'The gates and the models disagreed.') : `A tone at half of full scale goes in as ${w}-bit words. Bits leave the loop, and words leave the CIC at 1/${R} of the rate.`;
   };
   const run = () => {
     stage.checkpoint();
