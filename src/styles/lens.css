@@ -20,6 +20,12 @@
   pointer-events: none;
   opacity: 0;
   transition: opacity 160ms ease;
+  /* the canvas is touch-action: manipulation (taps on its buttons); over an inside two fingers are the lens's pinch
+     (lens.ts wire), never the browser's page zoom, which took the gesture and fought the fingers */
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .inside.on { opacity: 1; pointer-events: auto; }
 .inside.instant { transition: none; }

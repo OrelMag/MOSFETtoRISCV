@@ -124,6 +124,8 @@ interface Box {
   shown?: boolean;
   /** Its fade-out's start (a show in between cancels the drop). */
   gone?: number;
+  /** Faded out while fingers were down: dropped when they lift (removing the element under a finger ends its gesture). */
+  dropLater?: boolean;
   sel?: string | null;
 }
 
@@ -142,6 +144,11 @@ export class Lens {
   private pinchLive = false;
   /** A zoom-in step since the last evaluation (the wheel, `+`, a spreading pinch): at the zoom limit it steps in. */
   private pushIn = false;
+  /** Touch pointers down on the canvas, by id. While any is, nothing the lens does moves the camera or changes the level:
+   *  a hand-off, a step in at the zoom limit and going up wait for the last finger to lift (the gesture's). */
+  private fingers = new Set<number>();
+  /** The touch gesture under way: the zoom it began at, and what it asked for (a step in at the limit, going up). */
+  private gesture: { px: number; limit: boolean; up: boolean } | null = null;
   /** What the stage lights now (its own level's names, `box.part` for parts inside a box). */
   private litNames: string[] = [];
   /** The view's px per unit at the last evaluation: a hand-off needs a zoom in. */
@@ -179,6 +186,34 @@ export class Lens {
     v.el.addEventListener('pointermove', move);
     v.el.addEventListener('pointerleave', leave);
     this.off.push(() => { v.el.removeEventListener('pointermove', move); v.el.removeEventListener('pointerleave', leave); });
+    // the fingers on the canvas: in the capture phase on the window, ahead of the pinches that swallow their events
+    const fingerDown = (e: PointerEvent) => {
+      if (e.pointerType !== 'touch') return;
+      // a primary touch begins a new touch session: no other finger can still be down (a lift we never heard)
+      if (e.isPrimary) this.fingers.clear();
+      if (!this.fingers.size) this.gesture = { px: this.unitPx(), limit: false, up: false };
+      this.fingers.add(e.pointerId);
+    };
+    const fingerUp = (e: PointerEvent) => {
+      if (this.fingers.delete(e.pointerId) && !this.fingers.size) this.released();
+    };
+    const lost = () => {
+      if (!this.fingers.size) return;
+      this.fingers.clear();
+      this.released();
+    };
+    host.canvas.addEventListener('pointerdown', fingerDown, { capture: true });
+    window.addEventListener('pointerup', fingerUp, { capture: true });
+    window.addEventListener('pointercancel', fingerUp, { capture: true });
+    window.addEventListener('blur', lost);
+    document.addEventListener('visibilitychange', lost);
+    this.off.push(() => {
+      host.canvas.removeEventListener('pointerdown', fingerDown, { capture: true });
+      window.removeEventListener('pointerup', fingerUp, { capture: true });
+      window.removeEventListener('pointercancel', fingerUp, { capture: true });
+      window.removeEventListener('blur', lost);
+      document.removeEventListener('visibilitychange', lost);
+    });
     this.levelChanged(host.ctx()?.path ?? []);
     this.started = true;
   }
@@ -212,7 +247,11 @@ export class Lens {
     } else {
       const start = !this.pinchLive;
       this.pinchLive = true;
-      if (this.gate.pinch(performance.now(), k, start) === 'up') this.goUp();
+      // going up changes the level and the camera: not under the fingers, when they lift
+      if (this.gate.pinch(performance.now(), k, start) === 'up') {
+        if (this.fingers.size && this.gesture) this.gesture.up = true;
+        else this.goUp();
+      }
     }
     this.focus = mid;
     if (k > 1) this.pushIn = true;
@@ -414,7 +453,43 @@ export class Lens {
     // hand-off (R3.5) is reached however small the inside is drawn in its box
     const push = this.pushIn, atLimit = px >= (0.995 * c.width) / MIN_VIEW_UNITS;
     this.pushIn = false;
-    if (zoomingIn || (push && atLimit)) this.maybeHandOff(c, atLimit);
+    // fingers down: the hand-off waits for them to lift (released), the gesture remembering a push at the limit
+    if (this.fingers.size) {
+      if (push && atLimit && this.gesture) this.gesture.limit = true;
+    } else if (zoomingIn || (push && atLimit)) this.maybeHandOff(c, atLimit);
+  }
+
+  /**
+   * The last finger lifted: what the gesture asked for and the lens held back, now. Going up; else a hand-off when the
+   * gesture zoomed in past it (the evaluations during it saw each step, not the whole) or pushed at the zoom limit; the
+   * insides faded during it dropped, the crumb's inside let go.
+   */
+  private released(): void {
+    const g = this.gesture;
+    this.gesture = null;
+    if (g?.up) {
+      this.dropDeferred();
+      return this.goUp();
+    }
+    // the evaluation the last move asked for, now, so the hand-off below reads this zoom's boxes
+    cancelSoon(this.frame);
+    this.frame = 0;
+    const key = this.levelKey;
+    this.evaluate();
+    this.dropDeferred();
+    if (!g || this.levelKey !== key || !this.host.ctx() || this.host.ctx()!.path.join('.') !== key) return;
+    const c = this.canvasRect(), px = this.unitPx();
+    const atLimit = px >= (0.995 * c.width) / MIN_VIEW_UNITS;
+    if (px > g.px * 1.0001 || (g.limit && atLimit)) this.maybeHandOff(c, g.limit && atLimit);
+  }
+
+  private dropDeferred(): void {
+    for (const b of this.boxes.values()) {
+      if (!b.dropLater) continue;
+      b.dropLater = false;
+      if (!b.shown) this.drop(b);
+    }
+    if (this.over && !this.cur) this.setOver(null);
   }
 
   /** Build the waiting inside nearest the pointer, one per frame. */
@@ -660,14 +735,25 @@ export class Lens {
     b.el.classList.remove('on');
     this.host.view.boxClass(b.name, 'inside-on', false);
     this.host.view.boxClass(b.name, 'lens-lit', false);
-    if (this.over === b.name) this.setOver(null);
+    // the crumb changes when the fingers lift (dropDeferred): the stage bar does not rewrap under a gesture
+    if (this.over === b.name && !this.fingers.size) this.setOver(null);
     const t = (b.gone = performance.now());
     setTimeout(() => { if (b.gone === t && !b.shown) this.drop(b); }, b.el.classList.contains('instant') ? 0 : FADE_MS + 20);
   }
 
-  private drop(b: Box): void {
+  private drop(b: Box, force = false): void {
     this.host.view.boxClass(b.name, 'inside-on', false);
     this.host.view.boxClass(b.name, 'lens-lit', false);
+    // a finger may be on it: its element taken out of the page would end that finger's pinch (its events lost, the browser's
+    // own gesture or nothing left to follow it). Faded and kept until the fingers lift (released)
+    if (!force && this.fingers.size && b.el) {
+      if (b.shown) {
+        b.shown = false;
+        b.el.classList.remove('on');
+      }
+      b.dropLater = true;
+      return;
+    }
     if (this.over === b.name) this.setOver(null);
     b.view?.clear();
     b.el?.remove();
@@ -678,7 +764,7 @@ export class Lens {
   }
 
   private dropAll(): void {
-    for (const b of this.boxes.values()) this.drop(b);
+    for (const b of this.boxes.values()) this.drop(b, true);
     this.boxes.clear();
     this.setOver(null);
   }
