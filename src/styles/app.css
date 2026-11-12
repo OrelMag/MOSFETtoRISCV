@@ -1771,6 +1771,8 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .bm-table th button { padding: 8px 8px; }
 .bm-table td { padding: 6px 8px; }
 .bm-table .hw-name .bm-fam { margin-right: 8px; }
+/* chevron, dot and name side by side, so a name that wraps stays beside them (G-4) */
+.bm-namecell { display: flex; align-items: center; justify-content: flex-start; min-width: 0; width: 100%; text-align: left; }
 .bm-table .hw-name a { color: var(--accent); }
 .bm-table th:nth-child(2), .bm-table td:nth-child(2) { text-align: right; }
 .bm-cell { display: inline-grid; justify-items: end; gap: 2px; min-width: 52px; }
