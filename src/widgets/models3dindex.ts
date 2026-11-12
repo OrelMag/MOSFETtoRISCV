@@ -166,7 +166,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'cores', title: 'A core memory plane', category: 'memory', chapter: 'memory', step: 10,
     summary: 'Sixteen ferrite cores on X, Y, sense and inhibit wires: only the core where two half currents cross flips; reads restore.',
-    files: ['core3d', 'core3dview', 'core3dparts'], factory: 'core3d', codex: ['coremem', 'ram', 'senseamp'],
+    files: ['core3d', 'core3dview', 'core3dkit', 'core3dparts'], factory: 'core3d', codex: ['coremem', 'ram', 'senseamp'],
     open: () => import('./core3d').then((m) => m.core3d()),
   },
   {

@@ -230,7 +230,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     const lines: SVGElement[] = [];
     for (const side of ['l', 'r'] as const) {
       const col = seen.filter((q) => (q.x < W / 2) === (side === 'l')).sort((a, b) => a.y - b.y);
-      const ys = spread(col.map((q) => q.y), narrow ? 24 : 22, 12, H - 12);
+      // the right column stops above the corner buttons, the left above the scale bar
+      const ys = spread(col.map((q) => q.y), narrow ? 24 : 22, 12, side === 'r' ? H - 56 : o.scaleBar ? H - 40 : H - 12);
       col.forEach((q, i) => {
         const y = ys[i];
         let gx: number, elbow: number;
