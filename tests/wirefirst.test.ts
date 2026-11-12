@@ -27,11 +27,12 @@ describe('wires first', () => {
   });
 
   it('wires a pin to the parts it feeds instead of a pointer beside it: z in the DRAM controller state machine', () => {
-    // z (the wait counter at 0) enters on a pin and reaches six transition gates in the next column: drawn as one wire on a trunk
+    // z (the wait counter at 0) enters on a pin and reaches six inverters in the first column: drawn as a wire on a trunk
     const fsm = netlistOf(dramCtrl({ k: 6, banks: 2, rowWords: 16, policy: 'open' }))!.instances.find((i) => i.name === 'fsm')!.def;
     const nl = netlistOf(fsm)!, z = (d: Netlist) => d.nets.find((n) => n.ends[0] === 'z')!;
     expect(z(nl).tags).toBe(true);
-    expect(z(drawnNetlist(fsm, nl)).tags).toBeUndefined();
+    // wired from the pin: at most a sink whose wire would run through a part keeps a pointer
+    expect(z(drawnNetlist(fsm, nl)).tags).not.toBe(true);
   });
 
   it('counts a crossing once, between two nets only', () => {
