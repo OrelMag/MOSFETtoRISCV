@@ -145,21 +145,24 @@ export function buildQueue<Q extends Question>(all: readonly Q[], st: ReviewStat
 export interface Summary {
   /** Missed and not yet answered right. */
   missed: number;
-  /** Not seen for STALE_DAYS (or never, in a chapter visited). */
+  /** Answered before, not seen for STALE_DAYS. */
   stale: number;
+  /** Never asked, in a chapter visited. */
+  fresh: number;
   /** Everything asked now (before the limit). */
   due: number;
 }
 
 export function summarize<Q extends Question>(all: readonly Q[], st: ReviewState, o: QueueOptions): Summary {
-  const s: Summary = { missed: 0, stale: 0, due: 0 };
+  const s: Summary = { missed: 0, stale: 0, fresh: 0, due: 0 };
   for (const q of all) {
     const m = st.memos[q.key];
     const t = tier(q, m, o);
     if (t === null) continue;
     s.due++;
     if (t === 0) s.missed++;
-    if (!m || o.now - m.last > STALE_DAYS * DAY) s.stale++;
+    if (!m) s.fresh++;
+    else if (o.now - m.last > STALE_DAYS * DAY) s.stale++;
   }
   return s;
 }

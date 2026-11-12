@@ -199,3 +199,15 @@ describe('files', () => {
     expect(importJson(`{"format":"${FORMAT}","schema":1,"chips":[{"name":"x"}]}`, emptyWorkspace())).toEqual({ error: expect.any(String) });
   });
 });
+
+describe('pin width', () => {
+  // Release review m1: a stored or shared 1e9-bit pin blanked the sandbox on every visit.
+  it('past MAX_PIN_BITS is refused by the sanitizer; a generated part\'s 2048-bit port, opened as a chip, is kept', async () => {
+    const { MAX_PIN_BITS } = await import('../src/editor/store');
+    const at = (w: number) => sanitizeChip({ ...chip('u_w'), pins: [{ id: 'p', name: 'a', dir: 'in', width: w, at: [0, 0] }] })?.pins.length;
+    expect(at(2048)).toBe(1);
+    expect(at(MAX_PIN_BITS)).toBe(1);
+    expect(at(MAX_PIN_BITS + 1)).toBe(0);
+    expect(at(1e9)).toBe(0);
+  });
+});

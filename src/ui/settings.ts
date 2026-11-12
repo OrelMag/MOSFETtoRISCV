@@ -113,11 +113,48 @@ interface State {
 const KEY = 'mosfet2riscv:v1';
 const defaults: State = { theme: 'auto', palette: 'default', radix: 'hex', animate: false, modules: true, wide: false, wireFlow: true, netColors: true, vivid: true, board: true, cartoon: true, workingGates: true, vividNets: true, looks: 1, glossary: true, simpleWires: false, autoClock: true, loadDelay: false, singleKeys: true, minimap: true, moveParts: null, zoomOpen: null, lensPlain: false, reduceMotion: false, wireScale: 'normal', grid: 'dots', portNames: true, partNames: true, busValues: true, tapRanges: true, zoomNames: 'normal', hideSmall: true, coachDone: {}, textSize: 100, narrowText: false, analyzer: false, speed: 12, traceLevel: 'instr', traceRate: 2, overlay: 'slack', visited: {}, solved: {}, openActs: {} };
 
+/**
+ * The stored fields that have the right shape, the rest left out (so they take their defaults): a damaged or hand-edited
+ * blob (a backup file) must never stop every page from loading. Records lose only their bad entries.
+ */
+function coerce(raw: unknown): Partial<State> {
+  if (typeof raw != 'object' || raw === null || Array.isArray(raw)) return {};
+  const r = raw as Record<string, unknown>, out: Record<string, unknown> = {};
+  const isRec = (v: unknown): v is Record<string, unknown> => typeof v == 'object' && v !== null && !Array.isArray(v);
+  const rec = <T>(v: unknown, ok: (x: unknown) => x is T): Record<string, T> | undefined =>
+    isRec(v) ? Object.fromEntries(Object.entries(v).filter(([k, x]) => k !== '__proto__' && ok(x))) as Record<string, T> : undefined;
+  const bool = (x: unknown): x is boolean => typeof x == 'boolean';
+  const steps = (x: unknown): x is unknown[] => Array.isArray(x);
+  const ONE_OF: Partial<Record<keyof State, readonly unknown[]>> = {
+    theme: ['auto', 'light', 'dark'], palette: PALETTES.map((p) => p.id), radix: ['hex', 'bin', 'dec', 'sdec'], wireScale: ['thin', 'normal', 'thick'],
+    grid: ['dots', 'lines', 'off'], zoomNames: ['off', 'normal', 'large'], traceLevel: ['gate', 'cycle', 'instr'], textSize: TEXT_SIZES,
+  };
+  for (const [k, d] of Object.entries(defaults) as [keyof State, unknown][]) {
+    const v = r[k], one = ONE_OF[k];
+    if (v === undefined) continue;
+    if (one) { if (one.includes(v)) out[k] = v; }
+    else if (k === 'visited') {
+      const vs = rec(v, steps);
+      if (vs) out[k] = Object.fromEntries(Object.entries(vs).map(([c, s]) => [c, s.filter((i): i is number => Number.isInteger(i) && (i as number) >= 0)]));
+    } else if (k === 'solved' || k === 'coachDone' || k === 'openActs') { const b = rec(v, bool); if (b) out[k] = b; }
+    else if (d === null) { if (v === null || typeof v == 'boolean') out[k] = v; }
+    else if (typeof d == 'number') { if (typeof v == 'number' && Number.isFinite(v) && (k === 'looks' || v > 0)) out[k] = v; }
+    else if (typeof v == typeof d) out[k] = v;
+  }
+  if (Number.isInteger(r.moved) && (r.moved as number) >= 0) out.moved = r.moved;
+  const last = r.last;
+  if (isRec(last) && typeof last.chapter == 'string' && Number.isInteger(last.step) && (last.step as number) >= 0) out.last = { chapter: last.chapter, step: last.step as number };
+  return out as Partial<State>;
+}
+
 function load(): State {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const st: State = { ...defaults, looks: 0, ...JSON.parse(raw) };
+      let parsed: unknown;
+      // Text that is not JSON is kept aside before the next save writes the defaults over it (as the sandbox keeps its own).
+      try { parsed = JSON.parse(raw); } catch { localStorage.setItem(KEY + ':unreadable', raw); throw new Error('unreadable settings'); }
+      const st: State = { ...defaults, looks: 0, ...coerce(parsed) };
       // Settings saved before the vivid look and cartoon parts became the default get them once; turned off since, they stay off.
       if (st.looks < 1) {
         if (!st.vivid && !st.netColors) st.vividNets = true;

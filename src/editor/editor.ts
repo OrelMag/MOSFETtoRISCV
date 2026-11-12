@@ -330,6 +330,13 @@ export class Editor {
     this.topResize.observe(this.slots.top);
     document.fonts?.ready.then(() => this.fitSoon(), () => {});
     this.refresh();
+    // A save still waiting on its debounce is written when the page goes away (a reload, a closed tab or window, a phone
+    // switching apps): only destroy() saved it before, and that runs on a route change, never on an unload.
+    const flush = () => { if (this.saveTimer) this.save(); };
+    const hidden = () => { if (document.visibilityState === 'hidden') flush(); };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', hidden);
+    this.cleanups.push(() => { window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', hidden); });
     for (const p of plugins) {
       const off = p(this);
       if (off) this.cleanups.push(off);

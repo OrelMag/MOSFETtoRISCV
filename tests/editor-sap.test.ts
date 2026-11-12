@@ -145,6 +145,13 @@ describe('the SAP-1 example', () => {
     expect(o.mon.rowText(0, r[0])).toBe('LDA 12');
   });
 
+  it('lists a sample\'s lines as written, white space folded (a lost backslash once cut every s)', () => {
+    const up = sapBytes(SAP_PROGRAMS.find((p) => p.id === 'countup')!.src);
+    const { es, mon } = open(up);
+    es.runCycles(1);
+    expect(mon.rowText(2, up[2])).toBe('ADD step');
+  });
+
   it('steps an instruction at a time, and names the modules a control word uses', () => {
     const { mon } = open();
     expect(mon.stepInstr()).toBe(5);

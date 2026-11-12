@@ -24,10 +24,10 @@ import {
   type ChipDoc, type CommentDoc, type EndRef, type LabelDoc, type PartDoc, type PartRef, type PinDoc, type WireDoc,
   isIdent, onSegment, slug, uniqueName,
 } from '../editor/model';
-import { isError, partDef } from '../editor/parts';
+import { isError, MAX_WIDTH, partDef } from '../editor/parts';
 import { type ExitDir, instPort, symbolGeom, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
-import { type ImportFailure, type ImportOptions, type ImportResult, MappingTally, type SourceFile } from './report';
+import { type ImportFailure, type ImportOptions, type ImportResult, MappingTally, type SourceFile, tooLarge, tooWide } from './report';
 
 // ---------------------------------------------------------------------------------------------
 // A small XML reader (no DOM in Node): elements, attributes, text, comments, CDATA, entities.
@@ -711,11 +711,17 @@ export function isLogisimFile(name: string, text: string): boolean {
   return /<project[\s>]/.test(head) && /<lib\s[^>]*desc="#/.test(head);
 }
 
+/** The numeric attributes that size a part: a width or a count the importer loops over (Logisim stops at 32 bits; our parts at MAX_WIDTH). */
+const SIZE_ATTR = /^(width|dataWidth|addrWidth|fanout|incoming|inputs|select|group|number|spacing)$/;
+
 export function importLogisim(files: SourceFile[], opts: ImportOptions): ImportResult | ImportFailure {
   const file = files.find((f) => isLogisimFile(f.name, f.text));
   if (!file) return { error: 'no Logisim .circ file among the files' };
   const proj = readProject(file.text);
   if ('error' in proj) return proj;
+  const big = tooLarge(proj.circuits.flatMap((c) => c.comps.flatMap((k) => [...k.a.entries()].filter(([n]) => SIZE_ATTR.test(n))
+    .map(([n, v]) => ({ where: `${c.name} ▸ ${k.name}`, key: n, value: num(v, 0) })))), MAX_WIDTH);
+  if (big) return big;
   const ctx: Ctx = {
     proj, orig: cmpVer(proj.ver, [2, 7, 2]) < 0, tally: new MappingTally(), problems: [], taken: new Set(opts.taken),
     chips: [], defs: new Map(), helpers: new Map(), ifaces: new Map(), clocked: new Map(),
@@ -754,7 +760,7 @@ export function importLogisim(files: SourceFile[], opts: ImportOptions): ImportR
   // The main circuit last, its helpers and sub-circuits before it.
   const i = ctx.chips.findIndex((c) => c.id === top);
   ctx.chips.push(...ctx.chips.splice(i, 1));
-  return { format: 'logisim', chips: ctx.chips, top, mapping: ctx.tally.list(), problems: ctx.problems };
+  return tooWide(ctx.chips, MAX_WIDTH) ?? { format: 'logisim', chips: ctx.chips, top, mapping: ctx.tally.list(), problems: ctx.problems };
 }
 
 function needsClock(ctx: Ctx, name: string, seen = new Set<string>()): boolean {

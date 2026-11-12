@@ -110,7 +110,9 @@ function tryOne(d: Drill): HTMLElement {
     const out = h('div', { class: 'explain' });
     const check = () => {
       const r = q.check(input.value);
-      out.innerHTML = r.ok ? `<strong>Right.</strong> ${q.explain ?? ''}` : (r.why ?? 'Not quite.');
+      // why is text (drills.ts Question): it may echo what was typed
+      if (r.ok) out.innerHTML = `<strong>Right.</strong> ${q.explain ?? ''}`;
+      else out.textContent = r.why ?? 'Not quite.';
       box.classList.toggle('solved', r.ok);
     };
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') check(); });
@@ -119,7 +121,7 @@ function tryOne(d: Drill): HTMLElement {
       h('div', { class: 'challenge-head' }, h('span', { class: 'tag' }, 'Try one'), rich('span', q.prompt)),
       h('div', { class: 'cx-try-row' }, input,
         h('button', { class: 'btn sm', onclick: check }, 'Check'),
-        h('button', { class: 'btn ghost sm', onclick: () => { out.innerHTML = `${q.answer}${q.explain ? `: ${q.explain}` : ''}`; } }, 'Show answer'),
+        h('button', { class: 'btn ghost sm', onclick: () => { out.replaceChildren(q.answer, q.explain ? h('span', { html: `: ${q.explain}` }) : ''); } }, 'Show answer'),
         h('button', { class: 'btn ghost sm', onclick: draw }, 'New question')),
       out);
   };

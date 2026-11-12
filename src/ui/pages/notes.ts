@@ -119,6 +119,7 @@ export class NotesPage implements Page {
     const parts = [`${this.done} of ${this.queue.length} today`];
     if (s.missed) parts.push(`${s.missed} missed before`);
     if (s.stale) parts.push(`${s.stale} not seen for 2 weeks`);
+    if (s.fresh) parts.push(`${s.fresh} not asked yet`);
     return parts.join(' · ');
   }
 

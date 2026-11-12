@@ -214,3 +214,22 @@ describe('the summary lists everything a backup merges', () => {
     expect(text).toMatch(/My path: 1 chapter tested out/);
   });
 });
+
+describe('backup of a hostile or damaged settings value', () => {
+  // Release review N2: a "__proto__" chapter made moveProgress throw (nothing imported) and could set a merged object's prototype.
+  const raw = '{"moved":0,"visited":{"__proto__":[1],"gates":[0]},"solved":{"__proto__":true,"gates:1":true},"openActs":{"__proto__":{"x":1}}}';
+  for (const mineHas of [false, true]) {
+    it(`loses only the "__proto__" entries (${mineHas ? 'merged' : 'into a fresh browser'})`, () => {
+      const mine = new MapKV(mineHas ? [[SETTINGS_KEY, JSON.stringify({ visited: { adders: [1] } })]] : []);
+      const r = readBackup(JSON.stringify({ format: 'mosfet2riscv-backup', schema: 1, keys: { [SETTINGS_KEY]: raw } }));
+      if ('error' in r) throw new Error(r.error);
+      expect(applyMerge(mergeBackup(r.file, mine), mine)).toEqual({ ok: true });
+      const st = JSON.parse(mine.getItem(SETTINGS_KEY)!);
+      expect(Object.getPrototypeOf(st.visited)).toBe(Object.prototype);
+      expect(Object.keys(st.visited)).not.toContain('__proto__');
+      expect(st.visited.gates).toEqual([0]);
+      expect(st.solved['gates:1']).toBe(true);
+      expect(Object.keys(st.solved)).not.toContain('__proto__');
+    });
+  }
+});

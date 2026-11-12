@@ -259,7 +259,7 @@ export class SapMonitor {
   rowText(addr: number, byte: number): string {
     if (byte < 0) return '?';
     const line = this.source?.at.get(addr), lab = this.source?.label.get(addr);
-    const text = line ? (line.byte === byte ? line.text.replace(/s+/g, ' ') : line.text.startsWith('.byte') ? `.byte ${byte}` : disasm(byte))
+    const text = line ? (line.byte === byte ? line.text.replace(/\s+/g, ' ') : line.text.startsWith('.byte') ? `.byte ${byte}` : disasm(byte))
       : this.data.has(addr) && !this.code.has(addr) ? `.byte ${byte}` : disasm(byte);
     return lab ? `${lab}: ${text}` : text;
   }

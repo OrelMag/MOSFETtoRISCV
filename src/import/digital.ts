@@ -18,9 +18,10 @@ import { type Compiled, compileChip } from '../editor/compile';
 import { DIR, partBox, pinBody } from '../editor/geom';
 import { untangled } from '../editor/untangle';
 import { isError, partDef } from '../editor/parts';
+import { MAX_PIN_BITS } from '../editor/store';
 import { instPort, symbolGeom } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
-import { type ImportFailure, type ImportOptions, type ImportResult, MappingTally, type SourceFile } from './report';
+import { type ImportFailure, type ImportOptions, type ImportResult, MappingTally, type SourceFile, tooLarge, tooWide } from './report';
 import { child, childrenNamed, deref, parseXml, type XNode } from './xml';
 
 const SIZE = 20;
@@ -1425,6 +1426,9 @@ export function normalizeWires(ws: [DPt, DPt][]): [DPt, DPt][] {
 
 // ---- entry point ------------------------------------------------------------------------------
 
+/** The numeric attributes that size a part: a width or a count the importer loops over. */
+const SIZE_ATTR = /Bits$|^(Inputs|inputBits|outputBits|splitterSpreading|Width)$/;
+
 export function importDigital(files: SourceFile[], opts: ImportOptions): ImportResult | ImportFailure {
   const circuits: DCircuit[] = [];
   const problems: string[] = [];
@@ -1434,6 +1438,9 @@ export function importDigital(files: SourceFile[], opts: ImportOptions): ImportR
     else if (!circuits.some((d) => d.base === c.base)) circuits.push(c);
   }
   if (!circuits.length) return { error: problems[0] ?? 'no Digital circuit in the files' };
+  const big = tooLarge(circuits.flatMap((c) => c.elems.flatMap((e) => [...e.attrs.keys()].filter((k) => SIZE_ATTR.test(k))
+    .map((k) => ({ where: `${c.name} ▸ ${e.name}`, key: k, value: aNum(e.attrs, k, 0) })))), MAX_PIN_BITS);
+  if (big) return big;
   const byBase = new Map(circuits.map((c) => [c.base, c]));
   const placed = new Set(circuits.flatMap((c) => c.elems.filter((e) => /\.dig$/i.test(e.name)).map((e) => baseOf(e.name))));
   const top = circuits.find((c) => !placed.has(c.base)) ?? circuits[0];
@@ -1465,5 +1472,5 @@ export function importDigital(files: SourceFile[], opts: ImportOptions): ImportR
   build(top);
   for (const c of circuits) build(c);
 
-  return { format: 'digital', chips: imp.chips, top: imp.made.get(top.base)!.id, mapping: imp.tally.list(), problems: imp.problems };
+  return tooWide(imp.chips, MAX_PIN_BITS) ?? { format: 'digital', chips: imp.chips, top: imp.made.get(top.base)!.id, mapping: imp.tally.list(), problems: imp.problems };
 }

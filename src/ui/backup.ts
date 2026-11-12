@@ -8,7 +8,7 @@
 // listed in `notes`.
 
 import { mergeCampaign, sanitizeCampaign, CAMPAIGN_KEY, CAMPAIGN_FORMAT } from '../campaign/progress';
-import { moveProgress, movedOf, STEP_MOVES } from '../chapters/stepmoves';
+import { moveProgress } from '../chapters/stepmoves';
 import { mergeFolders } from '../editor/folders';
 import type { Workspace } from '../editor/model';
 import { adoptProject, projectKey, readProjects, MAIN_PROJECT, PROJECTS_KEY } from '../editor/projects';
@@ -107,6 +107,16 @@ export interface Summary {
 const parse = (s: string | null | undefined): unknown => {
   try { return s ? JSON.parse(s) : null; } catch { return null; }
 };
+
+/** Settings with every "__proto__" entry left out of their records: as a key it makes moveProgress throw and sets a merged object's prototype. */
+function settingsOf(v: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...v };
+  for (const k of ['visited', 'solved', 'openActs', 'coachDone']) {
+    const r = v[k];
+    if (isObj(r)) out[k] = Object.fromEntries(Object.entries(r).filter(([id]) => id !== '__proto__'));
+  }
+  return out;
+}
 
 /** What `kv` holds, counted. */
 export function summarize(kv: ListKV): Summary {
@@ -229,11 +239,14 @@ export function mergeBackup(file: BackupFile, kv: ListKV): MergeResult {
 
   // chapters
   if (theirs.getItem(SETTINGS_KEY) !== null) {
-    const inc = parse(theirs.getItem(SETTINGS_KEY));
-    if (!isObj(inc)) unreadable(SETTINGS_KEY, 'The settings and chapter progress');
-    else if (stage.getItem(SETTINGS_KEY) === null) stage.setItem(SETTINGS_KEY, movedOf(inc) < STEP_MOVES.length ? JSON.stringify(moveProgress(inc)) : theirs.getItem(SETTINGS_KEY)!);
-    // an old file, or a store not saved since a move: each up to date first, or a step would count twice under two names
-    else put(SETTINGS_KEY, mergeSettings(moveProgress(parse(stage.getItem(SETTINGS_KEY))), moveProgress(inc)));
+    const raw = parse(theirs.getItem(SETTINGS_KEY));
+    if (!isObj(raw)) unreadable(SETTINGS_KEY, 'The settings and chapter progress');
+    else {
+      const inc = settingsOf(raw), mine = parse(stage.getItem(SETTINGS_KEY));
+      if (stage.getItem(SETTINGS_KEY) === null) stage.setItem(SETTINGS_KEY, JSON.stringify(moveProgress(inc)));
+      // an old file, or a store not saved since a move: each up to date first, or a step would count twice under two names
+      else put(SETTINGS_KEY, mergeSettings(moveProgress(isObj(mine) ? settingsOf(mine) : mine), moveProgress(inc)));
+    }
   }
   // campaign
   if (theirs.getItem(CAMPAIGN_KEY) !== null) {
