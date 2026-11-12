@@ -13,6 +13,7 @@ import { ACC_BITS, raccOf } from '../dsp/mac';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { constWord, shiftRightWire } from './alu';
 import { Builder } from './builder';
+import { laid } from './layered';
 import { busMux2, rca } from './combinational';
 import { define, ones, splitter } from './define';
 import { cut, placed, roundUp } from './fft';
@@ -51,7 +52,6 @@ export function readShifter(): ComponentDef {
     }
     b.next();
     b.wire(t, 'y');
-    const right = b.right;
     return define({
       id: `macshift${R}`, name: `${R}-bit arithmetic shifter, 0-63`, category: 'arithmetic',
       summary: `Shifts a ${R}-bit word right by 0 to 63 places in six stages (stage j moves by 2^j), filling with the sign. A shift past the width leaves only the sign.`,
@@ -61,7 +61,7 @@ export function readShifter(): ComponentDef {
         const v = BigInt.asIntN(R, BigInt(x)) >> BigInt(sh);
         return [Number(BigInt.asUintN(R, v))];
       },
-      netlist: () => ({ pins: { x: [0, 6], sh: [0, 14], y: [right, 6] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { aspect: 1.6, avoid: true, room: true }), // the six stages in bands, not a strip 172 × 31
     });
   });
 }

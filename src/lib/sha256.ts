@@ -260,7 +260,7 @@ export function shaK(): ComponentDef {
       summary: 'K[t] for t = 0..63, the first 32 bits of the fractional parts of the cube roots of the first 64 primes, as a 64-line decoder feeding one OR gate per output bit. A ROM drawn in gates.',
       ports: [bus('t', 6, 'in'), bus('k', 32, 'out')], symbol: { kind: 'box', label: 'K[t]' },
       spec: ([t]) => [K[t]],
-      netlist: () => ({ pins: { t: [0, 12], k: [b.right, 12] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { aspect: 1.6, avoid: true, room: true }), // by depth in bands: the column drawing was 1 193 units tall, 15 wires through gates
     });
   });
 }
