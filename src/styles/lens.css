@@ -54,6 +54,14 @@ svg.schematic g.inst.inside-on .sym-gloss { opacity: 0; }
 svg.schematic.lens-bigicons .sym-icon { opacity: 0; }
 /* the stage lit the box but names nothing inside it (DESIGN.md track 2c): its outline glows */
 svg.schematic g.inst.lens-lit { filter: drop-shadow(0 0 0.5px var(--lens-rim)) drop-shadow(0 0 4px var(--lens-rim)); }
+/* View options ▸ Opened blocks without colour (settings.lensPlain, data-lens-fill on <html>): an opened box's body takes the
+   board's colour (not none: the level's grid would show through, out of line with the inside's) and a neutral outline, so its
+   inside reads on the plain board; its port names leave the vivid look's white. Closed boxes keep their hue: only inside-on
+   matches. The fade is scoped to the option, so no other symbol gains a fill transition. Gates keep their blue. */
+:root[data-lens-fill='plain'] svg.schematic g.inst :is(.sym-box, .sym.cat .sym-body) { transition: fill 160ms ease, stroke 160ms ease; }
+:root[data-lens-fill='plain'] svg.schematic g.inst.inside-on :is(.sym-box, .sym.cat .sym-body) { fill: var(--canvas); stroke: var(--box-stroke); }
+:root[data-lens-fill='plain'] svg.schematic g.inst.inside-on .sym-shadow { opacity: 0; }
+:root[data-lens-fill='plain'] svg.schematic g.inst.inside-on .sym-port { fill: var(--text-2); }
 
 /* Hovering a closed block that can open: how much more zoom it needs, below the box (lens.ts places it). */
 .inside-hint {
@@ -95,9 +103,11 @@ svg.schematic g.inst.lens-lit { filter: drop-shadow(0 0 0.5px var(--lens-rim)) d
 .ov-inside { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
 
 @media (prefers-reduced-motion: reduce) {
-  .inside, svg.schematic g.inst text, svg.schematic g.inst .lg-name { transition: none; }
+  .inside, svg.schematic g.inst text, svg.schematic g.inst .lg-name,
+  :root[data-lens-fill='plain'] svg.schematic g.inst :is(.sym-box, .sym.cat .sym-body) { transition: none; }
 }
-:root[data-reduce-motion] .inside, :root[data-reduce-motion] svg.schematic g.inst text { transition: none; }
+:root[data-reduce-motion] .inside, :root[data-reduce-motion] svg.schematic g.inst text,
+:root[data-reduce-motion][data-lens-fill='plain'] svg.schematic g.inst :is(.sym-box, .sym.cat .sym-body) { transition: none; }
 
 /* A touch screen: the cue's link is a 40 px target, as every small control there (app.css's coarse-pointer blocks). */
 @media (pointer: coarse) {

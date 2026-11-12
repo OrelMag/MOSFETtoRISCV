@@ -155,3 +155,62 @@ describe('view options', () => {
     expect(app).toMatch(/:not\(\[data-reduce-motion\]\) \.bus-label\.riding \{ display: none; \}/);
   });
 });
+
+// View options ▸ Opened blocks without colour (settings.lensPlain): lens.css acts on the attribute, only on an opened box.
+describe('opened blocks without colour', () => {
+  afterEach(() => settings.resetView());
+
+  /** applyTheme on a stand-in <html> (no document in node): the attributes it leaves. */
+  const attrs = () => {
+    const a = new Map<string, string>();
+    const root = {
+      setAttribute: (k: string, v: string) => a.set(k, v), removeAttribute: (k: string) => a.delete(k),
+      toggleAttribute: (k: string, on: boolean) => (on ? a.set(k, '') : a.delete(k)), style: { setProperty() {}, removeProperty() {} },
+    };
+    const g = globalThis as { document?: unknown };
+    const saved = g.document;
+    g.document = { documentElement: root };
+    try { applyTheme(); } finally { g.document = saved; }
+    return a;
+  };
+
+  it('is off by default, comes back off on a reset, and a corrupt saved value reads as off', () => {
+    expect(settings.lensPlain).toBe(false);
+    settings.set('lensPlain', true);
+    expect(settings.lensPlain).toBe(true);
+    settings.resetView();
+    expect(settings.lensPlain).toBe(false);
+    settings.set('lensPlain', 'yes' as never);
+    expect(settings.lensPlain).toBe(false);
+  });
+
+  it('sets data-lens-fill on <html> while on, and takes it off again', () => {
+    expect(attrs().has('data-lens-fill')).toBe(false);
+    settings.set('lensPlain', true);
+    expect(attrs().get('data-lens-fill')).toBe('plain');
+    settings.set('lensPlain', false);
+    expect(attrs().has('data-lens-fill')).toBe(false);
+  });
+
+  it('is no part of a preset: a preset is still recognized with it on, and applying one leaves it alone', () => {
+    settings.set('theme', 'auto');
+    settings.resetView();
+    settings.set('lensPlain', true);
+    expect(settings.preset()).toBe('standard');
+    settings.applyPreset('plain');
+    expect(settings.lensPlain).toBe(true);
+    expect(settings.preset()).toBe('plain');
+  });
+
+  it('only an opened box loses its colour: every rule under the attribute that paints names inside-on', () => {
+    const lens = css('lens.css');
+    const rules = [...lens.matchAll(/([^{}]*\[data-lens-fill='plain'\][^{}]*)\{([^}]*)\}/g)].map(([, sel, body]) => ({ sel: sel.trim(), body }));
+    const paints = rules.filter((r) => /(^|[;\s])(fill|stroke|opacity)\s*:/.test(r.body));
+    expect(paints.length).toBe(3);
+    for (const r of paints) for (const s of r.sel.split(/,(?![^(]*\))/)) if (s.includes('data-lens-fill')) expect(s).toContain('g.inst.inside-on');
+    // the fade belongs to the option and gives way to reduced motion (the setting and the system's preference)
+    expect(rules.filter((r) => /transition:\s*none/.test(r.body)).length).toBe(2);
+    // gates keep their blue: no rule reaches a gate body
+    expect(lens).not.toMatch(/data-lens-fill[^{]*kind-(nand|and|or|not)/);
+  });
+});

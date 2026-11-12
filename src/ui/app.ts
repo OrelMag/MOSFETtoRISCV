@@ -249,6 +249,11 @@ export function startApp(root: HTMLElement): void {
   const zoomItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow pal-zoom', onclick: () => settings.set('zoomOpen', !settings.zoomOpen) },
     h('span', { class: 'pal-zoom-sw' }, icon('zoom-open', 32)),
     h('span', null, h('b', null, 'Open blocks as you zoom'), zoomWhy));
+  // lens.css: an opened block's body takes the board's colour (data-lens-fill); greyed, with the reason, while the lens is off
+  const lensPlainWhy = h('small', null);
+  const lensPlainItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow pal-lens-plain', onclick: () => { settings.set('lensPlain', !settings.lensPlain); applyTheme(); } },
+    h('span', { class: 'pal-flow-sw' }, h('i')),
+    h('span', null, h('b', null, 'Opened blocks without colour'), lensPlainWhy));
   // layout.ts is not first-load code
   const layoutsItem = h('button', { class: 'pal-reset', onclick: () => {
     void import('../view/layout').then((m) => {
@@ -275,7 +280,7 @@ export function startApp(root: HTMLElement): void {
     syncTools();
     undoItem.focus();
   } }, 'Reset view options to defaults');
-  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, gatesItem, modItem, netItem, flowItem, wiresRow.row, gridRow.row, motionItem, palHead('Labels'), ...labelItems, namesRow.row, palHead('Behaviour'), moveItem, zoomItem, layoutsItem, simpleItem, clockItem, delayItem, minimapItem, singleItem, resetItem);
+  palMenu.append(palHead('Reading'), sizeRow, narrowItem, glossItem, palHead('Look'), vividItem, boardItem, cartoonItem, gatesItem, modItem, netItem, flowItem, wiresRow.row, gridRow.row, motionItem, palHead('Labels'), ...labelItems, namesRow.row, palHead('Behaviour'), moveItem, zoomItem, lensPlainItem, layoutsItem, simpleItem, clockItem, delayItem, minimapItem, singleItem, resetItem);
   const palBtn = h('button', { class: 'btn ghost icon-only pal-btn', title: 'View options: presets, text size, wire colours and thickness, the look of parts, grid, motion, labels, and how the circuits behave', 'aria-label': 'View options (colours and look)', 'aria-haspopup': 'menu', 'aria-expanded': 'false' }, swatch());
   const palOpen = (on: boolean) => {
     palMenu.classList.toggle('open', on);
@@ -333,6 +338,9 @@ export function startApp(root: HTMLElement): void {
     minimapItem.setAttribute('aria-checked', String(settings.minimap));
     moveItem.setAttribute('aria-checked', String(settings.moveParts));
     zoomItem.setAttribute('aria-checked', String(settings.zoomOpen));
+    lensPlainItem.setAttribute('aria-checked', String(settings.zoomOpen && settings.lensPlain));
+    lensPlainItem.disabled = !settings.zoomOpen;
+    lensPlainWhy.textContent = settings.zoomOpen ? 'An opened block drops its module colour, so its inside reads on the plain board. Closed blocks keep theirs' : 'Turn on Open blocks as you zoom first';
     singleItem.setAttribute('aria-checked', String(settings.singleKeys));
     const preset = settings.preset();
     for (const b of presetBtns) { const on = b.dataset.preset === preset; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }
