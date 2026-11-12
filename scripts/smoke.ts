@@ -884,7 +884,12 @@ const lensPlainDrive = (part: string, on: boolean) => `(async () => {
   const hash = location.hash;
   for (let k = 0; k < 60 && !g().classList.contains('inside-on') && location.hash === hash; k++) { wheel(-100); await wait(SETTLE); }
   if (!g().classList.contains('inside-on')) return [...bad, '${part} never opened'];
-  await wait(400);
+  // The lens marks a box inside-on once its queued build is done and the fill then fades over 160 ms (lens.css): on a loaded
+  // runner a fixed wait read it mid-way (the gate's "keeps #30cf72"). Poll up to COLOUR_MAX for the colour wanted, same colours:
+  // a box that keeps its hue still fails, after the limit.
+  const COLOUR_MAX = 10000;
+  const settle = async (want) => { const t = performance.now() + COLOUR_MAX; while (fill(g()) !== want && performance.now() < t) await wait(50); };
+  if (${on}) await settle(board); else await wait(400);
   const open = fill(g());
   if (${on} && open !== board) bad.push('${part} opened keeps ' + open + ', not the board ' + board);
   if (!${on} && open !== hue) bad.push('with the option off, ${part} opened changed colour: ' + open + ' (was ' + hue + ')');
@@ -897,7 +902,7 @@ const lensPlainDrive = (part: string, on: boolean) => `(async () => {
     }
   }
   for (let k = 0; k < 60 && g().classList.contains('inside-on'); k++) { wheel(100); await wait(SETTLE); }
-  await wait(400);
+  if (g().classList.contains('inside-on')) await wait(400); else await settle(hue);
   if (g().classList.contains('inside-on')) bad.push('zooming out never closed ${part}');
   else if (fill(g()) !== hue) bad.push('${part} closed again is ' + fill(g()) + ', not its hue ' + hue);
   document.querySelector('.stage [aria-label="Fit to screen"]')?.click();
