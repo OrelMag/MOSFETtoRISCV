@@ -371,10 +371,7 @@ export const chBinary: Chapter = {
         The method needs no table of powers: <code>0b1011_0110</code> goes 1, then 1·2 + 0 = 2, then 2·2 + 1 = 5, then 11, then 22, then 45, then 91 and
         91·2 + 0 = ${parseInt('10110110', 2)}; in hex, <code>0x2F5</code> is (2·16 + 15)·16 + 5 = ${0x2f5}. To binary from decimal, halve and keep the remainders (the widget below shows the halving
         for any number you set), or go straight to hex by dividing by 16.</p>
-        <p><strong>Fractions</strong> continue the pattern to the right of the point, with weights ½, ¼, ⅛…, and convert the other way by <em>doubling and taking the integer bit</em>. For 0.3125:
-        ×2 = 0.625 gives bit 0; 0.625 × 2 = 1.25 gives 1, keep 0.25; 0.25 × 2 = 0.5 gives 0; 0.5 × 2 = 1.0 gives 1 and nothing is left. So 0.3125 = <code>0.0101</code>₂
-        (¼ + 1⁄16). Most decimal fractions never finish: 0.1 × 2 gives 0.2, 0.4, 0.8, 1.6 (bit 1, keep 0.6), 1.2 (bit 1, keep 0.2), and 0.2 has come back, so the bits
-        repeat: 0.1 = <code>0.0001100110011…</code>₂. A computer storing 0.1 in n bits stores a rounded neighbour, which is why 0.1 + 0.2 is not quite 0.3 in most programs.</p>
+        <p><strong>Fractions</strong> continue the pattern to the right of a binary point, with weights ½, ¼, ⅛ …: <a href="#/c/binary/7">the last step</a> of this chapter converts them.</p>
         <details class="deeper"><summary>Octal, the base between</summary>
         <p>Base 8 packs <em>three</em> bits into a digit (0–7), so <code>0o755</code> is 111 101 101. Hex won because bytes are eight bits and four divides eight; octal
         survives where words come in multiples of three: Unix file permissions (read, write, execute is one octal digit, so 755 is rwx r-x r-x), and a 12-bit machine
@@ -609,8 +606,12 @@ export const chBinary: Chapter = {
         fraction bits is an integer that means x / 2ᶠ. Addition is the same adder, since the points line up. A product has 2f fraction bits,
         so it is shifted right by f, a constant shift as in the step before. This is <strong>fixed point</strong>, written Qm.f: m integer
         bits, f fraction bits (unsigned here; a signed Qm.f spends one of the m on the sign, so signed Q4.4 runs from −8 to 7.9375).</p>
+        <p><strong>Converting a fraction</strong> to binary goes by <em>doubling and taking the integer bit</em>. For 0.3125:
+        ×2 = 0.625 gives bit 0; 0.625 × 2 = 1.25 gives 1, keep 0.25; 0.25 × 2 = 0.5 gives 0; 0.5 × 2 = 1.0 gives 1 and nothing is left. So 0.3125 = <code>0.0101</code>₂
+        (¼ + 1⁄16). Most decimal fractions never finish: 0.1 × 2 gives 0.2, 0.4, 0.8, 1.6 (bit 1, keep 0.6), 1.2 (bit 1, keep 0.2), and 0.2 has come back, so the bits
+        repeat: 0.1 = <code>0.0001100110011…</code>₂. A computer storing 0.1 in n bits stores a rounded neighbour, which is why 0.1 + 0.2 is not quite 0.3 in most programs.</p>
         <p>The price is a fixed step and a fixed range. Q4.4 counts in sixteenths up to 15.9375, and every value in between rounds to the
-        nearest step. Some decimal fractions never fit exactly. 0.1 is 1/10, and 10 has a factor of 5 that no power of two contains, so its
+        nearest step. 0.1 never fits, as the doubling showed: it is 1/10, and 10 has a factor of 5 that no power of two contains, so its
         binary expansion repeats for ever, as 1/3 does in decimal. More bits shrink the error but never remove it.</p>
         <p>DSPs, audio codecs and texture coordinates carry fractions this way, and the vertex kernel of <a href="#/c/graphics/0">chapter ${numOf('graphics')}</a>
         rotates in 16.16 fixed point. When a range must stretch from tiny to huge the point has to move with the number: that is floating

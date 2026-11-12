@@ -290,10 +290,11 @@ export const chAdders: Chapter = {
         <span data-show="pin:cin"><code>cin</code></span> to 1. The carry has to pass through every full adder in turn, like a row of falling
         dominoes, and each sum bit flips from 1 to 0 as the carry passes it. Watch the status line: it reports how many gate delays the
         adder took to settle.</p>
-        <p>The carry crosses all eight columns: ${pathDepth(rca(8), 'cin', 's')} gate delays on the status line here, 2 per column for seven columns, then the last sum's XOR. The longest path through the adder, from column 0's a or b, is ${logicDepth(rca(8))}: with a = 0xFF and cin = 0, change b from 0x01 to 0x00. Most inputs settle sooner, because a carry chain
-        stops at the first column that generates or kills. But whatever uses the sum must wait for the worst case, so the worst case sets the speed.
-        A 64-bit ripple adder needs ${logicDepth(rca(64))}. Faster adders compute the carries in parallel: that is
-        <a href="#/c/fastadd/0">a later chapter</a>.</p>`,
+        <p>The carry crosses all eight columns: ${pathDepth(rca(8), 'cin', 's')} gate delays on the status line here. The longest path through the adder,
+        from column 0's a or b, is a little longer, ${logicDepth(rca(8))} (Derivation shows where both come from).</p>
+        <p>Most inputs settle sooner, because a carry chain stops at the first column that generates or kills. But whatever uses the sum must
+        wait for the worst case, so the worst case sets the speed. A 64-bit ripple adder needs ${logicDepth(rca(64))}. Faster adders compute the
+        carries in parallel: that is <a href="#/c/fastadd/0">a later chapter</a>.</p>`,
       scene: () => ({ root: rca(8), inputs: { a: 0xff, b: 0, cin: 0 }, animate: true, panels: [delayPanel({ glitches: true })] }),
       actions: [{ label: 'Toggle cin', run: (st) => st.toggleInput('cin') }],
       ledger: { kind: 'add', a: 'a', b: 'b', cin: 'cin', sum: 's', cout: 'cout', width: 8, col: (i) => [`fa${i}`] },
@@ -308,6 +309,9 @@ export const chAdders: Chapter = {
         ],
       },
       more: {
+        derive: `<p>From cin, the carry passes 2 gate delays per column through seven columns, then the last sum's XOR: ${pathDepth(rca(8), 'cin', 's')}.
+          The longest path starts at column 0's a or b instead, which first goes through column 0's a ⊕ b before the carry chain: ${logicDepth(rca(8))}. To see it, set
+          a = 0xFF and cin = 0, then change b from 0x01 to 0x00. Measured on the netlist the depth is 2 per bit plus 4, as Numbers lists.</p>`,
         real: `<p>The 4004 and the 6502 used ripple-style carries in their 4- and 8-bit ALUs. Manchester carry chains (a pass-transistor chain, precharged)
           made ripple carry fast enough for 16 to 32 bits in the 1970s and 80s. Above that, carry-lookahead took over.</p>`,
         pitfall: `<p>Average-case delay is not the clock period. Random inputs give short carry chains (about log₂ n on average), but a single

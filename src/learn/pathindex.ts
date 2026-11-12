@@ -14,7 +14,7 @@ export const PATH_MINUTES: Record<string, number[]> = {
   "nand": [6,6,4,6,6,5],
   "gates": [3,4,6,2,6,3,6],
   "logic": [4,5,5,5,5,3,6,5],
-  "binary": [6,5,5,5,5,5,5,5],
+  "binary": [6,5,5,5,5,5,5,6],
   "adders": [4,4,6,6,4,6,4,5,5,6],
   "routing": [4,6,4,4,6,6,6,4],
   "latches": [6,4,6,4,6,6,7,4],
