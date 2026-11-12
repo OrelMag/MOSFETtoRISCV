@@ -18,6 +18,7 @@ import type { ComponentDef, PortDef } from '../sim/types';
 import { CMD, EDGE_BITS, FB_W, Z_FRAC } from '../gfx/raster';
 import { constWord, isZero } from './alu';
 import { bigRam, bigRamWithInit } from './bigmem';
+import { laid, type LayeredOptions } from './layered';
 import { Builder } from './builder';
 import { addSub, andN, busMux2, decoder, equal, incrementer, muxTree, rca } from './combinational';
 import { absValue, magComparator } from './coding';
@@ -200,98 +201,135 @@ function minMax(b: Builder, a: string, c: string, label: string, want: 'min' | '
  * the first tile's top-left pixel, out on e0 in S4, S6, S8.
  */
 export const RAST_SETUP: ComponentDef = (() => {
+  // Four blocks a reader opens one at a time: the edges (A, B, signs, the top-left bias), the steps and tile offsets, the
+  // bounding box in tiles, and the products (a Booth multiplier and an accumulator, a product a cycle). Each gate is the one
+  // the flat drawing had, moved into the block that uses it (tests/raster.test.ts pins the NANDs and the period).
+  const block = (id: string, label: string, summary: string, ports: PortDef[], build: (b: Builder) => void, opts: LayeredOptions = {}) => {
+    const b = new Builder(14, 12, 4);
+    b.pins(...ports.filter((p) => p.dir === 'in').map((p) => p.name));
+    build(b);
+    return define({ id, name: `Triangle set-up: ${label}`, category: 'arithmetic', summary, ports, symbol: { kind: 'box', label: label.toUpperCase() }, netlist: laid(b, { aspect: 1.6, room: true, keepOrder: true, ...opts }) });
+  };
+  const vIn = VERTEX_PINS.map((p) => bus(p, CB, 'in'));
+
+  const EDGES = block('rast_setup_edges', 'edges', 'Per edge A = v_i.y − v_{i+1}.y and B = v_{i+1}.x − v_i.x (subtractors), their signs, and the top-left bias: 0 for a left edge (A > 0) or a top edge (A = 0, B > 0), else 1.', [
+    ...vIn, ...E3.flatMap((i) => [bus(`A${i}`, DB, 'out'), bus(`B${i}`, DB, 'out'), bit(`sA${i}`, 'out'), bit(`sB${i}`, 'out'), bit(`bias${i}`, 'out')]),
+  ], (b) => {
+    const z2 = b.op1(constWord(DB - CB, 0), []);
+    const V = VERTEX_PINS.map((p) => z10(b, p, z2));
+    b.next();
+    const one = b.op1(constWord(1, 1), []);
+    const A = E3.map((i) => b.name(`${b.op(addSub(DB), [V[2 * i + 1], V[2 * ((i + 1) % 3) + 1], one], `A${i}`)}.s`, `A${i}`, true));
+    const B = E3.map((i) => b.name(`${b.op(addSub(DB), [V[2 * ((i + 1) % 3)], V[2 * i], one], `B${i}`)}.s`, `B${i}`, true));
+    b.next();
+    const sgn = (w: string, l: string) => topBit(b, w, DB, l);
+    const sA = E3.map((i) => sgn(A[i], `sign A${i}`)), sB = E3.map((i) => sgn(B[i], `sign B${i}`));
+    const zA = E3.map((i) => b.op1(isZero(DB), [A[i]], `A${i} = 0`)), zB = E3.map((i) => b.op1(isZero(DB), [B[i]], `B${i} = 0`));
+    b.next();
+    const pos = (s: string, z: string, l: string) => b.op1(AND, [b.op1(NOT, [s]), b.op1(NOT, [z])], l);
+    for (const i of E3) {
+      const left = pos(sA[i], zA[i], `A${i} > 0`), top = b.op1(AND, [zA[i], pos(sB[i], zB[i], `B${i} > 0`)], `edge ${i} top`);
+      b.wire(b.name(b.op1(NOT, [b.op1(OR, [left, top])], `bias ${i}`), `bias${i}`, true), `bias${i}`);
+      b.wire(A[i], `A${i}`); b.wire(B[i], `B${i}`); b.wire(sA[i], `sA${i}`); b.wire(sB[i], `sB${i}`);
+    }
+  });
+
+  const STEPS = block('rast_setup_steps', 'steps', 'The steps dx = 4A and dy = 4B (wiring and sign extension) and the tile test\'s offset 12·(A⁺ + B⁺), A⁺ being A when A > 0, else 0.', [
+    ...E3.flatMap((i) => [bus(`A${i}`, DB, 'in'), bus(`B${i}`, DB, 'in'), bit(`sA${i}`, 'in'), bit(`sB${i}`, 'in')]),
+    ...E3.flatMap((i) => [bus(`dx${i}`, N, 'out'), bus(`dy${i}`, N, 'out'), bus(`off${i}`, N, 'out')]),
+  ], (b) => {
+    const ext = (w: string, s: string, l: string) => b.op1(merger([2, DB, N - DB - 2]), [b.op1(constWord(2, 0), []), w, b.op1(fanout(N - DB - 2), [s])], l);
+    const plus = (w: string, s: string, l: string) => b.op1(POS8, [b.op(splitter([CB, DB - CB]), [w]) + '.o0', s], l);
+    for (const i of E3) {
+      b.wire(ext(`A${i}`, `sA${i}`, `dx${i} = 4·A${i}`), `dx${i}`);
+      b.wire(ext(`B${i}`, `sB${i}`, `dy${i} = 4·B${i}`), `dy${i}`);
+    }
+    b.next();
+    for (const i of E3) {
+      const sum = b.op(rca(CB), [plus(`A${i}`, `sA${i}`, `A${i}⁺`), plus(`B${i}`, `sB${i}`, `B${i}⁺`), b.op1(TIE0, [])], `A${i}⁺ + B${i}⁺`);
+      const s9 = b.op1(merger([CB, 1]), [`${sum}.s`, `${sum}.cout`]);
+      const x8 = b.op1(merger([3, 9]), [b.op1(constWord(3, 0), []), s9], '×8');
+      const x4 = b.op1(merger([2, 9, 1]), [b.op1(constWord(2, 0), []), s9, b.op1(TIE0, [])], '×4');
+      const p12 = b.op(rca(12), [x8, x4, b.op1(TIE0, [])], `off${i} = 12·(A⁺ + B⁺)`);
+      b.wire(b.op1(merger([12, 1, N - 13]), [`${p12}.s`, `${p12}.cout`, b.op1(constWord(N - 13, 0), [])], `off${i}`), `off${i}`);
+    }
+  });
+
+  const BOX = block('rast_setup_box', 'bounding box', 'The triangle\'s box in tiles: min x → (min + 1) >> 4, max x → (max − 2) >> 4 (0 when max < 2), the same for y; three comparators per axis.', [
+    ...vIn, bus('tx0', 4, 'out'), bus('tx1', 4, 'out'), bus('ty0', 4, 'out'), bus('ty1', 4, 'out'),
+  ], (b) => {
+    const box = (c: string[], axis: string): [string, string] => {
+      const [m01, M01] = minMax(b, c[0], c[1], `${axis}0 ${axis}1`);
+      const [mn] = minMax(b, m01, c[2], `min ${axis}`, 'min');
+      const [, mx] = minMax(b, M01, c[2], `max ${axis}`, 'max');
+      const inc = b.op(incrementer(CB), [mn], `min ${axis} + 1`);
+      const t0 = `${b.op(splitter([4, 4]), [`${inc}.y`])}.o1`;
+      const dec = b.op(rca(CB), [mx, b.op1(constWord(CB, 0xfe), []), b.op1(TIE0, [])], `max ${axis} − 2`);
+      const hi = `${b.op(splitter([4, 4]), [`${dec}.s`])}.o1`;
+      const t1 = b.op1(AND4W, [hi, b.op1(fanout(4), [`${dec}.cout`])], `${axis === 'x' ? 'tx1' : 'ty1'}: 0 if max < 2`);
+      return [t0, t1];
+    };
+    const [tx0, tx1] = box(['v0x', 'v1x', 'v2x'], 'x');
+    const [ty0, ty1] = box(['v0y', 'v1y', 'v2y'], 'y');
+    b.wire(tx0, 'tx0'); b.wire(tx1, 'tx1'); b.wire(ty0, 'ty0'); b.wire(ty1, 'ty1');
+  });
+
+  const PRODUCTS = block('rast_setup_products', 'products', 'One 10 × 10 Booth multiplier and an accumulator, a product a cycle for eight cycles: twice the area (its sign culls back faces) and each edge\'s value at the first tile\'s top-left pixel.', [
+    ...vIn, ...E3.flatMap((i) => [bus(`A${i}`, DB, 'in'), bus(`B${i}`, DB, 'in'), bit(`bias${i}`, 'in')]), bus('tx0', 4, 'in'), bus('ty0', 4, 'in'), bus('s', 4, 'in'), bit('clk', 'in', 'bottom', true),
+    bus('e0', N, 'out'), bit('front', 'out'), bus('area', N, 'out'),
+  ], (b) => {
+    const z2 = b.op1(constWord(DB - CB, 0), []);
+    const ss = b.op(splitter([3, 1]), ['s'], 'phase');
+    const s3 = `${ss}.o0`;
+    const sb = b.op(splitter(ones(3)), [s3], 'phase bits');
+    const V = VERTEX_PINS.map((p) => z10(b, p, z2));
+    const one = b.op1(constWord(1, 1), []);
+    b.next();
+    // the first tile's top-left pixel centre: (16·tx0 + 2, 16·ty0 + 2)
+    const c2 = b.op1(constWord(4, 2), []);
+    const ox = z10(b, b.op1(merger([4, 4]), [c2, 'tx0'], 'ox'), z2), oy = z10(b, b.op1(merger([4, 4]), [c2, 'ty0'], 'oy'), z2);
+    // operands by phase (s mod 8): 1 A0·(v2x − v0x), 2 B0·(v2y − v0y), 3/4 edge 0 at the origin, 5/6 edge 1, 7/0 edge 2
+    const mA = b.op1(muxTree(3, DB), ['B2', 'A0', 'B0', 'A0', 'B0', 'A1', 'B1', 'A2', s3], 'A or B of the edge');
+    const mP = b.op1(muxTree(3, DB), [oy, V[4], V[5], ox, oy, ox, oy, ox, s3], 'point');
+    const mV = b.op1(muxTree(3, DB), [V[5], V[0], V[1], V[0], V[1], V[2], V[3], V[4], s3], 'its vertex');
+    b.next();
+    const dlt = b.op(addSub(DB), [mP, mV, one], 'Δ = point − vertex');
+    b.next();
+    const prod = b.op1(boothMul(DB), [mA, `${dlt}.s`], 'product');
+    const p18 = `${b.op(splitter([N, 2 * DB - N]), [prod])}.o0`;
+    // second operand: s odd → −bias of the edge (s = 1: 0), s even → acc
+    const bsel = b.op1(muxTree(2, 1), [b.op1(TIE0, []), 'bias0', 'bias1', 'bias2', b.op1(merger([1, 1]), [`${sb}.o1`, `${sb}.o2`])], 'bias of the edge');
+    b.next();
+    const acc = b.op(register(N), ['', '', 'clk'], 'acc', 'acc');
+    const y2 = b.op1(busMux2(N), [`${acc}.q`, b.op1(fanout(N), [bsel]), `${sb}.o0`], 'acc, or −bias');
+    b.next();
+    const sum = b.op(rca(N), [p18, y2, b.op1(TIE0, [])], 'product + acc');
+    b.name(`${sum}.s`, 'sum', true);
+    b.wire(`${sum}.s`, `${acc}.d`);
+    b.next();
+    // twice the area, written in S2 (s = 2: 0010)
+    const dec = b.op(decoder(4), ['s'], 'phase');
+    const area = b.op(register(N), [`${sum}.s`, `${dec}.y2`, 'clk'], '2 × area', 'area');
+    // acc moves in S1 … S7 only: S8 may last (the depth set-up waits) and edge 2's value must stay put
+    b.wire(b.op1(orN(7), [1, 2, 3, 4, 5, 6, 7].map((i) => `${dec}.y${i}`), 'S1 … S7'), `${acc}.en`);
+    b.next();
+    const sAr = topBit(b, `${area}.q`, N, 'sign of area');
+    const front = b.op1(AND, [b.op1(NOT, [sAr]), b.op1(NOT, [b.op1(isZero(N), [`${area}.q`], 'area = 0')])], 'area > 0: front face');
+    b.wire(`${sum}.s`, 'e0'); b.wire(front, 'front'); b.wire(`${area}.q`, 'area');
+  }, { keepOrder: false }); // its rows by their neighbours: in Builder order two nets met on one line
+
+  // the top level: the set-up's block diagram
   const b = new Builder(14, 12, 4);
   b.pins(...VERTEX_PINS, 's', 'clk');
-  const z2 = b.op1(constWord(DB - CB, 0), []);
-  const ss = b.op(splitter([3, 1]), ['s'], 'phase');
-  const s3 = `${ss}.o0`;
-  const sb = b.op(splitter(ones(3)), [s3], 'phase bits');
-  const V = VERTEX_PINS.map((p) => z10(b, p, z2));   // v0x v0y v1x v1y v2x v2y, 10-bit
+  b.op(EDGES, [...VERTEX_PINS], 'edges', 'edges');
+  b.op(BOX, [...VERTEX_PINS], 'bounding box', 'box');
   b.next();
-  // A_i = v_i.y − v_{i+1}.y, B_i = v_{i+1}.x − v_i.x
-  const one = b.op1(constWord(1, 1), []);
-  const A = E3.map((i) => b.name(`${b.op(addSub(DB), [V[2 * i + 1], V[2 * ((i + 1) % 3) + 1], one], `A${i}`)}.s`, `A${i}`, true));
-  const B = E3.map((i) => b.name(`${b.op(addSub(DB), [V[2 * ((i + 1) % 3)], V[2 * i], one], `B${i}`)}.s`, `B${i}`, true));
+  b.op(STEPS, E3.flatMap((i) => [`edges.A${i}`, `edges.B${i}`, `edges.sA${i}`, `edges.sB${i}`]), 'steps', 'steps');
+  b.op(PRODUCTS, [...VERTEX_PINS, ...E3.flatMap((i) => [`edges.A${i}`, `edges.B${i}`, `edges.bias${i}`]), 'box.tx0', 'box.ty0', 's', 'clk'], 'products', 'products');
   b.next();
-  // top-left: A > 0 (a left edge) or A = 0 and B > 0 (a top edge); bias = 1 otherwise
-  const sgn = (w: string, l: string) => topBit(b, w, DB, l);
-  const sA = E3.map((i) => sgn(A[i], `sign A${i}`)), sB = E3.map((i) => sgn(B[i], `sign B${i}`));
-  const zA = E3.map((i) => b.op1(isZero(DB), [A[i]], `A${i} = 0`)), zB = E3.map((i) => b.op1(isZero(DB), [B[i]], `B${i} = 0`));
-  b.next();
-  const pos = (s: string, z: string, l: string) => b.op1(AND, [b.op1(NOT, [s]), b.op1(NOT, [z])], l);
-  const bias = E3.map((i) => {
-    const left = pos(sA[i], zA[i], `A${i} > 0`), top = b.op1(AND, [zA[i], pos(sB[i], zB[i], `B${i} > 0`)], `edge ${i} top`);
-    return b.name(b.op1(NOT, [b.op1(OR, [left, top])], `bias ${i}`), `bias${i}`, true);
-  });
-  b.next();
-  // steps (sign-extended, ×4) and the tile offset 12·(A⁺ + B⁺) (A⁺: A when A > 0, else 0)
-  const ext = (w: string, s: string, l: string) => b.op1(merger([2, DB, N - DB - 2]), [b.op1(constWord(2, 0), []), w, b.op1(fanout(N - DB - 2), [s])], l);
-  const dx = E3.map((i) => ext(A[i], sA[i], `dx${i} = 4·A${i}`));
-  const dy = E3.map((i) => ext(B[i], sB[i], `dy${i} = 4·B${i}`));
-  const plus = (w: string, s: string, l: string) => b.op1(POS8, [b.op(splitter([CB, DB - CB]), [w]) + '.o0', s], l);
-  const off = E3.map((i) => {
-    const sum = b.op(rca(CB), [plus(A[i], sA[i], `A${i}⁺`), plus(B[i], sB[i], `B${i}⁺`), b.op1(TIE0, [])], `A${i}⁺ + B${i}⁺`);
-    const s9 = b.op1(merger([CB, 1]), [`${sum}.s`, `${sum}.cout`]);
-    const x8 = b.op1(merger([3, 9]), [b.op1(constWord(3, 0), []), s9], '×8');
-    const x4 = b.op1(merger([2, 9, 1]), [b.op1(constWord(2, 0), []), s9, b.op1(TIE0, [])], '×4');
-    const p12 = b.op(rca(12), [x8, x4, b.op1(TIE0, [])], `off${i} = 12·(A⁺ + B⁺)`);
-    return b.op1(merger([12, 1, N - 13]), [`${p12}.s`, `${p12}.cout`, b.op1(constWord(N - 13, 0), [])], `off${i}`);
-  });
-  b.next();
-  // bounding box in tiles: min x → (min + 1) >> 4; max x → (max − 2) >> 4, 0 when max < 2
-  const box = (c: string[], axis: string): [string, string] => {
-    const [m01, M01] = minMax(b, c[0], c[1], `${axis}0 ${axis}1`);
-    const [mn] = minMax(b, m01, c[2], `min ${axis}`, 'min');
-    const [, mx] = minMax(b, M01, c[2], `max ${axis}`, 'max');
-    const inc = b.op(incrementer(CB), [mn], `min ${axis} + 1`);
-    const t0 = `${b.op(splitter([4, 4]), [`${inc}.y`])}.o1`;
-    const dec = b.op(rca(CB), [mx, b.op1(constWord(CB, 0xfe), []), b.op1(TIE0, [])], `max ${axis} − 2`);
-    const hi = `${b.op(splitter([4, 4]), [`${dec}.s`])}.o1`;
-    const t1 = b.op1(AND4W, [hi, b.op1(fanout(4), [`${dec}.cout`])], `${axis === 'x' ? 'tx1' : 'ty1'}: 0 if max < 2`);
-    return [t0, t1];
-  };
-  const [tx0, tx1] = box(['v0x', 'v1x', 'v2x'], 'x');
-  const [ty0, ty1] = box(['v0y', 'v1y', 'v2y'], 'y');
-  b.next();
-  // the first tile's top-left pixel centre: (16·tx0 + 2, 16·ty0 + 2)
-  const c2 = b.op1(constWord(4, 2), []);
-  const ox = z10(b, b.op1(merger([4, 4]), [c2, tx0], 'ox'), z2), oy = z10(b, b.op1(merger([4, 4]), [c2, ty0], 'oy'), z2);
-  // operands by phase (s mod 8): 1 A0·(v2x − v0x), 2 B0·(v2y − v0y), 3/4 edge 0 at the origin, 5/6 edge 1, 7/0 edge 2
-  const mA = b.op1(muxTree(3, DB), [B[2], A[0], B[0], A[0], B[0], A[1], B[1], A[2], s3], 'A or B of the edge');
-  const mP = b.op1(muxTree(3, DB), [oy, V[4], V[5], ox, oy, ox, oy, ox, s3], 'point');
-  const mV = b.op1(muxTree(3, DB), [V[5], V[0], V[1], V[0], V[1], V[2], V[3], V[4], s3], 'its vertex');
-  b.next();
-  const dlt = b.op(addSub(DB), [mP, mV, one], 'Δ = point − vertex');
-  b.next();
-  const prod = b.op1(boothMul(DB), [mA, `${dlt}.s`], 'product');
-  const p18 = `${b.op(splitter([N, 2 * DB - N]), [prod])}.o0`;
-  // second operand: s odd → −bias of the edge (s = 1: 0), s even → acc
-  const bsel = b.op1(muxTree(2, 1), [b.op1(TIE0, []), bias[0], bias[1], bias[2], b.op1(merger([1, 1]), [`${sb}.o1`, `${sb}.o2`])], 'bias of the edge');
-  b.next();
-  const acc = b.op(register(N), ['', '', 'clk'], 'acc', 'acc');
-  const y2 = b.op1(busMux2(N), [`${acc}.q`, b.op1(fanout(N), [bsel]), `${sb}.o0`], 'acc, or −bias');
-  b.next();
-  const sum = b.op(rca(N), [p18, y2, b.op1(TIE0, [])], 'product + acc');
-  b.name(`${sum}.s`, 'sum', true);
-  b.wire(`${sum}.s`, `${acc}.d`);
-  b.next();
-  // twice the area, written in S2 (s = 2: 0010)
-  const dec = b.op(decoder(4), ['s'], 'phase');
-  const area = b.op(register(N), [`${sum}.s`, `${dec}.y2`, 'clk'], '2 × area', 'area');
-  // acc moves in S1 … S7 only: S8 may last (the depth set-up waits) and edge 2's value must stay put; idle and during
-  // the walk nothing downstream switches
-  b.wire(b.op1(orN(7), [1, 2, 3, 4, 5, 6, 7].map((i) => `${dec}.y${i}`), 'S1 … S7'), `${acc}.en`);
-  b.next();
-  const sAr = topBit(b, `${area}.q`, N, 'sign of area');
-  const front = b.op1(AND, [b.op1(NOT, [sAr]), b.op1(NOT, [b.op1(isZero(N), [`${area}.q`], 'area = 0')])], 'area > 0: front face');
-  b.next();
-  for (const i of E3) { b.wire(dx[i], `dx${i}`); b.wire(dy[i], `dy${i}`); b.wire(off[i], `off${i}`); }
-  b.wire(`${sum}.s`, 'e0');
-  b.wire(front, 'front');
-  b.wire(`${area}.q`, 'area');
-  b.wire(tx0, 'tx0'); b.wire(tx1, 'tx1'); b.wire(ty0, 'ty0'); b.wire(ty1, 'ty1');
-  const R = b.right;
-  const outs = [...E3.flatMap((i) => [`dx${i}`, `dy${i}`, `off${i}`]), 'e0', 'front', 'area', 'tx0', 'tx1', 'ty0', 'ty1'];
+  for (const i of E3) { b.wire(`steps.dx${i}`, `dx${i}`); b.wire(`steps.dy${i}`, `dy${i}`); b.wire(`steps.off${i}`, `off${i}`); }
+  b.wire('products.e0', 'e0'); b.wire('products.front', 'front'); b.wire('products.area', 'area');
+  for (const o of ['tx0', 'tx1', 'ty0', 'ty1']) b.wire(`box.${o}`, o);
   return define({
     id: 'rast_setup', name: 'Triangle set-up', category: 'arithmetic',
     summary: 'Everything the walk needs, from the three vertices: per edge A and B (subtractors), the top-left bias, the steps 4A and 4B (wiring), '
@@ -301,7 +339,7 @@ export const RAST_SETUP: ComponentDef = (() => {
       ...E3.flatMap((i) => [bus(`dx${i}`, N, 'out'), bus(`dy${i}`, N, 'out'), bus(`off${i}`, N, 'out')]), bus('e0', N, 'out'), bit('front', 'out'), bus('area', N, 'out'),
       bus('tx0', 4, 'out'), bus('tx1', 4, 'out'), bus('ty0', 4, 'out'), bus('ty1', 4, 'out')],
     symbol: { kind: 'box', label: 'SET-UP' },
-    netlist: () => ({ pins: { ...pinsAt([...VERTEX_PINS, 's', 'clk'], 0, 6), ...pinsAt(outs, R, 4) }, instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { room: true }),
   });
 })();
 
