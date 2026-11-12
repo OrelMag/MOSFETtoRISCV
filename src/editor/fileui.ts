@@ -205,11 +205,16 @@ async function importFiles(ed: Editor, fs: File[]): Promise<void> {
   for (const imp of importers) {
     if (!imp.runMany) continue;
     const mine = read.filter((r) => imp.takes(r.name, r.text));
-    if (mine.length) return imp.runMany(ed, mine);
+    if (mine.length) return failSoft(ed, mine.map((m) => m.name).join(', '), () => imp.runMany!(ed, mine));
   }
   const f = fs.find((x) => importable(x.name) || x.type === 'application/json') ?? fs[0];
   ed.toast(`One file at a time: importing ${f.name}`);
   return importFile(ed, f);
+}
+
+/** A reader that throws on a malformed file says so in a toast instead of failing without a word. */
+function failSoft(ed: Editor, name: string, run: () => void): void {
+  try { run(); } catch (e) { ed.toast(`${name}: could not be read (${e instanceof Error ? e.message : String(e)})`, 'err'); }
 }
 
 async function importFile(ed: Editor, f: File): Promise<void> {
@@ -221,7 +226,7 @@ async function importFile(ed: Editor, f: File): Promise<void> {
     return void ed.toast(`${f.name}: could not be read`, 'err');
   }
   const other = importers.find((i) => i.takes(f.name, text));
-  if (other) return other.run(ed, f.name, text);
+  if (other) return failSoft(ed, f.name, () => other.run(ed, f.name, text));
   const r = importJson(text, ed.ws);
   if ('error' in r) return void ed.toast(`${f.name}: ${r.error}`, 'err');
   if (r.added.length) ed.editWs(() => r.ws);
