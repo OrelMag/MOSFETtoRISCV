@@ -10,7 +10,7 @@ const P: CrtPalette = { glass: c(0.8), aquadag: c(0.2), copper: c(0.7), ferrite:
 const pose = (o: Partial<WilliamsPose> = {}): WilliamsPose => ({ beam: null, bit: (i) => i & 1, glow: () => 0, plate: 0, ...o });
 
 describe('the Williams tube geometry', () => {
-  it('quotes its figures: the CV1131 12-inch face (300 mm), 32 x 32 spots, a raster inside the glass', () => {
+  it('quotes its figures: the CV1131 face drawn 12-inch (300 mm) after Lavington (Computer50 says 6), 32 x 32 spots, a raster inside the glass', () => {
     expect(WGEOM.FACE_D).toBe(300);
     expect(DIGITS * LINES).toBe(1024);
     expect(Math.hypot(...spotYZ(0, 0))).toBeLessThan(WGEOM.FACE_R);
