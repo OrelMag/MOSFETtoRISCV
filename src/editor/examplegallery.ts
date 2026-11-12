@@ -3,7 +3,7 @@
 // (editor/examplethumb.ts → examples/<id>.svg; a missing file leaves the placeholder), a search box over name and blurb, arrow keys
 // between the cards. A card loads the example as a new chip, as the menu did.
 import '../styles/examplegallery.css';
-import { h, icon, rememberFocus, undoKey } from '../ui/dom';
+import { coarsePointer, h, icon, rememberFocus, undoKey } from '../ui/dom';
 import type { Editor } from './editor';
 import { filterExamples } from './examplefilter';
 import { addExample, EXAMPLES, type Example } from './examples';
@@ -97,5 +97,5 @@ export function openExamplesGallery(ed: Editor): void {
   closeGallery = close;
   ed.claimMenu(close);
   ed.el.append(ov);
-  search.focus();
+  if (!coarsePointer()) search.focus(); // a phone's keyboard would cover the list at once
 }
