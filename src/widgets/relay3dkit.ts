@@ -39,9 +39,10 @@ export function bladeLine(q: Pick<RelaySample, 'x' | 'y'>): Vec3[] {
     const h = x1 - x0, f2 = f * f, f3 = f2 * f;
     return (2 * f3 - 3 * f2 + 1) * y0 + (f3 - 2 * f2 + f) * h * s0 + (-2 * f3 + 3 * f2) * y1 + (f3 - f2) * h * s1;
   };
-  const half = (BLADE_N - 3) / 2;
-  for (let i = 1; i <= half; i++) { const f = i / half; out.push([XR + (XC - XR) * f, herm(XR, YB, m0, XC, yc, m1, f), 0]); }
-  for (let i = 1; i < BLADE_N - 3 - half + 1; i++) { const f = i / (BLADE_N - 3 - half); out.push([XC + (XT - XC) * f, herm(XC, yc, m1, XT, yt, m2, f), 0]); }
+  // the remaining points split between the two pieces, each ending exactly on its knot (the contact, the tip)
+  const first = Math.floor((BLADE_N - 3) / 2), second = BLADE_N - 3 - first;
+  for (let i = 1; i <= first; i++) { const f = i / first; out.push([XR + (XC - XR) * f, herm(XR, YB, m0, XC, yc, m1, f), 0]); }
+  for (let i = 1; i <= second; i++) { const f = i / second; out.push([XC + (XT - XC) * f, herm(XC, yc, m1, XT, yt, m2, f), 0]); }
   return out;
 }
 

@@ -27,6 +27,8 @@ export function refresh(g: Geo, next: Geo): Geo {
   if (next.positions.length !== g.positions.length || next.indices.length !== g.indices.length) throw new Error(`refresh: ${g.name} changed size`);
   g.positions.set(next.positions); g.normals.set(next.normals);
   if (next.colors && g.colors) g.colors.set(next.colors);
+  // the bounds follow (framing, picking and the shadow's fit read them)
+  for (let a = 0; a < 3; a++) { (g.min as number[])[a] = next.min[a]; (g.max as number[])[a] = next.max[a]; }
   g.rev = (g.rev ?? 0) + 1;
   return g;
 }
