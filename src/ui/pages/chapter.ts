@@ -269,13 +269,14 @@ export class ChapterPage implements Page {
         class: [i === this.step ? 'cur' : visited.includes(i) ? 'done' : '', solved ? 'solved' : ''].filter(Boolean).join(' '),
         title: `Step ${i + 1}: ${s.title}${s.challenge ? (solved ? ' (check solved)' : ' (has a check)') : ''}`,
         'aria-label': `Step ${i + 1}: ${s.title}${solved ? ', check solved' : ''}`,
+        'aria-current': i === this.step ? 'step' : undefined,
         onclick: () => this.goStep(i),
       });
     });
     for (const t of c.soon ?? []) dots.push(h('span', { class: 'soon', role: 'img', title: `Coming: ${t}`, 'aria-label': `Coming later: ${t}` }));
     if (this.recap >= 0) {
       dots.push(h('button', {
-        class: `recap${this.step === this.recap ? ' cur' : ''}`, title: 'Recap', 'aria-label': 'Recap', onclick: () => this.goStep(this.recap),
+        class: `recap${this.step === this.recap ? ' cur' : ''}`, title: 'Recap', 'aria-label': 'Recap', 'aria-current': this.step === this.recap ? 'step' : undefined, onclick: () => this.goStep(this.recap),
       }));
     }
     const { done, total } = checksDone(c, (k) => settings.isSolved(k));
@@ -289,7 +290,7 @@ export class ChapterPage implements Page {
         onclick: (e: Event) => toggleChapterMenu(e.currentTarget as HTMLElement),
       }, h('span', null, c.title), icon('chevD', 18))),
       parts ?? h('div', { class: 'steps-row' },
-        h('div', { class: 'steps-dots', role: 'tablist' }, dots),
+        h('nav', { class: 'steps-dots', 'aria-label': 'Steps' }, dots),
         total ? h('span', { class: 'checks-count', title: 'Questions and challenges solved in this chapter' }, `${done} / ${total} checks`) : null),
       this.tools,
     );

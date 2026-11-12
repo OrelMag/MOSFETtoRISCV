@@ -227,7 +227,7 @@ export class SchematicView {
   private tooltip: HTMLDivElement;
 
   constructor(private host: HTMLElement, private events: SchematicEvents) {
-    this.el = s('svg', { class: 'schematic', role: 'img' });
+    this.el = s('svg', { class: 'schematic', role: 'img', 'aria-label': 'Circuit' });
     this.tooltip = document.createElement('div');
     this.tooltip.className = 'wire-tip';
     host.append(this.el, this.tooltip);
@@ -324,6 +324,8 @@ export class SchematicView {
     this.netMarks = new Map();
     this.closeMenu();
     if (!keepView) { this.group = new Set(); this.ov = null; this.original = false; }
+    // the figure's accessible name (role=img with none is read as just "image")
+    this.el.setAttribute('aria-label', `Circuit: ${ctx.def.name}`);
     const authored = netlistOf(ctx.def);
     // a level the build routed (routecache.ts): its drawing and wires seeded, so drawnNetlist and the route below are lookups
     const hit = authored ? cachedLevel(ctx.def, authored) : null;

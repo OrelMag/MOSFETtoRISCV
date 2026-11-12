@@ -1921,7 +1921,7 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .fields { display: flex; margin: 10px 0; font: 12px var(--font-mono); border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
 .fields > div { flex: var(--w); text-align: center; padding: 6px 2px; border-right: 1px solid var(--border); min-width: 0; }
 .fields > div:last-child { border-right: 0; }
-.fields .fname { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fields .fname { font-size: 10.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fields .fbits { font-weight: 700; letter-spacing: 0.04em; word-break: break-all; }
 .fields .fval { font-size: 11px; color: var(--text-2); }
 .fields > div[class^='f-'] { background: color-mix(in srgb, var(--fc) 14%, var(--surface)); }

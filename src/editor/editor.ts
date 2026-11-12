@@ -279,7 +279,7 @@ export class Editor {
     });
     this.props = new PropsPanel(this);
 
-    this.tabs = h('div', { class: 'sb-tabs', role: 'tablist' });
+    this.tabs = h('div', { class: 'sb-tabs', role: 'group', 'aria-label': 'Open chips' });
     this.actionsEl = h('div', { class: 'sb-actions' });
     this.moreBtn = h('button', { class: 'btn ghost sm sb-more', title: 'More tools', 'aria-label': 'More tools', 'aria-haspopup': 'menu', 'aria-expanded': 'false', hidden: true,
       onclick: () => this.toggleMore() }, icon('more', 16), h('span', null, 'More')) as HTMLButtonElement;
@@ -831,8 +831,8 @@ export class Editor {
       const c = ws.chips[id];
       if (!c) continue;
       const on = id === this.chipId;
-      const tab = h('div', { class: `sb-tab${on ? ' on' : ''}`, role: 'tab', 'aria-selected': String(on), title: c.name, 'data-chip': id },
-        h('button', { class: 'sb-tab-name', title: c.name, onclick: () => this.openChip(id) }, icon('chip', 13), h('span', { class: 'sb-tab-label' }, c.name), c.hdl ? h('span', { class: 'sb-tab-hdl', title: 'Drawn from Verilog' }, '.v') : null));
+      const tab = h('div', { class: `sb-tab${on ? ' on' : ''}`, title: c.name, 'data-chip': id },
+        h('button', { class: 'sb-tab-name', title: c.name, 'aria-current': on ? 'page' : undefined, onclick: () => this.openChip(id) }, icon('chip', 13), h('span', { class: 'sb-tab-label' }, c.name), c.hdl ? h('span', { class: 'sb-tab-hdl', title: 'Drawn from Verilog' }, '.v') : null));
       if (shown.length > 1 && id !== this.level?.chipId) tab.append(h('button', { class: 'sb-tab-x', title: `Close ${c.name}`, 'aria-label': `Close ${c.name}`, onclick: () => this.closeTab(id) }, icon('close', 12)));
       this.tabs.append(tab);
     }

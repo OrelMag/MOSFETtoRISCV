@@ -229,7 +229,40 @@ export function mapSvg(view: ProgressView, unlockAll: boolean, selected: string 
   }
   trace(undefined);
   fitTitles(svg);
+  roveCards(svg, selected);
   return svg;
+}
+
+/**
+ * The level cards are one Tab stop (a roving tabindex): the selected card, else the first one open, else the first; the arrow keys
+ * move to the nearest card that way. Each card a Tab stop of its own made the map about a hundred presses to get past.
+ */
+function roveCards(svg: SVGSVGElement, selected: string | undefined): void {
+  const cards = [...svg.querySelectorAll<SVGGElement>('.cp-node')];
+  if (!cards.length) return;
+  const rove = (to: Element) => { for (const c of cards) c.setAttribute('tabindex', c === to ? '0' : '-1'); };
+  rove(cards.find((c) => c.dataset.node === selected) ?? cards.find((c) => c.matches('.available, .started')) ?? cards[0]);
+  svg.addEventListener('focusin', (e) => {
+    const c = (e.target as Element).closest?.('.cp-node');
+    if (c) rove(c);
+  });
+  const DIRS: Record<string, [number, number]> = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] };
+  svg.addEventListener('keydown', (e) => {
+    const d = DIRS[e.key], from = (e.target as Element).closest?.('.cp-node');
+    if (!d || !from || e.altKey || e.ctrlKey || e.metaKey) return;
+    const mid = (el: Element) => { const r = el.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; };
+    const [x0, y0] = mid(from);
+    let best: SVGGElement | null = null, bestScore = Infinity;
+    for (const c of cards) {
+      if (c === from) continue;
+      const [x, y] = mid(c), along = (x - x0) * d[0] + (y - y0) * d[1], across = Math.abs((x - x0) * d[1] + (y - y0) * d[0]);
+      if (along <= 4) continue;
+      const score = along + 2 * across;
+      if (score < bestScore) { bestScore = score; best = c; }
+    }
+    e.preventDefault();
+    if (best) { best.focus(); best.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+  });
 }
 
 /**
