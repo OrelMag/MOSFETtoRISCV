@@ -70,8 +70,9 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   const chips = h('div', { class: 'r3-chips' });
   const stats = h('div', { class: 'st-stats' });
   stats.style.display = /stats/.test(location.hash + location.search) ? '' : 'none';
-  const view = h('div', { class: 'st-view r3-stage' }, canvas, flat, leaders, badges, card, chips, stats);
-  const stage = h('div', { class: 'st-stage' }, gutL, view, gutR);
+  // the gutters lie over the canvas's side bands: the canvas takes the column's width and the model is fitted between them
+  const view = h('div', { class: 'st-view r3-stage' }, canvas, flat, gutL, gutR, leaders, badges, card, chips, stats);
+  const stage = h('div', { class: 'st-stage' }, view);
   const list = h('ol', { class: 'st-list' });
 
   const exIn = h('input', { type: 'range', min: 0, max: 1, step: 0.01, value: 0, 'aria-label': 'Exploded view' }) as HTMLInputElement;
@@ -100,28 +101,39 @@ export function studioStage(o: StudioStageOptions): StudioStage {
 
   // ---------------------------------------------------------------- framing
 
-  /** The canvas's aspect from the model as seen from home; the home view fitted to the model at that aspect. */
-  let aspect = 4 / 3;
+  /** The model's aspect as seen from home. The canvas is sized from it in one rule for both label forms: the content (the
+   *  part the model is fitted to) is the column less two gutters (none with badges), as tall as the model's aspect asks but
+   *  at least MIN_CANVAS_H and at most most of the screen's height (a tall model then narrows, centred); the canvas is
+   *  that content plus the gutters, which lie over its side bands. A long, low model so fills the column; a tall one
+   *  keeps its portrait. */
+  let aspect = 4 / 3, gutNow = 0, shownSize = '';
   const shape = () => {
     const box = boundsOf(model);
     aspect = Math.max(ASPECT_MIN, Math.min(ASPECT_MAX, aspectOf(box, o.home.yaw, o.home.pitch) * 1.15));
-    fitAspect(el.clientWidth);
+    layout();
   };
-  /** The canvas's aspect for the width it has: the model's, but never so wide that the canvas falls under
-   *  MIN_CANVAS_H tall (a long, low model on a phone gets room above and below instead of a strip). */
-  let shownAspect = '';
-  const fitAspect = (avail: number) => {
-    const key = (avail > 0 ? Math.max(ASPECT_MIN, Math.min(aspect, avail / MIN_CANVAS_H)) : aspect).toFixed(3);
-    if (key === shownAspect) return;
-    shownAspect = key;
-    view.style.aspectRatio = key;
-    // a tall model's canvas is held to most of the screen's height: its width follows, centred
-    view.style.maxWidth = `calc(min(78vh, 760px) * ${key})`;
+  const isNarrow = () => el.clientWidth - 2 * gutterW < MIN_CANVAS || rows.length === 0;
+  const layout = () => {
+    const C = el.clientWidth;
+    if (!C) return;
+    const narrow = isNarrow(), g = narrow ? 0 : gutterW, maxH = Math.max(MIN_CANVAS_H, Math.min(window.innerHeight * 0.78, 760));
+    let wc = C - 2 * g, hh = Math.max(MIN_CANVAS_H, wc / aspect);
+    if (hh > maxH) { hh = maxH; wc = Math.min(wc, hh * aspect); }
+    const W = Math.round(wc + 2 * g), H = Math.round(hh), key = `${W}x${H}x${g}`;
+    gutNow = g;
+    if (el.classList.contains('narrow') !== narrow) el.classList.toggle('narrow', narrow);
+    if (key === shownSize) return;
+    shownSize = key;
+    view.style.setProperty('--st-gw', `${g}px`);
+    view.style.aspectRatio = (W / H).toFixed(4);
+    view.style.maxWidth = `${W}px`;
+    st?.invalidate();
   };
+  /** The width over height of the part of the canvas the model is fitted to (between the gutters). */
+  const contentAspect = () => Math.max(0.2, ((canvas.clientWidth || 4) - 2 * gutNow) / (canvas.clientHeight || 3));
   const homeView = (): OrbitView => {
     if (o.fit === false || !st) return o.home;
-    const w = canvas.clientWidth || 4, hh = canvas.clientHeight || 3;
-    const f = fitView(boundsOf(model), o.home.yaw, o.home.pitch, st.camera.fov, w / hh, 0.06);
+    const f = fitView(boundsOf(model), o.home.yaw, o.home.pitch, st.camera.fov, contentAspect(), 0.06);
     return { yaw: o.home.yaw, pitch: o.home.pitch, target: f.target, dist: f.dist };
   };
   let fitFor = '';
@@ -169,10 +181,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     if (mode !== 'gl' || !st) return;
     makeLabels();
     refit();
-    const W = canvas.clientWidth, H = canvas.clientHeight, cam = st.camera, eye = cam.eye(), under = cam.pitch < -0.25, cw = el.clientWidth - 2 * gutterW, narrow = cw < MIN_CANVAS || rows.length === 0;
-    if (el.classList.contains('narrow') !== narrow) { el.classList.toggle('narrow', narrow); requestAnimationFrame(() => st?.invalidate()); }
-    stage.style.gridTemplateColumns = narrow ? '' : `${gutterW}px minmax(0, 1fr) ${gutterW}px`;
-    fitAspect(narrow ? el.clientWidth : cw);
+    layout();
+    const W = canvas.clientWidth, H = canvas.clientHeight, cam = st.camera, eye = cam.eye(), under = cam.pitch < -0.25, narrow = gutNow === 0, g = gutNow;
     const k = st.knobs().explode;
     const seen: { r: typeof rows[number]; x: number; y: number; away: boolean }[] = [];
     for (const r of rows) {
@@ -185,7 +195,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
       seen.push({ r, x: p![0], y: p![1], away: dot3(r.a.n, sub3(eye, p3)) < 0 });
     }
     // Each label on the side its anchor is nearer, stacked in the order of their heights. Wide: the names in the gutters
-    // outside the canvas; narrow: numbered badges just inside its edges (the names are in the list below).
+    // over the canvas's side bands; narrow: numbered badges just inside its edges (the names are in the list below).
     const lines: SVGElement[] = [];
     for (const side of ['l', 'r'] as const) {
       const col = seen.filter((q) => (q.x < W / 2) === (side === 'l')).sort((a, b) => a.y - b.y);
@@ -206,8 +216,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
           q.r.el.style.display = '';
           q.r.el.style.transform = `translateY(${(y - 9).toFixed(1)}px)`;
           q.r.el.classList.toggle('away', q.away);
-          gx = side === 'l' ? -6 : W + 6;
-          elbow = side === 'l' ? 10 : W - 10;
+          gx = side === 'l' ? g - 2 : W - g + 2;
+          elbow = side === 'l' ? g + 8 : W - g - 8;
         }
         lines.push(s('polyline', { points: `${gx},${y} ${elbow},${y} ${q.x},${q.y}`, class: q.away ? 'away' : '' }));
         lines.push(s('circle', { cx: q.x, cy: q.y, r: 2.6, class: q.away ? 'away' : '' }));
@@ -282,7 +292,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     // the beat's subject framed from its direction, at the knobs it ends on
     let dest: OrbitView = b.view;
     if (b.frame && st) {
-      const f = fitView(boundsOfNamed(model, b.frame, to.explode), b.view.yaw, b.view.pitch, st.camera.fov, (canvas.clientWidth || 4) / (canvas.clientHeight || 3), 0.12);
+      const f = fitView(boundsOfNamed(model, b.frame, to.explode), b.view.yaw, b.view.pitch, st.camera.fov, contentAspect(), 0.12);
       dest = { yaw: b.view.yaw, pitch: b.view.pitch, target: f.target, dist: f.dist };
     }
     const from = { ...knobs(), cam: st ? { target: [...st.camera.target] as Vec3, yaw: st.camera.yaw, pitch: st.camera.pitch, dist: st.camera.dist } : null };
@@ -371,6 +381,9 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     st?.setKnobs(knobs());
   };
   const unwatch = watchTheme(() => { colors.invalidate(); lights(); refresh(); });
+  // a column that changes width (a window resize, a drawer) re-lays the canvas out; the render that follows refits home
+  const ro = new ResizeObserver(() => { layout(); st?.invalidate(); });
+  ro.observe(el);
 
   const forceFlat = /flat3d/.test(location.hash + location.search);
   shape();
@@ -402,6 +415,6 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     studio: () => st,
     isFlat: () => mode === 'flat',
     rgb: (t) => colors.rgb(t),
-    destroy() { dead = true; cancelAnimationFrame(tween); cancelAnimationFrame(hoverRaf); frame.destroy(); unwatch(); st?.destroy(); st = null; colors.destroy(); },
+    destroy() { dead = true; cancelAnimationFrame(tween); cancelAnimationFrame(hoverRaf); ro.disconnect(); frame.destroy(); unwatch(); st?.destroy(); st = null; colors.destroy(); },
   };
 }

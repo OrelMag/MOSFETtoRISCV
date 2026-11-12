@@ -16,17 +16,21 @@
    rather than pushing its readout out, and a readout is as wide as its text, never clipped under the next control */
 .st-slot .r3-sl span, .st-bar .r3-sl span { flex: 0 1 auto; }
 .st-slot .r3-sl output { width: auto; min-width: 58px; white-space: nowrap; }
-.st-stage { position: relative; display: grid; grid-template-columns: 112px minmax(0, 1fr) 112px; }
+.st-stage { position: relative; }
 .st-view.r3-stage {
   position: relative; aspect-ratio: 4 / 3; max-height: none; width: 100%; margin: 0 auto; overflow: hidden;
   border-radius: var(--radius-sm); border: 1px solid var(--border);
   background: radial-gradient(120% 90% at 50% 38%, var(--st-back-1), var(--st-back-2));
 }
-.st-gutter { position: relative; min-width: 0; }
+/* the gutters lie over the canvas's side bands (--st-gw wide); the model is fitted between them */
+.st-gutter { position: absolute; top: 0; bottom: 0; width: var(--st-gw, 0px); z-index: 2; pointer-events: none; }
+.st-gutter.l { left: 0; }
+.st-gutter.r { right: 0; }
 .st-gutter.l { text-align: right; }
 .st-lbl {
   position: absolute; left: 0; right: 0; top: 0; padding: 0 8px; font: 600 12.5px/18px var(--font-ui); color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: transform 120ms ease-out;
+  text-shadow: 0 0 3px var(--st-back-1), 0 0 3px var(--st-back-1);
 }
 .st-lbl.away { color: var(--text-2); font-weight: 500; }
 .st-leaders { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; z-index: 1; }
@@ -45,7 +49,6 @@
 .st.narrow .st-list { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .st-list li { flex: 0 0 auto; }
 .st-list li.off { opacity: 0.45; }
-.st.narrow .st-stage { grid-template-columns: minmax(0, 1fr); }
 .st.narrow .st-gutter { display: none; }
 .st-card {
   position: absolute; left: 0; top: 0; z-index: 3; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px;
