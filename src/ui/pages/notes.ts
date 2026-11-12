@@ -46,7 +46,7 @@ export class NotesPage implements Page {
     search.addEventListener('input', () => { this.query = search.value.trim().toLowerCase(); this.renderList(); });
     this.el = h('div', { class: 'np-page' },
       h('section', { class: 'np-left', 'aria-label': 'Notes and bookmarks' },
-        h('h1', null, 'My notes'),
+        h('h1', null, 'My notes and review'),
         h('div', { class: 'np-bar' }, this.chips, search),
         this.list),
       this.review);
