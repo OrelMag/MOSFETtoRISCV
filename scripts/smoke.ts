@@ -1005,6 +1005,20 @@ const lensMarksDrive = (part: string, line: string, inner: string[], first: 'sel
 })()`;
 
 /**
+ * Drives run one after another, each after `n` clicks on the stage's Pulse (a clock cycle each): the pipeline's CPU marks
+ * per stage (insthw stageUse) need the instruction moved into the stage first. Their failures add up.
+ */
+const pulsed = (...runs: [n: number, drive: string][]) => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const pulse = () => [...document.querySelectorAll('.stage button')].find((b) => b.textContent.trim() === 'Pulse');
+  ${runs.map(([n, drive]) => `if (!pulse()) return [...bad, 'no Pulse button'];
+  for (let i = 0; i < ${n}; i++) { pulse().click(); await wait(300); }
+  bad.push(...(await ${drive}).map((m) => 'after ${n} more pulse(s): ' + m));`).join('\n  ')}
+  return bad;
+})()`;
+
+/**
  * Open blocks as you zoom on a touch screen (DESIGN.md item 6, Revision 3): pinches spreading over `part` (two touch
  * pointers) open its inside in its outline once past its opening zoom, as the wheel does; the stage bar keeps its height;
  * a tap on an inner part under 40 px steps into `part` (#/…/<part>). `off`: the setting left at its default (null), and a
@@ -1283,6 +1297,9 @@ function routes(): Route[] {
   // the box's outline glows
   add('#/c/cpu/0', lensOn('light'), ' (zoom lens, CPU marks inside)', undefined, lensMarksDrive('alu', 'add', ['add', 'mux'], 'open'));
   add('#/c/cpu/0', lensOn('dark'), ' (zoom lens, CPU marks, outline, dark)', undefined, lensMarksDrive('res', 'add', [], 'select'));
+  // the pipeline splits the marks by stage: the first li in D reads x0 through rp1, three cycles on in W writes a0 (w10)
+  add('#/c/pipeline/1', lensOn('light'), ' (zoom lens, CPU marks by stage, pipeline)', undefined,
+    pulsed([1, lensMarksDrive('rf', 'li', ['rp1', 'x0'], 'open')], [3, lensMarksDrive('rf', 'li', ['dec', 'w10'], 'open')]));
   // the lens honed (Revision 3): the single-cycle CPU's pc, register file and alu in both themes and on the light canvas
   // (board off); the pipeline register FD (the author's bug); the out-of-order core
   for (const theme of ['light', 'dark'] as const) for (const part of ['pc', 'rf', 'alu']) add('#/c/cpu/0', lensOn(theme), ` (lens hone, ${part}, ${theme})`, undefined, honeDrive(part));
