@@ -109,7 +109,7 @@ export const chBench: Chapter = {
     {
       title: 'Reading a console',
       body: `
-        <p>A <a href="#/c/uart/0">UART</a> gives itself away differently. Each character starts on a falling edge, which resets the receiver's timing, and it then samples on its own clock. A clock error therefore builds across the character: the first bits are right, and the samples at the end go first. Whether a data bit reads wrong depends on the data, since a sample that lands in a neighbouring bit is only an error if that bit differs. So some bytes read right and some do not, usually with framing errors around them.</p>
+        <p>A <a href="#/c/uart/0">UART</a> gives itself away differently. Each character starts on a falling edge, which resets the receiver's timing, and it then samples on its own clock. A clock error therefore builds across the character: the first bits are right, and the samples at the end go wrong first. Whether a data bit reads wrong depends on the data, since a sample that lands in a neighbouring bit is only an error if that bit differs. So some bytes read right and some do not, usually with framing errors around them.</p>
         <p>That is why a clock error looks odd: some characters come through with the right value. Noise would hit bits at random and spare no character on principle.</p>
         <div class="try">Find which characters survive. Compare the bits of one that did with one that did not: what do the survivors have in common?</div>`,
       widget: benchWidget(['uart_clock'], ['The console']),

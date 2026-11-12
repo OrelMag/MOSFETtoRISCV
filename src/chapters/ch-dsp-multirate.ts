@@ -63,7 +63,7 @@ export const chMultirate: Chapter = {
       get body() {
         const r = cascade();
         return `
-        <p>Chapters ${numOf('firdesign')} and ${numOf('iir')} priced a filter at one fixed rate. This one changes the rate. A radio's front end samples at a high rate because the whole band has to fit through it. After <a href="#/c/signals/7">the mixer</a> has moved one station to zero, that station is a sliver of what was sampled, and every sample of the rest is a waste of everything downstream.</p>
+        <p>Chapters ${numOf('firdesign')} and ${numOf('iir')} priced a filter at one fixed rate. This one changes the rate. A radio's front end samples at a high rate because the whole band has to fit through it. After <a href="#/c/signals/7">the mixer</a> has moved one station to zero, that station is a sliver of what was sampled, and every sample of the rest is wasted work for everything downstream.</p>
         <p>Filtering is multiplications a second, so the price is taps × rate. Lower the rate by R, and everything after it costs R times less. The chapter's goal is one job: drop the rate by ${CASCADE_R}, keep 40 % of the new rate and hold back what would fold by 50 dB. Done as a single filter at the input's rate, that takes ${n0(r[0].mults)} multiplications for each input sample. By the end it will take ${r[3].mults.toFixed(2)}, about a thousandth of that, with the same mask.</p>`;
       },
       challenge: {
@@ -110,7 +110,7 @@ export const chMultirate: Chapter = {
       get body() {
         const { R, M, w } = POLY_SPEC;
         return `
-        <p>Here is one: ${w}-bit samples, ${w}-bit taps, ÷ ${R} over ${RM} taps. A count of ${R} says which branch the next sample goes to. There are ${R} rows of ${M} registers, and each only loads on its own turn. ${M} multipliers read whichever branch loaded last, through multiplexers, and small ROMs give them that branch's taps. The ${R}-branch sum builds up in one register and becomes an output.</p>
+        <p>Here is a polyphase decimator: ${w}-bit samples, ${w}-bit taps, ÷ ${R} over ${RM} taps. A count of ${R} says which branch the next sample goes to. There are ${R} rows of ${M} registers, and each only loads on its own turn. ${M} multipliers read whichever branch loaded last, through multiplexers, and small ROMs give them that branch's taps. The ${R}-branch sum builds up in one register and becomes an output.</p>
         <p>It is ${n0(nands(polyDecimator(POLY_SPEC)))} NANDs. The multipliers are ${n0(M * MUL8())} of that, against ${n0(RM * MUL8())} for the ${RM} a direct filter on this clock would need. Sample storage is the same either way, since every sample still has to be held somewhere. So the saving is all in the multipliers, and it grows with R.</p>
         <p>Nothing here rounds or saturates: the sum is held in full, ${2 * w + Math.round(Math.log2(RM))} bits. Where the word should come down is a choice for whatever reads it.</p>
         <div class="try">Run the tone in the band, then the one past the new half-rate. The first passes at about full size. The second is what the filter exists to stop.</div>`;
