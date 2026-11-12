@@ -518,8 +518,10 @@ the 3D views.
 
 ## License
 
-[MIT](LICENSE). Doom's source (doomgeneric, `ports/doom/`) is GPL-2; Freedoom's data is BSD and
-fetched at build time.
+[MIT](LICENSE). Doom's source (doomgeneric, `ports/doom/`) and the image built from it are GPL-2 (the licence ships
+beside the image as `doom/COPYING.txt`); Freedoom's data is BSD and fetched at build time. Every third-party
+component the site, the desktop program or this repository carries, with its licence text, is listed in
+[THIRD-PARTY-NOTICES.txt](public/THIRD-PARTY-NOTICES.txt), which the site serves and links from its home page.
 
 Inspired by *Turing Complete*, Sebastian Lague's *Digital Logic Sim*, *nand2tetris*, and Harris &
 Harris. The structure and HDL follow the companion primer in `References/`.

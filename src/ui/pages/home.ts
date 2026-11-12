@@ -105,6 +105,7 @@ export function homePage(): Page {
       h('div', { class: 'footer-meta' },
         h('span', { title: `build ${__APP_COMMIT__}, ${__APP_DATE__}` }, `Version ${__APP_VERSION__}`), ' · ',
         `© ${__APP_DATE__.slice(0, 4)} `,
-        h('a', { href: 'mailto:orelmac@gmail.com', title: 'Write to Orel Magidish' }, 'Orel Magidish')))));
+        h('a', { href: 'mailto:orelmac@gmail.com', title: 'Write to Orel Magidish' }, 'Orel Magidish'), ' · ',
+        h('a', { href: 'THIRD-PARTY-NOTICES.txt', title: 'Doom (GPL-2), Freedoom, riscv-tests, Yosys, the fonts and the recordings' }, 'Third-party licences')))));
   return { el, destroy() {} };
 }
