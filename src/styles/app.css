@@ -629,6 +629,8 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
   position: absolute; left: 12px; bottom: 10px; z-index: 2; pointer-events: none;
   font-size: 12px; color: var(--muted);
 }
+/* the mouse wording gets a pill too: a net label drawn under it was struck through (C-7) */
+.hint-badge:not(.touch) { padding: 2px 10px; border-radius: 99px; background: color-mix(in srgb, var(--surface) 85%, transparent); }
 /* Touch wording (ui/dom.ts hintBadge): short, on one line (wrapped on a phone it hid the circuit's lower pins),
    a pill a tap hides. */
 .hint-badge.touch {
