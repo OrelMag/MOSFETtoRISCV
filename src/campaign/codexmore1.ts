@@ -181,7 +181,7 @@ read upwards: 11 1110 1000 = 0x3E8 = 512 + 256 + 128 + 64 + 32 + 8</pre>`,
 
   capacitance: {
     idea: `Two conductors with an insulator between them hold equal and opposite charge, and the charge is proportional to the voltage between them: <strong>Q = C · V</strong>, with C in farads (coulombs per volt). No current crosses the gap, but while the voltage changes a current i = C · dv/dt flows in the wires on either side. C grows with the area facing each other and shrinks with the gap, which is why a transistor's gate (metal, a thin oxide, the channel) is one, and so is a wire against its neighbours.<br>Fed through a resistance R from a supply V, the voltage is v(t) = V · (1 − e<sup>−t/RC</sup>): 63 % after R · C, 99 % after five. The supply pushes Q · V = C · V² and the capacitor keeps half of it; the other half is heat in R, whatever R is. So a bigger C costs more time and more energy, a bigger R costs time only.`,
-    example: { title: 'A gate output, and the bench capacitor', body: `<pre>bench:  R = 1 kΩ, C = 1 000 µF, V = 1.5 V
+    example: { title: 'A gate output, and the bench capacitor', body: `<pre>bench:  R = 1 kΩ, C = 1000 µF, V = 1.5 V
          RC = 1 s,  Q = C·V = 1.5 mC,  first current V/R = 1.5 mA
          from the supply C·V² = 2.25 mJ  =  1.125 mJ stored + 1.125 mJ in R
 

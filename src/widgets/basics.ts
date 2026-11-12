@@ -132,7 +132,7 @@ export function loopWidget(): Widget {
 
 // ---- Step 2: a bucket of charge. The closed form v(t) = V·(1 − e^(−t/RC)), DOM-free, then the widget that animates it. ----
 
-/** The bucket: the loop's 1.5 V cell through 1 kΩ into 1 000 µF, so RC = 1 s, Q = 1.5 mC. The slider' ranges are in Ω and µF. */
+/** The bucket: the loop's 1.5 V cell through 1 kΩ into 1000 µF, so RC = 1 s, Q = 1.5 mC. The slider' ranges are in Ω and µF. */
 export const RC = { volts: LOOP.volts, ohms: 1000, farads: 1e-3 };
 export const RC_RANGE = { ohms: [100, 10000] as const, microfarads: [100, 4700] as const };
 /** A gate driving two inputs, from the MOSFET chapter's own constants (widgets/mosphys.ts): 5 fF, 1.8 V, C·V² = 16 fJ a swing. */
@@ -186,7 +186,8 @@ export function rcRun(p: RcPart, events: readonly RcEvent[], t: number): RcNow {
   return { v, i, q: chargeOf(p, v), ...energies(p, v, drawn) };
 }
 
-const thin = (n: number): string => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+// (a four-digit integer is not grouped: the house rule, tests/digit-grouping.test.ts)
+const thin = (n: number): string => { const s = String(Math.round(n)); return s.length < 5 ? s : s.replace(/\B(?=(\d{3})+(?!\d))/g, ' '); };
 const sig = (x: number, n = 3): string => String(+x.toPrecision(n));
 /** 1 000 Ω → "1 kΩ"; 100 Ω → "100 Ω". */
 export const fmtOhms = (r: number): string => (r >= 1000 ? `${sig(r / 1000)} kΩ` : `${sig(r)} Ω`);

@@ -10,7 +10,7 @@ const part = (ohms: number, farads = RC.farads): RcPart => ({ volts: RC.volts, o
 const fill: RcEvent[] = [{ at: 0, mode: 'charge' }];
 
 describe('the RC bucket', () => {
-  it('the step\'s bucket is 1 kΩ and 1 000 µF: RC = 1 s, Q = 1.5 mC, first current 1.5 mA', () => {
+  it('the step\'s bucket is 1 kΩ and 1000 µF: RC = 1 s, Q = 1.5 mC, first current 1.5 mA', () => {
     expect(rc(RC)).toBeCloseTo(1, 12);
     expect(RC.farads * RC.volts).toBeCloseTo(1.5e-3, 12);
     expect(currentAt(0, RC, 'charge')).toBeCloseTo(1.5e-3, 12);
