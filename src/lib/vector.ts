@@ -133,59 +133,53 @@ export const VEC_DECODE: ComponentDef = (() => {
   // Three blocks a reader opens one at a time: the fields (what the word's bits say, the immediate, vset and csrr), the forms
   // (which instruction of the subset, and how the lanes compute it) and the legality (vtype, groups, v0) with the classes it
   // lets through. Each gate is the one the flat drawing had, moved into the block that uses it (tests/vector.test.ts pins them).
-  const FIELDS = vecBlock('vdec_fields', 'Vector decoder: fields', 'fields', 'The word cut into its fields: the opcode compared with OP-V, LOAD-FP, STORE-FP and SYSTEM, funct3 and funct6 decoded one-hot, registers x0 or not, the 5-bit immediate signed or not. vset* and csrr of the vector CSRs are decided here; the compare\'s and min / max\'s selects are funct6\'s low bits.', [
+  const FIELDS = vecBlock('vdec_fields', 'Vector decoder: fields', 'fields', 'The word cut into its fields: the opcode compared with OP-V, LOAD-FP, STORE-FP and SYSTEM, registers x0 or not, csrr of the vector CSRs; a compare is funct6 = 011xxx, and funct6\'s low bits pick the compare and min / max.', [
     bus('instr', 32, 'in'),
-    bit('isV', 'out'), bit('isLd', 'out'), bit('isSt', 'out'), bus('f3', 8, 'out'), bus('f6', 64, 'out'), bus('vd', 5, 'out'), bus('rs1', 5, 'out'), bus('vs2', 5, 'out'),
-    bit('vmb', 'out'), bit('masked', 'out'), bit('rs1z', 'out'), bit('vs2z', 'out'), bit('vdz', 'out'), bit('vidSrc', 'out'), bit('isCmp', 'out'), bus('imm', 32, 'out'),
-    bit('set', 'out'), bit('csr', 'out'), bit('minS', 'out'), bit('isMax', 'out'), bus('cmpSel', 3, 'out'),
+    bit('isV', 'out'), bit('isLd', 'out'), bit('isSt', 'out'), bus('f3', 3, 'out'), bus('f6', 6, 'out'), bus('vd', 5, 'out'), bus('rs1', 5, 'out'), bus('vs2', 5, 'out'),
+    bit('vmb', 'out'), bit('masked', 'out'), bit('rs1z', 'out'), bit('vs2z', 'out'), bit('vdz', 'out'), bit('vidSrc', 'out'), bit('isCmp', 'out'),
+    bit('csr', 'out'), bit('minS', 'out'), bit('isMax', 'out'), bus('cmpSel', 3, 'out'),
   ], (b) => {
     const { and, or, not, k, bits } = kit(b);
     const fs = b.op(splitter([7, 5, 3, 5, 5, 1, 6]), ['instr'], 'fields');
     const op = `${fs}.o0`, vd = `${fs}.o1`, f3 = `${fs}.o2`, rs1 = `${fs}.o3`, vs2 = `${fs}.o4`, vmb = `${fs}.o5`, f6 = `${fs}.o6`;
     b.next();
     const eqK = (x: string, w: number, v: number, label?: string) => b.op1(equal(w), [x, k(w, v)], label);
-    const isV = eqK(op, 7, 0x57, 'OP-V?');
     const isSys = eqK(op, 7, 0x73, 'SYSTEM?');
-    const f3d = b.op(decoder(3), [f3], 'funct3');
-    const f6d = b.op(decoder(6), [f6], 'funct6');
     const f6b = bits(f6, 6), f3b = bits(f3, 3);
-    const masked = not(vmb);
-    const imm = b.op1(busMux2(32), [b.op1(merger([5, 27]), [rs1, b.op1(fanout(27), [bits(rs1, 5)[4]])], 'simm5'), b.op1(merger([5, 27]), [rs1, k(27, 0)], 'uimm5'), ''], 'immediate');
-    b.next();
-    const D = (i: number) => `${f6d}.y${i}`, F = (i: number) => `${f3d}.y${i}`;
-    b.wire(or(D(0x25), D(0x28), D(0x29)), `${imm.slice(0, imm.indexOf('.'))}.s`);
     const csrA = b.op1(merger([5, 1, 6]), [vs2, vmb, f6], 'csr address');
     b.next();
     const csrHit = or(...[0x008, 0x009, 0x00a, 0x00f, 0xc20, 0xc21, 0xc22].map((a) => eqK(csrA, 12, a)));
     b.next();
-    // vsetvli (bit 31 = 0), vsetivli (31:30 = 11), vsetvl (31:25 = 1000000); other words of the group are not vsets
-    b.wire(and(isV, F(7), or(not(f6b[5]), f6b[4], and(D(0x20), masked))), 'set');
     b.wire(and(isSys, or(f3b[0], f3b[1]), csrHit), 'csr');
-    b.wire(isV, 'isV');
+    b.wire(eqK(op, 7, 0x57, 'OP-V?'), 'isV');
     b.wire(eqK(op, 7, 0x07, 'vector load?'), 'isLd');
     b.wire(eqK(op, 7, 0x27, 'vector store?'), 'isSt');
-    b.wire(b.op1(merger(ones(8)), Array.from({ length: 8 }, (_, i) => F(i)), 'funct3, one-hot'), 'f3');
-    b.wire(b.op1(merger(ones(64)), Array.from({ length: 64 }, (_, i) => D(i)), 'funct6, one-hot'), 'f6');
-    b.wire(vd, 'vd'); b.wire(rs1, 'rs1'); b.wire(vs2, 'vs2'); b.wire(vmb, 'vmb'); b.wire(masked, 'masked');
+    b.wire(f3, 'f3'); b.wire(f6, 'f6');
+    b.wire(vd, 'vd'); b.wire(rs1, 'rs1'); b.wire(vs2, 'vs2'); b.wire(vmb, 'vmb'); b.wire(not(vmb), 'masked');
     b.wire(b.op1(isZero(5), [rs1]), 'rs1z'); b.wire(b.op1(isZero(5), [vs2]), 'vs2z'); b.wire(b.op1(isZero(5), [vd]), 'vdz');
     b.wire(eqK(rs1, 5, 0x11, 'vid?'), 'vidSrc');
     b.wire(and(not(f6b[5]), f6b[4], f6b[3]), 'isCmp');
-    b.wire(imm, 'imm');
     b.wire(f6b[0], 'minS');
     b.wire(f6b[1], 'isMax');
     b.wire(b.op1(merger([1, 1, 1]), [f6b[0], f6b[1], f6b[2]]), 'cmpSel');
   });
 
-  const FORMS = vecBlock('vdec_forms', 'Vector decoder: forms', 'forms', 'Which instruction of the subset the fields name (an OPI operation in a form it has, vmerge / vmv.v, vredsum, vmv.x.s, vmv.s.x, vid, a unit-stride access) before any legality check, and how the lanes compute it: operand B, vrsub\'s swap, the ALU operation, the result.', [
-    bit('isV', 'in'), bit('isLd', 'in'), bit('isSt', 'in'), bus('f3', 8, 'in'), bus('f6', 64, 'in'), bit('vmb', 'in'), bit('masked', 'in'), bit('rs1z', 'in'), bit('vs2z', 'in'), bit('vidSrc', 'in'), bit('isCmp', 'in'),
-    bit('opi', 'out'), bit('merge', 'out'), bit('red', 'out'), bit('mvxs', 'out'), bit('vid', 'out'), bit('mvsx', 'out'), bit('mem', 'out'),
-    bit('vv', 'out'), bit('isX', 'out'), bit('swap', 'out'), bus('aluCtl', 4, 'out'), bit('mergeLike', 'out'), bus('resSel', 2, 'out'),
+  const FORMS = vecBlock('vdec_forms', 'Vector decoder: forms', 'forms', 'funct3 and funct6 decoded one-hot: which instruction of the subset the word is (vset*, an OPI operation in a form it has, vmerge / vmv.v, vredsum, vmv.x.s, vmv.s.x, vid, a unit-stride access) before any legality check, and how the lanes compute it: operand B, the 5-bit immediate signed or not, vrsub\'s swap, the ALU operation, the result.', [
+    bit('isV', 'in'), bit('isLd', 'in'), bit('isSt', 'in'), bus('f3', 3, 'in'), bus('f6', 6, 'in'), bus('rs1', 5, 'in'), bit('vmb', 'in'), bit('masked', 'in'), bit('rs1z', 'in'), bit('vs2z', 'in'), bit('vidSrc', 'in'), bit('isCmp', 'in'),
+    bit('set', 'out'), bit('opi', 'out'), bit('merge', 'out'), bit('red', 'out'), bit('mvxs', 'out'), bit('vid', 'out'), bit('mvsx', 'out'), bit('mem', 'out'),
+    bit('vv', 'out'), bit('isX', 'out'), bus('imm', 32, 'out'), bit('swap', 'out'), bus('aluCtl', 4, 'out'), bit('mergeLike', 'out'), bus('resSel', 2, 'out'),
   ], (b) => {
-    const { and, or } = kit(b);
-    const f3s = b.op(splitter(ones(8)), ['f3'], 'funct3'), f6s = b.op(splitter(ones(64)), ['f6'], 'funct6');
-    const D = (i: number) => `${f6s}.o${i}`, F = (i: number) => `${f3s}.o${i}`;
+    const { and, or, not, k, bits } = kit(b);
+    const f3d = b.op(decoder(3), ['f3'], 'funct3');
+    const f6d = b.op(decoder(6), ['f6'], 'funct6');
+    const f6b = bits('f6', 6);
+    const imm = b.op1(busMux2(32), [b.op1(merger([5, 27]), ['rs1', b.op1(fanout(27), [bits('rs1', 5)[4]])], 'simm5'), b.op1(merger([5, 27]), ['rs1', k(27, 0)], 'uimm5'), ''], 'immediate');
+    const D = (i: number) => `${f6d}.y${i}`, F = (i: number) => `${f3d}.y${i}`;
     const vv = F(0), vi = F(3), vx = F(4), mvv = F(2), mvx = F(6);
     b.next();
+    b.wire(or(D(0x25), D(0x28), D(0x29)), `${imm.slice(0, imm.indexOf('.'))}.s`);
+    // vsetvli (bit 31 = 0), vsetivli (31:30 = 11), vsetvl (31:25 = 1000000); other words of the group are not vsets
+    b.wire(b.op1(andN(3), ['isV', F(7), or(not(f6b[5]), f6b[4], and(D(0x20), 'masked'))], 'vset?', 'vset'), 'set');
     const opiF3 = and('isV', or(vv, vi, vx));
     const allF = or(...[0x00, 0x09, 0x0a, 0x0b, 0x18, 0x19, 0x1c, 0x1d, 0x25, 0x28, 0x29].map(D));
     const vvx = or(...[0x02, 0x04, 0x05, 0x06, 0x07, 0x1a, 0x1b].map(D));
@@ -205,12 +199,13 @@ export const VEC_DECODE: ComponentDef = (() => {
     b.next();
     b.wire(vv, 'vv');
     b.wire(or(vx, mvx), 'isX');
+    b.wire(imm, 'imm');
     b.wire(D(0x03), 'swap');
     const sub = or(D(0x02), D(0x03), D(0x04), D(0x05), D(0x06), D(0x07), 'isCmp');
     b.wire(b.op1(merger([1, 1, 1, 1]), [or(D(0x09), D(0x25), D(0x28), D(0x29)), or(D(0x09), D(0x0a)), or(D(0x09), D(0x0a), D(0x0b), D(0x28), D(0x29)), or(sub, D(0x29))], 'ALU control'), 'aluCtl');
     b.wire(mergeLike, 'mergeLike');
     b.wire(b.op1(merger([1, 1]), [or(picked, 'isLd'), or(vidOp, 'isLd')], 'result select'), 'resSel');
-  });
+  }, { wires: { 'vset.y': true } });
 
   const LEGAL = vecBlock('vdec_legal', 'Vector decoder: legality', 'legality', 'Is the instruction legal now: vtype valid (ok), its register groups aligned to LMUL, no masked write to v0, a mask result not inside a source group. Only then do the class outputs (elem … store) go to 1; anything else does nothing for a cycle.', [
     bus('vd', 5, 'in'), bus('rs1', 5, 'in'), bus('vs2', 5, 'in'), bus('lmul', 2, 'in'), bit('ok', 'in'), bit('masked', 'in'), bit('vdz', 'in'), bit('vv', 'in'), bit('isCmp', 'in'), bit('isLd', 'in'), bit('isSt', 'in'),
@@ -248,14 +243,14 @@ export const VEC_DECODE: ComponentDef = (() => {
   b.pins('instr', 'ok', 'lmul');
   b.op(FIELDS, ['instr'], 'fields', 'fld');
   b.next();
-  b.op(FORMS, ['fld.isV', 'fld.isLd', 'fld.isSt', 'fld.f3', 'fld.f6', 'fld.vmb', 'fld.masked', 'fld.rs1z', 'fld.vs2z', 'fld.vidSrc', 'fld.isCmp'], 'forms', 'form');
+  b.op(FORMS, ['fld.isV', 'fld.isLd', 'fld.isSt', 'fld.f3', 'fld.f6', 'fld.rs1', 'fld.vmb', 'fld.masked', 'fld.rs1z', 'fld.vs2z', 'fld.vidSrc', 'fld.isCmp'], 'forms', 'form');
   b.next();
   b.op(LEGAL, ['fld.vd', 'fld.rs1', 'fld.vs2', 'lmul', 'ok', 'fld.masked', 'fld.vdz', 'form.vv', 'fld.isCmp', 'fld.isLd', 'fld.isSt',
     'form.opi', 'form.merge', 'form.red', 'form.mvxs', 'form.vid', 'form.mvsx', 'form.mem'], 'legality', 'legal');
   b.next();
   const from: Record<(typeof DEC_OUTS)[number], string> = {
-    set: 'fld.set', elem: 'legal.elem', mask: 'legal.mask', red: 'legal.redOut', mvxs: 'legal.mvxsOut', mvsx: 'legal.mvsxOut', load: 'legal.load', store: 'legal.store',
-    csr: 'fld.csr', multi: 'legal.multi', pre: 'legal.pre', vv: 'form.vv', isX: 'form.isX', imm: 'fld.imm', swap: 'form.swap', aluCtl: 'form.aluCtl',
+    set: 'form.set', elem: 'legal.elem', mask: 'legal.mask', red: 'legal.redOut', mvxs: 'legal.mvxsOut', mvsx: 'legal.mvsxOut', load: 'legal.load', store: 'legal.store',
+    csr: 'fld.csr', multi: 'legal.multi', pre: 'legal.pre', vv: 'form.vv', isX: 'form.isX', imm: 'form.imm', swap: 'form.swap', aluCtl: 'form.aluCtl',
     mergeLike: 'form.mergeLike', minS: 'fld.minS', isMax: 'fld.isMax', cmpSel: 'fld.cmpSel', resSel: 'form.resSel', masked: 'fld.masked',
   };
   for (const o of DEC_OUTS) b.wire(from[o], o);
