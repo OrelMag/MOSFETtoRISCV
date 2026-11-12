@@ -1,5 +1,8 @@
 # Chapter plan: Vectors (RVV), the bridge from cores to lanes
 
+> **Historical (2026-11-12).** Built: see docs/ROADMAP.md, Phase 23. Kept as the record of the decisions; its future tense is
+> as of the plan, and any mockup link in it is the author's private draft.
+
 Status: **APPROVED by the author on 2026-11-09, with all ten decisions as recommended** (relayed by the Coordinator).
 Order: … power → vectors → lanes (Rock's Power chapter also goes before lanes). Built in three stages, each a tip.
 

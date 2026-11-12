@@ -1,5 +1,8 @@
 # Placing and wiring in the sandbox by keyboard
 
+> **Historical (2026-11-12).** Built: see docs/ROADMAP.md, Phase 23, Cross-cutting features. Kept as the record of the decisions; its future tense is
+> as of the plan, and any mockup link in it is the author's private draft.
+
 Roadmap: Phase 23 / Cross-cutting, "a part cursor on the stage …, then placing and wiring in the sandbox by keyboard".
 The stage half is feat/key-cursor (batch 6). This is the sandbox half.
 

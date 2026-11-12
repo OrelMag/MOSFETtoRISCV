@@ -1,7 +1,7 @@
 # Appendix D: a game with no program (Bit Runner)
 
 An original video game in counters and gates: no CPU, no ROM, one clock. Approved 2026-11-03 with its mockup
-(https://claude.ai/artifact/RaPk6SDG2x5533wEfBdfNv). It began as a request to implement Atari's Pong schematic; a check
+(a private draft). It began as a request to implement Atari's Pong schematic; a check
 found no Atari release or permission, and a recreation of a specific game is not something we build. So the game, its
 rules and its circuit are new, and the chapter says so. Keep it that way: no ball, bats or net, and nothing transcribed
 from an arcade schematic.

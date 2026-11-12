@@ -59,7 +59,7 @@ single-cycle             0.89 V   45.9 pJ</pre>Faster at 0.9 V, the pipeline mee
   },
   minenergy: {
     idea: `Energy per instruction = ½ C<sub>switched</sub> V² + I<sub>leak</sub> · V · t<sub>instruction</sub>. The first falls with V². The second falls slowly with V but grows with the
-      instruction's time, which far below threshold grows exponentially as the on current fades. The sum has a minimum, usually a little above or below the threshold. Sensors, hearing aids and
+      instruction's time, which far below threshold grows exponentially as the on current fades. The sum has a minimum, usually in the subthreshold region, near or below the threshold (in the chapter's models a little above it in the fast process, well below it in the low-leakage one). Sensors, hearing aids and
       watches run near it; nothing that must be fast does.`,
     example: {
       title: 'The single-cycle CPU, high-performance process',

@@ -1,5 +1,8 @@
 # Plan: "Side channels" (Phase 23)
 
+> **Historical (2026-11-12).** Built: see docs/ROADMAP.md, Phase 23. Kept as the record of the decisions; its future tense is
+> as of the plan, and any mockup link in it is the author's private draft.
+
 Roadmap item: "Side channels: Spectre on our out-of-order core and its cache". This is a plan and a mockup
 (E:/mockups/sidechan/).
 

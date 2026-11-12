@@ -1,5 +1,8 @@
 # Plan: the chapter "Power" (Phase 23)
 
+> **Historical (2026-11-12).** Built: see docs/ROADMAP.md, Phase 23. Kept as the record of the decisions; its future tense is
+> as of the plan, and any mockup link in it is the author's private draft.
+
 **Approved 2026-11-09** by the author as shown (mockup artifact https://claude.ai/artifact/MrTBNyksDH3UrF23iDUzAC), every decision
 as recommended: placement right before `lanes`; decision 2 = chapter 2's device law with a subthreshold (EKV) tail, calibrated to
 0.9 V / 25 ps per NAND, the off current from a cited process figure, two flavours; clock gating on the register file and data

@@ -181,7 +181,7 @@ export const chFirstComputer: Chapter = {
         options: ['STA 4: M[4] ← A', 'LDA 4: A ← M[4]', 'ADD 12', 'LDI 4'],
         answer: 0,
         explain: 'The top three bits 011 are op 3, STA; the low five, 00100, are x = 4.',
-        why: ['', 'LDA is op 000.', 'The op field is the top three bits, not the top four.', 'LDI is op 100.'],
+        why: ['', 'LDA is op 000.', 'ADD is op 001, and 12 is the top five bits read as an operand: the op field is the top three bits, the operand the low five.', 'LDI is op 100.'],
       },
     },
     {

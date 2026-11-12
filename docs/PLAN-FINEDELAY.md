@@ -1,5 +1,8 @@
 # Design note: GateSim with loaded delays on a finer grain
 
+> **Historical (2026-11-12).** Built: see docs/ROADMAP.md, Phase 19. Kept as the record of the decisions; its future tense is
+> as of the plan, and any mockup link in it is the author's private draft.
+
 Phase 19's open item: the event-driven simulator times every NAND by its load, in tenths of a unit, so glitches and races
 follow the loads the way static timing already does (sim/delay.ts, the Timing panels' Unit / Load switch). **Status: APPROVED by
 the author on 2026-11-09 as recommended** (every decision below), through the Coordinator. The Load-dependent delay setting

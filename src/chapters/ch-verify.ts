@@ -109,7 +109,7 @@ export const chVerify: Chapter = {
         <p>The table is every check this site's CPUs go through, ${LAYERS.length} rungs. Read the last two columns: each rung finds what the one before it cannot, and none of them alone is enough.</p>`,
       widget: () => verifyMap(),
       more: {
-        real: `<p>A modern processor team spends more engineers on verification than on design. Simulation is joined by formal methods (proving a property for every input, not testing some), emulation on FPGAs (the design running a million times faster than a simulator, fast enough to boot an operating system before tape-out) and post-silicon validation on the first chips.</p>`,
+        real: `<p>A modern processor team spends more engineers on verification than on design. Simulation is joined by formal methods (proving a property for every input, not testing some), emulation on FPGAs (the design running orders of magnitude faster than a simulator, often a thousand times or more, fast enough to boot an operating system before tape-out) and post-silicon validation on the first chips.</p>`,
         pitfall: `<p>Mixing the two questions up. A chip that fails a manufacturing test was made wrong; a design bug is on every chip, passes every manufacturing test (the tester compares with the design, bug included) and is found by verification or, too late, by customers.</p>`,
       },
     },
@@ -176,7 +176,7 @@ export const chVerify: Chapter = {
       title: 'Coverage: what did the tests reach?',
       body: `
         <p>A passing test suite says nothing about what it never touched. <strong>Coverage</strong> counts what was exercised: here, which RV32I instructions the golden model executed, and which pipeline events the gates' own hazard unit produced (each forwarding path, the write-back bypass, the load-use stall, the flush after a taken branch).</p>
-        <p>Pick the sample programs one by one. The "Primer" program produces all ${F.primerEvents} events but uses only ${F.primerInstrs} of the ${F.rv32iWord} instructions; most samples reach far less. 32 random programs reach all ${F.randomInstrs} instructions and every event, hundreds of times.</p>
+        <p>Pick the sample programs one by one. The "Primer" program produces all ${F.primerEvents} events but uses only ${F.primerInstrs} of the ${F.rv32iWord} word-access RV32I instructions (no byte or halfword loads and stores, ecall, ebreak or fence); most samples reach far less. 32 random programs reach all ${F.randomInstrs} instructions and every event, hundreds of times.</p>
         <p>Coverage finds gaps; it cannot prove there are none. Every forwarding path firing is not every pair of hazards meeting: the planted bug of "Random programs" needs a taken branch <em>while</em> an FP interlock stalls D, a combination an event count does not see.</p>`,
       widget: () => coverageWidget(),
       more: {

@@ -161,6 +161,10 @@ export const chAppendixDoom: Chapter = {
         registers next to the system CPU's: <code>KEY</code> (a read takes one key event), <code>FLIP</code> (a frame is
         done) and <code>WADLEN</code>. Doom's renderer stores its columns and spans straight into the frame buffer.</p>
         <p>It runs on a fast interpreter of our ISA, not on the gates.</p>
+        <p><strong>Licence.</strong> The program image is under the GNU GPL, version 2 (<a href="doom/COPYING.txt" target="_blank" rel="noopener">its text</a>),
+        like Doom's source. Its exact source, doomgeneric with our platform layer and the five patches, is
+        <a href="https://github.com/OrelMag/MOSFETtoRISCV/tree/main/ports/doom" target="_blank" rel="noopener">ports/doom</a> in this site's repository.
+        Freedoom's game data is under a BSD licence (<a href="THIRD-PARTY-NOTICES.txt" target="_blank" rel="noopener">every third-party licence</a>).</p>
         <p><strong>Cost.</strong> A frame of the demo takes 1.0–3.0 M cycles (median 1.9 M): 48 ms at 40 MHz. The
         interpreter manages about 90 M instructions a second. The gate-level system CPU in this page manages about
         2400 cycles a second: one frame would take about 13 minutes. The same gates on silicon, at their static-timing
