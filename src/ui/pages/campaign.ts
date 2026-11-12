@@ -272,8 +272,8 @@ export class CampaignPage implements Page {
         tab('#/campaign/intro', 'The CPU', view === 'intro', 'chip'),
         tab('#/campaign/codex', 'Codex', view === 'codex', 'book')),
       h('div', { class: 'cp-actions' }, unlock,
-        h('button', { class: 'btn sm ghost', title: 'Your progress and your level chips, as one .json file', onclick: () => this.exportFile() }, 'Export campaign'),
-        h('button', { class: 'btn sm ghost', title: 'Merge a campaign file into your progress (your chips are never overwritten)', onclick: () => file.click() }, 'Import campaign'),
+        h('button', { class: 'btn sm', title: 'Your progress and your level chips, as one .json file', onclick: () => this.exportFile() }, 'Export campaign'),
+        h('button', { class: 'btn sm', title: 'Merge a campaign file into your progress (your chips are never overwritten)', onclick: () => file.click() }, 'Import campaign'),
         file, this.note));
   }
 
