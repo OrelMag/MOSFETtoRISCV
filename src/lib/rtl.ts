@@ -504,18 +504,18 @@ export class Rtl {
       const nets: NetDef[] = b.nets();
       const instances: InstanceDef[] = b.instances;
       // a block of gates is laid out by logic depth, rows level with what they talk to, its short nets drawn as wires where
-      // no other part stands between their ends (lib/layered.ts, avoid): a small block, and a split block's next state / outputs
-      // (drawn in columns with every net a label they read as nothing but pointers: 31 276 of 32 244 nets over the book's
-      // blocks, 27 061 with this, no part below half its scale at fit); not one of boxes or wide buses, whose pointer names
+      // no other part stands between their ends (lib/layered.ts, avoid): a block of gates of any size, a split block's next state / outputs
+      // (drawn in columns with every net a label they read as nothing but pointers: 51 890 of 61 736 nets over the book's
+      // 521 blocks, 46 759 with this, none below half its scale at fit); not one of boxes or wide buses, whose pointer names
       // need wider channels than layered leaves; nor a state register of more than STATE_COLUMN flip-flops, which share one
       // logic depth and would stand in one column too tall to read at fit (Builder's wrapped columns hold them). Laid out when
       // the level is first opened, not when the design is built. room: a split block's labels need it.
-      const small = !sc.kids.length && (sc.role === 'state' ? instances.length <= STATE_COLUMN : !!sc.role || instances.length <= SPLIT_MIN) && instances.every((i) => i.def.ports.length <= 8);
+      const small = !sc.kids.length && (sc.role !== 'state' || instances.length <= STATE_COLUMN) && instances.every((i) => i.def.ports.length <= 8);
       const cols: Netlist = { pins, instances, nets };
       let lay: Netlist | null = null;
-      // a split block keeps its columns when laying it out would shrink it at fit below FIT_KEEP of their scale: a block of
-      // hundreds of gates laid out by depth runs to a thousand units or more, every part a dot, whatever its wires
-      const laid = () => (lay ??= ((l) => (!sc.role || fitScale(l) >= FIT_KEEP * fitScale(cols) ? l : cols))(layered(ports, b, { gap: 14, x0: gapW, avoid: true, ...(sc.role ? { room: true } : {}) }))); // x0: room for a pin's pointer
+      // a split block, or one of more than SPLIT_MIN gates, keeps its columns when laying it out would shrink it at fit below
+      // FIT_KEEP of their scale: hundreds of gates laid out by depth run to a thousand units or more, every part a dot
+      const laid = () => (lay ??= ((l) => ((!sc.role && instances.length <= SPLIT_MIN) || fitScale(l) >= FIT_KEEP * fitScale(cols) ? l : cols))(layered(ports, b, { gap: 14, x0: gapW, avoid: true, ...(sc.role ? { room: true } : {}) }))); // x0: room for a pin's pointer
       return define({
         id,
         name: isRoot ? this.opt.name : sc.role ? `${this.opt.name}: ${this.scopes[sc.parent].label || this.opt.name}, ${sc.label}` : `${this.opt.name}: ${sc.label}`,
