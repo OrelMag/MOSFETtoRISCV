@@ -71,6 +71,19 @@ describe('schematic labels', () => {
   it.each(defs.map((d) => [d.id, d] as const))('%s: no wire reaches a pin from behind its symbol', (_, d) => {
     expect(backwardEnds(d, netlistOf(d)!)).toEqual([]);
   });
+  // an input pin draws its value beside it (a switch, or a badge for a word): two in one column a unit apart overlap
+  it('no two input pins in one column sit closer than 2 units (their value badges would overlap)', () => {
+    const close: string[] = [];
+    for (const d of defs) {
+      const pins = netlistOf(d)!.pins ?? {};
+      const ins = d.ports.filter((p) => p.dir !== 'out' && pins[p.name]).map((p) => [p.name, pins[p.name]] as const);
+      for (let i = 0; i < ins.length; i++) for (let j = i + 1; j < ins.length; j++) {
+        const [n, a] = ins[i], [m, b] = ins[j];
+        if (a[0] === b[0] && Math.abs(a[1] - b[1]) < 2) close.push(`${d.id}: ${n} ${m}`);
+      }
+    }
+    expect(close).toEqual([]);
+  });
 });
 
 describe('dead parts', () => {
