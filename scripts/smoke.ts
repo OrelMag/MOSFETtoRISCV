@@ -857,6 +857,54 @@ const NET_DRIVE = `(async () => {
  * box in view whose opening zoom is passed open too; the hover hint on a closed box; zooming out crossfades back to the symbol;
  * zooming in again to the same zoom opens it again (no refusal remembered); no hand-off before the inside fills the canvas.
  */
+/**
+ * View options ▸ Opened blocks without colour (settings.lensPlain, lens.css): with `on`, `part` zoomed open takes the board's
+ * colour (the svg's --canvas) while every closed tinted box keeps its own, its port names leave white, and its hue comes back
+ * once a zoom out closes it; the menu row is enabled and ticked. Without `on`, the opened box keeps its hue (today's drawing).
+ */
+const lensPlainDrive = (part: string, on: boolean) => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const SETTLE = 450, bad = [];
+  const svg = document.querySelector('.canvas > svg.schematic');
+  const g = () => svg?.querySelector('[data-inst="${part}"]');
+  if (!svg || !g()) return ['no ${part} on the stage'];
+  // colours compared through a 2d context, which spells any CSS colour one way
+  const ctx = document.createElement('canvas').getContext('2d');
+  const norm = (c) => { ctx.fillStyle = '#010203'; ctx.fillStyle = c; return ctx.fillStyle; };
+  const board = norm(getComputedStyle(svg).getPropertyValue('--canvas').trim());
+  const body = (el) => el.querySelector('.sym .sym-box, .sym.cat .sym-body');
+  const fill = (el) => { const b = body(el); return b ? norm(getComputedStyle(b).fill) : null; };
+  const hue = fill(g());
+  if (!hue) return ['${part} has no tinted body'];
+  if (hue === board) bad.push('${part} is board-coloured before it opened');
+  const item = document.querySelector('.pal-lens-plain');
+  if (!item) bad.push('no Opened blocks without colour row in View options');
+  else if (item.disabled || item.getAttribute('aria-checked') !== String(${on})) bad.push('the menu row: disabled ' + item.disabled + ', checked ' + item.getAttribute('aria-checked'));
+  const wheel = (dy) => { const r = g().getBoundingClientRect(); svg.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); };
+  const hash = location.hash;
+  for (let k = 0; k < 60 && !g().classList.contains('inside-on') && location.hash === hash; k++) { wheel(-100); await wait(SETTLE); }
+  if (!g().classList.contains('inside-on')) return [...bad, '${part} never opened'];
+  await wait(400);
+  const open = fill(g());
+  if (${on} && open !== board) bad.push('${part} opened keeps ' + open + ', not the board ' + board);
+  if (!${on} && open !== hue) bad.push('with the option off, ${part} opened changed colour: ' + open + ' (was ' + hue + ')');
+  if (${on}) {
+    const port = g().querySelector('.sym-port');
+    if (port && norm(getComputedStyle(port).fill) === '#ffffff') bad.push('the port names of ${part} are still white on the board');
+    for (const o of svg.querySelectorAll('g.inst:not(.inside-on)')) {
+      const f = fill(o);
+      if (f && f === board && o.querySelector('.sym.cat, .sym.chip')) bad.push(o.dataset.inst + ' is closed but board-coloured');
+    }
+  }
+  for (let k = 0; k < 60 && g().classList.contains('inside-on'); k++) { wheel(100); await wait(SETTLE); }
+  await wait(400);
+  if (g().classList.contains('inside-on')) bad.push('zooming out never closed ${part}');
+  else if (fill(g()) !== hue) bad.push('${part} closed again is ' + fill(g()) + ', not its hue ' + hue);
+  document.querySelector('.stage [aria-label="Fit to screen"]')?.click();
+  await wait(300);
+  return bad;
+})()`;
+
 const honeDrive = (part: string) => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const CLOSE_SHARE = 0.75, SETTLE = 450;
@@ -1460,6 +1508,13 @@ function routes(): Route[] {
   add('#/c/pipeline/1', lensOn('light'), ' (lens hone, pipeline register FD)', undefined, honeDrive('FD'));
   add('#/c/pipeline/1', lensOn('dark'), ' (lens hone, pipeline register FD, dark)', undefined, honeDrive('FD'));
   add('#/c/ooo/11', lensOn('dark'), ' (lens hone, out of order, dark)', undefined, honeDrive('div'));
+  // View options ▸ Opened blocks without colour: the opened alu on the board's colour, closed boxes keep theirs; the dark board
+  // and the light canvas; off, the opened alu keeps its hue
+  const plainOn = (theme: 'light' | 'dark', board: boolean, lensPlain: boolean) =>
+    ({ [SETTINGS_KEY]: JSON.stringify({ theme, board, lensPlain, autoClock: false, zoomOpen: true, coachDone: { stage: true, sandbox: true } }) });
+  add('#/c/cpu/0', plainOn('dark', true, true), ' (lens plain, alu, dark board)', undefined, lensPlainDrive('alu', true));
+  add('#/c/cpu/0', plainOn('light', false, true), ' (lens plain, alu, light canvas)', undefined, lensPlainDrive('alu', true));
+  add('#/c/cpu/0', plainOn('light', true, false), ' (lens plain off, alu)', undefined, lensPlainDrive('alu', false));
   // the same lens over the sandbox's look inside (track 2a): the computer's core, both themes, and with the setting off
   {
     const ex = examplesWorkspace(), comp = `#/sandbox/${ex.ids[EXAMPLES.findIndex((e) => e.id === 'computer')]}`;
