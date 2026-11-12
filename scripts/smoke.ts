@@ -937,7 +937,16 @@ const honeDrive = (part: string) => `(async () => {
   // outlasts SETTLE (ooo/11's div: 0.5 to 0.9 s at an 8× CPU throttle; cpu/0's alu after the pan: 0.4 to 0.7 s). So each check
   // waits for the build first, with the same thresholds: a box that never opens still fails, after BUILD_MAX.
   const BUILD_MAX = 10000;
-  const until = async (pending) => { const t = performance.now() + BUILD_MAX; while (pending() && performance.now() < t) await wait(50); };
+  // one wait that runs out is a failure already: the later ones do not wait again (a lens that never opens fails in seconds, not 60 × 10)
+  let stuck = false;
+  const until = async (pending) => {
+    if (stuck) return;
+    // a part gone (handed off to its own level) is not waited for: the checks after this say so
+    const still = () => { try { return !!g() && pending(); } catch { return false; } };
+    const t = performance.now() + BUILD_MAX;
+    while (still() && performance.now() < t) await wait(50);
+    if (still()) stuck = true;
+  };
   const built = () => until(() => px() >= openAt && !isOpen());
   if (px() >= CLOSE_SHARE * openAt) return ['${part} starts within its band (' + fmt(px()) + ' of ' + fmt(openAt) + '): pick another part'];
   if (document.querySelector('.lens-layer .inside')) bad.push('an inside before any zoom');
