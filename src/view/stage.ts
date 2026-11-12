@@ -299,7 +299,7 @@ export class Stage {
   private ovRaf = 0;
   private moreMenu: HTMLElement;
   /** The bar's buttons fitBar may move into More, in that order, with what each does there. */
-  private shedGroups: { els: HTMLElement[]; items: { label: string; hint?: string; icon: string; on?: () => boolean; run: () => void }[] }[] = [];
+  private shedGroups: { els: HTMLElement[]; items: { label: string; hint?: string; icon: string; on?: () => boolean; off?: () => string | undefined; run: () => void }[] }[] = [];
   /** Fixed clock period in gate delays (null: every edge waits for the logic to settle). */
   private period: number | null = null;
   private nextEdge = 0;
@@ -448,7 +448,7 @@ export class Stage {
       if (!moreWrap.contains(e.target as Node)) this.toggleMore(false);
     }, { signal: this.life.signal });
     moreMenu.addEventListener('keydown', (e) => {
-      const items = [...moreMenu.querySelectorAll<HTMLElement>('button')];
+      const items = [...moreMenu.querySelectorAll<HTMLElement>('button:not(:disabled)')];
       const i = items.indexOf(document.activeElement as HTMLElement);
       if (e.key === 'Escape') {
         e.stopPropagation();
@@ -476,7 +476,7 @@ export class Stage {
       { els: [this.timingBtn], items: [{ label: 'Timing diagram', icon: 'wave', on: () => pressed(this.timingBtn), run: () => this.timingBtn.click() }] },
       { els: [this.probeBtn], items: [{ label: 'Probe mode (P)', icon: 'probe', on: () => pressed(this.probeBtn), run: () => this.probeBtn.click() }] },
       { els: [this.whyBtn], items: [{ label: 'Why? (W)', icon: 'why', on: () => pressed(this.whyBtn), run: () => this.whyBtn.click() }] },
-      { els: [this.ovBar.el], items: OVERLAY_KINDS.map((k) => ({ label: `Overlay: ${OVERLAY_LABEL[k]}`, hint: this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
+      { els: [this.ovBar.el], items: OVERLAY_KINDS.map((k) => ({ label: `Overlay: ${OVERLAY_LABEL[k]}`, off: () => this.ovRefusals()[k], icon: 'wave', on: () => this.ovKind === k, run: () => this.setOverlay(this.ovKind === k ? null : k) })) },
       // the lock last: its state (a phone starts locked) has to stay in sight, as a bare icon once the labels go
       { els: [lockBtn], items: [{ label: 'Move parts by dragging', hint: 'Off: a drag on a part pans', icon: 'unlock', on: () => settings.moveParts, run: () => settings.set('moveParts', !settings.moveParts) }] },
     ];
@@ -701,20 +701,27 @@ export class Stage {
     more.setAttribute('aria-expanded', String(open));
     if (!open) return;
     menu.replaceChildren();
+    let said = '';
     for (const g of this.shedGroups) {
       if (!g.els[0].classList.contains('shed') || g.els[0].hidden) continue;
       for (const it of g.items) {
         const on = it.on?.();
+        // asked when the menu opens: what applies depends on the open level (an overlay refused there is shown with why)
+        const why = it.off?.();
+        // the same reason under every refused overlay would fill a phone: said once, the rows after it greyed alone
+        const note = why ? (why === said ? '' : why) : it.hint;
+        if (why) said = why;
         menu.append(h('button', {
+          disabled: !!why,
           role: on === undefined ? 'menuitem' : 'menuitemcheckbox', ...(on === undefined ? {} : { 'aria-checked': String(on) }),
           onclick: () => {
             this.toggleMore(false);
             it.run();
           },
-        }, icon(it.icon, 16), h('span', null, h('b', null, it.label), it.hint ? h('small', null, it.hint) : null)));
+        }, icon(it.icon, 16), h('span', null, h('b', null, it.label), note ? h('small', null, note) : null)));
       }
     }
-    menu.querySelector<HTMLElement>('button')?.focus();
+    menu.querySelector<HTMLElement>('button:not(:disabled)')?.focus();
   }
 
   private syncPanesBtn(): void {
