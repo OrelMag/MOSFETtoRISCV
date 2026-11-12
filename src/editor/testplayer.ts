@@ -274,7 +274,7 @@ export class TestPlayer {
           const got = o.got ? fmtBits(o.got) : '?';
           if (want === undefined) return h('td', { class: 'dc', title: 'not checked in this step' }, got);
           return o.ok ? h('td', { class: 'good', title: 'what your circuit shows: as expected' }, got)
-            : h('td', { class: 'wrong', title: `your circuit shows ${got}, the test expects ${fmtNum(want, p.width)}` }, h('s', null, got), ' ', fmtNum(want, p.width));
+            : h('td', { class: 'wrong', title: `your circuit shows ${got}, the test expects ${fmtNum(want, p.width)}` }, h('s', null, got), ' want ', fmtNum(want, p.width));
         }),
         h('td', { class: 'st' }, fails ? icon('close', 12) : icon('check', 12)),
       ];
