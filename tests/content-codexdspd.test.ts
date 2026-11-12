@@ -74,8 +74,8 @@ describe('group D: converters', () => {
     says('converters', 7, `${f1(chainEnob())} effective bits`);
     says('converters', 7, `${f1(chainEnob(128))}`);
     says('converters', 7, `${f1(chainEnob(256))}`);
-    says('signals', 6, 'effective number of bits');
-    says('signals', 6, `${f1(sqnrDb(8))} dB at 8 bits and ${f1(sqnrDb(16))} dB at 16`);
+    says('signals', 7, 'effective number of bits');
+    says('signals', 7, `${f1(sqnrDb(8))} dB at 8 bits and ${f1(sqnrDb(16))} dB at 16`);
   });
 
   it('successive approximation: the search, the flash count, the capacitor error', () => {

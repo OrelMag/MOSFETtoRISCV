@@ -6,7 +6,8 @@ import '../lib';
 import NET from '../comm/stack/netcosts.json';
 import COSTS from '../net/tcpcosts.json';
 import { TCP_K } from '../net/tcp';
-import { ladderWidget, mbps, realStackWidget, rtoWidget, sawWidget, tcpWindowScene, windowApi, windowWidget } from '../widgets/tcp';
+import { ADDR_BITS, EPHEMERAL_COUNT, EPHEMERAL_FROM, KEY_BITS, PORT_BITS, PORT_MAX, PROBES } from '../net/tcpports';
+import { ladderWidget, mbps, portsApi, portsWidget, realStackWidget, rtoWidget, sawWidget, tcpWindowScene, windowApi, windowWidget } from '../widgets/tcp';
 import type { Chapter } from './types';
 import { numOf } from './order';
 import { groupNum } from '../sim/numfmt';
@@ -25,7 +26,7 @@ export const chTcp: Chapter = {
   id: 'tcp', num: numOf('tcp'), title: 'TCP', level: 'Communication',
   blurb: 'A reliable stream over a network that loses, repeats and reorders: the handshake, sequence numbers, the window, a timer that learns, AIMD\'s sawtooth, and queues that fill, in Python compiled for our CPU.',
   goals: [
-    'read a TCP header and follow sequence and acknowledgment numbers through a handshake, a transfer and a loss',
+    'read a TCP header, say which four numbers find a connection, and follow sequence and acknowledgment numbers through a handshake, a transfer and a loss',
     'say what the receive window and the congestion window each limit, and how the sender learns each one',
     'compute a retransmission timer from round-trip samples, and say why a fixed one fails',
     'explain the sawtooth, why a short queue costs more than a long one, and what a long queue costs instead',
@@ -34,6 +35,7 @@ export const chTcp: Chapter = {
   recap: {
     keep: [
       'TCP gives two applications a stream of bytes over IP, which promises nothing. Every byte has a sequence number; an ACK says "everything before this has arrived". A connection opens with three segments because each side must learn the other\'s first number and know that its own arrived.',
+      `A segment finds its connection by four numbers: source address and port, destination address and port (${KEY_BITS} bits). A listener matches any remote; a segment that matches nothing is answered with a RST.`,
       `A sender may have min(cwnd, rwnd) bytes unacknowledged. The receive window protects the receiver and is announced in every segment. The congestion window protects the network and is announced by nobody: the sender infers it from losses.`,
       'The retransmission timer follows the round trip: SRTT + 4 · RTTVAR (RFC 6298). A retransmitted segment gives no sample (Karn), and each timeout doubles the timer. Three duplicate ACKs signal a loss a round trip sooner than the timer, while data is still flowing.',
       `Additive increase, multiplicative decrease: one segment more per round trip, halve on a loss. The queue at the bottleneck fills until a frame is dropped, so the sawtooth is what finding the limit looks like. Too short a queue leaves too little in flight for three duplicate ACKs, and the timer takes over. A longer queue than the window needs only adds delay.`,
@@ -94,6 +96,29 @@ export const chTcp: Chapter = {
       },
     },
     {
+      title: 'Ports: which connection is this?',
+      body: `
+        <p>An IP address names a machine, and a machine runs many programs. So each end of a connection is an address <em>and</em> a <strong>port</strong>: a ${PORT_BITS}-bit number, 0 to ${n0(PORT_MAX)}, that picks the program. A web server listens on port 443, a mail server on 25. A program that starts a connection takes any free port for itself, its <strong>ephemeral</strong> (short-lived) port; the convention (RFC 6335) is to hand these out from ${n0(EPHEMERAL_FROM)} up, ${n0(EPHEMERAL_COUNT)} of them. A segment carries both ports in its first four bytes, which you have been reading since the first step.</p>
+        <p>A connection is found by <strong>four numbers</strong>: source address, source port, destination address, destination port. That is ${ADDR_BITS} + ${PORT_BITS} + ${ADDR_BITS} + ${PORT_BITS} = ${KEY_BITS} bits, and nothing less will do. Two browser tabs on one laptop talk to the same server's port 443 and differ only in the laptop's port. Two laptops behind one <strong>NAT</strong> (a box that shares one public address between many machines by rewriting their ports) differ only in their addresses. The checksum's pseudo-header already puts both addresses into the sum; the ports are the other half of the same key.</p>
+        <p><strong>Demultiplexing</strong> is the receiver's side. Every segment that IP delivers is looked up by its four numbers among the connections the machine holds. A hit hands the segment to that connection's state machine. A miss has one answer, unless the segment is a SYN to a port where a program listens: a <strong>RST</strong> (reset) segment, "nothing here, stop", with the ports swapped back. (UDP keeps no connections: chapter ${numOf('network')} showed it handing a datagram to whatever listens on the destination port, and that is the whole lookup.)</p>
+        <p>The program never sees segments. It makes three calls, each one a view of the handshake you just read. <code>listen(port)</code> puts a state machine in LISTEN on that port; it matches any remote address and port, the one case where the key has holes, and sends nothing. <code>connect(address, port)</code> picks an ephemeral port, goes to SYN_SENT and sends the SYN. <code>accept()</code> waits for a connection that has reached ESTABLISHED and hands it over. A real operating system gives each arriving SYN a <em>new</em> connection with the full four numbers filled in, and the listener stays in LISTEN for the next one, which is how one port serves thousands of clients. A <strong>socket</strong> is the operating system's handle for one of these: a number the program holds, behind which sit the four numbers, the state, the buffers of the next steps and the sequence numbers. A listening socket and a connected socket are different things with the same local port.</p>
+        <p><strong>Ours is simpler.</strong> The TcpModel of this chapter, and the Python it is compiled from, hold one connection in one set of variables: no sockets, no table, no <code>accept</code>, because the listener <em>becomes</em> the connection (the first SYN fills in the remote address and port and the state moves to SYN_RCVD). The whole lookup is one test: the destination port must be ours and, unless we are listening, the source address and port must be the remote's; anything else is answered with a RST. So a second client calling the same port while the first is connected gets a RST, which a real server would never send. <span class="try">Send each of the four segments below to the server and see which one the connection takes.</span></p>`,
+      widget: (st) => portsWidget(st),
+      tries: [(st) => (portsApi.get(st)?.sent().length ?? 0) >= PROBES.length],
+      challenge: {
+        kind: 'quiz',
+        question: 'Two tabs on your laptop both open a connection to the same server, port 443. What lets the server keep their bytes apart?',
+        options: ['The laptop gave each connection a different source port, so the four numbers differ', 'The server\'s port: it opens 443 twice', 'The sequence numbers: each tab\'s bytes are numbered differently', 'The laptop\'s IP address, which differs per tab'],
+        answer: 0,
+        explain: 'Both segments name the same server address and port, and one listener serves them all. Only the client\'s port tells the two connections apart.',
+        why: ['', 'Both segments name the same destination port. Only the client\'s side of the key differs.', 'Sequence numbers are looked at only after the segment has found its connection; they cannot find it, and two connections could even use the same numbers.', 'Both tabs share the one address. If addresses were the only key, a machine could hold one connection to a server.'],
+      },
+      more: {
+        real: `<p>A real kernel keeps a hash table keyed on the four numbers, and a second table of listeners keyed on the local port, so the lookup is a hash and a compare. Network address translation works because of the key: the box remembers which inside address and port each rewritten outside port stands for. A load balancer or an ECMP router hashes the same four numbers, with the protocol (the five-tuple of chapter ${numOf('datacentre')}), so that every segment of one connection takes one path. A listener's backlog holds half-open connections, and a flood of SYNs fills it, which is why SYN cookies (previous step) exist. QUIC carries its own connection id because the four numbers change when a phone moves from Wi-Fi to cellular, and TCP cannot survive that.</p>`,
+        pitfall: `<p>A port number is not a secret and not an authority. Ports below 1 024 are "well known" by convention, and Unix asks for privilege to listen on them, but nothing in a segment proves that the program at port 443 is a web server. Keeping two programs off one port is the operating system's refusal of the second <code>listen</code>; the wire cannot.</p>`,
+      },
+    },
+    {
       title: 'Numbers that count bytes',
       body: `
         <p>Data goes out in segments of at most the <strong>maximum segment size</strong>, <strong>MSS</strong>, ${MSS} bytes here, each stamped with the number of its first byte. An <strong>ACK</strong> is cumulative: it names the next byte expected, so one ACK covers everything before it, and a lost ACK costs nothing if a later one arrives.</p>
@@ -137,7 +162,7 @@ export const chTcp: Chapter = {
       body: `
         <p>A timer that is too long wastes time after a loss. One that is too short sends data that was only late, adding load just when the network is busiest. The right value depends on a path you cannot see, and it moves. So the sender measures: for one segment at a time it notes when it left and when its ACK came, and keeps a smoothed mean, SRTT, and a smoothed deviation, RTTVAR (RFC 6298). The <strong>retransmission timeout</strong>, RTO, is the timer's length:</p>
         <p><code>RTTVAR ← 3/4 RTTVAR + 1/4 |SRTT − R| &nbsp; SRTT ← 7/8 SRTT + 1/8 R &nbsp; RTO = SRTT + 4 · RTTVAR</code></p>
-        <p>The shifts make that cheap, which matters on our RV32I with no multiply. Two rules finish it. <strong>Karn's</strong>: never sample a segment that was sent twice, since its ACK could belong to either copy. And each timeout <strong>doubles</strong> the timer, until the next valid sample resets it. <span class="try">Widen the spread and watch the dashed fixed timer: it starts firing on round trips that were only late, while the adaptive RTO rises to stay clear of them.</span> <span class="try">Read "RTO now": that is the wait the adaptive timer pays after a real loss.</span></p>`,
+        <p>The weights are 3/4, 1/4, 7/8 and 1/8, so each product is a shift and a subtraction, which matters on our RV32I with no multiply. Two rules finish it. <strong>Karn's</strong>: never sample a segment that was sent twice, since its ACK could belong to either copy. And each timeout <strong>doubles</strong> the timer, until the next valid sample resets it. <span class="try">Widen the spread and watch the dashed fixed timer: it starts firing on round trips that were only late, while the adaptive RTO rises to stay clear of them.</span> <span class="try">Read "RTO now": that is the wait the adaptive timer pays after a real loss.</span></p>`,
       widget: rtoWidget,
       challenge: {
         kind: 'quiz',

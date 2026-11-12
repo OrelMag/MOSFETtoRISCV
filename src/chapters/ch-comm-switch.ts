@@ -142,7 +142,7 @@ export const chSwitch: Chapter = {
           <tr><td>library CAM, 16 entries, 48-bit key store alone, no port or age</td><td>${n0(CAM4)}</td></tr>
           <tr><td>128-entry table as built</td><td>${n0(TAB7)}</td></tr>
           <tr><td>128-entry 48-bit CAM</td><td>${n0(CAM7)}</td></tr></table>`,
-        real: '<p>Production switches use tables of thousands to hundreds of thousands of entries, usually hashed (often by CRC rather than XOR-fold, with several slots per bucket to soften collisions), and some keep a small CAM for the entries that collide. Ageing defaults to minutes. These figures are from memory and vary by product.</p>',
+        real: '<p>Production switches use tables of thousands to hundreds of thousands of entries, usually hashed (often by CRC rather than XOR-fold, with several slots per bucket to soften collisions), and some keep a small CAM for the entries that collide. Ageing defaults to minutes. These figures are indicative, not measured here, and vary by product.</p>',
         pitfall: '<p>A table that is too small does not fail loudly. Hosts that collide still work: every frame between them is flooded, so traffic multiplies by the number of ports minus one, and the evictions counter is the only sign.</p>',
       },
       challenge: {

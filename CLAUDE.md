@@ -1870,7 +1870,7 @@ The guide around the prose (ui/pages/chapter.ts, looks.ts; tests/chapter-guide.t
 - A quiz's `why` (one per option) says why a wrong pick is wrong; a reach challenge's `hints` come before Show answer;
   `Step.tries` ticks the body's `.try` boxes in order once a condition holds. Folded asides: `<details class="deeper">`.
 - Checks (challenges and recap questions, chapters/checks.ts) fill the step dots and the chapter menu's counts.
-- A step inserted mid-chapter shifts the steps after it: `chapter: 'x', step: n` links in the codex and levels (tests/campaign-content, content-codexcomm), the review bank's keys (rerun scripts/review-bank.ts, tests/reviewbank), the manifest, and readers' saved `id:i` solved marks, which nothing migrates.
+- A step inserted mid-chapter shifts the steps after it: `chapter: 'x', step: n` links in the codex and levels (tests/campaign-content, content-codexcomm), the review bank's keys (rerun scripts/review-bank.ts, tests/reviewbank), the manifest, and readers' saved `id:i` solved marks, notes and review memos: append one batch to src/chapters/stepmoves.ts in the same merge (a row per step whose index changes, its current title; never edit a shipped batch; tests/stepmoves.test.ts holds each title to the step now at the target), and every store moves its keys once.
 - A chapter of 15 steps or more (chapters/parts.ts PARTS_MIN) names its parts: `parts: [['Name', stepCount], …]`, counts adding up to the
   steps, 4–7 short unique names (tests/chapter-guide.test.ts). Parts only group the steps in their order, so no address or saved
   progress moves; ui/chapterparts.ts draws one segment per part, the status line and the list (the current part open, folded to

@@ -22,7 +22,7 @@ after one loss Reno climbs back 4167 round trips ≈ 7 minutes on the 100 ms pat
     chapters: [
       { chapter: 'message', step: 2, label: 'What fits on the line' },
       { chapter: 'errors', step: 7, label: 'Asking again' },
-      { chapter: 'tcp', step: 3, label: 'The window: room at the far end' },
+      { chapter: 'tcp', step: 4, label: 'The window: room at the far end' },
       { chapter: 'queues', step: 3, label: 'A window from a formula' },
     ],
   },
@@ -87,10 +87,35 @@ a = e^(−2π · 1 / 8) = 0.456 of the last level left after each bit
     ],
     chapters: [
       { chapter: 'signals', step: 0, label: 'A wave is a sum of sines' },
-      { chapter: 'signals', step: 1, label: 'The same numbers in frequency' },
-      { chapter: 'signals', step: 2, label: 'Narrow in time, wide in frequency' },
+      { chapter: 'signals', step: 2, label: 'The same numbers in frequency' },
+      { chapter: 'signals', step: 3, label: 'Narrow in time, wide in frequency' },
       { chapter: 'spectrum', step: 0, label: 'A tone that is not a line' },
       { chapter: 'spectrum', step: 1, label: 'A window is a choice of skirt' },
+    ],
+  },
+  complex: {
+    idea: `Is there a multiplication that turns a number a quarter of the way round zero? Doing it twice must give −1, so call it <b>j</b>, with j × j = −1. A complex number a + jb is the arrow from zero to the point a along and b up: a is its real part, b its imaginary part, its length is √(a² + b²) and its angle atan2(b, a). Multiplying by j is a quarter turn anticlockwise.<br><br>The rule that makes the picture useful: multiply two arrows and the lengths multiply while the angles add. The arrow of length 1 at angle θ is cos θ + j sin θ, written e<sup>jθ</sup>, and e<sup>jα</sup> e<sup>jβ</sup> = e<sup>j(α+β)</sup> is that rule. With θ = 2πft it turns f times a second and its shadow on the real axis is a cosine. A real cosine is two arrows of length ½ turning opposite ways, so the spectrum of a real signal mirrors itself. A bin of the discrete Fourier transform, X[k] = Σ x[n] e<sup>−j2πkn/N</sup>, adds the samples turned back at k cycles a block: a tone at k lines every term up and the bin is an arrow of length (N / 2) A and the tone's phase as its angle; any other frequency curls round and closes. A radio's I and Q are the two parts of one such arrow.`,
+    example: {
+      title: 'Two products and a bin',
+      body: `<pre>(2 + j)(1 + j) = (2 − 1) + j(2 + 1) = 1 + 3j
+lengths  2.24 × 1.41 = 3.16        angles  26.6° + 45.0° = 71.6°
+(1 + j)(1 − j) = 2                  √2 × √2 = 2,  +45° − 45° = 0°
+e^j0 = 1   e^jπ/2 = j   e^jπ = −1
+256 samples of sin(2π · 8t):  X[8] = 128 at −90°  (amplitude 128 / 128 = 1)   X[9] = 0
+256 samples of a square wave: |X[8]| = 163, |X[24]| = 55 (a third, as 1 / k says)</pre>The chain of the 256 products, head to tail, runs nearly straight at the tone's own bin and closes into loops at any other.`,
+    },
+    mistakes: [
+      'Adding lengths when multiplying. Lengths multiply and angles add; adding the arrows head to tail is a different operation.',
+      'Reading the −f arrow of a real cosine as time running backwards. It is the mirror arrow that cancels the imaginary part; a signal that is truly complex can have one without the other.',
+      'Reading a bin\'s length as the amplitude. A tone of amplitude A makes a bin of length (N / 2) A: divide by N / 2.',
+      'Forgetting that the transform turns the arrows backwards. X[k] uses e<sup>−j2πkn/N</sup>, so a cosine with phase φ gives a bin at the angle +φ.',
+    ],
+    chapters: [
+      { chapter: 'signals', step: 1, label: 'Arrows that turn: complex numbers' },
+      { chapter: 'signals', step: 2, label: 'The same numbers in frequency' },
+      { chapter: 'modem', step: 4, label: 'Phase and amplitude' },
+      { chapter: 'zplane', step: 2, label: 'A delay is z⁻¹' },
+      { chapter: 'sdr', step: 2, label: 'Moving a station to zero' },
     ],
   },
   firfilter: {
@@ -112,9 +137,9 @@ the adders\' ripple carries set the period: 40 gate delays after an edge</pre>`,
       'Reading "no feedback" as "no delay". A symmetric FIR delays every frequency by (n − 1) / 2 samples; that is what keeps pulses in shape and also what a loop has to wait for.',
     ],
     chapters: [
-      { chapter: 'signals', step: 3, label: 'A filter is a sum of delayed samples' },
-      { chapter: 'signals', step: 4, label: 'A filter in gates' },
-      { chapter: 'noise', step: 3, label: 'The matched filter' },
+      { chapter: 'signals', step: 4, label: 'A filter is a sum of delayed samples' },
+      { chapter: 'signals', step: 5, label: 'A filter in gates' },
+      { chapter: 'noise', step: 4, label: 'The matched filter' },
       { chapter: 'firdesign', step: 0, label: 'A mask, and mirror-image taps' },
       { chapter: 'firdesign', step: 2, label: 'Parks–McClellan' },
       { chapter: 'firdesign', step: 6, label: 'One multiplier, N clocks' },
@@ -137,8 +162,8 @@ rounding to b bits: 6.02 b + 1.76 dB   8 bits 49.9 dB   16 bits 98.1 dB</pre>An 
       'Buying more converter bits than the SNR can use. At 42 dB above the analog noise, about 7 bits (6.7 by the formula) record the signal and more only record the noise more exactly.',
     ],
     chapters: [
-      { chapter: 'signals', step: 5, label: 'Sampling, and what folds' },
-      { chapter: 'signals', step: 6, label: 'Rounding to a number' },
+      { chapter: 'signals', step: 6, label: 'Sampling, and what folds' },
+      { chapter: 'signals', step: 7, label: 'Rounding to a number' },
       { chapter: 'multirate', step: 1, label: 'Throwing samples away' },
     ],
   },
@@ -159,7 +184,7 @@ I / Q arms: about ½ % gain error or a third of a degree of phase → an image a
       'Assuming any carrier will do on the way back. A carrier out by φ shrinks the result by cos φ, and at 90° the signal is gone.',
     ],
     chapters: [
-      { chapter: 'signals', step: 7, label: 'A mixer moves a band' },
+      { chapter: 'signals', step: 8, label: 'A mixer moves a band' },
       { chapter: 'radio', step: 3, label: 'The mixer' },
     ],
   },
@@ -186,6 +211,32 @@ the order alone costs 9.7 dB</pre>9.7 dB is about 9 times the transmit power for
       { chapter: 'radio', step: 2, label: 'The link budget' },
     ],
   },
+  gaussian: {
+    idea: `Sort 20 000 samples of a wandering voltage into bins and the bars settle into a hill, tall in the middle and falling fast on both sides: the Gaussian or normal curve, proportional to e<sup>−x²/2σ²</sup>. The shape comes from the central limit theorem: a sum of many independent small things has this shape whatever each one looks like, and thermal noise is a sum of an enormous number of tiny pushes. <b>σ</b> is the width, the RMS of the samples (square, average, root), the typical distance from the middle; the share within ±σ, ±2σ, ±3σ is fixed at 68.3 %, 95.4 %, 99.73 %, and doubling σ makes the hill twice as wide and half as tall.<br><br>A receiver reading a level a distance d from its threshold errs when noise carries a sample past it. The chance is the area of the hill beyond d, the tail <b>Q(d / σ)</b>, which depends only on how many σ the margin is. It has no closed form in simple functions, so Q(x) = ½ erfc(x / √2) is tabulated; for large x it is about e<sup>−x²/2</sup> / (x √(2π)), so each extra σ cuts the chance by more than the last. One decision looks at one side, so Q is right and not 2Q; the 2Q(3) of a keeper counts both sides.`,
+    example: {
+      title: 'The tail at 1 to 7 σ, and what it means at 1 Gb/s',
+      body: `<pre>d / σ    Q(d / σ)         one in            at 1 Gb/s, an error every
+1        1.59 × 10⁻¹      6.3               6.3 ns
+2        2.28 × 10⁻²      44                44 ns
+3        1.35 × 10⁻³      741               741 ns
+4        3.17 × 10⁻⁵      31 574            32 µs
+5        2.87 × 10⁻⁷      3.5 million       3.5 ms
+6        9.87 × 10⁻¹⁰     1.0 billion       1 s
+7        1.28 × 10⁻¹²     7.8 × 10¹¹        13 minutes
+σ = 0.2 V, level 0.6 V from the threshold: 3 σ, wrong one time in 741
+a hysteresis 6 σ wide is ±3 σ: 2 Q(3) = 0.27 % of samples outside</pre>`,
+    },
+    mistakes: [
+      'Treating the tail as proportional to the ratio. It falls far faster: from 3 σ to 6 σ the chance drops by a factor of about a million.',
+      'Using 2Q(d / σ) for one decision. Noise that carries a "1" down across the threshold is one tail; 2Q counts both sides, as a keeper does.',
+      'Believing a large margin makes errors impossible. A Gaussian tail has no end: a sample beyond 3 σ is rare, and across a billion bits it happens a great deal.',
+      'Trying to measure a far tail by counting errors. At 7 σ one decision in 7.8 × 10¹¹ fails: the formula has to do it.',
+    ],
+    chapters: [
+      { chapter: 'noise', step: 2, label: 'The bell curve and its tail' },
+      { chapter: 'noise', step: 3, label: 'A decision' },
+    ],
+  },
   matchedfilter: {
     idea: `A symbol lasts many samples and looking at one wastes the rest. Take a weighted sum Σ w<sub>k</sub> r<sub>k</sub> of samples r = pulse p plus noise of σ on each, and compare it with zero. The signal part is Σ w p; the noise part has variance σ² Σ w². The Cauchy–Schwarz inequality says the SNR (Σ w p)² / (σ² Σ w²) is largest when w is proportional to p, and there it equals <b>E / σ²</b>: the pulse\'s energy over the noise per sample (D. O. North, 1943). In continuous time the filter\'s impulse response is the pulse reversed in time.<br><br>Two things follow. The best SNR depends on the pulse\'s energy and not its shape, so a shape can be chosen for its band without loss to noise. And for a rectangle all weights are equal, so the best receiver just averages: over 16 samples that gains 10 log<sub>10</sub> 16 = 12.0 dB on one. It is forgiving: for half a sine, plain averaging is 0.90 dB short. Practical links split the filter between the ends, a root-raised-cosine at the transmitter and the same at the receiver, whose product leaves no intersymbol interference at the sampling instants.`,
     example: {
@@ -204,8 +255,8 @@ half a sine: averaging all is 0.90 dB below matched</pre>The signal adds in step
       'Adding more samples of the same signal in the same noise density and expecting more SNR. Finer sampling adds no energy.',
     ],
     chapters: [
-      { chapter: 'noise', step: 3, label: 'The matched filter' },
-      { chapter: 'noise', step: 4, label: 'One axis for every link' },
+      { chapter: 'noise', step: 4, label: 'The matched filter' },
+      { chapter: 'noise', step: 5, label: 'One axis for every link' },
     ],
   },
   ebn0: {
@@ -226,8 +277,8 @@ binary ±1 input at rate ½: limit 0.19 dB</pre>`,
       'Reading −1.59 dB as reachable. It is the limit for codes of unbounded length; a real code stops short of it, and the uncoded curve sits 11.2 dB above it at 10<sup>−5</sup>.',
     ],
     chapters: [
-      { chapter: 'noise', step: 4, label: 'One axis for every link' },
-      { chapter: 'noise', step: 5, label: 'Power or band' },
+      { chapter: 'noise', step: 5, label: 'One axis for every link' },
+      { chapter: 'noise', step: 6, label: 'Power or band' },
       { chapter: 'codes', step: 6, label: 'How far from Shannon' },
     ],
   },

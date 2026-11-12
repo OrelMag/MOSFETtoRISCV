@@ -251,6 +251,7 @@ export const TAUGHT: Record<string, string> = {
   fastpath: 'router',
   routing: 'router',
   tcp: 'tcp',
+  ports: 'tcp',
   aimd: 'tcp',
   bufferbloat: 'tcp',
   bgp: 'path',

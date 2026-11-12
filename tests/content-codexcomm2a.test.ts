@@ -10,6 +10,7 @@ import { moreOf } from '../src/campaign/codexmore';
 import { chapterById } from '../src/chapters';
 import { MIN_FRAME } from '../src/comm/ethframe';
 import { ebn0For, shannonBinaryDb, uncodedBer } from '../src/comm/ber';
+import { arrow, product } from '../src/comm/arrows';
 import { gibbsOvershoot, poleGain, powerShare, swing1010, tauOf, toDb } from '../src/comm/fourier';
 import { dbToRatio, EBN0_MIN, ratioToDb } from '../src/comm/limits';
 import { layerCost, onTheLine, travelTime, WIRE_OVERHEAD } from '../src/comm/message';
@@ -114,7 +115,16 @@ describe('group A: signals', () => {
     says('signals', 0, '350 ps');
     says('signals', 0, `${(1 - 2 * A8).toFixed(3)}`);
     says('signals', 0, '9.1 × B');
-    says('signals', 1, 'N / 2 + 1');
+    says('signals', 2, 'N / 2 + 1');
+  });
+
+  it('complex numbers: the arrows the entry quotes', () => {
+    const r = product(arrow(2, 1), arrow(1, 1));
+    quotes('complex', '1 + 3j', r.lengths[0].toFixed(2), r.lengths[1].toFixed(2), r.lengths[2].toFixed(2), r.angles[0].toFixed(1), r.angles[2].toFixed(1), '163', '55', 'N / 2');
+    says('signals', 1, '1 + 3j');
+    says('signals', 1, r.lengths[2].toFixed(2));
+    says('signals', 1, r.angles[2].toFixed(1));
+    expect(moreOf('complex')!.chapters!.every((l) => chapterById(l.chapter!)!.steps[l.step!]?.title === l.label)).toBe(true);
   });
 
   it('FIR filter: taps 1 4 6 4 1 in gates', () => {
@@ -133,12 +143,12 @@ describe('group A: signals', () => {
     expect(binomialGain(0.5)).toBeCloseTo(0, 12);
     expect(resolveComponent(moreOf('firfilter')!.lib!)).toBeTruthy();
     quotes('firfilter', c(nands(FIR5)), c(5 * reg8), c(mul8), c(3 * mul8), FIR_SETTLE, '0.250', '−2048', '16', '3.3 / n', '1 − 4 + 6 − 4 + 1 = 0');
-    says('signals', 4, c(nands(FIR5)));
-    says('signals', 4, c(5 * reg8));
-    says('signals', 4, c(mul8));
-    says('signals', 4, `${FIR_SETTLE} delays`);
-    says('signals', 4, binomialGain(0.25).toFixed(3));
-    says('signals', 3, '3.3 / n');
+    says('signals', 5, c(nands(FIR5)));
+    says('signals', 5, c(5 * reg8));
+    says('signals', 5, c(mul8));
+    says('signals', 5, `${FIR_SETTLE} delays`);
+    says('signals', 5, binomialGain(0.25).toFixed(3));
+    says('signals', 4, '3.3 / n');
   });
 
   it('sampling and aliasing: where a tone folds', () => {
@@ -151,12 +161,12 @@ describe('group A: signals', () => {
     expect(sqnrDb(16).toFixed(1)).toBe('98.1');
     expect(((42 - 1.76) / 6.02).toFixed(1)).toBe('6.7');
     quotes('aliasing', '3 kHz', '18 kHz', '49.9 dB', '98.1 dB', '6.02 b + 1.76 dB', '3.4 kHz', '8 kHz', '44.1 kHz', '6.7 by the formula');
-    says('signals', 5, '3.4 kHz');
-    says('signals', 5, '8 kHz');
-    says('signals', 5, '44.1 kHz');
-    says('signals', 6, `${sqnrDb(8).toFixed(1)} dB`);
-    says('signals', 6, `${sqnrDb(16).toFixed(1)} dB`);
-    says('signals', 6, '6.02 b + 1.76 dB');
+    says('signals', 6, '3.4 kHz');
+    says('signals', 6, '8 kHz');
+    says('signals', 6, '44.1 kHz');
+    says('signals', 7, `${sqnrDb(8).toFixed(1)} dB`);
+    says('signals', 7, `${sqnrDb(16).toFixed(1)} dB`);
+    says('signals', 7, '6.02 b + 1.76 dB');
   });
 
   it('mixer: the product, the sidebands, the image', () => {
@@ -167,8 +177,8 @@ describe('group A: signals', () => {
     expect(Math.abs(2.41 - 2.4)).toBeCloseTo(0.01, 12);
     expect(Math.cos(Math.PI / 2)).toBeCloseTo(0, 12);
     quotes('mixer', '96 to 104 kHz', '2.390 GHz', '0.980 GHz', '10 MHz', '20 MHz', '−50 dB', 'cos φ', 'a third of a degree');
-    says('signals', 7, 'cos a · cos b = ½ cos(a − b) + ½ cos(a + b)');
-    const q = chapterById('signals')!.steps[7].challenge;
+    says('signals', 8, 'cos a · cos b = ½ cos(a − b) + ½ cos(a + b)');
+    const q = chapterById('signals')!.steps[8].challenge;
     expect(q?.kind === 'quiz' && q.options[0], 'the chapter quiz').toContain('96 to 104 kHz');
     says('radio', 3, '−50 dB');
     says('radio', 3, 'a third of a degree');
@@ -214,9 +224,9 @@ describe('group A: noise', () => {
     // matched: SNR = Σ p² / σ², whatever the shape
     for (const p of PULSES) expect(snrAfter(p.shape, RECEIVERS[2].weights(p.shape), 1)).toBeCloseTo(p.shape.reduce((m, v) => m + v * v, 0), 9);
     quotes('matchedfilter', '12.0 dB', '0.90 dB', '18.1 dB', '16 samples', 'E / σ²');
-    says('noise', 3, '12.0 dB');
-    says('noise', 3, '0.90 dB');
-    says('noise', 3, 'E / σ²');
+    says('noise', 4, '12.0 dB');
+    says('noise', 4, '0.90 dB');
+    says('noise', 4, 'E / σ²');
   });
 
   it('Eb/N0: the curve, the limit and the gap', () => {
@@ -230,18 +240,18 @@ describe('group A: noise', () => {
     expect(Math.round(10 * Math.log10(1e9 / 1e3))).toBe(60);
     expect(ebn0For(uncodedBer, 1e-2).toFixed(1)).toBe('4.3');
     quotes('ebn0', '9.59 dB', '9.6 dB', '12.5 dB', '−1.59 dB', '11.2 dB', 'factor of 13', '0.19 dB', '60 dB');
-    says('noise', 4, `${e5.toFixed(1)} dB`);
-    says('noise', 4, `${e9.toFixed(1)} dB`);
-    says('noise', 4, `${minus(wall, 2)} dB`);
-    says('noise', 4, `${(e5 - wall).toFixed(1)} dB`);
-    const q = chapterById('noise')!.steps[4].challenge;
+    says('noise', 5, `${e5.toFixed(1)} dB`);
+    says('noise', 5, `${e9.toFixed(1)} dB`);
+    says('noise', 5, `${minus(wall, 2)} dB`);
+    says('noise', 5, `${(e5 - wall).toFixed(1)} dB`);
+    const q = chapterById('noise')!.steps[5].challenge;
     expect(q?.kind === 'quiz' && q.explain, 'the chapter quiz').toContain('60 dB more power');
-    says('noise', 6, `${shannonBinaryDb(0.5).toFixed(2)} dB`);
+    says('noise', 7, `${shannonBinaryDb(0.5).toFixed(2)} dB`);
   });
 });
 
 describe('group A: shape', () => {
-  it('has the ten entries, each linked from its teaching chapter', () => {
-    expect(CODEX_A.map((e) => e.id)).toEqual(['bdp', 'layers', 'decibel', 'fourier', 'firfilter', 'aliasing', 'mixer', 'thermalnoise', 'matchedfilter', 'ebn0']);
+  it('has the twelve entries, each linked from its teaching chapter', () => {
+    expect(CODEX_A.map((e) => e.id)).toEqual(['bdp', 'layers', 'decibel', 'fourier', 'complex', 'firfilter', 'aliasing', 'mixer', 'thermalnoise', 'gaussian', 'matchedfilter', 'ebn0']);
   });
 });

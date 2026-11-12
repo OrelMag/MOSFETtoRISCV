@@ -137,7 +137,7 @@ break-even against an FFT: 16 bins for 256 samples, 12 for 64</pre>Eight cells w
       'Using an even-length symmetric filter as a high-pass. It always has a zero at z = −1, so the gain at half the sample rate is zero.',
     ],
     chapters: [
-      { chapter: 'signals', step: 3, label: 'A filter is a sum of delayed samples' },
+      { chapter: 'signals', step: 4, label: 'A filter is a sum of delayed samples' },
       { chapter: 'zplane', step: 6, label: 'Same gain, different delay' },
       { chapter: 'firdesign', step: 0, label: 'A mask, and mirror-image taps' },
     ],

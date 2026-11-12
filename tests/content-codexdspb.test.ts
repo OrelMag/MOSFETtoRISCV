@@ -153,7 +153,7 @@ describe('group B: FIR design', () => {
     says('firdesign', 0, nf(linearDelay(F.ch.n), 1));
     says('zplane', 6, '(N − 1) / 2 samples');
     // the signals chapter's step that teaches it
-    expect(strip(chapterById('signals')!.steps[3].body)).toMatch(/twice the delay/);
+    expect(strip(chapterById('signals')!.steps[4].body)).toMatch(/twice the delay/);
   });
 
   it('windowdesign', () => {

@@ -78,7 +78,7 @@ describe('chapter 52', () => {
     const k = runTcp(o).segs.findIndex((x) => x.from === 'a' && x.seg.data.length > 0 && x.seg.seq - 0x1000 === 193);
     expect(k).toBeGreaterThan(0);
     expect(runTcp({ ...o, lost: new Set([k]) }).fast).toBe(1);
-    expect(chTcp.steps[2].body).toContain('ACK seq 193');
+    expect(chTcp.steps[3].body).toContain('ACK seq 193');
   });
   it('the timer step: a wider spread makes the fixed timer fire before the step, and the adaptive one wait longer', () => {
     const before = (spread: number) => rttSamples(60000, spread).slice(0, 41).filter((r) => r > 78000).length;

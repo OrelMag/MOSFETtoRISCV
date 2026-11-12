@@ -53,7 +53,7 @@ export const chMessage: Chapter = {
         options: ['Divides it by 10: the sum is −10 dB', 'Multiplies it by 36 000: 20 × 60 × 30', 'Nothing: the amplifiers make up for the cable', 'Divides it by 60'],
         answer: 0,
         explain: `Decibels add: 20 − 60 + 30 = −10 dB, a ratio of ${dbToRatio(-10)}.`,
-        why: ['', 'Decibels are already logarithms, so they add. Multiplying them has no meaning.', 'The amplifiers add 50 dB and the cable takes 60.', 'That treats −60 dB as a ratio of 60. It is a ratio of a million.'],
+        why: ['', 'Decibels are already logarithms, so they add. Multiplying them has no meaning.', 'The amplifiers add 50 dB and the cable takes 60.', 'That treats −60 dB as a ratio of 60. It is a ratio of one in a million.'],
       },
     ],
   },
@@ -126,7 +126,7 @@ export const chMessage: Chapter = {
       title: 'Layers',
       body: `
         <p>Nobody writes one program that knows about voltages, routes across the world and which browser tab wants the data. The job is split into <strong>layers</strong>, each using the one below as a service and adding a header of its own: an envelope inside an envelope.</p>
-        <p><span data-ahead="tcp">TCP, in the program's computer, numbers the bytes so nothing is lost or out of order.</span> IP names the machine anywhere in the world. Ethernet names the next machine along this one cable and checks that its packet, which it calls a <em>frame</em>, came through. At each <em>hop</em>, each machine along the way, the outer envelope is opened and replaced, and the inner ones travel nearly untouched: a router reads the IP header to choose the next hop and only counts down its hop limit.</p>
+        <p><span data-ahead="tcp">TCP, running on the sending computer, numbers the bytes so nothing is lost or out of order.</span> IP names the machine anywhere in the world. Ethernet names the next machine along this one cable and checks that its packet, which it calls a <em>frame</em>, came through. At each <em>hop</em>, each machine along the way, the outer envelope is opened and replaced, and the inner ones travel nearly untouched: a router reads the IP header to choose the next hop and only counts down its hop limit.</p>
         <p>The layers can change independently, which is the whole point: the same web page crosses Wi-Fi, then fibre, then copper. The price is ${WIRE_OVERHEAD + 40} bytes on every packet, and a frame too short is padded to Ethernet's minimum. On a full frame that is ${(100 * (1 - full.share)).toFixed(1)} %; on a one-byte message it is nearly all of it.</p>
         <div class="try">Slide the data down to 1 byte and read what share of the wire is your data.</div>`,
       widget: layersWidget,
