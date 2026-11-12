@@ -9,6 +9,8 @@ import { SapISS } from '../sap/iss';
 import { SAP_PROGRAMS } from '../sap/programs';
 import { h, s } from '../ui/dom';
 import type { Widget } from '../view/stage';
+import { reducedMotion } from '../ui/motion';
+import { loadOf, VDD } from './mosphys';
 import { LOOP_RANGE } from './water';
 import type { WaterMount } from './waterkit';
 
@@ -19,6 +21,23 @@ const fmt = (x: number, d = 2) => x.toFixed(d);
 
 const btn = (label: string, onclick: () => void, extra = '') => h('button', { class: `btn sm${extra}`, type: 'button', onclick }, label);
 const readout = (...cells: [string, string][]) => h('div', { class: 'readout' }, ...cells.map(([v, l]) => h('div', null, h('b', null, v), h('span', null, l))));
+
+/** The loop's pieces, shared by step 1 and step 2 (the bucket): the cell, left, at x 62..118; the switch on the top wire, x 230..300. */
+function cellDrawing(volts: number): SVGElement[] {
+  return [
+    // the cell: long plate +, short plate −
+    s('line', { x1: 62, y1: 108, x2: 118, y2: 108, class: 'bx-sym' }), s('line', { x1: 76, y1: 122, x2: 104, y2: 122, class: 'bx-sym thick' }),
+    s('line', { x1: 62, y1: 138, x2: 118, y2: 138, class: 'bx-sym' }), s('line', { x1: 76, y1: 152, x2: 104, y2: 152, class: 'bx-sym thick' }),
+    s('text', { x: 126, y: 112, class: 'bx-lbl' }, '+'), s('text', { x: 126, y: 158, class: 'bx-lbl' }, '−'),
+    s('text', { x: 14, y: 135, class: 'bx-big' }, `${volts} V`),
+  ];
+}
+function switchDrawing(closed: boolean, w: string): SVGElement[] {
+  return [
+    s('circle', { cx: 230, cy: 50, r: 5, class: 'bx-pin' }), s('circle', { cx: 300, cy: 50, r: 5, class: 'bx-pin' }),
+    s('line', closed ? { x1: 233, y1: 48, x2: 297, y2: 48, class: w } : { x1: 233, y1: 47, x2: 290, y2: 18, class: 'bx-wire' }),
+  ];
+}
 
 /** Step 1: a closed loop lights the lamp; open it anywhere and the current is 0 all round. */
 export function loopWidget(): Widget {
@@ -92,14 +111,8 @@ export function loopWidget(): Widget {
       s('path', { class: w, d: `M460 ${lampY[lampY.length - 1] + 24} V225 H${cut ? 300 : 90}` }),
       s('path', { class: w, d: `M${cut ? 260 : 90} 225 H90 V160` }),
       ...(cut ? [s('text', { x: 280, y: 214, class: 'bx-lbl', 'text-anchor': 'middle' }, 'cut')] : []),
-      // the cell: long plate +, short plate −
-      s('line', { x1: 62, y1: 108, x2: 118, y2: 108, class: 'bx-sym' }), s('line', { x1: 76, y1: 122, x2: 104, y2: 122, class: 'bx-sym thick' }),
-      s('line', { x1: 62, y1: 138, x2: 118, y2: 138, class: 'bx-sym' }), s('line', { x1: 76, y1: 152, x2: 104, y2: 152, class: 'bx-sym thick' }),
-      s('text', { x: 126, y: 112, class: 'bx-lbl' }, '+'), s('text', { x: 126, y: 158, class: 'bx-lbl' }, '−'),
-      s('text', { x: 14, y: 135, class: 'bx-big' }, `${volts} V`),
-      // the switch
-      s('circle', { cx: 230, cy: 50, r: 5, class: 'bx-pin' }), s('circle', { cx: 300, cy: 50, r: 5, class: 'bx-pin' }),
-      s('line', closed ? { x1: 233, y1: 48, x2: 297, y2: 48, class: w } : { x1: 233, y1: 47, x2: 290, y2: 18, class: 'bx-wire' }),
+      ...cellDrawing(volts),
+      ...switchDrawing(closed, w),
       s('text', { x: 265, y: 82, class: 'bx-lbl', 'text-anchor': 'middle' }, closed ? 'switch closed' : 'switch open'),
       ...lampY.map((y) => lampAt(460, y, p)),
       s('text', { x: 500, y: lampY[0] + 5, class: 'bx-lbl' }, lamps === 1 ? 'lamp' : 'lamps'),
@@ -115,6 +128,189 @@ export function loopWidget(): Widget {
   }
   render();
   return { el, destroy() { dead = true; water?.destroy(); water = null; } };
+}
+
+// ---- Step 2: a bucket of charge. The closed form v(t) = V·(1 − e^(−t/RC)), DOM-free, then the widget that animates it. ----
+
+/** The bucket: the loop's 1.5 V cell through 1 kΩ into 1 000 µF, so RC = 1 s, Q = 1.5 mC. The slider' ranges are in Ω and µF. */
+export const RC = { volts: LOOP.volts, ohms: 1000, farads: 1e-3 };
+export const RC_RANGE = { ohms: [100, 10000] as const, microfarads: [100, 4700] as const };
+/** A gate driving two inputs, from the MOSFET chapter's own constants (widgets/mosphys.ts): 5 fF, 1.8 V, C·V² = 16 fJ a swing. */
+export const GATE = { femtofarads: loadOf(2), volts: VDD, femtojoules: loadOf(2) * VDD * VDD };
+
+export interface RcPart { volts: number; ohms: number; farads: number }
+/** The switch: connected to the cell (charge), open, or the cell taken out and the bucket emptied through R (discharge). */
+export type RcMode = 'charge' | 'open' | 'discharge';
+export interface RcEvent { at: number; mode: RcMode }
+
+/** The time constant R·C, in seconds. */
+export const rc = (p: Pick<RcPart, 'ohms' | 'farads'>): number => p.ohms * p.farads;
+/** After t = RC the voltage has covered 1 − 1/e of the way: 63.2 %. After 5 RC, 99.3 %. */
+export const FRACTION_AT_RC = 1 - Math.exp(-1);
+export const FRACTION_AT_5RC = 1 - Math.exp(-5);
+
+/** Voltage on C, t seconds after the switch went to `mode` with v0 on C. */
+export function voltageAt(t: number, p: RcPart, mode: RcMode, v0 = 0): number {
+  if (mode === 'open') return v0;
+  const target = mode === 'charge' ? p.volts : 0;
+  return target + (v0 - target) * Math.exp(-t / rc(p));
+}
+/** Current into C (A; negative while emptying): the voltage left to push, over R. */
+export function currentAt(t: number, p: RcPart, mode: RcMode, v0 = 0): number {
+  if (mode === 'open') return 0;
+  return ((mode === 'charge' ? p.volts : 0) - voltageAt(t, p, mode, v0)) / p.ohms;
+}
+/** Q = C·V, in coulombs. */
+export const chargeOf = (p: Pick<RcPart, 'farads'>, v: number): number => p.farads * v;
+/** Energy so far, J: `drawn` is what the cell has pushed (Q·V for the charge it has moved); ½C·v² is stored, the rest warmed R. */
+export function energies(p: Pick<RcPart, 'farads'>, v: number, drawn: number): { battery: number; stored: number; heat: number } {
+  const stored = 0.5 * p.farads * v * v;
+  return { battery: drawn, stored, heat: drawn - stored };
+}
+
+export interface RcNow { v: number; i: number; q: number; battery: number; stored: number; heat: number }
+/** The bucket at time t (s) when it starts empty and the switch is thrown at each event in turn. */
+export function rcRun(p: RcPart, events: readonly RcEvent[], t: number): RcNow {
+  let v = 0, drawn = 0, mode: RcMode = 'open', at = 0;
+  const to = (when: number): number => {
+    const v1 = voltageAt(Math.max(0, when - at), p, mode, v);
+    if (mode === 'charge') drawn += (v1 - v) * p.farads * p.volts;
+    return v1;
+  };
+  for (const e of events) {
+    if (e.at >= t) break;
+    v = to(e.at); at = e.at; mode = e.mode;
+  }
+  const i = currentAt(Math.max(0, t - at), p, mode, v);
+  v = to(t);
+  return { v, i, q: chargeOf(p, v), ...energies(p, v, drawn) };
+}
+
+const thin = (n: number): string => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const sig = (x: number, n = 3): string => String(+x.toPrecision(n));
+/** 1 000 Ω → "1 kΩ"; 100 Ω → "100 Ω". */
+export const fmtOhms = (r: number): string => (r >= 1000 ? `${sig(r / 1000)} kΩ` : `${sig(r)} Ω`);
+export const fmtMicrofarads = (f: number): string => `${thin(f * 1e6)} µF`;
+export const fmtSeconds = (t: number): string => (t >= 0.1 ? `${sig(t)} s` : `${sig(t * 1e3)} ms`);
+export const fmtMilli = (x: number, unit: string, d = 4): string => `${+(x * 1e3).toPrecision(d)} m${unit}`;
+
+/** Step 2: close the switch and watch a capacitor fill through a resistor; open it, or empty it again. */
+export function bucketWidget(): Widget {
+  const part: RcPart = { ...RC };
+  let events: RcEvent[] = [], T = 0, raf = 0, last = 0, dead = false;
+  const mode = (): RcMode => events[events.length - 1]?.mode ?? 'open';
+  const since = (): number => T - (events[events.length - 1]?.at ?? 0);
+  /** Still moving: a switch position that changes the voltage, and not yet 8 RC after it was thrown. */
+  const running = (): boolean => mode() !== 'open' && since() < 8 * rc(part);
+
+  const loop = s('svg', { viewBox: '0 0 560 270', class: 'bx-svg', role: 'img' });
+  const curve = s('svg', { viewBox: '0 0 460 270', class: 'bx-svg', role: 'img' });
+  const sw = h('div', { class: 'bx-row', role: 'group', 'aria-label': 'The switch' });
+  const wait = btn('Wait one RC', () => { T += rc(part); render(); });
+  const out = h('div'), bars = h('div', { class: 'bx-bars' });
+  const slider = (label: string, min: number, max: number, value: number, text: (x: number) => string, set: (x: number) => void) => {
+    const o = h('output', null, text(value));
+    const input = h('input', { type: 'range', min, max, step: 0.01, value: Math.log10(value), 'aria-label': label, 'aria-valuetext': text(value) }) as HTMLInputElement;
+    input.addEventListener('input', () => {
+      const x = +(10 ** +input.value).toPrecision(3);
+      o.textContent = text(x); input.setAttribute('aria-valuetext', text(x));
+      set(x); restart();
+    });
+    return h('label', { class: 'slider' }, h('span', null, label), input, o);
+  };
+  const rSl = slider('R', Math.log10(RC_RANGE.ohms[0]), Math.log10(RC_RANGE.ohms[1]), part.ohms, fmtOhms, (x) => { part.ohms = x; });
+  const cSl = slider('C', Math.log10(RC_RANGE.microfarads[0]), Math.log10(RC_RANGE.microfarads[1]), part.farads * 1e6, (x) => fmtMicrofarads(x * 1e-6), (x) => { part.farads = x * 1e-6; });
+  const el = h('div', { class: 'widget' }, h('div', { class: 'wgrid' },
+    h('div', { class: 'panel' }, h('h3', null, 'A cell, a switch, a resistor and a capacitor'),
+      h('p', { class: 'sub' }, 'Close the switch to fill the capacitor, open it to hold the charge, Discharge to empty it through R. Moving a slider starts again from empty.'),
+      loop, sw, rSl, cSl),
+    h('div', { class: 'panel' }, h('h3', null, 'The voltage on the capacitor'),
+      h('p', { class: 'sub' }, 'Drawn as time passes. The dashed line marks one RC: 63 % of the way.'), curve, out, bars)));
+
+  /** Slider moved: the parts changed, so the bucket is empty again and the switch open. */
+  function restart(): void { events = []; T = 0; render(); }
+  function throwTo(m: RcMode): void {
+    if (mode() === m) return;
+    events.push({ at: T, mode: m });
+    render();
+  }
+
+  function frame(ts: number): void {
+    raf = 0;
+    T += Math.min(0.1, (ts - last) / 1000); last = ts;
+    render();
+  }
+  function kick(): void {
+    if (raf || dead || reducedMotion() || !running()) return;
+    last = performance.now(); raf = requestAnimationFrame(frame);
+  }
+
+  function drawLoop(now: RcNow): void {
+    const m = mode(), tau = rc(part), frac = now.v / part.volts;
+    const flowing = Math.abs(now.i) > 0.003 * part.volts / part.ohms;
+    const w = flowing ? 'bx-wire on' : 'bx-wire';
+    const n = Math.round(5 * frac);
+    loop.setAttribute('aria-label', `A ${part.volts} V cell, a switch, a ${fmtOhms(part.ohms)} resistor and a ${fmtMicrofarads(part.farads)} capacitor in a loop. Switch ${m === 'charge' ? 'closed' : m === 'open' ? 'open' : 'set to discharge'}. The capacitor holds ${sig(now.v)} V.`);
+    loop.replaceChildren(
+      s('path', { class: w, d: 'M90 100 V50 H230' }), s('path', { class: w, d: 'M300 50 H330' }),
+      s('path', { class: w, d: 'M330 50 l8 -14 l12 28 l12 -28 l12 28 l12 -28 l8 14', style: 'stroke-width:3' }), s('path', { class: w, d: 'M394 50 H460 V110' }),
+      s('path', { class: w, d: 'M460 130 V225 H90 V160' }),
+      s('g', { class: m === 'discharge' ? 'bx-dim' : '' }, ...cellDrawing(part.volts)),
+      ...(m === 'discharge' ? [s('path', { class: w, d: 'M90 100 V160' })] : []),
+      ...switchDrawing(m !== 'open', w),
+      s('text', { x: 265, y: 82, class: 'bx-lbl', 'text-anchor': 'middle' }, m === 'charge' ? 'switch closed' : m === 'open' ? 'switch open' : 'cell taken out'),
+      s('text', { x: 362, y: 84, class: 'bx-lbl', 'text-anchor': 'middle' }, `R ${fmtOhms(part.ohms)}`),
+      // the capacitor: two plates with a gap, the gap tinted by how full it is
+      s('rect', { x: 430, y: 110, width: 60, height: 20, class: 'bx-glow', style: `opacity:${frac}` }),
+      s('line', { x1: 430, y1: 110, x2: 490, y2: 110, class: 'bx-sym thick' }), s('line', { x1: 430, y1: 130, x2: 490, y2: 130, class: 'bx-sym thick' }),
+      s('text', { x: 500, y: 108, class: 'bx-lbl bx-pos' }, '+'.repeat(n)), s('text', { x: 500, y: 140, class: 'bx-lbl bx-neg' }, '−'.repeat(n)),
+      s('text', { x: 470, y: 168, class: 'bx-lbl' }, `C ${fmtMicrofarads(part.farads)}`),
+      s('text', { x: 470, y: 186, class: 'bx-lbl' }, `${sig(now.v)} V`),
+      ...(flowing ? [s('text', { x: 400, y: 40, class: 'bx-lbl' }, now.i > 0 ? `${fmtMilli(now.i, 'A', 3)} →` : `← ${fmtMilli(-now.i, 'A', 3)}`)] : []),
+      s('text', { x: 175, y: 252, class: 'bx-lbl' }, `RC = ${fmtSeconds(tau)}`));
+  }
+
+  function drawCurve(): void {
+    const tau = rc(part), xmax = Math.max(6 * tau, T * 1.04);
+    const L = 48, R = 446, Tp = 24, B = 226, X = (t: number) => L + (t / xmax) * (R - L), Y = (v: number) => B - (v / part.volts) * (B - Tp);
+    const N = 140, pts: string[] = [];
+    for (let k = 0; k <= N; k++) { const t = Math.min(T, (k / N) * xmax); pts.push(`${X(t).toFixed(1)} ${Y(rcRun(part, events, t).v).toFixed(1)}`); if (t >= T) break; }
+    const first = events[0]?.mode === 'charge' && events[0].at === 0;
+    const ticks: SVGElement[] = [];
+    for (let k = 1; k <= 8 && k * tau <= xmax; k++) ticks.push(s('line', { x1: X(k * tau), y1: B, x2: X(k * tau), y2: B + 5, class: 'bx-axis' }));
+    const now = rcRun(part, events, T);
+    curve.setAttribute('aria-label', `Voltage on the capacitor against time: ${sig(now.v)} V of ${part.volts} V after ${fmtSeconds(T)}.`);
+    curve.replaceChildren(
+      s('line', { x1: L, y1: B, x2: R, y2: B, class: 'bx-axis' }), s('line', { x1: L, y1: Tp, x2: L, y2: B, class: 'bx-axis' }),
+      s('line', { x1: L, y1: Y(part.volts), x2: R, y2: Y(part.volts), class: 'bx-grid' }),
+      s('text', { x: L - 6, y: Y(part.volts) + 4, class: 'bx-lbl', 'text-anchor': 'end' }, `${part.volts} V`), s('text', { x: L - 6, y: B + 4, class: 'bx-lbl', 'text-anchor': 'end' }, '0'),
+      ...ticks,
+      ...(xmax <= 8 * tau ? [s('text', { x: X(tau), y: B + 20, class: 'bx-lbl', 'text-anchor': 'middle' }, 'RC'), ...(xmax >= 5 * tau ? [s('text', { x: X(5 * tau), y: B + 20, class: 'bx-lbl', 'text-anchor': 'middle' }, '5 RC')] : [])] : []),
+      ...(first ? [s('line', { x1: X(tau), y1: B, x2: X(tau), y2: Y(FRACTION_AT_RC * part.volts), class: 'bx-mark' }), s('line', { x1: L, y1: Y(FRACTION_AT_RC * part.volts), x2: X(tau), y2: Y(FRACTION_AT_RC * part.volts), class: 'bx-mark' }),
+        s('text', { x: X(tau) + 8, y: Y(FRACTION_AT_RC * part.volts) + 16, class: 'bx-lbl bx-markt' }, `${(FRACTION_AT_RC * 100).toFixed(0)} % at ${fmtSeconds(tau)}`)] : []),
+      s('path', { d: `M${pts.join(' L')}`, class: 'bx-curve' }),
+      s('circle', { cx: X(Math.min(T, xmax)), cy: Y(now.v), r: 5, class: 'bx-now' }),
+      ...(xmax > 8 * tau ? [s('text', { x: (L + R) / 2, y: B + 20, class: 'bx-lbl', 'text-anchor': 'middle' }, `0 … ${fmtSeconds(xmax)}`)] : []),
+      s('text', { x: R, y: B - 6, class: 'bx-lbl', 'text-anchor': 'end' }, 'time →'), s('text', { x: L + 6, y: Tp - 8, class: 'bx-lbl' }, 'voltage on C'));
+  }
+
+  function render(): void {
+    const now = rcRun(part, events, T), m = mode();
+    drawLoop(now); drawCurve();
+    sw.replaceChildren(
+      ...([['charge', 'Close'], ['open', 'Open'], ['discharge', 'Discharge']] as const).map(([k, label]) =>
+        h('button', { class: `btn sm${m === k ? ' primary' : ''}`, type: 'button', 'aria-pressed': String(m === k), onclick: () => throwTo(k) }, label)),
+      ...(reducedMotion() && m !== 'open' ? [wait] : []));
+    out.replaceChildren(readout([`${fmtMilli(now.i, 'A', 3)}`, 'current now'], [`${fmtMilli(now.q, 'C', 3)}`, 'charge Q = C·V'],
+      [`${sig(now.v)} V`, 'voltage on C'], [fmtSeconds(T), 'time so far']));
+    const full = part.farads * part.volts ** 2, row = (cls: string, k: string, e: number) =>
+      h('div', { class: `bx-bar ${cls}` }, h('span', { class: 'k' }, k), h('i', null, h('b', { style: `width:${Math.max(0, Math.min(100, (e / full) * 100)).toFixed(1)}%` })), h('span', { class: 'v' }, fmtMilli(e, 'J')));
+    bars.replaceChildren(h('p', { class: 'bx-cap' }, `Energy so far (the bars end at C·V² = ${fmtMilli(full, 'J')})`),
+      row('bat', 'from the cell', now.battery), row('sto', 'stored in C', now.stored), row('heat', 'heat in R', now.heat));
+    kick();
+  }
+  render();
+  return { el, destroy() { dead = true; if (raf) cancelAnimationFrame(raf); raf = 0; } };
 }
 
 /** A small seeded generator, so the noise is the same on every visit. */

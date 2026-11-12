@@ -24,7 +24,7 @@ import { ALIASES_FSM } from './codexfsm';
 export const ALIASES: Record<string, string[]> = {
   cpu: ['processor'], fde: ['fetch, decode, execute'], sop: ['sum of products'], nandnand: ['NAND–NAND', 'NAND-NAND'],
   kmap: ['K-map', 'Karnaugh map'], fanin: ['fan-in', 'fan-out'], comparator: ['equality comparator'],
-  hex: ['hexadecimal'], twos: ['two’s complement'], signext: ['sign extension', 'sign-extend', 'sign-extended'],
+  capacitance: ['capacitor'], hex: ['hexadecimal'], twos: ['two’s complement'], signext: ['sign extension', 'sign-extend', 'sign-extended'],
   ripple: ['ripple-carry', 'ripple adder'], shifter: ['barrel shifter', 'shifter'], cla: ['carry-lookahead', 'carry lookahead'],
   prefix: ['prefix adder', 'Kogge–Stone'], dff: ['flip-flop'], setuphold: ['setup time', 'hold time', 'setup window', 'setup margin', 'hold violation'],
   clockgating: ['clock gating', 'gated clock', 'integrated clock gate', 'ICG'], fsm: ['state machine', 'FSM'], isa: ['ISA', 'instruction set'],

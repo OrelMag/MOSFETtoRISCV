@@ -205,7 +205,7 @@ Each level plays on a screen of its own: the brief, why the CPU needs the block 
 against the alternatives and its copies in the finished CPU), the level's parts only, a hint ladder
 from a nudge to the full walkthrough, and Build along (the next step's parts as outlines, the
 learner's wiring checked against the reference). Number and Boolean drills (generated, with exact
-checkers), assembly puzzles on the golden model and a codex of <!--n:codex-->417<!--/n--> entries sit alongside: each with a
+checkers), assembly puzzles on the golden model and a codex of <!--n:codex-->418<!--/n--> entries sit alongside: each with a
 live figure, a worked example, Check yourself questions and links to what it builds on and leads to,
 searchable by alias, read beside the level without leaving it, and shown as hover definitions in the
 chapters, with an index of every analogy. Practice questions (predict, what breaks) and drills come back

@@ -81,7 +81,7 @@ export const MORE0: Record<string, CodexMore> = {
       'Using a table for a circuit with state: the same inputs can give different outputs, so it needs a sequence.',
     ],
     lib: 'full_adder',
-    chapters: [{ chapter: 'logic', step: 0, label: 'Any rule is a circuit: minterms' }, { chapter: 'basics', step: 3, label: 'A rule as a table' }, { chapter: 'adders', step: 1, label: 'Adding three bits' }],
+    chapters: [{ chapter: 'logic', step: 0, label: 'Any rule is a circuit: minterms' }, { chapter: 'basics', step: 4, label: 'A rule as a table' }, { chapter: 'adders', step: 1, label: 'Adding three bits' }],
   },
   identities: {
     idea: 'The identities are the rewrite rules that turn an expression into a cheaper one with the same truth table. Four do most of the work. <b>Complement</b> merges two terms that differ in one variable (a·b + a·¬b = a), which is all a K-map rectangle does. <b>Absorption</b> drops a term covered by a smaller one (a + a·b = a). <b>Distributivity</b> factors a shared literal out (a·b + a·c = a·(b + c): fewer gates, one level deeper). <b>Consensus</b> drops the redundant b·c from a·b + ¬a·c + b·c. Each has a dual.<br>Rewriting trades area against depth: factoring saves gates and adds levels, flattening to a sum of products does the reverse. A redundant term is not always waste: the consensus term is what keeps a mux from glitching.',

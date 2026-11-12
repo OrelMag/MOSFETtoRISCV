@@ -43,6 +43,7 @@ export const TAUGHT: Record<string, string> = {
   bus: 'routing',
   comparator: 'adders',
   positional: 'basics',
+  capacitance: 'basics',
   hex: 'binary',
   twos: 'binary',
   overflow: 'binary',

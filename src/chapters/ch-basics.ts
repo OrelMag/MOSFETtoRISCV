@@ -2,18 +2,19 @@
 // rule as a table, a program as steps, and how this site draws a circuit. Numbers come from widgets/basics.ts.
 
 import { rca } from '../lib/combinational';
-import { LOOP, loopAmps, misreads, NOISE, TOY, lampCountWidget, loopWidget, noiseWidget, switchTableWidget, toyMachineWidget } from '../widgets/basics';
+import { FRACTION_AT_5RC, FRACTION_AT_RC, GATE, LOOP, RC, bucketWidget, fmtMicrofarads, fmtMilli, fmtOhms, fmtSeconds, loopAmps, misreads, NOISE, rc, rcRun, TOY, lampCountWidget, loopWidget, noiseWidget, switchTableWidget, toyMachineWidget } from '../widgets/basics';
 import type { Chapter } from './types';
 import { numOf } from './order';
 
 const amps = loopAmps(1), amps2 = loopAmps(2);
+const full = rcRun(RC, [{ at: 0, mode: 'charge' }], 1e6), pct = (x: number) => (x * 100).toFixed(0);
 const two = misreads(2, NOISE.start), ten = misreads(10, NOISE.start);
 
 export const chBasics: Chapter = {
   id: 'basics', num: numOf('basics'), label: 'Start', title: 'Before the switch', level: 'Basics',
   blurb: 'Voltage and current, two levels, binary, a truth table, a program: what the first switch needs.',
   goals: [
-    'say why a lamp lights only on a closed loop, and what voltage and current measure',
+    'say why a lamp lights only on a closed loop, what voltage and current measure, and why filling a wire takes time and energy',
     'explain why a computer reads a wire as one of two levels, not ten',
     'count to 15 on four lamps, and read a truth table',
     'step a four-instruction program through a small machine, and read a circuit drawn on this site',
@@ -38,6 +39,53 @@ export const chBasics: Chapter = {
         <p>Every circuit on this site is loops like this one. What changes is the switch: in chapter ${numOf('mosfet')} it becomes a switch
         that a voltage opens and closes, instead of a finger.</p>`,
       widget: () => loopWidget(),
+    },
+    {
+      title: 'A bucket of charge',
+      body: `
+        <p>Put two metal plates close together with an insulator between them. No current can cross the gap, yet when you connect them to the
+        battery, charge flows for a moment. It piles up on one plate and leaves the other, until the plates are at the battery's voltage.
+        This is a <strong>capacitor</strong>. How much charge it holds per volt is its <strong>capacitance</strong> C, in farads (F):
+        <strong>Q = C · V</strong>. Charge is measured in coulombs (C, the charge one ampere carries in a second).</p>
+        <p>It fills like a bucket under a tap. Through a resistance R, the flow starts at V / R and slows as the plates fill, because the voltage
+        left to push it shrinks. Most of the way, ${pct(FRACTION_AT_RC)} %, takes the time <strong>R · C</strong>, and five times that leaves it within
+        ${Math.ceil((1 - FRACTION_AT_5RC) * 100)} %. With ${fmtMicrofarads(RC.farads)} and ${fmtOhms(RC.ohms)} that is ${fmtSeconds(rc(RC))}: ${fmtMilli(full.q, 'C', 3)} from a
+        ${RC.volts} V battery, starting at ${fmtMilli(RC.volts / RC.ohms, 'A', 3)}.</p>
+        <p>Filling the bucket costs energy. The battery pushes ${fmtMilli(full.q, 'C', 3)} up ${RC.volts} V: <strong>Q · V = C · V²</strong> =
+        ${fmtMilli(full.battery, 'J')}. Half of it, ${fmtMilli(full.stored, 'J')}, is stored in the capacitor, and the other half warms the resistor. That
+        split is the same whatever R is: a smaller resistance fills the bucket faster, but it does not make it any cheaper. Empty it through the
+        resistor again and the stored half becomes heat too.</p>
+        <p>Every wire, and every input of every transistor, is such a bucket, a very small one: a few femtofarads (1 fF = 10<sup>−15</sup> F).
+        To turn a 0 into a 1 the wire has to be filled, and to turn it back it has to be emptied. So switching takes time, more for a bigger C
+        or a weaker push, and every full swing, 0 → 1 → 0, draws C · V² from the supply. In chapter ${numOf('mosfet')}, a transistor driving
+        ${GATE.femtofarads} fF at ${GATE.volts} V spends ${Math.round(GATE.femtojoules)} fJ a swing. Those two facts, time and energy, set the speed and the power of
+        every chip in this book.</p>
+        <div class="try">Close the switch and watch the curve: ${pct(FRACTION_AT_RC)} % after RC, nearly full after five. Then set R ten times smaller: the
+        curve is ten times quicker, and the heat in R is still ${fmtMilli(full.heat, 'J')}.</div>`,
+      widget: () => bucketWidget(),
+      more: {
+        derive: `<p>The voltage left to push the charge is V − v, so the current is i = (V − v) / R, and the charge on the plates grows as C · dv/dt = i.
+          Together: dv/dt = (V − v) / RC, whose solution from v = 0 is <strong>v(t) = V · (1 − e<sup>−t/RC</sup>)</strong>. At t = RC the exponential is
+          e<sup>−1</sup> = ${(Math.exp(-1)).toFixed(3)}, so v is ${pct(FRACTION_AT_RC)} % of V; at 5 RC it is ${(FRACTION_AT_5RC * 100).toFixed(1)} %.</p>
+          <p>The heat is the integral of i² · R over all time, which is ½ C V² for any R: a larger R makes i smaller but lasts longer, and the two cancel exactly.
+          The cell has pushed Q · V = C V² and the capacitor keeps ½ C V², so the other half has to be heat.</p>`,
+        real: `<p>A capacitor's C grows with the area of its plates and shrinks with the gap between them. That is why a transistor's gate is one: a plate
+          of metal or silicon, a thin insulating oxide, and the channel under it as the other plate. The ${fmtMicrofarads(RC.farads)} here is a bench part; a gate
+          is about ${Math.round(RC.farads / (GATE.femtofarads * 1e-15) / 1e9)} billion times smaller.</p>`,
+      },
+      challenge: {
+        kind: 'quiz',
+        question: 'A wire\'s capacitance doubles, and it is still charged through the same resistance to the same voltage. Compared with before, filling it takes…',
+        options: ['twice as long, and twice the energy', 'twice as long, and the same energy', 'the same time, and twice the energy', 'half the time'],
+        answer: 0,
+        explain: 'RC doubles, and so does C · V².',
+        why: [
+          'Right: the time constant R · C doubles, and the energy C · V² doubles with it.',
+          'The energy is C · V², so a bigger C costs more, however slowly it is filled.',
+          'The current starts at V / R as before, but there is twice as much charge to move, so it takes twice as long.',
+          'More capacitance is a bigger bucket. The same tap takes longer to fill it.',
+        ],
+      },
     },
     {
       title: 'Two levels, not ten',
@@ -141,6 +189,7 @@ export const chBasics: Chapter = {
   recap: {
     keep: [
       'Current flows only around a closed loop; voltage is measured between two points, from ground at 0 V.',
+      'A capacitor holds charge Q = C·V. Through a resistance it fills in about R·C, and a full swing costs C·V², half of it lost as heat whatever R is. Every wire is a small one, which is why switching takes time and energy.',
       'A wire carries one bit: two levels survive noise that would ruin ten, and can be restored at every step.',
       'n bits give 2<sup>n</sup> patterns; in binary each place is worth twice the one to its right.',
       'A truth table lists every input case and its output: the complete description of a circuit without memory.',
