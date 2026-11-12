@@ -129,7 +129,7 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
 
   const ctl = spec.ports.filter((p) => p.width === 1 && p.dir !== 'out');
   const outs1 = spec.ports.filter((p) => p.width === 1 && p.dir === 'out');
-  const base = Math.max(6, 2 * ctl.length + 4, 2 * outs1.length + 4);
+  const base = spec.top ? 6 : Math.max(6, 2 * ctl.length + 4, 2 * outs1.length + 4);
   // what is left of the parts stands below the rows, or above them (spec.top: a PLA's input bars)
   const rightSided = (n: string) => spec.ports.some((q) => `${q.name}_bits` === n && q.dir === 'out');
   const leftExtras = placed.filter((p) => !sliceOf.has(p.name) && !isBar(p.name) && !rightSided(p.name));
@@ -137,9 +137,20 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
   const bandBase = spec.top ? base + leftExtras.reduce((a, p) => a + geo(p.name).h + exGap, 0) + 4 : base;
   // rows of their own height when no bus is held to the row pitch
   const cum: number[] = [];
-  { let y = bandBase; for (const s of sliceIds) { cum.push(y); y += height(s) + VGAP + 2; } cum.push(y); }
+  // spec.bands: the rows folded into side by side bands of about equal height (a PLA far taller than wide); the first row of a band starts at the top
+  const B = bars.length ? 1 : Math.max(1, spec.bands ?? 1);
+  const bandIdx: number[] = [];
+  let bandTall = 0;
+  { const total = sliceIds.reduce((a, s) => a + height(s) + VGAP + 2, 0); let y = bandBase, b = 0;
+    for (const s of sliceIds) {
+      cum.push(y); bandIdx.push(b); y += height(s) + VGAP + 2;
+      if (b < B - 1 && y - bandBase >= total / B) { bandTall = Math.max(bandTall, y); b++; y = bandBase; }
+      else bandTall = Math.max(bandTall, y);
+    }
+    cum.push(y); }
+  const bandOfSlice = (s: number) => bandIdx[sliceIds.indexOf(s)] ?? 0;
   const sliceTop = (s: number) => (bars.length ? bandBase + sliceIds.indexOf(s) * P : cum[sliceIds.indexOf(s)]);
-  const bandEnd = bars.length ? bandBase + sliceIds.length * P : cum[sliceIds.length];
+  const bandEnd = bars.length ? bandBase + sliceIds.length * P : Math.max(bandTall, cum[sliceIds.length]);
 
   // control lines that feed one column of every row: a trunk beside the column
   const colOf = (n: string) => depth.get(n)! + 1;
@@ -164,7 +175,10 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
     const xs = [8];
     for (let c = 0; c <= D; c++) xs.push(xs[c] + colW[c] + Math.max(spec.gap ?? 5, Math.ceil(rightRoom[c] + leftRoom[c + 1] + 1) + (trunksInto(c + 1) ? trunksInto(c + 1) + 2 : 0)));
     const at = new Map<string, [number, number]>();
-    for (const s of sliceIds) for (const n of members.get(s)!) at.set(n, [xs[colOf(n)], sliceTop(s) + (shift.get(s) ?? 0) + local.get(n)!]);
+    const pitchX = xs[D + 1] + colW[D + 1] - xs[0] + 16;
+    const dx = (s: number) => bandOfSlice(s) * pitchX;
+    const bandOfInst = (n: string) => bandOfSlice(sliceOf.get(n)!);
+    for (const s of sliceIds) for (const n of members.get(s)!) at.set(n, [xs[colOf(n)] + dx(s), sliceTop(s) + (shift.get(s) ?? 0) + local.get(n)!]);
     const xRight = xs[D + 1] + colW[D + 1] + 6;
     const pins: Record<string, [number, number]> = {};
     // bars level with the rows
@@ -196,15 +210,15 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
       const n = nets.find((x) => x.ends.includes(p.name));
       if (n && n.ends.length === 2 && inst(n.ends[0]) !== null && sliceOf.has(inst(n.ends[0])!)) {
         const q = geo(inst(n.ends[0])!).ports[portOf(n.ends[0])].pos[1] + at.get(inst(n.ends[0])!)![1];
-        pins[p.name] = [xRight, q]; levelOuts.push(p.name);
+        pins[p.name] = [xRight + bandOfInst(inst(n.ends[0])!) * pitchX, q]; levelOuts.push(p.name);
       }
     }
-    levelOuts.sort((a, b) => pins[a][1] - pins[b][1]);
-    levelOuts.forEach((p, i) => { if (i && pins[p][1] < pins[levelOuts[i - 1]][1] + 2) pins[p][1] = pins[levelOuts[i - 1]][1] + 2; });
+    levelOuts.sort((a, b) => pins[a][0] - pins[b][0] || pins[a][1] - pins[b][1]);
+    levelOuts.forEach((p, i) => { if (i && pins[p][0] === pins[levelOuts[i - 1]][0] && pins[p][1] < pins[levelOuts[i - 1]][1] + 2) pins[p][1] = pins[levelOuts[i - 1]][1] + 2; });
     let i1 = 0, o1 = 0;
     for (const p of spec.ports) {
       if (pins[p.name]) continue;
-      if (p.dir === 'out') pins[p.name] = [xRight, 2 + 2 * o1++]; else pins[p.name] = [0, 2 + 2 * i1++];
+      if (p.dir === 'out') pins[p.name] = [xRight, (spec.top ? bandBase : 0) + 2 + 2 * o1++]; else pins[p.name] = [0, (spec.top ? bandBase : 0) + 2 + 2 * i1++];
     }
     const endPos = (e: string): [number, number] => {
       const n = inst(e);
@@ -237,7 +251,13 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
       if (k === 'wire') return w;
       const col = trunkNets.get(n.name!)!;
       const j = trunkIdx.get(n.name!)!;
-      return { ...w, trunk: xs[col] - Math.ceil(leftRoom[col]) - 1.5 - (trunksInto(col) - 1 - j) };
+      const tx = xs[col] - Math.ceil(leftRoom[col]) - 1.5 - (trunksInto(col) - 1 - j);
+      const sinkBand = (e: string) => bandOfInst(inst(e)!);
+      const b0 = Math.min(...n.ends.slice(1).map(sinkBand));
+      const via: NonNullable<NetDef['via']> = {};
+      const yd = endPos(n.ends[0])[1];
+      for (const e of n.ends.slice(1)) if (sinkBand(e) !== b0) { const x = tx + sinkBand(e) * pitchX; via[e] = [[x, yd], [x, endPos(e)[1]]]; }
+      return { ...w, trunk: tx + b0 * pitchX, ...(Object.keys(via).length ? { via } : {}) };
     });
     const instances: InstanceDef[] = placed.map((p) => ({ name: p.name, def: p.def, at: at.get(p.name), label: p.label, flip: flip.get(p.name), rot: rot.get(p.name) }));
     return { pins, instances, nets: out, kind };

@@ -165,7 +165,7 @@ class Sheet {
     for (const [pin, d] of pinOuts) b.wire(d, pin);
     // laid out by logic depth (lib/layered.ts): chips in signal order with wires between neighbours; the clock a wire, a tie wired to the chips beside it
     const ties = new Set(b.instances.filter((i) => i.def === TIE0 || i.def === TIE1).map((i) => `${i.name}.y`));
-    const lay = laid(b, { room: true, gap: 14, pinOrder: ports.map((p) => p.name), wires: Object.fromEntries(b.nets().filter((n) => n.name === 'clk').map((n) => [n.ends[0], true])) });
+    const lay = laid(b, { room: true, gap: 14, aspect: 1.6, x0: 22, pinOrder: ports.map((p) => p.name), wires: Object.fromEntries(b.nets().filter((n) => n.name === 'clk').map((n) => [n.ends[0], true])) });
     return function (this: ComponentDef) {
       const nl = lay.call(this);
       const pos = (e: string): [number, number] => {

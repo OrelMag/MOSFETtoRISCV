@@ -101,7 +101,7 @@ export function decodeBlock(): ComponentDef {
     id: 'm65_decode', name: '6502 decode PLA',
     summary: `${rows.length} product terms of IR and the T state (each a NOR of complemented literals), ORed per control signal (a NOR of its rows): the control table of src/m6502/ucode.ts, minimized with the undocumented opcodes as don't-cares.`,
     ports: [bus('ir', 8, 'in'), bus('nir', 8, 'in'), bus('nt', 7, 'in'), ...EXTRA_NETS.map((x) => bit(x)), ...SIGNALS.map((s) => bit(n(s), 'out'))],
-    symbol: { kind: 'box', label: 'DECODE PLA' }, rows: 24, place: 'slices', top: true, across: false,
+    symbol: { kind: 'box', label: 'DECODE PLA' }, rows: 24, place: 'slices', top: true, across: false, bands: 14,
   });
 }
 

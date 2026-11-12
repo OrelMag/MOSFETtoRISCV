@@ -319,7 +319,7 @@ export function layered(ports: PortDef[], b: Builder, opts: LayeredOptions = {})
     // pins: each at the height of the ends it serves, inputs at the left edge, outputs at the right, kept a pitch apart
     const pitches: [number, number] = Array.isArray(opts.pinPitch) ? opts.pinPitch : [opts.pinPitch ?? 2, opts.pinPitch ?? 2];
     const pins: Record<string, [number, number]> = {};
-    const outX = best.width + 6;
+    const outX = best.width + Math.max(6, Math.ceil(Math.max(0, ...ports.filter((p) => p.dir === 'out').map((p) => tagWidth(p.name))) + 12));
     const place = (side: PortDef[], px: number, pitch: number) => {
       const want = side.map((p) => {
         const ys = nl.nets.filter((n) => n.ends.includes(p.name)).flatMap((n) => n.ends.map(portAt)).filter((q): q is [number, number] => !!q).map((q) => q[1]);

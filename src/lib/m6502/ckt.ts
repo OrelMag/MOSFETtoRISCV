@@ -36,6 +36,8 @@ export interface BlockSpec {
   gap?: number;
   /** With place 'slices': the parts that belong to no row stand above the rows, not below (a PLA's input bars). */
   top?: boolean;
+  /** With place 'slices': fold the rows into this many side by side bands (rails run along each, one trunk per band). */
+  bands?: number;
   /** With place 'slices': false draws a wire only between parts of one row (default: also to a neighbouring row). */
   across?: boolean;
 }
