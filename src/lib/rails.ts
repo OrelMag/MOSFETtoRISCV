@@ -12,8 +12,8 @@ export interface RailInput {
   y: number;
   /** Net names of the true and the complement rail. */
   name: string;
-  /** The inverter's instance name. */
-  not: string;
+  /** The inverter's instance name; none: the complement is not used and nothing is drawn for it. */
+  not?: string;
 }
 
 /**
@@ -35,7 +35,8 @@ export class LiteralRails {
     order.forEach((i, g) => {
       const xt = x0 + 7 * g;
       this.xs[i] = [xt, xt + 5];
-      this.instances.push({ name: ins[i].not, def: NOT, at: [xt + 1, yNot] });
+      const nm = ins[i].not;
+      if (nm) this.instances.push({ name: nm, def: NOT, at: [xt + 1, yNot] });
     });
     this.right = x0 + 7 * ins.length - 1;
     this.sinks = ins.map(() => [[], []]);
@@ -55,8 +56,8 @@ export class LiteralRails {
     const out: NetDef[] = [];
     this.ins.forEach((r, i) => {
       const [t, c] = this.sinks[i];
-      out.push({ name: r.name, ends: [r.src, `${r.not}.a`, ...t], trunk: this.xs[i][0] });
-      if (c.length) out.push({ name: `${r.name}′`, ends: [`${r.not}.y`, ...c], trunk: this.xs[i][1] });
+      out.push({ name: r.name, ends: [r.src, ...(r.not ? [`${r.not}.a`] : []), ...t], trunk: this.xs[i][0] });
+      if (c.length && r.not) out.push({ name: `${r.name}′`, ends: [`${r.not}.y`, ...c], trunk: this.xs[i][1] });
     });
     return out;
   }
