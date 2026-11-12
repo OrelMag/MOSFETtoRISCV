@@ -970,8 +970,11 @@ export class Lens {
       if (!b.shown || !b.extent || !b.ctx) continue;
       const fit = this.fitPx(b, c);
       if (!fit || !(handsOff(fit, canvas) || atLimit)) continue;
-      const under = fx >= c.left + fit.x && fx <= c.left + fit.x + fit.w && fy >= c.top + fit.y && fy <= c.top + fit.y + fit.h;
-      // only the box under the pointer: zooming on a small part must never step into a big neighbour
+      // only the box under the pointer: zooming on a small part must never step into a big neighbour. Under its outline, not
+      // only its letterboxed drawing: a register's column of flip-flops sits in a wider box, and fingers on its margin (the
+      // open inside's own element, which takes them) never stepped in at the zoom limit
+      const o = this.boxPx(b.name, c) ?? fit;
+      const under = fx >= c.left + o.x && fx <= c.left + o.x + o.w && fy >= c.top + o.y && fy <= c.top + o.y + o.h;
       if (under) { pick = { b, fit }; break; }
     }
     if (!pick) return;

@@ -1115,10 +1115,10 @@ const lensTouchDrive = (part: string) => `(async () => {
     const r = mine()?.getBoundingClientRect() ?? box(), c = svg.getBoundingClientRect();
     const x0 = Math.max(r.left, c.left + 40, 40), x1 = Math.min(r.right, c.right - 40, innerWidth - 40);
     const y0 = Math.max(r.top, c.top + 60, 60), y1 = Math.min(r.bottom, c.bottom - 40, innerHeight - 40);
-    return [(x0 + x1) / 2, (y0 + y1) / 2];
+    return [(x0 + x1) / 2, (y0 + y1) / 2, Math.max(6, Math.min(30, (x1 - x0) / 2 - 4))];
   };
   const pinch = async (k, steps, check) => {
-    const [cx, cy] = centre(), d0 = 30;
+    const [cx, cy, d0] = centre();
     const at = (x) => document.elementFromPoint(x, cy) ?? svg;
     const f1 = at(cx - d0), f2 = at(cx + d0);
     ptr(f1, 'pointerdown', 81, cx - d0, cy, true);
@@ -1140,9 +1140,9 @@ const lensTouchDrive = (part: string) => `(async () => {
   await wait(300);
   if (getComputedStyle(mine()).touchAction !== 'none') bad.push('an open inside lets the browser take two fingers (touch-action ' + getComputedStyle(mine()).touchAction + ')');
   const under = (x, y) => !!document.elementFromPoint(x, y)?.closest('.lens-layer .inside[data-inst="${part}"]');
-  const [mx, my] = centre();
+  const [mx, my, md] = centre();
   const what = (x) => { const e = document.elementFromPoint(x, my); return e ? e.tagName + '.' + (e.getAttribute('class') ?? '') : 'nothing'; };
-  if (!under(mx - 30, my) || !under(mx + 30, my)) return [...bad, 'the fingers would not land on the inside of ${part}: ' + what(mx - 30) + ', ' + what(mx + 30) + ' at ' + Math.round(mx) + ',' + Math.round(my)];
+  if (!under(mx - md, my) || !under(mx + md, my)) return [...bad, 'the fingers would not land on the inside of ${part}: ' + what(mx - md) + ', ' + what(mx + md) + ' at ' + Math.round(mx) + ',' + Math.round(my)];
   // 1. closing on the inside until it closes: each step zooms by its own scale, the level stays, and the element under
   //    the fingers stays in the page while they are down
   let closedDuring = false;
@@ -1203,7 +1203,41 @@ const lensTouchDrive = (part: string) => `(async () => {
     await wait(400);
   }
   if (!splits) bad.push('no spreading pinch was split across the inside and the board');
-  if (!location.hash.endsWith('/${part}')) bad.push('spreading to the zoom limit never stepped into ${part} once the fingers lifted: ' + location.hash + ' at ' + scale().toFixed(1) + ' px a unit');
+  if (!location.hash.endsWith('/${part}')) return [...bad, 'spreading to the zoom limit never stepped into ${part} once the fingers lifted: ' + location.hash + ' at ' + scale().toFixed(1) + ' px a unit'];
+  // 4. going up by pinch (view/zoomout.ts): closing pinches on the level until the cue says it fits, then a fresh closing
+  //    pinch goes up to the parent, never while its fingers are down
+  const stage = () => document.querySelector('.canvas > svg.schematic');
+  const hashIn = location.hash;
+  const pinchC = async (k, steps, check) => {
+    // the stage on screen (a drill can scroll the phone's page), the fingers on the circuit in the window
+    const c0 = stage().getBoundingClientRect();
+    if (c0.top < 0 || c0.bottom > innerHeight) scrollBy(0, c0.top - Math.max(0, (innerHeight - c0.height) / 2));
+    const c = stage().getBoundingClientRect();
+    const cx = (Math.max(c.left, 0) + Math.min(c.right, innerWidth)) / 2, cy = (Math.max(c.top, 60) + Math.min(c.bottom, innerHeight)) / 2, d0 = 60;
+    const at = (x) => document.elementFromPoint(x, cy) ?? stage();
+    if (!stage().contains(at(cx - d0)) && !at(cx - d0).closest('.lens-layer')) bad.push('a finger of the pinch on the level would land off the circuit: ' + at(cx - d0).tagName + '.' + at(cx - d0).getAttribute('class'));
+    const f1 = at(cx - d0), f2 = at(cx + d0);
+    ptr(f1, 'pointerdown', 85, cx - d0, cy, true);
+    ptr(f2, 'pointerdown', 86, cx + d0, cy, false);
+    for (let i = 1; i <= steps; i++) {
+      const d = d0 * Math.pow(k, i / steps);
+      ptr(f1, 'pointermove', 85, cx - d, cy, true);
+      ptr(f2, 'pointermove', 86, cx + d, cy, false);
+      check?.(i);
+      await wait(40);
+    }
+    ptr(f2, 'pointerup', 86, cx + d0 * k, cy, false);
+    ptr(f1, 'pointerup', 85, cx - d0 * k, cy, true);
+  };
+  const cue = () => document.querySelector('.canvas .lens-cue')?.textContent ?? '';
+  const stay = (label) => (i) => { if (location.hash !== hashIn && bad.length < 12) bad.push(label + ' step ' + i + ': went up under the fingers to ' + location.hash); };
+  for (let n = 0; n < 12 && !/^Zoom out once more/.test(cue().trim()) && location.hash === hashIn; n++) { await pinchC(0.6, 8, stay('zooming out')); await wait(300); }
+  if (location.hash !== hashIn) return [...bad, 'zooming out of ${part} went up before the cue said it fits: ' + location.hash];
+  if (!/^Zoom out once more/.test(cue().trim())) return [...bad, 'zooming out of ${part} never brought the cue to "once more": ' + JSON.stringify(cue())];
+  await wait(200);
+  await pinchC(0.6, 8, stay('the fresh pinch'));
+  await wait(500);
+  if (location.hash !== hash0) bad.push('a fresh closing pinch after the cue did not go up to the top level: ' + location.hash);
   return bad;
 })()`;
 
@@ -1438,7 +1472,8 @@ function routes(): Route[] {
   // part steps in, at both phone widths in both themes; at its default (null) nothing opens
   for (const vp of TOUCH_VIEWPORTS) for (const theme of ['light', 'dark'] as const) add('#/c/cpu/0', lensOn(theme), ` (zoom lens, ${vp.name}, ${theme})`, vp, lensPinchDrive('open', 'ctl'));
   // the fingers on an open inside: a closing pinch, then one spreading to the hand-off, nothing moving under them
-  add('#/c/cpu/0', lensOn('light'), ` (zoom lens, fingers on an inside, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensTouchDrive('alu'));
+  // alu's inside fills its box; pc's is a narrow column in a wider box (fingers on its margin step in all the same)
+  for (const vp of TOUCH_VIEWPORTS) for (const part of ['alu', 'pc']) add('#/c/cpu/0', lensOn(vp === TOUCH_VIEWPORTS[0] ? 'light' : 'dark'), ` (zoom lens, fingers on an inside, ${part}, ${vp.name})`, vp, lensTouchDrive(part));
   add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens at its default, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('off', 'ctl'));
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
   // The layout lock: locked by default on a touch screen, unlocked with a mouse; an arrangement of an older drawing set aside.
