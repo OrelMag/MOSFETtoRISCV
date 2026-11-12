@@ -175,7 +175,7 @@ export const chUart: Chapter = {
     {
       title: 'Errors: framing, false start, break, overrun',
       body: `
-        <p>Four things go wrong on a real wire, and the receiver turns each into a definite event. The scene is the UART core with its FIFOs and status register on a bench; the panel plays the sender at divisor 1.</p>
+        <p>Four things go wrong on a real wire, and the receiver turns each into a definite event. The scene is the UART core with its FIFOs (queues that hand bytes out in the order they came in; the next step sizes them) and status register on a bench; the panel plays the sender at divisor 1.</p>
         <p><strong>Framing error.</strong> The stop sample reads 0. The byte is discarded, the <code>framing error</code> flag (status bit 3) is set, and the receiver waits for the line to be 1 before it will accept a start bit.
         That is the usual reading of a wrong baud rate or a noisy wire, and it is cheap: the sample that would have been the stop bit does the check. <strong>False start.</strong> A low pulse shorter than about half a bit is
         gone by the time the receiver looks again in the middle, so it returns to idle with no event: the 8-tick confirmation is a glitch filter. <strong>Break.</strong> A line held low for longer than a frame is a deliberate signal.

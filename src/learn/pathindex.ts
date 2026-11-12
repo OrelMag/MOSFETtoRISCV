@@ -69,7 +69,7 @@ export const PATH_MINUTES: Record<string, number[]> = {
   "signals": [6,5,5,5,6,5,5,5],
   "noise": [6,5,5,5,5,5,6],
   "modem": [5,5,6,6,6,6,6],
-  "carriers": [6,5,5,6,5,5,6,6,4],
+  "carriers": [6,6,5,6,5,5,6,6,4],
   "serial": [6,6,5,6,6,6,6,6,5],
   "glass": [6,5,6,6,5,6,5,6],
   "errors": [6,5,6,6,5,5,6,6,6],

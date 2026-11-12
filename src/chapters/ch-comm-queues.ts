@@ -29,7 +29,7 @@ const steps: Step[] = [
       const pkt100 = ((1500 * 8) / 100e6) * 1000;
       return `
       <p>Chapter ${numOf('tcp')} ended on the queue its sawtooth fills. This chapter is about that queue and what to do with it, and it starts before the queue is full: a queue is already a matter of probability.</p>
-      <p>Packets arrive at random, and the link sends one at a time, so sometimes they meet. With arrivals at a rate that loads the link to ρ, an exponential packet time gives a mean wait of <strong>ρ / (1 − ρ)</strong> packets; a fixed one half of that. At 50 % load one packet's time of waiting, at 90 % nine, at 99 % ninety-nine: the curve has no knee to speak of until you are on it. The general form, Pollaczek-Khinchine, has (1 + c²) / 2 in front, c being the spread of packet sizes, so variation costs delay as surely as load does.</p>
+      <p>Packets arrive at random, and the link sends one at a time, so sometimes they meet. With arrivals at a rate that loads the link to ρ, an exponential packet time gives a mean wait of <strong>ρ / (1 − ρ)</strong> packets; a fixed packet time gives half of that. At 50 % load one packet's time of waiting, at 90 % nine, at 99 % ninety-nine: the curve has no knee to speak of until you are on it. The general form, Pollaczek-Khinchine, has (1 + c²) / 2 in front, c being the spread of packet sizes, so variation costs delay as surely as load does.</p>
       <p><strong>Little's law</strong> ties it together, for any queue at all: the mean number inside is the arrival rate times the mean time inside. And the tail is worse than the mean. At 90 %, one packet in 100 waits ${nf(mm1Quantile(0.9, 0.01), 0)} packet times, against the mean's ${nf(mm1Wait(0.9), 0)}. On 100 Mb/s a packet is ${nf(pkt100, 2)} ms, so all this is small. On a 1 Mb/s upload it would be a hundred times as much. Operators keep links well below full for this reason: idle time cannot be saved up, so a link that averages half-full can still show a ping you notice.</p>
       <div class="try">Slide the load from 0.5 to 0.95, and watch the dots follow the curve. Then find the load where the wait at 10 Mb/s first passes 10 ms.</div>`;
     },
@@ -225,7 +225,7 @@ export const chQueues: Chapter = {
   goals: [
     'work out a queue\'s delay from its load, and say why running a link near full always costs delay',
     'explain bufferbloat, and size a buffer from the bandwidth-delay product and the sawtooth',
-    'say why additive increase and multiplicative decrease converge, derive Mathis\'s formula, and why long fat pipes led to CUBIC',
+    'say why additive increase and multiplicative decrease converge, derive Mathis\'s formula, and say why long fat pipes led to CUBIC',
     'compare RED, CoDel, fair queueing, ECN and BBR by what signal they use and where they act, and choose for a given link',
   ],
   builds: ['tcp', 'switch', 'router'],
