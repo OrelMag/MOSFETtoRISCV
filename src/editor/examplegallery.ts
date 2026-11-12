@@ -80,6 +80,11 @@ export function openExamplesGallery(ed: Editor): void {
   function onKey(e: KeyboardEvent): void {
     e.stopPropagation(); // the editor's shortcuts stay out of the dialog
     if (e.key === 'Escape') { e.preventDefault(); return close(); }
+    if (e.key === 'Enter' && document.activeElement === search) { // one match left: Enter opens it
+      const one = cards().filter((c) => !c.hidden && !c.closest('[hidden]'));
+      if (one.length === 1) { e.preventDefault(); one[0].click(); }
+      return;
+    }
     if (!/^Arrow(Up|Down|Left|Right)$/.test(e.key)) return;
     const list = cards().filter((c) => !c.hidden && !c.closest('[hidden]'));
     if (!list.length) return;
