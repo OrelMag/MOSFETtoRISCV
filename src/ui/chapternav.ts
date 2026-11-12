@@ -178,6 +178,8 @@ export interface NavItem {
   keys?: string[];
   /** Left column: a chapter's number. */
   no?: string;
+  /** Left column: an icon of its own (dom.ts ICONS) in place of its kind's. */
+  icon?: string;
   /** A campaign level not open yet, a codex entry not discovered: listed, marked, its brief only. */
   locked?: boolean;
   /** Shown on the right: solved, read … */

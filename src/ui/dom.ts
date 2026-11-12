@@ -164,6 +164,11 @@ export const ICONS: Record<string, string> = {
   expand: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   shrink: '<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>',
   spin: '<path d="M20 12a8 8 0 1 1-2.3-5.7"/><path d="M20 4v5h-5"/>',
+  /* Open blocks as you zoom: a block with a gate and its wires inside, a magnifier on its corner (the box stops where the lens
+   * covers it); classes let the view options row light the inside and the lens while the setting is on */
+  'zoom-open': '<path class="zo-box" d="M12 16H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11a2 2 0 0 1 2 2v7"/>'
+    + '<path class="zo-in" stroke-width="1.5" d="M6.2 6.5h2a2.75 2.75 0 0 1 0 5.5h-2zM3.8 8h2.4M3.8 10.5h2.4M11 9.25h3.2"/>'
+    + '<circle class="zo-lens" cx="16.5" cy="16.5" r="4.5"/><path class="zo-lens" d="M19.8 19.8l2.7 2.7M14.6 16.5h3.8M16.5 14.6v3.8"/>',
 };
 
 export function icon(name: string, size = 18): SVGSVGElement {
