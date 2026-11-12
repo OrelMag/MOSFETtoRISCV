@@ -48,12 +48,13 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const kb = (n: number) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`);
 
 /** A modal dialog over the editor (Esc or a click outside closes it). */
-export function dialog(ed: Editor, title: string, body: (Node | string | null)[], foot: HTMLElement[] = [], cls = ''): { el: HTMLElement; body: HTMLElement; close: () => void } {
+export function dialog(ed: Editor, title: string, body: (Node | string | null)[], foot: HTMLElement[] = [], cls = '', onClose?: () => void): { el: HTMLElement; body: HTMLElement; close: () => void } {
   closeMenu();
   // Esc gives the focus back to what opened it: the File menu's button when the menu item went with its menu
   const back = rememberFocus(() => (menuBack && performance.now() - menuBack.t < 5000 ? menuBack.el : null) ?? ed.view.svg);
   const close = () => {
     ov.remove();
+    onClose?.();
     back();
   };
   const content = h('div', { class: 'sb-dlg-body' }, body);
@@ -518,10 +519,9 @@ function manageDialog(ed: Editor): void {
     } }, icon('folderPlus', 14), 'New folder'),
     h('button', { class: 'btn ghost sm', onclick: () => exportAll(ed) }, glyph('download', 14), 'Export all'),
     h('button', { class: 'btn primary sm', onclick: () => d.close() }, 'Done'),
-  ], 'sb-manage');
+  ], 'sb-manage', () => off());
   const head = d.el.querySelector('h3')!;
   const off = ed.onChange(() => {
-    if (!d.el.isConnected) return void off();
     head.textContent = `My chips (${Object.keys(ed.ws.chips).length})`;
     render();
   });

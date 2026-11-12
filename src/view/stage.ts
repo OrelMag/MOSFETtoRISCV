@@ -609,7 +609,7 @@ export class Stage {
         this.up();
       }
     });
-    settings.onChange(() => {
+    const offSettings = settings.onChange(() => {
       this.syncPanesBtn();
       this.syncLens();
       this.analyzer.radix = settings.radix;
@@ -623,6 +623,8 @@ export class Stage {
       }
       this.refresh();
     });
+    // (a dropped `off` kept every stage ever built, with its simulator, in settings' listener set: tests/listeners.test.ts)
+    this.life.signal.addEventListener('abort', () => offSettings());
     this.view.radix = settings.radix;
     this.inspector.radix = settings.radix;
     // The canvas also changes size during a run (the bottom bar rewraps as values and the status
