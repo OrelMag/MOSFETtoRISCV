@@ -154,7 +154,7 @@ export const chMulticycle: Chapter = {
         <span data-show="ctrl">controller</span> says, one step at a time.</p>
         <p>(The memory port selects the program ROM or the data RAM by phase, so the sample programs keep their data at address 0.)</p>
         <p>The aim of sharing is area: one ALU instead of three adders, one memory port instead of two (the step <em>Was it worth it?</em> counts whether it paid here: the registers that carry values across steps cost more than the adders saved). Registers hold what crosses a clock edge, and the controller must now remember which step it is in, so it becomes a state machine. What this costs is time. An
-        instruction takes ${CYC.branch} to ${CYC.load} cycles instead of one, and the clock period only shrinks to the longest single step.</p>
+        instruction takes ${CYC.branch} to ${CYC.load} cycles instead of one (its <strong>CPI</strong>, cycles per instruction, rises from 1 to about 4), and the clock period only shrinks to the longest single step.</p>
         <div class="try">Pulse the clock and follow the controller panel: the first instruction, <code>li a0, 0</code>, takes Fetch, Decode, ExecuteI, ALUWB (four cycles).</div>`,
       scene: () => cpuScene({ source: src('sum'), multicycle: 'fsm', highlight: ['ctrl'] }),
       tour: {
@@ -176,7 +176,7 @@ export const chMulticycle: Chapter = {
         ],
       },
       more: {
-        derive: `<p>Cycles per class come straight from the state table: branch, lui and auipc ${CYC.branch}; ALU operations, stores and jal ${CYC.alu}; loads and jalr ${CYC.load}. Time per instruction is CPI × period. A program whose mix is half ALU operations (4 cycles), a
+        derive: `<p>Cycles per class come straight from the state table: branch, lui and auipc ${CYC.branch}; ALU operations, stores and jal ${CYC.alu}; loads and jalr ${CYC.load}. Time per instruction is CPI (cycles per instruction) × period. A program whose mix is half ALU operations (4 cycles), a
           fifth loads (5), a fifth branches (3) and the rest stores (4) averages ${(0.5 * CYC.alu + 0.2 * CYC.load + 0.2 * CYC.branch + 0.1 * CYC.store).toFixed(1)} cycles per instruction.</p>`,
         pitfall: `<p>Leaving out IR. It is tempting to read the instruction from memory in every step, but the memory port is shared: after Fetch the same port serves a load or store, and the address changes. IR is the copy that survives. The same goes for A, B and ALUOut: any value
           needed after the next edge must sit in a register, or the shared unit overwrites it.</p>`,

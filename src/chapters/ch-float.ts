@@ -219,7 +219,7 @@ export const chFloat: Chapter = {
         <strong>infinity</strong> (fraction 0) and <strong>NaN</strong> (fraction ≠ 0), "not a number": the result of ∞ − ∞ or 0 × ∞. The next steps take these patterns apart.</p>
         <p>0.1 has no finite binary expansion, so the float called 0.1 is really 0.100000001490116…: the nearest of the
         2<sup>32</sup> patterns.</p>
-        <p>Why this layout and not a fixed point: a fixed-point word spends the same resolution everywhere, so it either covers a small range finely or a large range coarsely. A float spends
+        <p>Why this layout and not fixed point: a fixed-point word spends the same resolution everywhere, so it either covers a small range finely or a large range coarsely. A float spends
         its bits on a ratio: the exponent chooses a <em>binade</em> (the range [2<sup>k</sup>, 2<sup>k+1</sup>), from one power of two to the next), the fraction chooses one of 2<sup>M</sup> equally spaced values in it. Relative error is therefore
         bounded by 2<sup>−M</sup> over the whole range, from ${sci(minNormal(F32))} to ${sci(maxFinite(F32))} in float32, which is what scientific computation needs. The cost is that the spacing
         between neighbours grows with the magnitude, so addition is no longer exact and no longer associative.</p>`,
@@ -233,11 +233,7 @@ export const chFloat: Chapter = {
           ${FORMATS.map(([n, f]) => `<tr><td>${n}</td><td>${2 ** (f.E - 1) - 1}</td><td>${sci(maxFinite(f))}</td><td>${sci(minNormal(f))}</td><td>${sci(minNormal(f) * 2 ** -f.M)}</td><td>${sci(2 ** -f.M)}</td></tr>`).join('')}</table>`,
         pitfall: `<p>Testing floats for equality, or summing them and expecting the order not to matter. Both fail for the same reason: each operation rounds to the nearest neighbour. 0.1 above is stored as
           0.100000001490116…, and ten additions of it do not give exactly 1 (a later step of this chapter runs that sum on the CPU). Compare with a tolerance, and sum small values before large ones.</p>`,
-        real: `<p>The top fraction bit of a NaN is the <em>quiet</em> bit. A quiet NaN (1) passes through arithmetic without complaint; a
-        <em>signaling</em> NaN (0, with some lower fraction bit set so that it is not ∞) raises the invalid flag when an operation consumes it. IEEE 754
-        lets a NaN carry a payload through a computation; RISC-V does not: every NaN an operation produces is the <strong>canonical NaN</strong>
-        0x7FC00000 (positive, quiet, payload 0), whatever the operands were. Only loads, stores, moves and sign injection copy a NaN's bits unchanged.
-        In the 8-bit format the circuits below use, the canonical NaN is 0 1111 100 = 0x7C.</p>
+        real: `<p>A NaN's top fraction bit is its <em>quiet</em> bit, and RISC-V returns one fixed NaN from every operation, the canonical NaN 0x7FC00000: the step "Unpack" takes both apart on the circuit.</p>
           <p>IEEE 754 float32 and float64 are universal in CPUs and GPUs. Machine-learning hardware pushes the other way: bfloat16 keeps float32's 8 exponent bits and cuts the fraction to 7, trading precision
           for range with a multiplier a small fraction of float32's; 8-bit formats with 4 or 5 exponent bits, like the one these circuits use, are in common use for inference.</p>`,
       },
@@ -409,9 +405,9 @@ export const chFloat: Chapter = {
       body: `
         <p>RISC-V has five: <span data-show="u6"><strong>RNE</strong></span> (nearest, ties to even, the default), <strong>RTZ</strong> (towards zero: truncate),
         <span data-show="u7"><strong>RDN</strong></span> (towards −∞), <span data-show="u8"><strong>RUP</strong></span> (towards +∞) and <span data-show="u9"><strong>RMM</strong></span> (nearest, ties away from zero).
-        Every instruction that rounds (add, subtract, multiply, divide, square root, the fused multiply-adds, the conversions) carries a 3-bit rm field; rm = 7 (<em>dyn</em>) means "use frm", the mode held in the fcsr register.
+        Every instruction that rounds (add, subtract, multiply, divide, square root, the fused multiply-adds, the conversions) carries a 3-bit rm field; rm = 7 (<em>dyn</em>) means "use frm", the mode held in the floating-point control register (fcsr; a later step builds it).
         RDN and RUP give interval arithmetic: computing a bound twice, once in each mode, brackets the exact result.</p>
-        <p>The modes only change one decision: <span data-show="u17">whether to add one unit in the last place</span> to the truncated magnitude, from the sign, the
+        <p>The modes only change one decision: <span data-show="u17">whether to add one unit in the last place (one ulp)</span> to the truncated magnitude, from the sign, the
         last kept bit, G and S. That is this block: 62 NANDs, 13 deep, sitting beside the incrementer of normalize &amp; round. It also says
         <span data-show="u18">where an overflow goes</span>: to ∞ in RNE and RMM and in the direction being rounded towards, otherwise to the largest finite number (RTZ never
         produces ∞ from finite operands). The reserved encodings 5 and 6 are illegal instructions in RISC-V; this CPU has no traps, so here they
@@ -459,15 +455,15 @@ export const chFloat: Chapter = {
     {
       title: 'Exception flags',
       body: `
-        <p>IEEE 754 defines five exceptions; RISC-V does not trap on them but ORs them into <strong>fflags</strong>, where they stay until software
+        <p>IEEE 754 defines five exceptions; RISC-V does not trap on them but ORs them into <strong>fflags</strong>, a five-bit field of the floating-point control register, where they stay until software
         clears them, so one check after a long loop finds any exception inside it. <strong>NV</strong> invalid (∞ − ∞, 0 × ∞, a signaling NaN
         operand, an out-of-range float → int), <strong>DZ</strong> divide by zero, <strong>OF</strong> overflow, <span data-show="pack"><strong>UF</strong> underflow</span>,
         <span data-show="pack"><strong>NX</strong> inexact</span> (G or S was 1, or overflow).</p>
         <p>Underflow is subtle. A result is <span data-show="rnd"><em>tiny</em></span> if it lies below 2<sup>emin</sup>; RISC-V checks tininess <em>after rounding</em>,
         as if the exponent were unbounded. And UF is raised only if the tiny result is also inexact: a subnormal computed exactly raises nothing. Detecting
         "after rounding" costs <span data-show="rnd">a second rounding decision</span>: with G as the last bit and the bit below it (R) as the new guard, would the M + 1 kept
-        bits carry into 2<sup>emin</sup>? Its last two stages, the rounding (every mode, the increment, tininess) and the packing (overflow to ∞ or the largest finite, the flags), are ${groupDigits(nrShare().part)} of the float32 adder's ${groupDigits(nrShare().all)} normalize &amp; round NANDs. With its incrementers
-        and overflow test made parallel (see the pipelined FPU at the end of the chapter), the multiplier's instance (48-bit significand) is 6120 NANDs and
+        bits carry into 2<sup>emin</sup>? In the normalize &amp; round unit the last two stages, the rounding (every mode, the increment, tininess) and the packing (overflow to ∞ or the largest finite, the flags), are ${groupDigits(nrShare().part)} of the float32 adder's ${groupDigits(nrShare().all)} normalize &amp; round NANDs. With its incrementers
+        and overflow test made parallel (see the pipelined FPU later in the chapter), the multiplier's instance (48-bit significand) is 6120 NANDs and
         102 NAND delays deep.</p>
         <div class="try">exp = 0, mant = 1111 0000: 1.111 × 2<sup>−7</sup>. It rounds to 0x08 = 2<sup>−6</sup>, the smallest normal, yet flags = UF NX (0x03): with an unbounded exponent it is exact at 1.111 × 2<sup>−7</sup>, below 2<sup>−6</sup>. Now mant = 1111 1100: the same result, but only NX. In RTZ (rm = 1) the first stays subnormal, 0x07.</div>`,
       scene: () => ({ root: normRound(E4M3, 8), inputs: { sign: 0, exp: 0, mant: 0b11110000, stin: 0, rm: 0 } }),
@@ -775,7 +771,7 @@ export const chFloat: Chapter = {
           <tr><td>multiplier</td><td>${grp(u32('mul').n)}</td></tr><tr><td>fused multiply-add</td><td>${grp(u32('fma').n)}</td></tr></table>`,
         pitfall: `<p>Comparing a float sum with feq.s against the number it should be. After ten additions of 0.1 the program's a1 holds ${hex32(tenth()[9])}, not 0x3F800000, and the comparison is false. A test for "close enough" uses a tolerance
           relative to the operands, not an exact comparison.</p>`,
-        real: `<p>Cores pipeline the FPU: an add or multiply takes 3 to 5 cycles, issued one a cycle, and the fused multiply-add is the same unit, so a dependent chain runs at one operation per latency. Two steps further on, "A pipelined FPU"
+        real: `<p>Cores pipeline the FPU: an add or multiply takes 3 to 5 cycles, issued one a cycle, and the fused multiply-add is the same unit, so a dependent chain runs at one operation per latency. Later, "A pipelined FPU"
           builds the pipelined version and "Pipelined vs single-cycle" measures what the chain costs. Cores with double precision keep 64-bit f registers; a single there is NaN-boxed, its upper 32 bits all ones.</p>`,
       })),
       challenge: {

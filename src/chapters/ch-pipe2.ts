@@ -287,7 +287,7 @@ export const chPipePay: Chapter = {
         the only number that matters to the user; period and CPI are how you get there.</p>
         <p>Balancing turns the pipeline from slower than the single-cycle machine into faster. Prediction is a closer call:
         the period grows 19 % (59 → 70) and the CPI falls 14 % (1.51 → 1.30 on average), so time per instruction is about a
-        draw (89 against 91: 89 without prediction, 91 with it). Per program it wins on fib and gcd, whose loop branches it learns, and loses on mul, a loop of
+        draw (91 delays with prediction against 89 without). Per program it wins on fib and gcd, whose loop branches it learns, and loses on mul, a loop of
         six passes whose inner <code>beqz</code> follows the multiplier's bits. Which wins depends on the program's branches,
         which is why real designs measure on benchmarks rather than argue from diagrams (a deeper pipeline, with more cycles
         per flush, would gain more from the same predictor).</p>

@@ -469,8 +469,7 @@ export const chTraps: Chapter = {
         to BASE + 4<em>n</em> (exceptions still to BASE), saving the handler the dispatch on mcause. Here the two bits are wired to 0: direct only.</p>
         <p><code>ecall</code> traps on purpose: it is how a program calls the operating system. Here a six-instruction "OS" prints the
         character in a0. Note the handler adds 4 to mepc so that <code>mret</code> returns <em>after</em> the ecall.</p>
-        <p>Everything the hardware does on the trap happens at one clock edge: the PC is replaced, mepc and mcause are written, MIE is cleared, and the instruction that trapped is suppressed. No general register is touched, which is why the handler can start with a free hand only after it has saved
-        what it will use.</p>
+        <p>Everything the hardware does on the trap happens at one clock edge: the PC is replaced, mepc and mcause are written, MIE is cleared, and the instruction that trapped is suppressed. No general register is touched, so the handler must save every register it means to use before it uses it.</p>
         <div class="try">Pulse to the ecall and watch mepc and mcause (11 = ecall) change in the I/O panel, and the PC jump to the handler.</div>`,
       scene: () => cpuScene({ source: sys('syscall'), system: true, highlight: ['trap', 'csr', 'trapmux'] }),
       tour: {

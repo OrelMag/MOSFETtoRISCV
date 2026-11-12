@@ -139,7 +139,7 @@ function pipeMistakes(): string {
     <li><strong>"Pipelining makes an instruction faster."</strong> One instruction now spends five clocks in the machine: 5 × ${T5} = ${5 * T5} NAND
     delays even with even stages, against 155 on the single-cycle CPU. What improves is the rate: one instruction finishes per clock.</li>
     <li><strong>"The CPI is 1."</strong> Only without hazards. The worked example in Control hazards runs ${S.retired} instructions in
-    ${S.cycles} cycles, ${((S.retired + S.stalls + S.flushed) / S.retired).toFixed(2)} per instruction past the fill; the table in that step measures Fibonacci.</li>
+    ${S.cycles} cycles, ${((S.retired + S.stalls + S.flushed) / S.retired).toFixed(2)} per instruction past the fill; the table in <em>Does it pay? Measured</em> runs Fibonacci.</li>
     <li><strong>"Forwarding removes every stall."</strong> Not after a load: its word exists only at the end of M, when the next instruction's E has
     already begun. One bubble each time, unless the compiler puts an independent instruction in between.</li>
     <li><strong>"A flush has to undo the wrong-path instructions."</strong> There is nothing to undo: they are flushed from F and D, before any
@@ -359,7 +359,7 @@ export const chPipeline: Chapter = {
         <span data-show="byA byB">bypasses</span> W into D. Together the three paths cover every distance: one instruction back (M → E),
         two back (W → E), three back (W → D). Four or more back, the register file already has the value.</p>
         <p>Cost: four 5-bit comparators and two 3-input multiplexers of 32 bits, all on the E stage's critical path, which matters in the
-        last step.</p>
+        step <em>Does it pay? Measured</em>.</p>
         <div class="try">Pulse through and watch the event row of the diagram: M→E and W→E mark forwarding.</div>`,
       scene: () => ({ ...cpuScene({ source: HAZARDS, pipeline: true, highlight: ['hz', 'fwdA', 'fwdB', 'byA', 'byB'] }), autoClock: false }),
       tries: [(st) => { const p = snap(st); return !!p && (p.fwdA === 2 || p.fwdB === 2); }],

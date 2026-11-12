@@ -56,7 +56,7 @@ function hallStep(): Step {
       <p>A relay machine of this size is a building. The cost is not in the logic's cleverness but in counting: every NAND is a device, every bit of
       storage is several, and a relay cannot drive many inputs, so the fan-out adds coils.</p>
       <p>The program comes off punched cards, which the relay machine can read as it runs and the tube machine must load first; the
-      In real silicon layer works out why.</p>
+      "In real silicon" layer below works out why.</p>
       <div class="try">Run the program and watch the relays switch (or the plates glow): each cycle's settled values from the
       gate-level simulation, one relay or tube per NAND output of its block (a real relay machine would ripple through
       ${f.steps} steps to get there). Click a rack to open its block. Then switch to tubes, and between <em>Read as it runs</em> and
@@ -357,7 +357,7 @@ export const chSilicon: Chapter = {
       body: `
         <p>The finished design is stepped across a 300 mm wafer hundreds of times. After fabrication every die is tested; random defects kill some. The expected fraction
         of good dies falls exponentially with die area, so cost per good die rises faster than area.</p>
-        <p>Two effects stack. A bigger die yields fewer to the wafer, because the circle's edge wastes more of it, and a smaller share of those work. Designers answer both ways: smaller dies where
+        <p>Two effects stack. A bigger die means fewer dies per wafer, because the circle's edge wastes more of it, and a smaller share of those work. Designers answer both ways: smaller dies where
         possible, redundancy (spare rows and columns in memories, disabled cores sold as a cheaper part), and splitting a design into chiplets that are tested before they are joined.</p>`,
       widget: waferWidget,
       more: {

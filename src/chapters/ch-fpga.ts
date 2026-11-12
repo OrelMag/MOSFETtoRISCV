@@ -210,7 +210,7 @@ export const chFpga: Chapter = {
         <p>The register file did not go into block RAM: it is read on two ports and written on a third in the same cycle, and its register x0 is a constant. It stays as ${num(rf.ffs)} flip-flops
         (31 × 32) and ${num(rf.luts)} LUTs of read multiplexers and write decoding, the largest block by name. Read the other names with care: Yosys names a LUT after the net it drives, and ${num(ram.luts)} LUTs
         under <code>mem.ram</code> are the logic that feeds the RAM's sampled address and data: mostly the register file's read port for the store data, named after the register where its result ends.</p>
-        <p>The <strong>configuration</strong>: Apycula's packer writes the bitstream as frames of ${num(COUNTER.bitstream.frameBits)} bits. The counter's, with no memory contents, is ${num(COUNTER.bitstream.frames)} frames,
+        <p>The <strong>configuration</strong>: Apycula, the open-source Gowin packer, writes the bitstream as frames of ${num(COUNTER.bitstream.frameBits)} bits. The counter's, with no memory contents, is ${num(COUNTER.bitstream.frames)} frames,
         ${num(fabricBits())} bits for the fabric; the LUTs' tables are ${num(lutConfigBits())} of them (${num(D.lut4.available)} × 16), ${pct(lutConfigBits(), fabricBits())} %. The rest
         sets the routing switches, the cells' modes and the clocks. The computer's bitstream adds ${num(C.bitstream.frames - COUNTER.bitstream.frames)} frames for its block RAMs' contents, the program among them.</p>`;
       },

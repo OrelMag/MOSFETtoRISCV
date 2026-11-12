@@ -154,12 +154,12 @@ export const chFlash: Chapter = {
       body: `
         <p>The same cell, drawn as a stack: p substrate, a thin tunnel oxide, the <strong>floating gate</strong>, a second oxide, the <strong>control gate</strong>.
         The control gate has a wire to its word line. The floating gate has none: it is sealed in oxide on every side, which is why charge put there stays.
-        Four cells share one strip, as in a NAND string, with the n+ regions between them as shared source and drain.</p>
+        Four cells share one strip, with the n+ regions between them as shared source and drain (the arrangement of a NAND string, two steps on).</p>
         <p>A program pulse tunnels electrons from the channel through the tunnel oxide into the floating gate: ${FG_STEP} of charge a pulse,
-        Vt = 1 + 5q, so ${pulses} pulses carry Vt past the read voltage of ${V_READ} V. Erase empties every cell of the block at once. A read of one cell puts ${V_READ} V on its control gate and a
+        Vt = 1 + 5q (q the stored charge), so ${pulses} pulses carry Vt past the read voltage of ${V_READ} V. Erase empties every cell of the block at once. A read of one cell puts ${V_READ} V on its control gate and a
         pass voltage on the others, high enough that they conduct whatever they hold. The string carries current only if the chosen cell does, so its
         bit is read through the other cells, which are all on.</p>
-        <p>The voltages are illustrative. In a real NAND string the erased cells have a threshold below 0 V and the chosen word line is read at about 0 V, with the others passed at 4.5 to 6 V, and a program step (ISPP) moves Vt by 0.2 to 0.5 V rather than the model's 1 V; the model keeps the NOR-style window above so that one rule serves the whole chapter. The 5 in Vt = 1 + 5q is the floating gate's coupling to the control gate: the charge needed for a volt of threshold is Q / C<sub>ONO</sub>, and the same ratio, GCR = C<sub>ONO</sub> / (C<sub>ONO</sub> + C<sub>tox</sub>) of about 0.6, sets how much of the programming voltage lands across the thin tunnel oxide.</p>
+        <p>The voltages are illustrative. In a real NAND string the erased cells have a threshold below 0 V and the chosen word line is read at about 0 V, with the others passed at 4.5 to 6 V, and a program step (ISPP) moves Vt by 0.2 to 0.5 V rather than the model's 1 V; the model keeps the NOR-style window above so that one rule serves the whole chapter. The 5 in Vt = 1 + 5q is the floating gate's coupling to the control gate: the charge needed for a volt of threshold is Q / C<sub>ONO</sub> (C<sub>ONO</sub>: the capacitance of the second oxide, between the two gates), and the same ratio, GCR = C<sub>ONO</sub> / (C<sub>ONO</sub> + C<sub>tox</sub>) of about 0.6 (C<sub>tox</sub>: the tunnel oxide's), sets how much of the programming voltage lands across the thin tunnel oxide.</p>
         <div class="try">Choose cell 3, pulse until the string goes from conducting to blocked, then erase the block.</div>`,
       widget: () => fgate3d(),
     },
@@ -173,7 +173,7 @@ export const chFlash: Chapter = {
         cell), so only a few bytes or words at a time. Both erase by tunnelling the electrons back out, and the array does it for a
         whole <strong>block</strong> at once.</p>
         <p>So flash cannot overwrite. To turn one 0 back into a 1, the controller must read every row of the block, erase the
-        block and program the rows again. The times show what that costs: on a real SLC device a page read is
+        block and program the rows again. The times show what that costs: on a real SLC device (one bit a cell) a page read is
         ${FLASH_REAL_US.read} µs, a page program ${FLASH_REAL_US.program} µs, a block erase ${FLASH_REAL_US.erase / 1000} ms. At our
         ${CLOCK_NS.toFixed(2)} ns clock a read alone would be ${fmtN(READ_REAL)} cycles, so the model scales all three down about ${SCALE}×,
         rounding to powers of two (1 : 8 : 64 against the real 1 : 8 : 60): ${FLASH_TIMES.read}, ${FLASH_TIMES.program} and ${FLASH_TIMES.erase} cycles.</p>
@@ -219,7 +219,7 @@ export const chFlash: Chapter = {
         a page is sensed in tens of microseconds and then streamed out. NAND holds files and SSDs, NOR holds boot code.</p>
         <p>The two arrays are one cell wired two ways, and the wiring decides everything else. Parallel cells give random access and cost a contact each;
         series cells give density and force every access to go through the whole string. The cost of the series path shows in two places: reads are slow
-        (a small current through many transistors), and every read applies the pass voltage to the other rows, a mild stress that the last step comes back to.</p>
+        (a small current through many transistors), and every read applies the pass voltage to the other rows, a mild stress that a later step comes back to.</p>
         <div class="try">Read a row: every other row's cells sit at the pass voltage. Program a row, then erase the block.</div>`,
       more: {
         derive: `<p>Transistors and contacts per bit. NOR: 1 cell and 1 bit-line contact (here one a cell; real arrays often share one between two). A NAND string of N cells has N + 2 transistors (the string and ground selects) and a single
