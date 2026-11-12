@@ -77,7 +77,7 @@ function countdownListing(): string {
     }
   };
   const bin = (w: number) => `${(w >> 5).toString(2).padStart(3, '0')} ${(w & 31).toString(2).padStart(5, '0')}`;
-  const body = rows.map((r, i) => `<tr><td>${i}</td><td><code>${esc(lines[i])}</code></td><td><code>${bin(words[i])}</code></td><td style="text-align:left">${plain(r, i)}</td></tr>`).join('');
+  const body = rows.map((r, i) => `<tr><td>${i}</td><td><code>${esc(lines[i])}</code></td><td style="white-space:nowrap"><code>${bin(words[i])}</code></td><td style="text-align:left">${plain(r, i)}</td></tr>`).join('');
   return `<table class="acc-table"><tr><th>word</th><th>name</th><th>number</th><th>in plain words</th></tr>${body}</table>`;
 }
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
