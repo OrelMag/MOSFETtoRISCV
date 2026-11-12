@@ -12,6 +12,9 @@ import type { Sim } from '../sim/sim';
 import { netlistOf } from '../sim/types';
 import { h, hintBadge, icon, s } from '../ui/dom';
 import { isMenuKey } from '../ui/menu';
+import { settings } from '../ui/settings';
+import type { Lens } from '../view/lens';
+import type { Rect } from '../view/lensplan';
 import type { ViewFocus } from '../ui/viewlink';
 import type { ElsewhereHost, MeasureHost } from '../view/tracemenu';
 import { powerOff } from '../view/truthrule';
@@ -86,6 +89,12 @@ class InsideView {
   /** Why? (view/whypanel.ts): a click on a wire traces its value; what each part of the level is for. */
   private why: WhyPanel;
   private whyBtn: HTMLButtonElement;
+  /** The zoom lens (view/lens.ts, docs/transparent/DESIGN.md track 2a), loaded only while settings.zoomOpen is on. */
+  private lens: Lens | null = null;
+  private lensLoading = false;
+  /** The cue after the lens handed off to a level ("Zoom out once more to go up to cpu (or Esc)"). */
+  private cueEl: HTMLElement | null = null;
+  private unsub: () => void;
 
   constructor(private ed: Editor) {
     this.chip = ed.chipId;
@@ -102,6 +111,7 @@ class InsideView {
         this.whyBtn.classList.toggle('on', on);
         this.canvas.classList.toggle('probing', on);
         if (!on) this.view.setCover([], true);
+        this.lens?.coversChanged();
       },
     });
     this.whyBtn = h('button', { class: 'btn ghost sm toggle why-btn', title: 'Why? (W): click any wire to trace its value back to the inputs that decide it, or see what each part is for', onclick: () => this.why.setOn(!this.why.on) },
@@ -111,6 +121,7 @@ class InsideView {
       if (!this.why.on) return;
       const c = this.canvas.getBoundingClientRect(), r = this.why.el.getBoundingClientRect();
       this.view.setCover([{ x: r.left - c.left, y: r.top - c.top, w: r.width, h: r.height }]);
+      this.lens?.coversChanged();
     }).observe(this.why.el);
     this.el = h('section', { class: 'sb-inside', role: 'dialog', 'aria-label': 'Look inside', tabindex: '-1' },
       h('div', { class: 'stage-bar sb-inside-bar' },
@@ -127,6 +138,11 @@ class InsideView {
       this.canvas);
     this.el.addEventListener('keydown', (e) => {
       e.stopPropagation();
+      // an open lens closes before anything else Esc does here (DESIGN.md item 8)
+      if (e.key === 'Escape' && this.lens?.close()) {
+        e.preventDefault();
+        return;
+      }
       if (e.key === 'Escape' && this.pathLit) {
         e.preventDefault();
         this.pathLit = false;
@@ -182,6 +198,89 @@ class InsideView {
     this.view.trace = true;
     this.view.menuBack = this.el;
     ed.paintHooks.add(this.hook);
+    this.unsub = settings.onChange(() => this.syncLens());
+    this.syncLens();
+  }
+
+  // ---- the zoom lens (view/lens.ts), as on the stage ------------------------------------------
+
+  /** Load the lens while Open blocks as you zoom is on; off, it is torn down and nothing of it runs. */
+  private syncLens(): void {
+    if (!settings.zoomOpen) {
+      this.lens?.dispose();
+      this.lens = null;
+      this.showCue(null);
+      return;
+    }
+    if (this.lens || this.lensLoading) return;
+    this.lensLoading = true;
+    void import('../view/lens').then(({ Lens }) => {
+      this.lensLoading = false;
+      if (!settings.zoomOpen || this.lens || !this.el.isConnected) return;
+      this.lens = new Lens({
+        view: this.view,
+        canvas: this.canvas,
+        ctx: () => this.ctx,
+        covers: () => this.covers(),
+        allowed: () => settings.zoomOpen && !this.leaf && !(this.sim instanceof NmosSim),
+        // the out-of-order core's levels are too large for one task yet (DESIGN.md phase 2f): the core, or a level in it
+        tooLarge: (ctx, name) => {
+          const c = ctx.node.children?.get(name);
+          if (c && isOoo(c.def.id, c)) return true;
+          for (let l: ViewCtx | null = ctx; l; l = l.parent) if (isOoo(l.def.id, l.node)) return true;
+          return false;
+        },
+        drill: (path, vb) => {
+          this.goTo(path, false, vb);
+        },
+        peek: () => this.renderCrumbs(),
+        overlay: () => null,
+        overlayGap: () => null,
+        selected: () => {},
+        cue: (p) => this.showCue(p),
+        say: (t) => this.ed.announce(t),
+      });
+    });
+  }
+
+  /**
+   * What the lens keeps clear of, in the inside canvas's pixels (DESIGN.md track 2a: the dock, the canvas toolbar, the run bar).
+   * The inside's own bar and the sandbox's run bar sit outside its canvas (flex siblings), so they never meet it; the dock
+   * does where it is drawn over look inside, and the level tag, the hint and the Why? card sit on the canvas. Measured, not
+   * read from --dock-space: when the room is short look inside is drawn over the dock (sbdock.css), and then the dock
+   * covers nothing.
+   */
+  private covers(): Rect[] {
+    const c = this.canvas.getBoundingClientRect();
+    const out: Rect[] = [];
+    const add = (r: DOMRect) => {
+      const x0 = Math.max(r.left, c.left), y0 = Math.max(r.top, c.top), x1 = Math.min(r.right, c.right), y1 = Math.min(r.bottom, c.bottom);
+      if (x1 > x0 && y1 > y0) out.push({ x: x0 - c.left, y: y0 - c.top, w: x1 - x0, h: y1 - y0 });
+    };
+    const z = (e: Element) => parseInt(getComputedStyle(e).zIndex, 10) || 0;
+    const dock = this.ed.slots.overlay.querySelector('.sb-dock');
+    if (dock && z(dock) > z(this.el)) {
+      for (const d of dock.querySelectorAll(':scope > .sb-drawer:not([hidden]), :scope > .sb-dock-tabs:not([hidden])')) add(d.getBoundingClientRect());
+    }
+    for (const e of [this.badge, this.canvas.querySelector(':scope > .hint-badge'), this.why.on ? this.why.el : null]) {
+      if (e instanceof HTMLElement && e.offsetParent) add(e.getBoundingClientRect());
+    }
+    return out;
+  }
+
+  /** After a hand-off or a step in: the stage's words ("Zoom out once more to go up to cpu", view/zoomout.ts cueWords), the
+   *  parent's name a link, and Esc, look inside's own way up (null removes it). */
+  private showCue(parent: { label: string; path: string[]; words?: string } | null): void {
+    this.cueEl?.remove();
+    this.cueEl = null;
+    if (!parent) return;
+    // above the inside's first level is the chip itself: going there closes the view
+    const top = !parent.path.length;
+    const words = parent.words ?? `Keep zooming out to go up to ${parent.label}`;
+    const lead = words.endsWith(parent.label) ? words.slice(0, words.length - parent.label.length) : `${words} `;
+    this.cueEl = h('div', { class: 'lens-cue', role: 'status' }, lead,
+      h('button', { class: 'linkish', onclick: () => (top ? this.close() : this.goTo(parent.path)) }, top ? this.ed.doc.name : parent.label), ' (or Esc)');
+    this.canvas.append(this.cueEl);
   }
 
   /** A path lit from the menu: Esc puts the view back before it goes up a level. */
@@ -248,7 +347,8 @@ class InsideView {
     this.root = sim ? new ViewCtx(sim, sim.design.root) : null;
   }
 
-  goTo(path: string[], keepView = false): void {
+  /** `vb`: the view box to show the level at (the lens's hand-off: the same scale and place, nothing jumps). */
+  goTo(path: string[], keepView = false, vb?: { x: number; y: number; w: number; h: number }): void {
     this.pathLit = false;
     this.bind();
     this.closeLeaf();
@@ -271,6 +371,8 @@ class InsideView {
     }
     if (ctx === this.root && !leaf) return this.close();
     this.ctx = ctx;
+    // no lens survives a level change (a hand-off keeps its cue while this is its level)
+    this.lens?.levelChanged(leaf ? [...ctx.path, leaf] : ctx.path);
     this.why.levelChanged();
     // A library part's wires move as on the stage (the same layout, by component id); a user chip's are drawn in its own tab.
     this.view.arrange = ctx.def.id.startsWith('u_') ? false : 'wires';
@@ -279,7 +381,8 @@ class InsideView {
     this.applyLight();
     this.decorate();
     // The panel may still be settling into its size on the first frame.
-    if (!keepView) requestAnimationFrame(() => this.view.fit());
+    if (vb) this.view.setView(vb);
+    else if (!keepView) requestAnimationFrame(() => this.view.fit());
     if (leaf) this.openLeaf(leaf);
     this.renderCrumbs();
     this.tick();
@@ -378,6 +481,9 @@ class InsideView {
     const p = this.path;
     const levels: ViewCtx[] = [];
     for (let l: ViewCtx | null = this.ctx; l; l = l.parent) levels.unshift(l);
+    // the lens's level (DESIGN.md item 4): "alu (inside)" in italics, a click steps in
+    const peek = this.leaf ? null : this.lens?.peekCtx ?? null;
+    if (peek) levels.push(peek);
     const vals = crumbValues(levels);
     this.crumbVals = [];
     const valEl = (i: number, name: string, above: string, btn: HTMLElement) => {
@@ -399,6 +505,12 @@ class InsideView {
       valEl(i + 1, name, i ? p[i - 1] : ed.doc.name, btn);
       ctx = ctx && !last ? safeChild(ctx, name) : null;
     });
+    if (peek) {
+      const name = peek.path[peek.path.length - 1];
+      const btn = h('button', { class: 'peek', title: 'Step in', onclick: () => this.goTo(peek.path) }, h('i', null, name + ' (inside)'));
+      c.append(h('span', { class: 'sep' }, '›'), btn);
+      valEl(p.length + 1, name, p[p.length - 1] ?? ed.doc.name, btn);
+    }
     this.syncCrumbVals();
     // Deep paths overflow the bar: keep the current level in view.
     requestAnimationFrame(() => (c.scrollLeft = c.scrollWidth));
@@ -424,6 +536,9 @@ class InsideView {
     if (ctx.isSubSim) ctx.sync();
     this.view.radix = ed.view.radix;
     this.view.update();
+    const pk = this.lens?.peekCtx;
+    if (pk?.isSubSim) pk.sync();
+    this.lens?.update();
     this.why.update();
     this.applyLight();
     this.ioPaint?.();
@@ -436,12 +551,23 @@ class InsideView {
   }
 
   close(): void {
+    this.lens?.dispose();
+    this.lens = null;
+    this.unsub();
+    this.showCue(null);
     this.closeLeaf();
     this.ed.paintHooks.delete(this.hook);
     this.el.remove();
     views.delete(this.ed);
     this.ed.view.svg.focus({ preventScroll: true });
   }
+}
+
+/** The out-of-order core, by id or (a sandbox copy) by its reorder buffer and issue queue (riscv/ooosnap.ts isOooCore's rule). */
+function isOoo(id: string, node: { children?: Map<string, { def: { id: string } }> }): boolean {
+  if (/^(u_)?ooo_/.test(id)) return true;
+  const k = node.children;
+  return /^(u_)?rob16_/.test(k?.get('rob')?.def.id ?? '') && /^(u_)?iq8_/.test(k?.get('iq')?.def.id ?? '');
 }
 
 function safeChild(ctx: ViewCtx, name: string): ViewCtx | null {

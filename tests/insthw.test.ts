@@ -5,7 +5,7 @@ import { disasm } from '../src/riscv/isa';
 import { SIMT_PROGRAMS } from '../src/riscv/simtprograms';
 import { WARP_DMEM_K, WARP_PROGRAMS, WARP_SMEM_K } from '../src/riscv/warpprograms';
 import { netlistOf } from '../src/sim/types';
-import { instrUse, laneUse, oooUse, STAGE_UNITS } from '../src/widgets/insthw';
+import { innerUse, instrUse, laneUse, litOf, namesIn, oooUse, STAGE_UNITS, stageUse } from '../src/widgets/insthw';
 import { oooCpu } from '../src/lib/ooocore';
 import { CUSTOM_PRESETS } from '../src/riscv/custom';
 
@@ -94,5 +94,86 @@ describe('instruction → hardware map, lane and warp cores', () => {
     const core = { n: 4, W: 4, lsu: true, mul: true };
     expect(laneUse(assemble('lw t0, 0(t1)').words[0], core, { warp: 2 }).units).toEqual(expect.arrayContaining(['sched', 'warp2', 'hz2', 'se2', 'acc', 'mem']));
     expect(laneUse(assemble('bar t0, t1').words[0], core, { warp: 1 }).units).toEqual(expect.arrayContaining(['atBar', 'barCmp', 'warp1']));
+  });
+});
+
+describe('instruction → the parts inside the boxes (the zoom lens, track 2c)', () => {
+  // every RV32I instruction, each class and each ALU / branch operation, with registers read and written
+  const ALL = assemble([
+    'add x5, x6, x7', 'sub x5, x6, x7', 'sll x5, x6, x7', 'slt x5, x6, x7', 'sltu x5, x6, x7', 'xor x5, x6, x7', 'srl x5, x6, x7', 'sra x5, x6, x7', 'or x5, x6, x7', 'and x5, x6, x7',
+    'addi x8, x9, 3', 'slti x8, x9, 3', 'sltiu x8, x9, 3', 'xori x8, x9, 3', 'ori x8, x9, 3', 'andi x8, x9, 3', 'slli x8, x9, 3', 'srli x8, x9, 3', 'srai x8, x9, 3',
+    'lw x10, 4(x11)', 'lb x10, 4(x11)', 'lhu x10, 4(x11)', 'sw x12, 8(x13)', 'sb x12, 8(x13)',
+    'beq x1, x2, 0', 'bne x1, x2, 0', 'blt x1, x2, 0', 'bge x1, x2, 0', 'bltu x1, x2, 0', 'bgeu x1, x2, 0',
+    'jal x1, 4', 'jalr x0, 0(x1)', 'lui x14, 1', 'auipc x15, 0', 'addi x0, x0, 0',
+  ].join('\n')).words;
+  const top = (n: string) => n.slice(0, n.indexOf('.'));
+
+  it('names a part inside every class, and each one exists where its box does, on the single-cycle and the pipelined CPU', () => {
+    for (const cpu of [singleCycleCpu(prog), pipelinedCpu(prog, {})]) {
+      const have = names(cpu);
+      for (const w of ALL) {
+        const inner = innerUse(w);
+        expect(inner.length, disasm(w, 0)).toBeGreaterThan(2);
+        const here = inner.filter((n) => have.has(top(n)));
+        expect(namesIn(cpu, here), `${cpu.id}: ${disasm(w, 0)}`).toEqual(here);
+        // the boxes they sit in are lit too
+        for (const n of here) expect(instrUse(w).units, disasm(w, 0)).toContain(top(n));
+      }
+    }
+  });
+
+  it('on the other variants a name either exists or is one the lens drops (it lights only parts its box has)', () => {
+    const variants = [systemCpu(prog), multicycleCpu(prog, {}), pipelinedCpu(prog, { adder: 'ks', m: true })];
+    for (const cpu of variants) {
+      const have = names(cpu);
+      const miss = new Set<string>();
+      for (const w of ALL) {
+        const here = innerUse(w).filter((n) => have.has(top(n)));
+        const ok = new Set(namesIn(cpu, here));
+        here.filter((n) => !ok.has(n)).forEach((n) => miss.add(n));
+      }
+      // the system CPU's data memory is the MMIO unit, no `ram` inside: its loads and stores glow the rim
+      expect([...miss], cpu.id).toEqual(cpu === variants[0] ? ['dm.ram'] : []);
+    }
+  });
+
+  it('picks the ALU part, the branch condition, the immediate box and the registers by the instruction', () => {
+    const at = (src: string) => innerUse(assemble(src).words[0]);
+    expect(at('add x5, x6, x7')).toEqual(expect.arrayContaining(['alu.add', 'alu.mux', 'rf.rp1', 'rf.w6', 'rf.rp2', 'rf.w7', 'rf.dec', 'rf.w5', 'ctl.aludec']));
+    expect(at('xor x5, x6, x7')).toContain('alu.xor');
+    expect(at('xor x5, x6, x7')).not.toContain('alu.add');
+    expect(at('sra x5, x6, x7')).toEqual(expect.arrayContaining(['alu.shift', 'alu.sb']));
+    expect(at('sltu x5, x6, x7')).toEqual(expect.arrayContaining(['alu.add', 'alu.sltu', 'alu.zsltu']));
+    expect(at('lw x10, 4(x11)')).toEqual(expect.arrayContaining(['imm.i', 'alu.add', 'dm.ram', 'rf.w10', 'rf.w11']));
+    expect(at('sw x12, 8(x13)')).toEqual(expect.arrayContaining(['imm.s', 'dm.ram', 'rf.rp2', 'rf.w12']));
+    expect(at('sw x12, 8(x13)')).not.toContain('rf.dec');
+    expect(at('beq x1, x2, 0')).toEqual(expect.arrayContaining(['imm.b', 'alu.zero', 'npc.cond', 'npc.take']));
+    expect(at('bne x1, x2, 0')).toContain('npc.nz');
+    expect(at('bge x1, x2, 0')).toEqual(expect.arrayContaining(['npc.lt', 'npc.ge']));
+    expect(at('bltu x1, x2, 0')).toContain('npc.nc');
+    expect(at('jal x1, 4')).toEqual(expect.arrayContaining(['imm.j', 'npc.src0', 'rf.w1']));
+    expect(at('lui x14, 1')).toEqual(expect.arrayContaining(['imm.u', 'rf.w14']));
+    expect(at('lui x14, 1').some((n) => n.startsWith('alu.'))).toBe(false);
+    expect(at('addi x0, x0, 0')).toContain('rf.x0');
+    expect(at('addi x0, x0, 0')).not.toContain('rf.dec');
+    // M, custom, vector and unknown words name nothing inside: the lens lights the rim alone
+    expect(innerUse(assemble('mul x5, x6, x7').words[0])).toEqual([]);
+    expect(innerUse(0)).toEqual([]);
+  });
+
+  it('a click lights the boxes and the parts; the pipeline lights what each stage does', () => {
+    const use = instrUse(assemble('add x5, x6, x7').words[0]);
+    expect(litOf(use)).toEqual(expect.arrayContaining(['alu', 'alu.add', 'rf', 'rf.w5']));
+    const d = stageUse('D', use), e = stageUse('E', use), w = stageUse('W', use);
+    expect(d).toEqual(expect.arrayContaining(['rf.rp1', 'rf.w6', 'rf.rp2', 'rf.w7']));
+    expect(d).not.toContain('rf.w5');
+    expect(d).not.toContain('alu.add');
+    expect(e).toContain('alu.add');
+    expect(w).toEqual(expect.arrayContaining(['rf.dec', 'rf.w5']));
+    expect(w).not.toContain('rf.w6');
+    // a register read and written lights in both
+    const same = instrUse(assemble('addi x5, x5, 1').words[0]);
+    expect(stageUse('D', same)).toContain('rf.w5');
+    expect(stageUse('W', same)).toContain('rf.w5');
   });
 });

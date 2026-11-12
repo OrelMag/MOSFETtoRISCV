@@ -2712,6 +2712,11 @@ a.card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-co
 .why-chain li:hover, .why-chain li:focus-visible { background: var(--surface-2); }
 .why-n { font: 600 11px var(--font-mono); color: var(--accent); padding-top: 2px; }
 .why-chain li[data-kind="pin"] .why-n, .why-chain li[data-kind="port"] .why-n { color: var(--muted); }
+/* the trace across an open lens's rim: a rule and where it goes, then the other level's steps, indented */
+.why-chain li.why-rim { display: block; margin-top: 4px; padding: 6px 6px 2px; border-top: 1px dashed var(--border); border-radius: 0; color: var(--muted); font-size: 12px; }
+.why-chain li.why-rim:hover { background: none; }
+.why-chain li[data-across] { margin-left: 10px; }
+.why-table tr.why-mark td { background: var(--accent-soft); }
 .why-table { overflow-x: auto; }
 .why-table table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
 .why-table th, .why-table td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); }

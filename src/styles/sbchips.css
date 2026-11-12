@@ -81,7 +81,8 @@
 .sb-inside.wide { left: 0; border-left: 0; }
 @media (max-width: 900px) { .sb-inside { left: 0; border-left: 0; } }
 .sb-inside-bar .crumbs { overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
-.sb-inside-bar .crumbs button { white-space: nowrap; }
+/* the crumbs scroll here (renderCrumbs keeps the open level in view), so none is cut to the bar's width with an ellipsis (app.css .stage-bar) */
+.sb-inside .sb-inside-bar.stage-bar:not(.stacked) .crumbs > button { white-space: nowrap; flex-shrink: 0; max-width: none; }
 .sb-inside-bar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .sb-inside-tag {
   display: inline-flex; align-items: center; gap: 5px; flex: none; font: 600 11px var(--font-mono); text-transform: uppercase; letter-spacing: 0.05em;

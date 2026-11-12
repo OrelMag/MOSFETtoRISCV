@@ -53,7 +53,7 @@ browser context; it fails on exceptions, console / browser errors, failed reques
 "could not load" panels, editor error toasts / diagnostics, an empty main view, and horizontal overflow at 1280 px and on
 a 390 px phone (a few pages), and a sandbox toolbar label cut or scrolled out of view (also at 1440 and 1920 px), the open tab under Open… / New chip, and on every
 route a stage bar's button past its edge, the open level's name cut on a one-row stage bar (view/stage.ts fitBar: labels off, then
-buttons into More, then a row for the hierarchy) or the run row cut (fitControls: icons only, then wrapped within its row). Every analogy with a figure or a Water view (chapters/analogies.ts) is also a route "(analogy open)" (30 with the phone ones; `--only analogy`): its `.analogy` asides opened and the step's Water toggles clicked (ANALOGY_DRIVE), failing on a figure that stays empty or says it could not load. `--only <substring>`, `--headful`, `--dwell <ms>` (wait after settling, default 600).
+buttons into More, then a row for the hierarchy) or the run row cut (fitControls: icons only, then wrapped within its row). Every analogy with a figure or a Water view (chapters/analogies.ts) is also a route "(analogy open)" (30 with the phone ones; `--only analogy`): its `.analogy` asides opened and the step's Water toggles clicked (ANALOGY_DRIVE), failing on a figure that stays empty or says it could not load. `--only <substring>`, `--zoom-open on | off` (Open blocks as you zoom for every route that does not set it), `--headful`, `--dwell <ms>` (wait after settling, default 600).
 
 CI (`.github/workflows/deploy.yml`) runs tests beside build + smoke (one job) and deploys `dist/` to GitHub Pages
 on every push to `main` (https://switchtocpu.com/, a Pages custom domain). The unit tests are skipped when the pushed tree already
@@ -1233,7 +1233,9 @@ src/editor/    the Sandbox (#/sandbox[/<chipId>], a DLS-style editor; page in ui
   inside.ts      lookInside(ed, path): live schematic over the canvas on EditorSim's simulator (ViewCtx), read-only but for
                  a library part's wires (arrange 'wires': the stage's layout, Ctrl+Z there); lightInside(ed, path, names): the CPU drawer lights the units
                  an instruction uses inside a placed port core (widgets/insthw.ts coreUnitNames: dm → amux / wmux), the core's box haloed on the canvas;
-                 consoles, screens and switch banks get their live faces there (ioface.ts decorateInside; switches flip)
+                 consoles, screens and switch banks get their live faces there (ioface.ts decorateInside; switches flip);
+                 the zoom lens (view/lens.ts, settings.zoomOpen) as on the stage: covers measured (the dock where drawn over it, the level tag, the
+                 hint, the Why? card; its bar and the run bar lie outside its canvas), Esc closes it first, the peek crumb, the hand-off cue
   ioface.ts      the I/O parts' SVG faces (canvas and look inside; the wheel over a console with scrollback scrolls it,
                  "↑ n lines" while up, Ctrl + wheel zooms); ScreenCanvas: the picture as a canvas bitmap in a
                  foreignObject, repainted when the frame buffer's version moves (image.ts exports it as an <image>)

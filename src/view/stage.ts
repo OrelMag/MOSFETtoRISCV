@@ -49,6 +49,7 @@ import { isMenuKey, type MenuEntry } from '../ui/menu';
 import type { ElsewhereHost, ExplainHost, MeasureHost } from './tracemenu';
 import { powerOff } from './truthrule';
 import { WhyPanel } from './whypanel';
+import { ablationRefusal } from '../sim/ablate';
 import { memGridPanel } from '../widgets/memgrid';
 import { modelLeaf } from '../widgets/modelleaf';
 import { findMemories } from './memfind';
@@ -264,6 +265,8 @@ export class Stage {
   /** The zoom lens (view/lens.ts), loaded only while settings.zoomOpen is on. */
   private lens: Lens | null = null;
   private lensLoading = false;
+  /** What highlight() lit last (names of the level at `at`, `box.part` inside a box): an open zoom lens shows its own share. */
+  private litNames: { names: string[]; at: string[] } = { names: [], at: [] };
   /** The cue under the breadcrumb after the lens handed off to a drill. */
   private cueEl: HTMLElement | null = null;
   private ovKind: OverlayKind | null = null;
@@ -346,6 +349,11 @@ export class Stage {
       ctx: () => this.ctx,
       light: (names) => (names.length ? this.view.highlight(names, true) : this.view.highlight(this.ctx === this.rootCtx ? this.scene?.highlight ?? [] : [])),
       selectNet: (i) => this.view.selectNet(i),
+      // the open zoom lens: a trace crosses its rim (DESIGN.md track 2b)
+      lens: () => {
+        const v = this.lens?.innerView, c = this.lens?.peekCtx;
+        return v && c ? { ctx: c, box: c.path[c.path.length - 1], light: (names) => (names.length ? v.highlight(names, true) : this.lens?.lit(this.litFor(this.path))), selectNet: (i) => v.selectNet(i) } : null;
+      },
       toggled: (on) => {
         this.whyBtn.classList.toggle('on', on);
         this.canvas.classList.toggle('probing', on || this.probeMode);
@@ -934,6 +942,8 @@ export class Stage {
     this.remixBtn.hidden = !!scene.noRemix;
     this.view.highlight(scene.highlight ?? []);
     this.board.highlight(scene.highlight ?? [], true);
+    this.litNames = { names: scene.highlight ?? [], at: [] };
+    this.lens?.lit(this.litFor(this.path));
     this.panels = this.panelsOf(scene).map((f) => f(this));
     for (const p of this.panels) (p.el.dataset.dock === 'left' ? this.dock : this.canvas).append(p.el);
     for (const p of this.panels) if (p.el.dataset.dock === 'right' || p.el.dataset.fold) this.foldable(p.el);
@@ -1000,6 +1010,7 @@ export class Stage {
     // another level: a path lit on this one is gone with it, and so is an open lens
     this.pathLit = false;
     this.lens?.levelChanged(path);
+    this.lens?.lit(this.litFor(path));
     if (!this.rootCtx) return;
     this.closeLeaf();
     let ctx = this.rootCtx;
@@ -1168,18 +1179,34 @@ export class Stage {
         },
         allowed: () => settings.zoomOpen && !this.boardOn && !this.leaf && this.scene?.engine !== 'nmos',
         // the out-of-order core's levels are too large for one task yet (DESIGN.md phase 2f)
-        tooLarge: () => !!this.rootCtx?.def.id.startsWith('ooo_'),
+        // nothing is too large since phase 2f: the lens's own task is 8-24 ms on every part of the out-of-order core
+        // (scripts/lens-ooo-measure.mjs; the dim and the crumb follow as tasks of their own). Parts whose inside cannot
+        // be drawn legibly at the cap (the issue queue, the reorder buffer…) still say "double-click to step in"
+        tooLarge: () => false,
         drill: (path, vb) => {
           this.goTo(path);
           if (vb) this.view.setView(vb);
         },
-        peek: () => this.renderCrumbs(),
+        peek: (ctx) => {
+          this.peekCrumb(ctx);
+          this.why.lensChanged();
+        },
+        // Why? on the lens's wires, and its menu's Why this value? and Explain with Break a part (DESIGN.md track 2b)
+        events: (ctx) => ({
+          netClick: (i) => this.why.netClick(i, 'lens'),
+          why: (i) => {
+            this.why.setOn(true);
+            this.why.netClick(i, 'lens');
+          },
+          explain: (c) => this.explainIn(ctx, c, 'lens'),
+        }),
         overlay: (ctx) => (this.ovKind && !this.boardOn && !this.leaf && !this.ovRefusals()[this.ovKind] && !this.lensOverlayGap(ctx) ? this.overlayFor(ctx) : null),
         overlayGap: (ctx) => this.lensOverlayGap(ctx),
         selected: () => this.showInspector(),
         cue: (p) => this.showCue(p),
         say: (t) => this.say(t),
       });
+      this.lens.lit(this.litFor(this.path));
     });
   }
 
@@ -1201,17 +1228,37 @@ export class Stage {
     if (!r) return v.zoom(0.8);
     const [x, y] = [r.left + r.width / 2, r.top + r.height / 2];
     v.wheelAt(Math.log(0.8) / 0.0015, x, y);
-    this.lens?.zoomed(x, y);
+    this.lens?.zoomed(x, y, true);
   }
 
-  /** After a hand-off: "Esc or cpu goes back up" under the breadcrumb (null removes it). */
-  private showCue(parent: { label: string; path: string[] } | null): void {
+  /** After a hand-off: "Keep zooming out to go up to cpu" under the breadcrumb (null removes it). */
+  private showCue(parent: { label: string; path: string[]; words?: string; progress?: number } | null): void {
+    const words = parent && (parent.words ?? `Keep zooming out to go up to ${parent.label}`);
+    // the same words: only the bar moves (a new status element would be announced again at every wheel notch)
+    if (parent && this.cueEl && this.cueEl.dataset.words === words) return this.cueBar(parent.progress);
     this.cueEl?.remove();
     this.cueEl = null;
-    if (!parent) return;
-    this.cueEl = h('div', { class: 'lens-cue', role: 'status' }, 'Esc or ',
-      h('button', { class: 'linkish', onclick: () => this.goTo(parent.path) }, parent.label), ' goes back up');
+    if (!parent || !words) return;
+    // the lens's words (view/zoomout.ts cueWords) end with the parent's name: that name is the link
+    const lead = words.endsWith(parent.label) ? words.slice(0, words.length - parent.label.length) : `${words} `;
+    this.cueEl = h('div', { class: 'lens-cue', role: 'status' }, lead,
+      h('button', { class: 'linkish', onclick: () => this.goTo(parent.path) }, parent.label));
+    this.cueEl.dataset.words = words;
     this.canvas.append(this.cueEl);
+    this.cueBar(parent.progress);
+  }
+
+  /** The cue's bar: how much of the zoom-out to fit is done (view/zoomout.ts progress); none once the level fits. */
+  private cueBar(p: number | undefined): void {
+    const el = this.cueEl;
+    if (!el) return;
+    let bar = el.querySelector<HTMLElement>('.lens-cue-bar');
+    if (p === undefined) return void bar?.remove();
+    if (!bar) {
+      bar = h('span', { class: 'lens-cue-bar', 'aria-hidden': 'true' }, h('i'));
+      el.append(bar);
+    }
+    (bar.firstElementChild as HTMLElement).style.width = `${Math.round(p * 100)}%`;
   }
 
   // ---- the breadboard view ----------------------------------------------------------------
@@ -1228,6 +1275,8 @@ export class Stage {
   /** The bar's zoom buttons: on the boards while they are shown, else on the schematic. */
   private zoomBy(f: number): void {
     if (this.boardOn) this.board.zoom(f);
+    // zooming out after stepping in: the press that goes up does not also zoom the parent (view/zoomout.ts key)
+    else if (f > 1 && this.lens?.zoomOutKey()) return;
     else this.view.zoom(f);
   }
 
@@ -1407,19 +1456,28 @@ export class Stage {
   private explain(c: string | null): { def: ComponentDef; host: ExplainHost } | null {
     const def = c ? this.ctx?.node.children?.get(c)?.def : this.ctx?.def;
     if (!def) return null;
+    const x = this.explainIn(this.ctx!, c, 'stage')!;
     const at = (section: 'truth' | 'used') => () => {
       this.select(c);
       this.showInspector();
       this.inspector.openAt(section);
     };
+    return { def, host: { ...x.host, truth: at('truth'), used: at('used') } };
+  }
+
+  /** Explain on a level (the one on screen, or an open lens's): the codex, the chapter, Break a part. */
+  private explainIn(ctx: ViewCtx, c: string | null, at: 'stage' | 'lens'): { def: ComponentDef; host: ExplainHost } | null {
+    const def = c ? ctx.node.children?.get(c)?.def : ctx.def;
+    if (!def) return null;
     const go = (href: string) => {
       markJump();
       location.hash = href;
     };
     return { def, host: {
-      truth: at('truth'), used: at('used'),
       openCodex: (id) => go(`#/campaign/codex/${id}`),
       openChapter: go,
+      // the table is of the level the menu is on (not the part clicked): disabled, with the reason, where it cannot be made
+      breakPart: { run: () => this.why.showParts(at, c), part: !!c, why: ablationRefusal(ctx.def) },
     } };
   }
 
@@ -1616,7 +1674,7 @@ export class Stage {
     if (matches(e, 'cursor.step')) { if (this.sim?.kind === 'gate' || this.relayTime) { this.stepOnce(); again(); } return true; }
     if (matches(e, 'cursor.back')) { if (this.back()) again(); else this.say('Nothing to go back to'); return true; }
     if (matches(e, 'cursor.zoomin')) { this.zoomToCursor(); return true; }
-    if (matches(e, 'cursor.zoomout')) { v.zoom(1.25); return true; }
+    if (matches(e, 'cursor.zoomout')) { if (!this.lens?.zoomOutKey()) v.zoom(1.25); return true; }
     if (matches(e, 'cursor.fit')) { v.fit(); return true; }
     return false;
   }
@@ -2466,6 +2524,17 @@ export class Stage {
   }
 
   private renderCrumbs(): void {
+    const peek = this.leaf ? null : this.lens?.peekCtx ?? null;
+    this.drawCrumbs(null);
+    if (!peek) return;
+    // the zoom lens's peek crumb only where it fits: it must not restack the bar (on a phone that took half the canvas
+    // away, and the lens closed for want of room); the lens's own tag names the level anyway
+    const bare = this.bar.getBoundingClientRect().height;
+    this.drawCrumbs(peek);
+    if (this.bar.getBoundingClientRect().height > bare + 1) this.drawCrumbs(null);
+  }
+
+  private drawCrumbs(peek: ViewCtx | null): void {
     const c = this.crumbs;
     c.replaceChildren();
     if (!this.rootCtx) return;
@@ -2482,7 +2551,6 @@ export class Stage {
       const def = this.ctx!.node.children!.get(this.leaf.name)!.def;
       chain.push({ label: this.leaf.name, kind: def.name, path: this.path });
     }
-    const peek = this.leaf ? null : this.lens?.peekCtx ?? null;
     if (peek) {
       levels.push(peek);
       chain.push({ label: peek.path[peek.path.length - 1], kind: '', path: peek.path, peek: true });
@@ -2495,8 +2563,8 @@ export class Stage {
       const v = vals[i];
       const el = v ? h('span', { class: 'val' }) : null;
       if (el && v) this.crumbVals.push({ el, v });
-      // the lens's level (DESIGN.md item 4): "alu (peek)" in italics, a click steps in
-      if (item.peek) c.append(h('button', { class: 'peek', title: 'Step in', onclick: () => this.goTo(item.path) }, h('i', null, `${item.label} (peek)`), el));
+      // the lens's level (DESIGN.md item 4): "alu (inside)" in italics, a click steps in
+      if (item.peek) c.append(h('button', { class: 'peek', title: 'Step in', onclick: () => this.goTo(item.path) }, h('i', null, `${item.label} (inside)`), el));
       else c.append(h('button', { class: last || chain[i + 1]?.peek ? 'cur' : '', onclick: () => (last || chain[i + 1]?.peek ? null : this.goTo(item.path)) },
         item.label, item.kind ? h('span', { class: 'kind' }, item.kind) : null, el));
       // The name may be cut with an ellipsis (app.css): the tooltip keeps it whole.
@@ -2506,6 +2574,28 @@ export class Stage {
     this.syncCrumbVals();
     this.fitBar();
     this.syncScope();
+  }
+
+  /**
+   * The lens's level as the breadcrumb's last item, "alu (inside)", added or removed in place. Not renderCrumbs: a crumb
+   * more can make the bar overflow, and fitBar's ladder then lays the whole stage out once per step, the circuit included
+   * (280 ms on the out-of-order core, 50 ms on the single-cycle CPU, measured by scripts/lens-ooo-measure.mjs). The
+   * peek crumb shrinks instead (lens.css), so the bar keeps its layout while a lens comes and goes.
+   */
+  private peekCrumb(peek: ViewCtx | null): void {
+    const c = this.crumbs;
+    c.querySelectorAll(':scope > .peek, :scope > .peek-sep').forEach((e) => e.remove());
+    this.crumbVals = this.crumbVals.filter((x) => c.contains(x.el));
+    if (!peek || this.leaf) return;
+    const levels: ViewCtx[] = [];
+    for (let x: ViewCtx | null = peek; x; x = x.parent) levels.unshift(x);
+    const v = crumbValues(levels).at(-1) ?? null;
+    const el = v ? h('span', { class: 'val' }) : null;
+    if (el && v) this.crumbVals.push({ el, v });
+    const label = peek.path[peek.path.length - 1];
+    c.append(h('span', { class: 'sep peek-sep' }, '›'),
+      h('button', { class: 'peek', title: `${label} (${peek.def.name}): step in`, onclick: () => this.goTo(peek.path) }, h('i', null, `${label} (inside)`), el));
+    this.syncCrumbVals();
   }
 
   /** The breadcrumb's values follow the simulation (crumbvals.ts). */
@@ -2629,9 +2719,20 @@ export class Stage {
     this.view.frameInsts(names);
   }
 
+  /** The names last lit, as seen from the level at `path`: a drill below where they were lit strips its prefix (rf.w5 at rf is w5). */
+  private litFor(path: readonly string[]): string[] {
+    const { names, at } = this.litNames;
+    if (path.length < at.length || at.some((n, i) => path[i] !== n)) return [];
+    const pre = path.slice(at.length).join('.');
+    return pre ? names.filter((n) => n.startsWith(`${pre}.`)).map((n) => n.slice(pre.length + 1)) : names;
+  }
+
   /** Highlight instances in the current view (empty list clears). */
   highlight(names: string[], focus = false): void {
     this.view.highlight(names, focus);
+    // parts inside a box (alu.add) light in an open zoom lens on it; the box alone, its rim (DESIGN.md track 2c)
+    this.litNames = { names, at: [...this.path] };
+    this.lens?.lit(names);
     // the boards light what the schematic would (names of the root's instances: a module's board, a chip)
     if (this.ctx === this.rootCtx) this.board.highlight(names);
   }

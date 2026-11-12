@@ -188,8 +188,8 @@ export const settings = {
   get loadDelay() { return state.loadDelay; },
   get minimap() { return state.minimap; },
   get moveParts(): boolean { return state.moveParts ?? !(typeof matchMedia == 'function' && matchMedia('(pointer: coarse)').matches); },
-  /** Open blocks as you zoom: off by default while it is new, and never on a touch screen in this phase. */
-  get zoomOpen(): boolean { return !coarsePointer() && (state.zoomOpen ?? false); },
+  /** Open blocks as you zoom: off by default while it is new. Null stays off on a touch screen when phase 3 turns it on with a mouse (DESIGN.md item 6). */
+  get zoomOpen(): boolean { return state.zoomOpen ?? false; },
   get reduceMotion() { return state.reduceMotion; },
   get wireScale() { return state.wireScale; },
   get grid() { return state.grid; },

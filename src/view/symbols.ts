@@ -460,9 +460,16 @@ export function drawPinGlyph(pin: PinGeom, clickable: boolean): PinGlyph {
   const anchor = back > 0 ? 'start' : back < 0 ? 'end' : 'middle';
   const name = s('text', { class: 'pin-name', x: ax, y: ay, 'text-anchor': anchor }, portLabel(pin.name));
   g.append(name);
+  return { g, name, value, valueBg, bounds: pinGlyphBounds(pin) };
+}
+
+/** What drawPinGlyph covers (grid units): its knob or value box and its name, for a level's extent without drawing it. */
+export function pinGlyphBounds(pin: PinGeom): Rect {
+  const [back, vert] = pinBack(pin);
+  const cx = pin.pos[0] + back * 0.9, cy = pin.pos[1] + vert * 0.9;
   const extra = textWidth(pin.name, 1.1) + 3 + (pin.width > 1 ? textWidth('0x'.padEnd(2 + Math.ceil(pin.width / 4), '0'), 1.05) : 0);
   const x0 = cx - 2 - (back < 0 ? extra : 0), x1 = cx + 2 + (back > 0 ? extra : 0);
-  return { g, name, value, valueBg, bounds: { x: x0, y: cy - 2, w: x1 - x0, h: 4 } };
+  return { x: x0, y: cy - 2, w: x1 - x0, h: 4 };
 }
 
 /** Show a bus pin's value text, sizing its box and pushing the name clear of it. */

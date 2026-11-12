@@ -51,10 +51,15 @@ const headful = argv.includes('--headful');
 const only = opt('only');
 const tabs = Number(opt('tabs') ?? Math.max(2, Math.min(6, cpus().length - 1)));
 const routeTimeout = Number(opt('timeout') ?? 60) * 1000;
+/** The longest a route's drive may take (the longest take about 20 s). */
+const DRIVE_MS = 2 * routeTimeout;
 // CPU slowdown factor (Emulation.setCPUThrottlingRate): a slow phone's load takes long enough for the service worker to install mid-route.
 const throttle = Number(opt('throttle') ?? 1);
 // After the load and two frames: long enough for a 2 Hz automatic clock (settings.autoClock) to tick once.
 const dwell = Number(opt('dwell') ?? 600);
+// `--zoom-open on | off`: View options ▸ Open blocks as you zoom for every route that does not set it itself (the lens's "off
+// restores today" check, DESIGN.md: the same routes with it on and off).
+const zoomOpen = opt('zoom-open');
 
 // ---- routes ----------------------------------------------------------------------------------
 
@@ -305,7 +310,7 @@ const TOUCH_DRIVE = `(async () => {
   if (!knob || !tog()) return [...bad, 'tapping the canvas with an armed pin placed none'];
   const k = knob.getBoundingClientRect(), v0 = tog();
   ptr(svg, 'pointerdown', k.left + k.width / 2, k.top + k.height / 2); ptr(svg, 'pointerup', k.left + k.width / 2, k.top + k.height / 2); await wait(300);
-  if (tog() === v0) bad.push('a tap on a pin's knob did not flip the input');
+  if (tog() === v0) bad.push('a tap on the knob of a pin did not flip the input');
   const v1 = tog();
   document.querySelector('.in-toggle').click(); await wait(200);
   if (tog() === v1) bad.push('the switch under the canvas did not flip the input');
@@ -846,74 +851,281 @@ const NET_DRIVE = `(async () => {
 })()`;
 
 /**
- * The zoom lens (view/lens.ts, settings.zoomOpen on): wheel steps onto `part` open its inside over it once they settle (one
- * .lens, the view in focus, the breadcrumb's peek crumb), placed clear of the canvas's edges, its docked panels and the stage
- * bar; it follows a clock pulse; Esc closes it; zooming on hands off to the level (#/…/part); zooming out shows the cue. Long
- * tasks after the gesture settles are measured (DESIGN.md: 50 ms on a quiet machine; the parallel tabs here get 250 ms).
+ * The lens honed (DESIGN.md "Revision 3: inside the box", view/lens.ts): wheel steps onto `part`, settling after each, check
+ * the one rule against the box's own `data-open-at` (px per grid unit): open at or past it, closed below CLOSE_SHARE of it,
+ * the band keeping the last answer; the drawn inside (`.lens-layer .inside[data-inst]`) within the box's outline; every other
+ * box in view whose opening zoom is passed open too; the hover hint on a closed box; zooming out crossfades back to the symbol;
+ * zooming in again to the same zoom opens it again (no refusal remembered); no hand-off before the inside fills the canvas.
  */
-const lensDrive = (part: string) => `(async () => {
+const honeDrive = (part: string) => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const CLOSE_SHARE = 0.75, SETTLE = 450;
+  const bad = [];
+  const svg = document.querySelector('.canvas > svg.schematic');
+  const canvas = svg?.closest('.canvas');
+  const g = () => document.querySelector('.canvas > svg.schematic [data-inst="${part}"]');
+  if (!svg || !g()) return ['no ${part} on the stage'];
+  const hash = location.hash;
+  const openAt = Number(g().dataset.openAt);
+  if (!(openAt > 0 && Number.isFinite(openAt))) return ['${part} has no data-open-at: ' + g().dataset.openAt];
+  // px per grid unit: the schematic's user space is the grid (view/lens.ts unitPx, data-open-at's unit)
+  const px = () => svg.getScreenCTM().a;
+  const isOpen = () => g().classList.contains('inside-on');
+  const inside = () => document.querySelector('.lens-layer .inside[data-inst="${part}"]');
+  const box = () => g().getBoundingClientRect();
+  const wheel = (dy) => { const r = box(); svg.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); };
+  const fmt = (v) => v.toFixed(1);
+  // the rule at a settled zoom; prev: the answer before this step
+  const check = (prev, where) => {
+    const p = px(), o = isOpen();
+    if (p >= openAt && !o) bad.push(where + ': closed at ' + fmt(p) + ' px a unit, past its opening ' + fmt(openAt));
+    else if (p < CLOSE_SHARE * openAt && o) bad.push(where + ': open at ' + fmt(p) + ' px a unit, below ¾ of ' + fmt(openAt));
+    else if (p < openAt && p >= CLOSE_SHARE * openAt && o !== prev) bad.push(where + ': flipped inside the band at ' + fmt(p));
+    return o;
+  };
+  if (px() >= CLOSE_SHARE * openAt) return ['${part} starts within its band (' + fmt(px()) + ' of ' + fmt(openAt) + '): pick another part'];
+  if (document.querySelector('.lens-layer .inside')) bad.push('an inside before any zoom');
+  // the hint on a closed box that can open, with the zoom still needed
+  const r0 = box();
+  for (const t of ['pointerover', 'pointermove']) g().dispatchEvent(new PointerEvent(t, { clientX: r0.x + r0.width / 2, clientY: r0.y + r0.height / 2, bubbles: true }));
+  await wait(300);
+  const hint = document.querySelector('.inside-hint');
+  if (!hint || !/zoom in/i.test(hint.textContent)) bad.push('no "zoom in" hint over the closed ${part}: ' + (hint?.textContent ?? 'none'));
+  // in, a step at a time, each settled, until open and two steps past
+  let open = false, past = 0;
+  for (let k = 0; k < 60 && past < 2 && location.hash === hash; k++) {
+    wheel(-100); await wait(SETTLE);
+    open = check(open, 'zooming in');
+    if (open) past++;
+  }
+  if (location.hash !== hash) bad.push('handed off to ' + location.hash + ' at its opening zoom');
+  if (!open) return [...bad, '${part} never opened (' + fmt(px()) + ' px a unit, opens at ' + fmt(openAt) + ')'];
+  const el = inside();
+  if (!el) bad.push('${part} is inside-on but no .lens-layer .inside for it');
+  else {
+    // within the outline (a pixel's rounding allowed), so no neighbour is covered
+    const b = box(), i = el.getBoundingClientRect();
+    if (i.left < b.left - 1 || i.top < b.top - 1 || i.right > b.right + 1 || i.bottom > b.bottom + 1) {
+      bad.push('the inside leaves the outline: ' + [i.left, i.top, i.right, i.bottom].map(Math.round) + ' in ' + [b.left, b.top, b.right, b.bottom].map(Math.round));
+    }
+    if (!el.querySelector('svg.schematic [data-inst]')) bad.push('nothing drawn inside ${part}');
+  }
+  // every other box fully in view whose opening zoom is passed is open too (R3.6: nothing depends on the pointer)
+  const c = canvas.getBoundingClientRect();
+  for (const o of document.querySelectorAll('.canvas > svg.schematic [data-open-at]')) {
+    const r = o.getBoundingClientRect(), at = Number(o.dataset.openAt);
+    const inView = r.left >= c.left && r.top >= c.top && r.right <= c.right && r.bottom <= c.bottom;
+    if (inView && px() >= at && !o.classList.contains('inside-on')) bad.push(o.dataset.inst + ' is past its opening (' + fmt(at) + ') but closed');
+    if (px() < CLOSE_SHARE * at && o.classList.contains('inside-on')) bad.push(o.dataset.inst + ' is open below ¾ of its opening');
+  }
+  const openPx = px();
+  // only a zoom out closes (R3.4): a docked panel folding and unfolding moves the canvas's cap, never the answer
+  const dockTitle = [...document.querySelectorAll('[data-dock="right"] > h4')].find((h) => h.getBoundingClientRect().width > 0);
+  if (dockTitle) for (const how of ['folded', 'unfolded']) {
+    dockTitle.click(); await wait(SETTLE);
+    if (!isOpen()) bad.push('${part} closed when a docked panel ' + how);
+  }
+  // a pan that takes the box out of reach and back, zoomed out into its band in small steps: the same answer as before
+  for (let k = 0; k < 12 && px() >= openAt; k++) { wheel(30); await wait(SETTLE); open = check(open, 'stepping out into the band'); }
+  if (!(px() < openAt && px() >= CLOSE_SHARE * openAt)) bad.push('could not stop inside the band of ${part} (' + fmt(px()) + ' of ' + fmt(openAt) + ')');
+  else if (open) {
+    const cv = canvas.getBoundingClientRect(), x0 = cv.left + 20, y0 = cv.top + cv.height / 2;
+    const span = box().right - cv.left + 2 * cv.width;
+    const move = (x) => svg.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: x, clientY: y0, bubbles: true }));
+    svg.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, button: 0, clientX: x0, clientY: y0, bubbles: true }));
+    for (let k = 1; k <= 6; k++) { move(x0 - (k * span) / 6); await wait(16); }
+    await wait(SETTLE);
+    const away = box();
+    for (let k = 5; k >= 0; k--) { move(x0 - (k * span) / 6); await wait(16); }
+    svg.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientX: x0, clientY: y0, bubbles: true }));
+    await wait(SETTLE);
+    if (away.right > cv.left) bad.push('the pan did not take ${part} out of view');
+    else if (!isOpen()) bad.push('${part} came back closed after a pan away and back at ' + fmt(px()) + ' (inside its band)');
+  }
+  // out, a step at a time: open through the band, closed below it, crossfading back to the symbol
+  for (let k = 0; k < 60 && open; k++) { wheel(100); await wait(SETTLE); open = check(open, 'zooming out'); }
+  if (open) return [...bad, 'zooming out never closed ${part}'];
+  await wait(400);
+  if (inside()) bad.push('the inside stayed after ${part} closed');
+  const label = g().querySelector('.sym-label');
+  if (label && getComputedStyle(label).display === 'none') bad.push('the name of ${part} is still hidden after it closed');
+  // in again to the zoom it opened at: the same answer (nothing remembered)
+  for (let k = 0; k < 60 && px() < openPx * 0.999; k++) { wheel(-100); await wait(SETTLE); open = check(open, 'zooming in again'); }
+  if (!isOpen()) bad.push('${part} did not open again at ' + fmt(px()) + ' px a unit');
+  // the whole level again, as every drive leaves it (the run's checks look at the fitted view)
+  document.querySelector('.stage [aria-label="Fit to screen"]')?.click();
+  await wait(300);
+  return bad;
+})()`;
+
+/**
+ * The CPU panel's marks inside an open box (DESIGN.md track 2c, Revision 3): `first` 'select' clicks the listing's `line`
+ * before `part` opens (the inside shows marks already standing), 'open' after. `inner` names parts that must be lit in its
+ * inside; none: the box's outline must glow (the instruction uses the box but names nothing in it).
+ */
+const lensMarksDrive = (part: string, line: string, inner: string[], first: 'select' | 'open') => `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const bad = [];
+  const svg = document.querySelector('.canvas > svg.schematic');
+  const g = () => document.querySelector('.canvas > svg.schematic g.inst[data-inst="${part}"]');
+  const box = () => g()?.getBoundingClientRect();
+  if (!svg || !box()) return ['no ${part} on the stage'];
+  const pick = () => [...document.querySelectorAll('.cpu-listing .ln')].find((l) => /^\\s*${line}\\b/.test(l.querySelector('.t')?.textContent ?? ''));
+  const select = async () => { const l = pick(); if (!l) return bad.push('no "${line}" line in the listing'); l.click(); await wait(250); };
+  const inside = () => document.querySelector('.lens-layer .inside.on[data-inst="${part}"]');
+  const open = async () => {
+    for (let k = 0; k < 60 && !inside(); k++) {
+      const r = box();
+      svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true }));
+      await wait(60);
+    }
+    await wait(500);
+  };
+  if ('${first}' === 'select') { await select(); await open(); } else { await open(); await select(); }
+  const el = inside();
+  if (!el) return [...bad, 'no inside on ${part} (opens at ' + g()?.dataset.openAt + ' px a unit)'];
+  const want = ${JSON.stringify(inner)};
+  const lit = [...el.querySelectorAll('svg.schematic g.hl[data-inst]')].map((x) => x.dataset.inst);
+  const glows = () => g().classList.contains('lens-lit');
+  if (want.length) {
+    for (const n of want) if (!lit.includes(n)) bad.push('${line}: ${part}.' + n + ' not lit inside (lit: ' + lit.join(' ') + ')');
+    if (!el.querySelector('svg.schematic.focus')) bad.push('${line}: the inside is not dimmed around its marks');
+    if (glows()) bad.push('${line}: the outline glows although parts inside are named');
+  } else {
+    if (!glows()) bad.push('${line}: the outline of ${part} does not glow');
+    if (lit.length) bad.push('${line}: parts lit inside ${part}: ' + lit.join(' '));
+  }
+  // deselected: the marks go
+  pick()?.click();
+  await wait(250);
+  if (el.querySelector('svg.schematic g.hl[data-inst]') || glows()) bad.push('marks left inside after deselecting ${line}');
+  document.querySelector('.stage [aria-label="Fit to screen"]')?.click();
+  await wait(300);
+  return bad;
+})()`;
+
+/**
+ * Open blocks as you zoom on a touch screen (DESIGN.md item 6, Revision 3): pinches spreading over `part` (two touch
+ * pointers) open its inside in its outline once past its opening zoom, as the wheel does; the stage bar keeps its height;
+ * a tap on an inner part under 40 px steps into `part` (#/…/<part>). `off`: the setting left at its default (null), and a
+ * pinch only zooms.
+ */
+const lensPinchDrive = (mode: 'open' | 'off', part: string) => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
   const svg = document.querySelector('.canvas > svg.schematic');
   const canvas = svg?.closest('.canvas');
   const box = () => document.querySelector('.canvas > svg.schematic [data-inst="${part}"]')?.getBoundingClientRect();
-  if (!svg || !box()) return ['no ${part} on the stage'];
-  const wheel = (dy, r = box()) => svg.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true }));
-  const lenses = () => document.querySelectorAll('.lens').length;
-  if (lenses()) bad.push('a lens before any zoom');
-  for (let k = 0; k < 40 && Math.min(box().width, box().height) < 110; k++) { wheel(-120); await wait(20); }
-  const long = [];
-  const po = new PerformanceObserver((l) => { for (const e of l.getEntries()) long.push(e.duration); });
-  try { po.observe({ type: 'longtask', buffered: false }); } catch {}
-  await wait(700);
-  po.disconnect();
-  if (lenses() !== 1) return [...bad, 'zoomed onto ${part}: ' + lenses() + ' lenses (expected 1)'];
-  const worst = Math.max(0, ...long);
-  if (worst > 250) bad.push('a long task of ' + Math.round(worst) + ' ms after the zoom settled');
-  if (!svg.classList.contains('focus')) bad.push('the level is not dimmed around the lens');
-  if (!document.querySelector('.crumbs button.peek')) bad.push('no peek crumb');
-  const L = document.querySelector('.lens').getBoundingClientRect(), c = canvas.getBoundingClientRect();
-  if (L.left < c.left || L.right > c.right || L.top < c.top || L.bottom > c.bottom) bad.push('the lens leaves the canvas');
-  const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-  for (const p of canvas.querySelectorAll('[data-dock], .level-badge, .stage-notes > *')) {
-    const r = p.getBoundingClientRect();
-    if (r.width && r.height && hit(L, r)) bad.push('the lens covers ' + (p.className || p.tagName).toString().slice(0, 40));
-  }
-  if (!document.querySelector('.lens svg.schematic .lg-name, .lens svg.schematic .sym-label')) bad.push('nothing named inside the lens');
-  // a pulse: the inside follows (its wires repaint; no error is the check, the console is watched)
-  [...document.querySelectorAll('.stage button')].find((b) => /^pulse$/i.test(b.textContent.trim()))?.click();
-  await wait(400);
-  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
-  await wait(150);
-  if (lenses()) bad.push('Esc left the lens open');
-  if (location.hash.split('/').length !== 4) bad.push('Esc went up a level: ' + location.hash);
-  wheel(-60);
+  if (!svg || !box()) return ['no ${part} on the stage: ' + [...document.querySelectorAll('.canvas > svg.schematic [data-inst]')].map((g) => g.dataset.inst).join(' ')];
+  svg.setPointerCapture = () => {}; svg.releasePointerCapture = () => {}; svg.hasPointerCapture = () => false; // synthetic pointers are not active ones
+  const ptr = (el, type, id, x, y, primary) => el.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', pointerId: id, isPrimary: primary, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+  // one pinch spreading the fingers by k around the ALU's middle, then both lifted
+  const pinch = async (k) => {
+    const r = box();
+    if (!r) return;
+    const cx = r.x + r.width / 2, cy = r.y + r.height / 2, d0 = 30;
+    // each finger on what is under it (a part, as a real finger would be), its events kept there
+    const at = (x) => { const e = document.elementFromPoint(x, cy); return e && svg.contains(e) ? e : svg; };
+    const f1 = at(cx - d0), f2 = at(cx + d0);
+    ptr(f1, 'pointerdown', 91, cx - d0, cy, true);
+    ptr(f2, 'pointerdown', 92, cx + d0, cy, false);
+    for (let i = 1; i <= 6; i++) {
+      const d = d0 * Math.pow(k, i / 6);
+      ptr(f1, 'pointermove', 91, cx - d, cy, true);
+      ptr(f2, 'pointermove', 92, cx + d, cy, false);
+      await wait(16);
+    }
+    const d = d0 * k;
+    ptr(f2, 'pointerup', 92, cx + d, cy, false);
+    ptr(f1, 'pointerup', 91, cx - d, cy, true);
+    await wait(120);
+  };
+  const lenses = () => document.querySelectorAll('.lens-layer .inside.on').length;
+  const g = () => document.querySelector('.canvas > svg.schematic g.inst[data-inst="${part}"]');
+  const mine = () => document.querySelector('.lens-layer .inside.on[data-inst="${part}"]');
+  const log = [], t0 = performance.now();
+  addEventListener('hashchange', () => log.push(location.hash + '@' + Math.round(performance.now() - t0)));
+  const before = box().width, canvasH = canvas.getBoundingClientRect().height;
+  for (let k = 0; k < 20 && box() && !('${mode}' === 'open' ? mine() : lenses()) && Math.min(box().width, box().height) < 600; k++) { await pinch(1.3); await wait(150); }
+  if (!box()) return [...bad, 'the pinches left the level: ' + location.hash + ', ' + lenses() + ' lenses; ' + log.join(' ')];
+  await wait(300);
+  if (box() && box().width <= before * 1.2) bad.push('the pinches did not zoom');
+  // the first finger of a pinch is not a press and hold: no menu once the hold's time has passed
   await wait(500);
-  if (lenses() !== 1) bad.push('a zoom after Esc did not open it again');
-  for (let k = 0; k < 60 && !location.hash.endsWith('/${part}'); k++) { const r = box(); if (!r) break; wheel(-120, r); await wait(40); }
+  if (document.querySelector('.ctx-menu')) bad.push('a pinch opened the press-and-hold menu');
+  if ('${mode}' === 'off') return lenses() ? [...bad, 'an inside opened on a touch screen with the setting at its default'] : bad;
+  // the inside crumb must not restack the stage bar and take the canvas's height away (it did at 360 px)
+  if (canvas.getBoundingClientRect().height < canvasH - 1) bad.push('the canvas shrank from ' + Math.round(canvasH) + ' to ' + Math.round(canvas.getBoundingClientRect().height) + ' px');
+  const el = mine();
+  if (!el) return [...bad, 'pinched onto ${part}: no inside (opens at ' + g()?.dataset.openAt + ' px a unit, now ' + (svg.getScreenCTM()?.a ?? 0).toFixed(1) + '); ' + log.join(' ')];
+  const B = box(), L = el.getBoundingClientRect();
+  if (L.left < B.left - 1 || L.top < B.top - 1 || L.right > B.right + 1 || L.bottom > B.bottom + 1) bad.push('the inside leaves the outline of ${part}');
+  // a tap on a part under 40 px steps into the box
+  const small = [...el.querySelectorAll('svg.schematic [data-inst]')].map((x) => [x, x.getBoundingClientRect()])
+    .find(([, r]) => r.width > 2 && Math.min(r.width, r.height) < 40 && r.top > L.top && r.bottom < L.bottom && r.left > L.left && r.right < L.right);
+  if (!small) return [...bad, 'no part under 40 px inside ${part} to tap'];
+  const [x, r] = small;
+  ptr(x, 'pointerdown', 93, r.x + r.width / 2, r.y + r.height / 2, true);
+  await wait(60);
+  ptr(x, 'pointerup', 93, r.x + r.width / 2, r.y + r.height / 2, true);
   await wait(400);
-  if (!location.hash.endsWith('/${part}')) bad.push('zooming on did not step into ${part}: ' + location.hash);
-  if (lenses()) bad.push('a lens left after the hand-off');
-  const s2 = document.querySelector('.canvas > svg.schematic');
-  for (let k = 0; k < 30 && !document.querySelector('.lens-cue'); k++) { const r = s2.getBoundingClientRect(); s2.dispatchEvent(new WheelEvent('wheel', { deltaY: 200, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); await wait(30); }
-  if (!document.querySelector('.lens-cue')) bad.push('no cue after zooming out of the level the lens handed off to');
+  if (!location.hash.endsWith('/${part}')) bad.push('a tap on a small part did not step into ${part}: ' + location.hash);
+  if (document.querySelector('.lens-layer .inside.on[data-inst="${part}"]')) bad.push('the inside of ${part} left after the tap stepped in');
   return bad;
 })()`;
 
-/** A touch screen: the lens is not built for it yet (DESIGN.md item 6), so with the setting stored on, nothing opens. */
-const LENS_TOUCH_DRIVE = `(async () => {
+/**
+ * Open blocks as you zoom over the sandbox's look inside (DESIGN.md track 2a, Revision 3): the computer's core opened by
+ * double-click, wheel steps onto `inner` there. On: its inside opens within its box in look inside's canvas, the crumb names
+ * it while the pointer is over it, a clock step keeps it live, and zooming on hands off to the level. Off: nothing opens.
+ */
+const lensInsideDrive = (part: string, inner: string, on: boolean) => `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  const svg = document.querySelector('.canvas > svg.schematic');
-  const g = svg?.querySelector('[data-inst="alu"]');
-  if (!g) return ['no alu on the stage'];
-  for (let k = 0; k < 30; k++) { const r = g.getBoundingClientRect(); svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true })); await wait(20); }
-  await wait(600);
-  return document.querySelector('.lens') ? ['a lens opened on a touch screen'] : [];
+  const bad = [];
+  let pg;
+  for (let i = 0; i < 40 && !(pg = document.querySelector('svg.ed-svg [data-part="${part}"]')); i++) await wait(250);
+  if (!pg) return ['no ${part} in the sandbox'];
+  const pr = pg.getBoundingClientRect();
+  pg.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: pr.x + pr.width / 2, clientY: pr.y + pr.height / 2 }));
+  let svg;
+  for (let i = 0; i < 40 && !(svg = document.querySelector('.sb-inside-canvas > svg.schematic'))?.querySelector('[data-inst="${inner}"]'); i++) await wait(250);
+  if (!svg?.querySelector('[data-inst="${inner}"]')) return ['look inside ${part} shows no ${inner}'];
+  await wait(300);
+  const canvas = svg.closest('.sb-inside-canvas');
+  const g = () => svg.querySelector('g.inst[data-inst="${inner}"]');
+  const box = () => g()?.getBoundingClientRect();
+  const wheel = (dy, r = box()) => svg.dispatchEvent(new WheelEvent('wheel', { deltaY: dy, clientX: r.x + r.width / 2, clientY: r.y + r.height / 2, bubbles: true, cancelable: true }));
+  const inside = () => canvas.querySelector('.lens-layer .inside.on[data-inst="${inner}"]');
+  if (document.querySelector('.lens-layer .inside')) bad.push('an inside before any zoom');
+  for (let k = 0; k < 60 && box() && !inside() && Math.min(box().width, box().height) < 900; k++) { wheel(-120); await wait(60); }
+  await wait(500);
+  if (!${on}) return document.querySelector('.lens-layer .inside') ? [...bad, 'an inside with Open blocks as you zoom off'] : bad;
+  const el = inside();
+  if (!el) return [...bad, 'zoomed onto ${inner}: no inside (opens at ' + g()?.dataset.openAt + ' px a unit, now ' + (svg.getScreenCTM()?.a ?? 0).toFixed(1) + ')'];
+  const b = box(), i = el.getBoundingClientRect();
+  if (i.left < b.left - 1 || i.top < b.top - 1 || i.right > b.right + 1 || i.bottom > b.bottom + 1) bad.push('the inside leaves its box');
+  if (!el.querySelector('svg.schematic [data-inst]')) bad.push('nothing drawn inside ${inner}');
+  el.dispatchEvent(new PointerEvent('pointerenter', { clientX: i.x + i.width / 2, clientY: i.y + i.height / 2 }));
+  await wait(150);
+  if (!/[(]inside[)]/.test(document.querySelector('.sb-inside .crumbs button.peek')?.textContent ?? '')) bad.push('no "(inside)" crumb while the pointer is over it');
+  // a clock step: the inside follows (no error is the check, the console is watched)
+  [...document.querySelectorAll('.sb-controls button')].find((x) => x.textContent.trim() === 'Step')?.click();
+  await wait(400);
+  const cur = () => document.querySelector('.sb-inside .crumbs button.cur')?.firstChild?.textContent;
+  for (let k = 0; k < 80 && cur() !== '${inner}'; k++) { const r = box(); if (!r) break; wheel(-120, r); await wait(40); }
+  await wait(400);
+  if (cur() !== '${inner}') bad.push('zooming on did not step into ${inner}: at ' + cur());
+  if (canvas.querySelector('.lens-layer .inside.on')) bad.push('an inside left after the hand-off');
+  return bad;
 })()`;
 
 function routes(): Route[] {
   const out: Route[] = [];
-  const add = (hash: string, storage: Record<string, string>, note = '', viewport?: Viewport, drive?: string) => out.push({ hash, storage, label: hash + note, viewport, drive });
+  const add = (hash: string, storage: Record<string, string>, note = '', viewport?: Viewport, drive?: string) => {
+    const set = JSON.parse(storage[SETTINGS_KEY] ?? '{}');
+    if (zoomOpen && !('zoomOpen' in set)) storage = { ...storage, [SETTINGS_KEY]: JSON.stringify({ ...set, zoomOpen: zoomOpen === 'on' }) };
+    out.push({ hash, storage, label: hash + note, viewport, drive });
+  };
   add('#/', light);
   add('#/', themed('dark'), ' (dark)');
   for (const theme of ['light', 'dark'] as const) {
@@ -1067,11 +1279,29 @@ function routes(): Route[] {
   add('#/sandbox', light, ` (${TOUCH_VIEWPORTS[0].name}: hold, cancel, tap a pin)`, TOUCH_VIEWPORTS[0], TOUCH_DRIVE);
   // the zoom lens with Open blocks as you zoom on: both themes, the light canvas (board off), the pipeline; a touch phone opens none
   const lensOn = (theme: 'light' | 'dark', board = true) => ({ [SETTINGS_KEY]: JSON.stringify({ theme, board, autoClock: false, zoomOpen: true, coachDone: { stage: true, sandbox: true } }) });
-  add('#/c/cpu/0', lensOn('light'), ' (zoom lens)', undefined, lensDrive('alu'));
-  add('#/c/cpu/0', lensOn('dark'), ' (zoom lens, dark)', undefined, lensDrive('alu'));
-  add('#/c/cpu/0', lensOn('light', false), ' (zoom lens, light canvas)', undefined, lensDrive('alu'));
-  add('#/c/pipeline/1', lensOn('dark'), ' (zoom lens, pipeline, dark)', undefined, lensDrive('alu'));
-  add('#/c/cpu/0', lensOn('dark'), ` (zoom lens, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], LENS_TOUCH_DRIVE);
+  // the CPU panel's marks inside an open box (track 2c): add lights the adder; on a box it uses with nothing named inside,
+  // the box's outline glows
+  add('#/c/cpu/0', lensOn('light'), ' (zoom lens, CPU marks inside)', undefined, lensMarksDrive('alu', 'add', ['add', 'mux'], 'open'));
+  add('#/c/cpu/0', lensOn('dark'), ' (zoom lens, CPU marks, outline, dark)', undefined, lensMarksDrive('res', 'add', [], 'select'));
+  // the lens honed (Revision 3): the single-cycle CPU's pc, register file and alu in both themes and on the light canvas
+  // (board off); the pipeline register FD (the author's bug); the out-of-order core
+  for (const theme of ['light', 'dark'] as const) for (const part of ['pc', 'rf', 'alu']) add('#/c/cpu/0', lensOn(theme), ` (lens hone, ${part}, ${theme})`, undefined, honeDrive(part));
+  add('#/c/cpu/0', lensOn('light', false), ' (lens hone, alu, light canvas)', undefined, honeDrive('alu'));
+  add('#/c/pipeline/1', lensOn('light'), ' (lens hone, pipeline register FD)', undefined, honeDrive('FD'));
+  add('#/c/pipeline/1', lensOn('dark'), ' (lens hone, pipeline register FD, dark)', undefined, honeDrive('FD'));
+  add('#/c/ooo/11', lensOn('dark'), ' (lens hone, out of order, dark)', undefined, honeDrive('div'));
+  // the same lens over the sandbox's look inside (track 2a): the computer's core, both themes, and with the setting off
+  {
+    const ex = examplesWorkspace(), comp = `#/sandbox/${ex.ids[EXAMPLES.findIndex((e) => e.id === 'computer')]}`;
+    const lensOff = { [SETTINGS_KEY]: JSON.stringify({ theme: 'light', autoClock: false, zoomOpen: false, coachDone: { stage: true, sandbox: true } }) };
+    add(comp, { ...lensOn('light'), [SANDBOX_KEY]: ex.json }, ' (zoom lens in look inside)', undefined, lensInsideDrive('cpu', 'alu', true));
+    add(comp, { ...lensOn('dark'), [SANDBOX_KEY]: ex.json }, ' (zoom lens in look inside, dark)', undefined, lensInsideDrive('cpu', 'alu', true));
+    add(comp, { ...lensOff, [SANDBOX_KEY]: ex.json }, ' (look inside, zoom lens off)', undefined, lensInsideDrive('cpu', 'alu', false));
+  }
+  // a touch screen (DESIGN.md item 6): pinches onto the control unit open its inside like the wheel and a tap on a small inner
+  // part steps in, at both phone widths in both themes; at its default (null) nothing opens
+  for (const vp of TOUCH_VIEWPORTS) for (const theme of ['light', 'dark'] as const) add('#/c/cpu/0', lensOn(theme), ` (zoom lens, ${vp.name}, ${theme})`, vp, lensPinchDrive('open', 'ctl'));
+  add('#/c/cpu/0', { [SETTINGS_KEY]: JSON.stringify({ theme: 'dark', autoClock: false, coachDone: { stage: true, sandbox: true } }) }, ` (zoom lens at its default, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], lensPinchDrive('off', 'ctl'));
   add('#/workbench/xor', light, ` (${TOUCH_VIEWPORTS[0].name}: tap a pin, hold a wire)`, TOUCH_VIEWPORTS[0], STAGE_TOUCH_DRIVE);
   // The layout lock: locked by default on a touch screen, unlocked with a mouse; an arrangement of an older drawing set aside.
   add('#/workbench/xor', light, ` (layout lock, ${TOUCH_VIEWPORTS[0].name})`, TOUCH_VIEWPORTS[0], layoutDrive('touch'));
@@ -1505,8 +1735,22 @@ class Tab {
       if (nav.errorText) throw new Error(`navigation failed: ${nav.errorText}`);
       await this.settle(t0);
       if (route.drive) {
-        const found = (await this.send('Runtime.evaluate', { expression: route.drive, awaitPromise: true, returnByValue: true })).result.value as string[] | undefined;
-        for (const p of found ?? []) this.errors.push(`drive: ${p}`);
+        // a drive that never resolves (a page stuck in a loop, a promise never settled) fails its route, instead of holding the
+        // tab, and with it the whole run, forever; a synchronous loop is stopped so the tab can go on to the next route
+        let stuck = false;
+        const ev = await Promise.race([
+          this.send('Runtime.evaluate', { expression: route.drive, awaitPromise: true, returnByValue: true }),
+          sleep(DRIVE_MS).then(() => { stuck = true; return null; }),
+        ]);
+        if (stuck || !ev) {
+          const alive = await Promise.race([this.send('Runtime.evaluate', { expression: '1', returnByValue: true }).then(() => true), sleep(3000).then(() => false)]);
+          if (!alive) await this.send('Runtime.terminateExecution').catch(() => {});
+          throw new Error(`drive never finished in ${DRIVE_MS / 1000} s (${alive ? 'the page answers: a promise never settled' : 'the page is frozen: stopped'})`);
+        }
+        const found = ev.result.value as string[] | undefined;
+        // a drive that throws comes back as an exception, not a list
+        if (ev.exceptionDetails) this.errors.push(`drive threw: ${ev.exceptionDetails.exception?.description ?? ev.exceptionDetails.text}`.slice(0, 400));
+        else for (const p of Array.isArray(found) ? found : []) this.errors.push(`drive: ${p}`);
         await this.settle(t0);
       }
       const seen = (await this.send('Runtime.evaluate', { expression: INSPECT, returnByValue: true })).result.value as string[];

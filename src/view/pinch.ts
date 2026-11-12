@@ -8,6 +8,8 @@ export interface PinchHooks {
   start(): void;
   /** `k` > 1 when the fingers spread; midpoints in client coordinates. */
   move(k: number, mid: [number, number], prev: [number, number]): void;
+  /** The pinch ended (fewer than two fingers down); `mid`: its last midpoint. */
+  end?(mid: [number, number]): void;
 }
 
 export function installPinch(el: Element, hooks: PinchHooks): void {
@@ -48,10 +50,14 @@ export function installPinch(el: Element, hooks: PinchHooks): void {
 
   // A finger left over from a pinch stays owned (it does not start a one-finger pan or a
   // band); a new second finger resumes the pinch.
+  let last: [number, number] = [0, 0];
   const end = (ev: Event) => {
     const e = ev as PointerEvent;
+    if (pinching && pts.has(e.pointerId)) last = geom().mid;
+    const was = pinching;
     pts.delete(e.pointerId);
     pinching = pts.size === 2;
+    if (was && !pinching) hooks.end?.(last);
     if (owned.delete(e.pointerId)) swallow(e);
   };
   el.addEventListener('pointerup', end, opt);

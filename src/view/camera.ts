@@ -16,6 +16,8 @@ export type { Rect };
 export const MIN_FIT_PX = 120;
 export const MIN_FIT_H = 80;
 
+/** The deepest zoom: the view is never narrower than this many grid units (so at most hostWidth / MIN_VIEW_UNITS px a unit). */
+export const MIN_VIEW_UNITS = 8;
 /** Pixels kept clear between the drawing and an overlay panel. */
 export const COVER_GAP = 12;
 
@@ -266,7 +268,7 @@ export class Camera {
   zoom(factor: number, cx?: number, cy?: number): void {
     const v = this.vb;
     const px = cx ?? v.x + v.w / 2, py = cy ?? v.y + v.h / 2;
-    const nw = Math.min(Math.max(v.w * factor, 8), 4000);
+    const nw = Math.min(Math.max(v.w * factor, MIN_VIEW_UNITS), 4000);
     const k = nw / v.w;
     this.vb = { x: px - (px - v.x) * k, y: py - (py - v.y) * k, w: v.w * k, h: v.h * k };
     this.fitted = false;
@@ -326,17 +328,24 @@ export interface PanZoomHooks {
   onLeave?(): void;
   /** A two-finger pinch began: abandon what its first finger started. */
   onPinch?(): void;
+  /** A pinch step (after the camera moved) and its end, with the fingers' midpoint (client px): the zoom lens's focus. */
+  onPinchMove?(mid: [number, number], k: number): void;
+  onPinchEnd?(mid: [number, number]): void;
 }
 
 /**
  * Wheel zooms around the cursor; a drag on the background pans; a press without drag is a tap;
  * two fingers pinch-zoom and pan, wherever they land.
  */
+/** Below this (grid units, |dx| + |dy|) a press is still a click: hands shake. The lens's wire tap uses it too. */
+export const TAP_SLOP = 0.2;
+
 export function installPanZoom(svg: SVGSVGElement, cam: Camera, hooks: PanZoomHooks): void {
   let drag: { x: number; y: number; vx: number; vy: number; moved: boolean; target: Element } | null = null;
   installPinch(svg, {
     start: () => { drag = null; hooks.onPinch?.(); },
-    move: (k, mid, prev) => cam.pinch(k, mid, prev),
+    move: (k, mid, prev) => { cam.pinch(k, mid, prev); hooks.onPinchMove?.(mid, k); },
+    end: (mid) => hooks.onPinchEnd?.(mid),
   });
   svg.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -352,8 +361,7 @@ export function installPanZoom(svg: SVGSVGElement, cam: Camera, hooks: PanZoomHo
     if (drag) {
       const k = cam.scale();
       const dx = (e.clientX - drag.x) * k, dy = (e.clientY - drag.y) * k;
-      // Below this (grid units) a press is still a click: hands shake.
-      if (Math.abs(dx) + Math.abs(dy) > 0.2) drag.moved = true;
+      if (Math.abs(dx) + Math.abs(dy) > TAP_SLOP) drag.moved = true;
       cam.vb.x = drag.vx - dx;
       cam.vb.y = drag.vy - dy;
       if (drag.moved) cam.fitted = false;

@@ -11,7 +11,7 @@ import { homePage } from './pages/home';
 import type { WorkbenchPage } from './pages/workbench';
 import { notes, NOTES_KEY } from './notes';
 import { focusStage, installQuickNav, openQuickNav, QUICK_KEY, toggleChapterMenu } from './quicknav';
-import { applyTheme, coarsePointer, PALETTES, PRESETS, settings, TEXT_SIZES, type GridStyle, type Theme, type ViewState, type WireScale, type ZoomNames } from './settings';
+import { applyTheme, PALETTES, PRESETS, settings, TEXT_SIZES, type GridStyle, type Theme, type ViewState, type WireScale, type ZoomNames } from './settings';
 import { systemReducedMotion } from './motion';
 import { parseDrill } from './drillpath';
 import { applyPendingView, decodeView, setPendingView, splitView } from './viewlink';
@@ -244,8 +244,8 @@ export function startApp(root: HTMLElement): void {
   const moveItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('moveParts', !settings.moveParts) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Move parts by dragging'), h('small', null, 'On: dragging a part or a wire moves it. Off: dragging moves the view and the drawing stays put (the lock on the stage bar is the same switch). Starts off on a touch screen')));
-  // view/lens.ts: a zoom that settles on a block opens its inside over it (docs/transparent/DESIGN.md); not on touch yet
-  const zoomWhy = h('small', null);
+  // view/lens.ts: a zoom or a pinch that settles on a block opens its inside over it (docs/transparent/DESIGN.md)
+  const zoomWhy = h('small', null, 'Zoom into a block and its inside opens in place, live; zoom further to step in. Off: a block opens only when you double-click it. Starts off on a touch screen');
   const zoomItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('zoomOpen', !settings.zoomOpen) },
     h('span', { class: 'pal-flow-sw' }, h('i')),
     h('span', null, h('b', null, 'Open blocks as you zoom'), zoomWhy));
@@ -332,10 +332,7 @@ export function startApp(root: HTMLElement): void {
     motionWhy.textContent = sysMotion ? 'On: your system asks for it' : 'No flowing bits, pulses or smooth scrolling; Slow motion still plays when you ask';
     minimapItem.setAttribute('aria-checked', String(settings.minimap));
     moveItem.setAttribute('aria-checked', String(settings.moveParts));
-    const touch = coarsePointer();
     zoomItem.setAttribute('aria-checked', String(settings.zoomOpen));
-    zoomItem.disabled = touch;
-    zoomWhy.textContent = touch ? 'Not yet on touch screens' : 'Zoom into a block and its inside opens over it, live; zoom further to step in. Off: a block opens only when you double-click it. Starts off on a touch screen';
     singleItem.setAttribute('aria-checked', String(settings.singleKeys));
     const preset = settings.preset();
     for (const b of presetBtns) { const on = b.dataset.preset === preset; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }
