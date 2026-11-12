@@ -62,7 +62,3 @@
 @media (pointer: coarse) { .st .btn.sm { min-height: 40px; } .st .r3-sl input { min-height: 40px; } }
 
 /* the triode prototype's before / after switch */
-.t3n-ab { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.t3n-ab button { border: 0; border-radius: 0; }
-.t3n-ab button[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent); }
-.t3n-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }

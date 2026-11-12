@@ -14,7 +14,7 @@ export function relayCloseup(): Widget {
   import('./relay3dview')
     .then((m) => {
       if (dead) return;
-      inner = m.relayView({ studio: !/before3d/.test(location.hash + location.search) });
+      inner = m.relayView({ studio: true });
       el.style.minHeight = '';
       el.replaceChildren(inner.el);
     })
