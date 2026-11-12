@@ -5,6 +5,7 @@
 import type { ComponentDef, InstanceDef, NetDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
 import { Builder } from './builder';
+import { laid } from './layered';
 import { addSub, andN, busMux2, decoder, equal, incrementer } from './combinational';
 import { priorityEncoder } from './coding';
 import { define, merger, ones, splitter } from './define';
@@ -431,13 +432,12 @@ export function cam(k: number, w: number): ComponentDef {
     b.next();
     b.wire(`${pe}.v`, 'hit');
     b.wire(`${pe}.y`, 'index');
-    const R = b.right;
     return define({
       id: `cam${N}x${w}`, name: `${N}-entry CAM (${w}-bit keys)`, category: 'memory',
       summary: `${N} entries written by address (we, waddr, wdata) and searched by content: each entry has its own ${w}-bit comparator, all comparing with key in parallel; a priority encoder turns the matches into hit and index. Search costs one comparator per entry, which is why CAMs stay small (TLBs, fully associative caches, network routers).`,
       ports: [bit('we', 'in'), bus('waddr', k, 'in'), bus('wdata', w, 'in'), bus('key', w, 'in'), clock(), bit('hit', 'out'), bus('index', k, 'out')],
       symbol: { kind: 'box', label: 'CAM' },
-      netlist: () => ({ pins: { we: [0, 2], waddr: [0, 6], wdata: [0, 10], key: [0, 14], clk: [0, 18], hit: [R, 4], index: [R, 8] }, instances: b.instances, nets: b.nets() }),
+      netlist: laid(b, { pinOrder: ['we', 'waddr', 'wdata', 'key', 'clk', 'hit', 'index'], room: true, keepOrder: true, wires: { wdata: true, key: true } }),
       hdl: {
         verilog: `always_comb begin
   hit = 0; index = '0;
