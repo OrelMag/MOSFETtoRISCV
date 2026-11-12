@@ -53,7 +53,7 @@ export function nrDivStep(n: number, fast = n >= 16): ComponentDef {
         return [res, res < 2 ** n ? 1 : 0];
       },
       netlist: () => ({
-        pins: { r: [0, 5], qin: [0, 12], d: [0, 2 + sg.ports.b.pos[1] + 6], rout: [xr + 6, 2 + sg.ports.s.pos[1]], q: [xr + 6, 2 + sg.h + 6] },
+        pins: { r: [0, 5], qin: [0, Math.min(12, sg.ports.b.pos[1] + 6)], d: [0, 2 + sg.ports.b.pos[1] + 6], rout: [xr + 6, 2 + sg.ports.s.pos[1]], q: [xr + 6, 2 + sg.h + 6] },
         instances: [
           { name: 'sr', def: splitter([n, 1], 4), at: [4, 1] },
           { name: 'r2', def: merger([1, n]), at: [14, 2 + sg.ports.a.pos[1] - 2] },
