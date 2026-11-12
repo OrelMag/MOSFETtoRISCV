@@ -289,7 +289,7 @@ export const chCards: Chapter = {
         <div class="try">Run the deck row by row and watch the lamps behind: data, then ready, empty and next. Then turn
         off "Computer takes (next)" and step: the card waits at the station. Switch to column by column and watch the word
         build up beside the model, one row-9 bit a column. Then use "Turn the next card" on a card in the hopper and run again: the
-        reader reads the card as it lies, the second station (real readers read every card twice and compare) agrees with the first,
+        reader reads the card as it lies, the second station (the IBM 1402 read every card at two brush stations and compared, the 2501 every column twice) agrees with the first,
         and the sequence number in columns 73–80 is what stops the deck.</div>`,
       more: {
         derive: `<p>Column by column a card is ${COLUMNS} items, so with next held at 1 card k is done after ${COLUMNS}·k + ${FEED}·(k − 1) edges and the deck after

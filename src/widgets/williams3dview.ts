@@ -30,7 +30,7 @@ export function williamsView(words: number[] = Array.from({ length: LINES }, (_,
     aria: 'A Williams-Kilburn storage tube in 3D: an electron gun, electrostatic deflection plates, a face carrying 32 by 32 dots and dashes, and a wire-mesh pick-up plate in front of it with its lead to an amplifier',
     camera: isNarrow() ? { ...VIEWS.side, dist: VIEWS.side.dist * 1.25 } : VIEWS.three,
     limits: { minDist: 100, maxDist: 2000 },
-    note: 'Drawn, not modelled: electrodes as plates, one smooth bend in the deflection plates, 6 mm between spots, a dot and a dash as boxes. Sizes are estimates except the 12-inch (300 mm) CV1131 tube (Lavington). The pick-up plate was at first a wire mesh (Digital60).',
+    note: 'Drawn, not modelled: electrodes as plates, one smooth bend in the deflection plates, 6 mm between spots, a dot and a dash as boxes. Sizes are estimates. The tube is drawn as a 12-inch (300 mm) CV1131 after Lavington; the University’s Computer50 pages put the Baby’s store on a 6-inch tube, so the sources differ. The pick-up plate was at first a wire mesh (Digital60). It covered the face, so the stored pattern could not be seen on the store tube itself: the operators read it on a separate display tube that copied the store (Computer50, Digital60). The pattern is drawn on this tube’s face so that you can see it.',
     draw: () => paint(),
   });
   const palette = (): CrtPalette => ({

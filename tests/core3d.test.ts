@@ -267,3 +267,13 @@ describe('the cycle summary', () => {
     expect(n).toBeGreaterThan(1);
   });
 });
+
+describe('wire gauge (MIT Report R-221, section 5.24)', () => {
+  it('draws Whirlwind\'s 32-gauge magnet wire at its bare copper diameter, 0.00795 in', async () => {
+    const { AWG, awgInch, UNIT_MIL } = await import('../src/widgets/core3dparts');
+    expect(AWG).toBe(32);
+    expect(awgInch(36)).toBeCloseTo(0.005, 6); // the AWG series' anchor
+    expect(awgInch(32)).toBeCloseTo(0.00795, 5);
+    expect(WIRE_R * 2 * UNIT_MIL).toBeCloseTo(7.95, 2);
+  });
+});
