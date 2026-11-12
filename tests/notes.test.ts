@@ -116,7 +116,7 @@ describe('review schedule', () => {
     const q = buildQueue(all, st, { now: T, visited });
     expect(q.map((x) => `${x.q.key}:${x.why}`)).toEqual(['c1:4:missed', 'c1:2:missed', 'c1:3:soon', 'c1:5:new', 'c1:0:due']);
     expect(buildQueue(all, st, { now: T, visited, limit: 2 })).toHaveLength(2);
-    expect(summarize(all, st, { now: T, visited })).toEqual({ missed: 2, stale: 2, due: 5 });
+    expect(summarize(all, st, { now: T, visited })).toEqual({ missed: 2, stale: 1, fresh: 1, due: 5 }); // c1:5 never asked: not "not seen for 2 weeks" (release review m5)
     // a chapter not visited contributes nothing
     expect(buildQueue(all, emptyReview(), { now: T, visited: () => false })).toEqual([]);
   });
