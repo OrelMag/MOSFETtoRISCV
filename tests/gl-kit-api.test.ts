@@ -1,7 +1,8 @@
 // The studio kit's newer API, DOM-free: framing (fitView, aspectOf), live deform (refresh), paths (along), parametric
 // surfaces, ribbons and lettering (strokeGeo, round and flat).
 import { describe, expect, it } from 'vitest';
-import { along, plane, refresh, ribbon, roundedBox, surface, type Geo } from '../src/gl/kit/geo';
+import { along, paint, plane, refresh, ribbon, roundedBox, surface, type Geo } from '../src/gl/kit/geo';
+import { heatRamp } from '../src/gl/kit/materials';
 import { aspectOf, fitView } from '../src/gl/kit/scene';
 import { onCylinder, onPlane, strokeGeo } from '../src/gl/kit/text';
 import { dot3, mat4Apply, mat4LookAt, mat4Mul, mat4Perspective, type Vec3 } from '../src/gl/math';
@@ -42,6 +43,13 @@ describe('live deform', () => {
     expect(g.positions.length).toBe(n);
     expect(g.rev).toBe(1);
     expect(g.max[0]).toBeCloseTo(1.5, 6);
+  });
+  it('paints a colour per vertex from its position (a scalar through a ramp) and bumps the revision', () => {
+    const g = paint(plane(2, 2), (p) => heatRamp((p[0] + 1) / 2));
+    expect(g.colors!.length).toBe(g.positions.length);
+    expect([...g.colors!.slice(0, 3)]).toEqual([...heatRamp(0)].map((v) => Math.fround(v)));
+    expect([...g.colors!.slice(3, 6)]).toEqual([...heatRamp(1)].map((v) => Math.fround(v)));
+    expect(g.rev).toBe(1);
   });
   it('refuses a geometry of another shape', () => {
     expect(() => refresh(roundedBox(1, 1, 1, 0.1), roundedBox(1, 1, 1, 0))).toThrow();

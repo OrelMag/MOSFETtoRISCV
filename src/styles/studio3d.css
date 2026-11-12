@@ -12,6 +12,10 @@
 .st-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; }
 .st-bar .r3-sl { flex: 1 1 160px; }
 .st-bar .r3-sl span { width: auto; min-width: 56px; }
+/* the model's own controls under the canvas (Ross's phone rule for .m3d, model3d.css, carried over): a long label wraps
+   rather than pushing its readout out, and a readout is as wide as its text, never clipped under the next control */
+.st-slot .r3-sl span, .st-bar .r3-sl span { flex: 0 1 auto; }
+.st-slot .r3-sl output { width: auto; min-width: 58px; white-space: nowrap; }
 .st-stage { position: relative; display: grid; grid-template-columns: 112px minmax(0, 1fr) 112px; }
 .st-view.r3-stage {
   position: relative; aspect-ratio: 4 / 3; max-height: none; width: 100%; margin: 0 auto; overflow: hidden;

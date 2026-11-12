@@ -105,9 +105,18 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   const shape = () => {
     const box = boundsOf(model);
     aspect = Math.max(ASPECT_MIN, Math.min(ASPECT_MAX, aspectOf(box, o.home.yaw, o.home.pitch) * 1.15));
-    view.style.aspectRatio = String(aspect.toFixed(3));
+    fitAspect(el.clientWidth);
+  };
+  /** The canvas's aspect for the width it has: the model's, but never so wide that the canvas falls under
+   *  MIN_CANVAS_H tall (a long, low model on a phone gets room above and below instead of a strip). */
+  let shownAspect = '';
+  const fitAspect = (avail: number) => {
+    const key = (avail > 0 ? Math.max(ASPECT_MIN, Math.min(aspect, avail / MIN_CANVAS_H)) : aspect).toFixed(3);
+    if (key === shownAspect) return;
+    shownAspect = key;
+    view.style.aspectRatio = key;
     // a tall model's canvas is held to most of the screen's height: its width follows, centred
-    view.style.maxWidth = `calc(min(78vh, 760px) * ${aspect.toFixed(3)})`;
+    view.style.maxWidth = `calc(min(78vh, 760px) * ${key})`;
   };
   const homeView = (): OrbitView => {
     if (o.fit === false || !st) return o.home;
@@ -160,9 +169,10 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     if (mode !== 'gl' || !st) return;
     makeLabels();
     refit();
-    const W = canvas.clientWidth, H = canvas.clientHeight, cam = st.camera, eye = cam.eye(), under = cam.pitch < -0.25, cw = el.clientWidth - 2 * gutterW, narrow = cw < MIN_CANVAS || cw / aspect < MIN_CANVAS_H || rows.length === 0;
+    const W = canvas.clientWidth, H = canvas.clientHeight, cam = st.camera, eye = cam.eye(), under = cam.pitch < -0.25, cw = el.clientWidth - 2 * gutterW, narrow = cw < MIN_CANVAS || rows.length === 0;
     if (el.classList.contains('narrow') !== narrow) { el.classList.toggle('narrow', narrow); requestAnimationFrame(() => st?.invalidate()); }
     stage.style.gridTemplateColumns = narrow ? '' : `${gutterW}px minmax(0, 1fr) ${gutterW}px`;
+    fitAspect(narrow ? el.clientWidth : cw);
     const k = st.knobs().explode;
     const seen: { r: typeof rows[number]; x: number; y: number; away: boolean }[] = [];
     for (const r of rows) {

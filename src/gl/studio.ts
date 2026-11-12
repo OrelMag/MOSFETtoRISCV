@@ -543,6 +543,10 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
     gl.bindBuffer(gl.ARRAY_BUFFER, g.vbo);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
     gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+    // the geometry's own per-vertex colours and UVs (a painted or data-textured mesh drawn as instances); without them
+    // the draw's constant attributes (white, uv 0) stand in
+    if (g.cbo) { gl.bindBuffer(gl.ARRAY_BUFFER, g.cbo); gl.enableVertexAttribArray(7); gl.vertexAttribPointer(7, 3, gl.FLOAT, false, 0, 0); }
+    if (g.ubo) { gl.bindBuffer(gl.ARRAY_BUFFER, g.ubo); gl.enableVertexAttribArray(8); gl.vertexAttribPointer(8, 2, gl.FLOAT, false, 0, 0); }
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, g.ibo);
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, s.data, gl.DYNAMIC_DRAW);
