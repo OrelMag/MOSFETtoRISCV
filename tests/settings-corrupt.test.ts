@@ -46,3 +46,15 @@ describe('settings with corrupt fields', () => {
     for (const raw of ['null', '42', '"x"', '[1]']) expect((await loadRaw(raw)).theme).toBe('auto');
   });
 });
+
+describe('settings that are not JSON', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
+  it('are kept aside before the defaults are saved over them', async () => {
+    const store: Record<string, string> = { 'mosfet2riscv:v1': '{"visited":{"gates":[0]' };
+    vi.stubGlobal('localStorage', { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; }, removeItem: (k: string) => { delete store[k]; } });
+    vi.resetModules();
+    const s = (await import('../src/ui/settings')).settings;
+    expect(s.theme).toBe('auto');
+    expect(store['mosfet2riscv:v1:unreadable']).toBe('{"visited":{"gates":[0]');
+  });
+});

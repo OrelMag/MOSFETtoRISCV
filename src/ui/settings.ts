@@ -151,7 +151,10 @@ function load(): State {
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) {
-      const st: State = { ...defaults, looks: 0, ...coerce(JSON.parse(raw)) };
+      let parsed: unknown;
+      // Text that is not JSON is kept aside before the next save writes the defaults over it (as the sandbox keeps its own).
+      try { parsed = JSON.parse(raw); } catch { localStorage.setItem(KEY + ':unreadable', raw); throw new Error('unreadable settings'); }
+      const st: State = { ...defaults, looks: 0, ...coerce(parsed) };
       // Settings saved before the vivid look and cartoon parts became the default get them once; turned off since, they stay off.
       if (st.looks < 1) {
         if (!st.vivid && !st.netColors) st.vividNets = true;
