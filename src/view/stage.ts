@@ -27,7 +27,7 @@ import { h, hintBadge, icon } from '../ui/dom';
 import { menuKeys } from '../ui/menukeys';
 import { applyTheme, settings } from '../ui/settings';
 import type { Lens } from './lens';
-import { copyText, emptyView, encodeView, isEmptyView, linkTo, setViewTarget, splitView, takePendingView, type ViewFocus, type ViewState } from '../ui/viewlink';
+import { copyText, emptyView, encodeView, isEmptyView, linkTo, releaseViewTarget, setViewTarget, splitView, takePendingView, type ViewFocus, type ViewState } from '../ui/viewlink';
 import { switchSim, ViewCtx } from './context';
 import { type CrumbValue, crumbTitle, crumbValues, paintCrumbVals } from './crumbvals';
 import { Inspector, inspectorChoice } from './inspector';
@@ -3427,6 +3427,7 @@ export class Stage {
     this.panels.forEach((p) => p.destroy?.());
     this.leaf?.widget.destroy?.();
     closePopover();
+    releaseViewTarget(this);
     this.life.abort();
   }
 }
