@@ -246,8 +246,8 @@ export function startApp(root: HTMLElement): void {
     h('span', null, h('b', null, 'Move parts by dragging'), h('small', null, 'On: dragging a part or a wire moves it. Off: dragging moves the view and the drawing stays put (the lock on the stage bar is the same switch). Starts off on a touch screen')));
   // view/lens.ts: a zoom or a pinch that settles on a block opens its inside over it (docs/transparent/DESIGN.md)
   const zoomWhy = h('small', null, 'Zoom into a block and its inside opens in place, live; zoom further to step in. Off: a block opens only when you double-click it. Starts off on a touch screen');
-  const zoomItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow', onclick: () => settings.set('zoomOpen', !settings.zoomOpen) },
-    h('span', { class: 'pal-flow-sw' }, h('i')),
+  const zoomItem = h('button', { role: 'menuitemcheckbox', class: 'pal-flow pal-zoom', onclick: () => settings.set('zoomOpen', !settings.zoomOpen) },
+    h('span', { class: 'pal-zoom-sw' }, icon('zoom-open', 32)),
     h('span', null, h('b', null, 'Open blocks as you zoom'), zoomWhy));
   // layout.ts is not first-load code
   const layoutsItem = h('button', { class: 'pal-reset', onclick: () => {

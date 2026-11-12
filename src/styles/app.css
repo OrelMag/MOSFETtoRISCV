@@ -175,6 +175,13 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .pal-simple .st { display: none; }
 .pal-simple[aria-checked='true'] .sq { display: none; }
 .pal-simple[aria-checked='true'] .st { display: inline; }
+/* Open blocks as you zoom (dom.ts ICONS['zoom-open']): off, a grey block; on, its inside lit like a wire at 1 and the lens in the accent. */
+.pal-zoom-sw { width: 46px; height: 32px; display: grid; place-items: center; flex: none; }
+.pal-zoom-sw .icon { display: block; color: var(--muted); }
+.pal-zoom-sw .zo-in { stroke: var(--w0); }
+.pal-zoom[aria-checked='true'] .pal-zoom-sw .zo-box { stroke: var(--text); }
+.pal-zoom[aria-checked='true'] .pal-zoom-sw .zo-in { stroke: var(--w1); }
+.pal-zoom[aria-checked='true'] .pal-zoom-sw .zo-lens { stroke: var(--accent); }
 
 /* quick navigation: chapter menu and search palette (src/ui/quicknav.ts) */
 .nav a .icon:last-child:not(:first-child) { opacity: 0.6; margin-left: -2px; }

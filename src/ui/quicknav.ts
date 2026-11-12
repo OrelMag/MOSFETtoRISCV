@@ -224,7 +224,7 @@ export function openQuickNav(initial = ''): void {
     return e;
   };
   const row = (it: NavItem, q: string, i: number): HTMLElement => {
-    const lead = it.no ? h('span', { class: 'qn-num' }, it.no) : h('span', { class: 'qn-num k' }, icon(KIND_ICON[it.kind] ?? 'search', 14));
+    const lead = it.no ? h('span', { class: 'qn-num' }, it.no) : h('span', { class: 'qn-num k' }, icon(it.icon ?? KIND_ICON[it.kind] ?? 'search', 14));
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     const lt = `${it.title} ${it.entry?.chTitle ?? ''} ${it.alt ?? ''}`.toLowerCase();
     const inTitle = !words.length || words.every((w) => lt.includes(w) || /^\d+$/.test(w));
