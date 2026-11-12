@@ -173,6 +173,28 @@ function nearEnds(def: ComponentDef, nl: Netlist): Netlist {
   return nl;
 }
 
+/** Nets tried one by one when they do not go wired together: a few routings each, so only so many. */
+const ONE_BY_ONE = 8;
+/** A near net tried alone may add this many crossings: a pointer pair one gate apart reads worse than a crossing (a pin's net adds none). */
+const ALONE_CROSSINGS = 1;
+/** Nets are tried one by one only on a level of up to this many nets: each try is a few routings of it. */
+const ONE_BY_ONE_NETS = 60;
+/** A pin's or constant's sinks within this many units to its right: the first column or two. */
+const PIN_REACH = 64;
+const CONSTANT = /^(tie[01]|const\d+_[0-9a-f]+)$/;
+
+/**
+ * A net from one of the level's input pins, or from a constant: a pointer beside the pin (or the tie) and its twins at the
+ * parts read worse than the wire from it, on a trunk where it fans out. A clock or reset reaching many parts stays a pointer.
+ */
+function fromPinOrConstant(nl: Netlist, n: NetDef): boolean {
+  if (!tagged(n) || manyClock(n)) return false;
+  const { inst, port } = parseEnd(n.ends[0]);
+  if (inst === null ? !nl.pins?.[port] : !CONSTANT.test(nl.instances.find((x) => x.name === inst)?.def.id ?? '')) return false;
+  const d = endPos(nl, n.ends[0]);
+  return !!d && n.ends.slice(1).every((e) => { const s = endPos(nl, e); return !!s && s[0] >= d[0] - 2 && s[0] - d[0] <= PIN_REACH; });
+}
+
 const caches = new Map<number, WeakMap<Netlist, Netlist>>();
 
 /**
@@ -217,18 +239,31 @@ export function drawnNetlist(def: ComponentDef, nl: Netlist, limit = LOCAL_NETS)
       if (fits(local, Infinity)) out = local;
       // Near nets (a pointer pair a short wire would join), then the near ends of what is still a pointer: each taken only when it
       // is no worse than the drawing so far (no more crossings, no new wire through a part, no overlap), so no level loses by them.
-      const noWorse = (from: Netlist, c: Netlist): boolean => {
+      const noWorse = (from: Netlist, c: Netlist, extra = 0): boolean => {
         if (c === from) return false;
         const a = routedOnce(def, from).nets, r = routedOnce(def, c).nets, was = wiresThroughParts(from, a);
-        return !wireOverlaps(r).length && [...wiresThroughParts(c, r)].every((i) => was.has(i)) && wireCrossings(r) <= wireCrossings(a);
+        return !wireOverlaps(r).length && [...wiresThroughParts(c, r)].every((i) => was.has(i)) && wireCrossings(r) <= wireCrossings(a) + extra;
+      };
+      // a group of nets wired together when that is no worse, else each alone (the first few), at up to `extra` crossings each
+      const wireGroup = (pick: (from: Netlist, x: NetDef) => boolean, extra: number) => {
+        const group = out.nets.filter((x) => pick(out, x));
+        if (!group.length) return;
+        const all = wiredClear(def, out, (x) => group.includes(x));
+        if (noWorse(out, all)) { out = all; return; }
+        if ((group.length < 2 && !extra) || n > ONE_BY_ONE_NETS) return;
+        for (const g of group.slice(0, ONE_BY_ONE)) {
+          const k = out.nets.findIndex((x) => x.ends[0] === g.ends[0] && x.name === g.name);
+          if (k < 0 || !pick(out, out.nets[k])) continue;
+          const target = out.nets[k], one = wiredClear(def, out, (x) => x === target);
+          if (noWorse(out, one, extra)) out = one;
+        }
       };
       // (each only when some net qualifies: a candidate is several routings of the level, felt on a big top)
-      if (out.nets.some((x) => tagged(x) && isNear(nl, x))) {
-        const near = wiredClear(def, out, (x) => tagged(x) && isNear(nl, x));
-        if (noWorse(out, near)) out = near;
-      }
+      wireGroup((_, x) => tagged(x) && isNear(nl, x), ALONE_CROSSINGS);
       const part = nearEnds(def, out);
       if (noWorse(out, part)) out = part;
+      // pins and constants wired from where they enter
+      wireGroup((from, x) => fromPinOrConstant(from, x), 0);
     }
   }
   cache.set(nl, out);
