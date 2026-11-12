@@ -18,7 +18,8 @@ export interface BoxPortText { name: string; x: number; y: number; anchor: 'star
 export interface BoxText {
   ports: BoxPortText[];
   /** The label's baseline (centred on x), or null for none. */
-  label: { text: string; x: number; y: number } | null;
+  /** : the font shrunk so the label fits the box's width (C3: a label never runs past its box); absent, full size. */
+  label: { text: string; x: number; y: number; scale?: number } | null;
 }
 
 const textRect = (x: number, y: number, chars: number, font: number, em: number, anchor: 'start' | 'middle' | 'end'): Rect => {
@@ -36,7 +37,11 @@ export const portTextRect = (p: BoxPortText): Rect => {
 /** Capitals in the label's bold UI font (and the cartoon look's rounded one) run wider than the average letter. */
 const LABEL_CAP_EM = 0.7;
 const labelChars = (s: string) => s.length + (LABEL_CAP_EM / LABEL_EM - 1) * (s.match(/[A-Z]/g)?.length ?? 0);
-export const labelRect = (l: NonNullable<BoxText['label']>): Rect => textRect(l.x, l.y, labelChars(l.text), LABEL_FONT, LABEL_EM, 'middle');
+export const labelRect = (l: NonNullable<BoxText['label']>): Rect => textRect(l.x, l.y, labelChars(l.text), LABEL_FONT * (l.scale ?? 1), LABEL_EM, 'middle');
+/** The smallest a label is shrunk to fit its box (below, it is drawn at this size and squeezed by textLength). */
+export const LABEL_MIN_SCALE = 0.6;
+/** Room a label leaves at each side of its box. */
+const LABEL_PAD = 0.2;
 
 const hit = (a: Rect, b: Rect) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
@@ -78,19 +83,21 @@ export function boxText(def: ComponentDef, flip = false): BoxText {
     ports.push({ name: p.name, x, y, anchor, side, clock, ...(across ? { across } : {}) });
   }
   if (!text) return { ports, label: null };
-  const mid = h / 2 + 0.45;
+  const full = labelRect({ text, x: 0, y: 0 }).w, room = w - 2 * LABEL_PAD;
+  const scale = full > room ? Math.max(LABEL_MIN_SCALE, room / full) : undefined;
+  const mid = h / 2 + 0.45 * (scale ?? 1);
   // The middle, unless a port name is in the way: then a little up or down, whichever is clear.
   const rects = ports.map(portTextRect);
   const keep = def.symbol.keepOut ?? [];
   rects.push(...keep);
-  const clear = (y: number) => !rects.some((r) => hit(r, labelRect({ text, x: w / 2, y })));
+  const clear = (y: number) => !rects.some((r) => hit(r, labelRect({ text, x: w / 2, y, scale })));
   const near = [mid, mid - 0.7, mid + 0.7, mid - 1.1, mid + 1.1];
   // Displays on a chip's face: any clear row of the box, the nearest the middle; none clear, no label.
   const rows = keep.length ? [...near, ...Array.from({ length: Math.max(0, Math.floor((h - 1) * 2)) }, (_, i) => 0.8 + i / 2).sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid))] : near;
-  const fits = (c: number) => c - 0.8 >= 0 && c + 0.2 <= h && (!keep.length || labelRect({ text, x: w / 2, y: c }).w <= w - 0.4);
+  const fits = (c: number) => c - 0.8 >= 0 && c + 0.2 <= h && (!keep.length || labelRect({ text, x: w / 2, y: c, scale }).w <= w - 0.4);
   const y = rows.find((c) => fits(c) && clear(c));
   if (y === undefined && keep.length) return { ports, label: null };
-  return { ports, label: { text, x: w / 2, y: y ?? mid } };
+  return { ports, label: { text, x: w / 2, y: y ?? mid, ...(scale ? { scale } : {}) } };
 }
 
 /** Port names and the label of a box that hide one another (for the layout tests). */
