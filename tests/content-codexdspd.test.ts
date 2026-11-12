@@ -263,7 +263,7 @@ describe('group D: filters that learn', () => {
     expect(CHECKS.echocancel[1].options).toContain(`About ${Math.round(on)} dB`);
     says('adaptive', 3, `${full.toFixed(0)} dB`);
     says('adaptive', 3, `${short.toFixed(0)} dB with 32 taps`);
-    says('adaptive', 3, `${on.toFixed(0)} dB with learning left on, against ${frozen.toFixed(0)} when it stopped`);
+    says('adaptive', 3, `${on.toFixed(0)} dB with learning left on, against ${frozen.toFixed(0)} dB when learning was stopped`);
     says('adaptive', 3, 'Over the last second of the run');
     says('adaptive', 3, 'G.168');
     says('adaptive', 3, `${ECHO_TAPS * 2} multiplications a sample`);
