@@ -194,12 +194,15 @@ function rayTri(o: Vec3, d: Vec3, a: Vec3, b: Vec3, c: Vec3): number | null {
 }
 
 /** An anchor's point at explode k (it rides with its item). */
-export function anchorAt(m: Model3, a: StudioAnchor, k: number): Vec3 {
-  if (!a.on || k <= 0) return a.p;
+export function anchorAt(m: Model3, a: StudioAnchor, k: number, moves?: Moves): Vec3 {
+  if (!a.on) return a.p;
   const it = m.items.find((i) => i.name === a.on || i.group === a.on);
   if (!it) return a.p;
+  // a moved part carries its label (the move is about where the part is drawn, before the explode's offset)
+  const mv = moveOf(it, moves), p = mv ? applyMat(mv, a.p) : a.p;
+  if (k <= 0) return p;
   const o = explodeOffset(it, k);
-  return [a.p[0] + o[0], a.p[1] + o[1], a.p[2] + o[2]];
+  return [p[0] + o[0], p[1] + o[1], p[2] + o[2]];
 }
 
 export { quatRotate };

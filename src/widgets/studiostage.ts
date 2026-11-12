@@ -53,7 +53,7 @@ export interface StudioStage {
 
 const FW = 640, FH = 520;
 /** The narrowest canvas the names may flank: below it, numbered badges and the list (measured, not by device). */
-const MIN_CANVAS = 260, GUTTER_MIN = 56, GUTTER_MAX = 150;
+const MIN_CANVAS = 260, MIN_CANVAS_H = 240, GUTTER_MIN = 56, GUTTER_MAX = 150;
 /** The canvas's aspect (w / h) is the model's, held within these. */
 const ASPECT_MIN = 0.62, ASPECT_MAX = 1.9;
 const ease = (t: number) => t * t * (3 - 2 * t);
@@ -93,6 +93,8 @@ export function studioStage(o: StudioStageOptions): StudioStage {
 
   let mode: 'wait' | 'gl' | 'flat' = 'wait', st: Studio | null = null, dead = false;
   let model: Model3 = o.build('full');
+  /** The parts the physics moved last (kept here so the flat drawing, the labels and a rebuilt renderer follow). */
+  let curMoves: Moves = new Map();
   let beat = -1, tween = 0, pinned: Item | null = null, hoverRaf = 0, hiddenNow: ReadonlySet<string> | null = null;
   const frame = modelFrame({ stage: view, name: o.aria, renderer: () => (mode === 'gl' ? (st as unknown as Renderer) : null), root: () => el.closest<HTMLElement>('.m3d, .widget') ?? el });
 
@@ -158,14 +160,14 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     if (mode !== 'gl' || !st) return;
     makeLabels();
     refit();
-    const W = canvas.clientWidth, H = canvas.clientHeight, cam = st.camera, eye = cam.eye(), under = cam.pitch < -0.25, narrow = el.clientWidth - 2 * gutterW < MIN_CANVAS || rows.length === 0;
+    const W = canvas.clientWidth, H = canvas.clientHeight, cam = st.camera, eye = cam.eye(), under = cam.pitch < -0.25, cw = el.clientWidth - 2 * gutterW, narrow = cw < MIN_CANVAS || cw / aspect < MIN_CANVAS_H || rows.length === 0;
     if (el.classList.contains('narrow') !== narrow) { el.classList.toggle('narrow', narrow); requestAnimationFrame(() => st?.invalidate()); }
     stage.style.gridTemplateColumns = narrow ? '' : `${gutterW}px minmax(0, 1fr) ${gutterW}px`;
     const k = st.knobs().explode;
     const seen: { r: typeof rows[number]; x: number; y: number; away: boolean }[] = [];
     for (const r of rows) {
       const hiddenPart = !!hiddenNow && !!r.a.on && hiddenNow.has(r.a.on);
-      const p3 = anchorAt(model, r.a, k), p = st.project(p3);
+      const p3 = anchorAt(model, r.a, k, curMoves), p = st.project(p3);
       const ok = !hiddenPart && !!p && !!r.a.under === under && p[0] >= 0 && p[1] >= 0 && p[0] <= W && p[1] <= H;
       r.el.style.display = 'none'; r.badge.style.display = 'none';
       r.li.hidden = !!r.a.under !== under; r.li.classList.toggle('off', !ok);
@@ -308,7 +310,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const it of m.items) {
       if (it.mat.beam) continue;
-      itemMatrix(it, k.explode, M);
+      itemMatrix(it, k.explode, M, curMoves);
       const P = it.geo.positions, I = it.geo.indices, glass = (it.mat.transmit ?? 0) > 0.3, cut = (it.cut ?? 'section') !== 'none' && cuts.length > 0;
       const base = resolve(it.mat.base), em = it.mat.emit ? resolve(it.mat.emit).map((v) => v * Math.min(1, it.mat.glow ?? 0)) : [0, 0, 0];
       for (let t = 0; t < I.length; t += 3) {
@@ -329,7 +331,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     for (const f of faces) g.append(s('polygon', { points: f.pts.map(([x, y]) => `${X(x).toFixed(1)},${Y(y).toFixed(1)}`).join(' '), style: `fill:${f.fill};stroke:${f.fill}`, class: 'st-face' }));
     for (const a of m.anchors ?? []) {
       if (a.minor || a.under) continue;
-      const [x, y] = pr(anchorAt(m, a, k.explode));
+      const [x, y] = pr(anchorAt(m, a, k.explode, curMoves));
       g.append(s('text', { x: X(x), y: Y(y), class: 'm3-flat-lbl', 'text-anchor': 'middle' }, a.text));
     }
     flat.replaceChildren(g);
@@ -378,6 +380,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     } catch (e) { console.error(e); st = null; }
     if (!st) { setMode('flat'); return; }
     (window as unknown as { __studio?: Studio }).__studio = st;
+    if (curMoves.size) st.move(curMoves);
     lights();
     setMode('gl');
   }).catch(() => { if (!dead) setMode('flat'); });
@@ -385,7 +388,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   return {
     el, slot, chips, hint, refresh,
     instances(key, geo, mat, data) { st?.setInstances(key, geo, mat, data); },
-    move(m) { st?.move(m); },
+    move(m) { curMoves = m; if (mode === 'flat') drawFlat(); else st?.move(m); },
     studio: () => st,
     isFlat: () => mode === 'flat',
     rgb: (t) => colors.rgb(t),
