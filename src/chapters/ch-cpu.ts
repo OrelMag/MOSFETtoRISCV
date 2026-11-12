@@ -873,7 +873,7 @@ export const chSingleCycle: Chapter = {
       title: 'The control table',
       body: `
         <p>The datapath does whatever its multiplexers and write enables say. The <span data-show="ctl">control unit</span> is where an instruction's meaning becomes those settings, and it is small: a function of the opcode (7 bits), funct3 (3) and funct7 (7), ${CONTROL_NANDS} NANDs and ${logicDepth(CONTROL)} NAND delays deep, with no state. It decodes the opcode to one of nine classes, then each output is an OR of the classes that need it. The panel beside the circuit is that table, evaluated by the simulator on one instruction of each class: <strong>click a row</strong> to run that instruction on the datapath and watch the signals.</p>
-        <p>Read it by columns. <strong>RegWrite</strong> is 1 for everything but stores and branches; <strong>MemWrite</strong> is the store class and nothing else; <strong>ResultSrc</strong> picks what is written back: the ALU, the memory word, PC + 4 (the link of a jump) or the immediate (<code>lui</code>). <strong>SrcA</strong> is the PC only for <code>auipc</code>, <strong>SrcB</strong> the register for R-type and branches, where it matters (<code>jal</code> and <code>lui</code> show rs2 as well, unused). <strong>ImmSrc</strong> names the immediate format of chapter ${numOf('isa')}; a column that does not matter for a class (the ImmSrc of an <code>add</code>) is whatever the logic gives, not a don't care the gates exploit.</p>
+        <p>Read it by columns. <strong>RegWrite</strong> is 1 for everything but stores and branches; <strong>MemWrite</strong> is the store class and nothing else; <strong>ResultSrc</strong> picks what is written back: the ALU, the memory word, PC + 4 (the link of a jump) or the immediate (<code>lui</code>). <strong>SrcA</strong> is the PC only for <code>auipc</code>, <strong>SrcB</strong> picks rs2 for R-type and branches and the immediate otherwise (the table also shows rs2 for <code>jal</code> and <code>lui</code>, where nothing uses it). <strong>ImmSrc</strong> names the immediate format of chapter ${numOf('isa')}; a column that does not matter for a class (the ImmSrc of an <code>add</code>) is whatever the logic gives, not a don't care the gates exploit.</p>
         <p>The one column with real logic is <strong>ALUControl</strong>. R-type passes {funct7[5], funct3}: <code>add</code> and <code>sub</code> differ in that bit alone. OP-IMM passes funct3 only, because bit 30 of an <code>addi</code> is part of its immediate; the exception is <code>srai</code>, which is how it differs from <code>srli</code>. Loads, stores, <code>jalr</code> and <code>auipc</code> force ADD whatever their funct3 says (it holds a width or nothing), and branches force SUB. The branch kind then reads the ALU's flags.</p>
         <p>Because a new instruction is a new row, the cost of one is countable: the last step of this chapter adds a row and prices it.</p>
         <div class="try">Click <code>sw</code>, then <code>lw</code>: only RegWrite, MemWrite, ResultSrc and ImmSrc (I against S) differ, and the ALU adds rs1 and the immediate either way.</div>`,
@@ -1047,7 +1047,7 @@ export const chSingleCycle: Chapter = {
       title: 'Run real programs',
       body: `
         <p>Pick a program in the panel, or write your own with <strong>Edit</strong>. <strong>Run to halt</strong> clocks the
-        gate-level machine as fast as your browser allows, about 200 cycles per second for ~200 000 transistors.</p>
+        gate-level machine, ~200 000 transistors, as fast as your browser allows.</p>
         <p>Supported: all of RV32I except byte/halfword loads and stores, <code>fence</code>, <code>ecall</code>, <code>ebreak</code>.
         A jump to itself is treated as halt.</p>
         <p>What this checks is the point of the exercise. After every clock cycle the panel compares all 32 registers, the PC and the memory with the instruction-set simulator, which was written
@@ -1068,7 +1068,7 @@ export const chSingleCycle: Chapter = {
       },
       more: {
         derive: `<p>Cycle count of the program: four setup instructions, 6 per iteration × 12 iterations, one final jump to itself: 4 + 72 + 1 = 77 instructions, and 77 cycles, since each takes one. The
-          challenge says "about 75" for that reason. At roughly 200 cycles per second in the browser, the run takes under half a second; at the 155-delay period and the illustrative 25 ps a delay of chapter ${numOf('fastadd')}, a cycle is about
+          challenge says "about 75" for that reason. In the browser the run takes a fraction of a second; at the 155-delay period and the illustrative 25 ps a delay of chapter ${numOf('fastadd')}, a cycle is about
           4 ns and the whole run about 0.3 µs.</p>`,
         pitfall: `<p>A program that "works" on the simulator and not on the gates, or the reverse, almost always uses an instruction the hardware leaves out: byte and halfword accesses, <code>fence</code>,
           <code>ecall</code>. The panel stops at the first mismatch and names the register: start there, not at the end of the run.</p>`,

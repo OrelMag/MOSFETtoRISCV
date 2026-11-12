@@ -199,7 +199,7 @@ export const chAppendixRunner: Chapter = {
       body: `
         <p><span data-show="player">The Player board</span> uses the walls' trick on the other axis. Its counter counts once a line, from ${RB_PLAYER_LOAD} to 63: a period of ${RB_FRAME} lines, one frame, so you stand still. Its top four counts are the four lines you are on.</p>
         <p>Hold ▲ and each wrap loads ${RB_PLAYER_LOAD + 1}: ${RB_FRAME - 1} lines, so you arrive one line earlier on the next frame. ▼ loads ${RB_PLAYER_LOAD - 1}. The buttons are read only at the wrap, so a button is 1 line a frame whatever you do between: 30 lines a second, with no debouncing. Two gates stop you leaving the field: the wrap comes at your last line, so "v is not in the first four lines" allows up and "v is below 36" allows down.</p>
-        <p>Your colour is one flip-flop toggled by Flip's rising edge: <code>bit' = bit XOR (flip AND NOT flip-a-clock-ago)</code>. Cost: ${k(RB_COST.player)} NANDs. The 161's four bits are two more than this counter needs, because it comes in a package.</p>
+        <p>Your colour is one flip-flop toggled by Flip's rising edge: <code>bit' = bit XOR (flip AND NOT flip-a-clock-ago)</code>. Cost: ${k(RB_COST.player)} NANDs. Its two 161s give eight bits, two more than a count to 63 needs, because the counter comes four bits to a package.</p>
         <div class="try">Flip your bit to cyan: use <strong>Flip bit</strong> on the panel or the FLIP switch on the Player board. Press it twice and it is amber again.</div>`,
       scene: () => runnerScene({ highlight: ['player'] }),
       challenge: {
