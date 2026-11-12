@@ -17,6 +17,7 @@
 .cp-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .cp-unlock { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-2); cursor: pointer; padding: 0 6px; }
 .cp-note { font-size: 12.5px; color: var(--good); }
+.cp-note.bad { color: var(--bad); font-weight: 600; }
 .sub { color: var(--text-2); font-size: 13px; }
 
 /* ---- map + panel ---- */

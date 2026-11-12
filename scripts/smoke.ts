@@ -1885,8 +1885,10 @@ const STUDIO_LABELS = `(() => {
   const out = [];
   const hit = (a, b, gx, gy) => a.left < b.right + gx && b.left < a.right + gx && a.top < b.bottom + gy && b.top < a.bottom + gy;
   for (const st of document.querySelectorAll('.st')) {
-    if (!st.offsetWidth) continue;
-    const view = st.querySelector('.st-view'), v = view.getBoundingClientRect(), tools = view.querySelector('.r3-tools');
+    // (.st is also a puzzle / test table status cell: only a studio stage has a view)
+    const view = st.querySelector('.st-view');
+    if (!st.offsetWidth || !view) continue;
+    const v = view.getBoundingClientRect(), tools = view.querySelector('.r3-tools');
     const tr = tools && tools.offsetWidth ? tools.getBoundingClientRect() : null;
     const names = [...st.querySelectorAll('.st-gutter .st-lbl')].filter((e) => e.offsetParent && e.style.display !== 'none');
     for (const [i, a] of names.entries()) {
@@ -2075,7 +2077,7 @@ class Tab {
       for (const p of bars) this.errors.push(p);
       const lbls = (await this.send('Runtime.evaluate', { expression: MODEL_LABELS, returnByValue: true })).result.value as string[];
       for (const p of lbls) this.errors.push(p);
-      const slbls = (await this.send('Runtime.evaluate', { expression: STUDIO_LABELS, returnByValue: true })).result.value as string[];
+      const slbls = ((await this.send('Runtime.evaluate', { expression: STUDIO_LABELS, returnByValue: true })).result.value ?? ['studio label check threw']) as string[];
       for (const p of slbls) this.errors.push(p);
       if (route.viewport) {
         const wide = (await this.send('Runtime.evaluate', { expression: OVERFLOW, returnByValue: true })).result.value as string[];

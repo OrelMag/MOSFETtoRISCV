@@ -120,8 +120,11 @@ export function matchNote(e: CodexEntry, query: string, n = 70): string {
     if (!pat) continue;
     const m = new RegExp(pat, 'i').exec(text);
     if (!m) continue;
-    const from = Math.max(0, m.index - Math.floor((n - m[0].length) / 2));
-    const to = Math.min(text.length, from + n);
+    // the window starts and ends on a word boundary (it began mid-word: "…wo inputs are")
+    let from = Math.max(0, m.index - Math.floor((n - m[0].length) / 2));
+    if (from > 0) { const sp = text.indexOf(' ', from); from = sp >= 0 && sp < m.index ? sp + 1 : from; }
+    let to = Math.min(text.length, from + n);
+    if (to < text.length) { const sp = text.lastIndexOf(' ', to); to = sp > m.index + m[0].length ? sp : to; }
     return `${from ? '…' : ''}${text.slice(from, m.index)}«${m[0]}»${text.slice(m.index + m[0].length, to)}${to < text.length ? '…' : ''}`.replace(/\s+/g, ' ');
   }
   return '';
