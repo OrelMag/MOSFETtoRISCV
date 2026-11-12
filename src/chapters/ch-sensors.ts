@@ -9,7 +9,7 @@ import {
 } from '../phys/imagesensor';
 import { sensorStack3d } from '../widgets/sensorstack3d';
 import { groupNum } from '../sim/numfmt';
-import { adcApi, adcScene, ccdWidget, colourWidget, lightWidget, noiseWidget, pixelApi, pixelScene, pixelWidget, shutterWidget } from '../widgets/sensors';
+import { ADC_BITS, ADC_COLS, adcApi, adcScene, ccdWidget, colourWidget, lightWidget, noiseWidget, pixelApi, pixelScene, pixelWidget, shutterWidget } from '../widgets/sensors';
 import { ccd3d } from '../widgets/ccd3d';
 import { withModel } from '../widgets/modelhost';
 import { pixel4t3d } from '../widgets/pixel4t3d';
@@ -68,7 +68,7 @@ export const chSensors: Chapter = {
       get body() {
         return `
         <p>A camera is a grid of buckets for electrons. Light enters silicon, and a photon with more energy than silicon's band gap (1.12 eV, so wavelengths below ${g(SI_CUTOFF_NM)} nm) lifts one electron into the conduction band, leaving a hole. A junction's field sweeps the electron into a well, and the well's count after the exposure is the pixel's value. One photon makes at most one electron: a blue photon's extra energy is lost as heat.</p>
-        <p>How deep it goes first depends on its colour. Silicon absorbs blue in about ${n1(absorptionDepth(450), 2)} µm, green in ${n1(absorptionDepth(550), 1)}, red in ${n1(absorptionDepth(650), 1)}, and near infrared at 900 nm only after ${g(absorptionDepth(900))} µm (M. A. Green's table, 2008). A diode a few micrometres deep catches visible light well and lets most infrared go through.</p>
+        <p>How deep a photon goes before it is absorbed depends on its colour. Silicon has absorbed 63 % of blue light by about ${n1(absorptionDepth(450), 2)} µm, of green by ${n1(absorptionDepth(550), 1)}, of red by ${n1(absorptionDepth(650), 1)}, and of near infrared at 900 nm only by ${g(absorptionDepth(900))} µm (M. A. Green's table, 2008). A diode a few micrometres deep catches visible light well and lets most infrared go through.</p>
         <p>The share of photons that become counted electrons is the <strong>quantum efficiency</strong> (QE). It loses light above the silicon (microlens, colour filter, metal wiring) and light absorbed where nothing collects it. A front-illuminated pixel is lit through its own metal layers. A back-illuminated one is thinned and turned over, so light reaches the diode first: the Sony IMX183 reaches 79 % at 525 nm (FLIR's EMVA 1288 measurement). The curves are a one-dimensional absorption model fitted to such points, not a simulation of the device.</p>
         <div class="try">Move the wavelength from 400 to 1000 nm and watch the depth where the light is used up pass the back-illuminated diode's 3 µm.</div>`;
       },
@@ -87,15 +87,16 @@ export const chSensors: Chapter = {
         return `
         <p>A charge-coupled device keeps each pixel's electrons in a potential well under a gate and moves them all to one amplifier. Three gates per pixel, clocked in phases: the packet sits under the gate held high; raise the next one, lower the first, and the packet slides over. Six steps of the three clocks move every packet in the array one pixel at once, like a bucket brigade (Boyle and Smith, Bell Labs, 1969).</p>
         <p>The numbers here are the Teledyne e2v CCD42-40, a scientific full-frame sensor: ${g(CCD42_40.cols)} × ${g(CCD42_40.rows)} pixels of ${CCD42_40.pitch} µm, three-phase image and register clocks, ${g(CCD42_40.fullWell)} e⁻ per pixel, ${CCD42_40.cg} µV per electron at the output. The rows shift down into a serial register, which shifts along to the output amplifier, the only place a charge becomes a voltage. Each gate is about ${n1(CCD42_40.gateLength, 1)} µm long: that is the pixel over three, as the datasheet gives no gate length.</p>
-        <p>Every transfer leaves a little behind. The charge-transfer efficiency (CTE) is 99.9999 % per transfer in the image area and 99.9993 % in the register, and the far corner's charge makes ${g(4096)} transfers: ${n1(ccdRetained(2047, 2047) * 100, 1)} % of it arrives, the loss mostly in the register (${n1((1 - CCD42_40.cteSerial ** 2048) * 100, 1)} % over its ${g(2048)} transfers against ${n1((1 - CCD42_40.cteParallel ** 2048) * 100, 1)} % in the image area). At 99 % it would be gone. Reading the frame through one amplifier takes ${n1(ccdReadTime(3e6), 1)} s at 3 MHz, or ${n1(ccdReadTime(20e3) / 60, 1)} minutes at the 20 kHz where the noise is lowest (${CCD42_40.readNoise} e⁻). Consumer interline CCDs such as the Sony ICX285 (${ICX285.pitch} µm) clock their vertical registers in four phases instead, two gates high at a time: try both.</p>`;
+        <p>Every transfer leaves a little behind. The charge-transfer efficiency (CTE) is 99.9999 % per transfer in the image area and 99.9993 % in the register, and the far corner's charge makes ${g(4096)} transfers: ${n1(ccdRetained(2047, 2047) * 100, 1)} % of it arrives, the loss mostly in the register (${n1((1 - CCD42_40.cteSerial ** 2048) * 100, 1)} % over its ${g(2048)} transfers against ${n1((1 - CCD42_40.cteParallel ** 2048) * 100, 1)} % in the image area). At 99 % it would be gone. Reading the frame through one amplifier takes ${n1(ccdReadTime(3e6), 1)} s at 3 MHz, or ${n1(ccdReadTime(20e3) / 60, 1)} minutes at the 20 kHz where the noise is lowest (${CCD42_40.readNoise} e⁻). Consumer interline CCDs such as the Sony ICX285 (${ICX285.pitch} µm) clock their vertical registers in four phases instead, two gates high at a time: try both.</p>
+        <div class="try">Step the clocks: a packet moves one pixel in six steps (three-phase) or four (four-phase). Then lower the CTE and watch the trail it leaves behind.</div>`;
       },
       widget: () => withModel(ccdWidget(), ccd3d()),
       challenge: {
         kind: 'quiz', question: 'A CCD with 99.99 % CTE moves a corner pixel through 4000 transfers. About how much of its charge reaches the amplifier?',
-        options: ['67 %', '99.99 %', '96 %', '40 %'],
+        options: ['67 %', '99.99 %', '96 %', '45 %'],
         answer: 0,
         explain: '0.9999^4000 = e^(−0.4) ≈ 0.67: a third is smeared into the pixels behind. That is why scientific CCDs need six nines.',
-        why: ['', 'That is one transfer, not 4000.', 'That would need 99.999 %.', 'That would be about 99.98 %.'],
+        why: ['', 'That is one transfer, not 4000.', 'That would need 99.999 %.', 'That is what 99.98 % per transfer would leave.'],
       },
     },
     {
@@ -104,7 +105,7 @@ export const chSensors: Chapter = {
         return `
         <p>A CMOS sensor gives every pixel its own amplifier, so nothing has to cross the array as charge. The usual pixel has four transistors (4T). A <strong>pinned photodiode</strong> collects the electrons; a transfer gate TX empties it onto a small node, the floating diffusion FD; a reset transistor RST sets FD to the supply; a source follower SF copies FD's voltage, and a select switch SEL puts it on the column line that every pixel in the column shares.</p>
         <p>FD's capacitance sets the gain: an electron moves it by q / C. At ${CG_4T} µV per electron FD is ${n1(C_FD_FF, 2)} fF. Sony does not publish the IMX183's conversion gain, so ${CG_4T} µV/e⁻ is an illustrative value for a ${IMX183.pitch} µm pixel; its full well of ${g(IMX183.fullWell)} e⁻ then moves FD ${g(IMX183.fullWell * CG_4T / 1000)} mV.</p>
-        <p>One readout of a row: RST pulses, the column samples FD's reset level (SHR); TX pulses and the photodiode's electrons pull FD down; the column samples again (SHS). The reset leaves FD randomly off its nominal level, √(kTC)/q = ${n1(ktcNoise(C_FD_FF), 1)} e⁻ rms here, and the error stays until the next reset. Both samples carry it, so their difference does not. This is <strong>correlated double sampling</strong> (CDS). The pinned photodiode is what makes it possible: it empties completely through TX, so the reset happens before the charge arrives (Fossum and Hondongwa, 2014).</p>
+        <p>One readout of a row: RST pulses, the column samples FD's reset level (sample-and-hold reset, SHR); TX pulses and the photodiode's electrons pull FD down; the column samples again (sample-and-hold signal, SHS). The reset leaves FD randomly off its nominal level, √(kTC)/q = ${n1(ktcNoise(C_FD_FF), 1)} e⁻ rms here, and the error stays until the next reset. Both samples carry it, so their difference does not. This is <strong>correlated double sampling</strong> (CDS). The pinned photodiode is what makes it possible: it empties completely through TX, so the reset happens before the charge arrives (Fossum and Hondongwa, 2014).</p>
         <div class="try">Press "Another reset" a few times: the signal sample alone wanders by tens of electrons, the CDS result stays put.</div>`;
       },
       widget: () => withModel(pixelWidget(), pixel4t3d()),
@@ -120,7 +121,7 @@ export const chSensors: Chapter = {
       title: 'The pixel, switch by switch',
       body: `
         <p>Here is the pixel in transistors, solved at switch level. The photodiode and the floating diffusion are nodes that keep their charge; when TX joins them they share it, ΣCV / ΣC. Reset, expose and read it: a dark pixel leaves FD high, the follower conducts and the column reads H, a threshold below the supply, as a real follower's output sits. A bright one pulls FD below the threshold, the follower turns off and the column's load pulls it to 0.</p>
-        <p>The switch-level solver knows 0, 1, weak levels and shared charge, not a follower's analog output, so the voltages in between are the previous step's. A real pinned photodiode empties completely into FD rather than sharing; full light against none reads the same either way.</p>
+        <p>The switch-level solver knows 0, 1, weak levels and shared charge, not a follower's analog output, so the column shows H or 0 and never the voltage between. A real pinned photodiode empties completely into FD rather than sharing; full light against none reads the same either way.</p>
         <div class="try">Reset, then Light, then Read. Then Reset, Dark, Read, and compare the columns.</div>`,
       scene: pixelScene,
       lit: '',
@@ -137,7 +138,7 @@ export const chSensors: Chapter = {
       get body() {
         return `
         <p>A CMOS sensor reads a row at a time, and converts every column of it at once. Each column has a comparator and a counter; one ramp, shared by all, rises a step a clock. A column's counter runs until the ramp passes its sample. That is a <strong>single-slope ADC</strong>, slow alone (2<sup>12</sup> clocks for 12 bits, ${n1(singleSlopeTime(12, 400e6) * 1e6, 2)} µs at 400 MHz) and fast in parallel: the IMX183 converts its ${g(IMX183.cols)} columns together.</p>
-        <p>The counter can do the CDS subtraction itself. Count <em>down</em> while the ramp is below the reset level, then <em>up</em> while it is below the signal level: what is left is signal − reset (Nitta et al., ISSCC 2006). The circuit here is that, in gates: a ${5}-bit ramp counter, a comparator and an up/down counter per column, four columns. The ramp is a counter's value, where silicon has an analog ramp and an analog comparator per column; the arithmetic is the same.</p>
+        <p>The counter can do the CDS subtraction itself. Count <em>down</em> while the ramp is below the reset level, then <em>up</em> while it is below the signal level: what is left is signal − reset (Nitta et al., ISSCC 2006). The circuit here is that, in gates: a ${ADC_BITS}-bit ramp counter, a comparator and an up/down counter per column, ${ADC_COLS} columns. The ramp is a counter's value, where silicon has an analog ramp and an analog comparator per column; the arithmetic is the same.</p>
         <div class="try">Convert the row, then draw other offsets and convert again: each column's reset differs, the counts do not.</div>`;
       },
       scene: adcScene,
@@ -186,8 +187,8 @@ export const chSensors: Chapter = {
       title: 'What limits a pixel',
       get body() {
         return `
-        <p>Three noises decide what a pixel can see. <strong>Shot noise</strong>: photons arrive at random, so N electrons vary by √N, and the SNR can never beat √N. <strong>Read noise</strong>: the amplifier and the ADC add a few electrons whatever the light, ${IMX183.readNoise} e⁻ for the IMX183 and ${CCD42_40.readNoise} e⁻ for the CCD42-40 read slowly. <strong>Dark current</strong>: heat lifts electrons too, ${g(CCD42_40.darkAt293)} e⁻ a pixel a second in the CCD42-40 at 20 °C, halving about every 8 K near room temperature and every 3 K by −100 °C (its datasheet's law, steeper as it cools): ${n1(darkCurrent(173) * 3600, 1)} e⁻ an hour at −100 °C, which is why astronomers cool their cameras.</p>
-        <p>In the dark the read noise rules; above a few tens of electrons the photons' own randomness does; at the top the <strong>full well</strong> stops the count. Full well over read noise is the dynamic range: ${n1(dynamicRangeDb(IMX183), 1)} dB for the IMX183 (${g(IMX183.fullWell)} e⁻ over ${IMX183.readNoise}), ${n1(dynamicRangeDb(CCD42_40), 1)} dB for the CCD42-40, whose ${CCD42_40.pitch} µm pixels hold ten times the charge. Smaller pixels hold less charge and catch less light, which is why phone sensors combine several pixels in the dark.</p>
+        <p>Three noises decide what a pixel can see. <strong>Shot noise</strong>: photons arrive at random, so N electrons vary by √N, and the SNR can never beat √N. <strong>Read noise</strong>: the amplifier and the ADC add a few electrons whatever the light, ${IMX183.readNoise} e⁻ for the IMX183 and ${CCD42_40.readNoise} e⁻ for the CCD42-40 read slowly. <strong>Dark current</strong>: heat lifts electrons too, ${g(CCD42_40.darkAt293)} e⁻ a pixel a second in the CCD42-40 at 20 °C, halving for about every 8 K of cooling near room temperature, and for every 3 K by −100 °C (its datasheet's law, steeper as it cools): ${n1(darkCurrent(173) * 3600, 1)} e⁻ an hour at −100 °C, which is why astronomers cool their cameras.</p>
+        <p>In the dark the read noise rules; above about ten electrons the photons' own randomness does; at the top the <strong>full well</strong> stops the count. Full well over read noise is the dynamic range: ${n1(dynamicRangeDb(IMX183), 1)} dB for the IMX183 (${g(IMX183.fullWell)} e⁻ over ${IMX183.readNoise}), ${n1(dynamicRangeDb(CCD42_40), 1)} dB for the CCD42-40, whose ${CCD42_40.pitch} µm pixels hold ten times the charge. Smaller pixels hold less charge and catch less light, which is why phone sensors combine several pixels in the dark.</p>
         <p>QE at 525 nm is ${Math.round(qe(525, STACK_BSI) * 100)} % back-illuminated against about ${Math.round(qe(525, STACK_FSI) * 100)} % front-illuminated in the model: the one number a design can still raise when the noise is down to the photons.</p>`;
       },
       widget: () => noiseWidget(),
