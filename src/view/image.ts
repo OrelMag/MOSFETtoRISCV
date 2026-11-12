@@ -18,16 +18,17 @@ const PROPS = [
 ];
 
 /** Layers that are editing feedback, not the circuit (hit areas, previews, the grid, probe flags). */
-const DROP = '.wire-hits, .ed-over, .grid-bg, .probes, .lg-names, .lg-name, defs';
+const DROP = '.wire-hits, .ed-over, .grid-bg, .probes, .lg-names, .lg-name, .ov-tip, defs';
 
 /** Grid units → output pixels (1 unit = 10 px, like the schematics). */
 const UNIT = 10;
 
 export function svgImage(svg: SVGSVGElement, box: ViewBox, background: string): string {
   // The readable-view rule (view/legible.ts) hides small text and adds fixed-size names: an export keeps every text, as drawn.
-  const lg = svg.classList.contains('lg');
-  svg.classList.remove('lg');
-  try { return svgImageOf(svg, box, background); } finally { if (lg) svg.classList.add('lg'); }
+  // An overlay (view/overlays.ts: the ov and ov-<kind> classes) tints parts and wires for a legend the file would not carry: export the circuit's own colours.
+  const off = [...svg.classList].filter((c) => c === 'lg' || c === 'ov' || c.startsWith('ov-'));
+  svg.classList.remove(...off);
+  try { return svgImageOf(svg, box, background); } finally { svg.classList.add(...off); }
 }
 
 function svgImageOf(svg: SVGSVGElement, box: ViewBox, background: string): string {

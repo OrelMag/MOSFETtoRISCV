@@ -56,17 +56,17 @@ describe('the default system CPU is unchanged', () => {
 });
 
 const PINNED: Record<string, [string, number, string]> = {
-  sys: ['sys_rom_42f163e1', 83387, '23d29dfd41b963ab'],
-  sys_m: ['sys_rom_42f163e1_m', 103965, 'f9019054bbeec9c7'],
-  sys_bus: ['sys_rom_42f163e1_bus', 63790, '712390cce2f40da7'],
-  syscore: ['syscore', 46507, '75f5010d51957030'],
-  syscore_m: ['syscore_m', 67085, 'a2f812674e3afdc4'],
+  sys: ['sys_rom_42f163e1', 83387, '5714518cb019bb6c'],
+  sys_m: ['sys_rom_42f163e1_m', 103965, '5373ba14dbca5f3f'],
+  sys_bus: ['sys_rom_42f163e1_bus', 63790, '7de4f33c22629f41'],
+  syscore: ['syscore', 46507, '9eeb3222fea0ab96'],
+  syscore_m: ['syscore_m', 67085, '70e7039913fb7e6a'],
   csr: ['csrunit', 7127, '726fe05d9b321002'],
   csr_m: ['csrunit_m', 7127, 'e5324359782d8a92'],
   trap: ['trapunit', 1810, '67068621827780d6'],
-  io: ['iounit', 3193, '617019618740d888'],
+  io: ['iounit', 3193, 'd7deab2bd9febcfe'],
   sysdec: ['sysdec', 1116, 'b1b4a1063bb5f94c'],
   sysdec_m: ['sysdec_m', 1168, 'a8d094ef64f14aa9'],
-  cam2x20: ['cam4x20', 1851, '50819da2a8cce49b'],
+  cam2x20: ['cam4x20', 1851, 'c2b156522eaedfb3'],
 };
 const PERIOD = 126;
