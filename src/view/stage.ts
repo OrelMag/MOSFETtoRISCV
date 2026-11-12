@@ -1496,7 +1496,8 @@ export class Stage {
       openCodex: (id) => go(`#/campaign/codex/${id}`),
       openChapter: go,
       // the table is of the level the menu is on (not the part clicked): disabled, with the reason, where it cannot be made
-      breakPart: { run: () => this.why.showParts(at, c), part: !!c, why: ablationRefusal(ctx.def) },
+      // (a clocked level has storage, which the card refuses after a flatten too costly to run as the menu opens)
+      breakPart: { run: () => this.why.showParts(at, c), part: !!c, why: ablationRefusal(ctx.def) ?? (ctx.def.ports.some((p) => p.clock) ? 'it has feedback (storage)' : null) },
     } };
   }
 
