@@ -358,7 +358,7 @@ export const chRegfile: Chapter = {
         memory array from <a href="#/c/memory/0">chapter ${numOf('memory')}</a> with a second mux tree.</p>
         <p>All register outputs are bundled into <span data-show="bundle">one wide bus</span> feeding both read ports; that is the usual way to draw
         "every word reaches every port". Register <span data-show="x0">x0</span> does not exist: its slot is a constant 0, and writes to it go nowhere.
-        That gives <code>li</code>, <code>nop</code>, <code>j</code>, <code>beqz</code>, <code>neg</code> and <code>ret</code> for free as pseudo-instructions, each an ordinary instruction with x0 as a source or destination.</p>
+        That gives <code>li</code>, <code>nop</code>, <code>j</code>, <code>beqz</code>, <code>neg</code> and <code>ret</code> for free as pseudo-instructions (names that <a href="#/c/isa/3">chapter ${numOf('isa')}</a> turns into a real instruction), each an ordinary instruction with x0 as a source or destination.</p>
         <p>A machine that finishes one instruction per cycle does both reads and the write in one clock. Reads are combinational: the address goes into a mux tree and the word comes out after its delay, with no clock involved.
         A write must change state, so it happens only at the rising edge and only where the decoder and <code>we</code> enable one register. Reading a register while writing it gives the old
         value until the edge, which is what such a machine wants: the instruction reads its operands first and the result lands at the end of the cycle.</p>
@@ -382,7 +382,7 @@ export const chRegfile: Chapter = {
         derive: `<p>One register of 8 bits is 8 enable flip-flops. The write decoder turns a 3-bit address into one of 8 enables, the bundle puts all 8 words side by side on one bus, and each read port is an 8:1 mux
           per bit, three stages of 2:1 muxes. Scaled to 32 registers of 32 bits the structure is the same and the next step prices it: the storage grows with the number of registers, the ports with
           registers × width × ports.</p>`,
-        pitfall: `<p>An instruction that reads a register another instruction is writing in the same cycle sees the old value. That is correct here and a bug in a pipeline, where the writer is three stages
+        pitfall: `<p>An instruction that reads a register another instruction is writing in the same cycle sees the old value. That is correct here and a bug in a <span data-ahead="pipeline">pipeline (instructions overlapped in stages)</span>, where the writer is three stages
           past the reader: the pipelined chapter adds a bypass for exactly this case. If a value "does not arrive" in the register file, check whether the write has happened at an edge yet.</p>`,
         real: `<p>Real register files are SRAM-like arrays with the read ports built in, and some are written in the first half of the cycle and read in the second so that a write and a read of the same register
           in one cycle can see each other. The mux-tree form here is correct but about as expensive as storage gets.</p>`,
@@ -409,7 +409,7 @@ export const chRegfile: Chapter = {
         mux tree. Register-file port count is a first-order cost in superscalar cores for exactly this reason.</p>
         <p>The split is worth reading: ${Math.round((100 * RF_COST.regs) / RF_COST.total)} % of the NANDs are the storage itself, ${Math.round((200 * RF_COST.port) / RF_COST.total)} % the two read ports and the decoder about
         ${Math.round((100 * RF_COST.dec) / RF_COST.total)} %. The registers are the part you cannot avoid; the ports are the part that grows with ambition. Doubling the issue width of a core roughly
-        doubles the ports and, because each port also fans out to more storage, grows the file much faster than the instruction count it serves.</p>
+        doubles the ports, and in gates each port is another full tree over all the storage.</p>
         <div class="try">Set wa = 10, wd = 0xCAFE, we = 1 and Pulse, then open <code>rp1</code>: each output bit comes from a tree of 31 2:1 muxes, five levels deep.</div>`,
       scene: () => ({ root: regfile(5, 32), inputs: { wa: 10, wd: 0xcafe, we: 1, clk: 0, ra1: 10, ra2: 0 } }),
       more: {
@@ -422,7 +422,7 @@ export const chRegfile: Chapter = {
           <tr><td>2 read ports</td><td>${fmt(2 * RF_COST.port)}</td><td>${Math.round((200 * RF_COST.port) / RF_COST.total)} %</td></tr>
           <tr><td>decoder, bundle</td><td>${fmt(RF_COST.dec)}</td><td>${Math.round((100 * RF_COST.dec) / RF_COST.total)} %</td></tr></table>`,
         real: `<p>A 6-transistor memory cell stores a bit in six transistors against this design's ${RF_COST.perBit * 4} a bit (${RF_COST.perBit} NANDs of four transistors each). A register-file cell with two read ports and one write port is
-          about ten, because each read port adds two transistors (a pass gate and its enable) instead of a whole tree. That is the saving the paragraph above describes: ports in custom cells are cheap, and ports
+          about ten, because each read port adds two transistors (a pass gate and its enable) instead of a whole tree. That is the saving the step's second paragraph describes: ports in custom cells are cheap, and ports
           in gates are not.</p>`,
         pitfall: `<p>Do not read the register file's NAND count as the cost of "32 registers" in general: it is the cost of this construction. Changing from 2 to 3 read ports or from 32 to 16 registers moves the
           total by tens of percent, and a custom array changes the whole shape of the answer.</p>`,
@@ -620,7 +620,7 @@ export const chIsa: Chapter = {
         <p>RV32I has neither <code>mv</code> nor <code>li</code> nor <code>ret</code> nor <code>call</code>. Those are <strong>pseudo-instructions</strong>: names the assembler accepts and replaces with one or two real ones. They cost the hardware nothing, which is the design point:
         <code>x0</code> reads as 0 and discards writes, so most of them are an ordinary instruction with x0 in a slot. The table is made by running each line through this site's assembler; nothing in it is typed.</p>
         <ul>
-        <li><strong>x0 in a slot.</strong> <code>neg</code> a subtraction from zero, <code>beqz</code> a compare against zero, <code>j</code> a <code>jal</code> that discards the link, <code>ret</code> is <code>${expand('ret').words[0]}</code>. <code>mv a0, a1</code> uses a zero immediate instead: <code>${expand('mv a0, a1').words[0]}</code>.</li>
+        <li><strong>x0 in a slot.</strong> <code>neg</code> is a subtraction from zero, <code>beqz</code> a compare against zero, <code>j</code> a <code>jal</code> that discards the link, <code>ret</code> is <code>${expand('ret').words[0]}</code>. <code>mv a0, a1</code> uses a zero immediate instead: <code>${expand('mv a0, a1').words[0]}</code>.</li>
         <li><strong>Operands swapped.</strong> There is no <code>bgt</code>: the assembler writes <code>${expand('bgt a0, a1, L').words[0].replace(/, 0x\d+$/, ', L')}</code>. Four comparisons (<code>blt</code>, <code>bge</code> and their unsigned forms) are enough when the operands can swap.</li>
         <li><strong>Constants.</strong> <code>li</code> is one word if the value fits a signed 12-bit immediate (−2048 … 2047), a lone <code>lui</code> if the low 12 bits are 0, and otherwise two: <code>lui</code> for the top 20 bits, <code>addi</code> for the low 12. Because addi sign-extends, the top part is rounded: 0x12845 is <code>${expand('li t0, 0x12845').words.join('  ;  ')}</code>.</li>
         <li><strong>Addresses.</strong> <code>la</code>, <code>call</code> and <code>tail</code> are an <code>auipc</code> (PC + upper 20 bits) and a 12-bit completion, so a symbol anywhere within ±2 GiB is reached without a fixed address: <code>${expand('call L').words.join('  ;  ')}</code>.</li>
@@ -873,7 +873,7 @@ export const chSingleCycle: Chapter = {
       title: 'The control table',
       body: `
         <p>The datapath does whatever its multiplexers and write enables say. The <span data-show="ctl">control unit</span> is where an instruction's meaning becomes those settings, and it is small: a function of the opcode (7 bits), funct3 (3) and funct7 (7), ${CONTROL_NANDS} NANDs and ${logicDepth(CONTROL)} NAND delays deep, with no state. It decodes the opcode to one of nine classes, then each output is an OR of the classes that need it. The panel beside the circuit is that table, evaluated by the simulator on one instruction of each class: <strong>click a row</strong> to run that instruction on the datapath and watch the signals.</p>
-        <p>Read it by columns. <strong>RegWrite</strong> is 1 for everything but stores and branches; <strong>MemWrite</strong> is the store class and nothing else; <strong>ResultSrc</strong> picks what is written back: the ALU, the memory word, PC + 4 (the link of a jump) or the immediate (<code>lui</code>). <strong>SrcA</strong> is the PC only for <code>auipc</code>, <strong>SrcB</strong> the register for R-type and branches, where it matters (<code>jal</code> and <code>lui</code> show rs2 as well, unused). <strong>ImmSrc</strong> names the immediate format of chapter ${numOf('isa')}; a column that does not matter for a class (the ImmSrc of an <code>add</code>) is whatever the logic gives, not a don't care the gates exploit.</p>
+        <p>Read it by columns. <strong>RegWrite</strong> is 1 for everything but stores and branches; <strong>MemWrite</strong> is the store class and nothing else; <strong>ResultSrc</strong> picks what is written back: the ALU, the memory word, PC + 4 (the link of a jump) or the immediate (<code>lui</code>). <strong>SrcA</strong> is the PC only for <code>auipc</code>, <strong>SrcB</strong> picks rs2 for R-type and branches and the immediate otherwise (the table also shows rs2 for <code>jal</code> and <code>lui</code>, where nothing uses it). <strong>ImmSrc</strong> names the immediate format of chapter ${numOf('isa')}; a column that does not matter for a class (the ImmSrc of an <code>add</code>) is whatever the logic gives, not a don't care the gates exploit.</p>
         <p>The one column with real logic is <strong>ALUControl</strong>. R-type passes {funct7[5], funct3}: <code>add</code> and <code>sub</code> differ in that bit alone. OP-IMM passes funct3 only, because bit 30 of an <code>addi</code> is part of its immediate; the exception is <code>srai</code>, which is how it differs from <code>srli</code>. Loads, stores, <code>jalr</code> and <code>auipc</code> force ADD whatever their funct3 says (it holds a width or nothing), and branches force SUB. The branch kind then reads the ALU's flags.</p>
         <p>Because a new instruction is a new row, the cost of one is countable: the last step of this chapter adds a row and prices it.</p>
         <div class="try">Click <code>sw</code>, then <code>lw</code>: only RegWrite, MemWrite, ResultSrc and ImmSrc (I against S) differ, and the ALU adds rs1 and the immediate either way.</div>`,
@@ -1047,7 +1047,7 @@ export const chSingleCycle: Chapter = {
       title: 'Run real programs',
       body: `
         <p>Pick a program in the panel, or write your own with <strong>Edit</strong>. <strong>Run to halt</strong> clocks the
-        gate-level machine as fast as your browser allows, about 200 cycles per second for ~200 000 transistors.</p>
+        gate-level machine, ~200 000 transistors, as fast as your browser allows.</p>
         <p>Supported: all of RV32I except byte/halfword loads and stores, <code>fence</code>, <code>ecall</code>, <code>ebreak</code>.
         A jump to itself is treated as halt.</p>
         <p>What this checks is the point of the exercise. After every clock cycle the panel compares all 32 registers, the PC and the memory with the instruction-set simulator, which was written
@@ -1068,7 +1068,7 @@ export const chSingleCycle: Chapter = {
       },
       more: {
         derive: `<p>Cycle count of the program: four setup instructions, 6 per iteration × 12 iterations, one final jump to itself: 4 + 72 + 1 = 77 instructions, and 77 cycles, since each takes one. The
-          challenge says "about 75" for that reason. At roughly 200 cycles per second in the browser, the run takes under half a second; at the 155-delay period and the illustrative 25 ps a delay of chapter ${numOf('fastadd')}, a cycle is about
+          challenge says "about 75" for that reason. In the browser the run takes a fraction of a second; at the 155-delay period and the illustrative 25 ps a delay of chapter ${numOf('fastadd')}, a cycle is about
           4 ns and the whole run about 0.3 µs.</p>`,
         pitfall: `<p>A program that "works" on the simulator and not on the gates, or the reverse, almost always uses an instruction the hardware leaves out: byte and halfword accesses, <code>fence</code>,
           <code>ecall</code>. The panel stops at the first mismatch and names the register: start there, not at the end of the run.</p>`,
@@ -1118,7 +1118,7 @@ export const chSingleCycle: Chapter = {
         opcode[6:2] only, so funct3 and funct7 are free for the instruction's own use and one opcode holds one instruction; a decoder that also matches funct3 shares an opcode among eight, for
         a few ANDs more per instruction.</p>
         <p>What it buys: the loop on the left sums eight words. Without the instruction each element takes <code>add t4, a0, t0</code> and <code>lw t2, 0(t4)</code>; with <code>lwx</code> it is one instruction,
-        4 cycles an iteration instead of 5. The draft row below only adds and writes nothing. The panel is the row editor of the sandbox's <em>Custom instructions…</em> dialog: set the signals, build the CPU and run.
+        4 cycles an iteration instead of 5. The draft row in the panel only adds and writes nothing. The panel is the row editor of the sandbox's <em>Custom instructions…</em> dialog: set the signals, build the CPU and run.
         The golden model executes the same row, so lock step with it will agree with a wrong definition as well; the program's answer is what says it is the one you meant.</p>`,
       scene: () => ownInstrScene(),
       lit: 'The control unit (ctl) grows by the new class; the data path stays as it was.',

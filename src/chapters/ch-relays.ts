@@ -80,7 +80,7 @@ export const chRelays: Chapter = {
         ${ms(PULL.pull ?? 0)} V and opens only below ${ms(PULL.drop ?? 0)} V, and it is closed for good
         ${ms(RELAY_STEP_MS)} ms after the current is switched on, bounces included. That time is the
         <strong>relay step</strong> the rest of this chapter counts in.</p>
-        <p>Two properties of this curve carry the rest of the chapter. First, <strong>hysteresis</strong>: closing the
+        <p>Two properties of the curve in the close-up carry the rest of the chapter. First, <strong>hysteresis</strong>: closing the
         armature across the open gap takes ${ms(PULL.pull ?? 0)} V, but once it is in, the gap is nearly gone and a
         fraction of the current holds it, so it lets go only at ${ms(PULL.drop ?? 0)} V. A supply that sags between the two
         changes nothing. And because the coil's own contact keeps the full supply on it, a relay can hold a bit (step 6); the hysteresis is margin on top. Second, <strong>time</strong>: the
@@ -121,9 +121,9 @@ export const chRelays: Chapter = {
         <p>In a schematic <span data-show="r">a relay</span> is its coil (left) and its contacts (right), joined by a dashed line for the
         armature. The blade rests on NC; drive <span data-show="pin:a"><code>a</code></span> to 1 and it moves to NO. Not at once: the coil lights up
         first, and the blade follows one relay step later.</p>
-        <p>Here the relay's break contact connects <span data-show="vdd">VDD</span> to <span data-show="pin:y"><code>y</code></span>: y always takes the opposite of a. Every relay circuit in this
+        <p>Here the relay's break contact connects <span data-show="vdd">VDD</span> (the supply) to <span data-show="pin:y"><code>y</code></span>: y always takes the opposite of a. Every relay circuit in this
         chapter moves in relay steps, all relays together, and the status line counts them.</p>
-        <p>This gate costs ${stats(RELAY_NOT).relays} relay and uses one of its poles; the others could serve other gates reading the same signal.
+        <p>This gate costs ${stats(RELAY_NOT).relays} relay and uses one of its poles (a pole is one set of contacts); the others could serve other gates reading the same signal.
         The output is a <em>connection to a rail</em>: whichever rail the contact touches, the line gets the supply's full voltage,
         so there is no level to degrade from gate to gate.</p>
         <div class="try">Toggle <code>a</code>, then use Step: the coil carries current a whole step before the contact moves.</div>`,
@@ -152,13 +152,13 @@ export const chRelays: Chapter = {
       body: `
         <p>A contact is two pieces of metal touching. It passes whatever is on one side to the other, in both
         directions and at full strength, with no threshold to lose (the transistor of <a href="#/c/mosfet/0">chapter ${numOf('mosfet')}</a>,
-        ahead, will lose one). The contacts are also isolated from the coil that moves them: a line on a contact never
+        later in the book, does lose one). The contacts are also isolated from the coil that moves them: a line on a contact never
         disturbs the coil.</p>
         <p>An open contact leaves its line connected to nothing, so why does <code>y</code> read 0 here? Because in a
         relay machine every line ends on the <strong>coil</strong> of the next relay, and a coil is a resistor to ground:
         an undriven line is pulled to 0 through it. The <span data-show="ld"><em>load</em></span> drawn on <code>y</code> stands for that coil.
         That is relay logic's convention: <strong>voltage means 1, no connection means 0</strong>.</p>
-        <p>This NAND puts <span data-show="ra rb">the two relays'</span> break contacts in parallel from VDD: the output is connected unless both
+        <p>This NAND (a gate whose output is 0 only when both inputs are 1) puts <span data-show="ra rb">the two relays'</span> break contacts in parallel from VDD: the output is connected unless both
         coils pull. A relay machine pays per <em>signal</em>, not per gate: each signal gets one coil, and that relay's
         ${RELAY_CONTACTS} poles are ${RELAY_CONTACTS} gate inputs reading it. A NAND-mapped machine needs about one relay
         per NAND output, plus one more for every ${RELAY_CONTACTS} readers past the first ${RELAY_CONTACTS}.</p>
@@ -204,10 +204,10 @@ export const chRelays: Chapter = {
       title: 'What contacts are good at',
       body: `
         <p>A changeover contact chooses between two lines. <span data-show="ra">Relay <code>a</code></span> puts VDD on one of two lines (L0 when
-        released, L1 when operated), and <span data-show="rb">relay <code>b</code></span> connects the output to the other one. The output is 1 when
+        released, L1 when operated), and <span data-show="rb">relay <code>b</code></span> connects the output to L1 when released and to L0 when operated. The output is 1 when
         exactly one of them pulled: an <strong>XOR</strong>, from two relays and one relay step.</p>
-        <p>In <span data-ahead="cmos">CMOS (the transistor logic of chapters ${numOf('mosfet')} to ${numOf('nand')})</span>, through this site's NAND brick an XOR is 4 NANDs, 16 transistors, 3 gate delays deep (a dedicated CMOS cell takes about 12). Changeover contacts make selection nearly
-        free: here the relay is in its own style.</p>
+        <p>In <span data-ahead="cmos">CMOS (the transistor logic of chapters ${numOf('mosfet')} to ${numOf('nand')})</span>, through this site's NAND brick an XOR takes 4 NANDs (a dedicated cell, about 12 transistors). Changeover contacts make selection nearly
+        free, which is where a relay does best.</p>
         <p>The XOR is ${stats(RELAY_XOR).relays} relays against ${stats(XOR).nands} NANDs (${stats(XOR).transistors} transistors, ${logicDepth(XOR)} gate delays) in the
         brick. The same contacts make a two-way selector or a comparator just as cheaply: here the unit of price is the pole, not the gate.</p>`,
       scene: () => ({ root: RELAY_XOR, inputs: { a: 1, b: 0 }, animate: true }),
@@ -375,7 +375,7 @@ export const chRelays: Chapter = {
         included. A NAND in <span data-ahead="cmos">CMOS (the transistor logic of chapters ${numOf('mosfet')} to ${numOf('nand')})</span> switches in about ${PS_PER_NAND} ps on femtojoules and takes about ${NAND2_UM2} µm² of
         silicon.</p>
         <p>Contacts wear out. Every contact feeds a coil, and breaking a coil's current is breaking an inductor: its
-        stored energy has to go somewhere, and what a quench path (the first step's resistor) does not take arcs across
+        stored energy has to go somewhere, and what a quench path (the resistor across the coil, in the first step's layers) does not take arcs across
         the opening gap. Each arc pits one contact and plates metal onto the other. Contacts are rated for some ${thin(CONTACT_LIFE / 1e6)} million operations under load; a relay switching on
         every cycle of a ${Z3.hz} Hz clock spends that in about ${Math.round(CONTACT_LIFE / Z3.hz / 86400)} days. Dust and
         oxide films open contacts too: the "bug" taped into the log of a Mark II relay computer in 1947 was a moth caught in a relay.</p>

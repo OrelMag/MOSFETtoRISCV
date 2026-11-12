@@ -45,7 +45,7 @@ describe('chapter 15: the numbers in the text', () => {
     while (!iss.halted) { if (iss.pc === fib) calls++; iss.step(); minSp = Math.min(minSp, iss.x[2]); }
     expect(iss.steps).toBe(721);
     expect(calls).toBe(41);
-    quoted('721 cycles for its 13');
+    quoted('fib(7) = 13 takes 721 cycles');
     expect(c.asm).toMatch(/fib:\n\s+addi sp, sp, -8\n/);
     // seven frames of ra and n, plus the t0 words waiting across the second calls
     expect(c.layout!.stackTop - minSp).toBeGreaterThanOrEqual(7 * 8);

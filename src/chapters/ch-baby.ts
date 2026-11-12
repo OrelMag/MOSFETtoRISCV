@@ -112,11 +112,11 @@ export const chAppendixBaby: Chapter = {
         the charge changes, and the pulse is different for a dot and a dash. So one tube face holds a raster of bits, 32
         lines of 32.</p>
         <p>The charge does not stay. Kilburn's report of December 1947 gives the screen a memory "of the order of 0.2
-        seconds". At the machine's beat of ${BEAT_US} µs (32 digits of ${DIGIT_US} µs and four of fly-back) that is
+        seconds". At the beat of Kilburn's 1947 design, ${BEAT_US} µs (32 digits of ${DIGIT_US} µs and four of fly-back; the replica's manual gives 10 µs digits), that is
         about ${HOLD_BEATS} beats. Reading also disturbs the charge, so a read must be followed by a rewrite.</p>
         <p>The model shows the store tube with Kilburn's program on its face: the gun, the plates that steer the beam to a
         line and a digit, and the wire-mesh pick-up plate in front of the glass with its lead to the amplifier. The tube was
-        a commercial CV1131, 12 inches across; its other dimensions here are estimates.</p>`,
+        a commercial CV1131 (the sources disagree on the size of its face, 6 or 12 inches); its dimensions here are estimates.</p>`,
       widget: () => williams3d(ssemWords(FULL)),
     },
     {
@@ -135,7 +135,7 @@ export const chAppendixBaby: Chapter = {
         remainder is 0. With regeneration off, by then its
         charge has leaked away: it reads as all dots, 0, which is JMP 0, and the machine jumps instead of stopping. That
         happens after ${k(REGEN_OFF.instrs)} instructions, ${k(REGEN_OFF.beats)} beats, about
-        ${Math.round((REGEN_OFF.beats * BEAT_US) / 1e6)} seconds at 1948 speed.</p>
+        ${Math.round((REGEN_OFF.beats * BEAT_US) / 1e6)} seconds at the design's speed.</p>
         <p>The face is drawn as <strong>charge</strong> here: each line fades from the moment it was last written and comes
         back to full brightness when it is rewritten.</p>
         <div class="try">Press <strong>Regeneration on</strong> to turn it off, watch line 13 fade, and wait for the panel
@@ -206,7 +206,7 @@ export const chAppendixBaby: Chapter = {
     {
       title: 'Four beats',
       body: `
-        <p>The machine works in <strong>beats</strong>, one per clock edge here, ${BEAT_US} µs in 1948. An instruction is
+        <p>The machine works in <strong>beats</strong>, one per clock edge here, ${BEAT_US} µs in Kilburn's 1947 design (${(BEAT_US / DIGIT_US) * 10} µs at the 10 µs digit of the replica's manual). An instruction is
         four, and the panel lights the one the next edge ends:</p>
         <ul>
           <li><b>S1</b> (scan 1): CI = CI + 1, the <span data-show="stat">staticisor</span> (five flip-flops that hold a
@@ -291,7 +291,7 @@ export const chAppendixBaby: Chapter = {
       body: `
         <p>Programs were written on paper in the notebook's notation, converted to binary and set into the store line by
         line, each digit on one of a row of 32 buttons. Here you type them. The program in the box multiplies: with no adder, t + x is
-        written −(−t − x), so every addition is an LDN, a SUB and a STO, LDN, STO through a spare line. A counter in line
+        written −(−t − x), so every addition is five instructions: LDN, SUB, STO into a spare line, then LDN and STO again. A counter in line
         29 runs up from −y to 0 the same way, and CMP skips the Stop while it is still negative.</p>
         <p>As loaded, it leaves 7 × 6 = 42 in line 31. Lines 14 to 25 are never reached: an unused line holds 0, which is
         JMP 0.</p>`,

@@ -176,9 +176,24 @@ read upwards: 11 1110 1000 = 0x3E8 = 512 + 256 + 128 + 64 + 32 + 8</pre>`,
       'Reading the remainders top-down: the first remainder is bit 0.',
       'Assuming a left shift always doubles: the top bit falls off (0x8000 shifted left is 0 at 16 bits).',
     ],
-    chapters: [{ chapter: 'basics', step: 2, label: 'Counting with lamps' }, { chapter: 'binary', step: 0, label: 'Counting with two digits' }],
+    chapters: [{ chapter: 'basics', step: 3, label: 'Counting with lamps' }, { chapter: 'binary', step: 0, label: 'Counting with two digits' }],
   },
 
+  capacitance: {
+    idea: `Two conductors with an insulator between them hold equal and opposite charge, and the charge is proportional to the voltage between them: <strong>Q = C · V</strong>, with C in farads (coulombs per volt). No current crosses the gap, but while the voltage changes a current i = C · dv/dt flows in the wires on either side. C grows with the area facing each other and shrinks with the gap, which is why a transistor's gate (metal, a thin oxide, the channel) is one, and so is a wire against its neighbours.<br>Fed through a resistance R from a supply V, the voltage is v(t) = V · (1 − e<sup>−t/RC</sup>): 63 % after R · C, 99 % after five. The supply pushes Q · V = C · V² and the capacitor keeps half of it; the other half is heat in R, whatever R is. So a bigger C costs more time and more energy, a bigger R costs time only.`,
+    example: { title: 'A gate output, and the bench capacitor', body: `<pre>bench:  R = 1 kΩ, C = 1 000 µF, V = 1.5 V
+         RC = 1 s,  Q = C·V = 1.5 mC,  first current V/R = 1.5 mA
+         from the supply C·V² = 2.25 mJ  =  1.125 mJ stored + 1.125 mJ in R
+
+gate:    C = 5 fF, V = 1.8 V
+         swing 0 → 1 → 0 draws C·V² = 16 fJ</pre>` },
+    mistakes: [
+      'Thinking a smaller resistor makes the fill cheaper: it only makes it faster. The heat is ½ C V² for any R.',
+      'Counting the energy stored as the energy spent: the supply gives C · V² to fill it, and only half is still there afterwards.',
+      'Treating a capacitor as an open circuit always: for a steady voltage it is, but while the voltage changes it passes current i = C · dv/dt.',
+    ],
+    chapters: [{ chapter: 'basics', step: 1, label: 'A bucket of charge' }, { chapter: 'mosfet', step: 3, label: 'What one switch costs' }],
+  },
   hex: {
     idea: `Hexadecimal writes a binary word four bits per digit (0–9, then A–F for 10–15), so converting is a lookup per nibble with no arithmetic, and a 16-bit RV16 word is exactly four digits. Addresses, instruction words and memory dumps are written in hex because each digit stands for fixed bits.<br>The digits follow nibbles, and an encoding's fields need not. RV16's opcode is the low nibble, but rd, rs1 and rs2 are 3-bit fields that straddle digit boundaries, so decoding by eye means writing out the binary first.`,
     example: {
@@ -371,7 +386,7 @@ registers:      add a2, a0, a1    (x, y, z already in a0, a1, a2)</pre>`,
       'Forgetting to store A before loading the next variable: the accumulator holds one value, and LDA overwrites it.',
       'Counting the short instructions as a win: three accumulator instructions do what one register instruction does.',
     ],
-    chapters: [{ chapter: 'firstcomputer', step: 1, label: 'Splitting the word: LDA and STA' }],
+    chapters: [{ chapter: 'firstcomputer', step: 2, label: 'Splitting the word: LDA and STA' }],
   },
 
   // ---- ISA and software

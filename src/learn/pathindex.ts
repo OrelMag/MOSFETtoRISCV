@@ -4,7 +4,7 @@ import type { LevelFact, ReviewRow, Skill } from './skills';
 
 /** Minutes per step, by chapter (learn/minutes.ts). */
 export const PATH_MINUTES: Record<string, number[]> = {
-  "basics": [3,3,3,5,3,5],
+  "basics": [3,6,3,3,5,3,5],
   "map": [3,6,3],
   "relays": [6,4,6,6,6,6,5,5],
   "tubes": [6,6,5,6,6,7,6],
@@ -14,14 +14,14 @@ export const PATH_MINUTES: Record<string, number[]> = {
   "nand": [6,6,4,6,6,5],
   "gates": [3,4,6,2,6,3,6],
   "logic": [4,5,5,5,5,3,6,5],
-  "binary": [6,5,5,5,5,5,5,5],
+  "binary": [6,5,5,5,5,5,5,6],
   "adders": [4,4,6,6,4,6,4,5,5,6],
   "routing": [4,6,4,4,6,6,6,4],
   "latches": [6,4,6,4,6,6,7,4],
   "registers": [6,3,6,6,4,6,6,4,4,4,7],
-  "fsm": [4,6,6,6,6,5,6,6,5],
+  "fsm": [4,6,6,6,6,5,6,6,6],
   "memory": [3,6,4,5,6,3,6,6,6,3,3,8],
-  "firstcomputer": [5,5,5,5,5,6,5,5],
+  "firstcomputer": [6,5,5,5,5,5,6,5,5],
   "alu": [5,4,6,6,6,7,5],
   "regfile": [7,3,6,6,6],
   "isa": [4,6,5,5,6,6,6,5],
@@ -115,9 +115,10 @@ export const PATH_MINUTES: Record<string, number[]> = {
 /** Every skill, in journey order (learn/pathgen.ts computeSkills). */
 export const PATH_SKILLS: Skill[] = [
   {"id":"basics:loop","title":"A closed loop","tier":0,"chapter":"basics","steps":[0],"checks":["basics:recap:1"],"reach":[],"levels":[]},
-  {"id":"basics:levels","title":"Two levels","tier":0,"chapter":"basics","steps":[1],"checks":["basics:recap:2"],"reach":[],"levels":[]},
-  {"id":"positional","title":"Positional notation","tier":0,"chapter":"basics","steps":[2],"checks":["codex:positional:0","codex:positional:1","drill:binary"],"reach":[],"levels":["n_bin"]},
-  {"id":"truthtable","title":"Truth table","tier":0,"chapter":"basics","steps":[3],"checks":["codex:truthtable:0","codex:truthtable:1","basics:3","ablate:full_adder:g6","ablate:full_adder:g7","ablate:full_adder:g8"],"reach":[],"levels":["l_bool"]},
+  {"id":"capacitance","title":"Capacitance","tier":0,"chapter":"basics","steps":[1],"checks":["codex:capacitance:0","codex:capacitance:1","basics:1"],"reach":[],"levels":["t_inv"]},
+  {"id":"basics:levels","title":"Two levels","tier":0,"chapter":"basics","steps":[2],"checks":["basics:recap:2"],"reach":[],"levels":[]},
+  {"id":"positional","title":"Positional notation","tier":0,"chapter":"basics","steps":[3],"checks":["codex:positional:0","codex:positional:1","drill:binary"],"reach":[],"levels":["n_bin"]},
+  {"id":"truthtable","title":"Truth table","tier":0,"chapter":"basics","steps":[4],"checks":["codex:truthtable:0","codex:truthtable:1","basics:4","ablate:full_adder:g6","ablate:full_adder:g7","ablate:full_adder:g8"],"reach":[],"levels":["l_bool"]},
   {"id":"cpu","title":"Processor","tier":0,"chapter":"map","steps":[0],"checks":["codex:cpu:0","codex:cpu:1"],"reach":[],"levels":[]},
   {"id":"abstraction","title":"Abstraction","tier":0,"chapter":"map","steps":[1,2],"checks":["codex:abstraction:0","codex:abstraction:1","predict:map:1:0","predict:map:1:1"],"reach":["map:1"],"levels":[]},
   {"id":"mosfet","title":"MOSFET","tier":1,"chapter":"mosfet","steps":[0,1,2,3,4],"checks":["codex:mosfet:0","codex:mosfet:1","mosfet:1","mosfet:2","mosfet:3","mosfet:4","predict:mosfet:4:0","predict:mosfet:4:1","predict:mosfet:4:2"],"reach":[],"levels":["t_inv"]},
@@ -187,7 +188,7 @@ export const PATH_SKILLS: Skill[] = [
   {"id":"rom","title":"ROM","tier":1,"chapter":"memory","steps":[4,5],"checks":["codex:rom:0","codex:rom:1","memory:4","predict:memory:4:0","predict:memory:4:1","predict:memory:4:2","predict:memory:4:3"],"reach":[],"levels":[]},
   {"id":"stack","title":"Stack","tier":1,"chapter":"memory","steps":[7],"checks":["codex:stack:0","codex:stack:1"],"reach":["memory:7"],"levels":["p_call"]},
   {"id":"coremem","title":"Core memory","tier":1,"chapter":"memory","steps":[10,11],"checks":["codex:coremem:0","codex:coremem:1"],"reach":["memory:11"],"levels":["m_sense"]},
-  {"id":"accumulator","title":"Accumulator","tier":2,"chapter":"firstcomputer","steps":[1],"checks":["codex:accumulator:0","codex:accumulator:1","firstcomputer:1"],"reach":[],"levels":["m_acc"]},
+  {"id":"accumulator","title":"Accumulator","tier":2,"chapter":"firstcomputer","steps":[2],"checks":["codex:accumulator:0","codex:accumulator:1","firstcomputer:2"],"reach":[],"levels":["m_acc"]},
   {"id":"alu","title":"ALU","tier":2,"chapter":"alu","steps":[0,3],"checks":["codex:alu:0","codex:alu:1","predict:alu:0:1","predict:alu:0:2","predict:alu:3:1","predict:alu:3:2","predict:alu:3:3","predict:alu:3:4"],"reach":["alu:3"],"levels":["a_alu16"]},
   {"id":"shifter","title":"Barrel shifter","tier":2,"chapter":"alu","steps":[1],"checks":["codex:shifter:0","codex:shifter:1","predict:alu:1:1","predict:alu:1:2","predict:alu:1:3"],"reach":[],"levels":["a_shift16","o_fpsticky"]},
   {"id":"regfile","title":"Register file","tier":2,"chapter":"regfile","steps":[0,1],"checks":["codex:regfile:0","codex:regfile:1"],"reach":["regfile:0"],"levels":["m_rf","b_x0"]},
@@ -685,7 +686,8 @@ export const PATH_LEVELS: Record<string, LevelFact> = {
 
 /** Every review question (ui/reviewqs.ts allQuestions, in its order): key, chapter ('' for none), generated. */
 export const PATH_REVIEW: ReviewRow[] = [
-  ["basics:3","basics",0],
+  ["basics:1","basics",0],
+  ["basics:4","basics",0],
   ["basics:recap:0","basics",0],
   ["basics:recap:1","basics",0],
   ["basics:recap:2","basics",0],
@@ -791,7 +793,8 @@ export const PATH_REVIEW: ReviewRow[] = [
   ["firstcomputer:3","firstcomputer",0],
   ["firstcomputer:4","firstcomputer",0],
   ["firstcomputer:5","firstcomputer",0],
-  ["firstcomputer:7","firstcomputer",0],
+  ["firstcomputer:6","firstcomputer",0],
+  ["firstcomputer:8","firstcomputer",0],
   ["firstcomputer:recap:0","firstcomputer",0],
   ["firstcomputer:recap:1","firstcomputer",0],
   ["firstcomputer:recap:2","firstcomputer",0],
@@ -1814,6 +1817,8 @@ export const PATH_REVIEW: ReviewRow[] = [
   ["codex:bus:1","",0],
   ["codex:positional:0","",0],
   ["codex:positional:1","",0],
+  ["codex:capacitance:0","",0],
+  ["codex:capacitance:1","",0],
   ["codex:hex:0","",0],
   ["codex:hex:1","",0],
   ["codex:twos:0","",0],

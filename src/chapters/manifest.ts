@@ -5,6 +5,7 @@ import type { ChapterMeta } from './meta';
 export const MANIFEST: readonly ChapterMeta[] = [
   { id: "basics", num: 0, title: "Before the switch", blurb: "Voltage and current, two levels, binary, a truth table, a program: what the first switch needs.", level: "Basics", label: "Start", recap: {"checks":3}, steps: [
     { title: "A loop of wire", stage: "widget" },
+    { title: "A bucket of charge", challenge: "quiz", stage: "widget" },
     { title: "Two levels, not ten", stage: "widget" },
     { title: "Counting with lamps", stage: "widget" },
     { title: "A rule as a table", challenge: "quiz", stage: "widget" },
@@ -168,6 +169,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "A core plane, wired", challenge: "reach", stage: "scene" },
   ] },
   { id: "firstcomputer", num: 13, title: "A first computer", blurb: "Eight instructions, one register, one clock each: a counter reads a ROM, a decoder tells the rest what to do, and a computer runs.", level: "Processor", builds: ["adders","registers","memory"], recap: {"checks":3}, steps: [
+    { title: "One circuit, one job", challenge: "quiz", stage: "scene" },
     { title: "A counter reads a ROM", challenge: "quiz", stage: "scene" },
     { title: "Splitting the word: LDA and STA", challenge: "quiz", stage: "scene" },
     { title: "Add and subtract", challenge: "quiz", stage: "scene" },

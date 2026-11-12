@@ -66,7 +66,7 @@ export const timingSteps: Step[] = [
       return `
       <p>Two flip-flops, <code>ff1</code> feeding <code>ff2</code> with nothing between them: the fastest path in a design is a wire, so only clk-to-q (${a.r.cqRise} delays rising) separates q1's change from the edge that should not have seen it.
       Now delay the second clock by <em>k</em> buffers, 2 gate delays each: the capturing edge arrives <strong>skewed</strong>. ff1's new q reaches d2 ${a.r.cqRise} delays after ff1's edge; if ff2's edge comes at least the setup time (${a.r.setup} for a rising d) later than that, ff2 captures ff1's
-      <em>new</em> value, and one edge moves the bit through both stages. The condition is the second inequality of the previous step, with the skew on the other side: <strong>t<sub>cq,min</sub> + t<sub>logic,min</sub> &ge; t<sub>h</sub> + skew</strong>. With ${a.r.cqRise} + 0 and
+      <em>new</em> value, and one edge moves the bit through both stages. The condition is the second inequality of the flip-flop step's Derivation layer, with the skew on the other side: <strong>t<sub>cq,min</sub> + t<sub>logic,min</sub> &ge; t<sub>h</sub> + skew</strong>. With ${a.r.cqRise} + 0 and
       hold ${a.r.hold}, one buffer (skew 2) lands in the window and the pair hangs undecided; two buffers (skew 4) is a clean race-through. Lengthening the period changes none of it: hold has no T in it.</p>
       <p>Skew is not exotic: a clock reaches thousands of flip-flops through a buffer tree, and unequal wire lengths, loads and a gated branch (the load-enable step's pitfall) all show up as skew. Fixes: pad the short data path with delay buffers (hold fixing, which
       costs area), balance the clock tree, or build a stage that cannot race (latches on opposite clock phases: chapter ${numOf('regfile')}'s "Latches instead of flip-flops").</p>
@@ -124,7 +124,7 @@ export const timingSteps: Step[] = [
       ],
     },
     more: {
-      derive: `<p>With clk = 1: n2 = ¬n1 and n3 = ¬(n2 · n4). Case d = 1 at the edge: n4 = 0, n1 = ¬(0 · n2) = 1, so n2 = 0 and n3 = 1: set. A late d = 0 gives n4 = 1, n1 = ¬(1 · 0) = 1, n2 stays 0. Case d = 0: n4 = 1, n3 = ¬(1 · 1 · 1) = 0, n4 = ¬(0 · d) = 1 for any d: reset, locked. The four front gates
+      derive: `<p>With clk = 1: n2 = ¬n1 and n3 = ¬(n2 · n4). Case d = 1 at the edge: n4 = 0, n1 = ¬(0 · n2) = 1, so n2 = 0 and n3 = 1: set. A late d = 0 gives n4 = 1, n1 = ¬(1 · 0) = 1, n2 stays 0. Case d = 0: n4 = 1, n3 = ¬(n2 · n4) = ¬(1 · 1) = 0, and n4 = ¬(n3 · d) = 1 for any d: reset, locked. The four front gates
         form two interlocked SR latches; the output pair is the third.</p>`,
       real: `<p>74LS74 and its successors are this circuit in TTL, with asynchronous preset and clear on extra NAND inputs. CMOS libraries use the master–slave transmission-gate form instead, for the output and hold reasons above.</p>`,
       pitfall: `<p>Thinking fewer gates means faster. The count says nothing about the paths: here a falling q goes through three levels after the edge (${m('e6').r.cqFall} delays against ${m('ms').r.cqFall}).</p>`,

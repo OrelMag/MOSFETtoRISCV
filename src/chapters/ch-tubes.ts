@@ -83,12 +83,12 @@ export const chTubes: Chapter = {
         <p>A relay waits milliseconds for iron to move. A <strong>vacuum tube</strong> moves only electrons. A heater
         brings an oxide-coated <strong>cathode</strong> to about 1000 K, hot enough to boil electrons off its surface;
         a <strong>plate</strong> (anode) at +${B_PLUS} V collects them. Between the two, a <strong>grid</strong>, a fine wire helix wound on two side rods,
-        decides how many get through: at 0 V nearly all, and with the plate at ${B_PLUS} V
+        decides how many get through: at 0 V the full current, and with the plate at ${B_PLUS} V
         none once the grid is below ${V_CUTOFF} V in this model (the ideal cutoff of the law below; on the 6SN7's datasheet curves a few microamps
-        still flow to about −18 V). Its field pushes them back. Most electrons never get through at all: a cloud of them, the <strong>space charge</strong>,
+        still flow to about −18 V). The grid's field pushes them back. Most electrons never get through at all: a cloud of them, the <strong>space charge</strong>,
         hangs round the cathode and repels the next ones, so at 0 V only about one in ${HEADROOM} of those the cathode could emit reaches the plate.</p>
         <p>This is one section of a 6SN7, the twin triode ENIAC used most. The current follows the space-charge law
-        I = K·(V<sub>g</sub> + V<sub>p</sub>/µ)<sup>1.5</sup> with µ = 20, fitted to the datasheet point (250 V, −8 V,
+        I = K·(V<sub>g</sub> + V<sub>p</sub>/µ)<sup>1.5</sup> with µ = 20 (how much more a volt on the grid does than a volt on the plate), fitted to the datasheet point (250 V, −8 V,
         9 mA), and works into a 22 kΩ plate resistor. The cathode warms with a 6 s time constant, and emission
         (Richardson's law) grows exponentially with temperature. So after switch-on nothing flows for
         ${WARM.t10.toFixed(1)} s, and the full current arrives by ${WARM.t90.toFixed(1)} s.</p>
@@ -128,7 +128,7 @@ export const chTubes: Chapter = {
       body: `
         <p>As a switch, <span data-show="v1">the triode</span> sits under <span data-show="rl">its plate resistor</span>, cathode on ground. Grid at 1: current flows and the
         plate falls to ${v(V_LOW)} V, a 0. Grid at 0: the tube is cut off and the resistor pulls the plate to
-        ${B_PLUS} V, a 1. That is <strong>ratioed logic</strong> (<a href="#/c/inverter/0">chapter ${numOf('inverter')}</a> meets it again in pseudo-NMOS): the tube wins
+        ${B_PLUS} V, a 1. That is <strong>ratioed logic</strong> (<a href="#/c/inverter/0">chapter ${numOf('inverter')}</a> meets it in pseudo-NMOS): the tube wins
         over the resistor, and while it conducts, current flows from B+ (the +${B_PLUS} V plate supply) to ground for nothing.</p>
         <p>Electrons only leave the hot cathode, so current crosses the tube one way only. A triode can pull its
         plate down or push its cathode up, but it never passes a signal back the way a contact does (or, from
@@ -189,7 +189,7 @@ export const chTubes: Chapter = {
         works.</div>`,
       more: {
         derive: `<p>The divider output is V<sub>g</sub> = (V<sub>p</sub>·R<sub>b</sub> + V<sub>bias</sub>·R<sub>t</sub>) / (R<sub>t</sub> + R<sub>b</sub>). For a ${B_PLUS} V plate to give
-          0 V: ${B_PLUS}·${R_DIV_BOTTOM / 1e3} = ${-V_BIAS}·${R_DIV_TOP / 1e3} in the ratio R<sub>t</sub> / R<sub>b</sub> = ${(R_DIV_TOP / R_DIV_BOTTOM).toFixed(2)}, which is ${B_PLUS} / ${-V_BIAS} = ${DIVIDER_RATIO.toFixed(2)} on the whole divider.
+          0 V: ${B_PLUS}·${R_DIV_BOTTOM / 1e3} = ${-V_BIAS}·${R_DIV_TOP / 1e3}, so R<sub>t</sub> / R<sub>b</sub> = ${(R_DIV_TOP / R_DIV_BOTTOM).toFixed(2)}, the plate-to-bias ratio ${B_PLUS} / ${-V_BIAS} = ${DIVIDER_RATIO.toFixed(2)}.
           The low plate (${v(V_LOW)} V) then gives ${v(dividerOut(V_LOW))} V on the next grid, ${(V_CUTOFF - dividerOut(V_LOW)).toFixed(0)} V below cutoff for an unloaded plate. Each added divider on the plate is a ${(R_DIV_TOP + R_DIV_BOTTOM) / 1e3} kΩ
           path to ${V_BIAS} V in parallel with the plate resistor; the numbers below are what that does to both levels.</p>`,
         numbers: `<table class="mini"><tr><th>dividers on a plate</th><th>cut-off plate</th><th>next grid, high</th><th>margin above cutoff</th><th>next grid, low</th><th>margin below cutoff</th></tr>${[1, 2, 3, 4].map((k) => {
@@ -275,7 +275,7 @@ export const chTubes: Chapter = {
         ${w2(BRICK.heaters)} W of heaters, ${w2(BRICK.plate)} W through the plate resistor, ${w2(BRICK.divider)} W in the
         divider. ENIAC already carried 7200 crystal diodes; later machines used them for gates like this one, which saved the heaters.</p>
         <p>The diodes do the logic and the triode restores the level: a diode AND alone has no gain, and every stage through it would lose a diode drop of swing. The
-        triode after it makes the output a full ${v(V_LOW)} V to ${B_PLUS} V again. That is the same split as in <span data-ahead="cmos">CMOS (the transistor logic of chapters ${numOf('mosfet')} to ${numOf('nand')})</span> between the gate and its restoring stage, paid in
+        triode after it makes the output a full ${v(V_LOW)} V to ${B_PLUS} V again. In <span data-ahead="cmos">CMOS (the transistor logic of chapters ${numOf('mosfet')} to ${numOf('nand')})</span> every gate restores its own output; here the restoring stage is a second device, paid in
         two tube envelopes (${stats(TUBE_NAND).triodes} triode section and ${stats(TUBE_NAND).diodes} diode sections per NAND).</p>
         <div class="try">Set both inputs to 1: both diodes let go, the junction rises, the triode conducts.</div>`,
       scene: () => ({ root: TUBE_NAND, inputs: { a: 1, b: 0 } }),
