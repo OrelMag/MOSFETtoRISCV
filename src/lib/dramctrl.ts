@@ -9,6 +9,7 @@ import { type CtrlModel, Cmd, DeviceModel, deviceIn, type DramConfig, fieldWidth
 import { TIMING } from '../dram/timing';
 import type { ComponentDef, PortDef } from '../sim/types';
 import { constWord, isZero } from './alu';
+import { laid } from './layered';
 import { Builder } from './builder';
 import { andN, busMux2, decoder, equal, incrementer, muxTree } from './combinational';
 import { parity } from './coding';
@@ -182,8 +183,6 @@ export function dramCtrl(c: DramConfig): ComponentDef {
     b.wire(b.op1(bitwise('and', rw), [rinc, g.merge(Array.from({ length: rw }, () => g.not(wrap)), ones(rw))]), `${refCnt}.d`);
     b.wire(g.or(g.and(refPend, g.not(cREF)), wrap), `${pend}.d`);
 
-    const R = b.right;
-    const outs = ['cmd', 'ba', 'ra', 'ca', 'word', 'dv', 'wv', 'done', 'hit', 'miss', 'conflict'];
     return define({
       id, name: `DRAM controller (${B} banks, ${c.rowWords}-word rows, ${c.policy} page${c.hash ? ', XOR hash' : ''})`, category: 'memory',
       summary: `One 4-word line request at a time. A row hit issues RD / WR at once (${t.tCAS + 4} cycles), a closed bank ACT first (${t.tRCD + t.tCAS + 4}), another open row PRE, ACT (${t.tRP + t.tRCD + t.tCAS + 4}). Every ${t.tREFI} cycles a refresh goes first: precharge all, REF, ${t.tRFC} cycles busy.${c.policy === 'closed' ? ' Closed page: the row is precharged after every access.' : ''}`,
@@ -191,10 +190,9 @@ export function dramCtrl(c: DramConfig): ComponentDef {
         bus('cmd', 3, 'out'), bus('ba', bb, 'out'), bus('ra', rb, 'out'), bus('ca', cb, 'out'), bus('word', 2, 'out'),
         bit('dv', 'out'), bit('wv', 'out'), bit('done', 'out'), bit('hit', 'out'), bit('miss', 'out'), bit('conflict', 'out')],
       symbol: { kind: 'box', label: 'DRAM CTRL' },
-      netlist: () => ({
-        pins: { req: [0, 4], wr: [0, 8], la: [0, 12], clk: [0, 18], ...Object.fromEntries(outs.map((o, i) => [o, [R, 4 + 3 * i] as [number, number]])) },
-        instances: b.instances, nets: b.nets(),
-      }),
+      // laid out by logic depth (layered.ts): the Builder's columns put the next-state and counter logic in one column 590
+      // units tall, 137 of 148 nets pointers; by depth it reads left to right, request → state → command → next state
+      netlist: laid(b),
     });
   });
 }
