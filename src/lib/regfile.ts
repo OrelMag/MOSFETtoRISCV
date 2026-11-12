@@ -65,12 +65,12 @@ export function writeSelect(w: number): ComponentDef {
       symbol: { kind: 'box', label: 'WR', w: 4, h: 8, portPos: { y0: 1, y1: 3, wd0: 5, wd1: 7, d: 2, en: 4 }, noPortLabels: true },
       spec: ([y0, y1, a, b]) => [y1 ? b : a, y0 || y1 ? 1 : 0],
       netlist: () => ({
-        pins: { y0: [0, 10], y1: [0, 4], wd0: [0, 1], wd1: [0, 2], d: [16, 3], en: [16, 11] },
+        pins: { y0: [0, 12], y1: [0, 7], wd0: [0, 2], wd1: [0, 4], d: [16, 3], en: [16, 11] },
         instances: [{ name: 'mux', def: MX, at: [8, 0] }, { name: 'or', def: OR, at: [8, 9] }],
         nets: [
           { name: 'wd0', ends: ['wd0', 'mux.a'] }, { name: 'wd1', ends: ['wd1', 'mux.b'] },
-          { name: 'y1', ends: ['y1', 'mux.s', 'or.b'], via: { 'mux.s': [[4, 4], [4, 7], [10, 7]] }, trunk: 4 },
-          { name: 'y0', ends: ['y0', 'or.a'] },
+          { name: 'y1', ends: ['y1', 'mux.s', 'or.a'], via: { 'mux.s': [[10, 7]], 'or.a': [[4, 7], [4, 10]] } },
+          { name: 'y0', ends: ['y0', 'or.b'] },
           { name: 'd', ends: ['mux.y', 'd'] }, { name: 'en', ends: ['or.y', 'en'] },
         ],
       }),
@@ -123,8 +123,8 @@ export function regfile2w(k: number, w: number): ComponentDef {
     }
     const bottom = Math.max(d1At[1] + dg.h, rTop(N - 1) + rg.h, rpAt(3)[1] + rpg.h) + 4;
     nets.push(
-      { name: 'wa0', ends: ['wa0', 'dec0.a'], tags: ['dec0.a'] }, { name: 'we0', ends: ['we0', 'dec0.en'], tags: ['dec0.en'] },
-      { name: 'wa1', ends: ['wa1', 'dec1.a'], tags: ['dec1.a'] }, { name: 'we1', ends: ['we1', 'dec1.en'], tags: ['dec1.en'] },
+      { name: 'wa0', ends: ['wa0', 'dec0.a'] }, { name: 'we0', ends: ['we0', 'dec0.en'] },
+      { name: 'wa1', ends: ['wa1', 'dec1.a'] }, { name: 'we1', ends: ['we1', 'dec1.en'] },
       { name: 'wd0', ends: wd0, trunk: xS - 3 }, { name: 'wd1', ends: wd1, trunk: xS - 6 },
       { name: 'clk', ends: clk, trunk: xR + rg.w + 2 },
       { name: 'regs', ends: ['bundle.out', ...[1, 2, 3, 4].map((j) => `rp${j}.words`)], trunk: xP - 3 },
@@ -134,7 +134,9 @@ export function regfile2w(k: number, w: number): ComponentDef {
       ]),
     );
     const outX = xP + rpg.w + 6;
-    const ins = ['wa0', 'we0', 'wd0', 'wa1', 'we1', 'wd1', 'ra1', 'ra2', 'ra3', 'ra4'];
+    // each write port's address and enable beside its decoder; the data words, read addresses and clock under everything
+    const ins = ['wd0', 'wd1', 'ra1', 'ra2', 'ra3', 'ra4'];
+    const beside = (p: string, d: [number, number]): [number, number] => [0, d[1] + dg.ports[p].pos[1]];
     return define({
       id: `regfile${N}x${w}_4r2w`, name: `Register file (${N} × ${w}, 4 read, 2 write ports)`, category: 'memory',
       summary: `${N} registers of ${w} bits, x0 always reads 0. Four read ports (two instructions, two operands each) and two write ports, all in one cycle: each register's write select takes either port, and port 1 (the younger instruction) wins when both write one register.`,
@@ -146,6 +148,7 @@ export function regfile2w(k: number, w: number): ComponentDef {
       symbol: { kind: 'box', label: 'REGISTERS 4R 2W' },
       netlist: () => ({
         pins: {
+          wa0: beside('a', dAt), we0: beside('en', dAt), wa1: beside('a', d1At), we1: beside('en', d1At),
           ...Object.fromEntries(ins.map((n, i) => [n, [0, bottom + 2 * i] as [number, number]])), clk: [0, bottom + 2 * ins.length],
           ...Object.fromEntries([1, 2, 3, 4].map((j) => [`rd${j}`, [outX, rpAt(j - 1)[1] + rpg.ports.y.pos[1]] as [number, number]])),
         },

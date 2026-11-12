@@ -137,16 +137,17 @@ export const JKFF: ComponentDef = define({
   ports: [bit('j', 'in'), bit('k', 'in'), bit('clk', 'in', 'left', true), bit('rst_n', 'in'), bit('q', 'out')],
   symbol: { kind: 'box', label: 'JKFF' },
   netlist: () => {
-    const g = symbolGeom(DFF_R), xf = 30;
+    // the flip-flop low enough that clk and rst_n pass under the gates, not through them
+    const g = symbolGeom(DFF_R), xf = 30, yf = 10;
     return {
-      pins: { j: [0, 2], k: [0, 9], clk: [0, 6 + g.ports.clk.pos[1]], rst_n: [0, 6 + g.ports.rst_n.pos[1]], q: [xf + g.w + 8, 6 + g.ports.q.pos[1]] },
+      pins: { j: [0, 2], k: [0, 7], clk: [0, yf + g.ports.clk.pos[1]], rst_n: [0, yf + g.ports.rst_n.pos[1]], q: [xf + g.w + 8, yf + g.ports.q.pos[1]] },
       instances: [
         { name: 'nq', def: NOT, at: [6, 4] },
         { name: 'nk', def: NOT, at: [6, 8] },
         { name: 'set', def: AND, at: [12, 1] },
         { name: 'keep', def: AND, at: [12, 8] },
         { name: 'o', def: OR, at: [20, 4] },
-        { name: 'ff', def: DFF_R, at: [xf, 6] },
+        { name: 'ff', def: DFF_R, at: [xf, yf] },
       ],
       nets: [
         { name: 'j', ends: ['j', 'set.a'] }, { name: 'k', ends: ['k', 'nk.a'] },
