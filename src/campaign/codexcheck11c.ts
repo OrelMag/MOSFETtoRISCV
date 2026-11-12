@@ -19,6 +19,22 @@ export const CHECK11C: Record<string, Quiz[]> = {
       why: ['', 'A coefficient can exceed 1; the roots are what count.', 'With every pole inside the circle, every bounded input gives a bounded output.', 'Stability is a property of the filter and not of the input: bounded in, bounded out.'],
     },
   ],
+  splane: [
+    {
+      question: 'An RC low-pass has R = 10 kΩ and C = 10 nF. Where is its pole in the s-plane?',
+      options: ['At −10 000 s⁻¹, on the negative real axis', 'At +10 000 s⁻¹, on the positive real axis', 'At j10 000 s⁻¹, on the imaginary axis', 'At −1591.5 s⁻¹, the corner frequency'],
+      answer: 0,
+      explain: 'H(s) = 1 / (1 + sRC) is infinite where 1 + sRC = 0, at s = −1 / RC = −1 / 100 µs. It is left of the axis, so the circuit is stable, and its impulse response falls as e<sup>−t/RC</sup>.',
+      why: ['', 'A pole right of the axis would make a response that grows; a resistor and a capacitor only lose energy.', 'A pole on the axis rings for ever, and one real pole does not ring at all.', '1591.5 is the corner in hertz, 1 / 2πRC: a point on the imaginary axis where the gain is −3.01 dB, not the pole.'],
+    },
+    {
+      question: 'A pole pair sits at −0.3 ± j2 s⁻¹. What does its impulse response do?',
+      options: ['It rings at 2 rad/s inside an envelope that falls to 0.050 in 10 s', 'It fades at 2 per second without ringing', 'It rings at 0.3 rad/s for ever', 'It grows, since its height 2 is above 1'],
+      answer: 0,
+      explain: 'The real part σ = −0.3 sets the envelope e<sup>−0.3t</sup>, which is e<sup>−3</sup> = 0.050 after 10 s; the height ω = 2 is the ringing rate in rad/s.',
+      why: ['', 'The height is the ringing rate; the decay is the real part.', 'The two are the other way round: 0.3 is the decay, 2 the ringing, and left of the axis it fades.', 'In the s-plane the line between growing and fading is the imaginary axis, σ = 0, not a circle of radius 1.'],
+    },
+  ],
   bilinear: [
     {
       question: 'A Butterworth edge is wanted at 0.2 cycles a sample. To what edge is the prototype scaled before the transform?',

@@ -3,7 +3,7 @@
 
 import { signedOf, wordOf } from '../comm/signals';
 import {
-  analogPrototype, Biquad, endOf, BQ, burstThenSilence, cabs, cascadeSnr, coefWord, cycleSweep, deadBandOf, directHeld, directStable, FAMILIES, findCycle, kaiserTaps, LIMIT_CYCLE, lowpass, MASK,
+  analogGain, analogImpulse, analogPrototype, Biquad, pairPeak, endOf, BQ, burstThenSilence, cabs, cascadeSnr, coefWord, cycleSweep, deadBandOf, directHeld, directStable, FAMILIES, findCycle, kaiserTaps, LIMIT_CYCLE, lowpass, MASK,
   maskDesign, measuredSnr, noiseGain, snrAt, permutations, prefixPeaks, prewarp, runBiquad, scaleSos, sectionWords, sosGain, sosMults, sosMultsFolded, sosStable, sosToTf, SWEEP_VARIANTS,
   SWEEP_RUNS, warpedAt, wordsOf, zpkToSos, type Family, type Sos, type Words, type Zpk,
 } from '../dsp/iir';
@@ -154,6 +154,98 @@ export function bilinearWidget(): Widget {
         slider('Order', 2, 12, 1, n, (v) => String(v), (v) => { n = v; paint(); }).el,
         slider('Edge, cycles a sample', 0.02, 0.45, 0.005, f, (v) => num(v, 3), (v) => { f = v; paint(); }).el),
         h('label', { class: 'dsp-check' }, box, h('span', null, 'Prewarp the analog edge (ω = 2 tan πf); off: ω = 2πf')))),
+  };
+}
+
+// ---- the s-plane ------------------------------------------------------------------------------------------------------------------------------
+
+/** The s-plane step's figure: its starting pair, its RC and its Butterworth corner. */
+export const SPLANE = { sigma: -0.3, omega: 2, R: 10e3, C: 10e-9, wc: 1 };
+type SMode = 'pair' | 'rc' | 'butter';
+
+export function sPlaneWidget(): Widget {
+  let mode: SMode = 'pair', { sigma, omega, R, C, wc } = SPLANE;
+  const chips = mkChips(4), planeBox = h('div', { class: 'dsp-splane' }), plotBox = h('div', { class: 'dsp-splots' });
+  // RC: the plane in units of 10⁴ s⁻¹, time in µs, frequency in kHz; the other two in s⁻¹, s and rad/s
+  const win = () => (mode === 'rc' ? { x0: -5, x1: 1, y0: -3, y1: 3 } : { x0: -2.5, x1: 1, y0: -4, y1: 4 });
+  const poles = (): Cx[] => mode === 'rc' ? [{ re: -1 / (R * C), im: 0 }]
+    : mode === 'butter' ? analogPrototype('butter', 2).p.map((q) => ({ re: q.re * wc, im: q.im * wc }))
+      : [{ re: sigma, im: omega }, { re: sigma, im: -omega }];
+  let imp: Plot, gain: Plot;
+  const makePlots = () => {
+    const rc = mode === 'rc';
+    imp = plotOf({ W: 320, H: 190, x: [0, rc ? 500 : 10], y: [-1.1, 1.1], yTicks: [-1, 0, 1], xLabel: rc ? 'time, µs' : 'time, s', yLabel: 'h(t), scaled', aria: 'The impulse response, scaled to fit' });
+    gain = plotOf({ W: 320, H: 190, x: [0, rc ? 20 : 5], y: rc ? [-30, 3] : [-40, 30], yTicks: rc ? [-30, -20, -10, -3, 0] : [-40, -20, 0, 20], xLabel: rc ? 'frequency, kHz' : 'ω, rad/s', yLabel: 'gain, dB', aria: 'The gain along the imaginary axis' });
+    plotBox.replaceChildren(h('figure', null, imp.el, h('figcaption', null, 'impulse response')), h('figure', null, gain.el, h('figcaption', null, 'gain along the axis, s = jω')));
+  };
+  const mn = (v: number, d = 1) => num(v, d).replace(/^-/, "−");
+  const paint = () => {
+    const P = poles(), rc = mode === 'rc', u = rc ? 1e4 : 1, w = win();
+    planeBox.replaceChildren(planeSvg(P.map((q) => ({ re: q.re / u, im: q.im / u })), [], w, false, 'The s-plane with the poles: stable left of the vertical axis', 260, 260, true),
+      h('p', { class: 'sub mos-note' }, rc ? 's-plane, units of 10 000 s⁻¹' : mode === 'pair' ? 's-plane: drag the upper pole (its mirror follows)' : 's-plane'));
+    imp.clear(); gain.clear();
+    const ts = range(401).map((i) => (i / 400) * (rc ? 500e-6 : 10)), hs = ts.map((t) => analogImpulse(P, t)), top = Math.max(...hs.map(Math.abs)) || 1;
+    line(imp, ts.map((t) => (rc ? t * 1e6 : t)), hs.map((v) => v / top), 'real');
+    const unstable = P.some((q) => q.re >= 0);
+    if (!unstable) {
+      const xs = range(401).map((i) => (i / 400) * (rc ? 20 : 5));
+      line(gain, xs, xs.map((x) => Math.max(-100, Math.min(100, dB(analogGain(P, [], rc ? TAU * x * 1e3 : x))))), 'real');
+      gain.layer.append(s('line', { x1: gain.x0, x2: gain.x1, y1: gain.Y(-3.0103), y2: gain.Y(-3.0103), class: 'ln-h th' }));
+    }
+    if (mode === 'pair') {
+      const left = Math.exp(10 * sigma), pk = pairPeak(sigma, omega);
+      chips.set(0, `${mn(sigma, 2)} ± j${mn(omega, 2)}`, 'the pole pair, in s⁻¹: σ ± jω');
+      chips.set(1, sigma < 0 ? `${mn(left * 100, 1)} %` : sigma === 0 ? '100 %' : `× ${mn(left, 2)}`, sigma < 0 ? 'of its size left after 10 s, e^(10σ)' : sigma === 0 ? 'left after 10 s: on the axis it rings for ever' : 'grown in 10 s, e^(10σ)');
+      chips.set(2, sigma < 0 ? 'stable' : sigma === 0 ? 'on the axis' : 'unstable', sigma < 0 ? 'left of the axis' : sigma === 0 ? 'never decays' : 'right of the axis: it grows', sigma < 0 ? '' : 'bad');
+      chips.set(3, unstable ? 'none' : pk ? `+${mn(dB(pk.gain), 2)} dB` : 'no peak', unstable ? 'no steady gain: the response grows without bound' : pk ? `peak gain, at ${mn(pk.at, 3)} rad/s (1 at ω = 0)` : 'the gain only falls: σ is too far left for ω');
+    } else if (rc) {
+      const fc = 1 / (TAU * R * C), at = (f: number) => dB(analogGain(P, [], TAU * f));
+      chips.set(0, `−${grouped(Math.round(1 / (R * C)))} s⁻¹`, 'the pole, at −1 / RC');
+      chips.set(1, `${mn(R * C * 1e6, 1)} µs`, 'RC, the time constant: 63 % after it');
+      chips.set(2, `${mn(fc, 1)} Hz`, `the corner, 1 / 2πRC: ${mn(at(fc), 2)} dB`);
+      chips.set(3, `${mn(at(fc / 10), 3)} / ${mn(at(fc * 10), 2)} dB`, 'at a tenth of the corner and at ten times it');
+    } else {
+      const q = P[0];
+      chips.set(0, `${mn(q.re, 4)} ± j${mn(Math.abs(q.im), 4)}`, 'the Butterworth pair, in s⁻¹');
+      chips.set(1, `${mn(cabs(q), 3)}`, 'its distance from 0, the corner in rad/s, at 45° either side of the negative axis');
+      chips.set(2, `${mn(dB(analogGain(P, [], wc)), 2)} dB`, 'the gain at the corner');
+      chips.set(3, 'stable', 'left of the axis, for any corner');
+    }
+    for (const [k, b] of Object.entries(btns)) b.setAttribute('aria-pressed', String(k === mode));
+    planeBox.classList.toggle('drag', mode === 'pair');
+    sPair.el.hidden = mode !== 'pair'; sRc.el.hidden = mode !== 'rc'; sBu.el.hidden = mode !== 'butter';
+  };
+  const sSig = slider('σ, s⁻¹', -2, 0.8, 0.05, sigma, (v) => num(v, 2), (v) => { sigma = v; paint(); });
+  const sOm = slider('ω, rad/s', 0.2, 3.8, 0.05, omega, (v) => num(v, 2), (v) => { omega = v; paint(); });
+  const sR = slider('R, kΩ', 5, 20, 1, R / 1e3, (v) => String(v), (v) => { R = v * 1e3; paint(); });
+  const sC = slider('C, nF', 5, 20, 1, C * 1e9, (v) => String(v), (v) => { C = v * 1e-9; paint(); });
+  const sW = slider('Corner, rad/s', 0.3, 3, 0.05, wc, (v) => num(v, 2), (v) => { wc = v; paint(); });
+  const sPair = { el: h('div', { class: 'mos-row' }, sSig.el, sOm.el) }, sRc = { el: h('div', { class: 'mos-row' }, sR.el, sC.el) }, sBu = { el: h('div', { class: 'mos-row' }, sW.el) };
+  const pick = (m: SMode) => { if (m !== mode) { mode = m; makePlots(); paint(); } };
+  const btns: Record<SMode, HTMLElement> = {
+    pair: h('button', { type: 'button', class: 'btn sm', onclick: () => pick('pair') }, 'Pole pair'),
+    rc: h('button', { type: 'button', class: 'btn sm', onclick: () => pick('rc') }, 'RC'),
+    butter: h('button', { type: 'button', class: 'btn sm', onclick: () => pick('butter') }, 'Butterworth 2'),
+  };
+  // dragging the upper pole of the pair (the mirror follows); the sliders do the same from the keyboard
+  let dragging = false;
+  const dragTo = (e: PointerEvent) => {
+    const svg = planeBox.querySelector('svg');
+    if (!svg) return;
+    const r = svg.getBoundingClientRect(), w = win();
+    const x = w.x0 + ((e.clientX - r.left) / r.width) * (w.x1 - w.x0), y = w.y1 - ((e.clientY - r.top) / r.height) * (w.y1 - w.y0);
+    sigma = Math.round(Math.max(-2, Math.min(0.8, x)) * 20) / 20; omega = Math.round(Math.max(0.2, Math.min(3.8, Math.abs(y))) * 20) / 20;
+    sSig.set(sigma); sOm.set(omega); paint();
+  };
+  planeBox.addEventListener('pointerdown', (e) => { if (mode !== 'pair') return; dragging = true; planeBox.setPointerCapture(e.pointerId); dragTo(e); });
+  planeBox.addEventListener('pointermove', (e) => { if (dragging) dragTo(e); });
+  const stop = () => { dragging = false; };
+  planeBox.addEventListener('pointerup', stop); planeBox.addEventListener('pointercancel', stop);
+  makePlots(); paint();
+  return {
+    el: h('div', { class: 'widget mos sr-w' },
+      h('div', { class: 'panel' }, h('h3', null, 'Poles in the s-plane'), h('div', { class: 'dsp-sgrid' }, planeBox, plotBox), chips.el),
+      h('div', { class: 'panel mos-ctl' }, h('div', { class: 'dram-ops' }, btns.pair, btns.rc, btns.butter), sPair.el, sRc.el, sBu.el)),
   };
 }
 

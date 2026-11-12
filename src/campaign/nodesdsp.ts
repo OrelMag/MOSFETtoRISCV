@@ -48,7 +48,7 @@ export const NODES_DSP: CampaignNode[] = [
       'A product of two 16-bit words is 32 bits; five of them need three guard bits, a 35-bit sum. Sign-extend every product to 35 bits before adding. The feedback terms are subtracted: add the inverse of their sum and a carry-in of 1, which also works for a₁ = −2.',
       '35-bit sum to Q1.15 word: keep bits 14 and up, add the first dropped bit (bit 13) back (round half up), then clamp once from 21 bits to 16. The clamped y is what goes in y[n−1], not the exact sum.',
     ],
-    codex: ['biquad', 'limitcycle', 'guardbits'], chapters: [{ chapter: 'iir', step: 4, label: 'A biquad in gates' }, { chapter: 'iir', step: 5, label: 'A limit cycle on the gates' }],
+    codex: ['biquad', 'limitcycle', 'guardbits'], chapters: [{ chapter: 'iir', step: 5, label: 'A biquad in gates' }, { chapter: 'iir', step: 6, label: 'A limit cycle on the gates' }],
   },
   {
     id: 'sp_goertzel', act: 13, title: 'Goertzel for one tone', kind: 'build', optional: true, requires: ['sp_sat'], base: BUILDDSP.sp_goertzel, givesOf: gzGives,

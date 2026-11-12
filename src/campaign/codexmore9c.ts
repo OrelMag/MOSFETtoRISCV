@@ -26,8 +26,28 @@ y[n] = x[n] + 1.5 y[n−1] − 0.7 y[n−2]:  z² − 1.5z + 0.7 = 0
       { chapter: 'zplane', step: 4, label: 'Poles make it ring' },
       { chapter: 'zplane', step: 5, label: 'Inside the circle' },
       { chapter: 'iir', step: 0, label: 'What feedback buys' },
-      { chapter: 'iir', step: 3, label: 'One polynomial or small sections' },
+      { chapter: 'iir', step: 4, label: 'One polynomial or small sections' },
     ],
+  },
+  splane: {
+    idea: `An analog filter is a circuit with no samples to delay, and the <b>s-plane</b> is where it is read. The RC low-pass obeys RC · dy/dt + y = x, where dy/dt is how fast the output is changing. The signal e<sup>st</sup>, with s = σ + jω complex, has the property that its rate of change is s times itself, so it passes through the circuit unchanged in shape and comes out multiplied by one number, H(s) = 1 / (1 + sRC), the transfer function. Every value of s gets such a number, and the plane of s plays the part the z-plane plays for a digital filter.<br><br>Two places on it matter. The imaginary axis, s = j2πf, is the frequency response, climbed from 0 to infinity as f grows. And the poles, where H is infinite, are the decays: a pole at σ + jω puts into the impulse response a term ringing at ω inside the envelope e<sup>σt</sup>. Left of the axis it dies away, on it it rings for ever, right of it it grows. So an analog filter is stable when every pole is in the left half-plane, which is what the bilinear transform maps into the unit circle.`,
+    example: {
+      title: 'An RC low-pass and a pole pair, read on the plane',
+      body: `<pre>R = 10 kΩ, C = 10 nF:  RC = 100 µs,  pole at −1 / RC = −10 000 s⁻¹
+|H(j2πf)| = 1 / √(1 + (2πf · RC)²)
+  at  159 Hz      −0.043 dB
+  at 1591.5 Hz    −3.01 dB   (the corner, 1 / 2πRC)
+  at 15 915 Hz    −20.04 dB
+pole pair −0.3 ± j2:  envelope e^(−0.3t) = 0.050 after 10 s,  peak +10.65 dB at 1.977 rad/s
+Butterworth 2, corner 1 rad/s:  −0.7071 ± j0.7071, radius 1, 45° from the negative axis
+sampled at T = 1 s:  −0.5 + j0.5 → z = e^(sT), radius 0.607, 0.0796 cycles a sample</pre>`,
+    },
+    mistakes: [
+      'Reading the pole\'s height ω as its decay. The height is how fast it rings; the distance left of the axis, σ, is how fast it fades.',
+      'Treating a pole on the axis as stable because it does not grow. It never decays either: a pair at σ = 0 rings for ever, as one on the unit circle does.',
+      'Reading the gain at s = 2πf on the real axis. The frequency response is on the imaginary axis, s = j2πf.',
+    ],
+    chapters: [{ chapter: 'iir', step: 1, label: 'The analog picture: the s-plane' }, { chapter: 'iir', step: 2, label: 'From an analog filter to a digital one' }],
   },
   bilinear: {
     idea: `Analog filter design is old and well tabulated, and the <b>bilinear transform</b> carries a design from the s-plane to the z-plane by the substitution z = (2 + s) / (2 − s) for one sample a second. The imaginary axis, where an analog filter's frequency response lives, becomes the unit circle; the left half-plane, where stable poles live, becomes the inside of the circle. So the map keeps stability, always, and every pole and zero of the analog design is mapped one by one. The zeros an analog low-pass has at infinity come to rest at z = −1, half the sample rate.<br><br>The map is not linear in frequency. All of ω from 0 to infinity lands on half a turn, f = atan(ω / 2) / π cycles a sample, close to ω / 2π while ω is small and squeezed hard as it grows. An edge placed by 2π f therefore lands too low, so the prototype is <b>prewarped</b>: scaled to 2 tan(π f), which the map sends back to exactly f. The edges are then right and the shape between them is the analog filter's, compressed.`,
@@ -46,7 +66,7 @@ edge asked 0.2, prewarped: 2 tan(0.2π) = 1.453 → lands at 0.2
       'Expecting the digital filter to have the analog filter\'s shape out to Nyquist. The shape is compressed: all of frequency to infinity fits into half a turn.',
       'Using the map with the wrong constant. z = (2 + s) / (2 − s) is for one sample a second; for a rate fs the prototype is scaled by 2 fs tan(π f / fs).',
     ],
-    chapters: [{ chapter: 'iir', step: 1, label: 'From an analog filter to a digital one' }],
+    chapters: [{ chapter: 'iir', step: 2, label: 'From an analog filter to a digital one' }],
   },
   biquad: {
     idea: `A <b>biquad</b> is the second-order IIR section, y[n] = b₀x[n] + b₁x[n − 1] + b₂x[n − 2] − a₁y[n − 1] − a₂y[n − 2]: two zeros, two poles, five multiplications. Any filter of higher order factors into such sections, and a pole pair is exactly what two coefficients hold: a₁ = −2r cos θ and a₂ = r². The section is stable inside a triangle of the coefficient plane, |a₂| &lt; 1 and |a₁| &lt; 1 + a₂, which can be checked exactly on the integers.<br><br>In gates the chapter builds direct form I: four delay registers hold the last two inputs and the last two outputs, five signed multipliers form the products, and four adders sum them into an accumulator that keeps every product bit and adds log₂ 5 → 3 guard bits to the 32 of a product, 35 in all. There is one rounding, after the sum, and one saturating clamp, because a filter with poles on the circle can drive the sum off the end. Data are Q1.15 and the coefficients Q2.14, so the word −2 is a legal a₁.`,
@@ -65,9 +85,9 @@ radius 0.95 at a quarter rate: a₁ = 0, a₂ = round(0.9025 × 2¹⁴) = 14 7
       'Counting the section as two coefficients. It has five multiplications; the numerator is symmetric in many designs (b₀ = b₂), which a folded structure could use to spend four.',
     ],
     chapters: [
-      { chapter: 'iir', step: 3, label: 'One polynomial or small sections' },
-      { chapter: 'iir', step: 4, label: 'A biquad in gates' },
-      { chapter: 'iir', step: 7, label: 'Sections in a cascade' },
+      { chapter: 'iir', step: 4, label: 'One polynomial or small sections' },
+      { chapter: 'iir', step: 5, label: 'A biquad in gates' },
+      { chapter: 'iir', step: 8, label: 'Sections in a cascade' },
     ],
   },
   coefsens: {
@@ -92,8 +112,8 @@ narrow elliptic filter (order 6), coefficients rounded:
       'Adding bits to the data to cure it. The feedback coefficients\' step sets the pole lattice; a wider data path leaves the lattice as sparse as it was.',
     ],
     chapters: [
-      { chapter: 'iir', step: 2, label: 'Where a pole is allowed to sit' },
-      { chapter: 'iir', step: 3, label: 'One polynomial or small sections' },
+      { chapter: 'iir', step: 3, label: 'Where a pole is allowed to sit' },
+      { chapter: 'iir', step: 4, label: 'One polynomial or small sections' },
     ],
   },
   limitcycle: {
@@ -118,8 +138,8 @@ sweep, 176 runs (radius 0.90 … 0.97, 11 angles, 2 inputs, 2 bursts):
       'Confusing it with overflow. The cycle is a few LSB (5, 0, −5, 0); overflow is the clamp acting, a different failure with its own flag.',
     ],
     chapters: [
-      { chapter: 'iir', step: 5, label: 'A limit cycle on the gates' },
-      { chapter: 'iir', step: 6, label: 'What removes a limit cycle' },
+      { chapter: 'iir', step: 6, label: 'A limit cycle on the gates' },
+      { chapter: 'iir', step: 7, label: 'What removes a limit cycle' },
     ],
   },
   decimation: {
