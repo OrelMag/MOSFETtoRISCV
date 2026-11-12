@@ -37,6 +37,33 @@ const ICON_MAX_PX = 36;
 export const TAP_SELECT_PX = 40;
 /** A touch is a tap while it moves less than this (px) and lifts within TAP_MS (a longer press is the held-finger menu). */
 const TAP_SLOP_PX = 8, TAP_MS = 450;
+/**
+ * Run `f` at the next animation frame, or after SOON_MS if frames are held back (a page not in front: the smoke's parallel
+ * tabs, a window behind another), whichever comes first: the rule must not wait for a paint to decide. A handle for cancelSoon.
+ */
+const SOON_MS = 60;
+const pending = new Map<number, [number, number]>();
+let soonId = 0;
+function soon(f: () => void): number {
+  const id = ++soonId;
+  const run = () => {
+    const h = pending.get(id);
+    if (!h) return;
+    pending.delete(id);
+    cancelAnimationFrame(h[0]);
+    clearTimeout(h[1]);
+    f();
+  };
+  pending.set(id, [requestAnimationFrame(run), window.setTimeout(run, SOON_MS)]);
+  return id;
+}
+function cancelSoon(id: number): void {
+  const h = pending.get(id);
+  if (!h) return;
+  pending.delete(id);
+  cancelAnimationFrame(h[0]);
+  clearTimeout(h[1]);
+}
 /** The view has settled when the camera has not moved for this long (ms). */
 export const SETTLE_MS = 160;
 
@@ -160,8 +187,8 @@ export class Lens {
     this.hideHint();
     this.off.forEach((f) => f());
     this.off = [];
-    cancelAnimationFrame(this.frame);
-    cancelAnimationFrame(this.buildFrame);
+    cancelSoon(this.frame);
+    cancelSoon(this.buildFrame);
     clearTimeout(this.settleTimer);
   }
 
@@ -302,7 +329,7 @@ export class Lens {
   private schedule(): void {
     this.moved = performance.now();
     if (this.frame) return;
-    this.frame = requestAnimationFrame(() => {
+    this.frame = soon(() => {
       this.frame = 0;
       this.evaluate();
     });
@@ -381,7 +408,7 @@ export class Lens {
   /** Build the waiting inside nearest the pointer, one per frame. */
   private queueBuild(): void {
     if (this.buildFrame) return;
-    this.buildFrame = requestAnimationFrame(() => {
+    this.buildFrame = soon(() => {
       this.buildFrame = 0;
       const c = this.canvasRect();
       const [fx, fy] = this.focus ?? [c.left + c.width / 2, c.top + c.height / 2];
