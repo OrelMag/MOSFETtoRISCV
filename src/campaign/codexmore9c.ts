@@ -29,6 +29,26 @@ y[n] = x[n] + 1.5 y[n−1] − 0.7 y[n−2]:  z² − 1.5z + 0.7 = 0
       { chapter: 'iir', step: 4, label: 'One polynomial or small sections' },
     ],
   },
+  splane: {
+    idea: `An analog filter is a circuit with no samples to delay, and the <b>s-plane</b> is where it is read. The RC low-pass obeys RC · dy/dt + y = x, where dy/dt is how fast the output is changing. The signal e<sup>st</sup>, with s = σ + jω complex, has the property that its rate of change is s times itself, so it passes through the circuit unchanged in shape and comes out multiplied by one number, H(s) = 1 / (1 + sRC), the transfer function. Every value of s gets such a number, and the plane of s plays the part the z-plane plays for a digital filter.<br><br>Two places on it matter. The imaginary axis, s = j2πf, is the frequency response, climbed from 0 to infinity as f grows. And the poles, where H is infinite, are the decays: a pole at σ + jω puts into the impulse response a term ringing at ω inside the envelope e<sup>σt</sup>. Left of the axis it dies away, on it it rings for ever, right of it it grows. So an analog filter is stable when every pole is in the left half-plane, which is what the bilinear transform maps into the unit circle.`,
+    example: {
+      title: 'An RC low-pass and a pole pair, read on the plane',
+      body: `<pre>R = 10 kΩ, C = 10 nF:  RC = 100 µs,  pole at −1 / RC = −10 000 s⁻¹
+|H(j2πf)| = 1 / √(1 + (2πf · RC)²)
+  at  159 Hz      −0.043 dB
+  at 1591.5 Hz    −3.01 dB   (the corner, 1 / 2πRC)
+  at 15 915 Hz    −20.04 dB
+pole pair −0.3 ± j2:  envelope e^(−0.3t) = 0.050 after 10 s,  peak +10.65 dB at 1.977 rad/s
+Butterworth 2, corner 1 rad/s:  −0.7071 ± j0.7071, radius 1, 45° from the negative axis
+sampled at T = 1 s:  −0.5 + j0.5 → z = e^(sT), radius 0.607, 0.0796 cycles a sample</pre>`,
+    },
+    mistakes: [
+      'Reading the pole\'s height ω as its decay. The height is how fast it rings; the distance left of the axis, σ, is how fast it fades.',
+      'Treating a pole on the axis as stable because it does not grow. It never decays either: a pair at σ = 0 rings for ever, as one on the unit circle does.',
+      'Reading the gain at s = 2πf on the real axis. The frequency response is on the imaginary axis, s = j2πf.',
+    ],
+    chapters: [{ chapter: 'iir', step: 1, label: 'The analog picture: the s-plane' }, { chapter: 'iir', step: 2, label: 'From an analog filter to a digital one' }],
+  },
   bilinear: {
     idea: `Analog filter design is old and well tabulated, and the <b>bilinear transform</b> carries a design from the s-plane to the z-plane by the substitution z = (2 + s) / (2 − s) for one sample a second. The imaginary axis, where an analog filter's frequency response lives, becomes the unit circle; the left half-plane, where stable poles live, becomes the inside of the circle. So the map keeps stability, always, and every pole and zero of the analog design is mapped one by one. The zeros an analog low-pass has at infinity come to rest at z = −1, half the sample rate.<br><br>The map is not linear in frequency. All of ω from 0 to infinity lands on half a turn, f = atan(ω / 2) / π cycles a sample, close to ω / 2π while ω is small and squeezed hard as it grows. An edge placed by 2π f therefore lands too low, so the prototype is <b>prewarped</b>: scaled to 2 tan(π f), which the map sends back to exactly f. The edges are then right and the shape between them is the analog filter's, compressed.`,
     example: {

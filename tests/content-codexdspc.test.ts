@@ -10,7 +10,7 @@ import { moreOf } from '../src/campaign/codexmore';
 import { chapterById } from '../src/chapters';
 import { directUnstable, held, NARROW_POLE, RES, sensitivity, stableFrom, sweepOnce, zeroSweepOnce } from '../src/chapters/ch-dsp-iir';
 import { atanTable, cordicStretch } from '../src/dsp/cordic';
-import { burstThenSilence, BQ, coefWord, deadBand, findCycle, LIMIT_CYCLE, prewarp, runBiquad, warpedAt } from '../src/dsp/iir';
+import { analogGain, analogPrototype, burstThenSilence, BQ, coefWord, deadBand, findCycle, LIMIT_CYCLE, pairPeak, prewarp, runBiquad, sampledPole, warpedAt } from '../src/dsp/iir';
 import { cicAliasDb, cicDcGain, cicGrowth, cicResponse, cicTaps, cicWidth, decimateDirect, halfBand, nonZero, polyphaseCost, polyphaseDecimate, upsample } from '../src/dsp/multirate';
 import { polyRoots } from '../src/dsp/zplane';
 import { biquad } from '../src/lib/biquad';
@@ -83,6 +83,21 @@ describe('group C: iir', () => {
     expect(z(0, 2)).toEqual([0, 1]);
     quotes('bilinear', '0.0969', '0.286', '1.453', '1.257', '0.179', '0.628', '2.513', '0.2π', 'z = (2 + s) / (2 − s)');
     says('iir', 2, `${warpedAt(TAU * 0.4).toFixed(3)}`);
+  });
+  it('s-plane: the RC, a pole pair, Butterworth 2 and a sampled pole, from dsp/iir.ts', () => {
+    const rc = [{ re: -1e4, im: 0 }], fc = 1 / (TAU * 1e-4), at = (f: number) => (20 * Math.log10(analogGain(rc, [], TAU * f)));
+    expect(fc.toFixed(1)).toBe('1591.5'); expect(Math.round(fc / 10)).toBe(159); expect(Math.round(fc * 10)).toBe(15915);
+    expect([at(fc / 10).toFixed(3), at(fc).toFixed(2), at(fc * 10).toFixed(2)]).toEqual(['-0.043', '-3.01', '-20.04']);
+    expect(Math.exp(-3).toFixed(3)).toBe('0.050');
+    const pk = pairPeak(-0.3, 2)!;
+    expect(pk.at.toFixed(3)).toBe('1.977'); expect((20 * Math.log10(pk.gain)).toFixed(2)).toBe('10.65');
+    const b = analogPrototype('butter', 2).p[0];
+    expect([b.re.toFixed(4), Math.abs(b.im).toFixed(4)]).toEqual(['-0.7071', '0.7071']);
+    const sp = sampledPole({ re: -0.5, im: 0.5 });
+    expect([sp.r.toFixed(3), sp.f.toFixed(4)]).toEqual(['0.607', '0.0796']);
+    quotes('splane', 'H(s) = 1 / (1 + sRC)', '−1 / RC', '100 µs', '−3.01 dB', '1591.5 Hz', 'z = e^(sT)', '−10 000 s⁻¹', '−0.043 dB', '−20.04 dB', '15 915 Hz',
+      '0.050', '+10.65 dB at 1.977 rad/s', '−0.7071 ± j0.7071', 'radius 0.607, 0.0796 cycles a sample');
+    says('iir', 1, 'H(s) = 1 / (1 + sRC)');
   });
   it('biquad: the section in gates', () => {
     const n = nands(biquad()), m = mul16(), c0 = biquadCost();
