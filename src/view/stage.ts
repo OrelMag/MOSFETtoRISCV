@@ -182,6 +182,23 @@ const LOAD_CARD_MS = 300;
 /** Width a challenge note or the Why? card needs beside a left panel before the right dock, else it does not move there. */
 const NOTE_ROOM = 240;
 
+/**
+ * fitBar / fitControls measure with every button and label put back, so for a moment the row runs past the page's edge.
+ * On a phone (a mobile viewport) the browser answers a page wider than the screen by resizing its layout viewport, and the
+ * page jumped hundreds of pixels: mid-pinch, when Zoom to readable came or went and the bar refitted (the author's
+ * "fights my fingers"). Clipped while measuring, nothing reaches the page's width; the rects and scroll widths read are
+ * the same, and nothing paints in between, so the bar's menus (absolute, wider than a button) are never cut.
+ */
+function clipWhileMeasuring(el: HTMLElement, measure: () => void): void {
+  const was = el.style.overflowX;
+  el.style.overflowX = 'clip';
+  try {
+    measure();
+  } finally {
+    el.style.overflowX = was;
+  }
+}
+
 export class Stage {
   readonly el: HTMLElement;
   readonly inspector: Inspector;
@@ -2261,6 +2278,10 @@ export class Stage {
    * there is room. Buttons on a row of their own that fit there keep their words.
    */
   private fitControls(): void {
+    clipWhileMeasuring(this.controls, () => this.fitControlsItems());
+  }
+
+  private fitControlsItems(): void {
     const c = this.controls, run = c.querySelector<HTMLElement>(':scope > .ctl-run');
     c.classList.remove('compact', 'tight');
     if (!run || !c.offsetWidth) return;
@@ -2667,7 +2688,7 @@ export class Stage {
    *  its own above the buttons (.stacked), every button back in the bar. The levels above the open one shrink
    *  first (app.css): cut with an ellipsis, their names in their tooltips. */
   private fitBar(): void {
-    this.fitBarItems();
+    clipWhileMeasuring(this.bar, () => this.fitBarItems());
     this.markSqueezed();
   }
 
