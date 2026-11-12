@@ -3,9 +3,25 @@
 import { describe, expect, it } from 'vitest';
 import { IMX183, rollingSkew, rowTime } from '../src/phys/imagesensor';
 import {
-  AW, AH, CELL, COLS, FRAME, OB_W, RAMP_SHARE, ROWS, T_ROW, pointers, rowZ, captureEnd, captureFrame, cellRow, covered, defaultScene, dieParts, dieState,
-  readTime, type DiePalette,
+  AW, AH, CELL, COLS, FRAME, OB_W, RAMP_SHARE, ROWS, T_ROW, pointers, rowZ, captureEnd, captureFrame, cellLight, cellRow, cellValue, covered, defaultScene,
+  dieParts, dieState, readTime, type DiePalette, type Scene, type Shutter,
 } from '../src/widgets/sensordie3dparts';
+
+describe('the slow-motion tick reads cached samples', () => {
+  it('cellLight equals cellValue exactly, cell by cell, at every stage of a capture, and after switching scenes', () => {
+    const cases: [Scene, Shutter, number][] = [
+      [defaultScene('prop'), 'rolling', 5e-3], [defaultScene('bar'), 'global', 0.25e-3], [{ ...defaultScene('prop'), rps: 12 }, 'global', 20e-3],
+      [defaultScene('prop'), 'rolling', 5e-3], // back to the first: the cache is rebuilt, not stale
+    ];
+    for (const [s, sh, texp] of cases) {
+      const end = captureEnd(sh, texp) + CELL * T_ROW;
+      for (const f of [0, 0.013, 0.2, 0.5, 0.77, 1, Infinity]) {
+        const now = f * end;
+        for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) expect(cellLight(s, c, r, sh, texp, now)).toBe(cellValue(s, c, r, sh, texp, now));
+      }
+    }
+  });
+});
 
 /** The left edge of the dark bar in each captured cell row, in pixels (NaN: no dark cell). */
 const edges = (f: number[][]) => f.map((row) => { const c = row.findIndex((v) => v < 0.5); return c < 0 ? NaN : c * CELL; });
