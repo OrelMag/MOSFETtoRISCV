@@ -1576,7 +1576,25 @@ function findChrome(): string {
   return found;
 }
 
-function launchChrome(): Promise<{ proc: ChildProcess; ws: string; profile: string }> {
+class ChromeStartTimeout extends Error {}
+
+/**
+ * Chrome on a CI runner now and then never prints its DevTools address (only dbus noise on stderr), and the whole run died
+ * before a route ran: on that timeout the attempt is killed, its profile removed and Chrome started again, 3 attempts in all.
+ */
+async function launchChrome(): Promise<{ proc: ChildProcess; ws: string; profile: string }> {
+  const ATTEMPTS = 3;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await launchChromeOnce();
+    } catch (e) {
+      if (!(e instanceof ChromeStartTimeout) || attempt >= ATTEMPTS) throw e;
+      console.log(`Chrome did not start (attempt ${attempt} of ${ATTEMPTS}), trying again. Its stderr:\n${e.message}`);
+    }
+  }
+}
+
+function launchChromeOnce(): Promise<{ proc: ChildProcess; ws: string; profile: string }> {
   const profile = mkdtempSync(join(tmpdir(), 'smoke-chrome-'));
   const args = [
     '--remote-debugging-port=0', `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check',
@@ -1590,7 +1608,17 @@ function launchChrome(): Promise<{ proc: ChildProcess; ws: string; profile: stri
   const proc = spawn(findChrome(), args, { stdio: ['ignore', 'ignore', 'pipe'] });
   return new Promise((resolve, reject) => {
     let err = '';
-    const timer = setTimeout(() => reject(new Error(`Chrome did not start:\n${err}`)), 30_000);
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      // kill it and wait for it to let go of its profile before removing that (Windows keeps the files locked until then)
+      const gone = new Promise<void>((done) => { proc.once('exit', () => done()); setTimeout(done, 5_000); });
+      proc.kill();
+      void gone.then(() => {
+        try { rmSync(profile, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); } catch { /* a temp dir */ }
+        reject(new ChromeStartTimeout(`Chrome did not start:\n${err}`));
+      });
+    }, 30_000);
     proc.stderr!.on('data', (d: Buffer) => {
       err += d.toString();
       const m = /DevTools listening on (ws:\/\/\S+)/.exec(err);
@@ -1599,7 +1627,7 @@ function launchChrome(): Promise<{ proc: ChildProcess; ws: string; profile: stri
         resolve({ proc, ws: m[1], profile });
       }
     });
-    proc.on('exit', (code) => reject(new Error(`Chrome exited (${code}):\n${err}`)));
+    proc.on('exit', (code) => { if (!timedOut) reject(new Error(`Chrome exited (${code}):\n${err}`)); });
   });
 }
 
