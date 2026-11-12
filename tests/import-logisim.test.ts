@@ -290,3 +290,12 @@ describe('Logisim components: helper chips behave as Logisim', () => {
     t.set({ a: 5 }); expect(t.get('dout')).toBe(3);
   });
 });
+
+describe('a pin wider than the sandbox takes', () => {
+  // Release review m1: a 2e9-bit pin came through, was stored and opened, and the sandbox drew nothing ever after.
+  it('refuses the file, naming the pin', () => {
+    const text = readFileSync(new URL('./import/halfadder.circ', import.meta.url), 'utf8').replace(/<a name="label" val="A"\/>/, '<a name="label" val="A"/><a name="width" val="2000000000"/>');
+    const r = importLogisim([{ name: 'h.circ', text }], { taken: new Set() });
+    expect('error' in r && r.error).toMatch(/A.*2000000000 bits.*1024/);
+  });
+});

@@ -17,10 +17,10 @@ import { type ChipDoc, type CommentDoc, type EndRef, type ExitDir, isIdent, type
 import { type Compiled, compileChip } from '../editor/compile';
 import { DIR, partBox, pinBody } from '../editor/geom';
 import { untangled } from '../editor/untangle';
-import { isError, partDef } from '../editor/parts';
+import { isError, MAX_WIDTH, partDef } from '../editor/parts';
 import { instPort, symbolGeom } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
-import { type ImportFailure, type ImportOptions, type ImportResult, MappingTally, type SourceFile } from './report';
+import { type ImportFailure, type ImportOptions, type ImportResult, MappingTally, type SourceFile, tooWide } from './report';
 import { child, childrenNamed, deref, parseXml, type XNode } from './xml';
 
 const SIZE = 20;
@@ -1465,5 +1465,5 @@ export function importDigital(files: SourceFile[], opts: ImportOptions): ImportR
   build(top);
   for (const c of circuits) build(c);
 
-  return { format: 'digital', chips: imp.chips, top: imp.made.get(top.base)!.id, mapping: imp.tally.list(), problems: imp.problems };
+  return tooWide(imp.chips, MAX_WIDTH) ?? { format: 'digital', chips: imp.chips, top: imp.made.get(top.base)!.id, mapping: imp.tally.list(), problems: imp.problems };
 }

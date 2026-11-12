@@ -57,3 +57,12 @@ export class MappingTally {
     return [...this.m.values()].sort((a, b) => rank[a.status] - rank[b.status] || b.count - a.count || a.from.localeCompare(b.from));
   }
 }
+
+/**
+ * The first pin wider than the sandbox takes (editor/parts.ts MAX_WIDTH), as the file's error: such a pin cannot be
+ * simulated or drawn, and passed on it would be stored and opened at once. Digital stops at 64 bits, Logisim at 32.
+ */
+export function tooWide(chips: ChipDoc[], max: number): ImportFailure | null {
+  for (const c of chips) for (const p of c.pins) if (p.width > max) return { error: `${c.name} ▸ pin ${p.name} is ${p.width} bits wide; the sandbox takes up to ${max}` };
+  return null;
+}

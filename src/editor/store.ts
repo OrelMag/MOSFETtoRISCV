@@ -14,7 +14,7 @@ import type { ProbeTarget } from './probes';
 import { MAX_SLOW } from '../sim/faults';
 import { mergeFolders, sanitizeFolders } from './folders';
 import { same } from './history';
-import { MAX_KEY_LENGTH } from './parts';
+import { MAX_KEY_LENGTH, MAX_WIDTH } from './parts';
 import { sanitizeIoRef } from './ioparts';
 import { sanitizeReaderRef } from './cardparts';
 import { sanitizeBabyRef } from './babypart';
@@ -128,7 +128,7 @@ function sanitizeEnd(e: unknown): EndRef | null {
 }
 
 function sanitizePin(p: unknown): PinDoc | null {
-  if (!isObj(p) || !str(p.id) || !str(p.name) || !isIdent(p.name) || (p.dir !== 'in' && p.dir !== 'out' && p.dir !== 'inout') || !int(p.width, 1)) return null;
+  if (!isObj(p) || !str(p.id) || !str(p.name) || !isIdent(p.name) || (p.dir !== 'in' && p.dir !== 'out' && p.dir !== 'inout') || !int(p.width, 1) || p.width > MAX_WIDTH) return null;
   const at = vec(p.at);
   if (!at) return null;
   const kind = p.kind === 'toggle' || p.kind === 'button' || p.kind === 'clock' ? p.kind : undefined;

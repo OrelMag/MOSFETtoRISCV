@@ -24,10 +24,10 @@ import {
   type ChipDoc, type CommentDoc, type EndRef, type LabelDoc, type PartDoc, type PartRef, type PinDoc, type WireDoc,
   isIdent, onSegment, slug, uniqueName,
 } from '../editor/model';
-import { isError, partDef } from '../editor/parts';
+import { isError, MAX_WIDTH, partDef } from '../editor/parts';
 import { type ExitDir, instPort, symbolGeom, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
-import { type ImportFailure, type ImportOptions, type ImportResult, MappingTally, type SourceFile } from './report';
+import { type ImportFailure, type ImportOptions, type ImportResult, MappingTally, type SourceFile, tooWide } from './report';
 
 // ---------------------------------------------------------------------------------------------
 // A small XML reader (no DOM in Node): elements, attributes, text, comments, CDATA, entities.
@@ -754,7 +754,7 @@ export function importLogisim(files: SourceFile[], opts: ImportOptions): ImportR
   // The main circuit last, its helpers and sub-circuits before it.
   const i = ctx.chips.findIndex((c) => c.id === top);
   ctx.chips.push(...ctx.chips.splice(i, 1));
-  return { format: 'logisim', chips: ctx.chips, top, mapping: ctx.tally.list(), problems: ctx.problems };
+  return tooWide(ctx.chips, MAX_WIDTH) ?? { format: 'logisim', chips: ctx.chips, top, mapping: ctx.tally.list(), problems: ctx.problems };
 }
 
 function needsClock(ctx: Ctx, name: string, seen = new Set<string>()): boolean {
