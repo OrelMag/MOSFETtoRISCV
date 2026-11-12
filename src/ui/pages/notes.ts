@@ -70,7 +70,7 @@ export class NotesPage implements Page {
       }, label, h('small', null, ` ${count[k]}`))));
     const shown = all.filter((i) => (this.filter === 'all' || i.type === this.filter) && (!this.query || noteHaystack(i).includes(this.query)));
     this.list.replaceChildren(...(shown.length ? shown.map((i) => this.row(i)) : [h('p', { class: 'np-empty' },
-      all.length ? 'Nothing matches.' : 'No notes or bookmarks yet. Use Save and Add note in a step’s header, or the bookmark on a workbench component or a sandbox chip.')]));
+      all.length ? 'Nothing matches.' : 'No notes or bookmarks yet. Use Bookmark and Add note in a step’s header, or the bookmark on a workbench component or a sandbox chip.')]));
   }
 
   private row(it: NoteItem): HTMLElement {
