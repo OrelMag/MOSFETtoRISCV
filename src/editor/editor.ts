@@ -304,7 +304,10 @@ export class Editor {
       this.repaint();
     });
     // a phone shows one tab (the rest are in Open…): rotating or resizing across 760 px redraws the tabs
-    if (typeof matchMedia === 'function') matchMedia('(max-width: 760px)').addEventListener?.('change', () => this.renderTabs());
+    // (the document keeps a query with a listener alive: removed in destroy, or every editor ever opened stays)
+    const narrow = typeof matchMedia === 'function' ? matchMedia('(max-width: 760px)') : null, onNarrow = () => this.renderTabs();
+    narrow?.addEventListener?.('change', onNarrow);
+    this.cleanups.push(() => narrow?.removeEventListener?.('change', onNarrow));
     this.resize = new ResizeObserver(() => {
       this.refreshLean();
       if (!this.fitted && this.canvas.clientWidth > 0) {
@@ -1485,6 +1488,8 @@ export class Editor {
     this.resize.disconnect();
     this.topResize.disconnect();
     this.closeMore();
+    this.menuClose?.();
+    this.groupClose?.();
     if (this.fitFrame) cancelAnimationFrame(this.fitFrame);
     if (this.frame) cancelAnimationFrame(this.frame);
     closePopover();
