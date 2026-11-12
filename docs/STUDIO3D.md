@@ -78,6 +78,7 @@ Material { base, metal, rough, transmit?, tint?, emit?, glow?, bloom?, coat?, be
   - Bump `rev` to re-upload.
   - `mask` discards pixels where the value is 0: holes in a card or a mask plate.
   - It is for data (a CRT's spot, a sensor's picture), not imagery.
+  - No model uses it yet. It has been rendered on a page as emit and mask quads, with a `rev` change re-uploading, and as instances; that check found and fixed the instanced path dropping UVs and colours.
 
 Presets in `M`:
 - Metals: steel, nickel, nickelCarbonized, copper, brass, gold, aluminium, tungsten, solder, getterFlash, silver, nickelSilver, permalloy, mercury.
@@ -140,13 +141,13 @@ Other functions: `boundsOf`, `boundsOfNamed`, `pick(m, o, d, knobs, { moves, hid
 `studioStage({ aria, home, fit?, limits, note, build })` returns `{ el, slot, chips, hint, refresh, instances, move, studio, isFlat, rgb, destroy }`.
 
 **Layout, top to bottom:** the canvas, the numbered list, the tour caption, `slot` (the model's own controls), the bar (Cutaway, Explode, Back, Tour, Reset view), the hint.
-- **Aspect:** the canvas takes the model's aspect from `aspectOf`, clamped to 0.62–1.9. Its width is held so a tall model fits about 78 % of the screen's height.
+- **Aspect:** the canvas takes the model's aspect from `aspectOf`, clamped to 0.62–1.9, but is never under 240 px tall: a long, low model (the relay) gets room above and below rather than a strip. Its width is held so a tall model fits about 78 % of the screen's height.
 - **Home view:** refitted with `fitView` whenever the canvas size changes and the camera is home.
 - **Corner tools:** turn, save image, full screen.
 
 **Labels: picked by measured width, not by device.**
 - **Gutter form:** the names sit in gutters beside the canvas, with leaders to the parts. The gutters are as wide as the longest name.
-- **Badge form:** numbered badges sit at the canvas edges with leaders, and the names go in a list under it. This form is used when the canvas between the gutters would be under 260 px wide or under 240 px tall.
+- **Badge form:** numbered badges sit at the canvas edges with leaders, and the names go in a list under it. This form is used when the canvas between the gutters would be under 260 px wide.
 - The badges spread so they never clump. An anchor whose face turns away is dimmed.
 
 **Hover and pick:**
