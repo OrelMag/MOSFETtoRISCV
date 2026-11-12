@@ -408,6 +408,17 @@ describe('a drill verdict is plain text', () => {
       }
     });
   }
+  it('nor any markup on a near miss or in the answer, now that they show as text', () => {
+    const near = (a: string) => [a + 'x', a.slice(0, -1), a.replace(/\d/, (c) => String((+c + 1) % 10)), a.replace(/[a-z]/, (c) => (c === 'a' ? 'b' : 'a')), a.split('').reverse().join(''), '0', '1', '0x0', 'a+b'];
+    for (const [id, d] of Object.entries(DRILLS)) {
+      const r = rng(11);
+      for (let i = 0; i < 60; i++) {
+        const q = d.make(r);
+        expect(q.answer, `${id} answer`).not.toMatch(/<[a-z]|&[a-z#0-9]+;/i);
+        for (const t of near(q.answer)) expect(q.check(t).why ?? '', `${id}: ${t}`).not.toMatch(/<[a-z/]|&[a-z#0-9]+;/i);
+      }
+    }
+  });
   it('the card drill echoes the character as typed', () => {
     const r = rng(1);
     for (let i = 0; i < 200; i++) {

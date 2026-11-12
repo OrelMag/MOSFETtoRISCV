@@ -58,3 +58,23 @@ describe('settings that are not JSON', () => {
     expect(store['mosfet2riscv:v1:unreadable']).toBe('{"visited":{"gates":[0]');
   });
 });
+
+describe('settings with every field set to a valid value other than its default', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
+  it('load unchanged: the coercion drops nothing a learner can have saved', async () => {
+    const saved = {
+      theme: 'dark', palette: 'lsim', radix: 'sdec', animate: true, modules: false, wide: true, wireFlow: false, netColors: false, vivid: false, board: false,
+      cartoon: false, workingGates: false, vividNets: false, looks: 1, glossary: false, simpleWires: true, autoClock: false, loadDelay: true, singleKeys: false,
+      minimap: false, moveParts: true, zoomOpen: false, lensPlain: true, reduceMotion: true, wireScale: 'thick', grid: 'lines', portNames: false, partNames: false,
+      busValues: false, tapRanges: false, zoomNames: 'large', hideSmall: false, coachDone: { stage: true }, textSize: 120, narrowText: true, analyzer: true,
+      speed: 3, traceLevel: 'cycle', traceRate: 7, overlay: 'power', visited: { gates: [0, 3] }, solved: { 'gates:1': true }, openActs: { '9': true },
+      last: { chapter: 'gates', step: 3 }, moved: STEP_MOVES.length,
+    };
+    const store: Record<string, string> = { 'mosfet2riscv:v1': JSON.stringify(saved) };
+    vi.stubGlobal('localStorage', { getItem: (k: string) => store[k] ?? null, setItem: (k: string, v: string) => { store[k] = v; }, removeItem: (k: string) => { delete store[k]; } });
+    vi.resetModules();
+    const { settings } = await import('../src/ui/settings');
+    settings.set('speed', 3); // any write saves the whole state
+    expect(JSON.parse(store['mosfet2riscv:v1'])).toEqual(saved);
+  });
+});
