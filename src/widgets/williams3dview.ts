@@ -1,6 +1,6 @@
 // The Williams tube in 3D (loaded on demand, modelhost.ts): the beam visits the 1 024 spots in the store's own order (a line at
 // a time, digit 0 on the left), and the pick-up plate's signal shows as the plate and amplifier light for the spot being read.
-// Time is counted in digits (the 1948 machine took 8.5 us a digit; here the speed is a slider).
+// Time is counted in digits (Kilburn's 1947 design: 8.5 us a digit; the replica manual gives 10 us; here the speed is a slider).
 
 import '../styles/crt3d.css';
 import { h } from '../ui/dom';
