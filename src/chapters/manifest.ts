@@ -1033,6 +1033,7 @@ export const MANIFEST: readonly ChapterMeta[] = [
     { title: "What a converter is judged by", challenge: "quiz" },
     { title: "Compare, and compare again", challenge: "quiz", stage: "widget" },
     { title: "The way back: a ladder", challenge: "quiz", stage: "widget" },
+    { title: "The way out: hold and smooth", challenge: "quiz", stage: "widget" },
     { title: "A shaky clock", challenge: "quiz", stage: "widget" },
     { title: "One bit, and feedback", challenge: "quiz", stage: "widget" },
     { title: "The loop in gates, and its CIC", challenge: "reach", stage: "scene" },

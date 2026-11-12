@@ -3,6 +3,7 @@
 import { signedOf, wordOf } from '../comm/signals';
 import { prepareClip, type Clip } from '../dsp/clip';
 import { enob, flashComparators, jitterHolds, jitterLimitDb, jitterMeasuredDb, ladderErrors, ladderOutput, linearity, mismatchedWeights, powerSpectrum, sarConvert, sdBand, sdBitstream, SD_LIMIT, sdLinearModelDb, SdLoop, sdMeasuredDb, sndrDb } from '../dsp/converters';
+import { butterDb, CD, holdDb, linesOf } from '../dsp/dachold';
 import { CicModel, cicWidth } from '../dsp/multirate';
 import { sdConverter } from '../lib/sigmadelta';
 import { h } from '../ui/dom';
@@ -58,6 +59,56 @@ export function ladderWidget(): Widget {
   const sd = slider('Which ladder', 1, 20, 1, seed, (x) => String(x), (x) => { seed = x; paint(); });
   paint();
   return { el: h('div', { class: 'widget mos sr-w' }, h('div', { class: 'panel' }, h('h3', null, `An ${BITS}-bit R-2R ladder, solved node by node`), plot.el, chips.el), h('div', { class: 'panel mos-ctl' }, ss.el, sd.el)) };
+}
+
+// ---- the way out: hold and smooth ------------------------------------------------------------------------------------------------------------
+
+const OVERS = [1, 2, 4, 8] as const;
+const kHz = (f: number) => `${num(f / 1e3, 1)} kHz`;
+export function dacHoldWidget(): Widget {
+  let fTone = 20e3, oi = 0, order = 5, correct = false;
+  const time = plotOf({ W: 640, H: 170, x: [0, 150], y: [-1.2, 1.2], yTicks: [-1, 0, 1], xLabel: 'time, µs', yLabel: 'level', aria: 'The tone, the DAC\'s held staircase of it, and the smoothed output half a sample later' });
+  const spec = plotOf({ W: 640, H: 230, x: [0, 120], y: [-120, 0], yTicks: [-120, -80, -40, 0], xLabel: 'frequency, kHz', yLabel: 'dB under the tone', aria: 'The staircase\'s spectrum: the tone and its images under the hold\'s sin x / x, the smoothing filter, and what is left of each image after it' });
+  const chips = mkChips(4);
+  const paint = () => {
+    const L = OVERS[oi], fs = CD.fs * L, T = 1e6 / fs, corr = correct ? -holdDb(fTone, fs) : 0;
+    // time: three periods of the tone, the samples at the DAC's rate held, and what a perfect smoothing filter leaves of them
+    const span = 3e6 / fTone, steps = Math.ceil(span / T);
+    time.setX(span); time.clear();
+    const ts = range(301).map((i) => (i / 300) * span), g = 10 ** (corr / 20);
+    line(time, ts, ts.map((t) => Math.sin(2 * Math.PI * fTone * t * 1e-6)), 'lump');
+    const sx: number[] = [], sy: number[] = [];
+    for (let k = 0; k < steps; k++) { const v = g * Math.sin(2 * Math.PI * fTone * k * T * 1e-6); sx.push(k * T, (k + 1) * T); sy.push(v, v); }
+    line(time, sx, sy, 'real');
+    const gain = 10 ** ((holdDb(fTone, fs) + corr) / 20);
+    line(time, ts, ts.map((t) => gain * Math.sin(2 * Math.PI * fTone * (t - T / 2) * 1e-6)), 'drv');
+    // spectrum: up to two and a half DAC rates
+    const top = 2.5 * fs;
+    spec.setX(top / 1e3); spec.clear();
+    const fx = range(801).map((i) => (i / 800) * top);
+    line(spec, fx.map((f) => f / 1e3), fx.map((f) => Math.max(-120, holdDb(f, fs) - holdDb(fTone, fs))), 'lump');
+    line(spec, fx.map((f) => f / 1e3), fx.map((f) => Math.max(-120, butterDb(f, CD.band, order))), 'drv');
+    const ls = linesOf(fTone, fs, top), ref = holdDb(fTone, fs);
+    for (const l of ls) {
+      const rel = l.holdDb - ref, after = rel + butterDb(l.f, CD.band, order), x = l.f / 1e3;
+      line(spec, [x, x], [-120, Math.max(-120, rel)], l.image ? 'wire' : 'real');
+      if (l.image) line(spec, [x - top / 1e3 / 120, x + top / 1e3 / 120], [Math.max(-120, after), Math.max(-120, after)], 'near');
+    }
+    const first = ls.find((l) => l.image)!, rel1 = first.holdDb - ref, after1 = rel1 + butterDb(first.f, CD.band, order);
+    chips.set(0, correct ? dbs(0, 2) : dbs(holdDb(fTone, fs), 2), correct ? `droop at the tone, lifted by ${dbs(-holdDb(fTone, fs), 2)} before the DAC` : 'droop at the tone: the hold\'s sin x / x');
+    chips.set(1, `${kHz(first.f)}, ${dbs(rel1)}`, 'the first image, before the filter, under the tone');
+    chips.set(2, dbs(after1), `the first image after an order-${order} filter`);
+    chips.set(3, after1 <= -CD.keepDb ? 'yes' : 'no', `${CD.keepDb} dB under the tone, 16 bits' worth?`);
+  };
+  const sf = slider('Tone', 1000, 20000, 100, fTone, kHz, (x) => { fTone = x; paint(); });
+  const so = slider('Oversampling', 0, 3, 1, oi, (x) => `${OVERS[x]} × (DAC at ${kHz(CD.fs * OVERS[x])})`, (x) => { oi = x; paint(); });
+  const sn = slider('Filter order', 1, 10, 1, order, (x) => `${x} (Butterworth, corner at 20 kHz)`, (x) => { order = x; paint(); });
+  const cb = h('input', { type: 'checkbox' }) as HTMLInputElement;
+  cb.addEventListener('change', () => { correct = cb.checked; paint(); });
+  paint();
+  return { el: h('div', { class: 'widget mos sr-w' },
+    h('div', { class: 'panel' }, h('h3', null, 'CD audio, held and smoothed'), time.el, spec.el, chips.el),
+    h('div', { class: 'panel mos-ctl' }, sf.el, so.el, sn.el, h('label', { class: 'mos-row' }, cb, ' Lift the droop before the DAC'))) };
 }
 
 // ---- jitter --------------------------------------------------------------------------------------------------------------------------------------------

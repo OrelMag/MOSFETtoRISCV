@@ -2,15 +2,17 @@
 // Changing the rate decimating its bits (lib/sigmadelta.ts, dsp/converters.ts, compared every clock). The identity V = z⁻¹U + (1 − z⁻¹)²E is checked exactly on the loop's own error (tests/dsp-converters.test.ts).
 
 import { enob, idealSqnrDb, jitterLimitDb, SD_GUARD, SD_LIMIT, sdErrorPower, sdLinearModelDb, sdMeasuredDb, sdPeak } from '../dsp/converters';
+import { CD, dacRow, holdDb } from '../dsp/dachold';
 import { cicWidth } from '../dsp/multirate';
 import { sdConverter, sdModulator } from '../lib/sigmadelta';
 import { stats } from '../sim/stats';
-import { adcApi, adcScene, CHAIN, chainEnob, clipWidget, jitterWidget, ladderWidget, sarWidget, SCENE_CHAIN, sdWidget } from '../widgets/dspconverters';
+import { adcApi, adcScene, CHAIN, chainEnob, clipWidget, dacHoldWidget, jitterWidget, ladderWidget, sarWidget, SCENE_CHAIN, sdWidget } from '../widgets/dspconverters';
 import { numOf } from './order';
 import type { Chapter } from './types';
 import { groupNum } from '../sim/numfmt';
 
 const n0 = (x: number) => groupNum(Math.round(x));
+const minus = (t: string) => t.replace(/^-/, '−');
 const nands = (d: Parameters<typeof stats>[0]) => stats(d).nands;
 const MOD = (w = CHAIN.w) => nands(sdModulator(2, w));
 const WHOLE = () => nands(sdConverter(CHAIN.order, CHAIN.w, CHAIN.N, CHAIN.R));
@@ -102,6 +104,33 @@ export const chConverters: Chapter = {
         answer: 0,
         explain: 'Going from 0111… to 1000… turns the MSB on and all the others off, and that step is the difference of their errors. Everywhere else fewer bits change.',
         why: ['', 'The reference is the same at every code in this model.', 'This is a static figure, so speed has no part in it.', 'Move σ up and read which code the worst one is before.'],
+      },
+    },
+    {
+      title: 'The way out: hold and smooth',
+      get body() {
+        const r1 = dacRow(1), r4 = dacRow(4), d2 = (x: number) => minus(x.toFixed(2)), d1 = (x: number) => minus(x.toFixed(1)), k = (f: number) => (f / 1e3).toFixed(1);
+        return `
+        <p>The ladder makes a voltage from a word, and it keeps making it until the next word arrives. So what leaves a DAC is not a smooth curve through the samples but a <strong>staircase</strong>: each value held for one sample period. This is called a <strong>zero-order hold</strong>, and it is the cheapest way back, since doing nothing between samples costs nothing. It has three consequences, and the hold's shape decides all three.</p>
+        <p>First, the staircase is late. Its steps sit, on average, half a period after the samples they hold: a delay of T / 2, the same at every frequency, which is harmless.</p>
+        <p>Second, it is quieter at high frequencies. Holding a value for a period has the same effect on each frequency as averaging the signal over a period, and an average over one period T weights a frequency f by sin(πf / fs) / (πf / fs). That is 1 at zero frequency and 0 at fs, 2 fs, and so on, where a whole number of cycles fits in the period and averages out; it is <a href="#/c/signals/3">the narrow pulse's wide spectrum</a> again, for a pulse one period wide. Every frequency in the output is weighted by that curve, so the top of the band comes out lower than the bottom: the <strong>droop</strong>. At a quarter of the sample rate it is ${d2(holdDb(0.25, 1))} dB, at half the rate ${d2(holdDb(0.5, 1))} dB. For CD audio (fs = 44.1 kHz) a 20 kHz tone comes out ${d2(r1.droopDb)} dB. Since the curve is known exactly, it is usually undone before the DAC, by a small digital filter that lifts the top of the band by the same amount.</p>
+        <p>Third, the steps' edges are sound too. Samples at rate fs <a href="#/c/signals/6">cannot tell f from fs − f</a>, fs + f, 2 fs − f and so on, the <a href="#/c/multirate/4">images</a> that interpolating made in chapter ${numOf('multirate')}, and the staircase contains all of them, each weighted by the same sin x / x curve. The curve is no filter: at fs − f it has hardly fallen. For CD audio the first image of a 20 kHz tone sits at ${k(r1.image)} kHz, only ${d1(-r1.imageRelDb)} dB below the tone. Nobody may hear 24 kHz, but an amplifier has to carry it, and anything that samples the output again folds it back into the band. So a DAC is followed by an analogue low-pass, the <strong>reconstruction filter</strong>, which passes the band and removes the images: the mirror of the filter that chapter ${numOf('signals')} put in front of every ADC. Removing them is what turns the staircase into the smooth curve.</p>
+        <p>That filter is where the cost is. To leave the first image ${CD.keepDb} dB under the tone, 16 bits' worth, it must fall by ${d1(r1.needDb)} dB between 20.0 and ${k(r1.image)} kHz. <a href="#/c/iir/0">A Butterworth</a> would need order ${r1.order}; an elliptic filter does it in far fewer, at the price of ripple, ringing and a phase that bends near the edge. The way out is the one chapter ${numOf('multirate')} taught: raise the rate digitally first. Interpolate by 4 and run the DAC at ${k(r4.fs)} kHz, and the first image moves to ${k(r4.image)} kHz, where the hold itself has already taken ${d1(-r4.imageRelDb)} dB off it; the analogue filter needs order ${r4.order}, and the droop at 20 kHz is down to ${d2(r4.droopDb)} dB. Digital filtering is exact and cheap; analogue steepness is neither. This is why audio DACs oversample, and the sigma-delta DAC carries the idea to its end: one bit at a very high rate, and a gentle filter.</p>
+        <table class="mini"><tr><th>DAC rate</th><th>droop at 20 kHz</th><th>first image</th><th>the hold's own loss there</th><th>the filter must still take</th><th>Butterworth order</th></tr>
+        ${[1, 2, 4, 8].map((L) => { const r = dacRow(L); return `<tr><td>${L === 1 ? '' : `${L} × `}${k(r.fs)} kHz</td><td>${d2(r.droopDb)} dB</td><td>${k(r.image)} kHz</td><td>${d1(r.imageRelDb)} dB</td><td>${d1(r.needDb)} dB</td><td>${r.order}</td></tr>`; }).join('')}</table>
+        <div class="try">Set oversampling to 1 and raise the filter order until the first image is ${CD.keepDb} dB under. Then oversample by 4 and see how few orders it takes. Move the tone to the top of the band and switch the droop correction on and off.</div>`;
+      },
+      more: {
+        derive: '<p>The staircase is the samples, each a single point, convolved with a rectangle one period wide, so its spectrum is theirs multiplied by the rectangle\'s: sin(πf / fs) / (πf / fs), the curve the step uses. The filtering is free and cannot be avoided. A DAC that returns to zero between samples is a narrower rectangle: it droops less, and gives up level for it.</p>',
+        real: '<p>The table\'s Butterworth has its −3 dB corner at 20 kHz, so the band\'s top edge itself loses 3 dB: it shows the steepness each rate asks for, not a finished design. A real one puts the corner higher, or uses an elliptic filter, at the price of ripple and phase. The droop correction is an FIR filter whose response is 1 / (sin x / x) up to the band\'s edge, designed as in chapter ' + numOf('firdesign') + '.</p>',
+      },
+      widget: dacHoldWidget,
+      challenge: {
+        kind: 'quiz', question: 'A DAC is changed to run at 4 times the rate, fed by a digital interpolator. What does the analogue filter after it gain?',
+        options: ['The images start much further above the band, so a gentle filter is enough', 'Nothing: the images are at the same frequencies', 'It can be left out: oversampling removes the images', 'It must be steeper, since there is more noise at the higher rate'],
+        answer: 0,
+        explain: 'The images sit around multiples of the DAC\'s rate. Four times the rate puts the first one far above the band, already lowered by the hold, so a few orders of filter finish the job.',
+        why: ['', 'They sit around multiples of the DAC\'s rate, and that rate moved.', 'They are still there, further out and lower; an amplifier still carries them and a later sampler still folds them in.', 'The interpolator adds nothing in the band. What grows is the gap to the first image.'],
       },
     },
     {
