@@ -390,3 +390,31 @@ describe('binary16 / float drill: modes, spacing, special values, subnormals', (
     expect(halves).toBeGreaterThan(20);
   });
 });
+
+describe('a drill verdict is plain text', () => {
+  // Release review m4: placement, test-out, review and the codex's Try one set `why` as HTML, the campaign's drill page as
+  // text; the RV16 decode drill echoed the typed operand raw (markup ran), the card drill escaped it (&lt; on the map page).
+  // The rule now: `why` is text everywhere, and no checker escapes what it echoes.
+  const hostile = ['<b>x</b>', 'add <img src=x>, a1, a2', '<', '&', '12-<'];
+  for (const [id, d] of Object.entries(DRILLS)) {
+    it(id, () => {
+      const r = rng(7);
+      for (let i = 0; i < 40; i++) {
+        const q = d.make(r);
+        for (const t of hostile) {
+          const why = q.check(t).why ?? '';
+          expect(why, `${id}: ${t}`).not.toMatch(/&(lt|gt|amp|quot);/);
+        }
+      }
+    });
+  }
+  it('the card drill echoes the character as typed', () => {
+    const r = rng(1);
+    for (let i = 0; i < 200; i++) {
+      const q = DRILLS.hollerith.make(r);
+      const why = q.check('<').why ?? '';
+      if (/ is /.test(why) && /^</.test(why)) return;
+    }
+    throw new Error('no card question took "<"');
+  });
+});

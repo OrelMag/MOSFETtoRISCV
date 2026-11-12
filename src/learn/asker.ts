@@ -57,7 +57,8 @@ export function drillBox(q: Question, how: string, onAnswer: (right: boolean) =>
     done = true;
     const r = q.check(input.value);
     verdict.className = `lp-verdict ${r.ok ? 'ok' : 'bad'}`;
-    verdict.innerHTML = r.ok ? 'Right.' : `Not quite${r.why ? `: ${r.why}` : '.'} The answer: <code>${q.answer}</code>.${q.explain ? ` ${q.explain}` : ''}`;
+    // why and answer are text (drills.ts Question): what the learner typed is echoed, never parsed as markup; explain is HTML
+    verdict.replaceChildren(...(r.ok ? ['Right.'] : [`Not quite${r.why ? `: ${r.why}` : ''}. The answer: `, h('code', null, q.answer), '.', q.explain ? h('span', { html: ` ${q.explain}` }) : '']));
     input.disabled = true;
     onAnswer(r.ok);
   };
