@@ -136,7 +136,7 @@ export function controlBlock(): ComponentDef {
       ...PHI1.map((s) => bit(c(s), 'out')), ...HELD.map((s) => bit(h(s), 'out')), ...RAW.map((s) => bit(r(s), 'out')),
       bit('hold_pcl', 'out'), bit('hold_pch', 'out'), bit('c_ZO_ADH', 'out'), bit('c_VEC', 'out'), bit(h('PC_INC'), 'out'), bit(h('WRITE'), 'out'),
       bit('rw', 'out'), bit('wa', 'out'), bit('wx', 'out'), bit('wy', 'out'), bit('irld', 'out'), bit('sync', 'out')],
-    symbol: { kind: 'box', label: 'CONTROL' }, rows: 20,
+    symbol: { kind: 'box', label: 'CONTROL' }, rows: 20, place: 'layered',
   });
 }
 
@@ -145,6 +145,8 @@ export function controlBlock(): ComponentDef {
 export function timingBlock(): ComponentDef {
   const L = new Logic();
   const [END, END_INT, NOCROSS, NOTTAKEN, NOCROSS_BR] = ['END', 'END_INT', 'END_NOCROSS', 'END_NOTTAKEN', 'END_NOCROSS_BR'].map((s) => r(s as Sig));
+  // rows (place 'slices'): the end-of-instruction logic, one row per T state of the ring, the branch's state
+  L.slice(0);
   // branch condition: the flag picked by IR7:6, compared with IR5
   const nf = L.aoi([['nir[7]', 'nir[6]', 'fn'], ['nir[7]', 'ir[6]', 'fv'], ['ir[7]', 'nir[6]', 'fc'], ['ir[7]', 'ir[6]', 'fz']]);
   const f = L.inv(nf);
@@ -158,11 +160,13 @@ export function timingBlock(): ComponentDef {
   const nend = L.aoi([[END], [END_INT], [NOCROSS, nacr], [NOTTAKEN, ntaken], [NOCROSS_BR, ncross]], 'nendany');
   L.inv(nend, 'endany');
   // the T ring: one-hot, T1 after the last cycle (or while RES is low)
+  L.slice(1);
   const next1 = L.inv(L.nor(['endany', 'reslow']));
   const t = L.ms(next1, 'p1', 'p2', 't1', 'nt[0]');
   void t;
-  for (let k = 2; k <= 7; k++) L.ms(L.nor([`nt[${k - 2}]`, 'endany', 'reslow']), 'p1', 'p2', `t${k}`, `nt[${k - 1}]`);
+  for (let k = 2; k <= 7; k++) { L.slice(k); L.ms(L.nor([`nt[${k - 2}]`, 'endany', 'reslow']), 'p1', 'p2', `t${k}`, `nt[${k - 1}]`); }
   // the branch's state for the next fetch: within the page, crossed (and the offset's sign)
+  L.slice(8);
   const enBr = L.or([NOTTAKEN, NOCROSS_BR]);
   const nenBr = L.inv(enBr);
   const brCross = L.ms(L.inv(L.aoi([[NOCROSS_BR, cross], [nenBr, 'brcross']])), 'p1', 'p2', 'brcross', 'nbrcross');
@@ -186,7 +190,7 @@ export function timingBlock(): ComponentDef {
       bit('fn'), bit('fv'), bit('fc'), bit('fz'), bus('db', 8, 'in'), bit('carry'), bit('acr'), bit('reslow'), bit('p1'), bit('p2'),
       bus('nt', 7, 'out'), bit('t1', 'out'), bit('endany', 'out'), bit('nendany', 'out'),
       ...['brx', 'brs', 'brnx', 'brns', 'bfn', 'bfp'].map((x) => bit(x, 'out'))],
-    symbol: { kind: 'box', label: 'TIMING' }, rows: 14,
+    symbol: { kind: 'box', label: 'TIMING' }, rows: 14, place: 'slices', gap: 8,
   });
 }
 
@@ -227,7 +231,7 @@ export function intrBlock(): ComponentDef {
     ports: [bit('resb'), bit('irqb'), bit('nmib'), bit('p1'), bit('p2'), bit('r_END'), bit('r_END_NOCROSS'), bit('r_END_NOTTAKEN'), bit('r_BR_FIX'),
       bit('r_END_INT'), bit('r_VEC_SEL'), bit('endany'), bit('nendany'), bit('ni'),
       bit('reslow', 'out'), bit('nreslow', 'out'), bit('intg', 'out'), bit('nintg', 'out'), bit('resetting', 'out'), bit('nresetting', 'out'), bit('vfa', 'out')],
-    symbol: { kind: 'box', label: 'INTERRUPTS' }, rows: 12,
+    symbol: { kind: 'box', label: 'INTERRUPTS' }, rows: 12, place: 'layered', gap: 12,
   });
 }
 

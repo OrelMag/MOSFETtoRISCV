@@ -129,7 +129,11 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
   const ctl = spec.ports.filter((p) => p.width === 1 && p.dir !== 'out');
   const outs1 = spec.ports.filter((p) => p.width === 1 && p.dir === 'out');
   const base = Math.max(6, 2 * ctl.length + 4, 2 * outs1.length + 4);
-  const sliceTop = (s: number) => base + sliceIds.indexOf(s) * P;
+  // rows of their own height when no bus is held to the row pitch
+  const cum: number[] = [];
+  { let y = base; for (const s of sliceIds) { cum.push(y); y += height(s) + VGAP + 2; } cum.push(y); }
+  const sliceTop = (s: number) => (bars.length ? base + sliceIds.indexOf(s) * P : cum[sliceIds.indexOf(s)]);
+  const bandEnd = bars.length ? base + sliceIds.length * P : cum[sliceIds.length];
 
   // control lines that feed one column of every row: a trunk beside the column
   const colOf = (n: string) => depth.get(n)! + 1;
@@ -167,7 +171,7 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
       pins[b.port.name] = [b.side === 'left' ? 0 : xRight, at.get(b.name)![1] + main.pos[1]];
     }
     // what is left stands below the rows
-    let yl = base + sliceIds.length * P + 3, yr = yl;
+    let yl = bandEnd + 3, yr = yl;
     for (const p of placed) {
       if (at.has(p.name) || sliceOf.has(p.name)) continue;
       const g = geo(p.name);
