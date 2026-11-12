@@ -76,7 +76,7 @@ export function modelStage(host: HTMLElement, o: ModelStageOptions): ModelStage 
 
   // 'wait' until the renderer chunk answers; 'flat' without WebGL2 or while the context is lost.
   let mode: 'wait' | 'gl' | 'flat' = 'wait', renderer: Renderer | null = null, dead = false;
-  // PROTOTYPE (proto/3d-rock): ?studio3d draws the same parts on gl/studio.ts (phase 0: no change to any model)
+  // ?studio3d draws the same parts on gl/studio.ts with the model's look (phase 0 of the 3D pass: no change to any model)
   const studioMode = /studio3d/.test(location.search + location.hash);
   let paintParts: ((parts: readonly Part[]) => void) | null = null;
   let last: readonly Anchor[] = [], lblEls: HTMLElement[] = [];
