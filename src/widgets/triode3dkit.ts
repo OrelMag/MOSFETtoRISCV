@@ -27,6 +27,8 @@ const GLASS_R = 14.3, GLASS_T = 0.9, GLASS_Y0 = 12, GLASS_Y1 = 62, DOME_H = 8;
 const BASE_R = 14.8, BASE_H = 13;
 const PIN_D = 2.36, PIN_L = 9.2, KEY_D = 7.9, KEY_L = 12.5;
 const HEATER_LEAD = 150;
+/** The most a hot surface emits of its own (linear): orange stays orange through ACES. */
+const SURFACE_GLOW = 1.1;
 
 const SRC = {
   sheet: 'Tung-Sol 6SN7GTB data sheet: T-9 bulb, intermediate octal base',
@@ -115,7 +117,7 @@ function geos(d: Detail): Geos {
     heater: memoFn(heater),
     getterCup: lathe([[0, 58], [2.2, 58], [2.8, 58.6], [2.9, 59.4], [2.6, 59.4], [2.4, 58.5], [0, 58.4]], { seg: small * 2 }),
     // the type number printed on the glass (silk-screened white), facing the home view
-    print: strokeGeo('6SN7GT', onCylinder(GLASS_R, -0.5), 0, 20.5, 2.4, 0.3, 0.05),
+    print: strokeGeo('6SN7GT', onCylinder(GLASS_R, -0.5), 0, 20.5, 2.2, 0.14, 0.03, { flat: true }),
     electron: sphere(0.15, 8, 5), cloud: lathe([[0, 30.6], [0.85, 30.6], [0.95, 31.4], [0.95, 44], [0.85, 44.6], [0, 44.6]], { seg: full ? 32 : 8 }),
   };
   memo.set(d, g);
@@ -131,10 +133,13 @@ const T = (x: number) => x.toFixed(x < 10 ? 2 : 1).replace(/\.?0+$/, '');
 /** The tube at state st: every item, the cut, the labels and the tour. */
 export function tubeModel(st: TubeState, look: TubeLook): Model3 {
   const G = geos(look.detail), items: Item[] = [];
-  // A hot part: its emission is the black body at its temperature; what light it reflects fades as it outshines it.
+  // A hot part: its emission is the black body at its temperature; what light it reflects fades as it outshines it. The
+  // surface's own emission is held under the tone curve's knee so a coil at 1 173 K reads orange with its turns shaded,
+  // not clipped white (white is far hotter): the glow lights and the bloom carry the rest of its brightness.
   const hot = (T0: number, m: Material): Material => {
     const g = heatGlow(T0), k = 1 / (1 + 1.2 * g), b = m.base as [number, number, number];
-    return { ...M.glow(m, heatColour(T0), g), base: [b[0] * k, b[1] * k, b[2] * k] };
+    const s = Math.min(g, SURFACE_GLOW);
+    return { ...M.glow(m, heatColour(T0), s), bloom: s > 0 ? g / s : 1, base: [b[0] * k, b[1] * k, b[2] * k] };
   };
   const brass = M.tint(M.nickel, [0.78, 0.72, 0.6], 'nickel-plated brass');
   const moly = M.make({ base: [0.8, 0.8, 0.82], metal: 1, rough: 0.28, label: 'molybdenum wire' });
@@ -191,7 +196,7 @@ export function tubeModel(st: TubeState, look: TubeLook): Model3 {
   // Getter: the cup on its wire above the top mica, and the barium mirror it flashed onto the dome.
   items.push({ geo: G.rod(MICA_HI, 58.2, 0.25), mat: M.nickel, name: 'getter', group: 'getter', explode: [0, 52, 0] });
   items.push({ geo: G.getterCup, mat: M.nickel, name: 'getter', group: 'getter', explode: [0, 52, 0], info: { dim: '5.5 mm cup', source: SRC.photo, note: 'barium, flashed by induction heating after pumping: it soaks up the gas the pump left' } });
-  items.push({ geo: G.print, mat: M.make({ base: [0.94, 0.94, 0.92], metal: 0, rough: 0.6, label: 'silk-screened print' }), name: 'type number', group: 'glass', explode: [0, 90, 0], shadow: false, info: { note: 'the tube type, printed on the glass' } });
+  items.push({ geo: G.print, mat: M.make({ base: [0.9, 0.9, 0.86], metal: 0, rough: 1, transmit: 0.5, label: 'silk-screened print (thin translucent ink)' }), name: 'type number', group: 'glass', explode: [0, 90, 0], shadow: false, info: { note: 'the tube type, printed on the glass' } });
   items.push({ geo: G.getterFlash, mat: { ...M.getterFlash, base: [0.8, 0.79, 0.76], rough: 0.06, transmit: 0.32, tint: [0.45, 0.43, 0.4], label: 'barium getter film (a mirror)' }, name: 'getter mirror', group: 'glass', explode: [0, 90, 0], cut: 'open', shadow: false, info: { source: SRC.photo, note: 'the silvery film inside the dome: still silver means the vacuum is good; white means air got in' } });
   items.push({ geo: G.glass, mat: M.glass, name: 'glass bulb', group: 'glass', explode: [0, 90, 0], info: { dim: `${T(2 * GLASS_R)} mm (T-9), wall ${GLASS_T} mm`, source: SRC.sheet } });
   return { items, cuts: CUT, anchors: ANCHORS, beats: beats(st), floor: -KEY_L, lights };

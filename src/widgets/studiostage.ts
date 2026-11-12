@@ -51,7 +51,9 @@ export interface StudioStage {
   destroy(): void;
 }
 
-const FW = 640, FH = 520, NARROW = 560;
+const FW = 640, FH = 520;
+/** The narrowest canvas the names may flank: below it, numbered badges and the list (measured, not by device). */
+const MIN_CANVAS = 260, GUTTER_MIN = 56, GUTTER_MAX = 150;
 /** The canvas's aspect (w / h) is the model's, held within these. */
 const ASPECT_MIN = 0.62, ASPECT_MAX = 1.9;
 const ease = (t: number) => t * t * (3 - 2 * t);
@@ -124,7 +126,16 @@ export function studioStage(o: StudioStageOptions): StudioStage {
 
   // ---------------------------------------------------------------- labels: gutters, leaders, phone badges
 
-  let lblKey = '';
+  let lblKey = '', gutterW = 112;
+  /** The gutter width the longest name needs, from the label's own font. */
+  const measureGutter = () => {
+    const probe = h('span', { class: 'st-lbl', style: 'position:absolute;visibility:hidden;left:auto;right:auto;width:auto;overflow:visible' });
+    el.append(probe);
+    let w = 0;
+    for (const r of rows) { probe.textContent = r.a.text; w = Math.max(w, probe.getBoundingClientRect().width); }
+    probe.remove();
+    gutterW = Math.round(Math.max(GUTTER_MIN, Math.min(GUTTER_MAX, w + 4)));
+  };
   let rows: { a: StudioAnchor; el: HTMLElement; badge: HTMLElement; li: HTMLElement }[] = [];
   const makeLabels = () => {
     const anchors = (model.anchors ?? []).filter((a) => !a.minor);
@@ -134,6 +145,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     rows = anchors.map((a, i) => ({ a, el: h('span', { class: 'st-lbl' }, a.text), badge: h('span', { class: 'st-badge' }, String(i + 1)), li: h('li', null, h('b', null, String(i + 1)), ' ', a.text) }));
     badges.replaceChildren(...rows.map((r) => r.badge));
     list.replaceChildren(...rows.map((r) => r.li));
+    measureGutter();
   };
   /** Spread n wanted heights at least `gap` apart within [top, bottom], keeping their order. */
   const spread = (want: number[], gap: number, top: number, bottom: number) => {
@@ -146,8 +158,9 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     if (mode !== 'gl' || !st) return;
     makeLabels();
     refit();
-    const W = canvas.clientWidth, H = canvas.clientHeight, cam = st.camera, eye = cam.eye(), under = cam.pitch < -0.25, narrow = el.clientWidth < NARROW;
-    el.classList.toggle('narrow', narrow);
+    const W = canvas.clientWidth, H = canvas.clientHeight, cam = st.camera, eye = cam.eye(), under = cam.pitch < -0.25, narrow = el.clientWidth - 2 * gutterW < MIN_CANVAS || rows.length === 0;
+    if (el.classList.contains('narrow') !== narrow) { el.classList.toggle('narrow', narrow); requestAnimationFrame(() => st?.invalidate()); }
+    stage.style.gridTemplateColumns = narrow ? '' : `${gutterW}px minmax(0, 1fr) ${gutterW}px`;
     const k = st.knobs().explode;
     const seen: { r: typeof rows[number]; x: number; y: number; away: boolean }[] = [];
     for (const r of rows) {

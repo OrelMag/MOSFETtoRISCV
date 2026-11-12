@@ -32,6 +32,9 @@ export interface Material {
   tint?: Colour;
   /** Light given off (sRGB) and how strongly (≥ 0; 1 is a part lit as bright as white paper). */
   emit?: Colour; glow?: number;
+  /** How much more the emission feeds the bloom than the surface shows (default 1): a hot coil held orange on its
+   *  surface while its halo carries the black body's full brightness. */
+  bloom?: number;
   /** A clear lacquer over the base (bakelite's shine, enamel): its strength 0..1. */
   coat?: number;
   /** Additive light that writes no depth: a ray of light, a beam of UV, a current's path, a lamp's glow. */

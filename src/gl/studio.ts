@@ -106,7 +106,7 @@ precision highp sampler2DShadow;
 in vec3 vN; in vec3 vW; in vec4 vL; in vec4 vC; in vec3 vE; in vec3 vVC; in vec2 vUV;
 uniform vec3 uEye, uKeyDir, uKeyCol, uSky, uGround, uAccent;
 uniform vec3 uBase, uEmit, uTint;
-uniform float uMetal, uRough, uCoat, uTransmit, uExposure, uDim, uRim;
+uniform float uMetal, uRough, uCoat, uTransmit, uExposure, uDim, uRim, uBloomK;
 uniform int uMode;        // 0 opaque, 1 thin glass (blended), 2 glass over the frame copy, 3 floor, 4 beam (additive)
 uniform int uCutOn, uNCut;
 uniform vec4 uCut[2];
@@ -253,7 +253,7 @@ void main() {
     float l = dot(outc, vec3(0.299, 0.587, 0.114));
     outc = mix(outc, vec3(l) * 0.55 + 0.2, uDim);
     o = vec4(outc * vC.a, vC.a);
-    og = vec4(min(emit * uExposure * 0.35 * (1.0 - uDim), vec3(1.0)), 1.0);
+    og = vec4(min(emit * uBloomK * uExposure * 0.35 * (1.0 - uDim), vec3(1.0)), 1.0);
     return;
   }
   float NoV = max(dot(n, V), 1e-3);
@@ -324,7 +324,7 @@ void main() {
 
 interface GpuGeo { vbo: WebGLBuffer; ibo: WebGLBuffer; vao: WebGLVertexArrayObject; count: number; cbo: WebGLBuffer | null; ubo: WebGLBuffer | null; rev: number }
 interface Draw { item: Item; geo: GpuGeo; src: Geo; mat: ResolvedMat; glass: boolean; key: string[] }
-interface ResolvedMat { base: RGB; emit: RGB; tint: RGB; metal: number; rough: number; coat: number; transmit: number; glow: number; beam: boolean; data: DataTex | null }
+interface ResolvedMat { base: RGB; emit: RGB; tint: RGB; metal: number; rough: number; coat: number; transmit: number; glow: number; bloom: number; beam: boolean; data: DataTex | null }
 interface InstSet { casts: boolean; geo: Geo; mat: ResolvedMat; vao: WebGLVertexArrayObject | null; buf: WebGLBuffer | null; data: Float32Array; count: number; gpu: GpuGeo | null }
 interface Target { fb: WebGLFramebuffer; tex: WebGLTexture; w: number; h: number }
 
@@ -457,7 +457,7 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
 
   const resolveMat = (m: Material): ResolvedMat => ({
     base: resolve(m.base), emit: m.emit ? resolve(m.emit).map((v) => v * (m.glow ?? 1)) as RGB : [0, 0, 0],
-    tint: m.tint ? resolve(m.tint) : [1, 1, 1], metal: m.metal, rough: m.rough, coat: m.coat ?? 0, transmit: m.transmit ?? 0, glow: m.glow ?? 0,
+    tint: m.tint ? resolve(m.tint) : [1, 1, 1], metal: m.metal, rough: m.rough, coat: m.coat ?? 0, transmit: m.transmit ?? 0, glow: m.glow ?? 0, bloom: m.bloom ?? 1,
     beam: !!m.beam, data: m.data ?? null,
   });
 
@@ -565,6 +565,7 @@ export function createStudio(canvas: HTMLCanvasElement, camera: OrbitCamera, opt
 
   const setMat = (u: Record<string, WebGLUniformLocation | null>, m: ResolvedMat) => {
     gl.uniform3fv(u.uBase, m.base); gl.uniform3fv(u.uEmit, m.emit); gl.uniform3fv(u.uTint, m.tint);
+    if (u.uBloomK) gl.uniform1f(u.uBloomK, m.bloom);
     gl.uniform1f(u.uMetal, m.metal); gl.uniform1f(u.uRough, m.rough); gl.uniform1f(u.uCoat, m.coat); gl.uniform1f(u.uTransmit, m.transmit);
     if (m.data) {
       gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, texOf(m.data)); gl.uniform1i(u.uData, 2);

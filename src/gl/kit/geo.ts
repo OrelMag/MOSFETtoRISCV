@@ -408,6 +408,14 @@ export function surface(fn: (u: number, v: number) => Vec3, nu = 32, nv = 32): G
   return g;
 }
 
+/** A strip between two rows of points (left[i], right[i]) facing the given normals: ink on a surface, a flat
+ *  ribbon cable, a trace on a board. One-sided; its vertices carry the surface's normals. */
+export function ribbon(left: readonly Vec3[], right: readonly Vec3[], normals: readonly Vec3[], name = 'ribbon'): Geo {
+  const b = new Builder(), L = left.map((p, i) => b.v(p, normals[i])), R = right.map((p, i) => b.v(p, normals[i]));
+  for (let i = 0; i + 1 < left.length; i++) b.vquad(L[i], L[i + 1], R[i + 1], R[i]);
+  return b.done(name);
+}
+
 /** The point at fraction s (0..1, by length) along a polyline: particles riding a wire, a pulse along a path. */
 export function along(path: readonly Vec3[], s: number): Vec3 {
   const L: number[] = [0];

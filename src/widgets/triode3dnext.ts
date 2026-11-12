@@ -81,7 +81,7 @@ export function triodeNextView(): Widget {
     barNote.textContent = `Plate ${pw.toFixed(2)} W against the 6SN7GTB rating of ${PLATE_RATING_W} W (max 450 V, 20 mA of cathode current per section).`;
   };
 
-  const eMat = M.make({ base: '--tb-electron', metal: 0, rough: 0.4, emit: '--tb-electron', glow: 1.4, label: 'electrons (drawn larger than life)' });
+  const eMat = M.make({ base: '--tb-electron', metal: 0, rough: 0.4, emit: '--tb-electron', glow: 0.7, label: 'electrons (drawn larger than life)' });
   const putElectrons = () => {
     const list: Instance[] = electrons.map((q) => ({ pos: electronAt(q.th, q.y, rhoOf(q)), color: [1, 1, 1] }));
     stage.instances('electrons', ELECTRON, eMat, packInstances(list));
