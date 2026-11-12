@@ -50,7 +50,7 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 @media (max-width: 1760px) { .brand small { display: none; } }
 @media (max-width: 1380px) { .brand-long { display: none; } }
 @media (max-width: 1220px) { .tools .lbl { display: none; } }
-@media (max-width: 960px) { .nav a span { display: none; } }
+@media (max-width: 1100px) { .nav a span { display: none; } }
 @media (max-width: 580px) { .brand-name { display: none; } }
 /* Quick return (ui/returnto.ts): the way back after a jump into another section, beside the nav. data-fit (returnto.ts fit):
    the full label while the nav still fits beside it, else the short one ("Ch 07 · 3"), else the arrow alone; the full one in
