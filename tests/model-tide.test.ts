@@ -1,10 +1,11 @@
 // The tide predictor's drawing held to the chapter's own Fourier series (comm/fourier.ts): the pen's height, found only from the
-// cord's constant length and the pulleys' positions, is the chapter's sum at every sample time.
+// cord's constant length and the pulleys' positions, is the chapter's sum at every sample time on the later machines' slotted
+// yokes ('yoke', the functions' default), and nearly so on the 1872 machine's crank pins ('pins'), which the last block bounds.
 import { describe, expect, it } from 'vitest';
 import type { RGB } from '../src/gl/instances';
 import { gibbsPeak, PATTERNS, seriesOf, sumAt } from '../src/comm/fourier';
 import {
-  A_ARC, GEAR_C, N_CRANKS, PAPER_L, PEN_SCALE, PEN_X, PITCH, TIDE_PRESET, angleOf, beatHours, gearRadii, handAngle, paperSpeed, ratioOf, throwMm, cordPath, crankX, levelOf, offsetsAt, pathLength, penTip, tideAnchors, tideOf, tideParts,
+  A_ARC, GEAR_C, N_CRANKS, PAPER_L, PEN_SCALE, PEN_X, PITCH, TIDE_PRESET, angleOf, beatHours, gearRadii, handAngle, paperSpeed, ratioOf, throwMm, cordPath, crankX, levelOf, offsetsAt, pathLength, penTip, sidewaysAt, cordLength, tideAnchors, tideOf, tideParts,
   traceOf, type TidePalette,
 } from '../src/widgets/tide3dparts';
 
@@ -105,6 +106,10 @@ describe('the drawing', () => {
     for (const p of parts) for (const v of [...p.pos, ...(p.scale ?? [])]) expect(Number.isFinite(v)).toBe(true);
     const a = tideAnchors(td);
     expect(new Set(a.map((x) => x.text)).size).toBe(a.length);
+    const pins = tideParts(td, ALL, 1.2, P, false, 'pins'), ap = tideAnchors(td, 'pins');
+    for (const p of pins) for (const v of [...p.pos, ...(p.scale ?? [])]) expect(Number.isFinite(v)).toBe(true);
+    expect(new Set(ap.map((x) => x.text)).size).toBe(ap.length);
+    expect(ap.some((x) => x.text === 'pulley on its crank pin')).toBe(true);
   });
 });
 
@@ -116,7 +121,9 @@ describe('the real tide preset', () => {
     expect(td.harms).toHaveLength(N_CRANKS);
     const speed = (n: string) => td.harms[td.names.indexOf(n)].k;
     expect(speed('M2')).toBeCloseTo(28.984104, 6); expect(speed('S2')).toBe(30); expect(speed('N2')).toBeCloseTo(28.43973, 5);
-    expect(speed('K1')).toBeCloseTo(15.041069, 6); expect(speed('O1')).toBeCloseTo(13.943036, 6);
+    expect(speed('K1')).toBeCloseTo(15.041069, 6); expect(speed('L2')).toBeCloseTo(29.528479, 6);
+    // the 1872 machine's ten (Woodworth 2016, p. 15)
+    expect(new Set(td.names)).toEqual(new Set(['M2', 'S2', 'N2', 'K2', 'Q1', 'K1', 'L2', 'P1', 'M4', 'MS4']));
     // M2 + S2 = MS4, 2 M2 = M4: the shallow-water terms are sums of the main ones
     expect(speed('MS4')).toBeCloseTo(speed('M2') + speed('S2'), 6); expect(speed('M4')).toBeCloseTo(2 * speed('M2'), 6);
     // M4 is exactly 2 M2 (a shallow-water overtide); every other pair is incommensurate with an integer ratio
@@ -190,6 +197,47 @@ describe('the gearing and the slotted cranks', () => {
       expect(parts.length).toBeLessThan(800);
       for (const p of parts) for (const v of [...p.pos, ...(p.scale ?? [])]) expect(Number.isFinite(v)).toBe(true);
       expect(new Set(tideAnchors(td).map((a) => a.text)).size).toBe(tideAnchors(td).length);
+    }
+  });
+});
+
+describe('the 1872 machine: pulleys on crank pins (Woodworth 2016, after Cartwright 1999)', () => {
+  const sum = (td: ReturnType<typeof tideOf>, on: boolean[], t: number) => td.harms.reduce((v, h, i) => v + (on[i] ? h.amp * Math.cos(angleOf(h, td.n, t)) : 0), td.dc);
+  it('a pin moves its pulley sideways by throw · sin θ; a yoke never does', () => {
+    const td = tideOf(0);
+    for (const t of TIMES) {
+      const e = sidewaysAt(td, ALL, t, 'pins');
+      td.harms.forEach((h, i) => expect(e[i]).toBeCloseTo((PEN_SCALE / 2) * h.amp * Math.sin(angleOf(h, td.n, t)), 12));
+      expect(sidewaysAt(td, ALL, t, 'yoke').every((v) => v === 0)).toBe(true);
+      expect(sidewaysAt(td, prefix(3), t, 'pins').slice(3).every((v) => v === 0)).toBe(true);
+    }
+  });
+  it('the cord keeps its length with the legs tilted, and with no sideways motion it is the yoke machine exactly', () => {
+    const td = tideOf(0), rest = cordLength(Array(N_CRANKS).fill(0), 0, penTip(Array(N_CRANKS).fill(0), 0));
+    for (const t of TIMES) {
+      const d = offsetsAt(td, ALL, t), e = sidewaysAt(td, ALL, t, 'pins');
+      expect(cordLength(d, td.dc, penTip(d, td.dc, e), e)).toBeCloseTo(rest, 9);
+      expect(penTip(d, td.dc, Array(N_CRANKS).fill(0))).toBe(penTip(d, td.dc));
+      const p = cordPath(d, td.dc, e);
+      expect(p[p.length - 1][1] - 3).toBeCloseTo(penTip(d, td.dc, e), 9);
+    }
+  });
+  it('the pen is the sum only nearly: a small error that grows as the square of the throws', () => {
+    for (const pat of [0, TIDE_PRESET]) {
+      const td = tideOf(pat), T = pat === TIDE_PRESET ? 720 : td.n;
+      const errAt = (scale: number) => {
+        const tds = { ...td, harms: td.harms.map((h) => ({ ...h, amp: h.amp * scale })) };
+        let m = 0, peak = 0;
+        for (let i = 0; i <= 2000; i++) {
+          const t = (i / 2000) * T, d = offsetsAt(tds, ALL, t), e = sidewaysAt(tds, ALL, t, 'pins'), s = sum(tds, ALL, t);
+          m = Math.max(m, Math.abs(levelOf(penTip(d, tds.dc, e)) - s)); peak = Math.max(peak, Math.abs(s));
+        }
+        return { m, peak };
+      };
+      const full = errAt(1), half = errAt(0.5);
+      expect(full.m).toBeGreaterThan(0.01);
+      expect(full.m / full.peak).toBeLessThan(0.1);
+      expect(half.m / full.m).toBeGreaterThan(0.2); expect(half.m / full.m).toBeLessThan(0.3); // about a quarter
     }
   });
 });

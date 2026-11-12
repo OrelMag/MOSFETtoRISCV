@@ -82,7 +82,8 @@ export const chAppendixAgc: Chapter = {
         that landed, has 15-bit words (16 in memory, with a parity bit) in one's complement (a number is negated by inverting every bit; step 4 shows what that
         costs the adder), ${groupNum(BLOCK2_ROPE.words)} words of read-only <strong>fixed</strong> memory and 2048 of
         <strong>erasable</strong> (read-write) memory, a memory cycle time (<strong>MCT</strong>) of ${MCT_US} µs, about 5600 gates in 2800 packages, 70 pounds and
-        55 watts (Table 2-1 of R-700, E. C. Hall's 1972 history of the computer for MIT, the source of every number here).</p>
+        55 watts (Table 2-1 of R-700, E. C. Hall's 1972 history of the computer for MIT, the source of every number here; NASA's
+        own history, J. Tomayko's <i>Computers in Spaceflight</i>, gives the same machine 70 watts at 28 volts).</p>
         <p>All of its logic is one circuit. In R-700's words it is "three NPN bipolar transistors and four resistors
         connected as a modified direct-coupled transistor logic or DCTL NOR gate", also called <strong>resistor-transistor
         logic</strong>: the transistors' emitters to ground, their collectors joined under one <span data-show="rc">collector
