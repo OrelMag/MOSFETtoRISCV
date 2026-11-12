@@ -76,7 +76,12 @@ export function decodeBlock(): ComponentDef {
   const L = new Logic();
   const rows = plaRows();
   const rowsOf = new Map<number, string[]>(SIGNALS.map((_, i) => [i, []]));
+  // rows (place 'slices'): the product terms of one signal together, its NOR level with them; a term that feeds several signals is a label
+  const count = new Map<number, number>();
+  for (const row of rows) for (const s of row.outs) count.set(s, (count.get(s) ?? 0) + 1);
+  const home = (outs: number[]) => outs.reduce((a, b) => ((count.get(b) ?? 0) > (count.get(a) ?? 0) ? b : a));
   rows.forEach((row, k) => {
+    L.slice(home(row.outs));
     const ins: string[] = [`nt[${row.t - 1}]`];
     for (let i = 0; i < 8; i++) {
       if ((row.cube.mask >> i) & 1) continue;
@@ -87,6 +92,7 @@ export function decodeBlock(): ComponentDef {
     for (const s of row.outs) rowsOf.get(s)!.push(out);
   });
   SIGNALS.forEach((s, i) => {
+    L.slice(i);
     const ins = [...rowsOf.get(i)!, ...(EXTRA[s] ?? [])];
     if (ins.length) L.nor(ins, n(s));
     else L.pullup('VDD', n(s)); // never asserted: tied off
@@ -95,7 +101,7 @@ export function decodeBlock(): ComponentDef {
     id: 'm65_decode', name: '6502 decode PLA',
     summary: `${rows.length} product terms of IR and the T state (each a NOR of complemented literals), ORed per control signal (a NOR of its rows): the control table of src/m6502/ucode.ts, minimized with the undocumented opcodes as don't-cares.`,
     ports: [bus('ir', 8, 'in'), bus('nir', 8, 'in'), bus('nt', 7, 'in'), ...EXTRA_NETS.map((x) => bit(x)), ...SIGNALS.map((s) => bit(n(s), 'out'))],
-    symbol: { kind: 'box', label: 'DECODE PLA' }, rows: 24,
+    symbol: { kind: 'box', label: 'DECODE PLA' }, rows: 24, place: 'slices', top: true, across: false,
   });
 }
 

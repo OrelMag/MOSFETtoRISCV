@@ -49,6 +49,7 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
     for (const e of n.ends) { const i = inst(e); const s = i === null ? undefined : sliceOf.get(i); if (s !== undefined) { if (!bySlice.has(s)) bySlice.set(s, []); bySlice.get(s)!.push(e); } }
     for (const es of bySlice.values()) {
       const d = es[0];
+      if (d !== n.ends[0]) continue;
       for (const e of es.slice(1)) if (inst(e) !== inst(d) && idx.get(inst(d)!)! < idx.get(inst(e)!)!) preds.get(inst(e)!)!.push({ from: inst(d)!, fp: portOf(d), tp: portOf(e) });
     }
   }
@@ -129,19 +130,25 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
   const ctl = spec.ports.filter((p) => p.width === 1 && p.dir !== 'out');
   const outs1 = spec.ports.filter((p) => p.width === 1 && p.dir === 'out');
   const base = Math.max(6, 2 * ctl.length + 4, 2 * outs1.length + 4);
+  // what is left of the parts stands below the rows, or above them (spec.top: a PLA's input bars)
+  const rightSided = (n: string) => spec.ports.some((q) => `${q.name}_bits` === n && q.dir === 'out');
+  const leftExtras = placed.filter((p) => !sliceOf.has(p.name) && !isBar(p.name) && !rightSided(p.name));
+  const exGap = spec.top ? 3 : 8;
+  const bandBase = spec.top ? base + leftExtras.reduce((a, p) => a + geo(p.name).h + exGap, 0) + 4 : base;
   // rows of their own height when no bus is held to the row pitch
   const cum: number[] = [];
-  { let y = base; for (const s of sliceIds) { cum.push(y); y += height(s) + VGAP + 2; } cum.push(y); }
-  const sliceTop = (s: number) => (bars.length ? base + sliceIds.indexOf(s) * P : cum[sliceIds.indexOf(s)]);
-  const bandEnd = bars.length ? base + sliceIds.length * P : cum[sliceIds.length];
+  { let y = bandBase; for (const s of sliceIds) { cum.push(y); y += height(s) + VGAP + 2; } cum.push(y); }
+  const sliceTop = (s: number) => (bars.length ? bandBase + sliceIds.indexOf(s) * P : cum[sliceIds.indexOf(s)]);
+  const bandEnd = bars.length ? bandBase + sliceIds.length * P : cum[sliceIds.length];
 
   // control lines that feed one column of every row: a trunk beside the column
   const colOf = (n: string) => depth.get(n)! + 1;
   const trunkNets = new Map<string, number>(); // net name → column
   for (const n of nets) {
-    const pins = n.ends.filter((e) => inst(e) === null);
-    const sinks = n.ends.filter((e) => inst(e) !== null);
-    if (pins.length !== 1 || !ctl.some((p) => p.name === pins[0]) || sinks.length < 3) continue;
+    const d0 = n.ends[0], sinks = n.ends.slice(1);
+    const pinDrv = inst(d0) === null && ctl.some((p) => p.name === d0);
+    const barDrv = inst(d0) !== null && !sliceOf.has(inst(d0)!) && spec.ports.some((p) => `${p.name}_bits` === inst(d0)) && !isBar(inst(d0)!);
+    if (!(pinDrv || barDrv) || n.ends.filter((e) => inst(e) === null).length !== (pinDrv ? 1 : 0) || sinks.length < 3) continue;
     if (!sinks.every((e) => sliceOf.has(inst(e)!) && geo(inst(e)!).ports[portOf(e)].exit !== 'right')) continue;
     const cols = new Set(sinks.map((e) => colOf(inst(e)!)));
     if (cols.size !== 1 || new Set(sinks.map((e) => sliceOf.get(inst(e)!))).size < 2) continue;
@@ -171,18 +178,29 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
       pins[b.port.name] = [b.side === 'left' ? 0 : xRight, at.get(b.name)![1] + main.pos[1]];
     }
     // what is left stands below the rows
-    let yl = bandEnd + 3, yr = yl;
+    let yl = spec.top ? base : bandEnd + 3, yr = spec.top ? base : bandEnd + 3;
     for (const p of placed) {
       if (at.has(p.name) || sliceOf.has(p.name)) continue;
       const g = geo(p.name);
-      const right = spec.ports.some((q) => `${q.name}_bits` === p.name && q.dir === 'out');
-      if (right) { at.set(p.name, [xs[D + 1], yr]); yr += g.h + 8; } else { at.set(p.name, [xs[0], yl]); yl += g.h + 8; }
+      const right = rightSided(p.name);
+      if (right) { at.set(p.name, [xs[D + 1], yr]); yr += g.h + exGap; } else { at.set(p.name, [xs[0], yl]); yl += g.h + exGap; }
       const q = spec.ports.find((r) => `${r.name}_bits` === p.name);
       if (q) {
         const main = g.ports[q.dir === 'in' ? 'in' : 'out'];
         pins[q.name] = [right ? xRight : 0, at.get(p.name)![1] + main.pos[1]];
       }
     }
+    // an output pin on a net with nothing else: level with its driver, pushed down where two meet
+    const levelOuts: string[] = [];
+    for (const p of outs1) {
+      const n = nets.find((x) => x.ends.includes(p.name));
+      if (n && n.ends.length === 2 && inst(n.ends[0]) !== null && sliceOf.has(inst(n.ends[0])!)) {
+        const q = geo(inst(n.ends[0])!).ports[portOf(n.ends[0])].pos[1] + at.get(inst(n.ends[0])!)![1];
+        pins[p.name] = [xRight, q]; levelOuts.push(p.name);
+      }
+    }
+    levelOuts.sort((a, b) => pins[a][1] - pins[b][1]);
+    levelOuts.forEach((p, i) => { if (i && pins[p][1] < pins[levelOuts[i - 1]][1] + 2) pins[p][1] = pins[levelOuts[i - 1]][1] + 2; });
     let i1 = 0, o1 = 0;
     for (const p of spec.ports) {
       if (pins[p.name]) continue;
@@ -196,15 +214,20 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
     };
     // wires where one reads well: a pin straight into its bar, a short forward net; trunks for shared controls; labels otherwise
     const kind = new Map<NetDef, 'wire' | 'tag' | 'trunk'>();
-    const nextTrunk = new Map<number, number>();
+    // trunks of a column left to right in the order their drivers stand bottom to top, so no run crosses another's trunk
+    const trunkIdx = new Map<string, number>();
+    for (const col of new Set(trunkNets.values())) {
+      nets.filter((n) => trunkNets.get(n.name!) === col).sort((a, b) => endPos(b.ends[0])[1] - endPos(a.ends[0])[1]).forEach((n, j) => trunkIdx.set(n.name!, j));
+    }
     const out: NetDef[] = nets.map((n) => {
       let k: 'wire' | 'tag' | 'trunk' = 'tag';
       const pinEnds = n.ends.filter((e) => inst(e) === null);
       if (trunkNets.has(n.name!)) k = 'trunk';
       else if (pinEnds.length) {
         const o = n.ends.filter((e) => inst(e) !== null);
-        if (n.ends.length === 2 && o.length === 1 && o[0].endsWith(spec.ports.find((q) => q.name === pinEnds[0])?.dir === 'in' ? '.in' : '.out') && spec.ports.some((q) => `${q.name}_bits` === inst(o[0]))) k = 'wire';
-      } else if (n.ends.length <= 5 && n.ends.every((e) => sliceOf.has(inst(e)!) || isBar(inst(e)!)) && !/^(rails?|vdd|gnd)$/i.test(n.name ?? '')) {
+        if (outs1.some((q) => q.name === pinEnds[0]) && n.ends.length === 2 && inst(n.ends[0]) !== null && sliceOf.has(inst(n.ends[0])!)) k = 'wire';
+        else if (n.ends.length === 2 && o.length === 1 && o[0].endsWith(spec.ports.find((q) => q.name === pinEnds[0])?.dir === 'in' ? '.in' : '.out') && spec.ports.some((q) => `${q.name}_bits` === inst(o[0]))) k = 'wire';
+      } else if (n.ends.length <= 5 && n.ends.every((e) => sliceOf.has(inst(e)!) || isBar(inst(e)!)) && (spec.across !== false || new Set(n.ends.map((e) => sliceOf.get(inst(e)!)).filter((x) => x !== undefined)).size <= 1) && !/^(rails?|vdd|gnd)$/i.test(n.name ?? '')) {
         const d = endPos(n.ends[0]);
         if (n.ends.slice(1).every((e) => { const q = endPos(e); return q[0] >= d[0] - 2 && Math.abs(q[0] - d[0]) + Math.abs(q[1] - d[1]) <= 45; })) k = 'wire';
       }
@@ -213,9 +236,8 @@ export function layoutSlices(spec: BlockSpec, placed0: Placed[], nets: NetDef[],
       const w = { ...n }; delete w.tags;
       if (k === 'wire') return w;
       const col = trunkNets.get(n.name!)!;
-      const j = nextTrunk.get(col) ?? 0;
-      nextTrunk.set(col, j + 1);
-      return { ...w, trunk: xs[col] - Math.ceil(leftRoom[col]) - 1.5 - j };
+      const j = trunkIdx.get(n.name!)!;
+      return { ...w, trunk: xs[col] - Math.ceil(leftRoom[col]) - 1.5 - (trunksInto(col) - 1 - j) };
     });
     const instances: InstanceDef[] = placed.map((p) => ({ name: p.name, def: p.def, at: at.get(p.name), label: p.label, flip: flip.get(p.name), rot: rot.get(p.name) }));
     return { pins, instances, nets: out, kind };

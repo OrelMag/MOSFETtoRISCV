@@ -34,6 +34,10 @@ export interface BlockSpec {
   wires?: string[];
   /** With place 'slices': the least gap between columns (default 5). */
   gap?: number;
+  /** With place 'slices': the parts that belong to no row stand above the rows, not below (a PLA's input bars). */
+  top?: boolean;
+  /** With place 'slices': false draws a wire only between parts of one row (default: also to a neighbouring row). */
+  across?: boolean;
 }
 
 export interface Inst { name: string; def: ComponentDef; conns: Record<string, string | string[]>; label?: string; slice: number }
