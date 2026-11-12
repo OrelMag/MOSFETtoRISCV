@@ -244,7 +244,8 @@ void main() {
       n = cn; cap = true;
     }
   }
-  float sh = shadowAt();
+  // a cap is shaded at the back face it is drawn from, inside the solid: the shadow map would darken every section
+  float sh = cap ? 1.0 : shadowAt();
   if (uMode == 0) {
     vec3 c = shade(n, V, base, uMetal, cap ? 0.75 : uRough, cap ? 0.0 : uCoat, sh) + emit;
     float NoV = max(dot(n, V), 0.0);
