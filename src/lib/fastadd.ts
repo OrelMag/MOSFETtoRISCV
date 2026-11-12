@@ -565,7 +565,7 @@ export function addSubFast(n: number): ComponentDef {
         pins: {
           a: [0, ksAt[1] + kg.ports.a.pos[1]], b: [0, ksAt[1] + kg.ports.b.pos[1] + 6], sub: [0, ksAt[1] + kg.ports.b.pos[1] + 10],
           s: [ksAt[0] + kg.w + 12, ksAt[1] + kg.ports.s.pos[1]], cout: [ksAt[0] + kg.w + 12, ksAt[1] + kg.ports.cout.pos[1]],
-          v: [ksAt[0] + kg.w + 12, ksAt[1] + kg.ports.v.pos[1]], n: [ksAt[0] + kg.w + 12, ksAt[1] + kg.ports.s.pos[1] + 3],
+          v: [ksAt[0] + kg.w + 12, ksAt[1] + kg.ports.v.pos[1]], n: [ksAt[0] + kg.w + 12, ksAt[1] + kg.ports.v.pos[1] + 3], // under v: s + 3 sat between cout and v (PW-16)
         },
         instances: [
           { name: 'fan', def: F, at: [6, ksAt[1] + kg.ports.b.pos[1] + 9] },

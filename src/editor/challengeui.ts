@@ -642,7 +642,7 @@ class ChallengeUi {
       return b.ws;
     });
     // The level screen shows only the level's chips: the bench opens in the full sandbox.
-    if (!err && this.screen) location.hash = `#/sandbox/${ed.chipId}`;
+    if (!err && this.screen) { ed.save(); location.hash = `#/sandbox/${ed.chipId}`; } // saved first: the sandbox page reads storage before this editor is destroyed
     else ed.toast(err ? `Cannot build the bench: ${err}` : `New chip “${ed.doc.name}”: Run to halt in the CPU panel (${undoKey()} removes it)`);
   }
 
@@ -657,7 +657,7 @@ class ChallengeUi {
       if ('error' in b) { err = b.error; return ws; }
       return b.ws;
     });
-    if (!err && this.screen) location.hash = `#/sandbox/${ed.chipId}`;
+    if (!err && this.screen) { ed.save(); location.hash = `#/sandbox/${ed.chipId}`; } // saved first: the sandbox page reads storage before this editor is destroyed
     else ed.toast(err ? `Cannot build the bench: ${err}` : `New chip “${ed.doc.name}”: Run, then switches 7 and 6 move your paddle (${undoKey()} removes it)`);
   }
 
@@ -672,7 +672,9 @@ class ChallengeUi {
       return r.ws;
     });
     const names = added.map((id) => ed.ws.chips[id]?.name).filter(Boolean);
-    ed.toast(names.length ? `Answer imported: ${names.join(', ')} (${undoKey()} removes it)` : 'The answer is already among your chips: opened it');
+    // a long list covered the canvas (30 sub-chip names): the first few, then a count
+    const said = names.length > 3 ? `${names.slice(0, 2).join(', ')} and ${names.length - 2} more chips` : names.join(', ');
+    ed.toast(names.length ? `Answer imported: ${said} (${undoKey()} removes it)` : 'The answer is already among your chips: opened it');
   }
 
   // ---- break-it levels (campaign/breakit.ts) ---------------------------------------------------

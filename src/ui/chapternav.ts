@@ -200,10 +200,10 @@ const low = (it: NavItem): Low => {
 export function itemWordScore(it: NavItem, w: string): number {
   if (it.entry) return wordScore(it.entry, w);
   const l = low(it);
-  if (l.t === w) return 70;
+  if (l.t === w || (l.a && l.a === w)) return 70; // the alias: a page by its own name
   if (l.t.startsWith(w)) return 60;
   if (wordStart(l.t, w)) return 50;
-  if (l.a && (l.a === w || l.a.split(/[\s·,/]+/).includes(w))) return 45;
+  if (l.a && l.a.split(/[\s·,/]+/).includes(w)) return 45;
   if (l.t.includes(w)) return 35;
   if (l.a && wordStart(l.a, w)) return 25;
   if (l.a.includes(w)) return 12;
