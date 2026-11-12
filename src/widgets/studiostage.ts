@@ -30,6 +30,9 @@ export interface StudioStageOptions {
   fit?: boolean;
   /** Fit home to these groups or names, not the whole model (the subject first: a device under its wiring). */
   homeFrame?: string[];
+  /** Fit home to a sphere of this radius round the framed box's centre instead of the box's corners (a round model: a
+   *  radiation pattern, a ring), which would otherwise leave it small. */
+  homeRadius?: number;
   /** Groups or names hidden outside the tour and in beats that do not say (a beat's `hide: []` shows them). */
   hidden?: string[];
   /** A scale bar under the canvas following the zoom: the label for a length in model units (1-2-5 steps). */
@@ -153,7 +156,13 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   const contentAspect = () => Math.max(0.2, ((canvas.clientWidth || 4) - 2 * gutNow) / (canvas.clientHeight || 3));
   const homeView = (): OrbitView => {
     if (o.fit === false || !st) return o.home;
-    const f = fitView(homeBox(), o.home.yaw, o.home.pitch, st.camera.fov, contentAspect(), 0.06);
+    const box = homeBox();
+    if (o.homeRadius) {
+      const c: Vec3 = [(box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2];
+      const half = Math.atan(Math.tan(st.camera.fov / 2) * Math.min(1, contentAspect())) * 0.94;
+      return { yaw: o.home.yaw, pitch: o.home.pitch, target: c, dist: o.homeRadius / Math.sin(half) };
+    }
+    const f = fitView(box, o.home.yaw, o.home.pitch, st.camera.fov, contentAspect(), 0.06);
     return { yaw: o.home.yaw, pitch: o.home.pitch, target: f.target, dist: f.dist };
   };
   let fitFor = '';
@@ -185,6 +194,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     const key = anchors.map((a) => a.text).join('|');
     if (key === lblKey) return;
     lblKey = key;
+    gutL.replaceChildren(); gutR.replaceChildren(); // the old names, or they stay where they were last placed
     rows = anchors.map((a, i) => ({ a, el: h('span', { class: 'st-lbl' }, a.text), badge: h('span', { class: 'st-badge' }, String(i + 1)), li: h('li', null, h('b', null, String(i + 1)), ' ', a.text) }));
     badges.replaceChildren(...rows.map((r) => r.badge));
     list.replaceChildren(...rows.map((r) => r.li));
