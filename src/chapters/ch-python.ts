@@ -136,8 +136,8 @@ export const chPython: Chapter = {
         costs about 240 cycles a call, 1472 of the program's 1545. Chapter ${numOf('muldiv')}'s divider does the same 32 steps in
         hardware, with no instruction fetched between them.</p>
         <p>The lesson generalizes: the cost of an operator is the number of instructions behind it, and an operator that looks like one indivisible step in the source can hide a loop. A programmer who
-        knows the target sees that <code>%</code> by a power of two is free and <code>%</code> by a variable is a function call; a hardware divider (chapter ${numOf('muldiv')}) moves that loop out of
-        the instruction stream, trading area for cycles, as every earlier chapter did.</p>`,
+        knows the target sees that <code>%</code> by a power of two is free and <code>%</code> by a variable is a function call; a hardware divider moves that loop out of
+        the instruction stream, trading area for cycles.</p>`,
       widget: () => pyCost(['gcd']),
       more: {
         derive: `<p><code>x * 5</code> = <code>x * 4 + x</code>: <code>slli</code> then <code>add</code>, two cycles. <code>x * 7</code> = <code>x * 8 − x</code>: <code>slli</code> then <code>sub</code>.
@@ -203,11 +203,11 @@ export const chPython: Chapter = {
       title: 'Functions are a stack',
       body: `
         <p>A call is <code>jal ra, fib</code>: the return address goes to ra and the PC to the function. Since fib
-        calls itself, it must keep ra, and the s0 that holds its n and that the next call will reuse, somewhere the next call will not overwrite: its prologue moves sp down
-        two words and stores them; its epilogue loads them back and returns with <code>ret</code>.</p>
+        calls itself, it must keep ra, and also s0 (which holds its n and which the next call will reuse), somewhere the next call will not overwrite: its prologue moves sp down
+        two words and stores both; its epilogue loads them back and returns with <code>ret</code>.</p>
         <p>One more word appears during <code>fib(n - 1) + fib(n - 2)</code>: fib(n − 1)'s result is in t0 when the
         second call starts, and the callee uses t0 too, so the caller saves it below sp and loads it after. The stack
-        panel labels every word by the store that wrote it. fib(7) runs 721 cycles for its 13; most of them move
+        panel labels every word by the store that wrote it. fib(7) = 13 takes 721 cycles; most of them move
         frames.</p>
         <p>The stack is a convention, not a hardware feature: <code>sp</code> is an ordinary register and the stack is an ordinary region of the data memory that every function agrees to
         use from the top down. The CPU has no notion of a frame. What makes the recursion work is discipline: whatever a function overwrites and its caller still needs, it saves
@@ -301,10 +301,10 @@ export const chPython: Chapter = {
     {
       title: 'A heap that never gives back',
       body: `
-        <p>The heap here is the simplest there is: a pointer that only moves forward. Making a block is <code>tp</code> += its size; freeing is not a thing. Run the program beside this text and watch tp: reversing the four-letter word "ward" does
+        <p>The heap here is the simplest there is: a pointer that only moves forward. Making a block is <code>tp</code> += its size; nothing is ever freed. Run the program beside this text and watch tp: reversing the four-letter word "ward" does
         <code>back = word[i] + back</code> four times, and each pass makes the one-character str <code>word[i]</code> (${strBlock(1)} bytes) and then the longer word (${[1, 2, 3, 4].map((n) => strBlock(n)).join(', ')} bytes). The old words stay in the heap, unreachable, because nothing frees them: ${REVERSE.heap} of the ${HEAP_BYTES} bytes are gone when the loop ends, though the program needs only "draw".</p>
         <p>The heap is a fixed ${HEAP_BYTES} bytes, so a program that builds too much does not slow down: the routine that makes a block compares tp with the end of the heap and, when the block does not fit, the program <em>stops</em> (it jumps to its halt loop, with the output so far in place). The golden interpreter counts the same bytes and reports <code>MemoryError</code> at that line. An index past the end of a str, <code>ord</code> of a string longer than one character and <code>chr</code> of a number above 255 stop the program the same way.</p>
-        <p>The other two regions have the shape you met above: the stack grows down from the top of data memory and the output up from just after the heap. The heap never meets either, because it is a reserved stretch and not a region that grows; the price is that its size is fixed before the program runs.</p>`,
+        <p>The other two regions have the shape met in "Your own program": the stack grows down from the top of data memory and the output up from just after the heap. The heap never meets either, because it is a reserved stretch and not a region that grows; the price is that its size is fixed before the program runs.</p>`,
       scene: () => pyScene(REVERSE.source),
       more: {
         derive: `<p>Pass i makes word[i] (${strBlock(1)} bytes) and the new <code>back</code>, i + 1 characters. For "ward": ${[1, 2, 3, 4].map((n) => `${strBlock(1)} + ${strBlock(n)}`).join(' + ')}, then <code>word[-1]</code> in the print is one more ${strBlock(1)}: ${5 * strBlock(1) + [1, 2, 3, 4].reduce((a, n) => a + strBlock(n), 0)} bytes, the panel's count. The program is ${REVERSE_C.words.length} instructions.</p>`,

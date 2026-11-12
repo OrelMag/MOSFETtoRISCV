@@ -99,7 +99,7 @@ export const chAdders: Chapter = {
         options: ['It merges bit fields in a tree, so its depth grows with log n', 'It is built from faster gates', 'It computes no difference, so it has fewer gates', 'It compares only the top bits'],
         answer: 0,
         explain: 'Each combine cell decides a field from two halves: "the higher one decides, unless equal". log₂ 32 = 5 levels of cells replace a 32-stage chain.',
-        why: ['', 'Every gate on this site is a NAND with one delay; only the structure differs.', 'It costs about as many NANDs as the subtractor (some 450). What changes is the shape: a tree in place of a chain.', 'The top bits decide only when they differ; when they are equal, every lower field still counts.'],
+        why: ['', 'Every gate on this site is a NAND with one delay; only the structure differs.', `It costs about as many NANDs as the subtractor (${stats(magComparator(32, false)).nands} against ${stats(addSub(32)).nands}). What changes is the shape: a tree in place of a chain.`, 'The top bits decide only when they differ; when they are equal, every lower field still counts.'],
       },
     ],
   },
@@ -122,7 +122,7 @@ export const chAdders: Chapter = {
       tour: {
         beats: [
           { title: 'Nothing to add', set: { a: 0, b: 0 }, show: ['g1', 'g2', 'g3', 'g4', 'g5'], expect: { s: 0, c: 0 },
-            say: '<p>a = b = 0: s = {v:s}, c = {v:c}. g1 sees two 0s and gives 1, and every gate after it settles to 0 on the outputs.</p>' },
+            say: '<p>a = b = 0: s = {v:s}, c = {v:c}. g1 sees two 0s and gives 1, and the gates after it settle so that both outputs are 0.</p>' },
           { title: 'One input', set: { a: 1, b: 0 }, show: ['g1', 'g2', 'g3', 'g4'], expect: { s: 1, c: 0 },
             say: '<p>a = 1, b = 0: exactly one input is 1, so the XOR (g1 to g4) gives s = {v:s}. g1 still sees a 0, so it stays 1 and the carry stays {v:c}.</p>' },
           { title: 'Both: the carry', set: { a: 1, b: 1 }, show: ['g1', 'g5'], expect: { s: 0, c: 1 },
@@ -175,8 +175,8 @@ export const chAdders: Chapter = {
       },
       more: {
         derive: `<p>s = a ⊕ b ⊕ cin (odd parity of the three bits). cout is the majority: at least two of the three are 1,
-          cout = a·b + cin·(a ⊕ b). The two terms are exactly the two half adders' carries: <em>generate</em> (a·b: this column carries
-          whatever comes in) and <em>propagate</em> (a ⊕ b: this column passes the incoming carry on). The fast adders of a later chapter are built
+          cout = a·b + cin·(a ⊕ b). The two terms are the two half adders' carries. The first, a·b, is <em>generate</em>: this column carries
+          whatever comes in. In the second, a ⊕ b is <em>propagate</em>: this column passes the incoming carry on. The fast adders of a later chapter are built
           from these two words.</p>`,
         real: `<p>A CMOS full-adder cell is usually the 28-transistor "mirror adder", which computes ¬cout directly from a, b, cin in one complex
           gate and then the sum from ¬cout, against ${stats(FULL_ADDER).transistors} transistors in our 9-NAND version. Fast adders skip full
@@ -192,10 +192,10 @@ export const chAdders: Chapter = {
         carry with a NOT, and the OR gate begins by inverting both inputs. Delete both pairs and the OR collapses into a single NAND,
         <span data-show="g9"><code>g9</code></span>, fed straight from the first NAND of each XOR: <span data-show="g1"><code>g1</code></span> = NAND(a, b) and
         <span data-show="g5"><code>g5</code></span> = NAND(x, cin).</p>
-        <p>The result is a <strong>9-NAND full adder</strong> with the same truth table (check the tab): ${stats(FULL_ADDER).nands} NANDs instead of
+        <p>The result is a <strong>9-NAND full adder</strong> with the same truth table (check its truth table): ${stats(FULL_ADDER).nands} NANDs instead of
         ${stats(FULL_ADDER_HA).nands}, and the carry from cin crosses ${pathDepth(FULL_ADDER, 'cin', 'cout')} gates instead of
         ${pathDepth(FULL_ADDER_HA, 'cin', 'cout')}. Cheaper <em>and</em> faster, which is rare. This is the full adder every later circuit uses.</p>
-        <p>Read the carry as the derivation says: cout = ¬(¬(a·b) · ¬(x·cin)) = a·b + x·cin, generate or propagate.</p>
+        <p>Read the carry as a formula: cout = ¬(¬(a·b) · ¬(x·cin)) = a·b + x·cin, generate or propagate.</p>
         <div class="note">Compare the two in the Info tab: transistor count and worst-case gate delays. Cheaper and
         faster circuits for the same function are a recurring theme of this journey.</div>`,
       scene: () => ({ root: FULL_ADDER, inputs: { a: 1, b: 0, cin: 1 } }),
@@ -242,7 +242,7 @@ export const chAdders: Chapter = {
         the <span data-show="ms">merger on the right</span> bundles the sum bits back into a bus. Splitters and mergers are only wiring: they cost
         nothing and add no delay.</p>
         <p>Cost: n full adders, ${stats(rca(4)).nands} NANDs for 4 bits, and the carry crosses every one of them. That is fine at 4 bits and
-        the central problem at 64 (see Numbers below).</p>
+        the central problem at 64 (the Numbers layer below has the figures).</p>
         <div class="try">Compute 9 + 7. Watch the carries: which full adders produce one?</div>`,
       scene: () => ({ root: rca(4), inputs: { a: 9, b: 7, cin: 0 } }),
       ledger: { kind: 'add', a: 'a', b: 'b', cin: 'cin', sum: 's', cout: 'cout', width: 4, col: (i) => [`fa${i}`] },
@@ -325,8 +325,8 @@ export const chAdders: Chapter = {
         <code>sub = 0</code> it passes the bit unchanged (x ⊕ 0 = x, x ⊕ 1 = ¬x). Feed <code>sub</code> into the carry-in as well to add the 1.
         One circuit now adds <em>and</em> subtracts, for ${stats(addSub(8)).nands - stats(rca(8)).nands} NANDs more than the plain adder
         (eight XORs, and one more for the overflow flag below; ${stats(addSub(8)).nands} in all at 8 bits).</p>
-        <p>It also reports overflow. <code>cout</code> is the unsigned flag: a carry out of an add, or no carry out of a subtract (a
-        borrow). The signed result is wrong exactly when the carry into the top bit differs from the carry out of it:
+        <p>It also reports overflow. <code>cout</code> is the unsigned flag: after an add, a carry out means the result wrapped; after a subtract, no carry out
+        means a borrow (a &lt; b unsigned). The signed result is wrong exactly when the carry into the top bit differs from the carry out of it:
         <span data-show="vx"><code>v = c7 XOR c8</code></span> here, and <code>n</code> is the top bit of s.</p>
         <div class="try">Compute 5 − 7 (a = 5, b = 7, sub = 1). Switch the radix to DEC in the top bar, then click the
         <code>s</code> label on the wire to cycle through readings: is it 254 or −2? Both.</div>`,
@@ -348,7 +348,7 @@ export const chAdders: Chapter = {
       },
       more: {
         derive: `<p>Signed overflow happens when two operands of the same sign give a result of the other sign. In the top column, with operand bits aₙ₋₁ and
-          b'ₙ₋₁: if both are 0, the sum bit is the carry in cₙ₋₁ and there is no carry out, so the sign went wrong exactly when cₙ₋₁ = 1 ≠ cₙ = 0;
+          b'ₙ₋₁ (b after the XOR): if both are 0, the sum bit is the carry in cₙ₋₁ and there is no carry out, so the sign went wrong exactly when cₙ₋₁ = 1 ≠ cₙ = 0;
           if both are 1, cₙ = 1 and the sign is wrong when cₙ₋₁ = 0; if they differ, cₙ₋₁ = cₙ and overflow is impossible. In every case
           v = cₙ₋₁ ⊕ cₙ.</p>`,
         real: `<p>Flags differ between ISAs. x86 sets CF on a borrow (CF = 1 when a &lt; b); ARM sets C to the adder's carry out, so after SUBS C = 1 means
@@ -492,7 +492,7 @@ export const chAdders: Chapter = {
         ],
         answer: 0,
         explain: `A million is ${(1e6 / exhaustiveCount(32)).toExponential(0).replace('e-', ' × 10^−')} of the 2^65 cases. A common fault shows at once, and a stuck carry usually does, but a fault that needs one particular pattern can sit unseen. That is why random vectors are paired with corner cases chosen for the patterns that matter, and why what a check covers is measured later in the journey.`,
-        why: ['', 'Gates and cases are different counts: a gate can behave wrongly only for a few of its 2^65 context patterns.', 'The same recipe can be drawn wrongly in one place, which is what a planted fault is.', 'A sample can show a bug and does not have to be large for that; it cannot show the absence of one.'],
+        why: ['', 'Gates and cases are different counts: a fault can sit in one gate and show itself on only a few of the 2^65 input patterns.', 'The same recipe can be drawn wrongly in one place, which is what a planted fault is.', 'A sample can show a bug and does not have to be large for that; it cannot show the absence of one.'],
       },
       more: {
         derive: `<p>A ripple-carry adder is <em>n</em> copies of one full adder, so its behaviour follows from the cell's 8 cases and from how the carries are joined. Checking all 8 cases of the cell is a proof about the cell; the joints are not covered by it. A carry stuck between two columns breaks neither cell, which is why the interesting faults are on the wires between them and why the corner cases are chosen to push a carry through every one.</p>`,
@@ -595,7 +595,7 @@ export const chRouting: Chapter = {
         This exact circuit will select which word of a memory gets written: the address picks the row, and the
         write-enable says "now".</p>
         <p>With en = 0 every AND has a 0 input, so all outputs are 0, whatever the address: a decoder with enable is a decoder that can say "none". It costs ${stats(decoder(3, true)).nands} NANDs for 3 address bits,
-        against ${stats(decoder(3)).nands} without: each of the 8 gates grows from 3 to 4 inputs. The enable is the data of the 1-bit demultiplexer of the end of this chapter.</p>`,
+        against ${stats(decoder(3)).nands} without: each of the 8 gates grows from 3 to 4 inputs. The enable is the data input of the 1-bit demultiplexer at the end of this chapter.</p>`,
       tour: {
         beats: [
           { title: 'Enabled', set: { a: 5, en: 1 }, show: ['g5'], expect: { y5: 1, y6: 0 },
@@ -636,7 +636,7 @@ export const chRouting: Chapter = {
         <code>s1</code> chooses <span data-show="m1_0">between the winners</span>.</p>
         <p>A 2ᵏ:1 mux needs 2ᵏ − 1 two-input muxes and k levels. The levels set the delay.</p>
         <p>The tree shape is the same halving as binary search: each level discards half the candidates, using one more select bit. For 4 inputs that is ${stats(muxTree(2, 1)).nands} NANDs (three 2:1 muxes at ${stats(MUX2).nands} each) and
-        ${pathDepth(muxTree(2, 1), 'd0', 'y')} gate delays from the data inputs to y (${logicDepth(muxTree(2, 1))} from the select); a flat alternative, a decoder gating each input into one big OR, has the same function and a different cost and delay, which the layers below compare.</p>`,
+        ${pathDepth(muxTree(2, 1), 'd0', 'y')} gate delays from the data inputs to y (${logicDepth(muxTree(2, 1))} from the select); a flat alternative, a decoder gating each input into one big OR, has the same function and a different cost and delay (the Real layer below says which way).</p>`,
       tour: {
         beats: [
           { title: 's = 0: the first of the first pair', set: { s: 0 }, show: ['m0_0', 'm1_0'], expect: { y: 0 },
@@ -684,7 +684,7 @@ export const chRouting: Chapter = {
       },
       more: {
         derive: `<p>y[i] = s ? b[i] : a[i] for every i, with one s. Cost ${stats(MUX2).nands}·w NANDs; depth that of one MUX2, ${logicDepth(MUX2)}, independent of w; select fan-out w multiplexers (3 gate inputs each: the select and its inverter).</p>`,
-        real: `<p>Boards and early computers chose differently: every source drives the same wires through a <strong>tri-state buffer</strong>,
+        real: `<p>Boards and early computers often shared a bus another way: every source drives the same wires through a <strong>tri-state buffer</strong>,
           which either drives its value or lets go (output Z, high impedance), and one-hot enables from a decoder let exactly one source
           speak. No mux tree, and one wire per bit however many sources.</p>
           <p>Inside chips the mux won. Two enables overlapping for a moment let two drivers fight (contention: a short from supply to ground

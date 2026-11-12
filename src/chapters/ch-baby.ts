@@ -291,7 +291,7 @@ export const chAppendixBaby: Chapter = {
       body: `
         <p>Programs were written on paper in the notebook's notation, converted to binary and set into the store line by
         line, each digit on one of a row of 32 buttons. Here you type them. The program in the box multiplies: with no adder, t + x is
-        written −(−t − x), so every addition is an LDN, a SUB and a STO, LDN, STO through a spare line. A counter in line
+        written −(−t − x), so every addition is five instructions: LDN, SUB, STO into a spare line, then LDN and STO again. A counter in line
         29 runs up from −y to 0 the same way, and CMP skips the Stop while it is still negative.</p>
         <p>As loaded, it leaves 7 × 6 = 42 in line 31. Lines 14 to 25 are never reached: an unused line holds 0, which is
         JMP 0.</p>`,

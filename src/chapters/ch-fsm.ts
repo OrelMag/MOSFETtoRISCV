@@ -179,7 +179,7 @@ const steps: Step[] = [
       ],
     },
     more: {
-      derive: `<p>Any Mealy machine becomes a Moore one by splitting each state by the output its entering arcs carry: a state entered both with y = 0 and with y = 1 becomes two states. Here S1 is entered with y = 0 only, but the arc S2 → S1 carries y = 1,
+      derive: `<p>Any Mealy machine becomes a Moore one by splitting each state by the output its entering arcs carry: a state entered both with y = 0 and with y = 1 becomes two states. Here S1 is entered quietly (from S0 and from S1 itself) and also by the arc S2 → S1, which carries y = 1,
         so S1 splits into S1 (entered quietly) and S3 (entered by the matching 1). The Moore machine has up to as many states as the Mealy one has (state, output) pairs.</p>
         <table class="mini"><tr><th>input</th>${PAIR.map((p) => `<td>${p.x}</td>`).join('')}</tr><tr><th>Mealy y</th>${PAIR.map((p) => `<td>${p.mealy}</td>`).join('')}</tr><tr><th>Moore y</th>${PAIR.map((p) => `<td>${p.moore}</td>`).join('')}</tr></table>`,
       real: `<p>A Mealy output in a long chain is a timing problem: x → logic → y → more logic → a register, all in one cycle. Registering the output (a flip-flop on y) makes it a Moore-like output a cycle later, which is why many bus protocols specify
@@ -246,7 +246,7 @@ const steps: Step[] = [
       why: [
         '',
         'Fewer flip-flops (4 against 12) is the saving of binary, but each of its 4 next-state bits is a function of all 4 bits and the inputs: more logic per bit.',
-        'Gray changes one bit per step along a path of adjacent codes; it does not shrink the logic that decides which state comes next, and in a ${MC_STATES.length}-state controller adjacent codes cannot serve every arc.',
+        'Gray changes one bit per step along a path of adjacent codes; it does not shrink the logic that decides which state comes next, and in a 12-state controller adjacent codes cannot serve every arc.',
         'The costs differ, and in opposite directions: flip-flops favour binary, logic per bit favours one-hot. The table above shows both for a machine that is small.',
       ],
     },
@@ -290,8 +290,8 @@ const steps: Step[] = [
     title: 'Reset, and the codes nobody uses',
     body: `
       <p>A state register powers up in <em>some</em> code. If the machine has fewer states than codes, some codes belong to no state, and the logic there is whatever the minimizer found cheapest. Two things must hold: the machine must be put in a known state at the start, and an unused code must lead back.</p>
-      <p><strong>Reset.</strong> The builder gives every machine a synchronous <code>rst</code>: while it is 1, the next state is the reset state, whatever the arcs say (<span data-show="inv_rst g0">one gate</span> per state bit). The reset state gets the code that power-on gives where it can: all zeros in binary, but one-hot's reset state has a 1 in it, so a one-hot register powers up in 000, which is an
-      <em>unused</em> code, until rst has been applied for one edge. Press Reset to A on the stage.</p>
+      <p><strong>Reset.</strong> The builder gives every machine a synchronous <code>rst</code>: while it is 1, the next state is the reset state, whatever the arcs say (<span data-show="inv_rst g0">one gate</span> per state bit). The reset state gets the code that power-on gives where it can: all zeros in binary, but one-hot's reset state has a 1 in it, so a one-hot register that powers up as 000 sits in an
+      <em>unused</em> code until rst has been applied for one edge. Press Reset to A on the stage.</p>
       <p><strong>Unused codes.</strong> The sequencer on the stage steps A → B → C → A while go = 1, one lamp per state, one-hot (${3} flip-flops, ${8 - 3} unused codes). A particle strike, a glitch or a marginal supply flips one flip-flop: use the Flip buttons. With the unused codes left as don't cares (${RING_FREE} NANDs), every single-bit upset
       leaves a code the machine never leaves: ${[0, 1, 2].flatMap((s) => [0, 1, 2].map((b) => upset(false, s, b))).filter((u) => !u.valid).length} of 9 flips from the three states are permanent. Either no lamp at all (000, which maps to itself) or two lamps lit, rotating for good.
       With the option "unused codes go to reset" (the builder's <code>safe</code>, ${RING_SAFE} NANDs) the same flips are gone after one edge: every unused code has an arc, to A.</p>
@@ -435,7 +435,7 @@ const steps: Step[] = [
     title: 'Your own: a traffic light',
     body: `
       <p>The same method, on a problem you have not seen. A road crossing: the main road stays green until a car waits on the side road (<code>car</code> = 1). Then main goes yellow, the side road gets green for as long as cars keep coming, then yellow, and main is green again. Outputs, one lamp each: <code>mg my sg sy</code> (the red lamps are the absence of the others).</p>
-      <p>Follow the steps. <strong>States</strong>: four things to remember, MG, MY, SG, SY, one lamp state each: a Moore machine, because lamps should not flicker with the sensor. <strong>Arcs</strong>: MG stays on car = 0, goes to MY on car = 1; MY goes to SG whatever car does; SG stays while car = 1, goes to SY on car = 0; SY goes to MG. <strong>Codes</strong>: four states are two binary
+      <p>Follow the steps. <strong>States</strong>: four things to remember, MG, MY, SG, SY (main green, main yellow, side green, side yellow), one lamp state each: a Moore machine, because lamps should not flicker with the sensor. <strong>Arcs</strong>: MG stays on car = 0, goes to MY on car = 1; MY goes to SG whatever car does; SG stays while car = 1, goes to SY on car = 0; SY goes to MG. <strong>Codes</strong>: four states are two binary
       flip-flops, ${nands(fsmCircuit('traffic', TRAFFIC))} NANDs here. <strong>Unused codes</strong>: none, all four codes are states. <strong>Read-back</strong>: the builder does it for you.</p>
       <p>The stage has that machine. Serve the side road: set car = 1 and Pulse until sg lights, then release the car and watch it return. Then <a href="#/sandbox/new/traffic">open the empty diagram in the sandbox</a> (four states with their lamps, no arcs), draw the six arcs, and compare. Then improve it: what happens when cars never stop coming on the side road? Main waits for ever. A minimum green time for the side road needs
       a counter, which makes it a controller with data, like step 7's. A pedestrian button is one more input; an all-red cycle between yellow and green is one more state.</p>

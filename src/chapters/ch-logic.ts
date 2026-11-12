@@ -156,7 +156,7 @@ export const chLogic: Chapter = {
         <p>Open the consensus row and read its table: the two columns are equal. Then type your own pair under the table and see whether they agree and what each costs.</p>`,
       widget: () => algebraWidget(),
       challenge: {
-        kind: 'quiz', question: 'Which term of  a·b + ¬a·c + b·c  can be dropped without changing any row of the truth table?',
+        kind: 'quiz', question: 'Which term of a·b + ¬a·c + b·c  can be dropped without changing any row of the truth table?',
         options: ['b·c, the consensus of the other two', 'a·b', '¬a·c', 'None: each one covers a row the others miss'],
         answer: 0,
         why: ['',
@@ -216,7 +216,7 @@ export const chLogic: Chapter = {
       title: 'Don\'t cares: inputs that never happen',
       body: `
         <p>A circuit that drives a seven-segment display shows a digit from its 4-bit code. The code is a <span data-ahead="bcd">BCD digit, 0 to 9 (binary-coded decimal: one decimal digit in four bits)</span>, so the six codes 10 to 15 <em>never occur</em>. For those rows the table does not say 0 or 1; it says <strong>don't care</strong>, and the designer may
-        choose whichever value makes the circuit smaller, group by group.</p>
+        choose, row by row, whichever value makes the circuit smaller.</p>
         <p>Take segment e, lit for the digits 0, 2, 6 and 8. With rows 10 to 15 held at 0 the minimal sum is <code>${E_PLAIN.cost.text}</code>: ${E_PLAIN.cost.literals} literals, <strong>${E_PLAIN.cost.nands} NANDs</strong>.
         Let the six unused rows be don't cares and the loops can grow into them: <code>${E_DC.cost.text}</code>, ${E_DC.cost.literals} literals, <strong>${E_DC.cost.nands} NANDs</strong>. Nothing the display must show has changed.</p>
         <p>A don't care joins a loop when it makes the loop bigger and is simply left uncovered otherwise: each one is decided independently. What the circuit then does for the code 12 is whatever the chosen loops give, and the designer has promised never to look.</p>
@@ -296,7 +296,7 @@ export const chLogic: Chapter = {
         The term <span data-show="sb">s·b</span> turns off one NAND delay after s changes, but <span data-show="nsa">¬s·a</span> turns on only after <span data-show="ns">the inverter</span> has made ¬s, one delay later still.
         For that one delay neither term is 1, and y drops to 0 and back up: a <strong>static-1 hazard</strong>. In this circuit y stays low for ${DIP} gate delay.</p>
         <p>On the map the two terms are loops that touch but do not overlap, and the dip happens in the hand-over between them. The cure is the loop that bridges them: the <strong>consensus term</strong> <code>a·b</code>, the one step 2 showed to be redundant.
-        It changes no settled value, but it holds y at 1 while the other two terms hand over. It costs gates: the multiplexer grows from ${MUX_PLAIN_NANDS} to ${MUX_CONS_NANDS} NANDs (the output NAND gains a third input, which here is three 2-input NANDs).</p>
+        It changes no settled value, but it holds y at 1 while the other two terms hand over. It costs gates: the multiplexer grows from ${MUX_PLAIN_NANDS} to ${MUX_CONS_NANDS} NANDs (the output NAND gains a third input, and a 3-input NAND takes three 2-input NANDs here).</p>
         <p>Whether a <span data-ahead="glitch">glitch (a change that does not last)</span> matters depends on what reads y. Anything that samples y only after the logic has settled never sees it. A reset line, or anything that treats its input as an edge, can: a pulse one delay wide is a pulse.
         The scene's <span data-show="ab">third term</span> is switched by the input <code>cons</code>.</p>
         <div class="try">With cons = 0, bring s down from 1 to 0 and watch y dip (the Timing panel records it).</div>

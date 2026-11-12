@@ -49,7 +49,7 @@ export const chAppendixRunner: Chapter = {
   recap: {
     keep: [
       `A raster is two counters: h ${RB_LINE} clocks a line, v ${RB_FRAME} lines a frame, ${k(RB_CLOCKS)} clocks a frame. A shape is logic on those counters, so nothing is stored as a picture.`,
-      `A moving object needs no position register. A counter whose period equals the line's stands still against the beam; load it one count short and everything it draws is one pixel to the left from then on.`,
+      `A moving object needs no position register. A counter whose period divides the line's stands still against the beam; load it one count short and everything it draws is one pixel to the left from then on.`,
       'Collision is an AND of two video signals at one clock: if you and a wall light the same pixel, you hit it. The shapes\' geometry never enters the logic.',
       `The cost is rigid hardware: ${RB_COST.chips} chips and ${k(RB_COST.nands)} NANDs, every rule in gates. A CPU costs more silicon once and then each rule is a line of a program.`,
     ],
@@ -162,7 +162,7 @@ export const chAppendixRunner: Chapter = {
         <p>One flip-flop, <code>armed</code>, makes that happen once: it is set on line 50 of a slip frame and cleared by the next wrap, and it is bit 0 of the
         load value. The slip frame is every other frame (15 pixels a second at 30 frames, a wall every 2.4 s); at a score of 10 it is every frame. That is the speed half of the
         difficulty curve, one OR gate; the gates narrow later.</p>
-        <p>Cost: ${k(RB_COST.walls)} NANDs for the board, which also keeps your place on the score. A CPU would hold a wall's x in a register and add to it. Here it takes
+        <p>Cost: ${k(RB_COST.walls)} NANDs for the board, which also reads the score to pick the slip rate. A CPU would hold a wall's x in a register and add to it. Here it takes
         a counter that was needed anyway to draw the wall.</p>
         <div class="try">Press <strong>Frame</strong> a few times and read the WC LEDs: at the same beam position, the count differs once per slip.</div>`,
       scene: () => runnerScene({ highlight: ['walls'], paused: true }),
@@ -261,7 +261,7 @@ export const chAppendixRunner: Chapter = {
       body: `
         <p>Against a program, this machine has one real advantage and several costs. The advantage: it is exactly as fast as the screen needs, because its logic runs in step with the beam. It never misses a deadline, since it has none: every signal is decided within a clock.</p>
         <p>The costs: ${RB_COST.chips} chips for a game, and every rule welded in. Slowing the walls at a score of 30 means a new gate and a new wire. A third colour touches four boards. Our single-cycle RV32I costs ${k(RV32I.nands)} NANDs (${(RV32I.nands / RB_COST.nands).toFixed(0)} × this machine), and you would still need a frame buffer or a sprite unit. After that one purchase, though, each of those changes is a line of a program, and so is the next game.</p>
-        <p>The arithmetic favoured gates only while logic was dear and games were simple. When a processor and a ROM cost less than the 100-odd chips of a more complicated game, cabinets changed over, and the hardware was reused from game to game: a change the chapters on CPUs already explain.</p>
+        <p>The arithmetic favoured gates only while a processor was dear and games were simple. When a processor and a ROM cost less than the 100-odd chips of a more complicated game, cabinets changed over, and the hardware was reused from game to game: a change the chapters on CPUs already explain.</p>
         <details class="deeper"><summary>What is checked</summary>
           <p><code>runner/model.ts</code> is a TypeScript model of every register. A test runs it beside the gates on random buttons and restarts, comparing all registers and video pins at every clock; the panel keeps comparing the pins while you play, and its title says so if they ever differ. Simulation is on the cycle engine, which is why every flip-flop shares one clock.</p>
         </details>`,
