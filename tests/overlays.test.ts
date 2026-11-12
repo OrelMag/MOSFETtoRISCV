@@ -146,7 +146,7 @@ describe('overlays', () => {
   it('says which overlays a scene can show', () => {
     expect(overlayRefusal('activity', { level: 'gate', engine: 'cycle' })).toMatch(/cycle engine/);
     expect(overlayRefusal('slack', { level: 'gate', engine: 'cycle' })).toBe('');
-    expect(overlayRefusal('slack', { level: 'switch' })).toMatch(/only Load, Unknown and Cost/);
+    expect(overlayRefusal('slack', { level: 'switch' })).toMatch(/only Unknown and Cost/);
     expect(overlayRefusal('energy', { level: 'gate', engine: 'cycle' })).toMatch(/cycle engine/);
     expect(overlayRefusal('energy', { level: 'gate', sub: true })).toMatch(/simulation of its own/);
     expect(overlayRefusal('energy', { level: 'switch' })).toMatch(/switch-level/);
@@ -155,7 +155,10 @@ describe('overlays', () => {
     expect(overlayRefusal('cost', { level: 'switch' })).toBe('');
     expect(overlayRefusal('cost', { level: 'gate', engine: 'cycle' })).toBe('');
     expect(overlayRefusal('cost', { level: 'gate', engine: 'nmos' })).toMatch(/NMOS/);
-    expect(overlayRefusal('load', { level: 'switch' })).toBe('');
+    // Load is the gate-level load model: a transistor, relay or tube level has no NAND inputs to load
+    expect(overlayRefusal('load', { level: 'switch' })).toMatch(/only Unknown and Cost/);
+    expect(overlayRefusal('load', { level: 'gate' })).toBe('');
+    expect(overlayRefusal('unknown', { level: 'switch' })).toBe('');
     expect(overlayRefusal('unknown', { level: 'switch', engine: 'nmos' })).toMatch(/NMOS/);
   });
 });

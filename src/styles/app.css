@@ -605,6 +605,9 @@ kbd { border: 1px solid var(--border-strong); border-bottom-width: 2px; padding:
 .stage-bar .shed { display: none; }
 .stage-more-menu { min-width: 260px; }
 .stage-more-menu button > svg { flex: none; color: var(--text-2); }
+/* an overlay the open level refuses: listed with why, in the faintest text that still reads (--muted) */
+.stage-more-menu button:disabled { cursor: default; background: none; }
+.stage-more-menu button:disabled :is(b, small, svg) { color: var(--muted); }
 /* manipulation: a double tap on the panels and badges over the circuit does not zoom the page either (the svg: none) */
 .canvas { flex: 1; position: relative; min-height: 0; overflow: hidden; touch-action: manipulation; }
 .canvas > svg.schematic { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
