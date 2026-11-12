@@ -29,7 +29,10 @@ export const WINDOWS = [{ name: 'First window', nm: 850 }, { name: 'O band', nm:
 
 // ---- a ray in a core --------------------------------------------------------------------------------------------------------
 export interface Fibre { name: string; n1: number; delta: number; aUm: number }
-/** Step-index shapes of the two common fibres. Δ and a are typical of the data sheets (G.652 single-mode, 50 µm multimode), n₁ of doped silica. */
+/** Step-index shapes of the two common fibres. Δ and a are typical of the data sheets (G.652 single-mode, 50 µm multimode), n₁ of doped silica.
+ *  The multimode n₁ = 1.464 is illustrative: no data sheet we found gives a core's phase index (Corning's 1.482 for OM3 / OM4 is the
+ *  effective group index, a different quantity, so it is not a substitute). It sits within 0.003 of what G.651.1's NA of 0.200 implies
+ *  over a pure-silica cladding of about 1.453 at 850 nm (Malitson, 1965): √(1.453² + 0.200²) ≈ 1.466. */
 export const SMF_G652: Fibre = { name: 'Single-mode', n1: 1.4504, delta: 0.0034, aUm: 4.0 };
 export const MMF_50: Fibre = { name: 'Multimode', n1: 1.4640, delta: 0.01, aUm: 25 };
 export const n2Of = (f: { n1: number; delta: number }): number => f.n1 * (1 - f.delta);

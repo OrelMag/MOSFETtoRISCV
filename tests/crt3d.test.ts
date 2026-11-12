@@ -224,10 +224,10 @@ describe('the tube', () => {
 
 describe('the three beams', () => {
   const S = GEOM.GUN_PITCH, spots = [spotOf(10.2, 50.3), spotOf(32, 32), spotOf(63.5, 0.5), spotOf(0.5, 63.5)];
-  it('keep their 5.5 mm in-line offset through the yoke, and cross in the mask hole, not at the yoke', () => {
+  it('keep their in-line offset (5.08 mm, US6107729) through the yoke, and cross in the mask hole, not at the yoke', () => {
     for (const spot of spots) {
       const [r, g, b] = [-S, 0, S].map((z) => beamPath(z, spot)), mx = spot[0] - GEOM.Q;
-      // at the yoke's front they are still 5.5 mm apart ...
+      // at the yoke's front they are still GUN_PITCH apart ...
       expect(pathAt(r, GEOM.YOKE_X1)[2] - pathAt(g, GEOM.YOKE_X1)[2]).toBeCloseTo(-S, 6);
       expect(pathAt(b, GEOM.YOKE_X1)[2] - pathAt(g, GEOM.YOKE_X1)[2]).toBeCloseTo(S, 6);
       // ... and in the plane of the mask hole all three are at one point
@@ -363,5 +363,13 @@ describe('the Mask view labels (batch 24 review)', () => {
     // steel: off every hole by more than half a hole in y (rows are a pitch apart)
     const dy = Math.abs(steel.p[1] / T - Math.round(steel.p[1] / T)) * T;
     expect(dy).toBeGreaterThan(MASK.HOLE / 2);
+  });
+});
+
+describe('gun spacing (US6107729)', () => {
+  it('is the effective S of an in-line gun in the standard 29.1 mm neck, 5.08 mm; the mask gap follows from it', () => {
+    expect(GEOM.NECK_OD).toBe(29.1);
+    expect(GEOM.GUN_PITCH).toBe(5.08);
+    expect(GEOM.Q).toBeCloseTo((GEOM.TRIAD * GEOM.D) / (3 * GEOM.GUN_PITCH + GEOM.TRIAD), 9);
   });
 });

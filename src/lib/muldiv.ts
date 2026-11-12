@@ -555,8 +555,7 @@ export function divStep(n: number, fast = n >= 16, mux: Mux2Kind = LIB_MUX2): Co
         return full >= d ? [(full - d) % 2 ** n, 1] : [full, 0];
       },
       netlist: () => ({
-        // qin under d: at y 10 it sat one unit under d's pin (PW-16)
-        pins: { r: [0, 4], qin: [0, 7 + sg.ports.b.pos[1]], d: [0, 4 + sg.ports.b.pos[1]], rout: [xm + mg.w + 8, 4 + mg.ports.y.pos[1]], q: [xm + mg.w + 8, 4 + mg.h + 8] },
+        pins: { r: [0, 4], qin: [0, Math.abs(sg.ports.b.pos[1] - 6) < 2 ? 4 + sg.ports.b.pos[1] + 2 : 10], d: [0, 4 + sg.ports.b.pos[1]], rout: [xm + mg.w + 8, 4 + mg.ports.y.pos[1]], q: [xm + mg.w + 8, 4 + mg.h + 8] },
         instances: [
           { name: 'sr', def: splitter([n - 1, 1]), at: [4, 3] },
           { name: 'r2', def: merger([1, n - 1]), at: [13, 5] },
