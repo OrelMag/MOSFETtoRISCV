@@ -268,12 +268,19 @@ describe('Digital import: the drawing', () => {
   });
 });
 
-describe('a pin wider than the sandbox takes', () => {
-  // Release review m1: a 2e9-bit pin came through, was stored and opened, and the sandbox drew nothing ever after.
-  it('refuses the file, naming the pin', () => {
-    const text = file('half-adder.dig').text.replace(/<elementAttributes>\s*<entry>\s*<string>Label<\/string>\s*<string>A<\/string>\s*<\/entry>/,
-      '<elementAttributes><entry><string>Label</string><string>A</string></entry><entry><string>Bits</string><int>2000000000</int></entry>');
-    const r = importDigital([{ name: 'w.dig', text }], { taken: new Set() });
-    expect('error' in r && r.error).toMatch(/A.*2000000000 bits.*1024/);
+describe('a part wider than the sandbox takes', () => {
+  // Release review m1: a 2e9-bit pin came through, was stored and opened, and the sandbox drew nothing ever after;
+  // a 2e9-bit And ran the import itself out of memory.
+  const wide = (text: string) => importDigital([{ name: 'w.dig', text }], { taken: new Set() });
+  it('refuses a wide pin, naming it', () => {
+    const r = wide(file('half-adder.dig').text.replace(/<elementAttributes>\s*<entry>\s*<string>Label<\/string>\s*<string>A<\/string>\s*<\/entry>/,
+      '<elementAttributes><entry><string>Label</string><string>A</string></entry><entry><string>Bits</string><int>2000000000</int></entry>'));
+    expect('error' in r && r.error).toMatch(/In: Bits is 2000000000; .* 1024/);
+  });
+  it('refuses a wide gate before building anything, and takes one 1024 bits wide', () => {
+    const gate = (w: number) => wide(file('half-adder.dig').text.replace('<elementName>And</elementName>\n      <elementAttributes/>',
+      `<elementName>And</elementName>\n      <elementAttributes><entry><string>Bits</string><int>${w}</int></entry></elementAttributes>`));
+    expect('error' in gate(2000000000) && (gate(2000000000) as { error: string }).error).toMatch(/And: Bits is 2000000000/);
+    expect('error' in gate(1024)).toBe(false);
   });
 });

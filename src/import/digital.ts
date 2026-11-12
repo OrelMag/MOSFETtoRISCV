@@ -20,7 +20,7 @@ import { untangled } from '../editor/untangle';
 import { isError, MAX_WIDTH, partDef } from '../editor/parts';
 import { instPort, symbolGeom } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
-import { type ImportFailure, type ImportOptions, type ImportResult, MappingTally, type SourceFile, tooWide } from './report';
+import { type ImportFailure, type ImportOptions, type ImportResult, MappingTally, type SourceFile, tooLarge, tooWide } from './report';
 import { child, childrenNamed, deref, parseXml, type XNode } from './xml';
 
 const SIZE = 20;
@@ -1425,6 +1425,9 @@ export function normalizeWires(ws: [DPt, DPt][]): [DPt, DPt][] {
 
 // ---- entry point ------------------------------------------------------------------------------
 
+/** The numeric attributes that size a part: a width or a count the importer loops over. */
+const SIZE_ATTR = /Bits$|^(Inputs|inputBits|outputBits|splitterSpreading|Width)$/;
+
 export function importDigital(files: SourceFile[], opts: ImportOptions): ImportResult | ImportFailure {
   const circuits: DCircuit[] = [];
   const problems: string[] = [];
@@ -1434,6 +1437,9 @@ export function importDigital(files: SourceFile[], opts: ImportOptions): ImportR
     else if (!circuits.some((d) => d.base === c.base)) circuits.push(c);
   }
   if (!circuits.length) return { error: problems[0] ?? 'no Digital circuit in the files' };
+  const big = tooLarge(circuits.flatMap((c) => c.elems.flatMap((e) => [...e.attrs.keys()].filter((k) => SIZE_ATTR.test(k))
+    .map((k) => ({ where: `${c.name} ▸ ${e.name}`, key: k, value: aNum(e.attrs, k, 0) })))), MAX_WIDTH);
+  if (big) return big;
   const byBase = new Map(circuits.map((c) => [c.base, c]));
   const placed = new Set(circuits.flatMap((c) => c.elems.filter((e) => /\.dig$/i.test(e.name)).map((e) => baseOf(e.name))));
   const top = circuits.find((c) => !placed.has(c.base)) ?? circuits[0];

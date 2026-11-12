@@ -291,11 +291,17 @@ describe('Logisim components: helper chips behave as Logisim', () => {
   });
 });
 
-describe('a pin wider than the sandbox takes', () => {
+describe('a part wider than the sandbox takes', () => {
   // Release review m1: a 2e9-bit pin came through, was stored and opened, and the sandbox drew nothing ever after.
-  it('refuses the file, naming the pin', () => {
-    const text = readFileSync(new URL('./import/halfadder.circ', import.meta.url), 'utf8').replace(/<a name="label" val="A"\/>/, '<a name="label" val="A"/><a name="width" val="2000000000"/>');
-    const r = importLogisim([{ name: 'h.circ', text }], { taken: new Set() });
-    expect('error' in r && r.error).toMatch(/A.*2000000000 bits.*1024/);
+  const src = readFileSync(new URL('./import/halfadder.circ', import.meta.url), 'utf8');
+  const wide = (text: string) => importLogisim([{ name: 'h.circ', text }], { taken: new Set() });
+  it('refuses a wide pin, naming it', () => {
+    const r = wide(src.replace(/<a name="label" val="A"\/>/, '<a name="label" val="A"/><a name="width" val="2000000000"/>'));
+    expect('error' in r && r.error).toMatch(/Pin: width is 2000000000; .* 1024/);
+  });
+  it('refuses a wide gate before building anything, and takes one 1024 bits wide', () => {
+    const gate = (w: number) => wide(src.replace('<comp lib="1" loc="(250,260)" name="AND Gate"/>', `<comp lib="1" loc="(250,260)" name="AND Gate"><a name="width" val="${w}"/></comp>`));
+    expect('error' in gate(2000000000) && (gate(2000000000) as { error: string }).error).toMatch(/AND Gate: width is 2000000000/);
+    expect('error' in gate(1024)).toBe(false);
   });
 });

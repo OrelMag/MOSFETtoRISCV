@@ -66,3 +66,13 @@ export function tooWide(chips: ChipDoc[], max: number): ImportFailure | null {
   for (const c of chips) for (const p of c.pins) if (p.width > max) return { error: `${c.name} ▸ pin ${p.name} is ${p.width} bits wide; the sandbox takes up to ${max}` };
   return null;
 }
+
+/**
+ * The first numeric attribute (a width, a count of inputs, select bits) past `max`, as the file's error. Read before
+ * anything is built: a part 2e9 bits wide runs the import itself out of memory. Real files stay far below (Digital 64
+ * bits, Logisim 32).
+ */
+export function tooLarge(attrs: Iterable<{ where: string; key: string; value: number }>, max: number): ImportFailure | null {
+  for (const a of attrs) if (a.value > max) return { error: `${a.where}: ${a.key} is ${a.value}; the sandbox takes up to ${max}` };
+  return null;
+}

@@ -27,7 +27,7 @@ import {
 import { isError, MAX_WIDTH, partDef } from '../editor/parts';
 import { type ExitDir, instPort, symbolGeom, type Vec } from '../sim/geometry';
 import type { ComponentDef } from '../sim/types';
-import { type ImportFailure, type ImportOptions, type ImportResult, MappingTally, type SourceFile, tooWide } from './report';
+import { type ImportFailure, type ImportOptions, type ImportResult, MappingTally, type SourceFile, tooLarge, tooWide } from './report';
 
 // ---------------------------------------------------------------------------------------------
 // A small XML reader (no DOM in Node): elements, attributes, text, comments, CDATA, entities.
@@ -711,11 +711,17 @@ export function isLogisimFile(name: string, text: string): boolean {
   return /<project[\s>]/.test(head) && /<lib\s[^>]*desc="#/.test(head);
 }
 
+/** The numeric attributes that size a part: a width or a count the importer loops over. */
+const SIZE_ATTR = /^(width|dataWidth|addrWidth|fanout|incoming|inputs|select|group|number|spacing)$/;
+
 export function importLogisim(files: SourceFile[], opts: ImportOptions): ImportResult | ImportFailure {
   const file = files.find((f) => isLogisimFile(f.name, f.text));
   if (!file) return { error: 'no Logisim .circ file among the files' };
   const proj = readProject(file.text);
   if ('error' in proj) return proj;
+  const big = tooLarge(proj.circuits.flatMap((c) => c.comps.flatMap((k) => [...k.a.entries()].filter(([n]) => SIZE_ATTR.test(n))
+    .map(([n, v]) => ({ where: `${c.name} ▸ ${k.name}`, key: n, value: num(v, 0) })))), MAX_WIDTH);
+  if (big) return big;
   const ctx: Ctx = {
     proj, orig: cmpVer(proj.ver, [2, 7, 2]) < 0, tally: new MappingTally(), problems: [], taken: new Set(opts.taken),
     chips: [], defs: new Map(), helpers: new Map(), ifaces: new Map(), clocked: new Map(),
