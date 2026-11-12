@@ -294,6 +294,7 @@ export function startApp(root: HTMLElement): void {
   palBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     palOpen(!palMenu.classList.contains('open'));
+    if (e.detail === 0 && palMenu.classList.contains('open')) presetBtns[0]?.focus({ preventScroll: true });
   });
   document.addEventListener('pointerdown', (e) => {
     if (!palMenu.contains(e.target as Node) && !palBtn.contains(e.target as Node)) palOpen(false);
