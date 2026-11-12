@@ -46,7 +46,7 @@ export const MODELS_3D: readonly Model3d[] = [
   {
     id: 'mosfet', title: 'The MOSFET in 3D', category: 'devices', chapter: 'mosfet', step: 0,
     summary: 'Width, length and gate area as solid geometry: the inversion sheet and the carriers that cross it.',
-    files: ['modelhost', 'mosfet3dview', 'mosfet3dparts'], factory: 'mosfet3d', codex: ['mosfet', 'cmos'],
+    files: ['modelhost', 'mosfet3dview', 'mosfet3dkit'], factory: 'mosfet3d', codex: ['mosfet', 'cmos'],
     open: () => import('./modelhost').then((m) => m.mosfet3d()),
   },
   {
