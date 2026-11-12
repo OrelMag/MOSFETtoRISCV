@@ -1,11 +1,10 @@
 name: Verify CPUs (long fuzzing)
 
 # Random RV32 programs on every gate-level CPU against the golden model, far beyond the 32 seeds npm test
-# runs (docs/VERIFICATION.md). Each night takes a new range of seeds; failures (CPU, seed, program, first
+# runs (docs/VERIFICATION.md). By hand: each run takes a new range of seeds; failures (CPU, seed, program, first
 # differing state) are kept as an artifact. Re-run a range by hand with the seeds input.
+# It ran nightly until the development stop (2026-11-12): unattended, a failure would only mail someone who is not there.
 on:
-  schedule:
-    - cron: '17 3 * * *'
   workflow_dispatch:
     inputs:
       seeds:
@@ -30,8 +29,8 @@ jobs:
           - pipe-m pipe-m-bal-bp sys-m
           - pipe-2w ooo
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -46,7 +45,7 @@ jobs:
           echo "seeds $SEEDS"
           npx vite-node scripts/fuzz32.ts $CPUS --seeds "$SEEDS" --out failures.json
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fuzz-failures-${{ strategy.job-index }}
           path: failures.json

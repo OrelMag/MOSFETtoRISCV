@@ -1,7 +1,7 @@
 {
   "name": "mosfet-to-riscv-desktop",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "From Switch to CPU as a portable Windows program",
   "license": "MIT",
   "author": "Orel Magidish",
@@ -16,7 +16,7 @@
     "@fontsource/fredoka": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
-    "electron": "^44.7.0",
+    "electron": "^44.11.2",
     "electron-builder": "^26.15.3"
   }
 }

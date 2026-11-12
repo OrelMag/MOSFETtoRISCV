@@ -5,15 +5,15 @@ import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, rea
 import { join, resolve } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { routeRules } from './scripts/routerules';
+import { versionOf } from './scripts/version.mjs';
 
 // Version X.YYY.ZZZ: major and minor from package.json, the build number is the git commit count
-// (it grows with every merge; CI checks out the full history for it).
+// (it grows with every merge; CI checks out the full history for it). scripts/version.mjs: the desktop program's file
+// name is made from the same string.
 const git = (cmd: string, fallback: string) => {
   try { return execSync(`git ${cmd}`, { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { return fallback; }
 };
-const [major, minor] = (JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version as string).split('.').map(Number);
-const build = Number(git('rev-list --count HEAD', '0'));
-const version = `${major}.${String(minor).padStart(3, '0')}.${String(build).padStart(3, '0')}`;
+const version = versionOf(new URL('./', import.meta.url)).site;
 
 // Yosys in WebAssembly (@yowasp/yosys, ~78 MB) for the sandbox's Verilog chips: served beside the site as plain
 // files (yosys/bundle.js and its wasm), never bundled, so nothing loads it until a Verilog chip is synthesized.

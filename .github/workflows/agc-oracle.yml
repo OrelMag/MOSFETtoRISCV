@@ -11,12 +11,10 @@ on:
       - 'src/agc/**'
       - 'scripts/agc/**'
       - '.github/workflows/agc-oracle.yml'
-  schedule:
-    - cron: '17 3 * * 1'
   workflow_dispatch:
     inputs:
       seeds:
-        description: 'Seed range, e.g. 1000..3000 (empty: 1..500, or a new range on the weekly run)'
+        description: 'Seed range, e.g. 1000..3000 (empty: 1..500; the weekly run ended at the development stop, 2026-11-12)'
         required: false
 
 permissions:
@@ -30,8 +28,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -58,7 +56,7 @@ jobs:
       - name: The comparison catches a difference (the model spoiled on purpose, every program must fail)
         run: npx vite-node scripts/agc/oracle.ts --harness /tmp/agc-harness --break --seeds 1..30 --out agc-break > /dev/null
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: agc-report
           path: agc-report
