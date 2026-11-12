@@ -74,16 +74,17 @@ cached by definition + canvas size (`refused`), so a box refused once with a pan
 folded, at every zoom. Neither can exist below: the rule reads only the box and its inside, and nothing is cached
 that the learner cannot see (the floor per definition is a constant of the netlist).
 
-**R3.1 Where it is drawn.** In the box's outline, letterboxed: the inside's extent scaled by `k = min((w − 2·INSET)/E.w,
-(h − 2·INSET)/E.h)` and centred, so the empty bands are on the long sides (`lensplan.ts fitInside`, INSET 0.6 units for
-the box's ports). It grows on screen only through the view's zoom, with the box; neighbours and their wires never move
+**R3.1 Where it is drawn.** In the box's outline, letterboxed: the inside's extent scaled to fit what the box leaves
+free inside its edges and centred there (`lensplan.ts fitInside`). Each side keeps INSET (0.6 units), or more where the
+box's own port names sit (`bandOf`: past the farthest name boxtext.ts lays out on that side, a clock's marker included, at
+most 30 % of the box), so the inside's stubs and drawing never run through them. It grows on screen only through the view's zoom, with the box; neighbours and their wires never move
 and are never covered. The box's ports stay on its edge as today; a short stub inside the outline joins each to its
 inner pin (it never leaves the outline). The box's name and icon fade while its inside shows (the crumb carries the
 name); its port names stay on its edge, so which pin is which still reads; its tinted body is the inside's background. The extent `E` is what the view draws, computed from the
 netlist (`insideExtent`: parts, the level's pins with their knobs and names, the view's 3-unit margin), so the scale the
 rule reads is the drawing's. **Tall bit-sliced parts** (a 32-bit register: its inside 60 × 270 units in an 8 × 6 box)
 read as a narrow centred column of bit cells, its first and last named ("ff0", "ff31": the run rule, R3.2); the
-single-cycle CPU's `pc` opens when the box is ~211 × 158 px. A pipeline register (3 × 74 units, its inside drawn 95 × 30)
+single-cycle CPU's `pc` opens when the box is ~300 × 225 px, its column clear of its `clk` name. A pipeline register (3 × 74 units, its inside drawn 95 × 30)
 opens at ~132 px wide (3 252 tall): a strip, so double-click stays the quick way in. That is the honest cost of drawing
 inside the outline: their insides are the wrong shape for their symbols. Drill (double-click) stays the quick way in,
 and the hint (R3.3) says how far away the opening is.
@@ -94,11 +95,13 @@ own name and ports are what reads) **and (b)** its inside's smallest named block
 drawn). Both reduce to one number per box, `openAtPx` (the view's px per unit at which it opens), from the box's size and
 its inside alone (`smallestNamed(def)`: from the netlist, memoized per definition). It closes below **¾** of that
 (`CLOSE_SHARE`): outside that band the answer is the geometry's alone, inside it the previous answer's alone
-(`decide(prev, px, openAt)`); nothing else is state. Every box on screen that meets the rule opens (R3.6), so nothing
+(`decide(prev, px, openAt)`); nothing else is state. Only a zoom out closes a box: a panel docking or folding, a resize
+or a pan moves the cap or the box, never the answer, and a box panned out of reach keeps it (its drawing is dropped).
+Constants (tie cells) never open. Every box on screen that meets the rule opens (R3.6), so nothing
 depends on where the pointer was. On a touch screen as with a mouse (item 6: the setting starts off there): a pinch opens a box
 past its opening zoom like the wheel; a tap on an inner part at least 40 px selects it, anywhere else in the inside steps
 into the box; a double tap on a part drills. Not in an NMOS scene. **Runs.** RUN_MIN (4) or more identical parts (one definition and orientation: a register's flip-flops, a register file's
-registers, a mux array's gates) count as one block, the run's extent, as long as each cell is at least CELL_PX (5) on
+registers, a mux array's gates) count as one block, the run's extent, as long as each cell is at least CELL_PX (4) on
 screen; while the cells are too small for their own names the lens names the run's first and last (`runsOf`).
 **The canvas cap** (`capOpenAt`, the author's target, 2026-11-12): no box opens later than when its shorter side is
 CAP_SHARE (40 %) of the canvas's shorter side, nor past the view's deepest zoom (camera.ts MIN_VIEW_UNITS: no dead end,
@@ -106,8 +109,9 @@ the hint never asks for a zoom the view cannot reach). The one place the canvas 
 panel docking opens or closes nothing); it decides the big insides on the out-of-order core (the issue queue, the reorder
 buffer, the store queue, the instruction classifiers, the operand units, `rf` on the pipelined and single-cycle CPUs), which
 then open before every inner name is drawn; those names appear as the zoom goes on. `data-open-at` is the capped value.
-Measured opening zooms before the cap (px per unit, fib): single-cycle `pc` 35.2, `alu` 27.5, `rf` 31.1, `imm` 16.0, `ctl`
-3.6, `npc` 21.5; pipeline `FD` / `DE` 43.9, `hz` 12.2 (tests/lens-hone.test.ts); tests/lens-target.test.ts holds every box
+Measured opening zooms before the cap (px per unit, fib, with the port-name band): single-cycle `pc` 37.5, `alu` 42.9,
+`rf` 35.7, `imm` 16.0, `ctl` 6.5, `npc` 38.0; pipeline `FD` / `DE` 44.0, `hz` 20.5 (tests/lens-hone.test.ts; the cap
+opens `alu`, `rf`, `npc`, `hz` earlier, their inner names appearing as the zoom goes on); tests/lens-target.test.ts holds every box
 of the three CPUs' tops to the cap at two canvas sizes.
 
 **R3.3 Shown to the learner.** Hovering a closed box that can open shows "zoom in to see inside (×2.4)": the zoom factor
@@ -127,8 +131,9 @@ key or the zoom-out button; never the event that raised the cue) goes up, and th
 exactly where its drawing was, shrinking with the zoom until the rule closes it. (c)
 The wheel zooms the whole view, insides included; nothing is caught by the inside.
 
-**R3.5 The hand-off.** When the drawn inside (the fit, on screen) covers the canvas in width or in height
-(`handsOff`), the view becomes that level, at the scale and place where its drawing was (`handOffView`: the inner
+**R3.5 The hand-off.** When the drawn inside (the fit, on screen) under the pointer covers the canvas in width or in
+height (`handsOff`), or a zoom-in step comes at the view's deepest zoom (an inside drawn small in its box is then never a
+dead end), the view becomes that level, at the scale and place where its drawing was (`handOffView`: the inner
 drawing *is* the drilled level's drawing, so nothing jumps), with a history entry as for a double-click.
 
 **R3.6 Many boxes.** Every box that meets the rule opens, built one per animation frame, nearest the pointer first, each
