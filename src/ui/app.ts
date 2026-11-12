@@ -358,7 +358,7 @@ export function startApp(root: HTMLElement): void {
     animate.classList.toggle('on', settings.animate);
     animate.setAttribute('aria-pressed', String(settings.animate));
     themeBtn.replaceChildren(icon(settings.theme === 'light' ? 'sun' : settings.theme === 'dark' ? 'moon' : 'auto', 18));
-    themeBtn.title = `Theme: ${settings.theme} (click to change)`;
+    themeBtn.title = `Theme: ${settings.theme}, click for ${themes[(themes.indexOf(settings.theme) + 1) % themes.length]}`;
   };
   settings.onChange(syncTools);
   syncTools();
