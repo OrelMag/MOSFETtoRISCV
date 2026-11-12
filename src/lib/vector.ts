@@ -21,6 +21,7 @@ import type { ComponentDef, PortDef } from '../sim/types';
 import { VILL, vlmaxOf, vtypeOf } from '../riscv/rvv';
 import { alu, aluSpec, constWord, isZero } from './alu';
 import { Builder } from './builder';
+import { laid, type LayeredOptions } from './layered';
 import { andN, busMux2, decoder, equal, incrementer, muxTree, rca } from './combinational';
 import { magComparator } from './coding';
 import { define, merger, ones, splitter } from './define';
@@ -65,6 +66,14 @@ function edgePins(b: Builder, ins: string[], outs: string[]): Record<string, [nu
   ins.forEach((p, i) => (pins[p] = [0, 2 + 4 * i]));
   outs.forEach((p, i) => (pins[p] = [b.right, 2 + 4 * i]));
   return pins;
+}
+
+/** A block of a larger unit, laid out by layered.ts (aspect near the canvas's): what a reader opens one at a time. */
+function vecBlock(id: string, name: string, label: string, summary: string, ports: PortDef[], build: (b: Builder) => void, opts: LayeredOptions = {}): ComponentDef {
+  const b = new Builder();
+  b.pins(...ports.filter((p) => p.dir === 'in').map((p) => p.name));
+  build(b);
+  return define({ id, name, category: 'cpu', summary, ports, symbol: { kind: 'box', label: label.toUpperCase() }, netlist: laid(b, { aspect: 1.6, room: true, keepOrder: true, ...opts }) });
 }
 
 /** Is register r misaligned for a group of 2^lmul registers (r mod L ≠ 0)? */
@@ -121,93 +130,145 @@ const DEC_OUTS = ['set', 'elem', 'mask', 'red', 'mvxs', 'mvsx', 'load', 'store',
  * the subset; the operation outputs say how the lanes compute.
  */
 export const VEC_DECODE: ComponentDef = (() => {
+  // Three blocks a reader opens one at a time: the fields (what the word's bits say, the immediate, vset and csrr), the forms
+  // (which instruction of the subset, and how the lanes compute it) and the legality (vtype, groups, v0) with the classes it
+  // lets through. Each gate is the one the flat drawing had, moved into the block that uses it (tests/vector.test.ts pins them).
+  const FIELDS = vecBlock('vdec_fields', 'Vector decoder: fields', 'fields', 'The word cut into its fields: the opcode compared with OP-V, LOAD-FP, STORE-FP and SYSTEM, funct3 and funct6 decoded one-hot, registers x0 or not, the 5-bit immediate signed or not. vset* and csrr of the vector CSRs are decided here; the compare\'s and min / max\'s selects are funct6\'s low bits.', [
+    bus('instr', 32, 'in'),
+    bit('isV', 'out'), bit('isLd', 'out'), bit('isSt', 'out'), bus('f3', 8, 'out'), bus('f6', 64, 'out'), bus('vd', 5, 'out'), bus('rs1', 5, 'out'), bus('vs2', 5, 'out'),
+    bit('vmb', 'out'), bit('masked', 'out'), bit('rs1z', 'out'), bit('vs2z', 'out'), bit('vdz', 'out'), bit('vidSrc', 'out'), bit('isCmp', 'out'), bus('imm', 32, 'out'),
+    bit('set', 'out'), bit('csr', 'out'), bit('minS', 'out'), bit('isMax', 'out'), bus('cmpSel', 3, 'out'),
+  ], (b) => {
+    const { and, or, not, k, bits } = kit(b);
+    const fs = b.op(splitter([7, 5, 3, 5, 5, 1, 6]), ['instr'], 'fields');
+    const op = `${fs}.o0`, vd = `${fs}.o1`, f3 = `${fs}.o2`, rs1 = `${fs}.o3`, vs2 = `${fs}.o4`, vmb = `${fs}.o5`, f6 = `${fs}.o6`;
+    b.next();
+    const eqK = (x: string, w: number, v: number, label?: string) => b.op1(equal(w), [x, k(w, v)], label);
+    const isV = eqK(op, 7, 0x57, 'OP-V?');
+    const isSys = eqK(op, 7, 0x73, 'SYSTEM?');
+    const f3d = b.op(decoder(3), [f3], 'funct3');
+    const f6d = b.op(decoder(6), [f6], 'funct6');
+    const f6b = bits(f6, 6), f3b = bits(f3, 3);
+    const masked = not(vmb);
+    const imm = b.op1(busMux2(32), [b.op1(merger([5, 27]), [rs1, b.op1(fanout(27), [bits(rs1, 5)[4]])], 'simm5'), b.op1(merger([5, 27]), [rs1, k(27, 0)], 'uimm5'), ''], 'immediate');
+    b.next();
+    const D = (i: number) => `${f6d}.y${i}`, F = (i: number) => `${f3d}.y${i}`;
+    b.wire(or(D(0x25), D(0x28), D(0x29)), `${imm.slice(0, imm.indexOf('.'))}.s`);
+    const csrA = b.op1(merger([5, 1, 6]), [vs2, vmb, f6], 'csr address');
+    b.next();
+    const csrHit = or(...[0x008, 0x009, 0x00a, 0x00f, 0xc20, 0xc21, 0xc22].map((a) => eqK(csrA, 12, a)));
+    b.next();
+    // vsetvli (bit 31 = 0), vsetivli (31:30 = 11), vsetvl (31:25 = 1000000); other words of the group are not vsets
+    b.wire(and(isV, F(7), or(not(f6b[5]), f6b[4], and(D(0x20), masked))), 'set');
+    b.wire(and(isSys, or(f3b[0], f3b[1]), csrHit), 'csr');
+    b.wire(isV, 'isV');
+    b.wire(eqK(op, 7, 0x07, 'vector load?'), 'isLd');
+    b.wire(eqK(op, 7, 0x27, 'vector store?'), 'isSt');
+    b.wire(b.op1(merger(ones(8)), Array.from({ length: 8 }, (_, i) => F(i)), 'funct3, one-hot'), 'f3');
+    b.wire(b.op1(merger(ones(64)), Array.from({ length: 64 }, (_, i) => D(i)), 'funct6, one-hot'), 'f6');
+    b.wire(vd, 'vd'); b.wire(rs1, 'rs1'); b.wire(vs2, 'vs2'); b.wire(vmb, 'vmb'); b.wire(masked, 'masked');
+    b.wire(b.op1(isZero(5), [rs1]), 'rs1z'); b.wire(b.op1(isZero(5), [vs2]), 'vs2z'); b.wire(b.op1(isZero(5), [vd]), 'vdz');
+    b.wire(eqK(rs1, 5, 0x11, 'vid?'), 'vidSrc');
+    b.wire(and(not(f6b[5]), f6b[4], f6b[3]), 'isCmp');
+    b.wire(imm, 'imm');
+    b.wire(f6b[0], 'minS');
+    b.wire(f6b[1], 'isMax');
+    b.wire(b.op1(merger([1, 1, 1]), [f6b[0], f6b[1], f6b[2]]), 'cmpSel');
+  });
+
+  const FORMS = vecBlock('vdec_forms', 'Vector decoder: forms', 'forms', 'Which instruction of the subset the fields name (an OPI operation in a form it has, vmerge / vmv.v, vredsum, vmv.x.s, vmv.s.x, vid, a unit-stride access) before any legality check, and how the lanes compute it: operand B, vrsub\'s swap, the ALU operation, the result.', [
+    bit('isV', 'in'), bit('isLd', 'in'), bit('isSt', 'in'), bus('f3', 8, 'in'), bus('f6', 64, 'in'), bit('vmb', 'in'), bit('masked', 'in'), bit('rs1z', 'in'), bit('vs2z', 'in'), bit('vidSrc', 'in'), bit('isCmp', 'in'),
+    bit('opi', 'out'), bit('merge', 'out'), bit('red', 'out'), bit('mvxs', 'out'), bit('vid', 'out'), bit('mvsx', 'out'), bit('mem', 'out'),
+    bit('vv', 'out'), bit('isX', 'out'), bit('swap', 'out'), bus('aluCtl', 4, 'out'), bit('mergeLike', 'out'), bus('resSel', 2, 'out'),
+  ], (b) => {
+    const { and, or } = kit(b);
+    const f3s = b.op(splitter(ones(8)), ['f3'], 'funct3'), f6s = b.op(splitter(ones(64)), ['f6'], 'funct6');
+    const D = (i: number) => `${f6s}.o${i}`, F = (i: number) => `${f3s}.o${i}`;
+    const vv = F(0), vi = F(3), vx = F(4), mvv = F(2), mvx = F(6);
+    b.next();
+    const opiF3 = and('isV', or(vv, vi, vx));
+    const allF = or(...[0x00, 0x09, 0x0a, 0x0b, 0x18, 0x19, 0x1c, 0x1d, 0x25, 0x28, 0x29].map(D));
+    const vvx = or(...[0x02, 0x04, 0x05, 0x06, 0x07, 0x1a, 0x1b].map(D));
+    const vxi = or(...[0x03, 0x1e, 0x1f].map(D));
+    b.next();
+    const formOk = or(allF, and(vvx, or(vv, vx)), and(vxi, or(vx, vi)));
+    b.wire(and(opiF3, formOk), 'opi');
+    b.wire(and(opiF3, D(0x17), or('masked', 'vs2z')), 'merge');
+    b.wire(and('isV', mvv, D(0x00)), 'red');
+    b.wire(and('isV', mvv, D(0x10), 'rs1z', 'vmb'), 'mvxs');
+    b.wire(and('isV', mvv, D(0x14), 'vidSrc', 'vs2z'), 'vid');
+    b.wire(and('isV', mvx, D(0x10), 'vs2z', 'vmb'), 'mvsx');
+    b.wire(and(or('isLd', 'isSt'), F(6), D(0x00), 'vs2z'), 'mem');
+    const mergeLike = or(and(opiF3, D(0x17)), and(mvx, D(0x10)));
+    const picked = or(and(opiF3, or(D(4), D(5), D(6), D(7))), mergeLike);
+    const vidOp = and(mvv, D(0x14));
+    b.next();
+    b.wire(vv, 'vv');
+    b.wire(or(vx, mvx), 'isX');
+    b.wire(D(0x03), 'swap');
+    const sub = or(D(0x02), D(0x03), D(0x04), D(0x05), D(0x06), D(0x07), 'isCmp');
+    b.wire(b.op1(merger([1, 1, 1, 1]), [or(D(0x09), D(0x25), D(0x28), D(0x29)), or(D(0x09), D(0x0a)), or(D(0x09), D(0x0a), D(0x0b), D(0x28), D(0x29)), or(sub, D(0x29))], 'ALU control'), 'aluCtl');
+    b.wire(mergeLike, 'mergeLike');
+    b.wire(b.op1(merger([1, 1]), [or(picked, 'isLd'), or(vidOp, 'isLd')], 'result select'), 'resSel');
+  });
+
+  const LEGAL = vecBlock('vdec_legal', 'Vector decoder: legality', 'legality', 'Is the instruction legal now: vtype valid (ok), its register groups aligned to LMUL, no masked write to v0, a mask result not inside a source group. Only then do the class outputs (elem … store) go to 1; anything else does nothing for a cycle.', [
+    bus('vd', 5, 'in'), bus('rs1', 5, 'in'), bus('vs2', 5, 'in'), bus('lmul', 2, 'in'), bit('ok', 'in'), bit('masked', 'in'), bit('vdz', 'in'), bit('vv', 'in'), bit('isCmp', 'in'), bit('isLd', 'in'), bit('isSt', 'in'),
+    bit('opi', 'in'), bit('merge', 'in'), bit('red', 'in'), bit('mvxs', 'in'), bit('vid', 'in'), bit('mvsx', 'in'), bit('mem', 'in'),
+    bit('elem', 'out'), bit('mask', 'out'), bit('redOut', 'out'), bit('mvxsOut', 'out'), bit('mvsxOut', 'out'), bit('load', 'out'), bit('store', 'out'), bit('multi', 'out'), bit('pre', 'out'),
+  ], (b) => {
+    const { and, or, not } = kit(b);
+    const misVd = b.op1(VGROUP, ['vd', 'lmul']), misVs2 = b.op1(VGROUP, ['vs2', 'lmul']), misVs1 = b.op1(VGROUP, ['rs1', 'lmul']);
+    const insVs2 = b.op1(VINSIDE, ['vd', 'vs2', 'lmul']), insVs1 = b.op1(VINSIDE, ['vd', 'rs1', 'lmul']);
+    b.next();
+    const mvd0 = and('masked', 'vdz');
+    const srcOk = and('ok', not(misVs2), not(and('vv', misVs1)));
+    const opiOk = and(srcOk, b.op1(MUX2, [and(not(misVd), not(mvd0)), not(or(insVs2, and('vv', insVs1))), 'isCmp'], 'mask result?'));
+    const mergeOk = and('ok', not(misVd), not(and('vv', misVs1)), not(and('masked', or(misVs2, 'vdz'))));
+    const vidOk = and('ok', not(misVd), not(mvd0));
+    const memOk = and('ok', not(misVd), not(and('isLd', mvd0)));
+    b.next();
+    const load = and('mem', 'isLd', memOk), store = and('mem', 'isSt', memOk);
+    const maskL = and('opi', 'isCmp', opiOk), redL = and('red', 'ok', not(misVs2));
+    const elem = or(and('opi', not('isCmp'), opiOk), and('merge', mergeOk), and('vid', vidOk), load);
+    b.next();
+    b.wire(elem, 'elem');
+    b.wire(maskL, 'mask');
+    b.wire(redL, 'redOut');
+    b.wire(and('mvxs', 'ok'), 'mvxsOut');
+    b.wire(and('mvsx', 'ok'), 'mvsxOut');
+    b.wire(load, 'load');
+    b.wire(store, 'store');
+    b.wire(or(elem, maskL, redL, store), 'multi');
+    b.wire(or(maskL, redL), 'pre');
+  }, { wires: { lmul: true } });
+
+  // the top level: the decoder's block diagram
   const b = new Builder();
-  const { and, or, not, k, bits } = kit(b);
-  const fs = b.op(splitter([7, 5, 3, 5, 5, 1, 6]), ['instr'], 'fields');
-  const op = `${fs}.o0`, vd = `${fs}.o1`, f3 = `${fs}.o2`, rs1 = `${fs}.o3`, vs2 = `${fs}.o4`, vmb = `${fs}.o5`, f6 = `${fs}.o6`;
+  b.pins('instr', 'ok', 'lmul');
+  b.op(FIELDS, ['instr'], 'fields', 'fld');
   b.next();
-  const eqK = (x: string, w: number, v: number, label?: string) => b.op1(equal(w), [x, k(w, v)], label);
-  const isV = b.name(eqK(op, 7, 0x57, 'OP-V?'), 'isOPV');
-  const isLd = b.name(eqK(op, 7, 0x07, 'vector load?'), 'isLD');
-  const isSt = b.name(eqK(op, 7, 0x27, 'vector store?'), 'isST');
-  const isSys = eqK(op, 7, 0x73, 'SYSTEM?');
-  const f3d = b.op(decoder(3), [f3], 'funct3');
-  const f6d = b.op(decoder(6), [f6], 'funct6');
-  const f6b = bits(f6, 6), f3b = bits(f3, 3);
-  const masked = b.name(not(vmb), 'masked');
-  const rs1z = b.op1(isZero(5), [rs1]), vs2z = b.op1(isZero(5), [vs2]), vdz = b.op1(isZero(5), [vd]);
-  const imm = b.op1(busMux2(32), [b.op1(merger([5, 27]), [rs1, b.op1(fanout(27), [bits(rs1, 5)[4]])], 'simm5'), b.op1(merger([5, 27]), [rs1, k(27, 0)], 'uimm5'), ''], 'immediate');
+  b.op(FORMS, ['fld.isV', 'fld.isLd', 'fld.isSt', 'fld.f3', 'fld.f6', 'fld.vmb', 'fld.masked', 'fld.rs1z', 'fld.vs2z', 'fld.vidSrc', 'fld.isCmp'], 'forms', 'form');
   b.next();
-  const D = (i: number) => `${f6d}.y${i}`, F = (i: number) => `${f3d}.y${i}`;
-  const vv = F(0), vi = F(3), vx = F(4), mvv = F(2), mvx = F(6);
-  const opiF3 = and(isV, or(vv, vi, vx));
-  const allF = or(...[0x00, 0x09, 0x0a, 0x0b, 0x18, 0x19, 0x1c, 0x1d, 0x25, 0x28, 0x29].map(D));
-  const vvx = or(...[0x02, 0x04, 0x05, 0x06, 0x07, 0x1a, 0x1b].map(D));
-  const vxi = or(...[0x03, 0x1e, 0x1f].map(D));
-  const isCmp = and(not(f6b[5]), f6b[4], f6b[3]);
-  const uimm = or(D(0x25), D(0x28), D(0x29));
-  b.wire(uimm, `${imm.slice(0, imm.indexOf('.'))}.s`);
-  const csrA = b.op1(merger([5, 1, 6]), [vs2, vmb, f6], 'csr address');
+  b.op(LEGAL, ['fld.vd', 'fld.rs1', 'fld.vs2', 'lmul', 'ok', 'fld.masked', 'fld.vdz', 'form.vv', 'fld.isCmp', 'fld.isLd', 'fld.isSt',
+    'form.opi', 'form.merge', 'form.red', 'form.mvxs', 'form.vid', 'form.mvsx', 'form.mem'], 'legality', 'legal');
   b.next();
-  const formOk = or(allF, and(vvx, or(vv, vx)), and(vxi, or(vx, vi)));
-  const opi = and(opiF3, formOk);
-  const merge = and(opiF3, D(0x17), or(masked, vs2z));
-  const red = and(isV, mvv, D(0x00));
-  const mvxs = and(isV, mvv, D(0x10), rs1z, vmb);
-  const vid = and(isV, mvv, D(0x14), eqK(rs1, 5, 0x11), vs2z);
-  const mvsx = and(isV, mvx, D(0x10), vs2z, vmb);
-  const mem = and(or(isLd, isSt), F(6), D(0x00), vs2z);
-  const csrHit = or(...[0x008, 0x009, 0x00a, 0x00f, 0xc20, 0xc21, 0xc22].map((a) => eqK(csrA, 12, a)));
-  const misVd = b.op1(VGROUP, [vd, 'lmul']), misVs2 = b.op1(VGROUP, [vs2, 'lmul']), misVs1 = b.op1(VGROUP, [rs1, 'lmul']);
-  const insVs2 = b.op1(VINSIDE, [vd, vs2, 'lmul']), insVs1 = b.op1(VINSIDE, [vd, rs1, 'lmul']);
-  b.next();
-  const mvd0 = and(masked, vdz);
-  const srcOk = and('ok', not(misVs2), not(and(vv, misVs1)));
-  const opiOk = and(srcOk, b.op1(MUX2, [and(not(misVd), not(mvd0)), not(or(insVs2, and(vv, insVs1))), isCmp], 'mask result?'));
-  const mergeOk = and('ok', not(misVd), not(and(vv, misVs1)), not(and(masked, or(misVs2, vdz))));
-  const vidOk = and('ok', not(misVd), not(mvd0));
-  const memOk = and('ok', not(misVd), not(and(isLd, mvd0)));
-  b.next();
-  const load = b.name(and(mem, isLd, memOk), 'load'), store = b.name(and(mem, isSt, memOk), 'store');
-  const maskL = b.name(and(opi, isCmp, opiOk), 'mask'), redL = b.name(and(red, 'ok', not(misVs2)), 'red');
-  const elem = b.name(or(and(opi, not(isCmp), opiOk), and(merge, mergeOk), and(vid, vidOk), load), 'elem');
-  const mergeLike = or(and(opiF3, D(0x17)), and(mvx, D(0x10)));
-  const picked = or(and(opiF3, or(D(4), D(5), D(6), D(7))), mergeLike);
-  const vidOp = and(mvv, D(0x14));
-  b.next();
-  // vsetvli (bit 31 = 0), vsetivli (31:30 = 11), vsetvl (31:25 = 1000000); other words of the group are not vsets
-  b.wire(and(isV, F(7), or(not(f6b[5]), f6b[4], and(D(0x20), masked))), 'set');
-  b.wire(elem, 'elem');
-  b.wire(maskL, 'mask');
-  b.wire(redL, 'red');
-  b.wire(and(mvxs, 'ok'), 'mvxs');
-  b.wire(and(mvsx, 'ok'), 'mvsx');
-  b.wire(load, 'load');
-  b.wire(store, 'store');
-  b.wire(and(isSys, or(f3b[0], f3b[1]), csrHit), 'csr');
-  b.wire(or(elem, maskL, redL, store), 'multi');
-  b.wire(or(maskL, redL), 'pre');
-  b.wire(vv, 'vv');
-  b.wire(or(vx, mvx), 'isX');
-  b.wire(imm, 'imm');
-  b.wire(D(0x03), 'swap');
-  const sub = or(D(0x02), D(0x03), D(0x04), D(0x05), D(0x06), D(0x07), isCmp);
-  b.wire(b.op1(merger([1, 1, 1, 1]), [or(D(0x09), D(0x25), D(0x28), D(0x29)), or(D(0x09), D(0x0a)), or(D(0x09), D(0x0a), D(0x0b), D(0x28), D(0x29)), or(sub, D(0x29))], 'ALU control'), 'aluCtl');
-  b.wire(mergeLike, 'mergeLike');
-  b.wire(f6b[0], 'minS');
-  b.wire(f6b[1], 'isMax');
-  b.wire(b.op1(merger([1, 1, 1]), [f6b[0], f6b[1], f6b[2]]), 'cmpSel');
-  b.wire(b.op1(merger([1, 1]), [or(picked, isLd), or(vidOp, isLd)], 'result select'), 'resSel');
-  b.wire(masked, 'masked');
+  const from: Record<(typeof DEC_OUTS)[number], string> = {
+    set: 'fld.set', elem: 'legal.elem', mask: 'legal.mask', red: 'legal.redOut', mvxs: 'legal.mvxsOut', mvsx: 'legal.mvsxOut', load: 'legal.load', store: 'legal.store',
+    csr: 'fld.csr', multi: 'legal.multi', pre: 'legal.pre', vv: 'form.vv', isX: 'form.isX', imm: 'fld.imm', swap: 'form.swap', aluCtl: 'form.aluCtl',
+    mergeLike: 'form.mergeLike', minS: 'fld.minS', isMax: 'fld.isMax', cmpSel: 'fld.cmpSel', resSel: 'form.resSel', masked: 'fld.masked',
+  };
+  for (const o of DEC_OUTS) b.wire(from[o], o);
+  const ports: PortDef[] = [bus('instr', 32, 'in'), bit('ok', 'in'), bus('lmul', 2, 'in'),
+    bit('set', 'out'), bit('elem', 'out'), bit('mask', 'out'), bit('red', 'out'), bit('mvxs', 'out'), bit('mvsx', 'out'), bit('load', 'out'), bit('store', 'out'), bit('csr', 'out'),
+    bit('multi', 'out'), bit('pre', 'out'), bit('vv', 'out'), bit('isX', 'out'), bus('imm', 32, 'out'), bit('swap', 'out'), bus('aluCtl', 4, 'out'), bit('mergeLike', 'out'),
+    bit('minS', 'out'), bit('isMax', 'out'), bus('cmpSel', 3, 'out'), bus('resSel', 2, 'out'), bit('masked', 'out')];
   return define({
     id: 'vdec', name: 'Vector decoder', category: 'cpu',
     summary: 'Recognises the vector instructions the unit runs (vset*, the integer OPI group, vmerge / vmv.v, vredsum, vmv.x.s / vmv.s.x, vid, vle32 / vse32, csrr of the vector CSRs) and checks them against vtype: a valid vtype (ok), register groups aligned to LMUL, no masked write to v0, a mask result not inside a source group. elem … csr are 1 only for a legal instruction; anything else does nothing for a cycle. The other outputs steer the lanes: the operand (vv, a scalar, an immediate), the ALU operation, the compare, the result.',
-    ports: [bus('instr', 32, 'in'), bit('ok', 'in'), bus('lmul', 2, 'in'),
-      bit('set', 'out'), bit('elem', 'out'), bit('mask', 'out'), bit('red', 'out'), bit('mvxs', 'out'), bit('mvsx', 'out'), bit('load', 'out'), bit('store', 'out'), bit('csr', 'out'),
-      bit('multi', 'out'), bit('pre', 'out'), bit('vv', 'out'), bit('isX', 'out'), bus('imm', 32, 'out'), bit('swap', 'out'), bus('aluCtl', 4, 'out'), bit('mergeLike', 'out'),
-      bit('minS', 'out'), bit('isMax', 'out'), bus('cmpSel', 3, 'out'), bus('resSel', 2, 'out'), bit('masked', 'out')],
+    ports,
     symbol: { kind: 'box', label: 'V DECODE' },
-    netlist: () => ({ pins: edgePins(b, ['instr', 'ok', 'lmul'], [...DEC_OUTS]), instances: b.instances, nets: b.nets() }),
+    netlist: laid(b, { room: true }),
   });
 })();
 
@@ -321,59 +382,90 @@ export const VEC_CFG: ComponentDef = (() => {
  * the old mask word or vs1[0] (port B: vd or vs1) and write vd's lane-0 word on the last.
  */
 export const VEC_SEQ: ComponentDef = (() => {
+  // Three blocks: the beat counter (which register of the group, the first beat a mask compare or vredsum adds, the last),
+  // the register addresses of this beat, and the lanes (each one's element, inside vl, active under v0, its write enable).
+  const COUNT = vecBlock('vseq_count', 'Beat sequencer: counter', 'beat counter', 'Counts the cycles since the instruction began and clears on the last. The beat is the register of the group this cycle (one less after a first beat of a mask compare or vredsum); last = 1 when it is the group\'s last register, or at once for an instruction that is not multi-beat.', [
+    bit('pre', 'in'), bus('lmul', 2, 'in'), bit('multi', 'in'), clkPort,
+    bus('beat', 3, 'out'), bit('preBeat', 'out'), bit('atEnd', 'out'), bit('last', 'out'),
+  ], (b) => {
+    const { and, or, not, k, bits, fan } = kit(b);
+    const cs = b.op(splitter([3, 1]), ['cnt.q']);
+    const [l0, l1] = bits('lmul', 2);
+    const cntZ = b.op1(isZero(4), ['cnt.q']);
+    b.next();
+    const preBeat = and('pre', cntZ);
+    const dec = b.op1(rca(3), [`${cs}.o0`, k(3, 7), k(1, 0)], 'beat − 1');
+    const lm1 = b.op1(merger([1, 1, 1]), [or(l0, l1), l1, and(l0, l1)], 'L − 1');
+    b.next();
+    const bOff = b.op1(busMux2(3), [`${cs}.o0`, dec, 'pre']);
+    b.next();
+    const beat = b.op1(bitwise('and', 3), [bOff, fan(not(preBeat), 3)], 'beat', 'bt');
+    b.next();
+    const atEnd = b.op1(equal(3), [beat, lm1], 'last of the group?', 'end');
+    b.next();
+    const last = or(not('multi'), and(not(preBeat), atEnd));
+    b.wire(b.op1(busMux2(4), [b.op1(incrementer(4), ['cnt.q']), k(4, 0), last], 'next count'), 'cnt.d');
+    b.wire(k(1, 1), 'cnt.en');
+    b.wire('clk', 'cnt.clk');
+    b.add(register(4), 'beat counter', 'cnt');
+    b.wire(beat, 'beat'); b.wire(preBeat, 'preBeat'); b.wire(atEnd, 'atEnd'); b.wire(last, 'last');
+  }, { aspect: 0, wires: { 'bt.y': true, 'end.eq': true } }); // small: one band
+
+  const REGS = vecBlock('vseq_regs', 'Beat sequencer: registers', 'registers', 'The registers this beat reads and writes: vs2 | b (vs3 for a store) on port A, vs1 | b (vd for the old mask word on a first beat) on port B, vd | b to write (a mask compare and vredsum write vd itself). The groups are aligned, so | b is an OR into the low bits.', [
+    bus('instr', 32, 'in'), bus('beat', 3, 'in'), bit('store', 'in'), bit('mask', 'in'), bit('red', 'in'), bit('preBeat', 'in'),
+    bus('raA', 5, 'out'), bus('raB', 5, 'out'), bus('wa', 5, 'out'),
+  ], (b) => {
+    const { and, or, not, fan } = kit(b);
+    const fs = b.op(splitter([7, 5, 3, 5, 5, 7]), ['instr'], 'fields');
+    const vd = `${fs}.o1`, vs1 = `${fs}.o3`, vs2 = `${fs}.o4`;
+    b.next();
+    const orLow = (base: string) => { const s = b.op(splitter([3, 2]), [base]); return b.op1(merger([3, 2]), [b.op1(bitwise('or', 3), [`${s}.o0`, 'beat']), `${s}.o1`]); };
+    b.wire(orLow(b.op1(busMux2(5), [vs2, vd, 'store'], 'vs2 / vs3')), 'raA');
+    b.wire(orLow(b.op1(busMux2(5), [vs1, vd, and('mask', 'preBeat')], 'vs1 / old mask')), 'raB');
+    const wd = b.op(splitter([3, 2]), [vd]);
+    b.wire(b.op1(merger([3, 2]), [b.op1(bitwise('or', 3), [`${wd}.o0`, b.op1(bitwise('and', 3), ['beat', fan(not(or('mask', 'red')), 3)])]), `${wd}.o1`]), 'wa');
+  });
+
+  const LANES = vecBlock('vseq_lanes', 'Beat sequencer: lanes', 'lanes', 'Each lane\'s element 4b + i this beat, whether it is inside vl and active under v0, and its write enable: an element inside vl and active (vmerge: every element inside vl). Lane 0 also writes vmv.s.x\'s word and, on the last beat, a mask compare\'s or vredsum\'s result.', [
+    bus('beat', 3, 'in'), bit('preBeat', 'in'), bit('atEnd', 'in'), bus('vl', 6, 'in'), bus('v0', 32, 'in'), bit('masked', 'in'),
+    bit('elem', 'in'), bit('mergeLike', 'in'), bit('mvsx', 'in'), bit('mask', 'in'), bit('red', 'in'),
+    bus('we', 4, 'out'), bus('act', 4, 'out'), bus('take', 4, 'out'), bus('e0', 5, 'out'), bus('e1', 5, 'out'), bus('e2', 5, 'out'), bus('e3', 5, 'out'), bit('accW', 'out'),
+  ], (b) => {
+    const { and, or, not, k, bits } = kit(b);
+    const vlNZ = not(b.op1(isZero(6), ['vl']));
+    const v0b = bits('v0', 32);
+    b.next();
+    const we: string[] = [], act: string[] = [], take: string[] = [];
+    for (let i = 0; i < VEC_LANES; i++) {
+      const e = b.op1(merger([2, 3]), [k(2, i), 'beat'], `element ${i}`);
+      b.wire(e, `e${i}`);
+      const lt = `${b.op(magComparator(6), [b.op1(merger([5, 1]), [e, k(1, 0)]), 'vl'], `e${i} < vl?`)}.lt`;
+      const m = b.op1(muxTree(3, 1), [...Array.from({ length: 8 }, (_, j) => v0b[4 * j + i]), 'beat'], `v0[e${i}]`);
+      const active = or(not('masked'), m);
+      take.push(active);
+      act.push(and(active, lt, not('preBeat')));
+      const ew = and('elem', lt, or('mergeLike', active));
+      we.push(i ? ew : or(ew, and('mvsx', lt), and('mask', not('preBeat'), 'atEnd'), and('red', not('preBeat'), 'atEnd', vlNZ)));
+    }
+    b.next();
+    b.wire(b.op1(merger(ones(4)), we, 'write'), 'we');
+    b.wire(b.op1(merger(ones(4)), act, 'active, in vl'), 'act');
+    b.wire(b.op1(merger(ones(4)), take), 'take');
+    b.wire(or('mask', 'red'), 'accW');
+  });
+
+  // the top level: the sequencer's block diagram
+  const ins = ['instr', 'multi', 'pre', 'lmul', 'elem', 'mask', 'red', 'mvsx', 'store', 'masked', 'mergeLike', 'vl', 'v0', 'clk'];
   const b = new Builder();
-  const { and, or, not, k, bits, fan } = kit(b);
-  const fs = b.op(splitter([7, 5, 3, 5, 5, 7]), ['instr'], 'fields');
-  const vd = `${fs}.o1`, vs1 = `${fs}.o3`, vs2 = `${fs}.o4`;
-  const cs = b.op(splitter([3, 1]), ['cnt.q']);
-  const [l0, l1] = bits('lmul', 2);
-  const cntZ = b.op1(isZero(4), ['cnt.q']);
+  b.pins(...ins);
+  b.op(COUNT, ['pre', 'lmul', 'multi', 'clk'], 'beat counter', 'count');
   b.next();
-  const preBeat = b.name(and('pre', cntZ), 'preBeat');
-  const dec = b.op1(rca(3), [`${cs}.o0`, k(3, 7), k(1, 0)], 'beat − 1');
-  const lm1 = b.op1(merger([1, 1, 1]), [or(l0, l1), l1, and(l0, l1)], 'L − 1');
-  const vlNZ = not(b.op1(isZero(6), ['vl']));
+  b.op(REGS, ['instr', 'count.beat', 'store', 'mask', 'red', 'count.preBeat'], 'registers', 'regs');
+  b.op(LANES, ['count.beat', 'count.preBeat', 'count.atEnd', 'vl', 'v0', 'masked', 'elem', 'mergeLike', 'mvsx', 'mask', 'red'], 'lanes', 'lanes');
   b.next();
-  const bOff = b.op1(busMux2(3), [`${cs}.o0`, dec, 'pre']);
-  b.next();
-  const beat = b.name(b.op1(bitwise('and', 3), [bOff, fan(not(preBeat), 3)], 'beat'), 'beat');
-  const v0b = bits('v0', 32);
-  b.next();
-  const atEnd = b.op1(equal(3), [beat, lm1], 'last of the group?');
-  const orLow = (base: string) => { const s = b.op(splitter([3, 2]), [base]); return b.op1(merger([3, 2]), [b.op1(bitwise('or', 3), [`${s}.o0`, beat]), `${s}.o1`]); };
-  const raA = orLow(b.op1(busMux2(5), [vs2, vd, 'store'], 'vs2 / vs3'));
-  const raB = orLow(b.op1(busMux2(5), [vs1, vd, and('mask', preBeat)], 'vs1 / old mask'));
-  const wd = b.op(splitter([3, 2]), [vd]);
-  const wa = b.op1(merger([3, 2]), [b.op1(bitwise('or', 3), [`${wd}.o0`, b.op1(bitwise('and', 3), [beat, fan(not(or('mask', 'red')), 3)])]), `${wd}.o1`]);
-  b.next();
-  const last = b.name(or(not('multi'), and(not(preBeat), atEnd)), 'last');
-  b.wire(b.op1(busMux2(4), [b.op1(incrementer(4), ['cnt.q']), k(4, 0), last], 'next count'), 'cnt.d');
-  b.wire(k(1, 1), 'cnt.en');
-  b.wire('clk', 'cnt.clk');
-  b.add(register(4), 'beat counter', 'cnt');
-  const we: string[] = [], act: string[] = [], take: string[] = [];
-  for (let i = 0; i < VEC_LANES; i++) {
-    const e = b.op1(merger([2, 3]), [k(2, i), beat], `element ${i}`);
-    b.wire(e, `e${i}`);
-    const lt = `${b.op(magComparator(6), [b.op1(merger([5, 1]), [e, k(1, 0)]), 'vl'], `e${i} < vl?`)}.lt`;
-    const m = b.op1(muxTree(3, 1), [...Array.from({ length: 8 }, (_, j) => v0b[4 * j + i]), beat], `v0[e${i}]`);
-    const active = or(not('masked'), m);
-    take.push(active);
-    act.push(and(active, lt, not(preBeat)));
-    const ew = and('elem', lt, or('mergeLike', active));
-    we.push(i ? ew : or(ew, and('mvsx', lt), and('mask', not(preBeat), atEnd), and('red', not(preBeat), atEnd, vlNZ)));
-  }
-  b.next();
-  b.wire(raA, 'raA');
-  b.wire(raB, 'raB');
-  b.wire(wa, 'wa');
-  b.wire(b.op1(merger(ones(4)), we, 'write'), 'we');
-  b.wire(b.op1(merger(ones(4)), act, 'active, in vl'), 'act');
-  b.wire(b.op1(merger(ones(4)), take), 'take');
-  b.wire(beat, 'beat');
-  b.wire(preBeat, 'preBeat');
-  b.wire(last, 'last');
-  b.wire(or('mask', 'red'), 'accW');
+  for (const o of ['raA', 'raB', 'wa']) b.wire(`regs.${o}`, o);
+  for (const o of ['we', 'act', 'take', 'e0', 'e1', 'e2', 'e3', 'accW']) b.wire(`lanes.${o}`, o);
+  for (const o of ['beat', 'preBeat', 'last']) b.wire(`count.${o}`, o);
   return define({
     id: 'vseq', name: 'Beat sequencer', category: 'cpu',
     summary: 'Runs an instruction over its register group: one beat per register (L = LMUL beats), the four lanes on elements 4b … 4b + 3. A lane writes only an element inside vl and active under v0 (vmerge writes every element inside vl, picking by v0), which keeps tail and masked-off elements undisturbed. A mask compare and vredsum add a first beat that reads the old mask word or vs1[0]; their result goes to lane 0 on the last beat. last = 1 lets the scalar core retire the instruction; a scalar instruction is always last.',
@@ -381,10 +473,7 @@ export const VEC_SEQ: ComponentDef = (() => {
       bus('raA', 5, 'out'), bus('raB', 5, 'out'), bus('wa', 5, 'out'), bus('we', 4, 'out'), bus('act', 4, 'out'), bus('take', 4, 'out'), bus('e0', 5, 'out'), bus('e1', 5, 'out'), bus('e2', 5, 'out'), bus('e3', 5, 'out'),
       bus('beat', 3, 'out'), bit('preBeat', 'out'), bit('last', 'out'), bit('accW', 'out')],
     symbol: { kind: 'box', label: 'BEATS' },
-    netlist: () => ({
-      pins: edgePins(b, ['instr', 'multi', 'pre', 'lmul', 'elem', 'mask', 'red', 'mvsx', 'store', 'masked', 'mergeLike', 'vl', 'v0', 'clk'], ['raA', 'raB', 'wa', 'we', 'act', 'take', 'e0', 'e1', 'e2', 'e3', 'beat', 'preBeat', 'last', 'accW']),
-      instances: b.instances, nets: b.nets(),
-    }),
+    netlist: laid(b, { room: true }),
   });
 })();
 
