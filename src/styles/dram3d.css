@@ -1,6 +1,9 @@
 /* The DRAM array model: materials, scoped under .m3d (model3d.css holds the shared ones). */
 .m3d, .dr3 {
   --m3-dram-plate: light-dark(#cfd5e3, #3a4258);
+  --m3-dram-nit: light-dark(#c9b98a, #a8996a);
+  --m3-dram-tin: light-dark(#b89a5a, #d2b46e);
+  --m3-dram-plate2: light-dark(#9fb3cf, #7f93b0);
   --m3-dram-line: light-dark(#8f98a8, #7a8398);
   --m3-dram-wl: light-dark(#e08a1e, #ffb347);
   --m3-dram-charge: light-dark(#1f9a63, #3ecb8a);
