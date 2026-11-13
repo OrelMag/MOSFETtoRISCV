@@ -27,7 +27,7 @@ export const roleOf = (p: Part): Role => p.color as unknown as Role;
 
 const mk = (m: Material): Material => M.make(m);
 export const MATS: Record<Role, Material> = {
-  psub: mk({ base: '--mk-psub', metal: 0.2, rough: 0.35, label: 'p-type silicon: the wafer' }),
+  psub: mk({ base: [0.47, 0.49, 0.54], metal: 0.35, rough: 0.3, label: 'p-type silicon: the wafer' }),
   nwell: mk({ base: '--mk-nwell', metal: 0.2, rough: 0.35, label: 'n-well: silicon doped n, the PMOS pocket' }),
   ndiff: mk({ base: '--mk-ndiff', metal: 0.2, rough: 0.35, label: 'n+ silicon: NMOS source and drain' }),
   pdiff: mk({ base: '--mk-pdiff', metal: 0.2, rough: 0.35, label: 'p+ silicon: PMOS source and drain' }),
@@ -38,9 +38,9 @@ export const MATS: Record<Role, Material> = {
   ild: mk({ base: '--mk-ild', metal: 0, rough: 0.1, transmit: 0.8, tint: '--mk-ild', label: 'interlayer oxide (pre-metal dielectric)' }),
   contact: mk({ ...M.tungsten, label: 'contacts (licon1): tungsten-filled holes in sky130' }),
   metal: mk({ ...M.aluminium, label: 'metal 1: aluminium in sky130' }),
-  plate: mk({ ...M.quartz, label: 'reticle: a fused-quartz plate (a real one is 6 in square, 1/4 in thick)' }),
-  chrome: mk({ base: [0.55, 0.56, 0.58], metal: 1, rough: 0.32, label: 'chrome: the pattern, opaque to the light' }),
-  pell: mk({ base: '--mk-pell', metal: 0, rough: 0.05, transmit: 0.92, label: 'pellicle: a membrane that keeps dust out of focus' }),
+  plate: mk({ ...M.quartz, transmit: 0.96, label: 'reticle: a fused-quartz plate (a real one is 6 in square, 1/4 in thick)' }),
+  chrome: mk({ base: [0.78, 0.79, 0.82], metal: 1, rough: 0.22, label: 'chrome: a film some 0.1 µm thick on the plate’s underside, opaque to the light' }),
+  pell: mk({ base: '--mk-pell', metal: 0, rough: 0.05, transmit: 0.97, label: 'pellicle: a membrane that keeps dust out of focus' }),
   frame: mk({ base: '--mk-frame', metal: 0.6, rough: 0.4, label: 'pellicle frame' }),
   uv: M.beam('--mk-uv', 1.6, 'ultraviolet light through the clear areas'),
 };
@@ -63,7 +63,9 @@ export function cutZ(c: Cell): number {
   return place(c, 0, (y0 + y1) / 2, 0)[2];
 }
 
-export const MK_HOME: OrbitView = { target: [0, 4, 1], yaw: -0.6, pitch: 0.36, dist: 64 };
+/** The reticle's drawn thickness (layout units). */
+export const PLATE_T = 2;
+export const MK_HOME: OrbitView = { target: [0, 3.5, 4], yaw: -0.42, pitch: 0.22, dist: 45 };
 /** The tour's steps (silicon.ts FAB indices): the trench mask, the light through the poly reticle, the implant beside the gate, the metal. */
 export const TOUR_STEPS = [1, 4, 6, 9];
 
@@ -71,13 +73,15 @@ export function masksModel(c: Cell, st: MasksState): Model3 {
   const parts = masksParts(c, st, ROLE_PALETTE), by = new Map<Role, Geo[]>(), m = MASK_AT[st.step];
   // An implant mask is dark-field: chrome everywhere but the window, so the ions are seen to come through it.
   const dark = m === 'nsdm' || m === 'psdm';
-  if (dark) {
+  if (m) {
+    // the plate drawn with a visible thickness (a real one is 1/24 of its width), the chrome as a thin film under it
     const z = zs(st.spread), plate: R = [-MARGIN, -MARGIN, c.w + 2 * MARGIN, 44 + 2 * MARGIN];
-    by.set('chrome', slabs(c, 'chrome' as never, minus([plate], maskRects(c, m)), z.plate - 0.4, z.plate).map(geoOf));
+    by.set('plate', slabs(c, 'plate' as never, [plate], z.plate, z.plate + PLATE_T).map(geoOf));
+    by.set('chrome', slabs(c, 'chrome' as never, dark ? minus([plate], maskRects(c, m)) : maskRects(c, m, st.shift), z.plate - 0.08, z.plate).map(geoOf));
   }
   for (const p of parts) {
     const r = roleOf(p);
-    if (dark && r === 'chrome') continue;
+    if (r === 'chrome' || r === 'plate') continue;
     // the beams a little wider than the parts' rays, so they read at the model's size
     const g = r === 'uv' ? geoOf({ ...p, scale: [p.scale![0] * 2.6, p.scale![1], p.scale![2] * 2.6] }) : geoOf(p);
     by.set(r, [...(by.get(r) ?? []), g]);

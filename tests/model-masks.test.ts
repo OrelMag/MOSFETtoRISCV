@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { RGB, RGBA } from '../src/gl/instances';
 import {
-  activeOf, area, channelOf, DEPTH, implanted, intersect, LAND_AT, LAYERS, maskRects, MASK_AT, masksAnchors, masksParts, minus, misalignment, place, polyOf, rayPoints, reticle, windowOf, WINDOW_MARGIN, zs,
+  activeOf, area, channelOf, DEPTH, LAMBDA_UM, MK_DEPTH, TRUE_UM, V_FACTOR, implanted, intersect, LAND_AT, LAYERS, maskRects, MASK_AT, masksAnchors, masksParts, minus, misalignment, place, polyOf, rayPoints, reticle, windowOf, WINDOW_MARGIN, zs,
   type MaskName, type MasksPalette, type R,
 } from '../src/widgets/masks3dparts';
 import { CELLS, FAB } from '../src/widgets/silicon';
@@ -168,5 +168,22 @@ describe('masks on the studio renderer', () => {
     expect(cutZ(cell)).toBe(m.cuts!.planes[0].d);
     expect(m.beats).toHaveLength(TOUR_STEPS.length);
     expect(TOUR_STEPS.map((s) => MASK_AT[s])).toEqual(['diff', 'poly', 'nsdm', 'met1']);
+  });
+});
+
+describe('masks: one height factor', () => {
+  it('every layer is drawn at V_FACTOR of its sky130 thickness against the footprint (1 λ = 62 nm)', () => {
+    expect(V_FACTOR).toBe(0.25);
+    expect(LAMBDA_UM).toBe(0.062);
+    const z = zs(0), u = (um: number) => (V_FACTOR * um) / LAMBDA_UM;
+    expect(z.poly1 - z.poly0).toBeCloseTo(u(0.18), 9);
+    expect(z.res1 - z.res0).toBeCloseTo(u(1.14), 9);
+    expect(z.metal1 - z.metal0).toBeCloseTo(u(0.35), 9);
+    expect(z.ild).toBeCloseTo(u(0.5) + z.poly0, 9); // the dielectric's top is 0.5 µm above the gate's foot
+    expect(MK_DEPTH.well).toBeCloseTo(u(1.1), 9);
+    expect(MK_DEPTH.junction).toBeCloseTo(u(0.1), 9);
+    // the true ratios hold in the drawing: metal 1 is 0.35 / 0.18 the poly's thickness
+    expect((z.metal1 - z.metal0) / (z.poly1 - z.poly0)).toBeCloseTo(0.35 / 0.18, 9);
+    expect(TRUE_UM).toEqual({ poly: 0.18, ild: 0.5, metal: 0.35, resist: 1.14, well: 1.1, junction: 0.1, sti: 0.3 });
   });
 });

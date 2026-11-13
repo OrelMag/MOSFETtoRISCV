@@ -10,7 +10,7 @@ import { reducedMotion } from '../ui/motion';
 import { frameLoop } from './mosfet';
 import { studioStage } from './studiostage';
 import { ION_GEO, ION_MAT, MK_HOME, TOUR_STEPS, ionInstances, masksModel } from './masks3dkit';
-import { LAND_AT, LAYER_NAME, LAYERS, MASK_AT, MASK_NAME, maskRects, misalignment, type MasksState } from './masks3dparts';
+import { LAND_AT, LAYER_NAME, LAYERS, MASK_AT, MASK_NAME, maskRects, misalignment, TRUE_UM, V_FACTOR, type MasksState } from './masks3dparts';
 import { CELLS, FAB } from './silicon';
 
 /** The masks this cell's flow needs in sky130 (nwell, diff, poly, nsdm, psdm, licon1, li1, mcon, met1); the model draws seven. */
@@ -26,12 +26,14 @@ export function masksView(): Widget {
     home: MK_HOME,
     fit: false,
     aspect: 1.45,
+    // opened along the NMOS row: the layers in section are the subject
+    knobs: { cut: 1 },
     limits: { minDist: 20, maxDist: 240, maxPan: 80 },
     // a beat takes the process to its step
     onBeat: (i) => { if (i >= 0) go(TOUR_STEPS[i]); },
     build: () => masksModel(cell, st),
     aria: 'A standard cell in 3D, built mask by mask; the current step’s reticle floats above it',
-    note: 'The cell’s footprint is to scale (1 λ = 62 nm, so the 44 λ row is sky130’s 2.72 µm); heights and depths are exaggerated and the layers pulled apart. The reticle is drawn 1×, one cell, over the die; a real one is 4× and carries the whole die. The light is drawn as a few beams, the implant as a few ions falling at walking pace (a real one is a beam of millions, at hundreds of keV); the resist is shown on the gates in the lithography step only, not coated, exposed, developed and stripped in turn.',
+    note: `The cell’s footprint is to scale (1 λ = 62 nm, so the 44 λ row is sky130’s 2.72 µm). Heights are drawn at ${V_FACTOR} of true against it, every layer by the same factor, so their proportions are sky130’s (SkyWater PDK: poly ${TRUE_UM.poly} µm, dielectric under metal ${TRUE_UM.ild} µm, metal 1 ${TRUE_UM.metal} µm, resist ${TRUE_UM.resist} µm, n-well ${TRUE_UM.well} µm deep, junctions ${TRUE_UM.junction} µm); the trench depth (${TRUE_UM.sti} µm) is assumed, the gate oxide (a few nanometres) is drawn thick enough to see, and Pull apart separates the layers. ` + 'The reticle is drawn 1×, one cell, over the die; a real one is 4× and carries the whole die. The light is drawn as a few beams, the implant as a few ions falling at walking pace (a real one is a beam of millions, at hundreds of keV); the resist is shown on the gates in the lithography step only, not coated, exposed, developed and stripped in turn.',
   });
   ready = true;
   const ions = () => { if (ready) stage.instances('ions', ION_GEO, ION_MAT, packInstances(ionInstances(cell, st, t, stage.rgb(st.step === 6 ? '--mk-ndiff' : '--mk-pdiff')))); };
