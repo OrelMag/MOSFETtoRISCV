@@ -161,8 +161,10 @@ export function studioStage(o: StudioStageOptions): StudioStage {
   };
   /** The width over height of the part of the canvas the model is fitted to (between the gutters). */
   const contentAspect = () => Math.max(0.2, ((canvas.clientWidth || 4) - 2 * gutNow) / (canvas.clientHeight || 3));
+  /** A home the host set with goTo is a view it chose (target and distance included): a resize keeps it, never refits it. */
+  let homeGiven = false;
   const homeView = (): OrbitView => {
-    if (o.fit === false || !st) return o.home;
+    if (o.fit === false || homeGiven || !st) return o.home;
     const box = homeBox();
     if (o.homeRadius) {
       const c: Vec3 = [(box.min[0] + box.max[0]) / 2, (box.min[1] + box.max[1]) / 2, (box.min[2] + box.max[2]) / 2];
@@ -366,6 +368,7 @@ export function studioStage(o: StudioStageOptions): StudioStage {
     tween = requestAnimationFrame(step);
   };
   const goTo = (dest: OrbitView) => {
+    homeGiven = true;
     if (!st) { o.home = dest; return; }
     const c = st.camera, from = { target: [...c.target] as Vec3, yaw: c.yaw, pitch: c.pitch, dist: c.dist };
     cancelAnimationFrame(tween);
