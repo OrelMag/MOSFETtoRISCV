@@ -124,7 +124,8 @@ Your circuit and your progress are saved in this browser as you go. To carry the
   ![Act P unfolded: optional relay, tube and card levels in dashed boxes](img/campaign/12-act-p.png)
 
 - **The side panel.** It is on the right and shows the level you clicked.
-  - On a fresh start it shows **Start here**, with a **Begin** button and a summary of every act.
+  - On a fresh start it shows **Start here**, with a **Begin** button and a summary of every act. Once you have
+    started, it says **Welcome back**, with a **Continue: …** button for the next level to play.
   - For a level, it shows:
     - **Why you need it**, and **Goes into**: the chain of later levels that use this block.
     - **The problem** and **What it costs**: the par and the alternatives, measured.
@@ -378,7 +379,7 @@ level it breaks; point at the small circle on its box's left edge to see which. 
    they are your clues. A FIND IT level never passes Check, because the drawing is already right.
 2. Work out which net would give exactly those failures. Probe wires, step through the failing cases, or use the
    **Timing** panel to see which bit never moves.
-3. Press **B**, or click **Accuse** beside Check. The banner says: *click the wire you think is stuck, then say at
+3. Press **B**, or click **Accuse** beside Check. A note says: *click the wire you think is stuck, then say at
    what* (**B** or **Esc** to stop).
 4. Click the wire, then choose **It is stuck at 0 here** or **… at 1**. Each wrong accusation costs a star, so par is
    0 wrong.
