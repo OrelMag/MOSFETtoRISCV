@@ -4,6 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import { HOOKS, LOOM_PRESETS, PICKS, WARP, loomPick } from '../src/widgets/cards';
 import { HOOK_BAR_X, HOOK_Z, HOOK_ROW, ROW_A, NEEDLE_H, SHUTTLE_Y, Z_WEFT, Z_HEDDLE, HOOK_Y1, KNIFE_Y, PUSH, SHED, THREAD_X, Z_FELL, clothRow, loomParts, poseOf, steppedPose, type LoomPalette } from '../src/widgets/loom3dparts';
+import { bake, FRONT_Z, loomModel, TOUR_T } from '../src/widgets/loom3dkit';
+import { UNIT_BOX, UNIT_CYL } from '../src/gl/kit/fromparts';
 
 const col = (i: number): [number, number, number] => [i / 20, 0.5, 0.5];
 const P: LoomPalette = { wood: col(1), iron: col(2), steel: col(3), spring: col(4), card: col(5), hole: col(6), warp: col(7), weft: col(8), cord: col(9), lead: col(10), brass: col(11), live: col(12) };
@@ -105,5 +107,25 @@ describe('the Jacquard head model against the loom widget', () => {
     expect(knives).toHaveLength(2);
     // every needle ends in a tip; the prism has pits (wood boxes) under the hole positions: more pieces than one cube
     expect(parts.filter((q) => q.color === P.wood && q.scale![0] === 72).length).toBeGreaterThan(8);
+  });
+});
+
+describe('the loom on the studio renderer', () => {
+  const [, cards] = presets[0];
+  it('every box and rod is baked once (the frame’s front left out), the lifted hooks and cords lit', () => {
+    const o = poseOf(cards, 2, 0.3), parts = loomParts(cards, o, P);
+    const m = loomModel(cards, o, false), front = parts.filter((p) => p.color === P.wood && Math.abs(p.pos[2] - FRONT_Z) < 1e-6);
+    expect(front.length).toBeGreaterThan(0);
+    const tris = (p: { kind: string }) => (p.kind === 'box' ? UNIT_BOX : UNIT_CYL).indices.length / 3;
+    const want = parts.filter((p) => !front.includes(p)).reduce((a, p) => a + tris(p), 0);
+    expect(m.items.reduce((a, i) => a + i.geo.indices.length / 3, 0)).toBe(want);
+    for (const it of m.items) for (const v of it.geo.positions) expect(Number.isFinite(v)).toBe(true);
+    expect(m.items.filter((i) => i.mat.emit).length).toBeGreaterThan(0);
+    expect(m.beats).toHaveLength(TOUR_T.length);
+  });
+  it('bake puts a turned rod where its part says', () => {
+    const rod = loomParts(cards, poseOf(cards, 1, 0), P).find((p) => p.kind === 'cyl' && p.rot)!;
+    const g = bake([rod], 'r'), c = [(g.min[0] + g.max[0]) / 2, (g.min[1] + g.max[1]) / 2, (g.min[2] + g.max[2]) / 2];
+    for (let a = 0; a < 3; a++) expect(c[a]).toBeCloseTo(rod.pos[a], 3);
   });
 });
