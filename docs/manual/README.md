@@ -54,6 +54,8 @@ gestures, and what to do when something looks wrong.
   background. Turn either off in View options.
 - Every 3D model sits on the same stage, with the same controls:
   - drag to turn it;
+  - to zoom, click the model first, then scroll (before that, the wheel scrolls the page); **Ctrl** + scroll and a
+    pinch zoom at any time;
   - **Cutaway** and **Explode**, on the models that open up;
   - a **Tour** of its parts;
   - **Hide names** (**N**) to hide or show the labels;

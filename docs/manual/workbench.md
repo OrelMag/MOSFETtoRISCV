@@ -91,7 +91,9 @@ of this page covers every control.
 
   **Statistics**, **Benchmarks** and **Lab** each open as a page of their own, with the same four tabs across the top;
   click **Parts** to come back to the circuit.
-- **Middle: the circuit**, with a bar above it and the controls below it.
+- **Middle: the circuit**, with a bar above it and the controls below it. A badge at its top left says what level of
+  detail you are looking at (for example **LEVEL: GATES & BLOCKS**), and a line along its bottom recalls the mouse
+  gestures (double-click to open, drag to move, right-click for layout, wheel or pinch to zoom).
   - **The bar above**, from left to right:
     - the part's name, and the path when you are inside it;
     - **Open in Sandbox** (the chip icon);
@@ -293,7 +295,8 @@ Under **Info**:
 - **Transistors**, **NAND gates**, **NAND delays (worst path)** and **levels of boxes inside** are counted from the
   part's own circuit.
 - Each pin with its direction and current value.
-- **Power (estimate)**: the energy it switches, measured on the running circuit or on random inputs.
+- **Power (estimate)**: the energy it switches, measured on the running circuit or on random inputs. **Supply voltage**
+  sets the voltage it is worked out at, and **Restart** counts again from now.
 - **In relays and tubes**: what the same part would take built from relays or vacuum tubes (devices, worst path,
   power, size, mass), with **Where the numbers come from**.
 - **Where it is used**: the parts that place it, how many times, and its copies in the chapters' processors.
@@ -335,11 +338,13 @@ starts sorted by **NAND gates**. Click a name to open that part on the workbench
 
 Click **Benchmarks**.
 - **Speed against cost** plots every processor in the site: its mean time on the same programs (Fibonacci, insertion
-  sort, matrix multiply and more) against its size in NAND gates. Down and left is better.
+  sort, matrix multiply, CRC-32 and more) against its size in NAND gates. Down and left is better.
 - The **Cost** and **Energy** switches above it change what the plot shows.
 - The table below gives each processor's NAND gates, clock period and its result on each program. **Show** above it
   chooses the result: **Time**, **Cycles**, **CPI**, **Energy** or **Energy / instr.** Open a row for its cache misses,
   stalls and energy.
+- **CPUs**, beside **Show**, has a button for each family (**Single-cycle**, **Multicycle**, **Pipelined**, **Two-wide**):
+  click one to hide its processors from the table, and again to bring them back.
 
 ![Benchmarks: speed against cost](img/workbench/21-benchmarks.png)
 
@@ -350,16 +355,20 @@ Click **Lab**.
    resolve** or **No return stack**.
 2. Change the knobs:
    - fetch and commit width;
-   - the execution ports (**+ add a port**);
+   - the execution ports: each port (**P0**, **P1**, …) has buttons for the units it holds (**ALU**, **BR**, **LD/ST**,
+     **MUL**, **DIV**); **×** removes a port and **+ add a port** adds one;
    - issue order and port binding;
    - the reorder buffer, issue queue and store queue;
    - the predictor, the BTB and the return stack;
    - when to recover;
    - latencies;
    - the divider.
-3. Run it on **The benchmark set**, on one program, or on your own assembly or Python. Read the cycles per
-   instruction and what each lost slot waited for.
-4. **Keep for comparison** keeps a design beside the next one.
+3. Run it on **The benchmark set**, on one program, or on your own assembly or Python.
+4. Read the results: the CPI and IPC, mispredictions per 1000 instructions and, where the gate-level core can be built
+   that way, its NAND gates and clock period. **Where the commit slots went** shows what each lost slot waited for,
+   **Per program** gives each program's cycles and CPI next to our core's, and the **Timeline** shows each instruction
+   going through the stages (hover a row for why it waited).
+5. **Keep for comparison** keeps a design beside the next one.
 
 ![The out-of-order lab](img/workbench/22-lab.png)
 
