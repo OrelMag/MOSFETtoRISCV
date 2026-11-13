@@ -1376,7 +1376,7 @@ src/gl/        the hand-written WebGL2 renderers (lazy chunks, no library). rend
                off, bloom off: never back up); a cut cap is shaded at the first inner back face, so solids sharing a face z-fight
                on a section (inset them a hair). kit/ (DOM-free, tested in Node): geo.ts (lathe, sweep, tube, helix, extrude,
                bentSheet, roundedBox, surface, ribbon, refresh, paint, along; transform / merge keep uvs and colours),
-               materials.ts (M presets, heatColour / heatGlow, oxideColour), scene.ts (Item / Model3 / Beat / Moves /
+               materials.ts (M presets incl. M.oxideFilm, heatColour / heatGlow, oxideColour), scene.ts (Item / Model3 / Beat / Moves /
                StudioAnchor; pick: a CPU ray, fitView / aspectOf, anchorAt follows moves; Model3.cutLabels, StudioAnchor.gutter /
                whenCut, Beat.labels, flatOrder), text.ts (strokeGeo: the stroke font as tubes or flat ink on a Surface),
                fromparts.ts (UNIT_BOX / UNIT_CYL the kits instance). parts.ts flatView: the flat fallback seen from
@@ -1385,7 +1385,9 @@ src/gl/        the hand-written WebGL2 renderers (lazy chunks, no library). rend
                width, canvas at the model's aspect, home fitted to what it shows (a goTo home survives a resize), names in
                gutters or numbered badges + list (by measured width), hover cards, tour beats (frame / show / hide / labels;
                onBeat before the beat is read), Cutaway / Explode, corner tools, flat SVG fallback (?flat3d), ?stats overlay;
-               goTo / look / endTour / setKnobs for hosts.
+               goTo / look / endTour / setKnobs for hosts. A Names corner tool (tag, key N; settings.modelNames, the view menu's
+               "3D model names", in VIEW_KEYS) hides the names, leaders, phone badges and list for every model, the canvas box
+               unchanged and the model fitted into the gutters' width (gl/kit/names.ts).
                widgets/relay3d.ts (relayCloseup: a placeholder, then relay3dview.ts: the controls,
                plots and sweep around relay3dkit.ts's relay (true geometry, posed per sample by relayPose(): the armature
                turned about the hinge, the spring stretched, the blade bent with refresh(), contacts lit when closed;
