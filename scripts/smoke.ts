@@ -807,6 +807,28 @@ const ANALOGY_DRIVE = `(async () => {
  * left waiting), that the dialog was asked for exactly once (window.print is stubbed for every route: see visit()), and that a
  * wrong theme did not leak into the sheet (the page behind keeps the learner's own).
  */
+// A failing Check opens the test player under the canvas: the view keeps its corner and scale (it may pan to show the
+// failing pins, never zoom), and closing the player fits an untouched view again (editor.ts holdView / releaseView).
+const PLAYER_DRIVE = `(async () => {
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const c = document.querySelector('.sb-canvas'), svg = c && c.querySelector('svg');
+  if (!svg) return ['no canvas'];
+  const px = () => c.clientWidth / +svg.getAttribute('viewBox').split(' ')[2];
+  const before = px(), vb0 = svg.getAttribute('viewBox');
+  const check = [...document.querySelectorAll('button')].find((b) => /^Check/.test(b.textContent.trim()) && b.offsetParent);
+  if (!check) return ['no Check button'];
+  check.click(); await wait(2500);
+  const bad = [];
+  if (!document.querySelector('[data-chal=player]')) return ['an empty circuit failed nothing: no test player'];
+  if (Math.abs(px() - before) > 1e-3 * before) bad.push('the scale changed when the test player opened: ' + before.toFixed(3) + ' → ' + px().toFixed(3) + ' px a unit');
+  // t_inv's pins stay in view above the player, so nothing pans either: the corner is where it was
+  const corner = (v) => v.split(' ').slice(0, 2).map((n) => (+n).toFixed(3)).join(' ');
+  if (corner(svg.getAttribute('viewBox')) !== corner(vb0)) bad.push('the view moved when the test player opened: ' + corner(vb0) + ' → ' + corner(svg.getAttribute('viewBox')));
+  const close = document.querySelector('[data-chal=player] [data-tp=close]');
+  if (close) { close.click(); await wait(1500); if (svg.getAttribute('viewBox') !== vb0) bad.push('closing the player did not fit the view again'); }
+  return bad;
+})()`;
+
 const PRINT_DRIVE = `(async () => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const bad = [];
@@ -1439,6 +1461,7 @@ function routes(): Route[] {
   for (const c of DSP_CAPSTONES) if (c.route) add(c.route, light);
   // The Verilog twins (campaign/twinids.ts): the source beside the check, never synthesized here (Yosys is 78 MB)
   for (const l of TWIN_LEVELS) add(`#/campaign/play/${twinKey(l)}`, unlocked);
+  add('#/campaign/play/t_inv', unlocked, ' (test player keeps the view)', undefined, PLAYER_DRIVE);
   // A locked level renders its notice (fresh progress: only the first levels are open).
   add(`#/campaign/play/${NODES[NODES.length - 1].id}`, light, ' (locked)');
   add('#/sandbox', light);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Camera, chooseFolds, COVER_GAP, fitMinW, NARROW_MIN_W, FOLD_BESIDE_PX, KEEP_SCALE, KEEP_SCALE_OPENED, fitBox, freeArea, freeRect, MIN_FIT_H, MIN_FIT_PX, type Rect, roomBeside, startFolded, TOUCH_PX, touchZoom, underCover, type ViewBox } from '../src/view/camera';
+import { Camera, chooseFolds, COVER_GAP, fitMinW, NARROW_MIN_W, FOLD_BESIDE_PX, KEEP_SCALE, KEEP_SCALE_OPENED, fitBox, freeArea, freeRect, MIN_FIT_H, MIN_FIT_PX, panToShow, type Rect, roomBeside, startFolded, TOUCH_PX, touchZoom, underCover, type ViewBox } from '../src/view/camera';
 
 /** A host of a settable size and an svg that only records its view box: enough for Camera. */
 function rig(w: number, h: number) {
@@ -265,5 +265,21 @@ describe('a small circuit on a phone', () => {
   it('keeps the desktop minimum on a wide canvas', () => {
     expect(fitMinW(34, 800)).toBe(34);
     expect(fitBox(and, 800, 600).w).toBe(34);
+  });
+});
+
+describe('panToShow (the test player keeps the failing pins in sight)', () => {
+  const vb = { x: 0, y: 0, w: 100, h: 50 };
+  it('leaves a view alone when the pins are in it', () => {
+    expect(panToShow(vb, [{ x: 10, y: 10, w: 2, h: 2 }, { x: 80, y: 40, w: 2, h: 2 }])).toBe(vb);
+    expect(panToShow(vb, [])).toBe(vb);
+  });
+  it('pans just enough, never zooms', () => {
+    const r = panToShow(vb, [{ x: 90, y: 60, w: 2, h: 2 }]);
+    expect(r).toEqual({ x: 0, y: 14, w: 100, h: 50 });
+    expect(panToShow(vb, [{ x: -10, y: 5, w: 2, h: 2 }])).toEqual({ x: -12, y: 0, w: 100, h: 50 });
+  });
+  it('keeps the top of a union taller than the view', () => {
+    expect(panToShow(vb, [{ x: 10, y: 20, w: 2, h: 2 }, { x: 10, y: 120, w: 2, h: 2 }])).toEqual({ x: 0, y: 18, w: 100, h: 50 });
   });
 });
